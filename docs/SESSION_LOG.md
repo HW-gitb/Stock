@@ -1,5 +1,20 @@
 # Session Log
 
+## 2026-07-26 — Claude Code 审查 PASS (US-short 软发现 K4-pre capstone fixture)
+
+- **Verdict/Action**: PASS，已提交。K4-pre 只动 2 个文件（`tests/test_us_short_model_paper_capstone_wiring.py` + 本 log），生产代码 git-diff 为零、`_build_pass2_budget_approval` 未被放宽或绕过。基线红确认是 fixture 漂移：该测试上次改于 `2f84f51e`(07-22)，finalize 调用 `80a283a2`(07-23) 才进 capstone，它从未在带门代码上绿过——非生产缺陷，故未 STOP K4-pre、未另立 Required。
+- **Required**: 无。Register: non-material。三条 Optional 均不阻塞、未入册：①日期迁移 20260720→20260615 非修红所需（我实测还原后同样绿）②本测试 mock 掉 `finalize_preflight_from_existing_derivation`，真缝由 `tests/provider/test_us_short_pass2_budget_approval.py` 的 resume 用例未 mock 覆盖 ③跨测试导入私有 helper `_candidate_artifact` 形成耦合。
+- **Verify**: review-evidence:not_available(hook 无 token；下列均真实工具输出)。Python313+bash：HEAD 版复现红(缺 immutable approval 派生字段)→ 2 OK。六探针：sha／candidate_universe／top_k／price_basis 四改各按名转红(fixture 承重)；去 finalize mock 红因是 summary_path 须在仓库根下(临时 state_dir，非生产缺陷)；日期还原 7 月仍绿。capstone+Pass2+consumer 142 OK(先建空 state/us_short，零残留已删回)、conformance+刀1/2/3 178 OK、doc-gov 35 OK、py_compile+git diff --check clean。快档：§6a 不起 agent、rule 3 不跑全量；无网络/key/flag/lifecycle。
+- **Next**: 无（已提交）。
+
+## 2026-07-26 - Codex repair (US-short soft discovery K4-pre capstone fixture)
+
+- **Verdict/Action**: Repaired only the capstone wiring test fixture so its injected Pass2 preflight derives the immutable approval from a real candidate artifact and its byte digest, decision clock, Pass2 target, and endpoint forecast. Production code and fail-closed validation are unchanged; no provider/live/network/key action and no commit.
+- **Required**: No new production Required. Claude Code must independently review the complete K4-pre diff before any commit; K4 4a/4b/4c, score seams, `theme_soft_boost_enabled`, Top15/action advice, seats, theme_probe, lifecycle, and confirmation remain untouched.
+- **Verify**: Fixed Python red then green: target capstone test first failed on missing immutable approval fields, then passed; capstone + Pass2 approval pack `93 OK` after creating and removing an empty gitignored test-only `state/us_short` directory required by existing tests; knife-1/2/3 offline conformance/invariants `144 OK`; changed Python `py_compile` clean; `git diff --check` clean apart from normal CRLF notice. No residual state file or provider call.
+- **Pre-Codex self-review**: A-F checked / N-A. A: approval inputs cover candidate artifact/digest, clock, target, and forecast together; B: consumer and immutable binding grep re-swept; C: retained missing-fields red test and digest-bound green path; D N/A; E: only this handoff changed; F: lightweight current-diff-only independent self-review returned PASS with no test run, timeout, write, network, or key access. Full lane not run: test-fixture-only change does not meet AGENTS verification rule 3 conditions.
+- **Next**: Claude Code：独立审查完整 K4-pre diff；PASS 后按流程提交。
+
 ## 2026-07-26 - Claude Code 修复 (theme 引擎死函数删除，冻结前 Optional (a) 收口，自做自审)
 
 - **Verdict/Action**: 用户指令直接删。`engine/a_short_theme_forward_comparison.py::_semantic_file_function_digest`（8 行、零代码调用点）已删，未改测试、未动豁免常量、未碰其他轨。冻结前必须做：它仍被契约摘要绑着，`--start-epoch` 后再删要作废已积累周。Detail in register。

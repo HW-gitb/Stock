@@ -11,6 +11,7 @@ from unittest import mock
 from engine.us_short_model_paper_store import load_head
 import runners.us_short_weekly_capstone as capstone
 from runners.us_short_weekly_capstone import Stage, _run_model_paper_adapter, _run_model_paper_weekly, default_pipeline, run_weekly_capstone
+from tests.provider.test_us_short_batch5_data_context import _candidate_artifact
 
 
 def _packet(decision: str, basis: str, points: list[dict]) -> dict:
@@ -98,15 +99,73 @@ class ModelPaperCapstoneWiringTest(unittest.TestCase):
                 path.write_text(json.dumps(payload), encoding="utf-8")
 
             def seed_momentum(ctx):
-                packet = _packet("20260720", "20260717", [])
+                packet = _packet("20260615", "20260612", [])
                 write_json(ctx.series_packet_path, packet)
                 write_json(ctx.ohlcv_series_packet_path, packet)
                 return {"stage": "momentum"}
 
             def seed_preflight(ctx):
+                candidate = _candidate_artifact(("AAPL",))
+                write_json(ctx.candidate_path, candidate)
                 summary = {
-                    "endpoint_call_forecast": {"total_calls_for_pass2_target_cut": 1},
-                    "pass2_target_universe": {"target_count": 1},
+                    "decision_clock": {
+                        "expected_decision_date": ctx.decision_date,
+                        "candidate_price_basis_date": ctx.price_basis_date,
+                        "price_basis_date": "2026-06-12",
+                        "used_date": "2026-06-12",
+                    },
+                    "candidate_universe": {
+                        "candidate_artifact_path": f"state/us_short/{ctx.candidate_path.name}",
+                        "candidate_artifact_path_gitignored": True,
+                        "candidate_artifact_sha256": capstone._sha256_file(ctx.candidate_path),
+                        "row_count": candidate["row_count"],
+                        "eligible_count": candidate["eligible_count"],
+                        "eligible_symbol_sample": candidate["eligible_tickers"],
+                        "symbol_scope": "full_pass1_eligible_candidate_set",
+                        "full_market_sample": False,
+                    },
+                    "pass2_target_universe": {
+                        "selection_mode": "momentum_theme_top_k_plus_catalyst_recall_plus_forced_holdings",
+                        "eligible_count": candidate["eligible_count"],
+                        "momentum_scored_candidate_count": 1,
+                        "momentum_top_k": ctx.authorized_momentum_top_k,
+                        "forced_holding_count": 0,
+                        "target_count": 1,
+                        "target_symbols": ["AAPL"],
+                        "target_symbol_sample": ["AAPL"],
+                        "fmp_grade_call_cap": 250,
+                        "fmp_grade_calls_within_free_daily_cap": True,
+                        "neutral_fill_tickers_excluded_from_expensive_pass2": True,
+                        "expensive_pass2_targets_full_eligible_set": True,
+                    },
+                    "endpoint_call_forecast": {
+                        "families": {
+                            "pass2_source_packet": {
+                                "sec_company_tickers_mapping_calls": 1,
+                                "fmp_grades_calls": 1,
+                                "sec_submissions_calls": 1,
+                                "massive_reference_news_calls": 1,
+                                "total_calls": 4,
+                            },
+                            "corporate_action_live_half": {
+                                "massive_split_calls": 1,
+                                "massive_dividend_calls": 1,
+                                "total_calls": 2,
+                                "corporate_action_reconciliation_performed_by_preflight": False,
+                            },
+                            "momentum_price_refresh_if_local_projection_missing": {
+                                "massive_daily_aggregates_calls": 2,
+                                "benchmark_symbols": ["SPY", "QQQ"],
+                                "not_in_total_until_separate_price_packet_review": True,
+                            },
+                        },
+                        "forecast_basis": "pass2_target_universe_not_full_eligible_count",
+                        "total_calls_for_pass2_target_cut": 6,
+                        "total_calls_for_full_candidate_cut": 6,
+                        "total_calls_for_full_candidate_cut_is_hypothetical": True,
+                        "call_budget_must_be_explicit_before_network": True,
+                        "full_market_call_performed": False,
+                    },
                     "execution_gate": {"ready_to_run_full_candidate_live_packet": False},
                 }
                 write_json(ctx.preflight_summary_path, summary)
@@ -117,7 +176,7 @@ class ModelPaperCapstoneWiringTest(unittest.TestCase):
                 report_path.parent.mkdir(parents=True, exist_ok=True)
                 report_path.write_text("# weekly base\n", encoding="utf-8")
                 action_path.write_text("ticker\nABC\n", encoding="utf-8")
-                write_json(machine_path, _record("20260720", "建仓"))
+                write_json(machine_path, _record(ctx.decision_date, "建仓"))
                 return {
                     "batch4_run": {
                         "emitted": True,
@@ -140,6 +199,12 @@ class ModelPaperCapstoneWiringTest(unittest.TestCase):
             with (
                 mock.patch.object(capstone, "default_pipeline", return_value=pipeline),
                 mock.patch.object(capstone, "_provider_execution_receipt", receipt),
+                mock.patch(
+                    "runners.us_short_batch5_full_candidate_pass2_preflight.finalize_preflight_from_existing_derivation",
+                    side_effect=lambda **kwargs: json.loads(
+                        kwargs["preflight_summary_path"].read_text(encoding="utf-8")
+                    ),
+                ),
             ):
                 summary = run_weekly_capstone(
                     dry_run=False,
@@ -151,7 +216,7 @@ class ModelPaperCapstoneWiringTest(unittest.TestCase):
                     sample_root=root,
                     batch4_template_path=root / "inputs" / "batch4_template.md",
                     account_state_path=root / "inputs" / "paper_account_state.adapter.json",
-                    now_et=datetime(2026, 7, 20, 8, 0, 0),
+                    now_et=datetime(2026, 6, 15, 8, 0, 0),
                     model_paper_store_root=store_root,
                     model_paper_run_account_mode="paper_only",
                 )
@@ -165,8 +230,8 @@ class ModelPaperCapstoneWiringTest(unittest.TestCase):
                 {"initial_capital", "current_cash", "holdings_market_value", "current_nav", "cumulative_pnl", "cumulative_return_pct", "consecutive_weeks"},
                 {key for key in weekly["weekly_portfolio_metrics"] if key not in {"paper_evaluable", "performance_status"}},
             )
-            self.assertEqual("20260720", load_head(store_root)["pending_decision"]["decision_date"])
-            report = private_root / "weekly_private" / "20260720" / "weekly_report.md"
+            self.assertEqual("20260615", load_head(store_root)["pending_decision"]["decision_date"])
+            report = private_root / "weekly_private" / "20260615" / "weekly_report.md"
             self.assertTrue(report.exists())
             self.assertIn("cumulative_pnl", report.read_text(encoding="utf-8"))
 
