@@ -563,7 +563,7 @@ def _summary_from_ledger(ledger: dict[str, Any], as_of: str) -> dict[str, Any]:
         {"decision_date": record["decision_date"], "source_identity": record.get("source_identity")}
         for record in valid
     ])
-    counts = _epoch_mode.evidence_counts_toward_clock()
+    counts = _epoch_mode.evidence_counts_toward_clock("p3_final_action_validation")
     hold_status = "review_due" if counts and len(holds) >= HOLD_REVIEW_WEEKS else "accumulating"
     edge_status = "review_due" if counts and len(edges) >= FULL_EDGE_REVIEW_WEEKS else "accumulating"
     hac_status = "review_due" if counts and len(edges) >= HAC_REVIEW_WEEKS and managed_plans >= HAC_MIN_PLANS else "accumulating"

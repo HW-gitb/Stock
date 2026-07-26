@@ -161,7 +161,7 @@ def _breakout_contract_surface() -> dict[str, Any]:
 
 def _contract_fingerprint(track: str | None = None) -> str:
     """Pre-freeze returns a stable per-track constant; see ``engine/a_short_evidence_epoch_mode``."""
-    if not _epoch_mode.enforcement_enabled():
+    if not _epoch_mode.enforcement_enabled("p2_target_policy"):
         if track is not None and track not in TRACK_ADMISSIONS:
             raise TargetPolicyError("unknown_p2_component")
         # Keep the two P2 components in separate epochs even while constant.
@@ -306,7 +306,7 @@ def _active_epoch(ledger: dict[str, Any], *, create: bool, track: str = "target_
 
 def _current_review_status(ledger: dict[str, Any], track: str, epoch: dict[str, Any] | None) -> str:
     # Pre-freeze evidence is audit-only and can never reach a review point.
-    if epoch is None or not _epoch_mode.evidence_counts_toward_clock():
+    if epoch is None or not _epoch_mode.evidence_counts_toward_clock("p2_target_policy"):
         return "not_reviewed"
     statuses = ledger.get("review_status_by_epoch") or {}
     return str((statuses.get(track) or {}).get(epoch["epoch_id"], "not_reviewed"))
@@ -344,7 +344,7 @@ def _progress(records: list[dict[str, Any]], track: str, review_status: str) -> 
         progress["evaluable_plans"] >= 20
     if review_status == "pass":
         progress["review_state"] = "pass_pending_confirmation"
-    elif enough and _epoch_mode.evidence_counts_toward_clock():
+    elif enough and _epoch_mode.evidence_counts_toward_clock("p2_target_policy"):
         progress["review_state"] = "due"
     return progress
 

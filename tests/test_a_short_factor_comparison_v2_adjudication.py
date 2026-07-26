@@ -23,6 +23,7 @@ from engine.a_short_factor_comparison_v2_adjudication import (  # noqa: E402
     _register_combination_batch,
 )
 from engine import a_short_evidence_epoch_mode as _epoch_mode  # noqa: E402
+from tests._a_short_epoch_mode_test_utils import enter_patched_epoch_modes, patched_epoch_modes  # noqa: E402
 
 
 def _root(tmp: str) -> Path:
@@ -117,9 +118,7 @@ class AdjudicationTests(unittest.TestCase):
     def setUp(self):
         # Existing cases verify the enforced epoch contract.  The paired
         # pre-freeze/enforced reverse control is below.
-        previous = _epoch_mode.MODE
-        _epoch_mode.MODE = "frozen_enforced"
-        self.addCleanup(setattr, _epoch_mode, "MODE", previous)
+        enter_patched_epoch_modes(self, "frozen_enforced")
 
     def _adjudicate(self, root: Path, *, require_evidence: bool = True) -> dict:
         with mock.patch("engine.a_short_factor_comparison_v2_adjudication._validate_source_receipt") as source_gate:
@@ -156,7 +155,7 @@ class AdjudicationTests(unittest.TestCase):
             root = _root(tmp)
             _write_fixture(root, effects={"entry_ma_pullback": [0.8] * 24,
                                           "entry_range_pullback": [0.1] * 24})
-            with mock.patch.object(_epoch_mode, "MODE", "pre_freeze_audit_only"):
+            with patched_epoch_modes("pre_freeze_audit_only"):
                 audit_only = self._adjudicate(root)
             question = audit_only["adjudication"]["questions"][0]
             self.assertEqual(question["status"], "continue_accumulation")
@@ -165,7 +164,7 @@ class AdjudicationTests(unittest.TestCase):
             receipts = json.loads((root / "decision_receipts.json").read_text(encoding="utf-8"))
             self.assertEqual(receipts["receipts"], [])
 
-            with mock.patch.object(_epoch_mode, "MODE", "frozen_enforced"):
+            with patched_epoch_modes("frozen_enforced"):
                 enforced = self._adjudicate(root)
             self.assertEqual(enforced["adjudication"]["questions"][0]["status"], "recommend_adopt_arm")
 

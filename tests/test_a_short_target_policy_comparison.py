@@ -35,6 +35,7 @@ from runners.a_short_weekly_pipeline import build_weekly_report, validate_weekly
 from runners.a_short_m67_render import render_weekly_markdown  # noqa: E402
 from tests.test_a_short_weekly_pipeline import _feed, _normalized  # noqa: E402
 from engine import a_short_evidence_epoch_mode as _epoch_mode
+from tests._a_short_epoch_mode_test_utils import enter_patched_epoch_modes, patched_epoch_modes
 
 
 def _dated_series(days: int = 253, *, spike: bool = False) -> list[dict]:
@@ -264,9 +265,7 @@ class TargetLedgerTests(unittest.TestCase):
     def setUp(self):
         # These cases assert the ENFORCED epoch contract (the historical default).
         # Pre-freeze behaviour is covered by tests/test_a_short_evidence_epoch_mode.py.
-        previous = _epoch_mode.MODE
-        _epoch_mode.MODE = "frozen_enforced"
-        self.addCleanup(setattr, _epoch_mode, "MODE", previous)
+        enter_patched_epoch_modes(self, "frozen_enforced")
 
     def test_threshold_evidence_is_not_review_due_pre_freeze_then_is_due_when_enforced(self):
         settled = {"changed": True, "outcomes": {"status": "settled"}}
@@ -276,10 +275,10 @@ class TargetLedgerTests(unittest.TestCase):
              "breakout_difference": True, "breakout_entries": [dict(settled), dict(settled)]}
             for _ in range(12)
         ]
-        with patch.object(_epoch_mode, "MODE", "pre_freeze_audit_only"):
+        with patched_epoch_modes("pre_freeze_audit_only"):
             self.assertEqual(_progress(records, "target_exit", "not_reviewed")["review_state"], "not_due")
             self.assertEqual(_progress(records, "breakout_entry", "not_reviewed")["review_state"], "not_due")
-        with patch.object(_epoch_mode, "MODE", "frozen_enforced"):
+        with patched_epoch_modes("frozen_enforced"):
             self.assertEqual(_progress(records, "target_exit", "not_reviewed")["review_state"], "due")
             self.assertEqual(_progress(records, "breakout_entry", "not_reviewed")["review_state"], "due")
 

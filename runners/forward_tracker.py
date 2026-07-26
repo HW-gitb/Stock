@@ -69,8 +69,14 @@ SCHEMA_COLUMNS = [
     "captured_at",
     "run_id",
     "candidate_digest",
+    "decision_as_of",
+    "run_date",
+    "price_data_through",
+    "stage3_candidate_count",
+    "runtime_configuration_fingerprint",
     "ts_code",
     "name",
+    "analysis_role",
     "tier",
     "final_score",
     "esp_score",
@@ -120,6 +126,8 @@ SCHEMA_COLUMNS = [
     "ret_5d_excess_csi1000",
     "ret_5d_status",
     "ret_10d_t1_net",
+    "ret_10d_t1_net_unit",
+    "ret_10d_exit_date",
     "ret_10d_excess_csi300",
     "ret_10d_excess_csi1000",
     "ret_10d_status",
@@ -129,6 +137,12 @@ SCHEMA_COLUMNS = [
     "ret_20d_status",
     "backfilled_at",
 ]
+TRACKER_STRING_COLUMNS = {
+    "as_of": str, "decision_as_of": str, "run_date": str,
+    "price_data_through": str, "industry_trend_source_as_of": str,
+    "theme_taxonomy_source_as_of": str, "theme_taxonomy_l3_snapshot_date": str,
+    "entry_date": str, "ret_10d_exit_date": str, "ts_code": str,
+}
 
 DEFAULT_WINDOWS = [5, 10, 20]
 # Calendar-day pad beyond the trading-day window estimate. Lets the cache
@@ -140,6 +154,10 @@ TERMINAL_FORWARD_STATUSES = {
     "pending_missing_future_close",
     "pending_return_conversion_failed",
 }
+DECISION_TIME_COLUMNS = tuple(
+    column for column in SCHEMA_COLUMNS[:SCHEMA_COLUMNS.index("entry_date")]
+    if column != "captured_at"
+)
 
 
 # ============================================================
@@ -159,7 +177,10 @@ def _get(d, *keys, default=None):
 
 
 def _candidate_row(as_of: str, captured_at: str, run_id: str, candidate_digest: str, c: dict,
-                   l3_mode: str | None = None) -> dict:
+                   l3_mode: str | None = None, *, decision_as_of: str | None = None,
+                   run_date: str | None = None, price_data_through: str | None = None,
+                   stage3_candidate_count: int | None = None,
+                   runtime_configuration_fingerprint: str | None = None) -> dict:
     industry = _get(c, "industry", default={}) or {}
     signal = industry.get("industry_trend_signal") if isinstance(industry, dict) else {}
     signal = signal if isinstance(signal, dict) else {}
@@ -184,8 +205,14 @@ def _candidate_row(as_of: str, captured_at: str, run_id: str, candidate_digest: 
         "captured_at": captured_at,
         "run_id": run_id,
         "candidate_digest": candidate_digest,
+        "decision_as_of": decision_as_of,
+        "run_date": run_date,
+        "price_data_through": price_data_through,
+        "stage3_candidate_count": stage3_candidate_count,
+        "runtime_configuration_fingerprint": runtime_configuration_fingerprint,
         "ts_code": c.get("ts_code"),
         "name": c.get("name"),
+        "analysis_role": c.get("analysis_role"),
         "tier": _get(c, "selection", "tier"),
         "final_score": _get(c, "scores", "final_score"),
         "esp_score": _get(c, "scores", "esp_score"),
@@ -237,6 +264,8 @@ def _candidate_row(as_of: str, captured_at: str, run_id: str, candidate_digest: 
         "ret_5d_excess_csi1000": pd.NA,
         "ret_5d_status": "pending_capture",
         "ret_10d_t1_net": pd.NA,
+        "ret_10d_t1_net_unit": "percentage_points",
+        "ret_10d_exit_date": pd.NA,
         "ret_10d_excess_csi300": pd.NA,
         "ret_10d_excess_csi1000": pd.NA,
         "ret_10d_status": "pending_capture",
@@ -251,7 +280,7 @@ def _candidate_row(as_of: str, captured_at: str, run_id: str, candidate_digest: 
 def _load_existing_tracker() -> pd.DataFrame:
     if not TRACKER_CSV.exists():
         return pd.DataFrame(columns=SCHEMA_COLUMNS)
-    df = pd.read_csv(TRACKER_CSV, dtype={"as_of": str, "ts_code": str})
+    df = pd.read_csv(TRACKER_CSV, dtype=TRACKER_STRING_COLUMNS)
     for col in SCHEMA_COLUMNS:
         if col not in df.columns:
             df[col] = pd.NA
@@ -281,6 +310,31 @@ def _write_tracker(df: pd.DataFrame) -> None:
         raise
 
 
+def _decision_cohort_matches(existing: pd.DataFrame, incoming: pd.DataFrame) -> bool:
+    """Compare every decision-time field while ignoring later settlement and capture timestamp."""
+    if len(existing) != len(incoming):
+        return False
+
+    def canonical(value):
+        if value is None or (not isinstance(value, (list, dict)) and pd.isna(value)):
+            return ("missing",)
+        if isinstance(value, (bool, np.bool_)):
+            return ("bool", bool(value))
+        if isinstance(value, (int, float, np.integer, np.floating)) and not isinstance(value, bool):
+            number = float(value)
+            return ("number", number) if np.isfinite(number) else ("missing",)
+        return ("text", str(value))
+
+    def canonical_rows(frame: pd.DataFrame):
+        rows = []
+        for row in frame.reindex(columns=DECISION_TIME_COLUMNS).to_dict(orient="records"):
+            rows.append(tuple(canonical(row.get(column)) for column in DECISION_TIME_COLUMNS))
+        code_index = DECISION_TIME_COLUMNS.index("ts_code")
+        return sorted(rows, key=lambda row: row[code_index])
+
+    return canonical_rows(existing) == canonical_rows(incoming)
+
+
 def capture(as_of: str) -> int:
     input_path = LIVE_RESULT_ROOT / as_of / "analysis_input.json"
     if not input_path.exists():
@@ -303,10 +357,29 @@ def capture(as_of: str) -> int:
         print("[FATAL] analysis_input missing run identity; refusing ambiguous same-day cohort")
         return 2
     candidates = payload.get("candidates") or []
+    decision_as_of = str(payload.get("decision_as_of") or payload.get("trade_date") or "")
+    run_date = str(payload.get("run_date") or ((payload.get("source") or {}).get("clocks") or {}).get("run_date") or "")
+    price_data_through = str(
+        payload.get("price_data_through")
+        or ((payload.get("source") or {}).get("clocks") or {}).get("price_data_through")
+        or ""
+    )
+    runtime_configuration_fingerprint = str(
+        (((payload.get("source") or {}).get("runtime_configuration") or {}).get(
+            "configuration_fingerprint"
+        ) or "")
+    )
 
     captured_at = datetime.now().astimezone().isoformat(timespec="seconds")
     l3_mode = (payload.get("source") or {}).get("l3_mode")
-    new_rows = [_candidate_row(as_of, captured_at, run_id, digest, c, l3_mode=l3_mode)
+    new_rows = [_candidate_row(
+        as_of, captured_at, run_id, digest, c, l3_mode=l3_mode,
+        decision_as_of=decision_as_of,
+        run_date=run_date,
+        price_data_through=price_data_through,
+        stage3_candidate_count=len(candidates),
+        runtime_configuration_fingerprint=runtime_configuration_fingerprint,
+    )
                 for c in candidates]
     new_df = pd.DataFrame(new_rows, columns=SCHEMA_COLUMNS)
 
@@ -316,7 +389,7 @@ def capture(as_of: str) -> int:
     captured_codes = sorted(same_day["ts_code"].dropna().astype(str).tolist()) if not same_day.empty else []
     if not same_day.empty and set(same_day["run_id"].dropna().astype(str)) == {run_id} and \
             set(same_day["candidate_digest"].dropna().astype(str)) == {digest} and \
-            len(same_day) == len(new_df) and captured_codes == expected_codes:
+            captured_codes == expected_codes and _decision_cohort_matches(same_day, new_df):
         print(f"[OK] {as_of}: identical run already captured; preserving backfill")
         return 0
 
@@ -436,7 +509,7 @@ def backfill(windows: list[int]) -> int:
     # string-into-float64 cell set. Coerce to object first. (This loop was dead
     # code until the coverage gate was fixed to settle per cohort, so the
     # dtype mismatch never surfaced in production.)
-    for _col in ("entry_date", "entry_unbuyable_reason", "backfilled_at"):
+    for _col in ("entry_date", "entry_unbuyable_reason", "ret_10d_exit_date", "backfilled_at"):
         df_idx[_col] = df_idx[_col].astype(object)
 
     updated_keys = []
@@ -459,6 +532,9 @@ def backfill(windows: list[int]) -> int:
                 df_idx.at[key, f"ret_{w}d_status"] = new_status
             if pd.notna(new_val):
                 df_idx.at[key, f"ret_{w}d_t1_net"] = new_val
+            exit_col = f"ret_{w}d_exit_date"
+            if exit_col in df_idx.columns and pd.notna(row.get(exit_col)):
+                df_idx.at[key, exit_col] = str(row.get(exit_col))
             for benchmark in BENCHMARKS:
                 excess_col = f"ret_{w}d_excess_{benchmark}"
                 excess_val = row.get(excess_col)

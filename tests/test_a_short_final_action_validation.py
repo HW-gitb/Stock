@@ -33,6 +33,7 @@ from runners.a_short_final_action_validation_runner import (  # noqa: E402
 from runners.a_short_phase5_engine import ATR_MULT  # noqa: E402
 from runners.a_short_target_policy_comparison_runner import _freeze_plan as freeze_p2_plan  # noqa: E402
 from engine import a_short_evidence_epoch_mode as _epoch_mode
+from tests._a_short_epoch_mode_test_utils import enter_patched_epoch_modes, patched_epoch_modes
 
 
 AS_OF = "20260101"
@@ -94,9 +95,7 @@ class FinalActionValidationTests(unittest.TestCase):
     def setUp(self):
         # These cases assert the ENFORCED epoch contract (the historical default).
         # Pre-freeze behaviour is covered by tests/test_a_short_evidence_epoch_mode.py.
-        previous = _epoch_mode.MODE
-        _epoch_mode.MODE = "frozen_enforced"
-        self.addCleanup(setattr, _epoch_mode, "MODE", previous)
+        enter_patched_epoch_modes(self, "frozen_enforced")
 
     def test_threshold_evidence_keeps_all_reminders_accumulating_pre_freeze_then_rearms(self):
         records = [
@@ -110,12 +109,12 @@ class FinalActionValidationTests(unittest.TestCase):
         def ledger_for_current_mode():
             return {"epochs": [{"contract_fingerprint": _contract_fingerprint(), "records": records}]}
 
-        with patch.object(_epoch_mode, "MODE", "pre_freeze_audit_only"):
+        with patched_epoch_modes("pre_freeze_audit_only"):
             audit_only = _summary_from_ledger(ledger_for_current_mode(), "20260102")
         self.assertEqual(audit_only["status"], "accumulating")
         self.assertTrue(all(row["status"] == "accumulating" for row in audit_only["reminders"]))
 
-        with patch.object(_epoch_mode, "MODE", "frozen_enforced"):
+        with patched_epoch_modes("frozen_enforced"):
             enforced = _summary_from_ledger(ledger_for_current_mode(), "20260102")
         self.assertEqual(enforced["status"], "review_due")
         self.assertEqual([row["status"] for row in enforced["reminders"][:4]], ["review_due"] * 4)

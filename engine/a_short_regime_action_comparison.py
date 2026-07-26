@@ -424,7 +424,7 @@ def summarize_action_records(records: list[dict]) -> dict:
         elif proxy < 0:
             unfavorable += 1
     gate = governance()["review_gate"]
-    ready = (_epoch_mode.evidence_counts_toward_clock()
+    ready = (_epoch_mode.evidence_counts_toward_clock("p1_regime_candidate_effect")
              and len(forward_records) >= gate["forward_live_weeks_min"]
              and len(h10) >= gate["divergence_h10_samples_min"])
     if not ready:
@@ -676,7 +676,7 @@ def summarize_candidate_effect_records(records: list[dict]) -> dict:
     h20_complete = len(weekly_h20) == len(weekly_h10) and bool(weekly_h10)
     ready = (
         # Pre-freeze evidence is audit-only and must never reach a verdict.
-        _epoch_mode.evidence_counts_toward_clock()
+        _epoch_mode.evidence_counts_toward_clock("p1_regime_candidate_effect")
         and len(live_weeks) >= policy["forward_live_weeks_min"]
         and len(weekly_h10) >= policy["divergence_weeks_min"]
         and sum(len(group) for group in divergent_h10.values()) >= policy["divergence_stocks_min"]

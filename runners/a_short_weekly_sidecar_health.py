@@ -28,6 +28,7 @@ SIDECAR_SPECS: dict[str, str] = {
     "data_canary": "advisory",
     "forward_tracker_capture": "forward_evidence",
     "forward_tracker_backfill": "forward_evidence",
+    "theme_forward_comparison": "forward_evidence",
     "crash_veto": "forward_evidence",
     "shared_cache_build": "cache_support",
     "regime_daily": "forward_evidence",
@@ -113,6 +114,9 @@ def _probe(project_root: Path, name: str, as_of: str) -> tuple[str | None, str |
         "regime_action": (project_root / "research/results/a_short/regime_action_comparison_records.json", None),
         "crash_veto": (project_root / "logs/a_short_crash_veto_summary.json", None),
         "forward_tracker_capture": (project_root / "logs/forward_tracker.csv", None),
+        "theme_forward_comparison": (
+            project_root / "research/results/a_short_theme_forward_comparison.json", None
+        ),
         "industry_weight_capture": (project_root / "research/results/a_short/industry_weight_comparison_summary.json", None),
         "industry_weight_settlement": (project_root / "research/results/a_short/industry_weight_comparison_summary.json", None),
         "target_policy_capture": (project_root / "research/results/a_short/target_policy_comparison_summary.json", None),
@@ -200,6 +204,14 @@ def _normalise_outcome(raw: dict[str, Any], *, as_of: str, project_root: Path) -
                 item["progress_status"] = "unavailable"
             elif observed_data < expected_data:
                 item["progress_status"] = "stalled"
+    if name == "theme_forward_comparison" and item["execution_status"] == "succeeded":
+        packet = _load_json(
+            project_root / "research/results/a_short_theme_forward_comparison.json"
+        )
+        mode = str((packet or {}).get("adjudication_mode") or "")
+        if mode.startswith("epoch_"):
+            item["progress_status"] = "stalled"
+            item["error_code"] = item["error_code"] or f"evidence_clock_blocked_{mode}"
     return item
 
 

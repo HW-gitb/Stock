@@ -597,6 +597,12 @@ def attach_forward_returns(samples, windows, daily_payload, cost_pct=DEFAULT_COS
             continue
         entry_open, _entry_close, entry_adj = entry_row
         samples.at[idx, "entry_date"] = entry_date
+        # The evidence interval is part of the settled outcome even when the
+        # T+1 order is blocked and the slot remains cash.
+        for window in windows:
+            exit_idx = base_idx + window
+            if exit_idx < len(trade_dates):
+                samples.at[idx, f"ret_{window}d_exit_date"] = trade_dates[exit_idx]
         # base close (for close-to-close reference)
         base_row = lookup.get((ts_code, trade_date))
         base_close = base_row[1] if base_row else None

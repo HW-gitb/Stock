@@ -2,7 +2,8 @@
 
 Why this exists (2026-07-25, user-directed)
 -------------------------------------------
-The six A-short comparison tracks (P0/v2, P1, P2, P3, P4a, P5) each bind an
+The seven A-short comparison tracks (P0/v2, P1, P2, P3, P4a, P5, and
+theme_forward_comparison) each bind an
 "epoch fingerprint" that hashes whole implementation files -- among them
 ``runners/a_short_weekly_pipeline.py``, ``runners/a_short_phase5_engine.py``,
 ``A-EGS/egs_main.py``, weekly schemas and runtime presets.  The intent was
@@ -19,27 +20,28 @@ mechanism was protecting almost nothing while invalidating everything.
 
 What this module does
 ---------------------
-While ``MODE`` is ``pre_freeze_audit_only`` every track's epoch fingerprint is
-a **stable constant** instead of a hash over moving files:
+While a track is ``pre_freeze_audit_only`` in the per-track registry, its epoch
+fingerprint is a **stable constant** instead of a hash over moving files:
 
 * captures still record a fingerprint, so provenance is still written down;
 * nothing is ever silently dropped, so progress counters stop lying;
 * unrelated edits cost nothing, so the design can keep moving.
 
 A pre-freeze constant can never equal a real post-freeze fingerprint, so
-flipping ``MODE`` to ``frozen_enforced`` naturally leaves every pre-freeze week
-outside the new epoch.  That is the intended semantics: the 12/24/36-week
-clocks start **at the freeze**, not before.
+freezing one registry entry naturally leaves every pre-freeze week outside the
+new epoch.  That is the intended semantics: the 12/24/36-week clocks start
+**at the freeze**, not before.
 
-Pre-freeze evidence is audit-only.  ``evidence_counts_toward_clock()`` is
+Pre-freeze evidence is audit-only.  ``evidence_counts_toward_clock(track)`` is
 False, and every track must refuse to emit a promote / retire / ready verdict
 while it is False -- concluding from evidence that does not count would be the
 same class of dishonesty this module exists to remove.
 
 Restoring enforcement
 ---------------------
-Flip ``MODE`` to ``frozen_enforced`` once the design is settled.  Before doing
-so, converge each track's real fingerprint onto semantic contracts (governance
+Freeze only the intended entry in ``TRACK_MODE_REGISTRY_PATH`` once that
+track's design is settled.  There is deliberately no all-track switch.  Before
+freezing a track, converge its real fingerprint onto semantic contracts (governance
 JSON / preset / schema / admission snapshot plus ``inspect.getsource`` of the
 evidence-producing functions) rather than whole-file bytes, and make any
 retained file-level hash LF-canonical -- otherwise the original churn returns
@@ -58,12 +60,11 @@ from __future__ import annotations
 
 import hashlib
 import json
+from pathlib import Path
 
-#: Flip to ``frozen_enforced`` when the design is settled and the real clocks start.
-MODE = "pre_freeze_audit_only"
-
+_PRE_FREEZE = "pre_freeze_audit_only"
 _FROZEN = "frozen_enforced"
-_VALID_MODES = (MODE, _FROZEN)
+_VALID_MODES = (_PRE_FREEZE, _FROZEN)
 
 #: Every track that owns an epoch fingerprint.  A new comparison track MUST be
 #: registered here and route its fingerprint through this module, so the next
@@ -75,27 +76,44 @@ TRACKS = (
     "p3_final_action_validation",
     "p4a_overlay_adjudication",
     "p5_industry_weight",
+    "theme_forward_comparison",
 )
+
+ROOT = Path(__file__).resolve().parents[1]
+TRACK_MODE_REGISTRY_PATH = ROOT / "docs" / "a_short_evidence_epoch_mode_registry_20260725.json"
 
 
 class EvidenceEpochModeError(ValueError):
     """Raised when the evidence mode or a track identifier is not recognised."""
 
 
-def _mode() -> str:
-    if MODE not in _VALID_MODES:
-        raise EvidenceEpochModeError("unknown evidence epoch mode")
-    return MODE
+def _mode(track: str) -> str:
+    """Return one registered track's mode; the registry is the sole authority."""
+    track = _require_track(track)
+    try:
+        registry = json.loads(TRACK_MODE_REGISTRY_PATH.read_text(encoding="utf-8"))
+    except (OSError, ValueError) as exc:
+        raise EvidenceEpochModeError(f"cannot read evidence epoch mode registry: {exc}") from exc
+    if registry.get("schema_name") != "a_short_evidence_epoch_mode_registry" or \
+            registry.get("schema_version") != "1.0.0":
+        raise EvidenceEpochModeError("invalid evidence epoch mode registry identity")
+    modes = registry.get("track_modes")
+    if not isinstance(modes, dict) or set(modes) != set(TRACKS):
+        raise EvidenceEpochModeError("evidence epoch mode registry must name every registered track exactly once")
+    mode = modes.get(track)
+    if mode not in _VALID_MODES:
+        raise EvidenceEpochModeError(f"unknown evidence epoch mode for track: {track}")
+    return mode
 
 
-def enforcement_enabled() -> bool:
+def enforcement_enabled(track: str) -> bool:
     """Whether a real contract fingerprint governs epoch membership."""
-    return _mode() == _FROZEN
+    return _mode(track) == _FROZEN
 
 
-def evidence_counts_toward_clock() -> bool:
+def evidence_counts_toward_clock(track: str) -> bool:
     """Whether accumulated weeks may advance a 12/24/36-week checkpoint."""
-    return enforcement_enabled()
+    return enforcement_enabled(track)
 
 
 def _require_track(track: str) -> str:
@@ -111,7 +129,7 @@ def pre_freeze_fingerprint(track: str) -> str:
     Distinct per track so two tracks can never share an epoch, and shaped like a
     sha256 digest so it still satisfies every track's ``^[0-9a-f]{64}$`` schema.
     """
-    payload = {"evidence_mode": _mode(), "track": _require_track(track)}
+    payload = {"evidence_mode": _PRE_FREEZE, "track": _require_track(track)}
     return hashlib.sha256(
         json.dumps(payload, ensure_ascii=False, sort_keys=True, separators=(",", ":")).encode("utf-8")
     ).hexdigest()
@@ -120,4 +138,4 @@ def pre_freeze_fingerprint(track: str) -> str:
 def fingerprint_or_pre_freeze(track: str, compute) -> str:
     """Return the track's real fingerprint only while enforcement is enabled."""
     _require_track(track)
-    return compute() if enforcement_enabled() else pre_freeze_fingerprint(track)
+    return compute() if enforcement_enabled(track) else pre_freeze_fingerprint(track)

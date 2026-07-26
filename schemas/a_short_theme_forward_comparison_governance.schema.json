@@ -1,0 +1,66 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "A-short theme forward comparison governance",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_name", "schema_version", "track", "scope", "policy", "criteria"],
+  "properties": {
+    "schema_name": {"const": "a_short_theme_forward_comparison_governance"},
+    "schema_version": {"const": "1.0.0"},
+    "track": {"const": "theme_forward_comparison"},
+    "scope": {
+      "type": "object", "additionalProperties": false,
+      "required": ["comparison_only", "audit_only_until_separately_frozen_epoch", "production_replacement_authorized", "p4a_mutation_authorized"],
+      "properties": {
+        "comparison_only": {"const": true},
+        "audit_only_until_separately_frozen_epoch": {"const": true},
+        "production_replacement_authorized": {"const": false},
+        "p4a_mutation_authorized": {"const": false}
+      }
+    },
+    "policy": {
+      "type": "object", "additionalProperties": false,
+      "required": ["top_n", "return_window_trading_days", "return_unit", "practical_margin_pp", "preview_at_weeks", "formal_at_weeks", "minimum_nonoverlap_h10_blocks", "nonoverlap_rule", "bootstrap_resamples", "bootstrap_seed", "holm_family", "holm_alpha", "familywise_interval_method", "power_target", "minimum_average_selected_positions", "minimum_full_slot_week_rate", "minimum_counted_block_executed_positions", "exploratory_theme_min_weeks", "exploratory_theme_min_stock_weeks", "negative_control"],
+      "properties": {
+        "top_n": {"const": 5}, "return_window_trading_days": {"const": 10}, "return_unit": {"const": "percentage_points"}, "practical_margin_pp": {"const": 0.25}, "preview_at_weeks": {"const": 24}, "formal_at_weeks": {"const": 36}, "minimum_nonoverlap_h10_blocks": {"const": 12}, "nonoverlap_rule": {"const": "strict_realized_t1_h10_intervals"}, "bootstrap_resamples": {"const": 10000}, "bootstrap_seed": {"const": 20260725}, "holm_family": {"const": "seven_policy_vs_primary_two_sided_practical_tests"}, "holm_alpha": {"const": 0.025}, "familywise_interval_method": {"const": "bonferroni_simultaneous_bootstrap"}, "power_target": {"const": 0.8}, "minimum_average_selected_positions": {"const": 3.0}, "minimum_full_slot_week_rate": {"const": 0.5}, "minimum_counted_block_executed_positions": {"const": 3}, "exploratory_theme_min_weeks": {"const": 12}, "exploratory_theme_min_stock_weeks": {"const": 24},
+        "negative_control": {"$ref": "#/definitions/negativeControl"}
+      }
+    },
+    "criteria": {
+      "type": "array", "minItems": 7, "maxItems": 7, "additionalItems": false,
+      "items": [
+        {"$ref": "#/definitions/industryTrend"},
+        {"$ref": "#/definitions/businessRole"},
+        {"$ref": "#/definitions/industryHeat"},
+        {"$ref": "#/definitions/persistence"},
+        {"$ref": "#/definitions/themeBreadthPass"},
+        {"$ref": "#/definitions/themeFitPass"},
+        {"$ref": "#/definitions/themeHeat"}
+      ]
+    }
+  },
+  "definitions": {
+    "criterion": {
+      "type": "object", "additionalProperties": false,
+      "required": ["criterion_id", "strategy", "field", "operator"],
+      "properties": {
+        "criterion_id": {"enum": ["industry_trend", "theme_fit_pass", "theme_breadth_pass", "theme_heat", "industry_heat", "persistence", "business_role"]},
+        "strategy": {"type": "string", "minLength": 1}, "field": {"type": "string"}, "operator": {"enum": ["equals", "boolean_true", "gte", "primary_theme_role_equals"]}, "value": {}, "negative_value": {"type": "string"}, "negative_values": {"type": "array", "items": {"type": "string"}}
+      }
+    },
+    "industryTrend": {"allOf": [{"$ref": "#/definitions/criterion"}, {"properties": {"criterion_id": {"const": "industry_trend"}, "strategy": {"const": "select industry_trend=tailwind, rank by unchanged final_score, use cash for empty slots"}, "field": {"const": "industry_trend"}, "operator": {"const": "equals"}, "value": {"const": "tailwind"}, "negative_value": {"const": "headwind"}}, "required": ["value", "negative_value"]}]},
+    "themeFitPass": {"allOf": [{"$ref": "#/definitions/criterion"}, {"properties": {"criterion_id": {"const": "theme_fit_pass"}, "strategy": {"const": "select theme_fit_pass=true, rank by unchanged final_score, use cash for empty slots"}, "field": {"const": "theme_fit_pass"}, "operator": {"const": "boolean_true"}}}]},
+    "themeBreadthPass": {"allOf": [{"$ref": "#/definitions/criterion"}, {"properties": {"criterion_id": {"const": "theme_breadth_pass"}, "strategy": {"const": "select theme_breadth_pass=true, rank by unchanged final_score, use cash for empty slots"}, "field": {"const": "theme_breadth_pass"}, "operator": {"const": "boolean_true"}}}]},
+    "themeHeat": {"allOf": [{"$ref": "#/definitions/criterion"}, {"properties": {"criterion_id": {"const": "theme_heat"}, "strategy": {"const": "select theme_heat_score>=70, rank by unchanged final_score, use cash for empty slots"}, "field": {"const": "theme_heat_score"}, "operator": {"const": "gte"}, "value": {"const": 70.0}}, "required": ["value"]}]},
+    "industryHeat": {"allOf": [{"$ref": "#/definitions/criterion"}, {"properties": {"criterion_id": {"const": "industry_heat"}, "strategy": {"const": "select industry_heat_score>=70, rank by unchanged final_score, use cash for empty slots"}, "field": {"const": "industry_heat_score"}, "operator": {"const": "gte"}, "value": {"const": 70.0}}, "required": ["value"]}]},
+    "persistence": {"allOf": [{"$ref": "#/definitions/criterion"}, {"properties": {"criterion_id": {"const": "persistence"}, "strategy": {"const": "select theme_persistence_mult>=1.0, rank by unchanged final_score, use cash for empty slots"}, "field": {"const": "theme_persistence_mult"}, "operator": {"const": "gte"}, "value": {"const": 1.0}}, "required": ["value"]}]},
+    "businessRole": {"allOf": [{"$ref": "#/definitions/criterion"}, {"properties": {"criterion_id": {"const": "business_role"}, "strategy": {"const": "select primary canonical theme role=core, rank by unchanged final_score, use cash for empty slots"}, "field": {"const": "primary_canonical_theme_id"}, "operator": {"const": "primary_theme_role_equals"}, "value": {"const": "core"}, "negative_values": {"const": ["key_supplier", "adjacent", "weak_link"]}}, "required": ["value", "negative_values"]}]},
+    "negativeControl": {
+      "type": "object", "additionalProperties": false,
+      "required": ["criterion_id", "strategy", "field", "operator", "fields"],
+      "properties": {
+        "criterion_id": {"const": "negative_control_overheat_or_chasing"}, "strategy": {"type": "string", "minLength": 1}, "field": {"const": "derived_flags"}, "operator": {"const": "any_boolean_true"}, "fields": {"const": ["overheat_flag", "chasing_high"]}
+      }
+    }
+  }
+}

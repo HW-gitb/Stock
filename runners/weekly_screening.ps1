@@ -342,9 +342,11 @@ if ($SkipCanary) {
 }
 
 # --- Stage 3: forward_tracker capture ---
+# The theme comparator runs after capture/backfill as an audit-only sidecar.
 if ($SkipTracker) {
     Add-SidecarOutcome -Name 'forward_tracker_capture' -Expected $false -Attempted $false -ExecutionStatus 'skipped' -ProgressStatus 'not_applicable' -SkipReason 'skip_tracker'
     Add-SidecarOutcome -Name 'forward_tracker_backfill' -Expected $false -Attempted $false -ExecutionStatus 'skipped' -ProgressStatus 'not_applicable' -SkipReason 'skip_tracker'
+    Add-SidecarOutcome -Name 'theme_forward_comparison' -Expected $false -Attempted $false -ExecutionStatus 'skipped' -ProgressStatus 'not_applicable' -SkipReason 'skip_tracker'
     Write-Host ""
     Write-Host "[3/4] -SkipTracker set, forward tracker not run" -ForegroundColor DarkGray
 } else {
@@ -361,6 +363,7 @@ if ($SkipTracker) {
         Write-Host "[WARN] forward_tracker exit $TrackerExitCode (check logs/forward_tracker.csv)" -ForegroundColor Yellow
         Add-SidecarOutcome -Name 'forward_tracker_capture' -Expected $true -Attempted $true -ExecutionStatus 'failed' -ProgressStatus 'unavailable' -ErrorCode 'process_failed' -ObservedDecisionAsOf $AsOf
         Add-SidecarOutcome -Name 'forward_tracker_backfill' -Expected $false -Attempted $false -ExecutionStatus 'not_due' -ProgressStatus 'not_applicable' -SkipReason 'capture_failed'
+        Add-SidecarOutcome -Name 'theme_forward_comparison' -Expected $false -Attempted $false -ExecutionStatus 'not_due' -ProgressStatus 'not_applicable' -SkipReason 'capture_failed'
     } else {
         # P1 Cut2 consumes only this existing tracker. Backfill is cache-only: it never asks the
         # weekly runner to download extra market data, and a cache gap remains advisory.
@@ -373,6 +376,21 @@ if ($SkipTracker) {
         }
         Add-SidecarOutcome -Name 'forward_tracker_capture' -Expected $true -Attempted $true -ExecutionStatus 'succeeded' -ProgressStatus 'advanced' -ObservedDecisionAsOf $AsOf
         Add-SidecarOutcome -Name 'forward_tracker_backfill' -Expected $true -Attempted $true -ExecutionStatus $(if($TrackerBackfillExitCode -eq 0){'succeeded'}else{'failed'}) -ProgressStatus $(if($TrackerBackfillExitCode -eq 0){'not_applicable'}else{'unavailable'}) -ErrorCode $(if($TrackerBackfillExitCode -eq 0){$null}else{'process_failed'})
+        if ($IsHistoricalAsOf) {
+            Add-SidecarOutcome -Name 'theme_forward_comparison' -Expected $false -Attempted $false -ExecutionStatus 'not_due' -ProgressStatus 'not_applicable' -SkipReason 'historical_replay'
+        } else {
+            Write-Host "[3a/4] Running audit-only theme forward comparison sidecar ..." -ForegroundColor Yellow
+            & $PythonExe runners\a_short_theme_forward_comparison.py `
+                --tracker (Join-Path $ProjectRoot 'logs\forward_tracker.csv') `
+                --out (Join-Path $ProjectRoot 'research\results\a_short_theme_forward_comparison.json') `
+                --private-root (Join-Path $ProjectRoot 'state\a_short\theme_forward_comparison_private\v1')
+            $ThemeComparisonExitCode = $LASTEXITCODE
+            if ($null -eq $ThemeComparisonExitCode) { $ThemeComparisonExitCode = 1 }
+            if ($ThemeComparisonExitCode -ne 0) {
+                Write-Host "[WARN] theme forward comparison exit $ThemeComparisonExitCode (audit-only sidecar; does NOT block the weekly)" -ForegroundColor Yellow
+            }
+            Add-SidecarOutcome -Name 'theme_forward_comparison' -Expected $true -Attempted $true -ExecutionStatus $(if($ThemeComparisonExitCode -eq 0){'succeeded'}else{'failed'}) -ProgressStatus $(if($ThemeComparisonExitCode -eq 0){'not_applicable'}else{'unavailable'}) -ErrorCode $(if($ThemeComparisonExitCode -eq 0){$null}else{'process_failed'})
+        }
     }
 }
 

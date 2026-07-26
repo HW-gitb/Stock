@@ -1,0 +1,48 @@
+{
+  "schema_name": "a_short_theme_forward_comparison_governance",
+  "schema_version": "1.0.0",
+  "track": "theme_forward_comparison",
+  "scope": {
+    "comparison_only": true,
+    "audit_only_until_separately_frozen_epoch": true,
+    "production_replacement_authorized": false,
+    "p4a_mutation_authorized": false
+  },
+  "policy": {
+    "top_n": 5,
+    "return_window_trading_days": 10,
+    "return_unit": "percentage_points",
+    "practical_margin_pp": 0.25,
+    "preview_at_weeks": 24,
+    "formal_at_weeks": 36,
+    "minimum_nonoverlap_h10_blocks": 12,
+    "nonoverlap_rule": "strict_realized_t1_h10_intervals",
+    "bootstrap_resamples": 10000,
+    "bootstrap_seed": 20260725,
+    "holm_family": "seven_policy_vs_primary_two_sided_practical_tests",
+    "holm_alpha": 0.025,
+    "familywise_interval_method": "bonferroni_simultaneous_bootstrap",
+    "power_target": 0.8,
+    "minimum_average_selected_positions": 3.0,
+    "minimum_full_slot_week_rate": 0.5,
+    "minimum_counted_block_executed_positions": 3,
+    "exploratory_theme_min_weeks": 12,
+    "exploratory_theme_min_stock_weeks": 24,
+    "negative_control": {
+      "criterion_id": "negative_control_overheat_or_chasing",
+      "strategy": "select overheat_flag OR chasing_high, rank by unchanged final_score, use cash for empty slots",
+      "field": "derived_flags",
+      "operator": "any_boolean_true",
+      "fields": ["overheat_flag", "chasing_high"]
+    }
+  },
+  "criteria": [
+    {"criterion_id": "industry_trend", "strategy": "select industry_trend=tailwind, rank by unchanged final_score, use cash for empty slots", "field": "industry_trend", "operator": "equals", "value": "tailwind", "negative_value": "headwind"},
+    {"criterion_id": "business_role", "strategy": "select primary canonical theme role=core, rank by unchanged final_score, use cash for empty slots", "field": "primary_canonical_theme_id", "operator": "primary_theme_role_equals", "value": "core", "negative_values": ["key_supplier", "adjacent", "weak_link"]},
+    {"criterion_id": "industry_heat", "strategy": "select industry_heat_score>=70, rank by unchanged final_score, use cash for empty slots", "field": "industry_heat_score", "operator": "gte", "value": 70.0},
+    {"criterion_id": "persistence", "strategy": "select theme_persistence_mult>=1.0, rank by unchanged final_score, use cash for empty slots", "field": "theme_persistence_mult", "operator": "gte", "value": 1.0},
+    {"criterion_id": "theme_breadth_pass", "strategy": "select theme_breadth_pass=true, rank by unchanged final_score, use cash for empty slots", "field": "theme_breadth_pass", "operator": "boolean_true"},
+    {"criterion_id": "theme_fit_pass", "strategy": "select theme_fit_pass=true, rank by unchanged final_score, use cash for empty slots", "field": "theme_fit_pass", "operator": "boolean_true"},
+    {"criterion_id": "theme_heat", "strategy": "select theme_heat_score>=70, rank by unchanged final_score, use cash for empty slots", "field": "theme_heat_score", "operator": "gte", "value": 70.0}
+  ]
+}

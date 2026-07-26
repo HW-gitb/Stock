@@ -7,6 +7,7 @@ from unittest import mock
 import jsonschema
 
 from engine import a_short_evidence_epoch_mode as epoch_mode
+from tests._a_short_epoch_mode_test_utils import patched_epoch_modes
 
 
 ROOT = Path(__file__).resolve().parents[2]
@@ -24,7 +25,7 @@ def _hashes_must_match(artifact: dict) -> bool:
     # cannot be the re-arm signal: using it here makes the hash guard dead
     # forever.  The epoch-mode switch is the authoritative transition; the
     # pre-freeze branch below continues to enforce the packet's honesty fields.
-    return epoch_mode.enforcement_enabled()
+    return epoch_mode.enforcement_enabled("p4a_overlay_adjudication")
 
 
 def _assert_frozen_contract_hashes(testcase: unittest.TestCase, artifact: dict) -> None:
@@ -72,12 +73,12 @@ class AShortFifthKnifeForwardEvidenceFreezeTests(unittest.TestCase):
 
     def test_enforced_epoch_rejects_recorded_contract_drift(self) -> None:
         artifact = json.loads(ARTIFACT.read_text(encoding="utf-8"))
-        with mock.patch.object(epoch_mode, "MODE", "frozen_enforced"):
+        with patched_epoch_modes("frozen_enforced"):
             self.assertTrue(_hashes_must_match(artifact))
         # Plant drift in the copied packet itself.  This remains a real
         # reverse control even after the live packet is fully resealed.
         artifact["frozen_contracts"][0]["sha256"] = "0" * 64
-        with mock.patch.object(epoch_mode, "MODE", "frozen_enforced"):
+        with patched_epoch_modes("frozen_enforced"):
             with self.assertRaises(AssertionError):
                 _assert_frozen_contract_hashes(self, artifact)
 

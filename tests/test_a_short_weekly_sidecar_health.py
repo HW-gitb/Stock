@@ -97,6 +97,47 @@ class AShortSidecarHealthTests(unittest.TestCase):
         self.assertEqual(result["overall"], "partial")
         self.assertEqual(result["sidecars"][0]["progress_status"], "not_applicable")
 
+    def test_theme_comparison_progress_comes_from_packet_clock(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            packet = root / "research" / "results" / "a_short_theme_forward_comparison.json"
+            packet.parent.mkdir(parents=True)
+            packet.write_text(
+                json.dumps({"latest_evidence_as_of": "20260727"}), encoding="utf-8"
+            )
+            manifest = _manifest([_row(
+                "theme_forward_comparison",
+                progress="not_applicable",
+                observed_decision_as_of=None,
+            )])
+            result = build_health(
+                as_of="20260727", launcher_manifest=manifest, project_root=root
+            )
+        self.assertEqual(result["overall"], "healthy")
+        self.assertEqual(result["sidecars"][0]["observed_decision_as_of"], "20260727")
+        self.assertEqual(result["sidecars"][0]["progress_status"], "advanced")
+
+    def test_theme_comparison_epoch_mismatch_is_stalled_even_when_fresh(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            packet = root / "research" / "results" / "a_short_theme_forward_comparison.json"
+            packet.parent.mkdir(parents=True)
+            packet.write_text(json.dumps({
+                "latest_evidence_as_of": "20260727",
+                "adjudication_mode": "epoch_contract_mismatch",
+            }), encoding="utf-8")
+            manifest = _manifest([_row(
+                "theme_forward_comparison",
+                progress="not_applicable",
+                observed_decision_as_of=None,
+            )])
+            result = build_health(
+                as_of="20260727", launcher_manifest=manifest, project_root=root
+            )
+        self.assertEqual(result["overall"], "degraded")
+        self.assertEqual(result["sidecars"][0]["progress_status"], "stalled")
+        self.assertIn("epoch_contract_mismatch", result["sidecars"][0]["error_code"])
+
     def test_bundle_is_schema_valid_and_deidentified(self):
         manifest = _manifest([_row("data_canary")])
         result = build_health(as_of="20260727", launcher_manifest=manifest, project_root=Path("."))
@@ -123,6 +164,13 @@ class AShortSidecarOutcomeSchemaTests(unittest.TestCase):
         self.assertIn("--weekly-receipt", text)
         self.assertIn("[sidecar-health] UNAVAILABLE", text)
         self.assertLess(text.index("a_short_weekly_sidecar_health.py"), text.index("=== Pipeline done ==="))
+
+    def test_launcher_runs_theme_comparison_after_tracker_without_epoch_start(self):
+        text = (Path(__file__).resolve().parents[1] / "runners" / "weekly_screening.ps1").read_text(encoding="utf-8")
+        invocation = "runners\\a_short_theme_forward_comparison.py"
+        self.assertIn(invocation, text)
+        self.assertLess(text.index("forward_tracker.py backfill"), text.index(invocation))
+        self.assertNotIn("--start-epoch", text)
 
     def test_pipeline_writes_outcomes_after_publish_without_rewriting_bundle(self):
         text = (Path(__file__).resolve().parents[1] / "runners" / "a_short_weekly_pipeline.py").read_text(encoding="utf-8")

@@ -1,5 +1,50 @@
 # Session Log
 
+## 2026-07-26 - Claude Code 审查 PASS (theme_forward_comparison 全件第三轮，五类闭合收口)
+
+- **Verdict/Action**: PASS，已并入 master（未 push）。按用户要求全件重读而非只看修复面：五类闭合契约现已全部带机器断言。类2 按 Required 收口（validate 经 `_decision_time_projection` 走同一个 builder，废字段删除，信任边界写进收据与设计文档）。P3 与 7 条 Optional 亦已落地。用户 2026-07-26 选 A，接受「可信本地操作者」边界，已固化进设计文档 §Epoch protocol。Detail in register。
+- **Required**: 无。`R-ASHORT-THEME-ADJUDICATOR-COVERAGE-MEASURED-ON-UNCOUNTED-WEEKS` 转 resolved P1；用户已选 A 接受「可信本地操作者」边界。新入册 `R-ASHORT-EPOCH-CHURN-TEST-MUTATES-PRODUCTION-SOURCES-IN-PLACE`(open P2)。另 2 条冻结前 Optional。完整证据/边界/closure 见 `system_risk_register.md`(单一来源，本处不复述)。
+- **Verify**: review-evidence:a9edd3b54902。亲跑探针证实回填残留真实存在，但全树 grep 证实无 CLI/runner 路径可倒填。定向包 93 OK；十三个组件指纹开工/收口全同；七轨仍 `pre_freeze_audit_only`、时钟未起。rule 3(a)(b) 命中，合并时刻跑唯一一次全量 = 1997 tests / 1F+1E，两条均为已登记预存红，已记账本。中途 churn 测试写脏三个生产文件，已精确复原、重跑不复现。§6a 不起 agent。全部证据与理由见 register。无 provider/account/order。
+- **Next**: 无（已并入 master）。冻结前尚欠两条 Optional：删死函数 `_semantic_file_function_digest`、把引擎自身常量改成与外部文件同样的自动绑定方向。
+
+## 2026-07-26 - Claude Code 审查 FAIL (theme_forward_comparison 五类闭合，第二轮全件)
+
+- **Verdict/Action**: FAIL，不提交。按五类闭合契约逐类核「机器断言是否存在」：类1(统计与门同吃一个证据块集，且 packet 校验硬绑块数)、类3(零观测/低覆盖走不可评估并绑住 replacement 阻断)、类4(四处中断点均可按精确字节续跑)、类5(闭包引用常量默认全绑)均已闭合且各有断言。类2(收据 build/validate 对称)未闭合。Detail in register。
+- **Required**: `R-ASHORT-THEME-ADJUDICATOR-COVERAGE-MEASURED-ON-UNCOUNTED-WEEKS`(仍 open P1)。类2 症结：`validate_cohort_admission_receipt` 走 `_admission_receipt_fields` 而非 builder，跳过的恰是唯一防倒填检查；新增 `admission_outcome_state_sha256` 把 `"unobserved"` 写死，只是 ts_code 的函数。P2(a) 事后补签成熟周原样成立。Round-2 Required 四条 + 7 条低危见 `system_risk_register.md`(单一来源，本处不复述)。
+- **Verify**: review-evidence:a9edd3b54902。亲跑探针(pinned main Python，脚本在仓库外 scratchpad)：全结算 cohort 下 builder 返回 None，validator 接受手签件，伪造件与真件**逐字节相同**，outcome-state 摘要在成熟与未结算 cohort 上完全相等(`37c19f8cb8208d12`)。定向包 80 OK。九个组件指纹开工/收口全同(上一次尝试因树被实时改写已作废重来)。分级：§6a 不起 agent(上轮已对全件跑过对抗 agent，本轮增量逐行读且 FAIL 亲自复现，rule 4/6)；全量包不跑(rule 3 仅在 PASS 时刻触发)。无 provider/account/order。
+- **Next**: Codex：修复（按 register 的 Round-2 Required 四条，类2 一刀闭合）。
+
+## 2026-07-26 - Codex repair (theme_forward_comparison class-2 correction + Optional closure)
+
+- **Verdict/Action**: Accepted the independent FAIL's class-2 diagnosis. Admission validation now calls the admission builder over a reconstructed decision-time projection using the receipt's recorded admission date; the vacuous `admission_outcome_state_sha256` is removed. The receipt explicitly marks its timing provenance as local and not independently timestamped. The component remains `pre_freeze_audit_only`; no epoch starts, no clock advances, and no verdict/action is emitted.
+- **Required**: The residual boundary is explicit rather than concealed: a local actor who can rewrite both the private receipt chain and epoch pointer can back-date a receipt, so this local chain is operational forward evidence only under a trusted-local-operator assumption; independently auditable external/committed anchoring requires a separately authorized authority design. `R-ASHORT-THEME-ADJUDICATOR-COVERAGE-MEASURED-ON-UNCOUNTED-WEEKS` remains open pending independent review.
+- **Verify**: Fixed main Python: theme engine 66 OK; runner/tracker/epoch/sidecar pack 43 OK; old-six-track/P4a cross-track pack 162 OK; doc-governance pack 60 OK; `git diff --check` clean apart from normal line-ending warnings. Real tracker smoke writes only `%TEMP%` and remains `audit_only_pre_freeze`, clock 0, `formal=false`, no epoch ID. Optional repairs add status-specific block reasons, exact per-block execution profiles, eligible-unadmitted assertion, fingerprint-exemption enumeration, explicit exploratory-theme scope, and remove mixed-scope coverage/dead code. No provider/account/order/broker/live operation.
+- **Pre-Codex self-review**: The prior claim that this component could independently prove admission timing was withdrawn. The repaired contract names exactly what the local chain verifies and what it cannot verify; existing unrelated target-policy dirt remains untouched.
+- **Next**: Claude Code：审查
+
+## 2026-07-26 - Codex structural repair (theme_forward_comparison, five-class closure)
+
+- **Verdict/Action**: Implemented the user-approved structural closure for the open theme-comparison P1/P2 batch; the component remains `pre_freeze_audit_only`, with no epoch start, clock, formal verdict, activation, or production change. Statistics, deployability, primary coverage, negative-control applicability and verdict inputs now share selected non-overlapping evidence blocks; each counted block requires at least three actually entered challenger positions.
+- **Required**: `R-ASHORT-THEME-ADJUDICATOR-COVERAGE-MEASURED-ON-UNCOUNTED-WEEKS` remains open pending independent review. Repair scope: admission creation-time facts are validated separately from later settlement; receipt/archive/epoch/registry transitions resume only from exact immutable bytes; sealed same-week cohorts cannot be evicted; reset can resume after archive write; private state is proven gitignored; generated public sidecar is ignored; semantic producer fingerprints automatically include referenced constants.
+- **Verify**: Fixed main Python: theme engine 63 OK; runner receipt/restart suite 13 OK; five structural reverse controls 5 OK (same evidence blocks, replay-float exclusion, absent baseline no-count, empty negative control not-assessable, automatic constant fingerprint); six old tracks/P4a cross-track pack 162 OK; doc-governance pack 60 OK; `git diff --check` passed with only line-ending warnings. No provider/account/order/broker/live operation.
+- **Pre-Codex self-review**: Re-read the five closure classes against the current implementation; no epoch is started and pre-freeze registry/epoch artifacts remain untouched. Existing unrelated target-policy public-summary dirt is preserved and not part of this repair.
+- **Next**: Claude Code：审查
+
+## 2026-07-26 - Claude Code 审查 FAIL (theme_forward_comparison 全部件，刀1+刀2 合并态)
+
+- **Verdict/Action**: FAIL，不提交。按用户指定做全部件严格审查。P1：`_policy_result` 的统计只用非重叠块（约每隔一周），而 `deployable` 覆盖门算在**全部**周上，两集合按构造不同——熊市里挑战者在被计数的 18 个块中每周只持 1 只 + 4 现金位，仍判 `supported`（+2.4pp 全来自现金没跌，两道门恰好卡阈值）。另 5 条 P2 + 1 条 P3。时钟确认未起跑。Detail in register.
+- **Required**: `R-ASHORT-THEME-ADJUDICATOR-COVERAGE-MEASURED-ON-UNCOUNTED-WEEKS`(open P1，含 P2 批 a-e 与 P3)。完整 Required/证据/边界/closure 见 `system_risk_register.md`(单一来源，本处不复述)。
+- **Verify**: review-evidence:30e5e2869293。§6a(iii) 命中：起 1 个独立对抗 agent 做全部件黑盒（首个 agent 被看门狗中止后重起，并纠正了因全局 `MODE` 删除而失效的模拟指令）；P1 由我亲自复现，不采信转述。rule 3(a) 命中(`weekly_screening.ps1` 生产入口)：全量 1984 tests，1F+1E 均为 master 预存红(`R-ASHORT-MASTER-LANE-PACK-TWO-PREEXISTING-RED`)，无一可归因本刀。组件指纹四次取样一致。无 provider/account/order。
+- **Next**: Codex：修复（先修 P1 覆盖口径，再按 register 的 P2 批 a-e）。
+
+## 2026-07-26 - Codex 第二刀完成 + 全部件独立复审 PASS（epoch 启动安全延期）
+
+- **Verdict/Action**: 第二刀实现完成；独立子 agent 已对整个 `theme_forward_comparison` 全量复审并 PASS。按轨注册表、原子 admission、不可改写 outcome receipts、固定 36 周裁决、正式包归档、主题冻结、周流程 sidecar 和旧六轨隔离均已落地。第七轨仍保持 `pre_freeze_audit_only`，未伪造“已开始计时”：真实 tracker 的现有 cohort 均为旧格式，不具备合法原子 admission，必须等第一份完整 post-merge live cohort 后再显式启动零周 epoch。Detail in register.
+- **Required**: 无实现 Required。操作边界：在完整新 cohort 出现前不得运行 `--start-epoch`；出现后以该 cohort 冻结 strategy/taxonomy/runtime identity 并从零周开始，不追溯旧记录。
+- **Verify**: 固定主 Python：theme 聚焦包 86 OK；跨 epoch/tracker/weekly/EOL/旧六轨包 172 OK；EOL/source-binding 28 OK；文档守护 60 OK；全部件独立 agent 最终包 224/224 OK，PowerShell launcher ParseFile 与 `git diff --check` 通过。真实 D 盘 tracker CLI exit 0：171 rows，0 counted，clock 0，`audit_only_pre_freeze`，formal=false。无 provider/account/order/broker/production switch。
+- **Pre-Codex self-review**: 对齐 master `8a9d5d83` 后保留 overlay-eval 退役/P4a 唯一路由；修复合并遗留的两处全局 `MODE` 测试；11 份无用户改动的 published bundle 按 `-text` 从 index 精确重新物化；无冲突、无 staged diff，stash 备份仍保留。
+- **Next**: Claude Code：审查第二刀；PASS 后提交。
+
 ## 2026-07-25 - Claude Code 审查 (本轮无可审实现；P2 公开摘要回退根因入册)
 
 - **Verdict/Action**: 无 PASS 可发——本会话零代码产出（刀13 在读文档阶段被用户叫停，其后全程为设计讨论）。工作树唯一改动是既存的 P2 公开摘要回退，非本轮工作；审它时定位到从未登记的根因并入册。两个产物文件不提交（提交等于发布一个倒退的 as_of 时钟）。Detail in register.
@@ -42,6 +87,55 @@
 - **Required**: 用户需求 = 设计定稿前，对系统的任何改动都不得因冻结机制报错、或让已积累的周数失效。用户目的 = 用户确认设计完成的那一周开始记录数据，数据攒够后系统自动出结果。据此两个方向对抗：①预冻结期真的不会因无关改动报错/清零，也不会提前喊出 `review_due` / `recommend_*`；②`MODE` 翻成 `frozen_enforced` 后真能自动建新 epoch、从零计数、达标时自动出结论。overlay 退役刀不在范围（未提交，Required 见 register）。
 - **Verify**: 我这轮跑过：七模块 epoch 包 120 OK（修前 11 errors）；`tests.test_a_short_evidence_epoch_mode` 9 OK；fifth-knife + official-operation 19 OK；churn probe + target-policy 30 OK；植入 reload 被新守护抓到；`py_compile` clean。全量 lane 包起过但按用户指示掐掉，未采信、未记 ledger；Codex 自行决定是否补跑。
 - **Next**: Codex：重审 `7d72679d`。
+## 2026-07-26 - Claude Code 审查 Pass-with-Required (theme forward comparison knife 1 二轮收口)
+
+- **Verdict/Action**: Pass-with-Required，未提交。两条 P1 按整类闭合（基准残缺四种入口全 fail-closed；`_as_bool` 整个强转类闭合），R4/R5 闭合、R6 一半。Codex 明示把 R3/R6-改写/R7/R8 推回刀2；实测两把钥匙（注册表 + epoch 文件）单独伪造任一把都只得 `epoch_mode_mismatch`，故推回**成立且今日惰性**，已在 register 对刀2 上硬门：须与翻钥匙同刀且先于翻转受审。未提交因该工作树是 detached HEAD，提交会产生游离提交；并入 master 属用户级集成决定。Detail in register.
+- **Required**: `R-ASHORT-THEME-FIELD-ADJUDICATOR-KNIFE1-FALSE-POSITIVE-AND-LOOKAHEAD`(Round 2 = Pass-with-Required，余项 gated 到刀2)；新增 `R-ASHORT-MASTER-LANE-PACK-TWO-PREEXISTING-RED`(master 自身 2 红)。完整证据/边界/closure 见 `system_risk_register.md`(单一来源，本处不复述)。
+- **Verify**: review-evidence:30e5e2869293。分级：本轮为对已受对抗审查面的定向修复复审，未再起第二个 agent（改动限于点名 Required 面；我复现了原 agent 的 P1 探针并新写指纹/基准类探针；刀2 已挂强制 §6a 统计面对抗）。rule 3(b) 全量包 1973 tests / 2 failures + 2 errors，**四条逐条归因均非本 diff**（2 条在 master 绿、2 条在 master 同红）；聚焦包 88 OK + tracker 1 OK。无 provider/account/order。
+- **Next**: Codex：Pass（刀2 起草前先读 register 的 Round 2 硬门）。
+
+## 2026-07-26 - Codex repair (theme forward comparison first knife)
+
+- **Verdict/Action**: Implemented first-knife input/baseline/statistical repairs: incomplete official Top5 is no-count, replay booleans are strict, business_role filters only challenger, zero-observation negative control is not assessable, policy statistics use one latest cohort per ISO week, return unit/capture-date lineage is enforced, and packets expose independent predictive/policy layers with cash-slot metrics. Knife 2 epoch identity/outcome receipts/global-mode/churn work remains out of scope.
+- **Required**: `R-ASHORT-THEME-FIELD-ADJUDICATOR-KNIFE1-FALSE-POSITIVE-AND-LOOKAHEAD` remains open pending review of the separated knife-2 items; first-knife implementation is complete in the current uncommitted worktree.
+- **Verify**: Fixed main Python: theme/runner/tracker focused pack 34 OK after the future-date reverse control; earlier first-knife cross-pack 46 OK and governance/epoch pack 58 OK; changed Python compile clean; `git diff --check` only reports repository-wide LF/CRLF normalization warnings.
+- **Pre-Codex self-review**: independent current-diff-only agent PASS; it found no first-knife P1/P2, and explicitly classified admission-fingerprint completeness and immutable mature-outcome receipts as knife-2 scope.
+- **Next**: Claude Code：审查第一刀修复。
+
+## 2026-07-25 - Claude Code 审查 FAIL (theme forward comparison knife 1, uncommitted)
+
+- **Verdict/Action**: FAIL，不提交。按轨道冻结这一半是干净的（只翻 theme 一条轨时六条旧轨全未武装、P4a 指纹仍是预冻结常量、注册表七轨全 pre-freeze＝刀1 确为 audit-only）。但裁决引擎本身有两条 P1：空的正式 Top5 被当成已结算的 0.0pp 全现金基准，以及 float 型 `historical_replay` 逃过回放边界——两者都能让七条判据全部输出 `supported`。Detail in register.
+- **Required**: `R-ASHORT-THEME-FIELD-ADJUDICATOR-KNIFE1-FALSE-POSITIVE-AND-LOOKAHEAD`(open P1，含 Required 1-8 + 4 条 Optional)。完整 Required/证据/边界/closure 见 `system_risk_register.md`(单一来源，本处不复述)。
+- **Verify**: review-evidence:30e5e2869293。分级：§6a(iii) 命中(新~700 行 fail-closed 裁决引擎)→起 1 个独立对抗 agent(只读 Codex 树、离线、自行推导不变量)，未替代我自己的整读+探针(我覆盖 epoch 接缝，agent 覆盖引擎，不重叠)。rule 3(b) 命中→全量包已起但按用户指令停止，**不作为证据**，PASS 前仍需补跑。亲跑聚焦包 88 OK(pinned main Python，Codex 树)。两条 P1 均由 agent 在真 CLI 上复现。无 provider/account/order。
+- **Next**: Codex：修复（按 register 的 Required 1-8；两条 P1 先修，Optional 一并处理）。
+
+## 2026-07-25 - Codex executor self-review PASS (theme forward comparison knife 1, uncommitted)
+
+- **Verdict/Action**: PASS. Seven frozen field policies are comparison-only; epoch start/reset/archive, per-track freeze, mature-H10 clock, anti-backfill, source/config drift stop, fixed Holm family, negative-control block, and primary-theme isolation are implemented. P4a and the six existing tracks remain unchanged in mode.
+- **Required**: 无。
+- **Verify**: Fixed main Python `C:\\Users\\cnhea\\AppData\\Local\\Programs\\Python\\Python313\\python.exe`: independent re-review targeted pack 42 OK; theme/runner/schema pack 28 OK; affected six-track pack and document governance pack passed; `git diff --check` clean.
+- **Next**: Claude Code：审查并提交。
+
+## 2026-07-25 - Codex 完整复审 PASS（`89711212`，published-bundle EOL pin）
+
+- **Verdict/Action**: PASS. Exact detached `89711212` worktree confirms all 11 tracked weekly bundles are `i/lf w/lf attr/-text`; the new guard covers attribute, checkout EOL, raw CRLF bytes, and recorded source-SHA binding. No Required finding.
+- **Required**: 无。
+- **Verify**: Fixed main Python `C:\\Users\\cnhea\\AppData\\Local\\Programs\\Python\\Python313\\python.exe`: published-bundle EOL guard 3 OK; P1 action comparison 25 OK; epoch mode 9 OK; official-operation 15 OK; changed test compiles. Detached review worktree clean after tests; no provider/account/order.
+- **Next**: 无。
+
+## 2026-07-25 - Codex 重审 FAIL (`dec458da`, A-short pre-freeze tests + bundle EOL pin)
+
+- **Verdict/Action**: FAIL. The P4a/P5 threshold controls are sound, but the new bundle `-text` rules do not match their target paths: `git check-attr text` returns `unspecified`, not `unset`. The current CRLF-smudged worktree still produces the same P1 1-error/1-failure source-binding regression. Detail in register.
+- **Required**: `R-ASHORT-PUBLISHED-BUNDLE-CRLF-ATTRIBUTE-PATTERN-NOOP` — replace the non-matching attributes patterns with verified matching rules and add a path-level regression guard; re-review before any follow-up commit. Detail in register.
+- **Verify**: Fixed main Python `C:\\Users\\cnhea\\AppData\\Local\\Programs\\Python\\Python313\\python.exe`: epoch-mode 9 OK; combined epoch/P1 run 34 tests with P1 1 error + 1 failure. Canonical Git blob SHA equals the recorded `b4e20618…` and migrates correctly, proving the diagnosis but not the ineffective attribute application. `git diff --check dec458da^ dec458da` clean; no provider/account/order.
+- **Next**: Codex：修复。
+
+## 2026-07-25 - Codex 完整重审 FAIL（`7d72679d`，A-short pre-freeze evidence epoch）
+
+- **Verdict/Action**: FAIL after complete review of all 19 changed files. P4a/P5 production gates are present, but their committed pre-freeze controls are vacuous: both use empty input, so they stay neutral even if the gates are removed. The complete P1 action-comparison module is also red on a pre-existing tracked M6.7 source-binding drift; it is not introduced by this commit but prevents a clean regression verdict. Detail in register.
+- **Required**: `R-ASHORT-PREFREEZE-P4A-P5-THRESHOLD-TEST-GAP` — add threshold-satisfying, two-directional P4a/P5 controls. `R-ASHORT-REGIME-ACTION-MIGRATION-SOURCE-BINDING-DRIFT` — separately reconcile the tracked M6.7 bytes with the historical recorded SHA without weakening the source-binding check. Detail in register.
+- **Verify**: Fixed main Python `C:\\Users\\cnhea\\AppData\\Local\\Programs\\Python\\Python313\\python.exe`: all changed Python files compile; epoch 9 OK, P0 16 OK, P3 8 OK, P5 9 OK, P4a 24 OK, P2 29 OK, fifth-knife + official-operation 19 OK, P1 runner 33 OK; P1 action module = 25 run, 1 error + 1 failure (tracked source-binding drift). `git diff --check 7d72679d^ 7d72679d` clean; no provider/account/order.
+- **Next**: Codex：修复 Required。
 
 ## 2026-07-25 - Claude Code 审查 PASS + commit (A-short 第一刀 + 第二刀)
 

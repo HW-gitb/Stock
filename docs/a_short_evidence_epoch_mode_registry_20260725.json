@@ -1,0 +1,13 @@
+{
+  "schema_name": "a_short_evidence_epoch_mode_registry",
+  "schema_version": "1.0.0",
+  "track_modes": {
+    "p0_factor_comparison_v2": "pre_freeze_audit_only",
+    "p1_regime_candidate_effect": "pre_freeze_audit_only",
+    "p2_target_policy": "pre_freeze_audit_only",
+    "p3_final_action_validation": "pre_freeze_audit_only",
+    "p4a_overlay_adjudication": "pre_freeze_audit_only",
+    "p5_industry_weight": "pre_freeze_audit_only",
+    "theme_forward_comparison": "pre_freeze_audit_only"
+  }
+}

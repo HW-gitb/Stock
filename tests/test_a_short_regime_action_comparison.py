@@ -13,6 +13,7 @@ from engine.a_short_regime_action_comparison import (
 )
 from engine.a_short_regime_classifier import FORWARD_RETURN_BASIS
 from engine import a_short_evidence_epoch_mode as _epoch_mode
+from tests._a_short_epoch_mode_test_utils import enter_patched_epoch_modes, patched_epoch_modes
 
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -29,9 +30,7 @@ class RegimeActionComparisonTests(unittest.TestCase):
     def setUp(self):
         # Existing cases verify the enforced epoch contract.  The paired
         # pre-freeze/enforced reverse control is below.
-        previous = _epoch_mode.MODE
-        _epoch_mode.MODE = "frozen_enforced"
-        self.addCleanup(setattr, _epoch_mode, "MODE", previous)
+        enter_patched_epoch_modes(self, "frozen_enforced")
 
     def _source(self):
         return {"source_schema_name": "a_short_weekly_report", "source_as_of": "20260714", "source_sha256": "a" * 64, "candidate_build_count": 2}
@@ -161,9 +160,9 @@ class RegimeActionComparisonTests(unittest.TestCase):
                 raw_v14_2_regime="shock", effective_v14_2_regime="shock", m67_source=self._source(),
                 forward_origin=self._origin(decision_as_of=as_of),
             ))
-        with patch.object(_epoch_mode, "MODE", "pre_freeze_audit_only"):
+        with patched_epoch_modes("pre_freeze_audit_only"):
             self.assertEqual(summarize_action_records(rows)["status"], "accumulating")
-        with patch.object(_epoch_mode, "MODE", "frozen_enforced"):
+        with patched_epoch_modes("frozen_enforced"):
             self.assertEqual(summarize_action_records(rows)["status"], "review_candidate_preferred")
 
     def test_summary_rejects_multiple_forward_records_from_one_run_date(self):
@@ -226,9 +225,7 @@ class CandidateEffectTests(unittest.TestCase):
     def setUp(self):
         # These cases assert the ENFORCED epoch contract (the historical default).
         # Pre-freeze behaviour is covered by tests/test_a_short_evidence_epoch_mode.py.
-        previous = _epoch_mode.MODE
-        _epoch_mode.MODE = "frozen_enforced"
-        self.addCleanup(setattr, _epoch_mode, "MODE", previous)
+        enter_patched_epoch_modes(self, "frozen_enforced")
 
     def test_public_admission_rejects_private_or_result_payload_fields(self):
         summary = summarize_candidate_effect_records([])

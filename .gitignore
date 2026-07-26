@@ -69,6 +69,8 @@ state/*/overlay_adjudication_private/
 # They are append-only private evidence, never tracked output.
 state/*/operation_evidence_private/
 state/*/capstone_checkpoints_private/
+state/*/theme_forward_comparison_private/
+research/results/a_short_theme_forward_comparison.json
 
 # --- A-short M6.7 weekly validation 执行 byproducts (one-off, research lane, regenerable via 执行) ---
 research/results/a_short/m67_validation_*/

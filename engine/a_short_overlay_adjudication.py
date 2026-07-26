@@ -775,7 +775,7 @@ def _adjudicate(rows: list[dict], mature: int, no_count: int) -> tuple[str, dict
     metrics.update(_risk_metrics(rows))
     metrics["h20_coverage_ok"] = all(row.get("h20_complete") is True for row in rows)
     # Pre-freeze evidence is audit-only: never promote, retire or judge on it.
-    if not _epoch_mode.evidence_counts_toward_clock(): return "continue_accumulating", metrics
+    if not _epoch_mode.evidence_counts_toward_clock("p4a_overlay_adjudication"): return "continue_accumulating", metrics
     if eligible < 12: return "continue_accumulating", metrics
     if not metrics["h5_coverage_ok"]: return "pending_h5_coverage", metrics
     if difference < 6: return "insufficient_policy_separation", metrics

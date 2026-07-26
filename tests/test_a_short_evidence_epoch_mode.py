@@ -9,6 +9,8 @@ does not count.
 from __future__ import annotations
 
 import sys
+import json
+import tempfile
 import unittest
 from pathlib import Path
 from unittest import mock
@@ -18,6 +20,7 @@ if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
 from engine import a_short_evidence_epoch_mode as epoch_mode  # noqa: E402
+from tests._a_short_epoch_mode_test_utils import patched_epoch_modes  # noqa: E402
 
 # Files bound by several tracks' real fingerprints and edited by most repair
 # slices; touching them must not disturb any epoch while the design is unfrozen.
@@ -54,6 +57,7 @@ TRACK_MODULES = (
     "runners.a_short_target_policy_comparison_runner",
     "engine.a_short_regime_action_comparison",
     "engine.a_short_factor_comparison_v2",
+    "engine.a_short_theme_forward_comparison",
 )
 
 P0V2_CONTRACT_LEGS = (
@@ -77,6 +81,9 @@ def _fingerprints() -> dict[str, str]:
     from engine.a_short_regime_action_comparison import candidate_effect_policy_fingerprint as p1
     from runners.a_short_final_action_validation_runner import _contract_fingerprint as p3
     from runners.a_short_target_policy_comparison_runner import _contract_fingerprint as p2
+    from engine.a_short_theme_forward_comparison import (
+        TRACK_ID as theme_track, comparison_contract_fingerprint, load_governance as load_theme_governance,
+    )
     v2_contracts = _canonical_contracts(load_v2_governance())
     values = {
         "p4a": _epoch_context()["contract_fingerprint"],
@@ -85,6 +92,17 @@ def _fingerprints() -> dict[str, str]:
         "p2_target": p2("target_exit"),
         "p2_breakout": p2("breakout_entry"),
         "p1": p1(),
+        "theme_forward": epoch_mode.fingerprint_or_pre_freeze(
+            theme_track,
+            lambda: comparison_contract_fingerprint(
+                load_theme_governance(),
+                ["physical_ai"],
+                {
+                    "industry_trend_configuration_fingerprint": "a" * 64,
+                    "theme_taxonomy_configuration_fingerprint": "b" * 64,
+                },
+            ),
+        ),
     }
     for leg in P0V2_CONTRACT_LEGS:
         values[f"p0v2.{leg}"] = v2_contracts[leg]
@@ -133,19 +151,15 @@ def _p4a_promotion_row(index: int) -> dict:
 
 
 def _fingerprints_in_mode(mode: str) -> dict[str, str]:
-    original = epoch_mode.MODE
-    epoch_mode.MODE = mode
-    try:
+    with patched_epoch_modes(mode):
         return _fingerprints()
-    finally:
-        epoch_mode.MODE = original
 
 
 class PreFreezeEvidenceModeTests(unittest.TestCase):
     def test_default_mode_is_pre_freeze_and_does_not_count(self):
-        self.assertEqual(epoch_mode.MODE, "pre_freeze_audit_only")
-        self.assertFalse(epoch_mode.enforcement_enabled())
-        self.assertFalse(epoch_mode.evidence_counts_toward_clock())
+        for track in epoch_mode.TRACKS:
+            self.assertFalse(epoch_mode.enforcement_enabled(track))
+            self.assertFalse(epoch_mode.evidence_counts_toward_clock(track))
 
     def test_pre_freeze_fingerprint_is_sha256_shaped_and_track_distinct(self):
         seen = {track: epoch_mode.pre_freeze_fingerprint(track) for track in epoch_mode.TRACKS}
@@ -156,6 +170,12 @@ class PreFreezeEvidenceModeTests(unittest.TestCase):
     def test_unregistered_track_is_rejected(self):
         with self.assertRaises(epoch_mode.EvidenceEpochModeError):
             epoch_mode.pre_freeze_fingerprint("not_a_track")
+        with patched_epoch_modes("frozen_enforced"):
+            with self.assertRaises(epoch_mode.EvidenceEpochModeError):
+                epoch_mode.enforcement_enabled("not_a_track")
+
+    def test_no_global_switch_can_arm_all_tracks(self):
+        self.assertFalse(hasattr(epoch_mode, "MODE"))
 
     def test_unrelated_source_edits_do_not_move_any_epoch(self):
         """The churn edit must move nothing pre-freeze while still being able to
@@ -190,7 +210,7 @@ class PreFreezeEvidenceModeTests(unittest.TestCase):
         self.assertEqual([name for name, ids in symbols_before.items()
                           if symbols_after.get(name) != ids], [])
         self.assertEqual({path: (ROOT / path).read_bytes() for path in CHURN_FILES}, originals)
-        self.assertEqual(epoch_mode.MODE, "pre_freeze_audit_only")
+        self.assertTrue(all(not epoch_mode.enforcement_enabled(track) for track in epoch_mode.TRACKS))
 
     def test_enforcement_is_parked_not_deleted(self):
         """Flipping the mode back on must restore a real, drift-sensitive binding."""
@@ -201,22 +221,27 @@ class PreFreezeEvidenceModeTests(unittest.TestCase):
             self.assertNotEqual(enforced[component], parked[component], component)
 
     def test_unknown_mode_fails_closed(self):
-        original = epoch_mode.MODE
-        try:
-            epoch_mode.MODE = "something_else"
-            with self.assertRaises(epoch_mode.EvidenceEpochModeError):
-                epoch_mode.enforcement_enabled()
-        finally:
-            epoch_mode.MODE = original
+        with tempfile.TemporaryDirectory() as temp:
+            path = Path(temp) / "registry.json"
+            modes = {track: "pre_freeze_audit_only" for track in epoch_mode.TRACKS}
+            modes[epoch_mode.TRACKS[0]] = "something_else"
+            path.write_text(json.dumps({
+                "schema_name": "a_short_evidence_epoch_mode_registry",
+                "schema_version": "1.0.0",
+                "track_modes": modes,
+            }), encoding="utf-8")
+            with mock.patch.object(epoch_mode, "TRACK_MODE_REGISTRY_PATH", path):
+                with self.assertRaises(epoch_mode.EvidenceEpochModeError):
+                    epoch_mode.enforcement_enabled(epoch_mode.TRACKS[0])
 
 
 class PreFreezeVerdictGateTests(unittest.TestCase):
     def test_p4a_threshold_evidence_gates_pre_freeze_then_re_arms(self):
         from engine.a_short_overlay_adjudication import _adjudicate
         rows = [_p4a_promotion_row(index) for index in range(24)]
-        with mock.patch.object(epoch_mode, "MODE", "pre_freeze_audit_only"):
+        with patched_epoch_modes("pre_freeze_audit_only", ("p4a_overlay_adjudication",)):
             parked, parked_metrics = _adjudicate(rows, 24, 0)
-        with mock.patch.object(epoch_mode, "MODE", "frozen_enforced"):
+        with patched_epoch_modes("frozen_enforced", ("p4a_overlay_adjudication",)):
             enforced, _metrics = _adjudicate(rows, 24, 0)
         self.assertEqual(parked, "continue_accumulating")
         self.assertEqual(enforced, "candidate_for_manual_promotion")
@@ -239,9 +264,9 @@ class PreFreezeVerdictGateTests(unittest.TestCase):
                 mock.patch.object(p5, "_weekly_paths", lambda root, date: (any_existing_file, any_existing_file)), \
                 mock.patch.object(p5, "_load_json", lambda path: outcome), \
                 mock.patch.object(p5, "_validate_private_record", lambda record: None):
-            with mock.patch.object(epoch_mode, "MODE", "pre_freeze_audit_only"):
+            with patched_epoch_modes("pre_freeze_audit_only", ("p5_industry_weight",)):
                 parked = p5._question_progress(Path("."), "balanced_vs_legacy", "20260727")
-            with mock.patch.object(epoch_mode, "MODE", "frozen_enforced"):
+            with patched_epoch_modes("frozen_enforced", ("p5_industry_weight",)):
                 enforced = p5._question_progress(Path("."), "balanced_vs_legacy", "20260727")
         # Same threshold-satisfying evidence both times: 12 eligible weeks, 12 with a real difference.
         self.assertEqual((parked["eligible_policy_weeks"], parked["difference_weeks"]), (12, 12))

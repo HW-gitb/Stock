@@ -597,7 +597,7 @@ def _question_progress(root: Path, question_id: str, as_of: str) -> dict:
             mature += 1
             no_count += 1
     # Pre-freeze evidence is audit-only: it must not trigger the P5b build reminder.
-    counts = _epoch_mode.evidence_counts_toward_clock()
+    counts = _epoch_mode.evidence_counts_toward_clock("p5_industry_weight")
     notice = ("accumulating" if not counts else
               "p5b_terminal_checkpoint_36_not_implemented" if eligible >= 36 else
               "p5b_formal_checkpoint_24_not_implemented" if eligible >= 24 else

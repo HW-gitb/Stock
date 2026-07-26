@@ -516,7 +516,7 @@ def _question_adjudication(question: dict, evidence: dict, *, governance: dict, 
     no_count_rates = {arm_id: (evidence["no_count_by_arm"][arm_id] / evidence["terminal_by_arm"][arm_id]
                                if evidence["terminal_by_arm"][arm_id] else None)
                       for arm_id in evidence["terminal_by_arm"]}
-    if not _epoch_mode.evidence_counts_toward_clock():
+    if not _epoch_mode.evidence_counts_toward_clock("p0_factor_comparison_v2"):
         return {"question_id": question["question_id"], "experiment_batch_id": experiment_batch_id,
                 "status": "continue_accumulation", "formal_checkpoint_effective_weeks": None,
                 "effective_difference_weeks": effective_weeks, "arm_verdicts": [], "finalist_comparisons": {},

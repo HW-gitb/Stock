@@ -1,0 +1,162 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "A-short theme forward comparison active epoch",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_name", "schema_version", "track", "mode", "epoch_id",
+    "epoch_start_as_of", "governance_fingerprint", "contract_fingerprint",
+    "epoch_identity_fingerprint", "frozen_theme_ids",
+    "taxonomy_registry_fingerprint", "taxonomy_registry_effective_date",
+    "source_configuration_fingerprints", "admission_receipt_manifest", "outcome_receipt_manifest",
+    "formal_decision", "boundary"
+  ],
+  "properties": {
+    "schema_name": {"const": "a_short_theme_forward_comparison_epoch"},
+    "schema_version": {"const": "1.3.0"},
+    "track": {"const": "theme_forward_comparison"},
+    "mode": {"enum": ["pre_freeze_audit_only", "frozen_enforced"]},
+    "epoch_id": {"type": ["string", "null"], "pattern": "^[A-Za-z0-9][A-Za-z0-9._-]*$"},
+    "epoch_start_as_of": {"type": ["string", "null"], "pattern": "^[0-9]{8}$"},
+    "governance_fingerprint": {"type": ["string", "null"], "pattern": "^[0-9a-f]{64}$"},
+    "contract_fingerprint": {"type": ["string", "null"], "pattern": "^[0-9a-f]{64}$"},
+    "epoch_identity_fingerprint": {"type": ["string", "null"], "pattern": "^[0-9a-f]{64}$"},
+    "frozen_theme_ids": {"type": "array", "items": {"type": "string", "minLength": 1}, "uniqueItems": true},
+    "taxonomy_registry_fingerprint": {"type": ["string", "null"], "pattern": "^[0-9a-f]{64}$"},
+    "taxonomy_registry_effective_date": {"type": ["string", "null"], "pattern": "^[0-9]{8}$"},
+    "source_configuration_fingerprints": {
+      "type": ["object", "null"],
+      "additionalProperties": false,
+      "properties": {
+        "industry_trend_configuration_fingerprint": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+        "theme_taxonomy_configuration_fingerprint": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+        "runtime_configuration_fingerprint": {"type": "string", "pattern": "^[0-9a-f]{64}$"}
+      }
+    },
+    "admission_receipt_manifest": {"$ref": "#/definitions/outcomeReceiptManifest"},
+    "outcome_receipt_manifest": {"$ref": "#/definitions/outcomeReceiptManifest"},
+    "formal_decision": {"$ref": "#/definitions/formalDecision"},
+    "boundary": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["historical_replay_counts_as_forward", "automatic_promotion", "production_replacement_authorized"],
+      "properties": {
+        "historical_replay_counts_as_forward": {"const": false},
+        "automatic_promotion": {"const": false},
+        "production_replacement_authorized": {"const": false}
+      }
+    }
+  },
+  "allOf": [
+    {
+      "if": {"properties": {"mode": {"const": "pre_freeze_audit_only"}}},
+      "then": {
+        "properties": {
+          "epoch_id": {"const": null},
+          "epoch_start_as_of": {"const": null},
+          "governance_fingerprint": {"const": null},
+          "contract_fingerprint": {"const": null},
+          "epoch_identity_fingerprint": {"const": null},
+          "frozen_theme_ids": {"const": []},
+          "taxonomy_registry_fingerprint": {"const": null},
+          "taxonomy_registry_effective_date": {"const": null},
+          "source_configuration_fingerprints": {"const": null},
+          "admission_receipt_manifest": {
+            "properties": {
+              "receipt_count": {"const": 0},
+              "chain_head_sha256": {"const": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"},
+              "last_as_of": {"const": null}
+            }
+          },
+          "outcome_receipt_manifest": {
+            "properties": {
+              "receipt_count": {"const": 0},
+              "chain_head_sha256": {"const": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"},
+              "last_as_of": {"const": null}
+            }
+          },
+          "formal_decision": {
+            "properties": {
+              "status": {"const": "not_recorded"},
+              "as_of": {"const": null},
+              "packet_sha256": {"const": null},
+              "archive_relative_path": {"const": null},
+              "receipt_sha256": {"const": null}
+            }
+          }
+        }
+      }
+    },
+    {
+      "if": {"properties": {"mode": {"const": "frozen_enforced"}}},
+      "then": {
+        "properties": {
+          "epoch_id": {"type": "string", "minLength": 1},
+          "epoch_start_as_of": {"type": "string"},
+          "governance_fingerprint": {"type": "string"},
+          "contract_fingerprint": {"type": "string"},
+          "epoch_identity_fingerprint": {"type": "string"},
+          "frozen_theme_ids": {"minItems": 1},
+          "taxonomy_registry_fingerprint": {"type": "string"},
+          "taxonomy_registry_effective_date": {"type": "string"},
+          "source_configuration_fingerprints": {
+            "type": "object",
+            "required": [
+              "industry_trend_configuration_fingerprint",
+              "theme_taxonomy_configuration_fingerprint",
+              "runtime_configuration_fingerprint"
+            ]
+          }
+        }
+      }
+    }
+  ],
+  "definitions": {
+    "outcomeReceiptManifest": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["receipt_count", "chain_head_sha256", "last_as_of"],
+      "properties": {
+        "receipt_count": {"type": "integer", "minimum": 0},
+        "chain_head_sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+        "last_as_of": {"type": ["string", "null"], "pattern": "^[0-9]{8}$"}
+      }
+    },
+    "formalDecision": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["status", "as_of", "packet_sha256", "archive_relative_path", "receipt_sha256"],
+      "properties": {
+        "status": {"enum": ["not_recorded", "recorded"]},
+        "as_of": {"type": ["string", "null"], "pattern": "^[0-9]{8}$"},
+        "packet_sha256": {"type": ["string", "null"], "pattern": "^[0-9a-f]{64}$"},
+        "archive_relative_path": {"type": ["string", "null"], "minLength": 1},
+        "receipt_sha256": {"type": ["string", "null"], "pattern": "^[0-9a-f]{64}$"}
+      },
+      "allOf": [
+        {
+          "if": {"properties": {"status": {"const": "not_recorded"}}},
+          "then": {
+            "properties": {
+              "as_of": {"const": null},
+              "packet_sha256": {"const": null},
+              "archive_relative_path": {"const": null},
+              "receipt_sha256": {"const": null}
+            }
+          }
+        },
+        {
+          "if": {"properties": {"status": {"const": "recorded"}}},
+          "then": {
+            "properties": {
+              "as_of": {"type": "string"},
+              "packet_sha256": {"type": "string"},
+              "archive_relative_path": {"type": "string"},
+              "receipt_sha256": {"type": "string"}
+            }
+          }
+        }
+      ]
+    }
+  }
+}
