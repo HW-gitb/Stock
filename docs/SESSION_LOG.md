@@ -1,5 +1,12 @@
 # Session Log
 
+## 2026-07-26 - Claude Code 复审 PASS (A-short 第三刀，Required 已闭并入 master)
+
+- **Verdict/Action**: PASS，已提交。8865 的修复到位：`main()` 里 `--crash-veto-summary`(L3969) 与 `--iv-feed`(L4046) 两个解析点补上受控出口，捕获集未放宽、消息只带异常类名。整类由我自己逐个复核：四个 `_load` 消费点全部受控。五个文件已应用到 master，`git hash-object` 逐个等同（磁盘 sha 差异仅为 CRLF 检出）。Detail in register。
+- **Required**: 无。`R-ASHORT-WEEKLY-MAIN-PARSE-EXIT-CLASS-INCOMPLETE` 转 resolved P3。两条 Optional（official-lane 判定重复、该分支无测试）保持 open 非阻断。两份脏 P2 摘要按 `R-ASHORT-TEST-PACK-REWRITES-TRACKED-P2-PUBLIC-SUMMARY` 排除在本次提交外。完整证据/边界/closure 见 `system_risk_register.md`(单一来源，本处不复述)。
+- **Verify**: review-evidence:e7bde8d61763。亲跑探针补测试未覆盖的三条腿：非法 UTF-8 ×2、路径指目录 → 全部受控且不泄露埋入的 `SECRETPAYLOAD`；非空转对照（底层仍抛原始异常）与正向对照（有效输入端到端跑通）均过；独立重算 predicate digest 两树同为 `a1359890cd27…`。定向 3 OK + 改动符号的消费者包 98 OK。**分级有一次自我更正**：先按文件名误判 rule 3(a) 起了全量，跑到约 800 例中止，改用按符号界定的消费者包；账本无 cached green 也未 record，不作任何全量声明；中止后 `git status` 无 churn 残留。不起 agent（Δ 为受控出口包装，§6a 三项不沾）。
+- **Next**: 无（已并入 master）。
+
 ## 2026-07-26 - Claude Code 复审 FAIL (A-short 第三刀，8865 树无新实现)
 
 - **Verdict/Action**: FAIL 不变，不提交。五个文件 sha256 与首轮开工取值逐字节相同，L3968/L4040 两个被点名的解析点原样未动；那棵树唯一新增是 Codex 当初交审的 SESSION_LOG 条目（其 Next 仍是「审查 A-short 第三刀」），不是对本 Required 的回应。Detail in register。

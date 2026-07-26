@@ -24,8 +24,11 @@ def _field(row, key: str):
         if bool(value != value):  # NaN, without importing pandas in this shared helper.
             return ""
     except (TypeError, ValueError):
-        pass
-    return str(value).strip()
+        return ""
+    text = str(value).strip()
+    if text.casefold() in {"<na>", "nan", "none", "nat", "null"}:
+        return ""
+    return text
 
 
 def _name_flags(name: str) -> tuple[bool, bool]:
