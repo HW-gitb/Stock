@@ -11,7 +11,6 @@ from __future__ import annotations
 
 import copy
 import hashlib
-import inspect
 import json
 import math
 import os
@@ -41,6 +40,14 @@ PROGRAM_ID = "a_short_factor_comparison_v2"
 SCHEMA_VERSION = "2.0.0"
 HORIZONS = (5, 10, 20)
 COMMON_POOL_SEAM = "same_pit_candidate_universe_after_non_iv_immutable_hard_gates"
+P0V2_SEMANTIC_MODULE_EXCLUSIONS = {
+    "engine.a_short_factor_comparison_v2": (),
+    "engine.a_short_factor_comparison": (),
+    "engine.a_short_factor_comparison_v2_weekly": (),
+    "engine.a_short_factor_comparison_v2_adjudication": (),
+    "runners.a_short_factor_comparison_v2_cache_build": (),
+    "runners.a_short_phase5_engine": (),
+}
 
 
 class ComparisonV2Error(ValueError):
@@ -205,10 +212,6 @@ def validate_v2_decision_receipt(receipt: dict) -> None:
         raise ComparisonV2Error("v2 decision receipt crossed the comparison-only boundary")
 
 
-def _source_text_digest(*objects: object) -> str:
-    return _digest([inspect.getsource(object) for object in objects])
-
-
 def _canonical_contracts(governance: dict) -> dict:
     """Pre-freeze every contract leg is a stable constant; the admission binding
     stays real because it is a governance fact, not an implementation hash.
@@ -235,6 +238,25 @@ def _pre_freeze_admission_bindings(governance: dict) -> dict:
 
 def _real_canonical_contracts(governance: dict) -> dict:
     from runners import a_short_phase5_engine as phase5
+    weekly = __import__("engine.a_short_factor_comparison_v2_weekly", fromlist=["*"])
+    adjudication = __import__("engine.a_short_factor_comparison_v2_adjudication", fromlist=["*"])
+    cache_builder = __import__("runners.a_short_factor_comparison_v2_cache_build", fromlist=["*"])
+    modules = {
+        "engine.a_short_factor_comparison_v2": __import__(__name__, fromlist=["*"]),
+        "engine.a_short_factor_comparison": v1,
+        "engine.a_short_factor_comparison_v2_weekly": weekly,
+        "engine.a_short_factor_comparison_v2_adjudication": adjudication,
+        "runners.a_short_factor_comparison_v2_cache_build": cache_builder,
+        "runners.a_short_phase5_engine": phase5,
+    }
+    semantic_modules = {
+        name: _epoch_mode.semantic_module_contract(
+            module,
+            excluded_functions=P0V2_SEMANTIC_MODULE_EXCLUSIONS[name],
+        )
+        for name, module in modules.items()
+    }
+    semantic_runtime_contract = _digest(semantic_modules)
 
     factor_map = {row["factor_id"]: row for row in v1.load_governance()["factor_registry"]}
     question_arms = []
@@ -264,37 +286,24 @@ def _real_canonical_contracts(governance: dict) -> dict:
     return {
         "decision_delta_contract": _digest({
             "questions": question_arms,
-            "v2_materializer": _source_text_digest(
-                _materialize_question, _combined_candidate_decision, _combined_policy_result,
-                v1._entry_for_factor, v1._iv_policy, v1._policy_result,
-            ),
-            "phase5_decision": _source_text_digest(phase5.entry_type, phase5.exit_and_size),
-            "phase5_source": _file_digest(ROOT / "runners" / "a_short_phase5_engine.py"),
+            "semantic_runtime_contract": semantic_runtime_contract,
         }),
         "immutable_common_pool_contract": _digest({
             "seams": [row["common_pool_seam"] for row in governance["questions"]],
-            "pool_builder": _source_text_digest(
-                _immutable_common_pool, phase5.compute_indicators, phase5.classify_risk_families,
-            ),
-            "phase5_source": _file_digest(ROOT / "runners" / "a_short_phase5_engine.py"),
+            "semantic_runtime_contract": semantic_runtime_contract,
         }),
         "outcome_contract": _digest({
             "outcome_contract": governance["outcome_contract"],
             "adjustment_contract": governance["adjustment_contract"],
-            "settler": _source_text_digest(
-                _settle_question, _position_outcomes, _maximum_drawdown, _loss_distribution_metrics,
-            ),
+            "semantic_runtime_contract": semantic_runtime_contract,
         }),
         # Capture, cache materialisation and settlement are one evidence
         # pipeline.  Any executable change to these local seams opens a new
         # epoch instead of allowing old forward rows to keep counting.
         "runtime_wiring_contract": _digest({
-            "v2_engine": _file_digest(Path(__file__)),
-            "weekly_capture": _file_digest(ROOT / "engine" / "a_short_factor_comparison_v2_weekly.py"),
-            "adjudication": _file_digest(ROOT / "engine" / "a_short_factor_comparison_v2_adjudication.py"),
-            "shared_cache_builder": _file_digest(ROOT / "runners" / "a_short_factor_comparison_v2_cache_build.py"),
-            "weekly_schema": _file_digest(WEEKLY_SCHEMA_PATH),
-            "daily_cache_schema": _file_digest(ROOT / "schemas" / "a_short_factor_comparison_v2_daily_cache.schema.json"),
+            "semantic_modules": semantic_modules,
+            "weekly_schema": _schema(WEEKLY_SCHEMA_PATH),
+            "daily_cache_schema": _schema(ROOT / "schemas" / "a_short_factor_comparison_v2_daily_cache.schema.json"),
         }),
         # This is intentionally part of the epoch signature.  A statistical,
         # PIT, arm, dependency or one-change admission drift opens a new v2

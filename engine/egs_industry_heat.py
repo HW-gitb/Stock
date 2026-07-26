@@ -21,7 +21,6 @@ from __future__ import annotations
 
 import json
 import hashlib
-import inspect
 import os
 
 import numpy as np
@@ -275,12 +274,27 @@ def _full_universe_digest(df: pd.DataFrame) -> str:
     return _canonical_digest({"columns": columns, "rows": records})
 
 
+def _real_p5_source_fingerprint() -> str:
+    import sys as _sys
+    from engine import a_short_evidence_epoch_mode as epoch_mode
+    return _canonical_digest(epoch_mode.semantic_function_contract(
+        _sys.modules[__name__],
+        ("select_profile_watch_pool", "final_score_and_tier", "compute_industry_heat_score"),
+    ))
+
+
 def _p5_source_fingerprint() -> str:
-    return _canonical_digest({
-        "selector": inspect.getsource(select_profile_watch_pool),
-        "scoring": inspect.getsource(final_score_and_tier),
-        "industry_heat": inspect.getsource(compute_industry_heat_score),
-    })
+    from engine import a_short_evidence_epoch_mode as epoch_mode
+    return epoch_mode.fingerprint_or_pre_freeze(
+        "p5_industry_weight",
+        _real_p5_source_fingerprint,
+    )
+
+
+def _p5_governance_digest(governance_path) -> str:
+    """Content digest of the profile governance, insensitive to JSON formatting."""
+    with open(governance_path, "r", encoding="utf-8") as handle:
+        return _canonical_digest(json.load(handle))
 
 
 def _profile_top_n(df: pd.DataFrame, weights: dict, top_n: int) -> list:
@@ -322,8 +336,9 @@ def build_weight_comparison(full_df: pd.DataFrame, gov_path: str = GOV_PATH,
             select_profile_watch_pool(scored, top_n=PROFILE_WATCH_POOL_TOP_N)
         )
     governance_path = os.path.abspath(gov_path)
-    with open(governance_path, "rb") as _governance_handle:
-        governance_sha256 = hashlib.sha256(_governance_handle.read()).hexdigest()
+    # Digest the PARSED governance, not its bytes: reformatting or a line-ending
+    # change must not invalidate an already-published comparison bundle.
+    governance_sha256 = _p5_governance_digest(governance_path)
     return {
         "schema_name": "egs_weight_comparison", "schema_version": "1.0.0",
         "as_of": (None if as_of is None else str(as_of)),

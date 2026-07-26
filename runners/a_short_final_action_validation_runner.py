@@ -16,6 +16,7 @@ import json
 import math
 import os
 import re
+import sys
 import tempfile
 from datetime import datetime
 from pathlib import Path
@@ -103,27 +104,28 @@ def _contract_fingerprint() -> str:
 
 
 def _real_contract_fingerprint() -> str:
-    """The enforced fingerprint used once the design is frozen."""
-    paths = (
-        Path(__file__),
-        ROOT / "engine" / "a_short_managed_exit.py",
-        ROOT / "runners" / "a_short_phase5_engine.py",
-        ROOT / "runners" / "a_short_factor_comparison_v2_cache_build.py",
-        ROOT / "runners" / "forward_tracker.py",
-        ROOT / "runners" / "a_short_weekly_pipeline.py",
-        ROOT / "schemas" / "a_short_weekly_report.schema.json",
-        ROOT / "schemas" / "a_short_m67_effect_contract.json",
-        ROOT / "presets" / "a_short_m67_runtime_policy_20260715.json",
-        SCHEMA_PATH,
-    )
-    chunks: list[bytes] = []
-    for path in paths:
-        try:
-            chunks.append(path.read_bytes())
-        except OSError as exc:
-            raise FinalActionValidationError("contract_fingerprint_unavailable") from exc
-    return _digest({"source_sha256": hashlib.sha256(b"\0".join(chunks)).hexdigest(),
-                    "admission_bindings": admission_snapshot(*ADMISSION_IDS)})
+    """Bind result-shaping functions and canonical JSON contracts, not whole files."""
+    from engine import a_short_managed_exit as managed_exit
+    from runners import forward_tracker
+
+    return _digest({
+        "module_sources": {
+            "runner": _epoch_mode.semantic_module_contract(sys.modules[__name__]),
+            "managed_exit": _epoch_mode.semantic_module_contract(managed_exit),
+            "forward_tracker": _epoch_mode.semantic_module_contract(forward_tracker),
+        },
+        "constants": {"horizon": HORIZON, "round_trip_cost_pct": ROUND_TRIP_COST_PCT,
+                      "hold_review_weeks": HOLD_REVIEW_WEEKS, "full_edge_review_weeks": FULL_EDGE_REVIEW_WEEKS,
+                      "hac_review_weeks": HAC_REVIEW_WEEKS, "hac_min_plans": HAC_MIN_PLANS,
+                      "atr_multiplier": ATR_MULT, "round_trip_cost_fraction": ROUND_TRIP_COST_FRACTION},
+        "json_contracts": {
+            "summary_schema": json.loads(SCHEMA_PATH.read_text(encoding="utf-8")),
+            "weekly_schema": json.loads((ROOT / "schemas" / "a_short_weekly_report.schema.json").read_text(encoding="utf-8")),
+            "effect_contract": json.loads((ROOT / "schemas" / "a_short_m67_effect_contract.json").read_text(encoding="utf-8")),
+            "runtime_policy": json.loads((ROOT / "presets" / "a_short_m67_runtime_policy_20260715.json").read_text(encoding="utf-8")),
+        },
+        "admission_bindings": admission_snapshot(*ADMISSION_IDS),
+    })
 
 
 def _initial_ledger() -> dict[str, Any]:

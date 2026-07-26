@@ -40,6 +40,12 @@ HORIZONS = (5, 10, 20)
 BENCHMARKS = ("csi1000", "csi300")
 BENCHMARK_CODES = {"csi1000": "000852.SH", "csi300": "000300.SH"}
 TOP_K, ROUND_TRIP_COST_PCT = 5, 0.16
+# The epoch machinery itself cannot be part of the contract it computes; every
+# other top-level function in this module is bound.  Enumerated here (not inline)
+# so `tests/test_a_short_evidence_epoch_mode.py` can assert the set is exact.
+P4A_SEMANTIC_MODULE_EXCLUSIONS = frozenset({
+    "_today", "_epoch_context", "_contract_fingerprint", "_epoch_id",
+})
 
 
 class OverlayAdjudicationError(ValueError):
@@ -171,12 +177,29 @@ def _epoch_context() -> dict:
     admission = admission_snapshot(ADMISSION_ID)
     profile = _active_profile_binding()
     recipe = _screening_runtime_recipe_binding()
+    def semantic_surface() -> dict[str, Any]:
+        from engine import egs_industry_heat
+        from engine import a_short_runtime_config
+        return {
+            "overlay_sources": _epoch_mode.semantic_module_contract(
+                __import__(__name__, fromlist=["*"]),
+                excluded_functions=P4A_SEMANTIC_MODULE_EXCLUSIONS,
+            ),
+            "industry_heat_sources": _epoch_mode.semantic_module_contract(egs_industry_heat),
+            "runtime_configuration_source": _epoch_mode.semantic_function_contract(
+                a_short_runtime_config, ("runtime_configuration_lineage",),
+            ),
+            "active_profile": _load(ROOT / "presets" / "egs_industry_heat_governance_20260611.json"),
+            "screening_governance": _load(ROOT / "presets" / "a_short_screening_threshold_governance_20260602.json"),
+            "schemas": {"private": _load(PRIVATE_SCHEMA), "public": _load(PUBLIC_SCHEMA),
+                        "daily_cache": _load(DAILY_CACHE_SCHEMA)},
+        }
+
     fingerprint = _epoch_mode.fingerprint_or_pre_freeze(
         "p4a_overlay_adjudication",
         lambda: _digest({"admission": admission, "active_profile_binding": profile,
                     "screening_runtime_recipe": recipe,
-                    "source_sha256": {str(path.relative_to(ROOT)): hashlib.sha256(path.read_bytes()).hexdigest()
-                                      for path in _source_files()},
+                    "semantic_surface": semantic_surface(),
                     "selection": {"top_k": TOP_K, "l1_max": 0.4, "l2_max": 0.3,
                                   "baseline": "final_score", "candidate": "overlay_score"},
                     "outcome": {"horizons": HORIZONS, "entry": "t_plus_1_open",
@@ -883,8 +906,26 @@ def validate_public_summary(summary: dict) -> None:
         raise OverlayAdjudicationError("P4a public summary leaks private evidence")
 
 
+def _assert_public_summary_as_of_monotonic(summary: dict, json_path: Path) -> None:
+    """Never replace a tracked public summary with an older point-in-time view."""
+    if not json_path.is_file():
+        return
+    try:
+        existing = _load(json_path)
+        validate_public_summary(existing)
+        existing_as_of = _date(existing.get("as_of"), "existing summary as_of")
+        new_as_of = _date(summary.get("as_of"), "summary as_of")
+    except (OSError, UnicodeDecodeError, json.JSONDecodeError, TypeError, ValueError) as exc:
+        raise OverlayAdjudicationError("existing_public_summary_unreadable") from exc
+    if existing_as_of > new_as_of:
+        raise OverlayAdjudicationError("public_summary_as_of_regressed")
+
+
 def write_public_summary(summary: dict, *, json_path: str | Path = DEFAULT_PUBLIC_JSON, markdown_path: str | Path = DEFAULT_PUBLIC_MD) -> None:
-    validate_public_summary(summary); _write(json_path, summary)
+    validate_public_summary(summary)
+    target_path = Path(json_path)
+    _assert_public_summary_as_of_monotonic(summary, target_path)
+    _write(target_path, summary)
     rows = ["# A-short P4a Stage3 排名源比较", "", summary["message"], "", "| 项目 | 数值 |", "|---|---:|"]
     for key in ("epoch_id", "eligible_policy_weeks", "difference_weeks", "nonoverlap_blocks", "mature_opportunities", "no_count_weeks", "h5_coverage_status", "h20_coverage_status"):
         rows.append(f"| {key} | {summary[key]} |")

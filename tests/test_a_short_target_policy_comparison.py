@@ -30,6 +30,7 @@ from runners.a_short_target_policy_comparison_runner import (  # noqa: E402
     capture_after_published_weekly,
     settle_and_summarize,
     validate_public_summary,
+    write_public_summary,
 )
 from runners.a_short_weekly_pipeline import build_weekly_report, validate_weekly_report  # noqa: E402
 from runners.a_short_m67_render import render_weekly_markdown  # noqa: E402
@@ -281,6 +282,19 @@ class TargetLedgerTests(unittest.TestCase):
         with patched_epoch_modes("frozen_enforced"):
             self.assertEqual(_progress(records, "target_exit", "not_reviewed")["review_state"], "due")
             self.assertEqual(_progress(records, "breakout_entry", "not_reviewed")["review_state"], "due")
+
+    def test_public_summary_rejects_older_as_of_but_allows_equal_or_newer(self):
+        with tempfile.TemporaryDirectory() as td:
+            summary_path, markdown_path = Path(td) / "summary.json", Path(td) / "summary.md"
+            current = _summary_from_ledger(_new_ledger(), "20260727")
+            write_public_summary(current, summary_path=summary_path, markdown_path=markdown_path)
+            older = _summary_from_ledger(_new_ledger(), "20260726")
+            with self.assertRaisesRegex(TargetPolicyError, "as_of_regressed"):
+                write_public_summary(older, summary_path=summary_path, markdown_path=markdown_path)
+            write_public_summary(_summary_from_ledger(_new_ledger(), "20260727"),
+                                 summary_path=summary_path, markdown_path=markdown_path)
+            write_public_summary(_summary_from_ledger(_new_ledger(), "20260728"),
+                                 summary_path=summary_path, markdown_path=markdown_path)
 
     def _published_bundle(self, directory: Path, as_of: str) -> tuple[Path, Path, dict, list[dict]]:
         series = _dated_series()

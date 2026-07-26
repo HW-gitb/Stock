@@ -11,6 +11,7 @@ from __future__ import annotations
 import hashlib
 import json
 import math
+import sys
 from statistics import median
 from pathlib import Path
 
@@ -70,26 +71,30 @@ def candidate_effect_policy() -> dict:
 
 
 def _runtime_policy_source_fingerprint() -> str:
-    """Pin every P1 result-shaping source, including its upstream cohort and returns."""
-    paths = (
-        Path(__file__),
-        ROOT / "runners" / "a_short_regime_comparison_runner.py",
-        ROOT / "runners" / "forward_tracker.py",
-        ROOT / "runners" / "a_short_weekly_pipeline.py",
-        ROOT / "runners" / "a_short_phase5_engine.py",
-        ROOT / "A-EGS" / "egs_main.py",
-        ROOT / "engine" / "a_short_regime_classifier.py",
-        ROOT / "engine" / "a_short_regime_ledger.py",
-        ROOT / "presets" / "a_short_m67_runtime_policy_20260715.json",
-        ROOT / "schemas" / "a_short_weekly_report.schema.json",
-        ROOT / "schemas" / "a_short_m67_effect_contract.json",
-        GOVERNANCE_SCHEMA_PATH,
-        CANDIDATE_EFFECT_SUMMARY_SCHEMA_PATH,
-    )
-    try:
-        payload = {str(path.relative_to(ROOT)): hashlib.sha256(path.read_bytes()).hexdigest() for path in paths}
-    except OSError as exc:
-        raise ValueError("candidate effect runtime source is unavailable") from exc
+    """Pin semantic result-shaping code, not whole files that contain unrelated prose."""
+    from engine import a_short_regime_classifier as classifier
+    from engine import a_short_regime_ledger as ledger
+    from runners import a_short_regime_comparison_runner as runner
+    from runners import forward_tracker
+
+    payload = {
+        "module_sources": {
+            "action": _epoch_mode.semantic_module_contract(sys.modules[__name__]),
+            "runner": _epoch_mode.semantic_module_contract(runner),
+            "classifier": _epoch_mode.semantic_module_contract(classifier),
+            "ledger": _epoch_mode.semantic_module_contract(ledger),
+            "forward_tracker": _epoch_mode.semantic_module_contract(forward_tracker),
+        },
+        "constants": {"forward_return_basis": FORWARD_RETURN_BASIS, "raw_regimes": RAW_REGIMES,
+                      "stateful_regimes": STATEFUL_REGIMES, "v14_2_regimes": V14_2_REGIMES},
+        "json_contracts": {
+            "runtime_policy": _load_json(ROOT / "presets" / "a_short_m67_runtime_policy_20260715.json"),
+            "weekly_schema": _load_json(ROOT / "schemas" / "a_short_weekly_report.schema.json"),
+            "effect_contract": _load_json(ROOT / "schemas" / "a_short_m67_effect_contract.json"),
+            "governance_schema": _load_json(GOVERNANCE_SCHEMA_PATH),
+            "candidate_summary_schema": _load_json(CANDIDATE_EFFECT_SUMMARY_SCHEMA_PATH),
+        },
+    }
     return hashlib.sha256(
         json.dumps(payload, ensure_ascii=False, sort_keys=True, separators=(",", ":")).encode("utf-8")
     ).hexdigest()

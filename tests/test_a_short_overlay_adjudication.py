@@ -98,6 +98,19 @@ class OverlayAdjudicationTests(unittest.TestCase):
         # Pre-freeze behaviour is covered by tests/test_a_short_evidence_epoch_mode.py.
         enter_patched_epoch_modes(self, "frozen_enforced")
 
+    def test_public_summary_rejects_older_as_of_but_allows_equal_or_newer(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            json_path, markdown_path = Path(tmp) / "summary.json", Path(tmp) / "summary.md"
+            current = build_public_summary(root=None, as_of="20260710")
+            write_public_summary(current, json_path=json_path, markdown_path=markdown_path)
+            older = build_public_summary(root=None, as_of="20260709")
+            with self.assertRaisesRegex(OverlayAdjudicationError, "as_of_regressed"):
+                write_public_summary(older, json_path=json_path, markdown_path=markdown_path)
+            write_public_summary(build_public_summary(root=None, as_of="20260710"),
+                                 json_path=json_path, markdown_path=markdown_path)
+            write_public_summary(build_public_summary(root=None, as_of="20260711"),
+                                 json_path=json_path, markdown_path=markdown_path)
+
     def _capture(self, tmp: str, **kwargs) -> Path:
         root = _root(tmp); stage3, overlay, weekly, receipt, marker, identity = _sources(tmp, **kwargs)
         with mock.patch("engine.a_short_overlay_adjudication._today", return_value=RUN):

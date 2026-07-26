@@ -294,6 +294,25 @@ class ProfileWatchPoolTests(unittest.TestCase):
         self.assertEqual(comparison_codes, formal_codes)
 
 
+class ProfileGovernanceDigestTests(unittest.TestCase):
+    """The P5 governance binding must survive reformatting but not a value change."""
+
+    def test_governance_digest_is_content_not_bytes(self):
+        from engine.egs_industry_heat import _p5_governance_digest
+
+        payload = {"active_profile": "balanced", "profiles": {"balanced": {"heat": 0.4}}}
+        with tempfile.TemporaryDirectory() as temp:
+            compact = Path(temp) / "compact.json"
+            pretty = Path(temp) / "pretty.json"
+            changed = Path(temp) / "changed.json"
+            compact.write_text(json.dumps(payload, separators=(",", ":")), encoding="utf-8")
+            pretty.write_text(json.dumps(payload, indent=4, sort_keys=True) + "\n", encoding="utf-8")
+            changed.write_text(
+                json.dumps({**payload, "profiles": {"balanced": {"heat": 0.5}}}), encoding="utf-8")
+            self.assertEqual(_p5_governance_digest(str(compact)), _p5_governance_digest(str(pretty)))
+            self.assertNotEqual(_p5_governance_digest(str(compact)), _p5_governance_digest(str(changed)))
+
+
 class WeightComparisonTests(unittest.TestCase):
     def test_build_covers_all_nonlegacy_variants(self):
         df = _universe()
