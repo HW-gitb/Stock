@@ -1,5 +1,12 @@
 # Session Log
 
+## 2026-07-26 - Claude Code 审查 PASS (theme 引擎常量绑定极性收口，自做自审，用户指令)
+
+- **Verdict/Action**: PASS，已提交。用户指令「你自己修自己审」，并要求先读代码验证改法。**验证推翻了原方案**：提议的「Path 常量整类排除」基于「自动绑会哈希机器相关的绝对路径」，而 `_semantic_file_contract_digest` 实际绑的是签入文件的 AST 赋值节点、不是求值后的对象，故排除反而会丢真信息。实现改为**不排除任何东西**。Detail in register。
+- **Required**: 无。`R-ASHORT-P0V2-FINGERPRINT-CONVERGENCE-DROPPED-97-PERCENT-OF-ITS-CONTRACT` 的 Round-3 Optional (b) 转 closed；至此三条冻结前 Optional 全清。新记一条待测观察：窄式 `semantic_function_contract` 腿（P1 selector / P4a lineage / P5）只绑函数不绑其引用常量，冻结前需单独量。完整证据见 `system_risk_register.md`(单一来源)。
+- **Verify**: review-evidence:e7bde8d61763。动手前先量：模块 33 个顶层常量，fingerprint 只引用 26 个，**7 个漏绑**，含 `ADMISSION_TIME_PROVENANCE`（每张收据的信任边界标签）、`CONTRACT_FUNCTION_SEMANTICS_EXCLUSIONS`（决定还绑什么）、`RUNTIME_CONFIGURATION_FINGERPRINT_COLUMN`。亲跑端到端探针（在指纹层不只在 helper 层）：换腿必动=接线成立；注释改动不动；上述三个常量改值与 `GOVERNANCE_PATH` 改指全部动；no-op 不动。定向包 86 OK，`py_compile` 与 `git diff --check` clean，七轨仍全 pre-freeze 故零证据代价。rule 3 未命中（comparison-only 审计引擎），不跑全量；不起 agent。
+- **Next**: 用户：冻结前清单已清空；下一步由你定（第 8 刀三个口径待拍板）。
+
 ## 2026-07-26 - Claude Code 复审 PASS (A-short 第三刀，Required 已闭并入 master)
 
 - **Verdict/Action**: PASS，已提交。8865 的修复到位：`main()` 里 `--crash-veto-summary`(L3969) 与 `--iv-feed`(L4046) 两个解析点补上受控出口，捕获集未放宽、消息只带异常类名。整类由我自己逐个复核：四个 `_load` 消费点全部受控。五个文件已应用到 master，`git hash-object` 逐个等同（磁盘 sha 差异仅为 CRLF 检出）。Detail in register。

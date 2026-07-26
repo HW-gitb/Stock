@@ -1069,6 +1069,36 @@ def _semantic_file_contract_digest(path: Path, function_names: set[str],
     )
 
 
+def _contract_constant_semantics() -> dict[str, str]:
+    """Bind every module constant, so a new gate constant cannot escape the contract.
+
+    Functions already bind by default through `_contract_function_semantics`, but
+    the module's own constants were enumerated by hand inside
+    `comparison_contract_fingerprint`: a constant added later and used in a gate
+    could change behaviour without moving the fingerprint.  This binds the
+    checked-in assignment statements themselves — the same AST polarity the
+    external producer files already get from `_semantic_file_contract_digest`.
+
+    Path constants need no exclusion.  Only an *evaluated* path is
+    machine-dependent; the source expression (`ROOT / "presets" / ...`) is not,
+    and re-pointing one at a different preset is a real contract change that
+    SHOULD move the fingerprint.  Comments and formatting are absent from the
+    AST, so prose edits still cannot open a new epoch.
+    """
+    tree = ast.parse(Path(__file__).read_text(encoding="utf-8"))
+    bound: dict[str, str] = {}
+    for node in tree.body:
+        if not isinstance(node, (ast.Assign, ast.AnnAssign)):
+            continue
+        targets = node.targets if isinstance(node, ast.Assign) else [node.target]
+        for target in targets:
+            if isinstance(target, ast.Name) and target.id.isupper():
+                bound[target.id] = ast.dump(node, include_attributes=False)
+    if not bound:
+        raise ThemeForwardComparisonError("module_constant_contract_is_empty")
+    return dict(sorted(bound.items()))
+
+
 def _contract_function_semantics() -> dict[str, str]:
     """Bind every local runtime function; a monkeypatch removes or changes it."""
     return {
@@ -1425,6 +1455,9 @@ def comparison_contract_fingerprint(governance: dict[str, Any], frozen_theme_ids
             },
         ),
         "policy_semantics": _contract_function_semantics(),
+        # Bound by default rather than by the hand-written list above, which is
+        # kept only as a readable subset; see `_contract_constant_semantics`.
+        "policy_constants": _contract_constant_semantics(),
     })
 
 
