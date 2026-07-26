@@ -1,5 +1,13 @@
 # Session Log
 
+## 2026-07-26 - Claude Code 修复 (theme 引擎死函数删除，冻结前 Optional (a) 收口，自做自审)
+
+- **Verdict/Action**: 用户指令直接删。`engine/a_short_theme_forward_comparison.py::_semantic_file_function_digest`（8 行、零代码调用点）已删，未改测试、未动豁免常量、未碰其他轨。冻结前必须做：它仍被契约摘要绑着，`--start-epoch` 后再删要作废已积累周。Detail in register。
+- **Required**: 无。`R-ASHORT-THEME-ADJUDICATOR-COVERAGE-MEASURED-ON-UNCOUNTED-WEEKS` 的 Round-3 Optional (a) 转 closed，(b) 保持 open。完整证据/边界/closure 见 `system_risk_register.md`(单一来源，本处不复述)。
+- **Verify**: review-evidence:not_available（本轮指令为「把 ② 删了」，非 review 命令形态，hook 未注入 token；以下均为真实工具结果）。定向验收包 100 OK（pinned main Python，preflight 过）。删后实测七轨仍 pre-freeze、theme `epoch_id=None`、绑定集 70 且不含该名。分级按 rule 6 走快档：不起 §6a agent、不跑全量 lane 包。并发核对与完整测量见 register。
+- **Pre-Codex self-review**: A 该文件唯一死 digest helper（两个同类兄弟均有活调用点）；B 全树引用清扫仅命中定义 + 3 处文档；C 反向对照由既有穷尽性断言承担；D N/A；E 只改 register 单一来源；F py_compile 与 `git diff --check` clean。
+- **Next**: 用户：决定 Optional (b) 与 P2 AST 归一何时做（均属冻结前清单）。
+
 ## 2026-07-26 - Claude Code 审查 PASS (register 归档瘦身，自做自审，用户指令)
 
 - **Verdict/Action**: PASS，已提交。用户指令「自己做自己审」。`docs/system_risk_register.md` 从 3.4MB/6384 行降到 446KB/781 行：307 条已关闭条目整块移入 `docs/archive/system_risk_register_resolved_20260726.md`，活册只留 63 条（54 declared-open + 9 语义歧义的保守保留）+ 4 个治理小节。移动不删除，R-ID 与 closure evidence 全部保留，活册顶部加指针。依据 AGENTS §System risk register discipline：该文件的定义是「未修复风险的 durable queue」。

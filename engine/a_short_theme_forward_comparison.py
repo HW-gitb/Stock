@@ -1010,16 +1010,6 @@ def _semantic_function_digest(function: Callable[..., Any]) -> str:
     return ast.dump(tree, include_attributes=False)
 
 
-def _semantic_file_function_digest(path: Path, names: set[str] | None = None) -> str:
-    """Bind a sibling runtime function without importing a circular runner module."""
-    tree = ast.parse(path.read_text(encoding="utf-8"))
-    selected = [node for node in tree.body if isinstance(node, ast.FunctionDef)
-                and (names is None or node.name in names)]
-    if names is not None and {node.name for node in selected} != names:
-        raise ThemeForwardComparisonError(f"missing frozen runner semantics: {sorted(names)}")
-    return ast.dump(_strip_docstrings(ast.Module(body=selected, type_ignores=[])), include_attributes=False)
-
-
 def _semantic_file_contract_digest(path: Path, function_names: set[str],
                                    constant_names: set[str]) -> str:
     """Bind a transitive producer closure and every referenced module constant by default."""
