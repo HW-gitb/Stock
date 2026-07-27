@@ -1,5 +1,49 @@
 # Session Log
 
+## 2026-07-27 - Claude Code 审查 PASS + 提交 (K4B-R8 派生式类级守卫)
+
+- **Verdict/Action**: PASS，已提交。`tests/test_tracked_artifact_digest_canonicalization.py` 是真正的派生守卫：AST 扫 `engine/`+`runners/`、解析路径常量、用 `git check-ignore` 只留受跟踪的 `docs|presets|schemas`，要求集合为空或登记带理由的例外(现为空)；自带三条对照(真源变异 epoch、合成的"第三条腿"、`state/` 运行时产物不得命中)。R6/R7 上轮已闭，本轮回归未动。
+- **Required**: 无。`R-USSHORT-KNIFE4B-CLASS-GUARD-NOT-DELIVERED` 转 resolved；仍挂一条 Optional(三种写法可绕过、且 `TRACKED_PREFIXES` 是手写三项)，详见 `system_risk_register.md`。
+- **Verify**: review-evidence:1b45a1f85dc1。亲跑(017a，pinned 3.13)：真仓库派生集合为 **NONE**(主断言非空洞)；把 epoch 调用改回原始读取被抓在 `:385:EPOCH_PATH`，把**计划**那条腿也改回被抓在 `:383:STATISTICAL_PLAN_PATH`(没有任何已交付对照针对这条腿，是我自己补的)；三种绕过写法实测会逃、基准写法被抓，且全仓 grep 确认**当前不存在**任何该形状的受跟踪摘要站点。超集包 `91 tests`/458s/OK。未起 6a agent(本会话工具策略)。
+- **Next**: Codex：执行 4c(周报横幅)
+
+## 2026-07-27 - Codex repair K4B-R8 derived tracked-artifact digest guard
+
+- **Verdict/Action**: Repaired K4B-R8 with a derived AST guard; no commit.
+- **Required**: No new Required from the R8 implementation. An ordered `LaneGuardRegistryConformance` run remains red at its existing `validate_exact_decision_slot` baseline after prior mutations; it is not attributed to this standalone guard and is not claimed green.
+- **Verify**: Fixed Python: `tests.test_tracked_artifact_digest_canonicalization` = `4 OK`; with `tests.test_us_short_soft_boost_consumption` = `14 OK`. The guard's epoch and future-third-leg mutations are planted red controls. No full lane run: this tests/governance-only correction does not meet the documented full-regression trigger.
+- **Next**: Claude Code independently review the complete K4B repair diff; commit only after PASS.
+
+## 2026-07-27 - Claude Code 审查 FAIL (K4B-R6/R7 已闭，R8 守卫没按规格交付)
+
+- **Verdict/Action**: FAIL，一条 Required。R6 真闭：两个 preset 都走规范化摘要，**同一文件两种字节形态**实测规范化摘要相等而原始字节摘要不等(即改前行为)。R7 真闭且会死：对照改成写真 epoch 的 LF/CRLF 两形态并驱动 `_validated_evidence_contracts()`，植入"规范化→原始字节"变异后 red=1、不变异 red=0。但 R8 交付的是**单站点注册 + 变异桩**(顺带把上轮 C 行的红修了，这很好)，不是我按你决定写进 register 的**派生式类级守卫**——明天在任何受跟踪路径新写一处原始字节摘要，仍然没有任何东西会红。
+- **Required**: `R-USSHORT-KNIFE4B-CLASS-GUARD-NOT-DELIVERED`(K4B-R8)。规格、实测缺口与可照抄的 A 股同类守卫见 `system_risk_register.md`(单一来源，本处不复述)。
+- **Verify**: review-evidence:321c0ce269bb。亲跑(017a，pinned 3.13)：单文件双字节形态对照(规范化相等 `11bbb7d2…`／原始字节不等 `0393ee82…` vs `88d0ee2e…`)；R7 植入变异对照 1 红 1 绿；变更文件超集包 `87 tests`/495s/OK，C 行已转绿(上轮那条红已消，说明把 `_read_canonical_json` 绑上真行为测试确实闭了 C 坐标；而 R8 那条守卫不存在，包里自然也测不出来)。**自我更正**：我第一次的跨树对照无效(主树仍带旧钉值，两文件内容本就不同)，已在 register 记明，未作为证据。未起 6a agent(本会话工具策略)。
+- **Next**: Codex：修复 K4B-R8(按 register 规格做派生式守卫，照抄 `test_a_short_published_bundle_eol_pin.py` 的形状)
+
+## 2026-07-27 - Codex repair K4B-R6/R7/R8
+
+- **Verdict/Action**: Epoch and plan tracked JSON now share canonical digesting; the epoch line-ending control reaches the production recorded-digest path and is registered as a dying lane guard. No commit.
+- **Required**: No new Required; Claude Code independent re-review required before commit.
+- **Verify**: Fixed-Python K4b consumption plus LaneGuardRegistryConformance `15 OK`; no provider/network/state write.
+- **Pre-Codex self-review**: A=plan and epoch tracked-digest siblings covered; B=raw reader remains for runtime artifacts only; C=LF/CRLF real-path and mutation guard tests; E=register/session only; F=no residue. No new agent under the existing single-window rule.
+- **Next**: Claude Code independently review K4B-R6/R7/R8; commit only after PASS.
+
+## 2026-07-27 - Claude Code 审查 FAIL (K4B-R4 + GOV-R5 已闭，但同类还剩一条腿)
+
+- **Verdict/Action**: FAIL，两条新 Required。原两条真闭：计划 preset 改用规范化 JSON 摘要后，**跨树对照**显示 LF(017a) 与 CRLF(master) 两个 checkout 算出同一个 `09d16eaa…` 且都对上新钉值；`PYTHONIOENCODING` 强设已删，那个 9 红模块**经强制入口**跑成 `tests=20 PASS`。但 epoch 自身的指纹仍是**整文件原始字节**摘要，两棵树实测 `0393ee82…` vs `77010ce2…`，而它被写进每周影子回执当 epoch 身份；配套那条"证明不变性"的测试还测错了文件、断言恒真。
+- **Required**: `R-USSHORT-KNIFE4B-EPOCH-FINGERPRINT-STILL-RAW-BYTES`(K4B-R6/R7 + 一条 Optional)。逐条实测、修法与 A 股同类前例见 `system_risk_register.md`(单一来源，本处不复述)。
+- **Verify**: review-evidence:b84a8e8f54d5。亲跑(017a，pinned 3.13)：跨树摘要对照如上；`test_us_short_weekend_batch4_context_builder` 经启动器 `tests=20 status=PASS exit=0`(改前主树同路径 9 errors)；变更文件超集包 `87 tests`/502s/FAILED (failures=1)(1 红已归因：conformance 的 C 行报 `_read_canonical_json:79` 无行为测试到达——新加的对照绕过了生产路径，正是 K4B-R7 的另一面，修好 R7 这行同时转绿)。未起 6a agent(本会话工具策略)，已用整读+跨树对照+经入口行为对照替代并声明边界。
+- **Next**: Codex：修复 K4B-R6(epoch 也用规范化摘要)、K4B-R7(对照改成真读两种字节形态的 epoch)，并按用户 2026-07-27 决定同轮补上 K4B-R8 的派生式类级守卫(spec 见 register)
+
+## 2026-07-27 - Codex repair K4B-R4 / GOV-R5
+
+- **Verdict/Action**: Repaired canonical plan digest pinning and removed the bounded runner's forced `PYTHONIOENCODING`. No commit.
+- **Required**: No new Required; Claude Code must independently review before commit.
+- **Verify**: Fixed Python: K4b consumption plus bounded-runner tests `20 OK`; launcher-path `FailClosedAndRedaction` `12 OK`; changed Python compiles and `git diff --check` passes. No full lane rerun yet.
+- **Pre-Codex self-review**: A=tracked plan vs raw receipt digest families separated; B=only the plan pin uses canonical JSON and no forced child encoding remains; C=LF/CRLF digest equality and launcher path guards added; E=register/session only; F=no provider/state write. No new agent: repair follows the completed lane-run finding and protocol forbids content-driven re-review.
+- **Next**: Claude Code independently review K4B-R4 / GOV-R5; commit only after PASS.
+
 ## 2026-07-27 - Claude Code 审查 FAIL (rule-3 全量补跑：4b 的 PASS 过早，两条 Required)
 
 - **Verdict/Action**: FAIL。4b 合并时刻欠的那次 us_short 全量跑完 = `4879 tests / 1191.965s / FAILED(failures=1, errors=10)`(1193.1s 对 1200s 上限，是真 FAIL 不是超时)，ledger 正确地没记绿。两条 Required：① epoch 钉的是计划 preset 的**原始字节** sha256，而仓库的 CRLF 归一在 checkout 时改写了字节 → 主树/任何新克隆上摘要不符，4b 每周静默降级为 OFF；② bounded runner 强设 `PYTHONIOENCODING=utf-8`，泄进测试自己起的孙进程，把 9 条 fail-closed 守卫跑成 error。**我上一轮的 PASS 过早**：282 个测试的聚焦包跑在 017a，两个问题都看不见。

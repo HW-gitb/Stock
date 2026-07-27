@@ -55,7 +55,6 @@ def run_command(command: list[str], timeout_seconds: int, *, cwd: Path = ROOT) -
         raise ValueError("timeout must be positive")
     creationflags = subprocess.CREATE_NEW_PROCESS_GROUP if os.name == "nt" else 0
     child_env = os.environ.copy()
-    child_env["PYTHONIOENCODING"] = "utf-8"
     started = time.monotonic()
     process = subprocess.Popen(
         command,

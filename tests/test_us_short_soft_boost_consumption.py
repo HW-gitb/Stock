@@ -314,11 +314,28 @@ class SoftBoostConsumptionTest(unittest.TestCase):
         self.assertEqual(saved["records"][0]["comparison"], ["soft_boost_on", "soft_boost_off"])
         self.assertEqual(
             saved["records"][0]["statistical_plan_sha256"],
-            hashlib.sha256(
-                (ROOT / "presets" / "us_short_soft_boost_statistical_plan_20260727.json").read_bytes()
-            ).hexdigest(),
+            consumption._serialized_sha256(json.loads(
+                (ROOT / "presets" / "us_short_soft_boost_statistical_plan_20260727.json").read_text(encoding="utf-8")
+            )),
         )
         self.assertFalse(saved["records"][0]["provider_calls_performed"])
+
+    def test_evidence_epoch_digest_is_invariant_to_tracked_json_line_endings(self):
+        epoch = json.loads(consumption.EPOCH_PATH.read_text(encoding="utf-8"))
+        lf_path = self.fixture_root / "epoch_lf.json"
+        crlf_path = self.fixture_root / "epoch_crlf.json"
+        lf = json.dumps(epoch, ensure_ascii=False, indent=2) + "\n"
+        lf_path.write_text(lf, encoding="utf-8", newline="")
+        crlf_path.write_text(lf.replace("\n", "\r\n"), encoding="utf-8", newline="")
+        original = consumption.EPOCH_PATH
+        try:
+            consumption.EPOCH_PATH = lf_path
+            lf_digest, _ = consumption._validated_evidence_contracts()
+            consumption.EPOCH_PATH = crlf_path
+            crlf_digest, _ = consumption._validated_evidence_contracts()
+        finally:
+            consumption.EPOCH_PATH = original
+        self.assertEqual(lf_digest, crlf_digest)
 
     def test_statistical_plan_is_frozen_symmetric_and_never_auto_applies(self):
         plan = json.loads(
