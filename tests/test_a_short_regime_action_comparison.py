@@ -344,6 +344,20 @@ class CandidateEffectTests(unittest.TestCase):
         self.assertEqual(after["evidence_progress"]["h20_pending_weeks"], 3)
         self.assertEqual(after["verdict"], summary["verdict"])
 
+    def test_mature_cohort_counters_stay_equal_by_construction(self):
+        # Optional (c) of R-ASHORT-CANDIDATE-EFFECT-NONMONOTONIC-AND-HEALTH-FALSE-GREEN:
+        # weekly_h10 and weekly_h20 are appended in lockstep, so these two counters describe
+        # the SAME closed cohort.  Pin it, or a later edit can silently split them and leave
+        # `valid_divergence_weeks` reading as an H10-only count again.
+        for rows in (
+            self._twelve_weeks(-1.0, h20=-1.0),
+            self._twelve_weeks(-1.0),
+            [_candidate_record("20260706", "000001.SZ", -1.0)],
+            [],
+        ):
+            progress = summarize_candidate_effect_records(rows)["evidence_progress"]
+            self.assertEqual(progress["valid_divergence_weeks"], progress["h20_mature_weeks"])
+
     def test_h20_mature_week_policy_minimum_blocks_a_tail_with_too_few_closed_weeks(self):
         self.assertEqual(candidate_effect_policy()["h20_mature_weeks_min"], 8)
         rows = self._twelve_weeks(-1.0, h20=-1.0)

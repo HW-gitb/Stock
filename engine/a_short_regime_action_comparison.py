@@ -677,6 +677,14 @@ def summarize_candidate_effect_records(records: list[dict]) -> dict:
         sum(value > 0 for value in weekly_h10) / len(weekly_h10) if weekly_h10 else None
     )
     mean_h20 = _mean_or_none(weekly_h20)
+    # `weekly_h10` and `weekly_h20` are appended in lockstep above (one closed H20-mature
+    # cohort feeds every reported statistic), so `len(weekly_h10) == len(weekly_h20)` ALWAYS
+    # and the two minimums below are the same predicate while both are frozen at 8:
+    # `h20_mature_weeks_min` only bites once it is raised above `divergence_weeks_min`.
+    # Both gates are kept explicit so a future governance edit to either one is honoured;
+    # `tests/test_a_short_regime_action_comparison.py` pins the equality so nobody "fixes"
+    # one counter without the other.  See register
+    # R-ASHORT-CANDIDATE-EFFECT-NONMONOTONIC-AND-HEALTH-FALSE-GREEN Optional (c).
     ready = (
         # Pre-freeze evidence is audit-only and must never reach a verdict.
         _epoch_mode.evidence_counts_toward_clock()

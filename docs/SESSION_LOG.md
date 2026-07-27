@@ -1,5 +1,13 @@
 # Session Log
 
+## 2026-07-27 — Claude Code 修复 (第四刀 Optional a/b/c，用户指令自修自审)
+
+- **Verdict/Action**: 三条全修。(a) launcher 删掉重复的 status/reason 枚举表与 `schema_version` 锁，只留身份+形状校验；(b) `candidate_effect_outcome.json` 归入 `.gitignore`（瞬态回执，证据仍是旁边那份 tracked 摘要）；(c) 把「两个计数恒等、`h20_mature_weeks_min` 只有抬过 `divergence_weeks_min` 才生效」写进引擎注释+schema description，并加一条恒等守护测试。无 schema 版本变更、tracked 产物零字节改动。
+- **Required**: `R-ASHORT-CANDIDATE-EFFECT-NONMONOTONIC-AND-HEALTH-FALSE-GREEN`（Optional a/b/c 处置与自审证据见 `system_risk_register.md`，单一来源，本处不复述）。
+- **Verify**: review-evidence:e9a8b5c0cd96。Optional-only 快档（§6a carve-out）：一次范围 grep + 一次定向包 `tests.test_a_short_regime_action_comparison tests.test_a_short_weekly_sidecar_health tests.phase6.test_weekly_screening_guardrails` = 71 OK；ps1 `ParseFile` 0 error；三条反向对照全红（枚举表/版本锁 grep 归零、`git check-ignore` 命中、植入计数分裂让新测试转红）。未起 agent、未跑全量。
+- **Pre-Codex self-review**: A 按「重复契约/未分类产物/误读计数」三类各扫全集非只改被点名处；B `grep` 确认 ps1 枚举表与版本锁 0 残留、被测试钉住的三条字符串仍在；C 植入计数分裂反向对照转红；E 未改 CURRENT；F 定向包集中一次跑完。
+- **Next**: 合并 8865 到主树 master
+
 ## 2026-07-27 — Claude Code 审查 PASS + commit (A-short 第四刀 candidate-effect + sidecar health)
 
 - **Verdict/Action**: PASS，已提交本刀 14 个文件。K4-RV1（receipt 配对测试真驱动 writer）、K4-RV2（doc guard 转绿）、K4-RV3(ii)（18 个 sidecar 两桶穷举 + 完整性守卫）三条均由我自建探针复测坐实，非采信交接。K4-RV3(i) 三个 parse 出口按 Codex 的判断归第三刀，已写进第三刀条目 Required 防悬空。分级：§6a 三触发全不命中→不起 agent；rule 3 按 rule 6 走聚焦档→不跑全量。

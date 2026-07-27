@@ -33,9 +33,9 @@
       "required": ["forward_live_weeks", "valid_divergence_weeks", "valid_divergence_stocks", "h20_mature_weeks", "h20_pending_weeks", "historical_not_counted", "immature_or_missing_not_counted", "ready_for_verdict"],
       "properties": {
         "forward_live_weeks": {"type": "integer", "minimum": 0},
-        "valid_divergence_weeks": {"type": "integer", "minimum": 0},
+        "valid_divergence_weeks": {"type": "integer", "minimum": 0, "description": "Divergent weeks counted into every reported statistic. Since 1.1.0 that is the closed H20-mature cohort, so this is ALWAYS equal to h20_mature_weeks; it is NOT an H10-only count."},
         "valid_divergence_stocks": {"type": "integer", "minimum": 0},
-        "h20_mature_weeks": {"type": "integer", "minimum": 0},
+        "h20_mature_weeks": {"type": "integer", "minimum": 0, "description": "The same closed cohort as valid_divergence_weeks, exposed separately so 'how many weeks are still pending' reads next to h20_pending_weeks. policy.h20_mature_weeks_min therefore only binds once it is raised above divergence_weeks_min."},
         "h20_pending_weeks": {"type": "integer", "minimum": 0},
         "historical_not_counted": {"type": "integer", "minimum": 0},
         "immature_or_missing_not_counted": {"type": "integer", "minimum": 0},

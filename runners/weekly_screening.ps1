@@ -615,25 +615,26 @@ if ($SkipRegime) {
     $CandidateEffectProgress = 'unavailable'
     $CandidateEffectError = 'candidate_effect_outcome_missing_or_invalid'
     $CandidateEffectObserved = $null
+    # The receipt writer validates status/reason_code against
+    # schemas/a_short_regime_candidate_effect_outcome.schema.json and refuses to write a
+    # mismatched pair, so the launcher deliberately does NOT re-implement that enum table or
+    # pin the schema version: one contract, one place.  It checks identity and field shape
+    # only, and the Python health observer stays authoritative for the real evidence clock.
     if ($RegimeExitCode -eq 0 -and (Test-Path -LiteralPath $CandidateEffectOutcome -PathType Leaf)) {
         try {
             $CandidateEffectReceipt = Get-Content -Raw -Encoding UTF8 $CandidateEffectOutcome | ConvertFrom-Json
             $CandidateEffectReceiptStatus = [string]$CandidateEffectReceipt.status
             $CandidateEffectReceiptReason = [string]$CandidateEffectReceipt.reason_code
             $CandidateEffectObservedCandidate = [string]$CandidateEffectReceipt.observed_as_of
-            $CandidateEffectReasonValid = (
-                ($CandidateEffectReceiptStatus -eq 'updated' -and $CandidateEffectReceiptReason -eq 'updated') -or
-                ($CandidateEffectReceiptStatus -eq 'skipped_source_mismatch' -and $CandidateEffectReceiptReason -in @('run_identity_mismatch', 'tracker_rows_missing', 'm67_digest_drift')) -or
-                ($CandidateEffectReceiptStatus -eq 'skipped_immutable_mature_week' -and $CandidateEffectReceiptReason -eq 'immutable_mature_week')
-            )
             $CandidateEffectObservedValid = (
                 [string]::IsNullOrWhiteSpace($CandidateEffectObservedCandidate) -or
                 $CandidateEffectObservedCandidate -match '^[0-9]{8}$'
             )
             if ([string]$CandidateEffectReceipt.schema_name -eq 'a_short_regime_candidate_effect_outcome' -and
-                [string]$CandidateEffectReceipt.schema_version -eq '1.0.0' -and
                 [string]$CandidateEffectReceipt.as_of -eq [string]$AsOf -and
-                $CandidateEffectReasonValid -and $CandidateEffectObservedValid) {
+                $CandidateEffectReceiptStatus -match '^[a-z0-9_]+$' -and
+                $CandidateEffectReceiptReason -match '^[a-z0-9_]+$' -and
+                $CandidateEffectObservedValid) {
                 $CandidateEffectStatus = 'succeeded'
                 $CandidateEffectObserved = $CandidateEffectObservedCandidate
                 $CandidateEffectProgress = if ($CandidateEffectReceiptStatus -eq 'updated') { 'advanced' } elseif ([string]::IsNullOrWhiteSpace($CandidateEffectObserved)) { 'unavailable' } else { 'stalled' }
