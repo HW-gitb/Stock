@@ -8,9 +8,11 @@ factor fail tests until its terminal weekly surface is explicitly registered.
 from __future__ import annotations
 
 import ast
+import copy
 import hashlib
 import json
 import re
+from functools import lru_cache
 from pathlib import Path
 
 
@@ -47,6 +49,17 @@ _OUTPUT_SCHEMA_FILES = (
     "schemas/a_short_weekly_report.schema.json",
     "schemas/a_short_m67_report.schema.json",
 )
+_ANALYSIS_INPUT_SCHEMA_FILE = "schemas/analysis_input.schema.json"
+_STATIC_SOURCE_FILES = tuple(sorted(
+    set(_DECISION_FILES) | set(_CONSTANT_FILES) | {_RUNTIME_CONFIG_FILE}
+))
+_DEFAULT_STATIC_SNAPSHOT_FILES = tuple(sorted(
+    set(_STATIC_SOURCE_FILES)
+    | {_ANALYSIS_INPUT_SCHEMA_FILE}
+    | set(_RUNTIME_POLICY_FILES)
+    | set(_RUNTIME_POLICY_SCHEMA_FILES)
+    | set(_OUTPUT_SCHEMA_FILES)
+))
 _STATUSES = frozenset({"applied", "not_triggered", "unavailable_manual_review", "intentionally_independent"})
 _POLICIES = frozenset({"must_affect_result", "intentionally_independent"})
 
@@ -256,8 +269,10 @@ def _policy_leaf_paths(rel: str, payload: dict) -> list[str]:
     return sorted(paths)
 
 
-def _runtime_policy_inventory(overrides: dict[str, str] | None = None) -> tuple[dict[str, list[str]], dict[str, str], dict[str, str]]:
+def _runtime_policy_inventory(overrides: dict[str, str] | None = None,
+                              schema_overrides: dict[str, str] | None = None) -> tuple[dict[str, list[str]], dict[str, str], dict[str, str]]:
     overrides = overrides or {}
+    schema_overrides = schema_overrides or {}
     paths, value_hashes = {}, {}
     for rel in _RUNTIME_POLICY_FILES:
         raw = overrides.get(rel, (ROOT / rel).read_text(encoding="utf-8"))
@@ -267,7 +282,7 @@ def _runtime_policy_inventory(overrides: dict[str, str] | None = None) -> tuple[
             raise ValueError(f"runtime policy JSON invalid for effect contract: {rel}") from exc
         paths[rel] = _policy_leaf_paths(rel, payload)
         value_hashes[rel] = _hash(raw)
-    schema_hashes = {rel: _hash((ROOT / rel).read_text(encoding="utf-8"))
+    schema_hashes = {rel: _hash(schema_overrides.get(rel, (ROOT / rel).read_text(encoding="utf-8")))
                      for rel in _RUNTIME_POLICY_SCHEMA_FILES}
     return paths, value_hashes, schema_hashes
 
@@ -503,17 +518,18 @@ def _llm_task_types(analysis_schema: dict) -> list[str]:
     return sorted(value for value in values if isinstance(value, str))
 
 
-def static_inventory(*, source_overrides: dict[str, str] | None = None,
-                     analysis_schema: dict | None = None,
-                     output_schema_overrides: dict[str, str] | None = None,
-                     runtime_policy_overrides: dict[str, str] | None = None) -> dict:
+def _build_static_inventory(*, source_overrides: dict[str, str] | None = None,
+                            analysis_schema: dict | None = None,
+                            output_schema_overrides: dict[str, str] | None = None,
+                            runtime_policy_overrides: dict[str, str] | None = None,
+                            runtime_policy_schema_overrides: dict[str, str] | None = None) -> dict:
     source_overrides = source_overrides or {}
     output_schema_overrides = output_schema_overrides or {}
     analysis_schema = analysis_schema if analysis_schema is not None else json.loads(
         (ROOT / "schemas" / "analysis_input.schema.json").read_text(encoding="utf-8")
     )
     sources = {rel: source_overrides.get(rel, (ROOT / rel).read_text(encoding="utf-8"))
-               for rel in set(_DECISION_FILES) | set(_CONSTANT_FILES) | {_RUNTIME_CONFIG_FILE}}
+               for rel in _STATIC_SOURCE_FILES}
     phase5 = sources["runners/a_short_phase5_engine.py"]
     portfolio = sources["engine/a_short_portfolio_risk.py"]
     weekly = sources["runners/a_short_weekly_pipeline.py"]
@@ -523,7 +539,8 @@ def static_inventory(*, source_overrides: dict[str, str] | None = None,
         if isinstance(node, ast.Assign) and isinstance(node.targets[0], ast.Name)
         and node.targets[0].id == "_FACTOR_SPECS")
     factor_specs = factor_node.value.elts if isinstance(factor_node.value, (ast.Tuple, ast.List)) else []
-    policy_paths, policy_hashes, policy_schema_hashes = _runtime_policy_inventory(runtime_policy_overrides)
+    policy_paths, policy_hashes, policy_schema_hashes = _runtime_policy_inventory(
+        runtime_policy_overrides, runtime_policy_schema_overrides)
     return {
         "analysis_input_paths": analysis_input_paths(analysis_schema),
         "decision_predicate_sha256": {rel: _hash(_predicate_hashes(sources[rel])) for rel in _DECISION_FILES},
@@ -548,8 +565,50 @@ def static_inventory(*, source_overrides: dict[str, str] | None = None,
     }
 
 
+def _read_default_static_snapshot() -> tuple[tuple[str, str], ...]:
+    """Read every default static-contract input; content is the cache key."""
+    return tuple((rel, (ROOT / rel).read_text(encoding="utf-8"))
+                 for rel in _DEFAULT_STATIC_SNAPSHOT_FILES)
+
+
+@lru_cache(maxsize=4)
+def _default_static_inventory_from_snapshot(snapshot: tuple[tuple[str, str], ...]) -> dict:
+    raw = dict(snapshot)
+    return _build_static_inventory(
+        source_overrides={rel: raw[rel] for rel in _STATIC_SOURCE_FILES},
+        analysis_schema=json.loads(raw[_ANALYSIS_INPUT_SCHEMA_FILE]),
+        output_schema_overrides={rel: raw[rel] for rel in _OUTPUT_SCHEMA_FILES},
+        runtime_policy_overrides={rel: raw[rel] for rel in _RUNTIME_POLICY_FILES},
+        runtime_policy_schema_overrides={rel: raw[rel] for rel in _RUNTIME_POLICY_SCHEMA_FILES},
+    )
+
+
+def static_inventory(*, source_overrides: dict[str, str] | None = None,
+                     analysis_schema: dict | None = None,
+                     output_schema_overrides: dict[str, str] | None = None,
+                     runtime_policy_overrides: dict[str, str] | None = None) -> dict:
+    """Return the static inventory, memoized only for unmodified on-disk inputs."""
+    if (source_overrides is None and analysis_schema is None
+            and output_schema_overrides is None and runtime_policy_overrides is None):
+        # A fresh copy prevents a caller from poisoning the cached contract view.
+        return copy.deepcopy(_default_static_inventory_from_snapshot(_read_default_static_snapshot()))
+    return _build_static_inventory(
+        source_overrides=source_overrides,
+        analysis_schema=analysis_schema,
+        output_schema_overrides=output_schema_overrides,
+        runtime_policy_overrides=runtime_policy_overrides,
+    )
+
+
+@lru_cache(maxsize=4)
+def _contract_from_source(raw: str) -> dict:
+    return json.loads(raw)
+
+
 def load_contract() -> dict:
-    return json.loads(CONTRACT_PATH.read_text(encoding="utf-8"))
+    # Re-read the bytes for every call so an in-process source change invalidates
+    # the memo; return a copy so callers cannot mutate cached contract state.
+    return copy.deepcopy(_contract_from_source(CONTRACT_PATH.read_text(encoding="utf-8")))
 
 
 def contract_fingerprint(contract: dict | None = None) -> str:

@@ -14,6 +14,27 @@
 - **Verify**: review-evidence:not_available(本轮为修复指令、非 review 命令形态，门未 arm)。亲跑：门超集包经强制入口 `status=PASS exit=0 tests=69 deadline=300s`；`py_compile` 通过；对照实测——A 树有 token、Stop hook 被塞 B 树时，带 `repo_root` 判 A(exit 0)、去掉它(改前形状)判 B(exit 2)；端到端以 cwd=017a arm，快照确实拍在 017a、`repo_root` 记为 017a、Stop hook 拿错树仍按记录树拦下；C 的 2 条该 arm + 4 条不该 arm 全部符合预期。顺手清掉一条 pre-fix 遗留 armed 状态。
 - **Proof-of-use**: A 按"两个 hook 各自定树"整类看，发现真洞不是判错树而是**连 state 都找不到**，故连 state 位置一并收敛；B grep 确认 `.claude/review_gate` 派生点只剩唯一常量、`disarm` 也改齐；C 对照用两棵真树跑，改前形状确实判错树；D 正对照(同树审查、meta 语句)行为不变；E 未动 CURRENT/README；F 超集包一次跑完 + doc guard 一次过。
 - **Next**: Codex：执行 4c(周报横幅)
+## 2026-07-27 — Claude Code 审查 PASS（测试提速第二刀：effect-contract 引擎级 memo）
+
+- **Verdict/Action**: PASS。改法比第一刀更对：把重复的 AST 清单构建 memo 在 `engine/a_short_effect_contract.py`，键=17 个默认输入文件的**内容**（每次仍重读磁盘，故进程内改文件即失效），带 overrides 的调用一律不缓存，返回前 deepcopy；第一刀的测试侧 patch 同刀移除。仅重封本模块自指纹，无 policy 变更。
+- **Required**: 无。两条观察写在下面 Verify/Next，未新开 register 条目（无风险项）。
+- **Verify**: review-evidence:5d229358a025。超时原因: 两次超集包选大了(3 模块/2 模块)各撞 300s、240s 上限，且我曾与探针并发跑重包，白耗约 9 分钟。亲跑：`tests.test_a_short_effect_contract` = 21 OK/200.0s/exit 0；`tests.test_a_short_weekly_pipeline`（已无测试侧 patch）= 486 OK/211.9s/exit 0。自写探针：把 17 个键内文件逐个改动后，缓存路径结果与绕开缓存重算**逐个相等**（stale 列表为空，7 例值真变=非空转），恢复后回到基线；清单与 contract 的返回值投毒均被 deepcopy 挡住。静态面：模块内 9 处磁盘读取点逐个对照，能影响清单的文件全在键里；`static_contract_error()` 干净；重封自指纹我独立重算 8/8 一致。
+- **Next**: 用户：可提交并合入 master。两条观察：① `test_a_short_effect_contract` 因每例都用 overrides 绕缓存，现是 lane 里最贵的单模块（200s），可考虑让这些用例共享一份基准清单；② 交接里写的 weekly 42.1s 我在带载机器上实测为 211.9s，别把 42s 当 lane 预算基线用。
+
+## 2026-07-27 - Codex implementation: test-performance second knife
+
+- **Verdict/Action**: Replaced the first knife's weekly-test-only patch with an engine-level effect-contract memo. Default inputs are keyed by the content of every static-contract source/schema/policy file; override paths remain uncached; cached results are copied before return. Resealed only the effect-contract self-fingerprint.
+- **Required**: None newly opened. This shared-engine change requires Claude Code review before commit.
+- **Verify**: `tests.test_a_short_effect_contract` = 21 OK; `tests.test_a_short_weekly_pipeline` = 486 OK in 42.1s without test-side patch; full-pack ledger `a_short` = 2045 OK, 3 skipped, 442.6s / 1200s.
+- **Pre-Codex self-review**: Memo tests cover identical-byte reuse, source-byte invalidation, uncached overrides, and copy isolation; the initial stale self-fingerprint failed closed and was recomputed/resealed without policy change.
+- **Next**: Claude Code independently review this second knife, then commit only the PASS-covered files.
+
+## 2026-07-27 — Claude Code 审查 PASS（测试提速第一刀：weekly 模块只做一次 effect-contract 静态校验）
+
+- **Verdict/Action**: PASS，未提交。改动只在 `tests/test_a_short_weekly_pipeline.py`（+22 行，无删除）：`setUpModule` 先真跑一次 `validate_static_contract()`，再把它 patch 成空，`tearDownModule` 复原。产品代码零改动。效果显著：该模块 486 例现 178.8 秒跑完，而它此前所在的那半条 lane（1118 例）连 1200 秒都跑不完。
+- **Required**: 无。未新开 register 条目——本轮没有风险项，只有一条备选方案（见 Verify 末）。
+- **Verify**: 亲跑 `bounded_unittest focused 300 -- tests.test_a_short_weekly_pipeline` = `status=PASS exit=0 tests=486 elapsed=178.8s`。覆盖不减三条实证：① 该模块自身对 effect contract **零断言**（grep 只命中新加的 patch 代码），故无断言被架空；② 漂移仍 fail-closed——`setUpModule` 里那次真校验未被 patch，包一进来就会红；③ `tests/test_a_short_effect_contract.py` 直接用 `static_contract_error(source_overrides=...)` 覆盖谓词/阈值/policy/schema 各类变异，drift 检测未丢。作用域：module fixture 且 `tearDownModule` 停 patch；别的模块只是 import 本模块的 helper，import 不触发 setUpModule，故不外泄。engine 侧确认无任何缓存（`lru_cache` 0 命中），所以这笔重复开销是真的。
+- **Next**: 已提交。非阻断 Option 留给下一刀：与其逐模块 patch，不如在 `engine/a_short_effect_contract.py` 给 `static_inventory()`/`load_contract()` 加一层按源码字节 key 的 memo，一处改动让所有模块受益（组合风险 74s、margin 43s 等）、也不需要测试侧打桩，代价是动产品代码需单独审查；之后量一次全 lane，看 1200 秒上限是否已够用。
 
 ## 2026-07-27 - Claude Code 修复 + 自审 PASS (GOV-R4 + Optional，用户明令自修自审)
 

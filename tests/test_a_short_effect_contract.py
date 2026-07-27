@@ -17,6 +17,7 @@ if str(ROOT) not in sys.path:
 from engine.a_short_effect_contract import (  # noqa: E402
     load_contract, static_contract_error, static_inventory,
 )
+from engine import a_short_effect_contract as effect_contract_module  # noqa: E402
 from runners.a_short_m67_render import render_weekly_markdown  # noqa: E402
 from engine.a_short_industry_theme import classify_industry_trend  # noqa: E402
 from engine.egs_industry_heat import load_governance  # noqa: E402
@@ -29,6 +30,49 @@ from tests.test_a_short_weekly_pipeline import (  # noqa: E402
 )
 
 
+class EffectContractMemoTests(unittest.TestCase):
+    def setUp(self):
+        effect_contract_module._default_static_inventory_from_snapshot.cache_clear()
+        effect_contract_module._contract_from_source.cache_clear()
+
+    def test_default_inventory_memo_reuses_same_snapshot_and_returns_copies(self):
+        with patch.object(effect_contract_module, "_build_static_inventory",
+                          wraps=effect_contract_module._build_static_inventory) as build:
+            first = static_inventory()
+            first["decision_predicate_sha256"]["A-EGS/egs_main.py"] = "mutated"
+            second = static_inventory()
+        self.assertEqual(build.call_count, 1)
+        self.assertNotEqual(second["decision_predicate_sha256"]["A-EGS/egs_main.py"], "mutated")
+
+    def test_inventory_memo_key_changes_with_source_bytes_and_overrides_stay_uncached(self):
+        baseline = effect_contract_module._read_default_static_snapshot()
+        changed = tuple(
+            (rel, text + "\n# memo-cache-probe\n" if rel == "runners/a_short_weekly_pipeline.py" else text)
+            for rel, text in baseline
+        )
+        with patch.object(effect_contract_module, "_build_static_inventory",
+                          wraps=effect_contract_module._build_static_inventory) as build:
+            effect_contract_module._default_static_inventory_from_snapshot(baseline)
+            effect_contract_module._default_static_inventory_from_snapshot(changed)
+            source = (ROOT / "engine" / "a_short_portfolio_risk.py").read_text(encoding="utf-8")
+            static_inventory(source_overrides={"engine/a_short_portfolio_risk.py": source})
+            static_inventory(source_overrides={"engine/a_short_portfolio_risk.py": source})
+        self.assertEqual(build.call_count, 4)
+
+    def test_contract_memo_keys_on_json_bytes_and_returns_copies(self):
+        first = load_contract()
+        first["schema_name"] = "mutated"
+        second = load_contract()
+        self.assertEqual(effect_contract_module._contract_from_source.cache_info().misses, 1)
+        self.assertEqual(second["schema_name"], "a_short_m67_effect_contract")
+
+        raw = effect_contract_module.CONTRACT_PATH.read_text(encoding="utf-8")
+        effect_contract_module._contract_from_source.cache_clear()
+        effect_contract_module._contract_from_source(raw)
+        effect_contract_module._contract_from_source(raw + "\n")
+        self.assertEqual(effect_contract_module._contract_from_source.cache_info().misses, 2)
+
+
 class EffectContractStaticTests(unittest.TestCase):
     def setUp(self):
         self.contract = load_contract()
@@ -38,6 +82,7 @@ class EffectContractStaticTests(unittest.TestCase):
 
     def test_ast_fingerprints_do_not_depend_on_cpython_dump_format(self):
         baseline = static_inventory()
+        effect_contract_module._default_static_inventory_from_snapshot.cache_clear()
         with patch("engine.a_short_effect_contract.ast.dump", side_effect=AssertionError("must not use ast.dump")):
             portable = static_inventory()
         self.assertEqual(portable["decision_predicate_sha256"], baseline["decision_predicate_sha256"])
