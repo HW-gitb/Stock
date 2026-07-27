@@ -7,12 +7,14 @@ import json
 import sys
 import unittest
 from pathlib import Path
+from unittest import mock
 
 ROOT = Path(__file__).resolve().parents[1]
 if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
 from engine.a_short_experiment_admission_registry import admissions, admission_snapshot  # noqa: E402
+from engine import a_short_experiment_admission_registry as registry  # noqa: E402
 from engine.a_short_experiment_governance import (  # noqa: E402
     ExperimentGovernanceError,
     seal_experiment_admission,
@@ -21,6 +23,21 @@ from engine.a_short_experiment_governance import (  # noqa: E402
 
 
 class AdmissionRegistryTests(unittest.TestCase):
+
+    def setUp(self):
+        registry._sealed_admission_from_payload.cache_clear()
+
+    def test_admission_memo_reuses_exact_payload_and_returns_copies(self):
+        with mock.patch.object(registry, "validate_experiment_admission",
+                               wraps=registry.validate_experiment_admission) as validate:
+            first = registry.admissions()
+            first_validation_count = validate.call_count
+            first["p1_regime_action_proxy"]["baseline"]["arm_id"] = "poison"
+            second = registry.admissions()
+        self.assertGreater(first_validation_count, 0)
+        self.assertEqual(validate.call_count, first_validation_count)
+        self.assertEqual(second["p1_regime_action_proxy"]["baseline"]["arm_id"], "current_build")
+
     def test_every_active_lane_has_a_valid_sealed_admission(self) -> None:
         registry = admissions()
         self.assertEqual(

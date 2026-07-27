@@ -411,6 +411,26 @@ class PreFreezeEvidenceModeTests(unittest.TestCase):
         self.assertEqual(baseline, prose_only)
         self.assertNotEqual(baseline["semantic_ast_sha256"], semantic_change["semantic_ast_sha256"])
 
+    def test_semantic_contract_memos_key_on_source_bytes_and_return_fresh_values(self):
+        from types import SimpleNamespace
+
+        epoch_mode._semantic_module_contract_from_source.cache_clear()
+        epoch_mode._semantic_function_contract_from_source.cache_clear()
+        module = SimpleNamespace(__name__="semantic_memo_probe")
+        with tempfile.TemporaryDirectory() as temp:
+            path = Path(temp) / "semantic_memo_probe.py"
+            with mock.patch.object(epoch_mode.inspect, "getsourcefile", return_value=str(path)):
+                path.write_text("LIMIT = 3\n\ndef bound():\n    return LIMIT\n", encoding="utf-8")
+                with mock.patch.object(epoch_mode.ast, "parse", wraps=epoch_mode.ast.parse) as parse:
+                    first = epoch_mode.semantic_function_contract(module, ("bound",))
+                    first["bound_constants"].append("poison")
+                    second = epoch_mode.semantic_function_contract(module, ("bound",))
+                    path.write_text("LIMIT = 4\n\ndef bound():\n    return LIMIT\n", encoding="utf-8")
+                    changed = epoch_mode.semantic_function_contract(module, ("bound",))
+                self.assertEqual(parse.call_count, 2)
+        self.assertEqual(second["bound_constants"], ["LIMIT"])
+        self.assertNotEqual(changed["semantic_ast_sha256"], second["semantic_ast_sha256"])
+
     def test_narrow_contract_binds_the_constants_its_functions_read(self):
         """A narrow binding must cover read constants, or a governed threshold escapes.
 
