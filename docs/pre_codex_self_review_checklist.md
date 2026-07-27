@@ -2,7 +2,7 @@
 
 **存在目的**:减少同类问题反复被 Codex 点名(本项目反复出现"修了被点名的实例、没修整类"+"修复不追连带影响"两类失败,典型如 Slice-1 PIT 4 轮、Slice-2b-i 关键词 6 轮)。**测试集通过 ≠ 设计闭环通过**;每次把代码/文档交给 Codex `审查` 前,逐项过下面 6 关,自跑对抗,确认后再交。
 
-适用:每次 `起草` 和每次 `修复`。重点是 **`修复` 时**——一条 finding 修完后,先别急着交,跑 B/C/E。
+适用:每次 `起草` 和每次 `修复`。重点是 **`修复` 时**——一条 finding 修完后,先别急着交,由主线程跑 B/C/E；不要把每次小修都变成新的独立审查窗口。
 
 ---
 
@@ -12,10 +12,13 @@
 
 1. **先固定测试 Python,再跑测试**:进入执行/修复后只用固定主 Python `C:\Users\cnhea\AppData\Local\Programs\Python\Python313\python.exe`；测试通过 `.tools/run_unittest_with_repo_pythonpath.cmd`，其他项目命令通过 `.tools\codex_main_python.ps1`。不要试裸 `python`/`py`，不要设置 `STOCK_TEST_PYTHON`，也不得回退到 Codex bundled/PATH runtime。
 2. **红绿节奏保持窄**:先写能复现 Required 的 focused 红测,最小修复到 focused 绿;所有 docs/register/SESSION_LOG 写完后再跑一次对应固定包。固定包层级、full-lane 触发条件及 reviewer 的独立复跑义务只以 `AGENTS.md §Verification tiering and one-full-run rule` 为准。除非后续代码/契约又变了,不要因为只补交接文字反复跑同一大包。
-3. **独立自审默认轻量**:交审前的独立 agent 只给当前 diff、当前 requirement、same-class closure 和必要文件清单;默认 `fork_context=false`,不 fork 完整历史,不让它 repo-wide 发散。
-4. **self-review anti-hang contract**:独立自审 prompt 必须硬限制为 `current-diff-only`(只审当前 diff + 当前 requirement + same-class closure),输出只允许 `PASS / FAIL` 或 `FAIL: <must-fix list>`;明确 `do not run big packs`,固定包测试证据由主线程负责。prompt 里要列明本 slice 文件清单,并写清 `unrelated dirty files` 不属于当前审查范围,避免子 agent 因混批犹豫。
-5. **独立自审限时**:轻量自审 `2-3 minutes`(2-3 分钟)无结果即 `close and restart once`;`second timeout` 仍无结果时 `do not keep waiting`,停止等待并在 SESSION_LOG 说明 timeout。此时走 `main-thread checklist fallback`:主线程按 A-F/B2 自查 + 已跑固定验证包作测试证据,不得无限等 agent。子 agent 只有通过上述固定主 Python launcher 且获批准的 host-process execution 时才跑测试;否则只做逻辑/契约审查。
-6. **Proof-of-use 必写速度证据**:SESSION_LOG 的 `Pre-Codex self-review` 行要写明是否使用轻量自审、是否发生 timeout/重启、是否触发 main-thread checklist fallback、固定包是否集中一次跑完;这样未来审查能看见是否又退回慢路径。
+3. **stable-slice single-window contract**:主线程完成实现、same-class closure、focused 验证且 diff 稳定后，才安排 **exactly one scheduled independent review**；迭代红绿、同类排查和固定包均由主线程完成，不在中途起/唤醒 agent。
+4. **独立自审默认轻量**:该唯一窗口只给当前稳定 diff、当前 requirement、same-class closure 和必要文件清单;默认 `fork_context=false`,不 fork 完整历史,不让它 repo-wide 发散。
+5. **self-review anti-hang contract**:独立自审 prompt 必须硬限制为 `current-diff-only`(只审当前 diff + 当前 requirement + same-class closure),输出只允许 `PASS / FAIL` 或 `FAIL: <must-fix list>`;明确 `do not run big packs`,固定包测试证据由主线程负责。prompt 里要列明本 slice 文件清单,并写清 `unrelated dirty files` 不属于当前审查范围,避免子 agent 因混批犹豫。
+6. **main-thread class-closure after FAIL**:唯一窗口给出 Required 后，由主线程一次按类完成修复、B/C/E 和受影响验证；**no content-driven re-review**，不得因逐条修复而反复唤醒同一 agent。之后直接进入项目规定的 Claude Code 独立审查/提交门。
+7. **独立自审限时**:轻量自审 `2-3 minutes`(2-3 分钟)无结果即 `close and restart once`；该 restart 仅限同一已排程窗口的超时/传输故障，不得作为内容性复审。`second timeout` 仍无结果时 `do not keep waiting`,停止等待并在 SESSION_LOG 说明 timeout。此时走 `main-thread checklist fallback`:主线程按 A-F/B2 自查 + 已跑固定验证包作测试证据,不得无限等 agent。子 agent 只有通过上述固定主 Python launcher 且获批准的 host-process execution 时才跑测试;否则只做逻辑/契约审查。
+8. **documented material-new-risk exception**:只有修复引入新的、独立的安全/资金/生产边界疑点时，才可额外开一个独立审查窗口；SESSION_LOG 必须写明新风险类别和为何原窗口不能覆盖。不得以“更放心”或未完成主线程排查为由加开。
+9. **Proof-of-use 必写速度证据**:SESSION_LOG 的 `Pre-Codex self-review` 行要写明是否使用轻量自审、是否发生 timeout/重启、是否触发 main-thread checklist fallback、固定包是否集中一次跑完；若开例外窗口，写明 material-new-risk 理由。这样未来审查能看见是否又退回慢路径。
 
 ## A. 类不修实例(class-not-instance)
 改 classifier / validator / enum / 形式集 / 布尔门 / 不变式 时:

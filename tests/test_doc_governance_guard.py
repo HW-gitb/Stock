@@ -559,7 +559,7 @@ class DocGovernanceGuard(unittest.TestCase):
             "`执行` = Codex runs the next approved execution slice",
             "`提交` = review-cycle commit is owned by Claude Code after `审查` PASS",
             "Codex must use `using-superpowers` when available before `执行` / `修复`",
-            "Codex must run an independent agent self-review before handing work to Claude Code for `审查`",
+            "Codex must follow the checklist's single-window independent self-review schedule before handing work to Claude Code for `审查`",
             "handoff commands belong in `docs/SESSION_LOG.md` / `docs/system_risk_register.md`, not in the final chat",
         )
         for anchor in required:
@@ -611,6 +611,7 @@ class DocGovernanceGuard(unittest.TestCase):
             "Claude Code = independent reviewer + post-PASS committer.",
             "`审查` addressed to Claude Code",
             "`修复` addressed to Codex",
+            "follow the checklist's single-window independent self-review schedule",
         ):
             self.assertIn(anchor, protocol, f"AI_REVIEW_PROTOCOL lost role-swap pointer: {anchor}")
         for anchor in (
@@ -619,6 +620,7 @@ class DocGovernanceGuard(unittest.TestCase):
             "`审查` addressed to Codex",
             "`修复` addressed to Claude",
             "do not run `修复` or `执行` business implementation work",
+            "run an independent agent self-review before handing work to Claude Code",
         ):
             self.assertNotIn(anchor, protocol, f"AI_REVIEW_PROTOCOL still contains old role binding: {anchor}")
 
@@ -709,6 +711,7 @@ class DocGovernanceGuard(unittest.TestCase):
         self.assertIn(".tools/run_unittest_with_repo_pythonpath.cmd", script,
                       "doc-process verifier must route through the repo Python/jsonschema wrapper")
         for module in (
+            "tests.test_a_short_preflight.PinnedStockPythonSmoke",
             "tests.test_doc_governance_guard",
             "tests.test_readme_route_row_length",
             "tests.test_route_doc_ledger_status_consistency",
@@ -1015,6 +1018,11 @@ class DocGovernanceGuard(unittest.TestCase):
         "do not keep waiting",
         "main-thread checklist fallback",
         "unrelated dirty files",
+        "stable-slice single-window contract",
+        "exactly one scheduled independent review",
+        "main-thread class-closure after FAIL",
+        "no content-driven re-review",
+        "documented material-new-risk exception",
     )
     # Body phrases that MUST NOT reappear in AGENTS item 7. Naming a rule ("B ripple-grep") is fine;
     # restating its body is the AGENTS<->checklist drift this refactor eliminates.
@@ -1066,6 +1074,10 @@ class DocGovernanceGuard(unittest.TestCase):
             planted = cl.replace(kw, "")
             self.assertFalse(all(a in planted for a in self.CHECKLIST_BODY_ANCHORS),
                              f"dropping {kw!r} from checklist must fail the authority check")
+        for anchor in self.CHECKLIST_SELF_REVIEW_SPEED_ANCHORS:     # schedule anchor must be load-bearing
+            planted = cl.replace(anchor, "")
+            self.assertFalse(all(a in planted for a in self.CHECKLIST_SELF_REVIEW_SPEED_ANCHORS),
+                             f"dropping {anchor!r} from checklist must fail the speed contract")
         injected = (self._agents_item7() or "") + "\n零残留 defect-class 靠人记 planted-failure"
         self.assertTrue(any(b in injected for b in self.AGENTS_ITEM7_FORBIDDEN_BODY),  # AGENTS restatement
                         "injecting a rule-body phrase into AGENTS item 7 must be detectable")
