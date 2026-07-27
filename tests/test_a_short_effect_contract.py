@@ -35,6 +35,13 @@ class EffectContractMemoTests(unittest.TestCase):
         effect_contract_module._default_static_inventory_from_snapshot.cache_clear()
         effect_contract_module._contract_from_source.cache_clear()
         effect_contract_module._source_tree.cache_clear()
+        effect_contract_module._predicate_hashes_for_source.cache_clear()
+        effect_contract_module._constant_inventory_items.cache_clear()
+        effect_contract_module._governed_python_literal_names_for_source.cache_clear()
+        effect_contract_module._runtime_portfolio_policy_literal_violations_for_sources.cache_clear()
+        effect_contract_module._string_assignment_items.cache_clear()
+        effect_contract_module._operation_impact_sources_for_source.cache_clear()
+        effect_contract_module._literal_string_assignment_values.cache_clear()
 
     def test_default_inventory_memo_reuses_same_snapshot_and_returns_copies(self):
         with patch.object(effect_contract_module, "_build_static_inventory",
@@ -84,6 +91,22 @@ class EffectContractMemoTests(unittest.TestCase):
         same_override = effect_contract_module._source_tree.cache_info()
         static_inventory(source_overrides={portfolio_rel: changed})
         changed_override = effect_contract_module._source_tree.cache_info()
+
+        self.assertEqual(same_override.misses, baseline.misses)
+        self.assertGreater(same_override.hits, baseline.hits)
+        self.assertEqual(changed_override.misses, same_override.misses + 1)
+
+    def test_override_reuses_unchanged_derived_analysis_but_recomputes_changed_source(self):
+        portfolio_rel = "engine/a_short_portfolio_risk.py"
+        portfolio = (ROOT / portfolio_rel).read_text(encoding="utf-8")
+        changed = portfolio + "\n# derived-analysis-cache-probe\n"
+
+        static_inventory(source_overrides={portfolio_rel: portfolio})
+        baseline = effect_contract_module._predicate_hashes_for_source.cache_info()
+        static_inventory(source_overrides={portfolio_rel: portfolio})
+        same_override = effect_contract_module._predicate_hashes_for_source.cache_info()
+        static_inventory(source_overrides={portfolio_rel: changed})
+        changed_override = effect_contract_module._predicate_hashes_for_source.cache_info()
 
         self.assertEqual(same_override.misses, baseline.misses)
         self.assertGreater(same_override.hits, baseline.hits)

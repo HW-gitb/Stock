@@ -1,5 +1,20 @@
 # Session Log
 
+## 2026-07-27 — Claude Code 审查 PASS（测试提速第四刀：AST 派生分析按源码文本 memo）
+
+- **Verdict/Action**: PASS。7 个 AST 派生分析（predicate/常量/受治理字面量/组合 policy 字面量探测/字符串赋值/operation-impact/字面量字符串）各拆成「缓存返回不可变 tuple + 薄壳转成新的 list/dict」。风险点是缓存值被调用方就地改写、以及键漏掉参数导致串味，本轮按此逐条查证。
+- **Required**: 无。Optional 结转第三刀那两条（`_source_tree` 的 `maxsize=64` 内存、"缓存只读"缺常驻守护），本刀新增的 7 个缓存值都是小 tuple，内存不构成新问题。
+- **Verify**: review-evidence:503cb28936b5。亲跑 `tests.test_a_short_effect_contract` = 23 OK / 118.3s / exit 0（含新增 memo 回归）。自写探针：7 个壳函数返回值逐个投毒（append/赋键）后再调用，**全部不受影响**；`cache_info` 实测只改 `rel` 参数即产生新 miss、重复调用命中（键含全部参数，先前那次"看似不含 rel"是两个 rel 都合法返回空的空转，已复核）；插入真语义节点后指纹变化并给出 `decision predicate changed without effect contract update`，随后原文本仍复现原结果，默认清单校验干净。
+- **Next**: 已按用户常设授权直接提交并合入 master。另记一处惰性改动：`_string_assignments` 返回顺序由源码序改成字母序，grep 确认它在非测试代码里只有一个消费点（`_operation_impact_sources` 内做 `in`/取值查表），顺序无关。
+
+## 2026-07-27 - Codex implementation: test-performance fourth knife
+
+- **Verdict/Action**: Added bounded, per-source-text memoization for immutable AST-derived effect-contract analysis: predicates, constants, governed literals, portfolio-policy literal probes, source-field reads, and runtime key declarations. Public helpers still return fresh lists/dicts; override inventory construction and every static guard remain active.
+- **Required**: None newly opened. This shared-engine change requires Claude Code review before commit.
+- **Verify**: New memo regression = 5 OK in 13.0s; `tests.test_a_short_effect_contract` and `tests.test_a_short_weekly_pipeline` both exited 0 (weekly = 486 tests; existing ResourceWarnings only); full-pack ledger `a_short` = 2047 OK, 490.0s / 1200s. This is one local run, not a loaded-machine performance baseline.
+- **Pre-Codex self-review**: Same-text overrides hit cached immutable derived values; changing only portfolio source adds exactly one predicate-analysis miss. Cached values are tuples, cache capacities are bounded at 128, and wrappers copy into fresh mutable return values.
+- **Next**: Claude Code independently review this fourth knife, then commit only PASS-covered files.
+
 ## 2026-07-27 — Claude Code 审查 PASS（测试提速第三刀：按源码文本共享 AST）
 
 - **Verdict/Action**: PASS。9 处 `ast.parse` 全部改走 `_source_tree`（`lru_cache(64)`，键=源码文本）。overrides 路径仍然重建整份清单、所有静态守卫照跑，只是文本逐字节相同的源码复用同一棵树。风险集中在"共享树被就地改写会污染后续解析"，本轮按此逐条查证。

@@ -147,16 +147,22 @@ def _source_tree(source: str) -> ast.AST:
     return ast.parse(source)
 
 
-def _predicate_hashes(source: str) -> list[str]:
+@lru_cache(maxsize=128)
+def _predicate_hashes_for_source(source: str) -> tuple[str, ...]:
     tree = _source_tree(source)
     tests = []
     for node in ast.walk(tree):
         if isinstance(node, (ast.If, ast.IfExp, ast.While, ast.Assert)):
             tests.append(_hash(_canonical_ast(node.test)))
-    return sorted(tests)
+    return tuple(sorted(tests))
 
 
-def _constant_inventory(source: str) -> dict[str, str]:
+def _predicate_hashes(source: str) -> list[str]:
+    return list(_predicate_hashes_for_source(source))
+
+
+@lru_cache(maxsize=128)
+def _constant_inventory_items(source: str) -> tuple[tuple[str, str], ...]:
     tree = _source_tree(source)
     values = {}
     for node in tree.body:
@@ -166,10 +172,15 @@ def _constant_inventory(source: str) -> dict[str, str]:
         for target in targets:
             if isinstance(target, ast.Name) and target.id.isupper():
                 values[target.id] = _hash(_canonical_ast(node.value))
-    return dict(sorted(values.items()))
+    return tuple(sorted(values.items()))
 
 
-def _governed_python_literal_names(source: str, rel: str) -> list[str]:
+def _constant_inventory(source: str) -> dict[str, str]:
+    return dict(_constant_inventory_items(source))
+
+
+@lru_cache(maxsize=128)
+def _governed_python_literal_names_for_source(source: str, rel: str) -> tuple[str, ...]:
     """Find business-threshold copies that would bypass the runtime JSON policy."""
     tree = _source_tree(source)
     policy_names = {
@@ -205,7 +216,7 @@ def _governed_python_literal_names(source: str, rel: str) -> list[str]:
                 if (isinstance(key, ast.Constant) and key.value in screening
                         and isinstance(value, ast.Constant) and isinstance(value.value, (int, float))):
                     offenders.append(str(key.value))
-        return sorted(offenders)
+        return tuple(sorted(offenders))
     names = policy_names.get(rel, set())
     for node in tree.body:
         if not isinstance(node, (ast.Assign, ast.AnnAssign)):
@@ -215,10 +226,16 @@ def _governed_python_literal_names(source: str, rel: str) -> list[str]:
             value = node.value
             if isinstance(value, ast.Constant) and isinstance(value.value, (int, float)):
                 offenders.extend(target.id for target in targets if isinstance(target, ast.Name) and target.id in names)
-    return sorted(set(offenders))
+    return tuple(sorted(set(offenders)))
 
 
-def _runtime_portfolio_policy_literal_violations(portfolio_source: str, weekly_source: str) -> list[str]:
+def _governed_python_literal_names(source: str, rel: str) -> list[str]:
+    return list(_governed_python_literal_names_for_source(source, rel))
+
+
+@lru_cache(maxsize=128)
+def _runtime_portfolio_policy_literal_violations_for_sources(
+        portfolio_source: str, weekly_source: str) -> tuple[str, ...]:
     """Reject literal copies in the two result-shaping portfolio consumers."""
     violations = []
     for label, pattern in (
@@ -252,7 +269,11 @@ def _runtime_portfolio_policy_literal_violations(portfolio_source: str, weekly_s
             if reads_field and has_numeric_literal:
                 violations.append(f"runners/a_short_weekly_pipeline.py:{policy_key}")
                 break
-    return sorted(violations)
+    return tuple(sorted(violations))
+
+
+def _runtime_portfolio_policy_literal_violations(portfolio_source: str, weekly_source: str) -> list[str]:
+    return list(_runtime_portfolio_policy_literal_violations_for_sources(portfolio_source, weekly_source))
 
 
 def _policy_leaf_paths(rel: str, payload: dict) -> list[str]:
@@ -473,7 +494,8 @@ def _runtime_policy_leaf_readers(policy_paths: dict[str, list[str]], sources: di
     return result
 
 
-def _string_assignments(source: str) -> dict[str, str]:
+@lru_cache(maxsize=128)
+def _string_assignment_items(source: str) -> tuple[tuple[str, str], ...]:
     tree = _source_tree(source)
     out = {}
     for node in tree.body:
@@ -481,10 +503,15 @@ def _string_assignments(source: str) -> dict[str, str]:
             continue
         if isinstance(node.targets[0], ast.Name) and isinstance(node.value, ast.Constant) and isinstance(node.value.value, str):
             out[node.targets[0].id] = node.value.value
-    return out
+    return tuple(sorted(out.items()))
 
 
-def _operation_impact_sources(source: str) -> list[str]:
+def _string_assignments(source: str) -> dict[str, str]:
+    return dict(_string_assignment_items(source))
+
+
+@lru_cache(maxsize=128)
+def _operation_impact_sources_for_source(source: str) -> tuple[str, ...]:
     tree = _source_tree(source)
     strings = _string_assignments(source)
     sources = set()
@@ -498,10 +525,15 @@ def _operation_impact_sources(source: str) -> list[str]:
                 sources.add(value.value)
             elif isinstance(value, ast.Name) and value.id in strings:
                 sources.add(strings[value.id])
-    return sorted(sources)
+    return tuple(sorted(sources))
 
 
-def _literal_string_assignment(source: str, name: str) -> list[str]:
+def _operation_impact_sources(source: str) -> list[str]:
+    return list(_operation_impact_sources_for_source(source))
+
+
+@lru_cache(maxsize=128)
+def _literal_string_assignment_values(source: str, name: str) -> tuple[str, ...]:
     tree = _source_tree(source)
     for node in tree.body:
         if not isinstance(node, ast.Assign) or len(node.targets) != 1:
@@ -510,9 +542,13 @@ def _literal_string_assignment(source: str, name: str) -> list[str]:
             continue
         values = node.value.args[0] if isinstance(node.value, ast.Call) and node.value.args else node.value
         if isinstance(values, (ast.Tuple, ast.List, ast.Set)):
-            return sorted(item.value for item in values.elts
-                          if isinstance(item, ast.Constant) and isinstance(item.value, str))
-    return []
+            return tuple(sorted(item.value for item in values.elts
+                                if isinstance(item, ast.Constant) and isinstance(item.value, str)))
+    return ()
+
+
+def _literal_string_assignment(source: str, name: str) -> list[str]:
+    return list(_literal_string_assignment_values(source, name))
 
 
 def _llm_task_types(analysis_schema: dict) -> list[str]:
