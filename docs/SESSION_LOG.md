@@ -1,5 +1,12 @@
 # Session Log
 
+## 2026-07-27 — Claude Code 治理更新 (rule 7 墙钟硬门 + gate 两处静默失效)
+
+- **Verdict/Action**: 用户认定「一刀审查 50 分钟不可接受」，要求写进系统而非记忆。`AGENTS.md §Verification tiering` 新增 **rule 7 审查执行调度**：(a) 第二条命令就后台起本轮唯一最慢的超集包再读代码 (b) 只跑超集、禁跑其子集 (c) 同时只跑一个重包 (d) 测试红了先扫 gitignored 残留再怀疑代码 (e) 一件事只确认一次；目标 10–15 分钟、硬上限 30 分钟。同时删掉 `.tools/verify_doc_process.cmd` 在 review 路径上的重复调用（收尾已跑一次 doc guard）。
+- **Required**: 无。rule 7 与本节旧表述冲突时以 rule 7 为准（已写进 AGENTS）。
+- **Verify**: 机器强制而非自觉：快照记 `armed_at_epoch`，Stop hook 实测墙钟，超 30 分钟且 Verify 无 `超时原因:` 即拦最终回复。端到端探针：12 分钟放行 / 47 分钟无原因 `exit 2` 拦截 / 补写原因后放行。顺带修两处 gate 静默失效：① `审查4a…` 这类带前置语的命令过去不 arm（今天就没 arm，故本轮无 token、无计时），② 在 worktree 评审时 gate 仍指向主树、校验错了树的 SESSION_LOG。`test_review_tiering_enforcement` + `test_claude_review_gate` + `test_doc_governance_guard` 亲跑 57 OK。
+- **Next**: 下一刀审查按 rule 7 执行，超时须在 Verify 写原因。
+
 ## 2026-07-27 — Claude Code 审查 PASS (US-short 刀4a 第四轮复审：K4A-R10/R11 已闭)
 
 - **Verdict/Action**: PASS。K4A-R10 已闭：降级 stage 无回执时 checkpoint 记 `output_availability=unavailable` 且不再打断强制周跑，强制 stage 与 Pass2 审批仍严格 fail-closed。K4A-R11 已闭：派生矩阵对每格植入失败都能杀。提交前发现本树 register 比自身 HEAD 少 5 条（含 2 条 open P2），已按 HEAD 原文逐条恢复后再提交。

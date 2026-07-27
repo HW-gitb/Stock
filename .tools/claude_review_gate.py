@@ -14,6 +14,10 @@ STATE_DIR = ROOT / ".claude" / "review_gate"
 ACTIVE_REVIEW = "active_review.json"
 SESSION_LOG = ROOT / "docs" / "SESSION_LOG.md"
 ADOPTION_MARKER = "REVIEW-CYCLE-MINIMAL-TEMPLATE-MARKER"
+# AGENTS §Verification tiering rule 7 (user-directed 2026-07-27): a knife review targets
+# 10-15 minutes; past this hard cap the Stop hook blocks until the Verify line states why.
+WALL_CLOCK_BUDGET_SECONDS = 1800
+OVERRUN_REASON_MARKER = "超时原因"
 
 
 def is_review_prompt(prompt: str) -> bool:
@@ -63,7 +67,32 @@ def is_review_prompt(prompt: str) -> bool:
     )
     if any(marker in text for marker in command_phrase_markers):
         return True
-    return bool(re.match(r"^[`\"'“”\s]*(审查|review)\b", text, re.IGNORECASE))
+    if re.match(r"^[`\"'“”\s]*(审查|review)\b", text, re.IGNORECASE):
+        return True
+    # `审查4a的再次修复` / `复审 K4a` arrive AFTER a context clause, so the
+    # start-anchored match above missed them and the gate never armed (found
+    # 2026-07-27).  Arm when the verb carries a concrete object; a meta word
+    # (`审查规则` / `审查流程` / `审查者`) stays a discussion and must not arm.
+    return _carries_review_object(text)
+
+
+REVIEW_META_TAILS = (
+    "规则", "规定", "流程", "方式", "方法", "标准", "机制", "时间", "耗时", "系统", "工作流",
+    "workflow", "者", "员", "习惯", "经验", "教训", "方案", "模板", "清单", "指南", "要求",
+    "原则", "轮数", "窗口", "质量", "成本", "策略", "文档", "的", "得", "了", "过", "很", "太",
+)
+
+
+def _carries_review_object(text: str) -> bool:
+    for match in re.finditer(r"(审查|复审)", text):
+        tail = text[match.end():match.end() + 8].lstrip(" :：`\"'“”")
+        if not tail:
+            continue
+        if any(tail.startswith(meta) for meta in REVIEW_META_TAILS):
+            continue
+        if re.match(r"^[0-9A-Za-z]|^(刀|当前|这|本|上|该|下|新|第|所有|一下|完)", tail):
+            return True
+    return False
 
 
 def _clip(text: str, limit: int = 12000) -> str:
@@ -116,6 +145,10 @@ def collect_review_snapshot(*, prompt: str, root: Path = ROOT) -> dict:
         "review_id": f"{now}-{digest}",
         "evidence_token": f"review-evidence:{digest}",
         "created_at_utc": now,
+        # AGENTS §Verification tiering rule 7: the wall clock is a hard metric, so the
+        # gate MEASURES it instead of trusting a self-reported number.
+        "armed_at_epoch": datetime.now(timezone.utc).timestamp(),
+        "wall_clock_budget_seconds": WALL_CLOCK_BUDGET_SECONDS,
         "prompt_sha256": hashlib.sha256((prompt or "").encode("utf-8")).hexdigest(),
         "commands": results,
     }
@@ -126,6 +159,10 @@ def _format_snapshot_context(snapshot: dict) -> str:
         "[stock-review-gate] REVIEW EVIDENCE SNAPSHOT",
         f"review_id: {snapshot['review_id']}",
         f"required SESSION_LOG Verify token: {snapshot['evidence_token']}",
+        f"wall-clock budget (AGENTS rule 7): 目标 10-15 分钟，硬上限 "
+        f"{snapshot.get('wall_clock_budget_seconds', WALL_CLOCK_BUDGET_SECONDS) // 60} 分钟 —— "
+        f"超时后 Stop hook 会拦住最终回复，直到 Verify 行写出 `{OVERRUN_REASON_MARKER}:<一句话>`。"
+        "计时从本快照开始，由 hook 实测，不采信自报。",
         "",
         "Anti-fabrication protocol:",
         "- A command result is valid only if it appears in this injected snapshot, a real tool result, or a user-run ! command output.",
@@ -159,27 +196,65 @@ def _fix_context() -> str:
 
 def _review_context() -> str:
     return (
-        "[审查-standard 自动触发] 本轮进入审查门。侦察可以高效，但 PASS 证据必须来自真实工具结果、"
-        "用户 ! 输出或上方 REVIEW EVIDENCE SNAPSHOT。若需要命令而没有真实输出，写 NOT_VERIFIED。"
-        "仍按 AGENTS 的分级：高危子集 PASS 前必须独立对抗 agent + reviewer 自己整读和探针；"
-        "轻量 slice 仍至少整读改动 + 1 个反向探针。"
-        " 验证分级门(AGENTS §Verification tiering rule 3/4/6，不靠记忆的硬提醒)："
+        "[审查-standard 自动触发] 本轮进入审查门。**先执行 AGENTS §Verification tiering rule 7（墙钟硬指标，"
+        "目标 10-15 分钟；超 30 分钟=流程缺陷，须在 Verify 写原因）**："
+        "(a) 第一条命令 `git status/diff` 出改动清单 → **第二条命令**就 `run_in_background` 起本轮唯一最慢的那个"
+        "**超集**测试包，再去整读函数体/写探针——禁止读完、探针跑完才起(并行掉的是纯等待，不降严格度);"
+        "(b) **只跑超集、禁跑其子集**:单测→测试类→整模块只跑最大的那个，超集绿=其内全绿，"
+        "不得为「再确认」回头补跑子集或重跑同一个包;"
+        "(c) 同一时刻只跑一个重包(并发重包会互拖、甚至无 traceback 崩溃 exit 127)，其余结论用探针/静态证据;"
+        "(d) 测试红了**先 `ls`+看 mtime 扫 gitignored 残留目录**(provider_samples/、state/、临时根)再怀疑代码，"
+        "禁止用重复慢跑去二分一个可能由残留造成的红;"
+        "(e) 一件事只确认一次，重跑同一命令不产新信息即浪费。"
+        "**不可删的三样**:整读被消费的函数体 + 自写反向/植入探针 + 放松类改动的强制腿反向控制。"
+        " 证据规则：PASS 证据只能来自真实工具结果、用户 ! 输出或上方 REVIEW EVIDENCE SNAPSHOT，"
+        "拿不到就写 NOT_VERIFIED。"
+        " 分级门(rule 3/4/6)："
         "①跑全量前先 `python .tools/full_pack_ledger.py check <lane>`——CACHED GREEN 就引用那个数、别重跑全量;"
-        "②全量包只在 PASS/合并那一刻、按 rule 3 触发时跑一次并 record，审查中途别提前跑;"
+        "②全量包只在 rule 3 真触发时、PASS/合并那一刻跑一次并 record，审查中途别提前跑;"
         "③FAIL 一旦被真实探针坐实就先出结论、不必等全量包;"
-        "④独立 agent 只在真钱/选股/安全/PIT-进选股/大而绕 diff 才起、且只起一个，"
-        "小低危改动别起 agent 也别跑全量(rule 6，过度审查=缺陷)。"
-        "⑤测试范围跟「改动的函数/符号」走、不跟「改动的文件」走:先说清本刀改了哪几个函数,"
-        "已选/已跑的 targeted 测试若已直接调用该改动函数即为覆盖、别再加跑该文件的整测试模块"
-        "(其余用例与本刀无关=全模块税);也别在第一个测试包结果回来前投机并起第二个全模块包。"
+        "④独立对抗 agent 只在真钱/选股/安全/PIT-进选股/大而绕 diff 才起、且只起一个，"
+        "小低危改动别起 agent 也别跑全量(rule 6，过度审查=缺陷);"
+        "⑤测试范围跟「改动的函数/符号」走、不跟「改动的文件」走:targeted 测试若已直接调用该改动函数即为覆盖，"
+        "别再加跑该文件的整测试模块(其余用例与本刀无关=全模块税)。"
     )
 
 
-def handle_prompt_hook(raw: str, *, root: Path = ROOT, state_dir: Path = STATE_DIR) -> str:
+def resolve_repo_root(cwd: str | None) -> Path:
+    """Reviews run in git worktrees; a gate pinned to the main tree silently no-ops there.
+
+    Resolve the repository the reviewer is actually working in, so the snapshot and the
+    SESSION_LOG the Stop hook validates come from the same tree (found 2026-07-27).
+    """
+    if not cwd:
+        return ROOT
+    candidate = Path(cwd)
+    if not candidate.is_dir():
+        return ROOT
+    try:
+        result = subprocess.run(
+            ["git", "rev-parse", "--show-toplevel"], cwd=str(candidate), text=True,
+            encoding="utf-8", errors="replace", stdout=subprocess.PIPE,
+            stderr=subprocess.DEVNULL, timeout=10,
+        )
+    except Exception:
+        return ROOT
+    top = (result.stdout or "").strip()
+    if result.returncode != 0 or not top:
+        return ROOT
+    resolved = Path(top)
+    return resolved if (resolved / "docs" / "SESSION_LOG.md").exists() else ROOT
+
+
+def handle_prompt_hook(raw: str, *, root: Path | None = None, state_dir: Path | None = None) -> str:
     try:
         data = json.loads(raw) if raw.strip() else {}
     except Exception:
         return ""
+    if root is None:
+        root = resolve_repo_root(data.get("cwd"))
+    if state_dir is None:
+        state_dir = root / ".claude" / "review_gate"
     prompt = data.get("prompt", "") or ""
     parts: list[str] = []
     if "修复" in prompt:
@@ -214,7 +289,10 @@ def _top_review_entry(text: str) -> str | None:
     return zone[start:end]
 
 
-def validate_session_log_text(text: str, evidence_token: str) -> list[str]:
+def validate_session_log_text(
+    text: str, evidence_token: str, *, elapsed_seconds: float | None = None,
+    budget_seconds: int = WALL_CLOCK_BUDGET_SECONDS,
+) -> list[str]:
     errors: list[str] = []
     entry = _top_review_entry(text)
     if not entry:
@@ -230,10 +308,25 @@ def validate_session_log_text(text: str, evidence_token: str) -> list[str]:
         errors.append("top review entry has no Verify line")
     elif not any(evidence_token in line for line in verify_lines):
         errors.append("top review entry Verify line is missing the review evidence token")
+    # Rule 7 teeth: a review that blew the wall-clock budget may still close, but it must
+    # say why in the same Verify line, so the overrun is recorded instead of forgotten.
+    if (
+        elapsed_seconds is not None
+        and elapsed_seconds > budget_seconds
+        and not any(OVERRUN_REASON_MARKER in line for line in verify_lines)
+    ):
+        errors.append(
+            f"review wall clock {int(elapsed_seconds // 60)} min exceeded the rule-7 budget "
+            f"({budget_seconds // 60} min) and the Verify line has no `{OVERRUN_REASON_MARKER}:` note"
+        )
     return errors
 
 
-def handle_stop_hook(*, root: Path = ROOT, state_dir: Path = STATE_DIR) -> int:
+def handle_stop_hook(*, root: Path | None = None, state_dir: Path | None = None) -> int:
+    if root is None:
+        root = ROOT
+    if state_dir is None:
+        state_dir = root / ".claude" / "review_gate"
     state_path = state_dir / ACTIVE_REVIEW
     if not state_path.exists():
         return 0
@@ -256,13 +349,25 @@ def handle_stop_hook(*, root: Path = ROOT, state_dir: Path = STATE_DIR) -> int:
     if not log_path.exists():
         print("stock-review-gate: docs/SESSION_LOG.md not found", file=sys.stderr)
         return 2
-    errors = validate_session_log_text(log_path.read_text(encoding="utf-8"), token)
+    armed_at = state.get("armed_at_epoch")
+    elapsed = None
+    if isinstance(armed_at, (int, float)):
+        elapsed = max(0.0, datetime.now(timezone.utc).timestamp() - float(armed_at))
+    errors = validate_session_log_text(
+        log_path.read_text(encoding="utf-8"), token, elapsed_seconds=elapsed,
+        budget_seconds=int(state.get("wall_clock_budget_seconds", WALL_CLOCK_BUDGET_SECONDS)),
+    )
     if errors:
         print("stock-review-gate blocked final response:", file=sys.stderr)
         for err in errors:
             print(f"- {err}", file=sys.stderr)
         print(f"- required token: {token}", file=sys.stderr)
         print("Put the token in the review-cycle SESSION_LOG Verify line, or mark NOT_VERIFIED if evidence is unavailable.", file=sys.stderr)
+        print(
+            f"If the run overran the rule-7 budget, add `{OVERRUN_REASON_MARKER}:<一句话>` to that same Verify line; "
+            "a non-review discussion turn is disarmed with `claude_review_gate.py disarm`.",
+            file=sys.stderr,
+        )
         return 2
     state_path.unlink()
     return 0
@@ -289,8 +394,33 @@ def main(argv: list[str]) -> int:
             _write_stdout_utf8(out)
         return 0
     if mode == "stop-hook":
-        _read_stdin_utf8()
-        return handle_stop_hook()
+        raw = _read_stdin_utf8()
+        try:
+            cwd = (json.loads(raw) if raw.strip() else {}).get("cwd")
+        except Exception:
+            cwd = None
+        return handle_stop_hook(root=resolve_repo_root(cwd))
+    if mode == "disarm":
+        # Escape hatch for a prompt that mentioned a review but produced no review cycle
+        # (discussion, planning, rule edits).  Leaves the reason in the state directory.
+        disarm_root = resolve_repo_root(str(Path.cwd()))
+        disarm_state = disarm_root / ".claude" / "review_gate"
+        state_path = disarm_state / ACTIVE_REVIEW
+        if not state_path.exists():
+            return 0
+        reason = " ".join(argv[2:]).strip() or "non-review turn"
+        try:
+            state = json.loads(state_path.read_text(encoding="utf-8"))
+        except Exception:
+            state = {}
+        state["disarmed_reason"] = reason
+        state["disarmed_at_utc"] = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ")
+        (disarm_state / "last_disarm.json").write_text(
+            json.dumps(state, ensure_ascii=False, indent=2), encoding="utf-8",
+        )
+        state_path.unlink()
+        print(f"stock-review-gate disarmed: {reason}")
+        return 0
     if mode == "collect-context":
         prompt = " ".join(argv[2:])
         _write_stdout_utf8(_format_snapshot_context(collect_review_snapshot(prompt=prompt)))
