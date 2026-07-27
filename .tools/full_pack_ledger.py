@@ -4,8 +4,9 @@ r"""Full-pack run ledger — enforce verification tiering rule 4 (one full run p
 Records a lane's full-pack result keyed by a fingerprint of the current CODE working-tree state
 (tracked diff-from-HEAD + untracked files, EXCLUDING docs / *.md, because per rule 4 a
 docs/register/SESSION_LOG-only correction does not invalidate a run). ``check`` warns loudly AND
-prints the cached count when a re-run would be redundant, so the reviewer cites the cached green
-instead of re-running a multi-minute pack for a number they already have.
+prints the cached count when a prepare-bound re-run would be redundant, so the reviewer cites that
+cached green instead of re-running a multi-minute pack for a number they already have. Legacy
+records written before the preparation gate are historical evidence only and are never reusable.
 
 Usage:
    .\tools\codex_main_python.ps1 .tools\full_pack_ledger.py run <lane> <full-trigger-reason> <focused-evidence> <timeout-seconds> -- <unittest args>
@@ -182,8 +183,8 @@ def cached_green(lane: str, *, state: dict[str, str] | None = None, ledger: Path
     record_for_lane = _load(ledger).get(lane)
     matching_prepare = prepared_review(lane, state=current_state, ledger=ledger)
     if (record_for_lane and record_for_lane.get("fingerprint") == fp
-            and (matching_prepare is not None
-                 or "prepared_fingerprint" not in record_for_lane)):
+            and record_for_lane.get("prepared_fingerprint") == fp
+            and matching_prepare is not None):
         return record_for_lane
     return None
 
@@ -192,18 +193,21 @@ def _check(lane: str, *, state: dict[str, str] | None = None,
            ledger: Path = DEFAULT_LEDGER) -> int:
     current_state = state if state is not None else collect_code_state()
     prepared = prepared_review(lane, state=current_state, ledger=ledger)
+    record_for_lane = _load(ledger).get(lane)
     hit = cached_green(lane, state=current_state, ledger=ledger)
     if hit is not None:
-        if prepared is None:
-            print(f"[full-pack-ledger] LEGACY CACHED GREEN — {lane} = {hit['count']} at "
-                  f"{hit['recorded_at']} on this exact code state; it predates the prepare gate.\n"
-                  "[full-pack-ledger] Do NOT re-run solely to migrate this record; future writes use `run`.")
-            return 0
         print(f"[full-pack-ledger] PREPARED A-F — {lane}: {prepared['trigger_reason']} | "
               f"focused={prepared['focused_evidence']}\n[full-pack-ledger] CACHED GREEN — {lane} = "
               f"{hit['count']} at {hit['recorded_at']} on this EXACT code state.\n"
               "[full-pack-ledger] Tiering rule 4: do NOT re-run the full pack; cite this cached run.")
         return 0
+    if (isinstance(record_for_lane, dict)
+            and record_for_lane.get("fingerprint") == fingerprint(current_state)
+            and "prepared_fingerprint" not in record_for_lane):
+        print(f"[full-pack-ledger] STALE LEGACY GREEN — {lane} = {record_for_lane.get('count', 'UNKNOWN')} "
+              f"at {record_for_lane.get('recorded_at', 'UNKNOWN')}; it predates the A-F prepare binding "
+              "and is not reusable closeout evidence.")
+        return 1
     if prepared is not None:
         print(f"[full-pack-ledger] PREPARED A-F — {lane}: {prepared['trigger_reason']} | "
               f"focused={prepared['focused_evidence']}\n[full-pack-ledger] no cached green for this prepared "

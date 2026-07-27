@@ -292,8 +292,20 @@ class PortfolioRiskRuntimePolicyTests(unittest.TestCase):
         self.assertIn("下调30%", markdown)
 
 
+MARGIN_COMPLETE = {"reference_date": AS_OF, "effective_ref_date": AS_OF, "row_count": 1200,
+                   "universe_size": 1100, "coverage_complete": True, "status": "complete"}
+
+
+def _with_complete_margin_checks(row):
+    """Give a pre-margin-knife fixture row the source metrics the gate now requires."""
+    for check in row.get("rule6_checks") or []:
+        if check.get("id") in {"rule6_margin_extreme_accumulation", "rule6_short_selling_surge"}:
+            check["metrics"] = {"status": "complete"}
+    return row
+
+
 class PortfolioRiskM67IntegrationTests(unittest.TestCase):
-    def _weekly(self, *, missing=False):
+    def _weekly(self, *, missing=False, margin_source_complete=True):
         held = _normal("000001.SZ", "bank", held_shares=100_000)
         first = _normal("600000.SH", "bank")       # same industry as held -> must be blocked
         second = _normal("600519.SH", "tech")       # can use freed cash
@@ -308,9 +320,14 @@ class PortfolioRiskM67IntegrationTests(unittest.TestCase):
             facts["600000.SH"]["northbound_holding_ratio_pct"] = None
         positions = [{"ts_code": "000001.SZ", "shares": 100_000, "avg_cost": 2.7,
                       "entry_date": "20260601", "stop_loss": 2.5}]
-        return build_weekly_report([held, first, second, third], AS_OF, GEN,
+        rows = [held, first, second, third]
+        if margin_source_complete:
+            rows = [_with_complete_margin_checks(row) for row in rows]
+        return build_weekly_report(rows, AS_OF, GEN,
                                    run_lineage=_sized_lineage(), available_cash=1_000_000.0,
-                                   portfolio_fact_overrides=facts, account_positions=positions)
+                                   portfolio_fact_overrides=facts, account_positions=positions,
+                                   margin_coverage=(copy.deepcopy(MARGIN_COMPLETE)
+                                                    if margin_source_complete else None))
 
     def test_blocked_candidate_changes_json_markdown_and_reallocates_cash(self):
         weekly = self._weekly()
@@ -348,3 +365,15 @@ class PortfolioRiskM67IntegrationTests(unittest.TestCase):
              if item["ts_code"] == "600000.SH")["action"] = "allow"
         with self.assertRaises(ValueError):
             validate_weekly_report(tampered, _feed())
+
+    def test_margin_outage_does_not_erase_portfolio_manual_review(self):
+        # The outage stops the trial, but "could not evaluate" must not be
+        # reported as "this portfolio rule does not apply".
+        weekly = self._weekly(missing=True, margin_source_complete=False)
+        blocked = next(r for r in weekly["reports"] if r["ts_code"] == "600000.SH")
+        risk = blocked["machine"]["layer"]["portfolio_risk"]
+        self.assertTrue(blocked["machine"]["layer"]["decision_reasons"]["margin_source_unavailable"])
+        self.assertEqual(risk["status"], "manual_review_required")
+        self.assertFalse(risk["evaluated"])
+        self.assertIn("两融数据源不可用", risk["reasons"][0])
+        validate_weekly_report(weekly, _feed())

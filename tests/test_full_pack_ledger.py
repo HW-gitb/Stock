@@ -181,7 +181,7 @@ class FullPackLedgerTests(unittest.TestCase):
             self.assertIn("PREPARED A-F", output.getvalue())
             self.assertIn("CACHED GREEN", output.getvalue())
 
-    def test_legacy_green_stays_reusable_but_new_records_are_prepare_bound(self):
+    def test_legacy_green_is_historical_but_not_reusable(self):
         with tempfile.TemporaryDirectory() as tmp:
             ledger = Path(tmp) / "ledger.json"
             state = {"engine/x.py": "aaa", "@HEAD": "h1"}
@@ -190,11 +190,24 @@ class FullPackLedgerTests(unittest.TestCase):
                 + '", "count": "1999 OK", "recorded_at": "old"}}',
                 encoding="utf-8",
             )
-            self.assertIsNotNone(fpl.cached_green("a_short", state=state, ledger=ledger))
+            self.assertIsNone(fpl.cached_green("a_short", state=state, ledger=ledger))
             output = StringIO()
             with redirect_stdout(output):
-                self.assertEqual(fpl._check("a_short", state=state, ledger=ledger), 0)
-            self.assertIn("LEGACY CACHED GREEN", output.getvalue())
+                self.assertEqual(fpl._check("a_short", state=state, ledger=ledger), 1)
+            self.assertIn("STALE LEGACY GREEN", output.getvalue())
+            self.assertIn("not reusable closeout evidence", output.getvalue())
+
+            passed = Result("PASS", 0, 2, 0.1, "Ran 2 tests in 0.1s\n\nOK\n")
+            with patch.object(fpl, "run_unittest", return_value=passed) as runner:
+                self.assertEqual(
+                    fpl.run_full_pack(
+                        "a_short", "production entrypoint", "focused=9 OK", 30,
+                        ["tests.test_x"], state=state, ledger=ledger,
+                    ),
+                    0,
+                )
+            runner.assert_called_once()
+            self.assertEqual(fpl.cached_green("a_short", state=state, ledger=ledger)["count"], "2 OK")
 
 
 if __name__ == "__main__":

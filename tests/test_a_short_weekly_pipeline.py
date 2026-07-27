@@ -26,7 +26,7 @@ if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
 from runners.a_short_weekly_pipeline import (  # noqa: E402
-    normalize_candidate, build_weekly_report, validate_weekly_report,
+    normalize_candidate, build_weekly_report as _build_weekly_report, validate_weekly_report,
     write_weekly_report, latest_iv_percentile, latest_iv_hv, main, SCHEMA_PATH,
     _fetch_price_series, _prev_trading_day, _load_validated_overlay, MIN_PRICE_OBS, resolve_market_regime,
     _candidate_price_clock, _candidate_price_exclusion,
@@ -70,6 +70,20 @@ M67_SCHEMA = ROOT / "schemas" / "a_short_m67_report.schema.json"
 FIXT_AI = ROOT / "schemas" / "examples" / "analysis_input.example.json"
 _DEFAULT_WEEKLY_BASELINE = None
 _DEFAULT_WEEKLY_BUILDER = None
+_MARGIN_CHECK_IDS = {"rule6_margin_extreme_accumulation", "rule6_short_selling_surge"}
+
+
+def _complete_margin_coverage(reference_date=AS_OF):
+    """Modern synthetic inputs must explicitly opt into a complete margin source."""
+    return {"reference_date": reference_date, "effective_ref_date": reference_date,
+            "row_count": 1200, "universe_size": 1100,
+            "coverage_complete": True, "status": "complete"}
+
+
+def build_weekly_report(*args, **kwargs):
+    """Keep ordinary synthetic weekly inputs source-complete; outage tests pass None explicitly."""
+    kwargs.setdefault("margin_coverage", _complete_margin_coverage())
+    return _build_weekly_report(*args, **kwargs)
 
 
 def _analysis_input(trade_date=AS_OF, candidates=None):
@@ -230,8 +244,14 @@ def _valid_overlay(as_of=AS_OF):
 
 
 def _normalized(ts_code="600000.SH", iv_pct=55.0, **cand_over):
-    return normalize_candidate(_egs_candidate(ts_code, **cand_over), _series(),
-                               _overlay_row(), iv_pct, {"available_cash": 500000.0}, "震荡期")
+    normalized = normalize_candidate(_egs_candidate(ts_code, **cand_over), _series(),
+                                     _overlay_row(), iv_pct, {"available_cash": 500000.0}, "震荡期")
+    normalized["margin_coverage"] = _complete_margin_coverage()
+    normalized["price_data_through"] = AS_OF
+    for check in normalized.get("rule6_checks") or []:
+        if check.get("id") in _MARGIN_CHECK_IDS:
+            check["metrics"] = {"status": "complete"}
+    return normalized
 
 
 def _weekly(normalized_list=None, iv_feed_ref="iv_feed.json"):
@@ -574,12 +594,24 @@ class WriteWeeklyTests(unittest.TestCase):
             self.assertFalse(out.exists())
 
     def test_write_rejects_noncalendar_as_of_even_empty(self):
-        # R-ASHORT-WEEKLY-WRITE-ASOF-CALENDAR-GAP: invalid calendar as_of rejected incl. empty reports.
-        w = build_weekly_report([], "20260631", GEN, iv_feed_ref="f")  # 0 reports, bad calendar
+        # Fifth-knife PIT clock guard: reject before an invalid envelope exists.
+        with self.assertRaisesRegex(ValueError, "price_data_through is not a valid PIT clock"):
+            build_weekly_report([], "20260631", GEN, iv_feed_ref="f")
+
+    def test_write_rejects_noncalendar_as_of_even_empty_envelope(self):
+        # R-ASHORT-WEEKLY-WRITE-ASOF-CALENDAR-GAP: the sanctioned writer
+        # must still reject a malformed but otherwise valid empty envelope.
+        # `decision_as_of` is a TOP-LEVEL envelope field, not a run_lineage
+        # one; setting the lineage copy leaves the top-level value stale and
+        # trips the neighbouring decision-consistency guard instead.  The
+        # message is pinned so this test cannot silently drift again.
+        weekly = _weekly([])
+        weekly["as_of"] = "20260631"
+        weekly["decision_as_of"] = "20260631"
         with tempfile.TemporaryDirectory() as td:
             out = Path(td) / "weekly.json"
-            with self.assertRaises(ValueError):
-                write_weekly_report(w, _feed(), str(out))
+            with self.assertRaisesRegex(ValueError, "非合法日历日期"):
+                write_weekly_report(weekly, _feed(), str(out))
             self.assertFalse(out.exists())
 
 
@@ -1328,10 +1360,10 @@ class MainWiringTests(unittest.TestCase):
         self.assertEqual(by["600000.SH"]["m67"]["table"]["操作"], "持有")
         self.assertIn("已有持仓", by["600000.SH"]["m67"]["精简结论区"]["操作建议"])
         self.assertEqual(by["000001.SZ"]["m67"]["table"]["操作"], "观察")
-        # An existing holding is exposure baseline, not a proposed new entry.
-        # Portfolio replacement/review therefore remains not_applicable here.
+        # The flat row is blocked by the legacy input's unavailable margin source.
+        # That suppresses a new entry but must not hide its portfolio review state.
         self.assertEqual(by["000001.SZ"]["machine"]["layer"]["portfolio_risk"]["status"],
-                         "not_applicable")
+                         "manual_review_required")
 
     def test_main_rule13_active_blocks_flat_reentry(self):
         with tempfile.TemporaryDirectory() as td:

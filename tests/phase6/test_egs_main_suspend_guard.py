@@ -152,6 +152,13 @@ class EgsMainSuspendGuardTest(unittest.TestCase):
                 "screening_engine_version": self.egs_main.EGS_VERSION,
                 "data_provider": "tushare",
             },
+            "market_context": {
+                "margin_coverage": {
+                    "reference_date": None, "effective_ref_date": None,
+                    "row_count": 0, "universe_size": 0,
+                    "coverage_complete": False, "status": "unavailable",
+                },
+            },
             "candidates": [{"data_quality": {"completeness_score": 100}}],
         }
 
@@ -173,16 +180,16 @@ class EgsMainSuspendGuardTest(unittest.TestCase):
             health["metrics"]["suspend_daily_coverage"]["coverage_ratio"],
             0.98,
         )
-        self.assertEqual(health["schema_version"], "1.5.0")
+        self.assertEqual(health["schema_version"], "1.6.0")
         schema = json.loads(DATA_HEALTH_SCHEMA.read_text(encoding="utf-8"))
         Draft7Validator.check_schema(schema)
-        self.assertEqual(schema["properties"]["schema_version"]["const"], "1.5.0")
+        self.assertEqual(schema["properties"]["schema_version"]["const"], "1.6.0")
         self.assertFalse(list(Draft7Validator(schema).iter_errors(health)))
 
     def test_export_data_health_validates_schema_before_write(self) -> None:
         invalid_health = {
             "schema_name": "data_health",
-            "schema_version": "1.5.0",
+            "schema_version": "1.6.0",
             "generated_at": "2026-06-01T00:00:00+08:00",
             "trade_date": "20260529",
             "preset": "a_short",

@@ -24,7 +24,7 @@
       "const": "data_health"
     },
     "schema_version": {
-      "const": "1.5.0"
+      "const": "1.6.0"
     },
     "generated_at": {
       "type": "string"
@@ -113,6 +113,7 @@
         "sw_industry_membership",
         "rank_universe_reconciliation",
         "suspend_daily_coverage",
+        "margin_coverage",
         "completeness_score_min",
         "completeness_score_below_95_count",
         "completeness_score_below_75_count"
@@ -431,6 +432,23 @@
               "type": ["string", "null"]
             }
           }
+        },
+        "margin_coverage": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["reference_date", "effective_ref_date", "row_count", "universe_size", "coverage_complete", "status"],
+          "properties": {
+            "reference_date": {"type": ["string", "null"], "pattern": "^[0-9]{8}$"},
+            "effective_ref_date": {"type": ["string", "null"], "pattern": "^[0-9]{8}$"},
+            "row_count": {"type": "integer", "minimum": 0},
+            "universe_size": {"type": "integer", "minimum": 0},
+            "coverage_complete": {"type": "boolean"},
+            "status": {"enum": ["complete", "incomplete", "unavailable", "invalid"]}
+          },
+          "allOf": [
+            {"if": {"properties": {"status": {"const": "complete"}}}, "then": {"properties": {"reference_date": {"type": "string", "pattern": "^[0-9]{8}$"}, "coverage_complete": {"const": true}, "effective_ref_date": {"type": "string", "pattern": "^[0-9]{8}$"}, "row_count": {"minimum": 1000}, "universe_size": {"minimum": 1000}}}},
+            {"if": {"properties": {"status": {"enum": ["incomplete", "unavailable", "invalid"]}}}, "then": {"properties": {"coverage_complete": {"const": false}}}}
+          ]
         },
         "completeness_score_min": {
           "type": ["number", "null"],

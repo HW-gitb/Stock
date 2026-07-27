@@ -891,9 +891,13 @@ def _holding_adds_portfolio_risk(fact: dict, summary: dict) -> bool:
                 and isinstance(fact.get("circ_mv_rmb"), (int, float)) and fact["circ_mv_rmb"] < SMALL_FLOAT_MV_RMB)
 
 
+_MARGIN_UNEVALUATED_REASON = "两融数据源不可用/覆盖不足，本行未进入组合试算（非「本规则不适用」）"
+
+
 def _apply_portfolio_risk_results(reports: list, context: dict, as_of: str) -> dict:
     """Attach per-stock machine records and deterministic M6.7 impacts after allocation."""
-    from engine.a_short_portfolio_risk import final_summary, not_applicable_result
+    from engine.a_short_portfolio_risk import (_REQUIRED_FACT_FIELDS, _valid_fact,
+                                               final_summary, not_applicable_result)
     from runners.a_short_phase5_engine import _apply_holding_disposition
 
     summary = final_summary(context)
@@ -920,8 +924,28 @@ def _apply_portfolio_risk_results(reports: list, context: dict, as_of: str) -> d
                                                reason="；".join(result["reasons"]), blocked_add=True)
                 _apply_holding_disposition(report)
         else:
-            result = context["results"].get(code) or not_applicable_result(
-                code, "candidate", "本行不是最终建仓候选，未进入组合试算")
+            result = context["results"].get(code)
+            if result is None:
+                # A margin-source outage stops the trial for a reason that is NOT
+                # "this portfolio rule does not apply".  Say so, and keep any
+                # portfolio-level manual review visible instead of erasing it.
+                margin_blocked = bool(
+                    ((machine.get("layer") or {}).get("decision_reasons") or {}).get(
+                        "margin_source_unavailable"))
+                if margin_blocked:
+                    result = not_applicable_result(code, "candidate", _MARGIN_UNEVALUATED_REASON)
+                    # The trial is what normally discovers an incomplete candidate
+                    # fact; without it the gap must still be stated, not dropped.
+                    candidate_missing = [f"{code}:{field}" for field in _REQUIRED_FACT_FIELDS
+                                         if not _valid_fact(fact, field, as_of)]
+                    if summary.get("status") == "manual_review_required" or candidate_missing:
+                        result["status"] = "manual_review_required"
+                        result["reasons"] = [_MARGIN_UNEVALUATED_REASON] + list(summary.get("reasons") or [])
+                        result["missing_fields"] = sorted(
+                            set(list(summary.get("missing_fields") or []) + candidate_missing))
+                else:
+                    result = not_applicable_result(
+                        code, "candidate", "本行不是最终建仓候选，未进入组合试算")
             if result.get("action") in {"replace", "observe_required"}:
                 effect = "manual_review" if result.get("status") == "manual_review_required" else "observe_required"
                 _append_portfolio_risk_impact(report, as_of, is_holding=False, effect=effect,
@@ -1032,17 +1056,59 @@ def build_weekly_report(normalized_list: list, as_of: str, generated_at: str,
                         portfolio_fact_overrides: dict | None = None,
                         account_positions: list[dict] | None = None,
                         missing_holding_codes: list[str] | None = None,
-                        candidate_exclusions: list[dict] | None = None) -> dict:
+                        candidate_exclusions: list[dict] | None = None,
+                        margin_coverage: dict | None = None) -> dict:
     from runners.a_short_phase5_engine import build_m67_report, build_holding_report
+    incoming_lineage = dict(run_lineage or {})
+    incoming_price_freshness = incoming_lineage.get("price_freshness") or {}
+    price_data_through = str(
+        incoming_price_freshness.get("price_data_through")
+        or incoming_lineage.get("price_data_through")
+        or as_of
+    )
+    if not _is_valid_date(price_data_through) or price_data_through > str(as_of):
+        raise ValueError("weekly price_data_through is not a valid PIT clock")
+    if margin_coverage is None:
+        margin_coverage = {
+            "reference_date": price_data_through, "effective_ref_date": None,
+            "row_count": 0, "universe_size": 0,
+            "coverage_complete": False, "status": "unavailable",
+        }
+    margin_coverage = dict(margin_coverage)
+    status = margin_coverage.get("status")
+    reference_date = margin_coverage.get("reference_date")
+    effective_ref_date = margin_coverage.get("effective_ref_date")
+    if not _is_valid_date(reference_date) or str(reference_date) != price_data_through:
+        raise ValueError("margin coverage reference_date is not bound to weekly price_data_through")
+    if status == "complete":
+        try:
+            universe_size = int(margin_coverage.get("universe_size"))
+            row_count = int(margin_coverage.get("row_count"))
+        except (TypeError, ValueError) as exc:
+            raise ValueError("complete margin coverage has invalid counts") from exc
+        if (margin_coverage.get("coverage_complete") is not True
+                or not _is_valid_date(effective_ref_date)
+                or str(effective_ref_date) > str(reference_date)
+                or universe_size < 1000 or row_count < universe_size):
+            raise ValueError("complete margin coverage is not date-bound and floor-complete")
+    elif status in {"incomplete", "unavailable", "invalid"}:
+        if margin_coverage.get("coverage_complete") is not False:
+            raise ValueError("non-complete margin coverage cannot claim complete")
+    else:
+        raise ValueError("margin coverage has an invalid status")
+    bound_normalized_list = [
+        dict(item, margin_coverage=margin_coverage, price_data_through=price_data_through)
+        for item in normalized_list
+    ]
     # 持仓恒列入 S1: 标了 egs_coverage="uncovered" 的(Tier-3 粗筛未覆盖持仓)走 build_holding_report
     # (不跑 EGS 风险分类,避免在缺失数据上伪造 veto);其余(候选 / Tier-1 / Tier-2)走 build_m67_report。
     reports = [(build_holding_report(n, as_of, generated_at)
                 if n.get("egs_coverage") == "uncovered" else build_m67_report(n, as_of, generated_at))
-               for n in normalized_list]
+               for n in bound_normalized_list]
     _validate_account_position_coverage(account_positions, reports, missing_holding_codes)
     from engine.a_short_portfolio_risk import build_context
     portfolio_context = build_context(
-        normalized_list, as_of, fact_overrides=portfolio_fact_overrides,
+        bound_normalized_list, as_of, fact_overrides=portfolio_fact_overrides,
         account_positions=account_positions, missing_holding_codes=missing_holding_codes)
     cash_summary = _allocate_cash(reports, available_cash, new_exposure_capacity, portfolio_context)
     portfolio_risk = _apply_portfolio_risk_results(reports, portfolio_context, as_of)
@@ -1050,10 +1116,10 @@ def build_weekly_report(normalized_list: list, as_of: str, generated_at: str,
     # (Slice 3b-2: selection 在 result/a_short、M6.7 在 research lane,靠此机器可读 lineage 绑定);
     # default = no-account observation-only,使直接 builder/测试仍 schema-valid。
     fallback_digest = hashlib.sha256(json.dumps(
-        [n.get("ts_code") for n in normalized_list], ensure_ascii=False,
+        [n.get("ts_code") for n in bound_normalized_list], ensure_ascii=False,
         separators=(",", ":"),
     ).encode("utf-8")).hexdigest()
-    lineage = dict(run_lineage) if run_lineage is not None else {
+    lineage = incoming_lineage if run_lineage is not None else {
         "run_id": f"a-short-{as_of}-{fallback_digest[:16]}",
         "candidate_digest": fallback_digest,
         "stage_status": "complete",
@@ -1068,6 +1134,9 @@ def build_weekly_report(normalized_list: list, as_of: str, generated_at: str,
     lineage.setdefault("candidate_digest", fallback_digest)
     lineage.setdefault("stage_status", "complete")
     lineage.setdefault("runtime_configuration", runtime_configuration_lineage(_RUNTIME_CONFIGURATION))
+    if lineage.get("margin_coverage") not in (None, margin_coverage):
+        raise ValueError("weekly run lineage margin coverage disagrees with report coverage")
+    lineage["margin_coverage"] = margin_coverage
     weekly = {
         "schema_name": SCHEMA_NAME, "schema_version": SCHEMA_VERSION,
         "generated_at": generated_at, "as_of": as_of,
@@ -1081,6 +1150,7 @@ def build_weekly_report(normalized_list: list, as_of: str, generated_at: str,
         "boundary": {"production": False, "real_money": False,
                      "is_validated_alpha": False, "satisfies_ship_gate": False},
     }
+    weekly["margin_coverage"] = margin_coverage
     if candidate_exclusions:
         weekly["candidate_exclusions"] = list(candidate_exclusions)
     from engine.a_short_effect_contract import build_effect_contract_ledger
@@ -1199,6 +1269,16 @@ def validate_weekly_report(weekly: dict, iv_feed_summary: dict) -> None:
         raise ValueError("weekly price_data_through is not a real date")
     if price_data_through > decision_as_of:
         raise ValueError("weekly price_data_through is after decision_as_of")
+    margin_coverage = weekly.get("margin_coverage")
+    if not isinstance(margin_coverage, dict):
+        raise ValueError("weekly missing margin_coverage")
+    reference_date = str(margin_coverage.get("reference_date") or "")
+    if reference_date != price_data_through:
+        raise ValueError("weekly margin coverage reference_date must equal price_data_through")
+    if margin_coverage.get("status") == "complete":
+        effective_ref_date = str(margin_coverage.get("effective_ref_date") or "")
+        if not _is_valid_date(effective_ref_date) or effective_ref_date > reference_date:
+            raise ValueError("weekly complete margin coverage has an invalid effective_ref_date")
     from runners.a_short_phase5_engine import validate_m67_consistency
     # weekly as_of 必须是合法日历日(空报告时也要校验;schema 的 ^\d{8}$ 不查历法,20260631 会漏过)
     try:
@@ -4282,6 +4362,10 @@ def main(argv=None, pro_factory=None, price_provider=None, semantic_provider=Non
             return os.path.relpath(pth).replace("\\", "/")
         except Exception:
             return os.path.basename(pth)
+    margin_coverage = ((ai.get("market_context") or {}).get("margin_coverage") or {
+        "reference_date": price_data_through, "effective_ref_date": None, "row_count": 0,
+        "universe_size": 0, "coverage_complete": False, "status": "unavailable",
+    })
     run_lineage = {"run_id": source_identity["run_id"],
                    "candidate_digest": source_identity["candidate_digest"],
                    "stage_status": "complete",
@@ -4306,6 +4390,7 @@ def main(argv=None, pro_factory=None, price_provider=None, semantic_provider=Non
                                      "effective_regime": regime,
                                      "fallback_active": bool(regime_fallback)},
                    "price_freshness": price_freshness,
+                   "margin_coverage": margin_coverage,
                    "decision_as_of": str(args.as_of),
                    "price_data_through": price_data_through,
                    "runtime_configuration": source_runtime_configuration}
@@ -4479,6 +4564,7 @@ def main(argv=None, pro_factory=None, price_provider=None, semantic_provider=Non
                                  available_cash=(available_cash if args.account else None),
                                  new_exposure_capacity=new_exposure_capacity,
                                  crash_veto_tracking=crash_veto_tracking,
+                                 margin_coverage=margin_coverage,
                                  portfolio_fact_overrides=portfolio_fact_overrides,
                                  account_positions=((acct.get("positions") or []) if args.account else None),
                                  missing_holding_codes=[item.get("ts_code") for item in holdings_manual_review],

@@ -102,11 +102,19 @@ def _prices(close=2.90):
 
 
 def _engine_input(stateful, cash=0.0):
+    checks = _clear_rule6_checks()
+    for check in checks:
+        if check["id"] in {"rule6_margin_extreme_accumulation", "rule6_short_selling_surge"}:
+            check["metrics"] = {"status": "complete"}
     return {
         "analysis_role": "final",
         "ts_code": "600000.SH", "name": "测试", "close": 2.90, "price_series": _prices(),
         "derived": {}, "event": {}, "liquidity": {"avg_amount_5d": 1e8},
-        "rule6_checks": _clear_rule6_checks(),
+        "rule6_checks": checks,
+        "margin_coverage": {"reference_date": DECISION, "effective_ref_date": DECISION,
+                            "row_count": 1200, "universe_size": 1100,
+                            "coverage_complete": True, "status": "complete"},
+        "price_data_through": DECISION,
         "iv": {"iv_percentile_252d": 50.0}, "market_regime": "震荡期",
         "account": {"available_cash": cash, "total_equity": 1_200_000.0,
                     "current_gross_exposure": 300_000.0,

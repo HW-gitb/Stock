@@ -1,7 +1,7 @@
 {
   "schema_name": "a_short_m67_effect_contract",
   "schema_version": "1.0.0",
-  "analysis_input_all_paths_sha256": "a9aaeca317daad60bbbd808c5a20660c44c28b578a0b73b4b6731dbbb124d188",
+  "analysis_input_all_paths_sha256": "3e3e5dcb607d1c758ff58c529c0995bbd3057b95ae2419b60e82ca7027b6ffd7",
   "groups": [
     {
       "id": "lineage_metadata",
@@ -112,7 +112,7 @@
       "source_prefixes": [
         "market_context"
       ],
-      "source_paths_sha256": "fc0178fb32c450a6f576232ee2b32abc9819eb648fce3031c61f13775131c898",
+      "source_paths_sha256": "81b6d462c255004b3332334f2fbab9ee46dcfdbec5e968a545bf18f07494c01c",
       "policy": "must_affect_result",
       "terminal_surfaces": [
         "weekly.effect_contract_ledger",
@@ -409,17 +409,17 @@
     }
   ],
   "decision_predicate_sha256": {
-    "A-EGS/egs_main.py": "459fd6fb3fdbf75d967629ed9f56358363f09d95d4a672b5257dd3c0ed501c1a",
+    "A-EGS/egs_main.py": "daabfc6193e9aed743368f3be02d3f0ed2fac339d783625d77b4eb1e86c741ae",
     "engine/egs_industry_heat.py": "79d8cddefdabb21fa8effd677f320a8e44d86782688f4449145c8789469700b3",
     "engine/a_short_industry_theme.py": "6a10200f80b3c0d301efc8af1561b53ef2578e1cd26eea7976188dd57b7b6b2b",
-    "runners/a_short_phase5_engine.py": "6f8a297f64df719652a20ad1b1e3d80996c70f182e4c070a148c6399cdb8f3fd",
-    "runners/a_short_weekly_pipeline.py": "a1359890cd27cb0e0f525951e19a420cbb55e2bc63f7e801f1e8e3d97309bd25",
-    "runners/a_short_m67_render.py": "070bcd409b5e4d30bcf5462e3f49081205799028f9aa12059b554db7ba39b67a",
+    "runners/a_short_phase5_engine.py": "c86f2589ec072718d8e0d7363b46dab15d6c888f4cc0dec8f799ee96fd01de96",
+    "runners/a_short_weekly_pipeline.py": "e3777543221d01eb7e0c61325fe2cd64f315c445156f7b23db10bb26b035874b",
+    "runners/a_short_m67_render.py": "b8f0bce2b970c3d5180044218bd0b3a6e66a964ec64b34837f89c0089da501f5",
     "engine/a_short_portfolio_risk.py": "6dbb9c0ddb8319c79315d97f798911220580681fa3cb9664b1085b403d941e45",
     "engine/a_short_effect_contract.py": "07c6a5f65b1904723ceced5383757051b4ab03797b5038d3c0b7b5ff3884081f"
   },
   "runtime_constants_sha256": {
-    "A-EGS/egs_main.py": "16714f65c6c1bb952b6754ac0e8d622c42dc81122a4a5a07461a733b084ad6e8",
+    "A-EGS/egs_main.py": "5122d39bd0d4799bff302dfc6cc5c51cb9a41e9a47362a08b87ad1c73a057715",
     "runners/a_short_phase5_engine.py": "537f47a9e7443e638b675cc7349b7e551eb926f2dd00267f6085433a680d1f3b",
     "engine/a_short_portfolio_risk.py": "d823756ca1142d648747401ad750c53a2439bcc3cbaaddf0521ac8eafb3dbd94"
   },
@@ -656,7 +656,7 @@
     "small_float_mv_pct"
   ],
   "output_schema_sha256": {
-    "schemas/a_short_weekly_report.schema.json": "8918389b93263588aa76db98a703a9e843b6e2f13b8cf61eb097e5f69f53d7e8",
+    "schemas/a_short_weekly_report.schema.json": "551e0e4f2c5fb91416048268efff6bab59e83dc047ea74e8fc45192636964c8c",
     "schemas/a_short_m67_report.schema.json": "9e74525507e9731031b90fdd0add1be74b28afcd78210ff78533070a6946c23c"
   },
   "analysis_input_paths": [
