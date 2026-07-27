@@ -141,8 +141,14 @@ def _canonical_ast(node):
     raise TypeError(f"unsupported AST fingerprint value: {type(node).__name__}")
 
 
+@lru_cache(maxsize=64)
+def _source_tree(source: str) -> ast.AST:
+    """Parse source once per exact text; callers must treat the tree as read-only."""
+    return ast.parse(source)
+
+
 def _predicate_hashes(source: str) -> list[str]:
-    tree = ast.parse(source)
+    tree = _source_tree(source)
     tests = []
     for node in ast.walk(tree):
         if isinstance(node, (ast.If, ast.IfExp, ast.While, ast.Assert)):
@@ -151,7 +157,7 @@ def _predicate_hashes(source: str) -> list[str]:
 
 
 def _constant_inventory(source: str) -> dict[str, str]:
-    tree = ast.parse(source)
+    tree = _source_tree(source)
     values = {}
     for node in tree.body:
         if not isinstance(node, (ast.Assign, ast.AnnAssign)):
@@ -165,7 +171,7 @@ def _constant_inventory(source: str) -> dict[str, str]:
 
 def _governed_python_literal_names(source: str, rel: str) -> list[str]:
     """Find business-threshold copies that would bypass the runtime JSON policy."""
-    tree = ast.parse(source)
+    tree = _source_tree(source)
     policy_names = {
         "runners/a_short_phase5_engine.py": {
             "ATR_MULT", "RR_FLOOR", "BREAKOUT_RR_BONUS", "SINGLE_CAP_PCT", "IV_HALVE_PCT",
@@ -221,7 +227,7 @@ def _runtime_portfolio_policy_literal_violations(portfolio_source: str, weekly_s
         if re.search(pattern, portfolio_source):
             violations.append(f"engine/a_short_portfolio_risk.py:{label}")
 
-    tree = ast.parse(weekly_source)
+    tree = _source_tree(weekly_source)
     checks = (
         ("_holding_adds_portfolio_risk", "circ_mv_rmb", "small_float_mv_rmb"),
         ("_validate_portfolio_risk", "holding_single_position_cap_multiplier", "high_risk_holding_cap_multiplier"),
@@ -380,7 +386,7 @@ def _runtime_policy_leaf_readers(policy_paths: dict[str, list[str]], sources: di
     portfolio = sources["engine/a_short_portfolio_risk.py"]
     weekly = sources["runners/a_short_weekly_pipeline.py"]
     industry_theme = sources["engine/a_short_industry_theme.py"]
-    trees = {rel: ast.parse(source) for rel, source in {
+    trees = {rel: _source_tree(source) for rel, source in {
         _RUNTIME_CONFIG_FILE: loader,
         "A-EGS/egs_main.py": egs,
         "engine/a_short_industry_theme.py": industry_theme,
@@ -468,7 +474,7 @@ def _runtime_policy_leaf_readers(policy_paths: dict[str, list[str]], sources: di
 
 
 def _string_assignments(source: str) -> dict[str, str]:
-    tree = ast.parse(source)
+    tree = _source_tree(source)
     out = {}
     for node in tree.body:
         if not isinstance(node, ast.Assign) or len(node.targets) != 1:
@@ -479,7 +485,7 @@ def _string_assignments(source: str) -> dict[str, str]:
 
 
 def _operation_impact_sources(source: str) -> list[str]:
-    tree = ast.parse(source)
+    tree = _source_tree(source)
     strings = _string_assignments(source)
     sources = set()
     for node in ast.walk(tree):
@@ -496,7 +502,7 @@ def _operation_impact_sources(source: str) -> list[str]:
 
 
 def _literal_string_assignment(source: str, name: str) -> list[str]:
-    tree = ast.parse(source)
+    tree = _source_tree(source)
     for node in tree.body:
         if not isinstance(node, ast.Assign) or len(node.targets) != 1:
             continue
@@ -533,7 +539,7 @@ def _build_static_inventory(*, source_overrides: dict[str, str] | None = None,
     phase5 = sources["runners/a_short_phase5_engine.py"]
     portfolio = sources["engine/a_short_portfolio_risk.py"]
     weekly = sources["runners/a_short_weekly_pipeline.py"]
-    portfolio_tree = ast.parse(portfolio)
+    portfolio_tree = _source_tree(portfolio)
     factor_node = next(
         node for node in portfolio_tree.body
         if isinstance(node, ast.Assign) and isinstance(node.targets[0], ast.Name)

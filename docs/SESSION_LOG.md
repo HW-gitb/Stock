@@ -58,6 +58,21 @@
 - **Verify**: review-evidence:not_available(本轮为修复指令、非 review 命令形态，门未 arm)。亲跑：门超集包经强制入口 `status=PASS exit=0 tests=69 deadline=300s`；`py_compile` 通过；对照实测——A 树有 token、Stop hook 被塞 B 树时，带 `repo_root` 判 A(exit 0)、去掉它(改前形状)判 B(exit 2)；端到端以 cwd=017a arm，快照确实拍在 017a、`repo_root` 记为 017a、Stop hook 拿错树仍按记录树拦下；C 的 2 条该 arm + 4 条不该 arm 全部符合预期。顺手清掉一条 pre-fix 遗留 armed 状态。
 - **Proof-of-use**: A 按"两个 hook 各自定树"整类看，发现真洞不是判错树而是**连 state 都找不到**，故连 state 位置一并收敛；B grep 确认 `.claude/review_gate` 派生点只剩唯一常量、`disarm` 也改齐；C 对照用两棵真树跑，改前形状确实判错树；D 正对照(同树审查、meta 语句)行为不变；E 未动 CURRENT/README；F 超集包一次跑完 + doc guard 一次过。
 - **Next**: Codex：执行 4c(周报横幅)
+## 2026-07-27 — Claude Code 审查 PASS（测试提速第三刀：按源码文本共享 AST）
+
+- **Verdict/Action**: PASS。9 处 `ast.parse` 全部改走 `_source_tree`（`lru_cache(64)`，键=源码文本）。overrides 路径仍然重建整份清单、所有静态守卫照跑，只是文本逐字节相同的源码复用同一棵树。风险集中在"共享树被就地改写会污染后续解析"，本轮按此逐条查证。
+- **Required**: 无。两条 Optional 见 Next，未新开 register 条目（无风险项）。
+- **Verify**: review-evidence:19e148cc90b2。亲跑 `tests.test_a_short_effect_contract` = 22 OK / 115.2s / exit 0（含新增 memo 回归；该模块上一刀是 200s）。静态面：全模块 grep `NodeTransformer` / `fix_missing_locations` / 节点属性赋值 = **0**，且没有 AST 节点逃逸进返回的清单（只取 `.value` 常量）。自写探针：同文本两次调用返回**同一对象**；跑完一次完整清单构建后重算该源码的 predicate hash **逐字节不变**（证明实际没人改过树）；同文本 override 结果等于默认构建；语义改动（插入一个 `if` 节点）**被看见**并给出 `decision predicate changed without effect contract update`；之后原文本仍复现出原结果，默认清单不受污染。
+- **Next**: 用户：可提交并合入 master。两条 Optional：① `maxsize=64` 会同时留住至多 64 棵树，最大的几个源文件（`egs_main.py` 等）内存不小、而 effect-contract 测试本身会造大量 override 变体，建议调小或改用哈希做键；② 「缓存树只读」目前只靠人工审查保证，建议把本轮探针第 2 条（构建后 predicate hash 不变）固化成常驻回归测试。
+
+## 2026-07-27 - Codex implementation: test-performance third knife
+
+- **Verdict/Action**: Added a bounded per-source-text AST memo inside `engine/a_short_effect_contract.py`. Override calls still build a fresh inventory and run every static guard; they only reuse read-only ASTs for source texts that are byte-for-byte unchanged. A changed override receives a distinct parse tree.
+- **Required**: None newly opened. This shared-engine change requires Claude Code review before commit.
+- **Verify**: New memo regression = 4 OK in 11.5s; `tests.test_a_short_effect_contract` and `tests.test_a_short_weekly_pipeline` both exited 0 (weekly = 486 tests; existing ResourceWarnings only); full-pack ledger `a_short` = 2046 OK, 475.0s / 1200s. This is one local run, not a loaded-machine performance baseline.
+- **Pre-Codex self-review**: The regression proves same-text overrides add no parse miss, while changing only portfolio source adds exactly one parse miss; existing mutation guards remain in the full module. Cached ASTs are read-only by contract and cache holds at most 64 texts.
+- **Next**: Claude Code independently review this third knife, then commit only PASS-covered files.
+
 ## 2026-07-27 — Claude Code 审查 PASS（测试提速第二刀：effect-contract 引擎级 memo）
 
 - **Verdict/Action**: PASS。改法比第一刀更对：把重复的 AST 清单构建 memo 在 `engine/a_short_effect_contract.py`，键=17 个默认输入文件的**内容**（每次仍重读磁盘，故进程内改文件即失效），带 overrides 的调用一律不缓存，返回前 deepcopy；第一刀的测试侧 patch 同刀移除。仅重封本模块自指纹，无 policy 变更。
