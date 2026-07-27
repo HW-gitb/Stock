@@ -1,5 +1,12 @@
 # Session Log
 
+## 2026-07-27 - Claude Code 审查 FAIL (rule-3 全量补跑：4b 的 PASS 过早，两条 Required)
+
+- **Verdict/Action**: FAIL。4b 合并时刻欠的那次 us_short 全量跑完 = `4879 tests / 1191.965s / FAILED(failures=1, errors=10)`(1193.1s 对 1200s 上限，是真 FAIL 不是超时)，ledger 正确地没记绿。两条 Required：① epoch 钉的是计划 preset 的**原始字节** sha256，而仓库的 CRLF 归一在 checkout 时改写了字节 → 主树/任何新克隆上摘要不符，4b 每周静默降级为 OFF；② bounded runner 强设 `PYTHONIOENCODING=utf-8`，泄进测试自己起的孙进程，把 9 条 fail-closed 守卫跑成 error。**我上一轮的 PASS 过早**：282 个测试的聚焦包跑在 017a，两个问题都看不见。
+- **Required**: `R-USSHORT-LANE-PACK-RED-AFTER-4B-MERGE`(K4B-R4 + GOV-R5)。逐条实测(两棵树的摘要、单变量隔离四跑)、修法与"不回滚合并"的理由见 `system_risk_register.md`(单一来源，本处不复述)。
+- **Verify**: review-evidence:not_available(本轮由后台任务通知触发，非 review 命令形态，门未 arm)。亲跑：017a 上该 preset 为 LF、摘要 `97be1c50…`=钉住值；主树为 CRLF、摘要 `b2bf5975…`。9 条 error 的单变量隔离：主树直跑 `20 OK` / 主树仅加 `PYTHONIOENCODING=utf-8` 变 `errors=9` / 主树经启动器同样 9 / 017a 直跑 `20 OK`。已确认**不是泄露**：链条是 `UnicodeDecodeError`(gbk) → `built.stderr` 为 None → `TypeError`，账户值我按脱敏核过、未进 stderr。
+- **Next**: Codex：修复 K4B-R4(改钉规范化 JSON 字节)与 GOV-R5(别强设 PYTHONIOENCODING)
+
 ## 2026-07-27 - Claude Code 修复 + 自审 PASS (评审门 B+C：定树与 arming)
 
 - **Verdict/Action**: PASS。B：快照记下 `repo_root`，Stop hook 改判"快照那棵树"，且 state 收敛到脚本旁唯一位置——原来按被审树派生，跨树审查时 Stop hook 连 state 都找不到，直接静默零执行(今日实发两次)。C：对象允许表补 `工作树/树/分支/提交/改动/变更/补丁/切片`，meta 停用词仍先判，`审查工作流` 依旧不 arm。按上轮讨论，选项 A(从命令猜目标树)**故意不做**。
