@@ -50,8 +50,9 @@ if [ -n "$PY" ]; then
     echo "" 1>&2
     echo "pre-commit REMINDER (advisory, does NOT block): this commit changes a-short production code but no" 1>&2
     echo "full-pack GREEN is recorded for this code state (AGENTS.md §Verification tiering rule 3/4)." 1>&2
-    echo "At the PASS/merge gate run the a_short full pack ONCE, then record it:" 1>&2
-    echo "  .tools\\codex_main_python.ps1 .tools\\full_pack_ledger.py record a_short <count>" 1>&2
+    echo "At the PASS/merge gate run the a_short full pack ONCE with the atomic ledger command" 1>&2
+    echo "(it prepares, bounds, verifies and records in one step; manual prepare/record is retired):" 1>&2
+    echo "  .tools\\codex_main_python.ps1 .tools\\full_pack_ledger.py run a_short \"<trigger>\" \"<focused evidence>\" 1200 -- <unittest args>" 1>&2
     echo "(If focused tests bound the impact per rule 6, ignore this.)" 1>&2
   fi
 fi

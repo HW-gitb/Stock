@@ -382,6 +382,22 @@ def render_weekly_markdown(weekly: dict) -> str:
     if ("regime unknown" in env) or ("保守fallback" in env) or ("保守 fallback" in env):
         out.append("> ⚠️ **市场 regime 未知 → 全员按震荡期保守降级(统一 −1 星)**。星级反映的是**当前市场保守状态**,"
                    "不是个股质量差;**个股质量看下表「EGS分」列**。(V14.3 regime 分类器接入 production 前,每次实盘都会如此。)")
+    # 该 banner 必须跟着 Phase5 的实际封锁判据走,而不是只看批次覆盖状态:覆盖标 complete
+    # 但两条两融检查自己没标完成时,报告照样全员被系统级理由拦成观察,此时静默无 banner
+    # 就会一处说停摆、一处说正常。两处表述取同一状态源,且恒只出一条。
+    margin = weekly.get("margin_coverage") or {}
+    margin_blocked = any(
+        (((report.get("machine") or {}).get("layer") or {}).get("decision_reasons") or {}).get(
+            "margin_source_unavailable") is True
+        for report in (weekly.get("reports") or [])
+    )
+    if margin.get("status") != "complete" or margin_blocked:
+        margin_state = (str(margin.get("status", "unavailable"))
+                        if margin.get("status") != "complete"
+                        else "complete/两融规则未标记完成")
+        out.append("> ⚠️ **两融数据源本周不可用或覆盖不足：两条两融规则未执行，"
+                   "新建仓统一观察处理。** 参考日=`" + str(margin.get("effective_ref_date")) +
+                   "`，状态=`" + margin_state + "`。")
     # Slice 3b-2: durable run_lineage banner — esp. the no-account no-sizing warning so a reader of THIS
     # artifact (not just the terminal) cannot mistake a sizing-artifact 观察 for a real avoid signal.
     rl = weekly.get("run_lineage") or {}

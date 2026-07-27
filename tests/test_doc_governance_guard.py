@@ -559,7 +559,8 @@ class DocGovernanceGuard(unittest.TestCase):
             "`执行` = Codex runs the next approved execution slice",
             "`提交` = review-cycle commit is owned by Claude Code after `审查` PASS",
             "Codex must use `using-superpowers` when available before `执行` / `修复`",
-            "Codex must run an independent agent self-review before handing work to Claude Code for `审查`",
+            "Codex must complete the main-thread A-F self-review before handing work to Claude Code for `审查`",
+            "an independent agent is conditional under verification-tiering rule 7",
             "handoff commands belong in `docs/SESSION_LOG.md` / `docs/system_risk_register.md`, not in the final chat",
         )
         for anchor in required:
@@ -1015,6 +1016,12 @@ class DocGovernanceGuard(unittest.TestCase):
                               "单一来源", "planted-failure", "靠人记",
                               "活跃设计文档")                                   # B2 body
     CHECKLIST_SELF_REVIEW_SPEED_ANCHORS = (
+        "existing failing focused test",
+        "direct deterministic probe",
+        "new focused regression test",
+        "共享契约/消费者验证只在",
+        "main-thread A-F",
+        "独立 agent 不是默认步骤",
         "self-review anti-hang contract",
         "current-diff-only",
         "fork_context=false",
@@ -1026,6 +1033,7 @@ class DocGovernanceGuard(unittest.TestCase):
         "do not keep waiting",
         "main-thread checklist fallback",
         "unrelated dirty files",
+        "legacy green",
     )
     # Body phrases that MUST NOT reappear in AGENTS item 7. Naming a rule ("B ripple-grep") is fine;
     # restating its body is the AGENTS<->checklist drift this refactor eliminates.
@@ -1052,6 +1060,31 @@ class DocGovernanceGuard(unittest.TestCase):
         cl = self.PRE_CODEX_CHECKLIST.read_text(encoding="utf-8")
         for anchor in self.CHECKLIST_SELF_REVIEW_SPEED_ANCHORS:
             self.assertIn(anchor, cl, f"checklist lost self-review anti-hang anchor: {anchor}")
+        self.assertNotIn("先写能复现 Required 的 focused 红测", cl,
+                         "checklist regressed to mandatory duplicate-test creation")
+
+    def test_agents_executor_critical_path_stays_conditional_and_routes_to_single_source(self):
+        text = AGENTS.read_text(encoding="utf-8")
+        m = re.search(r"(?ms)^0\. \*\*Executor/fixer critical path.*?(?=^1\. \*\*Acceptance focus pack)", text)
+        self.assertIsNotNone(m, "AGENTS lost the executor/fixer critical-path gate")
+        section = m.group(0)
+        for anchor in (
+            "existing failing focused test",
+            "direct deterministic probe",
+            "new focused regression test",
+            "only when the changed surface crosses that seam",
+            "independent agent only if rule 7 requires it",
+            "full-ledger command only if rule 3 requires it",
+            "No step may be added merely for ceremony",
+            "docs/pre_codex_self_review_checklist.md",
+        ):
+            self.assertIn(anchor, section, f"executor critical path lost anchor: {anchor}")
+
+    def test_compatibility_protocol_does_not_restore_unconditional_agent_tax(self):
+        protocol = (ROOT / "docs" / "AI_REVIEW_PROTOCOL.md").read_text(encoding="utf-8")
+        self.assertIn("main-thread A-F", protocol)
+        self.assertIn("only when `AGENTS.md §Verification tiering` rule 7 triggers it", protocol)
+        self.assertNotIn("run an independent agent self-review before handing work", protocol)
 
     def test_agents_item7_points_to_checklist_and_does_not_restate(self):
         # AGENTS item 7 must be a mandatory pointer (checklist path + 必读必走 + Proof-of-use) and

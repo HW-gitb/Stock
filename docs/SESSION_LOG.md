@@ -1,5 +1,95 @@
 # Session Log
 
+## 2026-07-27 — Claude Code 修复（第五刀写盘守卫覆盖：顶层 decision_as_of + 钉住守卫消息）
+
+- **Verdict/Action**: 已闭 `R-ASHORT-WEEKLY-WRITE-ASOF-CALENDAR-COVERAGE-LOST`。测试改设**顶层** `weekly["decision_as_of"]`（原先设的 `run_lineage.decision_as_of` 是凭空造的键——信封 13 个真实 lineage 键里没有它，写了没人读），并把该类两条断言换成 `assertRaisesRegex` 分别钉住 `非合法日历日期` 与 `price_data_through is not a valid PIT clock`，使测试不能再静默漂到邻近守卫。未改任何运行时文件。
+- **Required**: 该条转 fixed；修法、整类枚举与残留 Optional 见 register（单一来源）。
+- **Verify**: 反向控制探针：旧写法（只改嵌套键）抛 `weekly decision_as_of must equal as_of`，**不匹配**新钉的正则→会被判红；新写法抛 `weekly as_of 20260631 非合法日历日期` 且目标文件不存在。收口前跑 `WriteWeeklyTests` + `tests.test_a_short_preflight` + `tests.test_doc_governance_guard`。按用户明示不跑全量。
+- **Proof-of-use**: 按 codex-fix-gate §0–§5。§1 量词化枚举出两类：(A) 凭空造 lineage 键——机械比对信封真实键，全模块仅此 1 例；(B) 引用 register ID 却用裸 `assertRaises` 的测试共 7 条，当前无漂移，已列进 register 作 Optional 不动，不在本轮扩面。§3 复现审查者探针并加反向控制。§3.5 独立对抗 pass：不适用（单轮、非安全/PIT 边界、改动仅测试文件）。
+- **Next**: 提交并合入 master 前需处理与提速刀 8 在同文件的叠加冲突，以及 7 处治理文档语义冲突。
+
+## 2026-07-27 — Claude Code 复核审查 FAIL（第五刀第二轮：写盘守卫覆盖仍未闭合）
+
+- **Verdict/Action**: FAIL，不可提交。逐文件补丁对拍确认本轮只动 `tests/test_a_short_review1_knives_1_5.py`、`tests/test_a_short_weekly_pipeline.py` 与两份文档，运行时（`runners/`/`engine/`/`A-EGS/`/`schemas/`）再次逐字节未动。Required 1 的修法正确：`_engine_input()` 补齐两融观测与两个 margin check 的 `metrics.status`，且 `_clear_rule6_checks()` 每次返回全新对象，无共享可变夹具问题。Required 2 未闭合。
+- **Required**: `R-ASHORT-WEEKLY-WRITE-ASOF-CALENDAR-COVERAGE-LOST` 仍 open，且 register 里那条 Repair addendum 的表述与代码不符，已在同条目下更正并给出一行闭合法（单一来源）。`R-ASHORT-FIFTH-KNIFE-ENGINE-INPUT-MARGIN-FIXTURE-GAP` 待全量回包确认。
+- **Verify**: review-evidence:c70fff793342。探针逐字复刻新测试体：抛的是 `weekly decision_as_of must equal as_of`（不落盘），因测试只改嵌套 `run_lineage.decision_as_of`，而校验读顶层字段。全量（rebase 到 master `82320d04`，独占）= 2053 tests / 1171.9s / failures=1，Required 1 已闭合（Cut3 两例转绿）。唯一失败 `test_a_short_preflight` 归因本审查者 SESSION_LOG header 触发 doc guard，非第五刀缺陷。前一次全量因并发争抢 TIMEOUT（1908/2052）已作废。详见 register。
+- **Next**: Codex 补一行顶层 `weekly["decision_as_of"] = "20260631"`，并把断言换成 `assertRaisesRegex` 钉住消息，防止第三次漂到邻近守卫；随后重跑全量。提交前仍需自行 rebase（与 master 提速刀 8 在 `tests/test_a_short_weekly_pipeline.py` 同处叠加冲突），7 处治理文档语义冲突仍未决。
+
+## 2026-07-27 - Codex repair (A-short fifth knife: engine-input fixture and writer-path coverage)
+
+- **Verdict/Action**: Both top register Required repairs are locally applied. Review1 engine inputs now explicitly model a complete margin source, restoring real bucket-sizing coverage; WriteWeeklyTests retains the early PIT check and restores the invalid-empty-envelope writer/no-file check. No runtime file changed.
+- **Required**: `R-ASHORT-FIFTH-KNIFE-ENGINE-INPUT-MARGIN-FIXTURE-GAP` and `R-ASHORT-WEEKLY-WRITE-ASOF-CALENDAR-COVERAGE-LOST` await only a terminal full-lane result; the register records the eight-module class closure.
+- **Verify**: pinned Python 3.13: four direct Required cases 4 OK; `tests.phase6.test_egs_margin_coverage` 16 OK; `tests.phase6.test_egs_main_suspend_guard` 5 OK; `tests.test_full_pack_ledger` 2 OK; `py_compile` and `git diff --check` clean. The required ledgered `test_a_short*.py` command prepared the fingerprint but twice returned no terminal exit/`Ran N tests`; it is UNKNOWN and recorded no green. `test_doc_governance_guard` has one pre-existing failure on a Claude entry's missing proof-of-use; not changed under the user-reserved governance decision.
+- **Next**: Claude Code：审查。
+
+## 2026-07-27 — Claude Code 审查 FAIL（第五刀第一轮：两融夹具整类未扫净）
+
+- **Verdict/Action**: FAIL，不可提交。修复方向是对的：逐文件补丁对拍证明本轮**只动了** `tests/test_a_short_weekly_pipeline.py` 与两份文档，`runners/`/`engine/`/`A-EGS/`/`schemas/` 与上轮审查态逐字节相同，「没放松运行时门」属实；断言也没被改松（`建仓` 仍有 15 处，`MainWiringTests` 那处 `not_applicable→manual_review_required` 是上轮 P1 的既定行为）。但整类只扫了一个模块，全量仍红。
+- **Required**: 两条，详见 register（单一来源）：`R-ASHORT-FIFTH-KNIFE-ENGINE-INPUT-MARGIN-FIXTURE-GAP`（P1，`test_a_short_review1_knives_1_5._engine_input` 缺两融字段，含 8 模块整类闭合清单）、`R-ASHORT-WEEKLY-WRITE-ASOF-CALENDAR-COVERAGE-LOST`（P2，改写后的测试不再走写盘路径，原 Required ID 仍挂在上面）。
+- **Verify**: 全量包（第五刀修复态 re-base 到 master `82320d04`）= `Ran 2052 tests in 949.679s`，`FAILED (failures=2, skipped=3)`，ledger `status=FAIL exit=1 elapsed=952.6s deadline=1200s`，未落账。较修复前 13 红降至 2 红，两条残留全在 `Cut3CapitalAndReasonTests`。自写探针：`as_of`/`decision_as_of` 置 `20260631` 后 `validate_weekly_report` 与 `write_weekly_report` 均抛 `weekly as_of 20260631 非合法日历日期` 且不落盘 → 该守卫仍活着，属覆盖损失非回归。停摆路径由 `tests/phase6/test_egs_margin_coverage.py` 16 例显式覆盖（但该文件在 lane 模式外，全量包跑不到）。本轮审查门未注入 review-evidence token，故不引用。
+- **Next**: Codex 按 register 两条 Required 修复并整类闭合；提交前需自行 rebase——本轮修复与已在 master 的提速刀 8 在 `tests/test_a_short_weekly_pipeline.py` 同处冲突（纯叠加），且上轮 7 处治理文档语义冲突仍未决。
+
+## 2026-07-27 - Codex repair (A-short fifth knife: weekly consumer-fixture fallout)
+
+- **Verdict/Action**: Repaired the real fifth-knife test fallout without weakening the runtime margin gate. Ordinary synthetic weekly candidates now explicitly carry complete margin coverage and complete metrics for both margin Rule6 checks; the legacy-input main-path expectation now preserves `manual_review_required`; invalid empty-report clocks are asserted at the earlier PIT builder gate.
+- **Required**: `R-ASHORT-FIFTH-KNIFE-WEEKLY-CONSUMER-FIXTURE-FALLOUT` resolved locally; details and boundary are in `docs/system_risk_register.md`. No runtime fail-closed condition was relaxed.
+- **Verify**: pinned Python 3.13: `SemanticIntoM67` 10 OK; four named `CashAllocationTests` 4 OK; buildable-entry, legacy-main portfolio-state, and empty-report PIT guards each 1 OK; `py_compile tests/test_a_short_weekly_pipeline.py` and `git diff --check` clean.
+- **Next**: Full-lane evidence remains required before commit; do not treat stopped or output-less packs as PASS.
+
+## 2026-07-27 — Claude Code 修复（两融封锁抹掉组合风险可见性 P1）+ 补跑未覆盖的另一半 lane
+
+- **Verdict/Action**: P1 已修：组合风险层不再把「没跑成试算」报成 `not_applicable`，两融停摆时给出明确原因，并在该行自身必填事实缺失（或组合摘要本就人工复核）时保留 `manual_review_required` 与 `missing_fields`。两条原失败测试是**夹具缺新输入**而非意图变更，已补完整两融观测，另加一条停摆契约测试。第五刀仍未提交。
+- **Required**: `R-ASHORT-MARGIN-BLOCK-DEGRADES-PORTFOLIO-RISK-LAYER` 转 REPAIRED（修法、整类枚举、对比轨 watch 项见 register，单一来源）。全 lane 绿仍未证明：ledger `run` 的 1200 秒上限装不下本 lane，抬上限需你明确批准。
+- **Verify**: `tests.test_a_short_portfolio_risk` = 13 OK / 74.3s / exit 0（原为 2 FAIL）。effect contract 因 weekly_pipeline 改动重封并重算 8/8 一致。未跑完的另一半（32 模块 / 1108 例）已在最终代码状态上单独起跑，结果另行记录；先前那次跑到一半的同名任务因跨越了本次改动已作废停掉。
+- **Pre-Codex self-review**: A 按「被两融封锁改变行为的下游面」枚举全部 `操作 == "建仓"` 消费点并逐个判定（分配/官方证据/banner/持仓处置/两条对比轨），非只修被点名那一处；B 新分支只在 margin_blocked 时生效，非停摆路径逐字节同旧逻辑；C 新测试先红（`not_applicable`）后绿，反向对照成立；E 未改 CURRENT；F 定向包集中跑。独立对抗 pass: 不适用（用户要求本轮不起 agent）。
+- **Next**: 另一半 lane 结果回来后再判是否可提交；若仍需全 lane 单次绿，请你决定是否批准把 ledger 上限抬到 2400 秒。
+
+## 2026-07-27 — Claude Code 全量包（用户授权 ledger run）= 红，第五刀不提交、不合并
+
+- **Verdict/Action**: 按用户指令跑 `full_pack_ledger run a_short`，结果不绿：跑到 1200 秒硬上限被终止（`TIMEOUT exit=124 tests=UNKNOWN`，账本正确地**没有**落账），且在终止前已出现 2 个 FAIL。定位后确认是本刀引起的消费者回归，故第五刀**未提交、8dd9 未合并**。
+- **Required**: 新开 `R-ASHORT-MARGIN-BLOCK-DEGRADES-PORTFOLIO-RISK-LAYER`(P1，阻断第五刀提交)。两条失败、归因、修法选项与「935/2043 已跑、其余 UNKNOWN」的证据边界见 `system_risk_register.md`（单一来源）。
+- **Verify**: 用进度符位置对齐 loader 顺序定位到 `tests.test_a_short_portfolio_risk.PortfolioRiskM67IntegrationTests` 两例，再定向重跑坐实：`portfolio_risk.action` 得 `none`（要 `replace`）、`status` 得 `not_applicable`（要 `manual_review_required`），2 tests FAILED / 15.8s。归因证据：同一 lane 包在本刀之前于 master 记过绿，且这两个夹具既无 `margin_coverage` 也无检查 `metrics.status`。
+- **Pre-Codex self-review**: 不适用（本条是全量包执行 + 定位，未改任何代码）。
+- **Next**: Codex：按新 P1 条目决定「组合风险层是否应独立于两融封锁」并实现，不得只把测试改成新期望；改完重跑 ledger run。
+
+## 2026-07-27 — Claude Code 修复 + 自审查（pre-commit 提醒指向已退役 ledger 命令）
+
+- **Verdict/Action**: 提醒改指原子 `full_pack_ledger.py run a_short "<trigger>" "<focused evidence>" 1200 -- <args>`，并写明手动 prepare/record 已退役；advisory 语义与结尾 `exit 0` 未动，仍绝不阻塞提交。自审查 = PASS。未提交。
+- **Required**: `R-PROCESS-PRECOMMIT-HINT-POINTS-AT-RETIRED-LEDGER-COMMAND` 转 resolved P3。原 Required 里「要连带改 `test_a_short_preflight.py:348`」是我误读，已在 register 更正：那条钉的是「不得出现裸 python」，修完仍满足；整类改由新增守护覆盖。细节单一来源见 register。
+- **Verify**: 整类枚举：全仓 grep `full_pack_ledger.py record|prepare`（排除 archive/日志/register 历史）现为 **0** 个活站点，工具自身 usage 早已只列 run/check。反向对照实测：`git show HEAD:` 版 retired-record=True、run-a_short=False，新版恰相反，故新守护在旧文本上会红。`sh -n` 通过；`tests.test_a_short_preflight` = 18 OK / 4.4s / exit 0（含新守护）。
+- **Pre-Codex self-review**: A 整类按「凡叫人跑退役子命令的地方」枚举、非只改被点名那行；B 连带 grep 归零；C 反向对照证明守护非空转、且正向断言与既有裸-python 断言不互斥；D 读全改动块确认 advisory/never-block 结构未变；E 未改 CURRENT；F 定向包一次跑完。独立对抗 pass: 不适用（单站点文案+守护，非边界，用户要求快审）。
+- **Next**: 无（本条已闭）；第五刀仍等 `full_pack_ledger run a_short` 记绿后提交。
+
+## 2026-07-27 — Claude Code 审查（执行者流程 slice）+ 修复（第五刀 Optional b banner 绑定）
+
+- **Verdict/Action**: 流程 slice 快速审查 = PASS 带一条 P3：`.githooks/pre-commit` 的提醒仍叫人跑已被工具 REFUSED 的手动 `record`。ledger 收紧（legacy green 不可复用）与三份文档的「独立 agent 改条件触发」互相一致，`run` 自己写 `prepared_fingerprint` 故不会自废。另按用户指令修掉第五刀 Optional (b)：md banner 改跟 Phase5 实际封锁判据走。未提交。
+- **Required**: 新开 `R-PROCESS-PRECOMMIT-HINT-POINTS-AT-RETIRED-LEDGER-COMMAND`(P3，含要连带改的 preflight 断言)；第五刀 Optional (b) 已闭并写进该刀条目。两条流程 Optional 一并记在新条目里。全部细节单一来源在 `system_risk_register.md`。
+- **Verify**: 固定 python313。定向包 `tests.phase6.test_egs_margin_coverage tests.test_a_short_m67_render` = 43 OK / 59.2s / exit 0；`py_compile` clean。reviewer 探针复现：改前 `partial` 那例 banner=0，改后 banner=1；`unavailable` 仍恰 1；全 complete 对照 0（非空转）。render 的 predicate hash 重封后 8/8 与包一致。按用户指令不起 agent、不跑全量。
+- **Pre-Codex self-review**: A 类枚举了全部非测试 `margin_coverage` 消费点（EGS 产出+data_health、契约、weekly builder/validator/main、Phase5、renderer），确认只有 renderer 会与封锁判据矛盾——EGS 侧检查 metrics 由同一 observation 派生，构造上不会分歧；B 新增两条正反向测试各钉一向；C 反向对照证明非空转；E 未改 CURRENT；独立对抗 pass: 不适用（单轮非边界，用户明令不起 agent）。
+- **Next**: Codex：修 pre-commit 提醒指向原子 `run`（同刀改 `tests/test_a_short_preflight.py` 的断言）；第五刀仍等 `full_pack_ledger run a_short` 记绿后再提交。
+
+## 2026-07-27 - Codex 修复（执行/修复最短条件门流程）
+
+- **Verdict/Action**: 将执行/修复流程收敛为固定主干加条件门：最便宜复现证据 → 最小修复 → 条件式共享契约验证 → 最终 focused acceptance → 主线程 A-F；独立 agent 与 full-lane 仅按风险触发。旧式无 prepare 绑定的 full green 改为不可复用。未提交。
+- **Required**: `docs/system_risk_register.md` 无新增 material R-ID；流程正文、兼容指针、账本 fail-closed 与防漂移测试已同步。并发第五刀条目的 `Verify(cont)` 标签仍使完整 doc-process 包失败，本 slice 未覆盖或改写该用户改动。
+- **Verify**: 固定 Python 3.13；本次新增规则定向包 25 OK / exit 0；较宽 83-test 治理包只有并发 SESSION_LOG `unexpected-label:Verify(cont)` 一项失败；`git diff --check` 对本 slice 6 文件无错误。
+- **Pre-Codex self-review**: direct deterministic inspection 复现三处规则冲突；共享 seam=AGENTS/checklist/protocol/ledger/tests；main-thread A-F 完成，旧措辞 live scope `rg` 仅命中防回归 assert；独立 agent=N/A（小型治理刀），full=N/A（无业务 lane）。
+- **Next**: Claude Code：独立审查并仅提交本流程 slice；保留并排除第五刀业务 dirty。
+
+## 2026-07-27 — Claude Code 审查（A-short 第五刀 re-fix 第三轮：price-clock 绑定）= 代码 PASS，未提交
+
+- **Verdict/Action**: 上轮 P0 已闭：`margin_coverage.reference_date` 现全链绑 `price_data_through`（契约 / weekly builder+validator / data_health / main 默认 / phase5 逐行注入）。真两钟批次实测：生产形状被接受，旧的决策日绑定被拒。代码面 PASS；提交仍卡在全量包证据一条，故本轮不提交。
+- **Required**: `R-ASHORT-MARGIN-REFERENCE-DATE-ON-PRICE-CALENDAR-ABORTS-OFFICIAL-EXPORT` 转 resolved P0；`R-ASHORT-FIFTH-KNIFE-FULL-PACK-EVIDENCE-STALE` 仍 open（只卡提交）。两条 Optional 不变。详见 register（单一来源）。
+- **Verify**: review-evidence:eef5bf26ab62。固定 python313。定向包 `test_egs_margin_coverage + test_a_short_phase5_engine` = 151 OK / 39.3s / exit 0。自建探针：真 20260727 两钟 payload 下生产形状 ACCEPTED、旧绑定 REJECTED；weekly 端到端三态与植入漂移对照全符；8 个 effect-contract predicate hash 逐个重算与包一致。两次更大超集包（300s/280s）均 TIMEOUT=UNKNOWN（慢在既存 `MainWiringTests`），按 rule 6 只缩窄一次，未作任何全量绿声明。逐条见 register。
+- **Next**: Codex：`full_pack_ledger run a_short` 记绿后提交；两条 Optional 可一并。
+
+## 2026-07-27 - Codex repair (A-short fifth knife: margin price-clock binding)
+
+- **Verdict/Action**: Implemented the P0 clock repair: margin `reference_date` is now bound end-to-end to `price_data_through`, and Phase5 receives that exact bound clock rather than reinterpreting it as the decision date. No commit.
+- **Required**: `R-ASHORT-FIFTH-KNIFE-FULL-PACK-EVIDENCE-STALE` remains blocking. The one ledgered full-pack command prepared the current fingerprint but produced no recorded PASS; do not reuse the prior 2042 record.
+- **Verify**: pinned Python: margin clock regression 14 OK; Phase5 137 OK; producer/weekly consumer cases 4 OK; `validate_static_contract()` PASS. Full-ledger `check a_short` reports no cached green for this exact code state.
+- **Next**: Codex: resolve the full-pack evidence boundary before commit or merge.
+
 ## 2026-07-27 - Codex 修复（测试进程限时与证据链）
 
 - **Verdict/Action**: 已把测试等待教训固化为规则、限时 runner 和单命令 full-ledger 链；删掉每个小测试前的重复 import probe/full A-short preflight；用户明确免除第三方审查并授权 Codex 自行提交、合并。
@@ -7,6 +97,35 @@
 - **Verify**: 固定 Python 3.13；最终 focused 治理包 34 OK、exit 0、4.0s；`py_compile` exit 0。全 doc-governance 模块另有用户原第五刀 SESSION_LOG 超长 bullet 的既存失败，本 slice 未覆盖。
 - **Pre-Codex self-review**: current-diff-only 只读 agent 三轮限时复核，依次抓并闭合 zero-test 假绿、清理无上限、重复 preflight、旧 rule 编号；最终 PASS；未跑大包。
 - **Next**: Codex：仅提交并合并治理 slice，排除第五刀业务 dirty。
+
+## 2026-07-27 — Claude Code 审查（A-short 第五刀 re-fix 第二轮：两融三态来源契约）= FAIL
+
+- **Verdict/Action**: FAIL，不提交。上轮六条 Required 五条经我自建探针实测已闭（窗口平移 / L2 10 日基线 / 日历外参考日 / phase5 banner 绑定 / universe floor），第六条全量证据仍空。新发现一条 P0 阻断：margin `reference_date` 产在价格日历却按决策日历消费，两钟不等时 exporter 内部抛错、官方 EGS 跑直接死；最近真批 20260727 正是该形状。成因/位置/证据见 register。
+- **Required**: `R-ASHORT-MARGIN-REFERENCE-DATE-ON-PRICE-CALENDAR-ABORTS-OFFICIAL-EXPORT`(新 open P0) + `R-ASHORT-FIFTH-KNIFE-FULL-PACK-EVIDENCE-STALE`(仍 open)。完整成因/逐条闭合证据/两条 Optional/边界见 `system_risk_register.md`(单一来源，本处不复述)。
+- **Verify**: review-evidence:20b1a90304fd。固定 python313，四组自建探针全部实跑（真 20260727 payload 撞契约；两日滞后；一日滞后 L2；phase5 metrics 三态），逐条结果见 register。分级：FAIL 已被真实探针坐实，按 rule 6 不起独立 agent；全量包起在后台后按 rule 3③ 停止，全文不作任何全量声明。
+- **Next**: Codex：修复（register 新 P0 一条；两条 Optional 可一并）。
+
+## 2026-07-27 - Codex re-fix (A-short fifth knife: margin effective-reference contract)
+
+- **Verdict/Action**: Implemented all six reviewer Required repairs; no commit. The final evidence gate is not complete because the affected combined pack did not terminate after 16 minutes and was stopped, so this is not a PASS handoff.
+- **Required**: `R-ASHORT-MARGIN-EFFECTIVE-REFERENCE-THREE-STATE`: independently review the final diff and complete the ledger-prepared final A-short pack before any commit; detailed repair and incomplete-evidence boundary are in the register.
+- **Verify**: pinned `C:\Users\cnhea\AppData\Local\Programs\Python\Python313\python.exe`; `-m unittest tests.phase6.test_egs_margin_coverage -v` = 14 OK; `-m unittest tests.test_a_short_phase5_engine -q` = 137 OK; effect-contract static gate = PASS. The combined weekly/render/effect/EGS pack was stopped without an exit result; do not cite it as green.
+- **Next**: Claude Code: independent review; do not commit until the required final pack completes.
+
+## 2026-07-27 — Claude Code 审查（A-short 第五刀：两融三态来源契约）= FAIL
+
+- **Verdict/Action**: FAIL，升 P0。分级=最高危子集（§6a(iii)：新增 fail-closed 状态机 `MarginObservation`，`egs_main.py` 改 188 行且为被点名 entrypoint），起 1 个独立只读对抗 agent，已完成并报 5 条 CONFIRMED。其 F1 推翻我的初判方向：我原判「塌成 unknown」偏保守，实为 **fail-open**；我亲验复现后合并为六条 Required 落 register。
+- **Required**: 详见 register。①LAG-SLIDES-RULE6-WINDOW（最严重·fail-open）：常规一天两融滞后即整体平移日线窗口，硬否决 fail→pass 而 status 仍 complete、无 banner；②L2-VETO-WINDOW：融资否决窗口 10→11 跨度，双向改选股；③EFFECTIVE-REF-OUTSIDE-CALENDAR：Rule6 侧静默转 unknown、L2 侧直接跳过否决；④PHASE5-BANNER-NOT-BOUND：可同时打 banner 又推荐建仓；⑤COMPLETE-WITHOUT-UNIVERSE-FLOOR：row_count 0 也算 complete；⑥FULL-PACK-STALE。
+- **Verify**: 固定 python313。亲跑 rule-1 定向包 `tests.phase6.test_egs_margin_coverage` + `test_egs_main_suspend_guard` = 15 OK exit 0（用户令本轮不跑全量；rule 3(a)(b) 已触发，全量责任按 rule 4 留执行方）。自写四探针全复现：一天滞后 volume_stall fail→pass 且 status=complete（第一版样本 close_range 取值失当未翻转，按真实判据修正后复现）；complete 态 5 项转 unknown 且 banner=False；L2 10.169% 存活 vs 30.000% 否决。ledger check = no cached green，重算 11:10 指纹 ed129ae7… ≠ 账本 7bd8e1eb…，mtime 佐证。review-evidence: NOT_VERIFIED（本会话未注入 token）。
+- **Next**: Codex：按 register 四条 Required 修第五刀；无关改动已由 `34ffc2cc` 进 master，不在本刀 scope。
+
+## 2026-07-27 - Codex 修复（A-short 第五刀：两融有效参考日与三态来源契约）
+
+- **Verdict/Action**: 已完成最小实现与离线验收；未提交，待独立审查。
+- **Required**: `R-ASHORT-MARGIN-EFFECTIVE-REFERENCE-THREE-STATE`；另有三处 agent 写入和一处临时输出的无关 dirty，均须保留并排除；详见 register。
+- **Verify**: 固定 Python；新 source-contract 测试 10 OK，定向包与 A-short 全量 2042 均退出 0；实际命令见 register。
+- **Pre-Codex self-review**: 独立只读复核发现并修复 L2 整数日期、cache 伪造、schema 状态矛盾和未来参考日；非 complete 均 fail closed，未放宽 gate。
+- **Next**: Claude Code：独立审查第五刀；PASS 后由其提交。
 
 ## 2026-07-27 — Claude Code 修复 (三个 main parse 出口，用户指令自修自审)
 

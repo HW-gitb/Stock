@@ -106,6 +106,8 @@ def _validate_pit_invariants(payload: dict[str, Any], label: str) -> None:
         payload.get("price_data_through") or clocks.get("price_data_through") or payload.get("trade_date"),
         "price_data_through", label,
     )
+    if price_data_through > trade_date:
+        raise AnalysisInputContractError(f"{label} price_data_through is after trade_date")
     hard_sources = source.get("hard_veto_source_health")
     if hard_sources is not None:
         for name in ("suspension", "unlock", "holder_reduction"):
@@ -131,6 +133,35 @@ def _validate_pit_invariants(payload: dict[str, Any], label: str) -> None:
     l3_provider = source.get("l3_provider")
     l3_coverage = source.get("l3_coverage")
     schema_version = payload.get("schema_version")
+    if schema_version == "1.3.0":
+        margin = (payload.get("market_context") or {}).get("margin_coverage")
+        if not isinstance(margin, dict):
+            raise AnalysisInputContractError(f"{label} margin coverage is required for schema_version 1.3.0")
+        reference_date = _parse_date8(margin.get("reference_date"), "margin_coverage.reference_date", label)
+        if reference_date != price_data_through:
+            raise AnalysisInputContractError(
+                f"{label} margin coverage reference_date must equal price_data_through"
+            )
+        if margin.get("status") == "complete":
+            effective_ref_date = _parse_date8(
+                margin.get("effective_ref_date"), "margin_coverage.effective_ref_date", label
+            )
+            if effective_ref_date > reference_date:
+                raise AnalysisInputContractError(
+                    f"{label} margin coverage effective_ref_date is after reference_date"
+                )
+            try:
+                universe_size = int(margin.get("universe_size"))
+                row_count = int(margin.get("row_count"))
+            except (TypeError, ValueError) as exc:
+                raise AnalysisInputContractError(
+                    f"{label} complete margin coverage has invalid counts"
+                ) from exc
+            if (margin.get("coverage_complete") is not True
+                    or universe_size < 1000 or row_count < universe_size):
+                raise AnalysisInputContractError(
+                    f"{label} complete margin coverage is below the universe floor"
+                )
     if l3_mode == "pit":
         if not l3_snapshot_date:
             raise AnalysisInputContractError(

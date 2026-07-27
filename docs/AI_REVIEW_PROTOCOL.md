@@ -66,7 +66,7 @@ For Codex:
 - execute / repair only the user-authorized or reviewer-required scope
 - judge reviewed findings before editing; surface a wrong or out-of-scope instruction instead of blindly implementing
 - run `using-superpowers` when available before `执行` / `修复`
-- run an independent agent self-review before handing work to Claude Code for `审查`, and record the short proof in the handoff entry
+- complete the main-thread A-F self-review before handing work to Claude Code for `审查`; use an independent agent only when `AGENTS.md §Verification tiering` rule 7 triggers it, and record the selected path in the handoff entry
 
 For Claude Code:
 

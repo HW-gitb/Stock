@@ -73,6 +73,7 @@ v7.5 新增（周频优化 6 项）：
   ⬜ L1 行业毛利率趋势：固定免检 0.5 分
 """
 import argparse, os, sys, time, pickle, logging, warnings, shutil, uuid, re, hashlib
+from dataclasses import dataclass
 from contextlib import contextmanager, nullcontext
 from datetime import datetime, timedelta
 
@@ -188,7 +189,7 @@ logging.basicConfig(
 log = logging.getLogger("EGS")
 
 EGS_VERSION = "v7.12"
-ANALYSIS_INPUT_SCHEMA_VERSION = "1.2.0"
+ANALYSIS_INPUT_SCHEMA_VERSION = "1.3.0"
 SUSPEND_DAILY_COVERAGE_LOG_SCHEMA_VERSION = "1.0.0"
 _LAST_SUSPEND_DAILY_COVERAGE_OBSERVATION = None
 _LAST_HARD_VETO_SOURCE_HEALTH = {
@@ -1091,7 +1092,7 @@ def export_analysis_input(df_full, watch_df, tier1_final, latest_td, trade_dates
                           unlock_set, suspended_set, relisted_set, red_dict,
                           tier1_csv_path, full_csv_path, output_root=None,
                           rank_reconciliation=None, rule6_evaluations_by_code=None,
-                          price_data_through=None, run_date=None):
+                          price_data_through=None, run_date=None, margin_observation=None):
     import json as _json
 
     project_root = os.path.dirname(SCRIPT_DIR)
@@ -1231,6 +1232,12 @@ def export_analysis_input(df_full, watch_df, tier1_final, latest_td, trade_dates
                 "net_flow_5d": None,
                 "status": "unknown",
             },
+            "margin_coverage": (
+                margin_observation.public_dict()
+                if isinstance(margin_observation, MarginObservation)
+                else {"reference_date": price_data_through, "effective_ref_date": None, "row_count": 0,
+                      "universe_size": 0, "coverage_complete": False, "status": "unavailable"}
+            ),
         },
         "account_context": {
             "mode": "new_entry",
@@ -1358,8 +1365,31 @@ def export_stage3_selection_snapshot(top50, tier1_final, latest_td, run_identity
     return out_path
 
 
-DATA_HEALTH_SCHEMA_VERSION = "1.5.0"
+DATA_HEALTH_SCHEMA_VERSION = "1.6.0"
 DATA_HEALTH_SCHEMA_PATH = os.path.join(PROJECT_ROOT, "schemas", "data_health.schema.json")
+
+
+@dataclass(frozen=True)
+class MarginObservation:
+    """One fail-closed source-of-truth for the margin-detail reference window."""
+
+    frame: pd.DataFrame
+    reference_date: str | None
+    effective_ref_date: str | None
+    row_count: int
+    universe_size: int
+    coverage_complete: bool
+    status: str
+
+    def public_dict(self):
+        return {
+            "reference_date": self.reference_date,
+            "effective_ref_date": self.effective_ref_date,
+            "row_count": self.row_count,
+            "universe_size": self.universe_size,
+            "coverage_complete": self.coverage_complete,
+            "status": self.status,
+        }
 
 
 def _health_issue(check, message, **metrics):
@@ -1460,7 +1490,7 @@ def build_data_health(df_full, watch_df, tier1_final, analysis_input, latest_td,
                       analysis_path, snapshot_path, candidates_path,
                       tier1_csv_path, full_csv_path, rank_reconciliation=None,
                       rank_reconciliation_path=None, watch_eligible_count=None,
-                      sidecar_warnings=None):
+                      sidecar_warnings=None, margin_observation=None):
     errors = []
     warnings_ = []
     watch_count = int(len(watch_df)) if watch_df is not None else 0
@@ -1491,6 +1521,17 @@ def build_data_health(df_full, watch_df, tier1_final, analysis_input, latest_td,
         target_count=CONF["watch_n"],
     )
     sw_industry_membership = _current_sw_industry_source_observation()
+    margin_coverage = (
+        margin_observation.public_dict()
+        if isinstance(margin_observation, MarginObservation)
+        else {"reference_date": str((analysis_input or {}).get("price_data_through") or latest_td), "effective_ref_date": None, "row_count": 0,
+              "universe_size": 0, "coverage_complete": False, "status": "unavailable"}
+    )
+    if margin_coverage["status"] != "complete":
+        warnings_.append(_health_issue(
+            "margin_coverage", "margin source is not a complete reference universe",
+            **margin_coverage,
+        ))
 
     if not isinstance(analysis_input, dict):
         errors.append(_health_issue("analysis_input", "analysis_input is not a JSON object"))
@@ -1510,6 +1551,17 @@ def build_data_health(df_full, watch_df, tier1_final, analysis_input, latest_td,
                 "analysis_input was not produced by the current EGS version",
                 expected=EGS_VERSION,
                 actual=source.get("screening_engine_version"),
+            ))
+        analysis_margin_coverage = (analysis_input.get("market_context") or {}).get("margin_coverage")
+        if analysis_margin_coverage != margin_coverage:
+            errors.append(_health_issue(
+                "margin_coverage_consistency",
+                "analysis_input and data_health do not share the same margin observation",
+            ))
+        elif margin_coverage.get("reference_date") != analysis_input.get("price_data_through"):
+            errors.append(_health_issue(
+                "margin_coverage_clock_binding",
+                "margin reference date is not bound to price_data_through",
             ))
         expected_data_provider = (
             "mixed" if source.get("l3_provider") == HITHINK_L3_SOURCE_ID else "tushare"
@@ -1674,6 +1726,7 @@ def build_data_health(df_full, watch_df, tier1_final, analysis_input, latest_td,
             "sw_industry_membership": sw_industry_membership,
             "rank_universe_reconciliation": rank_reconciliation,
             "suspend_daily_coverage": _current_suspend_daily_coverage_observation(),
+            "margin_coverage": margin_coverage,
             "completeness_score_min": min(quality_scores) if quality_scores else None,
             "completeness_score_below_95_count": low_quality_count,
             "completeness_score_below_75_count": severe_quality_count,
@@ -1732,6 +1785,22 @@ def validate_data_health_consistency(health):
             cache_hit,
         ) != expected_flags[source]:
             raise ValueError("data_health passing SW source does not match its source flags")
+    margin = metrics.get("margin_coverage")
+    if not isinstance(margin, dict):
+        raise ValueError("data_health missing margin_coverage")
+    if margin.get("status") == "complete":
+        reference_date = margin.get("reference_date")
+        effective_ref_date = margin.get("effective_ref_date")
+        if (not isinstance(reference_date, str) or not re.fullmatch(r"[0-9]{8}", reference_date)
+                or not isinstance(effective_ref_date, str) or not re.fullmatch(r"[0-9]{8}", effective_ref_date)
+                or effective_ref_date > reference_date
+                or margin.get("coverage_complete") is not True
+                or not margin.get("effective_ref_date")
+                or int(margin.get("universe_size") or 0) < MARGIN_ELIGIBILITY_MIN_UNIVERSE
+                or int(margin.get("row_count") or 0) < int(margin.get("universe_size") or 0)):
+            raise ValueError("data_health complete margin coverage is inconsistent")
+    elif margin.get("coverage_complete"):
+        raise ValueError("data_health incomplete margin coverage cannot claim complete")
     return health
 
 
@@ -1739,7 +1808,7 @@ def export_data_health(df_full, watch_df, tier1_final, analysis_input, latest_td
                        analysis_path, snapshot_path, candidates_path,
                        tier1_csv_path, full_csv_path, rank_reconciliation=None,
                        rank_reconciliation_path=None, watch_eligible_count=None,
-                       sidecar_warnings=None):
+                       sidecar_warnings=None, margin_observation=None):
     health = build_data_health(
         df_full=df_full,
         watch_df=watch_df,
@@ -1755,6 +1824,7 @@ def export_data_health(df_full, watch_df, tier1_final, analysis_input, latest_td
         rank_reconciliation_path=rank_reconciliation_path,
         watch_eligible_count=watch_eligible_count,
         sidecar_warnings=sidecar_warnings,
+        margin_observation=margin_observation,
     )
     validate_json_schema(health, schema_path=DATA_HEALTH_SCHEMA_PATH, label=f"data_health export {latest_td}")
     validate_data_health_consistency(health)
@@ -3043,21 +3113,70 @@ def get_moneyflow(trade_dates):
     save_cache(key, result)
     return result
 
+def _margin_observation(frame, trade_dates):
+    """Classify margin data without allowing a partial response to look complete."""
+    calendar_dates = list(map(str, trade_dates))
+    reference_date = calendar_dates[0] if calendar_dates else None
+    required = {"ts_code", "trade_date", "rzye", "rqye"}
+    if not isinstance(frame, pd.DataFrame) or frame.empty:
+        return MarginObservation(pd.DataFrame(), reference_date, None, 0, 0, False, "unavailable")
+    if not required.issubset(frame.columns):
+        return MarginObservation(frame, reference_date, None, int(len(frame)), 0, False, "invalid")
+
+    work = frame.copy()
+    numeric = work[["rzye", "rqye"]].apply(pd.to_numeric, errors="coerce")
+    if numeric.isna().any().any() or not np.isfinite(numeric.to_numpy()).all():
+        return MarginObservation(work, reference_date, None, int(len(work)), 0, False, "invalid")
+    work[["rzye", "rqye"]] = numeric
+    dates = work["trade_date"].astype(str)
+    valid_dates = dates.str.fullmatch(r"[0-9]{8}")
+    valid_codes = work["ts_code"].map(_canonical_ashare_ts_code)
+    if not valid_dates.all() or valid_codes.isna().any():
+        return MarginObservation(work, reference_date, None, int(len(work)), 0, False, "invalid")
+    if not set(dates).issubset(set(calendar_dates)):
+        return MarginObservation(work, reference_date, None, int(len(work)), 0, False, "invalid")
+    eligible_dates = [date for date in calendar_dates if date in set(dates)]
+    if not eligible_dates:
+        return MarginObservation(work, reference_date, None, int(len(work)), 0, False, "unavailable")
+    effective_ref_date = eligible_dates[0]
+    ref_codes = set(valid_codes[dates == effective_ref_date])
+    # A normal D0 publication lag is allowed and explicitly surfaced.  Older
+    # data cannot silently become a current, complete margin observation.
+    lag_sessions = calendar_dates.index(effective_ref_date)
+    complete = (lag_sessions <= 1 and len(ref_codes) >= MARGIN_ELIGIBILITY_MIN_UNIVERSE)
+    return MarginObservation(
+        work, reference_date, effective_ref_date, int(len(work)), len(ref_codes), complete,
+        "complete" if complete else "incomplete",
+    )
+
+
 def get_margin(trade_dates):
-    # A ten-session change requires today's observation plus the observation
-    # ten trading sessions earlier; v3 separates the old ten-row cache.
-    key = f"margin_{trade_dates[0]}_rule6_v3"
-    if (cached := load_cache(key)) is not None: return cached
+    # Request the extra predecessor needed when the latest settled session has
+    # not yet published margin_detail.  The v4 cache stores the observation,
+    # not a bare DataFrame, so a cache hit cannot bypass the coverage contract.
+    key = f"margin_{trade_dates[0]}_rule6_v4"
+    if (cached := load_cache(key)) is not None:
+        if not isinstance(cached, MarginObservation):
+            raise RuntimeError("margin cache lacks required observation contract")
+        recomputed = _margin_observation(cached.frame, trade_dates)
+        if cached.public_dict() != recomputed.public_dict():
+            raise RuntimeError("margin cache observation semantics are inconsistent")
+        # Do not keep a lagged or incomplete observation sticky through the
+        # provider's normal publication window; fetch a fresh observation.
+        if (recomputed.status == "complete"
+                and recomputed.effective_ref_date == recomputed.reference_date):
+            return recomputed
     frames = []
-    for d in tqdm(trade_dates[:11], desc="两融"):
+    for d in tqdm(trade_dates[:12], desc="两融"):
         df = safe_api(pro.margin_detail, trade_date=d, fields="ts_code,trade_date,rzye,rqye")
         if df is not None: frames.append(df)
     result = pd.concat(frames, ignore_index=True) if frames else pd.DataFrame()
     for column in ("rzye", "rqye"):
         if not result.empty and column in result.columns:
             result[column] = pd.to_numeric(result[column], errors="coerce")
-    save_cache(key, result)
-    return result
+    observation = _margin_observation(result, trade_dates)
+    save_cache(key, observation)
+    return observation
 
 
 def _rule6_fetch_dataframe(fn, **kwargs):
@@ -3258,7 +3377,7 @@ def _clean_margin_ts_codes(frame):
     return codes
 
 
-def _collect_rule6_evaluations(watch_df, all_daily, margin_df, trade_dates, red_dict, df_fin):
+def _collect_rule6_evaluations(watch_df, all_daily, margin_observation, trade_dates, red_dict, df_fin):
     """Evaluate every EGS-computable Rule6 item for the final candidate set.
 
     This function intentionally runs after ranking: the newly authorized
@@ -3270,6 +3389,16 @@ def _collect_rule6_evaluations(watch_df, all_daily, margin_df, trade_dates, red_
     codes = [str(code) for code in watch_df["ts_code"].dropna().astype(str).tolist()]
     if len(trade_dates) < 11:
         return {code: {} for code in codes}
+    if not isinstance(margin_observation, MarginObservation):
+        raise ValueError("Rule6 requires a MarginObservation, never a bare margin dataframe")
+    margin_df = margin_observation.frame
+    effective_ref_date = margin_observation.effective_ref_date
+    try:
+        effective_index = list(map(str, trade_dates)).index(str(effective_ref_date))
+    except ValueError:
+        effective_index = None
+    margin_dates = (list(map(str, trade_dates))[effective_index:]
+                    if effective_index is not None else [])
     balance_by_code = get_rule6_balancesheets(codes)
     block_by_date = get_rule6_block_trades(trade_dates[:10])
     holder_events = (red_dict or {}).get("rule6_holder_events")
@@ -3285,9 +3414,9 @@ def _collect_rule6_evaluations(watch_df, all_daily, margin_df, trade_dates, red_
     # absence.  In every anomaly eligibility stays None → fail-closed `unknown`.
     margin_ref_codes = set()
     margin_ref_has_malformed = False
-    if (isinstance(margin_df, pd.DataFrame) and not margin_df.empty
+    if (margin_observation.status == "complete" and isinstance(margin_df, pd.DataFrame) and not margin_df.empty
             and {"ts_code", "trade_date", "rzye", "rqye"}.issubset(margin_df.columns)):
-        ref_frame = margin_df[margin_df["trade_date"].astype(str) == str(trade_dates[0])]
+        ref_frame = margin_df[margin_df["trade_date"].astype(str) == str(effective_ref_date)]
         for value in ref_frame["ts_code"].dropna():
             canon = _canonical_ashare_ts_code(value)
             if canon is None:
@@ -3299,9 +3428,17 @@ def _collect_rule6_evaluations(watch_df, all_daily, margin_df, trade_dates, red_
         and not margin_ref_has_malformed
     )
     margin_eligible_codes = _clean_margin_ts_codes(margin_df) if margin_universe_present else None
+    source_metrics = {
+        **margin_observation.public_dict(),
+        "effective_ref_date": effective_ref_date,
+    }
+    price_dates = list(map(str, trade_dates))[:11]
+    rule6_margin_dates = margin_dates[:11]
     evaluations_by_code = {}
     for code in codes:
-        daily_11 = _rule6_daily_rows(all_daily, code, trade_dates[:11], price_basis="qfq")
+        # Price/volume Rule6 windows are bound to the decision calendar, never
+        # to the margin provider's effective reference date.
+        daily_11 = _rule6_daily_rows(all_daily, code, price_dates, price_basis="qfq")
         daily_6 = daily_11[:6] if len(daily_11) >= 6 else []
         latest_daily = daily_11[0] if len(daily_11) == 11 else {}
         oldest_daily = daily_11[10] if len(daily_11) == 11 else {}
@@ -3344,14 +3481,14 @@ def _collect_rule6_evaluations(watch_df, all_daily, margin_df, trade_dates, red_
             "rule6_holder_below_5pct": evaluate_holder_below_5pct(code_holder_events, TODAY),
             "rule6_volume_stall": evaluate_volume_stall(daily_6),
             "rule6_margin_extreme_accumulation": evaluate_margin_extreme_accumulation(
-                _rule6_margin_value(margin_df, code, trade_dates[0], "rzye"),
-                _rule6_margin_value(margin_df, code, trade_dates[10], "rzye"),
+                _rule6_margin_value(margin_df, code, margin_dates[0], "rzye") if len(margin_dates) >= 11 else None,
+                _rule6_margin_value(margin_df, code, margin_dates[10], "rzye") if len(margin_dates) >= 11 else None,
                 _json_float(latest_daily.get("close")), _json_float(oldest_daily.get("close")),
                 is_margin_eligible=is_margin_eligible,
             ),
             "rule6_short_selling_surge": evaluate_short_selling_surge(
-                _rule6_margin_value(margin_df, code, trade_dates[0], "rqye"),
-                _rule6_margin_value(margin_df, code, trade_dates[6], "rqye"),
+                _rule6_margin_value(margin_df, code, margin_dates[0], "rqye") if len(margin_dates) >= 6 else None,
+                _rule6_margin_value(margin_df, code, margin_dates[5], "rqye") if len(margin_dates) >= 6 else None,
                 hedge_announcement_status=None,
                 is_margin_eligible=is_margin_eligible,
             ),
@@ -3363,6 +3500,8 @@ def _collect_rule6_evaluations(watch_df, all_daily, margin_df, trade_dates, red_
             ),
             "rule6_block_trade_discount": evaluate_block_trade_discount(trade_dates[:10], block_records),
         }
+        for check_id in ("rule6_margin_extreme_accumulation", "rule6_short_selling_surge"):
+            evaluations_by_code[code][check_id]["metrics"].update(source_metrics)
     return evaluations_by_code
 
 # ── [崩溃修复②] ─────────────────────────────────────────────────────────────
@@ -3842,7 +3981,8 @@ def score_l1(df, csi300_ret, exclusion_reasons=None):
     return df.reset_index(drop=True)
 
 
-def score_l2(df, mg_df, trade_dates, global_ind_med, exclusion_reasons=None):
+def score_l2(df, mg_df, trade_dates, global_ind_med, exclusion_reasons=None,
+             margin_observation=None):
     df = df.copy()
     if exclusion_reasons is None:
         exclusion_reasons = {}
@@ -3957,11 +4097,25 @@ def score_l2(df, mg_df, trade_dates, global_ind_med, exclusion_reasons=None):
         exclusion_reasons[ts_code] = "l2_espq_valuation_veto"
     df = df[~mask_triple].copy()
 
-    if not mg_df.empty and "rzye" in mg_df.columns and len(trade_dates) >= 10:
-        d_latest = trade_dates[0]
-        d_oldest = trade_dates[9]
-        mg_l = mg_df[mg_df["trade_date"]==d_latest][["ts_code","rzye"]].rename(columns={"rzye":"rzye_l"})
-        mg_o = mg_df[mg_df["trade_date"]==d_oldest][["ts_code","rzye"]].rename(columns={"rzye":"rzye_o"})
+    margin_status = getattr(margin_observation, "status", "unavailable")
+    margin_dates = []
+    if isinstance(margin_observation, MarginObservation) and margin_observation.effective_ref_date:
+        try:
+            margin_dates = list(map(str, trade_dates))[list(map(str, trade_dates)).index(
+                margin_observation.effective_ref_date):]
+        except ValueError:
+            margin_dates = []
+    df["margin_l2_status"] = margin_status
+    if (margin_status == "complete" and not mg_df.empty and "rzye" in mg_df.columns
+            and len(trade_dates) >= 10 and margin_dates):
+        d_latest = margin_dates[0]
+        # L2's financing veto remains a fixed ten-session decision-calendar
+        # comparison; a D0/D1 source lag may not widen that policy window.
+        d_oldest = str(trade_dates[9])
+        margin_work = mg_df.copy()
+        margin_work["trade_date"] = margin_work["trade_date"].astype(str)
+        mg_l = margin_work[margin_work["trade_date"] == d_latest][["ts_code","rzye"]].rename(columns={"rzye":"rzye_l"})
+        mg_o = margin_work[margin_work["trade_date"] == d_oldest][["ts_code","rzye"]].rename(columns={"rzye":"rzye_o"})
         if not mg_l.empty and not mg_o.empty:
             mg_chg = mg_l.merge(mg_o, on="ts_code")
             mg_chg["chg"] = (mg_chg["rzye_l"] - mg_chg["rzye_o"]) / mg_chg["rzye_o"].abs().clip(lower=1)
@@ -4718,7 +4872,8 @@ def run_egs(backtest_mode=False, output_root=None, price_as_of=None):
         global_ind_med = {}
 
     mf_df = get_moneyflow(trade_dates)
-    mg_df = get_margin(trade_dates)
+    margin_observation = get_margin(trade_dates)
+    mg_df = margin_observation.frame
 
     df_master = build_master(
         df_l0, stats_df, df_db, df_fin=df_raw_fin, sw_map=sw_map, red_dict=red_dict
@@ -4731,6 +4886,7 @@ def run_egs(backtest_mode=False, output_root=None, price_as_of=None):
     df_l2 = score_l2(
         df_l1, mg_df, trade_dates, global_ind_med,
         exclusion_reasons=l2_exclusion_reasons,
+        margin_observation=margin_observation,
     )
     df_l3 = score_l3(df_l2, trade_dates, all_daily)
     df_l4 = score_l4(df_l3, mf_df)
@@ -4905,7 +5061,7 @@ def run_egs(backtest_mode=False, output_root=None, price_as_of=None):
     else:
         watch_df["cninfo_flag"] = "未检查"
     rule6_evaluations_by_code = _collect_rule6_evaluations(
-        watch_df, all_daily, mg_df, trade_dates, red_dict, df_raw_fin,
+        watch_df, all_daily, margin_observation, trade_dates, red_dict, df_raw_fin,
     )
 
     watch_cols = ["ts_code","name","l2_name","final_score","tier",
@@ -5003,6 +5159,7 @@ def run_egs(backtest_mode=False, output_root=None, price_as_of=None):
             rule6_evaluations_by_code=rule6_evaluations_by_code,
             price_data_through=price_data_through,
             run_date=run_date,
+            margin_observation=margin_observation,
         )
         log.info(f"[OK] analysis_input saved to {analysis_path}")
         log.info(f"[OK] snapshot saved to {snapshot_path}")
@@ -5068,6 +5225,7 @@ def run_egs(backtest_mode=False, output_root=None, price_as_of=None):
             rank_reconciliation_path=rank_reconciliation_path,
             watch_eligible_count=watch_eligible_count,
             sidecar_warnings=comparison_sidecar_warnings,
+            margin_observation=margin_observation,
         )
         log_data_health_summary(health_path, health)
         _published_files = {

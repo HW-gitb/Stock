@@ -1308,10 +1308,52 @@ def model_build_eligible(inp: dict, ind: dict, rule6_gate: dict, *, regime: str,
     return plan is not None
 
 
+def _margin_source_is_unavailable(inp: dict, as_of: str) -> bool:
+    """Return true unless the batch coverage and both margin checks are complete."""
+    coverage = inp.get("margin_coverage")
+    if not isinstance(coverage, dict):
+        return True
+    if (coverage.get("status") != "complete"
+            or coverage.get("coverage_complete") is not True
+            or not isinstance(coverage.get("reference_date"), str)
+            or not isinstance(coverage.get("effective_ref_date"), str)):
+        return True
+    price_data_through = str(inp.get("price_data_through") or as_of)
+    if (not coverage["reference_date"].isdigit() or len(coverage["reference_date"]) != 8
+            or not coverage["effective_ref_date"].isdigit() or len(coverage["effective_ref_date"]) != 8
+            or coverage["reference_date"] != price_data_through
+            or price_data_through > str(as_of)
+            or coverage["effective_ref_date"] > coverage["reference_date"]):
+        return True
+    try:
+        universe_size = int(coverage.get("universe_size"))
+        row_count = int(coverage.get("row_count"))
+    except (TypeError, ValueError):
+        return True
+    if universe_size < 1000 or row_count < universe_size:
+        return True
+    margin_source_ids = {
+        "rule6_margin_extreme_accumulation", "rule6_short_selling_surge",
+    }
+    checks = {
+        check.get("id"): check for check in (inp.get("rule6_checks") or [])
+        if isinstance(check, dict) and check.get("id") in margin_source_ids
+    }
+    return any(
+        not isinstance(checks.get(check_id), dict)
+        or (checks[check_id].get("metrics") or {}).get("status") != "complete"
+        for check_id in margin_source_ids
+    )
+
+
 def build_m67_report(inp: dict, as_of: str, generated_at: str) -> dict:
     ind = compute_indicators(inp.get("price_series", []))
     rule6_gate = assess_rule6_checks(inp.get("rule6_checks"))
     rule6_d_tier_banner = render_rule6_d_tier_banner(rule6_gate)
+    margin_source_ids = {
+        "rule6_margin_extreme_accumulation", "rule6_short_selling_surge",
+    }
+    margin_source_unavailable = _margin_source_is_unavailable(inp, as_of)
     fam = classify_risk_families(inp, ind, rule6_gate=rule6_gate)
     regime = inp.get("market_regime", "震荡期")
     regime_fallback = inp.get("regime_fallback") or {}
@@ -1365,7 +1407,12 @@ def build_m67_report(inp: dict, as_of: str, generated_at: str) -> dict:
     if not has_position and not final_new_entry_eligible:
         observe.append("analysis_role=非 final，仅观察")
     llm_notes = list(inp.get("llm_enrichment") or []) # §10 Tier C:只解释,不改判决
-    rule6_manual_review_ids = rule6_gate["manual_review_check_ids"]
+    # A source-wide margin outage is one system condition, not N fake
+    # ticker-specific failures.  It still blocks new entries below.
+    rule6_manual_review_ids = [
+        check_id for check_id in rule6_gate["manual_review_check_ids"]
+        if not (margin_source_unavailable and check_id in margin_source_ids)
+    ]
     if rule6_manual_review_ids:
         observe.append("rule6_manual_review:" + ",".join(rule6_manual_review_ids))
 
@@ -1411,6 +1458,9 @@ def build_m67_report(inp: dict, as_of: str, generated_at: str) -> dict:
         action, etype, plan, reject = "否决", "N/A", None, "|".join(hard)
     elif not final_new_entry_eligible:
         action, etype, plan, reject = "观察", "N/A", None, "非 final，仅观察"
+    elif margin_source_unavailable:
+        action, etype, plan = "观察", "N/A", None
+        reject = "系统级：两融数据源本周不可用/覆盖不足，两条两融规则未执行"
     elif rule6_manual_review_ids:
         action, etype, plan = "观察", "N/A", None
         reject = "Rule6 未完成核查，需人工复核:" + ",".join(rule6_manual_review_ids)
@@ -1615,6 +1665,7 @@ def build_m67_report(inp: dict, as_of: str, generated_at: str) -> dict:
                                            "downgrade": list(downgrades),
                                            "observe_only": list(observe),
                                            "manual_review": list(rule6_manual_review_ids),
+                                           "margin_source_unavailable": margin_source_unavailable,
                                            "sizing_block": sizing_block}},
             "entry_exit_size_star": {"action": action, "type": etype if action != "否决" else "N/A",
                                      "star": star, "cash_allocation_star": allocation_star,

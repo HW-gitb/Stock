@@ -135,6 +135,23 @@
         }
       }
     },
+    "margin_coverage": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["reference_date", "effective_ref_date", "row_count", "universe_size", "coverage_complete", "status"],
+      "properties": {
+        "reference_date": {"type": ["string", "null"], "pattern": "^[0-9]{8}$"},
+        "effective_ref_date": {"type": ["string", "null"], "pattern": "^[0-9]{8}$"},
+        "row_count": {"type": "integer", "minimum": 0},
+        "universe_size": {"type": "integer", "minimum": 0},
+        "coverage_complete": {"type": "boolean"},
+        "status": {"enum": ["complete", "incomplete", "unavailable", "invalid"]}
+      },
+      "allOf": [
+        {"if": {"properties": {"status": {"const": "complete"}}}, "then": {"properties": {"reference_date": {"type": "string", "pattern": "^[0-9]{8}$"}, "coverage_complete": {"const": true}, "effective_ref_date": {"type": "string", "pattern": "^[0-9]{8}$"}, "row_count": {"minimum": 1000}, "universe_size": {"minimum": 1000}}}},
+        {"if": {"properties": {"status": {"enum": ["incomplete", "unavailable", "invalid"]}}}, "then": {"properties": {"coverage_complete": {"const": false}}}}
+      ]
+    },
     "ex_div_notices": {
       "type": "array",
       "description": "#1 除权除息提示(advisory,不改决策;价已前复权):近端(as_of..as_of+窗口)已公告将除权的候选/持仓,提醒未复权市价/成本会在除权日跳变。可选(无则缺省)。",
@@ -1217,6 +1234,23 @@
               "pattern": "^\\d{8}$"
             }
           }
+        },
+        "margin_coverage": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["reference_date", "effective_ref_date", "row_count", "universe_size", "coverage_complete", "status"],
+          "properties": {
+            "reference_date": {"type": ["string", "null"], "pattern": "^[0-9]{8}$"},
+            "effective_ref_date": {"type": ["string", "null"], "pattern": "^[0-9]{8}$"},
+            "row_count": {"type": "integer", "minimum": 0},
+            "universe_size": {"type": "integer", "minimum": 0},
+            "coverage_complete": {"type": "boolean"},
+            "status": {"enum": ["complete", "incomplete", "unavailable", "invalid"]}
+          },
+          "allOf": [
+            {"if": {"properties": {"status": {"const": "complete"}}}, "then": {"properties": {"reference_date": {"type": "string", "pattern": "^[0-9]{8}$"}, "coverage_complete": {"const": true}, "effective_ref_date": {"type": "string", "pattern": "^[0-9]{8}$"}, "row_count": {"minimum": 1000}, "universe_size": {"minimum": 1000}}}},
+            {"if": {"properties": {"status": {"enum": ["incomplete", "unavailable", "invalid"]}}}, "then": {"properties": {"coverage_complete": {"const": false}}}}
+          ]
         },
         "runtime_configuration": {
           "type": "object",

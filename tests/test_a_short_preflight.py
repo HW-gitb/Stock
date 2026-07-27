@@ -350,6 +350,14 @@ class AShortPreflightTests(unittest.TestCase):
         for path, stale_command in active_commands.items():
             self.assertNotIn(stale_command, path.read_text(encoding="utf-8"), path)
 
+    def test_precommit_reminder_points_at_the_atomic_ledger_run(self) -> None:
+        # The reminder is the only place an executor meets rule 3/4 at commit time;
+        # it must not hand out a subcommand the ledger now refuses.
+        hook = (ROOT / ".githooks" / "pre-commit").read_text(encoding="utf-8")
+        for retired in ("full_pack_ledger.py record", "full_pack_ledger.py prepare"):
+            self.assertNotIn(retired, hook)
+        self.assertIn("full_pack_ledger.py run a_short", hook)
+
 
 if __name__ == "__main__":
     unittest.main()

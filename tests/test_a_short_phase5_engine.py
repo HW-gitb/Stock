@@ -52,12 +52,16 @@ def _series():
 
 
 def _rule6_checks(status="pass"):
-    return [
+    checks = [
         {"id": check_id, "group": group,
          "status": "not_applicable" if check_id in RULE6_D_TIER_REASONS else status,
          "notes": RULE6_D_TIER_REASONS.get(check_id)}
         for check_id, group in RULE6_CHECKS
     ]
+    for check in checks:
+        if check["id"] in {"rule6_margin_extreme_accumulation", "rule6_short_selling_surge"}:
+            check["metrics"] = {"status": "complete"}
+    return checks
 
 
 def _good_input(**over):
@@ -72,6 +76,9 @@ def _good_input(**over):
         "event": {"holder_reduction_active": False, "st_or_delisting": False,
                   "regulatory_legacy_vetoed": False},
         "rule6_checks": _rule6_checks(),
+        "margin_coverage": {"reference_date": AS_OF, "effective_ref_date": AS_OF,
+                            "row_count": 1000, "universe_size": 1000,
+                            "coverage_complete": True, "status": "complete"},
         "liquidity": {"avg_amount_5d": 2e8, "avg_amount_20d": 2e8},
         "iv": {"iv_percentile_252d": 55.0},
         "market_regime": "震荡期",
