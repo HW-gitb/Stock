@@ -8,15 +8,13 @@ prints the cached count when a re-run would be redundant, so the reviewer cites 
 instead of re-running a multi-minute pack for a number they already have.
 
 Usage:
-   .\tools\codex_main_python.ps1 .tools\full_pack_ledger.py prepare <lane> <full-trigger-reason> <focused-evidence>
-   .\tools\codex_main_python.ps1 .tools\full_pack_ledger.py record <lane> <count>   # right after a REAL green full run
-   .\tools\codex_main_python.ps1 .tools\full_pack_ledger.py check  <lane>           # before considering a (re-)run
+   .\tools\codex_main_python.ps1 .tools\full_pack_ledger.py run <lane> <full-trigger-reason> <focused-evidence> <timeout-seconds> -- <unittest args>
+   .\tools\codex_main_python.ps1 .tools\full_pack_ledger.py check <lane>
 
 `check` exit code: 0 = cached green on the current exact code state (do NOT re-run; cite it);
 1 = no cached green for the current code state (a full run is warranted only if tiering rule 3
-applies). ``prepare`` attests that the focused repair loop converged and the A-F self-review is
-complete before the one final full run. ``record`` refuses to create a new green without the
-matching preparation, so a behavior/contract edit after self-review must return to the focused loop.
+applies). ``run`` is the only public write path: it checks the cache, binds the A-F preparation,
+runs one bounded unittest process, verifies its exit code and test count, and records only PASS.
 """
 from __future__ import annotations
 
@@ -26,6 +24,8 @@ import subprocess
 import sys
 import time
 from pathlib import Path
+
+from bounded_unittest import FULL_MAX_SECONDS, run_unittest
 
 ROOT = Path(__file__).resolve().parent.parent
 DEFAULT_LEDGER = ROOT / ".tools" / "state" / "full_pack_ledger.json"
@@ -117,6 +117,51 @@ def record(lane: str, count: str, *, state: dict[str, str] | None = None, ledger
     return fp
 
 
+def run_full_pack(
+    lane: str,
+    trigger_reason: str,
+    focused_evidence: str,
+    timeout_seconds: int,
+    unittest_args: list[str],
+    *,
+    state: dict[str, str] | None = None,
+    ledger: Path = DEFAULT_LEDGER,
+) -> int:
+    """Run the simplified check/prepare/test/record chain."""
+    if timeout_seconds <= 0 or timeout_seconds > FULL_MAX_SECONDS:
+        raise ValueError(f"full timeout must be 1..{FULL_MAX_SECONDS} seconds")
+    if not unittest_args:
+        raise ValueError("run requires unittest arguments after --")
+    current_state = state if state is not None else collect_code_state()
+    hit = cached_green(lane, state=current_state, ledger=ledger)
+    if hit is not None:
+        print(f"[full-pack-ledger] CACHED GREEN - {lane} = {hit['count']}; full run skipped.")
+        return 0
+    prepare(
+        lane,
+        trigger_reason,
+        focused_evidence,
+        state=current_state,
+        ledger=ledger,
+    )
+    result = run_unittest(unittest_args, timeout_seconds)
+    if result.output:
+        print(result.output, end="" if result.output.endswith("\n") else "\n")
+    count = str(result.tests) if result.tests is not None else "UNKNOWN"
+    print(
+        f"[full-pack-ledger] RESULT status={result.status} exit={result.exit_code} "
+        f"tests={count} elapsed={result.elapsed_seconds:.1f}s deadline={timeout_seconds}s"
+    )
+    if result.status != "PASS":
+        return result.exit_code
+    final_state = state if state is not None else collect_code_state()
+    if fingerprint(final_state) != fingerprint(current_state):
+        print("[full-pack-ledger] REFUSED - code state changed during the full run")
+        return 2
+    record(lane, f"{result.tests} OK", state=final_state, ledger=ledger)
+    return 0
+
+
 def cached_green(lane: str, *, state: dict[str, str] | None = None, ledger: Path = DEFAULT_LEDGER) -> dict | None:
     """Return the cached record iff the current code state matches a recorded run for the lane."""
     current_state = state if state is not None else collect_code_state()
@@ -139,7 +184,7 @@ def _check(lane: str, *, state: dict[str, str] | None = None,
         if prepared is None:
             print(f"[full-pack-ledger] LEGACY CACHED GREEN — {lane} = {hit['count']} at "
                   f"{hit['recorded_at']} on this exact code state; it predates the prepare gate.\n"
-                  "[full-pack-ledger] Do NOT re-run solely to migrate this record; future `record` calls require prepare.")
+                  "[full-pack-ledger] Do NOT re-run solely to migrate this record; future writes use `run`.")
             return 0
         print(f"[full-pack-ledger] PREPARED A-F — {lane}: {prepared['trigger_reason']} | "
               f"focused={prepared['focused_evidence']}\n[full-pack-ledger] CACHED GREEN — {lane} = "
@@ -149,31 +194,36 @@ def _check(lane: str, *, state: dict[str, str] | None = None,
     if prepared is not None:
         print(f"[full-pack-ledger] PREPARED A-F — {lane}: {prepared['trigger_reason']} | "
               f"focused={prepared['focused_evidence']}\n[full-pack-ledger] no cached green for this prepared "
-              "code state — run one full pack only if tiering rule 3 applies.")
+              "code state — use the single `run` command only if tiering rule 3 applies.")
         return 1
     print(f"[full-pack-ledger] no cached green for {lane} on the current code state — a full run is "
           "warranted ONLY if tiering rule 3 applies (else focused pack); "
-          "complete the focused loop, A-F, and `prepare` before a required full run.")
+          "complete the focused loop and A-F, then use the single `run` command.")
     return 1
 
 
 def main(argv: list[str]) -> int:
-    if len(argv) >= 5 and argv[1] == "prepare":
-        try:
-            fp = prepare(argv[2], argv[3], argv[4])
-        except ValueError as exc:
-            print(f"[full-pack-ledger] REFUSED — {exc}")
+    if hasattr(sys.stdout, "reconfigure"):
+        sys.stdout.reconfigure(encoding="utf-8", errors="replace")
+    if len(argv) >= 8 and argv[1] == "run" and "--" in argv:
+        split = argv.index("--")
+        if split != 6:
+            print(__doc__)
             return 2
-        print(f"[full-pack-ledger] prepared {argv[2]} @ {fp[:12]}")
-        return 0
-    if len(argv) >= 3 and argv[1] == "record":
         try:
-            fp = record(argv[2], argv[3] if len(argv) > 3 else "OK")
-        except ValueError as exc:
-            print(f"[full-pack-ledger] REFUSED — {exc}")
+            return run_full_pack(
+                argv[2],
+                argv[3],
+                argv[4],
+                int(argv[5]),
+                argv[split + 1:],
+            )
+        except (ValueError, OSError) as exc:
+            print(f"[full-pack-ledger] REFUSED - {exc}")
             return 2
-        print(f"[full-pack-ledger] recorded {argv[2]} @ {fp[:12]}")
-        return 0
+    if len(argv) >= 3 and argv[1] in {"prepare", "record"}:
+        print("[full-pack-ledger] REFUSED - use the single `run` command; manual prepare/record is retired")
+        return 2
     if len(argv) >= 3 and argv[1] == "check":
         return _check(argv[2])
     print(__doc__)

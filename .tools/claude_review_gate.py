@@ -163,15 +163,16 @@ def _review_context() -> str:
         "用户 ! 输出或上方 REVIEW EVIDENCE SNAPSHOT。若需要命令而没有真实输出，写 NOT_VERIFIED。"
         "仍按 AGENTS 的分级：高危子集 PASS 前必须独立对抗 agent + reviewer 自己整读和探针；"
         "轻量 slice 仍至少整读改动 + 1 个反向探针。"
-        " 验证分级门(AGENTS §Verification tiering rule 3/4/6，不靠记忆的硬提醒)："
-        "①跑全量前先 `python .tools/full_pack_ledger.py check <lane>`——CACHED GREEN 就引用那个数、别重跑全量;"
-        "②全量包只在 PASS/合并那一刻、按 rule 3 触发时跑一次并 record，审查中途别提前跑;"
+        " 验证分级门(AGENTS §Verification tiering rule 3/4/7，不靠记忆的硬提醒)："
+        "①focused 只用 bounded_unittest 单入口，最多 300 秒；PID/CPU/父子进程切换不等于测试进度或 PASS;"
+        "②按 rule 3 触发的全量只用 full_pack_ledger `run` 单命令，最多 1200 秒，自动查缓存并成功记账;"
         "③FAIL 一旦被真实探针坐实就先出结论、不必等全量包;"
         "④独立 agent 只在真钱/选股/安全/PIT-进选股/大而绕 diff 才起、且只起一个，"
-        "小低危改动别起 agent 也别跑全量(rule 6，过度审查=缺陷)。"
+        "小低危改动别起 agent 也别跑全量(rule 7，过度审查=缺陷)。"
         "⑤测试范围跟「改动的函数/符号」走、不跟「改动的文件」走:先说清本刀改了哪几个函数,"
         "已选/已跑的 targeted 测试若已直接调用该改动函数即为覆盖、别再加跑该文件的整测试模块"
         "(其余用例与本刀无关=全模块税);也别在第一个测试包结果回来前投机并起第二个全模块包。"
+        "⑥TIMEOUT/无退出码/无 `Ran N tests` 一律 UNKNOWN，终止本命令拥有的进程树后缩窄或诊断一次，不得重复等待。"
     )
 
 

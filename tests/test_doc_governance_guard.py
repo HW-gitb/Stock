@@ -689,7 +689,13 @@ class DocGovernanceGuard(unittest.TestCase):
             "Acceptance focus pack — mandatory twice",
             "Full lane regression — exceptional, not default",
             "exactly one actor runs the full lane pack",
-            "still-running, timed-out, interrupted, or merely transcribed full run is not PASS evidence",
+            ".tools\\run_unittest_with_repo_pythonpath.cmd <unittest args>",
+            "enforces a 300-second maximum",
+            "has a 1200-second maximum",
+            "PID, CPU change, process existence, or parent/child switch",
+            "A zero-test, still-running, timed-out, interrupted, missing-exit, or missing-`Ran N tests` run",
+            "does not pay an unconditional import probe or full A-short preflight tax",
+            "a 40-minute repair loop is a process failure",
         ):
             self.assertIn(anchor, section, f"shared process-speed contract lost anchor: {anchor}")
         for removed_soft_rule in (
@@ -702,6 +708,11 @@ class DocGovernanceGuard(unittest.TestCase):
                 section,
                 f"process-speed section reintroduced soft-rule tax: {removed_soft_rule}",
             )
+        self.assertNotIn(
+            "with the pinned host Python and full preflight passing",
+            text,
+            "a stale implementer rule reintroduced full preflight before every handoff",
+        )
 
         verifier = ROOT / ".tools" / "verify_doc_process.cmd"
         self.assertTrue(verifier.exists(), "missing shared docs/process verification script")
@@ -1194,14 +1205,10 @@ class DocGovernanceGuard(unittest.TestCase):
             self.assertNotIn(forbidden, normalized_script,
                              f"shared unittest wrapper must not require environment-private machinery: {forbidden}")
         for anchor in (
-            "PYTHONPATH",
-            ".tools/python_libs",
-            "jsonschema",
             "PINNED_PYTHON",
-            "PIN_VALIDATOR",
-            "Resolve-AshortPython.ps1",
             "C:/Users/cnhea/AppData/Local/Programs/Python/Python313/python.exe",
-            "-m unittest",
+            ".tools/bounded_unittest.py",
+            "focused 300 --",
         ):
             self.assertIn(anchor, normalized_script, f"wrapper lost required test-runtime anchor: {anchor}")
         for forbidden in ("where %%P", "if defined STOCK_TEST_PYTHON", "if defined STOCK_PYTHON"):
@@ -1209,19 +1216,18 @@ class DocGovernanceGuard(unittest.TestCase):
                              f"strict Codex launcher must not select another interpreter: {forbidden}")
         self.assertIn('set "STOCK_TEST_PYTHON="', launcher_script,
                       "strict launcher must clear an inherited test-interpreter override")
-        self.assertIn("legacy interpreter override does not equal the pinned Stock Python", launcher_script,
-                      "strict launcher must reject rather than silently ignore a legacy interpreter override")
+        for removed_tax in ('-c "import jsonschema"', "a_short_preflight.py", "Resolve-AshortPython.ps1"):
+            self.assertNotIn(removed_tax, launcher_script,
+                             f"focused wrapper reintroduced unconditional startup tax: {removed_tax}")
 
         agents = AGENTS.read_text(encoding="utf-8").replace("\\", "/")
         self.assertIn(".tools/run_unittest_with_repo_pythonpath.cmd", agents,
                       "AGENTS must name the canonical unittest wrapper launcher")
-        self.assertIn(".tools/python_libs", agents,
-                      "AGENTS must name the repo-local Python dependency directory")
         self.assertIn(".tools/codex_main_python.ps1", agents,
                       "AGENTS must document the strict Codex host-Python entrypoint")
         self.assertIn("Python313/python.exe", agents,
                       "AGENTS must document the pinned Codex host Python")
-        self.assertIn("do not accept silent schema-skip behavior", agents,
+        self.assertIn("Never accept a silent schema skip", agents,
                       "AGENTS lost the no-silent-schema-skip rule")
 
         result = subprocess.run(
@@ -1243,13 +1249,13 @@ class JsonschemaImportSmoke(unittest.TestCase):
         self.assertTrue(hasattr(jsonschema, "Draft7Validator"),
                         "jsonschema import must expose Draft7Validator")
 
-    def test_launcher_fallback_contract_handles_missing_vendored_rpds(self):
+    def test_launcher_does_not_repeat_import_or_full_preflight_probes(self):
         launcher = (ROOT / ".tools" / "run_unittest_with_repo_pythonpath.cmd").read_text(
             encoding="utf-8"
         )
-        self.assertIn("ORIGINAL_PYTHONPATH", launcher)
-        self.assertIn("The repository copy needs its matching rpds compiled extension.", launcher)
-        self.assertIn("this launcher will use that copy.", launcher)
+        self.assertNotIn('-c "import jsonschema"', launcher)
+        self.assertNotIn("a_short_preflight.py", launcher)
+        self.assertIn(".tools\\bounded_unittest.py", launcher)
 
 
 if __name__ == "__main__":

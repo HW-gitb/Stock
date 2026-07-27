@@ -1,5 +1,13 @@
 # Session Log
 
+## 2026-07-27 - Codex 修复（测试进程限时与证据链）
+
+- **Verdict/Action**: 已把测试等待教训固化为规则、限时 runner 和单命令 full-ledger 链；删掉每个小测试前的重复 import probe/full A-short preflight；用户明确免除第三方审查并授权 Codex 自行提交、合并。
+- **Required**: `R-TEST-PROCESS-EVIDENCE-TIMEBOX-GAP` 已 addressed，完整契约、失败形状、边界见 `system_risk_register.md`。
+- **Verify**: 固定 Python 3.13；最终 focused 治理包 34 OK、exit 0、4.0s；`py_compile` exit 0。全 doc-governance 模块另有用户原第五刀 SESSION_LOG 超长 bullet 的既存失败，本 slice 未覆盖。
+- **Pre-Codex self-review**: current-diff-only 只读 agent 三轮限时复核，依次抓并闭合 zero-test 假绿、清理无上限、重复 preflight、旧 rule 编号；最终 PASS；未跑大包。
+- **Next**: Codex：仅提交并合并治理 slice，排除第五刀业务 dirty。
+
 ## 2026-07-27 — Claude Code 修复 (三个 main parse 出口，用户指令自修自审)
 
 - **Verdict/Action**: 三处全修并 PASS：`load_account_bundle` 与两个 regulatory 旗补 `UnicodeDecodeError`，账户桶的 `{exc}` 换成 `type(exc).__name__`（原文案会把私密账户路径打进 FATAL）。用户明令「不按类，只修点名的三个」，故 helper 级整类扫描主动停掉；未覆盖的三个同形站点已在 register 逐个点名，供将来重开。7 增 4 删，成功路径零改动。
