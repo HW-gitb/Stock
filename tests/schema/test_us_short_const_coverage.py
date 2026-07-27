@@ -54,7 +54,8 @@ EXPECTED_CONST_PATH_COUNT = {
     "us_short_sizing_stack_governance": 9,
     "us_short_symbol_cooldown_governance": 9,
     "us_short_theme_lifecycle_governance": 11,
-    "us_short_weekly_report_contract": 9,
+    # 9 -> 12: K4C pinned the optional §4c banner (soft_discovery_banner id / tag / always_shown).
+    "us_short_weekly_report_contract": 12,
 }
 
 
