@@ -424,6 +424,35 @@ class ScoreComposerHappyPathTest(unittest.TestCase):
         analyzed = analyze_rows([row], market_axis_regimes=_AGGRESSIVE)["rows"][0]
         self.assertAlmostEqual(analyzed["score"]["core_score"], 86.0)
 
+    def test_legal_soft_boost_alone_moves_a_boundary_ticker_into_top15_core(self):
+        core_names = [
+            "AAPL", "MSFT", "TSLA", "NVDA", "JPM", "BAC",
+            "WFC", "XOM", "CVX", "COP", "AMZN", "GOOGL",
+        ]
+        theme_names = ["META", "NFLX", "INTC", "AMD", "IBM", "CRM", "ADBE", "QCOM"]
+        target = "ORCL"
+        off = {
+            ticker: {"core_score": 100.0 - index, "theme_momentum_score": 0.0}
+            for index, ticker in enumerate(core_names)
+        }
+        off.update({
+            ticker: {"core_score": 20.0, "theme_momentum_score": 100.0 - index}
+            for index, ticker in enumerate(theme_names)
+        })
+        off[target] = {"core_score": 92.0, "theme_momentum_score": 0.0}
+        on = copy.deepcopy(off)
+        on[target]["core_score"] = 97.0
+        off_top = _select_top15(
+            list(off), _top15_inputs(off), decision_date="20260630",
+        )
+        on_top = _select_top15(
+            list(on), _top15_inputs(on), decision_date="20260630",
+        )
+        self.assertNotIn(target, off_top["admitted"])
+        self.assertIn(target, on_top["admitted"])
+        detail = next(row for row in on_top["selection_details"] if row["ticker"] == target)
+        self.assertEqual(detail["selection_bucket"], "core_top")
+
     def test_compose_score_inputs_emits_selection_and_analysis_from_one_source(self):
         out = _compose()
 

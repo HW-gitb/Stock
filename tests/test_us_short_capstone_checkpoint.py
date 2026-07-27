@@ -33,6 +33,7 @@ class CapstoneCheckpointTest(unittest.TestCase):
         self.run_contract = {
             "authorized_momentum_top_k": 200, "authorized_pass2_call_budget": 10,
             "catalyst_recall_tickers": [], "frozen_holding_tickers": [],
+            "theme_soft_boost_enabled": True,
         }
         self.manifest_path, self.manifest = checkpoint.create_manifest(
             private_root=self.root / "private",

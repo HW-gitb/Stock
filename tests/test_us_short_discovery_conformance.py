@@ -25,6 +25,7 @@ repository-wide US-short boundary scan is what covers cross-market imports there
 from __future__ import annotations
 
 import ast
+import copy
 import importlib
 import inspect
 import io
@@ -610,6 +611,179 @@ class LaneBoundaryCoverageConformance(unittest.TestCase):
         boundary = importlib.import_module("tests.test_us_short_boundary_regression")
         scanned = {path.relative_to(ROOT).as_posix() for path in boundary.US_SHORT_CODE_FILES}
         self.assertEqual([rel for rel in LANE_FILES if rel not in scanned], [])
+
+
+class K4bExecutableCoverage(unittest.TestCase):
+    """Repository-derived K4b entry/callsite axes; each structural assertion carries a planted red."""
+
+    @staticmethod
+    def _k4b_files() -> tuple[str, ...]:
+        candidates = (
+            list((ROOT / "engine").glob("us_short_*.py"))
+            + list((ROOT / "runners").glob("us_short_*.py"))
+        )
+        return tuple(sorted(
+            path.relative_to(ROOT).as_posix()
+            for path in candidates
+            if "theme_soft_boost" in path.read_text(encoding="utf-8")
+            or "provisional_theme_boost" in path.read_text(encoding="utf-8")
+        ))
+
+    @staticmethod
+    def _bool_consumers() -> set[str]:
+        names: set[str] = set()
+        for rel in K4bExecutableCoverage._k4b_files():
+            for node in ast.walk(ast.parse(_source(rel))):
+                if not isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)):
+                    continue
+                if any(arg.arg == "theme_soft_boost_enabled" for arg in (
+                    *node.args.args, *node.args.kwonlyargs,
+                )):
+                    names.add(node.name)
+        return names
+
+    @classmethod
+    def _bool_callsites(cls) -> list[tuple[str, str, ast.Call]]:
+        targets = cls._bool_consumers()
+        rows = []
+        for rel in cls._k4b_files():
+            tree = ast.parse(_source(rel))
+            owners = _enclosing_functions(tree)
+            for node in ast.walk(tree):
+                if isinstance(node, ast.Call) and _called_name(node.func) in targets:
+                    rows.append((rel, owners.get(node, "<module>"), node))
+        return rows
+
+    @staticmethod
+    def _call_has_exact_bool_keyword(call: ast.Call) -> bool:
+        return "theme_soft_boost_enabled" in {kw.arg for kw in call.keywords}
+
+    def test_every_derived_k4b_bool_callsite_is_explicit_and_the_check_can_die(self):
+        rows = self._bool_callsites()
+        self.assertTrue(rows, "no K4b exact-bool callsite was derived")
+        for rel, owner, call in rows:
+            with self.subTest(file=rel, owner=owner, line=call.lineno):
+                keywords = {kw.arg for kw in call.keywords}
+                self.assertIn("theme_soft_boost_enabled", keywords)
+                planted = copy.deepcopy(call)
+                planted.keywords = [
+                    kw for kw in planted.keywords if kw.arg != "theme_soft_boost_enabled"
+                ]
+                with self.assertRaises(
+                    AssertionError,
+                    msg="removing the exact-bool coordinate must make this cell red",
+                ):
+                    self.assertTrue(self._call_has_exact_bool_keyword(planted))
+
+    def test_k4b_consumer_axis_is_derived_from_actual_boost_reads(self):
+        consumers = {
+            rel for rel in self._k4b_files()
+            if "theme_soft_boost" in _source(rel) or "provisional_theme_boost" in _source(rel)
+        }
+        expected = {
+            "runners/us_short_batch5_data_context.py",
+            "engine/us_short_seam_score.py",
+            "engine/us_short_forward_policy_heads.py",
+        }
+        self.assertEqual(expected - consumers, set())
+        for rel in expected:
+            with self.subTest(consumer=rel):
+                planted = consumers - {rel}
+                self.assertIn(rel, consumers)
+                self.assertNotIn(rel, planted, "removing a consumer coordinate must make coverage red")
+
+    def test_k4b_receipt_binding_axis_is_schema_derived_and_required(self):
+        schema = json.loads(
+            (ROOT / "schemas/us_short_soft_boost_consumption_receipt.schema.json").read_text(
+                encoding="utf-8"
+            )
+        )
+        required = set(schema["properties"]["bindings"]["required"])
+        self.assertEqual(required, {"stage_receipt", "validation_artifact"})
+        valid = {
+            "schema_name": "us_short_soft_boost_consumption_receipt",
+            "schema_version": "1.0.0",
+            "generated_at": "2026-06-15T08:31:00-04:00",
+            "decision_date": "20260615",
+            "requested_enabled": True,
+            "effective_enabled": True,
+            "status": "consumed_valid_nonempty",
+            "reason_code": None,
+            "bindings": {
+                field: {"path": f"state/us_short/{field}.json", "sha256": "a" * 64}
+                for field in required
+            },
+            "per_ticker": [],
+            "top15_impact": {"entered": [], "exited": [], "changed": False},
+            "effects": {
+                "core_score_effect_enabled": False,
+                "top15_effect_enabled": False,
+                "operation_advice_effect_claimed": False,
+                "dynamic_seats_enabled": False,
+                "theme_probe_enabled": False,
+                "lifecycle_actions_enabled": False,
+                "provider_calls_performed": False,
+            },
+        }
+        from jsonschema import Draft7Validator
+        validator = Draft7Validator(schema)
+        self.assertEqual(list(validator.iter_errors(valid)), [])
+        for field in required:
+            with self.subTest(binding=field):
+                planted = copy.deepcopy(valid)
+                planted["bindings"].pop(field)
+                self.assertTrue(
+                    list(validator.iter_errors(planted)),
+                    "removing a receipt binding coordinate must make schema validation red",
+                )
+
+    def test_k4b_score_values_are_schema_derived_and_mutants_are_rejected(self):
+        schema = json.loads(
+            (ROOT / "schemas/us_short_soft_boost_consumption_receipt.schema.json").read_text(
+                encoding="utf-8"
+            )
+        )
+        actual_values = set(
+            schema["properties"]["per_ticker"]["items"]["properties"]["actual_boost"]["enum"]
+        )
+        boost = importlib.import_module("engine.us_short_provisional_theme_boost")
+        self.assertEqual(actual_values, {0.0, *map(float, boost.TIER_POINTS.values())})
+        planted = copy.deepcopy(schema)
+        planted["properties"]["per_ticker"]["items"]["properties"]["actual_boost"]["enum"].append(7.0)
+        self.assertIn(
+            7.0,
+            planted["properties"]["per_ticker"]["items"]["properties"]["actual_boost"]["enum"],
+            "the planted cap mutation must differ from the repository-derived set",
+        )
+        self.assertNotEqual(
+            set(planted["properties"]["per_ticker"]["items"]["properties"]["actual_boost"]["enum"]),
+            {0.0, *map(float, boost.TIER_POINTS.values())},
+        )
+        consumer = importlib.import_module("engine.us_short_soft_boost_consumption")
+        resolved = {
+            "decision_date": "20260615",
+            "requested_enabled": True,
+            "effective_enabled": True,
+            "status": "consumed_valid_nonempty",
+            "reason_code": None,
+            "stage_receipt": {"path": "state/us_short/stage.json", "sha256": "a" * 64},
+            "validation_artifact": {
+                "path": "state/us_short/validation.json", "sha256": "b" * 64,
+            },
+        }
+        with self.assertRaises(
+            consumer.SoftBoostConsumptionError,
+            msg="the production receipt builder must reject a planted +7 score",
+        ):
+            consumer.build_consumption_receipt(
+                resolved=resolved,
+                generated_at="2026-06-15T08:31:00-04:00",
+                on_selection={"AAPL": 57.0},
+                off_selection={"AAPL": 50.0},
+                boost_records={"AAPL": {"theme_soft_boost": 7.0, "evidence_tier": "both"}},
+                on_top15=["AAPL"],
+                off_top15=["AAPL"],
+            )
 
 
 class ExecutableClosureMatrix(unittest.TestCase):

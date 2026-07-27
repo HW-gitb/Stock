@@ -35,7 +35,7 @@
       "type": "object", "additionalProperties": false,
       "required": [
         "authorized_momentum_top_k", "authorized_pass2_call_budget", "catalyst_recall_tickers",
-        "frozen_holding_tickers"
+        "frozen_holding_tickers", "theme_soft_boost_enabled"
       ],
       "properties": {
         "authorized_momentum_top_k": { "type": "integer", "minimum": 1, "maximum": 250 },
@@ -45,7 +45,8 @@
         },
         "frozen_holding_tickers": {
           "type": "array", "uniqueItems": true, "items": { "type": "string", "pattern": "^[A-Z][A-Z0-9.-]{0,15}$" }
-        }
+        },
+        "theme_soft_boost_enabled": { "type": "boolean" }
       }
     },
     "stage_contract": {

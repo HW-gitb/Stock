@@ -1,0 +1,70 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://stock.local/schemas/us_short_soft_boost_comparison_ledger.schema.json",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_name", "schema_version", "epoch_id", "records", "captured_week_count",
+    "matured_week_count", "eligible_divergence_week_count",
+    "non_overlap_h10_block_count", "record_scope", "formal_adjudication_performed",
+    "pending_user_decision_receipt_generated", "status", "automatic_route_change_allowed"
+  ],
+  "properties": {
+    "schema_name": {"const": "us_short_soft_boost_comparison_ledger"},
+    "schema_version": {"const": "1.0.0"},
+    "epoch_id": {"const": "us_short_soft_boost_k4b_20260727"},
+    "records": {
+      "type": "array", "minItems": 1, "maxItems": 1,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "schema_name", "schema_version", "epoch_id", "evidence_epoch_sha256",
+          "statistical_plan_sha256", "generated_at", "decision_date",
+          "comparison", "common_input_sha256", "stage_receipt_sha256",
+          "validation_artifact_sha256", "on_top15", "off_top15", "divergent",
+          "maturity", "provider_calls_performed"
+        ],
+        "properties": {
+          "schema_name": {"const": "us_short_soft_boost_shadow_receipt"},
+          "schema_version": {"const": "1.0.0"},
+          "epoch_id": {"const": "us_short_soft_boost_k4b_20260727"},
+          "evidence_epoch_sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+          "statistical_plan_sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+          "generated_at": {"type": "string", "format": "date-time"},
+          "decision_date": {"type": "string", "pattern": "^[0-9]{8}$"},
+          "comparison": {
+            "type": "array", "minItems": 2, "maxItems": 2,
+            "items": [{"const": "soft_boost_on"}, {"const": "soft_boost_off"}]
+          },
+          "common_input_sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+          "stage_receipt_sha256": {"type": ["string", "null"], "pattern": "^[0-9a-f]{64}$"},
+          "validation_artifact_sha256": {"type": ["string", "null"], "pattern": "^[0-9a-f]{64}$"},
+          "on_top15": {"type": "array", "uniqueItems": true, "items": {"type": "string"}},
+          "off_top15": {"type": "array", "uniqueItems": true, "items": {"type": "string"}},
+          "divergent": {"type": "boolean"},
+          "maturity": {
+            "type": "object", "additionalProperties": false,
+            "required": ["captured", "matured", "eligible", "non_overlap_h10_block"],
+            "properties": {
+              "captured": {"const": true},
+              "matured": {"const": false},
+              "eligible": {"const": false},
+              "non_overlap_h10_block": {"const": false}
+            }
+          },
+          "provider_calls_performed": {"const": false}
+        }
+      }
+    },
+    "captured_week_count": {"const": 1},
+    "matured_week_count": {"const": 0},
+    "eligible_divergence_week_count": {"const": 0},
+    "non_overlap_h10_block_count": {"const": 0},
+    "record_scope": {"const": "single_decision_week_capture"},
+    "formal_adjudication_performed": {"const": false},
+    "pending_user_decision_receipt_generated": {"const": false},
+    "status": {"const": "continue_accumulation"},
+    "automatic_route_change_allowed": {"const": false}
+  }
+}

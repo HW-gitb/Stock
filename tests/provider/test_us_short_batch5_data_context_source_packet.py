@@ -19,8 +19,12 @@ from engine.us_short_fmp_analyst_grades import resolve_analyst_grade_actions  # 
 from engine.us_short_massive_news import resolve_news_events  # noqa: E402
 from engine.us_short_sec_offering_audit import resolve_offering_audit  # noqa: E402
 from engine.us_short_yfinance_analyst_grades import resolve_yfinance_grade_actions  # noqa: E402
+from runners import us_short_batch5_data_context_source_packet as source_packet_runner  # noqa: E402
+from runners.us_short_batch5_data_context import official_top15_tickers  # noqa: E402
 from runners.us_short_batch5_data_context_source_packet import (  # noqa: E402
     SourcePacketError,
+    _load_and_validate_packet,
+    _soft_boost_common_input_sha256,
     main,
     run_packet,
     run_preflight,
@@ -41,9 +45,36 @@ from tests.provider.test_us_short_batch5_data_context import (  # noqa: E402
     _offering_record,
     _offering_source,
 )
+from tests.schema.test_us_short_provisional_theme_validation_schema import _artifact as _theme_artifact  # noqa: E402
 
 
 STATE_DIR = ROOT / "state" / "us_short"
+
+
+class K4bPublicTop15ContractTest(unittest.TestCase):
+    def test_source_packet_imports_the_public_top15_contract(self):
+        self.assertIs(source_packet_runner.official_top15_tickers, official_top15_tickers)
+        source = Path(source_packet_runner.__file__).read_text(encoding="utf-8")
+        self.assertNotIn("_official_top15_tickers", source)
+
+    def test_k4b_default_state_root_is_allowed_but_every_output_stays_gitignored(self):
+        self.assertFalse(source_packet_runner._git_ignored(STATE_DIR))
+        state_dir = source_packet_runner._validate_soft_boost_state_dir(_rel(STATE_DIR))
+        self.assertEqual(state_dir, STATE_DIR)
+        for field, relative_path in (
+            ("soft_boost_consumption_receipt_path", "us_short_soft_boost_consumption_receipt_20260615.json"),
+            ("soft_boost_shadow_receipt_path", "shadow_compare_private/us_short_soft_boost_shadow_receipt_20260615.json"),
+            ("soft_boost_comparison_ledger_path", "shadow_compare_private/us_short_soft_boost_comparison_ledger_20260615.json"),
+        ):
+            with self.subTest(field=field):
+                output = STATE_DIR / relative_path
+                self.assertTrue(source_packet_runner._git_ignored(output))
+                self.assertEqual(
+                    source_packet_runner._validate_soft_boost_output_path(
+                        _rel(output), field=field, state_dir=state_dir
+                    ),
+                    output,
+                )
 
 
 def _rel(path: Path) -> str:
@@ -108,6 +139,9 @@ def _overextension_projection() -> dict:
 class Batch5DataContextSourcePacketTest(unittest.TestCase):
     def setUp(self):
         self.slug = f"test_source_packet_{os.getpid()}_{self._testMethodName}"
+        self.soft_state_dir = (
+            ROOT / "provider_samples" / self.slug / "state" / "us_short"
+        )
         self.paths = {
             "packet": STATE_DIR / f"{self.slug}_packet.json",
             "candidate": STATE_DIR / f"{self.slug}_candidate.json",
@@ -121,6 +155,19 @@ class Batch5DataContextSourcePacketTest(unittest.TestCase):
             "theme_contract": STATE_DIR / f"{self.slug}_theme_selection_contract.json",
             "output": STATE_DIR / f"{self.slug}_data_context.json",
             "components": STATE_DIR / f"{self.slug}_context_components.json",
+            "classification": STATE_DIR / f"{self.slug}_classification.json",
+            "soft_ingest": self.soft_state_dir / f"{self.slug}_soft_ingest.json",
+            "soft_stage": self.soft_state_dir / f"us_short_provisional_theme_stage_receipt_{_DECISION_DATE}.json",
+            "soft_validation": self.soft_state_dir / f"us_short_provisional_theme_validation_{_DECISION_DATE}.json",
+            "soft_consumption": self.soft_state_dir / (
+                f"us_short_soft_boost_consumption_receipt_{_DECISION_DATE}.json"
+            ),
+            "soft_shadow": self.soft_state_dir / "shadow_compare_private" / (
+                f"us_short_soft_boost_shadow_receipt_{_DECISION_DATE}.json"
+            ),
+            "soft_ledger": self.soft_state_dir / "shadow_compare_private" / (
+                f"us_short_soft_boost_comparison_ledger_{_DECISION_DATE}.json"
+            ),
             "raw_payload": ROOT / "provider_samples" / f"{self.slug}_raw_payload.json",
         }
         for path in self.paths.values():
@@ -130,6 +177,16 @@ class Batch5DataContextSourcePacketTest(unittest.TestCase):
     def tearDown(self):
         for path in self.paths.values():
             path.unlink(missing_ok=True)
+        for path in (
+            self.soft_state_dir / "shadow_compare_private",
+            self.soft_state_dir,
+            self.soft_state_dir.parent,
+            self.soft_state_dir.parent.parent,
+        ):
+            try:
+                path.rmdir()
+            except OSError:
+                pass
 
     def _write_sources_and_packet(self):
         targets = ("AAPL", "MSFT")
@@ -327,6 +384,201 @@ class Batch5DataContextSourcePacketTest(unittest.TestCase):
         self.assertEqual(set(written["selection_inputs"]["per_ticker"]), {"AAPL", "MSFT"})
         self.assertAlmostEqual(written["selection_inputs"]["per_ticker"]["AAPL"]["core_score"], 43.5)
         self.assertAlmostEqual(written["selection_inputs"]["per_ticker"]["MSFT"]["core_score"], 50.0)
+
+    def test_k4b_valid_nonempty_uses_one_source_packet_for_on_and_local_off_shadow(self):
+        operator_shadow_dir = STATE_DIR / "shadow_compare_private"
+        operator_shadow_dir_existed = operator_shadow_dir.exists()
+        packet = self._packet_payload()
+        packet["paths"]["output_context_components_path"] = _rel(self.paths["components"])
+        baseline_packet = copy.deepcopy(packet)
+        baseline_packet["optional_inputs"]["theme_soft_boost_enabled"] = False
+        _write_json(self.packet, baseline_packet)
+        run_packet(self.packet, generated_at="2026-07-04T00:00:02Z")
+        baseline = self.paths["output"].read_bytes()
+
+        candidate_sha = hashlib.sha256(self.paths["candidate"].read_bytes()).hexdigest()
+        _write_json(self.paths["classification"], {"decision_date": _DECISION_DATE})
+        classification_sha = hashlib.sha256(self.paths["classification"].read_bytes()).hexdigest()
+        _write_json(self.paths["soft_ingest"], {"decision_date": _DECISION_DATE})
+        ingest_sha = hashlib.sha256(self.paths["soft_ingest"].read_bytes()).hexdigest()
+        artifact = _theme_artifact()
+        artifact["input_artifacts"].update({
+            "discovery_artifact_sha256": ingest_sha,
+            "candidate_artifact_sha256": candidate_sha,
+            "classification_packet_sha256": classification_sha,
+        })
+        _write_json(self.paths["soft_validation"], artifact)
+        validation_sha = hashlib.sha256(self.paths["soft_validation"].read_bytes()).hexdigest()
+        stage = {
+            "schema_name": "us_short_provisional_theme_stage_receipt",
+            "schema_version": "1.0.0",
+            "generated_at": "2026-06-15T08:30:00-04:00",
+            "decision_date": _DECISION_DATE,
+            "status": "valid_nonempty",
+            "reason_code": None,
+            "artifacts": {
+                "merge": {"path": "state/us_short/merge.json", "sha256": "1" * 64},
+                "merge_manifest": {"path": "state/us_short/manifest.json", "sha256": "2" * 64},
+                "ingest": {"path": _rel(self.paths["soft_ingest"]), "sha256": ingest_sha},
+                "validation": {"path": _rel(self.paths["soft_validation"]), "sha256": validation_sha},
+            },
+            "evidence_anchor": {
+                "upstream_pair_anchored": True,
+                "document_content_anchored": True,
+                "upstream_artifacts": {
+                    "web_discovery": {"path": "state/us_short/web.json", "sha256": "3" * 64},
+                    "web_receipt": {"path": "state/us_short/web_receipt.json", "sha256": "4" * 64},
+                    "x_discovery": {"path": "state/us_short/x.json", "sha256": "5" * 64},
+                    "x_receipt": {"path": "state/us_short/x_receipt.json", "sha256": "6" * 64},
+                },
+            },
+            "immutable_conflict": None,
+            "validated_theme_count": 1,
+            "boostable_ticker_count": 3,
+            "drop_summary": {"merge_dropped_theme_count": 0, "validation_drop_count": 0},
+            "error_summary": None,
+            "effects": {
+                "network_access_performed": False, "provider_calls_performed": False,
+                "scoring_eligible": False, "top15_effect_enabled": False,
+                "operation_advice_effect_enabled": False, "dynamic_seats_enabled": False,
+                "theme_probe_enabled": False, "lifecycle_actions_enabled": False,
+            },
+        }
+        _write_json(self.paths["soft_stage"], stage)
+        packet["optional_inputs"]["theme_soft_boost_enabled"] = True
+        packet["optional_inputs"]["soft_discovery_stage_result"] = stage
+        packet["paths"].update({
+            "soft_boost_state_dir_path": _rel(self.soft_state_dir),
+            "provisional_theme_stage_receipt_path": _rel(self.paths["soft_stage"]),
+            "provisional_theme_validation_path": _rel(self.paths["soft_validation"]),
+            "original_candidate_artifact_path": _rel(self.paths["candidate"]),
+            "classification_packet_path": _rel(self.paths["classification"]),
+            "soft_boost_consumption_receipt_path": _rel(self.paths["soft_consumption"]),
+            "soft_boost_shadow_receipt_path": _rel(self.paths["soft_shadow"]),
+            "soft_boost_comparison_ledger_path": _rel(self.paths["soft_ledger"]),
+        })
+        missing_components = copy.deepcopy(packet)
+        missing_components["paths"].pop("output_context_components_path")
+        _write_json(self.packet, missing_components)
+        with self.assertRaisesRegex(SourcePacketError, "output_context_components_path"):
+            run_packet(self.packet, generated_at="2026-07-04T00:00:02Z")
+        _write_json(self.packet, packet)
+        loaded_packet, loaded_paths = _load_and_validate_packet(self.packet)
+        common_digest = _soft_boost_common_input_sha256(loaded_packet, loaded_paths)
+        changed_holdings = copy.deepcopy(loaded_packet)
+        changed_holdings["optional_inputs"]["holdings"] = [{"ticker": "AAPL"}]
+        self.assertNotEqual(
+            common_digest,
+            _soft_boost_common_input_sha256(changed_holdings, loaded_paths),
+        )
+        changed_theme_contract = dict(loaded_paths)
+        alternate = STATE_DIR / f"{self.slug}_alternate_theme_contract.json"
+        _write_json(alternate, {"different": True})
+        self.paths["alternate_theme_contract"] = alternate
+        changed_theme_contract["theme_selection_contract_path"] = alternate
+        self.assertNotEqual(
+            common_digest,
+            _soft_boost_common_input_sha256(loaded_packet, changed_theme_contract),
+        )
+        result = run_packet(self.packet, generated_at="2026-07-04T00:00:02Z")
+
+        written = json.loads(self.paths["output"].read_text(encoding="utf-8"))
+        self.assertAlmostEqual(written["selection_inputs"]["per_ticker"]["AAPL"]["core_score"], 48.5)
+        self.assertAlmostEqual(written["selection_inputs"]["per_ticker"]["MSFT"]["core_score"], 55.0)
+        components = json.loads(self.paths["components"].read_text(encoding="utf-8"))
+        self.assertEqual(
+            components["score_composition"]["analysis_by_ticker"]["AAPL"][
+                "provisional_theme_boost"
+            ]["theme_soft_boost"],
+            5.0,
+        )
+        self.assertNotEqual(self.paths["output"].read_bytes(), baseline)
+        self.assertTrue(result["soft_boost"]["effective_enabled"])
+        receipt = json.loads(self.paths["soft_consumption"].read_text(encoding="utf-8"))
+        self.assertFalse(receipt["effects"]["operation_advice_effect_claimed"])
+        shadow = json.loads(self.paths["soft_shadow"].read_text(encoding="utf-8"))
+        self.assertEqual(shadow["comparison"], ["soft_boost_on", "soft_boost_off"])
+        self.assertFalse(shadow["provider_calls_performed"])
+        self.assertNotIn("theme_off", self.paths["soft_shadow"].read_text(encoding="utf-8"))
+        with mock.patch(
+            "runners.us_short_batch5_data_context_source_packet.write_evidence_bundle",
+            side_effect=__import__(
+                "engine.us_short_soft_boost_consumption",
+                fromlist=["SoftBoostConsumptionError"],
+            ).SoftBoostConsumptionError("planted publication failure"),
+        ):
+            degraded = run_packet(self.packet, generated_at="2026-07-04T00:00:02Z")
+        self.assertEqual(self.paths["output"].read_bytes(), baseline)
+        self.assertFalse(degraded["soft_boost"]["effective_enabled"])
+        self.assertEqual(degraded["soft_boost"]["status"], "zero_invalid_evidence")
+        self.assertFalse(degraded["soft_boost"]["evidence_bundle_written"])
+        self.assertIsNone(degraded["soft_boost"]["consumption_receipt_path"])
+
+        import engine.us_short_soft_boost_consumption as soft_consumer
+
+        missing_plan = self.soft_state_dir / "missing_statistical_plan.json"
+        with mock.patch.object(soft_consumer, "STATISTICAL_PLAN_PATH", missing_plan):
+            missing_plan_result = run_packet(
+                self.packet, generated_at="2026-07-04T00:00:02Z"
+            )
+        self.assertEqual(self.paths["output"].read_bytes(), baseline)
+        self.assertFalse(missing_plan_result["soft_boost"]["effective_enabled"])
+        self.assertEqual(
+            missing_plan_result["soft_boost"]["reason_code"],
+            "K4B_OPTIONAL_LIFECYCLE_REJECTED",
+        )
+
+        original_assemble = (
+            source_packet_runner.assemble_official_context_components_from_resolved_pass2_sources
+        )
+
+        def unexplained_on_delta(**kwargs):
+            value = original_assemble(**kwargs)
+            if kwargs.get("theme_soft_boost_enabled") is True:
+                value["data_context"]["selection_inputs"]["per_ticker"]["AAPL"]["core_score"] += 1.0
+            return value
+
+        with mock.patch(
+            "runners.us_short_batch5_data_context_source_packet."
+            "assemble_official_context_components_from_resolved_pass2_sources",
+            side_effect=unexplained_on_delta,
+        ):
+            attribution_result = run_packet(
+                self.packet, generated_at="2026-07-04T00:00:02Z"
+            )
+        self.assertEqual(self.paths["output"].read_bytes(), baseline)
+        self.assertFalse(attribution_result["soft_boost"]["effective_enabled"])
+
+        def out_of_range_on_score(**kwargs):
+            value = original_assemble(**kwargs)
+            if kwargs.get("theme_soft_boost_enabled") is True:
+                value["data_context"]["selection_inputs"]["per_ticker"]["AAPL"][
+                    "core_score"
+                ] = 101.0
+            return value
+
+        with mock.patch(
+            "runners.us_short_batch5_data_context_source_packet."
+            "assemble_official_context_components_from_resolved_pass2_sources",
+            side_effect=out_of_range_on_score,
+        ):
+            score_range_result = run_packet(
+                self.packet, generated_at="2026-07-04T00:00:02Z"
+            )
+        self.assertEqual(self.paths["output"].read_bytes(), baseline)
+        self.assertFalse(score_range_result["soft_boost"]["effective_enabled"])
+
+        with mock.patch(
+            "runners.us_short_batch5_data_context_source_packet."
+            "_soft_boost_common_input_sha256",
+            side_effect=OSError("planted unreadable K4b input"),
+        ):
+            unreadable_result = run_packet(
+                self.packet, generated_at="2026-07-04T00:00:02Z"
+            )
+        self.assertEqual(self.paths["output"].read_bytes(), baseline)
+        self.assertFalse(unreadable_result["soft_boost"]["effective_enabled"])
+        self.assertEqual(operator_shadow_dir.exists(), operator_shadow_dir_existed)
 
     def test_provider_envelope_digests_are_required_before_consumption(self):
         packet = self._packet_payload()

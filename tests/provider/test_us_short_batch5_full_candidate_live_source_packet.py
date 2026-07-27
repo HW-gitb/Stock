@@ -717,6 +717,29 @@ class UsShortBatch5FullCandidateLiveSourcePacketTest(unittest.TestCase):
 
         self.assertEqual(client.urls, [])
 
+    def test_enabled_k4b_missing_current_stage_result_aborts_before_network(self):
+        client = FullCandidateFakeClient()
+        with self.assertRaisesRegex(
+            runner.FullCandidateLiveSourcePacketError, "this run's stage result"
+        ):
+            runner.run_full_candidate_live_source_packet(
+                preflight_summary_path=self.paths["preflight"],
+                expected_total_call_budget=16,
+                output_data_context_path=self.paths["output"],
+                context_components_output_path=self.paths["components"],
+                source_artifact_prefix=self.paths["prefix"],
+                summary_path=self.paths["summary"],
+                raw_root=self.raw_root,
+                client=client,
+                confirm_user_authorization=True,
+                run_data_context=True,
+                generated_at="2026-07-06T12:00:00+00:00",
+                observed_at=_OFFERING_OBSERVED_AT,
+                sec_sleep_seconds=0,
+                theme_soft_boost_enabled=True,
+            )
+        self.assertEqual(client.urls, [])
+
     def test_stale_operator_theme_selection_contract_is_ignored_and_rebuilt_from_live_pass2_sources(self):
         contract_path = self.paths["prefix"].with_name(self.paths["prefix"].name + "_theme_selection_contract.json")
         _write_json(contract_path, {"stale_operator_input": True})

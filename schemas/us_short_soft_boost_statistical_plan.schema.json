@@ -1,0 +1,89 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://stock.local/schemas/us_short_soft_boost_statistical_plan.schema.json",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_name", "schema_version", "epoch_id", "comparison", "primary_metric",
+    "preliminary_eligible_weeks", "formal_look_divergence_weeks",
+    "minimum_non_overlap_h10_blocks", "minimum_market_risk_regimes",
+    "minimum_divergence_weeks_per_required_regime", "direction_policy",
+    "outcome_gate", "risk_guardrails", "status_set", "decision_policy"
+  ],
+  "properties": {
+    "schema_name": {"const": "us_short_soft_boost_statistical_plan"},
+    "schema_version": {"const": "1.0.0"},
+    "epoch_id": {"const": "us_short_soft_boost_k4b_20260727"},
+    "comparison": {"const": ["soft_boost_on", "soft_boost_off"]},
+    "primary_metric": {"const": "paired_after_cost_h10_net_return"},
+    "preliminary_eligible_weeks": {"const": 12},
+    "formal_look_divergence_weeks": {"const": [24, 36]},
+    "minimum_non_overlap_h10_blocks": {"const": 12},
+    "minimum_market_risk_regimes": {"const": 2},
+    "minimum_divergence_weeks_per_required_regime": {"const": 4},
+    "direction_policy": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["symmetric", "absence_of_significance_is_not_reverse_evidence"],
+      "properties": {
+        "symmetric": {"const": true},
+        "absence_of_significance_is_not_reverse_evidence": {"const": true}
+      }
+    },
+    "outcome_gate": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "mean_paired_advantage_gte", "paired_win_fraction_gte",
+        "placebo_percentile_exclusive_gt", "paired_block_ci_lower_gt",
+        "formal_one_sided_alpha_spending"
+      ],
+      "properties": {
+        "mean_paired_advantage_gte": {"const": 0.001},
+        "paired_win_fraction_gte": {"const": [2, 3]},
+        "placebo_percentile_exclusive_gt": {"const": 0.95},
+        "paired_block_ci_lower_gt": {"const": 0.0},
+        "formal_one_sided_alpha_spending": {"const": [0.0125, 0.0125]}
+      }
+    },
+    "risk_guardrails": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "max_drawdown_worsening_fraction_max", "bad_pick_rate_worsening_max",
+        "tail_loss_worsening_fraction_max", "turnover_harm_multiplier_max",
+        "fill_fraction_min"
+      ],
+      "properties": {
+        "max_drawdown_worsening_fraction_max": {"const": 0.02},
+        "bad_pick_rate_worsening_max": {"const": 0.05},
+        "tail_loss_worsening_fraction_max": {"const": 0.02},
+        "turnover_harm_multiplier_max": {"const": 2.0},
+        "fill_fraction_min": {"const": 0.5}
+      }
+    },
+    "status_set": {
+      "const": [
+        "continue_accumulation", "inconclusive", "recommend_keep_soft_boost_on",
+        "recommend_switch_soft_boost_off", "harm_or_futility_review"
+      ]
+    },
+    "decision_policy": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "recommendation_requires_pending_user_decision_receipt",
+        "allowed_user_decisions", "automatic_route_change_allowed",
+        "accepted_change_requires_separate_reviewed_slice",
+        "historical_backfill_allowed"
+      ],
+      "properties": {
+        "recommendation_requires_pending_user_decision_receipt": {"const": true},
+        "allowed_user_decisions": {"const": ["accept", "reject", "defer"]},
+        "automatic_route_change_allowed": {"const": false},
+        "accepted_change_requires_separate_reviewed_slice": {"const": true},
+        "historical_backfill_allowed": {"const": false}
+      }
+    }
+  }
+}

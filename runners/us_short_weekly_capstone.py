@@ -218,6 +218,8 @@ class CapstoneContext:
     model_paper_store_root: Path | None = None
     model_paper_run_account_mode: str | None = None
     soft_discovery_enabled: bool = True
+    theme_soft_boost_enabled: bool = True
+    soft_discovery_run_result: dict[str, Any] | None = None
     state_dir: Path = STATE_DIR
     sample_root: Path = ROOT   # repo root that the runners' provider_samples/ allowlists resolve against (tests inject a tempdir)
     research_live_capability: Any = None   # A1: minted by run_weekly_capstone ONLY for a genuine production run — never by resolve_capstone_context / a caller
@@ -280,6 +282,22 @@ class CapstoneContext:
     def soft_discovery_receipt_path(self) -> Path:
         from runners.us_short_weekly_capstone_soft_discovery import default_receipt_path
         return default_receipt_path(self.decision_date, state_dir=self.state_dir)
+
+    @property
+    def soft_boost_consumption_receipt_path(self) -> Path:
+        return self._s(f"us_short_soft_boost_consumption_receipt_{self.decision_date}.json")
+
+    @property
+    def soft_boost_shadow_receipt_path(self) -> Path:
+        return self._s("shadow_compare_private") / (
+            f"us_short_soft_boost_shadow_receipt_{self.decision_date}.json"
+        )
+
+    @property
+    def soft_boost_comparison_ledger_path(self) -> Path:
+        return self._s("shadow_compare_private") / (
+            f"us_short_soft_boost_comparison_ledger_{self.decision_date}.json"
+        )
 
     @property
     def theme_projection_path(self) -> Path:
@@ -448,6 +466,7 @@ def resolve_capstone_context(
     model_paper_store_root: Path | None = None,
     model_paper_run_account_mode: str | None = None,
     soft_discovery_enabled: bool = True,
+    theme_soft_boost_enabled: bool = True,
     state_dir: Path = STATE_DIR,
     sample_root: Path = ROOT,
 ) -> CapstoneContext:
@@ -455,6 +474,8 @@ def resolve_capstone_context(
     the run context. Fail-closed: an intraday `now_et` (session dead zone) raises WeeklyCapstoneError (no run)."""
     if type(soft_discovery_enabled) is not bool:
         raise WeeklyCapstoneError("soft_discovery_enabled must be an exact bool")
+    if type(theme_soft_boost_enabled) is not bool:
+        raise WeeklyCapstoneError("theme_soft_boost_enabled must be an exact bool")
     if not isinstance(now_et, datetime) or now_et.tzinfo is not None:
         raise WeeklyCapstoneError("now_et must be a naive ET wall-clock datetime (Beijing→ET conversion upstream)")
     calendar = load_market_calendar(calendar_path)
@@ -491,6 +512,7 @@ def resolve_capstone_context(
         model_paper_store_root=Path(model_paper_store_root) if model_paper_store_root is not None else None,
         model_paper_run_account_mode=model_paper_run_account_mode,
         soft_discovery_enabled=soft_discovery_enabled,
+        theme_soft_boost_enabled=theme_soft_boost_enabled,
         state_dir=Path(state_dir),
         sample_root=Path(sample_root),
     )
@@ -688,6 +710,7 @@ def _checkpoint_run_contract(ctx: CapstoneContext) -> dict[str, Any]:
         ),
         "catalyst_recall_tickers": list(ctx.catalyst_recall_tickers),
         "frozen_holding_tickers": list(ctx.frozen_holding_tickers or ()),
+        "theme_soft_boost_enabled": ctx.theme_soft_boost_enabled,
     }
 
 
@@ -1564,6 +1587,7 @@ def run_weekly_capstone(
     model_paper_store_root: Path | None = None,
     model_paper_run_account_mode: str | None = None,
     soft_discovery_enabled: bool = True,
+    theme_soft_boost_enabled: bool = True,
     diagnostic_event: Callable[[dict[str, Any]], None] | None = None,
 ) -> dict[str, Any]:
     """Orchestrate the weekly one-click path. `dry_run=True` (default) resolves the canonical dates and returns the
@@ -1598,6 +1622,7 @@ def run_weekly_capstone(
         model_paper_store_root=model_paper_store_root,
         model_paper_run_account_mode=model_paper_run_account_mode,
         soft_discovery_enabled=soft_discovery_enabled,
+        theme_soft_boost_enabled=theme_soft_boost_enabled,
         sample_root=sample_root,
     )
     _emit_diagnostic_event(
@@ -1911,6 +1936,8 @@ def run_weekly_capstone(
                         stage, result, execution_mode="reused",
                         stage_generated_at=stage_generated_at, stage_observed_at=stage_observed_at,
                     )
+                    if stage.name == "soft_discovery":
+                        ctx = replace(ctx, soft_discovery_run_result=dict(result))
                     try:
                         checkpoint_manifest = checkpoint_store.record_stage(
                             manifest_path=checkpoint_manifest_path, manifest=checkpoint_manifest, stage=stage,
@@ -2116,6 +2143,8 @@ def run_weekly_capstone(
                 if not isinstance(holdings, list) or any(not isinstance(ticker, str) for ticker in holdings):
                     raise WeeklyCapstoneError("model-paper adapter did not return canonical holding tickers")
                 ctx = replace(ctx, frozen_holding_tickers=tuple(holdings))
+            if stage.name == "soft_discovery":
+                ctx = replace(ctx, soft_discovery_run_result=dict(result))
             execution_mode = "executed"
             if resume_manifest is not None and stage.reuse_policy == "refresh_then_reuse_if_equivalent":
                 try:
@@ -2277,6 +2306,13 @@ def main(argv: list[str] | None = None) -> int:
         default=True,
         help="emergency opt-out; the one-click path otherwise consumes the frozen Knife3 pair offline and never fetches",
     )
+    parser.add_argument(
+        "--disable-theme-soft-boost",
+        dest="theme_soft_boost_enabled",
+        action="store_false",
+        default=True,
+        help="emergency K4b score opt-out; low-level score/data-context APIs remain explicit-OFF by default",
+    )
     args = parser.parse_args(argv)
     try:
         summary = run_weekly_capstone(
@@ -2293,6 +2329,7 @@ def main(argv: list[str] | None = None) -> int:
             prepare_pass2_budget=args.prepare_pass2_budget,
             auto_authorize_pass2_budget=args.auto_pass2_budget,
             soft_discovery_enabled=args.soft_discovery_enabled,
+            theme_soft_boost_enabled=args.theme_soft_boost_enabled,
         )
     except WeeklyCapstoneError as exc:
         print(f"ERROR: {exc}", file=sys.stderr)

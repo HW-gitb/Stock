@@ -1,0 +1,41 @@
+{
+  "schema_name": "us_short_soft_boost_statistical_plan",
+  "schema_version": "1.0.0",
+  "epoch_id": "us_short_soft_boost_k4b_20260727",
+  "comparison": ["soft_boost_on", "soft_boost_off"],
+  "primary_metric": "paired_after_cost_h10_net_return",
+  "preliminary_eligible_weeks": 12,
+  "formal_look_divergence_weeks": [24, 36],
+  "minimum_non_overlap_h10_blocks": 12,
+  "minimum_market_risk_regimes": 2,
+  "minimum_divergence_weeks_per_required_regime": 4,
+  "direction_policy": {
+    "symmetric": true,
+    "absence_of_significance_is_not_reverse_evidence": true
+  },
+  "outcome_gate": {
+    "mean_paired_advantage_gte": 0.001,
+    "paired_win_fraction_gte": [2, 3],
+    "placebo_percentile_exclusive_gt": 0.95,
+    "paired_block_ci_lower_gt": 0.0,
+    "formal_one_sided_alpha_spending": [0.0125, 0.0125]
+  },
+  "risk_guardrails": {
+    "max_drawdown_worsening_fraction_max": 0.02,
+    "bad_pick_rate_worsening_max": 0.05,
+    "tail_loss_worsening_fraction_max": 0.02,
+    "turnover_harm_multiplier_max": 2.0,
+    "fill_fraction_min": 0.5
+  },
+  "status_set": [
+    "continue_accumulation", "inconclusive", "recommend_keep_soft_boost_on",
+    "recommend_switch_soft_boost_off", "harm_or_futility_review"
+  ],
+  "decision_policy": {
+    "recommendation_requires_pending_user_decision_receipt": true,
+    "allowed_user_decisions": ["accept", "reject", "defer"],
+    "automatic_route_change_allowed": false,
+    "accepted_change_requires_separate_reviewed_slice": true,
+    "historical_backfill_allowed": false
+  }
+}
