@@ -286,8 +286,9 @@ def load_account_bundle(path: str, decision_as_of: str) -> tuple[dict, dict, dic
     try:
         with open(path, encoding="utf-8") as f:
             bundle = json.load(f)
-    except (OSError, json.JSONDecodeError) as exc:
-        raise SystemExit(f"[FATAL] --account bundle 无法读取/解析: {exc}") from exc
+    except (OSError, UnicodeDecodeError, json.JSONDecodeError) as exc:
+        # 只报异常类名:`{exc}` 会把 --account 的私密账户状态路径写进 FATAL 文案。
+        raise SystemExit(f"[FATAL] --account bundle 无法读取/解析: {type(exc).__name__}") from exc
     if not isinstance(bundle, dict) or bundle.get("schema_name") != "a_short_account_bundle":
         raise SystemExit(
             "[FATAL] --account 必须是 a_short_account_bundle；旧裸 account_state 无法证明真实 facts_as_of/"
@@ -4040,7 +4041,8 @@ def main(argv=None, pro_factory=None, price_provider=None, semantic_provider=Non
             regulatory_confirmations = validate_confirmation_document(
                 confirmation_payload, args.as_of, source_identity["candidate_digest"]
             )
-        except (OSError, json.JSONDecodeError, jsonschema.ValidationError, RegulatoryAdvisoryContractError) as exc:
+        except (OSError, UnicodeDecodeError, json.JSONDecodeError,
+                jsonschema.ValidationError, RegulatoryAdvisoryContractError) as exc:
             raise SystemExit(f"[FATAL] invalid/stale --regulatory-confirmations: {type(exc).__name__}") from exc
     try:
         feed = _load(args.iv_feed)
@@ -4076,7 +4078,8 @@ def main(argv=None, pro_factory=None, price_provider=None, semantic_provider=Non
                 holding_universe_digest(positions),
                 {str(position.get("ts_code")) for position in positions},
             )
-        except (OSError, json.JSONDecodeError, jsonschema.ValidationError, RegulatoryAdvisoryContractError) as exc:
+        except (OSError, UnicodeDecodeError, json.JSONDecodeError,
+                jsonschema.ValidationError, RegulatoryAdvisoryContractError) as exc:
             raise SystemExit(
                 f"[FATAL] invalid/stale --holding-regulatory-confirmations: {type(exc).__name__}"
             ) from exc

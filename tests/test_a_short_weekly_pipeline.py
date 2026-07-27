@@ -631,6 +631,76 @@ class MainWiringTests(unittest.TestCase):
                 ], price_provider=lambda code: _series())
         self.assertNotIn("000001.SZ", str(exc.exception))
 
+    # R-ASHORT-WEEKLY-MAIN-PARSE-EXIT-RESIDUAL-THREE-SITES: the three named sites used to omit
+    # UnicodeDecodeError, so an invalid-UTF-8 input escaped as a bare exception.  One reverse
+    # control each; the positive controls are the existing valid-input tests in this class.
+    _INVALID_UTF8 = b'{"schema_name": "\xff\xfe", "ts_code": "600000.SH"}'
+
+    def test_main_rejects_invalid_utf8_regulatory_confirmations_without_path_or_payload(self):
+        with tempfile.TemporaryDirectory() as td:
+            self._write_inputs(td)
+            bad = Path(td) / "reg-confirm.json"
+            bad.write_bytes(self._INVALID_UTF8)
+            with self.assertRaisesRegex(
+                SystemExit, "invalid/stale --regulatory-confirmations: UnicodeDecodeError"
+            ) as exc:
+                main([
+                    "--as-of", AS_OF,
+                    "--analysis-input", str(Path(td) / "ai.json"),
+                    "--iv-feed", str(Path(td) / "feed.json"),
+                    "--account", str(Path(td) / "acct.json"),
+                    "--regulatory-confirmations", str(bad),
+                    "--out", str(Path(td) / "weekly.json"),
+                ], price_provider=lambda code: _series())
+        message = str(exc.exception)
+        self.assertNotIn(str(bad), message)
+        self.assertNotIn("600000.SH", message)
+
+    def test_main_rejects_invalid_utf8_holding_regulatory_confirmations_without_path_or_payload(self):
+        with tempfile.TemporaryDirectory() as td:
+            self._write_inputs(td)
+            bad = Path(td) / "holding-reg-confirm.json"
+            bad.write_bytes(self._INVALID_UTF8)
+            with self.assertRaisesRegex(
+                SystemExit, "invalid/stale --holding-regulatory-confirmations: UnicodeDecodeError"
+            ) as exc:
+                main([
+                    "--as-of", AS_OF,
+                    "--analysis-input", str(Path(td) / "ai.json"),
+                    "--iv-feed", str(Path(td) / "feed.json"),
+                    "--account", str(Path(td) / "acct.json"),
+                    "--holding-regulatory-confirmations", str(bad),
+                    "--out", str(Path(td) / "weekly.json"),
+                ], price_provider=lambda code: _series())
+        message = str(exc.exception)
+        self.assertNotIn(str(bad), message)
+        self.assertNotIn("600000.SH", message)
+
+    def test_load_account_bundle_rejects_invalid_utf8_without_leaking_the_private_path(self):
+        from runners.a_short_weekly_pipeline import load_account_bundle
+        with tempfile.TemporaryDirectory() as td:
+            bad = Path(td) / "private-account-bundle.json"
+            bad.write_bytes(self._INVALID_UTF8)
+            with self.assertRaisesRegex(SystemExit, "UnicodeDecodeError") as exc:
+                load_account_bundle(str(bad), AS_OF)
+        message = str(exc.exception)
+        # The whole point of this site: an OSError/decode failure must not print where the
+        # operator's account state lives.
+        self.assertNotIn(str(bad), message)
+        self.assertNotIn("private-account-bundle", message)
+
+    def test_load_account_bundle_oserror_message_carries_no_private_path(self):
+        # The `{exc}` interpolation this repair removed: OSError stringifies WITH the filename,
+        # so an unreadable/missing bundle used to print the private account-state path.
+        from runners.a_short_weekly_pipeline import load_account_bundle
+        with tempfile.TemporaryDirectory() as td:
+            missing = Path(td) / "private-account-bundle.json"
+            with self.assertRaisesRegex(SystemExit, "FileNotFoundError") as exc:
+                load_account_bundle(str(missing), AS_OF)
+        message = str(exc.exception)
+        self.assertNotIn(str(missing), message)
+        self.assertNotIn("private-account-bundle", message)
+
     def test_main_accepts_only_current_digest_bound_regulatory_confirmation(self):
         from engine.a_short_regulatory_advisory import event_fingerprint
         from engine.data.analysis_input_contract import build_a_short_run_identity

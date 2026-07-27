@@ -1,5 +1,13 @@
 # Session Log
 
+## 2026-07-27 — Claude Code 修复 (三个 main parse 出口，用户指令自修自审)
+
+- **Verdict/Action**: 三处全修并 PASS：`load_account_bundle` 与两个 regulatory 旗补 `UnicodeDecodeError`，账户桶的 `{exc}` 换成 `type(exc).__name__`（原文案会把私密账户路径打进 FATAL）。用户明令「不按类，只修点名的三个」，故 helper 级整类扫描主动停掉；未覆盖的三个同形站点已在 register 逐个点名，供将来重开。7 增 4 删，成功路径零改动。
+- **Required**: `R-ASHORT-WEEKLY-MAIN-PARSE-EXIT-RESIDUAL-THREE-SITES`(转 resolved P3)。完整修法/主动未修范围/红转绿证据/边界见 `system_risk_register.md`(单一来源，本处不复述)。
+- **Verify**: review-evidence:e9a8b5c0cd96。四条反向对照改前逐条实测为红（三条裸 `UnicodeDecodeError` 逃逸；账户桶那条直接打出 `[Errno 2] … private-account-bundle.json` 私密路径），改后窄包（4 新 + 2 既有同类）6 OK/0.1s，报文既无路径也无票号；正对照 valid bundle 仍正常返回三元组；`py_compile`、`git diff --check` 通过。按用户指令与 rule 6：不起 agent、不跑全量。
+- **Pre-Codex self-review**: A 先按 helper+call-shape 扫全文件、发现 3 个同形站点，用户裁定不扩类后逐个点名进 register 而非静默丢弃；B `grep` 确认三处 except 均含完整三元组、`{exc}` 残留为 0；C 红转绿用 `git checkout HEAD --` 真实回滚测得，非推断；D 正对照单跑；E 未改 CURRENT；F 窄包一次跑完（整类 `MainWiringTests` >600s 未完已停并记进 register）。
+- **Next**: 无（代码在主树上直接修，无 merge 步骤）
+
 ## 2026-07-27 — Claude Code 审查 PASS + merge (8865 第四刀并入 master)
 
 - **Verdict/Action**: PASS，8865 的 `cfc6ef59`+`f9dc0ad1` 已并入 master（主树领先 20 提交，真合并非快进）。两处文本冲突手工解：SESSION_LOG 按日期复位（auto-merge 按 hunk 插到 07-26 之下，已把 07-27 三条移回顶部）、sidecar 测试两侧各自新增的用例都保留。一处**语义冲突**：主树并行窗口新增了第 19 个 sidecar `theme_forward_comparison`，正撞上本刀新加的分桶完整性门（未归桶即 `ValueError`）——按其性质归 best-effort（有探针无 schema 化权威回执）。register 冲突：主树的第三刀条目已 RESOLVED，故不重开旧条目，把 K4-RV3(i) 在 master 上重测后另立 live 条目。
