@@ -11,6 +11,8 @@ Usage:
    .\tools\codex_main_python.ps1 .tools\full_pack_ledger.py run <lane> <full-trigger-reason> <focused-evidence> <timeout-seconds> -- <unittest args>
    .\tools\codex_main_python.ps1 .tools\full_pack_ledger.py check <lane>
 
+`run` accepts only the lane's fixed full-discovery selector: `a_short` = `discover -s tests -p test_a_short*.py`; `us_short` = `discover -s tests -p test_us_short*.py`.
+
 `check` exit code: 0 = cached green on the current exact code state (do NOT re-run; cite it);
 1 = no cached green for the current code state (a full run is warranted only if tiering rule 3
 applies). ``run`` is the only public write path: it checks the cache, binds the A-F preparation,
@@ -30,6 +32,10 @@ from bounded_unittest import FULL_MAX_SECONDS, run_unittest
 ROOT = Path(__file__).resolve().parent.parent
 DEFAULT_LEDGER = ROOT / ".tools" / "state" / "full_pack_ledger.json"
 PREPARES_KEY = "_prepares"
+FULL_PACK_DISCOVERY_ARGS = {
+    "a_short": ("discover", "-s", "tests", "-p", "test_a_short*.py"),
+    "us_short": ("discover", "-s", "tests", "-p", "test_us_short*.py"),
+}
 
 
 def _is_code_path(rel_path: str) -> bool:
@@ -132,6 +138,13 @@ def run_full_pack(
         raise ValueError(f"full timeout must be 1..{FULL_MAX_SECONDS} seconds")
     if not unittest_args:
         raise ValueError("run requires unittest arguments after --")
+    required_args = FULL_PACK_DISCOVERY_ARGS.get(lane)
+    if required_args is None:
+        raise ValueError(f"unknown lane for full-pack ledger: {lane}")
+    if tuple(unittest_args) != required_args:
+        raise ValueError(
+            f"{lane} full-pack must exactly use unittest args {list(required_args)!r}"
+        )
     current_state = state if state is not None else collect_code_state()
     hit = cached_green(lane, state=current_state, ledger=ledger)
     if hit is not None:

@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import os
+import subprocess
 import sys
 import tempfile
 import unittest
@@ -47,11 +49,54 @@ class BoundedUnittestTests(unittest.TestCase):
         self.assertEqual(result.exit_code, bounded.TIMEOUT_EXIT)
         self.assertLess(result.elapsed_seconds, 5)
 
-    def test_cli_rejects_deadlines_above_tier_caps(self):
+    def test_cli_allows_explicit_slow_focused_deadline_but_rejects_above_full_cap(self):
+        self.assertEqual(bounded.FOCUSED_DEFAULT_SECONDS, 300)
+        self.assertEqual(
+            bounded._parse(["focused", "600", "--", "tests"]),
+            ("focused", 600, ["tests"]),
+        )
         self.assertEqual(
             bounded.main(["focused", str(bounded.FOCUSED_MAX_SECONDS + 1), "--", "tests"]),
             2,
         )
+
+    def test_launcher_passes_explicit_timeout_without_leaking_it_to_unittest(self):
+        launcher = Path(__file__).resolve().parents[1] / ".tools" / "run_unittest_with_repo_pythonpath.cmd"
+        result = subprocess.run(
+            [
+                str(launcher), "--timeout-seconds", "600",
+                "tests.test_bounded_unittest.BoundedUnittestTests.test_zero_tests_is_unknown_not_pass",
+            ],
+            cwd=str(launcher.parents[1]),
+            env=os.environ.copy(),
+            text=True,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.STDOUT,
+            timeout=30,
+        )
+        self.assertEqual(result.returncode, 0, result.stdout)
+        self.assertIn("deadline=600s", result.stdout)
+
+    def test_launcher_usage_errors_exit_non_zero_and_run_no_tests(self):
+        """GOV-R4: a usage error printed a message but exited 0, so a typo read as a green pack."""
+        launcher = Path(__file__).resolve().parents[1] / ".tools" / "run_unittest_with_repo_pythonpath.cmd"
+        for args, expected_message in (
+            (["--timeout-seconds"], "requires a positive integer"),
+            (["--timeout-seconds", "600"], "requires unittest arguments"),
+        ):
+            with self.subTest(args=args):
+                result = subprocess.run(
+                    [str(launcher), *args],
+                    cwd=str(launcher.parents[1]),
+                    env=os.environ.copy(),
+                    text=True,
+                    stdout=subprocess.PIPE,
+                    stderr=subprocess.STDOUT,
+                    timeout=60,
+                )
+                self.assertEqual(result.returncode, 2, result.stdout)
+                self.assertIn(expected_message, result.stdout)
+                self.assertNotIn("Ran ", result.stdout)
 
     def test_cleanup_failure_path_is_still_bounded(self):
         class StuckProcess:

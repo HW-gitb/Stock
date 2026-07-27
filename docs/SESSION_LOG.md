@@ -1,5 +1,28 @@
 # Session Log
 
+## 2026-07-27 - Claude Code 修复 + 自审 PASS (GOV-R4 + Optional，用户明令自修自审)
+
+- **Verdict/Action**: PASS。整类只有两处：launcher 里双层嵌套的两个用法守卫，改为 `goto` 到单层标签 `:usage_missing_timeout_value` / `:usage_missing_unittest_args`（各自 `popd` + `exit /b 2`，放在正常出口之后）。Optional 一并闭：AGENTS rule 5 补回"未经用户批准不得提高上限"，并加上"用法错误必须非零退出"。
+- **Required**: `R-GOV-LAUNCHER-USAGE-GUARDS-EXIT-ZERO`(GOV-R4) 与 `R-GOV-BOUNDED-TEST-CAPS-AND-SILENT-SKIP` 均转 resolved。整类枚举、修法与逐条证据见 `system_risk_register.md`(单一来源，本处不复述)。
+- **Verify**: review-evidence:7a5e8fac192a。改前实测两例 exit 0（bash 与 PowerShell 双测），改后同样两例 bash 与 PowerShell 均为 **exit 2**；`5000` 仍 2、正常路径仍 0。新增反向控制 `test_launcher_usage_errors_exit_non_zero_and_run_no_tests` 断言 exit 2 + 指定报文 + 无 `Ran ` 行。焦点超集包经强制入口自跑：`status=PASS exit=0 tests=60 deadline=300s`。仓库内外均无残留。
+- **Proof-of-use**: A 先按 `exit /b` 嵌套层级把整个类扫完（两个 .cmd 共 7 处出口，只有 2 处双层=缺陷），不只修被点名那条腿；B grep 确认无第三处同形；C 反向对照用真 launcher 子进程跑，改前红、改后绿；D 正对照（正常路径、over-ceiling）行为不变；E 未改任何 route-doc/CURRENT；F 焦点超集包一次跑完并经 doc guard 一次过。
+- **Next**: 提交并合入 master
+
+## 2026-07-27 - Claude Code 审查 FAIL (GOV-R1/R2/R3 + GOV-O1 闭合复核)
+
+- **Verdict/Action**: FAIL，一条新 Required。原四条全部真闭：焦点档上限可显式到 1200 秒(477 秒那个包现在跑得通)、jsonschema 探针带反向控制、gate 指向绝对脚本(本轮实测生效)、ledger 只认本 lane 的 discovery 选择器。但本次新加的 `--timeout-seconds` 两处用法守卫嵌在双层 `if` 里，报错后 `exit /b 2` 不传播——实测退出码 0 且零测试执行，正是这套限时治理要消灭的假绿类。未提交。
+- **Required**: `R-GOV-LAUNCHER-USAGE-GUARDS-EXIT-ZERO`(GOV-R4)。机理(单层 jsonschema 守卫退出 1 正常、双层嵌套丢码)、四条原 Required 的逐条闭合证据与修法见 `system_risk_register.md`(单一来源，本处不复述)。
+- **Verify**: review-evidence:7a5e8fac192a。亲跑(本树 = 携带该修复的 `wt/a-short-r`)：变更文件超集包 `97 OK`/exit 0；launcher 默认 `deadline=300s tests=8 PASS`、`--timeout-seconds 600` -> `deadline=600s PASS`、`5000` -> REFUSED/exit 2；植入坏 `jsonschema` -> 报错并 exit 1、零测试；ledger 错参数与未知 lane 双双 REFUSED；`--timeout-seconds` 缺值与缺测试参数两例 bash 与 PowerShell 双测均为 exit 0。首次超集包误指向主树(95 OK)，仅作干净树证据、不作闭合依据。未起 6a agent(治理面、rule 8)。
+- **Next**: Codex：修复 GOV-R4(把两处守卫提到 `goto :usage_error` 单层出口，并补非零退出的对照)。
+
+## 2026-07-27 — Codex 修复 (GOV-R1/R2/R3 + GOV-O1)
+
+- **Verdict/Action**: Locally repaired the bounded-test governance findings; no commit or full-lane run.
+- **Required**: `R-GOV-BOUNDED-TEST-CAPS-AND-SILENT-SKIP` locally addressed; detail and review state remain in `docs/system_risk_register.md`.
+- **Verify**: pinned launcher `--timeout-seconds 600 tests.test_bounded_unittest` = 8 OK; governance superpack = 89 OK; `git diff --check` exit 0.
+- **Pre-Codex self-review**: A all R1/R2/R3/O1 seams; B stale-rule grep 0; C launcher forwarding red-to-green; E CURRENT unchanged; F one bounded pack each, no self-review agent.
+- **Next**: Claude Code independently review this GOV diff, then commit only if PASS.
+
 ## 2026-07-27 — Claude Code 审查 FAIL (bounded test-process governance `1a4b3fa5`/`f78e7213`)
 
 - **Verdict/Action**: FAIL，三条 Required。新的 300 秒 focused 硬上限低于一个实测 477 秒的既有绿包，导致被强制的入口对它只能给 TIMEOUT；启动器删掉的 `import jsonschema` 探针是四个模块「静默 skip」的唯一防线，而同一提交新写的 AGENTS 断言与树里事实相反；我自己上一轮加的 rule 7 墙钟门只在带该提交的树里生效，本轮就没生效。未提交被审代码。

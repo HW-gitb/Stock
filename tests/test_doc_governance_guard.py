@@ -692,11 +692,13 @@ class DocGovernanceGuard(unittest.TestCase):
             "Full lane regression — exceptional, not default",
             "exactly one actor runs the full lane pack",
             ".tools\\run_unittest_with_repo_pythonpath.cmd <unittest args>",
-            "enforces a 300-second maximum",
+            "has a default focused deadline of 300 seconds",
+            "--timeout-seconds <N>",
             "has a 1200-second maximum",
             "PID, CPU change, process existence, or parent/child switch",
             "A zero-test, still-running, timed-out, interrupted, missing-exit, or missing-`Ran N tests` run",
-            "does not pay an unconditional import probe or full A-short preflight tax",
+            "verifies `jsonschema` once",
+            "does not pay a full A-short preflight tax",
             "a 40-minute repair loop is a process failure",
         ):
             self.assertIn(anchor, section, f"shared process-speed contract lost anchor: {anchor}")
@@ -1220,7 +1222,8 @@ class DocGovernanceGuard(unittest.TestCase):
             "PINNED_PYTHON",
             "C:/Users/cnhea/AppData/Local/Programs/Python/Python313/python.exe",
             ".tools/bounded_unittest.py",
-            "focused 300 --",
+            "set \"TIMEOUT_SECONDS=300\"",
+            "--timeout-seconds",
         ):
             self.assertIn(anchor, normalized_script, f"wrapper lost required test-runtime anchor: {anchor}")
         for forbidden in ("where %%P", "if defined STOCK_TEST_PYTHON", "if defined STOCK_PYTHON"):
@@ -1228,7 +1231,9 @@ class DocGovernanceGuard(unittest.TestCase):
                              f"strict Codex launcher must not select another interpreter: {forbidden}")
         self.assertIn('set "STOCK_TEST_PYTHON="', launcher_script,
                       "strict launcher must clear an inherited test-interpreter override")
-        for removed_tax in ('-c "import jsonschema"', "a_short_preflight.py", "Resolve-AshortPython.ps1"):
+        self.assertIn('-c "import jsonschema"', launcher_script,
+                      "strict launcher must fail before any silent schema skip")
+        for removed_tax in ("a_short_preflight.py", "Resolve-AshortPython.ps1"):
             self.assertNotIn(removed_tax, launcher_script,
                              f"focused wrapper reintroduced unconditional startup tax: {removed_tax}")
 
@@ -1261,11 +1266,11 @@ class JsonschemaImportSmoke(unittest.TestCase):
         self.assertTrue(hasattr(jsonschema, "Draft7Validator"),
                         "jsonschema import must expose Draft7Validator")
 
-    def test_launcher_does_not_repeat_import_or_full_preflight_probes(self):
+    def test_launcher_checks_jsonschema_once_but_not_full_preflight(self):
         launcher = (ROOT / ".tools" / "run_unittest_with_repo_pythonpath.cmd").read_text(
             encoding="utf-8"
         )
-        self.assertNotIn('-c "import jsonschema"', launcher)
+        self.assertIn('-c "import jsonschema"', launcher)
         self.assertNotIn("a_short_preflight.py", launcher)
         self.assertIn(".tools\\bounded_unittest.py", launcher)
 

@@ -12,8 +12,11 @@ from dataclasses import dataclass
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
-FOCUSED_MAX_SECONDS = 300
 FULL_MAX_SECONDS = 1200
+FOCUSED_DEFAULT_SECONDS = 300
+# A focused command normally gets the short default. A known slow, still-focused
+# pack may opt in through the launcher, but never exceed the full-run ceiling.
+FOCUSED_MAX_SECONDS = FULL_MAX_SECONDS
 TIMEOUT_EXIT = 124
 INVALID_EVIDENCE_EXIT = 125
 _RAN_TESTS = re.compile(r"\bRan\s+(\d+)\s+tests?\s+in\b")

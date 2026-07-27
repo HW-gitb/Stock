@@ -96,12 +96,13 @@ class FullPackLedgerTests(unittest.TestCase):
             self.assertEqual(
                 fpl.main([
                     "ledger", "run", "a_short", "shared schema", "focused=12 OK",
-                    "30", "--", "tests.test_x",
+                    "30", "--", "discover", "-s", "tests", "-p", "test_a_short*.py",
                 ]),
                 0,
             )
         runner.assert_called_once_with(
-            "a_short", "shared schema", "focused=12 OK", 30, ["tests.test_x"]
+            "a_short", "shared schema", "focused=12 OK", 30,
+            ["discover", "-s", "tests", "-p", "test_a_short*.py"],
         )
 
     def test_single_run_command_prepares_runs_and_records_only_real_pass(self):
@@ -116,7 +117,7 @@ class FullPackLedgerTests(unittest.TestCase):
                         "shared schema",
                         "focused=12 OK",
                         30,
-                        ["tests.test_x"],
+                        ["discover", "-s", "tests", "-p", "test_a_short*.py"],
                         state=state,
                         ledger=ledger,
                     ),
@@ -125,6 +126,28 @@ class FullPackLedgerTests(unittest.TestCase):
             hit = fpl.cached_green("a_short", state=state, ledger=ledger)
             self.assertIsNotNone(hit)
             self.assertEqual(hit["count"], "3 OK")
+
+    def test_single_run_rejects_subset_and_unknown_lane(self):
+        state = {"engine/x.py": "aaa", "@HEAD": "h1"}
+        with tempfile.TemporaryDirectory() as tmp:
+            ledger = Path(tmp) / "ledger.json"
+            with self.assertRaisesRegex(ValueError, "test_a_short\\*\\.py"):
+                fpl.run_full_pack(
+                    "a_short", "shared schema", "focused=12 OK", 30, ["tests.test_x"],
+                    state=state, ledger=ledger,
+                )
+            with self.assertRaisesRegex(ValueError, "test_a_short\\*\\.py"):
+                fpl.run_full_pack(
+                    "a_short", "shared schema", "focused=12 OK", 30,
+                    ["discover", "-s", "other", "-p", "test_a_short*.py"],
+                    state=state, ledger=ledger,
+                )
+            with self.assertRaisesRegex(ValueError, "unknown lane"):
+                fpl.run_full_pack(
+                    "unknown", "shared schema", "focused=12 OK", 30,
+                    ["discover", "-s", "tests", "-p", "test_unknown*.py"],
+                    state=state, ledger=ledger,
+                )
 
     def test_single_run_timeout_never_records_green(self):
         with tempfile.TemporaryDirectory() as tmp:
@@ -138,7 +161,7 @@ class FullPackLedgerTests(unittest.TestCase):
                         "shared schema",
                         "focused=12 OK",
                         30,
-                        ["tests.test_x"],
+                        ["discover", "-s", "tests", "-p", "test_a_short*.py"],
                         state=state,
                         ledger=ledger,
                     ),
