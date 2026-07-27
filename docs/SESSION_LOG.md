@@ -1,5 +1,13 @@
 # Session Log
 
+## 2026-07-27 - Claude Code 修复 + 自审 PASS (GOV-R6：GOV-R5 那次没修到根上)
+
+- **Verdict/Action**: PASS。根因不是启动器强设 `PYTHONIOENCODING`(那行删得对，但只是其中一个来源)，而是测试自己 `subprocess.run(..., text=True)` 不钉 `encoding=`、拿跑测试那个 shell 的 locale(cp936) 去解子进程输出；子进程吐什么编码又看它继承到的 `PYTHONIOENCODING`。两端各自随环境漂 ⇒ 换个 shell 同一份代码就红。改成两端一起钉死。
+- **Required**: 无新开。`R-GOV-SUBPROCESS-DECODE-USES-MACHINE-LOCALE`(GOV-R6) 直接以 resolved 记入 `system_risk_register.md`(单一来源：根因、整类判据、故意不动的 19 处边界、守护与对照)。
+- **Verify**: review-evidence:not_available(本轮为用户直接下达的修复指令、非 review 命令形态，门未 arm)。亲跑：修后 5 个模块经启动器在 **PowerShell**(`PYTHONIOENCODING=utf-8:surrogateescape`) = `53 tests/PASS/exit=0`，在 **Bash**(该变量为空) = `Ran 53/OK`——同码同结果即不再依赖 shell；会死的对照用两棵真树做：未修的 master 树在 PowerShell 下同模块 `errors=9`、已修树 `OK`；原始字节探针证子进程实际吐 UTF-8(`decode utf-8 OK/gbk FAIL`)；`test_doc_governance_guard`+`test_review_tiering_enforcement` `54 OK`。
+- **Proof-of-use**: A 按「测试 spawn 本解释器并按文本捕获」整类枚举，AST 扫出 `tests/` 24 处无 `encoding=` 的文本捕获、命中判据 5 处全修；B `git`/PowerShell/`.cmd` 子进程那 19 处**故意不动**并写明理由(强钉 utf-8 会引入新错配)；C 新守卫自带植入失败对照(缺父端/缺子端各被抓、干净与 git 子进程不被抓)，否则「集合为空」是空洞的；D 双 shell 正反对照；E 未动 CURRENT/README；F 顺手修掉本树 4 份 bundle 的 CRLF 残留(master 同测试本来就绿)。
+- **Next**: 用户：可提交并合入 master
+
 ## 2026-07-27 - Claude Code 审查 PASS + 提交 (K4B-R8 派生式类级守卫)
 
 - **Verdict/Action**: PASS，已提交。`tests/test_tracked_artifact_digest_canonicalization.py` 是真正的派生守卫：AST 扫 `engine/`+`runners/`、解析路径常量、用 `git check-ignore` 只留受跟踪的 `docs|presets|schemas`，要求集合为空或登记带理由的例外(现为空)；自带三条对照(真源变异 epoch、合成的"第三条腿"、`state/` 运行时产物不得命中)。R6/R7 上轮已闭，本轮回归未动。

@@ -1,5 +1,18 @@
 # System Risk Register
 
+### R-GOV-SUBPROCESS-DECODE-USES-MACHINE-LOCALE - resolved Required (GOV-R6): the real root cause behind GOV-R5's nine red fail-closed guards
+
+- **状态 / 严重度**: **resolved 2026-07-27，由 reviewer(Claude Code) 按用户指令自修 + 自审，未提交前已双 shell 验证**。测试基础设施；不碰选股、真钱、provider、网络。P2 的理由是它让这条 lane 的强制入口**在某些 shell 下永远拿不到全绿**，于是所有依赖「full pack 绿」的 PASS 门都建在一个随环境变红的包上。
+- **GOV-R5 为什么没修到根上（先说清，避免第三次）**: GOV-R5 的判断是「bounded runner 强设 `PYTHONIOENCODING=utf-8`，泄进孙进程，把 9 条 `FailClosedAndRedaction` 守卫跑成 error」，修法是把那一行删掉，闭合证据是「经启动器 `tests=20 status=PASS`」。那次删除**本身是对的**（它确实是当时的一个 utf-8 来源），但闭合证据只证明了「那次那个 shell 里没人设这个变量」，没有证明「代码不再依赖环境」。真正的缺陷在测试自己这一侧，删掉 runner 那一行并不能消除它。
+- **根因（本轮实测定位）**: `tests/test_us_short_weekend_batch4_context_builder.py::_run` 用 `subprocess.run(..., capture_output=True, text=True)` 而**不钉 `encoding=`**，于是解码用「跑测试那个进程的 locale」（本机 `cp936`）；而子进程用什么编码写 stderr 又取决于**它继承到的 `PYTHONIOENCODING`**。两端各自随环境漂，一旦不一致就 `UnicodeDecodeError` → `text=True` 的捕获整个塌成 `None` → 断言 `TypeError: argument of type 'NoneType' is not iterable`。
+- **实测（pinned 3.13，master `b5bd8466`）**: ① PowerShell 会话里 `PYTHONIOENCODING=utf-8:surrogateescape`、Bash 里为空，两侧 `locale.getencoding()` 都是 `cp936`；② 同一棵干净 master、同一条 plain `python -m unittest`：PowerShell 下 `Ran 20 / FAILED (errors=9)`，Bash 下 `Ran 20 / OK`——**差异变量就是 shell 的那个环境变量，与启动器无关**（经启动器同样 9）；③ 原始字节探针（`subprocess.run` 不带 `text=`）确认子进程 stderr 实际吐 UTF-8：`b'... --account \xe5\xbf\x85\xe9\xa1\xbb...'`，`decode('utf-8') OK / decode('gbk') FAIL`；④ 完整栈 = `UnicodeDecodeError: 'gbk' codec can't decode byte 0x89` → `ran.stderr is None` → `TypeError`（`:312`）。
+- **修法（两端一起钉，结果与 shell/locale 无关）**: 子进程 env 显式 `PYTHONIOENCODING=utf-8`，父进程捕获显式 `encoding="utf-8", errors="replace"`。
+- **整类扫描（不是只改被点名那一处）**: 判据 = 「测试里 spawn 本解释器（`sys.executable`）的子进程并按文本捕获」。AST 扫 `tests/` 共 24 处 `text=True` 且无 `encoding=` 的捕获，其中命中判据的 **5 处全部已修**：`tests/test_us_short_weekend_batch4_context_builder.py:69`、`tests/provider/test_us_short_batch5_to_batch4_e2e.py:421,471`、`tests/provider/test_us_short_forward_universe_snapshot.py:171`、`tests/test_a_short_factor_comparison.py:285`。**故意不动**剩下 19 处：它们的子进程是 `git` / PowerShell / `.cmd` 启动器（`git check-ignore -q` 无输出、PowerShell 按控制台代码页输出），对它们强钉 utf-8 反而会引入新的错配——边界写在这里，不是漏掉。
+- **机器守护（防第三次）**: 新增 `tests/test_subprocess_text_capture_encoding_pin.py`，AST 派生扫 `tests/`，对命中判据的调用点要求 (a) 显式 `encoding=`、(b) 所在函数内出现 `PYTHONIOENCODING`；违反即列出 `<file>:<line>:<reason>`，断言集合为空（**当前为空、无豁免名单**）。自带**植入失败对照**：两个各缺一半的合成模块必须被抓出对应 reason，一个两端都钉的干净模块与一个 `git` 子进程模块必须不被抓——否则「集合为空」是空洞的。
+- **验证（双 shell + 跨树 A/B + 植入对照，均为亲跑）**: ① 修后 `tests.test_subprocess_text_capture_encoding_pin` + 上述 4 个受影响模块，**PowerShell**（`PYTHONIOENCODING=utf-8:surrogateescape`）经启动器 = `53 tests / PASS / exit=0`；② **Bash**（该变量为空）同 5 个模块 = `Ran 53 / OK`——同一份代码在两个环境下同结果，即「不再依赖 shell」；③ 会死的对照用两棵真树做，不靠临时改代码：未修的 master 树在 PowerShell 下同模块 `errors=9`，已修的 `a-short-r` 树 `OK`；④ 守护自身的植入对照随 ① 一起绿；⑤ `tests.test_doc_governance_guard` + `tests.test_review_tiering_enforcement` = `54 OK`（新增测试文件未触治理门）。
+- **顺带（工作树自愈，非代码改动）**: `a-short-r` 里 4 份已发布 bundle（`research/results/a_short/{20260612,20260706,20260720,weekly_20260609}/weekly_m67.md`）是旧 checkout 残留的 CRLF，`git status` 因 stat 缓存显示干净，却让 `tests.test_a_short_published_bundle_eol_pin` 在本树 3 红（master 树同测试 `3 OK`）。已删除后 `git checkout --` 重新落盘为 LF，现两树一致。不是 GOV-R6 的一部分，记录以免下一个人当新 bug。
+- **残留 / 不在本刀**: 上述 19 处非 Python 子进程的捕获仍未钉编码（低危，见上），守护也按判据不管它们；若将来有测试改成断言 `git`/PowerShell 子进程的中文输出，需要按同样思路单独处理。
+
 ### R-USSHORT-KNIFE4B-CLASS-GUARD-NOT-DELIVERED - resolved Required (K4B-R8 derived class guard)
 
 - **Status / severity**: **resolved 2026-07-27 - independent Claude Code re-review PASS, committed**.

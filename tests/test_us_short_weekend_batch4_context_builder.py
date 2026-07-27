@@ -65,8 +65,13 @@ def _run(cmd):
     pythonpath_parts = [str(ROOT)]
     if existing_pythonpath:
         pythonpath_parts.append(existing_pythonpath)
-    env = {**os.environ, "PYTHONPATH": os.pathsep.join(pythonpath_parts)}
-    return subprocess.run([sys.executable, *cmd], cwd=str(ROOT), env=env, capture_output=True, text=True)
+    # GOV-R6: pin BOTH ends of the pipe. The child's stdio encoding follows whatever
+    # PYTHONIOENCODING it inherits and the parent's `text=True` would otherwise decode with the
+    # machine/shell locale (cp936 here), so an ambient `PYTHONIOENCODING=utf-8` used to turn every
+    # redaction assertion below into `UnicodeDecodeError -> stderr is None -> TypeError`.
+    env = {**os.environ, "PYTHONPATH": os.pathsep.join(pythonpath_parts), "PYTHONIOENCODING": "utf-8"}
+    return subprocess.run([sys.executable, *cmd], cwd=str(ROOT), env=env, capture_output=True,
+                          text=True, encoding="utf-8", errors="replace")
 
 
 def _build_cmd(base: Path, *, account, fixture, out):

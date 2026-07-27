@@ -281,6 +281,7 @@ class DirectRunnerInvocationTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as tmp:
             env = os.environ.copy()
             env.pop("PYTHONPATH", None)
+            env["PYTHONIOENCODING"] = "utf-8"   # GOV-R6: pin both ends, never the ambient locale
             root = _root(tmp)
             completed = subprocess.run(
                 [
@@ -296,6 +297,8 @@ class DirectRunnerInvocationTests(unittest.TestCase):
                 env=env,
                 capture_output=True,
                 text=True,
+                encoding="utf-8",
+                errors="replace",
                 timeout=30,
                 check=False,
             )

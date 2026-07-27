@@ -168,6 +168,7 @@ class ForwardUniverseSnapshotTest(unittest.TestCase):
 
         env = dict(os.environ)
         env["PYTHONPATH"] = str(ROOT)
+        env["PYTHONIOENCODING"] = "utf-8"   # GOV-R6: pin both ends, never the ambient locale
         result = subprocess.run(
             [
                 sys.executable,
@@ -187,6 +188,8 @@ class ForwardUniverseSnapshotTest(unittest.TestCase):
             env=env,
             capture_output=True,
             text=True,
+            encoding="utf-8",
+            errors="replace",
             check=False,
         )
 

@@ -442,6 +442,9 @@ class Batch5ToBatch4E2ETest(unittest.TestCase):
                 ],
                 cwd=ROOT,
                 text=True,
+                encoding="utf-8",          # GOV-R6: both ends pinned, never the ambient locale
+                errors="replace",
+                env={**os.environ, "PYTHONIOENCODING": "utf-8"},
                 stdout=subprocess.PIPE,
                 stderr=subprocess.PIPE,
                 check=False,
@@ -494,6 +497,9 @@ class Batch5ToBatch4E2ETest(unittest.TestCase):
                 ],
                 cwd=ROOT,
                 text=True,
+                encoding="utf-8",          # GOV-R6: both ends pinned, never the ambient locale
+                errors="replace",
+                env={**os.environ, "PYTHONIOENCODING": "utf-8"},
                 stdout=subprocess.PIPE,
                 stderr=subprocess.PIPE,
                 check=False,
