@@ -1809,6 +1809,9 @@ class LaneGuardRegistryConformance(unittest.TestCase):
          "tests.provider.test_us_short_weekly_capstone_soft_discovery"
          ".WeeklyCapstoneSoftDiscoveryStageTest"
          ".test_in_memory_discovery_digest_must_hash_the_payload"),
+        ("engine.us_short_soft_boost_consumption", "_read_canonical_json",
+         "tests.test_us_short_soft_boost_consumption.SoftBoostConsumptionTest"
+         ".test_evidence_epoch_digest_is_invariant_to_tracked_json_line_endings"),
         ("runners.us_short_discovery_publish_policy", "publish_immutable_pair",
          "tests.provider.test_us_short_llm_theme_discovery_fetch_web.WebFetchTests"
          ".test_public_packet_pair_rolls_back_if_second_publish_fails"),
@@ -1952,6 +1955,9 @@ class LaneGuardRegistryConformance(unittest.TestCase):
                 json.dumps(payload, ensure_ascii=True, indent=2) + "\n"
             ).encode("utf-8"),
             "_serialized_sha256": lambda *_args, **_kwargs: "f" * 64,
+            "_read_canonical_json": lambda path: __import__(
+                "engine.us_short_soft_boost_consumption", fromlist=["_read_json_bytes"]
+            )._read_json_bytes(path),
             "persisted_text_violation": lambda value: None,
             "credential_query_keys": lambda query: [],
             "_schema_validate": lambda *_args, **_kwargs: None,

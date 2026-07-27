@@ -14,6 +14,7 @@ from engine.us_short_provisional_theme_boost import (
 from engine.us_short_schema_formats import FORMAT_CHECKER
 from runners.us_short_discovery_publish_policy import (
     DiscoveryPublishPolicyError,
+    _serialized_sha256,
     publish_immutable_pair,
     validate_exact_decision_slot,
     write_immutable_json,
@@ -71,6 +72,11 @@ def _read_json_bytes(path: Path) -> tuple[dict[str, Any], str]:
     if type(value) is not dict:
         raise ValueError("JSON root must be an object")
     return value, hashlib.sha256(raw).hexdigest()
+
+
+def _read_canonical_json(path: Path) -> tuple[dict[str, Any], str]:
+    value, _raw_sha256 = _read_json_bytes(path)
+    return value, _serialized_sha256(value)
 
 
 def _repo_rel(path: Path) -> str:
@@ -374,9 +380,9 @@ def write_consumption_receipt(
 
 
 def _validated_evidence_contracts() -> tuple[str, str]:
-    plan, plan_sha = _read_json_bytes(STATISTICAL_PLAN_PATH)
+    plan, plan_sha = _read_canonical_json(STATISTICAL_PLAN_PATH)
     _validate(plan, STATISTICAL_PLAN_SCHEMA, label="K4b statistical plan")
-    epoch, epoch_sha = _read_json_bytes(EPOCH_PATH)
+    epoch, epoch_sha = _read_canonical_json(EPOCH_PATH)
     _validate(epoch, EPOCH_SCHEMA, label="K4b evidence epoch")
     if epoch["statistical_plan_path"] != _repo_rel(STATISTICAL_PLAN_PATH):
         raise SoftBoostConsumptionError("K4b evidence epoch statistical-plan path mismatch")

@@ -13,6 +13,10 @@ import bounded_unittest as bounded  # noqa: E402
 
 
 class BoundedUnittestTests(unittest.TestCase):
+    def test_runner_does_not_force_pythonioencoding_into_children(self):
+        source = Path(bounded.__file__).read_text(encoding="utf-8")
+        self.assertNotIn('child_env["PYTHONIOENCODING"]', source)
+
     def test_real_unittest_pass_has_terminal_count(self):
         with tempfile.TemporaryDirectory() as tmp:
             test_file = Path(tmp) / "test_sample.py"
