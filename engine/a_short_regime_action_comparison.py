@@ -658,19 +658,23 @@ def summarize_candidate_effect_records(records: list[dict]) -> dict:
     weekly_h10 = []
     weekly_h20 = []
     forbidden_h10_excess = []
+    mature_divergence_stocks = 0
+    h20_pending_weeks = 0
     for as_of in sorted(divergent_h10):
         group = divergent_h10[as_of]
-        h10 = [float(r["operation_improvement_pp"]["h10"]) for r in group]
-        weekly_h10.append(sum(h10) / len(h10))
         h20 = [r["operation_improvement_pp"]["h20"] for r in group]
         if all(value is not None for value in h20):
+            h10 = [float(r["operation_improvement_pp"]["h10"]) for r in group]
+            weekly_h10.append(sum(h10) / len(h10))
             weekly_h20.append(sum(float(value) for value in h20) / len(h20))
+            mature_divergence_stocks += len(group)
+            forbidden_h10_excess.extend(
+                float(r["baseline_excess_csi1000_pp"]["h10"])
+                for r in group if r["baseline_excess_csi1000_pp"]["h10"] is not None
+            )
         else:
+            h20_pending_weeks += 1
             immature_or_missing += sum(value is None for value in h20)
-        forbidden_h10_excess.extend(
-            float(r["baseline_excess_csi1000_pp"]["h10"])
-            for r in group if r["baseline_excess_csi1000_pp"]["h10"] is not None
-        )
 
     mean_h10 = _mean_or_none(weekly_h10)
     median_h10 = float(median(weekly_h10)) if weekly_h10 else None
@@ -678,14 +682,21 @@ def summarize_candidate_effect_records(records: list[dict]) -> dict:
         sum(value > 0 for value in weekly_h10) / len(weekly_h10) if weekly_h10 else None
     )
     mean_h20 = _mean_or_none(weekly_h20)
-    h20_complete = len(weekly_h20) == len(weekly_h10) and bool(weekly_h10)
+    # `weekly_h10` and `weekly_h20` are appended in lockstep above (one closed H20-mature
+    # cohort feeds every reported statistic), so `len(weekly_h10) == len(weekly_h20)` ALWAYS
+    # and the two minimums below are the same predicate while both are frozen at 8:
+    # `h20_mature_weeks_min` only bites once it is raised above `divergence_weeks_min`.
+    # Both gates are kept explicit so a future governance edit to either one is honoured;
+    # `tests/test_a_short_regime_action_comparison.py` pins the equality so nobody "fixes"
+    # one counter without the other.  See register
+    # R-ASHORT-CANDIDATE-EFFECT-NONMONOTONIC-AND-HEALTH-FALSE-GREEN Optional (c).
     ready = (
         # Pre-freeze evidence is audit-only and must never reach a verdict.
         _epoch_mode.evidence_counts_toward_clock("p1_regime_candidate_effect")
         and len(live_weeks) >= policy["forward_live_weeks_min"]
         and len(weekly_h10) >= policy["divergence_weeks_min"]
-        and sum(len(group) for group in divergent_h10.values()) >= policy["divergence_stocks_min"]
-        and h20_complete
+        and len(weekly_h20) >= policy["h20_mature_weeks_min"]
+        and mature_divergence_stocks >= policy["divergence_stocks_min"]
     )
     if not ready:
         verdict = "insufficient_data"
@@ -711,11 +722,13 @@ def summarize_candidate_effect_records(records: list[dict]) -> dict:
         selection_status = "mixed"
     summary = {
         "schema_name": "a_short_regime_candidate_effect_summary",
-        "schema_version": "1.0.0",
+        "schema_version": "1.1.0",
+        "latest_evidence_as_of": max(live_weeks) if live_weeks else None,
         "policy": {
             "policy_id": policy["policy_id"],
             "policy_epoch": policy["policy_epoch"],
             "policy_fingerprint": candidate_effect_policy_fingerprint(),
+            "h20_mature_weeks_min": policy["h20_mature_weeks_min"],
             "baseline_description": policy["baseline_description"],
             "candidate_proxy_description": policy["candidate_proxy_description"],
         },
@@ -723,7 +736,9 @@ def summarize_candidate_effect_records(records: list[dict]) -> dict:
         "evidence_progress": {
             "forward_live_weeks": len(live_weeks),
             "valid_divergence_weeks": len(weekly_h10),
-            "valid_divergence_stocks": sum(len(group) for group in divergent_h10.values()),
+            "valid_divergence_stocks": mature_divergence_stocks,
+            "h20_mature_weeks": len(weekly_h20),
+            "h20_pending_weeks": h20_pending_weeks,
             "historical_not_counted": historical_not_counted,
             "immature_or_missing_not_counted": immature_or_missing,
             "ready_for_verdict": ready,

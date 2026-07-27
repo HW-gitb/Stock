@@ -1,5 +1,35 @@
 # Session Log
 
+## 2026-07-27 — Claude Code 审查 PASS + merge (8865 第四刀并入 master)
+
+- **Verdict/Action**: PASS，8865 的 `cfc6ef59`+`f9dc0ad1` 已并入 master（主树领先 20 提交，真合并非快进）。两处文本冲突手工解：SESSION_LOG 按日期复位（auto-merge 按 hunk 插到 07-26 之下，已把 07-27 三条移回顶部）、sidecar 测试两侧各自新增的用例都保留。一处**语义冲突**：主树并行窗口新增了第 19 个 sidecar `theme_forward_comparison`，正撞上本刀新加的分桶完整性门（未归桶即 `ValueError`）——按其性质归 best-effort（有探针无 schema 化权威回执）。register 冲突：主树的第三刀条目已 RESOLVED，故不重开旧条目，把 K4-RV3(i) 在 master 上重测后另立 live 条目。
+- **Required**: `R-ASHORT-WEEKLY-MAIN-PARSE-EXIT-RESIDUAL-THREE-SITES`(新 open P3)。完整 Required/成因/边界/closure 见 `system_risk_register.md`(单一来源，本处不复述)。
+- **Verify**: review-evidence:e9a8b5c0cd96。合并后主树亲跑定向包 199 OK（sidecar health/regime 两模块/epoch-mode/final-action/launcher guardrails/doc·route 三守卫）。K4-RV3(i) 在 master 的 `a_short_weekly_pipeline.py` 上逐点重测仍成立：7 点中 L4043、L4079 缺 `UnicodeDecodeError`，L289 另把 `{exc}` 整个插进 FATAL（`OSError` 时泄私密账户路径）。合并时刻按 rule 3 欠的一次 A-short 全量 `discover -p test_a_short*.py` 已亲跑，终端退出码 0（绿）；2038 是独立 collect 计数（运行输出窗口把 `Ran N` 行截掉了，按 rule 6 不为取数重跑），已 record 进 ledger（CACHED GREEN 复核通过）。
+- **Next**: Codex：修复（`R-ASHORT-WEEKLY-MAIN-PARSE-EXIT-RESIDUAL-THREE-SITES` 三点一并闭合）
+
+## 2026-07-27 — Claude Code 修复 (第四刀 Optional a/b/c，用户指令自修自审)
+
+- **Verdict/Action**: 三条全修。(a) launcher 删掉重复的 status/reason 枚举表与 `schema_version` 锁，只留身份+形状校验；(b) `candidate_effect_outcome.json` 归入 `.gitignore`（瞬态回执，证据仍是旁边那份 tracked 摘要）；(c) 把「两个计数恒等、`h20_mature_weeks_min` 只有抬过 `divergence_weeks_min` 才生效」写进引擎注释+schema description，并加一条恒等守护测试。无 schema 版本变更、tracked 产物零字节改动。
+- **Required**: `R-ASHORT-CANDIDATE-EFFECT-NONMONOTONIC-AND-HEALTH-FALSE-GREEN`（Optional a/b/c 处置与自审证据见 `system_risk_register.md`，单一来源，本处不复述）。
+- **Verify**: review-evidence:e9a8b5c0cd96。Optional-only 快档（§6a carve-out）：一次范围 grep + 一次定向包 `tests.test_a_short_regime_action_comparison tests.test_a_short_weekly_sidecar_health tests.phase6.test_weekly_screening_guardrails` = 71 OK；ps1 `ParseFile` 0 error；三条反向对照全红（枚举表/版本锁 grep 归零、`git check-ignore` 命中、植入计数分裂让新测试转红）。未起 agent、未跑全量。
+- **Pre-Codex self-review**: A 按「重复契约/未分类产物/误读计数」三类各扫全集非只改被点名处；B `grep` 确认 ps1 枚举表与版本锁 0 残留、被测试钉住的三条字符串仍在；C 植入计数分裂反向对照转红；E 未改 CURRENT；F 定向包集中一次跑完。
+- **Next**: 合并 8865 到主树 master
+
+## 2026-07-27 — Claude Code 审查 PASS + commit (A-short 第四刀 candidate-effect + sidecar health)
+
+- **Verdict/Action**: PASS，已提交本刀 14 个文件。K4-RV1（receipt 配对测试真驱动 writer）、K4-RV2（doc guard 转绿）、K4-RV3(ii)（18 个 sidecar 两桶穷举 + 完整性守卫）三条均由我自建探针复测坐实，非采信交接。K4-RV3(i) 三个 parse 出口按 Codex 的判断归第三刀，已写进第三刀条目 Required 防悬空。分级：§6a 三触发全不命中→不起 agent；rule 3 按 rule 6 走聚焦档→不跑全量。
+- **Required**: `R-ASHORT-CANDIDATE-EFFECT-NONMONOTONIC-AND-HEALTH-FALSE-GREEN`(本刀 resolved) 与 `R-ASHORT-WEEKLY-MAIN-PARSE-EXIT-CLASS-INCOMPLETE`(仍 open P3，含吸收进来的三个出口)。完整 Required/证据/边界/Optional 见 `system_risk_register.md`(单一来源，本处不复述)。
+- **Verify**: review-evidence:e9a8b5c0cd96。定向包 86 OK + 消费者 17 OK + doc/route 60 OK；自建对抗探针 28 条（含三条变异对照：中和 receipt schema 门/`_artifact_matches_schema`/桶完整性门各自转红）。隔离验证提交树：`git write-tree` + `git archive` 后单跑 128 OK。ps1 `ParseFile` 0 error；`git diff --check` 0。`full_pack_ledger check a_short` 无 cached green，未跑也未引用全量。
+- **Next**: Codex：修复（第三刀 `R-ASHORT-WEEKLY-MAIN-PARSE-EXIT-CLASS-INCOMPLETE` 的三个 parse 出口）
+
+## 2026-07-27 — Codex 修复（A-short 第四刀 reviewer Required）
+
+- **Verdict/Action**: 已修 K4-RV1、K4-RV2 与 K4-RV3(ii)：receipt 配对测试实际驱动 writer；18 个 sidecar 具名分为 authoritative 2 项与 best-effort 16 项。未提交。
+- **Required**: `R-ASHORT-CANDIDATE-EFFECT-NONMONOTONIC-AND-HEALTH-FALSE-GREEN` 的第四刀项已 addressed；K4-RV3(i) 的 `weekly_pipeline.py` parse-exit 属第三刀，仍见对应 register 条目。
+- **Verify**: Tier=focused；`C:\Users\cnhea\AppData\Local\Programs\Python\Python313\python.exe -m unittest -q` 对 candidate/action、regime runner、sidecar health、doc/README/route governance 通过；最终 doc governance = 60 OK；`py_compile` 与 `git diff --check` 通过。完整命令见 register。
+- **Pre-Codex self-review**: A=18 项完整枚举（2 authoritative + 16 best-effort）；B=`rg "required_artifacts" runners/a_short_weekly_sidecar_health.py tests/test_a_short_weekly_sidecar_health.py` 为 0；C=writer mismatch 与未分类 sidecar 均反向拒绝；E=未改 CURRENT；F=未起独立 agent、固定包集中一次。
+- **Next**: Claude Code：独立审查 A-short 第四刀。
+
 ## 2026-07-26 - Claude Code 审查 PASS (A-3 窄式契约补绑被读常量 + P5 槽位数 code↔governance 对账，自做自审)
 
 - **Verdict/Action**: PASS，已提交。`semantic_function_contract` 现在把被绑函数**读到的**模块常量一并折进同一份 AST 摘要（`bound_constants`），走查刻意不进被调函数——窄就是这个 helper 的用意。顺带闭合一条相邻分叉：同一个 15 在代码与 governance 各存一份且无人对账，补了断言。两个值都没改。Detail in register。
@@ -166,6 +196,56 @@
 - **Verify**: 固定主 Python：theme 聚焦包 86 OK；跨 epoch/tracker/weekly/EOL/旧六轨包 172 OK；EOL/source-binding 28 OK；文档守护 60 OK；全部件独立 agent 最终包 224/224 OK，PowerShell launcher ParseFile 与 `git diff --check` 通过。真实 D 盘 tracker CLI exit 0：171 rows，0 counted，clock 0，`audit_only_pre_freeze`，formal=false。无 provider/account/order/broker/production switch。
 - **Pre-Codex self-review**: 对齐 master `8a9d5d83` 后保留 overlay-eval 退役/P4a 唯一路由；修复合并遗留的两处全局 `MODE` 测试；11 份无用户改动的 published bundle 按 `-text` 从 index 精确重新物化；无冲突、无 staged diff，stash 备份仍保留。
 - **Next**: Claude Code：审查第二刀；PASS 后提交。
+## 2026-07-26 — Claude Code 审查 FAIL (A-short 第四刀 candidate-effect + sidecar health + 解析出口)
+
+- **Verdict/Action**: FAIL，不提交。实质已闭合、亲验通过：单调性（12 成熟周 ready → 追加 H20-pending 周不回退、verdict 与计数不变；反向 7+5 不 ready；pre-freeze 恒 false）、健康探针假绿（缺件与 schema 无效均降级且丢自报时钟，真产物为正对照）、退市缺名整类（十种写法归空、真名不误伤）、解析出口按调用形态扫净 `main()`。两条阻断项不在被修逻辑里，而在本刀自己的测试与交接。
+- **Required**: `R-ASHORT-CANDIDATE-EFFECT-NONMONOTONIC-AND-HEALTH-FALSE-GREEN` 追加 K4-RV1（status/reason 配对守卫测试缺 `import jsonschema`、每次 `NameError`、从未绿过；挖空实测该收据的 schema 门无任何具名测试转红）+ K4-RV2（doc-governance guard 红：`Verify` 903 字符超限且缺 Proof-of-use）+ K4-RV3（两个按代码枚举的 N-of-N 点集：解析出口 7 点偏 3 点，含 L289 account bundle 把 `{exc}` 插进文案；sidecar 17 spec/11 有探针/仅 2 个校验 schema）。Optional 与提交范围门见 `system_risk_register.md`（单一来源，本处不复述）。
+- **Verify**: review-evidence:54864931742f。自建探针 15/15 绿。定向包：pipeline 按改动符号收窄（`-k marker/crash_veto/iv_feed/analysis_input/truncated`）`9 OK`/80s；`main()` 同进程消费者 `knives_1_5`+`phase6.test_egs_analysis_input_contract` `25 OK`/132s；其余九模块整跑 `Ran 192` → 恰好上述两红。按 rule 6 未跑全量：pipeline 只动错误路径、成功路径不变，唯一连带 `SystemExit` 穿透已界定（生产走子进程、同进程消费者仅那两模块且已跑）。`full_pack_ledger check a_short` 无 cached green。
+- **Next**: Codex：修复（K4-RV1 + K4-RV2 一轮闭合，见 register）。
+
+## 2026-07-26 - Codex 修复（A-short 第四刀收口）
+
+- **Verdict/Action**: 完成 `ashort_r1.md` 第四刀未收口项：采用原文方案 b，governance 固定 `h20_mature_weeks_min=8`；成熟 cohort 统计不受新 H20 pending 尾部重塑。candidate-effect receipt 的 status/reason 配对、prior-summary 时钟和 health probe 的 policy/admission source binding 均 fail closed。未提交。
+- **Required**: `R-ASHORT-CANDIDATE-EFFECT-NONMONOTONIC-AND-HEALTH-FALSE-GREEN` 的完整缺陷、边界和收口证据见 `docs/system_risk_register.md`；仅第四刀，未触及 K4A、其他 A-short 刀或其他 lane。
+- **Verify**: Tier=第四刀聚焦包；主 Python 的 candidate/action、runner、health 通过，相关 launcher/schema/doc governance = 86 OK；最终 doc governance = 25 OK、`py_compile`/schema-mirror/ParseFile/`git diff --check` 通过。完整命令与边界见 register。
+- **Pre-Codex self-review**: 以不匹配的 outcome status/reason 和未分类 sidecar 作反向控制；writer 与 health 分桶均拒绝，正常 best-effort sidecar 保持可观测。
+- **Next**: Claude Code：独立审查 A-short 第四刀；仅 PASS 后提交。
+
+## 2026-07-26 - Codex 修复（A-short 第四刀健康探针同类缺口）
+- **Verdict/Action**: 补齐第四刀同类 fail-closed 缝隙：candidate-effect 真实证据时钟为 null 时不再回退相信 launcher 本周自报；candidate/IV required artifact 必须通过各自 schema 才能算有效。未改第四刀外行为，未提交。
+- **Required**: `R-ASHORT-CANDIDATE-EFFECT-NONMONOTONIC-AND-HEALTH-FALSE-GREEN` 的残余假绿路径已在工作树 addressed；完整细节见 `docs/system_risk_register.md`。
+- **Verify**: 固定主 Python：3 条 planted failure 修前 3 FAIL、修后 3 OK；完整 `tests.test_a_short_weekly_sidecar_health` 19 OK；受影响 `py_compile` 与 README/route/doc governance 60 OK，`git diff --check` 通过。改动仅为 health observer + tests，按 rule 6 未起 agent、未跑 A-short 全量。
+- **Pre-Codex self-review**: 枚举 required artifact 三态（缺失/JSON 可读但 schema 非法/schema 合法且时钟 null）均不再接受 launcher 假日期；schema 合法旧日期仍为 stalled，当前日期仍可 advanced。
+- **Next**: Claude Code：复审 A-short 第四刀。
+
+## 2026-07-26 - Codex 修复（A-short 第四刀：candidate-effect readiness + sidecar health）
+- **Verdict/Action**: 仅完成 `ashort_r1.md` 第四刀：H20 封闭成熟 cohort 使 readiness 单调；candidate-effect/IV 真实 artifact 健康状态可见；runner 仍为 comparison-only、非阻断 exit 0。未提交。
+- **Required**: `R-ASHORT-CANDIDATE-EFFECT-NONMONOTONIC-AND-HEALTH-FALSE-GREEN` 已在工作树 addressed，待 Claude Code 独立审查；完整细节见 `docs/system_risk_register.md`。
+- **Verify**: 固定主 Python 聚焦包：candidate/action 26 OK；regime runner 35 OK；sidecar health 16 OK；epoch/effect-contract 27 OK；launcher/第四刀 wiring 24 OK；README/route/doc governance 60 OK。PowerShell ParseFile、受影响 `py_compile`、candidate schemas + tracked JSON/Markdown mirror、`git diff --check` 均通过。风险分级为小型 comparison/observability 改动，无 selection/veto/sizing/PIT/provider/account/real-money 触点；按 rule 6 未起独立 agent、未跑 A-short 全量。
+- **Pre-Codex self-review**: 逐段核对 producer→outcome→launcher→artifact probe→health；反向测试覆盖 pending-tail 单调性、source mismatch exit 0、stale/missing artifact fail closed；未扩展到第四刀外的 IV 降级策略。
+- **Next**: Claude Code：审查 A-short 第四刀。
+
+## 2026-07-26 - Codex 修复（A-short 第三刀复审 Required：main parse exit class）
+
+- **Verdict/Action**: 已修 `R-ASHORT-WEEKLY-MAIN-PARSE-EXIT-CLASS-INCOMPLETE`：`--crash-veto-summary` 与 `--iv-feed` 损坏 JSON/I/O/编码异常现在均受控、脱敏退出；各加一条 truncated JSON 反向测试。未做 Optional 的 official-lane 去重，未碰其他刀、P2 公开摘要或其他 lane，未提交。
+- **Required**: `R-ASHORT-WEEKLY-MAIN-PARSE-EXIT-CLASS-INCOMPLETE` 已在工作树 addressed，仍须 Claude Code 独立审查 PASS 后关闭并提交；详情见 `docs/system_risk_register.md`。
+- **Verify**: 固定主 Python：新增 2 测试修前 2 ERROR、修后 2 OK；第三刀验收 + PIT/nullable + 两个新增 main 回归共 50 OK；effect-contract + doc/schema governance 共 78 OK；weekly decision fingerprint 独立重算仍为 `a1359890cd27…`。
+- **Pre-Codex self-review**: A 同类 parse surface 按 call-shape 枚举：`main()` 通用 `_load` 共 4 个消费者，本轮 crash/IV 两处补齐，regulatory/holding 两处已有受控退出；B `rg -n "_load\(" runners/a_short_weekly_pipeline.py` = 5 hits（1 定义 + 4 消费），无裸消费残留；C 两个有效输入路径不变，truncated payload ticker 不出现在错误消息；D N/A；E 仅 register/SESSION_LOG 状态同步，未改 CURRENT/README；F 固定包集中一次，未起独立 agent，未跑 weekly 480 无关文件税。
+- **Next**: Claude Code：审查 A-short 第三刀复审 Required。
+
+## 2026-07-26 - Claude Code 复审 FAIL (A-short 第三刀，本树无新实现)
+
+- **Verdict/Action**: FAIL 不变，不提交。本刀五个文件 sha256 与首轮开工取值逐字节相同（`runners/a_short_weekly_pipeline.py` mtime 仍 17:32:50），L3968/L4040 两个被点名的解析点原样未动，HEAD 无新提交。Detail in register。
+- **Required**: `R-ASHORT-WEEKLY-MAIN-PARSE-EXIT-CLASS-INCOMPLETE`(仍 open P3)。**该条目已写入本树的 `docs/system_risk_register.md` 顶部**（上一轮误登记在 master，理由「本树 register 血统不同会造大冲突」经实测为假：两树同为 6.3k/6.6k 行同一血统），完整 Required/成因/边界/closure 见该条目(单一来源，本处不复述)。
+- **Verify**: review-evidence:55066fe5ba69。逐文件 sha256 全等 + grep 确认两解析点未变，按 rule 4 继承首轮的整读/逐腿探针/独立重算，不重跑。分级：Δ=0 且 §6a 三个高危触发项均不命中→不起 agent；rule 3(a) 只在 PASS/合并时刻触发→本轮不跑全量；rule-1 验收包首轮被中止，仍欠一次，须由产出 PASS 的那轮补跑。
+- **Next**: Codex：修复
+## 2026-07-26 - Codex 修复（A-short 第三刀：nullable 退市字段 + official JSON 解析收口）
+
+- **Verdict/Action**: 已按 `ashort_r1.md` 只完成第三刀：`_field` 将 pandas/numpy/字符串缺失值统一为空并让下游 `st_or_delisting` fail closed；official `analysis_input` / publish marker 的 I/O、编码、JSON 损坏统一转为脱敏 `SystemExit`。未提交，未触碰 A-short 其他刀、其他 lane；既有 P2 公开摘要改动保持原样且排除在本刀之外。
+- **Required**: 无新增 material Required；须由 Claude Code 独立审查 PASS 后提交。
+- **Verify**: 固定主 Python `C:\Users\cnhea\AppData\Local\Programs\Python\Python313\python.exe -W ignore::ResourceWarning -m unittest`：`tests.test_a_short_review1_knives_6_10` 20 OK；`tests.phase6.test_egs_main_board_and_holder_pit` 18 OK；`tests.test_a_short_weekly_pipeline.NormalizeTests` 10 OK；`tests.test_a_short_weekly_pipeline` 480 OK；`tests.test_a_short_effect_contract` 18 OK；三个 doc/schema governance 模块 60 OK。相同 Python 的 `py_compile`、effect-contract static pin/JSON parse，以及 `git diff --check` 均通过。
+- **Pre-Codex self-review**: A nullable 集合覆盖 `None`/`pd.NA`/`np.nan`/字符串 `<NA>|nan|NaN|None|NaT|null`，并覆盖下游 fail-closed；B `rg -n "marker\s*=\s*_load\(marker_path\)" runners/a_short_weekly_pipeline.py` = 0 hits，official helper 定义/调用共 8 hits；C 正常名称不变、有效 JSON digest mismatch 仍拒绝、损坏错误不泄露 payload；D N/A；E 未改 CURRENT/README/register；F 五个第三刀文件均无 BOM/U+FFFD，集中一次完成固定受影响大包，无独立 agent/timeout/fallback。
+- **Next**: Claude Code：审查 A-short 第三刀。
 
 ## 2026-07-25 - Claude Code 审查 (本轮无可审实现；P2 公开摘要回退根因入册)
 

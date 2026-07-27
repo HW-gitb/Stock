@@ -8,7 +8,7 @@ from unittest.mock import patch
 from engine.a_short_regime_action_comparison import (
     build_action_record, m67_provenance, merge_action_records, summarize_action_records,
     validate_action_record, candidate_effect_eligibility, build_candidate_effect_record,
-    summarize_candidate_effect_records, candidate_effect_policy_fingerprint, validate_candidate_effect_summary,
+    summarize_candidate_effect_records, candidate_effect_policy, candidate_effect_policy_fingerprint, validate_candidate_effect_summary,
     migrate_action_record_from_published_m67, ACTION_RECORD_SCHEMA_VERSION,
 )
 from engine.a_short_regime_classifier import FORWARD_RETURN_BASIS
@@ -303,6 +303,72 @@ class CandidateEffectTests(unittest.TestCase):
             row["candidate_excess_csi1000_pp"] = {"h5": 0.0, "h10": 0.0, "h20": 0.0}
         summary = summarize_candidate_effect_records(rows)
         self.assertEqual(summary["verdict"], "no_material_difference")
+
+    def test_h20_closed_cohort_readiness_does_not_regress_when_a_pending_week_arrives(self):
+        start = __import__("datetime").date(2026, 7, 6)
+        rows = []
+        for week in range(14):
+            as_of = (start + __import__("datetime").timedelta(days=week * 7)).strftime("%Y%m%d")
+            regime = "defense" if week < 12 else "attack"
+            for prefix in ("000", "001"):
+                row = _candidate_record(as_of, f"{prefix}{week:02d}.SZ", -1.0, h20=-1.0, regime=regime)
+                if 10 <= week < 12:
+                    for field in (
+                        "baseline_net_returns", "candidate_net_returns", "operation_improvement_pp",
+                        "baseline_excess_csi1000_pp", "candidate_excess_csi1000_pp",
+                    ):
+                        row[field]["h20"] = None
+                rows.append(row)
+        summary = summarize_candidate_effect_records(rows)
+        self.assertTrue(summary["evidence_progress"]["ready_for_verdict"])
+        self.assertEqual(summary["evidence_progress"]["valid_divergence_weeks"], 10)
+        self.assertEqual(summary["evidence_progress"]["h20_mature_weeks"], 10)
+        self.assertEqual(summary["evidence_progress"]["h20_pending_weeks"], 2)
+        self.assertEqual(summary["verdict"], "candidate_better")
+
+        new_as_of = (start + __import__("datetime").timedelta(days=14 * 7)).strftime("%Y%m%d")
+        for prefix in ("000", "001"):
+            row = _candidate_record(new_as_of, f"{prefix}14.SZ", -1.0, h20=-1.0)
+            for field in (
+                "baseline_net_returns", "candidate_net_returns", "operation_improvement_pp",
+                "baseline_excess_csi1000_pp", "candidate_excess_csi1000_pp",
+            ):
+                row[field]["h20"] = None
+            rows.append(row)
+        after = summarize_candidate_effect_records(rows)
+        self.assertTrue(after["evidence_progress"]["ready_for_verdict"])
+        self.assertEqual(after["evidence_progress"]["h20_mature_weeks"], 10)
+        self.assertEqual(after["evidence_progress"]["h20_pending_weeks"], 3)
+        self.assertEqual(after["verdict"], summary["verdict"])
+
+    def test_mature_cohort_counters_stay_equal_by_construction(self):
+        # Optional (c) of R-ASHORT-CANDIDATE-EFFECT-NONMONOTONIC-AND-HEALTH-FALSE-GREEN:
+        # weekly_h10 and weekly_h20 are appended in lockstep, so these two counters describe
+        # the SAME closed cohort.  Pin it, or a later edit can silently split them and leave
+        # `valid_divergence_weeks` reading as an H10-only count again.
+        for rows in (
+            self._twelve_weeks(-1.0, h20=-1.0),
+            self._twelve_weeks(-1.0),
+            [_candidate_record("20260706", "000001.SZ", -1.0)],
+            [],
+        ):
+            progress = summarize_candidate_effect_records(rows)["evidence_progress"]
+            self.assertEqual(progress["valid_divergence_weeks"], progress["h20_mature_weeks"])
+
+    def test_h20_mature_week_policy_minimum_blocks_a_tail_with_too_few_closed_weeks(self):
+        self.assertEqual(candidate_effect_policy()["h20_mature_weeks_min"], 8)
+        rows = self._twelve_weeks(-1.0, h20=-1.0)
+        for row in rows[14:]:  # Seven H20-mature weeks, five pending divergent weeks.
+            for field in (
+                "baseline_net_returns", "candidate_net_returns", "operation_improvement_pp",
+                "baseline_excess_csi1000_pp", "candidate_excess_csi1000_pp",
+            ):
+                row[field]["h20"] = None
+        summary = summarize_candidate_effect_records(rows)
+        self.assertEqual(summary["evidence_progress"]["valid_divergence_weeks"], 7)
+        self.assertEqual(summary["evidence_progress"]["h20_mature_weeks"], 7)
+        self.assertEqual(summary["evidence_progress"]["h20_pending_weeks"], 5)
+        self.assertFalse(summary["evidence_progress"]["ready_for_verdict"])
 
     def test_historical_or_immature_returns_do_not_count_as_zero(self):
         historical = _candidate_record("20260706", "000001.SZ", -1.0, mode="historical_replay")

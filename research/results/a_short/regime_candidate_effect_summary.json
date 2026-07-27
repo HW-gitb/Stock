@@ -1,10 +1,12 @@
 {
   "schema_name": "a_short_regime_candidate_effect_summary",
-  "schema_version": "1.0.0",
+  "schema_version": "1.1.0",
+  "latest_evidence_as_of": null,
   "policy": {
     "policy_id": "v14_3_candidate_effect_proxy_v1",
     "policy_epoch": "20260719_p1_cut1_v1",
-    "policy_fingerprint": "709e7a1f63598406fa602571ae3b3453465af5d5720b43579fb371d857749a04",
+    "policy_fingerprint": "9d9c553c4f2c31c530fa93b8d575eb7b4b1b8bb165b913193d54326e2d97fdf9",
+    "h20_mature_weeks_min": 8,
     "baseline_description": "current production build without regime-driven candidate action",
     "candidate_proxy_description": "comparison-only simplified proxy: defense and contraction forbid a new build and use cash return 0%; this is not a final production V14.3 defense policy"
   },
@@ -27,6 +29,8 @@
     "forward_live_weeks": 0,
     "valid_divergence_weeks": 0,
     "valid_divergence_stocks": 0,
+    "h20_mature_weeks": 0,
+    "h20_pending_weeks": 0,
     "historical_not_counted": 0,
     "immature_or_missing_not_counted": 0,
     "ready_for_verdict": false
