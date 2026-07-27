@@ -62,6 +62,7 @@ NEW_YORK = ZoneInfo("America/New_York")
 SOURCE_ID_RE = re.compile(r"^web:[0-9a-f]{64}$")
 SHA256_RE = re.compile(r"^[0-9a-f]{64}$")
 SECRET_RE = SECRET_TEXT_RE
+CONFORMANCE_GUARDS = ("_guard_generated_before_open",)
 # `SECRET_RE` is a TEXTUAL check (free text, queries) and must stay conservative there: "AI token
 # demand" is a legitimate search query.  A LOCATOR needs a STRUCTURAL check instead — a provider may
 # hand back a signed/bearer URL whose credential sits in a generic parameter (`?token=`, `?sig=`,
@@ -282,6 +283,11 @@ def _decision_date(value: str) -> datetime.date:
 
 def _cutoff(decision_date: str) -> datetime:
     return datetime.combine(_decision_date(decision_date), datetime_time(9, 30), NEW_YORK).astimezone(timezone.utc)
+
+
+def _guard_generated_before_open(generated: datetime, expected_decision_date: str) -> None:
+    if generated >= _cutoff(expected_decision_date):
+        raise WebThemeDiscoveryError("generated_at must be before the decision open")
 
 
 def _validate_fetch_clock(fetched: datetime, generated: datetime) -> None:
@@ -812,6 +818,7 @@ def build_web_fetch_packet(
 ) -> tuple[dict[str, Any], dict[str, Any], dict[str, Any]]:
     queries = _safe_queries(queries)
     generated = _parse_dt(generated_at, field="generated_at")
+    _guard_generated_before_open(generated, expected_decision_date)
     fetched = _parse_dt(fetched_at, field="fetched_at") if fetched_at else generated
     _validate_fetch_clock(fetched, generated)
     if execution_mode not in {"offline_fake_client", "live_authorized"}:

@@ -70,8 +70,9 @@ class ProvisionalThemeValidationTests(unittest.TestCase):
         self.runner_module = importlib.import_module(MODULE)
         self.discovery_writer = importlib.import_module("runners.us_short_llm_theme_discovery")
         self.universe_writer = importlib.import_module("runners.us_short_universe_fetch")
-        self.tempdir = tempfile.TemporaryDirectory(dir=ROOT / "provider_samples")
-        self.test_state_dir = Path(self.tempdir.name) / "state" / "us_short"
+        from tests.provider.us_short_private_test_root import temporary_provider_directory
+        self.tempdir = temporary_provider_directory(ROOT)
+        self.test_state_dir = Path(self.tempdir.__enter__()) / "state" / "us_short"
         self.state_patch = mock.patch.object(self.runner_module, "STATE_DIR", self.test_state_dir)
         self.state_patch.start()
         self.discovery_state_patch = mock.patch.object(
@@ -96,7 +97,7 @@ class ProvisionalThemeValidationTests(unittest.TestCase):
         self.candidate_state_patch.stop()
         self.discovery_state_patch.stop()
         self.state_patch.stop()
-        self.tempdir.cleanup()
+        self.tempdir.__exit__(None, None, None)
 
     def runner(self):
         return self.runner_module

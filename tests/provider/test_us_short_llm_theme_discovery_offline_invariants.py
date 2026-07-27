@@ -9,6 +9,7 @@ from unittest import mock
 
 from runners import us_short_llm_theme_discovery_fetch_web as web
 from runners import us_short_llm_theme_discovery_fetch_x as xfetch
+from tests.provider.us_short_private_test_root import temporary_provider_directory
 
 
 WEB_GOOD = {
@@ -165,7 +166,7 @@ class OfflineDiscoveryInvariantTests(unittest.TestCase):
 
     def test_offline_cli_object_fixture_publishes_a_nonempty_lane_on_both_producers(self):
         """K3-R40: ordinary JSON-object fixtures use the same parser boundary as live text."""
-        with tempfile.TemporaryDirectory(dir=web.ROOT / "provider_samples") as td:
+        with temporary_provider_directory(web.ROOT) as td:
             state_dir = Path(td) / "state" / "us_short"
             fake_results = Path(td) / "results.json"
             fake_response = Path(td) / "response.json"
@@ -201,7 +202,7 @@ class OfflineDiscoveryInvariantTests(unittest.TestCase):
                         self.assertTrue(receipt_path("20260725").is_file())
 
     def test_offline_cli_malformed_top_level_fixture_fails_before_any_publication(self):
-        with tempfile.TemporaryDirectory(dir=web.ROOT / "provider_samples") as td:
+        with temporary_provider_directory(web.ROOT) as td:
             state_dir = Path(td) / "state" / "us_short"
             fake_response = Path(td) / "response.json"
             fake_results = Path(td) / "results.json"

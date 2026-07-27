@@ -88,6 +88,16 @@ def _display_path(path: Path) -> str:
         return str(path)
 
 
+def _state_artifact_rel(path: Path) -> str:
+    try:
+        suffix = path.resolve().relative_to(STATE_US_SHORT_DIR.resolve()).as_posix()
+    except ValueError as exc:
+        raise FullCandidatePass2PreflightError(
+            "state artifact path must stay under the configured state/us_short root"
+        ) from exc
+    return f"state/us_short/{suffix}"
+
+
 def _resolve_repo_path(path: Path | str, *, field: str) -> Path:
     raw = Path(path)
     resolved = raw.resolve() if raw.is_absolute() else (ROOT / raw).resolve()
@@ -112,7 +122,12 @@ def _git_ignored(path: Path) -> bool:
 
 
 def _existing_state_json(path: Path | str, *, field: str) -> Path:
-    resolved = _resolve_repo_path(path, field=field)
+    raw = Path(path)
+    logical_prefix = ("state", "us_short")
+    if not raw.is_absolute() and raw.parts[:2] == logical_prefix:
+        resolved = (STATE_US_SHORT_DIR / Path(*raw.parts[2:])).resolve()
+    else:
+        resolved = _resolve_repo_path(raw, field=field)
     try:
         resolved.parent.relative_to(STATE_US_SHORT_DIR.resolve())
     except ValueError as exc:
@@ -276,7 +291,7 @@ def _load_candidate_artifact(
 def _public_projection_coverage(coverage: dict[str, Any], *, path: Path) -> dict[str, Any]:
     return {
         key: value
-        for key, value in dict(coverage, path=_repo_rel(path)).items()
+        for key, value in dict(coverage, path=_state_artifact_rel(path)).items()
         if not key.startswith("_")
     }
 
@@ -465,7 +480,7 @@ def _build_summary(
             "used_date": artifact["used_date"],
         },
         "candidate_universe": {
-            "candidate_artifact_path": _repo_rel(candidate_path),
+            "candidate_artifact_path": _state_artifact_rel(candidate_path),
             "candidate_artifact_path_gitignored": _git_ignored(candidate_path),
             "candidate_artifact_sha256": file_sha256(candidate_path),
             "row_count": len(artifact["rows"]),

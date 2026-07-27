@@ -9,6 +9,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 
 from runners import us_short_llm_theme_discovery_fetch_web as fetch
+from tests.provider.us_short_private_test_root import temporary_provider_directory
 
 
 class _Search:
@@ -44,6 +45,16 @@ ROWS = [
 
 
 class WebFetchTests(unittest.TestCase):
+    def setUp(self):
+        self._state_tempdir = temporary_provider_directory(fetch.ROOT)
+        self._state_path = Path(self._state_tempdir.__enter__())
+        self._state_patch = mock.patch.object(fetch, "STATE_DIR", self._state_path)
+        self._state_patch.start()
+
+    def tearDown(self):
+        self._state_patch.stop()
+        self._state_tempdir.__exit__(None, None, None)
+
     def _llm(self):
         refs = [fetch._source_id("https://example.com/a"), fetch._source_id("https://example.com/b")]
         return json.dumps({"themes": [{"theme_id": "power_demand", "display_name": "Power demand", "summary": "Cross-industry power demand.", "observed_at": "2026-07-24T12:00:00Z", "source_ref_ids": refs, "members": [{"ticker": "AAPL", "source_ref_ids": refs}, {"ticker": "CEG", "source_ref_ids": refs}]}]})
@@ -123,7 +134,7 @@ class WebFetchTests(unittest.TestCase):
         self.assertIn("invalid_theme_dropped", [row["reason"] for row in receipt["drop_ledger"]])
 
     def test_raw_receipt_is_content_hashed_and_never_contains_key(self):
-        with tempfile.TemporaryDirectory(dir=fetch.ROOT / "provider_samples") as td:
+        with temporary_provider_directory(fetch.ROOT) as td:
             root = Path(td) / "web"
             _, receipt, _ = fetch.build_web_fetch_packet(
                 queries=["x"], search_results=ROWS[:2], llm_response=self._llm(),
@@ -197,7 +208,7 @@ class WebFetchTests(unittest.TestCase):
             fetch.build_web_fetch_packet(queries=["q"], search_results=[], llm_response='{"themes":[]}', expected_decision_date="20260725", generated_at="2026-07-25T08:00:00Z", fetched_at="2099-01-01T00:00:00Z")
 
     def test_raw_receipt_conflict_drops_only_changed_source_and_keeps_sibling(self):
-        with tempfile.TemporaryDirectory(dir=fetch.ROOT / "provider_samples") as td:
+        with temporary_provider_directory(fetch.ROOT) as td:
             root = Path(td) / "retry"
             kwargs = dict(queries=["q"], expected_decision_date="20260725", generated_at="2026-07-25T08:00:00Z", raw_root=root, persist_raw=True)
             fetch.build_web_fetch_packet(search_results=ROWS[:2], llm_response='{"themes":[]}', **kwargs)
@@ -207,7 +218,7 @@ class WebFetchTests(unittest.TestCase):
             self.assertIn("immutable_raw_content_conflict", [row["reason"] for row in receipt["drop_ledger"]])
 
     def test_bad_decision_date_and_publish_target_fail_before_live_work(self):
-        with tempfile.TemporaryDirectory(dir=fetch.ROOT / "provider_samples") as td:
+        with temporary_provider_directory(fetch.ROOT) as td:
             with mock.patch.object(fetch, "STATE_DIR", Path(td)):
                 for malformed in ("2026-08-10", "20260810x", "not-a-date"):
                     with self.subTest(date=malformed), self.assertRaises(fetch.WebThemeDiscoveryError):
@@ -229,7 +240,7 @@ class WebFetchTests(unittest.TestCase):
         self.assertEqual(first_receipt["drop_ledger"], second_receipt["drop_ledger"])
 
     def test_raw_batch_failure_removes_its_partial_new_evidence(self):
-        with tempfile.TemporaryDirectory(dir=fetch.ROOT / "provider_samples") as td:
+        with temporary_provider_directory(fetch.ROOT) as td:
             root = Path(td) / "batch"
             pending = [(root / "raw" / "a.json", {"a": 1}), (root / "raw" / "b.json", {"b": 2})]
             real_write = fetch._write_json_atomic
@@ -271,7 +282,7 @@ class WebFetchTests(unittest.TestCase):
             self.assertFalse(second.exists())
 
     def test_identical_later_refetch_is_idempotent_and_budget_is_per_decision_date(self):
-        with tempfile.TemporaryDirectory(dir=fetch.ROOT / "provider_samples") as td:
+        with temporary_provider_directory(fetch.ROOT) as td:
             root = Path(td) / "retry"
             base = dict(queries=["q"], search_results=[ROWS[0]], llm_response='{"themes":[]}', expected_decision_date="20260725", raw_root=root, persist_raw=True)
             _, first, _ = fetch.build_web_fetch_packet(generated_at="2026-07-25T07:00:00Z", fetched_at="2026-07-25T07:00:00Z", **base)
@@ -292,7 +303,7 @@ class WebFetchTests(unittest.TestCase):
                 fetch.STATE_DIR = original_state
 
     def test_raw_receipt_is_not_written_before_receipt_schema_passes(self):
-        with tempfile.TemporaryDirectory(dir=fetch.ROOT / "provider_samples") as td:
+        with temporary_provider_directory(fetch.ROOT) as td:
             root = Path(td) / "schema_gate"
             with mock.patch.object(fetch, "_validate_schema", side_effect=fetch.WebThemeDiscoveryError("forced schema failure")):
                 with self.assertRaises(fetch.WebThemeDiscoveryError):
@@ -303,7 +314,7 @@ class WebFetchTests(unittest.TestCase):
             self.assertFalse(root.exists())
 
     def test_gitignore_gate_cannot_be_bypassed(self):
-        with tempfile.TemporaryDirectory(dir=fetch.ROOT / "provider_samples") as td:
+        with temporary_provider_directory(fetch.ROOT) as td:
             with mock.patch.object(fetch, "_gitignored", return_value=False):
                 with self.assertRaises(fetch.WebThemeDiscoveryError):
                     fetch.build_web_fetch_packet(
@@ -355,7 +366,7 @@ class WebFetchTests(unittest.TestCase):
         self.assertFalse(fetch._gitignored(fetch.ROOT / "runners" / "probe_not_ignored.json"))
 
     def test_atomic_writer_loses_a_race_without_overwriting_or_temp_residue(self):
-        with tempfile.TemporaryDirectory(dir=fetch.ROOT / "provider_samples") as td:
+        with temporary_provider_directory(fetch.ROOT) as td:
             path = Path(td) / "state" / "us_short" / "race.json"
             payload = {"evidence": "frozen"}
             fetch._write_json_atomic(payload, path)
@@ -383,7 +394,7 @@ class WebFetchTests(unittest.TestCase):
 
     def test_live_budget_is_capped_and_lets_a_second_query_set_spend_the_rest(self):
         # A test must never reserve against the operator's real state/us_short.
-        with tempfile.TemporaryDirectory(dir=fetch.ROOT / "provider_samples") as td:
+        with temporary_provider_directory(fetch.ROOT) as td:
             with mock.patch.object(fetch, "STATE_DIR", Path(td)):
                 fetch._reserve_provider_budget("web", "tavily", "20260726", call_count=20, query_scope=[f"a{i}" for i in range(20)])
                 fetch._reserve_provider_budget("web", "tavily", "20260726", call_count=5, query_scope=[f"b{i}" for i in range(5)])
@@ -392,7 +403,7 @@ class WebFetchTests(unittest.TestCase):
 
     def test_provider_budgets_are_separate(self):
         """The frozen runner cannot spend; direct ledger checks retain the provider-cap invariant."""
-        with tempfile.TemporaryDirectory(dir=fetch.ROOT / "provider_samples") as td:
+        with temporary_provider_directory(fetch.ROOT) as td:
             root = Path(td)
             with mock.patch.object(fetch, "STATE_DIR", root):
                 fetch._reserve_provider_budget("web", "tavily", "20260726", call_count=2, query_scope=["q1", "q2"])
@@ -415,7 +426,7 @@ class WebFetchTests(unittest.TestCase):
         self.assertIn("redacted_untrusted_detail", [row["detail"] for row in receipt["drop_ledger"]])
 
     def test_cli_publishes_one_slot_per_decision_date(self):
-        with tempfile.TemporaryDirectory(dir=fetch.ROOT / "provider_samples") as state:
+        with temporary_provider_directory(fetch.ROOT) as state:
             with tempfile.TemporaryDirectory() as td:
                 results = Path(td) / "results.json"
                 llm = Path(td) / "llm.json"
@@ -513,7 +524,7 @@ class WebFetchTests(unittest.TestCase):
             generated_at="2026-07-25T08:00:00Z", fetched_at="2026-07-25T08:00:00Z", **kwargs,
         )
         self.assertEqual(first_receipt["discovery_artifact_sha256"], second_receipt["discovery_artifact_sha256"])
-        with tempfile.TemporaryDirectory(dir=fetch.ROOT / "provider_samples") as td:
+        with temporary_provider_directory(fetch.ROOT) as td:
             with mock.patch.object(fetch, "STATE_DIR", Path(td)):
                 output = fetch.default_discovery_path("20260725")
                 receipt_path = fetch.default_receipt_path("20260725")

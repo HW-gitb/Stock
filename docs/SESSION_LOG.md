@@ -1,5 +1,19 @@
 # Session Log
 
+## 2026-07-27 — Claude Code 审查 PASS (US-short 刀4a 第四轮复审：K4A-R10/R11 已闭)
+
+- **Verdict/Action**: PASS。K4A-R10 已闭：降级 stage 无回执时 checkpoint 记 `output_availability=unavailable` 且不再打断强制周跑，强制 stage 与 Pass2 审批仍严格 fail-closed。K4A-R11 已闭：派生矩阵对每格植入失败都能杀。提交前发现本树 register 比自身 HEAD 少 5 条（含 2 条 open P2），已按 HEAD 原文逐条恢复后再提交。
+- **Required**: 无新开。K4A-O1（Optional：`_plan` 干跑枚举仍在生命周期边界外）与两条测试卫生观察见 `system_risk_register.md`（单一来源，本处不复述）。
+- **Verify**: review-evidence:not_available（本轮未注入 token）。亲跑（017a，pinned 3.13）：soft+checkpoint `54 OK`；`test_us_short_weekly_capstone` `81 OK`；其余六个被改 provider 包 `126 OK`；conformance 全模块 `34 OK`。探针 P1–P7：R10 原探针转绿、两条强制腿控制仍红、降级回执 schema 有效、干跑枚举仍会死。全量包 NOT_VERIFIED（用户指令不起，ledger 无 cached green）。
+- **Next**: 提交本轮 PASS 覆盖文件；4b（唯一影响选股的一刀）按 pack 派生覆盖面开工。
+
+## 2026-07-27 - Codex K4a closeout repair
+
+- **Verdict/Action**: K4a R10/R11 required plus same-class optional coverage repaired; optional soft-stage lifecycle is typed zero-effect and artifact-less checkpoint-safe, while mandatory stages/Pass2 approval remain strict. No commit.
+- **Required**: None newly opened; Claude Code must independently review the complete diff before commit. No K4b/score/provider/live/network/key work.
+- **Verify**: Fixed Python focused checkpoint/soft pack `15 OK`; Pass2 approval `11 OK`; knife-1/2/3 offline conformance/invariants `115 OK`; derived lifecycle boundary `1 OK`; policy matrix + strict Pass2 control `2 OK`; doc governance `35 OK`; `py_compile` `21` files exit 0; `git diff --check` exit 0; `state/us_short` and `provider_samples/tmp*` empty.
+- **Next**: Claude Code independently review the complete K4a diff; after PASS commit per project flow.
+
 ## 2026-07-27 — Claude Code 修复 (三个 main parse 出口，用户指令自修自审)
 
 - **Verdict/Action**: 三处全修并 PASS：`load_account_bundle` 与两个 regulatory 旗补 `UnicodeDecodeError`，账户桶的 `{exc}` 换成 `type(exc).__name__`（原文案会把私密账户路径打进 FATAL）。用户明令「不按类，只修点名的三个」，故 helper 级整类扫描主动停掉；未覆盖的三个同形站点已在 register 逐个点名，供将来重开。7 增 4 删，成功路径零改动。
@@ -93,6 +107,78 @@
 - **Required**: `R-ASHORT-WEEKLY-MAIN-PARSE-EXIT-CLASS-INCOMPLETE`(open P3，仅阻断本刀)。另新入册 `R-ASHORT-TEST-PACK-REWRITES-TRACKED-P2-PUBLIC-SUMMARY`(open P2，本轮实测复现，非本刀引入)。完整证据/边界/closure 见 `system_risk_register.md`(单一来源，本处不复述)。
 - **Verify**: review-evidence:not_available（本轮指令非 review 命令形态，hook 未注入 token；以下均为真实工具结果）。亲跑对抗探针（pinned main Python，脚本在仓库外 scratchpad）：条目 21 十种缺失形状全归空、真名不误伤、反向对照证实修前是假清白、两道生产门方向正确；条目 22 七种敌意输入全部受控且不泄露载荷。独立重算 effect contract 的 `decision_predicate_sha256` = 包内值逐字节相同。合并风险已排除：8a9d5d83→master 的 78 个变更文件无一命中本刀 5 个文件，master 上 `tests.test_a_short_effect_contract` 亲跑 18 OK。分级：§6a agent 本会话被工具策略禁用，已用整读被消费函数体+自跑对抗探针替代，残余风险记于 register；rule-1 验收包起跑后按 rule 4/6 在 FAIL 复现后中止（PASS 前须由下一轮补跑），全量 lane 包按 rule 3 未跑。
 - **Next**: Codex：修复（先 rebase 8865 到 master，再按 register 的 Required 收口 `main()` 两个解析点）。
+## 2026-07-27 - Codex K4a R10/R11 follow-up repair
+
+- **Verdict/Action**: R10/R11 follow-up fixes complete; no commit. Optional checkpoint now fail-softs any `Exception` and rolls back partial bundle files; conformance matrix uses an independent policy contract, AST-derived lifecycle cells, and real controls for normal/resume/preview/injected routes. Strict Pass2 approval remains a separate fail-closed callsite control.
+- **Required**: None newly opened; Claude Code independent review remains the gate. No K4b/score/provider/live/network/key work.
+- **Verify**: fixed Python checkpoint/soft focused `13 OK`; route-observed policy mutation matrix `1 OK`; strict Pass2 callsite control `1 OK`; doc governance `35 OK`; changed Python `py_compile` exit 0; `git diff --check` exit 0 (CRLF notices only); no files under `state/us_short` or `provider_samples/tmp*`.
+- **Next**: Claude Code independently review the complete K4a diff; after PASS, commit per project flow.
+
+## 2026-07-27 — Codex 修复 (US-short K4a R10/R11)
+
+- **Verdict/Action**: 修复 R10/R11：optional soft-discovery 采用显式 zero-effect lifecycle，任何输入/输出枚举、执行、freshness、发布或 checkpoint 失败均保留 typed zero-effect 并继续 mandatory weekly terminal；checkpoint 支持 `output_availability=unavailable` 且 resume 按 policy 拒绝复用；A-D conformance 改为仓库派生并有真实 mutation controls。未改 score seam、Top15、操作意见、dynamic seats、theme_probe、lifecycle、确认器或席位；不提交。
+- **Required**: `R-USSHORT-KNIFE4A-OPTIONAL-STAGE-STILL-KILLS-THE-MANDATORY-RUN` — R10/R11 已修，完整风险与 closure 证据见 `docs/system_risk_register.md`；Optional (a)-(c) 接受为本刀边界内非阻断，不扩成 K4b/provider/live。
+- **Verify**: fixed Python + wrapper/preflight affected pack `324 OK`; latest post-edit acceptance `52 OK`; C derived mutation `1 OK`; changed Python `py_compile` exit 0; `git diff --check` 无错误（仅既有 CRLF notices）。按用户禁止 provider/live/network/key，broad full-lane attempt 因既有测试打印 key-presence metadata 立即停止，未计为 full-run evidence，未输出 key value。
+- **Pre-Codex self-review**: A-F checked / independent current-diff-only adversarial agent requested; A swept all optional lifecycle and strict-stage defaults, B grepped Stage/checkpoint/schema/reuse consumers, C added typed-handler and artifact-hash reverse controls, D retained isolated state/lock roots, E only SESSION_LOG/register transient updates, F py_compile/diff-check/preflight passed. Tests passing ≠ design closure.
+- **Next**: Claude Code：独立审查完整 K4a diff；PASS 后按流程提交。
+
+## 2026-07-27 — Claude Code 复审 FAIL (US-short K4a 第三轮，A 类在 checkpoint 第三次复发)
+
+- **Verdict/Action**: FAIL，不提交。上轮四条我亲验**确认闭合**：clean-checkout 下 conformance `31 OK`、原必红组合 `69 OK`（K4A-R6）；坏收据与 schema 过期收据下周报仍 `emitted=True` 且冻结字节不动（K4A-R7）；`upstream_pair_anchored=true/document_content_anchored=false` 且 `upstream_pairs` 已成必填（K4A-R9）；默认一键仍自动开、只剩 `--disable-soft-discovery`、无选股接线；Pass2 preflight 仅改路径口径、审批绑定未松。新增两条阻断。
+- **Required**: `R-USSHORT-KNIFE4A-OPTIONAL-STAGE-STILL-KILLS-THE-MANDATORY-RUN`(open P1)：K4A-R10 降级不落收据→强制 checkpoint 记录器炸掉生产周报（A 类第三个点位）；K4A-R11 本该拦住它的矩阵行部分是装饰（A 行推导自循环、B 行植入对照是恒真、wrapper 不在 LANE_FILES、手工豁免名单）。三条 Optional 入册。详见 `system_risk_register.md`(单一来源)。
+- **Verify**: review-evidence:429236eac907。亲跑：收据槽被目录占用→stage 正确降级(`invalid_evidence/IMMUTABLE_CONFLICT`、无文件、效果位全 false)，随后 `record_stage` 抛 `CapstoneCheckpointError: cannot checkpoint missing stage output`。核实：checkpoint 只豁免 weekly_bridge；manifest 仅在 production 非 auto-budget 时存在；`frozen_artifacts` minItems=1 与过滤 None 的构造冲突。矩阵两处装饰点亲读确认。全量按指示不跑，引用亲查 ledger CACHED GREEN 4850_OK(同指纹)。§6a agent 结论逐条复现后采信。state/us_short 零文件、无网络/key。
+- **Next**: Codex：修复(K4A-R10+R11 同一类一轮闭合，见 register)。
+
+## 2026-07-27 - Codex repair (US-short Knife4a executable A-D closure)
+
+- **Verdict/Action**: K4a repair complete; no commit. Optional soft-discovery failure now stays typed zero-effect at the capstone boundary, all merge/receipt/PIT/digest/identity/immutable gates remain fail-closed, and the executable A-D matrix is repository-derived, mutation-bearing, clean-checkout safe, and order/resource deterministic. No K4b/K4c score, flag, Top15/advice, seat/theme_probe/lifecycle, provider/live/network, cross-market, account, or order change.
+- **Required**: None. Latest independent adversarial review PASS; Optional none. Material closure pointer is at the top of `docs/system_risk_register.md`.
+- **Verify**: Fixed Python: affected pack `310 OK`; matrix conformance->soft `69 OK`/`295.707s`, reverse `69 OK`/`324.334s`; final US-short lane `4850 OK`/`503.172s`, ledger `896f8fa63b6a`. No external call or secret value output.
+- **Next**: Claude Code: independently review the complete K4a diff; only after PASS, commit per project flow. Then execute K4b separately from the updated authority plan.
+
+## 2026-07-26 — Claude Code 审查 FAIL (US-short 软发现 K4a 完整 diff，第二个独立 reviewer 窗口)
+
+- **Verdict/Action**: FAIL，不提交。与下条平行 reviewer 窗口并发、独立跑。亲验 K4A-R1/R3/R4 闭合：五态同日跃迁全返回零效果类型收据、冻结三件字节不变、冲突收据落 attempt-keyed 自有槽、重复冲突换墙钟仍字节稳定；包身时钟开盘当刻与次日拒、前一微秒收、manifest↔artifact 不一致拒；删 web/X 锚点后同一 packet 变 `invalid_evidence`、0 加分票、`document_anchored=false`。全树无选股接线。新增一条阻断项。
+- **Required**: `R-USSHORT-KNIFE4A-STALE-RECEIPT-CARVE-OUT-BRICKS-THE-WEEKLY-RUN`（open P1，本轮新增 K4A-R7 + K4A-R8）+ `R-USSHORT-KNIFE4A-ORDER-DEPENDENT-EVIDENCE`（open P1，K4A-R6，平行窗口所记、本轮独立复现）。R1/R3/R4/R5 判 closed，R2 判未实质闭合并并入 R8。完整机理/repro/repair/closure 见 `system_risk_register.md`（单一来源，本处不复述）。
+- **Verify**: review-evidence:not_available（未注入 token；均真实工具输出）。验收包 357 OK/exit 0，但被 K4A-R6 作废：conformance→soft `53 OK`、反序 `53 FAILED`、soft→model_paper_wiring `28 FAILED(errors=3)`。K4A-R8：单跑 conformance `27/FAILED(2)`，建空 `state/us_short` 后 `27 OK`、删掉又红。K4A-R7：冻结收据改 `{` → stage 出冲突收据零残留，但 carve-out 返 False → `WeeklyCapstoneError`。py_compile 11 文件 clean；`git diff --check` 仅 CRLF；新槽 gitignored。full pack 未重跑（ledger `4833_OK`/`cd1d83ed`）。§6a agent 五面已回、BROKEN 逐条复现后采信。`state/us_short` 零新增、无网络/key。
+- **Next**: Codex：修复（K4A-R6/R7/R8 同一轮按类闭合，见 register）。
+
+## 2026-07-26 — Claude Code 复审 FAIL (US-short K4a 默认一键接入 + 五条 Required 复核)
+
+- **Verdict/Action**: FAIL，不提交。K4A-R1..R5 我亲跑复核**确认闭合**（五种同日跃迁全转 SOFT_DISCOVERY_IMMUTABLE_CONFLICT 零效果收据、真入口 emitted=True 不再阻断；默认一键含 soft_discovery、仅 `--disable-soft-discovery` 可退、非 bool 拒收；七个声明守卫挖空全红；`theme_soft_boost_enabled` 处处默认 False、K3-R34 未被削弱）。两条新阻断：证据依顺序而变、离线锚标签失真。
+- **Required**: `R-USSHORT-KNIFE4A-ORDER-DEPENDENT-EVIDENCE`(open P1)：K4A-R6 证据依执行顺序而变故 `4833 OK` 不可复现；K4A-R9(原编 R8，与并发窗口撞号已改) `document_anchored: true` 名不副实且 `upstream_pairs` 默认可跳过锚定。R1..R5 转 closed 附我的复核证据。并发窗口另立 K4A-R7/R8(不合并)。register 已加四类缺陷的按类修复契约与依赖顺序。五条 Optional 入册。详见 `system_risk_register.md`(单一来源)。
+- **Verify**: review-evidence:b3e9356ee46f。串行复验(无并发)：conformance→soft = 53 run/2F+3E(全局锁 20260615 被占，capstone:1026)、soft→conformance = 53 run/2F(守卫注册行 publish_immutable_pair 与 write_mutable_ledger)、两模块单独 27/26 OK。**更正**：先前「soft+模型纸 capstone 4E」是我自己 agent 并发污染，串行 28 OK，该腿已撤。§6a agent 回：锚定确已 fail-closed、时钟按 13:30 半开修好、manifest 重复行已修；离线锚可手写、六个 call site 未钉。零残留、无网络/key。
+- **Next**: Codex：修复(K4A-R6+R8，与另一窗口 K4A-R7 一并一轮闭合后重记 ledger)。
+
+## 2026-07-26 - Codex repair (US-short K4a default one-click + K4b design alignment)
+
+- **Verdict/Action**: Accepted the default-on one-click direction and completed K4a only. The formal capstone pipeline now runs the non-gated offline soft-discovery stage by default, with an explicit emergency `--disable-soft-discovery`; missing/invalid/conflicting evidence remains typed boost-zero and non-blocking. Pass2 budget preview now shares the immutable-conflict retry rule, and public switches reject non-boolean values. The desktop authority plan now routes K4b to default-on consumption without changing low-level score API defaults.
+- **Required**: No K4b scoring/Top15/advice code was implemented. K4b must keep the immutable K4a receipt's effect flags false and publish a separate schema-first consumption receipt bound to the K4a receipt and validation digests; only `valid_nonempty` with complete identity may affect core score. Seats, `theme_probe`, lifecycle, confirmation, provider/live/network/key, other markets, account and order surfaces remain frozen; no commit.
+- **Verify**: Fixed Python red-green: default route/CLI assertions first failed then passed; Pass2 preview immutable-conflict and exact-bool public-switch probes each failed before repair and passed after. Final focused/Knife1-3/Pass2/capstone pack `277 OK`; final US-short lane `4833 OK` in `268.097s`, ledger `cd1d83ed7d2c`. Pre-Codex self-review A-F checked: same-class sweep covered default/explicit-off, injected/non-bool switches, normal capstone and budget-preview retry paths, research-live receipt exclusion, downstream default-false score seams, stale desktop-plan statements, and K4a-vs-K4b receipt semantics. Independent current-diff-only review found those sibling gaps, all were repaired, and its final code/design recheck found no further code/design must-fix. No provider call, network access or secret read/output.
+- **Next**: Claude Code: independently review the complete K4a diff; only after PASS, commit per project flow. Then implement K4b as a separate knife from the updated desktop authority.
+
+## 2026-07-26 - Codex repair (US-short soft discovery K4a Required + Optional)
+
+- **Verdict/Action**: Repaired K4a by class, not only by the first review probe. Same-day unavailable/invalid/valid transitions now degrade to a typed zero-effect immutable-conflict receipt and all five reach the terminal capstone without rewriting frozen evidence. Merge/validation now bind every artifact, receipt, digest, authoring/fetch clock, source identity, raw hash, unique row and replayed drop ledger. No K4b/K4c, score seam, flag enablement, Top15/advice/seats/theme_probe/lifecycle, provider/live/network/key, cross-market, account or order change; no commit.
+- **Required**: K4A-R1 through R5 and all five recorded Optional items repaired. Conformance now derives guard declarations from AST definitions, pins the exact upstream-receipt clock call site, and has production-path dying controls for web/X producers, merge producer/consumer, anchor digests and receipt state/count branches. Material closure detail remains in `docs/system_risk_register.md`.
+- **Verify**: Fixed Python focused red/green culminated in `50 OK`; affected capstone/Pass2/Knife1-3/schema/conformance pack `285 OK`; one full US-short lane run required by AGENTS rule 3 and completed `4830 OK` in `282.664s`, ledger recorded at `b398f804843e`. The full pack exposed one unencodable-input exception-contract drift; its dying test is `1 OK` and the complete affected pack remained `285 OK` after repair. Latest independent current-diff-only adversarial review returned PASS. No external call or secret value read/output.
+- **Pre-Codex self-review**: A-F checked. Same-class sweeps covered every status transition, carried instant, artifact/receipt digest, duplicate theme/member/drop row, public in-memory digest entry, raw traversal, cross-field receipt branch and guard call site. Full-lane decision was mandatory because top-level capstone and shared production validation/publish paths changed; it ran once only.
+- **Next**: Claude Code: independently review the complete diff; only after PASS, commit per project flow.
+
+## 2026-07-26 — Claude Code 审查 FAIL (US-short 软发现 K4a 离线编排)
+
+- **Verdict/Action**: FAIL，不提交。4a 其余面亲验干净：五态可达且 invalid≠valid_empty、OFF 惰性(stage 不在默认 pipeline、flag 无其它入口打开)、同证据重试字节稳、日期/digest/manifest/raw 篡改与冻结件被改或截断全部拒收且无部分发布与 .tmp 残留、receipt schema 全层 additionalProperties:false + 八个效果位 const false、新模块与新 schema 均在派生 conformance 枚举内。五条 Required 见 register(含 §6a agent 报的三条，机理我已逐条复核)。
+- **Required**: `R-USSHORT-KNIFE4A-SAME-DAY-RECEIPT-FREEZE-BRICKS-THE-WEEKLY-RUN`(open P1)：K4A-R1 同日跃迁炸整条周报、R2 新增守卫缺 dying test(8 项)、R3 包身 generated_at 不受 PIT 约束、R4 离线对无锚点故手写包可拿 both/5.0、R5 manifest 行 last-wins 而消费读 first。五条按类一轮闭合；五条 Optional 亦入册。完整 repro/repair/closure 见 `system_risk_register.md`(单一来源，本处不复述)。
+- **Verify**: review-evidence:not_available(无 token；均真实输出)。探针：真入口(flag ON)→stage 'soft_discovery' failed，五种同日跃迁全 raise、冻结件字节不变零 .tmp；包身时钟 06-16T20:00Z 对 20260615 仍接受(R3)；input_artifact_sha256 全树零读点、离线 raw ref 恒 None(R4)；变异：挖空 validate_merged_packet→4F+1E；挖空 receipt schema/slot→0 红。验收包 256 OK、doc/route 60 OK、全量引用亲跑 ledger CACHED GREEN 4812_OK。§6a agent(证据绑定面)：伪造对→valid_nonempty+4×both、真 boost +5.0/票，另报 manifest 行与 raw 穿越；机理已复核。零残留、无网络/key。
+- **Next**: Codex：修复(按 register K4A-R1/K4A-R2 按类闭合)。
+
+## 2026-07-26 - Codex implementation (US-short soft discovery Knife4a)
+
+- **Verdict/Action**: Implemented Knife4a only: an explicit-OFF, offline capstone stage consumes the existing Knife3 merge artifact/manifest, revalidates PIT/date/source/raw/digest bindings, runs Knife1 normalization plus Knife2 candidate/classification validation in memory, and atomically publishes typed ingest/validation/receipt artifacts through the shared immutable publisher. Five machine statuses are covered; all score/Top15/advice/seats/theme_probe/lifecycle effects remain hard false. No commit.
+- **Required**: None found after repair. Claude Code must independently review the complete diff before any commit. Knife4b/4c, score seams, `theme_soft_boost_enabled`, provider/live/network/key, A-short, US-long, account and order work remain out of scope.
+- **Verify**: Fixed Python: new focused test first red (`5 tests`, `7 errors`, missing 4a API), then `7 OK`; affected capstone/Pass2/Knife1-3 pack `240 OK`; final US-short lane `4812 OK` in `270.277s`, exit 0, ledger fingerprint `d6a273058467`; changed Python `py_compile` clean; `git diff --check` clean apart from normal line-ending notices. Test-only empty `state/us_short` directories were removed and the path is absent; no provider call or network access occurred.
+- **Pre-Codex self-review**: A-F checked. AGENTS rule 3(a)/(b) required the one final full-lane run because top-level capstone and shared validation/publish code changed. Independent current-diff-only review first returned FAIL on raw source-path/date binding and retry-clock byte identity; both were repaired with reverse tests, and the follow-up review returned PASS. No review timeout, write, network, provider or key access.
+- **Next**: Claude Code：独立审查完整 Knife4a diff；PASS 后按项目流程由 Claude Code 提交。
 
 ## 2026-07-26 — Claude Code 审查 PASS (US-short 软发现 K4-pre capstone fixture)
 

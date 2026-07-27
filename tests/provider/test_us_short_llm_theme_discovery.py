@@ -48,9 +48,10 @@ def _payload():
 
 class OfflineLLMThemeDiscoveryTests(unittest.TestCase):
     def setUp(self):
+        from tests.provider.us_short_private_test_root import temporary_provider_directory
         self.slug = f"test_llm_theme_discovery_{os.getpid()}_{self._testMethodName}"
-        self.tempdir = tempfile.TemporaryDirectory(dir=ROOT / "provider_samples")
-        self.test_state_dir = Path(self.tempdir.name) / "state" / "us_short"
+        self.tempdir = temporary_provider_directory(ROOT)
+        self.test_state_dir = Path(self.tempdir.__enter__()) / "state" / "us_short"
         self.runner_module = _runner()
         self.state_patch = mock.patch.object(self.runner_module, "STATE_US_SHORT_DIR", self.test_state_dir)
         self.state_patch.start()
@@ -61,7 +62,7 @@ class OfflineLLMThemeDiscoveryTests(unittest.TestCase):
 
     def tearDown(self):
         self.state_patch.stop()
-        self.tempdir.cleanup()
+        self.tempdir.__exit__(None, None, None)
 
     def test_run_packet_freezes_source_bound_provisional_artifact_without_effect(self):
         runner = _runner()

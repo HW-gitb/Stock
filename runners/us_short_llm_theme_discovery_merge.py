@@ -13,15 +13,17 @@ import json
 import re
 import argparse
 from datetime import datetime
-from pathlib import Path
+from pathlib import Path, PurePosixPath
 from typing import Any
 
 from runners import us_short_llm_theme_discovery_fetch_web as web
 from runners import us_short_llm_theme_discovery_fetch_x as xfetch
+from runners import us_short_llm_theme_discovery as ingest
 from engine.us_short_schema_formats import FORMAT_CHECKER
 
 ROOT = web.ROOT
 SCHEMA_PATH = ROOT / "schemas" / "us_short_llm_theme_discovery_merge.schema.json"
+PROVIDER_SAMPLES_ROOT = ROOT / "provider_samples"
 
 
 def default_discovery_path(expected_decision_date: str) -> Path:
@@ -36,6 +38,26 @@ class ThemeDiscoveryMergeError(ValueError):
     """The web/X merge would require an unsafe guess."""
 
 
+CONFORMANCE_GUARDS = (
+    "_instant",
+    "_validate_discovery",
+    "_schema_validate",
+    "_verify_receipt",
+    "_guard_generated_clock",
+    "_guard_source_identity",
+    "_guard_source_pit",
+    "_guard_raw_content_digest",
+    "_guard_member_evidence_tier",
+    "_guard_summary_counts",
+    "_guard_unique_manifest_rows",
+    "_guard_merge_producer_clock",
+    "_guard_merge_consumer_clock",
+    "_guard_input_artifact_hashes",
+    "_guard_upstream_generated_clocks",
+    "_raw_receipt_path",
+)
+
+
 def _sha(value: Any) -> str:
     return hashlib.sha256(web._canonical_json(value)).hexdigest()
 
@@ -45,6 +67,110 @@ def _instant(value: Any, field: str) -> datetime:
         return web._parse_dt(value, field=field)
     except web.WebThemeDiscoveryError as exc:
         raise ThemeDiscoveryMergeError(f"{field} is not timezone-aware RFC3339") from exc
+
+
+def _guard_generated_clock(value: Any, *, cutoff: datetime, field: str) -> datetime:
+    instant = _instant(value, field)
+    if instant >= cutoff:
+        raise ThemeDiscoveryMergeError(f"{field} is not before the decision open")
+    return instant
+
+
+def _guard_merge_producer_clock(value: Any, *, cutoff: datetime) -> datetime:
+    return _guard_generated_clock(value, cutoff=cutoff, field="generated_at")
+
+
+def _guard_merge_consumer_clock(
+    artifact_value: Any, manifest_value: Any, *, cutoff: datetime,
+) -> None:
+    artifact_generated = _guard_generated_clock(
+        artifact_value, cutoff=cutoff, field="merged artifact generated_at",
+    )
+    manifest_generated = _guard_generated_clock(
+        manifest_value, cutoff=cutoff, field="merge manifest generated_at",
+    )
+    if artifact_generated != manifest_generated:
+        raise ThemeDiscoveryMergeError("merge artifact and manifest generated_at clocks do not match")
+
+
+def _guard_input_artifact_hashes(
+    actual: dict[str, Any], expected: dict[str, str],
+) -> None:
+    if actual != expected:
+        raise ThemeDiscoveryMergeError("merge input artifact digests do not match document anchors")
+
+
+def _guard_upstream_generated_clocks(
+    artifact_value: Any,
+    receipt_value: Any,
+    *,
+    cutoff: datetime,
+    source_type: str,
+) -> None:
+    artifact_generated = _guard_generated_clock(
+        artifact_value, cutoff=cutoff, field=f"{source_type} artifact generated_at",
+    )
+    receipt_generated = _guard_generated_clock(
+        receipt_value, cutoff=cutoff, field=f"{source_type} receipt generated_at",
+    )
+    if artifact_generated != receipt_generated:
+        raise ThemeDiscoveryMergeError(
+            f"{source_type} artifact and receipt generated_at clocks do not match"
+        )
+
+
+def _guard_source_identity(*, source_id: str, source_type: str, locator: str) -> None:
+    expected_id = web._source_id(locator) if source_type == "web" else xfetch._source_id(locator)
+    if source_id != expected_id:
+        raise ThemeDiscoveryMergeError("merge manifest source identity is not locator-derived")
+
+
+def _guard_source_pit(*, observed: datetime, fetched: datetime, cutoff: datetime) -> None:
+    if observed >= cutoff or fetched >= cutoff:
+        raise ThemeDiscoveryMergeError("merge manifest source clock is not PIT-safe")
+
+
+def _guard_raw_content_digest(*, raw_payload: dict[str, Any], expected_sha256: str) -> None:
+    if _sha(raw_payload) != expected_sha256:
+        raise ThemeDiscoveryMergeError("merge manifest raw content digest does not match")
+
+
+def _guard_member_evidence_tier(
+    *, residual: list[str], actual_sources: str, expected_sources: str,
+    actual_tier: str | None, expected_tier: str | None,
+) -> None:
+    if residual or actual_sources != expected_sources or actual_tier != expected_tier:
+        raise ThemeDiscoveryMergeError("merge manifest member evidence tier does not match its refs")
+
+
+def _guard_summary_counts(*, summary: dict[str, Any], expected_counts: dict[str, int]) -> None:
+    if any(summary[key] != value for key, value in expected_counts.items()):
+        raise ThemeDiscoveryMergeError("merge manifest summary does not match its bound rows")
+
+
+def _guard_unique_manifest_rows(rows: list[dict[str, Any]], *, key: str, label: str) -> dict[str, dict[str, Any]]:
+    indexed = {row[key]: row for row in rows}
+    if len(indexed) != len(rows):
+        raise ThemeDiscoveryMergeError(f"merge manifest contains duplicate {label}")
+    return indexed
+
+
+def _raw_receipt_path(raw_ref: Any) -> Path:
+    if not isinstance(raw_ref, str):
+        raise ThemeDiscoveryMergeError("merge manifest raw receipt path is malformed")
+    lexical = PurePosixPath(raw_ref)
+    if (
+        lexical.is_absolute()
+        or not lexical.parts
+        or lexical.parts[0] != "provider_samples"
+        or ".." in lexical.parts
+        or lexical.as_posix() != raw_ref
+    ):
+        raise ThemeDiscoveryMergeError("merge manifest raw receipt must stay under provider_samples")
+    raw_path = (ROOT / raw_ref).resolve()
+    if not raw_path.is_relative_to(PROVIDER_SAMPLES_ROOT.resolve()):
+        raise ThemeDiscoveryMergeError("merge manifest raw receipt must stay under provider_samples")
+    return raw_path
 
 
 def _corroboration(bound_refs: list[dict[str, str]]) -> tuple[str, str | None, list[str]]:
@@ -139,6 +265,12 @@ def _verify_receipt(
     artifact_refs = {ref.get("source_id"): ref for ref in artifact.get("source_refs", []) if isinstance(ref, dict)}
     artifact_types = {source_id: ref.get("source_type") for source_id, ref in artifact_refs.items()}
     cutoff = web._cutoff(expected_decision_date)
+    _guard_upstream_generated_clocks(
+        artifact.get("generated_at"),
+        receipt.get("generated_at"),
+        cutoff=cutoff,
+        source_type=source_type,
+    )
     for ref in receipt.get("source_refs", []):
         if ref.get("source_type") != source_type:
             raise ThemeDiscoveryMergeError(f"receipt source type mismatch: {ref.get('source_id')}")
@@ -163,16 +295,16 @@ def _verify_receipt(
         # The observation instant is the PIT-bearing field, so bind it across receipt and artifact and
         # keep the pre-open check here too (a hash only proves the receipt is self-consistent).
         observed = _instant(ref.get("observed_at"), f"{source_type} receipt observed_at ({source_id})")
-        if observed >= cutoff:
-            raise ThemeDiscoveryMergeError(f"{source_type} receipt source was observed after the decision open: {source_id}")
+        fetched = _instant(ref.get("fetched_at"), f"{source_type} receipt fetched_at ({source_id})")
+        _guard_source_pit(observed=observed, fetched=fetched, cutoff=cutoff)
         if _instant(artifact_refs[source_id].get("observed_at"), f"{source_type} artifact observed_at ({source_id})") != observed:
             raise ThemeDiscoveryMergeError(f"{source_type} artifact observation does not match the receipt: {source_id}")
         if mode == "live_authorized":
             raw_ref = ref.get("raw_receipt_ref")
             if not isinstance(raw_ref, str) or not ref.get("raw_receipt_gitignored"):
                 raise ThemeDiscoveryMergeError(f"live {source_type} receipt is missing a gitignored raw receipt")
-            raw_path = (ROOT / raw_ref).resolve()
-            if not raw_path.is_relative_to(ROOT.resolve()) or not raw_path.is_file() or not web._gitignored(raw_path):
+            raw_path = _raw_receipt_path(raw_ref)
+            if not raw_path.is_file() or not web._gitignored(raw_path):
                 raise ThemeDiscoveryMergeError(f"live {source_type} raw receipt is not gitignored")
             if raw_path.name != f"{source_id.split(':', 1)[1]}.json" or raw_path.parent.name != expected_decision_date:
                 raise ThemeDiscoveryMergeError(f"live {source_type} raw receipt path is not bound to its source ID and decision date: {source_id}")
@@ -180,8 +312,9 @@ def _verify_receipt(
                 raw_payload = web._read_json(raw_path)
             except web.WebThemeDiscoveryError as exc:
                 raise ThemeDiscoveryMergeError(f"live {source_type} raw receipt is unreadable") from exc
-            if _sha(raw_payload) != ref.get("content_sha256"):
-                raise ThemeDiscoveryMergeError(f"live {source_type} raw receipt content hash does not match")
+            _guard_raw_content_digest(
+                raw_payload=raw_payload, expected_sha256=ref.get("content_sha256"),
+            )
             for key in ("source_id", "source_type", "canonical_locator"):
                 if raw_payload.get(key) != ref.get(key):
                     raise ThemeDiscoveryMergeError(f"live {source_type} raw receipt binding mismatch: {key}")
@@ -212,7 +345,9 @@ def merge_web_x_discovery(
     web._decision_date(expected_decision_date)
     # Normalize the operator-supplied clock exactly as the ingest does: the manifest is
     # schema-checked for RFC 3339, so a loose-but-parseable spelling must not reach it.
-    generated_at = _instant(generated_at, "generated_at").isoformat()
+    generated_at = _guard_merge_producer_clock(
+        generated_at, cutoff=web._cutoff(expected_decision_date),
+    ).isoformat()
     _validate_discovery(web_artifact)
     _validate_discovery(x_artifact)
     web_types = _verify_receipt(web_artifact, web_receipt, "web", expected_decision_date)
@@ -321,6 +456,210 @@ def merge_web_x_discovery(
     }
     _schema_validate(SCHEMA_PATH, manifest)
     return merged_artifact, manifest
+
+
+def _ingest_input(artifact: dict[str, Any]) -> dict[str, Any]:
+    """Project a frozen merge artifact back to Knife1's inert input surface."""
+    return {
+        "source_refs": [
+            {
+                "source_id": ref["source_id"],
+                "source_type": ref["source_type"],
+                "observed_at": ref["observed_at"],
+            }
+            for ref in artifact["source_refs"]
+        ],
+        "themes": [
+            {
+                "theme_id": theme["theme_id"],
+                "display_name": theme["display_name"],
+                "summary": theme["summary"],
+                "status": theme["status"],
+                "observed_at": theme["observed_at"],
+                "source_ref_ids": list(theme["source_ref_ids"]),
+                "members": [
+                    {
+                        "ticker": member["ticker"],
+                        "membership_status": member["membership_status"],
+                        "source_ref_ids": list(member["source_ref_ids"]),
+                    }
+                    for member in theme["members"]
+                ],
+                "cross_industry_validation_status": theme["cross_industry_validation_status"],
+                "market_confirmation_status": theme["market_confirmation_status"],
+            }
+            for theme in artifact["themes"]
+        ],
+    }
+
+
+def validate_merged_packet(
+    artifact: dict[str, Any],
+    manifest: dict[str, Any],
+    *,
+    expected_decision_date: str,
+    upstream_pairs: dict[str, tuple[dict[str, Any], dict[str, Any]]],
+) -> dict[str, Any]:
+    """Revalidate a frozen Knife3 pair against both exact upstream artifact/receipt pairs."""
+    web._decision_date(expected_decision_date)
+    _validate_discovery(artifact)
+    _schema_validate(SCHEMA_PATH, manifest)
+    if artifact["decision_clock"]["expected_decision_date"] != expected_decision_date:
+        raise ThemeDiscoveryMergeError("merged artifact decision date does not match capstone clock")
+    if manifest["decision_clock"]["expected_decision_date"] != expected_decision_date:
+        raise ThemeDiscoveryMergeError("merge manifest decision date does not match capstone clock")
+
+    cutoff = web._cutoff(expected_decision_date)
+    _guard_merge_consumer_clock(
+        artifact["generated_at"], manifest["generated_at"], cutoff=cutoff,
+    )
+
+    ingest_input = _ingest_input(artifact)
+    normalized = ingest.normalize_discovery_payload(
+        ingest_input,
+        expected_decision_date=expected_decision_date,
+        generated_at=artifact["generated_at"],
+    )
+    if normalized != artifact:
+        raise ThemeDiscoveryMergeError("merged artifact identity/digest does not match its normalized evidence")
+
+    manifest_refs: dict[str, dict[str, Any]] = {}
+    for ref in manifest["source_refs"]:
+        source_id = ref["source_id"]
+        if source_id in manifest_refs:
+            raise ThemeDiscoveryMergeError("merge manifest contains duplicate source identity")
+        source_type = ref["source_type"]
+        locator = ref["canonical_locator"]
+        if web._canonical_locator(locator) != locator:
+            raise ThemeDiscoveryMergeError("merge manifest source locator is not canonical")
+        _guard_source_identity(source_id=source_id, source_type=source_type, locator=locator)
+        observed = _instant(ref["observed_at"], f"manifest source observed_at ({source_id})")
+        fetched = _instant(ref["fetched_at"], f"manifest source fetched_at ({source_id})")
+        _guard_source_pit(observed=observed, fetched=fetched, cutoff=cutoff)
+        raw_ref = ref["raw_receipt_ref"]
+        raw_gitignored = ref["raw_receipt_gitignored"]
+        if (raw_ref is None) != (raw_gitignored is False):
+            raise ThemeDiscoveryMergeError("merge manifest raw receipt binding is inconsistent")
+        if raw_ref is not None:
+            raw_path = _raw_receipt_path(raw_ref)
+            if (
+                not raw_path.is_file()
+                or not web._gitignored(raw_path)
+            ):
+                raise ThemeDiscoveryMergeError("merge manifest raw receipt is missing or not gitignored")
+            if (
+                raw_path.name != f"{source_id.split(':', 1)[1]}.json"
+                or raw_path.parent.name != expected_decision_date
+            ):
+                raise ThemeDiscoveryMergeError(
+                    "merge manifest raw receipt path is not bound to its source identity and decision date"
+                )
+            raw_payload = web._read_json(raw_path)
+            _guard_raw_content_digest(
+                raw_payload=raw_payload, expected_sha256=ref["content_sha256"],
+            )
+            for field in ("source_id", "source_type", "canonical_locator"):
+                if raw_payload.get(field) != ref[field]:
+                    raise ThemeDiscoveryMergeError(f"merge manifest raw source binding mismatch: {field}")
+            raw_time_key = "published_at" if source_type == "web" else "created_at"
+            if _instant(raw_payload.get(raw_time_key), f"raw {raw_time_key} ({source_id})") != observed:
+                raise ThemeDiscoveryMergeError("merge manifest raw observation clock does not match")
+        manifest_refs[source_id] = ref
+
+    artifact_refs = {
+        ref["source_id"]: {
+            "source_id": ref["source_id"],
+            "source_type": ref["source_type"],
+            "observed_at": ref["observed_at"],
+        }
+        for ref in artifact["source_refs"]
+    }
+    manifest_projection = {
+        source_id: {
+            "source_id": source_id,
+            "source_type": ref["source_type"],
+            "observed_at": ref["observed_at"],
+        }
+        for source_id, ref in manifest_refs.items()
+    }
+    if artifact_refs != manifest_projection:
+        raise ThemeDiscoveryMergeError("merge manifest sources do not bind the merged artifact")
+
+    artifact_themes = _guard_unique_manifest_rows(
+        artifact["themes"], key="theme_id", label="artifact theme identity",
+    )
+    manifest_themes = _guard_unique_manifest_rows(
+        manifest["themes"], key="theme_id", label="theme identity",
+    )
+    if set(artifact_themes) != set(manifest_themes):
+        raise ThemeDiscoveryMergeError("merge manifest themes do not cover the merged artifact")
+    for theme_id, manifest_theme in manifest_themes.items():
+        artifact_theme = artifact_themes[theme_id]
+        theme_refs = [manifest_refs[ref_id] for ref_id in artifact_theme["source_ref_ids"]]
+        if manifest_theme["discovery_sources"] != _corroboration(theme_refs)[0]:
+            raise ThemeDiscoveryMergeError("merge manifest theme source tier does not match its evidence")
+        artifact_members = _guard_unique_manifest_rows(
+            artifact_theme["members"], key="ticker", label="artifact member identity",
+        )
+        manifest_members = _guard_unique_manifest_rows(
+            manifest_theme["members"], key="ticker", label="member identity",
+        )
+        if set(artifact_members) != set(manifest_members):
+            raise ThemeDiscoveryMergeError("merge manifest members do not cover the merged artifact")
+        for ticker, manifest_member in manifest_members.items():
+            artifact_member = artifact_members[ticker]
+            if manifest_member["source_ref_ids"] != artifact_member["source_ref_ids"]:
+                raise ThemeDiscoveryMergeError("merge manifest member refs do not bind the merged artifact")
+            if set(manifest_member["redundant_source_ref_ids"]) & set(manifest_member["source_ref_ids"]):
+                raise ThemeDiscoveryMergeError("merge manifest retained and redundant member refs overlap")
+            if not set(manifest_member["redundant_source_ref_ids"]).issubset(manifest_refs):
+                raise ThemeDiscoveryMergeError("merge manifest redundant member ref is unknown")
+            member_refs = [manifest_refs[ref_id] for ref_id in artifact_member["source_ref_ids"]]
+            sources, tier, residual = _corroboration(member_refs)
+            _guard_member_evidence_tier(
+                residual=residual,
+                actual_sources=manifest_member["discovery_sources"],
+                expected_sources=sources,
+                actual_tier=manifest_member["evidence_tier"],
+                expected_tier=tier,
+            )
+
+    summary = manifest["summary"]
+    members = [member for theme in manifest["themes"] for member in theme["members"]]
+    expected_counts = {
+        "merged_theme_count": len(manifest["themes"]),
+        "dropped_theme_count": len(manifest["drop_ledger"]),
+        "both_member_count": sum(member["evidence_tier"] == "both" for member in members),
+        "single_member_count": sum(member["evidence_tier"] == "single" for member in members),
+        "zero_member_count": sum(member["evidence_tier"] is None for member in members),
+        "redundant_member_count": sum(bool(member["redundant_source_ref_ids"]) for member in members),
+    }
+    _guard_summary_counts(summary=summary, expected_counts=expected_counts)
+
+    if set(upstream_pairs) != {"web", "x"}:
+        raise ThemeDiscoveryMergeError("merge upstream anchors must contain exactly web and x pairs")
+    web_artifact, web_receipt = upstream_pairs["web"]
+    x_artifact, x_receipt = upstream_pairs["x"]
+    _verify_receipt(web_artifact, web_receipt, "web", expected_decision_date)
+    _verify_receipt(x_artifact, x_receipt, "x", expected_decision_date)
+    expected_input_hashes = {
+        "web": web._discovery_evidence_hash(web_artifact),
+        "x": web._discovery_evidence_hash(x_artifact),
+    }
+    _guard_input_artifact_hashes(
+        manifest["input_artifact_sha256"], expected_input_hashes,
+    )
+    replayed_artifact, replayed_manifest = merge_web_x_discovery(
+        web_artifact=web_artifact,
+        web_receipt=web_receipt,
+        x_artifact=x_artifact,
+        x_receipt=x_receipt,
+        expected_decision_date=expected_decision_date,
+        generated_at=artifact["generated_at"],
+    )
+    if replayed_artifact != artifact or replayed_manifest != manifest:
+        raise ThemeDiscoveryMergeError("merge packet is not the deterministic projection of its upstream pairs")
+    return ingest_input
 
 
 def main(argv: list[str] | None = None) -> int:

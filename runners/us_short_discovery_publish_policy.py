@@ -18,6 +18,7 @@ per-source `fetched_at` that a live retry re-stamps at depth.
 from __future__ import annotations
 
 import json
+import hashlib
 import os
 import subprocess
 from pathlib import Path
@@ -31,6 +32,7 @@ CLOCK_KEYS_NONE: tuple[str, ...] = ()
 # The lane has exactly ONE mutable artifact family (the per-decision provider reservation
 # counter).  Naming it here means the door - not a call site - decides what may be replaced;
 MUTABLE_LEDGER_SUFFIX = "_budget.json"
+CONFORMANCE_GUARDS = ("_serialized_payload", "_serialized_sha256")
 
 
 class DiscoveryPublishPolicyError(ValueError):
@@ -140,6 +142,11 @@ def _serialized_payload(payload: Any) -> bytes:
         raise DiscoveryPublishPolicyError("immutable artifact payload is not serializable") from exc
 
 
+def _serialized_sha256(payload: Any) -> str:
+    """Digest the exact bytes the shared immutable writer will publish."""
+    return hashlib.sha256(_serialized_payload(payload)).hexdigest()
+
+
 def _staged_temp(path: Path, serialized: bytes, *, suffix: str = "tmp") -> Path:
     """Stage the bytes in a hidden, uniquely named sibling created EXCLUSIVELY.
 
@@ -197,35 +204,43 @@ def write_immutable_json(
 def publish_immutable_pair(
     items: Sequence[tuple[dict[str, Any], Path]], *,
     clock_keys: Sequence[str] = CLOCK_KEYS_RECEIPT, recursive: bool = True,
+    verifiers: Sequence[Callable[[Any], None] | None] | None = None,
 ) -> None:
     """Publish several slots as a unit: stage all, then create final names, rolling back new peers."""
     paths = [path for _payload, path in items]
     if len({path.resolve() for path in paths}) != len(paths):
         raise DiscoveryPublishPolicyError("publish targets must be distinct")
-    staged: list[tuple[Path, Path, dict[str, Any]]] = []
+    checks = tuple(verifiers) if verifiers is not None else (None,) * len(items)
+    if len(checks) != len(items):
+        raise DiscoveryPublishPolicyError("publish verifiers must align with publish items")
+    staged: list[tuple[Path, Path, dict[str, Any], Callable[[Any], None] | None]] = []
     committed: list[Path] = []
     try:
-        for payload, path in items:
+        for (payload, path), verify in zip(items, checks):
             serialized = _serialized_payload(payload)
-            if frozen_artifact_matches(payload, path, clock_keys=clock_keys, recursive=recursive):
+            if frozen_artifact_matches(
+                payload, path, clock_keys=clock_keys, recursive=recursive, verify=verify,
+            ):
                 continue
-            staged.append((_staged_temp(path, serialized, suffix="pair.tmp"), path, payload))
-        for tmp, path, payload in staged:
+            staged.append((_staged_temp(path, serialized, suffix="pair.tmp"), path, payload, verify))
+        for tmp, path, payload, verify in staged:
             try:
                 os.link(tmp, path)
             except FileExistsError:
                 # Another writer won this slot: keep it only if it holds the same evidence.
-                frozen_artifact_matches(payload, path, clock_keys=clock_keys, recursive=recursive)
+                frozen_artifact_matches(
+                    payload, path, clock_keys=clock_keys, recursive=recursive, verify=verify,
+                )
                 continue
             committed.append(path)
     except DiscoveryPublishPolicyError:
-        _discard([tmp for tmp, _path, _payload in staged] + list(reversed(committed)))
+        _discard([tmp for tmp, _path, _payload, _verify in staged] + list(reversed(committed)))
         raise
     except OSError as exc:
-        _discard([tmp for tmp, _path, _payload in staged] + list(reversed(committed)))
+        _discard([tmp for tmp, _path, _payload, _verify in staged] + list(reversed(committed)))
         raise DiscoveryPublishPolicyError("cannot publish the decision-date artifact pair") from exc
     finally:
-        _discard([tmp for tmp, _path, _payload in staged])
+        _discard([tmp for tmp, _path, _payload, _verify in staged])
 
 
 def write_mutable_ledger(

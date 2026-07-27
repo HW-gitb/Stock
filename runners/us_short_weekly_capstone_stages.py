@@ -244,6 +244,12 @@ def run_vix_regime(ctx) -> dict[str, Any]:
 
 # --- OFFLINE stages (pure / local; no network) ---
 
+def run_soft_discovery(ctx) -> dict[str, Any]:
+    from runners.us_short_weekly_capstone_soft_discovery import run_offline_stage
+
+    return run_offline_stage(ctx)
+
+
 def run_momentum_producer(ctx) -> dict[str, Any]:
     return _mom_prod.run_packet(
         candidate_artifact_path=ctx.candidate_path,

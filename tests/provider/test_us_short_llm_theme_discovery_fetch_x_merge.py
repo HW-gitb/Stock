@@ -11,6 +11,7 @@ from runners import us_short_llm_theme_discovery_fetch_x as xfetch
 from runners import us_short_llm_theme_discovery_merge as merge
 from runners.us_short_llm_theme_discovery_merge import ThemeDiscoveryMergeError, merge_web_x_discovery
 from runners import us_short_llm_theme_discovery_fetch_web as web
+from tests.provider.us_short_private_test_root import temporary_provider_directory
 
 
 X_ROWS = [
@@ -77,7 +78,7 @@ class XFetchAndMergeTests(unittest.TestCase):
             expected_decision_date="20260725", generated_at="2026-07-25T08:00:00Z")
         self.assertEqual(receipt["summary"]["accepted_source_count"], 1)
         self.assertIn("invalid_canonical_locator", [row["reason"] for row in receipt["drop_ledger"]])
-        with tempfile.TemporaryDirectory(dir=web.ROOT / "provider_samples") as td:
+        with temporary_provider_directory(web.ROOT) as td:
             root = Path(td) / "x"
             kwargs = dict(queries=["q"], grok_response='{"themes":[]}', expected_decision_date="20260725", generated_at="2026-07-25T08:00:00Z", raw_root=root, persist_raw=True)
             xfetch.build_x_fetch_packet(results=X_ROWS, **kwargs)
@@ -198,7 +199,7 @@ class XFetchAndMergeTests(unittest.TestCase):
             generated_at="2026-07-25T08:00:00Z", fetched_at="2026-07-25T08:00:00Z", **kwargs,
         )
         self.assertEqual(first_receipt["discovery_artifact_sha256"], second_receipt["discovery_artifact_sha256"])
-        with tempfile.TemporaryDirectory(dir=web.ROOT / "provider_samples") as td:
+        with temporary_provider_directory(web.ROOT) as td:
             with mock.patch.object(web, "STATE_DIR", Path(td)), mock.patch.object(xfetch, "STATE_DIR", Path(td)):
                 output = xfetch.default_discovery_path("20260725")
                 receipt_path = xfetch.default_receipt_path("20260725")
@@ -347,7 +348,7 @@ class XFetchAndMergeTests(unittest.TestCase):
             queries=["q"], results=[], grok_response='{"themes":[]}',
             expected_decision_date="20260725", generated_at="2026-07-25T08:00:00Z",
         )
-        with tempfile.TemporaryDirectory(dir=web.ROOT / "provider_samples") as td:
+        with temporary_provider_directory(web.ROOT) as td:
             root = Path(td)
             paths = []
             for name, payload in (("web.json", wa), ("web_receipt.json", wr), ("x.json", xa), ("x_receipt.json", xr)):
@@ -495,7 +496,7 @@ class XFetchAndMergeTests(unittest.TestCase):
 
         for lane, time_key in (("web", "published_at"), ("x", "created_at")):
             with self.subTest(lane=lane, defect="after-open raw re-hashed"), \
-                    tempfile.TemporaryDirectory(dir=web.ROOT / "provider_samples") as td:
+                    temporary_provider_directory(web.ROOT) as td:
                 wa, wr, xa, xr = live_pair(td)
                 receipt, artifact = (wr, wa) if lane == "web" else (xr, xa)
                 merge_pair(wa, wr, xa, xr)      # reverse control: the untouched pair merges
@@ -506,7 +507,7 @@ class XFetchAndMergeTests(unittest.TestCase):
                 with self.assertRaises(ThemeDiscoveryMergeError):
                     merge_pair(wa, wr, xa, xr)
             with self.subTest(lane=lane, defect="forged source identity"), \
-                    tempfile.TemporaryDirectory(dir=web.ROOT / "provider_samples") as td:
+                    temporary_provider_directory(web.ROOT) as td:
                 wa, wr, xa, xr = live_pair(td)
                 receipt, artifact = (wr, wa) if lane == "web" else (xr, xa)
                 forged = f"{lane}:" + "a" * 64
@@ -524,7 +525,7 @@ class XFetchAndMergeTests(unittest.TestCase):
                 with self.assertRaises(ThemeDiscoveryMergeError):
                     merge_pair(wa, wr, xa, xr)
             with self.subTest(lane=lane, defect="raw path not bound to source ID"), \
-                    tempfile.TemporaryDirectory(dir=web.ROOT / "provider_samples") as td:
+                    temporary_provider_directory(web.ROOT) as td:
                 wa, wr, xa, xr = live_pair(td)
                 receipt = wr if lane == "web" else xr
                 raw_path = web.ROOT / receipt["source_refs"][0]["raw_receipt_ref"]
@@ -536,7 +537,7 @@ class XFetchAndMergeTests(unittest.TestCase):
             for defect, observed in (("artifact observation drifts from the receipt", "2026-07-23T09:00:00+00:00"),
                                      ("every copy moved past the decision open", "2026-07-25T15:00:00+00:00")):
                 with self.subTest(lane=lane, defect=defect), \
-                        tempfile.TemporaryDirectory(dir=web.ROOT / "provider_samples") as td:
+                        temporary_provider_directory(web.ROOT) as td:
                     wa, wr, xa, xr = live_pair(td)
                     receipt, artifact = (wr, wa) if lane == "web" else (xr, xa)
                     artifact["source_refs"][0]["observed_at"] = observed
@@ -605,7 +606,7 @@ class XFetchAndMergeTests(unittest.TestCase):
         self.assertIn("invalid_canonical_locator", [row["reason"] for row in receipt["drop_ledger"]])
 
     def test_merge_rehashes_live_raw_receipts(self):
-        with tempfile.TemporaryDirectory(dir=web.ROOT / "provider_samples") as td:
+        with temporary_provider_directory(web.ROOT) as td:
             root = Path(td)
             wa, wr, _ = web.build_web_fetch_packet(
                 queries=["power"], search_results=[{"url": "https://web.example/live", "title": "A", "content": "AAPL", "published_date": "2026-07-24T10:00:00Z"}], llm_response='{"themes":[]}',

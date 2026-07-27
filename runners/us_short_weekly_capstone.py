@@ -217,6 +217,7 @@ class CapstoneContext:
     max_total_http_attempts: int | None = None
     model_paper_store_root: Path | None = None
     model_paper_run_account_mode: str | None = None
+    soft_discovery_enabled: bool = True
     state_dir: Path = STATE_DIR
     sample_root: Path = ROOT   # repo root that the runners' provider_samples/ allowlists resolve against (tests inject a tempdir)
     research_live_capability: Any = None   # A1: minted by run_weekly_capstone ONLY for a genuine production run — never by resolve_capstone_context / a caller
@@ -250,6 +251,35 @@ class CapstoneContext:
     @property
     def classification_packet_path(self) -> Path:
         return self._s(f"us_short_batch5_full_universe_sector_classification_{self.price_basis_date}_packet.json")
+
+    @property
+    def soft_discovery_merge_path(self) -> Path:
+        from runners import us_short_llm_theme_discovery_merge as merge
+        from runners.us_short_weekly_capstone_soft_discovery import rerooted_default_path
+        return rerooted_default_path(merge.default_discovery_path, self.decision_date, state_dir=self.state_dir)
+
+    @property
+    def soft_discovery_merge_manifest_path(self) -> Path:
+        from runners import us_short_llm_theme_discovery_merge as merge
+        from runners.us_short_weekly_capstone_soft_discovery import rerooted_default_path
+        return rerooted_default_path(merge.default_manifest_path, self.decision_date, state_dir=self.state_dir)
+
+    @property
+    def soft_discovery_ingest_path(self) -> Path:
+        from runners import us_short_llm_theme_discovery as ingest
+        from runners.us_short_weekly_capstone_soft_discovery import rerooted_default_path
+        return rerooted_default_path(ingest.default_output_path, self.decision_date, state_dir=self.state_dir)
+
+    @property
+    def soft_discovery_validation_path(self) -> Path:
+        from runners import us_short_provisional_theme_validate as validate
+        from runners.us_short_weekly_capstone_soft_discovery import rerooted_default_path
+        return rerooted_default_path(validate.default_output_path, self.decision_date, state_dir=self.state_dir)
+
+    @property
+    def soft_discovery_receipt_path(self) -> Path:
+        from runners.us_short_weekly_capstone_soft_discovery import default_receipt_path
+        return default_receipt_path(self.decision_date, state_dir=self.state_dir)
 
     @property
     def theme_projection_path(self) -> Path:
@@ -417,11 +447,14 @@ def resolve_capstone_context(
     max_total_http_attempts: int | None = None,
     model_paper_store_root: Path | None = None,
     model_paper_run_account_mode: str | None = None,
+    soft_discovery_enabled: bool = True,
     state_dir: Path = STATE_DIR,
     sample_root: Path = ROOT,
 ) -> CapstoneContext:
     """Resolve the §2.1 canonical decision_date + price_basis_date from `now_et` and the frozen calendar, and build
     the run context. Fail-closed: an intraday `now_et` (session dead zone) raises WeeklyCapstoneError (no run)."""
+    if type(soft_discovery_enabled) is not bool:
+        raise WeeklyCapstoneError("soft_discovery_enabled must be an exact bool")
     if not isinstance(now_et, datetime) or now_et.tzinfo is not None:
         raise WeeklyCapstoneError("now_et must be a naive ET wall-clock datetime (Beijing→ET conversion upstream)")
     calendar = load_market_calendar(calendar_path)
@@ -457,6 +490,7 @@ def resolve_capstone_context(
         max_total_http_attempts=max_total_http_attempts,
         model_paper_store_root=Path(model_paper_store_root) if model_paper_store_root is not None else None,
         model_paper_run_account_mode=model_paper_run_account_mode,
+        soft_discovery_enabled=soft_discovery_enabled,
         state_dir=Path(state_dir),
         sample_root=Path(sample_root),
     )
@@ -480,12 +514,64 @@ class Stage:
     best_effort: bool = False
     contract_version: str = "1.0.0"
     reuse_policy: str = "never"
+    # Lifecycle policy defaults are deliberately strict.  A stage must opt into
+    # optional zero-effect handling explicitly; an unannotated/new stage can
+    # therefore never silently inherit the soft-discovery boundary.
+    failure_policy: str = "strict"
+    output_policy: str = "required"
+    checkpoint_policy: str = "required"
+    failure_handler: Callable[["Stage", CapstoneContext, Exception], dict[str, Any]] | None = None
 
 
-def default_pipeline(*, include_model_paper: bool = False) -> list[Stage]:
+STAGE_FAILURE_POLICIES = frozenset({"strict", "zero_effect"})
+STAGE_OUTPUT_POLICIES = frozenset({"required", "optional"})
+STAGE_CHECKPOINT_POLICIES = frozenset({"required", "optional_result_only"})
+STAGE_LIFECYCLE_POLICY_REGISTRY = {
+    "strict": {"output_policy": "required", "checkpoint_policy": "required"},
+    "zero_effect": {"output_policy": "optional", "checkpoint_policy": "optional_result_only"},
+}
+
+
+def _stage_is_optional(stage: Stage) -> bool:
+    return stage.failure_policy == "zero_effect"
+
+
+def _validate_stage_lifecycle(stages: list[Stage]) -> None:
+    """Validate the finite lifecycle policy before any stage can run."""
+    for stage in stages:
+        if stage.failure_policy not in STAGE_FAILURE_POLICIES:
+            raise WeeklyCapstoneError(f"stage '{stage.name}' has an unknown failure policy")
+        if stage.output_policy not in STAGE_OUTPUT_POLICIES:
+            raise WeeklyCapstoneError(f"stage '{stage.name}' has an unknown output policy")
+        if stage.checkpoint_policy not in STAGE_CHECKPOINT_POLICIES:
+            raise WeeklyCapstoneError(f"stage '{stage.name}' has an unknown checkpoint policy")
+        expected = STAGE_LIFECYCLE_POLICY_REGISTRY[stage.failure_policy]
+        if stage.output_policy != expected["output_policy"] or stage.checkpoint_policy != expected["checkpoint_policy"]:
+            if stage.failure_policy == "strict":
+                raise WeeklyCapstoneError(
+                    f"strict stage '{stage.name}' cannot use optional output/checkpoint policy"
+                )
+            else:
+                raise WeeklyCapstoneError(
+                    f"zero-effect stage '{stage.name}' must declare optional output/checkpoint policy"
+                )
+        if stage.failure_policy == "zero_effect":
+            if stage.failure_handler is None:
+                raise WeeklyCapstoneError(f"zero-effect stage '{stage.name}' lacks a failure handler")
+            if stage.reuse_policy != "never":
+                raise WeeklyCapstoneError(
+                    f"zero-effect stage '{stage.name}' must never reuse an artifact-less result"
+                )
+
+
+def default_pipeline(
+    *, include_model_paper: bool = False, include_soft_discovery: bool = True,
+) -> list[Stage]:
     """The weekly pipeline in dependency order. Each `run` adapter calls the corresponding real runner
     with dates/paths from the context (imported lazily so an offline dry-run / a stage-injected test never imports a
     provider runner it will not call)."""
+    if type(include_soft_discovery) is not bool:
+        raise WeeklyCapstoneError("include_soft_discovery must be an exact bool")
     from runners import us_short_weekly_capstone_stages as st  # thin adapters over the real runners
     stages = [
         Stage("universe_fetch", True, lambda c: [], lambda c: [c.candidate_path], st.run_universe,
@@ -505,6 +591,12 @@ def default_pipeline(*, include_model_paper: bool = False) -> list[Stage]:
               contract_version="1.0.0", reuse_policy="frozen_inputs"),
         Stage("sic_fetch", True, lambda c: [c.candidate_path], lambda c: [c.classification_packet_path],
               st.run_sic_fetch, contract_version="1.0.0", reuse_policy="frozen_inputs"),
+        Stage("soft_discovery", False, lambda c: [],
+              lambda c: [c.soft_discovery_receipt_path], st.run_soft_discovery,
+              contract_version="1.0.0", reuse_policy="never",
+              failure_policy="zero_effect", output_policy="optional",
+              checkpoint_policy="optional_result_only",
+              failure_handler=_degrade_soft_discovery_boundary),
         Stage("theme_producer", False,
               lambda c: [c.candidate_path, c.series_packet_path, c.classification_packet_path],
               lambda c: [c.theme_projection_path], st.run_theme_producer,
@@ -540,9 +632,12 @@ def default_pipeline(*, include_model_paper: bool = False) -> list[Stage]:
               lambda c: [_official_output_paths(c)[0]] if _model_paper_enabled(c) else [], _run_model_paper_weekly,
               contract_version="1.0.0", reuse_policy="never"),
     ]
-    if include_model_paper:
-        return stages
-    return [stage for stage in stages if stage.name not in {"model_paper_adapter", "model_paper_weekly"}]
+    excluded = set()
+    if not include_model_paper:
+        excluded.update({"model_paper_adapter", "model_paper_weekly"})
+    if not include_soft_discovery:
+        excluded.add("soft_discovery")
+    return [stage for stage in stages if stage.name not in excluded]
 
 
 def _official_output_paths(ctx: CapstoneContext) -> list[Path]:
@@ -572,6 +667,9 @@ def _plan(ctx: CapstoneContext, stages: list[Stage], *, resume_from: Path | None
                 "best_effort": s.best_effort,
                 "contract_version": s.contract_version,
                 "reuse_policy": s.reuse_policy,
+                "failure_policy": s.failure_policy,
+                "output_policy": s.output_policy,
+                "checkpoint_policy": s.checkpoint_policy,
                 "inputs": [_rel(p) for p in s.inputs(ctx)],
                 "outputs": [_rel(p) for p in s.outputs(ctx)],
             }
@@ -746,16 +844,149 @@ def _input_readable(path: Path) -> bool:
     return True
 
 
+def _unchanged_soft_discovery_receipt_matches(
+    stage: Stage, result: dict[str, Any], expected_outputs: list[Path],
+) -> bool:
+    if not _stage_is_optional(stage) or len(expected_outputs) != 1:
+        return False
+    try:
+        frozen_bytes = expected_outputs[0].read_bytes()
+    except OSError:
+        return False
+    try:
+        if json.loads(frozen_bytes.decode("utf-8")) == result:
+            return True
+    except (UnicodeDecodeError, ValueError):
+        pass
+    if not (
+        isinstance(result, dict)
+        and result.get("status") == "invalid_evidence"
+        and result.get("reason_code") == "SOFT_DISCOVERY_IMMUTABLE_CONFLICT"
+        and result.get("validated_theme_count") == 0
+        and result.get("boostable_ticker_count") == 0
+    ):
+        return False
+    try:
+        from runners.us_short_weekly_capstone_soft_discovery import _schema_validate
+
+        _schema_validate(result)
+    except Exception:
+        return False
+    effects = result.get("effects")
+    if type(effects) is not dict or any(value is not False for value in effects.values()):
+        return False
+    binding = result.get("immutable_conflict")
+    canonical = binding.get("canonical_receipt") if isinstance(binding, dict) else None
+    if not isinstance(canonical, dict):
+        return False
+    try:
+        expected_relative = expected_outputs[0].resolve().relative_to(ROOT.resolve()).as_posix()
+    except ValueError:
+        return False
+    return (
+        canonical.get("path") == expected_relative
+        and canonical.get("sha256") == hashlib.sha256(frozen_bytes).hexdigest()
+    )
+
+
+def _is_typed_zero_effect_result(result: Any) -> bool:
+    if not isinstance(result, dict) or result.get("status") != "invalid_evidence":
+        return False
+    effects = result.get("effects")
+    return (
+        isinstance(effects, dict)
+        and effects
+        and all(value is False for value in effects.values())
+        and result.get("validated_theme_count") == 0
+        and result.get("boostable_ticker_count") == 0
+    )
+
+
+def _degrade_soft_discovery_boundary(
+    stage: Stage, ctx: CapstoneContext, exc: Exception,
+) -> dict[str, Any]:
+    from runners.us_short_weekly_capstone_soft_discovery import (
+        degrade_capstone_boundary_failure,
+    )
+
+    try:
+        return degrade_capstone_boundary_failure(ctx, exc)
+    except Exception:
+        unbound = {"path": None, "sha256": None}
+        return {
+            "schema_name": "us_short_provisional_theme_stage_receipt",
+            "schema_version": "1.0.0",
+            "generated_at": ctx.generated_at,
+            "decision_date": ctx.decision_date,
+            "status": "invalid_evidence",
+            "reason_code": "SOFT_DISCOVERY_STAGE_EXCEPTION",
+            "artifacts": {
+                key: dict(unbound)
+                for key in ("merge", "merge_manifest", "ingest", "validation")
+            },
+            "evidence_anchor": {
+                "upstream_pair_anchored": False,
+                "document_content_anchored": False,
+                "upstream_artifacts": {
+                    key: dict(unbound)
+                    for key in ("web_discovery", "web_receipt", "x_discovery", "x_receipt")
+                },
+            },
+            "immutable_conflict": None,
+            "validated_theme_count": 0,
+            "boostable_ticker_count": 0,
+            "drop_summary": {
+                "merge_dropped_theme_count": 0,
+                "validation_drop_count": 0,
+            },
+            "error_summary": {
+                "code": "SOFT_DISCOVERY_STAGE_EXCEPTION",
+                "error_type": type(exc).__name__,
+            },
+            "effects": {
+                "network_access_performed": False,
+                "provider_calls_performed": False,
+                "scoring_eligible": False,
+                "top15_effect_enabled": False,
+                "operation_advice_effect_enabled": False,
+                "dynamic_seats_enabled": False,
+                "theme_probe_enabled": False,
+                "lifecycle_actions_enabled": False,
+            },
+        }
+
+
+def _degrade_stage_boundary(stage: Stage, ctx: CapstoneContext, exc: Exception) -> dict[str, Any]:
+    """Apply the explicitly declared optional-stage failure handler."""
+    if not _stage_is_optional(stage) or stage.failure_handler is None:
+        raise exc
+    try:
+        result = stage.failure_handler(stage, ctx, exc)
+        if not _is_typed_zero_effect_result(result):
+            raise WeeklyCapstoneError(
+                f"optional stage '{stage.name}' failure handler returned a non-zero-effect result"
+            )
+        return result
+    except Exception:
+        # The handler itself is part of the optional boundary.  Its fallback is
+        # still a typed zero-effect result; official output transaction errors
+        # remain outside this helper and stay strict.
+        return _degrade_soft_discovery_boundary(stage, ctx, exc)
+
+
 def _provider_execution_receipt(ctx: CapstoneContext, results: list[dict[str, Any]]):
     """Build the A1 receipt from exact completed stages and their provider-call evidence."""
     required_results = tuple(
         item for item in results
-        if not item.get("best_effort", False) and item.get("name") != "model_paper_adapter"
+        if not item.get("best_effort", False)
+        and item.get("name") not in {"model_paper_adapter", "soft_discovery"}
     )
     completed = tuple(item.get("name") for item in required_results)
     expected = tuple(
         stage.name for stage in default_pipeline()
-        if stage.name not in {"weekly_bridge", "model_paper_adapter", "model_paper_weekly"} and not stage.best_effort
+        if stage.name not in {
+            "weekly_bridge", "model_paper_adapter", "model_paper_weekly", "soft_discovery",
+        } and not stage.best_effort
     )
     if completed != expected:
         raise WeeklyCapstoneError("research_live receipt requires the exact completed pre-bridge stage sequence")
@@ -924,11 +1155,10 @@ class _DecisionDateLock:
 
 
 def _decision_lock_path(ctx: CapstoneContext) -> Path:
-    # One repo-wide lock per decision date: stage artifacts live under shared state_dir/sample_root even when callers
-    # choose different private output roots, so locking by private_root would still permit cross-run source mixing.
+    # One lock per decision date and artifact state root. Production callers share the canonical state root,
+    # while tests and isolated replays inject their own root and must not contend through repository-global state.
     return (
-        ROOT / "provider_samples" / "us_short_weekly_capstone" / "_transaction_locks"
-        / f"{ctx.decision_date}.lock"
+        ctx.state_dir / "_transaction_locks" / f"{ctx.decision_date}.lock"
     ).resolve()
 
 
@@ -1189,26 +1419,72 @@ def _run_pass2_budget_preview(ctx: CapstoneContext, pipeline: list[Stage]) -> di
     Pass2, VIX, or the weekly bridge.  The resulting forecast remains non-authorizing: it must be supplied again as
     an independently approved exact budget to the normal full run.
     """
+    _validate_stage_lifecycle(pipeline)
     results: list[dict[str, Any]] = []
     for stage in pipeline:
-        input_paths = [Path(p) for p in stage.inputs(ctx)]
+        try:
+            input_paths = [Path(p) for p in stage.inputs(ctx)]
+        except Exception as exc:  # noqa: BLE001 - optional lifecycle boundary
+            if not _stage_is_optional(stage):
+                raise WeeklyCapstoneError(f"stage '{stage.name}' input enumeration failed: {type(exc).__name__}: {exc}") from exc
+            input_paths = []
+            result = _degrade_stage_boundary(stage, ctx, exc)
+            soft_degraded = True
+        else:
+            soft_degraded = False
         unreadable_inputs = [path for path in input_paths if not _input_readable(path)]
         if unreadable_inputs:
-            raise WeeklyCapstoneError(
+            unreadable = WeeklyCapstoneError(
                 f"stage '{stage.name}' cannot start: declared input(s) missing or unreadable this run: "
                 f"{[_rel(p) for p in unreadable_inputs]}"
             )
-        expected_outputs = [Path(p) for p in stage.outputs(ctx)]
-        before = {str(path.resolve()): _output_fingerprint(path) for path in expected_outputs}
+            if not _stage_is_optional(stage):
+                raise unreadable
+            input_paths = []
+            result = _degrade_stage_boundary(stage, ctx, unreadable)
+            soft_degraded = True
         try:
-            result = stage.run(ctx)
-        except Exception as exc:  # noqa: BLE001 - preserve the public stage label for the one-click preview
-            raise WeeklyCapstoneError(f"stage '{stage.name}' failed: {type(exc).__name__}: {exc}") from exc
+            expected_outputs = [Path(p) for p in stage.outputs(ctx)]
+        except Exception as exc:  # noqa: BLE001 - optional lifecycle boundary
+            if not _stage_is_optional(stage):
+                raise WeeklyCapstoneError(f"stage '{stage.name}' output enumeration failed: {type(exc).__name__}: {exc}") from exc
+            expected_outputs = []
+            result = _degrade_stage_boundary(stage, ctx, exc)
+            soft_degraded = True
+        before = {str(path.resolve()): _output_fingerprint(path) for path in expected_outputs}
+        if not soft_degraded:
+            try:
+                result = stage.run(ctx)
+            except Exception as exc:  # noqa: BLE001 - optional lifecycle boundary
+                if not _stage_is_optional(stage):
+                    raise WeeklyCapstoneError(f"stage '{stage.name}' failed: {type(exc).__name__}: {exc}") from exc
+                result = _degrade_stage_boundary(stage, ctx, exc)
+                soft_degraded = True
+        if not isinstance(result, dict):
+            if not _stage_is_optional(stage):
+                raise WeeklyCapstoneError(f"stage '{stage.name}' returned a non-object result")
+            result = _degrade_stage_boundary(
+                stage, ctx, WeeklyCapstoneError(f"stage '{stage.name}' returned a non-object result"),
+            )
+            soft_degraded = True
         missing = [
             path for path in expected_outputs
             if _output_fingerprint(path) is None
             or _output_fingerprint(path) == before[str(path.resolve())]
         ]
+        if soft_degraded:
+            missing = []
+        elif missing == expected_outputs and _unchanged_soft_discovery_receipt_matches(
+            stage, result, expected_outputs,
+        ):
+            missing = []
+        elif missing and _stage_is_optional(stage):
+            if not _is_typed_zero_effect_result(result):
+                result = _degrade_stage_boundary(
+                    stage, ctx, WeeklyCapstoneError("optional stage did not produce a fresh output"),
+                )
+            soft_degraded = True
+            missing = []
         if missing:
             raise WeeklyCapstoneError(
                 f"stage '{stage.name}' completed but did not produce a fresh output this run: {[_rel(p) for p in missing]}"
@@ -1287,6 +1563,7 @@ def run_weekly_capstone(
     auto_authorize_pass2_budget: bool = False,
     model_paper_store_root: Path | None = None,
     model_paper_run_account_mode: str | None = None,
+    soft_discovery_enabled: bool = True,
     diagnostic_event: Callable[[dict[str, Any]], None] | None = None,
 ) -> dict[str, Any]:
     """Orchestrate the weekly one-click path. `dry_run=True` (default) resolves the canonical dates and returns the
@@ -1320,6 +1597,7 @@ def run_weekly_capstone(
         max_total_http_attempts=max_total_http_attempts, state_dir=state_dir,
         model_paper_store_root=model_paper_store_root,
         model_paper_run_account_mode=model_paper_run_account_mode,
+        soft_discovery_enabled=soft_discovery_enabled,
         sample_root=sample_root,
     )
     _emit_diagnostic_event(
@@ -1334,13 +1612,17 @@ def run_weekly_capstone(
         )
     if prepare_pass2_budget and stages is not None:
         raise WeeklyCapstoneError("--prepare-pass2-budget is available only on the real default capstone pipeline")
-    full_pipeline = stages if stages is not None else default_pipeline(include_model_paper=_model_paper_enabled(ctx))
+    full_pipeline = stages if stages is not None else default_pipeline(
+        include_model_paper=_model_paper_enabled(ctx),
+        include_soft_discovery=ctx.soft_discovery_enabled,
+    )
     pipeline = full_pipeline
     if prepare_pass2_budget:
         preflight_indexes = [i for i, stage in enumerate(full_pipeline) if stage.name == "pass2_preflight"]
         if len(preflight_indexes) != 1:
             raise WeeklyCapstoneError("default capstone pipeline must contain exactly one pass2_preflight")
         pipeline = full_pipeline[:preflight_indexes[0] + 1]
+    _validate_stage_lifecycle(pipeline)
     if any(stage.best_effort and stage.name not in {
         "forward_policy_shadow", "forward_policy_corporate_actions", "forward_policy_maturity",
     } for stage in pipeline):
@@ -1524,7 +1806,18 @@ def run_weekly_capstone(
             # schema/date/identity/digest checks. Empty input lists (e.g. universe_fetch, vix_regime) pass trivially.
             # A best_effort (shadow) stage routes an unreadable input through the SAME shadow-capture-failure path as a
             # run failure: a missing/partial shadow input must never abort the real weekly report (best_effort intent).
-            input_paths = [Path(p) for p in stage.inputs(stage_ctx)]
+            try:
+                input_paths = [Path(p) for p in stage.inputs(stage_ctx)]
+            except Exception as exc:  # noqa: BLE001 - optional lifecycle boundary
+                if not _stage_is_optional(stage):
+                    raise WeeklyCapstoneError(
+                        f"stage '{stage.name}' input enumeration failed: {type(exc).__name__}: {exc}"
+                    ) from exc
+                input_paths = []
+                result = _degrade_stage_boundary(stage, stage_ctx, exc)
+                soft_degraded = True
+            else:
+                soft_degraded = False
             unreadable_inputs = [path for path in input_paths if not _input_readable(path)]
             if unreadable_inputs:
                 unreadable = WeeklyCapstoneError(
@@ -1540,15 +1833,43 @@ def run_weekly_capstone(
                         error_type=type(unreadable).__name__,
                     )
                     continue
+                if _stage_is_optional(stage):
+                    input_paths = []
+                    result = _degrade_stage_boundary(stage, stage_ctx, unreadable)
+                    soft_degraded = True
+                    _emit_diagnostic_event(
+                        diagnostic_event,
+                        "stage_degraded",
+                        stage=stage.name,
+                        failure_kind="input_gate",
+                        error_type=type(unreadable).__name__,
+                    )
+                else:
+                    _emit_diagnostic_event(
+                        diagnostic_event,
+                        "stage_failed",
+                        stage=stage.name,
+                        failure_kind="input_gate",
+                        error_type=type(unreadable).__name__,
+                    )
+                    raise unreadable
+            try:
+                expected_outputs = [Path(p) for p in stage.outputs(stage_ctx)]
+            except Exception as exc:  # noqa: BLE001 - optional lifecycle boundary
+                if not _stage_is_optional(stage):
+                    raise WeeklyCapstoneError(
+                        f"stage '{stage.name}' output enumeration failed: {type(exc).__name__}: {exc}"
+                    ) from exc
+                expected_outputs = []
+                result = _degrade_stage_boundary(stage, stage_ctx, exc)
+                soft_degraded = True
                 _emit_diagnostic_event(
                     diagnostic_event,
-                    "stage_failed",
+                    "stage_degraded",
                     stage=stage.name,
-                    failure_kind="input_gate",
-                    error_type=type(unreadable).__name__,
+                    failure_kind="output_enumeration",
+                    error_type=type(exc).__name__,
                 )
-                raise unreadable
-            expected_outputs = [Path(p) for p in stage.outputs(stage_ctx)]
             if resume_manifest is not None and stage.reuse_policy == "frozen_inputs":
                 try:
                     restored = checkpoint_store.restore_stage(
@@ -1609,7 +1930,7 @@ def run_weekly_capstone(
                     continue
             before = {str(path.resolve()): _output_fingerprint(path) for path in expected_outputs}
             try:
-                result = stage.run(stage_ctx)
+                result = result if soft_degraded else stage.run(stage_ctx)
             except Exception as exc:  # noqa: BLE001 — re-wrap with the stage label so a failure is never anonymous
                 if stage.best_effort:
                     record_shadow_capture_failure(stage, exc)
@@ -1621,14 +1942,37 @@ def run_weekly_capstone(
                         error_type=type(exc).__name__,
                     )
                     continue
+                if not _stage_is_optional(stage):
+                    _emit_diagnostic_event(
+                        diagnostic_event,
+                        "stage_failed",
+                        stage=stage.name,
+                        failure_kind="stage_run",
+                        error_type=type(exc).__name__,
+                    )
+                    raise WeeklyCapstoneError(f"stage '{stage.name}' failed: {type(exc).__name__}: {exc}") from exc
+                result = _degrade_stage_boundary(stage, stage_ctx, exc)
+                soft_degraded = True
                 _emit_diagnostic_event(
                     diagnostic_event,
-                    "stage_failed",
+                    "stage_degraded",
                     stage=stage.name,
                     failure_kind="stage_run",
                     error_type=type(exc).__name__,
                 )
-                raise WeeklyCapstoneError(f"stage '{stage.name}' failed: {type(exc).__name__}: {exc}") from exc
+            if not isinstance(result, dict) and _stage_is_optional(stage):
+                result = _degrade_stage_boundary(
+                    stage,
+                    stage_ctx,
+                    WeeklyCapstoneError(f"stage '{stage.name}' returned a non-object result"),
+                )
+                if not isinstance(result, dict):
+                    raise WeeklyCapstoneError(
+                        f"optional stage '{stage.name}' failure handler returned no result"
+                    )
+                soft_degraded = True
+            elif not isinstance(result, dict):
+                raise WeeklyCapstoneError(f"stage '{stage.name}' returned a non-object result")
             # The terminal bridge legitimately writes NO weekly_report.md on an HONEST no-emit (intraday out-of-window
             # or a non-clean provider_health, design §3.2 — e.g. the free-tier FMP-429 case): that is a correct outcome,
             # not a missing-output failure. Detect it from the bridge's own emit flag and return the honest no-emit.
@@ -1691,6 +2035,21 @@ def run_weekly_capstone(
                 if _output_fingerprint(path) is None
                 or _output_fingerprint(path) == before[str(path.resolve())]
             ]
+            if soft_degraded:
+                missing = []
+            elif missing == expected_outputs and _unchanged_soft_discovery_receipt_matches(
+                stage, result, expected_outputs,
+            ):
+                missing = []
+            elif missing and _stage_is_optional(stage):
+                if not _is_typed_zero_effect_result(result):
+                    result = _degrade_stage_boundary(
+                        stage,
+                        stage_ctx,
+                        WeeklyCapstoneError("optional stage did not produce a fresh output"),
+                    )
+                soft_degraded = True
+                missing = []
             if missing:
                 if stage.best_effort:
                     record_shadow_capture_failure(
@@ -1791,9 +2150,30 @@ def run_weekly_capstone(
                         observed_at=stage_observed_at, input_paths=input_paths,
                         input_logical_paths=[_rel(path) for path in input_paths], output_paths=expected_outputs,
                         output_logical_paths=[_rel(path) for path in expected_outputs], result=result,
+                        allow_unavailable=_stage_is_optional(stage),
                     )
-                except checkpoint_store.CapstoneCheckpointError as exc:
-                    raise WeeklyCapstoneError(f"cannot persist stage checkpoint '{stage.name}': {exc}") from exc
+                except Exception as exc:
+                    if not _stage_is_optional(stage):
+                        raise WeeklyCapstoneError(
+                            f"cannot persist stage checkpoint '{stage.name}': "
+                            f"{type(exc).__name__}: {exc}"
+                        ) from exc
+                    # A broken private checkpoint root is itself an optional
+                    # observation failure.  Keep the terminal weekly report
+                    # and expose the missing checkpoint as a diagnostic; never
+                    # fabricate a bundle or reuse this row later.
+                    if results and results[-1].get("name") == stage.name:
+                        results[-1]["checkpoint"] = {
+                            "output_availability": "unavailable",
+                            "error_type": type(exc).__name__,
+                            "error": str(exc),
+                        }
+                    _emit_diagnostic_event(
+                        diagnostic_event,
+                        "stage_checkpoint_unavailable",
+                        stage=stage.name,
+                        error_type=type(exc).__name__,
+                    )
         _publish_current_output_transaction(ctx, transaction)
     except Exception:
         try:
@@ -1890,6 +2270,13 @@ def main(argv: list[str] | None = None) -> int:
                         help="explicit physical HTTP-attempt cap required for live 429 retries")
     parser.add_argument("--resume", type=Path,
                         help="explicit checkpoint_manifest.json bundle to validate/import; never scans other worktrees")
+    parser.add_argument(
+        "--disable-soft-discovery",
+        dest="soft_discovery_enabled",
+        action="store_false",
+        default=True,
+        help="emergency opt-out; the one-click path otherwise consumes the frozen Knife3 pair offline and never fetches",
+    )
     args = parser.parse_args(argv)
     try:
         summary = run_weekly_capstone(
@@ -1905,6 +2292,7 @@ def main(argv: list[str] | None = None) -> int:
             resume_from=args.resume,
             prepare_pass2_budget=args.prepare_pass2_budget,
             auto_authorize_pass2_budget=args.auto_pass2_budget,
+            soft_discovery_enabled=args.soft_discovery_enabled,
         )
     except WeeklyCapstoneError as exc:
         print(f"ERROR: {exc}", file=sys.stderr)

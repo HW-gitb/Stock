@@ -28,6 +28,7 @@ from engine.us_short_persisted_text_safety import persisted_text_violation  # no
 from engine.us_short_schema_formats import FORMAT_CHECKER  # noqa: E402
 from runners.us_short_discovery_publish_policy import (  # noqa: E402
     DiscoveryPublishPolicyError,
+    _serialized_sha256,
     validate_exact_decision_slot,
     write_immutable_json,
 )
@@ -38,6 +39,7 @@ SCHEMA_PATH = ROOT / "schemas" / "us_short_provisional_theme_validation.schema.j
 DISCOVERY_SCHEMA_PATH = ROOT / "schemas" / "us_short_llm_theme_discovery.schema.json"
 CLASSIFICATION_SCHEMA_PATH = ROOT / "schemas" / "us_short_batch5_full_universe_sector_classification_packet.schema.json"
 GOVERNANCE_PATH = ROOT / "presets" / "us_short_eligibility_governance_20260624.json"
+CONFORMANCE_GUARDS = ("_guard_discovery_digest",)
 STATE_DIR = ROOT / "state" / "us_short"
 DEFAULT_CLASSIFICATION_PATH = STATE_DIR / "us_short_full_universe_sector_classification_packet.json"
 NEW_YORK = ZoneInfo("America/New_York")
@@ -197,10 +199,46 @@ def _load_inputs(
     discovery_path: Path, candidate_path: Path, classification_path: Path, expected_date: str
 ) -> dict[str, Any]:
     discovery, discovery_hash = _read_json(discovery_path)
+    try:
+        canonical_discovery_hash = _serialized_sha256(discovery)
+    except DiscoveryPublishPolicyError as exc:
+        raise ProvisionalThemeValidationError(
+            "discovery artifact cannot be serialized safely"
+        ) from exc
+    inputs = load_inputs_from_discovery(
+        discovery=discovery,
+        discovery_sha256=canonical_discovery_hash,
+        candidate_path=candidate_path,
+        classification_path=classification_path,
+        expected_date=expected_date,
+    )
+    inputs["hashes"]["discovery"] = discovery_hash
+    return inputs
+
+
+def _guard_discovery_digest(discovery: dict[str, Any], discovery_sha256: Any) -> None:
+    if (
+        type(discovery_sha256) is not str
+        or re.fullmatch(r"[0-9a-f]{64}", discovery_sha256) is None
+        or discovery_sha256 != _serialized_sha256(discovery)
+    ):
+        raise ProvisionalThemeValidationError("discovery artifact digest is invalid or does not bind its payload")
+
+
+def load_inputs_from_discovery(
+    *,
+    discovery: dict[str, Any],
+    discovery_sha256: str,
+    candidate_path: Path,
+    classification_path: Path,
+    expected_date: str,
+) -> dict[str, Any]:
+    """Validate Knife1 in memory with the same Knife2 gates used by the file runner."""
     _schema_validate(discovery, DISCOVERY_SCHEMA_PATH, "discovery artifact")
     if discovery["decision_clock"]["expected_decision_date"] != expected_date:
         raise ProvisionalThemeValidationError("discovery decision date does not match expected_decision_date")
     _validate_discovery_bindings(discovery, expected_date)
+    _guard_discovery_digest(discovery, discovery_sha256)
 
     candidate, candidate_hash = _read_json(candidate_path)
     try:
@@ -236,7 +274,11 @@ def _load_inputs(
     )
     return {
         "discovery": discovery, "candidate": candidate, "classification": classification,
-        "hashes": {"discovery": discovery_hash, "candidate": candidate_hash, "classification": classification_hash},
+        "hashes": {
+            "discovery": discovery_sha256,
+            "candidate": candidate_hash,
+            "classification": classification_hash,
+        },
         "eligible": eligible, "sectors": sectors,
     }
 

@@ -62,6 +62,30 @@ class CapstoneCheckpointTest(unittest.TestCase):
         checkpoint._guard_private(production_path)
         self.assertFalse(production_path.exists())
 
+    def test_record_stage_rolls_back_bundle_when_manifest_write_fails(self):
+        stage = SimpleNamespace(
+            name="soft_discovery", contract_version="1.0.0", reuse_policy="never",
+            failure_policy="zero_effect", output_policy="optional",
+            checkpoint_policy="optional_result_only",
+        )
+        manifest_path, manifest = checkpoint.create_manifest(
+            private_root=self.root / "optional", decision_date="20260713", price_basis_date="20260710",
+            generated_at="2026-07-12T08:00:00-04:00", run_contract=self.run_contract, stages=[stage],
+        )
+        output = _write(self.root / "source" / "soft_discovery.json", {"status": "invalid_evidence"})
+        with mock.patch.object(
+            checkpoint, "_write_manifest", side_effect=OSError("injected manifest write failure"),
+        ), self.assertRaisesRegex(OSError, "injected manifest write failure"):
+            checkpoint.record_stage(
+                manifest_path=manifest_path, manifest=manifest, stage=stage,
+                execution_mode="executed", generated_at="2026-07-12T08:10:00-04:00",
+                observed_at="2026-07-12T08:10:00-04:00", input_paths=[], input_logical_paths=[],
+                output_paths=[output], output_logical_paths=["state/us_short/soft_discovery.json"],
+                result={"status": "invalid_evidence"},
+            )
+        self.assertFalse((manifest_path.parent / "artifacts").exists())
+        self.assertFalse((manifest_path.parent / "checkpoint_manifest.json.tmp").exists())
+
     def test_cross_root_restore_requires_exact_input_and_bundle_digest(self):
         candidate = _write(self.root / "source" / "candidate.json", {"facts": [1, 2, 3]})
         series = _write(self.root / "source" / "series.json", {"points": [10, 11]})
@@ -286,6 +310,22 @@ class CapstoneResumeIntegrationTest(unittest.TestCase):
         self.assertEqual(
             {row["name"]: row["execution_mode"] for row in changed["stages"]}["momentum_fetch"], "executed",
         )
+
+    def test_resume_restore_failure_is_fail_closed(self):
+        from datetime import datetime
+
+        first_order: list[str] = []
+        first = self._run(
+            now_et=datetime(2026, 7, 9, 8, 0, 0), pipeline=self._pipeline(first_order, universe_fact="active"),
+        )
+        with mock.patch.object(
+            checkpoint, "restore_stage", side_effect=checkpoint.CapstoneCheckpointError("injected restore failure"),
+        ), self.assertRaisesRegex(capstone.WeeklyCapstoneError, "resume checkpoint restore failed"):
+            self._run(
+                now_et=datetime(2026, 7, 9, 8, 30, 0),
+                pipeline=self._pipeline([], universe_fact="active"),
+                resume_from=Path(first["checkpoint_manifest"]),
+            )
 
     def test_resume_recovers_a_published_transaction_journal_before_stage_execution(self):
         from datetime import datetime

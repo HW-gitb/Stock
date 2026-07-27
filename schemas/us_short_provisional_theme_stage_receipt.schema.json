@@ -1,0 +1,429 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://stock.local/schemas/us_short_provisional_theme_stage_receipt.schema.json",
+  "title": "US-short capstone soft-discovery offline stage receipt",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_name", "schema_version", "generated_at", "decision_date", "status",
+    "reason_code", "artifacts", "evidence_anchor", "immutable_conflict",
+    "validated_theme_count", "boostable_ticker_count",
+    "drop_summary", "error_summary", "effects"
+  ],
+  "properties": {
+    "schema_name": {"const": "us_short_provisional_theme_stage_receipt"},
+    "schema_version": {"const": "1.0.0"},
+    "generated_at": {"type": "string", "format": "date-time"},
+    "decision_date": {"type": "string", "pattern": "^[0-9]{8}$"},
+    "status": {
+      "enum": [
+        "disabled", "valid_nonempty", "valid_empty",
+        "upstream_unavailable", "invalid_evidence"
+      ]
+    },
+    "reason_code": {
+      "enum": [
+        null, "SOFT_DISCOVERY_DISABLED", "MERGE_PAIR_UNAVAILABLE",
+        "CANDIDATE_INPUT_UNAVAILABLE",
+        "MERGE_PAIR_INCOMPLETE", "UPSTREAM_ANCHOR_INCOMPLETE",
+        "SOFT_DISCOVERY_JSON_INVALID", "MERGE_EVIDENCE_INVALID",
+        "INGEST_EVIDENCE_INVALID", "VALIDATION_EVIDENCE_INVALID",
+        "SOFT_DISCOVERY_EVIDENCE_INVALID", "SOFT_DISCOVERY_IMMUTABLE_CONFLICT",
+        "SOFT_DISCOVERY_STAGE_EXCEPTION"
+      ]
+    },
+    "artifacts": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["merge", "merge_manifest", "ingest", "validation"],
+      "properties": {
+        "merge": {"$ref": "#/definitions/artifact"},
+        "merge_manifest": {"$ref": "#/definitions/artifact"},
+        "ingest": {"$ref": "#/definitions/artifact"},
+        "validation": {"$ref": "#/definitions/artifact"}
+      }
+    },
+    "evidence_anchor": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "upstream_pair_anchored", "document_content_anchored", "upstream_artifacts"
+      ],
+      "properties": {
+        "upstream_pair_anchored": {"type": "boolean"},
+        "document_content_anchored": {"type": "boolean"},
+        "upstream_artifacts": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["web_discovery", "web_receipt", "x_discovery", "x_receipt"],
+          "properties": {
+            "web_discovery": {"$ref": "#/definitions/artifact"},
+            "web_receipt": {"$ref": "#/definitions/artifact"},
+            "x_discovery": {"$ref": "#/definitions/artifact"},
+            "x_receipt": {"$ref": "#/definitions/artifact"}
+          }
+        }
+      }
+    },
+    "immutable_conflict": {
+      "oneOf": [
+        {"type": "null"},
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["canonical_receipt", "frozen_artifacts"],
+          "properties": {
+            "canonical_receipt": {
+              "oneOf": [
+                {"type": "null"},
+                {"$ref": "#/definitions/bound_artifact"}
+              ]
+            },
+            "frozen_artifacts": {
+              "type": "array",
+              "minItems": 0,
+              "uniqueItems": true,
+              "items": {"$ref": "#/definitions/bound_artifact"}
+            }
+          }
+        }
+      ]
+    },
+    "validated_theme_count": {"type": "integer", "minimum": 0},
+    "boostable_ticker_count": {"type": "integer", "minimum": 0},
+    "drop_summary": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["merge_dropped_theme_count", "validation_drop_count"],
+      "properties": {
+        "merge_dropped_theme_count": {"type": "integer", "minimum": 0},
+        "validation_drop_count": {"type": "integer", "minimum": 0}
+      }
+    },
+    "error_summary": {
+      "oneOf": [
+        {"type": "null"},
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["code", "error_type"],
+          "properties": {
+            "code": {
+              "enum": [
+                "MERGE_PAIR_UNAVAILABLE", "CANDIDATE_INPUT_UNAVAILABLE",
+                "MERGE_PAIR_INCOMPLETE",
+                "UPSTREAM_ANCHOR_INCOMPLETE", "SOFT_DISCOVERY_JSON_INVALID",
+                "MERGE_EVIDENCE_INVALID", "INGEST_EVIDENCE_INVALID",
+                "VALIDATION_EVIDENCE_INVALID", "SOFT_DISCOVERY_EVIDENCE_INVALID",
+                "SOFT_DISCOVERY_IMMUTABLE_CONFLICT", "SOFT_DISCOVERY_STAGE_EXCEPTION"
+              ]
+            },
+            "error_type": {"type": "string", "pattern": "^[A-Za-z][A-Za-z0-9_]{0,63}$"}
+          }
+        }
+      ]
+    },
+    "effects": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "network_access_performed", "provider_calls_performed", "scoring_eligible",
+        "top15_effect_enabled", "operation_advice_effect_enabled",
+        "dynamic_seats_enabled", "theme_probe_enabled", "lifecycle_actions_enabled"
+      ],
+      "properties": {
+        "network_access_performed": {"const": false},
+        "provider_calls_performed": {"const": false},
+        "scoring_eligible": {"const": false},
+        "top15_effect_enabled": {"const": false},
+        "operation_advice_effect_enabled": {"const": false},
+        "dynamic_seats_enabled": {"const": false},
+        "theme_probe_enabled": {"const": false},
+        "lifecycle_actions_enabled": {"const": false}
+      }
+    }
+  },
+  "allOf": [
+    {
+      "if": {"properties": {"status": {"enum": ["valid_nonempty", "valid_empty"]}}},
+      "then": {
+        "properties": {
+          "reason_code": {"const": null},
+          "error_summary": {"const": null},
+          "artifacts": {
+            "properties": {
+              "merge": {"$ref": "#/definitions/bound_artifact"},
+              "merge_manifest": {"$ref": "#/definitions/bound_artifact"},
+              "ingest": {"$ref": "#/definitions/bound_artifact"},
+              "validation": {"$ref": "#/definitions/bound_artifact"}
+            }
+          },
+          "evidence_anchor": {
+            "properties": {
+              "upstream_pair_anchored": {"const": true},
+              "upstream_artifacts": {
+                "properties": {
+                  "web_discovery": {"$ref": "#/definitions/bound_artifact"},
+                  "web_receipt": {"$ref": "#/definitions/bound_artifact"},
+                  "x_discovery": {"$ref": "#/definitions/bound_artifact"},
+                  "x_receipt": {"$ref": "#/definitions/bound_artifact"}
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    {
+      "if": {"properties": {"status": {"const": "valid_empty"}}},
+      "then": {
+        "properties": {
+          "validated_theme_count": {"const": 0},
+          "boostable_ticker_count": {"const": 0}
+        }
+      }
+    },
+    {
+      "if": {"properties": {"status": {"const": "valid_nonempty"}}},
+      "then": {
+        "properties": {
+          "validated_theme_count": {"type": "integer", "minimum": 1},
+          "boostable_ticker_count": {"type": "integer", "minimum": 1}
+        }
+      }
+    },
+    {
+      "if": {"properties": {"status": {"const": "disabled"}}},
+      "then": {
+        "properties": {
+          "reason_code": {"const": "SOFT_DISCOVERY_DISABLED"},
+          "error_summary": {"const": null},
+          "validated_theme_count": {"const": 0},
+          "boostable_ticker_count": {"const": 0},
+          "evidence_anchor": {
+            "properties": {
+              "upstream_pair_anchored": {"const": false},
+              "document_content_anchored": {"const": false}
+            }
+          }
+        }
+      }
+    },
+    {
+      "if": {"properties": {"status": {"const": "upstream_unavailable"}}},
+      "then": {
+        "properties": {
+          "reason_code": {
+            "enum": ["MERGE_PAIR_UNAVAILABLE", "CANDIDATE_INPUT_UNAVAILABLE"]
+          },
+          "validated_theme_count": {"const": 0},
+          "boostable_ticker_count": {"const": 0},
+          "error_summary": {
+            "not": {"type": "null"},
+            "properties": {
+              "code": {
+                "enum": ["MERGE_PAIR_UNAVAILABLE", "CANDIDATE_INPUT_UNAVAILABLE"]
+              }
+            }
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {"reason_code": {"const": "MERGE_PAIR_UNAVAILABLE"}}
+      },
+      "then": {
+        "properties": {
+          "evidence_anchor": {
+            "properties": {
+              "upstream_pair_anchored": {"const": false},
+              "document_content_anchored": {"const": false}
+            }
+          }
+        }
+      }
+    },
+    {
+      "if": {"properties": {"status": {"const": "invalid_evidence"}}},
+      "then": {
+        "properties": {
+          "reason_code": {
+            "enum": [
+              "MERGE_PAIR_INCOMPLETE", "UPSTREAM_ANCHOR_INCOMPLETE",
+              "SOFT_DISCOVERY_JSON_INVALID", "MERGE_EVIDENCE_INVALID",
+              "INGEST_EVIDENCE_INVALID", "VALIDATION_EVIDENCE_INVALID",
+              "SOFT_DISCOVERY_EVIDENCE_INVALID", "SOFT_DISCOVERY_IMMUTABLE_CONFLICT",
+              "SOFT_DISCOVERY_STAGE_EXCEPTION"
+            ]
+          },
+          "validated_theme_count": {"const": 0},
+          "boostable_ticker_count": {"const": 0},
+          "error_summary": {"not": {"type": "null"}}
+        },
+        "oneOf": [
+          {
+            "properties": {
+              "reason_code": {"const": "MERGE_PAIR_INCOMPLETE"},
+              "error_summary": {"properties": {"code": {"const": "MERGE_PAIR_INCOMPLETE"}}}
+            }
+          },
+          {
+            "properties": {
+              "reason_code": {"const": "UPSTREAM_ANCHOR_INCOMPLETE"},
+              "error_summary": {"properties": {"code": {"const": "UPSTREAM_ANCHOR_INCOMPLETE"}}}
+            }
+          },
+          {
+            "properties": {
+              "reason_code": {"const": "SOFT_DISCOVERY_JSON_INVALID"},
+              "error_summary": {"properties": {"code": {"const": "SOFT_DISCOVERY_JSON_INVALID"}}}
+            }
+          },
+          {
+            "properties": {
+              "reason_code": {"const": "MERGE_EVIDENCE_INVALID"},
+              "error_summary": {"properties": {"code": {"const": "MERGE_EVIDENCE_INVALID"}}}
+            }
+          },
+          {
+            "properties": {
+              "reason_code": {"const": "INGEST_EVIDENCE_INVALID"},
+              "error_summary": {"properties": {"code": {"const": "INGEST_EVIDENCE_INVALID"}}}
+            }
+          },
+          {
+            "properties": {
+              "reason_code": {"const": "VALIDATION_EVIDENCE_INVALID"},
+              "error_summary": {"properties": {"code": {"const": "VALIDATION_EVIDENCE_INVALID"}}}
+            }
+          },
+          {
+            "properties": {
+              "reason_code": {"const": "SOFT_DISCOVERY_EVIDENCE_INVALID"},
+              "error_summary": {"properties": {"code": {"const": "SOFT_DISCOVERY_EVIDENCE_INVALID"}}}
+            }
+          },
+          {
+            "properties": {
+              "reason_code": {"const": "SOFT_DISCOVERY_IMMUTABLE_CONFLICT"},
+              "error_summary": {"properties": {"code": {"const": "SOFT_DISCOVERY_IMMUTABLE_CONFLICT"}}}
+            }
+          },
+          {
+            "properties": {
+              "reason_code": {"const": "SOFT_DISCOVERY_STAGE_EXCEPTION"},
+              "error_summary": {"properties": {"code": {"const": "SOFT_DISCOVERY_STAGE_EXCEPTION"}}}
+            }
+          }
+        ]
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "evidence_anchor": {
+            "properties": {"upstream_pair_anchored": {"const": true}}
+          }
+        }
+      },
+      "then": {
+        "properties": {
+          "evidence_anchor": {
+            "properties": {
+              "upstream_artifacts": {
+                "properties": {
+                  "web_discovery": {"$ref": "#/definitions/bound_artifact"},
+                  "web_receipt": {"$ref": "#/definitions/bound_artifact"},
+                  "x_discovery": {"$ref": "#/definitions/bound_artifact"},
+                  "x_receipt": {"$ref": "#/definitions/bound_artifact"}
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "evidence_anchor": {
+            "properties": {"document_content_anchored": {"const": true}}
+          }
+        }
+      },
+      "then": {
+        "properties": {
+          "evidence_anchor": {
+            "properties": {"upstream_pair_anchored": {"const": true}}
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "reason_code": {"const": "SOFT_DISCOVERY_IMMUTABLE_CONFLICT"}
+        }
+      },
+      "then": {
+        "properties": {
+          "immutable_conflict": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["canonical_receipt", "frozen_artifacts"],
+            "properties": {
+              "canonical_receipt": {
+                "oneOf": [
+                  {"type": "null"},
+                  {"$ref": "#/definitions/bound_artifact"}
+                ]
+              },
+              "frozen_artifacts": {
+                "type": "array",
+                "minItems": 0,
+                "uniqueItems": true,
+                "items": {"$ref": "#/definitions/bound_artifact"}
+              }
+            }
+          }
+        }
+      },
+      "else": {
+        "properties": {"immutable_conflict": {"const": null}}
+      }
+    }
+  ],
+  "definitions": {
+    "artifact": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["path", "sha256"],
+      "properties": {
+        "path": {
+          "oneOf": [
+            {"type": "null"},
+            {"type": "string", "minLength": 1, "not": {"pattern": "(^|/)\\.\\.(/|$)"}}
+          ]
+        },
+        "sha256": {
+          "type": ["string", "null"],
+          "pattern": "^[0-9a-f]{64}$"
+        }
+      }
+    },
+    "bound_artifact": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["path", "sha256"],
+      "properties": {
+        "path": {
+          "type": "string",
+          "minLength": 1,
+          "not": {"pattern": "(^|/)\\.\\.(/|$)"}
+        },
+        "sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"}
+      }
+    }
+  }
+}

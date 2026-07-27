@@ -318,6 +318,16 @@ def _coerce_x_client_reply(reply: Any) -> tuple[str, list[dict[str, Any]]]:
     raise XThemeDiscoveryError("X client reply shape is unsafe")
 
 
+CONFORMANCE_GUARDS = ("_guard_generated_before_open",)
+
+
+def _guard_generated_before_open(generated: datetime, expected_decision_date: str) -> None:
+    try:
+        web._guard_generated_before_open(generated, expected_decision_date)
+    except web.WebThemeDiscoveryError as exc:
+        raise XThemeDiscoveryError(str(exc)) from exc
+
+
 def build_x_fetch_packet(
     *, queries: list[str] | tuple[str, ...], results: list[Any], grok_response: str,
     expected_decision_date: str, generated_at: str, fetched_at: str | None = None,
@@ -330,6 +340,7 @@ def build_x_fetch_packet(
 ) -> tuple[dict[str, Any], dict[str, Any], dict[str, Any]]:
     queries = _safe_queries(queries)
     generated = _parse_dt(generated_at, "generated_at")
+    _guard_generated_before_open(generated, expected_decision_date)
     fetched = _parse_dt(fetched_at, "fetched_at") if fetched_at else generated
     web._validate_fetch_clock(fetched, generated)
     if execution_mode not in {"offline_fake_client", "live_authorized"}:

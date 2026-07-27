@@ -1,7 +1,7 @@
 from __future__ import annotations
 
-import os
 import json
+import os
 import shutil
 import sys
 import tempfile
@@ -22,10 +22,9 @@ from tests.provider.test_us_short_batch5_data_context import (  # noqa: E402
     _constant_projection,
 )
 from tests.provider.us_short_projection_binding_test_helpers import bound_projection  # noqa: E402
+from tests.provider.us_short_private_test_root import temporary_provider_directory  # noqa: E402
 
 
-STATE_DIR = ROOT / "state" / "us_short"
-SUMMARY_DIR = ROOT / "provider_samples" / "us_short_batch5_full_candidate_pass2_preflight_20260706"
 DECISION_DATE = "20260615"
 PRICE_BASIS_DATE = "20260612"
 GENERATED_AT = "2026-06-13T10:00:00+00:00"
@@ -33,26 +32,30 @@ GENERATED_AT = "2026-06-13T10:00:00+00:00"
 
 class Pass2BudgetApprovalContractTest(unittest.TestCase):
     def setUp(self):
-        self.slug = f"test_pass2_budget_approval_{os.getpid()}_{self._testMethodName}"
+        self.tempdir = temporary_provider_directory(
+            ROOT,
+            Path("provider_samples/us_short_batch5_full_candidate_pass2_preflight_20260706"),
+        )
+        self.test_root = Path(self.tempdir.__enter__())
+        self.state_dir = self.test_root / "state" / "us_short"
+        self.state_dir.mkdir(parents=True)
+        from runners import us_short_batch5_full_candidate_pass2_preflight as preflight
+
+        self.state_patch = mock.patch.object(
+            preflight, "STATE_US_SHORT_DIR", self.state_dir,
+        )
+        self.state_patch.start()
         self.paths = {
-            "candidate": STATE_DIR / f"{self.slug}_candidate.json",
-            "momentum": STATE_DIR / f"{self.slug}_momentum.json",
-            "theme": STATE_DIR / f"{self.slug}_theme.json",
-            "summary": SUMMARY_DIR / self.slug / "summary.json",
+            "candidate": self.state_dir / "candidate.json",
+            "momentum": self.state_dir / "momentum.json",
+            "theme": self.state_dir / "theme.json",
+            "summary": self.test_root / "summary.json",
         }
         self._prepare(200)
 
     def tearDown(self):
-        for path in self.paths.values():
-            path.unlink(missing_ok=True)
-        root = SUMMARY_DIR / self.slug
-        if root.exists():
-            for item in sorted(root.rglob("*"), reverse=True):
-                if item.is_file():
-                    item.unlink()
-                elif item.is_dir():
-                    item.rmdir()
-            root.rmdir()
+        self.state_patch.stop()
+        self.tempdir.__exit__(None, None, None)
 
     def _prepare(self, count: int):
         from runners import us_short_batch5_full_candidate_pass2_preflight as preflight

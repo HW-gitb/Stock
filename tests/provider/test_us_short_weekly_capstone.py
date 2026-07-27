@@ -25,13 +25,15 @@ from runners.us_short_weekly_capstone import (  # noqa: E402
 )
 
 _STAGE_NAMES = [
-    "universe_fetch", "momentum_fetch", "overextension_producer", "momentum_producer", "sic_fetch", "theme_producer",
+    "universe_fetch", "momentum_fetch", "overextension_producer", "momentum_producer", "sic_fetch",
+    "soft_discovery", "theme_producer",
     "projection_inputs", "pass2_preflight", "yfinance_grades_fetch", "pass2_fetch", "vix_regime", "forward_policy_shadow",
     "forward_policy_corporate_actions", "forward_policy_maturity", "weekly_bridge",
 ]
 _RECEIPT_STAGE_NAMES = tuple(
     name for name in _STAGE_NAMES if name not in {
-        "forward_policy_shadow", "forward_policy_corporate_actions", "forward_policy_maturity", "weekly_bridge",
+        "soft_discovery", "forward_policy_shadow", "forward_policy_corporate_actions",
+        "forward_policy_maturity", "weekly_bridge",
     }
 )
 
@@ -234,6 +236,7 @@ class CapstoneFakeChainTest(unittest.TestCase):
                 "overextension_producer": lambda c: [c.overextension_projection_path],
                 "momentum_producer": lambda c: [c.momentum_projection_path],
                 "sic_fetch": lambda c: [c.classification_packet_path],
+                "soft_discovery": lambda c: [c.soft_discovery_receipt_path],
                 "theme_producer": lambda c: [c.theme_projection_path],
                 "projection_inputs": lambda c: [c.merged_momentum_path, c.merged_theme_path],
                 "pass2_preflight": lambda c: [c.preflight_summary_path],
@@ -327,6 +330,26 @@ class CapstoneFakeChainTest(unittest.TestCase):
         self.assertTrue(summary["emitted_report"].endswith("weekly_report.md"))
         self.assertNotIn("shadow_capture_failed", summary)
 
+    def test_decision_lock_is_bound_to_the_injected_state_root_and_reacquirable(self):
+        from runners import us_short_weekly_capstone as cap
+
+        ctx = cap.resolve_capstone_context(
+            now_et=datetime(2026, 7, 9, 8, 0, 0),
+            private_root=self.private_root,
+            batch4_template_path=Path("template.json"),
+            account_state_path=Path("account.json"),
+            state_dir=self.state_dir,
+            sample_root=self.state_dir,
+        )
+        expected = (
+            self.state_dir / "_transaction_locks" / f"{ctx.decision_date}.lock"
+        ).resolve()
+        self.assertEqual(cap._decision_lock_path(ctx), expected)
+        first = cap._acquire_decision_lock(ctx)
+        cap._release_decision_lock(first)
+        second = cap._acquire_decision_lock(ctx)
+        cap._release_decision_lock(second)
+
     def test_budget_preview_uses_default_prefix_only_and_never_authorizes_pass2(self):
         # P2 end-to-end control: the one-click preview uses the real default-pipeline shape, stops immediately after
         # preflight, emits the forecast, and does not mint a checkpoint/output transaction or run later stages.
@@ -354,7 +377,7 @@ class CapstoneFakeChainTest(unittest.TestCase):
                 authorized_momentum_top_k=2,
             )
 
-        self.assertEqual(order, _STAGE_NAMES[:8])
+        self.assertEqual(order, _STAGE_NAMES[:_STAGE_NAMES.index("pass2_preflight") + 1])
         self.assertEqual(summary["mode"], "pass2_budget_preview")
         self.assertEqual(summary["pass2_call_budget"], 11)
         self.assertEqual(summary["pass2_target_count"], 2)

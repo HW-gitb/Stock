@@ -26,9 +26,12 @@ from __future__ import annotations
 
 import ast
 import importlib
+import inspect
 import io
 import json
 import sys
+import tempfile
+import threading
 import unittest
 from pathlib import Path
 from typing import Any
@@ -116,7 +119,22 @@ def derived_lane_schemas() -> tuple[str, ...]:
 
 
 LANE_FILES = derived_lane_files()
+MATRIX_FILES = tuple(sorted(set(LANE_FILES) | {"runners/us_short_weekly_capstone.py"}))
 LANE_SCHEMAS = derived_lane_schemas()
+# Test-owned expected contract.  The production registry is checked against this
+# independent source; it is never used to manufacture the expected rows.
+K4A_INDEPENDENT_STAGE_POLICY_REGISTRY = {
+    "strict": ("required", "required"),
+    "zero_effect": ("optional", "optional_result_only"),
+}
+K4A_LIFECYCLE_CALL_NAMES = frozenset({
+    "inputs", "outputs", "run", "restore_stage", "_degrade_stage_boundary",
+    "_unchanged_soft_discovery_receipt_matches", "record_stage",
+    "_publish_current_output_transaction",
+})
+# `_build_pass2_budget_approval` is deliberately outside this optional-stage
+# matrix: it is a mandatory strict approval seam, with its own Pass2 approval
+# conformance pack and fail-closed contract.  It is not a zero-effect boundary.
 # Schemas this lane WRITES (its own contracts) versus schemas it only reads from another lane.
 LANE_OWNED_SCHEMAS = tuple(
     rel for rel in LANE_SCHEMAS
@@ -594,6 +612,1000 @@ class LaneBoundaryCoverageConformance(unittest.TestCase):
         self.assertEqual([rel for rel in LANE_FILES if rel not in scanned], [])
 
 
+class ExecutableClosureMatrix(unittest.TestCase):
+    """Repository-derived class x exit matrix for the Knife4a A-D recurrence families."""
+
+    NAMED_NON_CELLS = {
+        "wrong_requirement": "only forward evidence can disprove the requirement itself",
+        "offline_document_corroboration": "offline files cannot prove two real documents; K3 Optional (a)",
+    }
+    A_BEHAVIOR = {
+        "_run_pass2_budget_preview": (
+            "tests.provider.test_us_short_weekly_capstone_soft_discovery"
+            ".WeeklyCapstoneSoftDiscoveryStageTest"
+            ".test_budget_preview_entry_degrades_any_soft_stage_exception_and_continues"
+        ),
+        "run_weekly_capstone": (
+            "tests.provider.test_us_short_weekly_capstone_soft_discovery"
+            ".WeeklyCapstoneSoftDiscoveryStageTest"
+            ".test_capstone_full_entry_degrades_any_soft_stage_exception_and_reaches_terminal"
+        ),
+    }
+    A_STAGE_BEHAVIOR = (
+        "tests.provider.test_us_short_weekly_capstone_soft_discovery"
+        ".WeeklyCapstoneSoftDiscoveryStageTest"
+        ".test_capstone_boundary_contains_the_real_soft_stage_public_entry"
+    )
+    A_FROZEN_BEHAVIOR = (
+        "tests.provider.test_us_short_weekly_capstone_soft_discovery"
+        ".WeeklyCapstoneSoftDiscoveryStageTest"
+        ".test_capstone_accepts_every_bound_unusable_canonical_receipt_as_zero_effect"
+    )
+    ADDITIONAL_BEHAVIOR = (
+        "tests.provider.test_us_short_provisional_theme_validate"
+        ".ProvisionalThemeValidationTests.test_run_packet_is_inert_and_records_input_digests",
+        "tests.provider.test_us_short_weekly_capstone_soft_discovery"
+        ".WeeklyCapstoneSoftDiscoveryStageTest"
+        ".test_merge_consumer_guards_are_load_bearing_at_the_public_entry",
+        "tests.provider.test_us_short_weekly_capstone_soft_discovery"
+        ".WeeklyCapstoneSoftDiscoveryStageTest"
+        ".test_production_checkpoint_records_artifactless_optional_failure_and_terminal_emits",
+        "tests.provider.test_us_short_weekly_capstone_soft_discovery"
+        ".WeeklyCapstoneSoftDiscoveryStageTest"
+        ".test_capstone_boundary_failure_binds_existing_artifact_hashes",
+    )
+    REDUNDANT_REPLAY_TERMS = frozenset({
+        "runners.us_short_llm_theme_discovery_merge._guard_input_artifact_hashes",
+        "runners.us_short_llm_theme_discovery_merge._guard_member_evidence_tier",
+        "runners.us_short_llm_theme_discovery_merge._guard_merge_consumer_clock",
+        "runners.us_short_llm_theme_discovery_merge._guard_raw_content_digest",
+        "runners.us_short_llm_theme_discovery_merge._guard_source_identity",
+        "runners.us_short_llm_theme_discovery_merge._guard_summary_counts",
+    })
+    REDUNDANT_REPLAY_TEST = (
+        "tests.provider.test_us_short_weekly_capstone_soft_discovery"
+        ".WeeklyCapstoneSoftDiscoveryStageTest"
+        ".test_merge_consumer_redundant_guards_fall_through_to_replay_gate"
+    )
+    K4A_GUARD_MODULES = frozenset({
+        "runners.us_short_discovery_publish_policy",
+        "runners.us_short_llm_theme_discovery_merge",
+        "runners.us_short_weekly_capstone_soft_discovery",
+    })
+    NAMED_NON_GUARD_RAISERS = {
+        "runners.us_short_discovery_publish_policy": {
+            "_gitignored": "internal gitignore adapter covered by exact-slot policy tests",
+            "_repo_relative": "internal containment primitive covered by the public slot validator",
+            "_staged_temp": "internal staging primitive covered by all three public writer mutations",
+        },
+        "runners.us_short_weekly_capstone_soft_discovery": {
+            "_artifact": "receipt value constructor; leaf path/schema guards are enumerated",
+            "_immutable_conflict_receipt": "conflict orchestrator; leaf slot/read/schema guards are enumerated",
+            "_publish_failure_receipt": "failure publisher; leaf slot/schema guards are enumerated",
+            "_publish_receipt": "receipt publisher; leaf slot/read/schema guards are enumerated",
+            "_receipt": "receipt constructor; schema guard is enumerated",
+            "_relative_or_none": "nullable adapter; non-null containment guard is enumerated",
+        },
+    }
+    NAMED_NON_GUARD_TESTS = {
+        "runners.us_short_weekly_capstone_soft_discovery": {
+            "_artifact": "tests.provider.test_us_short_weekly_capstone_soft_discovery"
+            ".WeeklyCapstoneSoftDiscoveryStageTest.test_all_five_states_are_distinct_and_invalid_is_not_valid_empty",
+            "_immutable_conflict_receipt": "tests.provider.test_us_short_weekly_capstone_soft_discovery"
+            ".WeeklyCapstoneSoftDiscoveryStageTest.test_all_same_day_status_transitions_reach_terminal_with_bound_conflict_receipts",
+            "_publish_failure_receipt": "tests.provider.test_us_short_weekly_capstone_soft_discovery"
+            ".WeeklyCapstoneSoftDiscoveryStageTest.test_all_five_states_are_distinct_and_invalid_is_not_valid_empty",
+            "_publish_receipt": "tests.provider.test_us_short_weekly_capstone_soft_discovery"
+            ".WeeklyCapstoneSoftDiscoveryStageTest.test_receipt_publisher_writes_and_reloads_a_schema_valid_payload",
+            "_receipt": "tests.provider.test_us_short_weekly_capstone_soft_discovery"
+            ".WeeklyCapstoneSoftDiscoveryStageTest.test_all_five_states_are_distinct_and_invalid_is_not_valid_empty",
+            "_relative_or_none": "tests.provider.test_us_short_weekly_capstone_soft_discovery"
+            ".WeeklyCapstoneSoftDiscoveryStageTest.test_all_five_states_are_distinct_and_invalid_is_not_valid_empty",
+        },
+    }
+    FROZEN_LIVE_RAW_COORDINATES = frozenset({
+        (
+            "runners.us_short_llm_theme_discovery_merge",
+            "_verify_receipt",
+            "runners.us_short_llm_theme_discovery_merge._guard_raw_content_digest",
+            315,
+        ),
+        (
+            "runners.us_short_llm_theme_discovery_merge",
+            "_verify_receipt",
+            "runners.us_short_llm_theme_discovery_merge._instant",
+            324,
+        ),
+        (
+            "runners.us_short_llm_theme_discovery_merge",
+            "_verify_receipt",
+            "runners.us_short_llm_theme_discovery_merge._raw_receipt_path",
+            306,
+        ),
+    })
+
+    @staticmethod
+    def _function_calls(function: ast.FunctionDef, callee: str) -> list[ast.Call]:
+        return [
+            node for node in ast.walk(function)
+            if isinstance(node, ast.Call) and _called_name(node.func) == callee
+        ]
+
+    @classmethod
+    def _derived_soft_execution_exits(cls) -> dict[str, ast.FunctionDef]:
+        tree = ast.parse(_source("runners/us_short_weekly_capstone.py"))
+        exits: dict[str, ast.FunctionDef] = {}
+        for node in tree.body:
+            if not isinstance(node, ast.FunctionDef):
+                continue
+            has_stage_run = any(
+                isinstance(call.func, ast.Attribute) and call.func.attr == "run"
+                for call in ast.walk(node) if isinstance(call, ast.Call)
+            )
+            # Derive every stage-loop entry from its orchestration shape. A
+            # path that forgets to mention the optional stage is the mutation
+            # this row must expose, so name/string predicates are forbidden.
+            if has_stage_run:
+                exits[node.name] = node
+        return exits
+
+    def test_a_every_derived_capstone_exit_has_a_load_bearing_soft_failure_boundary(self):
+        exits = self._derived_soft_execution_exits()
+        self.assertTrue(exits, "no soft-discovery execution exit was derived")
+        self.assertEqual(
+            set(exits), set(self.A_BEHAVIOR),
+            f"unmapped A coordinates: {sorted(set(exits) ^ set(self.A_BEHAVIOR))}",
+        )
+        for name, function in exits.items():
+            with self.subTest(exit=name):
+                calls = self._function_calls(function, "_degrade_stage_boundary")
+                self.assertTrue(calls, f"A/{name} lacks the structural zero-effect boundary")
+                planted = ast.fix_missing_locations(ast.parse(ast.unparse(function)).body[0])
+                for node in ast.walk(planted):
+                    if isinstance(node, ast.Call) and _called_name(node.func) == "_degrade_stage_boundary":
+                        node.func = ast.Name(id="_planted_missing_soft_boundary", ctx=ast.Load())
+                self.assertFalse(
+                    self._function_calls(planted, "_degrade_soft_discovery_boundary"),
+                    f"A/{name} planted failure did not disarm the assertion",
+                )
+                run, red, resolved = LaneGuardRegistryConformance._run(self.A_BEHAVIOR[name])
+                self.assertTrue(resolved)
+                self.assertEqual((run, red), (1, 0))
+                capstone = importlib.import_module("runners.us_short_weekly_capstone")
+                with mock.patch.object(
+                    capstone,
+                    "_degrade_stage_boundary",
+                    lambda *_args, **_kwargs: None,
+                ):
+                    planted_run, planted_red, _ = LaneGuardRegistryConformance._run(
+                        self.A_BEHAVIOR[name]
+                    )
+                self.assertEqual(planted_run, 1)
+                self.assertGreater(
+                    planted_red,
+                    0,
+                    f"A/{name} still passes with its zero-effect boundary removed",
+                )
+        stages_tree = ast.parse(_source("runners/us_short_weekly_capstone_stages.py"))
+        stage_entries = {
+            node.func.id
+            for node in ast.walk(stages_tree)
+            if (
+                isinstance(node, ast.Call)
+                and isinstance(node.func, ast.Name)
+                and node.func.id == "run_offline_stage"
+            )
+        }
+        self.assertEqual(stage_entries, {"run_offline_stage"})
+        for test_path in (self.A_STAGE_BEHAVIOR, self.A_FROZEN_BEHAVIOR):
+            run, red, resolved = LaneGuardRegistryConformance._run(test_path)
+            self.assertTrue(resolved)
+            self.assertEqual((run, red), (1, 0))
+
+    @classmethod
+    def _derived_lifecycle_sites(cls) -> list[tuple[str, str, str, int]]:
+        """Derive route × lifecycle coordinates from the orchestrator AST.
+
+        Route labels come from the public entrypoint's actual signature/branches, while
+        lifecycle columns come from calls in the entrypoint bodies.  No production
+        registry or human-maintained matrix row is used to create this set.
+        """
+        tree = ast.parse(_source("runners/us_short_weekly_capstone.py"))
+        functions = {
+            node.name: node for node in tree.body
+            if isinstance(node, ast.FunctionDef)
+        }
+        routes = {
+            "normal": functions["run_weekly_capstone"],
+            "resume": functions["run_weekly_capstone"],
+            "injected": functions["run_weekly_capstone"],
+            "preview": functions["_run_pass2_budget_preview"],
+        }
+        sites: list[tuple[str, str, str, int]] = []
+        for route, function in routes.items():
+            for node in ast.walk(function):
+                if not isinstance(node, ast.Call):
+                    continue
+                callee = _called_name(node.func)
+                if callee in K4A_LIFECYCLE_CALL_NAMES:
+                    sites.append((route, function.name, callee, node.lineno))
+        return sorted(set(sites))
+
+    @classmethod
+    def _derived_lifecycle_cells(cls) -> list[tuple[str, str, str, int]]:
+        sites = cls._derived_lifecycle_sites()
+        return [
+            (route, policy, callee, lineno)
+            for route, _owner, callee, lineno in sites
+            for policy in K4A_INDEPENDENT_STAGE_POLICY_REGISTRY
+        ]
+
+    def test_a_matrix_is_independent_derived_and_mutation_load_bearing(self):
+        self.assertIn("runners/us_short_weekly_capstone.py", MATRIX_FILES)
+        sites = self._derived_lifecycle_sites()
+        self.assertTrue(sites, "no orchestrator lifecycle sites were derived")
+        derived_columns = {callee for _route, _owner, callee, _line in sites}
+        self.assertTrue(
+            K4A_LIFECYCLE_CALL_NAMES <= derived_columns,
+            f"orchestrator lifecycle columns missing from derived matrix: "
+            f"{sorted(K4A_LIFECYCLE_CALL_NAMES - derived_columns)}",
+        )
+        route_tests = {
+            "normal": (
+                "tests.provider.test_us_short_weekly_capstone_soft_discovery"
+                ".WeeklyCapstoneSoftDiscoveryStageTest"
+                ".test_capstone_boundary_degrades_optional_input_output_and_freshness_failures"
+            ),
+            "resume": (
+                "tests.test_us_short_capstone_checkpoint.CapstoneResumeIntegrationTest"
+                ".test_resume_refreshes_volatile_stage_and_reuses_bound_frozen_stage_only_when_equivalent"
+            ),
+            "injected": self.A_STAGE_BEHAVIOR,
+            "preview": self.A_BEHAVIOR["_run_pass2_budget_preview"],
+        }
+
+        def observe_route(route: str, path: str) -> set[tuple[str, int]]:
+            capstone = importlib.import_module("runners.us_short_weekly_capstone")
+            observed: set[tuple[str, int]] = set()
+            originals: dict[tuple[Any, str], Any] = {}
+
+            def recorder(name: str, original):
+                def wrapped(*args, **kwargs):
+                    frame = inspect.currentframe().f_back
+                    if frame is not None and frame.f_globals.get("__name__") == capstone.__name__:
+                        observed.add((name, frame.f_lineno))
+                    return original(*args, **kwargs)
+                return wrapped
+
+            for name in K4A_LIFECYCLE_CALL_NAMES:
+                owner = capstone.checkpoint_store if name in {"record_stage", "restore_stage"} else capstone
+                if hasattr(owner, name):
+                    original = getattr(owner, name)
+                    originals[(owner, name)] = original
+                    setattr(owner, name, recorder(name, original))
+            original_stage = capstone.Stage
+
+            def stage_factory(*args, **kwargs):
+                stage = original_stage(*args, **kwargs)
+                for name in ("inputs", "outputs", "run"):
+                    original = getattr(stage, name)
+                    setattr(stage, name, recorder(name, original))
+                return stage
+
+            if route != "normal":
+                capstone.Stage = stage_factory
+            try:
+                run, red, resolved = LaneGuardRegistryConformance._run(path)
+                self.assertTrue(resolved, f"route precondition did not resolve: {path}")
+                self.assertEqual((run, red), (1, 0), f"route baseline failed: {path}")
+            finally:
+                capstone.Stage = original_stage
+                for (owner, name), original in originals.items():
+                    setattr(owner, name, original)
+            return observed
+
+        observed_routes = {route: observe_route(route, path) for route, path in route_tests.items()}
+        self.assertEqual(set(observed_routes), {"normal", "resume", "injected", "preview"})
+        ast_callees = {callee for _route, _owner, callee, _line in sites}
+        observed_coordinates = set().union(*observed_routes.values())
+        observed_callees = {callee for callee, _line in observed_coordinates}
+        self.assertEqual(
+            ast_callees,
+            observed_callees,
+            "every derived orchestrator lifecycle column must be reached by a real route probe",
+        )
+        expected_coordinates = {(callee, lineno) for _route, _owner, callee, lineno in sites}
+        self.assertEqual(
+            expected_coordinates,
+            observed_coordinates,
+            "every derived lifecycle callsite must be reached exactly; "
+            f"missing={sorted(expected_coordinates - observed_coordinates)} "
+            f"extra={sorted(observed_coordinates - expected_coordinates)}",
+        )
+        # Keep only AST-derived coordinates that the actual route probe reached;
+        # a route alias with no runtime branch is a precondition failure, not a green cell.
+        route_sites = {
+            route: [site for site in sites if (site[2], site[3]) in observed_routes[route]]
+            for route in route_tests
+        }
+        self.assertTrue(all(route_sites.values()), "a route probe reached no derived lifecycle callsite")
+
+        capstone = importlib.import_module("runners.us_short_weekly_capstone")
+        stages = capstone.default_pipeline()
+        actual_pairs = {
+            stage.failure_policy: (stage.output_policy, stage.checkpoint_policy)
+            for stage in stages
+        }
+        self.assertEqual(actual_pairs, K4A_INDEPENDENT_STAGE_POLICY_REGISTRY)
+        self.assertEqual(
+            capstone.STAGE_LIFECYCLE_POLICY_REGISTRY,
+            {
+                policy: {"output_policy": output, "checkpoint_policy": checkpoint}
+                for policy, (output, checkpoint) in K4A_INDEPENDENT_STAGE_POLICY_REGISTRY.items()
+            },
+        )
+        optional = [stage for stage in stages if stage.failure_policy == "zero_effect"]
+        self.assertEqual([stage.name for stage in optional], ["soft_discovery"])
+        self.assertEqual(optional[0].reuse_policy, "never")
+
+        # Every derived lifecycle column has a real planted-failure control.  The
+        # controls are test paths (not production policy) and are intentionally
+        # checked as real one-case tests so a renamed/deleted control is red.
+        probes = {
+            "inputs": (
+                "tests.provider.test_us_short_weekly_capstone_soft_discovery"
+                ".WeeklyCapstoneSoftDiscoveryStageTest"
+                ".test_capstone_boundary_degrades_optional_input_output_and_freshness_failures"
+            ),
+            "outputs": (
+                "tests.provider.test_us_short_weekly_capstone_soft_discovery"
+                ".WeeklyCapstoneSoftDiscoveryStageTest"
+                ".test_capstone_boundary_degrades_optional_input_output_and_freshness_failures"
+            ),
+            "run": self.A_BEHAVIOR["run_weekly_capstone"],
+            "_degrade_stage_boundary": self.A_BEHAVIOR["run_weekly_capstone"],
+            "_unchanged_soft_discovery_receipt_matches": self.A_FROZEN_BEHAVIOR,
+            "record_stage": (
+                "tests.provider.test_us_short_weekly_capstone_soft_discovery"
+                ".WeeklyCapstoneSoftDiscoveryStageTest"
+                ".test_production_checkpoint_records_artifactless_optional_failure_and_terminal_emits"
+            ),
+            "restore_stage": (
+                "tests.test_us_short_capstone_checkpoint.CapstoneResumeIntegrationTest"
+                ".test_resume_refreshes_volatile_stage_and_reuses_bound_frozen_stage_only_when_equivalent"
+            ),
+            "_publish_current_output_transaction": (
+                "tests.provider.test_us_short_weekly_capstone.CapstoneFakeChainTest"
+                ".test_publish_second_move_failure_leaves_current_empty"
+            ),
+        }
+        self.assertEqual(derived_columns, set(probes))
+        cells = [
+            (route, policy, callee, lineno)
+            for route, route_rows in route_sites.items()
+            for _route, _owner, callee, lineno in route_rows
+            for policy in K4A_INDEPENDENT_STAGE_POLICY_REGISTRY
+        ]
+        self.assertEqual(len(cells), sum(len(rows) for rows in route_sites.values()) * 2)
+
+        def mutate_route(route: str, policy: str, callee: str, lineno: int, path: str) -> tuple[int, int, bool]:
+            capstone = importlib.import_module("runners.us_short_weekly_capstone")
+            originals: list[tuple[Any, str, Any]] = []
+
+            def planted(*_args, **_kwargs):
+                frame = inspect.currentframe().f_back
+                if frame is not None and frame.f_globals.get("__name__") == capstone.__name__ \
+                        and frame.f_lineno == lineno:
+                    raise AssertionError(f"planted lifecycle mutation {route}:{callee}:{lineno}")
+                return None
+
+            try:
+                if callee in {"inputs", "outputs", "run"}:
+                    original_stage = capstone.Stage
+
+                    def stage_factory(*args, **kwargs):
+                        stage = original_stage(*args, **kwargs)
+                        if stage.name == "soft_discovery":
+                            stage.failure_policy = policy
+                            stage.output_policy, stage.checkpoint_policy = K4A_INDEPENDENT_STAGE_POLICY_REGISTRY[policy]
+                        original = getattr(stage, callee)
+
+                        def wrapped(*a, **kw):
+                            frame = inspect.currentframe().f_back
+                            if frame is not None and frame.f_globals.get("__name__") == capstone.__name__ \
+                                    and frame.f_lineno == lineno:
+                                raise AssertionError(f"planted lifecycle mutation {route}:{callee}:{lineno}")
+                            return original(*a, **kw)
+
+                        setattr(stage, callee, wrapped)
+                        return stage
+
+                    capstone.Stage = stage_factory
+                    # Optional method failures must still die when the boundary
+                    # is removed; this prevents a caught injected fault reading green.
+                    originals.append((capstone, "_degrade_stage_boundary", capstone._degrade_stage_boundary))
+                    capstone._degrade_stage_boundary = planted
+                    originals.append((capstone, "Stage", original_stage))
+                else:
+                    owner = capstone.checkpoint_store if callee in {"record_stage", "restore_stage"} else capstone
+                    original = getattr(owner, callee)
+                    originals.append((owner, callee, original))
+                    setattr(owner, callee, planted)
+                return LaneGuardRegistryConformance._run(path)
+            finally:
+                for owner, name, original in reversed(originals):
+                    setattr(owner, name, original)
+
+        for route, policy, callee, lineno in cells:
+            with self.subTest(route=route, policy=policy, lifecycle=f"{callee}:{lineno}"):
+                run, red, resolved = mutate_route(route, policy, callee, lineno, route_tests[route])
+                self.assertTrue(resolved, f"missing mutation control for {callee}")
+                self.assertGreater(run, 0)
+                self.assertGreater(red, 0, f"mutation did not kill {route}:{callee}:{lineno}")
+
+    def test_strict_pass2_approval_callsite_has_independent_load_bearing_control(self):
+        """Keep the mandatory approval seam covered without weakening it into fail-soft."""
+        tree = ast.parse(_source("runners/us_short_weekly_capstone.py"))
+        run_weekly = next(
+            node for node in tree.body
+            if isinstance(node, ast.FunctionDef) and node.name == "run_weekly_capstone"
+        )
+        callsites = [
+            node for node in ast.walk(run_weekly)
+            if isinstance(node, ast.Call) and _called_name(node.func) == "_build_pass2_budget_approval"
+        ]
+        self.assertEqual(len(callsites), 1, "strict Pass2 approval must have one pinned orchestrator callsite")
+        capstone = importlib.import_module("runners.us_short_weekly_capstone")
+        path = (
+            "tests.provider.test_us_short_pass2_budget_approval.Pass2BudgetApprovalContractTest"
+            ".test_capstone_approval_minting_binds_current_candidate_bytes"
+        )
+        baseline_run, baseline_red, resolved = LaneGuardRegistryConformance._run(path)
+        self.assertTrue(resolved)
+        self.assertEqual((baseline_run, baseline_red), (1, 0))
+        original = capstone._build_pass2_budget_approval
+        with mock.patch.object(
+            capstone,
+            "_build_pass2_budget_approval",
+            lambda *_args, **_kwargs: (_ for _ in ()).throw(
+                capstone.WeeklyCapstoneError("planted strict Pass2 approval callsite failure")
+            ),
+        ):
+            mutated_run, mutated_red, _ = LaneGuardRegistryConformance._run(path)
+        self.assertEqual(mutated_run, 1)
+        self.assertGreater(mutated_red, 0, "deleting strict approval enforcement must turn the control red")
+        self.assertIs(capstone._build_pass2_budget_approval, original)
+
+    def test_named_non_guard_raisers_each_have_a_real_dying_behavior_control(self):
+        for module_name, entries in self.NAMED_NON_GUARD_TESTS.items():
+            module = importlib.import_module(module_name)
+            for attribute, test_path in entries.items():
+                with self.subTest(module=module_name, attribute=attribute):
+                    baseline_run, baseline_red, resolved = LaneGuardRegistryConformance._run(test_path)
+                    self.assertTrue(resolved)
+                    self.assertEqual((baseline_run, baseline_red), (1, 0))
+                    original = getattr(module, attribute)
+                    with mock.patch.object(
+                        module,
+                        attribute,
+                        lambda *_args, **_kwargs: (_ for _ in ()).throw(
+                            AssertionError(f"planted {module_name}.{attribute} failure")
+                        ),
+                    ):
+                        mutated_run, mutated_red, _ = LaneGuardRegistryConformance._run(test_path)
+                    self.assertEqual(mutated_run, 1)
+                    self.assertGreater(mutated_red, 0)
+                    self.assertIs(getattr(module, attribute), original)
+
+    def test_b_every_derived_merge_revalidation_call_supplies_mandatory_upstream_pairs(self):
+        coordinates: list[tuple[str, str, ast.Call]] = []
+        for rel in LANE_FILES:
+            tree = ast.parse(_source(rel))
+            owners = _enclosing_functions(tree)
+            for node in ast.walk(tree):
+                if isinstance(node, ast.Call) and _called_name(node.func) == "validate_merged_packet":
+                    coordinates.append((rel, owners.get(node, "<module>"), node))
+        self.assertTrue(coordinates, "no merge revalidation call was derived")
+        for rel, owner, call in coordinates:
+            with self.subTest(exit=f"{rel}:{owner}:{call.lineno}"):
+                keywords = {kw.arg for kw in call.keywords}
+                self.assertIn("upstream_pairs", keywords)
+                self.assertTrue(
+                    any(kw.arg == "upstream_pairs" for kw in call.keywords),
+                    "B callsite must carry the mandatory upstream pair binding",
+                )
+        merge_tree = ast.parse(_source("runners/us_short_llm_theme_discovery_merge.py"))
+        entry = next(
+            node for node in merge_tree.body
+            if isinstance(node, ast.FunctionDef) and node.name == "validate_merged_packet"
+        )
+        upstream_arg = next(
+            arg for arg in entry.args.kwonlyargs if arg.arg == "upstream_pairs"
+        )
+        index = entry.args.kwonlyargs.index(upstream_arg)
+        self.assertIsNone(entry.args.kw_defaults[index], "anchoring must not be opt-in")
+        run, red, resolved = LaneGuardRegistryConformance._run(
+            "tests.provider.test_us_short_weekly_capstone_soft_discovery"
+            ".WeeklyCapstoneSoftDiscoveryStageTest"
+            ".test_upstream_pairs_are_required_replayed_and_honestly_labelled"
+        )
+        self.assertTrue(resolved)
+        self.assertEqual((run, red), (1, 0))
+
+    @staticmethod
+    def _declared_guard_origins() -> dict[str, set[str]]:
+        origins: dict[str, set[str]] = {}
+        for rel in MATRIX_FILES:
+            module_name = rel.replace("/", ".")[:-3]
+            if module_name not in ExecutableClosureMatrix.K4A_GUARD_MODULES:
+                continue
+            if module_name == "runners.us_short_weekly_capstone":
+                derived = {"_degrade_stage_boundary"}
+            else:
+                derived = ExecutableClosureMatrix._reachable_private_raisers(rel)
+            derived -= set(ExecutableClosureMatrix.NAMED_NON_GUARD_RAISERS.get(module_name, {}))
+            declared = getattr(importlib.import_module(module_name), "CONFORMANCE_GUARDS", ())
+            derived.update(declared)
+            for consumer_rel in MATRIX_FILES:
+                for node in ast.parse(_source(consumer_rel)).body:
+                    if isinstance(node, ast.ImportFrom) and node.module == module_name:
+                        derived.update(
+                            alias.name for alias in node.names if alias.name.startswith("_")
+                        )
+            if derived:
+                origins[module_name] = derived
+        return origins
+
+    @staticmethod
+    def _reachable_private_raisers(rel: str) -> set[str]:
+        tree = ast.parse(_source(rel))
+        functions = {
+            node.name: node
+            for node in tree.body
+            if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef))
+        }
+        graph = {
+            name: {
+                node.id
+                for node in ast.walk(function)
+                if isinstance(node, ast.Call) and isinstance(node.func, ast.Name)
+                for node in (node.func,)
+                if node.id in functions
+            }
+            for name, function in functions.items()
+        }
+        reachable = {name for name in functions if not name.startswith("_")}
+        frontier = list(reachable)
+        while frontier:
+            caller = frontier.pop()
+            for callee in graph[caller] - reachable:
+                reachable.add(callee)
+                frontier.append(callee)
+        can_raise = {
+            name for name, function in functions.items()
+            if any(isinstance(node, ast.Raise) for node in ast.walk(function))
+        }
+        changed = True
+        while changed:
+            changed = False
+            for caller, callees in graph.items():
+                if caller not in can_raise and callees & can_raise:
+                    can_raise.add(caller)
+                    changed = True
+        return {
+            name for name in reachable
+            if name.startswith("_") and name in can_raise
+        }
+
+    @classmethod
+    def _derived_guard_callsites(
+        cls,
+    ) -> list[tuple[str, str, str, str, str, int, int, bool]]:
+        origins = cls._declared_guard_origins()
+        coordinates: list[tuple[str, str, str, str, str, int, int, bool]] = []
+        for rel in MATRIX_FILES:
+            consumer_name = rel.replace("/", ".")[:-3]
+            tree = ast.parse(_source(rel))
+            owners = _enclosing_functions(tree)
+            parents = {
+                child: parent
+                for parent in ast.walk(tree)
+                for child in ast.iter_child_nodes(parent)
+            }
+            bindings: dict[str, tuple[str, str]] = {}
+            module_aliases: dict[str, str] = {}
+            for node in tree.body:
+                if isinstance(node, ast.ImportFrom) and node.module in origins:
+                    for alias in node.names:
+                        if alias.name in origins[node.module]:
+                            bindings[alias.asname or alias.name] = (node.module, alias.name)
+                elif isinstance(node, ast.Import):
+                    for alias in node.names:
+                        if alias.name in origins:
+                            module_aliases[alias.asname or alias.name] = alias.name
+            if consumer_name in origins:
+                bindings.update({
+                    attribute: (consumer_name, attribute)
+                    for attribute in origins[consumer_name]
+                })
+            for node in ast.walk(tree):
+                if not isinstance(node, ast.Call):
+                    continue
+                patch_owner = consumer_name
+                if isinstance(node.func, ast.Name) and node.func.id in bindings:
+                    bound_name = node.func.id
+                    origin_name, attribute = bindings[bound_name]
+                elif (
+                    isinstance(node.func, ast.Attribute)
+                    and isinstance(node.func.value, ast.Name)
+                    and node.func.value.id in module_aliases
+                    and node.func.attr in origins[module_aliases[node.func.value.id]]
+                ):
+                    origin_name = module_aliases[node.func.value.id]
+                    attribute = node.func.attr
+                    bound_name = attribute
+                    patch_owner = origin_name
+                else:
+                    continue
+                ancestor = parents.get(node)
+                frozen_raw_branch = False
+                while ancestor is not None:
+                    if isinstance(ancestor, ast.If):
+                        condition = ast.unparse(ancestor.test)
+                        if "raw_ref" in condition or "live_authorized" in condition:
+                            frozen_raw_branch = True
+                            break
+                    ancestor = parents.get(ancestor)
+                coordinates.append((
+                    consumer_name, owners.get(node, "<module>"), patch_owner, bound_name,
+                    f"{origin_name}.{attribute}", node.lineno,
+                    getattr(node, "end_lineno", node.lineno), frozen_raw_branch,
+                ))
+        return sorted(set(coordinates))
+
+    def test_c_every_repo_derived_guard_callsite_has_a_real_dying_mutation(self):
+        coordinates = self._derived_guard_callsites()
+        self.assertTrue(coordinates, "no C guard callsite was derived")
+        registry = LaneGuardRegistryConformance
+        registered_terms = {
+            f"{module}.{attribute}" for module, attribute, _test in registry.GUARDS
+        }
+        all_tests = tuple(dict.fromkeys(
+            [test for _module, _attribute, test in registry.GUARDS]
+            + list(self.ADDITIONAL_BEHAVIOR)
+        ))
+        coverage = {coordinate: [] for coordinate in coordinates}
+        active_test = ""
+        grouped: dict[
+            tuple[str, str], list[tuple[str, str, str, str, str, int, int, bool]]
+        ] = {}
+        for coordinate in coordinates:
+            grouped.setdefault((coordinate[2], coordinate[3]), []).append(coordinate)
+        recording_patches = []
+        for (patch_owner, bound_name), sites in grouped.items():
+            owner_module = importlib.import_module(patch_owner)
+            original = getattr(owner_module, bound_name)
+
+            def recording(*args, __original=original, __sites=sites, **kwargs):
+                caller_frame = inspect.currentframe().f_back
+                if caller_frame is not None:
+                    for site in __sites:
+                        (
+                            _consumer, caller, _patch_owner, _bound, _origin,
+                            lineno, end_lineno, _frozen,
+                        ) = site
+                        if (
+                            caller_frame.f_globals.get("__name__") == _consumer
+                            and caller_frame.f_code.co_name == caller
+                            and lineno <= caller_frame.f_lineno <= end_lineno
+                        ):
+                            coverage[site].append(active_test)
+                return __original(*args, **kwargs)
+
+            recording_patches.append(mock.patch.object(owner_module, bound_name, recording))
+        for patch in recording_patches:
+            patch.start()
+        try:
+            for active_test in all_tests:
+                registry._run(active_test)
+        finally:
+            for patch in reversed(recording_patches):
+                patch.stop()
+
+        missing: list[str] = []
+        a_boundary_coordinates = []
+        frozen_live_raw_coordinates = set()
+        for (
+            consumer_name, caller, patch_owner, bound_name, origin_term, lineno,
+            end_lineno, frozen_raw_branch,
+        ) in coordinates:
+            coordinate = f"C/{consumer_name}:{caller}:{lineno}->{origin_term}"
+            if origin_term not in registered_terms:
+                missing.append(f"{coordinate}: unregistered")
+                continue
+            origin_name, attribute = origin_term.rsplit(".", 1)
+            reachable = tuple(dict.fromkeys(coverage[
+                (
+                    consumer_name, caller, patch_owner, bound_name, origin_term,
+                    lineno, end_lineno, frozen_raw_branch,
+                )
+            ]))
+            priority = {
+                test: min(
+                    ((
+                        1 if module == origin_name and registered_attribute == attribute
+                        else 2 if module == consumer_name
+                        else 3
+                    )
+                    for module, registered_attribute, row_test in registry.GUARDS
+                    if row_test == test),
+                    default=0 if test in self.ADDITIONAL_BEHAVIOR else 3,
+                )
+                for test in reachable
+            }
+            candidates = tuple(sorted(reachable, key=lambda test: (priority[test], test)))
+            if not candidates and frozen_raw_branch and caller == "_verify_receipt":
+                frozen_live_raw_coordinates.add((
+                    consumer_name, caller, origin_term, lineno,
+                ))
+                continue
+            if (
+                candidates
+                and caller == "validate_merged_packet"
+                and origin_term in self.REDUNDANT_REPLAY_TERMS
+            ):
+                run, red, resolved = registry._run(self.REDUNDANT_REPLAY_TEST)
+                if resolved and (run, red) == (1, 0):
+                    continue
+            owner_module = importlib.import_module(patch_owner)
+            original = getattr(owner_module, bound_name)
+            mutant = registry._neutered(attribute)
+            hit = False
+
+            def targeted(*args, __original=original, __mutant=mutant, **kwargs):
+                nonlocal hit
+                caller_frame = inspect.currentframe().f_back
+                if (
+                    caller_frame is not None
+                    and caller_frame.f_globals.get("__name__") == consumer_name
+                    and caller_frame.f_code.co_name == caller
+                    and lineno <= caller_frame.f_lineno <= end_lineno
+                ):
+                    hit = True
+                    return __mutant(*args, **kwargs)
+                return __original(*args, **kwargs)
+
+            died = False
+            with mock.patch.object(owner_module, bound_name, targeted):
+                for test_path in candidates:
+                    run, red, resolved = registry._run(test_path)
+                    if hit and resolved and run == 1 and red > 0:
+                        died = True
+                        break
+            if not hit:
+                missing.append(f"{coordinate}: no registered behavior test reaches callsite")
+            elif not died:
+                siblings = [
+                    other
+                    for other in coordinates
+                    if other != (
+                        consumer_name, caller, patch_owner, bound_name, origin_term,
+                        lineno, end_lineno, frozen_raw_branch,
+                    )
+                    and other[4] == origin_term
+                    and set(coverage[other]) & set(candidates)
+                ]
+                if not siblings:
+                    missing.append(
+                        f"{coordinate}: bypass stayed green without a reached redundant sibling"
+                    )
+        self.assertEqual(
+            frozen_live_raw_coordinates,
+            set(self.FROZEN_LIVE_RAW_COORDINATES),
+            "the frozen live-authorized raw branch changed; every new or removed coordinate "
+            "requires an explicit local evidence decision",
+        )
+        self.assertEqual(missing, [], f"unmapped or non-load-bearing C coordinates: {missing}")
+
+    def test_d_repo_shared_resource_tests_inject_state_and_lock_roots(self):
+        from tests.provider.us_short_private_test_root import (
+            temporary_provider_directory,
+        )
+
+        with tempfile.TemporaryDirectory() as clean_root:
+            clean_repo = Path(clean_root)
+            private_parent = clean_repo / "provider_samples"
+            self.assertFalse(private_parent.exists())
+            first = temporary_provider_directory(clean_repo)
+            first_path = Path(first.__enter__())
+            second = temporary_provider_directory(clean_repo)
+            second_path = Path(second.__enter__())
+            self.assertTrue(first_path.is_dir())
+            self.assertTrue(second_path.is_dir())
+            first.__exit__(None, None, None)
+            self.assertTrue(
+                private_parent.exists(),
+                "one overlapping test removed another test's private parent",
+            )
+            second.__exit__(None, None, None)
+            self.assertFalse(
+                private_parent.exists(),
+                "overlapping clean-checkout helpers left an ignored parent behind",
+            )
+            errors: list[BaseException] = []
+            first_entered = threading.Event()
+            allow_first_exit = threading.Event()
+            second_attempting = threading.Event()
+            second_entered = threading.Event()
+
+            def first_worker():
+                try:
+                    with temporary_provider_directory(clean_repo):
+                        first_entered.set()
+                        allow_first_exit.wait(timeout=5)
+                except BaseException as exc:
+                    errors.append(exc)
+
+            def second_worker():
+                try:
+                    second_attempting.set()
+                    with temporary_provider_directory(clean_repo):
+                        second_entered.set()
+                except BaseException as exc:
+                    errors.append(exc)
+
+            threads = [
+                threading.Thread(target=first_worker),
+                threading.Thread(target=second_worker),
+            ]
+            threads[0].start()
+            self.assertTrue(first_entered.wait(timeout=5))
+            threads[1].start()
+            self.assertTrue(second_attempting.wait(timeout=5))
+            self.assertFalse(
+                second_entered.wait(timeout=0.1),
+                "same-root test helpers were not serialized",
+            )
+            allow_first_exit.set()
+            for thread in threads:
+                thread.join(timeout=10)
+            self.assertFalse(any(thread.is_alive() for thread in threads))
+            self.assertTrue(second_entered.is_set())
+            self.assertEqual(errors, [])
+            self.assertFalse(
+                private_parent.exists(),
+                "serialized helper exits left an ignored parent behind",
+            )
+
+        def snapshot(root: Path) -> dict[str, bytes]:
+            if not root.exists():
+                return {}
+            return {
+                path.relative_to(root).as_posix(): path.read_bytes()
+                for path in root.rglob("*") if path.is_file()
+            }
+
+        def test_ids(module: str) -> list[str]:
+            suite = unittest.defaultTestLoader.loadTestsFromName(module)
+            found: list[str] = []
+
+            def collect(node):
+                if isinstance(node, unittest.TestSuite):
+                    for child in node:
+                        collect(child)
+                else:
+                    found.append(node.id())
+
+            collect(suite)
+            return found
+
+        state_modules: set[str] = set()
+        lock_modules: set[str] = set()
+        for path in (ROOT / "tests").rglob("test_*.py"):
+            if path.resolve() == Path(__file__).resolve():
+                continue
+            text = path.read_text(encoding="utf-8")
+            tree = ast.parse(text)
+            module = path.relative_to(ROOT).with_suffix("").as_posix().replace("/", ".")
+            if any(
+                (
+                    isinstance(node, ast.Name) and node.id == "STATE_US_SHORT_DIR"
+                ) or (
+                    isinstance(node, ast.Attribute) and node.attr == "STATE_US_SHORT_DIR"
+                ) or (
+                    isinstance(node, ast.Constant) and node.value == "STATE_US_SHORT_DIR"
+                )
+                for node in ast.walk(tree)
+            ):
+                state_modules.add(module)
+            if any(
+                isinstance(node, ast.Call)
+                and _called_name(node.func) in {"run_weekly_capstone", "_acquire_decision_lock"}
+                for node in ast.walk(tree)
+            ):
+                lock_modules.add(module)
+        self.assertTrue(state_modules, "no D state-root injection coordinate was derived")
+        self.assertTrue(lock_modules, "no D lock-root injection coordinate was derived")
+        resource_modules = state_modules | lock_modules
+        selected_by_module = {module: test_ids(module) for module in sorted(resource_modules)}
+        mapped_modules = {module for module, tests in selected_by_module.items() if tests}
+        self.assertEqual(
+            resource_modules - mapped_modules,
+            set(),
+            "D resource module has no isolated executable behavior coordinate",
+        )
+        selected = [
+            test for module in sorted(selected_by_module) for test in selected_by_module[module]
+        ]
+        state_root = ROOT / "state" / "us_short"
+        legacy_lock_root = (
+            ROOT / "provider_samples" / "us_short_weekly_capstone" / "_transaction_locks"
+        )
+        state_before = snapshot(state_root)
+        legacy_locks_before = snapshot(legacy_lock_root)
+        capstone = importlib.import_module("runners.us_short_weekly_capstone")
+        lock_binding_test = (
+            "tests.provider.test_us_short_weekly_capstone.CapstoneFakeChainTest"
+            ".test_decision_lock_is_bound_to_the_injected_state_root_and_reacquirable"
+        )
+        with mock.patch.object(
+            capstone,
+            "_decision_lock_path",
+            lambda ctx: (legacy_lock_root / f"{ctx.decision_date}.lock").resolve(),
+        ):
+            planted_run, planted_red, planted_resolved = (
+                LaneGuardRegistryConformance._run(lock_binding_test)
+            )
+        self.assertTrue(planted_resolved)
+        self.assertEqual(planted_run, 1)
+        self.assertGreater(
+            planted_red, 0,
+            "D planted repository-global lock root did not kill its binding test",
+        )
+
+        original_acquire = capstone._acquire_decision_lock
+        original_release = capstone._release_decision_lock
+        lock_contexts: dict[Path, Any] = {}
+        probing = False
+
+        def recording_acquire(ctx):
+            lock = original_acquire(ctx)
+            lock_contexts[lock.path] = ctx
+            return lock
+
+        def proving_release(lock):
+            nonlocal probing
+            original_release(lock)
+            if probing:
+                return
+            probing = True
+            try:
+                probe = original_acquire(lock_contexts[lock.path])
+                original_release(probe)
+            finally:
+                probing = False
+
+        with mock.patch.object(capstone, "_acquire_decision_lock", recording_acquire), \
+             mock.patch.object(capstone, "_release_decision_lock", proving_release):
+            for order in (selected, list(reversed(selected))):
+                for test_path in order:
+                    run, red, resolved = LaneGuardRegistryConformance._run(test_path)
+                    with self.subTest(resource_test=test_path):
+                        self.assertTrue(resolved)
+                        self.assertEqual((run, red), (1, 0))
+                self.assertEqual(
+                    snapshot(state_root), state_before,
+                    "a resource test changed repository state/us_short",
+                )
+                self.assertEqual(
+                    snapshot(legacy_lock_root), legacy_locks_before,
+                    "a resource test changed the legacy repository lock root",
+                )
+        self.assertEqual(set(self.NAMED_NON_CELLS), {
+            "wrong_requirement", "offline_document_corroboration",
+        })
+
+
 class LaneGuardRegistryConformance(unittest.TestCase):
     """Every fail-closed term in the lane's shared modules must have a test that DIES with it.
 
@@ -616,6 +1628,13 @@ class LaneGuardRegistryConformance(unittest.TestCase):
         ("runners.us_short_discovery_publish_policy", "evidence_bytes",
          "tests.provider.test_us_short_llm_theme_discovery_fetch_x_merge.XFetchAndMergeTests"
          ".test_merge_retry_publish_property_same_evidence_different_clocks_is_idempotent"),
+        ("runners.us_short_discovery_publish_policy", "_serialized_payload",
+         "tests.provider.test_us_short_llm_theme_discovery.OfflineLLMThemeDiscoveryTests"
+         ".test_shared_publish_policy_guard_terms_are_independently_live"),
+        ("runners.us_short_discovery_publish_policy", "_serialized_sha256",
+         "tests.provider.test_us_short_weekly_capstone_soft_discovery"
+         ".WeeklyCapstoneSoftDiscoveryStageTest"
+         ".test_in_memory_discovery_digest_must_hash_the_payload"),
         ("runners.us_short_discovery_publish_policy", "publish_immutable_pair",
          "tests.provider.test_us_short_llm_theme_discovery_fetch_web.WebFetchTests"
          ".test_public_packet_pair_rolls_back_if_second_publish_fails"),
@@ -631,6 +1650,105 @@ class LaneGuardRegistryConformance(unittest.TestCase):
         ("engine.us_short_schema_formats", "FORMAT_CHECKER",
          "tests.provider.test_us_short_llm_theme_discovery_offline_invariants.OfflineDiscoveryInvariantTests"
          ".test_schema_date_time_formats_are_enforced_at_every_discovery_boundary"),
+        ("runners.us_short_weekly_capstone_soft_discovery", "_schema_validate",
+         "tests.provider.test_us_short_weekly_capstone_soft_discovery"
+         ".WeeklyCapstoneSoftDiscoveryStageTest.test_receipt_schema_rejects_cross_field_and_unknown_reason_drift"),
+        ("runners.us_short_weekly_capstone_soft_discovery", "validate_exact_decision_slot",
+         "tests.provider.test_us_short_weekly_capstone_soft_discovery"
+         ".WeeklyCapstoneSoftDiscoveryStageTest.test_stage_fail_closed_terms_have_direct_dying_controls"),
+        ("runners.us_short_weekly_capstone_soft_discovery", "_relative",
+         "tests.provider.test_us_short_weekly_capstone_soft_discovery"
+         ".WeeklyCapstoneSoftDiscoveryStageTest.test_stage_fail_closed_terms_have_direct_dying_controls"),
+        ("runners.us_short_weekly_capstone_soft_discovery", "_read_json_with_sha",
+         "tests.provider.test_us_short_weekly_capstone_soft_discovery"
+         ".WeeklyCapstoneSoftDiscoveryStageTest.test_stage_fail_closed_terms_have_direct_dying_controls"),
+        ("runners.us_short_weekly_capstone_soft_discovery", "_require_complete_pair",
+         "tests.provider.test_us_short_weekly_capstone_soft_discovery"
+         ".WeeklyCapstoneSoftDiscoveryStageTest.test_stage_fail_closed_terms_have_direct_dying_controls"),
+        ("runners.us_short_weekly_capstone_soft_discovery", "_conflict_receipt_path",
+         "tests.provider.test_us_short_weekly_capstone_soft_discovery"
+         ".WeeklyCapstoneSoftDiscoveryStageTest.test_stage_fail_closed_terms_have_direct_dying_controls"),
+        ("runners.us_short_weekly_capstone_soft_discovery", "_guard_existing_artifact_hashes",
+         "tests.provider.test_us_short_weekly_capstone_soft_discovery"
+         ".WeeklyCapstoneSoftDiscoveryStageTest"
+         ".test_all_same_day_status_transitions_reach_terminal_with_bound_conflict_receipts"),
+        ("runners.us_short_weekly_capstone_soft_discovery", "_published_sha256",
+         "tests.provider.test_us_short_weekly_capstone_soft_discovery"
+         ".WeeklyCapstoneSoftDiscoveryStageTest"
+         ".test_reused_artifact_digest_records_actual_frozen_file_bytes"),
+        ("runners.us_short_llm_theme_discovery_merge", "_guard_generated_clock",
+         "tests.provider.test_us_short_weekly_capstone_soft_discovery"
+         ".WeeklyCapstoneSoftDiscoveryStageTest.test_merge_fail_closed_terms_have_direct_dying_controls"),
+        ("runners.us_short_llm_theme_discovery_merge", "_instant",
+         "tests.provider.test_us_short_weekly_capstone_soft_discovery"
+         ".WeeklyCapstoneSoftDiscoveryStageTest"
+         ".test_merge_entry_points_reject_post_open_upstream_generated_clocks"),
+        ("runners.us_short_llm_theme_discovery_merge", "_validate_discovery",
+         "tests.provider.test_us_short_weekly_capstone_soft_discovery"
+         ".WeeklyCapstoneSoftDiscoveryStageTest"
+         ".test_merge_discovery_shape_guard_is_load_bearing_at_the_public_producer"),
+        ("runners.us_short_llm_theme_discovery_merge", "_schema_validate",
+         "tests.provider.test_us_short_weekly_capstone_soft_discovery"
+         ".WeeklyCapstoneSoftDiscoveryStageTest"
+         ".test_merge_manifest_schema_guard_is_load_bearing_at_the_public_producer"),
+        ("runners.us_short_llm_theme_discovery_merge", "_verify_receipt",
+         "tests.provider.test_us_short_weekly_capstone_soft_discovery"
+         ".WeeklyCapstoneSoftDiscoveryStageTest"
+         ".test_upstream_pairs_are_required_replayed_and_honestly_labelled"),
+        ("runners.us_short_llm_theme_discovery_merge", "_guard_source_identity",
+         "tests.provider.test_us_short_weekly_capstone_soft_discovery"
+         ".WeeklyCapstoneSoftDiscoveryStageTest.test_merge_fail_closed_terms_have_direct_dying_controls"),
+        ("runners.us_short_llm_theme_discovery_merge", "_guard_source_pit",
+         "tests.provider.test_us_short_weekly_capstone_soft_discovery"
+         ".WeeklyCapstoneSoftDiscoveryStageTest"
+         ".test_merge_producer_rejects_after_open_fetched_at_for_web_and_x"),
+        ("runners.us_short_llm_theme_discovery_merge", "_guard_source_pit",
+         "tests.provider.test_us_short_weekly_capstone_soft_discovery"
+         ".WeeklyCapstoneSoftDiscoveryStageTest"
+         ".test_merge_consumer_rejects_after_open_fetched_at_for_web_and_x"),
+        ("runners.us_short_llm_theme_discovery_merge", "_guard_raw_content_digest",
+         "tests.provider.test_us_short_weekly_capstone_soft_discovery"
+         ".WeeklyCapstoneSoftDiscoveryStageTest.test_merge_fail_closed_terms_have_direct_dying_controls"),
+        ("runners.us_short_llm_theme_discovery_merge", "_guard_member_evidence_tier",
+         "tests.provider.test_us_short_weekly_capstone_soft_discovery"
+         ".WeeklyCapstoneSoftDiscoveryStageTest.test_merge_fail_closed_terms_have_direct_dying_controls"),
+        ("runners.us_short_llm_theme_discovery_merge", "_guard_summary_counts",
+         "tests.provider.test_us_short_weekly_capstone_soft_discovery"
+         ".WeeklyCapstoneSoftDiscoveryStageTest.test_merge_fail_closed_terms_have_direct_dying_controls"),
+        ("runners.us_short_llm_theme_discovery_merge", "_guard_unique_manifest_rows",
+         "tests.provider.test_us_short_weekly_capstone_soft_discovery"
+         ".WeeklyCapstoneSoftDiscoveryStageTest.test_merge_fail_closed_terms_have_direct_dying_controls"),
+        ("runners.us_short_llm_theme_discovery_merge", "_guard_merge_producer_clock",
+         "tests.provider.test_us_short_weekly_capstone_soft_discovery"
+         ".WeeklyCapstoneSoftDiscoveryStageTest"
+         ".test_merge_and_manifest_generated_clocks_are_pit_bounded_and_equal"),
+        ("runners.us_short_llm_theme_discovery_merge", "_guard_merge_consumer_clock",
+         "tests.provider.test_us_short_weekly_capstone_soft_discovery"
+         ".WeeklyCapstoneSoftDiscoveryStageTest"
+         ".test_merge_consumer_clock_guard_has_a_direct_reverse_control"),
+        ("runners.us_short_llm_theme_discovery_merge", "_guard_input_artifact_hashes",
+         "tests.provider.test_us_short_weekly_capstone_soft_discovery"
+         ".WeeklyCapstoneSoftDiscoveryStageTest"
+         ".test_input_artifact_digest_anchor_guard_has_a_direct_reverse_control"),
+        ("runners.us_short_llm_theme_discovery_merge", "_guard_upstream_generated_clocks",
+         "tests.provider.test_us_short_weekly_capstone_soft_discovery"
+         ".WeeklyCapstoneSoftDiscoveryStageTest"
+         ".test_merge_entry_points_reject_post_open_upstream_generated_clocks"),
+        ("runners.us_short_llm_theme_discovery_merge", "_raw_receipt_path",
+         "tests.provider.test_us_short_weekly_capstone_soft_discovery"
+         ".WeeklyCapstoneSoftDiscoveryStageTest"
+         ".test_raw_receipt_traversal_is_rejected_before_filesystem_lookup"),
+        ("runners.us_short_provisional_theme_validate", "_guard_discovery_digest",
+         "tests.provider.test_us_short_weekly_capstone_soft_discovery"
+         ".WeeklyCapstoneSoftDiscoveryStageTest.test_in_memory_discovery_digest_must_hash_the_payload"),
+        ("runners.us_short_llm_theme_discovery_fetch_web", "_guard_generated_before_open",
+         "tests.provider.test_us_short_weekly_capstone_soft_discovery"
+         ".WeeklyCapstoneSoftDiscoveryStageTest"
+         ".test_web_and_x_producer_generated_at_guards_have_direct_controls"),
+        ("runners.us_short_llm_theme_discovery_fetch_x", "_guard_generated_before_open",
+         "tests.provider.test_us_short_weekly_capstone_soft_discovery"
+         ".WeeklyCapstoneSoftDiscoveryStageTest"
+         ".test_web_and_x_producer_generated_at_guards_have_direct_controls"),
     )
     # Declared non-guards: exercised through a registered term rather than on their own.
     # `is_rfc3339_date_time` is only reachable via `FORMAT_CHECKER`, which IS registered
@@ -656,8 +1774,51 @@ class LaneGuardRegistryConformance(unittest.TestCase):
             "write_mutable_ledger": lambda payload, path, **_kwargs: None,
             "frozen_artifact_matches": lambda payload, path, **_kwargs: False,
             "evidence_bytes": lambda payload, **_kwargs: json.dumps(payload, sort_keys=True).encode("utf-8"),
+            "_serialized_payload": lambda payload: (
+                json.dumps(payload, ensure_ascii=True, indent=2) + "\n"
+            ).encode("utf-8"),
+            "_serialized_sha256": lambda *_args, **_kwargs: "f" * 64,
             "persisted_text_violation": lambda value: None,
             "credential_query_keys": lambda query: [],
+            "_schema_validate": lambda *_args, **_kwargs: None,
+            "_relative": lambda path: Path(path).as_posix(),
+            "_read_json_with_sha": lambda _path, **_kwargs: ({}, "0" * 64),
+            "_require_complete_pair": lambda *_args, **_kwargs: None,
+            "_conflict_receipt_path": lambda _date, _key, *, state_dir: (
+                Path(state_dir) / "unvalidated_conflict.json"
+            ),
+            "_guard_generated_clock": lambda *_args, **_kwargs: None,
+            "_instant": lambda *_args, **_kwargs: __import__(
+                "runners.us_short_llm_theme_discovery_fetch_web",
+                fromlist=["_parse_dt"],
+            )._parse_dt("2026-06-15T13:29:00Z", field="generated_at"),
+            "_validate_discovery": lambda *_args, **_kwargs: None,
+            "_verify_receipt": lambda artifact, _receipt, *, source_type, **_kwargs: {
+                ref["source_id"]: source_type for ref in artifact.get("source_refs", [])
+            },
+            "_guard_source_identity": lambda *_args, **_kwargs: None,
+            "_guard_source_pit": lambda *_args, **_kwargs: None,
+            "_guard_raw_content_digest": lambda *_args, **_kwargs: None,
+            "_guard_member_evidence_tier": lambda *_args, **_kwargs: None,
+            "_guard_summary_counts": lambda *_args, **_kwargs: None,
+            "_guard_unique_manifest_rows": lambda rows, *, key, **_kwargs: {
+                row[key]: row for row in rows
+            },
+            "_guard_discovery_digest": lambda *_args, **_kwargs: None,
+            "_guard_generated_before_open": lambda *_args, **_kwargs: None,
+            "_guard_existing_artifact_hashes": lambda paths: {
+                key: "f" * 64 for key in paths
+            },
+            "_published_sha256": lambda *_args, **_kwargs: "f" * 64,
+            "_guard_merge_producer_clock": lambda value, **_kwargs: (
+                __import__("runners.us_short_llm_theme_discovery_fetch_web",
+                           fromlist=["_parse_dt"])._parse_dt(value, field="generated_at")
+            ),
+            "_guard_merge_consumer_clock": lambda *_args, **_kwargs: None,
+            "_guard_input_artifact_hashes": lambda *_args, **_kwargs: None,
+            "_guard_upstream_generated_clocks": lambda *_args, **_kwargs: None,
+            "_raw_receipt_path": lambda raw_ref: ROOT / str(raw_ref),
+            "_degrade_stage_boundary": lambda *_args, **_kwargs: None,
         }
         if name in mutants:
             return mutants[name]
@@ -707,31 +1868,120 @@ class LaneGuardRegistryConformance(unittest.TestCase):
                 self.assertEqual(sorted(public - registered - self.NON_GUARDS), [],
                                  f"{module_rel} exposes unregistered fail-closed terms")
 
+    def test_every_declared_lane_guard_is_registered(self):
+        registered = {(module, attribute) for module, attribute, _test in self.GUARDS}
+        derived_origins = ExecutableClosureMatrix._declared_guard_origins()
+        derived_terms = {
+            origin_term
+            for _consumer, _caller, _patch_owner, _bound, origin_term, _line, _end, _frozen
+            in ExecutableClosureMatrix._derived_guard_callsites()
+        }
+        declared_modules = 0
+        for rel in LANE_FILES:
+            module_name = rel.replace("/", ".")[:-3]
+            module = importlib.import_module(module_name)
+            declared = getattr(module, "CONFORMANCE_GUARDS", None)
+            tree = ast.parse(_source(rel))
+            defined_guards = {
+                node.name for node in tree.body
+                if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef))
+                and node.name.startswith("_guard_")
+            }
+            if declared is None:
+                if defined_guards:
+                    self.fail(
+                        f"{rel} defines fail-closed guards but has no CONFORMANCE_GUARDS declaration"
+                    )
+                continue
+            declared_modules += 1
+            self.assertEqual(
+                {(module_name, attribute) for attribute in declared}
+                - registered,
+                set(),
+                f"{rel} declares a guard without a dying-test registry row",
+            )
+            self.assertEqual(
+                defined_guards - set(declared),
+                set(),
+                f"{rel} defines a guard that can evade the dying-test declaration",
+            )
+            if module_name in ExecutableClosureMatrix.K4A_GUARD_MODULES:
+                named_non_guards = set(
+                    ExecutableClosureMatrix.NAMED_NON_GUARD_RAISERS.get(module_name, {})
+                )
+                self.assertEqual(
+                    ExecutableClosureMatrix._reachable_private_raisers(rel)
+                    - set(declared)
+                    - named_non_guards,
+                    set(),
+                    f"{rel} has an unclassified reachable private raiser",
+                )
+                self.assertEqual(
+                    {
+                        (module_name, attribute)
+                        for attribute in derived_origins.get(module_name, set())
+                    } - registered,
+                    set(),
+                    f"{rel} has a repository-derived enforcement term without a dying test",
+                )
+            self.assertEqual(
+                {
+                    attribute for attribute in declared
+                    if (
+                        f"{module_name}.{attribute}" not in derived_terms
+                        if module_name in ExecutableClosureMatrix.K4A_GUARD_MODULES
+                        else attribute not in {
+                            _called_name(node.func)
+                            for node in ast.walk(tree)
+                            if isinstance(node, ast.Call)
+                        }
+                    )
+                },
+                set(),
+                f"{rel} declares a guard that no derived production callsite uses",
+            )
+        self.assertGreaterEqual(declared_modules, 3)
+
+    def test_upstream_clock_guard_is_called_inside_receipt_verification(self):
+        tree = ast.parse(_source("runners/us_short_llm_theme_discovery_merge.py"))
+        verify = next(
+            node for node in tree.body
+            if isinstance(node, ast.FunctionDef) and node.name == "_verify_receipt"
+        )
+        calls = {
+            _called_name(node.func)
+            for node in ast.walk(verify)
+            if isinstance(node, ast.Call)
+        }
+        self.assertIn("_guard_upstream_generated_clocks", calls)
+
     def test_every_registered_guard_has_a_real_dying_test(self):
         for module_name, attribute, test_path in self.GUARDS:
-            with self.subTest(guard=f"{module_name}.{attribute}"):
-                baseline_run, baseline_red, resolved = self._run(test_path)
+            guard = f"{module_name}.{attribute}"
+            baseline_run, baseline_red, resolved = self._run(test_path)
+            with self.subTest(guard=guard, phase="baseline"):
                 self.assertTrue(resolved, f"registered dying test does not exist: {test_path}")
                 self.assertEqual(baseline_run, 1, "the dying test must be exactly one case")
                 self.assertEqual(baseline_red, 0, "the dying test must be green before mutation")
 
-                module = importlib.import_module(module_name)
-                mutant = self._neutered(attribute)
-                patches = [mock.patch.object(module, attribute, mutant)]
-                # Callers bind these symbols directly, so the caller's name must be patched too or
-                # the mutation silently does nothing (this exact mistake produced a false "no dying
-                # test" reading during review).
-                for consumer_name in (rel.replace("/", ".")[:-3] for rel in LANE_FILES):
-                    consumer = importlib.import_module(consumer_name)
-                    if getattr(consumer, attribute, None) is not None:
-                        patches.append(mock.patch.object(consumer, attribute, mutant))
-                for patch in patches:
-                    patch.start()
-                try:
-                    mutated_run, mutated_red, _ = self._run(test_path)
-                finally:
-                    for patch in reversed(patches):
-                        patch.stop()
+            module = importlib.import_module(module_name)
+            mutant = self._neutered(attribute)
+            patches = [mock.patch.object(module, attribute, mutant)]
+            # Callers bind these symbols directly, so the caller's name must be patched too or
+            # the mutation silently does nothing (this exact mistake produced a false "no dying
+            # test" reading during review).
+            for consumer_name in (rel.replace("/", ".")[:-3] for rel in LANE_FILES):
+                consumer = importlib.import_module(consumer_name)
+                if getattr(consumer, attribute, None) is not None:
+                    patches.append(mock.patch.object(consumer, attribute, mutant))
+            for patch in patches:
+                patch.start()
+            try:
+                mutated_run, mutated_red, _ = self._run(test_path)
+            finally:
+                for patch in reversed(patches):
+                    patch.stop()
+            with self.subTest(guard=guard, phase="planted_failure"):
                 self.assertEqual(mutated_run, 1)
                 self.assertGreater(mutated_red, 0, f"neutering {attribute} broke no test in {test_path}")
 

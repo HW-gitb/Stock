@@ -61,6 +61,27 @@ def _validate(manifest: Any) -> dict[str, Any]:
         raise CapstoneCheckpointError("capstone checkpoint stage names must be unique")
     if any(name not in names for name in stage_names):
         raise CapstoneCheckpointError("capstone checkpoint contains a stage outside its pipeline contract")
+    contracts = {row["name"]: row for row in manifest["pipeline_contract"]}
+    for row in manifest["stages"]:
+        contract = contracts[row["name"]]
+        for field in ("contract_version", "reuse_policy", "failure_policy", "output_policy", "checkpoint_policy"):
+            if row[field] != contract[field]:
+                raise CapstoneCheckpointError(
+                    f"capstone checkpoint stage policy mismatch for {row['name']}: {field}"
+                )
+        if row["output_availability"] == "unavailable":
+            if contract["checkpoint_policy"] != "optional_result_only" or contract["output_policy"] != "optional":
+                raise CapstoneCheckpointError(
+                    f"unavailable checkpoint output is not permitted for mandatory stage {row['name']}"
+                )
+            if row["output_manifest"]:
+                raise CapstoneCheckpointError(
+                    f"unavailable checkpoint stage {row['name']} must not carry an artifact manifest"
+                )
+        elif row["output_availability"] == "available" and not row["output_manifest"]:
+            raise CapstoneCheckpointError(
+                f"available checkpoint stage {row['name']} must carry an artifact manifest"
+            )
     return manifest
 
 
@@ -70,6 +91,9 @@ def pipeline_contract(stages) -> list[dict[str, str]]:
             "name": stage.name,
             "contract_version": stage.contract_version,
             "reuse_policy": stage.reuse_policy,
+            "failure_policy": getattr(stage, "failure_policy", "strict"),
+            "output_policy": getattr(stage, "output_policy", "required"),
+            "checkpoint_policy": getattr(stage, "checkpoint_policy", "required"),
         }
         for stage in stages
     ]
@@ -108,7 +132,7 @@ def create_manifest(
     ).resolve()
     manifest = {
         "schema_name": "us_short_weekly_capstone_checkpoint_manifest",
-        "schema_version": "1.0.0",
+        "schema_version": "1.1.0",
         "checkpoint_id": checkpoint_id,
         "decision_date": decision_date,
         "price_basis_date": price_basis_date,
@@ -155,8 +179,12 @@ def _write_manifest(path: Path, manifest: dict[str, Any]) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
     tmp = path.with_suffix(path.suffix + ".tmp")
     _guard_private(tmp)
-    tmp.write_bytes(_json_bytes(manifest) + b"\n")
-    os.replace(tmp, path)
+    try:
+        tmp.write_bytes(_json_bytes(manifest) + b"\n")
+        os.replace(tmp, path)
+    except Exception:
+        tmp.unlink(missing_ok=True)
+        raise
 
 
 def _logical_manifest(paths: list[Path], logical_paths: list[str]) -> list[dict[str, str]]:
@@ -174,6 +202,7 @@ def record_stage(
     *, manifest_path: Path, manifest: dict[str, Any], stage, execution_mode: str,
     generated_at: str, observed_at: str | None, input_paths: list[Path], input_logical_paths: list[str],
     output_paths: list[Path], output_logical_paths: list[str], result: dict[str, Any],
+    allow_unavailable: bool = False,
 ) -> dict[str, Any]:
     if execution_mode not in {"executed", "reused", "refreshed_equivalent"}:
         raise CapstoneCheckpointError("checkpoint execution_mode is invalid")
@@ -182,47 +211,108 @@ def record_stage(
         raise CapstoneCheckpointError("checkpoint output/logical-path counts differ")
     bundle_root = Path(manifest_path).resolve().parent
     output_manifest = []
-    for index, (source, logical) in enumerate(zip(output_paths, output_logical_paths), start=1):
-        source = Path(source)
-        if not source.is_file():
-            raise CapstoneCheckpointError(f"cannot checkpoint missing stage output: {logical}")
-        safe_name = source.name.replace("..", "_")
-        relative = Path("artifacts") / stage.name / f"{index:02d}_{safe_name}"
-        destination = bundle_root / relative
-        _guard_private(destination)
-        destination.parent.mkdir(parents=True, exist_ok=True)
-        tmp = destination.with_suffix(destination.suffix + ".tmp")
-        _guard_private(tmp)
-        shutil.copyfile(source, tmp)
-        os.replace(tmp, destination)
-        digest = _sha256_file(source)
-        if _sha256_file(destination) != digest:
-            raise CapstoneCheckpointError("checkpoint bundle copy digest mismatch")
-        output_manifest.append({
-            "logical_path": logical,
-            "bundle_path": relative.as_posix(),
-            "sha256": digest,
-        })
-    row = {
-        "name": stage.name,
-        "contract_version": stage.contract_version,
-        "reuse_policy": stage.reuse_policy,
-        "execution_mode": execution_mode,
-        "generated_at": generated_at,
-        "observed_at": observed_at,
-        "input_manifest": input_manifest,
-        "output_manifest": output_manifest,
-        "result": deepcopy(result),
-        "result_sha256": hashlib.sha256(_json_bytes(result)).hexdigest(),
-    }
-    updated = deepcopy(manifest)
-    updated["stages"] = [existing for existing in updated["stages"] if existing["name"] != stage.name]
-    updated["stages"].append(row)
-    order = {contract["name"]: index for index, contract in enumerate(updated["pipeline_contract"])}
-    updated["stages"].sort(key=lambda item: order[item["name"]])
-    updated["updated_at"] = datetime.now(timezone.utc).isoformat(timespec="seconds")
-    _write_manifest(Path(manifest_path), updated)
-    return updated
+    created_paths: list[Path] = []
+    temporary_paths: list[Path] = []
+    replaced_backups: list[tuple[Path, Path]] = []
+    missing_outputs = [
+        logical for source, logical in zip(output_paths, output_logical_paths)
+        if not Path(source).is_file()
+    ]
+    if missing_outputs and not allow_unavailable:
+        raise CapstoneCheckpointError(f"cannot checkpoint missing stage output: {missing_outputs[0]}")
+    output_sources = () if missing_outputs else zip(output_paths, output_logical_paths)
+    try:
+        for index, (source, logical) in enumerate(output_sources, start=1):
+            source = Path(source)
+            if not source.is_file():
+                missing_outputs.append(logical)
+                continue
+            safe_name = source.name.replace("..", "_")
+            relative = Path("artifacts") / stage.name / f"{index:02d}_{safe_name}"
+            destination = bundle_root / relative
+            _guard_private(destination)
+            destination.parent.mkdir(parents=True, exist_ok=True)
+            tmp = destination.with_suffix(destination.suffix + ".tmp")
+            _guard_private(tmp)
+            temporary_paths.append(tmp)
+            existed = destination.exists()
+            backup = destination.with_suffix(destination.suffix + ".rollback")
+            if existed:
+                _guard_private(backup)
+                backup.unlink(missing_ok=True)
+                os.replace(destination, backup)
+                replaced_backups.append((destination, backup))
+            shutil.copyfile(source, tmp)
+            os.replace(tmp, destination)
+            temporary_paths.remove(tmp)
+            if not existed:
+                created_paths.append(destination)
+            digest = _sha256_file(source)
+            if _sha256_file(destination) != digest:
+                raise CapstoneCheckpointError("checkpoint bundle copy digest mismatch")
+            output_manifest.append({
+                "logical_path": logical,
+                "bundle_path": relative.as_posix(),
+                "sha256": digest,
+            })
+        if missing_outputs and getattr(stage, "checkpoint_policy", "required") != "optional_result_only":
+            raise CapstoneCheckpointError(
+                f"stage '{stage.name}' cannot checkpoint unavailable output under its strict policy"
+            )
+        if allow_unavailable and (missing_outputs or not output_paths):
+            output_availability = "unavailable"
+            output_manifest = []
+        elif output_manifest:
+            output_availability = "available"
+        else:
+            output_availability = "none"
+        row = {
+            "name": stage.name,
+            "contract_version": stage.contract_version,
+            "reuse_policy": stage.reuse_policy,
+            "failure_policy": getattr(stage, "failure_policy", "strict"),
+            "output_policy": getattr(stage, "output_policy", "required"),
+            "checkpoint_policy": getattr(stage, "checkpoint_policy", "required"),
+            "execution_mode": execution_mode,
+            "generated_at": generated_at,
+            "observed_at": observed_at,
+            "input_manifest": input_manifest,
+            "output_manifest": output_manifest,
+            "output_availability": output_availability,
+            "result": deepcopy(result),
+            "result_sha256": hashlib.sha256(_json_bytes(result)).hexdigest(),
+        }
+        updated = deepcopy(manifest)
+        updated["stages"] = [existing for existing in updated["stages"] if existing["name"] != stage.name]
+        updated["stages"].append(row)
+        order = {contract["name"]: index for index, contract in enumerate(updated["pipeline_contract"])}
+        updated["stages"].sort(key=lambda item: order[item["name"]])
+        updated["updated_at"] = datetime.now(timezone.utc).isoformat(timespec="seconds")
+        _write_manifest(Path(manifest_path), updated)
+        for _destination, backup in replaced_backups:
+            try:
+                backup.unlink(missing_ok=True)
+            except OSError:
+                # The manifest is already the commit point; an old backup is
+                # harmless and can be pruned on the next checkpoint write.
+                pass
+        return updated
+    except Exception:
+        for temporary in temporary_paths:
+            temporary.unlink(missing_ok=True)
+        for created in created_paths:
+            created.unlink(missing_ok=True)
+        for destination, backup in reversed(replaced_backups):
+            destination.unlink(missing_ok=True)
+            if backup.exists():
+                os.replace(backup, destination)
+        stage_dir = bundle_root / "artifacts" / stage.name
+        if stage_dir.is_dir() and not any(stage_dir.iterdir()):
+            stage_dir.rmdir()
+        artifacts_dir = bundle_root / "artifacts"
+        if artifacts_dir.is_dir() and not any(artifacts_dir.iterdir()):
+            artifacts_dir.rmdir()
+        raise
 
 
 def _without_observation_clocks(value: Any) -> Any:
@@ -283,6 +373,11 @@ def restore_stage(
 ) -> tuple[dict[str, Any], str, str | None] | None:
     if stage.reuse_policy != "frozen_inputs":
         return None
+    # An artifact-less optional checkpoint is a diagnostic record only.  The
+    # reuse gate rejects it by policy, never merely because a file happens to
+    # be absent (mandatory stages remain strict below).
+    if getattr(stage, "checkpoint_policy", "required") != "required":
+        return None
     if len(output_paths) != len(output_logical_paths):
         raise CapstoneCheckpointError("checkpoint output/logical-path counts differ")
     row = next((item for item in source_manifest["stages"] if item["name"] == stage.name), None)
@@ -294,6 +389,8 @@ def restore_stage(
     if current_inputs != row["input_manifest"]:
         return None
     if [item["logical_path"] for item in row["output_manifest"]] != output_logical_paths:
+        return None
+    if row["output_availability"] != "available":
         return None
     if hashlib.sha256(_json_bytes(row["result"])).hexdigest() != row["result_sha256"]:
         raise CapstoneCheckpointError(f"checkpoint result digest mismatch for stage {stage.name}")
