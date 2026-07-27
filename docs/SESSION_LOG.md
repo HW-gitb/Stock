@@ -1,5 +1,12 @@
 # Session Log
 
+## 2026-07-27 — Claude Code 审查 FAIL (bounded test-process governance `1a4b3fa5`/`f78e7213`)
+
+- **Verdict/Action**: FAIL，三条 Required。新的 300 秒 focused 硬上限低于一个实测 477 秒的既有绿包，导致被强制的入口对它只能给 TIMEOUT；启动器删掉的 `import jsonschema` 探针是四个模块「静默 skip」的唯一防线，而同一提交新写的 AGENTS 断言与树里事实相反；我自己上一轮加的 rule 7 墙钟门只在带该提交的树里生效，本轮就没生效。未提交被审代码。
+- **Required**: `R-GOV-BOUNDED-TEST-CAPS-AND-SILENT-SKIP`(GOV-R1/R2/R3 + GOV-O1)。完整成因/实测/修法见 `system_risk_register.md`(单一来源，本处不复述)。
+- **Verify**: review-evidence:838795ceedf2。亲跑变更文件的超集包 `test_bounded_unittest + test_full_pack_ledger + test_review_tiering_enforcement + test_claude_review_gate + test_doc_governance_guard + test_a_short_preflight` = `95 OK`(另有 bounded runner 自身派生的 `3 OK`)，exit 0。477 秒那条为本会话在 017a 亲测。全量包未跑(用户指令 + rule 8，治理面无 §6a 触发)。本轮 gate 由旧副本 arm，故无计时；此事本身即 GOV-R3。
+- **Next**: Codex：修复 GOV-R1/R2/R3；GOV-O1 可一并处理。
+
 ## 2026-07-27 — Claude Code 治理更新 (rule 7 墙钟硬门 + gate 两处静默失效)
 
 - **Verdict/Action**: 用户认定「一刀审查 50 分钟不可接受」，要求写进系统而非记忆。`AGENTS.md §Verification tiering` 新增 **rule 7 审查执行调度**：(a) 第二条命令就后台起本轮唯一最慢的超集包再读代码 (b) 只跑超集、禁跑其子集 (c) 同时只跑一个重包 (d) 测试红了先扫 gitignored 残留再怀疑代码 (e) 一件事只确认一次；目标 10–15 分钟、硬上限 30 分钟。同时删掉 `.tools/verify_doc_process.cmd` 在 review 路径上的重复调用（收尾已跑一次 doc guard）。
