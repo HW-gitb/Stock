@@ -9,6 +9,8 @@ if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
 from engine.us_short_symbol_cooldown_state import (  # noqa: E402
+    SymbolCooldownStateError,
+    _validate_evidence_ref,
     build_next_symbol_cooldown_state,
     load_symbol_cooldown_state,
     resolve_symbol_cooldowns,
@@ -22,6 +24,12 @@ def _reconciliation(events, as_of="20260615"):
 
 
 class SymbolCooldownStateTests(unittest.TestCase):
+    def test_evidence_ref_allows_only_declared_optional_as_of(self):
+        _validate_evidence_ref({"kind": "source_id", "value": "x"}, "test")
+        _validate_evidence_ref({"kind": "source_id", "value": "x", "as_of": "20260615"}, "test")
+        with self.assertRaises(SymbolCooldownStateError):
+            _validate_evidence_ref({"kind": "source_id", "value": "x", "rogue": True}, "test")
+
     def test_unfilled_breakout_never_creates_a_cooldown_reconciliation_event(self):
         reconciliation = _build_symbol_cooldown_reconciliation(
             [{"ticker": "AAA", "decision_date": "20260615", "suggested_action": "建仓",

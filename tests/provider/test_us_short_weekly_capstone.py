@@ -28,12 +28,12 @@ _STAGE_NAMES = [
     "universe_fetch", "momentum_fetch", "overextension_producer", "momentum_producer", "sic_fetch",
     "soft_discovery", "theme_producer",
     "projection_inputs", "pass2_preflight", "yfinance_grades_fetch", "pass2_fetch", "vix_regime", "forward_policy_shadow",
-    "forward_policy_corporate_actions", "forward_policy_maturity", "weekly_bridge",
+    "forward_policy_corporate_actions", "forward_policy_maturity", "soft_boost_comparison_maturity", "soft_boost_comparison_capture", "weekly_bridge",
 ]
 _RECEIPT_STAGE_NAMES = tuple(
     name for name in _STAGE_NAMES if name not in {
         "soft_discovery", "forward_policy_shadow", "forward_policy_corporate_actions",
-        "forward_policy_maturity", "weekly_bridge",
+        "forward_policy_maturity", "soft_boost_comparison_maturity", "soft_boost_comparison_capture", "weekly_bridge",
     }
 )
 
@@ -249,6 +249,8 @@ class CapstoneFakeChainTest(unittest.TestCase):
                 ],
                 "forward_policy_corporate_actions": lambda c: [],
                 "forward_policy_maturity": lambda c: [],
+                "soft_boost_comparison_maturity": lambda c: [],
+                "soft_boost_comparison_capture": lambda c: [c.soft_boost_pairwise_ledger_path],
                 "weekly_bridge": lambda c: [
                     (c.official_output_root or c.private_root) / "weekly_private" / c.decision_date / "weekly_report.md",
                     (c.official_output_root or c.private_root) / "weekly_private" / c.decision_date / "action_table.csv",
@@ -300,6 +302,8 @@ class CapstoneFakeChainTest(unittest.TestCase):
                 name, gated, ins, outs, make_run(name, outs),
                 best_effort=name in {
                     "forward_policy_shadow", "forward_policy_corporate_actions", "forward_policy_maturity",
+                    "soft_boost_comparison_maturity",
+                    "soft_boost_comparison_capture",
                 },
             ))
         return stages
@@ -1280,6 +1284,8 @@ class CapstoneStageAuthAndSourceBindingTest(unittest.TestCase):
                 "gated": False,
                 "best_effort": name in {
                     "forward_policy_shadow", "forward_policy_corporate_actions", "forward_policy_maturity",
+                    "soft_boost_comparison_maturity",
+                    "soft_boost_comparison_capture",
                 },
                 "result": provider_results.get(name, {}),
             }

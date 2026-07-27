@@ -15,9 +15,11 @@ from __future__ import annotations
 
 import hashlib
 import json
+import math
 from pathlib import Path
 from typing import Any
 
+import jsonschema
 from engine.us_short_eligibility_gate import load_eligibility_governance
 from engine.us_short_forward_policy_comparison_ledger import (
     comparison_banner_from_private_ledger_path,
@@ -37,6 +39,13 @@ from engine.us_short_forward_policy_source_capture import (
 )
 from engine.us_short_market_calendar import load_market_calendar, sessions_for_window
 from engine.us_short_run_origin import require_research_live_provider_summary
+from engine.us_short_soft_boost_comparison_adjudication import (
+    SoftBoostComparisonAdjudicationError, append_pairwise_capture, apply_maturity_observations,
+    build_adjudication_receipt, build_pairwise_capture, evaluate_pairwise_ledger, persist_pairwise_ledger,
+    read_pairwise_ledger,
+)
+from engine import us_short_soft_boost_consumption as _soft_boost_consumption
+from engine.us_short_forward_policy_source_capture import _validated_ohlcv_packet
 from engine.us_short_regime import REGIMES, UNKNOWN
 from runners import us_short_batch5_full_candidate_live_source_packet as _pass2
 from runners import us_short_batch5_full_candidate_pass2_preflight as _preflight
@@ -530,6 +539,257 @@ def run_forward_policy_maturity(ctx) -> dict[str, Any]:
     }
 
 
+def run_soft_boost_comparison_capture(ctx) -> dict[str, Any]:
+    """Advance the private 4c comparison clock once per real decision week.
+
+    Capture is receipt-bound and does not manufacture H10 outcomes.  Matured
+    observations are optional local, source-bound inputs from a later maturity
+    workflow; absent observations leave the capture visibly unmatured.
+    """
+    try:
+        consumption_raw = ctx.soft_boost_consumption_receipt_path.read_bytes()
+        shadow_raw = ctx.soft_boost_shadow_receipt_path.read_bytes()
+        consumption = json.loads(consumption_raw.decode("utf-8"))
+        shadow = json.loads(shadow_raw.decode("utf-8"))
+        _soft_boost_consumption._validate(
+            consumption, _soft_boost_consumption.CONSUMPTION_SCHEMA, label="current K4b consumption receipt",
+        )
+        _soft_boost_consumption._validate(
+            shadow, _soft_boost_consumption.SHADOW_SCHEMA, label="current K4b shadow receipt",
+        )
+        if (not isinstance(consumption, dict) or not isinstance(shadow, dict)
+                or consumption.get("decision_date") != ctx.decision_date
+                or shadow.get("decision_date") != ctx.decision_date
+                or not isinstance(shadow.get("on_top15"), list) or not isinstance(shadow.get("off_top15"), list)):
+            raise SoftBoostComparisonAdjudicationError("current K4b receipts are not source-bound to this decision")
+        capture = build_pairwise_capture(
+            decision_date=ctx.decision_date,
+            consumption_receipt_sha256=hashlib.sha256(consumption_raw).hexdigest(),
+            shadow_receipt_sha256=hashlib.sha256(shadow_raw).hexdigest(),
+            divergent=set(shadow["on_top15"]) != set(shadow["off_top15"]),
+        )
+        ledger = append_pairwise_capture(read_pairwise_ledger(ctx.soft_boost_pairwise_ledger_path), capture)
+        observations = []
+        pending_dates = {record["decision_date"] for record in ledger["records"] if not record["matured"]}
+        if ctx.soft_boost_maturity_observation_root.is_dir():
+            for path in sorted(ctx.soft_boost_maturity_observation_root.glob("*.json")):
+                observation = json.loads(path.read_text(encoding="utf-8"))
+                if isinstance(observation, dict) and observation.get("decision_date") in pending_dates:
+                    observations.append(observation)
+        if observations:
+            ledger = apply_maturity_observations(ledger, observations, maturity_as_of=ctx.decision_date)
+        persist_pairwise_ledger(ctx.soft_boost_pairwise_ledger_path, ledger)
+        result = evaluate_pairwise_ledger(ledger)
+        if result["formal_look"] is not None:
+            receipt = build_adjudication_receipt(ctx.soft_boost_pairwise_ledger_path, decision_date=ctx.decision_date)
+            path = ctx.soft_boost_adjudication_receipt_path
+            if path.exists() and json.loads(path.read_text(encoding="utf-8")) != receipt:
+                raise SoftBoostComparisonAdjudicationError("immutable adjudication receipt conflicts with current ledger")
+            if not path.exists():
+                path.parent.mkdir(parents=True, exist_ok=True)
+                path.write_text(json.dumps(receipt, ensure_ascii=False, sort_keys=True, separators=(",", ":")), encoding="utf-8")
+        return {"status": result["status"], "captured_week_count": ledger["captured_week_count"],
+                "matured_week_count": ledger["matured_week_count"],
+                "eligible_divergence_week_count": ledger["eligible_divergence_week_count"],
+                "formal_look": result["formal_look"]}
+    except (OSError, UnicodeDecodeError, ValueError, SoftBoostComparisonAdjudicationError) as exc:
+        raise ValueError("soft-boost comparison capture rejected") from exc
+
+
+def _soft_boost_maturity_metrics(packet: object, *, tickers: list[str], decision_date: str) -> tuple[dict[str, float], dict[str, str]] | None:
+    """Return an equal-weight, ten-session held-basket outcome or no observation.
+
+    The first usable session on/after the frozen decision is entry; the tenth
+    subsequent session is exit.  Missing bars, non-finite prices, or malformed
+    series are no-count rather than fabricated zero metrics.
+    """
+    packet = _validated_ohlcv_packet(packet)
+    if packet["series_contract"].get("adjustment_mode") not in {"split_adjusted", "split_dividend_adjusted"}:
+        return None
+    entry_iso = f"{decision_date[:4]}-{decision_date[4:6]}-{decision_date[6:]}"
+    outcomes, drawdowns = [], []
+    window: dict[str, str] | None = None
+    for ticker in tickers:
+        series = packet["series_by_ticker"].get(ticker)
+        points = series.get("points") if isinstance(series, dict) else None
+        if not isinstance(points, list):
+            return None
+        usable = [point for point in points if isinstance(point, dict) and point.get("date", "") >= entry_iso]
+        if len(usable) < 11:
+            return None
+        bars = usable[:11]
+        if any(not isinstance(bar.get("close"), (int, float)) or isinstance(bar.get("close"), bool)
+               or not math.isfinite(bar["close"]) or bar["close"] <= 0 for bar in bars):
+            return None
+        if any(bars[index]["date"] >= bars[index + 1]["date"] for index in range(10)):
+            return None
+        closes = [float(bar["close"]) for bar in bars]
+        outcomes.append(closes[-1] / closes[0] - 1.0)
+        peak, drawdown = closes[0], 0.0
+        for close in closes:
+            peak = max(peak, close)
+            drawdown = max(drawdown, (peak - close) / peak)
+        drawdowns.append(drawdown)
+        candidate_window = {"window_start": bars[0]["date"], "h10_session_date": bars[-1]["date"]}
+        if window is None:
+            window = candidate_window
+        elif window != candidate_window:
+            # Different ticker calendars make a common H10 basket unevaluable.
+            return None
+    if not outcomes or window is None:
+        return None
+    return ({
+        "net_return": sum(outcomes) / len(outcomes), "max_drawdown": sum(drawdowns) / len(drawdowns),
+        "bad_pick_rate": sum(outcome < 0.0 for outcome in outcomes) / len(outcomes),
+        "tail_loss": max(0.0, -min(outcomes)), "fill_fraction": 1.0,
+    }, window)
+
+
+def _soft_boost_basket_turnover(*, current: list[str], previous: list[str]) -> float | None:
+    """Return adjacent-week basket replacement rate; absent prior basket is no-count."""
+    current_set, previous_set = set(current), set(previous)
+    if not current_set or not previous_set:
+        return None
+    return 1.0 - len(current_set & previous_set) / max(len(current_set), len(previous_set))
+
+
+def _soft_boost_maturity_vix_regime(ctx) -> tuple[str | None, str | None]:
+    """Bind maturity to the capstone VIX axis; unknown/missing is deliberately unevaluable."""
+    try:
+        raw = ctx.vix_regime_summary_path.read_bytes()
+        summary = json.loads(raw.decode("utf-8"))
+    except (AttributeError, OSError, UnicodeDecodeError, ValueError):
+        return None, None
+    regime = summary.get("vix_regime") if isinstance(summary, dict) else None
+    if regime not in REGIMES or summary.get("vix_regime_is_unknown") is not False:
+        return None, hashlib.sha256(raw).hexdigest()
+    return regime, hashlib.sha256(raw).hexdigest()
+
+
+def _write_immutable_private_json(path: Path, payload: dict[str, Any]) -> bytes:
+    raw = json.dumps(payload, ensure_ascii=False, sort_keys=True, separators=(",", ":")).encode("utf-8")
+    if path.exists():
+        if path.read_bytes() != raw:
+            raise ValueError("immutable soft-boost maturity receipt conflicts with existing evidence")
+        return raw
+    path.parent.mkdir(parents=True, exist_ok=True)
+    temporary = path.with_name(path.name + ".tmp")
+    temporary.write_bytes(raw)
+    temporary.replace(path)
+    return raw
+
+
+def run_soft_boost_comparison_maturity(ctx) -> dict[str, Any]:
+    """Produce source-bound K4C H10 observations from already-fetched local OHLCV only."""
+    try:
+        ledger = read_pairwise_ledger(ctx.soft_boost_pairwise_ledger_path)
+        if ledger is None:
+            return {"maturity_as_of": ctx.decision_date, "matured_observations_written": 0, "whole_week_no_count": 0}
+        raw_packet = ctx.ohlcv_series_packet_path.read_bytes()
+        packet = json.loads(raw_packet.decode("utf-8"))
+        _validated_ohlcv_packet(packet)
+        if packet["decision_clock"].get("expected_decision_date") != ctx.decision_date:
+            raise ValueError("soft-boost maturity packet clock mismatch")
+        vix_regime, vix_regime_sha256 = _soft_boost_maturity_vix_regime(ctx)
+        observation_root = ctx.soft_boost_maturity_observation_root
+        receipt_root = observation_root.parent / "soft_boost_maturity_receipts"
+        written = no_count = 0
+        receipt_schema = json.loads((Path(__file__).resolve().parents[1] / "schemas" / "us_short_soft_boost_maturity_receipt.schema.json").read_text(encoding="utf-8"))
+        non_overlap_until = None
+        for prior in ledger["records"]:
+            if not (prior["matured"] and prior["eligible"] and prior["non_overlap_h10_block"]):
+                continue
+            for path in receipt_root.glob(f"us_short_soft_boost_maturity_receipt_{prior['decision_date']}_*.json"):
+                raw = path.read_bytes()
+                if hashlib.sha256(raw).hexdigest() != prior["maturity_receipt_sha256"]:
+                    continue
+                candidate = json.loads(raw.decode("utf-8"))
+                jsonschema.validate(candidate, receipt_schema)
+                if candidate["status"] == "matured":
+                    non_overlap_until = max(non_overlap_until or "", candidate["window"]["h10_session_date"])
+        for index, record in enumerate(ledger["records"]):
+            date = record["decision_date"]
+            if record["matured"] or date >= ctx.decision_date or (observation_root / f"{date}.json").exists():
+                continue
+            consumption_path = ctx.soft_boost_consumption_receipt_path.parent / f"us_short_soft_boost_consumption_receipt_{date}.json"
+            shadow_path = ctx.soft_boost_shadow_receipt_path.parent / f"us_short_soft_boost_shadow_receipt_{date}.json"
+            consumption_raw, shadow_raw = consumption_path.read_bytes(), shadow_path.read_bytes()
+            consumption = json.loads(consumption_raw.decode("utf-8"))
+            shadow = json.loads(shadow_raw.decode("utf-8"))
+            _soft_boost_consumption._validate(consumption, _soft_boost_consumption.CONSUMPTION_SCHEMA, label="maturity K4b consumption receipt")
+            _soft_boost_consumption._validate(shadow, _soft_boost_consumption.SHADOW_SCHEMA, label="maturity K4b shadow receipt")
+            if (consumption.get("decision_date") != date or shadow.get("decision_date") != date
+                    or hashlib.sha256(consumption_raw).hexdigest() != record["consumption_receipt_sha256"]
+                    or hashlib.sha256(shadow_raw).hexdigest() != record["shadow_receipt_sha256"]):
+                raise ValueError("soft-boost maturity source receipt binding mismatch")
+            on, off = list(shadow["on_top15"]), list(shadow["off_top15"])
+            prior_shadow = None
+            if index:
+                prior = ledger["records"][index - 1]
+                prior_shadow_path = ctx.soft_boost_shadow_receipt_path.parent / f"us_short_soft_boost_shadow_receipt_{prior['decision_date']}.json"
+                prior_shadow_raw = prior_shadow_path.read_bytes()
+                prior_shadow = json.loads(prior_shadow_raw.decode("utf-8"))
+                _soft_boost_consumption._validate(prior_shadow, _soft_boost_consumption.SHADOW_SCHEMA, label="maturity prior K4b shadow receipt")
+                if (prior_shadow.get("decision_date") != prior["decision_date"]
+                        or hashlib.sha256(prior_shadow_raw).hexdigest() != prior["shadow_receipt_sha256"]):
+                    raise ValueError("soft-boost maturity prior shadow binding mismatch")
+            on_result = _soft_boost_maturity_metrics(packet, tickers=on, decision_date=date)
+            off_result = _soft_boost_maturity_metrics(packet, tickers=off, decision_date=date)
+            on_turnover = _soft_boost_basket_turnover(current=on, previous=list(prior_shadow["on_top15"])) if prior_shadow else None
+            off_turnover = _soft_boost_basket_turnover(current=off, previous=list(prior_shadow["off_top15"])) if prior_shadow else None
+            receipt = {
+                "schema_name": "us_short_soft_boost_maturity_receipt", "schema_version": "1.0.0",
+                "decision_date": date, "maturity_as_of": ctx.decision_date,
+                "consumption_receipt_sha256": record["consumption_receipt_sha256"],
+                "shadow_receipt_sha256": record["shadow_receipt_sha256"],
+                "maturity_ohlcv_packet_sha256": hashlib.sha256(raw_packet).hexdigest(),
+                "vix_regime_summary_sha256": vix_regime_sha256, "market_risk_regime": vix_regime,
+                "status": "matured" if on_result is not None and off_result is not None and on_turnover is not None and off_turnover is not None and vix_regime is not None else "whole_week_no_count",
+            }
+            if receipt["status"] != "matured":
+                receipt["reason_code"] = ("VIX_REGIME_UNAVAILABLE" if vix_regime is None else
+                                          "ADJACENT_BASKET_TURNOVER_UNAVAILABLE" if on_turnover is None or off_turnover is None else
+                                          "H10_WINDOW_OR_ADJUSTMENT_UNAVAILABLE")
+                receipt["window"] = None
+                receipt["on"] = receipt["off"] = None
+                no_count += 1
+            else:
+                on_metrics, on_window = on_result
+                off_metrics, off_window = off_result
+                if on_window != off_window:
+                    raise ValueError("soft-boost ON/OFF maturity windows differ")
+                receipt["reason_code"] = None
+                receipt["window"] = on_window
+                on_metrics["turnover"], off_metrics["turnover"] = on_turnover, off_turnover
+                receipt["on"], receipt["off"] = on_metrics, off_metrics
+                jsonschema.validate(receipt, receipt_schema)
+                observation_root.mkdir(parents=True, exist_ok=True)
+                observation = {
+                    "decision_date": date, "consumption_receipt_sha256": record["consumption_receipt_sha256"],
+                    "shadow_receipt_sha256": record["shadow_receipt_sha256"],
+                    "maturity_receipt_sha256": "0" * 64, "market_risk_regime": vix_regime,
+                    "eligible": bool(record["divergent"] and on and off),
+                    "non_overlap_h10_block": bool(non_overlap_until is None or on_window["window_start"] > non_overlap_until),
+                    **{f"on_{key}": value for key, value in on_metrics.items()},
+                    **{f"off_{key}": value for key, value in off_metrics.items()},
+                }
+                receipt_path = receipt_root / f"us_short_soft_boost_maturity_receipt_{date}_{ctx.decision_date}_matured.json"
+                observation["maturity_receipt_sha256"] = hashlib.sha256(_write_immutable_private_json(receipt_path, receipt)).hexdigest()
+                _write_immutable_private_json(observation_root / f"{date}.json", observation)
+                if observation["non_overlap_h10_block"]:
+                    non_overlap_until = on_window["h10_session_date"]
+                written += 1
+                continue
+            jsonschema.validate(receipt, receipt_schema)
+            _write_immutable_private_json(
+                receipt_root / (f"us_short_soft_boost_maturity_receipt_{date}_{ctx.decision_date}_"
+                                f"{receipt['maturity_ohlcv_packet_sha256'][:12]}_"
+                                f"{(vix_regime_sha256 or 'vix_unavailable')[:12]}_whole_week_no_count.json"), receipt)
+        return {"maturity_as_of": ctx.decision_date, "matured_observations_written": written, "whole_week_no_count": no_count}
+    except (OSError, UnicodeDecodeError, ValueError, jsonschema.ValidationError, SoftBoostComparisonAdjudicationError) as exc:
+        raise ValueError("soft-boost comparison maturity rejected") from exc
+
+
 def run_weekly_bridge(ctx) -> dict[str, Any]:
     """Derive HONEST provider_health from the actual Pass2 outcome, then bridge the source packet → weekly report /
     action table. provider_health is NOT hand-written: fmp = ok iff >=_HEALTH_MIN_SUCCESS_COVERAGE of grades calls
@@ -550,6 +810,18 @@ def run_weekly_bridge(ctx) -> dict[str, Any]:
     comparison_reminder = comparison_banner_from_private_ledger_path(
         ctx.forward_policy_comparison_ledger_path,
     )
+    soft_paths = None
+    if ctx.theme_soft_boost_enabled and ctx.soft_discovery_run_result is not None:
+        soft_paths = {
+            "stage_receipt_path": str(ctx.soft_discovery_receipt_path),
+            "consumption_receipt_path": str(ctx.soft_boost_consumption_receipt_path),
+            "shadow_receipt_path": str(ctx.soft_boost_shadow_receipt_path),
+            "comparison_ledger_path": str(ctx.soft_boost_pairwise_ledger_path
+                                           if ctx.soft_boost_pairwise_ledger_path.is_file()
+                                           else ctx.soft_boost_comparison_ledger_path),
+            "adjudication_receipt_path": (str(ctx.soft_boost_adjudication_receipt_path)
+                                           if ctx.soft_boost_adjudication_receipt_path.is_file() else None),
+        }
     return _bridge.run_e2e(
         source_packet_path=ctx.source_packet_path,
         batch4_template_path=ctx.batch4_template_path,
@@ -567,6 +839,7 @@ def run_weekly_bridge(ctx) -> dict[str, Any]:
         generated_at=ctx.generated_at,
         vix_regime=vix_regime,
         forward_policy_comparison_reminder=comparison_reminder,
+        soft_discovery_receipt_paths=soft_paths,
         projection_binding_expectations=_bridge.FULL_CANDIDATE_LIVE_PROJECTION_BINDING,
     )
 

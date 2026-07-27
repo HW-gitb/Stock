@@ -9,7 +9,8 @@ the existing bar for a discovered theme in any non-active lifecycle, so nothing 
 """
 import unittest
 
-from engine.us_short_theme_selection import strong_theme_leader_upgrades, theme_seat_plan
+from engine.us_short_theme_selection import (ThemeSelectionError, validate_theme_selection_contract,
+                                             strong_theme_leader_upgrades, theme_seat_plan)
 
 
 def _meta(*, source="industry_heat_v1", lifecycle="confirmed_active", market_confirmed=True,
@@ -27,6 +28,23 @@ def _ranked(metadata):
 
 
 class ThemeSelectionProvisionalGateTest(unittest.TestCase):
+    def test_contract_allows_only_hot_excluded_audit_optional_key(self):
+        row = _meta()
+        row["macro_cluster"] = "test_cluster"
+        contract = {"as_of": "20260615", "mode": "industry_heat_v1_cross_industry_disabled",
+                    "cross_industry_provisional_enabled": False, "theme_opportunity_state": "no_strong_theme",
+                    "per_ticker": {"X": row}}
+        validated = validate_theme_selection_contract(contract, expected_tickers=["X"], decision_date="20260615",
+                                                      theme_opportunity_state="no_strong_theme")
+        self.assertIn("X", validated["per_ticker"])
+        with_audit = validate_theme_selection_contract(
+            {**contract, "hot_excluded_audit": {"heat_threshold": 1.0, "per_ticker": {"X": 1.0}}},
+            expected_tickers=["X"], decision_date="20260615", theme_opportunity_state="no_strong_theme")
+        self.assertEqual(with_audit["hot_excluded_audit"]["per_ticker"], {"X": 1.0})
+        with self.assertRaises(ThemeSelectionError):
+            validate_theme_selection_contract({**contract, "rogue": True}, expected_tickers=["X"],
+                                              decision_date="20260615", theme_opportunity_state="no_strong_theme")
+
     def test_provisional_active_industry_heat_row_needs_market_confirmation(self):
         # gap fixed: an industry_heat_v1 source can still assert provisional_active; unconfirmed → no theme seat.
         self.assertNotIn("X", _ranked({"X": _meta(source="industry_heat_v1", lifecycle="provisional_active",

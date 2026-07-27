@@ -33,6 +33,7 @@ no broker/auto-order; no A-share crossing.
 from __future__ import annotations
 
 from datetime import datetime
+from pathlib import Path
 
 from engine.us_short_coverage_honesty import (
     CoverageHonestyError,
@@ -66,6 +67,9 @@ from engine.us_short_theme_probe import THEME_OPPORTUNITY_STATES
 from engine.us_short_theme_selection import THEME_SELECTION_MODES
 from engine.us_short_weekend_action_table import flatten_machine_record
 from engine.us_short_weekly_report_renderer import render_weekly_report
+from engine.us_short_soft_discovery_weekly_report import (
+    build_weekly_record, invalid_evidence_record, render_weekly_banner,
+)
 
 # the genuinely non-machine / non-lifecycle inputs the §11.2 assembly needs (closed-world — an unknown / missing
 # key fails closed, so a section can never silently render blank from a forgotten input). batch4 = offline fixture.
@@ -75,7 +79,7 @@ _REPORT_CONTEXT_KEYS = frozenset({
     "price_clock", "coverage_inputs",
     "core_conclusion", "risk_downgrade_note",
 })
-_OPTIONAL_REPORT_CONTEXT_KEYS = frozenset({"forward_policy_comparison_reminder"})
+_OPTIONAL_REPORT_CONTEXT_KEYS = frozenset({"forward_policy_comparison_reminder", "soft_discovery_receipt_paths"})
 # the STRUCTURED decision-stage status the §11.2 report BINDS to (no free-text status, R-USSHORT-BATCH4-OFFICIAL-
 # REPORT-SOURCE-BINDING-GAP): provider health from `classify_provider_health`, the account portfolio_guard, and
 # the theme opportunity state — the EXACT inputs/outputs the decision used, so the report can never contradict the
@@ -220,12 +224,11 @@ def _as_lines(value, where):
 
 
 def _validate_report_context(rc):
-    if not (isinstance(rc, dict) and set(rc) in {
-        _REPORT_CONTEXT_KEYS,
-        _REPORT_CONTEXT_KEYS | _OPTIONAL_REPORT_CONTEXT_KEYS,
-    }):
+    if not (isinstance(rc, dict) and _REPORT_CONTEXT_KEYS <= set(rc)
+            and set(rc) - _REPORT_CONTEXT_KEYS <= _OPTIONAL_REPORT_CONTEXT_KEYS):
         raise WeekendReportError(
-            f"report_context 顶层键须恰为 {sorted(_REPORT_CONTEXT_KEYS)}（closed-world）: {sorted(rc) if isinstance(rc, dict) else rc!r}")
+            f"report_context must include {sorted(_REPORT_CONTEXT_KEYS)} and may add only "
+            f"{sorted(_OPTIONAL_REPORT_CONTEXT_KEYS)}: {sorted(rc) if isinstance(rc, dict) else rc!r}")
 
 
 def _validate_stage_status(ss):
@@ -465,12 +468,54 @@ def build_weekly_report(machine_record, lifecycle_result, *, report_context, run
              "unevaluable_count": exclusion_public["hot_excluded_unevaluable_count"],
              "holdings": []}),
     }
+    soft_record = None
     macro = render_macro_cluster_banner(rows)
     if macro:
         banner["macro_cluster_warning"] = macro                                           # ② (structured)
     reminder = report_context.get("forward_policy_comparison_reminder")
     if isinstance(reminder, str) and reminder.strip():
         banner["forward_policy_comparison_reminder"] = reminder.strip()
+    soft_paths = report_context.get("soft_discovery_receipt_paths")
+    if soft_paths is not None:
+        if not (isinstance(soft_paths, dict) and set(soft_paths) == {
+            "stage_receipt_path", "consumption_receipt_path", "shadow_receipt_path",
+            "comparison_ledger_path", "adjudication_receipt_path"
+        } and all(value is None or isinstance(value, str) for value in soft_paths.values())):
+            # This is an advisory evidence surface.  A malformed optional packet must be
+            # rejected visibly, but must never turn into a mandatory-weekly-report outage.
+            soft_record = invalid_evidence_record(decision_date=flat["as_of"], reason_code="K4C_RENDER_REJECTED")
+            soft_banner = render_weekly_banner(soft_record)
+        else:
+            try:
+                soft_record = build_weekly_record(
+                    decision_date=flat["as_of"],
+                    stage_receipt_path=Path(soft_paths["stage_receipt_path"]) if soft_paths["stage_receipt_path"] else None,
+                    consumption_receipt_path=(Path(soft_paths["consumption_receipt_path"])
+                                              if soft_paths["consumption_receipt_path"] else None),
+                    comparison_ledger_path=(Path(soft_paths["comparison_ledger_path"])
+                                            if soft_paths["comparison_ledger_path"] else None),
+                    shadow_receipt_path=Path(soft_paths["shadow_receipt_path"])
+                    if soft_paths["shadow_receipt_path"] else None,
+                    adjudication_receipt_path=(Path(soft_paths["adjudication_receipt_path"])
+                                               if soft_paths["adjudication_receipt_path"] else None),
+                )
+                soft_banner = render_weekly_banner(soft_record)
+            except Exception:
+                soft_record = invalid_evidence_record(
+                    decision_date=flat["as_of"],
+                    stage_receipt_path=Path(soft_paths["stage_receipt_path"]) if soft_paths["stage_receipt_path"] else None,
+                    consumption_receipt_path=Path(soft_paths["consumption_receipt_path"])
+                    if soft_paths["consumption_receipt_path"] else None,
+                    shadow_receipt_path=Path(soft_paths["shadow_receipt_path"]) if soft_paths["shadow_receipt_path"] else None,
+                    comparison_ledger_path=Path(soft_paths["comparison_ledger_path"])
+                    if soft_paths["comparison_ledger_path"] else None,
+                    adjudication_receipt_path=Path(soft_paths["adjudication_receipt_path"])
+                    if soft_paths["adjudication_receipt_path"] else None,
+                    reason_code="K4C_RENDER_REJECTED",
+                )
+                soft_banner = render_weekly_banner(soft_record)
+        if soft_banner is not None:
+            banner["soft_discovery_status"] = soft_banner
     theme_reminder = theme_producer_pending_reminder(run_origin)   # ⑦ live/实盘-only §13 standing pending-component nag
     if theme_reminder:
         banner["theme_producer_pending_reminder"] = theme_reminder
@@ -533,6 +578,8 @@ def build_weekly_report(machine_record, lifecycle_result, *, report_context, run
     report_data = {"banner": banner, "lifecycle_reminder_count": {"section_1": due_count, "section_12": due_count},
                    "sections": sections, "run_origin": run_origin, "offline_honesty": offline_honesty,
                    "run_status": run_status}
+    if soft_record is not None:
+        report_data["soft_discovery_machine_record"] = soft_record
     # self-check the structured offline invariants (single source) before rendering — the private-write consumer
     # re-runs the SAME assertion, so the builder's output and the persistence boundary cannot drift.
     assert_offline_report_invariants(report_data, run_origin)

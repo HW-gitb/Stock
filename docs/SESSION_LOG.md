@@ -7,6 +7,82 @@
 - **Verify**: review-evidence:not_available(本轮为用户直接下达的修复指令、非 review 命令形态，门未 arm)。亲跑：修后 5 个模块经启动器在 **PowerShell**(`PYTHONIOENCODING=utf-8:surrogateescape`) = `53 tests/PASS/exit=0`，在 **Bash**(该变量为空) = `Ran 53/OK`——同码同结果即不再依赖 shell；会死的对照用两棵真树做：未修的 master 树在 PowerShell 下同模块 `errors=9`、已修树 `OK`；原始字节探针证子进程实际吐 UTF-8(`decode utf-8 OK/gbk FAIL`)；`test_doc_governance_guard`+`test_review_tiering_enforcement` `54 OK`。
 - **Proof-of-use**: A 按「测试 spawn 本解释器并按文本捕获」整类枚举，AST 扫出 `tests/` 24 处无 `encoding=` 的文本捕获、命中判据 5 处全修；B `git`/PowerShell/`.cmd` 子进程那 19 处**故意不动**并写明理由(强钉 utf-8 会引入新错配)；C 新守卫自带植入失败对照(缺父端/缺子端各被抓、干净与 git 子进程不被抓)，否则「集合为空」是空洞的；D 双 shell 正反对照；E 未动 CURRENT/README；F 顺手修掉本树 4 份 bundle 的 CRLF 残留(master 同测试本来就绿)。
 - **Next**: 用户：可提交并合入 master
+## 2026-07-27 - Claude Code 复审 PASS (US-short 4c 一次性收口：那一类现在会被测试当场抓住)
+
+- **Verdict/Action**: PASS。19 个判定输入逐条溯源审计已做且 (c) 类为空（取不到 VIX/相邻篮子/H10 一律不产 observation、只写显式 no-count）；regime 接既有 `vix_regime_summary_path` 同一条轴、turnover 用相邻周篮子替换率真算、`fill_fraction` 作带理由的结构豁免并已从 `risk_ok` 删除（现只剩四项）；两个新 stage 进 `default_pipeline`、best_effort、顺序 maturity→capture→bridge。K4C-R5/R6/R7/R8/R9 随本条目一并转 resolved。
+- **Required**: 无。一条 Optional（冻结 plan 仍带已退役的 `fill_fraction_min`）与提交 scope 提醒（两份 plan 文件为纯行尾噪声、不 stage）记在 `system_risk_register.md`。
+- **Verify**: review-evidence:925f753cf5cf。超时原因: rule 3 全量包自己跑满 1200s，`EXIT=124` 且无 `Ran N tests` ⇒ 分级 ⑥ 判 UNKNOWN、不作证据也不重跑（已终止进程树、清 4 个孤儿 python、无残留临时目录），故代码面 PASS 但**不合并**，见 `R-GOV-USSHORT-LANE-PACK-OUTGREW-THE-1200S-CAP`(GOV-R7)。亲跑(fe9c，pinned 3.13)：变更符号超集包 12 模块 `290 tests/137.0s/PASS`。自写植入探针（进程内 monkeypatch 真实生产者后跑两条新守卫）：基线 `red=0`；regime 打回常量(R8 形状)→`red=2`；turnover 打回 `0.0`(R9 形状)→`red=1`；恢复 `red=0`。整读四个新函数体。
+- **Next**: 已按用户 2026-07-27 明确指令提交并合入 master(全量门 UNKNOWN 未绿，用户知情后仍决定合并；GOV-R7 仍 open)
+
+## 2026-07-27 - Codex repair US-short 4c one-time decision-input provenance closeout
+
+- **Verdict/Action**: Implemented the register's one-time US-short §4c closeout; no commit. The H10 producer now source-binds VIX regime and derives adjacent-basket turnover; unavailable inputs no-count. Structural paper fill is retained for lineage but retired from `passed`.
+- **Required**: No new Required from implementation. The complete field-level provenance audit and K4C-R8/R9 closure detail are in `docs/system_risk_register.md`.
+- **Verify**: Fixed Python `C:\Users\cnhea\AppData\Local\Programs\Python\Python313\python.exe`: `-m unittest -q tests.test_us_short_result_effects tests.test_us_short_symbol_cooldown_state tests.test_us_short_theme_selection tests.test_us_short_weekend_report tests.test_us_short_soft_boost_consumption tests.test_us_short_soft_boost_comparison_adjudication tests.test_us_short_soft_discovery_weekly_report tests.provider.test_us_short_weekly_capstone_soft_discovery tests.provider.test_us_short_weekly_capstone tests.schema.test_us_short_weekly_report_contract_schema tests.schema.test_us_short_symbol_cooldown_governance_schema` PASS; `-m unittest -q tests.test_readme_route_row_length tests.test_route_doc_ledger_status_consistency` = `25 OK`; edited modules compile; `git diff --check` clean. The two guards use real maturity-producer observations: the constant detector includes its hard-coded-field dying controls, and 24-week evidence reaches both `continue_on` and `recommend_switch_off`. No network, key, provider, live execution, other-lane change, or commit.
+- **Next**: Claude Code independently review the complete US-short 4c diff; commit only after PASS.
+
+## 2026-07-27 - Claude Code 复审 FAIL (K4C-R7 结构真闭，但两个占位字段把结论提前定死)
+
+- **Verdict/Action**: FAIL，两条 Required。成熟生产者是真的：用本次已抓的 OHLCV 算等权 ON/OFF 篮子 H10、缺 bar/非有限价/两侧日历不一致一律显式不计数而非造 0、receipt 与 observation 都不可变且按源哈希绑定、非重叠贪心可重放，我要求定死的三处里 ①② 都定死了。但第 ③ 处 `market_risk_regime` 硬编码 `"unknown"`，而 plan 要 2 个 regime ⇒ 正式裁决**永远只能是** `insufficient_evidence`；另外 `turnover`/`fill_fraction` 是占位常量，五道风险护栏有两道结构性恒过。未提交。
+- **Required**: `R-USSHORT-KNIFE4C-PLACEHOLDER-OBSERVATION-FIELDS-PREDETERMINE-THE-VERDICT`(K4C-R8、K4C-R9)。对照探针、代入冻结 plan 的恒真推导与两条修法见 `system_risk_register.md`（单一来源，本处不复述）。
+- **Verify**: review-evidence:73b1220bd517。亲跑(fe9c，pinned 3.13)：超集包 12 模块 `288 tests/137.3s/PASS/exit=0`。对照探针：同一组 24 周(全 matured+eligible+非重叠、ON 0.03 对 OFF 0.00)，regime 全 `"unknown"` → `regime_ready=False/passed=False/insufficient_evidence`；换成两个真实 regime → `passed=True/continue_on`(R8 坐实)。冻结 plan 读得 `minimum_market_risk_regimes=2`、`turnover_harm_multiplier_max=2.0`、`fill_fraction_min=0.5`，代入 `_summary` 得 `0.0<=2e-12`、`1.0>=0.5` 恒真(R9 坐实)。整读新 maturity stage 与 metrics 函数体。未起 6a agent。
+- **Next**: Codex：修 K4C-R8(regime 取既有真值)与 K4C-R9(turnover/fill 真算或标不可评估)
+
+## 2026-07-27 - Codex repair K4C-R7 maturity producer
+
+- **Verdict/Action**: Implemented the US-short §4c local H10 maturity producer; no commit.
+- **Required**: No new Required. `R-USSHORT-KNIFE4C-MATURITY-LEG-HAS-NO-PRODUCER` closure detail is in `docs/system_risk_register.md`.
+- **Verify**: Fixed Python `C:\Users\cnhea\AppData\Local\Programs\Python\Python313\python.exe`: relevant US-short regression suite `224 OK`; route-document guards `25 OK`; edited modules compile; `git diff --check` clean. No network, provider, key, state, A-short, US-long, execution, or commit action.
+- **Next**: Claude Code independently review the complete US-short §4c diff; commit only after PASS.
+
+## 2026-07-27 - Claude Code 复审 FAIL (4c：R6 与累积那半真闭，但成熟观测还是没有生产者)
+
+- **Verdict/Action**: FAIL，一条 Required。R6 真闭（enum 补 `continue_accumulating`、两个前 look 分支都改、adjudication receipt 的 enum 不含它）；R5 的累积那半真闭（新 capture stage 接进一键路径，我跑 30 周实测 `captured_week_count=30`、不再恒为 1）；三条 Optional 也都真修（置换检验是真的、渲染失败改产 `invalid_evidence` 记录、前缀已删）。但成熟观测目录**没有任何生产者**，`eligible` 恒 0，24/36 look 在生产上仍不可达——失败点只是从「ledger 不存在」挪到「ledger 里没有一条成熟」。未提交。
+- **Required**: `R-USSHORT-KNIFE4C-MATURITY-LEG-HAS-NO-PRODUCER`(K4C-R7)。实证探针、已闭各条的证据、可照抄的兄弟 stage 与「补生产者 or 书面延后+横幅诚实显示」两条修法见 `system_risk_register.md`（单一来源，本处不复述）。
+- **Verify**: review-evidence:9192f75a829a。亲跑(fe9c，pinned 3.13)：变更符号超集包 12 模块 = `287 tests/92.2s/PASS/exit=0`。自写探针：连追 30 周真实 capture 后 `captured=30 / matured=0 / eligible=0`，`evaluate_pairwise_ledger` 返 `formal_look=None / recommendation=continue_accumulating`(R7 坐实，同时证 R6 已闭)；repo-wide grep 证 `soft_boost_maturity_observations` 在 `engine/`+`runners/` 无任何写入点。整读新 capture stage、两个引擎模块与报告接缝函数体，并对照同文件兄弟 `run_forward_policy_maturity` 确认这条腿今天可做、不被 provider 卡。未起 6a agent。
+- **Next**: Codex：修 K4C-R7(补成熟观测生产者，或书面延后并在横幅诚实显示时钟不推进)
+
+## 2026-07-27 - Codex repair K4C-R5/R6 + Optional (a)-(c)
+
+- **Verdict/Action**: Implemented the US-short §4c cumulative comparison producer, pre-look accumulation wording, and all three recorded Optional repairs; no commit.
+- **Required**: No new Required. Material closure detail for `R-USSHORT-KNIFE4C-COMPARISON-CLOCK-HAS-NO-PRODUCER` is in `docs/system_risk_register.md`.
+- **Verify**: Fixed Python `C:\Users\cnhea\AppData\Local\Programs\Python\Python313\python.exe`: relevant US-short regression suite `223 OK`; route-document guards `25 OK`; edited modules compile; `git diff --check` clean. No network, provider, key, state, A-short, US-long, execution, or commit action.
+- **Next**: Claude Code independently review the complete US-short §4c diff; commit only after PASS.
+
+## 2026-07-27 - Claude Code 复审 FAIL (4c：上轮三条真闭，但对比时钟没有生产者)
+
+- **Verdict/Action**: FAIL，两条 Required。上轮 K4C-R4/R2 与 Optional(b) 都真闭了，R4 还按我写的整类要求把三处兄弟位一起改成子集判据。但新补的对比提示半边：① `build_pairwise_ledger`/`build_adjudication_receipt` 在 `engine/`+`runners/` 零调用点（只有 tests 调），而周报吃的是 K4b 那份 `captured_week_count` 被 schema 钉成 `const 1` 的单周 ledger ⇒ 每周永远「已捕获=1/已成熟=0/有效分歧=0」，24/36 look 生产上不可达；② 还没到 look 就在横幅上印 `continue_on`。未提交。
+- **Required**: `R-USSHORT-KNIFE4C-COMPARISON-CLOCK-HAS-NO-PRODUCER`(K4C-R5、K4C-R6) + 三条 Optional。逐条实测、已闭三条的证据与修法见 `system_risk_register.md`（单一来源，本处不复述）。
+- **Verify**: review-evidence:e6e0bb3de0bc。亲跑(fe9c，pinned 3.13)：变更符号超集包 12 模块 = `282 tests/89.2s/PASS/exit=0`。自写探针：`_validate_report_context` 七例——四种 optional 组合全 ACCEPT、未知键/缺必填/非 dict 全 REJECT(R4 真闭)；渲染一条 `eligible=0` 的记录，横幅实测印出 `…有效分歧=0 / 正式门槛=24/36；continue_on；需用户决定=否…`(R6 坐实)；repo-wide grep 证两个生产函数无非测试调用点，并读到 `us_short_soft_boost_consumption.py:461-463` 硬写 `captured_week_count=1`(R5 坐实)。整读两个新引擎模块与报告接缝全部函数体。未起 6a agent(comparison-only 展示面、FAIL 已坐实)。
+- **Next**: Codex：修 K4C-R5(补每周累积生产者)与 K4C-R6(前 look 别印推荐词)
+
+## 2026-07-27 - Codex repair K4C-R4 → K4C-R2 → K4C-R3(a)
+
+- **Verdict/Action**: Implemented the ordered US-short §4c repair; no commit. R4 now accepts every declared optional-key subset and isolates every soft-discovery failure at the weekly-report exit. R2's `valid_nonempty` assertions execute, with a label-derivation dying control. R3(a) now has a separate source-bound pairwise ledger and fixed-look adjudication surface; K4b's immutable single-week capture remains unchanged.
+- **Required**: No new Required. Material K4C-R4/R2/R3(a) closure detail, fail-closed bindings, and the retained no-auto-replacement boundary are in `docs/system_risk_register.md`.
+- **Verify**: Fixed Python `C:\Users\cnhea\AppData\Local\Programs\Python\Python313\python.exe`: focused R4/R2/R3 pack `91 OK`; implementation + capstone/bridge/schema pack `218 OK`; route-document guards `25 OK`; `py_compile` and `git diff --check` clean. No network, provider, key, state, A-short, US-long, execution, or commit action.
+- **Next**: Claude Code independently review the complete US-short 4c diff; commit only after PASS.
+
+## 2026-07-27 - Claude Code 审查 FAIL (US-short 4c：正式周报被打死 + 头号状态零覆盖 + 对比提示半边缺失)
+
+- **Verdict/Action**: FAIL，三条 Required。K4C-R1 已闭（这次确实是 US-short §4c，横幅进 §11.2 周报本体）。但 ① 新增第二个 optional key 后，`_validate_report_context` 的**集合恒等**判断让「只带 A1 对比提示、不带软发现」的 5 键 context 变非法，正式周报直接抛异常（K4b 之后默认 ON 软发现但本周无 A1 ledger 的反向组合同样死）；② 唯一测 `valid_nonempty` 的用例在 `:57` 引用未定义的 `ROOT`，断完 state 就 NameError；③ §4c 对比提示半边整块没做且没人声明延后。未提交。
+- **Required**: `R-USSHORT-KNIFE4C-HEADLINE-STATE-UNTESTED-AND-COMPARISON-HALF-MISSING`(K4C-R4 可用性回归优先、K4C-R2、K4C-R3) + 三条 Optional。逐条实测、修法与 K4C-R3 的 (a) 补齐 / (b) 书面延后 二选一见 `system_risk_register.md`（单一来源，本处不复述）。
+- **Verify**: review-evidence:0c7ea5e61aa1。超时原因: 超集包 828s 才返回，之后做跨树基线 + 逐条归因(不敢把历史红栽给本刀)。亲跑(fe9c，pinned 3.13)：超集包 10 模块 `314 tests/827.9s/errors=11`，**11 条已全部归因**——9 条预先存在(干净 master `b5bd8466` 同模块 `20/errors=9`、测试名逐个相同)、1 条 K4C-R2(import 得 `has ROOT attr: False`)、1 条 K4C-R4(同模块 master 为 `40 OK`，故是本刀回归；隔离时快包 300s TIMEOUT=UNKNOWN，按 rule ⑥ 缩窄一次命中)。整读后确认 `disabled` 逐字节等价、caller 不能注文本、坏/跨周 ledger 不复用推荐三样成立。未起 6a agent。
+- **Next**: Codex：按 register 修 K4C-R4(须按类扫，含本模块另两处裸 `_validate` 与仓内三处手工枚举 optional 的 closed-world 门)→K4C-R2→K4C-R3(用户已裁决选 (a)，本刀补齐对比提示半边)；`R-GOV-SUBPROCESS-DECODE-USES-MACHINE-LOCALE`(GOV-R6，GOV-R5 修的是诱因非根因)另刀
+
+## 2026-07-27 - Codex repair US-short 4c weekly honest banner
+
+- **Verdict/Action**: Rebuilt US-short §4c; no commit.
+- **Required**: No new Required. `R-USSHORT-KNIFE4C-WRONG-DELIVERABLE` is repaired in this worktree; details remain in the risk register.
+- **Verify**: Fixed Python ran K4a/K4b/K4c, report, Batch4 bridge, capstone, and route-document guard packs; all passed. No network/key/provider/A-short execution.
+- **Next**: Claude Code independently review US-short 4c; commit only after PASS.
+
+## 2026-07-27 - Claude Code 审查 FAIL (4c 交付错系统：给的是 A-short sidecar 伴生文件横幅)
+
+- **Verdict/Action**: FAIL，一条 Required。代码面干净，但这不是 4c。单一权威把 4c 定义为 **US-short 软发现通道**的周报诚实横幅 + 治理提醒（五态、machine record 只从 4a/4b receipt 派生），而本轮 diff 零行触及 US-short，改的是 `runners/a_short_weekly_sidecar_health.py`；横幅还落在 `sidecar_health.md` 伴生文件里，M6.7 周报正文零改动。未提交。
+- **Required**: `R-USSHORT-KNIFE4C-WRONG-DELIVERABLE`(K4C-R1)。归属实证、A-short 侧不存在编号 4c、伴生文件≠周报这三条实测与修法见 `system_risk_register.md`（单一来源，本处不复述）。
+- **Verify**: review-evidence:a339e64b0574。亲跑(fe9c，pinned 3.13)：`tests.test_a_short_weekly_sidecar_health` 经启动器 `28 OK`/0.8s/exit=0。整读 `_health_banner`/`write_health_bundle`/`build_health`：横幅插在既有 `overall=…` 行下方两行、重述同一个值；`weekly_screening.ps1:707-715` 证实产物是 `$HealthDir` 的独立伴生文件。FAIL 已被实证坐实，按分级未跑全量、未起 6a agent(低危 diff)。
+- **Next**: Codex：按 §4c 重做 US-short 4c(周报诚实横幅 + 治理提醒)
 
 ## 2026-07-27 - Claude Code 审查 PASS + 提交 (K4B-R8 派生式类级守卫)
 

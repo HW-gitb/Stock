@@ -114,6 +114,10 @@ def render_weekly_report(report_data) -> str:
             val = banner.get(el["tag"])
             if _nonblank_str(val):
                 lines.append("- %s %s: %s" % (el["id"], el["tag"], val.strip()))
+    soft_contract = contract["soft_discovery_banner"]
+    soft_discovery = banner.get(soft_contract["tag"])
+    if _nonblank_str(soft_discovery):
+        lines.append("- %s %s: %s" % (soft_contract["id"], soft_contract["tag"], soft_discovery.strip()))
     lines.append("")
 
     # --- §11.2 lifecycle-reminder count reconcile: section_a count == section_b count (fail-closed) ---

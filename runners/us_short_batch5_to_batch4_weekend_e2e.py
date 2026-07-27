@@ -216,6 +216,7 @@ def _load_provider_health(path: Path) -> dict[str, str]:
 def _patched_report_context(
     template_report_context: dict[str, Any], *, run_provenance: dict[str, Any], now_et: datetime,
     forward_policy_comparison_reminder: str | None = None,
+    soft_discovery_receipt_paths: dict[str, str | None] | None = None,
 ):
     report_context = copy.deepcopy(template_report_context)
     if not isinstance(report_context, dict) or not isinstance(report_context.get("price_clock"), dict):
@@ -234,6 +235,13 @@ def _patched_report_context(
         if not isinstance(forward_policy_comparison_reminder, str) or not forward_policy_comparison_reminder.strip():
             raise Batch5ToBatch4E2EError("forward_policy_comparison_reminder must be a non-blank string or absent")
         report_context["forward_policy_comparison_reminder"] = forward_policy_comparison_reminder.strip()
+    if soft_discovery_receipt_paths is not None:
+        if not (isinstance(soft_discovery_receipt_paths, dict) and set(soft_discovery_receipt_paths) == {
+            "stage_receipt_path", "consumption_receipt_path", "shadow_receipt_path",
+            "comparison_ledger_path", "adjudication_receipt_path"
+        } and all(value is None or isinstance(value, str) for value in soft_discovery_receipt_paths.values())):
+            raise Batch5ToBatch4E2EError("soft discovery receipt paths must be a closed-world path object")
+        report_context["soft_discovery_receipt_paths"] = copy.deepcopy(soft_discovery_receipt_paths)
     return report_context
 
 
@@ -421,6 +429,7 @@ def _assemble_batch4_packet(
     now_et: datetime,
     vix_regime: str | None = None,
     forward_policy_comparison_reminder: str | None = None,
+    soft_discovery_receipt_paths: dict[str, str | None] | None = None,
 ) -> dict[str, Any]:
     data_context = components["data_context"]
     run_provenance = components["run_provenance"]
@@ -468,6 +477,7 @@ def _assemble_batch4_packet(
             run_provenance=run_provenance,
             now_et=now_et,
             forward_policy_comparison_reminder=forward_policy_comparison_reminder,
+            soft_discovery_receipt_paths=soft_discovery_receipt_paths,
         ),
         "eligibility_governance_path": str(governance_path.resolve()),
         "calendar_path": str(calendar_path.resolve()),
@@ -537,6 +547,7 @@ def run_e2e(
     generated_at: str | None = None,
     vix_regime: str | None = None,
     forward_policy_comparison_reminder: str | None = None,
+    soft_discovery_receipt_paths: dict[str, str | None] | None = None,
     projection_binding_expectations: source_packet_runner.ProjectionBindingExpectations = PROJECTION_INPUTS_BINDING,
 ) -> dict[str, Any]:
     if not isinstance(now_et, datetime) or now_et.tzinfo is not None:
@@ -687,6 +698,7 @@ def run_e2e(
             now_et=now_et,
             vix_regime=vix_regime,
             forward_policy_comparison_reminder=forward_policy_comparison_reminder,
+            soft_discovery_receipt_paths=soft_discovery_receipt_paths,
         )
         _write_private_json(context_path, packet)
         batch4_summary = _safe_batch4_run(

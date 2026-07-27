@@ -300,6 +300,20 @@ class CapstoneContext:
         )
 
     @property
+    def soft_boost_pairwise_ledger_path(self) -> Path:
+        return self._s("shadow_compare_private") / "us_short_soft_boost_pairwise_ledger.json"
+
+    @property
+    def soft_boost_maturity_observation_root(self) -> Path:
+        return self._s("shadow_compare_private") / "soft_boost_maturity_observations"
+
+    @property
+    def soft_boost_adjudication_receipt_path(self) -> Path:
+        return self._s("shadow_compare_private") / (
+            f"us_short_soft_boost_adjudication_receipt_{self.decision_date}.json"
+        )
+
+    @property
     def theme_projection_path(self) -> Path:
         return self._s(f"us_short_batch5_full_universe_theme_{self.price_basis_date}_theme.json")
 
@@ -647,6 +661,18 @@ def default_pipeline(
               st.run_forward_policy_corporate_actions, best_effort=True),
         Stage("forward_policy_maturity", False, lambda c: [c.ohlcv_series_packet_path], lambda c: [],
               st.run_forward_policy_maturity, best_effort=True),
+        Stage("soft_boost_comparison_maturity", False,
+              lambda c: ([c.ohlcv_series_packet_path] if c.theme_soft_boost_enabled
+                         and c.soft_boost_pairwise_ledger_path.is_file() else []), lambda c: [],
+              st.run_soft_boost_comparison_maturity, best_effort=True,
+              contract_version="1.0.0", reuse_policy="never"),
+        Stage("soft_boost_comparison_capture", False,
+              lambda c: ([c.soft_boost_consumption_receipt_path, c.soft_boost_shadow_receipt_path]
+                         if c.theme_soft_boost_enabled and c.soft_discovery_run_result is not None else []),
+              lambda c: ([c.soft_boost_pairwise_ledger_path]
+                         if c.theme_soft_boost_enabled and c.soft_discovery_run_result is not None else []),
+              st.run_soft_boost_comparison_capture, best_effort=True,
+              contract_version="1.0.0", reuse_policy="never"),
         Stage("weekly_bridge", False, lambda c: [c.source_packet_path], _official_output_paths, st.run_weekly_bridge),
         Stage("model_paper_weekly", False,
               lambda c: ([c.ohlcv_series_packet_path, _official_output_paths(c)[0], _official_output_paths(c)[2]]
@@ -1650,6 +1676,8 @@ def run_weekly_capstone(
     _validate_stage_lifecycle(pipeline)
     if any(stage.best_effort and stage.name not in {
         "forward_policy_shadow", "forward_policy_corporate_actions", "forward_policy_maturity",
+        "soft_boost_comparison_maturity",
+        "soft_boost_comparison_capture",
     } for stage in pipeline):
         raise WeeklyCapstoneError("only comparison-capture stages may be best_effort")
     if any(stage.reuse_policy not in {"never", "frozen_inputs", "refresh_then_reuse_if_equivalent"}

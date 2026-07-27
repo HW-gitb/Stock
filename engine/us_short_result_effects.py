@@ -63,7 +63,8 @@ def _evidence_ref(value, *, as_of, where):
     The upstream seam may supply ``{"kind", "value"}`` or a full record whose as_of equals the run.  A
     bare string is intentionally not accepted: visible effects must retain an explicit evidence kind.
     """
-    if not isinstance(value, dict) or set(value) not in ({"kind", "value"}, {"kind", "value", "as_of"}):
+    if not (isinstance(value, dict) and {"kind", "value"} <= set(value)
+            and set(value) - {"kind", "value"} <= {"as_of"}):
         raise ResultEffectsError(f"{where}.evidence_ref 须为 {{kind,value}} 或 {{kind,value,as_of}}")
     kind, ref_value = value.get("kind"), value.get("value")
     if kind not in _EVIDENCE_KINDS or not _nonblank(ref_value):
