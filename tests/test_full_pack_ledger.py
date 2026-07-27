@@ -7,8 +7,10 @@ import unittest
 from contextlib import redirect_stdout
 from io import StringIO
 from pathlib import Path
+from unittest.mock import patch
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / ".tools"))
+from bounded_unittest import Result  # noqa: E402
 import full_pack_ledger as fpl  # noqa: E402
 
 
@@ -82,6 +84,67 @@ class FullPackLedgerTests(unittest.TestCase):
         with redirect_stdout(output):
             self.assertEqual(fpl.main(["ledger", "prepare", "a_short", "", "focused=20 OK"]), 2)
         self.assertIn("REFUSED", output.getvalue())
+
+    def test_public_manual_record_is_retired(self):
+        output = StringIO()
+        with redirect_stdout(output):
+            self.assertEqual(fpl.main(["ledger", "record", "a_short", "2000 OK"]), 2)
+        self.assertIn("single `run` command", output.getvalue())
+
+    def test_cli_single_run_routes_the_whole_chain(self):
+        with patch.object(fpl, "run_full_pack", return_value=0) as runner:
+            self.assertEqual(
+                fpl.main([
+                    "ledger", "run", "a_short", "shared schema", "focused=12 OK",
+                    "30", "--", "tests.test_x",
+                ]),
+                0,
+            )
+        runner.assert_called_once_with(
+            "a_short", "shared schema", "focused=12 OK", 30, ["tests.test_x"]
+        )
+
+    def test_single_run_command_prepares_runs_and_records_only_real_pass(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            ledger = Path(tmp) / "ledger.json"
+            state = {"engine/x.py": "aaa", "@HEAD": "h1"}
+            passed = Result("PASS", 0, 3, 0.2, "Ran 3 tests in 0.1s\n\nOK\n")
+            with patch.object(fpl, "run_unittest", return_value=passed):
+                self.assertEqual(
+                    fpl.run_full_pack(
+                        "a_short",
+                        "shared schema",
+                        "focused=12 OK",
+                        30,
+                        ["tests.test_x"],
+                        state=state,
+                        ledger=ledger,
+                    ),
+                    0,
+                )
+            hit = fpl.cached_green("a_short", state=state, ledger=ledger)
+            self.assertIsNotNone(hit)
+            self.assertEqual(hit["count"], "3 OK")
+
+    def test_single_run_timeout_never_records_green(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            ledger = Path(tmp) / "ledger.json"
+            state = {"engine/x.py": "aaa", "@HEAD": "h1"}
+            timed_out = Result("TIMEOUT", 124, None, 1.0, "")
+            with patch.object(fpl, "run_unittest", return_value=timed_out):
+                self.assertEqual(
+                    fpl.run_full_pack(
+                        "a_short",
+                        "shared schema",
+                        "focused=12 OK",
+                        30,
+                        ["tests.test_x"],
+                        state=state,
+                        ledger=ledger,
+                    ),
+                    124,
+                )
+            self.assertIsNone(fpl.cached_green("a_short", state=state, ledger=ledger))
 
     def test_check_shows_the_prepared_review_and_matching_green_together(self):
         with tempfile.TemporaryDirectory() as tmp:

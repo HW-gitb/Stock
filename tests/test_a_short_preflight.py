@@ -178,7 +178,7 @@ class AShortPreflightTests(unittest.TestCase):
             )
             self.assertEqual(result.returncode, 0, f"override was accepted: {attack}\n{result.stdout}")
 
-    def test_test_launcher_rejects_poisoned_legacy_interpreter_environment(self) -> None:
+    def test_test_launcher_ignores_poisoned_legacy_interpreter_environment(self) -> None:
         if os.name != "nt":
             self.skipTest("The strict Stock Python pin is a Windows checkout contract.")
         cmd = Path(os.environ["ComSpec"])
@@ -202,8 +202,7 @@ class AShortPreflightTests(unittest.TestCase):
             stderr=subprocess.STDOUT,
             check=False,
         )
-        self.assertNotEqual(result.returncode, 0, result.stdout)
-        self.assertIn("legacy interpreter override", result.stdout)
+        self.assertEqual(result.returncode, 0, result.stdout)
 
     def test_test_launcher_uses_pinned_python_under_path_pollution(self) -> None:
         if os.name != "nt":

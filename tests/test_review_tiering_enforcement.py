@@ -1,8 +1,8 @@
 """Guards for the verification-tiering enforcement layers (AGENTS.md §Verification tiering).
 
 Two mechanical layers must not silently regress:
-1. The review-gate prompt hook (`_review_context`) injects the tiering STEP-0 (ledger check /
-   defer the full pack to PASS-merge / FAIL-early / independent-agent gate) on a review prompt.
+1. The review-gate prompt hook (`_review_context`) injects the tiering STEP-0 (bounded focused /
+   one-command full run / FAIL-early / independent-agent gate) on a review prompt.
 2. The pre-commit verification-tiering reminder is scoped to the a-short production surface and is
    WARN-ONLY — it can never block a commit.
 """
@@ -26,10 +26,12 @@ def _load_review_gate():
 class ReviewContextTieringTests(unittest.TestCase):
     def test_review_context_carries_tiering_step0(self):
         text = _load_review_gate()._review_context()
-        # ① ledger-first + cite-green (do not re-run the full pack)
-        self.assertIn("full_pack_ledger.py check", text)
-        # ② defer the full pack to the PASS/merge gate
-        self.assertIn("全量", text)
+        # ① focused work is bounded and process folklore is not evidence.
+        self.assertIn("bounded_unittest", text)
+        self.assertIn("PID/CPU", text)
+        # ② the full path is one bounded ledger command.
+        self.assertIn("full_pack_ledger `run`", text)
+        self.assertIn("1200", text)
         # ④ the independent agent is gated, not a default
         self.assertIn("agent", text)
         # ⑤ scope tests to changed symbols, not changed files (no whole-module tax)
@@ -152,7 +154,7 @@ class PromptHookInjectionTests(unittest.TestCase):
             out = gate.handle_prompt_hook(
                 json.dumps({"prompt": "审查当前 diff"}), root=ROOT, state_dir=Path(td))
         self.assertIn("REVIEW EVIDENCE SNAPSHOT", out)   # snapshot injected (no encoding crash)
-        self.assertIn("full_pack_ledger.py check", out)  # tiering STEP-0 injected
+        self.assertIn("full_pack_ledger `run`", out)  # tiering STEP-0 injected
 
 
 class StdinEncodingTests(unittest.TestCase):
