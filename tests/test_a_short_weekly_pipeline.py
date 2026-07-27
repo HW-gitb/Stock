@@ -55,29 +55,7 @@ from runners.a_short_semantic_risk_summary import build_summary_from_fetches  # 
 from runners.a_short_theme_overlay_comparison import (  # noqa: E402
     assemble_overlay, build_summary,
 )
-from engine import a_short_effect_contract as _effect_contract_module  # noqa: E402
 import runners.a_short_weekly_pipeline as _weekly_pipeline_module  # noqa: E402
-
-# The effect-contract static inventory parses the same production sources on every
-# build/validate call.  This module neither mutates those sources nor tests that
-# static validator; run it once at module entry, then keep the integration tests
-# focused on weekly wiring.  test_a_short_effect_contract retains mutation coverage.
-_effect_contract_static_patcher = None
-
-
-def setUpModule() -> None:
-    global _effect_contract_static_patcher
-    _effect_contract_module.validate_static_contract()
-    _effect_contract_static_patcher = patch.object(
-        _effect_contract_module, "validate_static_contract", return_value=None
-    )
-    _effect_contract_static_patcher.start()
-
-
-def tearDownModule() -> None:
-    if _effect_contract_static_patcher is not None:
-        _effect_contract_static_patcher.stop()
-
 
 # Every main() call in this module uses an isolated synthetic ratchet. Tests must
 # never discover, read, or update the user's gitignored private account state.

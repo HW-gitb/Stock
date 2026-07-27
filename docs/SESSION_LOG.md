@@ -1,5 +1,20 @@
 # Session Log
 
+## 2026-07-27 — Claude Code 审查 PASS（测试提速第二刀：effect-contract 引擎级 memo）
+
+- **Verdict/Action**: PASS。改法比第一刀更对：把重复的 AST 清单构建 memo 在 `engine/a_short_effect_contract.py`，键=17 个默认输入文件的**内容**（每次仍重读磁盘，故进程内改文件即失效），带 overrides 的调用一律不缓存，返回前 deepcopy；第一刀的测试侧 patch 同刀移除。仅重封本模块自指纹，无 policy 变更。
+- **Required**: 无。两条观察写在下面 Verify/Next，未新开 register 条目（无风险项）。
+- **Verify**: review-evidence:5d229358a025。超时原因: 两次超集包选大了(3 模块/2 模块)各撞 300s、240s 上限，且我曾与探针并发跑重包，白耗约 9 分钟。亲跑：`tests.test_a_short_effect_contract` = 21 OK/200.0s/exit 0；`tests.test_a_short_weekly_pipeline`（已无测试侧 patch）= 486 OK/211.9s/exit 0。自写探针：把 17 个键内文件逐个改动后，缓存路径结果与绕开缓存重算**逐个相等**（stale 列表为空，7 例值真变=非空转），恢复后回到基线；清单与 contract 的返回值投毒均被 deepcopy 挡住。静态面：模块内 9 处磁盘读取点逐个对照，能影响清单的文件全在键里；`static_contract_error()` 干净；重封自指纹我独立重算 8/8 一致。
+- **Next**: 用户：可提交并合入 master。两条观察：① `test_a_short_effect_contract` 因每例都用 overrides 绕缓存，现是 lane 里最贵的单模块（200s），可考虑让这些用例共享一份基准清单；② 交接里写的 weekly 42.1s 我在带载机器上实测为 211.9s，别把 42s 当 lane 预算基线用。
+
+## 2026-07-27 - Codex implementation: test-performance second knife
+
+- **Verdict/Action**: Replaced the first knife's weekly-test-only patch with an engine-level effect-contract memo. Default inputs are keyed by the content of every static-contract source/schema/policy file; override paths remain uncached; cached results are copied before return. Resealed only the effect-contract self-fingerprint.
+- **Required**: None newly opened. This shared-engine change requires Claude Code review before commit.
+- **Verify**: `tests.test_a_short_effect_contract` = 21 OK; `tests.test_a_short_weekly_pipeline` = 486 OK in 42.1s without test-side patch; full-pack ledger `a_short` = 2045 OK, 3 skipped, 442.6s / 1200s.
+- **Pre-Codex self-review**: Memo tests cover identical-byte reuse, source-byte invalidation, uncached overrides, and copy isolation; the initial stale self-fingerprint failed closed and was recomputed/resealed without policy change.
+- **Next**: Claude Code independently review this second knife, then commit only the PASS-covered files.
+
 ## 2026-07-27 — Claude Code 审查 PASS（测试提速第一刀：weekly 模块只做一次 effect-contract 静态校验）
 
 - **Verdict/Action**: PASS，未提交。改动只在 `tests/test_a_short_weekly_pipeline.py`（+22 行，无删除）：`setUpModule` 先真跑一次 `validate_static_contract()`，再把它 patch 成空，`tearDownModule` 复原。产品代码零改动。效果显著：该模块 486 例现 178.8 秒跑完，而它此前所在的那半条 lane（1118 例）连 1200 秒都跑不完。
