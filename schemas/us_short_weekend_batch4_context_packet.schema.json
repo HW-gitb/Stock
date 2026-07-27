@@ -202,6 +202,19 @@
           "type": "string",
           "minLength": 1,
           "description": "Optional de-identified US-short A1 comparison-track reminder injected only by the capstone bridge; advisory-only and never a selection input."
+        },
+        "soft_discovery_receipt_paths": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["stage_receipt_path", "consumption_receipt_path", "shadow_receipt_path", "comparison_ledger_path", "adjudication_receipt_path"],
+          "properties": {
+            "stage_receipt_path": {"type": ["string", "null"]},
+            "consumption_receipt_path": {"type": ["string", "null"]},
+            "shadow_receipt_path": {"type": ["string", "null"]},
+            "comparison_ledger_path": {"type": ["string", "null"]}
+            ,"adjudication_receipt_path": {"type": ["string", "null"]}
+          },
+          "description": "Optional §4c receipt references. The report derives its banner by re-reading these receipts; no text is caller-supplied."
         }
       }
     },

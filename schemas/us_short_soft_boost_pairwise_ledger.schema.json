@@ -1,0 +1,45 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://stock.local/schemas/us_short_soft_boost_pairwise_ledger.schema.json",
+  "type": "object", "additionalProperties": false,
+  "required": ["schema_name", "schema_version", "epoch_id", "comparison_statistical_plan_sha256", "records", "captured_week_count", "matured_week_count", "eligible_divergence_week_count", "non_overlap_h10_block_count", "latest_decision_date", "latest_consumption_receipt_sha256", "latest_shadow_receipt_sha256", "historical_backfill_allowed", "automatic_route_change_allowed", "production_flag"],
+  "properties": {
+    "schema_name": {"const": "us_short_soft_boost_pairwise_ledger"},
+    "schema_version": {"const": "1.0.0"},
+    "epoch_id": {"const": "us_short_soft_boost_k4b_20260727"},
+    "comparison_statistical_plan_sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+    "records": {"type": "array", "minItems": 1, "items": {"$ref": "#/definitions/record"}},
+    "captured_week_count": {"type": "integer", "minimum": 1},
+    "matured_week_count": {"type": "integer", "minimum": 0},
+    "eligible_divergence_week_count": {"type": "integer", "minimum": 0},
+    "non_overlap_h10_block_count": {"type": "integer", "minimum": 0},
+    "latest_decision_date": {"type": "string", "pattern": "^[0-9]{8}$"},
+    "latest_consumption_receipt_sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+    "latest_shadow_receipt_sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+    "historical_backfill_allowed": {"const": false},
+    "automatic_route_change_allowed": {"const": false},
+    "production_flag": {"const": false}
+  },
+  "definitions": {
+    "digest": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+    "fraction": {"type": "number", "minimum": -1.0, "maximum": 1.0},
+    "record": {
+      "type": "object", "additionalProperties": false,
+      "required": ["decision_date", "consumption_receipt_sha256", "shadow_receipt_sha256", "maturity_receipt_sha256", "market_risk_regime", "divergent", "matured", "eligible", "non_overlap_h10_block", "on_net_return", "off_net_return", "on_max_drawdown", "off_max_drawdown", "on_bad_pick_rate", "off_bad_pick_rate", "on_tail_loss", "off_tail_loss", "on_turnover", "off_turnover", "on_fill_fraction", "off_fill_fraction"],
+      "properties": {
+        "decision_date": {"type": "string", "pattern": "^[0-9]{8}$"},
+        "consumption_receipt_sha256": {"$ref": "#/definitions/digest"},
+        "shadow_receipt_sha256": {"$ref": "#/definitions/digest"},
+        "maturity_receipt_sha256": {"type": ["string", "null"], "pattern": "^[0-9a-f]{64}$"},
+        "market_risk_regime": {"type": "string", "minLength": 1},
+        "divergent": {"type": "boolean"}, "matured": {"type": "boolean"}, "eligible": {"type": "boolean"}, "non_overlap_h10_block": {"type": "boolean"},
+        "on_net_return": {"type": ["number", "null"], "minimum": -1.0, "maximum": 1.0}, "off_net_return": {"type": ["number", "null"], "minimum": -1.0, "maximum": 1.0},
+        "on_max_drawdown": {"type": ["number", "null"], "minimum": -1.0, "maximum": 1.0}, "off_max_drawdown": {"type": ["number", "null"], "minimum": -1.0, "maximum": 1.0},
+        "on_bad_pick_rate": {"type": ["number", "null"], "minimum": -1.0, "maximum": 1.0}, "off_bad_pick_rate": {"type": ["number", "null"], "minimum": -1.0, "maximum": 1.0},
+        "on_tail_loss": {"type": ["number", "null"], "minimum": -1.0, "maximum": 1.0}, "off_tail_loss": {"type": ["number", "null"], "minimum": -1.0, "maximum": 1.0},
+        "on_turnover": {"type": ["number", "null"], "minimum": -1.0, "maximum": 1.0}, "off_turnover": {"type": ["number", "null"], "minimum": -1.0, "maximum": 1.0},
+        "on_fill_fraction": {"type": ["number", "null"], "minimum": -1.0, "maximum": 1.0}, "off_fill_fraction": {"type": ["number", "null"], "minimum": -1.0, "maximum": 1.0}
+      }
+    }
+  }
+}

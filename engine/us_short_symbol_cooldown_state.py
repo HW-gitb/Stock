@@ -47,7 +47,8 @@ def _nonblank(value):
 
 
 def _validate_evidence_ref(value, where):
-    if not isinstance(value, dict) or set(value) not in ({"kind", "value"}, {"kind", "value", "as_of"}):
+    if not (isinstance(value, dict) and {"kind", "value"} <= set(value)
+            and set(value) - {"kind", "value"} <= {"as_of"}):
         raise SymbolCooldownStateError(f"{where}.evidence_ref 须为 {{kind,value}} 或 {{kind,value,as_of}}")
     if value.get("kind") not in {"provider row", "SEC filing", "source_id"} or not _nonblank(value.get("value")):
         raise SymbolCooldownStateError(f"{where}.evidence_ref kind/value 非法")

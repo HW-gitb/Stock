@@ -1,0 +1,16 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://stock.local/schemas/us_short_soft_boost_adjudication_receipt.schema.json",
+  "type": "object", "additionalProperties": false,
+  "required": ["schema_name", "schema_version", "epoch_id", "decision_date", "comparison_ledger_sha256", "comparison_statistical_plan_sha256", "formal_look", "comparison_counts", "formal_evidence", "recommendation", "user_decision", "automatic_replacement_allowed", "production_flag"],
+  "properties": {
+    "schema_name": {"const": "us_short_soft_boost_adjudication_receipt"}, "schema_version": {"const": "1.0.0"},
+    "epoch_id": {"const": "us_short_soft_boost_k4b_20260727"}, "decision_date": {"type": "string", "pattern": "^[0-9]{8}$"},
+    "comparison_ledger_sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"}, "comparison_statistical_plan_sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"}, "formal_look": {"enum": [24, 36]},
+    "comparison_counts": {"type": "object", "additionalProperties": false, "required": ["captured_week_count", "matured_week_count", "eligible_divergence_week_count", "non_overlap_h10_block_count"], "properties": {"captured_week_count": {"type": "integer", "minimum": 1}, "matured_week_count": {"type": "integer", "minimum": 0}, "eligible_divergence_week_count": {"type": "integer", "minimum": 24}, "non_overlap_h10_block_count": {"type": "integer", "minimum": 12}}},
+    "formal_evidence": {"type": "object", "additionalProperties": false, "required": ["on_gate_passed", "off_gate_passed", "inconclusive"], "properties": {"on_gate_passed": {"type": "boolean"}, "off_gate_passed": {"type": "boolean"}, "inconclusive": {"type": "boolean"}}},
+    "recommendation": {"enum": ["continue_on", "recommend_switch_off", "insufficient_evidence"]},
+    "user_decision": {"enum": ["none", "accept", "reject", "defer"]},
+    "automatic_replacement_allowed": {"const": false}, "production_flag": {"const": false}
+  }
+}

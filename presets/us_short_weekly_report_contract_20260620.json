@@ -74,6 +74,11 @@
       }
     ]
   },
+  "soft_discovery_banner": {
+    "id": "⑧",
+    "tag": "soft_discovery_status",
+    "always_shown": false
+  },
   "lifecycle_reminder_count_consistency": {
     "rule": "lifecycle_reminder_count_must_match_across_sections",
     "section_number_a": 1,

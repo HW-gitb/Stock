@@ -25,6 +25,7 @@ EXPECTED_BANNER_IDS = ["①", "②", "③", "④", "⑤", "⑥", "⑦"]
 EXPECTED_BANNER_TAGS = ["true_false_observe_split", "macro_cluster_warning", "ship_gate_progress",
                        "price_clock", "hot_excluded_notice", "forward_policy_comparison_reminder",
                        "theme_producer_pending_reminder"]
+EXPECTED_SOFT_DISCOVERY_BANNER = {"id": "⑧", "tag": "soft_discovery_status", "always_shown": False}
 
 
 def _load(p):
@@ -89,6 +90,9 @@ class UsShortWeeklyReportContract(unittest.TestCase):
         # §11.2: only ④ price_clock is 必显; all other banner elements are conditional
         for e in self.preset["mandatory_banner"]["elements"]:
             self.assertEqual(e["always_shown"], e["id"] == "④", e["id"])
+
+    def test_soft_discovery_banner_is_a_separate_optional_contract(self):
+        self.assertEqual(self.preset["soft_discovery_banner"], EXPECTED_SOFT_DISCOVERY_BANNER)
 
     def test_lifecycle_count_consistency_invariant_pinned(self):
         # now a structured const invariant (not prose): section 1 count == section 12 count
@@ -157,6 +161,9 @@ class UsShortWeeklyReportContract(unittest.TestCase):
     def test_schema_rejects_extra_banner_element(self):
         self._reject(lambda d: d["mandatory_banner"]["elements"].append(
             {"id": "⑧", "tag": "x", "always_shown": False, "ref": "y"}))
+
+    def test_schema_rejects_soft_discovery_banner_drift(self):
+        self._reject(lambda d: d["soft_discovery_banner"].__setitem__("tag", "caller_text"))
 
     def test_schema_rejects_unknown_top_level_key(self):
         self._reject(lambda d: d.__setitem__("rendered_md", "..."))

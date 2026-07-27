@@ -69,7 +69,8 @@ def validate_theme_selection_contract(contract, *, expected_tickers, decision_da
     Every candidate must have exactly one source-bound theme identity.  Cross-industry provisional themes are
     structurally impossible while the explicit industry-v1 mode is active.
     """
-    if not isinstance(contract, dict) or set(contract) not in (_CONTRACT_KEYS, _CONTRACT_KEYS | {"hot_excluded_audit"}):
+    if not (isinstance(contract, dict) and _CONTRACT_KEYS <= set(contract)
+            and set(contract) - _CONTRACT_KEYS <= {"hot_excluded_audit"}):
         raise ThemeSelectionError("theme_selection_contract 顶层键漂移")
     if contract["as_of"] != decision_date:
         raise ThemeSelectionError("theme_selection_contract.as_of 必须等于本次 decision_date")
