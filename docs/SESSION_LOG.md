@@ -1,5 +1,13 @@
 # Session Log
 
+## 2026-07-27 - Claude Code 修复 + 自审 PASS (评审门 B+C：定树与 arming)
+
+- **Verdict/Action**: PASS。B：快照记下 `repo_root`，Stop hook 改判"快照那棵树"，且 state 收敛到脚本旁唯一位置——原来按被审树派生，跨树审查时 Stop hook 连 state 都找不到，直接静默零执行(今日实发两次)。C：对象允许表补 `工作树/树/分支/提交/改动/变更/补丁/切片`，meta 停用词仍先判，`审查工作流` 依旧不 arm。按上轮讨论，选项 A(从命令猜目标树)**故意不做**。
+- **Required**: 无新开。`R-GOV-REVIEW-GATE-WRONG-TREE-AND-MISSED-ARMING` 直接以 resolved 记入 `system_risk_register.md`(单一来源，含两洞成因、修法、对照与故意不做的 A)。
+- **Verify**: review-evidence:not_available(本轮为修复指令、非 review 命令形态，门未 arm)。亲跑：门超集包经强制入口 `status=PASS exit=0 tests=69 deadline=300s`；`py_compile` 通过；对照实测——A 树有 token、Stop hook 被塞 B 树时，带 `repo_root` 判 A(exit 0)、去掉它(改前形状)判 B(exit 2)；端到端以 cwd=017a arm，快照确实拍在 017a、`repo_root` 记为 017a、Stop hook 拿错树仍按记录树拦下；C 的 2 条该 arm + 4 条不该 arm 全部符合预期。顺手清掉一条 pre-fix 遗留 armed 状态。
+- **Proof-of-use**: A 按"两个 hook 各自定树"整类看，发现真洞不是判错树而是**连 state 都找不到**，故连 state 位置一并收敛；B grep 确认 `.claude/review_gate` 派生点只剩唯一常量、`disarm` 也改齐；C 对照用两棵真树跑，改前形状确实判错树；D 正对照(同树审查、meta 语句)行为不变；E 未动 CURRENT/README；F 超集包一次跑完 + doc guard 一次过。
+- **Next**: Codex：执行 4c(周报横幅)
+
 ## 2026-07-27 - Claude Code 修复 + 自审 PASS (GOV-R4 + Optional，用户明令自修自审)
 
 - **Verdict/Action**: PASS。整类只有两处：launcher 里双层嵌套的两个用法守卫，改为 `goto` 到单层标签 `:usage_missing_timeout_value` / `:usage_missing_unittest_args`（各自 `popd` + `exit /b 2`，放在正常出口之后）。Optional 一并闭：AGENTS rule 5 补回"未经用户批准不得提高上限"，并加上"用法错误必须非零退出"。

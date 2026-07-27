@@ -81,6 +81,12 @@ REVIEW_META_TAILS = (
     "workflow", "者", "员", "习惯", "经验", "教训", "方案", "模板", "清单", "指南", "要求",
     "原则", "轮数", "窗口", "质量", "成本", "策略", "文档", "的", "得", "了", "过", "很", "太",
 )
+# Object shapes an actual review command uses.  `审查工作树017a的k4b修复` armed nothing
+# because `工作树` was missing here, so that round had no token and no wall clock at all.
+REVIEW_OBJECT_HEADS = (
+    "刀", "当前", "这", "本", "上", "该", "下", "新", "第", "所有", "一下", "完",
+    "工作树", "树", "分支", "提交", "改动", "变更", "补丁", "切片",
+)
 
 
 def _carries_review_object(text: str) -> bool:
@@ -90,7 +96,9 @@ def _carries_review_object(text: str) -> bool:
             continue
         if any(tail.startswith(meta) for meta in REVIEW_META_TAILS):
             continue
-        if re.match(r"^[0-9A-Za-z]|^(刀|当前|这|本|上|该|下|新|第|所有|一下|完)", tail):
+        if re.match(r"^[0-9A-Za-z]", tail):
+            return True
+        if any(tail.startswith(head) for head in REVIEW_OBJECT_HEADS):
             return True
     return False
 
@@ -149,6 +157,10 @@ def collect_review_snapshot(*, prompt: str, root: Path = ROOT) -> dict:
         # gate MEASURES it instead of trusting a self-reported number.
         "armed_at_epoch": datetime.now(timezone.utc).timestamp(),
         "wall_clock_budget_seconds": WALL_CLOCK_BUDGET_SECONDS,
+        # The two hooks must judge the SAME repository.  They used to resolve it
+        # independently, so a cwd change between arming and closing pointed the
+        # SESSION_LOG check at a different tree than the snapshot came from.
+        "repo_root": str(Path(root).resolve()),
         "prompt_sha256": hashlib.sha256((prompt or "").encode("utf-8")).hexdigest(),
         "commands": results,
     }
@@ -254,7 +266,10 @@ def handle_prompt_hook(raw: str, *, root: Path | None = None, state_dir: Path | 
     if root is None:
         root = resolve_repo_root(data.get("cwd"))
     if state_dir is None:
-        state_dir = root / ".claude" / "review_gate"
+        # ONE canonical state location next to the canonical script.  Deriving it from the
+        # reviewed tree meant the Stop hook could resolve a different tree, fail to find the
+        # state file at all, and silently enforce nothing.
+        state_dir = STATE_DIR
     prompt = data.get("prompt", "") or ""
     parts: list[str] = []
     if "修复" in prompt:
@@ -326,7 +341,7 @@ def handle_stop_hook(*, root: Path | None = None, state_dir: Path | None = None)
     if root is None:
         root = ROOT
     if state_dir is None:
-        state_dir = root / ".claude" / "review_gate"
+        state_dir = STATE_DIR
     state_path = state_dir / ACTIVE_REVIEW
     if not state_path.exists():
         return 0
@@ -345,6 +360,19 @@ def handle_stop_hook(*, root: Path | None = None, state_dir: Path | None = None)
     if not token:
         print("stock-review-gate: active_review.json is missing evidence_token; re-arm the review gate", file=sys.stderr)
         return 2
+    # Judge the tree the snapshot was taken in, not whatever tree this hook happens
+    # to resolve now.  Only an unreadable/missing record falls back to `root`.
+    recorded_root = state.get("repo_root")
+    if isinstance(recorded_root, str) and recorded_root:
+        candidate = Path(recorded_root)
+        if (candidate / "docs" / "SESSION_LOG.md").exists():
+            root = candidate
+        else:
+            print(
+                f"stock-review-gate: recorded repo_root is no longer readable ({recorded_root}); "
+                f"falling back to {root}",
+                file=sys.stderr,
+            )
     log_path = root / "docs" / "SESSION_LOG.md"
     if not log_path.exists():
         print("stock-review-gate: docs/SESSION_LOG.md not found", file=sys.stderr)
@@ -403,8 +431,7 @@ def main(argv: list[str]) -> int:
     if mode == "disarm":
         # Escape hatch for a prompt that mentioned a review but produced no review cycle
         # (discussion, planning, rule edits).  Leaves the reason in the state directory.
-        disarm_root = resolve_repo_root(str(Path.cwd()))
-        disarm_state = disarm_root / ".claude" / "review_gate"
+        disarm_state = STATE_DIR
         state_path = disarm_state / ACTIVE_REVIEW
         if not state_path.exists():
             return 0

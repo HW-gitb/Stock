@@ -68,6 +68,76 @@ class ReviewContextTieringTests(unittest.TestCase):
         self.assertFalse(gate.is_review_prompt("为什么审查流程这么慢"))
         self.assertFalse(gate.is_review_prompt("我们系统里已经有作为审查者审查时需要遵守的规定"))
 
+    def test_review_prompt_arms_on_a_worktree_or_diff_object(self):
+        """`审查工作树017a的k4b修复` armed nothing, so that round had no token and no clock."""
+        gate = _load_review_gate()
+        for prompt in (
+            "审查工作树017a的k4b修复",
+            "复审017a",
+            "审查该分支的改动",
+            "先读 register，审查提交 7da0b220",
+        ):
+            with self.subTest(prompt=prompt):
+                self.assertTrue(gate.is_review_prompt(prompt))
+        # `工作流` must not be dragged in by `工作树`: the meta list is checked first.
+        for prompt in ("审查工作流要不要改", "讨论一下审查方式", "审查耗时为什么这么长"):
+            with self.subTest(prompt=prompt):
+                self.assertFalse(gate.is_review_prompt(prompt))
+
+
+class RecordedRepoRootTests(unittest.TestCase):
+    """Both hooks must judge the tree the snapshot came from, not the tree they resolve now."""
+
+    ENTRY = (
+        "# Session Log\n\n## 2026-07-27 审查 PASS (t)\n\n"
+        "- **Verdict/Action**: PASS\n- **Verify**: review-evidence:deadbeef 1 OK\n\n"
+        "REVIEW-CYCLE-MINIMAL-TEMPLATE-MARKER\n"
+    )
+
+    def _tree(self, base: Path, name: str, entry: str) -> Path:
+        root = base / name
+        (root / "docs").mkdir(parents=True)
+        (root / "docs" / "SESSION_LOG.md").write_text(entry, encoding="utf-8")
+        return root
+
+    def test_stop_hook_uses_the_recorded_root_not_its_own(self):
+        import json
+        import tempfile
+        from datetime import datetime, timezone
+        gate = _load_review_gate()
+        with tempfile.TemporaryDirectory() as tmp:
+            base = Path(tmp)
+            reviewed = self._tree(base, "reviewed", self.ENTRY)
+            elsewhere = self._tree(base, "elsewhere", self.ENTRY.replace("review-evidence:deadbeef", "no token"))
+            state_dir = base / "state"
+            state_dir.mkdir()
+            for recorded, expected in ((reviewed, 0), (elsewhere, 2)):
+                with self.subTest(recorded=recorded.name):
+                    (state_dir / "active_review.json").write_text(json.dumps({
+                        "evidence_token": "review-evidence:deadbeef",
+                        "armed_at_epoch": datetime.now(timezone.utc).timestamp(),
+                        "wall_clock_budget_seconds": 1800,
+                        "repo_root": str(recorded),
+                    }), encoding="utf-8")
+                    # `root=elsewhere` is deliberately the WRONG tree; the record must win.
+                    self.assertEqual(
+                        gate.handle_stop_hook(root=elsewhere, state_dir=state_dir), expected,
+                    )
+
+    def test_snapshot_records_the_reviewed_root_and_state_lives_in_one_place(self):
+        import json
+        import tempfile
+        gate = _load_review_gate()
+        snapshot = gate.collect_review_snapshot(prompt="审查当前 diff", root=ROOT)
+        self.assertEqual(Path(snapshot["repo_root"]), ROOT.resolve())
+        with tempfile.TemporaryDirectory() as tmp:
+            out = gate.handle_prompt_hook(
+                json.dumps({"prompt": "审查当前 diff", "cwd": str(ROOT)}), state_dir=Path(tmp))
+            self.assertIn("REVIEW EVIDENCE SNAPSHOT", out)
+            written = json.loads((Path(tmp) / "active_review.json").read_text(encoding="utf-8"))
+            self.assertEqual(Path(written["repo_root"]), ROOT.resolve())
+        self.assertEqual(gate.STATE_DIR, gate.ROOT / ".claude" / "review_gate")
+
 
 class WallClockBudgetTests(unittest.TestCase):
     """Rule 7 teeth: the gate MEASURES the review wall clock; it never trusts a self-report."""
