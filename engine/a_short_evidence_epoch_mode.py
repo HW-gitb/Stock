@@ -161,7 +161,7 @@ class _StripDocstrings(ast.NodeTransformer):
     visit_ClassDef = _strip
 
 
-def _module_function_nodes(module) -> tuple[str, str]:
+def _module_source_text(module) -> tuple[str, str]:
     """Read the checked-in source of one module for semantic-contract caching.
 
     The file, not the live module dictionary, is the authority: a runtime
@@ -228,7 +228,7 @@ def semantic_module_contract(module, *, excluded_functions=frozenset()) -> dict:
     top-level function explicitly.  Exclusions are fail-closed: a stale or
     misspelled exclusion is an error instead of silently weakening coverage.
     """
-    module_name, source = _module_function_nodes(module)
+    module_name, source = _module_source_text(module)
     exclusions = frozenset(str(name) for name in excluded_functions)
     cached = _semantic_module_contract_from_source(module_name, source, tuple(sorted(exclusions)))
     return {
@@ -283,7 +283,7 @@ def semantic_function_contract(module, function_names) -> dict:
     requested = sorted({str(name) for name in function_names})
     if not requested:
         raise EvidenceEpochModeError(f"no semantic functions requested for {module.__name__}")
-    module_name, source = _module_function_nodes(module)
+    module_name, source = _module_source_text(module)
     # A narrow binding still has to cover the constants those functions read.
     # Binding only the function bodies let a governed threshold (P5's fixed
     # watch-pool slot count, for one) change behaviour without moving the

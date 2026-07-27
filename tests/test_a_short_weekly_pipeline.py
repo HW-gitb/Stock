@@ -69,6 +69,7 @@ GEN = "2026-06-09T12:00:00+08:00"
 M67_SCHEMA = ROOT / "schemas" / "a_short_m67_report.schema.json"
 FIXT_AI = ROOT / "schemas" / "examples" / "analysis_input.example.json"
 _DEFAULT_WEEKLY_BASELINE = None
+_DEFAULT_WEEKLY_BUILDER = None
 
 
 def _analysis_input(trade_date=AS_OF, candidates=None):
@@ -234,11 +235,12 @@ def _normalized(ts_code="600000.SH", iv_pct=55.0, **cand_over):
 
 
 def _weekly(normalized_list=None, iv_feed_ref="iv_feed.json"):
-    global _DEFAULT_WEEKLY_BASELINE
+    global _DEFAULT_WEEKLY_BASELINE, _DEFAULT_WEEKLY_BUILDER
     if normalized_list is None and iv_feed_ref == "iv_feed.json":
-        if _DEFAULT_WEEKLY_BASELINE is None:
+        if _DEFAULT_WEEKLY_BASELINE is None or _DEFAULT_WEEKLY_BUILDER is not build_weekly_report:
             _DEFAULT_WEEKLY_BASELINE = build_weekly_report([_normalized()], AS_OF, GEN,
                                                            iv_feed_ref=iv_feed_ref)
+            _DEFAULT_WEEKLY_BUILDER = build_weekly_report
         return copy.deepcopy(_DEFAULT_WEEKLY_BASELINE)
     nl = normalized_list if normalized_list is not None else [_normalized()]
     return build_weekly_report(nl, AS_OF, GEN, iv_feed_ref=iv_feed_ref)
@@ -412,14 +414,24 @@ class AccountStateTests(unittest.TestCase):
 
 class BuildWeeklyTests(unittest.TestCase):
     def test_default_weekly_fixture_is_cached_and_isolated(self):
-        global _DEFAULT_WEEKLY_BASELINE
+        global _DEFAULT_WEEKLY_BASELINE, _DEFAULT_WEEKLY_BUILDER
         _DEFAULT_WEEKLY_BASELINE = None
+        _DEFAULT_WEEKLY_BUILDER = None
         with patch(f"{__name__}.build_weekly_report", wraps=build_weekly_report) as build:
             first = _weekly()
             first["reports"][0]["ts_code"] = "poison"
             second = _weekly()
         self.assertEqual(build.call_count, 1)
         self.assertEqual(second["reports"][0]["ts_code"], "600000.SH")
+
+    def test_default_weekly_fixture_rebuilds_for_a_patched_builder(self):
+        global _DEFAULT_WEEKLY_BASELINE, _DEFAULT_WEEKLY_BUILDER
+        _DEFAULT_WEEKLY_BASELINE = None
+        _DEFAULT_WEEKLY_BUILDER = None
+        _weekly()
+        with patch(f"{__name__}.build_weekly_report", wraps=build_weekly_report) as build:
+            _weekly()
+        self.assertEqual(build.call_count, 1)
 
     def test_envelope(self):
         w = _weekly([_normalized("600000.SH"), _normalized("000001.SZ")])

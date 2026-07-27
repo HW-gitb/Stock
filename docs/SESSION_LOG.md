@@ -1,5 +1,26 @@
 # Session Log
 
+## 2026-07-27 — Claude Code 审查 PASS（刀 5-8 三条 Optional 收口 + US-short owned-private-root 提速）
+
+- **Verdict/Action**: PASS。①`_module_function_nodes`→`_module_source_text`，两个调用点与守卫测试硬编码名同一次改齐；②admission 缓存键并入 schema 字节与 seal/validate 入口身份；③weekly 默认夹具记录 builder 身份、被 patch 即重建；④US-short 把冲突矩阵里反复起 `git check-ignore` 换成「真 git 证明一次私有根被 ignore，之后只对该根内路径短路、其余委派回真实实现」。
+- **Required**: 无，未新开 register 条目。一条 Optional 见 Next。
+- **Verify**: 本轮审查门未注入 review-evidence token，故不引用。超集包 `test_a_short_evidence_epoch_mode` + `test_a_short_experiment_admission_registry` + `test_a_short_weekly_pipeline` + `test_us_short_weekly_capstone_soft_discovery` = 564 tests / 220.3s / exit 0。静态面：代码内旧符号残留归零（仅存历史记述）；`_validate_schema` 调用时读模块全局 `ADMISSION_SCHEMA_PATH`，负测 patch 得到且断言的消息真实存在；短路上下文只用于一处循环，`tests/test_us_short_private_paths.py` 仍直接测真实 containment 守卫两个方向。
+- **Next**: Optional（未修）：`_sealing_cache_context()` 用 `id(seal)/id(validate)` 入键，函数对象被回收后地址可复用，未来若加「替换 validate 使其失败」的负测，可能撞上早先以同地址缓存的成功条目而假绿；改成把函数对象本身入键即可（可哈希、强引用、无复用）。生产侧无影响（两函数进程内身份稳定）。
+
+## 2026-07-27 - Codex implementation: US-short cut 5 owned-private-root Git-check acceleration
+
+- **Verdict/Action**: Implemented the first US-short speed cut in one test file only; no product or shared-engine code changed. The repeated immutable-conflict transition matrix now proves its freshly created `provider_samples` temporary root is actually gitignored once per transition, then substitutes only its two local gitignore adapters and capstone private-path call for paths inside that exact owned root. Any other path delegates to the real fail-closed implementation.
+- **Required**: None newly opened. This remains uncommitted for the normal Claude Code independent review/commit cycle. Review must preserve the distinction between the accelerated owned temporary root and direct tests of tracked/non-private Git paths.
+- **Verify**: The formerly slow test is `1 OK` in `1.523s` (the pre-change profile was approximately `7.7s` for one execution). Direct real-Git private-path tests plus the complete soft-discovery module: `53 OK` in `30.661s`. `ExecutableClosureMatrix.test_c_every_repo_derived_guard_callsite_has_a_real_dying_mutation`: `1 OK` in `144.032s`; its deliberate mutations still fail as required. Exact-final-state full-pack ledger: `us_short` = `4880 OK`, `783.7s / 1200s`.
+- **Next**: Claude Code independently review this test-only cut, then commit only PASS-covered files; profile the next dominant module from the current exact-state baseline before another change.
+
+## 2026-07-27 - Codex implementation: post-merge Optional fixes for test-speed knives 5-8
+
+- **Verdict/Action**: Resolved all three reported Optional items in the main tree. Admission memo keys now include the live admission-schema bytes and current sealing/validation entry-point identities, so a warm cache cannot skip a changed schema or a replaced seal function. Renamed `_module_function_nodes` to `_module_source_text` and updated its source-identity guard. The default weekly fixture now records its builder identity and rebuilds when a test patches `build_weekly_report`.
+- **Required**: None newly opened. These are shared-engine/test changes and remain uncommitted for the normal Claude Code review/commit cycle.
+- **Verify**: New warm-cache negative tests prove both a replaced seal and a changed schema raise after a prior `admissions()` call; the weekly test proves a bare default `_weekly()` call reaches a subsequently patched builder. Focused `admission registry + epoch mode + BuildWeeklyTests` = 40 OK. Exact-final-state full-pack ledger: `a_short` = 2053 OK, 3 skipped, 295.7s / 1200s. One local run only; not a loaded-machine performance commitment.
+- **Next**: Claude Code independently review the Optional fixes, then commit only PASS-covered files.
+
 ## 2026-07-27 - Claude Code 修复 + 自审 PASS (GOV-R6：GOV-R5 那次没修到根上)
 
 - **Verdict/Action**: PASS。根因不是启动器强设 `PYTHONIOENCODING`(那行删得对，但只是其中一个来源)，而是测试自己 `subprocess.run(..., text=True)` 不钉 `encoding=`、拿跑测试那个 shell 的 locale(cp936) 去解子进程输出；子进程吐什么编码又看它继承到的 `PYTHONIOENCODING`。两端各自随环境漂 ⇒ 换个 shell 同一份代码就红。改成两端一起钉死。

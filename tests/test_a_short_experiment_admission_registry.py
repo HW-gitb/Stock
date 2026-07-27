@@ -5,6 +5,7 @@ import copy
 import hashlib
 import json
 import sys
+import tempfile
 import unittest
 from pathlib import Path
 from unittest import mock
@@ -37,6 +38,25 @@ class AdmissionRegistryTests(unittest.TestCase):
         self.assertGreater(first_validation_count, 0)
         self.assertEqual(validate.call_count, first_validation_count)
         self.assertEqual(second["p1_regime_action_proxy"]["baseline"]["arm_id"], "current_build")
+
+    def test_warm_admission_cache_cannot_skip_replaced_seal(self):
+        registry.admissions()
+        with mock.patch.object(
+                registry, "seal_experiment_admission",
+                side_effect=ExperimentGovernanceError("seal replacement probe")):
+            with self.assertRaisesRegex(ExperimentGovernanceError, "seal replacement probe"):
+                registry.admissions()
+
+    def test_warm_admission_cache_cannot_skip_changed_schema(self):
+        registry.admissions()
+        schema = json.loads(registry.governance.ADMISSION_SCHEMA_PATH.read_text(encoding="utf-8"))
+        schema["required"] = [*schema["required"], "cache_invalidation_probe"]
+        with tempfile.TemporaryDirectory() as temp:
+            path = Path(temp) / "admission.schema.json"
+            path.write_text(json.dumps(schema), encoding="utf-8")
+            with mock.patch.object(registry.governance, "ADMISSION_SCHEMA_PATH", path):
+                with self.assertRaisesRegex(ExperimentGovernanceError, "schema validation failed"):
+                    registry.admissions()
 
     def test_every_active_lane_has_a_valid_sealed_admission(self) -> None:
         registry = admissions()

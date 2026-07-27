@@ -4,8 +4,10 @@ import copy
 import hashlib
 import inspect
 import json
+import subprocess
 import tempfile
 import unittest
+from contextlib import contextmanager
 from dataclasses import replace
 from datetime import datetime
 from pathlib import Path
@@ -20,6 +22,7 @@ from runners import us_short_universe_fetch as universe
 from runners import us_short_weekly_capstone as capstone
 from runners import us_short_weekly_capstone_stages as stages
 from runners import us_short_weekly_capstone_soft_discovery as soft
+from runners import us_short_discovery_publish_policy as publish_policy
 from runners.us_short_discovery_publish_policy import DiscoveryPublishPolicyError
 from tests.provider.test_us_short_batch5_full_universe_momentum_producer import (
     _ALL_ELIGIBLE,
@@ -248,6 +251,61 @@ class WeeklyCapstoneSoftDiscoveryStageTest(unittest.TestCase):
                     first, first_path, first_expected, second, second_path, second_expected,
                 )
         return merged, manifest
+
+    @contextmanager
+    def _owned_private_root_git_check(self):
+        """Keep the repeated conflict matrix off the process-spawn hot path.
+
+        ``temporary_provider_directory`` creates a fresh child of the repository's
+        gitignored ``provider_samples`` root.  Prove that fact with real Git once per
+        transition, then answer only the two local gitignore adapters for paths inside
+        that exact owned root.  The production containment, suffix, and exact-slot
+        checks still run; an unexpected path is delegated to its real implementation.
+        Direct private-path policy tests keep exercising the actual Git command for
+        tracked and non-private paths.
+        """
+        original_run = subprocess.run
+        probe = original_run(
+            ["git", "check-ignore", "-q", "--", str(self.temp_root)],
+            cwd=ROOT,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            check=False,
+        )
+        self.assertEqual(probe.returncode, 0, "test-private root must be gitignored")
+
+        def owned_root_check(path: Path) -> bool:
+            checked_path = Path(path).resolve()
+            try:
+                checked_path.relative_to(self.temp_root.resolve())
+            except ValueError:
+                return False
+            return True
+
+        original_web_gitignored = web._gitignored
+        original_policy_gitignored = publish_policy._gitignored
+        original_private_path_check = capstone.reject_nonprivate_output_path
+
+        def test_root_web_gitignored(path: Path) -> bool:
+            return owned_root_check(path) or original_web_gitignored(path)
+
+        def test_root_policy_gitignored(path: Path, *, root: Path) -> bool:
+            return owned_root_check(path) or original_policy_gitignored(path, root=root)
+
+        def test_root_private_path_check(path) -> None:
+            candidate = Path(path)
+            if candidate.is_absolute() and owned_root_check(candidate):
+                return
+            return original_private_path_check(path)
+
+        with mock.patch.object(web, "_gitignored", side_effect=test_root_web_gitignored), \
+             mock.patch.object(
+                 publish_policy, "_gitignored", side_effect=test_root_policy_gitignored,
+             ), \
+             mock.patch.object(
+                 capstone, "reject_nonprivate_output_path", side_effect=test_root_private_path_check,
+             ):
+            yield
 
     def test_disabled_is_inert_and_default_one_click_pipeline_includes_soft_discovery(self):
         ctx = self._ctx(enabled=False)
@@ -562,64 +620,65 @@ class WeeklyCapstoneSoftDiscoveryStageTest(unittest.TestCase):
                 if index:
                     self.tearDown()
                     self.setUp()
-                ctx = self._assert_conflict_transition(initial, final)
+                with self._owned_private_root_git_check():
+                    ctx = self._assert_conflict_transition(initial, final)
 
-                def bridge_outputs(run_ctx):
-                    output_root = run_ctx.official_output_root or run_ctx.private_root
-                    return [
-                        output_root / "weekly_private" / run_ctx.decision_date / "weekly_report.md",
-                        output_root / "weekly_private" / run_ctx.decision_date / "action_table.csv",
-                        output_root / "runs_private" / run_ctx.decision_date / "machine_record.json",
-                    ]
+                    def bridge_outputs(run_ctx):
+                        output_root = run_ctx.official_output_root or run_ctx.private_root
+                        return [
+                            output_root / "weekly_private" / run_ctx.decision_date / "weekly_report.md",
+                            output_root / "weekly_private" / run_ctx.decision_date / "action_table.csv",
+                            output_root / "runs_private" / run_ctx.decision_date / "machine_record.json",
+                        ]
 
-                def run_bridge(run_ctx):
-                    outputs = bridge_outputs(run_ctx)
-                    for output in outputs:
-                        output.parent.mkdir(parents=True, exist_ok=True)
-                        output.write_text("terminal", encoding="utf-8")
-                    return {
-                        "batch4_run": {
-                            "emitted": True,
-                            "output_paths": {
-                                "weekly_report_path": str(outputs[0]),
-                                "action_table_path": str(outputs[1]),
-                                "machine_record_path": str(outputs[2]),
+                    def run_bridge(run_ctx):
+                        outputs = bridge_outputs(run_ctx)
+                        for output in outputs:
+                            output.parent.mkdir(parents=True, exist_ok=True)
+                            output.write_text("terminal", encoding="utf-8")
+                        return {
+                            "batch4_run": {
+                                "emitted": True,
+                                "output_paths": {
+                                    "weekly_report_path": str(outputs[0]),
+                                    "action_table_path": str(outputs[1]),
+                                    "machine_record_path": str(outputs[2]),
+                                },
                             },
-                        },
-                    }
+                        }
 
-                pipeline = [
-                    capstone.Stage(
-                        "soft_discovery", False, lambda _ctx: [],
-                        lambda run_ctx: [run_ctx.soft_discovery_receipt_path],
-                        stages.run_soft_discovery,
-                        failure_policy="zero_effect", output_policy="optional",
-                        checkpoint_policy="optional_result_only",
-                        failure_handler=capstone._degrade_soft_discovery_boundary,
-                    ),
-                    capstone.Stage(
-                        "weekly_bridge", False, lambda _ctx: [], bridge_outputs, run_bridge,
-                    ),
-                ]
-                summary = capstone.run_weekly_capstone(
-                    now_et=datetime(2026, 6, 15, 7, 0, 0),
-                    private_root=self.state_dir / "private",
-                    batch4_template_path=self.state_dir / "template.json",
-                    account_state_path=self.state_dir / "account.json",
-                    dry_run=False,
-                    confirm_user_authorization=True,
-                    stages=pipeline,
-                    state_dir=self.state_dir,
-                    sample_root=ROOT,
-                    soft_discovery_enabled=True,
-                )
-                self.assertTrue(summary["emitted"])
-                result = next(
-                    row["result"] for row in summary["stages"]
-                    if row["name"] == "soft_discovery"
-                )
-                self.assertEqual(result["reason_code"], "SOFT_DISCOVERY_IMMUTABLE_CONFLICT")
-                self.assertEqual(result["boostable_ticker_count"], 0)
+                    pipeline = [
+                        capstone.Stage(
+                            "soft_discovery", False, lambda _ctx: [],
+                            lambda run_ctx: [run_ctx.soft_discovery_receipt_path],
+                            stages.run_soft_discovery,
+                            failure_policy="zero_effect", output_policy="optional",
+                            checkpoint_policy="optional_result_only",
+                            failure_handler=capstone._degrade_soft_discovery_boundary,
+                        ),
+                        capstone.Stage(
+                            "weekly_bridge", False, lambda _ctx: [], bridge_outputs, run_bridge,
+                        ),
+                    ]
+                    summary = capstone.run_weekly_capstone(
+                        now_et=datetime(2026, 6, 15, 7, 0, 0),
+                        private_root=self.state_dir / "private",
+                        batch4_template_path=self.state_dir / "template.json",
+                        account_state_path=self.state_dir / "account.json",
+                        dry_run=False,
+                        confirm_user_authorization=True,
+                        stages=pipeline,
+                        state_dir=self.state_dir,
+                        sample_root=ROOT,
+                        soft_discovery_enabled=True,
+                    )
+                    self.assertTrue(summary["emitted"])
+                    result = next(
+                        row["result"] for row in summary["stages"]
+                        if row["name"] == "soft_discovery"
+                    )
+                    self.assertEqual(result["reason_code"], "SOFT_DISCOVERY_IMMUTABLE_CONFLICT")
+                    self.assertEqual(result["boostable_ticker_count"], 0)
 
     def test_budget_preview_accepts_bound_immutable_conflict_receipt(self):
         ctx = self._assert_conflict_transition("unavailable", "valid")

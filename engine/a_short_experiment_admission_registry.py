@@ -14,6 +14,7 @@ from functools import lru_cache
 from pathlib import Path
 from typing import Any
 
+from engine import a_short_experiment_governance as governance
 from engine.a_short_experiment_governance import seal_experiment_admission, validate_experiment_admission
 
 
@@ -116,15 +117,28 @@ def _admission(*, program_id: str, experiment_id: str, track_mode: str, componen
         },
     }
     return json.loads(_sealed_admission_from_payload(
-        _canonical(payload), trusted_arm_inventory(experiment_id)
+        _canonical(payload), trusted_arm_inventory(experiment_id), _sealing_cache_context()
     ))
+
+
+def _sealing_cache_context() -> tuple[bytes, int, int]:
+    """Bind memoized admissions to the live schema and sealing entry points."""
+    try:
+        schema_source = governance.ADMISSION_SCHEMA_PATH.read_bytes()
+    except OSError as exc:
+        raise AdmissionRegistryError(
+            "cannot read admission schema for sealed registry cache: "
+            f"{governance.ADMISSION_SCHEMA_PATH.name}"
+        ) from exc
+    return schema_source, id(seal_experiment_admission), id(validate_experiment_admission)
 
 
 @lru_cache(maxsize=32)
 def _sealed_admission_from_payload(payload_source: str,
-                                   trusted_inventory: tuple[str, str] | None) -> str:
-    """Seal and validate one immutable admission payload once per exact content."""
-    del trusted_inventory  # Part of the cache key; validation reads the live trusted inventory.
+                                   trusted_inventory: tuple[str, str] | None,
+                                   sealing_context: tuple[bytes, int, int]) -> str:
+    """Seal and validate one immutable admission per exact payload and live context."""
+    del trusted_inventory, sealing_context  # Both bind the cache key; validation reads live inventory/schema.
     sealed = seal_experiment_admission(json.loads(payload_source))
     validate_experiment_admission(sealed)
     return _canonical(sealed)

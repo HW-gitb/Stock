@@ -577,7 +577,7 @@ class PreFreezeEvidenceModeTests(unittest.TestCase):
             }
             if "getsourcefile" in attributes:
                 source_readers.add(node.name)
-        self.assertEqual(source_readers, {"_module_function_nodes"})
+        self.assertEqual(source_readers, {"_module_source_text"})
 
     def test_enforcement_is_parked_not_deleted(self):
         """Flipping the mode back on must restore a real, drift-sensitive binding."""
