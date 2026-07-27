@@ -1,5 +1,12 @@
 # Session Log
 
+## 2026-07-27 — Claude Code 审查 PASS（测试提速第一刀：weekly 模块只做一次 effect-contract 静态校验）
+
+- **Verdict/Action**: PASS，未提交。改动只在 `tests/test_a_short_weekly_pipeline.py`（+22 行，无删除）：`setUpModule` 先真跑一次 `validate_static_contract()`，再把它 patch 成空，`tearDownModule` 复原。产品代码零改动。效果显著：该模块 486 例现 178.8 秒跑完，而它此前所在的那半条 lane（1118 例）连 1200 秒都跑不完。
+- **Required**: 无。未新开 register 条目——本轮没有风险项，只有一条备选方案（见 Verify 末）。
+- **Verify**: 亲跑 `bounded_unittest focused 300 -- tests.test_a_short_weekly_pipeline` = `status=PASS exit=0 tests=486 elapsed=178.8s`。覆盖不减三条实证：① 该模块自身对 effect contract **零断言**（grep 只命中新加的 patch 代码），故无断言被架空；② 漂移仍 fail-closed——`setUpModule` 里那次真校验未被 patch，包一进来就会红；③ `tests/test_a_short_effect_contract.py` 直接用 `static_contract_error(source_overrides=...)` 覆盖谓词/阈值/policy/schema 各类变异，drift 检测未丢。作用域：module fixture 且 `tearDownModule` 停 patch；别的模块只是 import 本模块的 helper，import 不触发 setUpModule，故不外泄。engine 侧确认无任何缓存（`lru_cache` 0 命中），所以这笔重复开销是真的。
+- **Next**: 已提交。非阻断 Option 留给下一刀：与其逐模块 patch，不如在 `engine/a_short_effect_contract.py` 给 `static_inventory()`/`load_contract()` 加一层按源码字节 key 的 memo，一处改动让所有模块受益（组合风险 74s、margin 43s 等）、也不需要测试侧打桩，代价是动产品代码需单独审查；之后量一次全 lane，看 1200 秒上限是否已够用。
+
 ## 2026-07-27 - Claude Code 修复 + 自审 PASS (GOV-R4 + Optional，用户明令自修自审)
 
 - **Verdict/Action**: PASS。整类只有两处：launcher 里双层嵌套的两个用法守卫，改为 `goto` 到单层标签 `:usage_missing_timeout_value` / `:usage_missing_unittest_args`（各自 `popd` + `exit /b 2`，放在正常出口之后）。Optional 一并闭：AGENTS rule 5 补回"未经用户批准不得提高上限"，并加上"用法错误必须非零退出"。
