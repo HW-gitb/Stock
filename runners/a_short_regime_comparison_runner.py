@@ -35,6 +35,7 @@ import tempfile
 from datetime import datetime, timedelta
 from pathlib import Path
 
+import jsonschema
 import pandas as pd
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -66,7 +67,9 @@ ACTION_SUMMARY_FILENAME = "regime_action_comparison_summary.json"
 P1_CANDIDATE_EFFECT_LEDGER_FILENAME = "a_short_regime_candidate_effect.json"
 P1_CANDIDATE_EFFECT_SUMMARY_FILENAME = "regime_candidate_effect_summary.json"
 P1_CANDIDATE_EFFECT_MARKDOWN_FILENAME = "regime_candidate_effect_summary.md"
+P1_CANDIDATE_EFFECT_OUTCOME_FILENAME = "candidate_effect_outcome.json"
 IV_FEED_SCHEMA_PATH = ROOT / "schemas" / "a_short_iv_feed.schema.json"
+CANDIDATE_EFFECT_OUTCOME_SCHEMA_PATH = ROOT / "schemas" / "a_short_regime_candidate_effect_outcome.schema.json"
 
 
 # ---- pure helpers -----------------------------------------------------------------------------
@@ -136,6 +139,7 @@ def lane_paths(project_root: str | Path | None = None) -> dict:
         "candidate_effect_ledger": str(base / "logs" / P1_CANDIDATE_EFFECT_LEDGER_FILENAME),
         "candidate_effect_summary": str(lane / P1_CANDIDATE_EFFECT_SUMMARY_FILENAME),
         "candidate_effect_markdown": str(lane / P1_CANDIDATE_EFFECT_MARKDOWN_FILENAME),
+        "candidate_effect_outcome": str(lane / P1_CANDIDATE_EFFECT_OUTCOME_FILENAME),
         "forward_tracker": str(base / "logs" / "forward_tracker.csv"),
     }
 
@@ -165,6 +169,36 @@ def _write_json(obj, path: str) -> None:
     _reject_production_path(path)
     os.makedirs(os.path.dirname(os.path.abspath(path)), exist_ok=True)
     _atomic_write_text(json.dumps(obj, ensure_ascii=False, indent=2) + "\n", path)
+
+
+def write_candidate_effect_outcome(*, as_of: str, result: dict, summary_path: str,
+                                   outcome_path: str) -> dict:
+    """Publish one de-identified current-run receipt even when candidate evidence is not updated."""
+    if result.get("status") == "updated":
+        prior_summary = result.get("summary") or {}
+    else:
+        try:
+            prior_summary = json.loads(Path(summary_path).read_text(encoding="utf-8"))
+        except (OSError, ValueError, TypeError):
+            prior_summary = {}
+    try:
+        validate_candidate_effect_summary(prior_summary)
+    except (ValueError, TypeError):
+        observed_as_of = None
+    else:
+        observed_as_of = prior_summary.get("latest_evidence_as_of")
+    outcome = {
+        "schema_name": "a_short_regime_candidate_effect_outcome",
+        "schema_version": "1.0.0",
+        "as_of": str(as_of),
+        "status": str(result.get("status")),
+        "reason_code": str(result.get("reason_code") or "updated"),
+        "observed_as_of": observed_as_of,
+    }
+    schema = json.loads(CANDIDATE_EFFECT_OUTCOME_SCHEMA_PATH.read_text(encoding="utf-8"))
+    jsonschema.validate(outcome, schema)
+    _write_json(outcome, outcome_path)
+    return outcome
 
 
 def _atomic_write_text(text: str, path: str) -> None:
@@ -570,6 +604,7 @@ def _render_candidate_effect_summary(summary: dict) -> str:
         "## Evidence progress",
         f"- Forward-live weeks: {progress['forward_live_weeks']}",
         f"- Mature divergent weeks / stocks: {progress['valid_divergence_weeks']} / {progress['valid_divergence_stocks']}",
+        f"- H20 mature / pending divergent weeks: {progress['h20_mature_weeks']} / {progress['h20_pending_weeks']}",
         f"- Historical not counted: {progress['historical_not_counted']}; immature or missing not counted: {progress['immature_or_missing_not_counted']}",
         f"- Ready for verdict: {str(progress['ready_for_verdict']).lower()}",
         "",
@@ -606,10 +641,12 @@ def run_candidate_effect_sidecar(*, decision_as_of: str, regime_ledger: dict, m6
     if (m67_meta["candidate_digest"] != tracker_meta["candidate_digest"]
             or m67_meta["run_id"] != tracker_meta["run_id"]):
         return {"status": "skipped_source_mismatch", "counted": False,
+                "reason_code": "run_identity_mismatch",
                 "reason": "M6.7 and forward-tracker run identity differ"}
     missing_tracker_rows = sorted(c["ts_code"] for c in candidates if c["ts_code"] not in tracker_by_code)
     if missing_tracker_rows:
         return {"status": "skipped_source_mismatch", "counted": False,
+                "reason_code": "tracker_rows_missing",
                 "reason": "M6.7 build candidates are absent from forward_tracker"}
 
     run_date = _current_run_date()
@@ -631,6 +668,7 @@ def run_candidate_effect_sidecar(*, decision_as_of: str, regime_ledger: dict, m6
     if prior_week is not None and prior_week.get("candidate_digest") == tracker_meta["candidate_digest"] \
             and prior_week.get("m67_sha256") != m67_meta["m67_sha256"]:
         return {"status": "skipped_source_mismatch", "counted": False,
+                "reason_code": "m67_digest_drift",
                 "reason": "same-date M6.7 SHA-256 changed under an otherwise frozen cohort"}
     # Every new weekly invocation is also the cache-only maturation pass for all older frozen
     # observations.  A missing historical tracker row remains unchanged (never zero-filled); this
@@ -646,6 +684,7 @@ def run_candidate_effect_sidecar(*, decision_as_of: str, regime_ledger: dict, m6
     if prior_week is not None and prior_week.get("candidate_digest") != tracker_meta["candidate_digest"]:
         if any(_record_has_mature_return(record) for record in prior_records):
             return {"status": "skipped_immutable_mature_week", "counted": False,
+                    "reason_code": "immutable_mature_week",
                     "reason": "same-date tracker replacement arrived after a mature return"}
         group["records"] = [r for r in group["records"] if str(r.get("as_of")) != str(decision_as_of)]
         prior_records = []
@@ -680,7 +719,8 @@ def run_candidate_effect_sidecar(*, decision_as_of: str, regime_ledger: dict, m6
     _write_json(ledger, ledger_path)
     _write_json(summary, summary_path)
     _atomic_write_text(_render_candidate_effect_summary(summary), markdown_path)
-    return {"status": "updated", "counted": capture_mode == "live", "summary": summary,
+    return {"status": "updated", "reason_code": "updated",
+            "counted": capture_mode == "live", "summary": summary,
             "records_frozen": len(group["records"])}
 
 
@@ -955,6 +995,12 @@ def main(argv=None) -> int:
                   "comparison-only, no production switch.")
     candidate_effect = out.get("candidate_effect")
     if candidate_effect:
+        write_candidate_effect_outcome(
+            as_of=as_of,
+            result=candidate_effect,
+            summary_path=paths["candidate_effect_summary"],
+            outcome_path=paths["candidate_effect_outcome"],
+        )
         if candidate_effect["status"] == "updated":
             progress = candidate_effect["summary"]["evidence_progress"]
             print("[candidate-effect] updated (comparison-only): "

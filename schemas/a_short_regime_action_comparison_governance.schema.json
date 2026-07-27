@@ -28,7 +28,7 @@
     },
     "candidate_effect_policy": {
       "type": "object", "additionalProperties": false,
-      "required": ["policy_id", "policy_epoch", "state_machine_governance", "eligible_row_source", "eligible_m67_action", "primary_horizon_trading_days", "auxiliary_horizons_trading_days", "return_unit", "return_cost_basis", "benchmark", "benchmark_name", "forward_live_weeks_min", "divergence_weeks_min", "divergence_stocks_min", "practical_improvement_pp_min", "favorable_weeks_ratio_min", "historical_replay_counts", "automatic_production_switch", "baseline_description", "candidate_proxy_description"],
+      "required": ["policy_id", "policy_epoch", "state_machine_governance", "eligible_row_source", "eligible_m67_action", "primary_horizon_trading_days", "auxiliary_horizons_trading_days", "return_unit", "return_cost_basis", "benchmark", "benchmark_name", "forward_live_weeks_min", "divergence_weeks_min", "h20_mature_weeks_min", "divergence_stocks_min", "practical_improvement_pp_min", "favorable_weeks_ratio_min", "historical_replay_counts", "automatic_production_switch", "baseline_description", "candidate_proxy_description"],
       "properties": {
         "policy_id": {"const": "v14_3_candidate_effect_proxy_v1"},
         "policy_epoch": {"const": "20260719_p1_cut1_v1"},
@@ -43,6 +43,7 @@
         "benchmark_name": {"const": "CSI1000"},
         "forward_live_weeks_min": {"const": 12},
         "divergence_weeks_min": {"const": 8},
+        "h20_mature_weeks_min": {"const": 8},
         "divergence_stocks_min": {"const": 20},
         "practical_improvement_pp_min": {"const": 0.5},
         "favorable_weeks_ratio_min": {"const": 0.6},

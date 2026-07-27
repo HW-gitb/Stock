@@ -21,6 +21,10 @@ import jsonschema
 ROOT = Path(__file__).resolve().parents[1]
 HEALTH_SCHEMA = ROOT / "schemas" / "a_short_weekly_sidecar_health.schema.json"
 OUTCOME_SCHEMA = ROOT / "schemas" / "a_short_weekly_sidecar_outcomes.schema.json"
+REQUIRED_ARTIFACT_SCHEMAS = {
+    "candidate_effect": ROOT / "schemas" / "a_short_regime_candidate_effect_summary.schema.json",
+    "iv_feed": ROOT / "schemas" / "a_short_iv_feed.schema.json",
+}
 
 # Deliberately small and explicit.  A new sidecar must be registered here and
 # must also be named in the launcher/pipeline expected-outcome manifest.
@@ -32,6 +36,8 @@ SIDECAR_SPECS: dict[str, str] = {
     "shared_cache_build": "cache_support",
     "regime_daily": "forward_evidence",
     "regime_action": "forward_evidence",
+    "candidate_effect": "forward_evidence",
+    "iv_feed": "readiness",
     "official_operation_capture": "forward_evidence",
     "official_operation_settlement": "forward_evidence",
     "factor_v2_capture": "forward_evidence",
@@ -42,6 +48,42 @@ SIDECAR_SPECS: dict[str, str] = {
     "overlay_adjudication_capture": "forward_evidence",
     "overlay_adjudication_settlement": "forward_evidence",
 }
+AUTHORITATIVE_ARTIFACT_SIDECARS = frozenset(REQUIRED_ARTIFACT_SCHEMAS)
+BEST_EFFORT_SELF_REPORT_SIDECARS = frozenset({
+    "data_canary",
+    "forward_tracker_capture",
+    "forward_tracker_backfill",
+    "crash_veto",
+    "shared_cache_build",
+    "regime_daily",
+    "regime_action",
+    "official_operation_capture",
+    "official_operation_settlement",
+    "factor_v2_capture",
+    "industry_weight_capture",
+    "industry_weight_settlement",
+    "target_policy_capture",
+    "final_action_capture",
+    "overlay_adjudication_capture",
+    "overlay_adjudication_settlement",
+})
+
+
+def _validate_sidecar_validation_buckets() -> None:
+    """Keep every registered sidecar explicit about whether its artifact is authoritative.
+
+    Authoritative artifacts fail closed on missing/invalid data. Best-effort sidecars retain the
+    established launcher-report fallback because they have no schema-bound public receipt yet.
+    """
+    registered = set(SIDECAR_SPECS)
+    authoritative = set(AUTHORITATIVE_ARTIFACT_SIDECARS)
+    best_effort = set(BEST_EFFORT_SELF_REPORT_SIDECARS)
+    if authoritative & best_effort:
+        raise ValueError("sidecar validation buckets overlap")
+    if authoritative | best_effort != registered:
+        raise ValueError("every sidecar must have one validation bucket")
+    if not authoritative <= set(REQUIRED_ARTIFACT_SCHEMAS):
+        raise ValueError("authoritative sidecar lacks an artifact schema")
 
 
 def _load_json(path: Path) -> dict[str, Any] | None:
@@ -50,6 +92,33 @@ def _load_json(path: Path) -> dict[str, Any] | None:
     except (OSError, ValueError, TypeError):
         return None
     return value if isinstance(value, dict) else None
+
+
+def _artifact_matches_schema(name: str, path: Path) -> bool:
+    payload = _load_json(path)
+    schema_path = REQUIRED_ARTIFACT_SCHEMAS.get(name)
+    if payload is None or schema_path is None:
+        return False
+    try:
+        schema = json.loads(schema_path.read_text(encoding="utf-8"))
+        jsonschema.validate(payload, schema)
+        if name == "candidate_effect":
+            from engine.a_short_regime_action_comparison import validate_candidate_effect_summary
+            validate_candidate_effect_summary(payload)
+        elif name == "iv_feed":
+            from runners.a_short_iv_feed_build import validate_feed_summary_consistency
+            validate_feed_summary_consistency(payload)
+    except (OSError, ValueError, TypeError, jsonschema.ValidationError, jsonschema.SchemaError):
+        return False
+    return True
+
+
+def _authoritative_artifact_path(project_root: Path, name: str, as_of: str) -> Path:
+    if name == "candidate_effect":
+        return project_root / "research/results/a_short/regime_candidate_effect_summary.json"
+    if name == "iv_feed":
+        return project_root / f"research/results/a_short/iv_feed_{as_of}/iv_feed.json"
+    raise ValueError(f"authoritative sidecar has no artifact path: {name}")
 
 
 def _sha256(path: Path) -> str | None:
@@ -111,6 +180,7 @@ def _probe(project_root: Path, name: str, as_of: str) -> tuple[str | None, str |
     paths: dict[str, tuple[Path, str | None]] = {
         "regime_daily": (project_root / "research/results/a_short/regime_daily_ledger.json", "rows"),
         "regime_action": (project_root / "research/results/a_short/regime_action_comparison_records.json", None),
+        "candidate_effect": (project_root / "research/results/a_short/regime_candidate_effect_summary.json", None),
         "crash_veto": (project_root / "logs/a_short_crash_veto_summary.json", None),
         "forward_tracker_capture": (project_root / "logs/forward_tracker.csv", None),
         "industry_weight_capture": (project_root / "research/results/a_short/industry_weight_comparison_summary.json", None),
@@ -123,6 +193,11 @@ def _probe(project_root: Path, name: str, as_of: str) -> tuple[str | None, str |
     if name == "factor_v2_capture":
         path = project_root / "state/a_short/factor_comparison_private/v2/weeks" / as_of
         return (as_of if path.is_dir() else None, None)
+    if name == "iv_feed":
+        observed = _max_json_as_of(
+            project_root / f"research/results/a_short/iv_feed_{as_of}/iv_feed.json"
+        )
+        return observed, None
     path_info = paths.get(name)
     if path_info is None:
         return None, None
@@ -150,10 +225,22 @@ def _normalise_outcome(raw: dict[str, Any], *, as_of: str, project_root: Path) -
     progress = str(raw.get("progress_status") or "unavailable")
     observed_decision = _safe_date(raw.get("observed_decision_as_of"))
     observed_data = _safe_date(raw.get("observed_data_through"))
+    required_artifact = (
+        _authoritative_artifact_path(project_root, name, as_of)
+        if name in AUTHORITATIVE_ARTIFACT_SIDECARS else None
+    )
+    if expected and execution == "succeeded" and required_artifact is not None \
+            and not _artifact_matches_schema(name, required_artifact):
+        execution = "failed"
+        progress = "unavailable"
+        observed_decision = None
+        observed_data = None
+        raw = dict(raw)
+        raw["error_code"] = f"{name}_artifact_missing_or_invalid"
     probed_decision, probed_data = _probe(project_root, name, as_of)
-    if observed_decision is None:
+    if name in AUTHORITATIVE_ARTIFACT_SIDECARS or probed_decision is not None:
         observed_decision = probed_decision
-    if observed_data is None:
+    if name in AUTHORITATIVE_ARTIFACT_SIDECARS or probed_data is not None:
         observed_data = probed_data
     if execution == "succeeded" and progress == "not_applicable":
         if observed_decision == as_of or (observed_data and observed_data <= as_of):
@@ -213,6 +300,7 @@ def build_health(
     run_id: str | None = None,
     candidate_digest: str | None = None,
 ) -> dict[str, Any]:
+    _validate_sidecar_validation_buckets()
     manifests = [manifest for manifest in (launcher_manifest, pipeline_manifest) if manifest]
     expected: list[str] = []
     raw_by_name: dict[str, dict[str, Any]] = {}
