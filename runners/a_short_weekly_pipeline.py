@@ -169,15 +169,33 @@ def _validate_official_publish_marker(analysis_path: str | Path, marker: dict,
             marker.get("run_id") != source_identity.get("run_id") or \
             marker.get("candidate_digest") != source_identity.get("candidate_digest"):
         raise SystemExit("[FATAL] official publish marker does not match analysis_input run identity")
-    analysis = json.loads(Path(analysis_path).read_text(encoding="utf-8"))
+    path = Path(analysis_path)
+    try:
+        analysis = json.loads(path.read_text(encoding="utf-8"))
+        actual_sha = hashlib.sha256(path.read_bytes()).hexdigest()
+    except (OSError, UnicodeDecodeError, json.JSONDecodeError) as exc:
+        raise SystemExit(
+            "[FATAL] official publish marker/analysis_input 损坏或不可解析，已阻止发布"
+        ) from exc
     for field in ("decision_as_of", "run_date", "price_data_through"):
         if field in marker and marker.get(field) != analysis.get(field):
             raise SystemExit(f"[FATAL] official publish marker {field} does not match analysis_input")
     file_ref = ((marker.get("files") or {}).get("analysis_input") or {})
-    path = Path(analysis_path)
-    actual_sha = hashlib.sha256(path.read_bytes()).hexdigest()
     if file_ref.get("path") != path.name or file_ref.get("sha256") != actual_sha:
         raise SystemExit("[FATAL] official publish marker does not bind the consumed analysis_input bytes")
+
+
+def _load_official_publish_marker(marker_path: str | Path) -> dict:
+    """Load the formal marker without exposing parse details from a published batch."""
+    try:
+        marker = json.loads(Path(marker_path).read_text(encoding="utf-8"))
+    except (OSError, UnicodeDecodeError, json.JSONDecodeError) as exc:
+        raise SystemExit(
+            "[FATAL] official publish marker/analysis_input 损坏或不可解析，已阻止发布"
+        ) from exc
+    if not isinstance(marker, dict):
+        raise SystemExit("[FATAL] official publish marker/analysis_input 损坏或不可解析，已阻止发布")
+    return marker
 
 
 def _is_valid_date(s) -> bool:
@@ -268,8 +286,9 @@ def load_account_bundle(path: str, decision_as_of: str) -> tuple[dict, dict, dic
     try:
         with open(path, encoding="utf-8") as f:
             bundle = json.load(f)
-    except (OSError, json.JSONDecodeError) as exc:
-        raise SystemExit(f"[FATAL] --account bundle 无法读取/解析: {exc}") from exc
+    except (OSError, UnicodeDecodeError, json.JSONDecodeError) as exc:
+        # 只报异常类名:`{exc}` 会把 --account 的私密账户状态路径写进 FATAL 文案。
+        raise SystemExit(f"[FATAL] --account bundle 无法读取/解析: {type(exc).__name__}") from exc
     if not isinstance(bundle, dict) or bundle.get("schema_name") != "a_short_account_bundle":
         raise SystemExit(
             "[FATAL] --account 必须是 a_short_account_bundle；旧裸 account_state 无法证明真实 facts_as_of/"
@@ -3947,7 +3966,12 @@ def main(argv=None, pro_factory=None, price_provider=None, semantic_provider=Non
 
     crash_veto_tracking = None
     if args.crash_veto_summary:
-        crash_veto_tracking = _load(args.crash_veto_summary)
+        try:
+            crash_veto_tracking = _load(args.crash_veto_summary)
+        except (OSError, UnicodeDecodeError, json.JSONDecodeError) as exc:
+            raise SystemExit(
+                f"[FATAL] invalid/stale --crash-veto-summary: {type(exc).__name__}"
+            ) from exc
         try:
             _validate_crash_veto_tracking_summary(crash_veto_tracking, expected_as_of=args.as_of)
         except Exception as exc:
@@ -3955,7 +3979,19 @@ def main(argv=None, pro_factory=None, price_provider=None, semantic_provider=Non
 
     # analysis_input 消费方校验(#R-ASHORT-WEEKLY-ANALYSIS-INPUT-CONSUMER-VALIDATION-GAP):
     # 用仓库契约校验 schema + PIT,并强制 trade_date == --as-of(拒错配/未来/陈旧批次)。
-    ai = validate_analysis_input_file(args.analysis_input, label="weekly analysis_input")
+    try:
+        ai = validate_analysis_input_file(args.analysis_input, label="weekly analysis_input")
+    except (OSError, UnicodeDecodeError, json.JSONDecodeError) as exc:
+        try:
+            Path(args.analysis_input).resolve().relative_to((ROOT / "result" / "a_short").resolve())
+            official_input = True
+        except ValueError:
+            official_input = False
+        if official_input:
+            raise SystemExit(
+                "[FATAL] official publish marker/analysis_input 损坏或不可解析，已阻止发布"
+            ) from exc
+        raise
     if str(ai.get("trade_date")) != args.as_of:
         raise SystemExit(f"[FATAL] analysis_input.trade_date {ai.get('trade_date')} != --as-of {args.as_of}"
                          "(批次错配/未来/陈旧,拒跑周报)")
@@ -3990,7 +4026,7 @@ def main(argv=None, pro_factory=None, price_provider=None, semantic_provider=Non
         marker_path = Path(args.analysis_input).resolve().parent / "official_publish.json"
         if not marker_path.exists():
             raise SystemExit("[FATAL] official analysis_input has no final publish marker")
-        marker = _load(marker_path)
+        marker = _load_official_publish_marker(marker_path)
         _validate_official_publish_marker(args.analysis_input, marker, source_identity)
     elif not source_identity:
         # Hermetic fixtures/research callers outside result/a_short get a
@@ -4005,9 +4041,13 @@ def main(argv=None, pro_factory=None, price_provider=None, semantic_provider=Non
             regulatory_confirmations = validate_confirmation_document(
                 confirmation_payload, args.as_of, source_identity["candidate_digest"]
             )
-        except (OSError, json.JSONDecodeError, jsonschema.ValidationError, RegulatoryAdvisoryContractError) as exc:
+        except (OSError, UnicodeDecodeError, json.JSONDecodeError,
+                jsonschema.ValidationError, RegulatoryAdvisoryContractError) as exc:
             raise SystemExit(f"[FATAL] invalid/stale --regulatory-confirmations: {type(exc).__name__}") from exc
-    feed = _load(args.iv_feed)
+    try:
+        feed = _load(args.iv_feed)
+    except (OSError, UnicodeDecodeError, json.JSONDecodeError) as exc:
+        raise SystemExit(f"[FATAL] invalid/stale --iv-feed: {type(exc).__name__}") from exc
     from runners.a_short_iv_feed_build import validate_feed_summary_consistency
     validate_feed_summary_consistency(feed)
     iv_pct = latest_iv_percentile(feed)        # 市场级 IV 分位(None → 引擎按 missing 处理)
@@ -4038,7 +4078,8 @@ def main(argv=None, pro_factory=None, price_provider=None, semantic_provider=Non
                 holding_universe_digest(positions),
                 {str(position.get("ts_code")) for position in positions},
             )
-        except (OSError, json.JSONDecodeError, jsonschema.ValidationError, RegulatoryAdvisoryContractError) as exc:
+        except (OSError, UnicodeDecodeError, json.JSONDecodeError,
+                jsonschema.ValidationError, RegulatoryAdvisoryContractError) as exc:
             raise SystemExit(
                 f"[FATAL] invalid/stale --holding-regulatory-confirmations: {type(exc).__name__}"
             ) from exc

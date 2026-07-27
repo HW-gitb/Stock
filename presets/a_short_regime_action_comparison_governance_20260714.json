@@ -26,6 +26,7 @@
     "benchmark_name": "CSI1000",
     "forward_live_weeks_min": 12,
     "divergence_weeks_min": 8,
+    "h20_mature_weeks_min": 8,
     "divergence_stocks_min": 20,
     "practical_improvement_pp_min": 0.5,
     "favorable_weeks_ratio_min": 0.6,

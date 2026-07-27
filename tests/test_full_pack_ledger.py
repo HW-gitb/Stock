@@ -4,6 +4,8 @@ from __future__ import annotations
 import sys
 import tempfile
 import unittest
+from contextlib import redirect_stdout
+from io import StringIO
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / ".tools"))
@@ -28,6 +30,7 @@ class FullPackLedgerTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as tmp:
             ledger = Path(tmp) / "ledger.json"
             state = {"engine/x.py": "aaa", "@HEAD": "h1"}
+            fpl.prepare("us_short", "shared engine", "focused=12 OK", state=state, ledger=ledger)
             fpl.record("us_short", "4497 OK", state=state, ledger=ledger)
             # same code state -> hit; it returns the count so a re-run "just for a number" is unnecessary.
             hit = fpl.cached_green("us_short", state=state, ledger=ledger)
@@ -43,8 +46,69 @@ class FullPackLedgerTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as tmp:
             ledger = Path(tmp) / "ledger.json"
             code_state = {"engine/x.py": "aaa", "@HEAD": "h1"}       # docs paths are filtered out by collect_code_state
+            fpl.prepare("us_short", "shared engine", "focused=12 OK", state=code_state, ledger=ledger)
             fpl.record("us_short", "4497 OK", state=code_state, ledger=ledger)
             self.assertIsNotNone(fpl.cached_green("us_short", state=code_state, ledger=ledger))
+
+    def test_record_refuses_without_a_matching_af_prepare(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            ledger = Path(tmp) / "ledger.json"
+            state = {"engine/x.py": "aaa", "@HEAD": "h1"}
+            with self.assertRaisesRegex(ValueError, "matching prepare"):
+                fpl.record("a_short", "2000 OK", state=state, ledger=ledger)
+
+    def test_behavior_change_after_prepare_invalidates_the_final_full_record(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            ledger = Path(tmp) / "ledger.json"
+            prepared_state = {"engine/x.py": "aaa", "@HEAD": "h1"}
+            changed_state = {"engine/x.py": "bbb", "@HEAD": "h1"}
+            fpl.prepare("a_short", "production consumer", "focused=20 OK",
+                        state=prepared_state, ledger=ledger)
+            with self.assertRaisesRegex(ValueError, "matching prepare"):
+                fpl.record("a_short", "2000 OK", state=changed_state, ledger=ledger)
+            self.assertIsNone(fpl.prepared_review("a_short", state=changed_state, ledger=ledger))
+
+    def test_prepare_requires_a_trigger_reason_and_focused_evidence(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            ledger = Path(tmp) / "ledger.json"
+            state = {"engine/x.py": "aaa", "@HEAD": "h1"}
+            with self.assertRaisesRegex(ValueError, "trigger reason"):
+                fpl.prepare("a_short", "", "focused=20 OK", state=state, ledger=ledger)
+            with self.assertRaisesRegex(ValueError, "focused-test evidence"):
+                fpl.prepare("a_short", "production consumer", "", state=state, ledger=ledger)
+
+    def test_cli_prepare_refuses_missing_attestation_without_a_traceback(self):
+        output = StringIO()
+        with redirect_stdout(output):
+            self.assertEqual(fpl.main(["ledger", "prepare", "a_short", "", "focused=20 OK"]), 2)
+        self.assertIn("REFUSED", output.getvalue())
+
+    def test_check_shows_the_prepared_review_and_matching_green_together(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            ledger = Path(tmp) / "ledger.json"
+            state = {"engine/x.py": "aaa", "@HEAD": "h1"}
+            fpl.prepare("a_short", "shared schema", "focused=31 OK", state=state, ledger=ledger)
+            fpl.record("a_short", "2000 OK", state=state, ledger=ledger)
+            output = StringIO()
+            with redirect_stdout(output):
+                self.assertEqual(fpl._check("a_short", state=state, ledger=ledger), 0)
+            self.assertIn("PREPARED A-F", output.getvalue())
+            self.assertIn("CACHED GREEN", output.getvalue())
+
+    def test_legacy_green_stays_reusable_but_new_records_are_prepare_bound(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            ledger = Path(tmp) / "ledger.json"
+            state = {"engine/x.py": "aaa", "@HEAD": "h1"}
+            ledger.write_text(
+                '{"a_short": {"fingerprint": "' + fpl.fingerprint(state)
+                + '", "count": "1999 OK", "recorded_at": "old"}}',
+                encoding="utf-8",
+            )
+            self.assertIsNotNone(fpl.cached_green("a_short", state=state, ledger=ledger))
+            output = StringIO()
+            with redirect_stdout(output):
+                self.assertEqual(fpl._check("a_short", state=state, ledger=ledger), 0)
+            self.assertIn("LEGACY CACHED GREEN", output.getvalue())
 
 
 if __name__ == "__main__":

@@ -4,17 +4,19 @@
   "description": "P1 V14.3 per-stock candidate-effect aggregate. It is comparison-only evidence: the baseline is the current build without regime-driven candidate action; defense/contraction cash 0% is a simplified proxy, not a final production defense policy.",
   "type": "object",
   "additionalProperties": false,
-  "required": ["schema_name", "schema_version", "policy", "admission", "evidence_progress", "data_quality", "operation_effect", "selection_accuracy", "verdict", "boundary"],
+  "required": ["schema_name", "schema_version", "latest_evidence_as_of", "policy", "admission", "evidence_progress", "data_quality", "operation_effect", "selection_accuracy", "verdict", "boundary"],
   "properties": {
     "schema_name": {"const": "a_short_regime_candidate_effect_summary"},
-    "schema_version": {"const": "1.0.0"},
+    "schema_version": {"const": "1.1.0"},
+    "latest_evidence_as_of": {"type": ["string", "null"], "pattern": "^[0-9]{8}$"},
     "policy": {
       "type": "object", "additionalProperties": false,
-      "required": ["policy_id", "policy_epoch", "policy_fingerprint", "baseline_description", "candidate_proxy_description"],
+      "required": ["policy_id", "policy_epoch", "policy_fingerprint", "h20_mature_weeks_min", "baseline_description", "candidate_proxy_description"],
       "properties": {
         "policy_id": {"const": "v14_3_candidate_effect_proxy_v1"},
         "policy_epoch": {"const": "20260719_p1_cut1_v1"},
         "policy_fingerprint": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+        "h20_mature_weeks_min": {"const": 8},
         "baseline_description": {"const": "current production build without regime-driven candidate action"},
         "candidate_proxy_description": {"const": "comparison-only simplified proxy: defense and contraction forbid a new build and use cash return 0%; this is not a final production V14.3 defense policy"}
       }
@@ -28,11 +30,13 @@
     },
     "evidence_progress": {
       "type": "object", "additionalProperties": false,
-      "required": ["forward_live_weeks", "valid_divergence_weeks", "valid_divergence_stocks", "historical_not_counted", "immature_or_missing_not_counted", "ready_for_verdict"],
+      "required": ["forward_live_weeks", "valid_divergence_weeks", "valid_divergence_stocks", "h20_mature_weeks", "h20_pending_weeks", "historical_not_counted", "immature_or_missing_not_counted", "ready_for_verdict"],
       "properties": {
         "forward_live_weeks": {"type": "integer", "minimum": 0},
-        "valid_divergence_weeks": {"type": "integer", "minimum": 0},
+        "valid_divergence_weeks": {"type": "integer", "minimum": 0, "description": "Divergent weeks counted into every reported statistic. Since 1.1.0 that is the closed H20-mature cohort, so this is ALWAYS equal to h20_mature_weeks; it is NOT an H10-only count."},
         "valid_divergence_stocks": {"type": "integer", "minimum": 0},
+        "h20_mature_weeks": {"type": "integer", "minimum": 0, "description": "The same closed cohort as valid_divergence_weeks, exposed separately so 'how many weeks are still pending' reads next to h20_pending_weeks. policy.h20_mature_weeks_min therefore only binds once it is raised above divergence_weeks_min."},
+        "h20_pending_weeks": {"type": "integer", "minimum": 0},
         "historical_not_counted": {"type": "integer", "minimum": 0},
         "immature_or_missing_not_counted": {"type": "integer", "minimum": 0},
         "ready_for_verdict": {"type": "boolean"}

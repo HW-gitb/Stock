@@ -5,15 +5,21 @@ import json
 import tempfile
 import unittest
 from pathlib import Path
+from unittest.mock import patch
 
 import jsonschema
 
 from runners.a_short_weekly_sidecar_health import (
+    AUTHORITATIVE_ARTIFACT_SIDECARS,
+    BEST_EFFORT_SELF_REPORT_SIDECARS,
     HEALTH_SCHEMA,
     OUTCOME_SCHEMA,
+    SIDECAR_SPECS,
     build_health,
     write_health_bundle,
 )
+from runners import a_short_weekly_sidecar_health as sidecar_health
+from runners.a_short_regime_comparison_runner import write_candidate_effect_outcome
 
 
 def _manifest(sidecars, expected=None):
@@ -45,7 +51,92 @@ def _row(name, *, execution="succeeded", progress="advanced", expected=True, **e
     return row
 
 
+def _candidate_summary(*, latest_evidence_as_of):
+    payload = json.loads(
+        (Path(__file__).resolve().parents[1]
+         / "research/results/a_short/regime_candidate_effect_summary.json").read_text(
+             encoding="utf-8"
+         )
+    )
+    payload["latest_evidence_as_of"] = latest_evidence_as_of
+    return payload
+
+
+def _iv_feed(*, as_of):
+    return {
+        "schema_name": "a_short_iv_feed",
+        "schema_version": "1.1.0",
+        "generated_at": "2026-07-27T00:00:00+00:00",
+        "as_of": as_of,
+        "underlying": "510050.SH",
+        "params": {
+            "risk_free": 0.02,
+            "div_yield": 0.0,
+            "const_maturity_days": 30,
+            "min_t_days": 5,
+            "roll_window": 252,
+            "min_roll_obs": 60,
+            "hv_window": 21,
+        },
+        "n_days": 0,
+        "series": [],
+        "boundary": {
+            "production": False,
+            "real_money": False,
+            "satisfies_ship_gate": False,
+            "iv_method": "bs_atm_constant_maturity_feasibility_grade",
+        },
+    }
+
+
 class AShortSidecarHealthTests(unittest.TestCase):
+    def test_every_registered_sidecar_has_one_validation_bucket(self):
+        self.assertFalse(AUTHORITATIVE_ARTIFACT_SIDECARS & BEST_EFFORT_SELF_REPORT_SIDECARS)
+        self.assertEqual(
+            set(SIDECAR_SPECS),
+            AUTHORITATIVE_ARTIFACT_SIDECARS | BEST_EFFORT_SELF_REPORT_SIDECARS,
+        )
+        self.assertEqual(
+            build_health(
+                as_of="20260727",
+                launcher_manifest=_manifest([_row("data_canary")]),
+                project_root=Path("."),
+            )["overall"],
+            "healthy",
+        )
+        with patch.dict(
+            sidecar_health.SIDECAR_SPECS,
+            {"unclassified_sidecar": "forward_evidence"},
+        ):
+            with self.assertRaisesRegex(ValueError, "validation bucket"):
+                sidecar_health.build_health(
+                    as_of="20260727",
+                    launcher_manifest=_manifest([], expected=["unclassified_sidecar"]),
+                    project_root=Path("."),
+                )
+
+    def test_source_mismatch_receipt_with_prior_evidence_is_health_stalled(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            summary_path = root / "research/results/a_short/regime_candidate_effect_summary.json"
+            outcome_path = root / "research/results/a_short/candidate_effect_outcome.json"
+            summary_path.parent.mkdir(parents=True)
+            summary_path.write_text(json.dumps(_candidate_summary(latest_evidence_as_of="20260720")), encoding="utf-8")
+            receipt = write_candidate_effect_outcome(
+                as_of="20260727",
+                result={"status": "skipped_source_mismatch", "reason_code": "run_identity_mismatch"},
+                summary_path=str(summary_path), outcome_path=str(outcome_path),
+            )
+            manifest = _manifest([_row(
+                "candidate_effect", execution="succeeded", progress="stalled",
+                observed_decision_as_of=receipt["observed_as_of"], error_code=receipt["reason_code"],
+            )])
+            result = build_health(as_of="20260727", launcher_manifest=manifest, project_root=root)
+        self.assertEqual(receipt["status"], "skipped_source_mismatch")
+        self.assertEqual(result["overall"], "degraded")
+        self.assertEqual(result["sidecars"][0]["progress_status"], "stalled")
+        self.assertEqual(result["sidecars"][0]["observed_decision_as_of"], "20260720")
+
     def test_settled_regime_clock_is_not_stalled(self):
         manifest = _manifest([
             _row(
@@ -84,6 +175,156 @@ class AShortSidecarHealthTests(unittest.TestCase):
         result = build_health(as_of="20260727", launcher_manifest=manifest, project_root=Path("."))
         self.assertEqual(result["overall"], "degraded")
         self.assertEqual(result["sidecars"][0]["progress_status"], "stalled")
+
+    def test_artifact_probe_overrides_launcher_current_week_self_report(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            path = root / "research/results/a_short/regime_action_comparison_records.json"
+            path.parent.mkdir(parents=True)
+            path.write_text(json.dumps([{"as_of": "20260720"}]), encoding="utf-8")
+            manifest = _manifest([_row(
+                "regime_action",
+                execution="succeeded",
+                progress="advanced",
+                observed_decision_as_of="20260727",
+            )])
+            result = build_health(as_of="20260727", launcher_manifest=manifest, project_root=root)
+        self.assertEqual(result["overall"], "degraded")
+        self.assertEqual(result["sidecars"][0]["observed_decision_as_of"], "20260720")
+        self.assertEqual(result["sidecars"][0]["progress_status"], "stalled")
+
+    def test_candidate_effect_probe_exposes_stale_summary(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            path = root / "research/results/a_short/regime_candidate_effect_summary.json"
+            path.parent.mkdir(parents=True)
+            path.write_text(
+                json.dumps(_candidate_summary(latest_evidence_as_of="20260720")),
+                encoding="utf-8",
+            )
+            manifest = _manifest([_row(
+                "candidate_effect",
+                execution="succeeded",
+                progress="advanced",
+                observed_decision_as_of="20260727",
+            )])
+            result = build_health(as_of="20260727", launcher_manifest=manifest, project_root=root)
+        self.assertEqual(result["overall"], "degraded")
+        self.assertEqual(result["sidecars"][0]["progress_status"], "stalled")
+
+    def test_candidate_null_artifact_clock_overrides_launcher_current_self_report(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            path = root / "research/results/a_short/regime_candidate_effect_summary.json"
+            path.parent.mkdir(parents=True)
+            path.write_text(
+                json.dumps(_candidate_summary(latest_evidence_as_of=None)),
+                encoding="utf-8",
+            )
+            manifest = _manifest([_row(
+                "candidate_effect",
+                execution="succeeded",
+                progress="advanced",
+                observed_decision_as_of="20260727",
+            )])
+            result = build_health(as_of="20260727", launcher_manifest=manifest, project_root=root)
+        self.assertEqual(result["overall"], "degraded")
+        self.assertEqual(result["sidecars"][0]["execution_status"], "succeeded")
+        self.assertIsNone(result["sidecars"][0]["observed_decision_as_of"])
+        self.assertEqual(result["sidecars"][0]["progress_status"], "unavailable")
+
+    def test_iv_feed_probe_uses_artifact_as_of(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            path = root / "research/results/a_short/iv_feed_20260727/iv_feed.json"
+            path.parent.mkdir(parents=True)
+            path.write_text(json.dumps(_iv_feed(as_of="20260720")), encoding="utf-8")
+            manifest = _manifest([_row(
+                "iv_feed",
+                execution="succeeded",
+                progress="advanced",
+                observed_decision_as_of="20260727",
+            )])
+            result = build_health(as_of="20260727", launcher_manifest=manifest, project_root=root)
+        self.assertEqual(result["overall"], "degraded")
+        self.assertEqual(result["sidecars"][0]["observed_decision_as_of"], "20260720")
+        self.assertEqual(result["sidecars"][0]["progress_status"], "stalled")
+
+    def test_schema_invalid_candidate_summary_fails_closed(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            path = root / "research/results/a_short/regime_candidate_effect_summary.json"
+            path.parent.mkdir(parents=True)
+            path.write_text(json.dumps({"latest_evidence_as_of": "20260727"}), encoding="utf-8")
+            manifest = _manifest([_row("candidate_effect")])
+            result = build_health(as_of="20260727", launcher_manifest=manifest, project_root=root)
+        self.assertEqual(result["overall"], "degraded")
+        self.assertEqual(result["sidecars"][0]["execution_status"], "failed")
+        self.assertEqual(result["sidecars"][0]["progress_status"], "unavailable")
+
+    def test_candidate_summary_with_stale_policy_binding_fails_closed(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            path = root / "research/results/a_short/regime_candidate_effect_summary.json"
+            path.parent.mkdir(parents=True)
+            payload = _candidate_summary(latest_evidence_as_of="20260727")
+            payload["policy"]["policy_fingerprint"] = "0" * 64
+            path.write_text(json.dumps(payload), encoding="utf-8")
+            result = build_health(as_of="20260727", launcher_manifest=_manifest([_row("candidate_effect")]), project_root=root)
+        self.assertEqual(result["overall"], "degraded")
+        self.assertEqual(result["sidecars"][0]["execution_status"], "failed")
+
+    def test_schema_invalid_iv_feed_fails_closed(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            path = root / "research/results/a_short/iv_feed_20260727/iv_feed.json"
+            path.parent.mkdir(parents=True)
+            path.write_text(json.dumps({"as_of": "20260727"}), encoding="utf-8")
+            manifest = _manifest([_row("iv_feed")])
+            result = build_health(as_of="20260727", launcher_manifest=manifest, project_root=root)
+        self.assertEqual(result["overall"], "degraded")
+        self.assertEqual(result["sidecars"][0]["execution_status"], "failed")
+
+    def test_missing_candidate_effect_outcome_is_unavailable_and_failed(self):
+        manifest = _manifest([], expected=["candidate_effect"])
+        with tempfile.TemporaryDirectory() as tmp:
+            result = build_health(
+                as_of="20260727", launcher_manifest=manifest, project_root=Path(tmp)
+            )
+        self.assertEqual(result["overall"], "degraded")
+        self.assertEqual(result["failed_count"], 1)
+        self.assertEqual(result["sidecars"][0]["progress_status"], "unavailable")
+
+    def test_candidate_self_report_cannot_mask_missing_summary(self):
+        manifest = _manifest([_row(
+            "candidate_effect",
+            execution="succeeded",
+            progress="advanced",
+            observed_decision_as_of="20260727",
+        )])
+        with tempfile.TemporaryDirectory() as tmp:
+            result = build_health(
+                as_of="20260727", launcher_manifest=manifest, project_root=Path(tmp)
+            )
+        self.assertEqual(result["overall"], "degraded")
+        self.assertEqual(result["failed_count"], 1)
+        self.assertEqual(result["sidecars"][0]["execution_status"], "failed")
+        self.assertEqual(result["sidecars"][0]["progress_status"], "unavailable")
+
+    def test_iv_self_report_cannot_mask_missing_feed(self):
+        manifest = _manifest([_row(
+            "iv_feed",
+            execution="succeeded",
+            progress="advanced",
+            observed_decision_as_of="20260727",
+        )])
+        with tempfile.TemporaryDirectory() as tmp:
+            result = build_health(
+                as_of="20260727", launcher_manifest=manifest, project_root=Path(tmp)
+            )
+        self.assertEqual(result["overall"], "degraded")
+        self.assertEqual(result["failed_count"], 1)
+        self.assertEqual(result["sidecars"][0]["execution_status"], "failed")
 
     def test_missing_expected_outcome_is_degraded(self):
         manifest = _manifest([], expected=["overlay_adjudication_capture"])
@@ -171,6 +412,12 @@ class AShortSidecarOutcomeSchemaTests(unittest.TestCase):
         self.assertIn(invocation, text)
         self.assertLess(text.index("forward_tracker.py backfill"), text.index(invocation))
         self.assertNotIn("--start-epoch", text)
+
+    def test_launcher_registers_candidate_effect_and_iv_health_outcomes(self):
+        text = (Path(__file__).resolve().parents[1] / "runners" / "weekly_screening.ps1").read_text(encoding="utf-8")
+        self.assertIn("candidate_effect_outcome.json", text)
+        self.assertIn("Add-SidecarOutcome -Name 'candidate_effect'", text)
+        self.assertIn("Add-SidecarOutcome -Name 'iv_feed'", text)
 
     def test_pipeline_writes_outcomes_after_publish_without_rewriting_bundle(self):
         text = (Path(__file__).resolve().parents[1] / "runners" / "a_short_weekly_pipeline.py").read_text(encoding="utf-8")

@@ -420,6 +420,7 @@ if ($IsHistoricalAsOf) {
 #     web] rendered inline). semantic 证据本身 advisory-only；但 requested M6.7 失败必须写 failed receipt + 非零退出；落 research 非生产
 #     lane(禁 result/a_short)。真取数:IV options + 前复权价 + cninfo + em 资讯(web 源)+ DeepSeek。web 源 = em(取代失效 sina);run-path 见契约 §web_llm 产出路径。
 if ($SkipSemanticRisk) {
+    Add-SidecarOutcome -Name 'iv_feed' -Expected $false -Attempted $false -ExecutionStatus 'skipped' -ProgressStatus 'not_applicable' -SkipReason 'skip_semantic_risk'
     Write-Host ""
     Write-Host "[4/4] -SkipSemanticRisk set, M6.7 operation report not run" -ForegroundColor DarkGray
 } else {
@@ -454,11 +455,13 @@ if ($SkipSemanticRisk) {
         $IvExitCode = $LASTEXITCODE
         if ($null -eq $IvExitCode) { $IvExitCode = 1 }
         if ($IvExitCode -ne 0 -or -not (Test-Path $IvFeed)) {
+            Add-SidecarOutcome -Name 'iv_feed' -Expected $true -Attempted $true -ExecutionStatus 'failed' -ProgressStatus 'unavailable' -ErrorCode 'process_failed'
             $IvFailureDetailRef = if (Test-Path $IvFailureReceipt) { [System.IO.Path]::GetFileName($IvFailureReceipt) } else { '' }
             Write-M67FailureReceipt -Directory $M67Dir -Reason 'iv_feed_failed' -ExitCode 22 -FailureDetailRef $IvFailureDetailRef -AnalysisInput $SemAnalysisInput
             Write-Host "[FATAL] M6.7 requested but IV feed build failed (exit $IvExitCode)" -ForegroundColor Red
             exit 22
         } else {
+            Add-SidecarOutcome -Name 'iv_feed' -Expected $true -Attempted $true -ExecutionStatus 'succeeded' -ProgressStatus 'advanced' -ObservedDecisionAsOf $AsOf
             $M67Args = @('runners\a_short_weekly_pipeline.py', '--as-of', $AsOf, '--price-as-of', $PriceAsOf, '--run-date', $RunDate, '--analysis-input', $SemAnalysisInput, '--iv-feed', $IvFeed, '--out', $M67Out, '--confirm-fetch-authorized')
             if ($CrashVetoSummaryReady) { $M67Args += @('--crash-veto-summary', $CrashVetoSummary) }
             if (-not $IsHistoricalAsOf) {
@@ -572,11 +575,13 @@ if ($SkipSemanticRisk) {
 if ($SkipRegime) {
     Add-SidecarOutcome -Name 'regime_daily' -Expected $false -Attempted $false -ExecutionStatus 'skipped' -ProgressStatus 'not_applicable' -SkipReason 'skip_regime'
     Add-SidecarOutcome -Name 'regime_action' -Expected $false -Attempted $false -ExecutionStatus 'skipped' -ProgressStatus 'not_applicable' -SkipReason 'skip_regime'
+    Add-SidecarOutcome -Name 'candidate_effect' -Expected $false -Attempted $false -ExecutionStatus 'skipped' -ProgressStatus 'not_applicable' -SkipReason 'skip_regime'
     Write-Host ""
     Write-Host "[regime] -SkipRegime set, V14.3 regime comparison not run" -ForegroundColor DarkGray
 } elseif ($IsHistoricalAsOf) {
     Add-SidecarOutcome -Name 'regime_daily' -Expected $false -Attempted $false -ExecutionStatus 'not_due' -ProgressStatus 'not_applicable' -SkipReason 'historical_replay'
     Add-SidecarOutcome -Name 'regime_action' -Expected $false -Attempted $false -ExecutionStatus 'not_due' -ProgressStatus 'not_applicable' -SkipReason 'historical_replay'
+    Add-SidecarOutcome -Name 'candidate_effect' -Expected $false -Attempted $false -ExecutionStatus 'not_due' -ProgressStatus 'not_applicable' -SkipReason 'historical_replay'
     Write-Host ""
     Write-Host "[regime] historical -AsOf $AsOf -> skipping V14.3 regime ledger (only live runs advance the forward regime evidence)" -ForegroundColor DarkGray
 } else {
@@ -623,6 +628,41 @@ if ($SkipRegime) {
     $RegimeError = if($RegimeExitCode -eq 0){$null}else{'process_failed'}
     Add-SidecarOutcome -Name 'regime_daily' -Expected $true -Attempted $true -ExecutionStatus $RegimeStatus -ProgressStatus $RegimeProgress -ErrorCode $RegimeError -ExpectedDataThrough $PriceAsOf -ObservedDataThrough $(if($RegimeExitCode -eq 0){$PriceAsOf}else{$null})
     Add-SidecarOutcome -Name 'regime_action' -Expected $true -Attempted $true -ExecutionStatus $RegimeStatus -ProgressStatus $RegimeProgress -ErrorCode $RegimeError -ObservedDecisionAsOf $(if($RegimeExitCode -eq 0){$AsOf}else{$null})
+    $CandidateEffectOutcome = Join-Path $ProjectRoot 'research\results\a_short\candidate_effect_outcome.json'
+    $CandidateEffectStatus = 'failed'
+    $CandidateEffectProgress = 'unavailable'
+    $CandidateEffectError = 'candidate_effect_outcome_missing_or_invalid'
+    $CandidateEffectObserved = $null
+    # The receipt writer validates status/reason_code against
+    # schemas/a_short_regime_candidate_effect_outcome.schema.json and refuses to write a
+    # mismatched pair, so the launcher deliberately does NOT re-implement that enum table or
+    # pin the schema version: one contract, one place.  It checks identity and field shape
+    # only, and the Python health observer stays authoritative for the real evidence clock.
+    if ($RegimeExitCode -eq 0 -and (Test-Path -LiteralPath $CandidateEffectOutcome -PathType Leaf)) {
+        try {
+            $CandidateEffectReceipt = Get-Content -Raw -Encoding UTF8 $CandidateEffectOutcome | ConvertFrom-Json
+            $CandidateEffectReceiptStatus = [string]$CandidateEffectReceipt.status
+            $CandidateEffectReceiptReason = [string]$CandidateEffectReceipt.reason_code
+            $CandidateEffectObservedCandidate = [string]$CandidateEffectReceipt.observed_as_of
+            $CandidateEffectObservedValid = (
+                [string]::IsNullOrWhiteSpace($CandidateEffectObservedCandidate) -or
+                $CandidateEffectObservedCandidate -match '^[0-9]{8}$'
+            )
+            if ([string]$CandidateEffectReceipt.schema_name -eq 'a_short_regime_candidate_effect_outcome' -and
+                [string]$CandidateEffectReceipt.as_of -eq [string]$AsOf -and
+                $CandidateEffectReceiptStatus -match '^[a-z0-9_]+$' -and
+                $CandidateEffectReceiptReason -match '^[a-z0-9_]+$' -and
+                $CandidateEffectObservedValid) {
+                $CandidateEffectStatus = 'succeeded'
+                $CandidateEffectObserved = $CandidateEffectObservedCandidate
+                $CandidateEffectProgress = if ($CandidateEffectReceiptStatus -eq 'updated') { 'advanced' } elseif ([string]::IsNullOrWhiteSpace($CandidateEffectObserved)) { 'unavailable' } else { 'stalled' }
+                $CandidateEffectError = if ($CandidateEffectReceiptStatus -eq 'updated') { $null } else { $CandidateEffectReceiptReason }
+            }
+        } catch { }
+    } elseif ($RegimeExitCode -ne 0) {
+        $CandidateEffectError = 'process_failed'
+    }
+    Add-SidecarOutcome -Name 'candidate_effect' -Expected $true -Attempted $true -ExecutionStatus $CandidateEffectStatus -ProgressStatus $CandidateEffectProgress -ErrorCode $CandidateEffectError -ObservedDecisionAsOf $CandidateEffectObserved
 }
 
  # P4: health is a separate post-run companion.  The already-published M6.7

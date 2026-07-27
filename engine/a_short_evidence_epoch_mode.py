@@ -229,14 +229,38 @@ def semantic_function_contract(module, function_names) -> dict:
     requested = sorted({str(name) for name in function_names})
     if not requested:
         raise EvidenceEpochModeError(f"no semantic functions requested for {module.__name__}")
-    _tree, function_nodes = _module_function_nodes(module)
+    tree, function_nodes = _module_function_nodes(module)
     missing = [name for name in requested if name not in function_nodes]
     if missing:
         raise EvidenceEpochModeError(
             f"missing semantic functions in {module.__name__}: {missing}"
         )
+    # A narrow binding still has to cover the constants those functions read.
+    # Binding only the function bodies let a governed threshold (P5's fixed
+    # watch-pool slot count, for one) change behaviour without moving the
+    # epoch, which is the same polarity gap the whole-file helper already
+    # closes by collecting referenced constants.  The walk stays inside the
+    # requested functions: narrowing the surface is deliberate, so callees are
+    # still out of scope.
+    constant_nodes = {}
+    for node in tree.body:
+        if not isinstance(node, (ast.Assign, ast.AnnAssign)):
+            continue
+        targets = node.targets if isinstance(node, ast.Assign) else [node.target]
+        for target in targets:
+            if isinstance(target, ast.Name) and target.id.isupper():
+                constant_nodes[target.id] = node
+    referenced = sorted({
+        item.id
+        for name in requested
+        for item in ast.walk(function_nodes[name])
+        if isinstance(item, ast.Name) and isinstance(item.ctx, ast.Load) and item.id in constant_nodes
+    })
+    selected = [function_nodes[name] for name in requested]
+    selected += [constant_nodes[name] for name in referenced]
     return {
         "module": module.__name__,
         "bound_functions": requested,
-        "semantic_ast_sha256": _semantic_ast_sha256(function_nodes[name] for name in requested),
+        "bound_constants": referenced,
+        "semantic_ast_sha256": _semantic_ast_sha256(selected),
     }

@@ -14,6 +14,7 @@ import inspect
 import json
 import os
 import subprocess
+import sys
 from pathlib import Path
 from typing import Any
 
@@ -82,6 +83,36 @@ def _private_path(path: str | Path) -> Path:
     return result
 
 
+def _semantic_function_contract(function: object) -> dict[str, Any]:
+    """Bind one project function's executable semantics, not its prose.
+
+    P2 was the last comparison track whose contract hashed raw
+    ``inspect.getsource`` text, so a comment or reformat inside a bound
+    function opened a new epoch and silently dropped every accumulated week.
+    Routing every leg through the shared AST helper in
+    ``engine/a_short_evidence_epoch_mode`` makes the contract read the
+    checked-in file (a runtime monkeypatch cannot forge it), strip docstrings,
+    and fail closed on a rename instead of quietly shrinking the bound set.
+    """
+    module = inspect.getmodule(function)
+    name = getattr(function, "__name__", "")
+    if module is None or getattr(function, "__qualname__", "") != name:
+        raise TargetPolicyError("non_bindable_semantic_function")
+    return _epoch_mode.semantic_function_contract(module, {name})
+
+
+def _semantic_local_functions(*names: str) -> dict[str, Any]:
+    """Bind named functions of THIS module straight from the checked-in file.
+
+    The direct surface legs name their functions rather than passing the live
+    object, so a runtime monkeypatch cannot move (or forge) the contract; that
+    anti-forgery property is the reason the shared helper reads the file. A
+    real implementation change edits the file and does move it, which
+    `tests/test_a_short_evidence_epoch_mode.py` asserts per leg.
+    """
+    return _epoch_mode.semantic_function_contract(sys.modules[__name__], set(names))
+
+
 def _semantic_dependency_closure(*roots: object) -> dict[str, Any]:
     """Recursively freeze project functions and their referenced globals.
 
@@ -107,7 +138,7 @@ def _semantic_dependency_closure(*roots: object) -> dict[str, Any]:
             return
         seen.add(key)
         source_key = f"{module_name}.{function.__qualname__}"
-        closure[source_key] = {"source": inspect.getsource(function), "globals": {}}
+        closure[source_key] = {"semantics": _semantic_function_contract(function), "globals": {}}
         variables = inspect.getclosurevars(function)
         for name, value in sorted(variables.globals.items()):
             if inspect.isfunction(value):
@@ -133,11 +164,11 @@ def _shared_contract_surface() -> dict[str, Any]:
         # Dispatch is shared; the two settlement implementations are frozen
         # in their respective component surfaces below so a target-only
         # settlement change cannot reopen the breakout epoch (or vice versa).
-        "settlement_dispatch_source": inspect.getsource(_settle_existing_records),
+        "settlement_dispatch_semantics": _semantic_local_functions("_settle_existing_records"),
         # `_freeze_plan` dereferences this through the imported phase5 module;
         # module objects are deliberately not serialized by the closure.
         "phase5_atr_multiplier": phase5_engine.ATR_MULT,
-        "shared_cache_loader_source": inspect.getsource(_load_execution_cache),
+        "shared_cache_loader_semantics": _semantic_local_functions("_load_execution_cache"),
         "shared_cache_builder_closure": _semantic_dependency_closure(cache_builder.materialize_incremental_cache),
         "cost_and_priority": "t1_half_then_trailing;stop_before_t1;round_trip_cost_0.16pp",
     }

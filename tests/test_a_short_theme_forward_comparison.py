@@ -682,6 +682,63 @@ class ThemeForwardComparisonTests(unittest.TestCase):
                     baseline,
                 )
 
+    def test_contract_constant_semantics_binds_every_module_constant_by_default(self):
+        """Constants bind by default, in the same AST polarity as external files.
+
+        The three that used to escape the hand-written list are the point:
+        `ADMISSION_TIME_PROVENANCE` (the trust-boundary label stamped on every
+        receipt), `CONTRACT_FUNCTION_SEMANTICS_EXCLUSIONS` (which decides what
+        else is bound) and `RUNTIME_CONFIGURATION_FINGERPRINT_COLUMN`.
+        """
+        source = Path(comparison.__file__).read_text(encoding="utf-8")
+        tree = comparison.ast.parse(source)
+        declared = set()
+        for node in tree.body:
+            if not isinstance(node, (comparison.ast.Assign, comparison.ast.AnnAssign)):
+                continue
+            targets = node.targets if isinstance(node, comparison.ast.Assign) else [node.target]
+            declared |= {
+                target.id for target in targets
+                if isinstance(target, comparison.ast.Name) and target.id.isupper()
+            }
+        bound = comparison._contract_constant_semantics()
+        self.assertEqual(set(bound), declared, "a module constant escaped the contract")
+        for name in ("ADMISSION_TIME_PROVENANCE", "CONTRACT_FUNCTION_SEMANTICS_EXCLUSIONS",
+                     "RUNTIME_CONFIGURATION_FINGERPRINT_COLUMN", "GOVERNANCE_PATH"):
+            self.assertIn(name, bound)
+
+    def test_constant_contract_ignores_prose_but_moves_on_a_value_change(self):
+        """Two-directional control for the constant leg, mirroring the function leg."""
+        source = Path(comparison.__file__).read_text(encoding="utf-8")
+        baseline = comparison._contract_constant_semantics()
+
+        def contract_from(text):
+            with tempfile.TemporaryDirectory() as temp:
+                path = Path(temp) / "variant.py"
+                path.write_text(text, encoding="utf-8")
+                with mock.patch.object(comparison, "__file__", str(path)):
+                    return comparison._contract_constant_semantics()
+
+        commented = source.replace(
+            "ADMISSION_TIME_PROVENANCE = ",
+            "# simulated comment-only edit\nADMISSION_TIME_PROVENANCE = ", 1)
+        self.assertNotEqual(commented, source)
+        self.assertEqual(contract_from(commented), baseline,
+                         "a comment moved the constant contract")
+
+        revalued = source.replace(
+            'ADMISSION_TIME_PROVENANCE = "local_private_receipt_not_independently_timestamped"',
+            'ADMISSION_TIME_PROVENANCE = "independently_timestamped"', 1)
+        self.assertNotEqual(revalued, source)
+        self.assertNotEqual(contract_from(revalued), baseline,
+                            "re-labelling the trust boundary did not move the contract")
+
+        repointed = source.replace(
+            'GOVERNANCE_PATH = ROOT / "presets"', 'GOVERNANCE_PATH = ROOT / "other"', 1)
+        self.assertNotEqual(repointed, source)
+        self.assertNotEqual(contract_from(repointed), baseline,
+                            "re-pointing a path constant did not move the contract")
+
     def test_contract_function_semantics_exemptions_are_exact_and_exhaustive(self):
         self.assertEqual(
             comparison.CONTRACT_FUNCTION_SEMANTICS_EXCLUSIONS,

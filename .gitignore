@@ -78,6 +78,11 @@ research/results/a_short_theme_forward_comparison.json
 # --- A-short M6.7 weekly validation 执行 byproducts (one-off, research lane, regenerable via 执行) ---
 research/results/a_short/m67_validation_*/
 
+# --- A-short candidate-effect per-run health receipt (transient run state, not evidence) ---
+# Rewritten by every weekly regime run and consumed by the launcher in that same run; the
+# tracked evidence artifact is the sibling regime_candidate_effect_summary.{json,md}.
+research/results/a_short/candidate_effect_outcome.json
+
 # --- A-long value-yield forward-PAPER capture accumulator (research-only paper evidence; holds selected_symbols 选股明细) → private ---
 research/results/a_long/value_yield_forward_paper/
 

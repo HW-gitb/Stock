@@ -18,6 +18,7 @@ from pathlib import Path
 from unittest.mock import patch
 
 import jsonschema
+import numpy as np
 import pandas as pd
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -49,6 +50,7 @@ from runners.a_short_phase5_engine import validate_operation_impact_no_dangling 
 from runners.a_short_m67_render import render_weekly_markdown, write_weekly_markdown  # noqa: E402
 from runners.a_short_phase5_engine import _semantic_operation_impacts  # noqa: E402
 from engine.a_short_rule6_contract import RULE6_CHECKS, RULE6_D_TIER_REASONS  # noqa: E402
+from engine.a_short_delisting import _field, derive_delisting_flags  # noqa: E402
 from runners.a_short_semantic_risk_summary import build_summary_from_fetches  # noqa: E402
 from runners.a_short_theme_overlay_comparison import (  # noqa: E402
     assemble_overlay, build_summary,
@@ -248,6 +250,19 @@ def _sized_lineage():
 
 
 class NormalizeTests(unittest.TestCase):
+    def test_missing_delisting_text_fails_closed_into_phase5_veto(self):
+        for value in (pd.NA, np.nan, None, "<NA>", "nan", "NaN", "None", "NaT", "null"):
+            self.assertEqual(_field({"name": value}, "name"), "")
+        self.assertEqual(_field({"name": "正常名称"}, "name"), "正常名称")
+        flags = derive_delisting_flags({"name": pd.NA, "list_status": "L"})
+        candidate = _egs_candidate(event_risk={
+            "holder_reduction": {"active_plan": False},
+            "suspension": {"is_suspended": False},
+            "delisting": flags,
+        })
+        normalized = normalize_candidate(candidate, _series(), _overlay_row(), 55.0, {}, "震荡期")
+        self.assertTrue(normalized["event"]["st_or_delisting"])
+
     def test_maps_egs_fields(self):
         n = _normalized()
         self.assertEqual(n["close"], 2.90)
@@ -580,6 +595,111 @@ class MainWiringTests(unittest.TestCase):
         (Path(td) / "ai.json").write_text(json.dumps(ai), encoding="utf-8")
         (Path(td) / "feed.json").write_text(json.dumps(feed or _feed()), encoding="utf-8")
         _write_account(Path(td) / "acct.json")
+
+    def test_main_rejects_truncated_crash_veto_summary_without_payload_text(self):
+        with tempfile.TemporaryDirectory() as td:
+            self._write_inputs(td)
+            bad = Path(td) / "crash-veto.json"
+            bad.write_text('{"ticker": "600000.SH",', encoding="utf-8")
+            with self.assertRaisesRegex(
+                SystemExit, "invalid/stale --crash-veto-summary: JSONDecodeError"
+            ) as exc:
+                main([
+                    "--as-of", AS_OF,
+                    "--analysis-input", str(Path(td) / "ai.json"),
+                    "--iv-feed", str(Path(td) / "feed.json"),
+                    "--account", str(Path(td) / "acct.json"),
+                    "--crash-veto-summary", str(bad),
+                    "--out", str(Path(td) / "weekly.json"),
+                ], price_provider=lambda code: _series())
+        self.assertNotIn("600000.SH", str(exc.exception))
+
+    def test_main_rejects_truncated_iv_feed_without_payload_text(self):
+        with tempfile.TemporaryDirectory() as td:
+            self._write_inputs(td)
+            bad = Path(td) / "feed.json"
+            bad.write_text('{"ticker": "000001.SZ",', encoding="utf-8")
+            with self.assertRaisesRegex(
+                SystemExit, "invalid/stale --iv-feed: JSONDecodeError"
+            ) as exc:
+                main([
+                    "--as-of", AS_OF,
+                    "--analysis-input", str(Path(td) / "ai.json"),
+                    "--iv-feed", str(bad),
+                    "--account", str(Path(td) / "acct.json"),
+                    "--out", str(Path(td) / "weekly.json"),
+                ], price_provider=lambda code: _series())
+        self.assertNotIn("000001.SZ", str(exc.exception))
+
+    # R-ASHORT-WEEKLY-MAIN-PARSE-EXIT-RESIDUAL-THREE-SITES: the three named sites used to omit
+    # UnicodeDecodeError, so an invalid-UTF-8 input escaped as a bare exception.  One reverse
+    # control each; the positive controls are the existing valid-input tests in this class.
+    _INVALID_UTF8 = b'{"schema_name": "\xff\xfe", "ts_code": "600000.SH"}'
+
+    def test_main_rejects_invalid_utf8_regulatory_confirmations_without_path_or_payload(self):
+        with tempfile.TemporaryDirectory() as td:
+            self._write_inputs(td)
+            bad = Path(td) / "reg-confirm.json"
+            bad.write_bytes(self._INVALID_UTF8)
+            with self.assertRaisesRegex(
+                SystemExit, "invalid/stale --regulatory-confirmations: UnicodeDecodeError"
+            ) as exc:
+                main([
+                    "--as-of", AS_OF,
+                    "--analysis-input", str(Path(td) / "ai.json"),
+                    "--iv-feed", str(Path(td) / "feed.json"),
+                    "--account", str(Path(td) / "acct.json"),
+                    "--regulatory-confirmations", str(bad),
+                    "--out", str(Path(td) / "weekly.json"),
+                ], price_provider=lambda code: _series())
+        message = str(exc.exception)
+        self.assertNotIn(str(bad), message)
+        self.assertNotIn("600000.SH", message)
+
+    def test_main_rejects_invalid_utf8_holding_regulatory_confirmations_without_path_or_payload(self):
+        with tempfile.TemporaryDirectory() as td:
+            self._write_inputs(td)
+            bad = Path(td) / "holding-reg-confirm.json"
+            bad.write_bytes(self._INVALID_UTF8)
+            with self.assertRaisesRegex(
+                SystemExit, "invalid/stale --holding-regulatory-confirmations: UnicodeDecodeError"
+            ) as exc:
+                main([
+                    "--as-of", AS_OF,
+                    "--analysis-input", str(Path(td) / "ai.json"),
+                    "--iv-feed", str(Path(td) / "feed.json"),
+                    "--account", str(Path(td) / "acct.json"),
+                    "--holding-regulatory-confirmations", str(bad),
+                    "--out", str(Path(td) / "weekly.json"),
+                ], price_provider=lambda code: _series())
+        message = str(exc.exception)
+        self.assertNotIn(str(bad), message)
+        self.assertNotIn("600000.SH", message)
+
+    def test_load_account_bundle_rejects_invalid_utf8_without_leaking_the_private_path(self):
+        from runners.a_short_weekly_pipeline import load_account_bundle
+        with tempfile.TemporaryDirectory() as td:
+            bad = Path(td) / "private-account-bundle.json"
+            bad.write_bytes(self._INVALID_UTF8)
+            with self.assertRaisesRegex(SystemExit, "UnicodeDecodeError") as exc:
+                load_account_bundle(str(bad), AS_OF)
+        message = str(exc.exception)
+        # The whole point of this site: an OSError/decode failure must not print where the
+        # operator's account state lives.
+        self.assertNotIn(str(bad), message)
+        self.assertNotIn("private-account-bundle", message)
+
+    def test_load_account_bundle_oserror_message_carries_no_private_path(self):
+        # The `{exc}` interpolation this repair removed: OSError stringifies WITH the filename,
+        # so an unreadable/missing bundle used to print the private account-state path.
+        from runners.a_short_weekly_pipeline import load_account_bundle
+        with tempfile.TemporaryDirectory() as td:
+            missing = Path(td) / "private-account-bundle.json"
+            with self.assertRaisesRegex(SystemExit, "FileNotFoundError") as exc:
+                load_account_bundle(str(missing), AS_OF)
+        message = str(exc.exception)
+        self.assertNotIn(str(missing), message)
+        self.assertNotIn("private-account-bundle", message)
 
     def test_main_accepts_only_current_digest_bound_regulatory_confirmation(self):
         from engine.a_short_regulatory_advisory import event_fingerprint

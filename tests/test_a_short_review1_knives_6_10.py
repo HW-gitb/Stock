@@ -226,7 +226,7 @@ class RunIdentityAndPublishTest(unittest.TestCase):
         identity = {"run_id": "a-short-20260105-" + "a" * 16, "candidate_digest": "a" * 64}
         with tempfile.TemporaryDirectory() as tmp:
             analysis = Path(tmp) / "analysis_input.json"
-            analysis.write_text("original", encoding="utf-8")
+            analysis.write_text("{}", encoding="utf-8")
             marker = {
                 **identity,
                 "stage_status": "complete",
@@ -236,9 +236,21 @@ class RunIdentityAndPublishTest(unittest.TestCase):
                 }},
             }
             weekly_pipeline._validate_official_publish_marker(analysis, marker, identity)
-            analysis.write_text("tampered", encoding="utf-8")
+            analysis.write_text('{"tampered": true}', encoding="utf-8")
             with self.assertRaisesRegex(SystemExit, "does not bind"):
                 weekly_pipeline._validate_official_publish_marker(analysis, marker, identity)
+            analysis.write_text('{"candidate":', encoding="utf-8")
+            with self.assertRaisesRegex(SystemExit, "official publish marker/analysis_input") as exc:
+                weekly_pipeline._validate_official_publish_marker(analysis, marker, identity)
+            self.assertNotIn("candidate", str(exc.exception))
+
+    def test_weekly_consumer_rejects_truncated_marker_without_payload_text(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            marker = Path(tmp) / "official_publish.json"
+            marker.write_text('{"candidate_code": "600000.SH",', encoding="utf-8")
+            with self.assertRaisesRegex(SystemExit, "official publish marker/analysis_input") as exc:
+                weekly_pipeline._load_official_publish_marker(marker)
+        self.assertNotIn("600000.SH", str(exc.exception))
 
     def test_markdown_exposes_same_run_digest_and_complete_status(self) -> None:
         digest = "a" * 64

@@ -18,6 +18,7 @@ from pathlib import Path
 from unittest.mock import patch
 
 import pandas as pd
+import jsonschema
 
 ROOT = Path(__file__).resolve().parents[1]
 if str(ROOT) not in sys.path:
@@ -27,7 +28,7 @@ from runners.a_short_regime_comparison_runner import (  # noqa: E402
     iv_series_to_map, make_feature_provider, run_regime_step, save_panel, save_ledger,
     save_comparison_records, load_ledger, load_comparison_records, main, main_board_only,
     _latest_settled_as_of, save_action_records, render_action_review_reminder,
-    run_candidate_effect_sidecar,
+    run_candidate_effect_sidecar, write_candidate_effect_outcome,
 )
 from engine.a_short_regime_action_comparison import build_action_record  # noqa: E402
 from engine.a_short_regime_features import compute_regime_daily_features  # noqa: E402
@@ -250,6 +251,62 @@ class PureHelperTests(unittest.TestCase):
 
 
 class CandidateEffectSidecarTests(unittest.TestCase):
+    def test_nonupdated_outcome_is_deidentified_and_preserves_prior_clock(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            summary = root / "research/results/a_short/regime_candidate_effect_summary.json"
+            outcome = root / "research/results/a_short/candidate_effect_outcome.json"
+            summary.parent.mkdir(parents=True)
+            prior = json.loads((ROOT / "research/results/a_short/regime_candidate_effect_summary.json").read_text(encoding="utf-8"))
+            prior["latest_evidence_as_of"] = "20260720"
+            summary.write_text(json.dumps(prior), encoding="utf-8")
+            receipt = write_candidate_effect_outcome(
+                as_of="20260727",
+                result={
+                    "status": "skipped_source_mismatch",
+                    "reason_code": "run_identity_mismatch",
+                },
+                summary_path=str(summary),
+                outcome_path=str(outcome),
+            )
+        self.assertEqual(receipt["observed_as_of"], "20260720")
+        self.assertNotIn("ts_code", json.dumps(receipt))
+
+    def test_nonupdated_outcome_drops_clock_from_an_invalid_prior_summary(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            summary = root / "research/results/a_short/regime_candidate_effect_summary.json"
+            outcome = root / "research/results/a_short/candidate_effect_outcome.json"
+            summary.parent.mkdir(parents=True)
+            summary.write_text(json.dumps({"latest_evidence_as_of": "20260720"}), encoding="utf-8")
+            receipt = write_candidate_effect_outcome(
+                as_of="20260727",
+                result={"status": "skipped_source_mismatch", "reason_code": "run_identity_mismatch"},
+                summary_path=str(summary), outcome_path=str(outcome),
+            )
+        self.assertIsNone(receipt["observed_as_of"])
+
+    def test_outcome_status_and_reason_must_match(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            outcome = root / "research/results/a_short/candidate_effect_outcome.json"
+            summary = json.loads(
+                (ROOT / "research/results/a_short/regime_candidate_effect_summary.json").read_text(
+                    encoding="utf-8"
+                )
+            )
+            with self.assertRaises(jsonschema.ValidationError):
+                write_candidate_effect_outcome(
+                    as_of="20260727",
+                    result={
+                        "status": "updated",
+                        "reason_code": "m67_digest_drift",
+                        "summary": summary,
+                    },
+                    summary_path=str(root / "unused-summary.json"),
+                    outcome_path=str(outcome),
+                )
+
     def _paths(self, tmp: str) -> dict:
         base = Path(tmp)
         return {
@@ -308,6 +365,7 @@ class CandidateEffectSidecarTests(unittest.TestCase):
             _write_m67(Path(paths["m67_report_path"]), as_of, digest="b" * 64, codes=["000001.SZ"])
             result = self._run(paths, as_of, run_date=as_of)
             self.assertEqual(result["status"], "skipped_source_mismatch")
+            self.assertEqual(result["reason_code"], "run_identity_mismatch")
             self.assertFalse(Path(paths["ledger_path"]).exists())
             self.assertFalse(Path(paths["summary_path"]).exists())
 
@@ -618,6 +676,55 @@ class BootstrapPolicyTests(unittest.TestCase):
 
 
 class CliGuardTests(unittest.TestCase):
+    def test_cli_keeps_zero_exit_and_writes_outcome_when_candidate_source_mismatches(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            paths = {
+                "ledger": str(root / "research/results/a_short/regime_daily_ledger.json"),
+                "records": str(root / "research/results/a_short/regime_comparison_records.json"),
+                "panel": str(root / "research/results/a_short/regime_comparison_panel.md"),
+                "action_records": str(root / "research/results/a_short/regime_action_comparison_records.json"),
+                "action_summary": str(root / "research/results/a_short/regime_action_comparison_summary.json"),
+                "candidate_effect_ledger": str(root / "logs/a_short_regime_candidate_effect.json"),
+                "candidate_effect_summary": str(root / "research/results/a_short/regime_candidate_effect_summary.json"),
+                "candidate_effect_markdown": str(root / "research/results/a_short/regime_candidate_effect_summary.md"),
+                "candidate_effect_outcome": str(root / "research/results/a_short/candidate_effect_outcome.json"),
+                "forward_tracker": str(root / "logs/forward_tracker.csv"),
+            }
+            result = {
+                "ledger": {"coverage": {"n": 1}},
+                "evidence": "forward",
+                "candidate_effect": {
+                    "status": "skipped_source_mismatch",
+                    "reason_code": "run_identity_mismatch",
+                    "reason": "deidentified",
+                },
+            }
+            with patch("runners.a_short_regime_comparison_runner.lane_paths", return_value=paths), \
+                    patch("runners.a_short_regime_comparison_runner.load_ledger",
+                          return_value={"rows": [{}], "coverage": {"start": "20260701"}}), \
+                    patch("runners.a_short_regime_comparison_runner._init_pro", return_value=object()), \
+                    patch("runners.a_short_regime_comparison_runner._fetch_trade_calendar",
+                          return_value=["20260727"]), \
+                    patch("runners.a_short_regime_comparison_runner._fetch_daily",
+                          return_value=pd.DataFrame({"trade_date": ["20260727"]})), \
+                    patch("runners.a_short_regime_comparison_runner._fetch_stk_limit",
+                          return_value=pd.DataFrame()), \
+                    patch("runners.a_short_regime_comparison_runner._fetch_index",
+                          return_value=pd.DataFrame()), \
+                    patch("runners.a_short_regime_comparison_runner.run_regime_step",
+                          return_value=result):
+                exit_code = main([
+                    "--as-of", "20260727",
+                    "--v14_2-raw-regime", "unknown",
+                    "--m67-report", str(root / "weekly_m67.json"),
+                    "--confirm-fetch-authorized",
+                ])
+            receipt = json.loads(Path(paths["candidate_effect_outcome"]).read_text(encoding="utf-8"))
+        self.assertEqual(exit_code, 0)
+        self.assertEqual(receipt["status"], "skipped_source_mismatch")
+        self.assertIsNone(receipt["observed_as_of"])
+
     def test_noncanonical_as_of_rejected_before_fetch(self):
         # R-V143-SLICE2B-RUNNER-CLI-ASOF-LENIENT-FETCH: malformed date fails before any provider call.
         with self.assertRaises(SystemExit):

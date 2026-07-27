@@ -43,11 +43,11 @@ SOURCE_IDENTITY_GETSOURCE_CALLS = {
     "runners/a_short_final_action_validation_runner.py": set(),
     "engine/a_short_overlay_adjudication.py": set(),
     "engine/egs_industry_heat.py": set(),
-    # Still raw-source by design: P2's dependency-closure walker and the theme
-    # track's own single-function digest predate the shared helper.
-    "runners/a_short_target_policy_comparison_runner.py": {
-        "_semantic_dependency_closure", "_shared_contract_surface",
-    },
+    # P2's dependency-closure walker and its two shared-surface legs now route
+    # through the same AST helper, so this file must also hold none.
+    "runners/a_short_target_policy_comparison_runner.py": set(),
+    # Still a direct callsite by design: the theme track reads a live function
+    # object rather than a module, though it AST-normalises the result itself.
     "engine/a_short_theme_forward_comparison.py": {"_semantic_function_digest"},
 }
 
@@ -237,6 +237,71 @@ class PreFreezeEvidenceModeTests(unittest.TestCase):
             self.assertEqual(moved, mode == "frozen_enforced",
                              f"code-edit drift is wrong for {mode}")
 
+    def test_p2_contract_is_prose_insensitive_and_code_sensitive_on_every_leg(self):
+        """P2 was the last raw-source track; all three of its legs must converge.
+
+        The walker was the only leg named in the finding, but `_shared_contract_surface`
+        carried two more direct `inspect.getsource` legs, so the class is three legs
+        plus a scoping control and a rename control.
+        """
+        from engine import a_short_managed_exit as managed_exit
+        from runners import a_short_target_policy_comparison_runner as p2
+
+        real_getsourcefile = epoch_mode.inspect.getsourcefile
+        originals = {
+            module.__name__: Path(real_getsourcefile(module)).read_text(encoding="utf-8")
+            for module in (managed_exit, p2)
+        }
+
+        def variants(module, function_name):
+            source = originals[module.__name__]
+            tree = ast.parse(source)
+            node = next((n for n in tree.body
+                         if isinstance(n, ast.FunctionDef) and n.name == function_name), None)
+            self.assertIsNotNone(node, f"{function_name} is no longer a top-level function")
+            lines = source.splitlines(keepends=True)
+            lines.insert(node.body[0].lineno - 1,
+                         f"{' ' * node.body[0].col_offset}# simulated comment-only edit\n")
+            commented = "".join(lines)
+            node.body.insert(0, ast.parse("_semantic_mutant = 1").body[0])
+            recoded = ast.unparse(ast.fix_missing_locations(tree))
+            self.assertNotEqual(commented, source)
+            return commented, recoded
+
+        def fingerprint_with(module, source_text, mode):
+            with tempfile.TemporaryDirectory() as temp:
+                path = Path(temp) / "p2_variant.py"
+                path.write_text(source_text, encoding="utf-8")
+                overrides = {module.__name__: str(path)}
+
+                def resolve(target):
+                    return overrides.get(getattr(target, "__name__", ""), real_getsourcefile(target))
+
+                with patched_epoch_modes(mode, ("p2_target_policy",)), \
+                        mock.patch.object(epoch_mode.inspect, "getsourcefile", side_effect=resolve):
+                    return p2._contract_fingerprint()
+
+        legs = (
+            (managed_exit, "evaluate_managed_exit", True),   # walker leg, another module
+            (p2, "_settle_existing_records", True),          # settlement dispatch leg
+            (p2, "_load_execution_cache", True),             # shared cache loader leg
+            (p2, "main", False),                             # scoping control: unbound
+        )
+        for module, function_name, bound in legs:
+            commented, recoded = variants(module, function_name)
+            for mode in ("pre_freeze_audit_only", "frozen_enforced"):
+                baseline = fingerprint_with(module, originals[module.__name__], mode)
+                self.assertEqual(fingerprint_with(module, commented, mode), baseline,
+                                 f"a comment-only edit moved P2 via {function_name} in {mode}")
+                moved = fingerprint_with(module, recoded, mode) != baseline
+                self.assertEqual(moved, bound and mode == "frozen_enforced",
+                                 f"code-edit drift is wrong for {function_name} in {mode}")
+
+        renamed = originals[p2.__name__].replace(
+            "def _load_execution_cache(", "def _load_execution_cache_renamed(", 1)
+        with self.assertRaises(epoch_mode.EvidenceEpochModeError):
+            fingerprint_with(p2, renamed, "frozen_enforced")
+
     def test_every_track_has_a_positive_enforced_drift_control(self):
         """Every parked identity must become genuinely drift-sensitive at freeze."""
         from engine import a_short_factor_comparison_v2 as p0
@@ -345,6 +410,48 @@ class PreFreezeEvidenceModeTests(unittest.TestCase):
                 semantic_change = epoch_mode.semantic_module_contract(module)
         self.assertEqual(baseline, prose_only)
         self.assertNotEqual(baseline["semantic_ast_sha256"], semantic_change["semantic_ast_sha256"])
+
+    def test_narrow_contract_binds_the_constants_its_functions_read(self):
+        """A narrow binding must cover read constants, or a governed threshold escapes.
+
+        P5 is the live case: `select_profile_watch_pool` reads
+        `PROFILE_WATCH_POOL_TOP_N`, the fixed watch-pool slot count, so binding
+        only the function body let that number change without moving the epoch.
+        """
+        from types import SimpleNamespace
+
+        with tempfile.TemporaryDirectory() as temp:
+            path = Path(temp) / "const_probe.py"
+            module = SimpleNamespace(__name__="const_probe")
+            body = ('LIMIT = 3\nOTHER = 7\n\n\ndef bound():\n    return LIMIT\n\n\n'
+                    'def unbound():\n    return OTHER\n')
+            with mock.patch.object(epoch_mode.inspect, "getsourcefile", return_value=str(path)):
+                path.write_text(body, encoding="utf-8")
+                baseline = epoch_mode.semantic_function_contract(module, ("bound",))
+                self.assertEqual(baseline["bound_constants"], ["LIMIT"])
+
+                path.write_text(body.replace("LIMIT = 3", "LIMIT = 4"), encoding="utf-8")
+                self.assertNotEqual(
+                    epoch_mode.semantic_function_contract(module, ("bound",))["semantic_ast_sha256"],
+                    baseline["semantic_ast_sha256"], "a read constant escaped the narrow contract")
+
+                # A constant only the unbound function reads stays out of scope.
+                path.write_text(body.replace("OTHER = 7", "OTHER = 8"), encoding="utf-8")
+                self.assertEqual(epoch_mode.semantic_function_contract(module, ("bound",)), baseline)
+
+                # Prose around the constant is still ignored.
+                path.write_text(body.replace("LIMIT = 3", "# note\nLIMIT = 3"), encoding="utf-8")
+                self.assertEqual(epoch_mode.semantic_function_contract(module, ("bound",)), baseline)
+
+    def test_p5_narrow_contract_now_covers_its_governed_slot_count(self):
+        """The real instance behind the previous test, pinned against the live module."""
+        from engine import egs_industry_heat as heat
+
+        contract = epoch_mode.semantic_function_contract(
+            heat, ("select_profile_watch_pool", "final_score_and_tier", "compute_industry_heat_score"),
+        )
+        self.assertIn("PROFILE_WATCH_POOL_TOP_N", contract["bound_constants"])
+        self.assertIn("UNKNOWN_INDUSTRY", contract["bound_constants"])
 
     def test_semantic_function_contract_is_narrow_exact_and_prose_insensitive(self):
         """A narrowed binding keeps prose-insensitivity and fails closed on a rename."""
