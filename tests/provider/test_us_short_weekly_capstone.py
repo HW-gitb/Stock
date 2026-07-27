@@ -1031,8 +1031,12 @@ class CapstoneStageAuthAndSourceBindingTest(unittest.TestCase):
     def test_gated_adapter_forwards_ctx_authorization_when_authorized(self):
         # Required B (reverse): with an AUTHORIZED ctx each adapter forwards ctx.confirm_user_authorization (True) to
         # its runner — the value is CONSUMED from the context, not hardcoded.
+        from dataclasses import replace
         from runners import us_short_weekly_capstone_stages as st
-        ctx = self._ctx(authorized=True)
+        ctx = replace(
+            self._ctx(authorized=True),
+            soft_discovery_run_result={"status": "valid_nonempty"},
+        )
         with mock.patch.object(st, "_account_holding_tickers", return_value=["HOLD"]):
             for adapter, (mod_attr, fn) in self._WRAPPED.items():
                 with mock.patch.object(getattr(st, mod_attr), fn, return_value={"ok": True}) as m:
@@ -1046,6 +1050,27 @@ class CapstoneStageAuthAndSourceBindingTest(unittest.TestCase):
                     if adapter == "run_pass2_fetch":
                         self.assertEqual(m.call_args.kwargs["expected_total_call_budget"], 16)
                         self.assertIs(m.call_args.kwargs["budget_approval"], ctx.budget_approval)
+                        self.assertIs(m.call_args.kwargs["theme_soft_boost_enabled"], True)
+                        self.assertIs(
+                            m.call_args.kwargs["soft_discovery_stage_result"],
+                            ctx.soft_discovery_run_result,
+                        )
+                        self.assertEqual(
+                            m.call_args.kwargs["provisional_theme_stage_receipt_path"],
+                            ctx.soft_discovery_receipt_path,
+                        )
+                        self.assertEqual(
+                            m.call_args.kwargs["provisional_theme_validation_path"],
+                            ctx.soft_discovery_validation_path,
+                        )
+                        self.assertEqual(
+                            m.call_args.kwargs["soft_boost_consumption_receipt_path"],
+                            ctx.soft_boost_consumption_receipt_path,
+                        )
+                        self.assertEqual(
+                            m.call_args.kwargs["soft_boost_state_dir"],
+                            ctx.state_dir,
+                        )
                     if adapter == "run_yfinance_grades_fetch":
                         self.assertIs(m.call_args.kwargs["budget_approval"], ctx.budget_approval)
                     if adapter == "run_pass2_preflight":
@@ -1064,6 +1089,29 @@ class CapstoneStageAuthAndSourceBindingTest(unittest.TestCase):
         )
         ctx.account_state_path.write_text(json.dumps(state), encoding="utf-8")
         self.assertEqual(st._account_holding_tickers(ctx), ["AAPL", "MSFT"])
+
+    def test_pass2_fetch_explicit_soft_boost_off_forwards_no_k4b_paths(self):
+        from dataclasses import replace
+        from runners import us_short_weekly_capstone_stages as st
+
+        ctx = replace(self._ctx(authorized=True), theme_soft_boost_enabled=False)
+        with mock.patch.object(st, "_account_holding_tickers", return_value=[]), mock.patch.object(
+            st._pass2, "run_full_candidate_live_source_packet", return_value={"ok": True}
+        ) as run:
+            st.run_pass2_fetch(ctx)
+        self.assertIs(run.call_args.kwargs["theme_soft_boost_enabled"], False)
+        self.assertIsNone(run.call_args.kwargs["soft_discovery_stage_result"])
+        for field in (
+            "provisional_theme_stage_receipt_path",
+            "provisional_theme_validation_path",
+            "original_candidate_artifact_path",
+            "classification_packet_path",
+            "soft_boost_consumption_receipt_path",
+            "soft_boost_shadow_receipt_path",
+            "soft_boost_comparison_ledger_path",
+            "soft_boost_state_dir",
+        ):
+            self.assertIsNone(run.call_args.kwargs[field], field)
 
     def test_pass2_adapters_reject_missing_frozen_budget_before_wrapped_runner(self):
         from dataclasses import replace
@@ -1426,7 +1474,7 @@ class CapstoneAdapterSignatureTest(unittest.TestCase):
             (st._mom_fetch.run_fetch, ["candidate_artifact_path", "series_packet_path", "ohlcv_series_packet_path", "summary_path", "generated_at", "confirm_user_authorization"]),
             (st._sic.run_fetch, ["candidate_artifact_path", "classification_packet_path", "summary_path", "generated_at", "confirm_user_authorization"]),
             (st._yfinance_grades.run_yfinance_grades_fetch, ["preflight_summary_path", "output_source_package_path", "output_resolved_actions_path", "summary_path", "raw_root", "confirm_user_authorization", "generated_at", "observed_at", "pace_seconds"]),
-            (st._pass2.run_full_candidate_live_source_packet, ["preflight_summary_path", "expected_total_call_budget", "authorized_momentum_top_k", "forced_holding_tickers", "catalyst_recall_tickers", "source_artifact_prefix", "context_components_output_path", "output_data_context_path", "overextension_projection_path", "yfinance_grade_actions_path", "summary_path", "confirm_user_authorization", "run_data_context", "generated_at", "observed_at", "provider_pace_seconds", "max_retries_per_call", "retry_backoff_seconds", "max_total_http_attempts"]),
+            (st._pass2.run_full_candidate_live_source_packet, ["preflight_summary_path", "expected_total_call_budget", "authorized_momentum_top_k", "forced_holding_tickers", "catalyst_recall_tickers", "source_artifact_prefix", "context_components_output_path", "output_data_context_path", "overextension_projection_path", "yfinance_grade_actions_path", "summary_path", "confirm_user_authorization", "run_data_context", "generated_at", "observed_at", "provider_pace_seconds", "max_retries_per_call", "retry_backoff_seconds", "max_total_http_attempts", "theme_soft_boost_enabled", "soft_discovery_stage_result", "provisional_theme_stage_receipt_path", "provisional_theme_validation_path", "original_candidate_artifact_path", "classification_packet_path", "soft_boost_consumption_receipt_path", "soft_boost_shadow_receipt_path", "soft_boost_comparison_ledger_path", "soft_boost_state_dir"]),
             (st._mom_prod.run_packet, ["candidate_artifact_path", "series_packet_path", "output_projection_path", "summary_path", "generated_at"]),
             (st._overextension.run_packet, ["candidate_artifact_path", "series_packet_path", "output_projection_path", "summary_path", "generated_at"]),
             (st._theme.run_packet, ["candidate_artifact_path", "series_packet_path", "classification_packet_path", "output_projection_path", "summary_path", "generated_at"]),

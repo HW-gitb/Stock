@@ -291,9 +291,13 @@ class WeeklyCapstoneSoftDiscoveryStageTest(unittest.TestCase):
         with mock.patch.object(capstone, "run_weekly_capstone", return_value={}) as run:
             self.assertEqual(capstone.main(argv), 0)
         self.assertIs(run.call_args.kwargs["soft_discovery_enabled"], True)
+        self.assertIs(run.call_args.kwargs["theme_soft_boost_enabled"], True)
         with mock.patch.object(capstone, "run_weekly_capstone", return_value={}) as run:
             self.assertEqual(capstone.main([*argv, "--disable-soft-discovery"]), 0)
         self.assertIs(run.call_args.kwargs["soft_discovery_enabled"], False)
+        with mock.patch.object(capstone, "run_weekly_capstone", return_value={}) as run:
+            self.assertEqual(capstone.main([*argv, "--disable-theme-soft-boost"]), 0)
+        self.assertIs(run.call_args.kwargs["theme_soft_boost_enabled"], False)
 
     def test_public_pipeline_switch_rejects_non_boolean_values(self):
         for value in (0, 1, "false", "true", None):
@@ -308,6 +312,16 @@ class WeeklyCapstoneSoftDiscoveryStageTest(unittest.TestCase):
                         batch4_template_path=self.state_dir / "template.json",
                         account_state_path=self.state_dir / "account.json",
                         soft_discovery_enabled=value,
+                        state_dir=self.state_dir,
+                    )
+            with self.subTest(surface="resolve_capstone_context.boost", value=value):
+                with self.assertRaisesRegex(capstone.WeeklyCapstoneError, "exact bool"):
+                    capstone.resolve_capstone_context(
+                        now_et=datetime(2026, 6, 15, 7, 0, 0),
+                        private_root=self.state_dir / "private",
+                        batch4_template_path=self.state_dir / "template.json",
+                        account_state_path=self.state_dir / "account.json",
+                        theme_soft_boost_enabled=value,
                         state_dir=self.state_dir,
                     )
 

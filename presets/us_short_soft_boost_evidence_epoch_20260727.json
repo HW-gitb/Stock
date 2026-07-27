@@ -1,0 +1,17 @@
+{
+  "schema_name": "us_short_soft_boost_evidence_epoch",
+  "schema_version": "1.0.0",
+  "epoch_id": "us_short_soft_boost_k4b_20260727",
+  "starts_with_first_k4b_capture": true,
+  "backfill_allowed": false,
+  "foreground": "soft_boost_on",
+  "challenger": "soft_boost_off",
+  "formal_looks": [24, 36],
+  "minimum_matured_divergence_weeks": 24,
+  "minimum_non_overlap_h10_blocks": 12,
+  "minimum_regime_count": 2,
+  "minimum_divergence_weeks_per_regime": 4,
+  "statistical_plan_path": "presets/us_short_soft_boost_statistical_plan_20260727.json",
+  "statistical_plan_sha256": "97be1c500a6f0869557fc0d1f6635c2f781f5167559b46151280c65fc3045ec7",
+  "recommendation_auto_applies": false
+}

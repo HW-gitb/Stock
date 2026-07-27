@@ -1164,6 +1164,16 @@ def _build_local_source_packet(
     context_components_output_path: Path | None,
     holdings: list[dict[str, Any]],
     catalyst_recall_feed: list[str],
+    theme_soft_boost_enabled: bool,
+    soft_discovery_stage_result: dict[str, Any] | None,
+    provisional_theme_stage_receipt_path: Path | None,
+    provisional_theme_validation_path: Path | None,
+    original_candidate_artifact_path: Path | None,
+    classification_packet_path: Path | None,
+    soft_boost_consumption_receipt_path: Path | None,
+    soft_boost_shadow_receipt_path: Path | None,
+    soft_boost_comparison_ledger_path: Path | None,
+    soft_boost_state_dir: Path | None,
 ) -> dict[str, Any]:
     if (overextension_projection_path is None) != (overextension_candidate_artifact_path is None):
         raise FullCandidateLiveSourcePacketError(
@@ -1188,6 +1198,47 @@ def _build_local_source_packet(
         packet_paths["yfinance_grade_actions_path"] = _repo_rel(yfinance_grade_actions_path)
     if context_components_output_path is not None:
         packet_paths["output_context_components_path"] = _repo_rel(context_components_output_path)
+    soft_paths = (
+        provisional_theme_stage_receipt_path,
+        provisional_theme_validation_path,
+        original_candidate_artifact_path,
+        classification_packet_path,
+        soft_boost_consumption_receipt_path,
+        soft_boost_shadow_receipt_path,
+        soft_boost_comparison_ledger_path,
+    )
+    if theme_soft_boost_enabled:
+        if type(soft_discovery_stage_result) is not dict:
+            raise FullCandidateLiveSourcePacketError(
+                "enabled K4b consumption requires this run's soft-discovery stage result"
+            )
+        if any(path is None for path in soft_paths):
+            raise FullCandidateLiveSourcePacketError(
+                "enabled K4b consumption requires every source and output path"
+            )
+        if soft_boost_state_dir is None:
+            raise FullCandidateLiveSourcePacketError(
+                "enabled K4b consumption requires its injected state root"
+            )
+        packet_paths["soft_boost_state_dir_path"] = _repo_rel(soft_boost_state_dir)
+        for field, path in zip((
+            "provisional_theme_stage_receipt_path",
+            "provisional_theme_validation_path",
+            "original_candidate_artifact_path",
+            "classification_packet_path",
+            "soft_boost_consumption_receipt_path",
+            "soft_boost_shadow_receipt_path",
+            "soft_boost_comparison_ledger_path",
+        ), soft_paths):
+            packet_paths[field] = _repo_rel(path)
+    elif (
+        soft_discovery_stage_result is not None
+        or soft_boost_state_dir is not None
+        or any(path is not None for path in soft_paths)
+    ):
+        raise FullCandidateLiveSourcePacketError(
+            "disabled K4b consumption must not carry stage result or soft-boost paths"
+        )
     source_artifact_sha256 = {
         field: hashlib.sha256(path.read_bytes()).hexdigest()
         for field, path in (
@@ -1201,6 +1252,13 @@ def _build_local_source_packet(
         source_artifact_sha256["yfinance_grade_actions_path"] = hashlib.sha256(
             yfinance_grade_actions_path.read_bytes()
         ).hexdigest()
+    optional_inputs = {
+        "holdings": holdings,
+        "catalyst_recall_feed": catalyst_recall_feed or None,
+    }
+    if theme_soft_boost_enabled:
+        optional_inputs["theme_soft_boost_enabled"] = True
+        optional_inputs["soft_discovery_stage_result"] = soft_discovery_stage_result
     return {
         "schema_name": "us_short_batch5_data_context_source_packet",
         "schema_version": "1.3.0",
@@ -1225,10 +1283,7 @@ def _build_local_source_packet(
         },
         "source_artifact_sha256": source_artifact_sha256,
         "paths": packet_paths,
-        "optional_inputs": {
-            "holdings": holdings,
-            "catalyst_recall_feed": catalyst_recall_feed or None,
-        },
+        "optional_inputs": optional_inputs,
         "preflight_gates": {
             "local_files_only": True,
             "source_artifacts_must_exist": True,
@@ -1753,6 +1808,16 @@ def run_full_candidate_live_source_packet(
     max_total_http_attempts: int | None = None,
     execution_mode: str = _EXECUTION_MODE_LIVE_PROVIDER_FETCH,
     replay_source_capture: dict[str, Any] | None = None,
+    theme_soft_boost_enabled: bool = False,
+    soft_discovery_stage_result: dict[str, Any] | None = None,
+    provisional_theme_stage_receipt_path: Path | None = None,
+    provisional_theme_validation_path: Path | None = None,
+    original_candidate_artifact_path: Path | None = None,
+    classification_packet_path: Path | None = None,
+    soft_boost_consumption_receipt_path: Path | None = None,
+    soft_boost_shadow_receipt_path: Path | None = None,
+    soft_boost_comparison_ledger_path: Path | None = None,
+    soft_boost_state_dir: Path | None = None,
 ) -> dict[str, Any]:
     # This runner has no source-bound §4.3 theme-confirmation pool.  It must not accept a caller-selected strong
     # state that changes Top15 seats; the conservative state preserves the no-strong seat split until that producer
@@ -1760,6 +1825,36 @@ def run_full_candidate_live_source_packet(
     if theme_opportunity_state != "no_strong_theme":
         raise FullCandidateLiveSourcePacketError(
             "theme_opportunity_state must remain no_strong_theme until a source-bound theme confirmation producer exists"
+        )
+    if type(theme_soft_boost_enabled) is not bool:
+        raise FullCandidateLiveSourcePacketError("theme_soft_boost_enabled must be exact bool")
+    soft_boost_paths = (
+        provisional_theme_stage_receipt_path,
+        provisional_theme_validation_path,
+        original_candidate_artifact_path,
+        classification_packet_path,
+        soft_boost_consumption_receipt_path,
+        soft_boost_shadow_receipt_path,
+        soft_boost_comparison_ledger_path,
+    )
+    if theme_soft_boost_enabled:
+        if type(soft_discovery_stage_result) is not dict or any(
+            path is None for path in soft_boost_paths
+        ):
+            raise FullCandidateLiveSourcePacketError(
+                "enabled K4b consumption requires this run's stage result and every path"
+            )
+        if soft_boost_state_dir is None:
+            raise FullCandidateLiveSourcePacketError(
+                "enabled K4b consumption requires its injected state root"
+            )
+    elif (
+        soft_discovery_stage_result is not None
+        or soft_boost_state_dir is not None
+        or any(path is not None for path in soft_boost_paths)
+    ):
+        raise FullCandidateLiveSourcePacketError(
+            "disabled K4b consumption must not carry stage result or soft-boost paths"
         )
     if not (isinstance(max_retries_per_call, int) and not isinstance(max_retries_per_call, bool)
             and 0 <= max_retries_per_call <= _MAX_RETRIES_PER_CALL_CAP):
@@ -2017,6 +2112,16 @@ def run_full_candidate_live_source_packet(
         context_components_output_path=components_path,
         holdings=holding_rows,
         catalyst_recall_feed=verified_targets["_catalyst_recall_symbols"],
+        theme_soft_boost_enabled=theme_soft_boost_enabled,
+        soft_discovery_stage_result=soft_discovery_stage_result,
+        provisional_theme_stage_receipt_path=provisional_theme_stage_receipt_path,
+        provisional_theme_validation_path=provisional_theme_validation_path,
+        original_candidate_artifact_path=original_candidate_artifact_path,
+        classification_packet_path=classification_packet_path,
+        soft_boost_consumption_receipt_path=soft_boost_consumption_receipt_path,
+        soft_boost_shadow_receipt_path=soft_boost_shadow_receipt_path,
+        soft_boost_comparison_ledger_path=soft_boost_comparison_ledger_path,
+        soft_boost_state_dir=soft_boost_state_dir,
     )
     _write_json_atomic(packet, paths["source_packet"])
 
@@ -2126,6 +2231,8 @@ def main(argv: list[str] | None = None) -> int:
             max_retries_per_call=args.max_retries_per_call,
             retry_backoff_seconds=args.retry_backoff_seconds,
             max_total_http_attempts=args.max_total_http_attempts,
+            theme_soft_boost_enabled=False,
+            soft_discovery_stage_result=None,
         )
     except FullCandidateLiveSourcePacketError as exc:
         print(f"ERROR: {exc}", file=sys.stderr)

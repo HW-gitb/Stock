@@ -190,6 +190,9 @@ def run_sic_fetch(ctx) -> dict[str, Any]:
 def run_pass2_fetch(ctx) -> dict[str, Any]:
     _require_ctx_authorization(ctx)
     approval = _require_budget_approval(ctx)
+    soft_boost_enabled = (
+        ctx.theme_soft_boost_enabled and ctx.soft_discovery_run_result is not None
+    )
     summary = _pass2.run_full_candidate_live_source_packet(
         preflight_summary_path=ctx.preflight_summary_path,
         expected_total_call_budget=approval.exact_pass2_calls,
@@ -212,6 +215,30 @@ def run_pass2_fetch(ctx) -> dict[str, Any]:
         max_total_http_attempts=ctx.max_total_http_attempts,
         forced_holding_tickers=_account_holding_tickers(ctx),
         catalyst_recall_tickers=list(ctx.catalyst_recall_tickers),
+        theme_soft_boost_enabled=soft_boost_enabled,
+        soft_discovery_stage_result=(
+            ctx.soft_discovery_run_result if soft_boost_enabled else None
+        ),
+        provisional_theme_stage_receipt_path=(
+            ctx.soft_discovery_receipt_path if soft_boost_enabled else None
+        ),
+        provisional_theme_validation_path=(
+            ctx.soft_discovery_validation_path if soft_boost_enabled else None
+        ),
+        original_candidate_artifact_path=ctx.candidate_path if soft_boost_enabled else None,
+        classification_packet_path=(
+            ctx.classification_packet_path if soft_boost_enabled else None
+        ),
+        soft_boost_consumption_receipt_path=(
+            ctx.soft_boost_consumption_receipt_path if soft_boost_enabled else None
+        ),
+        soft_boost_shadow_receipt_path=(
+            ctx.soft_boost_shadow_receipt_path if soft_boost_enabled else None
+        ),
+        soft_boost_comparison_ledger_path=(
+            ctx.soft_boost_comparison_ledger_path if soft_boost_enabled else None
+        ),
+        soft_boost_state_dir=ctx.state_dir if soft_boost_enabled else None,
     )
     return summary
 

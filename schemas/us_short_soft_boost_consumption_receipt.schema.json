@@ -1,0 +1,153 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://stock.local/schemas/us_short_soft_boost_consumption_receipt.schema.json",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_name", "schema_version", "generated_at", "decision_date", "requested_enabled",
+    "effective_enabled", "status", "reason_code", "bindings", "per_ticker", "top15_impact", "effects"
+  ],
+  "properties": {
+    "schema_name": {"const": "us_short_soft_boost_consumption_receipt"},
+    "schema_version": {"const": "1.0.0"},
+    "generated_at": {"type": "string", "format": "date-time"},
+    "decision_date": {"type": "string", "pattern": "^[0-9]{8}$"},
+    "requested_enabled": {"type": "boolean"},
+    "effective_enabled": {"type": "boolean"},
+    "status": {
+      "enum": [
+        "consumed_valid_nonempty", "zero_disabled", "zero_valid_empty",
+        "zero_upstream_unavailable", "zero_invalid_evidence"
+      ]
+    },
+    "reason_code": {"type": ["string", "null"]},
+    "bindings": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["stage_receipt", "validation_artifact"],
+      "properties": {
+        "stage_receipt": {"$ref": "#/definitions/artifact"},
+        "validation_artifact": {"$ref": "#/definitions/artifact"}
+      }
+    },
+    "per_ticker": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["ticker", "evidence_tier", "actual_boost", "core_score_off", "core_score_on"],
+        "properties": {
+          "ticker": {"type": "string", "pattern": "^[A-Z][A-Z0-9.-]{0,14}$"},
+          "evidence_tier": {"enum": [null, "single", "both"]},
+          "actual_boost": {"type": "number", "enum": [0.0, 2.0, 5.0]},
+          "core_score_off": {"type": "number", "minimum": 0, "maximum": 100},
+          "core_score_on": {"type": "number", "minimum": 0, "maximum": 100}
+        }
+      }
+    },
+    "top15_impact": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["entered", "exited", "changed"],
+      "properties": {
+        "entered": {"type": "array", "uniqueItems": true, "items": {"type": "string"}},
+        "exited": {"type": "array", "uniqueItems": true, "items": {"type": "string"}},
+        "changed": {"type": "boolean"}
+      }
+    },
+    "effects": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "core_score_effect_enabled", "top15_effect_enabled",
+        "operation_advice_effect_claimed", "dynamic_seats_enabled",
+        "theme_probe_enabled", "lifecycle_actions_enabled", "provider_calls_performed"
+      ],
+      "properties": {
+        "core_score_effect_enabled": {"type": "boolean"},
+        "top15_effect_enabled": {"type": "boolean"},
+        "operation_advice_effect_claimed": {"const": false},
+        "dynamic_seats_enabled": {"const": false},
+        "theme_probe_enabled": {"const": false},
+        "lifecycle_actions_enabled": {"const": false},
+        "provider_calls_performed": {"const": false}
+      }
+    }
+  },
+  "allOf": [
+    {
+      "if": {"properties": {"status": {"const": "consumed_valid_nonempty"}}},
+      "then": {
+        "properties": {
+          "requested_enabled": {"const": true},
+          "effective_enabled": {"const": true},
+          "reason_code": {"const": null},
+          "bindings": {
+            "properties": {
+              "stage_receipt": {
+                "properties": {
+                  "path": {"type": "string", "minLength": 1},
+                  "sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"}
+                }
+              },
+              "validation_artifact": {
+                "properties": {
+                  "path": {"type": "string", "minLength": 1},
+                  "sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"}
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "status": {
+            "enum": [
+              "zero_disabled", "zero_valid_empty",
+              "zero_upstream_unavailable", "zero_invalid_evidence"
+            ]
+          }
+        }
+      },
+      "then": {
+        "properties": {
+          "effective_enabled": {"const": false},
+          "effects": {
+            "properties": {
+              "core_score_effect_enabled": {"const": false},
+              "top15_effect_enabled": {"const": false}
+            }
+          }
+        }
+      }
+    },
+    {
+      "if": {"properties": {"status": {"const": "zero_disabled"}}},
+      "then": {"properties": {"requested_enabled": {"const": false}}}
+    },
+    {
+      "if": {
+        "properties": {
+          "status": {
+            "enum": ["zero_valid_empty", "zero_upstream_unavailable", "zero_invalid_evidence"]
+          }
+        }
+      },
+      "then": {"properties": {"requested_enabled": {"const": true}}}
+    }
+  ],
+  "definitions": {
+    "artifact": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["path", "sha256"],
+      "properties": {
+        "path": {"type": ["string", "null"]},
+        "sha256": {"type": ["string", "null"], "pattern": "^[0-9a-f]{64}$"}
+      }
+    }
+  }
+}

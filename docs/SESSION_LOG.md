@@ -36,6 +36,58 @@
 - **Required**: 无。rule 7 与本节旧表述冲突时以 rule 7 为准（已写进 AGENTS）。
 - **Verify**: 机器强制而非自觉：快照记 `armed_at_epoch`，Stop hook 实测墙钟，超 30 分钟且 Verify 无 `超时原因:` 即拦最终回复。端到端探针：12 分钟放行 / 47 分钟无原因 `exit 2` 拦截 / 补写原因后放行。顺带修两处 gate 静默失效：① `审查4a…` 这类带前置语的命令过去不 arm（今天就没 arm，故本轮无 token、无计时），② 在 worktree 评审时 gate 仍指向主树、校验错了树的 SESSION_LOG。`test_review_tiering_enforcement` + `test_claude_review_gate` + `test_doc_governance_guard` 亲跑 57 OK。
 - **Next**: 下一刀审查按 rule 7 执行，超时须在 Verify 写原因。
+## 2026-07-27 - Claude Code 审查 PASS + 提交 (US-short 刀4b 第三轮，K4B-R3 已闭)
+
+- **Verdict/Action**: PASS，已提交本刀全量 27 个文件。R3 修得精准：只去掉 state ROOT 那条 gitignore 要求，每件产物"必须 gitignored + 必须在该根下 + .json + 不可穿越"四道全在，`.gitignore` 没动。R1/R2/O1/O2 经回归复测仍闭；生产 state 根现在被接受，且带一条会在旧代码上变红的控制。
+- **Required**: 无。`R-USSHORT-KNIFE4B-STATE-ROOT-GITIGNORE-GATE-KILLS-THE-DEFAULT-RUN` 转 resolved；仍挂一条 Optional(降级原因码过于笼统)，详见 `system_risk_register.md`(单一来源，本处不复述)。
+- **Verify**: review-evidence:4d4364f0b8bd。亲跑(017a，pinned 3.13)：生产 `state/us_short` 现被接受(改前报 `must be gitignored`)；以 `docs` 当根时 `docs/leak.json` 仍被 `must be gitignored` 拒绝，越根/非 json/穿越/缺目录逐条仍拒；三条原故障注入仍全部降级为 OFF(测试自身 `AssertionError: 43.5 != 48.5`，非 `SourcePacketError`)；8 模块超集包 `282 OK`/525s/exit 0；`state/us_short/` 探针与全包前后均只有 `lifecycle runs_private`。未起 6a agent(本会话工具策略)，已用整读+复现故障注入替代并声明边界。
+- **Next**: 4c(周报横幅)按 pack 派生覆盖面开工
+
+## 2026-07-27 - Codex repair K4B-R3
+
+- **Verdict/Action**: K4B-R3 repaired. The default state root is valid without being gitignored; each K4b output remains individually required to be repo-contained, under that root, JSON and gitignored. `.gitignore` unchanged. No commit.
+- **Required**: No new Required. Claude Code must independently re-review the complete K4b diff before commit.
+- **Verify**: Fixed-Python focused red reproduced `SourcePacketError: paths.soft_boost_state_dir_path must be gitignored`; focused green `11 OK` covers the production root, all three output slots and consumption seam. The larger affected command was launched but the harness did not return a terminal summary, so it is not claimed green. No full lane under the unchanged no-key/provider boundary.
+- **Pre-Codex self-review**: A=the sole K4b state-root validator and all three output fields checked; B=`rg` confirms no state-root gitignore requirement remains, while the three output checks remain; C=default-root acceptance plus output boundary covered; E=register is the material-risk authority and CURRENT/README unchanged; F=no state write. No new agent: this Required follows the existing K4b review window and protocol forbids content-driven re-review.
+- **Next**: Claude Code independently re-review the complete K4b diff; commit only after PASS.
+
+## 2026-07-27 - Claude Code 审查 FAIL (US-short 刀4b 第二轮：R1/R2 已闭，新出一条默认必死)
+
+- **Verdict/Action**: FAIL，一条新 Required。K4B-R1 修得比我要求的更强(OFF 先算且为默认，整段 ON+证据在一个 try 里，写成功证据后才采用 ON)，K4B-R2/O1/O2 也真闭(O1 的死导出已退役并有断言守着)。但新加的 state-root 校验要求 `paths.soft_boost_state_dir_path` 必须 gitignored，而生产传的就是 `state/us_short`——它并不被忽略(`.gitignore:44` 忽略的是 `state/*/*.json` 文件，不是目录)，且该校验在保护性 try 之外，等于**默认配置下每次周跑都死**，不需要任何故障。未提交。
+- **Required**: `R-USSHORT-KNIFE4B-STATE-ROOT-GITIGNORE-GATE-KILLS-THE-DEFAULT-RUN`(K4B-R3)。实测报文、闭合证据与修法(别用给 .gitignore 加目录的方式绕)见 `system_risk_register.md`(单一来源，本处不复述)。
+- **Verify**: review-evidence:not_available(本轮 `审查工作树…` 的措辞未 arm 评审门，属 GOV-R3 同类第三例，已在治理 register 侧记)。亲跑：三条原故障注入现在全部降级(测试自身 `AssertionError: 43.5 != 48.5`，不再 `SourcePacketError`)；`git check-ignore` 实测 `state/us_short` 未被忽略而其下 json 被忽略；直接调用校验器得 `SourcePacketError: ... must be gitignored`；卫生面 `state/us_short/` 探针前后均只有 `lifecycle runs_private`。8 模块超集包(第二条命令即后台起)收口 `281 OK`/548s/exit 0，跑完后 `state/us_short/` 仍只有 `lifecycle runs_private`(K4B-R2 二次确认)；K4B-R3 正是它没覆盖的——没有测试会走生产那个 state 根。
+- **Next**: Codex：修复 K4B-R3(去掉 state ROOT 的 gitignore 要求，保留每件产物的 gitignored+归属校验)
+
+## 2026-07-27 - Codex repair K4B-O1/O2
+
+- **Verdict/Action**: K4B-O1/O2 repaired. The atomic three-artifact evidence bundle is the only K4b publisher; the cross-module Top15 comparator is now the public `official_top15_tickers` contract. No commit.
+- **Required**: No new Required. The full K4b diff still requires Claude Code independent review before commit.
+- **Verify**: Fixed-Python focused red: duplicate publisher attribute remained and public Top15 import failed; focused green `2 OK`; the affected K4b/source-packet/capstone/conformance command was launched but the harness returned its intentional bad-`run_mode` parser probes without a terminal summary, so it is not claimed green; changed Python `py_compile`, route-doc guards `25 OK`, and `git diff --check` pass; live `state/us_short/shadow_compare_private` is absent and no K4b-named artifact remains under isolated fixture roots. No full lane rerun under the unchanged no-key/provider boundary.
+- **Pre-Codex self-review**: A=all publisher entry points (two before repair, one after) and every `_official_top15_tickers` code import/call checked; B=`rg` leaves only the two planted negative assertions; C=removal test and public-import test are reverse failures; E=register is the sole material-risk record, CURRENT/README unchanged; F=no state write. No new agent: this is same-window Optional closure, and protocol forbids content-driven re-review.
+- **Next**: Claude Code independently re-review the complete K4b diff; commit only after PASS.
+
+## 2026-07-27 - Codex repair K4B-R1/R2
+
+- **Verdict/Action**: K4B-R1/R2 repaired by class. The mandatory OFF composition is built first; every optional K4b resolution/ON/attribution/preset/input/publication failure becomes typed zero without aborting strict Pass2. The atomic evidence bundle now uses the capstone-injected K4b state root, and K4b tests no longer write operator state. No commit.
+- **Required**: `R-USSHORT-KNIFE4B-OPTIONAL-BOOST-STILL-KILLS-THE-MANDATORY-RUN` addressed; K4B-O1/O2 remain Optional. Claude Code must independently review the complete diff before commit.
+- **Verify**: Fixed Python focused red reproduced the missing injected-root contract; narrow lifecycle pack `24 OK`; final affected K4b/source/full-candidate/capstone/seam pack `246 OK` in `50.412s`; changed Python `py_compile`, schema parse and `git diff --check` pass; K4b fixture/operator-state residue 0. No full lane rerun under the unchanged no-key/provider boundary.
+- **Pre-Codex self-review**: A=all five named optional failure points plus resolution and injected-root threading checked; B=state-root and reason-code callsites/schema/adapter list swept; C=OFF byte equality and strict mandatory assembly preserved; E=CURRENT/README unchanged and design/register remain single-source; F=no temp/state residue. No new agent: the slice already consumed its one independent window, and this repair follows that window's Required without content-driven re-review.
+- **Next**: Claude Code independently re-review K4B-R1/R2 and the complete K4b diff; commit only after PASS.
+
+## 2026-07-27 - Claude Code 审查 FAIL (US-short 刀4b 软加成消费)
+
+- **Verdict/Action**: FAIL，两条 Required。这是第一把真正影响选股的刀(capstone 默认 `theme_soft_boost_enabled=True`，ON 组装成为正式 data_context，能把票推进 Top15)。可选通道里只有 `write_evidence_bundle` 一处被兜住，其余五个失败点(preset 摘要漂移/preset 缺失/ON-OFF 归因不符/评分范围/输入读盘)全部逃逸成 `SourcePacketError`，而 `pass2_fetch` 是 strict，等于整条强制周跑被可选通道打死——class A 第四次复发。发布器还硬编码 STATE_DIR，导致该刀自己的测试往操作员实时目录写。
+- **Required**: `R-USSHORT-KNIFE4B-OPTIONAL-BOOST-STILL-KILLS-THE-MANDATORY-RUN`(K4B-R1/R2 + O1/O2)。三条真实故障注入的实测报文、修法与必须保留的正确设计见 `system_risk_register.md`(单一来源，本处不复述)。
+- **Verify**: review-evidence:0677cf7a6a51。亲跑：先跑通该刀 happy-path 测试作基线(PASSED)，再逐条注入三种现实故障，全部得到 `SourcePacketError`；静态确认 `pass2_fetch failure_policy=strict`、`theme_soft_boost_enabled` 默认 True。实测 `state/us_short/shadow_compare_private/` 在该测试单跑时被创建(16:37:56)。变更文件超集包(第二条命令即后台起)收口 `271 OK`/558s/exit 0，`test_us_short_soft_boost_consumption` `9 OK`——该刀自测全绿，上述三条致命路径正是它没覆盖的；这两次运行还复现了 K4B-R2(删掉的 `shadow_compare_private/` 又被写回，已再次清除)。未起 6a agent(本会话工具策略)，已用整读+自建故障注入替代并声明边界。
+- **Next**: Codex：修复 K4B-R1/R2(按 K4a 生命周期契约整类兜住，别只补一条腿)。
+
+## 2026-07-27 - Codex K4b implementation
+
+- **Verdict/Action**: K4b implemented as the sole selection-changing knife: official one-click requests source-bound soft boost; only this run's fully bound `valid_nonempty` K4a evidence can affect core/Top15, every other state is typed zero, and immutable ON/OFF capture remains non-adjudicating. No commit.
+- **Required**: None knowingly open in the implementation; full material boundary and the scheduled independent agent's six repaired findings are recorded at `R-USSHORT-KNIFE4B-SOURCE-BOUND-SCORE-CONSUMPTION`. Claude Code must independently review the complete diff before commit.
+- **Verify**: Fixed Python post-review narrow pack `87 OK`; final affected K4b/capstone/source/knife1-3 offline pack `388 OK` in `368.257s`; changed Python `py_compile` exit 0; `git diff --check` exit 0; K4b state fixture residue 0. Full US-short attempt was stopped and is NOT evidence after an existing probe printed key-presence metadata; no key value/provider response and no provider/network call.
+- **Pre-Codex self-review**: A-F checked; pack-derived bool callsites/bindings/score tiers cover the changed class with planted failures, stale-result/valid-empty/wrong-path/wrong-digest/publication reverse cases are pinned, active design wording matches capture-only 4b, CURRENT/README unchanged. Exactly one independent agent was used (required by selection/fail-closed scope), returned FAIL, all six classes were repaired, no second content review; focused packs were concentrated after the final behavior diff.
+- **Next**: Claude Code independently review the complete K4b diff; commit only after PASS.
 
 ## 2026-07-27 — Claude Code 审查 PASS (US-short 刀4a 第四轮复审：K4A-R10/R11 已闭)
 

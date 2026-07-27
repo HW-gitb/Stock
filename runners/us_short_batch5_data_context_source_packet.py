@@ -26,6 +26,13 @@ from engine.us_short_result_source_linkage import (  # noqa: E402
     ResultSourceLinkageError,
     build_result_source_facts,
 )
+from engine.us_short_soft_boost_consumption import (  # noqa: E402
+    build_consumption_receipt,
+    build_shadow_receipt,
+    degrade_soft_boost_consumption,
+    resolve_soft_boost_consumption,
+    write_evidence_bundle,
+)
 from engine.us_short_seam_momentum import (  # noqa: E402
     COVERAGE_DISPOSITIONS as MOMENTUM_COVERAGE_DISPOSITIONS,
     DISPOSITION_SCORED as MOMENTUM_SCORED_DISPOSITION,
@@ -39,6 +46,7 @@ from engine.us_short_sec_offering_audit import resolve_offering_audit  # noqa: E
 from runners.us_short_batch5_data_context import (  # noqa: E402
     assemble_data_context_from_resolved_pass2_sources,
     assemble_official_context_components_from_resolved_pass2_sources,
+    official_top15_tickers,
     validate_overextension_projection,
 )
 
@@ -64,6 +72,18 @@ OPTIONAL_SOURCE_PATH_FIELDS = (
     "yfinance_grade_actions_path",
     "ohlcv_series_packet_path",
 )
+SOFT_BOOST_INPUT_PATH_FIELDS = (
+    "provisional_theme_stage_receipt_path",
+    "provisional_theme_validation_path",
+    "original_candidate_artifact_path",
+    "classification_packet_path",
+)
+SOFT_BOOST_OUTPUT_PATH_FIELDS = (
+    "soft_boost_consumption_receipt_path",
+    "soft_boost_shadow_receipt_path",
+    "soft_boost_comparison_ledger_path",
+)
+SOFT_BOOST_STATE_DIR_PATH_FIELD = "soft_boost_state_dir_path"
 PROVIDER_ENVELOPE_DIGEST_PATH_FIELDS = (
     "offering_audit_source_path",
     "analyst_grade_actions_path",
@@ -266,6 +286,54 @@ def _validate_output_path(value: Any, *, field: str) -> Path:
     return path
 
 
+def _validate_soft_boost_state_dir(value: Any) -> Path:
+    path = _validate_repo_relative_text(value, field=SOFT_BOOST_STATE_DIR_PATH_FIELD)
+    if not path.exists() or not path.is_dir():
+        raise SourcePacketError("paths.soft_boost_state_dir_path must be an existing directory")
+    return path
+
+
+def _validate_soft_boost_output_path(
+    value: Any, *, field: str, state_dir: Path,
+) -> Path:
+    path = _validate_repo_relative_text(value, field=field)
+    try:
+        path.resolve().parent.relative_to(state_dir.resolve())
+    except ValueError as exc:
+        raise SourcePacketError(f"paths.{field} must stay under the K4b state root") from exc
+    if path.suffix != ".json":
+        raise SourcePacketError(f"paths.{field} must be a .json file")
+    if not _git_ignored(path):
+        raise SourcePacketError(f"paths.{field} must be gitignored")
+    return path
+
+
+def _soft_boost_common_input_sha256(
+    packet: dict[str, Any], paths: dict[str, Path],
+) -> str:
+    input_path_sha256 = {
+        field: hashlib.sha256(paths[field].read_bytes()).hexdigest()
+        for field in (
+            *SOURCE_PATH_FIELDS,
+            *OPTIONAL_SOURCE_PATH_FIELDS,
+            *SOFT_BOOST_INPUT_PATH_FIELDS,
+        )
+        if field in paths
+    }
+    payload = {
+        "decision_clock": packet["decision_clock"],
+        "input_path_sha256": input_path_sha256,
+        "soft_boost_state_dir": _repo_rel(paths[SOFT_BOOST_STATE_DIR_PATH_FIELD]),
+        "holdings": packet["optional_inputs"]["holdings"],
+        "catalyst_recall_feed": packet["optional_inputs"]["catalyst_recall_feed"],
+        "preflight_gates": packet["preflight_gates"],
+        "prohibited_claims": packet["prohibited_claims"],
+    }
+    return hashlib.sha256(json.dumps(
+        payload, ensure_ascii=True, sort_keys=True, separators=(",", ":"),
+    ).encode("utf-8")).hexdigest()
+
+
 def _validate_schema(packet: Any) -> None:
     try:
         from jsonschema import Draft7Validator
@@ -354,6 +422,39 @@ def _load_and_validate_packet(packet_path: Path | str) -> tuple[dict[str, Any], 
     for field in OPTIONAL_SOURCE_PATH_FIELDS:
         if field in packet["paths"]:
             paths[field] = _existing_repo_path(packet["paths"][field], field=field)
+    soft_enabled = packet["optional_inputs"].get("theme_soft_boost_enabled", False)
+    if type(soft_enabled) is not bool:
+        raise SourcePacketError("optional_inputs.theme_soft_boost_enabled must be exact bool")
+    all_soft_path_fields = (
+        *SOFT_BOOST_INPUT_PATH_FIELDS,
+        *SOFT_BOOST_OUTPUT_PATH_FIELDS,
+        SOFT_BOOST_STATE_DIR_PATH_FIELD,
+    )
+    soft_present = {
+        field for field in all_soft_path_fields
+        if field in packet["paths"]
+    }
+    if soft_enabled and soft_present != set(all_soft_path_fields):
+        raise SourcePacketError("enabled K4b source packet must carry every soft-boost path")
+    if not soft_enabled and soft_present:
+        raise SourcePacketError("disabled K4b source packet must not carry soft-boost paths")
+    if not soft_enabled and "soft_discovery_stage_result" in packet["optional_inputs"]:
+        raise SourcePacketError("disabled K4b source packet must not carry a stage result")
+    if soft_enabled:
+        if "output_context_components_path" not in packet["paths"]:
+            raise SourcePacketError("enabled K4b source packet requires output_context_components_path")
+        if type(packet["optional_inputs"].get("soft_discovery_stage_result")) is not dict:
+            raise SourcePacketError("enabled K4b source packet requires this run's stage result")
+        soft_state_dir = _validate_soft_boost_state_dir(
+            packet["paths"][SOFT_BOOST_STATE_DIR_PATH_FIELD]
+        )
+        paths[SOFT_BOOST_STATE_DIR_PATH_FIELD] = soft_state_dir
+        for field in SOFT_BOOST_INPUT_PATH_FIELDS:
+            paths[field] = _validate_repo_relative_text(packet["paths"][field], field=field)
+        for field in SOFT_BOOST_OUTPUT_PATH_FIELDS:
+            paths[field] = _validate_soft_boost_output_path(
+                packet["paths"][field], field=field, state_dir=soft_state_dir,
+            )
     paths["output_data_context_path"] = _validate_output_path(
         packet["paths"]["output_data_context_path"],
         field="output_data_context_path",
@@ -800,6 +901,25 @@ def run_packet(
             "holdings": packet["optional_inputs"]["holdings"],
             "catalyst_recall_feed": packet["optional_inputs"]["catalyst_recall_feed"],
         }
+        soft_requested = packet["optional_inputs"].get("theme_soft_boost_enabled", False)
+        if soft_requested:
+            try:
+                soft_resolution = resolve_soft_boost_consumption(
+                    expected_decision_date=packet["decision_clock"]["expected_decision_date"],
+                    theme_soft_boost_enabled=True,
+                    current_stage_result=packet["optional_inputs"]["soft_discovery_stage_result"],
+                    stage_receipt_path=paths["provisional_theme_stage_receipt_path"],
+                    validation_artifact_path=paths["provisional_theme_validation_path"],
+                    candidate_artifact_path=paths["original_candidate_artifact_path"],
+                    classification_packet_path=paths["classification_packet_path"],
+                    state_dir=paths[SOFT_BOOST_STATE_DIR_PATH_FIELD],
+                )
+            except Exception:
+                soft_resolution = degrade_soft_boost_consumption(
+                    decision_date=packet["decision_clock"]["expected_decision_date"],
+                )
+        else:
+            soft_resolution = None
         overextension_generated_at = None
         if "overextension_projection_path" in source_payloads:
             projection = source_payloads["overextension_projection_path"]
@@ -812,18 +932,107 @@ def run_packet(
             common_kwargs["overextension_by_ticker"] = validated_overextension["overextension_by_ticker"]
             overextension_generated_at = validated_overextension["generated_at"]
         context_components = None
+        soft_evidence_bundle_written = False
         if "output_context_components_path" in paths:
-            context_components = assemble_official_context_components_from_resolved_pass2_sources(
+            component_kwargs = {
                 **common_kwargs,
-                overextension_generated_at=overextension_generated_at,
-                source_ref_paths={
+                "overextension_generated_at": overextension_generated_at,
+                "source_ref_paths": {
                     field: _repo_rel(paths[field])
                     for field in (*SOURCE_PATH_FIELDS, *OPTIONAL_SOURCE_PATH_FIELDS)
                     if field in paths and field != "ohlcv_series_packet_path"
                 },
+            }
+            # OFF is the mandatory baseline. Any failure in the optional ON/evidence
+            # lifecycle below must return to these exact bytes, never abort Pass2.
+            off_components = assemble_official_context_components_from_resolved_pass2_sources(
+                **component_kwargs,
+                theme_soft_boost_enabled=False,
             )
+            context_components = off_components
+            data_context = off_components["data_context"]
+            if soft_resolution is not None:
+                try:
+                    on_components = (
+                        assemble_official_context_components_from_resolved_pass2_sources(
+                            **component_kwargs,
+                            provisional_theme_validation=soft_resolution["validation_payload"],
+                            theme_soft_boost_enabled=True,
+                            provisional_theme_input_digests=soft_resolution["input_digests"],
+                        )
+                        if soft_resolution["effective_enabled"]
+                        else off_components
+                    )
+                    on_selection = {
+                        ticker: row["core_score"]
+                        for ticker, row in on_components["data_context"][
+                            "selection_inputs"
+                        ]["per_ticker"].items()
+                    }
+                    off_selection = {
+                        ticker: row["core_score"]
+                        for ticker, row in off_components["data_context"][
+                            "selection_inputs"
+                        ]["per_ticker"].items()
+                    }
+                    if soft_resolution["effective_enabled"]:
+                        boost_records = {
+                            ticker: dict(
+                                on_components["score_composition"]["analysis_by_ticker"][
+                                    ticker
+                                ]["provisional_theme_boost"]
+                            )
+                            for ticker in on_selection
+                        }
+                    else:
+                        boost_records = {
+                            ticker: {"theme_soft_boost": 0.0, "evidence_tier": None}
+                            for ticker in on_selection
+                        }
+                    on_top15 = official_top15_tickers(
+                        on_components["data_context"]["selection_inputs"],
+                        decision_date=packet["decision_clock"]["expected_decision_date"],
+                    )
+                    off_top15 = official_top15_tickers(
+                        off_components["data_context"]["selection_inputs"],
+                        decision_date=packet["decision_clock"]["expected_decision_date"],
+                    )
+                    receipt = build_consumption_receipt(
+                        resolved=soft_resolution,
+                        generated_at=generated_at or iso_now(),
+                        on_selection=on_selection,
+                        off_selection=off_selection,
+                        boost_records=boost_records,
+                        on_top15=on_top15,
+                        off_top15=off_top15,
+                    )
+                    common_input_sha256 = _soft_boost_common_input_sha256(packet, paths)
+                    shadow = build_shadow_receipt(
+                        resolved=soft_resolution,
+                        generated_at=generated_at or iso_now(),
+                        on_top15=on_top15,
+                        off_top15=off_top15,
+                        common_input_sha256=common_input_sha256,
+                    )
+                    write_evidence_bundle(
+                        consumption_receipt=receipt,
+                        consumption_path=paths["soft_boost_consumption_receipt_path"],
+                        shadow_receipt=shadow,
+                        shadow_path=paths["soft_boost_shadow_receipt_path"],
+                        ledger_path=paths["soft_boost_comparison_ledger_path"],
+                        state_dir=paths[SOFT_BOOST_STATE_DIR_PATH_FIELD],
+                    )
+                    soft_evidence_bundle_written = True
+                    context_components = on_components
+                    data_context = on_components["data_context"]
+                except Exception:
+                    context_components = off_components
+                    data_context = off_components["data_context"]
+                    soft_resolution = degrade_soft_boost_consumption(
+                        decision_date=packet["decision_clock"]["expected_decision_date"],
+                    )
             # Cut4: one source-bound per-ticker record owns coverage, the catalyst availability annotation,
-            # price input, and the output-visible quality/execution tags.  The existing score and price engines
+            # price input, and the output-visible quality/execution tags. The existing score and price engines
             # still do their own work; this only binds their permitted inputs to the local source packet.
             source_digests = {
                 field: hashlib.sha256(path.read_bytes()).hexdigest()
@@ -850,6 +1059,7 @@ def run_packet(
         else:
             data_context = assemble_data_context_from_resolved_pass2_sources(
                 **common_kwargs,
+                theme_soft_boost_enabled=False,
             )
     except SourcePacketError:
         raise
@@ -866,7 +1076,7 @@ def run_packet(
             json.dumps(context_components, ensure_ascii=False, indent=2) + "\n",
             encoding="utf-8",
         )
-    return {
+    result = {
         "schema_name": "us_short_batch5_data_context_source_packet_run_result",
         "schema_version": "1.0.0",
         "generated_at": generated_at or iso_now(),
@@ -912,6 +1122,28 @@ def run_packet(
         },
         "prohibited_claims": packet["prohibited_claims"],
     }
+    if packet["optional_inputs"].get("theme_soft_boost_enabled", False):
+        result["soft_boost"] = {
+            "requested_enabled": True,
+            "status": soft_resolution["status"],
+            "reason_code": soft_resolution["reason_code"],
+            "effective_enabled": soft_resolution["effective_enabled"],
+            "evidence_bundle_written": soft_evidence_bundle_written,
+            "consumption_receipt_path": (
+                _repo_rel(paths["soft_boost_consumption_receipt_path"])
+                if soft_evidence_bundle_written else None
+            ),
+            "shadow_receipt_path": (
+                _repo_rel(paths["soft_boost_shadow_receipt_path"])
+                if soft_evidence_bundle_written else None
+            ),
+            "comparison_ledger_path": (
+                _repo_rel(paths["soft_boost_comparison_ledger_path"])
+                if soft_evidence_bundle_written else None
+            ),
+            "provider_calls_performed": False,
+        }
+    return result
 
 
 def parse_args(argv: list[str] | None = None) -> argparse.Namespace:

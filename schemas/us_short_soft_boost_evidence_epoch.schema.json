@@ -1,0 +1,33 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://stock.local/schemas/us_short_soft_boost_evidence_epoch.schema.json",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_name", "schema_version", "epoch_id", "starts_with_first_k4b_capture",
+    "backfill_allowed", "foreground", "challenger", "formal_looks",
+    "minimum_matured_divergence_weeks", "minimum_non_overlap_h10_blocks",
+    "minimum_regime_count", "minimum_divergence_weeks_per_regime",
+    "statistical_plan_path", "statistical_plan_sha256",
+    "recommendation_auto_applies"
+  ],
+  "properties": {
+    "schema_name": {"const": "us_short_soft_boost_evidence_epoch"},
+    "schema_version": {"const": "1.0.0"},
+    "epoch_id": {"const": "us_short_soft_boost_k4b_20260727"},
+    "starts_with_first_k4b_capture": {"const": true},
+    "backfill_allowed": {"const": false},
+    "foreground": {"const": "soft_boost_on"},
+    "challenger": {"const": "soft_boost_off"},
+    "formal_looks": {"const": [24, 36]},
+    "minimum_matured_divergence_weeks": {"const": 24},
+    "minimum_non_overlap_h10_blocks": {"const": 12},
+    "minimum_regime_count": {"const": 2},
+    "minimum_divergence_weeks_per_regime": {"const": 4},
+    "statistical_plan_path": {
+      "const": "presets/us_short_soft_boost_statistical_plan_20260727.json"
+    },
+    "statistical_plan_sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+    "recommendation_auto_applies": {"const": false}
+  }
+}

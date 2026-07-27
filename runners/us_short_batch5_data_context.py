@@ -1076,7 +1076,7 @@ def assemble_data_context_from_resolved_pass2_sources(
     return data_context
 
 
-def _official_top15_tickers(selection_inputs: dict[str, Any], *, decision_date: str) -> list[str]:
+def official_top15_tickers(selection_inputs: dict[str, Any], *, decision_date: str) -> list[str]:
     return list(
         _select_top15(
             list(selection_inputs["per_ticker"]),
@@ -1107,7 +1107,7 @@ def _official_per_ticker_analysis(
     scoped_overextension: dict[str, Any] | None = None,
 ) -> dict[str, dict[str, Any]]:
     out: dict[str, dict[str, Any]] = {}
-    selected = _official_top15_tickers(selection_inputs, decision_date=decision_date)
+    selected = official_top15_tickers(selection_inputs, decision_date=decision_date)
     holding_by_ticker = {row["ticker"]: row for row in holdings}
     analysis_by_ticker = score_composition["analysis_by_ticker"]
     for ticker in selected:
@@ -1215,7 +1215,7 @@ def assemble_official_context_components_from_resolved_pass2_sources(
         scoped_overextension,
     )
     expected_analysis_tickers = set(
-        _official_top15_tickers(
+        official_top15_tickers(
             data_context["selection_inputs"], decision_date=expected_decision_date,
         )
     ) | {

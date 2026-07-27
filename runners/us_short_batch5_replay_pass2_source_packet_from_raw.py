@@ -357,6 +357,7 @@ def run_replay(
             max_total_http_attempts=expected_total_call_budget,
             execution_mode="offline_replay",
             replay_source_capture=capture,
+            theme_soft_boost_enabled=False,
         )
     finally:
         for name, prior in saved_environment.items():

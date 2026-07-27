@@ -212,6 +212,38 @@
         "output_context_components_path": {
           "type": "string",
           "minLength": 1
+        },
+        "soft_boost_state_dir_path": {
+          "type": "string",
+          "minLength": 1
+        },
+        "provisional_theme_stage_receipt_path": {
+          "type": "string",
+          "minLength": 1
+        },
+        "provisional_theme_validation_path": {
+          "type": "string",
+          "minLength": 1
+        },
+        "original_candidate_artifact_path": {
+          "type": "string",
+          "minLength": 1
+        },
+        "classification_packet_path": {
+          "type": "string",
+          "minLength": 1
+        },
+        "soft_boost_consumption_receipt_path": {
+          "type": "string",
+          "minLength": 1
+        },
+        "soft_boost_shadow_receipt_path": {
+          "type": "string",
+          "minLength": 1
+        },
+        "soft_boost_comparison_ledger_path": {
+          "type": "string",
+          "minLength": 1
         }
       }
     },
@@ -241,6 +273,12 @@
               "type": "null"
             }
           ]
+        },
+        "theme_soft_boost_enabled": {
+          "type": "boolean"
+        },
+        "soft_discovery_stage_result": {
+          "type": "object"
         }
       }
     },
@@ -330,6 +368,57 @@
         "properties": {
           "paths": {
             "required": ["overextension_projection_path"]
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "optional_inputs": {
+            "required": ["theme_soft_boost_enabled"],
+            "properties": {"theme_soft_boost_enabled": {"const": true}}
+          }
+        }
+      },
+      "then": {
+        "properties": {
+          "paths": {
+            "required": [
+              "output_context_components_path",
+              "soft_boost_state_dir_path",
+              "provisional_theme_stage_receipt_path",
+              "provisional_theme_validation_path",
+              "original_candidate_artifact_path",
+              "classification_packet_path",
+              "soft_boost_consumption_receipt_path",
+              "soft_boost_shadow_receipt_path",
+              "soft_boost_comparison_ledger_path"
+            ]
+          },
+          "optional_inputs": {
+            "required": ["soft_discovery_stage_result"]
+          }
+        }
+      },
+      "else": {
+        "properties": {
+          "optional_inputs": {
+            "not": {"required": ["soft_discovery_stage_result"]}
+          },
+          "paths": {
+            "not": {
+              "anyOf": [
+                {"required": ["provisional_theme_stage_receipt_path"]},
+                {"required": ["soft_boost_state_dir_path"]},
+                {"required": ["provisional_theme_validation_path"]},
+                {"required": ["original_candidate_artifact_path"]},
+                {"required": ["classification_packet_path"]},
+                {"required": ["soft_boost_consumption_receipt_path"]},
+                {"required": ["soft_boost_shadow_receipt_path"]},
+                {"required": ["soft_boost_comparison_ledger_path"]}
+              ]
+            }
           }
         }
       }
