@@ -11,6 +11,7 @@ provider/live; no A-share crossing.
 """
 import sys
 import unittest
+from unittest import mock
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -335,6 +336,41 @@ class HappyAssembly(unittest.TestCase):
 
 
 class FailClosed(unittest.TestCase):
+    def test_optional_report_context_keys_accept_each_subset_and_reject_a_rogue_key(self):
+        soft_paths = {
+            "stage_receipt_path": None,
+            "consumption_receipt_path": None,
+            "shadow_receipt_path": None,
+            "comparison_ledger_path": None,
+            "adjudication_receipt_path": None,
+        }
+        # R4 dying control: replacing the subset checks with exact-set equality
+        # makes either single-optional input fail this loop.
+        for optional in ({}, {"forward_policy_comparison_reminder": "A1 reminder"},
+                         {"soft_discovery_receipt_paths": soft_paths},
+                         {"forward_policy_comparison_reminder": "A1 reminder",
+                          "soft_discovery_receipt_paths": soft_paths}):
+            out = _build_report(_machine_record(), _lifecycle_result(),
+                                report_context=_report_context(**optional))
+            self.assertIn("report_data", out)
+        with self.assertRaises(wr.WeekendReportError):
+            _build_report(_machine_record(), _lifecycle_result(),
+                          report_context=_report_context(rogue_optional_key=True))
+
+    def test_soft_discovery_exception_is_visible_but_cannot_abort_weekly_report(self):
+        soft_paths = {
+            "stage_receipt_path": None,
+            "consumption_receipt_path": None,
+            "shadow_receipt_path": None,
+            "comparison_ledger_path": None,
+            "adjudication_receipt_path": None,
+        }
+        with mock.patch.object(wr, "build_weekly_record", side_effect=RuntimeError("dying control")):
+            out = _build_report(_machine_record(), _lifecycle_result(),
+                                report_context=_report_context(soft_discovery_receipt_paths=soft_paths))
+        self.assertIn("K4C_RENDER_REJECTED", out["report_data"]["banner"]["soft_discovery_status"])
+        self.assertEqual(out["report_data"]["soft_discovery_machine_record"]["state"], "invalid_evidence")
+
     def test_non_closed_world_report_context_rejected(self):
         with self.assertRaises(wr.WeekendReportError):     # missing a key
             _build_report(_machine_record(), _lifecycle_result(),

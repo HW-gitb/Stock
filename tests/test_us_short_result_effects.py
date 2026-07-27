@@ -10,6 +10,7 @@ if str(ROOT) not in sys.path:
 
 from engine.us_short_result_effects import (  # noqa: E402
     ResultEffectsError,
+    _evidence_ref,
     apply_result_effects,
     finalize_result_effects,
     validate_result_effects,
@@ -32,6 +33,12 @@ def _decision(row):
 
 
 class ResultEffectsTests(unittest.TestCase):
+    def test_evidence_ref_allows_only_declared_optional_as_of(self):
+        self.assertEqual(_evidence_ref({"kind": "source_id", "value": "x"}, as_of=_AS_OF, where="test")["as_of"], _AS_OF)
+        self.assertEqual(_evidence_ref({"kind": "source_id", "value": "x", "as_of": _AS_OF}, as_of=_AS_OF, where="test")["as_of"], _AS_OF)
+        with self.assertRaises(ResultEffectsError):
+            _evidence_ref({"kind": "source_id", "value": "x", "rogue": True}, as_of=_AS_OF, where="test")
+
     def test_in_window_earnings_overrides_new_build_and_keeps_claim_evidence(self):
         out = apply_result_effects(
             _decision({"ticker": "AAA", "final_action": "建仓", "observe_reason_type": None,

@@ -5,7 +5,7 @@
   "description": "Batch-1 declarative shared contract for the human-readable weekly report. Pairs with us_short_action_table_contract (§11.3) to freeze the §11 output surface so the batch-3 renderer cannot drop/reorder/rename a section, drift a banner tag, weaken the lifecycle-count invariant, or omit a mandatory banner element. ALL governed identity is const-pinned here (the 13 sections incl. exact Chinese content+order, the 6 banner ids+tags+always_shown, price_clock fields+always_shown, the lifecycle-count invariant) — the schema is a self-sufficient validator, not shape-only. A test triangulates the sections const == preset == design §11.2 so the byte-exact Chinese never silently diverges. No report rendered, no data fetched.",
   "type": "object",
   "additionalProperties": false,
-  "required": ["schema_name", "schema_version", "as_of", "status", "sections", "price_clock", "mandatory_banner", "lifecycle_reminder_count_consistency", "notes"],
+  "required": ["schema_name", "schema_version", "as_of", "status", "sections", "price_clock", "mandatory_banner", "soft_discovery_banner", "lifecycle_reminder_count_consistency", "notes"],
   "properties": {
     "schema_name": {"const": "us_short_weekly_report_contract"},
     "schema_version": {"type": "string", "pattern": "^[0-9]+\\.[0-9]+\\.[0-9]+$"},
@@ -53,6 +53,17 @@
              "properties": {"id": {"const": "⑦"}, "tag": {"const": "theme_producer_pending_reminder"}, "always_shown": {"const": false}, "ref": {"type": "string"}}}
           ]
         }
+      }
+    },
+    "soft_discovery_banner": {
+      "description": "§4c optional receipt-derived soft-discovery honest banner. It is absent only for disabled and is not caller text.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "tag", "always_shown"],
+      "properties": {
+        "id": {"const": "⑧"},
+        "tag": {"const": "soft_discovery_status"},
+        "always_shown": {"const": false}
       }
     },
     "lifecycle_reminder_count_consistency": {
