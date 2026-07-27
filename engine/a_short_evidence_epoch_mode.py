@@ -62,6 +62,7 @@ import ast
 import hashlib
 import inspect
 import json
+from functools import lru_cache
 from pathlib import Path
 
 _PRE_FREEZE = "pre_freeze_audit_only"
@@ -160,8 +161,8 @@ class _StripDocstrings(ast.NodeTransformer):
     visit_ClassDef = _strip
 
 
-def _module_function_nodes(module) -> dict:
-    """Parse the checked-in source of one module and index its top-level functions.
+def _module_function_nodes(module) -> tuple[str, str]:
+    """Read the checked-in source of one module for semantic-contract caching.
 
     The file, not the live module dictionary, is the authority: a runtime
     monkeypatch must not be able to forge or move a contract.
@@ -170,10 +171,14 @@ def _module_function_nodes(module) -> dict:
     if not source_path:
         raise EvidenceEpochModeError(f"cannot locate semantic source for {module.__name__}")
     try:
-        tree = ast.parse(Path(source_path).read_text(encoding="utf-8"))
-    except (OSError, UnicodeDecodeError, SyntaxError) as exc:
+        source = Path(source_path).read_text(encoding="utf-8")
+    except (OSError, UnicodeDecodeError) as exc:
         raise EvidenceEpochModeError(f"cannot read semantic source for {module.__name__}") from exc
-    return tree, {
+    return module.__name__, source
+
+
+def _top_level_function_nodes(tree: ast.AST) -> dict[str, ast.AST]:
+    return {
         node.name: node
         for node in tree.body
         if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef))
@@ -188,19 +193,18 @@ def _semantic_ast_sha256(nodes) -> str:
     return hashlib.sha256(normalized.encode("utf-8")).hexdigest()
 
 
-def semantic_module_contract(module, *, excluded_functions=frozenset()) -> dict:
-    """Return a comment/docstring-insensitive contract for one Python module.
-
-    The contract binds the module's complete executable AST and names every
-    top-level function explicitly.  Exclusions are fail-closed: a stale or
-    misspelled exclusion is an error instead of silently weakening coverage.
-    """
-    tree, function_nodes = _module_function_nodes(module)
-    exclusions = frozenset(str(name) for name in excluded_functions)
-    unknown = exclusions - set(function_nodes)
+@lru_cache(maxsize=64)
+def _semantic_module_contract_from_source(
+        module_name: str, source: str, exclusions: tuple[str, ...]) -> tuple[str, tuple[str, ...], tuple[str, ...], str]:
+    try:
+        tree = ast.parse(source)
+    except SyntaxError as exc:
+        raise EvidenceEpochModeError(f"cannot read semantic source for {module_name}") from exc
+    function_nodes = _top_level_function_nodes(tree)
+    unknown = set(exclusions) - set(function_nodes)
     if unknown:
         raise EvidenceEpochModeError(
-            f"unknown semantic-function exclusions for {module.__name__}: {sorted(unknown)}"
+            f"unknown semantic-function exclusions for {module_name}: {sorted(unknown)}"
         )
     selected = [
         node for node in tree.body
@@ -209,12 +213,62 @@ def semantic_module_contract(module, *, excluded_functions=frozenset()) -> dict:
             and node.name in exclusions
         )
     ]
+    return (
+        module_name,
+        tuple(sorted(set(function_nodes) - set(exclusions))),
+        exclusions,
+        _semantic_ast_sha256(selected),
+    )
+
+
+def semantic_module_contract(module, *, excluded_functions=frozenset()) -> dict:
+    """Return a comment/docstring-insensitive contract for one Python module.
+
+    The contract binds the module's complete executable AST and names every
+    top-level function explicitly.  Exclusions are fail-closed: a stale or
+    misspelled exclusion is an error instead of silently weakening coverage.
+    """
+    module_name, source = _module_function_nodes(module)
+    exclusions = frozenset(str(name) for name in excluded_functions)
+    cached = _semantic_module_contract_from_source(module_name, source, tuple(sorted(exclusions)))
     return {
-        "module": module.__name__,
-        "bound_functions": sorted(set(function_nodes) - exclusions),
-        "excluded_functions": sorted(exclusions),
-        "semantic_ast_sha256": _semantic_ast_sha256(selected),
+        "module": cached[0],
+        "bound_functions": list(cached[1]),
+        "excluded_functions": list(cached[2]),
+        "semantic_ast_sha256": cached[3],
     }
+
+
+@lru_cache(maxsize=64)
+def _semantic_function_contract_from_source(
+        module_name: str, source: str, requested: tuple[str, ...]) -> tuple[str, tuple[str, ...], tuple[str, ...], str]:
+    try:
+        tree = ast.parse(source)
+    except SyntaxError as exc:
+        raise EvidenceEpochModeError(f"cannot read semantic source for {module_name}") from exc
+    function_nodes = _top_level_function_nodes(tree)
+    missing = [name for name in requested if name not in function_nodes]
+    if missing:
+        raise EvidenceEpochModeError(
+            f"missing semantic functions in {module_name}: {missing}"
+        )
+    constant_nodes = {}
+    for node in tree.body:
+        if not isinstance(node, (ast.Assign, ast.AnnAssign)):
+            continue
+        targets = node.targets if isinstance(node, ast.Assign) else [node.target]
+        for target in targets:
+            if isinstance(target, ast.Name) and target.id.isupper():
+                constant_nodes[target.id] = node
+    referenced = tuple(sorted({
+        item.id
+        for name in requested
+        for item in ast.walk(function_nodes[name])
+        if isinstance(item, ast.Name) and isinstance(item.ctx, ast.Load) and item.id in constant_nodes
+    }))
+    selected = [function_nodes[name] for name in requested]
+    selected += [constant_nodes[name] for name in referenced]
+    return module_name, requested, referenced, _semantic_ast_sha256(selected)
 
 
 def semantic_function_contract(module, function_names) -> dict:
@@ -229,12 +283,7 @@ def semantic_function_contract(module, function_names) -> dict:
     requested = sorted({str(name) for name in function_names})
     if not requested:
         raise EvidenceEpochModeError(f"no semantic functions requested for {module.__name__}")
-    tree, function_nodes = _module_function_nodes(module)
-    missing = [name for name in requested if name not in function_nodes]
-    if missing:
-        raise EvidenceEpochModeError(
-            f"missing semantic functions in {module.__name__}: {missing}"
-        )
+    module_name, source = _module_function_nodes(module)
     # A narrow binding still has to cover the constants those functions read.
     # Binding only the function bodies let a governed threshold (P5's fixed
     # watch-pool slot count, for one) change behaviour without moving the
@@ -242,25 +291,10 @@ def semantic_function_contract(module, function_names) -> dict:
     # closes by collecting referenced constants.  The walk stays inside the
     # requested functions: narrowing the surface is deliberate, so callees are
     # still out of scope.
-    constant_nodes = {}
-    for node in tree.body:
-        if not isinstance(node, (ast.Assign, ast.AnnAssign)):
-            continue
-        targets = node.targets if isinstance(node, ast.Assign) else [node.target]
-        for target in targets:
-            if isinstance(target, ast.Name) and target.id.isupper():
-                constant_nodes[target.id] = node
-    referenced = sorted({
-        item.id
-        for name in requested
-        for item in ast.walk(function_nodes[name])
-        if isinstance(item, ast.Name) and isinstance(item.ctx, ast.Load) and item.id in constant_nodes
-    })
-    selected = [function_nodes[name] for name in requested]
-    selected += [constant_nodes[name] for name in referenced]
+    cached = _semantic_function_contract_from_source(module_name, source, tuple(requested))
     return {
-        "module": module.__name__,
-        "bound_functions": requested,
-        "bound_constants": referenced,
-        "semantic_ast_sha256": _semantic_ast_sha256(selected),
+        "module": cached[0],
+        "bound_functions": list(cached[1]),
+        "bound_constants": list(cached[2]),
+        "semantic_ast_sha256": cached[3],
     }

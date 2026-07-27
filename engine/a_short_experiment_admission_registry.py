@@ -10,6 +10,7 @@ from __future__ import annotations
 import copy
 import hashlib
 import json
+from functools import lru_cache
 from pathlib import Path
 from typing import Any
 
@@ -114,9 +115,19 @@ def _admission(*, program_id: str, experiment_id: str, track_mode: str, componen
             "shared_business_ledger": False,
         },
     }
-    sealed = seal_experiment_admission(payload)
+    return json.loads(_sealed_admission_from_payload(
+        _canonical(payload), trusted_arm_inventory(experiment_id)
+    ))
+
+
+@lru_cache(maxsize=32)
+def _sealed_admission_from_payload(payload_source: str,
+                                   trusted_inventory: tuple[str, str] | None) -> str:
+    """Seal and validate one immutable admission payload once per exact content."""
+    del trusted_inventory  # Part of the cache key; validation reads the live trusted inventory.
+    sealed = seal_experiment_admission(json.loads(payload_source))
     validate_experiment_admission(sealed)
-    return sealed
+    return _canonical(sealed)
 
 
 def _dependency(component_id: str, definition: Any) -> dict:

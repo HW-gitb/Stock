@@ -1,5 +1,20 @@
 # Session Log
 
+## 2026-07-27 — Claude Code 审查 PASS（测试提速刀 5-8：语义契约 memo / admission 封缄 memo / weekly 夹具缓存）
+
+- **Verdict/Action**: PASS。刀5 只做 profile 无代码改动；刀6 把 `semantic_module_contract` / `semantic_function_contract` 的解析与哈希按（模块名, 源码全文, 排除集/请求集）memo，源码仍每次从磁盘重读；刀7 把 `_admission` 的封缄+校验按（canonical payload, trusted arm inventory）memo 成字符串、调用方拿新解码对象；刀8 只缓存 weekly 默认夹具并 deepcopy 返回。风险点=缓存键漏掉外部依赖导致守卫被静默跳过、以及缓存值被就地改写，本轮按此逐条查证。
+- **Required**: 无，未新开 register 条目。三条 Optional 见 Next：暖缓存与将来 fail-closed 负测的顺序耦合、`_module_function_nodes` 名称已与职责不符、weekly 默认夹具缓存缺注释护栏。
+- **Verify**: review-evidence:3489f9e6b6f3。全包 ledger `run a_short` = CACHED GREEN 2050 OK（比刀4 的 2047 多 3 = 本刀新增回归），按 rule 4 未重跑。自写探针 22 条全过：以独立模块加载 HEAD 版 epoch_mode / admission_registry 做新旧对拍——6 个真实模块的 module contract、function contract、`admissions()` 内容与 `admission_snapshot_sha256` 全部 old==new；深层嵌套投毒不回流；植入真语义改动 sha 变、纯注释不变、还原可复现；SyntaxError 仍失败关闭；暖缓存下改坏 trusted arm inventory 仍抛 ExperimentGovernanceError；weekly 非默认参数仍新建。静态面：`getsourcefile` 调用者仍只有 `_module_function_nodes`（守卫测试未被改动），全仓 grep 无测试用未进 key 的手段令 `admissions()` 反向失败。
+- **Next**: 已按用户常设授权提交并合入 master。三条 Optional 未动：①`_sealed_admission_from_payload` 只在 `AdmissionRegistryTests.setUp` 清缓存，将来若加「改 schema 或换 seal 让 `admissions()` 失败」的负测须自行 cache_clear；②`_module_function_nodes` 已不返回函数节点（守卫测试硬编码该名，改名需同步）；③`_weekly()` 默认分支的模块级缓存对「先 patch 再 bare `_weekly()`」不敏感，当前无此类用例。
+
+## 2026-07-27 - Codex implementation: test-performance knives 5-8 (combined review requested)
+
+- **Verdict/Action**: Completed knives 5-8 as one review slice (fourth knife was already merged and is out of scope). Knife 5 profiled two independent `TargetLedgerTests`: semantic closure/AST work was the dominant cost. Knife 6 memoizes only immutable, source-byte-keyed semantic leaf contracts in `a_short_evidence_epoch_mode`; dynamic closure/global-value collection and final fingerprints still run each time. Knife 7 profiling showed `CandidateEffectTests` was dominated by repeated admission sealing/jsonschema validation, not capture replay, so it memoizes sealed admissions by exact constructed payload plus trusted-inventory key and returns fresh decoded copies. Knife 8 caches only the default weekly test fixture and returns a deepcopy; custom inputs still build fresh.
+- **Required**: None newly opened. User requested one combined Claude Code review for knives 5-8; do not commit before that review.
+- **Verify**: Knife 5 profile: `test_executed_wrappers_and_transitive_constants_restart_only_affected_component` took 50.0s locally, with 46.7s in semantic dependency closure and 35.1s in AST parsing; a second independent target test showed the same shape. Candidate profile was 19.5s, including 16.9s in admission construction and 12.7s in validation; after knife 7 the profiled case was 1.856s. New cache regressions cover source-byte invalidation and fresh semantic return values, admission no-revalidation/copy isolation, and weekly-fixture cache/copy isolation. Exact-final-state full-pack ledger: `a_short` = 2050 OK, 3 skipped, 337.2s / 1200s. One local run only; not a loaded-machine performance commitment.
+- **Pre-Codex self-review**: Epoch caches store only immutable tuples/strings and key on complete source text; changes to a root function or a runtime global cannot be hidden by cache. Admission cache key includes canonical payload and trusted inventory, while every caller gets a new JSON-decoded object. Weekly cache excludes non-default inputs. `git diff --check` is clean.
+- **Next**: Claude Code independently review the combined knives 5-8, then commit only PASS-covered files.
+
 ## 2026-07-27 — Claude Code 审查 PASS（测试提速第四刀：AST 派生分析按源码文本 memo）
 
 - **Verdict/Action**: PASS。7 个 AST 派生分析（predicate/常量/受治理字面量/组合 policy 字面量探测/字符串赋值/operation-impact/字面量字符串）各拆成「缓存返回不可变 tuple + 薄壳转成新的 list/dict」。风险点是缓存值被调用方就地改写、以及键漏掉参数导致串味，本轮按此逐条查证。
