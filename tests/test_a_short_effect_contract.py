@@ -34,6 +34,7 @@ class EffectContractMemoTests(unittest.TestCase):
     def setUp(self):
         effect_contract_module._default_static_inventory_from_snapshot.cache_clear()
         effect_contract_module._contract_from_source.cache_clear()
+        effect_contract_module._source_tree.cache_clear()
 
     def test_default_inventory_memo_reuses_same_snapshot_and_returns_copies(self):
         with patch.object(effect_contract_module, "_build_static_inventory",
@@ -71,6 +72,22 @@ class EffectContractMemoTests(unittest.TestCase):
         effect_contract_module._contract_from_source(raw)
         effect_contract_module._contract_from_source(raw + "\n")
         self.assertEqual(effect_contract_module._contract_from_source.cache_info().misses, 2)
+
+    def test_override_reuses_unchanged_source_trees_but_parses_changed_source(self):
+        portfolio_rel = "engine/a_short_portfolio_risk.py"
+        portfolio = (ROOT / portfolio_rel).read_text(encoding="utf-8")
+        changed = portfolio + "\n# source-tree-cache-probe\n"
+
+        static_inventory(source_overrides={portfolio_rel: portfolio})
+        baseline = effect_contract_module._source_tree.cache_info()
+        static_inventory(source_overrides={portfolio_rel: portfolio})
+        same_override = effect_contract_module._source_tree.cache_info()
+        static_inventory(source_overrides={portfolio_rel: changed})
+        changed_override = effect_contract_module._source_tree.cache_info()
+
+        self.assertEqual(same_override.misses, baseline.misses)
+        self.assertGreater(same_override.hits, baseline.hits)
+        self.assertEqual(changed_override.misses, same_override.misses + 1)
 
 
 class EffectContractStaticTests(unittest.TestCase):
