@@ -38,7 +38,7 @@
 - **Next**: 下一刀审查按 rule 7 执行，超时须在 Verify 写原因。
 ## 2026-07-27 - Claude Code 审查 PASS + 提交 (US-short 刀4b 第三轮，K4B-R3 已闭)
 
-- **Verdict/Action**: PASS，已提交本刀全量 27 个文件。R3 修得精准：只去掉 state ROOT 那条 gitignore 要求，每件产物"必须 gitignored + 必须在该根下 + .json + 不可穿越"四道全在，`.gitignore` 没动。R1/R2/O1/O2 经回归复测仍闭；生产 state 根现在被接受，且带一条会在旧代码上变红的控制。
+- **Verdict/Action**: PASS，已提交本刀全量 27 个文件。R3 修得精准：只去掉 state ROOT 那条 gitignore 要求，每件产物"必须 gitignored + 必须在该根下 + .json + 不可穿越"四道全在，`.gitignore` 没动。R1/R2/O1/O2 经回归复测仍闭。已合入 master(`27687bb3`，真合并；register 冲突手工解为两侧条目全保留)，合并未改动任何 4b 文件(对 4b 路径 diff 为空，故继承已测结果)；rule 3(a) 在合并时刻欠的 us_short 全量已用 ledger 唯一入口后台起跑，结果由 ledger 自行记账，此处不预称其绿。
 - **Required**: 无。`R-USSHORT-KNIFE4B-STATE-ROOT-GITIGNORE-GATE-KILLS-THE-DEFAULT-RUN` 转 resolved；仍挂一条 Optional(降级原因码过于笼统)，详见 `system_risk_register.md`(单一来源，本处不复述)。
 - **Verify**: review-evidence:4d4364f0b8bd。亲跑(017a，pinned 3.13)：生产 `state/us_short` 现被接受(改前报 `must be gitignored`)；以 `docs` 当根时 `docs/leak.json` 仍被 `must be gitignored` 拒绝，越根/非 json/穿越/缺目录逐条仍拒；三条原故障注入仍全部降级为 OFF(测试自身 `AssertionError: 43.5 != 48.5`，非 `SourcePacketError`)；8 模块超集包 `282 OK`/525s/exit 0；`state/us_short/` 探针与全包前后均只有 `lifecycle runs_private`。未起 6a agent(本会话工具策略)，已用整读+复现故障注入替代并声明边界。
 - **Next**: 4c(周报横幅)按 pack 派生覆盖面开工
