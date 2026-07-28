@@ -629,7 +629,6 @@ def normalize_candidate(cand: dict, price_series: list, overlay_row: dict, iv_pc
             "circ_mv_rmb": (valuation.get("circ_mv") * 10000.0
                             if isinstance(valuation.get("circ_mv"), (int, float))
                             and not isinstance(valuation.get("circ_mv"), bool) else None),
-            "northbound_holding_ratio_pct": northbound.get("holding_ratio"),
             "margin_balance_to_float_mv_pct": margin.get("balance_to_float_mv_pct"),
             "is_large_index_component": large_index_component,
         },
@@ -881,7 +880,7 @@ def _holding_adds_portfolio_risk(fact: dict, summary: dict) -> bool:
     if fact.get("sw_l2_key") in over_industries:
         return True
     by_factor = {row.get("factor"): row for row in (summary.get("factor_exposures") or [])}
-    for field in ("northbound_holding_ratio_pct", "margin_balance_to_float_mv_pct"):
+    for field in ("margin_balance_to_float_mv_pct",):
         row = by_factor.get(field) or {}
         if row.get("over_threshold") and isinstance(fact.get(field), (int, float)) and fact[field] > row.get("value_pct", 0):
             return True
@@ -894,19 +893,22 @@ def _holding_adds_portfolio_risk(fact: dict, summary: dict) -> bool:
 _MARGIN_UNEVALUATED_REASON = "两融数据源不可用/覆盖不足，本行未进入组合试算（非「本规则不适用」）"
 
 
-def _apply_portfolio_risk_results(reports: list, context: dict, as_of: str) -> dict:
+def _apply_portfolio_risk_results(reports: list, context: dict, as_of: str,
+                                  portfolio_fact_as_of: str | None = None,
+                                  portfolio_fact_fetch_status: str = "not_requested") -> dict:
     """Attach per-stock machine records and deterministic M6.7 impacts after allocation."""
     from engine.a_short_portfolio_risk import (_REQUIRED_FACT_FIELDS, _valid_fact,
                                                final_summary, not_applicable_result)
     from runners.a_short_phase5_engine import _apply_holding_disposition
 
+    portfolio_fact_as_of = str(portfolio_fact_as_of or context.get("as_of") or as_of)
     summary = final_summary(context)
     stock_results = []
     for report in reports:
         code = str(report.get("ts_code"))
         machine = report.get("machine") or {}
         held = (machine.get("stateful_risk") or {}).get("position_state") == "held"
-        fact = context["facts"].get(code, {"as_of": str(as_of)})
+        fact = context["facts"].get(code, {"as_of": portfolio_fact_as_of})
         if held:
             blocked = _holding_adds_portfolio_risk(fact, summary)
             result = {
@@ -937,7 +939,7 @@ def _apply_portfolio_risk_results(reports: list, context: dict, as_of: str) -> d
                     # The trial is what normally discovers an incomplete candidate
                     # fact; without it the gap must still be stated, not dropped.
                     candidate_missing = [f"{code}:{field}" for field in _REQUIRED_FACT_FIELDS
-                                         if not _valid_fact(fact, field, as_of)]
+                                         if not _valid_fact(fact, field, portfolio_fact_as_of)]
                     if summary.get("status") == "manual_review_required" or candidate_missing:
                         result["status"] = "manual_review_required"
                         result["reasons"] = [_MARGIN_UNEVALUATED_REASON] + list(summary.get("reasons") or [])
@@ -960,6 +962,7 @@ def _apply_portfolio_risk_results(reports: list, context: dict, as_of: str) -> d
         for result in stock_results
     })
     return {"as_of": str(as_of), "status": summary.get("status"), "summary": summary,
+            "fact_fetch": {"status": portfolio_fact_fetch_status, "as_of": portfolio_fact_as_of},
             "fact_sources": [{"source": source, "as_of": fact_as_of}
                              for source, fact_as_of in fact_sources],
             "stock_results": stock_results}
@@ -1057,7 +1060,9 @@ def build_weekly_report(normalized_list: list, as_of: str, generated_at: str,
                         account_positions: list[dict] | None = None,
                         missing_holding_codes: list[str] | None = None,
                         candidate_exclusions: list[dict] | None = None,
-                        margin_coverage: dict | None = None) -> dict:
+                        margin_coverage: dict | None = None,
+                        portfolio_fact_as_of: str | None = None,
+                        portfolio_fact_fetch_status: str = "not_requested") -> dict:
     from runners.a_short_phase5_engine import build_m67_report, build_holding_report
     incoming_lineage = dict(run_lineage or {})
     incoming_price_freshness = incoming_lineage.get("price_freshness") or {}
@@ -1068,6 +1073,11 @@ def build_weekly_report(normalized_list: list, as_of: str, generated_at: str,
     )
     if not _is_valid_date(price_data_through) or price_data_through > str(as_of):
         raise ValueError("weekly price_data_through is not a valid PIT clock")
+    portfolio_fact_as_of = str(portfolio_fact_as_of or price_data_through)
+    if portfolio_fact_as_of != price_data_through:
+        raise ValueError("portfolio fact clock must equal weekly price_data_through")
+    if portfolio_fact_fetch_status not in {"not_requested", "ok", "not_published", "unavailable"}:
+        raise ValueError("portfolio fact fetch status invalid")
     if margin_coverage is None:
         margin_coverage = {
             "reference_date": price_data_through, "effective_ref_date": None,
@@ -1108,10 +1118,11 @@ def build_weekly_report(normalized_list: list, as_of: str, generated_at: str,
     _validate_account_position_coverage(account_positions, reports, missing_holding_codes)
     from engine.a_short_portfolio_risk import build_context
     portfolio_context = build_context(
-        bound_normalized_list, as_of, fact_overrides=portfolio_fact_overrides,
+        bound_normalized_list, portfolio_fact_as_of, fact_overrides=portfolio_fact_overrides,
         account_positions=account_positions, missing_holding_codes=missing_holding_codes)
     cash_summary = _allocate_cash(reports, available_cash, new_exposure_capacity, portfolio_context)
-    portfolio_risk = _apply_portfolio_risk_results(reports, portfolio_context, as_of)
+    portfolio_risk = _apply_portfolio_risk_results(
+        reports, portfolio_context, as_of, portfolio_fact_as_of, portfolio_fact_fetch_status)
     # run_lineage ties the consumed selection + IV feed + account/sizing status to this M6.7 artifact
     # (Slice 3b-2: selection 在 result/a_short、M6.7 在 research lane,靠此机器可读 lineage 绑定);
     # default = no-account observation-only,使直接 builder/测试仍 schema-valid。
@@ -1170,6 +1181,13 @@ def _validate_portfolio_risk(weekly: dict) -> None:
                 "factor_resonance", "factor_resonance_high_risk"}
     if risk.get("status") not in statuses or not isinstance(risk.get("summary"), dict):
         raise ValueError("portfolio_risk status/summary invalid")
+    fact_fetch = risk.get("fact_fetch")
+    if (not isinstance(fact_fetch, dict)
+            or fact_fetch.get("status") not in {"not_requested", "ok", "not_published", "unavailable"}
+            or str(fact_fetch.get("as_of") or "") != str(
+                ((weekly.get("run_lineage") or {}).get("price_freshness") or {}).get(
+                    "price_data_through") or weekly.get("as_of"))):
+        raise ValueError("portfolio_risk fact_fetch status/clock invalid")
     results = risk.get("stock_results")
     reports = weekly.get("reports") or []
     if not isinstance(results, list) or len(results) != len(reports):
@@ -3799,24 +3817,31 @@ def _portfolio_frame_records(frame):
         return None
 
 
-def _fetch_portfolio_risk_fact_overrides(pro, as_of: str, codes) -> dict:
-    """Fetch the bounded deterministic M5.5B fact set for this weekly universe."""
+def _fetch_portfolio_risk_fact_overrides(pro, as_of: str, codes) -> tuple[dict, str]:
+    """Fetch the bounded deterministic M5.5B fact set with an explicit outcome."""
     codes = sorted({str(code) for code in codes if code})
 
     def _call(name, **kwargs):
         endpoint = getattr(pro, name, None)
         if not callable(endpoint):
-            return None
+            return "unavailable", None
         try:
-            return _portfolio_frame_records(endpoint(**kwargs))
+            rows = _portfolio_frame_records(endpoint(**kwargs))
+            return ("ok", rows) if rows is not None else ("unavailable", None)
         except Exception:
-            return None
+            return "unavailable", None
 
-    daily = _call("daily_basic", trade_date=as_of, fields="ts_code,circ_mv")
-    margin = _call("margin_detail", trade_date=as_of, fields="ts_code,rzye")
-    northbound = _call("hk_hold", trade_date=as_of, fields="ts_code,ratio")
-    csi300 = _call("index_member", index_code="000300.SH", fields="con_code,in_date,out_date")
-    sse50 = _call("index_member", index_code="000016.SH", fields="con_code,in_date,out_date")
+    calls = (
+        _call("daily_basic", trade_date=as_of, fields="ts_code,circ_mv"),
+        _call("margin_detail", trade_date=as_of, fields="ts_code,rzye"),
+        _call("index_member", index_code="000300.SH", fields="con_code,in_date,out_date"),
+        _call("index_member", index_code="000016.SH", fields="con_code,in_date,out_date"),
+    )
+    if any(status == "unavailable" for status, _rows in calls):
+        return {}, "unavailable"
+    daily, margin, csi300, sse50 = (rows for _status, rows in calls)
+    if not any(rows for _status, rows in calls):
+        return {}, "not_published"
 
     def _map(rows, key):
         if not rows or any(key not in row for row in rows if isinstance(row, dict)):
@@ -3835,7 +3860,7 @@ def _fetch_portfolio_risk_fact_overrides(pro, as_of: str, codes) -> dict:
                 members.add(str(row["con_code"]))
         return members
 
-    daily_map, margin_map, north_map = _map(daily, "ts_code"), _map(margin, "ts_code"), _map(northbound, "ts_code")
+    daily_map, margin_map = _map(daily, "ts_code"), _map(margin, "ts_code")
     members_300, members_50 = _active_members(csi300), _active_members(sse50)
     overrides = {}
     for code in codes:
@@ -3847,18 +3872,14 @@ def _fetch_portfolio_risk_fact_overrides(pro, as_of: str, codes) -> dict:
         ratio = None
         if isinstance(rzye, (int, float)) and not isinstance(rzye, bool) and circ_mv and circ_mv > 0:
             ratio = float(rzye) * 100.0 / circ_mv
-        north_ratio = ((north_map or {}).get(code) or {}).get("ratio")
-        if north_map is not None and code not in north_map:
-            north_ratio = 0.0
-        north_ratio = float(north_ratio) if isinstance(north_ratio, (int, float)) and not isinstance(north_ratio, bool) else None
         large_index = (code in members_300 or code in members_50) if members_300 is not None and members_50 is not None else None
         overrides[code] = {
             "ts_code": code, "as_of": str(as_of),
-            "source": "tushare:daily_basic+margin_detail+hk_hold+index_member",
+            "source": "tushare:daily_basic+margin_detail+index_member",
             "circ_mv_rmb": circ_mv, "margin_balance_to_float_mv_pct": ratio,
-            "northbound_holding_ratio_pct": north_ratio, "is_large_index_component": large_index,
+            "is_large_index_component": large_index,
         }
-    return overrides
+    return overrides, "ok"
 
 
 def main(argv=None, pro_factory=None, price_provider=None, semantic_provider=None,
@@ -4234,8 +4255,6 @@ def main(argv=None, pro_factory=None, price_provider=None, semantic_provider=Non
         # 4.2 Round5 真龙虎榜 provider + 近 N 交易日窗口(同上下文;top_list 按 trade_date 查、trade_cal 取交易日;analysis-only comparison-only)。
         if dragon_list_provider is None:
             dragon_list_provider = lambda d: _fetch_dragon_list(pro, d)
-        if dragon_list_days is None:
-            dragon_list_days = _recent_trading_days(pro, args.as_of, DRAGON_LIST_LOOKBACK_TRADING_DAYS)
         # 4.2 Round5 第二刀 真席位 provider(同上下文;top_inst 按 trade_date 查;analysis-only comparison-only)。
         if dragon_list_inst_provider is None:
             dragon_list_inst_provider = lambda d: _fetch_dragon_inst(pro, d)
@@ -4350,6 +4369,11 @@ def main(argv=None, pro_factory=None, price_provider=None, semantic_provider=Non
         )
     if not clock_explicit:
         price_data_through = price_clock_date
+    # The list window is a price-derived fact.  It must be computed only after
+    # the candidate bars settle the one batch price clock, not from the earlier
+    # decision-date placeholder used to request those bars.
+    if dragon_list_days is None and pro is not None:
+        dragon_list_days = _recent_trading_days(pro, price_data_through, DRAGON_LIST_LOOKBACK_TRADING_DAYS)
     iv_freshness = validate_iv_feed_freshness(feed, price_data_through)
     accepted_psd = str(prior_settled) if (prior_settled is not None and price_data_through == str(prior_settled)) else None
     price_freshness = {"mode": args.price_freshness_mode,
@@ -4462,17 +4486,29 @@ def main(argv=None, pro_factory=None, price_provider=None, semantic_provider=Non
     portfolio_normalized = normalized + holding_normalized
     portfolio_codes = [str(item.get("ts_code")) for item in portfolio_normalized if item.get("ts_code")]
     portfolio_fact_overrides = None
+    portfolio_fact_fetch_status = "not_requested"
     if portfolio_risk_provider is not None:
         try:
-            supplied = portfolio_risk_provider(portfolio_codes, args.as_of)
-            if not isinstance(supplied, dict):
-                raise ValueError("provider must return a code-keyed dict")
-            portfolio_fact_overrides = supplied
+            supplied = portfolio_risk_provider(portfolio_codes, price_data_through)
+            if isinstance(supplied, tuple) and len(supplied) == 2:
+                portfolio_fact_overrides, portfolio_fact_fetch_status = supplied
+            else:
+                portfolio_fact_overrides = supplied
+                portfolio_fact_fetch_status = "ok" if supplied else "not_published"
+            if (not isinstance(portfolio_fact_overrides, dict)
+                    or portfolio_fact_fetch_status not in {"ok", "not_published", "unavailable"}):
+                raise ValueError("provider must return (code-keyed dict, fetch status)")
+            if portfolio_fact_fetch_status == "unavailable":
+                portfolio_fact_overrides = {
+                    code: {"ts_code": code, "as_of": price_data_through,
+                           "fetch_status": "unavailable"}
+                    for code in portfolio_codes
+                }
         except Exception:
+            portfolio_fact_fetch_status = "unavailable"
             portfolio_fact_overrides = {
-                code: {"as_of": str(args.as_of), "source": "portfolio_risk_source_unavailable",
-                       "circ_mv_rmb": None, "margin_balance_to_float_mv_pct": None,
-                       "northbound_holding_ratio_pct": None, "is_large_index_component": None}
+                code: {"ts_code": code, "as_of": price_data_through,
+                       "fetch_status": "unavailable"}
                 for code in portfolio_codes
             }
     # Knife 3 pre-M6.7 order: only an existing private cache may settle frozen v2 captures,
@@ -4568,7 +4604,9 @@ def main(argv=None, pro_factory=None, price_provider=None, semantic_provider=Non
                                  portfolio_fact_overrides=portfolio_fact_overrides,
                                  account_positions=((acct.get("positions") or []) if args.account else None),
                                  missing_holding_codes=[item.get("ts_code") for item in holdings_manual_review],
-                                 candidate_exclusions=candidate_exclusions)
+                                 candidate_exclusions=candidate_exclusions,
+                                 portfolio_fact_as_of=price_data_through,
+                                 portfolio_fact_fetch_status=portfolio_fact_fetch_status)
     weekly["decision_as_of"] = str(args.as_of)
     weekly["run_date"] = str(args.run_date) if args.run_date else None
     weekly["price_data_through"] = price_data_through

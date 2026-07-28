@@ -23,7 +23,6 @@
   },
   "portfolio_risk": {
     "same_sw_l2_threshold_pct": 40.0,
-    "northbound_threshold_pct": 10.0,
     "margin_threshold_pct": 8.0,
     "large_index_threshold_pct": 50.0,
     "small_float_mv_threshold_pct": 40.0,

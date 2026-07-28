@@ -872,8 +872,6 @@ def _candidate_from_row(row, rank, final_codes, latest_td, unlock_set, suspended
             "factor_exposures": [
                 {"factor": "sw_l2_industry", "value": None,
                  "threshold": _PORTFOLIO_RISK_THRESHOLDS["same_sw_l2_threshold_pct"], "status": "unknown"},
-                {"factor": "northbound_holding_ratio", "value": None,
-                 "threshold": _PORTFOLIO_RISK_THRESHOLDS["northbound_threshold_pct"], "status": "unknown"},
                 {"factor": "margin_balance_to_float_mv", "value": None,
                  "threshold": _PORTFOLIO_RISK_THRESHOLDS["margin_threshold_pct"], "status": "unknown"},
                 {"factor": "index_component", "value": None,

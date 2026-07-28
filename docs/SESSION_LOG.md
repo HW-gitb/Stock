@@ -1,5 +1,44 @@
 # Session Log
 
+## 2026-07-28 — Claude Code 复审 PASS（A-short 第六刀 6A：A–G + I1 + H1 + Optional 全闭）
+
+- **Verdict/Action**: PASS，已提交。I1 的改法正确：`fact_fetch` 退出 `required` 只留属性定义，历史产物重新合法，新产物的强制性交给 builder 侧 `_validate_portfolio_risk`，且**没有**改写 `20260727` 那份已发布产物。H1 的守卫承重：AST 扫字面量下标读点、含一层别名（正是当初硬崩的那种形状），删 preset 键的植入测试确实变红。上轮 Optional 也补了能单独打红 leaf-reader 正文的用例。
+- **Required**: 无新开。`docs/system_risk_register.md#R-ASHORT-KNIFE6A-NORTHBOUND-RETIREMENT-CRASHES-EGS-AND-LEAVES-PARTIAL-RESIDUE` 转 resolved，A–G 与 I1、H1、Optional 全部闭合，两条不阻断的遗留 Optional 记在该条目内。
+- **Verify**: review-evidence:dad7c8b4ee04。超时原因:上一轮的红正是「执行方没跑 lane」，故本轮坚持自跑全量，且首次用了管道导致摘要丢失又重跑一次。**reviewer 自跑**官方选择器全量 = `Ran 2070 tests / OK (skipped=3) / exit 0 / 193.1s`（不采信 ledger 的 `CACHED GREEN`）；`tests/phase6/test_egs*.py` = `failures=1 / errors=9`，与干净 master 基线相同。探针复跑：EGS `NO-RAISE` 且 factor 行为 4 条、契约正文零幽灵 leaf。H1 覆盖面实测：生产侧 `load_runtime_configuration()` 仅 4 个消费者，全部命名 `_RUNTIME_CONFIGURATION` 且都在被扫目录内。
+- **Next**: 无。已 commit 并 fast-forward 进 master。第六刀 6B（条目 14：候选价格单一权威 + 契约加严）仍未开工，且它有「先实测 EGS 快照日与 `price_data_through` 的实际关系」的硬前置。
+
+## 2026-07-28 — Codex 修复（A-short 第六刀 6A：I1 + H1 + Optional + repair-closeout guard）
+
+- **Verdict/Action**: 已完成 I1、H1 与 Optional；A–G 保持关闭。I1 恢复历史 weekly schema 兼容且不改发布产物；H1 把 runtime-policy 孤儿读点封入官方 lane；Optional 有独立 leaf-reader 正文反向证明；执行/修复流程新增闭环矩阵机器门。
+- **Required**: `R-ASHORT-KNIFE6A-NORTHBOUND-RETIREMENT-CRASHES-EGS-AND-LEAVES-PARTIAL-RESIDUE` 的 A–G、I1、H1 已实现，详情与 pending-review 状态只见 `docs/system_risk_register.md`。
+- **Verify**: full-pack ledger `a_short = 2070 OK / 228.3s`；`tests/phase6/test_egs*.py = 1 fail / 9 errors`，与既有基线相同；定向 runtime-config + effect-contract + doc-governance 均通过；`git diff --check` clean（仅 CRLF warning）。
+- **Pre-Codex self-review**: A-F checked — matrix=A–G/I1/H1/Optional 全部已分类并实现；B=旧 northbound 符号与计数/来源语义扫净；C=历史 schema 与新 builder 双向；E=CURRENT 未写 gate；matrix=complete; register=updated; handoff=updated+indexed; focused=targeted packs PASS and phase6 baseline; full-lane=2070 OK cached once; self-review=main-thread checklist, no extra window.
+- **Next**: Claude Code：审查。
+
+## 2026-07-28 — Claude Code 复审 FAIL（A-short 第六刀 6A：A–G 七条真闭，但官方 lane 转红 + H1 未做）
+
+- **Verdict/Action**: FAIL，仍不可提交 —— 但上轮八条里 **A–G 七条真闭**（逐条实测见 register）：EGS 探针不再抛且 factor 行降为 4 条，残留只剩市场级 `capital_flow.northbound` 等合法幸存，文案改「三项因子」，契约正文补了 paths + leaf_readers 两条反向比对，`unavailable` 现在既可见又 fail-closed，时钟与三态都有了回归钉子。Codex 还顺手修掉一个我上轮漏核的隐患：龙虎榜窗口原先算在时钟收敛之前、用的是占位值。
+- **Required**: 两条，详情只在 `docs/system_risk_register.md#R-ASHORT-KNIFE6A-NORTHBOUND-RETIREMENT-CRASHES-EGS-AND-LEAVES-PARTIAL-RESIDUE`。**I1（本轮新开）**：`fact_fetch` 被加进周报 schema 的 `required`，追溯作废了已发布的 `20260727` 官方产物，官方全量因此转红。**H1**：lane 内孤儿读点静态守卫仍未实现（Codex 自述 open）。
+- **Verify**: review-evidence:2d96d4d105b7。官方固定命令全量 `a_short` = `FAIL / exit 1 / 2066 tests / 242.4s`，红的四条全在 `test_a_short_official_operation_evidence`，报 `'fact_fetch' is a required property` → `official_operation_capture_m67_consistency_invalid`；修前同命令 `2061 OK / exit 0`，归因确定。`grep -c fact_fetch research/results/a_short/20260727/weekly_m67.json` = 0。`tests/phase6` = `failures=1 / errors=9`，与干净 master 基线相同、净 +8 归零。两枚上轮探针复跑：EGS `NO-RAISE`、契约正文零幽灵 leaf。
+- **Next**: Codex：修复 I1 + H1。I1 的方向是让 schema 对历史产物后向兼容（`fact_fetch` 转可选，新产物的强制性交给已在校验状态与时钟的 `_validate_portfolio_risk`）或升版按版本 gate；**绝不可改写 `20260727` 那份已发布产物来迁就 schema**。收口须给官方全量绿 + `tests/phase6` 仍在基线。
+
+<!-- EXECUTOR-REPAIR-CLOSEOUT-MARKER (adopted 2026-07-28): future executor/fixer `修复` entries prepend above this line and their labeled Pre-Codex self-review must include matrix=, register=, handoff=, focused=, full-lane=. This is the machine-enforced repair-closeout evidence contract; below is grandfathered history. Do not remove or move. -->
+
+## 2026-07-28 — Codex 修复 (R-ASHORT-KNIFE6A-NORTHBOUND-RETIREMENT-CRASHES-EGS-AND-LEAVES-PARTIAL-RESIDUE)
+
+- **Verdict/Action**: 已完成 6A 的 A–G：北向组合因子完整退役；组合事实与龙虎榜窗口统一绑定 `price_data_through`；provider 三态可见，`unavailable` fail-closed。
+- **Required**: `R-ASHORT-KNIFE6A-NORTHBOUND-RETIREMENT-CRASHES-EGS-AND-LEAVES-PARTIAL-RESIDUE` 的 A–G 已实现；H1 lane 内孤儿读点守卫仍 open，完整状态见 `docs/system_risk_register.md`。
+- **Proof-of-use**: 盘中 `as_of=20260609` / `price_data_through=20260608` 集成测试断言 facts 与龙虎榜窗口均为 `20260608`；`({}, "unavailable")` 经主流程变为 `portfolio_risk_provider_unavailable`。
+- **Verify**: 新增 5 项 6A 验收均 OK；`validate_static_contract()` OK；`git diff --check` clean。`tests/phase6/test_egs*.py` 回到既有 `1 fail / 9 errors` 基线，审查指出的新增 8 个 northbound KeyError 已消失。
+- **Next**: Claude Code：审查。
+
+## 2026-07-28 — Claude Code 审查 FAIL（A-short 第六刀 6A：组合事实时钟 + 北向因子退役）
+
+- **Verdict/Action**: FAIL，不可提交。时钟腿做对了：`portfolio_fact_as_of` 一路传到 `build_context` / `_apply_portfolio_risk_results`，并被「必须等于 `price_data_through`」焊成单一权威钟；龙虎榜与大宗共用同一份窗口，全文只有一个 `_recent_trading_days` 调用点，不存在漏改的第二条腿。但同一刀的「退役北向因子」只做了一半：governed 阈值三处都删了，却漏了它在 EGS 里的唯一读点。
+- **Required**: 八条，全部详情只在 `docs/system_risk_register.md#R-ASHORT-KNIFE6A-NORTHBOUND-RETIREMENT-CRASHES-EGS-AND-LEAVES-PARTIAL-RESIDUE`。A=`A-EGS/egs_main.py:876` 每条候选硬崩；B/C=provider 与 engine 侧的悬空键与假来源标签；D=周报文案仍写「四项因子」；E=效应契约正文留幽灵 leaf 且守卫只比 sha256 不比正文；F=条目 1 第 3 点三态未落地、方向由 fail-closed 退成 fail-open；G=6A 验收 ①②③④ 零测试；H=把「lane 包看不见 EGS」这个复发盲区焊成机器门。另有一条 Options 同样在 register。
+- **Verify**: 本轮未注入 review-evidence token，故不引用。官方固定命令全量 `a_short` = `2061 OK / 239.0s / exit 0`（已记账；较基线 +2，正好是本刀新增的两条测试）。自写探针：`_candidate_from_row` 在本工作树抛 `KeyError('northbound_threshold_pct')`，同一探针在干净 master 树不抛并返回 5 条 factor 行。`discover -s tests/phase6 -p test_egs*.py` 本树 `errors=17`、master `errors=9`，净 +8 全部报同一 KeyError。`static_contract_error()` 返 `None`，而重算 inventory 已无该 leaf。`grep portfolio_fact_as_of tests/*.py` = 0 命中。
+- **Next**: Codex：修复。先封 A（EGS 硬崩），再按 register 的整类 checklist 一轮修完 B–H，别只修被探针演示的那一条。收口须逐条给 Closure tests ①–⑦ 的证据，尤其第 ④ 条反向守卫：正文塞一个 inventory 里没有的 governed leaf 必须让 `static_contract_error` 变红。官方 `a_short` 全量绿不足以证明本刀安全，必须同时给 `tests/phase6` 的 EGS 包。
+
 ## 2026-07-28 — Claude Code 审查（wt/us-short `45e71fdf`：未落地的 comparison-only 范围决策）
 
 - **Verdict/Action**: 该 commit **从未走过评审循环**——它只动 `docs/system_risk_register.md`（2 行）与 `docs/us_short_system_design.md`（1 行），**没有同时写 SESSION_LOG**；master 的 2026-07-22 条目全部是 A-short 治理，无一条对应；commit message 单行无正文。规模上不是大块，是 3 行，但每行是整段散文，重写了 comparison-only 的目的定义并改写了刀 5 的范围。内容是用户自述意图而非代码，不需要代码级审查，只欠落地。

@@ -760,6 +760,11 @@ class DocGovernanceGuard(unittest.TestCase):
     # one: entries above DRAFT_PROOF_MARKER are post-adoption (enforced); below = grandfathered history.
     DRAFT_HEADER_KEYS = ("起草", "强化")
     DRAFT_PROOF_MARKER = "DRAFT-HANDOFF-PROOF-MARKER"
+    # Executor repair closeout (2026-07-28): a proof line alone is not enough;
+    # future repair entries must evidence the closure matrix, register, handoff,
+    # and both verification tiers.
+    REPAIR_CLOSEOUT_MARKER = "EXECUTOR-REPAIR-CLOSEOUT-MARKER"
+    REPAIR_CLOSEOUT_FIELDS = ("matrix=", "register=", "handoff=", "focused=", "full-lane=")
     # require an ACTUAL labeled proof line (optional list marker, half/full-width colon), NOT a prose
     # mention of the token (R-PRECODEX-CHECKLIST-HANDOFF-PROOF-LABEL-FALSE-NEGATIVE — the same prose-vs-
     # labeled-line class as the original bug, this time in the guard itself).
@@ -829,6 +834,22 @@ class DocGovernanceGuard(unittest.TestCase):
                 continue
             if not cls._PROOF_LINE.search(block):    # actual labeled line, not a prose token mention
                 offenders.append(("missing-pre-codex-self-review", header[:50]))
+        return offenders
+
+    @classmethod
+    def _repair_closeout_offenders(cls, zone_text):
+        offenders = []
+        parts = re.split(r"(?m)^## (\d{4}-\d{2}-\d{2}) [—–-] ", zone_text)
+        for i in range(1, len(parts), 2):
+            lines = parts[i + 1].splitlines()
+            header = lines[0] if lines else ""
+            if "修复" not in header:
+                continue
+            proof = next((line for line in lines
+                          if re.match(r"^\s*-\s+\*\*Pre-Codex self-review\*\*\s*[:：]", line)), "")
+            missing = tuple(field for field in cls.REPAIR_CLOSEOUT_FIELDS if field not in proof)
+            if missing:
+                offenders.append(("repair-closeout-fields", header[:50], missing))
         return offenders
 
     def test_review_cycle_minimal_template_enforced_above_marker(self):
@@ -971,6 +992,24 @@ class DocGovernanceGuard(unittest.TestCase):
         self.assertEqual(self._draft_handoff_proof_offenders(codex_entry), [],
                          "guard must not flag a Codex review entry")
 
+    def test_executor_repair_closeout_enforced_above_marker(self):
+        log = (ROOT / "docs" / "SESSION_LOG.md").read_text(encoding="utf-8")
+        self.assertIn(self.REPAIR_CLOSEOUT_MARKER, log,
+                      "SESSION_LOG lost the executor repair-closeout adoption marker")
+        zone = log.split(self.REPAIR_CLOSEOUT_MARKER, 1)[0]
+        self.assertEqual(self._repair_closeout_offenders(zone), [],
+                         "post-adoption repair entry lacks closeout evidence")
+
+    def test_executor_repair_closeout_guard_planted(self):
+        incomplete = ("## 2026-07-28 — Codex 修复 (R-TEST-FOO)\n"
+                      "- **Pre-Codex self-review**: matrix=all; register=updated; focused=2 OK; full-lane=not run\n")
+        compliant = ("## 2026-07-28 — Codex 修复 (R-TEST-FOO)\n"
+                     "- **Pre-Codex self-review**: matrix=all; register=updated; handoff=updated; focused=2 OK; full-lane=1 OK\n")
+        self.assertTrue(self._repair_closeout_offenders(incomplete),
+                        "missing handoff closeout field must turn the guard red")
+        self.assertEqual(self._repair_closeout_offenders(compliant), [],
+                         "complete repair closeout evidence must be accepted")
+
     # R-DOCGOV-SESSIONLOG-ORPHANED-REVIEW-ENTRY-GAP: one SESSION_LOG `##` entry records ONE review-cycle
     # action → exactly one `Verdict/Action` bullet. >1 means a prior entry's review bullets were ORPHANED
     # under this heading (e.g. a prepend whose old_string ate the previous `##` heading). The minimal-
@@ -1036,6 +1075,12 @@ class DocGovernanceGuard(unittest.TestCase):
         "main-thread class-closure after FAIL",
         "no content-driven re-review",
         "documented material-new-risk exception",
+        "repair-closeout matrix 不可跳过",
+        "matrix=",
+        "register=",
+        "handoff=",
+        "focused=",
+        "full-lane=",
     )
     # Body phrases that MUST NOT reappear in AGENTS item 7. Naming a rule ("B ripple-grep") is fine;
     # restating its body is the AGENTS<->checklist drift this refactor eliminates.

@@ -187,6 +187,37 @@ class EffectContractStaticTests(unittest.TestCase):
             self.contract, inventory=static_inventory(runtime_policy_overrides={rel: policy}))
         self.assertIn("runtime policy", error)
 
+    def test_stale_governed_leaf_in_contract_body_cannot_hide_behind_updated_hashes(self):
+        """Deleting a governed leaf must also delete every contract-body reader entry."""
+        inventory = static_inventory()
+        contract = copy.deepcopy(self.contract)
+        rel = "presets/a_short_m67_runtime_policy_20260715.json"
+        contract["runtime_policy_paths_sha256"] = inventory["runtime_policy_paths_sha256"]
+        contract["runtime_policy_leaf_readers_sha256"] = hashlib.sha256(
+            json.dumps(inventory["runtime_policy_leaf_readers"], ensure_ascii=False,
+                       sort_keys=True, separators=(",", ":")).encode("utf-8")
+        ).hexdigest()
+        contract["runtime_policy_paths"][rel].append("portfolio_risk.retired_probe")
+        contract["runtime_policy_leaf_readers"][rel]["portfolio_risk.retired_probe"] = [
+            "stale reader"
+        ]
+        error = static_contract_error(contract, inventory=inventory)
+        self.assertEqual(error, "runtime policy field inventory body changed without effect contract update")
+
+    def test_stale_leaf_reader_body_cannot_hide_behind_updated_hashes(self):
+        """The per-leaf reader body has its own reverse guard, not just the paths body."""
+        inventory = static_inventory()
+        contract = copy.deepcopy(self.contract)
+        contract["runtime_policy_leaf_readers_sha256"] = hashlib.sha256(
+            json.dumps(inventory["runtime_policy_leaf_readers"], ensure_ascii=False,
+                       sort_keys=True, separators=(",", ":")).encode("utf-8")
+        ).hexdigest()
+        rel = "presets/a_short_m67_runtime_policy_20260715.json"
+        path = next(iter(contract["runtime_policy_leaf_readers"][rel]))
+        contract["runtime_policy_leaf_readers"][rel][path] = ["stale reader"]
+        error = static_contract_error(contract, inventory=inventory)
+        self.assertEqual(error, "runtime policy per-leaf reader mapping body changed without effect contract update")
+
     def test_new_policy_field_still_fails_after_hashes_and_generic_binding_are_updated(self):
         """A broad section-level consumer note cannot pretend an unread leaf is wired."""
         rel = "presets/a_short_m67_runtime_policy_20260715.json"

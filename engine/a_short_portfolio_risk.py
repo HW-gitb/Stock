@@ -16,7 +16,6 @@ from engine.a_short_runtime_config import load_runtime_configuration
 _RUNTIME_CONFIGURATION = load_runtime_configuration()
 _PORTFOLIO_POLICY = _RUNTIME_CONFIGURATION["m67"]["portfolio_risk"]
 SAME_SW_L2_THRESHOLD_PCT = _PORTFOLIO_POLICY["same_sw_l2_threshold_pct"]
-NORTHBOUND_THRESHOLD_PCT = _PORTFOLIO_POLICY["northbound_threshold_pct"]
 MARGIN_THRESHOLD_PCT = _PORTFOLIO_POLICY["margin_threshold_pct"]
 LARGE_INDEX_THRESHOLD_PCT = _PORTFOLIO_POLICY["large_index_threshold_pct"]
 SMALL_FLOAT_MV_THRESHOLD_PCT = _PORTFOLIO_POLICY["small_float_mv_threshold_pct"]
@@ -33,7 +32,6 @@ def _high_risk_cap_reduction_pct() -> str:
 
 
 _FACTOR_SPECS = (
-    ("northbound_holding_ratio_pct", "北向持股比例", NORTHBOUND_THRESHOLD_PCT),
     ("margin_balance_to_float_mv_pct", "融资余额/流通市值", MARGIN_THRESHOLD_PCT),
     ("large_index_component_pct", "50ETF/沪深300成分股", LARGE_INDEX_THRESHOLD_PCT),
     ("small_float_mv_pct", f"小流通市值(<{_format_rmb_yi(SMALL_FLOAT_MV_RMB)})", SMALL_FLOAT_MV_THRESHOLD_PCT),
@@ -41,7 +39,6 @@ _FACTOR_SPECS = (
 _REQUIRED_FACT_FIELDS = (
     "sw_l2_key",
     "circ_mv_rmb",
-    "northbound_holding_ratio_pct",
     "margin_balance_to_float_mv_pct",
     "is_large_index_component",
 )
@@ -99,10 +96,6 @@ def _factor_values(assets):
     if total <= 0:
         raise ValueError("portfolio value must be positive")
     return {
-        "northbound_holding_ratio_pct": sum(
-            float(asset["value_rmb"]) * float(asset["fact"]["northbound_holding_ratio_pct"])
-            for asset in assets
-        ) / total,
         "margin_balance_to_float_mv_pct": sum(
             float(asset["value_rmb"]) * float(asset["fact"]["margin_balance_to_float_mv_pct"])
             for asset in assets
@@ -165,8 +158,20 @@ def fact_from_normalized(normalized: dict, as_of: str, override: dict | None = N
     if (isinstance(override, dict)
             and str(override.get("as_of") or "") == str(as_of)
             and (not override.get("ts_code") or str(override.get("ts_code")) == code)):
-        raw.update({key: value for key, value in override.items() if key != "source"})
-        source = str(override.get("source") or "tushare_portfolio_snapshot")
+        if override.get("fetch_status") == "unavailable":
+            return {
+                "as_of": str(as_of), "source": "portfolio_risk_provider_unavailable",
+                "sw_l2_key": None, "circ_mv_rmb": None,
+                "margin_balance_to_float_mv_pct": None,
+                "is_large_index_component": None,
+            }
+        override_leaves = {
+            key: value for key, value in override.items()
+            if key in _REQUIRED_FACT_FIELDS and value is not None
+        }
+        raw.update(override_leaves)
+        source = (str(override.get("source") or "tushare_portfolio_snapshot")
+                  if override_leaves else str(raw.get("source") or "analysis_input"))
     elif isinstance(override, dict):
         # An explicitly supplied provider result for another stock/date is not
         # allowed to fall back silently to a different fact set.  Make it
@@ -174,7 +179,6 @@ def fact_from_normalized(normalized: dict, as_of: str, override: dict | None = N
         return {
             "as_of": str(as_of), "source": "portfolio_risk_invalid_override",
             "sw_l2_key": None, "circ_mv_rmb": None,
-            "northbound_holding_ratio_pct": None,
             "margin_balance_to_float_mv_pct": None,
             "is_large_index_component": None,
         }
@@ -185,7 +189,6 @@ def fact_from_normalized(normalized: dict, as_of: str, override: dict | None = N
         "source": source,
         "sw_l2_key": _string(raw.get("sw_l2_key")),
         "circ_mv_rmb": _finite_number(raw.get("circ_mv_rmb"), minimum=0.0),
-        "northbound_holding_ratio_pct": _finite_number(raw.get("northbound_holding_ratio_pct"), minimum=0.0, maximum=100.0),
         "margin_balance_to_float_mv_pct": _finite_number(raw.get("margin_balance_to_float_mv_pct"), minimum=0.0, maximum=100.0),
         "is_large_index_component": raw.get("is_large_index_component")
         if isinstance(raw.get("is_large_index_component"), bool) else None,
@@ -280,7 +283,7 @@ def evaluate_candidate(context: dict, ts_code: str, candidate_value_rmb: float) 
         status = "factor_resonance_high_risk" if len(factor_breaches) >= 2 else "factor_resonance"
     else:
         action = "allow"
-        reasons = (["组合因子已超线，但本候选不增加超线因子暴露"] if factor_breaches else ["组合集中度与四项因子均未超线"])
+        reasons = (["组合因子已超线，但本候选不增加超线因子暴露"] if factor_breaches else ["组合集中度与三项因子均未超线"])
         status = "factor_resonance_high_risk" if len(factor_breaches) >= 2 else ("factor_resonance" if factor_breaches else "clear")
     return {
         "ts_code": code, "role": "candidate", "status": status, "action": action, "evaluated": True,
@@ -344,5 +347,5 @@ def final_summary(context: dict) -> dict:
         "reasons": ([f"两项及以上因子超线：组合因子共振高危，持仓单只上限临时下调{_high_risk_cap_reduction_pct()}%，每日人工复核"] if high
                     else (["存在单项因子超线：不新增同方向暴露"] if breaches
                           else (["存在SW L2集中度超线：不新增同业暴露"] if over_industries
-                                else ["组合集中度与四项因子均未超线"]))),
+                                else ["组合集中度与三项因子均未超线"]))),
     }

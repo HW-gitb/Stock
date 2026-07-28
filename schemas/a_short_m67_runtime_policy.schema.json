@@ -35,8 +35,8 @@
     },
     "portfolioRisk": {
       "type": "object", "additionalProperties": false,
-      "required": ["same_sw_l2_threshold_pct", "northbound_threshold_pct", "margin_threshold_pct", "large_index_threshold_pct", "small_float_mv_threshold_pct", "small_float_mv_rmb", "high_risk_holding_cap_multiplier"],
-      "properties": {"same_sw_l2_threshold_pct": {"$ref": "#/$defs/number"}, "northbound_threshold_pct": {"$ref": "#/$defs/number"}, "margin_threshold_pct": {"$ref": "#/$defs/number"}, "large_index_threshold_pct": {"$ref": "#/$defs/number"}, "small_float_mv_threshold_pct": {"$ref": "#/$defs/number"}, "small_float_mv_rmb": {"$ref": "#/$defs/number"}, "high_risk_holding_cap_multiplier": {"$ref": "#/$defs/number"}}
+      "required": ["same_sw_l2_threshold_pct", "margin_threshold_pct", "large_index_threshold_pct", "small_float_mv_threshold_pct", "small_float_mv_rmb", "high_risk_holding_cap_multiplier"],
+      "properties": {"same_sw_l2_threshold_pct": {"$ref": "#/$defs/number"}, "margin_threshold_pct": {"$ref": "#/$defs/number"}, "large_index_threshold_pct": {"$ref": "#/$defs/number"}, "small_float_mv_threshold_pct": {"$ref": "#/$defs/number"}, "small_float_mv_rmb": {"$ref": "#/$defs/number"}, "high_risk_holding_cap_multiplier": {"$ref": "#/$defs/number"}}
     },
     "weeklyWindows": {
       "type": "object", "additionalProperties": false,

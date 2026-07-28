@@ -30,10 +30,10 @@ from tests.test_a_short_weekly_pipeline import (  # noqa: E402
 )
 
 
-def _facts(code, l2, *, north=1.0, margin=1.0, index=False, circ_mv=10_000_000_000.0):
+def _facts(code, l2, *, margin=1.0, index=False, circ_mv=10_000_000_000.0):
     return {
         "ts_code": code, "as_of": AS_OF, "source": "fixture", "sw_l2_key": l2,
-        "circ_mv_rmb": circ_mv, "northbound_holding_ratio_pct": north,
+        "circ_mv_rmb": circ_mv,
         "margin_balance_to_float_mv_pct": margin, "is_large_index_component": index,
     }
 
@@ -81,7 +81,6 @@ class PortfolioRiskPureTests(unittest.TestCase):
 
     def test_each_factor_over_threshold_blocks_same_direction(self):
         cases = [
-            ("north", {"north": 15.0}),
             ("margin", {"margin": 12.0}),
             ("index", {"index": True}),
             ("small", {"circ_mv": 7_000_000_000.0}),
@@ -95,9 +94,7 @@ class PortfolioRiskPureTests(unittest.TestCase):
                 # For ratio factors, the new position must make the already
                 # high exposure worse.  Equal values would be a diversifier
                 # neutral case, not an M5.5B "do not add" case.
-                if label == "north":
-                    held_changes["north"], candidate_changes["north"] = 15.0, 25.0
-                elif label == "margin":
+                if label == "margin":
                     held_changes["margin"], candidate_changes["margin"] = 12.0, 20.0
                 facts = {
                     "000001.SZ": _facts("000001.SZ", "bank", **held_changes),
@@ -112,8 +109,8 @@ class PortfolioRiskPureTests(unittest.TestCase):
         held = _normal("000001.SZ", "bank", held_shares=100_000)
         candidate = _normal("600000.SH", "tech")
         ctx = build_context([held, candidate], AS_OF, fact_overrides={
-            "000001.SZ": _facts("000001.SZ", "bank", north=20.0),
-            "600000.SH": _facts("600000.SH", "tech", north=1.0),
+            "000001.SZ": _facts("000001.SZ", "bank", margin=20.0),
+            "600000.SH": _facts("600000.SH", "tech", margin=1.0),
         })
         result = evaluate_candidate(ctx, "600000.SH", 100_000)
         self.assertEqual(result["status"], "factor_resonance")
@@ -123,7 +120,7 @@ class PortfolioRiskPureTests(unittest.TestCase):
         held = _normal("000001.SZ", "bank", held_shares=20_000)
         candidate = _normal("600000.SH", "tech")
         missing = _facts("600000.SH", "tech")
-        missing["northbound_holding_ratio_pct"] = None
+        missing["margin_balance_to_float_mv_pct"] = None
         ctx = build_context([held, candidate], AS_OF, fact_overrides={
             "000001.SZ": _facts("000001.SZ", "bank"), "600000.SH": missing,
         })
@@ -136,11 +133,36 @@ class PortfolioRiskPureTests(unittest.TestCase):
         foreign["as_of"] = "20260610"
         fact = fact_from_normalized(candidate, AS_OF, foreign)
         self.assertEqual(fact["source"], "portfolio_risk_invalid_override")
-        self.assertIsNone(fact["northbound_holding_ratio_pct"])
+        self.assertNotIn("northbound_holding_ratio_pct", fact)
 
         wrong_stock = _facts("000001.SZ", "foreign")
         fact = fact_from_normalized(candidate, AS_OF, wrong_stock)
         self.assertEqual(fact["source"], "portfolio_risk_invalid_override")
+
+    def test_northbound_factor_is_fully_retired_from_portfolio_facts(self):
+        held = _normal("000001.SZ", "bank", held_shares=20_000)
+        candidate = _normal("600000.SH", "tech")
+        facts = {
+            "000001.SZ": _facts("000001.SZ", "bank"),
+            "600000.SH": _facts("600000.SH", "tech"),
+        }
+        result = evaluate_candidate(build_context([held, candidate], AS_OF, fact_overrides=facts),
+                                    "600000.SH", 100_000)
+        self.assertTrue(result["evaluated"])
+        self.assertNotIn("northbound", str(result))
+
+    def test_empty_override_does_not_erase_analysis_input_fact(self):
+        normalized = _normal("600000.SH", "bank")
+        normalized["portfolio_risk_facts"] = {
+            "source": "analysis_input", "sw_l2_key": "bank", "circ_mv_rmb": 1_000_000_000.0,
+            "margin_balance_to_float_mv_pct": 1.5, "is_large_index_component": False,
+        }
+        fact = fact_from_normalized(normalized, AS_OF, {
+            "ts_code": "600000.SH", "as_of": AS_OF, "source": "tushare", "circ_mv_rmb": None,
+            "margin_balance_to_float_mv_pct": None, "is_large_index_component": None,
+        })
+        self.assertEqual(fact["source"], "analysis_input")
+        self.assertEqual(fact["circ_mv_rmb"], 1_000_000_000.0)
 
     def test_zero_value_holding_is_manual_review_not_factor_division(self):
         held = _normal("000001.SZ", "bank", held_shares=0)
@@ -167,8 +189,8 @@ class PortfolioRiskPureTests(unittest.TestCase):
         first = _normal("000001.SZ", "bank", held_shares=20_000)
         second = _normal("600000.SH", "tech", held_shares=20_000)
         ctx = build_context([first, second], AS_OF, fact_overrides={
-            "000001.SZ": _facts("000001.SZ", "bank", north=20.0, margin=12.0),
-            "600000.SH": _facts("600000.SH", "tech", north=20.0, margin=12.0),
+            "000001.SZ": _facts("000001.SZ", "bank", margin=12.0, index=True),
+            "600000.SH": _facts("600000.SH", "tech", margin=12.0, index=True),
         })
         summary = final_summary(ctx)
         self.assertEqual(summary["status"], "factor_resonance_high_risk")
@@ -193,16 +215,37 @@ class PortfolioRiskPureTests(unittest.TestCase):
             def margin_detail(self, **_kwargs):
                 return Frame([{"ts_code": "600000.SH", "rzye": 100_000_000.0}])
 
-            def hk_hold(self, **_kwargs):
-                return Frame([{"ts_code": "600000.SH", "ratio": 2.0}])
-
             def index_member(self, index_code, **_kwargs):
                 return Frame([{"con_code": "600000.SH" if index_code == "000300.SH" else "000001.SZ",
                                "in_date": "20260101", "out_date": None}])
 
-        fact = _fetch_portfolio_risk_fact_overrides(Provider(), AS_OF, ["600000.SH"])["600000.SH"]
+        overrides, status = _fetch_portfolio_risk_fact_overrides(Provider(), AS_OF, ["600000.SH"])
+        fact = overrides["600000.SH"]
+        self.assertEqual(status, "ok")
         self.assertIsNone(fact["circ_mv_rmb"])
-        self.assertEqual(fact["source"], "tushare:daily_basic+margin_detail+hk_hold+index_member")
+        self.assertEqual(fact["source"], "tushare:daily_basic+margin_detail+index_member")
+
+    def test_provider_reports_not_published_and_unavailable_distinctly(self):
+        class Frame:
+            def __init__(self, rows):
+                self.rows = rows
+
+            def to_dict(self, orient):
+                self.assert_orient = orient
+                return self.rows
+
+        class EmptyProvider:
+            def daily_basic(self, **_kwargs): return Frame([])
+            def margin_detail(self, **_kwargs): return Frame([])
+            def index_member(self, **_kwargs): return Frame([])
+
+        class BrokenProvider(EmptyProvider):
+            def margin_detail(self, **_kwargs): raise RuntimeError("provider down")
+
+        self.assertEqual(_fetch_portfolio_risk_fact_overrides(EmptyProvider(), AS_OF, ["600000.SH"]),
+                         ({}, "not_published"))
+        self.assertEqual(_fetch_portfolio_risk_fact_overrides(BrokenProvider(), AS_OF, ["600000.SH"]),
+                         ({}, "unavailable"))
 
 
 class PortfolioRiskRuntimePolicyTests(unittest.TestCase):
@@ -234,8 +277,8 @@ class PortfolioRiskRuntimePolicyTests(unittest.TestCase):
         first = _normal("000001.SZ", "bank", held_shares=20_000)
         second = _normal("600000.SH", "tech", held_shares=20_000)
         facts = {
-            "000001.SZ": _facts("000001.SZ", "bank", north=20.0, margin=12.0),
-            "600000.SH": _facts("600000.SH", "tech", north=20.0, margin=12.0),
+            "000001.SZ": _facts("000001.SZ", "bank", margin=12.0, index=True),
+            "600000.SH": _facts("600000.SH", "tech", margin=12.0, index=True),
         }
         positions = [
             {"ts_code": "000001.SZ", "shares": 20_000, "avg_cost": 2.7,
@@ -269,8 +312,8 @@ class PortfolioRiskRuntimePolicyTests(unittest.TestCase):
         first = _normal("000001.SZ", "bank", held_shares=20_000)
         second = _normal("600000.SH", "tech", held_shares=20_000)
         context = portfolio.build_context([first, second], AS_OF, fact_overrides={
-            "000001.SZ": _facts("000001.SZ", "bank", north=20.0, margin=12.0),
-            "600000.SH": _facts("600000.SH", "tech", north=20.0, margin=12.0),
+            "000001.SZ": _facts("000001.SZ", "bank", margin=12.0, index=True),
+            "600000.SH": _facts("600000.SH", "tech", margin=12.0, index=True),
         })
         summary = portfolio.final_summary(context)
         self.assertEqual(summary["status"], "factor_resonance_high_risk")
@@ -317,7 +360,7 @@ class PortfolioRiskM67IntegrationTests(unittest.TestCase):
             "601318.SH": _facts("601318.SH", "health"),
         }
         if missing:
-            facts["600000.SH"]["northbound_holding_ratio_pct"] = None
+            facts["600000.SH"]["margin_balance_to_float_mv_pct"] = None
         positions = [{"ts_code": "000001.SZ", "shares": 100_000, "avg_cost": 2.7,
                       "entry_date": "20260601", "stop_loss": 2.5}]
         rows = [held, first, second, third]

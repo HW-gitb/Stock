@@ -38,5 +38,6 @@ schema / runner / policy / historical finding.
   - `2026-05-25_phase5_kickoff_spec_handoff.md` — Phase 5 kickoff 规格:execution backtest contract 边界;schema/runner/simulator 代码当时未开始。
 - Phase 6:
   - `2026-05-26_phase6a_kickoff_spec_handoff.md` — Phase 6a 开工边界:forward evidence、A 短 benchmark sensitivity、forward tracker → aggregate evidence flow、steady/variant/burst/long-spec 边界。
+  - `2026-07-28_a_short_knife6a_repair_handoff.md` — A-short 第六刀 6A 的组合事实价格时钟、北向因子退役、provider 三态、I1 历史 schema 兼容、H1 runtime-policy 孤儿读点守卫与 repair-closeout 机器门；独立审查状态见 SESSION_LOG 顶部。
 - Phase 7:
   - `2026-05-27_phase7_kickoff_spec_handoff.md` — Phase 7 开工边界:provider capability / field catalog contract v1.0.0;schema-first,不选 provider、不抓数据、不建 adapter/DataHub table。**含** Phase 7a alpha-validation route + Phase 7a+ alpha reality action guide additions(同一文件,非独立 handoff)。

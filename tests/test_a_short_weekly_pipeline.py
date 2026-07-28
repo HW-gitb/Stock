@@ -1303,6 +1303,89 @@ class MainWiringTests(unittest.TestCase):
         self.assertIn("价格时钟", md)                               # clock visible to the user in Markdown
         self.assertIn("20260608", md)
 
+    def test_portfolio_facts_follow_the_price_clock_and_share_dragon_window(self):
+        """6A: decision date may differ, but facts and lookback both bind to price_data_through."""
+        dates = pd.date_range(end="20260608", periods=25, freq="D").strftime("%Y%m%d").tolist()
+        fake = _fake_ts(pd.DataFrame({"trade_date": dates, "high": [3.1] * 25,
+                                      "low": [2.8] * 25, "close": [2.9] * 25}))
+        fact_calls, dragon_calls = [], []
+
+        class _Pro:
+            def trade_cal(self, **_kw):
+                return pd.DataFrame({"cal_date": ["20260602", "20260603", "20260604", "20260605", "20260608", AS_OF]})
+
+        def portfolio_provider(codes, fact_as_of):
+            fact_calls.append((list(codes), fact_as_of))
+            return ({code: {"ts_code": code, "as_of": fact_as_of, "source": "fixture",
+                            "circ_mv_rmb": 10_000_000_000.0,
+                            "margin_balance_to_float_mv_pct": 1.0,
+                            "is_large_index_component": False}
+                     for code in codes}, "ok")
+
+        old = sys.modules.get("tushare")
+        sys.modules["tushare"] = fake
+        try:
+            with tempfile.TemporaryDirectory() as td:
+                feed = _feed()
+                feed["series"][-1]["trade_date"] = "20260608"
+                self._write_inputs(td, feed=feed)
+                out = Path(td) / "weekly_m67.json"
+                main(["--as-of", AS_OF, "--run-date", AS_OF, "--price-freshness-mode", "intraday_prior_settled",
+                      "--analysis-input", str(Path(td) / "ai.json"), "--iv-feed", str(Path(td) / "feed.json"),
+                      "--out", str(out), "--confirm-fetch-authorized", "--skip-semantic"],
+                     pro_factory=lambda: _Pro(), portfolio_risk_provider=portfolio_provider,
+                     dragon_list_provider=lambda day: dragon_calls.append(day) or [])
+                weekly = json.loads(out.read_text(encoding="utf-8"))
+        finally:
+            if old is not None:
+                sys.modules["tushare"] = old
+            else:
+                sys.modules.pop("tushare", None)
+        self.assertEqual(weekly["as_of"], AS_OF)
+        self.assertEqual(weekly["run_lineage"]["price_freshness"]["price_data_through"], "20260608")
+        self.assertEqual([(sorted(codes), fact_as_of) for codes, fact_as_of in fact_calls],
+                         [(["000001.SZ", "600000.SH"], "20260608")])
+        self.assertEqual(dragon_calls, ["20260602", "20260603", "20260604", "20260605", "20260608"])
+        self.assertEqual(weekly["portfolio_risk"]["fact_fetch"], {"status": "ok", "as_of": "20260608"})
+        self.assertEqual({row["fact_as_of"] for row in weekly["portfolio_risk"]["stock_results"]}, {"20260608"})
+
+    def test_portfolio_fact_fetch_states_are_visible_and_unavailable_fails_closed(self):
+        rows = [_normalized("600000.SH"), _normalized("000001.SZ")]
+        for row in rows:
+            row["stateful_risk"] = {
+                "position_state": "held",
+                "position": {"ts_code": row["ts_code"], "shares": 10_000, "avg_cost": 2.7,
+                             "entry_date": "20260601", "stop_loss": 2.5},
+            }
+        not_published = build_weekly_report(rows, AS_OF, GEN, portfolio_fact_overrides={},
+                                            portfolio_fact_fetch_status="not_published")
+        self.assertEqual(not_published["portfolio_risk"]["fact_fetch"],
+                         {"status": "not_published", "as_of": AS_OF})
+        unavailable = build_weekly_report(
+            rows, AS_OF, GEN,
+            portfolio_fact_overrides={row["ts_code"]: {"ts_code": row["ts_code"], "as_of": AS_OF,
+                                                          "fetch_status": "unavailable"}
+                                       for row in rows},
+            portfolio_fact_fetch_status="unavailable")
+        self.assertEqual(unavailable["portfolio_risk"]["fact_fetch"],
+                         {"status": "unavailable", "as_of": AS_OF})
+        self.assertEqual(unavailable["portfolio_risk"]["status"], "manual_review_required")
+
+    def test_main_converts_provider_unavailable_result_to_fail_closed_facts(self):
+        with tempfile.TemporaryDirectory() as td:
+            self._write_inputs(td, ai=_analysis_input(candidates=[_ai_candidate("600000.SH")]))
+            out = Path(td) / "weekly.json"
+            main(["--as-of", AS_OF, "--analysis-input", str(Path(td) / "ai.json"),
+                  "--iv-feed", str(Path(td) / "feed.json"), "--out", str(out)],
+                 price_provider=lambda _code: _series(),
+                 portfolio_risk_provider=lambda _codes, _as_of: ({}, "unavailable"))
+            weekly = json.loads(out.read_text(encoding="utf-8"))
+        self.assertEqual(weekly["portfolio_risk"]["fact_fetch"],
+                         {"status": "unavailable", "as_of": AS_OF})
+        self.assertEqual(weekly["portfolio_risk"]["fact_sources"], [
+            {"source": "portfolio_risk_provider_unavailable", "as_of": AS_OF}
+        ])
+
     def test_mixed_price_latest_dates_abort_no_file(self):
         # candidates with differing latest price-bar dates (uneven endpoint) → fail-closed, no file.
         def _prov(code):
@@ -2415,7 +2498,6 @@ class CashAllocationTests(unittest.TestCase):
                 "source": "cash_allocation_fixture",
                 "sw_l2_key": sw_l2_key,
                 "circ_mv_rmb": 10_000_000_000.0,
-                "northbound_holding_ratio_pct": 1.0,
                 "margin_balance_to_float_mv_pct": 1.0,
                 "is_large_index_component": False,
             }

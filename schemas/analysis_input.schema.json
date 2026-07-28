@@ -2474,7 +2474,6 @@
         "factor": {
           "type": "string",
           "enum": [
-            "northbound_holding_ratio",
             "margin_balance_to_float_mv",
             "index_component",
             "small_float_mv",
