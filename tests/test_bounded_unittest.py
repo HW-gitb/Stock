@@ -31,6 +31,30 @@ class BoundedUnittestTests(unittest.TestCase):
         self.assertEqual(result.exit_code, 0)
         self.assertEqual(result.tests, 1)
 
+    def test_a_share_provider_dependencies_do_not_poison_us_short_full_gate(self):
+        with (
+            patch.object(
+                bounded,
+                "find_spec",
+                side_effect=lambda name: None if name in {"akshare", "tushare"} else object(),
+            ),
+        ):
+            a_short_error = bounded.external_test_dependency_error("a_short")
+            us_short_error = bounded.external_test_dependency_error("us_short")
+        self.assertIn("akshare", a_short_error)
+        self.assertIn("tushare", a_short_error)
+        self.assertIsNone(us_short_error)
+
+    def test_us_short_focused_runner_does_not_check_full_pack_dependencies(self):
+        passed = bounded.Result("PASS", 0, 1, 0.1, "Ran 1 test in 0.1s\n\nOK\n")
+        with (
+            patch.object(bounded, "find_spec", return_value=None),
+            patch.object(bounded, "run_command", return_value=passed) as runner,
+        ):
+            result = bounded.run_unittest(["discover", "-s", "tests", "-p", "test_us_short*.py"], 10)
+        self.assertEqual(result, passed)
+        runner.assert_called_once()
+
     def test_zero_exit_without_unittest_summary_is_unknown(self):
         result = bounded.run_command([sys.executable, "-c", "print('not a test result')"], 10)
         self.assertEqual(result.status, "UNKNOWN")

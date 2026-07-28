@@ -127,6 +127,60 @@ class FullPackLedgerTests(unittest.TestCase):
             self.assertIsNotNone(hit)
             self.assertEqual(hit["count"], "3 OK")
 
+    def test_a_share_provider_dependency_blocks_only_a_short_full_pack(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            ledger = Path(tmp) / "ledger.json"
+            state = {"engine/x.py": "aaa", "@HEAD": "h1"}
+            fpl.prepare("a_short", "shared schema", "focused=12 OK", state=state, ledger=ledger)
+            fpl.record("a_short", "3 OK", state=state, ledger=ledger)
+            passed = Result("PASS", 0, 3, 0.2, "Ran 3 tests in 0.1s\n\nOK\n")
+            with patch.object(
+                fpl,
+                "external_test_dependency_error",
+                side_effect=lambda lane: "required external test modules unavailable: akshare, tushare"
+                if lane == "a_short" else None,
+            ), patch.object(fpl, "run_unittest", return_value=passed) as runner:
+                output = StringIO()
+                with redirect_stdout(output):
+                    self.assertEqual(
+                        fpl.run_full_pack(
+                            "a_short", "shared schema", "focused=12 OK", 30,
+                            ["discover", "-s", "tests", "-p", "test_a_short*.py"],
+                            state=state, ledger=ledger,
+                        ),
+                        fpl.DEPENDENCY_EXIT,
+                    )
+                    self.assertEqual(fpl._check("a_short", state=state, ledger=ledger), 1)
+                    self.assertEqual(
+                        fpl.run_full_pack(
+                            "us_short", "shared schema", "focused=12 OK", 30,
+                            ["discover", "-s", "tests", "-p", "test_us_short*.py"],
+                            state=state, ledger=ledger,
+                        ),
+                        0,
+                    )
+            self.assertIn("akshare", output.getvalue())
+            runner.assert_called_once()
+            self.assertIsNotNone(fpl.cached_green("a_short", state=state, ledger=ledger))
+
+    def test_common_dependency_blocks_both_full_pack_lanes(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            ledger = Path(tmp) / "ledger.json"
+            state = {"engine/x.py": "aaa", "@HEAD": "h1"}
+            with patch.object(
+                fpl,
+                "external_test_dependency_error",
+                return_value="required external test modules unavailable: jsonschema",
+            ), patch.object(fpl, "run_unittest") as runner:
+                for lane, args in fpl.FULL_PACK_DISCOVERY_ARGS.items():
+                    with self.subTest(lane=lane):
+                        self.assertEqual(
+                            fpl.run_full_pack(lane, "shared schema", "focused=12 OK", 30, list(args),
+                                              state=state, ledger=ledger),
+                            fpl.DEPENDENCY_EXIT,
+                        )
+            runner.assert_not_called()
+
     def test_single_run_rejects_subset_and_unknown_lane(self):
         state = {"engine/x.py": "aaa", "@HEAD": "h1"}
         with tempfile.TemporaryDirectory() as tmp:
@@ -202,7 +256,8 @@ class FullPackLedgerTests(unittest.TestCase):
                 self.assertEqual(
                     fpl.run_full_pack(
                         "a_short", "production entrypoint", "focused=9 OK", 30,
-                        ["tests.test_x"], state=state, ledger=ledger,
+                        ["discover", "-s", "tests", "-p", "test_a_short*.py"],
+                        state=state, ledger=ledger,
                     ),
                     0,
                 )

@@ -28,7 +28,7 @@ import sys
 import time
 from pathlib import Path
 
-from bounded_unittest import FULL_MAX_SECONDS, run_unittest
+from bounded_unittest import DEPENDENCY_EXIT, FULL_MAX_SECONDS, external_test_dependency_error, run_unittest
 
 ROOT = Path(__file__).resolve().parent.parent
 DEFAULT_LEDGER = ROOT / ".tools" / "state" / "full_pack_ledger.json"
@@ -146,6 +146,11 @@ def run_full_pack(
         raise ValueError(
             f"{lane} full-pack must exactly use unittest args {list(required_args)!r}"
         )
+    dependency_error = external_test_dependency_error(lane)
+    if dependency_error:
+        print(f"[full-pack-ledger] RESULT status=FAIL exit={DEPENDENCY_EXIT} tests=UNKNOWN "
+              f"elapsed=0.0s deadline={timeout_seconds}s\n[full-pack-ledger] {dependency_error}")
+        return DEPENDENCY_EXIT
     current_state = state if state is not None else collect_code_state()
     hit = cached_green(lane, state=current_state, ledger=ledger)
     if hit is not None:
@@ -191,6 +196,10 @@ def cached_green(lane: str, *, state: dict[str, str] | None = None, ledger: Path
 
 def _check(lane: str, *, state: dict[str, str] | None = None,
            ledger: Path = DEFAULT_LEDGER) -> int:
+    dependency_error = external_test_dependency_error(lane)
+    if dependency_error:
+        print(f"[full-pack-ledger] environment incomplete — cached green unavailable: {dependency_error}")
+        return 1
     current_state = state if state is not None else collect_code_state()
     prepared = prepared_review(lane, state=current_state, ledger=ledger)
     record_for_lane = _load(ledger).get(lane)

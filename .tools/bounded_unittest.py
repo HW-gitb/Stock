@@ -8,6 +8,7 @@ import signal
 import subprocess
 import sys
 import time
+from importlib.util import find_spec
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -19,6 +20,15 @@ FOCUSED_DEFAULT_SECONDS = 300
 FOCUSED_MAX_SECONDS = FULL_MAX_SECONDS
 TIMEOUT_EXIT = 124
 INVALID_EVIDENCE_EXIT = 125
+DEPENDENCY_EXIT = 126
+REQUIRED_TEST_MODULES_BY_LANE = {
+    "a_short": (
+        "akshare", "jsonschema", "numpy", "openpyxl", "pandas", "requests", "tqdm", "tushare",
+    ),
+    "us_short": (
+        "jsonschema", "numpy", "openpyxl", "pandas", "requests", "tqdm",
+    ),
+}
 _RAN_TESTS = re.compile(r"\bRan\s+(\d+)\s+tests?\s+in\b")
 
 
@@ -29,6 +39,18 @@ class Result:
     tests: int | None
     elapsed_seconds: float
     output: str
+
+
+def external_test_dependency_error(lane: str) -> str | None:
+    """Return missing dependencies required by one lane's full-pack entry."""
+    try:
+        required_modules = REQUIRED_TEST_MODULES_BY_LANE[lane]
+    except KeyError as exc:
+        raise ValueError(f"unknown lane for external test dependencies: {lane}") from exc
+    missing = [name for name in required_modules if find_spec(name) is None]
+    if not missing:
+        return None
+    return "required external test modules unavailable: " + ", ".join(missing)
 
 
 def _stop_owned_tree(process: subprocess.Popen[str]) -> None:

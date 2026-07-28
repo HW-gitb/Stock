@@ -1,5 +1,20 @@
 # Session Log
 
+## 2026-07-28 - Claude Code 复审 PASS (全量依赖前置检查按 lane 分流已闭)
+
+- **Verdict/Action**: PASS，提交并合入 master。清单改为按 lane 的 `REQUIRED_TEST_MODULES_BY_LANE`，检查点从 `run_unittest` 收回到 `run_full_pack` / `_check`，未知 lane 抛 `ValueError`。上一轮那条「A 股专属依赖会把 us_short 判红」的 Required 已闭。
+- **Required**: 无。逐条判据与探针结果落 `docs/system_risk_register.md`（单一来源）。
+- **Verify**: review-evidence:b18fbcc4498f。整读两处被改函数体。复现上一轮确切探针：仅缺 `akshare`/`tushare` → a_short 报缺、**us_short 得 `None`**、us_short focused 运行真的进入 `run_command`；缺共用 `jsonschema` → 两条 lane 均红；未知 lane 抛 `ValueError`；`run_unittest` 源码已无依赖门。植入控制：把 us_short 集合改回 a_short 的（退回全局清单）→ 具名测试 `test_a_share_provider_dependencies_do_not_poison_us_short_full_gate` 转红，基线与恢复均 0 红。变更符号包 `Ran 29 tests`，无 FAIL/ERROR。
+- **Next**: 合入 master
+
+## 2026-07-28 - Codex 修复 R-GOV-FULL-PACK-DOES-NOT-VERIFY-ITS-EXTERNAL-TEST-DEPENDENCIES（lane-scoped full-only）
+
+- **Verdict/Action**: 已按 Claude Code Required 修法修复，未提交：依赖集合按 lane 分流，检查只留在 full-pack ledger 的 `run`/`check`，focused runner 不再被 A-share provider 缺失误杀。
+- **Required**: `R-GOV-FULL-PACK-DOES-NOT-VERIFY-ITS-EXTERNAL-TEST-DEPENDENCIES` 待 Claude Code 独立复核；闭合细节只见 `docs/system_risk_register.md`。
+- **Verify**: 固定 Python `tests.test_bounded_unittest + tests.test_full_pack_ledger + tests.test_doc_governance_guard` = `68 OK`；两 lane 声明模块均可发现；四个改动文件 `py_compile` 与 `git diff --check` 通过（仅 CRLF warning）。具名控制覆盖 A 专属缺失不毒化 us_short full/focused、共同 `jsonschema` 缺失双 lane full 均红；非落盘地将 A provider 临时混入 us_short 集合后，`test_a_share_provider_dependencies_do_not_poison_us_short_full_gate` 实际转红，恢复后全包仍绿。
+- **Pre-Codex self-review**: A=按 `a_short`/`us_short` 枚举外部模块并把 provider 仅放 A；B=仅 ledger full `run`/`check` 调 helper，cache/prepare/spawn 前均 fail-closed；C=三项闭合判据各有具名测试；E=register 与既有 shared-flow handoff 已更新；F=tooling only。`matrix=complete; register=updated; handoff=updated; focused=68 OK; full-lane=not_triggered: AGENTS rule 3; reason=shared test-tool dependency guard`。
+- **Next**: Claude Code：审查。
+
 ## 2026-07-28 - 分支清理收尾：删除 full-test-reliability，其唯一残余价值转 Optional
 
 - **Verdict/Action**: 经用户确认删除 `codex/full-test-reliability`，复原点 `2c334829357707e56f033a3d707af0aca27d6553`。删除依据是用户告知 a-short / us-short 全量提速已完成且明确不需要分批 —— 该分支的两项核心能力（分批跑、慢批次不判红）因此失去动因。其唯一未被 master 覆盖的能力（全量入口不校验外部依赖）已单独立为 Optional。
@@ -80,6 +95,21 @@
 - **Verify**: `cmd /c .tools\run_unittest_with_repo_pythonpath.cmd` focused pack = 132 OK; pinned `bounded_unittest.py` conformance + permanent guard = 42 OK; pinned `bounded_unittest.py ... discover -s tests -p '*us_short*'` = 4,957 OK; pinned `-m py_compile` = exit 0; launcher route-doc guards = 25 OK; no network, real key, or state/us_short residue.
 - **Pre-Codex self-review**: Retrospective disclosure: this handoff omitted the required pre-handoff A-F proof; only final test evidence was recorded. The strengthened governance guard now rejects future implementation/repair/fix headers lacking this labelled line.
 - **Next**: Claude Code: review.
+## 2026-07-28 - Claude Code 审查 FAIL (全量依赖前置检查：机制对，适用范围反了)
+
+- **Verdict/Action**: FAIL，一条 Required，未提交。fail-closed 部分做得对：缺依赖时不 spawn unittest、不记账、`cached_green` 亦拒绝复用，退出码 126 与 TIMEOUT 的 124 分列。但清单是全局的、检查点放在每一次 bounded 运行，导致 A 股专属依赖缺失会把 us_short 判红。
+- **Required**: 一条，落 `docs/system_risk_register.md` 的 `R-GOV-FULL-PACK-DOES-NOT-VERIFY-ITS-EXTERNAL-TEST-DEPENDENCIES`（单一来源，本处不复述）。
+- **Verify**: review-evidence:c4a8b25e1c4d。整读两处被改函数体。变更符号包 `Ran 27 tests`、无 FAIL/ERROR（bounded runner 的 RESULT 行未落在输出 tail，故只引用该行）。反向控制探针：仅令 `akshare`/`tushare` 缺失 → `external_test_dependency_error()` 报这两个，一个 us_short focused 运行得 `FAIL exit=126` 且 `run_command` 未被调用。静态核对：`REQUIRED_TEST_MODULES` 为单一元组、该函数签名无 `lane` 参数、新增两个测试均只用 `a_short`。**公平说明**：本树基线 `df86779e` 早于 master `f5077d48`（「清单须按 lane 分」是在那笔才写入条目），执行方很可能未见该要求。
+- **Next**: Codex：按 lane 分流依赖集合、检查点收回全量入口，并补 us_short 不被 A 股依赖判红的具名测试
+
+## 2026-07-28 — Codex 修复（R-GOV-FULL-PACK-DOES-NOT-VERIFY-ITS-EXTERNAL-TEST-DEPENDENCIES）
+
+- **Verdict/Action**: Optional 已实现：full-pack 与 focused runner 均在 unittest 前检查同一组外部模块；缺失时显式失败，cache 也不可引用。
+- **Required**: 无；Optional `R-GOV-FULL-PACK-DOES-NOT-VERIFY-ITS-EXTERNAL-TEST-DEPENDENCIES` 实现详情与审查状态见 `docs/system_risk_register.md`。
+- **Verify**: bounded/ledger/doc-governance = `64 OK`；真实模块导入 OK；`git diff --check` clean（仅 CRLF warning）。
+- **Pre-Codex self-review**: A-F checked — matrix=Optional only; B=两入口及缓存路径全覆盖；C=缺模块不 spawn/不复用 cache；E=register+existing handoff updated; matrix=complete; register=updated; handoff=updated; focused=64 OK tooling package; full-lane=not_triggered: AGENTS rule 3; reason=test-tooling guard only; self-review=main-thread checklist.
+- **Next**: Claude Code：审查。
+
 ## 2026-07-28 — Claude Code 审查 PASS（repair-closeout 共用流程 / 分系统验证边界：docs + guard 锚点）
 
 - **Verdict/Action**: PASS。§0.11 把上一刀那条五字段机器门澄清成「`matrix`/`register`/`handoff` 共用，`focused`/`full-lane` 按 lane 记实际触及的系统」，并规定未触发 AGENTS rule 3 时写 `not_triggered: AGENTS rule 3; reason=<变更面>`。这不是把门放松到 rule 3 以下 —— 它只是不让「字段必填」被误读成「每次修复都欠一次全量」，同时把「不跑」的决定变成可审计的一行。guard 侧只往既有锚点表加三条 pin 字符串，防止该节被静默删掉。
