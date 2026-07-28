@@ -43,6 +43,22 @@ class XFetchSchemaTests(unittest.TestCase):
         with self.assertRaises(xfetch.XThemeDiscoveryError):
             xfetch._validate_schema(receipt)
 
+    def test_grok_model_identity_is_required_and_pins_requested_alias(self):
+        _, receipt, _ = xfetch.build_x_fetch_packet(
+            queries=["power"], results=[], grok_response='{"themes":[]}',
+            expected_decision_date="20260725", generated_at="2026-07-25T08:00:00Z",
+        )
+        receipt["fetch_contract"].pop("grok_model")
+        with self.assertRaises(xfetch.XThemeDiscoveryError):
+            xfetch._validate_schema(receipt)
+
+        receipt["fetch_contract"]["grok_model"] = xfetch._grok_model_identity(
+            served_model="grok-4.5",
+        )
+        receipt["fetch_contract"]["grok_model"]["requested_model"] = "grok-moving-alias"
+        with self.assertRaises(xfetch.XThemeDiscoveryError):
+            xfetch._validate_schema(receipt)
+
     def test_receipt_schema_guard_is_not_optional(self):
         with mock.patch.object(xfetch, "_validate_schema", side_effect=xfetch.XThemeDiscoveryError("forced schema failure")):
             with self.assertRaises(xfetch.XThemeDiscoveryError):

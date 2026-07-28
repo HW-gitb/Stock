@@ -5,6 +5,7 @@ import json
 import tempfile
 import unittest
 from pathlib import Path
+from types import SimpleNamespace
 from unittest import mock
 
 from runners import us_short_llm_theme_discovery_fetch_x as xfetch
@@ -132,6 +133,40 @@ class XFetchAndMergeTests(unittest.TestCase):
                 expected_decision_date="20260725", generated_at="2026-07-25T08:00:00Z",
                 execution_mode="live_authorized",
             )
+
+    def test_live_x_model_identity_rejections_drop_only_the_affected_query(self):
+        """K3-R70: model identity is untrusted per-query input, never a batch-level failure."""
+        class Client:
+            def __init__(self):
+                self.replies = iter((
+                    {"text": self_response, "results": X_ROWS, "model_identity": {"served_model": "grok-4.5", "system_fingerprint": "fp-first"}},
+                    {"text": self_response, "results": X_ROWS, "model_identity": {"served_model": None}},
+                    {"text": self_response, "results": X_ROWS, "model_identity": {"served_model": "grok-4.3"}},
+                    {"text": self_response, "results": X_ROWS, "model_identity": {"served_model": "grok-4.5", "system_fingerprint": "fp-last"}},
+                ))
+
+            def search(self, query, expected):
+                return next(self.replies)
+
+        self_response = self._x_response()
+        outcome = xfetch.execute_live_x_orchestration(
+            queries=["good-first", "missing", "changed", "good-last"],
+            expected_decision_date="20260725", client=Client(),
+        )
+
+        self.assertEqual(len(outcome["results"]), 2 * len(X_ROWS), "sibling queries survive identity drops")
+        self.assertEqual(
+            [row for row in outcome["query_drops"] if row["reason"] in {"served_model_missing", "served_model_changed"}],
+            [
+                {"stage": "llm", "reason": "served_model_missing", "detail": "missing"},
+                {"stage": "llm", "reason": "served_model_changed", "detail": "changed"},
+            ],
+        )
+        self.assertEqual(outcome["grok_model_identity"], {
+            "requested_model": xfetch.GROK_MODEL,
+            "served_model": "grok-4.5",
+            "system_fingerprints": ["fp-first", "fp-last"],
+        })
 
     def test_live_x_entrypoint_still_freezes_before_the_orchestration_runs(self):
         with mock.patch.object(xfetch, "execute_live_x_orchestration") as orchestration:
@@ -624,6 +659,151 @@ class XFetchAndMergeTests(unittest.TestCase):
             provider_annotation_urls=[url],
         )
         self.assertEqual(accepted["source_refs"][0]["evidence_attestation"], "model_transcribed")
+
+    def test_captured_grok_response_shape_routes_only_annotation_backed_transcript(self):
+        """Unfreeze step ②: pin the captured Grok shape, not a guessed result-row API."""
+        url = "https://x.com/example/status/1"
+        transcript = json.dumps({
+            "sources": [{
+                "url": url, "title": "Power", "text": "CEG demand rises",
+                "created_at": "2026-07-24T10:00:00Z",
+            }],
+            "themes": [{
+                "theme_id": "power_demand", "display_name": "Power", "summary": "Power",
+                "observed_at": "2026-07-24T12:00:00Z", "source_urls": [url],
+                "members": [{"ticker": "CEG", "source_urls": [url]}],
+            }],
+        })
+        response = SimpleNamespace(
+            output_text=transcript,
+            results=None,
+            citations=None,
+            output=[SimpleNamespace(content=[SimpleNamespace(annotations=[
+                SimpleNamespace(type="url_citation", url=url, title=url, start_index=0, end_index=1),
+            ])])],
+        )
+
+        self.assertEqual(xfetch._response_text(response), transcript)
+        self.assertEqual(xfetch._provider_result_rows(response), [])
+        annotation_urls = xfetch._provider_annotation_urls(response)
+        self.assertEqual(annotation_urls, [url])
+
+        discovery, receipt, _ = xfetch.build_x_fetch_packet(
+            queries=["power"], results=[], grok_response=xfetch._response_text(response),
+            expected_decision_date="20260725", generated_at="2026-07-25T08:00:00Z",
+            provider_annotation_urls=annotation_urls,
+        )
+        self.assertEqual(receipt["source_refs"][0]["evidence_attestation"], "model_transcribed")
+        self.assertEqual(discovery["themes"][0]["members"][0]["ticker"], "CEG")
+
+        _, unbacked_receipt, _ = xfetch.build_x_fetch_packet(
+            queries=["power"], results=[], grok_response=xfetch._response_text(response),
+            expected_decision_date="20260725", generated_at="2026-07-25T08:00:00Z",
+            provider_annotation_urls=[],
+        )
+        self.assertEqual(unbacked_receipt["source_refs"], [])
+        self.assertIn(
+            "model_source_url_not_provider_annotated",
+            {row["reason"] for row in unbacked_receipt["drop_ledger"]},
+        )
+
+        class OrchestrationClient:
+            def search(self, query, expected):
+                return {"text": transcript, "results": [], "annotation_urls": [url]}
+
+        outcome = xfetch.execute_live_x_orchestration(
+            queries=["power"], expected_decision_date="20260725", client=OrchestrationClient(),
+        )
+        discovery, receipt, _ = xfetch.build_x_fetch_packet(
+            queries=["power"], results=outcome["results"], grok_response=outcome["grok_response"],
+            expected_decision_date="20260725", generated_at="2026-07-25T08:00:00Z",
+            provider_annotation_urls=outcome["annotation_urls"],
+        )
+        self.assertEqual(receipt["source_refs"][0]["evidence_attestation"], "model_transcribed")
+        self.assertEqual(discovery["themes"][0]["members"][0]["ticker"], "CEG")
+
+    def test_x_model_transcript_enforces_decision_week_window(self):
+        """K3-R68: annotation-backed transcription still needs the sibling lane's week floor."""
+        url = "https://x.example/ceg-post"
+
+        def packet(created_at):
+            response = json.dumps({
+                "sources": [{"url": url, "title": "CEG", "text": "CEG demand rises", "created_at": created_at}],
+                "themes": [{"theme_id": "power_demand", "display_name": "Power", "summary": "Power", "observed_at": created_at, "source_urls": [url], "members": [{"ticker": "CEG", "source_urls": [url]}]}],
+            })
+            return xfetch.build_x_fetch_packet(
+                queries=["power"], results=[], grok_response=response,
+                expected_decision_date="20260727", generated_at="2026-07-27T12:00:00Z",
+                provider_annotation_urls=[url],
+            )
+
+        _, stale, _ = packet("2026-03-02T13:22:06Z")
+        self.assertEqual(stale["summary"]["accepted_source_count"], 0)
+        self.assertIn("published_at_outside_decision_week", {row["reason"] for row in stale["drop_ledger"]})
+        for created_at in ("2026-07-24T13:22:06Z", "2026-07-26T12:00:00Z"):
+            with self.subTest(created_at=created_at):
+                _, accepted, _ = packet(created_at)
+                self.assertEqual(accepted["summary"]["accepted_source_count"], 1)
+
+        with mock.patch.object(web, "_decision_week_start", return_value=xfetch._parse_dt("2000-01-01T00:00:00Z", "week_start")):
+            _, without_floor, _ = packet("2026-03-02T13:22:06Z")
+        self.assertEqual(without_floor["summary"]["accepted_source_count"], 1)
+
+    def test_x_live_receipt_binds_grok_requested_and_served_model(self):
+        """K3-R69: model aliases are not replayable evidence without provider-served identity."""
+        identity = xfetch._grok_model_identity(
+            served_model="grok-4.5", system_fingerprints=["fp-b", "fp-a", "fp-a"],
+        )
+        transport = web._new_live_transport("xai")
+        transport._record_completed_response("xai")
+        _, receipt, _ = xfetch.build_x_fetch_packet(
+            queries=["power"], results=X_ROWS, grok_response=self._x_response(),
+            expected_decision_date="20260725", generated_at="2026-07-25T08:00:00Z",
+            execution_mode="live_authorized", _live_transport=transport,
+            grok_model_identity=identity, grok_attempted=True,
+        )
+        self.assertEqual(receipt["fetch_contract"]["grok_model"], {
+            "requested_model": xfetch.GROK_MODEL,
+            "served_model": "grok-4.5",
+            "system_fingerprints": ["fp-a", "fp-b"],
+        })
+
+        missing_identity_transport = web._new_live_transport("xai")
+        missing_identity_transport._record_completed_response("xai")
+        with self.assertRaisesRegex(xfetch.XThemeDiscoveryError, "requested and served model identity"):
+            xfetch.build_x_fetch_packet(
+                queries=["power"], results=X_ROWS, grok_response=self._x_response(),
+                expected_decision_date="20260725", generated_at="2026-07-25T08:00:00Z",
+                execution_mode="live_authorized", _live_transport=missing_identity_transport,
+                grok_attempted=True,
+            )
+
+    def test_x_orchestration_carries_provider_model_identity_into_live_receipt(self):
+        class Client:
+            def search(self, query, expected):
+                return {
+                    "text": self_response, "results": X_ROWS, "annotation_urls": [],
+                    "model_identity": {"served_model": "grok-4.5", "system_fingerprint": "fp-live"},
+                }
+
+        self_response = self._x_response()
+        outcome = xfetch.execute_live_x_orchestration(
+            queries=["power"], expected_decision_date="20260725", client=Client(),
+        )
+        transport = web._new_live_transport("xai")
+        transport._record_completed_response("xai")
+        _, receipt, _ = xfetch.build_x_fetch_packet(
+            queries=["power"], results=outcome["results"], grok_response=outcome["grok_response"],
+            expected_decision_date="20260725", generated_at="2026-07-25T08:00:00Z",
+            execution_mode="live_authorized", _live_transport=transport,
+            grok_model_identity=outcome["grok_model_identity"],
+            grok_attempted=outcome["grok_attempted"], grok_failed=outcome["grok_failed"],
+        )
+        self.assertEqual(receipt["fetch_contract"]["grok_model"], {
+            "requested_model": xfetch.GROK_MODEL,
+            "served_model": "grok-4.5",
+            "system_fingerprints": ["fp-live"],
+        })
 
     def test_raw_ticker_match_requires_uppercase_bare_form_or_explicit_cashtag(self):
         prose = {"source_type": "web", "title": "", "content": "The market had a mixed session. It closed on a soft note, so all eyes are on Friday."}

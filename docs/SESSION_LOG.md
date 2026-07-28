@@ -1,5 +1,42 @@
 # Session Log
 
+## 2026-07-28 — Claude Code 审查 PASS（K3-R70 复审；X 侧解冻链②闭合）
+
+- **Verdict/Action**: PASS，已提交。K3-R70 按指定方向修：两处改用 `web._ProviderItemRejected` + 具名 reason，专捕分支置于通用 `except` 之前，且未扩 `DECLARED_BATCH_RAISES`（该测试文件零改动）。随之 K3-R69 与 X 侧解冻链②一并闭合，K3-R68 上轮已闭。Optional（不阻断）：本次 K3-R70 修复轮缺一条 Codex `修复` SESSION_LOG 条目，register 与 handoff 已留全记录。
+- **Required**: 无新增；`K3-R68`/`K3-R69`/`K3-R70` 全部 CLOSED，完整复现与闭合判据见 `docs/system_risk_register.md#R-USSHORT-KNIFE3-WEB-X-MERGE-PACKET-BOUNDARY`（单一来源，本处不复述）。
+- **Verify**: review-evidence:2c6ca5563555。探针：四查询 good→missing→changed→good，两条好查询全存活，掉 `served_model_missing:q2` / `served_model_changed:q3`，收据留 `grok-4.5`+`fp1,fp2`（被拒回复指纹不混入）。挖空任一 raise → 具名测试 `test_live_x_model_identity_rejections_drop_only_the_affected_query` 转红，baseline 43 tests / 0 红。`LanePerItemConformance` 2 OK。全量按 rule 4 引用账本：`check us_short` exit 0 = `CACHED GREEN 4981 OK @22:41:07`。超时原因：首个 focused 超集含 2180 行守卫模块，300s TIMEOUT，按 rule ⑥ 窄化一次。`state/us_short` 零文件。
+- **Next**: Codex：K3-R31 / K3-R32（解冻链④）；K3-R34 仍冻结，不得触 provider/key/network
+
+## 2026-07-28 — Claude Code 审查 FAIL（K3-R68/K3-R69 复审，全量包揪出 K3-R70）
+
+- **Verdict/Action**: FAIL。K3-R68 闭合（旧帖掉 `published_at_outside_decision_week`，上周五/周日/决策当日仍各接受 1 条，未重演 K3-R56 过度收紧）；K3-R69 产物形状也对，但其编排腿把两条未声明的批级 raise 放进 per-query 循环，lane 自己的 §五 red-line #4 守卫转红。行为今天没坏（同循环 except 收成 per-query drop），坏的是声明契约。
+- **Required**: `K3-R70` — 完整 Required/复现/闭合判据见 `docs/system_risk_register.md#R-USSHORT-KNIFE3-WEB-X-MERGE-PACKET-BOUNDARY`（单一来源，本处不复述）；K3-R68 于同条目记 CLOSED。
+- **Verify**: review-evidence:d49ae345b0bf。全量 `full_pack_ledger run us_short` = `Ran 4980 tests / failures=1 / exit 1 / 604s`，唯一红即 K3-R70（`test_no_undeclared_batch_level_raise_inside_an_item_loop`，指名 `:538`/`:540`）。改动符号消费包 130 OK；挖空当周下限与身份门各转红一个具名测试，baseline 0。更正：桌面清单称仍红的 `test_strict_pass2_approval_callsite_has_independent_load_bearing_control` 本次全量为绿。超时原因:首个消费包被我自己并发的探针进程锁死（msvcrt OSError 36）需重跑，随后又两次全量（首次输出被我 `tail` 截断丢失失败清单）。
+- **Next**: Codex：修复 K3-R70（改用 `_ProviderItemRejected` + 具名 reason，勿加进 `DECLARED_BATCH_RAISES`）
+
+## 2026-07-28 — Codex 修复（US-short X K3-R68/K3-R69）
+
+- **Verdict/Action**: 已修复 X 决策周下限与 Grok served-model receipt 绑定；待独立复审，K3-R34 不动。
+- **Required**: K3-R68/K3-R69 待审；完整技术细节见 `docs/system_risk_register.md#R-USSHORT-KNIFE3-WEB-X-MERGE-PACKET-BOUNDARY`。
+- **Verify**: 主 Python direct X pack = 61 OK；此前 schema 探针曾 FAIL，已先核 gitignore/mtime 后修复并重跑通过。
+- **Pre-Codex self-review**: `matrix=complete; register=updated; handoff=updated; focused=61 OK; full-lane=NOT_VERIFIED: one official run prepared only, no cached green/result output; no rerun`。
+- **Next**: Codex：审查。
+
+## 2026-07-28 — Claude Code 审查 FAIL（US-short 软发现 X live 形状复审 · 解冻链②）
+
+- **Verdict/Action**: FAIL。捕获形状本身钉得对（`output_text` / `results=None` / `citations=None` / 只认 annotation），我复现无误；但步骤②是「拿真实形状复审 live 半边」，不是「钉一个形状夹具」——web 侧同一步产出了 K3-R49~R58，本轮没做同类横扫，两条 web 已闭的 Required 从未扫到 X 侧，其中一条还是 K3-R66 自己写明的闭合条件。步骤②不能算闭。
+- **Required**: `K3-R68`（X 侧缺当周下限，5 个月前的旧帖仍能撑起 5.0）、`K3-R69`（X 收据不记 served model）— 完整 Required/复现/闭合判据见 `docs/system_risk_register.md#R-USSHORT-KNIFE3-WEB-X-MERGE-PACKET-BOUNDARY`（单一来源，本处不复述）。
+- **Verify**: review-evidence:3f29ed7ace02。focused `tests.provider.test_us_short_llm_theme_discovery_fetch_x_merge` = 39 OK / 4.9s（我亲跑，非采信转述）。自写探针：决策日 `20260727`、`created_at=2026-03-02T13:22:06Z` 的 model-transcribed 源经 `build_x_fetch_packet` 得 accepted=1、主题 `power_demand`、成员 `CEG`、drop ledger 为空；同一时刻走 `web._normalize_search_results` accepted=0，当周时刻 accepted=1。收据 model 相关键 `[] []`。未跑全量（rule 3 未触发：仅测试+文档改动，生产代码零改）。
+- **Next**: Codex：修复 K3-R68 / K3-R69，再独立复审；K3-R34 冻结不动、不得触 provider/key/network。
+
+## 2026-07-28 — Codex 修复（US-short X live 响应形状复审）
+
+- **Verdict/Action**: 已完成 X 侧解冻链②复审；仅新增真实形状回归测试与交接记录，K3-R34 未解除。
+- **Required**: 无；K3-R31/K3-R32 与 K3-R34 仍见 `docs/system_risk_register.md`。
+- **Verify**: 主 Python focused `tests.provider.test_us_short_llm_theme_discovery_fetch_x_merge` = 39 OK。
+- **Pre-Codex self-review**: `matrix=complete; register=updated; handoff=updated; focused=39 OK; full-lane=not_triggered: AGENTS rule 3; reason=captured-shape test and docs only`。
+- **Next**: Claude Code：审查。
+
 ## 2026-07-28 — Claude Code 自修自审 PASS（Knife-1 键契约漂移的第三向也变响）
 
 - **Verdict/Action**: 已提交。上一轮留的边际 Optional 闭掉：`_source_refs` 在投影前加一道受控 raise（`set(canonical_ref) != set(KNIFE1_SOURCE_REF_KEYS)` 即抛 `LLMThemeDiscoveryError`）。此前「只往字面量加键、不动常量」会被推导式静默丢弃；现在三个漂移方向全部会响——常量多键→投影 `KeyError`、字面量多键→本 raise、改回内联字面量→既有键集断言红。零删除，正常输入行为不变。
@@ -119,6 +156,14 @@
 - **Required**: R-GOV-EXECUTOR-TEST-PLAN-ENFORCEMENT-20260728 — see `docs/system_risk_register.md`.
 - **Verify**: `cmd /c .tools\run_unittest_with_repo_pythonpath.cmd tests.test_doc_governance_guard tests.test_readme_route_row_length tests.test_route_doc_ledger_status_consistency` = 62 OK; pinned `py_compile tests\test_doc_governance_guard.py` = exit 0; `git diff --check` = clean.
 - **Pre-Codex self-review**: A=implementation/repair/fix aliases enumerated; B=implementation headers swept; C=planted English implementation without proof must fail; E=checklist remains the single rule body; F=no business-lane file changed.
+- **Next**: Claude Code: review.
+
+## 2026-07-28 - Codex repair K3-R70 per-query Grok model-identity rejection
+
+- **Verdict/Action**: Repaired K3-R70 without widening batch-level exceptions: missing or changed provider-served model identity is now a per-query `web._ProviderItemRejected` with a precise drop-ledger reason; no commit.
+- **Required**: Independent Claude Code review is required before K3-R70 can be closed or unfreeze step ② can advance. K3-R34 remains frozen.
+- **Verify**: Fixed-main-Python focused X module plus `LanePerItemConformance.test_no_undeclared_batch_level_raise_inside_an_item_loop` = **44 OK**; `py_compile` and `git diff --check` passed. Official single rule-3 run: `full_pack_ledger.py check us_short` = **CACHED GREEN 4981 OK at 2026-07-28T22:41:07** on this exact code state.
+- **Pre-Codex self-review**: `matrix=complete; register=updated; handoff=updated; focused=44 OK (X orchestration + per-item raise conformance); full-lane=4981 OK (official rule-3 ledger); no provider/key/network/live action; no batch-raise allowlist change.`
 - **Next**: Claude Code: review.
 
 <!-- IMPLEMENTER-HANDOFF-PROOF-MARKER (adopted 2026-07-28): future Codex implementation/repair/fix handoffs must be prepended above this line and include a labelled Pre-Codex self-review/Proof-of-use line. Entries below are historical and are not retroactively claimed compliant. -->
