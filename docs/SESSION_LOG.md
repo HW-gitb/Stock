@@ -1,5 +1,36 @@
 # Session Log
 
+## 2026-07-28 — Claude Code 审查 PASS（repair-closeout 共用流程 / 分系统验证边界：docs + guard 锚点）
+
+- **Verdict/Action**: PASS。§0.11 把上一刀那条五字段机器门澄清成「`matrix`/`register`/`handoff` 共用，`focused`/`full-lane` 按 lane 记实际触及的系统」，并规定未触发 AGENTS rule 3 时写 `not_triggered: AGENTS rule 3; reason=<变更面>`。这不是把门放松到 rule 3 以下 —— 它只是不让「字段必填」被误读成「每次修复都欠一次全量」，同时把「不跑」的决定变成可审计的一行。guard 侧只往既有锚点表加三条 pin 字符串，防止该节被静默删掉。
+- **Required**: 无，未新开 register 条目。一条 Optional 见 Next。
+- **Verify**: 本轮未注入 review-evidence token，故不引用。`git diff --numstat` = `24/0 + 1/0 + 6/0 + 3/0`，**零删除**，故既有规则不可能被改写；改动面只有 docs 与测试锚点，零 runtime、零 schema，不碰选股 / provider / 真钱。doc-governance 三包 = `62 OK / 0.8s / exit 0` —— 这正是 handoff 里自述「因缺固定 Python 而 pending」的那条，现由我补齐。
+- **Next**: 提交。Optional（未修）：为 6 行 checklist 澄清新建了独立 handoff `2026-07-28_repair_closeout_shared_flow_handoff.md` 并占一行 README 索引，而 `CLAUDE.md` 定的门槛是「默认追加到 phase 主 handoff，新建独立 handoff 是高门槛操作」；同日同主题的 `2026-07-28_a_short_knife6a_repair_handoff.md` 就是它的自然归属。另该 handoff 的 Boundary 行「doc-governance test remains pending」现已过时。
+
+## 2026-07-28 — Codex（repair-closeout 共用流程 / 分系统验证边界落盘）
+
+**Commits**: 无（本次修改尚未提交）
+
+**Relationship to prior session(s)**:
+- Refines: 2026-07-28 A-short 第六刀 6A repair-closeout guard；补明其对 A-short/US-short 的共同流程边界，不改原五字段机器门。
+
+**Worked on**:
+1. 在唯一 checklist 明确共同的 matrix/register/handoff 与按 lane 分开的 focused/full-lane。
+2. 为该边界增加 doc-governance 守卫锚点，并写入独立 handoff 与索引。
+
+**Key decisions**:
+- `full-lane=` 必须留痕，但不是无条件全量测试；未触发 rule 3 时必须写明 `not_triggered: AGENTS rule 3` 和具体变更面。
+- 不将 A-short 的 preflight、Python、provider 或测试命令默认施加到 US-short，反之亦然。
+
+**Alternatives considered and rejected**:
+- “为 A-short 与 US-short 建立两套 repair-closeout 流程” — 拒绝；会让共同 marker/guard 的闭环责任分叉并产生 drift。
+
+**Open questions handed off**:
+- 固定项目 Python 当前不可用；`tests.test_doc_governance_guard` 需在可用环境中复跑。
+
+**Next natural step from my view**:
+1. Claude Code 审查这组流程文档/守卫改动后提交；A-short 第六刀 6B 继续按既有授权边界推进。
+
 ## 2026-07-28 — Claude Code 复审 PASS（A-short 第六刀 6A：A–G + I1 + H1 + Optional 全闭）
 
 - **Verdict/Action**: PASS，已提交。I1 的改法正确：`fact_fetch` 退出 `required` 只留属性定义，历史产物重新合法，新产物的强制性交给 builder 侧 `_validate_portfolio_risk`，且**没有**改写 `20260727` 那份已发布产物。H1 的守卫承重：AST 扫字面量下标读点、含一层别名（正是当初硬崩的那种形状），删 preset 键的植入测试确实变红。上轮 Optional 也补了能单独打红 leaf-reader 正文的用例。
