@@ -1,5 +1,34 @@
 # Session Log
 
+## 2026-07-28 — Claude Code 审查 PASS（US-short 提速刀二复审 + 刀三 冲突矩阵拆分）
+
+- **Verdict/Action**: PASS，两刀均可提交。刀二 Required 已闭：`_full_weeks` 按 values 缓存 + `copy.deepcopy` 分发，`_revalue_shadow_weeks` 在已隔离副本上改 T15 并重建该周 scorecard，引擎那段未动。刀三把五个同日 immutable-conflict transition 从一个聚合用例拆成五个独立用例（各自 `setUp` 新建 `temporary_provider_directory`，等价于旧的手工 tearDown/setUp；`_bridge_stage()` 是文件既有 helper，逐字等于被删的内联版本），注册表 GUARDS 绑 `unavailable_to_valid`、另四条进 `ADDITIONAL_BEHAVIOR`。`test_c` 覆盖遍历仍跑全五条，省的是变异遍历：每次植入变异只重跑一条、首杀即 break，最坏退回旧成本不会更慢。
+- **Required**: 无新开。`docs/system_risk_register.md#R-USSHORT-TESTSPEED-K2-EQUIVALENCE-TEST-NET-REGRESSION` 转 resolved（Codex 修复 + 本轮独立复审 PASS）。
+- **Verify**: review-evidence:fa16d417c6a9。超时原因:跨模块 guard 注册表绑定改动、且 Codex 自报的全量数没进 ledger，必须自跑一次官方全量。官方固定命令全量 `us_short` = `4935 OK / 378.9s / exit 0 / deadline 1200s`（已记账），基线为我 00:41 记的 `4929 OK / 743.2s` → **-364.3s / -49%**，+6 用例正好等于拆出的 5 条加新增缓存用例。三个改动模块超集包 `95 OK / 183.6s / exit 0`。自写夹具等价探针 7/7：`_full_weeks`/`_revalue_shadow_weeks` 与被替换的旧构造在 gate_a/b/c 三种取值形态下逐字段全等，改副本不污染缓存，嵌套 capture 深隔离，两 key 不串；缓存命中 `0.020s` vs 构建 `5.03s`。旧聚合用例名全仓零活引用。
+- **Next**: 提交两刀 + 本条 register 收口。Optional（未修）：五条 transition 四条落 `ADDITIONAL_BEHAVIOR`、一条落 GUARDS，将来动那条 GUARDS 绑定时另四条仍是 `test_c` 覆盖遍历的载荷，建议在 `ADDITIONAL_BEHAVIOR` 加一行注释标明这组同胞关系。
+
+## 2026-07-28 - Codex repair + implementation: US-short cuts 2-3 test-speed batch
+
+- **Verdict/Action**: Repaired `R-USSHORT-TESTSPEED-K2-EQUIVALENCE-TEST-NET-REGRESSION` without changing the cut-2 engine hunk: 24-week fixtures are cached by values and deep-copied per test. Cut 3 profiles the conformance matrices and splits the five same-day immutable-conflict transitions into isolated tests, so C reruns only the needed transition while retaining all five in its recording set.
+- **Required**: `R-USSHORT-TESTSPEED-K2-EQUIVALENCE-TEST-NET-REGRESSION` remains open pending independent review. No product behavior, plan, schema, seed, or live/provider path changed.
+- **Verify**: Cut 2 evaluator module: `10 OK / 37.145s`, below the review's pre-cut ~49.5s; injected `pool_population -> outgoing_population` changes the result (`mutation_red=True`). Cut 3: the five split transitions `5 OK / 0.773s`; C's real dying-mutation sweep `1 OK / 67.575s` (profile baseline `101.435s`), with all conflict-transition paths retained; D profile `1 OK / 54.969s` shows each selected leaf runs only twice, so no comparable multiplier remains. Registry baseline/mutation control `1 OK / 6.059s` after updating the renamed test path. Official fixed-command full lane: `4935 OK / 605.5s / exit 0`, under its `1200s` cap.
+- **Pre-Codex self-review**: Searched the old aggregate test name to zero active references; checked split test setup isolation, C's initial recording set, registry binding, and the targeted mutation controls. `git diff --check` has no error (only normal CRLF conversion notices).
+- **Next**: Claude Code independently review the two-cut batch; commit only after PASS.
+
+## 2026-07-28 — Claude Code 审查（US-short 提速第二刀 placebo 不变量外提）— Pass-with-Required
+
+- **Verdict/Action**: 引擎改动等价性成立且形式最优。独立探针（自写 legacy，非 Codex 那个 test-file oracle）在真 1000-replicate plan / 24 周 / 浮点噪声下 `float.hex()` 全等；`swaps=0` 与 `swaps=池上限` 两个边界全等；结果与 `candidate_values` 插入序无关；`balanced` 含池外票时新旧都仍抛 `KeyError`（fail-closed 未松，靠 prepare 期那次 baseline 调用守住，它同时保证 `placebo_selection ⊆ pool`）。扫池写法实测 `0.413s`，比 `_basket_net_excess(selection)` 的 `0.491s` 更快。但本刀作为提速刀净变慢，见 Required。
+- **Required**: 一条，`docs/system_risk_register.md#R-USSHORT-TESTSPEED-K2-EQUIVALENCE-TEST-NET-REGRESSION`。新增等价性测试自建 24 周夹具（`8.55s`）+ 跑满 1000 次 legacy 循环（`0.53s`）+ 新循环（`0.41s`）≈ `9.7s`，而本刀在整模块上只省约 `1s`（每次 `evaluate()` 省 `0.12s`），模块净 `+8.7s`。真瓶颈是夹具不是 placebo：`_weeks(24,…)` 单次 `8.55s`，模块六处重建 ≈ `51s / 58.2s`。
+- **Verify**: review-evidence:47019adcfc9c（同轮另一枚 review-evidence:ad49a75faa8e）。超集包 `.tools\run_unittest_with_repo_pythonpath.cmd --timeout-seconds 900 tests.test_us_short_forward_policy_statistical_evaluation` = `9 OK / 58.2s / exit 0`。自写对抗探针 7 项（等价 / 两边界 / 插入序 / fail-closed / 两处植入变异）：植入 `pool_population→outgoing_population` 被断言抓红；植入 `sorted(pool)→插入序` 抓不到（该量级 15 个浮点求和重排恰好精确），即该测试守的是篮子成分不是取值顺序。
+- **Next**: Codex 修 Required——六处 `_weeks(24,…)` 按 `values=` 归并为模块级共享夹具、`copy.deepcopy` 分发（多个用例会改自己的 week 记录），照 A-short 第八刀 `_DEFAULT_WEEKLY_BASELINE` 的写法；等价性测试改用共享夹具。收口线=模块耗时低于本刀之前，且植入变异仍抓红。引擎那段不用返工；Codex 原计划的刀 3 可并行。
+
+## 2026-07-28 - Codex implementation: US-short cut 2 placebo invariant hoisting
+
+- **Verdict/Action**: Implemented cut 2 in `engine/us_short_forward_policy_statistical_evaluation.py`; no plan, threshold, schema, seed, sample population/order, or decision rule changed. Per decision week, the formerly repeated pool/sorted populations/baseline are prepared once. The placebo subset is then read in the pre-sorted full-pool order, exactly reproducing the prior `sorted(placebo_selection)` value order.
+- **Required**: None newly opened. This product-code change is deliberately uncommitted. It is part of the approved two-cut batch; do not start independent review or a full lane before cut 3 completes.
+- **Verify**: A test-local literal copy of the pre-cut loop compares the full 1,000-replicate plan result by `float.hex()` and passes. Same input microbenchmark: legacy `0.510s`, optimized `0.389s`, `equal_hex=True` (about 24% faster for the placebo function). Statistical evaluator `9 OK / 62.947s`; comparison/ledger/plan/schema dependents `40 OK / 35.612s`. The evaluator-module aggregate includes the intentionally expensive legacy oracle and is not a clean before/after module benchmark.
+- **Next**: Codex execute cut 3 profile-led conformance-leaf optimization; then run one official full US-short ledger and submit both cuts for one Claude Code review.
+
 ## 2026-07-27 — Claude Code 审查 PASS（刀 5-8 三条 Optional 收口 + US-short owned-private-root 提速）
 
 - **Verdict/Action**: PASS。①`_module_function_nodes`→`_module_source_text`，两个调用点与守卫测试硬编码名同一次改齐；②admission 缓存键并入 schema 字节与 seal/validate 入口身份；③weekly 默认夹具记录 builder 身份、被 patch 即重建；④US-short 把冲突矩阵里反复起 `git check-ignore` 换成「真 git 证明一次私有根被 ignore，之后只对该根内路径短路、其余委派回真实实现」。

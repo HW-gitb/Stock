@@ -607,78 +607,55 @@ class WeeklyCapstoneSoftDiscoveryStageTest(unittest.TestCase):
         )
         return ctx
 
-    def test_all_same_day_status_transitions_reach_terminal_with_bound_conflict_receipts(self):
-        transitions = (
-            ("unavailable", "valid"),
-            ("invalid", "valid"),
-            ("unavailable", "invalid"),
-            ("valid", "unavailable"),
-            ("valid", "replaced_valid"),
-        )
-        for index, (initial, final) in enumerate(transitions):
-            with self.subTest(initial=initial, final=final):
-                if index:
-                    self.tearDown()
-                    self.setUp()
-                with self._owned_private_root_git_check():
-                    ctx = self._assert_conflict_transition(initial, final)
+    def _assert_same_day_status_transition_reaches_terminal(self, initial: str, final: str) -> None:
+        with self._owned_private_root_git_check():
+            ctx = self._assert_conflict_transition(initial, final)
 
-                    def bridge_outputs(run_ctx):
-                        output_root = run_ctx.official_output_root or run_ctx.private_root
-                        return [
-                            output_root / "weekly_private" / run_ctx.decision_date / "weekly_report.md",
-                            output_root / "weekly_private" / run_ctx.decision_date / "action_table.csv",
-                            output_root / "runs_private" / run_ctx.decision_date / "machine_record.json",
-                        ]
+            pipeline = [
+                capstone.Stage(
+                    "soft_discovery", False, lambda _ctx: [],
+                    lambda run_ctx: [run_ctx.soft_discovery_receipt_path],
+                    stages.run_soft_discovery,
+                    failure_policy="zero_effect", output_policy="optional",
+                    checkpoint_policy="optional_result_only",
+                    failure_handler=capstone._degrade_soft_discovery_boundary,
+                ),
+                self._bridge_stage(),
+            ]
+            summary = capstone.run_weekly_capstone(
+                now_et=datetime(2026, 6, 15, 7, 0, 0),
+                private_root=self.state_dir / "private",
+                batch4_template_path=self.state_dir / "template.json",
+                account_state_path=self.state_dir / "account.json",
+                dry_run=False,
+                confirm_user_authorization=True,
+                stages=pipeline,
+                state_dir=self.state_dir,
+                sample_root=ROOT,
+                soft_discovery_enabled=True,
+            )
+            self.assertTrue(summary["emitted"])
+            result = next(
+                row["result"] for row in summary["stages"]
+                if row["name"] == "soft_discovery"
+            )
+            self.assertEqual(result["reason_code"], "SOFT_DISCOVERY_IMMUTABLE_CONFLICT")
+            self.assertEqual(result["boostable_ticker_count"], 0)
 
-                    def run_bridge(run_ctx):
-                        outputs = bridge_outputs(run_ctx)
-                        for output in outputs:
-                            output.parent.mkdir(parents=True, exist_ok=True)
-                            output.write_text("terminal", encoding="utf-8")
-                        return {
-                            "batch4_run": {
-                                "emitted": True,
-                                "output_paths": {
-                                    "weekly_report_path": str(outputs[0]),
-                                    "action_table_path": str(outputs[1]),
-                                    "machine_record_path": str(outputs[2]),
-                                },
-                            },
-                        }
+    def test_same_day_unavailable_to_valid_reaches_terminal_with_bound_conflict_receipt(self):
+        self._assert_same_day_status_transition_reaches_terminal("unavailable", "valid")
 
-                    pipeline = [
-                        capstone.Stage(
-                            "soft_discovery", False, lambda _ctx: [],
-                            lambda run_ctx: [run_ctx.soft_discovery_receipt_path],
-                            stages.run_soft_discovery,
-                            failure_policy="zero_effect", output_policy="optional",
-                            checkpoint_policy="optional_result_only",
-                            failure_handler=capstone._degrade_soft_discovery_boundary,
-                        ),
-                        capstone.Stage(
-                            "weekly_bridge", False, lambda _ctx: [], bridge_outputs, run_bridge,
-                        ),
-                    ]
-                    summary = capstone.run_weekly_capstone(
-                        now_et=datetime(2026, 6, 15, 7, 0, 0),
-                        private_root=self.state_dir / "private",
-                        batch4_template_path=self.state_dir / "template.json",
-                        account_state_path=self.state_dir / "account.json",
-                        dry_run=False,
-                        confirm_user_authorization=True,
-                        stages=pipeline,
-                        state_dir=self.state_dir,
-                        sample_root=ROOT,
-                        soft_discovery_enabled=True,
-                    )
-                    self.assertTrue(summary["emitted"])
-                    result = next(
-                        row["result"] for row in summary["stages"]
-                        if row["name"] == "soft_discovery"
-                    )
-                    self.assertEqual(result["reason_code"], "SOFT_DISCOVERY_IMMUTABLE_CONFLICT")
-                    self.assertEqual(result["boostable_ticker_count"], 0)
+    def test_same_day_invalid_to_valid_reaches_terminal_with_bound_conflict_receipt(self):
+        self._assert_same_day_status_transition_reaches_terminal("invalid", "valid")
+
+    def test_same_day_unavailable_to_invalid_reaches_terminal_with_bound_conflict_receipt(self):
+        self._assert_same_day_status_transition_reaches_terminal("unavailable", "invalid")
+
+    def test_same_day_valid_to_unavailable_reaches_terminal_with_bound_conflict_receipt(self):
+        self._assert_same_day_status_transition_reaches_terminal("valid", "unavailable")
+
+    def test_same_day_valid_to_replaced_valid_reaches_terminal_with_bound_conflict_receipt(self):
+        self._assert_same_day_status_transition_reaches_terminal("valid", "replaced_valid")
 
     def test_budget_preview_accepts_bound_immutable_conflict_receipt(self):
         ctx = self._assert_conflict_transition("unavailable", "valid")

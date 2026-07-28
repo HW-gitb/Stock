@@ -261,20 +261,41 @@ def _placebo_95th_percentile(divergence_weeks: list[dict], *, policy_id: str, pl
     seeds = list(range(seed_start, seed_end + 1))
     if len(seeds) != replicates:
         raise ForwardPolicyStatisticalEvaluationError("manifest placebo seed span must equal its replicate count")
+    # All of these values are fixed for a decision week.  Keep the sampled populations
+    # as the same sorted lists the loop formerly built for each seed: the RNG seed,
+    # sample order, set construction, and floating-point operation order below remain
+    # unchanged.
+    prepared_weeks = []
+    for week in divergence_weeks:
+        balanced = week["selections"][SELECTION_POLICY_IDS[0]]
+        pool = set(week["candidate_values"])
+        prepared_weeks.append({
+            "balanced": balanced,
+            "baseline": _basket_net_excess(week["candidate_values"], balanced),
+            "decision_date": week["decision_date"],
+            "incoming_population": sorted(pool - balanced),
+            "outgoing_population": sorted(balanced),
+            "pool_population": sorted(pool),
+            "swaps": week["swap_counts"][policy_id],
+            "values": week["candidate_values"],
+        })
     null_means = []
     for seed in seeds:
         weekly_advantages = []
-        for week in divergence_weeks:
-            balanced = week["selections"][SELECTION_POLICY_IDS[0]]
-            swaps = week["swap_counts"][policy_id]
-            pool = set(week["candidate_values"])
+        for week in prepared_weeks:
             rng = random.Random("us-short-a1-cut-d|%d|%s|%s" % (seed, policy_id, week["decision_date"]))
-            outgoing = set(rng.sample(sorted(balanced), swaps))
-            incoming = set(rng.sample(sorted(pool - balanced), swaps))
-            placebo_selection = (balanced - outgoing) | incoming
+            outgoing = set(rng.sample(week["outgoing_population"], week["swaps"]))
+            incoming = set(rng.sample(week["incoming_population"], week["swaps"]))
+            placebo_selection = (week["balanced"] - outgoing) | incoming
+            # This preserves `sorted(placebo_selection)` exactly: the selection is a
+            # subset of the already-sorted candidate pool.
+            placebo_values = [
+                week["values"][ticker]
+                for ticker in week["pool_population"]
+                if ticker in placebo_selection
+            ]
             weekly_advantages.append(
-                _basket_net_excess(week["candidate_values"], placebo_selection)
-                - _basket_net_excess(week["candidate_values"], balanced)
+                _mean(placebo_values) - week["baseline"]
             )
         null_means.append(_mean(weekly_advantages))
     percentile = plan["statistics"]["elimination_rule"]["formal_recommendation_gate"]["placebo_percentile_exclusive_gt"]

@@ -4,6 +4,8 @@ from __future__ import annotations
 
 import copy
 from datetime import date, timedelta
+import math
+import random
 import unittest
 from unittest import mock
 
@@ -20,6 +22,7 @@ SHADOW = "theme_plus"
 CANDIDATES = ["T%02d" % index for index in range(30)]
 COMMON_POOL = CANDIDATES[:20]
 BALANCED = CANDIDATES[:15]
+_FULL_WEEK_BASELINES: dict[tuple[tuple[str, float], ...], list[dict]] = {}
 
 
 def _net_result(value: float) -> dict:
@@ -146,11 +149,81 @@ def _weeks(count: int, **kwargs) -> list[dict]:
     return [_week(index, **kwargs) for index in range(count)]
 
 
+def _full_weeks(values: dict[str, float]) -> list[dict]:
+    """Return an isolated 24-week baseline keyed by the outcome-value fixture."""
+    key = tuple(sorted(values.items()))
+    if key not in _FULL_WEEK_BASELINES:
+        _FULL_WEEK_BASELINES[key] = _weeks(24, values=dict(key))
+    return copy.deepcopy(_FULL_WEEK_BASELINES[key])
+
+
+def _revalue_shadow_weeks(weeks: list[dict], values_by_index: dict[int, float]) -> list[dict]:
+    """Change the shadow outcome on already-isolated weeks and rebuild its scorecard."""
+    for index, value in values_by_index.items():
+        candidate_values = weeks[index]["candidate_after_cost_net_return"]
+        candidate_values["T15"] = value
+        weeks[index]["scorecard_comparison"] = _scorecard(weeks[index]["capture"], candidate_values)
+    return weeks
+
+
 def _as_of(weeks: list[dict]) -> str:
     return weeks[-1]["outcome_as_of"] if weeks else "20260712"
 
 
+def _legacy_placebo_95th_percentile(divergence_weeks: list[dict], *, policy_id: str, plan: dict) -> float:
+    """Pre-knife loop retained only as a bitwise-equivalence test oracle."""
+    placebo = plan["statistics"]["placebo"]
+    seeds = list(range(placebo["seed_start"], placebo["seed_end_inclusive"] + 1))
+    if len(seeds) != placebo["replicates"]:
+        raise AssertionError("test fixture placebo seed span must equal replicates")
+    null_means = []
+    for seed in seeds:
+        weekly_advantages = []
+        for week in divergence_weeks:
+            balanced = week["selections"][POLICIES[0]]
+            swaps = week["swap_counts"][policy_id]
+            pool = set(week["candidate_values"])
+            rng = random.Random("us-short-a1-cut-d|%d|%s|%s" % (seed, policy_id, week["decision_date"]))
+            outgoing = set(rng.sample(sorted(balanced), swaps))
+            incoming = set(rng.sample(sorted(pool - balanced), swaps))
+            placebo_selection = (balanced - outgoing) | incoming
+            placebo_net = sum([
+                week["candidate_values"][ticker] for ticker in sorted(placebo_selection)
+            ]) / len(placebo_selection)
+            balanced_net = sum([
+                week["candidate_values"][ticker] for ticker in sorted(balanced)
+            ]) / len(balanced)
+            weekly_advantages.append(placebo_net - balanced_net)
+        null_means.append(sum(weekly_advantages) / len(weekly_advantages))
+    percentile = plan["statistics"]["elimination_rule"]["formal_recommendation_gate"]["placebo_percentile_exclusive_gt"]
+    ordered = sorted(null_means)
+    return ordered[max(0, math.ceil(percentile * len(ordered)) - 1)]
+
+
 class ForwardPolicyStatisticalEvaluationTests(unittest.TestCase):
+    def test_placebo_invariant_hoisting_is_bitwise_legacy_equivalent(self):
+        records = _full_weeks({"T15": 0.03, "T16": 0.6})
+        plan = evaluation.statistical_plan.load_forward_policy_statistical_plan()
+        selection_count = plan["statistics"]["selection_divergence"]["selection_count"]
+        normalized = [
+            evaluation._validate_week(record, as_of=_as_of(records), selection_count=selection_count)
+            for record in records
+        ]
+        divergence_weeks = [
+            week for week in normalized
+            if week["membership_symmetric_differences"][SHADOW]
+            >= plan["statistics"]["selection_divergence"]["membership_symmetric_difference_at_least"]
+        ]
+
+        expected = _legacy_placebo_95th_percentile(
+            divergence_weeks, policy_id=SHADOW, plan=plan,
+        )
+        actual = evaluation._placebo_95th_percentile(
+            divergence_weeks, policy_id=SHADOW, plan=plan,
+        )
+
+        self.assertEqual(actual.hex(), expected.hex())
+
     def test_zero_real_weeks_emits_no_forward_evidence(self):
         result = evaluation.evaluate_forward_policy_statistical_evaluation([], as_of="20260712")
 
@@ -171,7 +244,7 @@ class ForwardPolicyStatisticalEvaluationTests(unittest.TestCase):
         self.assertNotIn("T15", repr(result))
 
     def test_legacy_diagnostic_pass_requires_all_three_frozen_gates_and_is_deterministic(self):
-        weeks = _weeks(24, values={"T15": 0.03})
+        weeks = _full_weeks({"T15": 0.03})
         first = evaluation.evaluate_forward_policy_statistical_evaluation(weeks, as_of=_as_of(weeks))
         second = evaluation.evaluate_forward_policy_statistical_evaluation(weeks, as_of=_as_of(weeks))
         block = first["policy_verdicts"][SHADOW]
@@ -184,24 +257,26 @@ class ForwardPolicyStatisticalEvaluationTests(unittest.TestCase):
         self.assertGreater(block["outcome_gate"]["mean_paired_advantage"], block["outcome_gate"]["placebo_95th_percentile"])
 
     def test_each_legacy_diagnostic_gate_can_fail_alone(self):
-        gate_a_weeks = _weeks(24, values={"T15": 0.0005})
+        gate_a_weeks = _revalue_shadow_weeks(
+            _full_weeks({"T15": 0.03}), {index: 0.0005 for index in range(24)},
+        )
         gate_a = evaluation.evaluate_forward_policy_statistical_evaluation(gate_a_weeks, as_of=_as_of(gate_a_weeks))["policy_verdicts"][SHADOW]
         self.assertEqual(gate_a["verdict"], "diagnostic_not_passed_not_formal_recommendation")
         self.assertFalse(gate_a["outcome_gate"]["gate_a_mean_advantage"])
         self.assertTrue(gate_a["outcome_gate"]["gate_b_paired_wins"])
         self.assertTrue(gate_a["outcome_gate"]["gate_c_placebo"])
 
-        gate_b_weeks = [
-            _week(index, values={"T15": 0.03 if index < 15 else -0.005})
-            for index in range(24)
-        ]
+        gate_b_weeks = _revalue_shadow_weeks(
+            _full_weeks({"T15": 0.03}),
+            {index: 0.03 if index < 15 else -0.005 for index in range(24)},
+        )
         gate_b = evaluation.evaluate_forward_policy_statistical_evaluation(gate_b_weeks, as_of=_as_of(gate_b_weeks))["policy_verdicts"][SHADOW]
         self.assertEqual(gate_b["verdict"], "diagnostic_not_passed_not_formal_recommendation")
         self.assertTrue(gate_b["outcome_gate"]["gate_a_mean_advantage"])
         self.assertFalse(gate_b["outcome_gate"]["gate_b_paired_wins"])
         self.assertTrue(gate_b["outcome_gate"]["gate_c_placebo"])
 
-        gate_c_weeks = _weeks(24, values={"T15": 0.03, "T16": 0.6})
+        gate_c_weeks = _full_weeks({"T15": 0.03, "T16": 0.6})
         gate_c = evaluation.evaluate_forward_policy_statistical_evaluation(gate_c_weeks, as_of=_as_of(gate_c_weeks))["policy_verdicts"][SHADOW]
         self.assertEqual(gate_c["verdict"], "diagnostic_not_passed_not_formal_recommendation")
         self.assertTrue(gate_c["outcome_gate"]["gate_a_mean_advantage"])
@@ -235,7 +310,7 @@ class ForwardPolicyStatisticalEvaluationTests(unittest.TestCase):
         self.assertFalse(fill["outcome_gate"]["evaluated"])
 
     def test_manifest_loader_is_the_threshold_source(self):
-        weeks = _weeks(24, values={"T15": 0.03})
+        weeks = _full_weeks({"T15": 0.03})
         altered = copy.deepcopy(evaluation.statistical_plan.load_forward_policy_statistical_plan())
         altered["statistics"]["comparison_win_margin"] = 0.04
         with mock.patch.object(
@@ -248,6 +323,14 @@ class ForwardPolicyStatisticalEvaluationTests(unittest.TestCase):
 
         self.assertEqual(block["verdict"], "diagnostic_not_passed_not_formal_recommendation")
         self.assertFalse(block["outcome_gate"]["gate_a_mean_advantage"])
+
+    def test_full_week_fixture_is_cached_and_isolated(self):
+        first = _full_weeks({"T15": 0.03})
+        with mock.patch(f"{__name__}._weeks", wraps=_weeks) as build:
+            first[0]["candidate_after_cost_net_return"]["T15"] = -1.0
+            second = _full_weeks({"T15": 0.03})
+        self.assertEqual(build.call_count, 0)
+        self.assertEqual(second[0]["candidate_after_cost_net_return"]["T15"], 0.03)
 
     def test_candidate_outcomes_cover_only_the_pass2_clean_common_pool(self):
         week = _week(0, values={"T15": 0.03})

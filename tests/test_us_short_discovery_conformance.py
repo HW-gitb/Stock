@@ -827,6 +827,18 @@ class ExecutableClosureMatrix(unittest.TestCase):
         "tests.provider.test_us_short_weekly_capstone_soft_discovery"
         ".WeeklyCapstoneSoftDiscoveryStageTest"
         ".test_capstone_boundary_failure_binds_existing_artifact_hashes",
+        "tests.provider.test_us_short_weekly_capstone_soft_discovery"
+        ".WeeklyCapstoneSoftDiscoveryStageTest"
+        ".test_same_day_invalid_to_valid_reaches_terminal_with_bound_conflict_receipt",
+        "tests.provider.test_us_short_weekly_capstone_soft_discovery"
+        ".WeeklyCapstoneSoftDiscoveryStageTest"
+        ".test_same_day_unavailable_to_invalid_reaches_terminal_with_bound_conflict_receipt",
+        "tests.provider.test_us_short_weekly_capstone_soft_discovery"
+        ".WeeklyCapstoneSoftDiscoveryStageTest"
+        ".test_same_day_valid_to_unavailable_reaches_terminal_with_bound_conflict_receipt",
+        "tests.provider.test_us_short_weekly_capstone_soft_discovery"
+        ".WeeklyCapstoneSoftDiscoveryStageTest"
+        ".test_same_day_valid_to_replaced_valid_reaches_terminal_with_bound_conflict_receipt",
     )
     REDUNDANT_REPLAY_TERMS = frozenset({
         "runners.us_short_llm_theme_discovery_merge._guard_input_artifact_hashes",
@@ -866,7 +878,7 @@ class ExecutableClosureMatrix(unittest.TestCase):
             "_artifact": "tests.provider.test_us_short_weekly_capstone_soft_discovery"
             ".WeeklyCapstoneSoftDiscoveryStageTest.test_all_five_states_are_distinct_and_invalid_is_not_valid_empty",
             "_immutable_conflict_receipt": "tests.provider.test_us_short_weekly_capstone_soft_discovery"
-            ".WeeklyCapstoneSoftDiscoveryStageTest.test_all_same_day_status_transitions_reach_terminal_with_bound_conflict_receipts",
+            ".WeeklyCapstoneSoftDiscoveryStageTest.test_same_day_unavailable_to_valid_reaches_terminal_with_bound_conflict_receipt",
             "_publish_failure_receipt": "tests.provider.test_us_short_weekly_capstone_soft_discovery"
             ".WeeklyCapstoneSoftDiscoveryStageTest.test_all_five_states_are_distinct_and_invalid_is_not_valid_empty",
             "_publish_receipt": "tests.provider.test_us_short_weekly_capstone_soft_discovery"
@@ -1848,7 +1860,7 @@ class LaneGuardRegistryConformance(unittest.TestCase):
         ("runners.us_short_weekly_capstone_soft_discovery", "_guard_existing_artifact_hashes",
          "tests.provider.test_us_short_weekly_capstone_soft_discovery"
          ".WeeklyCapstoneSoftDiscoveryStageTest"
-         ".test_all_same_day_status_transitions_reach_terminal_with_bound_conflict_receipts"),
+         ".test_same_day_unavailable_to_valid_reaches_terminal_with_bound_conflict_receipt"),
         ("runners.us_short_weekly_capstone_soft_discovery", "_published_sha256",
          "tests.provider.test_us_short_weekly_capstone_soft_discovery"
          ".WeeklyCapstoneSoftDiscoveryStageTest"
