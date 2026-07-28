@@ -51,6 +51,42 @@ class XFetchAndMergeTests(unittest.TestCase):
         reserve.assert_not_called()
         key_lookup.assert_not_called()
 
+    def test_x_credential_rejects_whitespace_and_concatenated_markers(self):
+        valid = "xai-" + "a" * 32
+        for invalid in ("", "xai-a xai-b", valid + valid):
+            with self.subTest(invalid=repr(invalid)):
+                with self.assertRaises(xfetch.XThemeDiscoveryError):
+                    xfetch.GrokXSearchClient(invalid)
+
+    def test_x_credential_policy_is_shared_and_accepts_a_rotated_length(self):
+        """Both X call sites go through one helper that reuses the web lane's ambiguity rule."""
+        for rotated in ("xai-" + "a" * 20, "xai-" + "b" * 80, "xai-" + "c" * 200):
+            with self.subTest(rotated=len(rotated)):
+                self.assertEqual(xfetch._require_single_xai_api_key(rotated), rotated)
+        for ambiguous in ("", "xai-", "xai-short", "xai-" + "a" * 40 + "xai-" + "b" * 40,
+                          "xai-" + "a" * 40 + "\t"):
+            with self.subTest(ambiguous=repr(ambiguous[:10])):
+                with self.assertRaises(xfetch.XThemeDiscoveryError):
+                    xfetch._require_single_xai_api_key(ambiguous)
+
+    def test_x_absent_and_unsupported_created_at_get_distinct_ledger_reasons(self):
+        rows = [
+            {"url": "https://x.com/u/status/1", "title": "p", "text": "AAPL post"},
+            {"url": "https://x.com/u/status/2", "title": "p", "text": "AAPL post", "created_at": "not-a-date"},
+            {"url": "https://x.com/u/status/3", "title": "p", "text": "AAPL post",
+             "created_at": "2026-07-24T10:00:00+00:00"},
+        ]
+        refs, drops = xfetch._normalize_results(
+            rows, expected_decision_date="20260727",
+            fetched_at=web._parse_dt("2026-07-26T12:00:00Z", field="fetched_at"),
+            raw_root=None, persist_raw=False,
+        )
+        self.assertEqual(len(refs), 1)
+        self.assertEqual(
+            sorted(row["reason"] for row in drops),
+            ["missing_created_at", "unsupported_created_at_format"],
+        )
+
     def test_bad_grok_response_is_dropped_per_query(self):
         good = self._x_response()
         class Fake:
@@ -477,7 +513,8 @@ class XFetchAndMergeTests(unittest.TestCase):
                 queries=["power"], search_results=[{"url": "https://web.example/live", "title": "A", "content": "AAPL", "published_date": "2026-07-24T10:00:00Z"}],
                 llm_response='{"themes":[]}', expected_decision_date="20260725", generated_at="2026-07-25T08:00:00Z",
                 raw_root=Path(td) / "web", persist_raw=True, execution_mode="live_authorized",
-                network_call_count=1, provider_call_count=1, _live_attestation=web._LIVE_ATTESTATION)
+                network_call_count=1, provider_call_count=1, _live_attestation=web._LIVE_ATTESTATION,
+                regroup_model_identity=web._regroup_model_identity(served_model="deepseek-test"))
             xa, xr, _ = xfetch.build_x_fetch_packet(
                 queries=["power"], results=[{"url": "https://x.example/live", "title": "P", "text": "AAPL", "created_at": "2026-07-24T10:00:00Z"}],
                 grok_response='{"themes":[]}', expected_decision_date="20260725", generated_at="2026-07-25T08:00:00Z",
@@ -612,6 +649,7 @@ class XFetchAndMergeTests(unittest.TestCase):
                 queries=["power"], search_results=[{"url": "https://web.example/live", "title": "A", "content": "AAPL", "published_date": "2026-07-24T10:00:00Z"}], llm_response='{"themes":[]}',
                 expected_decision_date="20260725", generated_at="2026-07-25T08:00:00Z", raw_root=root / "web", persist_raw=True,
                 execution_mode="live_authorized", network_call_count=1, provider_call_count=1, _live_attestation=web._LIVE_ATTESTATION,
+                regroup_model_identity=web._regroup_model_identity(served_model="deepseek-test"),
             )
             xa, xr, _ = xfetch.build_x_fetch_packet(
                 queries=["power"], results=[], grok_response='{"themes":[]}',

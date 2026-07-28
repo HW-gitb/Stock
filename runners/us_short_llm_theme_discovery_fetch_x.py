@@ -112,13 +112,18 @@ def _normalize_results(
                 )
             if locator in seen:
                 raise web._ProviderItemRejected("duplicate_canonical_locator", locator)
+            raw_created_at = item.get("created_at", item.get("published_date", item.get("observed_at")))
             try:
-                observed = _parse_dt(
-                    item.get("created_at", item.get("published_date", item.get("observed_at"))),
-                    f"x_results[{index}].created_at",
-                )
+                observed = _parse_dt(raw_created_at, f"x_results[{index}].created_at")
             except Exception as exc:
-                raise web._ProviderItemRejected("missing_or_malformed_created_at", locator) from exc
+                raise web._ProviderItemRejected(
+                    web.provider_instant_drop_reason(
+                        raw_created_at,
+                        absent="missing_created_at",
+                        unsupported="unsupported_created_at_format",
+                    ),
+                    locator,
+                ) from exc
             if observed >= cutoff:
                 raise web._ProviderItemRejected("published_at_after_decision_open", locator)
             text = web._safe_text(item.get("text", item.get("content", item.get("snippet"))), limit=4000)
@@ -412,10 +417,20 @@ def build_x_fetch_packet(
     return discovery, receipt, summary
 
 
+def _require_single_xai_api_key(value: Any) -> str:
+    """One helper for both call sites, sharing the web lane's credential-ambiguity rule.
+
+    Previously this test was inlined twice, so a future correction could reach one leg and miss the
+    other; the length bound now comes from the shared policy instead of a sample-derived literal.
+    """
+    if not web.is_single_provider_credential(value, marker="xai-"):
+        raise XThemeDiscoveryError("XAI_API_KEY must be exactly one valid credential")
+    return value
+
+
 class GrokXSearchClient:
     def __init__(self, api_key: str, *, timeout: float = 45.0):
-        if not api_key:
-            raise XThemeDiscoveryError("XAI_API_KEY is missing")
+        _require_single_xai_api_key(api_key)
         try:
             from openai import OpenAI
             self.client = OpenAI(api_key=api_key, base_url=XAI_BASE_URL, timeout=timeout)
@@ -443,10 +458,11 @@ def run_x_fetch(*, queries: list[str] | tuple[str, ...], expected_decision_date:
         )
         if not confirm_user_authorization:
             raise XThemeDiscoveryError("live execution requires --confirm-user-authorization")
+        api_key = _require_single_xai_api_key(os.environ.get("XAI_API_KEY", ""))
         web._reserve_provider_budget(
             "x", "xai", expected_decision_date, call_count=len(queries), query_scope=queries,
         )
-        client = x_client or GrokXSearchClient(os.environ.get("XAI_API_KEY", ""))
+        client = x_client or GrokXSearchClient(api_key)
         results: list[dict[str, Any]] = []
         grok_texts: list[str] = []
         query_drops: list[dict[str, str]] = []
