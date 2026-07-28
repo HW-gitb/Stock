@@ -105,6 +105,87 @@ class FullPackLedgerTests(unittest.TestCase):
             ["discover", "-s", "tests", "-p", "test_a_short*.py"],
         )
 
+    def test_cli_run_argument_errors_are_explicit_and_never_start_a_pack(self):
+        for argv, expected in (
+            (["ledger", "run", "a_short", "shared schema", "focused=12 OK", "30"], "missing `--`"),
+            (["ledger", "run", "a_short", "shared schema", "focused=12 OK", "30", "unexpected", "--", "discover"],
+             "expected `run <lane>"),
+        ):
+            with self.subTest(argv=argv), patch.object(fpl, "run_full_pack") as runner:
+                output = StringIO()
+                with redirect_stdout(output):
+                    self.assertEqual(fpl.main(argv), 2)
+                self.assertIn("REFUSED", output.getvalue())
+                self.assertIn(expected, output.getvalue())
+                runner.assert_not_called()
+
+    def test_full_pack_prints_start_before_spawning_each_lane(self):
+        for lane, args in fpl.FULL_PACK_DISCOVERY_ARGS.items():
+            with self.subTest(lane=lane), tempfile.TemporaryDirectory() as tmp:
+                ledger = Path(tmp) / "ledger.json"
+                state = {"engine/x.py": "aaa", "@HEAD": "h1"}
+                output = StringIO()
+                passed = Result("PASS", 0, 3, 0.2, "Ran 3 tests in 0.1s\n\nOK\n")
+
+                def observed_run(actual_args, timeout_seconds):
+                    self.assertEqual(actual_args, list(args))
+                    self.assertEqual(timeout_seconds, 30)
+                    self.assertIn(f"START lane={lane}", output.getvalue())
+                    self.assertIn("fingerprint=", output.getvalue())
+                    return passed
+
+                with patch.object(fpl, "run_unittest", side_effect=observed_run):
+                    with redirect_stdout(output):
+                        self.assertEqual(
+                            fpl.run_full_pack(
+                                lane, "shared test tool", "focused=12 OK", 30, list(args),
+                                state=state, ledger=ledger,
+                            ),
+                            0,
+                        )
+                self.assertIn("RESULT status=PASS", output.getvalue())
+
+    def test_only_a_real_unittest_spawn_may_print_start(self):
+        state = {"engine/x.py": "aaa", "@HEAD": "h1"}
+        for lane, args in fpl.FULL_PACK_DISCOVERY_ARGS.items():
+            with self.subTest(lane=lane, case="dependency"), tempfile.TemporaryDirectory() as tmp:
+                output = StringIO()
+                with patch.object(fpl, "external_test_dependency_error", return_value="missing test dependency"), \
+                        patch.object(fpl, "run_unittest") as runner, redirect_stdout(output):
+                    self.assertEqual(
+                        fpl.run_full_pack(lane, "shared test tool", "focused=12 OK", 30, list(args),
+                                          state=state, ledger=Path(tmp) / "ledger.json"),
+                        fpl.DEPENDENCY_EXIT,
+                    )
+                self.assertNotIn("START lane=", output.getvalue())
+                runner.assert_not_called()
+
+        with tempfile.TemporaryDirectory() as tmp:
+            ledger = Path(tmp) / "ledger.json"
+            fpl.prepare("a_short", "shared test tool", "focused=12 OK", state=state, ledger=ledger)
+            fpl.record("a_short", "3 OK", state=state, ledger=ledger)
+            output = StringIO()
+            with patch.object(fpl, "run_unittest") as runner, redirect_stdout(output):
+                self.assertEqual(
+                    fpl.run_full_pack(
+                        "a_short", "shared test tool", "focused=12 OK", 30,
+                        ["discover", "-s", "tests", "-p", "test_a_short*.py"],
+                        state=state, ledger=ledger,
+                    ),
+                    0,
+                )
+            self.assertIn("CACHED GREEN", output.getvalue())
+            self.assertNotIn("START lane=", output.getvalue())
+            runner.assert_not_called()
+
+        output = StringIO()
+        with redirect_stdout(output), self.assertRaisesRegex(ValueError, "unknown lane"):
+            fpl.run_full_pack(
+                "unknown", "shared test tool", "focused=12 OK", 30,
+                ["discover", "-s", "tests", "-p", "test_unknown*.py"], state=state,
+            )
+        self.assertNotIn("START lane=", output.getvalue())
+
     def test_single_run_command_prepares_runs_and_records_only_real_pass(self):
         with tempfile.TemporaryDirectory() as tmp:
             ledger = Path(tmp) / "ledger.json"

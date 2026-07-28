@@ -1,5 +1,20 @@
 # Session Log
 
+## 2026-07-28 - Claude Code 审查 PASS(全量测试入口:spawn 前 START + 错参显式 REFUSED)
+
+- **Verdict/Action**: PASS,提交并合入 master。`run_full_pack` 在依赖检查与 cached-green 早返回之后、真正 spawn 之前打印 `START lane=… fingerprint=…`;`main` 的 `run` 分支放宽准入后改为显式拒两类错参。放宽不等于放松:`run_full_pack` 自身的空参、未知 lane、discovery 参数逐字相等、timeout 上界四道门在新路径上仍全部生效。AGENTS rule 1 追加「focused pack 必须显式点名被触及的 schema/effect-contract 守卫」——正是 6B 首轮差点漏掉 `test_a_short_effect_contract` 的那个坑。
+- **Required**: 无,未新开 register 条目。两条 Optional 见 Next。
+- **Verify**: review-evidence:1c63d8664739。亲跑 focused 超集 `test_full_pack_ledger + test_bounded_unittest + 治理三包` = `104 OK / 5.9s / exit 0`;按 rule 3 未起全量(纯测试工具,不碰引擎/选股/provider/指纹口径)。自写 CLI 反向探针六种错参(缺 `--`、`--` 错位、`--` 后为空、discovery 收窄成 `test_bogus*.py`、timeout=99999)全部单行 REFUSED + exit 2 且无进程起飞。静态核 `prepare()` 确 `return fp`、`record()` 仍 PASS-only、旧 `len(argv) >= 8` 分支零残留。
+- **Next**: 合入 master。Optional①:执行方 entry 的 header 引用 `R-GOV-FULL-PACK-START-OBSERVABILITY`,但该 ID 在 register 里 0 命中,是悬空指针(其正文自述「无新开 material Required」,故应直接不写 ID)。Optional②:`Pre-Codex self-review` 第三次写 `handoff=updated` 而提交未触及 `docs/handoff/`;本轮 handoff 由我补写在 shared-flow 那份。
+
+## 2026-07-28 — Codex 修复（R-GOV-FULL-PACK-START-OBSERVABILITY）
+
+- **Verdict/Action**: 已完成独立治理刀：统一 full-pack 入口在真正 spawn unittest 前立即输出 `START`，错误 `run` 参数明确 `REFUSED` 并以 2 退出；不新增 lane 包装器、不改变既有依赖/指纹/PASS-only 门。
+- **Required**: 无新开 material Required；本刀只收紧工具可观测性与调用纪律。
+- **Verify**: 固定 Python `.tools\run_unittest_with_repo_pythonpath.cmd tests.test_full_pack_ledger tests.test_bounded_unittest tests.test_doc_governance_guard tests.test_review_tiering_enforcement` = 90 OK / exit 0；真实 PowerShell 错参探针 = `REFUSED - invalid run arguments; missing --` / exit 2；`py_compile` 与 `git diff --check` 通过（仅 CRLF warning）。
+- **Next**: Claude Code：审查。
+- **Pre-Codex self-review**: A=two lanes/one spawn path; B=old CLI branch rg=0; C=START only after spawn; E=AGENTS+handoff; F=tooling; matrix=complete; register=no material Required; handoff=updated; focused=90 OK; full-lane=not_triggered: AGENTS rule 3; reason=test-tool observability; main-thread fallback (subagent unavailable).
+
 ## 2026-07-28 - Claude Code 审查 PASS(6B Required 已闭:官方输入必须自报价格钟 + 官方档判定下沉)
 
 - **Verdict/Action**: PASS,提交并合入 master。Required A/B 都按修法闭了:官方档不再拿 `trade_date` 顶替价格钟,缺声明即诚实报错;路径谓词下沉进契约模块并收紧为「恰好 `result/a_short/<YYYYMMDD>/analysis_input.json`」,回测子树不再误判官方,`validate_analysis_input_file` 自判使 weekly / `run_analysis_report` / Rule6 审计同门,EGS producer 写正式路径前也自校验。合并时发现执行方基线停在 `417c7fc3`,重写了一份同 ID 的 register 条目;我在 rebase 后把两份并成一份(单一来源),内容无丢失。

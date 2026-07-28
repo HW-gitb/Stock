@@ -156,12 +156,17 @@ def run_full_pack(
     if hit is not None:
         print(f"[full-pack-ledger] CACHED GREEN - {lane} = {hit['count']}; full run skipped.")
         return 0
-    prepare(
+    prepared_fingerprint = prepare(
         lane,
         trigger_reason,
         focused_evidence,
         state=current_state,
         ledger=ledger,
+    )
+    print(
+        f"[full-pack-ledger] START lane={lane} deadline={timeout_seconds}s "
+        f"fingerprint={prepared_fingerprint[:12]}",
+        flush=True,
     )
     result = run_unittest(unittest_args, timeout_seconds)
     if result.output:
@@ -231,10 +236,14 @@ def _check(lane: str, *, state: dict[str, str] | None = None,
 def main(argv: list[str]) -> int:
     if hasattr(sys.stdout, "reconfigure"):
         sys.stdout.reconfigure(encoding="utf-8", errors="replace")
-    if len(argv) >= 8 and argv[1] == "run" and "--" in argv:
+    if len(argv) >= 2 and argv[1] == "run":
+        if "--" not in argv:
+            print("[full-pack-ledger] REFUSED - invalid run arguments; missing `--` before unittest args")
+            return 2
         split = argv.index("--")
         if split != 6:
-            print(__doc__)
+            print("[full-pack-ledger] REFUSED - invalid run arguments; expected "
+                  "`run <lane> <trigger> <focused evidence> <timeout> -- <unittest args>`")
             return 2
         try:
             return run_full_pack(
