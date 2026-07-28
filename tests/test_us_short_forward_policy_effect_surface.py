@@ -5,6 +5,7 @@ import hashlib
 import unittest
 from copy import deepcopy
 
+from engine import us_short_forward_policy_effect_surface as effect_surface
 from engine.us_short_forward_policy_effect_surface import (
     ForwardPolicyEffectSurfaceError,
     baseline_epoch_sha256,
@@ -56,6 +57,47 @@ class USShortForwardPolicyEffectSurfaceTests(unittest.TestCase):
         self.assertEqual(
             semantic_component_sha256("presets/example.json", b'{"a":1,"b":[2]}'),
             semantic_component_sha256("presets/example.json", b'{\n  "b": [2],\n  "a": 1\n}'),
+        )
+
+    def test_effect_surface_memos_key_on_current_source_bytes_and_preserve_epoch(self) -> None:
+        effect_surface._engine_imports_from_source.cache_clear()
+        effect_surface._preset_dependencies_from_source.cache_clear()
+        effect_surface.semantic_component_sha256.cache_clear()
+        first = baseline_epoch_sha256()
+        first_infos = (
+            effect_surface._engine_imports_from_source.cache_info(),
+            effect_surface._preset_dependencies_from_source.cache_info(),
+            effect_surface.semantic_component_sha256.cache_info(),
+        )
+        self.assertEqual(baseline_epoch_sha256(), first)
+        for before, after in zip(first_infos, (
+            effect_surface._engine_imports_from_source.cache_info(),
+            effect_surface._preset_dependencies_from_source.cache_info(),
+            effect_surface.semantic_component_sha256.cache_info(),
+        )):
+            self.assertGreater(after.hits, before.hits)
+            self.assertLess(after.currsize, after.maxsize)
+        original = b"VALUE = 1\n"
+        changed = b"VALUE = 2\n"
+        self.assertNotEqual(
+            semantic_component_sha256("engine/example.py", original),
+            semantic_component_sha256("engine/example.py", changed),
+        )
+        self.assertEqual(
+            effect_surface._engine_imports_from_source("engine/example.py", "import engine.us_short_alpha\n"),
+            ("engine.us_short_alpha",),
+        )
+        self.assertEqual(
+            effect_surface._engine_imports_from_source("engine/example.py", "import engine.us_short_beta\n"),
+            ("engine.us_short_beta",),
+        )
+        self.assertEqual(
+            effect_surface._preset_dependencies_from_source("engine/example.py", "PRESET = 'presets/one.json'\n"),
+            frozenset({"presets/one.json"}),
+        )
+        self.assertEqual(
+            effect_surface._preset_dependencies_from_source("engine/example.py", "PRESET = 'presets/two.json'\n"),
+            frozenset({"presets/two.json"}),
         )
 
 

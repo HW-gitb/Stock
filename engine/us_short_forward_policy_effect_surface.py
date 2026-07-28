@@ -13,6 +13,7 @@ from __future__ import annotations
 import ast
 import hashlib
 import json
+from functools import lru_cache
 from pathlib import Path
 
 import jsonschema
@@ -88,11 +89,26 @@ def _engine_path_from_module(module: str | None) -> str | None:
     return relative_path
 
 
-def _python_tree(relative_path: str) -> ast.AST:
+def _python_source_text(relative_path: str) -> str:
     try:
-        return ast.parse((ROOT / relative_path).read_text(encoding="utf-8"), filename=relative_path)
-    except (OSError, UnicodeDecodeError, SyntaxError) as exc:
+        return (ROOT / relative_path).read_text(encoding="utf-8")
+    except (OSError, UnicodeDecodeError) as exc:
         raise ForwardPolicyEffectSurfaceError(f"cannot parse effect-surface Python: {relative_path}") from exc
+
+
+@lru_cache(maxsize=128)
+def _engine_imports_from_source(relative_path: str, source: str) -> tuple[str, ...]:
+    try:
+        tree = ast.parse(source, filename=relative_path)
+    except SyntaxError as exc:
+        raise ForwardPolicyEffectSurfaceError(f"cannot parse effect-surface Python: {relative_path}") from exc
+    modules: set[str] = set()
+    for node in ast.walk(tree):
+        if isinstance(node, ast.ImportFrom) and isinstance(node.module, str):
+            modules.add(node.module)
+        elif isinstance(node, ast.Import):
+            modules.update(alias.name for alias in node.names)
+    return tuple(sorted(modules))
 
 
 def selection_and_outcome_engine_closure() -> tuple[str, ...]:
@@ -103,21 +119,22 @@ def selection_and_outcome_engine_closure() -> tuple[str, ...]:
         if relative_path in discovered:
             continue
         discovered.add(relative_path)
-        for node in ast.walk(_python_tree(relative_path)):
-            modules = [node.module] if isinstance(node, ast.ImportFrom) else []
-            if isinstance(node, ast.Import):
-                modules.extend(alias.name for alias in node.names)
-            for module in modules:
-                imported = _engine_path_from_module(module)
-                if imported is not None and imported not in discovered:
-                    pending.append(imported)
+        for module in _engine_imports_from_source(relative_path, _python_source_text(relative_path)):
+            imported = _engine_path_from_module(module)
+            if imported is not None and imported not in discovered:
+                pending.append(imported)
     return tuple(sorted(discovered - _NON_EFFECT_TRANSITIVE_PATHS))
 
 
-def _preset_dependencies(relative_path: str) -> set[str]:
+@lru_cache(maxsize=128)
+def _preset_dependencies_from_source(relative_path: str, source: str) -> frozenset[str]:
     """Find runtime preset paths from assignments in one closure module."""
     result: set[str] = set()
-    for node in ast.walk(_python_tree(relative_path)):
+    try:
+        tree = ast.parse(source, filename=relative_path)
+    except SyntaxError as exc:
+        raise ForwardPolicyEffectSurfaceError(f"cannot parse effect-surface Python: {relative_path}") from exc
+    for node in ast.walk(tree):
         if not isinstance(node, (ast.Assign, ast.AnnAssign)) or node.value is None:
             continue
         strings = {
@@ -129,7 +146,11 @@ def _preset_dependencies(relative_path: str) -> set[str]:
                 result.add(value)
             elif value.startswith("us_short_") and value.endswith(".json") and "presets" in strings:
                 result.add(f"presets/{value}")
-    return result
+    return frozenset(result)
+
+
+def _preset_dependencies(relative_path: str) -> set[str]:
+    return set(_preset_dependencies_from_source(relative_path, _python_source_text(relative_path)))
 
 
 def required_effect_surface_paths() -> tuple[str, ...]:
@@ -144,6 +165,7 @@ def required_effect_surface_paths() -> tuple[str, ...]:
     return tuple(sorted(required))
 
 
+@lru_cache(maxsize=256)
 def semantic_component_sha256(relative_path: str, payload: bytes) -> str:
     """Hash Python semantics or JSON semantics, never source formatting."""
     try:

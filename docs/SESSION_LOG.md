@@ -1,5 +1,12 @@
 # Session Log
 
+## 2026-07-28 — Claude Code 审查 PASS（US-short effect-surface memo 刀 + fetch-web 两条 Required 收口）
+
+- **Verdict/Action**: 两件都过。①effect-surface 把 AST parse 按 `(path, source)` memo，`_preset_dependencies` 缓存 `frozenset`、壳函数返新 `set`，纯函数 `semantic_component_sha256` 加 256 格缓存。②fetch-web 抽出只读的 `_regroup_chunk_payload` 走 `_ingest_provider_item`，所有批状态写入移到成功之后；`served_model` 改锚在第一个**成功**的 chunk 上，比修前更严。
+- **Required**: 无新开。`docs/system_risk_register.md#R-USSHORT-FETCHWEB-UNDECLARED-BATCH-RAISE` 两条 Required 均已闭，转 resolved。一条 Optional 见 Next。
+- **Verify**: 本轮未注入 review-evidence token，故不引用。超时原因:US-short 审查须亲跑全量且当前代码态无缓存绿。超集包三模块 = `88 OK / 158.0s / exit 0`。自写老新对拍：closure 23 模块、29 条 path、29 个摘要、23 条 preset 腿**全等**；`_preset_dependencies` 投毒不回流；`baseline_epoch_sha256()`×5 的 `ast.parse` `375→75`、墙钟 `1.03s→0.24s`；三缓存 29/128、23/128、29/256 均不驱逐。静态面：`_python_tree` 零残留；`_engine_path_from_module(None)` 返 None 使新过滤等价；三处 `SyntaxError` 仍抛同一消息；新缓存函数不在 `test_c` guard 坐标表内，不会遮蔽植入变异。
+- **Next**: 待全量记绿后提交。Optional（未修）：`_ProviderItemRejected(reason, "served_model"/"finish_reason")` 传的是字段名，而本文件其余约 20 处传的都是定位符；因 `_ingest_provider_item` 对有类型的拒绝用 `exc.detail`、只对无类型的用 `fallback_detail`，这两行账本丢了 `chunk[N]`，反倒普通异常那条路还留着。建议把 `chunk_index` 传进去，detail 写成 `chunk[N]:served_model`。
+
 ## 2026-07-28 — Claude Code 审查 PASS（A-short 刀 9 遗留 Optional：缓存树纯净性守卫）
 
 - **Verdict/Action**: PASS，该 Optional 真闭。新守卫在 `frozen_enforced` 下跑真实 `_fingerprints()`，用 `mock.patch.object(..., wraps=...)` 记下每个传给 `_cached_semantic_source_tree` 的 `(module_name, source)`，事后逐个断言缓存树的 `ast.dump(include_attributes=True)` 等于该源码的新 parse。防护由「靠约定」回到「有守卫」。
