@@ -922,6 +922,53 @@ class DocGovernanceGuard(unittest.TestCase):
         self.assertTrue(self._review_cycle_offenders(pass_header_with_detail),
                         "word-boundary change wrongly lets a real standalone PASS verdict entry escape enforcement")
 
+    IMPLEMENTER_HANDOFF_HEADER_RE = re.compile(
+        r"\b(?:implementation|implement(?:ed|ing)?|repair(?:ed|ing)?|fix(?:ed|ing)?)\b",
+        flags=re.IGNORECASE,
+    )
+    IMPLEMENTER_PROOF_MARKER = "IMPLEMENTER-HANDOFF-PROOF-MARKER"
+
+    @classmethod
+    def _implementer_handoff_proof_offenders(cls, zone_text):
+        """Require proof for future Codex implementation/repair headers without rewriting history."""
+        offenders = []
+        headers = list(re.finditer(r"(?m)^## \d{4}-\d{2}-\d{2}\b.*$", zone_text))
+        for index, match in enumerate(headers):
+            block_end = headers[index + 1].start() if index + 1 < len(headers) else len(zone_text)
+            header = match.group(0)
+            block = zone_text[match.end():block_end]
+            if not re.search(r"\bCodex\b", header, flags=re.IGNORECASE):
+                continue
+            if not cls.IMPLEMENTER_HANDOFF_HEADER_RE.search(header):
+                continue
+            if not cls._PROOF_LINE.search(block):
+                offenders.append(("missing-pre-codex-self-review", header[:50]))
+        return offenders
+
+    def test_implementer_handoff_proof_enforced_above_marker(self):
+        log = (ROOT / "docs" / "SESSION_LOG.md").read_text(encoding="utf-8")
+        self.assertIn(self.IMPLEMENTER_PROOF_MARKER, log,
+                      "SESSION_LOG lost the implementation-handoff proof adoption marker")
+        zone = log.split(self.IMPLEMENTER_PROOF_MARKER, 1)[0]
+        self.assertEqual(
+            self._implementer_handoff_proof_offenders(zone), [],
+            "future Codex implementation/repair handoffs missing the Pre-Codex line")
+
+    def test_implementer_handoff_proof_guard_planted(self):
+        missing = ("## 2026-07-28 - Codex implementation (R-TEST-FOO)\n"
+                   "- **Verdict/Action**: implemented the change\n"
+                   "- **Required**: R-TEST-FOO - see register\n"
+                   "- **Verify**: 1 OK\n- **Next**: Claude Code: review\n")
+        present = missing + "- **Pre-Codex self-review**: A-F checked - evidence\n"
+        review = ("## 2026-07-28 - Codex review PASS (R-TEST-FOO)\n"
+                  "- **Verdict/Action**: PASS\n")
+        self.assertTrue(self._implementer_handoff_proof_offenders(missing),
+                        "guard must flag an English Codex implementation handoff missing proof")
+        self.assertEqual(self._implementer_handoff_proof_offenders(present), [],
+                         "guard must accept an implementation handoff with labelled proof")
+        self.assertEqual(self._implementer_handoff_proof_offenders(review), [],
+                         "guard must not treat a review-only header as an implementation handoff")
+
     def test_draft_handoff_proof_enforced_above_marker(self):
         # R-PRECODEX-CHECKLIST-HANDOFF-PROOF-OF-USE-GAP: a 起草/强化 handoff that omits the required
         # `Pre-Codex self-review` line must fail automatically (the rule can no longer rely on memory).
@@ -1036,6 +1083,7 @@ class DocGovernanceGuard(unittest.TestCase):
         "main-thread class-closure after FAIL",
         "no content-driven re-review",
         "documented material-new-risk exception",
+        "registry / frozen-coordinate / dying-test",
     )
     # Body phrases that MUST NOT reappear in AGENTS item 7. Naming a rule ("B ripple-grep") is fine;
     # restating its body is the AGENTS<->checklist drift this refactor eliminates.

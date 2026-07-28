@@ -1,5 +1,18 @@
 # System Risk Register
 
+### R-GOV-EXECUTOR-TEST-PLAN-ENFORCEMENT-20260728 - resolved governance Required
+
+- **Risk / root cause**: the executor checklist already required a narrow focused-to-final-full test plan and a `Pre-Codex self-review` handoff proof, but the machine guard only recognized Chinese `起草` / `强化` headers. An English `Codex implementation` handoff therefore bypassed the proof requirement; the K3-R67/R66 repair then serially re-ran conformance while discovering registry/frozen-coordinate obligations one at a time.
+- **Repair / invariant**: above the new implementation-handoff adoption marker, `tests/test_doc_governance_guard.py` treats Codex `implementation` / `implement` / `repair` / `fix` headers as implementer handoffs and rejects a missing labelled proof line; older entries are grandfathered rather than falsely claimed compliant. The authoritative checklist's speed discipline now requires a one-pass mapping of all changed shared-guard/conformance callsites to their registry, frozen-coordinate, and dying-test decisions before the first long conformance run. The final lane run remains exactly one `full_pack_ledger.py run` after the final behavior/contract diff; focused acceptance and mutation controls remain mandatory and are not replaced by a broad green run.
+- **Closure**: planted English `Codex implementation` entry without proof fails; the prior K3-R67/R66 handoff has an explicit retrospective disclosure rather than fabricated pre-review evidence. Fixed-Python document-governance/README/route guards = 62 OK; `py_compile tests/test_doc_governance_guard.py` and `git diff --check` pass. No A-short, US-long, provider, account, order, or production behavior changed.
+
+### R-USSHORT-K3-R67-K3-R66-OFFLINE-PRODUCTION-ENTRY-GUARD - implementation handoff
+
+- **Scope**: US-short knife-3 web/X discovery and §4c weekly consumption only; no provider call, network, real key, A-short, US-long, or order path.
+- **Required**: The production entries `run_web_fetch` and `run_x_fetch` now use their default gitignored raw roots in offline mode, preserve X reply rows, and emit X `model_transcribed` attestation. Merge re-reads persisted raw evidence, binds source text to the member ticker, demotes mismatches with a ledger row, and §4c reports `X 侧为模型转述，未经平台原始记录核验` when consumed.
+- **Permanent regression**: `tests/provider/test_us_short_offline_production_entry_guard.py` calls only the two production entries with fake clients, proves both-source/knife-2 output, runs the cat-text reverse control, and has named mutation controls for raw persistence, raw digest binding, and ticker binding.
+- **Status**: Codex implementation complete; independent Claude Code review remains required before commit.
+
 ### R-GOV-SUBPROCESS-DECODE-USES-MACHINE-LOCALE - resolved Required (GOV-R6): the real root cause behind GOV-R5's nine red fail-closed guards
 
 - **状态 / 严重度**: **resolved 2026-07-27，由 reviewer(Claude Code) 按用户指令自修 + 自审，未提交前已双 shell 验证**。测试基础设施；不碰选股、真钱、provider、网络。P2 的理由是它让这条 lane 的强制入口**在某些 shell 下永远拿不到全绿**，于是所有依赖「full pack 绿」的 PASS 门都建在一个随环境变红的包上。

@@ -1,5 +1,30 @@
 # Session Log
 
+## 2026-07-28 — Claude Code 审查 PASS（executor test-plan enforcement：英文 implementation 抬头绕过 proof-of-use）
+
+- **Verdict/Action**: PASS。缺陷真实：既有 proof 守卫只认中文 `起草`/`强化` 抬头，英文 `Codex implementation` 交接因此完全绕过 proof-of-use。新守卫按「抬头含 `Codex` 且含 implementation/implement/repair/fix」判为 implementer handoff，要求块内有**带标签**的 `Pre-Codex self-review` / `Proof-of-use` 行；marker 之下 grandfather，不追溯声称合规。checklist 第 2 条同步加「改共享 guard / AST-conformance 矩阵或其调用点前，先一次列全所有调用点及各自的 registry / frozen-coordinate / dying-test 决定」，并由锚点表钉住不被删。
+- **Required**: 无，未新开 register 条目。两条 Optional 见 Next。
+- **Verify**: 本轮未注入 review-evidence token，故不引用。doc-governance 三包 = `62 OK / 0.8s / exit 0`。自写植入（不采信它自带的自指对照）：真实 SESSION_LOG 强制区恰 1 条抬头、基线零 offender；删掉那条的标签行 → 变红；改成散文提及 `Pre-Codex self-review`（不带标签）→ 同样变红，即上次踩过的 prose-vs-labeled 假阴性类未复发。改动**零删除**，纯新增。
+- **Next**: 提交。本次提交只认证 governance 这一件；同批被带上的 `R-USSHORT-K3-R67-K3-R66-...` 交接记录**其代码不在本 commit**，该 finding 的权威实现是 fe9c `94a81ebc`（已审 PASS、待合），主树 us_short 工作区那份是更早的平行草稿、待处置。Optional①：中文 `Codex 修复` 抬头且无 proof 行，本树两条守卫都抓不到（实测 offenders 为空），由 213f 那笔的 `_repair_closeout_offenders` 覆盖，两笔合流后闭合，届时两处 marker 会在同一文件冲突需人工合。Optional②：抬头不写 `Codex` 的 implementer 交接可完全逃逸（实测）。
+
+## 2026-07-28 - Codex repair: executor test-plan enforcement
+
+- **Verdict/Action**: Closed the implementation-header proof-of-use bypass and pinned the shared-guard/conformance planning step; no commit.
+- **Required**: R-GOV-EXECUTOR-TEST-PLAN-ENFORCEMENT-20260728 — see `docs/system_risk_register.md`.
+- **Verify**: `cmd /c .tools\run_unittest_with_repo_pythonpath.cmd tests.test_doc_governance_guard tests.test_readme_route_row_length tests.test_route_doc_ledger_status_consistency` = 62 OK; pinned `py_compile tests\test_doc_governance_guard.py` = exit 0; `git diff --check` = clean.
+- **Pre-Codex self-review**: A=implementation/repair/fix aliases enumerated; B=implementation headers swept; C=planted English implementation without proof must fail; E=checklist remains the single rule body; F=no business-lane file changed.
+- **Next**: Claude Code: review.
+
+<!-- IMPLEMENTER-HANDOFF-PROOF-MARKER (adopted 2026-07-28): future Codex implementation/repair/fix handoffs must be prepended above this line and include a labelled Pre-Codex self-review/Proof-of-use line. Entries below are historical and are not retroactively claimed compliant. -->
+
+## 2026-07-28 - Codex implementation K3-R67 and K3-R66 remaining legs
+
+- **Verdict/Action**: Implemented the permanent offline production-entry guard and the weak X attestation path; no commit.
+- **Required**: Claude Code must independently review this complete US-short-only diff before any commit.
+- **Verify**: `cmd /c .tools\run_unittest_with_repo_pythonpath.cmd` focused pack = 132 OK; pinned `bounded_unittest.py` conformance + permanent guard = 42 OK; pinned `bounded_unittest.py ... discover -s tests -p '*us_short*'` = 4,957 OK; pinned `-m py_compile` = exit 0; launcher route-doc guards = 25 OK; no network, real key, or state/us_short residue.
+- **Pre-Codex self-review**: Retrospective disclosure: this handoff omitted the required pre-handoff A-F proof; only final test evidence was recorded. The strengthened governance guard now rejects future implementation/repair/fix headers lacking this labelled line.
+- **Next**: Claude Code: review.
+
 ## 2026-07-28 — Claude Code 审查（wt/us-short `45e71fdf`：未落地的 comparison-only 范围决策）
 
 - **Verdict/Action**: 该 commit **从未走过评审循环**——它只动 `docs/system_risk_register.md`（2 行）与 `docs/us_short_system_design.md`（1 行），**没有同时写 SESSION_LOG**；master 的 2026-07-22 条目全部是 A-short 治理，无一条对应；commit message 单行无正文。规模上不是大块，是 3 行，但每行是整段散文，重写了 comparison-only 的目的定义并改写了刀 5 的范围。内容是用户自述意图而非代码，不需要代码级审查，只欠落地。
