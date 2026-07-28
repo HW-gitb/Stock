@@ -1,5 +1,83 @@
 # Session Log
 
+## 2026-07-28 - Claude Code 审查 PASS (K3-R55 恢复原提示词属实；刀3 live 半边本轮 Required 全闭)
+
+- **Verdict/Action**: PASS，提交。R55 真闭：提示词与 HEAD 那份逐字节相同(各 421 字符)，八条已审约束全在，游离副本已删。至此 K3-R49~R58 与三条 Optional 全部闭合，整片(Codex 的 R49~R58 + 我自己修的三条 Optional)一并提交。
+- **Required**: 无。逐条证据与闭合判据落 `docs/system_risk_register.md`（单一来源）。
+- **Verify**: review-evidence:189a1959abf5。整读被消费函数体。自写探针：从 `HEAD` 与工作树各自抽出 `_build_deepseek_prompt` 渲染同一行 → 逐字节相等；八条约束逐一命中；`_regroup_model_identity` 回到 6 行、全模块提示词开头恰好 1 处。植入控制：把提示词改回 158 字符那版 → 具名测试 `test_regroup_prompt_is_nonempty_and_binds_every_chunk_source` 转红，基线与恢复均 0 红/46 tests。变更符号消费者包 **115 OK**。我自己的覆盖瑕疵：该命令里我多写了一个不存在的模块名，故那次报 `116 tests/exit 1`(加载器错误)，115 条真实测试全绿、无代码回归。未起 6a agent(用户级规则禁止未经请求起 agent)。
+- **Next**: 写桌面待办文档；解冻链 ① 的 Grok 形状待用户点头后抓
+
+## 2026-07-28 - Claude Code 修复 US-short 三条 Optional (凭证形状/提示词正文/日期拼法)，按类封不按腿封
+
+- **Verdict/Action**: 用户指令我自己修。按整类封：(A) 凭证形状绑死单一样本 —— 成员含 web 精确 `{52}` 与 X 内联两份的同款字面量，改为共享谓词「marker 恰好出现一次 + 无空白/控制字符 + 宽泛长度区间」，X 两处收敛到一个 helper；(B) 模型读到的正文≠收据冻的正文 —— 删掉第二道 1800 字截断，分块成为唯一边界；(C) 可区分失败折进「缺失」—— 新增共享 `provider_instant_drop_reason`，两条 lane 都区分「无值」与「拼法不支持」，同时放宽接收 `UT`/数字偏移、继续拒 `-0000` 与具名时区。未提交。
+- **Required**: 无新增。完整类枚举、修法与逐条证据落 `docs/system_risk_register.md` 的 Claude Code repair 注（单一来源，本处不复述）。
+- **Verify**: 探针：Tavily 40/52/96 位 body 全收、拼接/空格/空/过短全拒，X 84 位收、拼接与制表符拒；4000 字正文完整进提示词(单块出现 10 次、41286 字符、分块 `[10, 2]`)；`GMT`/`UT`/`+0000`/`-0500` 解析到同一时刻，`-0000`/`PST`/`2026/07/20` 落 `unsupported_published_at_format`、无值落 `missing_published_at`。放松类强制腿反向控制：带偏移且晚于开盘(含偏移把它推过开盘的那条)仍落 `published_at_after_decision_open`、早于本周仍落 `published_at_outside_decision_week`。植入控制四条各点名真实测试(红 4/2/2/2，基线与恢复均 0)。聚焦两模块 76 OK、变更符号消费者包 115 OK、四个改动文件 py_compile 通过、`git diff --check` 仅既有 CRLF。
+- **Pre-Codex self-review**: 连带 grep 归零(`TAVILY_API_KEY_RE`/`MAX_REGROUP_SOURCE_TEXT_CHARS`/`_RFC1123_GMT_RE`/`missing_or_malformed_*` 全树 0 命中，两处旧断言已同步改)；反向失败已核(放宽日期接收面的同时，具名时区与 `-0000` 保持拒绝，因为未知时区会被解析成 UTC、把太平洋时间提前八小时可能偷渡开盘后条目)；歧义走最窄安全侧。独立对抗 pass: **未跑** —— 触发条件(校验/PIT 边界)命中，但本会话用户级规则禁止未经请求起 agent，已用四条植入控制 + 强制腿反向控制替代并在 register 显式记录。
+- **Next**: Codex：独立复审本次三条 Optional 的完整 diff（与 K3-R55 那轮合并审）
+
+## 2026-07-28 - Codex repair US-short K3-R55 original-prompt restoration
+
+- **Verdict/Action**: Implemented; no commit. Restored the reviewed prompt literal as `_build_deepseek_prompt`'s return value and removed its unreachable duplicate from `_regroup_model_identity`.
+- **Required**: K3-R55 repair detail and independent closure decision remain in `docs/system_risk_register.md`; K3-R34 live freeze is unchanged.
+- **Verify**: Fixed Python 3.13 focused web/X/schema pack: 72 OK; no provider/live/key call.
+- **Next**: Claude Code independently review this K3-R55-only repair; commit only after PASS.
+
+## 2026-07-28 - Claude Code 复审 FAIL (K3-R56/R57/R58 真闭；R55 换了个更糟的形态)
+
+- **Verdict/Action**: FAIL，未提交。R56(滚动 7 天窗)、R57(零来源 live 周能出包且反向控制仍咬)、R58(逐分块隔离、fingerprint 不再是杀手闸)三条经我自己的探针逐条确认 CLOSED。R55 未闭：prompt 现在有返回值了，但返回的是**新写的 158 字符提示词**，原文仍作为死代码留在 `_regroup_model_identity` 的 return 之后。
+- **Required**: 一条，`R-USSHORT-KNIFE3-WEB-X-MERGE-PACKET-BOUNDARY` 下 K3-R55(重述)。新提示词丢了全部已审约束：防注入句、「不输出分数/席位/Top15/动作」(§五 红线 1、3 就靠这句)、整份 JSON 形状规格(`source_ref_ids` 等，缺了必然全量 `theme_without_bound_members`)、成员须为证据中明确提及的美股。修法=把原文恢复为返回值并删掉游离副本，别重写；完整判据在 `docs/system_risk_register.md`。
+- **Verify**: 本轮按用户指令不动 xAI、不跑测试包，全部本地静态+探针。探针：`_build_deepseek_prompt` 返回 158 字符、五项约束标记全 MISSING、`_regroup_model_identity` 源码仍 15 行且含原文标记；`20260727` 窗口实测 `2026-07-20T13:30Z..2026-07-27T13:30Z`=168.0h，上周五/上周日 ACCEPTED、开盘后与 8 天前/五个月前按各自理由丢弃；live 零来源出包 status=`live_authorized_no_accepted_sources`(schema 随之验过)、已归拢但无 served model 仍被拒；假客户端驱动真实分块循环：3 块中 1 块截断/抛错各保住 2 个主题并留 `regroup_chunk_dropped`，3 块全败才 `regroup_failed=True`，三个不同 fingerprint 全部保留。
+- **Next**: Codex：只修 K3-R55(恢复原提示词并加约束标记断言)
+
+## 2026-07-28 - Codex repair US-short K3-R55/R56/R57/R58
+
+- **Verdict/Action**: Implemented; no commit.
+- **Required**: K3-R55/R56/R57/R58 detail is in `docs/system_risk_register.md`; K3-R34 live freeze is unchanged.
+- **Verify**: Fixed Python 3.13 focused web/X/schema pack: 72 OK; no provider/live/key call.
+- **Next**: Claude Code independently review this K3 diff; commit only after PASS.
+
+## 2026-07-28 - Claude Code 审查 FAIL (K3-R51码腿/R54/R52/R53：两条真闭，但新代码全在冻结分支里、测试碰不到)
+
+- **Verdict/Action**: FAIL，未提交。K3-R51 代码腿 CLOSED(正则按实测 key 形状，无分隔符与空格双 key 均拒；X 侧同类已扫)、K3-R53 CLOSED(模型身份进收据+schema)、K3-R52 方向可接受(分块+截断显式失败)。但新增 live 代码有四处硬伤，测试全绿只因那条分支被 K3-R34 冻着、没有任何用例会走到。
+- **Required**: 四条新的，落 `R-USSHORT-KNIFE3-WEB-X-MERGE-PACKET-BOUNDARY`：K3-R55(prompt 构造函数被切开、现在返回 `None`)、K3-R56(「当周」下限做成了周一 9.5 小时窗、把上一轮修的空周又造回来)、K3-R57(Tavily 空结果的 live 周现在直接抛异常)、K3-R58(一个坏分块丢掉其余全部分块，且 fingerprint 变动成了杀手闸)。证据与修法只在 register。
+- **Verify**: review-evidence:7e54e354fae4。整读全 diff(web 114/19、x 6/3、schema 3/2、测试 94/0 与 10/1)。变更符号消费者包 `107 tests/4.9s/PASS`。自写探针：`_build_deepseek_prompt(...)` 返回 `NoneType`、`_regroup_model_identity` 源码 15 行(应约 7)；`20260727`(周一)窗口实测 `04:00Z..13:30Z`=9.5h，上周五/上周日两条均 `published_at_outside_decision_week`；live+零来源 → `RAISED live regroup receipt requires requested and served model identity`；凭证正则对实测 57 位放行、59 位与两种双 key 全拒；50 行→5 块、内容截到 1800、260 行→拒。未起 6a agent(改动小、且 FAIL 已坐实)。
+- **Next**: Codex：先修 K3-R55(最致命)，再 K3-R56/R57/R58
+
+## 2026-07-28 - Codex repair US-short K3-R51/R52/R53/R54
+
+- **Verdict/Action**: Implemented; no commit.
+- **Required**: K3-R51/R52/R53/R54 detail is in `docs/system_risk_register.md`; K3-R34 live freeze is unchanged.
+- **Verify**: Fixed Python 3.13 focused web/X/schema pack: 69 OK; no provider/live/key call.
+- **Next**: Claude Code independently review this K3 diff; commit only after PASS.
+
+## 2026-07-28 - Claude Code 审查 FAIL (US-short K3-R49/R50/R51：两条真闭，一条只挡住了外层症状)
+
+- **Verdict/Action**: FAIL，未提交。K3-R49、K3-R50 独立验证 CLOSED —— 含放松类改动的强制腿反向控制：新格式的开盘后时间仍被 PIT 门丢弃。K3-R51 未闭：无分隔符拼接的双 key 仍被放行，而那正是环境里实测到的形状；X 侧同类输入未扫。另开 K3-R54(缺「当周」下限)。
+- **Required**: 落 `R-USSHORT-KNIFE3-WEB-X-MERGE-PACKET-BOUNDARY`：K3-R51(重开·两腿=单 key 形状校验 + `fetch_x` 同类)、K3-R54(新)。同轮仍开着 K3-R52/R53 与两条 Optional。证据与修法只在 register。
+- **Verify**: review-evidence:221e32fac56c。超时原因: 两个测试包各 300s TIMEOUT(UNKNOWN)，起因是 `test_us_short_discovery_conformance` 在子进程真跑 runner；它不消费本刀改的符号、且是 Codex 自标的红边界，剔除后变更符号消费者包 `103 tests/6.6s/PASS`。整读全 diff(runner 49/6、测试 61/0)。自写探针：RFC1123 开盘后→`published_at_after_decision_open`，坏/缺日期逐条丢且好行存活(收 1 丢 2)；`tvly-A`+`tvly-B` 无分隔符→**放行**。植入控制：删 RFC1123 回退→2 具名红、删 `topic:"news"`→1 红、弱化 key 校验→4 红、恢复→0 红。未起 6a agent。
+- **Next**: Codex：修 K3-R51(两腿)与 K3-R54，连同 K3-R52/R53 一并
+
+## 2026-07-28 - Claude Code 真实响应形状抓取·第二轮 (web 半边第二条腿 DeepSeek 归拢)
+
+- **Verdict/Action**: 经用户指令补验 DeepSeek 归拢腿的真实形状。用已抓的真实 Tavily `topic=news` 证据走完整链路（repo 自己的 normalizer → `_build_deepseek_prompt` → `chat.completions.create` → `_parse_llm_json` → `_llm_to_discovery_input`），拿到一条真实响应。顺带在真实数据上确认了 Codex 那轮修的接收路径（10 条进、9 条被接受）——只是数据点，不是对该 diff 的审查。未提交、未解冻 K3-R34。
+- **Required**: 两条，`R-USSHORT-KNIFE3-WEB-X-MERGE-PACKET-BOUNDARY` 下：K3-R52(一次调用/2500 token 扛不住 25 query 预算，截断后静默变空周)、K3-R53(实际服务的模型不是请求的别名，且模型身份没进收据/schema)。另一条 Optional(真实证据端到端产出为 0)也在 register。
+- **Verify**: 探针只写系统临时目录，仓库与 `state/us_short` 零新增；pinned 3.13。真实 DeepSeek 200：请求 `deepseek-chat`、响应 `model=deepseek-v4-flash` 带 `system_fingerprint`；`finish_reason=stop`、无 markdown 围栏、`_parse_llm_json` 通过、themes=10。1 个 query/9 条源 = prompt 18646 字符 = 3962 token，回复用掉 1809/2500。`_llm_to_discovery_input` 丢 9 条 `theme_without_bound_members`，剩 1 主题 1 成员，再撞 knife-2 的 ≥3 成员门 → 0。计费 1 次调用。key 未打印未落盘。
+- **Next**: Codex 修 K3-R52/R53；xAI 充值后我补抓 Grok 形状，再做 ② 拿真实形状复审 live 半边
+
+## 2026-07-28 - Codex 修复 US-short K3-R49/R50/R51
+
+- **Verdict/Action**: 已修复；未提交。
+- **Required**: K3-R49/R50/R51 详情见 `docs/system_risk_register.md`；K3-R34 live 冻结未变。
+- **Verify**: pinned Python 3.13：web 专用 37 OK、related discovery/merge/schema 134 OK；conformance 的 strict Pass2 baseline 仍 FAIL，详见 register。
+- **Next**: Claude Code 独立审查本次 K3-R49/R50/R51 diff；PASS 后由其提交。
+
+## 2026-07-28 - Claude Code 真实响应形状抓取 (US-short 3b 解冻 ①：web 半边到手、X 半边被 xAI 计费挡住)
+
+- **Verdict/Action**: 经用户授权执行桌面方案 §六 解冻顺序第 ① 步。Tavily 用 runner 逐字节同款请求拿到一条真实 200 响应并记录形状；xAI 两个端点全 403(team 无 credits/licenses)，真实 Grok 响应拿不到，故 ① 只完成一半、② 的 X 半边无法开工。未提交、未解冻 K3-R34、未跑 live 分支、未起 6a agent。
+- **Required**: 三条，落在 `R-USSHORT-KNIFE3-WEB-X-MERGE-PACKET-BOUNDARY` 下：K3-R49(真实响应无 `published_date`)、K3-R50(`topic=news` 给的是 RFC 1123 而 `_parse_dt` 只吃 ISO)、K3-R51(`TAVILY_API_KEY` 是两段 token 且无预检)。证据与修法只在 register。
+- **Verify**: 探针只写系统临时目录，仓库与 `state/us_short` 零新增；pinned 3.13。真实 Tavily 200：repo 形态 10 条 key set 恒为 `{url,title,content,score,raw_content}`、`published_date` 0/10；`topic=news` 形态 9/10 有该字段但样例是 `'Tue, 02 Dec 2025 07:14:35 GMT'`。两份真实 payload 喂 repo 自己的 `_normalize_search_results`(只读) 均 `accepted=0/dropped=10/missing_or_malformed_published_at`。xAI `/v1/models` 与 `responses.create(grok-4.3,x_search)` 均 403。Tavily 实耗 5 次(2 次认证成功)。key 未打印未落盘。
+- **Next**: 用户给 xAI team 充值后补抓 Grok 形状；之后 Codex 按 K3-R49/R50/R51 动手，再做 ② 拿真实形状复审 live 半边
+
 ## 2026-07-27 - Claude Code 复审 PASS (US-short 4c 一次性收口：那一类现在会被测试当场抓住)
 
 - **Verdict/Action**: PASS。19 个判定输入逐条溯源审计已做且 (c) 类为空（取不到 VIX/相邻篮子/H10 一律不产 observation、只写显式 no-count）；regime 接既有 `vix_regime_summary_path` 同一条轴、turnover 用相邻周篮子替换率真算、`fill_fraction` 作带理由的结构豁免并已从 `risk_ok` 删除（现只剩四项）；两个新 stage 进 `default_pipeline`、best_effort、顺序 maturity→capture→bridge。K4C-R5/R6/R7/R8/R9 随本条目一并转 resolved。

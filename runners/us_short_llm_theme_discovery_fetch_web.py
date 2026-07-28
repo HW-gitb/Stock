@@ -12,6 +12,7 @@ keys; keys are never returned, logged, or written to tracked artifacts.
 from __future__ import annotations
 
 import argparse
+from email.utils import parsedate_to_datetime
 import hashlib
 import json
 import os
@@ -20,7 +21,7 @@ import subprocess
 import sys
 import urllib.request
 from urllib.parse import urlsplit, urlunsplit
-from datetime import datetime, time as datetime_time, timezone
+from datetime import datetime, time as datetime_time, timezone, timedelta
 from pathlib import Path
 from typing import Any, Callable
 from zoneinfo import ZoneInfo
@@ -58,10 +59,27 @@ SCHEMA_PATH = ROOT / "schemas" / "us_short_llm_theme_discovery_fetch_web.schema.
 TAVILY_ENDPOINT = "https://api.tavily.com/search"
 DEEPSEEK_MODEL = "deepseek-chat"
 MAX_TAVILY_QUERIES = 25
+MAX_REGROUP_SOURCES_PER_CALL = 10
+MAX_DEEPSEEK_REGROUP_CALLS = 25
+# A provider credential is validated for AMBIGUITY, not against the one key we happened to observe.
+# The property that protects a paid week is "exactly one credential" — two keys concatenated with no
+# separator is the shape actually found in an operator environment — while an exact sample-derived
+# length would refuse a legitimately rotated key of another length.
+PROVIDER_CREDENTIAL_BODY_RE = re.compile(r"[A-Za-z0-9_-]{16,256}")
 NEW_YORK = ZoneInfo("America/New_York")
 SOURCE_ID_RE = re.compile(r"^web:[0-9a-f]{64}$")
 SHA256_RE = re.compile(r"^[0-9a-f]{64}$")
 SECRET_RE = SECRET_TEXT_RE
+# RFC 1123 zones we accept: `GMT`/`UT`, and any real numeric offset.  Alphabetic zone names
+# (`PST`, `EST`, ...) and the RFC 5322 "unknown zone" spelling `-0000` stay refused on purpose:
+# `parsedate_to_datetime` resolves an unknown zone to UTC, so a Pacific timestamp would land eight
+# hours earlier than it happened and could smuggle a post-open item inside the decision window.
+_RFC1123_RE = re.compile(
+    r"^(?:Mon|Tue|Wed|Thu|Fri|Sat|Sun), [0-9]{2} "
+    r"(?:Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec) [0-9]{4} "
+    r"[0-9]{2}:[0-9]{2}:[0-9]{2} (?:GMT|UT|[+-][0-9]{4})$"
+)
+_RFC1123_UNKNOWN_ZONE_SUFFIX = " -0000"
 CONFORMANCE_GUARDS = ("_guard_generated_before_open",)
 # `SECRET_RE` is a TEXTUAL check (free text, queries) and must stay conservative there: "AI token
 # demand" is a legitimate search query.  A LOCATOR needs a STRUCTURAL check instead — a provider may
@@ -272,6 +290,42 @@ def _parse_dt(value: Any, *, field: str) -> datetime:
         raise WebThemeDiscoveryError(f"{field} must be timezone-aware RFC3339") from exc
 
 
+def _parse_provider_published_at(value: Any, *, field: str) -> datetime:
+    """Accept Tavily's observed RFC3339 or the real `topic=news` RFC 1123 shape.
+
+    Provider-specific decoding stops at this intake boundary.  All persisted instants are still
+    normalized UTC RFC3339 by ``datetime.isoformat()``, and every existing pre-open PIT check
+    remains downstream of this parser.  A spelling this parser cannot resolve UNAMBIGUOUSLY is
+    refused rather than guessed; the caller separates "no value" from "unsupported spelling" so an
+    unsupported provider format is visible in the ledger instead of looking like a missing date.
+    """
+    try:
+        return _parse_dt(value, field=field)
+    except WebThemeDiscoveryError as iso_error:
+        if (
+            not isinstance(value, str)
+            or _RFC1123_RE.fullmatch(value) is None
+            or value.endswith(_RFC1123_UNKNOWN_ZONE_SUFFIX)
+        ):
+            raise WebThemeDiscoveryError(
+                f"{field} must be timezone-aware RFC3339 or RFC1123 with a resolvable zone"
+            ) from iso_error
+    try:
+        parsed = parsedate_to_datetime(value)
+        if parsed.tzinfo is None:
+            raise ValueError("RFC1123 timestamp lacks timezone")
+        return parsed.astimezone(timezone.utc)
+    except (TypeError, ValueError, OverflowError) as exc:
+        raise WebThemeDiscoveryError(
+            f"{field} must be timezone-aware RFC3339 or RFC1123 with a resolvable zone"
+        ) from exc
+
+
+def provider_instant_drop_reason(raw_value: Any, *, absent: str, unsupported: str) -> str:
+    """One rule for both lanes: an absent instant and an unusable spelling are different failures."""
+    return absent if raw_value is None or raw_value == "" else unsupported
+
+
 def _decision_date(value: str) -> datetime.date:
     if not isinstance(value, str) or not re.fullmatch(r"[0-9]{8}", value):
         raise WebThemeDiscoveryError("expected_decision_date must be YYYYMMDD")
@@ -283,6 +337,10 @@ def _decision_date(value: str) -> datetime.date:
 
 def _cutoff(decision_date: str) -> datetime:
     return datetime.combine(_decision_date(decision_date), datetime_time(9, 30), NEW_YORK).astimezone(timezone.utc)
+
+
+def _decision_week_start(decision_date: str) -> datetime:
+    return _cutoff(decision_date) - timedelta(days=7)
 
 
 def _guard_generated_before_open(generated: datetime, expected_decision_date: str) -> None:
@@ -447,7 +505,7 @@ def _assert_receipt_secret_free(receipt: dict[str, Any]) -> None:
 
 PROVIDER_CALL_BUDGET = {
     ("web", "tavily"): MAX_TAVILY_QUERIES,
-    ("web", "deepseek"): 1,
+    ("web", "deepseek"): MAX_DEEPSEEK_REGROUP_CALLS,
     ("x", "xai"): 15,
 }
 
@@ -621,15 +679,24 @@ def _normalize_search_results(
                 )
             if locator in seen_locators:
                 raise _ProviderItemRejected("duplicate_canonical_locator", locator)
+            raw_published_at = item.get("published_date", item.get("observed_at"))
             try:
-                observed_at = _parse_dt(
-                    item.get("published_date", item.get("observed_at")),
-                    field=f"search_results[{index}].published_date",
+                observed_at = _parse_provider_published_at(
+                    raw_published_at, field=f"search_results[{index}].published_date",
                 )
             except Exception as exc:
-                raise _ProviderItemRejected("missing_or_malformed_published_at", locator) from exc
+                raise _ProviderItemRejected(
+                    provider_instant_drop_reason(
+                        raw_published_at,
+                        absent="missing_published_at",
+                        unsupported="unsupported_published_at_format",
+                    ),
+                    locator,
+                ) from exc
             if observed_at >= cutoff:
                 raise _ProviderItemRejected("published_at_after_decision_open", locator)
+            if observed_at < _decision_week_start(expected_decision_date):
+                raise _ProviderItemRejected("published_at_outside_decision_week", locator)
             title = _safe_text(item.get("title"), limit=240)
             content = _safe_text(item.get("content", item.get("snippet")), limit=4000)
             if not title or not content:
@@ -696,6 +763,29 @@ def _build_deepseek_prompt(expected_decision_date: str, rows: list[dict[str, str
         "\"source_ref_ids\":[\"web:...\"]}}]}}]}}。"
         "成员必须是证据中明确提及的美国股票；不确定就省略。\n" + evidence
     )
+
+
+def _chunk_regroup_rows(rows: list[dict[str, str]]) -> list[list[dict[str, str]]]:
+    """Bound the 25-query evidence maximum to at most 25 deterministic DeepSeek requests.
+
+    Chunking is the ONLY bound applied here.  The row text is passed through untouched so the model
+    reads exactly the evidence the receipt binds and hashes; a second, smaller cap at this layer
+    would make the artifact claim provenance over text the model never saw.
+    """
+    chunks: list[list[dict[str, str]]] = []
+    for start in range(0, len(rows), MAX_REGROUP_SOURCES_PER_CALL):
+        chunks.append([dict(row) for row in rows[start:start + MAX_REGROUP_SOURCES_PER_CALL]])
+    if len(chunks) > MAX_DEEPSEEK_REGROUP_CALLS:
+        raise WebThemeDiscoveryError("regroup evidence exceeds the bounded DeepSeek call budget")
+    return chunks
+
+
+def _regroup_model_identity(*, served_model: Any = None, system_fingerprints: list[str] | None = None) -> dict[str, Any]:
+    return {
+        "requested_model": DEEPSEEK_MODEL,
+        "served_model": served_model if isinstance(served_model, str) and served_model else None,
+        "system_fingerprints": sorted(set(system_fingerprints or [])),
+    }
 
 
 def _parse_llm_json(
@@ -815,6 +905,9 @@ def build_web_fetch_packet(
     network_call_count: int = 0, provider_call_count: int = 0,
     _live_attestation: object | None = None,
     extra_drop_ledger: list[dict[str, str]] | None = None,
+    regroup_model_identity: dict[str, Any] | None = None,
+    regroup_failed: bool = False,
+    regroup_attempted: bool = False,
 ) -> tuple[dict[str, Any], dict[str, Any], dict[str, Any]]:
     queries = _safe_queries(queries)
     generated = _parse_dt(generated_at, field="generated_at")
@@ -831,6 +924,9 @@ def build_web_fetch_packet(
         raise WebThemeDiscoveryError("offline packet cannot attest network/provider execution")
     if execution_mode == "live_authorized" and (network_call_count <= 0 or provider_call_count <= 0):
         raise WebThemeDiscoveryError("live packet requires observed provider/network call counts")
+    model_identity = regroup_model_identity or _regroup_model_identity()
+    if model_identity.get("requested_model") != DEEPSEEK_MODEL or (execution_mode == "live_authorized" and regroup_attempted and not regroup_failed and not model_identity.get("served_model")):
+        raise WebThemeDiscoveryError("live regroup receipt requires requested and served model identity")
     network_access_performed = network_call_count > 0
     provider_calls_performed = provider_call_count > 0
     if raw_root is not None:
@@ -905,6 +1001,7 @@ def build_web_fetch_packet(
             "scoring_eligible": False, "top15_effect_enabled": False,
             "operation_advice_effect_enabled": False, "dynamic_seats_enabled": False,
             "theme_probe_enabled": False, "lifecycle_actions_enabled": False,
+            "regroup_model": model_identity,
         },
         "queries": queries, "source_refs": receipt_refs,
         "discovery_artifact_sha256": _discovery_hash(discovery_artifact), "drop_ledger": drops,
@@ -923,7 +1020,7 @@ def build_web_fetch_packet(
         "schema_version": "1.0.0",
         # Mirror the X lane: a paid live run that accepted nothing must say so, not report success.
         "status": ("offline_fake_client_completed" if execution_mode == "offline_fake_client"
-                   else ("live_authorized_completed" if refs else "live_authorized_no_accepted_sources")),
+                   else ("live_authorized_regroup_failed" if regroup_failed else ("live_authorized_completed" if refs else "live_authorized_no_accepted_sources"))),
         "network_access_performed": network_access_performed, "provider_calls_performed": provider_calls_performed,
         "network_call_count": network_call_count, "provider_call_count": provider_call_count,
         "scoring_or_top15_effect": False, "operation_advice_effect": False,
@@ -935,12 +1032,14 @@ def build_web_fetch_packet(
 
 class TavilyClient:
     def __init__(self, api_key: str, *, timeout: float = 30.0):
-        if not api_key:
-            raise WebThemeDiscoveryError("Tavily API key is missing")
-        self.api_key, self.timeout, self.network_call_count = api_key, timeout, 0
+        self.api_key = _require_single_tavily_api_key(api_key)
+        self.timeout, self.network_call_count = timeout, 0
 
     def search(self, query: str) -> list[dict[str, Any]]:
-        body = json.dumps({"api_key": self.api_key, "query": query, "max_results": 10, "search_depth": "advanced"}).encode()
+        body = json.dumps({
+            "api_key": self.api_key, "query": query, "max_results": 10,
+            "search_depth": "advanced", "topic": "news",
+        }).encode()
         req = urllib.request.Request(TAVILY_ENDPOINT, data=body, headers={"Content-Type": "application/json"}, method="POST")
         try:
             self.network_call_count += 1
@@ -950,6 +1049,28 @@ class TavilyClient:
             raise WebThemeDiscoveryError(f"Tavily request failed: {type(exc).__name__}") from exc
         results = payload.get("results") if isinstance(payload, dict) else None
         return results if isinstance(results, list) else []
+
+
+def is_single_provider_credential(value: Any, *, marker: str) -> bool:
+    """Shared by both lanes: exactly one credential, unambiguous, no sample-derived exact length.
+
+    The marker must occur exactly once, which is what rejects `<key><key>` concatenated with no
+    separator; whitespace and control characters are refused so a multi-token variable cannot be
+    posted verbatim.  A body long enough to be a real secret is required, but the bound is a broad
+    sanity range so a rotated key of a different length is not refused.
+    """
+    if not isinstance(value, str) or not value.startswith(marker) or value.count(marker) != 1:
+        return False
+    if any(character.isspace() or ord(character) < 32 for character in value):
+        return False
+    return PROVIDER_CREDENTIAL_BODY_RE.fullmatch(value[len(marker):]) is not None
+
+
+def _require_single_tavily_api_key(value: Any) -> str:
+    """Fail before budget reservation or HTTP when the environment is not exactly one credential."""
+    if not is_single_provider_credential(value, marker="tvly-"):
+        raise WebThemeDiscoveryError("Tavily API key must be exactly one valid credential")
+    return value
 
 
 def run_web_fetch(
@@ -968,7 +1089,10 @@ def run_web_fetch(
         )
         if not confirm_user_authorization:
             raise WebThemeDiscoveryError("live execution requires --confirm-user-authorization")
-        tavily = search_client or TavilyClient(os.environ.get("TAVILY_API_KEY", ""))
+        # K3-R51: validate the environment before even a budget reservation.  Do not split or pick a
+        # token: an ambiguous credential must consume neither quota nor a provider request.
+        tavily_api_key = _require_single_tavily_api_key(os.environ.get("TAVILY_API_KEY", ""))
+        tavily = search_client or TavilyClient(tavily_api_key)
         if deepseek_client is None:
             # This branch remains unreachable while live is frozen.  A future
             # separately authorized unfreeze must provide a reviewed US-local
@@ -999,24 +1123,48 @@ def run_web_fetch(
         if not rows:
             llm_text = json.dumps({"themes": []})
             attempted_deepseek_calls = 0
+            model_identity = _regroup_model_identity()
+            regroup_failed = False
+            regroup_attempted = False
         else:
-            prompt = _build_deepseek_prompt(expected_decision_date, rows)
+            chunks = _chunk_regroup_rows(rows)
             attempted_deepseek_calls = 0
-            # The conditional regroup is billed to its own one-call DeepSeek cap,
-            # immediately before the single actual attempt.
             _reserve_provider_budget(
-                "web", "deepseek", expected_decision_date, call_count=1, query_scope=queries,
+                "web", "deepseek", expected_decision_date, call_count=len(chunks), query_scope=queries,
             )
-            try:
-                attempted_deepseek_calls += 1
-                response = deepseek_client.chat.completions.create(
-                    model=DEEPSEEK_MODEL, temperature=0, max_tokens=2500,
-                    messages=[{"role": "user", "content": prompt}],
-                )
-                llm_text = response.choices[0].message.content
-            except Exception as exc:
-                llm_text = json.dumps({"themes": []})
-                query_drops.append({"stage": "llm", "reason": "provider_response_dropped", "detail": type(exc).__name__})
+            regroup_failed = False
+            merged_themes: list[Any] = []
+            model_identity = _regroup_model_identity()
+            regroup_attempted = True
+            successful_chunks = 0
+            fingerprints: list[str] = []
+            for chunk_index, chunk in enumerate(chunks):
+                try:
+                    attempted_deepseek_calls += 1
+                    response = deepseek_client.chat.completions.create(
+                        model=DEEPSEEK_MODEL, temperature=0, max_tokens=2500,
+                        messages=[{"role": "user", "content": _build_deepseek_prompt(expected_decision_date, chunk)}],
+                    )
+                    served_model = getattr(response, "model", None)
+                    fingerprint = getattr(response, "system_fingerprint", None)
+                    if model_identity["served_model"] is None:
+                        model_identity["served_model"] = served_model if isinstance(served_model, str) and served_model else None
+                    elif served_model != model_identity["served_model"]:
+                        raise WebThemeDiscoveryError("regroup model identity changed across chunks")
+                    if isinstance(fingerprint, str) and fingerprint:
+                        fingerprints.append(fingerprint)
+                    choice = response.choices[0]
+                    if getattr(choice, "finish_reason", "stop") != "stop":
+                        raise WebThemeDiscoveryError("regroup response was truncated")
+                    merged_themes.extend(_parse_llm_json(choice.message.content)["themes"])
+                    successful_chunks += 1
+                except Exception as exc:
+                    query_drops.append({"stage": "llm", "reason": "regroup_chunk_dropped", "detail": f"chunk[{chunk_index}]:{type(exc).__name__}"})
+            model_identity["system_fingerprints"] = sorted(set(fingerprints))
+            regroup_failed = successful_chunks == 0
+            if regroup_failed:
+                query_drops.append({"stage": "llm", "reason": "regroup_response_invalid", "detail": "no_chunk_survived"})
+            llm_text = json.dumps({"themes": merged_themes})
         packet, receipt, summary = build_web_fetch_packet(
             queries=queries, search_results=results, llm_response=llm_text,
             expected_decision_date=expected_decision_date, generated_at=fetched_now.isoformat(),
@@ -1026,6 +1174,7 @@ def run_web_fetch(
             provider_call_count=attempted_tavily_calls + attempted_deepseek_calls,
             _live_attestation=_LIVE_ATTESTATION,
             extra_drop_ledger=query_drops,
+            regroup_model_identity=model_identity, regroup_failed=regroup_failed, regroup_attempted=regroup_attempted,
         )
         return packet, receipt, summary
     if search_client is None or deepseek_client is None:
