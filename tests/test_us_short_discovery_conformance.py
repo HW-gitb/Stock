@@ -2181,5 +2181,47 @@ class LaneGuardRegistryConformance(unittest.TestCase):
                 self.assertFalse(resolved, "a nonexistent test path must not count as a dying test")
 
 
+class ConformanceTierPairingConformance(unittest.TestCase):
+    """The slow tier lives in a sibling module; nothing else makes that pairing observable.
+
+    Deleting or renaming that module would silently retire every mutation test in it, and the
+    only tell would be a drop in the lane's total test count that nobody is obliged to compare.
+    The import stays inside the test so loading THIS module never collects the slow tier twice.
+    """
+
+    SLOW_TIER = ("K4bExecutableCoverage", "ExecutableClosureMatrix")
+
+    def test_slow_tier_is_paired_with_its_executable_module(self):
+        from tests import test_us_short_discovery_conformance_executable as executable
+
+        self.assertTrue(
+            executable.__name__.rpartition(".")[2].startswith("test_us_short"),
+            "the executable tier must keep a name the US-short lane selector collects",
+        )
+        for name in self.SLOW_TIER:
+            with self.subTest(cls=name):
+                base = globals()[name]
+                runner = getattr(executable, name, None)
+                self.assertFalse(
+                    issubclass(base, unittest.TestCase),
+                    f"{name} must stay a plain base here, or the focused pack pays for it again",
+                )
+                self.assertTrue(
+                    isinstance(runner, type) and issubclass(runner, (base, unittest.TestCase)),
+                    f"{name} has no TestCase runner in the executable module; its tests are retired",
+                )
+                methods = self._callable_tests(base)
+                self.assertTrue(methods, f"{name} carries no test method; the pairing check is vacuous")
+                self.assertEqual(
+                    self._callable_tests(runner), methods,
+                    f"{name} runs a different test set than it declares",
+                )
+
+    @staticmethod
+    def _callable_tests(cls):
+        # callable, not merely named: a method neutered to None keeps its name in dir()
+        return {m for m in dir(cls) if m.startswith("test") and callable(getattr(cls, m, None))}
+
+
 if __name__ == "__main__":
     unittest.main()

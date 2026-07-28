@@ -1,5 +1,12 @@
 # Session Log
 
+## 2026-07-28 — Claude Code 自修自审 PASS（conformance 快慢两半的配对守卫）
+
+- **Verdict/Action**: 已提交。把上一轮记的 Optional 从「靠人记得比账本总数」变成机器可查：静态模块新增 `ConformanceTierPairingConformance`，断言两个慢类在此仍是普通基类、且执行模块以同名 TestCase 子类暴露、可调用测试方法集合完全一致、模块名仍带 `test_us_short` 前缀（否则 lane selector 收不到）。import 写在测试函数内，加载静态模块不会把慢层收集第二遍。产品代码零改动。
+- **Required**: 无；Register: non-material（纯测试基建，不影响 data integrity / PIT / schema / 选股）。上轮 `K3-R70` 等仍 CLOSED，见 `docs/system_risk_register.md` 对应条目。
+- **Verify**: review-evidence:not_available（本轮未注入 token）。植入对照三打三中：删掉执行模块里的 runner 类→红、把模块名改成不带 `test_us_short` 前缀→红、把一条测试方法置 None→红（第一版按名字比较放过了这条，遂改成比较**可调用**属性）；baseline 与还原均 0 红。最小覆盖目标单跑一次：`tests.test_us_short_discovery_conformance` = 28 tests / 13.7s / PASS（27→28 即本条新测试）。按 Optional-only 快档不跑全量。
+- **Next**: Codex：K3-R31 / K3-R32（解冻链④）
+
 ## 2026-07-28 - Claude Code 审查 PASS(全量测试入口:spawn 前 START + 错参显式 REFUSED)
 
 - **Verdict/Action**: PASS,提交并合入 master。`run_full_pack` 在依赖检查与 cached-green 早返回之后、真正 spawn 之前打印 `START lane=… fingerprint=…`;`main` 的 `run` 分支放宽准入后改为显式拒两类错参。放宽不等于放松:`run_full_pack` 自身的空参、未知 lane、discovery 参数逐字相等、timeout 上界四道门在新路径上仍全部生效。AGENTS rule 1 追加「focused pack 必须显式点名被触及的 schema/effect-contract 守卫」——正是 6B 首轮差点漏掉 `test_a_short_effect_contract` 的那个坑。
