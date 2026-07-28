@@ -613,7 +613,7 @@ class LaneBoundaryCoverageConformance(unittest.TestCase):
         self.assertEqual([rel for rel in LANE_FILES if rel not in scanned], [])
 
 
-class K4bExecutableCoverage(unittest.TestCase):
+class K4bExecutableCoverage:
     """Repository-derived K4b entry/callsite axes; each structural assertion carries a planted red."""
 
     @staticmethod
@@ -786,7 +786,7 @@ class K4bExecutableCoverage(unittest.TestCase):
             )
 
 
-class ExecutableClosureMatrix(unittest.TestCase):
+class ExecutableClosureMatrix:
     """Repository-derived class x exit matrix for the Knife4a A-D recurrence families."""
 
     NAMED_NON_CELLS = {

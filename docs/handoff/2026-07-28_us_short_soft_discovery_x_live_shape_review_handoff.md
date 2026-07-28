@@ -78,3 +78,11 @@ K3-R70 按指定方向修好：两处改用 `web._ProviderItemRejected` + 具名
 ## Pre-Codex self-review
 
 `matrix=complete; register=updated; handoff=updated; focused=44 OK (X orchestration + per-item conformance); full-lane=4981 OK (official ledger); no batch-level allowlist extension; no provider/key/network/live action.`
+
+## 2026-07-28 conformance test-tier split
+
+The K4b executable coverage and mutation-heavy closure matrix now execute from `tests/test_us_short_discovery_conformance_executable.py`. The original `tests/test_us_short_discovery_conformance.py` retains their plain helper bases for the static guard registry, so importing the static module does not collect either slow TestCase. This preserves every inherited test method and assertion without circular imports or double collection.
+
+Collection evidence is `static=27` plus `executable=11`, the original 38 conformance tests. The bounded static package plus the moved K4b class ran `31 OK` in `17.036s`, below the 300-second focused limit. The required final US-short discovery run executed, rather than reusing the old cache: `Ran 4981 tests in 706.708s`, `OK`; the ledger recorded its new code fingerprint at `2026-07-28T23:27:39`.
+
+This is test-structure only: no production code, assertion body, R70 guard, timeout policy, provider/key/network/live path, score effect, or K3-R34 freeze changed. The remaining technical work is still K3-R31/K3-R32 before any separate reconsideration of K3-R34.
