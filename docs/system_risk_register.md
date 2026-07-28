@@ -85,7 +85,8 @@
 - **状态 / 严重度**: **Optional**，不阻塞。来源：2026-07-28 处置分支 `codex/full-test-reliability`（07-20，已删，复原点 `2c334829357707e56f033a3d707af0aca27d6553`）时，把它的 5 项能力逐项对照 master 后剩下的唯一一项。该分支的其余 4 项要么已因全量提速而失去动因（分批跑、慢批次不判红 —— 账本实测 `us_short 4952 OK` / `a_short 2059 OK` 均在 1300s 上限内完成并记账），要么 master 已有等价或更强的实现（只记 PASS + `prepare` 匹配才记账；按代码工作树状态生成 `fingerprint`/`prepared_fingerprint`，跑中代码变动即无法记绿）。
 - **缺口**: 全量入口不检查外部依赖是否可导入。`grep REQUIRED_MODULES / importlib.util.find_spec / ModuleNotFoundError` 在 `.tools/bounded_unittest.py` 与 `.tools/full_pack_ledger.py` 均为 **0 处**。被删分支曾硬钉一组必需模块（`akshare`、`jsonschema`、`numpy`、`openpyxl`、`pandas`、`requests`、`tqdm`、`tushare`），缺任一即红而非静默跳过。
 - **为什么值得记**: 这与本仓已经在防的「假绿」同类 —— 依赖缺失可能表现为用例被 skip 或整模块 import 失败，而不是一条明确的红；一次在依赖不全环境里跑出的「全绿」会被当成证据引用。已有的 `feedback_full_discover_env_overclaim` 纪律要求引用全树数时限定 deps-complete env，但那是靠人记得，不是机器保证。
-- **建议修法（未排期）**: 在全量入口跑第一个批次之前做一次 `find_spec` 前置检查，缺失即以明确原因失败并拒绝记账；模块清单与该检查各配一条反向测试。**不必**为此恢复被删分支 —— 那是个 11 天前、与当前 `full_pack_ledger.py` 差 281 行的实现。
+- **适用范围：两条 lane 都适用，但清单必须按 lane 分**。缺口在共用工具（`.tools/bounded_unittest.py`、`.tools/full_pack_ledger.py`），账本本身就带 `us_short` / `a_short` 两条 lane，所以问题是共用的；但依赖集合并不共用 —— 实测 `tushare` 只出现在 us_short 测试（3 处 / a_short 0 处），`pandas` 在 a_short 测试 24 处、us_short 测试 0 处，`jsonschema` 两边都有（105 / 36）。被删分支用的是**一张全局清单**，直接照搬会让 us_short 的全量跑去要求 A 股 provider 依赖，属于把误报换成另一种误报。
+- **建议修法（未排期）**: 在全量入口跑第一个批次之前做一次 `find_spec` 前置检查，**按 lane 取各自的必需模块集**，缺失即以明确原因失败并拒绝记账；清单与该检查各配一条反向测试，且必须有一条证明「A 股专属依赖缺失不会让 us_short 全量变红」。**不必**为此恢复被删分支 —— 那是个 11 天前、与当前 `full_pack_ledger.py` 差 281 行的实现。
 
 ### R-GOV-USSHORT-LANE-PACK-OUTGREW-THE-1200S-CAP - one Required (GOV-R7)：rule 3 的全量门现在跑不完，等于形同虚设
 
