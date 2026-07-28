@@ -1,5 +1,12 @@
 # Session Log
 
+## 2026-07-28 — Claude Code 审查 PASS（US-short fetch-web 账本定位符 Optional 收口）
+
+- **Verdict/Action**: PASS。`_regroup_chunk_payload` 增加必填 kwarg `chunk_index`，两处拒绝的 detail 由字段名改为 `chunk[{n}]:served_model` / `chunk[{n}]:finish_reason`，与 `_ingest_provider_item` 无类型路径的 `chunk[{n}]:TypeName` 同形，reason 与定位符现在同时可读。调用点在 `for chunk_index, chunk in enumerate(chunks)` 内、lambda 于同一轮被调用，无延迟绑定问题。
+- **Required**: 无，未新开 register 条目。`#R-USSHORT-FETCHWEB-UNDECLARED-BATCH-RAISE` 的 Optional 至此闭合。
+- **Verify**: review-evidence:357bb5bc1aee。超集包 `tests.provider.test_us_short_llm_theme_discovery_fetch_web + tests.test_us_short_discovery_conformance` = `85 OK / 166.6s / exit 0`。静态整类核查：`_regroup_chunk_payload` 全仓仅两个调用方（runner L1169、测试 L277），diff 均已同步，新增必填 kwarg 无遗漏调用方；本文件全部 `_ProviderItemRejected` 的 detail 实参现已一致为定位符/条目标识（`locator`/`ticker`/`theme_id`），两处字段名孤例归队。schema `drop_ledger.items.detail` 仅 `type: string` 无长度或格式约束、`reason` 无 enum、`stage` enum 含 `llm`，故加长 detail 无校验风险。
+- **Next**: 提交。按 rule 8 未跑全量：本刀是 4 行 detail 字符串格式加一个参数，行为面仅账本文本，超集包已覆盖被改函数及其治理守卫；最近全量记账 `us_short = 4952 OK / 296.6s`。
+
 ## 2026-07-28 — Claude Code 收口（US-short 提速刀 3 遗留 Optional：ADDITIONAL_BEHAVIOR 同胞关系）
 
 - **Verdict/Action**: 在 `tests/test_us_short_discovery_conformance.py` 的 `ADDITIONAL_BEHAVIOR` 上加 7 行注释：说明这个元组是「无 GUARDS 行指名、但 `test_c` 仍必须执行」的行为测试（它们让部分派生 callsite 可达，且在变异候选里享 priority 0），并点明四条 `test_same_day_*` 是绑在 `_guard_existing_artifact_hashes` 那条 transition 的同胞，动那条绑定必须一并考虑。整类看：该元组此前通篇无说明，不只是新加的四条缺标注。

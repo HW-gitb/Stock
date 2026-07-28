@@ -790,7 +790,7 @@ def _regroup_model_identity(*, served_model: Any = None, system_fingerprints: li
 
 def _regroup_chunk_payload(
         deepseek_client: Any, *, expected_decision_date: str, chunk: list[dict[str, Any]],
-        expected_served_model: str | None,
+        expected_served_model: str | None, chunk_index: int,
 ) -> tuple[str | None, str | None, list[Any]]:
     """Read one provider-controlled regroup chunk without mutating batch state."""
     response = deepseek_client.chat.completions.create(
@@ -800,10 +800,10 @@ def _regroup_chunk_payload(
     served_model = getattr(response, "model", None)
     served_model = served_model if isinstance(served_model, str) and served_model else None
     if expected_served_model is not None and served_model != expected_served_model:
-        raise _ProviderItemRejected("regroup_model_identity_changed", "served_model")
+        raise _ProviderItemRejected("regroup_model_identity_changed", f"chunk[{chunk_index}]:served_model")
     choice = response.choices[0]
     if getattr(choice, "finish_reason", "stop") != "stop":
-        raise _ProviderItemRejected("regroup_response_truncated", "finish_reason")
+        raise _ProviderItemRejected("regroup_response_truncated", f"chunk[{chunk_index}]:finish_reason")
     fingerprint = getattr(response, "system_fingerprint", None)
     return (
         served_model,
@@ -1171,6 +1171,7 @@ def run_web_fetch(
                         expected_decision_date=expected_decision_date,
                         chunk=chunk,
                         expected_served_model=model_identity["served_model"],
+                        chunk_index=chunk_index,
                     ),
                 )
                 if parsed is None:

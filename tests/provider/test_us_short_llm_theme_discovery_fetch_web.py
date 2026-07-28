@@ -276,12 +276,12 @@ class WebFetchTests(unittest.TestCase):
                     drops, stage="llm", fallback_detail="chunk[0]",
                     ingest=lambda: fetch._regroup_chunk_payload(
                         response, expected_decision_date="20260725", chunk=chunk,
-                        expected_served_model=expected,
+                        expected_served_model=expected, chunk_index=0,
                     ),
                 )
                 self.assertIsNone(accepted)
                 self.assertEqual(drops, [{"stage": "llm", "reason": reason,
-                                          "detail": "served_model" if reason.endswith("changed") else "finish_reason"}])
+                                          "detail": "chunk[0]:served_model" if reason.endswith("changed") else "chunk[0]:finish_reason"}])
 
     def test_regroup_prompt_is_nonempty_and_binds_every_chunk_source(self):
         rows = [{"source_id": "web:a", "title": "A", "content": "first"}, {"source_id": "web:b", "title": "B", "content": "second"}]
