@@ -11,7 +11,7 @@
 - **Scope**: US-short knife-3 web/X discovery and §4c weekly consumption only; no provider call, network, real key, A-short, US-long, or order path.
 - **Required**: The production entries `run_web_fetch` and `run_x_fetch` now use their default gitignored raw roots in offline mode, preserve X reply rows, and emit X `model_transcribed` attestation. Merge re-reads persisted raw evidence, binds source text to the member ticker, demotes mismatches with a ledger row, and §4c reports `X 侧为模型转述，未经平台原始记录核验` when consumed.
 - **Permanent regression**: `tests/provider/test_us_short_offline_production_entry_guard.py` calls only the two production entries with fake clients, proves both-source/knife-2 output, runs the cat-text reverse control, and has named mutation controls for raw persistence, raw digest binding, and ticker binding.
-- **Status**: Codex implementation complete; independent Claude Code review remains required before commit. **合并注（Claude Code 2026-07-28）**：该实现的权威、已审 PASS 版本是 fe9c 工作树的 `94a81ebc`，尚未合入 master；主树工作区那份 us_short 改动是更早的平行草稿，待处置。
+- **Status**: Codex implementation complete; independent Claude Code review remains required before commit. **合并注（Claude Code 2026-07-28，已更正一次）**：同一 finding 目前有**两份不同的实现**且都不在 master。① fe9c 工作树的 `94a81ebc`（提交于 16:04:45，fe9c 自己的 SESSION_LOG 有 `审查 PASS` + `review-evidence:cab9c1b48a27`）；② 主树工作区的未提交改动（写盘 16:33:45，即**晚于** ①）。`git diff 94a81ebc -- <us_short 路径>` = `401 +/568 −`，两者差异很大。**哪一份权威尚未判定**，需该执行窗口或用户指定；本注先前写「主树那份是更早的草稿」是按 fe9c 的提交时间反推的错判，实测 mtime 后作废。合入前必须先定这一件，否则会把两份实现混进 master。
 
 ### R-ASHORT-KNIFE6A-NORTHBOUND-RETIREMENT-CRASHES-EGS-AND-LEAVES-PARTIAL-RESIDUE - 第六刀 6A 独立审查 FAIL：一条 Required 是 EGS 每候选硬崩，其余是同一次「退役北向因子」没做全的整类残留
 
