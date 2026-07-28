@@ -896,26 +896,10 @@ class ExecutableClosureMatrix(unittest.TestCase):
             ".WeeklyCapstoneSoftDiscoveryStageTest.test_all_five_states_are_distinct_and_invalid_is_not_valid_empty",
         },
     }
-    FROZEN_LIVE_RAW_COORDINATES = frozenset({
-        (
-            "runners.us_short_llm_theme_discovery_merge",
-            "_verify_receipt",
-            "runners.us_short_llm_theme_discovery_merge._guard_raw_content_digest",
-            315,
-        ),
-        (
-            "runners.us_short_llm_theme_discovery_merge",
-            "_verify_receipt",
-            "runners.us_short_llm_theme_discovery_merge._instant",
-            324,
-        ),
-        (
-            "runners.us_short_llm_theme_discovery_merge",
-            "_verify_receipt",
-            "runners.us_short_llm_theme_discovery_merge._raw_receipt_path",
-            306,
-        ),
-    })
+    # Explicit local evidence decision: persisted raw evidence now reaches the capstone fixture,
+    # including the `raw_available` branch.  Its three calls must have a real dying mutation;
+    # no raw-evidence coordinate is allowed to survive as a manually frozen exception.
+    FROZEN_PERSISTED_RAW_COORDINATES = frozenset()
 
     @staticmethod
     def _function_calls(function: ast.FunctionDef, callee: str) -> list[ast.Call]:
@@ -1445,7 +1429,9 @@ class ExecutableClosureMatrix(unittest.TestCase):
                 while ancestor is not None:
                     if isinstance(ancestor, ast.If):
                         condition = ast.unparse(ancestor.test)
-                        if "raw_ref" in condition or "live_authorized" in condition:
+                        if any(marker in condition for marker in (
+                            "raw_ref", "raw_available", "live_authorized",
+                        )):
                             frozen_raw_branch = True
                             break
                     ancestor = parents.get(ancestor)
@@ -1594,8 +1580,8 @@ class ExecutableClosureMatrix(unittest.TestCase):
                     )
         self.assertEqual(
             frozen_live_raw_coordinates,
-            set(self.FROZEN_LIVE_RAW_COORDINATES),
-            "the frozen live-authorized raw branch changed; every new or removed coordinate "
+            set(self.FROZEN_PERSISTED_RAW_COORDINATES),
+            "the frozen persisted-raw branch changed; every new or removed coordinate "
             "requires an explicit local evidence decision",
         )
         self.assertEqual(missing, [], f"unmapped or non-load-bearing C coordinates: {missing}")

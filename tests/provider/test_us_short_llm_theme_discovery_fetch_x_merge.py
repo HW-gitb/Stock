@@ -87,6 +87,25 @@ class XFetchAndMergeTests(unittest.TestCase):
             ["missing_created_at", "unsupported_created_at_format"],
         )
 
+    def test_unsafe_x_attestation_is_rejected_per_item_without_aborting_valid_rows(self):
+        rows = [
+            {"url": "https://x.com/u/status/good", "title": "good", "text": "AAPL post",
+             "created_at": "2026-07-24T10:00:00Z", "_evidence_attestation": "provider_attested"},
+            {"url": "https://x.com/u/status/bad", "title": "bad", "text": "CEG post",
+             "created_at": "2026-07-24T10:00:00Z", "_evidence_attestation": "unverified"},
+        ]
+        refs, drops = xfetch._normalize_results(
+            rows, expected_decision_date="20260727",
+            fetched_at=web._parse_dt("2026-07-26T12:00:00Z", field="fetched_at"),
+            raw_root=None, persist_raw=False,
+        )
+        self.assertEqual(len(refs), 1)
+        self.assertEqual(refs[0]["evidence_attestation"], "provider_attested")
+        self.assertEqual(drops, [{
+            "stage": "search_result", "reason": "unsafe X evidence attestation",
+            "detail": "https://x.com/u/status/bad",
+        }])
+
     def test_live_x_orchestration_is_executable_and_mints_no_live_label(self):
         """Same split as the web lane: the X live body used to be unreachable dead code."""
         class _Client:

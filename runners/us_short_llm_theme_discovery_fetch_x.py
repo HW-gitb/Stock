@@ -101,7 +101,7 @@ def _normalize_results(
         return locator, stable, index
     ordered_results = sorted(enumerate(results), key=order_key)
     for index, item in ordered_results:
-        def ingest() -> tuple[str, datetime, str, str]:
+        def ingest() -> tuple[str, datetime, str, str, str]:
             if not isinstance(item, dict):
                 raise web._ProviderItemRejected("malformed_result", type(item).__name__)
             locator = web._canonical_locator(item.get("url", item.get("link")))
@@ -130,18 +130,18 @@ def _normalize_results(
             title = web._safe_text(item.get("title", "X post"), limit=240)
             if not text:
                 raise web._ProviderItemRejected("missing_post_text", locator)
-            return locator, observed, title, text
+            evidence_attestation = item.get("_evidence_attestation", "model_transcribed")
+            if evidence_attestation not in {"provider_attested", "model_transcribed"}:
+                raise web._ProviderItemRejected("unsafe X evidence attestation", locator)
+            return locator, observed, title, text, evidence_attestation
 
         parsed = web._ingest_provider_item(
             drops, stage="search_result", fallback_detail=f"result[{index}]", ingest=ingest,
         )
         if parsed is None:
             continue
-        locator, observed, title, text = parsed
+        locator, observed, title, text, evidence_attestation = parsed
         source_id = _source_id(locator)
-        evidence_attestation = item.get("_evidence_attestation", "model_transcribed")
-        if evidence_attestation not in {"provider_attested", "model_transcribed"}:
-            raise XThemeDiscoveryError("unsafe X evidence attestation")
         raw_payload = {"source_id": source_id, "source_type": "x", "canonical_locator": locator, "title": title, "text": text, "created_at": observed.isoformat(), "evidence_attestation": evidence_attestation}
         raw_path = None
         raw_ref = None

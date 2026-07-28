@@ -1,5 +1,11 @@
 # System Risk Register
 
+### R-USSHORT-K3-RELAND-BREAKS-CAPSTONE-SOFT-DISCOVERY-CONSUMER - resolved 2026-07-28
+
+- **Root causes closed**: the capstone fixture had not persisted the raw source records now required for ticker corroboration; independently, merge leaked manifest-only `evidence_attestation` into the Knife-1 normalized-input hash.
+- **Repair / fail-closed boundary**: fixture raw roots are isolated and persisted; merge projects normalized `source_refs` to the three Knife-1 fields while retaining attestation only in the manifest; deleted bound raw evidence yields `invalid_evidence`; unsafe X attestation is a per-item rejection with a ledger row; persisted-raw mutation coverage has no frozen exception.
+- **Evidence**: fixed Python focused mutation guard `ExecutableClosureMatrix.test_c_every_repo_derived_guard_callsite_has_a_real_dying_mutation` = PASS (1, 199.9s). Clean serial `full_pack_ledger.py run us_short ... discover -s tests -p test_us_short*.py` = PASS (4972, 564.1s, exit 0). Earlier concurrent deadlock observations are invalid per `docs/SESSION_LOG.md` review-evidence `0ff5fd46fb0e`.
+
 ### R-USSHORT-K3-RELAND-BREAKS-CAPSTONE-SOFT-DISCOVERY-CONSUMER - `fa3a2b90` 落地后 master 的 us_short lane 是红的，72 failures + 8 errors 全在一个消费者模块
 
 - **状态 / 严重度**: **open P1，2026-07-28 Claude Code 在复核「解冲突的几笔 merge」时发现，master 当前红**。P1 的理由不是这批测试本身，而是**官方硬门坏了**：`full_pack_ledger run us_short` 是本 lane 所有 PASS 门的地基，它现在必红，于是后续任何「全量绿」结论都建不起来（与今天 6A 那轮同型：lane 红 → 一切下游门失效）。

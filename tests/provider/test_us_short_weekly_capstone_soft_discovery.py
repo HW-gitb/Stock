@@ -78,6 +78,8 @@ def _source_packets(
         llm_response=response(web_ref),
         expected_decision_date=DECISION_DATE,
         generated_at=GENERATED_AT,
+        raw_root=web.DEFAULT_RAW_ROOT,
+        persist_raw=True,
     )
     x_artifact, x_receipt, _ = xfetch.build_x_fetch_packet(
         queries=["power"],
@@ -85,6 +87,8 @@ def _source_packets(
         grok_response=response(x_ref),
         expected_decision_date=DECISION_DATE,
         generated_at=GENERATED_AT,
+        raw_root=xfetch.DEFAULT_RAW_ROOT,
+        persist_raw=True,
     )
     if include_merge_drop:
         web_artifact["themes"][0]["theme_id"] = "stale_power"
@@ -102,6 +106,8 @@ class WeeklyCapstoneSoftDiscoveryStageTest(unittest.TestCase):
         self.patches = [
             mock.patch.object(web, "STATE_DIR", self.state_dir),
             mock.patch.object(xfetch, "STATE_DIR", self.state_dir),
+            mock.patch.object(web, "DEFAULT_RAW_ROOT", self.temp_root / "raw_web"),
+            mock.patch.object(xfetch, "DEFAULT_RAW_ROOT", self.temp_root / "raw_x"),
             mock.patch.object(ingest, "STATE_US_SHORT_DIR", self.state_dir),
             mock.patch.object(validate, "STATE_DIR", self.state_dir),
             mock.patch.object(universe, "CANDIDATE_LIST_DIR", self.state_dir),
@@ -443,6 +449,21 @@ class WeeklyCapstoneSoftDiscoveryStageTest(unittest.TestCase):
         self.assertEqual(retry, first)
         for key in ("merge", "merge_manifest", "ingest", "validation"):
             self.assertRegex(first["artifacts"][key]["sha256"], r"^[0-9a-f]{64}$")
+
+    def test_nonempty_capstone_fixture_fails_closed_when_bound_raw_evidence_is_removed(self):
+        """The re-land fixture must not silently regain its old raw-less acceptance path."""
+        ctx = self._ctx(enabled=True)
+        self._write_supporting_inputs(ctx)
+        _merged, manifest = self._write_merge_pair(ctx)
+        raw_path = merge._raw_receipt_path(manifest["source_refs"][0]["raw_receipt_ref"])
+        raw_path.unlink()
+
+        result = stages.run_soft_discovery(ctx)
+
+        self.assertEqual(result["status"], "invalid_evidence")
+        self.assertFalse(result["evidence_anchor"]["document_content_anchored"])
+        self.assertFalse(ctx.soft_discovery_ingest_path.exists())
+        self.assertFalse(ctx.soft_discovery_validation_path.exists())
 
     def test_date_digest_and_manifest_binding_tamper_are_rejected_without_partial_publish(self):
         mutations = ("date", "digest", "manifest_binding", "raw_path")
@@ -1056,7 +1077,7 @@ class WeeklyCapstoneSoftDiscoveryStageTest(unittest.TestCase):
         merged, manifest = self._write_merge_pair(ctx)
         result = stages.run_soft_discovery(ctx)
         self.assertTrue(result["evidence_anchor"]["upstream_pair_anchored"])
-        self.assertFalse(result["evidence_anchor"]["document_content_anchored"])
+        self.assertTrue(result["evidence_anchor"]["document_content_anchored"])
         for row in result["evidence_anchor"]["upstream_artifacts"].values():
             self.assertRegex(row["sha256"], r"^[0-9a-f]{64}$")
         with self.assertRaises(TypeError):

@@ -1,5 +1,19 @@
 # Session Log
 
+## 2026-07-28 — Claude Code 审查 PASS（K3 re-land 打红 capstone 消费者一刀已闭）
+
+- **Verdict/Action**: PASS。定性做出来了且是**产品缺陷、不是夹具过期**：merge 把只属于 manifest 的 `evidence_attestation` 混进了 Knife-1 规范化输入，改掉 `input_sha256`，而消费者只重建那三个字段。修法把 `discovery_input.source_refs` 投影成恰好三字段并按 `source_id` 排序；夹具另补 `persist_raw=True` 与每测试独立 raw 根，后者顺带把今天两次假红的跨运行撞包结构性消掉。
+- **Required**: 无新开。`docs/system_risk_register.md#R-USSHORT-K3-RELAND-BREAKS-CAPSTONE-SOFT-DISCOVERY-CONSUMER` 转 resolved。两条 Optional 见 Next。
+- **Verify**: review-evidence:092305509797。官方 `full_pack_ledger run us_short` = `CACHED GREEN 4972 OK`（执行方串行跑出 564.1s / exit 0，按 rule 4 以指纹绑定本代码态；我另起同命令被拒为冗余）。前后对照成立：同一 lane 修前我亲测 `4970 / failures=72 / errors=8`，现 `4972`，+2 恰为新增两测。静态核：`FROZEN_*_COORDINATES` 由 3 条豁免改成**空集**且断言是相等，任何幸存冻结坐标即红——是收紧不是减覆盖；被翻转的 `document_content_anchored` 断言其 False 分支由新增的删 raw 用例接住。
+- **Next**: 提交。Optional①：`reason: "unsafe X evidence attestation"` 是带空格散文，而同一数据边界其余 reason 全是 snake_case（`malformed_result` / `missing_post_text`），账本词表混了。Optional②：三字段投影与消费者的重建各写一份、无任何东西把两者绑住——正是本 finding 的成因类；建议提成共享常量或加一条「投影键集 == 消费者期望键集」的守卫。
+
+## 2026-07-28 — Claude Code 审查前置：释放 us_short 私有根锁（占锁者是并发起的三次同一条 lane 全量）
+
+- **Verdict/Action**: 锁已释放。占锁的不是「之前某个测试」，而是执行方**自己并发起的三次 `full_pack_ledger.py run us_short`**（三对父子进程，18:33:58 / 18:35:36 / 18:37:35，理由串都写着同一个 finding）。它们互相锁死：一个持有 `provider_samples` 私有根锁，另两个排队，20 分钟里三者 CPU 合计不到 1 分钟。已全部终止，无一属于其他窗口。
+- **Required**: 无新开。**但执行方那次「48 条 capstone 里 3 条 `Resource deadlock avoided`」的结论作废** —— 那是自造的并发争锁，不是代码或夹具证据，必须在干净状态重跑一次才算数。`docs/system_risk_register.md#R-USSHORT-K3-RELAND-BREAKS-CAPSTONE-SOFT-DISCOVERY-CONSUMER` 的定性（产品回退 or 夹具过期）仍未完成。
+- **Verify**: review-evidence:0ff5fd46fb0e。自写非阻塞探针 `msvcrt.locking(LK_NBLCK)`：终止前得 `PermissionError [Errno 13]`（确有句柄持有），终止后得 `FREE: acquired immediately`。`Win32_Process` 逐个取命令行确认 6 个进程全是同一条 lane 的三次并发调用。锁文件本身是设计上长期保留的 1 字节哨兵，`sha256("D:\cnhea\Stock")[:20]` = `8aa89f1c9cfdb6627aed`，删它不释放任何东西。
+- **Next**: 执行方在**串行**前提下重跑该模块并完成定性，再交审查。另记一条 Optional：`temporary_provider_directory` 只在正常退出时清理，异常退出会在 `provider_samples` 留下 `k4b_<PID>_*` 与 `tmp*` 残壳，自 07-27 已累积 90+ 个；本轮未清理（PID 命名不互撞、清理风险大于收益）。
+
 ## 2026-07-28 - Claude Code 复审 PASS (全量依赖前置检查按 lane 分流已闭)
 
 - **Verdict/Action**: PASS，提交并合入 master。清单改为按 lane 的 `REQUIRED_TEST_MODULES_BY_LANE`，检查点从 `run_unittest` 收回到 `run_full_pack` / `_check`，未知 lane 抛 `ValueError`。上一轮那条「A 股专属依赖会把 us_short 判红」的 Required 已闭。
@@ -15838,3 +15852,10 @@ Codex PASS(entry below,复审 scope 同时含 2b-i pending set + checklist 接�
 **Next**: Claude `修复` 后再交 Codex `审查`。
 
 ---
+## 2026-07-28 - Codex repair R-USSHORT-K3-RELAND-BREAKS-CAPSTONE-SOFT-DISCOVERY-CONSUMER
+
+- **Verdict/Action**: repaired and handed off; no commit.
+- **Required**: resolved; material detail in `docs/system_risk_register.md`.
+- **Verify**: fixed Python focused mutation = PASS (1, 199.9s); clean serial official `us_short` full ledger = PASS (4972, 564.1s, exit 0).
+- **Pre-Codex self-review**: matrix=raw fixture, hash projection, X rejection; register=updated; handoff=this entry; focused=PASS; full-lane=PASS.
+- **Next**: Claude Code: review.

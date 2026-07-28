@@ -477,7 +477,20 @@ def merge_web_x_discovery(
                 "reason": "member_evidence_demoted_unbound_ticker",
                 "detail": f"{canonical_us_ticker(ticker) or ticker}:{','.join(sorted(set(prior) - set(verified)))}",
             })
-    discovery_input = {"source_refs": list(refs_by_id.values()), "themes": []}
+    # Attestation is merge-manifest metadata, not a Knife-1 discovery input field.  Letting it
+    # reach the normalizer changes `input_sha256`, while the consumer correctly reconstructs
+    # only Knife-1's three source fields; keep those two representations deliberately separate.
+    discovery_input = {
+        "source_refs": [
+            {
+                "source_id": refs_by_id[source_id]["source_id"],
+                "source_type": refs_by_id[source_id]["source_type"],
+                "observed_at": refs_by_id[source_id]["observed_at"],
+            }
+            for source_id in sorted(refs_by_id)
+        ],
+        "themes": [],
+    }
     for theme in merged.values():
         theme = dict(theme)
         theme["members"] = list(theme["members"].values())
