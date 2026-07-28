@@ -1,5 +1,12 @@
 # Session Log
 
+## 2026-07-28 - 分支清理收尾：删除 full-test-reliability，其唯一残余价值转 Optional
+
+- **Verdict/Action**: 经用户确认删除 `codex/full-test-reliability`，复原点 `2c334829357707e56f033a3d707af0aca27d6553`。删除依据是用户告知 a-short / us-short 全量提速已完成且明确不需要分批 —— 该分支的两项核心能力（分批跑、慢批次不判红）因此失去动因。其唯一未被 master 覆盖的能力（全量入口不校验外部依赖）已单独立为 Optional。
+- **Required**: 无。Optional 落 `docs/system_risk_register.md` 新条目 `R-GOV-FULL-PACK-DOES-NOT-VERIFY-ITS-EXTERNAL-TEST-DEPENDENCIES`。
+- **Verify**: 逐项对照而非凭记忆。账本实测两条 lane 均在 1300s 上限内绿并记账（`us_short 4952 OK` 14:01、`a_short 2059 OK` 13:27）。master 已有：只记 PASS、`prepare` 匹配才记账、按代码工作树 `fingerprint`/`prepared_fingerprint` 防「跑中改码记绿」。master 没有：`REQUIRED_MODULES` / `find_spec` / `ModuleNotFoundError` 在两个 .tools 入口均 0 处。**更正**：我上一轮据分批能力判「别删」，前提被用户的提速结论推翻后改判为删。删除后未合入分支仅余 `archive/d15e-…`（有意保留的墓碑）。
+- **Next**: 用户决定 GOV-R7 是否可就此标记 resolved（其动因同样已消失）
+
 ## 2026-07-28 - 分支清理（续）：删除 07-17 那轮 a-short 六刀分支
 
 - **Verdict/Action**: 经用户确认删除 `codex/a-short-93db-six-knife`，复原点 `2d2b86516ddcef16c33567f178fb8365d6fb93b6`（`git branch <名字> <SHA>` 可复原）。它是 2026-07-17 那一轮的实现，其价格时钟部分已被 2026-07-28 的 `a2602252`（knife 6A）以更完整的方案取代；其 IV 部分不应从该分支回捞，按桌面方案的既定形态另做。桌面待办不回写、不入 register，按用户指令。
