@@ -102,7 +102,7 @@ class XFetchAndMergeTests(unittest.TestCase):
         self.assertEqual(len(refs), 1)
         self.assertEqual(refs[0]["evidence_attestation"], "provider_attested")
         self.assertEqual(drops, [{
-            "stage": "search_result", "reason": "unsafe X evidence attestation",
+            "stage": "search_result", "reason": "unsafe_x_evidence_attestation",
             "detail": "https://x.com/u/status/bad",
         }])
 

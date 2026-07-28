@@ -1,5 +1,12 @@
 # Session Log
 
+## 2026-07-28 — Claude Code 复审 PASS（K3 消费者一刀的两条 Optional 收口）
+
+- **Verdict/Action**: PASS。①账本 reason 归队 snake_case（`unsafe_x_evidence_attestation`）；②新增 `KNIFE1_SOURCE_REF_KEYS` + `project_knife1_source_refs()`，落在 Knife-1 模块自己，merge 的生产端与 `_ingest_input` 消费端改为调用同一函数——上一轮点名的成因类被结构性焊死，不再是两份各写一遍的约定。新守卫用 `mock.patch.object` 记调用次数，任一端被重新内联即掉回 1 而变红。
+- **Required**: 无，未新开 register 条目。`docs/system_risk_register.md#R-USSHORT-K3-RELAND-BREAKS-CAPSTONE-SOFT-DISCOVERY-CONSUMER` 保持 resolved。一条新 Optional 见 Next。
+- **Verify**: review-evidence:7e2e54e3bd6b。**自跑**官方 `full_pack_ledger run us_short` = `4973 OK / 593.9s / exit 0`（已记账；较上轮 `4972` +1 恰为新增守卫）。静态整类核：旧散文串 `unsafe X evidence attestation` 全仓零残留；`drop_ledger.reason` 的 schema 是 `{"type":"string","minLength":1}` 无 enum，故重命名无校验风险。排序副作用证否：`_source_refs` 以 `out.sort(key=source_id)` 收尾、manifest 侧亦 `for source_id in sorted(...)`，故消费端新增的排序对良构制品恒等，且从此不再依赖「制品恰好有序」。
+- **Next**: 提交。Optional（未修）：`KNIFE1_SOURCE_REF_KEYS` 目前只有 `project_knife1_source_refs` 一个消费者，而 `_source_refs` 里 `out.append({"source_id": …, "source_type": …, "observed_at": …})` 仍是第三份内联写法；将来加第四个 Knife-1 字段时它不会自动跟上。让 normalizer 也按该常量构造即闭。
+
 ## 2026-07-28 — Claude Code 审查 PASS（K3 re-land 打红 capstone 消费者一刀已闭）
 
 - **Verdict/Action**: PASS。定性做出来了且是**产品缺陷、不是夹具过期**：merge 把只属于 manifest 的 `evidence_attestation` 混进了 Knife-1 规范化输入，改掉 `input_sha256`，而消费者只重建那三个字段。修法把 `discovery_input.source_refs` 投影成恰好三字段并按 `source_id` 排序；夹具另补 `persist_raw=True` 与每测试独立 raw 根，后者顺带把今天两次假红的跨运行撞包结构性消掉。

@@ -481,14 +481,7 @@ def merge_web_x_discovery(
     # reach the normalizer changes `input_sha256`, while the consumer correctly reconstructs
     # only Knife-1's three source fields; keep those two representations deliberately separate.
     discovery_input = {
-        "source_refs": [
-            {
-                "source_id": refs_by_id[source_id]["source_id"],
-                "source_type": refs_by_id[source_id]["source_type"],
-                "observed_at": refs_by_id[source_id]["observed_at"],
-            }
-            for source_id in sorted(refs_by_id)
-        ],
+        "source_refs": ingest.project_knife1_source_refs(list(refs_by_id.values())),
         "themes": [],
     }
     for theme in merged.values():
@@ -554,14 +547,7 @@ def merge_web_x_discovery(
 def _ingest_input(artifact: dict[str, Any]) -> dict[str, Any]:
     """Project a frozen merge artifact back to Knife1's inert input surface."""
     return {
-        "source_refs": [
-            {
-                "source_id": ref["source_id"],
-                "source_type": ref["source_type"],
-                "observed_at": ref["observed_at"],
-            }
-            for ref in artifact["source_refs"]
-        ],
+        "source_refs": ingest.project_knife1_source_refs(artifact["source_refs"]),
         "themes": [
             {
                 "theme_id": theme["theme_id"],

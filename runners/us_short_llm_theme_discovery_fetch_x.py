@@ -132,7 +132,7 @@ def _normalize_results(
                 raise web._ProviderItemRejected("missing_post_text", locator)
             evidence_attestation = item.get("_evidence_attestation", "model_transcribed")
             if evidence_attestation not in {"provider_attested", "model_transcribed"}:
-                raise web._ProviderItemRejected("unsafe X evidence attestation", locator)
+                raise web._ProviderItemRejected("unsafe_x_evidence_attestation", locator)
             return locator, observed, title, text, evidence_attestation
 
         parsed = web._ingest_provider_item(

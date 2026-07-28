@@ -41,6 +41,7 @@ SCHEMA_PATH = ROOT / "schemas" / "us_short_llm_theme_discovery.schema.json"
 STATE_US_SHORT_DIR = ROOT / "state" / "us_short"
 DEFAULT_INPUT_PATH = STATE_US_SHORT_DIR / "us_short_llm_theme_discovery_input.json"
 SAFE_SOURCE_ID_RE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9_.:/-]{1,127}$")
+KNIFE1_SOURCE_REF_KEYS = ("source_id", "source_type", "observed_at")
 THEME_ID_RE = re.compile(r"^[a-z0-9][a-z0-9_-]{1,63}$")
 FORBIDDEN_OPERATIONAL_KEYS = {
     "score",
@@ -233,6 +234,10 @@ def _source_refs(raw_refs: Any, *, cutoff: datetime) -> tuple[list[dict[str, str
         out.append({"source_id": source_id, "source_type": source_type, "observed_at": observed_at.isoformat()})
     out.sort(key=lambda item: item["source_id"])
     return out, by_id
+
+
+def project_knife1_source_refs(refs: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    return [{key: ref[key] for key in KNIFE1_SOURCE_REF_KEYS} for ref in sorted(refs, key=lambda ref: ref["source_id"])]
 
 
 def normalize_discovery_payload(
