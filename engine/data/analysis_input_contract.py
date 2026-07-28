@@ -45,8 +45,19 @@ def build_a_short_run_identity(trade_date: str, candidates: list[dict[str, Any]]
     }
 
 
+def is_official_a_short_analysis_input_path(path: str | Path) -> bool:
+    """Return true only for the one-click EGS publication input, not backtest artifacts."""
+    try:
+        relative = Path(path).resolve().relative_to((ROOT / "result" / "a_short").resolve())
+    except ValueError:
+        return False
+    return len(relative.parts) == 2 and relative.parts[1] == "analysis_input.json" and bool(
+        _DATE8_RE.fullmatch(relative.parts[0])
+    )
+
+
 def validate_analysis_input_file(
-    path: str | Path, label: str | None = None, *, official_input: bool = False
+    path: str | Path, label: str | None = None, *, official_input: bool | None = None
 ) -> dict[str, Any]:
     input_path = Path(path)
     with input_path.open("r", encoding="utf-8") as f:
@@ -54,7 +65,10 @@ def validate_analysis_input_file(
     validate_analysis_input_contract(
         payload,
         label=label or f"analysis_input {input_path}",
-        official_input=official_input,
+        official_input=(
+            is_official_a_short_analysis_input_path(input_path)
+            if official_input is None else official_input
+        ),
     )
     return payload
 
@@ -110,8 +124,15 @@ def _validate_pit_invariants(payload: dict[str, Any], label: str, official_input
             raise AnalysisInputContractError(f"{label} source clock binding is inconsistent")
         if payload.get("run_date") not in (None, clock_run) or payload.get("price_data_through") not in (None, clock_price):
             raise AnalysisInputContractError(f"{label} top-level clocks do not match source.clocks")
+    declared_price_data_through = (
+        payload.get("price_data_through") or clocks.get("price_data_through")
+    )
+    if official_input and not declared_price_data_through:
+        raise AnalysisInputContractError(
+            f"{label} official input must declare price_data_through"
+        )
     price_data_through = _parse_date8(
-        payload.get("price_data_through") or clocks.get("price_data_through") or payload.get("trade_date"),
+        declared_price_data_through or payload.get("trade_date"),
         "price_data_through", label,
     )
     if price_data_through > trade_date:

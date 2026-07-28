@@ -95,15 +95,6 @@ PRODUCTION_PRICE_FETCH_CALENDAR_DAYS = 120
 P2_SHADOW_PRICE_FETCH_CALENDAR_DAYS = 450
 
 
-def _is_official_analysis_input_path(path: str | Path) -> bool:
-    """Only the one-click EGS publication directory opts into the strict input clock."""
-    try:
-        Path(path).resolve().relative_to((ROOT / "result" / "a_short").resolve())
-        return True
-    except ValueError:
-        return False
-
-
 def _industry_trend_for_candidate(cand: dict, expected_as_of: str) -> tuple[str, dict]:
     """Accept only source-bound deterministic heat evidence for formal M6.7 use."""
     industry = cand.get("industry") or {}
@@ -3904,7 +3895,10 @@ def main(argv=None, pro_factory=None, price_provider=None, semantic_provider=Non
          target_policy_price_provider=None):
     from datetime import datetime, timedelta
     from runners.a_short_iv_feed_probe import init_tushare_pro, _is_valid_yyyymmdd
-    from engine.data.analysis_input_contract import validate_analysis_input_file
+    from engine.data.analysis_input_contract import (
+        is_official_a_short_analysis_input_path,
+        validate_analysis_input_file,
+    )
     p = argparse.ArgumentParser(description="A-short weekly pipeline (EGS→overlay→IV→engine→weekly M6.7)")
     p.add_argument("--as-of", required=True, help="YYYYMMDD")
     p.add_argument("--analysis-input", required=True, help="EGS analysis_input.json (top-N 候选)")
@@ -4092,13 +4086,9 @@ def main(argv=None, pro_factory=None, price_provider=None, semantic_provider=Non
 
     # analysis_input 消费方校验(#R-ASHORT-WEEKLY-ANALYSIS-INPUT-CONSUMER-VALIDATION-GAP):
     # 用仓库契约校验 schema + PIT,并强制 trade_date == --as-of(拒错配/未来/陈旧批次)。
-    official_input = _is_official_analysis_input_path(args.analysis_input)
+    official_input = is_official_a_short_analysis_input_path(args.analysis_input)
     try:
-        ai = validate_analysis_input_file(
-            args.analysis_input,
-            label="weekly analysis_input",
-            official_input=official_input,
-        )
+        ai = validate_analysis_input_file(args.analysis_input, label="weekly analysis_input")
     except (OSError, UnicodeDecodeError, json.JSONDecodeError) as exc:
         if official_input:
             raise SystemExit(
@@ -4128,7 +4118,7 @@ def main(argv=None, pro_factory=None, price_provider=None, semantic_provider=Non
     except ValueError as exc:
         raise SystemExit(f"[FATAL] analysis_input runtime configuration missing/stale/mismatched: {exc}") from exc
     source_runtime_configuration = runtime_configuration_lineage(_RUNTIME_CONFIGURATION)
-    official_input = _is_official_analysis_input_path(args.analysis_input)
+    official_input = is_official_a_short_analysis_input_path(args.analysis_input)
     if official_input:
         if not source_identity:
             raise SystemExit("[FATAL] official analysis_input missing run_identity")

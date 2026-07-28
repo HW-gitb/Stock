@@ -110,6 +110,7 @@ if PROJECT_ROOT not in sys.path:
 
 from engine.data.analysis_input_contract import (
     build_a_short_run_identity,
+    is_official_a_short_analysis_input_path,
     validate_analysis_input_contract,
     validate_json_schema,
 )
@@ -1257,7 +1258,11 @@ def export_analysis_input(df_full, watch_df, tier1_final, latest_td, trade_dates
     snapshot_path = os.path.join(out_dir, "snapshot.json")
     candidates_path = os.path.join(out_dir, "candidates.csv")
 
-    validate_analysis_input_contract(analysis_input, label=f"analysis_input export {latest_td}")
+    validate_analysis_input_contract(
+        analysis_input,
+        label=f"analysis_input export {latest_td}",
+        official_input=is_official_a_short_analysis_input_path(analysis_path),
+    )
     write_json_atomic(analysis_path, analysis_input)
 
     candidates_df = watch_df.copy()

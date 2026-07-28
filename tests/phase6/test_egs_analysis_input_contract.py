@@ -85,6 +85,19 @@ class EgsMainAnalysisInputContractTest(unittest.TestCase):
 
         validate_analysis_input_contract(payload)
 
+    def test_official_export_applies_the_same_strict_price_clock_contract(self) -> None:
+        with tempfile.TemporaryDirectory(dir=str(ROOT)) as tmp:
+            with patch.object(
+                self.egs_main, "is_official_a_short_analysis_input_path", return_value=True
+            ) as official_path:
+                _analysis_path, _snapshot_path, _candidates_path, payload = self._export(
+                    tmp,
+                    latest_td="20260522",
+                )
+
+        official_path.assert_called_once()
+        validate_analysis_input_contract(payload, official_input=True)
+
     def test_export_records_reconciled_l0_and_stage_exclusion_counts(self) -> None:
         self.egs_main.CONF["l3_mode"] = "pit"
         self.egs_main.CONF["l3_pit_strict"] = True

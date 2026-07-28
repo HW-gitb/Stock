@@ -6,6 +6,13 @@
 - **Required**: 一条,新开 `docs/system_risk_register.md#R-ASHORT-KNIFE6B-OFFICIAL-CLOCK-FALLBACK-ANCHORS-TO-DECISION-DATE`(含机制、实测、修法两条腿、四条 closure tests)。原 Optional ① 定性作废并入该条;原 Optional ② 经 agent 补强(`run_analysis_report.py` 默认读官方目录并把决策面报告写回该目录)成为该条第二条腿。第六刀因此**未闭**。
 - **Verify**: review-evidence:3b2afc68322d。复核 agent 前提后采信,非照单全收:`schemas/analysis_input.schema.json` 的 `required` 实测不含 `price_data_through`;`clock_explicit = bool(args.price_as_of or ai_clock_explicit)` 实为独立变量、`:4378` 确有反推分支。agent 判 clean 的两项与我自己的结论一致(`close` 不可为 None、既有调用方无静默变更)。本轮仅改两份文档,无代码/行为变更,治理三包 `72 OK` 仍适用。
 - **Next**: Codex:修复。
+## 2026-07-28 — Codex 修复（A-short Knife 6B 官方时钟回落 Required）
+
+- **Verdict/Action**: 原 PASS 已更正为 Pass-with-Required；现已移除正式输入把价格钟回落为决策日的路径，并统一全部官方输入消费者。
+- **Required**: `R-ASHORT-KNIFE6B-OFFICIAL-CLOCK-FALLBACK-ANCHORS-TO-DECISION-DATE`，详见 `docs/system_risk_register.md`。
+- **Verify**: fixed Python focused 552 OK；A-short full ledger 2072 OK / 258.2s / exit 0；`git diff --check` clean（仅 CRLF warning）。
+- **Next**: Claude Code：审查。
+- **Pre-Codex self-review**: matrix=complete; register=updated; handoff=updated; focused=552 OK; full-lane=2072 OK.
 
 ## 2026-07-28 - Claude Code 审查 PASS(A-short 第六刀 6B:候选价格单一权威 + 官方档时钟加严)
 

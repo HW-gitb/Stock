@@ -1,8 +1,16 @@
 # System Risk Register
 
+### R-ASHORT-KNIFE6B-OFFICIAL-CLOCK-FALLBACK-ANCHORS-TO-DECISION-DATE - 官方候选日期门错误回落到决策日
+
+- **状态 / 严重度**: **open Required P1，2026-07-28 原 PASS 已更正为 Pass-with-Required。** `417c7fc3` 不回滚：缺陷只会安全地阻止周跑，不会产生错误选股；本条修复尚待独立审查。
+- **根因**: official 输入未声明 `price_data_through` 时，契约回落到 `trade_date` 再做候选 `source_trade_date` 等式；但 weekly pipeline 允许未声明时从观测 price bar 反推价格日，且 `--price-as-of` 在输入校验之后才解析，造成正常路径被提前阻断。
+- **Required A（已实现）**: `official_input=True` 现在要求顶层或 `source.clocks` 显式声明 `price_data_through`；缺失即报 `official input must declare price_data_through`，不再以 `trade_date` 代替价格日。
+- **Required B（已实现）**: 路径判定下沉至 `engine.data.analysis_input_contract.is_official_a_short_analysis_input_path`；仅 `result/a_short/<YYYYMMDD>/analysis_input.json` 自动严格，回测子树不算官方。`validate_analysis_input_file` 的 weekly、报告与 Rule6 审计读者因此同门；EGS 写入该正式路径时也显式按同一严格契约自校验。
+- **Closure tests / 当前证据**: 显式钟缺失、自动官方路径、候选日期不等、backtest 非官方、EGS producer 正式输出各有回归；固定 Python `bounded_unittest.py focused 500 -- tests.schema.test_analysis_input_contract tests.test_a_short_effect_contract tests.test_a_short_weekly_pipeline tests.phase6.test_egs_analysis_input_contract` = 552 OK / 51.8s；`full_pack_ledger.py run a_short "6B Required: official explicit price clock plus unified official input consumer gate" "py_compile + schema/weekly/EGS official clock regressions" 1300 -- discover -s tests -p test_a_short*.py` = 2072 OK / 258.2s / exit 0。
+
 ### R-ASHORT-KNIFE6B-CANDIDATE-PRICE-CLOCK-SOURCE-BINDING - 第六刀 6B 正式周跑候选价源时钟与价格权威
 
-- **状态 / 严重度**: implementation handoff，P1；待独立审查。范围仅 A-short 正式 EGS 一键周跑，不涉及 provider 调用、历史产物重写或其他 lane。
+- **状态 / 严重度**: 6B 原始等式/同源价格实现已落地；独立审查的 PASS 已被 `R-ASHORT-KNIFE6B-OFFICIAL-CLOCK-FALLBACK-ANCHORS-TO-DECISION-DATE` 更正为 Pass-with-Required，范围仍仅 A-short。
 - **修复 / fail-closed 不变式**: 正式 `result/a_short/.../analysis_input.json` 的每个候选必须有 `quote.source_trade_date`，且必须严格等于 6A 已落地的 `price_data_through`；缺失或不等立即阻止周跑。研究和 hermetic 输入仍只执行既有 PIT 上界校验。
 - **同源价格**: 候选的 `close` 现只取技术指标所用 `price_series` 的最后一根已结算 bar；EGS quote 保留 lineage，不再是可与指标混用的第二价格权威。
 - **接入与前置事实**: `weekly_screening.ps1` 已将正式 `analysis_input` 传给 `a_short_weekly_pipeline.py`，该消费者按正式目录启用严格门；现有 `D:\cnhea\Stock\result\a_short\20260727\analysis_input.json` 为 15/15 候选 `source_trade_date=price_data_through=20260724`。

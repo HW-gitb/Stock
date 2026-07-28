@@ -28,7 +28,6 @@ if str(ROOT) not in sys.path:
 from runners.a_short_weekly_pipeline import (  # noqa: E402
     normalize_candidate, build_weekly_report as _build_weekly_report, validate_weekly_report,
     write_weekly_report, latest_iv_percentile, latest_iv_hv, main, SCHEMA_PATH,
-    _is_official_analysis_input_path,
     _fetch_price_series, _prev_trading_day, _load_validated_overlay, MIN_PRICE_OBS, resolve_market_regime,
     _candidate_price_clock, _candidate_price_exclusion,
     validate_account_state, stateful_risk_for_candidate, _ex_div_notices, _fetch_dividends,
@@ -43,6 +42,7 @@ from runners.a_short_weekly_pipeline import (  # noqa: E402
     _forecast_red_flags, _income_red_flags, _balancesheet_red_flags, _industry_fundamentals, _FIN_STATEMENT_MARKER,
     _attach_holding_disposition, _factor_comparison_realized_regime, _build_evidence_reminders,
 )
+from engine.data.analysis_input_contract import is_official_a_short_analysis_input_path  # noqa: E402
 from runners.a_short_account_state_from_manual_tables import _bundle_digest  # noqa: E402
 from engine.a_short_runtime_config import (  # noqa: E402
     load_runtime_configuration, runtime_configuration_lineage,
@@ -281,10 +281,10 @@ def _sized_lineage():
 
 class NormalizeTests(unittest.TestCase):
     def test_one_click_analysis_input_path_is_the_strict_official_lane(self):
-        self.assertTrue(_is_official_analysis_input_path(
+        self.assertTrue(is_official_a_short_analysis_input_path(
             ROOT / "result" / "a_short" / AS_OF / "analysis_input.json"
         ))
-        self.assertFalse(_is_official_analysis_input_path(ROOT / "research" / "ai.json"))
+        self.assertFalse(is_official_a_short_analysis_input_path(ROOT / "research" / "ai.json"))
 
     def test_missing_delisting_text_fails_closed_into_phase5_veto(self):
         for value in (pd.NA, np.nan, None, "<NA>", "nan", "NaN", "None", "NaT", "null"):

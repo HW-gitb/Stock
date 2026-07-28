@@ -1,13 +1,19 @@
 from __future__ import annotations
 
+import json
+import tempfile
 import unittest
 from pathlib import Path
+from unittest.mock import patch
 
 import pandas as pd
 
+import engine.data.analysis_input_contract as analysis_input_contract
 from engine.data.analysis_input_contract import (
     AnalysisInputContractError,
+    is_official_a_short_analysis_input_path,
     validate_analysis_input_contract,
+    validate_analysis_input_file,
 )
 from engine.a_short_industry_theme import (
     classify_industry_trend,
@@ -184,10 +190,60 @@ class AnalysisInputContractTest(unittest.TestCase):
 
     def test_official_candidate_quote_date_cannot_be_missing(self) -> None:
         payload = cloned_minimal_analysis_input_payload()
+        payload["price_data_through"] = payload["trade_date"]
         payload["candidates"][0]["quote"].pop("source_trade_date", None)
 
         with self.assertRaisesRegex(AnalysisInputContractError, "official input requires.*source_trade_date"):
             validate_analysis_input_contract(payload, official_input=True)
+
+    def test_official_input_must_declare_its_price_clock(self) -> None:
+        payload = cloned_minimal_analysis_input_payload()
+        payload.pop("price_data_through", None)
+        payload["source"].get("clocks", {}).pop("price_data_through", None)
+
+        with self.assertRaisesRegex(AnalysisInputContractError, "official input must declare price_data_through"):
+            validate_analysis_input_contract(payload, official_input=True)
+
+    def test_official_path_auto_enables_the_candidate_price_clock_gate(self) -> None:
+        payload = cloned_minimal_analysis_input_payload()
+        payload["price_data_through"] = "20260522"
+        payload["candidates"][0]["quote"]["source_trade_date"] = "20260521"
+        payload["candidates"][0]["quote"]["price_time"] = "2026-05-21T15:00:00+08:00"
+
+        with tempfile.TemporaryDirectory() as tmp:
+            fake_root = Path(tmp)
+            official_path = fake_root / "result" / "a_short" / "20260522" / "analysis_input.json"
+            official_path.parent.mkdir(parents=True)
+            official_path.write_text(json.dumps(payload), encoding="utf-8")
+            with patch.object(analysis_input_contract, "ROOT", fake_root):
+                self.assertTrue(is_official_a_short_analysis_input_path(official_path))
+                with self.assertRaisesRegex(AnalysisInputContractError, "official input requires.*=="):
+                    validate_analysis_input_file(official_path)
+
+    def test_official_path_auto_rejects_an_implicit_price_clock(self) -> None:
+        payload = cloned_minimal_analysis_input_payload()
+        payload.pop("price_data_through", None)
+        payload["source"].get("clocks", {}).pop("price_data_through", None)
+
+        with tempfile.TemporaryDirectory() as tmp:
+            fake_root = Path(tmp)
+            official_path = fake_root / "result" / "a_short" / "20260522" / "analysis_input.json"
+            official_path.parent.mkdir(parents=True)
+            official_path.write_text(json.dumps(payload), encoding="utf-8")
+            with patch.object(analysis_input_contract, "ROOT", fake_root):
+                with self.assertRaisesRegex(AnalysisInputContractError, "official input must declare price_data_through"):
+                    validate_analysis_input_file(official_path)
+
+    def test_only_the_one_click_publish_path_is_official(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            fake_root = Path(tmp)
+            with patch.object(analysis_input_contract, "ROOT", fake_root):
+                self.assertTrue(is_official_a_short_analysis_input_path(
+                    fake_root / "result" / "a_short" / "20260522" / "analysis_input.json"
+                ))
+                self.assertFalse(is_official_a_short_analysis_input_path(
+                    fake_root / "result" / "a_short" / "backtest" / "generated" / "analysis_input.json"
+                ))
 
     def test_illegal_calendar_trade_date_is_rejected(self) -> None:
         # 8 位数字但非法历法日(六月0日 / 二月31日 / 六月31日)须拒,不得通过 schema 正则 + PIT 字典序比较。
