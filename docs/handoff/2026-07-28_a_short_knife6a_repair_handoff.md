@@ -29,3 +29,41 @@
 ## 失效的旧结论
 
 “6A 仅需时钟接线和删 policy 键即可收口”已失效。删除 governed leaf 必须沿符号轴和语义轴清扫所有生产/契约消费者，并以反向守卫阻止契约正文残留。
+
+## 2026-07-28 追加：第六刀 6B（候选价格单一权威 + 官方档输入时钟加严）
+
+本节记录 6B 的落地与独立审查结论。6B 与 6A 同属第六刀，按 `AGENTS.md §交接记录` 追加在此，不新建文件。
+
+### 改了什么
+
+- `runners/a_short_weekly_pipeline.py::normalize_candidate` 的 `close` 由 EGS 快照 `quote.close` 改取 `price_series[-1]["close"]`，与该候选 `ma5/ma10/ma20/support/atr` 所用的同一根已结算 bar 同源；EGS 快照价降级为纯 lineage，不再是第二价格权威。
+- `engine/data/analysis_input_contract.py` 新增 `official_input: bool = False` 关键字（贯穿 `validate_analysis_input_file` / `validate_analysis_input_contract` / `_validate_pit_invariants`）。为真时官方输入的每个候选必须存在 `quote.source_trade_date` 且恒等 `price_data_through`；为假时保持既有的「只拒更新、允许更旧」上界校验，research / hermetic fixtures 不受影响。
+- 新增共享谓词 `runners/a_short_weekly_pipeline.py::_is_official_analysis_input_path`，把原先在 `main()` 里重复两遍的 `result/a_short` 路径判定收成一处，并由它同时驱动新的严格档与既有的官方门（损坏即 FATAL、必须有 `run_identity`）。
+- `schemas/a_short_m67_effect_contract.json` 的 `decision_predicate_sha256` 中 `runners/a_short_weekly_pipeline.py` 一项随谓词变化更新（该值是谓词哈希，不是文件字节哈希）。
+
+### 为什么改
+
+条目 14：候选行用 EGS 快照价、技术指标用 pipeline 自抓序列，两侧口径不对称；契约只校验 `source_trade_date <= price_data_through`，允许更旧。在 `intraday_prior_settled` 模式下候选价与指标可能不属于同一日，低吸/突破判断会失真。修法双腿：契约加严负责快失败，价格取序列负责即使契约放行也不会用错价。
+
+### 验证命令与结果
+
+- 审查方亲跑 focused 超集 `.toolsun_unittest_with_repo_pythonpath.cmd tests.schema.test_analysis_input_contract tests.test_a_short_effect_contract tests.test_a_short_weekly_pipeline` = `538 OK / 46.8s / exit 0`，与执行方计数一致；按 `AGENTS` rule 4 未重跑执行方已记账的 `full_pack_ledger run a_short = 2072 OK / 205.8s / exit 0`。
+- 真数据探针：用真校验器对主树 13 个官方 `analysis_input` 与 27 个 `result/a_short/backtest/generated/*` 产物逐个跑 `official_input=False/True` 对照。仅 `20260727` 两档皆过；6 个批次由 lenient-PASS 翻成 official-REJECT；回测子树 27/27 会被判官方，但因缺 `run_identity` 早被既有官方门 FATAL，故不可达。
+- 桌面验收 ③（`close` 与 `ma5/ma10/ma20/support/atr` 恒同源同日）由构造成立：`_candidate_price_clock` 与 `:4374` 的 `observed candidate price clock != price_data_through` FATAL 已把序列末根钉在 `price_data_through`。`close=None` 的反方向不可达：`cands = eligible_cands` 之前已做 `_candidate_price_exclusion` 与 `len(series) < MIN_PRICE_OBS` 整批 FATAL；持仓腿 `:511` 同门。
+- 官方腿真接线：`runners/weekly_screening.ps1:428` 传的正是 `result/a_short/<AsOf>/analysis_input.json`。
+- 文档治理三包 `72 OK`。
+
+### 审查结论（含同日更正）
+
+首轮判 PASS 并已提交 `417c7fc3`（fast-forward 进 master）。独立对抗 agent 在结论发出后返回，坐实一条被判轻的缺陷，同日更正为 **Pass-with-Required**（`83ef31a6`）：官方档等式在输入未声明价格钟时，靠 `_parse_date8` 回落链拿 `trade_date` 顶替价格钟，于是拿候选 bar 日去比决策日，把管线自身支持的 `clock_explicit=False`（从观测 bar 反推钟）模式在 `:4097` 静默切掉。代码不回滚（纯 fail-shut，不产生错误选股），缺陷转 open Required。完整机制、实测、两条腿修法与四条 closure tests 见 `docs/system_risk_register.md#R-ASHORT-KNIFE6B-OFFICIAL-CLOCK-FALLBACK-ANCHORS-TO-DECISION-DATE`（单一来源，本文件不复述）。
+
+### 失效的旧结论
+
+- 「6B 的实测前置已由 20260727 单批次满足」失效：实测口径应写成「相等只自 producer 开始写 `price_data_through` 之后成立」，13 个官方产物里仅该批次是当代格式。
+- 审查方首轮把上述缺陷记为 Optional「记录口径偏窄、当代 producer 恒写故不可达」的定性作废——不可达的只是「当代产物」这一半，被切掉的是管线的反推钟模式。
+- 本轮执行方 SESSION_LOG 的 `handoff=updated` 与仓库状态不符：`417c7fc3` 未触及 `docs/handoff/`，本节即补记。
+
+### 下一步注意事项
+
+- 第六刀**未闭**：合并门要求 6A、6B 测试全过且 6B 的加严形态有实测依据在案，现有一条 open Required 悬着。修完该 Required 并复审通过后，再跑桌面文档的「本刀合并验证」全局不变量（所有事实类日期字段 ≤ `price_data_through` 且候选侧恒等），才可记「第六刀完成」。
+- 不改 provider live fetch、不碰真钱与 ship-gate；`result/a_short/<YYYYMMDD>/` 仍不可写。
