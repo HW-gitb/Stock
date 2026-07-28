@@ -88,7 +88,11 @@
 - **适用范围：两条 lane 都适用，但清单必须按 lane 分**。缺口在共用工具（`.tools/bounded_unittest.py`、`.tools/full_pack_ledger.py`），账本本身就带 `us_short` / `a_short` 两条 lane，所以问题是共用的；但依赖集合并不共用 —— 实测 `tushare` 只出现在 us_short 测试（3 处 / a_short 0 处），`pandas` 在 a_short 测试 24 处、us_short 测试 0 处，`jsonschema` 两边都有（105 / 36）。被删分支用的是**一张全局清单**，直接照搬会让 us_short 的全量跑去要求 A 股 provider 依赖，属于把误报换成另一种误报。
 - **建议修法（未排期）**: 在全量入口跑第一个批次之前做一次 `find_spec` 前置检查，**按 lane 取各自的必需模块集**，缺失即以明确原因失败并拒绝记账；清单与该检查各配一条反向测试，且必须有一条证明「A 股专属依赖缺失不会让 us_short 全量变红」。**不必**为此恢复被删分支 —— 那是个 11 天前、与当前 `full_pack_ledger.py` 差 281 行的实现。
 
-### R-GOV-USSHORT-LANE-PACK-OUTGREW-THE-1200S-CAP - one Required (GOV-R7)：rule 3 的全量门现在跑不完，等于形同虚设
+### R-GOV-USSHORT-LANE-PACK-OUTGREW-THE-1200S-CAP - resolved Required (GOV-R7)：全量门已恢复可跑完
+
+- **状态 / 严重度**: **resolved 2026-07-28**，由用户自行完成的 a-short / us-short 全量提速消除动因，非本条另行修复。**闭合证据**（读账本，非转述）：`.tools/state/full_pack_ledger.json` 今日两条 lane 均已绿并成功记账 —— `us_short` `4952 OK`（14:01:15）、`a_short` `2059 OK`（13:27:19）；`FULL_MAX_SECONDS` 现为 1300，而记账的前提正是在该上限内跑完（`records only PASS`，且需 `prepare` 指纹匹配）。对照本条开出时的实测：us_short 曾 `EXIT=124` 跑满 1200s 无 `Ran N tests`，此前一次跑完是 `4879 tests / 1191.965s`，几乎贴顶。现在测试数还多了（4879 → 4952）却能在上限内完成，说明是提速而非缩减覆盖。
+- **未随之解决、已另立**: 全量入口仍不校验外部依赖可导入性，见 `R-GOV-FULL-PACK-DOES-NOT-VERIFY-ITS-EXTERNAL-TEST-DEPENDENCIES`（Optional）。本条只解决「跑不完」，不解决「在依赖不全的环境里跑出的绿」。
+- **如果复发**: 判据是同一条 —— 全量跑出 `EXIT=124` 或无 `Ran N tests` 即 UNKNOWN，不得当证据；届时应重新评估分批执行，而不是继续抬高上限（本条第一次就是靠抬上限从 1200 到 1300 拖过去的）。
 
 - **状态 / 严重度**: open Required (GOV-R7)，治理层。**实测（2026-07-27，fe9c，pinned 3.13）**：`.tools\full_pack_ledger.py run us_short … 1200 -- discover -s tests -p "test_us_short*.py"` 跑满 1200s 后 `EXIT=124`、**没有 `Ran N tests` 行**，按 AGENTS 分级 ⑥ 判 **UNKNOWN**（既不是绿也不是红），ledger 只留下 `_prepares` 条目、没有记账。输出末尾停在 capstone resume-integration 的 checkpoint 阶段，说明时间主要花在那批把整条 stage 链跑一遍的集成用例上。
 - **不是偶发**：上一次真正跑完的记录是 `4879 tests / 1191.965s / FAILED`——**1192s 对 1200s 上限**，当时就已经贴着天花板；本刀又新增两个 stage 与两个引擎模块，于是这次直接撞线。也就是说这条 lane 的 rule 3 全量门**已经不可能再绿**，任何以「全量包绿」为前提的 PASS/合并从此都拿不到证据。
