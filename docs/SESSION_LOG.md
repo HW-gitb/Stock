@@ -1,5 +1,12 @@
 # Session Log
 
+## 2026-07-28 - Claude Code 落地 US-short K3-R66/R67 权威实现 (rebase 而非合并，主树 `fa3a2b90`)
+
+- **Verdict/Action**: 已落 master `fa3a2b90`。同一 finding 的两份实现裁定为：fe9c `94a81ebc`（已审 PASS）为权威；主树那份未提交草稿从未过审查门且缺两条已批准 Required，由该执行窗口作废并备份。落地方式改为 **rebase**：fe9c 落后 master 多笔 us_short 提交，直接合会回退 `4f235717`/`b3930e4f`。
+- **Required**: 无新增。裁定依据、rebase 理由与两份实现的函数级差异落 `docs/system_risk_register.md` 的合并注终稿（单一来源）。
+- **Verify**: review-evidence:0562e0284e80。超时原因: 本轮含两份并行实现的裁定、rebase 冲突整合与一次主树残留排障，远超 15 分钟目标。自核（不采信转述）：`_regroup_chunk_payload` 实为 master 已提交的 `4f235717`，**我上一轮把它说成主树草稿的优点是错的**，已更正。rebase 后 fe9c 包 `221 OK`；快进 master 后同命令先红 4 个，按规则先查残留 —— `provider_samples` 里 21 份 x lane 冻结原文全是今早那份作废草稿所写、与新 payload 字节不同而撞不可变冲突，清理后主树 `139 OK`。提取函数已改用 master 既有 `_ingest_provider_item` + `_regroup_chunk_payload`，传输计数下沉进该 helper 并在内容校验之前记录。
+- **Next**: 移植主树草稿里那三个具名挖空测试（唯一值得留的）；之后解冻链第 ④ 步 K3-R31/R32
+
 ## 2026-07-28 — Claude Code 审查 PASS（executor test-plan enforcement：英文 implementation 抬头绕过 proof-of-use）
 
 - **Verdict/Action**: PASS。缺陷真实：既有 proof 守卫只认中文 `起草`/`强化` 抬头，英文 `Codex implementation` 交接因此完全绕过 proof-of-use。新守卫按「抬头含 `Codex` 且含 implementation/implement/repair/fix」判为 implementer handoff，要求块内有**带标签**的 `Pre-Codex self-review` / `Proof-of-use` 行；marker 之下 grandfather，不追溯声称合规。checklist 第 2 条同步加「改共享 guard / AST-conformance 矩阵或其调用点前，先一次列全所有调用点及各自的 registry / frozen-coordinate / dying-test 决定」，并由锚点表钉住不被删。
