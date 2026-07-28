@@ -1,5 +1,26 @@
 # Session Log
 
+## 2026-07-28 - 分支清理：删除两个已被 master 吸收的早期草稿分支
+
+- **Verdict/Action**: 经用户确认删除两个分支，删前已记录复原点。`codex/a-short-industry-l3-integration` = `c387a65525fce353380ed4c8869a45ba729e4c79`；`wip/master-model-paper-preclean-20260722` = `e74f32bcedc0e8fce09975f01aea8f5f4dde23d9`。需要时 `git branch <名字> <SHA>` 即可复原。
+- **Required**: 无。仓库卫生，不入 register。
+- **Verify**: 删除依据是文件级比对而非 `git cherry`（后者按 patch-id 判等价，对「功能经别的提交落地」会误报未合）。l3-integration：`engine/a_short_hithink_l3.py` 与 master 逐字节相同、`a_short_industry_theme.py` 差 9 行、`a_short_theme_forward_comparison.py` master 版已超出 2215 行。wip：`runners/us_short_paper_one_click.py` 已在 master 且演进 344 行。删除后 `git branch --no-merged master` 余 3 个。
+- **Next**: 查 `codex/a-short-93db-six-knife` 的两个孤儿函数（`_bind_candidate_quote_to_price`、`_bounded_pro_call`，master 全树无定义）属于哪一刀；`codex/full-test-reliability` 待用户判断是否与主树全量测试优化重复
+
+## 2026-07-28 — Claude Code 审查（解冲突的几笔 merge）：merge 本身干净，但 master 的 us_short lane 是红的
+
+- **Verdict/Action**: 合并动作**无误、无遗漏**：只有 `f1b52692` 一笔真 merge，全仓零冲突标记；两侧父各自只带自己的改动（`df86779e→` 恰 4 个 governance 文件、`df10f812→` 恰我那 21 个），四个冲突文件两侧特征内容 15 串全命中；a_short 代码与我审过的 `df86779e` 逐字相同故继承 `2070 OK`。但复核时发现一件更重的事，见 Required。
+- **Required**: 一条，新开 `docs/system_risk_register.md#R-USSHORT-K3-RELAND-BREAKS-CAPSTONE-SOFT-DISCOVERY-CONSUMER`。`fa3a2b90` 落地后官方 us_short lane 必红，72 failures + 8 errors 全在 `test_us_short_weekly_capstone_soft_discovery`；合并产出为空、digest 对不上。是产品回退还是夹具过期尚未判定，register 里写明了先定性再动手，且不得靠放松 `validate_merged_packet` 变绿。
+- **Verify**: 本轮未注入 review-evidence token，故不引用。官方全量 `us_short` = `4970 tests / failures=72 / errors=8 / exit 1 / 305.2s`。归因用两棵树的同一模块对照：`df86779e` = `47 tests / PASS / 22.5s`，当前 master = `47 tests / FAIL`；`merge.py` 自那以后只被 `fa3a2b90` 改过，该测试模块未被它改。治理三包 + review-tiering = `83 OK`。`_regroup_chunk_payload` 与 fe9c 的 `_LiveTransport`/`transport_response_counts`/`execute_live_*` 在 master 上并存，我先前担心的回退未发生。
+- **Next**: Codex：修复该 Required（先定性：夹具过期 or 产品回退）。另据 master 顶部那条复核，仍有 5 个分支从未合入（`codex/a-short-93db-six-knife` 等），待用户逐个决定合并/归档/删除。
+
+## 2026-07-28 - Claude Code 复核全仓未合入内容 (上次只扫 worktree，漏了 5 个分支)
+
+- **Verdict/Action**: 复核完成，未改代码。**更正上一次的结论**：我此前只按 worktree 清点，报「积压 4 笔、分布 3 棵树」，遗漏了没有被任何 worktree 检出的分支。本轮按分支 + worktree + stash 三个面重扫，实际还有 5 个分支未合入 master，最近的也已放置 6 天。所有 worktree（含我自己那棵）的未合入提交均为 0。
+- **Required**: 无。这是仓库卫生不是系统缺陷，故不入 register。
+- **Verify**: review-evidence:e7e6036301cb。master HEAD `a3d754e8`。`git branch --no-merged master` 得 5 个：`archive/d15e-industry-trend-evaluator`(1 笔)、`codex/a-short-93db-six-knife`(1 笔/23 文件 +858)、`codex/a-short-industry-l3-integration`(2 笔)、`codex/full-test-reliability`(1 笔/10 文件 +541)、`wip/master-model-paper-preclean-20260722`(1 笔/8 文件 +361)。5 棵 worktree 未合入提交全 0；仅 codex 可视化临时工作区有 1 个未跟踪 receipt。stash 全仓共享 9 条（含我今天 rebase 前存的 eol-only plan 文件）。`wt/a-short-3` 分支已随其 worktree 删除，`cd8bbd67` 成悬空对象、不在 master。
+- **Next**: 用户逐个决定这 5 个分支合并/归档/删除；之后解冻链第 ④ 步 K3-R31/R32
+
 ## 2026-07-28 - Claude Code 自修 Optional：生产入口守卫改用每测试独立 raw 根
 
 - **Verdict/Action**: 已提交。把「冻结原文跨运行相撞」从靠纪律（记得用唯一 URL）改成结构上不可能：守卫用仓内既有的 `temporary_provider_directory` 取每测试独立 raw 根，并传给 `run_web_fetch` 与 `run_x_fetch` 两个生产入口。产品代码未改，只动该测试模块的夹具接线。
