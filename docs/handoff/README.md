@@ -15,6 +15,8 @@ Use this file to decide which handoff to open. Do not read every handoff by defa
 
 - `2026-05-27_phase7_kickoff_spec_handoff.md` — Phase 7 provider capability / field catalog contract boundary, with later Phase 7a alpha-validation route and Phase 7a+ alpha reality action guide additions; schema-first, no provider selection, no data fetch, no adapter / DataHub table.
 
+- `2026-07-28_us_short_soft_discovery_x_live_shape_review_handoff.md` — US-short X response-shape repair for K3-R68/K3-R69; step ② awaits independent review and K3-R34 remains frozen.
+
 ## Phase Index
 
 This index is the single annotated handoff list (it absorbs the per-file one-line descriptions that

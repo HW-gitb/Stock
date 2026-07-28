@@ -81,6 +81,7 @@ def _normalize_results(
     pending_raw_writes: list[tuple[Path, dict[str, Any]]] | None = None,
 ) -> tuple[list[dict[str, Any]], list[dict[str, str]]]:
     cutoff = web._cutoff(expected_decision_date)
+    decision_week_start = web._decision_week_start(expected_decision_date)
     refs: list[dict[str, Any]] = []
     drops: list[dict[str, str]] = []
     seen: set[str] = set()
@@ -126,6 +127,8 @@ def _normalize_results(
                 ) from exc
             if observed >= cutoff:
                 raise web._ProviderItemRejected("published_at_after_decision_open", locator)
+            if observed < decision_week_start:
+                raise web._ProviderItemRejected("published_at_outside_decision_week", locator)
             text = web._safe_text(item.get("text", item.get("content", item.get("snippet"))), limit=4000)
             title = web._safe_text(item.get("title", "X post"), limit=240)
             if not text:
@@ -355,18 +358,27 @@ def _provider_annotation_urls(response: Any) -> list[str]:
     return sorted(urls)
 
 
-def _coerce_x_client_reply(reply: Any) -> tuple[str, list[dict[str, Any]], list[str]]:
+def _grok_model_identity(*, served_model: Any = None, system_fingerprints: list[str] | None = None) -> dict[str, Any]:
+    return {
+        "requested_model": GROK_MODEL,
+        "served_model": served_model if isinstance(served_model, str) and served_model else None,
+        "system_fingerprints": sorted(set(system_fingerprints or [])),
+    }
+
+
+def _coerce_x_client_reply(reply: Any) -> tuple[str, list[dict[str, Any]], list[str], dict[str, Any] | None]:
     if isinstance(reply, str):
-        return reply, [], []
+        return reply, [], [], None
     if isinstance(reply, dict):
         text = reply.get("text", reply.get("response"))
         rows = reply.get("results")
         if not isinstance(text, str) or not isinstance(rows, list):
             raise XThemeDiscoveryError("X client reply must include text and provider result rows")
         annotations = reply.get("annotation_urls", [])
-        return text, [dict(row) for row in rows if isinstance(row, dict)], [url for url in annotations if isinstance(url, str)]
+        model_identity = reply.get("model_identity")
+        return text, [dict(row) for row in rows if isinstance(row, dict)], [url for url in annotations if isinstance(url, str)], model_identity if isinstance(model_identity, dict) else None
     if isinstance(reply, tuple) and len(reply) == 2 and isinstance(reply[0], str) and isinstance(reply[1], list):
-        return reply[0], [dict(row) for row in reply[1] if isinstance(row, dict)], []
+        return reply[0], [dict(row) for row in reply[1] if isinstance(row, dict)], [], None
     raise XThemeDiscoveryError("X client reply shape is unsafe")
 
 
@@ -390,6 +402,9 @@ def build_x_fetch_packet(
     _live_transport: web._LiveTransport | None = None,
     extra_drop_ledger: list[dict[str, str]] | None = None,
     provider_annotation_urls: Any = None,
+    grok_model_identity: dict[str, Any] | None = None,
+    grok_attempted: bool = False,
+    grok_failed: bool = False,
 ) -> tuple[dict[str, Any], dict[str, Any], dict[str, Any]]:
     queries = _safe_queries(queries)
     generated = _parse_dt(generated_at, "generated_at")
@@ -415,6 +430,12 @@ def build_x_fetch_packet(
         raise XThemeDiscoveryError("offline packet cannot attest network/provider execution")
     if execution_mode == "live_authorized" and (network_call_count <= 0 or provider_call_count <= 0):
         raise XThemeDiscoveryError("live packet requires observed provider/network call counts")
+    model_identity = grok_model_identity or _grok_model_identity()
+    if model_identity.get("requested_model") != GROK_MODEL or (
+        execution_mode == "live_authorized" and grok_attempted and not grok_failed
+        and not model_identity.get("served_model")
+    ):
+        raise XThemeDiscoveryError("live Grok receipt requires requested and served model identity")
     network_access_performed = network_call_count > 0
     provider_calls_performed = provider_call_count > 0
     if raw_root is not None:
@@ -469,7 +490,7 @@ def build_x_fetch_packet(
     receipt = {
         "schema_name": "us_short_llm_theme_discovery_fetch_x", "schema_version": "1.0.0", "generated_at": generated.isoformat(),
         "decision_clock": {"expected_decision_date": expected_decision_date, "cutoff_policy": "before_decision_open_et", "pit_enforced": True},
-        "fetch_contract": {"producer_kind": "grok_native_x_fetch", "execution_mode": execution_mode, "network_access_performed": network_access_performed, "provider_calls_performed": provider_calls_performed, "network_call_count": network_call_count, "provider_call_count": provider_call_count, "transport_response_counts": transport_response_counts, "scoring_eligible": False, "top15_effect_enabled": False, "operation_advice_effect_enabled": False, "dynamic_seats_enabled": False, "theme_probe_enabled": False, "lifecycle_actions_enabled": False},
+        "fetch_contract": {"producer_kind": "grok_native_x_fetch", "execution_mode": execution_mode, "network_access_performed": network_access_performed, "provider_calls_performed": provider_calls_performed, "network_call_count": network_call_count, "provider_call_count": provider_call_count, "transport_response_counts": transport_response_counts, "scoring_eligible": False, "top15_effect_enabled": False, "operation_advice_effect_enabled": False, "dynamic_seats_enabled": False, "theme_probe_enabled": False, "lifecycle_actions_enabled": False, "grok_model": model_identity},
         "queries": queries, "source_refs": refs, "discovery_artifact_sha256": web._discovery_evidence_hash(discovery), "drop_ledger": drops,
         "summary": {"query_count": len(queries), "accepted_source_count": len(refs), "validated_theme_count": len(discovery["themes"]), "validated_member_count": sum(len(t["members"]) for t in discovery["themes"]), "dropped_result_count": len(drops)},
     }
@@ -503,14 +524,31 @@ def execute_live_x_orchestration(
     annotation_urls: list[str] = []
     grok_texts: list[str] = []
     query_drops: list[dict[str, str]] = []
+    model_identity = _grok_model_identity()
+    fingerprints: list[str] = []
+    grok_attempted = False
     for query in queries:
         try:
-            text, provider_rows, annotations = _coerce_x_client_reply(client.search(query, expected_decision_date))
+            grok_attempted = True
+            text, provider_rows, annotations, reply_identity = _coerce_x_client_reply(client.search(query, expected_decision_date))
+            if reply_identity is not None:
+                served_model = reply_identity.get("served_model")
+                expected_model = model_identity["served_model"]
+                if not isinstance(served_model, str) or not served_model:
+                    raise web._ProviderItemRejected("served_model_missing", query)
+                if expected_model is not None and served_model != expected_model:
+                    raise web._ProviderItemRejected("served_model_changed", query)
+                model_identity["served_model"] = served_model
+                fingerprint = reply_identity.get("system_fingerprint")
+                if isinstance(fingerprint, str) and fingerprint:
+                    fingerprints.append(fingerprint)
             grok_texts.append(text)
             results.extend(provider_rows)
             annotation_urls.extend(annotations)
             if not provider_rows:
                 query_drops.append({"stage": "search_result", "reason": "missing_provider_result_rows", "detail": query})
+        except web._ProviderItemRejected as exc:
+            query_drops.append({"stage": "llm", "reason": exc.reason, "detail": exc.detail})
         except Exception as exc:
             query_drops.append({"stage": "llm", "reason": "provider_response_dropped", "detail": type(exc).__name__})
     combined, response_drops = _combine_grok_responses(grok_texts)
@@ -518,6 +556,8 @@ def execute_live_x_orchestration(
         "results": results, "grok_response": combined,
         "query_drops": query_drops + response_drops,
         "fetched_at": datetime.now(timezone.utc), "annotation_urls": sorted(set(annotation_urls)),
+        "grok_model_identity": {**model_identity, "system_fingerprints": sorted(set(fingerprints))},
+        "grok_attempted": grok_attempted, "grok_failed": grok_attempted and not grok_texts,
     }
 
 
@@ -537,7 +577,7 @@ class GrokXSearchClient:
             response = self.client.responses.create(model=GROK_MODEL, tools=[{"type": "x_search"}], input=_prompt(expected_decision_date, [{"source_id": "query", "title": query, "text": query}]))
             if self._live_transport is not None:
                 self._live_transport._record_completed_response("xai")
-            return {"text": _response_text(response), "results": _provider_result_rows(response), "annotation_urls": _provider_annotation_urls(response)}
+            return {"text": _response_text(response), "results": _provider_result_rows(response), "annotation_urls": _provider_annotation_urls(response), "model_identity": {"served_model": getattr(response, "model", None), "system_fingerprint": getattr(response, "system_fingerprint", None)}}
         except Exception as exc:
             raise XThemeDiscoveryError(f"Grok X request failed: {type(exc).__name__}") from exc
 
@@ -565,7 +605,7 @@ def run_x_fetch(*, queries: list[str] | tuple[str, ...], expected_decision_date:
             queries=queries, expected_decision_date=expected_decision_date, client=client,
         )
         fetched_now = outcome["fetched_at"]
-        return build_x_fetch_packet(queries=queries, results=outcome["results"], grok_response=outcome["grok_response"], expected_decision_date=expected_decision_date, generated_at=fetched_now.isoformat(), fetched_at=fetched_now.isoformat(), raw_root=raw_root, persist_raw=True, execution_mode="live_authorized", _live_transport=transport, extra_drop_ledger=outcome["query_drops"], provider_annotation_urls=outcome["annotation_urls"])
+        return build_x_fetch_packet(queries=queries, results=outcome["results"], grok_response=outcome["grok_response"], expected_decision_date=expected_decision_date, generated_at=fetched_now.isoformat(), fetched_at=fetched_now.isoformat(), raw_root=raw_root, persist_raw=True, execution_mode="live_authorized", _live_transport=transport, extra_drop_ledger=outcome["query_drops"], provider_annotation_urls=outcome["annotation_urls"], grok_model_identity=outcome["grok_model_identity"], grok_attempted=outcome["grok_attempted"], grok_failed=outcome["grok_failed"])
     if x_client is None:
         raise XThemeDiscoveryError("offline mode requires an injected fake X client")
     responses: list[str] = []
@@ -574,7 +614,7 @@ def run_x_fetch(*, queries: list[str] | tuple[str, ...], expected_decision_date:
     query_drops: list[dict[str, str]] = []
     for query in queries:
         try:
-            text, provider_rows, annotations = _coerce_x_client_reply(x_client.search(query, expected_decision_date))
+            text, provider_rows, annotations, _ = _coerce_x_client_reply(x_client.search(query, expected_decision_date))
             responses.append(text)
             results.extend(provider_rows)
             annotation_urls.extend(annotations)
