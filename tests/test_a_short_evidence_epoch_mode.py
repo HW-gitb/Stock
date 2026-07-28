@@ -416,6 +416,7 @@ class PreFreezeEvidenceModeTests(unittest.TestCase):
 
         epoch_mode._semantic_module_contract_from_source.cache_clear()
         epoch_mode._semantic_function_contract_from_source.cache_clear()
+        epoch_mode._cached_semantic_source_tree.cache_clear()
         module = SimpleNamespace(__name__="semantic_memo_probe")
         with tempfile.TemporaryDirectory() as temp:
             path = Path(temp) / "semantic_memo_probe.py"
@@ -430,6 +431,86 @@ class PreFreezeEvidenceModeTests(unittest.TestCase):
                 self.assertEqual(parse.call_count, 2)
         self.assertEqual(second["bound_constants"], ["LIMIT"])
         self.assertNotEqual(changed["semantic_ast_sha256"], second["semantic_ast_sha256"])
+
+    def test_semantic_source_parse_cache_is_shared_across_contract_dimensions(self):
+        from types import SimpleNamespace
+
+        epoch_mode._semantic_module_contract_from_source.cache_clear()
+        epoch_mode._semantic_function_contract_from_source.cache_clear()
+        epoch_mode._cached_semantic_source_tree.cache_clear()
+        module = SimpleNamespace(__name__="semantic_dimension_probe")
+        with tempfile.TemporaryDirectory() as temp:
+            path = Path(temp) / "semantic_dimension_probe.py"
+            source = (
+                "FIRST = 1\nSECOND = 2\n\n"
+                "def first():\n    return FIRST\n\n"
+                "def second():\n    return SECOND\n"
+            )
+            with mock.patch.object(epoch_mode.inspect, "getsourcefile", return_value=str(path)):
+                path.write_text(source, encoding="utf-8")
+                with mock.patch.object(epoch_mode.ast, "parse", wraps=epoch_mode.ast.parse) as parse:
+                    for _ in range(4):
+                        epoch_mode.semantic_function_contract(module, ("first",))
+                        epoch_mode.semantic_function_contract(module, ("second",))
+                        epoch_mode.semantic_function_contract(module, ("first", "second"))
+                        epoch_mode.semantic_module_contract(module)
+                        epoch_mode.semantic_module_contract(module, excluded_functions={"second"})
+                    self.assertEqual(parse.call_count, 1)
+
+                    cached_body, cached_functions, _cached_constants = (
+                        epoch_mode._semantic_source_inventory(module.__name__, source)
+                    )
+                    cached_functions["first"].body[-1].value.id = "POISON"
+                    self.assertEqual(
+                        epoch_mode.semantic_function_contract(module, ("first",))["bound_constants"],
+                        ["FIRST"],
+                    )
+
+                    path.write_text(source.replace("FIRST = 1", "FIRST = 3"), encoding="utf-8")
+                    changed = epoch_mode.semantic_function_contract(module, ("first",))
+                self.assertEqual(parse.call_count, 2)
+
+        self.assertEqual(changed["bound_constants"], ["FIRST"])
+        for cached in (
+            epoch_mode._cached_semantic_source_tree.cache_info(),
+            epoch_mode._semantic_module_contract_from_source.cache_info(),
+            epoch_mode._semantic_function_contract_from_source.cache_info(),
+        ):
+            self.assertLess(cached.currsize, cached.maxsize)
+
+    def test_semantic_contract_cache_failures_keep_their_fail_closed_messages(self):
+        from types import SimpleNamespace
+
+        epoch_mode._semantic_module_contract_from_source.cache_clear()
+        epoch_mode._semantic_function_contract_from_source.cache_clear()
+        epoch_mode._cached_semantic_source_tree.cache_clear()
+        module = SimpleNamespace(__name__="semantic_failure_probe")
+        with tempfile.TemporaryDirectory() as temp:
+            path = Path(temp) / "semantic_failure_probe.py"
+            with mock.patch.object(epoch_mode.inspect, "getsourcefile", return_value=str(path)):
+                path.write_text("def broken(:\n", encoding="utf-8")
+                with self.assertRaisesRegex(
+                    epoch_mode.EvidenceEpochModeError,
+                    r"^cannot read semantic source for semantic_failure_probe$",
+                ):
+                    epoch_mode.semantic_module_contract(module)
+
+                path.write_text("def bound():\n    return 1\n", encoding="utf-8")
+                with self.assertRaisesRegex(
+                    epoch_mode.EvidenceEpochModeError,
+                    r"^missing semantic functions in semantic_failure_probe: \['missing'\]$",
+                ):
+                    epoch_mode.semantic_function_contract(module, ("missing",))
+                with self.assertRaisesRegex(
+                    epoch_mode.EvidenceEpochModeError,
+                    r"^no semantic functions requested for semantic_failure_probe$",
+                ):
+                    epoch_mode.semantic_function_contract(module, ())
+                with self.assertRaisesRegex(
+                    epoch_mode.EvidenceEpochModeError,
+                    r"^unknown semantic-function exclusions for semantic_failure_probe: \['missing'\]$",
+                ):
+                    epoch_mode.semantic_module_contract(module, excluded_functions={"missing"})
 
     def test_narrow_contract_binds_the_constants_its_functions_read(self):
         """A narrow binding must cover read constants, or a governed threshold escapes.

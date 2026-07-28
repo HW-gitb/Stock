@@ -1,5 +1,19 @@
 # Session Log
 
+## 2026-07-28 — Claude Code 审查 PASS（A-short 提速刀 9：语义契约按源码共享 parse）
+
+- **Verdict/Action**: PASS。新增 `_cached_semantic_source_tree(module_name, source)` 只 parse 一次，`_semantic_source_inventory` 从它派生 `(body, function_nodes, constant_nodes)` 并深拷为私有副本；两个契约 memo 改为消费它，maxsize `64→128/256`。`_top_level_constant_nodes` 与原内联循环同义（同名后者覆盖）。SyntaxError 在 lru_cache 内抛出故不被缓存，仍每次重算重抛，fail-closed 未松。
+- **Required**: 无，未新开 register 条目。两条 Optional 见 Next。
+- **Verify**: review-evidence:df05b92d58c4。超时原因:需自跑 a_short 全量取前后对比，且首跑被我自己上一条 SESSION_LOG bullet 超长触发的 doc-gov guard 打红、改后须复跑。超集包 `test_a_short_evidence_epoch_mode + test_a_short_target_policy_comparison` = `53 OK / 37.9s`（改前同两模块 `154.2s / 51 tests`，-76%）。自写老新对拍：10 个真实被绑定模块、110 组比较（模块契约 / 函数契约全集·单例·子集 / 排除集维度）**全等**。机理：`ast.parse` `2070→18`，function 缓存 `misses 2059→99`、`currsize 99/256` 不驱逐，tree 缓存 `7/64`。全量 `2058 tests / 200.15s`（改前 `2056 / 337s`，-41%），唯一红是我自己的 bullet 超长，与本刀无关，已改。
+- **Next**: 提交。Optional①（未修）`_semantic_source_inventory` 每次深拷**整棵树**：实测 n=98 / `4.28s` = 剩余 6.5s 的 `65.3%`；而 `_semantic_ast_sha256` 只拷选中节点，同样 n=98 仅 `0.07s`。改成「只拷交出去的那部分」可再砍掉大半余量。Optional② tree 缓存 `maxsize=64` 在最重消费者上实测 `currsize=7`，但全 lane 的不同源码总数未量，值得补一条 lane 级 `currsize < maxsize` 断言。
+
+## 2026-07-28 — Claude Code 审查 FAIL（US-short test_c 变异遍历批处理再优化）
+
+- **Verdict/Action**: FAIL，不可提交，建议整段回退。本刀把 `test_c` 从「一次只变异一个 guard callsite」改成「同 `(patch_owner, bound_name, attribute)` 且候选集不相交的 coordinate 合批变异」。两个问题：①**没有收益**——实测 `groups=63 multi=2`，63 组里只有 2 组是多行（各 2 行），61 组是单行、走的就是老路径外加记账；②**放松了元守卫**——批处理门是「候选集不相交」，但它自己的注释指出的风险是「同一条路径里变异两个 callsite 会互相遮蔽」，而候选集不相交挡不住一次运行同时走到同组两个 callsite；真发生时红会同时记给两行，另一行的候选测试还会被 `remaining` 剔除而永不运行。老的逐 coordinate 遍历不可能犯这个错。
+- **Required**: 两条，均已落 `docs/system_risk_register.md`：`#R-USSHORT-TESTC-MUTATION-BATCHING-NO-GAIN-META-GUARD-RISK`（本刀，回退；若将来 profile 证明这里真是热点，重提时须带实测收益，且门要建在「同一次运行是否共同触达」而非候选集上）；`#R-USSHORT-FETCHWEB-UNDECLARED-BATCH-RAISE`（**master 自身已红**，与本刀无关）。
+- **Verify**: 本轮未注入 review-evidence token，故不引用。超集包 `tests.test_us_short_discovery_conformance` = `38 tests / 170.9s / FAIL / failures=2`，两处红全在 `LanePerItemConformance`，由已并入 master 的 `7849cd64` 引入（工作区未改 `runners/`，归因确定）；`test_c` 两侧都 `1 OK`。自写植入探针：`groups=63 multi=2`，MULTI-HIT 计数为 0。同 HEAD 的 `test_c` A/B 两轮、每侧独立进程、第二轮反序：HEAD `74.6s` vs 工作区 `78.8s`；反序后工作区 `91.0s` vs HEAD `83.6s`，方向一致，改后更慢。
+- **Next**: Codex 回退本刀（`a_boundary_coordinates` 那处死变量删除可以单独留作一次性清理）；另行处理 `7849cd64` 引入的两个未声明批级 raise——按该 commit 自述意图（「isolate a failing chunk instead of discarding the run」）应走 `_ProviderItemRejected` 逐项路径，而非中止整批。在它闭合前 `full_pack_ledger run us_short` 不可能绿。
+
 ## 2026-07-28 — Claude Code 审查 PASS（US-short 提速刀二复审 + 刀三 冲突矩阵拆分）
 
 - **Verdict/Action**: PASS，两刀均可提交。刀二 Required 已闭：`_full_weeks` 按 values 缓存 + `copy.deepcopy` 分发，`_revalue_shadow_weeks` 在已隔离副本上改 T15 并重建该周 scorecard，引擎那段未动。刀三把五个同日 immutable-conflict transition 从一个聚合用例拆成五个独立用例（各自 `setUp` 新建 `temporary_provider_directory`，等价于旧的手工 tearDown/setUp；`_bridge_stage()` 是文件既有 helper，逐字等于被删的内联版本），注册表 GUARDS 绑 `unavailable_to_valid`、另四条进 `ADDITIONAL_BEHAVIOR`。`test_c` 覆盖遍历仍跑全五条，省的是变异遍历：每次植入变异只重跑一条、首杀即 break，最坏退回旧成本不会更慢。

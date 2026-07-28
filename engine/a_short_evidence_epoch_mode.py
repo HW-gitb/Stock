@@ -59,6 +59,7 @@ rather than an implicit reseal.
 from __future__ import annotations
 
 import ast
+import copy
 import hashlib
 import inspect
 import json
@@ -185,29 +186,64 @@ def _top_level_function_nodes(tree: ast.AST) -> dict[str, ast.AST]:
     }
 
 
+def _top_level_constant_nodes(tree: ast.AST) -> dict[str, ast.AST]:
+    """Return the last top-level all-caps assignment for each constant name."""
+    constant_nodes = {}
+    for node in tree.body:
+        if not isinstance(node, (ast.Assign, ast.AnnAssign)):
+            continue
+        targets = node.targets if isinstance(node, ast.Assign) else [node.target]
+        for target in targets:
+            if isinstance(target, ast.Name) and target.id.isupper():
+                constant_nodes[target.id] = node
+    return constant_nodes
+
+
+@lru_cache(maxsize=64)
+def _cached_semantic_source_tree(module_name: str, source: str) -> ast.AST:
+    """Parse one exact source text once; callers receive a private clone."""
+    try:
+        return ast.parse(source)
+    except SyntaxError as exc:
+        raise EvidenceEpochModeError(f"cannot read semantic source for {module_name}") from exc
+
+
+def _semantic_source_inventory(
+        module_name: str, source: str,
+) -> tuple[tuple[ast.AST, ...], dict[str, ast.AST], dict[str, ast.AST]]:
+    """Return fresh AST containers derived from the source-keyed parse cache.
+
+    ``_semantic_ast_sha256`` deliberately strips docstrings, so it must never
+    receive nodes owned by the cached tree.  A deep copy keeps cached parse
+    results private and prevents one semantic-contract caller from poisoning
+    another.
+    """
+    tree = copy.deepcopy(_cached_semantic_source_tree(module_name, source))
+    return tuple(tree.body), _top_level_function_nodes(tree), _top_level_constant_nodes(tree)
+
+
 def _semantic_ast_sha256(nodes) -> str:
+    # The transformer mutates its input; isolate callers that pass a fresh
+    # inventory from callers that construct their own AST nodes.
+    normalized_nodes = copy.deepcopy(list(nodes))
     normalized = ast.dump(
-        _StripDocstrings().visit(ast.Module(body=list(nodes), type_ignores=[])),
+        _StripDocstrings().visit(ast.Module(body=normalized_nodes, type_ignores=[])),
         include_attributes=False,
     )
     return hashlib.sha256(normalized.encode("utf-8")).hexdigest()
 
 
-@lru_cache(maxsize=64)
+@lru_cache(maxsize=128)
 def _semantic_module_contract_from_source(
         module_name: str, source: str, exclusions: tuple[str, ...]) -> tuple[str, tuple[str, ...], tuple[str, ...], str]:
-    try:
-        tree = ast.parse(source)
-    except SyntaxError as exc:
-        raise EvidenceEpochModeError(f"cannot read semantic source for {module_name}") from exc
-    function_nodes = _top_level_function_nodes(tree)
+    top_level_nodes, function_nodes, _constant_nodes = _semantic_source_inventory(module_name, source)
     unknown = set(exclusions) - set(function_nodes)
     if unknown:
         raise EvidenceEpochModeError(
             f"unknown semantic-function exclusions for {module_name}: {sorted(unknown)}"
         )
     selected = [
-        node for node in tree.body
+        node for node in top_level_nodes
         if not (
             isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef))
             and node.name in exclusions
@@ -239,27 +275,15 @@ def semantic_module_contract(module, *, excluded_functions=frozenset()) -> dict:
     }
 
 
-@lru_cache(maxsize=64)
+@lru_cache(maxsize=256)
 def _semantic_function_contract_from_source(
         module_name: str, source: str, requested: tuple[str, ...]) -> tuple[str, tuple[str, ...], tuple[str, ...], str]:
-    try:
-        tree = ast.parse(source)
-    except SyntaxError as exc:
-        raise EvidenceEpochModeError(f"cannot read semantic source for {module_name}") from exc
-    function_nodes = _top_level_function_nodes(tree)
+    _top_level_nodes, function_nodes, constant_nodes = _semantic_source_inventory(module_name, source)
     missing = [name for name in requested if name not in function_nodes]
     if missing:
         raise EvidenceEpochModeError(
             f"missing semantic functions in {module_name}: {missing}"
         )
-    constant_nodes = {}
-    for node in tree.body:
-        if not isinstance(node, (ast.Assign, ast.AnnAssign)):
-            continue
-        targets = node.targets if isinstance(node, ast.Assign) else [node.target]
-        for target in targets:
-            if isinstance(target, ast.Name) and target.id.isupper():
-                constant_nodes[target.id] = node
     referenced = tuple(sorted({
         item.id
         for name in requested
