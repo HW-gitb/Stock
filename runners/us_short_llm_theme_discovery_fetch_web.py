@@ -788,6 +788,30 @@ def _regroup_model_identity(*, served_model: Any = None, system_fingerprints: li
     }
 
 
+def _regroup_chunk_payload(
+        deepseek_client: Any, *, expected_decision_date: str, chunk: list[dict[str, Any]],
+        expected_served_model: str | None,
+) -> tuple[str | None, str | None, list[Any]]:
+    """Read one provider-controlled regroup chunk without mutating batch state."""
+    response = deepseek_client.chat.completions.create(
+        model=DEEPSEEK_MODEL, temperature=0, max_tokens=2500,
+        messages=[{"role": "user", "content": _build_deepseek_prompt(expected_decision_date, chunk)}],
+    )
+    served_model = getattr(response, "model", None)
+    served_model = served_model if isinstance(served_model, str) and served_model else None
+    if expected_served_model is not None and served_model != expected_served_model:
+        raise _ProviderItemRejected("regroup_model_identity_changed", "served_model")
+    choice = response.choices[0]
+    if getattr(choice, "finish_reason", "stop") != "stop":
+        raise _ProviderItemRejected("regroup_response_truncated", "finish_reason")
+    fingerprint = getattr(response, "system_fingerprint", None)
+    return (
+        served_model,
+        fingerprint if isinstance(fingerprint, str) and fingerprint else None,
+        _parse_llm_json(choice.message.content)["themes"],
+    )
+
+
 def _parse_llm_json(
     value: Any, *, drop_ledger: list[dict[str, str]] | None = None,
 ) -> dict[str, Any]:
@@ -1139,27 +1163,25 @@ def run_web_fetch(
             successful_chunks = 0
             fingerprints: list[str] = []
             for chunk_index, chunk in enumerate(chunks):
-                try:
-                    attempted_deepseek_calls += 1
-                    response = deepseek_client.chat.completions.create(
-                        model=DEEPSEEK_MODEL, temperature=0, max_tokens=2500,
-                        messages=[{"role": "user", "content": _build_deepseek_prompt(expected_decision_date, chunk)}],
-                    )
-                    served_model = getattr(response, "model", None)
-                    fingerprint = getattr(response, "system_fingerprint", None)
-                    if model_identity["served_model"] is None:
-                        model_identity["served_model"] = served_model if isinstance(served_model, str) and served_model else None
-                    elif served_model != model_identity["served_model"]:
-                        raise WebThemeDiscoveryError("regroup model identity changed across chunks")
-                    if isinstance(fingerprint, str) and fingerprint:
-                        fingerprints.append(fingerprint)
-                    choice = response.choices[0]
-                    if getattr(choice, "finish_reason", "stop") != "stop":
-                        raise WebThemeDiscoveryError("regroup response was truncated")
-                    merged_themes.extend(_parse_llm_json(choice.message.content)["themes"])
-                    successful_chunks += 1
-                except Exception as exc:
-                    query_drops.append({"stage": "llm", "reason": "regroup_chunk_dropped", "detail": f"chunk[{chunk_index}]:{type(exc).__name__}"})
+                attempted_deepseek_calls += 1
+                parsed = _ingest_provider_item(
+                    query_drops, stage="llm", fallback_detail=f"chunk[{chunk_index}]",
+                    ingest=lambda: _regroup_chunk_payload(
+                        deepseek_client,
+                        expected_decision_date=expected_decision_date,
+                        chunk=chunk,
+                        expected_served_model=model_identity["served_model"],
+                    ),
+                )
+                if parsed is None:
+                    continue
+                served_model, fingerprint, themes = parsed
+                if model_identity["served_model"] is None:
+                    model_identity["served_model"] = served_model
+                if fingerprint is not None:
+                    fingerprints.append(fingerprint)
+                merged_themes.extend(themes)
+                successful_chunks += 1
             model_identity["system_fingerprints"] = sorted(set(fingerprints))
             regroup_failed = successful_chunks == 0
             if regroup_failed:

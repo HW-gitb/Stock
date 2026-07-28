@@ -247,6 +247,42 @@ class WebFetchTests(unittest.TestCase):
         )
         self.assertEqual(receipt["fetch_contract"]["regroup_model"], fetch._regroup_model_identity())
 
+    def test_regroup_chunk_rejections_keep_their_reason_and_return_no_fingerprint(self):
+        chunk = [{"source_id": "web:a", "title": "A", "content": "evidence"}]
+
+        def client(*, model, finish_reason, fingerprint):
+            choice = type("Choice", (), {
+                "finish_reason": finish_reason,
+                "message": type("Message", (), {"content": '{"themes":[]}'})(),
+            })()
+            response = type("Response", (), {
+                "model": model, "system_fingerprint": fingerprint, "choices": [choice],
+            })()
+            return type("Client", (), {
+                "chat": type("Chat", (), {
+                    "completions": type("Completions", (), {
+                        "create": staticmethod(lambda **_kwargs: response),
+                    })(),
+                })(),
+            })()
+
+        for response, expected, reason in (
+            (client(model="deepseek-other", finish_reason="stop", fingerprint="rejected-model"), "deepseek-test", "regroup_model_identity_changed"),
+            (client(model="deepseek-test", finish_reason="length", fingerprint="rejected-truncated"), "deepseek-test", "regroup_response_truncated"),
+        ):
+            with self.subTest(reason=reason):
+                drops: list[dict[str, str]] = []
+                accepted = fetch._ingest_provider_item(
+                    drops, stage="llm", fallback_detail="chunk[0]",
+                    ingest=lambda: fetch._regroup_chunk_payload(
+                        response, expected_decision_date="20260725", chunk=chunk,
+                        expected_served_model=expected,
+                    ),
+                )
+                self.assertIsNone(accepted)
+                self.assertEqual(drops, [{"stage": "llm", "reason": reason,
+                                          "detail": "served_model" if reason.endswith("changed") else "finish_reason"}])
+
     def test_regroup_prompt_is_nonempty_and_binds_every_chunk_source(self):
         rows = [{"source_id": "web:a", "title": "A", "content": "first"}, {"source_id": "web:b", "title": "B", "content": "second"}]
         prompt = fetch._build_deepseek_prompt("20260727", rows)
