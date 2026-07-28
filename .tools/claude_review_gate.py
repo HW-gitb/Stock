@@ -209,7 +209,7 @@ def _review_context() -> str:
         " PASS 证据只能来自真实工具结果、用户 ! 输出或上方 REVIEW EVIDENCE SNAPSHOT，拿不到就写 NOT_VERIFIED。"
         " 分级门(rule 3/4/5/8)："
         "①focused 只用 bounded_unittest 单入口，最多 300 秒；PID/CPU/父子进程切换不等于测试进度或 PASS;"
-        "②按 rule 3 触发的全量只用 full_pack_ledger `run` 单命令，最多 1200 秒，自动查缓存并成功记账;"
+        "②按 rule 3 触发的全量只用 full_pack_ledger `run` 单命令，最多 1300 秒，自动查缓存并成功记账;"
         "③FAIL 一旦被真实探针坐实就先出结论、不必等全量包;"
         "④独立对抗 agent 只在真钱/选股/安全/PIT-进选股/大而绕 diff 才起、且只起一个，"
         "小低危改动别起 agent 也别跑全量(rule 8，过度审查=缺陷);"

@@ -31,7 +31,7 @@ class ReviewContextTieringTests(unittest.TestCase):
         self.assertIn("PID/CPU", text)
         # ② the full path is one bounded ledger command.
         self.assertIn("full_pack_ledger `run`", text)
-        self.assertIn("1200", text)
+        self.assertIn("1300", text)
         # ④ the independent agent is gated, not a default
         self.assertIn("agent", text)
         # ⑤ scope tests to changed symbols, not changed files (no whole-module tax)

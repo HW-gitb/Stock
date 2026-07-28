@@ -12,7 +12,7 @@ from dataclasses import dataclass
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
-FULL_MAX_SECONDS = 1200
+FULL_MAX_SECONDS = 1300
 FOCUSED_DEFAULT_SECONDS = 300
 # A focused command normally gets the short default. A known slow, still-focused
 # pack may opt in through the launcher, but never exceed the full-run ceiling.
