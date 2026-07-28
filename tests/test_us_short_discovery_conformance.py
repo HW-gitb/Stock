@@ -815,6 +815,13 @@ class ExecutableClosureMatrix(unittest.TestCase):
         ".WeeklyCapstoneSoftDiscoveryStageTest"
         ".test_capstone_accepts_every_bound_unusable_canonical_receipt_as_zero_effect"
     )
+    # Behaviour tests that `test_c` must still execute even though no GUARDS row
+    # names them: they are what makes some derived callsites reachable at all, and
+    # membership here also gives a test first pick as a mutation candidate
+    # (priority 0).  The four `test_same_day_*` entries are siblings of the single
+    # transition bound at `_guard_existing_artifact_hashes` — the five were split
+    # out of one aggregate test — so moving or dropping that GUARDS binding has to
+    # account for these four as well, or the conflict matrix silently loses reach.
     ADDITIONAL_BEHAVIOR = (
         "tests.provider.test_us_short_provisional_theme_validate"
         ".ProvisionalThemeValidationTests.test_run_packet_is_inert_and_records_input_digests",

@@ -1,5 +1,12 @@
 # Session Log
 
+## 2026-07-28 — Claude Code 收口（US-short 提速刀 3 遗留 Optional：ADDITIONAL_BEHAVIOR 同胞关系）
+
+- **Verdict/Action**: 在 `tests/test_us_short_discovery_conformance.py` 的 `ADDITIONAL_BEHAVIOR` 上加 7 行注释：说明这个元组是「无 GUARDS 行指名、但 `test_c` 仍必须执行」的行为测试（它们让部分派生 callsite 可达，且在变异候选里享 priority 0），并点明四条 `test_same_day_*` 是绑在 `_guard_existing_artifact_hashes` 那条 transition 的同胞，动那条绑定必须一并考虑。整类看：该元组此前通篇无说明，不只是新加的四条缺标注。
+- **Required**: 无，未新开 register 条目。
+- **Verify**: 本轮未注入 review-evidence token，故不引用。`git diff --numstat` = `7 0`，七行全是 `+    #` 注释、零删除，故零代码变动、常量不可能改变。导入实测：`ADDITIONAL_BEHAVIOR` 长度 8，其中 `test_same_day_*` 同胞 4 条，`GUARDS` 里绑定 1 条（`..._unavailable_to_valid_...`），4+1=5 与拆分前的五条 transition 吻合——注释所述与数据一致而非臆测。
+- **Next**: 提交本文件。另按用户指令对两个 CRLF-only 触碰的文件跑了 `git checkout --`（内容差异实测为零），status 噪音已清。`runners/us_short_llm_theme_discovery_fetch_web.py` 与其测试随后出现别窗**真内容**改动（+4/-3、+2/-2，疑在修 `chunk[N]` 定位符那条 Optional），不属本次提交范围。
+
 ## 2026-07-28 — Claude Code 审查 PASS（US-short effect-surface memo 刀 + fetch-web 两条 Required 收口）
 
 - **Verdict/Action**: 两件都过。①effect-surface 把 AST parse 按 `(path, source)` memo，`_preset_dependencies` 缓存 `frozenset`、壳函数返新 `set`，纯函数 `semantic_component_sha256` 加 256 格缓存。②fetch-web 抽出只读的 `_regroup_chunk_payload` 走 `_ingest_provider_item`，所有批状态写入移到成功之后；`served_model` 改锚在第一个**成功**的 chunk 上，比修前更严。
