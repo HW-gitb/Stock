@@ -1,5 +1,12 @@
 # Session Log
 
+## 2026-07-28 — Claude Code 审查 PASS（A-short 刀 9 遗留 Optional：缓存树纯净性守卫）
+
+- **Verdict/Action**: PASS，该 Optional 真闭。新守卫在 `frozen_enforced` 下跑真实 `_fingerprints()`，用 `mock.patch.object(..., wraps=...)` 记下每个传给 `_cached_semantic_source_tree` 的 `(module_name, source)`，事后逐个断言缓存树的 `ast.dump(include_attributes=True)` 等于该源码的新 parse。防护由「靠约定」回到「有守卫」。
+- **Required**: 无，未新开 register 条目。
+- **Verify**: review-evidence:368a70a6d927。超集包 `tests.test_a_short_evidence_epoch_mode` = `24 OK / 13.3s / exit 0`。自写三态植入控制：①原样→守卫绿；②拿掉 `_semantic_ast_sha256` 里那次 `copy.deepcopy`（即 `_StripDocstrings` 就地改写缓存树，正是该守卫要抓的回归）→守卫**红**，报 `cached semantic tree was mutated for …`；③还原→复绿。证明守卫承重且红非残留。同测试既有的 `currsize < maxsize` 断言堵住「条目被驱逐后事后查询变成重新 parse 从而假绿」的口子，两条互补。
+- **Next**: 提交。测试计数未变（24），不触发全量，最近记账 `2059 OK / 181.2s`（`14a54d38`）仍代表当前代码。观察（非缺陷）：守卫只覆盖 `frozen_enforced` 下 `_fingerprints()` 触达的源码集合；该模式启用强制，应为其他模式的超集，但未实测确认。
+
 ## 2026-07-28 — Claude Code 审查 PASS（A-short 刀 9 两条 Optional 收口）
 
 - **Verdict/Action**: PASS。Optional① 拿掉 `_semantic_source_inventory` 的整树 deepcopy，索引直接指向缓存树；唯一会改写的 `_StripDocstrings` 仍在 `_semantic_ast_sha256` 内先拷选中节点。Optional② 新增 `test_real_epoch_binding_sources_fit_the_tree_cache`，用真实 `_fingerprints()` 断言 `0 < currsize < maxsize`，取代原先只在 6 行玩具模块上的空断言。

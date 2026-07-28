@@ -483,11 +483,20 @@ class PreFreezeEvidenceModeTests(unittest.TestCase):
         epoch_mode._cached_semantic_source_tree.cache_clear()
         epoch_mode._semantic_module_contract_from_source.cache_clear()
         epoch_mode._semantic_function_contract_from_source.cache_clear()
-        with patched_epoch_modes("frozen_enforced"):
+        source_tree_cache = epoch_mode._cached_semantic_source_tree
+        with patched_epoch_modes("frozen_enforced"), \
+                mock.patch.object(epoch_mode, "_cached_semantic_source_tree", wraps=source_tree_cache) as cached:
             _fingerprints()
         tree_cache = epoch_mode._cached_semantic_source_tree.cache_info()
         self.assertGreater(tree_cache.currsize, 0)
         self.assertLess(tree_cache.currsize, tree_cache.maxsize)
+        for call in cached.call_args_list:
+            module_name, source = call.args
+            self.assertEqual(
+                ast.dump(source_tree_cache(module_name, source), include_attributes=True),
+                ast.dump(ast.parse(source), include_attributes=True),
+                f"cached semantic tree was mutated for {module_name}",
+            )
 
     def test_semantic_contract_cache_failures_keep_their_fail_closed_messages(self):
         from types import SimpleNamespace
