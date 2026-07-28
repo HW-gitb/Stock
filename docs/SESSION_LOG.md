@@ -1,11 +1,12 @@
 # Session Log
 
-## 2026-07-28 - Claude Code 审查更正(6B 原 PASS 收回,改判 Pass-with-Required)
+## 2026-07-28 - Claude Code 审查 PASS(6B Required 已闭:官方输入必须自报价格钟 + 官方档判定下沉)
 
-- **Verdict/Action**: 更正上一条。独立对抗 agent 在我发出 PASS 之后返回,坐实一条我判轻了的缺陷:官方档等式在输入未声明价格钟时,靠回落链拿 `trade_date` 顶替价格钟,于是拿候选 bar 日去比决策日。我原把它记成「记录口径偏窄、当代 producer 恒写故不可达」——错在只看产物,没看管线自己的 `clock_explicit=False` 模式(`:4116`/`:4374-4378` 支持从观测 bar 反推钟),那条支持路径被这道门在 `:4097` 静默切掉了。代码已合入 master 不回滚(纯 fail-shut,不产生错误选股),缺陷转 open Required。
-- **Required**: 一条,新开 `docs/system_risk_register.md#R-ASHORT-KNIFE6B-OFFICIAL-CLOCK-FALLBACK-ANCHORS-TO-DECISION-DATE`(含机制、实测、修法两条腿、四条 closure tests)。原 Optional ① 定性作废并入该条;原 Optional ② 经 agent 补强(`run_analysis_report.py` 默认读官方目录并把决策面报告写回该目录)成为该条第二条腿。第六刀因此**未闭**。
-- **Verify**: review-evidence:3b2afc68322d。复核 agent 前提后采信,非照单全收:`schemas/analysis_input.schema.json` 的 `required` 实测不含 `price_data_through`;`clock_explicit = bool(args.price_as_of or ai_clock_explicit)` 实为独立变量、`:4378` 确有反推分支。agent 判 clean 的两项与我自己的结论一致(`close` 不可为 None、既有调用方无静默变更)。本轮仅改两份文档,无代码/行为变更,治理三包 `72 OK` 仍适用。
-- **Next**: Codex:修复。
+- **Verdict/Action**: PASS,提交并合入 master。Required A/B 都按修法闭了:官方档不再拿 `trade_date` 顶替价格钟,缺声明即诚实报错;路径谓词下沉进契约模块并收紧为「恰好 `result/a_short/<YYYYMMDD>/analysis_input.json`」,回测子树不再误判官方,`validate_analysis_input_file` 自判使 weekly / `run_analysis_report` / Rule6 审计同门,EGS producer 写正式路径前也自校验。合并时发现执行方基线停在 `417c7fc3`,重写了一份同 ID 的 register 条目;我在 rebase 后把两份并成一份(单一来源),内容无丢失。
+- **Required**: 无新开。`docs/system_risk_register.md#R-ASHORT-KNIFE6B-OFFICIAL-CLOCK-FALLBACK-ANCHORS-TO-DECISION-DATE` 转已修复+closure evidence。一条 Optional 见 Next。
+- **Verify**: review-evidence:0c44dcc91407(hook 本轮注入两个 id,另一个 ecefc32d063e)。亲跑 focused 超集 `test_analysis_input_contract + test_egs_analysis_input_contract + test_a_short_effect_contract + test_a_short_weekly_pipeline` = `552 OK / 54.1s / exit 0`;按 rule 4 未重跑执行方已记账的 `a_short 2072 OK`。正控+反控直打契约:真产物 20260714 官方档报新的「must declare」、补正确钟后 PASS、改错钟仍拒、宽松档不变。路径谓词逐例(官方/回测/snapshot/非日期/`..`)全对。旧符号零残留;effect-contract 测试在超集内且绿。
+- **Next**: 合入 master。Optional(不阻断):执行方本轮 `Pre-Codex self-review` 又写 `handoff=updated`,但其提交未触及 `docs/handoff/`(与上一轮同型);本轮的 handoff 由我按用户新规补写。
+
 ## 2026-07-28 — Codex 修复（A-short Knife 6B 官方时钟回落 Required）
 
 - **Verdict/Action**: 原 PASS 已更正为 Pass-with-Required；现已移除正式输入把价格钟回落为决策日的路径，并统一全部官方输入消费者。
@@ -14,6 +15,12 @@
 - **Next**: Claude Code：审查。
 - **Pre-Codex self-review**: matrix=complete; register=updated; handoff=updated; focused=552 OK; full-lane=2072 OK.
 
+## 2026-07-28 - Claude Code 审查更正(6B 原 PASS 收回,改判 Pass-with-Required)
+
+- **Verdict/Action**: 更正上一条。独立对抗 agent 在我发出 PASS 之后返回,坐实一条我判轻了的缺陷:官方档等式在输入未声明价格钟时,靠回落链拿 `trade_date` 顶替价格钟,于是拿候选 bar 日去比决策日。我原把它记成「记录口径偏窄、当代 producer 恒写故不可达」——错在只看产物,没看管线自己的 `clock_explicit=False` 模式(`:4116`/`:4374-4378` 支持从观测 bar 反推钟),那条支持路径被这道门在 `:4097` 静默切掉了。代码已合入 master 不回滚(纯 fail-shut,不产生错误选股),缺陷转 open Required。
+- **Required**: 一条,新开 `docs/system_risk_register.md#R-ASHORT-KNIFE6B-OFFICIAL-CLOCK-FALLBACK-ANCHORS-TO-DECISION-DATE`(含机制、实测、修法两条腿、四条 closure tests)。原 Optional ① 定性作废并入该条;原 Optional ② 经 agent 补强(`run_analysis_report.py` 默认读官方目录并把决策面报告写回该目录)成为该条第二条腿。第六刀因此**未闭**。
+- **Verify**: review-evidence:3b2afc68322d。复核 agent 前提后采信,非照单全收:`schemas/analysis_input.schema.json` 的 `required` 实测不含 `price_data_through`;`clock_explicit = bool(args.price_as_of or ai_clock_explicit)` 实为独立变量、`:4378` 确有反推分支。agent 判 clean 的两项与我自己的结论一致(`close` 不可为 None、既有调用方无静默变更)。本轮仅改两份文档,无代码/行为变更,治理三包 `72 OK` 仍适用。
+- **Next**: Codex:修复。
 ## 2026-07-28 - Claude Code 审查 PASS(A-short 第六刀 6B:候选价格单一权威 + 官方档时钟加严)
 
 - **Verdict/Action**: PASS。`normalize_candidate` 的 `close` 改取 `price_series[-1]`,与 `compute_indicators` 同吃一根已结算 bar;契约新增 `official_input` 档,官方输入要求 `quote.source_trade_date` 存在且恒等 `price_data_through`,research/hermetic 保持只拒更新的旧宽松档。桌面验收 ③ 由构造成立而非靠新测试:`_candidate_price_clock` 与 `observed candidate price clock` FATAL 已把序列末根钉在 `price_data_through`。

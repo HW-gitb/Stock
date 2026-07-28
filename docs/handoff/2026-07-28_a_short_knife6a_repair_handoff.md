@@ -67,3 +67,37 @@
 
 - 第六刀**未闭**：合并门要求 6A、6B 测试全过且 6B 的加严形态有实测依据在案，现有一条 open Required 悬着。修完该 Required 并复审通过后，再跑桌面文档的「本刀合并验证」全局不变量（所有事实类日期字段 ≤ `price_data_through` 且候选侧恒等），才可记「第六刀完成」。
 - 不改 provider live fetch、不碰真钱与 ship-gate；`result/a_short/<YYYYMMDD>/` 仍不可写。
+
+## 2026-07-28 追加：第六刀 6B Required 收口（官方输入必须自报价格钟）
+
+承接上一节。上一节记的 Pass-with-Required，其 Required 已在同日修复并通过独立复审，本节记收口结果；缺陷正文与 closure evidence 仍只在 `docs/system_risk_register.md#R-ASHORT-KNIFE6B-OFFICIAL-CLOCK-FALLBACK-ANCHORS-TO-DECISION-DATE`，此处不复述。
+
+### 改了什么
+
+- `engine/data/analysis_input_contract.py`：`official_input=True` 时要求顶层或 `source.clocks` 显式声明 `price_data_through`，缺失即报 `official input must declare price_data_through`；非官方档的 `trade_date` 回落链原样保留。
+- 新增 `is_official_a_short_analysis_input_path()` 于契约模块，收紧为「恰好 `result/a_short/<YYYYMMDD>/analysis_input.json` 两段路径」；`runners/a_short_weekly_pipeline.py` 里同名的本地私有谓词删除并改调它。`validate_analysis_input_file` 在未显式传 `official_input` 时自判。
+- `A-EGS/egs_main.py::export_analysis_input` 在写盘前按同一路径谓词自校验，producer 不再能发布漂移的正式产物。
+
+### 为什么改
+
+原实现把「官方 lane」做成逐调用点 opt-in，且在输入未声明价格钟时靠回落链拿决策日顶替，于是等式锚错日子、把管线支持的 `clock_explicit=False`（从观测 bar 反推钟）模式在输入校验阶段就切掉；同时 `result/a_short/backtest/generated/**` 被误判为官方。
+
+### 验证命令与结果
+
+- 审查方亲跑 focused 超集 `.toolsun_unittest_with_repo_pythonpath.cmd tests.schema.test_analysis_input_contract tests.phase6.test_egs_analysis_input_contract tests.test_a_short_effect_contract tests.test_a_short_weekly_pipeline` = `552 OK / 54.1s / exit 0`；执行方已记账 `full_pack_ledger run a_short = 2072 OK / 258.2s / exit 0`（rule 4，审查方不重跑）。
+- 正控 + 反控直打契约（真产物 `result/a_short/20260714/analysis_input.json`）：宽松档仍 PASS；官方档报新的 must-declare；补 `price_data_through=20260713` 后官方档 PASS；改成 `20260710` 后官方档仍拒。路径谓词逐例：官方日期目录 True、`backtest/generated` False、`snapshot.json` False、非日期目录 False、`..` 归一化后 True。旧符号 `_is_official_analysis_input_path` 全仓零残留。
+- `test_a_short_effect_contract` 在超集内且绿，故本轮未动 `decision_predicate_sha256`。
+
+### 失效的旧结论
+
+- 上一节「官方档只在 weekly pipeline 一个消费者启用」已失效：判定下沉后 `validate_analysis_input_file` 的全部读者同门，EGS producer 亦自校验。
+- 「`_is_official_analysis_input_path` 对回测子树 overclaim（当前不可达）」已失效：谓词收紧后回测子树明确非官方，并有具名测试钉住。
+
+### 合并时的一处处置（记给下一个接手的人）
+
+执行方本轮基线停在 `417c7fc3`（缺审查方的 `83ef31a6`/`93ec35bc`），因此重新写了一份**同 Required ID** 的 register 条目。rebase 到 master 后两份并存，已在提交前并成一份（保留审查方那份的机制/实测，折入执行方的 Required A/B 收口事实），无内容丢失。教训：执行方开工前应先把工作树 rebase 到 master，否则每轮都会在 register 制造同 ID 双写。
+
+### 下一步注意事项
+
+- 第六刀仍未记「完成」：还差桌面文档的「本刀合并验证」全局不变量（所有事实类日期字段 ≤ `price_data_through` 且候选侧恒等，只有 `decision_as_of` 可更晚）跑一次。
+- 不改 provider live fetch、不碰真钱与 ship-gate；`result/a_short/<YYYYMMDD>/` 仍不可写。

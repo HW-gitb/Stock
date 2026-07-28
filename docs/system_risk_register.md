@@ -1,13 +1,5 @@
 # System Risk Register
 
-### R-ASHORT-KNIFE6B-OFFICIAL-CLOCK-FALLBACK-ANCHORS-TO-DECISION-DATE - 官方候选日期门错误回落到决策日
-
-- **状态 / 严重度**: **open Required P1，2026-07-28 原 PASS 已更正为 Pass-with-Required。** `417c7fc3` 不回滚：缺陷只会安全地阻止周跑，不会产生错误选股；本条修复尚待独立审查。
-- **根因**: official 输入未声明 `price_data_through` 时，契约回落到 `trade_date` 再做候选 `source_trade_date` 等式；但 weekly pipeline 允许未声明时从观测 price bar 反推价格日，且 `--price-as-of` 在输入校验之后才解析，造成正常路径被提前阻断。
-- **Required A（已实现）**: `official_input=True` 现在要求顶层或 `source.clocks` 显式声明 `price_data_through`；缺失即报 `official input must declare price_data_through`，不再以 `trade_date` 代替价格日。
-- **Required B（已实现）**: 路径判定下沉至 `engine.data.analysis_input_contract.is_official_a_short_analysis_input_path`；仅 `result/a_short/<YYYYMMDD>/analysis_input.json` 自动严格，回测子树不算官方。`validate_analysis_input_file` 的 weekly、报告与 Rule6 审计读者因此同门；EGS 写入该正式路径时也显式按同一严格契约自校验。
-- **Closure tests / 当前证据**: 显式钟缺失、自动官方路径、候选日期不等、backtest 非官方、EGS producer 正式输出各有回归；固定 Python `bounded_unittest.py focused 500 -- tests.schema.test_analysis_input_contract tests.test_a_short_effect_contract tests.test_a_short_weekly_pipeline tests.phase6.test_egs_analysis_input_contract` = 552 OK / 51.8s；`full_pack_ledger.py run a_short "6B Required: official explicit price clock plus unified official input consumer gate" "py_compile + schema/weekly/EGS official clock regressions" 1300 -- discover -s tests -p test_a_short*.py` = 2072 OK / 258.2s / exit 0。
-
 ### R-ASHORT-KNIFE6B-CANDIDATE-PRICE-CLOCK-SOURCE-BINDING - 第六刀 6B 正式周跑候选价源时钟与价格权威
 
 - **状态 / 严重度**: 6B 原始等式/同源价格实现已落地；独立审查的 PASS 已被 `R-ASHORT-KNIFE6B-OFFICIAL-CLOCK-FALLBACK-ANCHORS-TO-DECISION-DATE` 更正为 Pass-with-Required，范围仍仅 A-short。
@@ -28,6 +20,8 @@
 - **Required repair**: `official_input=True` 时改为**显式要求已声明的价格钟**(`payload["price_data_through"]` 或 `source.clocks.price_data_through`),缺失即以「官方输入必须声明 price_data_through」诚实报错,绝不让回落链拿 `trade_date` 顶替后再做等式。第二条腿:把官方路径判定下沉进契约模块由 `validate_analysis_input_file` 自判,闭掉「同一目录另有消费者不启严」——`runners/run_analysis_report.py:37,45-47` 默认就读 `result/a_short/<as_of>/analysis_input.json` 且把决策面 Phase-4 报告写回 `result/a_short/<as-of>/reports`,却从不传 `official_input=True`;`A-EGS/egs_main.py:1260`(生产者自校验)与 `runners/a_short_rule6_report_rc_coverage_audit.py:239` 同。
 - **Closure tests**: (1) 官方输入缺 `price_data_through` -> 断言报「必须声明」而非日期不等;(2) 官方输入声明了钟且候选相等 -> 通过;(3) 同一缺钟输入走 research 档 -> 仍宽松通过;(4) `run_analysis_report` 读官方目录 -> 断言走严格档。
 - **Agent 未推翻的两项(仍为 clean)**: `close` 在生产不可为 `None`(两个 `normalize_candidate` 调用点都保证序列非空),且 `price_series[-1]` 就是 `compute_indicators` 用的同一根最新 bar;既有 `validate_analysis_input_contract` 调用方全部走关键字且保持 `official_input=False`,无静默全局变更。
+- **修复已落地 2026-07-28(Codex),独立复审 PASS**: Required A —— `official_input=True` 现要求顶层或 `source.clocks` 显式声明 `price_data_through`,缺失即报 `official input must declare price_data_through`,不再拿 `trade_date` 顶替;非官方档的回落链原样保留。Required B —— 路径判定下沉为 `engine.data.analysis_input_contract.is_official_a_short_analysis_input_path`,并收紧为「恰好 `result/a_short/<YYYYMMDD>/analysis_input.json` 两段路径」,回测子树不再算官方;`validate_analysis_input_file` 在未显式传参时自判,于是 weekly pipeline、`run_analysis_report`、Rule6 审计同门,EGS producer 写正式路径前也按同一契约自校验。
+- **本条 closure evidence(审查方亲测)**: 拿 register 点名的真产物 `result/a_short/20260714/analysis_input.json` 直打契约——宽松档仍 PASS;官方档报新的 `official input must declare price_data_through`(不再是锚错日子的等式);补上 `price_data_through=20260713` 后官方档 PASS(正控:门不再误伤正常输入);改成 `price_data_through=20260710` 后官方档仍拒(反控:等式没被顺手放松)。路径谓词逐例:官方日期目录 True、`backtest/generated` False、`snapshot.json` False、非日期目录 False、`..` 归一化后仍 True。旧符号 `_is_official_analysis_input_path` 全仓零残留。focused 超集 `552 OK / 54.1s / exit 0`(含 `test_a_short_effect_contract`,故谓词哈希未漂)。
 
 
 
