@@ -22,6 +22,7 @@ _PAIRWISE_LEDGER_SCHEMA = ROOT / "schemas" / "us_short_soft_boost_pairwise_ledge
 _SHADOW_SCHEMA = ROOT / "schemas" / "us_short_soft_boost_shadow_receipt.schema.json"
 _ADJUDICATION_SCHEMA = ROOT / "schemas" / "us_short_soft_boost_adjudication_receipt.schema.json"
 _VALIDATION_SCHEMA = ROOT / "schemas" / "us_short_provisional_theme_validation.schema.json"
+_MERGE_SCHEMA = ROOT / "schemas" / "us_short_llm_theme_discovery_merge.schema.json"
 _REMINDER = "paid_member_source_then_source_bound_member_confirmation_and_independent_market_verification_then_forward_shadow_then_reconsider_unlock_cap_switch"
 _REMINDER_TEXT = "治理提醒：付费成员源后，先做源绑定成员确认和独立市场验证，再做 forward shadow，才可重议解锁/上限/切换"
 
@@ -81,7 +82,7 @@ def _bound_path(binding: dict[str, Any], *, root: Path) -> Path | None:
 
 def _empty_consumed() -> dict[str, Any]:
     return {"labels": [], "tickers": [], "boosts": [], "top15_entered": [], "top15_exited": [],
-            "operation_advice_effect_claimed": False}
+            "operation_advice_effect_claimed": False, "model_transcribed_x_evidence": False}
 
 
 def invalid_evidence_record(*, decision_date: str, stage_receipt_path: Path | None = None,
@@ -218,6 +219,19 @@ def build_weekly_record(*, decision_date: str, stage_receipt_path: Path | None,
         if stage is not None and stage["status"] != expected_stage:
             raise SoftDiscoveryWeeklyReportError("stage and consumption state disagree")
         consumed = _empty_consumed()
+        model_transcribed_x_evidence = False
+        if stage is not None:
+            manifest_binding = stage.get("artifacts", {}).get("merge_manifest", {})
+            manifest_path = _bound_path(manifest_binding, root=root)
+            if manifest_path is not None and manifest_path.is_file():
+                merge_manifest, manifest_sha = _read(manifest_path, _MERGE_SCHEMA)
+                if manifest_sha != manifest_binding.get("sha256"):
+                    raise SoftDiscoveryWeeklyReportError("merge manifest digest mismatch")
+                model_transcribed_x_evidence = any(
+                    member.get("model_transcribed_x_evidence") is True
+                    for theme in merge_manifest.get("themes", [])
+                    for member in theme.get("members", [])
+                )
         if state == "valid_nonempty":
             validation_path = _bound_path(consumption["bindings"]["validation_artifact"], root=root)
             if validation_path is None:
@@ -234,7 +248,8 @@ def build_weekly_record(*, decision_date: str, stage_receipt_path: Path | None,
             consumed = {"labels": labels, "tickers": tickers, "boosts": boosts,
                         "top15_entered": consumption["top15_impact"]["entered"],
                         "top15_exited": consumption["top15_impact"]["exited"],
-                        "operation_advice_effect_claimed": False}
+                        "operation_advice_effect_claimed": False,
+                        "model_transcribed_x_evidence": model_transcribed_x_evidence}
         comparison, ledger_artifact, shadow_artifact, adjudication_artifact = _comparison(
             ledger_path, shadow_path, adjudication_path, decision_date=decision_date, stage_sha=stage_sha,
             consumption_sha=consumption_sha, root=root)
@@ -266,6 +281,8 @@ def render_weekly_banner(record: dict[str, Any]) -> str | None:
         comparison["captured_week_count"], comparison["matured_week_count"],
         comparison["eligible_divergence_week_count"], "/".join(str(x) for x in comparison["formal_thresholds"]),
         comparison["recommendation"], "是" if comparison["user_decision_required"] else "否"))
+    if record["consumed"].get("model_transcribed_x_evidence"):
+        progress += "；X 侧为模型转述，未经平台原始记录核验"
     if state == "valid_nonempty":
         boosts = ", ".join(f"{row['ticker']} +{int(row['actual_boost'])}分" for row in record["consumed"]["boosts"])
         return "未确认软发现 · ≤5 分；暂定主题=%s；已消费=%s；不改变操作建议；%s；%s" % (

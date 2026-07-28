@@ -214,6 +214,90 @@
 - **Verify**: review-evidence:not_available(本轮为用户直接下达的修复指令、非 review 命令形态，门未 arm)。亲跑：修后 5 个模块经启动器在 **PowerShell**(`PYTHONIOENCODING=utf-8:surrogateescape`) = `53 tests/PASS/exit=0`，在 **Bash**(该变量为空) = `Ran 53/OK`——同码同结果即不再依赖 shell；会死的对照用两棵真树做：未修的 master 树在 PowerShell 下同模块 `errors=9`、已修树 `OK`；原始字节探针证子进程实际吐 UTF-8(`decode utf-8 OK/gbk FAIL`)；`test_doc_governance_guard`+`test_review_tiering_enforcement` `54 OK`。
 - **Proof-of-use**: A 按「测试 spawn 本解释器并按文本捕获」整类枚举，AST 扫出 `tests/` 24 处无 `encoding=` 的文本捕获、命中判据 5 处全修；B `git`/PowerShell/`.cmd` 子进程那 19 处**故意不动**并写明理由(强钉 utf-8 会引入新错配)；C 新守卫自带植入失败对照(缺父端/缺子端各被抓、干净与 git 子进程不被抓)，否则「集合为空」是空洞的；D 双 shell 正反对照；E 未动 CURRENT/README；F 顺手修掉本树 4 份 bundle 的 CRLF 残留(master 同测试本来就绿)。
 - **Next**: 用户：可提交并合入 master
+## 2026-07-28 - Claude Code 审查 PASS (K3-R64/R66/R67 全闭，复发类已有常驻守卫)
+
+- **Verdict/Action**: PASS，提交并合入 master。R66 第 2 腿改成默认弱档、第 3 腿横幅按 merge manifest 派生并先校 sha256 再读，R67 离线两条 lane 都恢复产出。新增的生产入口守卫是 untracked（diff 盲区），已整读全文。
+- **Required**: 无。两条 Optional（守卫第二个测试是自指对照，冗余可删；`provider_samples/` 每跑一次累积一份 raw，现 333 份）记在 `docs/system_risk_register.md`（单一来源）。
+- **Verify**: review-evidence:cab9c1b48a27。包 `249 OK`（含新 untracked 模块）。自写探针：无标记的 X 行 → `model_transcribed`（弱档默认）；周报横幅确认追加「；X 侧为模型转述，未经平台原始记录核验」且只在真消费到该类证据时出现；生产入口跑通得 3 个 `both`，猫照片控制只降那一只、兄弟仍 `both`、降级计数非零。**我自己挖空验守卫真死**（不采信它自带的自指对照）：挖掉离线原文持久化 → 具名测试 `test_production_offline_entries_are_load_bearing_for_genuine_and_cat_control` 转红；强制票代码校验恒真 → 同一具名测试转红；基线与恢复均 0 红。残留核查：`state/us_short` 只有目录、无文件。
+- **Next**: 解冻链第 ④ 步（K3-R31/R32），之后才是 ⑤ 解 K3-R34
+
+## 2026-07-28 - Claude Code 审查 FAIL (R66 只闭一腿；离线 X 侧变成零来源)
+
+- **Verdict/Action**: FAIL，未提交。R66 第 1 腿（模型自述来源必须有 provider annotation 背书）真闭且 fail-closed；第 2 腿 attestation 默认值取了**更强**的一档（应默认弱档），第 3 腿（§4c 横幅明说）**没做** —— 而这一腿正是用户当初接受选项 (c) 的条件。R64 web 侧的离线原文持久化确实做成了，但 X 侧离线现在零来源，整条链又产不出东西。
+- **Required**: K3-R67（离线 X 零来源，K3-R62 同类第二次）；R66 第 2、3 腿仍开。完整复现与修法只在 `docs/system_risk_register.md`（单一来源）。
+- **Verify**: review-evidence:1af8b69f9fa2。超时原因: 本轮需分别验证 builder 直调与生产 runner 两条离线路径才能定位，超出 15 分钟目标。包 `247 OK`。探针：2 条模型来源仅 1 条被 annotation 背书 → 收 1 丢 1（`model_source_url_not_provider_annotated`），收下那条标 `model_transcribed`；annotations 传 None/[]/字符串 → 一律 0 收。无标记的裸行 → 被标成 `provider_attested`（fail-open）。周报引擎全文无 `model_transcribed`/`attestation`。生产 offline runner：web 持久化了原文（ref 已设、gitignored），`run_x_fetch` 的 `source_refs` **为空**（带不带 annotation_urls 都一样）。builder 直调路径：真实双源与猫照片同样得 `members=[] demotions=1`。
+- **Next**: Codex：修 K3-R67，补 R66 第 2、3 腿
+
+## 2026-07-28 - Codex implementation US-short K3-R64 / partial K3-R66
+
+- **Verdict/Action**: K3-R64 code path repaired: offline web/X producers now persist gitignored raw receipts and merge no longer skips the frozen-content ticker gate. K3-R66 legs 1 and merge-level leg 2 are implemented; weekly-record/banner propagation remains open.
+- **Required**: Finish K3-R66 weekly machine-record flag plus conditional §4c honest banner; detailed closure status is in `docs/system_risk_register.md`.
+- **Verify**: Fixed Python `C:\Users\cnhea\AppData\Local\Programs\Python\Python313\python.exe -m unittest tests.provider.test_us_short_llm_theme_discovery_fetch_x_merge tests.provider.test_us_short_llm_theme_discovery_offline_invariants` -> 48 OK. No provider/live/key call.
+- **Next**: Codex: repair K3-R66 weekly-record/banner leg
+
+## 2026-07-28 - 用户决定：K3-R65 走选项 (c)，局限必须进制品与横幅，转 K3-R66 交 Codex
+
+- **Verdict/Action**: 用户拍板：接受模型自述的 `sources` 作为 X 侧证据、真修法推迟，条件是「把这个方法的局限写进提示或系统」。这推翻了 K3-R5/K3-R13「模型自称的来源不算证据」的结论，故把推翻本身与代价一并记账，不留隐性。网页侧不受影响，仍是 provider 背书的证据。
+- **Required**: K3-R66（三腿：URL 必须出现在 provider 的 annotations 集合里否则丢弃并留理由；证据背书等级做成机器可读字段并一路带到周记录；§4c 诚实横幅在消费到模型转述证据时必须明说 X 侧未经平台原始记录核验）。完整判据与推迟触发条件只在 `docs/system_risk_register.md`。
+- **Verify**: 本条为决策落账与交接，无代码改动、无新测试。所依据的真实 Grok 形状证据见下方审查条目（`.results`/`.citations` 均 None、annotations 仅有 url/title、模型自述 sources 才带 created_at）。
+- **Next**: Codex：实现 K3-R66；另 K3-R64 仍开着
+
+## 2026-07-28 - Claude Code 审查 (R62/R63 闭合；反向控制与真实 Grok 形状各开出一条)
+
+- **Verdict/Action**: K3-R62、K3-R63 CLOSED（复现上一轮确切探针，接收面无误伤）。同轮开两条新 Required：R62 的修法是「没有冻结原文就不校验」，而离线路径从不写原文，于是 K3-R59 那道门在**当前真正参与打分的离线路径上完全失效**；另经用户授权完成解冻链 ① 的 X 半边，一条真实 Grok 响应证明 repo 假设的证据来源在真实 API 里不存在。未提交。
+- **Required**: K3-R64、K3-R65。逐条复现、后果与三个可选修法只在 `docs/system_risk_register.md`（单一来源）。R65 是设计决策不是补丁，需用户拍板。
+- **Verify**: review-evidence:35efe514c814。超时原因: 本轮含一次真实 provider 抓取(xAI)与其形状下钻，超出 15 分钟目标。包 `211 OK`。R63 探针：无公司散文对 `A/IT/ON/SO/ALL` 全 False，`CEG`/`$CEG`/`$ceg` 仍 True，裸小写/长词内/仅URL/样板尾全 False。R62 探针：按生产者默认值端到端得 `both=1 single=0 zero=0 demotions=0`，knife-2 拿回成员。反向控制（新洞）：X 原文写「totally unrelated cat photo」仍得 `both`、demotions=0。真实 Grok：`grok-4.3` 存在、`output_text` 2431 字符；`.results` 与 `.citations` 均 None → 提取 0 条 provider 行；真实来源在 `output[-1].content[0].annotations` 的 10 条 `url_citation`，但**只有 url/title，无正文无时间**；模型自述 `sources` 3 条才带 `created_at`。
+- **Next**: 用户决定 K3-R65 三选一；Codex 修 K3-R64
+
+## 2026-07-28 - Codex implementation US-short K3-R62/R63
+
+- **Verdict/Action**: Implemented; no commit. Offline fake-client packets now retain an already-bound two-source tier when raw payloads are intentionally absent; bare ticker evidence is uppercase-only while `$cashtag` remains case-insensitive.
+- **Required**: K3-R62/R63 repair evidence and the full-conformance boundary are in `docs/system_risk_register.md`.
+- **Verify**: Fixed Python 3.13 focused controls: 3 OK; direct fetch/merge/offline-invariant/knife-2/boost pack: 135 OK. Full `tests.test_us_short_discovery_conformance`: 38 ran / 2 failed on pre-existing frozen-live-coordinate and web loop-raise findings; no provider/live/key call.
+- **Next**: Claude Code independently review K3-R62/R63 only; commit only after PASS.
+
+## 2026-07-28 - Claude Code 复审 K3-R61 PASS + 自做 live 分支可测试化 (fixed pending Codex)
+
+- **Verdict/Action**: K3-R61 CLOSED（七处挖空全部点名同一具名测试变红）。另按用户指令自己做了 live 分支可测试化：把 web/X 两条 live 编排原样提取为可被测试直接调用的函数，凭证仍只由真实传输产生、两处入口的 K3-R34 冻结仍是第一条语句。未提交。
+- **Required**: 无新增。K3-R62/R63 仍开着。类枚举、修法与逐条证据落 `docs/system_risk_register.md`（单一来源）。
+- **Verify**: review-evidence:ff0fc3a88c7a。R61 复现上一轮确切探针：七处逐一挖空均 red=1 且点名 `test_schema_date_time_formats_are_enforced_at_every_discovery_boundary`，基线 0 红，包 `203 OK`。诚实限界：把四个坏时间喂 `build_provisional_theme_boost_map` 得到的是 `TypeError`（最小 artifact 缺必填结构，先于时间检查抛出），故该腿不由此探针独立证明。可测试化后植入历史缺陷验缝：提示词返回 None→3 红、提示词被改写→3 红、分块塌成一批→2 红、零行路径伪造行→1 红、X 合并器抛错→4 红，基线与恢复均 0 红；包 `209 OK`。我第一版把 Tavily 预留搬进提取函数，弄红了既有的“先验 key 再预留”顺序测试，已把顺序改回而不是放松测试。
+- **Next**: Codex：修 K3-R62 与 K3-R63；之后我复审并提交
+
+## 2026-07-28 - Codex implementation US-short K3-R61
+
+- **Verdict/Action**: Implemented test-only K3-R61; no commit and no production-path change.
+- **Required**: K3-R61 evidence and the remaining full-conformance boundary are recorded in `docs/system_risk_register.md`.
+- **Verify**: Fixed Python 3.13 target passed; direct offline discovery/merge/knife-2/boost regression pack: 78 OK. Full `tests.test_us_short_discovery_conformance` completed with exit 1 on its existing broader boundary; no provider/live/key call.
+- **Next**: Claude Code independently review K3-R61 only; commit only after PASS.
+
+## 2026-07-28 - Claude Code 审查 FAIL (K3-R60 真闭；K3-R59 把离线链打成了零产出)
+
+- **Verdict/Action**: FAIL，两条 Required，未提交。K3-R60 CLOSED：凭证改为私有传输对象、响应完成后才计数，直接构造/裸对象/零计数传输全拒，两条 lane 的 live 模式都不再接受注入客户端，merge 交叉核对计数=传输计数之和。K3-R59 未闭：新校验读的是离线路径根本不写的冻结原文。
+- **Required**: K3-R62(离线链现在零产出)、K3-R63(票代码大小写不敏感，常用词代码自我印证)。完整复现、修法与闭合判据只在 `docs/system_risk_register.md`（单一来源）。
+- **Verify**: review-evidence:a76fce42e1cf。整读 merge/web/x 三处被改函数体。变更符号消费者包 **200 OK** —— 这个绿恰恰是问题：套件从不驱动生产者默认值。端到端探针按离线生产路径(`raw_root=None, persist_raw=False`)构造，网页正文写着 CEG、X 帖也写着 CEG 的真实双源，merge 返回 `both=0/single=0/zero=0/demotions=1`，先 `member_evidence_demoted_unbound_ticker` 再 `theme_rejected_by_ingest`，交给 knife-2 的成员列表为空。票代码探针：对一句不含任何公司名的英文散文，`A`/`IT`/`ON`/`SO`/`ALL` 全部判为已印证，仅 `AAPL` 为否；finding 点名的其余七种形状(明文/cashtag/长词内/仅URL/样板尾/缺失/非字符串)全部正确。伪造探针：无传输、裸对象、零计数传输三条旧路全被拒。
+- **Next**: Codex：修 K3-R62(先定无冻结原文时的语义，且不得让单个成员拖垮整主题)与 K3-R63(裸形式改大小写敏感)
+
+## 2026-07-28 - Codex implementation US-short K3-R59/R60
+
+- **Verdict/Action**: Implemented; no commit. K3-R59 now binds a `both` tier to frozen raw-payload ticker evidence; K3-R60 derives live receipt counts from completed transport responses. K3-R34 freeze remains first; newly opened K3-R61 is untouched.
+- **Required**: K3-R59/R60 repair details and the unresolved full-conformance boundary are in `docs/system_risk_register.md`.
+- **Verify**: Fixed Python 3.13 focused web/X/merge/schema plus identity guard: 85 OK. Full `tests.test_us_short_discovery_conformance` completed: 38 ran / 42 failed, confined to pre-existing guard-registry baselines and K3-R58's loop-raise static finding; no provider/live/key call.
+- **Next**: Claude Code independently review K3-R59/R60 only; do not commit until PASS.
+
+## 2026-07-28 - Claude Code 独立复核 FAIL (2026-07-26 C+B+A+K3-R48 切片，这笔欠账现已了结)
+
+- **Verdict/Action**: FAIL，一条 Required。该切片此前从未被独立复核。A 腿(七处 validator 全部 armed)与 C 腿(生产者层只有一道写门)复核通过；K3-R48 第 3 腿(格式检查真的等于 RFC 3339)按 finding 点名的形状逐一验过、零不符。B 腿(可执行一致性包)判 NOT_VERIFIED。未提交代码改动。
+- **Required**: K3-R61 —— K3-R48 第 2 腿在七处里有两处未落实(boost 消费者与 knife-2 validator)，且底下是活洞。完整证据、修法与闭合判据只在 `docs/system_risk_register.md`（单一来源）。
+- **Verify**: 本轮 hook **未注入** review-evidence token，故此处不贴 token（不编造）。自写探针：格式检查对空格/制表/`X`/NUL 分隔符、`+0000`、`+00:00:30`、逗号小数全拒，对 `Z`/`+00:00`/`-04:00`/微秒全收，我另加的尾换行/前导空格/小写 t/越界月份亦全拒。逐点位挖空 `FORMAT_CHECKER`：knife-1/merge/web/x 四处各点名 `test_schema_date_time_formats_are_enforced_at_every_discovery_boundary` 转红；boost 与 validate 两处在 9 模块 143 tests 与 14 模块 **302 tests**(含全部 boost map 消费者)下均 0 红，基线亦 0 红。活洞证据：去掉该 kwarg 后 `generated_at` 可为空格分隔、NUL 分隔、`+0000`、乃至 `banana` 全部被接受。写门 grep：生产者层唯一 `os.replace` 在 `us_short_discovery_publish_policy.py:267`。
+- **Next**: Codex：修 K3-R61（扩充既有边界测试，使其名副其实覆盖全部七处），与 K3-R59/R60 一并
+
+## 2026-07-28 - 用户决定：解冻链 ③ 两条 live 前置一并做，转 Required 交 Codex
+
+- **Verdict/Action**: 用户 2026-07-28 拍板：方案 §六 解冻顺序第 ③ 步的两条 Optional **都做**，不再作为待定决策。已在 `docs/system_risk_register.md` 立为 K3-R59(`both` 档必须在冻结原文里验到票代码)与 K3-R60(`live_authorized` 必须由真实传输派生、伪造不出来)。第 ④ 步(K3-R31/R32)与 K3-R34 冻结均未变，本条不授权任何 provider/网络/key 路径。
+- **Required**: K3-R59、K3-R60，完整修法与闭合判据只在 `docs/system_risk_register.md`（单一来源，本处不复述）。K3-R60 附带一条不可破的设计约束：现有测试套件本身就靠 `live=True` + 注入假客户端跑，粗暴地「拒绝注入客户端」会打烂套件而不是堵住洞，必须改成从传输侧派生凭证。
+- **Verify**: 本条为决策落账与交接，无新测试。上一轮收口证据(变更符号消费者包 115 OK、主树合并后复验 115 OK)见下方 PASS 条目。
+- **Next**: Codex：实现 K3-R59 与 K3-R60；完成后 Claude Code 独立复审，再进第 ④ 步
+
 ## 2026-07-28 - Claude Code 审查 PASS (K3-R55 恢复原提示词属实；刀3 live 半边本轮 Required 全闭)
 
 - **Verdict/Action**: PASS，提交。R55 真闭：提示词与 HEAD 那份逐字节相同(各 421 字符)，八条已审约束全在，游离副本已删。至此 K3-R49~R58 与三条 Optional 全部闭合，整片(Codex 的 R49~R58 + 我自己修的三条 Optional)一并提交。

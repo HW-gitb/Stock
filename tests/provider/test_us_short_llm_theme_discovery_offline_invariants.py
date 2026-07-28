@@ -262,9 +262,11 @@ class OfflineDiscoveryInvariantTests(unittest.TestCase):
                     xfetch._parse_grok(malformed)
 
     def test_schema_date_time_formats_are_enforced_at_every_discovery_boundary(self):
-        """Optional-u: Draft7 format is a real boundary, not decorative schema prose."""
+        """Optional-u: each of the seven Draft7 date-time boundaries is load-bearing."""
+        from engine import us_short_provisional_theme_boost as boost
         from runners import us_short_llm_theme_discovery as discovery
         from runners import us_short_llm_theme_discovery_merge as merge
+        from runners import us_short_provisional_theme_validate as validate
 
         source_payload = {
             "source_refs": [{"source_id": "web:fixture", "source_type": "web", "observed_at": "2026-07-24T10:00:00Z"}],
@@ -309,6 +311,135 @@ class OfflineDiscoveryInvariantTests(unittest.TestCase):
         bad_manifest["generated_at"] = "not-a-timestamp"
         with self.assertRaises(merge.ThemeDiscoveryMergeError):
             merge._schema_validate(merge.SCHEMA_PATH, bad_manifest)
+
+        bad_merged_discovery = copy.deepcopy(artifact)
+        bad_merged_discovery["generated_at"] = "not-a-timestamp"
+        with self.assertRaises(merge.ThemeDiscoveryMergeError):
+            merge._validate_discovery(bad_merged_discovery)
+
+        digests = {
+            "discovery_artifact_sha256": "a" * 64,
+            "candidate_artifact_sha256": "b" * 64,
+            "classification_packet_sha256": "c" * 64,
+        }
+        validation_artifact = {
+            "schema_name": "us_short_provisional_theme_validation",
+            "schema_version": "1.0.0",
+            "generated_at": "2026-07-25T08:00:00Z",
+            "decision_clock": {
+                "expected_decision_date": "20260725",
+                "candidate_price_basis_date": "20260724",
+                "universe_used_date": "2026-07-24",
+                "classification_source_as_of": "2026-07-24",
+                "cutoff_policy": "before_decision_open_et",
+                "pit_enforced": True,
+            },
+            "validation_contract": {
+                "producer_kind": "provisional_theme_validate",
+                "input_mode": "offline_local_artifacts",
+                "membership_status": "provisional_validated",
+                "market_confirmation_status": "not_run",
+                "scoring_eligible": False,
+                "top15_effect_enabled": False,
+                "operation_advice_effect_enabled": False,
+                "dynamic_seats_enabled": False,
+                "theme_probe_enabled": False,
+                "lifecycle_actions_enabled": False,
+            },
+            "input_artifacts": {**digests, "eligible_ticker_count": 1, "classification_ticker_count": 1},
+            "source_ref_types": {"web:fixture": "web"},
+            "themes": [],
+            "drop_ledger": [],
+            "summary": {
+                "discovered_theme_count": 0,
+                "validated_theme_count": 0,
+                "validated_member_count": 0,
+                "rejected_theme_count": 0,
+                "dropped_member_count": 0,
+                "truncated_theme_count": 0,
+            },
+        }
+        validate._schema_validate(validation_artifact, validate.SCHEMA_PATH, "validation artifact")
+        self.assertEqual(
+            set(boost.build_provisional_theme_boost_map(
+                validation_artifact,
+                target_tickers=["AAPL"],
+                expected_decision_date="20260725",
+                expected_input_digests=digests,
+            )),
+            {"AAPL"},
+        )
+        for malformed_generated_at in (
+            "2026-07-25 08:00:00+00:00",
+            "2026-07-25T08:00:00\x00+00:00",
+            "2026-07-25T08:00:00+0000",
+            "banana",
+        ):
+            with self.subTest(malformed_generated_at=repr(malformed_generated_at)):
+                bad_validation = copy.deepcopy(validation_artifact)
+                bad_validation["generated_at"] = malformed_generated_at
+                with self.assertRaises(validate.ProvisionalThemeValidationError):
+                    validate._schema_validate(
+                        bad_validation, validate.SCHEMA_PATH, "validation artifact",
+                    )
+                with self.assertRaises(boost.ProvisionalThemeBoostError):
+                    boost.build_provisional_theme_boost_map(
+                        bad_validation,
+                        target_tickers=["AAPL"],
+                        expected_decision_date="20260725",
+                        expected_input_digests=digests,
+                    )
+
+        bad_validation = copy.deepcopy(validation_artifact)
+        bad_validation["generated_at"] = "banana"
+
+        def assert_discovery_rejects_bad_date_time() -> None:
+            with self.assertRaises(discovery.LLMThemeDiscoveryError):
+                discovery._validate_schema(bad_artifact)
+
+        def assert_web_rejects_bad_date_time() -> None:
+            with self.assertRaises(web.WebThemeDiscoveryError):
+                web._validate_schema(bad_web)
+
+        def assert_x_rejects_bad_date_time() -> None:
+            with self.assertRaises(xfetch.XThemeDiscoveryError):
+                xfetch._validate_schema(bad_x)
+
+        def assert_merge_manifest_rejects_bad_date_time() -> None:
+            with self.assertRaises(merge.ThemeDiscoveryMergeError):
+                merge._schema_validate(merge.SCHEMA_PATH, bad_manifest)
+
+        def assert_merge_discovery_rejects_bad_date_time() -> None:
+            with self.assertRaises(merge.ThemeDiscoveryMergeError):
+                merge._validate_discovery(bad_merged_discovery)
+
+        def assert_validate_rejects_bad_date_time() -> None:
+            with self.assertRaises(validate.ProvisionalThemeValidationError):
+                validate._schema_validate(bad_validation, validate.SCHEMA_PATH, "validation artifact")
+
+        def assert_boost_rejects_bad_date_time() -> None:
+            with self.assertRaises(boost.ProvisionalThemeBoostError):
+                boost.build_provisional_theme_boost_map(
+                    bad_validation,
+                    target_tickers=["AAPL"],
+                    expected_decision_date="20260725",
+                    expected_input_digests=digests,
+                )
+
+        for boundary, module, assertion in (
+            ("knife_1_discovery", discovery, assert_discovery_rejects_bad_date_time),
+            ("web_fetch", web, assert_web_rejects_bad_date_time),
+            ("x_fetch", xfetch, assert_x_rejects_bad_date_time),
+            ("merge_manifest", merge, assert_merge_manifest_rejects_bad_date_time),
+            ("merge_discovery", merge, assert_merge_discovery_rejects_bad_date_time),
+            ("knife_2_validate", validate, assert_validate_rejects_bad_date_time),
+            ("boost_consumer", boost, assert_boost_rejects_bad_date_time),
+        ):
+            with self.subTest(boundary=boundary):
+                assertion()
+                with mock.patch.object(module, "FORMAT_CHECKER", None):
+                    with self.assertRaises(AssertionError):
+                        assertion()
 
     def test_lossless_url_equivalence_is_collapsing_and_idempotent(self):
         pairs = (

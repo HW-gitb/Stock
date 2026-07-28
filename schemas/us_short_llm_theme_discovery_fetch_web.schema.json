@@ -16,11 +16,12 @@
     },
     "fetch_contract": {
       "type": "object", "additionalProperties": false,
-      "required": ["producer_kind", "execution_mode", "network_access_performed", "provider_calls_performed", "network_call_count", "provider_call_count", "scoring_eligible", "top15_effect_enabled", "operation_advice_effect_enabled", "dynamic_seats_enabled", "theme_probe_enabled", "lifecycle_actions_enabled", "regroup_model"],
+      "required": ["producer_kind", "execution_mode", "network_access_performed", "provider_calls_performed", "network_call_count", "provider_call_count", "transport_response_counts", "scoring_eligible", "top15_effect_enabled", "operation_advice_effect_enabled", "dynamic_seats_enabled", "theme_probe_enabled", "lifecycle_actions_enabled", "regroup_model"],
       "properties": {
         "producer_kind": {"const": "tavily_deepseek_web_fetch"},
         "execution_mode": {"enum": ["offline_fake_client", "live_authorized"]},
         "network_access_performed": {"type": "boolean"}, "provider_calls_performed": {"type": "boolean"}, "network_call_count": {"type": "integer", "minimum": 0}, "provider_call_count": {"type": "integer", "minimum": 0},
+        "transport_response_counts": {"type": "object", "additionalProperties": false, "required": ["tavily", "deepseek"], "properties": {"tavily": {"type": "integer", "minimum": 0}, "deepseek": {"type": "integer", "minimum": 0}}},
         "scoring_eligible": {"const": false}, "top15_effect_enabled": {"const": false}, "operation_advice_effect_enabled": {"const": false}, "dynamic_seats_enabled": {"const": false}, "theme_probe_enabled": {"const": false}, "lifecycle_actions_enabled": {"const": false},
         "regroup_model": {"type": "object", "additionalProperties": false, "required": ["requested_model", "served_model", "system_fingerprints"], "properties": {"requested_model": {"const": "deepseek-chat"}, "served_model": {"type": ["string", "null"]}, "system_fingerprints": {"type": "array", "uniqueItems": true, "items": {"type": "string"}}}}
       },

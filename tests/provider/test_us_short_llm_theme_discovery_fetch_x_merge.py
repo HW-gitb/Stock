@@ -87,6 +87,42 @@ class XFetchAndMergeTests(unittest.TestCase):
             ["missing_created_at", "unsupported_created_at_format"],
         )
 
+    def test_live_x_orchestration_is_executable_and_mints_no_live_label(self):
+        """Same split as the web lane: the X live body used to be unreachable dead code."""
+        class _Client:
+            def __init__(self, plan): self.plan, self.queries = list(plan), []
+            def search(self, query, expected):
+                self.queries.append(query)
+                item = self.plan.pop(0)
+                if isinstance(item, Exception):
+                    raise item
+                return item
+
+        good = {"text": self._x_response(), "results": X_ROWS}
+        client = _Client([good, RuntimeError("boom")])
+        outcome = xfetch.execute_live_x_orchestration(
+            queries=["q1", "q2"], expected_decision_date="20260725", client=client,
+        )
+        self.assertEqual(client.queries, ["q1", "q2"])
+        self.assertEqual(len(outcome["results"]), len(X_ROWS), "the good query survives the bad one")
+        self.assertTrue(any(row["reason"] == "provider_response_dropped" for row in outcome["query_drops"]))
+        self.assertNotIn("receipt", outcome)
+        with self.assertRaises(xfetch.XThemeDiscoveryError):
+            xfetch.build_x_fetch_packet(
+                queries=["q"], results=[], grok_response='{"themes":[]}',
+                expected_decision_date="20260725", generated_at="2026-07-25T08:00:00Z",
+                execution_mode="live_authorized",
+            )
+
+    def test_live_x_entrypoint_still_freezes_before_the_orchestration_runs(self):
+        with mock.patch.object(xfetch, "execute_live_x_orchestration") as orchestration:
+            with self.assertRaisesRegex(xfetch.XThemeDiscoveryError, "live execution is frozen"):
+                xfetch.run_x_fetch(
+                    queries=["q"], expected_decision_date="20260725",
+                    generated_at="2026-07-25T08:00:00Z", confirm_user_authorization=True, live=True,
+                )
+        orchestration.assert_not_called()
+
     def test_bad_grok_response_is_dropped_per_query(self):
         good = self._x_response()
         class Fake:
@@ -273,9 +309,10 @@ class XFetchAndMergeTests(unittest.TestCase):
         web_rows = [{"url": "https://web.example/a", "title": "A", "content": "AAPL CEG", "published_date": "2026-07-24T10:00:00Z"}, {"url": "https://web.example/b", "title": "B", "content": "CEG", "published_date": "2026-07-23T10:00:00Z"}]
         web_refs = [web._source_id(row["url"]) for row in web_rows]
         web_text = json.dumps({"themes": [{"theme_id": "power_demand", "display_name": "Power", "summary": "Power", "observed_at": "2026-07-24T12:00:00Z", "source_ref_ids": web_refs, "members": [{"ticker": "AAPL", "source_ref_ids": web_refs}, {"ticker": "CEG", "source_ref_ids": web_refs}]}]})
-        wa, wr, _ = web.build_web_fetch_packet(queries=["power"], search_results=web_rows, llm_response=web_text, expected_decision_date="20260725", generated_at="2026-07-25T08:00:00Z")
-        xa, xr, _ = xfetch.build_x_fetch_packet(queries=["power"], results=X_ROWS, grok_response=self._x_response(), expected_decision_date="20260725", generated_at="2026-07-25T08:00:00Z")
-        merged, manifest = merge_web_x_discovery(web_artifact=wa, web_receipt=wr, x_artifact=xa, x_receipt=xr, expected_decision_date="20260725", generated_at="2026-07-25T08:00:00Z")
+        with temporary_provider_directory(web.ROOT) as td:
+            wa, wr, _ = web.build_web_fetch_packet(queries=["power"], search_results=web_rows, llm_response=web_text, expected_decision_date="20260725", generated_at="2026-07-25T08:00:00Z", raw_root=Path(td) / "web", persist_raw=True)
+            xa, xr, _ = xfetch.build_x_fetch_packet(queries=["power"], results=X_ROWS, grok_response=self._x_response(), expected_decision_date="20260725", generated_at="2026-07-25T08:00:00Z", raw_root=Path(td) / "x", persist_raw=True)
+            merged, manifest = merge_web_x_discovery(web_artifact=wa, web_receipt=wr, x_artifact=xa, x_receipt=xr, expected_decision_date="20260725", generated_at="2026-07-25T08:00:00Z")
         rows = {row["ticker"]: row for theme in manifest["themes"] for row in theme["members"]}
         self.assertEqual(rows["AAPL"]["evidence_tier"], "both")
         self.assertEqual(rows["CEG"]["evidence_tier"], "both")
@@ -287,24 +324,25 @@ class XFetchAndMergeTests(unittest.TestCase):
     def test_merge_survives_mixed_utc_offsets_and_ledgers_a_rejected_theme(self):
         """A model may legitimately answer in -04:00; a lexical max over mixed offsets used to pick the
         earlier instant and abort the whole week. Also pins that merge drops per theme, not per week."""
-        w_rows = [{"url": "https://web.example/a", "title": "A", "content": "power", "published_date": "2026-07-24T20:00:00Z"}]
-        x_rows = [{"url": "https://x.example/1", "title": "P", "text": "power", "created_at": "2026-07-24T18:00:00-04:00"}]
+        w_rows = [{"url": "https://web.example/a", "title": "A", "content": "AAPL power", "published_date": "2026-07-24T20:00:00Z"}]
+        x_rows = [{"url": "https://x.example/1", "title": "P", "text": "AAPL power", "created_at": "2026-07-24T18:00:00-04:00"}]
         w_ref = [web._source_id(w_rows[0]["url"])]
         x_ref = [xfetch._source_id(x_rows[0]["url"])]
         def theme(refs, observed):
             return {"theme_id": "power_demand", "display_name": "P", "summary": "S", "observed_at": observed,
                     "source_ref_ids": refs, "members": [{"ticker": "AAPL", "source_ref_ids": refs}]}
-        wa, wr, _ = web.build_web_fetch_packet(
-            queries=["power"], search_results=w_rows,
-            llm_response=json.dumps({"themes": [theme(w_ref, "2026-07-24T20:30:00Z")]}),
-            expected_decision_date="20260725", generated_at="2026-07-25T08:00:00Z")
-        xa, xr, _ = xfetch.build_x_fetch_packet(
-            queries=["power"], results=x_rows,
-            grok_response=json.dumps({"themes": [theme(x_ref, "2026-07-24T18:30:00-04:00")]}),
-            expected_decision_date="20260725", generated_at="2026-07-25T08:00:00Z")
-        merged, manifest = merge_web_x_discovery(
-            web_artifact=wa, web_receipt=wr, x_artifact=xa, x_receipt=xr,
-            expected_decision_date="20260725", generated_at="2026-07-25T08:00:00Z")
+        with temporary_provider_directory(web.ROOT) as td:
+            wa, wr, _ = web.build_web_fetch_packet(
+                queries=["power"], search_results=w_rows,
+                llm_response=json.dumps({"themes": [theme(w_ref, "2026-07-24T20:30:00Z")]}),
+                expected_decision_date="20260725", generated_at="2026-07-25T08:00:00Z", raw_root=Path(td) / "web", persist_raw=True)
+            xa, xr, _ = xfetch.build_x_fetch_packet(
+                queries=["power"], results=x_rows,
+                grok_response=json.dumps({"themes": [theme(x_ref, "2026-07-24T18:30:00-04:00")]}),
+                expected_decision_date="20260725", generated_at="2026-07-25T08:00:00Z", raw_root=Path(td) / "x", persist_raw=True)
+            merged, manifest = merge_web_x_discovery(
+                web_artifact=wa, web_receipt=wr, x_artifact=xa, x_receipt=xr,
+                expected_decision_date="20260725", generated_at="2026-07-25T08:00:00Z")
         self.assertEqual(len(merged["themes"]), 1)
         self.assertEqual(manifest["summary"]["dropped_theme_count"], 0)
         self.assertEqual(manifest["drop_ledger"], [])
@@ -322,15 +360,16 @@ class XFetchAndMergeTests(unittest.TestCase):
                 return {"theme_id": "power_demand", "display_name": "T", "summary": "S",
                         "observed_at": "2026-07-24T12:00:00Z", "source_ref_ids": refs,
                         "members": [{"ticker": "CEG", "source_ref_ids": refs}]}
-            wa, wrc, _ = web.build_web_fetch_packet(
-                queries=["q"], search_results=w_rows, llm_response=json.dumps({"themes": [theme(wr)]}),
-                expected_decision_date="20260725", generated_at="2026-07-25T08:00:00Z")
-            xa, xrc, _ = xfetch.build_x_fetch_packet(
-                queries=["q"], results=x_rows, grok_response=json.dumps({"themes": [theme(xr)]}),
-                expected_decision_date="20260725", generated_at="2026-07-25T08:00:00Z")
-            _, manifest = merge_web_x_discovery(
-                web_artifact=wa, web_receipt=wrc, x_artifact=xa, x_receipt=xrc,
-                expected_decision_date="20260725", generated_at="2026-07-25T08:00:00Z")
+            with temporary_provider_directory(web.ROOT) as td:
+                wa, wrc, _ = web.build_web_fetch_packet(
+                    queries=["q"], search_results=w_rows, llm_response=json.dumps({"themes": [theme(wr)]}),
+                    expected_decision_date="20260725", generated_at="2026-07-25T08:00:00Z", raw_root=Path(td) / "web", persist_raw=True)
+                xa, xrc, _ = xfetch.build_x_fetch_packet(
+                    queries=["q"], results=x_rows, grok_response=json.dumps({"themes": [theme(xr)]}),
+                    expected_decision_date="20260725", generated_at="2026-07-25T08:00:00Z", raw_root=Path(td) / "x", persist_raw=True)
+                _, manifest = merge_web_x_discovery(
+                    web_artifact=wa, web_receipt=wrc, x_artifact=xa, x_receipt=xrc,
+                    expected_decision_date="20260725", generated_at="2026-07-25T08:00:00Z")
             return [row["evidence_tier"] for th in manifest["themes"] for row in th["members"]]
 
         self.assertEqual(packets(shared), ["single"])
@@ -346,7 +385,10 @@ class XFetchAndMergeTests(unittest.TestCase):
     def test_merge_rejects_inconsistent_execution_attestation(self):
         wa, wr, _ = web.build_web_fetch_packet(queries=["power"], search_results=[], llm_response='{"themes":[]}', expected_decision_date="20260725", generated_at="2026-07-25T08:00:00Z")
         xa, xr, _ = xfetch.build_x_fetch_packet(queries=["power"], results=[], grok_response='{"themes":[]}', expected_decision_date="20260725", generated_at="2026-07-25T08:00:00Z")
-        wr["fetch_contract"]["execution_mode"] = "live_authorized"
+        wr["fetch_contract"].update(
+            execution_mode="live_authorized", network_access_performed=True,
+            provider_calls_performed=True, network_call_count=1, provider_call_count=1,
+        )
         with self.assertRaises(ThemeDiscoveryMergeError):
             merge_web_x_discovery(web_artifact=wa, web_receipt=wr, x_artifact=xa, x_receipt=xr, expected_decision_date="20260725", generated_at="2026-07-25T08:00:00Z")
 
@@ -448,16 +490,145 @@ class XFetchAndMergeTests(unittest.TestCase):
                 "observed_at": "2026-07-24T12:00:00Z", "source_ref_ids": refs,
                 "members": [{"ticker": t, "source_ref_ids": r} for t, r in members.items()]}]})
 
-        wa, wr, _ = web.build_web_fetch_packet(
-            queries=["power"], search_results=wrows,
-            llm_response=payload({t: [wid[u] for u in us] for t, us in web_members.items()}, [wid[u] for u in web_urls]),
-            expected_decision_date="20260725", generated_at="2026-07-25T08:00:00Z")
-        xa, xr, _ = xfetch.build_x_fetch_packet(
-            queries=["power"], results=xrows,
-            grok_response=payload({t: [xid[u] for u in us] for t, us in x_members.items()}, [xid[u] for u in x_urls]),
-            expected_decision_date="20260725", generated_at="2026-07-25T08:00:00Z")
-        return merge_web_x_discovery(web_artifact=wa, web_receipt=wr, x_artifact=xa, x_receipt=xr,
-                                     expected_decision_date="20260725", generated_at="2026-07-25T08:00:00Z")
+        with temporary_provider_directory(web.ROOT) as td:
+            wa, wr, _ = web.build_web_fetch_packet(
+                queries=["power"], search_results=wrows,
+                llm_response=payload({t: [wid[u] for u in us] for t, us in web_members.items()}, [wid[u] for u in web_urls]),
+                expected_decision_date="20260725", generated_at="2026-07-25T08:00:00Z", raw_root=Path(td) / "web", persist_raw=True)
+            xa, xr, _ = xfetch.build_x_fetch_packet(
+                queries=["power"], results=xrows,
+                grok_response=payload({t: [xid[u] for u in us] for t, us in x_members.items()}, [xid[u] for u in x_urls]),
+                expected_decision_date="20260725", generated_at="2026-07-25T08:00:00Z", raw_root=Path(td) / "x", persist_raw=True)
+            return merge_web_x_discovery(web_artifact=wa, web_receipt=wr, x_artifact=xa, x_receipt=xr,
+                                         expected_decision_date="20260725", generated_at="2026-07-25T08:00:00Z")
+
+    def test_both_member_without_frozen_x_ticker_evidence_demotes_to_single_through_boost(self):
+        """K3-R59: model refs alone cannot buy the 5-point `both` tier."""
+        w_rows = [{"url": "https://web.example/power", "title": "Power", "content": "AAPL MSFT JPM power", "published_date": "2026-07-24T10:00:00Z"}]
+        x_rows = [{"url": "https://x.example/photo", "title": "Photo", "text": "MSFT JPM power\nhttps://images.example/AAPL\nDisclaimer: AAPL is not evidence", "created_at": "2026-07-24T10:00:00Z"}]
+        w_ref, x_ref = web._source_id(w_rows[0]["url"]), xfetch._source_id(x_rows[0]["url"])
+        payload = json.dumps({"themes": [{
+            "theme_id": "power_demand", "display_name": "Power", "summary": "Power",
+            "observed_at": "2026-07-24T12:00:00Z", "source_ref_ids": [w_ref, x_ref],
+            "members": [{"ticker": ticker, "source_ref_ids": [w_ref, x_ref]} for ticker in ("AAPL", "MSFT", "JPM")],
+        }]})
+        with temporary_provider_directory(web.ROOT) as td:
+            wa, wr, _ = web.build_web_fetch_packet(
+                queries=["power"], search_results=w_rows, llm_response=payload,
+                expected_decision_date="20260725", generated_at="2026-07-25T08:00:00Z",
+                raw_root=Path(td) / "web", persist_raw=True,
+            )
+            xa, xr, _ = xfetch.build_x_fetch_packet(
+                queries=["power"], results=x_rows, grok_response=payload,
+                expected_decision_date="20260725", generated_at="2026-07-25T08:00:00Z",
+                raw_root=Path(td) / "x", persist_raw=True,
+            )
+            x_raw = json.loads((web.ROOT / xr["source_refs"][0]["raw_receipt_ref"]).read_text(encoding="utf-8"))
+            self.assertFalse(merge._raw_payload_mentions_ticker(x_raw, "AAPL"))
+            merged, manifest = merge_web_x_discovery(
+                web_artifact=wa, web_receipt=wr, x_artifact=xa, x_receipt=xr,
+                expected_decision_date="20260725", generated_at="2026-07-25T08:00:00Z",
+            )
+        rows = {row["ticker"]: row for theme in manifest["themes"] for row in theme["members"]}
+        tiers, boosts = self._chain_points(merged)
+        self.assertEqual(rows["AAPL"]["evidence_tier"], "single")
+        self.assertEqual(tiers["AAPL"], "single")
+        self.assertEqual(boosts["AAPL"], 2.0)
+        self.assertEqual(rows["MSFT"]["evidence_tier"], "both")
+        self.assertEqual(manifest["summary"]["member_evidence_demotion_count"], 1)
+        self.assertIn(
+            {"stage": "theme", "theme_id": "power_demand", "reason": "member_evidence_demoted_unbound_ticker", "detail": f"AAPL:{x_ref}"},
+            manifest["drop_ledger"],
+        )
+
+    def test_offline_raw_receipts_keep_bound_two_source_members_through_knife_2(self):
+        """K3-R64: offline output persists raw bytes before the same ticker gate runs."""
+        web_row = {
+            "url": "https://web.example/ceg", "title": "CEG generation",
+            "content": "AAPL MSFT JPM expand data-center generation.", "published_date": "2026-07-24T10:00:00Z",
+        }
+        x_row = {
+            "url": "https://x.example/ceg", "title": "CEG power demand",
+            "text": "AAPL MSFT JPM power demand keeps climbing.", "created_at": "2026-07-24T10:00:00Z",
+        }
+        web_ref, x_ref = web._source_id(web_row["url"]), xfetch._source_id(x_row["url"])
+        payload = json.dumps({"themes": [{
+            "theme_id": "power_demand", "display_name": "Power", "summary": "Power",
+            "observed_at": "2026-07-24T12:00:00Z", "source_ref_ids": [web_ref, x_ref],
+            "members": [{"ticker": ticker, "source_ref_ids": [web_ref, x_ref]}
+                        for ticker in ("AAPL", "MSFT", "JPM")],
+        }]})
+        with temporary_provider_directory(web.ROOT) as td:
+            web_artifact, web_receipt, _ = web.build_web_fetch_packet(
+                queries=["power"], search_results=[web_row], llm_response=payload,
+                expected_decision_date="20260725", generated_at="2026-07-25T08:00:00Z",
+                raw_root=Path(td) / "web", persist_raw=True,
+            )
+            x_artifact, x_receipt, _ = xfetch.build_x_fetch_packet(
+                queries=["power"], results=[x_row], grok_response=payload,
+                expected_decision_date="20260725", generated_at="2026-07-25T08:00:00Z",
+                raw_root=Path(td) / "x", persist_raw=True,
+            )
+            self.assertTrue(all(ref["raw_receipt_ref"] is not None for ref in web_receipt["source_refs"] + x_receipt["source_refs"]))
+            merged, manifest = merge_web_x_discovery(
+                web_artifact=web_artifact, web_receipt=web_receipt,
+                x_artifact=x_artifact, x_receipt=x_receipt,
+                expected_decision_date="20260725", generated_at="2026-07-25T08:00:00Z",
+            )
+        self.assertEqual(manifest["summary"]["both_member_count"], 3)
+        self.assertEqual(manifest["summary"]["member_evidence_demotion_count"], 0)
+        tiers, boosts = self._chain_points(merged)
+        self.assertEqual(tiers, {"AAPL": "both", "MSFT": "both", "JPM": "both"})
+        self.assertEqual(boosts["AAPL"], 5.0)
+
+    def test_raw_ticker_match_requires_standalone_non_url_non_boilerplate_evidence(self):
+        raw = {"source_type": "web", "title": "AAPL mentioned", "content": "$AAPL is explicit"}
+        self.assertTrue(merge._raw_payload_mentions_ticker(raw, "aapl"))
+        short = {"source_type": "x", "title": "", "text": "analysis https://example.com/A\nDisclaimer: A is not evidence"}
+        self.assertFalse(merge._raw_payload_mentions_ticker(short, "A"))
+        self.assertTrue(merge._raw_payload_mentions_ticker({**short, "text": "analysis $A"}, "A"))
+
+    def test_model_transcribed_x_source_requires_provider_annotation_url(self):
+        """K3-R66: model text is evidence only after provider URL attestation."""
+        url = "https://x.example/ceg-post"
+        grok = json.dumps({"sources": [{"url": url, "title": "CEG", "text": "CEG demand rises", "created_at": "2026-07-24T10:00:00Z"}], "themes": [{"theme_id": "power_demand", "display_name": "Power", "summary": "Power", "observed_at": "2026-07-24T12:00:00Z", "source_urls": [url], "members": [{"ticker": "CEG", "source_urls": [url]}]}]})
+        _, rejected, _ = xfetch.build_x_fetch_packet(
+            queries=["power"], results=[], grok_response=grok,
+            expected_decision_date="20260725", generated_at="2026-07-25T08:00:00Z",
+            provider_annotation_urls=[],
+        )
+        self.assertEqual(rejected["source_refs"], [])
+        self.assertIn("model_source_url_not_provider_annotated", {row["reason"] for row in rejected["drop_ledger"]})
+        _, accepted, _ = xfetch.build_x_fetch_packet(
+            queries=["power"], results=[], grok_response=grok,
+            expected_decision_date="20260725", generated_at="2026-07-25T08:00:00Z",
+            provider_annotation_urls=[url],
+        )
+        self.assertEqual(accepted["source_refs"][0]["evidence_attestation"], "model_transcribed")
+
+    def test_raw_ticker_match_requires_uppercase_bare_form_or_explicit_cashtag(self):
+        prose = {"source_type": "web", "title": "", "content": "The market had a mixed session. It closed on a soft note, so all eyes are on Friday."}
+        uppercase = {"source_type": "web", "title": "CEG expands generation", "content": ""}
+        lowercase = {"source_type": "web", "title": "ceg expands generation", "content": ""}
+        cashtag = {"source_type": "web", "title": "$ceg expands generation", "content": ""}
+
+        def assert_case_rule() -> None:
+            for ticker in ("A", "IT", "ON", "SO", "ALL"):
+                self.assertFalse(merge._raw_payload_mentions_ticker(prose, ticker))
+            self.assertTrue(merge._raw_payload_mentions_ticker(uppercase, "CEG"))
+            self.assertFalse(merge._raw_payload_mentions_ticker(lowercase, "CEG"))
+            self.assertTrue(merge._raw_payload_mentions_ticker(cashtag, "CEG"))
+
+        assert_case_rule()
+        with mock.patch.object(
+            merge,
+            "_evidence_mentions_canonical_ticker",
+            side_effect=lambda evidence, canonical: __import__("re").search(
+                rf"(?<![A-Z0-9])(?:\\$)?{canonical}(?![A-Z0-9])", evidence, __import__("re").I,
+            ) is not None,
+        ):
+            with self.assertRaises(AssertionError):
+                assert_case_rule()
 
     def test_redundant_lane_evidence_cannot_be_re_promoted_to_both_downstream(self):
         """The merge's corroboration verdict must reach the SCORE, not just the manifest.
@@ -508,18 +679,15 @@ class XFetchAndMergeTests(unittest.TestCase):
         """A self-consistent raw/receipt/artifact triad is not provenance, and a re-hashed raw payload is
         not PIT evidence: merge must re-derive the ID from its locator and bind the raw observation time.
         """
-        def live_pair(td):
+        def raw_pair(td):
             wa, wr, _ = web.build_web_fetch_packet(
                 queries=["power"], search_results=[{"url": "https://web.example/live", "title": "A", "content": "AAPL", "published_date": "2026-07-24T10:00:00Z"}],
                 llm_response='{"themes":[]}', expected_decision_date="20260725", generated_at="2026-07-25T08:00:00Z",
-                raw_root=Path(td) / "web", persist_raw=True, execution_mode="live_authorized",
-                network_call_count=1, provider_call_count=1, _live_attestation=web._LIVE_ATTESTATION,
-                regroup_model_identity=web._regroup_model_identity(served_model="deepseek-test"))
+                raw_root=Path(td) / "web", persist_raw=True)
             xa, xr, _ = xfetch.build_x_fetch_packet(
                 queries=["power"], results=[{"url": "https://x.example/live", "title": "P", "text": "AAPL", "created_at": "2026-07-24T10:00:00Z"}],
                 grok_response='{"themes":[]}', expected_decision_date="20260725", generated_at="2026-07-25T08:00:00Z",
-                raw_root=Path(td) / "x", persist_raw=True, execution_mode="live_authorized",
-                network_call_count=1, provider_call_count=1, _live_attestation=web._LIVE_ATTESTATION)
+                raw_root=Path(td) / "x", persist_raw=True)
             return wa, wr, xa, xr
 
         def rehash(receipt, artifact, raw_path, raw):
@@ -534,7 +702,7 @@ class XFetchAndMergeTests(unittest.TestCase):
         for lane, time_key in (("web", "published_at"), ("x", "created_at")):
             with self.subTest(lane=lane, defect="after-open raw re-hashed"), \
                     temporary_provider_directory(web.ROOT) as td:
-                wa, wr, xa, xr = live_pair(td)
+                wa, wr, xa, xr = raw_pair(td)
                 receipt, artifact = (wr, wa) if lane == "web" else (xr, xa)
                 merge_pair(wa, wr, xa, xr)      # reverse control: the untouched pair merges
                 raw_path = web.ROOT / receipt["source_refs"][0]["raw_receipt_ref"]
@@ -545,7 +713,7 @@ class XFetchAndMergeTests(unittest.TestCase):
                     merge_pair(wa, wr, xa, xr)
             with self.subTest(lane=lane, defect="forged source identity"), \
                     temporary_provider_directory(web.ROOT) as td:
-                wa, wr, xa, xr = live_pair(td)
+                wa, wr, xa, xr = raw_pair(td)
                 receipt, artifact = (wr, wa) if lane == "web" else (xr, xa)
                 forged = f"{lane}:" + "a" * 64
                 raw_path = web.ROOT / receipt["source_refs"][0]["raw_receipt_ref"]
@@ -563,7 +731,7 @@ class XFetchAndMergeTests(unittest.TestCase):
                     merge_pair(wa, wr, xa, xr)
             with self.subTest(lane=lane, defect="raw path not bound to source ID"), \
                     temporary_provider_directory(web.ROOT) as td:
-                wa, wr, xa, xr = live_pair(td)
+                wa, wr, xa, xr = raw_pair(td)
                 receipt = wr if lane == "web" else xr
                 raw_path = web.ROOT / receipt["source_refs"][0]["raw_receipt_ref"]
                 moved = raw_path.with_name("unbound_name.json")
@@ -575,7 +743,7 @@ class XFetchAndMergeTests(unittest.TestCase):
                                      ("every copy moved past the decision open", "2026-07-25T15:00:00+00:00")):
                 with self.subTest(lane=lane, defect=defect), \
                         temporary_provider_directory(web.ROOT) as td:
-                    wa, wr, xa, xr = live_pair(td)
+                    wa, wr, xa, xr = raw_pair(td)
                     receipt, artifact = (wr, wa) if lane == "web" else (xr, xa)
                     artifact["source_refs"][0]["observed_at"] = observed
                     raw_path = web.ROOT / receipt["source_refs"][0]["raw_receipt_ref"]
@@ -642,14 +810,12 @@ class XFetchAndMergeTests(unittest.TestCase):
         self.assertEqual(receipt["summary"]["accepted_source_count"], 1)
         self.assertIn("invalid_canonical_locator", [row["reason"] for row in receipt["drop_ledger"]])
 
-    def test_merge_rehashes_live_raw_receipts(self):
+    def test_merge_rehashes_frozen_raw_receipts(self):
         with temporary_provider_directory(web.ROOT) as td:
             root = Path(td)
             wa, wr, _ = web.build_web_fetch_packet(
                 queries=["power"], search_results=[{"url": "https://web.example/live", "title": "A", "content": "AAPL", "published_date": "2026-07-24T10:00:00Z"}], llm_response='{"themes":[]}',
                 expected_decision_date="20260725", generated_at="2026-07-25T08:00:00Z", raw_root=root / "web", persist_raw=True,
-                execution_mode="live_authorized", network_call_count=1, provider_call_count=1, _live_attestation=web._LIVE_ATTESTATION,
-                regroup_model_identity=web._regroup_model_identity(served_model="deepseek-test"),
             )
             xa, xr, _ = xfetch.build_x_fetch_packet(
                 queries=["power"], results=[], grok_response='{"themes":[]}',

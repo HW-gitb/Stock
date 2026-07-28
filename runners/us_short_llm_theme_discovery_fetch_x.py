@@ -139,7 +139,10 @@ def _normalize_results(
             continue
         locator, observed, title, text = parsed
         source_id = _source_id(locator)
-        raw_payload = {"source_id": source_id, "source_type": "x", "canonical_locator": locator, "title": title, "text": text, "created_at": observed.isoformat()}
+        evidence_attestation = item.get("_evidence_attestation", "model_transcribed")
+        if evidence_attestation not in {"provider_attested", "model_transcribed"}:
+            raise XThemeDiscoveryError("unsafe X evidence attestation")
+        raw_payload = {"source_id": source_id, "source_type": "x", "canonical_locator": locator, "title": title, "text": text, "created_at": observed.isoformat(), "evidence_attestation": evidence_attestation}
         raw_path = None
         raw_ref = None
         raw_gitignored = False
@@ -162,7 +165,7 @@ def _normalize_results(
                     pending_raw_writes.append((raw_path, raw_payload))
                 else:
                     web._write_json_atomic(raw_payload, raw_path)
-        refs.append({"source_id": source_id, "source_type": "x", "canonical_locator": locator, "observed_at": observed.isoformat(), "fetched_at": fetched_at.isoformat(), "content_sha256": hashlib.sha256(web._canonical_json(raw_payload)).hexdigest(), "raw_receipt_ref": raw_ref, "raw_receipt_gitignored": raw_gitignored})
+        refs.append({"source_id": source_id, "source_type": "x", "canonical_locator": locator, "observed_at": observed.isoformat(), "fetched_at": fetched_at.isoformat(), "content_sha256": hashlib.sha256(web._canonical_json(raw_payload)).hexdigest(), "raw_receipt_ref": raw_ref, "raw_receipt_gitignored": raw_gitignored, "evidence_attestation": evidence_attestation})
         seen.add(locator)
     refs.sort(key=lambda ref: ref["source_id"])
     drops.sort(key=lambda row: (row["stage"], row["reason"], row["detail"]))
@@ -200,6 +203,29 @@ def _parse_grok(
             "stage": "llm", "reason": "ignored_top_level_keys", "detail": ",".join(ignored),
         })
     return out
+
+
+def _model_transcribed_rows(payload: dict[str, Any], provider_annotation_urls: Any,
+                            drops: list[dict[str, str]]) -> list[dict[str, Any]]:
+    """A model transcript is admissible only when its URL has a provider annotation."""
+    annotated = {
+        canonical for url in (provider_annotation_urls if isinstance(provider_annotation_urls, (list, tuple, set)) else [])
+        if isinstance(url, str) and (canonical := web._canonical_locator(url))
+    }
+    rows = []
+    for index, source in enumerate(payload.get("sources", [])):
+        if not isinstance(source, dict):
+            drops.append({"stage": "llm", "reason": "model_source_not_object", "detail": str(index)})
+            continue
+        canonical = web._canonical_locator(source.get("url"))
+        if canonical is None or canonical not in annotated:
+            drops.append({"stage": "llm", "reason": "model_source_url_not_provider_annotated", "detail": canonical or str(index)})
+            continue
+        row = dict(source)
+        row["url"] = canonical
+        row["_evidence_attestation"] = "model_transcribed"
+        rows.append(row)
+    return rows
 
 
 def _coerce_source_urls(
@@ -301,25 +327,46 @@ def _provider_result_rows(response: Any) -> list[dict[str, Any]]:
     rows: list[dict[str, Any]] = []
     for item in candidates:
         if isinstance(item, dict):
-            rows.append(dict(item))
+            row = dict(item)
+            row.setdefault("_evidence_attestation", "provider_attested")
+            rows.append(row)
         elif hasattr(item, "model_dump"):
             dumped = item.model_dump()
             if isinstance(dumped, dict):
+                dumped.setdefault("_evidence_attestation", "provider_attested")
                 rows.append(dumped)
     return rows
 
 
-def _coerce_x_client_reply(reply: Any) -> tuple[str, list[dict[str, Any]]]:
+def _provider_annotation_urls(response: Any) -> list[str]:
+    """Read URL citations from the provider response, never from model JSON."""
+    output = response.get("output") if isinstance(response, dict) else getattr(response, "output", None)
+    urls: set[str] = set()
+    for item in output if isinstance(output, list) else []:
+        content = item.get("content") if isinstance(item, dict) else getattr(item, "content", None)
+        for part in content if isinstance(content, list) else []:
+            annotations = part.get("annotations") if isinstance(part, dict) else getattr(part, "annotations", None)
+            for annotation in annotations if isinstance(annotations, list) else []:
+                kind = annotation.get("type") if isinstance(annotation, dict) else getattr(annotation, "type", None)
+                url = annotation.get("url") if isinstance(annotation, dict) else getattr(annotation, "url", None)
+                canonical = web._canonical_locator(url) if kind == "url_citation" else None
+                if canonical:
+                    urls.add(canonical)
+    return sorted(urls)
+
+
+def _coerce_x_client_reply(reply: Any) -> tuple[str, list[dict[str, Any]], list[str]]:
     if isinstance(reply, str):
-        return reply, []
+        return reply, [], []
     if isinstance(reply, dict):
         text = reply.get("text", reply.get("response"))
         rows = reply.get("results")
         if not isinstance(text, str) or not isinstance(rows, list):
             raise XThemeDiscoveryError("X client reply must include text and provider result rows")
-        return text, [dict(row) for row in rows if isinstance(row, dict)]
+        annotations = reply.get("annotation_urls", [])
+        return text, [dict(row) for row in rows if isinstance(row, dict)], [url for url in annotations if isinstance(url, str)]
     if isinstance(reply, tuple) and len(reply) == 2 and isinstance(reply[0], str) and isinstance(reply[1], list):
-        return reply[0], [dict(row) for row in reply[1] if isinstance(row, dict)]
+        return reply[0], [dict(row) for row in reply[1] if isinstance(row, dict)], []
     raise XThemeDiscoveryError("X client reply shape is unsafe")
 
 
@@ -340,8 +387,9 @@ def build_x_fetch_packet(
     execution_mode: str = "offline_fake_client", network_access_performed: bool = False,
     provider_calls_performed: bool = False,
     network_call_count: int = 0, provider_call_count: int = 0,
-    _live_attestation: object | None = None,
+    _live_transport: web._LiveTransport | None = None,
     extra_drop_ledger: list[dict[str, str]] | None = None,
+    provider_annotation_urls: Any = None,
 ) -> tuple[dict[str, Any], dict[str, Any], dict[str, Any]]:
     queries = _safe_queries(queries)
     generated = _parse_dt(generated_at, "generated_at")
@@ -350,10 +398,19 @@ def build_x_fetch_packet(
     web._validate_fetch_clock(fetched, generated)
     if execution_mode not in {"offline_fake_client", "live_authorized"}:
         raise XThemeDiscoveryError("invalid execution mode")
-    if execution_mode == "live_authorized" and _live_attestation is not web._LIVE_ATTESTATION:
-        raise XThemeDiscoveryError("live packet must be produced by the gated live runner")
+    if execution_mode == "live_authorized" and not isinstance(_live_transport, web._LiveTransport):
+        raise XThemeDiscoveryError("live packet requires response-derived runner transport")
     if not isinstance(network_call_count, int) or not isinstance(provider_call_count, int) or network_call_count < 0 or provider_call_count < 0:
         raise XThemeDiscoveryError("execution call counts must be non-negative integers")
+    if execution_mode == "live_authorized":
+        transport_response_counts = _live_transport._snapshot()
+        completed_response_count = sum(transport_response_counts.values())
+        network_access_performed = completed_response_count > 0
+        provider_calls_performed = completed_response_count > 0
+        network_call_count = completed_response_count
+        provider_call_count = completed_response_count
+    else:
+        transport_response_counts = {"xai": 0}
     if execution_mode == "offline_fake_client" and (network_access_performed or provider_calls_performed or network_call_count or provider_call_count):
         raise XThemeDiscoveryError("offline packet cannot attest network/provider execution")
     if execution_mode == "live_authorized" and (network_call_count <= 0 or provider_call_count <= 0):
@@ -363,19 +420,25 @@ def build_x_fetch_packet(
     if raw_root is not None:
         raw_root = web._validate_raw_root(raw_root, require_gitignored=execution_mode == "live_authorized")
     pending_raw_writes: list[tuple[Path, dict[str, Any]]] = []
-    refs, drops = _normalize_results(
-        results, expected_decision_date=expected_decision_date, fetched_at=fetched,
-        raw_root=raw_root, persist_raw=persist_raw, pending_raw_writes=pending_raw_writes,
-    )
+    drops: list[dict[str, str]] = []
     try:
         payload = _parse_grok(grok_response, drop_ledger=drops)
     except Exception as exc:
         payload = {"themes": []}
-        discovery_input = {"source_refs": [{"source_id": ref["source_id"], "source_type": "x", "observed_at": ref["observed_at"]} for ref in refs], "themes": []}
         drops.append({"stage": "llm", "reason": "invalid_or_unusable_response", "detail": type(exc).__name__})
-    else:
+    effective_results = results
+    if not results and payload.get("sources"):
+        effective_results = _model_transcribed_rows(payload, provider_annotation_urls, drops)
+    refs, result_drops = _normalize_results(
+        effective_results, expected_decision_date=expected_decision_date, fetched_at=fetched,
+        raw_root=raw_root, persist_raw=persist_raw, pending_raw_writes=pending_raw_writes,
+    )
+    drops.extend(result_drops)
+    if payload.get("themes"):
         payload = _coerce_source_urls(payload, refs, drop_ledger=drops)
         discovery_input = web._llm_to_discovery_input(payload, refs, source_type="x", drop_ledger=drops)
+    else:
+        discovery_input = {"source_refs": [{"source_id": ref["source_id"], "source_type": "x", "observed_at": ref["observed_at"]} for ref in refs], "themes": []}
     from runners.us_short_llm_theme_discovery import normalize_discovery_payload
     accepted: list[dict[str, Any]] = []
     seen_theme_ids: set[str] = set()
@@ -406,7 +469,7 @@ def build_x_fetch_packet(
     receipt = {
         "schema_name": "us_short_llm_theme_discovery_fetch_x", "schema_version": "1.0.0", "generated_at": generated.isoformat(),
         "decision_clock": {"expected_decision_date": expected_decision_date, "cutoff_policy": "before_decision_open_et", "pit_enforced": True},
-        "fetch_contract": {"producer_kind": "grok_native_x_fetch", "execution_mode": execution_mode, "network_access_performed": network_access_performed, "provider_calls_performed": provider_calls_performed, "network_call_count": network_call_count, "provider_call_count": provider_call_count, "scoring_eligible": False, "top15_effect_enabled": False, "operation_advice_effect_enabled": False, "dynamic_seats_enabled": False, "theme_probe_enabled": False, "lifecycle_actions_enabled": False},
+        "fetch_contract": {"producer_kind": "grok_native_x_fetch", "execution_mode": execution_mode, "network_access_performed": network_access_performed, "provider_calls_performed": provider_calls_performed, "network_call_count": network_call_count, "provider_call_count": provider_call_count, "transport_response_counts": transport_response_counts, "scoring_eligible": False, "top15_effect_enabled": False, "operation_advice_effect_enabled": False, "dynamic_seats_enabled": False, "theme_probe_enabled": False, "lifecycle_actions_enabled": False},
         "queries": queries, "source_refs": refs, "discovery_artifact_sha256": web._discovery_evidence_hash(discovery), "drop_ledger": drops,
         "summary": {"query_count": len(queries), "accepted_source_count": len(refs), "validated_theme_count": len(discovery["themes"]), "validated_member_count": sum(len(t["members"]) for t in discovery["themes"]), "dropped_result_count": len(drops)},
     }
@@ -428,13 +491,43 @@ def _require_single_xai_api_key(value: Any) -> str:
     return value
 
 
+def execute_live_x_orchestration(
+    *, queries: list[str], expected_decision_date: str, client: Any,
+) -> dict[str, Any]:
+    """The live X orchestration, split out so tests can EXECUTE it (same reason as the web lane).
+
+    Mints no packet and no `live_authorized` label: the attestation still comes only from a real
+    transport inside ``build_x_fetch_packet``.
+    """
+    results: list[dict[str, Any]] = []
+    annotation_urls: list[str] = []
+    grok_texts: list[str] = []
+    query_drops: list[dict[str, str]] = []
+    for query in queries:
+        try:
+            text, provider_rows, annotations = _coerce_x_client_reply(client.search(query, expected_decision_date))
+            grok_texts.append(text)
+            results.extend(provider_rows)
+            annotation_urls.extend(annotations)
+            if not provider_rows:
+                query_drops.append({"stage": "search_result", "reason": "missing_provider_result_rows", "detail": query})
+        except Exception as exc:
+            query_drops.append({"stage": "llm", "reason": "provider_response_dropped", "detail": type(exc).__name__})
+    combined, response_drops = _combine_grok_responses(grok_texts)
+    return {
+        "results": results, "grok_response": combined,
+        "query_drops": query_drops + response_drops,
+        "fetched_at": datetime.now(timezone.utc), "annotation_urls": sorted(set(annotation_urls)),
+    }
+
+
 class GrokXSearchClient:
-    def __init__(self, api_key: str, *, timeout: float = 45.0):
+    def __init__(self, api_key: str, *, timeout: float = 45.0, _live_transport: web._LiveTransport | None = None):
         _require_single_xai_api_key(api_key)
         try:
             from openai import OpenAI
             self.client = OpenAI(api_key=api_key, base_url=XAI_BASE_URL, timeout=timeout)
-            self.network_call_count = 0
+            self.network_call_count, self._live_transport = 0, _live_transport
         except Exception as exc:
             raise XThemeDiscoveryError("OpenAI-compatible xAI client is unavailable") from exc
 
@@ -442,7 +535,9 @@ class GrokXSearchClient:
         try:
             self.network_call_count += 1
             response = self.client.responses.create(model=GROK_MODEL, tools=[{"type": "x_search"}], input=_prompt(expected_decision_date, [{"source_id": "query", "title": query, "text": query}]))
-            return {"text": _response_text(response), "results": _provider_result_rows(response)}
+            if self._live_transport is not None:
+                self._live_transport._record_completed_response("xai")
+            return {"text": _response_text(response), "results": _provider_result_rows(response), "annotation_urls": _provider_annotation_urls(response)}
         except Exception as exc:
             raise XThemeDiscoveryError(f"Grok X request failed: {type(exc).__name__}") from exc
 
@@ -458,44 +553,44 @@ def run_x_fetch(*, queries: list[str] | tuple[str, ...], expected_decision_date:
         )
         if not confirm_user_authorization:
             raise XThemeDiscoveryError("live execution requires --confirm-user-authorization")
+        if x_client is not None:
+            raise XThemeDiscoveryError("live execution does not accept an injected client")
         api_key = _require_single_xai_api_key(os.environ.get("XAI_API_KEY", ""))
         web._reserve_provider_budget(
             "x", "xai", expected_decision_date, call_count=len(queries), query_scope=queries,
         )
-        client = x_client or GrokXSearchClient(api_key)
-        results: list[dict[str, Any]] = []
-        grok_texts: list[str] = []
-        query_drops: list[dict[str, str]] = []
-        observed_calls = 0
-        for query in queries:
-            try:
-                observed_calls += 1
-                text, provider_rows = _coerce_x_client_reply(client.search(query, expected_decision_date))
-                grok_texts.append(text)
-                results.extend(provider_rows)
-                if not provider_rows:
-                    query_drops.append({"stage": "search_result", "reason": "missing_provider_result_rows", "detail": query})
-            except Exception as exc:
-                query_drops.append({"stage": "llm", "reason": "provider_response_dropped", "detail": type(exc).__name__})
-        combined, response_drops = _combine_grok_responses(grok_texts)
-        fetched_now = datetime.now(timezone.utc)
-        actual_calls = observed_calls
-        return build_x_fetch_packet(queries=queries, results=results, grok_response=combined, expected_decision_date=expected_decision_date, generated_at=fetched_now.isoformat(), fetched_at=fetched_now.isoformat(), raw_root=raw_root, persist_raw=True, execution_mode="live_authorized", network_access_performed=True, provider_calls_performed=True, network_call_count=actual_calls, provider_call_count=actual_calls, _live_attestation=web._LIVE_ATTESTATION, extra_drop_ledger=query_drops + response_drops)
+        transport = web._new_live_transport("xai")
+        client = GrokXSearchClient(api_key, _live_transport=transport)
+        outcome = execute_live_x_orchestration(
+            queries=queries, expected_decision_date=expected_decision_date, client=client,
+        )
+        fetched_now = outcome["fetched_at"]
+        return build_x_fetch_packet(queries=queries, results=outcome["results"], grok_response=outcome["grok_response"], expected_decision_date=expected_decision_date, generated_at=fetched_now.isoformat(), fetched_at=fetched_now.isoformat(), raw_root=raw_root, persist_raw=True, execution_mode="live_authorized", _live_transport=transport, extra_drop_ledger=outcome["query_drops"], provider_annotation_urls=outcome["annotation_urls"])
     if x_client is None:
         raise XThemeDiscoveryError("offline mode requires an injected fake X client")
     responses: list[str] = []
+    results: list[dict[str, Any]] = []
+    annotation_urls: list[str] = []
     query_drops: list[dict[str, str]] = []
     for query in queries:
         try:
-            text, _ = _coerce_x_client_reply(x_client.search(query, expected_decision_date))
+            text, provider_rows, annotations = _coerce_x_client_reply(x_client.search(query, expected_decision_date))
             responses.append(text)
+            results.extend(provider_rows)
+            annotation_urls.extend(annotations)
         except Exception as exc:
             query_drops.append({"stage": "llm", "reason": "provider_response_dropped", "detail": type(exc).__name__})
     combined, response_drops = _combine_grok_responses(responses)
-    # Fake clients may return already-materialized result rows; response sources
-    # remain authoritative when present and are normalized by build_x_fetch_packet.
-    results = getattr(x_client, "results", [])
-    return build_x_fetch_packet(queries=queries, results=results, grok_response=combined, expected_decision_date=expected_decision_date, generated_at=generated_at, extra_drop_ledger=query_drops + response_drops)
+    # Reply rows are the primary producer input; retain the legacy aggregate
+    # only for fake clients whose rows are exposed there.
+    if not results:
+        results = [
+            dict(row, _evidence_attestation=row.get("_evidence_attestation", "provider_attested"))
+            for row in getattr(x_client, "results", []) if isinstance(row, dict)
+        ]
+    # K3-R64: fake-client output is not exempt from the raw-content gate.
+    offline_raw_root = web._validate_raw_root(raw_root or DEFAULT_RAW_ROOT, require_gitignored=True)
+    return build_x_fetch_packet(queries=queries, results=results, grok_response=combined, expected_decision_date=expected_decision_date, generated_at=generated_at, raw_root=offline_raw_root, persist_raw=True, provider_annotation_urls=annotation_urls, extra_drop_ledger=query_drops + response_drops)
 
 
 def _combine_grok_responses(responses: list[str]) -> tuple[str, list[dict[str, str]]]:

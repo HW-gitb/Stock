@@ -24,6 +24,11 @@ from engine.us_short_schema_formats import FORMAT_CHECKER
 ROOT = web.ROOT
 SCHEMA_PATH = ROOT / "schemas" / "us_short_llm_theme_discovery_merge.schema.json"
 PROVIDER_SAMPLES_ROOT = ROOT / "provider_samples"
+_URL_TEXT_RE = re.compile(r"https?://[^\s<>()]+", re.I)
+_BOILERPLATE_TAIL_RE = re.compile(
+    r"(?:^|\s)(?:copyright|all rights reserved|disclaimer|subscribe|follow us|read more|source:)\b.*$",
+    re.I | re.M,
+)
 
 
 def default_discovery_path(expected_decision_date: str) -> Path:
@@ -233,7 +238,7 @@ def _validate_discovery(artifact: dict[str, Any]) -> None:
 def _verify_receipt(
     artifact: dict[str, Any], receipt: dict[str, Any], source_type: str,
     expected_decision_date: str,
-) -> dict[str, str]:
+) -> tuple[dict[str, str], dict[str, dict[str, Any]]]:
     try:
         if source_type == "web":
             web._validate_schema(receipt)
@@ -254,6 +259,17 @@ def _verify_receipt(
     provider_calls = contract.get("provider_call_count")
     if not isinstance(network_calls, int) or not isinstance(provider_calls, int) or network_calls < 0 or provider_calls < 0:
         raise ThemeDiscoveryMergeError(f"{source_type} receipt call counts are malformed")
+    expected_transport_providers = {"tavily", "deepseek"} if source_type == "web" else {"xai"}
+    transport_counts = contract.get("transport_response_counts")
+    if (
+        not isinstance(transport_counts, dict)
+        or set(transport_counts) != expected_transport_providers
+        or not all(isinstance(count, int) and count >= 0 for count in transport_counts.values())
+    ):
+        raise ThemeDiscoveryMergeError(f"{source_type} receipt transport evidence is malformed")
+    completed_transport_responses = sum(transport_counts.values())
+    if network_calls != completed_transport_responses or provider_calls != completed_transport_responses:
+        raise ThemeDiscoveryMergeError(f"{source_type} receipt call counts are not transport-derived")
     if expected_live and (network_calls <= 0 or provider_calls <= 0):
         raise ThemeDiscoveryMergeError(f"{source_type} live receipt has no observed provider/network calls")
     if not expected_live and (network_calls or provider_calls):
@@ -262,6 +278,7 @@ def _verify_receipt(
     if receipt.get("discovery_artifact_sha256") != expected:
         raise ThemeDiscoveryMergeError(f"{source_type} discovery artifact digest does not match receipt")
     actual_types: dict[str, str] = {}
+    raw_payloads: dict[str, dict[str, Any]] = {}
     artifact_refs = {ref.get("source_id"): ref for ref in artifact.get("source_refs", []) if isinstance(ref, dict)}
     artifact_types = {source_id: ref.get("source_type") for source_id, ref in artifact_refs.items()}
     cutoff = web._cutoff(expected_decision_date)
@@ -299,35 +316,67 @@ def _verify_receipt(
         _guard_source_pit(observed=observed, fetched=fetched, cutoff=cutoff)
         if _instant(artifact_refs[source_id].get("observed_at"), f"{source_type} artifact observed_at ({source_id})") != observed:
             raise ThemeDiscoveryMergeError(f"{source_type} artifact observation does not match the receipt: {source_id}")
-        if mode == "live_authorized":
-            raw_ref = ref.get("raw_receipt_ref")
-            if not isinstance(raw_ref, str) or not ref.get("raw_receipt_gitignored"):
-                raise ThemeDiscoveryMergeError(f"live {source_type} receipt is missing a gitignored raw receipt")
+        raw_ref = ref.get("raw_receipt_ref")
+        raw_available = isinstance(raw_ref, str) and bool(ref.get("raw_receipt_gitignored"))
+        if mode == "live_authorized" and not raw_available:
+            raise ThemeDiscoveryMergeError(f"live {source_type} receipt is missing a gitignored raw receipt")
+        if raw_available:
+            if not isinstance(raw_ref, str):
+                raise ThemeDiscoveryMergeError(f"{source_type} raw receipt reference is malformed")
             raw_path = _raw_receipt_path(raw_ref)
             if not raw_path.is_file() or not web._gitignored(raw_path):
-                raise ThemeDiscoveryMergeError(f"live {source_type} raw receipt is not gitignored")
+                raise ThemeDiscoveryMergeError(f"{source_type} raw receipt is not gitignored")
             if raw_path.name != f"{source_id.split(':', 1)[1]}.json" or raw_path.parent.name != expected_decision_date:
-                raise ThemeDiscoveryMergeError(f"live {source_type} raw receipt path is not bound to its source ID and decision date: {source_id}")
+                raise ThemeDiscoveryMergeError(f"{source_type} raw receipt path is not bound to its source ID and decision date: {source_id}")
             try:
                 raw_payload = web._read_json(raw_path)
             except web.WebThemeDiscoveryError as exc:
-                raise ThemeDiscoveryMergeError(f"live {source_type} raw receipt is unreadable") from exc
+                raise ThemeDiscoveryMergeError(f"{source_type} raw receipt is unreadable") from exc
             _guard_raw_content_digest(
                 raw_payload=raw_payload, expected_sha256=ref.get("content_sha256"),
             )
             for key in ("source_id", "source_type", "canonical_locator"):
                 if raw_payload.get(key) != ref.get(key):
-                    raise ThemeDiscoveryMergeError(f"live {source_type} raw receipt binding mismatch: {key}")
-            # A re-hashed raw payload is self-consistent, so the raw observation time must be bound to
-            # the receipt's PIT field as well; otherwise after-open evidence rides in behind a good hash.
+                    raise ThemeDiscoveryMergeError(f"{source_type} raw receipt binding mismatch: {key}")
             raw_time_key = "published_at" if source_type == "web" else "created_at"
-            if _instant(raw_payload.get(raw_time_key), f"live {source_type} raw {raw_time_key} ({source_id})") != observed:
-                raise ThemeDiscoveryMergeError(f"live {source_type} raw observation time does not match the receipt: {source_id}")
+            if _instant(raw_payload.get(raw_time_key), f"{source_type} raw {raw_time_key} ({source_id})") != observed:
+                raise ThemeDiscoveryMergeError(f"{source_type} raw observation time does not match the receipt: {source_id}")
+            raw_payloads[source_id] = raw_payload
         actual_types[source_id] = source_type
     artifact_ids = {ref.get("source_id") for ref in artifact.get("source_refs", [])}
     if artifact_ids != set(actual_types):
         raise ThemeDiscoveryMergeError(f"{source_type} receipt source IDs do not cover artifact refs")
-    return actual_types
+    return actual_types, raw_payloads
+
+
+def _raw_payload_mentions_ticker(raw_payload: dict[str, Any], ticker: str) -> bool:
+    """Count only a standalone ticker/cashtag in frozen title/body evidence.
+
+    URLs and boilerplate lines are deliberately removed before matching: their occurrence is not a
+    provider assertion about the company.  Unknown payload shapes or non-canonical tickers never
+    corroborate, so ambiguity always demotes rather than upgrades a member.
+    """
+    from engine.us_short_eligibility_gate import canonical_us_ticker
+
+    canonical = canonical_us_ticker(ticker)
+    if canonical is None:
+        return False
+    text_key = "content" if raw_payload.get("source_type") == "web" else "text"
+    fields = [raw_payload.get("title"), raw_payload.get(text_key)]
+    if not all(isinstance(value, str) for value in fields):
+        return False
+    evidence = "\n".join(fields)
+    evidence = _URL_TEXT_RE.sub(" ", evidence)
+    evidence = _BOILERPLATE_TAIL_RE.sub("", evidence)
+    return _evidence_mentions_canonical_ticker(evidence, canonical)
+
+
+def _evidence_mentions_canonical_ticker(evidence: str, canonical: str) -> bool:
+    """A bare ticker is upper-case; a dollar-prefixed cashtag is explicitly case-insensitive."""
+    boundary = r"[A-Za-z0-9]"
+    bare = rf"(?<!{boundary}){re.escape(canonical)}(?!{boundary})"
+    cashtag = rf"(?<!{boundary})\${re.escape(canonical)}(?!{boundary})"
+    return re.search(bare, evidence) is not None or re.search(cashtag, evidence, re.I) is not None
 
 
 def _theme_key(theme: dict[str, Any]) -> str:
@@ -350,8 +399,13 @@ def merge_web_x_discovery(
     ).isoformat()
     _validate_discovery(web_artifact)
     _validate_discovery(x_artifact)
-    web_types = _verify_receipt(web_artifact, web_receipt, "web", expected_decision_date)
-    x_types = _verify_receipt(x_artifact, x_receipt, "x", expected_decision_date)
+    web_types, web_raw_payloads = _verify_receipt(
+        web_artifact, web_receipt, "web", expected_decision_date,
+    )
+    x_types, x_raw_payloads = _verify_receipt(
+        x_artifact, x_receipt, "x", expected_decision_date,
+    )
+    raw_payloads_by_id = {**web_raw_payloads, **x_raw_payloads}
     refs_by_id: dict[str, dict[str, str]] = {}
     receipt_refs_by_id: dict[str, dict[str, Any]] = {}
     for receipt in (web_receipt, x_receipt):
@@ -361,7 +415,8 @@ def merge_web_x_discovery(
         for ref in artifact["source_refs"]:
             source_id = ref["source_id"]
             prior = refs_by_id.get(source_id)
-            candidate = {"source_id": source_id, "source_type": source_type, "observed_at": ref["observed_at"]}
+            candidate = {"source_id": source_id, "source_type": source_type, "observed_at": ref["observed_at"],
+                         "evidence_attestation": receipt_refs_by_id[source_id].get("evidence_attestation", "provider_attested")}
             if prior is not None and prior != candidate:
                 raise ThemeDiscoveryMergeError(f"source ID has conflicting definitions: {source_id}")
             refs_by_id[source_id] = candidate
@@ -394,6 +449,7 @@ def merge_web_x_discovery(
     # (5.0) no matter what this manifest says.  What was pruned is kept per member in the manifest.
     from engine.us_short_eligibility_gate import canonical_us_ticker
     redundant_by_member: dict[tuple[str, str], list[str]] = {}
+    merge_drops: list[dict[str, Any]] = []
     for theme in merged.values():
         for ticker, row in theme["members"].items():
             bound = [refs_by_id[ref_id] for ref_id in row["source_ref_ids"] if ref_id in refs_by_id]
@@ -401,6 +457,26 @@ def merge_web_x_discovery(
             if redundant:
                 row["source_ref_ids"] = sorted(set(row["source_ref_ids"]) - set(redundant))
                 redundant_by_member[(theme["theme_id"], canonical_us_ticker(ticker) or ticker)] = redundant
+            retained_bound = [refs_by_id[ref_id] for ref_id in row["source_ref_ids"] if ref_id in refs_by_id]
+            if _corroboration(retained_bound)[1] != "both":
+                continue
+            verified = [
+                ref["source_id"] for ref in retained_bound
+                if (raw_payload := raw_payloads_by_id.get(ref["source_id"])) is not None
+                and _raw_payload_mentions_ticker(raw_payload, ticker)
+            ]
+            verified_bound = [refs_by_id[ref_id] for ref_id in verified]
+            _, verified_tier, _ = _corroboration(verified_bound)
+            if verified_tier == "both":
+                row["source_ref_ids"] = sorted(verified)
+                continue
+            prior = row["source_ref_ids"]
+            row["source_ref_ids"] = sorted(verified)
+            merge_drops.append({
+                "stage": "theme", "theme_id": theme["theme_id"],
+                "reason": "member_evidence_demoted_unbound_ticker",
+                "detail": f"{canonical_us_ticker(ticker) or ticker}:{','.join(sorted(set(prior) - set(verified)))}",
+            })
     discovery_input = {"source_refs": list(refs_by_id.values()), "themes": []}
     for theme in merged.values():
         theme = dict(theme)
@@ -409,7 +485,6 @@ def merge_web_x_discovery(
     from runners.us_short_llm_theme_discovery import normalize_discovery_payload
     # §五 red-line #4 extends past the fetch layer: one theme the ingest cannot normalize must be
     # dropped with a ledger row, not allowed to abort the whole week's merge.
-    merge_drops: list[dict[str, Any]] = []
     keepable: list[dict[str, Any]] = []
     for theme in discovery_input["themes"]:
         try:
@@ -440,9 +515,14 @@ def merge_web_x_discovery(
             sources, tier, residual = _corroboration(bound)
             if residual:
                 raise ThemeDiscoveryMergeError(f"member evidence pruning failed for {member['ticker']}")
+            model_transcribed_x_evidence = any(
+                ref["source_type"] == "x" and ref.get("evidence_attestation") == "model_transcribed"
+                for ref in bound
+            )
             row = {"ticker": member["ticker"], "discovery_sources": sources, "evidence_tier": tier,
                    "source_ref_ids": member["source_ref_ids"],
-                   "redundant_source_ref_ids": redundant_by_member.get((theme["theme_id"], member["ticker"]), [])}
+                   "redundant_source_ref_ids": redundant_by_member.get((theme["theme_id"], member["ticker"]), []),
+                   "model_transcribed_x_evidence": model_transcribed_x_evidence}
             member_rows.append({"theme_id": theme["theme_id"], **row})
             theme_member_rows.append(row)
         theme_rows.append({"theme_id": theme["theme_id"], "discovery_sources": theme_sources, "members": theme_member_rows})
@@ -450,9 +530,9 @@ def merge_web_x_discovery(
         "schema_name": "us_short_llm_theme_discovery_merge", "schema_version": "1.0.0", "generated_at": generated_at,
         "decision_clock": {"expected_decision_date": expected_decision_date, "cutoff_policy": "before_decision_open_et", "pit_enforced": True},
         "merge_contract": {"producer_kind": "web_x_discovery_merge", "execution_mode": "offline_local_receipts", "scoring_eligible": False, "top15_effect_enabled": False, "operation_advice_effect_enabled": False, "dynamic_seats_enabled": False, "theme_probe_enabled": False, "lifecycle_actions_enabled": False},
-        "input_artifact_sha256": {"web": web._discovery_evidence_hash(web_artifact), "x": web._discovery_evidence_hash(x_artifact)}, "source_refs": [receipt_refs_by_id[source_id] for source_id in sorted(receipt_refs_by_id)], "themes": theme_rows,
+        "input_artifact_sha256": {"web": web._discovery_evidence_hash(web_artifact), "x": web._discovery_evidence_hash(x_artifact)}, "source_refs": [dict(receipt_refs_by_id[source_id], evidence_attestation=receipt_refs_by_id[source_id].get("evidence_attestation", "provider_attested")) for source_id in sorted(receipt_refs_by_id)], "themes": theme_rows,
         "drop_ledger": sorted(merge_drops, key=lambda row: (row["theme_id"], row["reason"])),
-        "summary": {"web_theme_count": len(web_artifact["themes"]), "x_theme_count": len(x_artifact["themes"]), "merged_theme_count": len(theme_rows), "dropped_theme_count": len(merge_drops), "both_member_count": sum(row["evidence_tier"] == "both" for row in member_rows), "single_member_count": sum(row["evidence_tier"] == "single" for row in member_rows), "zero_member_count": sum(row["evidence_tier"] is None for row in member_rows), "redundant_member_count": sum(bool(row["redundant_source_ref_ids"]) for row in member_rows)},
+        "summary": {"web_theme_count": len(web_artifact["themes"]), "x_theme_count": len(x_artifact["themes"]), "merged_theme_count": len(theme_rows), "dropped_theme_count": sum(row["reason"] == "theme_rejected_by_ingest" for row in merge_drops), "member_evidence_demotion_count": sum(row["reason"] == "member_evidence_demoted_unbound_ticker" for row in merge_drops), "both_member_count": sum(row["evidence_tier"] == "both" for row in member_rows), "single_member_count": sum(row["evidence_tier"] == "single" for row in member_rows), "zero_member_count": sum(row["evidence_tier"] is None for row in member_rows), "redundant_member_count": sum(bool(row["redundant_source_ref_ids"]) for row in member_rows), "model_transcribed_x_member_count": sum(row["model_transcribed_x_evidence"] for row in member_rows)},
     }
     _schema_validate(SCHEMA_PATH, manifest)
     return merged_artifact, manifest

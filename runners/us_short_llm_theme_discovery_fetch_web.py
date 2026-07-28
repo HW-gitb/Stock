@@ -86,7 +86,32 @@ CONFORMANCE_GUARDS = ("_guard_generated_before_open",)
 # hand back a signed/bearer URL whose credential sits in a generic parameter (`?token=`, `?sig=`,
 # `?auth=`) that no keyword list applied to whole-URL text catches, and `_canonical_locator` keeps the
 # query verbatim, so it would ride into the receipt and the raw path. Matched on the parsed KEY only.
-_LIVE_ATTESTATION = object()
+_TRANSPORT_ISSUER = object()
+
+
+class _LiveTransport:
+    """Private, response-derived capability for a live receipt.
+
+    Callers cannot mint a live label with booleans or loop counts.  Only a real client's request
+    path receives this reporter, and it records after a response object has actually completed.
+    """
+
+    def __init__(self, issuer: object, providers: tuple[str, ...]):
+        if issuer is not _TRANSPORT_ISSUER:
+            raise WebThemeDiscoveryError("live transport capability is runner-private")
+        self._completed = {provider: 0 for provider in providers}
+
+    def _record_completed_response(self, provider: str) -> None:
+        if provider not in self._completed:
+            raise WebThemeDiscoveryError("unknown live transport provider")
+        self._completed[provider] += 1
+
+    def _snapshot(self) -> dict[str, int]:
+        return dict(self._completed)
+
+
+def _new_live_transport(*providers: str) -> _LiveTransport:
+    return _LiveTransport(_TRANSPORT_ISSUER, providers or ("tavily", "deepseek"))
 
 
 def _normalized_query_order(query: str) -> str:
@@ -791,12 +816,18 @@ def _regroup_model_identity(*, served_model: Any = None, system_fingerprints: li
 def _regroup_chunk_payload(
         deepseek_client: Any, *, expected_decision_date: str, chunk: list[dict[str, Any]],
         expected_served_model: str | None, chunk_index: int,
+        transport: _LiveTransport | None = None,
 ) -> tuple[str | None, str | None, list[Any]]:
     """Read one provider-controlled regroup chunk without mutating batch state."""
     response = deepseek_client.chat.completions.create(
         model=DEEPSEEK_MODEL, temperature=0, max_tokens=2500,
         messages=[{"role": "user", "content": _build_deepseek_prompt(expected_decision_date, chunk)}],
     )
+    # Record the transport the moment the response object returns, BEFORE the content checks: a
+    # truncated or identity-changed chunk is still a completed provider response that was paid
+    # for, and the receipt's counts must reflect transport rather than admissibility.
+    if transport is not None:
+        transport._record_completed_response("deepseek")
     served_model = getattr(response, "model", None)
     served_model = served_model if isinstance(served_model, str) and served_model else None
     if expected_served_model is not None and served_model != expected_served_model:
@@ -927,7 +958,7 @@ def build_web_fetch_packet(
     execution_mode: str = "offline_fake_client", network_access_performed: bool = False,
     provider_calls_performed: bool = False,
     network_call_count: int = 0, provider_call_count: int = 0,
-    _live_attestation: object | None = None,
+    _live_transport: _LiveTransport | None = None,
     extra_drop_ledger: list[dict[str, str]] | None = None,
     regroup_model_identity: dict[str, Any] | None = None,
     regroup_failed: bool = False,
@@ -940,10 +971,19 @@ def build_web_fetch_packet(
     _validate_fetch_clock(fetched, generated)
     if execution_mode not in {"offline_fake_client", "live_authorized"}:
         raise WebThemeDiscoveryError("invalid execution mode")
-    if execution_mode == "live_authorized" and _live_attestation is not _LIVE_ATTESTATION:
-        raise WebThemeDiscoveryError("live packet must be produced by the gated live runner")
+    if execution_mode == "live_authorized" and not isinstance(_live_transport, _LiveTransport):
+        raise WebThemeDiscoveryError("live packet requires response-derived runner transport")
     if not isinstance(network_call_count, int) or not isinstance(provider_call_count, int) or network_call_count < 0 or provider_call_count < 0:
         raise WebThemeDiscoveryError("execution call counts must be non-negative integers")
+    if execution_mode == "live_authorized":
+        transport_response_counts = _live_transport._snapshot()
+        completed_response_count = sum(transport_response_counts.values())
+        network_access_performed = completed_response_count > 0
+        provider_calls_performed = completed_response_count > 0
+        network_call_count = completed_response_count
+        provider_call_count = completed_response_count
+    else:
+        transport_response_counts = {"tavily": 0, "deepseek": 0}
     if execution_mode == "offline_fake_client" and (network_access_performed or provider_calls_performed or network_call_count or provider_call_count):
         raise WebThemeDiscoveryError("offline packet cannot attest network/provider execution")
     if execution_mode == "live_authorized" and (network_call_count <= 0 or provider_call_count <= 0):
@@ -1025,6 +1065,7 @@ def build_web_fetch_packet(
             "scoring_eligible": False, "top15_effect_enabled": False,
             "operation_advice_effect_enabled": False, "dynamic_seats_enabled": False,
             "theme_probe_enabled": False, "lifecycle_actions_enabled": False,
+            "transport_response_counts": transport_response_counts,
             "regroup_model": model_identity,
         },
         "queries": queries, "source_refs": receipt_refs,
@@ -1055,9 +1096,9 @@ def build_web_fetch_packet(
 
 
 class TavilyClient:
-    def __init__(self, api_key: str, *, timeout: float = 30.0):
+    def __init__(self, api_key: str, *, timeout: float = 30.0, _live_transport: _LiveTransport | None = None):
         self.api_key = _require_single_tavily_api_key(api_key)
-        self.timeout, self.network_call_count = timeout, 0
+        self.timeout, self.network_call_count, self._live_transport = timeout, 0, _live_transport
 
     def search(self, query: str) -> list[dict[str, Any]]:
         body = json.dumps({
@@ -1068,7 +1109,10 @@ class TavilyClient:
         try:
             self.network_call_count += 1
             with urllib.request.urlopen(req, timeout=self.timeout) as response:
-                payload = json.loads(response.read().decode("utf-8"))
+                response_bytes = response.read()
+            if self._live_transport is not None:
+                self._live_transport._record_completed_response("tavily")
+            payload = json.loads(response_bytes.decode("utf-8"))
         except Exception as exc:
             raise WebThemeDiscoveryError(f"Tavily request failed: {type(exc).__name__}") from exc
         results = payload.get("results") if isinstance(payload, dict) else None
@@ -1097,6 +1141,100 @@ def _require_single_tavily_api_key(value: Any) -> str:
     return value
 
 
+def execute_live_web_orchestration(
+    *, queries: list[str], expected_decision_date: str, tavily: Any, deepseek_client: Any,
+    transport: _LiveTransport, reserve_regroup_budget: bool = True,
+) -> dict[str, Any]:
+    """The live web orchestration, split out so tests can EXECUTE it.
+
+    Everything the live branch does between the clients and the receipt lives here: the search
+    loop, per-query degradation, intake, chunked regroup, per-chunk isolation and model identity.
+    Before this split the whole body sat under the K3-R34 freeze `raise`, so no test could reach
+    it and four defects (a prompt builder returning `None`, a no-rows path that raised, a chunk
+    loop that discarded its siblings, a re-authored prompt) were only findable by reading.
+
+    It deliberately mints NO packet and NO `live_authorized` label: the attestation still comes
+    only from a real transport inside `build_web_fetch_packet`, so making the logic testable does
+    not make the evidence forgeable.  The unconditional Tavily reservation stays in the entrypoint
+    beside the credential check so their order remains provable there; only the regroup
+    reservation lives here, because its size is the chunk count computed below.
+    `reserve_regroup_budget=False` is for tests only — it skips the operator's spend ledger,
+    never a correctness gate.
+    """
+    results: list[dict[str, Any]] = []
+    query_drops: list[dict[str, str]] = []
+    attempted_tavily_calls = 0
+    for query in queries:
+        try:
+            attempted_tavily_calls += 1
+            batch = tavily.search(query)
+            if isinstance(batch, list):
+                results.extend(batch)
+            else:
+                query_drops.append({"stage": "search_result", "reason": "malformed_result_batch", "detail": query})
+        except Exception as exc:
+            query_drops.append({"stage": "search_result", "reason": "provider_response_dropped", "detail": type(exc).__name__})
+    fetched_now = datetime.now(timezone.utc)
+    rows = _normalize_search_results(
+        results, expected_decision_date=expected_decision_date,
+        fetched_at=fetched_now, raw_root=None, persist_raw=False,
+    )[1]
+    if not rows:
+        llm_text = json.dumps({"themes": []})
+        attempted_deepseek_calls = 0
+        model_identity = _regroup_model_identity()
+        regroup_failed = False
+        regroup_attempted = False
+    else:
+        chunks = _chunk_regroup_rows(rows)
+        attempted_deepseek_calls = 0
+        if reserve_regroup_budget:
+            _reserve_provider_budget(
+                "web", "deepseek", expected_decision_date, call_count=len(chunks), query_scope=queries,
+            )
+        merged_themes: list[Any] = []
+        model_identity = _regroup_model_identity()
+        regroup_attempted = True
+        successful_chunks = 0
+        fingerprints: list[str] = []
+        for chunk_index, chunk in enumerate(chunks):
+            try:
+                attempted_deepseek_calls += 1
+                parsed = _ingest_provider_item(
+                    query_drops, stage="llm", fallback_detail=f"chunk[{chunk_index}]",
+                    ingest=lambda: _regroup_chunk_payload(
+                        deepseek_client,
+                        expected_decision_date=expected_decision_date,
+                        chunk=chunk,
+                        expected_served_model=model_identity["served_model"],
+                        chunk_index=chunk_index,
+                        transport=transport,
+                    ),
+                )
+                if parsed is None:
+                    continue
+                served_model, fingerprint, themes = parsed
+                if model_identity["served_model"] is None:
+                    model_identity["served_model"] = served_model
+                if fingerprint is not None:
+                    fingerprints.append(fingerprint)
+                merged_themes.extend(themes)
+                successful_chunks += 1
+            except Exception as exc:
+                query_drops.append({"stage": "llm", "reason": "regroup_chunk_dropped", "detail": f"chunk[{chunk_index}]:{type(exc).__name__}"})
+        model_identity["system_fingerprints"] = sorted(set(fingerprints))
+        regroup_failed = successful_chunks == 0
+        if regroup_failed:
+            query_drops.append({"stage": "llm", "reason": "regroup_response_invalid", "detail": "no_chunk_survived"})
+        llm_text = json.dumps({"themes": merged_themes})
+    return {
+        "results": results, "llm_response": llm_text, "query_drops": query_drops,
+        "fetched_at": fetched_now, "regroup_model_identity": model_identity,
+        "regroup_failed": regroup_failed, "regroup_attempted": regroup_attempted,
+        "provider_call_count": attempted_tavily_calls + attempted_deepseek_calls,
+    }
+
+
 def run_web_fetch(
     *, queries: list[str] | tuple[str, ...], expected_decision_date: str, generated_at: str,
     search_client: Any | None = None, deepseek_client: Any | None = None,
@@ -1113,91 +1251,38 @@ def run_web_fetch(
         )
         if not confirm_user_authorization:
             raise WebThemeDiscoveryError("live execution requires --confirm-user-authorization")
+        if search_client is not None or deepseek_client is not None:
+            raise WebThemeDiscoveryError("live execution does not accept injected clients")
         # K3-R51: validate the environment before even a budget reservation.  Do not split or pick a
         # token: an ambiguous credential must consume neither quota nor a provider request.
         tavily_api_key = _require_single_tavily_api_key(os.environ.get("TAVILY_API_KEY", ""))
-        tavily = search_client or TavilyClient(tavily_api_key)
-        if deepseek_client is None:
-            # This branch remains unreachable while live is frozen.  A future
-            # separately authorized unfreeze must provide a reviewed US-local
-            # adapter; US-short may never reach into an A-share module.
-            raise WebThemeDiscoveryError("live DeepSeek client must be supplied by a US-short integration")
-        # Tavily is the only unconditional web provider: every reserved call is attempted.
+        transport = _new_live_transport()
+        tavily = TavilyClient(tavily_api_key, _live_transport=transport)
+        # This branch remains unreachable while live is frozen.  A future separately authorized
+        # unfreeze must supply a reviewed US-local, transport-reporting DeepSeek adapter; an injected
+        # object cannot mint a live receipt.
+        raise WebThemeDiscoveryError("live DeepSeek transport adapter is not implemented")
+        # Tavily is the only unconditional web provider: every reserved call is attempted.  This
+        # stays here, after the credential check, so that ordering remains provable at this site.
         _reserve_provider_budget(
             "web", "tavily", expected_decision_date, call_count=len(queries), query_scope=queries,
         )
-        results: list[dict[str, Any]] = []
-        query_drops: list[dict[str, str]] = []
-        attempted_tavily_calls = 0
-        for query in queries:
-            try:
-                attempted_tavily_calls += 1
-                batch = tavily.search(query)
-                if isinstance(batch, list):
-                    results.extend(batch)
-                else:
-                    query_drops.append({"stage": "search_result", "reason": "malformed_result_batch", "detail": query})
-            except Exception as exc:
-                query_drops.append({"stage": "search_result", "reason": "provider_response_dropped", "detail": type(exc).__name__})
-        fetched_now = datetime.now(timezone.utc)
-        rows = _normalize_search_results(
-            results, expected_decision_date=expected_decision_date,
-            fetched_at=fetched_now, raw_root=None, persist_raw=False,
-        )[1]
-        if not rows:
-            llm_text = json.dumps({"themes": []})
-            attempted_deepseek_calls = 0
-            model_identity = _regroup_model_identity()
-            regroup_failed = False
-            regroup_attempted = False
-        else:
-            chunks = _chunk_regroup_rows(rows)
-            attempted_deepseek_calls = 0
-            _reserve_provider_budget(
-                "web", "deepseek", expected_decision_date, call_count=len(chunks), query_scope=queries,
-            )
-            regroup_failed = False
-            merged_themes: list[Any] = []
-            model_identity = _regroup_model_identity()
-            regroup_attempted = True
-            successful_chunks = 0
-            fingerprints: list[str] = []
-            for chunk_index, chunk in enumerate(chunks):
-                attempted_deepseek_calls += 1
-                parsed = _ingest_provider_item(
-                    query_drops, stage="llm", fallback_detail=f"chunk[{chunk_index}]",
-                    ingest=lambda: _regroup_chunk_payload(
-                        deepseek_client,
-                        expected_decision_date=expected_decision_date,
-                        chunk=chunk,
-                        expected_served_model=model_identity["served_model"],
-                        chunk_index=chunk_index,
-                    ),
-                )
-                if parsed is None:
-                    continue
-                served_model, fingerprint, themes = parsed
-                if model_identity["served_model"] is None:
-                    model_identity["served_model"] = served_model
-                if fingerprint is not None:
-                    fingerprints.append(fingerprint)
-                merged_themes.extend(themes)
-                successful_chunks += 1
-            model_identity["system_fingerprints"] = sorted(set(fingerprints))
-            regroup_failed = successful_chunks == 0
-            if regroup_failed:
-                query_drops.append({"stage": "llm", "reason": "regroup_response_invalid", "detail": "no_chunk_survived"})
-            llm_text = json.dumps({"themes": merged_themes})
+        outcome = execute_live_web_orchestration(
+            queries=queries, expected_decision_date=expected_decision_date,
+            tavily=tavily, deepseek_client=deepseek_client, transport=transport,
+        )
+        fetched_now = outcome["fetched_at"]
         packet, receipt, summary = build_web_fetch_packet(
-            queries=queries, search_results=results, llm_response=llm_text,
+            queries=queries, search_results=outcome["results"], llm_response=outcome["llm_response"],
             expected_decision_date=expected_decision_date, generated_at=fetched_now.isoformat(),
             raw_root=raw_root, persist_raw=True, fetched_at=fetched_now.isoformat(), execution_mode="live_authorized",
             network_access_performed=True, provider_calls_performed=True,
-            network_call_count=attempted_tavily_calls + attempted_deepseek_calls,
-            provider_call_count=attempted_tavily_calls + attempted_deepseek_calls,
-            _live_attestation=_LIVE_ATTESTATION,
-            extra_drop_ledger=query_drops,
-            regroup_model_identity=model_identity, regroup_failed=regroup_failed, regroup_attempted=regroup_attempted,
+            network_call_count=outcome["provider_call_count"],
+            provider_call_count=outcome["provider_call_count"],
+            _live_transport=transport,
+            extra_drop_ledger=outcome["query_drops"],
+            regroup_model_identity=outcome["regroup_model_identity"],
+            regroup_failed=outcome["regroup_failed"], regroup_attempted=outcome["regroup_attempted"],
         )
         return packet, receipt, summary
     if search_client is None or deepseek_client is None:
@@ -1226,11 +1311,14 @@ def run_web_fetch(
     except Exception as exc:
         llm_text = json.dumps({"themes": []})
         query_drops.append({"stage": "llm", "reason": "provider_response_dropped", "detail": type(exc).__name__})
+    # K3-R64: offline fixtures are still producer output.  Persist the exact
+    # normalized bytes so the downstream independent-document guard runs here too.
+    offline_raw_root = _validate_raw_root(raw_root or DEFAULT_RAW_ROOT, require_gitignored=True)
     return build_web_fetch_packet(
         queries=queries, search_results=results, llm_response=llm_text,
         expected_decision_date=expected_decision_date, generated_at=generated_at,
         execution_mode="offline_fake_client", network_access_performed=False,
-        provider_calls_performed=False,
+        provider_calls_performed=False, raw_root=offline_raw_root, persist_raw=True,
         extra_drop_ledger=query_drops,
     )
 
