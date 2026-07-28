@@ -130,20 +130,46 @@ class OfflineProductionEntryGuardTests(unittest.TestCase):
         self.assertEqual(cat_members["MSFT"]["evidence_tier"], "both")
         self.assertGreater(cat_manifest["summary"]["member_evidence_demotion_count"], 0)
 
-    def test_production_offline_entry_guard_turns_red_when_either_gate_is_hollowed(self):
+    # Three separately named controls, one per gate.  They deliberately assert the OBSERVABLE
+    # outcome of hollowing a gate rather than wrapping their own assertions in `assertRaises`:
+    # a control that asserts its own inline assertions fail cannot show that the real test above
+    # would die, and it passes just as happily when something unrelated raises.
+
+    def test_production_default_entry_turns_red_when_persistence_gate_is_removed(self):
+        """Without the frozen raw receipts the merge cannot verify evidence and must refuse."""
         with mock.patch.object(web, "_flush_raw_writes", return_value=None), \
              mock.patch.object(xfetch.web, "_flush_raw_writes", return_value=None):
             packets = self._packets()
             with self.assertRaises(merge.ThemeDiscoveryMergeError):
                 self._merge_and_knife2(packets)
 
+    def test_production_default_entry_turns_red_when_raw_digest_gate_is_removed(self):
+        """A frozen raw receipt edited after the fact must not pass its content digest."""
+        packets = self._packets()
+        web_receipt = packets[1]
+        raw_ref = next(ref["raw_receipt_ref"] for ref in web_receipt["source_refs"])
+        raw_path = web.ROOT / raw_ref
+        tampered = json.loads(raw_path.read_text(encoding="utf-8"))
+        tampered["title"] = "tampered title"
+        raw_path.write_text(json.dumps(tampered), encoding="utf-8")
+        with self.assertRaises(merge.ThemeDiscoveryMergeError):
+            self._merge_and_knife2(packets)
+
+    def test_production_default_entry_turns_red_when_ticker_binding_gate_is_removed(self):
+        """Hollowing the ticker check must flip the cat-photo control's own outcome."""
         cat = self._packets(cat_aapl=True)
+        armed_manifest, armed_validated, _ = self._merge_and_knife2(cat)
+        armed = {member["ticker"]: member for theme in armed_validated for member in theme["members"]}
+        self.assertNotEqual(armed["AAPL"]["evidence_tier"], "both")
+        self.assertGreater(armed_manifest["summary"]["member_evidence_demotion_count"], 0)
+
+        hollowed = self._packets(cat_aapl=True)
         with mock.patch.object(merge, "_raw_payload_mentions_ticker", return_value=True):
-            with self.assertRaises(AssertionError):
-                manifest, validated, _ = self._merge_and_knife2(cat)
-                members = {member["ticker"]: member for theme in validated for member in theme["members"]}
-                self.assertNotEqual(members["AAPL"]["evidence_tier"], "both")
-                self.assertGreater(manifest["summary"]["member_evidence_demotion_count"], 0)
+            manifest, validated, _ = self._merge_and_knife2(hollowed)
+        members = {member["ticker"]: member for theme in validated for member in theme["members"]}
+        self.assertEqual(members["AAPL"]["evidence_tier"], "both",
+                         "with the gate hollowed the unrelated X post must corroborate again")
+        self.assertEqual(manifest["summary"]["member_evidence_demotion_count"], 0)
 
 
 if __name__ == "__main__":

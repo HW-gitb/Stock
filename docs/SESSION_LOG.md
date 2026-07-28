@@ -1,5 +1,12 @@
 # Session Log
 
+## 2026-07-28 - Claude Code 移植生产入口守卫的挖空对照 (自指改为可观测翻转)
+
+- **Verdict/Action**: 已提交。从那份作废草稿里只移植了唯一值得留的东西 —— 挖空对照拆成三个各自具名的测试。三个里只有两个照搬（持久化门、原文摘要门，后者是两版都没有的新覆盖）；第三个（票代码绑定门）它写成了跟我原来一样的自指对照，未照搬，改写为断言可观测翻转。
+- **Required**: 无。判据与拒绝照搬第三个的理由落 `docs/system_risk_register.md`（单一来源）；同处新增一条 Optional 记 `provider_samples` 冻结原文跨运行相撞的陷阱。
+- **Verify**: review-evidence:fb397281b3d2。整读被移植的三个测试体与 master 现有守卫。包 `141 OK`（此前 139，一个测试变三个）。三个对照均自证：原文摘要门那个靠 `assertRaises` 真的抓到篡改后的拒绝；票代码门那个直接断言「挖空后猫照片重新拿到 `both`、降级计数归零」，绿即证明该门承重。本轮另一处教训已记 Optional —— 验证 K3-R67 时因固定 URL 撞上 `provider_samples` 残留，一度误判该 finding 未修，改用唯一 URL 后推翻。
+- **Next**: 解冻链第 ④ 步 K3-R31/R32；另 `a-short-3` 的 `cd8bbd67` 仍未合
+
 ## 2026-07-28 - Claude Code 落地 US-short K3-R66/R67 权威实现 (rebase 而非合并，主树 `fa3a2b90`)
 
 - **Verdict/Action**: 已落 master `fa3a2b90`。同一 finding 的两份实现裁定为：fe9c `94a81ebc`（已审 PASS）为权威；主树那份未提交草稿从未过审查门且缺两条已批准 Required，由该执行窗口作废并备份。落地方式改为 **rebase**：fe9c 落后 master 多笔 us_short 提交，直接合会回退 `4f235717`/`b3930e4f`。
