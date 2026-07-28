@@ -45,11 +45,17 @@ def build_a_short_run_identity(trade_date: str, candidates: list[dict[str, Any]]
     }
 
 
-def validate_analysis_input_file(path: str | Path, label: str | None = None) -> dict[str, Any]:
+def validate_analysis_input_file(
+    path: str | Path, label: str | None = None, *, official_input: bool = False
+) -> dict[str, Any]:
     input_path = Path(path)
     with input_path.open("r", encoding="utf-8") as f:
         payload = json.load(f)
-    validate_analysis_input_contract(payload, label=label or f"analysis_input {input_path}")
+    validate_analysis_input_contract(
+        payload,
+        label=label or f"analysis_input {input_path}",
+        official_input=official_input,
+    )
     return payload
 
 
@@ -57,9 +63,11 @@ def validate_analysis_input_contract(
     payload: Any,
     schema_path: str | Path = ANALYSIS_INPUT_SCHEMA_PATH,
     label: str = "analysis_input",
+    *,
+    official_input: bool = False,
 ) -> None:
     validate_json_schema(payload, schema_path=schema_path, label=label)
-    _validate_pit_invariants(payload, label=label)
+    _validate_pit_invariants(payload, label=label, official_input=official_input)
 
 
 def validate_json_schema(
@@ -86,7 +94,7 @@ def validate_json_schema(
         raise ValueError(f"{label} schema validation failed at {path}: {first.message}")
 
 
-def _validate_pit_invariants(payload: dict[str, Any], label: str) -> None:
+def _validate_pit_invariants(payload: dict[str, Any], label: str, official_input: bool = False) -> None:
     trade_date = _parse_date8(payload.get("trade_date"), "trade_date", label)
 
     source = payload.get("source") or {}
@@ -263,10 +271,19 @@ def _validate_pit_invariants(payload: dict[str, Any], label: str) -> None:
         )
         quote = candidate.get("quote") or {}
         source_date = quote.get("source_trade_date")
+        if official_input and source_date is None:
+            raise AnalysisInputContractError(
+                f"{label} official input requires candidates[{index}].quote.source_trade_date"
+            )
         if source_date is not None:
             parsed_source_date = _parse_date8(
                 source_date, f"candidates[{index}].quote.source_trade_date", label
             )
+            if official_input and parsed_source_date != price_data_through:
+                raise AnalysisInputContractError(
+                    f"{label} official input requires candidates[{index}].quote.source_trade_date "
+                    f"{parsed_source_date} == price_data_through {price_data_through}"
+                )
             if parsed_source_date > price_data_through:
                 raise AnalysisInputContractError(
                     f"{label} PIT validation failed: candidates[{index}].quote.source_trade_date "

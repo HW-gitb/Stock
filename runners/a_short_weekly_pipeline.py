@@ -95,6 +95,15 @@ PRODUCTION_PRICE_FETCH_CALENDAR_DAYS = 120
 P2_SHADOW_PRICE_FETCH_CALENDAR_DAYS = 450
 
 
+def _is_official_analysis_input_path(path: str | Path) -> bool:
+    """Only the one-click EGS publication directory opts into the strict input clock."""
+    try:
+        Path(path).resolve().relative_to((ROOT / "result" / "a_short").resolve())
+        return True
+    except ValueError:
+        return False
+
+
 def _industry_trend_for_candidate(cand: dict, expected_as_of: str) -> tuple[str, dict]:
     """Accept only source-bound deterministic heat evidence for formal M6.7 use."""
     industry = cand.get("industry") or {}
@@ -585,7 +594,10 @@ def normalize_candidate(cand: dict, price_series: list, overlay_row: dict, iv_pc
     return {
         "ts_code": cand.get("ts_code"), "name": cand.get("name"),
         "analysis_role": cand.get("analysis_role"),
-        "close": (cand.get("quote") or {}).get("close"),
+        # Candidate technical indicators are calculated from price_series.  The
+        # current close must share that same settled bar; the EGS quote remains
+        # source lineage only and is never an alternative price authority.
+        "close": (price_series[-1].get("close") if price_series else None),
         "price_series": list(price_series or []),
         "esp_score": sc.get("esp_score"), "l4_score": sc.get("l4_score"),
         "egs_score": sc.get("final_score"),   # EGS 质量总分(M6.7 渲染并列展示,与风控星级区分)
@@ -4080,14 +4092,14 @@ def main(argv=None, pro_factory=None, price_provider=None, semantic_provider=Non
 
     # analysis_input 消费方校验(#R-ASHORT-WEEKLY-ANALYSIS-INPUT-CONSUMER-VALIDATION-GAP):
     # 用仓库契约校验 schema + PIT,并强制 trade_date == --as-of(拒错配/未来/陈旧批次)。
+    official_input = _is_official_analysis_input_path(args.analysis_input)
     try:
-        ai = validate_analysis_input_file(args.analysis_input, label="weekly analysis_input")
+        ai = validate_analysis_input_file(
+            args.analysis_input,
+            label="weekly analysis_input",
+            official_input=official_input,
+        )
     except (OSError, UnicodeDecodeError, json.JSONDecodeError) as exc:
-        try:
-            Path(args.analysis_input).resolve().relative_to((ROOT / "result" / "a_short").resolve())
-            official_input = True
-        except ValueError:
-            official_input = False
         if official_input:
             raise SystemExit(
                 "[FATAL] official publish marker/analysis_input 损坏或不可解析，已阻止发布"
@@ -4116,11 +4128,7 @@ def main(argv=None, pro_factory=None, price_provider=None, semantic_provider=Non
     except ValueError as exc:
         raise SystemExit(f"[FATAL] analysis_input runtime configuration missing/stale/mismatched: {exc}") from exc
     source_runtime_configuration = runtime_configuration_lineage(_RUNTIME_CONFIGURATION)
-    try:
-        Path(args.analysis_input).resolve().relative_to((ROOT / "result" / "a_short").resolve())
-        official_input = True
-    except ValueError:
-        official_input = False
+    official_input = _is_official_analysis_input_path(args.analysis_input)
     if official_input:
         if not source_identity:
             raise SystemExit("[FATAL] official analysis_input missing run_identity")

@@ -28,6 +28,7 @@ if str(ROOT) not in sys.path:
 from runners.a_short_weekly_pipeline import (  # noqa: E402
     normalize_candidate, build_weekly_report as _build_weekly_report, validate_weekly_report,
     write_weekly_report, latest_iv_percentile, latest_iv_hv, main, SCHEMA_PATH,
+    _is_official_analysis_input_path,
     _fetch_price_series, _prev_trading_day, _load_validated_overlay, MIN_PRICE_OBS, resolve_market_regime,
     _candidate_price_clock, _candidate_price_exclusion,
     validate_account_state, stateful_risk_for_candidate, _ex_div_notices, _fetch_dividends,
@@ -279,6 +280,12 @@ def _sized_lineage():
 
 
 class NormalizeTests(unittest.TestCase):
+    def test_one_click_analysis_input_path_is_the_strict_official_lane(self):
+        self.assertTrue(_is_official_analysis_input_path(
+            ROOT / "result" / "a_short" / AS_OF / "analysis_input.json"
+        ))
+        self.assertFalse(_is_official_analysis_input_path(ROOT / "research" / "ai.json"))
+
     def test_missing_delisting_text_fails_closed_into_phase5_veto(self):
         for value in (pd.NA, np.nan, None, "<NA>", "nan", "NaN", "None", "NaT", "null"):
             self.assertEqual(_field({"name": value}, "name"), "")
@@ -301,6 +308,15 @@ class NormalizeTests(unittest.TestCase):
         self.assertEqual(n["iv"]["iv_percentile_252d"], 55.0)
         self.assertEqual(n["liquidity"]["avg_amount_5d"], 2e8)
         self.assertEqual(n["market_regime"], "震荡期")
+
+    def test_candidate_close_uses_the_same_latest_bar_as_its_indicators(self):
+        candidate = _egs_candidate(quote={"close": 1.23})
+        series = _series()
+        series[-1]["close"] = 3.21
+
+        normalized = normalize_candidate(candidate, series, _overlay_row(), 55.0, {}, "震荡期")
+
+        self.assertEqual(normalized["close"], 3.21)
 
     def test_maps_event_and_derived_flags(self):
         n = normalize_candidate(

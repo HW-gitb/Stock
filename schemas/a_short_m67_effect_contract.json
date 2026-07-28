@@ -413,7 +413,7 @@
     "engine/egs_industry_heat.py": "79d8cddefdabb21fa8effd677f320a8e44d86782688f4449145c8789469700b3",
     "engine/a_short_industry_theme.py": "6a10200f80b3c0d301efc8af1561b53ef2578e1cd26eea7976188dd57b7b6b2b",
     "runners/a_short_phase5_engine.py": "c86f2589ec072718d8e0d7363b46dab15d6c888f4cc0dec8f799ee96fd01de96",
-    "runners/a_short_weekly_pipeline.py": "a1ee57fa577bbc6c932bd93d33b3185ba54f9dce5737057e1393b3214bd1c1dc",
+    "runners/a_short_weekly_pipeline.py": "5061155f4a810af89bd028a408068425382644a014fcb04b6816068c7757af2c",
     "runners/a_short_m67_render.py": "b8f0bce2b970c3d5180044218bd0b3a6e66a964ec64b34837f89c0089da501f5",
     "engine/a_short_portfolio_risk.py": "02b88ac3b5239e8dd4897bde06afab0769ea5593f8a8a3666e5c8fba24486860",
     "engine/a_short_effect_contract.py": "58ba0031973d98b67d29848dfd27857ab219257fef74eb568427b9f1991b960d"

@@ -1,5 +1,20 @@
 # Session Log
 
+## 2026-07-28 - Claude Code 审查 PASS(A-short 第六刀 6B:候选价格单一权威 + 官方档时钟加严)
+
+- **Verdict/Action**: PASS。`normalize_candidate` 的 `close` 改取 `price_series[-1]`,与 `compute_indicators` 同吃一根已结算 bar;契约新增 `official_input` 档,官方输入要求 `quote.source_trade_date` 存在且恒等 `price_data_through`,research/hermetic 保持只拒更新的旧宽松档。桌面验收 ③ 由构造成立而非靠新测试:`_candidate_price_clock` 与 `observed candidate price clock` FATAL 已把序列末根钉在 `price_data_through`。
+- **Required**: 无,未新开 register 条目。两条 Optional 与全部判据落 `docs/system_risk_register.md#R-ASHORT-KNIFE6B-CANDIDATE-PRICE-CLOCK-SOURCE-BINDING`(单一来源):①实测前置只记了 1 个批次,应写全「相等自 producer 开始写 price_data_through 之后才成立」;②官方档只在 weekly pipeline 一个消费者启用,producer `egs_main` 与另两个官方路径读者仍走宽松,且路径判定的 docstring 对 backtest 子树 overclaim(当前不可达)。
+- **Verify**: review-evidence:3b2afc68322d。亲跑 focused 超集 `test_analysis_input_contract + test_a_short_effect_contract + test_a_short_weekly_pipeline` = `538 OK / 46.8s / exit 0`;按 rule 4 未重跑执行方已记账的 `a_short 2072 OK`。真数据探针:用真校验器对 13 个官方产物 + 27 个回测产物跑 `official_input` 双档对照,6 批由 lenient-PASS 翻成 official-REJECT。强制腿反向控制双向坐实。判据全文见 register。独立对抗 agent 已起但未在墙钟内返回,结论 NOT_VERIFIED、不作 PASS 依据。超时原因:新门须逐批复算真实历史产物才判得出会不会卡死正常周跑。
+- **Next**: 提交并合入 master。
+
+## 2026-07-28 — Codex implementation（A-short Knife 6B）
+
+- **Verdict/Action**: 已接入正式一键周跑：候选报价日期与 6A 价格时钟严格绑定，候选收盘价改为同一根技术价格 bar。
+- **Required**: `R-ASHORT-KNIFE6B-CANDIDATE-PRICE-CLOCK-SOURCE-BINDING`，详见 `docs/system_risk_register.md`。
+- **Verify**: fixed Python focused 538 OK；A-short full ledger 2072 OK / 205.8s / exit 0；`git diff --check` clean（仅 CRLF warning）。
+- **Next**: Claude Code：审查。
+- **Pre-Codex self-review**: matrix=complete; register=updated; handoff=updated; focused=538 OK; full-lane=2072 OK.
+
 ## 2026-07-28 — Claude Code 自修自审 PASS（Knife-1 键契约漂移的第三向也变响）
 
 - **Verdict/Action**: 已提交。上一轮留的边际 Optional 闭掉：`_source_refs` 在投影前加一道受控 raise（`set(canonical_ref) != set(KNIFE1_SOURCE_REF_KEYS)` 即抛 `LLMThemeDiscoveryError`）。此前「只往字面量加键、不动常量」会被推导式静默丢弃；现在三个漂移方向全部会响——常量多键→投影 `KeyError`、字面量多键→本 raise、改回内联字面量→既有键集断言红。零删除，正常输入行为不变。

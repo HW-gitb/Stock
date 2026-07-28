@@ -172,6 +172,23 @@ class AnalysisInputContractTest(unittest.TestCase):
         with self.assertRaisesRegex(AnalysisInputContractError, "earnings_report_date"):
             validate_analysis_input_contract(payload)
 
+    def test_official_candidate_quote_date_must_equal_the_price_clock(self) -> None:
+        payload = cloned_minimal_analysis_input_payload()
+        payload["price_data_through"] = "20260522"
+        payload["candidates"][0]["quote"]["source_trade_date"] = "20260521"
+        payload["candidates"][0]["quote"]["price_time"] = "2026-05-21T15:00:00+08:00"
+
+        validate_analysis_input_contract(payload)
+        with self.assertRaisesRegex(AnalysisInputContractError, "official input requires.*=="):
+            validate_analysis_input_contract(payload, official_input=True)
+
+    def test_official_candidate_quote_date_cannot_be_missing(self) -> None:
+        payload = cloned_minimal_analysis_input_payload()
+        payload["candidates"][0]["quote"].pop("source_trade_date", None)
+
+        with self.assertRaisesRegex(AnalysisInputContractError, "official input requires.*source_trade_date"):
+            validate_analysis_input_contract(payload, official_input=True)
+
     def test_illegal_calendar_trade_date_is_rejected(self) -> None:
         # 8 位数字但非法历法日(六月0日 / 二月31日 / 六月31日)须拒,不得通过 schema 正则 + PIT 字典序比较。
         # 与 engine/weekly 已严格的 _is_valid_date 同口径(shared contract 是跨消费者防线)。
