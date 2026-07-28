@@ -231,7 +231,12 @@ def _source_refs(raw_refs: Any, *, cutoff: datetime) -> tuple[list[dict[str, str
                 f"source_refs[{index}].observed_at must be before the decision open (PIT fail-closed)"
             )
         by_id[source_id] = observed_at
-        out.append({"source_id": source_id, "source_type": source_type, "observed_at": observed_at.isoformat()})
+        canonical_ref = {
+            "source_id": source_id,
+            "source_type": source_type,
+            "observed_at": observed_at.isoformat(),
+        }
+        out.append({key: canonical_ref[key] for key in KNIFE1_SOURCE_REF_KEYS})
     out.sort(key=lambda item: item["source_id"])
     return out, by_id
 

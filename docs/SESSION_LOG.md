@@ -1,5 +1,12 @@
 # Session Log
 
+## 2026-07-28 — Claude Code 复审 PASS（Knife-1 normalizer 改按共享常量构造 source_ref）
+
+- **Verdict/Action**: PASS。`_source_refs` 不再以内联字面量出参，改为先建 `canonical_ref` 再按 `KNIFE1_SOURCE_REF_KEYS` 推导。等价性静态可证：键集与插入序都与改前逐字相同，故序列化与哈希不可能变。新测试断言 `set(merged["source_refs"][0]) == set(ingest.KNIFE1_SOURCE_REF_KEYS)`，而 `merged` 正是 `merge_web_x_discovery` 末尾 `normalize_discovery_payload(...)` 的返回值——打在被改函数的产物上，不是打在投影上。
+- **Required**: 无，未新开 register 条目。一条边际 Optional 见 Next。
+- **Verify**: review-evidence:334210dc3738。超集包 `discover -s tests -p test_us_short*discovery*.py` = `254 OK / 402.0s / exit 0`，覆盖 `tests/` 与 `tests/provider/` 下整条 discovery 链。按 rule 5/8 未再起 lane 全量：改动是单函数内 6 行且输出键集与序均未变，上一提交的官方全量 `4973 OK` 已记账。漂移三向核查：往常量加键而不改 `canonical_ref` → 推导式 `KeyError` 响；改回内联且键集不同 → 新测试红。
+- **Next**: 提交。Optional（未修，边际）：第三向仍静默——只往 `canonical_ref` 加键而不动常量，推导式会把它丢掉；三个键名在 `canonical_ref` 里仍是字面量，常量还不是唯一来源。补一句 `set(canonical_ref) == set(KNIFE1_SOURCE_REF_KEYS)` 的断言即可让该向也响。
+
 ## 2026-07-28 — Claude Code 复审 PASS（K3 消费者一刀的两条 Optional 收口）
 
 - **Verdict/Action**: PASS。①账本 reason 归队 snake_case（`unsafe_x_evidence_attestation`）；②新增 `KNIFE1_SOURCE_REF_KEYS` + `project_knife1_source_refs()`，落在 Knife-1 模块自己，merge 的生产端与 `_ingest_input` 消费端改为调用同一函数——上一轮点名的成因类被结构性焊死，不再是两份各写一遍的约定。新守卫用 `mock.patch.object` 记调用次数，任一端被重新内联即掉回 1 而变红。

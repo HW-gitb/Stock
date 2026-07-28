@@ -486,6 +486,15 @@ class WeeklyCapstoneSoftDiscoveryStageTest(unittest.TestCase):
             )
         self.assertGreaterEqual(len(calls), 2)
 
+    def test_knife1_normalizer_source_ref_keys_follow_the_shared_contract(self):
+        web_artifact, web_receipt, x_artifact, x_receipt = _source_packets()
+        merged, _manifest = merge.merge_web_x_discovery(
+            web_artifact=web_artifact, web_receipt=web_receipt,
+            x_artifact=x_artifact, x_receipt=x_receipt,
+            expected_decision_date=DECISION_DATE, generated_at=GENERATED_AT,
+        )
+        self.assertEqual(set(merged["source_refs"][0]), set(ingest.KNIFE1_SOURCE_REF_KEYS))
+
     def test_date_digest_and_manifest_binding_tamper_are_rejected_without_partial_publish(self):
         mutations = ("date", "digest", "manifest_binding", "raw_path")
         for mutation in mutations:
