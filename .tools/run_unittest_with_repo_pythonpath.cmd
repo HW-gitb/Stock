@@ -58,7 +58,7 @@ popd >nul
 exit /b %TEST_EXIT%
 
 :usage_missing_timeout_value
-echo --timeout-seconds requires a positive integer no greater than 1200. 1>&2
+echo --timeout-seconds requires a positive integer no greater than 1300. 1>&2
 popd >nul
 exit /b 2
 
