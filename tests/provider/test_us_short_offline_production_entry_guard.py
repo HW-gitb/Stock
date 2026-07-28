@@ -8,6 +8,7 @@ from __future__ import annotations
 import json
 import uuid
 import unittest
+from pathlib import Path
 from types import SimpleNamespace
 from unittest import mock
 
@@ -15,6 +16,7 @@ from runners import us_short_llm_theme_discovery_fetch_web as web
 from runners import us_short_llm_theme_discovery_fetch_x as xfetch
 from runners import us_short_llm_theme_discovery_merge as merge
 from runners import us_short_provisional_theme_validate as knife2
+from tests.provider.us_short_private_test_root import temporary_provider_directory
 
 
 DATE = "20260725"
@@ -72,6 +74,17 @@ def _theme_payload(*, source_urls, source_type):
 
 
 class OfflineProductionEntryGuardTests(unittest.TestCase):
+    def setUp(self):
+        # Frozen raw receipts are immutable by design, so a shared root makes any re-use of a
+        # source URL collide across runs as `immutable_raw_content_conflict` and silently drop
+        # every source.  A per-test root makes that structurally impossible instead of relying
+        # on each author remembering to mint unique URLs.
+        self._raw_tempdir = temporary_provider_directory(web.ROOT)
+        self._raw_root = Path(self._raw_tempdir.__enter__())
+
+    def tearDown(self):
+        self._raw_tempdir.__exit__(None, None, None)
+
     def _packets(self, *, cat_aapl=False):
         token = uuid.uuid4().hex
         web_url = f"https://web.example/k3-permanent-{token}"
@@ -91,10 +104,11 @@ class OfflineProductionEntryGuardTests(unittest.TestCase):
         web_artifact, web_receipt, web_summary = web.run_web_fetch(
             queries=["power"], expected_decision_date=DATE, generated_at=GENERATED,
             search_client=_FakeSearch(web_rows), deepseek_client=_FakeDeepSeek(web_payload),
+            raw_root=self._raw_root / "web",
         )
         x_artifact, x_receipt, x_summary = xfetch.run_x_fetch(
             queries=list(TICKERS), expected_decision_date=DATE, generated_at=GENERATED,
-            x_client=_FakeX(x_rows, x_payload),
+            x_client=_FakeX(x_rows, x_payload), raw_root=self._raw_root / "x",
         )
         return (web_artifact, web_receipt, web_summary,
                 x_artifact, x_receipt, x_summary)

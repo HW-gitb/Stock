@@ -1,5 +1,12 @@
 # Session Log
 
+## 2026-07-28 - Claude Code 自修 Optional：生产入口守卫改用每测试独立 raw 根
+
+- **Verdict/Action**: 已提交。把「冻结原文跨运行相撞」从靠纪律（记得用唯一 URL）改成结构上不可能：守卫用仓内既有的 `temporary_provider_directory` 取每测试独立 raw 根，并传给 `run_web_fetch` 与 `run_x_fetch` 两个生产入口。产品代码未改，只动该测试模块的夹具接线。
+- **Required**: 无。该 Optional 的原委与闭合判据落 `docs/system_risk_register.md`（单一来源）。
+- **Verify**: 本轮 hook 未注入 review-evidence token，故不引用、不编造。该模块 `4 OK`；`provider_samples` 的 JSON 计数跑前跑后相同（13790 → 13790），即零残留 —— 包括原文摘要那个对照故意留下的被篡改文件。三个具名挖空对照仍全绿，说明各自的门未被这次夹具改动削弱。按改动性质未起全量：产品代码零改动，覆盖范围就是本模块自身。
+- **Next**: 解冻链第 ④ 步 K3-R31/R32；`a-short-3` 的 `cd8bbd67` 仍未合
+
 ## 2026-07-28 - Claude Code 移植生产入口守卫的挖空对照 (自指改为可观测翻转)
 
 - **Verdict/Action**: 已提交。从那份作废草稿里只移植了唯一值得留的东西 —— 挖空对照拆成三个各自具名的测试。三个里只有两个照搬（持久化门、原文摘要门，后者是两版都没有的新覆盖）；第三个（票代码绑定门）它写成了跟我原来一样的自指对照，未照搬，改写为断言可观测翻转。
