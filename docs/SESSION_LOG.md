@@ -1,5 +1,12 @@
 # Session Log
 
+## 2026-07-28 - 分支清理（续）：删除 07-17 那轮 a-short 六刀分支
+
+- **Verdict/Action**: 经用户确认删除 `codex/a-short-93db-six-knife`，复原点 `2d2b86516ddcef16c33567f178fb8365d6fb93b6`（`git branch <名字> <SHA>` 可复原）。它是 2026-07-17 那一轮的实现，其价格时钟部分已被 2026-07-28 的 `a2602252`（knife 6A）以更完整的方案取代；其 IV 部分不应从该分支回捞，按桌面方案的既定形态另做。桌面待办不回写、不入 register，按用户指令。
+- **Required**: 无。
+- **Verify**: 该分支的 `_bind_candidate_quote_to_price` 与 `_bounded_pro_call` 在 master 历史中出现 **0 笔**，且在 master、213f、fe9c 三棵树中均无定义 —— 即从未落地。价格时钟侧 master 现有 `price_data_through` 21 处、`price_clock` 8 处，为更晚的新形态。删除前记录复原点；删除后 `git branch --no-merged master` 余 2 个（`archive/d15e-…` 为有意保留的墓碑，`codex/full-test-reliability` 待用户判断）。**更正**：我上一轮曾据一处脚本显示误报「三个关键 runner 与 master 无差异」，实测 `weekly_pipeline` 差 2706 行、`iv_feed_probe` 差 368 行。
+- **Next**: `codex/full-test-reliability` 待用户确认是否与主树全量测试优化重复
+
 ## 2026-07-28 - 分支清理：删除两个已被 master 吸收的早期草稿分支
 
 - **Verdict/Action**: 经用户确认删除两个分支，删前已记录复原点。`codex/a-short-industry-l3-integration` = `c387a65525fce353380ed4c8869a45ba729e4c79`；`wip/master-model-paper-preclean-20260722` = `e74f32bcedc0e8fce09975f01aea8f5f4dde23d9`。需要时 `git branch <名字> <SHA>` 即可复原。
