@@ -31,7 +31,7 @@ _PHASE5_KEYS = (
     "sr_spike_atr", "breakout_rr_bonus", "min_shares", "min_amount", "impact_cost_frac",
 )
 _PORTFOLIO_KEYS = (
-    "same_sw_l2_threshold_pct", "northbound_threshold_pct", "margin_threshold_pct",
+    "same_sw_l2_threshold_pct", "margin_threshold_pct",
     "large_index_threshold_pct", "small_float_mv_threshold_pct", "small_float_mv_rmb",
     "high_risk_holding_cap_multiplier",
 )

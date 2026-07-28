@@ -195,7 +195,7 @@ def _governed_python_literal_names_for_source(source: str, rel: str) -> tuple[st
             "DRAGON_LIST_LOOKBACK_TRADING_DAYS", "BLOCK_TRADE_LOOKBACK_TRADING_DAYS",
         },
         "engine/a_short_portfolio_risk.py": {
-            "SAME_SW_L2_THRESHOLD_PCT", "NORTHBOUND_THRESHOLD_PCT", "MARGIN_THRESHOLD_PCT",
+            "SAME_SW_L2_THRESHOLD_PCT", "MARGIN_THRESHOLD_PCT",
             "LARGE_INDEX_THRESHOLD_PCT", "SMALL_FLOAT_MV_THRESHOLD_PCT", "SMALL_FLOAT_MV_RMB",
             "HIGH_RISK_HOLDING_CAP_MULTIPLIER",
         },
@@ -771,12 +771,16 @@ def static_contract_error(contract: dict | None = None, *, inventory: dict | Non
         return f"effect contract runtime policy coverage invalid: uncovered={policy_uncovered[:4]}, duplicate={policy_duplicate[:4]}"
     if contract.get("runtime_policy_paths_sha256") != inventory["runtime_policy_paths_sha256"]:
         return "runtime policy field inventory changed without effect contract update"
+    if contract.get("runtime_policy_paths") != inventory["runtime_policy_paths"]:
+        return "runtime policy field inventory body changed without effect contract update"
     if contract.get("runtime_policy_sha256") != inventory["runtime_policy_sha256"]:
         return "runtime policy value changed without effect contract update"
     if contract.get("runtime_policy_schema_sha256") != inventory["runtime_policy_schema_sha256"]:
         return "runtime policy schema changed without effect contract update"
     if contract.get("runtime_policy_leaf_readers_sha256") != _hash(inventory["runtime_policy_leaf_readers"]):
         return "runtime policy per-leaf reader mapping changed without effect contract update"
+    if contract.get("runtime_policy_leaf_readers") != inventory["runtime_policy_leaf_readers"]:
+        return "runtime policy per-leaf reader mapping body changed without effect contract update"
     literals = {rel: values for rel, values in inventory["governed_python_literal_names"].items() if values}
     if literals:
         return f"governed business threshold literal returned to Python: {literals}"

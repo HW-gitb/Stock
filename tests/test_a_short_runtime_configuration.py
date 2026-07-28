@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import copy
+import ast
 import importlib.util
 import json
 import sys
@@ -9,6 +10,8 @@ import tempfile
 import unittest
 from pathlib import Path
 from unittest.mock import patch
+
+from jsonschema import Draft7Validator
 
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -34,6 +37,72 @@ def _load_with_policy(relative_path: str, configuration: dict):
     with patch("engine.a_short_runtime_config.load_runtime_configuration", return_value=configuration):
         spec.loader.exec_module(module)
     return module
+
+
+def _constant_string_subscript_path(node: ast.AST) -> tuple[str, tuple[str, ...]] | None:
+    """Return a literal subscript chain such as ``root[\"a\"][\"b\"]``."""
+    parts: list[str] = []
+    while isinstance(node, ast.Subscript):
+        if not isinstance(node.slice, ast.Constant) or not isinstance(node.slice.value, str):
+            return None
+        parts.append(node.slice.value)
+        node = node.value
+    if isinstance(node, ast.Name):
+        return node.id, tuple(reversed(parts))
+    return None
+
+
+def _runtime_policy_literal_reads(configuration: dict) -> list[tuple[str, int, tuple[str, ...]]]:
+    """Find every production literal read rooted in ``_RUNTIME_CONFIGURATION``.
+
+    This lane-local closure guard intentionally scans the production consumers instead
+    of relying on a manually curated key list.  A deleted preset key therefore turns
+    red even when a consumer was omitted from an ordinary repair grep.
+    """
+    del configuration  # The signature makes the paired validator's input explicit.
+    reads: list[tuple[str, int, tuple[str, ...]]] = []
+    for directory in ("A-EGS", "engine", "runners"):
+        for path in sorted((ROOT / directory).glob("*.py")):
+            source = path.read_text(encoding="utf-8")
+            tree = ast.parse(source, filename=str(path))
+            aliases: dict[str, tuple[str, ...]] = {}
+            for node in ast.walk(tree):
+                if not isinstance(node, (ast.Assign, ast.AnnAssign)):
+                    continue
+                targets = node.targets if isinstance(node, ast.Assign) else [node.target]
+                if len(targets) != 1 or not isinstance(targets[0], ast.Name):
+                    continue
+                chain = _constant_string_subscript_path(node.value)
+                if chain and chain[0] == "_RUNTIME_CONFIGURATION":
+                    aliases[targets[0].id] = chain[1]
+            for node in ast.walk(tree):
+                if not isinstance(node, ast.Subscript):
+                    continue
+                chain = _constant_string_subscript_path(node)
+                if not chain:
+                    continue
+                root, parts = chain
+                if root == "_RUNTIME_CONFIGURATION":
+                    full_path = parts
+                elif root in aliases:
+                    full_path = aliases[root] + parts
+                else:
+                    continue
+                if full_path:
+                    reads.append((path.relative_to(ROOT).as_posix(), node.lineno, full_path))
+    return sorted(set(reads))
+
+
+def _missing_runtime_policy_literal_reads(configuration: dict) -> list[str]:
+    missing: list[str] = []
+    for relative_path, line, policy_path in _runtime_policy_literal_reads(configuration):
+        value = configuration
+        for key in policy_path:
+            if not isinstance(value, dict) or key not in value:
+                missing.append(f"{relative_path}:{line}:{'.'.join(policy_path)}")
+                break
+            value = value[key]
+    return missing
 
 
 class RuntimeConfigurationBehaviorTests(unittest.TestCase):
@@ -116,6 +185,26 @@ class RuntimeConfigurationBehaviorTests(unittest.TestCase):
                 ], price_provider=price_provider)
             self.assertEqual(calls, [])
             self.assertFalse(out_path.exists())
+
+    def test_every_runtime_policy_literal_read_resolves_in_the_preset(self) -> None:
+        self.assertEqual(_missing_runtime_policy_literal_reads(self.configuration), [])
+
+    def test_deleted_preset_key_turns_the_runtime_policy_read_guard_red(self) -> None:
+        changed = copy.deepcopy(self.configuration)
+        del changed["m67"]["portfolio_risk"]["margin_threshold_pct"]
+        missing = _missing_runtime_policy_literal_reads(changed)
+        self.assertTrue(any(item.endswith(":m67.portfolio_risk.margin_threshold_pct") for item in missing),
+                        missing)
+
+    def test_historical_weekly_artifact_stays_schema_valid_but_new_builder_requires_fact_fetch(self) -> None:
+        schema = json.loads((ROOT / "schemas" / "a_short_weekly_report.schema.json").read_text(encoding="utf-8"))
+        historic = json.loads((ROOT / "research" / "results" / "a_short" / "20260727" / "weekly_m67.json").read_text(encoding="utf-8"))
+        self.assertFalse(list(Draft7Validator(schema).iter_errors(historic)))
+
+        new_weekly = baseline_weekly.build_weekly_report([_normalized()], AS_OF, GEN)
+        del new_weekly["portfolio_risk"]["fact_fetch"]
+        with self.assertRaisesRegex(ValueError, "fact_fetch status/clock"):
+            baseline_weekly.validate_weekly_report(new_weekly, _feed())
 
 
 if __name__ == "__main__":

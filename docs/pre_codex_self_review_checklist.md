@@ -19,6 +19,13 @@
 7. **独立自审限时**:轻量自审 `2-3 minutes`(2-3 分钟)无结果即 `close and restart once`；该 restart 仅限同一已排程窗口的超时/传输故障，不得作为内容性复审。`second timeout` 仍无结果时 `do not keep waiting`,停止等待并在 SESSION_LOG 说明 timeout。此时走 `main-thread checklist fallback`:主线程按 A-F/B2 自查 + 已跑固定验证包作测试证据,不得无限等 agent。子 agent 只有通过上述固定主 Python launcher 且获批准的 host-process execution 时才跑测试;否则只做逻辑/契约审查。
 8. **documented material-new-risk exception**:只有修复引入新的、独立的安全/资金/生产边界疑点时，才可额外开一个独立审查窗口；SESSION_LOG 必须写明新风险类别和为何原窗口不能覆盖。不得以“更放心”或未完成主线程排查为由加开。
 9. **Proof-of-use 必写速度证据**:SESSION_LOG 的 `Pre-Codex self-review` 行要写明是否使用轻量自审、是否发生 timeout/重启、是否触发 main-thread checklist fallback、固定包是否集中一次跑完；若开例外窗口，写明 material-new-risk 理由。这样未来审查能看见是否又退回慢路径。
+10. **repair-closeout matrix 不可跳过**:开始改前，从最新 `SESSION_LOG` / risk register 抄出本轮所有 `Required` 和用户接受的 `Optional`，逐项标记“待修 / 已修 / 不适用(理由)”。交出前矩阵不得有未分类项；更新 `system_risk_register.md` 的当前状态、更新独立 handoff（及索引），`CURRENT` 只在有 settled 事实时才更新。修复 entry 的 `Pre-Codex self-review` 必须带 `matrix=`、`register=`、`handoff=`、`focused=`、`full-lane=` 五个字段；这不是聊天承诺，而是 post-adoption SESSION_LOG guard 的机器门。
+
+### 0.11 共同流程 / 分系统验证（边界）
+
+`repair-closeout matrix` 是 **A-short/US-short 共用** 的执行/修复流程：`matrix=`、`register=`、`handoff=` 记录共同的闭环责任；`focused=`、`full-lane=` 则必须记录本次实际触及的系统和 lane。不得把 A-short 的 preflight、Python、provider 或测试命令当成 US-short 的默认要求，也不得反向套用。
+
+`full-lane=` 是“本 lane 的完整回归处置”，不是每次修复都强制跑全量：触发 `AGENTS` rule 3 时，写明对应 lane 的一次完整运行及结果；未触发时必须写 `not_triggered: AGENTS rule 3; reason=<具体变更面>`。因此共同流程强制留下可审计的决定和证据，而分系统验证仍按各自运行入口、数据边界和测试包执行。
 
 ## A. 类不修实例(class-not-instance)
 改 classifier / validator / enum / 形式集 / 布尔门 / 不变式 时:
@@ -75,6 +82,6 @@ durable route docs(`CURRENT`、READMEs)+ register 活动条目**只陈述当前�
 ---
 
 ## Proof-of-use(留痕,硬契约)
-每次 `起草`/`修复` 的 SESSION_LOG entry **必须**带一行 `Pre-Codex self-review: A-F checked / N-A`,并附实际证据(尤其 **B/C/E**):跑的 grep 命令 + 命中数、加的反向测试名、route-doc 单态确认。无此行 = 没过门。让"做没做"对用户和 Codex 可检查。
+每次 `起草`/`修复` 的 SESSION_LOG entry **必须**带一行 `Pre-Codex self-review: A-F checked / N-A`,并附实际证据(尤其 **B/C/E**):跑的 grep 命令 + 命中数、加的反向测试名、route-doc 单态确认。`修复` 还必须按 §0.10 写全 `matrix=`、`register=`、`handoff=`、`focused=`、`full-lane=`。无此行 = 没过门。让"做没做"对用户和 Codex 可检查。
 
 **收尾自问(一句话门)**:"我这次是修了**整类 + 追了连带 + 查了反向**,还是只让这一条 finding 消失了?" 后者就别交。

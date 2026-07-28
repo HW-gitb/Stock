@@ -1365,6 +1365,15 @@
         "summary": {
           "type": "object"
         },
+        "fact_fetch": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["status", "as_of"],
+          "properties": {
+            "status": {"enum": ["not_requested", "ok", "not_published", "unavailable"]},
+            "as_of": {"type": "string", "pattern": "^[0-9]{8}$"}
+          }
+        },
         "fact_sources": {
           "type": "array",
           "items": {
