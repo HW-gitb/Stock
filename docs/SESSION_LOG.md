@@ -1,5 +1,19 @@
 # Session Log
 
+## 2026-07-28 — Claude Code 审查 PASS（A-short 刀 9 两条 Optional 收口）
+
+- **Verdict/Action**: PASS。Optional① 拿掉 `_semantic_source_inventory` 的整树 deepcopy，索引直接指向缓存树；唯一会改写的 `_StripDocstrings` 仍在 `_semantic_ast_sha256` 内先拷选中节点。Optional② 新增 `test_real_epoch_binding_sources_fit_the_tree_cache`，用真实 `_fingerprints()` 断言 `0 < currsize < maxsize`，取代原先只在 6 行玩具模块上的空断言。
+- **Required**: 无，未新开 register 条目。一条 Optional 见 Next。
+- **Verify**: review-evidence:2f438569f026。超集包 `test_a_short_evidence_epoch_mode + test_a_short_target_policy_comparison` = `54 OK / 16.8s / exit 0`（上一版 `53 / 37.9s`；刀 9 之前 `154.2s / 51`）。自写对抗探针：真实负载跑完后 **7/7 缓存树与源码重新 parse 逐字节相同**，无调用方污染；植入删节点后检查报红、还原后转绿，证明该检查非空转；对 HEAD（带 deepcopy 版）**110 组契约比较全等**。profile 用例 `28.4s → 6.5s → 2.3s`；整树 deepcopy 已从 deepcopy 调用榜消失，`_semantic_ast_sha256` 仅 n=99 / `0.07s` / 3.3%；tree 缓存 `7/64`、function `99/256` 均不驱逐。
+- **Next**: 提交。Optional（未修）：防护由「结构上不可能污染」降为「当前没有调用方会改」，而测试只钉了 `_semantic_ast_sha256` 不改自己的入参。建议把本轮对抗检查搬进测试——跑完 `_fingerprints()` 后断言每棵缓存树等于其源码的新 parse，约 5 行，可把约定重新变回守卫。
+
+## 2026-07-28 — Claude Code 审查 Pass-with-Required（US-short fetch-web 批级 raise + test_c 批处理刀回退复核）
+
+- **Verdict/Action**: lane 红已真闭。两处批级 `WebThemeDiscoveryError` 改为 `_ProviderItemRejected`，语义正确——被拒 chunk 排除后留存主题确实都来自 `model_identity["served_model"]`。上一轮判 FAIL 的 `test_c` 批处理刀已回退（`diff HEAD` 为空）。但两条 reason code 悬空、且被拒 chunk 仍进回执，见 Required。
+- **Required**: 两条，均在 `docs/system_risk_register.md#R-USSHORT-FETCHWEB-UNDECLARED-BATCH-RAISE` 复审段。(A) L1153/L1161 抛出后落进 L1167 自己的 `except Exception`，账本只记 `chunk[N]:_ProviderItemRejected`，与同块 ValueError/IndexError/RuntimeError 无法区分，违反本文件唯一数据边界规则 `_ingest_provider_item`。(B) L1157 的 `fingerprints.append` 在 L1160 截断检查**之前**，被拒 chunk 的 `system_fingerprint` 仍进回执。
+- **Verify**: review-evidence:dc9e134c05ee。超集包 `tests.test_us_short_discovery_conformance` = `38 OK / 156.8s / exit 0`（上轮同包 `FAIL / failures=2`）。自写正反探针：经 `_ingest_provider_item` 得 `{'reason':'regroup_response_truncated','detail':'chunk[7]'}`；经实际 L1167 handler 只得 `{'reason':'regroup_chunk_dropped','detail':'chunk[1]:_ProviderItemRejected'}`，且三种无关异常产出同形行。整类 grep：本文件「抛 `_ProviderItemRejected` 而无人读 `.reason`」恰为这两处新代码。
+- **Next**: Codex 一轮修 (A)(B)（改走 `_ingest_provider_item`，或在通用 handler 前加 `except _ProviderItemRejected` 落 `exc.reason/exc.detail`；fingerprint 挪到成功路径）。另请定：`regroup_failed = successful_chunks == 0` 是唯一地板，10 个 chunk 掉 9 个仍算成功包，是否要最低存活阈值。
+
 ## 2026-07-28 — Claude Code 审查 PASS（A-short 提速刀 9：语义契约按源码共享 parse）
 
 - **Verdict/Action**: PASS。新增 `_cached_semantic_source_tree(module_name, source)` 只 parse 一次，`_semantic_source_inventory` 从它派生 `(body, function_nodes, constant_nodes)` 并深拷为私有副本；两个契约 memo 改为消费它，maxsize `64→128/256`。`_top_level_constant_nodes` 与原内联循环同义（同名后者覆盖）。SyntaxError 在 lru_cache 内抛出故不被缓存，仍每次重算重抛，fail-closed 未松。

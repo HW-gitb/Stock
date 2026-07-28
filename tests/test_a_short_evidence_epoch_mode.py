@@ -460,11 +460,12 @@ class PreFreezeEvidenceModeTests(unittest.TestCase):
                     cached_body, cached_functions, _cached_constants = (
                         epoch_mode._semantic_source_inventory(module.__name__, source)
                     )
-                    cached_functions["first"].body[-1].value.id = "POISON"
+                    epoch_mode._semantic_ast_sha256([cached_functions["first"]])
                     self.assertEqual(
                         epoch_mode.semantic_function_contract(module, ("first",))["bound_constants"],
                         ["FIRST"],
                     )
+                    self.assertEqual(cached_functions["first"].body[-1].value.id, "FIRST")
 
                     path.write_text(source.replace("FIRST = 1", "FIRST = 3"), encoding="utf-8")
                     changed = epoch_mode.semantic_function_contract(module, ("first",))
@@ -472,11 +473,21 @@ class PreFreezeEvidenceModeTests(unittest.TestCase):
 
         self.assertEqual(changed["bound_constants"], ["FIRST"])
         for cached in (
-            epoch_mode._cached_semantic_source_tree.cache_info(),
             epoch_mode._semantic_module_contract_from_source.cache_info(),
             epoch_mode._semantic_function_contract_from_source.cache_info(),
         ):
             self.assertLess(cached.currsize, cached.maxsize)
+
+    def test_real_epoch_binding_sources_fit_the_tree_cache(self):
+        """All seven A-short track bindings must fit without tree-cache eviction."""
+        epoch_mode._cached_semantic_source_tree.cache_clear()
+        epoch_mode._semantic_module_contract_from_source.cache_clear()
+        epoch_mode._semantic_function_contract_from_source.cache_clear()
+        with patched_epoch_modes("frozen_enforced"):
+            _fingerprints()
+        tree_cache = epoch_mode._cached_semantic_source_tree.cache_info()
+        self.assertGreater(tree_cache.currsize, 0)
+        self.assertLess(tree_cache.currsize, tree_cache.maxsize)
 
     def test_semantic_contract_cache_failures_keep_their_fail_closed_messages(self):
         from types import SimpleNamespace

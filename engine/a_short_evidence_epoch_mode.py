@@ -201,7 +201,7 @@ def _top_level_constant_nodes(tree: ast.AST) -> dict[str, ast.AST]:
 
 @lru_cache(maxsize=64)
 def _cached_semantic_source_tree(module_name: str, source: str) -> ast.AST:
-    """Parse one exact source text once; callers receive a private clone."""
+    """Parse one exact source text once; only private helpers may read the tree."""
     try:
         return ast.parse(source)
     except SyntaxError as exc:
@@ -211,20 +211,20 @@ def _cached_semantic_source_tree(module_name: str, source: str) -> ast.AST:
 def _semantic_source_inventory(
         module_name: str, source: str,
 ) -> tuple[tuple[ast.AST, ...], dict[str, ast.AST], dict[str, ast.AST]]:
-    """Return fresh AST containers derived from the source-keyed parse cache.
+    """Return read-only semantic indexes over one source-keyed parse tree.
 
-    ``_semantic_ast_sha256`` deliberately strips docstrings, so it must never
-    receive nodes owned by the cached tree.  A deep copy keeps cached parse
-    results private and prevents one semantic-contract caller from poisoning
-    another.
+    The indexes never leave this module.  ``_semantic_ast_sha256`` owns the
+    only mutation-prone operation and copies only its selected nodes before
+    stripping docstrings; cloning the whole source tree here made every narrow
+    function contract pay for unrelated module bodies.
     """
-    tree = copy.deepcopy(_cached_semantic_source_tree(module_name, source))
+    tree = _cached_semantic_source_tree(module_name, source)
     return tuple(tree.body), _top_level_function_nodes(tree), _top_level_constant_nodes(tree)
 
 
 def _semantic_ast_sha256(nodes) -> str:
-    # The transformer mutates its input; isolate callers that pass a fresh
-    # inventory from callers that construct their own AST nodes.
+    # The transformer mutates its input.  This is deliberately the sole copy:
+    # callers select only contract-relevant nodes from the private cached tree.
     normalized_nodes = copy.deepcopy(list(nodes))
     normalized = ast.dump(
         _StripDocstrings().visit(ast.Module(body=normalized_nodes, type_ignores=[])),
