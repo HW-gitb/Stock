@@ -495,6 +495,22 @@ class WeeklyCapstoneSoftDiscoveryStageTest(unittest.TestCase):
         )
         self.assertEqual(set(merged["source_refs"][0]), set(ingest.KNIFE1_SOURCE_REF_KEYS))
 
+    def test_normalizer_key_literal_drifting_from_the_shared_tuple_fails_closed(self):
+        """Reverse control: a drifted key literal must raise, not be silently projected away.
+
+        Driven straight at `_source_refs` on purpose.  Routing this through the merge would
+        raise for the WRONG reason: shrinking the tuple also shrinks the projected input, so
+        `observed_at` parsing fails long before the contract check is reached.
+        """
+        raw = [{"source_id": "web:a", "source_type": "web", "observed_at": "2026-07-24T10:00:00Z"}]
+        cutoff = ingest._parse_rfc3339("2026-07-27T00:00:00Z", field="cutoff")
+        self.assertEqual(len(ingest._source_refs(raw, cutoff=cutoff)[0]), 1)
+        with mock.patch.object(
+            ingest, "KNIFE1_SOURCE_REF_KEYS", ("source_id", "source_type", "observed_at_typo"),
+        ):
+            with self.assertRaisesRegex(ingest.LLMThemeDiscoveryError, "KNIFE1_SOURCE_REF_KEYS"):
+                ingest._source_refs(raw, cutoff=cutoff)
+
     def test_date_digest_and_manifest_binding_tamper_are_rejected_without_partial_publish(self):
         mutations = ("date", "digest", "manifest_binding", "raw_path")
         for mutation in mutations:

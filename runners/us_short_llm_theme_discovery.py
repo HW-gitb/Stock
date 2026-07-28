@@ -236,6 +236,13 @@ def _source_refs(raw_refs: Any, *, cutoff: datetime) -> tuple[list[dict[str, str
             "source_type": source_type,
             "observed_at": observed_at.isoformat(),
         }
+        # KNIFE1_SOURCE_REF_KEYS is the contract; this literal only carries its values.  The
+        # projection below would otherwise DROP a field added here and not to the tuple, which
+        # is precisely the silent drift the shared tuple exists to prevent.
+        if set(canonical_ref) != set(KNIFE1_SOURCE_REF_KEYS):
+            raise LLMThemeDiscoveryError(
+                "Knife-1 source_ref key contract drifted from KNIFE1_SOURCE_REF_KEYS"
+            )
         out.append({key: canonical_ref[key] for key in KNIFE1_SOURCE_REF_KEYS})
     out.sort(key=lambda item: item["source_id"])
     return out, by_id

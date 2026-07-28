@@ -1,5 +1,12 @@
 # Session Log
 
+## 2026-07-28 — Claude Code 自修自审 PASS（Knife-1 键契约漂移的第三向也变响）
+
+- **Verdict/Action**: 已提交。上一轮留的边际 Optional 闭掉：`_source_refs` 在投影前加一道受控 raise（`set(canonical_ref) != set(KNIFE1_SOURCE_REF_KEYS)` 即抛 `LLMThemeDiscoveryError`）。此前「只往字面量加键、不动常量」会被推导式静默丢弃；现在三个漂移方向全部会响——常量多键→投影 `KeyError`、字面量多键→本 raise、改回内联字面量→既有键集断言红。零删除，正常输入行为不变。
+- **Required**: 无，未新开 register 条目。
+- **Verify**: 本轮未注入 review-evidence token，故不引用。超集包 `discover -s tests -p test_us_short*discovery*.py` = `255 OK / 397.7s / exit 0`，较上轮 `254` +1 恰为新增反向控制；capstone 模块单跑 `51 OK / 30.5s`。**自审推翻了自己的第一版反向控制**：原写法把常量缩成两键再走 merge，虽抛同型异常，但根因是投影后 `observed_at` 缺失、`_parse_rfc3339` 先炸，压根没碰到被测的门。改为直打 `_source_refs`、常量只改一个键名（等长），`assertRaisesRegex` 钉住确由本门抛出；同用例内先跑一次未 patch 的正路，证明该门对正常输入不误伤。
+- **Next**: 无。该门的死法由构造可证——拿掉那两行 raise 后 `canonical_ref["observed_at_typo"]` 抛 `KeyError`，而 `KeyError` 不是 `LLMThemeDiscoveryError`，`assertRaisesRegex` 必红，故未再临时改产品代码植入一次。
+
 ## 2026-07-28 — Claude Code 复审 PASS（Knife-1 normalizer 改按共享常量构造 source_ref）
 
 - **Verdict/Action**: PASS。`_source_refs` 不再以内联字面量出参，改为先建 `canonical_ref` 再按 `KNIFE1_SOURCE_REF_KEYS` 推导。等价性静态可证：键集与插入序都与改前逐字相同，故序列化与哈希不可能变。新测试断言 `set(merged["source_refs"][0]) == set(ingest.KNIFE1_SOURCE_REF_KEYS)`，而 `merged` 正是 `merge_web_x_discovery` 末尾 `normalize_discovery_payload(...)` 的返回值——打在被改函数的产物上，不是打在投影上。
