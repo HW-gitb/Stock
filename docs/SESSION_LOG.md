@@ -1,5 +1,20 @@
 # Session Log
 
+## 2026-07-28 — Claude Code 审查 PASS（US-short conformance 静态/执行分层）
+
+- **Verdict/Action**: PASS，已提交。两个慢类在原模块降为普通基类（不再被 unittest 收集），新模块以 `(基类, TestCase)` 混入重新暴露；断言与守卫内容零改动，生产代码零改动。`LaneGuardRegistryConformance` 对它们的 6 处派生调用因基类留在原模块而无需 import、无循环依赖。Optional（不阻断）：无机制把「快慢两半配对」钉住——执行模块若被删/改名，11 条变异测试会静默消失，唯一的告警是账本总数。Register: non-material。
+- **Required**: 无。本刀无 material finding；上轮 `K3-R68`/`K3-R69`/`K3-R70` 仍为 CLOSED，见 `docs/system_risk_register.md#R-USSHORT-KNIFE3-WEB-X-MERGE-PACKET-BOUNDARY`（单一来源，本处不复述）。
+- **Verify**: review-evidence:not_available（本轮未注入 token）。均我亲跑：HEAD 版 AST 统计 38（K4b 4 / Matrix 7），拆后 loader 实测静态 27 + 执行 11 = 38，逐类不差；全量 4981→4981，故无丢失亦无重复收集。静态半边 27 tests / 12.8s（拆前整模块 300s TIMEOUT），K3-R70 守卫 `LanePerItemConformance` 留在快半边。搬走的测试确实执行：新模块单跑 `ExecutableClosureMatrix` 那条争议测试 1 test OK。全量按 rule 4 引用账本新指纹 `CACHED GREEN 4981 OK @23:27:39`。
+- **Next**: Codex：K3-R31 / K3-R32（解冻链④）；K3-R34 仍冻结
+
+## 2026-07-28 — Codex 修复（US-short conformance 静态/执行分层）
+
+- **Verdict/Action**: 已将 K4b 与执行式 closure matrix 的测试执行移入独立模块；原模块只保留非 TestCase helper 与快速静态层，断言/生产代码/R70 均未改。
+- **Required**: 无；K3-R31/K3-R32 与 K3-R34 仍按 `docs/system_risk_register.md` 当前条目处理。
+- **Verify**: 主 Python：static=27、executable=11；static + K4b focused=31 OK/17.036s；最终 full lane 实跑 4981 OK/707.7s。
+- **Pre-Codex self-review**: `A=38 conformance tests preserved as static 27 + executable 11; B=old TestCase bases absent; C=unchanged inherited assertions; E=SESSION_LOG+handoff updated; F=py_compile+diff check; matrix=complete; register=not_required; handoff=updated; focused=31 OK; full-lane=4981 OK`。
+- **Next**: Claude Code：审查。
+
 ## 2026-07-28 — Claude Code 审查 PASS（K3-R70 复审；X 侧解冻链②闭合）
 
 - **Verdict/Action**: PASS，已提交。K3-R70 按指定方向修：两处改用 `web._ProviderItemRejected` + 具名 reason，专捕分支置于通用 `except` 之前，且未扩 `DECLARED_BATCH_RAISES`（该测试文件零改动）。随之 K3-R69 与 X 侧解冻链②一并闭合，K3-R68 上轮已闭。Optional（不阻断）：本次 K3-R70 修复轮缺一条 Codex `修复` SESSION_LOG 条目，register 与 handoff 已留全记录。
