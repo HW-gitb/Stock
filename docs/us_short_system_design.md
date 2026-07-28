@@ -353,7 +353,7 @@ core_score = 40% 动量·相对强度 + 35% 赛道/主题热度 + 25% 催化剂/
 
 ### 12.3 model_paper_track 周度组合记账（weekly portfolio wiring）
 
-> 2026-07-20 用户定：无实盘期，主系统按真实周自维护模拟组合（orders/positions/cash/NAV），自动结周度+累计盈亏，为日后与 comparison-only 的 paired head-to-head 留接口（本轮**只建主系统 paper 侧**，不改 §12.2 comparison-only 预注册计划）。现状缺口 = 主系统"建议 → 跨周模拟组合 → 组合 NAV"的连接层（§12.1 引擎只到单笔 fill/net、§12.2 shadow 只到 per-ticker H10；组合级 cash/持仓结转 + 未实现 mark 从未接线）。register `R-USSHORT-MODEL-PAPER-WEEKLY-PORTFOLIO-WIRING`；桌面完整设计（评估后修订版）= `us_short主系统模拟盘方案.md`。
+> 2026-07-20 用户定：无实盘期，主系统按真实周自维护模拟组合（orders/positions/cash/NAV），自动结周度+累计盈亏，作为主系统账户级风控、校准与诊断轨（本轮**只建主系统 paper 侧**，不改 §12.2 comparison-only 预注册计划）。**comparison-only 只做单一部件的配对实验，不进行主系统与影子系统的整体账户或整体策略盈利比较。**未来只有在评估路径依赖的单一部件（如执行、仓位、持仓规则）时，才能从同一冻结 prior state 分出 baseline 与该单一变体的影子分支；NAV 只可作该部件的配对 outcome，绝不能作整套系统优劣或整体替换依据。现状缺口 = 主系统"建议 → 跨周模拟组合 → 组合 NAV"的连接层（§12.1 引擎只到单笔 fill/net、§12.2 shadow 只到 per-ticker H10；组合级 cash/持仓结转 + 未实现 mark 从未接线）。register `R-USSHORT-MODEL-PAPER-WEEKLY-PORTFOLIO-WIRING`；桌面完整设计（评估后修订版）= `us_short主系统模拟盘方案.md`。
 
 - **账户模式 `run_account_mode ∈ {paper_only, manual_actual, dual}`（显式、不隐式替换）**：paper state **永不**覆盖/回写/伪装成真实 `us_short_account_state`；候选分析/来源事实/价格时钟可共享，但**持仓重评、`portfolio_guard`、sizing、现金分配、action_table 必须各自消费自己的账户状态**；paper 分支产独立标记的 `paper_action_bundle`，不把真实分支 `action_table.csv` 无条件当 paper 成交。
 - **时序铁律：先成熟旧周、再冻结新周（防 look-ahead）**：决策日 `D_N`（价格基准 `P_N`）一次 run 内——① 成熟旧决策**只用日期 ≤ `P_N` 的已到达 OHLCV** 结算此前冻结 bundle 的入场/被动退出/持仓动作，**绝不消费 `D_N` 之后的 bar**；② 以 `P_N` 同源 mark 出 `nav_snapshot` → 派生 paper account adapter；③ 用该 adapter 生成 `D_N` 的私有 `paper_action_bundle`，**只冻结、不提前成交**（等下一次有相应日线的 run 再成熟）。合法 delayed materialization（决策当时已 PIT 冻结、行情后到再成熟）≠ 历史 backfill；**禁事后重建/修改当时的选择或订单**。

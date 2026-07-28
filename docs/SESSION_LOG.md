@@ -1,5 +1,12 @@
 # Session Log
 
+## 2026-07-28 — Claude Code 审查（wt/us-short `45e71fdf`：未落地的 comparison-only 范围决策）
+
+- **Verdict/Action**: 该 commit **从未走过评审循环**——它只动 `docs/system_risk_register.md`（2 行）与 `docs/us_short_system_design.md`（1 行），**没有同时写 SESSION_LOG**；master 的 2026-07-22 条目全部是 A-short 治理，无一条对应；commit message 单行无正文。规模上不是大块，是 3 行，但每行是整段散文，重写了 comparison-only 的目的定义并改写了刀 5 的范围。内容是用户自述意图而非代码，不需要代码级审查，只欠落地。
+- **Required**: 无，未新开 register 条目。
+- **Verify**: review-evidence:2a237b301529。`git show --numstat 45e71fdf` = `2 2` register + `1 1` design；`--name-only` 只有这两个文件，无 SESSION_LOG。master 全仓 grep 该决策特征句（「comparison-only 只做单一部件的配对实验」「禁止把 comparison-only 与主系统作整账户」）命中 **0**，故 master 至今没有这条决策。`git diff master 45e71fdf --stat` 显示分支远落后 master（`.tools/`、`.gitattributes` 等大片缺失），整分支不可 merge。
+- **Next**: 已落地（用户 2026-07-28 确认「以这条为准」）：三段逐字搬入 master 的 `docs/us_short_system_design.md` 与 `docs/system_risk_register.md`，经比对与 `45e71fdf` 版本逐字一致、diff 形状同为 register `2 2` + design `1 1`；memory `project_us_short_comparison_nav_caliber_alignment` 已改写为「旧内容作废 + 新决策 + 权威指针」；`wt/us-short` 分支随后删除（内容已在 master，整分支落后过多不可 merge）。
+
 ## 2026-07-28 — Claude Code 审查 PASS（US-short fetch-web 账本定位符 Optional 收口）
 
 - **Verdict/Action**: PASS。`_regroup_chunk_payload` 增加必填 kwarg `chunk_index`，两处拒绝的 detail 由字段名改为 `chunk[{n}]:served_model` / `chunk[{n}]:finish_reason`，与 `_ingest_provider_item` 无类型路径的 `chunk[{n}]:TypeName` 同形，reason 与定位符现在同时可读。调用点在 `for chunk_index, chunk in enumerate(chunks)` 内、lambda 于同一轮被调用，无延迟绑定问题。
