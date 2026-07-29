@@ -1955,8 +1955,12 @@ def write_weekly_report(weekly: dict, iv_feed_summary: dict, out_path: str) -> N
     validate_weekly_report(weekly, iv_feed_summary)
     os.makedirs(os.path.dirname(os.path.abspath(out_path)), exist_ok=True)
     tmp = str(out_path) + ".tmp"
-    with open(tmp, "w", encoding="utf-8") as f:
-        json.dump(weekly, f, ensure_ascii=False, indent=2)
+    try:
+        with open(tmp, "w", encoding="utf-8") as f:
+            json.dump(weekly, f, ensure_ascii=False, indent=2, allow_nan=False)
+    except Exception:
+        Path(tmp).unlink(missing_ok=True)
+        raise
     os.replace(tmp, out_path)
 
 
@@ -2037,7 +2041,7 @@ def _write_pipeline_sidecar_outcomes(path: str | Path, *, as_of: str, run_id: st
     target = Path(path)
     target.parent.mkdir(parents=True, exist_ok=True)
     tmp = target.with_name(f".{target.name}.tmp")
-    tmp.write_text(json.dumps(payload, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
+    tmp.write_text(json.dumps(payload, ensure_ascii=False, indent=2, allow_nan=False) + "\n", encoding="utf-8")
     os.replace(tmp, target)
 
 
@@ -2075,14 +2079,14 @@ def publish_weekly_bundle(weekly: dict, iv_feed_summary: dict, out_path: str, md
     }
     receipt_path = os.path.splitext(out_path)[0] + ".receipt.json"
     payloads = {
-        out_path: (json.dumps(weekly, ensure_ascii=False, indent=2) + "\n").encode("utf-8"),
+        out_path: (json.dumps(weekly, ensure_ascii=False, indent=2, allow_nan=False) + "\n").encode("utf-8"),
         md_path: markdown.encode("utf-8"),
-        receipt_path: (json.dumps(receipt, ensure_ascii=False, indent=2) + "\n").encode("utf-8"),
+        receipt_path: (json.dumps(receipt, ensure_ascii=False, indent=2, allow_nan=False) + "\n").encode("utf-8"),
     }
     if ratchet_publish is not None:
         ratchet_path, state, as_of, generated_at = ratchet_publish
         ratchet_doc = _holding_ratchet_doc(state, as_of, generated_at)
-        payloads[ratchet_path] = (json.dumps(ratchet_doc, ensure_ascii=False, indent=2) + "\n").encode("utf-8")
+        payloads[ratchet_path] = (json.dumps(ratchet_doc, ensure_ascii=False, indent=2, allow_nan=False) + "\n").encode("utf-8")
     _replace_many_with_rollback(payloads)
     return receipt_path
 
@@ -3004,8 +3008,12 @@ def save_holding_ratchet(path, state, as_of, generated_at):
     doc = _holding_ratchet_doc(state, as_of, generated_at)
     os.makedirs(os.path.dirname(os.path.abspath(path)), exist_ok=True)
     tmp = str(path) + ".tmp"
-    with open(tmp, "w", encoding="utf-8") as f:
-        json.dump(doc, f, ensure_ascii=False, indent=2)
+    try:
+        with open(tmp, "w", encoding="utf-8") as f:
+            json.dump(doc, f, ensure_ascii=False, indent=2, allow_nan=False)
+    except Exception:
+        Path(tmp).unlink(missing_ok=True)
+        raise
     os.replace(tmp, path)
 
 

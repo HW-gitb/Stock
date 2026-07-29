@@ -14,7 +14,7 @@
     "contract_fingerprint": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
     "payload": {"type": "object"},
     "boundary": {"type": "object", "additionalProperties": false,
-      "required": ["comparison_only", "automatic_policy_switch", "reads_account_or_holdings", "p5b_implemented"],
-      "properties": {"comparison_only": {"const": true}, "automatic_policy_switch": {"const": false}, "reads_account_or_holdings": {"const": false}, "p5b_implemented": {"const": false}}}
+      "required": ["comparison_only", "automatic_policy_switch", "reads_account_or_holdings"],
+      "properties": {"comparison_only": {"const": true}, "automatic_policy_switch": {"const": false}, "reads_account_or_holdings": {"const": false}, "p5b_implemented": {"type": "boolean"}}}
   }
 }

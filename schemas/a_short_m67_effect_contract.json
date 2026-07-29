@@ -611,10 +611,10 @@
       "id": "industry_weight_comparison_p5",
       "policy": "intentionally_independent",
       "schema_path": "schemas/a_short_industry_weight_comparison_progress_summary.schema.json",
-      "schema_sha256": "edcf868936ff5fd50cec72b788fcf6f8249bbde2de4952a8cf31f0c4373d1740",
-      "reason": "P5a records cache-only, source-bound profile-weight evidence progress and a P5b build reminder. It is prohibited from changing active_profile, EGS, formal M6.7 action, star, sizing, cash allocation, veto, stop, target, account state, or any production policy.",
-      "owner": "engine/a_short_industry_weight_comparison.py + runners/a_short_industry_weight_comparison.py",
-      "review_ref": "P5b may be implemented only after the frozen eligible/difference-week trigger; every policy change remains separately reviewed and user-gated.",
+      "schema_sha256": "9a62c53c616a5f09f3b19e8bbee9227c990c8d7d43db2c62c43fec57b0985f2b",
+      "reason": "P5b computes a source-bound, cache-only comparison verdict for the governed profile questions. It is prohibited from changing active_profile, EGS, formal M6.7 action, star, sizing, cash allocation, veto, stop, target, account state, or any production policy.",
+      "owner": "engine/a_short_industry_weight_comparison.py + engine/a_short_industry_weight_adjudication.py + runners/a_short_industry_weight_comparison.py",
+      "review_ref": "P5b verdicts are advisory comparison evidence only; every policy change remains separately reviewed and user-gated.",
       "consumer_refs": [
         "research/results/a_short/industry_weight_comparison_summary.json",
         "research/results/a_short/industry_weight_comparison_summary.md"
@@ -658,7 +658,7 @@
     "small_float_mv_pct"
   ],
   "output_schema_sha256": {
-    "schemas/a_short_weekly_report.schema.json": "3cc739653bb207da8ef8759cf038273d30b5ac34f3b02687808a580809a729b9",
+    "schemas/a_short_weekly_report.schema.json": "4a43e90072bd8a0483569de7efc5b337eed35547377be5724e26e58a1c24b70e",
     "schemas/a_short_m67_report.schema.json": "9e74525507e9731031b90fdd0add1be74b28afcd78210ff78533070a6946c23c"
   },
   "analysis_input_paths": [

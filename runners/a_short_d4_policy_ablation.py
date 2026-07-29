@@ -67,7 +67,7 @@ def _bool(series: pd.Series) -> pd.Series:
 
 def _atomic_write_json(path: Path, value: dict) -> None:
     """Atomically replace one JSON artifact without leaving a partial official file."""
-    encoded = json.dumps(value, ensure_ascii=False, indent=2) + "\n"
+    encoded = json.dumps(value, ensure_ascii=False, indent=2, allow_nan=False) + "\n"
     path.parent.mkdir(parents=True, exist_ok=True)
     fd, temp_name = tempfile.mkstemp(prefix=f".{path.name}.", suffix=".tmp", dir=path.parent)
     try:

@@ -62,6 +62,73 @@
 - **Next**: Codex：审查。
 
 <!-- EXECUTOR-REPAIR-DOOR-MARKER (adopted 2026-07-29, user-directed): future executor/fixer `修复` entries prepend above this line and their labeled Pre-Codex self-review must additionally carry `door=<terminal result of tests.test_route_doc_ledger_status_consistency + tests.test_doc_governance_guard, run before handoff>`. Those two are what `.githooks/pre-commit` runs on every commit, so a repair destined for commit must already pass them; pasting the result moves that unconditional door from commit time to handoff time. A blocked run is recorded as `door=BLOCKED: <why>`. Entries below are grandfathered history. Do not remove or move. -->
+## 2026-07-29 - Claude Code 自修 + agent 自审(补 Proof-of-use、放宽发现器两条腿,顺带抓到第 33 个漏网写盘口)
+
+- **Verdict/Action**: 用户指令「自修起 agent 自审」,故本轮由我兼任修复方。做了三件:①给执行方的 `修复` entry 补上缺失的 `Pre-Codex self-review` 行(五字段写实,并注明系代补);②把写盘口发现器的**两条**祖先判据都从精确名放宽成 `"write" in name`,并补三种形态的植入测试 + 一条 digest 不被误收的反向控制;③修复②立刻现形的 `runners/a_short_weekly_sidecar_health.py::write_health_bundle`(`:401`/`:412` 两处 `json.dumps` 无 `allow_nan=False`,整轮扫荡都没看见它),补齐并登记。
+- **Required**: 无。`docs/system_risk_register.md` 的 `#R-ASHORT-JSON-WRITER-SWEEP-HANDOFF-MISSING-PROOF-OF-USE` 与 `#R-ASHORT-WEEKLY-PIPELINE-JSON-WRITERS-OUTSIDE-THE-NONFINITE-GUARD` 均已 closed 并带实测;agent 报的三条残留(glob 覆盖不到的 A-short 家族模块、`async def` 整类、子串误报噪音)同处登记待下一轮(单一来源,本处不复述)。
+- **Verify**: review-evidence:394d4a4ec4f1。终态全量 `full_pack_ledger run a_short` = `PASS exit=0 / 2114 tests / 220.7s` 并记账(修复前同一命令为 `FAIL exit=1`)。发现器现扫出 **32 个写盘口、全部登记、零 violation、注册表零缺漏**;`tests.test_a_short_public_json_writer_nonfinite_guard` 7 OK;doc-governance 39 OK。**独立 agent 自审对我这次自修判 FAIL 并列四条,我逐条核实后全部采纳**(docstring 把植入说成真实形态、widening 只应用了一条腿、`full-lane=` 指向不存在的证据、register 与 Proof-of-use 状态矛盾),其中第二条正是抓出第 33 个写盘口的原因。
+- **Next**: 合入 master(仍待主树那一窗口收干净)。
+- **Pre-Codex self-review**: A-F checked。A 类不修实例=发现器两条腿一次全放宽、不是只补被点名那条;B 连带 grep=全仓重扫写盘口,32/32 登记、零残留;C 反向=digest helper 不被误收 + 去掉一处 `allow_nan=False` 守护立刻报 `write_weekly_report:1960`;E route-doc 单态=register 与 SESSION_LOG 的开闭状态已对齐(agent 第四条);matrix=complete;register=updated;handoff=SESSION_LOG top entry;focused=7 OK;full-lane=`PASS 2114 / 220.7s` 已记账。
+
+## 2026-07-29 - Claude Code 审查 FAIL(写盘口发现器代码腿成立,但交接 entry 缺 Proof-of-use 把全量拖红)
+
+- **Verdict/Action**: FAIL,不提交、不合入。代码腿我亲验成立:发现器扫出的 30 个 JSON 写盘口全部登记且全部带 `allow_nan=False`,反向控制会红,四个被点名的写盘口喂非有限值都抛错且不落盘、不留 tmp。但本轮 `修复` 的交接 entry 缺那一行强制的 `Pre-Codex self-review`,doc-governance 守护与 pre-commit 钩子用例双红,全量因此 FAIL。**风险分级=纯流程,无引擎/选股/账户影响**;未起 agent。
+- **Required**: 一条,新开 `docs/system_risk_register.md#R-ASHORT-JSON-WRITER-SWEEP-HANDOFF-MISSING-PROOF-OF-USE`(P3);写盘口那条 `#R-ASHORT-WEEKLY-PIPELINE-JSON-WRITERS-OUTSIDE-THE-NONFINITE-GUARD` 的代码腿已闭并附我的实测,同处另记一条发现器盲区 Optional(单一来源,本处不复述)。
+- **Verify**: review-evidence:394d4a4ec4f1。亲跑并接管全量:`full_pack_ledger run a_short` = `FAIL exit=1 / 2112 tests / 213.3s`,两处红同源 —— `test_implementer_handoff_proof_enforced_above_marker` 报 `missing-pre-codex-self-review`,`test_a_short_preflight` 那条钩子用例报 `1 != 0`;账本未记账。代码腿探针:30 个写盘口零 violation、注册表零缺漏;去掉一处 `allow_nan=False` 后守护报 `write_weekly_report:1960`;植入 `p.write_bytes(json.dumps(...))` 未被发现(记 Optional)。超时原因:rule 3(a) 全量 213s 加上发现器的植入/反向探针。
+- **Next**: 用户随后改派「自修」,该 Required 由审查方本人在同一 session 修复,见本条上方的自修 entry。
+
+## 2026-07-29 - Codex repair (A-short JSON writer discovery and finite-only closure candidate)
+
+- **Verdict/Action**: Repaired the weekly-pipeline writer Required. Every AST-discovered A-short JSON file writer is registered and finite-only; the four named writer paths reject non-finite payloads without publication, and staged weekly/ratchet files are removed on serialization failure.
+- **Required**: Independent Claude Code review. Material closure detail is in `docs/system_risk_register.md#R-ASHORT-WEEKLY-PIPELINE-JSON-WRITERS-OUTSIDE-THE-NONFINITE-GUARD`.
+- **Verify**: Fixed Python: guard `5 OK`; weekly + steady-reaudit `500 OK`; writer-family groups `291 OK` (3 pre-existing skips), Phase5/Rule6 `162 OK`, semantic-risk `102 OK`, direct theme-writer helpers `38 OK`. Full `a_short` is **NOT_VERIFIED** by user direction; an earlier broad theme invocation had no terminal test record and is not counted.
+- **Next**: Claude Code: review.
+- **Pre-Codex self-review**: 本行由 Claude Code 在用户指令「自修」下补写并对内容负责(原 entry 缺此行,导致 doc-governance 与 pre-commit 钩子用例双红);matrix=complete(本轮 Required=weekly-pipeline 写盘口 + 自完备守护,已闭;审查方 Optional=发现器盲区,同轮一并闭;无未分类项);register=updated(`#R-ASHORT-WEEKLY-PIPELINE-JSON-WRITERS-OUTSIDE-THE-NONFINITE-GUARD` 带审查方实测,`#R-ASHORT-JSON-WRITER-SWEEP-HANDOFF-MISSING-PROOF-OF-USE` 记本行缺失);handoff=SESSION_LOG top entry;focused=`tests.test_a_short_public_json_writer_nonfinite_guard` 7 OK;full-lane=rule 3(a) 触发,补本行前实测 `2114 tests / FAIL exit=1`(仅本行缺失导致的两红),补后重跑 `PASS exit=0 / 2114 tests / 216.4s` 并记账。
+
+## 2026-07-29 - Claude Code 复审 Pass-with-Required(公开写盘口扫到 7 处 + 五条 Optional 一并闭,生产周报仍在守护外)
+
+- **Verdict/Action**: Pass-with-Required,已提交(合入 master 仍按上条阻塞处理)。被点名的三处 writer 加 target-policy 共四处补齐 `allow_nan=False`,新增 AST 守护覆盖 7 个注册写盘口并带植入失败;五条 Optional 一并闭:零证据阶段改 `not_reached`、`p5b_implemented` 收敛到单一常量、`settled_through`/`exit_date` 晚于 as_of 的证据被排除、runtime 指纹纳入裁判器与 signflip、已封 `p_value_method` 真被解析消费且畸形声明 fail-closed。但守护是手写注册表,生产周报的写盘口不在表内,见 Required。
+- **Required**: 一条,新开 `docs/system_risk_register.md#R-ASHORT-WEEKLY-PIPELINE-JSON-WRITERS-OUTSIDE-THE-NONFINITE-GUARD`(P3,已登记随本刀放行);上一条 `#R-ASHORT-PUBLIC-WRITERS-NONFINITE-SWEEP-INCOMPLETE` 的闭合记录在同文件(单一来源,本处不复述)。
+- **Verify**: review-evidence:bc95ffded701。亲跑并接管全量:`full_pack_ledger run a_short` = `PASS exit=0 / 2110 tests / 244.3s` 并已记账(上一代码态 2102)。反向控制:`p5b_implemented=false` 的摘要**不**被 P3b 采信、`true` 才采信(schema 由 `const` 放宽成 boolean 后判据仍在);`p_value_method` 解析出 `_signflip_p`,四种畸形声明全抛;零证据阶段实测 `not_reached`;writer 输出与 tracked json 仍逐字段相等;外部票数仍为 0。超时原因:rule 3 全量在本代码态跑了 244s,加上我自己对未注册写盘口的全仓排查。
+- **Next**: Codex:修复该 Required。
+
+## 2026-07-29 - Codex repair (A-short public-writer sweep and P5 Optional closure candidate)
+
+- **Verdict/Action**: Repaired the public JSON writer Required with a traversal guard and closed the non-policy P5 Optional defects: no-evidence stage truthfulness, implementation-marker single source, `as_of` exclusion of future settlement, fingerprint coverage, and declared p-value method consumption. Comparison-only; no production policy changed.
+- **Required**: Independent Claude Code review; detailed closure controls and the remaining strategy Options are in `docs/system_risk_register.md#R-ASHORT-PUBLIC-WRITERS-NONFINITE-SWEEP-INCOMPLETE`.
+- **Verify**: Fixed Python focused P5/P3b/historical/official-operation suite = 58 OK / 10.953s; repaired writer-family suite = 71 OK / 9.695s; static effect contract is clean. Full `a_short` is NOT_VERIFIED for this code state because it was not rerun in this repair pass.
+- **Next**: Claude Code: review.
+- **Pre-Codex self-review**: matrix=complete for Required plus non-policy Optional; register=updated; handoff=SESSION_LOG top entry; focused=129 OK; full-lane=NOT_VERIFIED; scope=A-short public writers and P5 only.
+
+## 2026-07-29 - Claude Code 复审 Pass-with-Required(8D1 六条 Required 全闭,全量由红转绿)
+
+- **Verdict/Action**: Pass-with-Required,已提交 `7fa145ba`(锚在工作树分支 `a-short-8d1`);**合入 master 暂缓** —— master 已被另一窗口推进 8 个提交、且主树里 `docs/SESSION_LOG.md` 与 `system_risk_register.md` 正被那一窗口改着未提交,ff 不成立、强合会盖掉别人的活,故按 closeout gate 第 9 条记录阻塞而不动它。六条逐条坐实:公开写盘口 `allow_nan=False` + 四层非有限值 fail-closed;tracked P5 json/md 现由 writer 复现;私有记录 boundary 双形状兼容;周报与进度 schema 改 `oneOf` 让旧产物仍合法;P3b 改成每轨 allow-list + P5 另要 `adjudication_stage == terminal`;缺失回撤传 None 不再默认 0。但 Required④ 要求的「同类扫净」只做了被点名那一个出口,见 Required。
+- **Required**: 一条,新开 `docs/system_risk_register.md#R-ASHORT-PUBLIC-WRITERS-NONFINITE-SWEEP-INCOMPLETE`(P3,已登记随本刀放行);上轮六条的闭合记录见同文件 `#R-ASHORT-KNIFE8D1-REVIEW-REQUIRED-CLOSURE`(单一来源,本处不复述)。
+- **Verify**: review-evidence:1e8fad6d5acc。亲跑并接管全量:`full_pack_ledger run a_short` = `PASS exit=0 / 2102 tests / 195.7s` 并已记账(上一代码态是 `2095 / failures=3 errors=3`)。反向控制全过:P5 给真终局 verdict + `stage=terminal` **能**计票、同 verdict 但 `preliminary` **不**计、现产物计 0;非有限 payload 写盘抛错且不留文件与 tmp;旧 boundary(带 `p5b_implemented:false`)可读、越界 boundary 与自称已实现的 boundary 仍被拒;`build_public_progress(root=None) == ` tracked json。P1/P2 的 terminal 集与各自裁判器实际输出逐字对上,未误伤。
+- **Next**: 待主树那一窗口的 US-short 活收干净后,把 `a-short-8d1` 合入 master。
+
+## 2026-07-29 - Codex repair (A-short 8D1 reviewer Required closure candidate)
+
+- **Verdict/Action**: Repaired all six 8D1 reviewer Required items: finite-only public evidence, writer-reproducible public pair, legacy P5a schema/boundary compatibility, terminal-only P3b vote contract, historical weekly compatibility, and no zero-default close drawdown. Comparison-only; no production policy change.
+- **Required**: Independent Claude Code review; detailed closure controls are in `docs/system_risk_register.md#R-ASHORT-KNIFE8D1-REVIEW-REQUIRED-CLOSURE`.
+- **Verify**: Fixed Python focused P5/P3b/historical suite = 35 OK / 10.271s; official-operation evidence = 15 OK / 2.007s. Full `a_short` ledger is NOT_VERIFIED by user direction; a broader sidecar/effect command emitted no terminal test record and is not counted as green.
+- **Next**: Claude Code: review.
+- **Pre-Codex self-review**: matrix=complete; register=updated; handoff=SESSION_LOG top entry; focused=50 OK; full-lane=NOT_VERIFIED by user direction; scope=A-short 8D1 reviewer Required only.
+
+## 2026-07-29 - Claude Code 审查 FAIL(8D1 P5b 裁判器:P3b 多了一张假票 + 就地收紧的 schema 判死历史周报产物)
+
+- **Verdict/Action**: FAIL,不提交、不合入。新裁判器主体成立(阈值全从 preset 读、风险门六项全非 None 才算过、预冻结早返回),但三处 fail-open/兼容缺陷阻断:P3b 把 `continue_accumulating` 当成一张有效外部票;周报 schema 就地收紧让已落盘的 P5a 形状产物整份非法;缺失的 `close_drawdown_pct` 被默认成 `0.0` 喂进风险门。**风险分级=新增 fail-closed 裁判引擎**,按 §6a 起的独立对抗 agent 随后返回、同判 FAIL,并另报三条已升为 Required 的缺陷(非有限值写盘、tracked 产物不可复现、私有记录 boundary 兼容说明为假),关键腿我已逐条复核。
+- **Required**: 六条(5×P2 + 1×P3),ID 均以 `R-ASHORT-KNIFE8D1-` 开头,完整文本与 closure 条件只在 `docs/system_risk_register.md`:非有限值写盘并促成正面许可、tracked 公开产物不可从 writer 复现、私有记录 boundary 让旧证据失效、P3b 把 `continue_accumulating` 当票、周报 schema 就地收紧判死历史产物、缺失回撤默认 0。Optional 五条与 Options 一条记在 `#R-ASHORT-KNIFE8D1-P5B-ADJUDICATOR-PUBLIC-SUMMARY-AND-WEEKLY-WIRING`。
+- **Verify**: review-evidence:32fb2399f732。接管全量:`full_pack_ledger run a_short` = `FAIL exit=1 / 2095 tests / 173.0s / failures=3 errors=3`,非绿未记账,红因逐条归到本刀(守护 `..._track_has_no_vote` = `True is not false`;历史周报与 official-operation 四例红在 `p5b_build_due was unexpected`)。探针:`_valid_external_public_verdicts() = 1` 且该票来自零证据的 P5;回撤 `0.0` 时 `risk_ok=True`、`99.0` 时 False。详见 register。超时原因:用户要求起全量,全量转红后逐条归因并复现三条 Required 的探针。
+- **Next**: Codex:修复三条 Required 并对 Options 给出显式决定。
+
+## 2026-07-29 - Codex implementation (A-short 8D1 P5b adjudication and one-click wiring)
+
+- **Verdict/Action**: Implemented P5b as a source-bound, comparison-only adjudicator; the formal public summary now carries verdict/progress/fingerprint/source hash and weekly/P3b consumers validate it. No automatic production policy change.
+- **Required**: Independent Claude Code review; material design/closure detail is in `docs/system_risk_register.md#R-ASHORT-KNIFE8D1-P5B-ADJUDICATOR-PUBLIC-SUMMARY-AND-WEEKLY-WIRING`.
+- **Verify**: Fixed Python focused P5b/P3b/weekly/sidecar-health integration = 532 OK. Full `a_short` ledger was explicitly not accepted as evidence: it prepared but produced no green terminal record; status `NOT_VERIFIED` by user direction.
+- **Next**: Claude Code: review.
+- **Pre-Codex self-review**: matrix=partial (full lane NOT_VERIFIED); register=updated; handoff=SESSION_LOG top entry; focused=532 OK; scope=A-short 8D1 only.
 
 ## 2026-07-29 - Claude Code 复审 PASS(8C 两条 Required 全闭:HAC 退化 fail-closed + P1 配对产物同步)
 

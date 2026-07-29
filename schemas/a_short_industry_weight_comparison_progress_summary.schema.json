@@ -1,22 +1,71 @@
 {
   "$schema": "http://json-schema.org/draft-07/schema#",
-  "title": "A-short industry-weight comparison de-identified P5a progress",
+  "title": "A-short industry-weight comparison de-identified P5 progress",
   "type": "object",
   "additionalProperties": false,
-  "required": ["schema_name", "schema_version", "summary_id", "as_of", "status", "questions", "p5b_build_due", "admission_binding", "message", "production_unchanged"],
+  "required": ["schema_name", "schema_version", "summary_id", "as_of", "status", "questions", "admission_binding", "message", "production_unchanged"],
   "properties": {
     "schema_name": {"const": "a_short_industry_weight_comparison_progress_summary"},
     "schema_version": {"const": "1.0.0"},
     "summary_id": {"const": "a_short_industry_weight_comparison"},
     "as_of": {"type": "string", "pattern": "^[0-9]{8}$"},
-    "status": {"enum": ["not_configured", "accumulating", "p5b_build_due", "evidence_unavailable_or_inconclusive"]},
-    "questions": {"type": "array", "minItems": 3, "maxItems": 3,
-      "items": {"type": "object", "additionalProperties": false,
-        "required": ["question_id", "eligible_policy_weeks", "difference_weeks", "mature_opportunities", "no_count_weeks", "p5b_build_due", "remaining_eligible_to_p5b", "remaining_difference_to_p5b", "p5b_checkpoint_notice"],
-        "properties": {"question_id": {"enum": ["balanced_vs_legacy", "aggressive_vs_balanced", "theme_double_vs_balanced"]}, "eligible_policy_weeks": {"type": "integer", "minimum": 0}, "difference_weeks": {"type": "integer", "minimum": 0}, "mature_opportunities": {"type": "integer", "minimum": 0}, "no_count_weeks": {"type": "integer", "minimum": 0}, "p5b_build_due": {"type": "boolean"}, "remaining_eligible_to_p5b": {"type": "integer", "minimum": 0}, "remaining_difference_to_p5b": {"type": "integer", "minimum": 0}, "p5b_checkpoint_notice": {"enum": ["accumulating", "p5b_implementation_due_at_12", "p5b_formal_checkpoint_24_not_implemented", "p5b_terminal_checkpoint_36_not_implemented"]}}}},
+    "status": {"enum": ["not_configured", "accumulating", "review_due", "evidence_unavailable_or_inconclusive"]},
+    "questions": {"type": "array", "minItems": 3, "maxItems": 3},
     "p5b_build_due": {"type": "boolean"},
+    "verdict": {"enum": ["continue_accumulating", "retain_balanced_only", "next_reviewed_candidate_only", "manual_rollback_review_only", "do_not_promote", "not_adjudicated"]},
+    "adjudication_stage": {"enum": ["accumulating", "preliminary", "formal", "terminal", "not_adjudicated"]},
+    "progress": {"type": "object"},
+    "fingerprint": {"type": "string", "pattern": "^[a-f0-9]{64}$"},
+    "source_hash": {"type": "string", "pattern": "^[a-f0-9]{64}$"},
+    "p5b_implemented": {"type": "boolean"},
     "admission_binding": {"type": "string", "pattern": "^[a-f0-9]{64}$"},
     "message": {"type": "string", "minLength": 1},
     "production_unchanged": {"const": true}
+  },
+  "oneOf": [
+    {
+      "required": ["p5b_build_due"],
+      "properties": {
+        "questions": {"items": {"$ref": "#/definitions/legacy_question"}}
+      }
+    },
+    {
+      "required": ["verdict", "adjudication_stage", "progress", "fingerprint", "source_hash", "p5b_implemented"],
+      "properties": {
+        "questions": {"items": {"$ref": "#/definitions/adjudication_question"}}
+      }
+    }
+  ],
+  "definitions": {
+    "legacy_question": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["question_id", "eligible_policy_weeks", "difference_weeks", "mature_opportunities", "no_count_weeks", "p5b_build_due", "remaining_eligible_to_p5b", "remaining_difference_to_p5b", "p5b_checkpoint_notice"],
+      "properties": {
+        "question_id": {"enum": ["balanced_vs_legacy", "aggressive_vs_balanced", "theme_double_vs_balanced"]},
+        "eligible_policy_weeks": {"type": "integer", "minimum": 0},
+        "difference_weeks": {"type": "integer", "minimum": 0},
+        "mature_opportunities": {"type": "integer", "minimum": 0},
+        "no_count_weeks": {"type": "integer", "minimum": 0},
+        "p5b_build_due": {"type": "boolean"},
+        "remaining_eligible_to_p5b": {"type": "integer", "minimum": 0},
+        "remaining_difference_to_p5b": {"type": "integer", "minimum": 0},
+        "p5b_checkpoint_notice": {"type": "string", "minLength": 1}
+      }
+    },
+    "adjudication_question": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["question_id", "verdict", "reason", "checkpoint_stage", "progress", "metrics", "comparison_only"],
+      "properties": {
+        "question_id": {"enum": ["balanced_vs_legacy", "aggressive_vs_balanced", "theme_double_vs_balanced"]},
+        "verdict": {"enum": ["continue_accumulating", "retain_balanced_only", "next_reviewed_candidate_only", "manual_rollback_review_only", "do_not_promote"]},
+        "reason": {"type": "string"},
+        "checkpoint_stage": {"enum": ["not_reached", "preliminary", "formal", "terminal"]},
+        "progress": {"type": "object"},
+        "metrics": {"type": "object"},
+        "comparison_only": {"const": true}
+      }
+    }
   }
 }

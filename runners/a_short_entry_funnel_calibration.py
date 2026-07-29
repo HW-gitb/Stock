@@ -213,7 +213,7 @@ def build_report(prereg: dict[str, Any], generated_at: str) -> dict[str, Any]:
 def write_report(report: dict[str, Any], path: Path) -> None:
     validate(report, REPORT_SCHEMA_PATH, "calibration report")
     path.parent.mkdir(parents=True, exist_ok=True)
-    path.write_text(json.dumps(report, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
+    path.write_text(json.dumps(report, ensure_ascii=False, indent=2, allow_nan=False) + "\n", encoding="utf-8")
 
 
 def main(argv: list[str] | None = None) -> int:

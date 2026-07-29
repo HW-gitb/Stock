@@ -18,7 +18,7 @@
     "risk_and_statistics_contract": {"type": "object"},
     "epoch_rule": {"type": "string", "minLength": 1},
     "boundary": {"type": "object", "additionalProperties": false,
-      "required": ["comparison_only", "automatic_policy_switch", "reads_account_or_holdings", "allows_historical_backfill", "p5b_implemented"],
-      "properties": {"comparison_only": {"const": true}, "automatic_policy_switch": {"const": false}, "reads_account_or_holdings": {"const": false}, "allows_historical_backfill": {"const": false}, "p5b_implemented": {"const": false}}}
+      "required": ["comparison_only", "automatic_policy_switch", "reads_account_or_holdings", "allows_historical_backfill"],
+      "properties": {"comparison_only": {"const": true}, "automatic_policy_switch": {"const": false}, "reads_account_or_holdings": {"const": false}, "allows_historical_backfill": {"const": false}, "p5b_implemented": {"type": "boolean"}}}
   }
 }

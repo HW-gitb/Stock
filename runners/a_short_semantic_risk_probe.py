@@ -565,7 +565,7 @@ def write_probe_summary(summary: dict, out_path: str) -> None:
     os.makedirs(os.path.dirname(os.path.abspath(out_path)), exist_ok=True)
     tmp = str(out_path) + ".tmp"
     with open(tmp, "w", encoding="utf-8") as f:
-        json.dump(summary, f, ensure_ascii=False, indent=2)
+        json.dump(summary, f, ensure_ascii=False, indent=2, allow_nan=False)
     os.replace(tmp, out_path)
 
 

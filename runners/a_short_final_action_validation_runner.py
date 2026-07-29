@@ -546,7 +546,7 @@ def _is_current_external_public_summary(path: Path, payload: dict[str, Any]) -> 
         if path.name == "industry_weight_comparison_summary.json":
             from engine.a_short_industry_weight_comparison import validate_public_progress
             validate_public_progress(payload)
-            return True
+            return payload.get("p5b_implemented") is True
     except Exception:
         return False
     return False
@@ -557,7 +557,10 @@ def _valid_external_public_verdicts() -> int:
     count = 0
     for track in p3b_external_comparison_tracks():
         implementation = track.get("implementation") or {}
+        verdict_contract = track.get("public_verdict_contract")
         if implementation.get("value") is not True:
+            continue
+        if not isinstance(verdict_contract, dict) or not isinstance(verdict_contract.get("terminal_verdicts"), (tuple, list)):
             continue
         path = ROOT / str(track.get("public_summary_path") or "")
         try:
@@ -576,7 +579,10 @@ def _valid_external_public_verdicts() -> int:
             _date(evidence_date)
         except FinalActionValidationError:
             continue
-        if (isinstance(verdict, str) and verdict not in {"", "insufficient_data", "not_adjudicated"} and
+        terminal_stage_field = verdict_contract.get("terminal_stage_field")
+        terminal_stage_value = verdict_contract.get("terminal_stage_value")
+        stage_ok = terminal_stage_field is None or payload.get(terminal_stage_field) == terminal_stage_value
+        if (isinstance(verdict, str) and verdict in set(verdict_contract["terminal_verdicts"]) and stage_ok and
                 isinstance(progress, dict) and _is_sha256(fingerprint) and _is_sha256(source_hash)):
             count += 1
     return count

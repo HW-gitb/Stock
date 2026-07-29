@@ -427,19 +427,22 @@ def p3b_external_comparison_tracks() -> tuple[dict[str, Any], ...]:
     silently change P3b semantics.
     """
     registry = admissions()
-    from engine.a_short_industry_weight_comparison import _boundary
-    p5_boundary = _boundary()
+    from engine.a_short_industry_weight_adjudication import P5B_IMPLEMENTED
     return (
         {"track_id": "p1_regime_candidate_effect",
          "public_summary_path": "research/results/a_short/regime_candidate_effect_summary.json",
-         "implementation": {"kind": "constant", "value": True}},
+         "implementation": {"kind": "constant", "value": True},
+         "public_verdict_contract": {"terminal_verdicts": ("candidate_better", "baseline_better", "no_material_difference")}},
         {"track_id": "p2_target_exit_policy",
          "public_summary_path": "research/results/a_short/target_policy_comparison_summary.json",
          "implementation": {"kind": "admission_statistical_flag", "admission_id": "p2_target_exit_policy",
                             "flag": "formal_adjudication_implemented",
-                            "value": bool(registry["p2_target_exit_policy"]["statistical_contract"]["definition"]["formal_adjudication_implemented"])}},
+                            "value": bool(registry["p2_target_exit_policy"]["statistical_contract"]["definition"]["formal_adjudication_implemented"])},
+         "public_verdict_contract": {"terminal_verdicts": ("edge_positive", "edge_not_supported")}},
         {"track_id": "p5_industry_weight",
          "public_summary_path": "research/results/a_short/industry_weight_comparison_summary.json",
-         "implementation": {"kind": "module_boundary_flag", "module": "engine.a_short_industry_weight_comparison",
-                            "flag": "p5b_implemented", "value": bool(p5_boundary["p5b_implemented"])}},
+         "implementation": {"kind": "adjudicator_public_surface", "module": "engine.a_short_industry_weight_adjudication",
+                            "flag": "p5b_implemented", "value": bool(P5B_IMPLEMENTED)},
+         "public_verdict_contract": {"terminal_verdicts": ("retain_balanced_only", "next_reviewed_candidate_only", "manual_rollback_review_only", "do_not_promote"),
+                                     "terminal_stage_field": "adjudication_stage", "terminal_stage_value": "terminal"}},
     )
