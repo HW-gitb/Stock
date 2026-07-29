@@ -10,8 +10,8 @@
 ## 2026-07-29 — Claude Code 审查 FAIL（US-short K3-R79 / K3-R83 收口，master 工作树）
 
 - **Verdict/Action**: FAIL，未提交。身份比对那一半方向对（不动 `_canonical_locator`、只在背书处按推文 ID 比），零接受也落 raw 也建起来了；挡住这一刀的是 schema 把两个新字段设成 **required**，把已冻结的真实付费收据打成非法。正文只在 `docs/system_risk_register.md#R-USSHORT-KNIFE3-WEB-X-MERGE-PACKET-BOUNDARY`（K3-R86），本处不复述。
-- **Required**: K3-R86 —— `provider_response_refs` 与 drop 条目的 `model_source_url` / `provider_annotation_urls` 被写进 `required`，而 `merge.py:246` 是**读盘后**校验，等于追溯作废历史产物。修法：两者移出 `required` 只留 `properties`，改由 builder 对 live 包强制，并补「读回旧形状仍被接受」的正向控制。
-- **Verify**: review-evidence:5183d44a56a2。全量按 rule 4 引用执行方官方账本 `CACHED GREEN us_short 5003 OK @2026-07-29T18:18:34 on this EXACT code state`；其后并发窗口改了 `tests/test_doc_governance_guard.py`（不属该包）致缓存键失配，未重跑：FAIL 已被探针坐实，重跑还会绑进另一窗未审改动。决定性证据取自**真实产物**：`..._x_20260731_receipt.json` 被 `xfetch._validate_schema` 拒于 `provider_response_refs`，补空列表后改拒 `model_source_url`。独立对抗 agent 已起、结论未回，§6a 记 NOT_VERIFIED。Scope：树内并发的 K3-R85 文档守卫修复不在本轮范围、未 staged。
+- **Required**: K3-R86，加 §6a 独立 agent 事后带回并经我结构性核实的 K3-R87…K3-R93：一个坏件丢整批、腐坏文件永久卡死该响应、一句普通的 “secret” 废掉整轮付费、一条 annotation 放大出无界的模型自选来源身份、live 重试不再幂等、drop 新字段绕过 sanitizer 且体积二次增长、merge 完全不验 `provider_response_refs`。全部正文在 register。
+- **Verify**: review-evidence:5183d44a56a2。全量按 rule 4 引用执行方官方账本 `CACHED GREEN us_short 5003 OK @2026-07-29T18:18:34 on this EXACT code state`；其后并发窗口改了 `tests/test_doc_governance_guard.py`（不属该包）致缓存键失配，未重跑：FAIL 已被探针坐实，重跑还会绑进另一窗未审改动。决定性证据取自**真实产物**：`..._x_20260731_receipt.json` 被 `xfetch._validate_schema` 拒于 `provider_response_refs`，补空列表后改拒 `model_source_url`。§6a 独立对抗 agent 已回（原记 NOT_VERIFIED，此处更正）：独立复现了 K3-R86，另开出 K3-R87…K3-R93；其中四条结构性主张我已在仓库源码里逐条核实。Scope：树内并发的 K3-R85 文档守卫修复不在本轮范围、未 staged。
 - **Next**: Codex：修复。
 
 ## 2026-07-29 — Codex 修复 K3-R85

@@ -1,5 +1,18 @@
 # US-short soft-discovery X live response-shape re-review — 2026-07-28
 
+## 2026-07-29 追加：K3-R79 / K3-R83 修复的 Required 清单扩到八条（Claude Code；未实现任何代码）
+
+**先读这一条再动手**：上一轮我给的 FAIL 只有 K3-R86。§6a 独立对抗 agent 随后回来，独立复现了 K3-R86，另外开出七条，我已逐条落 register 并对其中四条做了结构性核实。**这一刀现在要一起修 K3-R86 到 K3-R93 八条**，正文只在 `docs/system_risk_register.md`，此处不复述。
+
+**为什么必须合成一刀**：这八条不是八个孤立 bug，是三个类。
+- **「一个坏件弄死整批」类**（K3-R87 / K3-R88）—— 这是本 lane 自己 §五 红线 #4 的原话，也是 K3-R70 / K3-R71 那条反复复发的线。新的 raw 捕获路径把它整个反过来了：一次抓取失败就废掉 N 次已付费调用，而同文件里的 `_normalize_results` 对同一类是「记账后继续」。修的时候按类扫，别只补被点名的那一条腿。
+- **「策略选错了那一版」类**（K3-R89 / K3-R92）—— 仓库里同时存在宽松词法策略和 value-shaped 持久化策略，注释白纸黑字写了持久化证据该用后者；新代码两处都挑了错的那版（安全扫描用了宽松词法、drop 新字段绕过了唯一的 sink 侧 sanitizer）。
+- **「证据身份 / 可复现性」类**（K3-R86 / K3-R90 / K3-R91 / K3-R93）—— schema 追溯作废历史收据、一条 annotation 放大出无界来源身份、live 重试不再幂等、merge 根本不验新加的 `provider_response_refs`。最后这条尤其要紧：K3-R83 的全部意义就是「让那份 raw 证据真实且可复现」，而现在收据可以声称一份不存在的 raw，消费端照单全收。
+
+**agent 试过但没打穿的（别重复投入）**：48 种 status-id 伪造全被拒（全角/阿拉伯-印度数字、前导零、前后缀、`x.com.evil.io`、punycode 与西里尔同形、userinfo、`/i/web/status/N`、id 只在 query 或 fragment）；60 万条模糊输入下 `_x_status_identity` 零异常；raw 写入路径逃逸在四个目标上全部拦住且未创建任何文件；已冻结产物无法被覆盖；每条中止路径都没留下残片；离线路径除多一个恒空键外逐字节不变。清单在 register 的 §6a 记录条里。
+
+**边界**：本刀仍然**不含任何付费调用**；真实验证是下一刀（只跑 X、一条查询、一次 xAI 调用、非交易决策日）。改动面命中 AGENTS rule 3(c)，全量归属按 rule 4 决定并写进 `full-lane=`；交出前别忘了 `door=`。
+
 ## 2026-07-29 追加：交给 Codex 的下一刀命令 —— 修复 K3-R79 + K3-R83（Claude Code 下达；未实现任何代码）
 
 **命令**：`修复 K3-R79 与 K3-R83`，两条同刀做，范围 = `runners/us_short_llm_theme_discovery_fetch_x.py` 的背书比对与 drop 记录、必要时 `runners/us_short_llm_theme_discovery_fetch_web.py` 的共享 raw 落盘腿，加对应测试。**Required 正文、修法约束与 Closure 条件的唯一来源是 `docs/system_risk_register.md` 的 K3-R79 与 K3-R83 两条**，这里不复述——动手前整段读它们，别只照本节的摘要修。
@@ -400,3 +413,9 @@ provider 用平台自己的 `/i/status/<id>` 规范形式，模型用 `/<handle>
 ### 边界
 
 不解除任何现存 fail-closed 门；不放宽 K3-R65 的补偿本身（背书要求保留，只修身份比较）；不执行 provider / key / network / live；不动 `theme_soft_boost_enabled`；不开 4d；`state/us_short` 不留测试残留；不 push。改完由 Claude Code 独立复审，全量按 rule 4 一次。
+
+## 2026-07-29 update: K3-R79 + K3-R83 executor repair (pending Claude Code review)
+
+X backing now compares a status ID only at the annotation seam for X/Twitter `/<segment>/status/<digits>` URLs. `_canonical_locator` and `_source_id` stay unchanged, preserving source provenance. Mismatch drops now carry both `model_source_url` and the canonical `provider_annotation_urls` candidate set, required by schema for that reason. Live X snapshots one JSON-safe raw provider response per completed call to a gitignored shared provider-response path and binds its hash/ref in `provider_response_refs`, including zero-accepted packets.
+
+Main-Python focused superset = 97 OK; the six measured pairs, different-id/non-status/non-X cases, identity hollowing, two-sided drop fields, and mocked-live zero-accepted raw replay/hash control are covered. The single rule-3 full ledger run = 5003 OK at 2026-07-29T18:18:34. The historical web run accepted sources, so its zero-accepted shape is N/A. No provider/key/network/live request, scoring change, K3-R34 lift, push, or remote action occurred.
