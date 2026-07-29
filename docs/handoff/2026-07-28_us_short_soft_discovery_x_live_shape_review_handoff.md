@@ -1,5 +1,22 @@
 # US-short soft-discovery X live response-shape re-review — 2026-07-28
 
+## 2026-07-29 追加：交给 Codex 的下一刀命令 —— 修复 K3-R79 + K3-R83（Claude Code 下达；未实现任何代码）
+
+**命令**：`修复 K3-R79 与 K3-R83`，两条同刀做，范围 = `runners/us_short_llm_theme_discovery_fetch_x.py` 的背书比对与 drop 记录、必要时 `runners/us_short_llm_theme_discovery_fetch_web.py` 的共享 raw 落盘腿，加对应测试。**Required 正文、修法约束与 Closure 条件的唯一来源是 `docs/system_risk_register.md` 的 K3-R79 与 K3-R83 两条**，这里不复述——动手前整段读它们，别只照本节的摘要修。
+
+**工作树与基线**：本树已同步到 master tip `5514b02e`，工作区干净。K3-R80 / K3-R81 / K3-R82 已 CLOSED 并合入 master，不要重开。
+
+**为什么合成一刀**：K3-R79 是「怎么修」，K3-R83 是「修完怎么证明」。只修前者，下一次仍然只能靠散文转写的 fixture 验证；只修后者，误杀继续。两条的 Closure 测试互相咬合，分两轮做会重复改同一个 drop 路径。
+
+**必须先读清楚的三条边界**（都出自 register，摘要仅为防止走错方向，冲突时以 register 为准）：
+1. **不许动 `_canonical_locator`**。它的 sha256 就是 `_source_id`，改了会波及已冻结证据；把 `/<handle>/status/<id>` 折成 `/i/status/<id>` 虽然身份等价但丢 handle，违反 K3-R35/R36 定下的「只做无损变换」。身份比较只加在**背书比对那一处**。
+2. **K3-R83 有两条腿，别只修被点名那条**：(i) 因身份/背书不匹配而丢弃时，drop 条目要同时记下**两边**；(ii) live 调用即使 0 条被接受也要落 raw。今天 raw 是按「被接受的来源」写盘的，所以全被丢掉的那次运行反而什么都没留——那恰恰是最需要 raw 的一次。整类扫：web lane 是否有同样的「0 接受 → 0 raw」形状，一并处理或明确写为不适用。
+3. **本刀不含任何付费调用**。不要为了验证去跑 provider；验证用 register K3-R79 里记下的六个 status id 与两种 URL 形式重建 fixture。真实付费验证是**下一刀**，且已定为「只跑 X、一条查询、一次 xAI 调用、非交易日」，Web 不跑。
+
+**交出前必须满足**：`Pre-Codex self-review` 现在是**六**个字段——新增 `door=`，要求交出前跑一次 `.githooks/pre-commit` 的那两个守卫（`tests.test_route_doc_ledger_status_consistency` + `tests.test_doc_governance_guard`）并贴终端结果；写 `TBD` / 留空判红，跑不了写 `door=BLOCKED: <原因>`。规则正文见 `docs/pre_codex_self_review_checklist.md` §0.10/§0.11。另按 AGENTS rule 1，改到 `AGENTS.md` 或治理文档时**必须**把 `tests.test_doc_governance_guard` 放进 focused pack——这正是 K3-R81 的根因。
+
+**验证分级预判**：改动面是 X lane 的 provider 消费与 raw 落盘 → 命中 AGENTS rule 3(c)（provider / raw-payload / live-data），全量由谁跑按 rule 4 决定并在 `full-lane=` 写明。
+
 ## 2026-07-29 追加：K3-R81 / K3-R82 独立审查 — PASS（Claude Code，48b5 工作树，已提交并合入 master）
 
 **为什么 PASS**：三条腿都补齐且都被外部挖空证明是承重的。Required 正文与关闭证据只在 `docs/system_risk_register.md`（K3-R81 / K3-R82 CLOSED），此处不复述。
