@@ -21,6 +21,7 @@ import json
 import hashlib
 import os
 import subprocess
+from contextlib import contextmanager
 from pathlib import Path
 from typing import Any, Callable, Sequence
 from uuid import uuid4
@@ -82,6 +83,7 @@ def validate_exact_decision_slot(
 
 def evidence_bytes(
     payload: Any, *, clock_keys: Sequence[str] = CLOCK_KEYS_ARTIFACT, recursive: bool = False,
+    evidence_projection: Callable[[Any], Any] | None = None,
 ) -> bytes:
     """Canonical bytes of a payload's EVIDENCE: everything except the declared retry clocks."""
     def strip(node: Any) -> Any:
@@ -91,12 +93,13 @@ def evidence_bytes(
             return [strip(item) for item in node]
         return node
 
+    candidate = evidence_projection(payload) if evidence_projection is not None else payload
     if recursive:
-        pruned = strip(payload)
-    elif isinstance(payload, dict):
-        pruned = {key: value for key, value in payload.items() if key not in clock_keys}
+        pruned = strip(candidate)
+    elif isinstance(candidate, dict):
+        pruned = {key: value for key, value in candidate.items() if key not in clock_keys}
     else:
-        pruned = payload
+        pruned = candidate
     try:
         return json.dumps(pruned, ensure_ascii=False, sort_keys=True, separators=(",", ":")).encode("utf-8")
     except (TypeError, ValueError, UnicodeEncodeError, RecursionError) as exc:
@@ -106,6 +109,7 @@ def evidence_bytes(
 def frozen_artifact_matches(
     payload: Any, path: Path, *, clock_keys: Sequence[str] = CLOCK_KEYS_ARTIFACT, recursive: bool = False,
     verify: Callable[[Any], None] | None = None,
+    evidence_projection: Callable[[Any], Any] | None = None,
 ) -> bool:
     """False when the slot is free; True when an evidence-equivalent artifact is frozen there.
 
@@ -119,8 +123,8 @@ def frozen_artifact_matches(
         existing = json.loads(path.read_text(encoding="utf-8"))
     except (OSError, UnicodeDecodeError, json.JSONDecodeError, ValueError, RecursionError) as exc:
         raise DiscoveryPublishPolicyError("refusing to replace an unreadable frozen artifact") from exc
-    if (evidence_bytes(existing, clock_keys=clock_keys, recursive=recursive)
-            != evidence_bytes(payload, clock_keys=clock_keys, recursive=recursive)):
+    if (evidence_bytes(existing, clock_keys=clock_keys, recursive=recursive, evidence_projection=evidence_projection)
+            != evidence_bytes(payload, clock_keys=clock_keys, recursive=recursive, evidence_projection=evidence_projection)):
         raise DiscoveryPublishPolicyError("immutable decision-date artifact already exists with different evidence")
     if verify is not None:
         try:
@@ -205,42 +209,106 @@ def publish_immutable_pair(
     items: Sequence[tuple[dict[str, Any], Path]], *,
     clock_keys: Sequence[str] = CLOCK_KEYS_RECEIPT, recursive: bool,
     verifiers: Sequence[Callable[[Any], None] | None] | None = None,
+    evidence_projections: Sequence[Callable[[Any], Any] | None] | None = None,
 ) -> None:
     """Publish several slots as a unit: stage all, then create final names, rolling back new peers."""
     paths = [path for _payload, path in items]
     if len({path.resolve() for path in paths}) != len(paths):
         raise DiscoveryPublishPolicyError("publish targets must be distinct")
     checks = tuple(verifiers) if verifiers is not None else (None,) * len(items)
-    if len(checks) != len(items):
-        raise DiscoveryPublishPolicyError("publish verifiers must align with publish items")
-    staged: list[tuple[Path, Path, dict[str, Any], Callable[[Any], None] | None]] = []
+    projections = tuple(evidence_projections) if evidence_projections is not None else (None,) * len(items)
+    if len(checks) != len(items) or len(projections) != len(items):
+        raise DiscoveryPublishPolicyError("publish policies must align with publish items")
+    staged: list[tuple[Path, Path, dict[str, Any], Callable[[Any], None] | None, Callable[[Any], Any] | None]] = []
     committed: list[Path] = []
     try:
-        for (payload, path), verify in zip(items, checks):
+        for (payload, path), verify, projection in zip(items, checks, projections):
             serialized = _serialized_payload(payload)
             if frozen_artifact_matches(
                 payload, path, clock_keys=clock_keys, recursive=recursive, verify=verify,
+                evidence_projection=projection,
             ):
                 continue
-            staged.append((_staged_temp(path, serialized, suffix="pair.tmp"), path, payload, verify))
-        for tmp, path, payload, verify in staged:
+            staged.append((_staged_temp(path, serialized, suffix="pair.tmp"), path, payload, verify, projection))
+        for tmp, path, payload, verify, projection in staged:
             try:
                 os.link(tmp, path)
             except FileExistsError:
                 # Another writer won this slot: keep it only if it holds the same evidence.
                 frozen_artifact_matches(
                     payload, path, clock_keys=clock_keys, recursive=recursive, verify=verify,
+                    evidence_projection=projection,
                 )
                 continue
             committed.append(path)
     except DiscoveryPublishPolicyError:
-        _discard([tmp for tmp, _path, _payload, _verify in staged] + list(reversed(committed)))
+        _discard([tmp for tmp, _path, _payload, _verify, _projection in staged] + list(reversed(committed)))
         raise
     except OSError as exc:
-        _discard([tmp for tmp, _path, _payload, _verify in staged] + list(reversed(committed)))
+        _discard([tmp for tmp, _path, _payload, _verify, _projection in staged] + list(reversed(committed)))
         raise DiscoveryPublishPolicyError("cannot publish the decision-date artifact pair") from exc
     finally:
-        _discard([tmp for tmp, _path, _payload, _verify in staged])
+        _discard([tmp for tmp, _path, _payload, _verify, _projection in staged])
+
+
+@contextmanager
+def mutable_ledger_lock(path: Path, *, timeout_seconds: float = 5.0):
+    """Serialize one budget-ledger update with a stable Windows named mutex, not a lock file.
+
+    PLATFORM-LOCKED BY CONSTRUCTION: there is no portable fallback, so on any non-Windows host
+    every provider budget reservation — and therefore the whole live path and its reservation
+    tests — fails closed with `provider budget locking is unavailable on this platform`.
+    That is deliberate for the authorized operator; it is stated here so it is discovered by
+    reading rather than by a confusing failure.
+    """
+    if not isinstance(timeout_seconds, (int, float)) or timeout_seconds <= 0:
+        raise DiscoveryPublishPolicyError("provider budget lock timeout is malformed")
+    try:
+        import ctypes
+        from ctypes import wintypes
+    except ImportError as exc:  # pragma: no cover - the authorized lane runs on Windows.
+        raise DiscoveryPublishPolicyError("provider budget locking is unavailable on this platform") from exc
+    try:
+        kernel32 = ctypes.WinDLL("kernel32", use_last_error=True)
+    except (AttributeError, OSError) as exc:  # pragma: no cover - the authorized lane runs on Windows.
+        raise DiscoveryPublishPolicyError("provider budget locking is unavailable on this platform") from exc
+    create = kernel32.CreateMutexW
+    create.argtypes = (wintypes.LPVOID, wintypes.BOOL, wintypes.LPCWSTR)
+    create.restype = wintypes.HANDLE
+    wait = kernel32.WaitForSingleObject
+    wait.argtypes = (wintypes.HANDLE, wintypes.DWORD)
+    wait.restype = wintypes.DWORD
+    release = kernel32.ReleaseMutex
+    release.argtypes = (wintypes.HANDLE,)
+    release.restype = wintypes.BOOL
+    close = kernel32.CloseHandle
+    close.argtypes = (wintypes.HANDLE,)
+    close.restype = wintypes.BOOL
+    mutex_name = "Local\\StockUsShortBudget-" + hashlib.sha256(
+        str(path.resolve()).lower().encode("utf-8")
+    ).hexdigest()
+    handle = create(None, False, mutex_name)
+    if not handle:
+        raise DiscoveryPublishPolicyError("provider budget mutex cannot be created")
+    acquired = False
+    try:
+        outcome = wait(handle, max(1, int(timeout_seconds * 1000)))
+        if outcome == 0:  # WAIT_OBJECT_0
+            acquired = True
+        elif outcome == 0x00000102:  # WAIT_TIMEOUT
+            raise DiscoveryPublishPolicyError("provider budget ledger is busy")
+        elif outcome == 0x00000080:  # WAIT_ABANDONED: fail closed rather than trust a crashed writer.
+            # Windows grants ownership on WAIT_ABANDONED.  Release it in finally before refusing
+            # the ledger, otherwise a surviving process can leave later reservations blocked.
+            acquired = True
+            raise DiscoveryPublishPolicyError("provider budget ledger mutex was abandoned")
+        else:
+            raise DiscoveryPublishPolicyError("provider budget mutex wait failed")
+        yield
+    finally:
+        if acquired:
+            release(handle)
+        close(handle)
 
 
 def write_mutable_ledger(

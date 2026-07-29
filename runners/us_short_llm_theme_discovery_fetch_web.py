@@ -19,6 +19,7 @@ import os
 import re
 import subprocess
 import sys
+import threading
 import urllib.request
 from urllib.parse import urlsplit, urlunsplit
 from datetime import datetime, time as datetime_time, timezone, timedelta
@@ -57,6 +58,7 @@ def default_receipt_path(expected_decision_date: str) -> Path:
 DEFAULT_RAW_ROOT = ROOT / "provider_samples" / "us_short_llm_theme_discovery_fetch_web"
 SCHEMA_PATH = ROOT / "schemas" / "us_short_llm_theme_discovery_fetch_web.schema.json"
 TAVILY_ENDPOINT = "https://api.tavily.com/search"
+DEEPSEEK_BASE_URL = "https://api.deepseek.com"
 DEEPSEEK_MODEL = "deepseek-chat"
 MAX_TAVILY_QUERIES = 25
 MAX_REGROUP_SOURCES_PER_CALL = 10
@@ -86,32 +88,70 @@ CONFORMANCE_GUARDS = ("_guard_generated_before_open",)
 # hand back a signed/bearer URL whose credential sits in a generic parameter (`?token=`, `?sig=`,
 # `?auth=`) that no keyword list applied to whole-URL text catches, and `_canonical_locator` keeps the
 # query verbatim, so it would ride into the receipt and the raw path. Matched on the parsed KEY only.
-_TRANSPORT_ISSUER = object()
+def _make_live_capabilities() -> tuple[
+    Callable[..., object], Callable[[object], bool], Callable[[], object], Callable[[object], None],
+]:
+    """Keep the ordinary runner path one-shot; this is not a security boundary.
 
+    Receipt builders consume a ticket before packet construction, which catches accidental replay
+    and keeps normal runner accounting coherent.  Python code executing in this process can inspect
+    closures and mutate their captured objects, so neither this factory nor `live_authorized` proves
+    that a provider request occurred.  The money-relevant boundary is downstream: merge re-reads
+    each raw receipt and re-derives its `content_sha256`; a forged label without intact bound raw
+    evidence is refused before knife-2.  That property is pinned by the forged-label control in the
+    merge tests.  It deliberately does not claim to establish provenance against arbitrary code in
+    the same interpreter.
 
-class _LiveTransport:
-    """Private, response-derived capability for a live receipt.
-
-    Callers cannot mint a live label with booleans or loop counts.  Only a real client's request
-    path receives this reporter, and it records after a response object has actually completed.
+    Tickets are held as objects rather than `id()` values: an id-keyed set keeps no reference, so a
+    ticket that is issued and never consumed (any live build that raises before the consume check)
+    leaves its address behind for CPython to hand to an unrelated later object, which would then
+    validate as that ticket.
     """
+    issuer = object()
+    issued_tickets: set[object] = set()
+    ticket_lock = threading.Lock()
 
-    def __init__(self, issuer: object, providers: tuple[str, ...]):
-        if issuer is not _TRANSPORT_ISSUER:
-            raise WebThemeDiscoveryError("live transport capability is runner-private")
-        self._completed = {provider: 0 for provider in providers}
+    class LiveTransport:
+        def __init__(self, supplied_issuer: object, providers: tuple[str, ...]):
+            if supplied_issuer is not issuer:
+                raise WebThemeDiscoveryError("live transport capability is runner-private")
+            self._completed = {provider: 0 for provider in providers}
 
-    def _record_completed_response(self, provider: str) -> None:
-        if provider not in self._completed:
-            raise WebThemeDiscoveryError("unknown live transport provider")
-        self._completed[provider] += 1
+        def _record_completed_response(self, provider: str) -> None:
+            if provider not in self._completed:
+                raise WebThemeDiscoveryError("unknown live transport provider")
+            self._completed[provider] += 1
 
-    def _snapshot(self) -> dict[str, int]:
-        return dict(self._completed)
+        def _snapshot(self) -> dict[str, int]:
+            return dict(self._completed)
+
+        def _consume_ticket(self, ticket: object | None) -> bool:
+            with ticket_lock:
+                if ticket is None or ticket not in issued_tickets:
+                    return False
+                issued_tickets.discard(ticket)
+                return True
+
+    def new_transport(*providers: str) -> object:
+        return LiveTransport(issuer, providers or ("tavily", "deepseek"))
+
+    def is_transport(candidate: object) -> bool:
+        return isinstance(candidate, LiveTransport)
+
+    def issue_ticket() -> object:
+        ticket = object()
+        with ticket_lock:
+            issued_tickets.add(ticket)
+        return ticket
+
+    def revoke_ticket(ticket: object) -> None:
+        with ticket_lock:
+            issued_tickets.discard(ticket)
+
+    return new_transport, is_transport, issue_ticket, revoke_ticket
 
 
-def _new_live_transport(*providers: str) -> _LiveTransport:
-    return _LiveTransport(_TRANSPORT_ISSUER, providers or ("tavily", "deepseek"))
+_new_live_transport, _is_live_transport, _issue_live_ticket, _revoke_live_ticket = _make_live_capabilities()
 
 
 def _normalized_query_order(query: str) -> str:
@@ -251,6 +291,43 @@ def _write_json_atomic(payload: Any, path: Path) -> None:
         raise WebThemeDiscoveryError(str(exc)) from exc
 
 
+def _live_receipt_retry_evidence(payload: Any) -> Any:
+    """Compare live receipts on frozen evidence, not a later attempt's operational telemetry.
+
+    Transport counts and per-attempt drops remain in the first immutable receipt for audit, while a
+    same-evidence retry reuses that receipt instead of being rejected merely because a transient
+    provider failure changed its attempt bookkeeping.
+
+    The deliberate cost, stated so it is not rediscovered as a defect: the projected-out fields —
+    including `transport_response_counts` — are no longer protected by the write door.  Whichever
+    receipt is frozen FIRST is the one that survives, and a later attempt's differing counters are
+    accepted as evidence-equivalent instead of refused.  `execution_mode`, `source_refs` and
+    `regroup_model` stay inside the compared evidence, so a changed served model or a changed
+    accepted-source set is still a conflict.
+    """
+    if not isinstance(payload, dict) or payload.get("schema_name") not in {
+        "us_short_llm_theme_discovery_fetch_web", "us_short_llm_theme_discovery_fetch_x",
+    }:
+        return payload
+    projected = dict(payload)
+    contract = projected.get("fetch_contract")
+    if isinstance(contract, dict):
+        projected_contract = dict(contract)
+        for key in (
+            "network_access_performed", "provider_calls_performed", "network_call_count",
+            "provider_call_count", "transport_response_counts",
+        ):
+            projected_contract.pop(key, None)
+        projected["fetch_contract"] = projected_contract
+    projected.pop("drop_ledger", None)
+    summary = projected.get("summary")
+    if isinstance(summary, dict):
+        projected_summary = dict(summary)
+        projected_summary.pop("dropped_result_count", None)
+        projected["summary"] = projected_summary
+    return projected
+
+
 def _write_json_pair_atomic(
     first_payload: Any, first_path: Path, second_payload: Any, second_path: Path,
 ) -> None:
@@ -259,6 +336,7 @@ def _write_json_pair_atomic(
         publish_immutable_pair(
             [(first_payload, first_path), (second_payload, second_path)],
             clock_keys=CLOCK_KEYS_RECEIPT, recursive=False,
+            evidence_projections=(_live_receipt_retry_evidence, _live_receipt_retry_evidence),
         )
     except DiscoveryPublishPolicyError as exc:
         raise WebThemeDiscoveryError(str(exc)) from exc
@@ -541,7 +619,7 @@ def _provider_budget_path(lane: str, provider: str, expected_decision_date: str)
     )
 
 
-def _reserve_provider_budget(
+def _reserve_provider_budget_locked(
     lane: str, provider: str, expected_decision_date: str, *, call_count: int, query_scope: list[str],
 ) -> None:
     _decision_date(expected_decision_date)
@@ -627,6 +705,21 @@ def _reserve_provider_budget(
         write_mutable_ledger(
             reservation, path, root=ROOT, state_dir=STATE_DIR, gitignored=_gitignored,
         )
+    except DiscoveryPublishPolicyError as exc:
+        raise WebThemeDiscoveryError(str(exc)) from exc
+
+
+def _reserve_provider_budget(
+    lane: str, provider: str, expected_decision_date: str, *, call_count: int, query_scope: list[str],
+) -> None:
+    """Reserve under a per-provider/date mutex so concurrent callers cannot both spend the cap."""
+    path = _provider_budget_path(lane, provider, expected_decision_date)
+    try:
+        from runners.us_short_discovery_publish_policy import mutable_ledger_lock
+        with mutable_ledger_lock(path):
+            _reserve_provider_budget_locked(
+                lane, provider, expected_decision_date, call_count=call_count, query_scope=query_scope,
+            )
     except DiscoveryPublishPolicyError as exc:
         raise WebThemeDiscoveryError(str(exc)) from exc
 
@@ -904,7 +997,10 @@ def _regroup_chunk_payload(
     # Record the transport the moment the response object returns, BEFORE the content checks: a
     # truncated or identity-changed chunk is still a completed provider response that was paid
     # for, and the receipt's counts must reflect transport rather than admissibility.
-    if transport is not None:
+    # The runner's own adapter records inside its request path; anything else is counted here.
+    # Selecting on the concrete type rather than on a `_reports_transport` attribute keeps a
+    # caller from switching transport accounting off by naming an attribute.
+    if transport is not None and not isinstance(deepseek_client, DeepSeekClient):
         transport._record_completed_response("deepseek")
     served_model = getattr(response, "model", None)
     served_model = served_model if isinstance(served_model, str) and served_model else None
@@ -1036,7 +1132,8 @@ def build_web_fetch_packet(
     execution_mode: str = "offline_fake_client", network_access_performed: bool = False,
     provider_calls_performed: bool = False,
     network_call_count: int = 0, provider_call_count: int = 0,
-    _live_transport: _LiveTransport | None = None,
+    _live_transport: object | None = None,
+    _live_ticket: object | None = None,
     extra_drop_ledger: list[dict[str, str]] | None = None,
     regroup_model_identity: dict[str, Any] | None = None,
     regroup_failed: bool = False,
@@ -1049,7 +1146,10 @@ def build_web_fetch_packet(
     _validate_fetch_clock(fetched, generated)
     if execution_mode not in {"offline_fake_client", "live_authorized"}:
         raise WebThemeDiscoveryError("invalid execution mode")
-    if execution_mode == "live_authorized" and not isinstance(_live_transport, _LiveTransport):
+    if execution_mode == "live_authorized" and (
+        not _is_live_transport(_live_transport)
+        or not _live_transport._consume_ticket(_live_ticket)
+    ):
         raise WebThemeDiscoveryError("live packet requires response-derived runner transport")
     if not isinstance(network_call_count, int) or not isinstance(provider_call_count, int) or network_call_count < 0 or provider_call_count < 0:
         raise WebThemeDiscoveryError("execution call counts must be non-negative integers")
@@ -1197,6 +1297,41 @@ class TavilyClient:
         return results if isinstance(results, list) else []
 
 
+def _require_single_deepseek_api_key(value: Any) -> str:
+    if not is_single_provider_credential(value, marker="sk-"):
+        raise WebThemeDiscoveryError("DEEPSEEK_API_KEY must be exactly one valid credential")
+    return value
+
+
+class DeepSeekClient:
+    """OpenAI-compatible DeepSeek adapter that records only completed provider responses."""
+
+    class _Completions:
+        def __init__(self, delegate: Any, transport: _LiveTransport):
+            self._delegate, self._transport = delegate, transport
+
+        def create(self, *args: Any, **kwargs: Any) -> Any:
+            try:
+                response = self._delegate.create(*args, **kwargs)
+            except Exception as exc:
+                raise WebThemeDiscoveryError(f"DeepSeek request failed: {type(exc).__name__}") from exc
+            self._transport._record_completed_response("deepseek")
+            return response
+
+    class _Chat:
+        def __init__(self, delegate: Any, transport: _LiveTransport):
+            self.completions = DeepSeekClient._Completions(delegate.completions, transport)
+
+    def __init__(self, api_key: str, *, timeout: float = 45.0, _live_transport: _LiveTransport):
+        _require_single_deepseek_api_key(api_key)
+        try:
+            from openai import OpenAI
+            client = OpenAI(api_key=api_key, base_url=DEEPSEEK_BASE_URL, timeout=timeout)
+        except Exception as exc:
+            raise WebThemeDiscoveryError("OpenAI-compatible DeepSeek client is unavailable") from exc
+        self.chat = self._Chat(client.chat, _live_transport)
+
+
 def is_single_provider_credential(value: Any, *, marker: str) -> bool:
     """Shared by both lanes: exactly one credential, unambiguous, no sample-derived exact length.
 
@@ -1306,20 +1441,18 @@ def execute_live_web_orchestration(
     }
 
 
-def run_web_fetch(
+def _run_web_fetch(
     *, queries: list[str] | tuple[str, ...], expected_decision_date: str, generated_at: str,
     search_client: Any | None = None, deepseek_client: Any | None = None,
     confirm_user_authorization: bool = False, live: bool = False,
     raw_root: Path | None = None,
+    _new_transport: Callable[..., object] = _new_live_transport,
+    _issue_ticket: Callable[[], object] = _issue_live_ticket,
+    _revoke_ticket: Callable[[object], None] = _revoke_live_ticket,
 ) -> tuple[dict[str, Any], dict[str, Any], dict[str, Any]]:
     queries = _safe_queries(queries)
     _decision_date(expected_decision_date)
     if live:
-        # User-directed K3-R34 freeze.  Keep this before every client, key lookup,
-        # raw write, and budget reservation; offline fake-client discovery remains enabled.
-        raise WebThemeDiscoveryError(
-            "live execution is frozen pending separately authorized provider-shape validation"
-        )
         if not confirm_user_authorization:
             raise WebThemeDiscoveryError("live execution requires --confirm-user-authorization")
         if search_client is not None or deepseek_client is not None:
@@ -1327,30 +1460,32 @@ def run_web_fetch(
         # K3-R51: validate the environment before even a budget reservation.  Do not split or pick a
         # token: an ambiguous credential must consume neither quota nor a provider request.
         tavily_api_key = _require_single_tavily_api_key(os.environ.get("TAVILY_API_KEY", ""))
-        transport = _new_live_transport()
+        deepseek_api_key = _require_single_deepseek_api_key(os.environ.get("DEEPSEEK_API_KEY", ""))
+        transport = _new_transport()
         tavily = TavilyClient(tavily_api_key, _live_transport=transport)
-        # This branch remains unreachable while live is frozen.  A future separately authorized
-        # unfreeze must supply a reviewed US-local, transport-reporting DeepSeek adapter; an injected
-        # object cannot mint a live receipt.
-        raise WebThemeDiscoveryError("live DeepSeek transport adapter is not implemented")
+        deepseek = DeepSeekClient(deepseek_api_key, _live_transport=transport)
         _reserve_live_web_provider_budgets(expected_decision_date, queries)
         outcome = execute_live_web_orchestration(
             queries=queries, expected_decision_date=expected_decision_date,
-            tavily=tavily, deepseek_client=deepseek_client, transport=transport,
+            tavily=tavily, deepseek_client=deepseek, transport=transport,
         )
         fetched_now = outcome["fetched_at"]
-        packet, receipt, summary = build_web_fetch_packet(
-            queries=queries, search_results=outcome["results"], llm_response=outcome["llm_response"],
-            expected_decision_date=expected_decision_date, generated_at=fetched_now.isoformat(),
-            raw_root=raw_root, persist_raw=True, fetched_at=fetched_now.isoformat(), execution_mode="live_authorized",
-            network_access_performed=True, provider_calls_performed=True,
-            network_call_count=outcome["provider_call_count"],
-            provider_call_count=outcome["provider_call_count"],
-            _live_transport=transport,
-            extra_drop_ledger=outcome["query_drops"],
-            regroup_model_identity=outcome["regroup_model_identity"],
-            regroup_failed=outcome["regroup_failed"], regroup_attempted=outcome["regroup_attempted"],
-        )
+        ticket = _issue_ticket()
+        try:
+            packet, receipt, summary = build_web_fetch_packet(
+                queries=queries, search_results=outcome["results"], llm_response=outcome["llm_response"],
+                expected_decision_date=expected_decision_date, generated_at=fetched_now.isoformat(),
+                raw_root=raw_root, persist_raw=True, fetched_at=fetched_now.isoformat(), execution_mode="live_authorized",
+                network_access_performed=True, provider_calls_performed=True,
+                network_call_count=outcome["provider_call_count"],
+                provider_call_count=outcome["provider_call_count"],
+                _live_transport=transport, _live_ticket=ticket,
+                extra_drop_ledger=outcome["query_drops"],
+                regroup_model_identity=outcome["regroup_model_identity"],
+                regroup_failed=outcome["regroup_failed"], regroup_attempted=outcome["regroup_attempted"],
+            )
+        finally:
+            _revoke_ticket(ticket)
         return packet, receipt, summary
     if search_client is None or deepseek_client is None:
         raise WebThemeDiscoveryError("offline mode requires injected fake search and DeepSeek clients")
@@ -1388,6 +1523,32 @@ def run_web_fetch(
         provider_calls_performed=False, raw_root=offline_raw_root, persist_raw=True,
         extra_drop_ledger=query_drops,
     )
+
+
+def _bind_live_runner(
+    run_impl: Callable[..., tuple[dict[str, Any], dict[str, Any], dict[str, Any]]],
+    new_transport: Callable[..., object], issue_ticket: Callable[[], object], revoke_ticket: Callable[[object], None],
+) -> Callable[..., tuple[dict[str, Any], dict[str, Any], dict[str, Any]]]:
+    """Bind normal-path bookkeeping here; closure placement is not an authorization boundary."""
+    def runner(
+        *, queries: list[str] | tuple[str, ...], expected_decision_date: str, generated_at: str,
+        search_client: Any | None = None, deepseek_client: Any | None = None,
+        confirm_user_authorization: bool = False, live: bool = False, raw_root: Path | None = None,
+    ) -> tuple[dict[str, Any], dict[str, Any], dict[str, Any]]:
+        return run_impl(
+            queries=queries, expected_decision_date=expected_decision_date, generated_at=generated_at,
+            search_client=search_client, deepseek_client=deepseek_client,
+            confirm_user_authorization=confirm_user_authorization, live=live, raw_root=raw_root,
+            _new_transport=new_transport, _issue_ticket=issue_ticket, _revoke_ticket=revoke_ticket,
+        )
+    return runner
+
+
+run_web_fetch = _bind_live_runner(
+    _run_web_fetch, _new_live_transport, _issue_live_ticket, _revoke_live_ticket,
+)
+del _make_live_capabilities, _new_live_transport, _issue_live_ticket, _revoke_live_ticket
+del _run_web_fetch, _bind_live_runner
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -1448,6 +1609,8 @@ def main(argv: list[str] | None = None) -> int:
     )
     print(json.dumps(summary, ensure_ascii=False, indent=2))
     return 0
+
+
 
 
 if __name__ == "__main__":

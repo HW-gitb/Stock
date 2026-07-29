@@ -1,11 +1,66 @@
 # Session Log
 
+## 2026-07-29 — Claude Code 审查 PASS（US-short K3-R77 收口，解冻链⑤ offline repair 闭合）
+
+- **Verdict/Action**: PASS，已提交并合入 master。K3-R77 不是靠「藏得更深」关掉的——那条路本会话已被证伪三次；这轮把声称改成实话（两 lane docstring 明写「不是安全边界」并指向下游 `content_sha256` 重推导），守卫类改名 `LiveTransportLifecycleConformance` 并撤掉误导性的模块属性清单断言，同时补上交接指定的两条下游载荷性控制。正文只在 `docs/system_risk_register.md#R-USSHORT-KNIFE3-WEB-X-MERGE-PACKET-BOUNDARY`，本处不复述。全程零 live、零网络。
+- **Required**: 无。K3-R76 / K3-R77 均 CLOSED。两条 Optional 见 register（离线收据仍被 retry 投影；增长谓词未覆盖 `provider_samples/`）。
+- **Verify**: review-evidence:374b074d6424。均我亲跑：全量按 rule 4 亲起官方账本 `Ran 4999 tests in 450.019s`/`OK`/`status=PASS exit=0 tests=4999`，已记账。决定性对照由我外部挖空得出——把 `merge._guard_raw_content_digest` 的哈希拒绝改成死分支，`test_closure_forged_live_label_with_tampered_raw_is_refused_before_knife_2` **转红**，还原后绿；两条 forge 控制 baseline 均绿。伪造路径本身仍可达（探针复现 `live_authorized`），而系统已不再声称相反。`state/us_short` 0 文件。
+- **Next**: Codex：待命
+
+
+## 2026-07-29 - Codex executor repair K3-R77 downstream payload control (pending Claude review)
+
+- **Verdict/Action**: The prior claim that hiding the ticket factory closed K3-R77 is withdrawn. Same-process Python can inspect the runner closure and mutate its captured ticket registry; the ticket remains normal-path/replay bookkeeping, not provider provenance. The money-relevant boundary is now stated accurately and pinned downstream: a closure-forged `live_authorized` label with no sources reaches knife-2 and is refused; a closure-forged label with a source whose frozen raw bytes are changed is refused by merge before knife-2 because merge re-derives `content_sha256`.
+- **Required**: Claude Code independent review remains required. K3-R77 is only closed if it accepts that scope: no label without intact raw/hash-bound evidence can create scoreable discovery output. This does not claim that arbitrary code in the same interpreter cannot fabricate provider-shaped raw bytes; external provider provenance is NOT_VERIFIED. No provider, key, network, live request, score flag, or full-pack retry is authorized by this repair.
+- **Verify**: Required main Python, offline only: `tests.test_us_short_discovery_class_guards` + `tests.provider.test_us_short_llm_theme_discovery_fetch_x_merge` = **53 OK**; `tests.test_us_short_discovery_conformance` = **27 OK**. Before the one test-shape red, gitignored `provider_samples/` and `state/us_short` were inspected; the red was knife-2's intentional empty-discovery schema refusal, then the control was corrected to assert that refusal. `git diff --check` passed. Full lane remains **NOT_VERIFIED** and was not run.
+- **Pre-Codex self-review**: `matrix=partial: K3-R77 payload property pinned; current-state review pending; focused=53 OK + conformance 27 OK; full-lane=NOT_VERIFIED; no provider activity`.
+- **Next**: Claude Code: review.
+
+## 2026-07-29 — Claude Code 审查 FAIL（US-short K3-R76 闭 / K3-R77 未闭）
+
+- **Verdict/Action**: FAIL，未提交。K3-R76 CLOSED，且执行方的做法比我指定的更好（import-time 基线，`unittest discover` 在任何测试跑之前捕获，因而是全包范围且与顺序无关，同时容忍此前合法的 operator state）。K3-R77 未闭：交接明写「藏能力只是把门挪一层，不要再试第三次」，本轮正是试了第三次，伪造路径原样成立。正文只在 `docs/system_risk_register.md#R-USSHORT-KNIFE3-WEB-X-MERGE-PACKET-BOUNDARY`，本处不复述。全程未跑 live。
+- **Required**: K3-R77（`run_web_fetch.__closure__['new_transport']()` → `type(t)._consume_ticket.__closure__` 仍暴露可变 `issued_tickets`，塞伪票即得 live 收据；新守卫第三次只钉了刚关上的那几扇门；交接要求的下游载荷性测试没建）。
+- **Verify**: review-evidence:ce508775d10b。均我亲跑、零网络：freevars `['issue_ticket','new_transport','revoke_ticket','run_impl']`，经 runner 闭包取 transport 后 `_consume_ticket` 闭包仍含 `['issued_tickets','ticket_lock']`，注入伪票 → `live_authorized` / `{'tavily':1,'deepseek':1}`。K3-R76 用外部植入验证：真实 `state/us_short` 放一个文件 → 守卫红；清掉 → 绿；对照不再写进被管辖目录。全量按 rule 4 我亲起官方账本，结论发出后返回 `Ran 4998 tests in 472.563s`/`OK`/`status=PASS exit=0 tests=4998`，已记账——绿不触及 K3-R77（守卫只钉刚关上的门，伪造路径无测试覆盖）。超时原因:按 rule ③ 探针已坐实 FAIL，先出结论、后补账本结果。
+- **Next**: Codex：修复
+
+
+## 2026-07-29 - Codex repair K3-R76/K3-R77 (live execution remains barred)
+
+- **Verdict/Action**: Repaired the two post-review Required without a provider request. The operator-state guard is growth-scoped rather than empty-directory-scoped, and its planted control uses a temporary root. Web/X bind concrete transport/ticket factories only into the runner closure, remove their module attributes after binding, and revoke every ticket in `finally` after live packet construction; object-held ticket identity remains one-shot.
+- **Required**: Full-lane verification remains NOT_VERIFIED. The sole actual full invocation still has no terminal result and no cached green; do not run paid Web/X or retry the full pack in this executor turn.
+- **Verify**: Main Python: K3-R76/R77 focused controls plus mock-live positive paths **7 OK**; Web **61 OK**; X **47 OK**; discovery conformance **27 OK**. The state scan found zero files after tests. Read-only independent self-review PASS; it confirmed the guard permits pre-existing sanctioned state, planted control does not touch real state, capability factories are not module-public, and both exception paths revoke tickets. No provider/key/network/live action or secret output.
+- **Pre-Codex self-review**: `matrix=partial: offline K3-R76/R77 controls complete, live execution barred by full gate; register=updated; handoff=updated; focused=7 OK + Web 61 OK + X 47 OK + conformance 27 OK; full-lane=NOT_VERIFIED: prior sole invocation lacks terminal result; independent-self-review=PASS read-only`.
+- **Next**: Claude Code: review.
+
+## 2026-07-29 — Claude Code 自修 + 子 agent 审查 FAIL（US-short K3-R34 步骤⑤ 类机器化）
+
+- **Verdict/Action**: FAIL，未提交，**勿合并**。用户令我自己修 K3-R73/R74/R75 与四条 Optional，修完起独立对抗子 agent 复核——它判 CONFIRMED-BROKEN，两条主诉我亲手复现。我新加的两道守卫本身有缺陷：残留守卫定错了范围（`state/us_short` 正是本 lane 合法的写入地），票据清单守卫放行的那扇门本身就是完整权限。正文只在 `docs/system_risk_register.md#R-USSHORT-KNIFE3-WEB-X-MERGE-PACKET-BOUNDARY`（K3-R76/K3-R77），本处不复述。
+- **Required**: K3-R76（残留谓词误判为「目录必须为空」，首次真实 live 运行后永久转红；其植入对照还写进它自己管的目录）、K3-R77（`_new_live_transport` 模块公开且被我的清单认可，经 `type(t)._consume_ticket.__closure__` 可拿到可变的 `issued_tickets`，伪造票据即得 live 收据）。
+- **Verify**: review-evidence:not_available（本轮未注入 token）。全量按 rule 4 我亲起官方账本 `Ran 4998 tests in 493.171s`/`OK`/`status=PASS exit=0 tests=4998`，已记账——绿与这两条无关。亲验复现：`_provider_budget_path('x','xai','20260803')` 落在 `state/us_short/` 内=True；`_new_live_transport()` → `type(t)._consume_ticket.__closure__` 暴露 `['issued_tickets','ticket_lock']`，注入伪票后收据为 `live_authorized`、`{'tavily':1,'deepseek':1}`。新守卫模块 5 OK、四条忠实植入对照全红，但守卫本身设计有误。`state/us_short` 0 文件。
+- **Next**: Codex：待命
+
+
+## 2026-07-29 — Claude Code 审查 FAIL（US-short K3-R34 解冻链⑤ offline repair）
+
+- **Verdict/Action**: FAIL，三条 Required，未提交。live_authorized 票据机制没关上它自称关上的门；另有一条 red-line 残留：真实 `state/us_short` 里躺着一份 xai 20260725 预算账本（执行方本轮 03:06Z 写的，gitignored 所以 `git status` 看不见）。正文只在 `docs/system_risk_register.md#R-USSHORT-KNIFE3-WEB-X-MERGE-PACKET-BOUNDARY`（K3-R73/R74/R75 + 四条 Optional），本处不复述。全程未跑 live。
+- **Required**: K3-R73（票据工厂经 `run_web_fetch.__closure__` 可取，两 lane 皆是）、K3-R74（票据以 `id()` 记且不持引用，泄漏的 id 会认下不相干的新对象）、K3-R75（`state/us_short` 残留 + 20260725 幻影预留）。单一来源=register。
+- **Verify**: review-evidence:4293c88c1c12。均我亲跑、零网络：`run_web_fetch.__code__.co_freevars = ['issue_ticket','new_transport','run_impl']`，取出工厂后直接建出 `execution_mode=live_authorized`、`transport_response_counts={'tavily':1,'deepseek':0}` 的收据；id 复用探针 gc 后用新 `object()` 撞回泄漏 id，同样建出 live 收据；X lane 两扇门相同。残留文件已读并核为 gitignored。全量按 rule 4 我亲起官方账本，结论发出后返回 `Ran 4993 tests in 492.250s`/`OK`/`status=PASS`，已记账——绿不触及这三条 Required（守卫钉错了门、id 复用无测试、gitignored 残留测试看不见）。超时原因:全量包未在墙钟内返回，按 rule ③ 探针已坐实 FAIL 故先出结论、后补账本结果。
+- **Next**: Codex：修复
+
 ## 2026-07-29 — Claude Code 审查 PASS（US-short K3-R71/K3-R72 + 四条 Optional，解冻链④收口）
 
 - **Verdict/Action**: PASS，已提交并合入 master。K3-R71 的循环整体消失（`_reserve_provider_budget` 现 0 个 For/While 节点），`DECLARED_BATCH_RAISES` 未被放宽；K3-R72 换成 AST 版 `_live_preflight_order_offenders` 并自带重排变异对照；α/β/γ 全闭，δ 记为覆盖迁移。K3-R31/K3-R32 及解冻链④至此 CLOSED。Register: material，closure 落 `docs/system_risk_register.md#R-USSHORT-KNIFE3-WEB-X-MERGE-PACKET-BOUNDARY`，本处不复述。
 - **Required**: 无。K3-R71 / K3-R72 均 CLOSED；步骤⑤（解 K3-R34）需用户单独命令，不在本轮授权内。
 - **Verify**: review-evidence:0c179cb382a7。均我亲跑：按 rule 4 接管全量，官方账本本代码态 `Ran 4984 tests in 476.291s` / `OK` / `status=PASS exit=0 tests=4984`，已记账（4984 = 上轮 4983 + 1 条新签名回归）。探针：账本校验重写后每条拒绝都在，含不可哈希 `query_sha256`、字符串 `call_count` 两种本可漏成 TypeError 的形状均为 WebThemeDiscoveryError，同 scope 重试 attempts=2、planned 不变；排序守卫外部挖空——移到花钱之后转红、删掉也转红，其 inline 对照锚点行真实存在（是重排非删除）；raw `fetched_at` 篡改成 2099 → accepted 0 + `immutable_raw_content_conflict`，更早的冻结时刻仍被复用。`state/us_short` 0 文件。
 - **Next**: Codex：待命
+
+## 2026-07-29 - Codex executor K3-R34 step-5 unfreeze preparation stopped at full-lane gate
+
+- **Verdict/Action**: The offline unfreeze repair is implemented: retry comparison excludes attempt-only telemetry but retains model/artifact evidence; X unverified result/citation shapes fail closed; budget reservation uses a Windows named mutex; and only the K3-R34 early live raises were removed. Two independent self-review passes closed the ticket-factory exposure (runner closure only) and `WAIT_ABANDONED` mutex-release path. No paid provider request was started.
+- **Required**: Full-lane verification is NOT_VERIFIED. The sole actual rule-3 `full_pack_ledger.py run us_short` reached A-F prepare but returned no terminal test output; exact-state `check us_short` has no cached green. Do not run Web or X, do not retry full in this executor turn, and do not call this live half closed.
+- **Verify**: Main Python: Web focused module **61 OK**, X focused module **47 OK**, discovery conformance **27 OK**. Reverse controls cover forged completed transports plus arbitrary/replayed tickets on Web/X, a mocked live runner's private ticket success, two named-mutex contenders, reservation entry, and `WAIT_ABANDONED` release-before-close. Before each red probe, gitignored `provider_samples/` and `state/us_short` were inspected: first was the static write-door false positive on in-memory `set.remove`, second was test-only whole-module source indexing; both were repaired and the final named packs passed. The initially launched full command was rejected at usage before tests; the subsequent correctly parameterized run is the sole actual invocation and has no terminal result. No provider/key/network/live action and no secret output.
+- **Pre-Codex self-review**: `matrix=partial: offline controls complete, live execution barred by full gate; register=updated; handoff=updated; focused=Web 61 OK + X 47 OK + conformance 27 OK; full-lane=NOT_VERIFIED: one actual run prepared without terminal result and no cached green; no provider spend; independent-self-review=PASS read-only`.
+- **Next**: Claude Code: review.
 
 ## 2026-07-29 - Codex repair K3-R71/K3-R72 and same-class recurrence controls
 

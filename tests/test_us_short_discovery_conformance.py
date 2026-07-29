@@ -24,6 +24,7 @@ repository-wide US-short boundary scan is what covers cross-market imports there
 """
 from __future__ import annotations
 
+from contextlib import contextmanager
 import ast
 import copy
 import importlib
@@ -1823,6 +1824,9 @@ class LaneGuardRegistryConformance(unittest.TestCase):
         ("runners.us_short_discovery_publish_policy", "write_mutable_ledger",
          "tests.provider.test_us_short_llm_theme_discovery_fetch_web.WebFetchTests"
          ".test_identical_later_refetch_is_idempotent_and_budget_is_per_decision_date"),
+        ("runners.us_short_discovery_publish_policy", "mutable_ledger_lock",
+         "tests.provider.test_us_short_llm_theme_discovery_fetch_web.BudgetMutexTests"
+         ".test_budget_ledger_lock_serializes_two_contenders_without_a_state_file"),
         ("engine.us_short_persisted_text_safety", "persisted_text_violation",
          "tests.provider.test_us_short_llm_theme_discovery.OfflineLLMThemeDiscoveryTests"
          ".test_credential_bearing_url_is_rejected_before_persisting"),
@@ -1940,6 +1944,10 @@ class LaneGuardRegistryConformance(unittest.TestCase):
     @staticmethod
     def _neutered(name: str):
         """A mutant that disables exactly one guard term, so the dying test is unambiguous."""
+        @contextmanager
+        def unlocked_ledger(*_args, **_kwargs):
+            yield
+
         def blind_write(payload: dict[str, Any], path: Path, **_kwargs) -> bool:
             path.parent.mkdir(parents=True, exist_ok=True)
             path.write_text(json.dumps(payload, ensure_ascii=False, indent=2), encoding="utf-8")
@@ -1954,6 +1962,7 @@ class LaneGuardRegistryConformance(unittest.TestCase):
             "write_immutable_json": blind_write,
             "publish_immutable_pair": blind_pair,
             "write_mutable_ledger": lambda payload, path, **_kwargs: None,
+            "mutable_ledger_lock": unlocked_ledger,
             "frozen_artifact_matches": lambda payload, path, **_kwargs: False,
             "evidence_bytes": lambda payload, **_kwargs: json.dumps(payload, sort_keys=True).encode("utf-8"),
             "_serialized_payload": lambda payload: (

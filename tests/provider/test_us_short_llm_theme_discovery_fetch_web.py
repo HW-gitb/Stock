@@ -5,7 +5,9 @@ import copy
 import inspect
 import json
 import tempfile
+import threading
 import unittest
+from contextlib import contextmanager
 from unittest import mock
 from datetime import datetime, timezone
 from pathlib import Path
@@ -47,6 +49,18 @@ ROWS = [
 TAVILY_TEST_KEY = "tvly-" + "a" * 52
 
 
+class _TransportProbe:
+    """Orchestration test double; unlike production transport it cannot authorize a receipt."""
+    def __init__(self, *providers):
+        self._completed = {provider: 0 for provider in providers}
+
+    def _record_completed_response(self, provider):
+        self._completed[provider] += 1
+
+    def _snapshot(self):
+        return dict(self._completed)
+
+
 def _live_preflight_order_offenders(source: str) -> list[str]:
     """Return the future-live ordering defect without executing the frozen branch."""
     tree = ast.parse(source)
@@ -61,6 +75,112 @@ def _live_preflight_order_offenders(source: str) -> list[str]:
     if not reserve_lines or not spend_lines:
         return ["missing reserve-before-spend call"]
     return [] if min(reserve_lines) < min(spend_lines) else ["reserve must precede the first paid orchestration call"]
+
+
+def _function_source(source: str, name: str) -> str:
+    tree = ast.parse(source)
+    node = next(
+        candidate for candidate in tree.body
+        if isinstance(candidate, (ast.FunctionDef, ast.AsyncFunctionDef)) and candidate.name == name
+    )
+    return "\n".join(source.splitlines()[node.lineno - 1:node.end_lineno])
+
+
+class BudgetMutexTests(unittest.TestCase):
+    def test_budget_ledger_lock_serializes_two_contenders_without_a_state_file(self):
+        """K3-R34 Optional (j): two contenders cannot enter the budget RMW together or leave a file."""
+        from runners import us_short_discovery_publish_policy as policy
+
+        with tempfile.TemporaryDirectory() as td:
+            ledger_path = Path(td) / "budget.json"
+            first_entered, release_first, second_entered = threading.Event(), threading.Event(), threading.Event()
+            failures: list[BaseException] = []
+
+            def holder():
+                try:
+                    with policy.mutable_ledger_lock(ledger_path, timeout_seconds=2):
+                        first_entered.set()
+                        release_first.wait(2)
+                except BaseException as exc:
+                    failures.append(exc)
+
+            def waiter():
+                try:
+                    first_entered.wait(2)
+                    with policy.mutable_ledger_lock(ledger_path, timeout_seconds=2):
+                        second_entered.set()
+                except BaseException as exc:
+                    failures.append(exc)
+
+            first, second = threading.Thread(target=holder), threading.Thread(target=waiter)
+            first.start()
+            self.assertTrue(first_entered.wait(2))
+            second.start()
+            self.assertFalse(second_entered.wait(0.15), "second contender entered before the first released")
+            release_first.set()
+            first.join(2)
+            second.join(2)
+            self.assertFalse(first.is_alive() or second.is_alive())
+            self.assertEqual(failures, [])
+            self.assertTrue(second_entered.is_set())
+            self.assertFalse(ledger_path.with_name(".budget.json.lock").exists())
+
+    def test_budget_reservation_enters_the_mutex_before_its_read_modify_write(self):
+        from runners import us_short_discovery_publish_policy as policy
+
+        entered: list[Path] = []
+
+        @contextmanager
+        def observed_lock(path: Path):
+            entered.append(path)
+            yield
+
+        with tempfile.TemporaryDirectory() as td:
+            ledger_path = Path(td) / "budget.json"
+            with (
+                mock.patch.object(fetch, "_provider_budget_path", return_value=ledger_path),
+                mock.patch.object(policy, "mutable_ledger_lock", observed_lock),
+                mock.patch.object(fetch, "_reserve_provider_budget_locked"),
+            ):
+                fetch._reserve_provider_budget(
+                    "web", "tavily", "20260726", call_count=1, query_scope=["q"],
+                )
+        self.assertEqual(entered, [ledger_path])
+
+    def test_abandoned_mutex_is_released_before_the_fail_closed_error(self):
+        """WAIT_ABANDONED grants ownership, so cleanup must release before rejecting the ledger."""
+        from runners import us_short_discovery_publish_policy as policy
+
+        class Api:
+            def __init__(self):
+                self.release_calls = 0
+                self.close_calls = 0
+                self.CreateMutexW = self._call(lambda *_args: 101)
+                self.WaitForSingleObject = self._call(lambda *_args: 0x00000080)
+                self.ReleaseMutex = self._call(self._release)
+                self.CloseHandle = self._call(self._close)
+
+            @staticmethod
+            def _call(fn):
+                def call(*args):
+                    return fn(*args)
+                return call
+
+            def _release(self, *_args):
+                self.release_calls += 1
+                return True
+
+            def _close(self, *_args):
+                self.close_calls += 1
+                return True
+
+        api = Api()
+        with tempfile.TemporaryDirectory() as td, mock.patch("ctypes.WinDLL", return_value=api):
+            with self.assertRaisesRegex(policy.DiscoveryPublishPolicyError, "was abandoned"):
+                with policy.mutable_ledger_lock(Path(td) / "budget.json"):
+                    self.fail("abandoned mutex must not enter")
+        self.assertEqual(api.release_calls, 1)
+        self.assertEqual(api.close_calls, 1)
 
 
 class WebFetchTests(unittest.TestCase):
@@ -96,21 +216,46 @@ class WebFetchTests(unittest.TestCase):
         self.assertEqual(summary["dropped_result_count"], 3)
         self.assertTrue(any(row["reason"] == "published_at_after_decision_open" for row in receipt["drop_ledger"]))
 
-    def test_live_freeze_blocks_before_clients_keys_or_reservation(self):
-        """K3-R34: live=True must stop before any provider-side effect begins."""
+    def test_live_mode_requires_confirmation_then_reserves_before_orchestration(self):
+        """K3-R34 unfreeze: authorization, private clients, and pre-spend reservation stay ordered."""
         with (
             mock.patch.object(fetch, "TavilyClient") as tavily_client,
-            mock.patch.object(fetch, "_reserve_provider_budget") as reserve,
+            mock.patch.object(fetch, "DeepSeekClient") as deepseek_client,
+            mock.patch.object(fetch, "_reserve_live_web_provider_budgets") as reserve,
             mock.patch.object(fetch.os.environ, "get", side_effect=AssertionError("key lookup reached")) as key_lookup,
         ):
-            with self.assertRaisesRegex(fetch.WebThemeDiscoveryError, "live execution is frozen"):
+            with self.assertRaisesRegex(fetch.WebThemeDiscoveryError, "requires --confirm-user-authorization"):
                 fetch.run_web_fetch(
                     queries=["x"], expected_decision_date="20260725",
-                    generated_at="2026-07-25T08:00:00Z", confirm_user_authorization=True, live=True,
+                    generated_at="2026-07-25T08:00:00Z", live=True,
                 )
         tavily_client.assert_not_called()
+        deepseek_client.assert_not_called()
         reserve.assert_not_called()
         key_lookup.assert_not_called()
+
+        order: list[str] = []
+        outcome = {
+            "results": [], "llm_response": '{"themes":[]}', "query_drops": [],
+            "fetched_at": datetime(2026, 7, 25, 8, tzinfo=timezone.utc),
+            "regroup_model_identity": fetch._regroup_model_identity(),
+            "regroup_failed": False, "regroup_attempted": False, "provider_call_count": 1,
+        }
+        with (
+            mock.patch.object(fetch.os.environ, "get", side_effect=lambda key, default: {
+                "TAVILY_API_KEY": TAVILY_TEST_KEY, "DEEPSEEK_API_KEY": "sk-" + "d" * 40,
+            }.get(key, default)),
+            mock.patch.object(fetch, "TavilyClient"),
+            mock.patch.object(fetch, "DeepSeekClient"),
+            mock.patch.object(fetch, "_reserve_live_web_provider_budgets", side_effect=lambda *_: order.append("reserve")),
+            mock.patch.object(fetch, "execute_live_web_orchestration", side_effect=lambda **_: order.append("orchestrate") or outcome),
+            mock.patch.object(fetch, "build_web_fetch_packet", return_value=({}, {}, {})),
+        ):
+            fetch.run_web_fetch(
+                queries=["x"], expected_decision_date="20260725",
+                generated_at="2026-07-25T08:00:00Z", confirm_user_authorization=True, live=True,
+            )
+        self.assertEqual(order, ["reserve", "orchestrate"])
 
     def test_tavily_news_request_and_captured_timestamp_shape_keep_valid_row(self):
         """K3-R49/R50: the real `topic=news` shape is RFC 1123/GMT, not guessed ISO-only data."""
@@ -135,7 +280,7 @@ class WebFetchTests(unittest.TestCase):
             captured_request["timeout"] = timeout
             return _Response()
 
-        transport = fetch._new_live_transport()
+        transport = _TransportProbe("tavily", "deepseek")
         with mock.patch.object(fetch.urllib.request, "urlopen", side_effect=fake_urlopen):
             rows = fetch.TavilyClient(TAVILY_TEST_KEY, _live_transport=transport).search("power demand")
         self.assertEqual(captured_request["body"], {
@@ -234,7 +379,7 @@ class WebFetchTests(unittest.TestCase):
                 request.assert_not_called()
         self.assertEqual(fetch._require_single_tavily_api_key(TAVILY_TEST_KEY), TAVILY_TEST_KEY)
         # The still-frozen live branch is not executable, so pin its future preflight ordering mechanically.
-        live_source = inspect.getsource(fetch.run_web_fetch)
+        live_source = _function_source(inspect.getsource(fetch), "_run_web_fetch")
         self.assertLess(live_source.index("_require_single_tavily_api_key"), live_source.index("_reserve_live_web_provider_budgets"))
         self.assertEqual(_live_preflight_order_offenders(live_source), [])
         reserve_line = "        _reserve_live_web_provider_budgets(expected_decision_date, queries)\n"
@@ -244,17 +389,74 @@ class WebFetchTests(unittest.TestCase):
         self.assertTrue(_live_preflight_order_offenders(mutated))
 
     def test_failed_transport_attempt_cannot_supply_a_live_packet_count(self):
-        transport = fetch._new_live_transport()
+        transport = _TransportProbe("tavily", "deepseek")
         with mock.patch.object(fetch.urllib.request, "urlopen", side_effect=OSError("offline")):
             with self.assertRaises(fetch.WebThemeDiscoveryError):
                 fetch.TavilyClient(TAVILY_TEST_KEY, _live_transport=transport).search("power")
         self.assertEqual(transport._snapshot(), {"tavily": 0, "deepseek": 0})
-        with self.assertRaisesRegex(fetch.WebThemeDiscoveryError, "observed provider/network call"):
+        with self.assertRaisesRegex(fetch.WebThemeDiscoveryError, "response-derived runner transport"):
             fetch.build_web_fetch_packet(
                 queries=["power"], search_results=[], llm_response='{"themes":[]}',
                 expected_decision_date="20260725", generated_at="2026-07-25T08:00:00Z",
-                execution_mode="live_authorized", _live_transport=transport,
+                execution_mode="live_authorized", _live_transport=transport, _live_ticket=object(),
             )
+
+    def test_direct_builder_rejects_a_minted_completed_live_transport(self):
+        """K3-R34 Optional (b): a builder caller cannot mint live authorization from a counter."""
+        transport = _TransportProbe("tavily", "deepseek")
+        transport._record_completed_response("tavily")
+        for _ in range(2):
+            with self.assertRaisesRegex(fetch.WebThemeDiscoveryError, "response-derived runner transport"):
+                fetch.build_web_fetch_packet(
+                    queries=["power"], search_results=[], llm_response='{"themes":[]}',
+                    expected_decision_date="20260725", generated_at="2026-07-25T08:00:00Z",
+                    execution_mode="live_authorized", _live_transport=transport, _live_ticket=object(),
+                )
+
+    def test_runner_ticket_is_consumed_and_cannot_replay_a_live_receipt(self):
+        """No direct builder path can issue a ticket or replay a forged one."""
+        self.assertFalse(hasattr(fetch, "_issue_live_ticket"))
+        self.assertNotIn("_issue_ticket", fetch.run_web_fetch.__kwdefaults__ or {})
+        transport = _TransportProbe("tavily", "deepseek")
+        transport._record_completed_response("tavily")
+        args = {
+            "queries": ["power"], "search_results": [], "llm_response": '{"themes":[]}',
+            "expected_decision_date": "20260725", "generated_at": "2026-07-25T08:00:00Z",
+            "execution_mode": "live_authorized", "_live_transport": transport,
+            "_live_ticket": object(),
+        }
+        for _ in range(2):
+            with self.assertRaisesRegex(fetch.WebThemeDiscoveryError, "response-derived runner transport"):
+                fetch.build_web_fetch_packet(**args)
+
+    def test_live_runner_closure_can_authorize_its_own_completed_transport_once(self):
+        class Client:
+            def __init__(self, *_args, _live_transport=None, **_kwargs):
+                self._live_transport = _live_transport
+
+        def orchestration(*, transport, **_kwargs):
+            transport._record_completed_response("tavily")
+            return {
+                "results": [], "llm_response": '{"themes":[]}', "query_drops": [],
+                "fetched_at": datetime(2026, 7, 25, 8, tzinfo=timezone.utc),
+                "regroup_model_identity": fetch._regroup_model_identity(),
+                "regroup_failed": False, "regroup_attempted": False, "provider_call_count": 1,
+            }
+
+        with (
+            mock.patch.object(fetch, "_require_single_tavily_api_key", return_value=TAVILY_TEST_KEY),
+            mock.patch.object(fetch, "_require_single_deepseek_api_key", return_value="sk-" + "a" * 40),
+            mock.patch.object(fetch, "TavilyClient", Client),
+            mock.patch.object(fetch, "DeepSeekClient", Client),
+            mock.patch.object(fetch, "_reserve_live_web_provider_budgets"),
+            mock.patch.object(fetch, "execute_live_web_orchestration", side_effect=orchestration),
+        ):
+            _, receipt, _ = fetch.run_web_fetch(
+                queries=["power"], expected_decision_date="20260725",
+                generated_at="2026-07-25T08:00:00Z", confirm_user_authorization=True, live=True,
+            )
+        self.assertEqual(receipt["fetch_contract"]["execution_mode"], "live_authorized")
+        self.assertEqual(receipt["fetch_contract"]["transport_response_counts"], {"deepseek": 0, "tavily": 1})
 
     def test_invalid_llm_is_empty_but_packet_is_still_valid(self):
         packet, receipt, _ = fetch.build_web_fetch_packet(
@@ -489,6 +691,35 @@ class WebFetchTests(unittest.TestCase):
         self.assertEqual(first_receipt["source_refs"], second_receipt["source_refs"])
         self.assertEqual(first_receipt["drop_ledger"], second_receipt["drop_ledger"])
 
+    def test_live_receipt_retry_ignores_attempt_telemetry_but_not_frozen_model_identity(self):
+        """A transient retry must reuse evidence, while a changed served model remains a conflict."""
+        with tempfile.TemporaryDirectory() as td:
+            root = Path(td)
+            artifact_path, receipt_path = root / "artifact.json", root / "receipt.json"
+            artifact = {"schema_name": "artifact", "evidence": "same"}
+            receipt = {
+                "schema_name": "us_short_llm_theme_discovery_fetch_web",
+                "fetch_contract": {"regroup_model": {"served_model": "deepseek-v4"},
+                                   "network_call_count": 1, "provider_call_count": 1,
+                                   "network_access_performed": True, "provider_calls_performed": True,
+                                   "transport_response_counts": {"tavily": 1, "deepseek": 0}},
+                "drop_ledger": [{"reason": "provider_response_dropped"}],
+                "summary": {"dropped_result_count": 1},
+            }
+            fetch._write_json_pair_atomic(artifact, artifact_path, receipt, receipt_path)
+            retry = json.loads(json.dumps(receipt))
+            retry["fetch_contract"]["network_call_count"] = 2
+            retry["fetch_contract"]["provider_call_count"] = 2
+            retry["fetch_contract"]["transport_response_counts"] = {"tavily": 1, "deepseek": 1}
+            retry["drop_ledger"] = []
+            retry["summary"]["dropped_result_count"] = 0
+            fetch._write_json_pair_atomic(artifact, artifact_path, retry, receipt_path)
+            self.assertEqual(json.loads(receipt_path.read_text(encoding="utf-8")), receipt)
+            changed_identity = json.loads(json.dumps(retry))
+            changed_identity["fetch_contract"]["regroup_model"]["served_model"] = "different-model"
+            with self.assertRaises(fetch.WebThemeDiscoveryError):
+                fetch._write_json_pair_atomic(artifact, artifact_path, changed_identity, receipt_path)
+
     def test_raw_batch_failure_removes_its_partial_new_evidence(self):
         with temporary_provider_directory(fetch.ROOT) as td:
             root = Path(td) / "batch"
@@ -644,7 +875,7 @@ class WebFetchTests(unittest.TestCase):
 
     def test_live_budget_is_capped_and_lets_a_second_query_set_spend_the_rest(self):
         # A test must never reserve against the operator's real state/us_short.
-        with temporary_provider_directory(fetch.ROOT) as td:
+        with tempfile.TemporaryDirectory(dir=fetch.STATE_DIR) as td:
             with mock.patch.object(fetch, "STATE_DIR", Path(td)):
                 fetch._reserve_provider_budget("web", "tavily", "20260726", call_count=20, query_scope=[f"a{i}" for i in range(20)])
                 fetch._reserve_provider_budget("web", "tavily", "20260726", call_count=5, query_scope=[f"b{i}" for i in range(5)])
@@ -686,6 +917,7 @@ class WebFetchTests(unittest.TestCase):
         self.assertEqual(retry["deepseek"]["planned_provider_call_count"], fetch.MAX_DEEPSEEK_REGROUP_CALLS)
         self.assertEqual(retry["tavily"]["reservation_attempt_count"], 2)
         self.assertEqual(retry["deepseek"]["reservation_attempt_count"], 2)
+        self.assertEqual(list(root.glob(".*.lock")), [])
 
     def test_secret_like_path_is_sanitized_without_poisoning_receipt_backstop(self):
         bad_path = {**ROWS[0], "url": "https://evil.example/password/reset"}
@@ -892,7 +1124,7 @@ class LiveOrchestrationExecutableTests(unittest.TestCase):
                 "observed_at": "2026-07-29T12:00:00Z", "source_ref_ids": [], "members": []}
 
     def _run(self, batches, plan):
-        transport = fetch._new_live_transport()
+        transport = _TransportProbe("tavily", "deepseek")
         outcome = fetch.execute_live_web_orchestration(
             queries=["power demand"], expected_decision_date=self.DATE,
             tavily=self._Tavily(batches), deepseek_client=self._DeepSeek(plan),
@@ -903,7 +1135,7 @@ class LiveOrchestrationExecutableTests(unittest.TestCase):
     def test_happy_path_sends_the_reviewed_prompt_and_returns_themes(self):
         """Covers the K3-R55 shape: a prompt builder that returned None or a re-authored string."""
         deepseek = self._DeepSeek([self._response([self._theme("power_demand")])])
-        transport = fetch._new_live_transport()
+        transport = _TransportProbe("tavily", "deepseek")
         outcome = fetch.execute_live_web_orchestration(
             queries=["power demand"], expected_decision_date=self.DATE,
             tavily=self._Tavily([self.ROWS]), deepseek_client=deepseek,
@@ -925,7 +1157,7 @@ class LiveOrchestrationExecutableTests(unittest.TestCase):
         outcome = fetch.execute_live_web_orchestration(
             queries=["power demand"], expected_decision_date=self.DATE,
             tavily=self._Tavily([[]]), deepseek_client=deepseek,
-            transport=fetch._new_live_transport(),
+            transport=_TransportProbe("tavily", "deepseek"),
         )
         self.assertEqual(deepseek.prompts, [])
         self.assertFalse(outcome["regroup_attempted"])
@@ -968,16 +1200,6 @@ class LiveOrchestrationExecutableTests(unittest.TestCase):
                 expected_decision_date=self.DATE, generated_at="2026-07-31T08:00:00Z",
                 execution_mode="live_authorized",
             )
-
-    def test_the_live_entrypoint_still_freezes_before_the_orchestration_runs(self):
-        with mock.patch.object(fetch, "execute_live_web_orchestration") as orchestration:
-            with self.assertRaisesRegex(fetch.WebThemeDiscoveryError, "live execution is frozen"):
-                fetch.run_web_fetch(
-                    queries=["q"], expected_decision_date=self.DATE,
-                    generated_at="2026-07-31T08:00:00Z", confirm_user_authorization=True, live=True,
-                )
-        orchestration.assert_not_called()
-
 
 if __name__ == "__main__":
     unittest.main()
