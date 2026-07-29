@@ -699,7 +699,7 @@ class WebFetchTests(unittest.TestCase):
             artifact = {"schema_name": "artifact", "evidence": "same"}
             receipt = {
                 "schema_name": "us_short_llm_theme_discovery_fetch_web",
-                "fetch_contract": {"regroup_model": {"served_model": "deepseek-v4"},
+                "fetch_contract": {"execution_mode": "live_authorized", "regroup_model": {"served_model": "deepseek-v4"},
                                    "network_call_count": 1, "provider_call_count": 1,
                                    "network_access_performed": True, "provider_calls_performed": True,
                                    "transport_response_counts": {"tavily": 1, "deepseek": 0}},
@@ -719,6 +719,29 @@ class WebFetchTests(unittest.TestCase):
             changed_identity["fetch_contract"]["regroup_model"]["served_model"] = "different-model"
             with self.assertRaises(fetch.WebThemeDiscoveryError):
                 fetch._write_json_pair_atomic(artifact, artifact_path, changed_identity, receipt_path)
+
+    def test_offline_receipt_retry_keeps_its_full_immutable_evidence(self):
+        """K3-R77 Optional: retry projection is live-only; offline drop evidence may not be erased."""
+        with tempfile.TemporaryDirectory() as td:
+            root = Path(td)
+            artifact_path, receipt_path = root / "artifact.json", root / "receipt.json"
+            artifact = {"schema_name": "artifact", "evidence": "same"}
+            receipt = {
+                "schema_name": "us_short_llm_theme_discovery_fetch_web",
+                "fetch_contract": {
+                    "execution_mode": "offline_fake_client", "network_access_performed": False,
+                    "provider_calls_performed": False, "network_call_count": 0,
+                    "provider_call_count": 0, "transport_response_counts": {"tavily": 0, "deepseek": 0},
+                },
+                "drop_ledger": [{"reason": "offline_response_dropped"}],
+                "summary": {"dropped_result_count": 1},
+            }
+            fetch._write_json_pair_atomic(artifact, artifact_path, receipt, receipt_path)
+            changed = json.loads(json.dumps(receipt))
+            changed["drop_ledger"] = []
+            changed["summary"]["dropped_result_count"] = 0
+            with self.assertRaises(fetch.WebThemeDiscoveryError):
+                fetch._write_json_pair_atomic(artifact, artifact_path, changed, receipt_path)
 
     def test_raw_batch_failure_removes_its_partial_new_evidence(self):
         with temporary_provider_directory(fetch.ROOT) as td:

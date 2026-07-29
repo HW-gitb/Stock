@@ -2,7 +2,6 @@ from __future__ import annotations
 
 import json
 import hashlib
-import shutil
 import sys
 import tempfile
 import unittest
@@ -152,10 +151,12 @@ class ReplayClientTest(unittest.TestCase):
     def test_bound_capture_rejects_root_alias_and_keeps_original_clock(self):
         provider_samples = ROOT / "provider_samples"
         provider_samples.mkdir(parents=True, exist_ok=True)
-        root = Path(tempfile.mkdtemp(prefix="test_replay_source_", dir=str(provider_samples)))
-        replay_root = Path(tempfile.mkdtemp(prefix="test_replay_output_", dir=str(provider_samples)))
-        summary_path = provider_samples / f"{root.name}_capture_summary.json"
-        try:
+        with tempfile.TemporaryDirectory(prefix="test_replay_source_", dir=str(provider_samples)) as root_dir, \
+                tempfile.TemporaryDirectory(prefix="test_replay_output_", dir=str(provider_samples)) as replay_dir, \
+                tempfile.TemporaryDirectory(prefix="test_replay_summary_", dir=str(provider_samples)) as summary_dir:
+            root = Path(root_dir)
+            replay_root = Path(replay_dir)
+            summary_path = Path(summary_dir) / "capture_summary.json"
             self._seed(root)
             self._bound_summary(root, summary_path)
             with self.assertRaises(replay.ReplayError):
@@ -191,17 +192,14 @@ class ReplayClientTest(unittest.TestCase):
             self.assertEqual(kwargs["observed_at"], "2026-07-08T08:00:00-04:00")
             self.assertTrue(kwargs["replay_source_capture"]["non_emittable"])
             self.assertEqual(kwargs["replay_source_capture"]["source_as_of"], "2026-07-08")
-        finally:
-            shutil.rmtree(root, ignore_errors=True)
-            shutil.rmtree(replay_root, ignore_errors=True)
-            summary_path.unlink(missing_ok=True)
 
     def test_bound_capture_rejects_raw_mutation_and_wrong_preflight_date(self):
         provider_samples = ROOT / "provider_samples"
         provider_samples.mkdir(parents=True, exist_ok=True)
-        root = Path(tempfile.mkdtemp(prefix="test_replay_source_", dir=str(provider_samples)))
-        summary_path = provider_samples / f"{root.name}_capture_summary.json"
-        try:
+        with tempfile.TemporaryDirectory(prefix="test_replay_source_", dir=str(provider_samples)) as root_dir, \
+                tempfile.TemporaryDirectory(prefix="test_replay_summary_", dir=str(provider_samples)) as summary_dir:
+            root = Path(root_dir)
+            summary_path = Path(summary_dir) / "capture_summary.json"
             self._seed(root)
             self._bound_summary(root, summary_path)
             mutated = sv.raw_sample_ref(root, "massive", "reference_news", "AAPL")
@@ -232,9 +230,6 @@ class ReplayClientTest(unittest.TestCase):
                         summary_path=root / "replay_summary.json",
                         replay_raw_root=root / "replay_raw",
                     )
-        finally:
-            shutil.rmtree(root, ignore_errors=True)
-            summary_path.unlink(missing_ok=True)
 
     def test_direct_offline_mode_rejects_unbound_client(self):
         with self.assertRaisesRegex(live.FullCandidateLiveSourcePacketError, "manifest-bound ReplayClient"):

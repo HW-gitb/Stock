@@ -241,6 +241,51 @@
 - **Verify**: fixed Python focused 538 OK；A-short full ledger 2072 OK / 205.8s / exit 0；`git diff --check` clean（仅 CRLF warning）。
 - **Next**: Claude Code：审查。
 - **Pre-Codex self-review**: matrix=complete; register=updated; handoff=updated; focused=538 OK; full-lane=2072 OK.
+## 2026-07-29 — Claude Code 审查 PASS（US-short K3-R81 / K3-R82 收口，48b5 工作树）
+
+- **Verdict/Action**: PASS，已提交并合入 master。本次提交一并落地 K3-R77 residual → K3-R80 → K3-R81/R82 整条链（12 个文件）。rule 4 恢复了单反斜杠 `.tools\codex_main_python.ps1`、恢复了 `Start-Process` / `ArgumentList` 禁令、并把 launcher 的适用范围收敛成「argv 不含字面 `--`」从而与 rule 5 不再打架；执行方两条 `修复` 条目补齐了五字段 `Pre-Codex self-review`。正文只在 `docs/system_risk_register.md#R-USSHORT-KNIFE3-WEB-X-MERGE-PACKET-BOUNDARY`（K3-R81 / K3-R82 CLOSED），本处不复述。
+- **Required**: 无。
+- **Verify**: review-evidence:492ff94f5c65。按用户指令 + rule 4 docs-only 例外未起全量（delta 仅 `AGENTS.md` 1+/1- 与文档，reviewer 自有 5001 OK 仍有效）。亲跑验收超集 doc-governance + review-tiering + route-consistency → `status=PASS exit=0 tests=72 elapsed=2.8s`。自写外部挖空 12/12（真文件真守卫、按字节还原并核 sha256）：删单反斜杠引用→路由断言转红；删补回的 `Pre-Codex self-review` 行→closeout 守卫转红；还原后皆绿。边界已记：`Start-Process` 那句无机器守卫。
+- **Next**: Codex：待命。
+
+## 2026-07-29 — Codex executor 修复 K3-R81 / K3-R82（待 Claude Code 独立审查）
+
+- **Verdict/Action**: K3-R81 恢复了 `.tools\codex_main_python.ps1` 的单反斜杠兼容锚点、`Start-Process` / `ArgumentList` 参数传递禁令，并明确它只用于不含字面 `--` 的命令；全量账本继续直调固定主 Python。K3-R82 已给上一条 executor 修复记录补齐五个 closeout 字段。
+- **Required**: Claude Code 独立审查。K3-R80 的 reviewer-owned full lane 已是 5001 OK；本轮只改治理文档，不重跑 lane。
+- **Verify**: 固定主 Python 治理超集（document governance + review tiering）**58 OK**；`git diff --check` 通过；无 provider / key / network / live 动作。
+- **Pre-Codex self-review**: `matrix=complete: K3-R81 documentation contract restored and reconciled; K3-R82 closeout fields completed; register=updated; handoff=updated; focused=document-governance + review-tiering 58 OK; full-lane=5001 OK reviewer-owned, docs-only delta does not invalidate it; main-thread checklist fallback used; no provider activity`.
+- **Next**: Claude Code：审查。
+
+## 2026-07-29 — Claude Code 审查 FAIL（US-short K3-R80 / K3-R80-O1 收口，48b5 工作树）
+
+- **Verdict/Action**: FAIL，未提交、未合入 master。K3-R80 的实质修复本身是好的（守卫一行没削、六个 `mkdtemp(dir=protected root)` 点改成受管临时目录、soft-boost 重复 `setUp()` 夹具逐个注册清理、61 个 gitignored 旧夹具目录已删且未触及 tracked 文件）；但同一刀的 O1 改动打红了另一道机器守卫，且执行方的 SESSION_LOG 条目缺 closeout 证据行。正文只在 `docs/system_risk_register.md#R-USSHORT-KNIFE3-WEB-X-MERGE-PACKET-BOUNDARY`（K3-R81 / K3-R82；K3-R80 实质证据与 K3-R80-O2 一并记在那里），本处不复述。
+- **Required**: K3-R81（rule 4 重写删掉了 AGENTS.md 里唯一的单反斜杠 `.tools\codex_main_python.ps1`，`test_doc_governance_guard.py::test_schema_tests_are_routed_through_repo_pythonpath_wrapper` 由绿转红；同一次重写还删了 `Start-Process` / `ArgumentList` 那句）。K3-R82（执行方本轮 `修复` 条目无 `Pre-Codex self-review` 行，`test_executor_repair_closeout_enforced_above_marker` 红）。
+- **Verify**: review-evidence:f52cc311d090。全量按 rule 4 我取得 ownership 亲跑官方账本（rule 3d）：`Ran 5001 tests`/`OK`、`RESULT status=PASS exit=0 tests=5001 elapsed=654.5s`，已记账，与上轮 FAIL 同为 5001。自写独立扫描器 9/9（不复用 `_growth`）：六模块 44 OK 后两私有根零增长零丢失；`soft_boost_consumption` 排在守卫之后、全量看不见，单跑 10 OK 零残留。两条红由 `tests.test_doc_governance_guard` 实测（`status=FAIL exit=1 tests=39`），该模块不匹配 `test_us_short*.py`。回归归属已证：同一归一化断言 HEAD 为 True、当前树为 False。超时原因：全量 655s + 收尾才跑到文档守卫并回写更正。
+- **Next**: Codex：修复。
+
+## 2026-07-29 — Codex executor 修复 K3-R80 / K3-R80-O1（待 Claude Code 独立审查）
+
+- **Verdict/Action**: K3-R80 的守卫未削弱。六处 `provider_samples` 测试临时根现统一受 `TemporaryDirectory` 管理；soft-boost 的重复 `setUp()` 所有夹具也由 `addCleanup` 覆盖。旧的 61 个已确认 gitignored 测试残留已删除。K3-R80-O1 的 rule-4 命令改为直接调用固定主 Python，避开 PowerShell 吞 `--`。
+- **Required**: Claude Code 独立审查。全量此前已实测红；本轮曾有一条 focused 探针红（回放摘要误放 source raw 根），已立即修正并在同一超集复测，不启动第二次全量。
+- **Verify**: 固定主 Python、离线：status / bankruptcy / retry pacing / replay / soft-boost / residue guard 超集 **44 OK**；`py_compile`、`git diff --check` 通过；受管六点 `mkdtemp` 扫描为 0，命名测试残留目录 0，`state/us_short` 文件 0。full lane = **NOT_VERIFIED**；无 provider / key / network / live 动作。
+- **Pre-Codex self-review**: `matrix=complete: K3-R80 fixed without weakening the guard; K3-R80-O1 accepted as direct fixed-Python rule-4 invocation; register=updated; handoff=updated; focused=44 OK; full-lane=NOT_VERIFIED at executor closeout, later superseded by reviewer-owned 5001 OK; main-thread checklist fallback used; no provider activity`.
+- **Next**: Claude Code：审查。
+
+## 2026-07-29 — Claude Code 审查 FAIL（US-short K3-R77 两条 residual Optional 收口，48b5 工作树）
+
+- **Verdict/Action**: FAIL，未提交、未合入 master。离线收据那条干净（只有 `execution_mode == "live_authorized"` 才投影，offline 保住完整不可变证据）；新加的 `provider_samples` 残留腿把 us_short 全量包打红。正文只在 `docs/system_risk_register.md#R-USSHORT-KNIFE3-WEB-X-MERGE-PACKET-BOUNDARY`（K3-R80 / K3-R80-O1），本处不复述。
+- **Required**: K3-R80 —— 守卫对、lane 自己的测试错：`tests/provider/test_us_short_batch5_status_source_probe.py:61` 的 `mkdtemp` 无清理，且 `tests/provider` 整包排在守卫之前跑。按整类扫 6 个 `mkdtemp(dir=provider_samples…)` 点加 `test_us_short_soft_boost_consumption.py` tearDown 漏网文件，删积存残留，别削守卫。Optional K3-R80-O1 详见 register。
+- **Verify**: review-evidence:40af56b613f8。全量按 rule 4 亲跑官方账本：`Ran 5001 tests in 654.408s` / `FAILED (failures=1)`、`RESULT status=FAIL exit=1 tests=5001 elapsed=655.3s`，唯一失败即该守卫；5001 = 上轮绿 4999 + 本 diff 新增 2。focused 超集 94 OK / 20.2s。自写外部挖空探针 21/21（换回旧投影→新离线测试转红；植入两处残留各自转红，清理后复扫为空）。超时原因：审中才认定 rule 3(d) 触发，加一次 655s 账本；另 `codex_main_python.ps1` 吞 `--` 废掉一次尝试。
+- **Next**: Codex：修复。
+
+## 2026-07-29 - Codex executor repair of the two K3-R77 residual Optionals (pending Claude review)
+
+- **Verdict/Action**: Both residual Optionals are repaired with the smallest load-bearing boundaries. `_live_receipt_retry_evidence` now projects retry telemetry only for an exact `live_authorized` receipt; offline receipts retain their full immutable evidence, so a changed offline drop ledger is rejected by the real pair write door. `LaneResidueConformance` now takes import-time baselines for both `state/us_short` and `provider_samples`; a pre-existing authorized capture remains legal, while any file left by a preceding sequential test/probe is a failure. The provider-samples root is separately pinned so it cannot be silently removed from that predicate.
+- **Required**: Claude Code independent review remains required. This preserves the K3-R77 PASS boundary; it does not make same-process Python provider provenance verifiable, authorize a provider/key/network/live action, enable scoring, or authorize a full-pack retry.
+- **Verify**: Required main Python, offline only: class guards + Web fetch + Web/X merge = **116 OK**; discovery conformance = **27 OK**. Before testing, `state/us_short` and gitignored `provider_samples/` were inspected. `py_compile` and `git diff --check` passed; final `state/us_short` scan is empty. Full lane remains **NOT_VERIFIED** and was not run.
+- **Pre-Codex self-review**: `matrix=partial: live-only retry projection + state/raw residue predicate; focused=116 OK + conformance 27 OK; full-lane=NOT_VERIFIED; no provider activity`.
+- **Next**: Claude Code: review.
+
 ## 2026-07-29 — Claude Code 审查 PASS（US-short K3-R77 收口，解冻链⑤ offline repair 闭合）
 
 - **Verdict/Action**: PASS，已提交并合入 master。K3-R77 不是靠「藏得更深」关掉的——那条路本会话已被证伪三次；这轮把声称改成实话（两 lane docstring 明写「不是安全边界」并指向下游 `content_sha256` 重推导），守卫类改名 `LiveTransportLifecycleConformance` 并撤掉误导性的模块属性清单断言，同时补上交接指定的两条下游载荷性控制。正文只在 `docs/system_risk_register.md#R-USSHORT-KNIFE3-WEB-X-MERGE-PACKET-BOUNDARY`，本处不复述。全程零 live、零网络。

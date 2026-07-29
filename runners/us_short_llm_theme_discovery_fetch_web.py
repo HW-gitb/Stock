@@ -292,11 +292,13 @@ def _write_json_atomic(payload: Any, path: Path) -> None:
 
 
 def _live_receipt_retry_evidence(payload: Any) -> Any:
-    """Compare live receipts on frozen evidence, not a later attempt's operational telemetry.
+    """Compare only live receipts on frozen evidence, not a later attempt's operational telemetry.
 
     Transport counts and per-attempt drops remain in the first immutable receipt for audit, while a
     same-evidence retry reuses that receipt instead of being rejected merely because a transient
-    provider failure changed its attempt bookkeeping.
+    provider failure changed its attempt bookkeeping.  Offline receipts never represent provider
+    attempts, so they retain their complete immutable comparison and a changed offline drop ledger
+    remains a conflict.
 
     The deliberate cost, stated so it is not rediscovered as a defect: the projected-out fields —
     including `transport_response_counts` — are no longer protected by the write door.  Whichever
@@ -309,16 +311,17 @@ def _live_receipt_retry_evidence(payload: Any) -> Any:
         "us_short_llm_theme_discovery_fetch_web", "us_short_llm_theme_discovery_fetch_x",
     }:
         return payload
+    contract = payload.get("fetch_contract")
+    if not isinstance(contract, dict) or contract.get("execution_mode") != "live_authorized":
+        return payload
     projected = dict(payload)
-    contract = projected.get("fetch_contract")
-    if isinstance(contract, dict):
-        projected_contract = dict(contract)
-        for key in (
-            "network_access_performed", "provider_calls_performed", "network_call_count",
-            "provider_call_count", "transport_response_counts",
-        ):
-            projected_contract.pop(key, None)
-        projected["fetch_contract"] = projected_contract
+    projected_contract = dict(contract)
+    for key in (
+        "network_access_performed", "provider_calls_performed", "network_call_count",
+        "provider_call_count", "transport_response_counts",
+    ):
+        projected_contract.pop(key, None)
+    projected["fetch_contract"] = projected_contract
     projected.pop("drop_ledger", None)
     summary = projected.get("summary")
     if isinstance(summary, dict):

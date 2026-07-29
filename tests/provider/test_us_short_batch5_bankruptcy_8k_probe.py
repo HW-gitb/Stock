@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import json
-import shutil
 import tempfile
 import unittest
 from pathlib import Path
@@ -86,8 +85,9 @@ class UsShortBatch5Bankruptcy8kProbeTest(unittest.TestCase):
         )
         base.mkdir(parents=True, exist_ok=True)
         client = FakeBankruptcyHttpClient()
-        temp_root = Path(tempfile.mkdtemp(prefix="run_", dir=base))
-        self.addCleanup(shutil.rmtree, temp_root, ignore_errors=True)
+        temp_dir = tempfile.TemporaryDirectory(prefix="run_", dir=base)
+        self.addCleanup(temp_dir.cleanup)
+        temp_root = Path(temp_dir.name)
         summary_path = temp_root / "summary.json"
         raw_root = temp_root / "raw"
         with mock.patch.dict(
