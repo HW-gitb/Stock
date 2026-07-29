@@ -13,6 +13,13 @@
 - **Required**: 无新开。Codex 待办按下面 Next 的顺序执行;两项治理口径待用户裁决,未裁决前**不得**开工 8B / 8C / 8D1。
 - **Verify**: 亲跑 `tests.test_a_short_semantic_risk_contract_docs` = `15 OK / 0.2s / exit 0`(即 MASTER-LANE-PACK 条目点名的目标 a);目标 b 由当前代码态账本 `full_pack_ledger run a_short = 2080 OK` 覆盖。6B 那条的闭合证据见其条目内 closure 段与 `89dd5e90`。本轮无代码改动,故未跑其它包。
 - **Next**: Codex 按序执行两件,均不依赖用户裁决:**①** 修 `docs/system_risk_register.md#R-ASHORT-P4A-NEGATIVE-BOUND-VALIDATION-IS-ASYMMETRIC`(P3:`negative_at_36.bootstrap_upper_pp_max` 补同侧符号约束 + 畸形值反向测试)。**②** 跑第六刀合并门:全局不变量断言「所有事实类日期字段(`portfolio_risk.fact_as_of`、候选 `quote.source_trade_date`、价格序列最新 bar、龙虎榜/大宗 `window_dates` 最大值)全部 ≤ `price_data_through` 且候选侧恒等于它,只有 `decision_as_of` 可更晚」,通过后才可记「第六刀完成」。**待用户裁决(挡着 8B/8C/8D1)**:见同日 handoff 追加节「待用户裁决的两项治理口径」。
+## 2026-07-29 - Codex repair (8A negative bound Optional and Knife 6 merge gate)
+
+- **Verdict/Action**: Closed R-ASHORT-P4A-NEGATIVE-BOUND-VALIDATION-IS-ASYMMETRIC: a positive terminal bootstrap upper bound now fails closed. The Knife 6 merge invariant passed in one complete synthetic weekly run, so Knife 6 is recorded complete in its main handoff.
+- **Required**: No residual material Required for this repair; closure detail is in docs/system_risk_register.md#R-ASHORT-P4A-NEGATIVE-BOUND-VALIDATION-IS-ASYMMETRIC.
+- **Verify**: Fixed Python tests.test_a_short_overlay_adjudication.OverlayAdjudicationTests.test_terminal_negative_policy_follows_the_admission = 1 OK / 0.809s. Fixed Python tests.test_a_short_weekly_pipeline.MainWiringTests.test_portfolio_facts_follow_the_price_clock_and_share_dragon_window = 1 OK / 1.729s; it asserts portfolio_risk.fact_as_of, candidate quote.source_trade_date, consumed price-series latest bar, and dragon_list/block_trade window-date maxima against price_data_through. Fixed Python full A-short ledger = 2080 OK, recorded 2026-07-29T11:59:23. git diff --check clean (CRLF warnings only).
+- **Next**: Claude Code: review.
+- **Pre-Codex self-review**: matrix=complete; register=updated; handoff=main Knife 6 handoff updated; focused=two explicit controls OK; full-lane=2080 OK; scope=A-short 8A Optional plus Knife 6 merge assertion only.
 
 ## 2026-07-29 - Claude Code 复审 PASS(8A Required + 阈值单一来源一并闭)
 

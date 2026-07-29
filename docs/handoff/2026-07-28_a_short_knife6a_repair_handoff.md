@@ -102,6 +102,10 @@
 - 第六刀仍未记「完成」：还差桌面文档的「本刀合并验证」全局不变量（所有事实类日期字段 ≤ `price_data_through` 且候选侧恒等，只有 `decision_as_of` 可更晚）跑一次。
 - 不改 provider live fetch、不碰真钱与 ship-gate；`result/a_short/<YYYYMMDD>/` 仍不可写。
 
+## 2026-07-29 追加：第六刀合并验证完成
+
+第六刀完成：本刀合并验证已在完整 synthetic 周报通过。断言 portfolio_risk.fact_as_of、候选 quote.source_trade_date、实际消耗价格序列末 bar、dragon_list/block_trade window_dates 最大值全部不晚于 price_data_through；候选 quote.source_trade_date 恒等于 price_data_through，只有 decision_as_of 可以更晚。第六刀不改 provider live fetch、真钱或 ship-gate，正式 result/a_short/<YYYYMMDD>/ 仍不可写。
+
 ## 2026-07-29 追加：第七刀（突破指标分歧可见性，条目 13）
 
 本节记录第七刀。它与 6A/6B 同属桌面 `ashort_r1.md` 这一批，按 `AGENTS.md §交接记录` 的「默认追加、不轻易新建」续在本文件，本文件实际已是该批次的主 handoff。缺陷/判据正文不在此复述。

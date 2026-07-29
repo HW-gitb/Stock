@@ -810,6 +810,7 @@ def _statistical_contract() -> dict:
                                                    for section, key, minimum in required_numbers)
             or preliminary["negative_mean_delta_pp_max"] >= 0
             or negative_at_36["mean_delta_pp_max"] >= 0
+            or negative_at_36["bootstrap_upper_pp_max"] > 0
             or promotion["signflip_p_max"] > 1
             or type(promotion.get("minimum_months")) is not int or promotion["minimum_months"] <= 0):
         raise OverlayAdjudicationError("P4a statistical contract is malformed")

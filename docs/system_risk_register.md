@@ -8,6 +8,8 @@
 - **Required repair**: 给 `bootstrap_upper_pp_max` 补同侧符号约束（`> 0` 即抛，与 `mean_delta_pp_max` 对称），并补一条畸形值反向测试。
 - **Closure tests**: (1) `bootstrap_upper_pp_max = 99.0` → 抛 `OverlayAdjudicationError`；(2) 原值 `0.0` 仍通过；(3) 既有四例畸形控制保持绿。
 
+- **Closure 2026-07-29**: This Optional is resolved. _statistical_contract() rejects negative_at_36.bootstrap_upper_pp_max > 0, so the reproduced 99.0 mutation raises OverlayAdjudicationError instead of changing a mild-negative epoch from inconclusive_retired_for_epoch to do_not_promote. The sealed 0.0 bound remains accepted. The same closeout completed the Knife 6 four-date merge invariant in an end-to-end synthetic weekly run; see the main Knife 6 handoff for the four asserted fields and full-lane evidence.
+
 ### R-ASHORT-KNIFE8A-TERMINAL-BLOCK-MINIMUM-DECLARED-BUT-NEVER-READ - 8A 新加的 36 周非重叠块下限曾是装饰性的
 
 - **状态 / 严重度**: closed P3（2026-07-29 Codex 修复，待独立审查）。comparison-only 且预冻结；无 EGS 选股、M6.7、provider、账户、订单或生产切换影响。

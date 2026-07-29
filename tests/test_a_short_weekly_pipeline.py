@@ -1386,7 +1386,7 @@ class MainWiringTests(unittest.TestCase):
         dates = pd.date_range(end="20260608", periods=25, freq="D").strftime("%Y%m%d").tolist()
         fake = _fake_ts(pd.DataFrame({"trade_date": dates, "high": [3.1] * 25,
                                       "low": [2.8] * 25, "close": [2.9] * 25}))
-        fact_calls, dragon_calls = [], []
+        fact_calls, dragon_calls, block_calls, observed_candidate_clocks = [], [], [], []
 
         class _Pro:
             def trade_cal(self, **_kw):
@@ -1402,17 +1402,34 @@ class MainWiringTests(unittest.TestCase):
 
         old = sys.modules.get("tushare")
         sys.modules["tushare"] = fake
+        import runners.a_short_weekly_pipeline as wp
+        original_normalize = wp.normalize_candidate
+
+        def capture_candidate_clock(*args, **kwargs):
+            observed_candidate_clocks.append((args[0]["quote"]["source_trade_date"], args[1][-1]["trade_date"]))
+            return original_normalize(*args, **kwargs)
+
         try:
             with tempfile.TemporaryDirectory() as td:
                 feed = _feed()
                 feed["series"][-1]["trade_date"] = "20260608"
-                self._write_inputs(td, feed=feed)
+                analysis_input = _analysis_input(candidates=[_ai_candidate("600000.SH"), _ai_candidate("000001.SZ")])
+                analysis_input["generated_at"] = "2026-06-09T12:00:00+08:00"
+                for candidate in analysis_input["candidates"]:
+                    candidate["quote"]["source_trade_date"] = "20260608"
+                    candidate["quote"]["price_time"] = "2026-06-08T15:00:00+08:00"
+                self._write_inputs(td, feed=feed, ai=analysis_input)
                 out = Path(td) / "weekly_m67.json"
-                main(["--as-of", AS_OF, "--run-date", AS_OF, "--price-freshness-mode", "intraday_prior_settled",
-                      "--analysis-input", str(Path(td) / "ai.json"), "--iv-feed", str(Path(td) / "feed.json"),
-                      "--out", str(out), "--confirm-fetch-authorized", "--skip-semantic"],
-                     pro_factory=lambda: _Pro(), portfolio_risk_provider=portfolio_provider,
-                     dragon_list_provider=lambda day: dragon_calls.append(day) or [])
+                wp.normalize_candidate = capture_candidate_clock
+                try:
+                    main(["--as-of", AS_OF, "--run-date", AS_OF, "--price-freshness-mode", "intraday_prior_settled",
+                          "--analysis-input", str(Path(td) / "ai.json"), "--iv-feed", str(Path(td) / "feed.json"),
+                          "--out", str(out), "--confirm-fetch-authorized", "--skip-semantic"],
+                         pro_factory=lambda: _Pro(), portfolio_risk_provider=portfolio_provider,
+                         dragon_list_provider=lambda day: dragon_calls.append(day) or [],
+                         block_trade_provider=lambda day: block_calls.append(day) or [])
+                finally:
+                    wp.normalize_candidate = original_normalize
                 weekly = json.loads(out.read_text(encoding="utf-8"))
         finally:
             if old is not None:
@@ -1426,6 +1443,15 @@ class MainWiringTests(unittest.TestCase):
         self.assertEqual(dragon_calls, ["20260602", "20260603", "20260604", "20260605", "20260608"])
         self.assertEqual(weekly["portfolio_risk"]["fact_fetch"], {"status": "ok", "as_of": "20260608"})
         self.assertEqual({row["fact_as_of"] for row in weekly["portfolio_risk"]["stock_results"]}, {"20260608"})
+        price_data_through = weekly["run_lineage"]["price_freshness"]["price_data_through"]
+        self.assertTrue(all(fact_as_of <= price_data_through
+                            for fact_as_of in {row["fact_as_of"] for row in weekly["portfolio_risk"]["stock_results"]}))
+        self.assertTrue(observed_candidate_clocks)
+        self.assertTrue(all(source_date == price_data_through and series_date <= price_data_through
+                            for source_date, series_date in observed_candidate_clocks))
+        for section in ("dragon_list", "block_trade"):
+            self.assertTrue(weekly[section]["window_dates"])
+            self.assertLessEqual(max(weekly[section]["window_dates"]), price_data_through)
 
     def test_portfolio_fact_fetch_states_are_visible_and_unavailable_fails_closed(self):
         rows = [_normalized("600000.SH"), _normalized("000001.SZ")]

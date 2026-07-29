@@ -445,6 +445,11 @@ class OverlayAdjudicationTests(unittest.TestCase):
             changed["statistical_contract"]["definition"]["negative_at_36"]["mean_delta_pp_max"] = -99.0
             with mock.patch("engine.a_short_overlay_adjudication.get_admission", return_value=changed):
                 self.assertEqual(_adjudicate(rows, 36, 0)[0], "inconclusive_retired_for_epoch")
+            changed = _admission_registry.get_admission("p4_stage3_rank_source")
+            changed["statistical_contract"]["definition"]["negative_at_36"]["bootstrap_upper_pp_max"] = 99.0
+            with mock.patch("engine.a_short_overlay_adjudication.get_admission", return_value=changed):
+                with self.assertRaisesRegex(OverlayAdjudicationError, "statistical contract is malformed"):
+                    _adjudicate(rows, 36, 0)
 
     def test_public_checkpoint_progress_uses_the_admission_thresholds(self) -> None:
         changed = _admission_registry.get_admission("p4_stage3_rank_source")
