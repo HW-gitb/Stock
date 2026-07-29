@@ -105,7 +105,7 @@
 
 - **Verdict/Action**: PASS，已提交并合入 master。K3-R71 的循环整体消失（`_reserve_provider_budget` 现 0 个 For/While 节点），`DECLARED_BATCH_RAISES` 未被放宽；K3-R72 换成 AST 版 `_live_preflight_order_offenders` 并自带重排变异对照；α/β/γ 全闭，δ 记为覆盖迁移。K3-R31/K3-R32 及解冻链④至此 CLOSED。Register: material，closure 落 `docs/system_risk_register.md#R-USSHORT-KNIFE3-WEB-X-MERGE-PACKET-BOUNDARY`，本处不复述。
 - **Required**: 无。K3-R71 / K3-R72 均 CLOSED；步骤⑤（解 K3-R34）需用户单独命令，不在本轮授权内。
-- **Verify**: review-evidence:0c179cb382a7。均我亲跑：按 rule 4 接管全量，官方账本本代码态 `Ran 4984 tests in 476.291s` / `OK` / `status=PASS exit=0 tests=4984`，已记账（4984 = 上轮 4983 + 1 条新签名回归）。探针：账本校验重写后每条拒绝都在，含不可哈希 `query_sha256`、字符串 `call_count` 两种本可漏成 TypeError 的形状均为 WebThemeDiscoveryError，同 scope 重试 attempts=2、planned 不变；排序守卫外部挖空——移到花钱之后转红、删掉也转红，其 inline 对照锚点行真实存在（是重排非删除）；raw `fetched_at` 篡改成 2099 → accepted 0 + `immutable_raw_content_conflict`，更早的冻结时刻仍被复用。`state/us_short` 0 文件。
+- **Verify**: review-evidence:0c179cb382a7。均我亲跑：按 rule 4 接管全量，官方账本本代码态 `Ran 4984 tests in 476.291s` / `OK` / `status=PASS exit=0`，已记账。探针：账本校验重写后每条拒绝都在（含不可哈希 `query_sha256`、字符串 `call_count` 两种本可漏成 TypeError 的形状），同 scope 重试 attempts=2、planned 不变；排序守卫外部挖空，移到花钱之后与删掉均转红；raw `fetched_at` 篡改成 2099 → accepted 0，更早的冻结时刻仍复用。`state/us_short` 0 文件。超时原因:全量包 477 秒，合入 master 又撞并发窗口改同一条 AGENTS 规则需人工消解。
 - **Next**: Codex：待命
 
 ## 2026-07-29 - Codex repair K3-R71/K3-R72 and same-class recurrence controls
