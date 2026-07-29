@@ -63,13 +63,21 @@ def _call_name(node: ast.Call) -> str | None:
     return None
 
 
-def _is_file_write_call(node: ast.Call) -> bool:
-    """Recognise concrete file writes and the local JSON write-helper vocabulary."""
+def _is_direct_file_write_call(node: ast.Call) -> bool:
+    """Recognise direct file-method sinks without relying on helper names."""
     name = _call_name(node)
-    if name in {"write", "write_text", "write_bytes", "writelines"}:
-        return True
-    return name in {"_atomic_write", "_atomic_write_text", "_write", "_write_json",
-                    "_write_json_atomic", "_write_json_exclusive", "_replace_many_with_rollback"}
+    return name in {"write", "write_text", "write_bytes", "writelines"}
+
+
+_FROZEN_LOCAL_JSON_WRITE_HELPERS = frozenset({
+    "_atomic_write", "_atomic_write_text", "_write", "_write_json", "_write_json_atomic",
+    "_write_json_exclusive", "_replace_many_with_rollback",
+})
+
+
+def _is_file_write_call(node: ast.Call, local_helpers: frozenset[str] = frozenset()) -> bool:
+    """Recognise direct sinks, frozen helpers, and source-derived local helpers."""
+    return _is_direct_file_write_call(node) or (_call_name(node) in _FROZEN_LOCAL_JSON_WRITE_HELPERS | local_helpers)
 
 
 def _is_json_serializer(node: ast.Call) -> bool:
@@ -99,7 +107,8 @@ def _parents(tree: ast.AST) -> dict[ast.AST, ast.AST]:
     }
 
 
-def _has_ancestor_file_write(node: ast.AST, parents: dict[ast.AST, ast.AST]) -> bool:
+def _has_ancestor_file_write(node: ast.AST, parents: dict[ast.AST, ast.AST],
+                             local_helpers: frozenset[str]) -> bool:
     """Any enclosing ``*write*`` call counts, not just ``write`` / ``write_text``.
 
     Matching the exact two names let a serializer handed straight to a local
@@ -113,12 +122,12 @@ def _has_ancestor_file_write(node: ast.AST, parents: dict[ast.AST, ast.AST]) -> 
     current = node
     while current in parents:
         current = parents[current]
-        if isinstance(current, ast.Call) and _is_file_write_call(current):
+        if isinstance(current, ast.Call) and _is_file_write_call(current, local_helpers):
             return True
     return False
 
 
-def _is_bundle_payload(serializer: ast.Call, function: ast.FunctionDef, parents: dict[ast.AST, ast.AST]) -> bool:
+def _is_bundle_payload(serializer: ast.Call, function: ast.AST, parents: dict[ast.AST, ast.AST]) -> bool:
     """Recognise encoded JSON staged for an atomic multi-file replacement."""
     current: ast.AST = serializer
     in_mapping = False
@@ -153,7 +162,13 @@ def _function_json_file_writers(source: str) -> dict[str, list[ast.Call]]:
     tree = ast.parse(source)
     parents = _parents(tree)
     writers: dict[str, list[ast.Call]] = {}
-    for function in (node for node in ast.walk(tree) if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef))):
+    functions = [node for node in ast.walk(tree) if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef))]
+    local_helpers = frozenset(
+        function.name
+        for function in functions
+        if any(isinstance(node, ast.Call) and _is_direct_file_write_call(node) for node in ast.walk(function))
+    )
+    for function in functions:
         serialized_names: set[str] = set()
         assignments = [node for node in ast.walk(function) if isinstance(node, ast.Assign)]
         while True:
@@ -170,7 +185,7 @@ def _function_json_file_writers(source: str) -> dict[str, list[ast.Call]]:
             serialized_names.update(derived_names)
         writes_serialized_name = any(
             isinstance(node, ast.Call)
-            and _is_file_write_call(node)
+            and _is_file_write_call(node, local_helpers)
             and bool(_names_in(node) & serialized_names)
             for node in ast.walk(function)
         )
@@ -181,7 +196,7 @@ def _function_json_file_writers(source: str) -> dict[str, list[ast.Call]]:
             and _is_json_serializer(node)
             and (
                 node.func.attr == "dump"
-                or _has_ancestor_file_write(node, parents)
+                or _has_ancestor_file_write(node, parents, local_helpers)
                 or _is_bundle_payload(node, function, parents)
                 or (writes_serialized_name and _serializer_flows_to_named_write(node, serialized_names, parents))
             )
@@ -278,6 +293,19 @@ class PublicJsonWriterNonfiniteGuardTests(unittest.TestCase):
                 discovered = _function_json_file_writers(source)
                 self.assertEqual(set(discovered), {name})
                 self.assertFalse(_has_literal_allow_nan_false(discovered[name][0]))
+
+    def test_guard_discovers_a_new_local_json_helper_without_a_frozen_name(self):
+        source = (
+            "import json\n\n"
+            "def _save_json(payload, path):\n"
+            "    path.write_text(payload, encoding='utf-8')\n\n"
+            "def publish(path, value):\n"
+            "    _save_json(json.dumps(value), path)\n"
+        )
+        discovered = _function_json_file_writers(source)
+        self.assertEqual(set(discovered), {"publish"})
+        self.assertFalse(_has_literal_allow_nan_false(discovered["publish"][0]))
+        self.assertSetEqual(set(discovered) - PUBLIC_WRITER_FUNCTIONS, {"publish"})
 
     def test_guard_does_not_treat_a_digest_helper_as_a_file_writer(self):
         """Substring matching must not drag hash/digest serializers into the registry."""

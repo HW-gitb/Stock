@@ -1,5 +1,20 @@
 # Session Log
 
+## 2026-07-29 — Claude Code 审查 PASS（写盘口发现器 Optional，79eb 工作树）
+
+- **Verdict/Action**: PASS，已提交。Optional-only、test-only AST 守卫。Codex 没照我建议的「`write` 词首/词尾子串兜底」做，而是从同一份 source AST 推导出「函数体含 direct file sink」的本地 helper 集合 —— 与名字无关，比我的建议更彻底。处置与边界见 `docs/system_risk_register.md#R-ASHORT-WEEKLY-PIPELINE-JSON-WRITERS-OUTSIDE-THE-NONFINITE-GUARD`，本处不复述。
+- **Required**: 无。
+- **Verify**: review-evidence:8ea6de0b9563。最小超集 `tests.test_a_short_public_json_writer_nonfinite_guard -v` = `10 OK`。自写独立探针：仓内发现仍 34 个写盘口、未注册 0（无回归）；我自造的新 helper `_persist`（`write_bytes`）← `emit` 被发现，原盲区已闭；同模块内纯 digest 函数仍不误报。按 §6a Optional-only carve-out 未起独立 agent、未跑全量（rule 3 未触发：test-only AST 谓词，不碰 runtime / schema / entrypoint / 共享引擎）。
+- **Next**: Codex：执行第九刀。
+
+## 2026-07-29 - Codex 修复写盘口发现器 Optional（79eb）
+
+- **Verdict/Action**: 用户授权修复未来未命名本地 JSON helper 的发现盲区；发现器现按 helper 的 direct file sink 行为推导本地 helper，不再只靠冻结名称，未改任何 A-short runtime / runner / schema / 生产路径，未提交。
+- **Required**: 无；Optional 处置及边界见 `docs/system_risk_register.md#R-ASHORT-WEEKLY-PIPELINE-JSON-WRITERS-OUTSIDE-THE-NONFINITE-GUARD`。
+- **Verify**: fixed Python `-m unittest tests.test_a_short_public_json_writer_nonfinite_guard -v` = `10 OK`；新增 `_save_json` → `publish` 植入必须被发现并作为未注册 violation，`_rewrite_for_digest` / `_write_lock` 负向控制保持不误报。
+- **Next**: Claude Code：独立审查。
+- **Pre-Codex self-review**: `matrix=complete: direct sink + frozen helper + source-derived local helper + async + digest/lock false-positive controls; register=updated; handoff=SESSION_LOG top entry; focused=writer guard 10 OK; full-lane=not_triggered: AGENTS rule 3; reason=test-only AST guard and no runtime/schema/entrypoint/shared-engine change; door=route-doc + doc-governance 55 OK`
+
 ## 2026-07-29 — Claude Code 审查 PASS（第八刀收尾第二轮，79eb 工作树）
 
 - **Verdict/Action**: PASS，已在 79eb 提交（只 stage 本刀 18 个文件；`logs/` 私有账本 gitignored 未进仓）。**合入 master 暂被挡住**：主树有别的窗口未提交的 `docs/SESSION_LOG.md` / `docs/system_risk_register.md`（US-short K3 轨），git 拒绝覆盖，我不动别人的活，等其提交后再 `--no-ff` 合入。上一轮的跨 epoch 回填已按 Required 全部拆掉，工单三条 Optional 也一并处置。完整闭合见 `docs/system_risk_register.md#R-ASHORT-KNIFE8-P2-PUBLIC-SUMMARY-RESURRECTS-A-CROSS-EPOCH-LEGACY-RECORD` 与 `#R-ASHORT-KNIFE8-SIX-STEP-MERGE-VERIFICATION-NOT-RUN-AS-ONE-PASS`，本处不复述。
