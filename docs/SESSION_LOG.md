@@ -3,9 +3,9 @@
 ## 2026-07-29 — Claude Code 审查 FAIL（US-short K3-R86..R93 收口，master 工作树；一条新 Required）
 
 - **Verdict/Action**: FAIL，未提交代码（只提交文档）。八条原 Required 我逐条核过、确实闭了；挡住这一刀的是修复自身把「可被背书的网址」收窄成唯一一种路径形状，而用来判断这样够不够的证据，正是 K3-R83 里丢掉的那份。正文只在 `docs/system_risk_register.md#R-USSHORT-KNIFE3-WEB-X-MERGE-PACKET-BOUNDARY`（K3-R94），本处不复述。
-- **Required**: K3-R94 —— 与提供方注解逐字节相同的 `https://x.com/i/web/status/<id>` 被判 `model_source_url_not_provider_annotated`，正是 K3-R79 要防的「同一条推文两种写法」。我已把自己最初写过头的两条腿撤回（非 X 文章网址、无 `/status/` 的主页）——执行方的对抗自审已按设计决定拒掉它们，且理由成立。
-- **Verify**: review-evidence:925defd8179e。全量按 rule 4 引用执行方官方账本 `CACHED GREEN us_short 5010 OK`（本代码状态，指纹 `baedefe2e01e`）。八条我逐条亲验：复现上轮确切探针→真实付费收据现已通过校验(R86)；`_provider_response_is_safe` 行为探针→普通词过、value-shaped 凭证仍拒(R89)；`_sanitized_drop_ledger` 探针→`email`/`uid` 已抹、逐行 annotation 清单改为单一指针(R92)；整读捕获与编排路径→失败逐条记账后继续(R87/R88)；`row["url"]=backing_locator`(R90)；两新字段已投影出重试比对(R91)；外部挖空 `merge._verify_provider_response_ref` 令命名测试转红、还原转绿 3/3(R93)；`DECLARED_BATCH_RAISES` 未放宽。§6a agent 已起、未回，本轮记 NOT_VERIFIED。
-- **Next**: Codex：修复 K3-R94。
+- **Required**: K3-R94（背书只认唯一一种路径形状）、K3-R95（源级 raw 冲突再次弄死整包，同一 reason 字符串有两个粒度不同的产出点，红线复发）、K3-R96（closure 正文声称已闭的 movable raw namespace 其实没闭，且把 merge 的保证说过头了）。O 级五条一并入 register，不单开轮次。
+- **Verify**: review-evidence:925defd8179e。全量按 rule 4 引用执行方账本 `5010 OK`（指纹 `baedefe2e01e`）。八条我逐条亲验：复现上轮探针→真实付费收据已通过校验(R86)；`_provider_response_is_safe` 探针→普通词过、凭证仍拒(R89)；`_sanitized_drop_ledger` 探针→`email`/`uid` 已抹、清单改单一指针(R92)；整读捕获与编排→失败逐条记账后继续(R87/R88)；`row["url"]=backing_locator`(R90)；两新字段已投影出重试比对(R91)；外部挖空 `merge._verify_provider_response_ref` 令命名测试转红 3/3(R93)；`DECLARED_BATCH_RAISES` 未放宽。§6a agent 已回（原记 NOT_VERIFIED，更正）：八条独立确认，另坐实 K3-R95 等。
+- **Next**: Codex：修复 K3-R94 / K3-R95 / K3-R96。
 
 ## 2026-07-29 — Codex 修复 K3-R86..K3-R93（待 Claude Code 独立审查）
 
