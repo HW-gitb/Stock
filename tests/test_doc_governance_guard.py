@@ -887,6 +887,17 @@ class DocGovernanceGuard(unittest.TestCase):
             value = value.strip().strip("`").strip().rstrip(".。").strip()
             if value.lower() in cls.DOOR_PLACEHOLDERS:
                 offenders.append(("door-field-placeholder", header[:50], value))
+                continue
+            # K3-R84: `BLOCKED` is the only escape hatch this gate advertises, so it is the shape a
+            # good-faith executor reaches for — and a reasonless `BLOCKED` is therefore a UNIVERSAL
+            # bypass, strictly weaker than having no escape hatch at all. Whatever follows the first
+            # half- or full-width colon must itself say something; a missing colon means no reason.
+            if value.lower().lstrip("*_ ").startswith("blocked"):
+                parts = re.split(r"[:：]", value, maxsplit=1)
+                reason = parts[1] if len(parts) > 1 else ""
+                reason = reason.strip().strip("`").strip().rstrip(".。").strip()
+                if reason.lower() in cls.DOOR_PLACEHOLDERS:
+                    offenders.append(("door-blocked-without-reason", header[:50], value))
         return offenders
 
     def test_review_cycle_minimal_template_enforced_above_marker(self):
@@ -1121,6 +1132,19 @@ class DocGovernanceGuard(unittest.TestCase):
                          "a pasted door result must be accepted")
         self.assertEqual(self._repair_door_offenders(blocked), [],
                          "an explicit BLOCKED door is evidence, not a placeholder")
+        # K3-R84 whole class: every reasonless spelling of the escape hatch, not just the two that
+        # were demonstrated. Each of these was green before the fix.
+        for reasonless in ("BLOCKED:", "BLOCKED: TBD", "BLOCKED", "blocked:", "BLOCKED:   ",
+                           "BLOCKED：", "BLOCKED: n/a", "BLOCKED: 待定", "blocked: -",
+                           "**BLOCKED**:"):
+            self.assertTrue(self._repair_door_offenders(head + base + f"; door={reasonless}\n"),
+                            f"a reasonless escape hatch must turn the guard red: door={reasonless!r}")
+        for with_reason in ("BLOCKED: pinned host Python unavailable",
+                            "blocked: 主 Python 不在这台机器上",
+                            "**BLOCKED**: sandbox blocks the host executable",
+                            "BLOCKED：固定解释器缺失"):
+            self.assertEqual(self._repair_door_offenders(head + base + f"; door={with_reason}\n"), [],
+                             f"a stated blocker is evidence and must stay green: door={with_reason!r}")
         self.assertEqual(
             self._repair_door_offenders("## 2026-07-29 — Claude Code 审查 PASS (R-TEST-FOO)\n"
                                         "- **Verdict/Action**: PASS\n"), [],

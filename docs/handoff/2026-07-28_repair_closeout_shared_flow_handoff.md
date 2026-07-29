@@ -1,5 +1,9 @@
 # Repair-closeout shared flow / lane-specific verification handoff
 
+## 2026-07-29 append: K3-R84 review FAIL — blocked door must name its reason
+
+The new `door=` handoff rule is correctly unconditional and does not need a changed-surface mapping table, but its initial parser treats a whole `BLOCKED: <reason>` string as opaque. A fixed-main-Python probe against the shipped guard showed both `door=BLOCKED:` and `door=BLOCKED: TBD` return no offender, although the contract says the reason must make the blocker visible and empty / `TBD` are red. K3-R84 is therefore Required: parse the `BLOCKED:` form, reject a missing or placeholder suffix (and bare `BLOCKED`), retain a real nonempty reason, and pin all cases with named controls. The pre-commit two-guard focused superset was 55 OK; this is a guard false-negative, not a lane/runtime/provider issue. No full lane or external action is warranted.
+
 ## Scope and decision
 
 The repair-closeout matrix is one shared execution/repair process for A-short and US-short. `matrix=`, `register=`, and `handoff=` record the common closure responsibility; the same `SESSION_LOG` adoption marker and doc-governance guard enforce future repair entries.

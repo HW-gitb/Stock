@@ -1,5 +1,20 @@
 # Session Log
 
+## 2026-07-29 — Claude Code 修复 K3-R84（接受 Codex 的 FAIL，用户直接指派）
+
+- **Verdict/Action**: 接受该 FAIL。我用真实解析器复现了 Codex 演示的两条，并按整类扫出**九种**无原因写法全部放行——`BLOCKED` 是本门唯一对外承诺的逃生口，没有原因就成了一句话绕过整道门。已修并加整类植入对照。正文只在 `docs/system_risk_register.md#R-GOV-HANDOFF-DOOR-FIELD`（K3-R84），本处不复述。
+- **Required**: 无（K3-R84 同轮修复并验证）。
+- **Verify**: 修前 14 例扫描 5/14 合约相符，修后 14/14；四种合法写法（中英文原因、`**BLOCKED**:`、全角冒号）仍绿。`tests.test_doc_governance_guard` + `tests.test_route_doc_ledger_status_consistency` = `RESULT tier=focused status=PASS exit=0 tests=55`。已记边界：本门挡不住伪造（照抄 `door=41 OK` 仍过），只挡缺失与逃生口；`door=x` 这类「写了等于没写」故意不判红，因为任何够强的启发式都可能在提交门上误红整个仓库。
+- **Pre-Codex self-review**: `matrix=complete: 九种无原因写法整类扫净 + 四种合法写法反向控制; register=updated (R-GOV-HANDOFF-DOOR-FIELD); handoff=n/a 本刀无独立 handoff, 正文在 register; focused=55 OK; full-lane=not_triggered: AGENTS rule 3; reason=改动面只有文档治理守卫的一个纯字符串谓词; door=route-doc 14 OK + doc-governance 41 OK`
+- **Next**: Codex：审查。
+
+## 2026-07-29 — Codex 审查 FAIL（K3-R84：door= BLOCKED 原因可为空）
+
+- **Verdict/Action**: FAIL。door 门把 `BLOCKED` 当成有效状态，却没有验证冒号后的原因；完整 finding / closure 只见 `docs/system_risk_register.md` K3-R84。
+- **Required**: K3-R84 — 修复 `BLOCKED:` 空原因与 `BLOCKED: TBD` 占位绕过，并加反向控制。
+- **Verify**: 固定主 Python pre-commit 两守卫超集 55 OK；真实解析器对 `door=BLOCKED:` 与 `door=BLOCKED: TBD` 均返回 `[]`，故本 finding 已坐实。无全量 / provider / live 动作。
+- **Next**: Codex：修复。
+
 ## 2026-07-29 — Claude Code 实现：交接门字段 `door=`（用户直接指派）
 
 - **做了什么**: `修复` entry 的 `Pre-Codex self-review` 增加第六个字段 `door=`，要求交出前跑一次 `.githooks/pre-commit` 那两个守卫并贴终端结果；缺字段或写占位符（`TBD`/`n/a`/空…）判红，`door=BLOCKED: <原因>` 视为有效证据。由 `EXECUTOR-REPAIR-DOOR-MARKER` 分区，历史条目不追溯。规则正文单一来源在 `docs/pre_codex_self_review_checklist.md` §0.10/§0.11，`AGENTS.md` 只点名不复述，故本轮未动 AGENTS 那条。
