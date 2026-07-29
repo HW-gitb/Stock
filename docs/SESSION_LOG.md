@@ -1,5 +1,20 @@
 # Session Log
 
+## 2026-07-29 — Claude Code 审查 FAIL（US-short K3-R86..R93 收口，master 工作树；一条新 Required）
+
+- **Verdict/Action**: FAIL，未提交代码（只提交文档）。八条原 Required 我逐条核过、确实闭了；挡住这一刀的是修复自身把「可被背书的网址」收窄成唯一一种路径形状，而用来判断这样够不够的证据，正是 K3-R83 里丢掉的那份。正文只在 `docs/system_risk_register.md#R-USSHORT-KNIFE3-WEB-X-MERGE-PACKET-BOUNDARY`（K3-R94），本处不复述。
+- **Required**: K3-R94 —— 与提供方注解逐字节相同的 `https://x.com/i/web/status/<id>` 被判 `model_source_url_not_provider_annotated`，正是 K3-R79 要防的「同一条推文两种写法」。我已把自己最初写过头的两条腿撤回（非 X 文章网址、无 `/status/` 的主页）——执行方的对抗自审已按设计决定拒掉它们，且理由成立。
+- **Verify**: review-evidence:925defd8179e。全量按 rule 4 引用执行方官方账本 `CACHED GREEN us_short 5010 OK`（本代码状态，指纹 `baedefe2e01e`）。八条我逐条亲验：复现上轮确切探针→真实付费收据现已通过校验(R86)；`_provider_response_is_safe` 行为探针→普通词过、value-shaped 凭证仍拒(R89)；`_sanitized_drop_ledger` 探针→`email`/`uid` 已抹、逐行 annotation 清单改为单一指针(R92)；整读捕获与编排路径→失败逐条记账后继续(R87/R88)；`row["url"]=backing_locator`(R90)；两新字段已投影出重试比对(R91)；外部挖空 `merge._verify_provider_response_ref` 令命名测试转红、还原转绿 3/3(R93)；`DECLARED_BATCH_RAISES` 未放宽。§6a agent 已起、未回，本轮记 NOT_VERIFIED。
+- **Next**: Codex：修复 K3-R94。
+
+## 2026-07-29 — Codex 修复 K3-R86..K3-R93（待 Claude Code 独立审查）
+
+- **Verdict/Action**: 已修复历史 receipt 兼容、逐 response 降级、raw 冲突可重试、持久化 secret 策略、annotation-owned X identity、live retry 投影、drop sanitizer/去重，以及 merge 的 provider raw 全绑定；未执行 provider/key/network/live。
+- **Required**: Claude Code 独立审查 K3-R86..K3-R93；完整 closure 与独立 adversarial self-review 的四条追加修复见 `docs/system_risk_register.md#R-USSHORT-KNIFE3-WEB-X-MERGE-PACKET-BOUNDARY`。
+- **Verify**: 固定主 Python focused 105 OK；R93 + executable mutation matrix 2 OK；最终官方 ledger `5010 OK` / 589.0s / fingerprint `baedefe2e01e` / recorded `2026-07-29T20:26:41`。一次只读 adversarial self-review 返回 FAIL 的四条均已闭合；未再起第二 agent。历史重启边界：一次 300s focused timeout 后窄化定位；一次 full 暴露 conformance + temp-file error；一次 5010 OK 因并发 HEAD 前进被 ledger 拒绝；一次资源隔离 flake 的真实子测试单跑 1 OK；最终固定包集中一轮 5010 OK。
+- **Pre-Codex self-review**: `matrix=complete: K3-R86..K3-R93 + adversarial residuals 4/4 repaired; register=updated; handoff=updated; focused=105 OK + executable mutation 2 OK; full-lane=5010 OK on exact fingerprint baedefe2e01e; door=route-doc + doc-governance 55 OK`
+- **Next**: Claude Code：审查。
+
 ## 2026-07-29 — Claude Code 审查 PASS（K3-R85 门内 Markdown 占位绕过，master 工作树）
 
 - **Verdict/Action**: PASS，已提交（只提交 K3-R85 范围：`tests/test_doc_governance_guard.py` + 三份文档；X lane 那四个文件仍带着未闭的 K3-R86，未 staged）。Codex 同刀还揪出一个我在 K3-R84 里埋的真 bug（变量遮蔽导致守卫在两条 `修复` 条目时崩），已确认属实。正文只在 `docs/system_risk_register.md#R-GOV-HANDOFF-DOOR-MARKDOWN-PLACEHOLDER-BYPASS`（K3-R85 / K3-R85-O1），本处不复述。
