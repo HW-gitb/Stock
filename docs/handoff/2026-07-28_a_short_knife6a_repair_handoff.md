@@ -101,3 +101,34 @@
 
 - 第六刀仍未记「完成」：还差桌面文档的「本刀合并验证」全局不变量（所有事实类日期字段 ≤ `price_data_through` 且候选侧恒等，只有 `decision_as_of` 可更晚）跑一次。
 - 不改 provider live fetch、不碰真钱与 ship-gate；`result/a_short/<YYYYMMDD>/` 仍不可写。
+
+## 2026-07-29 追加：第七刀（突破指标分歧可见性，条目 13）
+
+本节记录第七刀。它与 6A/6B 同属桌面 `ashort_r1.md` 这一批，按 `AGENTS.md §交接记录` 的「默认追加、不轻易新建」续在本文件，本文件实际已是该批次的主 handoff。缺陷/判据正文不在此复述。
+
+### 改了什么
+
+- `runners/a_short_phase5_engine.py`：新增纯函数 `breakout_source_agreement(inp, ind)`，返回 `agree_true / agree_false / egs_only / pipeline_only` 四态，**只回类别、不回价格或均线**。`entry_type` 的突破分支改成 `breakout_source_agreement(...) == "agree_true"`，与门条件逐字未变。`build_m67_report` 把该枚举写进 `machine`，分歧时给 `触发条件` 追加「两套技术指标口径不一致，按保守口径处理」；`validate_m67_consistency` 强制枚举合法且与该提示一致。
+- `runners/a_short_weekly_pipeline.py`：`_attach_breakout_source_disagreement_notices` 在现金/组合后处理合法重写 `触发条件` 之后把提示补回；`summarize_breakout_source_agreement(reports)` 产出本批 X/Y 与三态结论，**只读入参、不读不写任何跨周状态**；阈值常量从 `_PHASE5_POLICY` 取。
+- `runners/a_short_m67_render.py`：周报 md 多一行「突破指标口径」横幅（只对候选行，持仓行已被 `cand_reports` 排除）。
+- 阈值 `breakout_source_disagreement_rate_threshold_pct = 10.0` 落进两份 preset + policy schema `required` + `engine/a_short_runtime_config.py::_validate_m67`（0–100 边界）+ effect contract 的 leaf-reader 清单与 `runtime_policy_bindings`。
+
+### 为什么改
+
+与门是保守的，任一侧不同意只会掉回低吸/观察，**不会错误建仓**；缺的是分歧不可见——「确实没形态」和「两套数据打架」在报告里是同一句话。它同时是第 15 刀入场归因的前置。按 2026-07-28 用户裁决，只做**无状态本周自判**那一层；跨周累积 + 自动裁决属预冻结期禁建的冻结件，见桌面 `ashort_r1.md` 第 0 节。
+
+### 验证命令与结果
+
+- 审查方亲跑两包，覆盖全部改动符号：`tests.test_a_short_weekly_pipeline + tests.test_a_short_effect_contract + tests.test_a_short_runtime_configuration` = `531 OK / 93.4s / exit 0`；`tests.test_a_short_phase5_engine + tests.test_a_short_m67_render` = `164 OK / 1.4s / exit 0`。执行方已记账 `full_pack_ledger run a_short = 2075 OK / 276.5s / exit 0`，按 rule 4 未重跑。
+- **等价性亲证（本刀最关键的一条）**：把改前的 `entry_type` 实现并排放回，对 `breakout × close(含 None) × ma10/ma5/ma20/support(含 None 与 0)` 共 432 组合逐一对比，**零差异**；另 `derived=None` 旧实现抛 `AttributeError`、新实现返回「观察」，只增稳健、不改选股。
+- 植入控制：同一 1/15 分歧批次，阈值 10.0 → 「零星分歧」、5.0 → 「分歧显著」，证明结论确实读 runtime policy 而非硬编码；2/20（恰好 10.0%）→ 「分歧显著」，边界是 `>=`。marker 缺失 / 非法 / 空批一律返回 `None`、不渲染横幅（fail-closed，不伪造干净结论）。
+
+### 失效的旧结论
+
+桌面原稿第 7 刀第 4 点「汇总层加一个批次计数」已被 2026-07-28 用户裁决升级为「无状态三态自判 + md 横幅 + 阈值事前冻结」，桌面文档已同步改写；本实现按改写后的方案落地。
+
+### 下一步注意事项
+
+- 三条 Optional（渲染器↔pipeline 循环依赖、effect contract 两行哈希缩进漂移、「零星分歧」中间态无测试且 `持有` 行的提示一致性不被 validator 覆盖）见同日 `docs/SESSION_LOG.md` 顶部 entry 的 `Next`；均不阻断。
+- 这盏灯**只写不读**：任何把 `breakout_source_agreement` 接进判定的改动都是口径变更，须单独立项（桌面第 7 刀第 5 点）。
+- 跨周累积版在设计定稿前不做，判据见桌面第 0 节。
