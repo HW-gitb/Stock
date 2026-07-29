@@ -398,7 +398,7 @@ def write_health_bundle(payload: dict[str, Any], out_dir: Path, receipt_path: Pa
         "overall": payload["overall"],
         "outputs": [json_path.name, md_path.name],
     }
-    json_bytes = (json.dumps(payload, ensure_ascii=False, indent=2) + "\n").encode("utf-8")
+    json_bytes = (json.dumps(payload, ensure_ascii=False, indent=2, allow_nan=False) + "\n").encode("utf-8")
     receipt["health_sha256"] = hashlib.sha256(json_bytes).hexdigest()
     md = [
         f"# A-short sidecar health · {payload['as_of']}", "",
@@ -409,7 +409,7 @@ def write_health_bundle(payload: dict[str, Any], out_dir: Path, receipt_path: Pa
         date = item.get("observed_decision_as_of") or item.get("observed_data_through") or "-"
         md.append(f"| {item['name']} | {item['execution_status']} | {item['progress_status']} | {date} | {item.get('error_code') or '-'} |")
     md_bytes = ("\n".join(md) + "\n").encode("utf-8")
-    receipt_bytes = (json.dumps(receipt, ensure_ascii=False, indent=2) + "\n").encode("utf-8")
+    receipt_bytes = (json.dumps(receipt, ensure_ascii=False, indent=2, allow_nan=False) + "\n").encode("utf-8")
     _atomic_write(json_path, json_bytes)
     _atomic_write(md_path, md_bytes)
     _atomic_write(out_dir / "sidecar_health.receipt.json", receipt_bytes)

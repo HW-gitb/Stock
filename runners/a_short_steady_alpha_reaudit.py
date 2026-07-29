@@ -1022,10 +1022,10 @@ def write_outputs(
 ) -> None:
     output_dir.mkdir(parents=True, exist_ok=True)
     (output_dir / "diagnostics.json").write_text(
-        json.dumps(diagnostics, ensure_ascii=False, indent=2) + "\n", encoding="utf-8"
+        json.dumps(diagnostics, ensure_ascii=False, indent=2, allow_nan=False) + "\n", encoding="utf-8"
     )
     (output_dir / "evidence_report.json").write_text(
-        json.dumps(evidence_report, ensure_ascii=False, indent=2) + "\n", encoding="utf-8"
+        json.dumps(evidence_report, ensure_ascii=False, indent=2, allow_nan=False) + "\n", encoding="utf-8"
     )
     monthly_rows = []
     for horizon in HORIZONS:
@@ -1072,7 +1072,7 @@ def update_ledger(ledger_path: Path, result_ref: Path, result_summary: str, deci
         "If the user wants a new alpha search, create a new reviewed preregistration; do not silently rescue this failed clue.",
     ]
     validate_json(LEDGER_SCHEMA, ledger)
-    ledger_path.write_text(json.dumps(ledger, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
+    ledger_path.write_text(json.dumps(ledger, ensure_ascii=False, indent=2, allow_nan=False) + "\n", encoding="utf-8")
     return ledger
 
 

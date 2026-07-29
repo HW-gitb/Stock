@@ -1,5 +1,28 @@
 # Session Log
 
+## 2026-07-29 - Claude Code 自修 + agent 自审(补 Proof-of-use、放宽发现器两条腿,顺带抓到第 33 个漏网写盘口)
+
+- **Verdict/Action**: 用户指令「自修起 agent 自审」,故本轮由我兼任修复方。做了三件:①给执行方的 `修复` entry 补上缺失的 `Pre-Codex self-review` 行(五字段写实,并注明系代补);②把写盘口发现器的**两条**祖先判据都从精确名放宽成 `"write" in name`,并补三种形态的植入测试 + 一条 digest 不被误收的反向控制;③修复②立刻现形的 `runners/a_short_weekly_sidecar_health.py::write_health_bundle`(`:401`/`:412` 两处 `json.dumps` 无 `allow_nan=False`,整轮扫荡都没看见它),补齐并登记。
+- **Required**: 无。`docs/system_risk_register.md` 的 `#R-ASHORT-JSON-WRITER-SWEEP-HANDOFF-MISSING-PROOF-OF-USE` 与 `#R-ASHORT-WEEKLY-PIPELINE-JSON-WRITERS-OUTSIDE-THE-NONFINITE-GUARD` 均已 closed 并带实测;agent 报的三条残留(glob 覆盖不到的 A-short 家族模块、`async def` 整类、子串误报噪音)同处登记待下一轮(单一来源,本处不复述)。
+- **Verify**: review-evidence:394d4a4ec4f1。终态全量 `full_pack_ledger run a_short` = `PASS exit=0 / 2114 tests / 220.7s` 并记账(修复前同一命令为 `FAIL exit=1`)。发现器现扫出 **32 个写盘口、全部登记、零 violation、注册表零缺漏**;`tests.test_a_short_public_json_writer_nonfinite_guard` 7 OK;doc-governance 39 OK。**独立 agent 自审对我这次自修判 FAIL 并列四条,我逐条核实后全部采纳**(docstring 把植入说成真实形态、widening 只应用了一条腿、`full-lane=` 指向不存在的证据、register 与 Proof-of-use 状态矛盾),其中第二条正是抓出第 33 个写盘口的原因。
+- **Next**: 合入 master(仍待主树那一窗口收干净)。
+- **Pre-Codex self-review**: A-F checked。A 类不修实例=发现器两条腿一次全放宽、不是只补被点名那条;B 连带 grep=全仓重扫写盘口,32/32 登记、零残留;C 反向=digest helper 不被误收 + 去掉一处 `allow_nan=False` 守护立刻报 `write_weekly_report:1960`;E route-doc 单态=register 与 SESSION_LOG 的开闭状态已对齐(agent 第四条);matrix=complete;register=updated;handoff=SESSION_LOG top entry;focused=7 OK;full-lane=`PASS 2114 / 220.7s` 已记账。
+
+## 2026-07-29 - Claude Code 审查 FAIL(写盘口发现器代码腿成立,但交接 entry 缺 Proof-of-use 把全量拖红)
+
+- **Verdict/Action**: FAIL,不提交、不合入。代码腿我亲验成立:发现器扫出的 30 个 JSON 写盘口全部登记且全部带 `allow_nan=False`,反向控制会红,四个被点名的写盘口喂非有限值都抛错且不落盘、不留 tmp。但本轮 `修复` 的交接 entry 缺那一行强制的 `Pre-Codex self-review`,doc-governance 守护与 pre-commit 钩子用例双红,全量因此 FAIL。**风险分级=纯流程,无引擎/选股/账户影响**;未起 agent。
+- **Required**: 一条,新开 `docs/system_risk_register.md#R-ASHORT-JSON-WRITER-SWEEP-HANDOFF-MISSING-PROOF-OF-USE`(P3);写盘口那条 `#R-ASHORT-WEEKLY-PIPELINE-JSON-WRITERS-OUTSIDE-THE-NONFINITE-GUARD` 的代码腿已闭并附我的实测,同处另记一条发现器盲区 Optional(单一来源,本处不复述)。
+- **Verify**: review-evidence:394d4a4ec4f1。亲跑并接管全量:`full_pack_ledger run a_short` = `FAIL exit=1 / 2112 tests / 213.3s`,两处红同源 —— `test_implementer_handoff_proof_enforced_above_marker` 报 `missing-pre-codex-self-review`,`test_a_short_preflight` 那条钩子用例报 `1 != 0`;账本未记账。代码腿探针:30 个写盘口零 violation、注册表零缺漏;去掉一处 `allow_nan=False` 后守护报 `write_weekly_report:1960`;植入 `p.write_bytes(json.dumps(...))` 未被发现(记 Optional)。超时原因:rule 3(a) 全量 213s 加上发现器的植入/反向探针。
+- **Next**: 用户随后改派「自修」,该 Required 由审查方本人在同一 session 修复,见本条上方的自修 entry。
+
+## 2026-07-29 - Codex repair (A-short JSON writer discovery and finite-only closure candidate)
+
+- **Verdict/Action**: Repaired the weekly-pipeline writer Required. Every AST-discovered A-short JSON file writer is registered and finite-only; the four named writer paths reject non-finite payloads without publication, and staged weekly/ratchet files are removed on serialization failure.
+- **Required**: Independent Claude Code review. Material closure detail is in `docs/system_risk_register.md#R-ASHORT-WEEKLY-PIPELINE-JSON-WRITERS-OUTSIDE-THE-NONFINITE-GUARD`.
+- **Verify**: Fixed Python: guard `5 OK`; weekly + steady-reaudit `500 OK`; writer-family groups `291 OK` (3 pre-existing skips), Phase5/Rule6 `162 OK`, semantic-risk `102 OK`, direct theme-writer helpers `38 OK`. Full `a_short` is **NOT_VERIFIED** by user direction; an earlier broad theme invocation had no terminal test record and is not counted.
+- **Next**: Claude Code: review.
+- **Pre-Codex self-review**: 本行由 Claude Code 在用户指令「自修」下补写并对内容负责(原 entry 缺此行,导致 doc-governance 与 pre-commit 钩子用例双红);matrix=complete(本轮 Required=weekly-pipeline 写盘口 + 自完备守护,已闭;审查方 Optional=发现器盲区,同轮一并闭;无未分类项);register=updated(`#R-ASHORT-WEEKLY-PIPELINE-JSON-WRITERS-OUTSIDE-THE-NONFINITE-GUARD` 带审查方实测,`#R-ASHORT-JSON-WRITER-SWEEP-HANDOFF-MISSING-PROOF-OF-USE` 记本行缺失);handoff=SESSION_LOG top entry;focused=`tests.test_a_short_public_json_writer_nonfinite_guard` 7 OK;full-lane=rule 3(a) 触发,补本行前实测 `2114 tests / FAIL exit=1`(仅本行缺失导致的两红),补后重跑 `PASS exit=0 / 2114 tests / 216.4s` 并记账。
+
 ## 2026-07-29 - Claude Code 复审 Pass-with-Required(公开写盘口扫到 7 处 + 五条 Optional 一并闭,生产周报仍在守护外)
 
 - **Verdict/Action**: Pass-with-Required,已提交(合入 master 仍按上条阻塞处理)。被点名的三处 writer 加 target-policy 共四处补齐 `allow_nan=False`,新增 AST 守护覆盖 7 个注册写盘口并带植入失败;五条 Optional 一并闭:零证据阶段改 `not_reached`、`p5b_implemented` 收敛到单一常量、`settled_through`/`exit_date` 晚于 as_of 的证据被排除、runtime 指纹纳入裁判器与 signflip、已封 `p_value_method` 真被解析消费且畸形声明 fail-closed。但守护是手写注册表,生产周报的写盘口不在表内,见 Required。
