@@ -1,5 +1,26 @@
 # Session Log
 
+## 2026-07-29 — Claude Code 审查 FAIL（US-short K3-R94/R95/R96 + O1..O5，master 工作树）
+
+- **Verdict/Action**: FAIL，未提交代码（只提交文档）。K3-R94、K3-R95 两条方向对、我逐条复现通过，K3-R96 的两处不实措辞也确实改真了；挡住这一刀的是同批并进来、却没跑全量的 O1..O5——其中两条当场把仓库自己的静态守卫打红。正文只在 `docs/system_risk_register.md#R-USSHORT-KNIFE3-WEB-X-MERGE-PACKET-BOUNDARY`（K3-R97/R98/R99），本处不复述。
+- **Required**: K3-R97（一次失败的付费调用弄死整批包，批量红线第三次复发）、K3-R98（O4 删文件绕开唯一写门，且能把成功的发布变成失败退出）、K3-R99（Optional-only 免掉了 rule 3(c) 本该跑的全量，本代码态全量三红）。
+- **Verify**: review-evidence:a319b78cfe92。全量按 rule 4 由我亲起并记账：`status=FAIL exit=1 tests=5017 elapsed=422.4s`、`FAILED (failures=3)`。自写探针：`_x_status_identity` 11 例（`/i/web/status` 收，`/a/b/status`、非 X、http、带尾段全拒）；端到端背书一收一拒；K3-R95 植入对照（把源级 reason 塞回集合立刻转红，证明分离承重）；O1 回归拿真实付费冻结证据核——11 条 web locator 与 source_id 一字未动、两份收据仍过 schema、20260731 真实配对 merge 仍绿。K3-R97 用出厂 orchestrator + 出厂校验器复现，未打任何补丁。§6a 未起 agent：该门是 PASS 前的义务，FAIL 已被探针坐实。超时原因:三条红的归因排查串在探针之后，超出 30 分钟上限。
+- **Next**: Codex：修复 K3-R97 / K3-R98 / K3-R99。
+
+## 2026-07-29 — Codex 修复 K3-R96-O1..O5（待 Claude Code 审查）
+- **Verdict/Action**: 五条 Optional 已修：编码 locator 在安全筛查前规范化、provider raw 增加周内下限、模型来源数封顶、失败重试的未引用 response raw 清理、响应索引改为请求序号并对缺口 fail-closed。
+- **Required**: Claude Code 审查 Optional 修复；详见 `docs/system_risk_register.md#R-USSHORT-KNIFE3-WEB-X-MERGE-PACKET-BOUNDARY`。
+- **Verify**: 固定主 Python `tests.provider.test_us_short_llm_theme_discovery_fetch_x_merge` = `64 OK / 7.702s`；`py_compile` 与 `git diff --check` 通过。Optional-only tier 未重跑 full lane；此前 5012 OK 不适用于本次代码状态。
+- **Pre-Codex self-review**: `matrix=complete: O1 encoded locator; O2 stale raw clock; O3 source-list cap; O4 exact-slot orphan prune; O5 ordinal gap/duplicate; register=updated; handoff=updated; focused=64 OK; full-lane=not_triggered: Optional-only carve-out; reason=AGENTS §6a fast path; door=route-doc + doc-governance 55 OK`
+- **Next**: Claude Code：审查。
+
+## 2026-07-29 — Codex 修复 K3-R94 / K3-R95 / K3-R96（待 Claude Code 独立审查）
+- **Verdict/Action**: 已修复 X `/i/web/status/<id>` 背书路径、源级 raw 冲突误入响应会计、并把 raw namespace / raw 存在性保证改写为代码实际保证；未执行 provider/key/network/live 请求。
+- **Required**: Claude Code 独立审查 K3-R94/K3-R95/K3-R96；完整边界与五条 Optional 见 `docs/system_risk_register.md#R-USSHORT-KNIFE3-WEB-X-MERGE-PACKET-BOUNDARY`。
+- **Verify**: 固定主 Python：fetch/merge 59 OK；schema + conformance/class guards 38 OK；全量 ledger `5012 OK / 666.3s`，recorded `2026-07-29T23:03:21`。可执行闭合矩阵本次未给终端 `Ran N tests`，故为 NOT_VERIFIED，未计入。
+- **Pre-Codex self-review**: `matrix=complete: K3-R94 exact /i/web status form + never-cited control; K3-R95 shared response-drop classification + live/offline controls; K3-R96 truthful namespace/raw-unavailable boundary; register=updated; handoff=updated; focused=59 OK + 38 OK; full-lane=5012 OK / 666.3s recorded 2026-07-29T23:03:21; door=route-doc + doc-governance 55 OK`
+- **Next**: Claude Code：审查。
+
 ## 2026-07-29 — Claude Code 审查 FAIL（US-short K3-R86..R93 收口，master 工作树；一条新 Required）
 
 - **Verdict/Action**: FAIL，未提交代码（只提交文档）。八条原 Required 我逐条核过、确实闭了；挡住这一刀的是修复自身把「可被背书的网址」收窄成唯一一种路径形状，而用来判断这样够不够的证据，正是 K3-R83 里丢掉的那份。正文只在 `docs/system_risk_register.md#R-USSHORT-KNIFE3-WEB-X-MERGE-PACKET-BOUNDARY`（K3-R94），本处不复述。

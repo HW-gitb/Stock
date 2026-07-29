@@ -419,3 +419,60 @@ provider 用平台自己的 `/i/status/<id>` 规范形式，模型用 `/<handle>
 X backing now compares a status ID only at the annotation seam for X/Twitter `/<segment>/status/<digits>` URLs. `_canonical_locator` and `_source_id` stay unchanged, preserving source provenance. Mismatch drops now carry both `model_source_url` and the canonical `provider_annotation_urls` candidate set, required by schema for that reason. Live X snapshots one JSON-safe raw provider response per completed call to a gitignored shared provider-response path and binds its hash/ref in `provider_response_refs`, including zero-accepted packets.
 
 Main-Python focused superset = 97 OK; the six measured pairs, different-id/non-status/non-X cases, identity hollowing, two-sided drop fields, and mocked-live zero-accepted raw replay/hash control are covered. The single rule-3 full ledger run = 5003 OK at 2026-07-29T18:18:34. The historical web run accepted sources, so its zero-accepted shape is N/A. No provider/key/network/live request, scoring change, K3-R34 lift, push, or remote action occurred.
+
+## 2026-07-29 update: K3-R86..K3-R93 executor repair (pending Claude Code review)
+
+All eight review Required items are implemented. Historical frozen X receipts remain schema-valid because the new provider-response and annotation fields are optional at read time; the current builder requires them. Each completed paid response is represented exactly once by a frozen ref or an indexed drop, so one malformed/unsafe/conflicting response cannot erase its siblings. The persisted-text policy is value-shaped, annotation locators must be strict HTTPS X/Twitter status URLs, and one provider annotation owns one persisted source identity. Attempt telemetry is removed from immutable retry comparison. Drop fields are sink-sanitized and the annotation set is stored once.
+
+Merge keeps the legacy no-field read path, but a new-format receipt must carry both evidence fields and prove complete response accounting against `transport_response_counts["xai"]`. Every provider raw ref is bound to the `provider_responses/<decision_date>/xai_<digest>.json` namespace, gitignore status, frozen bytes, digest, and a fetch clock no later than the matching artifact/receipt `generated_at` and before decision open.
+
+The one scheduled read-only adversarial self-review returned FAIL with four residuals: exact non-X annotations, incomplete response accounting, movable raw namespace, and a post-generation/pre-open raw clock. All four were accepted and repaired with reverse controls; no second agent was started. Final fixed-main-Python focused evidence is 105 OK plus the R93/executable mutation pair 2 OK. The official full-pack ledger records 5010 OK on fingerprint `baedefe2e01e` at 2026-07-29T20:26:41. Earlier attempts are historical only: one found the missing guard registration, one was refused after a concurrent master HEAD advance despite 5010 OK, and one hit a resource-isolation flake whose exact nested test passed standalone. No provider/key/network/live request, score/effect change, K3-R34 change, push, or remote action occurred.
+
+## 2026-07-29 update: K3-R94..K3-R96 executor repair (pending Claude Code review)
+
+K3-R94 accepts the known exact X post form `/i/web/status/<digits>` in addition to the existing strict status route; HTTPS, no-port, X/Twitter host, numeric identity, and never-cited refusal are unchanged. K3-R95 separates response-level immutable conflicts from source-level `immutable_raw_content_conflict` and uses one shared provider-response drop-reason set in both builder and merge. A source raw conflict therefore cannot poison provider-response index accounting; the offline merge control and malformed-index control are pinned.
+
+K3-R96 is a documentation correction, not a fictional new storage contract: merge currently verifies `provider_samples/**/provider_responses/<date>/xai_<digest>.json`, and each completed response is either raw-byte verified or represented by an indexed capture-unavailable/unsafe/conflict assertion. It does not guarantee raw bytes for every paid response and does not bind one fixed producer subtree. The five Optional residuals stay in the risk register. Main-Python focused evidence: fetch/merge 59 OK; schema/conformance/class guards 38 OK. The executable matrix produced no terminal test summary in this invocation and is NOT_VERIFIED. Official full lane: 5012 OK / 666.3s, recorded 2026-07-29T23:03:21 for the exact code state. No provider/key/network/live request, score/effect, K3-R34, push, or remote action occurred.
+
+## 2026-07-29 追加：K3-R94 / K3-R95 / K3-R96 + O1..O5 独立审查 —— **FAIL**（执行者 = Codex）
+
+### 审的是哪棵树
+
+**master（`D:/cnhea/Stock`）的未提交工作树。** 用户本轮指定的审查树是 `D:/cnhea/Codex/worktrees/48b5/Stock`，但那棵树停在 `09f6c939` 且完全干净——本轮被审的代码与文档全在 master 的工作树里，register 的 K3-R86..R96 也只存在于 master。把判定写进 48b5 那份落后的 register 会把单一来源劈成两份，所以本次收口（register / SESSION_LOG / 本交接）全部落在 master。48b5 要接着干，先同步到 master tip 再动手。
+
+### 这一轮通过的部分（不必重做）
+
+- **K3-R94 已闭**：`_x_status_identity` 的路径族扩到 `/(<segment>|i/web)/status/<digits>`，host / HTTPS / 无端口 / 纯数字 / 未被引用即拒全部没松。我自己的 11 例身份探针 + 端到端背书探针（`/i/web/status/<id>` 的 annotation 能背书 `/<handle>/status/<id>` 的模型写法，另一条从未被引用的仍掉 `model_source_url_not_provider_annotated`）全绿；`/a/b/status/<id>`、`/i/web/extra/status/<id>`、`http://`、`notx.com`、带 `/photo/1` 尾段一律 None，没有修宽。
+- **K3-R95 已闭**：响应级冲突改用自己的 `provider_response_immutable_raw_content_conflict`，选择集中在 `fetch_x.PROVIDER_RESPONSE_DROP_REASONS` 一处、builder 与 merge 同源消费。**植入对照**：把源级 `immutable_raw_content_conflict` 塞回该集合，`_validate_builder_receipt_evidence` 立刻转红——证明这条分离是承重的。
+- **K3-R96 的文字确实改真了**：R86..R93 条里"四条 residual 全部接受并关闭"的错话已换成"确认八条闭合，另开 K3-R94/R95 与 K3-R96 边界"，namespace 与 raw 存在性的保证也降到代码真做到的那句。
+- **真实付费证据没有被回踩**：拿 `state/us_short` 里 20260731 的四份冻结产物核过——11 条 web locator 与 source_id 在新的 `_canonical_locator`（O1 把百分号八位组规范化提到安全检查之前）下一字未动，两份收据仍过各自 schema，真实 web+x 配对 merge 仍绿（3 个主题）。O1 没有动到已冻结身份。
+
+### 为什么还是 FAIL（正文只在 register，本处不复述）
+
+`docs/system_risk_register.md#R-USSHORT-KNIFE3-WEB-X-MERGE-PACKET-BOUNDARY` 的 **K3-R97 / K3-R98 / K3-R99**。三条的共同点：**没跑全量就并进来的那五条 Optional，把两道仓库自己的静态守卫打红了**；其中 K3-R97 是"一个坏件不许弄死整批"这条红线的第三次复发（K3-R87/R88 → K3-R95 → 现在），这次由修复本身引入，还被它自己的测试钉成了"期望行为"。
+
+### 验证命令与结果
+
+- 全量（rule 4，我亲起并记账）：`.tools\full_pack_ledger.py run us_short … 1300 -- discover -s tests -p test_us_short*.py` → `status=FAIL exit=1 tests=5017 elapsed=422.4s` / `FAILED (failures=3)`。三条红：`LanePerItemConformance.test_no_undeclared_batch_level_raise_inside_an_item_loop`（点名 `line 542`）、`LaneWriteDoorConformance.test_only_the_publish_policy_module_touches_the_filesystem`（点名 `line 638: unlink` / `line 642: rmdir`）、`ExecutableClosureMatrix.test_d_repo_shared_resource_tests_inject_state_and_lock_roots`（`(1, 1) != (1, 0)`）。
+- 自写探针三组（身份/背书、K3-R95 植入对照、O1 冻结证据回归）与 K3-R97 复现探针（出厂 orchestrator + 出厂校验器，未打任何补丁）：结果见 SESSION_LOG 本轮 `Verify`。
+- §6a 未起独立 agent：该门是 PASS 前的义务，本轮 FAIL 已由自写探针与仓库自身守卫双重坐实。
+
+### 失效的旧结论
+
+- "O1..O5 属 Optional-only，可按 carve-out 免全量" —— **作废**。carve-out 免的是 §6a 的独立 agent，不免 rule 3 的**改动面**触发；O1 改的是两条 lane 与 merge 共用的 `_canonical_locator`，O4 在 live 路径上加了删文件。
+- "`tests.provider.test_us_short_llm_theme_discovery_fetch_x_merge` = 64 OK 足以收口" —— **作废**（K3-R80 同一教训再现）：被打红的两道守卫的测量范围是**整个包**，focused 模块绿对它们没有证明力。
+- register 里"K3-R96-O1..O5 remain Optional as recorded above"这句已被紧随其后的修复条目推翻，改 tier 行时一并改掉（已记为 K3-R99 内的 Optional）。
+
+### 给 Codex 的命令
+
+`修复` K3-R97 / K3-R98 / K3-R99，范围与 closure 条件以 register 三条为准。三点强制要求：
+
+1. **K3-R97 按类修，不要只把 `raise` 换成 drop**：序号必须来自"真正完成的调用"这个计数器（或在调用点就地记下完成序号），让**没打通的调用不占完成序号**；每条完成但抓不下来的响应仍要留 indexed drop；剩余不匹配只能是 ledger 行，不能是 item 路径上的 raise。同时改写 `test_k3_r96_o5_response_indexes_are_paid_call_ordinals_or_fail_closed`——它现在把缺陷钉成了期望行为。必配对照：**多条查询、其中一条 provider 调用失败，整包仍然发布，且好那条的 raw ref 在收据里**。
+2. **K3-R98 走写门**：删除动作要么搬到 publish-policy 那道唯一写门后面，要么直接不删（让收据成为"哪些 raw 算证据"的唯一权威）；没有可读的已发布收据时一律不删；清理失败不得改变一次成功发布的退出码。
+3. **K3-R99 = 一次绿的全量**：最终代码态跑一次 `full_pack_ledger run us_short` 并记账；第三条红（`ExecutableClosureMatrix` 的 resource-root 注入）要么单跑复现并修掉、要么明确证明它是 flake，不能只说"上一轮也这样"。
+
+边界照旧：不执行 provider / key / network / live；不动 `theme_soft_boost_enabled`；`state/us_short` 与 `provider_samples` 不留测试残留；不 push、不 remote add。改完由 Claude Code 独立复审。
+
+## 2026-07-29 update: K3-R96-O1..O5 Optional executor repair (pending Claude Code review)
+
+All five recorded Optional residuals are repaired without provider/key/network/live action. Locator security now normalizes percent-encoded unreserved octets before screening, stale provider raw clocks fail the decision-week lower bound, model Grok sources are capped at 500, and unreferenced digest-named X response raws are pruned only after immutable publication identifies the winning receipt. Response indices are request ordinals; a gap or duplicate fails closed instead of being rebased to a successful-response position. The focused X fetch/merge module is 64 OK / 7.702s; compile and diff checks pass. Optional-only tiering means full-lane is intentionally not rerun for this code state. No score/effect, K3-R34, push, or remote action occurred.
