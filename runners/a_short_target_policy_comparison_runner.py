@@ -25,7 +25,8 @@ from engine import a_short_evidence_epoch_mode as _epoch_mode
 from engine.a_short_managed_exit import CONTRACT_VERSION as EXIT_CONTRACT_VERSION
 from engine.a_short_managed_exit import evaluate_managed_exit
 from runners import a_short_phase5_engine as phase5_engine
-from engine.a_short_experiment_admission_registry import admission_snapshot
+from engine.a_short_experiment_admission_registry import admission_snapshot, get_admission
+from engine.a_short_target_policy_adjudication import adjudicate_target_exit
 
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -423,6 +424,20 @@ def _summary_from_ledger(ledger: dict[str, Any], as_of: str) -> dict[str, Any]:
         for collection in (record.get("target_entries") or [], record.get("breakout_entries") or [])
         for item in collection
     )
+    target_adjudication = adjudicate_target_exit(
+        target_records,
+        get_admission("p2_target_exit_policy")["statistical_contract"]["definition"],
+        evidence_counts=_epoch_mode.evidence_counts_toward_clock("p2_target_policy"),
+    )
+    breakout_reports = {
+        "new_old_entry_week_portfolios": [], "excluded_vs_csi1000": [],
+        "missed_large_moves": [], "risk_outcomes": [],
+    }
+    source_hash = _digest([
+        {"decision_date": row.get("decision_date"), "source_identity": row.get("source_identity"),
+         "capture_sha256": row.get("capture_sha256")}
+        for row in target_records
+    ])
     summary = {
         "schema_name": "a_short_target_policy_comparison_summary",
         "schema_version": SCHEMA_VERSION,
@@ -433,6 +448,16 @@ def _summary_from_ledger(ledger: dict[str, Any], as_of: str) -> dict[str, Any]:
         "target_exit": target,
         "breakout_entry": breakout,
         "execution_data_status": "available" if execution_available else "unavailable",
+        "verdict": target_adjudication["verdict"],
+        "progress": target_adjudication["progress"],
+        "fingerprint": _digest({"admission": admission_snapshot("p2_target_exit_policy"),
+                                 "records": [{"decision_date": row.get("decision_date"),
+                                              "capture_sha256": row.get("capture_sha256")}
+                                             for row in target_records]}),
+        "source_hash": source_hash,
+        "target_exit_adjudication": target_adjudication,
+        "breakout_entry_reports": breakout_reports,
+        "breakout_entry_verdict": "not_adjudicated",
         "admissions": admission_snapshot(*ADMISSION_IDS),
         "message": _message(status, target, breakout),
         "production_unchanged": True,
@@ -455,6 +480,13 @@ def _unavailable_summary(as_of: str, *, configured: bool) -> dict[str, Any]:
         "target_exit": target,
         "breakout_entry": breakout,
         "execution_data_status": "unavailable",
+        "verdict": "not_adjudicated",
+        "progress": {"forward_weeks": 0, "difference_weeks": 0, "evaluable_plans": 0, "evaluable_weeks": 0},
+        "fingerprint": _digest({"admission": admission_snapshot("p2_target_exit_policy"), "records": []}),
+        "source_hash": _digest([]),
+        "target_exit_adjudication": {"verdict": "not_adjudicated", "progress": {"forward_weeks": 0, "difference_weeks": 0, "evaluable_plans": 0, "evaluable_weeks": 0}, "metrics": {"mean_net_improvement_pp": None, "weekly_median_net_improvement_pp": None, "favorable_week_ratio": None, "max_drawdown_worsening_pp": None, "h5_mean_delta_pp": None, "h10_mean_delta_pp": None}, "reason": "evidence_unavailable", "comparison_only": True},
+        "breakout_entry_reports": {"new_old_entry_week_portfolios": [], "excluded_vs_csi1000": [], "missed_large_moves": [], "risk_outcomes": []},
+        "breakout_entry_verdict": "not_adjudicated",
         "admissions": admission_snapshot(*ADMISSION_IDS),
         "message": _message(status, target, breakout),
         "production_unchanged": True,
@@ -482,6 +514,9 @@ def validate_public_summary(summary: dict[str, Any]) -> None:
         raise TargetPolicyError("public_summary_review_state_drifted")
     if summary.get("admissions") != admission_snapshot(*ADMISSION_IDS):
         raise TargetPolicyError("public_summary_admission_binding_drifted")
+    adjudication = summary.get("target_exit_adjudication") or {}
+    if adjudication.get("verdict") != summary.get("verdict") or adjudication.get("progress") != summary.get("progress"):
+        raise TargetPolicyError("public_summary_adjudication_binding_drifted")
 
 
 def _render_summary_markdown(summary: dict[str, Any]) -> str:
@@ -521,8 +556,8 @@ def _assert_public_summary_as_of_monotonic(summary: dict[str, Any], summary_path
         raise TargetPolicyError("public_summary_as_of_regressed")
 
 
-def write_public_summary(summary: dict[str, Any], *, summary_path: str | Path = PUBLIC_SUMMARY_DEFAULT,
-                         markdown_path: str | Path = PUBLIC_MARKDOWN_DEFAULT) -> None:
+def write_public_summary(summary: dict[str, Any], *, summary_path: str | Path,
+                         markdown_path: str | Path) -> None:
     validate_public_summary(summary)
     target_path = Path(summary_path)
     _assert_public_summary_as_of_monotonic(summary, target_path)
@@ -535,8 +570,8 @@ def write_public_summary(summary: dict[str, Any], *, summary_path: str | Path = 
 
 def settle_and_summarize(*, root: str | Path | None, as_of: str,
                           daily_cache_path: str | Path | None = None,
-                          summary_path: str | Path = PUBLIC_SUMMARY_DEFAULT,
-                          markdown_path: str | Path = PUBLIC_MARKDOWN_DEFAULT) -> dict[str, Any]:
+                          summary_path: str | Path | None = None,
+                          markdown_path: str | Path | None = None) -> dict[str, Any]:
     """Settle only existing captures, then return the current de-identified P2 reminder."""
     if root is None:
         return _unavailable_summary(as_of, configured=False)
@@ -549,7 +584,10 @@ def settle_and_summarize(*, root: str | Path | None, as_of: str,
         _validate_ledger(ledger)
         _atomic_write(private_path, ledger)
         summary = _summary_from_ledger(ledger, _date(as_of))
-        write_public_summary(summary, summary_path=summary_path, markdown_path=markdown_path)
+        if (summary_path is None) != (markdown_path is None):
+            raise TargetPolicyError("public_summary_paths_must_be_paired")
+        if summary_path is not None:
+            write_public_summary(summary, summary_path=summary_path, markdown_path=markdown_path)
         return summary
     except Exception:
         # The weekly seam must never repeat old review_due text if this sidecar
@@ -625,8 +663,8 @@ def _verify_published_bundle(out_path: str | Path, receipt_path: str | Path, dec
 def capture_after_published_weekly(*, root: str | Path, decision_date: str, candidates: list[dict],
                                    source_identity: dict[str, Any], out_path: str | Path, receipt_path: str | Path,
                                    forward_eligible: bool,
-                                   summary_path: str | Path = PUBLIC_SUMMARY_DEFAULT,
-                                   markdown_path: str | Path = PUBLIC_MARKDOWN_DEFAULT) -> dict[str, Any]:
+                                   summary_path: str | Path | None = None,
+                                   markdown_path: str | Path | None = None) -> dict[str, Any]:
     """Freeze P2 target/breakout deltas only after the official bundle exists."""
     decision_date = _date(decision_date)
     private_path, ledger = _load_or_initialize(root)
@@ -726,7 +764,10 @@ def capture_after_published_weekly(*, root: str | Path, decision_date: str, cand
     if not idempotent:
         _atomic_write(private_path, ledger)
         summary = _summary_from_ledger(ledger, decision_date)
-        write_public_summary(summary, summary_path=summary_path, markdown_path=markdown_path)
+        if (summary_path is None) != (markdown_path is None):
+            raise TargetPolicyError("public_summary_paths_must_be_paired")
+        if summary_path is not None:
+            write_public_summary(summary, summary_path=summary_path, markdown_path=markdown_path)
     return {"status": "idempotent" if idempotent else "captured", "record": records["target_exit"]}
 
 

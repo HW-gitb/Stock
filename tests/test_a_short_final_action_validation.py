@@ -292,7 +292,13 @@ class FinalActionValidationTests(unittest.TestCase):
                 "verdict": "edge_positive", "progress": {}, "fingerprint": "b" * 64,
                 "as_of": AS_OF, "source_hash": "c" * 64,
             }), encoding="utf-8")
-            with patch("runners.a_short_final_action_validation_runner.P3B_EXTERNAL_PUBLIC_SUMMARIES",
-                       (invalid, valid)):
+            tracks = (
+                {"track_id": "invalid", "public_summary_path": str(invalid),
+                 "implementation": {"value": True}},
+                {"track_id": "valid", "public_summary_path": str(valid),
+                 "implementation": {"value": True}},
+            )
+            with patch("runners.a_short_final_action_validation_runner.p3b_external_comparison_tracks",
+                       return_value=tracks):
                 from runners.a_short_final_action_validation_runner import _valid_external_public_verdicts
                 self.assertEqual(_valid_external_public_verdicts(), 0)

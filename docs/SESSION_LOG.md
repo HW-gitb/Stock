@@ -1,5 +1,20 @@
 # Session Log
 
+## 2026-07-29 - Claude Code 审查 Pass-with-Required(8D0′ 四项落 governance + 8B 完成 P2)
+
+- **Verdict/Action**: Pass-with-Required,提交并合入 master。8D0′ 落地正确:P3b 名单与「是否已实现裁判器」下沉进 `p3b_external_comparison_tracks()`,P5 已入列,`:516` 文件名死分支修好,未实现裁判器的轨被跳过,`>= 2` 语义按裁决不变。8B 完成 P2:新模块 `a_short_target_policy_adjudication`(83 行,阈值全从已封 admission 读、不进指纹),公开摘要 schema 补齐四个 required 字段,breakout 轨只出报告 + 占位 verdict。**风险分级=comparison-only 低危**;未起 agent、未跑全量。
+- **Required**: 一条,新开 `docs/system_risk_register.md#R-ASHORT-P5B-GOVERNANCE-NUMBERS-DUPLICATED-ACROSS-PRESET-AND-ADMISSION`(P3,已登记随本刀放行):`p5b_adjudication_governance` 把 preset `clock_contract` 已冻的 `checkpoints` 与 `difference_minimums` 又抄了一份,形状还不同,无任何绑定。
+- **Verify**: review-evidence:b3db148e59ed。亲跑覆盖全部改动符号的超集(7 个模块)= `581 OK / 60.5s / exit 0`;按 rule 4 未重跑执行方全量。**tracked 产物卫生亲证**:跑完这 581 个测试后 `git status research/` 为空,即 `R-ASHORT-TEST-PACK-REWRITES-TRACKED-P2-PUBLIC-SUMMARY` 的闭合判据在我的运行下成立(公开路径改为显式两参数、both-or-neither,省略则不写公开文件,ps1 官方跑才传)。**不悬空链路已核**:P2 verdict → 公开摘要 `verdict`(schema required)→ `_valid_external_public_verdicts` → P3b。
+- **Next**: Codex:修复该 Required(顺带定 `nonoverlap_block_minimums` 的唯一来源)。之后进 8C。
+
+## 2026-07-29 - Codex implementation (A-short 8D0 governance + 8B P2 adjudication)
+
+- **Verdict/Action**: Implemented the four 8D0 governance decisions and Knife 8B without unfreezing any evidence clock: the registry owns P3b's P1/P2/P5 roster and implemented-adjudicator predicate, records the P5b sign-flip reuse and 12/24/36 mapping, and P2 target-exit now has a registry-threshold adjudicator plus the public verdict/progress/fingerprint/source-hash fields. Breakout remains report-only with `not_adjudicated`. The one-click launcher explicitly publishes P2's tracked public summary; test/default paths cannot write it.
+- **Required**: Independent Claude Code review required; `R-ASHORT-TEST-PACK-REWRITES-TRACKED-P2-PUBLIC-SUMMARY` is repaired and its full-lane regression is green. No P3 HAC (8C) or P5b implementation (8D1) was started.
+- **Verify**: pinned Python `-m unittest tests.test_a_short_weekly_pipeline` = 497 OK; new 8B/8D0 guards = 8 OK; historical-summary compatibility pair = 24 OK; complete `-m unittest discover -s tests -p test_a_short*.py` = 2088 OK, skipped=3, 196.552s. `git diff --check` clean (CRLF warnings only); no tracked P2 summary rewrite.
+- **Next**: Claude Code: review.
+- **Pre-Codex self-review**: matrix=complete; register=updated; handoff=SESSION_LOG top entry; focused=weekly 497 OK plus 8B/8D0 guards 8 OK; full-lane=2088 OK; scope=A-short 8D0 governance and 8B only.
+
 ## 2026-07-29 - Claude Code 复审 PASS(负面界符号约束 + 第六刀合并门,第六刀就此完成)
 
 - **Verdict/Action**: PASS,提交并合入 master。两件都成立:①`_statistical_contract()` 新增 `negative_at_36["bootstrap_upper_pp_max"] > 0` 即抛,我复现原探针 `99.0` 现确实被拒;②第六刀合并门以断言形式钉进既有端到端 wiring 测试——一次完整周报里 `portfolio_risk.fact_as_of`、候选 `quote.source_trade_date`、实际消耗价格序列末 bar、`dragon_list`/`block_trade` 的 `window_dates` 最大值全部 ≤ `price_data_through`,且候选侧恒等于它。**第六刀就此记完成**(6A + 6B + 6B Required + 合并门四段齐)。**风险分级=comparison-only 低危**,按用户指令未起 agent、未跑全量。

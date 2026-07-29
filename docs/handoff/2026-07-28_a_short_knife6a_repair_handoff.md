@@ -321,3 +321,21 @@
 ### 下一步注意事项
 
 一条流程 Optional（非代码）：执行方**第三次**只补 closure 段落、不翻 `状态 / 严重度` 行，留下 `open` 的陈旧状态由审查方收口时翻正（本轮是 `R-ASHORT-P4A-NEGATIVE-BOUND-VALIDATION-IS-ASYMMETRIC`，前两轮是 6B 官方时钟条目与 master-lane 两红条目）。建议把「写 closure 段落必须同时翻状态行」做成 doc-governance 守卫，否则每轮都要人工兜。
+
+## 2026-07-29 追加：8D0′ 四项落 governance + 8B 完成 P2
+
+### 改了什么
+
+- **8D0′**：`engine/a_short_experiment_admission_registry.py` 新增 `p3b_external_comparison_tracks()` —— P3b 的外部轨名单 + 每条的「裁判器是否已实现」判据下沉到这里（P1 常量、P2 读 `formal_adjudication_implemented`、P5 读 `p5b_implemented`）；`runners/a_short_final_action_validation_runner.py` 删掉硬编码的 `P3B_EXTERNAL_PUBLIC_SUMMARIES` 元组、改遍历该名单并跳过未实现裁判器的轨，`_p3b_ready()` 独立成函数；`:516` 的文件名死分支改为真实产物名 `industry_weight_comparison_summary.json`。P2 的 `formal_adjudication_implemented` 翻 True。
+- **8D0″**：P5 三个 admission 的 statistical 里加 `p5b_adjudication_governance`（`p_value_method` 指向 `_signflip_p`、检查点阶段映射、终局分支必须卡最小值的断言）。
+- **8B**：新模块 `engine/a_short_target_policy_adjudication.py`（83 行，纯函数、阈值全从已封 admission 读、不进指纹）；P2 公开摘要 schema 补齐 `verdict` / `progress` / `fingerprint` / `source_hash` 四个 **required** 字段 + `target_exit_adjudication` / `breakout_entry_reports` / `breakout_entry_verdict`；breakout 轨只出四类报告 + `not_adjudicated` 占位，不现编阈值。公开发布路径改为 `--target-policy-public-summary` / `--target-policy-public-markdown` 两个显式参数，**both-or-neither**，省略即不写公开文件；`weekly_screening.ps1` 官方跑才传这两个路径。
+
+### 验证命令与结果
+
+- 审查方亲跑覆盖全部改动符号的超集（`target_policy_adjudication` + `p3b_governance` + `final_action_validation` + `target_policy_comparison` + `experiment_admission_registry` + `effect_contract` + `weekly_pipeline`）= `581 OK / 60.5s / exit 0`；按 rule 4 未重跑执行方全量。
+- **tracked 产物卫生亲证**：跑完这 581 个测试后 `git status research/` 为空 —— 即 register `R-ASHORT-TEST-PACK-REWRITES-TRACKED-P2-PUBLIC-SUMMARY` 的闭合判据（「跑完 A-short 包后 git status 不得出现 tracked 公开摘要的改动」）在我的运行下成立。
+- **不悬空链路已核**：P2 裁判器 verdict → 公开摘要 `verdict` 字段（schema required，enum 含 `not_adjudicated`）→ `_valid_external_public_verdicts()` → P3b 解锁判定。这条链是 8B 的「影响对比项未来裁决」判据。
+
+### 下一步注意事项
+
+一条 open Required：`docs/system_risk_register.md#R-ASHORT-P5B-GOVERNANCE-NUMBERS-DUPLICATED-ACROSS-PRESET-AND-ADMISSION` —— `p5b_adjudication_governance` 把 preset `clock_contract` 已冻的 `checkpoints` 与 `difference_minimums` 又抄了一份（形状还不同：list vs dict），无任何绑定；且它断言「终局分支必须同时卡非重叠块下限」，而 P5b 的 `nonoverlap_block_minimums` 在 preset 与 admission 里都不存在。修完再进 8C。

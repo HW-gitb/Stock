@@ -3980,6 +3980,10 @@ def main(argv=None, pro_factory=None, price_provider=None, semantic_provider=Non
                    help="existing P2 execution OHLCV cache; never fetches data")
     p.add_argument("--target-policy-forward", action="store_true",
                    help="mark this P2 snapshot as a forward observation; historical replay stays non-counting")
+    p.add_argument("--target-policy-public-summary", default=None,
+                   help="explicit tracked P2 public JSON publication path; omit for no public-file write")
+    p.add_argument("--target-policy-public-markdown", default=None,
+                   help="explicit tracked P2 public Markdown publication path; omit for no public-file write")
     p.add_argument("--final-action-validation-root", default=None,
                    help="private P3 final-action validation ledger; it never changes official M6.7")
     p.add_argument("--final-action-validation-daily-cache", default=None,
@@ -4046,6 +4050,8 @@ def main(argv=None, pro_factory=None, price_provider=None, semantic_provider=Non
         raise SystemExit("[FATAL] P2 target-policy capture requires --run-date for source-bound date identity")
     if args.target_policy_forward and not args.target_policy_root:
         raise SystemExit("[FATAL] --target-policy-forward requires --target-policy-root")
+    if bool(args.target_policy_public_summary) != bool(args.target_policy_public_markdown):
+        raise SystemExit("[FATAL] P2 public summary and markdown paths must be supplied together")
     if args.final_action_validation_root and not args.run_date:
         raise SystemExit("[FATAL] P3 final-action capture requires --run-date for source-bound date identity")
     if args.final_action_validation_forward and not args.final_action_validation_root:
@@ -4563,7 +4569,8 @@ def main(argv=None, pro_factory=None, price_provider=None, semantic_provider=Non
             validate_public_summary,
         )
         target_policy_comparison = settle_target_policy(
-            root=args.target_policy_root, as_of=args.as_of, daily_cache_path=args.target_policy_daily_cache)
+            root=args.target_policy_root, as_of=args.as_of, daily_cache_path=args.target_policy_daily_cache,
+            summary_path=args.target_policy_public_summary, markdown_path=args.target_policy_public_markdown)
         try:
             validate_public_summary(target_policy_comparison)
         except Exception:
@@ -4862,7 +4869,8 @@ def main(argv=None, pro_factory=None, price_provider=None, semantic_provider=Non
             target_capture = capture_after_published_weekly(
                 root=args.target_policy_root, decision_date=args.as_of, candidates=p2_candidates,
                 source_identity=source_identity, out_path=args.out, receipt_path=receipt_path,
-                forward_eligible=args.target_policy_forward)
+                forward_eligible=args.target_policy_forward, summary_path=args.target_policy_public_summary,
+                markdown_path=args.target_policy_public_markdown)
             print(f"[target-policy-p2] capture={target_capture['status']} (production unchanged)")
             _record_sidecar("target_policy_capture", execution_status="succeeded",
                             progress_status=_sidecar_progress_from_status(target_capture.get("status")),

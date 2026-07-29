@@ -231,7 +231,7 @@ def _p2_admissions() -> dict[str, dict]:
         statistical={"minimums": {"forward_weeks": 12, "difference_weeks": 8, "evaluable_plans": 20},
                      "primary_window": "h20", "mean_net_improvement_pp_min": 0.30, "weekly_median": ">0",
                      "favorable_week_ratio_min": 0.60, "max_drawdown_worsening_pp_max": 2.0,
-                     "h5_h10_not_both_materially_adverse": True, "formal_adjudication_implemented": False},
+                     "h5_h10_not_both_materially_adverse": True, "formal_adjudication_implemented": True},
         dependencies=target_deps, dependents=["a_short_p3_managed_exit_vs_hold", "a_short_p3_managed_exit_vs_csi1000"],
         allowed_path="A-EGS/egs_main.py#/target_exit_policy",
     )
@@ -291,7 +291,18 @@ def _p5_admissions() -> dict[str, dict]:
             candidate={"arm_id": question["challenger"], "profile_weights": gov["profiles"][question["challenger"]]},
             pit_forward={"live_canonical_only": True, "official_publish_marker_required": True,
                          "qfq_provider_observed_only": True, "outcome": gov["outcome_contract"]},
-            statistical={"question_id": question["question_id"], **common}, dependencies=deps,
+            statistical={
+                "question_id": question["question_id"],
+                **common,
+                # Knife 8D0: frozen P5b governance only.  The P5b adjudicator
+                # and its public surface remain 8D1 work.
+                "p5b_adjudication_governance": {
+                    "p_value_method": "engine.a_short_overlay_adjudication._signflip_p",
+                    "checkpoints": {"12": "preliminary", "24": "formal", "36": "terminal"},
+                    "difference_minimums": {"12": 6, "24": 12, "36": 18},
+                    "terminal_branches_require_difference_and_nonoverlap_minimums": True,
+                },
+            }, dependencies=deps,
             dependents=["a_short_p4_stage3_rank_source"],
             allowed_path="presets/egs_industry_heat_governance_20260611.json#/active_profile",
         )
@@ -406,3 +417,29 @@ def admission_snapshot(*admission_ids: str) -> dict[str, dict]:
 
 def admission_snapshot_sha256(*admission_ids: str) -> str:
     return _digest(admission_snapshot(*admission_ids))
+
+
+def p3b_external_comparison_tracks() -> tuple[dict[str, Any], ...]:
+    """Frozen P3b external-track roster and implementation predicates.
+
+    A track with no implemented adjudicator has no vote.  Keep this control
+    plane here rather than in P3's consumer so adding a future track cannot
+    silently change P3b semantics.
+    """
+    registry = admissions()
+    from engine.a_short_industry_weight_comparison import _boundary
+    p5_boundary = _boundary()
+    return (
+        {"track_id": "p1_regime_candidate_effect",
+         "public_summary_path": "research/results/a_short/regime_candidate_effect_summary.json",
+         "implementation": {"kind": "constant", "value": True}},
+        {"track_id": "p2_target_exit_policy",
+         "public_summary_path": "research/results/a_short/target_policy_comparison_summary.json",
+         "implementation": {"kind": "admission_statistical_flag", "admission_id": "p2_target_exit_policy",
+                            "flag": "formal_adjudication_implemented",
+                            "value": bool(registry["p2_target_exit_policy"]["statistical_contract"]["definition"]["formal_adjudication_implemented"])}},
+        {"track_id": "p5_industry_weight",
+         "public_summary_path": "research/results/a_short/industry_weight_comparison_summary.json",
+         "implementation": {"kind": "module_boundary_flag", "module": "engine.a_short_industry_weight_comparison",
+                            "flag": "p5b_implemented", "value": bool(p5_boundary["p5b_implemented"])}},
+    )

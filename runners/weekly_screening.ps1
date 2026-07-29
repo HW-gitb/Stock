@@ -483,6 +483,8 @@ if ($SkipSemanticRisk) {
                 $IndustryWeightP5Root = Join-Path $ProjectRoot 'state\a_short\industry_weight_comparison_private\v1'
                 $IndustryWeightSource = Join-Path $ProjectRoot "result\a_short\$AsOf\egs_weight_comparison.json"
                 $TargetPolicyLedger = Join-Path $ProjectRoot 'logs\a_short_target_policy_comparison.json'
+                $TargetPolicyPublicJson = Join-Path $ProjectRoot 'research\results\a_short\target_policy_comparison_summary.json'
+                $TargetPolicyPublicMarkdown = Join-Path $ProjectRoot 'research\results\a_short\target_policy_comparison_summary.md'
                 $FinalActionLedger = Join-Path $ProjectRoot 'logs\a_short_final_action_validation.json'
                 $OfficialOperationEvidenceRoot = Join-Path $ProjectRoot 'state\a_short\operation_evidence_private\v1'
                 Write-Host "[ADVISORY] Updating bounded A-short shared private cache ..." -ForegroundColor Yellow
@@ -507,6 +509,8 @@ if ($SkipSemanticRisk) {
                 # neither runner owns a fetcher or a second cache, and their ledgers/verdicts remain separate.
                 $M67Args += @('--target-policy-root', $TargetPolicyLedger,
                               '--target-policy-daily-cache', $FactorComparisonV2Cache,
+                              '--target-policy-public-summary', $TargetPolicyPublicJson,
+                              '--target-policy-public-markdown', $TargetPolicyPublicMarkdown,
                               '--target-policy-forward')
                 $ForwardTracker = Join-Path $ProjectRoot 'logs\forward_tracker.csv'
                 $M67Args += @('--final-action-validation-root', $FinalActionLedger,

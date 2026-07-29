@@ -33,7 +33,7 @@ from engine.a_short_managed_exit import (
     net_excess_after_round_trip_cost_pct,
 )
 from runners.a_short_phase5_engine import ATR_MULT
-from engine.a_short_experiment_admission_registry import admission_snapshot
+from engine.a_short_experiment_admission_registry import admission_snapshot, p3b_external_comparison_tracks
 
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -51,12 +51,6 @@ FULL_EDGE_REVIEW_WEEKS = 12
 HAC_REVIEW_WEEKS = 26
 HAC_MIN_PLANS = 20
 ADMISSION_IDS = ("p3_selected_vs_candidate_pool", "p3_selected_vs_csi1000", "p3_managed_exit_vs_hold")
-P3B_EXTERNAL_PUBLIC_SUMMARIES = (
-    ROOT / "research" / "results" / "a_short" / "regime_candidate_effect_summary.json",
-    ROOT / "research" / "results" / "a_short" / "target_policy_comparison_summary.json",
-)
-
-
 class FinalActionValidationError(ValueError):
     """A source-bound P3 sidecar cannot prove a valid comparison observation."""
 
@@ -513,7 +507,7 @@ def _is_current_external_public_summary(path: Path, payload: dict[str, Any]) -> 
             from runners.a_short_target_policy_comparison_runner import validate_public_summary
             validate_public_summary(payload)
             return True
-        if path.name == "industry_weight_comparison_progress_summary.json":
+        if path.name == "industry_weight_comparison_summary.json":
             from engine.a_short_industry_weight_comparison import validate_public_progress
             validate_public_progress(payload)
             return True
@@ -525,7 +519,11 @@ def _is_current_external_public_summary(path: Path, payload: dict[str, Any]) -> 
 def _valid_external_public_verdicts() -> int:
     """Count only future public tracks with a complete, independently auditable verdict surface."""
     count = 0
-    for path in P3B_EXTERNAL_PUBLIC_SUMMARIES:
+    for track in p3b_external_comparison_tracks():
+        implementation = track.get("implementation") or {}
+        if implementation.get("value") is not True:
+            continue
+        path = ROOT / str(track.get("public_summary_path") or "")
         try:
             payload = json.loads(path.read_text(encoding="utf-8"))
         except (OSError, UnicodeDecodeError, json.JSONDecodeError):
@@ -546,6 +544,11 @@ def _valid_external_public_verdicts() -> int:
                 isinstance(progress, dict) and _is_sha256(fingerprint) and _is_sha256(source_hash)):
             count += 1
     return count
+
+
+def _p3b_ready(public_verdict: object, external_verdicts: int) -> bool:
+    """The 8D0 registry-governed P3b admission rule."""
+    return isinstance(public_verdict, str) and public_verdict != "not_adjudicated" and external_verdicts >= 2
 
 
 def _summary_from_ledger(ledger: dict[str, Any], as_of: str) -> dict[str, Any]:
@@ -576,7 +579,7 @@ def _summary_from_ledger(ledger: dict[str, Any], as_of: str) -> dict[str, Any]:
             ship_status = "review_due"
     public_verdict = "not_adjudicated"
     external_verdicts = _valid_external_public_verdicts()
-    p3b_ready = public_verdict != "not_adjudicated" and external_verdicts >= 2
+    p3b_ready = _p3b_ready(public_verdict, external_verdicts)
     reminders = [
         _reminder("hold_based_midterm_review", hold_status, len(holds), HOLD_REVIEW_WEEKS,
                   "模型选择/市场中期复核" if hold_status == "review_due" else "模型选择与市场基准证据积累中"),

@@ -413,7 +413,7 @@
     "engine/egs_industry_heat.py": "79d8cddefdabb21fa8effd677f320a8e44d86782688f4449145c8789469700b3",
     "engine/a_short_industry_theme.py": "6a10200f80b3c0d301efc8af1561b53ef2578e1cd26eea7976188dd57b7b6b2b",
     "runners/a_short_phase5_engine.py": "432ab9ea2855d3007f62b5e4a8e2b00f3248fe208f88cc2f0a3accbc40246671",
-    "runners/a_short_weekly_pipeline.py": "66211a0e92a53a2b161229064fd149243a6afcf7859d4b5c5b9ef7d58e1b2616",
+      "runners/a_short_weekly_pipeline.py": "6d4bc0cb2031c19a9a5837809b0daa6058b020885a7cd2fa3bd0c8539e70398f",
     "runners/a_short_m67_render.py": "38a11b60716bbea952a7d28abebd0799e46b479ed307c9a8505a2114deb00058",
     "engine/a_short_portfolio_risk.py": "02b88ac3b5239e8dd4897bde06afab0769ea5593f8a8a3666e5c8fba24486860",
     "engine/a_short_effect_contract.py": "2479038bda6d59bd7be7f19229301855513b46e371dac2e57ec81236958f2985"
@@ -585,7 +585,7 @@
       "id": "target_policy_comparison",
       "policy": "intentionally_independent",
       "schema_path": "schemas/a_short_target_policy_comparison_summary.schema.json",
-      "schema_sha256": "6e024b1a80d53a83eeb4acecf44908a738b61a0b6a283ef2d92861c096484400",
+      "schema_sha256": "e78d21e59a3a7cffdebf08d751fb68409a81ac6490a6388df9fd65d3e1c4b4fb",
       "reason": "P2 freezes a shadow-only target and breakout comparison. Before separate future reviews, independent re-review, and explicit user confirmation, it is prohibited from changing formal M6.7 target, entry eligibility, star, risk, action, sizing, cash allocation, or veto.",
       "owner": "runners/a_short_target_policy_comparison_runner.py + engine/a_short_managed_exit.py",
       "review_ref": "P2 forward review only after the public summary reaches its frozen minimum data thresholds",
@@ -658,7 +658,7 @@
     "small_float_mv_pct"
   ],
   "output_schema_sha256": {
-    "schemas/a_short_weekly_report.schema.json": "30a11967e6719670a9aa0449605e9c33b392073a9237bf77a15a50e7f011e66d",
+    "schemas/a_short_weekly_report.schema.json": "3cc739653bb207da8ef8759cf038273d30b5ac34f3b02687808a580809a729b9",
     "schemas/a_short_m67_report.schema.json": "9e74525507e9731031b90fdd0add1be74b28afcd78210ff78533070a6946c23c"
   },
   "analysis_input_paths": [
