@@ -1,5 +1,12 @@
 # Session Log
 
+## 2026-07-29 - 用户裁决：8D0′ 与 8D0″ 四项治理口径已定（8B / 8C / 8D1 解除阻塞）
+
+- **Verdict/Action**: 用户 2026-07-29 明确裁决「按建议」,四项全部采纳,8B / 8C / 8D1 的开工前置就此解除。①P5 计入 P3b 外部旁证;②P3b 门槛改写为「至少 2 条**已实现裁判器**的外部对比轨给出有效当期裁决」,名单与「是否已实现裁判器」都从 registry 读,不再是 `runners/a_short_final_action_validation_runner.py:54-57` 的硬编码路径元组;③P5b 的 p 值沿用 P4a 的 sign-flip 随机化(复用 `_signflip_p`);④P5b 检查点映射 12=初步 / 24=正式 / 36=终局,与 P4a 同。四项的可执行规格写在同日 handoff 追加节,Codex 据此落 governance。
+- **Required**: 无新开。这是用户级决策记录,不是 finding。落地由 Codex 执行:先把四项写进 governance / registry,再按 `8B → 8C → 8D1` 施工;**代码里不得再出现第二份副本**(本批已两次栽在这条)。
+- **Verify**: 裁决前的实测依据:`_signflip_p` 在 `n <= 15` 时是 **2^n 穷举、给精确 p 值**(12 区块 = 4096 次 / 7ms),`n > 15` 才转 32768 次抽样(36 区块 355ms);种子固定 `random.Random(1)`,同输入连跑两次 p 值逐位相同;用局部 RNG 实例,实测不污染全局 `random` 状态。`formal_adjudication_implemented`(P2 两轨)、`formal_hac_adjudication_implemented`(P3)、`p5b_implemented`(P5)三个旗标已存在,可直接作为「已实现裁判器」的判据。
+- **Next**: Codex:执行(先落 governance 四项,再 8B)。
+
 ## 2026-07-29 - Claude Code 工作单：A-short 下一步（两条陈旧状态已就地更正，其余交 Codex / 待用户裁决）
 
 - **Verdict/Action**: 本轮不改代码,只做两处 register 状态就地更正 + 立工作单。①`R-ASHORT-KNIFE6B-OFFICIAL-CLOCK-FALLBACK-ANCHORS-TO-DECISION-DATE` 状态由 `open P2` 补正为 `closed P2`——它 2026-07-28 已随 `89dd5e90` 修复且我复审 PASS,当时只补了 closure 段忘了翻状态。②`R-ASHORT-MASTER-LANE-PACK-TWO-PREEXISTING-RED` 关闭:该 finding 量在 `8a9d5d83`,现已不复现。两条都属「档案说的与现状不符」,留着会让后面每一轮审查基于错误前提。

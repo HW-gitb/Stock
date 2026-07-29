@@ -262,3 +262,37 @@
 ### 第八刀的执行顺序（拍完口径后）
 
 `8A`（已完成并合入）→ `8D0′`（裁决）→ `8B`（P2 target 裁判器 + 公开摘要四字段 + 顺带闭 `R-ASHORT-TEST-PACK-REWRITES-TRACKED-P2-PUBLIC-SUMMARY`）→ `8C`（P3 HAC + P3b 可达性 + 修 `:516` 文件名死分支）→ `8D0″`（裁决）→ `8D1`（P5b 裁判器 + 公开摘要 + 一键周跑接线）。每把子刀的不悬空判据与共同纪律见桌面 `ashort_r1.md` 第 8 刀本刀实施拆分节。
+
+## 2026-07-29 追加：8D0′ / 8D0″ 四项治理口径已由用户裁决（可执行规格）
+
+上一节列为「待用户裁决」的两组口径，2026-07-29 用户裁决「按建议」，全部采纳。本节是可直接施工的规格；**8B / 8C / 8D1 的开工前置就此解除**。四项一律写进 governance / registry，**代码里不得再出现第二份副本**——本批已两次栽在这条（条目 5 的硬编码检查点、8A 的统计阈值）。
+
+### 8D0′-① P5 计入 P3b 的外部旁证
+
+`p5_industry_weight` 加入 P3b 的外部对比轨名单。同时必须修掉那条死分支：`runners/a_short_final_action_validation_runner.py:516` 的判断键是 `industry_weight_comparison_progress_summary.json`，而 P5 实际写出的是 `industry_weight_comparison_summary.json`（`engine/a_short_industry_weight_comparison.py:35`）。这条属 8C 范围。
+
+### 8D0′-② P3b 门槛的语义
+
+- **新语义**：`p3b_ready` 要求「P3 自己有真裁决」**且**「至少 2 条**已实现裁判器**的外部对比轨给出有效当期裁决」。
+- **名单从 registry 读**，不再是 `runners/a_short_final_action_validation_runner.py:54-57` 里那个硬编码路径元组。名单每条至少要有：轨 id、公开摘要路径、「裁判器是否已实现」的判据。
+- **「已实现裁判器」直接复用现有旗标**，不要新造：`formal_adjudication_implemented`（P2 两轨，`engine/a_short_experiment_admission_registry.py:234,245`）、`formal_hac_adjudication_implemented`（P3，`:260`）、`p5b_implemented`（P5，`engine/a_short_industry_weight_comparison.py:95`）。注意 `p5b_implemented` 目前同时嵌在 governance boundary、私有记录 boundary 与私有 schema 的 `const: false` 里，8D1 计划本来就要把它摘出来只留公开 summary 层元数据——两件事一起做。
+- **为什么这么定**：一条还没写裁判器的轨只是「还没资格发言」，不该拖累门槛；而以后再加第四条轨时，门槛含义不会自己从「都要过」滑成「随便两条」。
+- **必须有的守护测试**：把某条轨的「已实现」旗标翻成 false → 它不再计入；名单里加一条未实现的轨 → `p3b_ready` 不变；两条已实现轨都给出有效裁决 → `p3b_ready` 为真。
+
+### 8D0″-① P5b 的 p 值检验方法
+
+**sign-flip 随机化，直接复用 `engine/a_short_overlay_adjudication.py::_signflip_p`**，不要新写一套统计。裁决前实测：`n <= 15` 时它是 **2ⁿ 穷举、给精确 p 值**（12 区块 = 4096 次 / 7ms），`n > 15` 才转 32768 次抽样（36 区块 355ms）；种子固定 `random.Random(1)`，同一输入连跑两次 p 值逐位相同；用局部 RNG 实例，不污染全局 `random` 状态。选它的理由：数据形状与 P4a 完全一致（区块差值）、已实现且可复现、两轨同尺度可比；t 检验在 12 区块下会被单周极值拖成「显著」。
+
+**已知性质（写进 governance 注释即可，暂不加料）**：`n=16` 处从精确穷举切到抽样，抽样误差约 ±0.5%；仅当真实 p 落在 0.020–0.030 这条窄带（判定线 0.025）时才理论上可能影响结论。真遇到再把 trials 调高（20 万次约 2 秒），不预先加。
+
+### 8D0″-② P5b 检查点映射
+
+**12 周 = 初步 / 24 周 = 正式 / 36 周 = 终局**，与 P4a 同：
+- 12 周：只出 `preliminary_positive` / `preliminary_negative` / 继续积累，不定案。
+- 24 周：可出正式结论（需 h20 全覆盖 + bootstrap + sign-flip + 月度聚类等正式门）。
+- 36 周：可出终局结论（含退役 epoch）。
+**吸取 8A 的教训**：12/24/36 每档的差异下限（6/12/18）与非重叠块下限必须拦住**该档的所有终局分支**，不能只拦晋级；并且每个写进 registry 的门都必须真有读点——8A 就出过「声明了却没人读」的 Required。
+
+### 落地顺序
+
+先把上面四项写进 governance / registry（含守护测试），再按 `8B → 8C → 8D1` 施工。8B、8C 的验收引用 8D0′ 这两条；8D1 的验收引用 8D0″ 这两条。
