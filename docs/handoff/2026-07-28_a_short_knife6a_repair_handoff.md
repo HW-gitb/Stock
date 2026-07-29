@@ -132,3 +132,25 @@
 - 三条 Optional（渲染器↔pipeline 循环依赖、effect contract 两行哈希缩进漂移、「零星分歧」中间态无测试且 `持有` 行的提示一致性不被 validator 覆盖）见同日 `docs/SESSION_LOG.md` 顶部 entry 的 `Next`；均不阻断。
 - 这盏灯**只写不读**：任何把 `breakout_source_agreement` 接进判定的改动都是口径变更，须单独立项（桌面第 7 刀第 5 点）。
 - 跨周累积版在设计定稿前不做，判据见桌面第 0 节。
+
+## 2026-07-29 追加：第七刀三条 Optional 收口
+
+### 改了什么
+
+- `summarize_breakout_source_agreement` 与 `BREAKOUT_SOURCE_DISAGREEMENT_RATE_THRESHOLD_PCT` 从 `runners/a_short_weekly_pipeline.py` 搬进 `runners/a_short_m67_render.py`（render 自己 `load_runtime_configuration()`），渲染横幅不再反向 import pipeline；`engine/a_short_effect_contract.py::_runtime_policy_leaf_readers` 新增 render 这个 `_PHASE5_POLICY` 读点，契约的 leaf-reader 映射跟着指向 render。
+- `validate_m67_consistency` 里的分歧一致性检查从 `if isinstance(rule6_gate, dict):` 块中去缩进，覆盖到 gate 缺失的报告。
+- 中间态 `零星分歧` 补 1/11 用例；`schemas/a_short_m67_effect_contract.json` 两行哈希缩进归位。
+
+### 验证命令与结果
+
+- 审查方亲跑最小覆盖包 `.toolsun_unittest_with_repo_pythonpath.cmd tests.test_a_short_m67_render tests.test_a_short_phase5_engine tests.test_a_short_effect_contract tests.test_a_short_weekly_pipeline` = `687 OK / 46.0s / exit 0`。按用户本轮指令未起独立 agent、未跑全量（风险分级=低危：纯搬家 + 测试补齐，不新增也不改变 fail-closed 判定）。
+- 零残留：`weekly_pipeline import summarize_breakout_source_agreement` 全仓 0 命中；`_PHASE5_POLICY` 在 `weekly_pipeline` 0 命中。
+
+### 失效的旧结论
+
+- 上一节 Optional① 的修法描述「移到 render 侧即解（循环依赖）」**不完整**：`a_short_m67_render.py:734` 本来就有一条延迟 import pipeline（自带「避免模块级循环依赖」注释），所以模块对至今仍互相依赖；本刀只拆掉了 knife 7 自己新加的那条边。剩下那条是既有的，不属本刀范围。
+- 新增的 held 行 tamper 测试**不能**证明去缩进生效：实测该报告的 `rule6_gate` 就是 dict，旧代码同样会红。去缩进本身是对的（覆盖面变宽），但今天实际是防御性的——`build_holding_report` 不写该 marker，所以 gate 缺失的报告拿不到 marker、检查照样跳过。
+
+### 下一步注意事项
+
+一条 open Required 见 `docs/system_risk_register.md#R-ASHORT-KNIFE7-EFFECT-CONTRACT-CONSUMER-REF-NAMES-A-GONE-CONSUMER`：契约 `consumer_refs` 仍点名已搬走的 `weekly_pipeline`。`consumer_refs` 是自由散文、无任何 hash 或测试覆盖，建议一并按同类扫净并加守护。

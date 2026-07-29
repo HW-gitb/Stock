@@ -1,5 +1,12 @@
 # Session Log
 
+## 2026-07-29 - Claude Code 审查 Pass-with-Required(第七刀三条 Optional 收口)
+
+- **Verdict/Action**: Pass-with-Required,已提交并合入 master。三条 Optional 都真闭了:①summarizer 与阈值常量搬进 `a_short_m67_render`,render 不再反向 import pipeline,effect-contract 的 leaf-reader 跟着改指向 render;②两行哈希缩进归位;③中间态 `零星分歧` 补了 1/11 用例,分歧一致性检查从 `if isinstance(rule6_gate, dict)` 里去缩进、覆盖面变宽。**风险分级=低危**(纯搬家 + 测试补齐,不新增也不改变任何 fail-closed 判定);按用户本轮指令未起独立 agent、未跑全量。搬家顺手带出一条契约漂移,见 Required。
+- **Required**: 一条,新开 `docs/system_risk_register.md#R-ASHORT-KNIFE7-EFFECT-CONTRACT-CONSUMER-REF-NAMES-A-GONE-CONSUMER`(P3,已登记随本刀放行):契约 `consumer_refs` 仍点名 `weekly_pipeline` 消费该阈值,而该文件 `_PHASE5_POLICY` 已 0 命中。
+- **Verify**: review-evidence:56b4b796d8ea。亲跑覆盖改动路径的最小包 `m67_render + phase5_engine + effect_contract + weekly_pipeline` = `687 OK / 46.0s / exit 0`。零残留:全仓无 `weekly_pipeline import summarize_breakout_source_agreement`;`_PHASE5_POLICY` 在 weekly_pipeline 0 命中。两条探针纠正了修复的自述:(a) render:734 仍有旧的延迟 import pipeline,模块对仍互相依赖,本刀只拆掉 knife 7 自己加的那条边;(b) 新 held 行 tamper 测试证明不了去缩进——实测该报告 `rule6_gate` 就是 dict,旧代码同样会红。
+- **Next**: Codex:修复该 Required(顺带按同类扫一遍其余 consumer_refs)。
+
 ## 2026-07-29 - Codex implementation (A-short Knife 7 reviewer Optional closure)
 
 - **Verdict/Action**: Closed all three Knife 7 Optional items without changing the conservative breakout gate or any selection/action outcome: the batch-local pure summary now lives in `a_short_m67_render` and no longer imports the weekly pipeline; the governed 10.0% policy reader is re-bound and effect-contract hashes/maps are regenerated with normal indentation; marker/notice consistency now also applies to held EGS-covered reports. Added the missing <10% sparse-disagreement Markdown case. No cross-week state, provider call, or other lane was added.
