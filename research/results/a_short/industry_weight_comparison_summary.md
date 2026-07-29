@@ -1,11 +1,11 @@
 # A-short P5 行业权重比较进度
 
-P5 行业权重对比：证据积累中；未自动改动生产权重。
+P5 行业权重对比：P5b 裁判已运行；仅供人工比较决策，不自动修改生产权重。
 
-| 问题 | 有效政策周 | 名单差异周 | 成熟机会 | 无效周 | 距 P5b 有效周 | 距 P5b 差异周 | 检查点 |
-|---|---:|---:|---:|---:|---:|---:|---|
-| balanced_vs_legacy | 0 | 0 | 0 | 0 | 12 | 6 | accumulating |
-| aggressive_vs_balanced | 0 | 0 | 0 | 0 | 12 | 6 | accumulating |
-| theme_double_vs_balanced | 0 | 0 | 0 | 0 | 12 | 6 | accumulating |
+| 问题 | 裁决 | 原因 | 检查点 |
+|---|---|---|---|
+| balanced_vs_legacy | continue_accumulating | pre_freeze_audit_only | preliminary |
+| aggressive_vs_balanced | continue_accumulating | pre_freeze_audit_only | preliminary |
+| theme_double_vs_balanced | continue_accumulating | pre_freeze_audit_only | preliminary |
 
-P5a 仅记录进度与 P5b 触发提醒；不计算裁判结果，也不会自动修改 active_profile、EGS、M6.7 或仓位。
+P5b 为 comparison-only 裁判；不会自动修改 active_profile、EGS、M6.7 或仓位。

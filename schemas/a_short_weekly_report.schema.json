@@ -726,22 +726,32 @@
       }
     },
     "industry_weight_comparison": {
-      "description": "P5a de-identified industry-weight evidence progress. It is cache-only/comparison-only and never changes EGS, M6.7, selection, sizing, account state, or active_profile.",
+      "description": "P5b de-identified industry-weight adjudication. It is cache-only/comparison-only and never changes EGS, M6.7, selection, sizing, account state, or active_profile.",
       "type": "object",
       "additionalProperties": false,
-      "required": ["schema_name", "schema_version", "summary_id", "as_of", "status", "questions", "p5b_build_due", "admission_binding", "message", "production_unchanged"],
+      "required": ["schema_name", "schema_version", "summary_id", "as_of", "status", "questions", "admission_binding", "message", "production_unchanged"],
       "properties": {
         "schema_name": {"const": "a_short_industry_weight_comparison_progress_summary"},
         "schema_version": {"const": "1.0.0"},
         "summary_id": {"const": "a_short_industry_weight_comparison"},
         "as_of": {"type": "string", "pattern": "^[0-9]{8}$"},
-        "status": {"enum": ["not_configured", "accumulating", "p5b_build_due", "evidence_unavailable_or_inconclusive"]},
+        "status": {"enum": ["not_configured", "accumulating", "review_due", "evidence_unavailable_or_inconclusive"]},
         "questions": {"type": "array", "minItems": 3, "maxItems": 3},
         "p5b_build_due": {"type": "boolean"},
+        "verdict": {"type": "string"},
+        "adjudication_stage": {"enum": ["accumulating", "preliminary", "formal", "terminal", "not_adjudicated"]},
+        "progress": {"type": "object"},
+        "fingerprint": {"type": "string", "pattern": "^[a-f0-9]{64}$"},
+        "source_hash": {"type": "string", "pattern": "^[a-f0-9]{64}$"},
+        "p5b_implemented": {"const": true},
         "admission_binding": {"type": "string", "pattern": "^[a-f0-9]{64}$"},
         "message": {"type": "string", "minLength": 1},
         "production_unchanged": {"const": true}
-      }
+      },
+      "oneOf": [
+        {"required": ["p5b_build_due"]},
+        {"required": ["verdict", "adjudication_stage", "progress", "fingerprint", "source_hash", "p5b_implemented"]}
+      ]
     },
     "overlay_adjudication": {
       "description": "P4a de-identified Stage3 rank-source evidence summary. It is a cache-only comparison sidecar and never changes official Top5, EGS, M6.7, sizing, holdings, exits, or configuration.",

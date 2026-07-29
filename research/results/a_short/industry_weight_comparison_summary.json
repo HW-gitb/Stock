@@ -3,44 +3,133 @@
   "schema_version": "1.0.0",
   "summary_id": "a_short_industry_weight_comparison",
   "as_of": "20260727",
-  "status": "accumulating",
+  "status": "not_configured",
   "questions": [
     {
       "question_id": "balanced_vs_legacy",
-      "eligible_policy_weeks": 0,
-      "difference_weeks": 0,
-      "mature_opportunities": 0,
-      "no_count_weeks": 0,
-      "p5b_build_due": false,
-      "remaining_eligible_to_p5b": 12,
-      "remaining_difference_to_p5b": 6,
-      "p5b_checkpoint_notice": "accumulating"
+      "verdict": "continue_accumulating",
+      "reason": "pre_freeze_audit_only",
+      "checkpoint_stage": "preliminary",
+      "progress": {
+        "eligible_policy_weeks": 0,
+        "difference_weeks": 0,
+        "mature_opportunities": 0,
+        "no_count_weeks": 0,
+        "remaining_eligible_weeks": 12,
+        "remaining_difference_weeks": 6
+      },
+      "metrics": {
+        "eligible_policy_weeks": 0,
+        "difference_weeks": 0,
+        "nonoverlap_blocks": 0,
+        "mean_effect_pct": null,
+        "block_win_rate_pct": null,
+        "signflip_p_value": null,
+        "no_count_rate_pct": null,
+        "bad_ticket_h10_rate_pct": null,
+        "tail_h10_pct": null,
+        "max_relative_drawdown_worsening_pct": null,
+        "max_close_drawdown_pct": null,
+        "adjustment_coverage_pct": null,
+        "risk_ok": false
+      },
+      "comparison_only": true
     },
     {
       "question_id": "aggressive_vs_balanced",
-      "eligible_policy_weeks": 0,
-      "difference_weeks": 0,
-      "mature_opportunities": 0,
-      "no_count_weeks": 0,
-      "p5b_build_due": false,
-      "remaining_eligible_to_p5b": 12,
-      "remaining_difference_to_p5b": 6,
-      "p5b_checkpoint_notice": "accumulating"
+      "verdict": "continue_accumulating",
+      "reason": "pre_freeze_audit_only",
+      "checkpoint_stage": "preliminary",
+      "progress": {
+        "eligible_policy_weeks": 0,
+        "difference_weeks": 0,
+        "mature_opportunities": 0,
+        "no_count_weeks": 0,
+        "remaining_eligible_weeks": 12,
+        "remaining_difference_weeks": 6
+      },
+      "metrics": {
+        "eligible_policy_weeks": 0,
+        "difference_weeks": 0,
+        "nonoverlap_blocks": 0,
+        "mean_effect_pct": null,
+        "block_win_rate_pct": null,
+        "signflip_p_value": null,
+        "no_count_rate_pct": null,
+        "bad_ticket_h10_rate_pct": null,
+        "tail_h10_pct": null,
+        "max_relative_drawdown_worsening_pct": null,
+        "max_close_drawdown_pct": null,
+        "adjustment_coverage_pct": null,
+        "risk_ok": false
+      },
+      "comparison_only": true
     },
     {
       "question_id": "theme_double_vs_balanced",
-      "eligible_policy_weeks": 0,
-      "difference_weeks": 0,
-      "mature_opportunities": 0,
-      "no_count_weeks": 0,
-      "p5b_build_due": false,
-      "remaining_eligible_to_p5b": 12,
-      "remaining_difference_to_p5b": 6,
-      "p5b_checkpoint_notice": "accumulating"
+      "verdict": "continue_accumulating",
+      "reason": "pre_freeze_audit_only",
+      "checkpoint_stage": "preliminary",
+      "progress": {
+        "eligible_policy_weeks": 0,
+        "difference_weeks": 0,
+        "mature_opportunities": 0,
+        "no_count_weeks": 0,
+        "remaining_eligible_weeks": 12,
+        "remaining_difference_weeks": 6
+      },
+      "metrics": {
+        "eligible_policy_weeks": 0,
+        "difference_weeks": 0,
+        "nonoverlap_blocks": 0,
+        "mean_effect_pct": null,
+        "block_win_rate_pct": null,
+        "signflip_p_value": null,
+        "no_count_rate_pct": null,
+        "bad_ticket_h10_rate_pct": null,
+        "tail_h10_pct": null,
+        "max_relative_drawdown_worsening_pct": null,
+        "max_close_drawdown_pct": null,
+        "adjustment_coverage_pct": null,
+        "risk_ok": false
+      },
+      "comparison_only": true
     }
   ],
-  "p5b_build_due": false,
-  "admission_binding": "f5a4ca0055ec9ecd529f86868eba74c3fa8c82709e2eba87aca6c9f24bfbf6ab",
-  "message": "P5 行业权重对比：证据积累中；未自动改动生产权重。",
+  "verdict": "continue_accumulating",
+  "adjudication_stage": "accumulating",
+  "progress": {
+    "questions": {
+      "balanced_vs_legacy": {
+        "eligible_policy_weeks": 0,
+        "difference_weeks": 0,
+        "mature_opportunities": 0,
+        "no_count_weeks": 0,
+        "remaining_eligible_weeks": 12,
+        "remaining_difference_weeks": 6
+      },
+      "aggressive_vs_balanced": {
+        "eligible_policy_weeks": 0,
+        "difference_weeks": 0,
+        "mature_opportunities": 0,
+        "no_count_weeks": 0,
+        "remaining_eligible_weeks": 12,
+        "remaining_difference_weeks": 6
+      },
+      "theme_double_vs_balanced": {
+        "eligible_policy_weeks": 0,
+        "difference_weeks": 0,
+        "mature_opportunities": 0,
+        "no_count_weeks": 0,
+        "remaining_eligible_weeks": 12,
+        "remaining_difference_weeks": 6
+      }
+    }
+  },
+  "fingerprint": "37223b2b11889e4300f360946658e399d2131bfe9097075dc4c36b892a66f958",
+  "source_hash": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+  "p5b_implemented": true,
+  "admission_binding": "752c9d20371d8f6e0dbb7ba10ebdd6ac654e272a6b26f7cd01afaa404b348bbe",
+  "message": "P5 行业权重对比：P5b 裁判已运行；仅供人工比较决策，不自动修改生产权重。",
   "production_unchanged": true
 }

@@ -65,7 +65,6 @@
     "comparison_only": true,
     "automatic_policy_switch": false,
     "reads_account_or_holdings": false,
-    "allows_historical_backfill": false,
-    "p5b_implemented": false
+    "allows_historical_backfill": false
   }
 }

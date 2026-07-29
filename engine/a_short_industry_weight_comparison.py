@@ -64,7 +64,7 @@ def _load_json(path: Path) -> Any:
 def _atomic_write(path: Path, payload: Any) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
     temporary = path.with_name(f".{path.name}.tmp")
-    temporary.write_text(json.dumps(payload, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
+    temporary.write_text(json.dumps(payload, ensure_ascii=False, indent=2, allow_nan=False) + "\n", encoding="utf-8")
     os.replace(temporary, path)
 
 
@@ -92,8 +92,12 @@ def _boundary() -> dict:
         "comparison_only": True,
         "automatic_policy_switch": False,
         "reads_account_or_holdings": False,
-        "p5b_implemented": False,
     }
+
+
+def _boundary_is_compatible(value: object) -> bool:
+    """Accept the immutable P5a boundary shape while emitting the P5b shape."""
+    return value in (_boundary(), {**_boundary(), "p5b_implemented": False})
 
 
 def _private_root(root: str | Path) -> Path:
@@ -189,7 +193,7 @@ def _validate_private_record(record: dict) -> None:
         jsonschema.validate(record, _load_json(PRIVATE_SCHEMA))
     except jsonschema.ValidationError as exc:
         raise IndustryWeightComparisonError("P5 private record violates its schema") from exc
-    if record.get("program_id") != PROGRAM_ID or record.get("boundary") != _boundary():
+    if record.get("program_id") != PROGRAM_ID or not _boundary_is_compatible(record.get("boundary")):
         raise IndustryWeightComparisonError("P5 private record crossed its comparison-only boundary")
     if record.get("record_type") == "capture" and \
             record.get("contract_fingerprint") == _contract_fingerprint(load_governance()) and \
@@ -518,10 +522,40 @@ def _arm_horizon(*, selected: list[dict], decision_date: str, horizon: int, date
             positions.append({"entry_status": "unfilled_limit_up", "net_return_pct": 0.0})
         else:
             net = (exit_qfq / entry_qfq - 1.0) * 100.0 - cost_pct
+            if not _finite(net):
+                return {"status": "no_count", "reason": "nonfinite_qfq_return", "portfolio_net_return_pct": None, "positions": []}
             positions.append({"entry_status": "filled", "net_return_pct": net})
+    navs = []
+    for day in dates[date_pos[entry_date]:date_pos[exit_date] + 1]:
+        values = []
+        for member, position in zip(selected, positions):
+            if position["entry_status"] != "filled":
+                values.append(0.0)
+                continue
+            close_row = stocks.get((member["ts_code"], day))
+            close_qfq = _qfq(close_row, "close") if close_row else None
+            if close_qfq is None:
+                return {"status": "no_count", "reason": "qfq_close_unverified", "portfolio_net_return_pct": None, "positions": []}
+            entry_row = stocks[(member["ts_code"], entry_date)]
+            entry_qfq = _qfq(entry_row, "open")
+            value = (close_qfq / entry_qfq - 1.0) * 100.0 if entry_qfq is not None else None
+            if not _finite(value):
+                return {"status": "no_count", "reason": "nonfinite_qfq_close_return", "portfolio_net_return_pct": None, "positions": []}
+            values.append(value)
+        nav = sum(values) / 15.0
+        if not _finite(nav):
+            return {"status": "no_count", "reason": "nonfinite_close_drawdown", "portfolio_net_return_pct": None, "positions": []}
+        navs.append(nav)
+    peak, drawdown = 0.0, 0.0
+    for nav in navs:
+        peak = max(peak, nav)
+        drawdown = max(drawdown, peak - nav)
+    portfolio_net_return_pct = sum(row["net_return_pct"] for row in positions) / 15.0
+    if not _finite(portfolio_net_return_pct) or not _finite(drawdown):
+        return {"status": "no_count", "reason": "nonfinite_portfolio_metric", "portfolio_net_return_pct": None, "positions": []}
     return {"status": "settled", "entry_date": entry_date, "exit_date": exit_date,
-            "portfolio_net_return_pct": sum(row["net_return_pct"] for row in positions) / 15.0,
-            "cash_drag_pct": cash_slots / 15.0 * 100.0, "positions": positions}
+            "portfolio_net_return_pct": portfolio_net_return_pct,
+            "cash_drag_pct": cash_slots / 15.0 * 100.0, "close_drawdown_pct": drawdown, "positions": positions}
 
 
 def _question_outcome(question: dict, profiles: dict, decision_date: str, dates: list[str], date_pos: dict[str, int],
@@ -541,8 +575,12 @@ def _question_outcome(question: dict, profiles: dict, decision_date: str, dates:
                              "whole_policy_effect_pct": None}
         else:
             effect = 0.0 if question["same_list"] else challenger["portfolio_net_return_pct"] - base["portfolio_net_return_pct"]
-            horizons[key] = {"status": "settled", "whole_policy_effect_pct": effect,
-                             "same_list_zero_effect": bool(question["same_list"])}
+            if not _finite(effect):
+                horizons[key] = {"status": "no_count", "reason": "nonfinite_whole_policy_effect",
+                                 "whole_policy_effect_pct": None}
+            else:
+                horizons[key] = {"status": "settled", "whole_policy_effect_pct": effect,
+                                 "same_list_zero_effect": bool(question["same_list"])}
     return {"question_id": question["question_id"], "same_list": question["same_list"], "arms": arms, "horizons": horizons}
 
 
@@ -621,23 +659,70 @@ def _question_progress(root: Path, question_id: str, as_of: str) -> dict:
 
 def build_public_progress(*, root: str | Path | None, as_of: str) -> dict:
     as_of = _date(as_of, "as_of")
-    if root is None:
-        summary = {"schema_name": "a_short_industry_weight_comparison_progress_summary", "schema_version": "1.0.0",
-                   "summary_id": "a_short_industry_weight_comparison", "as_of": as_of, "status": "not_configured",
-                   "questions": [_question_progress_placeholder(question_id) for question_id in QUESTION_IDS],
-                   "p5b_build_due": False, "admission_binding": _digest(admission_snapshot(*ADMISSION_IDS)),
-                   "message": "P5 行业权重对比：未配置；生产结论不变。", "production_unchanged": True}
-    else:
+    from engine.a_short_industry_weight_adjudication import P5B_IMPLEMENTED, adjudicate_question, holm_bonferroni
+    governance = load_governance()
+    records = {question_id: [] for question_id in QUESTION_IDS}
+    mature = {question_id: 0 for question_id in QUESTION_IDS}
+    no_count = {question_id: 0 for question_id in QUESTION_IDS}
+    source_rows = []
+    if root is not None:
         private_root = _private_root(root)
-        rows = [_question_progress(private_root, question_id, as_of) for question_id in QUESTION_IDS] if private_root.exists() else [
-            _question_progress_placeholder(question_id) for question_id in QUESTION_IDS]
-        due = any(row["p5b_build_due"] for row in rows)
-        summary = {"schema_name": "a_short_industry_weight_comparison_progress_summary", "schema_version": "1.0.0",
-                   "summary_id": "a_short_industry_weight_comparison", "as_of": as_of,
-                   "status": "p5b_build_due" if due else "accumulating", "questions": rows, "p5b_build_due": due,
-                   "admission_binding": _digest(admission_snapshot(*ADMISSION_IDS)),
-                   "message": ("P5 行业权重对比：已达到 P5b 自动裁判实现/审查触发条件；若到 24/36 周，正式门与失败门仍须由尚未实现的 P5b 计算；不自动改动生产权重。" if due else
-                               "P5 行业权重对比：证据积累中；未自动改动生产权重。"), "production_unchanged": True}
+        for capture in _current_admission_capture_records(private_root) if private_root.exists() else []:
+            if capture["decision_date"] > as_of:
+                continue
+            _, outcome_path = _weekly_paths(private_root, capture["decision_date"])
+            if not outcome_path.exists():
+                continue
+            outcome = _load_json(outcome_path); _validate_private_record(outcome)
+            if outcome.get("epoch_id") != capture["epoch_id"] or outcome.get("contract_fingerprint") != capture["contract_fingerprint"] or \
+                    outcome.get("payload", {}).get("capture_sha256") not in (None, _digest(capture)):
+                raise IndustryWeightComparisonError("P5 outcome/capture source binding drifted")
+            source_rows.append({"capture": _digest(capture), "outcome": _digest(outcome)})
+            for outcome_question in outcome.get("payload", {}).get("questions", []):
+                question_id = outcome_question.get("question_id")
+                if question_id not in records:
+                    continue
+                h10 = (outcome_question.get("horizons") or {}).get("h10") or {}
+                if h10.get("status") == "no_count":
+                    mature[question_id] += 1; no_count[question_id] += 1
+                    continue
+                if h10.get("status") != "settled":
+                    continue
+                mature[question_id] += 1
+                if not _finite(h10.get("whole_policy_effect_pct")):
+                    no_count[question_id] += 1
+                    continue
+                baseline = outcome_question.get("arms", {}).get(next(q["baseline"] for q in governance["questions"] if q["question_id"] == question_id), {}).get("h10", {})
+                challenger = outcome_question.get("arms", {}).get(next(q["challenger"] for q in governance["questions"] if q["question_id"] == question_id), {}).get("h10", {})
+                tickets = [float(row["net_return_pct"]) for row in challenger.get("positions", []) if _finite(row.get("net_return_pct"))]
+                records[question_id].append({"decision_date": capture["decision_date"], "same_list": outcome_question.get("same_list") is True,
+                    "effect_pct": float(h10["whole_policy_effect_pct"]), "exit_date": challenger.get("exit_date") or baseline.get("exit_date"),
+                    "challenger_ticket_returns": tickets,
+                    "challenger_close_drawdown_pct": challenger.get("close_drawdown_pct"),
+                    "relative_close_drawdown_worsening_pct": (
+                        float(challenger["close_drawdown_pct"]) - float(baseline["close_drawdown_pct"])
+                        if _finite(challenger.get("close_drawdown_pct")) and _finite(baseline.get("close_drawdown_pct")) else None)})
+    from engine.a_short_experiment_admission_registry import get_admission
+    question_defs = {item["question_id"]: {**item, "evidence_counts": _epoch_mode.evidence_counts_toward_clock("p5_industry_weight"),
+                       "p5b_adjudication_governance": get_admission(f"p5_{item['question_id']}")["statistical_contract"]["definition"]["p5b_adjudication_governance"]}
+                     for item in governance["questions"]}
+    from engine.a_short_industry_weight_adjudication import _blocks, _signflip_p
+    p_values = {key: _signflip_p([row["effect_pct"] for row in _blocks(value)]) for key, value in records.items()}
+    rejected = holm_bonferroni(p_values, float(governance["risk_and_statistics_contract"]["formal_alpha_two_sided"]))
+    questions = [adjudicate_question(records[key], mature=mature[key], no_count=no_count[key], governance=governance,
+                                     question=question_defs[key], holm_rejected=rejected) for key in QUESTION_IDS]
+    terminal = [row for row in questions if row["checkpoint_stage"] == "terminal" and row["verdict"] != "continue_accumulating"]
+    aggregate = next((row["verdict"] for row in terminal), "continue_accumulating")
+    stage = "terminal" if terminal else next((row["checkpoint_stage"] for row in questions if row["verdict"] != "continue_accumulating"), "accumulating")
+    summary = {"schema_name": "a_short_industry_weight_comparison_progress_summary", "schema_version": "1.0.0",
+               "summary_id": "a_short_industry_weight_comparison", "as_of": as_of,
+               "status": "not_configured" if root is None else "review_due" if aggregate != "continue_accumulating" else "accumulating",
+               "questions": questions, "verdict": aggregate, "adjudication_stage": stage,
+               "progress": {"questions": {row["question_id"]: row["progress"] for row in questions}},
+               "fingerprint": _contract_fingerprint(governance), "source_hash": _digest(source_rows),
+               "p5b_implemented": P5B_IMPLEMENTED, "admission_binding": _digest(admission_snapshot(*ADMISSION_IDS)),
+               "message": "P5 行业权重对比：P5b 裁判已运行；仅供人工比较决策，不自动修改生产权重。",
+               "production_unchanged": True}
     validate_public_progress(summary)
     return summary
 
@@ -647,8 +732,9 @@ def unavailable_public_progress(as_of: str) -> dict:
     summary = {"schema_name": "a_short_industry_weight_comparison_progress_summary", "schema_version": "1.0.0",
                "summary_id": "a_short_industry_weight_comparison", "as_of": _date(as_of, "as_of"),
                "status": "evidence_unavailable_or_inconclusive",
-               "questions": [_question_progress_placeholder(question_id) for question_id in QUESTION_IDS],
-               "p5b_build_due": False, "admission_binding": _digest(admission_snapshot(*ADMISSION_IDS)),
+               "questions": [{"question_id": question_id, "verdict": "continue_accumulating", "reason": "evidence_unavailable",
+                              "checkpoint_stage": "preliminary", "progress": {}, "metrics": {}, "comparison_only": True} for question_id in QUESTION_IDS],
+               "verdict": "not_adjudicated", "adjudication_stage": "not_adjudicated", "progress": {}, "fingerprint": _contract_fingerprint(load_governance()), "source_hash": _digest([]), "p5b_implemented": True, "admission_binding": _digest(admission_snapshot(*ADMISSION_IDS)),
                "message": "P5 行业权重对比：证据不可用或不完整；不显示旧提醒，生产结论不变。",
                "production_unchanged": True}
     validate_public_progress(summary)
@@ -667,8 +753,7 @@ def validate_public_progress(summary: dict) -> None:
         jsonschema.validate(summary, _load_json(PUBLIC_SCHEMA))
     except jsonschema.ValidationError as exc:
         raise IndustryWeightComparisonError("P5 public progress summary violates its schema") from exc
-    if tuple(row["question_id"] for row in summary["questions"]) != QUESTION_IDS or \
-            summary["p5b_build_due"] != any(row["p5b_build_due"] for row in summary["questions"]):
+    if tuple(row["question_id"] for row in summary["questions"]) != QUESTION_IDS:
         raise IndustryWeightComparisonError("P5 public progress is internally inconsistent")
     if summary.get("admission_binding") != _digest(admission_snapshot(*ADMISSION_IDS)):
         raise IndustryWeightComparisonError("P5 public progress admission binding drifted")
@@ -683,11 +768,11 @@ def write_public_progress(summary: dict, *, json_path: str | Path = DEFAULT_PUBL
     validate_public_progress(summary)
     _atomic_write(Path(json_path), summary)
     lines = ["# A-short P5 行业权重比较进度", "", summary["message"], "",
-             "| 问题 | 有效政策周 | 名单差异周 | 成熟机会 | 无效周 | 距 P5b 有效周 | 距 P5b 差异周 | 检查点 |",
-             "|---|---:|---:|---:|---:|---:|---:|---|"]
+             "| 问题 | 裁决 | 原因 | 检查点 |",
+             "|---|---|---|---|"]
     for row in summary["questions"]:
-        lines.append("| {question_id} | {eligible_policy_weeks} | {difference_weeks} | {mature_opportunities} | {no_count_weeks} | {remaining_eligible_to_p5b} | {remaining_difference_to_p5b} | {p5b_checkpoint_notice} |".format(**row))
-    lines += ["", "P5a 仅记录进度与 P5b 触发提醒；不计算裁判结果，也不会自动修改 active_profile、EGS、M6.7 或仓位。"]
+        lines.append("| {question_id} | {verdict} | {reason} | {checkpoint_stage} |".format(**row))
+    lines += ["", "P5b 为 comparison-only 裁判；不会自动修改 active_profile、EGS、M6.7 或仓位。"]
     path = Path(markdown_path)
     path.parent.mkdir(parents=True, exist_ok=True)
     temporary = path.with_name(f".{path.name}.tmp")

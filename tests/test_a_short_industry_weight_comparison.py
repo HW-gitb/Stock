@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import json
 import hashlib
+import copy
 import sys
 import tempfile
 import unittest
@@ -18,9 +19,9 @@ if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
 from engine.a_short_industry_weight_comparison import (  # noqa: E402
-    ADMISSION_IDS, PROGRAM_ID, IndustryWeightComparisonError, _boundary, _contract_fingerprint,
+    ADMISSION_IDS, PROGRAM_ID, IndustryWeightComparisonError, _atomic_write, _boundary, _contract_fingerprint,
     _digest, _epoch_id, _runtime_source_fingerprint,
-    build_public_progress, cache_consumer_windows,
+    _validate_private_record, build_public_progress, cache_consumer_windows,
     capture_after_published_weekly, load_governance, settle_from_daily_payload,
     validate_public_progress, write_public_progress,
 )
@@ -259,7 +260,7 @@ class IndustryWeightComparisonTests(unittest.TestCase):
                 self.assertTrue(h10["same_list_zero_effect"])
                 self.assertLess(outcome["payload"]["questions"][0]["arms"]["legacy"]["h10"]["portfolio_net_return_pct"], 100.0)
             progress = build_public_progress(root=root, as_of=SETTLE_AS_OF)
-            self.assertTrue(all(row["eligible_policy_weeks"] == 1 and row["difference_weeks"] == 0 for row in progress["questions"]))
+            self.assertTrue(all(row["progress"]["eligible_policy_weeks"] == 1 and row["progress"]["difference_weeks"] == 0 for row in progress["questions"]))
 
     def test_missing_observed_adjustment_is_no_count_not_zero_or_backfill(self):
         with tempfile.TemporaryDirectory() as tmp:
@@ -269,7 +270,7 @@ class IndustryWeightComparisonTests(unittest.TestCase):
             codes = sorted({row["ts_code"] for arm in capture["payload"]["profiles"].values() for row in arm["selected"]})
             settle_from_daily_payload(root=root, daily_payload=_daily_cache(codes, missing_adjustment=True), as_of=SETTLE_AS_OF)
             progress = build_public_progress(root=root, as_of=SETTLE_AS_OF)
-            self.assertTrue(all(row["eligible_policy_weeks"] == 0 and row["no_count_weeks"] == 1 and row["mature_opportunities"] == 1 for row in progress["questions"]))
+            self.assertTrue(all(row["progress"]["eligible_policy_weeks"] == 0 and row["progress"]["no_count_weeks"] == 1 and row["progress"]["mature_opportunities"] == 1 for row in progress["questions"]))
 
     def test_shared_cache_defers_p5_after_fixed_budget_without_v2_failure(self):
         with tempfile.TemporaryDirectory() as tmp:
@@ -310,8 +311,8 @@ class IndustryWeightComparisonTests(unittest.TestCase):
                 (directory / "outcome.json").write_text(json.dumps(outcome), encoding="utf-8")
             summary = build_public_progress(root=root, as_of="20261231")
             validate_public_progress(summary)
-            self.assertTrue(summary["p5b_build_due"])
-            self.assertTrue(all(row["p5b_checkpoint_notice"] == "p5b_terminal_checkpoint_36_not_implemented"
+            self.assertTrue(summary["p5b_implemented"])
+            self.assertTrue(all(row["verdict"] in {"continue_accumulating", "manual_rollback_review_only", "do_not_promote"}
                                 for row in summary["questions"]))
             json_path, md_path = Path(tmp) / "public.json", Path(tmp) / "public.md"
             write_public_progress(summary, json_path=json_path, markdown_path=md_path)
@@ -319,6 +320,34 @@ class IndustryWeightComparisonTests(unittest.TestCase):
             self.assertNotIn("ts_code", public_text)
             self.assertNotIn("price", public_text)
             self.assertNotIn("account", public_text)
+
+    def test_public_writer_rejects_nonfinite_payload_without_creating_a_public_file(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            path = Path(tmp) / "public.json"
+            with self.assertRaises(ValueError):
+                _atomic_write(path, {"nonfinite": float("nan")})
+            self.assertFalse(path.exists())
+
+    def test_tracked_public_pair_is_reproducible_from_the_writer_and_altered_field_is_detected(self):
+        tracked_json = ROOT / "research" / "results" / "a_short" / "industry_weight_comparison_summary.json"
+        tracked_md = tracked_json.with_suffix(".md")
+        with patched_epoch_modes("pre_freeze_audit_only", ("p5_industry_weight",)):
+            expected = build_public_progress(root=None, as_of="20260727")
+            self.assertEqual(json.loads(tracked_json.read_text(encoding="utf-8")), expected)
+            with tempfile.TemporaryDirectory() as tmp:
+                generated_json, generated_md = Path(tmp) / "summary.json", Path(tmp) / "summary.md"
+                write_public_progress(expected, json_path=generated_json, markdown_path=generated_md)
+                self.assertEqual(tracked_md.read_text(encoding="utf-8"), generated_md.read_text(encoding="utf-8"))
+            altered = copy.deepcopy(expected)
+            altered["source_hash"] = "0" * 64
+            self.assertNotEqual(json.loads(tracked_json.read_text(encoding="utf-8")), altered)
+
+    def test_legacy_boundary_record_remains_readable(self):
+        record = {"schema_name": "a_short_industry_weight_comparison_private_record", "schema_version": "1.0.0",
+                  "record_type": "outcome", "program_id": PROGRAM_ID, "decision_date": DECISION,
+                  "epoch_id": "a" * 64, "contract_fingerprint": "b" * 64, "payload": {},
+                  "boundary": {**_boundary(), "p5b_implemented": False}}
+        _validate_private_record(record)
 
     def test_historical_or_test_capture_never_starts_forward_clock(self):
         with tempfile.TemporaryDirectory() as tmp:

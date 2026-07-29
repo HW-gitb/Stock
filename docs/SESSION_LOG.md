@@ -1,5 +1,35 @@
 # Session Log
 
+## 2026-07-29 - Claude Code 复审 Pass-with-Required(8D1 六条 Required 全闭,全量由红转绿)
+
+- **Verdict/Action**: Pass-with-Required,提交并合入 master。六条逐条坐实:公开写盘口 `allow_nan=False` + 四层非有限值 fail-closed;tracked P5 json/md 现由 writer 复现;私有记录 boundary 双形状兼容;周报与进度 schema 改 `oneOf` 让旧产物仍合法;P3b 改成每轨 allow-list + P5 另要 `adjudication_stage == terminal`;缺失回撤传 None 不再默认 0。但 Required④ 要求的「同类扫净」只做了被点名那一个出口,见 Required。
+- **Required**: 一条,新开 `docs/system_risk_register.md#R-ASHORT-PUBLIC-WRITERS-NONFINITE-SWEEP-INCOMPLETE`(P3,已登记随本刀放行);上轮六条的闭合记录见同文件 `#R-ASHORT-KNIFE8D1-REVIEW-REQUIRED-CLOSURE`(单一来源,本处不复述)。
+- **Verify**: review-evidence:1e8fad6d5acc。亲跑并接管全量:`full_pack_ledger run a_short` = `PASS exit=0 / 2102 tests / 195.7s` 并已记账(上一代码态是 `2095 / failures=3 errors=3`)。反向控制全过:P5 给真终局 verdict + `stage=terminal` **能**计票、同 verdict 但 `preliminary` **不**计、现产物计 0;非有限 payload 写盘抛错且不留文件与 tmp;旧 boundary(带 `p5b_implemented:false`)可读、越界 boundary 与自称已实现的 boundary 仍被拒;`build_public_progress(root=None) == ` tracked json。P1/P2 的 terminal 集与各自裁判器实际输出逐字对上,未误伤。
+- **Next**: 合入 master。
+
+## 2026-07-29 - Codex repair (A-short 8D1 reviewer Required closure candidate)
+
+- **Verdict/Action**: Repaired all six 8D1 reviewer Required items: finite-only public evidence, writer-reproducible public pair, legacy P5a schema/boundary compatibility, terminal-only P3b vote contract, historical weekly compatibility, and no zero-default close drawdown. Comparison-only; no production policy change.
+- **Required**: Independent Claude Code review; detailed closure controls are in `docs/system_risk_register.md#R-ASHORT-KNIFE8D1-REVIEW-REQUIRED-CLOSURE`.
+- **Verify**: Fixed Python focused P5/P3b/historical suite = 35 OK / 10.271s; official-operation evidence = 15 OK / 2.007s. Full `a_short` ledger is NOT_VERIFIED by user direction; a broader sidecar/effect command emitted no terminal test record and is not counted as green.
+- **Next**: Claude Code: review.
+- **Pre-Codex self-review**: matrix=complete; register=updated; handoff=SESSION_LOG top entry; focused=50 OK; full-lane=NOT_VERIFIED by user direction; scope=A-short 8D1 reviewer Required only.
+
+## 2026-07-29 - Claude Code 审查 FAIL(8D1 P5b 裁判器:P3b 多了一张假票 + 就地收紧的 schema 判死历史周报产物)
+
+- **Verdict/Action**: FAIL,不提交、不合入。新裁判器主体成立(阈值全从 preset 读、风险门六项全非 None 才算过、预冻结早返回),但三处 fail-open/兼容缺陷阻断:P3b 把 `continue_accumulating` 当成一张有效外部票;周报 schema 就地收紧让已落盘的 P5a 形状产物整份非法;缺失的 `close_drawdown_pct` 被默认成 `0.0` 喂进风险门。**风险分级=新增 fail-closed 裁判引擎**,按 §6a 起的独立对抗 agent 随后返回、同判 FAIL,并另报三条已升为 Required 的缺陷(非有限值写盘、tracked 产物不可复现、私有记录 boundary 兼容说明为假),关键腿我已逐条复核。
+- **Required**: 六条(5×P2 + 1×P3),ID 均以 `R-ASHORT-KNIFE8D1-` 开头,完整文本与 closure 条件只在 `docs/system_risk_register.md`:非有限值写盘并促成正面许可、tracked 公开产物不可从 writer 复现、私有记录 boundary 让旧证据失效、P3b 把 `continue_accumulating` 当票、周报 schema 就地收紧判死历史产物、缺失回撤默认 0。Optional 五条与 Options 一条记在 `#R-ASHORT-KNIFE8D1-P5B-ADJUDICATOR-PUBLIC-SUMMARY-AND-WEEKLY-WIRING`。
+- **Verify**: review-evidence:32fb2399f732。接管全量:`full_pack_ledger run a_short` = `FAIL exit=1 / 2095 tests / 173.0s / failures=3 errors=3`,非绿未记账,红因逐条归到本刀(守护 `..._track_has_no_vote` = `True is not false`;历史周报与 official-operation 四例红在 `p5b_build_due was unexpected`)。探针:`_valid_external_public_verdicts() = 1` 且该票来自零证据的 P5;回撤 `0.0` 时 `risk_ok=True`、`99.0` 时 False。详见 register。超时原因:用户要求起全量,全量转红后逐条归因并复现三条 Required 的探针。
+- **Next**: Codex:修复三条 Required 并对 Options 给出显式决定。
+
+## 2026-07-29 - Codex implementation (A-short 8D1 P5b adjudication and one-click wiring)
+
+- **Verdict/Action**: Implemented P5b as a source-bound, comparison-only adjudicator; the formal public summary now carries verdict/progress/fingerprint/source hash and weekly/P3b consumers validate it. No automatic production policy change.
+- **Required**: Independent Claude Code review; material design/closure detail is in `docs/system_risk_register.md#R-ASHORT-KNIFE8D1-P5B-ADJUDICATOR-PUBLIC-SUMMARY-AND-WEEKLY-WIRING`.
+- **Verify**: Fixed Python focused P5b/P3b/weekly/sidecar-health integration = 532 OK. Full `a_short` ledger was explicitly not accepted as evidence: it prepared but produced no green terminal record; status `NOT_VERIFIED` by user direction.
+- **Next**: Claude Code: review.
+- **Pre-Codex self-review**: matrix=partial (full lane NOT_VERIFIED); register=updated; handoff=SESSION_LOG top entry; focused=532 OK; scope=A-short 8D1 only.
+
 ## 2026-07-29 - Claude Code 复审 PASS(8C 两条 Required 全闭:HAC 退化 fail-closed + P1 配对产物同步)
 
 - **Verdict/Action**: PASS,提交并合入 master。两件都成立:①`_hac_t` 在长期方差非正时返回 `None`,`hac_t` 门原有的 `is not None` 判据即刻 fail-closed,两个公开写盘口补 `allow_nan=False`;②tracked `.md` 由生产渲染器从同一份 json 重渲染,新回归把两份 tracked 产物钉成逐字段相等并带植入失败。**风险分级=comparison-only 低危**;未起 agent、按 rule 4 未重跑全量。
