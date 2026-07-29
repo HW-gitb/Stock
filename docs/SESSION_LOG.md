@@ -193,7 +193,7 @@
 
 - **Verdict/Action**: PASS，已提交并合入 master。K3-R77 不是靠「藏得更深」关掉的——那条路本会话已被证伪三次；这轮把声称改成实话（两 lane docstring 明写「不是安全边界」并指向下游 `content_sha256` 重推导），守卫类改名 `LiveTransportLifecycleConformance` 并撤掉误导性的模块属性清单断言，同时补上交接指定的两条下游载荷性控制。正文只在 `docs/system_risk_register.md#R-USSHORT-KNIFE3-WEB-X-MERGE-PACKET-BOUNDARY`，本处不复述。全程零 live、零网络。
 - **Required**: 无。K3-R76 / K3-R77 均 CLOSED。两条 Optional 见 register（离线收据仍被 retry 投影；增长谓词未覆盖 `provider_samples/`）。
-- **Verify**: review-evidence:374b074d6424。均我亲跑：全量按 rule 4 亲起官方账本 `Ran 4999 tests in 450.019s`/`OK`/`status=PASS exit=0 tests=4999`，已记账。决定性对照由我外部挖空得出——把 `merge._guard_raw_content_digest` 的哈希拒绝改成死分支，`test_closure_forged_live_label_with_tampered_raw_is_refused_before_knife_2` **转红**，还原后绿；两条 forge 控制 baseline 均绿。伪造路径本身仍可达（探针复现 `live_authorized`），而系统已不再声称相反。`state/us_short` 0 文件。
+- **Verify**: review-evidence:374b074d6424。均我亲跑：全量按 rule 4 亲起官方账本 `Ran 4999 tests in 450.019s`/`OK`/`status=PASS exit=0 tests=4999`，已记账。决定性对照由我外部挖空得出——把 `merge._guard_raw_content_digest` 的哈希拒绝改成死分支，`test_closure_forged_live_label_with_tampered_raw_is_refused_before_knife_2` **转红**，还原后绿；两条 forge 控制 baseline 均绿。伪造路径本身仍可达（探针复现 `live_authorized`），而系统已不再声称相反。`state/us_short` 0 文件。超时原因:全量包 451 秒，加合入 master 时 register 顶部与并发窗口冲突需人工消解。
 - **Next**: Codex：待命
 
 
