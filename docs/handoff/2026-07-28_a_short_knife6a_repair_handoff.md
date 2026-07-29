@@ -206,3 +206,26 @@
 
 - 一条 open Required：`docs/system_risk_register.md#R-ASHORT-KNIFE8A-TERMINAL-BLOCK-MINIMUM-DECLARED-BUT-NEVER-READ`（36 周块下限声明了却无读点）。
 - 一条同类 Optional（非 8A scope，留给 8B/8C/8D1）：统计阈值仍是第二份副本 —— 把 `preliminary.negative_mean_delta_pp_max` 改成 `-99.0`，36 周负面数据仍判 `do_not_promote`，因为代码里写死 `-.25`；`mean_delta_pp_min` / `block_win_rate_min` / α 同理。桌面第 8 刀「共同纪律」第 2 条要求的守护测试应覆盖到这些维度。
+
+## 2026-07-29 追加：8A Required 收口 + P4a 阈值全部单一来源
+
+### 改了什么
+
+- `engine/a_short_overlay_adjudication.py`：`_adjudicate` 终局分支补上对称的块门 `if len(blocks) < terminal_blocks: return "continue_accumulating"`（上一节记的 Required）。
+- 新增 `_statistical_contract()`：从同一份已封 `p4_stage3_rank_source` admission 读出 `preliminary` / `promotion` / `negative_at_36` 三段的全部数值门，并硬校验形状（有限数、正负号、`signflip_p_max <= 1`、`minimum_months` 必须是 int 而非 bool；任一不合即抛 `OverlayAdjudicationError`）。`_checkpoint_contract()` 改为接受已读契约以免重复读。
+- `_adjudicate` 与 `_public_failed_gates` 里原先的 `.25 / .55 / -.25 / .025 / 2.0 / 6 / .20 / 0` 字面量全部替换为契约值 —— 上一节记的 Optional（阈值仍是第二份副本）一并闭掉。
+
+### 验证命令与结果
+
+- 审查方亲跑 `.toolsun_unittest_with_repo_pythonpath.cmd tests.test_a_short_overlay_adjudication` = `28 OK / 6.8s / exit 0`；执行方已记账 `full_pack_ledger run a_short = 2080 OK`（rule 4，未重跑）。
+- **等价性亲证（这是本次最关键的一条）**：逐项对照 registry 值与被替换的旧字面量 —— `preliminary.mean_delta_pp_min .25`、`block_win_rate_min .55`、`negative_mean_delta_pp_max -.25`、`promotion.bootstrap_lower_pp_min .25`、`signflip_p_max .025`、`minimum_months 6`、`monthly_cluster_t_min 2.0`、`no_count_rate_pct_max 20.0 → .20`、`negative_at_36.mean_delta_pp_max -.25`、`bootstrap_upper_pp_max 0.0`，**11 项全等、零不等**；新增合取项 `promotion.mean_delta_pp_min 0.25` 不高于 preliminary 同名值，故不收紧。行为保持不变。
+- **复现上一轮探针**：`nonoverlap_block_minimums["36"] = 999` 现由「纹丝不动」变为 `continue_accumulating`，Required 坐实已闭。
+- **新门的反向控制**：`signflip_p_max = 0` / `negative_at_36.mean_delta_pp_max` 取正 / `minimum_months` 传 bool / `promotion` 整段删除 —— 四例全部抛 `OverlayAdjudicationError`。
+
+### 失效的旧结论
+
+上一节 Optional 里那条演示（“把 `preliminary.negative_mean_delta_pp_max` 改成 -99，36 周负面数据仍判 `do_not_promote`，说明阈值仍硬编码”）**不成立、已更正**：36 周终局读的是 `negative_at_36.mean_delta_pp_max`，根本不读 `preliminary` 那个键；退回 12 周档试，又被 `or not risk_ok` 那条腿盖住。Optional 的**结论**是对的（阈值确曾是第二份副本），但那条演示本身不隔离，别再引用它。
+
+### 下一步注意事项
+
+一条新 Optional：`docs/system_risk_register.md#R-ASHORT-P4A-NEGATIVE-BOUND-VALIDATION-IS-ASYMMETRIC`（P3）——负面终局门的两个界只校验了 `mean_delta_pp_max` 的符号，`bootstrap_upper_pp_max` 不查符号；实测设成 `99.0` 会被接受，并把 mean_delta = -0.1 的温和负面 epoch 从 `inconclusive_retired_for_epoch` 翻成 `do_not_promote`。

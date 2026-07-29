@@ -420,6 +420,31 @@ class OverlayAdjudicationTests(unittest.TestCase):
             changed["statistical_contract"]["definition"]["difference_minimums"]["36"] = 20
             with mock.patch("engine.a_short_overlay_adjudication.get_admission", return_value=changed):
                 self.assertEqual(adjudicate(18), "continue_accumulating")
+            changed = _admission_registry.get_admission("p4_stage3_rank_source")
+            changed["statistical_contract"]["definition"]["nonoverlap_block_minimums"]["36"] = 37
+            with mock.patch("engine.a_short_overlay_adjudication.get_admission", return_value=changed):
+                self.assertEqual(adjudicate(18), "continue_accumulating")
+
+    def test_terminal_negative_policy_follows_the_admission(self) -> None:
+        def row(index: int) -> dict:
+            month = index + 1
+            decision = f"202{6 + index // 12}{month % 12 or 12:02d}01"
+            arm = {"entry_date": decision[:-2] + "02", "exit_date": decision[:-2] + "11",
+                   "close_drawdown_pct": 0.0, "cash_drag_pct": 0.0, "unfilled_rate_pct": 0.0,
+                   "positions": [{"ts_code": f"p{index}", "entry_status": "filled", "net_return_pct": 1.0}]}
+            return {"decision_date": decision, "same_list": False,
+                    "h5": {"status": "settled", "delta_pct": 0.5}, "h5_complete": True,
+                    "h10": {"status": "settled", "delta_pct": -1.0, "baseline": arm, "candidate": arm,
+                            "benchmarks": {"csi1000": {"candidate_excess_pct": 0.0}, "csi300": {"candidate_excess_pct": 0.0}}},
+                    "h20": {"status": "settled", "delta_pct": 0.5}, "h20_complete": True}
+
+        rows = [row(index) for index in range(36)]
+        with mock.patch("engine.a_short_overlay_adjudication._epoch_mode.evidence_counts_toward_clock", return_value=True):
+            self.assertEqual(_adjudicate(rows, 36, 0)[0], "do_not_promote")
+            changed = _admission_registry.get_admission("p4_stage3_rank_source")
+            changed["statistical_contract"]["definition"]["negative_at_36"]["mean_delta_pp_max"] = -99.0
+            with mock.patch("engine.a_short_overlay_adjudication.get_admission", return_value=changed):
+                self.assertEqual(_adjudicate(rows, 36, 0)[0], "inconclusive_retired_for_epoch")
 
     def test_public_checkpoint_progress_uses_the_admission_thresholds(self) -> None:
         changed = _admission_registry.get_admission("p4_stage3_rank_source")

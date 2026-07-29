@@ -1,13 +1,26 @@
 # System Risk Register
 
-### R-ASHORT-KNIFE8A-TERMINAL-BLOCK-MINIMUM-DECLARED-BUT-NEVER-READ - 8A 新加的 36 周非重叠块下限是装饰性的，改它不产生任何效果
+### R-ASHORT-P4A-NEGATIVE-BOUND-VALIDATION-IS-ASYMMETRIC - 负面终局门的两个界只校验了一个的符号
 
-- **状态 / 严重度**: open P3，已随 8A 一同合入（closeout gate 第 3 条：material Required 可「已登记」后放行）。comparison-only 且预冻结，今天不可能影响任何结论；P3 而非更低，是因为它恰好违反本刀自己要建立的那条不变式。
+- **状态 / 严重度**: open P3（Optional 级，不阻断；2026-07-29 由 Claude Code 复审 8A Required 修复时发现）。comparison-only 且预冻结，已封值为 `0.0` 属正常，无 EGS 选股、M6.7、provider、账户或订单影响。
+- **机制**: `_statistical_contract()` 对 `negative_at_36["mean_delta_pp_max"]` 校验了符号（`>= 0` 即抛），对同一道门的另一个界 `negative_at_36["bootstrap_upper_pp_max"]` 只查有限数、不查符号。
+- **实测**: 36 周、mean_delta = -0.1 的温和负面样本，基线为 `inconclusive_retired_for_epoch`；把 `bootstrap_upper_pp_max` 改成 `99.0`（验证器接受）后变成 `do_not_promote` —— 一个本该「证据不足、退役观望」的 epoch 被判成明确淘汰。
+- **Required repair**: 给 `bootstrap_upper_pp_max` 补同侧符号约束（`> 0` 即抛，与 `mean_delta_pp_max` 对称），并补一条畸形值反向测试。
+- **Closure tests**: (1) `bootstrap_upper_pp_max = 99.0` → 抛 `OverlayAdjudicationError`；(2) 原值 `0.0` 仍通过；(3) 既有四例畸形控制保持绿。
+
+### R-ASHORT-KNIFE8A-TERMINAL-BLOCK-MINIMUM-DECLARED-BUT-NEVER-READ - 8A 新加的 36 周非重叠块下限曾是装饰性的
+
+- **状态 / 严重度**: closed P3（2026-07-29 Codex 修复，待独立审查）。comparison-only 且预冻结；无 EGS 选股、M6.7、provider、账户、订单或生产切换影响。
 - **机制**: 8A 往已封的 `p4_stage3_rank_source` admission 里新增了 `nonoverlap_block_minimums {"12":6,"24":12,"36":12}`，但 `_adjudicate` 解包时把终局那一项丢掉了（`terminal_weeks, terminal_difference, _ = terminal`）。12 与 24 两档确实被读（`len(blocks) < preliminary_blocks` / `< formal_blocks`），**36 档无任何读点**。
 - **实测（审查方探针，36 周 / 18 差异 / 负面数据）**: 基线 `do_not_promote`；把 `nonoverlap_block_minimums["36"]` 改成 `999` → 仍 `do_not_promote`（**没被读**）；对照把 `["24"]` 改成 `999` → 变 `continue_accumulating`（被读）。
 - **为何 material**: 本刀的全部意义就是「阈值只有 registry 一个来源，改 registry 必须让裁判结果变」。现在契约里多了一个**声明了却不生效**的门，正是它要消灭的那一类；而且本刀新增的守护测试只覆盖 difference 一维，改 `["36"]` 块下限不会让任何测试变红。
 - **Required repair**: 在终局分支的 difference 门旁补一条对称的块门（`if len(blocks) < terminal_blocks: return "continue_accumulating"`），或者干脆不要往契约里加这个键。二选一，但不许维持「声明而不读」。守护测试同步扩到块维度。
 - **Closure tests**: (1) 36 周 / 差异达标 / `nonoverlap_block_minimums["36"]` 调高到块数达不到 → 必须 `continue_accumulating`；(2) 调回原值 → 恢复原结论；(3) 12/24 两档的既有控制保持绿。
+- **Closure 2026-07-29(Codex 修复,Claude Code 复审 PASS)**: 终局块门已补(`if len(blocks) < terminal_blocks: return "continue_accumulating"`)，并顺带把审查方记的 Optional 一并闭掉——新增 `_statistical_contract()` 从同一份已封 admission 读出 preliminary / promotion / negative_at_36 三段全部数值门并硬校验形状，`_adjudicate` 与 `_public_failed_gates` 里原先的 `.25 / .55 / -.25 / .025 / 2.0 / 6 / .20 / 0` 字面量全部替换为契约值。
+- **等价性(审查方亲证，本条最关键)**: 逐项对照 registry 值与被替换的旧字面量 —— `preliminary.mean_delta_pp_min .25`、`block_win_rate_min .55`、`negative_mean_delta_pp_max -.25`、`promotion.bootstrap_lower_pp_min .25`、`signflip_p_max .025`、`minimum_months 6`、`monthly_cluster_t_min 2.0`、`no_count_rate_pct_max 20.0→.20`、`negative_at_36.mean_delta_pp_max -.25`、`bootstrap_upper_pp_max 0.0`，**11 项全等、零不等**；新增的合取项 `promotion.mean_delta_pp_min 0.25` 不高于 preliminary 同名值，故不收紧。行为保持不变。
+- **复现上轮探针**: `nonoverlap_block_minimums["36"]=999` 现由「纹丝不动」变为 `continue_accumulating`，Required 坐实已闭。畸形契约反向控制四例(signflip_p_max=0 / mean_delta_pp_max 取正 / minimum_months 传 bool / promotion 整段删除)全部抛 `OverlayAdjudicationError`。
+
+- **Closure 2026-07-29**: _adjudicate now executes the declared terminal block gate before every terminal verdict; 36 weeks / 18 differences / negative data with nonoverlap_block_minimums["36"]=37 returns continue_accumulating, while the default returns do_not_promote. The reviewer-recorded Optional is also closed: _statistical_contract() strictly reads the existing preliminary, promotion, and terminal-negative thresholds from the same sealed admission for adjudication and public failed gates; malformed policy fails closed rather than falling back to literals. Fixed Python focused package = 40 OK; current-fingerprint full A-short ledger = 2080 OK.
 
 ### R-ASHORT-KNIFE8A-P4A-TERMINAL-DIFFERENCE-GATE - P4a terminal gate omitted its difference minimum
 

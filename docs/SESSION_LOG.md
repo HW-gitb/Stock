@@ -1,5 +1,20 @@
 # Session Log
 
+## 2026-07-29 - Claude Code 复审 PASS(8A Required + 阈值单一来源一并闭)
+
+- **Verdict/Action**: PASS,提交并合入 master。Required 已闭:终局块门补上(`len(blocks) < terminal_blocks → continue_accumulating`)。执行方顺带把我上轮记的 Optional 也闭了——新增 `_statistical_contract()` 从同一份已封 admission 读出 preliminary/promotion/negative_at_36 三段全部数值门并硬校验形状,`_adjudicate` 与 `_public_failed_gates` 里的 `.25/.55/-.25/.025/2.0/6/.20/0` 字面量全部替换为契约值。**风险分级=comparison-only 低危**(预冻结早返回仍在最前,终局 verdict 今天打不出来);按用户指令未起独立 agent、未跑全量。
+- **Required**: 无。`docs/system_risk_register.md#R-ASHORT-KNIFE8A-TERMINAL-BLOCK-MINIMUM-DECLARED-BUT-NEVER-READ` 转 closed 并带等价性与复现证据。一条新 Optional 另开条目,见 Next。
+- **Verify**: review-evidence:a25299729253。亲跑 `tests.test_a_short_overlay_adjudication` = `28 OK / 6.8s / exit 0`;按 rule 4 未重跑执行方已记账的 `a_short 2080 OK`。**等价性亲证**:逐项对照 registry 值与被替换的旧字面量,11 项全等零不等,新增合取项 `promotion.mean_delta_pp_min` 不高于 preliminary 同名值故不收紧。**复现上轮探针**:`nonoverlap_block_minimums["36"]=999` 由纹丝不动变为 `continue_accumulating`。畸形契约四例反向控制全部抛 `OverlayAdjudicationError`。
+- **Next**: 合入 master。**更正我上轮的一处举证**:上轮我用 `preliminary.negative_mean_delta_pp_max` 演示「阈值仍硬编码」,该演示不成立——36 周档根本不读这个键(终局读的是 `negative_at_36`),12 周档又被 `or not risk_ok` 那条腿盖住。Optional 的**结论**是对的(阈值确曾是第二份副本,现已全部单一来源),但那条演示本身不隔离。新 Optional:`docs/system_risk_register.md#R-ASHORT-P4A-NEGATIVE-BOUND-VALIDATION-IS-ASYMMETRIC`(P3,负面终局门只校验了两个界中一个的符号,实测把 `bootstrap_upper_pp_max` 设为 99.0 会被接受并把温和负面 epoch 从退役观望翻成明确淘汰)。
+
+## 2026-07-29 - Codex repair (A-short Knife 8A Required and Optional)
+
+- **Verdict/Action**: Closed R-ASHORT-KNIFE8A-TERMINAL-BLOCK-MINIMUM-DECLARED-BUT-NEVER-READ and the reviewer-recorded Optional statistical-threshold duplication. The terminal 36-week block minimum now gates every terminal verdict; all existing P4a adjudication and public failed-gate statistical thresholds read and validate the sealed admission rather than code literals.
+- **Required**: No residual material Required for Knife 8A; closure detail is in docs/system_risk_register.md#R-ASHORT-KNIFE8A-TERMINAL-BLOCK-MINIMUM-DECLARED-BUT-NEVER-READ.
+- **Verify**: Fixed Python C:\Users\cnhea\AppData\Local\Programs\Python\Python313\python.exe -m unittest tests.test_a_short_overlay_adjudication tests.test_a_short_experiment_admission_registry = 40 OK / 7.195s. Fixed Python C:\Users\cnhea\AppData\Local\Programs\Python\Python313\python.exe .tools\full_pack_ledger.py run a_short Knife-8A-Required-and-Optional 1300 -- discover -s tests -p test_a_short*.py = 2080 OK, recorded 2026-07-29T11:30:40. Fixed Python -m unittest tests.test_doc_governance_guard tests.test_route_doc_ledger_status_consistency = 53 OK / 0.753s. git diff --check clean (CRLF warnings only).
+- **Next**: Claude Code: review.
+- **Pre-Codex self-review**: matrix=complete; register=updated; handoff=SESSION_LOG top entry; focused=40 OK; full-lane=2080 OK; scope=A-short 8A Required and reviewer-recorded Optional only.
+
 ## 2026-07-29 - Claude Code 审查 Pass-with-Required(第八刀 8A:P4a 终局差异门)
 
 - **Verdict/Action**: Pass-with-Required,已提交并合入 master。8A 的主修法成立:新函数 `_checkpoint_contract()` 从已封 admission 一次读出 checkpoint/difference/块 三组门并硬校验形状,terminal difference 门提到**所有**终局 verdict 之前(36 周 / 12 差异 / 负面数据由旧的 `do_not_promote` 变为 `continue_accumulating`),公开 checkpoint/progress 面也由同一份契约推导。**风险分级=comparison-only 低危**:`_adjudicate` 开头就有预冻结早返回,这是解冻后才咬人的潜伏缺陷而非现行实盘风险;按用户指令未起独立 agent,按 rule 4 未重跑执行方已记账的全量。但本刀顺手往契约里加了一个不生效的门,见 Required。

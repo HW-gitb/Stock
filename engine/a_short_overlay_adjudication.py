@@ -787,10 +787,39 @@ def _risk_metrics(rows: list[dict]) -> dict:
     return metrics
 
 
-def _checkpoint_contract() -> tuple[tuple[int, int, int], ...]:
-    """Read P4a's complete checkpoint gates from its sealed admission only."""
+def _statistical_contract() -> dict:
+    """Read P4a's complete statistical policy from its sealed admission only."""
     try:
         statistical = get_admission(ADMISSION_ID)["statistical_contract"]["definition"]
+        preliminary = statistical["preliminary"]
+        promotion = statistical["promotion"]
+        negative_at_36 = statistical["negative_at_36"]
+    except (KeyError, TypeError, ValueError) as exc:
+        raise OverlayAdjudicationError("P4a statistical contract is malformed") from exc
+    required_numbers = (
+        (preliminary, "mean_delta_pp_min", 0.0), (preliminary, "block_win_rate_min", 0.0),
+        (preliminary, "negative_mean_delta_pp_max", None),
+        (promotion, "mean_delta_pp_min", 0.0), (promotion, "bootstrap_lower_pp_min", 0.0),
+        (promotion, "signflip_p_max", 0.0), (promotion, "monthly_cluster_t_min", 0.0),
+        (promotion, "no_count_rate_pct_max", 0.0),
+        (negative_at_36, "mean_delta_pp_max", None), (negative_at_36, "bootstrap_upper_pp_max", None),
+    )
+    if (not isinstance(statistical, dict) or any(not isinstance(section, dict) or type(section.get(key)) not in (int, float)
+                                                   or not math.isfinite(float(section[key]))
+                                                   or (minimum is not None and float(section[key]) <= minimum)
+                                                   for section, key, minimum in required_numbers)
+            or preliminary["negative_mean_delta_pp_max"] >= 0
+            or negative_at_36["mean_delta_pp_max"] >= 0
+            or promotion["signflip_p_max"] > 1
+            or type(promotion.get("minimum_months")) is not int or promotion["minimum_months"] <= 0):
+        raise OverlayAdjudicationError("P4a statistical contract is malformed")
+    return statistical
+
+
+def _checkpoint_contract(statistical: dict | None = None) -> tuple[tuple[int, int, int], ...]:
+    """Read P4a's complete checkpoint gates from its sealed admission only."""
+    statistical = _statistical_contract() if statistical is None else statistical
+    try:
         checkpoints = statistical["eligible_checkpoints"]
         difference_minimums = statistical["difference_minimums"]
         block_minimums = statistical["nonoverlap_block_minimums"]
@@ -812,10 +841,12 @@ def _checkpoint_contract() -> tuple[tuple[int, int, int], ...]:
 
 def _adjudicate(rows: list[dict], mature: int, no_count: int) -> tuple[str, dict]:
     eligible, difference, blocks = len(rows), sum(not row["same_list"] for row in rows), _block_rows(rows)
-    preliminary, formal, terminal = _checkpoint_contract()
+    statistical = _statistical_contract()
+    preliminary, formal, terminal = _checkpoint_contract(statistical)
     preliminary_weeks, preliminary_difference, preliminary_blocks = preliminary
     formal_weeks, formal_difference, formal_blocks = formal
-    terminal_weeks, terminal_difference, _ = terminal
+    terminal_weeks, terminal_difference, terminal_blocks = terminal
+    preliminary_policy = statistical["preliminary"]; promotion_policy = statistical["promotion"]; negative_policy = statistical["negative_at_36"]
     values = [row["h10"]["delta_pct"] for row in rows]; block_values = [row["h10"]["delta_pct"] for row in blocks]
     metrics = {"eligible": eligible, "difference": difference, "blocks": len(blocks), "mean_delta": mean(values) if values else None,
                "block_win_rate": (sum(value > 0 for value in block_values) / len(block_values) if block_values else None),
@@ -830,17 +861,18 @@ def _adjudicate(rows: list[dict], mature: int, no_count: int) -> tuple[str, dict
     if not metrics["h5_coverage_ok"]: return "pending_h5_coverage", metrics
     if difference < preliminary_difference: return "insufficient_policy_separation", metrics
     if len(blocks) < preliminary_blocks: return "continue_accumulating", metrics
-    preliminary_positive = metrics["mean_delta"] >= .25 and metrics["block_win_rate"] >= .55 and metrics["risk_ok"]
-    preliminary_negative = metrics["mean_delta"] <= -.25 or not metrics["risk_ok"]
+    preliminary_positive = metrics["mean_delta"] >= preliminary_policy["mean_delta_pp_min"] and metrics["block_win_rate"] >= preliminary_policy["block_win_rate_min"] and metrics["risk_ok"]
+    preliminary_negative = metrics["mean_delta"] <= preliminary_policy["negative_mean_delta_pp_max"] or not metrics["risk_ok"]
     if eligible < formal_weeks: return ("preliminary_positive" if preliminary_positive else "preliminary_negative" if preliminary_negative else "continue_accumulating"), metrics
     h20_complete = metrics["h20_coverage_ok"]
     if not h20_complete: return "pending_h20_coverage", metrics
-    if difference < formal_difference or len(blocks) < formal_blocks or mature <= 0 or no_count / mature > .20: return "continue_accumulating", metrics
-    positive = preliminary_positive and metrics["bootstrap_lower"] is not None and metrics["bootstrap_lower"] >= .25 and metrics["signflip_p"] is not None and metrics["signflip_p"] <= .025 and metrics["months"] >= 6 and metrics["monthly_cluster_t"] is not None and metrics["monthly_cluster_t"] >= 2.0
+    if difference < formal_difference or len(blocks) < formal_blocks or mature <= 0 or no_count / mature > promotion_policy["no_count_rate_pct_max"] / 100.0: return "continue_accumulating", metrics
+    positive = preliminary_positive and metrics["mean_delta"] >= promotion_policy["mean_delta_pp_min"] and metrics["bootstrap_lower"] is not None and metrics["bootstrap_lower"] >= promotion_policy["bootstrap_lower_pp_min"] and metrics["signflip_p"] is not None and metrics["signflip_p"] <= promotion_policy["signflip_p_max"] and metrics["months"] >= promotion_policy["minimum_months"] and metrics["monthly_cluster_t"] is not None and metrics["monthly_cluster_t"] >= promotion_policy["monthly_cluster_t_min"]
     if eligible < terminal_weeks: return ("candidate_for_manual_promotion" if positive else "continue_accumulating"), metrics
     if difference < terminal_difference: return "continue_accumulating", metrics
+    if len(blocks) < terminal_blocks: return "continue_accumulating", metrics
     if positive: return "candidate_for_manual_promotion", metrics
-    if (metrics["mean_delta"] <= -.25 and metrics["bootstrap_upper"] is not None and metrics["bootstrap_upper"] < 0) or not metrics["risk_ok"]:
+    if (metrics["mean_delta"] <= negative_policy["mean_delta_pp_max"] and metrics["bootstrap_upper"] is not None and metrics["bootstrap_upper"] < negative_policy["bootstrap_upper_pp_max"]) or not metrics["risk_ok"]:
         return "do_not_promote", metrics
     return "inconclusive_retired_for_epoch", metrics
 
@@ -885,27 +917,28 @@ def build_public_summary(*, root: str | Path | None, as_of: str, epoch_context: 
 def _public_failed_gates(metrics: dict | None, *, eligible: int, blocks: int, mature: int, no_count: int) -> list[str]:
     if not metrics:
         return []
+    statistical = _statistical_contract(); preliminary_policy = statistical["preliminary"]; promotion_policy = statistical["promotion"]
     failed = []
     checks = (("candidate_excess_ok", "candidate_excess_vs_benchmarks"), ("drawdown_ok", "close_drawdown"),
               ("bad_ticket_ok", "bad_ticket_rate"), ("tail_ok", "tail_h10"),
               ("false_negative_ok", "false_negative_rate"), ("cash_ok", "cash_or_unfilled"),
               ("h5_coverage_ok", "h5_coverage"),
               ("h5_h20_not_both_adverse", "h5_h20_adverse"))
-    preliminary, formal, _ = _checkpoint_contract()
+    preliminary, formal, _ = _checkpoint_contract(statistical)
     preliminary_weeks, _, preliminary_blocks = preliminary
     formal_weeks, _, _ = formal
     failed.extend(name for key, name in checks if metrics.get(key) is False)
-    if eligible >= preliminary_weeks and metrics.get("mean_delta") is not None and metrics["mean_delta"] < .25:
+    if eligible >= preliminary_weeks and metrics.get("mean_delta") is not None and metrics["mean_delta"] < preliminary_policy["mean_delta_pp_min"]:
         failed.append("mean_delta")
-    if blocks >= preliminary_blocks and metrics.get("block_win_rate") is not None and metrics["block_win_rate"] < .55:
+    if blocks >= preliminary_blocks and metrics.get("block_win_rate") is not None and metrics["block_win_rate"] < preliminary_policy["block_win_rate_min"]:
         failed.append("nonoverlap_block_win_rate")
     if eligible >= formal_weeks:
         if metrics.get("h20_coverage_ok") is False: failed.append("h20_coverage")
-        if metrics.get("bootstrap_lower") is not None and metrics["bootstrap_lower"] < .25: failed.append("block_bootstrap_lower")
-        if metrics.get("signflip_p") is not None and metrics["signflip_p"] > .025: failed.append("block_signflip")
-        if metrics.get("months", 0) < 6: failed.append("monthly_cluster_coverage")
-        if metrics.get("monthly_cluster_t") is not None and metrics["monthly_cluster_t"] < 2.0: failed.append("monthly_cluster_t")
-        if mature and no_count / mature > .20: failed.append("no_count_rate")
+        if metrics.get("bootstrap_lower") is not None and metrics["bootstrap_lower"] < promotion_policy["bootstrap_lower_pp_min"]: failed.append("block_bootstrap_lower")
+        if metrics.get("signflip_p") is not None and metrics["signflip_p"] > promotion_policy["signflip_p_max"]: failed.append("block_signflip")
+        if metrics.get("months", 0) < promotion_policy["minimum_months"]: failed.append("monthly_cluster_coverage")
+        if metrics.get("monthly_cluster_t") is not None and metrics["monthly_cluster_t"] < promotion_policy["monthly_cluster_t_min"]: failed.append("monthly_cluster_t")
+        if mature and no_count / mature > promotion_policy["no_count_rate_pct_max"] / 100.0: failed.append("no_count_rate")
     return sorted(set(failed))
 
 
