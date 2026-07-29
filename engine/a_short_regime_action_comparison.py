@@ -756,6 +756,9 @@ def summarize_candidate_effect_records(records: list[dict]) -> dict:
             "forbidden_stock_underperformed_csi1000_count": underperformed,
             "status": selection_status,
         },
+        "source_hash": hashlib.sha256(json.dumps(
+            records, ensure_ascii=False, sort_keys=True, separators=(",", ":")
+        ).encode("utf-8")).hexdigest(),
         "verdict": verdict,
         "boundary": {"comparison_only": True, "automatic_production_switch": False},
     }

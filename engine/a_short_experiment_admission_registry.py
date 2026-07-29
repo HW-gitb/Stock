@@ -257,7 +257,7 @@ def _p3_admissions() -> dict[str, dict]:
     stats = {"primary_window": "h20", "hac": {"method": "newey_west", "maxlags": 4, "t_min": 2.0},
              "minimums": {"full_edge_forward_weeks": 26, "mature_managed_plans": 20},
              "operation": {"mean_improvement_pp_min": 0.30, "median": ">0", "favorable_week_ratio_min": 0.60,
-                           "max_drawdown_worsening_pp_max": 2.0}, "formal_hac_adjudication_implemented": False}
+                           "max_drawdown_worsening_pp_max": 2.0}, "formal_hac_adjudication_implemented": True}
     definitions = (
         ("p3_selected_vs_candidate_pool", "selected_set_vs_candidate_pool", "model_selection_policy", "candidate_pool_hold"),
         ("p3_selected_vs_csi1000", "selected_set_vs_csi1000", "model_selection_policy", "csi1000_hold"),

@@ -34,6 +34,7 @@ from runners.a_short_final_action_validation_runner import (  # noqa: E402
 from runners.a_short_phase5_engine import ATR_MULT  # noqa: E402
 from runners.a_short_target_policy_comparison_runner import _freeze_plan as freeze_p2_plan  # noqa: E402
 from engine import a_short_evidence_epoch_mode as _epoch_mode
+from engine.a_short_final_action_adjudication import adjudicate_full_edge
 from tests._a_short_epoch_mode_test_utils import enter_patched_epoch_modes, patched_epoch_modes
 
 
@@ -119,6 +120,14 @@ class FinalActionValidationTests(unittest.TestCase):
             enforced = _summary_from_ledger(ledger_for_current_mode(), "20260102")
         self.assertEqual(enforced["status"], "review_due")
         self.assertEqual([row["status"] for row in enforced["reminders"][:4]], ["review_due"] * 4)
+
+    def test_hac_adjudication_uses_all_frozen_gates_and_fails_closed_without_drawdown(self):
+        rows = [{"managed_minus_simple_hold_pct": 1.0, "managed_plan_count": 1,
+                 "drawdown_worsening_pct": 0.0} for _ in range(26)]
+        self.assertEqual(adjudicate_full_edge(rows, evidence_counts=True)["verdict"], "preliminary_edge_positive")
+        self.assertEqual(adjudicate_full_edge(rows, evidence_counts=False)["verdict"], "not_adjudicated")
+        self.assertEqual(adjudicate_full_edge([{key: value for key, value in row.items() if key != "drawdown_worsening_pct"}
+                                                for row in rows], evidence_counts=True)["verdict"], "not_adjudicated")
 
     def test_forward_tracker_runtime_drift_opens_a_new_epoch(self):
         """A code change upstream opens a new epoch; a comment there must not.

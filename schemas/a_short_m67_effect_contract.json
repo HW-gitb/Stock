@@ -598,7 +598,7 @@
       "id": "final_action_validation",
       "policy": "intentionally_independent",
       "schema_path": "schemas/a_short_final_action_validation_summary.schema.json",
-      "schema_sha256": "614075759ccc1b87ea4b0975923f870e8c486993cf4b0efe3c5302f0c5f14069",
+      "schema_sha256": "498719d368f21d495e7123acfcf25c64889009ff3cf8ad3cd3d40ffabfdce2a2",
       "reason": "P3 freezes an account-independent model-selection comparison and optional shared managed-exit evidence. Before future threshold reviews, independent re-review, and explicit user confirmation, it is prohibited from changing EGS, formal M6.7 action, star, sizing, cash allocation, stop, target, veto, or any production policy.",
       "owner": "runners/a_short_final_action_validation_runner.py + engine/a_short_managed_exit.py",
       "review_ref": "P3 forward review only after public reminder thresholds; HAC, P3b and production switching remain separately gated",

@@ -7,6 +7,20 @@
 - **Verify**: 本轮为执行非审查。实测：web `live_authorized_completed` / accepted 11 / drop 25（18 当周下限 + 5 + 1 + 1）/ `transport_response_counts {'tavily':3,'deepseek':2}` = call_count 5；X `live_authorized_no_accepted_sources` / accepted 0 / drop 38（15 `model_source_url_not_provider_annotated` + 14 + 6 + 3）/ `{'xai':3}`；merge `merged_theme_count 3, single 11, both 0, x_theme_count 0`。首次实测到别名漂移：请求 `deepseek-chat` → 服务 `deepseek-v4-flash`。花费：Tavily 3、DeepSeek 2、xAI 3。
 - **Next**: 用户决定是否再花一次调用查清 X annotations 的真因
 
+## 2026-07-29 - Claude Code 审查 Pass-with-Required(8C:P3 HAC 裁判 + P1 source_hash)
+
+- **Verdict/Action**: Pass-with-Required,提交并合入 master。8C 主体成立:新模块 `engine/a_short_final_action_adjudication.py` 实现 Newey-West(Bartlett 权 `1-k/(L+1)`,阈值全从已封 admission 读并硬校验形状),`formal_hac_adjudication_implemented` 由 False 翻 True,`public_verdict` 不再是常量;P1 公开摘要补上 `source_hash`(P3b 四字段的最后一块);P3 摘要 schema 新增 `adjudication` 节。但退化方差分支 fail-open,见 Required。**风险分级=comparison-only 低危**(`automatic_policy_switch: false`、预冻结早返回);未起 agent。
+- **Required**: 一条,新开 `docs/system_risk_register.md#R-ASHORT-P3-HAC-ZERO-VARIANCE-FAILS-OPEN-AND-EMITS-INFINITY`(P2,已登记随本刀放行):`_hac_t` 在长期方差 `<= 0` 时返回 `±inf`,既让 `hac_t` 门恒真放行正面裁决,又把裸 `Infinity` 写进公开 JSON。
+- **Verify**: review-evidence:bc84a23f8bd1。亲跑 5 个改动符号模块 = `110 OK / 44.2s / exit 0`;按 rule 4 未重跑——账本对本代码态已有 `CACHED GREEN a_short = 2090 OK`。**探针坐实**:26 周恒等 `0.30` + `evidence_counts=True` → `preliminary_edge_positive`、`hac_t=inf`、五门全 True;`json.dumps(allow_nan=False)` 抛 `Out of range float values are not JSON compliant`。对照组(同均值有波动)得 `hac_t=50.494` / `edge_not_proven`,证明门本身在工作、问题只在退化分支。
+- **Next**: Codex:修复该 Required。
+
+## 2026-07-29 - Codex implementation (A-short 8C P3 HAC adjudication and P1 source binding)
+
+- **Verdict/Action**: Implemented 8C: P3 now computes the governed Newey-West HAC verdict from settled full-edge evidence, including a same-window close-drawdown worsening gate; its public verdict is no longer hardcoded. P1 public summaries bind a canonical record `source_hash`; P3b continues to consume only schema-valid, non-placeholder external verdicts. All paths remain pre-freeze and comparison-only: no selection, M6.7 action, provider, account, order, or production switch changed.
+- **Required**: Independent Claude Code review. The pre-8C tracked P1 summary lacks the newly required source hash and is correctly excluded until the normal one-click P1 sidecar rewrites it; full details and closure controls: `docs/system_risk_register.md#R-ASHORT-KNIFE8C-LEGACY-P1-PUBLIC-SUMMARY-HAS-NO-SOURCE-HASH`.
+- **Verify**: Fixed Python focused suites: final-action validation 9 OK; regime action comparison 28 OK; candidate-effect sidecar regression 1 OK; sidecar-health plus effect-contract 27 OK. Fixed Python `.tools\\full_pack_ledger.py run a_short "Knife 8C: P3 HAC adjudication, public verdict truth, P1 source binding" "Fixed Python focused P3, P1 source_hash, sidecar-health and effect-contract regression suites passed." 1300 -- discover -s tests -p "test_a_short*.py"` = 2090 OK, recorded 2026-07-29T14:02:13.
+- **Next**: Claude Code: review.
+- **Pre-Codex self-review**: matrix=complete; register=updated; handoff=SESSION_LOG top entry; focused=65 OK; full-lane=2090 OK; scope=A-short 8C only.
 
 ## 2026-07-29 - Claude Code 复审 PASS(P5b 治理数字重复已按单一来源收口)
 

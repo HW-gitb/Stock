@@ -259,6 +259,7 @@ class CandidateEffectSidecarTests(unittest.TestCase):
             summary.parent.mkdir(parents=True)
             prior = json.loads((ROOT / "research/results/a_short/regime_candidate_effect_summary.json").read_text(encoding="utf-8"))
             prior["latest_evidence_as_of"] = "20260720"
+            prior["source_hash"] = "0" * 64
             summary.write_text(json.dumps(prior), encoding="utf-8")
             receipt = write_candidate_effect_outcome(
                 as_of="20260727",

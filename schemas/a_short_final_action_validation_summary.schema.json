@@ -3,7 +3,7 @@
   "title": "a_short_final_action_validation_summary",
   "type": "object",
   "additionalProperties": false,
-  "required": ["schema_name", "schema_version", "summary_id", "as_of", "data_through", "status", "comparison_only", "automatic_policy_switch", "verdict", "evidence_epoch_fingerprint", "latest_evidence_as_of", "source_hash", "admissions", "round_trip_cost_pct", "hold_based_forward_weeks", "full_edge_forward_weeks", "hold_based", "full_edge", "first_forward_live_as_of", "reminders", "message", "production_unchanged"],
+  "required": ["schema_name", "schema_version", "summary_id", "as_of", "data_through", "status", "comparison_only", "automatic_policy_switch", "verdict", "adjudication", "evidence_epoch_fingerprint", "latest_evidence_as_of", "source_hash", "admissions", "round_trip_cost_pct", "hold_based_forward_weeks", "full_edge_forward_weeks", "hold_based", "full_edge", "first_forward_live_as_of", "reminders", "message", "production_unchanged"],
   "properties": {
     "schema_name": {"const": "a_short_final_action_validation_summary"},
     "schema_version": {"const": "1.0.0"},
@@ -14,6 +14,7 @@
     "comparison_only": {"const": true},
     "automatic_policy_switch": {"const": false},
     "verdict": {"enum": ["not_adjudicated", "preliminary_edge_positive", "edge_not_proven", "edge_negative"]},
+    "adjudication": {"type": "object", "additionalProperties": false, "required": ["verdict", "progress", "reason"], "properties": {"verdict": {"enum": ["not_adjudicated", "preliminary_edge_positive", "edge_not_proven", "edge_negative"]}, "progress": {"type": "object"}, "reason": {"type": "string", "minLength": 1}}},
     "evidence_epoch_fingerprint": {"type": ["string", "null"]},
     "latest_evidence_as_of": {"type": ["string", "null"]},
     "source_hash": {"type": ["string", "null"]},

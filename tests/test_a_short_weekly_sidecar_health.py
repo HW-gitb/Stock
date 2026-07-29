@@ -59,6 +59,7 @@ def _candidate_summary(*, latest_evidence_as_of):
          )
     )
     payload["latest_evidence_as_of"] = latest_evidence_as_of
+    payload["source_hash"] = "0" * 64
     return payload
 
 

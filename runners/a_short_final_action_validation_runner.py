@@ -34,6 +34,7 @@ from engine.a_short_managed_exit import (
 )
 from runners.a_short_phase5_engine import ATR_MULT
 from engine.a_short_experiment_admission_registry import admission_snapshot, p3b_external_comparison_tracks
+from engine.a_short_final_action_adjudication import adjudicate_full_edge
 
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -442,6 +443,36 @@ def _load_execution_cache(path: str | Path | None) -> dict[str, list[dict[str, A
     return by_code
 
 
+def _close_drawdown_pct(values: list[float]) -> float:
+    peak = values[0]; worst = 0.0
+    for value in values:
+        peak = max(peak, value)
+        worst = max(worst, (peak - value) / peak * 100.0)
+    return round(worst, 8)
+
+
+def _outcome_drawdowns(outcome: dict[str, Any], rows: list[dict[str, Any]]) -> tuple[float, float]:
+    """Return managed and simple-hold close drawdowns over the same settled H20 interval."""
+    entry_date, h20_date, entry_price = outcome["entry_date"], outcome["h20_date"], _number(outcome["entry_price"])
+    window = [row for row in rows if entry_date <= str(row.get("trade_date")) <= h20_date]
+    if not window:
+        raise FinalActionValidationError("execution_drawdown_window_missing")
+    events_by_date: dict[str, list[dict[str, Any]]] = {}
+    for event in outcome["events"]:
+        events_by_date.setdefault(str(event["trade_date"]), []).append(event)
+    cash, remaining, managed_nav, simple_nav = 0.0, 1.0, [], []
+    for row in window:
+        for event in events_by_date.get(str(row.get("trade_date")), []):
+            weight, price = _number(event["weight"]), _number(event["price"])
+            cash += weight * price / entry_price; remaining -= weight
+        close = _number(row.get("close"))
+        managed_nav.append(cash + remaining * close / entry_price)
+        simple_nav.append(close / entry_price)
+    if remaining < -1e-9:
+        raise FinalActionValidationError("execution_drawdown_events_oversell")
+    return _close_drawdown_pct(managed_nav), _close_drawdown_pct(simple_nav)
+
+
 def _settle_full_edge(record: dict[str, Any], execution_rows: dict[str, list[dict[str, Any]]] | None) -> None:
     hold = record.get("hold_result") or {}
     selected_codes = record.get("selected_codes") or []
@@ -455,7 +486,7 @@ def _settle_full_edge(record: dict[str, Any], execution_rows: dict[str, list[dic
     if execution_rows is None:
         record["full_edge_result"] = {"status": "no_count", "reason": "execution_cache_unavailable"}
         return
-    outcomes = []
+    outcomes, managed_drawdowns, simple_drawdowns = [], [], []
     for code in selected_codes:
         rows = execution_rows.get(code)
         if not rows:
@@ -466,6 +497,8 @@ def _settle_full_edge(record: dict[str, Any], execution_rows: dict[str, list[dic
             record["full_edge_result"] = {"status": "no_count", "reason": str(outcome.get("reason") or "managed_exit_unavailable")}
             return
         outcomes.append(_number(outcome.get("net_return_pct")))
+        managed_drawdown, simple_drawdown = _outcome_drawdowns(outcome, rows)
+        managed_drawdowns.append(managed_drawdown); simple_drawdowns.append(simple_drawdown)
     managed = sum(outcomes) / len(outcomes)
     record["full_edge_result"] = {
         "status": "settled",
@@ -473,6 +506,9 @@ def _settle_full_edge(record: dict[str, Any], execution_rows: dict[str, list[dic
         "managed_minus_simple_hold_pct": round(managed - _number(hold["selected_h20_net_pct"]), 8),
         "managed_minus_csi1000_pct": round(managed - _number(hold["csi1000_h20_return_pct"]), 8),
         "managed_plan_count": len(outcomes),
+        "managed_close_drawdown_pct": round(sum(managed_drawdowns) / len(managed_drawdowns), 8),
+        "simple_hold_close_drawdown_pct": round(sum(simple_drawdowns) / len(simple_drawdowns), 8),
+        "drawdown_worsening_pct": round(sum(managed_drawdowns) / len(managed_drawdowns) - sum(simple_drawdowns) / len(simple_drawdowns), 8),
         "round_trip_cost_pct": ROUND_TRIP_COST_PCT,
     }
 
@@ -577,7 +613,8 @@ def _summary_from_ledger(ledger: dict[str, Any], as_of: str) -> dict[str, Any]:
         months_ready = (datetime.strptime(as_of, "%Y%m%d") - datetime.strptime(first_forward, "%Y%m%d")).days >= 365
         if months_ready:
             ship_status = "review_due"
-    public_verdict = "not_adjudicated"
+    adjudication = adjudicate_full_edge(edges, evidence_counts=counts)
+    public_verdict = adjudication["verdict"]
     external_verdicts = _valid_external_public_verdicts()
     p3b_ready = _p3b_ready(public_verdict, external_verdicts)
     reminders = [
@@ -605,6 +642,7 @@ def _summary_from_ledger(ledger: dict[str, Any], as_of: str) -> dict[str, Any]:
         "comparison_only": True,
         "automatic_policy_switch": False,
         "verdict": public_verdict,
+        "adjudication": adjudication,
         "evidence_epoch_fingerprint": epoch_fingerprint,
         "latest_evidence_as_of": max((record["decision_date"] for record in valid), default=None),
         "source_hash": latest_source_hash,
@@ -640,7 +678,7 @@ def unavailable_public_summary(as_of: str) -> dict[str, Any]:
                       "managed_plan_count": 0, "managed_minus_simple_hold": _stats([]),
                       "managed_minus_csi1000": _stats([])},
         "first_forward_live_as_of": None,
-        "verdict": "not_adjudicated", "evidence_epoch_fingerprint": None,
+        "verdict": "not_adjudicated", "adjudication": {"verdict": "not_adjudicated", "progress": {}, "reason": "evidence_unavailable"}, "evidence_epoch_fingerprint": None,
         "latest_evidence_as_of": None, "source_hash": None,
         "admissions": admission_snapshot(*ADMISSION_IDS),
         "hold_based_forward_weeks": 0, "full_edge_forward_weeks": 0,

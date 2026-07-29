@@ -356,3 +356,23 @@
 ### 下一步注意事项（转 8D1）
 
 「终局分支必须卡最小值」这条要求现在**只以本 handoff 的散文形式存在**，没有机器可读载体；而且 **P5b 至今没有任何 `nonoverlap_block_minimums` 来源**。执行方选择删断言而不是编数字，这个取舍是对的（不记录一条没有出处的要求），但 8D1 开工时必须显式决定 P5b 要不要非重叠块门 —— 要就先在 preset 补齐，不要就只按差异下限设门，别照抄 P4a。
+
+## 2026-07-29 追加：8C 完成 P3 HAC 裁判 + 打通 P3b 可达性
+
+### 改了什么
+
+- 新模块 `engine/a_short_final_action_adjudication.py`：Newey-West HAC t（Bartlett 权 `1 - k/(L+1)`，`maxlags` 与 `t_min` 全从已封 `p3_managed_exit_vs_hold` admission 读并硬校验形状），五道门（mean / median / favorable_ratio / hac_t / drawdown）全过才给 `preliminary_edge_positive`。
+- `engine/a_short_experiment_admission_registry.py`：`formal_hac_adjudication_implemented` 由 `False` 翻 `True`（P3 admission 身份随之变化，预冻结期无代价）。
+- `runners/a_short_final_action_validation_runner.py`：`public_verdict` 不再是硬编码常量，改由 `adjudicate_full_edge(edges, evidence_counts=...)` 产出并进 `adjudication` 节；新增 `_outcome_drawdowns` / `_close_drawdown_pct` 供 drawdown 门用。
+- `engine/a_short_regime_action_comparison.py`：P1 公开摘要补上 `source_hash` —— 这是 P3b 四字段里 P1 缺的最后一块。
+- P3 / P1 两份摘要 schema 同步。
+
+### 验证命令与结果
+
+- 审查方亲跑 `tests.test_a_short_final_action_validation + regime_comparison_runner + weekly_sidecar_health + effect_contract + experiment_admission_registry` = `110 OK / 44.2s / exit 0`；账本对本代码态已有 `CACHED GREEN a_short = 2090 OK`（rule 4，未重跑）。
+- **HAC 实现按公式核对无误**：`γ₀ + 2·Σ(1 - k/(L+1))·γ_k`，`lag = min(maxlags, n-1)`，`t = mean / sqrt(LRV/n)`，教科书 Newey-West。
+- **对照组证明门在工作**：同均值但有波动的 26 周序列得 `hac_t = 50.494`、verdict `edge_not_proven`（均值差一点没到 0.30）。
+
+### 下一步注意事项
+
+一条 open Required：`docs/system_risk_register.md#R-ASHORT-P3-HAC-ZERO-VARIANCE-FAILS-OPEN-AND-EMITS-INFINITY`（P2）。`_hac_t` 在长期方差 `<= 0` 时返回 `±inf`，两条腿：① `hac_t` 门对 `inf` 恒真 → 恒定周效应（上游写占位常量的典型 signature）会被判成 `preliminary_edge_positive`，**方向是 fail-open**；② 该 `inf` 进 `adjudication.progress.hac_t`，而 `progress` schema 无约束、写盘没有 `allow_nan=False`，公开 JSON 里会出现裸 `Infinity` 字面量。修法：退化时返回 `None`（门已有 `is not None` 判据，改完即 fail-closed），并给 writer 加 `allow_nan=False`。
