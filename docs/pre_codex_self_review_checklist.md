@@ -19,13 +19,15 @@
 7. **独立自审限时**:轻量自审 `2-3 minutes`(2-3 分钟)无结果即 `close and restart once`；该 restart 仅限同一已排程窗口的超时/传输故障，不得作为内容性复审。`second timeout` 仍无结果时 `do not keep waiting`,停止等待并在 SESSION_LOG 说明 timeout。此时走 `main-thread checklist fallback`:主线程按 A-F/B2 自查 + 已跑固定验证包作测试证据,不得无限等 agent。子 agent 只有通过上述固定主 Python launcher 且获批准的 host-process execution 时才跑测试;否则只做逻辑/契约审查。
 8. **documented material-new-risk exception**:只有修复引入新的、独立的安全/资金/生产边界疑点时，才可额外开一个独立审查窗口；SESSION_LOG 必须写明新风险类别和为何原窗口不能覆盖。不得以“更放心”或未完成主线程排查为由加开。
 9. **Proof-of-use 必写速度证据**:SESSION_LOG 的 `Pre-Codex self-review` 行要写明是否使用轻量自审、是否发生 timeout/重启、是否触发 main-thread checklist fallback、固定包是否集中一次跑完；若开例外窗口，写明 material-new-risk 理由。这样未来审查能看见是否又退回慢路径。
-10. **repair-closeout matrix 不可跳过**:开始改前，从最新 `SESSION_LOG` / risk register 抄出本轮所有 `Required` 和用户接受的 `Optional`，逐项标记“待修 / 已修 / 不适用(理由)”。交出前矩阵不得有未分类项；更新 `system_risk_register.md` 的当前状态、更新独立 handoff（及索引），`CURRENT` 只在有 settled 事实时才更新。修复 entry 的 `Pre-Codex self-review` 必须带 `matrix=`、`register=`、`handoff=`、`focused=`、`full-lane=` 五个字段；这不是聊天承诺，而是 post-adoption SESSION_LOG guard 的机器门。
+10. **repair-closeout matrix 不可跳过**:开始改前，从最新 `SESSION_LOG` / risk register 抄出本轮所有 `Required` 和用户接受的 `Optional`，逐项标记“待修 / 已修 / 不适用(理由)”。交出前矩阵不得有未分类项；更新 `system_risk_register.md` 的当前状态、更新独立 handoff（及索引），`CURRENT` 只在有 settled 事实时才更新。修复 entry 的 `Pre-Codex self-review` 必须带 `matrix=`、`register=`、`handoff=`、`focused=`、`full-lane=`、`door=` 六个字段；这不是聊天承诺，而是 post-adoption SESSION_LOG guard 的机器门。
 
 ### 0.11 共同流程 / 分系统验证（边界）
 
 `repair-closeout matrix` 是 **A-short/US-short 共用** 的执行/修复流程：`matrix=`、`register=`、`handoff=` 记录共同的闭环责任；`focused=`、`full-lane=` 则必须记录本次实际触及的系统和 lane。不得把 A-short 的 preflight、Python、provider 或测试命令当成 US-short 的默认要求，也不得反向套用。
 
 `full-lane=` 是“本 lane 的完整回归处置”，不是每次修复都强制跑全量：触发 `AGENTS` rule 3 时，写明对应 lane 的一次完整运行及结果；未触发时必须写 `not_triggered: AGENTS rule 3; reason=<具体变更面>`。因此共同流程强制留下可审计的决定和证据，而分系统验证仍按各自运行入口、数据边界和测试包执行。
+
+`door=` 是**交接门**，与 lane 无关、无条件：交出前跑一次 `.githooks/pre-commit` 那两个守卫（`tests.test_route_doc_ledger_status_consistency` + `tests.test_doc_governance_guard`），把终端结果贴进来（例：`door=route 14 OK + doc-governance 41 OK`）。理由是这两个守卫在**每一次** commit 都会跑，所以任何要被提交的修复本来就必须先过它们；把结果前移到交接时，等于把提交门变成交接门，**不需要**任何「改动面 → 守卫」映射表（那种表每加一刀就会过期，且不全时反而给出假安全感）。跑不了就写 `door=BLOCKED: <原因>`——这不是占位符，让阻塞可见正是目的；写 `TBD` / `n/a` / 留空会被守卫判红。反例来自 K3-R81：一次 `AGENTS.md` 改动的 `focused=44 OK` 属实但一个文档守卫都没有，红要到审查才暴露。
 
 ## A. 类不修实例(class-not-instance)
 改 classifier / validator / enum / 形式集 / 布尔门 / 不变式 时:

@@ -765,6 +765,22 @@ class DocGovernanceGuard(unittest.TestCase):
     # and both verification tiers.
     REPAIR_CLOSEOUT_MARKER = "EXECUTOR-REPAIR-CLOSEOUT-MARKER"
     REPAIR_CLOSEOUT_FIELDS = ("matrix=", "register=", "handoff=", "focused=", "full-lane=")
+    # Handoff door (2026-07-29, user-directed). `.githooks/pre-commit` runs
+    # tests.test_route_doc_ledger_status_consistency + tests.test_doc_governance_guard on EVERY
+    # commit, so any repair that will be committed must already pass them. Requiring the executor to
+    # paste that terminal result turns an UNCONDITIONAL door into handoff-time evidence, which is
+    # why this needs no changed-surface→guard mapping table (the rejected alternative: such a table
+    # goes stale every time a knife is added, and an incomplete table gives false assurance).
+    # Concretely: K3-R81 shipped an AGENTS.md edit whose `focused=44 OK` was truthful but contained
+    # no document guard at all, and the red only surfaced at review. A blocked run is recorded as
+    # `door=BLOCKED: <why>`, deliberately NOT a placeholder — a visible blocker is the point.
+    REPAIR_DOOR_MARKER = "EXECUTOR-REPAIR-DOOR-MARKER"
+    REPAIR_DOOR_FIELD = "door="
+    # A field that is present but says nothing is the same defect as an absent field.
+    DOOR_PLACEHOLDERS = frozenset({
+        "", "-", "--", "tbd", "todo", "n/a", "na", "none", "pending", "xxx", "?", "??", "...",
+        "占位", "待定", "未跑", "skipped", "skip", "see above", "见上",
+    })
     # require an ACTUAL labeled proof line (optional list marker, half/full-width colon), NOT a prose
     # mention of the token (R-PRECODEX-CHECKLIST-HANDOFF-PROOF-LABEL-FALSE-NEGATIVE — the same prose-vs-
     # labeled-line class as the original bug, this time in the guard itself).
@@ -850,6 +866,27 @@ class DocGovernanceGuard(unittest.TestCase):
             missing = tuple(field for field in cls.REPAIR_CLOSEOUT_FIELDS if field not in proof)
             if missing:
                 offenders.append(("repair-closeout-fields", header[:50], missing))
+        return offenders
+
+    @classmethod
+    def _repair_door_offenders(cls, zone_text):
+        """A post-adoption `修复` entry must paste the pre-commit door's terminal result."""
+        offenders = []
+        parts = re.split(r"(?m)^## (\d{4}-\d{2}-\d{2}) [—–-] ", zone_text)
+        for i in range(1, len(parts), 2):
+            lines = parts[i + 1].splitlines()
+            header = lines[0] if lines else ""
+            if "修复" not in header:
+                continue
+            proof = next((line for line in lines
+                          if re.match(r"^\s*-\s+\*\*Pre-Codex self-review\*\*\s*[:：]", line)), "")
+            if cls.REPAIR_DOOR_FIELD not in proof:
+                offenders.append(("door-field-missing", header[:50]))
+                continue
+            value = proof.split(cls.REPAIR_DOOR_FIELD, 1)[1].split(";")[0]
+            value = value.strip().strip("`").strip().rstrip(".。").strip()
+            if value.lower() in cls.DOOR_PLACEHOLDERS:
+                offenders.append(("door-field-placeholder", header[:50], value))
         return offenders
 
     def test_review_cycle_minimal_template_enforced_above_marker(self):
@@ -1056,6 +1093,38 @@ class DocGovernanceGuard(unittest.TestCase):
                         "missing handoff closeout field must turn the guard red")
         self.assertEqual(self._repair_closeout_offenders(compliant), [],
                          "complete repair closeout evidence must be accepted")
+
+    def test_executor_repair_door_evidence_enforced_above_marker(self):
+        log = (ROOT / "docs" / "SESSION_LOG.md").read_text(encoding="utf-8")
+        self.assertIn(self.REPAIR_DOOR_MARKER, log,
+                      "SESSION_LOG lost the executor repair-door adoption marker")
+        zone = log.split(self.REPAIR_DOOR_MARKER, 1)[0]
+        self.assertEqual(self._repair_door_offenders(zone), [],
+                         "post-adoption repair entry lacks pre-commit-door evidence")
+
+    def test_executor_repair_door_guard_planted(self):
+        base = ("- **Pre-Codex self-review**: matrix=all; register=updated; handoff=updated; "
+                "focused=2 OK; full-lane=1 OK")
+        head = "## 2026-07-29 — Codex 修复 (R-TEST-FOO)\n"
+        missing = head + base + "\n"
+        placeholder = head + base + "; door=TBD\n"
+        empty = head + base + "; door=; next=whatever\n"
+        compliant = head + base + "; door=route 14 OK + doc-governance 41 OK\n"
+        blocked = head + base + "; door=BLOCKED: pinned host Python unavailable\n"
+        self.assertTrue(self._repair_door_offenders(missing),
+                        "a repair entry with no door= field must turn the guard red")
+        self.assertTrue(self._repair_door_offenders(placeholder),
+                        "door=TBD says nothing and must turn the guard red")
+        self.assertTrue(self._repair_door_offenders(empty),
+                        "an empty door= value must turn the guard red")
+        self.assertEqual(self._repair_door_offenders(compliant), [],
+                         "a pasted door result must be accepted")
+        self.assertEqual(self._repair_door_offenders(blocked), [],
+                         "an explicit BLOCKED door is evidence, not a placeholder")
+        self.assertEqual(
+            self._repair_door_offenders("## 2026-07-29 — Claude Code 审查 PASS (R-TEST-FOO)\n"
+                                        "- **Verdict/Action**: PASS\n"), [],
+            "a non-修复 entry is out of this gate's scope")
 
     # R-DOCGOV-SESSIONLOG-ORPHANED-REVIEW-ENTRY-GAP: one SESSION_LOG `##` entry records ONE review-cycle
     # action → exactly one `Verdict/Action` bullet. >1 means a prior entry's review bullets were ORPHANED
@@ -1342,6 +1411,11 @@ class DocGovernanceGuard(unittest.TestCase):
                       "AGENTS must document the pinned Codex host Python")
         self.assertIn("Never accept a silent schema skip", agents,
                       "AGENTS lost the no-silent-schema-skip rule")
+        # K3-R81: this sentence was silently deleted by a rule-4 rewrite and nothing noticed,
+        # because no assertion covered it. Pinning it here is the fold-in recorded at that closure.
+        self.assertIn("do not wrap it in `Start-Process` or concatenate it into one "
+                      "`ArgumentList` string", agents,
+                      "AGENTS lost the direct-argv warning for the rule-4 / launcher invocation")
 
         result = subprocess.run(
             [str(launcher), "tests.test_doc_governance_guard.JsonschemaImportSmoke"],
