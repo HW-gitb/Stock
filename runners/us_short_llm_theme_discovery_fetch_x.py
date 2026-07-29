@@ -11,10 +11,11 @@ import hashlib
 import json
 import os
 import re
+import threading
 import urllib.parse
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Any
+from typing import Any, Callable
 
 from runners import us_short_llm_theme_discovery_fetch_web as web
 from engine.us_short_schema_formats import FORMAT_CHECKER
@@ -38,6 +39,63 @@ MAX_X_QUERIES = 15
 
 class XThemeDiscoveryError(ValueError):
     """The bounded X discovery packet cannot be consumed safely."""
+
+
+def _make_live_capabilities() -> tuple[
+    Callable[..., object], Callable[[object], bool], Callable[[], object], Callable[[object], None],
+]:
+    """Keep the normal X runner path one-shot; this is not a security boundary.
+
+    Same contract and same in-process limit as the web lane: closure inspection can forge this
+    bookkeeping, so only downstream raw-receipt/hash re-derivation is relied on for refusing a
+    label without intact evidence.  Tickets are held as objects, never as `id()` values, so a
+    leaked address cannot validate a later unrelated object.
+    """
+    issuer = object()
+    issued_tickets: set[object] = set()
+    ticket_lock = threading.Lock()
+
+    class LiveTransport:
+        def __init__(self, supplied_issuer: object, providers: tuple[str, ...]):
+            if supplied_issuer is not issuer:
+                raise XThemeDiscoveryError("live transport capability is runner-private")
+            self._completed = {provider: 0 for provider in providers}
+
+        def _record_completed_response(self, provider: str) -> None:
+            if provider not in self._completed:
+                raise XThemeDiscoveryError("unknown live transport provider")
+            self._completed[provider] += 1
+
+        def _snapshot(self) -> dict[str, int]:
+            return dict(self._completed)
+
+        def _consume_ticket(self, ticket: object | None) -> bool:
+            with ticket_lock:
+                if ticket is None or ticket not in issued_tickets:
+                    return False
+                issued_tickets.discard(ticket)
+                return True
+
+    def new_transport(*providers: str) -> object:
+        return LiveTransport(issuer, providers or ("xai",))
+
+    def is_transport(candidate: object) -> bool:
+        return isinstance(candidate, LiveTransport)
+
+    def issue_ticket() -> object:
+        ticket = object()
+        with ticket_lock:
+            issued_tickets.add(ticket)
+        return ticket
+
+    def revoke_ticket(ticket: object) -> None:
+        with ticket_lock:
+            issued_tickets.discard(ticket)
+
+    return new_transport, is_transport, issue_ticket, revoke_ticket
+
+
+_new_live_transport, _is_live_transport, _issue_live_ticket, _revoke_live_ticket = _make_live_capabilities()
 
 
 def _source_id(locator: str) -> str:
@@ -405,7 +463,8 @@ def build_x_fetch_packet(
     execution_mode: str = "offline_fake_client", network_access_performed: bool = False,
     provider_calls_performed: bool = False,
     network_call_count: int = 0, provider_call_count: int = 0,
-    _live_transport: web._LiveTransport | None = None,
+    _live_transport: object | None = None,
+    _live_ticket: object | None = None,
     extra_drop_ledger: list[dict[str, str]] | None = None,
     provider_annotation_urls: Any = None,
     grok_model_identity: dict[str, Any] | None = None,
@@ -419,7 +478,10 @@ def build_x_fetch_packet(
     web._validate_fetch_clock(fetched, generated)
     if execution_mode not in {"offline_fake_client", "live_authorized"}:
         raise XThemeDiscoveryError("invalid execution mode")
-    if execution_mode == "live_authorized" and not isinstance(_live_transport, web._LiveTransport):
+    if execution_mode == "live_authorized" and (
+        not _is_live_transport(_live_transport)
+        or not _live_transport._consume_ticket(_live_ticket)
+    ):
         raise XThemeDiscoveryError("live packet requires response-derived runner transport")
     if not isinstance(network_call_count, int) or not isinstance(provider_call_count, int) or network_call_count < 0 or provider_call_count < 0:
         raise XThemeDiscoveryError("execution call counts must be non-negative integers")
@@ -568,7 +630,7 @@ def execute_live_x_orchestration(
 
 
 class GrokXSearchClient:
-    def __init__(self, api_key: str, *, timeout: float = 45.0, _live_transport: web._LiveTransport | None = None):
+    def __init__(self, api_key: str, *, timeout: float = 45.0, _live_transport: object | None = None):
         _require_single_xai_api_key(api_key)
         try:
             from openai import OpenAI
@@ -588,15 +650,10 @@ class GrokXSearchClient:
             raise XThemeDiscoveryError(f"Grok X request failed: {type(exc).__name__}") from exc
 
 
-def run_x_fetch(*, queries: list[str] | tuple[str, ...], expected_decision_date: str, generated_at: str, x_client: Any | None = None, confirm_user_authorization: bool = False, live: bool = False, raw_root: Path | None = None):
+def _run_x_fetch(*, queries: list[str] | tuple[str, ...], expected_decision_date: str, generated_at: str, x_client: Any | None = None, confirm_user_authorization: bool = False, live: bool = False, raw_root: Path | None = None, _new_transport: Callable[..., object] = _new_live_transport, _issue_ticket: Callable[[], object] = _issue_live_ticket, _revoke_ticket: Callable[[object], None] = _revoke_live_ticket):
     queries = _safe_queries(queries)
     web._decision_date(expected_decision_date)
     if live:
-        # User-directed K3-R34 freeze.  This guard must precede the provider
-        # client/key path and the live-budget reservation.
-        raise XThemeDiscoveryError(
-            "live execution is frozen pending separately authorized provider-shape validation"
-        )
         if not confirm_user_authorization:
             raise XThemeDiscoveryError("live execution requires --confirm-user-authorization")
         if x_client is not None:
@@ -605,13 +662,17 @@ def run_x_fetch(*, queries: list[str] | tuple[str, ...], expected_decision_date:
         web._reserve_provider_budget(
             "x", "xai", expected_decision_date, call_count=len(queries), query_scope=queries,
         )
-        transport = web._new_live_transport("xai")
+        transport = _new_transport("xai")
         client = GrokXSearchClient(api_key, _live_transport=transport)
         outcome = execute_live_x_orchestration(
             queries=queries, expected_decision_date=expected_decision_date, client=client,
         )
         fetched_now = outcome["fetched_at"]
-        return build_x_fetch_packet(queries=queries, results=outcome["results"], grok_response=outcome["grok_response"], expected_decision_date=expected_decision_date, generated_at=fetched_now.isoformat(), fetched_at=fetched_now.isoformat(), raw_root=raw_root, persist_raw=True, execution_mode="live_authorized", _live_transport=transport, extra_drop_ledger=outcome["query_drops"], provider_annotation_urls=outcome["annotation_urls"], grok_model_identity=outcome["grok_model_identity"], grok_attempted=outcome["grok_attempted"], grok_failed=outcome["grok_failed"])
+        ticket = _issue_ticket()
+        try:
+            return build_x_fetch_packet(queries=queries, results=outcome["results"], grok_response=outcome["grok_response"], expected_decision_date=expected_decision_date, generated_at=fetched_now.isoformat(), fetched_at=fetched_now.isoformat(), raw_root=raw_root, persist_raw=True, execution_mode="live_authorized", _live_transport=transport, _live_ticket=ticket, extra_drop_ledger=outcome["query_drops"], provider_annotation_urls=outcome["annotation_urls"], grok_model_identity=outcome["grok_model_identity"], grok_attempted=outcome["grok_attempted"], grok_failed=outcome["grok_failed"])
+        finally:
+            _revoke_ticket(ticket)
     if x_client is None:
         raise XThemeDiscoveryError("offline mode requires an injected fake X client")
     responses: list[str] = []
@@ -637,6 +698,18 @@ def run_x_fetch(*, queries: list[str] | tuple[str, ...], expected_decision_date:
     # K3-R64: fake-client output is not exempt from the raw-content gate.
     offline_raw_root = web._validate_raw_root(raw_root or DEFAULT_RAW_ROOT, require_gitignored=True)
     return build_x_fetch_packet(queries=queries, results=results, grok_response=combined, expected_decision_date=expected_decision_date, generated_at=generated_at, raw_root=offline_raw_root, persist_raw=True, provider_annotation_urls=annotation_urls, extra_drop_ledger=query_drops + response_drops)
+
+
+def _bind_live_runner(run_impl: Callable[..., Any], new_transport: Callable[..., object], issue_ticket: Callable[[], object], revoke_ticket: Callable[[object], None]) -> Callable[..., Any]:
+    """Bind normal-path bookkeeping here; closure placement is not an authorization boundary."""
+    def runner(*, queries: list[str] | tuple[str, ...], expected_decision_date: str, generated_at: str, x_client: Any | None = None, confirm_user_authorization: bool = False, live: bool = False, raw_root: Path | None = None):
+        return run_impl(queries=queries, expected_decision_date=expected_decision_date, generated_at=generated_at, x_client=x_client, confirm_user_authorization=confirm_user_authorization, live=live, raw_root=raw_root, _new_transport=new_transport, _issue_ticket=issue_ticket, _revoke_ticket=revoke_ticket)
+    return runner
+
+
+run_x_fetch = _bind_live_runner(_run_x_fetch, _new_live_transport, _issue_live_ticket, _revoke_live_ticket)
+del _make_live_capabilities, _new_live_transport, _issue_live_ticket, _revoke_live_ticket
+del _run_x_fetch, _bind_live_runner
 
 
 def _combine_grok_responses(responses: list[str]) -> tuple[str, list[dict[str, str]]]:
@@ -741,6 +814,8 @@ def main(argv: list[str] | None = None) -> int:
     print(json.dumps(summary, ensure_ascii=False, sort_keys=True))
     return 0
     return 0
+
+
 
 
 if __name__ == "__main__":

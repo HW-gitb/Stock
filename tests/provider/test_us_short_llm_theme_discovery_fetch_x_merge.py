@@ -4,6 +4,7 @@ import hashlib
 import json
 import tempfile
 import unittest
+from datetime import datetime, timezone
 from pathlib import Path
 from types import SimpleNamespace
 from unittest import mock
@@ -19,6 +20,17 @@ X_ROWS = [
     {"url": "https://x.example/post/1", "title": "Power post", "text": "AAPL and CEG power demand", "created_at": "2026-07-24T11:00:00Z"},
     {"url": "https://x.example/post/2", "title": "Utility post", "text": "VST generation buildout", "created_at": "2026-07-23T11:00:00Z"},
 ]
+
+
+class _TransportProbe:
+    def __init__(self, *providers):
+        self._completed = {provider: 0 for provider in providers}
+
+    def _record_completed_response(self, provider):
+        self._completed[provider] += 1
+
+    def _snapshot(self):
+        return dict(self._completed)
 
 
 class XFetchAndMergeTests(unittest.TestCase):
@@ -39,6 +51,77 @@ class XFetchAndMergeTests(unittest.TestCase):
         refs = [xfetch._source_id(row["url"]) for row in X_ROWS]
         return json.dumps({"themes": [{"theme_id": "power_demand", "display_name": "Power demand", "summary": "Power demand", "observed_at": "2026-07-24T12:00:00Z", "source_ref_ids": refs, "members": [{"ticker": "AAPL", "source_ref_ids": refs}, {"ticker": "CEG", "source_ref_ids": refs}, {"ticker": "VST", "source_ref_ids": refs}]}]})
 
+    @staticmethod
+    def _closure_cells(function):
+        return dict(zip(function.__code__.co_freevars, (
+            cell.cell_contents for cell in function.__closure__ or ()
+        )))
+
+    def _forge_web_live_label_by_closure(self):
+        """Reproduce the cheapest in-process R77 forge without any provider activity.
+
+        This is intentionally not a proof that a ticket is secure: arbitrary same-process Python can
+        reach the runner factory and the captured mutable registry.  The two callers below prove the
+        load-bearing downstream alternatives instead: no sources earn zero knife-2 members, and a
+        source whose frozen bytes no longer hash is refused by merge before knife-2.
+        """
+        runner_cells = self._closure_cells(web.run_web_fetch)
+        transport = runner_cells["new_transport"]()
+        consume_cells = self._closure_cells(type(transport)._consume_ticket)
+        forged_ticket = object()
+        consume_cells["issued_tickets"].add(forged_ticket)
+        transport._record_completed_response("tavily")
+        return transport, forged_ticket
+
+    def test_closure_forged_live_label_without_sources_is_refused_by_knife_2(self):
+        """K3-R77: a live label alone cannot buy a theme, member, or soft-boost point."""
+        transport, ticket = self._forge_web_live_label_by_closure()
+        wa, wr, _ = web.build_web_fetch_packet(
+            queries=["power"], search_results=[], llm_response='{"themes":[]}',
+            expected_decision_date="20260725", generated_at="2026-07-25T08:00:00Z",
+            execution_mode="live_authorized", _live_transport=transport, _live_ticket=ticket,
+        )
+        xa, xr, _ = xfetch.build_x_fetch_packet(
+            queries=["power"], results=[], grok_response='{"themes":[]}',
+            expected_decision_date="20260725", generated_at="2026-07-25T08:00:00Z",
+        )
+        merged, _ = merge_web_x_discovery(
+            web_artifact=wa, web_receipt=wr, x_artifact=xa, x_receipt=xr,
+            expected_decision_date="20260725", generated_at="2026-07-25T08:00:00Z",
+        )
+        self.assertEqual(merged["themes"], [])
+        from runners.us_short_provisional_theme_validate import ProvisionalThemeValidationError
+        with self.assertRaises(ProvisionalThemeValidationError):
+            self._chain_points(merged)
+
+    def test_closure_forged_live_label_with_tampered_raw_is_refused_before_knife_2(self):
+        """K3-R77: merge re-hashes forged-labelled raw bytes; weakening that re-derivation turns this red."""
+        with temporary_provider_directory(web.ROOT) as td:
+            transport, ticket = self._forge_web_live_label_by_closure()
+            wa, wr, _ = web.build_web_fetch_packet(
+                queries=["power"],
+                search_results=[{
+                    "url": "https://web.example/forged-live", "title": "Power",
+                    "content": "AAPL original provider-shaped bytes", "published_date": "2026-07-24T10:00:00Z",
+                }],
+                llm_response='{"themes":[]}', expected_decision_date="20260725",
+                generated_at="2026-07-25T08:00:00Z", raw_root=Path(td) / "web", persist_raw=True,
+                execution_mode="live_authorized", _live_transport=transport, _live_ticket=ticket,
+            )
+            xa, xr, _ = xfetch.build_x_fetch_packet(
+                queries=["power"], results=[], grok_response='{"themes":[]}',
+                expected_decision_date="20260725", generated_at="2026-07-25T08:00:00Z",
+            )
+            raw_path = web.ROOT / wr["source_refs"][0]["raw_receipt_ref"]
+            raw_payload = json.loads(raw_path.read_text(encoding="utf-8"))
+            raw_payload["content"] = "AAPL substituted bytes"
+            raw_path.write_text(json.dumps(raw_payload), encoding="utf-8")
+            with self.assertRaises(ThemeDiscoveryMergeError):
+                merge_web_x_discovery(
+                    web_artifact=wa, web_receipt=wr, x_artifact=xa, x_receipt=xr,
+                    expected_decision_date="20260725", generated_at="2026-07-25T08:00:00Z",
+                )
+
     def test_x_fake_client_is_offline_and_pit_bound(self):
         discovery, receipt, summary = xfetch.build_x_fetch_packet(
             queries=["power"], results=X_ROWS, grok_response=self._x_response(),
@@ -48,22 +131,6 @@ class XFetchAndMergeTests(unittest.TestCase):
         self.assertFalse(receipt["fetch_contract"]["network_access_performed"])
         self.assertEqual(len(discovery["themes"]), 1)
         self.assertEqual(summary["accepted_source_count"], 2)
-
-    def test_x_live_freeze_blocks_before_client_key_or_reservation(self):
-        """K3-R34 covers X separately: no client construction, key read, or spend reservation."""
-        with (
-            mock.patch.object(xfetch, "GrokXSearchClient") as client,
-            mock.patch.object(web, "_reserve_provider_budget") as reserve,
-            mock.patch.object(xfetch.os.environ, "get", side_effect=AssertionError("key lookup reached")) as key_lookup,
-        ):
-            with self.assertRaisesRegex(xfetch.XThemeDiscoveryError, "live execution is frozen"):
-                xfetch.run_x_fetch(
-                    queries=["power"], expected_decision_date="20260725",
-                    generated_at="2026-07-25T08:00:00Z", confirm_user_authorization=True, live=True,
-                )
-        client.assert_not_called()
-        reserve.assert_not_called()
-        key_lookup.assert_not_called()
 
     def test_x_credential_rejects_whitespace_and_concatenated_markers(self):
         valid = "xai-" + "a" * 32
@@ -180,15 +247,6 @@ class XFetchAndMergeTests(unittest.TestCase):
             "served_model": "grok-4.5",
             "system_fingerprints": ["fp-first", "fp-last"],
         })
-
-    def test_live_x_entrypoint_still_freezes_before_the_orchestration_runs(self):
-        with mock.patch.object(xfetch, "execute_live_x_orchestration") as orchestration:
-            with self.assertRaisesRegex(xfetch.XThemeDiscoveryError, "live execution is frozen"):
-                xfetch.run_x_fetch(
-                    queries=["q"], expected_decision_date="20260725",
-                    generated_at="2026-07-25T08:00:00Z", confirm_user_authorization=True, live=True,
-                )
-        orchestration.assert_not_called()
 
     def test_bad_grok_response_is_dropped_per_query(self):
         good = self._x_response()
@@ -811,17 +869,57 @@ class XFetchAndMergeTests(unittest.TestCase):
             _, without_floor, _ = packet("2026-03-02T13:22:06Z")
         self.assertEqual(without_floor["summary"]["accepted_source_count"], 1)
 
+    def test_x_unverified_results_or_citations_shapes_fail_closed_to_annotation_only(self):
+        """K3-R34 Optional (c): guessed dict fields cannot become provider-attested rows."""
+        url = "https://x.example/annotation-only"
+        response = SimpleNamespace(
+            output_text='{"themes":[]}', results={"url": url}, citations={"url": url},
+            output=[SimpleNamespace(content=[SimpleNamespace(annotations=[
+                SimpleNamespace(type="url_citation", url=url),
+            ])])],
+        )
+        self.assertEqual(xfetch._provider_result_rows(response), [])
+        self.assertEqual(xfetch._provider_annotation_urls(response), [url])
+        with mock.patch.object(response, "results", [{"url": url, "title": "P", "text": "CEG", "created_at": "2026-07-24T12:00:00Z"}]):
+            rows = xfetch._provider_result_rows(response)
+        self.assertEqual(rows[0]["_evidence_attestation"], "provider_attested")
+
+    def test_x_live_mode_requires_confirmation_then_reserves_before_orchestration(self):
+        with mock.patch.object(xfetch.os.environ, "get", side_effect=AssertionError("key lookup reached")) as key_lookup:
+            with self.assertRaisesRegex(xfetch.XThemeDiscoveryError, "requires --confirm-user-authorization"):
+                xfetch.run_x_fetch(
+                    queries=["power"], expected_decision_date="20260725",
+                    generated_at="2026-07-25T08:00:00Z", live=True,
+                )
+        key_lookup.assert_not_called()
+
+        order: list[str] = []
+        outcome = {
+            "results": [], "grok_response": '{"themes":[]}', "query_drops": [],
+            "fetched_at": datetime(2026, 7, 25, 8, tzinfo=timezone.utc), "annotation_urls": [],
+            "grok_model_identity": xfetch._grok_model_identity(), "grok_attempted": False, "grok_failed": False,
+        }
+        with (
+            mock.patch.object(xfetch.os.environ, "get", return_value="xai-" + "x" * 40),
+            mock.patch.object(xfetch.web, "_reserve_provider_budget", side_effect=lambda *_args, **_kwargs: order.append("reserve")),
+            mock.patch.object(xfetch, "GrokXSearchClient"),
+            mock.patch.object(xfetch, "execute_live_x_orchestration", side_effect=lambda **_: order.append("orchestrate") or outcome),
+            mock.patch.object(xfetch, "build_x_fetch_packet", return_value=({}, {}, {})),
+        ):
+            xfetch.run_x_fetch(
+                queries=["power"], expected_decision_date="20260725",
+                generated_at="2026-07-25T08:00:00Z", confirm_user_authorization=True, live=True,
+            )
+        self.assertEqual(order, ["reserve", "orchestrate"])
+
     def test_x_live_receipt_binds_grok_requested_and_served_model(self):
         """K3-R69: model aliases are not replayable evidence without provider-served identity."""
         identity = xfetch._grok_model_identity(
             served_model="grok-4.5", system_fingerprints=["fp-b", "fp-a", "fp-a"],
         )
-        transport = web._new_live_transport("xai")
-        transport._record_completed_response("xai")
         _, receipt, _ = xfetch.build_x_fetch_packet(
             queries=["power"], results=X_ROWS, grok_response=self._x_response(),
             expected_decision_date="20260725", generated_at="2026-07-25T08:00:00Z",
-            execution_mode="live_authorized", _live_transport=transport,
             grok_model_identity=identity, grok_attempted=True,
         )
         self.assertEqual(receipt["fetch_contract"]["grok_model"], {
@@ -830,15 +928,7 @@ class XFetchAndMergeTests(unittest.TestCase):
             "system_fingerprints": ["fp-a", "fp-b"],
         })
 
-        missing_identity_transport = web._new_live_transport("xai")
-        missing_identity_transport._record_completed_response("xai")
-        with self.assertRaisesRegex(xfetch.XThemeDiscoveryError, "requested and served model identity"):
-            xfetch.build_x_fetch_packet(
-                queries=["power"], results=X_ROWS, grok_response=self._x_response(),
-                expected_decision_date="20260725", generated_at="2026-07-25T08:00:00Z",
-                execution_mode="live_authorized", _live_transport=missing_identity_transport,
-                grok_attempted=True,
-            )
+        self.assertIsNone(xfetch._grok_model_identity()["served_model"])
 
     def test_x_orchestration_carries_provider_model_identity_into_live_receipt(self):
         class Client:
@@ -852,12 +942,9 @@ class XFetchAndMergeTests(unittest.TestCase):
         outcome = xfetch.execute_live_x_orchestration(
             queries=["power"], expected_decision_date="20260725", client=Client(),
         )
-        transport = web._new_live_transport("xai")
-        transport._record_completed_response("xai")
         _, receipt, _ = xfetch.build_x_fetch_packet(
             queries=["power"], results=outcome["results"], grok_response=outcome["grok_response"],
             expected_decision_date="20260725", generated_at="2026-07-25T08:00:00Z",
-            execution_mode="live_authorized", _live_transport=transport,
             grok_model_identity=outcome["grok_model_identity"],
             grok_attempted=outcome["grok_attempted"], grok_failed=outcome["grok_failed"],
         )
@@ -867,6 +954,58 @@ class XFetchAndMergeTests(unittest.TestCase):
             "system_fingerprints": ["fp-live"],
         })
 
+    def test_x_direct_builder_rejects_a_minted_completed_live_transport(self):
+        transport = _TransportProbe("xai")
+        transport._record_completed_response("xai")
+        for _ in range(2):
+            with self.assertRaisesRegex(xfetch.XThemeDiscoveryError, "response-derived runner transport"):
+                xfetch.build_x_fetch_packet(
+                    queries=["power"], results=[], grok_response='{"themes":[]}',
+                    expected_decision_date="20260725", generated_at="2026-07-25T08:00:00Z",
+                    execution_mode="live_authorized", _live_transport=transport, _live_ticket=object(),
+                )
+
+    def test_x_runner_ticket_is_consumed_and_cannot_replay_a_live_receipt(self):
+        self.assertFalse(hasattr(xfetch, "_issue_live_ticket"))
+        self.assertNotIn("_issue_ticket", xfetch.run_x_fetch.__kwdefaults__ or {})
+        transport = _TransportProbe("xai")
+        transport._record_completed_response("xai")
+        args = {
+            "queries": ["power"], "results": [], "grok_response": '{"themes":[]}',
+            "expected_decision_date": "20260725", "generated_at": "2026-07-25T08:00:00Z",
+            "execution_mode": "live_authorized", "_live_transport": transport,
+            "_live_ticket": object(),
+        }
+        for _ in range(2):
+            with self.assertRaisesRegex(xfetch.XThemeDiscoveryError, "response-derived runner transport"):
+                xfetch.build_x_fetch_packet(**args)
+
+    def test_x_live_runner_closure_can_authorize_its_own_completed_transport_once(self):
+        class Client:
+            def __init__(self, *_args, _live_transport=None, **_kwargs):
+                self._live_transport = _live_transport
+
+        def orchestration(*, client, **_kwargs):
+            client._live_transport._record_completed_response("xai")
+            return {
+                "results": [], "grok_response": '{"themes":[]}', "query_drops": [],
+                "fetched_at": datetime(2026, 7, 25, 8, tzinfo=timezone.utc), "annotation_urls": [],
+                "grok_model_identity": xfetch._grok_model_identity(),
+                "grok_attempted": False, "grok_failed": False,
+            }
+
+        with (
+            mock.patch.object(xfetch, "_require_single_xai_api_key", return_value="xai-" + "a" * 40),
+            mock.patch.object(xfetch.web, "_reserve_provider_budget"),
+            mock.patch.object(xfetch, "GrokXSearchClient", Client),
+            mock.patch.object(xfetch, "execute_live_x_orchestration", side_effect=orchestration),
+        ):
+            _, receipt, _ = xfetch.run_x_fetch(
+                queries=["power"], expected_decision_date="20260725",
+                generated_at="2026-07-25T08:00:00Z", confirm_user_authorization=True, live=True,
+            )
+        self.assertEqual(receipt["fetch_contract"]["execution_mode"], "live_authorized")
+        self.assertEqual(receipt["fetch_contract"]["transport_response_counts"], {"xai": 1})
     def test_raw_ticker_match_requires_uppercase_bare_form_or_explicit_cashtag(self):
         prose = {"source_type": "web", "title": "", "content": "The market had a mixed session. It closed on a soft note, so all eyes are on Friday."}
         uppercase = {"source_type": "web", "title": "CEG expands generation", "content": ""}
