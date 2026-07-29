@@ -98,6 +98,33 @@ class AdmissionRegistryTests(unittest.TestCase):
         self.assertEqual({row["component_id"] for row in p5}, {"industry_weight_profile"})
         self.assertEqual(len({row["identity_sha256"] for row in p5}), 3)
 
+    def test_p5b_adjudication_uses_the_preset_clock_as_its_only_numeric_source(self) -> None:
+        definition = admissions()["p5_balanced_vs_legacy"]["statistical_contract"]["definition"]
+        p5b = definition["p5b_adjudication_governance"]
+        self.assertEqual(p5b["p_value_method"], "engine.a_short_overlay_adjudication._signflip_p")
+        self.assertEqual(
+            [int(checkpoint) for checkpoint in p5b["checkpoint_stages"]],
+            definition["clock"]["checkpoints"],
+        )
+        self.assertNotIn("difference_minimums", p5b)
+        self.assertNotIn("nonoverlap_block_minimums", p5b)
+        self.assertNotIn("terminal_branches_require_difference_and_nonoverlap_minimums", p5b)
+
+        original_load = registry._load
+
+        def changed_p5_governance(path):
+            payload = original_load(path)
+            if Path(path).name == "a_short_industry_weight_comparison_governance_20260722.json":
+                payload["clock_contract"]["difference_minimums"] = [7, 12, 18]
+            return payload
+
+        with mock.patch.object(registry, "_load", side_effect=changed_p5_governance):
+            changed = registry._p5_admissions()["p5_balanced_vs_legacy"]
+        self.assertEqual(
+            changed["statistical_contract"]["definition"]["clock"]["difference_minimums"],
+            [7, 12, 18],
+        )
+
     def test_statistical_pit_and_dependency_drift_invalidates_a_registered_identity(self) -> None:
         admission = copy.deepcopy(admissions()["p2_target_exit_policy"])
         for field, mutate in (

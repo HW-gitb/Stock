@@ -1,5 +1,20 @@
 # Session Log
 
+## 2026-07-29 - Claude Code 复审 PASS(P5b 治理数字重复已按单一来源收口)
+
+- **Verdict/Action**: PASS,提交并合入 master。`p5b_adjudication_governance` 缩到只剩本次裁决**新增**的两项——`p_value_method` 与 `checkpoint_stages`(12=preliminary / 24=formal / 36=terminal);`difference_minimums`、裸 `checkpoints` 列表与 `terminal_branches_require_...` 断言全删,数值门只留在 preset 的 `clock_contract`。新测试把 `checkpoint_stages` 键集绑到 `clock.checkpoints`,并 patch preset 为 `[7,12,18]` 断言 admission 跟着变。**风险分级=comparison-only 低危**;未起 agent。
+- **Required**: 无。`docs/system_risk_register.md#R-ASHORT-P5B-GOVERNANCE-NUMBERS-DUPLICATED-ACROSS-PRESET-AND-ADMISSION` 转 closed 并带审查方实测。一条转 8D1 的残留见 Next。
+- **Verify**: review-evidence:a4038c2fb41f。亲跑 `experiment_admission_registry + p3b_governance + target_policy_adjudication` = `21 OK / 0.7s / exit 0`。因本刀改三个 P5 已封 admission 的身份(rule 3b),我调账本全量,得 `CACHED GREEN a_short = 2089 OK`——执行方已在同一代码态记账,账本判本次运行冗余并跳过。单一来源亲证:`p5b_adjudication_governance` 现仅两键;`clock.checkpoints` / `clock.difference_minimums` 与 preset 逐项相等;全 admissions 里 `nonoverlap_block_minimums` 仅剩 P4a 自己 1 处,P5 侧零残留。
+- **Next**: 合入 master。转 8D1 的残留(不阻断):「终局分支必须卡最小值」现在只以 handoff 散文存在、无机器载体,且 **P5b 至今没有任何 `nonoverlap_block_minimums` 来源**。执行方选择删断言而非编数字,取舍正确;但 8D1 开工时必须显式决定 P5b 要不要非重叠块门,要就先在 preset 补齐。
+
+## 2026-07-29 - Codex repair (A-short 8D0 P5 governance single-source Required)
+
+- **Verdict/Action**: Repaired `R-ASHORT-P5B-GOVERNANCE-NUMBERS-DUPLICATED-ACROSS-PRESET-AND-ADMISSION`: P5 admission now reads every numeric clock gate solely from `presets/a_short_industry_weight_comparison_governance_20260722.json#clock_contract`. Its 8D0 governance keeps only the sign-flip method and 12/24/36 phase semantics; the unsupported terminal non-overlap-minimum assertion is removed rather than assigned an invented threshold. P5 remains pre-freeze, comparison-only, and unimplemented; no selection, P3, P5b adjudicator, EGS, M6.7, provider, account, order, or production path changed.
+- **Required**: Independent Claude Code review of the repair and the open P3 register entry; closure details and controls are in `docs/system_risk_register.md#R-ASHORT-P5B-GOVERNANCE-NUMBERS-DUPLICATED-ACROSS-PRESET-AND-ADMISSION`.
+- **Verify**: Fixed Python `C:\Users\cnhea\AppData\Local\Programs\Python\Python313\python.exe -m unittest tests.test_a_short_experiment_admission_registry tests.test_a_short_industry_weight_comparison tests.test_a_short_p3b_governance` = 29 OK / 7.762s. Fixed Python `.tools\full_pack_ledger.py run a_short "Knife 8D0 P5 governance single-source Required repair" "P5 clock thresholds are sourced only from the preset; focused admission/P5 regression suite passed." 1300 -- discover -s tests -p "test_a_short*.py"` = 2089 OK, recorded 2026-07-29T13:06:32. `git diff --check` clean (CRLF warnings only).
+- **Next**: Claude Code: review.
+- **Pre-Codex self-review**: matrix=complete; register=updated; handoff=SESSION_LOG top entry; focused=29 OK; full-lane=2089 OK; scope=A-short 8D0 Required only.
+
 ## 2026-07-29 - Claude Code 审查 Pass-with-Required(8D0′ 四项落 governance + 8B 完成 P2)
 
 - **Verdict/Action**: Pass-with-Required,提交并合入 master。8D0′ 落地正确:P3b 名单与「是否已实现裁判器」下沉进 `p3b_external_comparison_tracks()`,P5 已入列,`:516` 文件名死分支修好,未实现裁判器的轨被跳过,`>= 2` 语义按裁决不变。8B 完成 P2:新模块 `a_short_target_policy_adjudication`(83 行,阈值全从已封 admission 读、不进指纹),公开摘要 schema 补齐四个 required 字段,breakout 轨只出报告 + 占位 verdict。**风险分级=comparison-only 低危**;未起 agent、未跑全量。

@@ -2,12 +2,16 @@
 
 ### R-ASHORT-P5B-GOVERNANCE-NUMBERS-DUPLICATED-ACROSS-PRESET-AND-ADMISSION - 8D0″ 把已在 preset 冻结的检查点/差异下限又抄进了 admission
 
-- **状态 / 严重度**: open P3，已随 8D0′+8B 一同合入（closeout gate 第 3 条：material Required 可「已登记」后放行）。comparison-only 且预冻结，今天没有任何裁判器读它，所以不产生错误结论；P3 而非更低，是因为它正是本轮用户裁决明令禁止的那一类，且会在 8D1 开工时咬人。
+- **状态 / 严重度**: **closed P3（2026-07-29 Codex 修复，Claude Code 复审 PASS）**。原为 open P3、随 8D0′+8B 一同合入。comparison-only 且预冻结，今天没有任何裁判器读它，所以不产生错误结论；P3 而非更低，是因为它正是本轮用户裁决明令禁止的那一类，且会在 8D1 开工时咬人。
 - **机制**: `engine/a_short_experiment_admission_registry.py::_p5_admissions` 新增的 `p5b_adjudication_governance` 里写了 `checkpoints {"12":"preliminary","24":"formal","36":"terminal"}` 与 `difference_minimums {"12":6,"24":12,"36":18}`。但 `presets/a_short_industry_weight_comparison_governance_20260722.json` 的 `clock_contract` **已经**冻结了同样的数：`checkpoints [12,24,36]`、`difference_minimums [6,12,18]`。两份形状还不同（list vs dict），没有任何东西把它们绑住。
 - **为何 material**: 用户 2026-07-29 的裁决与同日 handoff 明写「四项一律进 governance / registry，**代码里不得再出现第二份副本**（本批已两次栽在这条）」。8D1 的裁判器只会读其中一份；改了 preset 而 admission 不跟（或反之），就会静默用错门槛 —— 与条目 5 的硬编码检查点、8A 的装饰性块下限同型，本批第三次。
 - **Required repair**: `p5b_adjudication_governance` 只保留本次裁决**新增**的信息 —— `p_value_method` 与 `checkpoints` 的**阶段映射**（12=preliminary / 24=formal / 36=terminal），把 `difference_minimums` 与裸 `checkpoints` 列表删掉，由 8D1 从 preset 的 `clock_contract` 读；若确要留在 admission，则必须加一条守护断言两处逐项相等（改一处不改另一处必须红）。
 - **顺带（同条目一并处理）**: 新块里写了 `terminal_branches_require_difference_and_nonoverlap_minimums: True`，但 **P5b 的 `nonoverlap_block_minimums` 在 preset 与 admission 里都不存在** —— 8D1 会拿到一条「必须同时卡非重叠块下限」的要求却没有数。要么在 preset 补齐这组数，要么把该断言改成只约束 difference。
 - **Closure tests**: (1) 改 preset 的 `clock_contract.difference_minimums` 后，读该值的那条路径结果跟着变（或守护测试转红）；(2) admission 里不再有第二份 `difference_minimums`；(3) `nonoverlap_block_minimums` 要么有唯一来源、要么该断言不再提它。
+- **Repair candidate 2026-07-29 (Codex; independent review required)**: `p5b_adjudication_governance` 现只保留 8D0 新增的 `p_value_method` 与 `checkpoint_stages` 语义映射；删除第二份 `difference_minimums` 与裸 `checkpoints`，P5 admission 的数值时钟只由 preset `clock_contract` 读取。由于 P5 尚无经用户冻结的 `nonoverlap_block_minimums` 数值，已删除未接线的“终局必须卡该下限”断言，而非臆造一组门槛。`tests.test_a_short_experiment_admission_registry` 的新守护会在 mock 改动 preset 差异下限后断言 admission 随之改变，并拒绝 P5b governance 重新携带差异/非重叠阈值。固定主 Python 聚焦包 29 OK；修复后 full ledger `a_short` 2089 OK / recorded `2026-07-29T13:06:32`。待 Claude Code 独立复审决定是否关闭。
+- **Closure 2026-07-29（Codex 修复，Claude Code 复审 PASS）**: `p5b_adjudication_governance` 缩到只剩本次裁决**新增**的两项——`p_value_method` 与 `checkpoint_stages`（12=preliminary / 24=formal / 36=terminal）；`difference_minimums`、裸 `checkpoints` 列表、以及那条 `terminal_branches_require_...` 断言全部删除，数值门只留在 preset 的 `clock_contract`。新测试把 `checkpoint_stages` 的键集绑到 `definition["clock"]["checkpoints"]`，并 patch `registry._load` 把 preset 的 `difference_minimums` 改成 `[7,12,18]`、断言 admission 的 `clock` 跟着变。
+- **审查方独立验证**: 实测 `p5b_adjudication_governance` 现仅含两键；`clock.checkpoints [12,24,36]` 与 `clock.difference_minimums [6,12,18]` 与 preset 逐项相等（单一来源成立）；全 admissions 里 `nonoverlap_block_minimums` 仅剩 P4a 自己那 1 处，P5 侧零残留。
+- **残留（转 8D1 处置，不阻断）**: 「终局分支必须卡最小值」这条要求现在只以 handoff 散文形式存在，没有机器可读载体；且 **P5b 至今没有任何 `nonoverlap_block_minimums` 来源**。执行方选择删断言而不是编数字，这个取舍是对的（不记录一条没有出处的要求），但 8D1 开工时必须显式决定 P5b 到底要不要非重叠块门，要就先在 preset 补齐。
 
 ### R-ASHORT-P4A-NEGATIVE-BOUND-VALIDATION-IS-ASYMMETRIC - 负面终局门的两个界只校验了一个的符号
 

@@ -298,9 +298,9 @@ def _p5_admissions() -> dict[str, dict]:
                 # and its public surface remain 8D1 work.
                 "p5b_adjudication_governance": {
                     "p_value_method": "engine.a_short_overlay_adjudication._signflip_p",
-                    "checkpoints": {"12": "preliminary", "24": "formal", "36": "terminal"},
-                    "difference_minimums": {"12": 6, "24": 12, "36": 18},
-                    "terminal_branches_require_difference_and_nonoverlap_minimums": True,
+                    # The phase names are the 8D0 decision.  Numeric clock
+                    # gates remain solely in the preset clock contract above.
+                    "checkpoint_stages": {"12": "preliminary", "24": "formal", "36": "terminal"},
                 },
             }, dependencies=deps,
             dependents=["a_short_p4_stage3_rank_source"],

@@ -295,7 +295,7 @@
 - 12 周：只出 `preliminary_positive` / `preliminary_negative` / 继续积累，不定案。
 - 24 周：可出正式结论（需 h20 全覆盖 + bootstrap + sign-flip + 月度聚类等正式门）。
 - 36 周：可出终局结论（含退役 epoch）。
-**吸取 8A 的教训**：12/24/36 每档的差异下限（6/12/18）与非重叠块下限必须拦住**该档的所有终局分支**，不能只拦晋级；并且每个写进 registry 的门都必须真有读点——8A 就出过「声明了却没人读」的 Required。
+**吸取 8A 的教训**：12/24/36 每档的差异下限（6/12/18，唯一来源是 preset 的 `clock_contract`）必须拦住**该档的所有终局分支**，不能只拦晋级；每个写进 registry 的门都必须真有读点——8A 就出过「声明了却没人读」的 Required。**注意（2026-07-29 更正）**：P5b **没有** `nonoverlap_block_minimums`，preset 与 admission 里都不存在（那是 P4a 独有的）。8D1 开工时必须显式决定 P5b 要不要非重叠块门：要，就先在 preset 补齐这组数再实现；不要，就只按差异下限设门，别照抄 P4a。
 
 ### 落地顺序
 
@@ -340,3 +340,19 @@
 ### 下一步注意事项
 
 一条 open Required：`docs/system_risk_register.md#R-ASHORT-P5B-GOVERNANCE-NUMBERS-DUPLICATED-ACROSS-PRESET-AND-ADMISSION` —— `p5b_adjudication_governance` 把 preset `clock_contract` 已冻的 `checkpoints` 与 `difference_minimums` 又抄了一份（形状还不同：list vs dict），无任何绑定；且它断言「终局分支必须同时卡非重叠块下限」，而 P5b 的 `nonoverlap_block_minimums` 在 preset 与 admission 里都不存在。修完再进 8C。
+
+## 2026-07-29 追加：P5b 治理数字重复已按单一来源收口
+
+### 改了什么
+
+`engine/a_short_experiment_admission_registry.py::_p5_admissions` 里的 `p5b_adjudication_governance` 缩到只剩本次用户裁决**新增**的两项：`p_value_method`（指向 `_signflip_p`）与 `checkpoint_stages`（12=preliminary / 24=formal / 36=terminal）。`difference_minimums`、裸 `checkpoints` 列表、以及 `terminal_branches_require_difference_and_nonoverlap_minimums` 断言全部删除——数值门只留在 preset 的 `clock_contract`。
+
+### 验证命令与结果
+
+- 审查方亲跑 `tests.test_a_short_experiment_admission_registry + tests.test_a_short_p3b_governance + tests.test_a_short_target_policy_adjudication` = `21 OK / 0.7s / exit 0`。本刀改三个 P5 已封 admission 的身份（rule 3b），调账本全量得 `CACHED GREEN a_short = 2089 OK` —— 执行方已在同一代码态记账，账本判本次运行冗余并跳过。
+- **单一来源亲证**：`p5b_adjudication_governance` 现仅两键；`clock.checkpoints [12,24,36]` 与 `clock.difference_minimums [6,12,18]` 与 preset 逐项相等；全 admissions 里 `nonoverlap_block_minimums` 仅剩 P4a 自己那 1 处，P5 侧零残留。
+- 新测试的绑定方式是对的：把 `checkpoint_stages` 的键集绑到 `definition["clock"]["checkpoints"]`，再 patch `registry._load` 把 preset 的 `difference_minimums` 改成 `[7,12,18]`、断言 admission 的 `clock` 跟着变 —— 改 preset 不改代码就能让结果变，正是本批反复要求的那条不变式。
+
+### 下一步注意事项（转 8D1）
+
+「终局分支必须卡最小值」这条要求现在**只以本 handoff 的散文形式存在**，没有机器可读载体；而且 **P5b 至今没有任何 `nonoverlap_block_minimums` 来源**。执行方选择删断言而不是编数字，这个取舍是对的（不记录一条没有出处的要求），但 8D1 开工时必须显式决定 P5b 要不要非重叠块门 —— 要就先在 preset 补齐，不要就只按差异下限设门，别照抄 P4a。
