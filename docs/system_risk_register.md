@@ -2,13 +2,14 @@
 
 ### R-ASHORT-P4A-NEGATIVE-BOUND-VALIDATION-IS-ASYMMETRIC - 负面终局门的两个界只校验了一个的符号
 
-- **状态 / 严重度**: open P3（Optional 级，不阻断；2026-07-29 由 Claude Code 复审 8A Required 修复时发现）。comparison-only 且预冻结，已封值为 `0.0` 属正常，无 EGS 选股、M6.7、provider、账户或订单影响。
+- **状态 / 严重度**: **closed P3（2026-07-29 Codex 修复，Claude Code 复审 PASS；状态行由审查方在收口时翻正——执行方只补了 closure 段没翻状态，本批第三次同型）**。原为 Optional 级、不阻断，由 Claude Code 复审 8A Required 修复时发现。comparison-only 且预冻结，已封值为 `0.0` 属正常，无 EGS 选股、M6.7、provider、账户或订单影响。
 - **机制**: `_statistical_contract()` 对 `negative_at_36["mean_delta_pp_max"]` 校验了符号（`>= 0` 即抛），对同一道门的另一个界 `negative_at_36["bootstrap_upper_pp_max"]` 只查有限数、不查符号。
 - **实测**: 36 周、mean_delta = -0.1 的温和负面样本，基线为 `inconclusive_retired_for_epoch`；把 `bootstrap_upper_pp_max` 改成 `99.0`（验证器接受）后变成 `do_not_promote` —— 一个本该「证据不足、退役观望」的 epoch 被判成明确淘汰。
 - **Required repair**: 给 `bootstrap_upper_pp_max` 补同侧符号约束（`> 0` 即抛，与 `mean_delta_pp_max` 对称），并补一条畸形值反向测试。
 - **Closure tests**: (1) `bootstrap_upper_pp_max = 99.0` → 抛 `OverlayAdjudicationError`；(2) 原值 `0.0` 仍通过；(3) 既有四例畸形控制保持绿。
 
 - **Closure 2026-07-29**: This Optional is resolved. _statistical_contract() rejects negative_at_36.bootstrap_upper_pp_max > 0, so the reproduced 99.0 mutation raises OverlayAdjudicationError instead of changing a mild-negative epoch from inconclusive_retired_for_epoch to do_not_promote. The sealed 0.0 bound remains accepted. The same closeout completed the Knife 6 four-date merge invariant in an end-to-end synthetic weekly run; see the main Knife 6 handoff for the four asserted fields and full-lane evidence.
+- **复审独立验证（审查方亲测边界，2026-07-29）**: 复现我原来的探针 `bootstrap_upper_pp_max = 99.0` → 现抛 `OverlayAdjudicationError`（上轮是 accepted）；并把新约束的边界逐点量清：已封值 `0.0` **仍被接受**（不误伤）、`0.001` 这种轻微正值**即拒**（门是紧的）、`-1.0` 这种更严的值仍接受。约束写成 `> 0` 而非 `>= 0` 是对的——它的已封值就是 `0.0`，与 sibling `mean_delta_pp_max`（已封值 -0.25、要求严格 < 0）的宽严差异来自各自的已封值，不是不对称遗留。
 
 ### R-ASHORT-KNIFE8A-TERMINAL-BLOCK-MINIMUM-DECLARED-BUT-NEVER-READ - 8A 新加的 36 周非重叠块下限曾是装饰性的
 

@@ -300,3 +300,24 @@
 ### 落地顺序
 
 先把上面四项写进 governance / registry（含守护测试），再按 `8B → 8C → 8D1` 施工。8B、8C 的验收引用 8D0′ 这两条；8D1 的验收引用 8D0″ 这两条。
+
+## 2026-07-29 追加：负面界符号约束收口 + 第六刀合并门的独立复核
+
+### 改了什么
+
+- `engine/a_short_overlay_adjudication.py::_statistical_contract()` 增加一条 `negative_at_36["bootstrap_upper_pp_max"] > 0` 即抛，补上与 sibling `mean_delta_pp_max` 对称的符号校验。
+- 第六刀合并门以断言形式钉进既有端到端测试 `tests/test_a_short_weekly_pipeline.py::MainWiringTests::test_portfolio_facts_follow_the_price_clock_and_share_dragon_window`：该测试跑一次完整 `main(...)` 周报，临时包住 `normalize_candidate` 抓每个候选的 `(quote.source_trade_date, 消耗序列末 bar)`，然后断言四类日期字段全部 ≤ `price_data_through`，且候选侧 `source_trade_date` 恒等于它。
+
+### 验证命令与结果
+
+- 审查方亲跑 `.toolsun_unittest_with_repo_pythonpath.cmd tests.test_a_short_overlay_adjudication tests.test_a_short_weekly_pipeline` = `525 OK / 35.2s / exit 0`；执行方已记账 `full_pack_ledger run a_short = 2080 OK`（rule 4，未重跑）。
+- **边界逐点量清**（新约束写 `> 0` 而不是 `>= 0` 是对的）：`bootstrap_upper_pp_max = 99.0` → 抛（复现审查方原探针，上轮此值是被接受的）；已封值 `0.0` → **仍接受**，不误伤；`0.001` 这种轻微正值 → 即拒，门是紧的；`-1.0` 这种更严的值 → 接受。它与 sibling `mean_delta_pp_max`（已封值 -0.25、要求严格 `< 0`）的宽严差异来自各自的已封值，不是遗留的不对称。
+- **植入控制（证明合并门不是空转）**：把决策日 `20260609` 塞进龙虎榜窗口后，该 wiring 测试由绿转红。候选腿的 `== price_data_through` 同样非空转 —— 该场景下 `price_data_through = 20260608` 与 as_of `20260609` 本就不同，所以这条等式排除的正是「把决策日当价格日」这个错误。
+
+### 第六刀状态
+
+**第六刀完成**：6A（组合事实时钟 + 北向因子退役）、6B（候选价格单一权威 + 官方档时钟加严）、6B Required（官方输入必须自报价格钟）、本刀合并门，四段齐。桌面 `ashort_r1.md` 第 6 刀的最终合并门条件至此满足。
+
+### 下一步注意事项
+
+一条流程 Optional（非代码）：执行方**第三次**只补 closure 段落、不翻 `状态 / 严重度` 行，留下 `open` 的陈旧状态由审查方收口时翻正（本轮是 `R-ASHORT-P4A-NEGATIVE-BOUND-VALIDATION-IS-ASYMMETRIC`，前两轮是 6B 官方时钟条目与 master-lane 两红条目）。建议把「写 closure 段落必须同时翻状态行」做成 doc-governance 守卫，否则每轮都要人工兜。

@@ -1,5 +1,12 @@
 # Session Log
 
+## 2026-07-29 - Claude Code 复审 PASS(负面界符号约束 + 第六刀合并门,第六刀就此完成)
+
+- **Verdict/Action**: PASS,提交并合入 master。两件都成立:①`_statistical_contract()` 新增 `negative_at_36["bootstrap_upper_pp_max"] > 0` 即抛,我复现原探针 `99.0` 现确实被拒;②第六刀合并门以断言形式钉进既有端到端 wiring 测试——一次完整周报里 `portfolio_risk.fact_as_of`、候选 `quote.source_trade_date`、实际消耗价格序列末 bar、`dragon_list`/`block_trade` 的 `window_dates` 最大值全部 ≤ `price_data_through`,且候选侧恒等于它。**第六刀就此记完成**(6A + 6B + 6B Required + 合并门四段齐)。**风险分级=comparison-only 低危**,按用户指令未起 agent、未跑全量。
+- **Required**: 无。`docs/system_risk_register.md#R-ASHORT-P4A-NEGATIVE-BOUND-VALIDATION-IS-ASYMMETRIC` 转 closed 并带边界实测。一条流程 Optional 见 Next。
+- **Verify**: review-evidence:fb1176ad0f82。亲跑 `tests.test_a_short_overlay_adjudication + tests.test_a_short_weekly_pipeline` = `525 OK / 35.2s / exit 0`;按 rule 4 未重跑执行方已记账的 `a_short 2080 OK`。边界逐点量清:`99.0` 拒、已封值 `0.0` 仍接受、`0.001` 即拒、`-1.0` 接受,故写 `> 0` 而非 `>= 0` 是对的。**植入控制**:把决策日 `20260609` 塞进龙虎榜窗口后该 wiring 测试由绿转红(命中窗口日期断言),证明这组不变量不是空转;候选腿的 `== price_data_through` 也非空转——该场景下 `price_data_through=20260608` 与 as_of `20260609` 本就不同。
+- **Next**: 合入 master。Optional(流程,非代码):执行方**第三次**只补 closure 段、不翻 `状态 / 严重度` 行,留下 `open` 的陈旧状态由我在收口时翻正。建议把「closure 段落必须同时翻状态行」做成 doc-governance 守卫,否则每轮都要审查方手工兜。
+
 ## 2026-07-29 - 用户裁决：8D0′ 与 8D0″ 四项治理口径已定（8B / 8C / 8D1 解除阻塞）
 
 - **Verdict/Action**: 用户 2026-07-29 明确裁决「按建议」,四项全部采纳,8B / 8C / 8D1 的开工前置就此解除。①P5 计入 P3b 外部旁证;②P3b 门槛改写为「至少 2 条**已实现裁判器**的外部对比轨给出有效当期裁决」,名单与「是否已实现裁判器」都从 registry 读,不再是 `runners/a_short_final_action_validation_runner.py:54-57` 的硬编码路径元组;③P5b 的 p 值沿用 P4a 的 sign-flip 随机化(复用 `_signflip_p`);④P5b 检查点映射 12=初步 / 24=正式 / 36=终局,与 P4a 同。四项的可执行规格写在同日 handoff 追加节,Codex 据此落 governance。
