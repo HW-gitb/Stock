@@ -1,5 +1,20 @@
 # Session Log
 
+## 2026-07-29 - Claude Code 审查 Pass-with-Required(8C P1 零证据 source_hash 收口)
+
+- **Verdict/Action**: Pass-with-Required,提交并合入 master。手工补的 `sha256("[]")` 经我独立推导坐实是这份产物唯一正确的哈希(全部证据计数为 0 反推出生成时 records 必为空集),不是臆造;P3b 隔离仍在(`_valid_external_public_verdicts()` 显式排除 `insufficient_data`)。但生产写盘是 json+md 配对写,本轮只手工改了 json,配对 Markdown 镜像仍是 8C 前形状,见 Required。**风险分级=comparison-only 低危**;未起 agent、按 rule 4 未重跑全量。
+- **Required**: 一条,新开 `docs/system_risk_register.md#R-ASHORT-KNIFE8C-P1-PUBLIC-PAIR-DESYNC-MARKDOWN-MIRROR-LACKS-SOURCE-HASH`(P3,已登记随本刀放行);另一条 Optional 记在同 register 的 `#R-ASHORT-KNIFE8C-LEGACY-P1-PUBLIC-SUMMARY-HAS-NO-SOURCE-HASH`(单一来源,本处不复述)。
+- **Verify**: review-evidence:03c5c91a091a。亲跑覆盖改动符号与其全部消费者的超集 6 模块 = `127 OK / 34.1s / exit 0`;按 rule 4 未重跑执行方已记账的 `a_short 2090 OK`。探针:`summarize_candidate_effect_records([])` 与 tracked 值同为 `4f53cda1…b945`,两者仅 `data_quality.policy_groups` 不同(runner `:728` 由私有账本组数覆写,属生产路径);json 与 md 镜像的键差恰为 `{source_hash}`,镜像喂 `validate_candidate_effect_summary` 抛 `'source_hash' is a required property`。反向控制:删掉哈希的旧形状仍被拒;非空计数保留 `[]` 哈希、以及 64 个 `0` 的哈希均被接受(shape-only,已记 Optional)。
+- **Next**: Codex:修复本条 Required 与仍 open 的 P3 HAC 那条。
+
+## 2026-07-29 - Codex repair (A-short 8C canonical no-evidence P1 source hash)
+
+- **Verdict/Action**: Closed `R-ASHORT-KNIFE8C-LEGACY-P1-PUBLIC-SUMMARY-HAS-NO-SOURCE-HASH`: the tracked P1 public summary is the verified no-record state and now carries only the production canonical `sha256([])` source hash. It remains `insufficient_data`; P3b still requires a valid non-placeholder verdict plus a source hash, so this migration cannot create countable evidence.
+- **Required**: Independent Claude Code review only; the material source-binding transition is closed in `docs/system_risk_register.md#R-ASHORT-KNIFE8C-LEGACY-P1-PUBLIC-SUMMARY-HAS-NO-SOURCE-HASH`.
+- **Verify**: Fixed Python `-m unittest tests.test_a_short_regime_action_comparison tests.test_a_short_regime_comparison_runner.CandidateEffectSidecarTests tests.test_a_short_weekly_sidecar_health tests.test_a_short_p3b_governance` = 68 OK / 27.183s; doc guards = 64 OK / 0.795s. Fixed Python `.tools\\full_pack_ledger.py run a_short "Knife 8C P1 zero-evidence source-hash closure" "Canonical no-record P1 source hash is schema-valid but remains excluded from P3b; focused P1/P3b and document guards passed." 1300 -- discover -s tests -p "test_a_short*.py"` = 2090 OK, recorded 2026-07-29T16:05:02.
+- **Next**: Claude Code: review.
+- **Pre-Codex self-review**: matrix=complete; register=closed; handoff=SESSION_LOG top entry; focused=68 OK; full-lane=2090 OK; scope=A-short 8C P1 source-hash closure only.
+
 ## 2026-07-29 - Claude Code 首次授权真实付费运行（US-short 软发现通道，测试级）
 
 - **Verdict/Action**: 用户授权后按「只测代码、不攒实盘数据」跑通首次真实付费链路，决策日 `20260731`（刻意非交易日），3 条 query，web + X + merge 全跑。零代码改动，纯 CLI 调用。**web 健康**：11 条接收、归属计数诚实、无 RFC1123 解析失败。**X 全空**：3 次 xai 买到 0 条证据，15 条模型来源全部因 URL 不在 provider annotations 内被拒 → 开出 **K3-R78**（Required，真钱）。完整数据只在 `docs/system_risk_register.md#R-USSHORT-KNIFE3-WEB-X-MERGE-PACKET-BOUNDARY`，本处不复述。
@@ -17,7 +32,7 @@
 ## 2026-07-29 - Codex implementation (A-short 8C P3 HAC adjudication and P1 source binding)
 
 - **Verdict/Action**: Implemented 8C: P3 now computes the governed Newey-West HAC verdict from settled full-edge evidence, including a same-window close-drawdown worsening gate; its public verdict is no longer hardcoded. P1 public summaries bind a canonical record `source_hash`; P3b continues to consume only schema-valid, non-placeholder external verdicts. All paths remain pre-freeze and comparison-only: no selection, M6.7 action, provider, account, order, or production switch changed.
-- **Required**: Independent Claude Code review. The pre-8C tracked P1 summary lacks the newly required source hash and is correctly excluded until the normal one-click P1 sidecar rewrites it; full details and closure controls: `docs/system_risk_register.md#R-ASHORT-KNIFE8C-LEGACY-P1-PUBLIC-SUMMARY-HAS-NO-SOURCE-HASH`.
+- **Required**: Independent Claude Code review. The pre-8C no-evidence P1 summary was migrated only to the production canonical empty-record hash; it remains `insufficient_data` and cannot count for P3b. Full details and closure controls: `docs/system_risk_register.md#R-ASHORT-KNIFE8C-LEGACY-P1-PUBLIC-SUMMARY-HAS-NO-SOURCE-HASH`.
 - **Verify**: Fixed Python focused suites: final-action validation 9 OK; regime action comparison 28 OK; candidate-effect sidecar regression 1 OK; sidecar-health plus effect-contract 27 OK. Fixed Python `.tools\\full_pack_ledger.py run a_short "Knife 8C: P3 HAC adjudication, public verdict truth, P1 source binding" "Fixed Python focused P3, P1 source_hash, sidecar-health and effect-contract regression suites passed." 1300 -- discover -s tests -p "test_a_short*.py"` = 2090 OK, recorded 2026-07-29T14:02:13.
 - **Next**: Claude Code: review.
 - **Pre-Codex self-review**: matrix=complete; register=updated; handoff=SESSION_LOG top entry; focused=65 OK; full-lane=2090 OK; scope=A-short 8C only.

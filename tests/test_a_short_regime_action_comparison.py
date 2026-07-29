@@ -229,6 +229,7 @@ class CandidateEffectTests(unittest.TestCase):
 
     def test_public_admission_rejects_private_or_result_payload_fields(self):
         summary = summarize_candidate_effect_records([])
+        self.assertEqual(summary["source_hash"], "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945")
         for field in ("ts_code", "account", "holding", "price", "return"):
             bad = copy.deepcopy(summary)
             bad["admission"]["p1_regime_action_proxy"][field] = "private"
