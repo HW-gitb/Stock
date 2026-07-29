@@ -2,10 +2,10 @@
 
 ## 2026-07-29 - Claude Code 复审 Pass-with-Required(8D1 六条 Required 全闭,全量由红转绿)
 
-- **Verdict/Action**: Pass-with-Required,提交并合入 master。六条逐条坐实:公开写盘口 `allow_nan=False` + 四层非有限值 fail-closed;tracked P5 json/md 现由 writer 复现;私有记录 boundary 双形状兼容;周报与进度 schema 改 `oneOf` 让旧产物仍合法;P3b 改成每轨 allow-list + P5 另要 `adjudication_stage == terminal`;缺失回撤传 None 不再默认 0。但 Required④ 要求的「同类扫净」只做了被点名那一个出口,见 Required。
+- **Verdict/Action**: Pass-with-Required,已提交 `7fa145ba`(锚在工作树分支 `a-short-8d1`);**合入 master 暂缓** —— master 已被另一窗口推进 8 个提交、且主树里 `docs/SESSION_LOG.md` 与 `system_risk_register.md` 正被那一窗口改着未提交,ff 不成立、强合会盖掉别人的活,故按 closeout gate 第 9 条记录阻塞而不动它。六条逐条坐实:公开写盘口 `allow_nan=False` + 四层非有限值 fail-closed;tracked P5 json/md 现由 writer 复现;私有记录 boundary 双形状兼容;周报与进度 schema 改 `oneOf` 让旧产物仍合法;P3b 改成每轨 allow-list + P5 另要 `adjudication_stage == terminal`;缺失回撤传 None 不再默认 0。但 Required④ 要求的「同类扫净」只做了被点名那一个出口,见 Required。
 - **Required**: 一条,新开 `docs/system_risk_register.md#R-ASHORT-PUBLIC-WRITERS-NONFINITE-SWEEP-INCOMPLETE`(P3,已登记随本刀放行);上轮六条的闭合记录见同文件 `#R-ASHORT-KNIFE8D1-REVIEW-REQUIRED-CLOSURE`(单一来源,本处不复述)。
 - **Verify**: review-evidence:1e8fad6d5acc。亲跑并接管全量:`full_pack_ledger run a_short` = `PASS exit=0 / 2102 tests / 195.7s` 并已记账(上一代码态是 `2095 / failures=3 errors=3`)。反向控制全过:P5 给真终局 verdict + `stage=terminal` **能**计票、同 verdict 但 `preliminary` **不**计、现产物计 0;非有限 payload 写盘抛错且不留文件与 tmp;旧 boundary(带 `p5b_implemented:false`)可读、越界 boundary 与自称已实现的 boundary 仍被拒;`build_public_progress(root=None) == ` tracked json。P1/P2 的 terminal 集与各自裁判器实际输出逐字对上,未误伤。
-- **Next**: 合入 master。
+- **Next**: 待主树那一窗口的 US-short 活收干净后,把 `a-short-8d1` 合入 master。
 
 ## 2026-07-29 - Codex repair (A-short 8D1 reviewer Required closure candidate)
 
