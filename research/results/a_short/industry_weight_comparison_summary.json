@@ -16,7 +16,8 @@
         "mature_opportunities": 0,
         "no_count_weeks": 0,
         "remaining_eligible_weeks": 12,
-        "remaining_difference_weeks": 6
+        "remaining_difference_weeks": 6,
+        "remaining_nonoverlap_blocks": 6
       },
       "metrics": {
         "eligible_policy_weeks": 0,
@@ -46,7 +47,8 @@
         "mature_opportunities": 0,
         "no_count_weeks": 0,
         "remaining_eligible_weeks": 12,
-        "remaining_difference_weeks": 6
+        "remaining_difference_weeks": 6,
+        "remaining_nonoverlap_blocks": 6
       },
       "metrics": {
         "eligible_policy_weeks": 0,
@@ -76,7 +78,8 @@
         "mature_opportunities": 0,
         "no_count_weeks": 0,
         "remaining_eligible_weeks": 12,
-        "remaining_difference_weeks": 6
+        "remaining_difference_weeks": 6,
+        "remaining_nonoverlap_blocks": 6
       },
       "metrics": {
         "eligible_policy_weeks": 0,
@@ -106,7 +109,8 @@
         "mature_opportunities": 0,
         "no_count_weeks": 0,
         "remaining_eligible_weeks": 12,
-        "remaining_difference_weeks": 6
+        "remaining_difference_weeks": 6,
+        "remaining_nonoverlap_blocks": 6
       },
       "aggressive_vs_balanced": {
         "eligible_policy_weeks": 0,
@@ -114,7 +118,8 @@
         "mature_opportunities": 0,
         "no_count_weeks": 0,
         "remaining_eligible_weeks": 12,
-        "remaining_difference_weeks": 6
+        "remaining_difference_weeks": 6,
+        "remaining_nonoverlap_blocks": 6
       },
       "theme_double_vs_balanced": {
         "eligible_policy_weeks": 0,
@@ -122,14 +127,15 @@
         "mature_opportunities": 0,
         "no_count_weeks": 0,
         "remaining_eligible_weeks": 12,
-        "remaining_difference_weeks": 6
+        "remaining_difference_weeks": 6,
+        "remaining_nonoverlap_blocks": 6
       }
     }
   },
   "fingerprint": "37223b2b11889e4300f360946658e399d2131bfe9097075dc4c36b892a66f958",
   "source_hash": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
   "p5b_implemented": true,
-  "admission_binding": "752c9d20371d8f6e0dbb7ba10ebdd6ac654e272a6b26f7cd01afaa404b348bbe",
+  "admission_binding": "3ca580dad7b936649df6f49eee3e856631a8e10a3263c90eb8696e4e26401612",
   "message": "P5 行业权重对比：P5b 裁判已运行；仅供人工比较决策，不自动修改生产权重。",
   "production_unchanged": true
 }

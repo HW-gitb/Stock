@@ -410,3 +410,38 @@
 ### 下一步注意事项
 
 第八刀的收口条件 = 上面四条 Required 全闭 + 三条 Optional 有处置记录 + 六步合并验证留下一次性证据 + 全量绿记账。全部满足后第八刀才可宣布完成，之后才进第九刀。
+
+## 2026-07-29 追加：第八刀收尾第一轮独立审查 = FAIL（Claude Code；79eb 工作树，未提交）
+
+**审了什么**：79eb 工作树相对 `36f1aa1a` 的 13 个改动文件（P5b 裁判器 + P5 比较器 + governance preset + program schema + P2 sidecar runner + 两份 tracked 公开产物 + 四个测试文件 + register/SESSION_LOG）。
+
+**成立的部分（不必返工）**：
+
+- P5b 非重叠块门：`clock_contract.nonoverlap_block_minimums {"12":6,"24":12,"36":12}` 为唯一数值源，`adjudicate_question` 在差异周门之后、任何正面许可与负面淘汰之前读取当前检查点的块门，不足统一给 `continue_accumulating / insufficient_nonoverlap_blocks`，与 `insufficient_policy_separation` 可区分；`load_governance` 对该 dict 有漂移守护；36 周正负两分支的回归都在。
+- 顶层 verdict：`_aggregate_terminal_verdict` 从 `risk_and_statistics_contract.aggregate_verdict_priority` 取 rank，未知终局 verdict 缺 priority 时 fail-closed；正序与反序都得 `do_not_promote`；未新增 enum。
+- P5 公开产物：`remaining_nonoverlap_blocks` 逐问补齐、`admission_binding` 随 preset 变更重算，全程零证据形态诚实（各项 0），由 writer 产出。
+- P2 sidecar 的两处放松**保留**：`_validate_ledger` 的 `enforcement_enabled` 门修的是真实潜伏缺陷（admission 一变整份账本不可读），`frozen_enforced` 反向控制已在；`_assert_public_summary_as_of_monotonic` 对 pre-8B legacy 形状的一次性放行也保留，半成品仍 fail-closed 的反向控制已在。
+
+**为什么 FAIL**：新增的 `_summary_epoch` legacy 回退把**上一个契约指纹下**采集的那 1 周当成当前进度写进 tracked 公开摘要。实测：账本两条 epoch 指纹 `786b1033…` / `d4f93db8…`，当前预冻结常量指纹 `83855504…` / `420b8276…`，`_active_epoch(create=False)` 为 None；换回 `_active_epoch` 得 `forward_weeks=0`，带回退得 1，产物写的是 1。桌面方案已明确记过「预冻结切换后 `forward_weeks 0` 才是诚实值、一次性代价已记录」，本改动等于在没有新裁决的情况下推翻它。
+
+**失效的旧结论（我自己给错的，必须作废）**：审查方在派工后的问答里说过「预冻结指纹是常量 ⇒ 那 1 周仍在当前 epoch，会被错误覆盖成 0」，据此给了「必须保住 forward_weeks=1」的条件。**该条件作废**——那两条 epoch 建立于预冻结切换之前，今天诚实的值就是 0。执行方是照这条错误条件施工的，返工责任在审查方。
+
+**验证命令与结果**：`full_pack_ledger run a_short` → `CACHED GREEN a_short = 2120 OK`（同一精确代码态，审查方亲跑）；审查方自写反向控制见上；`git status --short --untracked-files=all` 实测 13 个改动（register 里写的 11 个不实）。
+
+**给 Codex 的命令（下一轮）**：修复 `docs/system_risk_register.md#R-ASHORT-KNIFE8-P2-PUBLIC-SUMMARY-RESURRECTS-A-CROSS-EPOCH-LEGACY-RECORD` 的三条 Required repair，然后按 reopen 的 `#R-ASHORT-KNIFE8-SIX-STEP-MERGE-VERIFICATION-NOT-RUN-AS-ONE-PASS` 逐条重跑六步（每步给本次命令 + 本次实际输出，不许写「已验」「同前」「由全量覆盖」），并在 `#R-ASHORT-WEEKLY-PIPELINE-JSON-WRITERS-OUTSIDE-THE-NONFINITE-GUARD` 名下补齐工单三条 Optional 的「已修 / 不修 + 理由」。
+
+**下一步注意事项**：重生产物仍只用 `settle --as-of 20260727`（无 `--daily-cache`、无 `refresh`、不前推日期），跑完仍要核主树与 79eb 的私有账本逐字节相同；不解冻任何轨；第八刀收口后才进第九刀。
+
+## 2026-07-29 追加：第八刀收尾第二轮独立审查 = PASS（Claude Code；已提交并合入 master）
+
+**改了什么**：跨 epoch 回填整条拆除 —— `_summary_epoch` 删除、`_summary_from_ledger` 恢复只读 `_active_epoch`；tracked 的 P2 公开 JSON 与配对 MD 由同一次 `settle --as-of 20260727` 重生（`forward_weeks` 两轨与 formal 全为 0）；钉住旧回退的那条测试换成 `test_cross_fingerprint_legacy_epoch_never_enters_public_progress`（pre-freeze 与 frozen 两种模式都断言 0）。工单三条 Optional 一并处置：`engine/egs_industry_heat.py::write_weight_comparison` 与 `runners/materialize_a_short_variant_tracking.py::write_payload` 补 `allow_nan=False` 并入注册表、发现器范围显式纳入这两个模块；AST 同时枚举 `AsyncFunctionDef`；`"write" in name` 子串判据换成明确的 file-sink + 本地 helper 词表并配误报负控。
+
+**为什么**：上一轮 FAIL 的唯一 Required 就是「别把上一个契约指纹下的证据当当前进度」；Optional 三条是工单里点名要么修要么写理由的。
+
+**验证命令与结果（审查方亲跑）**：`full_pack_ledger run a_short` → `CACHED GREEN a_short = 2122 OK`（同一精确代码态）；door 守卫 `tests.test_doc_governance_guard + tests.test_route_doc_ledger_status_consistency` 亲跑通过。自写探针：`hasattr(runner,'_summary_epoch') = False`；tracked JSON == writer 输出（逐字段相等）、MD == `_render_summary_markdown(writer 输出)`、`validate_public_summary` 通过、`forward_weeks=0`；`_is_current_external_public_summary(Path, payload) = True`、`_valid_external_public_verdicts() = 0`（预冻结期 `not_adjudicated`，符合预期）。放松类反向控制：把窄化后的 `_is_file_write_call` 换回旧子串匹配重跑发现器 —— 新旧都是 34 个写盘口、`LOST=[]`、无未登记项，证明这次窄化今天零覆盖损失。
+
+**失效的旧结论**：上一轮 FAIL 里「tracked P2 两轨 `forward_weeks=1`」及其「legacy epoch 可作公开诊断来源」的说法已作废，register 对应条目已加更正行；今天权威值是 0。
+
+**残留风险（Optional，未阻断）**：窄化后的写盘口词表是白名单，未来若新增一个名字不在词表内的本地 JSON 写盘 helper（例如 `_write_payload` / `_save_json`），发现器会看不见它 —— 旧的 `"write" in name` 子串判据本来能兜住一部分这类名字。建议后续给该判据补一个「`write` 作为词首/词尾」的兜底，或加一条植入新 helper 名必须被发现的守护测试。今天零命中损失，故不阻断本刀。
+
+**下一步注意事项**：第八刀至此收口（四条 Required 全闭 + 三条 Optional 有处置 + 六步逐条留证 + 全量绿记账）；可进第九刀（EGS 短历史动量与空候选池健壮性，条目 18、19）。仍不解冻任何证据轨。

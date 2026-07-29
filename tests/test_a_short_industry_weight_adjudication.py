@@ -24,7 +24,7 @@ def _question(question_id: str, *, evidence_counts: bool = True) -> dict:
 
 def _rows(count: int, *, differences: int, effect: float) -> list[dict]:
     return [{"decision_date": f"2026{index + 1:04d}", "same_list": index >= differences,
-             "effect_pct": effect, "exit_date": f"2027{index + 1:04d}",
+            "effect_pct": effect, "exit_date": f"2026{index:04d}",
              "challenger_ticket_returns": [1.0], "challenger_close_drawdown_pct": 0.0,
              "relative_close_drawdown_worsening_pct": 0.0}
             for index in range(count)]
@@ -45,6 +45,16 @@ class IndustryWeightAdjudicationTests(unittest.TestCase):
                                          governance=governance, question=question, holm_rejected=holm)
             self.assertEqual(result["verdict"], "continue_accumulating")
             self.assertEqual(result["reason"], "insufficient_policy_separation")
+
+    def test_nonoverlap_gate_blocks_positive_and_negative_branches_at_the_same_checkpoint(self):
+        governance = load_governance(); question = _question("aggressive_vs_balanced")
+        for effect, holm in ((1.0, {"aggressive_vs_balanced"}), (-1.0, set())):
+            rows = _rows(36, differences=18, effect=effect)
+            rows[0]["exit_date"] = "99999999"
+            result = adjudicate_question(rows, mature=36, no_count=0, governance=governance, question=question,
+                                         holm_rejected=holm, p_value_function=lambda _values: 0.001)
+            self.assertEqual(result["verdict"], "continue_accumulating")
+            self.assertEqual(result["reason"], "insufficient_nonoverlap_blocks")
 
     def test_holm_bonferroni_matches_manual_step_down_rejection_set(self):
         self.assertEqual(holm_bonferroni({"a": 0.005, "b": 0.012, "c": 0.03}, 0.025), {"a", "b"})

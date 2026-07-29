@@ -44,6 +44,7 @@
     "no_count_denominator": "h10_mature_opportunities",
     "checkpoints": [12, 24, 36],
     "difference_minimums": [6, 12, 18],
+    "nonoverlap_block_minimums": {"12": 6, "24": 12, "36": 12},
     "non_overlap": "decision_date_strictly_after_prior_h10_exit"
   },
   "risk_and_statistics_contract": {
@@ -59,6 +60,12 @@
     "max_relative_drawdown_worsening_pct": 2.0,
     "no_count_rate_max_pct": 20.0,
     "adjustment_coverage_required_pct": 100.0
+    ,"aggregate_verdict_priority": [
+      "manual_rollback_review_only",
+      "do_not_promote",
+      "retain_balanced_only",
+      "next_reviewed_candidate_only"
+    ]
   },
   "epoch_rule": "profile_weights_industry_heat_selector_sw_level_slots_outcome_cost_risk_or_statistics_change_starts_new_epoch",
   "boundary": {

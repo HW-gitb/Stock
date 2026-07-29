@@ -9,7 +9,10 @@ from unittest import mock
 
 
 ROOT = Path(__file__).resolve().parents[1]
-WRITER_ROOTS = (ROOT / "engine", ROOT / "runners")
+A_SHORT_WRITER_PATHS = frozenset({
+    "engine/egs_industry_heat.py",
+    "runners/materialize_a_short_variant_tracking.py",
+})
 
 # This registry is intentionally a reviewable policy surface, not the discovery
 # mechanism.  The AST traversal below makes an unregistered JSON file writer fail
@@ -19,6 +22,7 @@ PUBLIC_WRITER_FUNCTIONS = frozenset({
     "engine/a_short_factor_comparison_v2.py:_atomic_write",
     "engine/a_short_industry_weight_comparison.py:_atomic_write",
     "engine/a_short_overlay_adjudication.py:_write",
+    "engine/egs_industry_heat.py:write_weight_comparison",
     "runners/a_short_final_action_validation_runner.py:_atomic_write",
     "runners/a_short_account_state_from_manual_tables.py:_write_json_atomic",
     "runners/a_short_crash_veto_tracker.py:_atomic_json",
@@ -47,6 +51,7 @@ PUBLIC_WRITER_FUNCTIONS = frozenset({
     "runners/a_short_weekly_pipeline.py:save_holding_ratchet",
     "runners/a_short_weekly_pipeline.py:write_weekly_report",
     "runners/a_short_weekly_sidecar_health.py:write_health_bundle",
+    "runners/materialize_a_short_variant_tracking.py:write_payload",
 })
 
 
@@ -56,6 +61,15 @@ def _call_name(node: ast.Call) -> str | None:
     if isinstance(node.func, ast.Attribute):
         return node.func.attr
     return None
+
+
+def _is_file_write_call(node: ast.Call) -> bool:
+    """Recognise concrete file writes and the local JSON write-helper vocabulary."""
+    name = _call_name(node)
+    if name in {"write", "write_text", "write_bytes", "writelines"}:
+        return True
+    return name in {"_atomic_write", "_atomic_write_text", "_write", "_write_json",
+                    "_write_json_atomic", "_write_json_exclusive", "_replace_many_with_rollback"}
 
 
 def _is_json_serializer(node: ast.Call) -> bool:
@@ -99,7 +113,7 @@ def _has_ancestor_file_write(node: ast.AST, parents: dict[ast.AST, ast.AST]) -> 
     current = node
     while current in parents:
         current = parents[current]
-        if isinstance(current, ast.Call) and "write" in (_call_name(current) or ""):
+        if isinstance(current, ast.Call) and _is_file_write_call(current):
             return True
     return False
 
@@ -139,7 +153,7 @@ def _function_json_file_writers(source: str) -> dict[str, list[ast.Call]]:
     tree = ast.parse(source)
     parents = _parents(tree)
     writers: dict[str, list[ast.Call]] = {}
-    for function in (node for node in ast.walk(tree) if isinstance(node, ast.FunctionDef)):
+    for function in (node for node in ast.walk(tree) if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef))):
         serialized_names: set[str] = set()
         assignments = [node for node in ast.walk(function) if isinstance(node, ast.Assign)]
         while True:
@@ -156,7 +170,7 @@ def _function_json_file_writers(source: str) -> dict[str, list[ast.Call]]:
             serialized_names.update(derived_names)
         writes_serialized_name = any(
             isinstance(node, ast.Call)
-            and "write" in (_call_name(node) or "")
+            and _is_file_write_call(node)
             and bool(_names_in(node) & serialized_names)
             for node in ast.walk(function)
         )
@@ -179,11 +193,14 @@ def _function_json_file_writers(source: str) -> dict[str, list[ast.Call]]:
 
 def _discovered_writer_calls() -> dict[str, list[ast.Call]]:
     discovered: dict[str, list[ast.Call]] = {}
-    for writer_root in WRITER_ROOTS:
-        for path in sorted(writer_root.glob("a_short_*.py")):
-            relative = path.relative_to(ROOT).as_posix()
-            for function, calls in _function_json_file_writers(path.read_text(encoding="utf-8")).items():
-                discovered[f"{relative}:{function}"] = calls
+    paths = {
+        *(path for writer_root in (ROOT / "engine", ROOT / "runners") for path in writer_root.glob("a_short_*.py")),
+        *(ROOT / relative for relative in A_SHORT_WRITER_PATHS),
+    }
+    for path in sorted(paths):
+        relative = path.relative_to(ROOT).as_posix()
+        for function, calls in _function_json_file_writers(path.read_text(encoding="utf-8")).items():
+            discovered[f"{relative}:{function}"] = calls
     return discovered
 
 
@@ -217,7 +234,7 @@ class PublicJsonWriterNonfiniteGuardTests(unittest.TestCase):
             tree = ast.parse((ROOT / relative).read_text(encoding="utf-8"))
             functions = [
                 node for node in tree.body
-                if isinstance(node, ast.FunctionDef) and node.name == function_name
+                if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)) and node.name == function_name
             ]
             if len(functions) != 1:
                 violations.append(f"{qualified_name}:missing-or-duplicate")
@@ -270,6 +287,26 @@ class PublicJsonWriterNonfiniteGuardTests(unittest.TestCase):
             "    return hashlib.sha256(json.dumps(value, sort_keys=True).encode('utf-8')).hexdigest()\n"
         )
         self.assertEqual(_function_json_file_writers(source), {})
+
+    def test_guard_does_not_treat_unrelated_write_substrings_as_file_writers(self):
+        source = (
+            "import json\n\n"
+            "def _rewrite_for_digest(value):\n"
+            "    return json.dumps(value, sort_keys=True)\n\n"
+            "def _write_lock(value):\n"
+            "    return json.dumps(value)\n"
+        )
+        self.assertEqual(_function_json_file_writers(source), {})
+
+    def test_guard_discovers_async_json_file_writer(self):
+        source = (
+            "import json\n\n"
+            "async def write_async_output(path, value):\n"
+            "    path.write_text(json.dumps(value), encoding='utf-8')\n"
+        )
+        discovered = _function_json_file_writers(source)
+        self.assertEqual(set(discovered), {"write_async_output"})
+        self.assertFalse(_has_literal_allow_nan_false(discovered["write_async_output"][0]))
 
     def test_reviewer_named_weekly_and_ledger_writers_reject_nonfinite_without_publishing(self):
         import runners.a_short_steady_alpha_reaudit as reaudit

@@ -138,12 +138,15 @@ def load_governance(path: str | Path = GOVERNANCE_PATH) -> dict:
         raise IndustryWeightComparisonError("P5 outcome contract drifted")
     if governance["clock_contract"].get("checkpoints") != [12, 24, 36] or \
             governance["clock_contract"].get("difference_minimums") != [6, 12, 18] or \
+            governance["clock_contract"].get("nonoverlap_block_minimums") != {"12": 6, "24": 12, "36": 12} or \
             governance["clock_contract"].get("same_list_effect") != "eligible_with_zero_whole_policy_effect" or \
             governance["clock_contract"].get("no_count_denominator") != "h10_mature_opportunities" or \
             governance["clock_contract"].get("non_overlap") != "decision_date_strictly_after_prior_h10_exit":
         raise IndustryWeightComparisonError("P5 clock contract drifted")
     statistics = governance["risk_and_statistics_contract"]
-    if statistics.get("multiplicity_family") != "three_questions" or statistics.get("holm_bonferroni") is not True:
+    if statistics.get("multiplicity_family") != "three_questions" or statistics.get("holm_bonferroni") is not True or \
+            statistics.get("aggregate_verdict_priority") != ["manual_rollback_review_only", "do_not_promote",
+                                                               "retain_balanced_only", "next_reviewed_candidate_only"]:
         raise IndustryWeightComparisonError("P5 statistical contract drifted")
     try:
         profile_governance = _load_json(PROFILE_GOVERNANCE_PATH)
@@ -685,6 +688,18 @@ def _p_value_function(method_path: object):
     return method
 
 
+def _aggregate_terminal_verdict(terminal: list[dict], governance: dict) -> str:
+    """Select the most conservative terminal result from the sealed governance order."""
+    priority = governance["risk_and_statistics_contract"]["aggregate_verdict_priority"]
+    if not isinstance(priority, list) or len(priority) != len(set(priority)):
+        raise IndustryWeightComparisonError("P5 aggregate verdict priority is invalid")
+    ranks = {verdict: index for index, verdict in enumerate(priority)}
+    try:
+        return min((row["verdict"] for row in terminal), key=ranks.__getitem__)
+    except KeyError as exc:
+        raise IndustryWeightComparisonError("P5 terminal verdict is absent from governance priority") from exc
+
+
 def build_public_progress(*, root: str | Path | None, as_of: str) -> dict:
     as_of = _date(as_of, "as_of")
     from engine.a_short_industry_weight_adjudication import P5B_IMPLEMENTED, adjudicate_question, holm_bonferroni
@@ -751,7 +766,7 @@ def build_public_progress(*, root: str | Path | None, as_of: str) -> dict:
                                      question=question_defs[key], holm_rejected=rejected,
                                      p_value_function=p_value_function) for key in QUESTION_IDS]
     terminal = [row for row in questions if row["checkpoint_stage"] == "terminal" and row["verdict"] != "continue_accumulating"]
-    aggregate = next((row["verdict"] for row in terminal), "continue_accumulating")
+    aggregate = _aggregate_terminal_verdict(terminal, governance) if terminal else "continue_accumulating"
     stage = "terminal" if terminal else next((row["checkpoint_stage"] for row in questions if row["verdict"] != "continue_accumulating"), "accumulating")
     summary = {"schema_name": "a_short_industry_weight_comparison_progress_summary", "schema_version": "1.0.0",
                "summary_id": "a_short_industry_weight_comparison", "as_of": as_of,
