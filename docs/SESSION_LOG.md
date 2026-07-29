@@ -2,7 +2,7 @@
 
 ## 2026-07-29 - Claude Code 审查 PASS(A-short 第七刀:突破口径分歧可见性)
 
-- **Verdict/Action**: PASS,提交并合入 master。与门原样保留——`entry_type` 只是改成调用新的 `breakout_source_agreement()` 表达同一条件,选股结果零变化(见 Verify 的等价性亲证)。四态枚举只进 `machine`、不带任何价格/均线数值;分歧票在 `触发条件` 追加一句提示,并在现金/组合后处理重写该字段后由 `_attach_breakout_source_disagreement_notices` 恢复,validator 强制 marker 与提示一致。周报 md 出一行本批 X/Y 横幅 + 三态结论,阈值是 runtime policy 叶字段、两份 preset 与 schema required 同步、effect-contract leaf readers 已登记。
+- **Verdict/Action**: PASS,提交并合入 master。与门原样保留——`entry_type` 只改成调用新的 `breakout_source_agreement()` 表达同一条件,选股零变化(等价性见 Verify)。四态枚举只进 `machine`、不带价格/均线;分歧票在 `触发条件` 追加提示,后处理重写后由 `_attach_breakout_source_disagreement_notices` 恢复,validator 强制两者一致。md 出一行本批 X/Y 横幅 + 三态结论,阈值是 runtime policy 叶字段。**风险分级=选股档**(新函数落在 `entry_type` 决策路径);独立对抗 agent **经用户 2026-07-29 明令本刀免除**。
 - **Required**: 无,未新开 register 条目(Register: non-material)。三条 Optional 见 Next。
 - **Verify**: review-evidence:f1985fafa9a4。亲跑两包覆盖全部改动符号:`test_a_short_weekly_pipeline + test_a_short_effect_contract + test_a_short_runtime_configuration` = `531 OK / 93.4s`;`test_a_short_phase5_engine + test_a_short_m67_render` = `164 OK / 1.4s`;按 rule 4 未重跑执行方已记账的 `a_short 2075 OK`。等价性亲证:并排老实现跑 432 组合 `entry_type` 零差异;`derived=None` 由旧 AttributeError 变「观察」,只增稳健。植入控制:同一 1/15 批次阈值 10.0→零星、5.0→显著,证明结论真读 policy;marker 缺失/非法/空批一律 None、不出横幅。
 - **Next**: 合入 master。Optional①:`a_short_m67_render` 函数内 import `weekly_pipeline`,而 `weekly_pipeline:2081` 又函数内 import 该 render——真循环,渲染器从此被拖进 pipeline 的模块级 `load_runtime_configuration()`;那个 summarizer 是纯函数,移到 render 侧即解。Optional②:effect contract 两行新哈希缩进 8 空格(同级其余 4),像手改非重生成。Optional③:三态里「零星分歧」无仓库测试(现有用例只有 0/2 和 2/2),我用探针证过;另 validator 那段嵌在 `if isinstance(rule6_gate, dict)` 内,`持有` 行的提示一致性不被检查。
