@@ -1,5 +1,12 @@
 # Session Log
 
+## 2026-07-29 - Claude Code 工作单：A-short 下一步（两条陈旧状态已就地更正，其余交 Codex / 待用户裁决）
+
+- **Verdict/Action**: 本轮不改代码,只做两处 register 状态就地更正 + 立工作单。①`R-ASHORT-KNIFE6B-OFFICIAL-CLOCK-FALLBACK-ANCHORS-TO-DECISION-DATE` 状态由 `open P2` 补正为 `closed P2`——它 2026-07-28 已随 `89dd5e90` 修复且我复审 PASS,当时只补了 closure 段忘了翻状态。②`R-ASHORT-MASTER-LANE-PACK-TWO-PREEXISTING-RED` 关闭:该 finding 量在 `8a9d5d83`,现已不复现。两条都属「档案说的与现状不符」,留着会让后面每一轮审查基于错误前提。
+- **Required**: 无新开。Codex 待办按下面 Next 的顺序执行;两项治理口径待用户裁决,未裁决前**不得**开工 8B / 8C / 8D1。
+- **Verify**: 亲跑 `tests.test_a_short_semantic_risk_contract_docs` = `15 OK / 0.2s / exit 0`(即 MASTER-LANE-PACK 条目点名的目标 a);目标 b 由当前代码态账本 `full_pack_ledger run a_short = 2080 OK` 覆盖。6B 那条的闭合证据见其条目内 closure 段与 `89dd5e90`。本轮无代码改动,故未跑其它包。
+- **Next**: Codex 按序执行两件,均不依赖用户裁决:**①** 修 `docs/system_risk_register.md#R-ASHORT-P4A-NEGATIVE-BOUND-VALIDATION-IS-ASYMMETRIC`(P3:`negative_at_36.bootstrap_upper_pp_max` 补同侧符号约束 + 畸形值反向测试)。**②** 跑第六刀合并门:全局不变量断言「所有事实类日期字段(`portfolio_risk.fact_as_of`、候选 `quote.source_trade_date`、价格序列最新 bar、龙虎榜/大宗 `window_dates` 最大值)全部 ≤ `price_data_through` 且候选侧恒等于它,只有 `decision_as_of` 可更晚」,通过后才可记「第六刀完成」。**待用户裁决(挡着 8B/8C/8D1)**:见同日 handoff 追加节「待用户裁决的两项治理口径」。
+
 ## 2026-07-29 - Claude Code 复审 PASS(8A Required + 阈值单一来源一并闭)
 
 - **Verdict/Action**: PASS,提交并合入 master。Required 已闭:终局块门补上(`len(blocks) < terminal_blocks → continue_accumulating`)。执行方顺带把我上轮记的 Optional 也闭了——新增 `_statistical_contract()` 从同一份已封 admission 读出 preliminary/promotion/negative_at_36 三段全部数值门并硬校验形状,`_adjudicate` 与 `_public_failed_gates` 里的 `.25/.55/-.25/.025/2.0/6/.20/0` 字面量全部替换为契约值。**风险分级=comparison-only 低危**(预冻结早返回仍在最前,终局 verdict 今天打不出来);按用户指令未起独立 agent、未跑全量。

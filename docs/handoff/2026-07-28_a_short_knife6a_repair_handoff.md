@@ -229,3 +229,36 @@
 ### 下一步注意事项
 
 一条新 Optional：`docs/system_risk_register.md#R-ASHORT-P4A-NEGATIVE-BOUND-VALIDATION-IS-ASYMMETRIC`（P3）——负面终局门的两个界只校验了 `mean_delta_pp_max` 的符号，`bootstrap_upper_pp_max` 不查符号；实测设成 `99.0` 会被接受，并把 mean_delta = -0.1 的温和负面 epoch 从 `inconclusive_retired_for_epoch` 翻成 `do_not_promote`。
+
+## 2026-07-29 追加：A-short 下一步工作单（含待用户裁决的两项治理口径）
+
+本节是给下一位执行者（Codex）的工作单。桌面 `ashort_r1.md` 是这批刀的方案权威，但 **Codex 不读桌面**，所以凡是动手需要的内容，本节都摘全。
+
+### 立刻可做（不依赖任何裁决，按序）
+
+1. **修 `docs/system_risk_register.md#R-ASHORT-P4A-NEGATIVE-BOUND-VALIDATION-IS-ASYMMETRIC`（P3）**：`engine/a_short_overlay_adjudication.py::_statistical_contract()` 对 `negative_at_36["mean_delta_pp_max"]` 校验了符号（取正即抛），对同一道门的 `negative_at_36["bootstrap_upper_pp_max"]` 只查有限数、不查符号。补同侧符号约束 + 一条畸形值反向测试。实测依据：把它设成 `99.0` 验证器照收，mean_delta = −0.1 的温和负面 epoch 就从 `inconclusive_retired_for_epoch` 翻成 `do_not_promote`。
+2. **跑第六刀合并门**：断言全局不变量 —— 所有「事实类日期字段」（`portfolio_risk.fact_as_of`、候选 `quote.source_trade_date`、价格序列最新 bar、龙虎榜 / 大宗 `window_dates` 最大值）**全部 ≤ `price_data_through` 且候选侧恒等于它**，只有 `decision_as_of` 可以更晚。通过后才可以记「第六刀完成」——6A、6B、6B Required 都已落地，只差这一条。
+
+### 待用户裁决的两项治理口径（未裁决前不得开工 8B / 8C / 8D1）
+
+**8D0′（挡着 8B 与 8C）——P3b 解锁门的语义**
+
+- 现状：`runners/a_short_final_action_validation_runner.py:54-57` 的 `P3B_EXTERNAL_PUBLIC_SUMMARIES` 只有两条路径（P1 的 `regime_candidate_effect_summary.json`、P2 的 `target_policy_comparison_summary.json`），P5 不在里面；判定是 `external_verdicts >= 2`，今天恰好等价于「两条都必须过」。
+- 待裁决：① P5 要不要计入 P3b；② `>= 2` 是「两条固定轨都要过」、「三条里任意两条」还是「三条全要」。
+- 为什么必须先定：一旦 P5 进元组而 `>= 2` 不变，同一个数字就无声变成「三取二」，门槛自己放松；先修通 P3b 再决定，等于交付一道语义待定的门。
+
+**8D0″（挡着 8D1）——P5b 的统计口径**
+
+- ① p 值由哪个检验产生。governance 只给了 `formal_alpha_two_sided: 0.025` + `holm_bonferroni: true`，没说检验方法。P4a 的先例是块级 delta 的 sign-flip 随机化，沿用是自然选择，但要显式写进 governance 再实现。
+- ② `checkpoints [12,24,36]` 与 `preliminary_*` 阈值的映射（12=初步 / 24=正式 / 36=终局？）。P4a 是这么分的，同样要显式写死。
+
+两项裁决都写进 governance / registry，不在代码里现定；8B、8C、8D1 的验收都引用这份裁决。
+
+### 本轮就地更正的两条 register 状态
+
+- `R-ASHORT-KNIFE6B-OFFICIAL-CLOCK-FALLBACK-ANCHORS-TO-DECISION-DATE`：状态由 `open P2` 补正为 `closed P2`（2026-07-28 已随 `89dd5e90` 修复且复审 PASS，当时只补 closure 段、忘了翻状态）。
+- `R-ASHORT-MASTER-LANE-PACK-TWO-PREEXISTING-RED`：关闭。该 finding 量在 `8a9d5d83`，现已不复现 —— 实测 `tests.test_a_short_semantic_risk_contract_docs` = `15 OK`（条目点名的目标 a），目标 b 由当前代码态账本 `a_short 2080 OK` 覆盖。留着它的害处正是它自己警告的那件事：一句陈旧的「这条 lane 本来就红」会让后面每个审查者对真回归打折。
+
+### 第八刀的执行顺序（拍完口径后）
+
+`8A`（已完成并合入）→ `8D0′`（裁决）→ `8B`（P2 target 裁判器 + 公开摘要四字段 + 顺带闭 `R-ASHORT-TEST-PACK-REWRITES-TRACKED-P2-PUBLIC-SUMMARY`）→ `8C`（P3 HAC + P3b 可达性 + 修 `:516` 文件名死分支）→ `8D0″`（裁决）→ `8D1`（P5b 裁判器 + 公开摘要 + 一键周跑接线）。每把子刀的不悬空判据与共同纪律见桌面 `ashort_r1.md` 第 8 刀本刀实施拆分节。
