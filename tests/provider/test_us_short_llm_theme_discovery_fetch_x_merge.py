@@ -22,6 +22,19 @@ X_ROWS = [
 
 
 class XFetchAndMergeTests(unittest.TestCase):
+    def setUp(self):
+        self._raw_tempdir = temporary_provider_directory(web.ROOT)
+        self._raw_path = Path(self._raw_tempdir.__enter__())
+        self._web_raw_patch = mock.patch.object(web, "DEFAULT_RAW_ROOT", self._raw_path / "web_raw")
+        self._x_raw_patch = mock.patch.object(xfetch, "DEFAULT_RAW_ROOT", self._raw_path / "x_raw")
+        self._web_raw_patch.start()
+        self._x_raw_patch.start()
+
+    def tearDown(self):
+        self._x_raw_patch.stop()
+        self._web_raw_patch.stop()
+        self._raw_tempdir.__exit__(None, None, None)
+
     def _x_response(self):
         refs = [xfetch._source_id(row["url"]) for row in X_ROWS]
         return json.dumps({"themes": [{"theme_id": "power_demand", "display_name": "Power demand", "summary": "Power demand", "observed_at": "2026-07-24T12:00:00Z", "source_ref_ids": refs, "members": [{"ticker": "AAPL", "source_ref_ids": refs}, {"ticker": "CEG", "source_ref_ids": refs}, {"ticker": "VST", "source_ref_ids": refs}]}]})
@@ -316,13 +329,13 @@ class XFetchAndMergeTests(unittest.TestCase):
                 self.assertEqual(receipt["summary"]["accepted_source_count"], 1)
                 self.assertTrue(receipt["drop_ledger"])
 
-    def test_x_retry_publish_property_same_evidence_different_clocks_is_idempotent(self):
+    def test_x_retry_publish_property_same_source_fetch_clock_new_packet_clock_is_idempotent(self):
         kwargs = dict(queries=["q"], results=X_ROWS[:1], grok_response='{"themes":[]}', expected_decision_date="20260725")
         first, first_receipt, _ = xfetch.build_x_fetch_packet(
             generated_at="2026-07-25T07:00:00Z", fetched_at="2026-07-25T07:00:00Z", **kwargs,
         )
         second, second_receipt, _ = xfetch.build_x_fetch_packet(
-            generated_at="2026-07-25T08:00:00Z", fetched_at="2026-07-25T08:00:00Z", **kwargs,
+            generated_at="2026-07-25T08:00:00Z", fetched_at="2026-07-25T07:00:00Z", **kwargs,
         )
         self.assertEqual(first_receipt["discovery_artifact_sha256"], second_receipt["discovery_artifact_sha256"])
         with temporary_provider_directory(web.ROOT) as td:
@@ -333,6 +346,55 @@ class XFetchAndMergeTests(unittest.TestCase):
                 before = (output.read_bytes(), receipt_path.read_bytes())
                 web.publish_decision_pair(second, output, output, second_receipt, receipt_path, receipt_path)
                 self.assertEqual((output.read_bytes(), receipt_path.read_bytes()), before)
+
+    def test_retry_reuses_frozen_source_fetch_clock_and_rejects_tampering(self):
+        """K3-R32: a retry may restamp its packet clock, never a source fetch instant."""
+        for lane in ("web", "x"):
+            with self.subTest(lane=lane), temporary_provider_directory(web.ROOT) as td:
+                root = Path(td)
+                if lane == "web":
+                    def build(generated_at, fetched_at):
+                        return web.build_web_fetch_packet(
+                            queries=["q"],
+                            search_results=[{
+                                "url": "https://web.example/r32", "title": "R32", "content": "AAPL",
+                                "published_date": "2026-07-24T10:00:00Z",
+                            }],
+                            llm_response='{"themes":[]}', expected_decision_date="20260725",
+                            generated_at=generated_at, fetched_at=fetched_at,
+                            raw_root=root / lane, persist_raw=True,
+                        )
+                else:
+                    def build(generated_at, fetched_at):
+                        return xfetch.build_x_fetch_packet(
+                            queries=["q"], results=[X_ROWS[0]], grok_response='{"themes":[]}',
+                            expected_decision_date="20260725", generated_at=generated_at,
+                            fetched_at=fetched_at, raw_root=root / lane, persist_raw=True,
+                        )
+
+                first, first_receipt, _ = build("2026-07-25T07:00:00Z", "2026-07-25T07:00:00Z")
+                retry, retry_receipt, _ = build("2026-07-25T08:00:00Z", "2026-07-25T08:00:00Z")
+                self.assertEqual(retry_receipt["source_refs"][0]["fetched_at"], "2026-07-25T07:00:00+00:00")
+                artifact_path = root / f"{lane}_artifact.json"
+                receipt_path = root / f"{lane}_receipt.json"
+                web._write_json_pair_atomic(first, artifact_path, first_receipt, receipt_path)
+                web._write_json_pair_atomic(retry, artifact_path, retry_receipt, receipt_path)
+                raw_path = web.ROOT / first_receipt["source_refs"][0]["raw_receipt_ref"]
+                raw = json.loads(raw_path.read_text(encoding="utf-8"))
+                raw["fetched_at"] = "2099-01-01T00:00:00Z"
+                raw_path.write_text(json.dumps(raw), encoding="utf-8")
+                _artifact, tampered_raw_receipt, _summary = build(
+                    "2026-07-25T09:00:00Z", "2026-07-25T09:00:00Z",
+                )
+                self.assertEqual(tampered_raw_receipt["summary"]["accepted_source_count"], 0)
+                self.assertIn("immutable_raw_content_conflict", [
+                    row["reason"] for row in tampered_raw_receipt["drop_ledger"]
+                ])
+                tampered = json.loads(receipt_path.read_text(encoding="utf-8"))
+                tampered["source_refs"][0]["fetched_at"] = "2099-01-01T00:00:00Z"
+                receipt_path.write_text(json.dumps(tampered), encoding="utf-8")
+                with self.assertRaises(web.WebThemeDiscoveryError):
+                    web._write_json_pair_atomic(retry, artifact_path, retry_receipt, receipt_path)
 
     def test_grok_sources_are_receipted_and_url_refs_are_coerced(self):
         response = json.dumps({

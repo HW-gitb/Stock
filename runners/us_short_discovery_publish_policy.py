@@ -11,9 +11,9 @@ site N+1 to forget, and `tests/test_us_short_discovery_conformance.py` fails if 
 write primitive appears anywhere in the lane.
 
 The one axis writers legitimately differ on is WHICH clock keys a retry may re-stamp, so
-that is an explicit parameter instead of a per-writer reimplementation: knife-1/knife-2
-artifacts carry a single top-level `generated_at`, while knife-3 receipts also carry a
-per-source `fetched_at` that a live retry re-stamps at depth.
+that is an explicit parameter instead of a per-writer reimplementation.  Knife-3 may
+re-stamp only its top-level `generated_at`: each source's `fetched_at` is frozen evidence
+and must survive retries unchanged.
 """
 from __future__ import annotations
 
@@ -27,7 +27,7 @@ from uuid import uuid4
 
 # Retry clocks a re-run may legitimately re-stamp without minting different evidence.
 CLOCK_KEYS_ARTIFACT: tuple[str, ...] = ("generated_at",)
-CLOCK_KEYS_RECEIPT: tuple[str, ...] = ("generated_at", "fetched_at")
+CLOCK_KEYS_RECEIPT: tuple[str, ...] = ("generated_at",)
 CLOCK_KEYS_NONE: tuple[str, ...] = ()
 # The lane has exactly ONE mutable artifact family (the per-decision provider reservation
 # counter).  Naming it here means the door - not a call site - decides what may be replaced;
@@ -203,7 +203,7 @@ def write_immutable_json(
 
 def publish_immutable_pair(
     items: Sequence[tuple[dict[str, Any], Path]], *,
-    clock_keys: Sequence[str] = CLOCK_KEYS_RECEIPT, recursive: bool = True,
+    clock_keys: Sequence[str] = CLOCK_KEYS_RECEIPT, recursive: bool,
     verifiers: Sequence[Callable[[Any], None] | None] | None = None,
 ) -> None:
     """Publish several slots as a unit: stage all, then create final names, rolling back new peers."""

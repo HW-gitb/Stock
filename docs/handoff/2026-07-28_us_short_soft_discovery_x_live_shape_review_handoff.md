@@ -86,3 +86,54 @@ The K4b executable coverage and mutation-heavy closure matrix now execute from `
 Collection evidence is `static=27` plus `executable=11`, the original 38 conformance tests. The bounded static package plus the moved K4b class ran `31 OK` in `17.036s`, below the 300-second focused limit. The required final US-short discovery run executed, rather than reusing the old cache: `Ran 4981 tests in 706.708s`, `OK`; the ledger recorded its new code fingerprint at `2026-07-28T23:27:39`.
 
 This is test-structure only: no production code, assertion body, R70 guard, timeout policy, provider/key/network/live path, score effect, or K3-R34 freeze changed. The remaining technical work is still K3-R31/K3-R32 before any separate reconsideration of K3-R34.
+
+## K3-R31/K3-R32 executor repair — 2026-07-28
+
+The K3-R34 early live freeze remains first and unchanged; no provider client, credential, network request, or live run occurred. The future web path now reserves both Tavily and the reviewed maximum DeepSeek regroup capacity before its first paid Tavily request. Its dated budget ledger has per-query-scope reservations, so retrying the exact scope does not add planned calls.
+
+For R32, only receipt-level `generated_at` is a retry clock. Web and X raw source payloads retain `fetched_at`, bind it in `content_sha256`, and a same-evidence retry reuses the source's first frozen fetch instant. A tampered receipt-source `fetched_at` is refused; a genuine retry with a new packet clock remains idempotent. Tests use private gitignored raw roots: an inspected historical default-root fixture (`2026-07-28T13:39:11Z`) lacked `fetched_at`, which correctly conflicts under the repaired contract rather than being silently treated as equivalent.
+
+Fixed main Python focused pack:
+
+```text
+tests.provider.test_us_short_llm_theme_discovery_fetch_web
+tests.provider.test_us_short_llm_theme_discovery_fetch_x_merge
+tests.provider.test_us_short_llm_theme_discovery
+tests.provider.test_us_short_llm_theme_discovery_offline_invariants
+Ran 128 tests in 15.592s
+OK
+```
+
+`py_compile` and `git diff --check` passed. One official full-pack-ledger invocation was made, but it returned no terminal test result; follow-up `full_pack_ledger.py check us_short` reported no cached green on this exact code state. Therefore `full-lane=NOT_VERIFIED`; do not rerun it in this executor turn and do not close K3-R31/K3-R32 or lift K3-R34. Independent review is next.
+
+## K3-R71/K3-R72 recurrence repair — 2026-07-29
+
+K3-R71 is repaired without widening `DECLARED_BATCH_RAISES`: reservation-ledger entries are projected in a comprehension, then malformed shape, duplicate scope and aggregate-count failures are rejected once outside the iteration. This keeps untrusted-item loop behavior separate from the system-boundary ledger failure contract and makes `LanePerItemConformance` green again.
+
+K3-R72 is now a static AST ordering guard because K3-R34 correctly prevents execution of the future paid path. The guard requires `_reserve_live_web_provider_budgets` before `execute_live_web_orchestration`; its own test removes the reserve call and reinserts it after orchestration, then asserts an offender. The project rule added to `AGENTS.md` is deliberately predicate-based: a static conformance guard is a direct focused consumer when its AST/registry predicate intersects the changed symbol. It does not impose a filename-based test tax.
+
+The same-class Optional dispositions are: raw frozen `fetched_at` after the current retry clock is now a per-source rejection; `publish_immutable_pair` requires an explicit keyword-only recursion policy; the active clock-stripping docstring now matches the code; and the non-persisted retry tests were renamed to the narrower property they actually prove while the persisted retry test proves a new packet clock preserves the first frozen source clock.
+
+Focused main-Python evidence before the final test-only R72 helper strengthening: `fetch_web`, `fetch_x_merge`, policy/discovery and `LanePerItemConformance` = **120 OK / 12.167s**. The re-run then stopped before the target test body at an external `temporary_provider_directory` lock (`OSError 36`; lock mtime `2026-07-28T13:04:12Z`), so final focused status is **UNKNOWN**, not a code verdict. `py_compile` and `git diff --check` passed. The one scheduled read-only independent self-review returned PASS with no must-fix and ran no tests. A single official full-pack invocation returned no terminal test result and its ledger has no cached green for this code state; `full-lane=NOT_VERIFIED`, with no rerun. K3-R34 remains frozen and no provider/key/network/live action occurred. Next: independent review after the private-root lock is released.
+
+## 2026-07-29 追加：K3-R31/K3-R32 独立审查 **FAIL** —— 解冻链 ④ 未闭合
+
+判 **FAIL**，红点不在设计方向而在实现落点。这一刀的方向是对的：预算在第一笔付费 Tavily 之前一次性预留、同 query scope 的重试只加尝试次数不加计划调用（K3-R31 的闭合语句），`fetched_at` 回到冻结证据里并进 `content_sha256`、只留顶层 `generated_at` 当重试时钟（K3-R32 的闭合语句）。我另外核过三处不容易看出来的正确性：`_chunk_regroup_rows` 在 `len(chunks) > MAX_DEEPSEEK_REGROUP_CALLS` 时直接抛，所以按常量预留永远不会少留；`generated_at` 只出现在制品与 X 收据的**顶层**，去掉 `recursive` 不会误伤嵌套重试时钟；四个生产建包口全部 `persist_raw=True`，冻结路径覆盖了每个真实调用者。
+
+**红的那条只有全量包能发现，焦点包 128 OK 对它是瞎的**——和 K3-R70 完全一样的盲区。`_reserve_provider_budget` 为了校验新的 `query_reservations` 开了一个 `for entry in reservations:` 循环，循环体里两条 `WebThemeDiscoveryError` 是未声明的批级 raise，令 lane 自己的 §五 red-line #4 守卫转红（`batch_raise_offenders`，`tests/test_us_short_discovery_conformance.py:587`）。官方账本在本代码态实跑：`Ran 4983 tests in 622.385s` / `FAILED (failures=1)`，4983 = 原 4981 加本刀两条新回归，所以除这一条外没有别的回归。第二条 Required 是我用植入对照挖出来的：K3-R31 的全部意义就是「先预留再花钱」，而这条路径被 K3-R34 冻着不可执行，静态断言是唯一可能的证明——现在那条断言只钉了「凭据在预留之前」，把预留整行移到 `execute_live_web_orchestration(` 之后它照样绿。
+
+**全量账本边界**（本轮专门核过，因为上一轮交接停在「只有 prepare 没有结果」）：账本只记 PASS，`prepare` 每个 lane 只有一格且被下一次 `run` 覆盖。所以「有 prepare 没结果」不是含糊信号，它证明包跑过且没绿，但它既不区分 FAIL 与 TIMEOUT，也不保存失败内容；而下一次 `run` 会抹掉上一次的 prepare。另外 `run` 参数形状不对时只打印用法、返回 2、**不写 prepare**，等于完全不留痕。
+
+完整 Required / 复现 / 闭合判据的单一来源仍是 `docs/system_risk_register.md#R-USSHORT-KNIFE3-WEB-X-MERGE-PACKET-BOUNDARY`（K3-R71 / K3-R72 及四条 Optional），本节不复述。**下一步**：修 K3-R71 / K3-R72 后再复审，K3-R34 在那之后才谈解冻。
+
+## 2026-07-29 追加：K3-R71/K3-R72 复审 **PASS** —— 解冻链 ④ 至此闭合
+
+判 **PASS**。K3-R71 走的是我给的首选修法：整个 `for entry in reservations:` 消失，改成 comprehension 投影 + 一条聚合条件在迭代外只抛一次；`_reserve_provider_budget` 现在 AST 上有 **0 个 For/While 节点**，守卫的谓词根本匹配不到它，`DECLARED_BATCH_RAISES` 一字未动——没有靠削守卫过关。等价性我自己探针逐条打过：账本缺 `query_reservations` / 非 list → `cannot prove retry scope`；非 dict 条目、非 str `query_sha256`、字符串或负 `call_count`、重复 scope、`sum != planned` → `live budget ledger is malformed`；同 scope 不同 `call_count` → `retry scope conflicts`；新 scope 超帽 → `budget exhausted: 25+1 > 25`。**重写成单条布尔表达式后最容易漏的两种形状**——不可哈希的 `query_sha256`（进 set comprehension）和非 int 的 `call_count`（进 `sum()`）——都收成 `WebThemeDiscoveryError` 而不是裸 TypeError，说明 `or` 的短路顺序摆对了。正面对照：同 scope 重试 ACCEPTED、`reservation_attempt_count=2`、`planned_provider_call_count` 仍是 2，正是 K3-R31 的闭合语句。
+
+K3-R72 换成 AST 版 `_live_preflight_order_offenders`，并且在同一条测试里就地把 reserve 移到 orchestration 之后证明它会红。我按「守卫必须由外部挖空证明会死」另跑一遍：baseline `[]`、移到花钱之后 `['reserve must precede the first paid orchestration call']`、删掉 `['missing reserve-before-spend call']`。**同时核了它的 inline 对照不是假阳性**——锚点行 `fetched_now = outcome["fetched_at"]` 在 `run_web_fetch` 里真实存在，所以那个变异确实是「重排」而不是退化成「删除」。
+
+四条 Optional：α 闭且没有过度收紧——把冻结 raw 篡改成 2099 后 `accepted_source_count=0`、`source_refs=[]`、掉 `immutable_raw_content_conflict`（上一轮是被原样采信），而把它改成**更早**的 06:00 仍被复用，没有重演 K3-R56；β 闭——`recursive` 变成无默认的 keyword-only，四个调用点（web ×2、capstone、policy 测试）全部显式传值；γ 闭；δ 记为覆盖迁移。
+
+**全量由我按 rule 4 接管重跑**（执行方那轮因外部私有根锁 `OSError 36` 停在 UNKNOWN）：`Ran 4984 tests in 476.291s` / `OK` / `status=PASS exit=0 tests=4984`，已记账。4984 = 我 FAIL 轮的 4983 加一条新签名回归，说明曾经红的 `LanePerItemConformance` 已绿且别处没动。`state/us_short` 0 文件，全程无 provider / key / network / live 动作。
+
+**至此 K3-R71 / K3-R72 CLOSED，K3-R31 / K3-R32 CLOSED，解冻链 ④ 闭合。** 剩下的只有步骤 ⑤ 解 K3-R34，需用户单独命令。
