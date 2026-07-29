@@ -1,5 +1,20 @@
 # Session Log
 
+## 2026-07-29 - Claude Code 复审 PASS(8C 两条 Required 全闭:HAC 退化 fail-closed + P1 配对产物同步)
+
+- **Verdict/Action**: PASS,提交并合入 master。两件都成立:①`_hac_t` 在长期方差非正时返回 `None`,`hac_t` 门原有的 `is not None` 判据即刻 fail-closed,两个公开写盘口补 `allow_nan=False`;②tracked `.md` 由生产渲染器从同一份 json 重渲染,新回归把两份 tracked 产物钉成逐字段相等并带植入失败。**风险分级=comparison-only 低危**;未起 agent、按 rule 4 未重跑全量。
+- **Required**: 无。`docs/system_risk_register.md` 的 `#R-ASHORT-P3-HAC-ZERO-VARIANCE-FAILS-OPEN-AND-EMITS-INFINITY` 与 `#R-ASHORT-KNIFE8C-P1-PUBLIC-PAIR-DESYNC-MARKDOWN-MIRROR-LACKS-SOURCE-HASH` 均已 closed 并带审查方实测;两条 Optional 同处登记(单一来源,本处不复述)。
+- **Verify**: review-evidence:60edbeb53cff。亲跑改动符号及其消费者的超集 6 模块 = `129 OK / 35.1s / exit 0`;按 rule 4 未重跑执行方已记账的 `a_short 2092 OK`。复现原探针:26 周恒等 `0.30` 现 `hac_t=None`、`hac_t` 门 False、verdict `edge_not_proven`(上轮为 `preliminary_edge_positive` + `inf`);恒定负向同样 `edge_not_proven`;有波动对照仍 `preliminary_edge_positive`(t=148.2,不误伤)。`.md` 用生产渲染器从 tracked json 重渲染后与 tracked 逐字节相等,证明是真重渲染。反向控制:`_write_json` 喂 NaN 抛 `Out of range float values` 且不留半截文件、有限值照写。
+- **Next**: 合入 master。
+
+## 2026-07-29 - Codex repair (A-short 8C HAC fail-closed and P1 public-pair closure)
+
+- **Verdict/Action**: Closed both reviewer Required items. Degenerate HAC variance now yields `hac_t=None` and cannot promote P3; public P3/P1 writers reject non-finite JSON. The tracked P1 Markdown was regenerated from the same summary as its JSON, restoring its required source-hash mirror and field-for-field equality. All paths remain pre-freeze and comparison-only.
+- **Required**: Independent Claude Code review only; the two material closure records are `docs/system_risk_register.md#R-ASHORT-P3-HAC-ZERO-VARIANCE-FAILS-OPEN-AND-EMITS-INFINITY` and `docs/system_risk_register.md#R-ASHORT-KNIFE8C-P1-PUBLIC-PAIR-DESYNC-MARKDOWN-MIRROR-LACKS-SOURCE-HASH`.
+- **Verify**: Fixed Python focused suites: P3 final-action 10 OK; P1 summary 28 OK; P1 paired artifact 12 OK; P3b governance 4 OK; effect contract 26 OK. Fixed Python `.tools\\full_pack_ledger.py run a_short "Knife 8C Required: HAC zero-variance fail-closed and P1 public-pair repair" "Focused P3 HAC, P1 paired artifact, P3b and effect-contract regressions passed; public writers reject non-finite JSON." 1300 -- discover -s tests -p "test_a_short*.py"` = 2092 OK, recorded 2026-07-29T16:33:41.
+- **Next**: Claude Code: review.
+- **Pre-Codex self-review**: matrix=complete; register=updated; handoff=SESSION_LOG top entry; focused=80 OK; full-lane=2092 OK; scope=A-short 8C Required only.
+
 ## 2026-07-29 - Claude Code 审查 Pass-with-Required(8C P1 零证据 source_hash 收口)
 
 - **Verdict/Action**: Pass-with-Required,提交并合入 master。手工补的 `sha256("[]")` 经我独立推导坐实是这份产物唯一正确的哈希(全部证据计数为 0 反推出生成时 records 必为空集),不是臆造;P3b 隔离仍在(`_valid_external_public_verdicts()` 显式排除 `insufficient_data`)。但生产写盘是 json+md 配对写,本轮只手工改了 json,配对 Markdown 镜像仍是 8C 前形状,见 Required。**风险分级=comparison-only 低危**;未起 agent、按 rule 4 未重跑全量。

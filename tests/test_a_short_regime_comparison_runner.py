@@ -30,7 +30,7 @@ from runners.a_short_regime_comparison_runner import (  # noqa: E402
     _latest_settled_as_of, save_action_records, render_action_review_reminder,
     run_candidate_effect_sidecar, write_candidate_effect_outcome,
 )
-from engine.a_short_regime_action_comparison import build_action_record  # noqa: E402
+from engine.a_short_regime_action_comparison import build_action_record, validate_candidate_effect_summary  # noqa: E402
 from engine.a_short_regime_features import compute_regime_daily_features  # noqa: E402
 from engine.a_short_regime_ledger import build_ledger, BACKFILL_MIN_TRADING_DAYS  # noqa: E402
 
@@ -356,6 +356,16 @@ class CandidateEffectSidecarTests(unittest.TestCase):
         self.assertEqual(json.loads(mirror), summary)
         self.assertNotIn("position_state", private)
         self.assertNotIn("account_snapshot", private)
+
+    def test_tracked_candidate_effect_markdown_mirror_matches_json(self):
+        summary = json.loads((ROOT / "research/results/a_short/regime_candidate_effect_summary.json").read_text(encoding="utf-8"))
+        markdown = (ROOT / "research/results/a_short/regime_candidate_effect_summary.md").read_text(encoding="utf-8")
+        mirror = json.loads(markdown.split("<!-- candidate-effect-summary-json:", 1)[1].split(" -->", 1)[0])
+        self.assertEqual(mirror, summary)
+        validate_candidate_effect_summary(mirror)
+        mirror.pop("source_hash")
+        with self.assertRaises(ValueError):
+            validate_candidate_effect_summary(mirror)
 
     def test_m67_tracker_digest_mismatch_is_not_counted_or_written(self):
         as_of = _dates(BACKFILL_MIN_TRADING_DAYS)[-1]

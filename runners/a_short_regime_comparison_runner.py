@@ -169,7 +169,7 @@ def load_comparison_records(path: str) -> list:
 def _write_json(obj, path: str) -> None:
     _reject_production_path(path)
     os.makedirs(os.path.dirname(os.path.abspath(path)), exist_ok=True)
-    _atomic_write_text(json.dumps(obj, ensure_ascii=False, indent=2) + "\n", path)
+    _atomic_write_text(json.dumps(obj, ensure_ascii=False, indent=2, allow_nan=False) + "\n", path)
 
 
 def write_candidate_effect_outcome(*, as_of: str, result: dict, summary_path: str,
@@ -606,7 +606,7 @@ def _render_candidate_effect_summary(summary: dict) -> str:
     }[selection["status"]]
     def fmt(value):
         return "N/A" if value is None else f"{float(value):.4f}"
-    mirror = json.dumps(summary, ensure_ascii=False, sort_keys=True, separators=(",", ":"))
+    mirror = json.dumps(summary, ensure_ascii=False, sort_keys=True, separators=(",", ":"), allow_nan=False)
     return "\n".join((
         "# V14.3 per-stock candidate-effect summary",
         "",

@@ -46,7 +46,7 @@ def _hac_t(values: list[float], maxlags: int) -> float | None:
         covariance = sum(centered[pos] * centered[pos - index] for pos in range(index, len(values))) / len(values)
         long_run_variance += 2 * (1 - index / (lag + 1)) * covariance
     if long_run_variance <= 0:
-        return math.inf if mean > 0 else (-math.inf if mean < 0 else 0.0)
+        return None
     return mean / math.sqrt(long_run_variance / len(values))
 
 

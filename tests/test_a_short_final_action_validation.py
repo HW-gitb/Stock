@@ -24,6 +24,7 @@ from runners.a_short_final_action_validation_runner import (  # noqa: E402
     FinalActionValidationError,
     ROUND_TRIP_COST_PCT,
     _contract_fingerprint,
+    _atomic_write,
     _freeze_plan as freeze_p3_plan,
     _load_or_initialize,
     _summary_from_ledger,
@@ -124,10 +125,22 @@ class FinalActionValidationTests(unittest.TestCase):
     def test_hac_adjudication_uses_all_frozen_gates_and_fails_closed_without_drawdown(self):
         rows = [{"managed_minus_simple_hold_pct": 1.0, "managed_plan_count": 1,
                  "drawdown_worsening_pct": 0.0} for _ in range(26)]
-        self.assertEqual(adjudicate_full_edge(rows, evidence_counts=True)["verdict"], "preliminary_edge_positive")
+        constant = adjudicate_full_edge(rows, evidence_counts=True)
+        self.assertEqual(constant["verdict"], "edge_not_proven")
+        self.assertIsNone(constant["progress"]["hac_t"])
+        varying = [{**row, "managed_minus_simple_hold_pct": 1.0 + (index % 2) * 0.1}
+                   for index, row in enumerate(rows)]
+        self.assertEqual(adjudicate_full_edge(varying, evidence_counts=True)["verdict"], "preliminary_edge_positive")
         self.assertEqual(adjudicate_full_edge(rows, evidence_counts=False)["verdict"], "not_adjudicated")
         self.assertEqual(adjudicate_full_edge([{key: value for key, value in row.items() if key != "drawdown_worsening_pct"}
                                                 for row in rows], evidence_counts=True)["verdict"], "not_adjudicated")
+
+    def test_public_writer_rejects_nonfinite_values(self):
+        with tempfile.TemporaryDirectory() as td:
+            target = Path(td) / "summary.json"
+            with self.assertRaises(ValueError):
+                _atomic_write(target, {"adjudication": {"hac_t": float("inf")}})
+            self.assertFalse(target.exists())
 
     def test_forward_tracker_runtime_drift_opens_a_new_epoch(self):
         """A code change upstream opens a new epoch; a comment there must not.
