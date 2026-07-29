@@ -19,6 +19,7 @@ from engine.a_short_overlay_adjudication import (  # noqa: E402
     _screening_runtime_recipe_binding, select_stage3_top5,
     settle_and_summarize_weekly, settle_from_daily_payload, validate_public_summary, write_public_summary,
 )
+from engine import a_short_experiment_admission_registry as _admission_registry  # noqa: E402
 from runners.a_short_factor_comparison_v2_cache_build import CONSUMER_PRIORITY  # noqa: E402
 from engine import a_short_evidence_epoch_mode as _epoch_mode
 from tests._a_short_epoch_mode_test_utils import enter_patched_epoch_modes
@@ -394,6 +395,38 @@ class OverlayAdjudicationTests(unittest.TestCase):
         self.assertEqual(verdict, "candidate_for_manual_promotion")
         verdict, _ = _adjudicate([row(index, bad_drawdown=True) for index in range(36)], 36, 0)
         self.assertEqual(verdict, "do_not_promote")
+
+    def test_terminal_difference_gate_blocks_every_terminal_verdict_and_follows_registry(self) -> None:
+        def row(index: int, *, different: bool) -> dict:
+            month = index + 1
+            decision = f"202{6 + index // 12}{month % 12 or 12:02d}01"
+            arm = {"entry_date": decision[:-2] + "02", "exit_date": decision[:-2] + "11",
+                   "close_drawdown_pct": 0.0, "cash_drag_pct": 0.0, "unfilled_rate_pct": 0.0,
+                   "positions": [{"ts_code": f"p{index}", "entry_status": "filled", "net_return_pct": 1.0}]}
+            return {"decision_date": decision, "same_list": not different,
+                    "h5": {"status": "settled", "delta_pct": -1.0}, "h5_complete": True,
+                    "h10": {"status": "settled", "delta_pct": -1.0, "baseline": arm, "candidate": arm,
+                            "benchmarks": {"csi1000": {"candidate_excess_pct": 0.0}, "csi300": {"candidate_excess_pct": 0.0}}},
+                    "h20": {"status": "settled", "delta_pct": -1.0}, "h20_complete": True}
+
+        def adjudicate(difference: int) -> str:
+            rows = [row(index, different=index < difference) for index in range(36)]
+            return _adjudicate(rows, 36, 0)[0]
+
+        with mock.patch("engine.a_short_overlay_adjudication._epoch_mode.evidence_counts_toward_clock", return_value=True):
+            self.assertEqual(adjudicate(12), "continue_accumulating")
+            self.assertEqual(adjudicate(18), "do_not_promote")
+            changed = _admission_registry.get_admission("p4_stage3_rank_source")
+            changed["statistical_contract"]["definition"]["difference_minimums"]["36"] = 20
+            with mock.patch("engine.a_short_overlay_adjudication.get_admission", return_value=changed):
+                self.assertEqual(adjudicate(18), "continue_accumulating")
+
+    def test_public_checkpoint_progress_uses_the_admission_thresholds(self) -> None:
+        changed = _admission_registry.get_admission("p4_stage3_rank_source")
+        changed["statistical_contract"]["definition"]["difference_minimums"]["36"] = 20
+        with mock.patch("engine.a_short_overlay_adjudication.get_admission", return_value=changed):
+            summary = build_public_summary(root=None, as_of=DECISION)
+        self.assertEqual(summary["checkpoint_progress"]["36"]["remaining_difference_weeks"], 20)
 
     def test_missing_h5_benchmark_coverage_cannot_promote(self) -> None:
         def row(index: int) -> dict:

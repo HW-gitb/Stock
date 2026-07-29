@@ -180,3 +180,29 @@
 ### 下一步注意事项
 
 两条 Optional（均不阻断）：`binding["consumer_refs"]` 无 `.get` 兜底，将来某条 binding 翻成 `must_affect_result` 却忘加该键会抛 KeyError 而非返回契约错误；前缀匹配放行退化写法 `file::`（空符号，实测通过），可收紧成「`::` 后非空」。
+
+## 2026-07-29 追加：第八刀 8A（P4a 终局差异门 + checkpoint 契约单一来源）
+
+### 改了什么
+
+- `engine/a_short_experiment_admission_registry.py::_p4_admission` 的 `statistical_contract` 新增 `nonoverlap_block_minimums {"12":6,"24":12,"36":12}`。
+- `engine/a_short_overlay_adjudication.py` 新增 `_checkpoint_contract()`：从已封 admission 一次读出 checkpoint / difference / 非重叠块三组门，形状不合（数量、排序、键集、正整数）即抛 `OverlayAdjudicationError`。`_adjudicate` 删掉硬编码的 12/24/36/6/12 改用它，并把 **terminal difference 门提到所有终局 verdict 之前**；`build_public_summary` 的 H5/H20 状态、`_public_failed_gates` 的档位、`_summary` 的 `checkpoints`/`checkpoint_progress` 也全部由同一份契约推导。
+
+### 为什么改
+
+条目 5：36 周检查点此前只对晋级要求 `difference_minimums["36"]`，`do_not_promote` 与 `inconclusive_retired_for_epoch` 两条**终局**返回没有这道门 —— 政策分离证据不足时也能退役 epoch。12/24 两档都拦了所有结论，唯独 36 档只拦晋级，代码自身不自洽。
+
+### 验证命令与结果
+
+- 审查方亲跑 `tests.test_a_short_overlay_adjudication + tests.test_a_short_experiment_governance` = `38 OK / 4.5s / exit 0`，`tests.test_a_short_experiment_admission_registry` = `12 OK / 0.7s / exit 0`；执行方已记账 `full_pack_ledger run a_short = 2079 OK / 211.1s / exit 0`（rule 4，未重跑）。
+- **审查方探针（本刀的核心不变式：改 registry 必须让结论变）**：36 周 / 18 差异 / 负面数据，基线 `do_not_promote`；`difference_minimums["36"]` 改动能翻转结论、`nonoverlap_block_minimums["24"]` 改成 999 变 `continue_accumulating` —— 两者确被读；**`nonoverlap_block_minimums["36"]` 改成 999 结论纹丝不动 —— 没被读**（见下方 Required）。
+- 风险分级=comparison-only 低危：`_adjudicate` 开头 `evidence_counts_toward_clock` 早返回，预冻结期任何终局 verdict 都打不出来；这是解冻后才咬人的潜伏缺陷。按用户指令未起独立对抗 agent。
+
+### 失效的旧结论
+
+桌面稿把条目 5 写成「P4 对比轨可以在样本不足时提前给出淘汰结论」，读起来像现行风险；实际 `_adjudicate` 里有 `# Pre-freeze evidence is audit-only: never promote, retire or judge on it.`，今天打不出来。桌面第 8 刀已同步改写为「解冻后才咬人的潜伏缺陷」。
+
+### 下一步注意事项
+
+- 一条 open Required：`docs/system_risk_register.md#R-ASHORT-KNIFE8A-TERMINAL-BLOCK-MINIMUM-DECLARED-BUT-NEVER-READ`（36 周块下限声明了却无读点）。
+- 一条同类 Optional（非 8A scope，留给 8B/8C/8D1）：统计阈值仍是第二份副本 —— 把 `preliminary.negative_mean_delta_pp_max` 改成 `-99.0`，36 周负面数据仍判 `do_not_promote`，因为代码里写死 `-.25`；`mean_delta_pp_min` / `block_win_rate_min` / α 同理。桌面第 8 刀「共同纪律」第 2 条要求的守护测试应覆盖到这些维度。

@@ -314,6 +314,7 @@ def _p4_admission() -> dict:
     }
     statistical = {
         "eligible_checkpoints": [12, 24, 36], "difference_minimums": {"12": 6, "24": 12, "36": 18},
+        "nonoverlap_block_minimums": {"12": 6, "24": 12, "36": 12},
         "nonoverlap": {"window": "h10", "strict_entry_after_prior_exit": True},
         "preliminary": {"mean_delta_pp_min": 0.25, "block_win_rate_min": 0.55,
                           "negative_mean_delta_pp_max": -0.25},

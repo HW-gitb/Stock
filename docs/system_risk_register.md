@@ -1,5 +1,20 @@
 # System Risk Register
 
+### R-ASHORT-KNIFE8A-TERMINAL-BLOCK-MINIMUM-DECLARED-BUT-NEVER-READ - 8A 新加的 36 周非重叠块下限是装饰性的，改它不产生任何效果
+
+- **状态 / 严重度**: open P3，已随 8A 一同合入（closeout gate 第 3 条：material Required 可「已登记」后放行）。comparison-only 且预冻结，今天不可能影响任何结论；P3 而非更低，是因为它恰好违反本刀自己要建立的那条不变式。
+- **机制**: 8A 往已封的 `p4_stage3_rank_source` admission 里新增了 `nonoverlap_block_minimums {"12":6,"24":12,"36":12}`，但 `_adjudicate` 解包时把终局那一项丢掉了（`terminal_weeks, terminal_difference, _ = terminal`）。12 与 24 两档确实被读（`len(blocks) < preliminary_blocks` / `< formal_blocks`），**36 档无任何读点**。
+- **实测（审查方探针，36 周 / 18 差异 / 负面数据）**: 基线 `do_not_promote`；把 `nonoverlap_block_minimums["36"]` 改成 `999` → 仍 `do_not_promote`（**没被读**）；对照把 `["24"]` 改成 `999` → 变 `continue_accumulating`（被读）。
+- **为何 material**: 本刀的全部意义就是「阈值只有 registry 一个来源，改 registry 必须让裁判结果变」。现在契约里多了一个**声明了却不生效**的门，正是它要消灭的那一类；而且本刀新增的守护测试只覆盖 difference 一维，改 `["36"]` 块下限不会让任何测试变红。
+- **Required repair**: 在终局分支的 difference 门旁补一条对称的块门（`if len(blocks) < terminal_blocks: return "continue_accumulating"`），或者干脆不要往契约里加这个键。二选一，但不许维持「声明而不读」。守护测试同步扩到块维度。
+- **Closure tests**: (1) 36 周 / 差异达标 / `nonoverlap_block_minimums["36"]` 调高到块数达不到 → 必须 `continue_accumulating`；(2) 调回原值 → 恢复原结论；(3) 12/24 两档的既有控制保持绿。
+
+### R-ASHORT-KNIFE8A-P4A-TERMINAL-DIFFERENCE-GATE - P4a terminal gate omitted its difference minimum
+
+- **状态 / 严重度**: closed P2（同刀开同刀闭；2026-07-29 Codex 修复 → Claude Code 审查 Pass-with-Required）。comparison-only 且预冻结，`_adjudicate` 开头就有 `evidence_counts_toward_clock` 早返回，故这是**解冻后才会咬人的潜伏缺陷**，不是现行实盘风险。无 EGS 选股、M6.7、provider、账户、订单或生产切换影响。
+- **机制与修复**: 强制模式下 36 周路径此前只对晋级要求 `difference_minimums["36"]`，负面/不确定分支可以在政策分离证据不足时退役 epoch。`engine/a_short_overlay_adjudication.py` 现由新函数 `_checkpoint_contract()` 从已封的 `p4_stage3_rank_source` admission 一次读出 checkpoint / difference / 非重叠块三组门（形状不合即抛 `OverlayAdjudicationError`），并把 terminal difference 门提到**所有**终局 verdict 之前；公开 checkpoint/progress 面也由同一份契约推导。
+- **审查方独立验证**: 亲跑 focused 复跑绿；按 rule 4 未重跑执行方已记账的全量。自写探针逐项试「改 registry 是否真能改结论」：`difference_minimums["36"]` 与 `nonoverlap_block_minimums["24"]` 改动**都能**翻转结论（真被读），36 周 / 12 差异 / 负面数据确为 `continue_accumulating`、18 差异确为 `do_not_promote`。**但两项没被读**，见下条 Required 与 Optional。
+
 ### R-ASHORT-KNIFE7-EFFECT-CONTRACT-CONSUMER-REF-NAMES-A-GONE-CONSUMER - 效应契约仍宣称 weekly_pipeline 消费该阈值，实际消费者已搬走
 
 - **状态 / 严重度**: closed P3（已随 `059557a3` 一同登记；2026-07-29 修复完成）。仅治理产物的 prose 漂移；无引擎、选股、provider、账户或 schema 行为影响，机器校验的那一半是对的。

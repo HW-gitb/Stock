@@ -787,8 +787,35 @@ def _risk_metrics(rows: list[dict]) -> dict:
     return metrics
 
 
+def _checkpoint_contract() -> tuple[tuple[int, int, int], ...]:
+    """Read P4a's complete checkpoint gates from its sealed admission only."""
+    try:
+        statistical = get_admission(ADMISSION_ID)["statistical_contract"]["definition"]
+        checkpoints = statistical["eligible_checkpoints"]
+        difference_minimums = statistical["difference_minimums"]
+        block_minimums = statistical["nonoverlap_block_minimums"]
+    except (KeyError, TypeError, ValueError) as exc:
+        raise OverlayAdjudicationError("P4a checkpoint contract is malformed") from exc
+    if (not isinstance(checkpoints, list) or len(checkpoints) != 3
+            or any(type(value) is not int or value <= 0 for value in checkpoints)
+            or checkpoints != sorted(checkpoints)):
+        raise OverlayAdjudicationError("P4a checkpoint contract is malformed")
+    keys = {str(value) for value in checkpoints}
+    if (not isinstance(difference_minimums, dict) or not isinstance(block_minimums, dict)
+            or set(difference_minimums) != keys or set(block_minimums) != keys
+            or any(type(value) is not int or value <= 0 for value in difference_minimums.values())
+            or any(type(value) is not int or value <= 0 for value in block_minimums.values())):
+        raise OverlayAdjudicationError("P4a checkpoint contract is malformed")
+    return tuple((checkpoint, difference_minimums[str(checkpoint)], block_minimums[str(checkpoint)])
+                 for checkpoint in checkpoints)
+
+
 def _adjudicate(rows: list[dict], mature: int, no_count: int) -> tuple[str, dict]:
     eligible, difference, blocks = len(rows), sum(not row["same_list"] for row in rows), _block_rows(rows)
+    preliminary, formal, terminal = _checkpoint_contract()
+    preliminary_weeks, preliminary_difference, preliminary_blocks = preliminary
+    formal_weeks, formal_difference, formal_blocks = formal
+    terminal_weeks, terminal_difference, _ = terminal
     values = [row["h10"]["delta_pct"] for row in rows]; block_values = [row["h10"]["delta_pct"] for row in blocks]
     metrics = {"eligible": eligible, "difference": difference, "blocks": len(blocks), "mean_delta": mean(values) if values else None,
                "block_win_rate": (sum(value > 0 for value in block_values) / len(block_values) if block_values else None),
@@ -799,19 +826,20 @@ def _adjudicate(rows: list[dict], mature: int, no_count: int) -> tuple[str, dict
     metrics["h20_coverage_ok"] = all(row.get("h20_complete") is True for row in rows)
     # Pre-freeze evidence is audit-only: never promote, retire or judge on it.
     if not _epoch_mode.evidence_counts_toward_clock("p4a_overlay_adjudication"): return "continue_accumulating", metrics
-    if eligible < 12: return "continue_accumulating", metrics
+    if eligible < preliminary_weeks: return "continue_accumulating", metrics
     if not metrics["h5_coverage_ok"]: return "pending_h5_coverage", metrics
-    if difference < 6: return "insufficient_policy_separation", metrics
-    if len(blocks) < 6: return "continue_accumulating", metrics
+    if difference < preliminary_difference: return "insufficient_policy_separation", metrics
+    if len(blocks) < preliminary_blocks: return "continue_accumulating", metrics
     preliminary_positive = metrics["mean_delta"] >= .25 and metrics["block_win_rate"] >= .55 and metrics["risk_ok"]
     preliminary_negative = metrics["mean_delta"] <= -.25 or not metrics["risk_ok"]
-    if eligible < 24: return ("preliminary_positive" if preliminary_positive else "preliminary_negative" if preliminary_negative else "continue_accumulating"), metrics
+    if eligible < formal_weeks: return ("preliminary_positive" if preliminary_positive else "preliminary_negative" if preliminary_negative else "continue_accumulating"), metrics
     h20_complete = metrics["h20_coverage_ok"]
     if not h20_complete: return "pending_h20_coverage", metrics
-    if difference < 12 or len(blocks) < 12 or mature <= 0 or no_count / mature > .20: return "continue_accumulating", metrics
+    if difference < formal_difference or len(blocks) < formal_blocks or mature <= 0 or no_count / mature > .20: return "continue_accumulating", metrics
     positive = preliminary_positive and metrics["bootstrap_lower"] is not None and metrics["bootstrap_lower"] >= .25 and metrics["signflip_p"] is not None and metrics["signflip_p"] <= .025 and metrics["months"] >= 6 and metrics["monthly_cluster_t"] is not None and metrics["monthly_cluster_t"] >= 2.0
-    if eligible < 36: return ("candidate_for_manual_promotion" if positive else "continue_accumulating"), metrics
-    if positive and difference >= 18: return "candidate_for_manual_promotion", metrics
+    if eligible < terminal_weeks: return ("candidate_for_manual_promotion" if positive else "continue_accumulating"), metrics
+    if difference < terminal_difference: return "continue_accumulating", metrics
+    if positive: return "candidate_for_manual_promotion", metrics
     if (metrics["mean_delta"] <= -.25 and metrics["bootstrap_upper"] is not None and metrics["bootstrap_upper"] < 0) or not metrics["risk_ok"]:
         return "do_not_promote", metrics
     return "inconclusive_retired_for_epoch", metrics
@@ -846,8 +874,9 @@ def build_public_summary(*, root: str | Path | None, as_of: str, epoch_context: 
                          "h20": h20, "h20_complete": complete})
         elif h10.get("status") == "no_count": mature += 1; no_count += 1
     verdict, metrics = _adjudicate(rows, mature, no_count); eligible, difference, blocks = len(rows), sum(not row["same_list"] for row in rows), len(_block_rows(rows))
-    h5_status = "not_due" if eligible < 12 else "complete" if h5_complete else "pending_h5_coverage"
-    h20_status = "not_due" if eligible < 24 else "complete" if h20_complete else "pending_h20_coverage"
+    preliminary, formal, _ = _checkpoint_contract()
+    h5_status = "not_due" if eligible < preliminary[0] else "complete" if h5_complete else "pending_h5_coverage"
+    h20_status = "not_due" if eligible < formal[0] else "complete" if h20_complete else "pending_h20_coverage"
     status = "manual_promotion_candidate" if verdict == "candidate_for_manual_promotion" else "do_not_promote" if verdict == "do_not_promote" else "retired_for_epoch" if verdict == "inconclusive_retired_for_epoch" else "preliminary_review" if verdict.startswith("preliminary_") else "accumulating"
     return _summary(as_of, status, eligible, difference, blocks, mature, no_count, h5_status, h20_status, verdict,
                     metrics, context)
@@ -862,12 +891,15 @@ def _public_failed_gates(metrics: dict | None, *, eligible: int, blocks: int, ma
               ("false_negative_ok", "false_negative_rate"), ("cash_ok", "cash_or_unfilled"),
               ("h5_coverage_ok", "h5_coverage"),
               ("h5_h20_not_both_adverse", "h5_h20_adverse"))
+    preliminary, formal, _ = _checkpoint_contract()
+    preliminary_weeks, _, preliminary_blocks = preliminary
+    formal_weeks, _, _ = formal
     failed.extend(name for key, name in checks if metrics.get(key) is False)
-    if eligible >= 12 and metrics.get("mean_delta") is not None and metrics["mean_delta"] < .25:
+    if eligible >= preliminary_weeks and metrics.get("mean_delta") is not None and metrics["mean_delta"] < .25:
         failed.append("mean_delta")
-    if blocks >= 6 and metrics.get("block_win_rate") is not None and metrics["block_win_rate"] < .55:
+    if blocks >= preliminary_blocks and metrics.get("block_win_rate") is not None and metrics["block_win_rate"] < .55:
         failed.append("nonoverlap_block_win_rate")
-    if eligible >= 24:
+    if eligible >= formal_weeks:
         if metrics.get("h20_coverage_ok") is False: failed.append("h20_coverage")
         if metrics.get("bootstrap_lower") is not None and metrics["bootstrap_lower"] < .25: failed.append("block_bootstrap_lower")
         if metrics.get("signflip_p") is not None and metrics["signflip_p"] > .025: failed.append("block_signflip")
@@ -881,15 +913,17 @@ def _summary(as_of: str, status: str, eligible: int, difference: int, blocks: in
              h5: str, h20: str, verdict: str, metrics: dict | None = None,
              epoch_context: dict | None = None) -> dict:
     context = epoch_context or _epoch_context()
+    checkpoints = _checkpoint_contract()
     result = {"schema_name": "a_short_overlay_adjudication_summary", "schema_version": "1.0.0", "summary_id": "a_short_p4_stage3_rank_source", "as_of": as_of, "status": status,
                "eligible_policy_weeks": eligible, "difference_weeks": difference, "nonoverlap_blocks": blocks, "mature_opportunities": mature, "no_count_weeks": no_count,
                "h5_coverage_status": h5, "h20_coverage_status": h20,
                "epoch_id": context["epoch_id"],
-               "checkpoints": {"12": "available" if eligible >= 12 else "deficient", "24": "available" if eligible >= 24 else "deficient", "36": "available" if eligible >= 36 else "deficient"},
+               "checkpoints": {str(checkpoint): "available" if eligible >= checkpoint else "deficient"
+                               for checkpoint, _, _ in checkpoints},
                "checkpoint_progress": {str(checkpoint): {"remaining_eligible_weeks": max(0, checkpoint - eligible),
                                        "remaining_difference_weeks": max(0, target_difference - difference),
                                        "remaining_nonoverlap_blocks": max(0, target_blocks - blocks)}
-                                       for checkpoint, target_difference, target_blocks in ((12, 6, 6), (24, 12, 12), (36, 18, 12))},
+                                       for checkpoint, target_difference, target_blocks in checkpoints},
                "failing_risk_or_statistical_gates": _public_failed_gates(metrics, eligible=eligible, blocks=blocks, mature=mature, no_count=no_count),
                "adjudication": {"verdict": verdict, "advisory_only": True, "user_decision_required": verdict == "candidate_for_manual_promotion", "automatic_policy_switch": False, "automatic_production_config_write": False},
               "message": "P4a Stage3 排名源比较仅积累旁路证据；不改变正式 Top5、EGS、M6.7、仓位或退出。", "production_unchanged": True}

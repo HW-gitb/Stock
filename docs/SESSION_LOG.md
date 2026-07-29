@@ -1,5 +1,20 @@
 # Session Log
 
+## 2026-07-29 - Claude Code 审查 Pass-with-Required(第八刀 8A:P4a 终局差异门)
+
+- **Verdict/Action**: Pass-with-Required,已提交并合入 master。8A 的主修法成立:新函数 `_checkpoint_contract()` 从已封 admission 一次读出 checkpoint/difference/块 三组门并硬校验形状,terminal difference 门提到**所有**终局 verdict 之前(36 周 / 12 差异 / 负面数据由旧的 `do_not_promote` 变为 `continue_accumulating`),公开 checkpoint/progress 面也由同一份契约推导。**风险分级=comparison-only 低危**:`_adjudicate` 开头就有预冻结早返回,这是解冻后才咬人的潜伏缺陷而非现行实盘风险;按用户指令未起独立 agent,按 rule 4 未重跑执行方已记账的全量。但本刀顺手往契约里加了一个不生效的门,见 Required。
+- **Required**: 一条,新开 `docs/system_risk_register.md#R-ASHORT-KNIFE8A-TERMINAL-BLOCK-MINIMUM-DECLARED-BUT-NEVER-READ`(P3,已登记随本刀放行):新增的 `nonoverlap_block_minimums["36"]` 在 `_adjudicate` 里被解包丢弃,声明了却没有任何读点。
+- **Verify**: review-evidence:0194c52bf74c。亲跑覆盖改动符号的两包:`test_a_short_overlay_adjudication + test_a_short_experiment_governance` = `38 OK / 4.5s`;`test_a_short_experiment_admission_registry` = `12 OK / 0.7s`;按 rule 4 未重跑执行方已记账的 `a_short 2079 OK / 211.1s`。自写探针把「改 registry 是否真能改结论」逐项打了一遍:`difference_minimums["36"]` 与 `nonoverlap_block_minimums["24"]` 都能翻转结论(真被读);`nonoverlap_block_minimums["36"]` 调到 999 结论纹丝不动(没被读)。
+- **Next**: Codex:修复该 Required。Optional(非本刀 scope,留给 8B/8C/8D1 的共同纪律):统计阈值仍是第二份副本——把 `preliminary.negative_mean_delta_pp_max` 改成 `-99.0`,36 周负面数据仍判 `do_not_promote`,因为代码里写死 `-.25`;`mean_delta_pp_min 0.25` / `block_win_rate_min 0.55` / α `0.025` 同理。本刀只被要求搬 checkpoint 那几个数,故不判 Required,但同类未净。
+
+## 2026-07-29 - Codex implementation (A-short Knife 8A P4a terminal difference gate)
+
+- **Verdict/Action**: Closed `R-ASHORT-KNIFE8A-P4A-TERMINAL-DIFFERENCE-GATE`: P4a's enforced 36-week terminal outcomes now all require the sealed terminal policy-separation minimum. Checkpoint, difference, and non-overlap-block thresholds have one source in the P4a admission; adjudication and public checkpoint progress consume it. Pre-freeze remains audit-only and no selection, M6.7, provider, account, order, or production-switch path changed.
+- **Required**: No residual material Required; closure detail is in `docs/system_risk_register.md#R-ASHORT-KNIFE8A-P4A-TERMINAL-DIFFERENCE-GATE`.
+- **Verify**: Fixed Python `-m unittest tests.test_a_short_overlay_adjudication tests.test_a_short_experiment_admission_registry` = 39 OK / 4.644s; fixed Python `-m unittest tests.test_a_short_effect_contract tests.test_a_short_evidence_epoch_mode tests.test_a_short_overlay_adjudication tests.test_a_short_experiment_admission_registry` = 89 OK / 47.188s; static effect contract = clean. Fixed Python `.tools\full_pack_ledger.py run a_short "Knife 8A: P4a terminal difference gate and registry-only checkpoint contract" "fixed Python P4a/admission/effect-contract focused suite passed" 1300 -- discover -s tests -p "test_a_short*.py"` = PASS, 2079 tests / 211.1s / exit 0. Fixed Python `-m unittest tests.test_doc_governance_guard tests.test_route_doc_ledger_status_consistency` = 53 OK / 0.800s; `git diff --check` clean (CRLF warnings only).
+- **Next**: Claude Code: review.
+- **Pre-Codex self-review**: A=all P4a checkpoint consumers (adjudication, H5/H20 status, failed-gate panel, public progress); B=old P4a checkpoint branch forms 0 hits; C=36/12 negative terminal and registry mutation controls added; E=CURRENT/README unchanged; F=no independent-agent window; matrix=complete; register=updated; handoff=SESSION_LOG top entry; focused=89 OK; full-lane=2079 OK / 211.1s; scope=A-short 8A only.
+
 ## 2026-07-29 - Claude Code 复审 PASS(consumer_ref 漂移已按根因焊死)
 
 - **Verdict/Action**: PASS,提交并合入 master。没有只改那一行字:`static_contract_error` 对每个 `must_affect_result` binding 新增机器门——consumer_ref 必须含 `::` 且必须是该 policy path 实算 leaf reader 的前缀;六条 binding 的 consumer_refs 全部由散文迁成 `file::symbol`,`phase5_thresholds` 改指 render。**风险分级=低危**(纯治理契约 + 一道新静态断言,不碰引擎/选股/provider/PIT);按用户指令未起独立 agent、未跑全量。合并时顺手收掉执行方在 register 顶部新开的 `## 2026-07-29 closure update` 平行小节——closure 事实并进条目本身,免得 register 长出一条与条目并行的流水账(§E route-doc 单态)。
