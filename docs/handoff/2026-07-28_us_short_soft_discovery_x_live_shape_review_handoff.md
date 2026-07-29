@@ -1,8 +1,79 @@
 # US-short soft-discovery X live response-shape re-review — 2026-07-28
 
+## 2026-07-29 追加：K3-R81 / K3-R82 独立审查 — PASS（Claude Code，48b5 工作树，已提交并合入 master）
+
+**为什么 PASS**：三条腿都补齐且都被外部挖空证明是承重的。Required 正文与关闭证据只在 `docs/system_risk_register.md`（K3-R81 / K3-R82 CLOSED），此处不复述。
+
+**验证命令 / 结果**：
+- 未起全量（用户指令 + rule 4 docs-only 例外）：本轮相对已审 K3-R80 状态的 delta 只有 `AGENTS.md` 1+/1- 与文档，reviewer 自有的 `Ran 5001 tests` / `OK` 仍然有效。
+- 验收超集：`.tools\run_unittest_with_repo_pythonpath.cmd tests.test_doc_governance_guard tests.test_review_tiering_enforcement tests.test_route_doc_ledger_status_consistency` → `RESULT tier=focused status=PASS exit=0 tests=72 elapsed=2.8s`。
+- 外部挖空 12/12（真文件 + 真守卫 + 按字节还原 + 核 sha256）：删掉单反斜杠 `` `.tools\codex_main_python.ps1` remains the strict host-Python entrypoint `` → 路由断言转红（证明 415/689 行的 `\\` 转义写法不顶用）；删掉 K3-R80 条目里补回的 `Pre-Codex self-review` 行 → closeout 守卫转红；两处还原后复跑皆绿。
+
+**失效的旧结论**：K3-R80-O2 已并入 K3-R81 并随之关闭，不要再当 Optional 追。
+
+**下一步注意事项**：rule 4 里恢复的「不要 `Start-Process` 包裹 / 不要拼成单个 `ArgumentList`」那句**没有任何机器守卫**——我的对照证明删掉它全绿，它上次就是这么无声消失的。下一次碰 `tests/test_doc_governance_guard.py` 时顺手加一行 `assertIn` 把它钉住，不要为它单开一轮。
+
+## 2026-07-29 追加：K3-R81 / K3-R82 executor repair（待 Claude Code 独立审查）
+
+**判断与修复**：两条 Required 成立，且都来自上一刀 O1 的文档改动，不是 K3-R80 残留修复本身。rule 4 保持「带字面 `--` 的 ledger 必须直调固定主 Python」，同时恢复 `.tools\codex_main_python.ps1` 作为不含该 separator 的严格主 Python 入口；明确 rule 5 仍是 focused 测试入口，并恢复「不得 `Start-Process` 包裹或把 argv 拼成一个 `ArgumentList` 字符串」的禁令。上一条 Codex K3-R80/O1 entry 补入带 `matrix=`、`register=`、`handoff=`、`focused=`、`full-lane=` 的 labeled self-review 行。
+
+**证据 / 边界**：固定主 Python 治理超集：`tests.test_doc_governance_guard` + `tests.test_review_tiering_enforcement` = `Ran 58 tests` / `OK`；`git diff --check` 通过。K3-R80 的 reviewer-owned full lane 已为 `5001 OK`，本轮仅治理文档，按 rule 4 不使该全量结果失效、也不重复跑。无 provider/key/network/live 动作，未 push / remote。
+
+**交给 Claude Code**：独立审查 K3-R81 / K3-R82；不要把 `.tools\codex_main_python.ps1` 重新用于含 `--` 的 full ledger argv。
+
+## 2026-07-29 追加：K3-R80 / K3-R80-O1 独立审查 — FAIL（Claude Code，48b5 工作树，未提交）
+
+**改了什么**：六个 `tempfile.mkdtemp(dir=<protected root>)` 点（status source / bankruptcy / retry pacing / replay ×3）改成受管 `TemporaryDirectory`；replay 的 capture summary 移到独立的非-source-raw 临时根；`tests/test_us_short_soft_boost_consumption.py` 每次 `setUp()` 建独立 `TemporaryDirectory` 并 `addCleanup`，根治重复 `setUp()` 只清最后一套的老 `tearDown`；删 61 个 gitignored 旧夹具目录；`AGENTS.md` rule 4 改为固定主 Python 直调账本。
+
+**为什么 FAIL**：K3-R80 的实质修复是对的——守卫一行没动（`tests/test_us_short_discovery_class_guards.py` 与上轮我已审的 diff 逐字节相同），改的是丢垃圾的测试本身，正是 Required 要求的方向，且已被官方全量账本与我自写的独立扫描器双向证实。挡住这一刀的是同刀的 O1 改动：rule 4 重写删掉了 `AGENTS.md` 里唯一能满足文档守卫断言的单反斜杠 `.tools\codex_main_python.ps1`，把 `tests/test_doc_governance_guard.py` 由绿打红；同一次重写还删了 `Start-Process` / `ArgumentList` 那句，并让 rule 4 与 rule 5 / line 689 互相矛盾。另一条是执行方本轮 `修复` 条目缺 `Pre-Codex self-review` 行。Required 正文只在 `docs/system_risk_register.md`（K3-R81 / K3-R82；K3-R80 实质证据同处），此处不复述。
+
+**验证命令 / 结果**：
+- 全量（rule 4 官方账本，reviewer 取得 ownership 亲跑；rule 3d：包范围守卫无法被 focused 包界定）：`python .tools\full_pack_ledger.py run us_short "<trigger>" "<evidence>" 1300 -- discover -s tests -p 'test_us_short*.py'` → `Ran 5001 tests in 653.584s` / `OK`；`RESULT status=PASS exit=0 tests=5001 elapsed=654.5s deadline=1300s`，已记账。与上轮 FAIL 同为 5001，说明没增删或跳过用例。
+- reviewer 自写独立扫描器 9/9（刻意不复用 `_growth` 与它的 import 基线）：植入嵌套文件可检出且已清除；六个修复模块 `44 OK` 后 `provider_samples` 与 `state/us_short` 零增长零丢失；`tests/test_us_short_soft_boost_consumption` 单跑 `10 OK` 且零残留。
+- 整类扫描：lane 内存活的 `mkdtemp(` 全部无 `dir=<protected root>`；`k4b_*` 残留 0、`_unit_tests/run_*` 残留 0、`state/us_short` 文件 0；删目录未触及任何 tracked 文件。
+
+- 文档守卫：`.tools\run_unittest_with_repo_pythonpath.cmd tests.test_doc_governance_guard` → `RESULT tier=focused status=FAIL exit=1 tests=39 elapsed=0.9s`，两条红即 K3-R81 / K3-R82。该模块不匹配 `test_us_short*.py`，全量绿与它无关。回归归属已证：把守卫那条归一化断言分别跑在 `git show HEAD:AGENTS.md` 与当前树上 → True / False。
+
+**失效的旧结论**：executor 记的「post-repair full lane = NOT_VERIFIED」已由本轮官方账本 PASS 取代，不要再当未验证引用；K3-R80 的残留实质不必重验。上一轮记的 K3-R80-O2 已升级并并入 K3-R81，不要再当 Optional 处理。
+
+**下一步注意事项**：改 `AGENTS.md` 必须把 `tests/test_doc_governance_guard` 放进 focused pack——本轮 44 个用例里一个文档守卫都没有，这是两条红的共同根因。另 `tests/test_us_short_soft_boost_consumption` 排在残留守卫之后，全量包结构上看不见它的残留——以后再动这个模块，必须像本轮一样单独跑 + 自己扫，别拿全量绿当它的证据。
+
+## 2026-07-29 追加：K3-R80 / K3-R80-O1 executor repair（待 Claude Code 独立审查）
+
+**方案判断**：保留 `LaneResidueConformance` 的 `provider_samples` 增长腿是正确解；不能按发现顺序或缩小根目录绕开。审查列出的六个 `mkdtemp` 点中四个已有局部清理，但统一迁到 `TemporaryDirectory` 才能防止未来早退或新分支漏清。soft-boost 的根因更深：一个测试内重复调用 `setUp()` 会覆盖旧 `self.paths`，原 `tearDown()` 只能删最后一套夹具；现在每一套都注册独立 cleanup。
+
+**修复**：status-source、bankruptcy、retry pacing、replay 的六个 raw 夹具点均改为受管临时目录；replay capture summary 明确放在独立的非-source-raw 临时根。soft-boost 改为每次 `setUp()` 建立并 `addCleanup` 一个 `TemporaryDirectory`。经路径和 gitignore 核验后，删除 61 个旧 `k4b_*` / status `run_*` 测试夹具；不触碰其他 provider 样本。`AGENTS.md` rule 4 改为直接固定主 Python 调账本，修复 PowerShell launcher 吞 `--` 的 Optional。
+
+**证据 / 边界**：固定主 Python、离线 focused 超集（status source、bankruptcy、retry pacing、replay、soft-boost、residue guard）=`Ran 44 tests` / `OK`；`py_compile` 与 `git diff --check` 通过；六点 `mkdtemp` 静态扫描为零，命名测试残留目录为零，`state/us_short` 文件为零。第一次此超集曾在 replay 红两条：capture summary 被放入 source raw 后被 replay 正确当作非 wrapper 拒绝；已移到独立根并同命令转绿。此前官方全量 `5001` 的单一 guard FAIL 仍为真实历史证据；本轮探针已红，按规则没有启动第二次全量，因此 post-repair full lane = **NOT_VERIFIED**。无 provider/key/network/live 动作，未 push / remote。
+
+**交给 Claude Code**：独立审查 K3-R80 / O1；按 AGENTS tiering 处理是否拥有 final-diff 的唯一 rule-4 全量，不得把当前 `NOT_VERIFIED` 写成 PASS。
+
+## 2026-07-29 追加：K3-R77 两条 residual Optional 修复的独立审查 — FAIL（Claude Code，48b5 工作树）
+
+**改了什么 / 审了什么**：`runners/us_short_llm_theme_discovery_fetch_web.py::_live_receipt_retry_evidence` 加 `execution_mode == "live_authorized"` 门；`tests/test_us_short_discovery_class_guards.py::LaneResidueConformance` 把增长谓词从 `state/us_short` 一处扩到 `state/us_short` + `provider_samples` 两处，并加一条 root 成员固定测试。
+
+**为什么 FAIL**：第二条把 us_short 全量包打红。守卫本身是对的——它抓到的是真残留：`tests/provider/test_us_short_batch5_status_source_probe.py:61` 用 `tempfile.mkdtemp(prefix="run_", dir=…provider_samples/us_short_batch5_status_source_20260630/raw/_unit_tests)` 且从不清理，而 `unittest discover` 按 `sorted(os.listdir("tests"))` 走，`tests/provider`（下标 8）整包在 `tests/test_us_short_discovery_class_guards.py`（下标 137）之前跑完，基线又是 import 时捕获的，所以这些残留正好落在测量窗口里。Required 正文与整类清单只在 `docs/system_risk_register.md`（K3-R80），此处不复述。
+
+**验证命令 / 结果**：
+- 全量（rule 4 官方账本，reviewer 亲跑）：`python .tools\full_pack_ledger.py run us_short "<rule 3d trigger>" "<focused evidence>" 1300 -- discover -s tests -p 'test_us_short*.py'` → `Ran 5001 tests in 654.408s` / `FAILED (failures=1)`；`RESULT status=FAIL exit=1 tests=5001 elapsed=655.3s deadline=1300s`。唯一失败即该守卫。
+- focused 超集：`.tools\run_unittest_with_repo_pythonpath.cmd tests.provider.test_us_short_llm_theme_discovery_fetch_web tests.test_us_short_discovery_class_guards tests.test_us_short_discovery_conformance` → `RESULT tier=focused status=PASS exit=0 tests=94 elapsed=20.2s`。
+- reviewer 自写外部挖空探针 21/21：把 `_live_receipt_retry_evidence` 换成修复前函数体 → 新离线不可变性测试转红，还原转绿；植入 `provider_samples/**` 与 `state/us_short/**` 残留各自令守卫转红，两处清理后复扫为空。
+
+**失效的旧结论**：上一轮 K3-R77 PASS 记录的「两条 residual Optional 不阻断」仍然成立，但「扩到 `provider_samples` 是纯增强」不成立——它继承了 lane 既有的残留债，必须连带修测试才能落地。
+
+**下一步注意事项**：修复方不得为了让包变绿而削弱/收窄/删除该守卫；`tests/provider` 在守卫之前跑这一点是排序事实，不要靠调整顺序绕过。另注意 `codex_main_python.ps1` 会吞掉 `--`（K3-R80-O1），跑账本请直接调 pinned 解释器。
+
 ## K3-R76/K3-R77 executor repair — 2026-07-29
 
 ## K3-R77 downstream payload repair - 2026-07-29 (pending Claude review)
+
+## K3-R77 residual Optional repair - 2026-07-29 (pending Claude review)
+
+The two residual Optionals are worth repairing, but their narrow repair is preferable to a broad test-harness rewrite. Retry projection now applies only to an exact `live_authorized` receipt: that is the sole mode with transient provider-attempt telemetry worth ignoring on an idempotent retry. Offline receipts retain the entire immutable comparison, and the real pair-write control proves a changed offline drop ledger is rejected; deleting the `execution_mode` gate makes it red. This does not alter the immutable publisher or relax raw/hash binding.
+
+The private-residue predicate now covers both `state/us_short` and `provider_samples` from import-time baselines. Thus a prior authorized live ledger/raw capture is allowed, while a file left by a sequential test or probe is rejected. A nested temporary-root raw receipt proves the growth predicate, and a separate control pins `provider_samples` into the protected-root set so the coverage cannot disappear by omission. A pack-wide root redirection would be stronger only by changing the whole test harness and the many tests that deliberately exercise isolated raw files; it is not justified for these non-blocking residuals.
+
+Required main-Python offline evidence: `tests.test_us_short_discovery_class_guards tests.provider.test_us_short_llm_theme_discovery_fetch_web tests.provider.test_us_short_llm_theme_discovery_fetch_x_merge` = **116 OK**; `tests.test_us_short_discovery_conformance` = **27 OK**. Before running, `state/us_short` and gitignored `provider_samples/` were inspected. No provider command/request, credential read/output, network/live action, scoring change, full-pack retry, push, or remote action occurred. Full lane remains **NOT_VERIFIED**; hand to Claude Code for independent review.
 
 The previous K3-R77 repair is superseded where it implied that deleting module attributes or retaining a one-shot ticket made `live_authorized` unforgeable. It does not: arbitrary Python in this process can inspect `run_web_fetch.__closure__`, instantiate its captured `new_transport`, and add an arbitrary object to the mutable `issued_tickets` set captured by `_consume_ticket`. That ticket mechanism is retained only as normal-path/replay bookkeeping; it is not provider provenance.
 

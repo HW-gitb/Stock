@@ -58,7 +58,9 @@ class UsShortBatch5StatusSourceProbeTest(unittest.TestCase):
         )
         base.mkdir(parents=True, exist_ok=True)
         client = FakeStatusHttpClient()
-        temp_root = Path(tempfile.mkdtemp(prefix="run_", dir=base))
+        temp_dir = tempfile.TemporaryDirectory(prefix="run_", dir=base)
+        self.addCleanup(temp_dir.cleanup)
+        temp_root = Path(temp_dir.name)
         summary_path = temp_root / "summary.json"
         raw_root = temp_root / "raw"
         with mock.patch.dict(

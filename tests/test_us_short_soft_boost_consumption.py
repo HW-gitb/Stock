@@ -3,7 +3,7 @@ from __future__ import annotations
 import copy
 import hashlib
 import json
-import os
+import tempfile
 import unittest
 from pathlib import Path
 
@@ -23,8 +23,14 @@ def _write(path: Path, payload: dict) -> str:
 
 class SoftBoostConsumptionTest(unittest.TestCase):
     def setUp(self):
-        slug = f"k4b_{os.getpid()}_{self._testMethodName}"
-        fixture_root = ROOT / "provider_samples" / slug / "state" / "us_short"
+        provider_samples = ROOT / "provider_samples"
+        provider_samples.mkdir(parents=True, exist_ok=True)
+        self._fixture_dir = tempfile.TemporaryDirectory(
+            prefix=f"k4b_{self._testMethodName}_",
+            dir=provider_samples,
+        )
+        self.addCleanup(self._fixture_dir.cleanup)
+        fixture_root = Path(self._fixture_dir.name) / "state" / "us_short"
         artifact_root = fixture_root / "inputs"
         self.paths = {
             "candidate": artifact_root / "candidate.json",
@@ -99,20 +105,7 @@ class SoftBoostConsumptionTest(unittest.TestCase):
         _write(self.paths["stage"], self.stage)
 
     def tearDown(self):
-        for path in self.paths.values():
-            path.unlink(missing_ok=True)
-        parents = {
-            self.artifact_root,
-            self.fixture_root / "shadow_compare_private",
-            self.fixture_root,
-            self.fixture_root.parent,
-            self.fixture_root.parent.parent,
-        }
-        for parent in sorted(parents, key=lambda item: len(item.parts), reverse=True):
-            try:
-                parent.rmdir()
-            except OSError:
-                pass
+        self._fixture_dir.cleanup()
 
     def _resolve(self, **overrides):
         kwargs = {

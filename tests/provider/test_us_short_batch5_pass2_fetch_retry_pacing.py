@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import shutil
 import sys
 import tempfile
 import unittest
@@ -41,10 +40,14 @@ class Pass2FetchRetryPacingTest(unittest.TestCase):
         # raw_root MUST live inside the repo; provider_samples/ is gitignored.
         provider_samples = ROOT / "provider_samples"
         provider_samples.mkdir(parents=True, exist_ok=True)
-        self.raw_root = Path(tempfile.mkdtemp(prefix="test_retry_", dir=str(provider_samples)))
+        self._raw_root_dir = tempfile.TemporaryDirectory(
+            prefix="test_retry_",
+            dir=str(provider_samples),
+        )
+        self.raw_root = Path(self._raw_root_dir.name)
 
     def tearDown(self):
-        shutil.rmtree(self.raw_root, ignore_errors=True)
+        self._raw_root_dir.cleanup()
 
     def _fetch(self, client, *, max_retries):
         stats = {"used": 0}
