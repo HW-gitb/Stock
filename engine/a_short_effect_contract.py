@@ -774,6 +774,13 @@ def static_contract_error(contract: dict | None = None, *, inventory: dict | Non
                                                          for key in ("reason", "owner", "review_ref")):
                 return f"effect contract runtime policy binding {binding['id']} independent exception incomplete"
         leaf_readers = inventory["runtime_policy_leaf_readers"].get(rel, {})
+        if policy == "must_affect_result":
+            actual_readers = [reader for path in matched for reader in leaf_readers.get(path, [])]
+            for consumer_ref in binding["consumer_refs"]:
+                if (not isinstance(consumer_ref, str) or "::" not in consumer_ref
+                        or not any(reader.startswith(consumer_ref) for reader in actual_readers)):
+                    return (f"effect contract runtime policy binding {binding['id']} "
+                            f"consumer_ref is not an actual reader: {consumer_ref!r}")
         for path in matched:
             policy_coverage[(rel, path)] += 1
             if policy == "must_affect_result" and not leaf_readers.get(path):

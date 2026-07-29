@@ -2,12 +2,13 @@
 
 ### R-ASHORT-KNIFE7-EFFECT-CONTRACT-CONSUMER-REF-NAMES-A-GONE-CONSUMER - 效应契约仍宣称 weekly_pipeline 消费该阈值，实际消费者已搬走
 
-- **状态 / 严重度**: open P3，已随 `059557a3` 一同合入（按 closeout gate 第 3 条：material Required 可「已登记」而非「已修」后放行）。仅治理产物的 prose 漂移；无引擎、选股、provider、账户或 schema 行为影响，机器校验的那一半是对的。
+- **状态 / 严重度**: closed P3（已随 `059557a3` 一同登记；2026-07-29 修复完成）。仅治理产物的 prose 漂移；无引擎、选股、provider、账户或 schema 行为影响，机器校验的那一半是对的。
 - **机制**: 关闭 knife 7 Optional① 时把 `summarize_breakout_source_agreement` 与 `BREAKOUT_SOURCE_DISAGREEMENT_RATE_THRESHOLD_PCT` 从 `runners/a_short_weekly_pipeline.py` 搬到 `runners/a_short_m67_render.py`，机器侧的 `runtime_policy_leaf_readers` 已跟着改成 render（`schemas/a_short_m67_effect_contract.json:1168`），但同文件 `runtime_policy_bindings[id=phase5_thresholds].consumer_refs`（`:469`）仍写着 `runners/a_short_weekly_pipeline.py imports _PHASE5_POLICY for batch-local disagreement conclusion`。
 - **实测**: `grep -n "_PHASE5_POLICY" runners/a_short_weekly_pipeline.py` = 0 命中，该 consumer 已不存在；同一契约的 leaf-reader 映射指向 render。即契约的散文腿与机器腿互相矛盾。
 - **为何 material**: 该契约的唯一职责就是陈述「谁消费了哪条 policy 叶」。按 `AGENTS.md` §15a，活跃权威契约里的假陈述会误导下一次实现/审查——顺着 consumer_refs 去 weekly_pipeline 找会一无所获。
 - **Required repair**: 把 `:469` 改成 `runners/a_short_m67_render.py imports _PHASE5_POLICY for the batch-local disagreement conclusion`。**同类扫一遍**：`consumer_refs` 是自由散文、不被任何 hash 或测试覆盖，其余 binding 的 consumer_refs 也应逐条对 grep 核一次；根治办法是让 `consumer_refs` 由 leaf-reader 推导（或加一条守护断言每条 consumer_ref 命名的文件确实读了该常量），否则每次搬家都会再漏一次。
 - **Closure tests**: (1) 断言每条 `runtime_policy_bindings[].consumer_refs` 里点名的文件确实出现对应 `_*_POLICY` 读点（植入一个已搬走的文件名必须转红）；(2) 现有 effect-contract 包保持绿。
+- **Closure 2026-07-29(Codex 修复,Claude Code 复审 PASS)**: 根因焊死而非改那一行字——`static_contract_error` 对每个 `must_affect_result` binding 新增机器门:consumer_ref 必须是含 `::` 的定位符,且必须是该 policy path 实算出的 leaf reader 之一的前缀。同类已扫净:六条 binding 的 consumer_refs 全部由散文改成 `file::symbol`(`phase5_thresholds` 指向 render,不再指向已搬走的 weekly_pipeline)。复审自写探针逐一试三种真实漂移形态:不存在的文件、缺 `::` 的散文、张冠李戴的符号——**全部被拒并点名**;基线 `static_contract_error() = None`。残留一处松:退化写法 `runners/a_short_phase5_engine.py::`(空符号)因前缀匹配仍放行,但它要求该文件确实还是 reader,故不重开本缺陷类。
 
 ### R-ASHORT-KNIFE6B-CANDIDATE-PRICE-CLOCK-SOURCE-BINDING - 第六刀 6B 正式周跑候选价源时钟与价格权威
 

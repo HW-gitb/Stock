@@ -416,7 +416,7 @@
     "runners/a_short_weekly_pipeline.py": "66211a0e92a53a2b161229064fd149243a6afcf7859d4b5c5b9ef7d58e1b2616",
     "runners/a_short_m67_render.py": "38a11b60716bbea952a7d28abebd0799e46b479ed307c9a8505a2114deb00058",
     "engine/a_short_portfolio_risk.py": "02b88ac3b5239e8dd4897bde06afab0769ea5593f8a8a3666e5c8fba24486860",
-    "engine/a_short_effect_contract.py": "32f434fd5b87c65ca4cae27b8c57fcfb05c1a84c516e1cce4e33a3cf9e7a57ab"
+    "engine/a_short_effect_contract.py": "2479038bda6d59bd7be7f19229301855513b46e371dac2e57ec81236958f2985"
   },
   "runtime_constants_sha256": {
     "A-EGS/egs_main.py": "5122d39bd0d4799bff302dfc6cc5c51cb9a41e9a47362a08b87ad1c73a057715",
@@ -448,7 +448,7 @@
         "weekly.run_lineage.runtime_configuration"
       ],
       "consumer_refs": [
-        "A-EGS/egs_main.py::CONF loads _SCREENING_THRESHOLDS"
+        "A-EGS/egs_main.py::CONF"
       ]
     },
     {
@@ -465,8 +465,8 @@
         "weekly Markdown 突破指标口径横幅"
       ],
       "consumer_refs": [
-        "runners/a_short_phase5_engine.py imports _PHASE5_POLICY",
-        "runners/a_short_weekly_pipeline.py imports _PHASE5_POLICY for batch-local disagreement conclusion"
+        "runners/a_short_phase5_engine.py::_PHASE5_POLICY",
+        "runners/a_short_m67_render.py::_PHASE5_POLICY"
       ]
     },
     {
@@ -486,7 +486,7 @@
         "weekly.cash_allocation"
       ],
       "consumer_refs": [
-        "engine/a_short_portfolio_risk.py imports _PORTFOLIO_POLICY"
+        "engine/a_short_portfolio_risk.py::_PORTFOLIO_POLICY"
       ]
     },
     {
@@ -504,8 +504,8 @@
         "weekly JSON and Markdown portfolio-risk labels"
       ],
       "consumer_refs": [
-        "engine/a_short_portfolio_risk.py imports _PORTFOLIO_POLICY",
-        "runners/a_short_weekly_pipeline.py imports _PORTFOLIO_RISK_POLICY"
+        "engine/a_short_portfolio_risk.py::_PORTFOLIO_POLICY",
+        "runners/a_short_weekly_pipeline.py::_PORTFOLIO_RISK_POLICY"
       ]
     },
     {
@@ -521,7 +521,7 @@
         "weekly.reports[].m67"
       ],
       "consumer_refs": [
-        "runners/a_short_weekly_pipeline.py imports _WEEKLY_WINDOWS"
+        "runners/a_short_weekly_pipeline.py::_WEEKLY_WINDOWS"
       ]
     },
     {
@@ -544,7 +544,9 @@
         "reports[].m67.table.优先级"
       ],
       "consumer_refs": [
-        "engine/a_short_industry_theme.py classifier; A-EGS emits; weekly validates master governance"
+        "engine/a_short_industry_theme.py::industry_trend_classifier",
+        "A-EGS/egs_main.py::classify_industry_trend",
+        "runners/a_short_weekly_pipeline.py::_industry_trend_for_candidate"
       ]
     },
     {

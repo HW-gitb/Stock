@@ -218,6 +218,15 @@ class EffectContractStaticTests(unittest.TestCase):
         error = static_contract_error(contract, inventory=inventory)
         self.assertEqual(error, "runtime policy per-leaf reader mapping body changed without effect contract update")
 
+    def test_runtime_binding_consumer_ref_must_name_an_actual_leaf_reader(self):
+        """A prose locator cannot survive when its policy consumer moves."""
+        contract = copy.deepcopy(self.contract)
+        binding = next(row for row in contract["runtime_policy_bindings"] if row["id"] == "phase5_thresholds")
+        binding["consumer_refs"][1] = "runners/a_short_weekly_pipeline.py::_PHASE5_POLICY"
+        error = static_contract_error(contract, inventory=static_inventory())
+        self.assertIn("phase5_thresholds consumer_ref is not an actual reader", error)
+        self.assertIn("a_short_weekly_pipeline.py::_PHASE5_POLICY", error)
+
     def test_new_policy_field_still_fails_after_hashes_and_generic_binding_are_updated(self):
         """A broad section-level consumer note cannot pretend an unread leaf is wired."""
         rel = "presets/a_short_m67_runtime_policy_20260715.json"

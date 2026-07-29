@@ -1,5 +1,20 @@
 # Session Log
 
+## 2026-07-29 - Claude Code 复审 PASS(consumer_ref 漂移已按根因焊死)
+
+- **Verdict/Action**: PASS,提交并合入 master。没有只改那一行字:`static_contract_error` 对每个 `must_affect_result` binding 新增机器门——consumer_ref 必须含 `::` 且必须是该 policy path 实算 leaf reader 的前缀;六条 binding 的 consumer_refs 全部由散文迁成 `file::symbol`,`phase5_thresholds` 改指 render。**风险分级=低危**(纯治理契约 + 一道新静态断言,不碰引擎/选股/provider/PIT);按用户指令未起独立 agent、未跑全量。合并时顺手收掉执行方在 register 顶部新开的 `## 2026-07-29 closure update` 平行小节——closure 事实并进条目本身,免得 register 长出一条与条目并行的流水账(§E route-doc 单态)。
+- **Required**: 无。`docs/system_risk_register.md#R-ASHORT-KNIFE7-EFFECT-CONTRACT-CONSUMER-REF-NAMES-A-GONE-CONSUMER` 转 closed 并带 closure evidence。两条 Optional 见 Next。
+- **Verify**: review-evidence:b0ed49568739。亲跑最小覆盖包 `tests.test_a_short_effect_contract` = `26 OK / 39.8s / exit 0`。自写探针把新门按三种真实漂移形态各打一遍:不存在的文件、缺 `::` 的散文、张冠李戴的符号——**全部被拒并在错误串里点名**;基线 `static_contract_error() = None`。执行方已记账 `a_short 2077 OK / 243.7s`,按 rule 4 未重跑。
+- **Next**: 合入 master。Optional①:`binding["consumer_refs"]` 无 `.get` 兜底,今天只有 `industry_trend_semantic_boundary` 缺该键且它是 `intentionally_independent` 所以不触发;将来任一 binding 翻成 `must_affect_result` 而忘了加键会抛 KeyError 而非返回契约错误(fail-crash 而非 fail-honest)。Optional②:前缀匹配放行退化写法 `file::`(空符号),实测通过;不重开缺陷类(该文件仍须是真 reader),但可收紧成「`::` 后非空」。
+
+## 2026-07-29 - Codex implementation (A-short Knife 7 P3 consumer-ref repair)
+
+- **Verdict/Action**: Closed `R-ASHORT-KNIFE7-EFFECT-CONTRACT-CONSUMER-REF-NAMES-A-GONE-CONSUMER` without changing any screening, entry, action, data, PIT, provider, or execution behavior. Every `must_affect_result` runtime-policy `consumer_ref` is now a structured locator that must name an actual computed leaf reader; `phase5_thresholds` now names the render policy reader rather than the removed weekly-pipeline reader.
+- **Required**: No new material Required. The reviewed P3 is closed in `docs/system_risk_register.md`; all same-class runtime-policy bindings were scanned and migrated.
+- **Verify**: Fixed Python `C:\Users\cnhea\AppData\Local\Programs\Python\Python313\python.exe -m unittest tests.test_a_short_effect_contract tests.test_a_short_runtime_configuration tests.test_a_short_weekly_pipeline tests.test_a_short_phase5_engine tests.test_a_short_m67_render` exited 0; static effect contract = clean. Fixed Python `.tools\full_pack_ledger.py run a_short "Knife 7 Required: consumer refs must name live effect-contract readers" "fixed Python full A-short suite after runtime-policy consumer-ref guard and contract repair" 1300 -- discover -s tests -p "test_a_short*.py"` = PASS, 2077 tests / 243.7s / exit 0. Fixed Python `-m unittest tests.test_doc_governance_guard tests.test_route_doc_ledger_status_consistency` = 53 OK / 1.135s; `git diff --check` clean (CRLF warnings only).
+- **Next**: Claude Code: review.
+- **Pre-Codex self-review**: matrix=complete; register=updated; handoff=SESSION_LOG top entry; focused=exit 0; full-lane=2077 OK / 243.7s; scope=A-short only.
+
 ## 2026-07-29 - Claude Code 审查 Pass-with-Required(第七刀三条 Optional 收口)
 
 - **Verdict/Action**: Pass-with-Required,已提交并合入 master。三条 Optional 都真闭了:①summarizer 与阈值常量搬进 `a_short_m67_render`,render 不再反向 import pipeline,effect-contract 的 leaf-reader 跟着改指向 render;②两行哈希缩进归位;③中间态 `零星分歧` 补了 1/11 用例,分歧一致性检查从 `if isinstance(rule6_gate, dict)` 里去缩进、覆盖面变宽。**风险分级=低危**(纯搬家 + 测试补齐,不新增也不改变任何 fail-closed 判定);按用户本轮指令未起独立 agent、未跑全量。搬家顺手带出一条契约漂移,见 Required。

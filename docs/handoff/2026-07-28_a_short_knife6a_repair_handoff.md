@@ -154,3 +154,29 @@
 ### 下一步注意事项
 
 一条 open Required 见 `docs/system_risk_register.md#R-ASHORT-KNIFE7-EFFECT-CONTRACT-CONSUMER-REF-NAMES-A-GONE-CONSUMER`：契约 `consumer_refs` 仍点名已搬走的 `weekly_pipeline`。`consumer_refs` 是自由散文、无任何 hash 或测试覆盖，建议一并按同类扫净并加守护。
+
+## 2026-07-29 追加：consumer_ref 漂移按根因焊死（第七刀 P3 收口）
+
+### 改了什么
+
+- `engine/a_short_effect_contract.py::static_contract_error`：对每个 `must_affect_result` 的 runtime-policy binding 新增机器门——`consumer_refs` 里每一条都必须是含 `::` 的结构化定位符，且必须是该 policy path 实际算出的 leaf reader 之一的前缀，否则返回 `consumer_ref is not an actual reader: <ref>`。
+- `schemas/a_short_m67_effect_contract.json`：六条 binding 的 `consumer_refs` 全部由散文（`X imports Y`）迁成 `file::symbol`；`phase5_thresholds` 指向 `runners/a_short_m67_render.py::_PHASE5_POLICY`，不再指向已搬走的 weekly_pipeline；`industry_trend_classifier` 由一句混合散文拆成三条定位符。
+- `tests/test_a_short_effect_contract.py`：植入旧的（已搬走的）定位符必须转红。
+
+### 为什么改
+
+上一轮把 summarizer 搬进 render 后，契约的机器腿（leaf readers）跟着改了，散文腿（consumer_refs）没改，于是契约自称的消费者在 grep 下 0 命中。`consumer_refs` 此前是自由散文、不被任何 hash 或测试覆盖，每次搬家都会再漏一次——所以修法是加机器门 + 整类迁移，不是改那一行字。
+
+### 验证命令与结果
+
+- 审查方亲跑最小覆盖包 `.toolsun_unittest_with_repo_pythonpath.cmd tests.test_a_short_effect_contract` = `26 OK / 39.8s / exit 0`；执行方已记账 `full_pack_ledger run a_short = 2077 OK / 243.7s / exit 0`（rule 4，未重跑）。
+- 审查方自写探针，把新门按三种真实漂移形态各打一遍：**不存在的文件**、**缺 `::` 的散文**、**张冠李戴的符号**——全部被拒并在错误串里点名；基线 `static_contract_error() = None`。
+- 风险分级=低危（治理契约 + 一道静态断言，不碰引擎/选股/provider/PIT）；按用户指令未起独立 agent、未跑全量。
+
+### 失效的旧结论
+
+上一节写的修法「把 `:469` 改成 render」只是表面；实际采用的是根因修法（机器门 + 整类迁移）。另：执行方在 register 顶部新开了一节 `## 2026-07-29 closure update` 平行小节，合并时已收掉——closure 事实并进条目本身，避免 register 长出一条与条目并行的流水账（§E route-doc 单态）。
+
+### 下一步注意事项
+
+两条 Optional（均不阻断）：`binding["consumer_refs"]` 无 `.get` 兜底，将来某条 binding 翻成 `must_affect_result` 却忘加该键会抛 KeyError 而非返回契约错误；前缀匹配放行退化写法 `file::`（空符号，实测通过），可收紧成「`::` 后非空」。
