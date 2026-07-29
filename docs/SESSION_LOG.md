@@ -4,8 +4,8 @@
 
 - **Verdict/Action**: Pass-with-Required,提交并合入 master。8D0′ 落地正确:P3b 名单与「是否已实现裁判器」下沉进 `p3b_external_comparison_tracks()`,P5 已入列,`:516` 文件名死分支修好,未实现裁判器的轨被跳过,`>= 2` 语义按裁决不变。8B 完成 P2:新模块 `a_short_target_policy_adjudication`(83 行,阈值全从已封 admission 读、不进指纹),公开摘要 schema 补齐四个 required 字段,breakout 轨只出报告 + 占位 verdict。**风险分级=comparison-only 低危**;未起 agent、未跑全量。
 - **Required**: 一条,新开 `docs/system_risk_register.md#R-ASHORT-P5B-GOVERNANCE-NUMBERS-DUPLICATED-ACROSS-PRESET-AND-ADMISSION`(P3,已登记随本刀放行):`p5b_adjudication_governance` 把 preset `clock_contract` 已冻的 `checkpoints` 与 `difference_minimums` 又抄了一份,形状还不同,无任何绑定。
-- **Verify**: review-evidence:b3db148e59ed。亲跑覆盖全部改动符号的超集(7 个模块)= `581 OK / 60.5s / exit 0`;按 rule 4 未重跑执行方全量。**tracked 产物卫生亲证**:跑完这 581 个测试后 `git status research/` 为空,即 `R-ASHORT-TEST-PACK-REWRITES-TRACKED-P2-PUBLIC-SUMMARY` 的闭合判据在我的运行下成立(公开路径改为显式两参数、both-or-neither,省略则不写公开文件,ps1 官方跑才传)。**不悬空链路已核**:P2 verdict → 公开摘要 `verdict`(schema required)→ `_valid_external_public_verdicts` → P3b。
-- **Next**: Codex:修复该 Required(顺带定 `nonoverlap_block_minimums` 的唯一来源)。之后进 8C。
+- **Verify**: review-evidence:b3db148e59ed。亲跑覆盖全部改动符号的超集(7 个模块)= `581 OK / 60.5s / exit 0`;**并按 rule 4 接管全量**——执行方虽跑了 `discover` 但没走账本、`check a_short` 无绿,故我用 `full_pack_ledger run a_short` 跑并记账 = `2088 OK / 189.5s / exit 0`(与执行方裸跑计数一致),`check` 现为 CACHED GREEN。**tracked 产物卫生亲证**:跑完 581 测试后 `git status research/` 为空。**不悬空链路已核**:P2 verdict → 公开摘要 `verdict`(schema required)→ `_valid_external_public_verdicts` → P3b。
+- **Next**: Codex:修复该 Required(顺带定 `nonoverlap_block_minimums` 的唯一来源),之后进 8C。Optional(流程):本刀触发 rule 3(a)(改了生产顶层 runner + ps1 + 三个 schema),执行方跑了全量但用裸 `-m unittest discover`、没走 `full_pack_ledger run`,于是账本对该代码态无绿、pre-commit 钩子告警;裸跑结果按 rule 4 不算记账证据。以后 rule 3 触发时请直接用账本那条原子命令。
 
 ## 2026-07-29 - Codex implementation (A-short 8D0 governance + 8B P2 adjudication)
 

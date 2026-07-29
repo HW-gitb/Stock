@@ -332,7 +332,8 @@
 
 ### 验证命令与结果
 
-- 审查方亲跑覆盖全部改动符号的超集（`target_policy_adjudication` + `p3b_governance` + `final_action_validation` + `target_policy_comparison` + `experiment_admission_registry` + `effect_contract` + `weekly_pipeline`）= `581 OK / 60.5s / exit 0`；按 rule 4 未重跑执行方全量。
+- 审查方亲跑覆盖全部改动符号的超集（`target_policy_adjudication` + `p3b_governance` + `final_action_validation` + `target_policy_comparison` + `experiment_admission_registry` + `effect_contract` + `weekly_pipeline`）= `581 OK / 60.5s / exit 0`。
+- **全量由审查方按 rule 4 接管**：本刀改了生产顶层 runner + `weekly_screening.ps1` + 三个 schema，触发 rule 3(a)。执行方跑过全量，但用的是裸 `-m unittest discover`（`2088 OK / 196.6s`），**没走 `full_pack_ledger run`**，所以 `check a_short` 查不到该代码态的绿、pre-commit 钩子也告警。审查方用账本原子命令重跑并记账 = `2088 OK / 189.5s / exit 0`，计数与裸跑一致，`check` 现为 `CACHED GREEN`。裸跑结果按 rule 4 不构成记账证据——rule 3 触发时请直接用账本命令。
 - **tracked 产物卫生亲证**：跑完这 581 个测试后 `git status research/` 为空 —— 即 register `R-ASHORT-TEST-PACK-REWRITES-TRACKED-P2-PUBLIC-SUMMARY` 的闭合判据（「跑完 A-short 包后 git status 不得出现 tracked 公开摘要的改动」）在我的运行下成立。
 - **不悬空链路已核**：P2 裁判器 verdict → 公开摘要 `verdict` 字段（schema required，enum 含 `not_adjudicated`）→ `_valid_external_public_verdicts()` → P3b 解锁判定。这条链是 8B 的「影响对比项未来裁决」判据。
 
