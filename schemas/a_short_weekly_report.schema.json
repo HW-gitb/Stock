@@ -743,7 +743,7 @@
         "progress": {"type": "object"},
         "fingerprint": {"type": "string", "pattern": "^[a-f0-9]{64}$"},
         "source_hash": {"type": "string", "pattern": "^[a-f0-9]{64}$"},
-        "p5b_implemented": {"const": true},
+        "p5b_implemented": {"type": "boolean"},
         "admission_binding": {"type": "string", "pattern": "^[a-f0-9]{64}$"},
         "message": {"type": "string", "minLength": 1},
         "production_unchanged": {"const": true}

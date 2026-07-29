@@ -67,3 +67,10 @@ class IndustryWeightAdjudicationTests(unittest.TestCase):
                                      holm_rejected=set())
         self.assertFalse(result["metrics"]["risk_ok"])
         self.assertNotEqual(result["verdict"], "retain_balanced_only")
+
+    def test_zero_evidence_reports_not_reached_not_preliminary(self):
+        governance = load_governance(); question = _question("balanced_vs_legacy")
+        result = adjudicate_question([], mature=0, no_count=0, governance=governance, question=question,
+                                     holm_rejected=set())
+        self.assertEqual(result["checkpoint_stage"], "not_reached")
+        self.assertEqual(result["reason"], "checkpoint_not_reached")

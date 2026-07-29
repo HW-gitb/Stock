@@ -9,7 +9,7 @@
       "question_id": "balanced_vs_legacy",
       "verdict": "continue_accumulating",
       "reason": "pre_freeze_audit_only",
-      "checkpoint_stage": "preliminary",
+      "checkpoint_stage": "not_reached",
       "progress": {
         "eligible_policy_weeks": 0,
         "difference_weeks": 0,
@@ -39,7 +39,7 @@
       "question_id": "aggressive_vs_balanced",
       "verdict": "continue_accumulating",
       "reason": "pre_freeze_audit_only",
-      "checkpoint_stage": "preliminary",
+      "checkpoint_stage": "not_reached",
       "progress": {
         "eligible_policy_weeks": 0,
         "difference_weeks": 0,
@@ -69,7 +69,7 @@
       "question_id": "theme_double_vs_balanced",
       "verdict": "continue_accumulating",
       "reason": "pre_freeze_audit_only",
-      "checkpoint_stage": "preliminary",
+      "checkpoint_stage": "not_reached",
       "progress": {
         "eligible_policy_weeks": 0,
         "difference_weeks": 0,

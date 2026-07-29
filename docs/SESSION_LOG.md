@@ -1,5 +1,20 @@
 # Session Log
 
+## 2026-07-29 - Claude Code 复审 Pass-with-Required(公开写盘口扫到 7 处 + 五条 Optional 一并闭,生产周报仍在守护外)
+
+- **Verdict/Action**: Pass-with-Required,已提交(合入 master 仍按上条阻塞处理)。被点名的三处 writer 加 target-policy 共四处补齐 `allow_nan=False`,新增 AST 守护覆盖 7 个注册写盘口并带植入失败;五条 Optional 一并闭:零证据阶段改 `not_reached`、`p5b_implemented` 收敛到单一常量、`settled_through`/`exit_date` 晚于 as_of 的证据被排除、runtime 指纹纳入裁判器与 signflip、已封 `p_value_method` 真被解析消费且畸形声明 fail-closed。但守护是手写注册表,生产周报的写盘口不在表内,见 Required。
+- **Required**: 一条,新开 `docs/system_risk_register.md#R-ASHORT-WEEKLY-PIPELINE-JSON-WRITERS-OUTSIDE-THE-NONFINITE-GUARD`(P3,已登记随本刀放行);上一条 `#R-ASHORT-PUBLIC-WRITERS-NONFINITE-SWEEP-INCOMPLETE` 的闭合记录在同文件(单一来源,本处不复述)。
+- **Verify**: review-evidence:bc95ffded701。亲跑并接管全量:`full_pack_ledger run a_short` = `PASS exit=0 / 2110 tests / 244.3s` 并已记账(上一代码态 2102)。反向控制:`p5b_implemented=false` 的摘要**不**被 P3b 采信、`true` 才采信(schema 由 `const` 放宽成 boolean 后判据仍在);`p_value_method` 解析出 `_signflip_p`,四种畸形声明全抛;零证据阶段实测 `not_reached`;writer 输出与 tracked json 仍逐字段相等;外部票数仍为 0。超时原因:rule 3 全量在本代码态跑了 244s,加上我自己对未注册写盘口的全仓排查。
+- **Next**: Codex:修复该 Required。
+
+## 2026-07-29 - Codex repair (A-short public-writer sweep and P5 Optional closure candidate)
+
+- **Verdict/Action**: Repaired the public JSON writer Required with a traversal guard and closed the non-policy P5 Optional defects: no-evidence stage truthfulness, implementation-marker single source, `as_of` exclusion of future settlement, fingerprint coverage, and declared p-value method consumption. Comparison-only; no production policy changed.
+- **Required**: Independent Claude Code review; detailed closure controls and the remaining strategy Options are in `docs/system_risk_register.md#R-ASHORT-PUBLIC-WRITERS-NONFINITE-SWEEP-INCOMPLETE`.
+- **Verify**: Fixed Python focused P5/P3b/historical/official-operation suite = 58 OK / 10.953s; repaired writer-family suite = 71 OK / 9.695s; static effect contract is clean. Full `a_short` is NOT_VERIFIED for this code state because it was not rerun in this repair pass.
+- **Next**: Claude Code: review.
+- **Pre-Codex self-review**: matrix=complete for Required plus non-policy Optional; register=updated; handoff=SESSION_LOG top entry; focused=129 OK; full-lane=NOT_VERIFIED; scope=A-short public writers and P5 only.
+
 ## 2026-07-29 - Claude Code 复审 Pass-with-Required(8D1 六条 Required 全闭,全量由红转绿)
 
 - **Verdict/Action**: Pass-with-Required,已提交 `7fa145ba`(锚在工作树分支 `a-short-8d1`);**合入 master 暂缓** —— master 已被另一窗口推进 8 个提交、且主树里 `docs/SESSION_LOG.md` 与 `system_risk_register.md` 正被那一窗口改着未提交,ff 不成立、强合会盖掉别人的活,故按 closeout gate 第 9 条记录阻塞而不动它。六条逐条坐实:公开写盘口 `allow_nan=False` + 四层非有限值 fail-closed;tracked P5 json/md 现由 writer 复现;私有记录 boundary 双形状兼容;周报与进度 schema 改 `oneOf` 让旧产物仍合法;P3b 改成每轨 allow-list + P5 另要 `adjudication_stage == terminal`;缺失回撤传 None 不再默认 0。但 Required④ 要求的「同类扫净」只做了被点名那一个出口,见 Required。

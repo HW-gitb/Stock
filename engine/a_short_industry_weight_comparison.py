@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import copy
 import hashlib
+import importlib
 import json
 import math
 import os
@@ -131,11 +132,19 @@ def load_governance(path: str | Path = GOVERNANCE_PATH) -> dict:
         raise IndustryWeightComparisonError("P5 question order/identity drifted")
     if governance["outcome_contract"].get("horizons_trading_days") != list(HORIZONS) or \
             governance["outcome_contract"].get("fixed_slots") != 15 or \
-            governance["outcome_contract"].get("round_trip_cost_pct") != 0.16:
+            governance["outcome_contract"].get("round_trip_cost_pct") != 0.16 or \
+            governance["outcome_contract"].get("primary_horizon") != 10 or \
+            governance["outcome_contract"].get("close_based_drawdown") is not True:
         raise IndustryWeightComparisonError("P5 outcome contract drifted")
     if governance["clock_contract"].get("checkpoints") != [12, 24, 36] or \
-            governance["clock_contract"].get("difference_minimums") != [6, 12, 18]:
+            governance["clock_contract"].get("difference_minimums") != [6, 12, 18] or \
+            governance["clock_contract"].get("same_list_effect") != "eligible_with_zero_whole_policy_effect" or \
+            governance["clock_contract"].get("no_count_denominator") != "h10_mature_opportunities" or \
+            governance["clock_contract"].get("non_overlap") != "decision_date_strictly_after_prior_h10_exit":
         raise IndustryWeightComparisonError("P5 clock contract drifted")
+    statistics = governance["risk_and_statistics_contract"]
+    if statistics.get("multiplicity_family") != "three_questions" or statistics.get("holm_bonferroni") is not True:
+        raise IndustryWeightComparisonError("P5 statistical contract drifted")
     try:
         profile_governance = _load_json(PROFILE_GOVERNANCE_PATH)
     except (OSError, UnicodeDecodeError, json.JSONDecodeError) as exc:
@@ -152,12 +161,16 @@ def _source_fingerprint() -> str:
 
 def _runtime_source_fingerprint() -> str:
     """Pin semantic P5 capture/settlement dependencies, not whole source files."""
+    from engine import a_short_industry_weight_adjudication as adjudication
+    from engine import a_short_overlay_adjudication as overlay
     from engine import egs_industry_heat as heat
     from runners import a_short_factor_comparison_v2_cache_build as cache_build
 
     payload = {
         "module_sources": {
             "p5": _epoch_mode.semantic_module_contract(__import__(__name__, fromlist=["*"])),
+            "adjudication": _epoch_mode.semantic_module_contract(adjudication),
+            "signflip": _epoch_mode.semantic_module_contract(overlay),
             "industry_heat": _epoch_mode.semantic_module_contract(heat),
             "cache_builder": _epoch_mode.semantic_module_contract(cache_build),
         },
@@ -657,6 +670,21 @@ def _question_progress(root: Path, question_id: str, as_of: str) -> dict:
             "p5b_checkpoint_notice": notice}
 
 
+def _p_value_function(method_path: object):
+    """Resolve the frozen declared P5 method rather than keeping a second hidden source."""
+    method_path = str(method_path or "")
+    module_name, separator, attribute = method_path.rpartition(".")
+    if not module_name or not separator or not attribute:
+        raise IndustryWeightComparisonError("P5 p-value method declaration is invalid")
+    try:
+        method = getattr(importlib.import_module(module_name), attribute)
+    except (ImportError, AttributeError) as exc:
+        raise IndustryWeightComparisonError("P5 p-value method declaration is unavailable") from exc
+    if not callable(method):
+        raise IndustryWeightComparisonError("P5 p-value method declaration is not callable")
+    return method
+
+
 def build_public_progress(*, root: str | Path | None, as_of: str) -> dict:
     as_of = _date(as_of, "as_of")
     from engine.a_short_industry_weight_adjudication import P5B_IMPLEMENTED, adjudicate_question, holm_bonferroni
@@ -674,6 +702,8 @@ def build_public_progress(*, root: str | Path | None, as_of: str) -> dict:
             if not outcome_path.exists():
                 continue
             outcome = _load_json(outcome_path); _validate_private_record(outcome)
+            if str(outcome.get("payload", {}).get("settled_through") or "") > as_of:
+                continue
             if outcome.get("epoch_id") != capture["epoch_id"] or outcome.get("contract_fingerprint") != capture["contract_fingerprint"] or \
                     outcome.get("payload", {}).get("capture_sha256") not in (None, _digest(capture)):
                 raise IndustryWeightComparisonError("P5 outcome/capture source binding drifted")
@@ -694,9 +724,12 @@ def build_public_progress(*, root: str | Path | None, as_of: str) -> dict:
                     continue
                 baseline = outcome_question.get("arms", {}).get(next(q["baseline"] for q in governance["questions"] if q["question_id"] == question_id), {}).get("h10", {})
                 challenger = outcome_question.get("arms", {}).get(next(q["challenger"] for q in governance["questions"] if q["question_id"] == question_id), {}).get("h10", {})
+                exit_date = challenger.get("exit_date") or baseline.get("exit_date")
+                if not isinstance(exit_date, str) or exit_date > as_of:
+                    continue
                 tickets = [float(row["net_return_pct"]) for row in challenger.get("positions", []) if _finite(row.get("net_return_pct"))]
                 records[question_id].append({"decision_date": capture["decision_date"], "same_list": outcome_question.get("same_list") is True,
-                    "effect_pct": float(h10["whole_policy_effect_pct"]), "exit_date": challenger.get("exit_date") or baseline.get("exit_date"),
+                    "effect_pct": float(h10["whole_policy_effect_pct"]), "exit_date": exit_date,
                     "challenger_ticket_returns": tickets,
                     "challenger_close_drawdown_pct": challenger.get("close_drawdown_pct"),
                     "relative_close_drawdown_worsening_pct": (
@@ -706,11 +739,17 @@ def build_public_progress(*, root: str | Path | None, as_of: str) -> dict:
     question_defs = {item["question_id"]: {**item, "evidence_counts": _epoch_mode.evidence_counts_toward_clock("p5_industry_weight"),
                        "p5b_adjudication_governance": get_admission(f"p5_{item['question_id']}")["statistical_contract"]["definition"]["p5b_adjudication_governance"]}
                      for item in governance["questions"]}
-    from engine.a_short_industry_weight_adjudication import _blocks, _signflip_p
-    p_values = {key: _signflip_p([row["effect_pct"] for row in _blocks(value)]) for key, value in records.items()}
+    p_value_methods = {definition["p5b_adjudication_governance"].get("p_value_method")
+                       for definition in question_defs.values()}
+    if len(p_value_methods) != 1:
+        raise IndustryWeightComparisonError("P5 questions disagree about the p-value method")
+    p_value_function = _p_value_function(p_value_methods.pop())
+    from engine.a_short_industry_weight_adjudication import _blocks
+    p_values = {key: p_value_function([row["effect_pct"] for row in _blocks(value)]) for key, value in records.items()}
     rejected = holm_bonferroni(p_values, float(governance["risk_and_statistics_contract"]["formal_alpha_two_sided"]))
     questions = [adjudicate_question(records[key], mature=mature[key], no_count=no_count[key], governance=governance,
-                                     question=question_defs[key], holm_rejected=rejected) for key in QUESTION_IDS]
+                                     question=question_defs[key], holm_rejected=rejected,
+                                     p_value_function=p_value_function) for key in QUESTION_IDS]
     terminal = [row for row in questions if row["checkpoint_stage"] == "terminal" and row["verdict"] != "continue_accumulating"]
     aggregate = next((row["verdict"] for row in terminal), "continue_accumulating")
     stage = "terminal" if terminal else next((row["checkpoint_stage"] for row in questions if row["verdict"] != "continue_accumulating"), "accumulating")
@@ -729,12 +768,13 @@ def build_public_progress(*, root: str | Path | None, as_of: str) -> dict:
 
 def unavailable_public_progress(as_of: str) -> dict:
     """Fresh no-stale-reminder surface for an unavailable P5 sidecar."""
+    from engine.a_short_industry_weight_adjudication import P5B_IMPLEMENTED
     summary = {"schema_name": "a_short_industry_weight_comparison_progress_summary", "schema_version": "1.0.0",
                "summary_id": "a_short_industry_weight_comparison", "as_of": _date(as_of, "as_of"),
                "status": "evidence_unavailable_or_inconclusive",
                "questions": [{"question_id": question_id, "verdict": "continue_accumulating", "reason": "evidence_unavailable",
-                              "checkpoint_stage": "preliminary", "progress": {}, "metrics": {}, "comparison_only": True} for question_id in QUESTION_IDS],
-               "verdict": "not_adjudicated", "adjudication_stage": "not_adjudicated", "progress": {}, "fingerprint": _contract_fingerprint(load_governance()), "source_hash": _digest([]), "p5b_implemented": True, "admission_binding": _digest(admission_snapshot(*ADMISSION_IDS)),
+                              "checkpoint_stage": "not_reached", "progress": {}, "metrics": {}, "comparison_only": True} for question_id in QUESTION_IDS],
+               "verdict": "not_adjudicated", "adjudication_stage": "not_adjudicated", "progress": {}, "fingerprint": _contract_fingerprint(load_governance()), "source_hash": _digest([]), "p5b_implemented": P5B_IMPLEMENTED, "admission_binding": _digest(admission_snapshot(*ADMISSION_IDS)),
                "message": "P5 行业权重对比：证据不可用或不完整；不显示旧提醒，生产结论不变。",
                "production_unchanged": True}
     validate_public_progress(summary)

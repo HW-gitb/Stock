@@ -17,7 +17,7 @@
     "progress": {"type": "object"},
     "fingerprint": {"type": "string", "pattern": "^[a-f0-9]{64}$"},
     "source_hash": {"type": "string", "pattern": "^[a-f0-9]{64}$"},
-    "p5b_implemented": {"const": true},
+    "p5b_implemented": {"type": "boolean"},
     "admission_binding": {"type": "string", "pattern": "^[a-f0-9]{64}$"},
     "message": {"type": "string", "minLength": 1},
     "production_unchanged": {"const": true}
@@ -61,7 +61,7 @@
         "question_id": {"enum": ["balanced_vs_legacy", "aggressive_vs_balanced", "theme_double_vs_balanced"]},
         "verdict": {"enum": ["continue_accumulating", "retain_balanced_only", "next_reviewed_candidate_only", "manual_rollback_review_only", "do_not_promote"]},
         "reason": {"type": "string"},
-        "checkpoint_stage": {"enum": ["preliminary", "formal", "terminal"]},
+        "checkpoint_stage": {"enum": ["not_reached", "preliminary", "formal", "terminal"]},
         "progress": {"type": "object"},
         "metrics": {"type": "object"},
         "comparison_only": {"const": true}

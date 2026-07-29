@@ -21,7 +21,7 @@ if str(ROOT) not in sys.path:
 from engine.a_short_industry_weight_comparison import (  # noqa: E402
     ADMISSION_IDS, PROGRAM_ID, IndustryWeightComparisonError, _atomic_write, _boundary, _contract_fingerprint,
     _digest, _epoch_id, _runtime_source_fingerprint,
-    _validate_private_record, build_public_progress, cache_consumer_windows,
+    _p_value_function, _validate_private_record, build_public_progress, cache_consumer_windows,
     capture_after_published_weekly, load_governance, settle_from_daily_payload,
     validate_public_progress, write_public_progress,
 )
@@ -348,6 +348,39 @@ class IndustryWeightComparisonTests(unittest.TestCase):
                   "epoch_id": "a" * 64, "contract_fingerprint": "b" * 64, "payload": {},
                   "boundary": {**_boundary(), "p5b_implemented": False}}
         _validate_private_record(record)
+
+    def test_public_progress_does_not_use_an_outcome_settled_after_its_as_of(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = _p5_root(tmp)
+            _capture(root, tmp, same_profiles=True)
+            capture = json.loads((root / "weeks" / DECISION / "capture.json").read_text(encoding="utf-8"))
+            codes = sorted({row["ts_code"] for arm in capture["payload"]["profiles"].values() for row in arm["selected"]})
+            settle_from_daily_payload(root=root, daily_payload=_daily_cache(codes), as_of=SETTLE_AS_OF)
+            summary = build_public_progress(root=root, as_of="20260220")
+            self.assertTrue(all(row["progress"]["eligible_policy_weeks"] == 0 for row in summary["questions"]))
+
+    def test_runtime_fingerprint_includes_the_adjudicator_and_signflip_module(self):
+        def semantic(module):
+            return module.__name__
+        def changed_semantic(module):
+            return module.__name__ + ("-changed" if module.__name__ == "engine.a_short_industry_weight_adjudication" else "")
+        with mock.patch("engine.a_short_industry_weight_comparison._epoch_mode.semantic_module_contract", side_effect=semantic):
+            baseline = _runtime_source_fingerprint()
+        with mock.patch("engine.a_short_industry_weight_comparison._epoch_mode.semantic_module_contract", side_effect=changed_semantic):
+            self.assertNotEqual(_runtime_source_fingerprint(), baseline)
+
+    def test_unavailable_summary_uses_the_single_implementation_flag_and_not_reached_stage(self):
+        from engine import a_short_industry_weight_adjudication as adjudication
+        from engine.a_short_industry_weight_comparison import unavailable_public_progress
+        with mock.patch.object(adjudication, "P5B_IMPLEMENTED", False):
+            summary = unavailable_public_progress("20260727")
+        self.assertFalse(summary["p5b_implemented"])
+        self.assertTrue(all(row["checkpoint_stage"] == "not_reached" for row in summary["questions"]))
+
+    def test_declared_p_value_method_is_resolved_and_invalid_declaration_fails_closed(self):
+        self.assertTrue(callable(_p_value_function("engine.a_short_overlay_adjudication._signflip_p")))
+        with self.assertRaises(IndustryWeightComparisonError):
+            _p_value_function("engine.a_short_overlay_adjudication.not_a_method")
 
     def test_historical_or_test_capture_never_starts_forward_clock(self):
         with tempfile.TemporaryDirectory() as tmp:

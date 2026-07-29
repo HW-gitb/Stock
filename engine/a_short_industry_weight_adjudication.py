@@ -7,6 +7,7 @@ from __future__ import annotations
 
 import math
 from statistics import mean
+from collections.abc import Callable
 from typing import Any
 
 from engine.a_short_overlay_adjudication import _signflip_p
@@ -92,19 +93,22 @@ def _risk(rows: list[dict], mature: int, no_count: int, policy: dict) -> dict:
 
 
 def adjudicate_question(rows: list[dict], *, mature: int, no_count: int, governance: dict,
-                        question: dict, holm_rejected: set[str]) -> dict[str, Any]:
+                        question: dict, holm_rejected: set[str],
+                        p_value_function: Callable[[list[float]], float | None] = _signflip_p) -> dict[str, Any]:
     """Adjudicate one question; insufficient checkpoint separation always wins."""
     clock, policy = governance["clock_contract"], governance["risk_and_statistics_contract"]
     checkpoints, minimums = clock["checkpoints"], clock["difference_minimums"]
     stages = question["p5b_adjudication_governance"]["checkpoint_stages"]
     if not (len(checkpoints) == len(minimums) == 3 and all(isinstance(x, int) and x > 0 for x in checkpoints)):
         raise ValueError("p5b_clock_contract_invalid")
+    reached = max((index for index, checkpoint in enumerate(checkpoints) if len(rows) >= checkpoint), default=None)
+    checkpoint_stage = "not_reached" if reached is None else stages[str(checkpoints[reached])]
     invalid_effect = any(_finite(row.get("effect_pct")) is None for row in rows)
     values = [_finite(row["effect_pct"]) for row in rows if _finite(row.get("effect_pct")) is not None]
     difference = sum(row["same_list"] is False for row in rows)
     blocks = _blocks(rows)
     block_values = [_finite(row["effect_pct"]) for row in blocks if _finite(row.get("effect_pct")) is not None]
-    p_value = _signflip_p(block_values)
+    p_value = p_value_function(block_values)
     metrics = {
         "eligible_policy_weeks": len(rows), "difference_weeks": difference,
         "nonoverlap_blocks": len(blocks), "mean_effect_pct": mean(values) if values else None,
@@ -116,7 +120,6 @@ def adjudicate_question(rows: list[dict], *, mature: int, no_count: int, governa
     elif not question["evidence_counts"]:
         verdict, reason = "continue_accumulating", "pre_freeze_audit_only"
     else:
-        reached = max((index for index, checkpoint in enumerate(checkpoints) if len(rows) >= checkpoint), default=None)
         if reached is None:
             verdict, reason = "continue_accumulating", "checkpoint_not_reached"
         elif difference < minimums[reached]:
@@ -134,7 +137,7 @@ def adjudicate_question(rows: list[dict], *, mature: int, no_count: int, governa
             else:
                 verdict, reason = "continue_accumulating", "formal_gates_not_met"
     return {"question_id": question["question_id"], "verdict": verdict, "reason": reason,
-            "checkpoint_stage": stages[str(checkpoints[max((index for index, checkpoint in enumerate(checkpoints) if len(rows) >= checkpoint), default=0)])],
+            "checkpoint_stage": checkpoint_stage,
             "progress": {"eligible_policy_weeks": len(rows), "difference_weeks": difference,
                          "mature_opportunities": mature, "no_count_weeks": no_count,
                          "remaining_eligible_weeks": max(0, checkpoints[0] - len(rows)),
