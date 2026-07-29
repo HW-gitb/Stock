@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import importlib
+import inspect
 import json
 import os
 import sys
@@ -334,6 +335,11 @@ class OfflineLLMThemeDiscoveryTests(unittest.TestCase):
                     policy.write_immutable_json({"generated_at": "t1", "evidence": "mine"}, slot)
         self.assertEqual(slot.read_bytes(), rival)
         self.assertEqual(sorted(path.name for path in self.test_state_dir.glob(".*")), [])
+
+    def test_pair_publish_requires_an_explicit_recursion_policy(self):
+        policy = importlib.import_module("runners.us_short_discovery_publish_policy")
+        recursive = inspect.signature(policy.publish_immutable_pair).parameters["recursive"]
+        self.assertIs(recursive.default, inspect.Parameter.empty)
 
     def test_pair_publish_rolls_back_when_a_concurrent_winner_holds_different_evidence(self):
         """The policy-error rollback branch needs its own control: the existing tests force an

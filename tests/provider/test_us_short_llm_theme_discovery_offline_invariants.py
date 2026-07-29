@@ -76,6 +76,19 @@ def _poisoned_themes(refs: list[str]):
 
 
 class OfflineDiscoveryInvariantTests(unittest.TestCase):
+    def setUp(self):
+        self._raw_tempdir = temporary_provider_directory(web.ROOT)
+        self._raw_path = Path(self._raw_tempdir.__enter__())
+        self._web_raw_patch = mock.patch.object(web, "DEFAULT_RAW_ROOT", self._raw_path / "web_raw")
+        self._x_raw_patch = mock.patch.object(xfetch, "DEFAULT_RAW_ROOT", self._raw_path / "x_raw")
+        self._web_raw_patch.start()
+        self._x_raw_patch.start()
+
+    def tearDown(self):
+        self._x_raw_patch.stop()
+        self._web_raw_patch.stop()
+        self._raw_tempdir.__exit__(None, None, None)
+
     """Offline-only convergence harness; live/provider execution is intentionally out of scope."""
 
     def test_every_poisoned_web_row_keeps_the_good_sibling_and_ledgers_a_drop(self):

@@ -1,5 +1,35 @@
 # Session Log
 
+## 2026-07-29 — Claude Code 审查 PASS（US-short K3-R71/K3-R72 + 四条 Optional，解冻链④收口）
+
+- **Verdict/Action**: PASS，已提交并合入 master。K3-R71 的循环整体消失（`_reserve_provider_budget` 现 0 个 For/While 节点），`DECLARED_BATCH_RAISES` 未被放宽；K3-R72 换成 AST 版 `_live_preflight_order_offenders` 并自带重排变异对照；α/β/γ 全闭，δ 记为覆盖迁移。K3-R31/K3-R32 及解冻链④至此 CLOSED。Register: material，closure 落 `docs/system_risk_register.md#R-USSHORT-KNIFE3-WEB-X-MERGE-PACKET-BOUNDARY`，本处不复述。
+- **Required**: 无。K3-R71 / K3-R72 均 CLOSED；步骤⑤（解 K3-R34）需用户单独命令，不在本轮授权内。
+- **Verify**: review-evidence:0c179cb382a7。均我亲跑：按 rule 4 接管全量，官方账本本代码态 `Ran 4984 tests in 476.291s` / `OK` / `status=PASS exit=0 tests=4984`，已记账（4984 = 上轮 4983 + 1 条新签名回归）。探针：账本校验重写后每条拒绝都在，含不可哈希 `query_sha256`、字符串 `call_count` 两种本可漏成 TypeError 的形状均为 WebThemeDiscoveryError，同 scope 重试 attempts=2、planned 不变；排序守卫外部挖空——移到花钱之后转红、删掉也转红，其 inline 对照锚点行真实存在（是重排非删除）；raw `fetched_at` 篡改成 2099 → accepted 0 + `immutable_raw_content_conflict`，更早的冻结时刻仍被复用。`state/us_short` 0 文件。
+- **Next**: Codex：待命
+
+## 2026-07-29 - Codex repair K3-R71/K3-R72 and same-class recurrence controls
+
+- **Verdict/Action**: User-directed repair. K3-R71 now validates `query_reservations` by normalization and aggregate checks before one fail-closed raise, so no batch raise occurs inside its ledger-entry iteration. K3-R72 now has an AST source-order guard with an in-test mutation that moves reserve after orchestration and proves the guard turns red. Optional α is fixed (a frozen raw fetch instant later than the retry fetch clock drops the source); β is fixed (`publish_immutable_pair` requires an explicit keyword-only `recursive` policy); γ is fixed (the active `_clock_stripped` docstring matches the frozen-source contract); δ is accepted as coverage moved, with the non-persisted tests renamed to their actual same-source-clock property and the persisted retry test retained. The AGENTS addition is intentionally predicate-based: an AST/registry guard is a focused direct consumer only when its predicate intersects the changed symbol, not a filename-wide test rule.
+- **Required**: Independent review remains required. K3-R34 stays frozen; no provider, credential, network, or live action occurred. The single official full-pack invocation gave no terminal result and `full_pack_ledger.py check us_short` has no cached green on this exact code state, so full-lane verification is NOT_VERIFIED and must not be inferred from the focused pass.
+- **Verify**: The focused pack named above was 120 OK in 12.167s before the final test-only strengthening of the R72 helper. The re-run then failed before the affected test body at the external `temporary_provider_directory` lock (`msvcrt.locking`, `OSError 36 Resource deadlock avoided`); the lock file mtime is `2026-07-28T13:04:12Z`, so final focused verification is UNKNOWN rather than a code failure. `py_compile` and `git diff --check` passed; all `publish_immutable_pair` production callers were inspected and explicitly pass `recursive`. The one scheduled read-only independent self-review returned PASS with no must-fix; it ran no tests or external actions.
+- **Pre-Codex self-review**: `matrix=complete; register=updated; handoff=updated; focused=UNKNOWN: pre-final 120 OK, post-final direct test blocked before body by external private-root lock; full-lane=NOT_VERIFIED: one official run invoked, no terminal result and no cached ledger green; no rerun; A-F checked; independent-self-review=PASS read-only; main-thread fallback used`.
+- **Next**: Claude Code: review.
+
+## 2026-07-29 — Claude Code 审查 FAIL（US-short K3-R31/K3-R32 解冻链④）
+
+- **Verdict/Action**: FAIL。全量包在本代码态实测红一条，根因就是本刀新增的预算账本校验循环。Register: material，两条 Required 落 `docs/system_risk_register.md#R-USSHORT-KNIFE3-WEB-X-MERGE-PACKET-BOUNDARY`（K3-R71 / K3-R72），本处不复述。K3-R34 仍冻结，未触任何 provider / key / network / live 路径。
+- **Required**: K3-R71（新增 `for entry in reservations:` 循环内两条未声明的批级 raise，令 §五 red-line #4 守卫转红）、K3-R72（reserve-before-spend 无任何守卫钉住）。单一来源=register。
+- **Verify**: review-evidence:e86e63f1ecbc。均我亲跑：官方账本 `run us_short` 实跑本代码态 = `Ran 4983 tests in 622.385s` / `FAILED (failures=1)` / `RESULT status=FAIL exit=1 tests=4983 elapsed=626.9s deadline=1300s`，唯一红条即 K3-R71；植入对照证明排序守卫不死（reserve 移到 spend 之后，旧断言仍绿）；篡改探针把 raw `fetched_at` 改成 2099 被原样采信；`state/us_short` 0 文件。超时原因:rule-3 强制的单次全量包本身跑了 626.9 秒，墙钟被它占满。
+- **Next**: Codex：修复 K3-R71 / K3-R72（解冻链④）；K3-R34 仍冻结
+
+## 2026-07-28 - Codex repair K3-R31/K3-R32 (live half remains frozen)
+
+- **Verdict/Action**: Implemented the step-4 repair without a provider/key/network/live action. Web preflight now reserves Tavily and the reviewed maximum DeepSeek regroup capacity together before a paid request; a same query scope is idempotent in the dated provider ledger. Per-source `fetched_at` is now frozen raw evidence and included in the source hash on both web and X; only top-level `generated_at` is a retry clock. Test raw roots are isolated, so a legacy gitignored receipt missing `fetched_at` cannot contaminate the suite.
+- **Required**: Independent review is still required. K3-R34 remains frozen; no live execution is authorized. The official full-pack invocation produced no terminal result and `full_pack_ledger.py check us_short` has no cached green for this exact code state, so full-lane verification is NOT_VERIFIED and must not be inferred from the focused pass.
+- **Verify**: Fixed main Python focused pack: `tests.provider.test_us_short_llm_theme_discovery_fetch_web`, `tests.provider.test_us_short_llm_theme_discovery_fetch_x_merge`, `tests.provider.test_us_short_llm_theme_discovery`, and `tests.provider.test_us_short_llm_theme_discovery_offline_invariants` = 128 OK in 15.592s. `py_compile` and `git diff --check` passed. Before the repair, the same focused pack was 8 failures / 17 errors; gitignored raw receipts were checked first and the stale fixture receipt was timestamped `2026-07-28T13:39:11Z` with no `fetched_at`.
+- **Pre-Codex self-review**: `matrix=complete; register=updated; handoff=updated; focused=128 OK; full-lane=NOT_VERIFIED: one official run invoked, no terminal result and no cached ledger green; no rerun`.
+- **Next**: Claude Code: review.
+
 ## 2026-07-28 — Claude Code 审查 PASS（US-short conformance 静态/执行分层）
 
 - **Verdict/Action**: PASS，已提交。两个慢类在原模块降为普通基类（不再被 unittest 收集），新模块以 `(基类, TestCase)` 混入重新暴露；断言与守卫内容零改动，生产代码零改动。`LaneGuardRegistryConformance` 对它们的 6 处派生调用因基类留在原模块而无需 import、无循环依赖。Optional（不阻断）：无机制把「快慢两半配对」钉住——执行模块若被删/改名，11 条变异测试会静默消失，唯一的告警是账本总数。Register: non-material。

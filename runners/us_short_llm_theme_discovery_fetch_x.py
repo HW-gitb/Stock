@@ -145,7 +145,9 @@ def _normalize_results(
             continue
         locator, observed, title, text, evidence_attestation = parsed
         source_id = _source_id(locator)
-        raw_payload = {"source_id": source_id, "source_type": "x", "canonical_locator": locator, "title": title, "text": text, "created_at": observed.isoformat(), "evidence_attestation": evidence_attestation}
+        raw_evidence_payload = {"source_id": source_id, "source_type": "x", "canonical_locator": locator, "title": title, "text": text, "created_at": observed.isoformat(), "evidence_attestation": evidence_attestation}
+        raw_payload = {**raw_evidence_payload, "fetched_at": fetched_at.isoformat()}
+        source_fetched_at = fetched_at
         raw_path = None
         raw_ref = None
         raw_gitignored = False
@@ -160,6 +162,9 @@ def _normalize_results(
                     raise XThemeDiscoveryError("raw receipt path must be gitignored before writing")
                 raw_gitignored = web._gitignored(raw_path)
                 try:
+                    raw_payload, source_fetched_at = web._raw_payload_with_frozen_fetch_clock(
+                        raw_evidence_payload, raw_path, fetched_at,
+                    )
                     web._existing_packet_matches(raw_payload, raw_path)
                 except web.WebThemeDiscoveryError:
                     drops.append({"stage": "search_result", "reason": "immutable_raw_content_conflict", "detail": locator})
@@ -168,7 +173,8 @@ def _normalize_results(
                     pending_raw_writes.append((raw_path, raw_payload))
                 else:
                     web._write_json_atomic(raw_payload, raw_path)
-        refs.append({"source_id": source_id, "source_type": "x", "canonical_locator": locator, "observed_at": observed.isoformat(), "fetched_at": fetched_at.isoformat(), "content_sha256": hashlib.sha256(web._canonical_json(raw_payload)).hexdigest(), "raw_receipt_ref": raw_ref, "raw_receipt_gitignored": raw_gitignored, "evidence_attestation": evidence_attestation})
+        content_sha256 = hashlib.sha256(web._canonical_json(raw_payload)).hexdigest()
+        refs.append({"source_id": source_id, "source_type": "x", "canonical_locator": locator, "observed_at": observed.isoformat(), "fetched_at": source_fetched_at.isoformat(), "content_sha256": content_sha256, "raw_receipt_ref": raw_ref, "raw_receipt_gitignored": raw_gitignored, "evidence_attestation": evidence_attestation})
         seen.add(locator)
     refs.sort(key=lambda ref: ref["source_id"])
     drops.sort(key=lambda row: (row["stage"], row["reason"], row["detail"]))

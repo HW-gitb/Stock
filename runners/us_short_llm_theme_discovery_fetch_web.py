@@ -220,20 +220,20 @@ def _existing_packet_matches(payload: Any, path: Path) -> bool:
     """Delegate to the lane's single write door; keep this module's error type at the boundary."""
     try:
         return frozen_artifact_matches(
-            payload, path, clock_keys=CLOCK_KEYS_RECEIPT, recursive=True,
+            payload, path, clock_keys=CLOCK_KEYS_RECEIPT, recursive=False,
         )
     except DiscoveryPublishPolicyError as exc:
         raise WebThemeDiscoveryError(str(exc)) from exc
 
 
 def _clock_stripped(payload: Any) -> bytes:
-    """Immutability must compare EVIDENCE, not the wall clock.  A live retry re-stamps `generated_at`
-    and `fetched_at`, so comparing them verbatim made every retry collide with its own frozen slot
-    while changed evidence stayed correctly refused.  The receipt carries `fetched_at` per SOURCE,
-    hence the recursive key set — that difference from the knife-1/knife-2 artifacts is now a
-    declared parameter of the shared policy instead of a second implementation."""
+    """Compare frozen evidence while permitting only the top-level retry clock to restamp.
+
+    Per-source `fetched_at` remains in the canonical bytes.  Recursive stripping would make a
+    source-timestamp tamper indistinguishable from a genuine packet retry.
+    """
     try:
-        return evidence_bytes(payload, clock_keys=CLOCK_KEYS_RECEIPT, recursive=True)
+        return evidence_bytes(payload, clock_keys=CLOCK_KEYS_RECEIPT, recursive=False)
     except DiscoveryPublishPolicyError as exc:
         raise WebThemeDiscoveryError(str(exc)) from exc
 
@@ -246,7 +246,7 @@ def _discovery_evidence_hash(discovery_artifact: dict[str, Any]) -> str:
 def _write_json_atomic(payload: Any, path: Path) -> None:
     """Single-slot write (raw provider receipts) through the lane's one write door."""
     try:
-        write_immutable_json(payload, path, clock_keys=CLOCK_KEYS_RECEIPT, recursive=True)
+        write_immutable_json(payload, path, clock_keys=CLOCK_KEYS_RECEIPT, recursive=False)
     except DiscoveryPublishPolicyError as exc:
         raise WebThemeDiscoveryError(str(exc)) from exc
 
@@ -258,7 +258,7 @@ def _write_json_pair_atomic(
     try:
         publish_immutable_pair(
             [(first_payload, first_path), (second_payload, second_path)],
-            clock_keys=CLOCK_KEYS_RECEIPT, recursive=True,
+            clock_keys=CLOCK_KEYS_RECEIPT, recursive=False,
         )
     except DiscoveryPublishPolicyError as exc:
         raise WebThemeDiscoveryError(str(exc)) from exc
@@ -294,7 +294,7 @@ def _flush_raw_writes(pending_raw_writes: list[tuple[Path, dict[str, Any]]]) -> 
     try:
         publish_immutable_pair(
             [(payload, path) for path, payload in pending_raw_writes],
-            clock_keys=CLOCK_KEYS_RECEIPT, recursive=True,
+            clock_keys=CLOCK_KEYS_RECEIPT, recursive=False,
         )
     except DiscoveryPublishPolicyError as exc:
         raise WebThemeDiscoveryError(str(exc)) from exc
@@ -561,18 +561,53 @@ def _reserve_provider_budget(
             raise WebThemeDiscoveryError(f"live budget identity conflicts: {path.name}")
         attempts = prior.get("reservation_attempt_count")
         planned = prior.get("planned_provider_call_count")
+        reservations = prior.get("query_reservations")
         if not isinstance(attempts, int) or not isinstance(planned, int) or attempts < 0 or planned < 0:
             raise WebThemeDiscoveryError(f"live budget ledger is malformed: {path.name}")
-        if planned + call_count > cap:
+        if not isinstance(reservations, list):
+            raise WebThemeDiscoveryError(f"live budget ledger cannot prove retry scope: {path.name}")
+        normalized_reservations = [
+            {
+                "query_sha256": entry.get("query_sha256"),
+                "query_count": entry.get("query_count"),
+                "call_count": entry.get("call_count"),
+            }
+            for entry in reservations if isinstance(entry, dict)
+        ]
+        if (
+            len(normalized_reservations) != len(reservations)
+            or any(
+                not isinstance(entry["query_sha256"], str)
+                or not isinstance(entry["query_count"], int) or entry["query_count"] < 0
+                or not isinstance(entry["call_count"], int) or entry["call_count"] < 0
+                for entry in normalized_reservations
+            )
+            or len({entry["query_sha256"] for entry in normalized_reservations}) != len(normalized_reservations)
+            or sum(entry["call_count"] for entry in normalized_reservations) != planned
+        ):
+            raise WebThemeDiscoveryError(f"live budget ledger is malformed: {path.name}")
+        existing = next((entry for entry in normalized_reservations if entry["query_sha256"] == query_sha256), None)
+        if existing is not None:
+            if existing["query_count"] != len(query_scope) or existing["call_count"] != call_count:
+                raise WebThemeDiscoveryError(f"live budget retry scope conflicts: {path.name}")
+            reservation = dict(prior)
+            reservation["reservation_attempt_count"] = attempts + 1
+            reservation["last_reserved_at"] = datetime.now(timezone.utc).isoformat()
+        elif planned + call_count > cap:
             raise WebThemeDiscoveryError(
                 f"live {lane}/{provider} budget exhausted for {expected_decision_date}: {planned}+{call_count} > {cap}"
             )
-        reservation = dict(prior)
-        reservation["query_sha256"] = query_sha256
-        reservation["query_count"] = len(query_scope)
-        reservation["reservation_attempt_count"] = attempts + 1
-        reservation["planned_provider_call_count"] = planned + call_count
-        reservation["last_reserved_at"] = datetime.now(timezone.utc).isoformat()
+        else:
+            reservation = dict(prior)
+            normalized_reservations.append({
+                "query_sha256": query_sha256, "query_count": len(query_scope), "call_count": call_count,
+            })
+            reservation["query_sha256"] = query_sha256
+            reservation["query_count"] = len(query_scope)
+            reservation["query_reservations"] = normalized_reservations
+            reservation["reservation_attempt_count"] = attempts + 1
+            reservation["planned_provider_call_count"] = planned + call_count
+            reservation["last_reserved_at"] = datetime.now(timezone.utc).isoformat()
     else:
         if call_count > cap:
             raise WebThemeDiscoveryError(
@@ -581,6 +616,9 @@ def _reserve_provider_budget(
         reservation = {
             "lane": lane, "provider": provider, "expected_decision_date": expected_decision_date,
             "query_sha256": query_sha256, "query_count": len(query_scope),
+            "query_reservations": [{
+                "query_sha256": query_sha256, "query_count": len(query_scope), "call_count": call_count,
+            }],
             "reservation_attempt_count": 1, "planned_provider_call_count": call_count,
             "first_reserved_at": datetime.now(timezone.utc).isoformat(),
             "last_reserved_at": datetime.now(timezone.utc).isoformat(),
@@ -591,6 +629,21 @@ def _reserve_provider_budget(
         )
     except DiscoveryPublishPolicyError as exc:
         raise WebThemeDiscoveryError(str(exc)) from exc
+
+
+def _reserve_live_web_provider_budgets(expected_decision_date: str, queries: list[str]) -> None:
+    """Reserve every web provider before the first paid Tavily request.
+
+    DeepSeek regroup count depends on returned rows, so this reserves its reviewed hard maximum.
+    A retry with the same query scope reuses the same reservation rather than double-charging it.
+    """
+    _reserve_provider_budget(
+        "web", "tavily", expected_decision_date, call_count=len(queries), query_scope=queries,
+    )
+    _reserve_provider_budget(
+        "web", "deepseek", expected_decision_date,
+        call_count=MAX_DEEPSEEK_REGROUP_CALLS, query_scope=queries,
+    )
 
 
 def _source_id(locator: str) -> str:
@@ -667,6 +720,26 @@ def _raw_receipt_path(raw_root: Path, source_id: str, expected_decision_date: st
     return raw_root / "raw" / expected_decision_date / f"{suffix}.json"
 
 
+def _raw_payload_with_frozen_fetch_clock(
+    evidence_payload: dict[str, Any], raw_path: Path, fetched_at: datetime,
+) -> tuple[dict[str, Any], datetime]:
+    """Reuse a same-evidence source's first frozen fetch instant on retry."""
+    payload = {**evidence_payload, "fetched_at": fetched_at.isoformat()}
+    if not raw_path.exists():
+        return payload, fetched_at
+    existing = _read_json(raw_path)
+    if not isinstance(existing, dict):
+        raise WebThemeDiscoveryError("frozen raw receipt is malformed")
+    try:
+        frozen_fetched_at = _parse_dt(existing.get("fetched_at"), field="frozen raw fetched_at")
+    except WebThemeDiscoveryError as exc:
+        raise WebThemeDiscoveryError("frozen raw receipt lacks a valid fetched_at") from exc
+    if frozen_fetched_at > fetched_at:
+        raise WebThemeDiscoveryError("frozen raw fetched_at cannot be after retry fetch clock")
+    payload["fetched_at"] = frozen_fetched_at.isoformat()
+    return payload, frozen_fetched_at
+
+
 def _normalize_search_results(
     results_by_query: list[dict[str, Any]], *, expected_decision_date: str,
     fetched_at: datetime, raw_root: Path | None, persist_raw: bool,
@@ -735,11 +808,12 @@ def _normalize_search_results(
             continue
         locator, observed_at, title, content = parsed
         source_id = _source_id(locator)
-        raw_payload = {
+        raw_evidence_payload = {
             "source_id": source_id, "source_type": "web", "canonical_locator": locator,
             "title": title, "content": content, "published_at": observed_at.isoformat(),
         }
-        content_sha256 = _sha256_bytes(_canonical_json(raw_payload))
+        raw_payload = {**raw_evidence_payload, "fetched_at": fetched_at.isoformat()}
+        source_fetched_at = fetched_at
         raw_ref = None
         raw_gitignored = False
         if raw_root is not None:
@@ -753,6 +827,9 @@ def _normalize_search_results(
                 except WebThemeDiscoveryError:
                     raw_ref = None
                 try:
+                    raw_payload, source_fetched_at = _raw_payload_with_frozen_fetch_clock(
+                        raw_evidence_payload, raw_path, fetched_at,
+                    )
                     _existing_packet_matches(raw_payload, raw_path)
                 except WebThemeDiscoveryError:
                     drops.append({"stage": "search_result", "reason": "immutable_raw_content_conflict", "detail": locator})
@@ -761,9 +838,10 @@ def _normalize_search_results(
                     pending_raw_writes.append((raw_path, raw_payload))
                 else:
                     _write_json_atomic(raw_payload, raw_path)
+        content_sha256 = _sha256_bytes(_canonical_json(raw_payload))
         refs.append({
             "source_id": source_id, "source_type": "web", "canonical_locator": locator,
-            "observed_at": observed_at.isoformat(), "fetched_at": fetched_at.isoformat(),
+            "observed_at": observed_at.isoformat(), "fetched_at": source_fetched_at.isoformat(),
             "content_sha256": content_sha256, "raw_receipt_ref": raw_ref,
             "raw_receipt_gitignored": raw_gitignored,
         })
@@ -1143,7 +1221,7 @@ def _require_single_tavily_api_key(value: Any) -> str:
 
 def execute_live_web_orchestration(
     *, queries: list[str], expected_decision_date: str, tavily: Any, deepseek_client: Any,
-    transport: _LiveTransport, reserve_regroup_budget: bool = True,
+    transport: _LiveTransport,
 ) -> dict[str, Any]:
     """The live web orchestration, split out so tests can EXECUTE it.
 
@@ -1155,11 +1233,8 @@ def execute_live_web_orchestration(
 
     It deliberately mints NO packet and NO `live_authorized` label: the attestation still comes
     only from a real transport inside `build_web_fetch_packet`, so making the logic testable does
-    not make the evidence forgeable.  The unconditional Tavily reservation stays in the entrypoint
-    beside the credential check so their order remains provable there; only the regroup
-    reservation lives here, because its size is the chunk count computed below.
-    `reserve_regroup_budget=False` is for tests only — it skips the operator's spend ledger,
-    never a correctness gate.
+    not make the evidence forgeable.  All live-provider reservations occur in the entrypoint
+    before the first paid Tavily request; this seam never mutates a budget ledger.
     """
     results: list[dict[str, Any]] = []
     query_drops: list[dict[str, str]] = []
@@ -1188,10 +1263,6 @@ def execute_live_web_orchestration(
     else:
         chunks = _chunk_regroup_rows(rows)
         attempted_deepseek_calls = 0
-        if reserve_regroup_budget:
-            _reserve_provider_budget(
-                "web", "deepseek", expected_decision_date, call_count=len(chunks), query_scope=queries,
-            )
         merged_themes: list[Any] = []
         model_identity = _regroup_model_identity()
         regroup_attempted = True
@@ -1262,11 +1333,7 @@ def run_web_fetch(
         # unfreeze must supply a reviewed US-local, transport-reporting DeepSeek adapter; an injected
         # object cannot mint a live receipt.
         raise WebThemeDiscoveryError("live DeepSeek transport adapter is not implemented")
-        # Tavily is the only unconditional web provider: every reserved call is attempted.  This
-        # stays here, after the credential check, so that ordering remains provable at this site.
-        _reserve_provider_budget(
-            "web", "tavily", expected_decision_date, call_count=len(queries), query_scope=queries,
-        )
+        _reserve_live_web_provider_budgets(expected_decision_date, queries)
         outcome = execute_live_web_orchestration(
             queries=queries, expected_decision_date=expected_decision_date,
             tavily=tavily, deepseek_client=deepseek_client, transport=transport,
