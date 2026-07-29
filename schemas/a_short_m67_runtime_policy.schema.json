@@ -24,12 +24,12 @@
     },
     "phase5": {
       "type": "object", "additionalProperties": false,
-      "required": ["atr_mult", "rr_floor", "single_cap_pct", "iv_halve_pct", "iv_nobuild_pct", "iv_hv_ratio_hi", "iv_hv_ratio_lo", "min_avg_amount_5d", "lowxi_band", "support_lookback", "resistance_lookback", "sr_spike_atr", "breakout_rr_bonus", "min_shares", "min_amount", "impact_cost_frac"],
+      "required": ["atr_mult", "rr_floor", "single_cap_pct", "iv_halve_pct", "iv_nobuild_pct", "iv_hv_ratio_hi", "iv_hv_ratio_lo", "min_avg_amount_5d", "lowxi_band", "support_lookback", "resistance_lookback", "sr_spike_atr", "breakout_rr_bonus", "breakout_source_disagreement_rate_threshold_pct", "min_shares", "min_amount", "impact_cost_frac"],
       "properties": {
         "atr_mult": {"$ref": "#/$defs/regimeMap"}, "rr_floor": {"$ref": "#/$defs/regimeMap"}, "single_cap_pct": {"$ref": "#/$defs/regimeMap"},
         "iv_halve_pct": {"$ref": "#/$defs/number"}, "iv_nobuild_pct": {"$ref": "#/$defs/number"}, "iv_hv_ratio_hi": {"$ref": "#/$defs/number"}, "iv_hv_ratio_lo": {"$ref": "#/$defs/number"},
         "min_avg_amount_5d": {"$ref": "#/$defs/number"}, "lowxi_band": {"$ref": "#/$defs/number"},
-        "support_lookback": {"$ref": "#/$defs/positiveInteger"}, "resistance_lookback": {"$ref": "#/$defs/positiveInteger"}, "sr_spike_atr": {"$ref": "#/$defs/number"}, "breakout_rr_bonus": {"$ref": "#/$defs/number"},
+        "support_lookback": {"$ref": "#/$defs/positiveInteger"}, "resistance_lookback": {"$ref": "#/$defs/positiveInteger"}, "sr_spike_atr": {"$ref": "#/$defs/number"}, "breakout_rr_bonus": {"$ref": "#/$defs/number"}, "breakout_source_disagreement_rate_threshold_pct": {"$ref": "#/$defs/number"},
         "min_shares": {"$ref": "#/$defs/positiveInteger"}, "min_amount": {"$ref": "#/$defs/number"}, "impact_cost_frac": {"$ref": "#/$defs/number"}
       }
     },

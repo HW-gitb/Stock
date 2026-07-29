@@ -28,7 +28,8 @@ _PHASE5_KEYS = (
     "atr_mult", "rr_floor", "single_cap_pct", "iv_halve_pct", "iv_nobuild_pct",
     "iv_hv_ratio_hi", "iv_hv_ratio_lo", "min_avg_amount_5d", "lowxi_band",
     "support_lookback", "resistance_lookback",
-    "sr_spike_atr", "breakout_rr_bonus", "min_shares", "min_amount", "impact_cost_frac",
+    "sr_spike_atr", "breakout_rr_bonus", "breakout_source_disagreement_rate_threshold_pct",
+    "min_shares", "min_amount", "impact_cost_frac",
 )
 _PORTFOLIO_KEYS = (
     "same_sw_l2_threshold_pct", "margin_threshold_pct",
@@ -194,6 +195,9 @@ def _validate_m67(payload: dict) -> dict:
         "resistance_lookback": _number(phase["resistance_lookback"], "m67.phase5.resistance_lookback", minimum=2, integer=True),
         "sr_spike_atr": _number(phase["sr_spike_atr"], "m67.phase5.sr_spike_atr", minimum=0.0),
         "breakout_rr_bonus": _number(phase["breakout_rr_bonus"], "m67.phase5.breakout_rr_bonus", minimum=0.0),
+        "breakout_source_disagreement_rate_threshold_pct": _number(
+            phase["breakout_source_disagreement_rate_threshold_pct"],
+            "m67.phase5.breakout_source_disagreement_rate_threshold_pct", minimum=0.0, maximum=100.0),
         "min_shares": _number(phase["min_shares"], "m67.phase5.min_shares", minimum=1, integer=True),
         "min_amount": _number(phase["min_amount"], "m67.phase5.min_amount", minimum=0.0),
         "impact_cost_frac": _number(phase["impact_cost_frac"], "m67.phase5.impact_cost_frac", minimum=0.0, maximum=1.0),

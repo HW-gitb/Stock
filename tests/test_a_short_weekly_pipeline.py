@@ -449,6 +449,61 @@ class AccountStateTests(unittest.TestCase):
 
 
 class BuildWeeklyTests(unittest.TestCase):
+    @staticmethod
+    def _breakout_normalized(egs_breakout: bool, close: float):
+        candidate = _egs_candidate(derived_flags={
+            "chasing_high": False, "overheat_flag": False, "has_crash_veto": False,
+            "is_lock": False, "is_breakout": egs_breakout, "hard_veto": False,
+        })
+        series = _series()
+        series[-1]["close"] = close
+        normalized = normalize_candidate(candidate, series, _overlay_row(), 55.0,
+                                         {"available_cash": 500000.0}, "震荡期")
+        normalized["margin_coverage"] = _complete_margin_coverage()
+        normalized["price_data_through"] = AS_OF
+        for check in normalized.get("rule6_checks") or []:
+            if check.get("id") in _MARGIN_CHECK_IDS:
+                check["metrics"] = {"status": "complete"}
+        return normalized
+
+    def test_breakout_source_disagreement_is_visible_but_keeps_the_conservative_gate(self):
+        egs_only = _weekly([self._breakout_normalized(True, 2.80)])["reports"][0]
+        pipeline_only = _weekly([self._breakout_normalized(False, 2.95)])["reports"][0]
+        agree_true = _weekly([self._breakout_normalized(True, 2.95)])["reports"][0]
+        agree_false = _weekly([self._breakout_normalized(False, 2.80)])["reports"][0]
+
+        self.assertEqual(egs_only["machine"]["breakout_source_agreement"], "egs_only")
+        self.assertNotEqual(egs_only["m67"]["table"]["操作"], "建仓")
+        self.assertIn("两套技术指标口径不一致，按保守口径处理", egs_only["m67"]["table"]["触发条件"])
+        self.assertEqual(pipeline_only["machine"]["breakout_source_agreement"], "pipeline_only")
+        self.assertEqual(agree_true["machine"]["breakout_source_agreement"], "agree_true")
+        self.assertEqual(agree_false["machine"]["breakout_source_agreement"], "agree_false")
+        for report in (egs_only, pipeline_only, agree_true, agree_false):
+            self.assertIsInstance(report["machine"]["breakout_source_agreement"], str)
+
+    def test_breakout_summary_is_batch_local_and_renders_zero_and_significant_states(self):
+        zero = _weekly([
+            self._breakout_normalized(False, 2.80),
+            self._breakout_normalized(True, 2.95),
+        ])
+        significant = _weekly([
+            self._breakout_normalized(True, 2.80),
+            self._breakout_normalized(False, 2.95),
+        ])
+        with patch("pathlib.Path.write_text", side_effect=AssertionError("must not persist weekly state")):
+            zero_md = render_weekly_markdown(zero)
+            significant_md = render_weekly_markdown(significant)
+        self.assertIn("本周 0/2 只分歧", zero_md)
+        self.assertIn("一致（本周无分歧）", zero_md)
+        self.assertIn("本周 2/2 只分歧", significant_md)
+        self.assertIn("分歧显著，建议立项复核指标源", significant_md)
+
+    def test_breakout_source_agreement_tamper_fails_closed(self):
+        weekly = _weekly()
+        weekly["reports"][0]["machine"]["breakout_source_agreement"] = "unknown"
+        with self.assertRaisesRegex(ValueError, "breakout_source_agreement"):
+            validate_weekly_report(weekly, _feed())
+
     def test_default_weekly_fixture_is_cached_and_isolated(self):
         global _DEFAULT_WEEKLY_BASELINE, _DEFAULT_WEEKLY_BUILDER
         _DEFAULT_WEEKLY_BASELINE = None

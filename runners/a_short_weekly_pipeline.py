@@ -62,8 +62,12 @@ from engine.a_share_market_clock import a_share_market_date  # noqa: E402
 _RUNTIME_CONFIGURATION = load_runtime_configuration()
 _WEEKLY_WINDOWS = _RUNTIME_CONFIGURATION["m67"]["weekly_windows"]
 _PORTFOLIO_RISK_POLICY = _RUNTIME_CONFIGURATION["m67"]["portfolio_risk"]
+_PHASE5_POLICY = _RUNTIME_CONFIGURATION["m67"]["phase5"]
 SMALL_FLOAT_MV_RMB = _PORTFOLIO_RISK_POLICY["small_float_mv_rmb"]
 HIGH_RISK_HOLDING_CAP_MULTIPLIER = _PORTFOLIO_RISK_POLICY["high_risk_holding_cap_multiplier"]
+BREAKOUT_SOURCE_DISAGREEMENT_RATE_THRESHOLD_PCT = _PHASE5_POLICY[
+    "breakout_source_disagreement_rate_threshold_pct"
+]
 
 SCHEMA_NAME = "a_short_weekly_report"
 SCHEMA_VERSION = "1.0.0"
@@ -1056,6 +1060,55 @@ def _validate_account_position_coverage(account_positions: list[dict] | None, re
         raise ValueError(f"账户持仓覆盖不变量失败：missing={missing}")
 
 
+_BREAKOUT_SOURCE_DISAGREEMENT_NOTICE = "两套技术指标口径不一致，按保守口径处理"
+
+
+def _attach_breakout_source_disagreement_notices(reports: list[dict]) -> None:
+    """Restore the visibility notice after cash/portfolio post-processors.
+
+    Those post-processors legitimately replace ``触发条件`` when they demote a
+    row. The categorical marker remains the source of truth, so preserve its
+    advisory notice without touching action, plan, shares, or price fields.
+    """
+    for report in reports:
+        marker = ((report.get("machine") or {}).get("breakout_source_agreement"))
+        if marker not in {"egs_only", "pipeline_only"}:
+            continue
+        table = ((report.get("m67") or {}).get("table") or {})
+        trigger = str(table.get("触发条件") or "")
+        if _BREAKOUT_SOURCE_DISAGREEMENT_NOTICE not in trigger:
+            table["触发条件"] = (trigger + "；" if trigger else "") + _BREAKOUT_SOURCE_DISAGREEMENT_NOTICE
+
+
+def summarize_breakout_source_agreement(reports: list[dict]) -> dict | None:
+    """Return this batch's disagreement summary; it never reads or writes state.
+
+    An absent or malformed marker is unavailable rather than silently counted
+    as agreement, so legacy/incomplete reports cannot manufacture a clean
+    weekly conclusion.
+    """
+    allowed = {"agree_true", "agree_false", "egs_only", "pipeline_only"}
+    markers = [((report.get("machine") or {}).get("breakout_source_agreement"))
+               for report in reports]
+    if not markers or any(marker not in allowed for marker in markers):
+        return None
+    egs_only = sum(marker == "egs_only" for marker in markers)
+    pipeline_only = sum(marker == "pipeline_only" for marker in markers)
+    disagreement_count = egs_only + pipeline_only
+    rate_pct = disagreement_count * 100.0 / len(markers)
+    if disagreement_count == 0:
+        conclusion = "一致（本周无分歧）"
+    elif rate_pct < BREAKOUT_SOURCE_DISAGREEMENT_RATE_THRESHOLD_PCT:
+        conclusion = "零星分歧，已按保守口径处理"
+    else:
+        conclusion = "分歧显著，建议立项复核指标源"
+    return {
+        "candidate_count": len(markers), "disagreement_count": disagreement_count,
+        "egs_only_count": egs_only, "pipeline_only_count": pipeline_only,
+        "conclusion": conclusion,
+    }
+
+
 def build_weekly_report(normalized_list: list, as_of: str, generated_at: str,
                         iv_feed_ref: str = "", run_lineage: dict = None, available_cash=None,
                         new_exposure_capacity=None, crash_veto_tracking: dict | None = None,
@@ -1126,6 +1179,7 @@ def build_weekly_report(normalized_list: list, as_of: str, generated_at: str,
     cash_summary = _allocate_cash(reports, available_cash, new_exposure_capacity, portfolio_context)
     portfolio_risk = _apply_portfolio_risk_results(
         reports, portfolio_context, as_of, portfolio_fact_as_of, portfolio_fact_fetch_status)
+    _attach_breakout_source_disagreement_notices(reports)
     # run_lineage ties the consumed selection + IV feed + account/sizing status to this M6.7 artifact
     # (Slice 3b-2: selection 在 result/a_short、M6.7 在 research lane,靠此机器可读 lineage 绑定);
     # default = no-account observation-only,使直接 builder/测试仍 schema-valid。

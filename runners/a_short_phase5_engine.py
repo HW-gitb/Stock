@@ -633,11 +633,28 @@ def entry_type(inp: dict, ind: dict):
     # #6-ii:is_breakout 现为 v14.2 spec 突破信号(站稳MA10 + 当日量>5日均量×1.2,EGS 算)。引擎本地复查
     # close>=ma10 作安全门;**不再叠加旧 vol_confirm(近5日上涨日额>下跌日额)门**——那是非-spec 额外量能,
     # 会把合法的 spec 突破误判成观察(vol_confirm 仅留作 EGS l4_score 评分输入,不门控突破)。
-    if inp.get("derived", {}).get("breakout") and ma10 and close >= ma10:
+    if breakout_source_agreement(inp, ind) == "agree_true":
         return "突破", "站稳 MA10 + 放量"
     if sup and abs(close - sup) / sup <= LOWXI_BAND:
         return "低吸", "现价近关键支撑"
     return "观察", "未到低吸/突破触发"
+
+
+def breakout_source_agreement(inp: dict, ind: dict) -> str:
+    """Expose the existing conservative breakout AND-gate without changing it.
+
+    EGS owns the upstream breakout predicate; Phase 5 independently verifies
+    the local settled close against its own MA10.  This returns only the
+    categorical agreement state, never a price or moving-average value.
+    """
+    egs_breakout = bool((inp.get("derived") or {}).get("breakout"))
+    close, ma10 = inp.get("close"), ind.get("ma10")
+    pipeline_breakout = bool(ma10 and close is not None and close >= ma10)
+    if egs_breakout and pipeline_breakout:
+        return "agree_true"
+    if not egs_breakout and not pipeline_breakout:
+        return "agree_false"
+    return "egs_only" if egs_breakout else "pipeline_only"
 
 
 def exit_and_size(inp: dict, ind: dict, regime: str, etype: str = "低吸", extra_halve: bool = False,
@@ -1577,6 +1594,9 @@ def build_m67_report(inp: dict, as_of: str, generated_at: str) -> dict:
                      else ("持仓管理(系统位被动显示,到价由你盘中手动);周期1-3周" if action == "持有"
                            else (reject or ""))),
     }
+    breakout_agreement = breakout_source_agreement(inp, ind)
+    if breakout_agreement in {"egs_only", "pipeline_only"}:
+        table["触发条件"] += "；两套技术指标口径不一致，按保守口径处理"
     price_cost = f"{inp.get('close')} | 试探仓"
     if has_position:
         price_cost = (f"{inp.get('close')} | 持仓:{position.get('shares')}股/"
@@ -1657,6 +1677,7 @@ def build_m67_report(inp: dict, as_of: str, generated_at: str) -> dict:
         "m67": m67,
         "machine": {
             "indicators": ind, "risk_families": fam,
+            "breakout_source_agreement": breakout_agreement,
             "rule6_gate": rule6_gate,
             "layer": {"hard_veto": hard, "downgrade": downgrades,
                       "observe_only": observe, "llm_enrichment": llm_notes,
@@ -2090,6 +2111,22 @@ def validate_m67_consistency(report: dict) -> None:
         expected_banner = render_rule6_d_tier_banner(rule6_gate)
         if m67["精简结论区"].get("Rule6人工核查") != expected_banner:
             raise ValueError("Rule6 D-tier 人工核查横幅与 completion gate 不一致")
+        # Knife 7 applies only to EGS-covered candidate reports (including a
+        # candidate that is already held). Tier-3 holding reports have no EGS
+        # breakout source and therefore do not manufacture this four-state
+        # comparison.
+        breakout_agreement = mc.get("breakout_source_agreement")
+        allowed_breakout_agreements = {"agree_true", "agree_false", "egs_only", "pipeline_only"}
+        # Historical published reports predate the marker. Missing is therefore
+        # unavailable (and cannot render a clean conclusion), while any marker
+        # that is present is closed-world and checked against the final text.
+        if breakout_agreement is not None:
+            if breakout_agreement not in allowed_breakout_agreements:
+                raise ValueError("breakout_source_agreement 非法")
+            disagreement_notice = "两套技术指标口径不一致，按保守口径处理"
+            has_disagreement_notice = disagreement_notice in str(tbl.get("触发条件") or "")
+            if (breakout_agreement in {"egs_only", "pipeline_only"}) != has_disagreement_notice:
+                raise ValueError("breakout_source_agreement 与触发条件分歧提示不一致")
     # held-state 不变式(P1 修复 R-ASHORT-M67-HELD-STATE-ACTION-BIND):action=持有 必须真持仓(stateful_risk.position_state==held
     # + position 非空且 ts_code 与 report 一致),防 flat 候选冒充持仓行过 validator(候选/持仓串线);建仓/观察 反向必非 held;
     # held+hard-veto 仍必须走持仓管理：硬风险进入 clear_review/blocked_add，但不抹掉 S3a plan。

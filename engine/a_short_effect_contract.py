@@ -188,7 +188,8 @@ def _governed_python_literal_names_for_source(source: str, rel: str) -> tuple[st
             "ATR_MULT", "RR_FLOOR", "BREAKOUT_RR_BONUS", "SINGLE_CAP_PCT", "IV_HALVE_PCT",
             "IV_NOBUILD_PCT", "IV_HV_RATIO_HI", "IV_HV_RATIO_LO", "OVERHEAT_5D",
             "OVERHEAT_20D", "MIN_AVG_AMOUNT_5D", "LOWXI_BAND", "SUPPORT_LOOKBACK",
-            "RESISTANCE_LOOKBACK", "SR_SPIKE_ATR", "MIN_SHARES", "MIN_AMOUNT", "IMPACT_COST_FRAC",
+            "RESISTANCE_LOOKBACK", "SR_SPIKE_ATR", "BREAKOUT_SOURCE_DISAGREEMENT_RATE_THRESHOLD_PCT",
+            "MIN_SHARES", "MIN_AMOUNT", "IMPACT_COST_FRAC",
         },
         "runners/a_short_weekly_pipeline.py": {
             "MIN_PRICE_OBS", "EX_DIV_WINDOW_DAYS", "FORWARD_EVENT_WINDOW_DAYS",
@@ -456,13 +457,20 @@ def _runtime_policy_leaf_readers(policy_paths: dict[str, list[str]], sources: di
             elif len(parts) >= 2:
                 section, key = parts[0], parts[1]
                 if section == "phase5":
+                    phase5_reader = _policy_value_reaches_result(
+                        trees["runners/a_short_phase5_engine.py"], "_PHASE5_POLICY", key)
+                    weekly_reader = _policy_value_reaches_result(
+                        trees["runners/a_short_weekly_pipeline.py"], "_PHASE5_POLICY", key)
                     if (key in declared["phase5"]
                             and _loader_reads_key(trees[_RUNTIME_CONFIG_FILE], "_validate_m67", "phase", key)
-                            and _policy_value_reaches_result(trees["runners/a_short_phase5_engine.py"], "_PHASE5_POLICY", key)):
+                            and (phase5_reader or weekly_reader)):
                         refs = [
                             f'{_RUNTIME_CONFIG_FILE}::_validate_m67.phase["{key}"]',
-                            f'runners/a_short_phase5_engine.py::_PHASE5_POLICY["{key}"]',
                         ]
+                        if phase5_reader:
+                            refs.append(f'runners/a_short_phase5_engine.py::_PHASE5_POLICY["{key}"]')
+                        if weekly_reader:
+                            refs.append(f'runners/a_short_weekly_pipeline.py::_PHASE5_POLICY["{key}"]')
                 elif section == "portfolio_risk":
                     portfolio_reader = _policy_value_reaches_result(
                         trees["engine/a_short_portfolio_risk.py"], "_PORTFOLIO_POLICY", key)

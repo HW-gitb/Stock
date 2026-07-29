@@ -398,6 +398,16 @@ def render_weekly_markdown(weekly: dict) -> str:
         out.append("> ⚠️ **两融数据源本周不可用或覆盖不足：两条两融规则未执行，"
                    "新建仓统一观察处理。** 参考日=`" + str(margin.get("effective_ref_date")) +
                    "`，状态=`" + margin_state + "`。")
+    # Knife 7: this is a batch-local diagnostic only.  It never alters the
+    # conservative breakout AND-gate, and no marker means no clean conclusion.
+    from runners.a_short_weekly_pipeline import summarize_breakout_source_agreement
+    breakout_summary = summarize_breakout_source_agreement(cand_reports)
+    if breakout_summary is not None:
+        out.append("> **突破指标口径**：本周 " + str(breakout_summary["disagreement_count"]) + "/" +
+                   str(breakout_summary["candidate_count"]) + " 只分歧（EGS-only " +
+                   str(breakout_summary["egs_only_count"]) + " / pipeline-only " +
+                   str(breakout_summary["pipeline_only_count"]) + "）+ " +
+                   str(breakout_summary["conclusion"]) + "。")
     # Slice 3b-2: durable run_lineage banner — esp. the no-account no-sizing warning so a reader of THIS
     # artifact (not just the terminal) cannot mistake a sizing-artifact 观察 for a real avoid signal.
     rl = weekly.get("run_lineage") or {}

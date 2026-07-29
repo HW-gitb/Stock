@@ -6,6 +6,13 @@
 - **Required**: 无；Register: non-material（纯测试基建，不影响 data integrity / PIT / schema / 选股）。上轮 `K3-R70` 等仍 CLOSED，见 `docs/system_risk_register.md` 对应条目。
 - **Verify**: review-evidence:not_available（本轮未注入 token）。植入对照三打三中：删掉执行模块里的 runner 类→红、把模块名改成不带 `test_us_short` 前缀→红、把一条测试方法置 None→红（第一版按名字比较放过了这条，遂改成比较**可调用**属性）；baseline 与还原均 0 红。最小覆盖目标单跑一次：`tests.test_us_short_discovery_conformance` = 28 tests / 13.7s / PASS（27→28 即本条新测试）。按 Optional-only 快档不跑全量。
 - **Next**: Codex：K3-R31 / K3-R32（解冻链④）
+## 2026-07-28 - Codex implementation (A-short Knife 7 breakout-source disagreement visibility)
+
+- **Verdict/Action**: Implemented without changing the conservative entry gate: EGS `is_breakout` AND local `close >= MA10` remain jointly required. Each EGS-covered candidate now carries the price-free machine enum `breakout_source_agreement` (`agree_true`, `agree_false`, `egs_only`, or `pipeline_only`); either disagreement appends `两套技术指标口径不一致，按保守口径处理` to the final trigger text. The one-click weekly Markdown path derives a current-batch-only X/Y banner, two disagreement counts, and the frozen 10.0% sparse/significant conclusion. Missing legacy markers stay unavailable and are never reported as clean; no cross-week state is read or written.
+- **Required**: No new material Required; `docs/system_risk_register.md` unchanged.
+- **Verify**: Fixed Python `C:\Users\cnhea\AppData\Local\Programs\Python\Python313\python.exe -m unittest tests.test_a_short_official_operation_evidence tests.test_a_short_portfolio_risk tests.test_a_short_phase5_engine tests.test_a_short_weekly_pipeline tests.test_a_short_m67_render tests.test_a_short_effect_contract tests.schema.test_a_short_screening_threshold_governance_schema` exited 0. Fixed Python `.tools\full_pack_ledger.py run a_short "Knife 7: breakout visibility plus legacy/post-processor closure" "fixed Python full A-short suite after marker, batch-local banner, policy and legacy compatibility closure" 1300 -- discover -s tests -p "test_a_short*.py"` = PASS, 2075 tests, 276.5s, exit 0. Fixed Python `-m unittest tests.test_doc_governance_guard tests.test_route_doc_ledger_status_consistency` = 53 OK / 1.299s. `git diff --check` clean (CRLF warnings only).
+- **Next**: Claude Code: review.
+- **Pre-Codex self-review**: matrix=complete; register=no material Required; handoff=SESSION_LOG top entry; focused=targeted compatibility suite exit 0; full-lane=2075 OK / 276.5s; scope=A-short only.
 
 ## 2026-07-28 - Claude Code 审查 PASS(全量测试入口:spawn 前 START + 错参显式 REFUSED)
 

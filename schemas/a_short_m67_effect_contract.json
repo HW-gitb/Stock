@@ -412,28 +412,28 @@
     "A-EGS/egs_main.py": "daabfc6193e9aed743368f3be02d3f0ed2fac339d783625d77b4eb1e86c741ae",
     "engine/egs_industry_heat.py": "79d8cddefdabb21fa8effd677f320a8e44d86782688f4449145c8789469700b3",
     "engine/a_short_industry_theme.py": "6a10200f80b3c0d301efc8af1561b53ef2578e1cd26eea7976188dd57b7b6b2b",
-    "runners/a_short_phase5_engine.py": "c86f2589ec072718d8e0d7363b46dab15d6c888f4cc0dec8f799ee96fd01de96",
-    "runners/a_short_weekly_pipeline.py": "5061155f4a810af89bd028a408068425382644a014fcb04b6816068c7757af2c",
-    "runners/a_short_m67_render.py": "b8f0bce2b970c3d5180044218bd0b3a6e66a964ec64b34837f89c0089da501f5",
+        "runners/a_short_phase5_engine.py": "432ab9ea2855d3007f62b5e4a8e2b00f3248fe208f88cc2f0a3accbc40246671",
+        "runners/a_short_weekly_pipeline.py": "5faf25bbcc5f0544e5c0b43139975519f3feb588fa26c082dcac380aedda2a0d",
+    "runners/a_short_m67_render.py": "f275e71f71a11b293f3e23ce948b310dc690388082bbe3773406a725b0e0a947",
     "engine/a_short_portfolio_risk.py": "02b88ac3b5239e8dd4897bde06afab0769ea5593f8a8a3666e5c8fba24486860",
-    "engine/a_short_effect_contract.py": "58ba0031973d98b67d29848dfd27857ab219257fef74eb568427b9f1991b960d"
+    "engine/a_short_effect_contract.py": "6ce7e5a8bffce6631880a1a4c7e32c3ef8bcfe81d20d11e57875f02db1293d0b"
   },
   "runtime_constants_sha256": {
     "A-EGS/egs_main.py": "5122d39bd0d4799bff302dfc6cc5c51cb9a41e9a47362a08b87ad1c73a057715",
     "runners/a_short_phase5_engine.py": "537f47a9e7443e638b675cc7349b7e551eb926f2dd00267f6085433a680d1f3b",
     "engine/a_short_portfolio_risk.py": "238ae5ff77e269bc1b9a507014b21561c54e6766169d1854e19119ac5137943e"
   },
-  "runtime_policy_paths_sha256": "3b27deffedc387949f7adc7a91f30d8f236bd79846c26777e35fae8906254d18",
+  "runtime_policy_paths_sha256": "c3c0721fd095930f6d47f4bbe684aac53d1afb51732e5635d70d404cda70aa42",
   "runtime_policy_sha256": {
     "presets/a_short_screening_threshold_governance_20260602.json": "aeccfa2636685f395442a23892d9d816d22fcf50271b0fe7dbc13bf72cffce9d",
-    "presets/a_short_m67_runtime_policy_20260715.json": "3edaaede77d73bf6f96ce90ec929ae5e4c7a5c0d9870f772f463e6f0a33158fd",
+    "presets/a_short_m67_runtime_policy_20260715.json": "c06fd8ff00cbdbbd7c1fdbdff02132b8d6a29092663d66795d8df6406e59f474",
     "presets/egs_industry_heat_governance_20260611.json": "8bbbf474ca92321bf0d1c0e5f6e91d13d332e10545d3a222aa9e32caac3fb8da"
   },
   "runtime_policy_schema_sha256": {
     "schemas/a_short_screening_threshold_governance.schema.json": "6a517050ead73ebb4d939c236224d3776fc5be1ff3dc67453303c7329f276217",
-    "schemas/a_short_m67_runtime_policy.schema.json": "adb5fb9013adb74adb85f5d660e2a17becb666d3cc0ca8af60a06d3cbf44072c"
+    "schemas/a_short_m67_runtime_policy.schema.json": "eb594c270f1bd75e629a4f46e549e0c35f10da10d94c4f1ecd6d59cdd857bdc7"
   },
-  "runtime_policy_leaf_readers_sha256": "121c4e09658488a3a38477fb2a506a4b9c5dd9c3d8225481163b4df85f4a10a1",
+  "runtime_policy_leaf_readers_sha256": "7ec4118fe527be609bf3576dca2ac2ad2932075abe6bf0ad8d99d5db94715692",
   "runtime_policy_bindings": [
     {
       "id": "screening_thresholds",
@@ -457,14 +457,16 @@
       "source_prefixes": [
         "phase5"
       ],
-      "source_paths_sha256": "bee5707edbf5398bc7b83fd032b638c9e766094a81434a880255c300e77f3a67",
+      "source_paths_sha256": "c4b88b3eb1a1b36120862ba05f555c82f9485508f24bd19a71b6194e28e93e07",
       "policy": "must_affect_result",
       "terminal_surfaces": [
         "weekly.reports[].m67",
-        "weekly.reports[].machine"
+        "weekly.reports[].machine",
+        "weekly Markdown 突破指标口径横幅"
       ],
       "consumer_refs": [
-        "runners/a_short_phase5_engine.py imports _PHASE5_POLICY"
+        "runners/a_short_phase5_engine.py imports _PHASE5_POLICY",
+        "runners/a_short_weekly_pipeline.py imports _PHASE5_POLICY for batch-local disagreement conclusion"
       ]
     },
     {
@@ -1045,6 +1047,7 @@
       "phase5.atr_mult.防御期",
       "phase5.atr_mult.震荡期",
       "phase5.breakout_rr_bonus",
+      "phase5.breakout_source_disagreement_rate_threshold_pct",
       "phase5.impact_cost_frac",
       "phase5.iv_halve_pct",
       "phase5.iv_hv_ratio_hi",
@@ -1159,6 +1162,10 @@
       "phase5.breakout_rr_bonus": [
         "engine/a_short_runtime_config.py::_validate_m67.phase[\"breakout_rr_bonus\"]",
         "runners/a_short_phase5_engine.py::_PHASE5_POLICY[\"breakout_rr_bonus\"]"
+      ],
+      "phase5.breakout_source_disagreement_rate_threshold_pct": [
+        "engine/a_short_runtime_config.py::_validate_m67.phase[\"breakout_source_disagreement_rate_threshold_pct\"]",
+        "runners/a_short_weekly_pipeline.py::_PHASE5_POLICY[\"breakout_source_disagreement_rate_threshold_pct\"]"
       ],
       "phase5.impact_cost_frac": [
         "engine/a_short_runtime_config.py::_validate_m67.phase[\"impact_cost_frac\"]",
