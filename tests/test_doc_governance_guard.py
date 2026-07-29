@@ -893,9 +893,12 @@ class DocGovernanceGuard(unittest.TestCase):
             # bypass, strictly weaker than having no escape hatch at all. Whatever follows the first
             # half- or full-width colon must itself say something; a missing colon means no reason.
             if value.lower().lstrip("*_ ").startswith("blocked"):
-                parts = re.split(r"[:：]", value, maxsplit=1)
-                reason = parts[1] if len(parts) > 1 else ""
+                blocked_parts = re.split(r"[:：]", value, maxsplit=1)
+                reason = blocked_parts[1] if len(blocked_parts) > 1 else ""
                 reason = reason.strip().strip("`").strip().rstrip(".。").strip()
+                # K3-R85: normalise only outer Markdown emphasis, so wrapped placeholder tokens
+                # cannot claim a visible blocker while meaningful emphasized reasons still work.
+                reason = reason.strip("*_").strip().rstrip(".。").strip()
                 if reason.lower() in cls.DOOR_PLACEHOLDERS:
                     offenders.append(("door-blocked-without-reason", header[:50], value))
         return offenders
@@ -1132,6 +1135,10 @@ class DocGovernanceGuard(unittest.TestCase):
                          "a pasted door result must be accepted")
         self.assertEqual(self._repair_door_offenders(blocked), [],
                          "an explicit BLOCKED door is evidence, not a placeholder")
+        self.assertEqual(
+            self._repair_door_offenders(blocked + head + base + "; door=route 14 OK + doc-governance 41 OK\n"),
+            [],
+            "a valid BLOCKED entry must not corrupt parsing of the next repair entry")
         # K3-R84 whole class: every reasonless spelling of the escape hatch, not just the two that
         # were demonstrated. Each of these was green before the fix.
         for reasonless in ("BLOCKED:", "BLOCKED: TBD", "BLOCKED", "blocked:", "BLOCKED:   ",
@@ -1139,10 +1146,16 @@ class DocGovernanceGuard(unittest.TestCase):
                            "**BLOCKED**:"):
             self.assertTrue(self._repair_door_offenders(head + base + f"; door={reasonless}\n"),
                             f"a reasonless escape hatch must turn the guard red: door={reasonless!r}")
+        # K3-R85: Markdown may emphasize a real reason, but cannot disguise a placeholder reason.
+        for wrapped_placeholder in ("**TBD**", "_TBD_", "**n/a**", "_待定_", "**TBD.**"):
+            self.assertTrue(
+                self._repair_door_offenders(head + base + f"; door=BLOCKED: {wrapped_placeholder}\n"),
+                f"a Markdown-wrapped placeholder must turn the guard red: {wrapped_placeholder!r}")
         for with_reason in ("BLOCKED: pinned host Python unavailable",
                             "blocked: 主 Python 不在这台机器上",
                             "**BLOCKED**: sandbox blocks the host executable",
-                            "BLOCKED：固定解释器缺失"):
+                            "BLOCKED：固定解释器缺失",
+                            "**BLOCKED**: **sandbox blocks the host executable**"):
             self.assertEqual(self._repair_door_offenders(head + base + f"; door={with_reason}\n"), [],
                              f"a stated blocker is evidence and must stay green: door={with_reason!r}")
         self.assertEqual(

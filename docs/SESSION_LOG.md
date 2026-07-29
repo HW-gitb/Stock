@@ -1,5 +1,42 @@
 # Session Log
 
+## 2026-07-29 — Claude Code 审查 PASS（K3-R85 门内 Markdown 占位绕过，master 工作树）
+
+- **Verdict/Action**: PASS，已提交（只提交 K3-R85 范围：`tests/test_doc_governance_guard.py` + 三份文档；X lane 那四个文件仍带着未闭的 K3-R86，未 staged）。Codex 同刀还揪出一个我在 K3-R84 里埋的真 bug（变量遮蔽导致守卫在两条 `修复` 条目时崩），已确认属实。正文只在 `docs/system_risk_register.md#R-GOV-HANDOFF-DOOR-MARKDOWN-PLACEHOLDER-BYPASS`（K3-R85 / K3-R85-O1），本处不复述。
+- **Required**: 无。
+- **Verify**: review-evidence:f3d42f145114。守卫超集 `tests.test_doc_governance_guard` + `tests.test_route_doc_ledger_status_consistency` = `status=PASS exit=0 tests=55`。自写探针 28 例：五种被点名的写法全红、七种未点名的装饰仍绿（已记 Optional）、七条误报对照全绿（含强调的真实原因、原因内反引号路径、全角冒号、中文原因）。遮蔽 bug 用 `git show 569770b8:` 核到那行，修后两条目日志不再崩。未起全量（rule 3 未触发：一个纯文档守卫谓词）；未起子 agent（rule 8 低危、非 §6a 子集）。
+- **Next**: Codex：修复 K3-R86。
+
+## 2026-07-29 — Claude Code 审查 FAIL（US-short K3-R79 / K3-R83 收口，master 工作树）
+
+- **Verdict/Action**: FAIL，未提交。身份比对那一半方向对（不动 `_canonical_locator`、只在背书处按推文 ID 比），零接受也落 raw 也建起来了；挡住这一刀的是 schema 把两个新字段设成 **required**，把已冻结的真实付费收据打成非法。正文只在 `docs/system_risk_register.md#R-USSHORT-KNIFE3-WEB-X-MERGE-PACKET-BOUNDARY`（K3-R86），本处不复述。
+- **Required**: K3-R86 —— `provider_response_refs` 与 drop 条目的 `model_source_url` / `provider_annotation_urls` 被写进 `required`，而 `merge.py:246` 是**读盘后**校验，等于追溯作废历史产物。修法：两者移出 `required` 只留 `properties`，改由 builder 对 live 包强制，并补「读回旧形状仍被接受」的正向控制。
+- **Verify**: review-evidence:5183d44a56a2。全量按 rule 4 引用执行方官方账本 `CACHED GREEN us_short 5003 OK @2026-07-29T18:18:34 on this EXACT code state`；其后并发窗口改了 `tests/test_doc_governance_guard.py`（不属该包）致缓存键失配，未重跑：FAIL 已被探针坐实，重跑还会绑进另一窗未审改动。决定性证据取自**真实产物**：`..._x_20260731_receipt.json` 被 `xfetch._validate_schema` 拒于 `provider_response_refs`，补空列表后改拒 `model_source_url`。独立对抗 agent 已起、结论未回，§6a 记 NOT_VERIFIED。Scope：树内并发的 K3-R85 文档守卫修复不在本轮范围、未 staged。
+- **Next**: Codex：修复。
+
+## 2026-07-29 — Codex 修复 K3-R85
+
+- **Verdict/Action**: 已修复 `BLOCKED` 原因的 Markdown 包裹绕过；完整 closure 见 `docs/system_risk_register.md#R-GOV-HANDOFF-DOOR-MARKDOWN-PLACEHOLDER-BYPASS`。
+- **Required**: K3-R85 — 仅剥离原因两端的 `*` / `_` 后复用既有占位比较；加粗/斜体固定填充值转红，强调格式的真实原因保持转绿。
+- **Verify**: 固定主 Python `tests.test_doc_governance_guard` = 41 OK；未触发全量、provider 或 live 动作。
+- **Pre-Codex self-review**: `matrix=complete: K3-R85 wrapped-reason class + valid-emphasis control + valid-BLOCKED multi-entry iteration; register=updated; handoff=updated; focused=41 OK; full-lane=not_triggered: AGENTS rule 3; reason=one pure document-guard predicate and its own controls; door=route-doc + doc-governance 55 OK`
+- **Next**: Claude Code：审查。
+
+## 2026-07-29 — Codex 审查 FAIL（`569770b8`，K3-R85：`BLOCKED` 原因的 Markdown 占位绕过）
+
+- **Verdict/Action**: FAIL。K3-R84 修了裸 `BLOCKED:`，但没有按同一归一化规则检查冒号后的原因；完整 finding / closure 只见 `docs/system_risk_register.md#R-GOV-HANDOFF-DOOR-MARKDOWN-PLACEHOLDER-BYPASS`。
+- **Required**: K3-R85 — 拒绝加粗或斜体包裹的空理由，并添加反向控制与一个有意义的强调格式原因对照。
+- **Verify**: 固定主 Python 的真实解析器对登记册所列两个包裹空理由均返回 `[]`，而对应未包裹的固定填充值被拒绝；现有两守卫仍为 55 OK，故该绿是 false-negative。无全量 / provider / live 动作。
+- **Next**: Claude Code：修复。
+
+## 2026-07-29 — Codex 修复 K3-R79 + K3-R83
+
+- **Verdict/Action**: 已修复 X status 背书误杀与零接受 live 响应无 raw 收据；不改 canonical locator/source ID，K3-R34 仍冻结。
+- **Required**: K3-R79、K3-R83 — 完整 closure 见 `docs/system_risk_register.md`。
+- **Verify**: 主 Python focused 97 OK；rule-3 full ledger 5003 OK（2026-07-29T18:18:34）；无 provider/key/network/live 调用。
+- **Pre-Codex self-review**: `matrix=complete: R79 comparison + R83 mismatch/raw two legs + web shared raw helper; register=updated; handoff=updated; focused=97 OK; full-lane=5003 OK; door=route-doc + doc-governance 55 OK`
+- **Next**: Claude Code：审查。
+
 ## 2026-07-29 — Claude Code 修复 K3-R84（接受 Codex 的 FAIL，用户直接指派）
 
 - **Verdict/Action**: 接受该 FAIL。我用真实解析器复现了 Codex 演示的两条，并按整类扫出**九种**无原因写法全部放行——`BLOCKED` 是本门唯一对外承诺的逃生口，没有原因就成了一句话绕过整道门。已修并加整类植入对照。正文只在 `docs/system_risk_register.md#R-GOV-HANDOFF-DOOR-FIELD`（K3-R84），本处不复述。
