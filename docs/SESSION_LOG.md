@@ -5,7 +5,7 @@
 - **做了什么**: `修复` entry 的 `Pre-Codex self-review` 增加第六个字段 `door=`，要求交出前跑一次 `.githooks/pre-commit` 那两个守卫并贴终端结果；缺字段或写占位符（`TBD`/`n/a`/空…）判红，`door=BLOCKED: <原因>` 视为有效证据。由 `EXECUTOR-REPAIR-DOOR-MARKER` 分区，历史条目不追溯。规则正文单一来源在 `docs/pre_codex_self_review_checklist.md` §0.10/§0.11，`AGENTS.md` 只点名不复述，故本轮未动 AGENTS 那条。
 - **为什么这么做**: 那两个守卫在**每一次** commit 都跑，所以任何要被提交的修复本来就必须先过；把结果前移到交接时即可，**不需要**「改动面 → 守卫」映射表（表会随每把刀过期、不全时给假安全感——这是本轮明确否掉的方案）。反例是 K3-R81：一次 `AGENTS.md` 改动的 `focused=44 OK` 属实但一个文档守卫都没有，红要到审查才暴露。
 - **顺带**: 按 K3-R81 关闭时记下的 fold-in，给 `AGENTS.md` 里「不要 `Start-Process` 包裹 / 不要拼成单个 `ArgumentList`」那句补上一条 `assertIn`——它上次正是因为无人断言而被无声删掉。
-- **Verify**: `tests.test_doc_governance_guard` + `tests.test_route_doc_ledger_status_consistency` = `status=PASS exit=0 tests=55`（新增 2 条测试后为 57，见提交门输出）。自写外部对照均在真实 tracked 文件上跑真守卫、按字节还原并核 sha256：`door=` 门 12/12（无字段/`TBD`/空值各自转红；真实结果与 `BLOCKED` 转绿；`审查`/`执行` 条目不被拖进本门）；`Start-Process` 钉子 5/5（删句转红——同一实验在本轮之前是全绿）。
+- **Verify**: `tests.test_doc_governance_guard` + `tests.test_route_doc_ledger_status_consistency` = `status=PASS exit=0 tests=55`（doc-governance 由 39 增至 41，含本轮两条新测试；route-doc 14）。自写外部对照均在真实 tracked 文件上跑真守卫、按字节还原并核 sha256：`door=` 门 12/12（无字段/`TBD`/空值各自转红；真实结果与 `BLOCKED` 转绿；`审查`/`执行` 条目不被拖进本门）；`Start-Process` 钉子 5/5（删句转红——同一实验在本轮之前是全绿）。
 - **授权**: 用户本轮直接指派我实现（reviewer 代行 implementer，同 2026-07-29 K3-R73/74/75 先例）。
 - **Next**: Codex：审查。
 
