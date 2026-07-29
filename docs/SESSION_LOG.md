@@ -1,5 +1,12 @@
 # Session Log
 
+## 2026-07-29 - Claude Code 派工(第八刀收尾工单落 79eb 工作树)
+
+- **Verdict/Action**: 非审查轮,只落盘派工。第八刀六子刀已全部合入 master(`40b3b7d7`,全量 2114 OK),但方案的「本刀合并验证」④ 在真实产物上不成立(P2 的 tracked 公开摘要仍是 8B 之前形状、连自己的 schema 都过不了),六步验证也从未作为一次完整 pass 跑过,故第八刀**未完成**。已把四条 Required + 三条 Optional + 两条 Options(用户授权按我推荐处置)写成工单。
+- **Required**: 四条新开在 `docs/system_risk_register.md`,ID 为 `#R-ASHORT-KNIFE8-P2-PUBLIC-SUMMARY-PREDATES-ITS-8B-CONTRACT`(P2)、`#R-ASHORT-P5B-NONOVERLAP-BLOCK-GATE-DECISION`(P2,方案 A)、`#R-ASHORT-P5B-AGGREGATE-VERDICT-DEPENDS-ON-QUESTION-ORDER`(P3)、`#R-ASHORT-KNIFE8-SIX-STEP-MERGE-VERIFICATION-NOT-RUN-AS-ONE-PASS`(P3);三条 Optional 记在 `#R-ASHORT-WEEKLY-PIPELINE-JSON-WRITERS-OUTSIDE-THE-NONFINITE-GUARD` 名下。可执行工单见 `docs/handoff/2026-07-28_a_short_knife6a_repair_handoff.md` 的「第八刀收尾工单」节。
+- **Verify**: 本轮无代码改动,只有 register 与 handoff 落盘。派工依据的实测:`validate_public_summary(tracked P2)` 抛 `public_summary_contract_invalid`、`_valid_external_public_verdicts() = 0`;`_signflip_p` 为 2^n 穷举双侧,n 块最小可达 p = `2^(1-n)`,对 α=0.025 需 n≥7、经 Holm 三问族校正需 n≥8,故块门不是装饰;P4a 已封 `nonoverlap_block_minimums {"12":6,"24":12,"36":12}` 即方案 A 的出处。
+- **Next**: Codex 在 79eb 工作树执行该工单;第八刀收口后才进第九刀。
+
 ## 2026-07-29 — Claude Code 审查 PASS（K3-R85 门内 Markdown 占位绕过，master 工作树）
 
 - **Verdict/Action**: PASS，已提交（只提交 K3-R85 范围：`tests/test_doc_governance_guard.py` + 三份文档；X lane 那四个文件仍带着未闭的 K3-R86，未 staged）。Codex 同刀还揪出一个我在 K3-R84 里埋的真 bug（变量遮蔽导致守卫在两条 `修复` 条目时崩），已确认属实。正文只在 `docs/system_risk_register.md#R-GOV-HANDOFF-DOOR-MARKDOWN-PLACEHOLDER-BYPASS`（K3-R85 / K3-R85-O1），本处不复述。

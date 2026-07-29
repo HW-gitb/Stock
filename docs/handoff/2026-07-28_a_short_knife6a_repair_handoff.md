@@ -376,3 +376,37 @@
 ### 下一步注意事项
 
 一条 open Required：`docs/system_risk_register.md#R-ASHORT-P3-HAC-ZERO-VARIANCE-FAILS-OPEN-AND-EMITS-INFINITY`（P2）。`_hac_t` 在长期方差 `<= 0` 时返回 `±inf`，两条腿：① `hac_t` 门对 `inf` 恒真 → 恒定周效应（上游写占位常量的典型 signature）会被判成 `preliminary_edge_positive`，**方向是 fail-open**；② 该 `inf` 进 `adjudication.progress.hac_t`，而 `progress` schema 无约束、写盘没有 `allow_nan=False`，公开 JSON 里会出现裸 `Infinity` 字面量。修法：退化时返回 `None`（门已有 `is not None` 判据，改完即 fail-closed），并给 writer 加 `allow_nan=False`。
+
+## 2026-07-29 追加：第八刀收尾工单（Codex 执行；用户 2026-07-29 派工）
+
+第八刀六个子刀（8A / 8D0′ / 8B / 8C / 8D0″ / 8D1）已全部实现、审查并合入 master（`40b3b7d7`），全量 `a_short = 2114 OK` 记账。**但第八刀尚未完成**：桌面方案的「本刀合并验证」第 ④ 条在真实产物上不成立，且六步验证从未作为一次完整 pass 跑过。本节是收尾工单，做完第八刀才算收口。
+
+### 改什么（四条 Required，按此顺序做）
+
+1. **`R-ASHORT-KNIFE8-P2-PUBLIC-SUMMARY-PREDATES-ITS-8B-CONTRACT`（P2）** —— 让 P2 自己的一键 sidecar 从私有账本正常跑一次，重写 tracked 的 `research/results/a_short/target_policy_comparison_summary.json` 与配对 md。**不得手工回填任何字段**（同类已栽两次：P1 的 `source_hash`、P5 的 md 镜像）。并补一条把 tracked 产物钉成「与 writer 输出逐字段相等」的回归，照抄 P1/P5 已有那两条的做法。
+2. **`R-ASHORT-P5B-NONOVERLAP-BLOCK-GATE-DECISION`（P2，用户已裁决方案 A）** —— preset `clock_contract` 补 `nonoverlap_block_minimums {"12": 6, "24": 12, "36": 12}`（沿用 P4a 已封数值，不新增待批参数），`adjudicate_question` 读它并**拦住该检查点的所有终局结论**（正面许可与负面淘汰都拦，不能只拦晋级 —— 8A 的直接教训）；块数不足时给 `continue_accumulating` + 一个能与「差异周不足」区分开的 reason。
+3. **`R-ASHORT-P5B-AGGREGATE-VERDICT-DEPENDS-ON-QUESTION-ORDER`（P3，用户授权按审查方推荐）** —— 顶层 verdict 改由**已冻结的优先级表**取最保守者（`manual_rollback_review_only` > `do_not_promote` > `retain_balanced_only` > `next_reviewed_candidate_only`），优先级表进 governance/admission、不写死在代码里；**不新增 enum 值**。
+4. **`R-ASHORT-KNIFE8-SIX-STEP-MERGE-VERIFICATION-NOT-RUN-AS-ONE-PASS`（P3）** —— 前三条落完后，在同一代码态**一次性**跑完方案的六步合并验证，逐条给命令 + 本次实测输出写进该 register 条目。不许写「已验」「同前」。
+
+### 顺带修的 Optional（三条，`R-ASHORT-WEEKLY-PIPELINE-JSON-WRITERS-OUTSIDE-THE-NONFINITE-GUARD` 名下；合理就一并修，不做要写明原因）
+
+- (a) 写盘口发现器的文件范围只有 `engine/a_short_*.py` + `runners/a_short_*.py` 两个 glob，**A-short 家族里不叫这个名字的模块在范围外** —— `engine/egs_industry_heat.py:377::write_weight_comparison` 与 `runners/materialize_a_short_variant_tracking.py:79` 都在写 JSON 且无 `allow_nan=False`（未证实是 A-short 生产活路径）。建议把范围从「文件名 glob」换成「按内容找写盘口」，或显式把 A-short 家族模块列进范围。
+- (b) 判据只认 `ast.FunctionDef`，`async def` 写盘口整类看不见。
+- (c) 子串匹配会把未来名字含 `write` 的非写盘口函数（`_rewrite_for_digest` / `_write_lock` 之类）误判为需登记 —— 方向是 fail-closed 的噪音，今天仓内零命中，改不改都可以，但要在 entry 里写下处置。
+
+### 边界（这一轮不许顺手做的事）
+
+- **不解冻任何证据轨**：四条对比轨必须仍是 `pre_freeze_audit_only`，`evidence_counts_toward_clock` 不许动。
+- 不碰 `active_profile` / EGS / M6.7 / 选股 / 仓位 / 账户 / provider / 生产配置。
+- 不开第九刀（EGS 短历史动量与空候选池健壮性，条目 18、19）——收尾做完再开。
+- 阈值只许从 governance/preset/admission 读；代码里不得出现第二份副本。
+
+### 验证要求
+
+- 触发 `AGENTS` rule 3（改了 preset / admission / 裁判器 / 公开产物），故必须走 `.tools\full_pack_ledger.py run a_short ... -- discover -s tests -p "test_a_short*.py"` 一次终态绿并记账。
+- 交接 entry 必须带 `Pre-Codex self-review` 行，五个字段（`matrix=` / `register=` / `handoff=` / `focused=` / `full-lane=`）写实 —— 上一轮就是漏了这一行导致 doc-governance 与 pre-commit 钩子双红、全量 FAIL。
+- 每条 Required 的 closure tests 见 `docs/system_risk_register.md` 对应条目，本节不复述。
+
+### 下一步注意事项
+
+第八刀的收口条件 = 上面四条 Required 全闭 + 三条 Optional 有处置记录 + 六步合并验证留下一次性证据 + 全量绿记账。全部满足后第八刀才可宣布完成，之后才进第九刀。
