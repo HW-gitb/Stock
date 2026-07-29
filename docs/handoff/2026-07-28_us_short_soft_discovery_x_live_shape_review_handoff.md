@@ -265,3 +265,50 @@ FORGED via registry mutation : live_authorized {'tavily': 1, 'deepseek': 1}
 伪造路径本身没变、也不该变：我的探针依旧经 `type(transport)._consume_ticket.__closure__` 拿到 `issued_tickets` 并造出 `live_authorized`。区别在于系统不再声称相反。
 
 全量按 rule 4 我亲起：`Ran 4999 tests in 450.019s` / `OK` / `status=PASS exit=0 tests=4999`，已记账；`state/us_short` 0 文件。仍开的两条 Optional（离线收据被 retry 投影、增长谓词未覆盖 `provider_samples/`）见 register，不阻断。
+
+## 2026-07-29 交接：K3-R79 修复方案（执行者 = Codex）
+
+### 从哪棵树开始
+
+**从 master（`D:/cnhea/Stock`）开始，不要从 48b5 的旧状态。** 首次授权的真实付费运行是在 master 上跑的，K3-R78 与 K3-R79 也只记在 master 的 register 里；48b5 落后于 master，动手前先同步。
+
+### 用户目的
+
+让这条软发现通道的 **5.0 档在真实数据上真的能拿到**。现在拿不到，不是因为设计不成立，是因为一条缺失的身份规则把真实的、有平台背书的证据全判成了没背书。
+
+### 背景（一次付费探针把三选一变成一选一）
+
+首次真实付费运行（决策日 `20260731`，刻意非交易日）里 web 健康、X 全空：3 次 xai 调用买到 0 条证据，15 条模型来源全部掉 `model_source_url_not_provider_annotated`。当时无法区分三种可能——annotation 是空的、类型不对、还是仅不匹配——因为零接收意味着没有 raw 落盘。用户授权后花一次调用查清：
+
+```
+output[5] type='message' content[0] type='output_text' annotations=17 types=['url_citation']
+provider annotation : https://x.com/i/status/1937910118252712411
+model source        : https://x.com/Umbisam/status/1937910118252712411
+annotations 17 / canonical 17 | model sources 6 | 字符串交集 0 | 按 status ID 交集 6/6
+```
+
+provider 用平台自己的 `/i/status/<id>` 规范形式，模型用 `/<handle>/status/<id>`，19 位 ID 完全相同。**六条模型来源，六条都在 annotation 集合里。** 所以那 15 条全是误杀，K3-R65 选项 (c) 的补偿在真实数据上是可满足的。
+
+### 方案（形状很关键，别修宽了）
+
+**不要动 `_canonical_locator`。** 两个理由，都不是风格问题：
+
+1. `_source_id` 是它的 sha256。改它会让所有 X source ID 变掉，波及已冻结的证据与已发布的收据。
+2. 把 `/<handle>/status/<id>` 折成 `/i/status/<id>` **会丢掉 handle**——身份上等价，出处上有损。K3-R35/K3-R36 定下的规矩是「只做无损变换」，这一条不满足。
+
+**要做的是**：locator 一个字不动，只在**「annotation 背书」这一处比较**时改成按 **X 帖子身份**比：host 属于 x.com / twitter.com 家族、且路径形如 `/<任意段>/status/<数字>`，才提取那串数字作为身份；其余一切 URL 保持今天的精确 canonical 比较不变。
+
+### 必须配的反向对照
+
+- 上面六对实测 URL 必须绑上；
+- 两条**真正不同**的 status id 永不相撞；
+- 非 status 的 x.com 链接、以及任何非 X 域名，行为一字不变；
+- 挖空这条新身份规则，某条**具名**测试转红。
+
+### 这次为什么 4,999 条离线测试全都没发现
+
+因为每个 fixture 两边都用同一种 URL 写法。这条属于「只有真实 provider 才暴露」的类，和 K3-R49/K3-R50 同一族——离线再密的覆盖也照不到。修复时值得顺手想一句：还有哪些地方是「我们自己造的两端天然一致、真实两端却可能不一致」。
+
+### 边界
+
+不解除任何现存 fail-closed 门；不放宽 K3-R65 的补偿本身（背书要求保留，只修身份比较）；不执行 provider / key / network / live；不动 `theme_soft_boost_enabled`；不开 4d；`state/us_short` 不留测试残留；不 push。改完由 Claude Code 独立复审，全量按 rule 4 一次。

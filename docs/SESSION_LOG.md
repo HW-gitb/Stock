@@ -1,5 +1,13 @@
 # Session Log
 
+## 2026-07-29 - Claude Code 首次授权真实付费运行（US-short 软发现通道，测试级）
+
+- **Verdict/Action**: 用户授权后按「只测代码、不攒实盘数据」跑通首次真实付费链路，决策日 `20260731`（刻意非交易日），3 条 query，web + X + merge 全跑。零代码改动，纯 CLI 调用。**web 健康**：11 条接收、归属计数诚实、无 RFC1123 解析失败。**X 全空**：3 次 xai 买到 0 条证据，15 条模型来源全部因 URL 不在 provider annotations 内被拒 → 开出 **K3-R78**（Required，真钱）。完整数据只在 `docs/system_risk_register.md#R-USSHORT-KNIFE3-WEB-X-MERGE-PACKET-BOUNDARY`，本处不复述。
+- **Required**: K3-R78 —— live X 通道买不到证据，`both`/5.0 在真实数据上不可达，整条通道封顶 2.0。**未定且不得猜**：annotations 是空的（模型可能根本没联网搜）还是仅不匹配；查清需再花一次带原始响应捕获的付费调用，属用户决策。查清前不得放宽匹配器。
+- **Verify**: 本轮为执行非审查。实测：web `live_authorized_completed` / accepted 11 / drop 25（18 当周下限 + 5 + 1 + 1）/ `transport_response_counts {'tavily':3,'deepseek':2}` = call_count 5；X `live_authorized_no_accepted_sources` / accepted 0 / drop 38（15 `model_source_url_not_provider_annotated` + 14 + 6 + 3）/ `{'xai':3}`；merge `merged_theme_count 3, single 11, both 0, x_theme_count 0`。首次实测到别名漂移：请求 `deepseek-chat` → 服务 `deepseek-v4-flash`。花费：Tavily 3、DeepSeek 2、xAI 3。
+- **Next**: 用户决定是否再花一次调用查清 X annotations 的真因
+
+
 ## 2026-07-29 - Claude Code 复审 PASS(P5b 治理数字重复已按单一来源收口)
 
 - **Verdict/Action**: PASS,提交并合入 master。`p5b_adjudication_governance` 缩到只剩本次裁决**新增**的两项——`p_value_method` 与 `checkpoint_stages`(12=preliminary / 24=formal / 36=terminal);`difference_minimums`、裸 `checkpoints` 列表与 `terminal_branches_require_...` 断言全删,数值门只留在 preset 的 `clock_contract`。新测试把 `checkpoint_stages` 键集绑到 `clock.checkpoints`,并 patch preset 为 `[7,12,18]` 断言 admission 跟着变。**风险分级=comparison-only 低危**;未起 agent。
