@@ -2111,22 +2111,22 @@ def validate_m67_consistency(report: dict) -> None:
         expected_banner = render_rule6_d_tier_banner(rule6_gate)
         if m67["精简结论区"].get("Rule6人工核查") != expected_banner:
             raise ValueError("Rule6 D-tier 人工核查横幅与 completion gate 不一致")
-        # Knife 7 applies only to EGS-covered candidate reports (including a
-        # candidate that is already held). Tier-3 holding reports have no EGS
-        # breakout source and therefore do not manufacture this four-state
-        # comparison.
-        breakout_agreement = mc.get("breakout_source_agreement")
-        allowed_breakout_agreements = {"agree_true", "agree_false", "egs_only", "pipeline_only"}
-        # Historical published reports predate the marker. Missing is therefore
-        # unavailable (and cannot render a clean conclusion), while any marker
-        # that is present is closed-world and checked against the final text.
-        if breakout_agreement is not None:
-            if breakout_agreement not in allowed_breakout_agreements:
-                raise ValueError("breakout_source_agreement 非法")
-            disagreement_notice = "两套技术指标口径不一致，按保守口径处理"
-            has_disagreement_notice = disagreement_notice in str(tbl.get("触发条件") or "")
-            if (breakout_agreement in {"egs_only", "pipeline_only"}) != has_disagreement_notice:
-                raise ValueError("breakout_source_agreement 与触发条件分歧提示不一致")
+    # Knife 7 applies only to EGS-covered candidate reports (including a
+    # candidate that is already held). Tier-3 holding reports have no EGS
+    # breakout source and therefore do not manufacture this four-state
+    # comparison.
+    breakout_agreement = mc.get("breakout_source_agreement")
+    allowed_breakout_agreements = {"agree_true", "agree_false", "egs_only", "pipeline_only"}
+    # Historical published reports predate the marker. Missing is therefore
+    # unavailable (and cannot render a clean conclusion), while any marker
+    # that is present is closed-world and checked against the final text.
+    if breakout_agreement is not None:
+        if breakout_agreement not in allowed_breakout_agreements:
+            raise ValueError("breakout_source_agreement 非法")
+        disagreement_notice = "两套技术指标口径不一致，按保守口径处理"
+        has_disagreement_notice = disagreement_notice in str(tbl.get("触发条件") or "")
+        if (breakout_agreement in {"egs_only", "pipeline_only"}) != has_disagreement_notice:
+            raise ValueError("breakout_source_agreement 与触发条件分歧提示不一致")
     # held-state 不变式(P1 修复 R-ASHORT-M67-HELD-STATE-ACTION-BIND):action=持有 必须真持仓(stateful_risk.position_state==held
     # + position 非空且 ts_code 与 report 一致),防 flat 候选冒充持仓行过 validator(候选/持仓串线);建仓/观察 反向必非 held;
     # held+hard-veto 仍必须走持仓管理：硬风险进入 clear_review/blocked_add，但不抹掉 S3a plan。

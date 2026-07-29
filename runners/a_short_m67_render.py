@@ -13,12 +13,49 @@ import argparse
 import json
 import os
 
+from engine.a_short_runtime_config import load_runtime_configuration
+
 _BANNER = ("> ⚠️ **非生产 / A-short risk_filter_only / edge 未验证**。所有「建仓」均为 **试探仓**,"
            "**止损无条件**(盘中由你手动),仅供参考,非买卖指令。\n")
 
 
 def _cell(v):
     return "" if v is None else str(v)
+
+
+_PHASE5_POLICY = load_runtime_configuration()["m67"]["phase5"]
+BREAKOUT_SOURCE_DISAGREEMENT_RATE_THRESHOLD_PCT = _PHASE5_POLICY[
+    "breakout_source_disagreement_rate_threshold_pct"
+]
+
+
+def summarize_breakout_source_agreement(reports: list[dict]) -> dict | None:
+    """Return this batch's disagreement summary; it never reads or writes state.
+
+    An absent or malformed marker is unavailable rather than silently counted
+    as agreement, so legacy/incomplete reports cannot manufacture a clean
+    weekly conclusion.
+    """
+    allowed = {"agree_true", "agree_false", "egs_only", "pipeline_only"}
+    markers = [((report.get("machine") or {}).get("breakout_source_agreement"))
+               for report in reports]
+    if not markers or any(marker not in allowed for marker in markers):
+        return None
+    egs_only = sum(marker == "egs_only" for marker in markers)
+    pipeline_only = sum(marker == "pipeline_only" for marker in markers)
+    disagreement_count = egs_only + pipeline_only
+    rate_pct = disagreement_count * 100.0 / len(markers)
+    if disagreement_count == 0:
+        conclusion = "一致（本周无分歧）"
+    elif rate_pct < BREAKOUT_SOURCE_DISAGREEMENT_RATE_THRESHOLD_PCT:
+        conclusion = "零星分歧，已按保守口径处理"
+    else:
+        conclusion = "分歧显著，建议立项复核指标源"
+    return {
+        "candidate_count": len(markers), "disagreement_count": disagreement_count,
+        "egs_only_count": egs_only, "pipeline_only_count": pipeline_only,
+        "conclusion": conclusion,
+    }
 
 
 def _semantic_line(report: dict) -> str:
@@ -400,7 +437,6 @@ def render_weekly_markdown(weekly: dict) -> str:
                    "`，状态=`" + margin_state + "`。")
     # Knife 7: this is a batch-local diagnostic only.  It never alters the
     # conservative breakout AND-gate, and no marker means no clean conclusion.
-    from runners.a_short_weekly_pipeline import summarize_breakout_source_agreement
     breakout_summary = summarize_breakout_source_agreement(cand_reports)
     if breakout_summary is not None:
         out.append("> **突破指标口径**：本周 " + str(breakout_summary["disagreement_count"]) + "/" +

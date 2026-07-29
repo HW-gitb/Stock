@@ -412,11 +412,11 @@
     "A-EGS/egs_main.py": "daabfc6193e9aed743368f3be02d3f0ed2fac339d783625d77b4eb1e86c741ae",
     "engine/egs_industry_heat.py": "79d8cddefdabb21fa8effd677f320a8e44d86782688f4449145c8789469700b3",
     "engine/a_short_industry_theme.py": "6a10200f80b3c0d301efc8af1561b53ef2578e1cd26eea7976188dd57b7b6b2b",
-        "runners/a_short_phase5_engine.py": "432ab9ea2855d3007f62b5e4a8e2b00f3248fe208f88cc2f0a3accbc40246671",
-        "runners/a_short_weekly_pipeline.py": "5faf25bbcc5f0544e5c0b43139975519f3feb588fa26c082dcac380aedda2a0d",
-    "runners/a_short_m67_render.py": "f275e71f71a11b293f3e23ce948b310dc690388082bbe3773406a725b0e0a947",
+    "runners/a_short_phase5_engine.py": "432ab9ea2855d3007f62b5e4a8e2b00f3248fe208f88cc2f0a3accbc40246671",
+    "runners/a_short_weekly_pipeline.py": "66211a0e92a53a2b161229064fd149243a6afcf7859d4b5c5b9ef7d58e1b2616",
+    "runners/a_short_m67_render.py": "38a11b60716bbea952a7d28abebd0799e46b479ed307c9a8505a2114deb00058",
     "engine/a_short_portfolio_risk.py": "02b88ac3b5239e8dd4897bde06afab0769ea5593f8a8a3666e5c8fba24486860",
-    "engine/a_short_effect_contract.py": "6ce7e5a8bffce6631880a1a4c7e32c3ef8bcfe81d20d11e57875f02db1293d0b"
+    "engine/a_short_effect_contract.py": "32f434fd5b87c65ca4cae27b8c57fcfb05c1a84c516e1cce4e33a3cf9e7a57ab"
   },
   "runtime_constants_sha256": {
     "A-EGS/egs_main.py": "5122d39bd0d4799bff302dfc6cc5c51cb9a41e9a47362a08b87ad1c73a057715",
@@ -433,7 +433,7 @@
     "schemas/a_short_screening_threshold_governance.schema.json": "6a517050ead73ebb4d939c236224d3776fc5be1ff3dc67453303c7329f276217",
     "schemas/a_short_m67_runtime_policy.schema.json": "eb594c270f1bd75e629a4f46e549e0c35f10da10d94c4f1ecd6d59cdd857bdc7"
   },
-  "runtime_policy_leaf_readers_sha256": "7ec4118fe527be609bf3576dca2ac2ad2932075abe6bf0ad8d99d5db94715692",
+  "runtime_policy_leaf_readers_sha256": "cfbccd0d06c59327a33e84af545efaf8b37e1bde1c2e43bc73a2cc284470f18c",
   "runtime_policy_bindings": [
     {
       "id": "screening_thresholds",
@@ -1165,7 +1165,7 @@
       ],
       "phase5.breakout_source_disagreement_rate_threshold_pct": [
         "engine/a_short_runtime_config.py::_validate_m67.phase[\"breakout_source_disagreement_rate_threshold_pct\"]",
-        "runners/a_short_weekly_pipeline.py::_PHASE5_POLICY[\"breakout_source_disagreement_rate_threshold_pct\"]"
+        "runners/a_short_m67_render.py::_PHASE5_POLICY[\"breakout_source_disagreement_rate_threshold_pct\"]"
       ],
       "phase5.impact_cost_frac": [
         "engine/a_short_runtime_config.py::_validate_m67.phase[\"impact_cost_frac\"]",

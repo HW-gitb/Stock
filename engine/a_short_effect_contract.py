@@ -407,6 +407,7 @@ def _runtime_policy_leaf_readers(policy_paths: dict[str, list[str]], sources: di
     phase5 = sources["runners/a_short_phase5_engine.py"]
     portfolio = sources["engine/a_short_portfolio_risk.py"]
     weekly = sources["runners/a_short_weekly_pipeline.py"]
+    render = sources["runners/a_short_m67_render.py"]
     industry_theme = sources["engine/a_short_industry_theme.py"]
     trees = {rel: _source_tree(source) for rel, source in {
         _RUNTIME_CONFIG_FILE: loader,
@@ -415,6 +416,7 @@ def _runtime_policy_leaf_readers(policy_paths: dict[str, list[str]], sources: di
         "runners/a_short_phase5_engine.py": phase5,
         "engine/a_short_portfolio_risk.py": portfolio,
         "runners/a_short_weekly_pipeline.py": weekly,
+        "runners/a_short_m67_render.py": render,
     }.items()}
     declared = {
         "screening": set(_literal_string_assignment(loader, "_SCREENING_KEYS")),
@@ -461,9 +463,11 @@ def _runtime_policy_leaf_readers(policy_paths: dict[str, list[str]], sources: di
                         trees["runners/a_short_phase5_engine.py"], "_PHASE5_POLICY", key)
                     weekly_reader = _policy_value_reaches_result(
                         trees["runners/a_short_weekly_pipeline.py"], "_PHASE5_POLICY", key)
+                    render_reader = _policy_value_reaches_result(
+                        trees["runners/a_short_m67_render.py"], "_PHASE5_POLICY", key)
                     if (key in declared["phase5"]
                             and _loader_reads_key(trees[_RUNTIME_CONFIG_FILE], "_validate_m67", "phase", key)
-                            and (phase5_reader or weekly_reader)):
+                            and (phase5_reader or weekly_reader or render_reader)):
                         refs = [
                             f'{_RUNTIME_CONFIG_FILE}::_validate_m67.phase["{key}"]',
                         ]
@@ -471,6 +475,8 @@ def _runtime_policy_leaf_readers(policy_paths: dict[str, list[str]], sources: di
                             refs.append(f'runners/a_short_phase5_engine.py::_PHASE5_POLICY["{key}"]')
                         if weekly_reader:
                             refs.append(f'runners/a_short_weekly_pipeline.py::_PHASE5_POLICY["{key}"]')
+                        if render_reader:
+                            refs.append(f'runners/a_short_m67_render.py::_PHASE5_POLICY["{key}"]')
                 elif section == "portfolio_risk":
                     portfolio_reader = _policy_value_reaches_result(
                         trees["engine/a_short_portfolio_risk.py"], "_PORTFOLIO_POLICY", key)

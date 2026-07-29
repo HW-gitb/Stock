@@ -481,10 +481,14 @@ class BuildWeeklyTests(unittest.TestCase):
         for report in (egs_only, pipeline_only, agree_true, agree_false):
             self.assertIsInstance(report["machine"]["breakout_source_agreement"], str)
 
-    def test_breakout_summary_is_batch_local_and_renders_zero_and_significant_states(self):
+    def test_breakout_summary_is_batch_local_and_renders_all_conclusion_states(self):
         zero = _weekly([
             self._breakout_normalized(False, 2.80),
             self._breakout_normalized(True, 2.95),
+        ])
+        sparse = _weekly([
+            self._breakout_normalized(True, 2.80),
+            *[self._breakout_normalized(False, 2.80) for _ in range(10)],
         ])
         significant = _weekly([
             self._breakout_normalized(True, 2.80),
@@ -492,9 +496,12 @@ class BuildWeeklyTests(unittest.TestCase):
         ])
         with patch("pathlib.Path.write_text", side_effect=AssertionError("must not persist weekly state")):
             zero_md = render_weekly_markdown(zero)
+            sparse_md = render_weekly_markdown(sparse)
             significant_md = render_weekly_markdown(significant)
         self.assertIn("本周 0/2 只分歧", zero_md)
         self.assertIn("一致（本周无分歧）", zero_md)
+        self.assertIn("本周 1/11 只分歧", sparse_md)
+        self.assertIn("零星分歧，已按保守口径处理", sparse_md)
         self.assertIn("本周 2/2 只分歧", significant_md)
         self.assertIn("分歧显著，建议立项复核指标源", significant_md)
 

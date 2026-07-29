@@ -186,6 +186,22 @@ class Rule6CompletionGateTests(unittest.TestCase):
         self.assertEqual(report["machine"]["rule6_gate"]["disposition"], "manual_review")
         validate_m67_consistency(report)
 
+    def test_held_breakout_disagreement_notice_tamper_fails_closed(self):
+        report = build_m67_report(
+            _good_input(
+                close=2.80,
+                derived={**_good_input()["derived"], "breakout": True},
+                stateful_risk=_held_state(),
+            ),
+            AS_OF,
+            "t",
+        )
+        self.assertEqual(report["m67"]["table"]["操作"], "持有")
+        self.assertEqual(report["machine"]["breakout_source_agreement"], "egs_only")
+        report["m67"]["table"]["触发条件"] = "持仓管理"
+        with self.assertRaisesRegex(ValueError, "breakout_source_agreement"):
+            validate_m67_consistency(report)
+
     def test_market_level_rule6_iv_failure_keeps_existing_holding_management(self):
         checks = _rule6_checks()
         iv_check = next(item for item in checks if item["id"] == "rule6_50etf_iv")

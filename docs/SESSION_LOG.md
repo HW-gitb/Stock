@@ -1,5 +1,13 @@
 # Session Log
 
+## 2026-07-29 - Codex implementation (A-short Knife 7 reviewer Optional closure)
+
+- **Verdict/Action**: Closed all three Knife 7 Optional items without changing the conservative breakout gate or any selection/action outcome: the batch-local pure summary now lives in `a_short_m67_render` and no longer imports the weekly pipeline; the governed 10.0% policy reader is re-bound and effect-contract hashes/maps are regenerated with normal indentation; marker/notice consistency now also applies to held EGS-covered reports. Added the missing <10% sparse-disagreement Markdown case. No cross-week state, provider call, or other lane was added.
+- **Required**: No new material Required; `docs/system_risk_register.md` unchanged.
+- **Verify**: Fixed Python `C:\Users\cnhea\AppData\Local\Programs\Python\Python313\python.exe -m unittest tests.test_a_short_phase5_engine tests.test_a_short_weekly_pipeline tests.test_a_short_m67_render tests.test_a_short_effect_contract tests.test_a_short_runtime_configuration` = 696 OK / 77.444s; static effect contract = clean. Fixed Python `.tools\full_pack_ledger.py run a_short "Knife 7 Optional closure: render dependency, policy reader, held validation" "fixed Python full A-short suite after Optional-only dependency, contract, and regression closure" 1300 -- discover -s tests -p "test_a_short*.py"` = PASS, 2076 tests / 311.7s / exit 0. Fixed Python `-m unittest tests.test_doc_governance_guard tests.test_route_doc_ledger_status_consistency` = 53 OK / 0.806s. `git diff --check` clean (CRLF warnings only).
+- **Next**: Claude Code: review.
+- **Pre-Codex self-review**: matrix=complete; register=no material Required; handoff=SESSION_LOG top entry; focused=696 OK / 77.444s; full-lane=2076 OK / 311.7s; scope=A-short only.
+
 ## 2026-07-29 - Claude Code 审查 PASS(A-short 第七刀:突破口径分歧可见性)
 
 - **Verdict/Action**: PASS,提交并合入 master。与门原样保留——`entry_type` 只改成调用新的 `breakout_source_agreement()` 表达同一条件,选股零变化(等价性见 Verify)。四态枚举只进 `machine`、不带价格/均线;分歧票在 `触发条件` 追加提示,后处理重写后由 `_attach_breakout_source_disagreement_notices` 恢复,validator 强制两者一致。md 出一行本批 X/Y 横幅 + 三态结论,阈值是 runtime policy 叶字段。**风险分级=低危**:新函数只是复述未改动的与门(432 组合差分零差异),新 validator 只守 advisory 提示文本,不新增或改变任何 fail-closed 判定;按 §6a 未达强制独立 agent 档,故未起。
