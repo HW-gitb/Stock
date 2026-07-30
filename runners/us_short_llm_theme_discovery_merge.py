@@ -25,9 +25,26 @@ ROOT = web.ROOT
 SCHEMA_PATH = ROOT / "schemas" / "us_short_llm_theme_discovery_merge.schema.json"
 PROVIDER_SAMPLES_ROOT = ROOT / "provider_samples"
 _URL_TEXT_RE = re.compile(r"https?://[^\s<>()]+", re.I)
-_BOILERPLATE_TAIL_RE = re.compile(
-    r"(?:^|\s)(?:copyright|all rights reserved|disclaimer|subscribe|follow us|read more|source:)\b.*$",
+# User decision 2026-07-30 (K3-R105 a): only a GENUINE trailing boilerplate block may swallow the
+# text after it.  `_safe_text` collapses every stored field to one line, so the old single pattern's
+# `.*$` meant "from this word to the end of the field" for every marker — one mid-sentence
+# `Read more:` hid every ticker behind it and cost real members their evidence.
+# A legal notice really does terminate the content, so it still eats its tail — but only when it
+# STARTS a segment.  `The disclaimer in the 10-K notes AAPL supply risk` is ordinary prose, not a
+# trailing notice, and blanking the rest of that sentence would deny a legitimately named ticker.
+_BOILERPLATE_NOTICE_TAIL_RE = re.compile(
+    r"(?:^|(?<=[.!?;]))\s*(?:copyright|all rights reserved|disclaimer)\b.*$",
     re.I | re.M,
+)
+# A call-to-action or attribution label is a PHRASE, not a terminator: strip the label itself (plus
+# its punctuation) and keep whatever the snippet actually says around it.  The trailing `\b` is
+# load-bearing — without it `source` eats the head of `SOURCES` and leaves `S` standing as its own
+# token, which then reads as a bare ticker the document never wrote.
+_BOILERPLATE_LABEL_RE = re.compile(
+    # `[^\S\n]` not `\s`: the label must never eat the newline that keeps the title and the content
+    # separate fields, or a title-ending label would splice the two together.
+    r"(?:^|[^\S\n])(?:subscribe|follow us|read more|source)\b[^\S\n]*[:：]?",
+    re.I,
 )
 
 
@@ -476,8 +493,11 @@ def _raw_payload_mentions_ticker(raw_payload: dict[str, Any], ticker: str) -> bo
     if not all(isinstance(value, str) for value in fields):
         return False
     evidence = "\n".join(fields)
-    evidence = _URL_TEXT_RE.sub(" ", evidence)
-    evidence = _BOILERPLATE_TAIL_RE.sub("", evidence)
+    # A stripped URL ends the clause it sat in, so it counts as a segment break for the notice rule
+    # below (scraped snippets routinely put the legal notice straight after a link).
+    evidence = _URL_TEXT_RE.sub(" . ", evidence)
+    evidence = _BOILERPLATE_NOTICE_TAIL_RE.sub("", evidence)
+    evidence = _BOILERPLATE_LABEL_RE.sub(" ", evidence)
     return _evidence_mentions_canonical_ticker(evidence, canonical)
 
 
@@ -574,8 +594,13 @@ def merge_web_x_discovery(
                 row["source_ref_ids"] = sorted(set(row["source_ref_ids"]) - set(redundant))
                 redundant_by_member[(theme["theme_id"], canonical_us_ticker(ticker) or ticker)] = redundant
             retained_bound = [refs_by_id[ref_id] for ref_id in row["source_ref_ids"] if ref_id in refs_by_id]
-            if _corroboration(retained_bound)[1] != "both":
+            retained_tier = _corroboration(retained_bound)[1]
+            if retained_tier is None:
                 continue
+            # User decision 2026-07-30 (K3-R105 b): the frozen text must name the ticker for EVERY
+            # paying tier, not only for `both`.  A `single` member is 2.0 points — 40% of the cap —
+            # and used to reach the score with no content binding at all, so a model could mint it
+            # by naming a ticker no cited document ever mentions.
             verified = [
                 ref["source_id"] for ref in retained_bound
                 if (raw_payload := raw_payloads_by_id.get(ref["source_id"])) is not None
@@ -583,7 +608,17 @@ def merge_web_x_discovery(
             ]
             verified_bound = [refs_by_id[ref_id] for ref_id in verified]
             _, verified_tier, _ = _corroboration(verified_bound)
-            if verified_tier == "both":
+            if verified_tier == retained_tier:
+                # Same tier, but refs can still have been pruned here.  A silent prune lowers the
+                # theme's `distinct_web_x_source_ref_count`, which is a knife-2 top-8 ranking key,
+                # so a theme could lose its slot with nothing in any ledger explaining why.
+                pruned = sorted(set(row["source_ref_ids"]) - set(verified))
+                if pruned:
+                    merge_drops.append({
+                        "stage": "theme", "theme_id": theme["theme_id"],
+                        "reason": "member_evidence_ref_unbound_pruned",
+                        "detail": f"{canonical_us_ticker(ticker) or ticker}:{','.join(pruned)}",
+                    })
                 row["source_ref_ids"] = sorted(verified)
                 continue
             prior = row["source_ref_ids"]

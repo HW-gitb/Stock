@@ -1,5 +1,13 @@
 # Session Log
 
+## 2026-07-30 — Claude Code 修复 K3-R105（用户裁决两条正文绑定口径，0e30 工作树）
+
+- **Verdict/Action**: 用户裁决 (a) 只删真正的结尾样板、(b) `single` 档也要正文绑定，两条都已实现；§6a 对抗 agent 随后开出三条、同轮全修：标签少了词边界把 `SOURCES` 削出独立的 `S` 当成代码（加分方向、我这次改动带出的）、法律声明未限定必须位于段首（误杀普通句子里的 disclaimer/copyright）、同档裁剪 ref 不落 ledger。正文只在 `docs/system_risk_register.md#R-USSHORT-KNIFE3-WEB-X-MERGE-PACKET-BOUNDARY`，本处不复述。
+- **Required**: K3-R105 (a)(b) 与其对抗跟进三条 — 完整裁决、方向说明（(a) 让分数往上、(b) 往下）与 closure 全在 register；同处记着两条未闭残留（双类股拼写、drop 排序键非全序），并说明 agent 那条头条 deflation 例子判为「门按设计工作」不算缺陷。
+- **Verify**: review-evidence:937a4377b729。全量按 rule 4 亲跑记账 `status=PASS exit=0 tests=5022 elapsed=1060.4s`。focused `tests.provider.test_us_short_llm_theme_discovery_fetch_x_merge` 69 OK。对抗 agent 的三个探针我逐个复跑：四种被削出的假代码全部不再生成、两句普通散文里的 ticker 恢复可见、同档裁剪现在留 `member_evidence_ref_unbound_pruned`。超时原因:本轮含一次 agent 往返与两次全量，全量单次即 1060s。
+- **Pre-Codex self-review**: `matrix=complete: (a) notice 限段首+URL 视作段断 / label 加词边界且不吃换行 / (b) both 与 single 同一验证路径 / 同档裁剪补 ledger; register=updated; handoff=updated; focused=69 OK; full-lane=5022 OK 1060.4s recorded; door=route 14 + doc-governance 41 = 55 OK; 独立对抗 pass: 已跑 1 轮，返回三条已全修`
+- **Next**: 提交并合入 master；下一次真实付费运行仍是「只跑 X、一条查询、非交易决策日」。
+
 ## 2026-07-30 — Claude Code 修复 K3-R97..K3-R107（用户指派自修 + 子 agent 审查循环）
 
 - **Verdict/Action**: 用户指派我兼任修复者。三条 Required（K3-R97/R98/R99）全修；六轮独立对抗 agent 循环中又开出并修掉 K3-R100/R102/R103/R104/R106/R107，第六轮零发现。K3-R105（样板行尾规则、single 档无正文绑定）与两条 O 级判为设计判断，故意未动、只记账待你定。正文只在 `docs/system_risk_register.md#R-USSHORT-KNIFE3-WEB-X-MERGE-PACKET-BOUNDARY`，本处不复述。

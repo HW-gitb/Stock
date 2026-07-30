@@ -735,6 +735,87 @@ class XFetchAndMergeTests(unittest.TestCase):
             manifest["drop_ledger"],
         )
 
+    def test_k3_r105a_only_a_real_trailing_notice_swallows_the_text_behind_it(self):
+        """K3-R105 (a): a mid-sentence CTA label may not hide every ticker behind it."""
+        def payload(text):
+            return {"source_type": "web", "title": "Power demand", "content": text}
+
+        # A call-to-action label is a phrase: what the snippet actually says survives it.
+        kept = payload("AAPL leads the trade. Read more: MSFT and JPM follow.")
+        for ticker in ("AAPL", "MSFT", "JPM"):
+            with self.subTest(kept=ticker):
+                self.assertTrue(merge._raw_payload_mentions_ticker(kept, ticker))
+        for label in ("Subscribe: MSFT rallies", "Follow us MSFT rallies", "Source: MSFT rallies"):
+            with self.subTest(label=label):
+                self.assertTrue(merge._raw_payload_mentions_ticker(payload(label), "MSFT"))
+        # A label may not eat the HEAD of a longer word and leave a fragment standing: `SOURCES`
+        # minus `source` would read as the bare ticker `S`.
+        for fragment_text, minted in (
+            ("MSFT power demand, SOURCES SAY", "S"),
+            ("SUBSCRIBERS FLEE MSFT", "RS"),
+            ("FOLLOW USA TODAY MSFT", "A"),
+            ("READ MORES MSFT", "S"),
+        ):
+            with self.subTest(fragment=fragment_text):
+                self.assertFalse(merge._raw_payload_mentions_ticker(payload(fragment_text), minted))
+                self.assertTrue(merge._raw_payload_mentions_ticker(payload(fragment_text), "MSFT"))
+        # A legal notice really does terminate the content, but only when it STARTS a segment.
+        for notice in (
+            "MSFT rallies. Disclaimer: AAPL is not evidence",
+            "MSFT rallies. Copyright 2026 AAPL Inc",
+            "MSFT rallies. All rights reserved AAPL",
+            "MSFT rallies https://img.example/x Disclaimer: AAPL is not evidence",
+        ):
+            with self.subTest(notice=notice):
+                self.assertFalse(merge._raw_payload_mentions_ticker(payload(notice), "AAPL"))
+                self.assertTrue(merge._raw_payload_mentions_ticker(payload(notice), "MSFT"))
+        # ... and the same words used as ordinary prose mid-sentence are NOT a trailing notice.
+        for prose in (
+            "The disclaimer in the 10-K notes AAPL supply risk",
+            "A copyright dispute hit AAPL this week",
+        ):
+            with self.subTest(prose=prose):
+                self.assertTrue(merge._raw_payload_mentions_ticker(payload(prose), "AAPL"))
+
+    def test_k3_r105b_a_single_member_also_needs_its_ticker_in_the_frozen_text(self):
+        """K3-R105 (b): the 2.0 tier is content-bound too, not only the 5.0 tier."""
+        w_rows = [{"url": "https://web.example/power", "title": "Power",
+                   "content": "AAPL MSFT JPM power demand", "published_date": "2026-07-24T10:00:00Z"}]
+        w_ref = web._source_id(w_rows[0]["url"])
+        payload = json.dumps({"themes": [{
+            "theme_id": "power_demand", "display_name": "Power", "summary": "Power",
+            "observed_at": "2026-07-24T12:00:00Z", "source_ref_ids": [w_ref],
+            "members": [{"ticker": ticker, "source_ref_ids": [w_ref]}
+                        for ticker in ("AAPL", "MSFT", "JPM", "NVDA")],
+        }]})
+        with temporary_provider_directory(web.ROOT) as td:
+            wa, wr, _ = web.build_web_fetch_packet(
+                queries=["power"], search_results=w_rows, llm_response=payload,
+                expected_decision_date="20260725", generated_at="2026-07-25T08:00:00Z",
+                raw_root=Path(td) / "web", persist_raw=True,
+            )
+            xa, xr, _ = xfetch.build_x_fetch_packet(
+                queries=["power"], results=[], grok_response='{"themes":[]}',
+                expected_decision_date="20260725", generated_at="2026-07-25T08:00:00Z",
+                raw_root=Path(td) / "x", persist_raw=True,
+            )
+            merged, manifest = merge_web_x_discovery(
+                web_artifact=wa, web_receipt=wr, x_artifact=xa, x_receipt=xr,
+                expected_decision_date="20260725", generated_at="2026-07-25T08:00:00Z",
+            )
+            merge.validate_merged_packet(
+                merged, manifest, expected_decision_date="20260725",
+                upstream_pairs={"web": (wa, wr), "x": (xa, xr)},
+            )
+        rows = {row["ticker"]: row for theme in manifest["themes"] for row in theme["members"]}
+        self.assertEqual(sorted(rows), ["AAPL", "JPM", "MSFT"])       # NVDA is never named
+        self.assertEqual({rows[ticker]["evidence_tier"] for ticker in rows}, {"single"})
+        self.assertIn("member_evidence_unbound_ticker_dropped",
+                      {row["reason"] for row in manifest["drop_ledger"]})
+        _, boosts = self._chain_points(merged)
+        self.assertEqual(boosts["AAPL"], 2.0)
+        self.assertNotIn("NVDA", boosts)
+
     def test_k3_r103_unverifiable_member_is_dropped_without_taking_its_theme(self):
         """K3-R103: one member whose ticker is never in the frozen text may not void its siblings."""
         w_rows = [{"url": "https://web.example/power", "title": "Power",

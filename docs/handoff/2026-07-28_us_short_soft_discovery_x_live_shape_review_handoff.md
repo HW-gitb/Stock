@@ -511,3 +511,62 @@ All five recorded Optional residuals are repaired without provider/key/network/l
 ### 下一步注意事项
 
 真实付费运行的形状仍是「只跑 X、一条查询、一次 xAI 调用、非交易决策日」；Web 的 20260731 证据已冻结，不要重跑。K3-R105 的两条定了之后再动正文绑定，别在跑 live 之前改分数口径。
+
+## 2026-07-30 追加：K3-R105 用户裁决落地（工作树 = 0e30）
+
+### 树的变更
+
+用户本轮起把我的工作树换成 `D:/cnhea/Codex/worktrees/0e30/Stock`（与 master tip `6618db84` 同步的 detached worktree），交接文档也写在这棵树。上一轮的 K3-R97..R107 已经以 `3ba4c396` 合入 master，本轮改动建立在其上。
+
+### 用户裁决了什么
+
+我上一轮把两条「正文要多严格地绑定 ticker」的问题挂起交给用户，因为两条都会动真钱口径。用户的答复：**(a) 只删真正的结尾样板；(b) `single` 档也加上正文绑定。**
+
+### (a) 怎么实现的
+
+原来一条正则把 `copyright|all rights reserved|disclaimer|subscribe|follow us|read more|source:` 一视同仁，全部「从这个词删到字段末尾」。因为 `_safe_text` 已经把每个字段压成一行，这个「到行尾」实际就是「到文末」——正文中间一句 `Read more:` 就能把后面所有 ticker 一起藏掉。
+
+现在按**标记本身是什么**拆成两类：
+
+- `copyright` / `all rights reserved` / `disclaimer` = **法律声明，真的终结正文** → 保持吞到字段末尾（`_BOILERPLATE_NOTICE_TAIL_RE`）。
+- `subscribe` / `follow us` / `read more` / `source` = **CTA / 署名标签，是个短语不是终止符** → 只删标签及其标点（`_BOILERPLATE_LABEL_RE`），标签周围的真实正文留下。
+
+顺带修掉第三轮 agent 指出的死分支：老正则里 `source:` 后面跟 `\b`，需要冒号后紧跟单词字符才匹配，于是 `"Source: Reuters"` 根本不匹配、而 `"Source:Reuters"` 会把整句删光。新写法把冒号显式且可选地匹配，两种写法行为一致。
+
+**方向要说清楚：这条让分数往上走**（更多正文活下来 → 更多 ticker 能验证通过）。这正是我上一轮不肯自己拍板的原因。
+
+### (b) 怎么实现的
+
+验证块原来第一行就是 `if _corroboration(retained_bound)[1] != "both": continue` —— 也就是 2 分档完全不查正文，模型往单侧主题里塞一个正文从未提过的票就能拿 2 分（占 5 分帽的 40%）。现在改成：没有档位才早退，其余一律走同一条验证路径，并比对「保留档 vs 验证后档」。于是 `single` 成员只保留正文真提到该 ticker 的 ref；一条都不剩的成员走 K3-R103 那条**成员级丢弃**，不会连累同主题的兄弟。
+
+**方向：这条让分数往下走。**
+
+### 验证命令与结果
+
+- 全量（rule 4，我亲跑并记账，0e30 树）：`status=PASS exit=0 tests=5022 elapsed=1224.1s`。
+- focused：`tests.provider.test_us_short_llm_theme_discovery_fetch_x_merge` 69 OK；交接门 `route 14 + doc-governance 41 = 55 OK`。
+- 两条新收口测试：`test_k3_r105a_only_a_real_trailing_notice_swallows_the_text_behind_it`（三种 CTA 标签后的 ticker 全保住 / 三种法律声明仍吞尾且声明**之前**的正文不受影响，双向都钉）与 `test_k3_r105b_a_single_member_also_needs_its_ticker_in_the_frozen_text`（四成员 web-only 主题：三个具名成员各拿 2.0，未具名的按成员级丢弃并留 ledger 行，`validate_merged_packet` 仍接受）。
+- §6a 独立对抗 agent：本轮改的是真钱门，命中该门，已起一轮只读对抗 agent 跑未提交工作树。
+
+### 没有被这一轮关掉的
+
+register 里与 K3-R105 并列记着的两条残留仍开着：`_evidence_mentions_canonical_ticker` 要求精确拼写，所以双类股（`BRK.B` / `BRK-B` / `BRKB` 会 canonical 成三个不同值）会被系统性降档；`merge_drops` 的排序键 `(theme_id, reason)` 不是全序，目前只因为校验器重放同一份输入才没出问题。
+
+### 下一步注意事项
+
+分数口径已经动过一次，别在下一次真实付费运行之前再动。运行形状不变：只跑 X、一条查询、一次 xAI 调用、非交易决策日；Web 的 20260731 证据已冻结，不重跑。
+
+### 追加：对这条裁决本身的 §6a 对抗结果（同轮全修）
+
+改的是真钱门，所以起了一轮只读对抗 agent，它开出三条，全部同轮修掉：
+
+1. **我这次改动自己带出的加分漏洞**：CTA 标签那条正则少了收尾的 `\b`（旁边的法律声明那条一直有），于是 `source` 匹配上 `SOURCES` 的前六个字母，替换后把 `S` 留成独立 token，被读成裸代码。agent 端到端拿到 `{MSFT: 2.0, JPM: 2.0, S: 2.0}`；同族还有 `SUBSCRIBERS→RS`、`FOLLOW USA→A`、`SOURCED→D`。老那条「吞到末尾」的写法根本不可能留下碎片，所以这是拆分引入的。已加词边界，四个变体全部钉成对照。
+2. **(a) 只实现了一半**：法律声明仍然在字段任意位置生效，于是 `The disclaimer in the 10-K notes AAPL supply risk`、`A copyright dispute hit AAPL` 这种普通散文也会把后半句抹掉、误杀真被点名的票。用户的裁决是「只删**真正的结尾**样板」，所以现在只有位于**段首**（字段开头或 `.!?;` 之后）才吞尾；被剥掉的 URL 视作段断，因为抓取片段常把声明直接接在链接后面。
+3. **同档裁剪不落账**：验证后档位与保留档相同时，builder 直接换掉 ref 集合就返回，没有任何 ledger 行——而这会悄悄拉低 `distinct_web_x_source_ref_count`，那是知识刀 2 top-8 排序的第二个键，主题可能因此掉出名额却查不到原因。现在补 `member_evidence_ref_unbound_pruned`。
+
+另外把标签正则的空白改成 `[^\S
+]`，避免标题末尾的标签把标题和正文两个字段拼到一起。
+
+**判定为「不是缺陷」的一条**：agent 的头条 deflation 例子（`MSFT JPM power demand. Disclaimer: NVDA is also a member` 导致整主题归零）是门在按设计工作——那里的 `Disclaimer:` 确实位于段首、是真正的结尾声明，NVDA 只在样板里出现过，于是主题跌破 `min_theme_members=3` 这道既有门槛。这正是裁决 (b) 要的效果，不是连坐。
+
+最终证据：全量 `status=PASS exit=0 tests=5022 elapsed=1060.4s`；focused 69 OK；交接门 55 OK。
