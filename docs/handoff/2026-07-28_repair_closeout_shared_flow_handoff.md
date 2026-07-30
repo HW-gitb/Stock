@@ -54,3 +54,23 @@ The closure pack has named controls for: A-share provider absence blocks a_short
 
 - `START` 只是「进程要起了」的诚实信号，**不是**进度或 PASS 证据；AGENTS rule 5 的判据仍是真实测试输出 + 终态退出码。
 - 本刀不改依赖门、不改指纹口径、不改 PASS-only 记账，故未触发 rule 3 全量。
+
+## 2026-07-30 追加：full-lane 硬上限降至 800 秒
+
+### 改了什么 / 为什么
+
+- 用户明确把 full-lane 全量测试硬上限从 1300 秒降至 800 秒。单一执行常量 `bounded_unittest.FULL_MAX_SECONDS` 已改为 `800`，`full_pack_ledger.run_full_pack` 继续直接消费该常量，因此 `801` 起拒绝且不会启动测试。
+- focused 默认仍为 300 秒，已批准的显式慢 focused 包上限仍为 1300 秒；两者不再错误共用 full-lane 常量。审查提示、AGENTS active contract、risk-register active contract 与机器守卫已同步为 full=800。
+- 历史 `deadline=1300s` 运行记录保留为当时事实，不回写伪造历史。
+
+### 验证命令 / 结果
+
+- 固定主 Python 经 bounded launcher 最终跑 `tests.test_bounded_unittest tests.test_full_pack_ledger tests.test_review_tiering_enforcement tests.test_doc_governance_guard tests.test_route_doc_ledger_status_consistency`：`108 OK / 5.3s`。
+- 交接门 `tests.test_route_doc_ledger_status_consistency tests.test_doc_governance_guard`：`55 OK / 1.1s`；三个相关工具模块 `py_compile` 通过。
+- 反向控制明确钉住 `FULL_MAX_SECONDS == 800`、`FOCUSED_MAX_SECONDS == 1300`，并验证 full timeout `801` 得到 `full timeout must be 1..800 seconds`。
+
+### 失效旧结论 / 下一步注意事项
+
+- 旧的“当前 full-lane 上限 1300 秒”已失效；仅历史命令与历史结果中的 1300 仍有效。
+- 本刀只收紧测试基础设施的运行时预算，不改 discovery selector、测试覆盖、业务代码、provider 边界或 PASS-only 记账。它不触发 lane full regression；下一次 rule-3 full run 必须在 800 秒内完成，否则诚实返回 `TIMEOUT`，不得抬上限或把 UNKNOWN 当 PASS。
+- 唯一 scheduled 独立自审曾指出审查入口仍写 focused“最多 300 秒”；主线程已按类改成“默认 300 / 显式慢包最高 1300”，并在 review-tiering 守卫中同时钉住 300、1300、800。该窗口随后按 checklist 关闭，不做内容驱动复审。

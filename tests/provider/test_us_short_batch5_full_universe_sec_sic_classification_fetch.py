@@ -4,6 +4,7 @@ import importlib
 import json
 import os
 import sys
+import tempfile
 import unittest
 from pathlib import Path
 from unittest.mock import patch
@@ -26,9 +27,6 @@ from tests.provider.test_us_short_batch5_full_universe_momentum_producer import 
 from tests.provider.test_us_short_batch5_full_universe_theme_producer import _theme_series_map  # noqa: E402
 
 
-STATE_DIR = ROOT / "state" / "us_short"
-SAMPLE_ROOT = ROOT / "provider_samples" / "us_short_batch5_full_universe_sec_sic_classification_fetch"
-THEME_SAMPLE_ROOT = ROOT / "provider_samples" / "us_short_batch5_full_universe_theme_20260707"
 FETCH_MODULE = "runners.us_short_batch5_full_universe_sec_sic_classification_fetch"
 THEME_MODULE = "runners.us_short_batch5_full_universe_theme_producer"
 
@@ -72,36 +70,40 @@ def _fake_cik_source(cik_map=None):
 class FullUniverseSecSicClassificationFetchTest(unittest.TestCase):
     def setUp(self):
         self.slug = f"test_sec_sic_fetch_{os.getpid()}_{self._testMethodName}"
-        self.candidate = STATE_DIR / f"{self.slug}_candidate.json"
-        self.packet = STATE_DIR / f"{self.slug}_classification.json"
-        self.summary = SAMPLE_ROOT / self.slug / "summary.json"
-        self.series = STATE_DIR / f"{self.slug}_series.json"
-        self.theme_projection = STATE_DIR / f"{self.slug}_theme.json"
-        self.theme_summary = THEME_SAMPLE_ROOT / self.slug / "summary.json"
-        self.snapshot_root = STATE_DIR / "sec_sic_classification_snapshots" / self.slug
-        for p in (self.candidate, self.packet, self.series, self.theme_projection):
-            p.unlink(missing_ok=True)
+        self._case_temp = tempfile.TemporaryDirectory(prefix=f"{self.slug}_")
+        self.addCleanup(self._case_temp.cleanup)
+        self.case_root = Path(self._case_temp.name).resolve()
+        self.state_dir = self.case_root / "state" / "us_short"
+        self.candidate = self.state_dir / "candidate.json"
+        self.packet = self.state_dir / "classification.json"
+        self.summary = (
+            self.case_root
+            / "provider_samples"
+            / "us_short_batch5_full_universe_sec_sic_classification_fetch"
+            / "summary.json"
+        )
+        self.series = self.state_dir / "series.json"
+        self.theme_projection = self.state_dir / "theme.json"
+        self.theme_summary = (
+            self.case_root
+            / "provider_samples"
+            / "us_short_batch5_full_universe_theme_20260707"
+            / "summary.json"
+        )
+        self.snapshot_root = self.state_dir / "sec_sic_classification_snapshots"
+        self.assertFalse(self.case_root.is_relative_to(ROOT.resolve()))
+        for path in (
+            self.candidate,
+            self.packet,
+            self.summary,
+            self.series,
+            self.theme_projection,
+            self.theme_summary,
+            self.snapshot_root,
+        ):
+            self.assertTrue(path.resolve().is_relative_to(self.case_root))
+            self.assertFalse(path.resolve().is_relative_to(ROOT.resolve()))
         _write_json(self.candidate, _candidate_artifact(_ALL_ELIGIBLE))
-
-    def tearDown(self):
-        for p in (self.candidate, self.packet, self.series, self.theme_projection):
-            p.unlink(missing_ok=True)
-        for root in (SAMPLE_ROOT / self.slug, THEME_SAMPLE_ROOT / self.slug):
-            if root.exists():
-                for item in sorted(root.rglob("*"), reverse=True):
-                    if item.is_file():
-                        item.unlink()
-                    elif item.is_dir():
-                        item.rmdir()
-                root.rmdir()
-        if self.snapshot_root.exists():
-            for item in sorted(self.snapshot_root.rglob("*"), reverse=True):
-                if item.is_file():
-                    item.unlink()
-                elif item.is_dir():
-                    item.rmdir()
-            self.snapshot_root.rmdir()
-            self.snapshot_root.parent.rmdir()
 
     def _run(self, **overrides):
         kwargs = {
@@ -116,7 +118,25 @@ class FullUniverseSecSicClassificationFetchTest(unittest.TestCase):
             "interval_seconds": 0,
         }
         kwargs.update(overrides)
-        return _fetch().run_fetch(**kwargs)
+        mod = _fetch()
+        with (
+            patch.object(mod, "ROOT", self.case_root),
+            patch.object(mod, "STATE_US_SHORT_DIR", self.state_dir),
+            patch.object(mod.universe_fetch, "_check_gitignore", return_value=True),
+            patch.object(mod.universe_fetch, "_git_check_ignored", return_value=True),
+        ):
+            return mod.run_fetch(**kwargs)
+
+    def test_all_generated_data_stays_inside_one_system_temp_root(self):
+        self._run()
+        generated = [
+            path.resolve()
+            for path in self.case_root.rglob("*")
+            if path.is_file()
+        ]
+        self.assertGreater(len(generated), 2)
+        self.assertTrue(all(path.is_relative_to(self.case_root) for path in generated))
+        self.assertTrue(all(not path.is_relative_to(ROOT.resolve()) for path in generated))
 
     def test_fetch_coarsens_to_major_group_and_writes_packet(self):
         summary = self._run()
@@ -236,14 +256,21 @@ class FullUniverseSecSicClassificationFetchTest(unittest.TestCase):
         self._run()
         _write_json(self.series, _series_packet(_theme_series_map()))
         theme = importlib.import_module(THEME_MODULE)
-        theme_summary = theme.run_packet(
-            candidate_artifact_path=self.candidate,
-            series_packet_path=self.series,
-            classification_packet_path=self.packet,
-            output_projection_path=self.theme_projection,
-            summary_path=self.theme_summary,
-            generated_at="2026-06-15T12:00:00+00:00",
-        )
+        projection_binding = importlib.import_module("engine.us_short_projection_binding")
+        with (
+            patch.object(theme, "ROOT", self.case_root),
+            patch.object(theme, "STATE_US_SHORT_DIR", self.state_dir),
+            patch.object(theme, "_git_ignored", return_value=True),
+            patch.object(projection_binding, "ROOT", self.case_root),
+        ):
+            theme_summary = theme.run_packet(
+                candidate_artifact_path=self.candidate,
+                series_packet_path=self.series,
+                classification_packet_path=self.packet,
+                output_projection_path=self.theme_projection,
+                summary_path=self.theme_summary,
+                generated_at="2026-06-15T12:00:00+00:00",
+            )
         # group "35" = AAPL/MSFT/GOOG, all full-history -> a scored sector.
         self.assertEqual(theme_summary["theme_source"]["classification_source"], "sec_sic_major_group")
         self.assertGreaterEqual(theme_summary["projection_contract"]["theme_scored_count"], 3)
@@ -326,7 +353,7 @@ class FullUniverseSecSicClassificationFetchTest(unittest.TestCase):
 
     def test_packet_path_must_be_gitignored_state_json(self):
         with self.assertRaises(_fetch().FullUniverseSecSicClassificationFetchError):
-            self._run(classification_packet_path=ROOT / "docs" / f"{self.slug}_classification.json")
+            self._run(classification_packet_path=self.case_root / "docs" / "classification.json")
 
     def test_summary_schema_rejects_scope_creep(self):
         from jsonschema import Draft7Validator as V

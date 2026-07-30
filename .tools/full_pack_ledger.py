@@ -12,7 +12,7 @@ Usage:
    .\tools\codex_main_python.ps1 .tools\full_pack_ledger.py run <lane> <full-trigger-reason> <focused-evidence> <timeout-seconds> -- <unittest args>
    .\tools\codex_main_python.ps1 .tools\full_pack_ledger.py check <lane>
 
-`run` accepts only the lane's fixed full-discovery selector: `a_short` = `discover -s tests -p test_a_short*.py`; `us_short` = `discover -s tests -p test_us_short*.py`.
+`run` accepts only the lane's fixed full-discovery selector: `a_short` = `discover -s tests -p test_a_short*.py`; `us_short` = `discover -s tests -p test_us_short*.py`.  The ledger itself prepends the fixed `-b -f --durations 25` runtime flags; they quiet passing output, stop on the first red, and retain timing evidence without narrowing discovery.
 
 `check` exit code: 0 = cached green on the current exact code state (do NOT re-run; cite it);
 1 = no cached green for the current code state (a full run is warranted only if tiering rule 3
@@ -37,6 +37,10 @@ FULL_PACK_DISCOVERY_ARGS = {
     "a_short": ("discover", "-s", "tests", "-p", "test_a_short*.py"),
     "us_short": ("discover", "-s", "tests", "-p", "test_us_short*.py"),
 }
+# These flags do not select or skip tests.  They make the one official full
+# process quieter on green, stop immediately on the first real red, and retain
+# timing evidence for the next test-only optimization pass.
+FULL_PACK_RUNTIME_ARGS = ("-b", "-f", "--durations", "25")
 
 
 def _is_code_path(rel_path: str) -> bool:
@@ -124,6 +128,13 @@ def record(lane: str, count: str, *, state: dict[str, str] | None = None, ledger
     return fp
 
 
+def _runtime_unittest_args(unittest_args: list[str]) -> list[str]:
+    """Add runtime-only flags without moving discovery options out of its subparser."""
+    if unittest_args and unittest_args[0] == "discover":
+        return ["discover", *FULL_PACK_RUNTIME_ARGS, *unittest_args[1:]]
+    return [*FULL_PACK_RUNTIME_ARGS, *unittest_args]
+
+
 def run_full_pack(
     lane: str,
     trigger_reason: str,
@@ -168,7 +179,7 @@ def run_full_pack(
         f"fingerprint={prepared_fingerprint[:12]}",
         flush=True,
     )
-    result = run_unittest(unittest_args, timeout_seconds)
+    result = run_unittest(_runtime_unittest_args(unittest_args), timeout_seconds)
     if result.output:
         print(result.output, end="" if result.output.endswith("\n") else "\n")
     count = str(result.tests) if result.tests is not None else "UNKNOWN"

@@ -1,0 +1,390 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://stock.local/schemas/us_short_soft_discovery_query_quality_probe_assessment/1.2.0/schema.json",
+  "title": "US-short Soft-discovery Query-quality Probe Assessment",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_name",
+    "schema_version",
+    "schema_ref",
+    "generated_at",
+    "causal_floor",
+    "probe_identity",
+    "input_bindings",
+    "execution_evidence",
+    "lane_assessments",
+    "combined_diagnostic",
+    "verdict",
+    "prohibited_effects"
+  ],
+  "properties": {
+    "schema_name": {
+      "const": "us_short_soft_discovery_query_quality_probe_assessment"
+    },
+    "schema_version": {
+      "const": "1.2.0"
+    },
+    "schema_ref": {
+      "const": "schemas/us_short_soft_discovery_query_quality_probe_assessment.schema.json"
+    },
+    "generated_at": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "causal_floor": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "instant",
+        "components"
+      ],
+      "properties": {
+        "instant": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "components": {
+          "type": "array",
+          "minItems": 8,
+          "uniqueItems": true,
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "component",
+              "instant"
+            ],
+            "properties": {
+              "component": {
+                "type": "string",
+                "minLength": 1
+              },
+              "instant": {
+                "type": "string",
+                "format": "date-time"
+              }
+            }
+          }
+        }
+      }
+    },
+    "probe_identity": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "expected_decision_date",
+        "policy_version",
+        "packet_ref",
+        "packet_sha256",
+        "query_scope_sha256"
+      ],
+      "properties": {
+        "expected_decision_date": {
+          "type": "string",
+          "pattern": "^[0-9]{8}$"
+        },
+        "policy_version": {
+          "type": "string",
+          "minLength": 1
+        },
+        "packet_ref": {
+          "type": "string",
+          "pattern": "^docs/[^\\s]+\\.json$"
+        },
+        "packet_sha256": {
+          "$ref": "#/$defs/sha256"
+        },
+        "query_scope_sha256": {
+          "$ref": "#/$defs/sha256"
+        }
+      }
+    },
+    "input_bindings": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "web_discovery",
+        "web_receipt",
+        "x_discovery",
+        "x_receipt",
+        "web_tavily",
+        "web_deepseek",
+        "x_xai"
+      ],
+      "properties": {
+        "web_discovery": {
+          "$ref": "#/$defs/inputBinding"
+        },
+        "web_receipt": {
+          "$ref": "#/$defs/inputBinding"
+        },
+        "x_discovery": {
+          "$ref": "#/$defs/inputBinding"
+        },
+        "x_receipt": {
+          "$ref": "#/$defs/inputBinding"
+        },
+        "web_tavily": {
+          "$ref": "#/$defs/inputBinding"
+        },
+        "web_deepseek": {
+          "$ref": "#/$defs/inputBinding"
+        },
+        "x_xai": {
+          "$ref": "#/$defs/inputBinding"
+        }
+      }
+    },
+    "execution_evidence": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "actual_provider_call_counts",
+        "actual_provider_call_count",
+        "web_regroup_chunk_counts",
+        "all_exact_slots_bound",
+        "all_budget_scopes_bound",
+        "inconclusive_reasons"
+      ],
+      "properties": {
+        "actual_provider_call_counts": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "tavily",
+            "deepseek",
+            "xai"
+          ],
+          "properties": {
+            "tavily": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "deepseek": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "xai": {
+              "type": "integer",
+              "minimum": 0
+            }
+          }
+        },
+        "actual_provider_call_count": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "web_regroup_chunk_counts": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "attempted",
+            "successful",
+            "failed",
+            "failed_indexes"
+          ],
+          "properties": {
+            "attempted": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "successful": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "failed": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "failed_indexes": {
+              "type": "array",
+              "uniqueItems": true,
+              "items": {
+                "type": "integer",
+                "minimum": 0
+              }
+            }
+          }
+        },
+        "all_exact_slots_bound": {
+          "const": true
+        },
+        "all_budget_scopes_bound": {
+          "const": true
+        },
+        "inconclusive_reasons": {
+          "type": "array",
+          "uniqueItems": true,
+          "items": {
+            "type": "string",
+            "minLength": 1
+          }
+        }
+      }
+    },
+    "lane_assessments": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "web",
+        "x"
+      ],
+      "properties": {
+        "web": {
+          "$ref": "#/$defs/laneAssessment"
+        },
+        "x": {
+          "$ref": "#/$defs/laneAssessment"
+        }
+      }
+    },
+    "combined_diagnostic": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "distinct_candidate_theme_ids",
+        "distinct_candidate_theme_ids_diagnostic_target",
+        "breadth_diagnostic_is_pass_gate"
+      ],
+      "properties": {
+        "distinct_candidate_theme_ids": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "distinct_candidate_theme_ids_diagnostic_target": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "breadth_diagnostic_is_pass_gate": {
+          "const": false
+        }
+      }
+    },
+    "verdict": {
+      "enum": [
+        "pass_to_query_planner_implementation",
+        "revise_stage1_templates_before_planner",
+        "provider_or_execution_inconclusive_do_not_grade_templates"
+      ]
+    },
+    "prohibited_effects": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "theme_confirmation",
+        "theme_soft_boost_enablement",
+        "top15_or_scoring_effect",
+        "seat_or_probe_allocation",
+        "lifecycle_transition",
+        "operation_advice",
+        "forward_clock_start",
+        "ship_gate_evidence",
+        "broker_or_order_execution",
+        "a_share_crossing"
+      ],
+      "properties": {
+        "theme_confirmation": {
+          "const": false
+        },
+        "theme_soft_boost_enablement": {
+          "const": false
+        },
+        "top15_or_scoring_effect": {
+          "const": false
+        },
+        "seat_or_probe_allocation": {
+          "const": false
+        },
+        "lifecycle_transition": {
+          "const": false
+        },
+        "operation_advice": {
+          "const": false
+        },
+        "forward_clock_start": {
+          "const": false
+        },
+        "ship_gate_evidence": {
+          "const": false
+        },
+        "broker_or_order_execution": {
+          "const": false
+        },
+        "a_share_crossing": {
+          "const": false
+        }
+      }
+    }
+  },
+  "$defs": {
+    "sha256": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{64}$"
+    },
+    "inputBinding": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "path",
+        "sha256"
+      ],
+      "properties": {
+        "path": {
+          "type": "string",
+          "minLength": 1
+        },
+        "sha256": {
+          "$ref": "#/$defs/sha256"
+        }
+      }
+    },
+    "laneAssessment": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "validated_theme_count",
+        "source_bound_member_count",
+        "accepted_source_count",
+        "member_bound_source_count",
+        "member_bound_source_ratio",
+        "quality_thresholds_met",
+        "quality_failure_reasons"
+      ],
+      "properties": {
+        "validated_theme_count": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "source_bound_member_count": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "accepted_source_count": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "member_bound_source_count": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "member_bound_source_ratio": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 1
+        },
+        "quality_thresholds_met": {
+          "type": "boolean"
+        },
+        "quality_failure_reasons": {
+          "type": "array",
+          "uniqueItems": true,
+          "items": {
+            "type": "string",
+            "minLength": 1
+          }
+        }
+      }
+    }
+  }
+}

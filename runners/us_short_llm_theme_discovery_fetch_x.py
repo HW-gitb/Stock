@@ -48,6 +48,7 @@ PROVIDER_RESPONSE_DROP_REASONS = frozenset({
     "provider_response_path_not_gitignored",
     "provider_response_immutable_raw_content_conflict",
 })
+SOURCE_RAW_PUBLISH_FAILURE_REASONS = web.SOURCE_RAW_PUBLISH_FAILURE_REASONS
 
 
 class XThemeDiscoveryError(ValueError):
@@ -1131,7 +1132,7 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--raw-root", type=Path, default=DEFAULT_RAW_ROOT)
     args = parser.parse_args(argv)
     web._decision_date(args.expected_decision_date)
-    raw_root = web._validate_raw_root(args.raw_root, require_gitignored=args.live)
+    raw_root = web._validate_cli_raw_root(args.raw_root, DEFAULT_RAW_ROOT, live=args.live)
     discovery_output, receipt_output = web._decision_publish_paths(
         args.discovery_output or default_discovery_path(args.expected_decision_date),
         default_discovery_path(args.expected_decision_date),

@@ -22,6 +22,7 @@
         "execution_mode": {"enum": ["offline_fake_client", "live_authorized"]},
         "network_access_performed": {"type": "boolean"}, "provider_calls_performed": {"type": "boolean"}, "network_call_count": {"type": "integer", "minimum": 0}, "provider_call_count": {"type": "integer", "minimum": 0},
         "transport_response_counts": {"type": "object", "additionalProperties": false, "required": ["tavily", "deepseek"], "properties": {"tavily": {"type": "integer", "minimum": 0}, "deepseek": {"type": "integer", "minimum": 0}}},
+        "regroup_chunk_counts": {"type": "object", "additionalProperties": false, "required": ["attempted", "successful", "failed", "failed_indexes"], "properties": {"attempted": {"type": "integer", "minimum": 0}, "successful": {"type": "integer", "minimum": 0}, "failed": {"type": "integer", "minimum": 0}, "failed_indexes": {"type": "array", "uniqueItems": true, "items": {"type": "integer", "minimum": 0}}}},
         "scoring_eligible": {"const": false}, "top15_effect_enabled": {"const": false}, "operation_advice_effect_enabled": {"const": false}, "dynamic_seats_enabled": {"const": false}, "theme_probe_enabled": {"const": false}, "lifecycle_actions_enabled": {"const": false},
         "regroup_model": {"type": "object", "additionalProperties": false, "required": ["requested_model", "served_model", "system_fingerprints"], "properties": {"requested_model": {"const": "deepseek-chat"}, "served_model": {"type": ["string", "null"]}, "system_fingerprints": {"type": "array", "uniqueItems": true, "items": {"type": "string"}}}}
       },

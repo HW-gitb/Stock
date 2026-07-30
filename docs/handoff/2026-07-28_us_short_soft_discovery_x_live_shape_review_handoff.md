@@ -600,23 +600,41 @@ K3-R105 并列记录的两条残留已关闭；在 Claude Code 独立审查前�
 
 ### 三步走（第 1、2 步不花钱，第 3 步必须用户逐次授权）
 
-**第 1 步 —— 查 20260801 那 7 个成员够不够格（离线、只读、不占决策日）**
+**第 1 步 —— 查 20260801 那 7 个成员够不够格（已完成；离线、只读、不占决策日）**
 
-成员是 `CEG / VST / NEE / ETN / GEV / PWR / VRT`（artifact 在 `state/us_short/us_short_llm_theme_discovery_x_20260801.json`，gitignored）。要回答的就是知识刀 2 那两道结构门会不会放行，**复用它自己的判定，别另写一套**：
+成员是 `CEG / VST / NEE / ETN / GEV / PWR / VRT`。2026-07-30 已直接读取本树 gitignored 的 `candidate_universe_20260730.json` 与 `us_short_batch5_full_universe_sector_classification_20260729_packet.json`：**7/7 都在 `eligible_tickers`；SIC major group = `49`（CEG/VST/NEE）、`35`（ETN）、`36`（GEV/VRT）、`17`（PWR），共 4 组**。所以只看知识刀 2 的两道结构门，`7 >= 3` 且 `4 >= 2`，会通过；这不补 Web 证据、不改变 `single` 档，也不是市场确认。
+
+判定复用了知识刀 2 的既有输入口径，没有另写业务规则：
 - 活跃可交易池：`runners/us_short_provisional_theme_validate.py` 走 `us_short_universe_fetch` 的 candidate artifact，落选理由是 `not_in_active_pass1_eligible_universe`；
 - 行业：同文件的 `canonical_industry_code` + SEC-SIC 分类包（`DEFAULT_CLASSIFICATION_PATH`），门是 `MIN_THEME_MEMBERS = 3` 且 `len(industry_codes) >= 2`。
 
-产出只要一句结论：这 7 个里几个在池内、落在几个 SIC major group、按现行阈值过不过。**不要**为此新建 fixture、不要写进 `state/us_short` 的决策槽、不要构造一个空的 web 包去凑 merge——那会把 20260801 的 web 槽冻掉。
+本次只读查询没有新建 fixture、没有写 `state/us_short` 决策槽，也没有构造空 web 包。后续不要再为这 7 个成员重复此步。
 
 **第 2 步 —— 查询集重设计（不花钱）**
 
 **先纠正一处措辞（2026-07-30 用户点破；这里原先写「方向要用户拍板」，那是错的）**：本部件的设计目的就是让模型**自己**从 X / web 里发现当周的跨行业新主题。所以查询集**不是主题清单**，用户也不负责说出本周哪个题材热——那等于把要自动化的判断退回给人，正是这一步要消灭的反模式。20260801 那条查询（`AI data center power demand … nuclear, utilities and grid equipment`）就是该反模式的实例：它把答案写进了问题里，所以模型只能答出那一个主题。
 
-正确形态：**一组主题无关（theme-agnostic）、每周原样复用、不含任何公司名 / ticker / 行业名 / 题材名的发现式问法**。例如「本周有哪些**新出现**的进展，被**多个互不相关的行业**同时提到」「哪些美股公司这周因为**上季度还不存在的需求变化**被反复点名」。热点由模型从当周语料里填，不由人填。
+**再纠正一处，2026-07-30 用户复核后定稿（前一版把只该管第一阶段的规则写成了管整个查询集，是错的）**：正确形态是**两阶段查询规划**，不是「一组固定问法每周原样复用」。原因两条：固定模板长期用会稳定捞回宏观评论，而新热点的词汇本来就不在旧模板里；更要命的是，如果第二轮不许使用第一轮刚发现的概念，系统就只能「看见线索」，永远补不齐成员和独立来源——正好卡死 5 分档。
 
-硬约束：每周 ≤15 条查询（`MAX_X_QUERIES`），web 侧 Tavily ≤25/周；每周 ≤8 个主题；单条查询 ≤300 字符且不得含 secret 形状。**验收谓词（写成测试，别写成散文）**：查询集里出现任何具体公司名 / ticker / 行业名 / 题材名即判红——这条按本刀的教训必须是可执行谓词。
+- **第一阶段（广撒网）**：版本化、**主题无关**的固定发现模板，寻找新需求 / 资本开支 / 供应链瓶颈 / 监管变化 / 订单与财报共振。生产一键入口只能按已审查模板的固定占位符渲染，不接受操作员临时塞入公司名、ticker、行业名或题材名；人工自由文本只允许进入另行标记、逐次授权的探针入口，不得冒充正式周运行。
+- **第二阶段（追证据）**：由**第一阶段已冻结、且有来源绑定的概念**自动生成收窄查询，去补相关公司、行业与独立证据。此阶段**允许**使用出现在第一阶段证据里的行业名 / 公司名 / 概念——但每一条扩展查询都必须能回溯到具体的第一阶段来源。v1 优先用确定性模板把已冻结的 focus terms 投影成查询，不再调用另一个模型自由改写；若未来确需模型建议，也只能把建议当不可信候选，再经同一来源绑定和确定性过滤，不能直接进入付费执行。
 
-用户在这一步真正要拍板的只有**策略旋钮**，不是热点：① 只捞「本周新出现」还是也捞「持续升温」；② 覆盖优先（宁可多捞噪音交给下游门筛）还是精度优先；③ 15 条预算要不要分一部分给固定的行业轮询问法，还是全给发现式。Codex 按「只捞新出现 + 覆盖优先 + 全给发现式」出草案，把三个旋钮的取舍写清楚交用户确认，**不要直接拿去花钱跑**。
+**验收谓词（写成测试，别写成散文）**：① 正式第一阶段查询不是由已审查、版本化模板 artifact 精确渲染，或模板开放了题材/公司自由文本占位符 → 判红；不要假装用一张有限词表就能识别世界上所有行业名 / 新题材名；② 第二阶段任何一条查询的 focus term 无法回溯到第一阶段冻结 artifact 的具体 source ref，或引用了第二阶段自己才产生的证据 → 判红；③ 同一份第一阶段冻结字节 + 同一 policy version 必须复现出逐字相同、顺序相同的 query plan；④ 第二阶段不得回写、替换或扩充第一阶段 artifact；⑤ 正式一键入口不得接受未入 plan 的临时查询。
+
+**必须锁住的边界（这块的真正难点是「自己猜热点、再搜索证明自己的猜测」）**：
+
+1. 第二阶段查询只能来自第一阶段的真实、已冻结证据，不得来自模型自由想象，也不得来自人的事后提示；
+2. 每条扩展查询可追溯到来源，整份计划连同 policy version、decision date、第一阶段 artifact digest、来源线索、每 provider 的预算包络、实际查询与生成结果写进**可复现的 query-plan artifact**；阶段二只能追加到自己的冻结区，不能改阶段一；
+3. **预算继续服从 K3-R31，但必须按两阶段形状重新接线**：第二阶段查询在第一次付费调用前尚不存在，所以不能伪称已经按具体 `query_scope` 预留。正确做法是在第一次付费调用前，按 decision date + plan identity 为每个 provider 一次性锁住经审查的**最大调用包络**；阶段一、阶段二和同 scope 重试都只消费这一个包络，实际调用不得超额，阶段二不得再新开一笔预算。当前 `_reserve_provider_budget(..., query_scope=实际查询)` / `run_x_fetch` / `run_web_fetch` 会按每次传入列表自行预留，不能原样表达这个契约；实现时须最小扩展为「plan 级预留 + stage 消费」，并用并发、重试、崩溃恢复和双扣反向控制钉住；
+4. **第二阶段只是给 ≤5 分软通道收集证据，绝不是确认**。「成员确认 + 独立行情验证」那台确认器仍然冻结；第二阶段不得产生确认、不得动席位 / 试探仓 / 生命周期 / `theme_soft_boost_enabled`。这条离冻结的门只差一层窗户纸，实现时必须写死。
+
+**顺序（重要，别搞反）**：先离线写一份受审查的**查询质量探针包**，固定三至五条主题无关模板、运行 lane、决策日、provider 调用上限、结果只用于问法校准的边界，以及「带 source-bound 个股的有效文档比例 / 宏观评论占比 / 可形成候选概念数」等事前判据；再由用户逐次授权一次便宜的真实探针，确认第一阶段的问法真能捞回带个股的新闻；确认了再建规划器。不要直接在终端临时手打后再事后解释结果。现在 web 侧的老毛病正是宏观词搜回大盘评论——问法不出货的话，规划器就是围着一张破网造机器。注意：离线 fixture 只能证明「计划算得对、预算扣得对」，**证明不了「这网捞得上鱼」**。
+
+**策略旋钮不是每周问用户的**：① 只捞「本周新出现」还是也捞「持续升温」；② 覆盖优先还是精度优先；③ 预算在两阶段之间怎么分。这三个固化成**版本化策略配置**，用户只在设计变更时批准一次，之后每周一键运行不再问人。用户已于 2026-07-30 确认按最新方案修改；当前设计默认采用「只捞新出现 + 覆盖优先 + 第一阶段占多数预算」，精确模板和数字先进入探针包受审查，不再要求用户选择本周热点或逐条分配额度。
+
+**当前代码地形（已核实，2026-07-30）**：两条 lane 的 `_safe_queries`（`fetch_x.py` / `fetch_web.py`）**只校验外部传入的查询列表**，不生成、不扩展、不分配预算；`runners/` `engine/` `presets/` `schemas/` 里**没有任何冻结查询集、preset 或 query-plan 产物**；capstone 从不传 queries（`run_x_fetch` / `run_web_fetch` 只被各自 `main()` 调用）。也就是说到今天为止**每一次真实运行的查询词都是人在命令行手打的**，一键周报路径根本没接 live 发现。缺的不止是规划层，是连「查询从哪来」都还没有归宿。
+
+**工程量判断**：中等、边界清晰，不需要推翻 Web / X / merge 的证据解析、不可变发布、合并与知识刀 2。新增主体 = query-plan schema + 版本化 policy/template artifact + 确定性规划器 + 把 plan 喂给现有抓取器的一键入口 + 离线 fixture；但现有 fetch 入口和预算账本需要一处最小、受审查的 plan-envelope 接线，不能写成「预算预留完全不动」。**成本主要在审查不在代码**：本部件刚为证据完整性连烧六轮对抗审查，而规划器新增的恰恰是模型控制的输入面（第二阶段 focus terms 来自模型参与形成的第一阶段证据），自证循环 / 事后回填 / 用第二轮结果反改第一轮冻结 / plan 级预算双扣这几类攻击会立刻找上门。按「探针包审查与一次真实校准 → 一轮实现 → 至少一轮对抗审查，很可能不止一轮」估，别按行数估。
 
 **第 3 步 —— 完整一周（花钱）**
 
@@ -642,3 +660,125 @@ K3-R105 并列记录的两条残留已关闭；在 Claude Code 独立审查前�
 ### 失效旧结论 / 下一步注意事项
 
 “手工 direct `--help` 探针通过即可关闭启动入口问题”的旧结论失效；没有 subprocess 回归守卫时，模块 import 测试不会发现 direct-file bootstrap 回归。K3-R108 不改变 provider、证据、scoring、Top15、publication 或 live 行为，不触发 full lane；不得为本刀重跑 provider 或联网。完整 finding 与 closure 只在 `docs/system_risk_register.md#K3-R108` / `#K3-R109`，本 handoff 只保留 phase 级交接。
+
+## 2026-07-30 追加：第一阶段查询质量探针包已起草（离线、未执行）
+
+已新增 `docs/us_short_soft_discovery_query_quality_probe_packet_20260730.json`，由 `schemas/us_short_soft_discovery_query_quality_probe_packet.schema.json` 锁定，并由 `tests/schema/test_us_short_soft_discovery_query_quality_probe_packet_schema.py` 覆盖。它固定 `20260802` 非交易测试槽、4 条主题无关查询、同一查询同时投 Web/X、零重试，以及事前质量判据；创建本 packet **不授权**任何 provider 调用。
+
+预算必须区分两件事：按现有 runner 的结构，实际最多是 Tavily 4 + DeepSeek 4 + xAI 4 = **12 次**；但现有 Web 预算账本会为 DeepSeek 预留硬上限 25，所以账本包络是 4 + 25 + 4 = **33 单位**。33 是预留量，不是声称实际花费。执行前还必须确认本决策槽和三份 provider budget ledger 均不存在、raw 根被 gitignore、精确查询字节未变，并取得用户对这一次 probe 的新授权。
+
+事前裁决不许看结果后改：每条 lane 至少 1 个候选主题、至少 3 个 source-bound 成员、member-bound source ratio 至少 0.5，且两 lane 都过，才是 `pass_to_query_planner_implementation`。两 lane 合计 2 个不同 theme id 只作覆盖面诊断，不是硬门——现有 theme id 只是模型字符串，不能冒充语义去重，而且真实安静周也不能因此被错判为模板坏。provider/auth/transport/model identity/regroup/raw publish/调用计数不可证明等失败一律记 `provider_or_execution_inconclusive_do_not_grade_templates`，不能错判问法。质量不达标则只改第一阶段模板，暂不造完整规划器。
+
+本 slice 仍不实现第二阶段规划器、plan 级预算包络或一键入口，不运行 merge / 知识刀 2，不动 `theme_soft_boost_enabled`、确认、席位、试探仓、生命周期、操作意见或 forward 时钟。下一步是独立审查这份 packet；PASS 后再向用户索取一次明确的真实 Web+X 探针授权。
+
+## 2026-07-30 追加：K3-R110 已按类修复，仍待独立复审
+
+审查发现的三类问题已结构性收口，不是只补被点名实例：
+
+- 所有本 packet 校验均接入共享 `FORMAT_CHECKER`；测试自动枚举 schema 的 `date-time` 字段并逐字段做坏时间戳反控，移除 checker 会转红。
+- 授权、production policy、decision date、全部 provider 预算、全部 pre-execution gate、全部阈值、全部 prohibited effect 和每条 query 都改为“每次只改一项、断言自己的错误路径”；枚举从 artifact 当前字段生成，未来同类字段新增但未独立 const-pin 会自动转红。
+- v1.1.0 exact slot map 固定以下唯一未来槽位，测试直接绑定 runner 的默认路径函数和发布预检：
+  - discovery：`state/us_short/us_short_llm_theme_discovery_web_20260802.json`、`state/us_short/us_short_llm_theme_discovery_x_20260802.json`
+  - receipt：`state/us_short/us_short_llm_theme_discovery_web_20260802_receipt.json`、`state/us_short/us_short_llm_theme_discovery_x_20260802_receipt.json`
+  - budget：`state/us_short/us_short_llm_theme_discovery_web_tavily_20260802_budget.json`、`state/us_short/us_short_llm_theme_discovery_web_deepseek_20260802_budget.json`、`state/us_short/us_short_llm_theme_discovery_x_xai_20260802_budget.json`
+  - raw roots：`provider_samples/us_short_llm_theme_discovery_fetch_web`、`provider_samples/us_short_llm_theme_discovery_fetch_x`
+  - assessment：`docs/us_short_soft_discovery_query_quality_probe_assessment_20260802.json`
+
+未来授权命令不得携带改变默认值的 `--output-path` / `--receipt-path` / `--discovery-output` / `--receipt-output` / `--raw-root`；任何偏离上表的槽位都不属于本 packet。第一次修复后的独立复审发现 raw 规则当时只写在 packet，真实 CLI 仍会接受另一个 gitignored 根；该 FAIL 已继续修到代码：Web/X `main()` 现在共用 `_validate_cli_raw_root`，在 provider/key 访问前逐 lane 拒绝非默认 live raw root，并有两条真实 main 反控。assessment 不再只是测试里的字面量，唯一槽由 `engine/us_short_soft_discovery_query_quality_probe_paths.py` 推导并 exact preflight；当前仍没有 assessment writer，也不授权提前创建 assessment。
+
+测试前已确认 exact `20260802` 的 7 个 state 槽与两棵 raw 根内同日残留均为 0。修复不构成 provider 授权；独立 reviewer PASS 之前仍不得请求或执行真实 probe。完整 Required、两次复审/修复机制与 closure 只见 `docs/system_risk_register.md#K3-R110`。
+
+## 2026-07-30 追加：K3-R110 focused 已闭合，但 full lane 被 K3-R111 阻断
+
+K3-R110 第二次类修后的固定主 Python 聚焦超集为 `242 OK`；六类拆门反控（format checker、授权 const、slot const、query const、live raw-root preflight、assessment preflight）全部得到 `RED_EXPECTED`。由于本次实改 Web/X 顶层 live CLI/raw 安全面，按 AGENTS 触发唯一一次 US-short full lane；终态是 `5039 tests / 12 errors / FAIL`，故没有交 PASS，也没有再次启动 full。
+
+12 个 error 全部来自旧 SEC-SIC full-universe 测试的同一清理越权：每个用例删除自己拥有的 snapshot slug 后，又试图删除共享 `state/us_short/sec_sic_classification_snapshots` 父目录；该目录内已有 2026-07-30 真实运行的 gitignored cache，所以报 `WinError 145`。cache 的 mtime 早于本轮测试，本轮未删除、未改写。完整 finding 与 closure 见 `docs/system_risk_register.md#K3-R111`。
+
+下一执行者先按类修 K3-R111：测试只能清理自己拥有的子树，并用预置共享 sentinel/cache 的反控证明不会再碰父目录；聚焦绿后才允许在新 final code state 跑一次 ledger full lane。若聚焦 FAIL，立即停止。full green 后再做 K3-R110 current-diff-only 独立复审；在此之前不得提交、merge 或请求 `20260802` provider 授权。
+
+## 2026-07-30 追加：K3-R111 已按类修复，待 final full/reviewer
+
+SEC-SIC full-universe 测试不再把 snapshot slug 直接挂在共享目录后手工向上删除。每个用例现在在 `state/us_short/sec_sic_classification_snapshots/` 下取得一个 `TemporaryDirectory` 独占子树，由 unittest cleanup 只删除该子树；共享父目录无论原先为空还是已有真实 cache 都不属于测试。
+
+为了不让同类问题以后换个名字回来，守卫有三层：
+
+1. 每个用例在 setup 前后比对共享目录既有文件的 `sha256 + size + mtime_ns`，任何修改/删除/遗留都会转红；
+2. sentinel 回归在共享父目录预置固定 bytes/mtime 的文件，完整 fake fetch 后必须原样存在；
+3. AST 扫描全部 `test_us_short*.py` 的 `tearDown/asyncTearDown`，禁止直接 `.parent.rmdir()` 或把 `.parent` 传给 `rmdir/rmtree`。
+
+固定主 Python 直接模块 `19 OK`；恢复旧父目录删除、植入新的 parent-delete teardown 两条反控均 `RED_EXPECTED`。真实 cache 未被删除或改写。仍需对最终代码态跑 K3-R110+K3-R111 focused 超集和 ledger full lane，再由独立子 agent 做 current-diff-only 对抗复审；这些完成前仍不得提交、merge 或请求 provider 授权。
+
+## 2026-07-30 最终追加：K3-R110 / K3-R111 executor 修复闭合，待 Claude Code 审查
+
+最终代码态已经完成规定的收口，不再沿用前一次被 K3-R111 阻断的 full 结果：
+
+- 固定主 Python focused 超集 `261 OK`，覆盖 query-quality packet schema、Web/X、X/merge、SEC-SIC shared-cache isolation、US-short conformance 与文档门。
+- K3-R110 的 format/auth/slot/query/live-raw/assessment 六类反控，以及 K3-R111 的 shared-parent-delete/AST 两类反控，共八类均为 `RED_EXPECTED`。
+- `py_compile` 与 `git diff --check` 通过；测试前后 exact `20260802` state/raw 残留均为 0。
+- 最终 US-short full-pack ledger 为 `5041 OK` / PASS（fingerprint `c530a127f213...`）。测试后 `test_sec_sic_fetch_*` 残留为 0，真实 SEC-SIC cache 仍为 250148 bytes，mtime 仍是 `2026-07-30T07:02:18.3873943Z`。
+- 用户要求的独立 current-diff-only 子 agent 已完成对抗复核并给出 PASS；它未改文件、未跑测试、未联网、未调用 provider。
+
+这只表示 executor/fixer 的技术修复与自审闭合，不代替 Claude Code 的正式 reviewer/committer 审查。当前未提交、未 merge，也没有 `20260802` provider 调用授权；下一步固定为 `Claude Code：审查`。
+## 2026-07-30 最终追加：K3-R110-C2 / K3-R111-R1 / O1 全部修复，待 Claude Code 审查
+
+正式 reviewer 开出的 Required、Optional 和用户选择的 Option 已在本工作树按类闭合：
+
+- `runners/us_short_soft_discovery_query_quality_probe_assess.py` 是真实离线 assessment/preflight 入口，不调用 provider。它消费冻结 packet、Web/X exact discovery/receipt 和三份 exact budget ledger，校验内容绑定后只生成 counts/digests/timestamps-only assessment。
+- assessment exact path 在读取前与 immutable write 前双重强制；alternate absolute、relative alias、默认槽 symlink/escape 均 fail closed 且无 partial。Web receipt 若记录 `regroup_response_invalid / no_chunk_survived`，assessment 必须判 provider/execution inconclusive，不能把 0 主题错判成模板质量。
+- SEC-SIC 测试的全部数据和 snapshot 都在单个系统临时根；不再创建、扫描、依赖或清理真实 cache 父目录。原 AST 守卫已删除，换成“全部生成文件必须在 temp root 且不在 repo”的结构性 containment。
+
+最终固定主 Python focused `273 OK`，US-short ledger full `5053 OK` / PASS（595.4s，fingerprint `0fafdd515d92...`），独立 current-diff-only 子 agent 复审 PASS。测试前后 repo residue=0、`20260802` state 命中=0、tracked assessment 不存在；真实 SEC-SIC cache 始终为 250148 bytes、mtime UTC `2026-07-30T10:15:26.5954115Z`。未联网、未调用 provider、未产生付费请求、未提交。
+
+下一步仅是 `Claude Code：审查`。正式 PASS/commit 前不得请求或执行 `20260802` provider probe；本次修复本身也不构成 provider 授权。
+
+## 2026-07-30 最终追加：K3-R112 与 full-pack 基础设施优化已闭合，待 Claude Code 审查
+
+正式 reviewer 的 time-travel 探针已按因果时间整类收口。assessment v1.1.0 现在持久化可审计 `causal_floor`，覆盖 packet、Web/X discovery/receipt、全部 source/provider-response 抓取时钟和三份预算账本的最后预留时钟；生成时间早于任一最终证据、冻结产物伪造旧时间、floor 构成缺失/重复/不等于最大值都 fail closed。X receipt 还必须用生产者的完整证据校验覆盖每个已完成 provider response；删整组、删一行或漏一个 response index 均在写前失败且无 partial。
+
+全量工具的调用范围没有缩小，仍严格固定为 `discover -s tests -p test_us_short*.py`。内部只增加 `-b`（缓冲通过项噪声）、`-f`（首红即停）和 `--durations 25`（报告最慢项）；`discover` 参数顺序已由真实启动和回归锁定。conformance 静态包只缓存同一 test path 的干净基线，每个植入 mutation 仍单独 patch/run/restore。绿灯总时长实测没有下降：`5058 OK` / 610.2s；最慢三项约 343s 均是逐坐标真实 dying mutation/resource-order 证明，继续缓存、合并或并行会削弱对抗性结论，因此保留。优化的可靠收益是红灯能在首个故障立即返回、输出更安静、慢项可定位，不谎称绿灯缩时。
+
+最终固定主 Python证据：assessor `18 OK`、扩大 focused `312 OK`、入口顺序修复 focused `33 OK`、`py_compile` / `git diff --check` PASS；同一只读独立子 agent 对 K3-R112 和随后入口顺序修复分别给出 PASS。全量前 raw 最新 mtime 未变，`20260802/query_quality_probe` state 残留为 0。未联网、未调用 provider、未产生付费请求、未提交。
+
+当前只表示 executor/fixer 已达到 ready for review；下一步固定为 `Claude Code：审查`。审查 PASS 前不得提交、merge 或执行 `20260802` provider probe。
+
+### 2026-07-30 低风险绿灯时长优化补充
+
+在不减少任何 mutation/callsite 的前提下，conformance 测试只缓存不可变 repository source read，以及同一 test path 在同一方法内重复使用的**干净 baseline**；mutated 结果从不缓存，每个 attribute/callsite 仍独立 patch、运行和恢复。曾尝试把 D 类正序/倒序资源测试合并为 suite，但实测仅约 0.9s 波动，已撤回，避免无收益抽象。
+
+固定主 Python慢包 `39 OK / 385.0s`，最终静态 + named-mutation `30 OK / 17.5s`，独立 current-diff-only 子 agent PASS。最终完整全量为 `5059 OK` / PASS（fingerprint `4863a7fa459d...`，593.7s）。相对紧邻的 610.2s 少 16.5s，但与更早 595.4s 基线基本相同；唯一清晰的局部收益是重复 clean-baseline 项约从 6.6s 降至 2.2s。因此结论是“低风险小幅优化完成”，不是“全量显著提速”。下一步仍为 `Claude Code：审查`。
+
+## 2026-07-30 最终追加：K3-R112 正式复审补漏已全部类级闭合
+
+正式复审指出的 X incomplete-response、Web partial-regroup 和 causal-clock 三类旁路已经闭合。assessment v1.2.0 会把 X 四种 response raw 冻结失败逐项判为 inconclusive；Web receipt 强制记录 attempted/successful/failed/failed_indexes，chunk failure 的 provider-item 行与 explicit regroup 行必须按 index 双向成对，auth/transport/malformed 失败同样 inconclusive，完整 clean success 仍可进入模板质量判断。packet、4 个 discovery/receipt 和 3 个 ledger 的 8 个输入槽现在统一拒绝 alias/symlink/parent escape，packet digest 只绑定实际读取的已校验路径。
+
+因果 manifest 已覆盖 packet、两 lane 的 discovery/receipt generated、所有 source observed/fetched、所有 theme observed、X provider-response fetched 和三份 ledger first/last，并校验各项偏序；receipt source 顺序改变时 component 名称仍指向真实数组 index。Web 新 writer 强制生成分块计数，但 receipt schema 保留旧冻结产物兼容；live retry 只把该字段当单次遥测投影，首份 frozen receipt 继续保存真实审计值。
+
+最终固定主 Python窄包 `96 OK`，按改动符号 focused 超集 `273 OK / 65.151s`，独立 current-diff-only 只读子 agent 最终 PASS。唯一 final-code-state US-short full-pack ledger 为 `5073 OK / PASS`（fingerprint `1ac47fbf9e75...`，694.7s）。未联网、未调用 provider、未产生付费请求、未提交。本修复不授权执行 `20260802` probe；下一步固定为 `Claude Code：审查`，PASS 后由 reviewer/committer 提交。
+
+## 2026-07-30 最终追加：K3-R112-R3/R4/R5 causal DAG、raw failure 与 byte snapshot 闭合
+
+本轮取代上一段“全部 clock order / raw immutable failure / exact input digest 已闭合”的旧结论。assessment 现在使用单一 causal DAG：packet 必须先于三份预算账本首次预留，账本 `first<=last` 且所有预留完成后才能出现 source/provider fetch；每个 bound source 必须满足 `observed<=fetched<=theme/discovery<=receipt`，theme 不得早于任何绑定 source fetch，全部 execution/evidence clocks 必须严格早于决策日美东 09:30，assessment 不得早于最终证据。
+
+Web/X producer 共用 `SOURCE_RAW_PUBLISH_FAILURE_REASONS`；两 lane 的 source `immutable_raw_content_conflict` 均精确进入 preregistered inconclusive，X provider-response 四类 raw drop 继续逐项 inconclusive。packet 与 7 个 registered inputs 各自只读一次 bytes，同一 snapshot 同时用于 parse、schema/semantic validate 和 sha256；build 返回前与 immutable write 紧前再次核对 exact path、parent symlink、bytes/hash，任何 read→mutate 或 build→mutate 都写前失败且不留 assessment/partial。
+
+固定主 Python最窄 assessor `35 OK`，最终 assessor/Web/X/schema 超集 `191 OK / 18.2s`，三个 runner `py_compile` PASS；唯一 scheduled current-diff-only 只读子 agent `PASS`，未编辑、未跑测试、未联网。测试前后 `provider_samples` 与 `state/us_short` 文件数及最新 mtime 均未变化，`20260802/query_quality_probe_assessment` residue=0，tracked assessment 不存在。AGENTS rule 3 未触发：本刀只收紧离线 assessor lineage/producer reason registry，不改 capstone、评分、Top15、provider 调用或授权路径，因此未跑 full。当前未提交、未 merge、未联网、未调用 provider；下一步为 `Claude Code：审查`。
+
+## 2026-07-30 reviewer override：K3-R112 第二次正式复审 FAIL
+
+上一段 executor 的 ready-for-review closure 已被本次正式 reviewer 结论取代。R4 的 Web/X source raw failure 与 R5 的 packet+7 snapshot 已闭合；K3-R112-R6/R7 仍为 P1 Required：当前 causal DAG 会拒绝合法的 Web/X 串行执行，并会把零可冻结 ref 时应落盘的预注册 INCONCLUSIVE 变成硬错误。完整技术现状、真实探针、影响、修复边界和 closure tests 只见 `docs/system_risk_register.md#K3-R112`；本交接不复制第二份可漂移明细。
+
+固定主 Python点名 R3/R4/R5 反控 `5 OK / 1.636s`；独立只读 reviewer 的两个系统临时 fixture 坐实 R6/R7 后，主 reviewer 按规则停止扩测并终止尚无 terminal `Ran N` 的 conformance 慢包。未运行 full、未提交、未 merge、未联网、未调用 provider、未产生付费请求。下一步固定为 `Codex：修复`。
+
+## 2026-07-30 reviewer final override：K3-R112 独立复审 PASS
+
+上一段 FAIL 已被当前最终代码态取代。K3-R112-R1 至 R7 全部 CLOSED：lane-local causal DAG、Web/X 双向串行、三份 ledger 本 lane 边界、Web/X/双 lane 零-ref INCONCLUSIVE、同字节 snapshot 与 Web/X raw failure 分类均已通过主 reviewer 和独立 reviewer 的反控。完整机制与最终 closure evidence 只见 `docs/system_risk_register.md#K3-R112`。
+
+主 reviewer 固定主 Python点名 `4 OK`、assessor `39 OK`、按改动符号的 assessor/Web/X/schema 合计 `195 OK`，`py_compile` / `git diff --check` PASS；独立只读 reviewer PASS。上一轮 reviewer 强制终止慢包遗留的唯一临时目录已在精确确认归属后清除，测试前后原始 raw/state 基线恢复并保持 `8/15 files`、最新 mtime 不变、`20260802/query_quality_probe_assessment` residue=0。未运行 full、未联网、未调用 provider、未产生付费请求。
+
+## 2026-07-30 最终追加：K3-R112-R6/R7 lane-local causal 与零-ref INCONCLUSIVE 闭合
+
+本段取代上一段 reviewer override 的未修状态。causal DAG 已按 lane/provider 拆边：Web 的 Tavily/DeepSeek 预算只约束 Web execution evidence，X 的 xAI 预算只约束 X evidence；合法 Web→X 与 X→Web 串行均不再产生跨 lane 假边，本 lane 预算晚于本 lane fetch 仍写前失败。
+
+当某 lane 已完整记录 provider calls、但没有任何可冻结 source/provider-response ref 时，assessor 会先验证该 lane 的 call-count/regroup 或 indexed response-drop 守恒，再把本 lane receipt completion clock 用作 causal 上界，并生成预注册 `provider_or_execution_inconclusive_do_not_grade_templates`；不会借用另一 lane 的 fetch，也不会把零 ref 当模板质量 PASS。零-ref 计数不守恒或 X response index 缺口仍 fail closed。
+
+固定主 Python新反控 `4 OK`、assessor `39 OK`、最终按符号 focused 超集 `195 OK / 17.5s`，`py_compile` / `git diff --check` PASS；唯一 current-diff-only 只读子 agent `PASS`。测试前后 raw/state 文件数与最新 mtime 不变，相关 residue=0。未跑 full、未联网、未调用 provider、未提交、未 merge；下一步固定为 `Claude Code：审查`。

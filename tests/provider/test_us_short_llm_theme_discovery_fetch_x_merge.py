@@ -1464,9 +1464,13 @@ class XFetchAndMergeTests(unittest.TestCase):
         )
         receipt["provider_response_refs"] = [{"response_sha256": "a" * 64}]
         receipt["provider_annotation_urls"] = ["https://x.com/i/status/1"]
+        receipt["fetch_contract"]["regroup_chunk_counts"] = {
+            "attempted": 1, "successful": 0, "failed": 1, "failed_indexes": [0],
+        }
         projected = web._live_receipt_retry_evidence(receipt)
         self.assertNotIn("provider_response_refs", projected)
         self.assertNotIn("provider_annotation_urls", projected)
+        self.assertNotIn("regroup_chunk_counts", projected["fetch_contract"])
 
     def test_k3_r92_mismatch_urls_are_sanitized_and_annotation_set_is_stored_once(self):
         annotations = [f"https://x.com/i/status/{index}?email=user{index}%40example.com&uid={index}" for index in range(10, 16)]
