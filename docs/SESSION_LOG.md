@@ -1,5 +1,143 @@
 # Session Log
 
+## 2026-07-30 — Codex 审查 PASS（K3-R112 最终独立复审）
+- **Verdict/Action**: PASS；K3-R112-R1 至 R7 全部 CLOSED，lane-local causal DAG、零-ref INCONCLUSIVE、raw failure 与同字节 input binding 均通过独立对抗性反控；按 reviewer/committer 流程提交当前已审工作树。
+- **Required**: 无；Register: `K3-R112` CLOSED。
+- **Verify**: 固定主 Python点名 `4 OK / 0.508s`、assessor `39 OK / 4.9s`、assessor/Web/X/schema 合计 `195 OK`，`py_compile` / `git diff --check` PASS；独立只读 reviewer PASS。raw/state 基线保持 `8/15 files`、mtime 不变、相关 residue=0；未跑 full、未联网、未调用 provider。
+- **Next**: Codex：Pass。
+- **Pre-Codex self-review**: `matrix=complete:R1-R7 closed; register=K3-R112 CLOSED with final independent closure; handoff=single US-short soft-discovery handoff appended with final pointer-only override; focused=4 named + 39 assessor + 195 symbol-selected + py_compile/diff; full-lane=not_triggered: AGENTS rule 3, offline assessor causality/evidence only; door=route-doc+doc-governance 55 OK; A=both serial orders+three ledgers+Web/X/dual zero-ref; B=global earliest-fetch and hard-empty-fetch exits absent; C=own-lane red,cross-lane green,own-receipt fallback red,and incomplete-accounting red controls; E=K3-R112 single CLOSED state; independent self-review=one current-diff-only read-only PASS, no timeout/restart/fallback/edit/network/provider`
+
+## 2026-07-30 — Codex 修复 K3-R112-R6/R7（executor；ready for review）
+- **Verdict/Action**: R6 跨 lane 假因果边与 R7 零-ref INCONCLUSIVE 被硬错误吞掉已按 lane/provider 类级闭合；未提交、未 merge、未联网、未调用 provider。
+- **Required**: 当前 executor 已知技术 Required 为无；最终机制、反控与 closure evidence 只见 `docs/system_risk_register.md#K3-R112`。
+- **Verify**: 测试前后 raw/state 文件数与最新 mtime 不变，相关 residue=0。固定主 Python新反控 `4 OK`、assessor `39 OK`、最终 assessor/Web/X/schema 超集 `195 OK / 17.5s`，`py_compile`、`git diff --check` PASS；唯一只读子 agent PASS。
+- **Next**: Claude Code：审查。
+- **Pre-Codex self-review**: `matrix=complete:R6 lane-local Web Tavily/DeepSeek + X xAI edges,R7 Web/X/dual zero-ref fallback + incomplete-accounting negatives; register=K3-R112 R6/R7 final repair/evidence appended; handoff=US-short soft-discovery handoff appended with final override; focused=4 named + 39 assessor + 195 final + py_compile/diff/ripple; full-lane=not_triggered: AGENTS rule 3 and reviewer closure directs no full, offline assessor causality only; door=route-doc+doc-governance 55 OK; A=both serial orders+three ledgers+three zero-ref shapes; B=global earliest-fetch and hard-empty-fetch mechanisms removed; C=own-lane red controls+cross-lane green controls+zero-ref accounting red controls; E=K3-R112 single active closure; independent self-review=one current-diff-only read-only PASS, no restart/fallback/edit/test/network/provider`
+
+## 2026-07-30 — Codex 审查 FAIL（K3-R112 第二次正式复审）
+- **Verdict/Action**: FAIL；R4 Web/X source raw failure 与 R5 packet+7 snapshot 已闭合，但 R3 修复新增跨 lane 假因果边，并吞掉零 ref 时应落盘的预注册 INCONCLUSIVE；未提交、未 merge、未联网、未调用 provider。
+- **Required**: K3-R112-R6/R7 — 完整 Required/风险/边界/closure 只见 `docs/system_risk_register.md#K3-R112`。
+- **Verify**: 固定主 Python点名 R3/R4/R5 反控 `5 OK / 1.636s`；独立只读 agent 的系统临时 fixture 实测合法 Web→X 串行被拒、双 lane 零 ref INCONCLUSIVE 被硬错误吞掉。探针坐实后停止扩测并终止无 terminal `Ran N` 的慢包；未跑 full。
+- **Next**: Codex：修复。
+- **Pre-Codex self-review**: `matrix=complete:R4/R5 closed,R6/R7 open; register=K3-R112 R6/R7 full finding appended; handoff=single US-short soft-discovery handoff appended with pointer-only override; focused=5 named regressions OK + 2 independent adversarial fixtures FAIL, then stop; full-lane=not_run: reviewer probe proved FAIL; door=route-doc+doc-governance 55 OK; A=lane-local DAG and zero-ref incomplete-evidence shapes; B=global-earliest-fetch and hard-empty-fetch exits identified; C=Web->X serial and dual-zero-ref planted fixtures; E=register single active REOPENED P1 state; independent self-review=one current-diff-only read-only agent, no timeout/restart/fallback/edit/network/provider`
+
+## 2026-07-30 — Codex 修复 K3-R112-R3/R4/R5（executor；ready for review）
+- **Verdict/Action**: R3 causal DAG/decision-cutoff、R4 Web/X source raw failure、R5 packet+7 同字节 snapshot/写前复核已按类闭合；未联网、未调用 provider、未提交、未 merge。
+- **Required**: 当前 executor 已知技术 Required 为无；最终机制、反控与 closure evidence 见 `docs/system_risk_register.md#K3-R112`。
+- **Verify**: 测试前后 gitignored raw/state 文件数与最新 mtime 不变，`20260802/query_quality_probe_assessment` residue=0。固定主 Python assessor `35 OK`，最终 assessor/Web/X/schema 超集 `191 OK / 18.2s`，`py_compile`、`git diff --check`、零旧机制/BOM 扫描 PASS；唯一只读子 agent PASS。
+- **Next**: Claude Code：审查。
+- **Pre-Codex self-review**: `matrix=complete:R3 DAG+cutoff edges,R4 Web/X raw reasons,R5 packet+7 snapshots; register=K3-R112 final repair/evidence appended; handoff=US-short soft-discovery handoff appended; focused=35 narrow + 191 final + py_compile/diff/BOM/ripple; full-lane=not_triggered: AGENTS rule 3, offline assessor lineage and reason registry only; door=route-doc+doc-governance 55 OK; A=all DAG edges+2 lanes+8 slots; B=old mechanism 0 hits; C=cutoff before/equal/after and clean PASS; E=register single active state; independent self-review=one lightweight current-diff-only PASS, no timeout/restart/fallback/edit/test/network/provider`
+
+## 2026-07-30 — Codex 审查 FAIL（K3-R112 正式复审）
+- **Verdict/Action**: FAIL；R1 indexed provider-response 与 R2 Web chunk-count 子面已闭合，但 causal 跨阶段偏序、两 lane source raw conflict 与同字节 parse/hash 仍可让不可审计输入得到 PASS；未提交、未 merge、未联网、未调用 provider。
+- **Required**: K3-R112-R3/R4/R5 — 完整 Required/风险/边界/closure 见 `docs/system_risk_register.md`（单一来源，本处不复述）。
+- **Verify**: 固定主 Python reviewer TOCTOU 探针得到 assessed themes=1、bound-file themes=0、binding sha match=true 且 verdict=PASS；独立只读 agent 的 raw-conflict 与 causal-order 临时探针同判 P1。探针后停止扩测；已启动慢包不支持 interrupt，终态 `40 OK / 421.741s`，未跑 full。
+- **Next**: Codex：修复。
+
+## 2026-07-30 — Codex 审查 PASS（full-lane 800 秒治理）
+- **Verdict/Action**: PASS；full 上限严格降为 800 秒，focused 默认 300 秒与显式慢包 1300 秒分离，selector、terminal `Ran N`、fingerprint 与只记真实 PASS 的账本门未放宽；因同工作树 K3-R112 FAIL 未提交。
+- **Required**: 无；Register: non-material。
+- **Verify**: reviewer 整读 bounded/ledger/review-gate 当前 diff；独立只读 agent PASS，确认 full 801 拒绝且 focused 300/1300 不变。K3 探针坐实后按规则未补跑 executor 的 108-test 包。
+- **Next**: K3-R112 修复后统一复审并提交。
+
+## 2026-07-30 — Codex 完成 full-lane 全量时限 800 秒治理（executor；ready for review）
+- **Verdict/Action**: full-lane 全量硬上限已从 1300 秒降至 800 秒；执行常量、账本消费、审查提示、AGENTS/register active contract 与反向守卫已统一。focused 默认 300 秒及显式慢包上限 1300 秒保持不变；未提交、未跑 full、未联网、未调用 provider。
+- **Required**: 当前 executor 已知技术 Required 为无；历史 `deadline=1300s` 仅保留为当时运行证据，不再作为当前上限。
+- **Verify**: 固定主 Python最终按符号选择的 bounded focused 超集 `108 OK / 5.3s`，其中钉住 full=800、full 801 拒绝、focused default=300、focused max=1300、review prompt 三值一致；三个工具模块 `py_compile` 与 `git diff --check` PASS。测试前检查 gitignored state/provider 残留与最近 mtime，无本轮相关残留。
+- **Next**: Claude Code：审查。
+- **Pre-Codex self-review**: `matrix=complete: full execution constant + ledger validator + review prompt + AGENTS/register active contract + doc/test guards; register=active Required contract updated and historical 1300 evidence labeled historical; handoff=shared repair-closeout handoff appended with mechanism/evidence/supersession; focused=108 OK + py_compile + diff-check after residue/mtime check; full-lane=not_triggered: AGENTS rule 3; reason=bounded test-governance ceiling only, exact lane selectors and business/runtime consumers unchanged; door=route-doc + doc-governance 55 OK included in final 108; independent self-review=one scheduled current-diff-only read-only agent found stale focused-max wording, main thread closed the whole 300/1300/800 class, no content-driven re-review, no timeout/restart/fallback/edit/test/network/provider`
+
+## 2026-07-30 — Codex 修复 K3-R112 正式复审补漏（executor；ready for review）
+- **Verdict/Action**: K3-R112-R1/R2/R3 已按 incomplete-evidence、chunk-count conservation、causal-clock 与 exact-input binding 四个类级不变量闭合；未提交、未 merge、未联网、未调用 provider、未产生付费请求。
+- **Required**: 当前 executor 已知技术 Required 为无；完整最终机制、反控与 closure evidence 见 `docs/system_risk_register.md#K3-R112`。本修复不授权 `20260802` Web/X query-quality probe。
+- **Verify**: 固定主 Python最终窄包 `96 OK`；Web/X/merge/capstone/assessor/schema/conformance focused 超集 `273 OK / 65.151s`；`py_compile`、assessment/Web schema JSON parse、`git diff --check` PASS。唯一 final-code-state US-short full-pack ledger `5073 OK / PASS`（fingerprint `1ac47fbf9e75...`，694.7s，deadline 1300s）。测试前真实 gitignored cache/state 无最近残留命中；独立 current-diff-only 只读子 agent 最终 PASS，未编辑、未跑测试、未联网。
+- **Next**: Claude Code：审查。
+- **Pre-Codex self-review**: `matrix=complete: X provider response drops={capture_unavailable, unsafe_to_persist, path_not_gitignored, immutable_raw_conflict} all exact inconclusive; Web clean/single/multiple/all/auth/transport/malformed + paired provider-item/regroup indexes + attempted/successful/failed/failed_indexes + retry projection/new-writer; clocks=packet+2 discovery+2 receipt+all discovery/receipt source observed+receipt source/provider fetched+all theme observed+3 ledgers first/last with all orders; paths=packet+4 outputs+3 ledgers lexical exact/symlink-parent/actual-read digest; register=K3-R112 marked repaired with final single-source mechanism/evidence; handoff=existing US-short handoff plus desktop solution and unfinished checklist appended with latest override; focused=96 narrow + 273 symbol-selected superpack + py_compile/JSON/diff-check, all serial after residue/mtime checks; full-lane=5073 OK PASS fingerprint 1ac47fbf9e75 elapsed 694.7s, one final code state run with first-red stop; door=route-doc + doc-governance 55 OK; independent self-review=one continuous scheduled current-diff-only read-only agent window, final PASS, no restart/fallback/edit/test/network/provider`
+
+## 2026-07-30 — Codex 审查 FAIL（K3-R112 query-quality assessor）
+- **Verdict/Action**: FAIL；causal-floor 主修复存在同类漏项，且 X/Web 不完整执行仍可被判模板质量 PASS；未提交、未联网、未调用 provider。
+- **Required**: K3-R112-R1/R2/R3 — 完整 Required/风险/边界/closure 见 `docs/system_risk_register.md`（单一来源，本处不复述）。
+- **Verify**: 固定主 Python 临时 fixture：X completed-response drop 与 Web partial-regroup drop 均 `accepted=true / PASS / inconclusive=[]`；source/theme future 与 ledger first>last 三项均 PASS；独立只读子 agent 同判 P1；探针坐实后停止扩测/full。
+- **Next**: Codex：修复。
+
+## 2026-07-30 — Codex 审查 PASS（US-short 全量测试低风险优化）
+- **Verdict/Action**: PASS；scope=`.tools/full_pack_ledger.py`、`AGENTS.md`、`tests/test_full_pack_ledger.py`、`tests/test_us_short_discovery_conformance.py`；原始 selector 未变且每个 mutation/callsite 仍独立。因同工作树同时含 K3-R112 FAIL，review-cycle/交接共享落盘与两项改动交织，无法形成完整且只含 PASS 的 staged scope，故按 scope gate 未提交。
+- **Required**: 无；Register: non-material。
+- **Verify**: 固定主 Python reviewer 静态+可执行 conformance `40 OK / 331.136s`；入口不变式探针确认 discover/non-discover 参数位置与 raw selector round-trip；独立只读子 agent PASS；未重复 executor-owned full。
+- **Next**: K3-R112 修复后统一复审；上述 PASS scope 暂留未提交。
+
+## 2026-07-30 — Codex 完成 US-short 全量低风险小幅优化（executor；ready for review）
+
+- **Verdict/Action**: 在不改业务代码、不减少测试、不缓存 mutated 结果的前提下，conformance 只缓存不可变 repository source read 与同一方法内相同 test path 的干净 baseline；每个 attribute/callsite mutation 仍独立 patch/run/restore。D 类 suite 合并因实测仅约 0.9s 波动已撤回。未提交、未联网、未调用 provider。
+- **Required**: 当前无 executor 已知技术 Required。优化后的完整绿灯不是显著提速：最终 593.7s 比紧邻 610.2s 少 16.5s，但与更早 595.4s 基线近似；不得宣传为大幅缩时。三项主要对抗测试仍约 336s，继续明显提速需要新的中等风险测试-harness 设计与独立审查。
+- **Verify**: 固定主 Python完整慢 conformance `39 OK / 385.0s`，最终静态 + named-mutation `30 OK / 17.5s`，`py_compile` / `git diff --check` PASS；独立 current-diff-only 子 agent PASS。最终 US-short full-pack `5059 OK` / PASS（fingerprint `4863a7fa459d...`，593.7s）；其中重复 clean-baseline 项约由 6.6s 降至 2.2s。全量前 raw 最新 mtime 保持 `2026-07-30T07:11:31.2719222Z`，相关 state 残留为 0。
+- **Next**: Claude Code：审查。
+- **Pre-Codex self-review**: `matrix=complete: immutable source reads + named non-guard duplicate clean baseline + redundant replay duplicate clean baseline across all existing attributes/callsites; mutated result caching=forbidden and absent, each mutation remains independent; register=K3-R112 closure evidence updated with final low-risk optimization run; handoff=existing US-short main handoff and both desktop authority/checklist newest overrides updated; focused=39 slow conformance OK + 30 final static/named mutation OK + py_compile/diff-check, packs serial after residue/mtime checks; full-lane=final ledger PASS 5059 OK fingerprint 4863a7fa459d, 593.7s, exact selector unchanged; door=route/doc-governance 55 OK; independent self-review=one stable current-diff-only read-only sub-agent PASS, no timeout/restart/fallback, no edit/test/network/provider`
+
+## 2026-07-30 — Codex 完成 K3-R112 与 US-short full-pack 基础设施优化（executor；ready for review）
+
+- **Verdict/Action**: executor/fixer 已按类关闭 K3-R112，并完成不缩小测试范围的 full-pack 运行优化，未提交。assessment 现在以可审计 causal floor 约束因果时间，X receipt 必须完整覆盖全部已完成 provider response；full-pack 保持固定 discovery selector，只增加通过输出缓冲、首红即停与最慢项报告。未联网、未调用 provider、未产生付费请求。
+- **Required**: 当前无 executor 已知技术 Required；仍须 Claude Code 按 reviewer/committer 流程正式审查。绿灯全量实测 `610.2s`，未短于此前约 `595.4s`；最慢三项约 343s 是逐坐标 dying mutation/resource-order 对抗证明，不得为缩时缓存、合并、跳过或并行。第一次优化入口真实启动因 runtime flags 位于 `discover` 前被 argparse 拒绝并立即停止；已按所有 discover/non-discover 选择器整类修复并由回归锁定。
+- **Verify**: 固定主 Python assessor `18 OK`、扩大 focused `312 OK`、入口顺序修复 focused `33 OK`；`py_compile` / `git diff --check` PASS。11 类输入时钟、冻结 time-travel assessment、X provider-response 整组/单行/index 缺失均有独立反控。相同只读独立子 agent 对 K3-R112 与新增入口顺序修复分别 PASS。最终 US-short full-pack `5058 OK` / PASS，fingerprint `04265d6c4c61...`，elapsed `610.2s`；全量前 raw 最新 mtime 保持 `2026-07-30T07:11:31.2719222Z`，`20260802/query_quality_probe` state 残留为 0；交接门 `55 OK`。
+- **Next**: Claude Code：审查。
+- **Pre-Codex self-review**: `matrix=complete: assessment build/frozen-reuse/immutable-write causal floor × packet+2 discovery+2 receipt+all source/provider-response clocks+3 ledgers, X completed-response group/row/index coverage, full-pack discover/non-discover argument placement and unchanged selectors; register=K3-R112 marked repaired with class-level mechanism and final evidence; handoff=existing US-short main handoff plus desktop solution and unfinished checklist updated with newest override; focused=18 assessor OK + 312 expanded OK + 33 full-entry OK + py_compile/diff-check, fixed packs run serially after residue/mtime checks; full-lane=final ledger PASS 5058 OK fingerprint 04265d6c4c61, 610.2s, supersedes immediate argparse FAIL before business tests; door=route/doc-governance 55 OK; independent self-review=same current-diff-only read-only sub-agent PASS after K3-R112 repair and material-new-risk exception for real full-entry argparse failure, no timeout/restart/fallback, no edit/test/network/provider`
+
+## 2026-07-30 — Codex 审查 FAIL（query-quality assessor PIT；K3-R112）
+
+- **Verdict/Action**: FAIL，未提交。K3-R110-C2 的真实 assessment/preflight 消费链与 K3-R111-R1/O1 的系统临时根修复已通过整读和 focused，但新 assessor 接受早于全部 2026 输入证据的 `2000-01-01` 生成时间并仍给 PASS；完整 Required/closure 仅见 `docs/system_risk_register.md#K3-R112`。
+- **Required**: K3-R112——assessment 在构建/写入前必须把自身 `generated_at` 绑定到 packet、discovery、receipt、source/provider-response fetched clock 与 ledger reservation clock 的 causal floor，并记录可审计的 floor；早于任一最终证据时 fail closed、零 partial。
+- **Verify**: 测试前 exact `20260802` 七个 state 槽、tracked assessment 和两棵 default raw 根内同日残留均为 0；固定主 Python reviewer focused 超集 `247 OK / 13.663s`。随后 reviewer 系统临时 fixture 探针得到 `TIME_TRAVEL_ACCEPTED=2000-01-01T00:00:00+00:00 / VERDICT=pass_to_query_planner_implementation`；探针坐实 FAIL 后按规则停止，未运行 full。executor 的 final `5053 OK` 保留为被审代码态历史证据，不能覆盖新增 assessor 的 PIT 缺口；独立只读子 agent 同判 P1。未联网、未读 key、未调用 provider。
+- **Next**: Codex：修复。
+- **Pre-Codex self-review**: `matrix=complete: K3-R110-C2 packet+2 discovery+2 receipt+3 ledger+exact write consumer, K3-R111 temp-root containment, new assessor schema/lineage/clock/PIT/no-effect; register=opened K3-R112 with causal-floor Required and closure; handoff=unchanged: formal review finding belongs in register and SESSION_LOG; focused=247 OK through fixed bounded launcher before reviewer PIT probe; full-lane=not_run: executor owns final 5053 ledger and reviewer probe proved FAIL; door=not_rerun after FAIL, executor 66 OK is historical only; independent self-review=read-only sub-agent confirmed K3-R112 material P1, no edit/test/network/provider, no timeout/restart/fallback`
+
+## 2026-07-30 — Codex 完成 K3-R110-C2 / K3-R111-R1 / O1 全量修复（executor；待 Claude Code 审查）
+
+- **Verdict/Action**: executor/fixer 已把正式复审的 Required、Optional 与用户选择的 Option 全部按类修复，未提交。新增真实离线 assessment/preflight 入口并强制 exact tracked slot；SEC-SIC 测试数据完全移入独立系统临时根；脆弱 AST 守卫由结构性 containment 取代。未联网、未调用 provider、未产生付费请求。
+- **Required**: K3-R110-C2 已由真实入口消费冻结 packet、2 discovery、2 receipt、3 ledger，并在读前/写前双重拒绝 alternate/alias/symlink/escape；Web 全部 regroup 失败强制 inconclusive。K3-R111-R1 已保证测试不创建、扫描、依赖或清理真实 cache。K3-R111-O1 已删除 AST 绕过面；Option 的 assessment generation/preflight CLI 与强制调用路径已实现。
+- **Verify**: 固定主 Python focused `273 OK`，`py_compile` / `git diff --check` 通过；最终 US-short full-pack ledger `5053 OK` / PASS（fingerprint `0fafdd515d92...`，595.4s）；closeout door `66 OK`。测试前后 repo residue=0、`20260802` state 命中=0、tracked assessment 不存在；真实 SEC-SIC cache 保持 250148 bytes / mtime UTC `2026-07-30T10:15:26.5954115Z`。独立 current-diff-only 子 agent 最终 PASS。
+- **Next**: Claude Code 按 reviewer/committer 流程正式审查；PASS 后由 reviewer 提交。正式 PASS/commit 前不得请求或执行 `20260802` provider probe，本修复不构成 provider 授权。
+- **Pre-Codex self-review**: `matrix=complete: K3-R110-C2 real assessment/preflight consumer + exact relative/absolute/symlink/write-boundary guards + receipt/ledger/content binding + Web regroup fail-closed; K3-R111-R1 all SEC-SIC test artifacts in one system temp root; K3-R111-O1 brittle AST deleted and structural containment added; register=top closure entry added with Required/Optional/Option and final evidence; handoff=existing US-short main handoff appended and desktop unfinished checklist latest override updated; focused=273 OK + py_compile + git diff --check + alias/absolute/symlink/tamper/ledger/model/regroup/temp-root reverse controls; full-lane=final ledger PASS 5053 OK fingerprint 0fafdd515d92, 595.4s; door=66 OK after register/handoff/desktop closeout; independent self-review=same current-diff-only sub-agent PASS after two must-fix closures, no edit/test/network/provider, no timeout/restart/fallback`
+
+## 2026-07-30 — Codex 复审 FAIL（K3-R110-C2 / K3-R111-R1）
+
+- **Verdict/Action**: FAIL，未提交。K3-R110 的 format、逐叶 mutation、Web/X output/receipt/ledger/raw slot 防线已闭合，但 assessment exact-path helper 没有实际写入/preflight 消费者；K3-R111 的 owned temp 会在共享父目录原本不存在时遗留空 gitignored state 目录。完整 Required/Optional 与 closure 仅见 `docs/system_risk_register.md#K3-R110`、`#K3-R111`。
+- **Required**: K3-R110-C2——让真实 assessment/preflight 写入入口消费 exact-path validator，或诚实保持该门 open；K3-R111-R1——测试 snapshot 移出真实共享 cache 父目录，或用 parent-absent→absent 回归恢复原始目录存在性且绝不碰既有 cache。
+- **Verify**: 测试前 exact 7 个 `20260802` state 槽与两棵真实 default raw 根内同日残留均为 0；reviewer 调用图只找到 assessment helper 自身和 schema test 消费，未找到执行/写入消费者；固定主 Python 临时目录探针得到 `PARENT_EXISTED_BEFORE=False / PARENT_EXISTS_AFTER_OWNED_CLEANUP=True / FILES_AFTER=0`。探针已坐实 FAIL，按规则未启动 focused/full；executor 的 `261 OK`、`5041 OK` 保留为被审代码态历史证据但不能支持本轮 PASS。独立只读子 agent 同判两项阻断，并指出 AST guard 的等价绕过 Optional；未联网、未读 key、未调用 provider。
+- **Next**: Codex：修复。
+- **Pre-Codex self-review**: `matrix=complete: K3-R110 format/per-leaf/query/output/receipt/ledger/live-raw/assessment consumption + K3-R111 owned-root/existence/file-mtime/AST-equivalence; register=reopened K3-R110 and K3-R111 with C2/R1 plus O1; handoff=unchanged: formal review findings live only in register and SESSION_LOG; focused=not_started: reviewer probe proved two FAIL boundaries before acceptance pack; full-lane=not_run: executor owns exact-final 5041 ledger and reviewer probe already failed; door=not_rerun after FAIL, prior executor 66 OK is historical only; independent self-review=read-only sub-agent FAIL on assessment consumer and parent-existence residue, plus AST Optional, no edit/test/network/provider, no timeout/restart/fallback`
+
+## 2026-07-30 — Codex 完成 K3-R110 / K3-R111 类级修复（executor；待 Claude Code 审查）
+
+- **Verdict/Action**: executor/fixer 技术修复已闭合，未提交。K3-R110 的 schema/逐叶反控/exact slots/live raw/assessment 防线与 K3-R111 的测试目录 ownership/shared-cache/AST 防线均已按类修复；未联网、未调用 provider、未产生付费请求。
+- **Required**: 无技术 Required；仍须 Claude Code 按 reviewer/committer 流程正式审查，审查 PASS 前不得提交、merge 或请求 `20260802` provider 授权。
+- **Verify**: 固定主 Python最终 focused 超集 `261 OK`；format/auth/slot/query/live-raw/assessment/shared-parent-delete/AST 八类反控均为 `RED_EXPECTED`；`py_compile` 与 `git diff --check` 通过；最终 US-short full-pack ledger `5041 OK` / PASS（fingerprint `c530a127f213...`）；最终 closeout 文档门 `66 OK`。测试前后 exact `20260802` state/raw 残留均为 0，`test_sec_sic_fetch_*` 残留为 0，真实 SEC-SIC cache 始终为 250148 bytes、mtime `2026-07-30T07:02:18.3873943Z`。独立 current-diff-only 子 agent 对 K3-R110 A/B/C、live raw/assessment 与 K3-R111 ownership/sentinel/AST 复核 PASS；它未改文件、未跑测试、未联网或调用 provider。
+- **Next**: Claude Code：审查。
+- **Pre-Codex self-review**: `matrix=complete: K3-R110 A/B/C + Web/X live raw-root + assessment + K3-R111 owned temp subtree/shared-file identity/sentinel/all-US-short teardown AST; register=K3-R110/K3-R111 repaired with final focused/full/independent evidence, formal Claude review pending; handoff=existing US-short main handoff appended and desktop unfinished checklist updated; focused=261 OK + py_compile + git diff --check + eight RED_EXPECTED reverse controls; full-lane=final ledger PASS 5041 OK fingerprint c530a127f213, supersedes historical 5039/12-teardown-error run; door=66 OK after final closeout; independent self-review=current-diff-only PASS, no edit/test/network/provider, no timeout/restart/fallback`
+
+## 2026-07-30 — Codex 修复 K3-R110；full lane 因 K3-R111 FAIL（executor）
+
+- **Verdict/Action**: K3-R110 A/B/C 已两轮按类修复，但本刀结论仍为 FAIL、未提交。第一次修后独立复审抓到 live CLI raw-root override 与 assessment 字面路径未承重，第二次已接入 Web/X 共享 exact raw preflight 和 assessment 默认路径/preflight；production CLI/raw safety 触发的 full lane 随后被既有 SEC-SIC 测试清理越权阻断。
+- **Required**: K3-R111——SEC-SIC full-universe 测试只能清理自己拥有的 snapshot slug，不得删除含真实 cache 的共享父目录；完整机制、证据与 closure 仅见 `docs/system_risk_register.md#K3-R111`。
+- **Verify**: 测试前 exact `20260802` state/raw 残留均为 0；固定主 Python final focused `242 OK`，六类拆门反控均 `RED_EXPECTED`。唯一 US-short full lane 真实终态 `Ran 5039 tests in 601.334s / FAILED (errors=12)`，12 项均为旧测试 `tearDown()` 对共享 snapshot parent 的 `WinError 145`；gitignored 真实 cache mtime 早于本轮且未被删除/改写。按规则停止测试，未重跑、未联网、未调用 provider。
+- **Next**: Codex：修复。
+- **Pre-Codex self-review**: `matrix=complete for K3-R110 A/B/C plus first-review raw/assessment bypass; register=K3-R110 repaired but blocked, K3-R111 opened with class-level closure; handoff=existing US-short main handoff appended, desktop checklist updated; focused=242 OK + six RED_EXPECTED reverse controls; full-lane=FAIL: 5039 tests, 12 teardown errors from pre-existing gitignored SEC-SIC shared-parent cache, stopped/no rerun; door=66 OK within focused superpack; independent self-review=first post-repair current-diff-only FAIL on raw/assessment, second repair completed but no final agent PASS because full lane then failed, no restart/fallback`
+
+## 2026-07-30 — Codex 审查 FAIL（US-short query-quality probe packet；K3-R110）
+
+- **Verdict/Action**: FAIL，未提交。packet 仍是离线零效果设计，但其 `date-time` 校验未启用、授权/阈值负控不是逐项承重、未来 Web/X discovery/receipt/budget 槽位未精确列全；完整 Required 与 closure 仅见 `docs/system_risk_register.md#K3-R110`。
+- **Required**: K3-R110-A/B/C——接入共享 `FORMAT_CHECKER` 并植入单字段坏时间戳负控；把授权、预算、阈值和 prohibited effects 改为逐项 mutation；const-pin 并逐字段校验 2 discovery + 2 receipt + 3 budget ledger + 2 raw root + assessment 的 exact slot map。
+- **Verify**: 测试前已查 gitignored 残留与 mtime，未见本 probe 新产物；固定主 Python 原 focused 新 schema `7 OK`、door `55 OK`，但 reviewer 单字段探针得到 `UNARMED_ERRORS=0 / ARMED_ERRORS=1 path=['generated_at']`，已坐实 FAIL，故按规则停止扩大测试、未跑 full lane；独立只读子 agent 同判三项 P1。未联网、未读 key、未调用 provider。
+- **Next**: Codex：修复。
+- **Pre-Codex self-review**: `matrix=complete: packet/schema/test/docs current diff + exact queries + provider arithmetic + format enforcement + one-mutation load-bearing guards + future output/receipt/ledger/raw/assessment slots; register=opened K3-R110 with A/B/C and closure; handoff=unchanged: review-cycle detail belongs in register and SESSION_LOG, existing US-short main handoff remains executor-owned; focused=pre-probe 7 OK + ignored residual/mtime check, then date-time reverse probe FAIL and testing stopped; full-lane=stopped/not_run: a focused reverse probe proved FAIL, so no expansion permitted; door=route/doc-governance 55 OK before reviewer-doc landing; independent self-review=read-only sub-agent FAIL on the same three P1 boundaries, no timeout, no restart, no fallback`
+
+## 2026-07-30 — Codex 起草 US-short 第一阶段 query-quality probe packet（executor）
+
+- **Verdict/Action**: 已离线起草并 const-pin `20260802` Web+X 查询质量探针：4 条主题无关查询、零重试、最多实际 12 次 provider 调用、事前质量/INCONCLUSIVE 判据和全部零效果边界；未联网、未读 key、未执行 provider。
+- **Required**: 独立审查 packet/schema/test、精确查询字节、预算算术和事前判据；PASS 前不得运行 probe，创建 packet 不构成付费授权。
+- **Verify**: 固定主 Python focused 超集（新 schema 测试 + README row-length + route ledger + doc governance）`73 OK / 0.9s`；`py_compile`、`git diff --check` 通过；Web/X future raw roots 均命中 `.gitignore:97 provider_samples/`；`20260802` state/provider_samples 残留检查为 0。schema 反向控制拒绝授权翻真、生产 policy 翻真、复用旧日期、主题预埋、调用上限漂移、事后降门槛和确认效果翻真。
+- **Next**: Claude Code：审查。
+- **Pre-Codex self-review**: `matrix=complete: schema/artifact exact identity + 4 const queries + Web/X separate raw roots + xAI/Tavily/DeepSeek actual-vs-reserved arithmetic + PASS/REVISE/INCONCLUSIVE + all no-effect exits; register=not_applicable: no finding or risk status changed; handoff=existing US-short main handoff updated and desktop checklist updated; focused=73 OK + py_compile + git diff --check + gitignore/BOM/mojibake checks; full-lane=not_triggered: AGENTS rule 3, isolated no-access schema/artifact/test and docs with no production wiring or provider execution; door=route 14 + doc-governance 41 = 55 OK; independent self-review=not_triggered: low-risk isolated schema/docs fast path, main-thread A-F complete, no timeout/restart/fallback`
+
 ## 2026-07-30 — Codex review PASS (US-short 20260730 universe + SEC-SIC public summaries)
 
 - **Verdict/Action**: PASS. The two user-authorized run summaries are public audit receipts and should be committed; no code, raw payload, candidate artifact, or classification packet is included.

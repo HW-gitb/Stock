@@ -63,6 +63,15 @@ DEEPSEEK_MODEL = "deepseek-chat"
 MAX_TAVILY_QUERIES = 25
 MAX_REGROUP_SOURCES_PER_CALL = 10
 MAX_DEEPSEEK_REGROUP_CALLS = 25
+PROVIDER_RESPONSE_DROPPED_REASON = "provider_response_dropped"
+MALFORMED_RESULT_BATCH_REASON = "malformed_result_batch"
+INCONCLUSIVE_SEARCH_RESULT_REASONS = frozenset({
+    PROVIDER_RESPONSE_DROPPED_REASON,
+    MALFORMED_RESULT_BATCH_REASON,
+})
+SOURCE_RAW_PUBLISH_FAILURE_REASONS = frozenset({
+    "immutable_raw_content_conflict",
+})
 # A provider credential is validated for AMBIGUITY, not against the one key we happened to observe.
 # The property that protects a paid week is "exactly one credential" — two keys concatenated with no
 # separator is the shape actually found in an operator environment — while an exact sample-derived
@@ -71,6 +80,9 @@ PROVIDER_CREDENTIAL_BODY_RE = re.compile(r"[A-Za-z0-9_-]{16,256}")
 NEW_YORK = ZoneInfo("America/New_York")
 SOURCE_ID_RE = re.compile(r"^web:[0-9a-f]{64}$")
 SHA256_RE = re.compile(r"^[0-9a-f]{64}$")
+REGROUP_CHUNK_DROP_DETAIL_RE = re.compile(
+    r"^chunk\[(0|[1-9][0-9]*)\]:[A-Za-z_][A-Za-z0-9_]{0,119}$"
+)
 SECRET_RE = SECRET_TEXT_RE
 # RFC 1123 zones we accept: `GMT`/`UT`, and any real numeric offset.  Alphabetic zone names
 # (`PST`, `EST`, ...) and the RFC 5322 "unknown zone" spelling `-0000` stay refused on purpose:
@@ -294,16 +306,17 @@ def _write_json_atomic(payload: Any, path: Path) -> None:
 def _live_receipt_retry_evidence(payload: Any) -> Any:
     """Compare only live receipts on frozen evidence, not a later attempt's operational telemetry.
 
-    Transport counts and per-attempt drops remain in the first immutable receipt for audit, while a
-    same-evidence retry reuses that receipt instead of being rejected merely because a transient
-    provider failure changed its attempt bookkeeping.  Offline receipts never represent provider
-    attempts, so they retain their complete immutable comparison and a changed offline drop ledger
-    remains a conflict.
+    Transport/regroup counts and per-attempt drops remain in the first immutable receipt for audit,
+    while a same-evidence retry reuses that receipt instead of being rejected merely because a
+    transient provider failure changed its attempt bookkeeping.  Offline receipts never represent
+    provider attempts, so they retain their complete immutable comparison and a changed offline
+    drop ledger remains a conflict.
 
     The deliberate cost, stated so it is not rediscovered as a defect: the projected-out fields —
-    including `transport_response_counts` — are no longer protected by the write door.  Whichever
-    receipt is frozen FIRST is the one that survives, and a later attempt's differing counters are
-    accepted as evidence-equivalent instead of refused.  `execution_mode`, `source_refs` and
+    including `transport_response_counts` / `regroup_chunk_counts` — are no longer protected by the
+    write door.  Whichever receipt is frozen FIRST is the one that survives, and a later attempt's
+    differing counters are accepted as evidence-equivalent instead of refused.  `execution_mode`,
+    `source_refs` and
     `regroup_model` stay inside the compared evidence, so a changed served model or a changed
     accepted-source set is still a conflict.
     """
@@ -318,7 +331,7 @@ def _live_receipt_retry_evidence(payload: Any) -> Any:
     projected_contract = dict(contract)
     for key in (
         "network_access_performed", "provider_calls_performed", "network_call_count",
-        "provider_call_count", "transport_response_counts",
+        "provider_call_count", "transport_response_counts", "regroup_chunk_counts",
     ):
         projected_contract.pop(key, None)
     projected["fetch_contract"] = projected_contract
@@ -537,6 +550,20 @@ def _validate_raw_root(path: Path, *, require_gitignored: bool) -> Path:
     return resolved
 
 
+def _validate_cli_raw_root(path: Path, expected_path: Path, *, live: bool) -> Path:
+    """Keep live CLI raw evidence in the lane's registered default namespace.
+
+    Injected fake clients and direct Python callers retain their existing
+    isolated-fixture support.  The operator-facing live CLI is stricter: a
+    gitignored alternate root is still an unregistered evidence slot.
+    """
+    resolved = _validate_raw_root(path, require_gitignored=live)
+    expected = _validate_raw_root(expected_path, require_gitignored=live)
+    if live and resolved != expected:
+        raise WebThemeDiscoveryError("live CLI raw_root must use the lane default")
+    return resolved
+
+
 def _safe_text(value: Any, *, limit: int) -> str:
     text = " ".join(str(value or "").split()).replace("`", "").strip()
     # Provider/model text is persisted in raw evidence and public receipts.  A lone
@@ -607,6 +634,59 @@ def _sanitized_drop_ledger(rows: list[dict[str, Any]]) -> list[dict[str, Any]]:
             })
         sanitized.append(clean)
     return sanitized
+
+
+def _regroup_chunk_drop_index(row: dict[str, Any]) -> int | None:
+    """Parse one audited regroup-drop index outside any batch iteration."""
+    if row["stage"] != "llm" or row["reason"] != "regroup_chunk_dropped":
+        return None
+    detail = row["detail"]
+    if not isinstance(detail, str):
+        raise WebThemeDiscoveryError("regroup chunk drop has malformed index")
+    matched = REGROUP_CHUNK_DROP_DETAIL_RE.fullmatch(detail)
+    if matched is None:
+        raise WebThemeDiscoveryError("regroup chunk drop has malformed index")
+    return int(matched.group(1))
+
+
+def _provider_item_chunk_drop_index(row: dict[str, Any]) -> int | None:
+    """Return the chunk index only for provider-item rows emitted by regroup."""
+    if row["stage"] != "llm" or row["reason"] != "provider_item_exception_dropped":
+        return None
+    detail = row["detail"]
+    if not isinstance(detail, str) or not detail.startswith("chunk["):
+        return None
+    matched = REGROUP_CHUNK_DROP_DETAIL_RE.fullmatch(detail)
+    if matched is None:
+        raise WebThemeDiscoveryError("provider-item chunk drop has malformed index")
+    return int(matched.group(1))
+
+
+def _validated_regroup_chunk_counts(value: Any) -> dict[str, Any]:
+    if (
+        type(value) is not dict
+        or set(value) != {"attempted", "successful", "failed", "failed_indexes"}
+        or any(
+            type(value[key]) is not int or value[key] < 0
+            for key in ("attempted", "successful", "failed")
+        )
+        or type(value["failed_indexes"]) is not list
+        or any(type(index) is not int or index < 0 for index in value["failed_indexes"])
+        or len(value["failed_indexes"]) != len(set(value["failed_indexes"]))
+        or value["attempted"] != value["successful"] + value["failed"]
+        or len(value["failed_indexes"]) != value["failed"]
+        or any(index >= value["attempted"] for index in value["failed_indexes"])
+    ):
+        raise WebThemeDiscoveryError("regroup chunk counts are malformed or inconsistent")
+    return dict(value)
+
+
+def _validate_builder_receipt_evidence(receipt: dict[str, Any]) -> None:
+    """Require new writers to emit audit counts without invalidating old frozen receipts."""
+    contract = receipt.get("fetch_contract")
+    if not isinstance(contract, dict):
+        raise WebThemeDiscoveryError("new Web receipt is missing its fetch contract")
+    _validated_regroup_chunk_counts(contract.get("regroup_chunk_counts"))
 
 
 def _assert_receipt_secret_free(receipt: dict[str, Any]) -> None:
@@ -882,7 +962,7 @@ def _normalize_search_results(
     drops: list[dict[str, str]] = []
     seen_locators: set[str] = set()
     if not isinstance(results_by_query, list):
-        return [], [], [{"stage": "search_result", "reason": "malformed_result_batch", "detail": type(results_by_query).__name__}]
+        return [], [], [{"stage": "search_result", "reason": MALFORMED_RESULT_BATCH_REASON, "detail": type(results_by_query).__name__}]
     def order_key(pair: tuple[int, Any]) -> tuple[str, str, int]:
         index, candidate = pair
         if not isinstance(candidate, dict):
@@ -1176,6 +1256,7 @@ def build_web_fetch_packet(
     regroup_model_identity: dict[str, Any] | None = None,
     regroup_failed: bool = False,
     regroup_attempted: bool = False,
+    regroup_chunk_counts: dict[str, Any] | None = None,
 ) -> tuple[dict[str, Any], dict[str, Any], dict[str, Any]]:
     queries = _safe_queries(queries)
     generated = _parse_dt(generated_at, field="generated_at")
@@ -1207,6 +1288,35 @@ def build_web_fetch_packet(
     model_identity = regroup_model_identity or _regroup_model_identity()
     if model_identity.get("requested_model") != DEEPSEEK_MODEL or (execution_mode == "live_authorized" and regroup_attempted and not regroup_failed and not model_identity.get("served_model")):
         raise WebThemeDiscoveryError("live regroup receipt requires requested and served model identity")
+    if regroup_chunk_counts is None:
+        regroup_chunk_counts = {
+            "attempted": 0,
+            "successful": 0,
+            "failed": 0,
+            "failed_indexes": [],
+        }
+    regroup_chunk_counts = _validated_regroup_chunk_counts(regroup_chunk_counts)
+    zero_regroup_counts = {
+        "attempted": 0, "successful": 0, "failed": 0, "failed_indexes": [],
+    }
+    if execution_mode == "offline_fake_client" and regroup_chunk_counts != zero_regroup_counts:
+        raise WebThemeDiscoveryError("offline packet cannot attest live regroup chunk counts")
+    if execution_mode == "live_authorized" and (
+        regroup_attempted != (regroup_chunk_counts["attempted"] > 0)
+        or regroup_failed
+        != (
+            regroup_chunk_counts["attempted"] > 0
+            and regroup_chunk_counts["successful"] == 0
+        )
+        or not (
+            regroup_chunk_counts["successful"]
+            <= transport_response_counts["deepseek"]
+            <= regroup_chunk_counts["attempted"]
+        )
+    ):
+        raise WebThemeDiscoveryError(
+            "live regroup state does not match audited chunk/transport counts"
+        )
     network_access_performed = network_call_count > 0
     provider_calls_performed = provider_call_count > 0
     if raw_root is not None:
@@ -1260,6 +1370,24 @@ def build_web_fetch_packet(
         drops.extend(extra_drop_ledger)
     drops = _sanitized_drop_ledger(drops)      # sink-side redaction; also guarantees `detail` exists
     drops.sort(key=lambda row: (row["stage"], row["reason"], row["detail"]))
+    chunk_drop_indexes = [
+        index
+        for row in drops
+        if (index := _regroup_chunk_drop_index(row)) is not None
+    ]
+    provider_item_chunk_indexes = [
+        index
+        for row in drops
+        if (index := _provider_item_chunk_drop_index(row)) is not None
+    ]
+    if sorted(provider_item_chunk_indexes) != sorted(chunk_drop_indexes):
+        raise WebThemeDiscoveryError(
+            "regroup chunk drop rows do not have matching provider-item evidence"
+        )
+    if sorted(chunk_drop_indexes) != sorted(regroup_chunk_counts["failed_indexes"]):
+        raise WebThemeDiscoveryError(
+            "regroup chunk drop ledger does not match audited failed indexes"
+        )
     receipt_refs = []
     for ref in refs:
         receipt_ref = dict(ref)
@@ -1282,6 +1410,7 @@ def build_web_fetch_packet(
             "operation_advice_effect_enabled": False, "dynamic_seats_enabled": False,
             "theme_probe_enabled": False, "lifecycle_actions_enabled": False,
             "transport_response_counts": transport_response_counts,
+            "regroup_chunk_counts": dict(regroup_chunk_counts),
             "regroup_model": model_identity,
         },
         "queries": queries, "source_refs": receipt_refs,
@@ -1294,6 +1423,7 @@ def build_web_fetch_packet(
         },
     }
     _assert_receipt_secret_free(receipt)
+    _validate_builder_receipt_evidence(receipt)
     _validate_schema(receipt)
     _flush_raw_writes(pending_raw_writes)
     summary = {
@@ -1419,9 +1549,9 @@ def execute_live_web_orchestration(
             if isinstance(batch, list):
                 results.extend(batch)
             else:
-                query_drops.append({"stage": "search_result", "reason": "malformed_result_batch", "detail": query})
+                query_drops.append({"stage": "search_result", "reason": MALFORMED_RESULT_BATCH_REASON, "detail": query})
         except Exception as exc:
-            query_drops.append({"stage": "search_result", "reason": "provider_response_dropped", "detail": type(exc).__name__})
+            query_drops.append({"stage": "search_result", "reason": PROVIDER_RESPONSE_DROPPED_REASON, "detail": type(exc).__name__})
     fetched_now = datetime.now(timezone.utc)
     rows = _normalize_search_results(
         results, expected_decision_date=expected_decision_date,
@@ -1433,6 +1563,9 @@ def execute_live_web_orchestration(
         model_identity = _regroup_model_identity()
         regroup_failed = False
         regroup_attempted = False
+        regroup_chunk_counts = {
+            "attempted": 0, "successful": 0, "failed": 0, "failed_indexes": [],
+        }
     else:
         chunks = _chunk_regroup_rows(rows)
         attempted_deepseek_calls = 0
@@ -1440,10 +1573,12 @@ def execute_live_web_orchestration(
         model_identity = _regroup_model_identity()
         regroup_attempted = True
         successful_chunks = 0
+        failed_chunk_indexes: list[int] = []
         fingerprints: list[str] = []
         for chunk_index, chunk in enumerate(chunks):
             try:
                 attempted_deepseek_calls += 1
+                drop_start = len(query_drops)
                 parsed = _ingest_provider_item(
                     query_drops, stage="llm", fallback_detail=f"chunk[{chunk_index}]",
                     ingest=lambda: _regroup_chunk_payload(
@@ -1456,6 +1591,21 @@ def execute_live_web_orchestration(
                     ),
                 )
                 if parsed is None:
+                    if not any(
+                        _provider_item_chunk_drop_index(row) == chunk_index
+                        for row in query_drops[drop_start:]
+                    ):
+                        query_drops.append({
+                            "stage": "llm",
+                            "reason": "provider_item_exception_dropped",
+                            "detail": f"chunk[{chunk_index}]:typed_rejection",
+                        })
+                    query_drops.append({
+                        "stage": "llm",
+                        "reason": "regroup_chunk_dropped",
+                        "detail": f"chunk[{chunk_index}]:invalid_or_unusable_response",
+                    })
+                    failed_chunk_indexes.append(chunk_index)
                     continue
                 served_model, fingerprint, themes = parsed
                 if model_identity["served_model"] is None:
@@ -1465,16 +1615,29 @@ def execute_live_web_orchestration(
                 merged_themes.extend(themes)
                 successful_chunks += 1
             except Exception as exc:
+                query_drops.append({
+                    "stage": "llm",
+                    "reason": "provider_item_exception_dropped",
+                    "detail": f"chunk[{chunk_index}]:{type(exc).__name__}",
+                })
                 query_drops.append({"stage": "llm", "reason": "regroup_chunk_dropped", "detail": f"chunk[{chunk_index}]:{type(exc).__name__}"})
+                failed_chunk_indexes.append(chunk_index)
         model_identity["system_fingerprints"] = sorted(set(fingerprints))
         regroup_failed = successful_chunks == 0
         if regroup_failed:
             query_drops.append({"stage": "llm", "reason": "regroup_response_invalid", "detail": "no_chunk_survived"})
         llm_text = json.dumps({"themes": merged_themes})
+        regroup_chunk_counts = {
+            "attempted": attempted_deepseek_calls,
+            "successful": successful_chunks,
+            "failed": len(failed_chunk_indexes),
+            "failed_indexes": failed_chunk_indexes,
+        }
     return {
         "results": results, "llm_response": llm_text, "query_drops": query_drops,
         "fetched_at": fetched_now, "regroup_model_identity": model_identity,
         "regroup_failed": regroup_failed, "regroup_attempted": regroup_attempted,
+        "regroup_chunk_counts": regroup_chunk_counts,
         "provider_call_count": attempted_tavily_calls + attempted_deepseek_calls,
     }
 
@@ -1521,6 +1684,7 @@ def _run_web_fetch(
                 extra_drop_ledger=outcome["query_drops"],
                 regroup_model_identity=outcome["regroup_model_identity"],
                 regroup_failed=outcome["regroup_failed"], regroup_attempted=outcome["regroup_attempted"],
+                regroup_chunk_counts=outcome["regroup_chunk_counts"],
             )
         finally:
             _revoke_ticket(ticket)
@@ -1535,9 +1699,9 @@ def _run_web_fetch(
             if isinstance(batch, list):
                 results.extend(batch)
             else:
-                query_drops.append({"stage": "search_result", "reason": "malformed_result_batch", "detail": query})
+                query_drops.append({"stage": "search_result", "reason": MALFORMED_RESULT_BATCH_REASON, "detail": query})
         except Exception as exc:
-            query_drops.append({"stage": "search_result", "reason": "provider_response_dropped", "detail": type(exc).__name__})
+            query_drops.append({"stage": "search_result", "reason": PROVIDER_RESPONSE_DROPPED_REASON, "detail": type(exc).__name__})
     rows = _normalize_search_results(
         results, expected_decision_date=expected_decision_date,
         fetched_at=_parse_dt(generated_at, field="generated_at"), raw_root=None, persist_raw=False,
@@ -1550,7 +1714,7 @@ def _run_web_fetch(
         llm_text = response.choices[0].message.content
     except Exception as exc:
         llm_text = json.dumps({"themes": []})
-        query_drops.append({"stage": "llm", "reason": "provider_response_dropped", "detail": type(exc).__name__})
+        query_drops.append({"stage": "llm", "reason": PROVIDER_RESPONSE_DROPPED_REASON, "detail": type(exc).__name__})
     # K3-R64: offline fixtures are still producer output.  Persist the exact
     # normalized bytes so the downstream independent-document guard runs here too.
     offline_raw_root = _validate_raw_root(raw_root or DEFAULT_RAW_ROOT, require_gitignored=True)
@@ -1605,7 +1769,7 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--fake-llm-response-path", type=Path)
     args = parser.parse_args(argv)
     _decision_date(args.expected_decision_date)
-    raw_root = _validate_raw_root(args.raw_root, require_gitignored=args.live)
+    raw_root = _validate_cli_raw_root(args.raw_root, DEFAULT_RAW_ROOT, live=args.live)
     output, receipt_path = _decision_publish_paths(
         args.output_path or default_discovery_path(args.expected_decision_date),
         default_discovery_path(args.expected_decision_date),

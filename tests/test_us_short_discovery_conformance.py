@@ -27,6 +27,7 @@ from __future__ import annotations
 from contextlib import contextmanager
 import ast
 import copy
+from functools import lru_cache
 import importlib
 import inspect
 import io
@@ -87,7 +88,9 @@ RETIRED_SLOT_NAMES = frozenset({
 })
 
 
+@lru_cache(maxsize=None)
 def _source(rel: str) -> str:
+    """Read an immutable repository source once per conformance process."""
     return (ROOT / rel).read_text(encoding="utf-8")
 
 
@@ -351,6 +354,16 @@ def flag_pins(schema: Any) -> list[tuple[str, Any]]:
 
 
 class LaneSurfaceConformance(unittest.TestCase):
+    def test_repository_source_reads_are_cached_without_changing_source_bytes(self):
+        rel = SHARED_MODULES[0]
+        expected = (ROOT / rel).read_text(encoding="utf-8")
+        self.assertEqual(_source(rel), expected)
+        before = _source.cache_info()
+        self.assertEqual(_source(rel), expected)
+        after = _source.cache_info()
+        self.assertEqual(after.hits, before.hits + 1)
+        self.assertEqual(after.misses, before.misses)
+
     def test_read_only_schemas_stay_valid_json(self):
         for rel in LANE_SCHEMAS:
             with self.subTest(schema=rel):
@@ -1255,11 +1268,16 @@ class ExecutableClosureMatrix:
         self.assertIs(capstone._build_pass2_budget_approval, original)
 
     def test_named_non_guard_raisers_each_have_a_real_dying_behavior_control(self):
+        clean_baselines: dict[str, tuple[int, int, bool]] = {}
         for module_name, entries in self.NAMED_NON_GUARD_TESTS.items():
             module = importlib.import_module(module_name)
             for attribute, test_path in entries.items():
                 with self.subTest(module=module_name, attribute=attribute):
-                    baseline_run, baseline_red, resolved = LaneGuardRegistryConformance._run(test_path)
+                    if test_path not in clean_baselines:
+                        clean_baselines[test_path] = LaneGuardRegistryConformance._run(
+                            test_path
+                        )
+                    baseline_run, baseline_red, resolved = clean_baselines[test_path]
                     self.assertTrue(resolved)
                     self.assertEqual((baseline_run, baseline_red), (1, 0))
                     original = getattr(module, attribute)
@@ -1495,6 +1513,7 @@ class ExecutableClosureMatrix:
         missing: list[str] = []
         a_boundary_coordinates = []
         frozen_live_raw_coordinates = set()
+        redundant_replay_baseline: tuple[int, int, bool] | None = None
         for (
             consumer_name, caller, patch_owner, bound_name, origin_term, lineno,
             end_lineno, frozen_raw_branch,
@@ -1534,7 +1553,11 @@ class ExecutableClosureMatrix:
                 and caller == "validate_merged_packet"
                 and origin_term in self.REDUNDANT_REPLAY_TERMS
             ):
-                run, red, resolved = registry._run(self.REDUNDANT_REPLAY_TEST)
+                if redundant_replay_baseline is None:
+                    redundant_replay_baseline = registry._run(
+                        self.REDUNDANT_REPLAY_TEST
+                    )
+                run, red, resolved = redundant_replay_baseline
                 if resolved and (run, red) == (1, 0):
                     continue
             owner_module = importlib.import_module(patch_owner)
@@ -2155,9 +2178,16 @@ class LaneGuardRegistryConformance(unittest.TestCase):
         self.assertIn("_guard_upstream_generated_clocks", calls)
 
     def test_every_registered_guard_has_a_real_dying_test(self):
+        # Several independent guards intentionally share one broad dying test.
+        # Its clean baseline only proves that the named test exists and is green,
+        # so run that identical fact once per unique test path.  Every guard's
+        # planted mutation below still runs separately and must still turn red.
+        baseline_by_test: dict[str, tuple[int, int, bool]] = {}
         for module_name, attribute, test_path in self.GUARDS:
             guard = f"{module_name}.{attribute}"
-            baseline_run, baseline_red, resolved = self._run(test_path)
+            if test_path not in baseline_by_test:
+                baseline_by_test[test_path] = self._run(test_path)
+            baseline_run, baseline_red, resolved = baseline_by_test[test_path]
             with self.subTest(guard=guard, phase="baseline"):
                 self.assertTrue(resolved, f"registered dying test does not exist: {test_path}")
                 self.assertEqual(baseline_run, 1, "the dying test must be exactly one case")

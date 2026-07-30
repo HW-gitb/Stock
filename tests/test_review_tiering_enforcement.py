@@ -28,10 +28,12 @@ class ReviewContextTieringTests(unittest.TestCase):
         text = _load_review_gate()._review_context()
         # ① focused work is bounded and process folklore is not evidence.
         self.assertIn("bounded_unittest", text)
+        self.assertIn("默认最多 300 秒", text)
+        self.assertIn("最高 1300 秒", text)
         self.assertIn("PID/CPU", text)
         # ② the full path is one bounded ledger command.
         self.assertIn("full_pack_ledger `run`", text)
-        self.assertIn("1300", text)
+        self.assertIn("800", text)
         # ④ the independent agent is gated, not a default
         self.assertIn("agent", text)
         # ⑤ scope tests to changed symbols, not changed files (no whole-module tax)

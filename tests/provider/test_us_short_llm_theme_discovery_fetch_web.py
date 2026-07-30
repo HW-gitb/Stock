@@ -240,6 +240,9 @@ class WebFetchTests(unittest.TestCase):
             "fetched_at": datetime(2026, 7, 25, 8, tzinfo=timezone.utc),
             "regroup_model_identity": fetch._regroup_model_identity(),
             "regroup_failed": False, "regroup_attempted": False, "provider_call_count": 1,
+            "regroup_chunk_counts": {
+                "attempted": 0, "successful": 0, "failed": 0, "failed_indexes": [],
+            },
         }
         with (
             mock.patch.object(fetch.os.environ, "get", side_effect=lambda key, default: {
@@ -441,6 +444,9 @@ class WebFetchTests(unittest.TestCase):
                 "fetched_at": datetime(2026, 7, 25, 8, tzinfo=timezone.utc),
                 "regroup_model_identity": fetch._regroup_model_identity(),
                 "regroup_failed": False, "regroup_attempted": False, "provider_call_count": 1,
+                "regroup_chunk_counts": {
+                    "attempted": 0, "successful": 0, "failed": 0, "failed_indexes": [],
+                },
             }
 
         with (
@@ -457,6 +463,25 @@ class WebFetchTests(unittest.TestCase):
             )
         self.assertEqual(receipt["fetch_contract"]["execution_mode"], "live_authorized")
         self.assertEqual(receipt["fetch_contract"]["transport_response_counts"], {"deepseek": 0, "tavily": 1})
+        self.assertEqual(
+            receipt["fetch_contract"]["regroup_chunk_counts"],
+            {"attempted": 0, "successful": 0, "failed": 0, "failed_indexes": []},
+        )
+
+    def test_new_writer_verifier_requires_regroup_chunk_counts(self):
+        _, receipt, _ = fetch.build_web_fetch_packet(
+            queries=["power"],
+            search_results=[],
+            llm_response='{"themes":[]}',
+            expected_decision_date="20260725",
+            generated_at="2026-07-25T08:00:00Z",
+        )
+        receipt["fetch_contract"].pop("regroup_chunk_counts")
+        with self.assertRaisesRegex(
+            fetch.WebThemeDiscoveryError,
+            "regroup chunk counts",
+        ):
+            fetch._validate_builder_receipt_evidence(receipt)
 
     def test_invalid_llm_is_empty_but_packet_is_still_valid(self):
         packet, receipt, _ = fetch.build_web_fetch_packet(
@@ -1172,6 +1197,10 @@ class LiveOrchestrationExecutableTests(unittest.TestCase):
         self.assertEqual(len(json.loads(outcome["llm_response"])["themes"]), 1)
         self.assertTrue(outcome["regroup_attempted"])
         self.assertFalse(outcome["regroup_failed"])
+        self.assertEqual(
+            outcome["regroup_chunk_counts"],
+            {"attempted": 1, "successful": 1, "failed": 0, "failed_indexes": []},
+        )
         self.assertEqual(transport._snapshot()["deepseek"], 1)
 
     def test_no_accepted_rows_skips_the_regroup_entirely(self):
@@ -1185,6 +1214,10 @@ class LiveOrchestrationExecutableTests(unittest.TestCase):
         self.assertEqual(deepseek.prompts, [])
         self.assertFalse(outcome["regroup_attempted"])
         self.assertFalse(outcome["regroup_failed"])
+        self.assertEqual(
+            outcome["regroup_chunk_counts"],
+            {"attempted": 0, "successful": 0, "failed": 0, "failed_indexes": []},
+        )
         self.assertEqual(json.loads(outcome["llm_response"]), {"themes": []})
 
     def test_one_failing_chunk_keeps_the_other_chunks(self):
@@ -1194,18 +1227,40 @@ class LiveOrchestrationExecutableTests(unittest.TestCase):
             [rows], [self._response([self._theme("kept")]), RuntimeError("boom")],
         )
         self.assertEqual(len(json.loads(outcome["llm_response"])["themes"]), 1)
-        # The chunk loop degrades through the module's single provider-item boundary (K3-R33), so
-        # the ledger reason comes from that shared vocabulary and the detail keeps the chunk
-        # locator that the typed rejections bind to.
         dropped = [row for row in outcome["query_drops"] if row["stage"] == "llm"]
-        self.assertEqual([row["reason"] for row in dropped], ["provider_item_exception_dropped"])
-        self.assertTrue(dropped[0]["detail"].startswith("chunk[1]:"))
+        self.assertEqual(
+            [row["reason"] for row in dropped],
+            ["provider_item_exception_dropped", "regroup_chunk_dropped"],
+        )
+        self.assertTrue(all(row["detail"].startswith("chunk[1]:") for row in dropped))
         self.assertFalse(outcome["regroup_failed"])
+        self.assertEqual(
+            outcome["regroup_chunk_counts"],
+            {"attempted": 2, "successful": 1, "failed": 1, "failed_indexes": [1]},
+        )
 
     def test_every_chunk_failing_is_an_explicit_failure_not_a_quiet_empty(self):
         outcome, _ = self._run([self.ROWS], [RuntimeError("boom")])
         self.assertTrue(outcome["regroup_failed"])
         self.assertTrue(any(row["reason"] == "regroup_response_invalid" for row in outcome["query_drops"]))
+        self.assertEqual(
+            outcome["regroup_chunk_counts"],
+            {"attempted": 1, "successful": 0, "failed": 1, "failed_indexes": [0]},
+        )
+
+    def test_typed_chunk_rejection_still_emits_the_paired_audit_rows(self):
+        outcome, _ = self._run(
+            [self.ROWS],
+            [self._response([], finish="length")],
+        )
+        reasons = [row["reason"] for row in outcome["query_drops"]]
+        self.assertIn("regroup_response_truncated", reasons)
+        self.assertIn("provider_item_exception_dropped", reasons)
+        self.assertIn("regroup_chunk_dropped", reasons)
+        self.assertEqual(
+            outcome["regroup_chunk_counts"],
+            {"attempted": 1, "successful": 0, "failed": 1, "failed_indexes": [0]},
+        )
 
     def test_a_failing_search_query_degrades_without_losing_the_run(self):
         outcome, _ = self._run([OSError("socket")], [])

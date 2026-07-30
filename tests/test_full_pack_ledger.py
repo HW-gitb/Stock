@@ -15,6 +15,17 @@ import full_pack_ledger as fpl  # noqa: E402
 
 
 class FullPackLedgerTests(unittest.TestCase):
+    def test_full_pack_timeout_ceiling_is_800_seconds(self):
+        self.assertEqual(fpl.FULL_MAX_SECONDS, 800)
+        with self.assertRaisesRegex(ValueError, r"full timeout must be 1\.\.800 seconds"):
+            fpl.run_full_pack(
+                "us_short",
+                "shared test infrastructure",
+                "focused=1 OK",
+                801,
+                ["discover", "-s", "tests", "-p", "test_us_short*.py"],
+            )
+
     def test_docs_and_markdown_edits_do_not_count_as_code_state(self):
         # rule 4: a docs/register/SESSION_LOG-only correction must NOT invalidate a code full-pack.
         for doc in ("docs/SESSION_LOG.md", "docs/system_risk_register.md", "AGENTS.md", "README.md"):
@@ -128,7 +139,10 @@ class FullPackLedgerTests(unittest.TestCase):
                 passed = Result("PASS", 0, 3, 0.2, "Ran 3 tests in 0.1s\n\nOK\n")
 
                 def observed_run(actual_args, timeout_seconds):
-                    self.assertEqual(actual_args, list(args))
+                    self.assertEqual(
+                        actual_args,
+                        ["discover", *fpl.FULL_PACK_RUNTIME_ARGS, *args[1:]],
+                    )
                     self.assertEqual(timeout_seconds, 30)
                     self.assertIn(f"START lane={lane}", output.getvalue())
                     self.assertIn("fingerprint=", output.getvalue())
@@ -144,6 +158,26 @@ class FullPackLedgerTests(unittest.TestCase):
                             0,
                         )
                 self.assertIn("RESULT status=PASS", output.getvalue())
+
+    def test_full_pack_runtime_optimization_keeps_discovery_and_adds_only_safe_flags(self):
+        self.assertEqual(
+            fpl.FULL_PACK_RUNTIME_ARGS,
+            ("-b", "-f", "--durations", "25"),
+        )
+        for lane, discovery in fpl.FULL_PACK_DISCOVERY_ARGS.items():
+            with self.subTest(lane=lane):
+                self.assertEqual(discovery[:3], ("discover", "-s", "tests"))
+                self.assertIn("-p", discovery)
+                self.assertTrue(discovery[-1].startswith("test_"))
+                self.assertTrue(discovery[-1].endswith("*.py"))
+                self.assertEqual(
+                    fpl._runtime_unittest_args(list(discovery)),
+                    ["discover", *fpl.FULL_PACK_RUNTIME_ARGS, *discovery[1:]],
+                )
+        self.assertEqual(
+            fpl._runtime_unittest_args(["tests.test_example"]),
+            [*fpl.FULL_PACK_RUNTIME_ARGS, "tests.test_example"],
+        )
 
     def test_only_a_real_unittest_spawn_may_print_start(self):
         state = {"engine/x.py": "aaa", "@HEAD": "h1"}
