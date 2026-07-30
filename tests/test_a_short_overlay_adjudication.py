@@ -23,6 +23,7 @@ from engine import a_short_experiment_admission_registry as _admission_registry 
 from runners.a_short_factor_comparison_v2_cache_build import CONSUMER_PRIORITY  # noqa: E402
 from engine import a_short_evidence_epoch_mode as _epoch_mode
 from tests._a_short_epoch_mode_test_utils import enter_patched_epoch_modes
+from tests._a_short_weekly_publish_test_utils import write_content_bound_bundle
 
 DECISION, RUN = "20260710", "20260710"
 
@@ -51,12 +52,12 @@ def _sources(tmp: str, *, mismatch: bool = False, same_scores: bool = False, mem
                "candidates": [{"ts_code": row["ts_code"], "overlay_score": row["final_score"] if same_scores else float(index)} for index, row in enumerate(eligible, start=1)]}
     identity = {"run_id": snapshot["run_id"], "candidate_digest": "a" * 64}
     weekly = {"as_of": DECISION, "run_lineage": {**identity, "price_freshness": {"mode": "strict_as_of", "run_date": RUN, "price_data_through": DECISION}}}
-    receipt = {"stage_status": "complete", "as_of": DECISION, **identity, "published_at": "2026-07-10T10:00:00+08:00",
-               "outputs": ["weekly_m67.json", "weekly_m67.md"]}
-    paths = (directory / "stage3_selection_snapshot.json", directory / "stage3_overlay_score.json", directory / "weekly_m67.json", directory / "weekly_m67.receipt.json")
-    for path, value in zip(paths, (snapshot, overlay, weekly, receipt)):
+    weekly_dir = directory / DECISION
+    paths = (directory / "stage3_selection_snapshot.json", directory / "stage3_overlay_score.json",
+             weekly_dir / "weekly_m67.json", weekly_dir / "weekly_m67.receipt.json")
+    for path, value in zip(paths[:2], (snapshot, overlay)):
         path.write_text(json.dumps(value), encoding="utf-8")
-    paths[2].with_suffix(".md").write_text("# weekly\n", encoding="utf-8")
+    write_content_bound_bundle(paths[2], weekly, receipt_path=paths[3])
     marker = {"schema_name": "a_short_egs_official_publish", "schema_version": "1.0.0",
               "trade_date": DECISION, "run_id": snapshot["run_id"], "candidate_digest": "a" * 64,
               "published_at": "2026-07-10T09:00:00+08:00",
@@ -154,14 +155,21 @@ class OverlayAdjudicationTests(unittest.TestCase):
                 doc = json.loads(path.read_text(encoding="utf-8")); doc["as_of"] = "20260720"
                 path.write_text(json.dumps(doc), encoding="utf-8")
             weekly_doc = json.loads(weekly.read_text(encoding="utf-8"))
-            weekly_doc["as_of"] = "20260720"
+            weekly_doc.update({
+                "as_of": "20260720",
+                "decision_as_of": "20260720",
+                "run_date": "20260720",
+                "price_data_through": "20260717",
+            })
             weekly_doc["run_lineage"]["price_freshness"] = {
                 "mode": "intraday_prior_settled", "run_date": "20260720", "price_data_through": "20260717"
             }
-            weekly.write_text(json.dumps(weekly_doc), encoding="utf-8")
-            receipt_doc = json.loads(receipt.read_text(encoding="utf-8")); receipt_doc.update(
-                {"as_of": "20260720", "published_at": "2026-07-20T10:00:00+08:00"})
-            receipt.write_text(json.dumps(receipt_doc), encoding="utf-8")
+            weekly = Path(tmp) / "20260720" / "weekly_m67.json"
+            receipt = weekly.with_name("weekly_m67.receipt.json")
+            write_content_bound_bundle(
+                weekly, weekly_doc, receipt_path=receipt,
+                published_at="2026-07-20T10:00:00+08:00",
+            )
             marker_doc = json.loads(marker.read_text(encoding="utf-8")); marker_doc.update(
                 {"trade_date": "20260720", "published_at": "2026-07-20T09:00:00+08:00"})
             marker_doc["files"]["p4_stage3_selection_snapshot"]["sha256"] = hashlib.sha256(stage3.read_bytes()).hexdigest()
@@ -211,7 +219,7 @@ class OverlayAdjudicationTests(unittest.TestCase):
                     egs_publish_marker_path=marker, source_identity=identity, forward_eligible=True)
             self.assertEqual(result["status"], "not_live_canonical_no_capture")
             weekly_doc = json.loads(weekly.read_text(encoding="utf-8")); weekly_doc["run_lineage"]["run_id"] = "a-short-20260710-fedcba9876543210"
-            weekly.write_text(json.dumps(weekly_doc), encoding="utf-8")
+            write_content_bound_bundle(weekly, weekly_doc, receipt_path=receipt)
             with mock.patch("engine.a_short_overlay_adjudication._today", return_value=RUN):
                 with self.assertRaisesRegex(OverlayAdjudicationError, "run_id"):
                     capture_after_published_weekly(root=root, decision_date=DECISION, run_date=RUN,

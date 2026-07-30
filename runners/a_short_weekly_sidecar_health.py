@@ -21,6 +21,7 @@ import jsonschema
 ROOT = Path(__file__).resolve().parents[1]
 HEALTH_SCHEMA = ROOT / "schemas" / "a_short_weekly_sidecar_health.schema.json"
 OUTCOME_SCHEMA = ROOT / "schemas" / "a_short_weekly_sidecar_outcomes.schema.json"
+WEEKLY_RECEIPT_SCHEMA = ROOT / "schemas" / "a_short_weekly_publish_receipt.schema.json"
 REQUIRED_ARTIFACT_SCHEMAS = {
     "candidate_effect": ROOT / "schemas" / "a_short_regime_candidate_effect_summary.schema.json",
     "iv_feed": ROOT / "schemas" / "a_short_iv_feed.schema.json",
@@ -125,15 +126,89 @@ def _authoritative_artifact_path(project_root: Path, name: str, as_of: str) -> P
     raise ValueError(f"authoritative sidecar has no artifact path: {name}")
 
 
-def _sha256(path: Path) -> str | None:
+def _failed_m67_receipt_evidence(receipt_path: Path, as_of: str) -> dict[str, Any] | None:
+    """Validate a failure-only receipt without claiming any output binding."""
     try:
-        digest = hashlib.sha256()
-        with path.open("rb") as handle:
-            for chunk in iter(lambda: handle.read(1024 * 1024), b""):
-                digest.update(chunk)
-        return digest.hexdigest()
-    except OSError:
+        receipt_bytes = receipt_path.read_bytes()
+        receipt = json.loads(receipt_bytes.decode("utf-8"))
+        schema = json.loads(WEEKLY_RECEIPT_SCHEMA.read_text(encoding="utf-8"))
+        jsonschema.validate(receipt, schema)
+        if str(receipt.get("as_of")) != str(as_of) or receipt.get("stage_status") != "failed":
+            return None
+        return {
+            "status": "failed",
+            "run_id": None,
+            "candidate_digest": None,
+            "source_receipt_sha256": hashlib.sha256(receipt_bytes).hexdigest(),
+        }
+    except (
+        OSError,
+        UnicodeDecodeError,
+        ValueError,
+        TypeError,
+        json.JSONDecodeError,
+        jsonschema.ValidationError,
+        jsonschema.SchemaError,
+    ):
         return None
+
+
+def _m67_evidence(
+    out_dir: Path,
+    as_of: str,
+) -> dict[str, Any]:
+    """Derive requested M6.7 health identity from the canonical published bundle only."""
+    weekly_path = out_dir / "weekly_m67.json"
+    markdown_path = out_dir / "weekly_m67.md"
+    receipt_path = out_dir / "weekly_m67.receipt.json"
+    present = (weekly_path.is_file(), markdown_path.is_file(), receipt_path.is_file())
+    if all(present):
+        try:
+            from runners.a_short_weekly_pipeline import validate_published_weekly_bundle
+
+            bundle = validate_published_weekly_bundle(weekly_path)
+            if str(bundle.weekly.get("as_of")) != str(as_of):
+                raise ValueError("weekly bundle as_of mismatch")
+            lineage = bundle.weekly.get("run_lineage") or {}
+            return {
+                "status": "complete",
+                "run_id": str(lineage.get("run_id") or "") or None,
+                "candidate_digest": str(lineage.get("candidate_digest") or "") or None,
+                "source_receipt_sha256": bundle.receipt_sha256,
+            }
+        except Exception:
+            failed = _failed_m67_receipt_evidence(receipt_path, as_of)
+            if failed is not None:
+                return failed
+            return {
+                "status": "unavailable",
+                "run_id": None,
+                "candidate_digest": None,
+                "source_receipt_sha256": None,
+            }
+    if receipt_path.is_file() and not weekly_path.exists() and not markdown_path.exists():
+        failed = _failed_m67_receipt_evidence(receipt_path, as_of)
+        if failed is not None:
+            return failed
+        return {
+            "status": "unavailable",
+            "run_id": None,
+            "candidate_digest": None,
+            "source_receipt_sha256": None,
+        }
+    if any(present):
+        return {
+            "status": "unavailable",
+            "run_id": None,
+            "candidate_digest": None,
+            "source_receipt_sha256": None,
+        }
+    return {
+        "status": "unavailable",
+        "run_id": None,
+        "candidate_digest": None,
+        "source_receipt_sha256": None,
+    }
 
 
 def _atomic_write(path: Path, data: bytes) -> None:
@@ -311,21 +386,62 @@ def build_health(
     launcher_manifest: dict[str, Any] | None = None,
     pipeline_manifest: dict[str, Any] | None = None,
     project_root: Path = ROOT,
-    m67_status: str = "not_run",
-    run_id: str | None = None,
-    candidate_digest: str | None = None,
+    m67_out_dir: Path | None = None,
+    m67_invocation: str | None = None,
 ) -> dict[str, Any]:
     _validate_sidecar_validation_buckets()
-    manifests = [manifest for manifest in (launcher_manifest, pipeline_manifest) if manifest]
+    if m67_invocation is None:
+        m67_invocation = "requested" if m67_out_dir is not None else "not_run"
+    if m67_invocation not in {"requested", "skipped", "not_run"}:
+        raise ValueError("m67_invocation must be requested, skipped, or not_run")
+    manifests = [manifest for manifest in (launcher_manifest,) if manifest]
+    if m67_invocation == "requested" and pipeline_manifest:
+        manifests.append(pipeline_manifest)
     expected: list[str] = []
     raw_by_name: dict[str, dict[str, Any]] = {}
+    manifest_run_ids: set[str] = set()
+    manifest_candidate_digests: set[str] = set()
     for manifest in manifests:
         expected.extend(str(name) for name in manifest.get("expected_sidecars", []))
         for raw in manifest.get("sidecars", []):
             if isinstance(raw, dict) and raw.get("name"):
                 raw_by_name[str(raw["name"])] = raw
-        run_id = run_id or manifest.get("run_id")
-        candidate_digest = candidate_digest or manifest.get("candidate_digest")
+        if manifest.get("run_id"):
+            manifest_run_ids.add(str(manifest["run_id"]))
+        if manifest.get("candidate_digest"):
+            manifest_candidate_digests.add(str(manifest["candidate_digest"]))
+    evidence = (
+        {
+            "status": m67_invocation,
+            "run_id": None,
+            "candidate_digest": None,
+            "source_receipt_sha256": None,
+        }
+        if m67_invocation != "requested"
+        else (
+            _m67_evidence(Path(m67_out_dir), as_of)
+            if m67_out_dir is not None
+            else {
+                "status": "unavailable",
+                "run_id": None,
+                "candidate_digest": None,
+                "source_receipt_sha256": None,
+            }
+        )
+    )
+    if evidence.get("status") == "complete" and (
+        (manifest_run_ids and manifest_run_ids != {evidence.get("run_id")})
+        or (
+            manifest_candidate_digests
+            and manifest_candidate_digests != {evidence.get("candidate_digest")}
+        )
+    ):
+        evidence = {
+            "status": "unavailable",
+            "run_id": None,
+            "candidate_digest": None,
+            "source_receipt_sha256": None,
+        }
     expected = list(dict.fromkeys(expected))
     for name in expected:
         if name not in SIDECAR_SPECS:
@@ -345,21 +461,30 @@ def build_health(
     stalled = sum(1 for item in entries if item["progress_status"] == "stalled")
     advanced = sum(1 for item in entries if item["progress_status"] in {"advanced", "already_current"})
     partial = sum(1 for item in entries if item["execution_status"] in {"skipped", "not_due", "not_configured"})
-    overall = "degraded" if failed else ("partial" if partial else "healthy")
+    m67_status = str(evidence.get("status") or "unavailable")
+    overall = (
+        "degraded"
+        if failed or m67_status in {"failed", "unavailable"}
+        else (
+            "partial"
+            if partial or m67_status == "skipped"
+            else "healthy"
+        )
+    )
     payload = {
         "schema_name": "a_short_weekly_sidecar_health",
         "schema_version": "1.0.0",
         "as_of": as_of,
         "generated_at": datetime.now(timezone.utc).isoformat(timespec="seconds"),
-        "run_id": run_id,
-        "candidate_digest": candidate_digest,
+        "run_id": evidence.get("run_id"),
+        "candidate_digest": evidence.get("candidate_digest"),
         "m67_status": m67_status,
         "overall": overall,
         "advanced_count": advanced,
         "stalled_count": stalled,
         "failed_count": failed,
         "partial_count": partial,
-        "source_receipt_sha256": None,
+        "source_receipt_sha256": evidence.get("source_receipt_sha256"),
         "sidecars": entries,
     }
     jsonschema.validate(payload, json.loads(HEALTH_SCHEMA.read_text(encoding="utf-8")))
@@ -378,13 +503,8 @@ def _load_manifest(path: str | None) -> dict[str, Any] | None:
     return payload
 
 
-def write_health_bundle(payload: dict[str, Any], out_dir: Path, receipt_path: Path | None = None) -> tuple[Path, Path, Path]:
+def write_health_bundle(payload: dict[str, Any], out_dir: Path) -> tuple[Path, Path, Path]:
     out_dir.mkdir(parents=True, exist_ok=True)
-    source_sha = _sha256(receipt_path) if receipt_path else None
-    if source_sha:
-        payload = dict(payload)
-        payload["source_receipt_sha256"] = source_sha
-        jsonschema.validate(payload, json.loads(HEALTH_SCHEMA.read_text(encoding="utf-8")))
     json_path = out_dir / "sidecar_health.json"
     md_path = out_dir / "sidecar_health.md"
     receipt = {
@@ -423,17 +543,22 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--out-dir", required=True)
     parser.add_argument("--launcher-outcomes")
     parser.add_argument("--pipeline-outcomes")
-    parser.add_argument("--weekly-receipt")
-    parser.add_argument("--m67-status", choices=["complete", "failed", "skipped", "not_run"], default="not_run")
+    parser.add_argument(
+        "--m67-invocation",
+        choices=["requested", "skipped", "not_run"],
+        default="requested",
+    )
     args = parser.parse_args(argv)
+    out_dir = Path(args.out_dir).resolve()
     payload = build_health(
         as_of=args.as_of,
         launcher_manifest=_load_manifest(args.launcher_outcomes),
         pipeline_manifest=_load_manifest(args.pipeline_outcomes),
         project_root=Path(args.project_root).resolve(),
-        m67_status=args.m67_status,
+        m67_out_dir=out_dir,
+        m67_invocation=args.m67_invocation,
     )
-    paths = write_health_bundle(payload, Path(args.out_dir).resolve(), Path(args.weekly_receipt).resolve() if args.weekly_receipt else None)
+    paths = write_health_bundle(payload, out_dir)
     print(f"[sidecar-health] overall={payload['overall']} failed={payload['failed_count']} stalled={payload['stalled_count']} partial={payload['partial_count']} -> {paths[1].name}")
     return 0
 

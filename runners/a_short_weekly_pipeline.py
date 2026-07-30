@@ -72,6 +72,10 @@ SCHEMA_PATH = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__fil
                            "schemas", "a_short_weekly_report.schema.json")
 M67_SCHEMA_PATH = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
                                "schemas", "a_short_m67_report.schema.json")
+WEEKLY_RECEIPT_SCHEMA_PATH = os.path.join(
+    os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
+    "schemas", "a_short_weekly_publish_receipt.schema.json",
+)
 OVERLAY_SCHEMA_PATH = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
                                    "schemas", "a_short_theme_overlay_comparison.schema.json")
 ACCOUNT_SCHEMA_PATH = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
@@ -2073,9 +2077,15 @@ def publish_weekly_bundle(weekly: dict, iv_feed_summary: dict, out_path: str, md
     validate_weekly_report(weekly, iv_feed_summary)
     markdown = render_weekly_markdown(weekly)
     lineage = weekly["run_lineage"]
+    weekly_bytes = (json.dumps(weekly, ensure_ascii=False, indent=2, allow_nan=False) + "\n").encode("utf-8")
+    markdown_bytes = markdown.encode("utf-8")
+    output_bytes = {
+        os.path.basename(out_path): weekly_bytes,
+        os.path.basename(md_path): markdown_bytes,
+    }
     receipt = {
         "schema_name": "a_short_weekly_publish_receipt",
-        "schema_version": "1.0.0",
+        "schema_version": "1.1.0",
         "as_of": weekly["as_of"],
         "decision_as_of": weekly.get("decision_as_of", weekly["as_of"]),
         "run_date": weekly.get("run_date"),
@@ -2085,12 +2095,21 @@ def publish_weekly_bundle(weekly: dict, iv_feed_summary: dict, out_path: str, md
         "published_at": datetime.now().astimezone().isoformat(timespec="seconds"),
         "account_snapshot": lineage.get("account_snapshot"),
         "stage_status": "complete",
-        "outputs": [os.path.basename(out_path), os.path.basename(md_path)],
+        "outputs": list(output_bytes),
+        "outputs_digest": {
+            name: {
+                "sha256": hashlib.sha256(payload).hexdigest(),
+                "byte_length": len(payload),
+            }
+            for name, payload in output_bytes.items()
+        },
     }
+    with open(WEEKLY_RECEIPT_SCHEMA_PATH, "r", encoding="utf-8") as f:
+        jsonschema.validate(receipt, json.load(f))
     receipt_path = os.path.splitext(out_path)[0] + ".receipt.json"
     payloads = {
-        out_path: (json.dumps(weekly, ensure_ascii=False, indent=2, allow_nan=False) + "\n").encode("utf-8"),
-        md_path: markdown.encode("utf-8"),
+        out_path: weekly_bytes,
+        md_path: markdown_bytes,
         receipt_path: (json.dumps(receipt, ensure_ascii=False, indent=2, allow_nan=False) + "\n").encode("utf-8"),
     }
     if ratchet_publish is not None:
@@ -2101,26 +2120,246 @@ def publish_weekly_bundle(weekly: dict, iv_feed_summary: dict, out_path: str, md
     return receipt_path
 
 
-def load_published_weekly_bundle(out_path: str) -> dict:
-    """刀2: load an official weekly artifact ONLY through its matching complete receipt.
-    A failed / mismatched receipt (or a missing JSON/Markdown) makes any older bundle non-consumable."""
+class PublishedWeeklyBundle:
+    """One single-read snapshot of an official weekly publish bundle."""
+
+    __slots__ = (
+        "weekly", "receipt", "weekly_bytes", "markdown_bytes", "receipt_bytes",
+        "weekly_path", "markdown_path", "receipt_path",
+    )
+
+    def __init__(
+        self, *, weekly: dict, receipt: dict, weekly_bytes: bytes,
+        markdown_bytes: bytes, receipt_bytes: bytes, weekly_path: Path,
+        markdown_path: Path, receipt_path: Path,
+    ):
+        self.weekly = weekly
+        self.receipt = receipt
+        self.weekly_bytes = weekly_bytes
+        self.markdown_bytes = markdown_bytes
+        self.receipt_bytes = receipt_bytes
+        self.weekly_path = weekly_path
+        self.markdown_path = markdown_path
+        self.receipt_path = receipt_path
+
+    def __iter__(self):
+        """Preserve the historical ``weekly, receipt = validator(...)`` API."""
+        yield self.weekly
+        yield self.receipt
+
+    @property
+    def weekly_sha256(self) -> str:
+        return hashlib.sha256(self.weekly_bytes).hexdigest()
+
+    @property
+    def markdown_sha256(self) -> str:
+        return hashlib.sha256(self.markdown_bytes).hexdigest()
+
+    @property
+    def receipt_sha256(self) -> str:
+        return hashlib.sha256(self.receipt_bytes).hexdigest()
+
+    @property
+    def weekly_byte_length(self) -> int:
+        return len(self.weekly_bytes)
+
+    @property
+    def markdown_byte_length(self) -> int:
+        return len(self.markdown_bytes)
+
+    @property
+    def receipt_byte_length(self) -> int:
+        return len(self.receipt_bytes)
+
+
+# Authoritative inventory for code that consumes an already-published weekly
+# bundle. Producers, renderers, and path-only helpers are deliberately absent.
+# A new engine/runner consumer must register its formal boundary here.
+FORMAL_PUBLISHED_WEEKLY_CONSUMERS = {
+    "engine/a_short_factor_comparison_v2_weekly.py": (
+        "capture_v2_after_published_weekly",
+    ),
+    "engine/a_short_industry_weight_comparison.py": (
+        "capture_after_published_weekly",
+    ),
+    "engine/a_short_overlay_adjudication.py": (
+        "capture_after_published_weekly",
+    ),
+    "engine/a_short_regime_action_comparison.py": (
+        "m67_provenance",
+        "migrate_action_record_from_published_m67",
+    ),
+    "runners/a_short_final_action_validation_runner.py": (
+        "capture_after_published_weekly",
+    ),
+    "runners/a_short_official_operation_evidence.py": (
+        "capture_after_published_weekly",
+    ),
+    "runners/a_short_regime_comparison_runner.py": (
+        "run_candidate_effect_sidecar",
+        "run_regime_step",
+    ),
+    "runners/a_short_target_policy_comparison_runner.py": (
+        "capture_after_published_weekly",
+    ),
+    "runners/a_short_weekly_sidecar_health.py": (
+        "main",
+    ),
+}
+
+# Every public function in a registered consumer module must be classified here
+# or in FORMAL_PUBLISHED_WEEKLY_CONSUMERS.  Classification deliberately does
+# not depend on parameter names: adding ``consumer(source)`` must be as visible
+# as adding ``consumer(path)``.
+NONCONSUMER_PUBLIC_PATH_ENTRYPOINTS = {
+    "engine/a_short_factor_comparison_v2_weekly.py": (
+        "capture_error_code",
+        "is_capture_replay_drift",
+        "load_v2_daily_cache",
+        "settle_and_summarize_v2_weekly",
+        "validate_v2_public_summary",
+        "v1",
+    ),
+    "engine/a_short_industry_weight_comparison.py": (
+        "build_public_progress",
+        "cache_consumer_windows",
+        "load_governance",
+        "settle_and_summarize_weekly",
+        "settle_from_daily_payload",
+        "unavailable_public_progress",
+        "validate_public_progress",
+        "write_public_progress",
+    ),
+    "engine/a_short_overlay_adjudication.py": (
+        "build_public_summary",
+        "cache_consumer_windows",
+        "select_stage3_top5",
+        "settle_and_summarize_weekly",
+        "settle_from_daily_payload",
+        "unavailable_public_summary",
+        "validate_public_summary",
+        "write_public_summary",
+    ),
+    "engine/a_short_regime_action_comparison.py": (
+        "action_for_regime",
+        "build_action_record",
+        "build_candidate_effect_record",
+        "candidate_effect_eligibility",
+        "candidate_effect_policy",
+        "candidate_effect_policy_fingerprint",
+        "governance",
+        "m67_provenance_from_bundle",
+        "merge_action_records",
+        "refresh_action_records",
+        "summarize_action_records",
+        "summarize_candidate_effect_records",
+        "validate_action_record",
+        "validate_candidate_effect_summary",
+    ),
+    "runners/a_short_final_action_validation_runner.py": (
+        "main",
+        "settle_and_summarize",
+        "unavailable_public_summary",
+        "validate_public_summary",
+        "write_public_summary",
+    ),
+    "runners/a_short_official_operation_evidence.py": (
+        "build_public_summary",
+        "cache_consumer_windows",
+        "main",
+        "settle_and_summarize",
+        "write_public_summary",
+    ),
+    "runners/a_short_regime_comparison_runner.py": (
+        "append_action_review_reminder",
+        "iv_series_to_map",
+        "lane_paths",
+        "load_comparison_records",
+        "load_ledger",
+        "main",
+        "main_board_only",
+        "make_feature_provider",
+        "render_action_review_reminder",
+        "save_action_records",
+        "save_comparison_records",
+        "save_ledger",
+        "save_panel",
+        "validate_iv_feed",
+        "write_candidate_effect_outcome",
+    ),
+    "runners/a_short_target_policy_comparison_runner.py": (
+        "EXIT_CONTRACT_VERSION",
+        "main",
+        "phase5_engine",
+        "settle_and_summarize",
+        "unavailable_public_summary",
+        "validate_public_summary",
+        "write_public_summary",
+    ),
+    "runners/a_short_weekly_sidecar_health.py": (
+        "build_health",
+        "write_health_bundle",
+    ),
+}
+
+
+def validate_published_weekly_bundle(
+    out_path: str | Path,
+    receipt_path: str | Path | None = None,
+) -> PublishedWeeklyBundle:
+    """Load one official bundle from the exact bytes bound by its complete receipt."""
+    from runners.a_short_m67_render import render_weekly_markdown
+
     output = Path(out_path)
     if output.name != "weekly_m67.json":
         raise ValueError("official weekly JSON must be named weekly_m67.json")
-    receipt_path = output.with_suffix("").with_suffix(".receipt.json")
-    if not output.is_file() or not receipt_path.is_file():
-        raise ValueError("weekly bundle is incomplete: JSON or receipt missing")
-    weekly = json.loads(output.read_text(encoding="utf-8-sig"))
-    receipt = json.loads(receipt_path.read_text(encoding="utf-8-sig"))
-    if not re.fullmatch(r"[0-9]{8}", output.parent.name) or output.parent.name != str(weekly.get("as_of") or ""):
+    expected_receipt = output.with_suffix("").with_suffix(".receipt.json")
+    receipt_file = Path(receipt_path) if receipt_path is not None else expected_receipt
+    if receipt_file.resolve() != expected_receipt.resolve():
+        raise ValueError("weekly receipt path does not match the official JSON")
+    markdown = output.with_suffix(".md")
+    if not output.is_file() or not markdown.is_file() or not receipt_file.is_file():
+        raise ValueError("weekly bundle is incomplete: JSON, Markdown, or receipt missing")
+    try:
+        weekly_bytes = output.read_bytes()
+        markdown_bytes = markdown.read_bytes()
+        receipt_bytes = receipt_file.read_bytes()
+        weekly = json.loads(weekly_bytes.decode("utf-8-sig"))
+        receipt = json.loads(receipt_bytes.decode("utf-8-sig"))
+        with open(WEEKLY_RECEIPT_SCHEMA_PATH, "r", encoding="utf-8") as f:
+            jsonschema.validate(receipt, json.load(f))
+    except (OSError, UnicodeDecodeError, json.JSONDecodeError, jsonschema.ValidationError) as exc:
+        raise ValueError("weekly bundle or receipt is unreadable or schema-invalid") from exc
+    if (
+        not re.fullmatch(r"[0-9]{8}", output.parent.name)
+        or output.parent.name != str(weekly.get("as_of") or "")
+    ):
         raise ValueError("weekly bundle directory does not match artifact as_of")
     lineage = weekly.get("run_lineage") or {}
+    price_freshness = lineage.get("price_freshness") or {}
+    temporal_origin = lineage.get("temporal_origin") or {}
+    identity = {
+        "as_of": weekly.get("as_of"),
+        "decision_as_of": weekly.get("decision_as_of") or weekly.get("as_of"),
+        "run_date": (
+            weekly.get("run_date")
+            or lineage.get("run_date")
+            or price_freshness.get("run_date")
+            or temporal_origin.get("run_date")
+        ),
+        "price_data_through": (
+            weekly.get("price_data_through")
+            or lineage.get("price_data_through")
+            or price_freshness.get("price_data_through")
+            or temporal_origin.get("price_data_through")
+        ),
+        "run_id": lineage.get("run_id"),
+        "candidate_digest": lineage.get("candidate_digest"),
+    }
     if receipt.get("stage_status") != "complete":
         raise ValueError("weekly receipt is not complete")
     for field in ("as_of", "decision_as_of", "run_date", "price_data_through", "run_id", "candidate_digest"):
-        expected = weekly.get(field) if field == "as_of" else lineage.get(field)
-        if field in {"decision_as_of", "run_date", "price_data_through"}:
-            expected = weekly.get(field)
+        expected = identity[field]
         if field == "run_date" and expected is None and receipt.get(field) is None:
             continue
         if not expected or receipt.get(field) != expected:
@@ -2128,9 +2367,36 @@ def load_published_weekly_bundle(out_path: str) -> dict:
     expected_outputs = {output.name, output.with_suffix(".md").name}
     if set(receipt.get("outputs") or []) != expected_outputs:
         raise ValueError("weekly receipt output set does not match artifact")
-    if not output.with_suffix(".md").is_file():
-        raise ValueError("weekly Markdown output is missing")
-    return weekly
+    outputs_digest = receipt.get("outputs_digest")
+    if not isinstance(outputs_digest, dict) or set(outputs_digest) != expected_outputs:
+        raise ValueError("weekly receipt output digests do not match the output set")
+    payloads = {output.name: weekly_bytes, markdown.name: markdown_bytes}
+    for name, payload in payloads.items():
+        binding = outputs_digest.get(name)
+        if not isinstance(binding, dict) or binding.get("byte_length") != len(payload) or \
+                binding.get("sha256") != hashlib.sha256(payload).hexdigest():
+            raise ValueError(f"weekly receipt digest does not match {name}")
+    try:
+        rendered = render_weekly_markdown(weekly).encode("utf-8")
+    except (KeyError, TypeError, ValueError) as exc:
+        raise ValueError("weekly Markdown cannot be deterministically rendered") from exc
+    if rendered != markdown_bytes:
+        raise ValueError("weekly Markdown does not match deterministic rendering")
+    return PublishedWeeklyBundle(
+        weekly=weekly,
+        receipt=receipt,
+        weekly_bytes=weekly_bytes,
+        markdown_bytes=markdown_bytes,
+        receipt_bytes=receipt_bytes,
+        weekly_path=output,
+        markdown_path=markdown,
+        receipt_path=receipt_file,
+    )
+
+
+def load_published_weekly_bundle(out_path: str) -> dict:
+    """Load an official weekly artifact only through its content-bound complete receipt."""
+    return validate_published_weekly_bundle(out_path).weekly
 
 
 def _load_validated_overlay(overlay_path: str, weekly_as_of: str) -> dict:

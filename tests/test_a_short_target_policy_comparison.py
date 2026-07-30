@@ -39,6 +39,7 @@ from runners.a_short_m67_render import render_weekly_markdown  # noqa: E402
 from tests.test_a_short_weekly_pipeline import _feed, _normalized  # noqa: E402
 from engine import a_short_evidence_epoch_mode as _epoch_mode
 from tests._a_short_epoch_mode_test_utils import enter_patched_epoch_modes, patched_epoch_modes
+from tests._a_short_weekly_publish_test_utils import write_content_bound_bundle
 
 
 def _dated_series(days: int = 253, *, spike: bool = False) -> list[dict]:
@@ -388,12 +389,9 @@ class TargetLedgerTests(unittest.TestCase):
             "reports": [{"ts_code": candidate["ts_code"],
                          "machine": {"entry_exit_size_star": {"plan": _official_plan()}}}],
         }
-        out = directory / "weekly.json"
-        out.write_text(json.dumps(weekly), encoding="utf-8")
-        out.with_suffix(".md").write_text("# weekly\n", encoding="utf-8")
-        receipt = directory / "weekly_receipt.json"
-        receipt.write_text(json.dumps({"stage_status": "complete", "as_of": as_of, "run_id": "run-1",
-                                       "candidate_digest": candidate_digest}), encoding="utf-8")
+        out = directory / as_of / "weekly_m67.json"
+        receipt = out.with_name("weekly_m67.receipt.json")
+        write_content_bound_bundle(out, weekly, receipt_path=receipt)
         return out, receipt, {"run_id": "run-1", "candidate_digest": candidate_digest}, [candidate]
 
     def test_capture_is_idempotent_and_settlement_uses_existing_cache_only(self):
@@ -477,7 +475,7 @@ class TargetLedgerTests(unittest.TestCase):
             candidate["price_series"][-1].update(high=10.4, low=9.9, close=10.1)
             weekly = json.loads(out.read_text(encoding="utf-8"))
             weekly["reports"][0]["machine"]["entry_exit_size_star"]["plan"]["t1"] = 12.0
-            out.write_text(json.dumps(weekly), encoding="utf-8")
+            write_content_bound_bundle(out, weekly, receipt_path=receipt)
             capture_after_published_weekly(
                 root=ledger, decision_date=as_of, candidates=candidates, source_identity=identity,
                 out_path=out, receipt_path=receipt, forward_eligible=True,

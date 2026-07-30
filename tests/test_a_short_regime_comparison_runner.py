@@ -33,6 +33,7 @@ from runners.a_short_regime_comparison_runner import (  # noqa: E402
 from engine.a_short_regime_action_comparison import build_action_record, validate_candidate_effect_summary  # noqa: E402
 from engine.a_short_regime_features import compute_regime_daily_features  # noqa: E402
 from engine.a_short_regime_ledger import build_ledger, BACKFILL_MIN_TRADING_DAYS  # noqa: E402
+from tests._a_short_weekly_publish_test_utils import write_content_bound_bundle  # noqa: E402
 
 
 def _dates(n, start=date(2023, 1, 2)):
@@ -117,7 +118,7 @@ def _write_tracker(path: Path, as_of: str, *, digest: str, values: dict[str, flo
 
 def _write_m67(path: Path, as_of: str, *, digest: str, codes: list[str]) -> None:
     run_id = f"a-short-{as_of}-0123456789abcdef"
-    path.write_text(json.dumps({
+    write_content_bound_bundle(path, {
         "schema_name": "a_short_weekly_report", "as_of": as_of,
         "run_lineage": {
             "candidate_digest": digest, "run_id": run_id,
@@ -130,12 +131,7 @@ def _write_m67(path: Path, as_of: str, *, digest: str, codes: list[str]) -> None
             "machine": {"stateful_risk": {"position_state": "flat"},
                         "rule6_gate": {"disposition": "clear"}, "layer": {"hard_veto": []}},
         } for code in codes],
-    }, ensure_ascii=False), encoding="utf-8")
-    path.with_name("weekly_m67.receipt.json").write_text(json.dumps({
-        "schema_name": "a_short_weekly_publish_receipt", "schema_version": "1.0.0",
-        "as_of": as_of, "run_id": run_id, "candidate_digest": digest,
-        "stage_status": "complete",
-    }, ensure_ascii=False), encoding="utf-8")
+    })
 
 
 class PureHelperTests(unittest.TestCase):
@@ -308,10 +304,10 @@ class CandidateEffectSidecarTests(unittest.TestCase):
                     outcome_path=str(outcome),
                 )
 
-    def _paths(self, tmp: str) -> dict:
+    def _paths(self, tmp: str, as_of: str) -> dict:
         base = Path(tmp)
         return {
-            "m67_report_path": str(base / "weekly_m67.json"),
+            "m67_report_path": str(base / as_of / "weekly_m67.json"),
             "tracker_path": str(base / "forward_tracker.csv"),
             "ledger_path": str(base / "private_candidate_effect.json"),
             "summary_path": str(base / "summary.json"),
@@ -328,7 +324,7 @@ class CandidateEffectSidecarTests(unittest.TestCase):
     def test_freeze_idempotence_then_cache_only_mature_backfill_and_aggregate_mirror(self):
         as_of, digest = _dates(BACKFILL_MIN_TRADING_DAYS)[-1], "a" * 64
         with tempfile.TemporaryDirectory() as tmp:
-            paths = self._paths(tmp)
+            paths = self._paths(tmp, as_of)
             _write_tracker(Path(paths["tracker_path"]), as_of, digest=digest,
                            values={"000001.SZ": None, "000002.SZ": None})
             _write_m67(Path(paths["m67_report_path"]), as_of, digest=digest,
@@ -370,7 +366,7 @@ class CandidateEffectSidecarTests(unittest.TestCase):
     def test_m67_tracker_digest_mismatch_is_not_counted_or_written(self):
         as_of = _dates(BACKFILL_MIN_TRADING_DAYS)[-1]
         with tempfile.TemporaryDirectory() as tmp:
-            paths = self._paths(tmp)
+            paths = self._paths(tmp, as_of)
             _write_tracker(Path(paths["tracker_path"]), as_of, digest="a" * 64,
                            values={"000001.SZ": None})
             _write_m67(Path(paths["m67_report_path"]), as_of, digest="b" * 64, codes=["000001.SZ"])
@@ -380,10 +376,56 @@ class CandidateEffectSidecarTests(unittest.TestCase):
             self.assertFalse(Path(paths["ledger_path"]).exists())
             self.assertFalse(Path(paths["summary_path"]).exists())
 
+    def test_candidate_effect_rejects_unreceipted_json_or_markdown_before_any_write(self):
+        as_of, digest = _dates(BACKFILL_MIN_TRADING_DAYS)[-1], "a" * 64
+        for target in ("json", "markdown"):
+            with self.subTest(target=target), tempfile.TemporaryDirectory() as tmp:
+                paths = self._paths(tmp, as_of)
+                _write_tracker(
+                    Path(paths["tracker_path"]), as_of, digest=digest,
+                    values={"000001.SZ": None},
+                )
+                report = Path(paths["m67_report_path"])
+                _write_m67(report, as_of, digest=digest, codes=["000001.SZ"])
+                if target == "json":
+                    document = json.loads(report.read_text(encoding="utf-8"))
+                    document["reports"][0]["m67"]["table"]["操作"] = "观察"
+                    report.write_text(json.dumps(document), encoding="utf-8")
+                else:
+                    report.with_suffix(".md").write_text("# tampered\n", encoding="utf-8")
+                with self.assertRaisesRegex(ValueError, "digest"):
+                    self._run(paths, as_of, run_date=as_of)
+                for key in ("ledger_path", "summary_path", "markdown_path"):
+                    self.assertFalse(Path(paths[key]).exists())
+
+    def test_invalid_receipt_cannot_change_existing_candidate_effect_artifacts(self):
+        as_of, digest = _dates(BACKFILL_MIN_TRADING_DAYS)[-1], "a" * 64
+        with tempfile.TemporaryDirectory() as tmp:
+            paths = self._paths(tmp, as_of)
+            _write_tracker(
+                Path(paths["tracker_path"]), as_of, digest=digest,
+                values={"000001.SZ": None},
+            )
+            report = Path(paths["m67_report_path"])
+            _write_m67(report, as_of, digest=digest, codes=["000001.SZ"])
+            self._run(paths, as_of, run_date=as_of)
+            protected = {
+                key: Path(paths[key]).read_bytes()
+                for key in ("ledger_path", "summary_path", "markdown_path")
+            }
+            receipt_path = report.with_name("weekly_m67.receipt.json")
+            receipt = json.loads(receipt_path.read_text(encoding="utf-8"))
+            receipt.pop("outputs_digest")
+            receipt_path.write_text(json.dumps(receipt), encoding="utf-8")
+            with self.assertRaisesRegex(ValueError, "schema-invalid"):
+                self._run(paths, as_of, run_date=as_of)
+            for key, prior in protected.items():
+                self.assertEqual(Path(paths[key]).read_bytes(), prior)
+
     def test_historical_replay_is_persisted_but_never_counts_as_forward_evidence(self):
         as_of, digest = _dates(BACKFILL_MIN_TRADING_DAYS)[-1], "a" * 64
         with tempfile.TemporaryDirectory() as tmp:
-            paths = self._paths(tmp)
+            paths = self._paths(tmp, as_of)
             _write_tracker(Path(paths["tracker_path"]), as_of, digest=digest,
                            values={"000001.SZ": -1.0})
             _write_m67(Path(paths["m67_report_path"]), as_of, digest=digest, codes=["000001.SZ"])
@@ -396,7 +438,7 @@ class CandidateEffectSidecarTests(unittest.TestCase):
         as_of_1 = _dates(BACKFILL_MIN_TRADING_DAYS)[-1]
         as_of_2 = _dates(BACKFILL_MIN_TRADING_DAYS + 1)[-1]
         with tempfile.TemporaryDirectory() as tmp:
-            paths = self._paths(tmp)
+            paths = self._paths(tmp, as_of_1)
             _write_tracker(Path(paths["tracker_path"]), as_of_1, digest="a" * 64,
                            values={"000001.SZ": None})
             _write_m67(Path(paths["m67_report_path"]), as_of_1, digest="a" * 64, codes=["000001.SZ"])
@@ -405,6 +447,7 @@ class CandidateEffectSidecarTests(unittest.TestCase):
                            values={"000001.SZ": -2.0})
             _write_tracker(Path(paths["tracker_path"]), as_of_2, digest="b" * 64,
                            values={"000002.SZ": None}, append=True)
+            paths["m67_report_path"] = str(Path(tmp) / as_of_2 / "weekly_m67.json")
             _write_m67(Path(paths["m67_report_path"]), as_of_2, digest="b" * 64, codes=["000002.SZ"])
             self._run(paths, as_of_2, run_date=as_of_2)
             summary = json.loads(Path(paths["summary_path"]).read_text(encoding="utf-8"))
@@ -415,7 +458,7 @@ class CandidateEffectSidecarTests(unittest.TestCase):
     def test_same_date_authority_replacement_cannot_overwrite_mature_evidence(self):
         as_of, digest = _dates(BACKFILL_MIN_TRADING_DAYS)[-1], "a" * 64
         with tempfile.TemporaryDirectory() as tmp:
-            paths = self._paths(tmp)
+            paths = self._paths(tmp, as_of)
             _write_tracker(Path(paths["tracker_path"]), as_of, digest=digest,
                            values={"000001.SZ": -1.0})
             _write_m67(Path(paths["m67_report_path"]), as_of, digest=digest, codes=["000001.SZ"])
@@ -431,7 +474,7 @@ class CandidateEffectSidecarTests(unittest.TestCase):
     def test_unmatured_same_date_tracker_authority_replacement_replaces_the_cohort(self):
         as_of = _dates(BACKFILL_MIN_TRADING_DAYS)[-1]
         with tempfile.TemporaryDirectory() as tmp:
-            paths = self._paths(tmp)
+            paths = self._paths(tmp, as_of)
             _write_tracker(Path(paths["tracker_path"]), as_of, digest="a" * 64,
                            values={"000001.SZ": None})
             _write_m67(Path(paths["m67_report_path"]), as_of, digest="a" * 64, codes=["000001.SZ"])
@@ -449,7 +492,7 @@ class CandidateEffectSidecarTests(unittest.TestCase):
     def test_same_date_m67_sha_drift_is_not_counted_or_overwritten(self):
         as_of, digest = _dates(BACKFILL_MIN_TRADING_DAYS)[-1], "a" * 64
         with tempfile.TemporaryDirectory() as tmp:
-            paths = self._paths(tmp)
+            paths = self._paths(tmp, as_of)
             _write_tracker(Path(paths["tracker_path"]), as_of, digest=digest,
                            values={"000001.SZ": None})
             _write_m67(Path(paths["m67_report_path"]), as_of, digest=digest, codes=["000001.SZ"])
@@ -458,8 +501,8 @@ class CandidateEffectSidecarTests(unittest.TestCase):
             m67 = json.loads(Path(paths["m67_report_path"]).read_text(encoding="utf-8"))
             m67["same_day_rerun_marker"] = "changed-source-bytes"
             Path(paths["m67_report_path"]).write_text(json.dumps(m67), encoding="utf-8")
-            result = self._run(paths, as_of, run_date=as_of)
-            self.assertEqual(result["status"], "skipped_source_mismatch")
+            with self.assertRaisesRegex(ValueError, "digest"):
+                self._run(paths, as_of, run_date=as_of)
             self.assertEqual(Path(paths["ledger_path"]).read_bytes(), prior)
 
     def test_regime_runner_uses_the_same_m67_input_without_mutating_it(self):
@@ -467,7 +510,7 @@ class CandidateEffectSidecarTests(unittest.TestCase):
         as_of, digest = cal[-1], "a" * 64
         with tempfile.TemporaryDirectory() as tmp:
             base = Path(tmp)
-            paths = self._paths(tmp)
+            paths = self._paths(tmp, as_of)
             _write_tracker(Path(paths["tracker_path"]), as_of, digest=digest,
                            values={"000001.SZ": None})
             _write_m67(Path(paths["m67_report_path"]), as_of, digest=digest, codes=["000001.SZ"])
@@ -559,7 +602,7 @@ class BootstrapPolicyTests(unittest.TestCase):
         cal = _dates(BACKFILL_MIN_TRADING_DAYS)
         with tempfile.TemporaryDirectory() as tmp:
             base = Path(tmp)
-            report = base / "weekly_m67.json"
+            report = base / cal[-1] / "weekly_m67.json"
             _write_m67(report, cal[-1], digest="a" * 64, codes=[])
             kw = self._kw(cal, tmp, bootstrap=True)
             kw.update(v14_2_regime="shock", raw_v14_2_regime="unknown",
@@ -572,11 +615,62 @@ class BootstrapPolicyTests(unittest.TestCase):
             self.assertTrue(out["action_comparison"]["records"][0]["forward_eligible"])
             self.assertTrue((base / "actions.json").exists())
 
+    def test_d2_rejects_unreceipted_json_or_markdown_before_action_writes(self):
+        cal = _dates(BACKFILL_MIN_TRADING_DAYS)
+        for target in ("json", "markdown"):
+            with self.subTest(target=target), tempfile.TemporaryDirectory() as tmp:
+                base = Path(tmp)
+                report = base / cal[-1] / "weekly_m67.json"
+                _write_m67(report, cal[-1], digest="a" * 64, codes=[])
+                if target == "json":
+                    document = json.loads(report.read_text(encoding="utf-8"))
+                    document["unreceipted_action_change"] = True
+                    report.write_text(json.dumps(document), encoding="utf-8")
+                else:
+                    report.with_suffix(".md").write_text("# tampered\n", encoding="utf-8")
+                actions = base / "actions.json"
+                summary = base / "action-summary.json"
+                kw = self._kw(cal, tmp, bootstrap=True)
+                kw.update(
+                    v14_2_regime="shock", raw_v14_2_regime="unknown",
+                    m67_report_path=str(report), action_records_path=str(actions),
+                    action_summary_path=str(summary), action_decision_as_of=cal[-1],
+                )
+                with self.assertRaisesRegex(ValueError, "digest"):
+                    run_regime_step(**kw)
+                self.assertFalse(actions.exists())
+                self.assertFalse(summary.exists())
+
+    def test_d2_failed_receipt_cannot_change_existing_action_artifacts(self):
+        cal = _dates(BACKFILL_MIN_TRADING_DAYS)
+        with tempfile.TemporaryDirectory() as tmp:
+            base = Path(tmp)
+            report = base / cal[-1] / "weekly_m67.json"
+            _write_m67(report, cal[-1], digest="a" * 64, codes=[])
+            actions = base / "actions.json"
+            summary = base / "action-summary.json"
+            kw = self._kw(cal, tmp, bootstrap=True)
+            kw.update(
+                v14_2_regime="shock", raw_v14_2_regime="unknown",
+                m67_report_path=str(report), action_records_path=str(actions),
+                action_summary_path=str(summary), action_decision_as_of=cal[-1],
+            )
+            run_regime_step(**kw)
+            protected = {actions: actions.read_bytes(), summary: summary.read_bytes()}
+            receipt_path = report.with_name("weekly_m67.receipt.json")
+            receipt = json.loads(receipt_path.read_text(encoding="utf-8"))
+            receipt["stage_status"] = "failed"
+            receipt_path.write_text(json.dumps(receipt), encoding="utf-8")
+            with self.assertRaisesRegex(ValueError, "schema-invalid|not complete"):
+                run_regime_step(**{**kw, "bootstrap": False})
+            for path, prior in protected.items():
+                self.assertEqual(path.read_bytes(), prior)
+
     def test_d2_same_settled_week_rerun_keeps_first_frozen_m67_provenance(self):
         cal = _dates(BACKFILL_MIN_TRADING_DAYS)
         with tempfile.TemporaryDirectory() as tmp:
             base = Path(tmp)
-            report = base / "weekly_m67.json"
+            report = base / cal[-1] / "weekly_m67.json"
             _write_m67(report, cal[-1], digest="a" * 64, codes=[])
             kw = self._kw(cal, tmp, bootstrap=True)
             kw.update(v14_2_regime="shock", raw_v14_2_regime="unknown",
@@ -585,9 +679,9 @@ class BootstrapPolicyTests(unittest.TestCase):
             with patch("runners.a_short_regime_comparison_runner._current_run_date", return_value=cal[-1]):
                 first = run_regime_step(**kw)
                 first_digest = first["action_comparison"]["records"][0]["m67_provenance"]["source_sha256"]
-                report.write_text(json.dumps({"schema_name": "a_short_weekly_report", "as_of": cal[-1],
-                                              "reports": [], "rerun_marker": "account_scope_changed"}),
-                                  encoding="utf-8")
+                rerun = json.loads(report.read_text(encoding="utf-8"))
+                rerun["rerun_marker"] = "account_scope_changed"
+                write_content_bound_bundle(report, rerun)
                 second = run_regime_step(**{**kw, "bootstrap": False})
             self.assertEqual(second["action_comparison"]["records"][0]["m67_provenance"]["source_sha256"],
                              first_digest)
@@ -602,7 +696,7 @@ class BootstrapPolicyTests(unittest.TestCase):
         }
         with tempfile.TemporaryDirectory() as tmp:
             base = Path(tmp)
-            report = base / "weekly_m67.json"
+            report = base / cal[-1] / "weekly_m67.json"
             _write_m67(report, cal[-1], digest="a" * 64, codes=[])
             kw = self._kw(cal, tmp, bootstrap=True)
             kw.update(v14_2_regime="shock", raw_v14_2_regime="unknown",
@@ -621,13 +715,15 @@ class BootstrapPolicyTests(unittest.TestCase):
         cal = _dates(BACKFILL_MIN_TRADING_DAYS)
         with tempfile.TemporaryDirectory() as tmp:
             base = Path(tmp)
-            report = base / "weekly_m67.json"
+            report = base / cal[-1] / "weekly_m67.json"
             _write_m67(report, cal[-1], digest="a" * 64, codes=[])
             historical_source = json.loads(report.read_text(encoding="utf-8"))
             historical_source["run_lineage"]["price_freshness"] = {
                 "mode": "strict_as_of", "run_date": cal[-2], "price_data_through": cal[-2],
             }
-            report.write_text(json.dumps(historical_source), encoding="utf-8")
+            historical_source["run_date"] = cal[-2]
+            historical_source["price_data_through"] = cal[-2]
+            write_content_bound_bundle(report, historical_source)
             kw = self._kw(cal, tmp, bootstrap=True)
             kw.update(v14_2_regime="shock", raw_v14_2_regime="unknown", m67_report_path=str(report),
                       action_records_path=str(base / "actions.json"),
@@ -642,7 +738,7 @@ class BootstrapPolicyTests(unittest.TestCase):
         cal = _dates(BACKFILL_MIN_TRADING_DAYS)
         with tempfile.TemporaryDirectory() as tmp:
             base = Path(tmp)
-            report = base / "weekly_m67.json"
+            report = base / cal[-1] / "weekly_m67.json"
             _write_m67(report, cal[-1], digest="a" * 64, codes=[])
             kw = self._kw(cal, tmp, bootstrap=True)
             kw.update(v14_2_regime="shock", raw_v14_2_regime="unknown", m67_report_path=str(report),

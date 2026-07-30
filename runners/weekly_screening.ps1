@@ -91,6 +91,35 @@ try {
     Write-Host "[FATAL] $($_.Exception.Message)" -ForegroundColor Red
     exit 1
 }
+function Write-M67Utf8NoBom {
+    param([string]$LiteralPath, [string]$Text)
+    $Encoding = [System.Text.UTF8Encoding]::new($false)
+    [System.IO.File]::WriteAllText($LiteralPath, $Text, $Encoding)
+}
+function Invalidate-M67Artifact {
+    param([string]$LiteralPath)
+    if (-not (Test-Path -LiteralPath $LiteralPath)) { return $true }
+    try {
+        Remove-Item -LiteralPath $LiteralPath -Force -ErrorAction Stop
+        return $true
+    } catch {
+        # A failed delete must not leave a schema-valid old success surface.
+        # Overwrite fallback is deliberately schema-invalid for JSON/receipt
+        # and visibly unavailable for Markdown.
+        $Tombstone = if ($LiteralPath.EndsWith('.md', [System.StringComparison]::OrdinalIgnoreCase)) {
+            "# unavailable: superseded by a failed M6.7 invocation`n"
+        } else {
+            "{}`n"
+        }
+        try {
+            Write-M67Utf8NoBom -LiteralPath $LiteralPath -Text $Tombstone
+            return $true
+        } catch {
+            Write-Host "[WARN] unable to invalidate stale M6.7 artifact: $([System.IO.Path]::GetFileName($LiteralPath))" -ForegroundColor Yellow
+            return $false
+        }
+    }
+}
 function Write-M67FailureReceipt {
     param([string]$Directory, [string]$Reason, [int]$ExitCode, [string]$FailureDetailRef = '', [string]$AnalysisInput = $null)
     $ErrorActionPreference = 'Stop'
@@ -99,7 +128,7 @@ function Write-M67FailureReceipt {
     $Tmp = "$Receipt.tmp"
     $Payload = [ordered]@{
         schema_name = 'a_short_weekly_publish_receipt'
-        schema_version = '1.0.0'
+        schema_version = '1.1.0'
         as_of = $AsOf
         stage_status = 'failed'
         failure_reason = $Reason
@@ -120,19 +149,69 @@ function Write-M67FailureReceipt {
             # The failed receipt remains honest without fabricated identity.
         }
     }
-    # Stage the failed receipt first. Then unlink the old complete receipt BEFORE touching JSON/Markdown,
-    # so any later filesystem failure leaves the official reader fail-closed (missing receipt), never stale-complete.
-    $Payload | ConvertTo-Json -Depth 4 | Set-Content -LiteralPath $Tmp -Encoding utf8 -ErrorAction Stop
-    if (Test-Path -LiteralPath $Receipt) {
-        Remove-Item -LiteralPath $Receipt -Force -ErrorAction Stop
-    }
-    foreach ($Leaf in @('weekly_m67.json', 'weekly_m67.md')) {
-        $Stale = Join-Path $Directory $Leaf
-        if (Test-Path -LiteralPath $Stale) {
-            Remove-Item -LiteralPath $Stale -Force -ErrorAction Stop
+    # Cut every trust root and visible old surface BEFORE the first fallible
+    # failed-receipt write.  Each item is independent: a delete failure falls
+    # back to an invalid tombstone instead of aborting before later health
+    # surfaces are invalidated.
+    $InvalidationFailures = @()
+    foreach ($Leaf in @(
+        'weekly_m67.receipt.json',
+        'sidecar_health.receipt.json',
+        'weekly_m67.json',
+        'weekly_m67.md',
+        'sidecar_health.json',
+        'sidecar_health.md',
+        'weekly_m67.pipeline_sidecar_outcomes.json',
+        'launcher_sidecar_outcomes.json'
+    )) {
+        if (-not (Invalidate-M67Artifact -LiteralPath (Join-Path $Directory $Leaf))) {
+            $InvalidationFailures += $Leaf
         }
     }
+    if ($InvalidationFailures.Count -gt 0) {
+        throw "unable to invalidate $($InvalidationFailures.Count) stale M6.7 artifact(s)"
+    }
+    Write-M67Utf8NoBom -LiteralPath $Tmp -Text (
+        ($Payload | ConvertTo-Json -Depth 4) + "`n"
+    )
     Move-Item -LiteralPath $Tmp -Destination $Receipt -Force -ErrorAction Stop
+    $FailureHealthScript = Join-Path $ProjectRoot 'runners\a_short_weekly_sidecar_health.py'
+    if (Test-Path -LiteralPath $FailureHealthScript -PathType Leaf) {
+        $FailureHealthArgs = @(
+            $FailureHealthScript,
+            '--as-of', [string]$AsOf,
+            '--project-root', $ProjectRoot,
+            '--out-dir', $Directory,
+            '--m67-invocation', 'requested'
+        )
+        & $PythonExe @FailureHealthArgs
+        $FailureHealthExit = $LASTEXITCODE
+        if ($null -eq $FailureHealthExit) { $FailureHealthExit = 1 }
+        $FailureHealthComplete = (
+            $FailureHealthExit -eq 0 -and
+            (Test-Path -LiteralPath (Join-Path $Directory 'sidecar_health.json') -PathType Leaf) -and
+            (Test-Path -LiteralPath (Join-Path $Directory 'sidecar_health.md') -PathType Leaf) -and
+            (Test-Path -LiteralPath (Join-Path $Directory 'sidecar_health.receipt.json') -PathType Leaf)
+        )
+        if (-not $FailureHealthComplete) {
+            $HealthInvalidationFailures = @()
+            foreach ($Leaf in @(
+                'sidecar_health.receipt.json',
+                'sidecar_health.json',
+                'sidecar_health.md'
+            )) {
+                if (-not (Invalidate-M67Artifact -LiteralPath (Join-Path $Directory $Leaf))) {
+                    $HealthInvalidationFailures += $Leaf
+                }
+            }
+            if ($HealthInvalidationFailures.Count -gt 0) {
+                throw "unable to invalidate $($HealthInvalidationFailures.Count) partial health artifact(s)"
+            }
+            Write-Host "[WARN] failed M6.7 receipt published but failure health was unavailable (exit $FailureHealthExit); stale health remains invalidated." -ForegroundColor Yellow
+        }
+    } else {
+        Write-Host "[WARN] failed M6.7 receipt published but health companion is missing; stale health remains invalidated." -ForegroundColor Yellow
+    }
 }
 function Write-KnownM67FailureReceipt {
     param([string]$Reason, [int]$ExitCode)
@@ -695,15 +774,6 @@ $LauncherManifest = [ordered]@{
     expected_sidecars = @($ManifestExpected)
     sidecars = @($LauncherSidecarOutcomes)
 }
-$ReceiptForHealth = Join-Path $HealthDir 'weekly_m67.receipt.json'
-$M67StatusForHealth = if ($SkipSemanticRisk) { 'skipped' } elseif (Test-Path -LiteralPath $ReceiptForHealth) { 'complete' } else { 'not_run' }
-if (Test-Path -LiteralPath (Join-Path $HealthDir 'weekly_m67.json')) {
-    try {
-        $WeeklyForHealth = Get-Content -Raw -Encoding UTF8 (Join-Path $HealthDir 'weekly_m67.json') | ConvertFrom-Json
-        $LauncherManifest.run_id = [string]$WeeklyForHealth.run_lineage.run_id
-        $LauncherManifest.candidate_digest = [string]$WeeklyForHealth.run_lineage.candidate_digest
-    } catch { }
-}
 $Utf8NoBom = [System.Text.UTF8Encoding]::new($false)
 New-Item -ItemType Directory -Force -Path $HealthDir | Out-Null
 [System.IO.File]::WriteAllText($LauncherManifestPath, ($LauncherManifest | ConvertTo-Json -Depth 8) + "`n", $Utf8NoBom)
@@ -712,10 +782,11 @@ $HealthArgs = @(
     'runners\a_short_weekly_sidecar_health.py', '--as-of', $AsOf,
     '--project-root', $ProjectRoot, '--out-dir', $HealthDir,
     '--launcher-outcomes', $LauncherManifestPath,
-    '--pipeline-outcomes', $PipelineManifestPath,
-    '--m67-status', $M67StatusForHealth
+    '--m67-invocation', $(if ($SkipSemanticRisk) { 'skipped' } else { 'requested' })
 )
-if (Test-Path -LiteralPath $ReceiptForHealth) { $HealthArgs += @('--weekly-receipt', $ReceiptForHealth) }
+if (-not $SkipSemanticRisk) {
+    $HealthArgs += @('--pipeline-outcomes', $PipelineManifestPath)
+}
 & $PythonExe @HealthArgs
 $HealthExitCode = $LASTEXITCODE
 if ($null -eq $HealthExitCode) { $HealthExitCode = 1 }

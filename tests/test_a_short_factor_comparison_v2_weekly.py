@@ -35,6 +35,7 @@ from engine.a_short_factor_comparison_v2_weekly import (  # noqa: E402
     settle_and_summarize_v2_weekly,
     validate_v2_public_summary,
 )
+from tests._a_short_weekly_publish_test_utils import write_content_bound_bundle  # noqa: E402
 
 
 def _root(tmp: str) -> Path:
@@ -193,7 +194,7 @@ class ComparisonV2WeeklyAdapterTests(unittest.TestCase):
     def test_capture_requires_the_matching_published_bundle_before_freezing_current_week(self):
         with tempfile.TemporaryDirectory() as tmp:
             root = _root(tmp)
-            out = Path(tmp) / "weekly_m67.json"
+            out = Path(tmp) / DECISION_DATE / "weekly_m67.json"
             md = out.with_suffix(".md")
             receipt_path = out.with_suffix("").with_suffix(".receipt.json")
             candidates = _candidates()
@@ -213,12 +214,7 @@ class ComparisonV2WeeklyAdapterTests(unittest.TestCase):
                     "production_unchanged": True,
                 },
             }
-            out.write_text(json.dumps(weekly), encoding="utf-8")
-            md.write_text("weekly", encoding="utf-8")
-            receipt_path.write_text(json.dumps({
-                "stage_status": "complete", "as_of": DECISION_DATE, "run_id": "official-run",
-                "candidate_digest": "a" * 64, "outputs": [out.name, md.name],
-            }), encoding="utf-8")
+            receipt_path = write_content_bound_bundle(out, weekly)
             result = capture_v2_after_published_weekly(
                 root=root, decision_date=DECISION_DATE, candidates=candidates,
                 source_identity=source_identity, out_path=out, receipt_path=receipt_path,
@@ -234,7 +230,7 @@ class ComparisonV2WeeklyAdapterTests(unittest.TestCase):
     def test_weekend_canonical_capture_binds_friday_price_but_keeps_monday_decision_key(self):
         with tempfile.TemporaryDirectory() as tmp:
             root = _root(tmp)
-            out = Path(tmp) / "weekly_m67.json"
+            out = Path(tmp) / DECISION_DATE / "weekly_m67.json"
             md = out.with_suffix(".md")
             receipt_path = out.with_suffix("").with_suffix(".receipt.json")
             run_date, price_data_through = "20260131", "20260130"
@@ -263,12 +259,7 @@ class ComparisonV2WeeklyAdapterTests(unittest.TestCase):
                     "production_unchanged": True,
                 },
             }
-            out.write_text(json.dumps(weekly), encoding="utf-8")
-            md.write_text("weekly", encoding="utf-8")
-            receipt_path.write_text(json.dumps({
-                "stage_status": "complete", "as_of": DECISION_DATE, "run_id": "official-run",
-                "candidate_digest": "a" * 64, "outputs": [out.name, md.name],
-            }), encoding="utf-8")
+            receipt_path = write_content_bound_bundle(out, weekly)
             with mock.patch("engine.a_short_factor_comparison_v2._today", return_value=run_date):
                 result = capture_v2_after_published_weekly(
                     root=root, decision_date=DECISION_DATE, candidates=candidates,
@@ -299,7 +290,7 @@ class ComparisonV2WeeklyAdapterTests(unittest.TestCase):
         def _attempt(mode: str, accepted: str):
             with tempfile.TemporaryDirectory() as tmp:
                 root = _root(tmp)
-                out = Path(tmp) / "weekly_m67.json"
+                out = Path(tmp) / DECISION_DATE / "weekly_m67.json"
                 md = out.with_suffix(".md")
                 receipt_path = out.with_suffix("").with_suffix(".receipt.json")
                 weekly = {
@@ -321,12 +312,7 @@ class ComparisonV2WeeklyAdapterTests(unittest.TestCase):
                         "production_unchanged": True,
                     },
                 }
-                out.write_text(json.dumps(weekly), encoding="utf-8")
-                md.write_text("weekly", encoding="utf-8")
-                receipt_path.write_text(json.dumps({
-                    "stage_status": "complete", "as_of": DECISION_DATE, "run_id": "official-run",
-                    "candidate_digest": "a" * 64, "outputs": [out.name, md.name],
-                }), encoding="utf-8")
+                receipt_path = write_content_bound_bundle(out, weekly)
                 with mock.patch("engine.a_short_factor_comparison_v2._today", return_value=run_date):
                     capture_v2_after_published_weekly(
                         root=root, decision_date=DECISION_DATE, candidates=_candidates(),

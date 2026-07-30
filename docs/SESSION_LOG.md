@@ -135,6 +135,57 @@
 - **Verify**: 固定主 Python focused 105 OK；R93 + executable mutation matrix 2 OK；最终官方 ledger `5010 OK` / 589.0s / fingerprint `baedefe2e01e` / recorded `2026-07-29T20:26:41`。一次只读 adversarial self-review 返回 FAIL 的四条均已闭合；未再起第二 agent。历史重启边界：一次 300s focused timeout 后窄化定位；一次 full 暴露 conformance + temp-file error；一次 5010 OK 因并发 HEAD 前进被 ledger 拒绝；一次资源隔离 flake 的真实子测试单跑 1 OK；最终固定包集中一轮 5010 OK。
 - **Pre-Codex self-review**: `matrix=complete: K3-R86..K3-R93 + adversarial residuals 4/4 repaired; register=updated; handoff=updated; focused=105 OK + executable mutation 2 OK; full-lane=5010 OK on exact fingerprint baedefe2e01e; door=route-doc + doc-governance 55 OK`
 - **Next**: Claude Code：审查。
+## 2026-07-30 - User-authorized A-short Knife 10 integration closeout (79eb)
+
+- **Verdict/Action**: The user explicitly authorized committing and merging the repaired Knife 10 slice after the fixed-Python focus/full evidence and bounded adversarial self-review. Integration is limited to the complete existing 79eb change set; no push.
+- **Required**: None known at integration closeout; the two repaired classes and residual boundaries remain recorded at the risk-register entries linked immediately below.
+- **Verify**: Final code fingerprint `d048ca136ed4`: focus `97 OK`; independent read-only adversarial subset `14 OK`, no new Required; full A-short ledger `2168 OK (skipped=3)` / `PASS`; final document/route guard `66 OK`; `git diff --check` exit 0. The main `master` worktree was clean before integration.
+- **Pre-Codex self-review**: `scope=all and only current 79eb tracked/untracked Knife 10 files; target=master; strategy=commit detached 79eb tip then merge --no-ff; push=forbidden`
+- **Next**: No push; continue from the merged master history.
+
+## 2026-07-30 - Codex class-level repair and adversarial self-review of A-short Knife 10 (79eb)
+
+- **Verdict/Action**: Implementer repair is complete and ten bounded adversarial sub-agent rounds ended with no new Required. Failed weekly invocations now invalidate every weekly/health/manifest trust surface before publishing failure evidence, and the formal-consumer guard follows the whole ordinary Python alias/container/callable/path-representation class. This is not a separate-review PASS; not committed.
+- **Required**: Repaired `docs/system_risk_register.md#R-ASHORT-KNIFE10-FAILURE-EXITS-LEAVE-STALE-HEALTH-COMPLETE` and `docs/system_risk_register.md#R-ASHORT-KNIFE10-CONSUMER-GUARD-STRUCTURAL-BYPASS-CLASS`. No known implementer-side Optional remains.
+- **Verify**: Fixed Python 3.13.8 only. Repository-launcher focus pack `Ran 97 tests in 37.325s` / `OK`; independent read-only adversarial subset `Ran 14 tests in 1.823s` / `OK`, no new Required; exact final code fingerprint `d048ca136ed4` full A-short ledger `Ran 2168 tests in 199.953s` / `OK (skipped=3)`, ledger `PASS`. The first document-door run correctly failed because this entry omitted the mandatory `Pre-Codex self-review` line; after adding it, the same 66-test governance/route pack ended `OK`. Risk register records the failure-injection matrix, reverse controls, residual filesystem boundary, and unverified dynamic-code boundary.
+- **Pre-Codex self-review**: `matrix=complete: failure trust roots + partial order + delete/tombstone faults + health partial/missing + public inventory + alias/container/callable/path representation; agent=ten bounded rounds, final 14 OK, no Required; focused=97 OK; full-lane=2168 OK skipped=3 fingerprint d048ca136ed4; handoff=register + SESSION_LOG`
+- **Next**: Independent reviewer: review the final 79eb diff and rerun the rule-1 acceptance pack; commit only after PASS.
+
+## 2026-07-30 - Codex repairs A-short Knife 10 second re-review Required (79eb)
+
+- **Verdict/Action**: Repaired both second re-review P2 findings class-wide. Current `requested/skipped/not_run` invocation intent now dominates directory history and old pipeline manifests; consumer governance now propagates raw-path return taint and `*args/**kwargs`, and classifies every public path entrypoint in each registered module. Not committed.
+- **Required**: Repaired `docs/system_risk_register.md#R-ASHORT-KNIFE10-HEALTH-SKIP-REUSES-STALE-COMPLETE` and `docs/system_risk_register.md#R-ASHORT-KNIFE10-GUARD-VALIDATOR-HELPER-LAUNDERS-RAW-PATH`; no Optional was assigned in this re-review.
+- **Verify**: Fixed Python 3.13.8 only. Core health/guard plus official-operation repair `Ran 54 tests ... OK`; formal-consumer acceptance `Ran 733 tests ... OK`; final exact-state full A-short ledger `Ran 2157 tests ... OK (skipped=3)`, fingerprint `3480812251fa`; document/route guards `Ran 66 tests ... OK`; `py_compile` and `git diff --check` passed. An earlier 733-test development run exposed three `PublishedWeeklyBundle.json_path` AttributeErrors; the correct immutable `weekly_path` property was applied before both final green runs.
+- **Proof-of-use**: With a valid old complete bundle and stale pipeline manifest still on disk, explicit `skipped` and `not_run` produce those current-run statuses, no identity/digest, and no old pipeline sidecars; `requested` restores strict-snapshot `complete`. The guard turns red for a validator wrapper returning the raw path, one/two-layer varargs, imported/open/raw loaders, validate-after-use, unclassified second public path entrypoint, inventory deletion, and unrelated-path validation, while a wrapper returning the validated snapshot remains green.
+- **Pre-Codex self-review**: `matrix=complete: invocation intent + stale manifest isolation + requested failure states + return taint + varargs + entrypoint classification + snapshot-only safe path; register=updated; handoff=SESSION_LOG top entry; focused=54+733 OK; full-lane=2157 OK skipped=3 fingerprint 3480812251fa`
+- **Next**: Independent reviewer: re-review Knife 10; commit only after PASS.
+
+## 2026-07-30 - Codex repairs A-short Knife 10 re-review Required (79eb)
+
+- **Verdict/Action**: Repaired both Knife 10 re-review findings class-wide. Sidecar health can no longer self-assert a complete M6.7 publication from caller hints or raw JSON, and the formal-consumer guard now follows renamed and multi-layer path aliases across helper calls while rejecting raw and imported loaders. Not committed.
+- **Required**: Repaired `docs/system_risk_register.md#R-ASHORT-KNIFE10-SIDECAR-HEALTH-BYPASSES-PUBLISHED-BUNDLE` and `docs/system_risk_register.md#R-ASHORT-KNIFE10-CONSUMER-GUARD-INDIRECT-HELPER-FALSE-GREEN`; no known implementer-side Optional remains from this re-review.
+- **Verify**: Fixed Python 3.13.8 only. Final core guard/health pack `Ran 37 tests ... OK`; affected consumer superset before the final test-only guard strengthening `Ran 740 tests ... OK`; effect/writer/schema pack `Ran 40 tests ... OK`; final exact-state full A-short ledger `Ran 2155 tests ... OK (skipped=3)`, fingerprint `35c218b3cba7`; document guards `Ran 55 tests ... OK`; `py_compile` and `git diff --check` passed.
+- **Proof-of-use**: JSON or Markdown tamper overwrites stale complete health with honest `unavailable`; a schema-valid failed receipt remains `failed` even beside stale complete outputs; run identity and receipt digest come only from the validated snapshot. Planted renamed helper, two-layer helper, validate-after-use, `open`/`json.load`, imported loader, unrelated-path validator, second entrypoint, and inventory deletion controls all turn the consumer guard red.
+- **Pre-Codex self-review**: `matrix=complete: health canonical bundle + failure states + PS no raw read + authoritative inventory + interprocedural aliases + raw/imported loader controls; register=updated; handoff=SESSION_LOG top entry; focused=37+740+40 OK; full-lane=2155 OK skipped=3 fingerprint 35c218b3cba7`
+- **Next**: Independent reviewer: re-review Knife 10; commit only after PASS.
+
+## 2026-07-30 - Codex repairs A-short Knife 10 review Required and independent consumer gap (79eb)
+
+- **Verdict/Action**: The review finding and the implementer self-review finding were related but not duplicates; both are repaired class-wide. All formal weekly consumers now receive one strict, content-bound validation snapshot before use or output, with no weakening flags or post-validation source rereads. Not committed.
+- **Required**: Repaired `docs/system_risk_register.md#R-ASHORT-KNIFE10-REGIME-CONSUMER-RECEIPT-BYPASS`; the same closure also removes the independently found relaxed canonical-path and Markdown-render validation switches from every formal consumer.
+- **Verify**: Fixed Python 3.13.8 only. Focused acceptance `Ran 722 tests ... OK`; repair probes `Ran 38 tests ... OK`; final exact-code-state full A-short ledger `Ran 2145 tests ... OK`, fingerprint `0b2606119ab2`; document guards `Ran 55 tests ... OK`. The first full run exposed two dynamic-loader errors from the initial dataclass carrier (`2145 tests`, `errors=2`); replacing it with a plain immutable-use snapshot class closed both. One mistaken attempt to pass the `.cmd` launcher to Python ended in `SyntaxError`; the corrected explicit fixed-Python command produced the recorded 55-test terminal.
+- **Proof-of-use**: Call-graph and taint guards prove every enumerated formal entrypoint reaches the shared validator and cannot raw-read weekly source arguments; a planted future helper makes the guard fail. JSON, Markdown, and receipt tampering all stop action/candidate publication without changing existing evidence bytes.
+- **Next**: Claude Code: independently re-review Knife 10; commit only after PASS.
+
+## 2026-07-30 - Codex executes A-short Knife 10 (79eb)
+
+- **Verdict/Action**: Implemented Knife 10 item 2: a complete `weekly_m67` receipt now binds the exact final JSON and Markdown bytes with SHA-256 plus byte length; the official loader and every formal weekly consumer fail closed on content drift. Failed PowerShell receipts remain schema-valid and do not claim output digests. Not committed.
+- **Required**: No known implementer-side Required. Independent review is still required; implementation detail and residual boundary are recorded at `docs/system_risk_register.md#R-ASHORT-KNIFE10-WEEKLY-RECEIPT-CONTENT-BINDING`.
+- **Verify**: Fixed Python 3.13.8 only. Focused acceptance `Ran 691 tests ... OK`; final receipt / official-operation probe `Ran 28 tests ... OK`; exact-final-code full A-short ledger `Ran 2140 tests ... OK (skipped=3)`, recorded PASS at fingerprint `3ccbb3fbc897`; document governance `Ran 67 tests ... OK`; `git diff --check` clean apart from line-ending notices. JSON tamper, Markdown tamper, render mismatch, missing digest, failed receipt, operation-evidence source identity, and all enumerated formal consumers are covered.
+- **Proof-of-use**: The producer hashes the same in-memory byte strings passed to the atomic publisher; the shared validator re-hashes bytes read for consumption, validates receipt identity/schema/output set, and the canonical loader re-renders Markdown byte-for-byte. A planted future consumer bypass fails the routing guard.
+- **Pre-Codex self-review**: `matrix=complete: producer bytes + receipt schema + JSON/MD tamper + deterministic render + failed receipt + official operation identity + eight formal consumers; register=updated; handoff=SESSION_LOG top entry; focused=691+28 OK; full-lane=2140 OK skipped=3; door=doc-governance 67 OK`
+- **Next**: Claude Code: independently review Knife 10; commit only after PASS.
+
 ## 2026-07-30 — Codex 修复第九刀复审验收命令（79eb）
 
 - **Verdict/Action**: 已关闭“审查聚焦包实际运行 0 tests”的执行缺口；项目 launcher 改用正确的 unittest 参数形状，最终代码未因本项再改。未提交。

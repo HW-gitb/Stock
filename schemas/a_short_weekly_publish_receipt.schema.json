@@ -1,0 +1,204 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://example.local/schemas/a_short_weekly_publish_receipt.schema.json",
+  "title": "A-short weekly publish receipt",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_name",
+    "schema_version",
+    "as_of",
+    "stage_status"
+  ],
+  "properties": {
+    "schema_name": {
+      "const": "a_short_weekly_publish_receipt"
+    },
+    "schema_version": {
+      "const": "1.1.0"
+    },
+    "as_of": {
+      "type": "string",
+      "pattern": "^[0-9]{8}$"
+    },
+    "decision_as_of": {
+      "type": "string",
+      "pattern": "^[0-9]{8}$"
+    },
+    "run_date": {
+      "type": [
+        "string",
+        "null"
+      ],
+      "pattern": "^[0-9]{8}$"
+    },
+    "price_data_through": {
+      "type": "string",
+      "pattern": "^[0-9]{8}$"
+    },
+    "run_id": {
+      "type": "string",
+      "minLength": 1
+    },
+    "candidate_digest": {
+      "type": "string",
+      "pattern": "^[a-f0-9]{64}$"
+    },
+    "published_at": {
+      "type": "string",
+      "minLength": 1
+    },
+    "account_snapshot": {
+      "type": [
+        "object",
+        "null"
+      ]
+    },
+    "stage_status": {
+      "enum": [
+        "complete",
+        "failed"
+      ]
+    },
+    "outputs": {
+      "type": "array",
+      "minItems": 2,
+      "maxItems": 2,
+      "uniqueItems": true,
+      "items": {
+        "type": "string",
+        "minLength": 1
+      }
+    },
+    "outputs_digest": {
+      "type": "object",
+      "minProperties": 2,
+      "maxProperties": 2,
+      "additionalProperties": {
+        "$ref": "#/$defs/output_digest"
+      }
+    },
+    "failure_reason": {
+      "type": "string",
+      "minLength": 1
+    },
+    "exit_code": {
+      "type": "integer"
+    },
+    "failure_detail_ref": {
+      "type": "string",
+      "minLength": 1
+    }
+  },
+  "allOf": [
+    {
+      "if": {
+        "properties": {
+          "stage_status": {
+            "const": "complete"
+          }
+        },
+        "required": [
+          "stage_status"
+        ]
+      },
+      "then": {
+        "required": [
+          "decision_as_of",
+          "run_date",
+          "price_data_through",
+          "run_id",
+          "candidate_digest",
+          "published_at",
+          "account_snapshot",
+          "outputs",
+          "outputs_digest"
+        ],
+        "not": {
+          "anyOf": [
+            {
+              "required": [
+                "failure_reason"
+              ]
+            },
+            {
+              "required": [
+                "exit_code"
+              ]
+            },
+            {
+              "required": [
+                "failure_detail_ref"
+              ]
+            }
+          ]
+        }
+      },
+      "else": {
+        "required": [
+          "failure_reason",
+          "exit_code"
+        ],
+        "not": {
+          "anyOf": [
+            {
+              "required": [
+                "decision_as_of"
+              ]
+            },
+            {
+              "required": [
+                "run_date"
+              ]
+            },
+            {
+              "required": [
+                "price_data_through"
+              ]
+            },
+            {
+              "required": [
+                "published_at"
+              ]
+            },
+            {
+              "required": [
+                "account_snapshot"
+              ]
+            },
+            {
+              "required": [
+                "outputs"
+              ]
+            },
+            {
+              "required": [
+                "outputs_digest"
+              ]
+            }
+          ]
+        }
+      }
+    }
+  ],
+  "$defs": {
+    "output_digest": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "sha256",
+        "byte_length"
+      ],
+      "properties": {
+        "sha256": {
+          "type": "string",
+          "pattern": "^[a-f0-9]{64}$"
+        },
+        "byte_length": {
+          "type": "integer",
+          "minimum": 0
+        }
+      }
+    }
+  }
+}

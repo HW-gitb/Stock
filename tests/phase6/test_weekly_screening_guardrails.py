@@ -231,15 +231,20 @@ class WeeklyScreeningGuardrailTest(unittest.TestCase):
         self.assertIn("$null -eq $PreflightExit", text)
 
     def test_failure_receipt_invalidates_stale_and_records_identity(self) -> None:
-        # 刀2: a failed known-date run removes the stale weekly_m67.json/.md (the old complete receipt
-        # is unlinked FIRST, ErrorAction Stop) and records the real run identity, never fabricated;
-        # every known-date failure stage writes a receipt.
+        # 刀2/10: every known-date failure uses one finalizer. It cuts receipt/health
+        # trust roots before the first failed-receipt write, uses a schema-invalid
+        # tombstone if delete fails, and records real identity only.
         text = SCRIPT.read_text(encoding="utf-8")
-        self.assertIn("Remove-Item -LiteralPath $Stale -Force -ErrorAction Stop", text)
+        self.assertIn("function Invalidate-M67Artifact", text)
+        self.assertIn("Write-M67Utf8NoBom -LiteralPath $LiteralPath -Text $Tombstone", text)
+        self.assertIn("'weekly_m67.receipt.json'", text)
+        self.assertIn("'sidecar_health.receipt.json'", text)
         self.assertLess(
-            text.index("Remove-Item -LiteralPath $Receipt -Force -ErrorAction Stop"),
-            text.index("Remove-Item -LiteralPath $Stale -Force -ErrorAction Stop"),
+            text.index("'weekly_m67.receipt.json'"),
+            text.index("Write-M67Utf8NoBom -LiteralPath $Tmp"),
         )
+        self.assertIn("a_short_weekly_sidecar_health.py", text)
+        self.assertIn("$FailureHealthComplete", text)
         self.assertIn("$Payload['run_id']", text)
         self.assertIn("$Payload['candidate_digest']", text)
         for reason in ("preflight_failed", "entrypoint_missing", "egs_failed"):

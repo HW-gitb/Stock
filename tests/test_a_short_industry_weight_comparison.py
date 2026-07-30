@@ -30,6 +30,7 @@ from engine.egs_industry_heat import build_weight_comparison  # noqa: E402
 from runners.a_short_factor_comparison_v2_cache_build import materialize_incremental_cache  # noqa: E402
 from engine import a_short_evidence_epoch_mode as _epoch_mode
 from tests._a_short_epoch_mode_test_utils import enter_patched_epoch_modes, patched_epoch_modes
+from tests._a_short_weekly_publish_test_utils import write_content_bound_bundle
 
 
 DECISION = "20260202"
@@ -84,14 +85,9 @@ def _sources(tmp: str, *, same_profiles: bool = False) -> tuple[Path, Path, Path
                 "candidates": [{"ts_code": code} for code in balanced_codes]}
     analysis_path = Path(tmp) / "analysis_input.json"
     analysis_path.write_text(json.dumps(analysis), encoding="utf-8")
-    out = Path(tmp) / "weekly_m67.json"
-    out.write_text(json.dumps({"as_of": DECISION, "run_lineage": {**identity,
-                    "price_freshness": {"price_data_through": DECISION}}}), encoding="utf-8")
-    out.with_suffix(".md").write_text("# weekly\n", encoding="utf-8")
-    receipt = Path(tmp) / "weekly_m67.receipt.json"
-    receipt.write_text(json.dumps({"stage_status": "complete", "as_of": DECISION,
-                                    "run_id": identity["run_id"], "candidate_digest": identity["candidate_digest"],
-                                    "outputs": ["weekly_m67.json", "weekly_m67.md"]}), encoding="utf-8")
+    out = Path(tmp) / DECISION / "weekly_m67.json"
+    write_content_bound_bundle(out, {"as_of": DECISION, "run_lineage": {**identity,
+                               "price_freshness": {"price_data_through": DECISION}}})
     (Path(tmp) / "official_publish.json").write_text(json.dumps({
         "schema_name": "a_short_egs_official_publish", "schema_version": "1.0.0", "trade_date": DECISION,
         "run_id": identity["run_id"], "candidate_digest": identity["candidate_digest"], "stage_status": "complete",
@@ -246,7 +242,7 @@ class IndustryWeightComparisonTests(unittest.TestCase):
             marker = json.loads(marker_path.read_text(encoding="utf-8"))
             marker["files"]["egs_weight_comparison"]["sha256"] = hashlib.sha256(comparison_path.read_bytes()).hexdigest()
             marker_path.write_text(json.dumps(marker), encoding="utf-8")
-            analysis = Path(tmp) / "analysis_input.json"; out = Path(tmp) / "weekly_m67.json"
+            analysis = Path(tmp) / "analysis_input.json"; out = Path(tmp) / DECISION / "weekly_m67.json"
             identity = json.loads(analysis.read_text(encoding="utf-8"))["source"]["run_identity"]
             with mock.patch("engine.a_short_industry_weight_comparison._today", return_value=RUN):
                 result = capture_after_published_weekly(root=root, decision_date=DECISION, run_date=RUN,
