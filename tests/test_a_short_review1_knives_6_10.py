@@ -339,6 +339,28 @@ class ForwardCohortReplacementTest(unittest.TestCase):
 
 
 class BacktestInputAndEvidenceBoundaryTest(unittest.TestCase):
+    def test_unknown_momentum_flags_fail_closed_in_variant_masks(self) -> None:
+        sample = pd.DataFrame([{
+            "rank": 1,
+            "tier": "Tier1",
+            "entry_flag": "正常",
+            "l4_flag": "",
+            "q0_dt_yoy": 10,
+            "q1_dt_yoy": 10,
+            "esp_raw": 10,
+            "l2_name": "银行",
+            "final_score": 90,
+            "completeness_score": 100,
+            "chasing_high": pd.NA,
+            "overheat_flag": pd.NA,
+        }])
+
+        self.assertFalse(backtest_rank._variant_mask(sample, "no_chase").iloc[0])
+        self.assertFalse(backtest_rank._variant_mask(sample, "no_overheat").iloc[0])
+        self.assertFalse(backtest_rank._variant_mask(sample, "combined_p0").iloc[0])
+        grouped = backtest_rank.build_group_columns(sample)
+        self.assertIn("momentum_history_unknown", grouped.loc[0, "risk_reasons"])
+
     def test_invalid_pit_input_fails_before_rank_or_execution_output(self) -> None:
         payload = cloned_minimal_analysis_input_payload()
         payload["candidates"][0]["fundamental"]["expectation"]["earnings_report_date"] = "20990101"

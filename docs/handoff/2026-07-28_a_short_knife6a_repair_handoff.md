@@ -445,3 +445,52 @@
 **残留风险（Optional，未阻断）**：窄化后的写盘口词表是白名单，未来若新增一个名字不在词表内的本地 JSON 写盘 helper（例如 `_write_payload` / `_save_json`），发现器会看不见它 —— 旧的 `"write" in name` 子串判据本来能兜住一部分这类名字。建议后续给该判据补一个「`write` 作为词首/词尾」的兜底，或加一条植入新 helper 名必须被发现的守护测试。今天零命中损失，故不阻断本刀。
 
 **下一步注意事项**：第八刀至此收口（四条 Required 全闭 + 三条 Optional 有处置 + 六步逐条留证 + 全量绿记账）；可进第九刀（EGS 短历史动量与空候选池健壮性，条目 18、19）。仍不解冻任何证据轨。
+
+## 2026-07-30 追加：第九刀实现交接（Codex；待 Claude Code 独立审查）
+
+### 实现范围
+
+- 条目 18：`A-EGS/egs_main.py` 的 5/20/60 日收益改为各自要求 N+1 根有效收盘并使用第 N 根锚点；L0 区分 provider/source 缺口与已知短历史，后者按 20 日窗口 fail closed 排除；`runners/a_short_crash_veto_tracker.py` 的 20 日口径同步。
+- 下游风险语义：动量窗口不足时 `chasing_high` / `overheat_flag` 保持 nullable，正式 Tier 与 `runners/backtest_rank.py` 的重排/variant 消费者均把 unknown 当作保守降级或排除条件，并记录 `momentum_history_unknown`。
+- `schemas/data_health.schema.json` 升至 1.7.0，新增 `short_history_candidate_count`；短历史可见为 warning，不与 source coverage failure 混同。
+- 条目 19：L1→L5 均支持阶段列/dtype 完整的结构化空表；L3 空表在 provider/snapshot 前短路。合法零候选只在 reconciliation pass、accounting balanced、source coverage 无失败时形成 `empty_candidate_pool` warning和 `overall_status=warn`；否则保持 error。
+- 正式与 weekly 消费：空池写 `analysis_input.candidates=[]`；weekly 不请求候选价格/语义 provider，仍写 schema-valid 的零 reports JSON、配对 Markdown 和 receipt。未更改账户持仓链语义。
+
+### 验证证据
+
+- 固定解释器：`C:\Users\cnhea\AppData\Local\Programs\Python\Python313\python.exe`，Python 3.13.8。
+- 受影响调用者/消费者超集：`Ran 627 tests ... OK`；新增 review1 回测消费者负控：`Ran 21 tests ... OK`；effect-contract + industry：`Ran 55 tests ... OK`。
+- 最终自审另补“非空 full + 空 watch/final 不得伪装合法空池”的反向控制，连 effect contract 为 `39 OK`；合法空池现在还必须满足 `full_universe == 0`。
+- `data_health` Draft7 schema check、五个改动 Python 面的 `py_compile`、`git diff --check` 均通过；route-doc + doc-governance：`Ran 55 tests ... OK`。
+- 自审修正后的最终 `.tools/full_pack_ledger.py run a_short ... -- discover -s tests -p 'test_a_short*.py'`：`Ran 2125 tests in 172.049s — OK (skipped=3)`；ledger 终态 `PASS / exit=0 / tests=2125 / elapsed=173.4s`。修正前一次 full pack 不作为最终代码态证据。
+- full pack 后 `git status --short --untracked-files=all` 无 tracked 正式公开产物漂移；仅本刀代码、schema、测试和交接文档为修改态。
+
+### 审查边界与下一步
+
+- 权威细节：`docs/system_risk_register.md#R-ASHORT-KNIFE9-SHORT-HISTORY-AND-EMPTY-POOL`；桌面 `ashort_r1.md` 只作路线图背景。
+- 未解冻任何 evidence lane，未改 active profile、账户、provider 授权或其他三套系统；Codex 未 commit、push、merge。
+- 下一步：Claude Code 独立审查本刀；只有审查 PASS 后才由 Claude Code 提交。
+
+## 2026-07-30 追加：第九刀第一轮独立审查 = FAIL（Claude Code；79eb 工作树，未提交）
+
+**审了什么**：79eb 相对 `06fe9443` 的 17 个改动文件（`A-EGS/egs_main.py` +287、`engine/egs_industry_heat.py`、`runners/a_short_crash_veto_tracker.py`、`runners/backtest_rank.py`、effect contract 与 data_health schema、7 个测试文件）。分级：生产选股入口 + fail-closed 门改动 → 走满标准，起 1 个 §6a 独立对抗 agent（read-only、禁网禁改）。
+
+**成立的部分（不必返工）**：
+
+- 窗口重定义：`_trailing_return_pct` 要求 N+1 根收盘、锚点在 `iloc[N]`，与桌面方案条目 18 第 1 点**原文一致**（不是越界改因子定义）。审查方自写边界探针：6/8/20 根 → 20d/60d 为 NaN；21 根恰好可算且与手算逐位一致（**不过度排除**）；61 根三窗口齐全；非正锚点 → NaN。
+- L0：删掉「pct_20d 全 NaN 就跳过过滤」的应急分支、改为 NaN 一律排除；缺 stats 符号仍 `RuntimeError` fail loud，两类没混为一谈。
+- `_short_history_candidate_count` 只数主板、1–60 根，0 根不误计为短历史。
+- 消费者同步：`crash_veto_tracker` 的本地 20 日重算与 egs_main 同口径；`backtest_rank` / `egs_industry_heat` 的 `chasing_high` / `overheat_flag` 由 `fillna(False)` 改 `fillna(True)`（保守侧），`has_l4_overheat` 保留 False-fill 是对的（非动量派生）。
+- data_health 1.6.0→1.7.0：仓内 0 份 1.6.0 产物，不存在历史产物被新 `const` 打死的问题（区别于 8D1 那次同类）。
+- effect contract 双哈希由仓内校验器机器核对（非手抄），随全量绿。
+- agent 的四个 HELD：空表端到端穿完 L1→L5 与整条发布链且产物 schema 有效、CSV 带表头；空表不触任何 provider / snapshot / cninfo；unknown 动量被三条独立机制挡在 Tier1 之外且 `downgrade_reasons` 只写 `momentum_history_unknown`（不伪称真追高/过热）。
+
+**为什么 FAIL（三条 P2，正文只在 register）**：`#R-ASHORT-KNIFE9-EMPTY-POOL-LAUNDERS-A-PRE-L0-FAILURE`（`legal_empty_pool` 不要求有票进过 L0，L0 之前的批量失败被洗成 warn，warning 文案还与自身指标矛盾）、`#R-ASHORT-KNIFE9-L3-EMPTY-SHORTCIRCUIT-SILENCES-ITS-DATA-GUARDS`（空表 return 在 L3 自己两道 `SystemExit` 数据门之上；次生发现一条被 `schema_version == "1.2.0"` 围栏关死的 L3 provider/mode 交叉校验，现行发布是 1.3.0）、`#R-ASHORT-KNIFE9-WEEKLY-NULLABLE-MOMENTUM-READ-FAIL-OPEN`（`weekly_pipeline:603` 用 `bool()` 把本刀新发的 `null` 读成 False，与同一 dict 往下 6 行的退市字段口径相反）。三条的承重前提审查方逐条自核过源码，未采信转述。
+
+**验证命令与结果**：`full_pack_ledger run a_short` → `CACHED GREEN a_short = 2125 OK`（同一精确代码态，rule 4 亲跑）；六个改动的 phase6 EGS 模块（`test_egs_main_board_and_holder_pit` / `..._daily_stats_guard` / `..._qfq_price_basis` / `..._suspend_guard` / `test_egs_rank_universe_reconciliation` / `..._sw_industry_and_watch_pool_health`）= `58 OK`（rule 1 亲跑）；door 守卫 `55 OK`；`git diff --check` 干净；`research/` 与 `result/` 无产物漂移。
+
+**失效的旧结论**：agent 报告里「非空回归逐列取值完全一致、`egs_full` CSV 逐字节相同」只在**固定 stats 输入之下游**成立 —— 窗口重定义按方案就是要把三个窗口各挪一个交易日，非空票的 `pct_5d/20d/60d` 必然变化并流入动量排名与行业热度。这是方案授权的口径变更，但不得用「取值不变」描述（已更正入 register）。
+
+**给 Codex 的命令（下一轮）**：修复 `docs/system_risk_register.md` 里 `#R-ASHORT-KNIFE9-EMPTY-POOL-LAUNDERS-A-PRE-L0-FAILURE`、`#R-ASHORT-KNIFE9-L3-EMPTY-SHORTCIRCUIT-SILENCES-ITS-DATA-GUARDS`、`#R-ASHORT-KNIFE9-WEEKLY-NULLABLE-MOMENTUM-READ-FAIL-OPEN` 三条的 Required repair 与 closure tests；`#R-ASHORT-KNIFE9-OPTIONAL-BATCH` 六条逐条写「已修 / 不修 + 理由」（(a)(e) 建议修，(d) 只报不动）。
+
+**下一步注意事项**：修 `legal_empty_pool` 时不要把本刀要支持的合法形态（有票进 L0、全被记账门排除）一起打回 error —— closure test (2) 就是这条反向控制。L3 空表 return 下移后要确认空表仍不触 provider（agent 已 HELD 的那条不能回归）。仍不解冻任何证据轨、不碰 `active_profile` / M6.7 / 生产配置。

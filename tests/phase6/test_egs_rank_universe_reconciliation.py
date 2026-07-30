@@ -2,6 +2,7 @@ import importlib.util
 import sys
 import unittest
 from pathlib import Path
+from unittest.mock import patch
 
 import pandas as pd
 
@@ -90,6 +91,72 @@ class RankUniverseReconciliationTest(unittest.TestCase):
         self.assertTrue(out.empty)
         self.assertEqual(reasons["A"], "l1_industry_leader_elim")
         self.assertEqual(reasons["B"], "l1_unknown_industry_elim")
+
+    def test_empty_frame_keeps_the_complete_l1_to_l5_contract(self) -> None:
+        frame = pd.DataFrame(columns=[
+            "ts_code", "name", "l1_name", "l2_name", "pct_20d",
+            "total_mv", "avg_amount_5d", "has_crash_veto", "reduce_deduct",
+        ])
+
+        l1 = self.egs_main.score_l1(frame, csi300_ret=0.0)
+        l2 = self.egs_main.score_l2(
+            l1, pd.DataFrame(), [], {}, margin_observation=None
+        )
+        with patch.dict(self.egs_main.CONF, {"l3_mode": "neutralize"}):
+            l3 = self.egs_main.score_l3(l2, [], pd.DataFrame())
+        l4 = self.egs_main.score_l4(l3, pd.DataFrame())
+        full, top = self.egs_main.score_l5(l4, {})
+
+        self.assertTrue(full.empty)
+        self.assertTrue(top.empty)
+        self.assertTrue({
+            "tier", "final_score", "l4_score", "pct_20d_n",
+            "l1_name", "l2_name", "chasing_high", "overheat_flag",
+            "downgrade_reasons",
+        }.issubset(full.columns))
+        self.assertEqual(str(full["chasing_high"].dtype), "boolean")
+        self.assertEqual(str(full["overheat_flag"].dtype), "boolean")
+        self.assertTrue({"close_n", "high_20d_n"}.issubset(l2.columns))
+        self.assertEqual(str(l4["mom_rank"].dtype), "float64")
+        self.assertEqual(str(l4["l4_mom_ok"].dtype), "Int64")
+        self.assertEqual(str(l4["l4_rel_ok"].dtype), "Int64")
+        self.assertEqual(str(l4["l4_score"].dtype), "Float64")
+        self.assertEqual(str(l4["reduce_penalty"].dtype), "float64")
+
+    def test_missing_momentum_stays_unknown_and_cannot_reach_tier1(self) -> None:
+        frame = pd.DataFrame([{
+            "ts_code": "600000.SH",
+            "l1_name": "行业A",
+            "l2_name": "行业B",
+            "pct_20d_n": float("nan"),
+            "pct_5d": float("nan"),
+            "pct_60d": float("nan"),
+            "drawdown_20d": float("nan"),
+            "vol_confirm": True,
+            "is_lock": False,
+            "is_breakout": False,
+            "esp_raw": 10.0,
+            "l2_flags": "",
+            "cat_score": 50.0,
+            "cat_flag": "",
+            "reduce_penalty": 0.0,
+            "val_penalty": 0.0,
+            "val_bonus": 0.0,
+            "q0_dt_yoy": 10.0,
+        }])
+
+        l4 = self.egs_main.score_l4(frame, pd.DataFrame())
+
+        self.assertTrue(pd.isna(l4.loc[0, "mom_rank"]))
+        self.assertTrue(pd.isna(l4.loc[0, "l4_mom_ok"]))
+        self.assertTrue(pd.isna(l4.loc[0, "chasing_high"]))
+        self.assertTrue(pd.isna(l4.loc[0, "overheat_flag"]))
+
+        full, _top = self.egs_main.score_l5(l4, {
+            "600000.SH": {"l1_name": "行业A", "l2_name": "行业B"},
+        })
+        self.assertNotEqual(full.loc[0, "tier"], "Tier1")
+        self.assertIn("momentum_history_unknown", full.loc[0, "downgrade_reasons"])
 
     def test_truncated_critical_source_fails_reconciliation(self) -> None:
         summary, _detail = self.egs_main.build_rank_universe_reconciliation(
@@ -193,6 +260,145 @@ class RankUniverseReconciliationTest(unittest.TestCase):
 
         self.assertEqual(health["overall_status"], "error")
         self.assertIn("rank_source_coverage", {item["check"] for item in health["errors"]})
+
+    def test_reconciled_empty_pool_is_a_warning_not_a_publish_error(self) -> None:
+        empty = _frame()
+        summary, _detail = self.egs_main.build_rank_universe_reconciliation(
+            df_l0=_frame("A", "B"),
+            feature_source=_feature_frame("A", "B"),
+            stages=[
+                ("master_join", _frame("A", "B"), False, "master_join_loss"),
+                ("l1_industry_leader", empty, True, "l1_industry_leader_elim"),
+                ("l5_rank", empty, False, "l5_unexpected_row_loss"),
+            ],
+            sources={"financial_l0": (_frame("A", "B"), _frame("A", "B"), 1.0)},
+        )
+        ranked = pd.DataFrame(columns=[
+            "ts_code", "tier", "close", "pe", "pb", "l1_name", "l2_name",
+        ])
+        margin = {
+            "reference_date": "20260714",
+            "effective_ref_date": None,
+            "row_count": 0,
+            "universe_size": 0,
+            "coverage_complete": False,
+            "status": "unavailable",
+        }
+        analysis_input = {
+            "schema_name": "analysis_input",
+            "schema_version": self.egs_main.ANALYSIS_INPUT_SCHEMA_VERSION,
+            "source": {
+                "screening_engine_version": self.egs_main.EGS_VERSION,
+                "data_provider": "tushare",
+            },
+            "market_context": {"margin_coverage": margin},
+            "price_data_through": "20260714",
+            "candidates": [],
+        }
+
+        health = self.egs_main.build_data_health(
+            df_full=ranked,
+            watch_df=ranked,
+            tier1_final=ranked,
+            analysis_input=analysis_input,
+            latest_td="20260714",
+            analysis_path=str(EGS_SCRIPT),
+            snapshot_path=str(EGS_SCRIPT),
+            candidates_path=str(EGS_SCRIPT),
+            tier1_csv_path=str(EGS_SCRIPT),
+            full_csv_path=str(EGS_SCRIPT),
+            rank_reconciliation=summary,
+            watch_eligible_count=0,
+            short_history_candidate_count=2,
+        )
+
+        self.assertEqual(summary["status"], "pass")
+        self.assertTrue(summary["accounting_balanced"])
+        self.assertEqual(summary["l0_count"], 2)
+        self.assertEqual(summary["expected_excluded_count"], 2)
+        self.assertEqual(health["overall_status"], "warn")
+        warning_checks = {item["check"] for item in health["warnings"]}
+        error_checks = {item["check"] for item in health["errors"]}
+        self.assertIn("empty_candidate_pool", warning_checks)
+        self.assertIn("short_history_candidate_count", warning_checks)
+        self.assertTrue({
+            "full_universe", "watch_pool", "final_pool", "tier1_count",
+        }.isdisjoint(error_checks))
+        self.egs_main.validate_json_schema(
+            health,
+            schema_path=str(DATA_HEALTH_SCHEMA),
+            label="reconciled empty pool health",
+        )
+
+        nonempty_full = pd.DataFrame({
+            "ts_code": ["A"],
+            "tier": ["Other"],
+            "close": [10.0],
+            "pe": [20.0],
+            "pb": [2.0],
+            "l1_name": ["行业A"],
+            "l2_name": ["行业B"],
+        })
+        inconsistent_health = self.egs_main.build_data_health(
+            df_full=nonempty_full,
+            watch_df=ranked,
+            tier1_final=ranked,
+            analysis_input=analysis_input,
+            latest_td="20260714",
+            analysis_path=str(EGS_SCRIPT),
+            snapshot_path=str(EGS_SCRIPT),
+            candidates_path=str(EGS_SCRIPT),
+            tier1_csv_path=str(EGS_SCRIPT),
+            full_csv_path=str(EGS_SCRIPT),
+            rank_reconciliation=summary,
+            watch_eligible_count=0,
+        )
+        self.assertEqual(inconsistent_health["overall_status"], "error")
+        self.assertNotIn(
+            "empty_candidate_pool",
+            {item["check"] for item in inconsistent_health["warnings"]},
+        )
+
+    def test_zero_l0_pool_is_an_error_and_never_an_empty_pool_warning(self) -> None:
+        empty = _frame()
+        summary, _detail = self.egs_main.build_rank_universe_reconciliation(
+            df_l0=empty,
+            feature_source=_feature_frame(),
+            stages=[("l5_rank", empty, False, "l5_unexpected_row_loss")],
+            sources={"financial_l0": (empty, empty, 1.0)},
+        )
+        ranked = pd.DataFrame(columns=[
+            "ts_code", "tier", "close", "pe", "pb", "l1_name", "l2_name",
+        ])
+        analysis_input = {
+            "schema_name": "analysis_input",
+            "schema_version": self.egs_main.ANALYSIS_INPUT_SCHEMA_VERSION,
+            "source": {
+                "screening_engine_version": self.egs_main.EGS_VERSION,
+                "data_provider": "tushare",
+            },
+            "candidates": [],
+        }
+        health = self.egs_main.build_data_health(
+            df_full=ranked,
+            watch_df=ranked,
+            tier1_final=ranked,
+            analysis_input=analysis_input,
+            latest_td="20260714",
+            analysis_path=str(EGS_SCRIPT),
+            snapshot_path=str(EGS_SCRIPT),
+            candidates_path=str(EGS_SCRIPT),
+            tier1_csv_path=str(EGS_SCRIPT),
+            full_csv_path=str(EGS_SCRIPT),
+            rank_reconciliation=summary,
+            watch_eligible_count=0,
+        )
+
+        self.assertEqual(health["overall_status"], "error")
+        self.assertNotIn(
+            "empty_candidate_pool",
+            {item["check"] for item in health["warnings"]},
+        )
 
     def test_feature_source_is_explicit_and_must_cover_post_l0_exactly(self) -> None:
         with self.assertRaisesRegex(RuntimeError, "coverage mismatch"):

@@ -24,7 +24,7 @@
       "const": "data_health"
     },
     "schema_version": {
-      "const": "1.6.0"
+      "const": "1.7.0"
     },
     "generated_at": {
       "type": "string"
@@ -109,6 +109,7 @@
         "watch_l1_unknown_count",
         "watch_l2_unknown_count",
         "full_l2_unknown_count",
+        "short_history_candidate_count",
         "watch_pool_reconciliation",
         "sw_industry_membership",
         "rank_universe_reconciliation",
@@ -159,6 +160,11 @@
         "full_l2_unknown_count": {
           "type": ["integer", "null"],
           "minimum": 0
+        },
+        "short_history_candidate_count": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "Main-board candidate-universe symbols with 1-60 usable closes; at least one governed 5/20/60-session return is unavailable."
         },
         "watch_pool_reconciliation": {
           "type": "object",

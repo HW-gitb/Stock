@@ -6,9 +6,16 @@ import hashlib
 import json
 import math
 import pickle
+import sys
 from collections import defaultdict
 from pathlib import Path
 from typing import Any
+
+ROOT = Path(__file__).resolve().parents[1]
+if str(ROOT) not in sys.path:
+    sys.path.insert(0, str(ROOT))
+
+from engine.a_short_nullable_bool import fail_closed_risk_bool
 
 
 DEFAULT_RANK_SAMPLES = Path("result/a_short/backtest/rank_samples.csv")
@@ -447,10 +454,11 @@ def subset_rows(rows: list[dict[str, str]], subset: str) -> list[dict[str, str]]
         return [
             row
             for row in rows
-            if as_bool(row.get("has_l4_overheat")) or as_bool(row.get("overheat_flag"))
+            if fail_closed_risk_bool(row.get("has_l4_overheat"))
+            or fail_closed_risk_bool(row.get("overheat_flag"))
         ]
     if subset == "chasing_high_flagged":
-        return [row for row in rows if as_bool(row.get("chasing_high"))]
+        return [row for row in rows if fail_closed_risk_bool(row.get("chasing_high"))]
     raise ValueError(f"Unknown subset {subset}")
 
 

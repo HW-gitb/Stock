@@ -48,6 +48,40 @@ class EgsMainL3GuardTest(unittest.TestCase):
                 run_date="20260601",
             )
 
+    def test_empty_candidates_do_not_bypass_unavailable_market_data_guard(self) -> None:
+        original_conf = dict(self.egs_main.CONF)
+        try:
+            self.egs_main.CONF["l3_mode"] = "today"
+            messages = []
+            for candidates in (
+                pd.DataFrame(columns=["ts_code", "pct_20d_n"]),
+                pd.DataFrame([{"ts_code": "600000.SH", "pct_20d_n": 0.0}]),
+            ):
+                with self.assertRaises(SystemExit) as raised:
+                    self.egs_main.score_l3(candidates, [], pd.DataFrame())
+                messages.append(str(raised.exception))
+            self.assertEqual(messages[0], messages[1])
+            self.assertIn("requires usable market daily data", messages[0])
+        finally:
+            self.egs_main.CONF.clear()
+            self.egs_main.CONF.update(original_conf)
+
+    def test_empty_neutralized_l3_records_explicit_provider_binding(self) -> None:
+        original_conf = dict(self.egs_main.CONF)
+        try:
+            self.egs_main.CONF["l3_mode"] = "neutralize"
+            scored = self.egs_main.score_l3(
+                pd.DataFrame(columns=["ts_code", "pct_20d_n"]),
+                [],
+                pd.DataFrame(),
+            )
+            self.assertTrue(scored.empty)
+            self.assertEqual(self.egs_main.CONF["l3_provider"], "neutralized")
+            self.assertIsNone(self.egs_main.CONF["l3_coverage"])
+        finally:
+            self.egs_main.CONF.clear()
+            self.egs_main.CONF.update(original_conf)
+
     def test_historical_asof_allows_pit_or_neutralize(self) -> None:
         self.egs_main._guard_historical_asof_l3_mode("20260522", "pit", run_date="20260601")
         self.egs_main._guard_historical_asof_l3_mode("20260522", "neutralize", run_date="20260601")
@@ -209,8 +243,15 @@ class EgsMainL3GuardTest(unittest.TestCase):
                     side_effect=AssertionError("provider must not be called"),
                 ) as fetch:
                     scored = self.egs_main.score_l3(candidates, ["20260716"], daily)
+                    empty_scored = self.egs_main.score_l3(
+                        pd.DataFrame(columns=["ts_code", "pct_20d_n"]),
+                        ["20260716"],
+                        daily,
+                    )
                 fetch.assert_not_called()
                 self.assertEqual(scored.loc[0, "cat_score"], 100.0)
+                self.assertTrue(empty_scored.empty)
+                self.assertEqual(self.egs_main.CONF["l3_provider"], "hithink_finance")
                 self.assertEqual(self.egs_main.CONF["l3_snapshot_date"], "20260716")
         finally:
             self.egs_main.TODAY = original_today

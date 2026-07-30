@@ -88,7 +88,7 @@ class EgsMainQfqPriceBasisTest(unittest.TestCase):
 
         self.assertAlmostEqual(float(panel.loc[panel["trade_date"] == "20260601", "qfq_close"].iloc[0]), 5.0)
         self.assertAlmostEqual(float(panel.loc[panel["trade_date"] == "20260602", "qfq_close"].iloc[0]), 5.0)
-        self.assertAlmostEqual(float(stats.loc[0, "pct_5d"]), 0.0)
+        self.assertTrue(pd.isna(stats.loc[0, "pct_5d"]))
         self.assertEqual(stats.loc[0, "qfq_source_trade_date"], "20260602")
 
         qfq_rows = self.egs._rule6_daily_rows(

@@ -1,5 +1,38 @@
 # Session Log
 
+## 2026-07-30 — Codex 修复第九刀复审验收命令（79eb）
+
+- **Verdict/Action**: 已关闭“审查聚焦包实际运行 0 tests”的执行缺口；项目 launcher 改用正确的 unittest 参数形状，最终代码未因本项再改。未提交。
+- **Required**: 已修复 `docs/system_risk_register.md#R-ASHORT-KNIFE9-REVIEW-ACCEPTANCE-PACK-NOT-EXECUTED`；仍须由独立 reviewer 从 79eb 最终 diff 复跑后裁决。
+- **Verify**: 固定主 Python 3.13.8；正确 launcher 聚焦验收包终态 `Ran 710 tests ... OK` / bounded result `PASS exit=0 tests=710`；exact-code-state full-pack ledger 仍为 `CACHED GREEN — a_short = 2131 OK`（rule 4 不重跑）；route-doc / doc-governance / effect / nullable guard 终态 `Ran 84 tests ... OK`。
+- **Proof-of-use**: 同一条正确 launcher 调用实际覆盖 nullable guard、L0/L1-L5/合法空池 reconciliation、L3 source guard、weekly 空候选与持仓、phase5、backtest consumer、review1 负控；不再以 launcher usage error 的 0-test 退出充当验收。
+- **Pre-Codex self-review**: `matrix=complete: nullable + L0-L5/empty + L3/source + weekly empty/holding + phase5 + backtest + review1; register=updated; handoff=SESSION_LOG top entry; focused=710 OK; full-lane=cached exact code state 2131 OK per ledger rule 4; door=84 OK`
+- **Next**: 独立 reviewer：从 79eb 最终 diff 复跑审查；PASS 后按审查流程提交。
+
+## 2026-07-30 — Codex 修复第九刀审查 Required / Optional（79eb）
+
+- **Verdict/Action**: 三条 P2 Required 与 Optional batch 已按类修复；空池、L3 source binding、nullable 风险消费与未来直接 truthiness 回归均 fail closed。未提交。
+- **Required**: 已修复 `#R-ASHORT-KNIFE9-EMPTY-POOL-LAUNDERS-A-PRE-L0-FAILURE`、`#R-ASHORT-KNIFE9-L3-EMPTY-SHORTCIRCUIT-SILENCES-ITS-DATA-GUARDS`、`#R-ASHORT-KNIFE9-WEEKLY-NULLABLE-MOMENTUM-READ-FAIL-OPEN`；Optional 处置见 `docs/system_risk_register.md#R-ASHORT-KNIFE9-OPTIONAL-BATCH`。
+- **Verify**: fixed Python 3.13.8；聚焦超集 `204 OK`，受影响消费者 `238 OK`，full-pack 红灯修复控制 `18 OK`，parser/D4 控制 `12 OK`；当前精确代码态 full A-short `2131 OK (skipped=3)`，ledger PASS。
+- **Proof-of-use**: 250×6 短历史 → 零 L0 error；2 票进 L0 后全被预期门排除 → warn；空 L3 不再绕过数据门且 provider 绑定一致；null 动量风险 → downgrade、false → clear；零候选已有持仓仍走 `account_position_only`。
+- **Pre-Codex self-review**: matrix=complete:L0/data-health + L3/source-binding + nullable-risk consumers + empty/nonempty contracts + weekly holding chain; register=updated; handoff=SESSION_LOG top entry; focused=204+238+18+12 OK; full-lane=2131 OK skipped=3; door=doc-governance + route + effect + nullable guard 84 OK
+- **Next**: Claude Code：独立审查；PASS 后由 Claude Code 提交。
+
+## 2026-07-30 — Claude Code 审查 FAIL（第九刀，79eb 工作树）
+
+- **Verdict/Action**: FAIL，未提交。短历史那半刀成立（窗口重定义与方案条目 18 原文一致、边界不过度排除、消费者同步取保守侧）；空池那半刀的链路也能端到端产出合法产物。挡住这一刀的是三条 P2：空池判据没要求有票进过 L0、L3 空表短路点在自己的 fail-closed 数据门之上、本刀新发的 null 动量标记在 weekly 第二道门被 `bool()` 读成 False。正文只在 `docs/system_risk_register.md`，本处不复述。
+- **Required**: `#R-ASHORT-KNIFE9-EMPTY-POOL-LAUNDERS-A-PRE-L0-FAILURE`、`#R-ASHORT-KNIFE9-L3-EMPTY-SHORTCIRCUIT-SILENCES-ITS-DATA-GUARDS`、`#R-ASHORT-KNIFE9-WEEKLY-NULLABLE-MOMENTUM-READ-FAIL-OPEN`（均 P2），Optional 六条记在 `#R-ASHORT-KNIFE9-OPTIONAL-BATCH` —— 完整机制 / 实测 / closure 见 register（单一来源）。
+- **Verify**: review-evidence:19977f5ddd5e。rule 4 全量亲跑 = `CACHED GREEN a_short 2125 OK`；rule 1 亲跑六个改动的 phase6 EGS 模块 = `58 OK`；`git diff --check` 干净、无产物漂移；仓内 0 份 1.6.0 data_health 产物。自写边界探针：20 根 → 20d NaN、21 根恰好可算且与手算一致、非正锚点 → NaN。§6a agent 已回（最高危子集）：3×P2 + 3×P3 + 四个 HELD；三条 P2 前提我逐条自核（详见 register）。
+- **Next**: Codex：修复。
+
+## 2026-07-30 - Codex 执行第九刀（79eb）
+
+- **Verdict/Action**: 条目 18、19 已实现：N 日收益严格要求 N+1 根收盘，短历史与 nullable 动量风险 fail closed；L1→L5、合法空池、正式空产物及 weekly 零候选链已收口。未提交；细节见 `docs/system_risk_register.md#R-ASHORT-KNIFE9-SHORT-HISTORY-AND-EMPTY-POOL`。
+- **Required**: 无已知实现侧 Required；待 Claude Code 独立审查。
+- **Verify**: fixed Python 3.13.8；消费者超集 `627 OK`，review1 `21 OK`，最终空池负控+effect `39 OK`，door `55 OK`；自审收紧后 exact full pack `2125 OK (skipped=3)`；schema、pycompile、diff-check 通过。
+- **Next**: Claude Code：独立审查；PASS 后由 Claude Code 提交。
+- **Pre-Codex self-review**: `matrix=complete:L0-L5+health+schema+formal-empty+weekly+crash-veto+backtest; register=updated; handoff=updated; focused=627+21+55 OK; full-lane=2125 OK skipped=3; door=55 OK`
+
 ## 2026-07-29 — Claude Code 审查 PASS（写盘口发现器 Optional，79eb 工作树）
 
 - **Verdict/Action**: PASS，已提交。Optional-only、test-only AST 守卫。Codex 没照我建议的「`write` 词首/词尾子串兜底」做，而是从同一份 source AST 推导出「函数体含 direct file sink」的本地 helper 集合 —— 与名字无关，比我的建议更彻底。处置与边界见 `docs/system_risk_register.md#R-ASHORT-WEEKLY-PIPELINE-JSON-WRITERS-OUTSIDE-THE-NONFINITE-GUARD`，本处不复述。

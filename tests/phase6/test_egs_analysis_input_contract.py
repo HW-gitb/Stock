@@ -116,6 +116,7 @@ class EgsMainAnalysisInputContractTest(unittest.TestCase):
                 tmp,
                 latest_td="20260522",
                 rank_reconciliation=reconciliation,
+                l0_excluded_counts={"short_history_momentum": 2},
             )
 
         summary = payload["universe_summary"]
@@ -126,6 +127,24 @@ class EgsMainAnalysisInputContractTest(unittest.TestCase):
         self.assertEqual(summary["rank_exclusion_counts"]["l1_industry_leader"], 1)
         self.assertEqual(summary["rank_exclusion_counts"]["l2_quality_risk"], 1)
         self.assertEqual(summary["rank_exclusion_counts"]["rank_unexpected"], 0)
+        self.assertEqual(summary["excluded_counts"]["short_history_momentum"], 2)
+
+    def test_current_schema_rejects_neutralized_l3_without_provider_binding(self) -> None:
+        with tempfile.TemporaryDirectory(dir=str(ROOT)) as tmp:
+            _analysis_path, _snapshot_path, _candidates_path, payload = self._export(
+                tmp,
+                latest_td="20260522",
+            )
+        payload["source"].update({
+            "l3_mode": "neutralize",
+            "l3_snapshot_date": None,
+            "l3_provider": None,
+            "l3_coverage": None,
+            "data_provider": "tushare",
+        })
+
+        with self.assertRaisesRegex(Exception, "neutralized L3 requires provider"):
+            validate_analysis_input_contract(payload)
 
     def test_export_marks_only_rule6_d_tier_as_manual_only(self) -> None:
         """The three unavailable checks are explicit human review, never silent passes."""
@@ -261,7 +280,13 @@ class EgsMainAnalysisInputContractTest(unittest.TestCase):
             self.assertTrue(out_path.exists())
             self.assertNotIn("overlay_adjudication", weekly)
 
-    def _export(self, output_root: str, latest_td: str, rank_reconciliation=None):
+    def _export(
+        self,
+        output_root: str,
+        latest_td: str,
+        rank_reconciliation=None,
+        l0_excluded_counts=None,
+    ):
         df = pd.DataFrame([{
             "ts_code": "600000.SH",
             "name": "Probe",
@@ -289,6 +314,7 @@ class EgsMainAnalysisInputContractTest(unittest.TestCase):
             full_csv_path=ROOT / "full.csv",
             output_root=output_root,
             rank_reconciliation=rank_reconciliation,
+            l0_excluded_counts=l0_excluded_counts,
         )
 
 

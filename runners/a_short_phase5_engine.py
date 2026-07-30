@@ -26,6 +26,7 @@ import jsonschema
 from decimal import Decimal, ROUND_HALF_UP, ROUND_UP, ROUND_DOWN
 
 from engine.a_short_runtime_config import load_runtime_configuration
+from engine.a_short_nullable_bool import fail_closed_risk_bool
 from engine.a_short_rule6_contract import assess_rule6_checks, render_rule6_d_tier_banner
 from engine.a_short_regulatory_advisory import (
     RegulatoryAdvisoryContractError,
@@ -513,7 +514,11 @@ def classify_risk_families(inp: dict, ind: dict, rule6_gate: dict | None = None)
 
     # overheat_crowding only consumes the production EGS price/behaviour fields.
     # The theme overlay is a comparison artifact and must not enter a risk family.
-    oh = bool(d.get("overheat") or d.get("chasing_high") or d.get("chase"))
+    oh = (
+        ("overheat" in d and fail_closed_risk_bool(d["overheat"]))
+        or ("chasing_high" in d and fail_closed_risk_bool(d["chasing_high"]))
+        or ("chase" in d and fail_closed_risk_bool(d["chase"]))
+    )
     if oh:
         fam["overheat_crowding"].update(hit=True, action="downgrade", reasons=["过热/追高/拥挤"])
 
@@ -1234,7 +1239,7 @@ def _apply_holding_disposition(report):
     plan = (mc.get("entry_exit_size_star") or {}).get("plan") or {}
     sig, blocked = _merge_holding_disposition(
         mc.get("operation_impact") or [], plan=plan,
-        hard_veto=bool((mc.get("layer") or {}).get("hard_veto")),
+        hard_veto=len((mc.get("layer") or {}).get("hard_veto") or []) > 0,
     )
     mc["holding_management_signal"] = sig
     mc["blocked_add_required"] = blocked
@@ -2296,7 +2301,7 @@ def validate_m67_consistency(report: dict) -> None:
         _plan = (mc.get("entry_exit_size_star") or {}).get("plan") or {}
         _sig, _blk = _merge_holding_disposition(
             mc.get("operation_impact") or [], plan=_plan,
-            hard_veto=bool(mc.get("layer", {}).get("hard_veto")),
+            hard_veto=len(mc.get("layer", {}).get("hard_veto") or []) > 0,
         )
         if mc.get("holding_management_signal") != _sig:
             raise ValueError(f"持有 machine.holding_management_signal={mc.get('holding_management_signal')!r} != 合并重算 {_sig!r}")

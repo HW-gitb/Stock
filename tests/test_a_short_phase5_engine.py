@@ -799,6 +799,18 @@ class RiskFamilyTests(unittest.TestCase):
         fam = classify_risk_families(_good_input(derived=d), self.ind)
         self.assertEqual(fam["overheat_crowding"]["action"], "downgrade")
 
+    def test_nullable_overheat_fails_closed_and_false_control_stays_clear(self):
+        unknown = _good_input()["derived"]
+        unknown["overheat"] = None
+        fam = classify_risk_families(_good_input(derived=unknown), self.ind)
+        self.assertEqual(fam["overheat_crowding"]["action"], "downgrade")
+
+        clear = _good_input()["derived"]
+        clear["overheat"] = False
+        clear["chasing_high"] = False
+        fam = classify_risk_families(_good_input(derived=clear), self.ind)
+        self.assertFalse(fam["overheat_crowding"]["hit"])
+
     def test_egs_hard_veto_flag_hard_vetoes(self):
         # EGS aggregate hard_veto must hard-veto independently (defensive vs decomposed reasons).
         d = _good_input()["derived"]; d["hard_veto"] = True

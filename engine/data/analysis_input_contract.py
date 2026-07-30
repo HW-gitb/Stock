@@ -236,7 +236,13 @@ def _validate_pit_invariants(payload: dict[str, Any], label: str, official_input
         if suffix_pair_count != unique_pair_count:
             raise AnalysisInputContractError(f"{label} L3 market suffix counts do not reconcile")
 
-    if schema_version == "1.2.0":
+    try:
+        current_l3_contract = tuple(
+            int(part) for part in str(schema_version).split(".")
+        ) >= (1, 2, 0)
+    except (TypeError, ValueError):
+        current_l3_contract = False
+    if current_l3_contract:
         if l3_mode == "today":
             if not l3_snapshot_date:
                 raise AnalysisInputContractError(

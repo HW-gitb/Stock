@@ -120,6 +120,7 @@ from engine.egs_industry_heat import (
     compute_industry_heat_score, get_active_weights, final_score_and_tier,
     select_profile_watch_pool, write_weight_comparison, load_governance,
 )
+from engine.a_short_nullable_bool import fail_closed_risk_bool, require_known_risk_bool
 from engine.a_short_industry_theme import (
     classify_industry_trend, taxonomy_by_code, unavailable_theme_taxonomy,
 )
@@ -890,7 +891,7 @@ def _candidate_from_row(row, rank, final_codes, latest_td, unlock_set, suspended
             "is_breakout": is_breakout,
             "vol_confirm": _json_bool(_row_get(row, "vol_confirm")),
             "m4_review_required": None,
-            "hard_veto": bool(reduce_deduct or has_crash_veto),
+            "hard_veto": bool(reduce_deduct) or fail_closed_risk_bool(has_crash_veto),
         },
         "llm_tasks": [],
         "data_quality": {
@@ -1091,7 +1092,8 @@ def export_analysis_input(df_full, watch_df, tier1_final, latest_td, trade_dates
                           unlock_set, suspended_set, relisted_set, red_dict,
                           tier1_csv_path, full_csv_path, output_root=None,
                           rank_reconciliation=None, rule6_evaluations_by_code=None,
-                          price_data_through=None, run_date=None, margin_observation=None):
+                          price_data_through=None, run_date=None, margin_observation=None,
+                          l0_excluded_counts=None):
     import json as _json
 
     project_root = os.path.dirname(SCRIPT_DIR)
@@ -1175,6 +1177,9 @@ def export_analysis_input(df_full, watch_df, tier1_final, latest_td, trade_dates
                 "suspended": int(len(suspended_set or [])),
                 "relisted": int(len(relisted_set or [])),
                 "holder_reduction_veto_10d": int(len((red_dict or {}).get("veto_10d", set()))),
+                "short_history_momentum": int(
+                    (l0_excluded_counts or {}).get("short_history_momentum", 0)
+                ),
             },
             # 排名层淘汰不是 L0 硬否决；独立存放，避免 weekly exclusion_summary 把它们误当
             # 上游硬过滤原因。旧 v1.4 混装产物由 weekly 对明确键做兼容，不放松其他未知键 fail-closed。
@@ -1324,10 +1329,19 @@ def export_stage3_selection_snapshot(top50, tier1_final, latest_td, run_identity
             score = pd.to_numeric(row.get("final_score"), errors="coerce")
             if pd.isna(score) or not str(row.get("ts_code") or ""):
                 raise ValueError(f"P4a {label} snapshot has invalid score/code")
-            rows.append({"ts_code": str(row["ts_code"]), "final_score": float(score),
-                         "l1_name": str(row.get("l1_name")), "l2_name": str(row.get("l2_name")),
-                         "tier": str(row.get("tier")), "overheat_flag": bool(row.get("overheat_flag", False)),
-                         "chasing_high": bool(row.get("chasing_high", False))})
+            rows.append({
+                "ts_code": str(row["ts_code"]),
+                "final_score": float(score),
+                "l1_name": str(row.get("l1_name")),
+                "l2_name": str(row.get("l2_name")),
+                "tier": str(row.get("tier")),
+                "overheat_flag": require_known_risk_bool(
+                    row.get("overheat_flag"), f"P4a {label} overheat_flag"
+                ),
+                "chasing_high": require_known_risk_bool(
+                    row.get("chasing_high"), f"P4a {label} chasing_high"
+                ),
+            })
         if len({row["ts_code"] for row in rows}) != len(rows):
             raise ValueError(f"P4a {label} snapshot has duplicate ts_code")
         return rows
@@ -1368,7 +1382,7 @@ def export_stage3_selection_snapshot(top50, tier1_final, latest_td, run_identity
     return out_path
 
 
-DATA_HEALTH_SCHEMA_VERSION = "1.6.0"
+DATA_HEALTH_SCHEMA_VERSION = "1.7.0"
 DATA_HEALTH_SCHEMA_PATH = os.path.join(PROJECT_ROOT, "schemas", "data_health.schema.json")
 
 
@@ -1493,7 +1507,8 @@ def build_data_health(df_full, watch_df, tier1_final, analysis_input, latest_td,
                       analysis_path, snapshot_path, candidates_path,
                       tier1_csv_path, full_csv_path, rank_reconciliation=None,
                       rank_reconciliation_path=None, watch_eligible_count=None,
-                      sidecar_warnings=None, margin_observation=None):
+                      sidecar_warnings=None, margin_observation=None,
+                      short_history_candidate_count=0):
     errors = []
     warnings_ = []
     watch_count = int(len(watch_df)) if watch_df is not None else 0
@@ -1518,6 +1533,19 @@ def build_data_health(df_full, watch_df, tier1_final, analysis_input, latest_td,
     )
     if watch_eligible_count is None:
         watch_eligible_count = watch_count
+    legal_empty_pool = (
+        rank_reconciliation.get("status") == "pass"
+        and bool(rank_reconciliation.get("accounting_balanced"))
+        and int(rank_reconciliation.get("source_coverage_failure_count", 0)) == 0
+        and int(rank_reconciliation.get("l0_count", 0)) > 0
+        and int(rank_reconciliation.get("expected_excluded_count", 0))
+        == int(rank_reconciliation.get("l0_count", 0))
+        and df_full is not None
+        and len(df_full) == 0
+        and watch_count == 0
+        and final_count == 0
+        and int(watch_eligible_count) == 0
+    )
     watch_pool_reconciliation = build_watch_pool_reconciliation(
         actual_count=watch_count,
         eligible_count=watch_eligible_count,
@@ -1594,8 +1622,15 @@ def build_data_health(df_full, watch_df, tier1_final, analysis_input, latest_td,
             missing=",".join(missing_outputs),
         ))
 
-    if df_full is None or df_full.empty:
+    if df_full is None or (df_full.empty and not legal_empty_pool):
         errors.append(_health_issue("full_universe", "full ranked universe is empty"))
+    elif legal_empty_pool:
+        warnings_.append(_health_issue(
+            "empty_candidate_pool",
+            "all candidates were removed by accounted screening gates",
+            l0_count=rank_reconciliation.get("l0_count"),
+            expected_excluded_count=rank_reconciliation.get("expected_excluded_count"),
+        ))
     if rank_reconciliation.get("status") == "fail":
         if int(rank_reconciliation.get("source_coverage_failure_count", 0)):
             errors.append(_health_issue(
@@ -1625,7 +1660,7 @@ def build_data_health(df_full, watch_df, tier1_final, analysis_input, latest_td,
                 full_count=len(df_full),
             ))
 
-    if watch_count == 0:
+    if watch_count == 0 and not legal_empty_pool:
         errors.append(_health_issue("watch_pool", "watch pool is empty"))
     if watch_pool_reconciliation["status"] == "fail":
         errors.append(_health_issue(
@@ -1637,9 +1672,9 @@ def build_data_health(df_full, watch_df, tier1_final, analysis_input, latest_td,
             target_count=watch_pool_reconciliation["target_count"],
         ))
 
-    if final_count == 0:
+    if final_count == 0 and not legal_empty_pool:
         errors.append(_health_issue("final_pool", "final recommendation pool is empty"))
-    elif final_count < int(CONF["final_n"]):
+    elif final_count > 0 and final_count < int(CONF["final_n"]):
         warnings_.append(_health_issue(
             "final_pool",
             "final recommendation count is below configured final_n",
@@ -1647,9 +1682,9 @@ def build_data_health(df_full, watch_df, tier1_final, analysis_input, latest_td,
             final_n=CONF["final_n"],
         ))
 
-    if tier1_count == 0:
+    if tier1_count == 0 and not legal_empty_pool:
         errors.append(_health_issue("tier1_count", "no Tier1 candidates in watch pool"))
-    elif tier1_count < int(CONF["final_n"]):
+    elif tier1_count > 0 and tier1_count < int(CONF["final_n"]):
         warnings_.append(_health_issue(
             "tier1_count",
             "Tier1 count is below final_n",
@@ -1690,6 +1725,13 @@ def build_data_health(df_full, watch_df, tier1_final, analysis_input, latest_td,
             "candidate data completeness score below 95",
             low_count=low_quality_count,
         ))
+    short_history_candidate_count = int(short_history_candidate_count or 0)
+    if short_history_candidate_count:
+        warnings_.append(_health_issue(
+            "short_history_candidate_count",
+            "candidate-universe symbols have fewer than 61 usable closes",
+            count=short_history_candidate_count,
+        ))
 
     warnings_.extend(sidecar_warnings or [])
     status = "error" if errors else ("warn" if warnings_ else "ok")
@@ -1725,6 +1767,7 @@ def build_data_health(df_full, watch_df, tier1_final, analysis_input, latest_td,
             "watch_l1_unknown_count": l1_unknown_count,
             "watch_l2_unknown_count": l2_unknown_count,
             "full_l2_unknown_count": full_l2_unknown_count,
+            "short_history_candidate_count": short_history_candidate_count,
             "watch_pool_reconciliation": watch_pool_reconciliation,
             "sw_industry_membership": sw_industry_membership,
             "rank_universe_reconciliation": rank_reconciliation,
@@ -1811,7 +1854,8 @@ def export_data_health(df_full, watch_df, tier1_final, analysis_input, latest_td
                        analysis_path, snapshot_path, candidates_path,
                        tier1_csv_path, full_csv_path, rank_reconciliation=None,
                        rank_reconciliation_path=None, watch_eligible_count=None,
-                       sidecar_warnings=None, margin_observation=None):
+                       sidecar_warnings=None, margin_observation=None,
+                       short_history_candidate_count=0):
     health = build_data_health(
         df_full=df_full,
         watch_df=watch_df,
@@ -1828,6 +1872,7 @@ def export_data_health(df_full, watch_df, tier1_final, analysis_input, latest_td
         watch_eligible_count=watch_eligible_count,
         sidecar_warnings=sidecar_warnings,
         margin_observation=margin_observation,
+        short_history_candidate_count=short_history_candidate_count,
     )
     validate_json_schema(health, schema_path=DATA_HEALTH_SCHEMA_PATH, label=f"data_health export {latest_td}")
     validate_data_health_consistency(health)
@@ -3657,18 +3702,35 @@ def get_holder_reductions():
 # ═══════════════════════════════════════════════════
 # §3 预计算统计量
 # ═══════════════════════════════════════════════════
-def _neutral_stats_df(codes):
-    basic = pd.DataFrame({"ts_code": list(codes)})
-    for col in ["pct_20d","pct_5d","pct_60d","avg_amount_20d","avg_amount_5d","high_20d","low_20d","drawdown_20d"]:
-        basic[col] = np.nan
-    basic["vol_confirm"]    = True
-    basic["limit_20d"]      = 0
-    basic["limit_10d"]      = 0
-    basic["is_lock"]        = False
-    basic["is_breakout"]    = False
-    basic["limit_breakout_legacy"] = False
-    basic["has_crash_veto"] = False
-    return basic
+def _trailing_return_pct(closes, sessions):
+    """Return an exact N-session move only when N+1 closes are available."""
+    if len(closes) < sessions + 1:
+        return np.nan
+    latest = pd.to_numeric(closes.iloc[0], errors="coerce")
+    anchor = pd.to_numeric(closes.iloc[sessions], errors="coerce")
+    if pd.isna(latest) or pd.isna(anchor) or float(anchor) <= 0:
+        return np.nan
+    return float((float(latest) / float(anchor) - 1) * 100)
+
+
+def _short_history_candidate_count(df_stocks, stats_df):
+    if (
+        not isinstance(df_stocks, pd.DataFrame)
+        or not isinstance(stats_df, pd.DataFrame)
+        or "ts_code" not in df_stocks.columns
+        or not {"ts_code", "price_observation_count"}.issubset(stats_df.columns)
+    ):
+        return 0
+    main_board_codes = set(
+        df_stocks.loc[
+            df_stocks["ts_code"].map(is_a_share_main_board), "ts_code"
+        ].astype(str)
+    )
+    observations = stats_df[
+        stats_df["ts_code"].astype(str).isin(main_board_codes)
+    ]["price_observation_count"]
+    observations = pd.to_numeric(observations, errors="coerce")
+    return int(observations.between(1, 60, inclusive="both").sum())
 
 
 def precompute_stock_stats(codes, all_daily):
@@ -3706,9 +3768,9 @@ def precompute_stock_stats(codes, all_daily):
         closes = grp["qfq_close"].dropna()
         if len(closes) < 1: continue
 
-        pct_20d = float((closes.iloc[0] / closes.iloc[min(19, len(closes)-1)] - 1) * 100) if len(closes) >= 2 else np.nan
-        pct_5d  = float((closes.iloc[0] / closes.iloc[min(4,  len(closes)-1)] - 1) * 100) if len(closes) >= 2 else np.nan
-        pct_60d = float((closes.iloc[0] / closes.iloc[min(59, len(closes)-1)] - 1) * 100) if len(closes) >= 2 else np.nan
+        pct_20d = _trailing_return_pct(closes, 20)
+        pct_5d  = _trailing_return_pct(closes, 5)
+        pct_60d = _trailing_return_pct(closes, 60)
         avg_20d = grp.head(20)["amount"].mean() * 1000 if "amount" in grp.columns else np.nan
         avg_5d  = grp.head(5) ["amount"].mean() * 1000 if "amount" in grp.columns else np.nan
 
@@ -3773,6 +3835,7 @@ def precompute_stock_stats(codes, all_daily):
             "ts_code":        code,
             "qfq_close":      float(grp.iloc[0]["qfq_close"]),
             "qfq_source_trade_date": str(grp.iloc[0]["trade_date"]),
+            "price_observation_count": int(len(closes)),
             "pct_20d":        pct_20d,
             "pct_5d":         pct_5d,
             "pct_60d":        pct_60d,
@@ -3800,7 +3863,8 @@ def precompute_stock_stats(codes, all_daily):
 # ═══════════════════════════════════════════════════
 # §4 L0 过滤
 # ═══════════════════════════════════════════════════
-def filter_l0(df_stocks, stats_df, unlock_set, red_dict, suspended_set, relisted_set):
+def filter_l0(df_stocks, stats_df, unlock_set, red_dict, suspended_set, relisted_set,
+              exclusion_counts=None):
     missing_columns = sorted({"ts_code", "name"} - set(df_stocks.columns))
     if missing_columns:
         raise RuntimeError("L0 input missing delisting-safety columns: " + ",".join(missing_columns))
@@ -3812,19 +3876,20 @@ def filter_l0(df_stocks, stats_df, unlock_set, red_dict, suspended_set, relisted
     # **B股(沪900·深200)**/畸形码——比逐个加排除前缀(原 `~startswith(300/301/688/689/920/900/200)`)更彻底:
     # 畸形码(如 600ABC.SH)、未来新非主板前缀都拒,_board_from_code 之后只会见到主板码。
     df = df[df["ts_code"].map(is_a_share_main_board)].copy()
-    delisting = df.apply(
-        lambda row: derive_delisting_flags(row, historical=_historical_replay_mode()),
-        axis=1,
-        result_type="expand",
-    )
-    # Unknown status is never a safe pass-through.  Historical rows use only
-    # the already PIT-resolved name; live rows additionally require list_status.
-    safe_status = (
-        delisting["known"].astype(bool)
-        & ~delisting["st_flag"].fillna(True).astype(bool)
-        & ~delisting["delisting_warning"].fillna(True).astype(bool)
-    )
-    df = df[safe_status].copy()
+    if not df.empty:
+        delisting = df.apply(
+            lambda row: derive_delisting_flags(row, historical=_historical_replay_mode()),
+            axis=1,
+            result_type="expand",
+        )
+        # Unknown status is never a safe pass-through.  Historical rows use only
+        # the already PIT-resolved name; live rows additionally require list_status.
+        safe_status = (
+            delisting["known"].astype(bool)
+            & ~delisting["st_flag"].fillna(True).astype(bool)
+            & ~delisting["delisting_warning"].fillna(True).astype(bool)
+        )
+        df = df[safe_status].copy()
     df = df[~df["name"].fillna("").astype(str).str.contains("暂停上市", regex=False)].copy()
     if not _historical_replay_mode() and "list_status" in df.columns:
         df = df[df["list_status"].fillna("").astype(str).str.upper().ne("P")].copy()
@@ -3836,6 +3901,16 @@ def filter_l0(df_stocks, stats_df, unlock_set, red_dict, suspended_set, relisted
     veto = red_dict.get("veto_10d", set())
     if veto: df = df[~df["ts_code"].isin(veto)].copy()
 
+    if not stats_df.empty and "price_observation_count" in stats_df.columns:
+        requested_codes = set(df["ts_code"].astype(str))
+        stats_codes = set(stats_df["ts_code"].dropna().astype(str))
+        missing_stats_codes = requested_codes - stats_codes
+        if missing_stats_codes:
+            raise RuntimeError(
+                "daily stats symbol coverage incomplete before momentum filter: "
+                f"missing_count={len(missing_stats_codes)}"
+            )
+
     if not stats_df.empty and "avg_amount_20d" in stats_df.columns:
         df = df.merge(stats_df[["ts_code","avg_amount_20d"]], on="ts_code", how="left")
         df["avg_amount_20d"] = df["avg_amount_20d"].fillna(0)
@@ -3844,12 +3919,28 @@ def filter_l0(df_stocks, stats_df, unlock_set, red_dict, suspended_set, relisted
         else:
             log.warning("avg_amount_20d 全为 NaN/0（日线数据缺失），跳过成交额过滤")
 
-    if "pct_20d" in stats_df.columns and stats_df["pct_20d"].notna().any():
-        df = df.merge(stats_df[["ts_code","pct_20d"]], on="ts_code", how="left")
+    if not stats_df.empty and "pct_20d" in stats_df.columns:
+        momentum_cols = [
+            column for column in ("ts_code", "pct_20d", "price_observation_count")
+            if column in stats_df.columns
+        ]
+        df = df.merge(stats_df[momentum_cols], on="ts_code", how="left")
+        if "price_observation_count" in df.columns:
+            missing_stats = df["price_observation_count"].isna()
+            if missing_stats.any():
+                raise RuntimeError(
+                    "daily stats symbol coverage incomplete before momentum filter: "
+                    f"missing_count={int(missing_stats.sum())}"
+                )
+        short_count = int(df["pct_20d"].isna().sum())
+        if exclusion_counts is not None:
+            exclusion_counts["short_history_momentum"] = short_count
+        if short_count:
+            log.warning(
+                "L0 排除 %s 只 pct_20d 不可计算股票（20-session momentum requires 21 closes）",
+                short_count,
+            )
         df = df[df["pct_20d"].notna()].copy()
-    elif "pct_20d" in stats_df.columns:
-        log.warning("pct_20d 全为 NaN（数据应急兜底），跳过涨跌幅过滤")
-        df = df.merge(stats_df[["ts_code","pct_20d"]], on="ts_code", how="left")
 
     log.info(f"L0 过滤：{n0} -> {len(df)}")
     return df.reset_index(drop=True)
@@ -3918,10 +4009,32 @@ def build_master(df_l0, stats_df, df_db, df_fin, sw_map, red_dict):
 # ═══════════════════════════════════════════════════
 # §6 L1~L5 评分
 # ═══════════════════════════════════════════════════
+def _empty_scored_frame(df, columns):
+    """Preserve a stage's output contract when its legal input has zero rows."""
+    if not df.empty:
+        raise ValueError("_empty_scored_frame only accepts an empty dataframe")
+    out = df.copy()
+    for column, dtype in columns.items():
+        if column not in out.columns:
+            out[column] = pd.Series(index=out.index, dtype=dtype)
+    return out
+
+
 def score_l1(df, csi300_ret, exclusion_reasons=None):
     df = df.copy()
     if exclusion_reasons is None:
         exclusion_reasons = {}
+    if df.empty:
+        return _empty_scored_frame(df, {
+            "pct_20d_n": "float64",
+            "total_mv_n": "float64",
+            "avg_amt_5d_n": "float64",
+            "l1_leader": "float64",
+            "l1_score": "float64",
+            "l1_flag": "string",
+            "itf_adj": "boolean",
+            "l2_pe_mkt_pct": "float64",
+        })
     df["pct_20d_n"]    = pd.to_numeric(df["pct_20d"], errors="coerce")
     df["total_mv_n"]   = pd.to_numeric(df.get("total_mv",    pd.Series(dtype=float)), errors="coerce")
     df["avg_amt_5d_n"] = pd.to_numeric(df.get("avg_amount_5d", pd.Series(dtype=float)), errors="coerce")
@@ -3989,6 +4102,25 @@ def score_l2(df, mg_df, trade_dates, global_ind_med, exclusion_reasons=None,
     df = df.copy()
     if exclusion_reasons is None:
         exclusion_reasons = {}
+    if df.empty:
+        return _empty_scored_frame(df, {
+            "q0_dt_yoy_n": "float64",
+            "q1_dt_yoy_n": "float64",
+            "ind_med": "float64",
+            "esp_raw": "float64",
+            "l2_flags": "string",
+            "pe_n": "float64",
+            "pb_n": "float64",
+            "roe_n": "float64",
+            "peg_n": "float64",
+            "pe_mean": "float64",
+            "close_n": "float64",
+            "high_20d_n": "float64",
+            "val_bonus": "float64",
+            "val_penalty": "float64",
+            "margin_l2_status": "string",
+            "reduce_penalty": "float64",
+        })
 
     if "has_crash_veto" in df.columns:
         n_before = len(df)
@@ -4135,7 +4267,7 @@ def score_l2(df, mg_df, trade_dates, global_ind_med, exclusion_reasons=None,
                 exclusion_reasons[str(ts_code)] = "l2_margin_growth_veto"
             df = df[~df["ts_code"].isin(veto_margin)].copy()
 
-    df["reduce_penalty"] = df["reduce_deduct"].fillna(0) * 10
+    df["reduce_penalty"] = (df["reduce_deduct"].fillna(0) * 10).astype(float)
     return df
 
 
@@ -4146,21 +4278,20 @@ def score_l3(df, trade_dates, all_daily):
     CONF["l3_snapshot_date"] = None  # M2: reset every call; pit branch will set if applicable
     CONF["l3_provider"] = None
     CONF["l3_coverage"] = None
-
     l3_mode = CONF.get("l3_mode", "today")
     if l3_mode == "neutralize":
         CONF["l3_provider"] = "neutralized"
         log.info("L3 mode=neutralize: cat_score=50.0 for all candidates, skipping L3 API calls")
-        return df
+        return _empty_scored_frame(df, {
+            "cat_score": "float64",
+            "cat_flag": "string",
+        }) if df.empty else df
 
     if all_daily.empty:
-        if l3_mode == "today":
-            raise SystemExit(
-                "[FATAL] L3 requires usable market daily data to calculate concept intensity; "
-                "no selection will be published."
-            )
-        df["cat_flag"] = "COV-LOW"
-        return df
+        raise SystemExit(
+            "[FATAL] L3 requires usable market daily data to calculate concept intensity; "
+            "no selection will be published."
+        )
 
     # 取近5日日线数据
     recent_dates = set(trade_dates[:5])
@@ -4171,25 +4302,19 @@ def score_l3(df, trade_dates, all_daily):
     ad5 = ad5[["ts_code", "trade_date", "pct_chg", "amount"]].dropna(subset=["pct_chg", "amount"])
 
     if ad5.empty:
-        if l3_mode == "today":
-            raise SystemExit(
-                "[FATAL] L3 has no usable recent daily rows to calculate concept intensity; "
-                "no selection will be published."
-            )
-        df["cat_flag"] = "COV-LOW"
-        return df
+        raise SystemExit(
+            "[FATAL] L3 has no usable recent daily rows to calculate concept intensity; "
+            "no selection will be published."
+        )
 
     if l3_mode == "pit":
         snapshot = _load_l3_snapshot(TODAY, include_metadata=True)
         if snapshot is None:
-            if CONF.get("l3_pit_strict", False):
-                raise SystemExit(
-                    f"[FATAL] L3 mode=pit requires a snapshot dated <= {TODAY} in "
-                    f"{L3_SNAPSHOT_DIR}; none found. Seed snapshots by running with "
-                    "--l3-mode=today on or before this date, or use --l3-mode=neutralize."
-                )
-            log.warning(f"L3 mode=pit: no snapshot <= {TODAY}, falling back to cat_score=50.0")
-            return df
+            raise SystemExit(
+                f"[FATAL] L3 mode=pit requires a snapshot dated <= {TODAY} in "
+                f"{L3_SNAPSHOT_DIR}; none found. Seed snapshots by running with "
+                "--l3-mode=today on or before this date, or use --l3-mode=neutralize."
+            )
         concepts_df, stock_concepts, concept_members, snap_date, l3_source, coverage = snapshot
         CONF["l3_snapshot_date"] = snap_date
         CONF["l3_provider"] = l3_source or "legacy_tushare_snapshot"
@@ -4291,6 +4416,11 @@ def score_l3(df, trade_dates, all_daily):
             )
     else:
         raise ValueError(f"unsupported L3 mode {l3_mode!r}")
+    if df.empty:
+        return _empty_scored_frame(df, {
+            "cat_score": "float64",
+            "cat_flag": "string",
+        })
     # Re-validate concepts_df (defensive for both pit and today branches).
     if concepts_df is None or concepts_df.empty:
         df["cat_flag"] = "COV-LOW"
@@ -4356,12 +4486,31 @@ def score_l3(df, trade_dates, all_daily):
 
 def score_l4(df, mf_df):
     df = df.copy()
+    if df.empty:
+        return _empty_scored_frame(df, {
+            "mom_rank": "float64",
+            "l4_mom_ok": "Int64",
+            "l4_rel_ok": "Int64",
+            "l4_score": "Float64",
+            "ind_mom_cnt": "int64",
+            "alpha_excess": "float64",
+            "alpha_flag": "boolean",
+            "pct_5d_n": "float64",
+            "l4_flag": "string",
+            "big_ratio": "float64",
+            "chasing_high": "boolean",
+            "overheat_flag": "boolean",
+        })
 
     df["mom_rank"]   = df.groupby("l2_name")["pct_20d_n"].rank(pct=True)
-    df["l4_mom_ok"]  = (df["mom_rank"] >= 0.70).astype(int)
+    df["l4_mom_ok"]  = (df["mom_rank"] >= 0.70).astype("Int64")
+    df.loc[df["mom_rank"].isna(), "l4_mom_ok"] = pd.NA
     mkt_med          = df["pct_20d_n"].median()
-    df["l4_rel_ok"]  = (df["pct_20d_n"] > mkt_med + 1).astype(int)
-    df["l4_score"]   = (df["l4_mom_ok"] + df["l4_rel_ok"]) * 50.0
+    df["l4_rel_ok"]  = (df["pct_20d_n"] > mkt_med + 1).astype("Int64")
+    df.loc[df["pct_20d_n"].isna(), "l4_rel_ok"] = pd.NA
+    df["l4_score"]   = (
+        df["l4_mom_ok"] + df["l4_rel_ok"]
+    ).astype("Float64") * 50.0
 
     if "vol_confirm" in df.columns:
         df.loc[df["vol_confirm"] == False, "l4_score"] *= 0.7
@@ -4377,7 +4526,8 @@ def score_l4(df, mf_df):
 
     ind_ret_med       = df.groupby("l2_name")["pct_20d_n"].transform("median")
     df["alpha_excess"] = df["pct_20d_n"] - ind_ret_med
-    df["alpha_flag"]   = df["alpha_excess"] > 5.0
+    df["alpha_flag"]   = (df["alpha_excess"] > 5.0).astype("boolean")
+    df.loc[df["alpha_excess"].isna(), "alpha_flag"] = pd.NA
 
     if "pct_5d" in df.columns:
         df["pct_5d_n"] = pd.to_numeric(df["pct_5d"], errors="coerce")
@@ -4385,7 +4535,8 @@ def score_l4(df, mf_df):
     else:
         ind_5d_ret = ind_ret_med / 4.0
 
-    df.loc[df["alpha_flag"] & (ind_5d_ret > -2), "l4_score"] += 10  # v7.3: ALPHA+行业不跌→+10
+    alpha_bonus_mask = (df["alpha_flag"] & (ind_5d_ret > -2)).fillna(False)
+    df.loc[alpha_bonus_mask, "l4_score"] += 10  # v7.3: ALPHA+行业不跌→+10
     df["l4_score"] = df["l4_score"].clip(0, 100)
 
     def limit_flag(row):
@@ -4420,20 +4571,28 @@ def score_l4(df, mf_df):
     # 所有加分完成后再判定 TIER2_FORCED，避免资金流加分后仍被冤枉降级
     df["l4_flag"] = df.apply(
         lambda r: ("" if not r["l4_flag"] else r["l4_flag"] + "|") + "TIER2_FORCED"
-        if r["l4_score"] == 0 else r["l4_flag"], axis=1
+        if pd.notna(r["l4_score"]) and r["l4_score"] == 0 else r["l4_flag"], axis=1
     )
 
-    df["chasing_high"] = df["pct_20d_n"] > 15
+    pct20 = pd.to_numeric(df["pct_20d_n"], errors="coerce")
+    df["chasing_high"] = (pct20 > 15).astype("boolean")
+    df.loc[pct20.isna(), "chasing_high"] = pd.NA
 
     # 周频过热标记：5日涨幅过快 或 20日大涨且仍在高位（drawdown < 3%）
     if "pct_5d_n" not in df.columns:
         df["pct_5d_n"] = pd.to_numeric(df.get("pct_5d", pd.Series(dtype=float)), errors="coerce")
     dd20 = pd.to_numeric(df.get("drawdown_20d", pd.Series(np.nan, index=df.index)), errors="coerce")
-    oh_5d  = df["pct_5d_n"]  > CONF["overheat_5d"]
-    oh_20d = (df["pct_20d_n"] > CONF["overheat_20d"]) & (dd20 > -3)
+    pct5 = pd.to_numeric(df["pct_5d_n"], errors="coerce")
+    oh_5d = (pct5 > CONF["overheat_5d"]).astype("boolean")
+    oh_5d.loc[pct5.isna()] = pd.NA
+    pct20_hot = (pct20 > CONF["overheat_20d"]).astype("boolean")
+    pct20_hot.loc[pct20.isna()] = pd.NA
+    near_high = (dd20 > -3).astype("boolean")
+    near_high.loc[dd20.isna()] = pd.NA
+    oh_20d = pct20_hot & near_high
     df["overheat_flag"] = oh_5d | oh_20d
-    df["overheat_flag"] = df["overheat_flag"].fillna(False)
-    df.loc[df["overheat_flag"], "l4_flag"] = df.loc[df["overheat_flag"], "l4_flag"].apply(
+    overheat_hit = df["overheat_flag"].fillna(True)
+    df.loc[overheat_hit, "l4_flag"] = df.loc[overheat_hit, "l4_flag"].apply(
         lambda x: (x + "|" if x else "") + "OVERHEAT"
     )
     return df
@@ -4441,6 +4600,23 @@ def score_l4(df, mf_df):
 
 def score_l5(df, sw_map):
     df = df.copy()
+    if df.empty:
+        empty = _empty_scored_frame(df, {
+            "z_group": "string",
+            "esp_raw_w": "float64",
+            "low_base_growth_flag": "boolean",
+            "esp_z": "float64",
+            "esp_score": "float64",
+            "industry_heat_score": "float64",
+            "egs_base": "float64",
+            "mult": "float64",
+            "deduct": "float64",
+            "final_score": "float64",
+            "tier": "string",
+            "downgrade_reasons": "string",
+            "score_penalty_reasons": "string",
+        })
+        return empty, empty.copy()
 
     global_l2 = pd.Series([v["l2_name"] for v in sw_map.values() if v["l2_name"] != "未知"])
     global_l1 = pd.Series([v["l1_name"] for v in sw_map.values() if v["l1_name"] != "未知"])
@@ -4530,8 +4706,15 @@ def score_l5(df, sw_map):
         log.info(f"Tier1 准入硬条件暂停（财务覆盖率{fin_coverage:.0%}<70%，等待财报完整披露）")
     log.info(f"egs_base 权重 profile={_ih_profile}（active 生效；行业热度权重={_ih_weights['industry_heat']}；legacy 仅回滚锚）")
 
-    ch_mask = df.get("chasing_high", pd.Series(False, index=df.index)).fillna(False)
-    oh_mask = df.get("overheat_flag", pd.Series(False, index=df.index)).fillna(False)
+    chasing = df.get(
+        "chasing_high", pd.Series(pd.NA, index=df.index, dtype="boolean")
+    ).astype("boolean")
+    overheat = df.get(
+        "overheat_flag", pd.Series(pd.NA, index=df.index, dtype="boolean")
+    ).astype("boolean")
+    momentum_unknown = chasing.isna() | overheat.isna()
+    ch_mask = chasing.fillna(True)
+    oh_mask = overheat.fillna(True)
 
     def _join_reasons(reasons):
         reasons = [r for r in reasons if r]
@@ -4543,6 +4726,8 @@ def score_l5(df, sw_map):
         lambda r: _join_reasons([r.get("downgrade_reasons"), "chasing_high"]), axis=1)
     df.loc[oh_mask, "downgrade_reasons"] = df.loc[oh_mask].apply(
         lambda r: _join_reasons([r.get("downgrade_reasons"), "overheat"]), axis=1)
+    df.loc[momentum_unknown, "downgrade_reasons"] = df.loc[momentum_unknown].apply(
+        lambda r: _join_reasons([r.get("downgrade_reasons"), "momentum_history_unknown"]), axis=1)
     df.loc[df["l4_flag"].str.contains("TIER2_FORCED", na=False), "downgrade_reasons"] = \
         df.loc[df["l4_flag"].str.contains("TIER2_FORCED", na=False)].apply(
             lambda r: _join_reasons([r.get("downgrade_reasons"), "l4_score_zero"]), axis=1)
@@ -4851,8 +5036,18 @@ def run_egs(backtest_mode=False, output_root=None, price_as_of=None):
 
     all_codes = set(df_stocks["ts_code"])
     stats_df  = precompute_stock_stats(all_codes, all_daily)
+    short_history_candidate_count = _short_history_candidate_count(df_stocks, stats_df)
 
-    df_l0 = filter_l0(df_stocks, stats_df, unlock_set, red_dict, suspended_set, relisted_set)
+    l0_excluded_counts = {}
+    df_l0 = filter_l0(
+        df_stocks,
+        stats_df,
+        unlock_set,
+        red_dict,
+        suspended_set,
+        relisted_set,
+        exclusion_counts=l0_excluded_counts,
+    )
 
     # 行业 ESP 基准(global_ind_med)**有意用全行业样本**(df_stocks 全 universe,非主板过滤后的 df_l0)——
     # 用户 2026-06-20 拍板「含全行业」:ChiNext/STAR 等是同 SW 行业的合法成员,纳入使行业中位数更稳健
@@ -4935,7 +5130,8 @@ def run_egs(backtest_mode=False, output_root=None, price_as_of=None):
 
     # ── 计算 entry_flag ────────────────────────────────────────────────────────
     def _entry_flag(row):
-        if row.get("overheat_flag", False) or row.get("chasing_high", False):
+        if (fail_closed_risk_bool(row.get("overheat_flag"))
+                or fail_closed_risk_bool(row.get("chasing_high"))):
             return "追高风险，周一确认"
         br = row.get("big_ratio", np.nan)
         if not pd.isna(br) and br < -0.05:
@@ -4997,8 +5193,11 @@ def run_egs(backtest_mode=False, output_root=None, price_as_of=None):
     try:
         from runners.a_short_theme_overlay_comparison import emit_overlay, overlay_emit_allowed
         from engine.a_short_run_paths import overlay_path
-        _l3 = (_load_l3_snapshot(TODAY, include_metadata=True)
-               if overlay_emit_allowed(CONF.get("l3_mode")) else None)
+        _l3 = (
+            _load_l3_snapshot(TODAY, include_metadata=True)
+            if not watch_df.empty and overlay_emit_allowed(CONF.get("l3_mode"))
+            else None
+        )
         if _l3 is not None:
             _taxonomy_by_code = taxonomy_by_code(
                 watch_df, stock_concepts=_l3[1], concept_members=_l3[2],
@@ -5058,7 +5257,10 @@ def run_egs(backtest_mode=False, output_root=None, price_as_of=None):
         comparison_sidecar_warnings.append(_ov_warning)
         log.warning(_ov_warning["message"])
 
-    watch_df["entry_flag"]  = watch_df.apply(_entry_flag, axis=1)
+    watch_df["entry_flag"] = (
+        pd.Series(index=watch_df.index, dtype="string")
+        if watch_df.empty else watch_df.apply(_entry_flag, axis=1)
+    )
     if "ts_code" in watch_df.columns:
         watch_df["cninfo_flag"] = watch_df["ts_code"].map(cninfo_checked).fillna("未检查")
     else:
@@ -5086,7 +5288,10 @@ def run_egs(backtest_mode=False, output_root=None, price_as_of=None):
         print(watch_df[watch_cols].to_string(index=False))
 
     # ── Top 5 最终推荐 ────────────────────────────────────────────────────────
-    tier1_final["entry_flag"] = tier1_final.apply(_entry_flag, axis=1)
+    tier1_final["entry_flag"] = (
+        pd.Series(index=tier1_final.index, dtype="string")
+        if tier1_final.empty else tier1_final.apply(_entry_flag, axis=1)
+    )
 
     out_cols = ["ts_code","name","l2_name","final_score","tier",
                 "esp_score","cat_score","l4_score","industry_heat_score",
@@ -5163,6 +5368,7 @@ def run_egs(backtest_mode=False, output_root=None, price_as_of=None):
             price_data_through=price_data_through,
             run_date=run_date,
             margin_observation=margin_observation,
+            l0_excluded_counts=l0_excluded_counts,
         )
         log.info(f"[OK] analysis_input saved to {analysis_path}")
         log.info(f"[OK] snapshot saved to {snapshot_path}")
@@ -5229,6 +5435,7 @@ def run_egs(backtest_mode=False, output_root=None, price_as_of=None):
             watch_eligible_count=watch_eligible_count,
             sidecar_warnings=comparison_sidecar_warnings,
             margin_observation=margin_observation,
+            short_history_candidate_count=short_history_candidate_count,
         )
         log_data_health_summary(health_path, health)
         _published_files = {

@@ -46,6 +46,7 @@ from engine.a_short_industry_theme import (  # noqa: E402
     industry_trend_policy,
 )
 from engine.egs_industry_heat import load_governance  # noqa: E402
+from engine.a_short_nullable_bool import fail_closed_risk_bool  # noqa: E402
 
 from engine.a_short_rule6_evaluation import materialize_50etf_iv_rule6_check
 from engine.a_short_regulatory_advisory import (
@@ -600,10 +601,13 @@ def normalize_candidate(cand: dict, price_series: list, overlay_row: dict, iv_pc
         # overheat_flag,chasing_high,vol_confirm,hard_veto};suspension 在 event_risk.suspension.is_suspended。
         # vol_confirm 可选:EGS 量能旁证(近5日上涨日额>下跌日额),仅进 EGS l4_score 评分;**不再门控 M6.7 突破**
         # (#6-ii:突破改由 is_breakout=v14.2 spec[站稳MA10 + 当日量>5日均量×1.2]触发,见 a_short_phase5_engine.entry_type)。
-        "derived": {"overheat": bool(d.get("overheat_flag")), "chasing_high": bool(d.get("chasing_high")),
+        "derived": {"overheat": fail_closed_risk_bool(d.get("overheat_flag")),
+                    "chasing_high": fail_closed_risk_bool(d.get("chasing_high")),
                     "breakout": bool(d.get("is_breakout")), "vol_confirm": bool(d.get("vol_confirm")),
-                    "crash_veto": bool(d.get("has_crash_veto")), "limit_locked": bool(d.get("is_lock")),
-                    "suspended": bool(susp.get("is_suspended")), "hard_veto": bool(d.get("hard_veto"))},
+                    "crash_veto": fail_closed_risk_bool(d.get("has_crash_veto")),
+                    "limit_locked": fail_closed_risk_bool(d.get("is_lock")),
+                    "suspended": fail_closed_risk_bool(susp.get("is_suspended")),
+                    "hard_veto": fail_closed_risk_bool(d.get("hard_veto"))},
         # regulatory_legacy_vetoed 恒 False:EGS Stage3 CNINFO REGULATOR-VETO 在上游已剔除被否票
         # (§10),analysis_input 里的票均已过 cninfo;契约无顶层 veto 字段,pipeline 不再二次硬杀。
         # Nullable delisting fields represent unknown source facts.  Unknown
@@ -978,6 +982,12 @@ _EXCL_REASON_META = {
     "unlock": ("share_float_unlock", "l0_filter", "disclosure_date", "大额解禁"),
     "suspended": ("suspended", "l0_filter", "trade_date_window", "停牌"),
     "relisted": ("relisted", "l0_filter", "trade_date_window", "次新/relisted"),
+    "short_history_momentum": (
+        "short_history_momentum",
+        "l0_filter",
+        "price_observation_count",
+        "20日动量历史不足",
+    ),
 }
 
 # EGS v1.4 曾把这些 post-L0 排名淘汰键混入 excluded_counts，导致 weekly 把它们当未知 L0

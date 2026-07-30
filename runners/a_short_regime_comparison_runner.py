@@ -527,7 +527,7 @@ def _m67_build_candidates(path: str, *, as_of: str) -> tuple[list[dict], dict]:
         stateful_risk = machine.get("stateful_risk") or {}
         rule6 = machine.get("rule6_gate") or {}
         layer = machine.get("layer") or {}
-        hard_veto = bool((layer.get("hard_veto") or []))
+        hard_veto = len(layer.get("hard_veto") or []) > 0
         candidates.append({
             "as_of": str(as_of),
             "ts_code": code,

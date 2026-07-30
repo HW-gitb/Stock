@@ -113,6 +113,39 @@ class FilterL0BoardScopeTest(unittest.TestCase):
         out = em.filter_l0(stocks, stats, set(), {}, set(), set())
         self.assertTrue(out.empty)
 
+    def test_all_non_main_board_rows_produce_a_structural_empty_l0(self) -> None:
+        stocks = pd.DataFrame([
+            {"ts_code": "300001.SZ", "name": "创业板", "list_status": "L"},
+            {"ts_code": "688001.SH", "name": "科创板", "list_status": "L"},
+        ])
+        stats = pd.DataFrame(columns=[
+            "ts_code", "avg_amount_20d", "pct_20d", "price_observation_count",
+        ])
+
+        out = self.egs_main.filter_l0(
+            stocks, stats, set(), {}, set(), set()
+        )
+
+        self.assertTrue(out.empty)
+        self.assertIn("ts_code", out.columns)
+
+    def test_missing_daily_stats_symbol_cannot_be_laundered_as_short_history(self) -> None:
+        stocks = pd.DataFrame([
+            {"ts_code": "600001.SH", "name": "正常一", "list_status": "L"},
+            {"ts_code": "600002.SH", "name": "正常二", "list_status": "L"},
+        ])
+        stats = pd.DataFrame([{
+            "ts_code": "600001.SH",
+            "avg_amount_20d": 2e8,
+            "pct_20d": 1.0,
+            "price_observation_count": 61,
+        }])
+
+        with self.assertRaisesRegex(RuntimeError, "symbol coverage incomplete"):
+            self.egs_main.filter_l0(
+                stocks, stats, set(), {}, set(), set()
+            )
+
     def test_sst_and_s_star_st_prefixes_are_excluded_but_s_controls_survive(self) -> None:
         em = self.egs_main
         stocks = pd.DataFrame([

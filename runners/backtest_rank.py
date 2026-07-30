@@ -47,6 +47,7 @@ from engine.analyzer.rule6_hard_veto import normalize_rules as _normalize_veto_r
 from engine.analyzer.rule6_hard_veto import run_veto
 from engine.data.analysis_input_contract import validate_analysis_input_contract
 from engine.a_share_market_clock import a_share_market_date
+from engine.a_short_nullable_bool import fail_closed_risk_bool
 from engine.a_short_tushare_client import init_tushare_pro, is_retryable_tushare_error
 
 RESULT_ROOT = ROOT / "result" / "a_short"
@@ -904,11 +905,15 @@ def _is_l2_unknown_value(value):
 
 def _risk_reasons_for_row(row):
     reasons = []
-    if bool(row.get("chasing_high")) or str(row.get("entry_flag_group", "")) == "追高风险，周一确认":
+    chasing_high = row.get("chasing_high")
+    overheat_flag = row.get("overheat_flag")
+    if pd.isna(chasing_high) or pd.isna(overheat_flag):
+        reasons.append("momentum_history_unknown")
+    if fail_closed_risk_bool(chasing_high) or str(row.get("entry_flag_group", "")) == "追高风险，周一确认":
         reasons.append("chasing_high")
-    if bool(row.get("has_l4_overheat")) or bool(row.get("overheat_flag")):
+    if fail_closed_risk_bool(row.get("has_l4_overheat")) or fail_closed_risk_bool(overheat_flag):
         reasons.append("overheat")
-    if bool(row.get("has_l4_lock")) or bool(row.get("is_lock")):
+    if fail_closed_risk_bool(row.get("has_l4_lock")) or fail_closed_risk_bool(row.get("is_lock")):
         reasons.append("lock")
     if bool(row.get("q0_dt_yoy_gt_200")) or bool(row.get("q1_dt_yoy_gt_200")) or bool(row.get("esp_raw_gt_200")):
         reasons.append("low_base_growth")
@@ -1278,7 +1283,7 @@ def _row_to_sample(row, trade_date, source_file, rank):
 
 
 def _entry_flag_from_full(row):
-    if bool(row.get("overheat_flag")) or bool(row.get("chasing_high")):
+    if fail_closed_risk_bool(row.get("overheat_flag")) or fail_closed_risk_bool(row.get("chasing_high")):
         return "追高风险，周一确认"
     br = pd.to_numeric(row.get("big_ratio"), errors="coerce")
     if not pd.isna(br) and br < -0.05:
@@ -1407,8 +1412,8 @@ def _recalc_esp_cap_scores(df, cap=ESP_CAP_VALUE):
     fin_coverage = pd.to_numeric(df.get("q0_dt_yoy"), errors="coerce").notna().sum() / max(len(df), 1)
     if fin_coverage >= 0.70:
         df.loc[(df["tier"] == "Tier1") & (pd.to_numeric(df["esp_raw"], errors="coerce").fillna(0) <= 0), "tier"] = "Tier2"
-    df.loc[(df["tier"] == "Tier1") & _series("chasing_high").fillna(False).astype(bool), "tier"] = "Tier2"
-    df.loc[(df["tier"] == "Tier1") & _series("overheat_flag").fillna(False).astype(bool), "tier"] = "Tier2"
+    df.loc[(df["tier"] == "Tier1") & _series("chasing_high", pd.NA).fillna(True).astype(bool), "tier"] = "Tier2"
+    df.loc[(df["tier"] == "Tier1") & _series("overheat_flag", pd.NA).fillna(True).astype(bool), "tier"] = "Tier2"
     df.loc[df["l4_flag"].str.contains("TIER2_FORCED", na=False), "tier"] = "Tier2"
     df.loc[(df["tier"] == "Tier1") & (df["l2_name"] == "未知"), "tier"] = "Tier2"
     return df
@@ -1505,9 +1510,9 @@ def _variant_mask(samples, name):
     if name == "baseline":
         return mask
     if name == "no_chase":
-        return mask & ~(s["entry_flag_group"].eq("追高风险，周一确认") | s["chasing_high"].fillna(False).astype(bool))
+        return mask & ~(s["entry_flag_group"].eq("追高风险，周一确认") | s["chasing_high"].fillna(True).astype(bool))
     if name == "no_overheat":
-        return mask & ~(s["has_l4_overheat"].fillna(False).astype(bool) | s["overheat_flag"].fillna(False).astype(bool))
+        return mask & ~(s["has_l4_overheat"].fillna(True).astype(bool) | s["overheat_flag"].fillna(True).astype(bool))
     if name == "no_low_base":
         return mask & ~(s["q0_dt_yoy_gt_200"] | s["q1_dt_yoy_gt_200"] | s["esp_raw_gt_200"])
     if name == "tier1_only":
@@ -1515,11 +1520,11 @@ def _variant_mask(samples, name):
     if name == "no_tier2_unknown":
         return mask & ~(s["tier_group"].eq("Tier2") & s["l2_unknown"])
     if name == "no_lock":
-        return mask & ~s["has_l4_lock"].fillna(False).astype(bool)
+        return mask & ~s["has_l4_lock"].fillna(True).astype(bool)
     if name == "combined_p0":
         return (mask & s["tier_group"].eq("Tier1")
-                & ~(s["entry_flag_group"].eq("追高风险，周一确认") | s["chasing_high"].fillna(False).astype(bool))
-                & ~(s["has_l4_overheat"].fillna(False).astype(bool) | s["overheat_flag"].fillna(False).astype(bool))
+                & ~(s["entry_flag_group"].eq("追高风险，周一确认") | s["chasing_high"].fillna(True).astype(bool))
+                & ~(s["has_l4_overheat"].fillna(True).astype(bool) | s["overheat_flag"].fillna(True).astype(bool))
                 & ~(s["q0_dt_yoy_gt_200"] | s["q1_dt_yoy_gt_200"] | s["esp_raw_gt_200"]))
     if name == "score_ge_60":
         # Phase 3.2 candidate: diagnose_tier1_bad_signals identified
