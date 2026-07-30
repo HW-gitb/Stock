@@ -587,3 +587,35 @@ register 里与 K3-R105 并列记着的两条残留仍开着：`_evidence_mentio
 ### 失效旧结论 / 下一步注意事项
 
 K3-R105 并列记录的两条残留已关闭；在 Claude Code 独立审查前，不发起新付费运行或 4d-iii，也不提交。
+
+## 2026-07-30 交接：下一步交给 Codex（第二次真实付费运行之后）
+
+### 现状一句话
+
+第二次受限真实付费运行已完成（决策日 `20260801`，只跑 X、一条查询、一次 xAI 调用、非交易日）。**K3-R79 与 K3-R83 在真实数据上确认关闭**，完整数字见 `docs/system_risk_register.md#R-USSHORT-KNIFE3-WEB-X-MERGE-PACKET-BOUNDARY` 的「K3-R79 / K3-R83 CLOSED ON REAL DATA」条。**代码侧目前没有开着的 Required**，剩下的都是 Optional 或设计判断。
+
+### 给人看的清单在哪
+
+用户维护的人类可读清单在桌面：`C:\Users\cnhea\Desktop\us_short_软发现通道_未完成清单_20260728.md`（第十一版）。**它是给人看的，不是命令来源**；执行细节以本节和 register 为准，两边冲突时以仓库为准。方案与红线仍在 `C:\Users\cnhea\Desktop\us_short_软发现通道_方案与执行_20260725.md`。
+
+### 三步走（第 1、2 步不花钱，第 3 步必须用户逐次授权）
+
+**第 1 步 —— 查 20260801 那 7 个成员够不够格（离线、只读、不占决策日）**
+
+成员是 `CEG / VST / NEE / ETN / GEV / PWR / VRT`（artifact 在 `state/us_short/us_short_llm_theme_discovery_x_20260801.json`，gitignored）。要回答的就是知识刀 2 那两道结构门会不会放行，**复用它自己的判定，别另写一套**：
+- 活跃可交易池：`runners/us_short_provisional_theme_validate.py` 走 `us_short_universe_fetch` 的 candidate artifact，落选理由是 `not_in_active_pass1_eligible_universe`；
+- 行业：同文件的 `canonical_industry_code` + SEC-SIC 分类包（`DEFAULT_CLASSIFICATION_PATH`），门是 `MIN_THEME_MEMBERS = 3` 且 `len(industry_codes) >= 2`。
+
+产出只要一句结论：这 7 个里几个在池内、落在几个 SIC major group、按现行阈值过不过。**不要**为此新建 fixture、不要写进 `state/us_short` 的决策槽、不要构造一个空的 web 包去凑 merge——那会把 20260801 的 web 槽冻掉。
+
+**第 2 步 —— 查询集重设计（不花钱，方向要用户拍板）**
+
+现在这条查询等于替模型把主题名字写好了，是「验证一个已知主题」；系统要的是让它**自己发现**跨行业新主题。方向：几条**发现式**问法（本周哪些看似不相关的行业被同一件事同时推动 / 哪些公司因为同一个新需求被反复点名）+ 几条**收窄式**行业问法。硬约束：每周 ≤15 条查询（`MAX_X_QUERIES`）、每周 ≤8 个主题、单条查询 ≤300 字符且不得含 secret 形状。**先出草案交用户定方向，不要直接拿去花钱跑。**
+
+**第 3 步 —— 完整一周（花钱）**
+
+查询集定稿后，web + X 都跑，一路跑到知识刀 2，把「每主题 ≥3 个合格成员」这道门的真实通过率看出来。仍用非交易决策日，且必须用户逐次授权；不得复用 20260731 / 20260801 这两个已冻结的决策槽。
+
+### 红线（不变）
+
+不解除任何 fail-closed 门；不动 `theme_soft_boost_enabled`；确认器、席位、试探仓、生命周期、4d-iii 正式一键激活继续冻结；`state/us_short` 与 `provider_samples` 不留测试残留；不 push、不 remote add；测试级证据不得用于起 12 周时钟。
