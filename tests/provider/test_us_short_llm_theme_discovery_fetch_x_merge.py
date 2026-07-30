@@ -816,6 +816,37 @@ class XFetchAndMergeTests(unittest.TestCase):
         self.assertEqual(boosts["AAPL"], 2.0)
         self.assertNotIn("NVDA", boosts)
 
+    def test_k3_r105_residual_class_share_evidence_spellings_are_equivalent_but_bounded(self):
+        """A declared class-share target accepts only its dot, dash, and compact evidence spellings."""
+        def payload(text):
+            return {"source_type": "web", "title": "Class share", "content": text}
+
+        for target in ("BRK.B", "BRK-B"):
+            for spelling in ("BRK.B", "BRK-B", "BRKB"):
+                with self.subTest(target=target, spelling=spelling):
+                    self.assertTrue(merge._raw_payload_mentions_ticker(payload(f"{spelling} rallies"), target))
+                    self.assertTrue(merge._raw_payload_mentions_ticker(payload(f"${spelling.lower()} rallies"), target))
+        for evidence, target in (
+            ("BRK.C rallies", "BRK.B"),
+            ("BRKC rallies", "BRK.B"),
+            ("XBRKB rallies", "BRK.B"),
+            ("BRKBB rallies", "BRK.B"),
+            ("BRK.B rallies", "BRKB"),
+        ):
+            with self.subTest(evidence=evidence, target=target):
+                self.assertFalse(merge._raw_payload_mentions_ticker(payload(evidence), target))
+
+    def test_k3_r105_residual_merge_drop_order_is_total_and_input_independent(self):
+        """Two drops sharing theme/reason still have a stable producer-defined order."""
+        drops = [
+            {"stage": "theme", "theme_id": "power_demand", "reason": "member_unbound", "detail": "BRK.B:x"},
+            {"stage": "theme", "theme_id": "power_demand", "reason": "member_unbound", "detail": "BRK.B:web"},
+            {"stage": "ingest", "theme_id": "power_demand", "reason": "theme_rejected", "detail": "ValueError"},
+        ]
+        expected = [drops[2], drops[1], drops[0]]
+        self.assertEqual(merge._sorted_merge_drops(drops), expected)
+        self.assertEqual(merge._sorted_merge_drops(list(reversed(drops))), expected)
+
     def test_k3_r103_unverifiable_member_is_dropped_without_taking_its_theme(self):
         """K3-R103: one member whose ticker is never in the frozen text may not void its siblings."""
         w_rows = [{"url": "https://web.example/power", "title": "Power",

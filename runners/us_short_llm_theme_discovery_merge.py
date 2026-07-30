@@ -501,12 +501,33 @@ def _raw_payload_mentions_ticker(raw_payload: dict[str, Any], ticker: str) -> bo
     return _evidence_mentions_canonical_ticker(evidence, canonical)
 
 
+def _class_share_evidence_spellings(canonical: str) -> tuple[str, ...]:
+    """Return safe textual aliases for an already-declared class-share ticker.
+
+    This is deliberately one-way: a punctuated target such as ``BRK.B`` may match the
+    equivalent evidence spellings ``BRK-B`` and ``BRKB``.  A compact target does not
+    invent a punctuation split, because that would guess a class share for an otherwise
+    valid independent ticker and widen the money-moving evidence gate.
+    """
+    match = re.fullmatch(r"([A-Z][A-Z0-9]{0,5})[.-]([A-Z]{1,3})", canonical)
+    if match is None:
+        return (canonical,)
+    root, share_class = match.groups()
+    return (f"{root}.{share_class}", f"{root}-{share_class}", f"{root}{share_class}")
+
+
 def _evidence_mentions_canonical_ticker(evidence: str, canonical: str) -> bool:
     """A bare ticker is upper-case; a dollar-prefixed cashtag is explicitly case-insensitive."""
     boundary = r"[A-Za-z0-9]"
-    bare = rf"(?<!{boundary}){re.escape(canonical)}(?!{boundary})"
-    cashtag = rf"(?<!{boundary})\${re.escape(canonical)}(?!{boundary})"
+    spellings = "|".join(re.escape(value) for value in _class_share_evidence_spellings(canonical))
+    bare = rf"(?<!{boundary})(?:{spellings})(?!{boundary})"
+    cashtag = rf"(?<!{boundary})\$(?:{spellings})(?!{boundary})"
     return re.search(bare, evidence) is not None or re.search(cashtag, evidence, re.I) is not None
+
+
+def _sorted_merge_drops(drops: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    """Produce a complete deterministic order for the frozen merge drop ledger."""
+    return sorted(drops, key=lambda row: (row["stage"], row["theme_id"], row["reason"], row["detail"]))
 
 
 def _theme_key(theme: dict[str, Any]) -> str:
@@ -702,7 +723,7 @@ def merge_web_x_discovery(
         "decision_clock": {"expected_decision_date": expected_decision_date, "cutoff_policy": "before_decision_open_et", "pit_enforced": True},
         "merge_contract": {"producer_kind": "web_x_discovery_merge", "execution_mode": "offline_local_receipts", "scoring_eligible": False, "top15_effect_enabled": False, "operation_advice_effect_enabled": False, "dynamic_seats_enabled": False, "theme_probe_enabled": False, "lifecycle_actions_enabled": False},
         "input_artifact_sha256": {"web": web._discovery_evidence_hash(web_artifact), "x": web._discovery_evidence_hash(x_artifact)}, "source_refs": [dict(receipt_refs_by_id[source_id], evidence_attestation=receipt_refs_by_id[source_id].get("evidence_attestation", "provider_attested")) for source_id in sorted(receipt_refs_by_id)], "themes": theme_rows,
-        "drop_ledger": sorted(merge_drops, key=lambda row: (row["theme_id"], row["reason"])),
+        "drop_ledger": _sorted_merge_drops(merge_drops),
         "summary": {"web_theme_count": len(web_artifact["themes"]), "x_theme_count": len(x_artifact["themes"]), "merged_theme_count": len(theme_rows), "dropped_theme_count": sum(row["reason"] == "theme_rejected_by_ingest" for row in merge_drops), "member_evidence_demotion_count": sum(row["reason"] == "member_evidence_demoted_unbound_ticker" for row in merge_drops), "both_member_count": sum(row["evidence_tier"] == "both" for row in member_rows), "single_member_count": sum(row["evidence_tier"] == "single" for row in member_rows), "zero_member_count": sum(row["evidence_tier"] is None for row in member_rows), "redundant_member_count": sum(bool(row["redundant_source_ref_ids"]) for row in member_rows), "model_transcribed_x_member_count": sum(row["model_transcribed_x_evidence"] for row in member_rows)},
     }
     _schema_validate(SCHEMA_PATH, manifest)

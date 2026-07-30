@@ -1,5 +1,13 @@
 # Session Log
 
+## 2026-07-30 — Codex 修复 K3-R105 两条残留（0e30 工作树）
+
+- **Verdict/Action**: 已修复 class-share 冻结证据的安全三拼写匹配，以及 merge drop ledger 的全序排序；未提交、未联网。
+- **Required**: K3-R105 residuals（完整 closure 在 `docs/system_risk_register.md#R-USSHORT-KNIFE3-WEB-X-MERGE-PACKET-BOUNDARY`）。
+- **Verify**: focused `166 OK`；full lane `5024 OK / 603.5s`（fingerprint `9e6f15861987`）；current-diff-only 独立 self-review `PASS`；door `route 14 + doc-governance 41 = 55 OK`。
+- **Next**: Claude Code：审查。
+- **Pre-Codex self-review**: `matrix=complete: declared class-share dot/dash/compact evidence aliases + compact-target reverse control + total drop ordering under reversed input; register=updated; handoff=updated; focused=166 OK; full-lane=5024 OK / 603.5s exact fingerprint 9e6f15861987; door=route 14 + doc-governance 41 = 55 OK; independent self-review=current-diff-only PASS`
+
 ## 2026-07-30 — Claude Code 修复 K3-R105（用户裁决两条正文绑定口径，0e30 工作树）
 
 - **Verdict/Action**: 用户裁决 (a) 只删真正的结尾样板、(b) `single` 档也要正文绑定，两条都已实现；§6a 对抗 agent 随后开出三条、同轮全修：标签少了词边界把 `SOURCES` 削出独立的 `S` 当成代码（加分方向、我这次改动带出的）、法律声明未限定必须位于段首（误杀普通句子里的 disclaimer/copyright）、同档裁剪 ref 不落 ledger。正文只在 `docs/system_risk_register.md#R-USSHORT-KNIFE3-WEB-X-MERGE-PACKET-BOUNDARY`，本处不复述。

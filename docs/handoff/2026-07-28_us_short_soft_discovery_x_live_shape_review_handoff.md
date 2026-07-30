@@ -570,3 +570,20 @@ register 里与 K3-R105 并列记着的两条残留仍开着：`_evidence_mentio
 **判定为「不是缺陷」的一条**：agent 的头条 deflation 例子（`MSFT JPM power demand. Disclaimer: NVDA is also a member` 导致整主题归零）是门在按设计工作——那里的 `Disclaimer:` 确实位于段首、是真正的结尾声明，NVDA 只在样板里出现过，于是主题跌破 `min_theme_members=3` 这道既有门槛。这正是裁决 (b) 要的效果，不是连坐。
 
 最终证据：全量 `status=PASS exit=0 tests=5022 elapsed=1060.4s`；focused 69 OK；交接门 55 OK。
+
+## 2026-07-30 追加：K3-R105 两条确定性残留修复（Codex；待 Claude Code 独立审查）
+
+### 改了什么 / 为什么
+
+`BRK.B` / `BRK-B` 这类已声明双类股的冻结证据现在接受点、连字符和紧凑拼写；紧凑目标本身不反推 class split，避免把独立有效 ticker 猜成 class share。merge 的 `drop_ledger` 改由唯一 `_sorted_merge_drops` 以 `(stage, theme_id, reason, detail)` 排序，消除同 theme/reason 不同 detail 对输入构造顺序的依赖。
+
+### 验证命令与结果
+
+- 新增回归先红后绿：点/连字符/紧凑 bare 与 cashtag 正控均通过；另一 class、嵌入 token、紧凑 target 反向控制均拒。
+- focused：fetch/merge、offline invariants、offline production-entry、capstone soft discovery、merge schema 与 conformance = `166 OK`。
+- rule 3(c) 全量账本（最终代码指纹 `9e6f15861987`）=`5024 OK` / 603.5s。
+- 只读独立 self-review（current-diff-only）=`PASS`；未运行 provider/key/network/live 或付费请求。
+
+### 失效旧结论 / 下一步注意事项
+
+K3-R105 并列记录的两条残留已关闭；在 Claude Code 独立审查前，不发起新付费运行或 4d-iii，也不提交。
