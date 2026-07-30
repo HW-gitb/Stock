@@ -12,9 +12,14 @@ import hashlib
 import json
 import re
 import argparse
+import sys
 from datetime import datetime
 from pathlib import Path, PurePosixPath
 from typing import Any
+
+ROOT = Path(__file__).resolve().parents[1]
+if str(ROOT) not in sys.path:
+    sys.path.insert(0, str(ROOT))
 
 from runners import us_short_llm_theme_discovery_fetch_web as web
 from runners import us_short_llm_theme_discovery_fetch_x as xfetch

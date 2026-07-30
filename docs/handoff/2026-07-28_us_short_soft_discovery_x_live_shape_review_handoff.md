@@ -619,3 +619,20 @@ K3-R105 并列记录的两条残留已关闭；在 Claude Code 独立审查前�
 ### 红线（不变）
 
 不解除任何 fail-closed 门；不动 `theme_soft_boost_enabled`；确认器、席位、试探仓、生命周期、4d-iii 正式一键激活继续冻结；`state/us_short` 与 `provider_samples` 不留测试残留；不 push、不 remote add；测试级证据不得用于起 12 周时钟。
+
+## 2026-07-30 追加：K3-R108 direct-entry bootstrap 与永久回归守卫
+
+### 改了什么 / 为什么
+
+`runners/us_short_llm_theme_discovery_fetch_x.py` 与 `runners/us_short_llm_theme_discovery_merge.py` 原先按文件路径直接启动时，checkout 根目录没有在项目 import 之前进入 `sys.path`，会在任何 provider 调用之前分别因缺少 `engine` / `runners` 失败。两条入口现复用 Web sibling 已有的 guarded repository-root bootstrap；同时，focused 测试模块用真实绝对脚本路径、临时非仓库 CWD、移除 `PYTHONPATH`、固定主 Python 的 isolated `-I` 与 `--help` 永久锁定两个 direct-file entrypoint。
+
+### 验证命令 / 结果
+
+- `.tools\run_unittest_with_repo_pythonpath.cmd tests.provider.test_us_short_llm_theme_discovery_fetch_x_merge` → `73 OK`。
+- `C:\Users\cnhea\AppData\Local\Programs\Python\Python313\python.exe -m py_compile runners\us_short_llm_theme_discovery_fetch_x.py runners\us_short_llm_theme_discovery_merge.py tests\provider\test_us_short_llm_theme_discovery_fetch_x_merge.py` → PASS。
+- reviewer bootstrap-removal probes：移除 X bootstrap 后缺少 `engine`，移除 merge bootstrap 后缺少 `runners`；两条均 exit 1，证明新回归守卫承重。
+- `.tools\run_unittest_with_repo_pythonpath.cmd tests.test_route_doc_ledger_status_consistency tests.test_doc_governance_guard` → `55 OK`。
+
+### 失效旧结论 / 下一步注意事项
+
+“手工 direct `--help` 探针通过即可关闭启动入口问题”的旧结论失效；没有 subprocess 回归守卫时，模块 import 测试不会发现 direct-file bootstrap 回归。K3-R108 不改变 provider、证据、scoring、Top15、publication 或 live 行为，不触发 full lane；不得为本刀重跑 provider 或联网。完整 finding 与 closure 只在 `docs/system_risk_register.md#K3-R108` / `#K3-R109`，本 handoff 只保留 phase 级交接。

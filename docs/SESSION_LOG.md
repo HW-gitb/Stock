@@ -1,5 +1,50 @@
 # Session Log
 
+## 2026-07-30 — Codex PASS（US-short K3-R108 / K3-R109；用户指派 reviewer 自修）
+
+- **Verdict/Action**: PASS。K3-R108 的两个 direct-file entrypoint 与永久回归守卫闭合；K3-R109 的 handoff 碎片已归并回既有 US-short 软发现主 handoff。本轮自动提交审查覆盖文件。
+- **Required**: 无。
+- **Verify**: 固定主 Python focused 73 OK；X/merge bootstrap-removal probes 分别以缺失 `engine`/`runners` 转红；`py_compile` 与 `git diff --check` 通过；route/doc guards 55 OK；最终 current-diff-only 独立对抗复核 PASS。full lane 未触发；未触网、未调用 provider。
+- **Next**: Codex：Pass。
+
+## 2026-07-30 — Codex 修复 K3-R109（用户指派 reviewer 自修）
+
+- **Verdict/Action**: 删除错误新建的 K3-R108 handoff 与重复索引行，把完整最小交接追加到既有 US-short 软发现主 handoff；K3-R108 runner/test 行为未再改动。
+- **Required**: K3-R109 已修；完整 closure 只在 `docs/system_risk_register.md#K3-R109`。
+- **Verify**: fragment 文件不存在、README 索引零残留、既有主 handoff 含 K3-R108 追加节；focused 73 OK、两条 bootstrap-removal 反向探针转红、`py_compile` / `git diff --check` 通过、door 55 OK；最终 current-diff-only 独立复核 PASS。
+- **Next**: Codex：审查。
+- **Pre-Codex self-review**: `matrix=complete: K3-R108 X+merge direct-file bootstrap/regression + K3-R109 same-phase handoff consolidation; register=updated K3-R108/K3-R109 closure; handoff=existing US-short main appended, fragment/index removed; focused=73 OK + py_compile + two bootstrap-removal red probes; full-lane=not_triggered: AGENTS rule 3, import bootstrap/test plus docs-only consolidation; door=route 14 + doc-governance 41 = 55 OK; independent self-review=current-diff-only PASS, no timeout, no restart, no fallback`
+
+## 2026-07-30 — Codex 审查 FAIL（US-short K3-R108 回归守卫；K3-R109 交接碎片化）
+
+- **Verdict/Action**: FAIL，未提交。K3-R108 的代码与永久 direct-file 回归守卫已独立验过；当前唯一阻断是修复仍新建独立 handoff，未按同 phase 默认规则追加既有 US-short 软发现主 handoff。完整 Required 与闭合条件只在 `docs/system_risk_register.md#K3-R109`。
+- **Required**: K3-R109 — 删除新建的 direct-entry handoff 及其索引行，把 K3-R108 的最小交接内容追加到既有 `2026-07-28_us_short_soft_discovery_x_live_shape_review_handoff.md`。
+- **Verify**: 固定主 Python focused `tests.provider.test_us_short_llm_theme_discovery_fetch_x_merge` = 73 OK；`py_compile` 通过；reviewer 自写移除 bootstrap 探针对 X/merge 分别以缺失 `engine`/`runners` 转红；独立 current-diff-only 对抗子 agent 同样判定代码守卫承重、handoff 位置违规。未运行全量、未触网、未调用 provider。
+- **Next**: Codex：修复。
+
+## 2026-07-30 — US-short K3-R108 direct-entry regression repair (executor)
+
+- **Verdict/Action**: implemented the missing permanent offline regression for both X and merge direct-file entrypoints; no provider, evidence, scoring, Top15, or publication behavior changed.
+- **Required**: independent re-review remains required before K3-R108 can close or any commit can occur.
+- **Verify**: each real absolute script path is started from a temporary non-repository CWD with `PYTHONPATH` absent and isolated `-I` Python; the two new tests pass, each bootstrap-removal reverse control fails with the expected missing module, `py_compile` passes, and the focused X/merge pack is 73 OK.
+- **Next**: Codex：审查
+- **Pre-Codex self-review**: `matrix=complete: X + merge absolute direct-file subprocess entries, non-repository CWD, PYTHONPATH absent, isolated -I help path, reverse controls for each bootstrap; register=updated K3-R108 repair evidence with re-review pending; handoff=updated; focused=73 OK + py_compile + two direct-entry probes; full-lane=not_triggered: AGENTS rule 3, import bootstrap and its regression guard only with no behavior-contract change; door=route/doc guards 55 OK; independent self-review=current-diff-only adversarial PASS, no timeout, no restart, no fallback`
+
+## 2026-07-30 — Codex 审查 FAIL（US-short K3-R108 直接脚本启动入口，0e30 工作树）
+
+- **Verdict/Action**: FAIL，未提交。X 与 merge 的 bootstrap 使本次直接 `--help` 探针恢复，但 K3-R108 尚未闭合：现有 71 条聚焦测试只以模块方式导入 runner，未锁定“非仓库目录按绝对脚本路径启动”的修复行为。完整 Required 与闭合条件只在 `docs/system_risk_register.md#K3-R108`。
+- **Required**: K3-R108 — 为 X 和 merge 两个 direct-file entrypoint 加离线 subprocess 回归；必须移除 `PYTHONPATH`、改到非仓库 CWD、按绝对路径传 `--help`，并断言无 `ModuleNotFoundError`。
+- **Verify**: 实际工具结果：固定主 Python 下 `PYTHONPATH=C:\\tmp` 的两个 direct `--help` 均 exit 0；`py_compile` 通过；`tests.provider.test_us_short_llm_theme_discovery_fetch_x_merge` = 71 OK。独立 current-diff-only 对抗子 agent 报告 FAIL：该启动行为无永久回归守卫；未运行全量、未触网、未调用 provider。
+- **Next**: Codex：修复。
+
+## 2026-07-30 — US-short discovery direct-entry repair (executor)
+
+- **Verdict/Action**: closed K3-R108 by adding the existing guarded repository-root import bootstrap before project imports in the X and merge direct-script entries; no discovery, validation, scoring, or provider behavior changed.
+- **Required**: 无。
+- **Verify**: direct `--help` with `PYTHONPATH=C:\\tmp` exits 0 for both runners; `py_compile` and `tests.provider.test_us_short_llm_theme_discovery_fetch_x_merge` = 71 OK; independent current-diff-only self-review = PASS.
+- **Next**: Codex：审查
+- **Pre-Codex self-review**: `matrix=complete: X + merge direct-file imports, reverse no-repository-PYTHONPATH probe, no business-rule change; register=updated K3-R108 closed; handoff=updated + indexed; focused=71 OK + py_compile + direct-help probe; full-lane=not_triggered: AGENTS rule 3, import bootstrap only with no behavior-contract change; door=route/doc guards 55 OK; independent self-review=current-diff-only PASS, no timeout, no restart, no fallback`
+
 ## 2026-07-30 — Claude Code 执行：第二次受限真实付费运行（X 单查询，决策日 20260801）
 
 **Commits**: 见本轮 docs 提交
