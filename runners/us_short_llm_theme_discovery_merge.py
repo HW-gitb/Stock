@@ -60,6 +60,7 @@ CONFORMANCE_GUARDS = (
     "_guard_input_artifact_hashes",
     "_guard_upstream_generated_clocks",
     "_raw_receipt_path",
+    "_verify_provider_response_ref",
 )
 
 
@@ -111,7 +112,7 @@ def _guard_upstream_generated_clocks(
     *,
     cutoff: datetime,
     source_type: str,
-) -> None:
+) -> datetime:
     artifact_generated = _guard_generated_clock(
         artifact_value, cutoff=cutoff, field=f"{source_type} artifact generated_at",
     )
@@ -122,6 +123,7 @@ def _guard_upstream_generated_clocks(
         raise ThemeDiscoveryMergeError(
             f"{source_type} artifact and receipt generated_at clocks do not match"
         )
+    return artifact_generated
 
 
 def _guard_source_identity(*, source_id: str, source_type: str, locator: str) -> None:
@@ -178,6 +180,79 @@ def _raw_receipt_path(raw_ref: Any) -> Path:
     return raw_path
 
 
+def _verify_provider_response_ref(
+    ref: dict[str, Any], *, expected_decision_date: str, cutoff: datetime,
+    upstream_generated_at: datetime,
+) -> int:
+    response_index = ref.get("response_index")
+    response_sha256 = ref.get("response_sha256")
+    if not isinstance(response_index, int) or response_index < 0 or not isinstance(response_sha256, str):
+        raise ThemeDiscoveryMergeError("X provider response reference is malformed")
+    raw_ref = ref.get("raw_receipt_ref")
+    if not isinstance(raw_ref, str):
+        raise ThemeDiscoveryMergeError("X provider raw response path is malformed")
+    lexical = PurePosixPath(raw_ref)
+    if (
+        Path(raw_ref).is_absolute()
+        or lexical.is_absolute()
+        or ".." in lexical.parts
+        or lexical.as_posix() != raw_ref
+    ):
+        raise ThemeDiscoveryMergeError("X provider raw response must stay under provider_samples")
+    raw_path = (ROOT / raw_ref).resolve()
+    if not raw_path.is_relative_to(PROVIDER_SAMPLES_ROOT.resolve()):
+        raise ThemeDiscoveryMergeError("X provider raw response must stay under provider_samples")
+    if not raw_path.is_file() or not web._gitignored(raw_path) or ref.get("raw_receipt_gitignored") is not True:
+        raise ThemeDiscoveryMergeError("X provider raw response is missing or not gitignored")
+    if (
+        raw_path.name != f"xai_{response_sha256}.json"
+        or raw_path.parent.name != expected_decision_date
+        or raw_path.parent.parent.name != "provider_responses"
+    ):
+        raise ThemeDiscoveryMergeError("X provider raw response path is not digest/date bound")
+    try:
+        raw_payload = web._read_json(raw_path)
+    except web.WebThemeDiscoveryError as exc:
+        raise ThemeDiscoveryMergeError("X provider raw response is unreadable") from exc
+    if not isinstance(raw_payload, dict):
+        raise ThemeDiscoveryMergeError("X provider raw response shape is invalid")
+    response = raw_payload.get("response")
+    if raw_payload.get("provider") != "xai" or not isinstance(response, dict):
+        raise ThemeDiscoveryMergeError("X provider raw response shape is invalid")
+    if hashlib.sha256(web._canonical_json(response)).hexdigest() != response_sha256:
+        raise ThemeDiscoveryMergeError("X provider raw response digest does not match")
+    frozen_fetched = _instant(raw_payload.get("fetched_at"), "X provider raw fetched_at")
+    receipt_fetched = _instant(ref.get("fetched_at"), "X provider response ref fetched_at")
+    if (
+        frozen_fetched != receipt_fetched
+        or frozen_fetched < web._decision_week_start(expected_decision_date)
+        or frozen_fetched > upstream_generated_at
+        or frozen_fetched >= cutoff
+    ):
+        raise ThemeDiscoveryMergeError("X provider raw response clock is not bound or PIT-safe")
+    return response_index
+
+
+def _document_identity(ref: dict[str, str]) -> str:
+    """Cross-lane identity of ONE document, for the independent-evidence verdict only.
+
+    Falls back to the content-hash suffix; an X post locator instead yields the post identity, so
+    the same tweet cited by both lanes in different spellings can never mint the `both` tier.
+    """
+    locator = ref.get("canonical_locator")
+    if not isinstance(locator, str):
+        # Unreachable defence: both call paths reject a missing or non-canonical `canonical_locator`
+        # before corroboration runs.  It returns a shared constant rather than raising because a
+        # raise on the merge path would be a new batch-kill vector; note that this constant does NOT
+        # by itself prevent a `both` verdict (one unidentified document still differs from an
+        # identified one), so it is a crash guard, not a security property.
+        return "unidentified_document"
+    status_id = xfetch._x_post_document_identity(locator)
+    if status_id is not None:
+        return f"x_status:{status_id}"
+    return ref["source_id"].split(":", 1)[1]
+
+
 def _corroboration(bound_refs: list[dict[str, str]]) -> tuple[str, str | None, list[str]]:
     """Independent-evidence verdict for one member (or the label for one theme).
 
@@ -191,8 +266,17 @@ def _corroboration(bound_refs: list[dict[str, str]]) -> tuple[str, str | None, l
 
     This rule is sound only here, where IDs are provably `<lane>:sha256(locator)`; a knife-2-side latch
     would be unsound because a locally-authored discovery artifact's suffixes are not content hashes.
+
+    A raw hash suffix is not enough for X posts: the X lane deliberately persists the PROVIDER
+    annotation spelling (`/i/status/<id>`), while a web sighting of the same post carries the handle
+    spelling, so two spellings of ONE tweet hash differently and would read as corroboration.  The
+    lane already owns a provable post identity for exactly this question (K3-R79/K3-R90/K3-R94), so
+    it is reused here.  Only what is PROVABLY one document is collapsed.  For a NON-X document the
+    open heuristic mirrors (`www.`/AMP, `http` vs `https`, tracking params) stay deliberately
+    uncollapsed — that judgement is unchanged; the X post rule is not a heuristic, so it collapses
+    those spellings for X locators only.
     """
-    by_lane = {kind: {ref["source_id"].split(":", 1)[1] for ref in bound_refs if ref["source_type"] == kind}
+    by_lane = {kind: {_document_identity(ref) for ref in bound_refs if ref["source_type"] == kind}
                for kind in ("web", "x")}
     present = {kind for kind in ("web", "x") if by_lane[kind]}
     if not present:
@@ -282,12 +366,38 @@ def _verify_receipt(
     artifact_refs = {ref.get("source_id"): ref for ref in artifact.get("source_refs", []) if isinstance(ref, dict)}
     artifact_types = {source_id: ref.get("source_type") for source_id, ref in artifact_refs.items()}
     cutoff = web._cutoff(expected_decision_date)
-    _guard_upstream_generated_clocks(
+    upstream_generated_at = _guard_upstream_generated_clocks(
         artifact.get("generated_at"),
         receipt.get("generated_at"),
         cutoff=cutoff,
         source_type=source_type,
     )
+    has_provider_refs = "provider_response_refs" in receipt
+    has_provider_annotations = "provider_annotation_urls" in receipt
+    if source_type == "x" and has_provider_refs != has_provider_annotations:
+        raise ThemeDiscoveryMergeError("X provider evidence fields must be present together")
+    provider_response_refs = receipt.get("provider_response_refs")
+    if source_type == "x" and has_provider_refs:
+        verified_response_indexes = [
+            _verify_provider_response_ref(
+                ref, expected_decision_date=expected_decision_date, cutoff=cutoff,
+                upstream_generated_at=upstream_generated_at,
+            )
+            for ref in provider_response_refs if isinstance(ref, dict)
+        ]
+        response_drop_indexes = [
+            row.get("provider_response_index")
+            for row in receipt.get("drop_ledger", [])
+            if isinstance(row, dict) and row.get("reason") in xfetch.PROVIDER_RESPONSE_DROP_REASONS
+        ]
+        accounted_indexes = verified_response_indexes + response_drop_indexes
+        if (
+            len(verified_response_indexes) != len(provider_response_refs)
+            or any(not isinstance(index, int) for index in accounted_indexes)
+            or len(set(accounted_indexes)) != len(accounted_indexes)
+            or set(accounted_indexes) != set(range(transport_counts["xai"]))
+        ):
+            raise ThemeDiscoveryMergeError("X provider responses are not completely accounted")
     for ref in receipt.get("source_refs", []):
         if ref.get("source_type") != source_type:
             raise ThemeDiscoveryMergeError(f"receipt source type mismatch: {ref.get('source_id')}")
@@ -416,6 +526,11 @@ def merge_web_x_discovery(
             source_id = ref["source_id"]
             prior = refs_by_id.get(source_id)
             candidate = {"source_id": source_id, "source_type": source_type, "observed_at": ref["observed_at"],
+                         # Carried for `_document_identity` only, so the builder and
+                         # `validate_merged_packet` (whose manifest refs always carry it) decide
+                         # corroboration from the SAME identity; `project_knife1_source_refs`
+                         # whitelists its keys, so this never reaches the frozen artifact.
+                         "canonical_locator": receipt_refs_by_id[source_id]["canonical_locator"],
                          "evidence_attestation": receipt_refs_by_id[source_id].get("evidence_attestation", "provider_attested")}
             if prior is not None and prior != candidate:
                 raise ThemeDiscoveryMergeError(f"source ID has conflicting definitions: {source_id}")
@@ -451,6 +566,7 @@ def merge_web_x_discovery(
     redundant_by_member: dict[tuple[str, str], list[str]] = {}
     merge_drops: list[dict[str, Any]] = []
     for theme in merged.values():
+        unbound_tickers: list[str] = []
         for ticker, row in theme["members"].items():
             bound = [refs_by_id[ref_id] for ref_id in row["source_ref_ids"] if ref_id in refs_by_id]
             redundant = _corroboration(bound)[2]
@@ -471,12 +587,26 @@ def merge_web_x_discovery(
                 row["source_ref_ids"] = sorted(verified)
                 continue
             prior = row["source_ref_ids"]
+            if not verified:
+                # No ref survives ticker verification, so this MEMBER has no evidence.  Leaving it
+                # with an empty ref list makes the ingest reject the member and the per-theme guard
+                # then drops the WHOLE theme — one unverifiable member would destroy its siblings'
+                # genuine two-document evidence (§五 red line #4).  Drop the member instead.
+                unbound_tickers.append(ticker)
+                merge_drops.append({
+                    "stage": "theme", "theme_id": theme["theme_id"],
+                    "reason": "member_evidence_unbound_ticker_dropped",
+                    "detail": f"{canonical_us_ticker(ticker) or ticker}:{','.join(sorted(set(prior)))}",
+                })
+                continue
             row["source_ref_ids"] = sorted(verified)
             merge_drops.append({
                 "stage": "theme", "theme_id": theme["theme_id"],
                 "reason": "member_evidence_demoted_unbound_ticker",
                 "detail": f"{canonical_us_ticker(ticker) or ticker}:{','.join(sorted(set(prior) - set(verified)))}",
             })
+        for ticker in unbound_tickers:
+            theme["members"].pop(ticker, None)
     # Attestation is merge-manifest metadata, not a Knife-1 discovery input field.  Letting it
     # reach the normalizer changes `input_sha256`, while the consumer correctly reconstructs
     # only Knife-1's three source fields; keep those two representations deliberately separate.
@@ -707,7 +837,12 @@ def validate_merged_packet(
     members = [member for theme in manifest["themes"] for member in theme["members"]]
     expected_counts = {
         "merged_theme_count": len(manifest["themes"]),
-        "dropped_theme_count": len(manifest["drop_ledger"]),
+        # Count THEME drops, exactly as the builder does.  Counting the whole ledger made an
+        # ordinary member demotion (a tweet naming a company without its ticker) publish a manifest
+        # this validator then refused forever, zeroing the week's soft boost on the immutable slot.
+        "dropped_theme_count": sum(
+            row.get("reason") == "theme_rejected_by_ingest" for row in manifest["drop_ledger"]
+        ),
         "both_member_count": sum(member["evidence_tier"] == "both" for member in members),
         "single_member_count": sum(member["evidence_tier"] == "single" for member in members),
         "zero_member_count": sum(member["evidence_tier"] is None for member in members),

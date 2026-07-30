@@ -17,6 +17,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Callable
 
+from engine.us_short_persisted_text_safety import persisted_text_violation
 from runners import us_short_llm_theme_discovery_fetch_web as web
 from engine.us_short_schema_formats import FORMAT_CHECKER
 
@@ -35,6 +36,13 @@ SCHEMA_PATH = ROOT / "schemas" / "us_short_llm_theme_discovery_fetch_x.schema.js
 XAI_BASE_URL = "https://api.x.ai/v1"
 GROK_MODEL = "grok-4.3"
 MAX_X_QUERIES = 15
+MAX_GROK_SOURCES = 500
+PROVIDER_RESPONSE_DROP_REASONS = frozenset({
+    "provider_response_capture_unavailable",
+    "provider_response_unsafe_to_persist",
+    "provider_response_path_not_gitignored",
+    "provider_response_immutable_raw_content_conflict",
+})
 
 
 class XThemeDiscoveryError(ValueError):
@@ -253,17 +261,27 @@ def _parse_grok(
         raise XThemeDiscoveryError("Grok response is not JSON") from exc
     if type(payload) is not dict or type(payload.get("themes")) is not list:
         raise XThemeDiscoveryError("Grok response shape is unsafe")
+    sources_present = "sources" in payload
+    raw_sources = payload.get("sources")
     out = {"themes": payload["themes"]}
-    if "sources" in payload:
-        if type(payload["sources"]) is list:
-            out["sources"] = payload["sources"]
-        elif drop_ledger is not None:
-            # `sources` is auxiliary model commentary, never receipt evidence.
-            # Its shape cannot invalidate otherwise usable themes.
+    if isinstance(raw_sources, list):
+        # Bound the receipt WITHOUT voiding the batch.  This parser also runs on the concatenation
+        # of every query's response, so a raise here would let the aggregate of several innocent
+        # paid responses erase them all (§五 red line #4); surplus model commentary is truncated
+        # deterministically and ledgered instead.
+        if len(raw_sources) > MAX_GROK_SOURCES and drop_ledger is not None:
             drop_ledger.append({
-                "stage": "llm", "reason": "ignored_malformed_top_level_field",
-                "detail": f"sources:{type(payload['sources']).__name__}",
+                "stage": "llm", "reason": "model_source_list_truncated",
+                "detail": f"{len(raw_sources)}>{MAX_GROK_SOURCES}",
             })
+        out["sources"] = raw_sources[:MAX_GROK_SOURCES]
+    elif sources_present and drop_ledger is not None:
+        # `sources` is auxiliary model commentary, never receipt evidence.
+        # Its malformed shape cannot invalidate otherwise usable themes.
+        drop_ledger.append({
+            "stage": "llm", "reason": "ignored_malformed_top_level_field",
+            "detail": f"sources:{type(raw_sources).__name__}",
+        })
     ignored = sorted(set(payload) - {"themes", "sources"})
     if ignored and drop_ledger is not None:
         drop_ledger.append({
@@ -273,26 +291,99 @@ def _parse_grok(
 
 
 def _model_transcribed_rows(payload: dict[str, Any], provider_annotation_urls: Any,
-                            drops: list[dict[str, str]]) -> list[dict[str, Any]]:
+                            drops: list[dict[str, Any]]) -> list[dict[str, Any]]:
     """A model transcript is admissible only when its URL has a provider annotation."""
-    annotated = {
+    annotated = sorted({
         canonical for url in (provider_annotation_urls if isinstance(provider_annotation_urls, (list, tuple, set)) else [])
         if isinstance(url, str) and (canonical := web._canonical_locator(url))
-    }
+    })
+    annotated_by_status: dict[str, str] = {}
+    for locator in annotated:
+        status_id = _x_status_identity(locator)
+        if status_id is not None:
+            annotated_by_status.setdefault(status_id, locator)
     rows = []
     for index, source in enumerate(payload.get("sources", [])):
         if not isinstance(source, dict):
             drops.append({"stage": "llm", "reason": "model_source_not_object", "detail": str(index)})
             continue
         canonical = web._canonical_locator(source.get("url"))
-        if canonical is None or canonical not in annotated:
-            drops.append({"stage": "llm", "reason": "model_source_url_not_provider_annotated", "detail": canonical or str(index)})
+        identity = _x_status_identity(canonical) if canonical is not None else None
+        backing_locator = annotated_by_status.get(identity or "")
+        if backing_locator is None:
+            drops.append({
+                "stage": "llm", "reason": "model_source_url_not_provider_annotated",
+                "detail": canonical or f"source[{index}]:unusable_locator",
+                "model_source_url": canonical or f"source[{index}]:unusable_locator",
+                "provider_annotation_set_ref": "provider_annotation_urls",
+            })
             continue
         row = dict(source)
-        row["url"] = canonical
+        # The provider annotation, not model-controlled spelling around the same status ID,
+        # owns the persisted locator and therefore the source identity.
+        row["url"] = backing_locator
         row["_evidence_attestation"] = "model_transcribed"
         rows.append(row)
     return rows
+
+
+def _x_status_identity(locator: str) -> str | None:
+    """Comparison-only identity for X posts; source locators themselves stay lossless."""
+    parsed = urllib.parse.urlsplit(locator)
+    host = (parsed.hostname or "").lower()
+    try:
+        port = parsed.port
+    except ValueError:
+        return None
+    if parsed.scheme.lower() != "https" or port is not None or host not in {"x.com", "twitter.com"}:
+        return None
+    match = re.fullmatch(r"/(?:[^/]+|i/web)/status/([0-9]+)", parsed.path)
+    return match.group(1) if match else None
+
+
+def _x_post_document_identity(locator: str) -> str | None:
+    """Same-post identity for the CORROBORATION question only.
+
+    Deliberately MORE permissive than `_x_status_identity`, which stays strict because it decides
+    ADMISSION (what may become evidence).  The only error that matters here is calling one post two
+    independent documents, which buys a member +3.0 boost points; erring toward collapse can only
+    demote a tier, never inflate one.
+
+    Three earlier versions of this rule were written by ENUMERATING the X product surfaces someone
+    had just demonstrated, and each missed a whole family behind it.  So this one normalizes URL
+    SYNTAX first — root label, mirror prefix, scheme, empty segments, percent-encoding, integer id
+    — and only then matches the route.  `_canonical_locator` deliberately keeps a locator lossless,
+    so every one of those spellings survives into the receipt and reaches this function.
+
+    Port is deliberately IGNORED here even though the admission rule refuses one: ignoring it
+    collapses `x.com:8443/...` with `x.com/...`, and collapsing is the safe direction for this
+    question.  Aligning with admission would mean collapsing LESS, i.e. inflating.
+    """
+    try:
+        parsed = urllib.parse.urlsplit(locator)
+        host = (parsed.hostname or "").lower()
+    except ValueError:
+        return None
+    host = re.sub(r"^(?:www|m|mobile)\.", "", host.rstrip("."))   # RFC 1034 root label + mirrors
+    if parsed.scheme.lower() not in {"http", "https"} or host not in {"x.com", "twitter.com"}:
+        return None
+    # Decode first, then drop empty segments: `%2F` is the same separator, and `//` is the same
+    # route (both are what a naive base-URL join emits).
+    segments = [segment for segment in urllib.parse.unquote(parsed.path).split("/") if segment]
+    # SEARCH for the route word; never assume its POSITION.  Stripping a fixed prefix ("the handle
+    # segment") is what made the handle-less `/status/<id>` and `/statuses/<id>` forms — and every
+    # empty-handle spelling the line above normalizes into them — miss the rule entirely.  The
+    # leftmost `status|statuses` + decimal pair IS the post; anything deeper is a tail.
+    for index, segment in enumerate(segments[:-1]):
+        if segment.lower() not in {"status", "statuses"} or not segments[index + 1].isdecimal():
+            continue
+        # Any trailing path under the id (`/photo/1`, `/photo/1/large`, `/quotes`, `/analytics`, …)
+        # is a VIEW of that one post; X resolves the id as an integer, so `0<id>` is the same post.
+        try:
+            return str(int(segments[index + 1]))
+        except ValueError:
+            return None
+    return None
 
 
 def _coerce_source_urls(
@@ -301,6 +392,21 @@ def _coerce_source_urls(
 ) -> dict[str, Any]:
     """Map model-returned source URLs to deterministic IDs after receipt normalization."""
     by_url = {ref["canonical_locator"]: ref["source_id"] for ref in refs}
+    by_status = {
+        status_id: ref["source_id"] for ref in refs
+        if (status_id := _x_status_identity(ref["canonical_locator"])) is not None
+    }
+
+    def source_ref_for_url(value: Any) -> str | None:
+        canonical = web._canonical_locator(value)
+        if canonical is None:
+            return None
+        direct = by_url.get(canonical)
+        if direct is not None:
+            return direct
+        status_id = _x_status_identity(canonical)
+        return by_status.get(status_id) if status_id is not None else None
+
     out = {"themes": []}
     def drop(reason: str, detail: str) -> None:
         if drop_ledger is not None:
@@ -315,8 +421,7 @@ def _coerce_source_urls(
             if source_urls is not None and not isinstance(source_urls, list):
                 raise web._ProviderItemRejected("malformed_theme_source_urls", str(theme.get("theme_id", "unknown")))
             theme_refs.extend(
-                by_url[canonical] for url in source_urls or []
-                if (canonical := web._canonical_locator(url)) in by_url
+                ref for url in source_urls or [] if (ref := source_ref_for_url(url)) is not None
             )
             if not all(isinstance(ref, str) for ref in theme_refs):
                 raise web._ProviderItemRejected("malformed_theme_source_refs", str(theme.get("theme_id", "unknown")))
@@ -335,8 +440,7 @@ def _coerce_source_urls(
                     if member_urls is not None and not isinstance(member_urls, list):
                         raise web._ProviderItemRejected("malformed_member_source_urls", str(member.get("ticker", "unknown")))
                     member_refs.extend(
-                        by_url[canonical] for url in member_urls or []
-                        if (canonical := web._canonical_locator(url)) in by_url
+                        ref for url in member_urls or [] if (ref := source_ref_for_url(url)) is not None
                     )
                     if not all(isinstance(ref, str) for ref in member_refs):
                         raise web._ProviderItemRejected("malformed_member_source_refs", str(member.get("ticker", "unknown")))
@@ -430,9 +534,187 @@ def _grok_model_identity(*, served_model: Any = None, system_fingerprints: list[
     }
 
 
-def _coerce_x_client_reply(reply: Any) -> tuple[str, list[dict[str, Any]], list[str], dict[str, Any] | None]:
+def _raw_provider_response_payload(response: Any) -> dict[str, Any]:
+    """Capture the provider's structured response before deriving its transcript or citations."""
+    try:
+        if isinstance(response, dict):
+            payload = dict(response)
+        elif hasattr(response, "model_dump"):
+            payload = response.model_dump(mode="json")
+        else:
+            raise TypeError("response is not serializable")
+        if type(payload) is not dict:
+            raise TypeError("response payload is not an object")
+        # Round-trip through JSON now: a later raw-write error must not occur after a paid call.
+        return json.loads(web._canonical_json(payload).decode("utf-8"))
+    except Exception as exc:
+        raise XThemeDiscoveryError("Grok response cannot be frozen safely") from exc
+
+
+def _provider_response_is_safe(response: dict[str, Any]) -> bool:
+    return persisted_text_violation({"provider_response": response}) is None
+
+
+def _frozen_provider_response_payload(
+    response: dict[str, Any], raw_path: Path, fetched_at: datetime,
+) -> tuple[dict[str, Any], datetime] | None:
+    try:
+        raw_payload, frozen_fetched_at = web._raw_payload_with_frozen_fetch_clock(
+            {"provider": "xai", "response": response}, raw_path, fetched_at,
+        )
+        web._existing_packet_matches(raw_payload, raw_path)
+    except web.WebThemeDiscoveryError:
+        return None
+    return raw_payload, frozen_fetched_at
+
+
+def _provider_response_refs(
+    raw_provider_responses: Any, *, raw_root: Path | None, persist_raw: bool,
+    execution_mode: str, completed_response_count: int, expected_decision_date: str,
+    fetched_at: datetime, pending_raw_writes: list[tuple[Path, dict[str, Any]]],
+    drops: list[dict[str, Any]],
+) -> list[dict[str, Any]]:
+    if execution_mode != "live_authorized":
+        return []
+    if not persist_raw or raw_root is None:
+        raise XThemeDiscoveryError("live X packet requires one frozen raw provider response per completed call")
+    records: dict[int, dict[str, Any]] = {}
+    raw_items = raw_provider_responses if isinstance(raw_provider_responses, list) else []
+    # The caller contributes ONE record per completed provider call, in call order, so the list
+    # position IS the completed-response ordinal.  A record that cannot claim an ordinal becomes an
+    # unindexed ledger row: a single unusable record may not abort a batch of paid siblings, which
+    # is the same red line as K3-R87/K3-R88/K3-R95.
+    for position, item in enumerate(raw_items):
+        if type(item) is not dict:
+            record: dict[str, Any] = {"error_reason": "not_json_object"}
+        elif "response" in item or "error_reason" in item:
+            record = item
+        else:
+            record = {"response": item}
+        declared = record.get("response_index")
+        index = declared if isinstance(declared, int) else position
+        if index < 0 or index >= completed_response_count or index in records:
+            drops.append({
+                "stage": "search_result", "reason": "provider_response_record_unaccounted",
+                "detail": f"response_record[{position}]",
+            })
+            continue
+        records[index] = record
+
+    refs: list[dict[str, Any]] = []
+    queued_paths = {path for path, _payload in pending_raw_writes}
+    for index in range(completed_response_count):
+        record = records.get(index)
+        response = record.get("response") if isinstance(record, dict) else None
+        error_reason = record.get("error_reason") if isinstance(record, dict) else "missing_response"
+        if type(response) is not dict:
+            drops.append({
+                "stage": "search_result", "reason": "provider_response_capture_unavailable",
+                "detail": f"response[{index}]:{error_reason if isinstance(error_reason, str) else 'missing_response'}",
+                "provider_response_index": index,
+            })
+            continue
+        try:
+            response_sha256 = hashlib.sha256(web._canonical_json(response)).hexdigest()
+        except Exception:
+            drops.append({
+                "stage": "search_result", "reason": "provider_response_capture_unavailable",
+                "detail": f"response[{index}]:not_json_serializable", "provider_response_index": index,
+            })
+            continue
+        if not _provider_response_is_safe(response):
+            drops.append({
+                "stage": "search_result", "reason": "provider_response_unsafe_to_persist",
+                "detail": f"response[{index}]", "provider_response_index": index,
+            })
+            continue
+        raw_path = web._raw_provider_response_path(
+            raw_root, "xai", response_sha256, expected_decision_date,
+        )
+        if not web._gitignored(raw_path):
+            drops.append({
+                "stage": "search_result", "reason": "provider_response_path_not_gitignored",
+                "detail": f"provider_response[{index}]", "provider_response_index": index,
+            })
+            continue
+        frozen_payload = _frozen_provider_response_payload(response, raw_path, fetched_at)
+        if frozen_payload is None:
+            drops.append({
+                "stage": "search_result", "reason": "provider_response_immutable_raw_content_conflict",
+                "detail": f"provider_response[{index}]", "provider_response_index": index,
+            })
+            continue
+        raw_payload, frozen_fetched_at = frozen_payload
+        if raw_path not in queued_paths:
+            pending_raw_writes.append((raw_path, raw_payload))
+            queued_paths.add(raw_path)
+        refs.append({
+            "provider": "xai", "response_index": index,
+            "response_sha256": response_sha256,
+            "fetched_at": frozen_fetched_at.isoformat(),
+            "raw_receipt_ref": web._repo_relative(raw_path),
+            "raw_receipt_gitignored": web._gitignored(raw_path),
+        })
+    return refs
+
+
+# No producer-side deletion of provider response raws.  A retry can leave a digest-named raw that
+# the winning immutable receipt does not reference; the receipt stays the ONLY authority on which
+# bytes are evidence (merge accepts a ref only when the receipt names it), and the leftover file is
+# gitignored, digest-named and unreachable.  Deleting it here would put a filesystem mutation
+# outside the lane's single write door and could destroy the paid bytes of a failed publish.
+
+
+def _receipt_annotation_urls(provider_annotation_urls: Any) -> list[str]:
+    canonical = {
+        locator for value in (
+            provider_annotation_urls
+            if isinstance(provider_annotation_urls, (list, tuple, set)) else []
+        )
+        if isinstance(value, str) and (locator := web._canonical_locator(value)) is not None
+    }
+    return sorted({web._ledger_safe_detail(locator) for locator in canonical})
+
+
+def _validate_builder_receipt_evidence(receipt: dict[str, Any], completed_response_count: int) -> None:
+    """Enforce new-writer evidence fields without retroactively invalidating frozen receipts."""
+    if not isinstance(receipt.get("provider_response_refs"), list) or not isinstance(
+        receipt.get("provider_annotation_urls"), list
+    ):
+        raise XThemeDiscoveryError("new X receipt is missing provider evidence fields")
+    mismatch_rows = [
+        row for row in receipt.get("drop_ledger", [])
+        if isinstance(row, dict) and row.get("reason") == "model_source_url_not_provider_annotated"
+    ]
+    if any(
+        not isinstance(row.get("model_source_url"), str)
+        or row.get("provider_annotation_set_ref") != "provider_annotation_urls"
+        for row in mismatch_rows
+    ):
+        raise XThemeDiscoveryError("new X endorsement drop is missing its two-sided evidence binding")
+    if receipt.get("fetch_contract", {}).get("execution_mode") != "live_authorized":
+        return
+    refs = receipt["provider_response_refs"]
+    drop_indexes = [
+        row.get("provider_response_index") for row in receipt.get("drop_ledger", [])
+        if isinstance(row, dict) and row.get("reason") in PROVIDER_RESPONSE_DROP_REASONS
+    ]
+    ref_indexes = [ref.get("response_index") for ref in refs if isinstance(ref, dict)]
+    all_indexes = ref_indexes + drop_indexes
+    if (
+        len(all_indexes) != completed_response_count
+        or len(set(all_indexes)) != len(all_indexes)
+        or set(all_indexes) != set(range(completed_response_count))
+    ):
+        raise XThemeDiscoveryError("live X receipt does not account for every completed provider response")
+
+
+def _coerce_x_client_reply(reply: Any) -> tuple[
+    str, list[dict[str, Any]], list[str], dict[str, Any] | None,
+    dict[str, Any] | None, str | None,
+]:
     if isinstance(reply, str):
-        return reply, [], [], None
+        return reply, [], [], None, None, None
     if isinstance(reply, dict):
         text = reply.get("text", reply.get("response"))
         rows = reply.get("results")
@@ -440,9 +722,11 @@ def _coerce_x_client_reply(reply: Any) -> tuple[str, list[dict[str, Any]], list[
             raise XThemeDiscoveryError("X client reply must include text and provider result rows")
         annotations = reply.get("annotation_urls", [])
         model_identity = reply.get("model_identity")
-        return text, [dict(row) for row in rows if isinstance(row, dict)], [url for url in annotations if isinstance(url, str)], model_identity if isinstance(model_identity, dict) else None
+        raw_response = reply.get("raw_response")
+        response_error = reply.get("response_error")
+        return text, [dict(row) for row in rows if isinstance(row, dict)], [url for url in annotations if isinstance(url, str)], model_identity if isinstance(model_identity, dict) else None, raw_response if type(raw_response) is dict else None, response_error if isinstance(response_error, str) else None
     if isinstance(reply, tuple) and len(reply) == 2 and isinstance(reply[0], str) and isinstance(reply[1], list):
-        return reply[0], [dict(row) for row in reply[1] if isinstance(row, dict)], [], None
+        return reply[0], [dict(row) for row in reply[1] if isinstance(row, dict)], [], None, None, None
     raise XThemeDiscoveryError("X client reply shape is unsafe")
 
 
@@ -467,6 +751,7 @@ def build_x_fetch_packet(
     _live_ticket: object | None = None,
     extra_drop_ledger: list[dict[str, str]] | None = None,
     provider_annotation_urls: Any = None,
+    raw_provider_responses: list[dict[str, Any]] | None = None,
     grok_model_identity: dict[str, Any] | None = None,
     grok_attempted: bool = False,
     grok_failed: bool = False,
@@ -494,6 +779,7 @@ def build_x_fetch_packet(
         provider_call_count = completed_response_count
     else:
         transport_response_counts = {"xai": 0}
+        completed_response_count = 0
     if execution_mode == "offline_fake_client" and (network_access_performed or provider_calls_performed or network_call_count or provider_call_count):
         raise XThemeDiscoveryError("offline packet cannot attest network/provider execution")
     if execution_mode == "live_authorized" and (network_call_count <= 0 or provider_call_count <= 0):
@@ -509,7 +795,14 @@ def build_x_fetch_packet(
     if raw_root is not None:
         raw_root = web._validate_raw_root(raw_root, require_gitignored=execution_mode == "live_authorized")
     pending_raw_writes: list[tuple[Path, dict[str, Any]]] = []
-    drops: list[dict[str, str]] = []
+    drops: list[dict[str, Any]] = []
+    provider_response_refs = _provider_response_refs(
+        raw_provider_responses, raw_root=raw_root, persist_raw=persist_raw,
+        execution_mode=execution_mode, completed_response_count=completed_response_count,
+        expected_decision_date=expected_decision_date, fetched_at=fetched,
+        pending_raw_writes=pending_raw_writes, drops=drops,
+    )
+    receipt_annotation_urls = _receipt_annotation_urls(provider_annotation_urls)
     try:
         payload = _parse_grok(grok_response, drop_ledger=drops)
     except Exception as exc:
@@ -559,10 +852,13 @@ def build_x_fetch_packet(
         "schema_name": "us_short_llm_theme_discovery_fetch_x", "schema_version": "1.0.0", "generated_at": generated.isoformat(),
         "decision_clock": {"expected_decision_date": expected_decision_date, "cutoff_policy": "before_decision_open_et", "pit_enforced": True},
         "fetch_contract": {"producer_kind": "grok_native_x_fetch", "execution_mode": execution_mode, "network_access_performed": network_access_performed, "provider_calls_performed": provider_calls_performed, "network_call_count": network_call_count, "provider_call_count": provider_call_count, "transport_response_counts": transport_response_counts, "scoring_eligible": False, "top15_effect_enabled": False, "operation_advice_effect_enabled": False, "dynamic_seats_enabled": False, "theme_probe_enabled": False, "lifecycle_actions_enabled": False, "grok_model": model_identity},
-        "queries": queries, "source_refs": refs, "discovery_artifact_sha256": web._discovery_evidence_hash(discovery), "drop_ledger": drops,
+        "queries": queries, "source_refs": refs, "provider_response_refs": provider_response_refs,
+        "provider_annotation_urls": receipt_annotation_urls,
+        "discovery_artifact_sha256": web._discovery_evidence_hash(discovery), "drop_ledger": drops,
         "summary": {"query_count": len(queries), "accepted_source_count": len(refs), "validated_theme_count": len(discovery["themes"]), "validated_member_count": sum(len(t["members"]) for t in discovery["themes"]), "dropped_result_count": len(drops)},
     }
     web._assert_receipt_secret_free(receipt)
+    _validate_builder_receipt_evidence(receipt, completed_response_count)
     _validate_schema(receipt)
     web._flush_raw_writes(pending_raw_writes)
     summary = {"schema_name": "us_short_llm_theme_discovery_fetch_x_execution_summary", "schema_version": "1.0.0", "status": "offline_fake_client_completed" if execution_mode == "offline_fake_client" else ("live_authorized_completed" if refs else "live_authorized_no_accepted_sources"), "network_access_performed": network_access_performed, "provider_calls_performed": provider_calls_performed, "network_call_count": network_call_count, "provider_call_count": provider_call_count, "scoring_or_top15_effect": False, "operation_advice_effect": False, "accepted_source_count": len(refs), "validated_theme_count": len(discovery["themes"]), "dropped_result_count": len(drops)}
@@ -591,14 +887,37 @@ def execute_live_x_orchestration(
     results: list[dict[str, Any]] = []
     annotation_urls: list[str] = []
     grok_texts: list[str] = []
+    raw_provider_responses: list[dict[str, Any]] = []
     query_drops: list[dict[str, str]] = []
     model_identity = _grok_model_identity()
     fingerprints: list[str] = []
     grok_attempted = False
     for query in queries:
+        grok_attempted = True
         try:
-            grok_attempted = True
-            text, provider_rows, annotations, reply_identity = _coerce_x_client_reply(client.search(query, expected_decision_date))
+            reply = client.search(query, expected_decision_date)
+        except Exception as exc:
+            # The provider call never completed, so the transport counted nothing and this query
+            # must NOT consume a completed-response ordinal (K3-R97).
+            query_drops.append({"stage": "llm", "reason": "provider_response_dropped", "detail": type(exc).__name__})
+            continue
+        # Past this point the transport has recorded one completed response, so this call owns
+        # exactly one record however badly the reply then reads.
+        record: dict[str, Any] = {"error_reason": "missing_response"}
+        raw_provider_responses.append(record)
+        try:
+            text, provider_rows, annotations, reply_identity, raw_response, response_error = _coerce_x_client_reply(reply)
+            if raw_response is not None:
+                record.pop("error_reason", None)
+                record["response"] = raw_response
+            elif response_error is not None:
+                record["error_reason"] = response_error
+            if response_error is not None:
+                query_drops.append({
+                    "stage": "llm", "reason": "provider_response_dropped",
+                    "detail": f"{query}:{response_error}",
+                })
+                continue
             if reply_identity is not None:
                 served_model = reply_identity.get("served_model")
                 expected_model = model_identity["served_model"]
@@ -616,14 +935,21 @@ def execute_live_x_orchestration(
             if not provider_rows:
                 query_drops.append({"stage": "search_result", "reason": "missing_provider_result_rows", "detail": query})
         except web._ProviderItemRejected as exc:
+            # A captured response stays captured: the call was paid for even when its metadata is
+            # rejected, so only an uncaptured record inherits the failure reason.
+            if "response" not in record:
+                record["error_reason"] = exc.reason
             query_drops.append({"stage": "llm", "reason": exc.reason, "detail": exc.detail})
         except Exception as exc:
+            if "response" not in record:
+                record["error_reason"] = type(exc).__name__
             query_drops.append({"stage": "llm", "reason": "provider_response_dropped", "detail": type(exc).__name__})
     combined, response_drops = _combine_grok_responses(grok_texts)
     return {
         "results": results, "grok_response": combined,
         "query_drops": query_drops + response_drops,
         "fetched_at": datetime.now(timezone.utc), "annotation_urls": sorted(set(annotation_urls)),
+        "raw_provider_responses": raw_provider_responses,
         "grok_model_identity": {**model_identity, "system_fingerprints": sorted(set(fingerprints))},
         "grok_attempted": grok_attempted, "grok_failed": grok_attempted and not grok_texts,
     }
@@ -645,9 +971,32 @@ class GrokXSearchClient:
             response = self.client.responses.create(model=GROK_MODEL, tools=[{"type": "x_search"}], input=_prompt(expected_decision_date, [{"source_id": "query", "title": query, "text": query}]))
             if self._live_transport is not None:
                 self._live_transport._record_completed_response("xai")
-            return {"text": _response_text(response), "results": _provider_result_rows(response), "annotation_urls": _provider_annotation_urls(response), "model_identity": {"served_model": getattr(response, "model", None), "system_fingerprint": getattr(response, "system_fingerprint", None)}}
         except Exception as exc:
             raise XThemeDiscoveryError(f"Grok X request failed: {type(exc).__name__}") from exc
+        raw_response = None
+        response_error = None
+        try:
+            raw_response = _raw_provider_response_payload(response)
+        except XThemeDiscoveryError:
+            response_error = "raw_provider_response_not_json_serializable"
+        if raw_response is not None and not _provider_response_is_safe(raw_response):
+            raw_response = None
+            response_error = "raw_provider_response_unsafe_to_persist"
+        try:
+            text = _response_text(response)
+            rows = _provider_result_rows(response)
+            annotations = _provider_annotation_urls(response)
+        except Exception as exc:
+            text, rows, annotations = '{"themes":[]}', [], []
+            response_error = response_error or f"provider_response_{type(exc).__name__}"
+        return {
+            "text": text, "results": rows, "annotation_urls": annotations,
+            "raw_response": raw_response, "response_error": response_error,
+            "model_identity": {
+                "served_model": getattr(response, "model", None),
+                "system_fingerprint": getattr(response, "system_fingerprint", None),
+            },
+        }
 
 
 def _run_x_fetch(*, queries: list[str] | tuple[str, ...], expected_decision_date: str, generated_at: str, x_client: Any | None = None, confirm_user_authorization: bool = False, live: bool = False, raw_root: Path | None = None, _new_transport: Callable[..., object] = _new_live_transport, _issue_ticket: Callable[[], object] = _issue_live_ticket, _revoke_ticket: Callable[[object], None] = _revoke_live_ticket):
@@ -670,7 +1019,7 @@ def _run_x_fetch(*, queries: list[str] | tuple[str, ...], expected_decision_date
         fetched_now = outcome["fetched_at"]
         ticket = _issue_ticket()
         try:
-            return build_x_fetch_packet(queries=queries, results=outcome["results"], grok_response=outcome["grok_response"], expected_decision_date=expected_decision_date, generated_at=fetched_now.isoformat(), fetched_at=fetched_now.isoformat(), raw_root=raw_root, persist_raw=True, execution_mode="live_authorized", _live_transport=transport, _live_ticket=ticket, extra_drop_ledger=outcome["query_drops"], provider_annotation_urls=outcome["annotation_urls"], grok_model_identity=outcome["grok_model_identity"], grok_attempted=outcome["grok_attempted"], grok_failed=outcome["grok_failed"])
+            return build_x_fetch_packet(queries=queries, results=outcome["results"], grok_response=outcome["grok_response"], expected_decision_date=expected_decision_date, generated_at=fetched_now.isoformat(), fetched_at=fetched_now.isoformat(), raw_root=raw_root or DEFAULT_RAW_ROOT, persist_raw=True, execution_mode="live_authorized", _live_transport=transport, _live_ticket=ticket, extra_drop_ledger=outcome["query_drops"], provider_annotation_urls=outcome["annotation_urls"], raw_provider_responses=outcome.get("raw_provider_responses", []), grok_model_identity=outcome["grok_model_identity"], grok_attempted=outcome["grok_attempted"], grok_failed=outcome["grok_failed"])
         finally:
             _revoke_ticket(ticket)
     if x_client is None:
@@ -681,7 +1030,7 @@ def _run_x_fetch(*, queries: list[str] | tuple[str, ...], expected_decision_date
     query_drops: list[dict[str, str]] = []
     for query in queries:
         try:
-            text, provider_rows, annotations, _ = _coerce_x_client_reply(x_client.search(query, expected_decision_date))
+            text, provider_rows, annotations, _, _, _ = _coerce_x_client_reply(x_client.search(query, expected_decision_date))
             responses.append(text)
             results.extend(provider_rows)
             annotation_urls.extend(annotations)

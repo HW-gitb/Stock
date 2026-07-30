@@ -1924,6 +1924,10 @@ class LaneGuardRegistryConformance(unittest.TestCase):
          "tests.provider.test_us_short_weekly_capstone_soft_discovery"
          ".WeeklyCapstoneSoftDiscoveryStageTest"
          ".test_raw_receipt_traversal_is_rejected_before_filesystem_lookup"),
+        ("runners.us_short_llm_theme_discovery_merge", "_verify_provider_response_ref",
+         "tests.provider.test_us_short_llm_theme_discovery_fetch_x_merge"
+         ".XFetchAndMergeTests"
+         ".test_k3_r93_merge_rejects_missing_or_redigested_provider_raw_response"),
         ("runners.us_short_provisional_theme_validate", "_guard_discovery_digest",
          "tests.provider.test_us_short_weekly_capstone_soft_discovery"
          ".WeeklyCapstoneSoftDiscoveryStageTest.test_in_memory_discovery_digest_must_hash_the_payload"),
@@ -2012,6 +2016,7 @@ class LaneGuardRegistryConformance(unittest.TestCase):
             "_guard_input_artifact_hashes": lambda *_args, **_kwargs: None,
             "_guard_upstream_generated_clocks": lambda *_args, **_kwargs: None,
             "_raw_receipt_path": lambda raw_ref: ROOT / str(raw_ref),
+            "_verify_provider_response_ref": lambda *_args, **_kwargs: 0,
             "_degrade_stage_boundary": lambda *_args, **_kwargs: None,
         }
         if name in mutants:

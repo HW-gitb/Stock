@@ -476,3 +476,38 @@ K3-R96 is a documentation correction, not a fictional new storage contract: merg
 ## 2026-07-29 update: K3-R96-O1..O5 Optional executor repair (pending Claude Code review)
 
 All five recorded Optional residuals are repaired without provider/key/network/live action. Locator security now normalizes percent-encoded unreserved octets before screening, stale provider raw clocks fail the decision-week lower bound, model Grok sources are capped at 500, and unreferenced digest-named X response raws are pruned only after immutable publication identifies the winning receipt. Response indices are request ordinals; a gap or duplicate fails closed instead of being rebased to a successful-response position. The focused X fetch/merge module is 64 OK / 7.702s; compile and diff checks pass. Optional-only tiering means full-lane is intentionally not rerun for this code state. No score/effect, K3-R34, push, or remote action occurred.
+
+## 2026-07-30 追加：K3-R97..K3-R107 修复收口 —— **PASS**（修复者 = Claude Code，用户指派）
+
+### 这一轮是谁做的
+
+用户本轮改了分工：**我兼任修复者**，并要求「修完起子 agent 审查，PASS 就提交合入，FAIL 就继续修-审循环」。所以下面既是修复记录也是收口记录；执行者不是 Codex。落盘树是 master（`D:/cnhea/Stock`）的工作树——48b5 停在 `09f6c939` 且干净，被审代码与 register 都只在 master。
+
+### 修了什么（正文只在 register，本处只给地图）
+
+- **K3-R97**：`execute_live_x_orchestration` 原来按**查询序号**给付费响应编号，而 builder 用**真正完成的调用数**当分母；一条 provider 调用失败两者就错位，`_provider_response_refs` 直接 raise，整包中止、已付费的响应全丢。改成「一次真正返回才产生一条记录」，序号来自完成调用；无法归位的记录降级成不带索引的 ledger 行，item 路径上不再有 raise。
+- **K3-R98**：删掉 `_prune_unreferenced_provider_responses` 及其 `main()` `finally` 调用。收据是「哪些 raw 算证据」的唯一权威；未被引用的 raw 是 gitignored、按摘要命名、merge 够不着。这同时撤回 O4，那条残留（重试多留一个文件）判为无害。
+- **K3-R99**：Optional-only 免不掉 rule 3(c) 的全量。最终代码态一次绿全量并记账。
+- **K3-R100 / R104 / R106 / R107（同一类，连开四轮）**：跨 lane 判「两份独立文档」原来只比 `sha256(locator)`，而 X lane 存的是 provider 的 `/i/status/<id>` 拼写、web lane 存的是 handle 拼写 —— **同一条推文两种写法 = 5 分档**。新增 `_x_post_document_identity` 专答 corroboration，并在四轮里从「枚举拼写」一路改成「**先归一 URL 语法、再搜索路由词**」：根标签点、`www./m./mobile.` 镜像、两种 scheme、`status|statuses`、大小写、空路径段、`%2F` 编码、前导零 id、任意尾路径，全部按类收敛；handle 有无都不影响。严格的 `_x_status_identity`（管准入）一字未动。
+- **K3-R102**：builder 算 `dropped_theme_count` 只数主题级丢弃，validator 却数整个 ledger —— 一次普通的成员降级就让 builder 发出**自己 validator 永远拒收**的 manifest，而决策槽不可变，于是那一周所有票的软加分归零。两侧统一为同一谓词，capstone 里第三份同样口径也一并改。
+- **K3-R103**：一个「ticker 从未出现在冻结正文里」的成员原来会被留成空 ref 列表 → 归一化器拒该成员 → **整个主题被丢**，兄弟成员真实的双文档证据一起陪葬。改成成员级丢弃 + 自己的 ledger 行。
+
+### 故意没做的（留给你决定，不是漏）
+
+`docs/system_risk_register.md` 的 **K3-R105**：(a) `_BOILERPLATE_TAIL_RE` 因为所有证据文本都被压成一行，`.*$` 实际等于「从关键词删到文末」，正文中间一句 `Read more:` 就会吃掉后面所有 ticker；(b) 正文绑定只对 `both` 档执行，`single`（2 分）完全不查正文。两条都**先于本轮存在**、方向都是**少给分**，而改动会让分数往上走 —— 属于真钱口径的设计判断，不该由修复者顺手改。另有 K3-R106-O1（2012 年废弃的 `#!` 形式，fragment 在 canonical 化时就丢了，真正的问题是「光秃秃的域名根算不算证据」）与 K3-R107-O1（nitter/fxtwitter 等第三方镜像；两种可行修法都比暴露更糟）。
+
+### 验证命令与结果
+
+- 全量（rule 4，我亲跑并记账）：`status=PASS exit=0 tests=5020 elapsed=626.9s`。
+- focused：`tests.provider.test_us_short_llm_theme_discovery_fetch_x_merge` 67 OK；交接门 `route 14 + doc-governance 41 = 55 OK`。
+- **六轮只读独立对抗 agent**（全部跑未提交工作树、无网络、零残留）：1 轮确认账本两个方向都攻不破；2–5 轮各开出真实缺陷（含三次「我只封了被演示的实例」），我逐轮用**它们自己的探针**复跑验证；第 6 轮零发现，并留下 2576/2576 同帖拼写归一、652/652 判 `single`、3 份真独立文档仍判 `both`、782 条可归一中仅 16 条可准入、11 条恶意输入零异常。
+
+### 失效的旧结论
+
+- 「`_corroboration` 比 hash 后缀就能保证一条文档不被算成两份」—— **作废**，X 帖必须按帖子身份比。
+- 「身份类修好了」在第 2、3、4、5 轮各说错一次；**教训写进 register K3-R107**：这类「哪些拼写是同一个东西」的问题，修复必须写成「归一 + 搜索」，绝不能写成枚举或位置假设。
+- 「Optional-only 可以免全量」—— 作废（见 K3-R99）。
+
+### 下一步注意事项
+
+真实付费运行的形状仍是「只跑 X、一条查询、一次 xAI 调用、非交易决策日」；Web 的 20260731 证据已冻结，不要重跑。K3-R105 的两条定了之后再动正文绑定，别在跑 live 之前改分数口径。

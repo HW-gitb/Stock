@@ -5,7 +5,7 @@ import json
 import tempfile
 import unittest
 from datetime import datetime, timezone
-from pathlib import Path
+from pathlib import Path, PurePosixPath
 from types import SimpleNamespace
 from unittest import mock
 
@@ -52,6 +52,10 @@ class XFetchAndMergeTests(unittest.TestCase):
         return json.dumps({"themes": [{"theme_id": "power_demand", "display_name": "Power demand", "summary": "Power demand", "observed_at": "2026-07-24T12:00:00Z", "source_ref_ids": refs, "members": [{"ticker": "AAPL", "source_ref_ids": refs}, {"ticker": "CEG", "source_ref_ids": refs}, {"ticker": "VST", "source_ref_ids": refs}]}]})
 
     @staticmethod
+    def _live_raw_response(response_id="resp-test"):
+        return {"id": response_id, "object": "response", "output": []}
+
+    @staticmethod
     def _closure_cells(function):
         return dict(zip(function.__code__.co_freevars, (
             cell.cell_contents for cell in function.__closure__ or ()
@@ -71,6 +75,16 @@ class XFetchAndMergeTests(unittest.TestCase):
         forged_ticket = object()
         consume_cells["issued_tickets"].add(forged_ticket)
         transport._record_completed_response("tavily")
+        return transport, forged_ticket
+
+    def _forge_x_live_label_by_closure(self, completed=1):
+        runner_cells = self._closure_cells(xfetch.run_x_fetch)
+        transport = runner_cells["new_transport"]("xai")
+        consume_cells = self._closure_cells(type(transport)._consume_ticket)
+        forged_ticket = object()
+        consume_cells["issued_tickets"].add(forged_ticket)
+        for _ in range(completed):
+            transport._record_completed_response("xai")
         return transport, forged_ticket
 
     def test_closure_forged_live_label_without_sources_is_refused_by_knife_2(self):
@@ -703,6 +717,12 @@ class XFetchAndMergeTests(unittest.TestCase):
                 web_artifact=wa, web_receipt=wr, x_artifact=xa, x_receipt=xr,
                 expected_decision_date="20260725", generated_at="2026-07-25T08:00:00Z",
             )
+            # K3-R102: an ordinary demotion must not make the builder emit a manifest that its own
+            # validator refuses forever (the decision slot is immutable, so that zeroes the week).
+            merge.validate_merged_packet(
+                merged, manifest, expected_decision_date="20260725",
+                upstream_pairs={"web": (wa, wr), "x": (xa, xr)},
+            )
         rows = {row["ticker"]: row for theme in manifest["themes"] for row in theme["members"]}
         tiers, boosts = self._chain_points(merged)
         self.assertEqual(rows["AAPL"]["evidence_tier"], "single")
@@ -714,6 +734,49 @@ class XFetchAndMergeTests(unittest.TestCase):
             {"stage": "theme", "theme_id": "power_demand", "reason": "member_evidence_demoted_unbound_ticker", "detail": f"AAPL:{x_ref}"},
             manifest["drop_ledger"],
         )
+
+    def test_k3_r103_unverifiable_member_is_dropped_without_taking_its_theme(self):
+        """K3-R103: one member whose ticker is never in the frozen text may not void its siblings."""
+        w_rows = [{"url": "https://web.example/power", "title": "Power",
+                   "content": "AAPL MSFT JPM power demand", "published_date": "2026-07-24T10:00:00Z"}]
+        x_rows = [{"url": "https://x.example/power", "title": "Power",
+                   "text": "AAPL MSFT JPM power demand", "created_at": "2026-07-24T10:00:00Z"}]
+        w_ref, x_ref = web._source_id(w_rows[0]["url"]), xfetch._source_id(x_rows[0]["url"])
+        payload = json.dumps({"themes": [{
+            "theme_id": "power_demand", "display_name": "Power", "summary": "Power",
+            "observed_at": "2026-07-24T12:00:00Z", "source_ref_ids": [w_ref, x_ref],
+            "members": [{"ticker": ticker, "source_ref_ids": [w_ref, x_ref]}
+                        for ticker in ("AAPL", "MSFT", "JPM", "NVDA")],
+        }]})
+        with temporary_provider_directory(web.ROOT) as td:
+            wa, wr, _ = web.build_web_fetch_packet(
+                queries=["power"], search_results=w_rows, llm_response=payload,
+                expected_decision_date="20260725", generated_at="2026-07-25T08:00:00Z",
+                raw_root=Path(td) / "web", persist_raw=True,
+            )
+            xa, xr, _ = xfetch.build_x_fetch_packet(
+                queries=["power"], results=x_rows, grok_response=payload,
+                expected_decision_date="20260725", generated_at="2026-07-25T08:00:00Z",
+                raw_root=Path(td) / "x", persist_raw=True,
+            )
+            merged, manifest = merge_web_x_discovery(
+                web_artifact=wa, web_receipt=wr, x_artifact=xa, x_receipt=xr,
+                expected_decision_date="20260725", generated_at="2026-07-25T08:00:00Z",
+            )
+            merge.validate_merged_packet(
+                merged, manifest, expected_decision_date="20260725",
+                upstream_pairs={"web": (wa, wr), "x": (xa, xr)},
+            )
+        self.assertEqual(manifest["summary"]["merged_theme_count"], 1)
+        self.assertEqual(manifest["summary"]["dropped_theme_count"], 0)
+        rows = {row["ticker"]: row for theme in manifest["themes"] for row in theme["members"]}
+        self.assertEqual(sorted(rows), ["AAPL", "JPM", "MSFT"])
+        self.assertEqual({rows[ticker]["evidence_tier"] for ticker in rows}, {"both"})
+        self.assertIn("member_evidence_unbound_ticker_dropped",
+                      {row["reason"] for row in manifest["drop_ledger"]})
+        tiers, boosts = self._chain_points(merged)
+        self.assertEqual(boosts["AAPL"], 5.0)
+        self.assertNotIn("NVDA", boosts)
 
     def test_offline_raw_receipts_keep_bound_two_source_members_through_knife_2(self):
         """K3-R64: offline output persists raw bytes before the same ticker gate runs."""
@@ -764,7 +827,7 @@ class XFetchAndMergeTests(unittest.TestCase):
 
     def test_model_transcribed_x_source_requires_provider_annotation_url(self):
         """K3-R66: model text is evidence only after provider URL attestation."""
-        url = "https://x.example/ceg-post"
+        url = "https://x.com/ceg/status/1937910118252712411"
         grok = json.dumps({"sources": [{"url": url, "title": "CEG", "text": "CEG demand rises", "created_at": "2026-07-24T10:00:00Z"}], "themes": [{"theme_id": "power_demand", "display_name": "Power", "summary": "Power", "observed_at": "2026-07-24T12:00:00Z", "source_urls": [url], "members": [{"ticker": "CEG", "source_urls": [url]}]}]})
         _, rejected, _ = xfetch.build_x_fetch_packet(
             queries=["power"], results=[], grok_response=grok,
@@ -779,6 +842,593 @@ class XFetchAndMergeTests(unittest.TestCase):
             provider_annotation_urls=[url],
         )
         self.assertEqual(accepted["source_refs"][0]["evidence_attestation"], "model_transcribed")
+
+    def test_x_status_identity_backs_real_annotation_form_and_records_both_mismatch_sides(self):
+        """K3-R79/R83: comparison identity is narrow, while mismatch evidence remains replayable."""
+        status_ids = [
+            "1937910118252712411", "2080275382704500979", "1976276108007092382",
+            "2051270129586209252", "2081856920949014998", "2074770950034227607",
+        ]
+        model_urls = [f"https://x.com/handle{index}/status/{status_id}" for index, status_id in enumerate(status_ids)]
+        annotation_urls = [f"https://x.com/i/status/{status_id}" for status_id in status_ids]
+        transcript = json.dumps({
+            "sources": [
+                {"url": url, "title": "Power", "text": "CEG demand rises", "created_at": "2026-07-24T10:00:00Z"}
+                for url in model_urls
+            ],
+            "themes": [],
+        })
+        _, accepted, _ = xfetch.build_x_fetch_packet(
+            queries=["power"], results=[], grok_response=transcript,
+            expected_decision_date="20260725", generated_at="2026-07-25T08:00:00Z",
+            provider_annotation_urls=annotation_urls,
+        )
+        self.assertEqual(
+            {(ref["canonical_locator"], ref["source_id"]) for ref in accepted["source_refs"]},
+            {(url, xfetch._source_id(url)) for url in annotation_urls},
+        )
+
+        web_annotation = f"https://x.com/i/web/status/{status_ids[0]}"
+        _, web_form, _ = xfetch.build_x_fetch_packet(
+            queries=["power"], results=[], grok_response=json.dumps({
+                "sources": [{"url": web_annotation, "title": "Power", "text": "CEG", "created_at": "2026-07-24T10:00:00Z"}],
+                "themes": [],
+            }), expected_decision_date="20260725", generated_at="2026-07-25T08:00:00Z",
+            provider_annotation_urls=[web_annotation],
+        )
+        self.assertEqual(web_form["source_refs"][0]["canonical_locator"], web_annotation)
+
+        mismatch_annotation_urls = annotation_urls + ["https://x.com/i/status/9999999999999999999"]
+        _, rejected, _ = xfetch.build_x_fetch_packet(
+            queries=["power"], results=[], grok_response=json.dumps({
+                "sources": [{"url": "https://x.com/other/status/1111111111111111111", "title": "Power", "text": "CEG", "created_at": "2026-07-24T10:00:00Z"}], "themes": [],
+            }), expected_decision_date="20260725", generated_at="2026-07-25T08:00:00Z",
+            provider_annotation_urls=mismatch_annotation_urls,
+        )
+        drop = next(row for row in rejected["drop_ledger"] if row["reason"] == "model_source_url_not_provider_annotated")
+        self.assertEqual(set(drop), {"stage", "reason", "detail", "model_source_url", "provider_annotation_set_ref"})
+        self.assertEqual(drop["model_source_url"], "https://x.com/other/status/1111111111111111111")
+        self.assertEqual(drop["provider_annotation_set_ref"], "provider_annotation_urls")
+        self.assertEqual(rejected["provider_annotation_urls"], sorted(mismatch_annotation_urls))
+
+        for model_url in ("https://x.com/home", "https://example.com/handle/status/1937910118252712411"):
+            with self.subTest(model_url=model_url):
+                _, unbacked, _ = xfetch.build_x_fetch_packet(
+                    queries=["power"], results=[], grok_response=json.dumps({
+                        "sources": [{"url": model_url, "title": "Power", "text": "CEG", "created_at": "2026-07-24T10:00:00Z"}], "themes": [],
+                    }), expected_decision_date="20260725", generated_at="2026-07-25T08:00:00Z",
+                    provider_annotation_urls=annotation_urls,
+                )
+                self.assertEqual(unbacked["source_refs"], [])
+
+        with mock.patch.object(xfetch, "_x_status_identity", return_value=None):
+            _, hollowed, _ = xfetch.build_x_fetch_packet(
+                queries=["power"], results=[], grok_response=transcript,
+                expected_decision_date="20260725", generated_at="2026-07-25T08:00:00Z",
+                provider_annotation_urls=annotation_urls,
+            )
+        self.assertEqual(hollowed["source_refs"], [])
+
+    def test_k3_r86_legacy_x_receipt_shape_remains_mergeable(self):
+        wa, wr, _ = web.build_web_fetch_packet(
+            queries=["power"], search_results=[], llm_response='{"themes":[]}',
+            expected_decision_date="20260725", generated_at="2026-07-25T08:00:00Z",
+        )
+        xa, xr, _ = xfetch.build_x_fetch_packet(
+            queries=["power"], results=[], grok_response=json.dumps({
+                "sources": [{"url": "https://x.com/u/status/1", "title": "Power", "text": "CEG", "created_at": "2026-07-24T10:00:00Z"}],
+                "themes": [],
+            }), expected_decision_date="20260725", generated_at="2026-07-25T08:00:00Z",
+            provider_annotation_urls=[],
+        )
+        legacy = json.loads(json.dumps(xr))
+        legacy.pop("provider_response_refs", None)
+        legacy.pop("provider_annotation_urls", None)
+        for row in legacy["drop_ledger"]:
+            row.pop("model_source_url", None)
+            row.pop("provider_annotation_urls", None)
+            row.pop("provider_annotation_set_ref", None)
+        xfetch._validate_schema(legacy)
+        for missing in ("provider_response_refs", "provider_annotation_urls"):
+            new_shape = json.loads(json.dumps(xr))
+            new_shape.pop(missing)
+            with self.assertRaises(xfetch.XThemeDiscoveryError):
+                xfetch._validate_builder_receipt_evidence(new_shape, 0)
+        merged, _ = merge_web_x_discovery(
+            web_artifact=wa, web_receipt=wr, x_artifact=xa, x_receipt=legacy,
+            expected_decision_date="20260725", generated_at="2026-07-25T08:00:00Z",
+        )
+        self.assertEqual(merged["themes"], [])
+
+    def test_k3_r87_r88_bad_or_conflicting_raw_response_drops_only_that_response(self):
+        with temporary_provider_directory(web.ROOT) as td:
+            raw_root = Path(td) / "x"
+            good = self._live_raw_response("good")
+            bad = {"id": "bad", "text": "lone-surrogate-\ud800"}
+            transport, ticket = self._forge_x_live_label_by_closure(completed=2)
+            _, receipt, _ = xfetch.build_x_fetch_packet(
+                queries=["q1", "q2"], results=[], grok_response='{"themes":[]}',
+                expected_decision_date="20260725", generated_at="2026-07-25T08:00:00Z",
+                raw_root=raw_root, persist_raw=True, execution_mode="live_authorized",
+                _live_transport=transport, _live_ticket=ticket,
+                raw_provider_responses=[good, bad],
+            )
+            self.assertEqual(len(receipt["provider_response_refs"]), 1)
+            self.assertIn("provider_response_capture_unavailable", {row["reason"] for row in receipt["drop_ledger"]})
+
+            conflict = self._live_raw_response("conflict")
+            conflict_digest = hashlib.sha256(web._canonical_json(conflict)).hexdigest()
+            conflict_path = web._raw_provider_response_path(raw_root, "xai", conflict_digest, "20260725")
+            conflict_path.parent.mkdir(parents=True, exist_ok=True)
+            conflict_path.write_text("{ not json", encoding="utf-8")
+            transport, ticket = self._forge_x_live_label_by_closure()
+            _, conflicted, _ = xfetch.build_x_fetch_packet(
+                queries=["q"], results=[], grok_response='{"themes":[]}',
+                expected_decision_date="20260725", generated_at="2026-07-25T08:00:00Z",
+                raw_root=raw_root, persist_raw=True, execution_mode="live_authorized",
+                _live_transport=transport, _live_ticket=ticket,
+                raw_provider_responses=[conflict],
+            )
+            self.assertEqual(conflicted["provider_response_refs"], [])
+            self.assertIn("provider_response_immutable_raw_content_conflict", {row["reason"] for row in conflicted["drop_ledger"]})
+
+    def test_k3_r95_source_conflict_is_not_a_provider_response_drop(self):
+        """K3-R95: source freeze failures must not poison response-index accounting."""
+        receipt = {
+            "fetch_contract": {"execution_mode": "live_authorized"},
+            "provider_response_refs": [{"response_index": 0}],
+            "provider_annotation_urls": [],
+            "drop_ledger": [{
+                "stage": "search_result", "reason": "immutable_raw_content_conflict",
+                "detail": "https://x.com/u/status/1",
+            }],
+        }
+        xfetch._validate_builder_receipt_evidence(receipt, 1)
+        receipt["drop_ledger"].append({
+            "stage": "search_result", "reason": "provider_response_capture_unavailable",
+            "detail": "response[1]:missing_response", "provider_response_index": 1,
+        })
+        with self.assertRaises(xfetch.XThemeDiscoveryError):
+            xfetch._validate_builder_receipt_evidence(receipt, 1)
+
+    def test_k3_r95_offline_source_conflict_does_not_break_merge_accounting(self):
+        wa, wr, _ = web.build_web_fetch_packet(
+            queries=["q"], search_results=[], llm_response='{"themes":[]}',
+            expected_decision_date="20260725", generated_at="2026-07-25T08:00:00Z",
+        )
+        xa, xr, _ = xfetch.build_x_fetch_packet(
+            queries=["q"], results=[], grok_response='{"themes":[]}',
+            expected_decision_date="20260725", generated_at="2026-07-25T08:00:00Z",
+        )
+        xr["drop_ledger"].append({
+            "stage": "search_result", "reason": "immutable_raw_content_conflict",
+            "detail": "https://x.com/u/status/1",
+        })
+        xr["drop_ledger"].sort(key=lambda row: (row["stage"], row["reason"], row["detail"]))
+        xr["discovery_artifact_sha256"] = web._discovery_evidence_hash(xa)
+        xfetch._validate_schema(xr)
+        merged, _ = merge_web_x_discovery(
+            web_artifact=wa, web_receipt=wr, x_artifact=xa, x_receipt=xr,
+            expected_decision_date="20260725", generated_at="2026-07-25T08:00:00Z",
+        )
+        self.assertEqual(merged["themes"], [])
+
+    def test_k3_r96_o1_percent_encoded_secret_locator_drops_without_schema_abort(self):
+        locator = "https://x.com/%73ecret/status/1937910118252712411"
+        _, receipt, _ = xfetch.build_x_fetch_packet(
+            queries=["power"], results=[], grok_response=json.dumps({
+                "sources": [{"url": locator, "title": "Power", "text": "CEG", "created_at": "2026-07-24T10:00:00Z"}],
+                "themes": [],
+            }), expected_decision_date="20260725", generated_at="2026-07-25T08:00:00Z",
+            provider_annotation_urls=[locator],
+        )
+        self.assertEqual(receipt["source_refs"], [])
+        self.assertEqual(receipt["provider_annotation_urls"], [])
+        self.assertNotIn("redacted_untrusted_detail", json.dumps(receipt))
+
+    def test_k3_r96_o2_provider_raw_must_stay_in_decision_week(self):
+        with temporary_provider_directory(web.ROOT) as td:
+            raw_root = Path(td) / "x"
+            transport, ticket = self._forge_x_live_label_by_closure()
+            xa, xr, _ = xfetch.build_x_fetch_packet(
+                queries=["q"], results=[], grok_response='{"themes":[]}',
+                expected_decision_date="20260725", generated_at="2026-07-25T08:00:00Z",
+                raw_root=raw_root, persist_raw=True, execution_mode="live_authorized",
+                _live_transport=transport, _live_ticket=ticket,
+                raw_provider_responses=[self._live_raw_response("stale-clock")],
+            )
+            wa, wr, _ = web.build_web_fetch_packet(
+                queries=["q"], search_results=[], llm_response='{"themes":[]}',
+                expected_decision_date="20260725", generated_at="2026-07-25T08:00:00Z",
+            )
+            raw_ref = xr["provider_response_refs"][0]
+            raw_path = web.ROOT / raw_ref["raw_receipt_ref"]
+            raw = json.loads(raw_path.read_text(encoding="utf-8"))
+            raw["fetched_at"] = "2026-05-01T08:00:00Z"
+            raw_path.write_text(json.dumps(raw), encoding="utf-8")
+            raw_ref["fetched_at"] = raw["fetched_at"]
+            with self.assertRaises(ThemeDiscoveryMergeError):
+                merge_web_x_discovery(
+                    web_artifact=wa, web_receipt=wr, x_artifact=xa, x_receipt=xr,
+                    expected_decision_date="20260725", generated_at="2026-07-25T08:00:00Z",
+                )
+
+    def test_k3_r96_o3_model_source_list_is_bounded_by_truncation_not_by_a_batch_abort(self):
+        """K3-R101: the cap bounds the receipt; it may not void the themes of paid siblings.
+
+        `_parse_grok` also runs on the CONCATENATION of every query's response, so raising here let
+        the aggregate of individually-innocent responses erase them all.
+        """
+        drops: list[dict] = []
+        theme = {"theme_id": "power", "display_name": "P", "summary": "S",
+                 "observed_at": "2026-07-24T12:00:00Z", "members": []}
+        parsed = xfetch._parse_grok(json.dumps({
+            "sources": [{"url": f"https://x.example/post/{index}"}
+                        for index in range(xfetch.MAX_GROK_SOURCES + 25)],
+            "themes": [theme],
+        }), drop_ledger=drops)
+        self.assertEqual(len(parsed["sources"]), xfetch.MAX_GROK_SOURCES)
+        self.assertEqual(parsed["themes"], [theme])
+        self.assertIn("model_source_list_truncated", {row["reason"] for row in drops})
+
+        under_cap = json.dumps({
+            "sources": [{"url": f"https://x.example/post/{index}"}
+                        for index in range(xfetch.MAX_GROK_SOURCES - 100)],
+            "themes": [theme],
+        })
+        combined, _ = xfetch._combine_grok_responses([under_cap, under_cap])
+        survived = xfetch._parse_grok(combined, drop_ledger=[])
+        self.assertEqual(len(survived["themes"]), 1)
+
+    def test_k3_r100_one_x_post_in_two_spellings_is_not_corroboration(self):
+        """K3-R100: two spellings of ONE tweet may not mint the 5-point `both` tier."""
+        status_id = "1937910118252712411"
+
+        def ref(kind: str, locator: str) -> dict[str, str]:
+            return {
+                "source_id": f"{kind}:" + hashlib.sha256(locator.encode("utf-8")).hexdigest(),
+                "source_type": kind, "canonical_locator": locator,
+            }
+
+        web_sighting = ref("web", f"https://x.com/nvidia/status/{status_id}")
+        for spelling in (
+            f"https://x.com/i/status/{status_id}",             # the spelling the X lane persists
+            f"https://twitter.com/nvidia/status/{status_id}",  # host alias
+            f"https://x.com/i/web/status/{status_id}",         # the K3-R94 route
+            f"https://www.x.com/nvidia/status/{status_id}",    # www mirror
+            f"https://www.twitter.com/nvidia/status/{status_id}",
+            f"https://mobile.twitter.com/nvidia/status/{status_id}",
+            f"http://x.com/nvidia/status/{status_id}",         # scheme mirror
+            f"https://x.com/nvidia/status/{status_id}/photo/1",   # permalink views
+            f"https://x.com/nvidia/status/{status_id}/photo/1/large",
+            f"https://x.com/nvidia/status/{status_id}/video/2",
+            f"https://x.com/nvidia/status/{status_id}/quotes",
+            f"https://x.com/nvidia/status/{status_id}/likes",
+            f"https://x.com/nvidia/status/{status_id}/retweets",
+            f"https://x.com/nvidia/status/{status_id}/analytics",
+            f"https://x.com/nvidia/status/{status_id}/history",
+            f"https://twitter.com/nvidia/statuses/{status_id}",   # pre-2013 spelling
+            f"https://x.com/nvidia/Status/{status_id}",           # path case
+            f"https://x.com./nvidia/status/{status_id}",          # RFC 1034 root label
+            f"https://www.twitter.com./nvidia/status/{status_id}",
+            f"https://x.com//nvidia/status/{status_id}",          # empty path segments
+            f"https://x.com/nvidia//status/{status_id}",
+            f"https://x.com/nvidia/status//{status_id}",
+            f"https://x.com/nvidia/status/{status_id}%2Fphoto%2F1",   # encoded separators
+            f"https://x.com/nvidia/status/0{status_id}",          # X resolves the id as an integer
+            f"https://x.com:8443/nvidia/status/{status_id}",      # port is ignored on purpose
+            f"https://x.com/status/{status_id}",                  # handle-less permalink
+            f"https://twitter.com/statuses/{status_id}",
+            f"https://x.com//status/{status_id}",                 # empty handle segment
+            f"https://x.com/%2Fstatus/{status_id}",
+            f"https://x.com/statuses/{status_id}/photo/1",
+            f"https://www.twitter.com./statuses/{status_id}",
+            f"https://x.com/i/statuses/{status_id}",
+        ):
+            x_sighting = ref("x", spelling)
+            keep, tier, redundant = merge._corroboration([web_sighting, x_sighting])
+            with self.subTest(spelling=spelling):
+                self.assertEqual((keep, tier), ("web", "single"))
+                self.assertEqual(redundant, [x_sighting["source_id"]])
+        # Reverse controls: two genuinely different posts still corroborate, and the frozen
+        # hash-suffix behaviour for non-X documents is untouched.
+        self.assertEqual(merge._corroboration([
+            web_sighting, ref("x", f"https://x.com/i/status/{status_id[:-1]}7"),
+        ])[1], "both")
+        self.assertEqual(merge._corroboration([
+            ref("web", "https://a.example/news"), ref("x", "https://b.example/news"),
+        ])[1], "both")
+        # Over-collapse controls: a non-status X page, a look-alike host and a dot-segment escape
+        # must NOT be absorbed into the post identity.
+        for unrelated in (
+            "https://x.com/nvidia",
+            "https://x.com/nvidia/with_replies",
+            "https://x.com/i/lists/" + status_id,
+            "https://x.com/i/communities/" + status_id,
+            "https://api.twitter.com/2/tweets/" + status_id,
+            "https://mobile.twitter.com.evil.example/nvidia/status/" + status_id,
+        ):
+            with self.subTest(unrelated=unrelated):
+                self.assertIsNone(xfetch._x_post_document_identity(unrelated))
+        # Widening corroboration must not widen ADMISSION: the strict rule still refuses them all.
+        for spelling in (
+            f"https://x.com./nvidia/status/{status_id}",
+            f"https://x.com/nvidia/statuses/{status_id}",
+            f"http://x.com/nvidia/status/{status_id}",
+            f"https://x.com/nvidia/status/{status_id}/photo/1",
+            f"https://www.x.com/nvidia/status/{status_id}",
+            f"https://x.com/status/{status_id}",
+            f"https://x.com//status/{status_id}",
+        ):
+            with self.subTest(admission=spelling):
+                self.assertIsNone(xfetch._x_status_identity(spelling))
+        # A tail may not smuggle a SECOND post id out: the leftmost pair wins.
+        self.assertEqual(
+            xfetch._x_post_document_identity(f"https://x.com/n/status/{status_id}/status/999"),
+            status_id,
+        )
+        # Planted failure: with the identity collapsed back to the raw hash suffix, the first
+        # assertion above must die.
+        with mock.patch.object(
+            merge, "_document_identity", lambda ref: ref["source_id"].split(":", 1)[1],
+        ):
+            self.assertEqual(merge._corroboration([
+                web_sighting, ref("x", f"https://x.com/i/status/{status_id}"),
+            ])[1], "both")
+        # A ref that lost its locator must fail CLOSED (collapse to one shared identity), not
+        # silently revert to the hash suffix and mint `both` again.
+        self.assertEqual(merge._corroboration([
+            {k: v for k, v in web_sighting.items() if k != "canonical_locator"},
+            {k: v for k, v in ref("x", f"https://x.com/i/status/{status_id}").items()
+             if k != "canonical_locator"},
+        ])[1], "single")
+
+    def test_k3_r98_the_producer_owns_no_filesystem_deletion_path(self):
+        """K3-R98: the receipt is the only authority on which raws count as evidence.
+
+        A producer-side delete sits outside the lane's single write door (enforced AST-side by
+        `LaneWriteDoorConformance`) and could destroy the paid bytes of a run whose publish failed,
+        so no such helper may exist here at all.
+        """
+        self.assertFalse(hasattr(xfetch, "_prune_unreferenced_provider_responses"))
+        source = (web.ROOT / "runners" / "us_short_llm_theme_discovery_fetch_x.py").read_text(encoding="utf-8")
+        for primitive in (".unlink(", ".rmdir(", "os.remove(", "shutil.rmtree("):
+            self.assertNotIn(primitive, source)
+
+    def test_k3_r97_one_failed_provider_call_does_not_void_its_paid_siblings(self):
+        """K3-R97: a query whose provider call never completed consumes no completed ordinal."""
+        with temporary_provider_directory(web.ROOT) as td:
+            raw_root = Path(td) / "x"
+            transport, ticket = self._forge_x_live_label_by_closure(completed=0)
+            reply = {
+                "text": '{"themes":[]}', "results": [], "annotation_urls": [],
+                "raw_response": self._live_raw_response("paid-sibling"),
+                "model_identity": {"served_model": "grok-4.3", "system_fingerprint": "fp"},
+            }
+
+            class FirstQueryFails:
+                def search(self, query, expected_date):
+                    if query == "q0":
+                        raise xfetch.XThemeDiscoveryError("Grok X request failed: APIStatusError")
+                    transport._record_completed_response("xai")
+                    return dict(reply)
+
+            outcome = xfetch.execute_live_x_orchestration(
+                queries=["q0", "q1"], expected_decision_date="20260725", client=FirstQueryFails(),
+            )
+            self.assertEqual(len(outcome["raw_provider_responses"]), 1)
+            _, receipt, _ = xfetch.build_x_fetch_packet(
+                queries=["q0", "q1"], results=outcome["results"],
+                grok_response=outcome["grok_response"],
+                expected_decision_date="20260725", generated_at="2026-07-25T08:00:00Z",
+                fetched_at="2026-07-25T08:00:00Z",
+                raw_root=raw_root, persist_raw=True, execution_mode="live_authorized",
+                _live_transport=transport, _live_ticket=ticket,
+                extra_drop_ledger=outcome["query_drops"],
+                raw_provider_responses=outcome["raw_provider_responses"],
+                grok_model_identity=outcome["grok_model_identity"],
+                grok_attempted=outcome["grok_attempted"], grok_failed=outcome["grok_failed"],
+            )
+            self.assertEqual(len(receipt["provider_response_refs"]), 1)
+            self.assertEqual(receipt["provider_response_refs"][0]["response_index"], 0)
+            self.assertTrue((web.ROOT / receipt["provider_response_refs"][0]["raw_receipt_ref"]).is_file())
+            self.assertIn("provider_response_dropped", {row["reason"] for row in receipt["drop_ledger"]})
+
+    def test_k3_r97_unaccountable_response_record_is_ledgered_not_raised(self):
+        """K3-R97: an out-of-range or duplicate record becomes a ledger row, never a batch abort."""
+        with temporary_provider_directory(web.ROOT) as td:
+            drops: list[dict] = []
+            refs = xfetch._provider_response_refs(
+                [{"response_index": 4, "response": self._live_raw_response("later-call")}],
+                raw_root=Path(td) / "x", persist_raw=True, execution_mode="live_authorized",
+                completed_response_count=1, expected_decision_date="20260725",
+                fetched_at=datetime(2026, 7, 25, 8, tzinfo=timezone.utc),
+                pending_raw_writes=[], drops=drops,
+            )
+            self.assertEqual(refs, [])
+            reasons = {row["reason"] for row in drops}
+            self.assertIn("provider_response_record_unaccounted", reasons)
+            self.assertIn("provider_response_capture_unavailable", reasons)
+            self.assertEqual(
+                [row.get("provider_response_index") for row in drops
+                 if row["reason"] in xfetch.PROVIDER_RESPONSE_DROP_REASONS], [0],
+            )
+
+    def test_k3_r89_ordinary_secret_word_is_safe_persisted_evidence(self):
+        self.assertTrue(xfetch._provider_response_is_safe({"text": "CEG's secret weapon is its nuclear fleet"}))
+        self.assertFalse(xfetch._provider_response_is_safe({"api_key": "value-shaped-credential"}))
+
+    def test_k3_r90_one_annotation_mints_one_annotation_bound_identity(self):
+        status_id = "1937910118252712411"
+        annotation = f"https://x.com/i/status/{status_id}"
+        sources = [
+            {"url": f"https://x.com/handle{index}/status/{status_id}?variant={index}", "title": "Power", "text": "CEG demand", "created_at": "2026-07-24T10:00:00Z"}
+            for index in range(24)
+        ]
+        discovery, receipt, _ = xfetch.build_x_fetch_packet(
+            queries=["power"], results=[], grok_response=json.dumps({
+                "sources": sources,
+                "themes": [{
+                    "theme_id": "power_demand", "display_name": "Power", "summary": "Power",
+                    "observed_at": "2026-07-24T12:00:00Z", "source_urls": [sources[0]["url"]],
+                    "members": [{"ticker": "CEG", "source_urls": [sources[0]["url"]]}],
+                }],
+            }),
+            expected_decision_date="20260725", generated_at="2026-07-25T08:00:00Z",
+            provider_annotation_urls=[annotation],
+        )
+        self.assertEqual(len(receipt["source_refs"]), 1)
+        self.assertEqual(receipt["source_refs"][0]["canonical_locator"], annotation)
+        self.assertEqual(discovery["themes"][0]["source_ref_ids"], [receipt["source_refs"][0]["source_id"]])
+        self.assertEqual(discovery["themes"][0]["members"][0]["source_ref_ids"], [receipt["source_refs"][0]["source_id"]])
+        for invalid in (
+            f"https://x.com./i/status/{status_id}",
+            f"https://x.com:8443/i/status/{status_id}",
+            f"https://sub.x.com/i/status/{status_id}",
+        ):
+            self.assertIsNone(xfetch._x_status_identity(invalid))
+        _, non_x_receipt, _ = xfetch.build_x_fetch_packet(
+            queries=["power"], results=[],
+            grok_response=json.dumps({
+                "sources": [{
+                    "url": "https://example.com/not-an-x-status", "title": "Power",
+                    "text": "CEG demand", "created_at": "2026-07-24T10:00:00Z",
+                }],
+                "themes": [],
+            }),
+            expected_decision_date="20260725", generated_at="2026-07-25T08:00:00Z",
+            provider_annotation_urls=["https://example.com/not-an-x-status"],
+        )
+        self.assertEqual(non_x_receipt["source_refs"], [])
+        self.assertIn(
+            "model_source_url_not_provider_annotated",
+            {row["reason"] for row in non_x_receipt["drop_ledger"]},
+        )
+
+    def test_k3_r91_provider_attempt_receipts_are_projected_from_retry_evidence(self):
+        _, receipt, _ = xfetch.build_x_fetch_packet(
+            queries=["q"], results=[], grok_response='{"themes":[]}',
+            expected_decision_date="20260725", generated_at="2026-07-25T08:00:00Z",
+        )
+        receipt["fetch_contract"].update(
+            execution_mode="live_authorized", network_access_performed=True,
+            provider_calls_performed=True, network_call_count=1, provider_call_count=1,
+            transport_response_counts={"xai": 1},
+        )
+        receipt["provider_response_refs"] = [{"response_sha256": "a" * 64}]
+        receipt["provider_annotation_urls"] = ["https://x.com/i/status/1"]
+        projected = web._live_receipt_retry_evidence(receipt)
+        self.assertNotIn("provider_response_refs", projected)
+        self.assertNotIn("provider_annotation_urls", projected)
+
+    def test_k3_r92_mismatch_urls_are_sanitized_and_annotation_set_is_stored_once(self):
+        annotations = [f"https://x.com/i/status/{index}?email=user{index}%40example.com&uid={index}" for index in range(10, 16)]
+        sources = [
+            {"url": f"https://x.com/u/status/{index}?email=alice%40example.com&uid=99", "title": "Power", "text": "CEG", "created_at": "2026-07-24T10:00:00Z"}
+            for index in range(20, 26)
+        ]
+        _, receipt, _ = xfetch.build_x_fetch_packet(
+            queries=["power"], results=[], grok_response=json.dumps({"sources": sources, "themes": []}),
+            expected_decision_date="20260725", generated_at="2026-07-25T08:00:00Z",
+            provider_annotation_urls=annotations,
+        )
+        mismatch = [row for row in receipt["drop_ledger"] if row["reason"] == "model_source_url_not_provider_annotated"]
+        self.assertEqual(len(receipt["provider_annotation_urls"]), len(annotations))
+        self.assertTrue(all("provider_annotation_urls" not in row for row in mismatch))
+        self.assertTrue(all(row["provider_annotation_set_ref"] == "provider_annotation_urls" for row in mismatch))
+        serialized = json.dumps(receipt, ensure_ascii=False)
+        self.assertNotIn("email=", serialized)
+        self.assertNotIn("uid=", serialized)
+
+    def test_k3_r93_merge_rejects_missing_or_redigested_provider_raw_response(self):
+        with temporary_provider_directory(web.ROOT) as td:
+            raw_root = Path(td) / "x"
+            transport, ticket = self._forge_x_live_label_by_closure()
+            xa, xr, _ = xfetch.build_x_fetch_packet(
+                queries=["q"], results=[], grok_response='{"themes":[]}',
+                expected_decision_date="20260725", generated_at="2026-07-25T08:00:00Z",
+                raw_root=raw_root, persist_raw=True, execution_mode="live_authorized",
+                _live_transport=transport, _live_ticket=ticket,
+                raw_provider_responses=[self._live_raw_response("merge-bound")],
+            )
+            wa, wr, _ = web.build_web_fetch_packet(
+                queries=["q"], search_results=[], llm_response='{"themes":[]}',
+                expected_decision_date="20260725", generated_at="2026-07-25T08:00:00Z",
+            )
+            def merge_packet():
+                return merge_web_x_discovery(
+                    web_artifact=wa, web_receipt=wr, x_artifact=xa, x_receipt=xr,
+                    expected_decision_date="20260725", generated_at="2026-07-25T08:00:00Z",
+                )
+
+            merge_packet()
+            raw_ref = xr["provider_response_refs"][0]
+            raw_path = web.ROOT / raw_ref["raw_receipt_ref"]
+            original = raw_path.read_bytes()
+
+            original_refs = xr["provider_response_refs"]
+            xr["provider_response_refs"] = []
+            with self.assertRaises(ThemeDiscoveryMergeError):
+                merge_packet()
+            xr["drop_ledger"].append({
+                "stage": "search_result", "reason": "provider_response_capture_unavailable",
+                "detail": "response[0]:test_control", "provider_response_index": 0,
+            })
+            merge_packet()
+            xr["drop_ledger"].pop()
+            xr["provider_response_refs"] = original_refs
+
+            annotations = xr.pop("provider_annotation_urls")
+            with self.assertRaises(ThemeDiscoveryMergeError):
+                merge_packet()
+            xr["provider_annotation_urls"] = annotations
+
+            original_ref = raw_ref["raw_receipt_ref"]
+            parts = list(PurePosixPath(original_ref).parts)
+            date_index = parts.index("20260725")
+            raw_ref["raw_receipt_ref"] = PurePosixPath(
+                *parts[:date_index], "lexical_alias", "..", *parts[date_index:]
+            ).as_posix()
+            with self.assertRaises(ThemeDiscoveryMergeError):
+                merge_packet()
+            raw_ref["raw_receipt_ref"] = original_ref
+
+            other_namespace = raw_path.parent.parent.parent / "other_namespace" / "20260725" / raw_path.name
+            other_namespace.parent.mkdir(parents=True, exist_ok=True)
+            other_namespace.write_bytes(original)
+            raw_ref["raw_receipt_ref"] = web._repo_relative(other_namespace)
+            with self.assertRaises(ThemeDiscoveryMergeError):
+                merge_packet()
+            raw_ref["raw_receipt_ref"] = original_ref
+
+            generated_later = json.loads(original.decode("utf-8"))
+            generated_later["fetched_at"] = "2026-07-25T08:01:00Z"
+            raw_path.write_text(json.dumps(generated_later), encoding="utf-8")
+            raw_ref["fetched_at"] = generated_later["fetched_at"]
+            with self.assertRaises(ThemeDiscoveryMergeError):
+                merge_packet()
+            raw_ref["fetched_at"] = json.loads(original.decode("utf-8"))["fetched_at"]
+
+            post_open = json.loads(original.decode("utf-8"))
+            post_open["fetched_at"] = "2026-07-25T13:30:00Z"
+            raw_path.write_text(json.dumps(post_open), encoding="utf-8")
+            raw_ref["fetched_at"] = post_open["fetched_at"]
+            with self.assertRaises(ThemeDiscoveryMergeError):
+                merge_packet()
+            raw_ref["fetched_at"] = json.loads(original.decode("utf-8"))["fetched_at"]
+
+            raw_path.write_text("[]", encoding="utf-8")
+            with self.assertRaises(ThemeDiscoveryMergeError):
+                merge_packet()
+            tampered = json.loads(original.decode("utf-8"))
+            tampered["response"]["id"] = "redigested"
+            raw_path.write_text(json.dumps(tampered), encoding="utf-8")
+            with self.assertRaises(ThemeDiscoveryMergeError):
+                merge_packet()
+            raw_path.write_bytes(original)
+            raw_path.unlink()
+            with self.assertRaises(ThemeDiscoveryMergeError):
+                merge_packet()
 
     def test_captured_grok_response_shape_routes_only_annotation_backed_transcript(self):
         """Unfreeze step ②: pin the captured Grok shape, not a guessed result-row API."""
@@ -844,7 +1494,7 @@ class XFetchAndMergeTests(unittest.TestCase):
 
     def test_x_model_transcript_enforces_decision_week_window(self):
         """K3-R68: annotation-backed transcription still needs the sibling lane's week floor."""
-        url = "https://x.example/ceg-post"
+        url = "https://x.com/ceg/status/1937910118252712411"
 
         def packet(created_at):
             response = json.dumps({
@@ -990,6 +1640,7 @@ class XFetchAndMergeTests(unittest.TestCase):
             return {
                 "results": [], "grok_response": '{"themes":[]}', "query_drops": [],
                 "fetched_at": datetime(2026, 7, 25, 8, tzinfo=timezone.utc), "annotation_urls": [],
+                "raw_provider_responses": [self._live_raw_response("resp-zero-accepted")],
                 "grok_model_identity": xfetch._grok_model_identity(),
                 "grok_attempted": False, "grok_failed": False,
             }
@@ -1003,9 +1654,16 @@ class XFetchAndMergeTests(unittest.TestCase):
             _, receipt, _ = xfetch.run_x_fetch(
                 queries=["power"], expected_decision_date="20260725",
                 generated_at="2026-07-25T08:00:00Z", confirm_user_authorization=True, live=True,
+                raw_root=self._raw_path / "x_live_zero",
             )
         self.assertEqual(receipt["fetch_contract"]["execution_mode"], "live_authorized")
         self.assertEqual(receipt["fetch_contract"]["transport_response_counts"], {"xai": 1})
+        self.assertEqual(receipt["source_refs"], [])
+        self.assertEqual(len(receipt["provider_response_refs"]), 1)
+        raw_ref = receipt["provider_response_refs"][0]
+        raw_payload = json.loads((web.ROOT / raw_ref["raw_receipt_ref"]).read_text(encoding="utf-8"))
+        self.assertEqual(raw_payload["response"], self._live_raw_response("resp-zero-accepted"))
+        self.assertEqual(raw_ref["response_sha256"], hashlib.sha256(web._canonical_json(raw_payload["response"])).hexdigest())
     def test_raw_ticker_match_requires_uppercase_bare_form_or_explicit_cashtag(self):
         prose = {"source_type": "web", "title": "", "content": "The market had a mixed session. It closed on a soft note, so all eyes are on Friday."}
         uppercase = {"source_type": "web", "title": "CEG expands generation", "content": ""}

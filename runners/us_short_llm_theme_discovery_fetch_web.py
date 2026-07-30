@@ -323,6 +323,11 @@ def _live_receipt_retry_evidence(payload: Any) -> Any:
         projected_contract.pop(key, None)
     projected["fetch_contract"] = projected_contract
     projected.pop("drop_ledger", None)
+    # Raw provider responses and the annotation diagnostic set are attempt telemetry.  The stable
+    # evidence remains the accepted source set plus its discovery digest; SDK response IDs/times
+    # must not make an otherwise identical live retry conflict with its first immutable receipt.
+    projected.pop("provider_response_refs", None)
+    projected.pop("provider_annotation_urls", None)
     summary = projected.get("summary")
     if isinstance(summary, dict):
         projected_summary = dict(summary)
@@ -591,7 +596,17 @@ def _ledger_safe_detail(value: Any) -> str:
 
 
 def _sanitized_drop_ledger(rows: list[dict[str, Any]]) -> list[dict[str, Any]]:
-    return [{**row, "detail": _ledger_safe_detail(row.get("detail"))} for row in rows]
+    sanitized: list[dict[str, Any]] = []
+    for row in rows:
+        clean = {**row, "detail": _ledger_safe_detail(row.get("detail"))}
+        if "model_source_url" in clean:
+            clean["model_source_url"] = _ledger_safe_detail(clean.get("model_source_url"))
+        if isinstance(clean.get("provider_annotation_urls"), list):
+            clean["provider_annotation_urls"] = sorted({
+                _ledger_safe_detail(locator) for locator in clean["provider_annotation_urls"]
+            })
+        sanitized.append(clean)
+    return sanitized
 
 
 def _assert_receipt_secret_free(receipt: dict[str, Any]) -> None:
@@ -750,11 +765,15 @@ def _canonical_locator(value: Any) -> str | None:
     if not isinstance(value, str) or any(char.isspace() or ord(char) < 32 for char in value):
         return None
     raw = _safe_text(value, limit=2048)
+    # Security checks and persisted identity must see the same RFC-normalized spelling.  Checking
+    # only the raw spelling let an encoded secret-shaped path turn into a post-check literal that
+    # later broke receipt schema validation rather than becoming an ordinary per-item rejection.
+    normalized = _uppercase_percent_octets(raw)
     try:
-        parts = urlsplit(raw)
+        parts = urlsplit(normalized)
     except ValueError:
         return None
-    if parts.scheme.lower() not in {"http", "https"} or not parts.netloc or parts.username or parts.password or SECRET_RE.search(raw):
+    if parts.scheme.lower() not in {"http", "https"} or not parts.netloc or parts.username or parts.password or SECRET_RE.search(normalized):
         return None
     if _credential_query_keys(parts.query):
         return None      # a credential-bearing locator is never turned into a source ref or raw path
@@ -814,6 +833,22 @@ def _raw_receipt_path(raw_root: Path, source_id: str, expected_decision_date: st
     week's packet down — the immutability rule is「同一 decision_date 内不可改写」, not「forever」."""
     suffix = source_id.split(":", 1)[1]
     return raw_root / "raw" / expected_decision_date / f"{suffix}.json"
+
+
+def _raw_provider_response_path(
+    raw_root: Path, provider: str, response_sha256: str, expected_decision_date: str,
+) -> Path:
+    """Keep a provider response outside source receipts when it yielded no admissible source.
+
+    Source receipts remain keyed by the lossless source locator.  A provider response is instead
+    keyed by its own frozen bytes, so an all-dropped live call still has replayable evidence without
+    inventing a source identity or weakening source-level provenance.
+    """
+    if not re.fullmatch(r"[a-z0-9_-]{1,32}", provider):
+        raise WebThemeDiscoveryError("raw provider name is unsafe")
+    if not re.fullmatch(r"[0-9a-f]{64}", response_sha256):
+        raise WebThemeDiscoveryError("raw provider response digest is unsafe")
+    return raw_root / "provider_responses" / expected_decision_date / f"{provider}_{response_sha256}.json"
 
 
 def _raw_payload_with_frozen_fetch_clock(

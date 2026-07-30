@@ -1,5 +1,13 @@
 # Session Log
 
+## 2026-07-30 — Claude Code 修复 K3-R97..K3-R107（用户指派自修 + 子 agent 审查循环）
+
+- **Verdict/Action**: 用户指派我兼任修复者。三条 Required（K3-R97/R98/R99）全修；六轮独立对抗 agent 循环中又开出并修掉 K3-R100/R102/R103/R104/R106/R107，第六轮零发现。K3-R105（样板行尾规则、single 档无正文绑定）与两条 O 级判为设计判断，故意未动、只记账待你定。正文只在 `docs/system_risk_register.md#R-USSHORT-KNIFE3-WEB-X-MERGE-PACKET-BOUNDARY`，本处不复述。
+- **Required**: K3-R97（一次失败调用弄死整批付费包）、K3-R98（删文件绕开唯一写门）、K3-R99（Optional-only 免掉该跑的全量）、K3-R100/R104/R106/R107（同一条推文的多种拼写铸出 5 分档，同类连开四轮）、K3-R102（builder 发出自己 validator 永拒的 manifest）、K3-R103（一个不可验证成员删掉整主题）——完整正文与 closure 全在 register。
+- **Verify**: review-evidence:a319b78cfe92。全量按 rule 4 亲跑记账 `status=PASS exit=0 tests=5020 elapsed=626.9s`。focused fetch/merge 67 OK。六轮只读对抗 agent 全跑未提交工作树，每轮的探针我都亲自复跑；第六轮 2576/2576 同帖拼写归一、652/652 判 single、3 份真独立文档仍判 both、782 条中仅 16 条可准入、11 条恶意输入零异常。超时原因:六轮 fix→agent 循环加四次全量，主机中途休眠一次。
+- **Pre-Codex self-review**: `matrix=complete: R97 完成序号 / R98 写门 / R99 全量 / R100+R104+R106+R107 身份类改语法归一+搜索路由 / R102 两侧计数同源 / R103 成员级丢弃; register=updated; handoff=updated; focused=67 OK; full-lane=5020 OK 626.9s recorded; door=route 14 + doc-governance 41 = 55 OK; 独立对抗 pass: 已跑 6 轮, 第 6 轮零发现`
+- **Next**: 用户：K3-R105 两条设计判断待定（样板行尾语义、single 档要不要也做正文绑定）。
+
 ## 2026-07-29 — Claude Code 审查 FAIL（US-short K3-R94/R95/R96 + O1..O5，master 工作树）
 
 - **Verdict/Action**: FAIL，未提交代码（只提交文档）。K3-R94、K3-R95 两条方向对、我逐条复现通过，K3-R96 的两处不实措辞也确实改真了；挡住这一刀的是同批并进来、却没跑全量的 O1..O5——其中两条当场把仓库自己的静态守卫打红。正文只在 `docs/system_risk_register.md#R-USSHORT-KNIFE3-WEB-X-MERGE-PACKET-BOUNDARY`（K3-R97/R98/R99），本处不复述。

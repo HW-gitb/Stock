@@ -527,7 +527,9 @@ def run_offline_stage(ctx) -> dict[str, Any]:
         hashes=hashes,
         validated_theme_count=validated_theme_count,
         boostable_ticker_count=len(boostable_tickers),
-        merge_dropped_theme_count=len(manifest["drop_ledger"]),
+        # THEME drops only, matching the manifest's own `dropped_theme_count`.  The ledger also
+        # carries member-level rows, which this field's name does not describe.
+        merge_dropped_theme_count=manifest["summary"]["dropped_theme_count"],
         validation_drop_count=len(validation_artifact["drop_ledger"]),
         generated_at=merged["generated_at"],
         upstream_pair_anchored=upstream_pair_anchored,
