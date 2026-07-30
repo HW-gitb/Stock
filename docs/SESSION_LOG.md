@@ -60,7 +60,7 @@
 
 ## 2026-07-29 — Claude Code 审查 PASS（第八刀收尾第二轮，79eb 工作树）
 
-- **Verdict/Action**: PASS，已在 79eb 提交（只 stage 本刀 18 个文件；`logs/` 私有账本 gitignored 未进仓）。**合入 master 暂被挡住**：主树有别的窗口未提交的 `docs/SESSION_LOG.md` / `docs/system_risk_register.md`（US-short K3 轨），git 拒绝覆盖，我不动别人的活，等其提交后再 `--no-ff` 合入。上一轮的跨 epoch 回填已按 Required 全部拆掉，工单三条 Optional 也一并处置。完整闭合见 `docs/system_risk_register.md#R-ASHORT-KNIFE8-P2-PUBLIC-SUMMARY-RESURRECTS-A-CROSS-EPOCH-LEGACY-RECORD` 与 `#R-ASHORT-KNIFE8-SIX-STEP-MERGE-VERIFICATION-NOT-RUN-AS-ONE-PASS`，本处不复述。
+- **Verdict/Action**: PASS，已在 79eb 提交（只 stage 本刀 18 个文件；`logs/` 私有账本 gitignored 未进仓）。**合入 master 已完成**（2026-07-30 `fc148331`，`--no-ff`；此前一度被别窗未提交的两份文档挡住，等其提交后才合，未 stash 他人改动）。上一轮的跨 epoch 回填已按 Required 全部拆掉，工单三条 Optional 也一并处置。完整闭合见 `docs/system_risk_register.md#R-ASHORT-KNIFE8-P2-PUBLIC-SUMMARY-RESURRECTS-A-CROSS-EPOCH-LEGACY-RECORD` 与 `#R-ASHORT-KNIFE8-SIX-STEP-MERGE-VERIFICATION-NOT-RUN-AS-ONE-PASS`，本处不复述。
 - **Required**: 无。
 - **Verify**: review-evidence:5a3e631d5973 / review-evidence:e589052af708。rule 4 全量亲跑 `full_pack_ledger run a_short` = `CACHED GREEN 2122 OK`（同一代码态）；door 守卫亲跑绿。探针：`_summary_epoch` 已删、tracked JSON == writer 输出、MD == render、`forward_weeks=0`、`validate_public_summary` 过、`_is_current_external_public_summary(Path,payload)=True`（先前 False 是我传了 str，已更正）。放松类反向控制：窄化的 `_is_file_write_call` 换回旧子串判据，新旧均 34 写盘口、LOST=0。comparison-only + 预冻结、非 §6a 子集、未起 agent。未复核：P3-HAC 与一键周跑只由全量覆盖。
 - **Next**: Codex：执行第九刀。
