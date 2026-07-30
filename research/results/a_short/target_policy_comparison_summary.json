@@ -3,10 +3,10 @@
   "schema_version": "1.0.0",
   "summary_id": "a_short_target_policy_comparison",
   "as_of": "20260727",
-  "data_through": "20260727",
+  "data_through": null,
   "status": "accumulating",
   "target_exit": {
-    "forward_weeks": 1,
+    "forward_weeks": 0,
     "required_forward_weeks": 12,
     "decision_difference_weeks": 0,
     "required_decision_difference_weeks": 8,
@@ -15,7 +15,7 @@
     "review_state": "not_due"
   },
   "breakout_entry": {
-    "forward_weeks": 1,
+    "forward_weeks": 0,
     "required_forward_weeks": 12,
     "decision_difference_weeks": 0,
     "required_decision_difference_weeks": 8,
@@ -24,30 +24,65 @@
     "review_state": "not_due"
   },
   "execution_data_status": "unavailable",
+  "verdict": "not_adjudicated",
+  "progress": {
+    "forward_weeks": 0,
+    "difference_weeks": 0,
+    "evaluable_plans": 0,
+    "evaluable_weeks": 0
+  },
+  "fingerprint": "98764d00279f80b26451c78a63a73dc4cf7e50d64d1bc5c0daa14801617b00bc",
+  "source_hash": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+  "target_exit_adjudication": {
+    "verdict": "not_adjudicated",
+    "progress": {
+      "forward_weeks": 0,
+      "difference_weeks": 0,
+      "evaluable_plans": 0,
+      "evaluable_weeks": 0
+    },
+    "metrics": {
+      "mean_net_improvement_pp": null,
+      "weekly_median_net_improvement_pp": null,
+      "favorable_week_ratio": null,
+      "max_drawdown_worsening_pp": null,
+      "h5_mean_delta_pp": null,
+      "h10_mean_delta_pp": null
+    },
+    "reason": "minimum_evidence_not_met",
+    "comparison_only": true
+  },
+  "breakout_entry_reports": {
+    "new_old_entry_week_portfolios": [],
+    "excluded_vs_csi1000": [],
+    "missed_large_moves": [],
+    "risk_outcomes": []
+  },
+  "breakout_entry_verdict": "not_adjudicated",
   "admissions": {
     "p2_target_exit_policy": {
       "experiment_id": "a_short_p2_target_exit_policy",
       "component_id": "target_exit_policy",
       "track_mode": "switchable",
-      "identity_sha256": "46b2c6e79e27d2c60b64a1ad08a7f7f6ac220dfe639ae034f88e89c10f6247fa",
-      "statistical_contract_sha256": "abbf0752bcafc9d9982dbdbf1fb3b99e90c9354412875e2fb0e0ea55e6c83c57",
+      "identity_sha256": "76bf9a6c6d2c1b11aab5ea0faecf8b9c23cdc01c4745586e89b0841e484b3d13",
+      "statistical_contract_sha256": "45f1f7d5a99f245c3c31b6ffcae8015a7ceae56681bf254d4c587ae4e0a8810a",
       "pit_forward_contract_sha256": "efc617895a669ddd2235aa0068336805f135e892e46ffe9814001376342d8c81",
       "dependency_components": [
         {
-          "component_id": "published_m67_bundle",
-          "baseline_definition_sha256": "a4f4d943692080d94c4dee578ce3647617a107ef59428952234a92ff45addf04"
+          "baseline_definition_sha256": "a4f4d943692080d94c4dee578ce3647617a107ef59428952234a92ff45addf04",
+          "component_id": "published_m67_bundle"
         },
         {
-          "component_id": "target_exit_baseline",
-          "baseline_definition_sha256": "a83ab238fb48dd581b5e3d1e83efac8721af24e6158289b6c1e62589a2b0b9cc"
+          "baseline_definition_sha256": "a83ab238fb48dd581b5e3d1e83efac8721af24e6158289b6c1e62589a2b0b9cc",
+          "component_id": "target_exit_baseline"
         },
         {
-          "component_id": "managed_exit_contract",
-          "baseline_definition_sha256": "ccd0bc0b5044a1abf196d607d5491c1785a4f33e89d920be362d2326c45c5734"
+          "baseline_definition_sha256": "ccd0bc0b5044a1abf196d607d5491c1785a4f33e89d920be362d2326c45c5734",
+          "component_id": "managed_exit_contract"
         },
         {
-          "component_id": "qfq_price_identity",
-          "baseline_definition_sha256": "efc617895a669ddd2235aa0068336805f135e892e46ffe9814001376342d8c81"
+          "baseline_definition_sha256": "efc617895a669ddd2235aa0068336805f135e892e46ffe9814001376342d8c81",
+          "component_id": "qfq_price_identity"
         }
       ]
     },
@@ -60,24 +95,24 @@
       "pit_forward_contract_sha256": "efc617895a669ddd2235aa0068336805f135e892e46ffe9814001376342d8c81",
       "dependency_components": [
         {
-          "component_id": "published_m67_bundle",
-          "baseline_definition_sha256": "a4f4d943692080d94c4dee578ce3647617a107ef59428952234a92ff45addf04"
+          "baseline_definition_sha256": "a4f4d943692080d94c4dee578ce3647617a107ef59428952234a92ff45addf04",
+          "component_id": "published_m67_bundle"
         },
         {
-          "component_id": "breakout_entry_baseline",
-          "baseline_definition_sha256": "1e1bf158d2d60209a23371ae6189d4a3bb890b3e1872351b6c1fdc591b9cd856"
+          "baseline_definition_sha256": "1e1bf158d2d60209a23371ae6189d4a3bb890b3e1872351b6c1fdc591b9cd856",
+          "component_id": "breakout_entry_baseline"
         },
         {
-          "component_id": "managed_exit_contract",
-          "baseline_definition_sha256": "2bde5e31db84c69ff1cda2947eed0fb7970996aa32d9cbbffc1e22e64a0eef37"
+          "baseline_definition_sha256": "2bde5e31db84c69ff1cda2947eed0fb7970996aa32d9cbbffc1e22e64a0eef37",
+          "component_id": "managed_exit_contract"
         },
         {
-          "component_id": "qfq_price_identity",
-          "baseline_definition_sha256": "efc617895a669ddd2235aa0068336805f135e892e46ffe9814001376342d8c81"
+          "baseline_definition_sha256": "efc617895a669ddd2235aa0068336805f135e892e46ffe9814001376342d8c81",
+          "component_id": "qfq_price_identity"
         }
       ]
     }
   },
-  "message": "P2 目标策略：累计中；目标退出 1/12 周、差异 0/8 周、计划 0/20；突破轨 1/12 周、差异 0/8 周、受影响计划 0/20。",
+  "message": "P2 目标策略：累计中；目标退出 0/12 周、差异 0/8 周、计划 0/20；突破轨 0/12 周、差异 0/8 周、受影响计划 0/20。",
   "production_unchanged": true
 }

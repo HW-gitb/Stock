@@ -21,7 +21,7 @@ if str(ROOT) not in sys.path:
 from engine.a_short_industry_weight_comparison import (  # noqa: E402
     ADMISSION_IDS, PROGRAM_ID, IndustryWeightComparisonError, _atomic_write, _boundary, _contract_fingerprint,
     _digest, _epoch_id, _runtime_source_fingerprint,
-    _p_value_function, _validate_private_record, build_public_progress, cache_consumer_windows,
+    _aggregate_terminal_verdict, _p_value_function, _validate_private_record, build_public_progress, cache_consumer_windows,
     capture_after_published_weekly, load_governance, settle_from_daily_payload,
     validate_public_progress, write_public_progress,
 )
@@ -174,6 +174,16 @@ class IndustryWeightComparisonTests(unittest.TestCase):
         with mock.patch("engine.a_short_industry_weight_comparison._runtime_source_fingerprint",
                         return_value="runtime-source-drift"):
             self.assertNotEqual(_contract_fingerprint(governance), baseline)
+
+    def test_aggregate_terminal_verdict_uses_the_sealed_conservative_priority_not_question_order(self):
+        governance = load_governance()
+        terminal = [
+            {"question_id": "balanced_vs_legacy", "verdict": "retain_balanced_only"},
+            {"question_id": "aggressive_vs_balanced", "verdict": "do_not_promote"},
+            {"question_id": "theme_double_vs_balanced", "verdict": "next_reviewed_candidate_only"},
+        ]
+        self.assertEqual(_aggregate_terminal_verdict(terminal, governance), "do_not_promote")
+        self.assertEqual(_aggregate_terminal_verdict(list(reversed(terminal)), governance), "do_not_promote")
 
     def test_pre_freeze_accepts_a_source_bound_bundle_published_before_parking(self):
         """Old valid P5 bundles must not become uncapturable when parking lands."""

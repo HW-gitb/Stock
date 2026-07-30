@@ -76,7 +76,7 @@ def write_payload(payload: dict[str, Any], path: Path) -> None:
     validate_json_schema(payload, SCHEMA_PATH, "a_short_variant_tracking")
     path.parent.mkdir(parents=True, exist_ok=True)
     with path.open("w", encoding="utf-8") as handle:
-        json.dump(payload, handle, ensure_ascii=False, indent=2)
+        json.dump(payload, handle, ensure_ascii=False, indent=2, allow_nan=False)
         handle.write("\n")
 
 

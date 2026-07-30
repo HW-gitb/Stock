@@ -22,9 +22,11 @@ from runners.a_short_phase5_engine import build_true_pressure_targets  # noqa: E
 from runners.a_short_target_policy_comparison_runner import (  # noqa: E402
     TargetPolicyError,
     _active_epoch,
+    _capture_digest,
     _contract_fingerprint,
     _new_ledger,
     _progress,
+    _render_summary_markdown,
     _summary_from_ledger,
     _validate_ledger,
     capture_after_published_weekly,
@@ -295,6 +297,84 @@ class TargetLedgerTests(unittest.TestCase):
                                  summary_path=summary_path, markdown_path=markdown_path)
             write_public_summary(_summary_from_ledger(_new_ledger(), "20260728"),
                                  summary_path=summary_path, markdown_path=markdown_path)
+
+    def test_public_writer_replaces_only_the_complete_pre_8b_summary_shape(self):
+        with tempfile.TemporaryDirectory() as td:
+            summary_path, markdown_path = Path(td) / "summary.json", Path(td) / "summary.md"
+            current = _summary_from_ledger(_new_ledger(), "20260727")
+            legacy = copy.deepcopy(current)
+            for key in (
+                "verdict", "progress", "fingerprint", "source_hash", "target_exit_adjudication",
+                "breakout_entry_reports", "breakout_entry_verdict",
+            ):
+                legacy.pop(key)
+            summary_path.write_text(json.dumps(legacy), encoding="utf-8")
+
+            write_public_summary(current, summary_path=summary_path, markdown_path=markdown_path)
+            written = json.loads(summary_path.read_text(encoding="utf-8"))
+            validate_public_summary(written)
+            self.assertEqual(written, current)
+            self.assertIn("只显示脱敏进度", markdown_path.read_text(encoding="utf-8"))
+
+            malformed = copy.deepcopy(current)
+            malformed.pop("verdict")
+            summary_path.write_text(json.dumps(malformed), encoding="utf-8")
+            with self.assertRaisesRegex(TargetPolicyError, "existing_public_summary_unreadable"):
+                write_public_summary(current, summary_path=summary_path, markdown_path=markdown_path)
+
+    def test_pre_freeze_epoch_retains_its_capture_admission_but_frozen_epoch_rejects_drift(self):
+        ledger = _new_ledger()
+        epoch = _active_epoch(ledger, create=True, track="target_exit")
+        assert epoch is not None
+        historical = copy.deepcopy(epoch["admission_binding"])
+        historical["p2_target_exit_policy"]["identity_sha256"] = "0" * 64
+        epoch["admission_binding"] = historical
+
+        with patched_epoch_modes("pre_freeze_audit_only"):
+            _validate_ledger(ledger)
+        with patched_epoch_modes("frozen_enforced"):
+            with self.assertRaisesRegex(TargetPolicyError, "private_epoch_admission_binding_drifted"):
+                _validate_ledger(ledger)
+
+    def test_cross_fingerprint_legacy_epoch_never_enters_public_progress(self):
+        ledger = _new_ledger()
+        epoch = _active_epoch(ledger, create=True, track="target_exit")
+        assert epoch is not None
+        legacy_fingerprint = "a" * 64
+        epoch["epoch_id"] = legacy_fingerprint
+        epoch["contract_fingerprint"] = legacy_fingerprint
+        record = {
+            "decision_date": "20260727", "forward_eligible": True,
+            "source_identity": {"run_id": "legacy-run", "candidate_digest": "b" * 64,
+                                "official_m67_sha256": "c" * 64, "price_data_through": "20260727"},
+            "component_id": "target_exit", "admission_binding": copy.deepcopy(epoch["admission_binding"]),
+            "component_epoch_fingerprint": legacy_fingerprint, "target_entries": [], "target_difference": False,
+        }
+        record["capture_sha256"] = _capture_digest(record)
+        epoch["records"].append(record)
+        for mode in ("pre_freeze_audit_only", "frozen_enforced"):
+            with self.subTest(mode=mode), patched_epoch_modes(mode):
+                summary = _summary_from_ledger(ledger, "20260727")
+            self.assertEqual(summary["target_exit"]["forward_weeks"], 0)
+            self.assertEqual(summary["progress"]["forward_weeks"], 0)
+            self.assertIsNone(summary["data_through"])
+            self.assertEqual(summary["target_exit"]["review_state"], "not_due")
+
+    def test_tracked_public_summary_is_a_valid_matched_writer_pair_without_private_ledger(self):
+        """The tracked pair stays reproducible without consulting ignored private state."""
+        tracked_json = ROOT / "research" / "results" / "a_short" / "target_policy_comparison_summary.json"
+        tracked_markdown = tracked_json.with_suffix(".md")
+        tracked = json.loads(tracked_json.read_text(encoding="utf-8"))
+        validate_public_summary(tracked)
+        self.assertEqual(tracked_markdown.read_text(encoding="utf-8"), _render_summary_markdown(tracked))
+
+        with tempfile.TemporaryDirectory() as td:
+            reproduced_json = Path(td) / "summary.json"
+            reproduced_markdown = Path(td) / "summary.md"
+            write_public_summary(tracked, summary_path=reproduced_json, markdown_path=reproduced_markdown)
+            self.assertEqual(json.loads(reproduced_json.read_text(encoding="utf-8")), tracked)
+            self.assertEqual(reproduced_markdown.read_text(encoding="utf-8"),
+                             tracked_markdown.read_text(encoding="utf-8"))
 
     def _published_bundle(self, directory: Path, as_of: str) -> tuple[Path, Path, dict, list[dict]]:
         series = _dated_series()

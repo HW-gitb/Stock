@@ -43,6 +43,57 @@
 - **Verify**: 固定主 Python focused 105 OK；R93 + executable mutation matrix 2 OK；最终官方 ledger `5010 OK` / 589.0s / fingerprint `baedefe2e01e` / recorded `2026-07-29T20:26:41`。一次只读 adversarial self-review 返回 FAIL 的四条均已闭合；未再起第二 agent。历史重启边界：一次 300s focused timeout 后窄化定位；一次 full 暴露 conformance + temp-file error；一次 5010 OK 因并发 HEAD 前进被 ledger 拒绝；一次资源隔离 flake 的真实子测试单跑 1 OK；最终固定包集中一轮 5010 OK。
 - **Pre-Codex self-review**: `matrix=complete: K3-R86..K3-R93 + adversarial residuals 4/4 repaired; register=updated; handoff=updated; focused=105 OK + executable mutation 2 OK; full-lane=5010 OK on exact fingerprint baedefe2e01e; door=route-doc + doc-governance 55 OK`
 - **Next**: Claude Code：审查。
+## 2026-07-29 — Claude Code 审查 PASS（写盘口发现器 Optional，79eb 工作树）
+
+- **Verdict/Action**: PASS，已提交。Optional-only、test-only AST 守卫。Codex 没照我建议的「`write` 词首/词尾子串兜底」做，而是从同一份 source AST 推导出「函数体含 direct file sink」的本地 helper 集合 —— 与名字无关，比我的建议更彻底。处置与边界见 `docs/system_risk_register.md#R-ASHORT-WEEKLY-PIPELINE-JSON-WRITERS-OUTSIDE-THE-NONFINITE-GUARD`，本处不复述。
+- **Required**: 无。
+- **Verify**: review-evidence:8ea6de0b9563。最小超集 `tests.test_a_short_public_json_writer_nonfinite_guard -v` = `10 OK`。自写独立探针：仓内发现仍 34 个写盘口、未注册 0（无回归）；我自造的新 helper `_persist`（`write_bytes`）← `emit` 被发现，原盲区已闭；同模块内纯 digest 函数仍不误报。按 §6a Optional-only carve-out 未起独立 agent、未跑全量（rule 3 未触发：test-only AST 谓词，不碰 runtime / schema / entrypoint / 共享引擎）。
+- **Next**: Codex：执行第九刀。
+
+## 2026-07-29 - Codex 修复写盘口发现器 Optional（79eb）
+
+- **Verdict/Action**: 用户授权修复未来未命名本地 JSON helper 的发现盲区；发现器现按 helper 的 direct file sink 行为推导本地 helper，不再只靠冻结名称，未改任何 A-short runtime / runner / schema / 生产路径，未提交。
+- **Required**: 无；Optional 处置及边界见 `docs/system_risk_register.md#R-ASHORT-WEEKLY-PIPELINE-JSON-WRITERS-OUTSIDE-THE-NONFINITE-GUARD`。
+- **Verify**: fixed Python `-m unittest tests.test_a_short_public_json_writer_nonfinite_guard -v` = `10 OK`；新增 `_save_json` → `publish` 植入必须被发现并作为未注册 violation，`_rewrite_for_digest` / `_write_lock` 负向控制保持不误报。
+- **Next**: Claude Code：独立审查。
+- **Pre-Codex self-review**: `matrix=complete: direct sink + frozen helper + source-derived local helper + async + digest/lock false-positive controls; register=updated; handoff=SESSION_LOG top entry; focused=writer guard 10 OK; full-lane=not_triggered: AGENTS rule 3; reason=test-only AST guard and no runtime/schema/entrypoint/shared-engine change; door=route-doc + doc-governance 55 OK`
+
+## 2026-07-29 — Claude Code 审查 PASS（第八刀收尾第二轮，79eb 工作树）
+
+- **Verdict/Action**: PASS，已在 79eb 提交（只 stage 本刀 18 个文件；`logs/` 私有账本 gitignored 未进仓）。**合入 master 暂被挡住**：主树有别的窗口未提交的 `docs/SESSION_LOG.md` / `docs/system_risk_register.md`（US-short K3 轨），git 拒绝覆盖，我不动别人的活，等其提交后再 `--no-ff` 合入。上一轮的跨 epoch 回填已按 Required 全部拆掉，工单三条 Optional 也一并处置。完整闭合见 `docs/system_risk_register.md#R-ASHORT-KNIFE8-P2-PUBLIC-SUMMARY-RESURRECTS-A-CROSS-EPOCH-LEGACY-RECORD` 与 `#R-ASHORT-KNIFE8-SIX-STEP-MERGE-VERIFICATION-NOT-RUN-AS-ONE-PASS`，本处不复述。
+- **Required**: 无。
+- **Verify**: review-evidence:5a3e631d5973 / review-evidence:e589052af708。rule 4 全量亲跑 `full_pack_ledger run a_short` = `CACHED GREEN 2122 OK`（同一代码态）；door 守卫亲跑绿。探针：`_summary_epoch` 已删、tracked JSON == writer 输出、MD == render、`forward_weeks=0`、`validate_public_summary` 过、`_is_current_external_public_summary(Path,payload)=True`（先前 False 是我传了 str，已更正）。放松类反向控制：窄化的 `_is_file_write_call` 换回旧子串判据，新旧均 34 写盘口、LOST=0。comparison-only + 预冻结、非 §6a 子集、未起 agent。未复核：P3-HAC 与一键周跑只由全量覆盖。
+- **Next**: Codex：执行第九刀。
+
+## 2026-07-29 - Codex 修复第八刀审查 Required 与 Optional（79eb）
+
+- **Verdict/Action**: 已修 P2 跨 epoch 公开进度回填及工单三条 Optional；第八刀仍为 comparison-only / `pre_freeze_audit_only`，未改 `active_profile`、EGS、M6.7、账户、provider 或生产配置，未提交。
+- **Required**: 无；详见 `docs/system_risk_register.md#R-ASHORT-KNIFE8-P2-PUBLIC-SUMMARY-RESURRECTS-A-CROSS-EPOCH-LEGACY-RECORD` 与 `#R-ASHORT-KNIFE8-SIX-STEP-MERGE-VERIFICATION-NOT-RUN-AS-ONE-PASS`。
+- **Verify**: fixed Python：P2 `34 OK`、P2/P3 consumer `20 OK`、P5/admission `40 OK`、8A `28 OK`、epoch-mode `24 OK`、writer guard `9 OK`；官方 full-pack `a_short = 2122 OK`（2026-07-29T23:02:08）。P2 仅 settle `--as-of 20260727`，无 cache/refresh；主树与 79eb 私有 ledger 运行前后 SHA-256 都为 `8E9ECA6C5FD84A0E152790759C63A83C558B88F92B447F2DA516CA0FEA386548`，产物为合法 8B 配对且两轨/formal forward weeks 均为 0。
+- **Next**: Claude Code：独立审查。
+- **Pre-Codex self-review**: `matrix=complete: P2 active-epoch-only summary + writer pair + Optional writer-scope/async/false-positive controls + P3/P5 consumers; register=updated; handoff=SESSION_LOG top entry; focused=P2 34 OK + P2/P3 20 OK + P5/admission 40 OK + 8A 28 OK + epoch 24 OK + writer guard 9 OK; full-lane=2122 OK; door=route-doc + doc-governance 55 OK`
+
+## 2026-07-29 — Claude Code 审查 FAIL（第八刀收尾，79eb 工作树）
+
+- **Verdict/Action**: FAIL，未提交。P5b 块门、顶层 verdict 优先级表、preset/schema/admission 绑定与 P5 公开产物这几条都成立；挡住这一刀的是 P2 —— 新增的 legacy-epoch 回退把**上一个契约指纹下**的那 1 周当成当前进度写进了 tracked 公开摘要。正文只在 `docs/system_risk_register.md#R-ASHORT-KNIFE8-P2-PUBLIC-SUMMARY-RESURRECTS-A-CROSS-EPOCH-LEGACY-RECORD`，本处不复述；我自己给错的那条前置条件也已在该条目里作废并留痕。
+- **Required**: `#R-ASHORT-KNIFE8-P2-PUBLIC-SUMMARY-RESURRECTS-A-CROSS-EPOCH-LEGACY-RECORD`（新开 P2）与 reopen 的 `#R-ASHORT-KNIFE8-SIX-STEP-MERGE-VERIFICATION-NOT-RUN-AS-ONE-PASS`（P3，含工单三条 Optional 的处置补记）—— 完整 Required / 边界 / closure 见 `system_risk_register.md`（单一来源）。
+- **Verify**: review-evidence:21525aac6ac6。全量按 rule 4 亲跑 `full_pack_ledger run a_short` = `CACHED GREEN 2120 OK`（同一精确代码态）。反向控制：账本两条 epoch 指纹 `786b1033…` / `d4f93db8…` vs 当前 `83855504…` / `420b8276…`，`_active_epoch(create=False)` 为 None；把 `_summary_epoch` 换回 `_active_epoch` 得 `forward_weeks=0`，带回退得 1，而 tracked 产物写的是 1。分级：comparison-only + 预冻结、不进选股/真钱，非 §6a 最高危子集，未起独立 agent（rule 8；FAIL 已被探针坐实即出结论）。未复核维度：P3-HAC 与一键周跑路径只由全量覆盖，未再独立重算。
+- **Next**: Codex：修复。
+
+## 2026-07-29 - Codex 执行第八刀收尾工单（79eb）
+
+- **Verdict/Action**: 第八刀四条收尾 Required 已完成，仍为 comparison-only / `pre_freeze_audit_only`；未改 `active_profile`、EGS、M6.7、账户、provider 或生产配置，未提交。
+- **Required**: 无；完整闭合细节见 `docs/system_risk_register.md#R-ASHORT-KNIFE8-P2-PUBLIC-SUMMARY-PREDATES-ITS-8B-CONTRACT`、`#R-ASHORT-P5B-NONOVERLAP-BLOCK-GATE-DECISION`、`#R-ASHORT-P5B-AGGREGATE-VERDICT-DEPENDS-ON-QUESTION-ORDER`、`#R-ASHORT-KNIFE8-SIX-STEP-MERGE-VERIFICATION-NOT-RUN-AS-ONE-PASS`。
+- **Verify**: P2 sidecar 仅 `settle --as-of 20260727`（无 daily cache / refresh）；公开 JSON schema、8B 字段及配对 MD 均通过，双轨 forward_weeks 均为 1。主树与 79eb 私有 P2 ledger SHA-256 都是 `8E9ECA6C5FD84A0E152790759C63A83C558B88F92B447F2DA516CA0FEA386548`。Fixed Python 聚焦：P2 34 OK；P5b/admission/comparison 40 OK。官方 full-pack ledger：`a_short = 2120 OK`（当前精确代码态，2026-07-29T20:44:41）。
+- **Next**: Claude Code：独立审查。
+- **Pre-Codex self-review**: `matrix=complete: P2 writer/legacy diagnostic boundary + P5 nonoverlap/aggregate + consumers/schema/public pairs; register=updated; handoff=SESSION_LOG top entry; focused=P2 34 OK + P5b/admission/comparison 40 OK; full-lane=2120 OK recorded; door=route-doc + doc-governance 55 OK`
+
+## 2026-07-29 - Claude Code 派工(第八刀收尾工单落 79eb 工作树)
+
+- **Verdict/Action**: 非审查轮,只落盘派工。第八刀六子刀已全部合入 master(`40b3b7d7`,全量 2114 OK),但方案的「本刀合并验证」④ 在真实产物上不成立(P2 的 tracked 公开摘要仍是 8B 之前形状、连自己的 schema 都过不了),六步验证也从未作为一次完整 pass 跑过,故第八刀**未完成**。已把四条 Required + 三条 Optional + 两条 Options(用户授权按我推荐处置)写成工单。
+- **Required**: 四条新开在 `docs/system_risk_register.md`,ID 为 `#R-ASHORT-KNIFE8-P2-PUBLIC-SUMMARY-PREDATES-ITS-8B-CONTRACT`(P2)、`#R-ASHORT-P5B-NONOVERLAP-BLOCK-GATE-DECISION`(P2,方案 A)、`#R-ASHORT-P5B-AGGREGATE-VERDICT-DEPENDS-ON-QUESTION-ORDER`(P3)、`#R-ASHORT-KNIFE8-SIX-STEP-MERGE-VERIFICATION-NOT-RUN-AS-ONE-PASS`(P3);三条 Optional 记在 `#R-ASHORT-WEEKLY-PIPELINE-JSON-WRITERS-OUTSIDE-THE-NONFINITE-GUARD` 名下。可执行工单见 `docs/handoff/2026-07-28_a_short_knife6a_repair_handoff.md` 的「第八刀收尾工单」节。
+- **Verify**: 本轮无代码改动,只有 register 与 handoff 落盘。派工依据的实测:`validate_public_summary(tracked P2)` 抛 `public_summary_contract_invalid`、`_valid_external_public_verdicts() = 0`;`_signflip_p` 为 2^n 穷举双侧,n 块最小可达 p = `2^(1-n)`,对 α=0.025 需 n≥7、经 Holm 三问族校正需 n≥8,故块门不是装饰;P4a 已封 `nonoverlap_block_minimums {"12":6,"24":12,"36":12}` 即方案 A 的出处。
+- **Next**: Codex 在 79eb 工作树执行该工单;第八刀收口后才进第九刀。
 
 ## 2026-07-29 — Claude Code 审查 PASS（K3-R85 门内 Markdown 占位绕过，master 工作树）
 

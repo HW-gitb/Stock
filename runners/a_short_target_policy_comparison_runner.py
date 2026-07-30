@@ -38,6 +38,10 @@ LEDGER_SCHEMA_NAME = "a_short_target_policy_comparison_ledger"
 SCHEMA_VERSION = "1.0.0"
 ADMISSION_IDS = ("p2_target_exit_policy", "p2_breakout_entry_policy")
 TRACK_ADMISSIONS = {"target_exit": "p2_target_exit_policy", "breakout_entry": "p2_breakout_entry_policy"}
+_PRE_8B_PUBLIC_SUMMARY_FIELDS = frozenset({
+    "verdict", "progress", "fingerprint", "source_hash", "target_exit_adjudication",
+    "breakout_entry_reports", "breakout_entry_verdict",
+})
 
 
 class TargetPolicyError(ValueError):
@@ -278,8 +282,10 @@ def _validate_ledger(ledger: dict[str, Any]) -> None:
         if not isinstance(epoch, dict) or set(epoch) not in (legacy_keys, current_keys) or \
                 not isinstance(epoch["records"], list) or epoch["epoch_id"] != epoch["contract_fingerprint"]:
             raise TargetPolicyError("private_epoch_invalid")
-        if "component_id" in epoch and (epoch["component_id"] not in TRACK_ADMISSIONS or
-                                        epoch["admission_binding"] != admission_snapshot(TRACK_ADMISSIONS[epoch["component_id"]])):
+        if "component_id" in epoch and epoch["component_id"] not in TRACK_ADMISSIONS:
+            raise TargetPolicyError("private_epoch_admission_binding_drifted")
+        if "component_id" in epoch and _epoch_mode.enforcement_enabled("p2_target_policy") and \
+                epoch["admission_binding"] != admission_snapshot(TRACK_ADMISSIONS[epoch["component_id"]]):
             raise TargetPolicyError("private_epoch_admission_binding_drifted")
         dates = [record.get("decision_date") for record in epoch["records"] if isinstance(record, dict)]
         if len(dates) != len(epoch["records"]) or len(set(dates)) != len(dates):
@@ -547,13 +553,26 @@ def _assert_public_summary_as_of_monotonic(summary: dict[str, Any], summary_path
         return
     try:
         existing = json.loads(summary_path.read_text(encoding="utf-8"))
-        validate_public_summary(existing)
+        if not isinstance(existing, dict):
+            raise TargetPolicyError("existing_public_summary_unreadable")
         existing_as_of = _date(existing.get("as_of"))
         new_as_of = _date(summary.get("as_of"))
-    except (OSError, UnicodeDecodeError, json.JSONDecodeError, TypeError, ValueError) as exc:
+    except (OSError, UnicodeDecodeError, json.JSONDecodeError, TypeError, ValueError, TargetPolicyError) as exc:
         raise TargetPolicyError("existing_public_summary_unreadable") from exc
     if existing_as_of > new_as_of:
         raise TargetPolicyError("public_summary_as_of_regressed")
+    try:
+        validate_public_summary(existing)
+    except TargetPolicyError as exc:
+        legacy_identity = {
+            "schema_name": "a_short_target_policy_comparison_summary",
+            "schema_version": SCHEMA_VERSION,
+            "summary_id": "a_short_target_policy_comparison",
+        }
+        if (all(existing.get(key) == value for key, value in legacy_identity.items()) and
+                all(key not in existing for key in _PRE_8B_PUBLIC_SUMMARY_FIELDS)):
+            return
+        raise TargetPolicyError("existing_public_summary_unreadable") from exc
 
 
 def write_public_summary(summary: dict[str, Any], *, summary_path: str | Path,

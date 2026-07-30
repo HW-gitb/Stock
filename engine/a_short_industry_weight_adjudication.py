@@ -98,8 +98,12 @@ def adjudicate_question(rows: list[dict], *, mature: int, no_count: int, governa
     """Adjudicate one question; insufficient checkpoint separation always wins."""
     clock, policy = governance["clock_contract"], governance["risk_and_statistics_contract"]
     checkpoints, minimums = clock["checkpoints"], clock["difference_minimums"]
+    block_minimums = clock["nonoverlap_block_minimums"]
     stages = question["p5b_adjudication_governance"]["checkpoint_stages"]
-    if not (len(checkpoints) == len(minimums) == 3 and all(isinstance(x, int) and x > 0 for x in checkpoints)):
+    if not (len(checkpoints) == len(minimums) == 3 and all(isinstance(x, int) and x > 0 for x in checkpoints) and
+            isinstance(block_minimums, dict) and
+            all(isinstance(block_minimums.get(str(checkpoint)), int) and block_minimums[str(checkpoint)] > 0
+                for checkpoint in checkpoints)):
         raise ValueError("p5b_clock_contract_invalid")
     reached = max((index for index, checkpoint in enumerate(checkpoints) if len(rows) >= checkpoint), default=None)
     checkpoint_stage = "not_reached" if reached is None else stages[str(checkpoints[reached])]
@@ -124,6 +128,8 @@ def adjudicate_question(rows: list[dict], *, mature: int, no_count: int, governa
             verdict, reason = "continue_accumulating", "checkpoint_not_reached"
         elif difference < minimums[reached]:
             verdict, reason = "continue_accumulating", "insufficient_policy_separation"
+        elif len(blocks) < block_minimums[str(checkpoints[reached])]:
+            verdict, reason = "continue_accumulating", "insufficient_nonoverlap_blocks"
         else:
             positive_preliminary = metrics["mean_effect_pct"] >= policy["preliminary_mean_effect_pct"] and \
                 metrics["block_win_rate_pct"] >= policy["preliminary_block_win_rate_pct"] and metrics["risk_ok"]
@@ -141,5 +147,6 @@ def adjudicate_question(rows: list[dict], *, mature: int, no_count: int, governa
             "progress": {"eligible_policy_weeks": len(rows), "difference_weeks": difference,
                          "mature_opportunities": mature, "no_count_weeks": no_count,
                          "remaining_eligible_weeks": max(0, checkpoints[0] - len(rows)),
-                         "remaining_difference_weeks": max(0, minimums[0] - difference)},
+                         "remaining_difference_weeks": max(0, minimums[0] - difference),
+                         "remaining_nonoverlap_blocks": max(0, block_minimums[str(checkpoints[0])] - len(blocks))},
             "metrics": metrics, "comparison_only": True}

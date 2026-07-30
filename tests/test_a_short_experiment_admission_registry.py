@@ -106,6 +106,8 @@ class AdmissionRegistryTests(unittest.TestCase):
             [int(checkpoint) for checkpoint in p5b["checkpoint_stages"]],
             definition["clock"]["checkpoints"],
         )
+        self.assertEqual(definition["clock"]["difference_minimums"], [6, 12, 18])
+        self.assertEqual(definition["clock"]["nonoverlap_block_minimums"], {"12": 6, "24": 12, "36": 12})
         self.assertNotIn("difference_minimums", p5b)
         self.assertNotIn("nonoverlap_block_minimums", p5b)
         self.assertNotIn("terminal_branches_require_difference_and_nonoverlap_minimums", p5b)
@@ -116,6 +118,7 @@ class AdmissionRegistryTests(unittest.TestCase):
             payload = original_load(path)
             if Path(path).name == "a_short_industry_weight_comparison_governance_20260722.json":
                 payload["clock_contract"]["difference_minimums"] = [7, 12, 18]
+                payload["clock_contract"]["nonoverlap_block_minimums"] = {"12": 7, "24": 12, "36": 12}
             return payload
 
         with mock.patch.object(registry, "_load", side_effect=changed_p5_governance):
@@ -123,6 +126,10 @@ class AdmissionRegistryTests(unittest.TestCase):
         self.assertEqual(
             changed["statistical_contract"]["definition"]["clock"]["difference_minimums"],
             [7, 12, 18],
+        )
+        self.assertEqual(
+            changed["statistical_contract"]["definition"]["clock"]["nonoverlap_block_minimums"],
+            {"12": 7, "24": 12, "36": 12},
         )
 
     def test_statistical_pit_and_dependency_drift_invalidates_a_registered_identity(self) -> None:
