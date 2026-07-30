@@ -1,5 +1,29 @@
 # Session Log
 
+## 2026-07-30 — Claude Code 执行：第二次受限真实付费运行（X 单查询，决策日 20260801）
+
+**Commits**: 见本轮 docs 提交
+
+**Relationship to prior session(s)**:
+- Builds on 2026-07-30 K3-R105 裁决落地（`9170b744`）与 2026-07-29 起的 K3-R79/R83 修复链
+
+**Worked on**:
+1. 按用户指定形状跑通第二次真实付费运行：只跑 X、一条查询、一次 xAI 调用、非交易决策日，Web 不重跑
+2. 亲验产物：收据计数、额度账本、provider raw 绑定、annotation↔accepted 身份关系、零 tracked 残留
+
+**Key decisions**:
+- 决策日改用 20260801（周六）而非 20260731 —— 后者的 X 槽已冻结，同日重跑必然判冲突
+
+**Alternatives considered and rejected**:
+- "复用 20260731 决策日" —— 否决，不可变槽会拒收不同证据
+
+**Open questions handed off**:
+- 查询集仍是宏观词，这次只出 1 个主题 7 个成员；能不能过知识刀 2 的门还没验
+
+**Next natural step from my view**:
+1. 查询集重设计（宏观 → 能搜出具体个股新闻）
+2. 之后再跑一次带 web 的完整周，一路跑到知识刀 2
+
 ## 2026-07-30 — Codex 修复 K3-R105 两条残留（0e30 工作树）
 
 - **Verdict/Action**: 已修复 class-share 冻结证据的安全三拼写匹配，以及 merge drop ledger 的全序排序；未提交、未联网。
