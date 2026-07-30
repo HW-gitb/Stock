@@ -2,6 +2,9 @@ from __future__ import annotations
 
 import hashlib
 import json
+import os
+import subprocess
+import sys
 import tempfile
 import unittest
 from datetime import datetime, timezone
@@ -50,6 +53,38 @@ class XFetchAndMergeTests(unittest.TestCase):
     def _x_response(self):
         refs = [xfetch._source_id(row["url"]) for row in X_ROWS]
         return json.dumps({"themes": [{"theme_id": "power_demand", "display_name": "Power demand", "summary": "Power demand", "observed_at": "2026-07-24T12:00:00Z", "source_ref_ids": refs, "members": [{"ticker": "AAPL", "source_ref_ids": refs}, {"ticker": "CEG", "source_ref_ids": refs}, {"ticker": "VST", "source_ref_ids": refs}]}]})
+
+    def _assert_direct_script_help_is_self_bootstrapping(self, script_name):
+        """K3-R108: execute the real file path, rather than importing its module in this test process."""
+        script_path = (web.ROOT / "runners" / script_name).resolve()
+        self.assertTrue(script_path.is_absolute())
+        env = os.environ.copy()
+        env.pop("PYTHONPATH", None)
+        with tempfile.TemporaryDirectory() as outside_repo:
+            completed = subprocess.run(
+                [sys.executable, "-I", str(script_path), "--help"],
+                cwd=outside_repo,
+                env=env,
+                capture_output=True,
+                text=True,
+                encoding="utf-8",
+                errors="replace",
+                timeout=30,
+                check=False,
+            )
+        output = completed.stdout + completed.stderr
+        self.assertEqual(completed.returncode, 0, output)
+        self.assertNotIn("ModuleNotFoundError", output)
+
+    def test_x_direct_script_entrypoint_bootstraps_without_pythonpath(self):
+        self._assert_direct_script_help_is_self_bootstrapping(
+            "us_short_llm_theme_discovery_fetch_x.py"
+        )
+
+    def test_merge_direct_script_entrypoint_bootstraps_without_pythonpath(self):
+        self._assert_direct_script_help_is_self_bootstrapping(
+            "us_short_llm_theme_discovery_merge.py"
+        )
 
     @staticmethod
     def _live_raw_response(response_id="resp-test"):

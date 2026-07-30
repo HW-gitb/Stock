@@ -11,11 +11,16 @@ import hashlib
 import json
 import os
 import re
+import sys
 import threading
 import urllib.parse
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Callable
+
+ROOT = Path(__file__).resolve().parents[1]
+if str(ROOT) not in sys.path:
+    sys.path.insert(0, str(ROOT))
 
 from engine.us_short_persisted_text_safety import persisted_text_violation
 from runners import us_short_llm_theme_discovery_fetch_web as web
