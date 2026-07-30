@@ -28,6 +28,7 @@ if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
 from engine.analyzer.rule6_hard_veto import DEFAULT_RULES
+from engine.a_short_nullable_bool import fail_closed_risk_bool
 from runners.backtest_rank import apply_analyzer_veto
 
 
@@ -128,7 +129,11 @@ def metric(identifier: str, frame: pd.DataFrame) -> dict:
 
 
 def _parent_population(samples: pd.DataFrame) -> pd.DataFrame:
-    hard_veto = _bool(samples["hard_veto"]) if "hard_veto" in samples else pd.Series(False, index=samples.index)
+    hard_veto = (
+        samples["hard_veto"].map(fail_closed_risk_bool)
+        if "hard_veto" in samples
+        else pd.Series(False, index=samples.index)
+    )
     return samples.loc[~hard_veto].copy()
 
 

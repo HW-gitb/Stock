@@ -203,9 +203,20 @@ class WatchPoolHealthTest(unittest.TestCase):
         analysis_input = {
             "schema_name": "analysis_input",
             "schema_version": self.egs_main.ANALYSIS_INPUT_SCHEMA_VERSION,
+            "price_data_through": "20260714",
             "source": {
                 "screening_engine_version": self.egs_main.EGS_VERSION,
                 "data_provider": "tushare",
+            },
+            "market_context": {
+                "margin_coverage": {
+                    "reference_date": "20260714",
+                    "effective_ref_date": None,
+                    "row_count": 0,
+                    "universe_size": 0,
+                    "coverage_complete": False,
+                    "status": "unavailable",
+                },
             },
             "candidates": [
                 {"data_quality": {"completeness_score": 100}}

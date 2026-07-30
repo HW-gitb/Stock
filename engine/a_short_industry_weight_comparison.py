@@ -22,6 +22,7 @@ import jsonschema
 
 from engine import a_short_evidence_epoch_mode as _epoch_mode
 from engine.a_short_experiment_admission_registry import admission_snapshot
+from engine.a_short_nullable_bool import require_known_risk_bool
 
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -283,7 +284,12 @@ def _profile_rows(weight_comparison: dict) -> dict[str, list[dict]]:
                 "l4_score": float(raw["l4_score"]), "pct_20d_n": float(raw["pct_20d_n"]),
                 "industry_heat_score": (None if raw["industry_heat_score"] is None else float(raw["industry_heat_score"])),
                 "l1_name": str(raw["l1_name"]), "l2_name": str(raw["l2_name"]),
-                "overheat_flag": bool(raw["overheat_flag"]), "chasing_high": bool(raw["chasing_high"]),
+                "overheat_flag": require_known_risk_bool(
+                    raw["overheat_flag"], "P5 profile overheat_flag", IndustryWeightComparisonError
+                ),
+                "chasing_high": require_known_risk_bool(
+                    raw["chasing_high"], "P5 profile chasing_high", IndustryWeightComparisonError
+                ),
             })
             seen.add(code)
         clean[profile] = copied

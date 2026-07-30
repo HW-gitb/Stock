@@ -24,6 +24,7 @@ import jsonschema
 from engine import a_short_evidence_epoch_mode as _epoch_mode
 
 from engine.a_short_experiment_admission_registry import admission_snapshot, get_admission
+from engine.a_short_nullable_bool import require_known_risk_bool
 from engine.a_short_runtime_config import runtime_configuration_lineage
 
 
@@ -286,9 +287,19 @@ def _require_member(value: object, label: str) -> dict:
     required = ("ts_code", "final_score", "l1_name", "l2_name", "tier", "overheat_flag", "chasing_high")
     if any(key not in value for key in required) or not str(value.get("ts_code") or "") or not _finite(value.get("final_score")):
         raise OverlayAdjudicationError(f"P4a {label} lacks frozen Stage3 fields")
-    result = {"ts_code": str(value["ts_code"]), "final_score": float(value["final_score"]),
-            "l1_name": str(value["l1_name"]), "l2_name": str(value["l2_name"]), "tier": str(value["tier"]),
-            "overheat_flag": bool(value["overheat_flag"]), "chasing_high": bool(value["chasing_high"])}
+    result = {
+        "ts_code": str(value["ts_code"]),
+        "final_score": float(value["final_score"]),
+        "l1_name": str(value["l1_name"]),
+        "l2_name": str(value["l2_name"]),
+        "tier": str(value["tier"]),
+        "overheat_flag": require_known_risk_bool(
+            value["overheat_flag"], f"P4a {label} overheat_flag", OverlayAdjudicationError
+        ),
+        "chasing_high": require_known_risk_bool(
+            value["chasing_high"], f"P4a {label} chasing_high", OverlayAdjudicationError
+        ),
+    }
     if "overlay_score" in value:
         result["overlay_score"] = value["overlay_score"]
     return result

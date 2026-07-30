@@ -167,8 +167,8 @@ def _load_capture_frames(as_of: str, full: pd.DataFrame,
     daily = daily.sort_values(["ts_code", "trade_date"], ascending=[True, False])
     for code, grp in daily.groupby("ts_code", sort=False):
         closes = pd.to_numeric(grp["close"], errors="coerce").dropna()
-        pct20 = ((float(closes.iloc[0]) / float(closes.iloc[min(19, len(closes) - 1)]) - 1) * 100
-                 if len(closes) >= 2 else np.nan)
+        pct20 = ((float(closes.iloc[0]) / float(closes.iloc[20]) - 1) * 100
+                 if len(closes) >= 21 and float(closes.iloc[20]) > 0 else np.nan)
         rows.append({"ts_code": str(code), "pct_20d": pct20,
                      "avg_amount_20d": pd.to_numeric(grp.head(20)["amount"], errors="coerce").mean() * 1000})
     stats = pd.DataFrame(rows)

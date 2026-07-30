@@ -24,10 +24,17 @@ import argparse
 import json
 import math
 import os
+import sys
 from datetime import datetime
 
 import numpy as np
 import pandas as pd
+
+ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+if ROOT not in sys.path:
+    sys.path.insert(0, ROOT)
+
+from engine.a_short_nullable_bool import fail_closed_risk_bool
 
 SCHEMA_NAME = "a_short_theme_overlay_comparison"
 SCHEMA_VERSION = "1.0.0"
@@ -234,8 +241,15 @@ def compute_fit(best_concept: dict, concept_members: dict, amount_latest: dict,
 
 
 def crowding_hit(row) -> bool:
-    return bool(row.get("overheat_flag") or row.get("chasing_high") or row.get("chase_flag")
-                or row.get("high_pos_shrink"))
+    return (
+        fail_closed_risk_bool(row.get("overheat_flag"))
+        or fail_closed_risk_bool(row.get("chasing_high"))
+        or any(
+            fail_closed_risk_bool(row.get(key))
+            for key in ("chase_flag", "high_pos_shrink")
+            if key in row
+        )
+    )
 
 
 # ── 组装 ──────────────────────────────────────────────────────────────────────

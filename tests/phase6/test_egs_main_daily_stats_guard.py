@@ -1,4 +1,5 @@
 import importlib.util
+import math
 import sys
 import unittest
 from pathlib import Path
@@ -28,7 +29,7 @@ def _daily_rows(code: str, n: int) -> pd.DataFrame:
     for i in range(n):
         rows.append({
             "ts_code": code,
-            "trade_date": f"202605{29 - (i % 20):02d}",
+            "trade_date": (pd.Timestamp("2026-05-29") - pd.Timedelta(days=i)).strftime("%Y%m%d"),
             "open": 10.0,
             "high": 10.6,
             "low": 9.8,
@@ -81,8 +82,78 @@ class EgsMainDailyStatsGuardTest(unittest.TestCase):
 
         self.assertEqual(stats["ts_code"].tolist(), ["600000.SH"])
         self.assertTrue(stats["avg_amount_20d"].notna().all())
-        self.assertTrue(stats["pct_20d"].notna().all())
+        self.assertTrue(stats["pct_20d"].isna().all())
+        self.assertEqual(stats["price_observation_count"].tolist(), [5])
         self.assertFalse(bool(stats.loc[0, "has_crash_veto"]))
+
+    def test_eight_closes_never_impersonate_longer_momentum_windows(self) -> None:
+        self.egs_main.CONF["daily_stats_min_rows"] = 1
+
+        stats = self.egs_main.precompute_stock_stats(
+            {"600000.SH"}, _daily_rows("600000.SH", 8)
+        )
+
+        self.assertEqual(int(stats.loc[0, "price_observation_count"]), 8)
+        self.assertTrue(math.isnan(float(stats.loc[0, "pct_20d"])))
+        self.assertTrue(math.isnan(float(stats.loc[0, "pct_60d"])))
+        self.assertAlmostEqual(
+            float(stats.loc[0, "pct_5d"]),
+            (10.0 / 10.05 - 1) * 100,
+        )
+
+    def test_sixty_one_closes_compute_exact_session_returns(self) -> None:
+        self.egs_main.CONF["daily_stats_min_rows"] = 1
+
+        stats = self.egs_main.precompute_stock_stats(
+            {"600000.SH"}, _daily_rows("600000.SH", 61)
+        )
+
+        self.assertEqual(int(stats.loc[0, "price_observation_count"]), 61)
+        for sessions, column in ((5, "pct_5d"), (20, "pct_20d"), (60, "pct_60d")):
+            with self.subTest(column=column):
+                self.assertAlmostEqual(
+                    float(stats.loc[0, column]),
+                    (10.0 / (10.0 + sessions * 0.01) - 1) * 100,
+                )
+
+    def test_short_history_count_is_main_board_only(self) -> None:
+        stocks = pd.DataFrame({
+            "ts_code": ["600000.SH", "300001.SZ", "000001.SZ"],
+        })
+        stats = pd.DataFrame({
+            "ts_code": ["600000.SH", "300001.SZ", "000001.SZ"],
+            "price_observation_count": [8, 8, 61],
+        })
+
+        self.assertEqual(
+            self.egs_main._short_history_candidate_count(stocks, stats),
+            1,
+        )
+
+    def test_250_symbols_with_six_closes_are_all_excluded_at_l0(self) -> None:
+        self.egs_main.CONF["daily_stats_min_rows"] = 1
+        codes = [f"{600000 + i:06d}.SH" for i in range(250)]
+        stocks = pd.DataFrame({
+            "ts_code": codes,
+            "name": [f"name-{i}" for i in range(250)],
+            "list_status": ["L"] * 250,
+        })
+        all_daily = pd.concat([_daily_rows(code, 6) for code in codes], ignore_index=True)
+        stats = self.egs_main.precompute_stock_stats(set(codes), all_daily)
+        exclusion_counts = {}
+
+        filtered = self.egs_main.filter_l0(
+            stocks,
+            stats,
+            set(),
+            {},
+            set(),
+            set(),
+            exclusion_counts=exclusion_counts,
+        )
+
+        self.assertTrue(filtered.empty)
+        self.assertEqual(exclusion_counts["short_history_momentum"], 250)
 
 
 if __name__ == "__main__":

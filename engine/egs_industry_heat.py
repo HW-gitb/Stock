@@ -25,6 +25,7 @@ import os
 
 import numpy as np
 import pandas as pd
+from engine.a_short_nullable_bool import require_known_risk_bool
 
 GOV_PATH = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
                         "presets", "egs_industry_heat_governance_20260611.json")
@@ -111,11 +112,15 @@ def final_score_and_tier(df: pd.DataFrame, weights: dict) -> tuple[pd.DataFrame,
     p75 = df["final_score"].quantile(0.75)
     p55 = df["final_score"].quantile(0.55)
     df["tier"] = "Other"
-    df.loc[df["final_score"] >= p55, "tier"] = "Tier2"
-    df.loc[df["final_score"] >= p75, "tier"] = "Tier1"
+    if not pd.isna(p55) and not pd.isna(p75):
+        df.loc[df["final_score"] >= p55, "tier"] = "Tier2"
+        df.loc[df["final_score"] >= p75, "tier"] = "Tier1"
     df.loc[df["final_score"] < 50, "tier"] = "Other"
 
-    info = {"p75": float(p75), "p55": float(p55)}
+    info = {
+        "p75": None if pd.isna(p75) else float(p75),
+        "p55": None if pd.isna(p55) else float(p55),
+    }
     fin_coverage = (df["q0_dt_yoy"].notna().sum() / max(len(df), 1)) if "q0_dt_yoy" in df.columns else 0.0
     info["fin_coverage"] = float(fin_coverage)
     if fin_coverage >= 0.70:
@@ -127,9 +132,9 @@ def final_score_and_tier(df: pd.DataFrame, weights: dict) -> tuple[pd.DataFrame,
         info["esp_neg_demoted"] = 0
 
     # 准入降级:行业热度绝不救回这些(都在 egs_base 之后施加)
-    ch = df.get("chasing_high", pd.Series(False, index=df.index)).fillna(False)
+    ch = df.get("chasing_high", pd.Series(pd.NA, index=df.index, dtype="boolean")).fillna(True)
     df.loc[ch & (df["tier"] == "Tier1"), "tier"] = "Tier2"
-    oh = df.get("overheat_flag", pd.Series(False, index=df.index)).fillna(False)
+    oh = df.get("overheat_flag", pd.Series(pd.NA, index=df.index, dtype="boolean")).fillna(True)
     df.loc[oh & (df["tier"] == "Tier1"), "tier"] = "Tier2"
     if "l4_flag" in df.columns:
         df.loc[df["l4_flag"].astype(str).str.contains("TIER2_FORCED", na=False), "tier"] = "Tier2"
@@ -147,8 +152,8 @@ def selection_diff(df: pd.DataFrame, base_weights: dict, cand_weights: dict) -> 
     code = df["ts_code"] if "ts_code" in df.columns else pd.Series(df.index, index=df.index)
     base_t1 = set(code[base_df["tier"] == "Tier1"])
     cand_t1 = set(code[cand_df["tier"] == "Tier1"])
-    oh = df.get("overheat_flag", pd.Series(False, index=df.index)).fillna(False)
-    ch = df.get("chasing_high", pd.Series(False, index=df.index)).fillna(False)
+    oh = df.get("overheat_flag", pd.Series(pd.NA, index=df.index, dtype="boolean")).fillna(True)
+    ch = df.get("chasing_high", pd.Series(pd.NA, index=df.index, dtype="boolean")).fillna(True)
     hot = (oh | ch)
     hot_codes = set(code[hot])
 
@@ -237,8 +242,12 @@ def _watch_pool_rows(scored_df: pd.DataFrame) -> list[dict]:
             "l2_name": str(row["l2_name"]),
             "industry_heat_score": (None if pd.isna(row.get("industry_heat_score"))
                                     else float(row["industry_heat_score"])),
-            "overheat_flag": bool(row.get("overheat_flag", False)),
-            "chasing_high": bool(row.get("chasing_high", False)),
+            "overheat_flag": require_known_risk_bool(
+                row.get("overheat_flag"), "P5 watch-pool overheat_flag"
+            ),
+            "chasing_high": require_known_risk_bool(
+                row.get("chasing_high"), "P5 watch-pool chasing_high"
+            ),
         })
     return rows
 

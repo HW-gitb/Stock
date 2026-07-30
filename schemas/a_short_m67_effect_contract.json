@@ -409,8 +409,8 @@
     }
   ],
   "decision_predicate_sha256": {
-    "A-EGS/egs_main.py": "daabfc6193e9aed743368f3be02d3f0ed2fac339d783625d77b4eb1e86c741ae",
-    "engine/egs_industry_heat.py": "79d8cddefdabb21fa8effd677f320a8e44d86782688f4449145c8789469700b3",
+    "A-EGS/egs_main.py": "9b36fd70d79b7d852329b2ca614e4a8932738727557d3fde542f5deaab955889",
+    "engine/egs_industry_heat.py": "74932f994ec0658345c41aa932b54b5685c1737c663f5070a193d264f37fced2",
     "engine/a_short_industry_theme.py": "6a10200f80b3c0d301efc8af1561b53ef2578e1cd26eea7976188dd57b7b6b2b",
     "runners/a_short_phase5_engine.py": "432ab9ea2855d3007f62b5e4a8e2b00f3248fe208f88cc2f0a3accbc40246671",
       "runners/a_short_weekly_pipeline.py": "6d4bc0cb2031c19a9a5837809b0daa6058b020885a7cd2fa3bd0c8539e70398f",
@@ -419,7 +419,7 @@
     "engine/a_short_effect_contract.py": "2479038bda6d59bd7be7f19229301855513b46e371dac2e57ec81236958f2985"
   },
   "runtime_constants_sha256": {
-    "A-EGS/egs_main.py": "5122d39bd0d4799bff302dfc6cc5c51cb9a41e9a47362a08b87ad1c73a057715",
+    "A-EGS/egs_main.py": "7a7db52541d037b08195ddf8275c0c6a9196a30958ee91203d178396071d335e",
     "runners/a_short_phase5_engine.py": "537f47a9e7443e638b675cc7349b7e551eb926f2dd00267f6085433a680d1f3b",
     "engine/a_short_portfolio_risk.py": "238ae5ff77e269bc1b9a507014b21561c54e6766169d1854e19119ac5137943e"
   },

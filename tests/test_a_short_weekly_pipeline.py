@@ -42,7 +42,10 @@ from runners.a_short_weekly_pipeline import (  # noqa: E402
     _forecast_red_flags, _income_red_flags, _balancesheet_red_flags, _industry_fundamentals, _FIN_STATEMENT_MARKER,
     _attach_holding_disposition, _factor_comparison_realized_regime, _build_evidence_reminders,
 )
-from engine.data.analysis_input_contract import is_official_a_short_analysis_input_path  # noqa: E402
+from engine.data.analysis_input_contract import (  # noqa: E402
+    build_a_short_run_identity,
+    is_official_a_short_analysis_input_path,
+)
 from runners.a_short_account_state_from_manual_tables import _bundle_digest  # noqa: E402
 from engine.a_short_runtime_config import (  # noqa: E402
     load_runtime_configuration, runtime_configuration_lineage,
@@ -330,6 +333,36 @@ class NormalizeTests(unittest.TestCase):
         self.assertTrue(n["derived"]["overheat"])
         self.assertTrue(n["event"]["holder_reduction_active"])
         self.assertTrue(n["event"]["st_or_delisting"])
+
+    def test_nullable_momentum_risk_fails_closed_but_explicit_false_stays_clear(self):
+        from runners.a_short_phase5_engine import classify_risk_families
+
+        unknown = _egs_candidate()
+        unknown["derived_flags"]["overheat_flag"] = None
+        unknown["derived_flags"]["chasing_high"] = None
+        normalized_unknown = normalize_candidate(
+            unknown, _series(), _overlay_row(), 55.0, {}, "震荡期"
+        )
+        unknown_families = classify_risk_families(normalized_unknown, {})
+        self.assertTrue(normalized_unknown["derived"]["overheat"])
+        self.assertTrue(normalized_unknown["derived"]["chasing_high"])
+        self.assertEqual(
+            unknown_families["overheat_crowding"]["action"],
+            "downgrade",
+        )
+
+        known_clear = normalize_candidate(
+            _egs_candidate(),
+            _series(),
+            _overlay_row(),
+            55.0,
+            {},
+            "震荡期",
+        )
+        clear_families = classify_risk_families(known_clear, {})
+        self.assertFalse(known_clear["derived"]["overheat"])
+        self.assertFalse(known_clear["derived"]["chasing_high"])
+        self.assertFalse(clear_families["overheat_crowding"]["hit"])
 
     def test_unknown_delisting_field_fails_closed_into_phase5_veto(self):
         candidate = _egs_candidate(
@@ -734,6 +767,69 @@ class MainWiringTests(unittest.TestCase):
         (Path(td) / "ai.json").write_text(json.dumps(ai), encoding="utf-8")
         (Path(td) / "feed.json").write_text(json.dumps(feed or _feed()), encoding="utf-8")
         _write_account(Path(td) / "acct.json")
+
+    def test_main_publishes_zero_report_bundle_for_empty_candidate_set(self):
+        ai = _analysis_input(candidates=[])
+        ai["source"]["run_identity"] = build_a_short_run_identity(AS_OF, [])
+        provider_calls = []
+
+        def _provider(code):
+            provider_calls.append(code)
+            raise AssertionError("empty candidate run must not request candidate prices")
+
+        with tempfile.TemporaryDirectory() as td:
+            self._write_inputs(td, ai=ai)
+            out = Path(td) / "weekly.json"
+            main([
+                "--as-of", AS_OF,
+                "--analysis-input", str(Path(td) / "ai.json"),
+                "--iv-feed", str(Path(td) / "feed.json"),
+                "--account", str(Path(td) / "acct.json"),
+                "--out", str(out),
+            ], price_provider=_provider)
+            weekly = json.loads(out.read_text(encoding="utf-8"))
+
+            self.assertEqual(weekly["n_stocks"], 0)
+            self.assertEqual(weekly["reports"], [])
+            self.assertTrue(out.with_suffix(".md").is_file())
+            self.assertTrue(Path(td, "weekly.receipt.json").is_file())
+            self.assertEqual(provider_calls, [])
+
+    def test_empty_candidate_set_still_runs_the_existing_holding_chain(self):
+        ai = _analysis_input(candidates=[])
+        ai["source"]["run_identity"] = build_a_short_run_identity(AS_OF, [])
+        account = _account()
+        account["positions"] = [{
+            "ts_code": "600000.SH",
+            "name": "Holding",
+            "shares": 10_000,
+            "avg_cost": 2.70,
+            "entry_date": "20260601",
+            "stop_loss": 2.55,
+        }]
+        provider_calls = []
+
+        def _provider(code):
+            provider_calls.append(code)
+            return _series()
+
+        with tempfile.TemporaryDirectory() as td:
+            (Path(td) / "ai.json").write_text(json.dumps(ai), encoding="utf-8")
+            (Path(td) / "feed.json").write_text(json.dumps(_feed()), encoding="utf-8")
+            _write_account(Path(td) / "acct.json", account)
+            out = Path(td) / "weekly.json"
+            main([
+                "--as-of", AS_OF,
+                "--analysis-input", str(Path(td) / "ai.json"),
+                "--iv-feed", str(Path(td) / "feed.json"),
+                "--account", str(Path(td) / "acct.json"),
+                "--out", str(out),
+            ], price_provider=_provider)
+            weekly = json.loads(out.read_text(encoding="utf-8"))
+
+        self.assertEqual(weekly["n_stocks"], 1)
+        self.assertEqual(weekly["reports"][0]["row_source"], "account_position_only")
+        self.assertEqual(provider_calls, ["600000.SH"])
 
     def test_main_rejects_truncated_crash_veto_summary_without_payload_text(self):
         with tempfile.TemporaryDirectory() as td:
