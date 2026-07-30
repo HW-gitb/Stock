@@ -142,9 +142,9 @@ def _validate_private_capture(record: dict) -> None:
         raise OfficialOperationEvidenceError("official_operation_capture_duplicate_decision_id")
 
 
-def _load_official_bundle(*, out_path: str | Path, receipt_path: str | Path) -> tuple[dict, dict, Path, Path]:
+def _load_official_bundle(*, out_path: str | Path, receipt_path: str | Path):
     """Accept an official bundle only when the receipt binds the exact JSON file."""
-    from runners.a_short_weekly_pipeline import load_published_weekly_bundle
+    from runners.a_short_weekly_pipeline import validate_published_weekly_bundle
     from runners.a_short_phase5_engine import validate_m67_consistency
 
     output = Path(out_path).resolve()
@@ -153,10 +153,10 @@ def _load_official_bundle(*, out_path: str | Path, receipt_path: str | Path) -> 
     if receipt_file != expected_receipt:
         raise OfficialOperationEvidenceError("official_operation_capture_receipt_path_mismatch")
     try:
-        weekly = load_published_weekly_bundle(str(output))
+        bundle = validate_published_weekly_bundle(output, receipt_file)
     except Exception as exc:
         raise OfficialOperationEvidenceError("official_operation_capture_receipt_not_publish_bound") from exc
-    receipt = _load_json(receipt_file)
+    weekly, receipt = bundle.weekly, bundle.receipt
     if not isinstance(weekly, dict) or not isinstance(receipt, dict):
         raise OfficialOperationEvidenceError("official_operation_capture_source_shape_invalid")
     try:
@@ -170,10 +170,16 @@ def _load_official_bundle(*, out_path: str | Path, receipt_path: str | Path) -> 
     lineage = weekly.get("run_lineage") or {}
     if receipt.get("account_snapshot") != lineage.get("account_snapshot"):
         raise OfficialOperationEvidenceError("official_operation_capture_account_snapshot_mismatch")
-    return weekly, receipt, output, receipt_file
+    return bundle
 
 
-def _source_identity(weekly: dict, output: Path, receipt_file: Path) -> dict:
+def _source_identity(
+    weekly: dict,
+    output: Path,
+    receipt_file: Path,
+    *,
+    validated_bundle=None,
+) -> dict:
     lineage = weekly["run_lineage"]
     as_of = _calendar_date(weekly.get("as_of"), "as_of")
     account_snapshot = lineage.get("account_snapshot")
@@ -192,13 +198,22 @@ def _source_identity(weekly: dict, output: Path, receipt_file: Path) -> dict:
         raise OfficialOperationEvidenceError("official_operation_capture_runtime_configuration_unbound")
     if account_snapshot is not None and not isinstance(account_digest, str):
         raise OfficialOperationEvidenceError("official_operation_capture_account_snapshot_digest_unbound")
+    if validated_bundle is None:
+        from runners.a_short_weekly_pipeline import validate_published_weekly_bundle
+        validated_bundle = validate_published_weekly_bundle(output, receipt_file)
+    receipt = validated_bundle.receipt
+    output_binding = (receipt.get("outputs_digest") or {}).get(output.name)
+    if not isinstance(output_binding, dict) or \
+            output_binding.get("sha256") != validated_bundle.weekly_sha256 or \
+            output_binding.get("byte_length") != len(validated_bundle.weekly_bytes):
+        raise OfficialOperationEvidenceError("official_operation_capture_receipt_digest_mismatch")
     return {
         "as_of": as_of,
         "price_data_through": price_data_through,
         "run_id": str(lineage["run_id"]),
         "candidate_digest": str(lineage["candidate_digest"]),
-        "official_m67_sha256": _file_digest(output),
-        "official_receipt_sha256": _file_digest(receipt_file),
+        "official_m67_sha256": str(output_binding["sha256"]),
+        "official_receipt_sha256": validated_bundle.receipt_sha256,
         "account_snapshot_digest": account_digest,
         "weekly_schema_version": str(weekly["schema_version"]),
         "m67_schema_versions": sorted({str(report["schema_version"]) for report in weekly["reports"]}) or ["1.0.0"],
@@ -420,9 +435,17 @@ def _portfolio_only_decision(weekly: dict, source: dict) -> dict | None:
     }
 
 
-def _capture_record(weekly: dict, output: Path, receipt_file: Path) -> dict:
+def _capture_record(
+    weekly: dict,
+    output: Path,
+    receipt_file: Path,
+    *,
+    validated_bundle=None,
+) -> dict:
     as_of = _calendar_date(weekly.get("as_of"), "as_of")
-    source = _source_identity(weekly, output, receipt_file)
+    source = _source_identity(
+        weekly, output, receipt_file, validated_bundle=validated_bundle
+    )
     decisions = [_decision_from_report(weekly, source, report) for report in weekly["reports"]]
     if not decisions:
         portfolio_only = _portfolio_only_decision(weekly, source)
@@ -464,8 +487,15 @@ def _write_conflict(root: Path, as_of: str, existing: dict, incoming: dict) -> N
 def capture_after_published_weekly(*, root: str | Path, out_path: str | Path, receipt_path: str | Path) -> dict:
     """Create one immutable capture from the published source; conflict never overwrites it."""
     private_root = _private_root(root)
-    weekly, _receipt, output, receipt_file = _load_official_bundle(out_path=out_path, receipt_path=receipt_path)
-    record = _capture_record(weekly, output, receipt_file)
+    bundle = _load_official_bundle(
+        out_path=out_path, receipt_path=receipt_path
+    )
+    record = _capture_record(
+        bundle.weekly,
+        bundle.weekly_path,
+        bundle.receipt_path,
+        validated_bundle=bundle,
+    )
     path = _capture_path(private_root, record["as_of"])
     if path.exists():
         existing = _load_json(path)

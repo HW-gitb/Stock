@@ -235,23 +235,21 @@ def _weekly_paths(root: Path, decision_date: str) -> tuple[Path, Path]:
 
 
 def _verify_published_weekly_bundle(*, out_path: str | Path, receipt_path: str | Path,
-                                    decision_date: str, source_identity: dict) -> dict:
-    output, receipt_file = Path(out_path), Path(receipt_path)
-    markdown = output.with_suffix(".md")
+                                    decision_date: str, source_identity: dict):
     try:
-        weekly, receipt = _load_json(output), _load_json(receipt_file)
-    except (OSError, UnicodeDecodeError, json.JSONDecodeError) as exc:
+        from runners.a_short_weekly_pipeline import validate_published_weekly_bundle
+        bundle = validate_published_weekly_bundle(out_path, receipt_path)
+    except (OSError, ValueError) as exc:
         raise IndustryWeightComparisonError("P5 published weekly bundle is unreadable") from exc
+    weekly, receipt = bundle.weekly, bundle.receipt
     lineage = weekly.get("run_lineage") if isinstance(weekly, dict) else None
     if not isinstance(lineage, dict) or str(weekly.get("as_of")) != decision_date or \
             lineage.get("run_id") != source_identity.get("run_id") or \
-            receipt.get("stage_status") != "complete" or receipt.get("as_of") != decision_date or \
             receipt.get("run_id") != lineage.get("run_id") or \
             receipt.get("candidate_digest") != lineage.get("candidate_digest") or \
-            receipt.get("candidate_digest") != source_identity.get("candidate_digest") or \
-            set(receipt.get("outputs") or []) != {output.name, markdown.name} or not markdown.is_file():
+            receipt.get("candidate_digest") != source_identity.get("candidate_digest"):
         raise IndustryWeightComparisonError("P5 published weekly receipt does not bind the official bundle")
-    return weekly
+    return bundle
 
 
 def _profile_rows(weight_comparison: dict) -> dict[str, list[dict]]:
@@ -320,10 +318,11 @@ def _verify_egs_published_sources(*, analysis_input_path: Path, weight_compariso
         raise IndustryWeightComparisonError("P5 EGS marker does not bind the consumed full-universe sources")
 
 
-def _capture_payload(*, decision_date: str, run_date: str, weekly: dict, analysis_input: dict,
+def _capture_payload(*, decision_date: str, run_date: str, weekly_bundle, analysis_input: dict,
                      weight_comparison: dict, governance: dict, contract_fingerprint: str,
                      analysis_input_path: Path, weight_comparison_path: Path,
                      weekly_out_path: Path, weekly_receipt_path: Path) -> dict:
+    weekly = weekly_bundle.weekly
     source = analysis_input.get("source") or {}
     run_identity = source.get("run_identity") or {}
     if str(analysis_input.get("trade_date")) != decision_date or not run_identity:
@@ -375,8 +374,8 @@ def _capture_payload(*, decision_date: str, run_date: str, weekly: dict, analysi
         "run_id": str(run_identity.get("run_id")),
         "input_pit_identity": copy.deepcopy(run_identity),
         "analysis_input_sha256": _digest(analysis_input),
-        "official_weekly_m67_sha256": _file_digest(weekly_out_path),
-        "official_weekly_receipt_sha256": _file_digest(weekly_receipt_path),
+        "official_weekly_m67_sha256": weekly_bundle.weekly_sha256,
+        "official_weekly_receipt_sha256": weekly_bundle.receipt_sha256,
         "full_universe_digest": str(weight_comparison["universe_digest"]),
         "egs_weight_comparison_sha256": _digest(weight_comparison),
         "profile_governance_sha256": _file_digest(PROFILE_GOVERNANCE_PATH),
@@ -408,8 +407,11 @@ def capture_after_published_weekly(*, root: str | Path, decision_date: str, run_
     decision_date, run_date = _date(decision_date, "decision_date"), _date(run_date, "run_date")
     if not forward_eligible or run_date != _today() or decision_date < run_date:
         return {"status": "not_live_canonical_no_capture", "production_unchanged": True}
-    weekly = _verify_published_weekly_bundle(out_path=out_path, receipt_path=receipt_path,
-                                             decision_date=decision_date, source_identity=source_identity)
+    weekly_bundle = _verify_published_weekly_bundle(
+        out_path=out_path, receipt_path=receipt_path,
+        decision_date=decision_date, source_identity=source_identity,
+    )
+    weekly = weekly_bundle.weekly
     try:
         analysis_input = _load_json(Path(analysis_input_path))
         comparison = _load_json(Path(weight_comparison_path))
@@ -421,7 +423,8 @@ def capture_after_published_weekly(*, root: str | Path, decision_date: str, run_
         "schema_name": "a_short_industry_weight_comparison_private_record", "schema_version": "1.0.0",
         "record_type": "capture", "program_id": PROGRAM_ID, "decision_date": decision_date,
         "epoch_id": _epoch_id(fingerprint), "contract_fingerprint": fingerprint,
-        "payload": _capture_payload(decision_date=decision_date, run_date=run_date, weekly=weekly,
+        "payload": _capture_payload(decision_date=decision_date, run_date=run_date,
+                                    weekly_bundle=weekly_bundle,
                                     analysis_input=analysis_input, weight_comparison=comparison,
                                     governance=governance, contract_fingerprint=fingerprint,
                                     analysis_input_path=Path(analysis_input_path).resolve(),

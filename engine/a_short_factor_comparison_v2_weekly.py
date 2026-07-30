@@ -223,28 +223,24 @@ def settle_and_summarize_v2_weekly(*, root: str | Path | None,
 
 
 def _verify_published_weekly_bundle(*, out_path: str | Path, receipt_path: str | Path,
-                                    decision_date: str, source_identity: dict) -> dict:
+                                    decision_date: str, source_identity: dict):
     output = Path(out_path)
-    receipt_file = Path(receipt_path)
-    markdown = output.with_suffix(".md")
     try:
-        weekly = json.loads(output.read_text(encoding="utf-8"))
-        receipt = json.loads(receipt_file.read_text(encoding="utf-8"))
-    except (OSError, UnicodeDecodeError, json.JSONDecodeError) as exc:
+        from runners.a_short_weekly_pipeline import validate_published_weekly_bundle
+        bundle = validate_published_weekly_bundle(output, receipt_path)
+    except (OSError, ValueError) as exc:
         raise ComparisonV2Error("published weekly bundle is unreadable") from exc
+    weekly, receipt = bundle.weekly, bundle.receipt
     lineage = weekly.get("run_lineage") if isinstance(weekly, dict) else None
     if not isinstance(lineage, dict) or str(weekly.get("as_of")) != str(decision_date) or \
             lineage.get("run_id") != source_identity.get("run_id") or \
-            receipt.get("stage_status") != "complete" or \
-            receipt.get("as_of") != str(decision_date) or \
             receipt.get("run_id") != lineage.get("run_id") or \
             receipt.get("candidate_digest") != lineage.get("candidate_digest") or \
-            receipt.get("candidate_digest") != source_identity.get("candidate_digest") or \
-            set(receipt.get("outputs") or []) != {output.name, markdown.name} or not markdown.is_file():
+            receipt.get("candidate_digest") != source_identity.get("candidate_digest"):
         raise ComparisonV2Error("published weekly bundle receipt does not match the official M6.7 artifact")
     summary = weekly.get("factor_comparison_v2")
     validate_v2_public_summary(summary)
-    return weekly
+    return bundle
 
 
 def capture_v2_after_published_weekly(*, root: str | Path, decision_date: str, candidates: list[dict],
@@ -252,8 +248,9 @@ def capture_v2_after_published_weekly(*, root: str | Path, decision_date: str, c
                                       forward_eligible: bool) -> dict:
     """Freeze the current week only after a matching M6.7 JSON/Markdown/receipt exists."""
     _private_root(root)
-    weekly = _verify_published_weekly_bundle(out_path=out_path, receipt_path=receipt_path,
+    bundle = _verify_published_weekly_bundle(out_path=out_path, receipt_path=receipt_path,
                                              decision_date=decision_date, source_identity=source_identity)
+    weekly = bundle.weekly
     price_freshness = (weekly.get("run_lineage") or {}).get("price_freshness")
     if not isinstance(price_freshness, dict):
         raise ComparisonV2Error("published weekly bundle lacks price_freshness lineage")
@@ -274,7 +271,7 @@ def capture_v2_after_published_weekly(*, root: str | Path, decision_date: str, c
         "source_as_of": str(decision_date),
         "price_data_through": price_data_through,
         "candidate_digest": _digest(sanitized),
-        "official_m67_digest": hashlib.sha256(Path(out_path).read_bytes()).hexdigest(),
+        "official_m67_digest": bundle.weekly_sha256,
     }
     return capture_v2_week(root=root, decision_date=decision_date, candidates=candidates,
                            run_identity=identity, forward_eligible=forward_eligible)

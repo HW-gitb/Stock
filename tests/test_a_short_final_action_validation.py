@@ -37,10 +37,11 @@ from runners.a_short_target_policy_comparison_runner import _freeze_plan as free
 from engine import a_short_evidence_epoch_mode as _epoch_mode
 from engine.a_short_final_action_adjudication import adjudicate_full_edge
 from tests._a_short_epoch_mode_test_utils import enter_patched_epoch_modes, patched_epoch_modes
+from tests._a_short_weekly_publish_test_utils import write_content_bound_bundle
 
 
 AS_OF = "20260101"
-IDENTITY = {"run_id": "run-1", "candidate_digest": "candidate-digest"}
+IDENTITY = {"run_id": "run-1", "candidate_digest": "a" * 64}
 PLAN = {"entry_low": 9.9, "entry_high": 10.5, "stop": 9.0, "t1": 12.0, "t2": 14.0}
 
 
@@ -58,11 +59,11 @@ def _tracker(path: Path) -> None:
               "ret_10d_t1_net", "ret_10d_excess_csi1000", "ret_10d_status",
               "ret_20d_t1_net", "ret_20d_excess_csi1000", "ret_20d_status"]
     rows = [
-        {"as_of": AS_OF, "run_id": "run-1", "candidate_digest": "candidate-digest", "ts_code": "600000.SH",
+        {"as_of": AS_OF, "run_id": "run-1", "candidate_digest": "a" * 64, "ts_code": "600000.SH",
          "forward_live": "True", "ret_5d_t1_net": "10.0", "ret_5d_excess_csi1000": "3.0", "ret_5d_status": "ok",
          "ret_10d_t1_net": "10.0", "ret_10d_excess_csi1000": "3.0", "ret_10d_status": "ok",
          "ret_20d_t1_net": "10.0", "ret_20d_excess_csi1000": "3.0", "ret_20d_status": "ok"},
-        {"as_of": AS_OF, "run_id": "run-1", "candidate_digest": "candidate-digest", "ts_code": "600001.SH",
+        {"as_of": AS_OF, "run_id": "run-1", "candidate_digest": "a" * 64, "ts_code": "600001.SH",
          "forward_live": "True", "ret_5d_t1_net": "4.0", "ret_5d_excess_csi1000": "-3.0", "ret_5d_status": "ok",
          "ret_10d_t1_net": "4.0", "ret_10d_excess_csi1000": "-3.0", "ret_10d_status": "ok",
          "ret_20d_t1_net": "4.0", "ret_20d_excess_csi1000": "-3.0", "ret_20d_status": "ok"},
@@ -186,7 +187,7 @@ class FinalActionValidationTests(unittest.TestCase):
     def _bundle(self, directory: Path) -> tuple[Path, Path, list[dict]]:
         weekly = {
             "as_of": AS_OF,
-            "run_lineage": {"run_id": "run-1", "candidate_digest": "candidate-digest",
+            "run_lineage": {"run_id": "run-1", "candidate_digest": "a" * 64,
                             "price_freshness": {"mode": "intraday_prior_settled", "run_date": AS_OF,
                                                 "price_data_through": AS_OF}},
             "reports": [
@@ -196,11 +197,9 @@ class FinalActionValidationTests(unittest.TestCase):
                  "machine": {"model_build_eligible": False, "entry_exit_size_star": {"plan": PLAN}}},
             ],
         }
-        out = directory / "weekly.json"
-        out.write_text(json.dumps(weekly), encoding="utf-8")
-        out.with_suffix(".md").write_text("# weekly\n", encoding="utf-8")
-        receipt = directory / "receipt.json"
-        receipt.write_text(json.dumps({"stage_status": "complete", "as_of": AS_OF, **IDENTITY}), encoding="utf-8")
+        out = directory / AS_OF / "weekly_m67.json"
+        receipt = out.with_name("weekly_m67.receipt.json")
+        write_content_bound_bundle(out, weekly, receipt_path=receipt)
         return out, receipt, [_candidate("600000.SH"), _candidate("600001.SH")]
 
     def test_hold_and_full_edge_are_weekly_equal_weighted_and_public_is_deidentified(self):
@@ -261,7 +260,7 @@ class FinalActionValidationTests(unittest.TestCase):
                                            summary_path=directory / "summary.json", markdown_path=directory / "summary.md")
             weekly = json.loads(out.read_text(encoding="utf-8"))
             weekly["reports"][0]["machine"]["entry_exit_size_star"]["plan"]["t1"] = 13.0
-            out.write_text(json.dumps(weekly), encoding="utf-8")
+            write_content_bound_bundle(out, weekly, receipt_path=receipt)
             replay = capture_after_published_weekly(root=ledger, decision_date=AS_OF, candidates=candidates,
                                                     source_identity=IDENTITY, out_path=out, receipt_path=receipt,
                                                     forward_eligible=True, tracker_path=tracker,

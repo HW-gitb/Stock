@@ -125,10 +125,9 @@ def _real_candidate_effect_policy_fingerprint() -> str:
     ).hexdigest()
 
 
-def m67_provenance(path: str | Path, *, as_of: str) -> dict:
-    """Read only a digest and candidate build count from M6.7; never persist rows/account data."""
-    raw = Path(path).read_bytes()
-    doc = json.loads(raw.decode("utf-8"))
+def m67_provenance_from_bundle(bundle, *, as_of: str) -> dict:
+    """Project provenance only from one already validated publication snapshot."""
+    doc = bundle.weekly
     source_as_of = str((doc or {}).get("as_of"))
     if not isinstance(doc, dict) or not is_canonical_date(source_as_of) or not is_canonical_date(str(as_of)):
         raise ValueError("M6.7 source and settled regime date must both be real dates")
@@ -149,9 +148,17 @@ def m67_provenance(path: str | Path, *, as_of: str) -> dict:
     return {
         "source_schema_name": str(doc.get("schema_name") or "a_short_weekly_report"),
         "source_as_of": source_as_of,
-        "source_sha256": hashlib.sha256(raw).hexdigest(),
+        "source_sha256": bundle.weekly_sha256,
         "candidate_build_count": builds,
     }
+
+
+def m67_provenance(path: str | Path, *, as_of: str) -> dict:
+    """Validate one official publish bundle, then project its bounded provenance."""
+    from runners.a_short_weekly_pipeline import validate_published_weekly_bundle
+
+    bundle = validate_published_weekly_bundle(path)
+    return m67_provenance_from_bundle(bundle, as_of=as_of)
 
 
 def _returns_from_regime_record(record: dict) -> tuple[dict, list[str], bool]:
@@ -311,20 +318,22 @@ def migrate_action_record_from_published_m67(record: dict, *, m67_path: str | Pa
         return migrated
     m67_file = Path(m67_path)
     receipt_file = Path(receipt_path)
-    raw = m67_file.read_bytes()
-    source_sha256 = hashlib.sha256(raw).hexdigest()
+    try:
+        from runners.a_short_weekly_pipeline import validate_published_weekly_bundle
+        bundle = validate_published_weekly_bundle(m67_file, receipt_file)
+    except (OSError, ValueError) as exc:
+        raise ValueError("action migration receipt is not bound to the published M6.7 source") from exc
+    m67, receipt = bundle.weekly, bundle.receipt
+    source_sha256 = bundle.weekly_sha256
     expected_sha256 = str((record.get("m67_provenance") or {}).get("source_sha256") or "")
     if source_sha256 != expected_sha256:
         raise ValueError("action migration source SHA does not match m67_provenance")
-    m67 = json.loads(raw.decode("utf-8"))
     lineage = m67.get("run_lineage") or {}
     source_as_of = str((record.get("m67_provenance") or {}).get("source_as_of") or "")
     if str(m67.get("as_of") or "") != source_as_of:
         raise ValueError("action migration M6.7 as_of does not match m67_provenance")
-    receipt = _load_json(receipt_file)
     if (
-        receipt.get("stage_status") != "complete"
-        or str(receipt.get("as_of")) != source_as_of
+        str(receipt.get("as_of")) != source_as_of
         or receipt.get("run_id") != lineage.get("run_id")
         or receipt.get("candidate_digest") != lineage.get("candidate_digest")
     ):

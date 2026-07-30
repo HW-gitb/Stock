@@ -1,4 +1,5 @@
 import copy
+import hashlib
 import json
 import tempfile
 import unittest
@@ -13,10 +14,52 @@ from engine.a_short_regime_action_comparison import (
 )
 from engine.a_short_regime_classifier import FORWARD_RETURN_BASIS
 from engine import a_short_evidence_epoch_mode as _epoch_mode
+from runners.a_short_m67_render import render_weekly_markdown
 from tests._a_short_epoch_mode_test_utils import enter_patched_epoch_modes, patched_epoch_modes
 
 
 ROOT = Path(__file__).resolve().parents[1]
+from tests._a_short_weekly_publish_test_utils import write_content_bound_bundle
+
+
+def _copy_tracked_m67_as_content_bound_bundle(tmp_root):
+    tracked = ROOT / "research" / "results" / "a_short" / "20260720" / "weekly_m67.json"
+    output = Path(tmp_root) / "20260720" / "weekly_m67.json"
+    output.parent.mkdir(parents=True)
+    weekly_bytes = tracked.read_bytes()
+    weekly = json.loads(weekly_bytes.decode("utf-8"))
+    markdown_bytes = render_weekly_markdown(weekly).encode("utf-8")
+    output.write_bytes(weekly_bytes)
+    output.with_suffix(".md").write_bytes(markdown_bytes)
+    lineage = weekly["run_lineage"]
+    price_freshness = lineage["price_freshness"]
+    receipt = {
+        "schema_name": "a_short_weekly_publish_receipt",
+        "schema_version": "1.1.0",
+        "as_of": weekly["as_of"],
+        "decision_as_of": weekly["as_of"],
+        "run_date": price_freshness["run_date"],
+        "price_data_through": price_freshness["price_data_through"],
+        "run_id": lineage["run_id"],
+        "candidate_digest": lineage["candidate_digest"],
+        "published_at": "2026-07-19T22:51:02+08:00",
+        "account_snapshot": None,
+        "stage_status": "complete",
+        "outputs": ["weekly_m67.json", "weekly_m67.md"],
+        "outputs_digest": {
+            "weekly_m67.json": {
+                "sha256": hashlib.sha256(weekly_bytes).hexdigest(),
+                "byte_length": len(weekly_bytes),
+            },
+            "weekly_m67.md": {
+                "sha256": hashlib.sha256(markdown_bytes).hexdigest(),
+                "byte_length": len(markdown_bytes),
+            },
+        },
+    }
+    receipt_path = output.with_name("weekly_m67.receipt.json")
+    receipt_path.write_text(json.dumps(receipt, ensure_ascii=False, indent=2), encoding="utf-8")
+    return output, receipt_path
 
 
 def _regime_record(*, as_of="20260714", raw="defense", returns=None):
@@ -95,16 +138,16 @@ class RegimeActionComparisonTests(unittest.TestCase):
 
     def test_tracked_legacy_action_row_migrates_from_hash_bound_m67_source(self):
         records_path = ROOT / "research" / "results" / "a_short" / "regime_action_comparison_records.json"
-        m67_path = ROOT / "research" / "results" / "a_short" / "20260720" / "weekly_m67.json"
-        receipt_path = ROOT / "research" / "results" / "a_short" / "20260720" / "weekly_m67.receipt.json"
         records = json.loads(records_path.read_text(encoding="utf-8"))
         legacy = next(row for row in records if row["as_of"] == "20260717")
         legacy = dict(legacy)
         legacy["schema_version"] = "1.0.0"
         legacy["forward_origin"] = {"decision_as_of": "20260720", "run_date": "20260719"}
-        migrated = migrate_action_record_from_published_m67(
-            legacy, m67_path=m67_path, receipt_path=receipt_path
-        )
+        with tempfile.TemporaryDirectory() as tmp:
+            m67_path, receipt_path = _copy_tracked_m67_as_content_bound_bundle(tmp)
+            migrated = migrate_action_record_from_published_m67(
+                legacy, m67_path=m67_path, receipt_path=receipt_path
+            )
         self.assertEqual(migrated["schema_version"], ACTION_RECORD_SCHEMA_VERSION)
         self.assertEqual(migrated["forward_origin"], {
             "decision_as_of": "20260720", "run_date": "20260719", "capture_mode": "live",
@@ -116,21 +159,19 @@ class RegimeActionComparisonTests(unittest.TestCase):
 
     def test_legacy_migration_rejects_source_or_receipt_mismatch(self):
         records_path = ROOT / "research" / "results" / "a_short" / "regime_action_comparison_records.json"
-        m67_path = ROOT / "research" / "results" / "a_short" / "20260720" / "weekly_m67.json"
-        receipt_path = ROOT / "research" / "results" / "a_short" / "20260720" / "weekly_m67.receipt.json"
         records = json.loads(records_path.read_text(encoding="utf-8"))
         legacy = dict(next(row for row in records if row["as_of"] == "20260717"))
         legacy["schema_version"] = "1.0.0"
         legacy["forward_origin"] = {"decision_as_of": "20260720", "run_date": "20260719"}
         bad_source = dict(legacy)
         bad_source["m67_provenance"] = dict(legacy["m67_provenance"], source_sha256="0" * 64)
-        with self.assertRaisesRegex(ValueError, "source SHA"):
-            migrate_action_record_from_published_m67(bad_source, m67_path=m67_path, receipt_path=receipt_path)
         with tempfile.TemporaryDirectory() as tmp:
-            tmp_m67 = Path(tmp) / "weekly_m67.json"
-            tmp_receipt = Path(tmp) / "weekly_m67.receipt.json"
-            tmp_m67.write_bytes(m67_path.read_bytes())
-            receipt = json.loads(receipt_path.read_text(encoding="utf-8"))
+            tmp_m67, tmp_receipt = _copy_tracked_m67_as_content_bound_bundle(tmp)
+            with self.assertRaisesRegex(ValueError, "source SHA"):
+                migrate_action_record_from_published_m67(
+                    bad_source, m67_path=tmp_m67, receipt_path=tmp_receipt
+                )
+            receipt = json.loads(tmp_receipt.read_text(encoding="utf-8"))
             receipt["candidate_digest"] = "0" * 64
             tmp_receipt.write_text(json.dumps(receipt), encoding="utf-8")
             with self.assertRaisesRegex(ValueError, "receipt"):
@@ -188,8 +229,24 @@ class RegimeActionComparisonTests(unittest.TestCase):
 
     def test_m67_provenance_persists_digest_only(self):
         with tempfile.TemporaryDirectory() as tmp:
-            path = Path(tmp) / "weekly.json"
-            path.write_text(json.dumps({"schema_name": "a_short_weekly_report", "as_of": "20260714", "reports": [{"row_source": "egs_candidate", "m67": {"table": {"操作": "建仓"}}}]}), encoding="utf-8")
+            path = Path(tmp) / "20260714" / "weekly_m67.json"
+            write_content_bound_bundle(path, {
+                "schema_name": "a_short_weekly_report",
+                "as_of": "20260714",
+                "run_lineage": {
+                    "run_id": "a-short-20260714-0123456789abcdef",
+                    "candidate_digest": "a" * 64,
+                    "price_freshness": {
+                        "mode": "strict_as_of",
+                        "run_date": "20260714",
+                        "price_data_through": "20260714",
+                    },
+                },
+                "reports": [{
+                    "row_source": "egs_candidate",
+                    "m67": {"table": {"操作": "建仓"}},
+                }],
+            })
             result = m67_provenance(path, as_of="20260714")
         self.assertEqual(result["candidate_build_count"], 1)
         self.assertEqual(result["source_as_of"], "20260714")

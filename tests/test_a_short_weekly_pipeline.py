@@ -8,6 +8,8 @@ propagation, and main() wiring with an injected price provider (no live Tushare)
 from __future__ import annotations
 
 import copy
+import ast
+import hashlib
 import json
 import sys
 import tempfile
@@ -792,7 +794,13 @@ class MainWiringTests(unittest.TestCase):
             self.assertEqual(weekly["n_stocks"], 0)
             self.assertEqual(weekly["reports"], [])
             self.assertTrue(out.with_suffix(".md").is_file())
-            self.assertTrue(Path(td, "weekly.receipt.json").is_file())
+            receipt = json.loads(Path(td, "weekly.receipt.json").read_text(encoding="utf-8"))
+            self.assertEqual(receipt["schema_version"], "1.1.0")
+            for path in (out, out.with_suffix(".md")):
+                binding = receipt["outputs_digest"][path.name]
+                raw = path.read_bytes()
+                self.assertEqual(binding["sha256"], hashlib.sha256(raw).hexdigest())
+                self.assertEqual(binding["byte_length"], len(raw))
             self.assertEqual(provider_calls, [])
 
     def test_empty_candidate_set_still_runs_the_existing_holding_chain(self):
@@ -1017,7 +1025,7 @@ class MainWiringTests(unittest.TestCase):
     def test_v2_comparison_weekly_order_is_pre_publish_summary_then_post_publish_capture(self):
         with tempfile.TemporaryDirectory() as td:
             self._write_inputs(td)
-            out = Path(td) / "weekly.json"
+            out = Path(td) / AS_OF / "weekly_m67.json"
             root = Path(td) / "state" / "a_short" / "factor_comparison_private" / "v2"
             dates = pd.bdate_range(end=pd.Timestamp(AS_OF), periods=len(_series())).strftime("%Y%m%d").tolist()
             dated_series = [{**row, "trade_date": trade_date} for row, trade_date in zip(_series(), dates)]
@@ -5379,7 +5387,7 @@ class FactorComparisonRealizedRegimeTests(unittest.TestCase):
 
 
 class LoadPublishedBundleTests(unittest.TestCase):
-    """刀2: the official reader accepts a bundle only through its matching complete receipt."""
+    """刀10: the official reader accepts only the exact JSON/Markdown bytes in the receipt."""
 
     def _bundle(self, root, *, dir_name="20260622", stage_status="complete", tamper=None):
         d = Path(root) / dir_name
@@ -5388,21 +5396,46 @@ class LoadPublishedBundleTests(unittest.TestCase):
                   "price_data_through": "20260622",
                   "run_lineage": {"run_id": "a-short-20260622-01", "candidate_digest": "b" * 64,
                                    "decision_as_of": "20260622", "price_data_through": "20260622"}}
-        receipt = {"schema_name": "a_short_weekly_publish_receipt", "as_of": "20260622",
+        weekly_bytes = json.dumps(weekly).encode("utf-8")
+        markdown_bytes = b"# report"
+        receipt = {"schema_name": "a_short_weekly_publish_receipt", "schema_version": "1.1.0",
+                   "as_of": "20260622",
                    "decision_as_of": "20260622", "run_date": "20260622", "price_data_through": "20260622",
                    "run_id": "a-short-20260622-01", "candidate_digest": "b" * 64,
-                   "stage_status": stage_status, "outputs": ["weekly_m67.json", "weekly_m67.md"]}
+                   "published_at": "2026-06-22T12:00:00+08:00", "account_snapshot": None,
+                   "stage_status": stage_status, "outputs": ["weekly_m67.json", "weekly_m67.md"],
+                   "outputs_digest": {
+                       "weekly_m67.json": {
+                           "sha256": hashlib.sha256(weekly_bytes).hexdigest(),
+                           "byte_length": len(weekly_bytes),
+                       },
+                       "weekly_m67.md": {
+                           "sha256": hashlib.sha256(markdown_bytes).hexdigest(),
+                           "byte_length": len(markdown_bytes),
+                       },
+                   }}
         if tamper:
             tamper(weekly, receipt)
-        (d / "weekly_m67.json").write_text(json.dumps(weekly), encoding="utf-8")
-        (d / "weekly_m67.md").write_text("# report", encoding="utf-8")
+        (d / "weekly_m67.json").write_bytes(weekly_bytes)
+        (d / "weekly_m67.md").write_bytes(markdown_bytes)
         (d / "weekly_m67.receipt.json").write_text(json.dumps(receipt), encoding="utf-8")
         return str(d / "weekly_m67.json")
 
     def test_complete_receipt_accepts(self):
-        from runners.a_short_weekly_pipeline import load_published_weekly_bundle
+        from runners.a_short_weekly_pipeline import (
+            load_published_weekly_bundle, validate_published_weekly_bundle,
+        )
         with tempfile.TemporaryDirectory() as tmp:
-            self.assertEqual(load_published_weekly_bundle(self._bundle(tmp))["as_of"], "20260622")
+            with patch("runners.a_short_m67_render.render_weekly_markdown", return_value="# report"):
+                out = self._bundle(tmp)
+                self.assertEqual(load_published_weekly_bundle(out)["as_of"], "20260622")
+                bundle = validate_published_weekly_bundle(out)
+        self.assertEqual(bundle.weekly_sha256, hashlib.sha256(bundle.weekly_bytes).hexdigest())
+        self.assertEqual(bundle.markdown_sha256, hashlib.sha256(bundle.markdown_bytes).hexdigest())
+        self.assertEqual(bundle.receipt_sha256, hashlib.sha256(bundle.receipt_bytes).hexdigest())
+        self.assertEqual(bundle.weekly_byte_length, len(bundle.weekly_bytes))
+        self.assertEqual(bundle.markdown_byte_length, len(bundle.markdown_bytes))
+        self.assertEqual(bundle.receipt_byte_length, len(bundle.receipt_bytes))
 
     def test_failed_receipt_rejects(self):
         from runners.a_short_weekly_pipeline import load_published_weekly_bundle
@@ -5422,6 +5455,964 @@ class LoadPublishedBundleTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as tmp:
             with self.assertRaises(ValueError):
                 load_published_weekly_bundle(self._bundle(tmp, dir_name="20260101"))
+
+    def test_json_content_tamper_rejects(self):
+        from runners.a_short_weekly_pipeline import load_published_weekly_bundle
+        with tempfile.TemporaryDirectory() as tmp:
+            out = Path(self._bundle(tmp))
+            weekly = json.loads(out.read_text(encoding="utf-8"))
+            weekly["operation"] = "建仓"
+            out.write_text(json.dumps(weekly), encoding="utf-8")
+            with patch("runners.a_short_m67_render.render_weekly_markdown", return_value="# report"), \
+                    self.assertRaisesRegex(ValueError, "digest"):
+                load_published_weekly_bundle(str(out))
+
+    def test_markdown_content_tamper_rejects(self):
+        from runners.a_short_weekly_pipeline import load_published_weekly_bundle
+        with tempfile.TemporaryDirectory() as tmp:
+            out = Path(self._bundle(tmp))
+            out.with_suffix(".md").write_text("# tampered", encoding="utf-8")
+            with patch("runners.a_short_m67_render.render_weekly_markdown", return_value="# tampered"), \
+                    self.assertRaisesRegex(ValueError, "digest"):
+                load_published_weekly_bundle(str(out))
+
+    def test_matching_digest_but_noncanonical_markdown_rejects(self):
+        from runners.a_short_weekly_pipeline import load_published_weekly_bundle
+        with tempfile.TemporaryDirectory() as tmp:
+            out = self._bundle(tmp)
+            with patch("runners.a_short_m67_render.render_weekly_markdown", return_value="# different"), \
+                    self.assertRaisesRegex(ValueError, "deterministic"):
+                load_published_weekly_bundle(out)
+
+    def test_missing_output_digest_rejects(self):
+        from runners.a_short_weekly_pipeline import load_published_weekly_bundle
+        with tempfile.TemporaryDirectory() as tmp:
+            out = self._bundle(tmp, tamper=lambda _w, r: r.pop("outputs_digest"))
+            with self.assertRaisesRegex(ValueError, "schema-invalid"):
+                load_published_weekly_bundle(out)
+
+
+class PublishedBundleConsumerRoutingTests(unittest.TestCase):
+    ENTRYPOINTS = {
+        relative: set(names)
+        for relative, names in _weekly_pipeline_module.FORMAL_PUBLISHED_WEEKLY_CONSUMERS.items()
+    }
+    NONCONSUMER_ENTRYPOINTS = {
+        relative: set(names)
+        for relative, names in
+        _weekly_pipeline_module.NONCONSUMER_PUBLIC_PATH_ENTRYPOINTS.items()
+    }
+    WEEKLY_ROOT_NAMES = {
+        "out_path", "m67_path", "m67_report_path", "weekly_path", "receipt_path", "path",
+    }
+    RAW_READ_METHODS = {"read_bytes", "read_text", "open"}
+    PATH_CONTAINER_EXTRACT_METHODS = {
+        "get", "pop", "setdefault", "__getitem__",
+    }
+    PATH_TRANSFORM_METHODS = {
+        "resolve", "absolute", "as_posix", "with_name", "with_suffix",
+        "joinpath",
+    }
+    PATH_REPRESENTATION_FUNCTIONS = {
+        "str", "fspath", "fsencode", "fsdecode", "abspath", "realpath",
+        "normpath", "join",
+    }
+    SAFE_PATH_CALLS = {
+        "Path", "str", "any", "all", "print",
+        "validate_published_weekly_bundle",
+        # Output-side filesystem operations are not weekly JSON consumers.
+        "mkstemp", "replace",
+    }
+    WRAPPED_PATH_LOADER_CALLS = {
+        "load", "read_csv", "read_excel", "read_feather", "read_file",
+        "read_fwf", "read_hdf", "read_json", "read_orc", "read_parquet",
+        "read_pickle", "read_table", "read_xml",
+    }
+    INVENTORY_DISCOVERY_TOKENS = (
+        "weekly_m67.json",
+        "weekly_m67.receipt.json",
+        "validate_published_weekly_bundle",
+        "load_published_weekly_bundle",
+    )
+    INVENTORY_EXCLUSIONS = {
+        "engine/a_short_run_paths.py",
+        "runners/a_short_m67_render.py",
+        "runners/a_short_weekly_pipeline.py",
+        "runners/weekly_screening.ps1",
+    }
+
+    @classmethod
+    def _function_parameters(cls, function: ast.AST) -> list[str]:
+        args = function.args
+        return [
+            *(arg.arg for arg in args.posonlyargs),
+            *(arg.arg for arg in args.args),
+            *(arg.arg for arg in args.kwonlyargs),
+            *([args.vararg.arg] if args.vararg else []),
+            *([args.kwarg.arg] if args.kwarg else []),
+        ]
+
+    @classmethod
+    def _public_entrypoints(cls, source: str) -> set[str]:
+        tree = ast.parse(source)
+        functions = {
+            node.name
+            for node in tree.body
+            if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef))
+        }
+        imported_names: set[str] = set()
+        aliases: set[str] = set()
+        for node in tree.body:
+            if isinstance(node, ast.ImportFrom):
+                for imported in node.names:
+                    local = imported.asname or imported.name
+                    imported_names.add(local)
+                    if imported.asname and not local.startswith("_"):
+                        aliases.add(local)
+            elif isinstance(node, ast.Import):
+                imported_names.update(
+                    imported.asname or imported.name.split(".", 1)[0]
+                    for imported in node.names
+                )
+        callable_names = set(functions) | imported_names | aliases
+        changed = True
+        while changed:
+            changed = False
+            for node in tree.body:
+                if not isinstance(node, (ast.Assign, ast.AnnAssign)):
+                    continue
+                value = node.value
+                targets = node.targets if isinstance(node, ast.Assign) else [node.target]
+                callable_alias = (
+                    isinstance(value, ast.Lambda)
+                    or (isinstance(value, ast.Name) and value.id in callable_names)
+                    or (
+                        isinstance(value, ast.Attribute)
+                        and any(
+                            isinstance(item, ast.Name) and item.id in imported_names
+                            for item in ast.walk(value.value)
+                        )
+                    )
+                    or (
+                        isinstance(value, ast.Call)
+                        and (
+                            (
+                                isinstance(value.func, ast.Name)
+                                and value.func.id == "partial"
+                            )
+                            or (
+                                isinstance(value.func, ast.Attribute)
+                                and value.func.attr == "partial"
+                            )
+                        )
+                    )
+                )
+                if not callable_alias:
+                    continue
+                for target in targets:
+                    for item in ast.walk(target):
+                        if (
+                            isinstance(item, ast.Name)
+                            and not item.id.startswith("_")
+                            and item.id not in callable_names
+                        ):
+                            callable_names.add(item.id)
+                            aliases.add(item.id)
+                            changed = True
+        explicit_exports: set[str] = set()
+        for node in tree.body:
+            if not isinstance(node, ast.Assign):
+                continue
+            if not any(
+                isinstance(target, ast.Name) and target.id == "__all__"
+                for target in node.targets
+            ):
+                continue
+            if isinstance(node.value, (ast.List, ast.Tuple, ast.Set)):
+                explicit_exports.update(
+                    item.value
+                    for item in node.value.elts
+                    if isinstance(item, ast.Constant)
+                    and isinstance(item.value, str)
+                    and not item.value.startswith("_")
+                )
+        return {
+            name for name in functions if not name.startswith("_")
+        } | aliases | explicit_exports
+
+    @classmethod
+    def _audit_source(
+        cls,
+        source: str,
+        entrypoints: set[str] | None = None,
+    ) -> tuple[set[str], list[str]]:
+        tree = ast.parse(source)
+        functions = {
+            node.name: node for node in tree.body
+            if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef))
+        }
+        entrypoints = set(entrypoints or cls._public_entrypoints(source))
+        reaches_validator: set[str] = set()
+        raw_weekly_reads: list[str] = []
+        cache: dict[
+            tuple[str, frozenset[str], frozenset[str]],
+            tuple[bool, tuple[str, ...], bool],
+        ] = {}
+
+        def analyse(
+            name: str,
+            initial_taint: set[str],
+            initial_path_containers: set[str],
+            stack: tuple[str, ...],
+        ) -> tuple[bool, tuple[str, ...], bool]:
+            key = (
+                name,
+                frozenset(initial_taint),
+                frozenset(initial_path_containers),
+            )
+            if key in cache:
+                return cache[key]
+            if name in stack:
+                return False, (), False
+            function = functions[name]
+            tainted = set(initial_taint)
+            path_containers = set(initial_path_containers)
+            tainted_callables: set[str] = set()
+
+            def names_in(node: ast.AST) -> set[str]:
+                return {
+                    item.id for item in ast.walk(node)
+                    if isinstance(item, ast.Name)
+                }
+
+            def child_taint_for_call(
+                node: ast.Call,
+                callee: ast.AST,
+                source_names: set[str],
+            ) -> set[str]:
+                args = callee.args
+                positional = [
+                    *(arg.arg for arg in args.posonlyargs),
+                    *(arg.arg for arg in args.args),
+                ]
+                named = set(positional) | {arg.arg for arg in args.kwonlyargs}
+                child_taint: set[str] = set()
+                for index, argument in enumerate(node.args):
+                    if not (names_in(argument) & source_names):
+                        continue
+                    if isinstance(argument, ast.Starred):
+                        if args.vararg:
+                            child_taint.add(args.vararg.arg)
+                    elif index < len(positional):
+                        child_taint.add(positional[index])
+                    elif args.vararg:
+                        child_taint.add(args.vararg.arg)
+                for keyword in node.keywords:
+                    if not (names_in(keyword.value) & source_names):
+                        continue
+                    if keyword.arg is None:
+                        if args.kwarg:
+                            child_taint.add(args.kwarg.arg)
+                    elif keyword.arg in named:
+                        child_taint.add(keyword.arg)
+                    elif args.kwarg:
+                        child_taint.add(args.kwarg.arg)
+                return child_taint
+
+            changed = True
+            while changed:
+                changed = False
+                for node in ast.walk(function):
+                    if not isinstance(node, (ast.Assign, ast.AnnAssign)):
+                        continue
+                    value = node.value
+                    if (
+                        isinstance(value, ast.Call)
+                        and isinstance(value.func, ast.Attribute)
+                        and value.func.attr in cls.RAW_READ_METHODS
+                    ):
+                        continue
+                    value_names = names_in(value)
+                    local_return_tainted = False
+                    if (
+                        isinstance(value, ast.Call)
+                        and isinstance(value.func, ast.Name)
+                        and value.func.id in functions
+                    ):
+                        child_taint = child_taint_for_call(
+                            value, functions[value.func.id], tainted
+                        )
+                        child_path_containers = child_taint_for_call(
+                            value, functions[value.func.id], path_containers
+                        )
+                        if child_taint or child_path_containers:
+                            _child_reached, _child_violations, local_return_tainted = analyse(
+                                value.func.id,
+                                child_taint,
+                                child_path_containers,
+                                (*stack, name),
+                            )
+                    subscript_container_names = (
+                        names_in(value.value)
+                        if isinstance(value, ast.Subscript)
+                        else set()
+                    )
+                    path_expression = (
+                        isinstance(value, ast.Name) and value.id in tainted
+                    ) or (
+                        isinstance(
+                            value,
+                            (
+                                ast.Attribute,
+                                ast.BinOp,
+                                ast.JoinedStr,
+                                ast.Subscript,
+                            ),
+                        )
+                        and (
+                            bool(value_names & tainted)
+                            if not isinstance(value, ast.Subscript)
+                            else bool(
+                                subscript_container_names
+                                & (tainted | path_containers)
+                            )
+                        )
+                    ) or (
+                        isinstance(value, ast.Call)
+                        and isinstance(value.func, ast.Attribute)
+                        and value.func.attr in cls.PATH_CONTAINER_EXTRACT_METHODS
+                        and bool(
+                            names_in(value.func.value)
+                            & (tainted | path_containers)
+                        )
+                    ) or (
+                        isinstance(value, ast.Call)
+                        and isinstance(value.func, ast.Attribute)
+                        and bool(names_in(value.func.value) & tainted)
+                    ) or (
+                        isinstance(value, ast.Call)
+                        and isinstance(value.func, ast.Name)
+                        and value.func.id in (
+                            {"Path"} | cls.PATH_REPRESENTATION_FUNCTIONS
+                        )
+                        and bool(value_names & tainted)
+                    ) or (
+                        isinstance(value, ast.Call)
+                        and isinstance(value.func, ast.Attribute)
+                        and value.func.attr in cls.PATH_REPRESENTATION_FUNCTIONS
+                        and bool(value_names & tainted)
+                    ) or (
+                        isinstance(value, ast.Call)
+                        and isinstance(value.func, ast.Attribute)
+                        and value.func.attr in cls.PATH_TRANSFORM_METHODS
+                        and bool({
+                            item.id for item in ast.walk(value.func.value)
+                            if isinstance(item, ast.Name)
+                        } & tainted)
+                    ) or (
+                        local_return_tainted
+                    )
+                    path_container_expression = (
+                        isinstance(value, ast.Name)
+                        and value.id in path_containers
+                    ) or (
+                        isinstance(value, (ast.Dict, ast.List, ast.Set, ast.Tuple))
+                        and bool(value_names & (tainted | path_containers))
+                    )
+                    targets = node.targets if isinstance(node, ast.Assign) else [node.target]
+                    target_names = {
+                        item.id
+                        for target in targets
+                        for item in ast.walk(target)
+                        if isinstance(item, ast.Name)
+                    }
+                    raw_callable_expression = (
+                        isinstance(value, ast.Name)
+                        and value.id in tainted_callables
+                    ) or (
+                        isinstance(value, ast.Attribute)
+                        and value.attr in cls.RAW_READ_METHODS
+                        and bool(names_in(value.value) & tainted)
+                    ) or (
+                        isinstance(value, ast.Call)
+                        and (
+                            (
+                                isinstance(value.func, ast.Name)
+                                and value.func.id == "partial"
+                            )
+                            or (
+                                isinstance(value.func, ast.Attribute)
+                                and value.func.attr == "partial"
+                            )
+                        )
+                        and len(value.args) >= 2
+                        and (
+                            (
+                                isinstance(value.args[0], ast.Name)
+                                and (
+                                    value.args[0].id == "open"
+                                    or value.args[0].id in tainted_callables
+                                )
+                            )
+                            or (
+                                isinstance(value.args[0], ast.Attribute)
+                                and value.args[0].attr in cls.RAW_READ_METHODS
+                            )
+                        )
+                        and bool(
+                            {
+                                item.id
+                                for argument in value.args[1:]
+                                for item in ast.walk(argument)
+                                if isinstance(item, ast.Name)
+                            }
+                            & tainted
+                        )
+                    )
+                    assigned: set[str] = set()
+                    if (
+                        len(targets) == 1
+                        and isinstance(targets[0], (ast.Tuple, ast.List))
+                        and isinstance(value, (ast.Tuple, ast.List))
+                        and len(targets[0].elts) == len(value.elts)
+                    ):
+                        for target_item, value_item in zip(targets[0].elts, value.elts):
+                            item_names = {
+                                item.id for item in ast.walk(value_item)
+                                if isinstance(item, ast.Name)
+                            }
+                            if item_names & tainted:
+                                assigned.update(
+                                    item.id for item in ast.walk(target_item)
+                                    if isinstance(item, ast.Name)
+                                )
+                    elif path_expression:
+                        assigned = target_names
+                    if not assigned.issubset(tainted):
+                        tainted.update(assigned)
+                        changed = True
+                    container_assigned = (
+                        target_names if path_container_expression else set()
+                    )
+                    if not container_assigned.issubset(path_containers):
+                        path_containers.update(container_assigned)
+                        changed = True
+                    callable_assigned = (
+                        target_names if raw_callable_expression else set()
+                    )
+                    if not callable_assigned.issubset(tainted_callables):
+                        tainted_callables.update(callable_assigned)
+                        changed = True
+            reached = False
+            violations: list[str] = []
+            for attribute in (
+                node for node in ast.walk(function)
+                if isinstance(node, ast.Attribute)
+                and node.attr in cls.RAW_READ_METHODS
+            ):
+                raw_taint = names_in(attribute.value) & tainted
+                if raw_taint:
+                    violations.append(
+                        f"{name}:{attribute.attr}:{sorted(raw_taint)}"
+                    )
+            calls = sorted(
+                (node for node in ast.walk(function) if isinstance(node, ast.Call)),
+                key=lambda node: (getattr(node, "lineno", 0), getattr(node, "col_offset", 0)),
+            )
+            parameters_by_function = {
+                function_name: cls._function_parameters(function_node)
+                for function_name, function_node in functions.items()
+            }
+            for node in calls:
+                target = node.func
+                called = target.id if isinstance(target, ast.Name) else (
+                    target.attr if isinstance(target, ast.Attribute) else None
+                )
+                argument_names = {
+                    item.id
+                    for argument in (*node.args, *(keyword.value for keyword in node.keywords))
+                    for item in ast.walk(argument)
+                    if isinstance(item, ast.Name)
+                }
+                tainted_arguments = argument_names & tainted
+                path_container_arguments = argument_names & path_containers
+                if called == "validate_published_weekly_bundle" and tainted_arguments:
+                    reached = True
+                if isinstance(target, ast.Name) and target.id in tainted_callables:
+                    violations.append(f"{name}:raw_callable:{target.id}")
+                if isinstance(target, ast.Attribute) and called in cls.RAW_READ_METHODS:
+                    owner_names = {
+                        item.id for item in ast.walk(target.value) if isinstance(item, ast.Name)
+                    }
+                    raw_taint = (owner_names | argument_names) & tainted
+                    if raw_taint:
+                        violations.append(
+                            f"{name}:{called}:{sorted(raw_taint)}"
+                        )
+                elif isinstance(target, ast.Name) and called == "open" and tainted_arguments:
+                    violations.append(f"{name}:open:{sorted(tainted_arguments)}")
+                if called in functions and (
+                    tainted_arguments or path_container_arguments
+                ):
+                    child_taint = child_taint_for_call(
+                        node, functions[called], tainted
+                    )
+                    child_path_containers = child_taint_for_call(
+                        node, functions[called], path_containers
+                    )
+                    child_reached, child_violations, _child_return_tainted = analyse(
+                        called,
+                        child_taint,
+                        child_path_containers,
+                        (*stack, name),
+                    )
+                    reached = reached or child_reached
+                    violations.extend(child_violations)
+                elif (
+                    called not in functions
+                    and tainted_arguments
+                    and called not in cls.SAFE_PATH_CALLS
+                    and called != "open"
+                ):
+                    violations.append(
+                        f"{name}:external_path_call:{called}:{sorted(tainted_arguments)}"
+                    )
+            return_tainted = False
+            for return_node in (
+                node for node in ast.walk(function) if isinstance(node, ast.Return)
+            ):
+                value = return_node.value
+                if value is None:
+                    continue
+                if (
+                    isinstance(value, ast.Call)
+                    and isinstance(value.func, ast.Name)
+                    and value.func.id == "validate_published_weekly_bundle"
+                ):
+                    continue
+                if (
+                    isinstance(value, ast.Call)
+                    and isinstance(value.func, ast.Name)
+                    and value.func.id in functions
+                ):
+                    child_taint = child_taint_for_call(
+                        value, functions[value.func.id], tainted
+                    )
+                    child_path_containers = child_taint_for_call(
+                        value, functions[value.func.id], path_containers
+                    )
+                    if child_taint or child_path_containers:
+                        _r, _v, child_returns_taint = analyse(
+                            value.func.id,
+                            child_taint,
+                            child_path_containers,
+                            (*stack, name),
+                        )
+                        return_tainted = return_tainted or child_returns_taint
+                    continue
+                if names_in(value) & tainted:
+                    return_tainted = True
+            result = reached, tuple(dict.fromkeys(violations)), return_tainted
+            cache[key] = result
+            return result
+
+        for entrypoint in entrypoints:
+            if entrypoint not in functions:
+                continue
+            initial = {
+                parameter
+                for parameter in cls._function_parameters(functions[entrypoint])
+                if parameter in cls.WEEKLY_ROOT_NAMES
+            }
+            if entrypoint == "main":
+                initial.add("out_dir")
+            reached, violations, _return_tainted = analyse(
+                entrypoint, initial, set(), ()
+            )
+            if reached:
+                reaches_validator.add(entrypoint)
+            raw_weekly_reads.extend(violations)
+        return reaches_validator, raw_weekly_reads
+
+    def test_every_formal_entrypoint_reaches_validator_and_no_raw_weekly_loader_survives(self):
+        for relative, entrypoints in self.ENTRYPOINTS.items():
+            with self.subTest(consumer=relative):
+                source = (ROOT / relative).read_text(encoding="utf-8")
+                reaches_validator, raw_weekly_reads = self._audit_source(source, entrypoints)
+                self.assertEqual(entrypoints - reaches_validator, set())
+                if relative == "runners/a_short_weekly_sidecar_health.py":
+                    self.assertEqual(
+                        raw_weekly_reads,
+                        ["_failed_m67_receipt_evidence:read_bytes:['receipt_path']"],
+                    )
+                else:
+                    self.assertEqual(raw_weekly_reads, [])
+                self.assertNotIn("require_canonical_path", source)
+                self.assertNotIn("verify_markdown_render", source)
+
+    def test_inventory_matches_automatic_engine_runner_discovery(self):
+        discovered = set()
+        for directory in ("engine", "runners"):
+            for path in (ROOT / directory).iterdir():
+                if path.suffix.lower() not in {".py", ".ps1"}:
+                    continue
+                relative = path.relative_to(ROOT).as_posix()
+                source = path.read_text(encoding="utf-8")
+                if any(token in source for token in self.INVENTORY_DISCOVERY_TOKENS):
+                    discovered.add(relative)
+        discovered -= self.INVENTORY_EXCLUSIONS
+        self.assertEqual(discovered, set(self.ENTRYPOINTS))
+        self.assertIn("runners/a_short_weekly_sidecar_health.py", discovered)
+        self.assertEqual(set(self.NONCONSUMER_ENTRYPOINTS), set(self.ENTRYPOINTS))
+        for relative, formal in self.ENTRYPOINTS.items():
+            source = (ROOT / relative).read_text(encoding="utf-8")
+            public_entrypoints = self._public_entrypoints(source)
+            classified = formal | self.NONCONSUMER_ENTRYPOINTS[relative]
+            self.assertEqual(
+                public_entrypoints,
+                classified,
+                f"unclassified public entrypoint in {relative}",
+            )
+
+    def test_guard_dies_on_indirect_two_layer_after_use_and_open_dialects(self):
+        sources = (
+            """
+from pathlib import Path
+def helper(path):
+    return Path(path).read_bytes()
+def capture_after_published_weekly(out_path):
+    validate_published_weekly_bundle(out_path)
+    return helper(out_path)
+""",
+            """
+def helper_two(renamed_file):
+    return renamed_file.read_text()
+def helper_one(path):
+    return helper_two(path)
+def capture_after_published_weekly(out_path):
+    return helper_one(out_path)
+""",
+            """
+def capture_after_published_weekly(out_path):
+    value = out_path.read_bytes()
+    validate_published_weekly_bundle(out_path)
+    return value
+""",
+            """
+import json
+def helper(path):
+    with open(path, encoding="utf-8") as handle:
+        return json.load(handle)
+def capture_after_published_weekly(out_path):
+    validate_published_weekly_bundle(out_path)
+    return helper(out_path)
+""",
+            """
+def capture_after_published_weekly(out_path):
+    validate_published_weekly_bundle(out_path)
+    return imported_json_loader(out_path)
+""",
+        )
+        for source in sources:
+            with self.subTest(source=source.strip().splitlines()[-1]):
+                _reaches_validator, raw_weekly_reads = self._audit_source(
+                    source, {"capture_after_published_weekly"}
+                )
+                self.assertTrue(raw_weekly_reads)
+
+    def test_guard_accepts_snapshot_only_helper_and_discovers_renamed_public_entrypoints(self):
+        safe = """
+def helper(bundle):
+    return bundle.weekly
+def capture_after_published_weekly(out_path):
+    bundle = validate_published_weekly_bundle(out_path)
+    return helper(bundle)
+"""
+        reaches, raw = self._audit_source(safe, {"capture_after_published_weekly"})
+        self.assertEqual(reaches, {"capture_after_published_weekly"})
+        self.assertEqual(raw, [])
+        for parameter in ("source", "input", "weekly", "artifact"):
+            with self.subTest(parameter=parameter):
+                planted = safe + f"""
+def second_weekly_consumer({parameter}):
+    return Path({parameter}).read_bytes()
+"""
+                discovered = self._public_entrypoints(planted)
+                self.assertIn("second_weekly_consumer", discovered)
+                self.assertNotEqual(
+                    discovered,
+                    {"capture_after_published_weekly"},
+                )
+                classified = {"capture_after_published_weekly", "helper"}
+                self.assertNotEqual(discovered, classified)
+
+    def test_guard_tracks_validator_wrapper_return_and_varargs(self):
+        raw_return = """
+def validated_path(path):
+    validate_published_weekly_bundle(path)
+    return path
+def capture_after_published_weekly(out_path):
+    escaped = validated_path(out_path)
+    return escaped.read_bytes()
+"""
+        snapshot_return = """
+def validated_snapshot(path):
+    return validate_published_weekly_bundle(path)
+def capture_after_published_weekly(out_path):
+    bundle = validated_snapshot(out_path)
+    return bundle.weekly
+"""
+        vararg_sources = (
+            """
+def helper(*args):
+    return args[0].read_bytes()
+def capture_after_published_weekly(out_path):
+    validate_published_weekly_bundle(out_path)
+    return helper(out_path)
+""",
+            """
+def helper_two(**kwargs):
+    return kwargs["source"].read_text()
+def helper_one(*args):
+    return helper_two(source=args[0])
+def capture_after_published_weekly(out_path):
+    validate_published_weekly_bundle(out_path)
+    return helper_one(out_path)
+""",
+        )
+        reaches, violations = self._audit_source(
+            raw_return, {"capture_after_published_weekly"}
+        )
+        self.assertEqual(reaches, {"capture_after_published_weekly"})
+        self.assertTrue(violations)
+        reaches, violations = self._audit_source(
+            snapshot_return, {"capture_after_published_weekly"}
+        )
+        self.assertEqual(reaches, {"capture_after_published_weekly"})
+        self.assertEqual(violations, [])
+        for source in vararg_sources:
+            with self.subTest(source=source.strip().splitlines()[0]):
+                _reaches, violations = self._audit_source(
+                    source, {"capture_after_published_weekly"}
+                )
+                self.assertTrue(violations)
+
+    def test_guard_tracks_subscript_and_container_aliases(self):
+        sources = (
+            """
+def helper(**kwargs):
+    escaped = kwargs["source"]
+    return escaped.read_text()
+def capture_after_published_weekly(out_path):
+    validate_published_weekly_bundle(out_path)
+    return helper(source=out_path)
+""",
+            """
+def helper(*args):
+    escaped = args[0]
+    return escaped.read_bytes()
+def capture_after_published_weekly(out_path):
+    validate_published_weekly_bundle(out_path)
+    return helper(out_path)
+""",
+            """
+def helper(path):
+    box = {"source": path}
+    escaped = box["source"]
+    return escaped.read_text()
+def capture_after_published_weekly(out_path):
+    validate_published_weekly_bundle(out_path)
+    return helper(out_path)
+""",
+            """
+def helper(box):
+    escaped = box["source"]
+    return escaped.read_text()
+def capture_after_published_weekly(out_path):
+    box = {"source": out_path}
+    validate_published_weekly_bundle(out_path)
+    return helper(box)
+""",
+        )
+        for source in sources:
+            with self.subTest(source=source.strip().splitlines()[0]):
+                reaches, violations = self._audit_source(
+                    source, {"capture_after_published_weekly"}
+                )
+                self.assertEqual(reaches, {"capture_after_published_weekly"})
+                self.assertTrue(violations)
+
+    def test_public_callable_aliases_are_inventory_visible(self):
+        local_alias = """
+def _raw(path):
+    return path.read_bytes()
+capture_after_published_weekly = _raw
+"""
+        imported_alias = """
+from elsewhere import raw_loader as capture_after_published_weekly
+"""
+        partial_alias = """
+import functools
+def _raw(path):
+    return path.read_bytes()
+capture_after_published_weekly = functools.partial(_raw)
+"""
+        explicit_export = """
+__all__ = ["capture_after_published_weekly"]
+def _raw(path):
+    return path.read_bytes()
+capture_after_published_weekly = _raw
+"""
+        for source in (
+            local_alias,
+            imported_alias,
+            partial_alias,
+            explicit_export,
+        ):
+            with self.subTest(source=source.strip().splitlines()[-1]):
+                self.assertIn(
+                    "capture_after_published_weekly",
+                    self._public_entrypoints(source),
+                )
+
+    def test_guard_tracks_attribute_open_arguments(self):
+        for module in ("io", "gzip", "bz2", "lzma"):
+            with self.subTest(module=module):
+                source = f"""
+import {module}
+import json
+def capture_after_published_weekly(out_path):
+    validate_published_weekly_bundle(out_path)
+    with {module}.open(out_path, "rb") as handle:
+        return json.load(handle)
+"""
+                reaches, violations = self._audit_source(
+                    source, {"capture_after_published_weekly"}
+                )
+                self.assertEqual(reaches, {"capture_after_published_weekly"})
+                self.assertTrue(violations)
+
+    def test_guard_tracks_bound_raw_callables_container_extractors_and_wrapped_loaders(self):
+        sources = (
+            """
+def capture_after_published_weekly(out_path):
+    reader = out_path.read_bytes
+    alias = reader
+    validate_published_weekly_bundle(out_path)
+    return alias()
+""",
+            """
+def helper(**kwargs):
+    escaped = kwargs.get("source")
+    return escaped.read_text()
+def capture_after_published_weekly(out_path):
+    validate_published_weekly_bundle(out_path)
+    return helper(source=out_path)
+""",
+            """
+import pandas as pd
+def capture_after_published_weekly(out_path):
+    validate_published_weekly_bundle(out_path)
+    return pd.read_json(Path(out_path))
+""",
+            """
+def make_reader(path):
+    return path.read_bytes
+def capture_after_published_weekly(out_path):
+    reader = make_reader(out_path)
+    validate_published_weekly_bundle(out_path)
+    return reader()
+""",
+            """
+import functools
+def capture_after_published_weekly(out_path):
+    reader = functools.partial(out_path.read_bytes)
+    validate_published_weekly_bundle(out_path)
+    return reader()
+""",
+            """
+def capture_after_published_weekly(out_path):
+    escaped = str(out_path)
+    validate_published_weekly_bundle(out_path)
+    return Path(escaped).read_bytes()
+""",
+            """
+import os
+def capture_after_published_weekly(out_path):
+    escaped = os.fspath(out_path)
+    box = {"reader": Path(escaped).read_bytes}
+    validate_published_weekly_bundle(out_path)
+    return box["reader"]()
+""",
+            """
+def capture_after_published_weekly(out_path):
+    escaped = f"prefix-{out_path}-suffix"
+    validate_published_weekly_bundle(out_path)
+    return Path(escaped).read_bytes()
+""",
+            """
+def stringify(path):
+    return f"{path}"
+def capture_after_published_weekly(out_path):
+    escaped = stringify(out_path)
+    validate_published_weekly_bundle(out_path)
+    return Path(escaped).read_bytes()
+""",
+            """
+def capture_after_published_weekly(out_path):
+    escaped = out_path.__fspath__()
+    validate_published_weekly_bundle(out_path)
+    return Path(escaped).read_bytes()
+""",
+            """
+import os
+def capture_after_published_weekly(out_path):
+    encoded = str(out_path).encode("utf-8")
+    restored = os.fsdecode(encoded)
+    validate_published_weekly_bundle(out_path)
+    return Path(restored).read_text()
+""",
+        )
+        for source in sources:
+            with self.subTest(source=source.strip().splitlines()[-1]):
+                reaches, violations = self._audit_source(
+                    source, {"capture_after_published_weekly"}
+                )
+                self.assertEqual(reaches, {"capture_after_published_weekly"})
+                self.assertTrue(violations)
+        for module in ("io", "gzip", "bz2", "lzma"):
+            with self.subTest(module=f"{module}.open partial"):
+                source = f"""
+import functools
+import {module}
+def capture_after_published_weekly(out_path):
+    reader = functools.partial({module}.open, out_path, "rb")
+    validate_published_weekly_bundle(out_path)
+    return reader()
+"""
+                reaches, violations = self._audit_source(
+                    source, {"capture_after_published_weekly"}
+                )
+                self.assertEqual(reaches, {"capture_after_published_weekly"})
+                self.assertTrue(violations)
+
+    def test_guard_does_not_credit_validator_of_an_unrelated_path(self):
+        planted = """
+def helper(source_path):
+    validate_published_weekly_bundle("unrelated/weekly_m67.json")
+def capture_after_published_weekly(out_path):
+    helper(out_path)
+"""
+        reaches, _raw = self._audit_source(
+            planted, {"capture_after_published_weekly"}
+        )
+        self.assertEqual(reaches, set())
+
+    def test_inventory_deletion_control_turns_red(self):
+        inventory = dict(self.ENTRYPOINTS)
+        inventory.pop("runners/a_short_weekly_sidecar_health.py")
+        discovered = set(self.ENTRYPOINTS)
+        self.assertNotEqual(discovered, set(inventory))
 
 
 if __name__ == "__main__":

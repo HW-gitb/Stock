@@ -346,14 +346,21 @@ def select_stage3_top5(eligible_pool: list[dict], rank_source: str) -> list[dict
 
 
 def _verify_weekly_receipt(out_path: str | Path, receipt_path: str | Path, decision_date: str,
-                           run_date: str, source_identity: dict) -> dict:
+                           run_date: str, source_identity: dict):
     out, receipt_file = Path(out_path).resolve(), Path(receipt_path).resolve()
     expected_receipt = out.with_suffix("").with_suffix(".receipt.json")
-    if out.name != "weekly_m67.json" or receipt_file != expected_receipt or not out.with_suffix(".md").is_file():
+    if out.name != "weekly_m67.json" or receipt_file != expected_receipt:
         raise OverlayAdjudicationError("P4a requires the canonical complete weekly_m67 JSON/Markdown/receipt bundle")
-    weekly, receipt = _load(out), _load(receipt_file)
+    try:
+        from runners.a_short_weekly_pipeline import validate_published_weekly_bundle
+        bundle = validate_published_weekly_bundle(out, receipt_file)
+    except (OSError, ValueError) as exc:
+        raise OverlayAdjudicationError(
+            "P4a requires the canonical complete weekly_m67 JSON/Markdown/receipt bundle"
+        ) from exc
+    weekly, receipt = bundle.weekly, bundle.receipt
     lineage = weekly.get("run_lineage") or {}
-    if weekly.get("as_of") != decision_date or receipt.get("stage_status") != "complete" or receipt.get("as_of") != decision_date:
+    if weekly.get("as_of") != decision_date:
         raise OverlayAdjudicationError("P4a requires a complete same-date M6.7 publish receipt")
     if not _published_on_run_date(receipt.get("published_at"), run_date, "M6.7 receipt"):
         raise OverlayAdjudicationError("P4a M6.7 receipt is not published on the live run date")
@@ -361,15 +368,13 @@ def _verify_weekly_receipt(out_path: str | Path, receipt_path: str | Path, decis
         if not source_identity.get(field) or lineage.get(field) != source_identity.get(field) or \
                 receipt.get(field) != source_identity.get(field):
             raise OverlayAdjudicationError(f"P4a M6.7 receipt {field} identity drifted")
-    if set(receipt.get("outputs") or []) != {out.name, out.with_suffix(".md").name}:
-        raise OverlayAdjudicationError("P4a M6.7 receipt output set drifted")
     freshness = lineage.get("price_freshness") or {}
     if freshness.get("run_date") != run_date or freshness.get("mode") not in {"strict_as_of", "intraday_prior_settled"} or \
             str(freshness.get("price_data_through") or "") > decision_date:
         raise OverlayAdjudicationError("P4a M6.7 live price/PIT lineage drifted")
     if freshness.get("mode") == "strict_as_of" and freshness.get("price_data_through") != decision_date:
         raise OverlayAdjudicationError("P4a strict-as-of M6.7 lineage is not same-date")
-    return weekly
+    return bundle
 
 
 def _file_sha256(path: str | Path) -> str:
@@ -464,7 +469,10 @@ def capture_after_published_weekly(*, root: str | Path, decision_date: str, run_
     # The profile in the published Stage3 snapshot and the epoch header must
     # be judged against this one immutable configuration read.
     epoch_context = _epoch_context()
-    weekly = _verify_weekly_receipt(out_path, receipt_path, decision_date, run_date, source_identity)
+    weekly_bundle = _verify_weekly_receipt(
+        out_path, receipt_path, decision_date, run_date, source_identity
+    )
+    weekly = weekly_bundle.weekly
     price_data_through = str(((weekly.get("run_lineage") or {}).get("price_freshness") or {}).get("price_data_through") or "")
     if not price_data_through:
         raise OverlayAdjudicationError("P4a M6.7 bundle lacks the canonical price_data_through clock")
@@ -475,8 +483,9 @@ def capture_after_published_weekly(*, root: str | Path, decision_date: str, run_
         epoch_context["active_profile_binding"], epoch_context["screening_runtime_recipe"])
     fingerprint, epoch = epoch_context["contract_fingerprint"], epoch_context["epoch_id"]
     payload = {"admission_binding": epoch_context["admission_binding"], "run_date": run_date,
-                "run_id": source_identity["run_id"], "weekly_bundle_sha256": _file_sha256(out_path),
-                "weekly_receipt_digest": _digest(_load(receipt_path)),
+                "run_id": source_identity["run_id"],
+                "weekly_bundle_sha256": weekly_bundle.weekly_sha256,
+                "weekly_receipt_digest": _digest(weekly_bundle.receipt),
                "egs_publish_marker_digest": _digest(marker),
                "weekly_candidate_digest": (weekly.get("run_lineage") or {}).get("candidate_digest"),
                "top50_digest": _digest(top50), "eligible_pool_digest": _digest(eligible),

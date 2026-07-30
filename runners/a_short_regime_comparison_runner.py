@@ -52,7 +52,7 @@ from engine.a_short_regime_classifier import (
     classify_raw_regime, classify_stateful_regime, validate_comparison_record,
 )
 from engine.a_short_regime_action_comparison import (
-    build_action_record, m67_provenance, merge_action_records, refresh_action_records,
+    build_action_record, m67_provenance_from_bundle, merge_action_records, refresh_action_records,
     summarize_action_records, validate_action_record, build_candidate_effect_record,
     candidate_effect_policy, candidate_effect_policy_fingerprint,
     summarize_candidate_effect_records, validate_candidate_effect_summary,
@@ -490,15 +490,14 @@ def _tracker_rows_by_frozen_key(rows: list[dict]) -> dict[tuple[str, str], dict]
     return out
 
 
-def _m67_build_candidates(path: str, *, as_of: str) -> tuple[list[dict], dict]:
+def _m67_build_candidates(bundle, *, as_of: str) -> tuple[list[dict], dict]:
     """Return a deliberately minimal public candidate projection from a weekly M6.7 artifact.
 
     The full weekly artifact may be private when it contains an account.  This function reads it
     only to decide whether a row is an ordinary EGS new-build candidate, then retains no name,
     position, cash, price, or report body in the P1 artifacts.
     """
-    raw = Path(path).read_bytes()
-    doc = json.loads(raw.decode("utf-8"))
+    doc = bundle.weekly
     if not isinstance(doc, dict) or doc.get("schema_name") != "a_short_weekly_report":
         raise ValueError("M6.7 source is not an a_short_weekly_report")
     if str(doc.get("as_of")) != str(as_of):
@@ -543,7 +542,7 @@ def _m67_build_candidates(path: str, *, as_of: str) -> tuple[list[dict], dict]:
         json.dumps(sorted(c["ts_code"] for c in candidates), separators=(",", ":")).encode("utf-8")
     ).hexdigest()
     return candidates, {
-        "m67_sha256": _sha256_bytes(raw),
+        "m67_sha256": bundle.weekly_sha256,
         "candidate_digest": candidate_digest,
         "run_id": run_id,
         "candidate_set_digest": candidate_set_digest,
@@ -637,7 +636,7 @@ def _render_candidate_effect_summary(summary: dict) -> str:
 
 def run_candidate_effect_sidecar(*, decision_as_of: str, regime_ledger: dict, m67_report_path: str,
                                  tracker_path: str, ledger_path: str, summary_path: str,
-                                 markdown_path: str) -> dict:
+                                 markdown_path: str, published_bundle=None) -> dict:
     """Freeze/refresh P1 Cut2 evidence from existing M6.7 and forward-tracker artifacts only.
 
     This never fetches market data and never writes production or private-account artifacts.  A
@@ -647,10 +646,15 @@ def run_candidate_effect_sidecar(*, decision_as_of: str, regime_ledger: dict, m6
     """
     if not is_canonical_date(str(decision_as_of)):
         raise ValueError("candidate-effect decision_as_of must be a canonical date")
+    if published_bundle is None:
+        from runners.a_short_weekly_pipeline import validate_published_weekly_bundle
+        published_bundle = validate_published_weekly_bundle(m67_report_path)
+    candidates, m67_meta = _m67_build_candidates(
+        published_bundle, as_of=str(decision_as_of)
+    )
     all_tracker_rows = _load_tracker_rows(tracker_path)
     tracker_by_code, tracker_meta = _tracker_rows_for_week(
         tracker_path, str(decision_as_of), all_rows=all_tracker_rows)
-    candidates, m67_meta = _m67_build_candidates(m67_report_path, as_of=str(decision_as_of))
     if (m67_meta["candidate_digest"] != tracker_meta["candidate_digest"]
             or m67_meta["run_id"] != tracker_meta["run_id"]):
         return {"status": "skipped_source_mismatch", "counted": False,
@@ -774,6 +778,10 @@ def run_regime_step(*, as_of: str, trade_calendar, v14_2_regime: str,
         raise ValueError("candidate-effect sidecar requires all private/public/tracker paths")
     if candidate_effect_requested and not action_requested:
         raise ValueError("candidate-effect sidecar requires the same-week D2 M6.7 source and decision date")
+    published_bundle = None
+    if action_requested or candidate_effect_requested:
+        from runners.a_short_weekly_pipeline import validate_published_weekly_bundle
+        published_bundle = validate_published_weekly_bundle(m67_report_path)
     if action_requested:
         decision_as_of = str(action_decision_as_of)
         if not is_canonical_date(decision_as_of) or not is_canonical_date(str(as_of)):
@@ -814,24 +822,22 @@ def run_regime_step(*, as_of: str, trade_calendar, v14_2_regime: str,
         refreshed = refresh_action_records(old_actions, out["comparison_records"])
         existing_action = next((row for row in refreshed if str(row["as_of"]) == str(as_of)), None)
         if existing_action is None:
-            m67_source = m67_provenance(str(m67_report_path), as_of=as_of)
-            m67_doc = json.loads(Path(m67_report_path).read_text(encoding="utf-8"))
+            m67_source = m67_provenance_from_bundle(published_bundle, as_of=as_of)
+            m67_doc = published_bundle.weekly
             m67_lineage = m67_doc.get("run_lineage") or {}
             price_freshness = m67_lineage.get("price_freshness") or {}
             source_price_data_through = str(price_freshness.get("price_data_through") or "")
             if price_freshness.get("mode") not in {"strict_as_of", "intraday_prior_settled"} \
                     or not source_price_data_through:
                 raise ValueError("D2 M6.7 source lacks a complete price freshness clock")
-            receipt_path = Path(m67_report_path).with_name("weekly_m67.receipt.json")
-            source_receipt_complete = False
-            if receipt_path.is_file():
-                receipt = json.loads(receipt_path.read_text(encoding="utf-8"))
-                source_receipt_complete = (
-                    receipt.get("stage_status") == "complete"
-                    and receipt.get("as_of") == as_of
-                    and receipt.get("run_id") == m67_lineage.get("run_id")
-                    and receipt.get("candidate_digest") == m67_lineage.get("candidate_digest")
-                )
+            receipt = published_bundle.receipt
+            source_receipt_complete = (
+                receipt.get("as_of") == as_of
+                and receipt.get("run_id") == m67_lineage.get("run_id")
+                and receipt.get("candidate_digest") == m67_lineage.get("candidate_digest")
+            )
+            if not source_receipt_complete:
+                raise ValueError("D2 M6.7 receipt identity is incomplete")
             if price_freshness.get("mode") == "intraday_prior_settled":
                 price_day_latest_settled = (
                     str(price_freshness.get("accepted_prior_settled_date") or "") == source_price_data_through
@@ -874,7 +880,7 @@ def run_regime_step(*, as_of: str, trade_calendar, v14_2_regime: str,
             decision_as_of=str(action_decision_as_of), regime_ledger=out["ledger"],
             m67_report_path=str(m67_report_path), tracker_path=str(forward_tracker_path),
             ledger_path=str(candidate_effect_ledger_path), summary_path=str(candidate_effect_summary_path),
-            markdown_path=str(candidate_effect_markdown_path),
+            markdown_path=str(candidate_effect_markdown_path), published_bundle=published_bundle,
         )
     return out
 

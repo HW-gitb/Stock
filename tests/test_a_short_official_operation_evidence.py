@@ -2,8 +2,8 @@
 from __future__ import annotations
 
 import copy
+import hashlib
 import json
-import shutil
 import sys
 import tempfile
 import unittest
@@ -110,17 +110,48 @@ def _qfq_execution_rows(*, decision_date: str = "20260202", count: int = 21) -> 
 
 
 def _publish(base: Path) -> tuple[Path, Path]:
-    """Copy a committed, account-free official bundle without reconstructing a recommendation.
+    """Bind the committed account-free recommendation with a current-format receipt.
 
-    This fixture is deliberately the published source shape, not an approximate M6.7
-    reconstruction. The live builder's effect-contract guard is tested in its own
-    module; this suite isolates the capture consumer's receipt/schema boundary.
+    The recommendation JSON is unchanged. This consumer fixture uses the current
+    deterministic renderer and the same byte-level receipt contract as the publisher;
+    publisher behavior itself is covered by the weekly-pipeline suite.
     """
+    from runners.a_short_m67_render import render_weekly_markdown
+
     output = base / FIXTURE_AS_OF / "weekly_m67.json"
     output.parent.mkdir(parents=True)
-    for name in ("weekly_m67.json", "weekly_m67.md", "weekly_m67.receipt.json"):
-        shutil.copy2(FIXTURE_DIR / name, output.parent / name)
+    weekly_bytes = (FIXTURE_DIR / "weekly_m67.json").read_bytes()
+    weekly = json.loads(weekly_bytes.decode("utf-8-sig"))
+    markdown_bytes = render_weekly_markdown(weekly).encode("utf-8")
+    output.write_bytes(weekly_bytes)
+    output.with_suffix(".md").write_bytes(markdown_bytes)
+    lineage = weekly["run_lineage"]
+    receipt = {
+        "schema_name": "a_short_weekly_publish_receipt",
+        "schema_version": "1.1.0",
+        "as_of": weekly["as_of"],
+        "decision_as_of": weekly["decision_as_of"],
+        "run_date": weekly["run_date"],
+        "price_data_through": weekly["price_data_through"],
+        "run_id": lineage["run_id"],
+        "candidate_digest": lineage["candidate_digest"],
+        "published_at": "2026-07-27T12:00:00+08:00",
+        "account_snapshot": lineage.get("account_snapshot"),
+        "stage_status": "complete",
+        "outputs": ["weekly_m67.json", "weekly_m67.md"],
+        "outputs_digest": {
+            "weekly_m67.json": {
+                "sha256": hashlib.sha256(weekly_bytes).hexdigest(),
+                "byte_length": len(weekly_bytes),
+            },
+            "weekly_m67.md": {
+                "sha256": hashlib.sha256(markdown_bytes).hexdigest(),
+                "byte_length": len(markdown_bytes),
+            },
+        },
+    }
     receipt_path = output.with_suffix("").with_suffix(".receipt.json")
+    receipt_path.write_text(json.dumps(receipt, ensure_ascii=False) + "\n", encoding="utf-8")
     return output, receipt_path
 
 
@@ -206,7 +237,7 @@ class OfficialOperationEvidenceCaptureTests(unittest.TestCase):
             self.assertEqual(capture["boundary"]["outcome_settlement_implemented"], False)
             self.assertEqual(capture["boundary"]["modifies_m67"], False)
 
-    def test_same_canonical_decision_with_changed_official_bytes_fails_closed(self):
+    def test_changed_official_bytes_are_rejected_by_receipt_before_capture(self):
         with tempfile.TemporaryDirectory() as td:
             base = Path(td)
             output, receipt = _publish(base)
@@ -214,9 +245,9 @@ class OfficialOperationEvidenceCaptureTests(unittest.TestCase):
             capture_after_published_weekly(root=root, out_path=output, receipt_path=receipt)
             weekly = json.loads(output.read_text(encoding="utf-8"))
             output.write_text(json.dumps(weekly, ensure_ascii=False, indent=4) + "\n", encoding="utf-8")
-            with self.assertRaisesRegex(OfficialOperationEvidenceError, "source_conflict"):
+            with self.assertRaisesRegex(OfficialOperationEvidenceError, "receipt_not_publish_bound"):
                 capture_after_published_weekly(root=root, out_path=output, receipt_path=receipt)
-            self.assertTrue((root / "conflicts" / f"{FIXTURE_AS_OF}.json").is_file())
+            self.assertFalse((root / "conflicts" / f"{FIXTURE_AS_OF}.json").exists())
             original = json.loads((root / "weeks" / FIXTURE_AS_OF / "capture.json").read_text(encoding="utf-8"))
             self.assertNotEqual(original["source_identity"]["official_m67_sha256"], "")
 

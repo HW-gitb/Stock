@@ -662,21 +662,19 @@ def _breakout_entry(candidate: dict[str, Any], official_plan: dict | None, price
 
 
 def _verify_published_bundle(out_path: str | Path, receipt_path: str | Path, decision_date: str,
-                             source_identity: dict[str, Any]) -> dict[str, Any]:
-    out_file, receipt_file = Path(out_path), Path(receipt_path)
-    markdown = out_file.with_suffix(".md")
+                             source_identity: dict[str, Any]):
     try:
-        weekly = json.loads(out_file.read_text(encoding="utf-8"))
-        receipt = json.loads(receipt_file.read_text(encoding="utf-8"))
-    except (OSError, UnicodeDecodeError, json.JSONDecodeError) as exc:
+        from runners.a_short_weekly_pipeline import validate_published_weekly_bundle
+        bundle = validate_published_weekly_bundle(out_path, receipt_path)
+    except (OSError, ValueError) as exc:
         raise TargetPolicyError("published_bundle_unreadable") from exc
+    weekly, receipt = bundle.weekly, bundle.receipt
     lineage = weekly.get("run_lineage") or {}
     if str(weekly.get("as_of")) != str(decision_date) or lineage.get("run_id") != source_identity.get("run_id") or \
-            receipt.get("stage_status") != "complete" or receipt.get("as_of") != str(decision_date) or \
             receipt.get("run_id") != lineage.get("run_id") or receipt.get("candidate_digest") != lineage.get("candidate_digest") or \
-            receipt.get("candidate_digest") != source_identity.get("candidate_digest") or not markdown.is_file():
+            receipt.get("candidate_digest") != source_identity.get("candidate_digest"):
         raise TargetPolicyError("published_bundle_binding_invalid")
-    return weekly
+    return bundle
 
 
 def capture_after_published_weekly(*, root: str | Path, decision_date: str, candidates: list[dict],
@@ -687,7 +685,10 @@ def capture_after_published_weekly(*, root: str | Path, decision_date: str, cand
     """Freeze P2 target/breakout deltas only after the official bundle exists."""
     decision_date = _date(decision_date)
     private_path, ledger = _load_or_initialize(root)
-    weekly = _verify_published_bundle(out_path, receipt_path, decision_date, source_identity)
+    weekly_bundle = _verify_published_bundle(
+        out_path, receipt_path, decision_date, source_identity
+    )
+    weekly = weekly_bundle.weekly
     price_data_through = str(((weekly.get("run_lineage") or {}).get("price_freshness") or {}).get("price_data_through") or "")
     _date(price_data_through)
     if forward_eligible:
@@ -751,7 +752,7 @@ def capture_after_published_weekly(*, root: str | Path, decision_date: str, cand
         "forward_eligible": bool(forward_eligible),
         "source_identity": {"run_id": str(source_identity["run_id"]),
                             "candidate_digest": str(source_identity["candidate_digest"]),
-                            "official_m67_sha256": hashlib.sha256(Path(out_path).read_bytes()).hexdigest(),
+                            "official_m67_sha256": weekly_bundle.weekly_sha256,
                             "price_data_through": price_data_through},
     }
     records: dict[str, dict[str, Any]] = {}
