@@ -824,3 +824,27 @@ Web/X producer 共用 `SOURCE_RAW_PUBLISH_FAILURE_REASONS`；两 lane 的 source
 assessment schema/producer/test contract 已从 `1.2.0` 升至 `1.3.0`，三份 ledger 槽位均覆盖 retry 正控与六类 tamper 负控；固定主 Python assessor + schema focused `Ran 53 tests in 8.912s / OK`，无写入 syntax compile 与 JSON Schema meta-validation 通过。测试前后 `provider_samples`、`state/us_short`、tracked 20260802 assessment 均不存在，未联网、未调用 provider、未写真实 probe 产物、未跑 full、未提交。
 
 当前状态仍是 executor ready for independent review；20260802 真实 probe 只能在该修复获 reviewer/committer 独立 PASS 后以预注册 INCONCLUSIVE 口径落盘，不能据此解冻模板质量、query planner、确认器、席位、试探仓、生命周期或 `theme_soft_boost_enabled`。
+
+## 2026-08-01 追加：K3-R113 独立复审 PASS 并合入；真实证据开出 K3-R114（Claude Code，reviewer/committer）
+
+### 改了什么 / 结论
+
+Codex 的 K3-R113 修复经独立复审 **PASS**，提交 `449aad9e`、合入 master `3cba7fa6`：合法同 scope 重试不再被当作账本篡改，而是逐槽记进 `execution_evidence.budget_reservation_attempt_counts` 并映射到预注册 `provider_or_execution_inconclusive_do_not_grade_templates`；query sha / query count / planned 包络 / 单条精确 reservation / 预留时钟顺序五类篡改，以及畸形 `reservation_attempt_count`，仍全部写前硬失败。assessment 契约 `1.2.0 → 1.3.0`。
+
+### 验证命令与结果（reviewer 亲跑）
+
+- 固定主 Python assessor + packet schema focused `53 OK / 11.1s`；交接门 `route-doc + doc-governance 55 OK / 1.3s`；`git diff --check` clean；`1.2.0` 陈旧引用 0 处。
+- reviewer 自写探针补 executor 未覆盖的 sibling 腿：`web_tavily` 与 `web_deepseek` **同时** retry（真实 web 重跑的必然形状）→ 真写盘 INCONCLUSIVE、`{web_tavily:2, web_deepseek:2, x_xai:1}`、理由去重为 1 条（未撞 schema `uniqueItems`）；`0 / -1 / true / "1" / 缺失` 五种畸形 attempt 全部写前硬失败、零 assessment；挖空映射 → 点名测试 3 红、还原 0 红。
+- 零-ref 后备门未被拓宽：`_causal_order_and_floor()` 的 receipt-clock 后备只在 lane 完全无 immutable ref 时进入，而那种 lane 必然已带 `{lane}_immutable_execution_evidence_missing`。
+
+### 失效的旧结论
+
+「K3-R113 修好之后 20260802 就能落一张 INCONCLUSIVE 记录」**不成立**。合并后用真实证据实跑，assessor 在更后面的因果门硬失败：`web theme observed_at cannot be later than discovery generated_at`。原因是两条 lane 都把**模型自报**的主题时刻写进了冻结产物，web 4/4、X 1/5 个主题被戳成决策日零点 `2026-08-02T00:00:00+00:00`，晚于各自产物的生成时刻。正文与修复边界只在 `docs/system_risk_register.md#K3-R114`。
+
+### 下一步注意事项 + 给 Codex 的命令
+
+1. 修 **K3-R114**（离线、零 provider 调用）：两条 lane 的 producer 主题接纳边界补上界 `max(bound source observed_at) <= theme.observed_at <= 本次产出时钟`，逐主题丢弃 + 自己的 ledger reason，别杀整批；assessor 的因果规则不许为了让旧产物过关而放宽。
+2. 20260802 已冻结产物**不可能**再被判定，别在它上面想办法；可判结论只能来自全新非交易槽的重跑，且需用户逐次授权。
+3. register 里还留了一条 Option（assessor 对「冻结证据违反因果顺序」要不要也落 INCONCLUSIVE 而非硬崩）和一条 Optional（`reservation_attempt_count` 类型/下界校验没有点名测试），都不阻塞本刀。
+
+**给 Codex 的命令**：`修复 K3-R114`

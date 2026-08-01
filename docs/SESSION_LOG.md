@@ -1,5 +1,11 @@
 # Session Log
 
+## 2026-08-01 — Claude 审查 FAIL（K3-R114 · 真实证据仍生成不出裁决）
+- **Verdict/Action**: K3-R113 已 PASS 并合入 master（`3cba7fa6`）；但拿真实 20260802 证据跑 assessor 又在因果门硬失败——两条 lane 的模型自报主题时刻晚于其所在产物的生成时刻。probe 记录仍无法生成，stage1 模板质量仍不得判定，20260802 冻结产物即便修好也不可判。
+- **Required**: K3-R114 — 完整技术现状 / 真实探针 / 修复边界 / closure tests / 对已冻结证据的后果只见 `docs/system_risk_register.md`（单一来源，本处不复述）。
+- **Verify**: review-evidence:4a6bc40df700；固定主 Python 在真实证据上跑 assessor 得 `web theme observed_at cannot be later than discovery generated_at`、exit 1、tracked assessment 不存在；实测 web `4/4` 主题与 X `1/5` 主题 `observed_at=2026-08-02T00:00:00+00:00`，两 lane 生成时刻为 `04:39:20Z` / `04:50:59Z`，source 时刻均正常。未跑 full（AGENTS rule 3 未触发）。超时原因: 本轮串了审查 Codex 修复→提交合并→真实证据复跑三段，且真实证据又开出新 Required 需二次落盘。
+- **Next**: Codex：修复 K3-R114。
+
 ## 2026-08-01 — Claude 审查 PASS（K3-R113 assessor 合法重试落盘已闭）
 - **Verdict/Action**: PASS；合法同 scope retry 现在映射为 packet 预注册的 INCONCLUSIVE 并真正写盘，篡改类与畸形 attempt 值仍写前硬失败、零 partial；K3-R113 CLOSED，按 reviewer/committer 流程提交并合入 master。20260802 槽仍只能判 INCONCLUSIVE，不解冻模板质量、query planner 或两个开关。
 - **Required**: 无；Register: `K3-R113` CLOSED（完整机制与 closure evidence 只见 `docs/system_risk_register.md`）。
