@@ -434,6 +434,56 @@ class EffectContractStaticTests(unittest.TestCase):
         error = static_contract_error(contract)
         self.assertIn("must change outcome", error)
 
+    def test_event_risk_phase5_gate_batch_is_leaf_bound_and_changes_main_decision(self):
+        group = next(row for row in self.contract["groups"]
+                     if row["id"] == "candidate_event_risk_phase5_gates")
+        expected = sorted([
+            "candidates[].event_risk.delisting.delisting_warning",
+            "candidates[].event_risk.delisting.st_flag",
+            "candidates[].event_risk.holder_reduction.active_plan",
+            "candidates[].event_risk.suspension.is_suspended",
+        ])
+        self.assertEqual(group["runtime_handler"], "phase5_risk")
+        self.assertEqual(group["proven_consumer_paths"], expected)
+        self.assertIsNone(static_contract_error(self.contract))
+
+        # The source-side mutations must reach the normalized Phase5 risk inputs.
+        source_mutations = {
+            "st_flag": ("delisting", "st_flag"),
+            "delisting_warning": ("delisting", "delisting_warning"),
+            "active_plan": ("holder_reduction", "active_plan"),
+            "is_suspended": ("suspension", "is_suspended"),
+        }
+        for label, (section, key) in source_mutations.items():
+            source = _egs_candidate()
+            source["event_risk"][section][key] = True
+            normalized = normalize_candidate(
+                source, _series(), _overlay_row(), 55.0,
+                {"available_cash": 500000.0}, "震荡市",
+            )
+            mapped = (normalized["event"]["st_or_delisting"]
+                      if label in {"st_flag", "delisting_warning"}
+                      else normalized["event"]["holder_reduction_active"]
+                      if label == "active_plan"
+                      else normalized["derived"]["suspended"])
+            self.assertTrue(mapped, label)
+
+        # Each mapped gate is load-bearing: a clean candidate can build, while
+        # the corresponding source-derived flag becomes a Phase5 hard veto.
+        for section, key, normalized_section, normalized_key, family in (
+            ("event", "holder_reduction_active", "event", "holder_reduction_active", "negative_event"),
+            ("event", "st_or_delisting", "event", "st_or_delisting", "negative_event"),
+            ("derived", "suspended", "derived", "suspended", "liquidity_execution"),
+        ):
+            baseline = build_m67_report(_normalized(), AS_OF, GEN)
+            mutant_input = _normalized()
+            mutant_input[normalized_section][normalized_key] = True
+            mutant = build_m67_report(mutant_input, AS_OF, GEN)
+            self.assertTrue(baseline["machine"]["model_build_eligible"])
+            self.assertFalse(mutant["machine"]["model_build_eligible"])
+            self.assertEqual(mutant["machine"]["risk_families"][family]["action"], "hard_veto")
+            self.assertEqual(mutant["m67"]["table"]["操作"], "否决")
+
 
 class EffectContractRuntimeTests(unittest.TestCase):
     def test_weekly_json_markdown_and_validator_expose_unwired_or_independent_groups(self):

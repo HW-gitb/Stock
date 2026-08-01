@@ -241,6 +241,21 @@
 - **Verify**: 固定主 Python focused 超集（新 schema 测试 + README row-length + route ledger + doc governance）`73 OK / 0.9s`；`py_compile`、`git diff --check` 通过；Web/X future raw roots 均命中 `.gitignore:97 provider_samples/`；`20260802` state/provider_samples 残留检查为 0。schema 反向控制拒绝授权翻真、生产 policy 翻真、复用旧日期、主题预埋、调用上限漂移、事后降门槛和确认效果翻真。
 - **Next**: Claude Code：审查。
 - **Pre-Codex self-review**: `matrix=complete: schema/artifact exact identity + 4 const queries + Web/X separate raw roots + xAI/Tavily/DeepSeek actual-vs-reserved arithmetic + PASS/REVISE/INCONCLUSIVE + all no-effect exits; register=not_applicable: no finding or risk status changed; handoff=existing US-short main handoff updated and desktop checklist updated; focused=73 OK + py_compile + git diff --check + gitignore/BOM/mojibake checks; full-lane=not_triggered: AGENTS rule 3, isolated no-access schema/artifact/test and docs with no production wiring or provider execution; door=route 14 + doc-governance 41 = 55 OK; independent self-review=not_triggered: low-risk isolated schema/docs fast path, main-thread A-F complete, no timeout/restart/fallback`
+## 2026-08-01 — Claude Code 审查 PASS（A-short event_risk 四叶 Phase5 门登记）
+
+- **Verdict/Action**: PASS，已提交并合入 master。本批零生产代码改动，只把本来就在承重的 4 个事件风险叶从 `true_dangling` 拆组登记为 `main_decision`；其余 33 叶如实留在 `true_dangling`。未重封冻结包、未建生产者、未启用新阈值。
+- **Required**: 无。`R-ASHORT-KNIFE13-EVENT-RISK-PHASE5-GATES-PARTIAL-WIRING` 已 closed，正文只见 `docs/system_risk_register.md`。
+- **Verify**: review-evidence:ed1176755593；超时原因:本批零代码改动、承重性只能靠逐叶运行时变异证明，首轮探针用错归一字段名需定位改名重跑。固定 Python 3.13.8；reviewer 自跑 bounded 超集 `Ran 551 tests in 297.7s — OK`（tier=focused / exit=0 / deadline=900s）；自写探针逐叶变异：基线 `建仓`，翻 `suspended`→`否决/['停牌']`、`holder_reduction_active`→`否决/['减持进行中']`、`st_or_delisting`→`否决/['ST/退市']`；拆组实测 `4+33=37` 穷尽不重叠；改标回 `true_dangling` 被拒；计数 241→237 与真接叶数一致。按门禁未跑全量。
+- **Next**: Codex：无待办；用户可授权下一批 true_dangling 接线。
+
+## 2026-08-01 — Codex 执行下一批 candidate_event_risk Phase5 gates（未提交）
+- **Verdict/Action**: 用户已授权；本轮只接 `candidate_event_risk_phase5_gates` 的 4 个叶（`delisting_warning`、`st_flag`、`active_plan`、`is_suspended`），其余 33 个 `candidate_event_risk` 叶继续 `true_dangling`；不扩展其他组、不重封冻结包、不建生产者、不提交。
+- **Required**: `R-ASHORT-KNIFE13-EVENT-RISK-PHASE5-GATES-PARTIAL-WIRING` 需 Claude Code 独立复审。
+- **Verify**: 固定 Python `C:\Users\cnhea\AppData\Local\Programs\Python\Python313\python.exe`（3.13.8）；effect-contract `Ran 36 tests ... OK`；Phase5/weekly/effect/render/consumer focused `Ran 728 tests ... OK`；文档/路由 `Ran 55 tests ... OK`；`py_compile`、schema meta、`git diff --check` OK；full-pack `NOT_VERIFIED`。
+- **Proof-of-use**: 四个源叶的 normalize 映射与 baseline/variant Phase5 负向控制均证明风险门可把建仓改为 `否决`，并绑定 `proven_consumer_paths`。
+- **Pre-Codex self-review**: `matrix=complete: event-risk 4-leaf batch; residual=true_dangling 237 / partial_consumption 41 / main_decision 40 / comparison_track 5 / duplicate_source 42 / display_audit 6; register=updated; handoff=updated; focused=36+728 OK; doc-route=55 OK; py_compile/schema-meta/diff=OK; full-lane=NOT_VERIFIED; door=tests.test_route_doc_ledger_status_consistency + tests.test_doc_governance_guard = Ran 55 tests ... OK; freeze-packet=untouched; producer=not-built; independent-review=pending; commit=not performed`
+- **Next**: Claude Code 独立复审本批 `candidate_event_risk_phase5_gates` 接线。
+
 ## 2026-08-01 — Claude Code 审查 PASS（A-short 12B technical/volatility 改判收口）
 
 - **Verdict/Action**: PASS，已提交并合入 master。42 叶按实际性质改判 `duplicate_source` / `intentionally_independent` 并写明理由，摘要节点降级为展示审计；新增 comparison-track verdict 类级守护。`true_dangling` 仍 241 叶，本批不虚报进度。

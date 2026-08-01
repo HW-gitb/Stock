@@ -323,9 +323,41 @@
     {
       "id": "candidate_event_risk",
       "source_prefixes": [
-        "candidates[].event_risk"
+        "candidates[].event_risk.delisting.negative_net_asset",
+        "candidates[].event_risk.delisting.non_standard_audit",
+        "candidates[].event_risk.holder_reduction.completed_3m_amount",
+        "candidates[].event_risk.holder_reduction.completed_3m_pct_share",
+        "candidates[].event_risk.holder_reduction.observed_at",
+        "candidates[].event_risk.holder_reduction.reduce_penalty",
+        "candidates[].event_risk.holder_reduction.source_status",
+        "candidates[].event_risk.regulatory.evidence[].published_at",
+        "candidates[].event_risk.regulatory.evidence[].source",
+        "candidates[].event_risk.regulatory.evidence[].title",
+        "candidates[].event_risk.regulatory.evidence[].url",
+        "candidates[].event_risk.regulatory.has_inquiry_or_concern_48h",
+        "candidates[].event_risk.regulatory.negative_depth",
+        "candidates[].event_risk.rule6_checks[].evidence[].published_at",
+        "candidates[].event_risk.rule6_checks[].evidence[].source",
+        "candidates[].event_risk.rule6_checks[].evidence[].title",
+        "candidates[].event_risk.rule6_checks[].evidence[].url",
+        "candidates[].event_risk.rule6_checks[].group",
+        "candidates[].event_risk.rule6_checks[].id",
+        "candidates[].event_risk.rule6_checks[].metrics",
+        "candidates[].event_risk.rule6_checks[].name",
+        "candidates[].event_risk.rule6_checks[].notes",
+        "candidates[].event_risk.rule6_checks[].severity",
+        "candidates[].event_risk.rule6_checks[].status",
+        "candidates[].event_risk.suspension.observed_at",
+        "candidates[].event_risk.suspension.recent_suspension_5d",
+        "candidates[].event_risk.suspension.source_status",
+        "candidates[].event_risk.unlock.denominator",
+        "candidates[].event_risk.unlock.large_unlock_flag",
+        "candidates[].event_risk.unlock.observed_at",
+        "candidates[].event_risk.unlock.source_status",
+        "candidates[].event_risk.unlock.unlock_date",
+        "candidates[].event_risk.unlock.unlock_pct"
       ],
-      "source_paths_sha256": "a006204918486233041473e0009d3f6119c1339d152579118346cf0337b912d0",
+      "source_paths_sha256": "775f9daffbc1a62feb44cbfa58bc258f8527fd5caf06e91c86815ebe311b16e3",
       "policy": "must_affect_result",
       "terminal_surfaces": [
         "weekly.effect_contract_ledger",
@@ -333,6 +365,30 @@
       ],
       "runtime_handler": "unresolved_input_group",
       "unresolved_reason": "weekly 只转入部分减持、退市和停牌事实；监管、解禁及其余事件叶字段尚未逐叶证明消费者，整组不得报已联动。"
+    },
+    {
+      "id": "candidate_event_risk_phase5_gates",
+      "source_prefixes": [
+        "candidates[].event_risk.delisting.delisting_warning",
+        "candidates[].event_risk.delisting.st_flag",
+        "candidates[].event_risk.holder_reduction.active_plan",
+        "candidates[].event_risk.suspension.is_suspended"
+      ],
+      "source_paths_sha256": "02cba7a952a4bbb91f4549ddc384db1ad463745409e39773131583e47779d362",
+      "policy": "must_affect_result",
+      "terminal_surfaces": [
+        "reports[].machine.risk_families",
+        "reports[].m67.table.操作",
+        "weekly.effect_contract_ledger"
+      ],
+      "runtime_handler": "phase5_risk",
+      "proven_consumer_paths": [
+        "candidates[].event_risk.delisting.delisting_warning",
+        "candidates[].event_risk.delisting.st_flag",
+        "candidates[].event_risk.holder_reduction.active_plan",
+        "candidates[].event_risk.suspension.is_suspended"
+      ],
+      "consumer_proof_ref": "runners/a_short_weekly_pipeline.py::normalize_candidate -> runners/a_short_phase5_engine.py::classify_risk_families"
     },
     {
       "id": "candidate_catalyst",
@@ -587,6 +643,7 @@
     "candidate_fundamental": "true_dangling",
     "candidate_capital_flow": "true_dangling",
     "candidate_event_risk": "true_dangling",
+    "candidate_event_risk_phase5_gates": "main_decision",
     "candidate_catalyst": "true_dangling",
     "candidate_liquidity": "true_dangling",
     "candidate_volatility": "duplicate_source",
