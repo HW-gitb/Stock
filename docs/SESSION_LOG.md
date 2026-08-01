@@ -1,5 +1,37 @@
 # Session Log
 
+## 2026-08-01 — Claude Code 审查 PASS（A-short 第十一刀 official rolling 收口）
+
+- **Verdict/Action**: PASS，已提交并合入 master。冻结门改为硬钉 `pre_freeze_audit_only`、不再代理任何注册轨；滚动节点的 `paired_count`/`member_count` 改为真实成熟周数。反悬空链路未回归。
+- **Required**: 无。`R-ASHORT-KNIFE11-ROLLING-FREEZE-GATE-PROXIES-UNRELATED-P0-TRACK` 与 `R-ASHORT-KNIFE11-OFFICIAL-ROLLING-VERDICT-HANGS-BELOW-TOP-DECISION` 均已 closed，正文只见 `docs/system_risk_register.md`。
+- **Verify**: review-evidence:8f8f4d77b63d；固定 Python 3.13.8；reviewer 自跑 `Ran 19 tests in 4.5s — OK`（bounded tier=focused / exit=0）；自写探针 16 项全过：全七轨翻 frozen 仍 pre-freeze、tracker 已无 epoch-mode import、未打桩生产路径强证据仍 insufficient_keep；放松类反向控制 `decide_design` 默认 19 对拒/20 对过、仅一处传 `minimum_pairs`、植 19 对周被剔出 basis 且降到 2 周即回落。按门禁未跑全量。
+- **Next**: Codex：无待办。
+
+## 2026-08-01 - Codex repairs A-short Knife 11 freeze-gate proxy Required
+
+- **Verdict/Action**: Applied the independent-review Required. `_official_rolling_epoch_mode()` no longer queries or proxies `p0_factor_comparison_v2`; crash-veto rolling is explicitly `pre_freeze_audit_only` until a reviewed unified switchover registers its own track. Not independently re-reviewed and not committed.
+- **Required**: `R-ASHORT-KNIFE11-ROLLING-FREEZE-GATE-PROXIES-UNRELATED-P0-TRACK` — repaired; re-review remains required.
+- **Verify**: Fixed Python 3.13.8 only: `Ran 19 tests in 2.830s ... OK`; negative control proves the unrelated registry gate is not queried; route/doc guards `41 OK + 14 OK`; `py_compile` and `git diff --check` passed. Full A-short ledger is `NOT_VERIFIED`.
+- **Proof-of-use**: The three-week equal-weight official rolling path remains wired to `final_decision`; rolling horizon counts are mature weekly observations rather than synthetic stock pairs; strong synthetic evidence cannot become frozen through any other track; `comparison_only=true`, `affects_selection=false`, and `production_rule_changed=false` remain unchanged.
+- **Pre-Codex self-review**: `matrix=complete: unrelated-track proxy negative + explicit pre-freeze gate + prior rolling consumer tests; register=updated; handoff=updated; focused=19 OK; route-doc=55 OK; full-lane=NOT_VERIFIED; door=git diff --check passed`
+- **Next**: Claude Code：重新独立审查第十一刀 Required；PASS 后按项目流程提交，Codex 不提交。
+
+## 2026-08-01 — Claude Code 审查 Pass-with-Required（A-short 第十一刀 official rolling）
+
+- **Verdict/Action**: Pass-with-Required，未提交。反悬空目标已达成并经 reviewer 独立坐实：official 周裁决真进顶层 `final_decision` 与 weekly/Markdown，非只落 variants。放行受阻于冻结门借用无关轨。
+- **Required**: `R-ASHORT-KNIFE11-ROLLING-FREEZE-GATE-PROXIES-UNRELATED-P0-TRACK` —— `_official_rolling_epoch_mode()` 拿 `p0_factor_comparison_v2` 当 crash-veto 冻结门；机制、为何 material、Required repair、closure tests 正文只见 `docs/system_risk_register.md`。另一条 Optional（滚动节点复用个股级 horizon schema、`paired_count` 为合成常量）同址。
+- **Verify**: review-evidence:96f8b582cc2b；固定 Python 3.13.8；reviewer 自跑 `Ran 18 tests in 4.8s — OK`（bounded tier=focused / exit=0）；自写探针 7 项：1a-1e 全过（legacy+incremental 在场且不变、只翻 official 周 → 滚动与顶层 status 同步 `change_candidate`↔`keep`、basis 含三个 official 周 id 且未挤掉 bootstrap），2b 转红实测「只解冻 p0 → crash-veto 门变 frozen_enforced」。按门禁未跑全量。
+- **Next**: Codex：修复
+
+## 2026-08-01 - Codex executes A-short Knife 11 official rolling crash-veto repair
+
+- **Verdict/Action**: Knife 11 implementation complete; not an independent review PASS and not committed. `official_all_crash_veto` now reaches `final_decision` through weekly equal-weight `official_rolling` with a three-mature-week gate and pre-freeze fail-closed status.
+- **Required**: `R-ASHORT-KNIFE11-OFFICIAL-ROLLING-VERDICT-HANGS-BELOW-TOP-DECISION` — repaired; independent Claude Code review remains required.
+- **Verify**: Fixed Python 3.13.8 only: `Ran 18 tests in 2.691s ... OK` for `tests.test_a_short_crash_veto_tracker`; route/doc guards `41 OK + 14 OK`; `py_compile` and `git diff --check` passed. Full A-short ledger and independent review are `NOT_VERIFIED`.
+- **Proof-of-use**: Synthetic 340/20/20 official weeks prove equal-week aggregation and basis propagation into `weekly_m67`/Markdown; one mature week is insufficient; pre-freeze strong evidence remains `insufficient_keep`; comparison-only flags remain unchanged.
+- **Pre-Codex self-review**: `matrix=complete: weekly equal-weight aggregation + maturity gate + pre-freeze gate + final precedence + schema + weekly/Markdown consumer + comparison-only negative controls; register=updated; handoff=updated; focused=18 OK; route-doc=55 OK; full-lane=NOT_VERIFIED; door=git diff --check passed`
+- **Next**: Claude Code：独立审查第十一刀；PASS 后按项目流程提交，Codex 不提交。
+
 ## 2026-08-01 — Claude Code 审查 PASS（A-short 第五刀两条复审 Optional 收口）
 
 - **Verdict/Action**: PASS，已提交并合入 master。schema 已编译校验器按 `路径+mtime_ns+size` 缓存、packet 仍逐次全量校验；frozen receipt writer 守卫改为 AST 自动派生。未解冻、未起时钟、未重封生产 packet。

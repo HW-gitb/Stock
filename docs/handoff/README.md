@@ -19,6 +19,8 @@ Use this file to decide which handoff to open. Do not read every handoff by defa
 
 ## Phase Index
 
+- `2026-08-01_a_short_knife11_official_rolling_handoff.md` — A-short desktop Knife 11 official rolling crash-veto verdict repair; focused evidence is complete and independent review remains pending.
+
 This index is the single annotated handoff list (it absorbs the per-file one-line descriptions that
 used to live in `AGENTS.md §交接记录`). Open a file only when the current task touches that phase /
 schema / runner / policy / historical finding.
