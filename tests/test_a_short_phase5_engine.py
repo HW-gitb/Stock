@@ -229,6 +229,36 @@ class Rule6CompletionGateTests(unittest.TestCase):
                             for reason in report["machine"]["layer"]["decision_reasons"]["hard_veto"]))
         validate_m67_consistency(report)
 
+    def test_rule6_severity_only_mutation_does_not_change_m67(self):
+        checks = _rule6_checks()
+        target = next(item for item in checks if item["id"] == "rule6_holder_below_5pct")
+        target["severity"] = "hard_veto"
+        baseline = build_m67_report(_good_input(rule6_checks=checks), AS_OF, "t")
+
+        severity_mutated = copy.deepcopy(checks)
+        severity_target = next(item for item in severity_mutated
+                               if item["id"] == "rule6_holder_below_5pct")
+        severity_target["severity"] = "watch"
+        severity_report = build_m67_report(
+            _good_input(rule6_checks=severity_mutated), AS_OF, "t")
+
+        status_mutated = copy.deepcopy(checks)
+        status_target = next(item for item in status_mutated
+                             if item["id"] == "rule6_holder_below_5pct")
+        status_target["status"] = "fail"
+        status_report = build_m67_report(
+            _good_input(rule6_checks=status_mutated), AS_OF, "t")
+
+        self.assertEqual(baseline["machine"]["rule6_gate"],
+                         severity_report["machine"]["rule6_gate"])
+        self.assertEqual(baseline["m67"]["table"]["操作"],
+                         severity_report["m67"]["table"]["操作"])
+        self.assertNotEqual(baseline["machine"]["rule6_gate"],
+                            status_report["machine"]["rule6_gate"])
+        self.assertEqual(status_report["m67"]["table"]["操作"], "否决")
+        validate_m67_consistency(severity_report)
+        validate_m67_consistency(status_report)
+
     def test_validator_rejects_tampered_d_tier_banner(self):
         report = build_m67_report(_good_input(rule6_checks=_rule6_checks()), AS_OF, "t")
         report["m67"]["精简结论区"]["Rule6人工核查"] = "无"

@@ -236,61 +236,61 @@
         "candidates[].technical"
       ],
       "source_paths_sha256": "80565630ed6c1f70d79de9cf1d0e97acb71cc254c8580738917ae76f10717e68",
-    "policy": "intentionally_independent",
-    "terminal_surfaces": [
-      "reports[].machine.technical_volatility_comparison",
-      "weekly.effect_contract_ledger",
-      "weekly Markdown 字段/规则联动台账"
-    ],
-    "runtime_handler": "intentionally_independent",
-    "comparison_family": "technical",
-    "proven_consumer_paths": [
-      "candidates[].technical.amplitude",
-      "candidates[].technical.atr.atr_14",
-      "candidates[].technical.atr.atr_window",
-      "candidates[].technical.atr.ex_rights_adjusted",
-      "candidates[].technical.avg_amount_20d",
-      "candidates[].technical.avg_amount_5d",
-      "candidates[].technical.bollinger.lower",
-      "candidates[].technical.bollinger.middle",
-      "candidates[].technical.bollinger.upper",
-      "candidates[].technical.close_position_in_range",
-      "candidates[].technical.coarse_reward_risk",
-      "candidates[].technical.direction_lock",
-      "candidates[].technical.drawdown_20d",
-      "candidates[].technical.high_20d",
-      "candidates[].technical.limit_up_count_10d",
-      "candidates[].technical.limit_up_count_20d",
-      "candidates[].technical.low_20d",
-      "candidates[].technical.macd.dea",
-      "candidates[].technical.macd.dif",
-      "candidates[].technical.macd.hist",
-      "candidates[].technical.moving_averages.ma10",
-      "candidates[].technical.moving_averages.ma20",
-      "candidates[].technical.moving_averages.ma5",
-      "candidates[].technical.moving_averages.ma60",
-      "candidates[].technical.pct_20d",
-      "candidates[].technical.pct_20d_n",
-      "candidates[].technical.pct_5d",
-      "candidates[].technical.pct_5d_n",
-      "candidates[].technical.pct_60d",
-      "candidates[].technical.precise_reward_risk",
-      "candidates[].technical.resistance.confidence",
-      "candidates[].technical.resistance.method",
-      "candidates[].technical.resistance.price",
-      "candidates[].technical.rsi_14",
-      "candidates[].technical.support.confidence",
-      "candidates[].technical.support.method",
-      "candidates[].technical.support.price",
-      "candidates[].technical.volume_ratio_5d",
-      "candidates[].technical.yesterday_amount"
-    ],
-    "consumer_proof_ref": "runners/a_short_weekly_pipeline.py::normalize_candidate -> runners/a_short_phase5_engine.py::technical_volatility_comparison",
-    "intentional_independence": {
-      "reason": "Phase5 recomputes technical indicators from the PIT-bounded price_series; the EGS technical snapshot is a non-authoritative duplicate source and is retained only for display audit.",
-      "owner": "A-short maintainers",
-      "review_ref": "R-ASHORT-KNIFE12-DIGEST-ONLY-COMPARISON-COUNTS-AS-WIRED"
-    }
+      "policy": "intentionally_independent",
+      "terminal_surfaces": [
+        "reports[].machine.technical_volatility_comparison",
+        "weekly.effect_contract_ledger",
+        "weekly Markdown 字段/规则联动台账"
+      ],
+      "runtime_handler": "intentionally_independent",
+      "comparison_family": "technical",
+      "proven_consumer_paths": [
+        "candidates[].technical.amplitude",
+        "candidates[].technical.atr.atr_14",
+        "candidates[].technical.atr.atr_window",
+        "candidates[].technical.atr.ex_rights_adjusted",
+        "candidates[].technical.avg_amount_20d",
+        "candidates[].technical.avg_amount_5d",
+        "candidates[].technical.bollinger.lower",
+        "candidates[].technical.bollinger.middle",
+        "candidates[].technical.bollinger.upper",
+        "candidates[].technical.close_position_in_range",
+        "candidates[].technical.coarse_reward_risk",
+        "candidates[].technical.direction_lock",
+        "candidates[].technical.drawdown_20d",
+        "candidates[].technical.high_20d",
+        "candidates[].technical.limit_up_count_10d",
+        "candidates[].technical.limit_up_count_20d",
+        "candidates[].technical.low_20d",
+        "candidates[].technical.macd.dea",
+        "candidates[].technical.macd.dif",
+        "candidates[].technical.macd.hist",
+        "candidates[].technical.moving_averages.ma10",
+        "candidates[].technical.moving_averages.ma20",
+        "candidates[].technical.moving_averages.ma5",
+        "candidates[].technical.moving_averages.ma60",
+        "candidates[].technical.pct_20d",
+        "candidates[].technical.pct_20d_n",
+        "candidates[].technical.pct_5d",
+        "candidates[].technical.pct_5d_n",
+        "candidates[].technical.pct_60d",
+        "candidates[].technical.precise_reward_risk",
+        "candidates[].technical.resistance.confidence",
+        "candidates[].technical.resistance.method",
+        "candidates[].technical.resistance.price",
+        "candidates[].technical.rsi_14",
+        "candidates[].technical.support.confidence",
+        "candidates[].technical.support.method",
+        "candidates[].technical.support.price",
+        "candidates[].technical.volume_ratio_5d",
+        "candidates[].technical.yesterday_amount"
+      ],
+      "consumer_proof_ref": "runners/a_short_weekly_pipeline.py::normalize_candidate -> runners/a_short_phase5_engine.py::technical_volatility_comparison",
+      "intentional_independence": {
+        "reason": "Phase5 recomputes technical indicators from the PIT-bounded price_series; the EGS technical snapshot is a non-authoritative duplicate source and is retained only for display audit.",
+        "owner": "A-short maintainers",
+        "review_ref": "R-ASHORT-KNIFE12-DIGEST-ONLY-COMPARISON-COUNTS-AS-WIRED"
+      }
     },
     {
       "id": "candidate_fundamental",
@@ -424,30 +424,30 @@
         "candidates[].volatility"
       ],
       "source_paths_sha256": "5326f1e3f8e751633320ffa0756354ac19bbc267199057757b321c72b20a1675",
-    "policy": "intentionally_independent",
-    "terminal_surfaces": [
-      "reports[].machine.technical_volatility_comparison",
-      "weekly.effect_contract_ledger",
-      "weekly Markdown 字段/规则联动台账"
-    ],
-    "runtime_handler": "intentionally_independent",
-    "comparison_family": "volatility",
-    "proven_consumer_paths": [
-      "candidates[].volatility.hv_252d",
-      "candidates[].volatility.iv_hv_position_cut_pct",
-      "candidates[].volatility.iv_hv_ratio"
-    ],
-    "consumer_proof_ref": "runners/a_short_weekly_pipeline.py::normalize_candidate -> runners/a_short_phase5_engine.py::technical_volatility_comparison",
-    "producer_binding": {
-      "status": "constant_null",
-      "source_ref": "A-EGS/egs_main.py::_candidate_from_row.volatility",
-      "activation": "display_audit_only_until_separately_reviewed_volatility_producer"
-    },
-    "intentional_independence": {
-      "reason": "Phase5 owns its IV/HV feed and the current EGS volatility producer is constant-null; the snapshot is a non-authoritative duplicate source retained only for display audit.",
-      "owner": "A-short maintainers",
-      "review_ref": "R-ASHORT-KNIFE12-DIGEST-ONLY-COMPARISON-COUNTS-AS-WIRED"
-    }
+      "policy": "intentionally_independent",
+      "terminal_surfaces": [
+        "reports[].machine.technical_volatility_comparison",
+        "weekly.effect_contract_ledger",
+        "weekly Markdown 字段/规则联动台账"
+      ],
+      "runtime_handler": "intentionally_independent",
+      "comparison_family": "volatility",
+      "proven_consumer_paths": [
+        "candidates[].volatility.hv_252d",
+        "candidates[].volatility.iv_hv_position_cut_pct",
+        "candidates[].volatility.iv_hv_ratio"
+      ],
+      "consumer_proof_ref": "runners/a_short_weekly_pipeline.py::normalize_candidate -> runners/a_short_phase5_engine.py::technical_volatility_comparison",
+      "producer_binding": {
+        "status": "constant_null",
+        "source_ref": "A-EGS/egs_main.py::_candidate_from_row.volatility",
+        "activation": "display_audit_only_until_separately_reviewed_volatility_producer"
+      },
+      "intentional_independence": {
+        "reason": "Phase5 owns its IV/HV feed and the current EGS volatility producer is constant-null; the snapshot is a non-authoritative duplicate source retained only for display audit.",
+        "owner": "A-short maintainers",
+        "review_ref": "R-ASHORT-KNIFE12-DIGEST-ONLY-COMPARISON-COUNTS-AS-WIRED"
+      }
     },
     {
       "id": "candidate_analyst",
@@ -625,27 +625,77 @@
       }
     }
   ],
+  "leaf_effect_overrides": {
+    "candidates[].scores.final_score": {
+      "category": "upstream_candidate_set_or_rank",
+      "consumer_ref": "A-EGS/egs_main.py::final_score",
+      "terminal_surface": "A-EGS/egs_main.py candidate ranking (sort_values final_score/l4_score/pct_20d_n) and reports[].m67.table.EGS分",
+      "mutation_evidence": "changing final_score changes the EGS rank order that selects candidates; the same value is carried to the M6.7 table EGS分 column via a_short_weekly_pipeline.py:599 -> a_short_phase5_engine.py:1795"
+    },
+    "candidates[].fundamental.profitability.q0_dt_yoy": {
+      "category": "m67_main_decision",
+      "consumer_ref": "runners/a_short_phase5_engine.py::financial_quality",
+      "terminal_surface": "weekly.reports[].m67 risk/quality advisory",
+      "mutation_evidence": "positive mutation changes the financial-quality decision output"
+    },
+    "candidates[].fundamental.valuation.circ_mv": {
+      "category": "m67_main_decision",
+      "consumer_ref": "engine/a_short_portfolio_risk.py::_portfolio_risk",
+      "terminal_surface": "weekly.portfolio_risk and operation impact",
+      "mutation_evidence": "positive mutation changes portfolio-risk facts"
+    },
+    "candidates[].catalyst.theme_taxonomy.comparison_metrics.theme_heat_score": {
+      "category": "formal_comparison_verdict",
+      "consumer_ref": "engine/a_short_industry_theme.py::theme comparison",
+      "terminal_surface": "formal theme comparison verdict",
+      "mutation_evidence": "positive mutation changes the formal comparison outcome"
+    },
+    "candidates[].liquidity.avg_amount_5d": {
+      "category": "m67_main_decision",
+      "consumer_ref": "runners/a_short_phase5_engine.py::liquidity_execution",
+      "terminal_surface": "weekly.reports[].machine risk family liquidity_execution",
+      "mutation_evidence": "positive mutation changes liquidity execution action"
+    },
+    "candidates[].event_risk.rule6_checks[].status": {
+      "category": "m67_main_decision",
+      "consumer_ref": "runners/a_short_phase5_engine.py::rule6_checks",
+      "terminal_surface": "weekly.reports[].machine risk veto/action",
+      "mutation_evidence": "positive mutation changes Rule6 risk action"
+    },
+    "candidates[].event_risk.rule6_checks[].severity": {
+      "category": "duplicate_or_display_audit",
+      "consumer_ref": "A-EGS/egs_main.py::_rule6_evaluated_check + schemas/analysis_input.schema.json",
+      "terminal_surface": "analysis_input Rule6 audit label; not an M6.7 decision input",
+      "mutation_evidence": "severity-only mutation leaves M6.7 unchanged; Rule6 action is driven by status"
+    },
+    "market_context.market_regime.status": {
+      "category": "m67_main_decision",
+      "consumer_ref": "runners/a_short_weekly_pipeline.py::_market_regime",
+      "terminal_surface": "weekly market regime and operation impact",
+      "mutation_evidence": "positive mutation changes market-regime action"
+    }
+  },
   "leaf_nature_by_group": {
     "lineage_metadata": "display_audit",
     "identity_batch_gate": "partial_consumption",
     "l3_coverage_provenance": "true_dangling",
     "runtime_configuration": "main_decision",
     "universe_selection": "true_dangling",
-    "market_context": "true_dangling",
+    "market_context": "partial_consumption",
     "account_context": "true_dangling",
     "candidate_identity_selection": "true_dangling",
     "candidate_quote": "true_dangling",
     "candidate_industry_classification": "true_dangling",
     "industry_trend": "main_decision",
     "industry_fundamental_advisory": "true_dangling",
-    "candidate_scores": "true_dangling",
+    "candidate_scores": "partial_consumption",
     "candidate_technical": "duplicate_source",
-    "candidate_fundamental": "true_dangling",
+    "candidate_fundamental": "partial_consumption",
     "candidate_capital_flow": "true_dangling",
-    "candidate_event_risk": "true_dangling",
+    "candidate_event_risk": "partial_consumption",
     "candidate_event_risk_phase5_gates": "main_decision",
-    "candidate_catalyst": "true_dangling",
-    "candidate_liquidity": "true_dangling",
+    "candidate_catalyst": "partial_consumption",
+    "candidate_liquidity": "partial_consumption",
     "candidate_volatility": "duplicate_source",
     "candidate_analyst": "true_dangling",
     "portfolio_concentration_factor_resonance": "partial_consumption",
@@ -664,7 +714,7 @@
     "runners/a_short_weekly_pipeline.py": "434209d703064fa6446b180da14f3196983683e81bc480e06c20893b90d1c38d",
     "runners/a_short_m67_render.py": "765120fe463ecb9dcaff0e0644aa4782259e5999b63b7990f8cc3fd3ca8c7635",
     "engine/a_short_portfolio_risk.py": "02b88ac3b5239e8dd4897bde06afab0769ea5593f8a8a3666e5c8fba24486860",
-    "engine/a_short_effect_contract.py": "1f911700de658d795a638f9b087889f373e06ca2702de5cd50cb01987a0e5a02"
+    "engine/a_short_effect_contract.py": "e19595733318f6b08838823bb382eae8168d6a302355d23dc4b7e7b5ec42bcda"
   },
   "runtime_constants_sha256": {
     "A-EGS/egs_main.py": "7a7db52541d037b08195ddf8275c0c6a9196a30958ee91203d178396071d335e",
@@ -919,7 +969,7 @@
     "small_float_mv_pct"
   ],
   "output_schema_sha256": {
-    "schemas/a_short_weekly_report.schema.json": "0b57847b6109d96d9f9d6045ca4e8106febf4d083780a1c5974dd315259c772b",
+    "schemas/a_short_weekly_report.schema.json": "6b0f35c36c8d06775e7a9b2dbaa88b49698dcfd781d85e1828ef9dbbb149b884",
     "schemas/a_short_m67_report.schema.json": "9274db8929b0ef7e7c03892708fda7ad3d13ae72c3c6caa39ecce041cf1f34e5"
   },
   "analysis_input_paths": [

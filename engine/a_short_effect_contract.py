@@ -80,6 +80,18 @@ _NATURE_RUNTIME_HANDLERS = {
     }),
     "comparison_track": frozenset({"data_quality_shadow", "comparison_track", "technical_volatility_comparison"}),
 }
+_LEAF_EFFECT_CATEGORIES = frozenset({
+    "m67_main_decision",
+    "formal_comparison_verdict",
+    "upstream_candidate_set_or_rank",
+    "duplicate_or_display_audit",
+    "intentionally_independent_or_delete",
+    "producer_constant_null",
+    "true_dangling",
+    # Not yet adjudicated.  Distinct from ``true_dangling`` so a published count
+    # can never present an un-audited remainder as a finished audit.
+    "unclassified_pending_audit",
+})
 
 
 def _hash(value) -> str:
@@ -161,6 +173,126 @@ def leaf_natures(contract: dict | None = None, inventory: dict | None = None) ->
     contract = contract if contract is not None else load_contract()
     inventory = inventory if inventory is not None else static_inventory()
     return _leaf_nature_map(contract, inventory["analysis_input_paths"])
+
+
+def _producer_literal_leaves(egs_source: str) -> dict[str, str]:
+    """Reconstruct which analysis-input leaves the producer emits as a literal.
+
+    A leaf whose producing expression is the literal ``None`` can never be a
+    consumer-wiring gap: nothing downstream could act on it even if it were
+    read.  Deriving this mechanically keeps the ledger honest without a
+    hand-written list that silently rots when the producer changes.
+    """
+    def walk(node, prefix: str, out: dict[str, str]) -> None:
+        if isinstance(node, ast.Dict):
+            for key, value in zip(node.keys, node.values):
+                if isinstance(key, ast.Constant) and isinstance(key.value, str):
+                    walk(value, f"{prefix}.{key.value}" if prefix else key.value, out)
+            return
+        if isinstance(node, ast.List):
+            inner = [element for element in node.elts if isinstance(element, ast.Dict)]
+            for element in inner:
+                walk(element, prefix + "[]", out)
+            if not inner:
+                out.setdefault(prefix, "computed")
+            return
+        if isinstance(node, ast.Constant):
+            out[prefix] = "constant_null" if node.value is None else "computed"
+            return
+        if isinstance(node, ast.IfExp):
+            branches: dict[str, str] = {}
+            walk(node.body, prefix, branches)
+            walk(node.orelse, prefix, branches)
+            out[prefix] = branches.get(prefix, "computed")
+            return
+        out[prefix] = "computed"
+
+    emitted: dict[str, str] = {}
+    tree = ast.parse(egs_source)
+    for function in ast.walk(tree):
+        if not isinstance(function, ast.FunctionDef) or function.name != "_candidate_from_row":
+            continue
+        for node in ast.walk(function):
+            if isinstance(node, ast.Return) and isinstance(node.value, ast.Dict):
+                walk(node.value, "candidates[]", emitted)
+            if isinstance(node, ast.Assign) and isinstance(node.value, ast.Dict) and any(
+                    isinstance(target, ast.Name) and target.id == "candidate"
+                    for target in node.targets):
+                walk(node.value, "candidates[]", emitted)
+            if isinstance(node, ast.Assign) and len(node.targets) == 1 \
+                    and isinstance(node.targets[0], ast.Subscript) \
+                    and isinstance(node.targets[0].value, ast.Name) \
+                    and node.targets[0].value.id == "candidate" \
+                    and isinstance(node.targets[0].slice, ast.Constant):
+                walk(node.value, f"candidates[].{node.targets[0].slice.value}", emitted)
+    for node in ast.walk(tree):
+        if isinstance(node, ast.Dict):
+            keys = {key.value for key in node.keys
+                    if isinstance(key, ast.Constant) and isinstance(key.value, str)}
+            if {"universe_summary", "market_context"} & keys:
+                walk(node, "", emitted)
+    return emitted
+
+
+def _leaf_effect_map(contract: dict, paths: list[str],
+                     producer_constant_null_leaves: tuple[str, ...] = ()) -> dict[str, str]:
+    """Classify every analysis-input leaf without widening group-level proof."""
+    overrides = contract.get("leaf_effect_overrides")
+    if not isinstance(overrides, dict):
+        raise ValueError("leaf_effect_overrides missing")
+    path_set = set(paths)
+    unknown = sorted(set(overrides) - path_set)
+    if unknown:
+        raise ValueError(f"leaf effect override outside analysis_input: {unknown[:4]}")
+    derived_null = set(producer_constant_null_leaves)
+    result: dict[str, str] = {}
+    for group in contract["groups"]:
+        group_paths = _paths_for_prefixes(paths, group.get("source_prefixes") or [])
+        proven = set(group.get("proven_consumer_paths") or [])
+        producer_constant_null = (group.get("producer_binding") or {}).get("status") == "constant_null"
+        for path in group_paths:
+            override = overrides.get(path)
+            if isinstance(override, dict):
+                category = override.get("category")
+            else:
+                category = override
+            if category is None:
+                # An explicit adjudication outranks the derived producer fact:
+                # "Phase5 recomputes this" is a decision, "the producer emits
+                # None" is only an observation about today's producer.
+                if group["policy"] == "intentionally_independent":
+                    nature = contract["leaf_nature_by_group"][group["id"]]
+                    category = ("duplicate_or_display_audit"
+                                if nature == "duplicate_source"
+                                else "intentionally_independent_or_delete")
+                elif producer_constant_null or path in derived_null:
+                    category = "producer_constant_null"
+                elif path in proven:
+                    nature = contract["leaf_nature_by_group"][group["id"]]
+                    category = ("formal_comparison_verdict"
+                                if nature == "comparison_track" else "m67_main_decision")
+                else:
+                    # Unproven is not the same as adjudicated-dangling.  Claiming
+                    # ``true_dangling`` requires an explicit, evidenced override so
+                    # the published count can never pass an un-audited remainder
+                    # off as a finished audit.
+                    category = "unclassified_pending_audit"
+            if category not in _LEAF_EFFECT_CATEGORIES:
+                raise ValueError(f"unknown leaf effect category for {path}: {category!r}")
+            if path in result:
+                raise ValueError(f"leaf assigned multiple effect categories: {path}")
+            result[path] = category
+    if set(result) != path_set:
+        missing = sorted(path_set - set(result))
+        raise ValueError(f"leaf effect coverage mismatch: missing={missing[:4]}")
+    return result
+
+
+def leaf_effects(contract: dict | None = None, inventory: dict | None = None) -> dict[str, str]:
+    contract = contract if contract is not None else load_contract()
+    inventory = inventory if inventory is not None else static_inventory()
+    return _leaf_effect_map(contract, inventory["analysis_input_paths"],
+                            tuple(inventory["producer_constant_null_leaves"]))
 
 
 def _default_trend_guard(current_count: int) -> dict:
@@ -704,6 +836,10 @@ def _build_static_inventory(*, source_overrides: dict[str, str] | None = None,
         runtime_policy_overrides, runtime_policy_schema_overrides)
     return {
         "analysis_input_paths": analysis_input_paths(analysis_schema),
+        "producer_constant_null_leaves": sorted(
+            path for path, kind in _producer_literal_leaves(sources["A-EGS/egs_main.py"]).items()
+            if kind == "constant_null" and path in set(analysis_input_paths(analysis_schema))
+        ),
         "decision_predicate_sha256": {rel: _hash(_predicate_hashes(sources[rel])) for rel in _DECISION_FILES},
         "runtime_constants_sha256": {rel: _hash(_constant_inventory(sources[rel])) for rel in _CONSTANT_FILES},
         "governed_python_literal_names": {
@@ -848,6 +984,31 @@ def static_contract_error(contract: dict | None = None, *, inventory: dict | Non
         nature_by_path = _leaf_nature_map(contract, paths)
     except (TypeError, ValueError, KeyError) as exc:
         return f"effect contract nature classification invalid: {exc}"
+    try:
+        effect_by_path = _leaf_effect_map(
+            contract, paths, tuple(inventory["producer_constant_null_leaves"]))
+    except (TypeError, ValueError, KeyError) as exc:
+        return f"effect contract leaf effect classification invalid: {exc}"
+    _LIVE_EFFECTS = {"m67_main_decision", "formal_comparison_verdict",
+                     "upstream_candidate_set_or_rank"}
+    for group in groups:
+        group_paths = _paths_for_prefixes(paths, group["source_prefixes"])
+        if contract["leaf_nature_by_group"][group["id"]] != "true_dangling":
+            continue
+        live = sorted(p for p in group_paths if effect_by_path[p] in _LIVE_EFFECTS)
+        if live:
+            return (f"effect contract {group['id']} is labelled true_dangling but "
+                    f"{len(live)} of its leaves already reach a live terminal "
+                    f"(e.g. {live[0]}); use partial_consumption")
+    for path, override in (contract.get("leaf_effect_overrides") or {}).items():
+        if not isinstance(override, dict):
+            continue
+        category = effect_by_path[path]
+        if category in {"m67_main_decision", "formal_comparison_verdict",
+                        "upstream_candidate_set_or_rank"}:
+            if not all(str(override.get(key) or "").strip()
+                       for key in ("consumer_ref", "terminal_surface", "mutation_evidence")):
+                return f"effect contract leaf {path} effect proof incomplete"
     for group in groups:
         nature = contract["leaf_nature_by_group"][group["id"]]
         policy = group["policy"]
@@ -1171,6 +1332,7 @@ def build_effect_contract_ledger(weekly: dict, contract: dict | None = None,
     contract = contract if contract is not None else load_contract()
     validate_static_contract(contract)
     nature_by_path = leaf_natures(contract)
+    effect_by_path = leaf_effects(contract)
     records = []
     for group in contract["groups"]:
         status, reason = _runtime_status(group, weekly)
@@ -1181,6 +1343,7 @@ def build_effect_contract_ledger(weekly: dict, contract: dict | None = None,
             "id": group["id"], "policy": group["policy"], "status": status,
             "nature": contract["leaf_nature_by_group"][group["id"]],
             "leaf_natures": {path: nature_by_path[path] for path in group_paths},
+            "leaf_effects": {path: effect_by_path[path] for path in group_paths},
             "source_prefixes": list(group["source_prefixes"]),
             "source_paths_sha256": group["source_paths_sha256"],
             "terminal_surfaces": list(group["terminal_surfaces"]), "reason": reason,
@@ -1189,18 +1352,24 @@ def build_effect_contract_ledger(weekly: dict, contract: dict | None = None,
         records.append({
             "id": track["id"], "policy": track["policy"], "status": "intentionally_independent",
             "nature": "comparison_track", "leaf_natures": {track["schema_path"]: "comparison_track"},
+            "leaf_effects": {track["schema_path"]: "formal_comparison_verdict"},
             "source_prefixes": [track["schema_path"]], "source_paths_sha256": track["schema_sha256"],
             "terminal_surfaces": list(track.get("consumer_refs") or []), "reason": track["reason"],
         })
     counts = {status: sum(record["status"] == status for record in records) for status in sorted(_STATUSES)}
     nature_counts = {nature: sum(value == nature for value in nature_by_path.values())
                      for nature in sorted(_NATURES)}
+    effect_counts = {category: sum(value == category for value in effect_by_path.values())
+                     for category in sorted(_LEAF_EFFECT_CATEGORIES)}
     guard = copy.deepcopy(trend_guard) if trend_guard is not None else _default_trend_guard(counts["unavailable_manual_review"])
     guard["current_unavailable_manual_review"] = counts["unavailable_manual_review"]
     return {
         "schema_name": "a_short_effect_contract_ledger", "schema_version": "1.0.0",
         "as_of": str(weekly.get("as_of") or ""), "contract_fingerprint": contract_fingerprint(contract),
-        "records": records, "summary": {"total": len(records), **counts, "nature_counts": nature_counts},
+        "records": records, "summary": {
+            "total": len(records), **counts, "nature_counts": nature_counts,
+            "effect_counts": effect_counts,
+        },
         "trend_guard": guard,
     }
 
