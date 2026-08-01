@@ -668,7 +668,7 @@ def _validate_discovery_and_receipt(
 def _validate_budget_ledger(
     ledger: dict[str, Any], *, lane: str, provider: str, decision_date: str,
     queries: list[str], expected_call_count: int,
-) -> None:
+) -> int:
     expected_query_sha = _sha256_bytes(_canonical_bytes(queries))
     required_identity = {
         "lane": lane,
@@ -676,12 +676,20 @@ def _validate_budget_ledger(
         "expected_decision_date": decision_date,
         "query_sha256": expected_query_sha,
         "query_count": len(queries),
-        "reservation_attempt_count": 1,
         "planned_provider_call_count": expected_call_count,
     }
     for key, expected in required_identity.items():
         if ledger.get(key) != expected:
             raise QueryQualityProbeAssessmentError(f"{lane}/{provider} budget ledger mismatch at {key}")
+    attempt_count = ledger.get("reservation_attempt_count")
+    if (
+        isinstance(attempt_count, bool)
+        or not isinstance(attempt_count, int)
+        or attempt_count < 1
+    ):
+        raise QueryQualityProbeAssessmentError(
+            f"{lane}/{provider} budget ledger mismatch at reservation_attempt_count"
+        )
     reservations = ledger.get("query_reservations")
     if reservations != [{
         "query_sha256": expected_query_sha,
@@ -703,6 +711,7 @@ def _validate_budget_ledger(
         raise QueryQualityProbeAssessmentError(
             f"{lane}/{provider} budget ledger first_reserved_at cannot follow last_reserved_at"
         )
+    return attempt_count
 
 
 def _lane_metrics(
@@ -808,13 +817,19 @@ def _build_assessment_with_snapshots(
     }
     input_snapshots.update(ledger_snapshots)
     ledgers = {key: snapshot.payload for key, snapshot in ledger_snapshots.items()}
+    budget_reservation_attempt_counts: dict[str, int] = {}
     for key, ledger in ledgers.items():
         lane, provider = ledger_identity[key]
-        _validate_budget_ledger(
+        attempt_count = _validate_budget_ledger(
             ledger,
             lane=lane, provider=provider, decision_date=decision_date, queries=queries,
             expected_call_count=expected_calls[key],
         )
+        budget_reservation_attempt_counts[key] = attempt_count
+        if attempt_count > 1:
+            retry_reason = "actual_call_count_or_scope_cannot_be_proven"
+            inconclusive.append(retry_reason)
+            lane_inconclusive_reasons[lane].append(retry_reason)
 
     actual_counts = {
         "tavily": web_receipt["fetch_contract"]["transport_response_counts"]["tavily"],
@@ -868,7 +883,7 @@ def _build_assessment_with_snapshots(
         )
     assessment = {
         "schema_name": "us_short_soft_discovery_query_quality_probe_assessment",
-        "schema_version": "1.2.0",
+        "schema_version": "1.3.0",
         "schema_ref": "schemas/us_short_soft_discovery_query_quality_probe_assessment.schema.json",
         "generated_at": parsed_generated.isoformat(),
         "causal_floor": causal_floor,
@@ -889,6 +904,7 @@ def _build_assessment_with_snapshots(
         "execution_evidence": {
             "actual_provider_call_counts": actual_counts,
             "actual_provider_call_count": sum(actual_counts.values()),
+            "budget_reservation_attempt_counts": budget_reservation_attempt_counts,
             "web_regroup_chunk_counts":
                 dict(web_receipt["fetch_contract"]["regroup_chunk_counts"]),
             "all_exact_slots_bound": True,

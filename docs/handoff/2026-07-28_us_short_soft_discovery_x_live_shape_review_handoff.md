@@ -816,3 +816,11 @@ Web/X producer 共用 `SOURCE_RAW_PUBLISH_FAILURE_REASONS`；两 lane 的 source
 4. 不得因本轮任何绿灯启动 query planner、第二阶段追证据或 4d-iii 正式一键激活；确认器、席位、试探仓、生命周期与 `theme_soft_boost_enabled` 仍冻结。
 
 **给 Codex 的命令**：`修复 K3-R113`
+
+## 2026-08-01 追加：K3-R113 合法同 scope 重试落盘修复（Codex executor/fixer）
+
+本轮只修离线 assessor 的账本语义，不调用 provider、不联网、不重跑 20260802、不改 packet 阈值或下游效果。`_validate_budget_ledger()` 保留 query SHA、query count、packet planned-call envelope、单条精确 reservation scope、`first_reserved_at <= last_reserved_at` 的写前硬失败；合法同 scope retry 的 `reservation_attempt_count > 1` 不再被误当 tamper，而是逐槽写入 `execution_evidence.budget_reservation_attempt_counts`，并追加 packet 已预注册的 `actual_call_count_or_scope_cannot_be_proven`，最终只得到 `provider_or_execution_inconclusive_do_not_grade_templates`。
+
+assessment schema/producer/test contract 已从 `1.2.0` 升至 `1.3.0`，三份 ledger 槽位均覆盖 retry 正控与六类 tamper 负控；固定主 Python assessor + schema focused `Ran 53 tests in 8.912s / OK`，无写入 syntax compile 与 JSON Schema meta-validation 通过。测试前后 `provider_samples`、`state/us_short`、tracked 20260802 assessment 均不存在，未联网、未调用 provider、未写真实 probe 产物、未跑 full、未提交。
+
+当前状态仍是 executor ready for independent review；20260802 真实 probe 只能在该修复获 reviewer/committer 独立 PASS 后以预注册 INCONCLUSIVE 口径落盘，不能据此解冻模板质量、query planner、确认器、席位、试探仓、生命周期或 `theme_soft_boost_enabled`。

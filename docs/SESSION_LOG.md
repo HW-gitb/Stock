@@ -1,5 +1,18 @@
 # Session Log
 
+## 2026-08-01 — Claude 审查 PASS（K3-R113 assessor 合法重试落盘已闭）
+- **Verdict/Action**: PASS；合法同 scope retry 现在映射为 packet 预注册的 INCONCLUSIVE 并真正写盘，篡改类与畸形 attempt 值仍写前硬失败、零 partial；K3-R113 CLOSED，按 reviewer/committer 流程提交并合入 master。20260802 槽仍只能判 INCONCLUSIVE，不解冻模板质量、query planner 或两个开关。
+- **Required**: 无；Register: `K3-R113` CLOSED（完整机制与 closure evidence 只见 `docs/system_risk_register.md`）。
+- **Verify**: review-evidence:4a6bc40df700；固定主 Python assessor+packet schema focused `53 OK / 11.1s`、交接门 `55 OK / 1.3s`、`git diff --check` clean。reviewer 自写探针：两份 web 账本同时 retry → 真写盘 INCONCLUSIVE 且理由去重为 1 条（未撞 schema `uniqueItems`；executor 测试未覆盖此腿）；attempt=`0/-1/true/"1"/缺失` 五种畸形全部写前硬失败、零 assessment；挖空映射 → 点名测试 3 红、还原 0 红。§6a 未触发（24 行 validator、零 provider/secret/选股影响，rule 8 快档）；未跑 full（rule 3 未触发）；仓库 state/provider_samples 残留前后一致。
+- **Next**: reviewer 用 master 上的真实 20260802 证据生成预注册 INCONCLUSIVE 记录。
+
+## 2026-08-01 — Codex 修复 K3-R113（executor；ready for Claude Code review）
+- **Verdict/Action**: 合法同 scope retry 不再被 assessor 当作账本篡改；三份 ledger 的 `reservation_attempt_count` 逐槽审计，retry 映射到 packet 预注册的 exact `provider_or_execution_inconclusive_do_not_grade_templates` 并写 tracked assessment；未提交、未 merge、未联网、未调用 provider。
+- **Required**: K3-R113；完整修复细节与边界只见 `docs/system_risk_register.md#K3-R113`，本条不把 20260802 真实 probe 改判为 PASS。
+- **Verify**: 固定主 Python assessor + schema focused `Ran 53 tests in 8.912s / OK`；固定主 Python 无写入 syntax compile、JSON Schema meta-validation、UTF-8/BOM/U+FFFD 检查与 `git diff --check` 通过；测试/检查前后 `provider_samples`、`state/us_short`、tracked 20260802 assessment 均不存在，既有 `__pycache__` 文件集合未新增。
+- **Next**: Claude Code：审查。
+- **Pre-Codex self-review**: `matrix=complete: web_tavily/web_deepseek/x_xai × legal retry + five tamper classes (six named controls); builder→execution_evidence→schema→tracked immutable writer; render/panel=N-A, downstream=preflight/assessment consumer; register=K3-R113 current entry updated to repair-ready open P2 with executor evidence; handoff=single docs/handoff/2026-07-28_us_short_soft_discovery_x_live_shape_review_handoff.md appended; focused=53 named assessor/schema tests + fixed-Python syntax/schema + UTF-8/BOM/U+FFFD + git diff; full-lane=not_triggered: AGENTS rule 3, offline assessor ledger/evidence only and no provider/capstone/downstream behavior; door=route-doc+doc-governance 55 OK; A=all three enumerable ledger slots, retry audit field, schema required field, and tracked writer path covered; B=targeted old identity/test/schema patterns 0 stale hits in runner/schema/tests (one intentional current invalid-attempt guard message retained), mapping references present in runner/schema/tests; C=clean attempt=1 pass control, all three-slot retry INCONCLUSIVE controls, and all three-slot tamper write-before-fail/no-assessment controls; D=N-A, no natural-language classifier; E=CURRENT untouched, one active risk source + SESSION top entry + one US-short handoff append, no transient gate in CURRENT; F=fixed-Python compile/schema, no BOM/U+FFFD, diff check, no new residue; independent-self-review=not_used: developer forbids unrequested agent spawn, main-thread checklist fallback used, no timeout/restart, focused package run once`
+
 ## 2026-08-01 — Claude 审查 FAIL（K3-R113 · 20260802 Web+X 查询质量 probe）
 - **Verdict/Action**: 用户逐次授权的 20260802 真实 probe 已执行并冻结证据（Web 5 次 provider 调用 / 3 条来源；X 4 次调用 / 13 条来源 + 4 份 provider response raw），但离线 assessment 写前硬失败、无 tracked 产物；本轮不给 stage1 模板打分，按 packet 预注册口径视为执行不可证明。未提交代码，无代码改动。
 - **Required**: K3-R113 — 完整技术现状 / 真实探针 / 影响 / 修复边界 / closure tests 只见 `docs/system_risk_register.md`（单一来源，本处不复述）。
