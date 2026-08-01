@@ -44,6 +44,10 @@ DECISION_EXCESS_PCT = 1.0
 DECISION_OUTPERFORM_RATE = 0.60
 DECISION_MAE_TOLERANCE_PCT = 1.0
 DECISION_LOSS_RATE_GAP = 0.10
+# A rolling verdict is a weekly observation, not a pooled stock sample.  Three
+# mature official weeks are the minimum frozen evidence window; pre-freeze
+# output remains audit-only even when the synthetic rollup is decisive.
+OFFICIAL_ROLLING_MIN_WEEKS = 3
 
 
 def _now() -> str:
@@ -574,9 +578,9 @@ def evaluate_cohort(cohort: dict, cache: dict, horizon: int) -> dict:
     return result
 
 
-def decide_design(five: dict, ten: dict) -> tuple[str, str]:
+def decide_design(five: dict, ten: dict, *, minimum_pairs: int = DECISION_MIN_PAIRS) -> tuple[str, str]:
     if five.get("status") != "ready" or ten.get("status") != "ready" or \
-            five.get("paired_count", 0) < DECISION_MIN_PAIRS or ten.get("paired_count", 0) < DECISION_MIN_PAIRS:
+            five.get("paired_count", 0) < minimum_pairs or ten.get("paired_count", 0) < minimum_pairs:
         return "insufficient_keep", "证据还没走完或可比样本不足，暂时不改设计，继续按周积累。"
     good = all(m["mean_paired_excess_pct"] >= DECISION_EXCESS_PCT
                and m["outperform_rate"] >= DECISION_OUTPERFORM_RATE
@@ -604,6 +608,88 @@ def _plain_metric(metric: dict, label: str) -> str:
             f"{metric['outperform_rate'] * 100:.1f}% 跑赢对照。")
 
 
+def _official_rolling_epoch_mode() -> str:
+    """Keep crash-veto pre-freeze until its own reviewed switchover exists."""
+    # Crash-veto rolling is not one of the shared seven comparison tracks.
+    # Never proxy another track's registry bit: a future freeze must register
+    # and switch this component explicitly, otherwise it stays audit-only.
+    return "pre_freeze_audit_only"
+
+
+_ROLLING_METRIC_FIELDS = (
+    "coverage_rate", "blocked_mean_return_pct", "blocked_median_return_pct",
+    "control_mean_return_pct", "mean_paired_excess_pct", "median_paired_excess_pct",
+    "outperform_rate", "blocked_loss_gt_5_rate", "blocked_loss_gt_10_rate",
+    "control_loss_gt_5_rate", "blocked_mean_mae_pct", "control_mean_mae_pct",
+)
+
+
+def _rolling_horizon(metrics: list[dict], horizon: int, official_week_count: int) -> dict:
+    """Equal-weight mature weekly metrics without pooling member rows."""
+    result = {
+        "status": "ready" if metrics else "pending",
+        "horizon_trading_days": horizon,
+        # These two fields describe weekly observations, not pooled stocks.
+        # The stock-level sample-size gate was already applied to every source week.
+        "member_count": len(metrics),
+        "paired_count": len(metrics),
+        "status_counts": {
+            "mature_week": len(metrics),
+            "all_official_weeks": official_week_count,
+        },
+        "mature_week_count": len(metrics),
+    }
+    for field in _ROLLING_METRIC_FIELDS:
+        values = [float(metric[field]) for metric in metrics if metric.get(field) is not None]
+        if values:
+            result[field] = round(float(np.mean(values)), 6)
+    return result
+
+
+def _build_official_rolling(official_variants: list[dict], as_of: str) -> dict:
+    mature = [
+        variant for variant in official_variants
+        if variant["one_week"].get("status") == "ready"
+        and variant["two_week"].get("status") == "ready"
+        and variant["one_week"].get("paired_count", 0) >= DECISION_MIN_PAIRS
+        and variant["two_week"].get("paired_count", 0) >= DECISION_MIN_PAIRS
+    ]
+    one_week = _rolling_horizon(
+        [variant["one_week"] for variant in mature], 5, len(official_variants)
+    )
+    two_week = _rolling_horizon(
+        [variant["two_week"] for variant in mature], 10, len(official_variants)
+    )
+    basis = [variant["cohort_id"] for variant in mature]
+    if len(mature) >= OFFICIAL_ROLLING_MIN_WEEKS:
+        # The per-week pair gate was applied while selecting ``mature``.  The
+        # aggregate's paired unit is a week, so do not fake a stock-level pair
+        # count just to reuse the metric decision thresholds.
+        raw_decision, _ = decide_design(one_week, two_week, minimum_pairs=0)
+    else:
+        raw_decision = "insufficient_keep"
+    epoch_mode = _official_rolling_epoch_mode()
+    decision = raw_decision if epoch_mode == "frozen_enforced" else "insufficient_keep"
+    plain = (
+        f"official_rolling: {decision}; equal-weight mature weeks "
+        f"{len(mature)}/{OFFICIAL_ROLLING_MIN_WEEKS}; mode={epoch_mode}; "
+        f"basis={','.join(basis) if basis else 'none'}"
+    )
+    return {
+        "as_of": as_of,
+        "status": decision,
+        "decision": decision,
+        "unfrozen_decision": raw_decision,
+        "epoch_mode": epoch_mode,
+        "minimum_mature_weeks": OFFICIAL_ROLLING_MIN_WEEKS,
+        "mature_week_count": len(mature),
+        "basis_cohort_ids": basis,
+        "one_week": one_week,
+        "two_week": two_week,
+        "plain_text": plain,
+    }
+
+
 def build_summary(state: dict, cache: dict, as_of: str) -> dict:
     variants = []
     for cohort in state["cohorts"]:
@@ -620,16 +706,24 @@ def build_summary(state: dict, cache: dict, as_of: str) -> dict:
     scope_order = {"legacy_official_4d": 0, "active_5d_incremental_rank_impact": 1,
                    "official_all_crash_veto": 2}
     variants.sort(key=lambda v: (scope_order.get(v["scope"], 9), v["as_of"], v["cohort_id"]))
+    official_variants = [v for v in variants if v["scope"] == "official_all_crash_veto"]
+    official_rolling = _build_official_rolling(official_variants, as_of)
     # 用户要看的主样本是旧官方 245 只；新增第 5 日的排名影响组单独作为敏感度复核，绝不混算收益。
     legacy = [v for v in variants if v["scope"] == "legacy_official_4d"]
     incremental = [v for v in variants if v["scope"] == "active_5d_incremental_rank_impact"]
     headline = legacy[-1] if legacy else (variants[-1] if variants else None)
     decision_set = ([legacy[-1]] if legacy else []) + ([incremental[-1]] if incremental else [])
+    decision_set.append({"cohort_id": None, "decision": official_rolling["decision"]})
     if not decision_set and headline:
         decision_set = [headline]
-    if headline:
-        one_plain, two_plain = headline["one_week_plain"], headline["two_week_plain"]
-        basis = [v["cohort_id"] for v in decision_set]
+    if headline or decision_set:
+        if headline:
+            one_plain, two_plain = headline["one_week_plain"], headline["two_week_plain"]
+        else:
+            one_plain = official_rolling["plain_text"]
+            two_plain = official_rolling["plain_text"]
+        basis = [v["cohort_id"] for v in decision_set if v.get("cohort_id")]
+        basis.extend(official_rolling["basis_cohort_ids"])
         decisions = [v["decision"] for v in decision_set]
         if "insufficient_keep" in decisions:
             final_status = "insufficient_keep"
@@ -647,11 +741,14 @@ def build_summary(state: dict, cache: dict, as_of: str) -> dict:
         final_status, final_plain = "insufficient_keep", "还没有冻结到闪崩否决批次，暂时不改设计。"
         one_plain = two_plain = "暂无批次。"
         basis = []
+    rolling_evidence = official_rolling["plain_text"]
+    final_plain = f"{final_plain}；{rolling_evidence}"
     return {"schema_name": "a_short_crash_veto_tracking_summary",
             "schema_version": SUMMARY_SCHEMA_VERSION, "generated_at": _now(), "as_of": as_of,
             "comparison_only": True, "affects_selection": False, "production_rule_changed": False,
             "one_week_plain": one_plain, "two_week_plain": two_plain,
             "final_decision": {"status": final_status, "basis_cohort_ids": basis, "plain_text": final_plain},
+            "official_rolling": official_rolling,
             "variants": variants}
 
 

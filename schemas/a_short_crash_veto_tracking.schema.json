@@ -18,6 +18,32 @@
     "production_rule_changed": {"const": false},
     "one_week_plain": {"type": "string", "minLength": 1},
     "two_week_plain": {"type": "string", "minLength": 1},
+    "official_rolling": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "as_of", "status", "decision", "unfrozen_decision", "epoch_mode",
+        "minimum_mature_weeks", "mature_week_count", "basis_cohort_ids",
+        "one_week", "two_week", "plain_text"
+      ],
+      "properties": {
+        "as_of": {"type": "string", "pattern": "^[0-9]{8}$"},
+        "status": {"enum": ["insufficient_keep", "change_candidate", "keep", "mixed_keep"]},
+        "decision": {"enum": ["insufficient_keep", "change_candidate", "keep", "mixed_keep"]},
+        "unfrozen_decision": {"enum": ["insufficient_keep", "change_candidate", "keep", "mixed_keep"]},
+        "epoch_mode": {"enum": ["pre_freeze_audit_only", "frozen_enforced"]},
+        "minimum_mature_weeks": {"type": "integer", "minimum": 1},
+        "mature_week_count": {"type": "integer", "minimum": 0},
+        "basis_cohort_ids": {
+          "type": "array",
+          "items": {"type": "string", "pattern": "^crash-veto-[0-9a-f]{20}$"},
+          "uniqueItems": true
+        },
+        "one_week": {"$ref": "#/definitions/horizon"},
+        "two_week": {"$ref": "#/definitions/horizon"},
+        "plain_text": {"type": "string", "minLength": 1}
+      }
+    },
     "final_decision": {
       "type": "object",
       "additionalProperties": false,
@@ -82,7 +108,8 @@
         "blocked_loss_gt_10_rate": {"type": "number", "minimum": 0, "maximum": 1},
         "control_loss_gt_5_rate": {"type": "number", "minimum": 0, "maximum": 1},
         "blocked_mean_mae_pct": {"type": ["number", "null"]},
-        "control_mean_mae_pct": {"type": ["number", "null"]}
+        "control_mean_mae_pct": {"type": ["number", "null"]},
+        "mature_week_count": {"type": "integer", "minimum": 0}
       }
     }
   }

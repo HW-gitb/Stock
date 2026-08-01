@@ -10,6 +10,7 @@ import jsonschema
 import pandas as pd
 
 from runners.a_short_crash_veto_tracker import (
+    _official_rolling_epoch_mode,
     _load_capture_frames,
     build_summary,
     decide_design,
@@ -29,6 +30,11 @@ ROOT = Path(__file__).resolve().parents[1]
 
 
 class CrashVetoTrackerTest(unittest.TestCase):
+    def test_official_rolling_does_not_proxy_unrelated_epoch_track(self):
+        with mock.patch("engine.a_short_evidence_epoch_mode.enforcement_enabled",
+                        side_effect=AssertionError("unrelated track must not be queried")):
+            self.assertEqual(_official_rolling_epoch_mode(), "pre_freeze_audit_only")
+
     def test_capture_features_use_fresh_official_full_output_without_egs_cache(self):
         full = pd.DataFrame([
             {
@@ -224,6 +230,85 @@ class CrashVetoTrackerTest(unittest.TestCase):
         self.assertIn("最终结论", rendered)
         self.assertIn("旧4日口径官方被拦组", rendered)
         self.assertIn("新增第5日实际多拦组", rendered)
+
+    def test_official_rolling_is_week_equal_weighted_and_reaches_weekly_markdown(self):
+        official_ids = ["crash-veto-" + digit * 20 for digit in ("a", "b", "c")]
+        state = {"cohorts": [
+            {"cohort_id": cohort_id, "as_of": f"2026071{index + 4}",
+             "scope": "official_all_crash_veto", "rule_confirmed_days": 5,
+             "member_count": 340 if index == 0 else 20, "members": []}
+            for index, cohort_id in enumerate(official_ids)
+        ]}
+
+        def metric(cohort, _cache, horizon):
+            # One large positive week and two small negative weeks prove that
+            # the rolling decision weights weeks, never pooled stock rows.
+            excess = 2.0 if cohort["cohort_id"] == official_ids[0] else -1.2
+            outperform = 1.0 if excess > 0 else 0.0
+            blocked_loss = 0.0
+            return {
+                "status": "ready", "horizon_trading_days": horizon,
+                "member_count": cohort["member_count"], "paired_count": 20,
+                "status_counts": {}, "blocked_mean_return_pct": excess,
+                "control_mean_return_pct": 0.0, "mean_paired_excess_pct": excess,
+                "outperform_rate": outperform, "blocked_loss_gt_5_rate": blocked_loss,
+                "control_loss_gt_5_rate": 0.0, "blocked_mean_mae_pct": -2.0,
+                "control_mean_mae_pct": -2.0,
+            }
+
+        with mock.patch("runners.a_short_crash_veto_tracker.evaluate_cohort",
+                        side_effect=metric), \
+                mock.patch("runners.a_short_crash_veto_tracker._official_rolling_epoch_mode",
+                           return_value="frozen_enforced"):
+            summary = build_summary(state, {"trade_dates": [], "stocks": pd.DataFrame()}, "20260724")
+
+        rolling = summary["official_rolling"]
+        self.assertEqual(rolling["basis_cohort_ids"], official_ids)
+        self.assertEqual(rolling["one_week"]["paired_count"], 3)
+        self.assertEqual(rolling["one_week"]["member_count"], 3)
+        self.assertAlmostEqual(rolling["one_week"]["mean_paired_excess_pct"], -0.4 / 3.0, places=5)
+        self.assertEqual(rolling["decision"], "mixed_keep")
+        self.assertEqual(summary["final_decision"]["status"], "mixed_keep")
+        self.assertTrue(set(official_ids).issubset(summary["final_decision"]["basis_cohort_ids"]))
+        schema = json.loads((ROOT / "schemas" / "a_short_crash_veto_tracking.schema.json").read_text(encoding="utf-8"))
+        jsonschema.validate(summary, schema)
+        weekly = build_weekly_report([], "20260724", "2026-07-24T00:00:00+08:00",
+                                     crash_veto_tracking=summary)
+        rendered = render_weekly_markdown(weekly)
+        self.assertIn("official_rolling", rendered)
+        self.assertIn(official_ids[0], rendered)
+
+    def test_official_rolling_requires_minimum_weeks_and_pre_freeze_stays_insufficient(self):
+        cohort = {"cohort_id": "crash-veto-" + "d" * 20, "as_of": "20260724",
+                  "scope": "official_all_crash_veto", "rule_confirmed_days": 5,
+                  "member_count": 20, "members": []}
+        ready = {
+            "status": "ready", "horizon_trading_days": 5, "member_count": 20,
+            "paired_count": 20, "status_counts": {}, "blocked_mean_return_pct": 10.0,
+            "control_mean_return_pct": 0.0, "mean_paired_excess_pct": 10.0,
+            "outperform_rate": 1.0, "blocked_loss_gt_5_rate": 0.0,
+            "control_loss_gt_5_rate": 0.0, "blocked_mean_mae_pct": -2.0,
+            "control_mean_mae_pct": -2.0,
+        }
+        with mock.patch("runners.a_short_crash_veto_tracker.evaluate_cohort", return_value=ready), \
+                mock.patch("runners.a_short_crash_veto_tracker._official_rolling_epoch_mode",
+                           return_value="frozen_enforced"):
+            summary = build_summary({"cohorts": [cohort]}, {"trade_dates": [], "stocks": pd.DataFrame()},
+                                    "20260724")
+        self.assertEqual(summary["official_rolling"]["mature_week_count"], 1)
+        self.assertEqual(summary["official_rolling"]["decision"], "insufficient_keep")
+        self.assertEqual(summary["final_decision"]["status"], "insufficient_keep")
+
+        with mock.patch("runners.a_short_crash_veto_tracker.evaluate_cohort", return_value=ready), \
+                mock.patch("runners.a_short_crash_veto_tracker._official_rolling_epoch_mode",
+                           return_value="pre_freeze_audit_only"):
+            state = {"cohorts": [dict(cohort, cohort_id="crash-veto-" + digit * 20,
+                                       as_of=f"2026072{digit}") for digit in ("1", "2", "3")]}
+            summary = build_summary(state, {"trade_dates": [], "stocks": pd.DataFrame()}, "20260724")
+        self.assertEqual(summary["official_rolling"]["mature_week_count"], 3)
+        self.assertEqual(summary["official_rolling"]["unfrozen_decision"], "change_candidate")
+        self.assertEqual(summary["official_rolling"]["decision"], "insufficient_keep")
+        self.assertEqual(summary["final_decision"]["status"], "insufficient_keep")
 
     def test_weekly_entry_wires_tracker_non_blocking_and_passes_summary(self):
         script = (ROOT / "runners" / "weekly_screening.ps1").read_text(encoding="utf-8")
