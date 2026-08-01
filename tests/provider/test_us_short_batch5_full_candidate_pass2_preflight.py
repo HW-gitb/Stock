@@ -24,6 +24,10 @@ from tests.provider.test_us_short_batch5_data_context import (  # noqa: E402
     _constant_projection,
 )
 from tests.provider.us_short_projection_binding_test_helpers import bound_projection  # noqa: E402
+from tests.provider.us_short_private_test_root import (  # noqa: E402
+    temporary_us_short_directory,
+    temporary_us_short_state_directory,
+)
 
 
 STATE_DIR = ROOT / "state" / "us_short"
@@ -47,12 +51,32 @@ def _write_json(path: Path, payload) -> Path:
 
 class FullCandidatePass2PreflightTest(unittest.TestCase):
     def setUp(self):
+        self._state_root_context = temporary_us_short_state_directory(ROOT)
+        self.state_dir = Path(self._state_root_context.__enter__())
+        self.addCleanup(self._state_root_context.__exit__, None, None, None)
+        self._summary_root_context = temporary_us_short_directory(
+            ROOT, Path("provider_samples") / "us_short_batch5_full_candidate_pass2_preflight_20260706"
+        )
+        self.summary_root = Path(self._summary_root_context.__enter__())
+        self.addCleanup(self._summary_root_context.__exit__, None, None, None)
+        runner = importlib.import_module(MODULE)
+        original_git_ignored = runner._git_ignored
+        state_root = self.state_dir.resolve()
+
+        def _git_ignored_for_private_test(path):
+            resolved = Path(path).resolve()
+            if resolved == state_root or state_root in resolved.parents:
+                return True
+            return original_git_ignored(path)
+
+        runner._git_ignored = _git_ignored_for_private_test
+        self.addCleanup(setattr, runner, "_git_ignored", original_git_ignored)
         self.slug = f"test_full_candidate_pass2_preflight_{os.getpid()}_{self._testMethodName}"
         self.paths = {
-            "candidate": STATE_DIR / f"{self.slug}_candidate.json",
-            "momentum": STATE_DIR / f"{self.slug}_momentum.json",
-            "theme": STATE_DIR / f"{self.slug}_theme.json",
-            "summary": SUMMARY_DIR / self.slug / "summary.json",
+            "candidate": self.state_dir / f"{self.slug}_candidate.json",
+            "momentum": self.state_dir / f"{self.slug}_momentum.json",
+            "theme": self.state_dir / f"{self.slug}_theme.json",
+            "summary": self.summary_root / self.slug / "summary.json",
         }
         for path in self.paths.values():
             path.unlink(missing_ok=True)
@@ -69,14 +93,6 @@ class FullCandidatePass2PreflightTest(unittest.TestCase):
     def tearDown(self):
         for path in self.paths.values():
             path.unlink(missing_ok=True)
-        root = SUMMARY_DIR / self.slug
-        if root.exists():
-            for item in sorted(root.rglob("*"), reverse=True):
-                if item.is_file():
-                    item.unlink()
-                elif item.is_dir():
-                    item.rmdir()
-            root.rmdir()
 
     def _module(self):
         return importlib.import_module(MODULE)

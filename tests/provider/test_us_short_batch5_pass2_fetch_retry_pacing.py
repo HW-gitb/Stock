@@ -14,6 +14,7 @@ if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
 from runners import us_short_batch5_full_candidate_live_source_packet as runner  # noqa: E402
+from tests.provider.us_short_private_test_root import temporary_us_short_directory  # noqa: E402
 
 
 class ScriptedClient:
@@ -38,8 +39,9 @@ class Pass2FetchRetryPacingTest(unittest.TestCase):
     def setUp(self):
         # fetch_and_store writes raw under a repo-relative path (as_repo_relative -> relative_to(ROOT)), so the
         # raw_root MUST live inside the repo; provider_samples/ is gitignored.
-        provider_samples = ROOT / "provider_samples"
-        provider_samples.mkdir(parents=True, exist_ok=True)
+        root_context = temporary_us_short_directory(ROOT, Path("provider_samples"))
+        provider_samples = Path(root_context.__enter__())
+        self.addCleanup(root_context.__exit__, None, None, None)
         self._raw_root_dir = tempfile.TemporaryDirectory(
             prefix="test_retry_",
             dir=str(provider_samples),

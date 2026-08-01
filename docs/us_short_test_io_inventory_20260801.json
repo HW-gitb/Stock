@@ -1,5 +1,5 @@
 {
-  "inventory_version": "us_short_test_io_inventory.v0.2.0",
+  "inventory_version": "us_short_test_io_inventory.v0.4.0",
   "scope": {
     "glob": "tests/**/test_us_short*.py",
     "protected_roots": [
@@ -9,375 +9,105 @@
   },
   "module_count": 279,
   "classification_counts": {
-    "class0_no_direct_protected_io": 233,
+    "class0_no_direct_protected_io": 254,
     "class1_read_real_root": 8,
-    "class2_write_real_root": 36,
-    "class3_global_sentinel": 2
+    "class2_write_real_root": 15,
+    "class3_global_sentinel": 2,
+    "class4_unresolved_write": 0
   },
   "class0_modules_omitted": true,
   "module_path_sha256": "bb8c3d9a286366a92bbd660bdf0cf168b510269aee53dbaccdc4496832299ccd",
   "allowlist": [
-    "tests/provider/test_us_short_batch5_bankruptcy_8k_candidate_resume_scan.py:kwarg:raw_root:provider_samples",
-    "tests/provider/test_us_short_batch5_bankruptcy_8k_candidate_resume_scan.py:rmdir:provider_samples",
-    "tests/provider/test_us_short_batch5_bankruptcy_8k_candidate_scan.py:kwarg:raw_root:provider_samples",
-    "tests/provider/test_us_short_batch5_bankruptcy_8k_candidate_scan.py:rmdir:provider_samples",
-    "tests/provider/test_us_short_batch5_bankruptcy_8k_probe.py:kwarg:dir:provider_samples",
-    "tests/provider/test_us_short_batch5_bankruptcy_8k_probe.py:mkdir:provider_samples",
     "tests/provider/test_us_short_batch5_bankruptcy_8k_source_packet.py:kwarg:packet_ref:state/us_short",
     "tests/provider/test_us_short_batch5_bankruptcy_8k_source_packet.py:kwarg:screen_path:state/us_short",
     "tests/provider/test_us_short_batch5_bankruptcy_8k_source_packet.py:kwarg:summary_path:provider_samples",
-    "tests/provider/test_us_short_batch5_bankruptcy_8k_source_packet.py:rmdir:provider_samples",
-    "tests/provider/test_us_short_batch5_bankruptcy_8k_source_packet_producer.py:kwarg:output_source_packet_path:provider_samples,state/us_short",
-    "tests/provider/test_us_short_batch5_bankruptcy_8k_source_packet_producer.py:kwarg:raw_root:provider_samples",
-    "tests/provider/test_us_short_batch5_bankruptcy_8k_source_packet_producer.py:rmdir:provider_samples",
-    "tests/provider/test_us_short_batch5_capstone_offline_e2e.py:kwarg:raw_root:provider_samples",
     "tests/provider/test_us_short_batch5_capstone_offline_e2e.py:kwarg:source_packet_path:provider_samples,state/us_short",
-    "tests/provider/test_us_short_batch5_capstone_offline_e2e.py:write_text:provider_samples,state/us_short",
-    "tests/provider/test_us_short_batch5_full_candidate_live_source_packet.py:kwarg:raw_root:provider_samples",
-    "tests/provider/test_us_short_batch5_full_candidate_live_source_packet.py:rmdir:provider_samples",
-    "tests/provider/test_us_short_batch5_full_candidate_pass2_preflight.py:rmdir:provider_samples",
-    "tests/provider/test_us_short_batch5_full_candidate_projection_inputs.py:rmdir:provider_samples",
-    "tests/provider/test_us_short_batch5_full_universe_momentum_fetch.py:kwarg:candidate_artifact_path:state/us_short",
-    "tests/provider/test_us_short_batch5_full_universe_momentum_fetch.py:kwarg:ohlcv_series_packet_path:provider_samples,state/us_short",
-    "tests/provider/test_us_short_batch5_full_universe_momentum_fetch.py:kwarg:ohlcv_series_packet_path:state/us_short",
-    "tests/provider/test_us_short_batch5_full_universe_momentum_fetch.py:kwarg:output_projection_path:state/us_short",
-    "tests/provider/test_us_short_batch5_full_universe_momentum_fetch.py:kwarg:series_packet_path:provider_samples,state/us_short",
-    "tests/provider/test_us_short_batch5_full_universe_momentum_fetch.py:kwarg:series_packet_path:state/us_short",
-    "tests/provider/test_us_short_batch5_full_universe_momentum_fetch.py:kwarg:summary_path:provider_samples",
-    "tests/provider/test_us_short_batch5_full_universe_momentum_producer.py:kwarg:output_momentum_projection_path:state/us_short",
-    "tests/provider/test_us_short_batch5_full_universe_momentum_producer.py:kwarg:output_projection_path:provider_samples,state/us_short",
-    "tests/provider/test_us_short_batch5_full_universe_momentum_producer.py:kwarg:output_theme_projection_path:state/us_short",
-    "tests/provider/test_us_short_batch5_full_universe_momentum_producer.py:kwarg:source_theme_projection_path:state/us_short",
-    "tests/provider/test_us_short_batch5_full_universe_momentum_producer.py:kwarg:summary_path:provider_samples",
-    "tests/provider/test_us_short_batch5_full_universe_overextension_producer.py:kwarg:output_projection_path:provider_samples,state/us_short",
-    "tests/provider/test_us_short_batch5_full_universe_overextension_producer.py:kwarg:series_packet_path:provider_samples,state/us_short",
-    "tests/provider/test_us_short_batch5_full_universe_overextension_producer.py:kwarg:summary_path:provider_samples,state/us_short",
-    "tests/provider/test_us_short_batch5_full_universe_overextension_producer.py:rmdir:provider_samples",
-    "tests/provider/test_us_short_batch5_full_universe_sec_sic_classification_fetch.py:kwarg:summary_path:provider_samples",
-    "tests/provider/test_us_short_batch5_full_universe_theme_producer.py:kwarg:output_momentum_projection_path:state/us_short",
-    "tests/provider/test_us_short_batch5_full_universe_theme_producer.py:kwarg:output_projection_path:provider_samples,state/us_short",
-    "tests/provider/test_us_short_batch5_full_universe_theme_producer.py:kwarg:output_theme_projection_path:state/us_short",
-    "tests/provider/test_us_short_batch5_full_universe_theme_producer.py:kwarg:source_momentum_projection_path:state/us_short",
-    "tests/provider/test_us_short_batch5_full_universe_theme_producer.py:kwarg:summary_path:provider_samples",
-    "tests/provider/test_us_short_batch5_live_source_packet.py:kwarg:momentum_projection_path:state/us_short",
-    "tests/provider/test_us_short_batch5_live_source_packet.py:kwarg:raw_root:provider_samples",
+    "tests/provider/test_us_short_batch5_incident_log_writer.py:TemporaryDirectory:state/us_short",
+    "tests/provider/test_us_short_batch5_incident_log_writer.py:kwarg:incident_root:state/us_short",
+    "tests/provider/test_us_short_batch5_incident_log_writer.py:mkdir:state/us_short",
+    "tests/provider/test_us_short_batch5_incident_log_writer.py:write_text:state/us_short",
     "tests/provider/test_us_short_batch5_live_source_packet.py:kwarg:raw_sample_ref:provider_samples",
-    "tests/provider/test_us_short_batch5_live_source_packet.py:rmdir:provider_samples",
-    "tests/provider/test_us_short_batch5_massive_corporate_action_shape_probe.py:rmdir:state/us_short",
-    "tests/provider/test_us_short_batch5_massive_corporate_action_shape_probe.py:unlink:state/us_short",
-    "tests/provider/test_us_short_batch5_momentum_price_source.py:kwarg:output_projection_path:provider_samples,state/us_short",
-    "tests/provider/test_us_short_batch5_momentum_price_source.py:kwarg:output_projection_path:state/us_short",
-    "tests/provider/test_us_short_batch5_momentum_price_source.py:kwarg:source_packet_path:state/us_short",
-    "tests/provider/test_us_short_batch5_momentum_price_source.py:kwarg:summary_path:provider_samples",
-    "tests/provider/test_us_short_batch5_momentum_price_source.py:mkdir:provider_samples",
-    "tests/provider/test_us_short_batch5_momentum_price_source.py:rmdir:provider_samples",
-    "tests/provider/test_us_short_batch5_momentum_price_source.py:unlink:provider_samples",
-    "tests/provider/test_us_short_batch5_momentum_price_source.py:unlink:state/us_short",
-    "tests/provider/test_us_short_batch5_momentum_price_source.py:write_text:provider_samples",
-    "tests/provider/test_us_short_batch5_momentum_price_source_packet.py:kwarg:output_source_packet_path:provider_samples,state/us_short",
-    "tests/provider/test_us_short_batch5_momentum_price_source_packet.py:kwarg:raw_root:provider_samples",
-    "tests/provider/test_us_short_batch5_momentum_price_source_packet.py:kwarg:summary_path:provider_samples,state/us_short",
-    "tests/provider/test_us_short_batch5_momentum_price_source_packet.py:rmdir:provider_samples",
-    "tests/provider/test_us_short_batch5_momentum_price_source_packet.py:unlink:provider_samples,state/us_short",
-    "tests/provider/test_us_short_batch5_neutral_projection_inputs.py:kwarg:momentum_projection_path:provider_samples,state/us_short",
-    "tests/provider/test_us_short_batch5_neutral_projection_inputs.py:rmdir:provider_samples",
-    "tests/provider/test_us_short_batch5_pass2_fetch_retry_pacing.py:mkdir:provider_samples",
-    "tests/provider/test_us_short_batch5_provider_live_probe.py:kwarg:dir:provider_samples",
-    "tests/provider/test_us_short_batch5_provider_live_probe.py:mkdir:provider_samples",
-    "tests/provider/test_us_short_batch5_replay_pass2_source_packet_from_raw.py:mkdir:provider_samples",
-    "tests/provider/test_us_short_batch5_status_source_probe.py:kwarg:dir:provider_samples",
-    "tests/provider/test_us_short_batch5_status_source_probe.py:mkdir:provider_samples",
-    "tests/provider/test_us_short_batch5_theme_gics_source.py:kwarg:raw_root:provider_samples",
-    "tests/provider/test_us_short_batch5_theme_gics_source.py:rmdir:provider_samples",
-    "tests/provider/test_us_short_batch5_theme_source.py:kwarg:summary_path:provider_samples",
-    "tests/provider/test_us_short_batch5_theme_source.py:mkdir:provider_samples",
-    "tests/provider/test_us_short_batch5_theme_source.py:rmdir:provider_samples",
-    "tests/provider/test_us_short_batch5_theme_source.py:write_text:provider_samples",
-    "tests/provider/test_us_short_batch5_theme_source_packet.py:kwarg:raw_root:provider_samples",
     "tests/provider/test_us_short_batch5_theme_source_packet.py:kwarg:raw_sample_ref:provider_samples",
-    "tests/provider/test_us_short_cut5_pass2_feasibility_probe.py:kwarg:raw_root:provider_samples,state/us_short",
-    "tests/provider/test_us_short_cut5_pass2_feasibility_probe.py:kwarg:summary_path:provider_samples,state/us_short",
-    "tests/provider/test_us_short_cut5_pass2_feasibility_probe.py:mkdir:provider_samples,state/us_short",
-    "tests/provider/test_us_short_cut5_pass2_feasibility_probe.py:shutil.rmtree:provider_samples,state/us_short",
-    "tests/provider/test_us_short_cut5_pass2_feasibility_probe.py:unlink:provider_samples,state/us_short",
-    "tests/provider/test_us_short_cut5_pass2_feasibility_probe.py:write_bytes:provider_samples,state/us_short",
-    "tests/provider/test_us_short_cut5_pass2_feasibility_probe.py:write_text:provider_samples,state/us_short",
-    "tests/provider/test_us_short_forward_lifecycle_capture.py:kwarg:candidate_path:state/us_short",
-    "tests/provider/test_us_short_forward_lifecycle_capture.py:kwarg:snapshot_path:state/us_short",
-    "tests/provider/test_us_short_forward_lifecycle_capture.py:unlink:state/us_short",
-    "tests/provider/test_us_short_forward_policy_corporate_action_fetch.py:write_bytes:provider_samples",
-    "tests/provider/test_us_short_forward_policy_corporate_action_fetch.py:write_text:provider_samples",
-    "tests/provider/test_us_short_forward_universe_snapshot.py:kwarg:output_path:provider_samples,state/us_short",
-    "tests/provider/test_us_short_massive_corporate_action_normalize.py:kwarg:output_root:provider_samples",
-    "tests/provider/test_us_short_massive_corporate_action_normalize.py:kwarg:raw_root:provider_samples",
-    "tests/provider/test_us_short_massive_corporate_action_normalize.py:mkdir:provider_samples,state/us_short",
-    "tests/provider/test_us_short_massive_corporate_action_normalize.py:shutil.rmtree:provider_samples",
-    "tests/provider/test_us_short_massive_corporate_action_normalize.py:unlink:provider_samples",
-    "tests/provider/test_us_short_massive_corporate_action_normalize.py:write_text:provider_samples,state/us_short",
-    "tests/provider/test_us_short_massive_corporate_action_validation.py:mkdir:state/us_short",
-    "tests/provider/test_us_short_massive_corporate_action_validation.py:rmdir:state/us_short",
-    "tests/provider/test_us_short_massive_corporate_action_validation.py:unlink:state/us_short",
-    "tests/provider/test_us_short_massive_corporate_action_validation.py:write_text:state/us_short",
-    "tests/provider/test_us_short_universe_fetch.py:kwarg:candidate_list_path:state/us_short",
-    "tests/provider/test_us_short_universe_fetch.py:mkdir:state/us_short",
-    "tests/provider/test_us_short_universe_fetch.py:unlink:state/us_short",
-    "tests/provider/test_us_short_universe_fetch.py:write_text:state/us_short",
+    "tests/provider/test_us_short_llm_theme_discovery_fetch_x_merge.py:mkdir:provider_samples,state/us_short",
+    "tests/provider/test_us_short_llm_theme_discovery_fetch_x_merge.py:rename:provider_samples,state/us_short",
+    "tests/provider/test_us_short_llm_theme_discovery_fetch_x_merge.py:unlink:provider_samples,state/us_short",
+    "tests/provider/test_us_short_llm_theme_discovery_fetch_x_merge.py:write_bytes:provider_samples,state/us_short",
+    "tests/provider/test_us_short_llm_theme_discovery_fetch_x_merge.py:write_text:provider_samples,state/us_short",
+    "tests/provider/test_us_short_offline_production_entry_guard.py:write_text:provider_samples,state/us_short",
+    "tests/provider/test_us_short_soft_discovery_query_quality_probe_assess.py:kwarg:row:provider_samples,state/us_short",
     "tests/provider/test_us_short_weekly_capstone.py:mkdir:state/us_short",
     "tests/provider/test_us_short_weekly_capstone.py:write_text:state/us_short",
-    "tests/provider/test_us_short_yfinance_grades_feasibility_probe.py:kwarg:raw_root:provider_samples,state/us_short",
-    "tests/provider/test_us_short_yfinance_grades_feasibility_probe.py:kwarg:summary_path:provider_samples,state/us_short",
-    "tests/provider/test_us_short_yfinance_grades_feasibility_probe.py:shutil.rmtree:provider_samples,state/us_short",
-    "tests/test_us_short_soft_boost_consumption.py:kwarg:dir:provider_samples",
-    "tests/test_us_short_soft_boost_consumption.py:mkdir:provider_samples"
+    "tests/test_us_short_capstone_checkpoint.py:kwarg:input_logical_paths:state/us_short",
+    "tests/test_us_short_capstone_checkpoint.py:kwarg:output_logical_paths:state/us_short",
+    "tests/test_us_short_corporate_action_workflow.py:kwarg:lifecycle_observation:provider_samples,state/us_short",
+    "tests/test_us_short_discovery_conformance.py:kwarg:resolved:provider_samples,state/us_short",
+    "tests/test_us_short_forward_policy_outcome.py:kwarg:adjustment_evidence:provider_samples,state/us_short",
+    "tests/test_us_short_forward_policy_private_week.py:kwarg:private_output_path:state/us_short",
+    "tests/test_us_short_result_linkage_cut3.py:kwarg:selection_input_provenance:provider_samples,state/us_short",
+    "tests/test_us_short_weekend_batch4_runner.py:write_text:provider_samples,state/us_short"
   ],
+  "unresolved_allowlist": [],
   "unallowlisted_write_findings": [],
+  "unresolved_write_finding_counts": {},
   "protected_write_finding_keys": [
-    "tests/provider/test_us_short_batch5_bankruptcy_8k_candidate_resume_scan.py:kwarg:raw_root:provider_samples",
-    "tests/provider/test_us_short_batch5_bankruptcy_8k_candidate_resume_scan.py:rmdir:provider_samples",
-    "tests/provider/test_us_short_batch5_bankruptcy_8k_candidate_scan.py:kwarg:raw_root:provider_samples",
-    "tests/provider/test_us_short_batch5_bankruptcy_8k_candidate_scan.py:rmdir:provider_samples",
-    "tests/provider/test_us_short_batch5_bankruptcy_8k_probe.py:kwarg:dir:provider_samples",
-    "tests/provider/test_us_short_batch5_bankruptcy_8k_probe.py:mkdir:provider_samples",
     "tests/provider/test_us_short_batch5_bankruptcy_8k_source_packet.py:kwarg:packet_ref:state/us_short",
     "tests/provider/test_us_short_batch5_bankruptcy_8k_source_packet.py:kwarg:screen_path:state/us_short",
     "tests/provider/test_us_short_batch5_bankruptcy_8k_source_packet.py:kwarg:summary_path:provider_samples",
-    "tests/provider/test_us_short_batch5_bankruptcy_8k_source_packet.py:rmdir:provider_samples",
-    "tests/provider/test_us_short_batch5_bankruptcy_8k_source_packet_producer.py:kwarg:output_source_packet_path:provider_samples,state/us_short",
-    "tests/provider/test_us_short_batch5_bankruptcy_8k_source_packet_producer.py:kwarg:raw_root:provider_samples",
-    "tests/provider/test_us_short_batch5_bankruptcy_8k_source_packet_producer.py:rmdir:provider_samples",
-    "tests/provider/test_us_short_batch5_capstone_offline_e2e.py:kwarg:raw_root:provider_samples",
     "tests/provider/test_us_short_batch5_capstone_offline_e2e.py:kwarg:source_packet_path:provider_samples,state/us_short",
-    "tests/provider/test_us_short_batch5_capstone_offline_e2e.py:write_text:provider_samples,state/us_short",
-    "tests/provider/test_us_short_batch5_full_candidate_live_source_packet.py:kwarg:raw_root:provider_samples",
-    "tests/provider/test_us_short_batch5_full_candidate_live_source_packet.py:rmdir:provider_samples",
-    "tests/provider/test_us_short_batch5_full_candidate_pass2_preflight.py:rmdir:provider_samples",
-    "tests/provider/test_us_short_batch5_full_candidate_projection_inputs.py:rmdir:provider_samples",
-    "tests/provider/test_us_short_batch5_full_universe_momentum_fetch.py:kwarg:candidate_artifact_path:state/us_short",
-    "tests/provider/test_us_short_batch5_full_universe_momentum_fetch.py:kwarg:ohlcv_series_packet_path:provider_samples,state/us_short",
-    "tests/provider/test_us_short_batch5_full_universe_momentum_fetch.py:kwarg:ohlcv_series_packet_path:state/us_short",
-    "tests/provider/test_us_short_batch5_full_universe_momentum_fetch.py:kwarg:output_projection_path:state/us_short",
-    "tests/provider/test_us_short_batch5_full_universe_momentum_fetch.py:kwarg:series_packet_path:provider_samples,state/us_short",
-    "tests/provider/test_us_short_batch5_full_universe_momentum_fetch.py:kwarg:series_packet_path:state/us_short",
-    "tests/provider/test_us_short_batch5_full_universe_momentum_fetch.py:kwarg:summary_path:provider_samples",
-    "tests/provider/test_us_short_batch5_full_universe_momentum_producer.py:kwarg:output_momentum_projection_path:state/us_short",
-    "tests/provider/test_us_short_batch5_full_universe_momentum_producer.py:kwarg:output_projection_path:provider_samples,state/us_short",
-    "tests/provider/test_us_short_batch5_full_universe_momentum_producer.py:kwarg:output_theme_projection_path:state/us_short",
-    "tests/provider/test_us_short_batch5_full_universe_momentum_producer.py:kwarg:source_theme_projection_path:state/us_short",
-    "tests/provider/test_us_short_batch5_full_universe_momentum_producer.py:kwarg:summary_path:provider_samples",
-    "tests/provider/test_us_short_batch5_full_universe_overextension_producer.py:kwarg:output_projection_path:provider_samples,state/us_short",
-    "tests/provider/test_us_short_batch5_full_universe_overextension_producer.py:kwarg:series_packet_path:provider_samples,state/us_short",
-    "tests/provider/test_us_short_batch5_full_universe_overextension_producer.py:kwarg:summary_path:provider_samples,state/us_short",
-    "tests/provider/test_us_short_batch5_full_universe_overextension_producer.py:rmdir:provider_samples",
-    "tests/provider/test_us_short_batch5_full_universe_sec_sic_classification_fetch.py:kwarg:summary_path:provider_samples",
-    "tests/provider/test_us_short_batch5_full_universe_theme_producer.py:kwarg:output_momentum_projection_path:state/us_short",
-    "tests/provider/test_us_short_batch5_full_universe_theme_producer.py:kwarg:output_projection_path:provider_samples,state/us_short",
-    "tests/provider/test_us_short_batch5_full_universe_theme_producer.py:kwarg:output_theme_projection_path:state/us_short",
-    "tests/provider/test_us_short_batch5_full_universe_theme_producer.py:kwarg:source_momentum_projection_path:state/us_short",
-    "tests/provider/test_us_short_batch5_full_universe_theme_producer.py:kwarg:summary_path:provider_samples",
-    "tests/provider/test_us_short_batch5_live_source_packet.py:kwarg:momentum_projection_path:state/us_short",
-    "tests/provider/test_us_short_batch5_live_source_packet.py:kwarg:raw_root:provider_samples",
+    "tests/provider/test_us_short_batch5_incident_log_writer.py:TemporaryDirectory:state/us_short",
+    "tests/provider/test_us_short_batch5_incident_log_writer.py:kwarg:incident_root:state/us_short",
+    "tests/provider/test_us_short_batch5_incident_log_writer.py:mkdir:state/us_short",
+    "tests/provider/test_us_short_batch5_incident_log_writer.py:write_text:state/us_short",
     "tests/provider/test_us_short_batch5_live_source_packet.py:kwarg:raw_sample_ref:provider_samples",
-    "tests/provider/test_us_short_batch5_live_source_packet.py:rmdir:provider_samples",
-    "tests/provider/test_us_short_batch5_massive_corporate_action_shape_probe.py:rmdir:state/us_short",
-    "tests/provider/test_us_short_batch5_massive_corporate_action_shape_probe.py:unlink:state/us_short",
-    "tests/provider/test_us_short_batch5_momentum_price_source.py:kwarg:output_projection_path:provider_samples,state/us_short",
-    "tests/provider/test_us_short_batch5_momentum_price_source.py:kwarg:output_projection_path:state/us_short",
-    "tests/provider/test_us_short_batch5_momentum_price_source.py:kwarg:source_packet_path:state/us_short",
-    "tests/provider/test_us_short_batch5_momentum_price_source.py:kwarg:summary_path:provider_samples",
-    "tests/provider/test_us_short_batch5_momentum_price_source.py:mkdir:provider_samples",
-    "tests/provider/test_us_short_batch5_momentum_price_source.py:rmdir:provider_samples",
-    "tests/provider/test_us_short_batch5_momentum_price_source.py:unlink:provider_samples",
-    "tests/provider/test_us_short_batch5_momentum_price_source.py:unlink:state/us_short",
-    "tests/provider/test_us_short_batch5_momentum_price_source.py:write_text:provider_samples",
-    "tests/provider/test_us_short_batch5_momentum_price_source_packet.py:kwarg:output_source_packet_path:provider_samples,state/us_short",
-    "tests/provider/test_us_short_batch5_momentum_price_source_packet.py:kwarg:raw_root:provider_samples",
-    "tests/provider/test_us_short_batch5_momentum_price_source_packet.py:kwarg:summary_path:provider_samples,state/us_short",
-    "tests/provider/test_us_short_batch5_momentum_price_source_packet.py:rmdir:provider_samples",
-    "tests/provider/test_us_short_batch5_momentum_price_source_packet.py:unlink:provider_samples,state/us_short",
-    "tests/provider/test_us_short_batch5_neutral_projection_inputs.py:kwarg:momentum_projection_path:provider_samples,state/us_short",
-    "tests/provider/test_us_short_batch5_neutral_projection_inputs.py:rmdir:provider_samples",
-    "tests/provider/test_us_short_batch5_pass2_fetch_retry_pacing.py:mkdir:provider_samples",
-    "tests/provider/test_us_short_batch5_provider_live_probe.py:kwarg:dir:provider_samples",
-    "tests/provider/test_us_short_batch5_provider_live_probe.py:mkdir:provider_samples",
-    "tests/provider/test_us_short_batch5_replay_pass2_source_packet_from_raw.py:mkdir:provider_samples",
-    "tests/provider/test_us_short_batch5_status_source_probe.py:kwarg:dir:provider_samples",
-    "tests/provider/test_us_short_batch5_status_source_probe.py:mkdir:provider_samples",
-    "tests/provider/test_us_short_batch5_theme_gics_source.py:kwarg:raw_root:provider_samples",
-    "tests/provider/test_us_short_batch5_theme_gics_source.py:rmdir:provider_samples",
-    "tests/provider/test_us_short_batch5_theme_source.py:kwarg:summary_path:provider_samples",
-    "tests/provider/test_us_short_batch5_theme_source.py:mkdir:provider_samples",
-    "tests/provider/test_us_short_batch5_theme_source.py:rmdir:provider_samples",
-    "tests/provider/test_us_short_batch5_theme_source.py:write_text:provider_samples",
-    "tests/provider/test_us_short_batch5_theme_source_packet.py:kwarg:raw_root:provider_samples",
     "tests/provider/test_us_short_batch5_theme_source_packet.py:kwarg:raw_sample_ref:provider_samples",
-    "tests/provider/test_us_short_cut5_pass2_feasibility_probe.py:kwarg:raw_root:provider_samples,state/us_short",
-    "tests/provider/test_us_short_cut5_pass2_feasibility_probe.py:kwarg:summary_path:provider_samples,state/us_short",
-    "tests/provider/test_us_short_cut5_pass2_feasibility_probe.py:mkdir:provider_samples,state/us_short",
-    "tests/provider/test_us_short_cut5_pass2_feasibility_probe.py:shutil.rmtree:provider_samples,state/us_short",
-    "tests/provider/test_us_short_cut5_pass2_feasibility_probe.py:unlink:provider_samples,state/us_short",
-    "tests/provider/test_us_short_cut5_pass2_feasibility_probe.py:write_bytes:provider_samples,state/us_short",
-    "tests/provider/test_us_short_cut5_pass2_feasibility_probe.py:write_text:provider_samples,state/us_short",
-    "tests/provider/test_us_short_forward_lifecycle_capture.py:kwarg:candidate_path:state/us_short",
-    "tests/provider/test_us_short_forward_lifecycle_capture.py:kwarg:snapshot_path:state/us_short",
-    "tests/provider/test_us_short_forward_lifecycle_capture.py:unlink:state/us_short",
-    "tests/provider/test_us_short_forward_policy_corporate_action_fetch.py:write_bytes:provider_samples",
-    "tests/provider/test_us_short_forward_policy_corporate_action_fetch.py:write_text:provider_samples",
-    "tests/provider/test_us_short_forward_universe_snapshot.py:kwarg:output_path:provider_samples,state/us_short",
-    "tests/provider/test_us_short_massive_corporate_action_normalize.py:kwarg:output_root:provider_samples",
-    "tests/provider/test_us_short_massive_corporate_action_normalize.py:kwarg:raw_root:provider_samples",
-    "tests/provider/test_us_short_massive_corporate_action_normalize.py:mkdir:provider_samples,state/us_short",
-    "tests/provider/test_us_short_massive_corporate_action_normalize.py:shutil.rmtree:provider_samples",
-    "tests/provider/test_us_short_massive_corporate_action_normalize.py:unlink:provider_samples",
-    "tests/provider/test_us_short_massive_corporate_action_normalize.py:write_text:provider_samples,state/us_short",
-    "tests/provider/test_us_short_massive_corporate_action_validation.py:mkdir:state/us_short",
-    "tests/provider/test_us_short_massive_corporate_action_validation.py:rmdir:state/us_short",
-    "tests/provider/test_us_short_massive_corporate_action_validation.py:unlink:state/us_short",
-    "tests/provider/test_us_short_massive_corporate_action_validation.py:write_text:state/us_short",
-    "tests/provider/test_us_short_universe_fetch.py:kwarg:candidate_list_path:state/us_short",
-    "tests/provider/test_us_short_universe_fetch.py:mkdir:state/us_short",
-    "tests/provider/test_us_short_universe_fetch.py:unlink:state/us_short",
-    "tests/provider/test_us_short_universe_fetch.py:write_text:state/us_short",
+    "tests/provider/test_us_short_llm_theme_discovery_fetch_x_merge.py:mkdir:provider_samples,state/us_short",
+    "tests/provider/test_us_short_llm_theme_discovery_fetch_x_merge.py:rename:provider_samples,state/us_short",
+    "tests/provider/test_us_short_llm_theme_discovery_fetch_x_merge.py:unlink:provider_samples,state/us_short",
+    "tests/provider/test_us_short_llm_theme_discovery_fetch_x_merge.py:write_bytes:provider_samples,state/us_short",
+    "tests/provider/test_us_short_llm_theme_discovery_fetch_x_merge.py:write_text:provider_samples,state/us_short",
+    "tests/provider/test_us_short_offline_production_entry_guard.py:write_text:provider_samples,state/us_short",
+    "tests/provider/test_us_short_soft_discovery_query_quality_probe_assess.py:kwarg:row:provider_samples,state/us_short",
     "tests/provider/test_us_short_weekly_capstone.py:mkdir:state/us_short",
     "tests/provider/test_us_short_weekly_capstone.py:write_text:state/us_short",
-    "tests/provider/test_us_short_yfinance_grades_feasibility_probe.py:kwarg:raw_root:provider_samples,state/us_short",
-    "tests/provider/test_us_short_yfinance_grades_feasibility_probe.py:kwarg:summary_path:provider_samples,state/us_short",
-    "tests/provider/test_us_short_yfinance_grades_feasibility_probe.py:shutil.rmtree:provider_samples,state/us_short",
-    "tests/test_us_short_soft_boost_consumption.py:kwarg:dir:provider_samples",
-    "tests/test_us_short_soft_boost_consumption.py:mkdir:provider_samples"
+    "tests/test_us_short_capstone_checkpoint.py:kwarg:input_logical_paths:state/us_short",
+    "tests/test_us_short_capstone_checkpoint.py:kwarg:output_logical_paths:state/us_short",
+    "tests/test_us_short_corporate_action_workflow.py:kwarg:lifecycle_observation:provider_samples,state/us_short",
+    "tests/test_us_short_discovery_conformance.py:kwarg:resolved:provider_samples,state/us_short",
+    "tests/test_us_short_forward_policy_outcome.py:kwarg:adjustment_evidence:provider_samples,state/us_short",
+    "tests/test_us_short_forward_policy_private_week.py:kwarg:private_output_path:state/us_short",
+    "tests/test_us_short_result_linkage_cut3.py:kwarg:selection_input_provenance:provider_samples,state/us_short",
+    "tests/test_us_short_weekend_batch4_runner.py:write_text:provider_samples,state/us_short"
   ],
   "protected_write_finding_counts": {
-    "tests/provider/test_us_short_batch5_bankruptcy_8k_candidate_resume_scan.py:kwarg:raw_root:provider_samples": 11,
-    "tests/provider/test_us_short_batch5_bankruptcy_8k_candidate_resume_scan.py:rmdir:provider_samples": 1,
-    "tests/provider/test_us_short_batch5_bankruptcy_8k_candidate_scan.py:kwarg:raw_root:provider_samples": 4,
-    "tests/provider/test_us_short_batch5_bankruptcy_8k_candidate_scan.py:rmdir:provider_samples": 1,
-    "tests/provider/test_us_short_batch5_bankruptcy_8k_probe.py:kwarg:dir:provider_samples": 5,
-    "tests/provider/test_us_short_batch5_bankruptcy_8k_probe.py:mkdir:provider_samples": 5,
     "tests/provider/test_us_short_batch5_bankruptcy_8k_source_packet.py:kwarg:packet_ref:state/us_short": 1,
     "tests/provider/test_us_short_batch5_bankruptcy_8k_source_packet.py:kwarg:screen_path:state/us_short": 1,
     "tests/provider/test_us_short_batch5_bankruptcy_8k_source_packet.py:kwarg:summary_path:provider_samples": 1,
-    "tests/provider/test_us_short_batch5_bankruptcy_8k_source_packet.py:rmdir:provider_samples": 1,
-    "tests/provider/test_us_short_batch5_bankruptcy_8k_source_packet_producer.py:kwarg:output_source_packet_path:provider_samples,state/us_short": 1,
-    "tests/provider/test_us_short_batch5_bankruptcy_8k_source_packet_producer.py:kwarg:raw_root:provider_samples": 5,
-    "tests/provider/test_us_short_batch5_bankruptcy_8k_source_packet_producer.py:rmdir:provider_samples": 1,
-    "tests/provider/test_us_short_batch5_capstone_offline_e2e.py:kwarg:raw_root:provider_samples": 7,
     "tests/provider/test_us_short_batch5_capstone_offline_e2e.py:kwarg:source_packet_path:provider_samples,state/us_short": 9,
-    "tests/provider/test_us_short_batch5_capstone_offline_e2e.py:write_text:provider_samples,state/us_short": 1,
-    "tests/provider/test_us_short_batch5_full_candidate_live_source_packet.py:kwarg:raw_root:provider_samples": 21,
-    "tests/provider/test_us_short_batch5_full_candidate_live_source_packet.py:rmdir:provider_samples": 2,
-    "tests/provider/test_us_short_batch5_full_candidate_pass2_preflight.py:rmdir:provider_samples": 1,
-    "tests/provider/test_us_short_batch5_full_candidate_projection_inputs.py:rmdir:provider_samples": 2,
-    "tests/provider/test_us_short_batch5_full_universe_momentum_fetch.py:kwarg:candidate_artifact_path:state/us_short": 2,
-    "tests/provider/test_us_short_batch5_full_universe_momentum_fetch.py:kwarg:ohlcv_series_packet_path:provider_samples,state/us_short": 1,
-    "tests/provider/test_us_short_batch5_full_universe_momentum_fetch.py:kwarg:ohlcv_series_packet_path:state/us_short": 5,
-    "tests/provider/test_us_short_batch5_full_universe_momentum_fetch.py:kwarg:output_projection_path:state/us_short": 2,
-    "tests/provider/test_us_short_batch5_full_universe_momentum_fetch.py:kwarg:series_packet_path:provider_samples,state/us_short": 1,
-    "tests/provider/test_us_short_batch5_full_universe_momentum_fetch.py:kwarg:series_packet_path:state/us_short": 2,
-    "tests/provider/test_us_short_batch5_full_universe_momentum_fetch.py:kwarg:summary_path:provider_samples": 2,
-    "tests/provider/test_us_short_batch5_full_universe_momentum_producer.py:kwarg:output_momentum_projection_path:state/us_short": 1,
-    "tests/provider/test_us_short_batch5_full_universe_momentum_producer.py:kwarg:output_projection_path:provider_samples,state/us_short": 1,
-    "tests/provider/test_us_short_batch5_full_universe_momentum_producer.py:kwarg:output_theme_projection_path:state/us_short": 1,
-    "tests/provider/test_us_short_batch5_full_universe_momentum_producer.py:kwarg:source_theme_projection_path:state/us_short": 1,
-    "tests/provider/test_us_short_batch5_full_universe_momentum_producer.py:kwarg:summary_path:provider_samples": 1,
-    "tests/provider/test_us_short_batch5_full_universe_overextension_producer.py:kwarg:output_projection_path:provider_samples,state/us_short": 1,
-    "tests/provider/test_us_short_batch5_full_universe_overextension_producer.py:kwarg:series_packet_path:provider_samples,state/us_short": 1,
-    "tests/provider/test_us_short_batch5_full_universe_overextension_producer.py:kwarg:summary_path:provider_samples,state/us_short": 1,
-    "tests/provider/test_us_short_batch5_full_universe_overextension_producer.py:rmdir:provider_samples": 1,
-    "tests/provider/test_us_short_batch5_full_universe_sec_sic_classification_fetch.py:kwarg:summary_path:provider_samples": 1,
-    "tests/provider/test_us_short_batch5_full_universe_theme_producer.py:kwarg:output_momentum_projection_path:state/us_short": 1,
-    "tests/provider/test_us_short_batch5_full_universe_theme_producer.py:kwarg:output_projection_path:provider_samples,state/us_short": 1,
-    "tests/provider/test_us_short_batch5_full_universe_theme_producer.py:kwarg:output_theme_projection_path:state/us_short": 1,
-    "tests/provider/test_us_short_batch5_full_universe_theme_producer.py:kwarg:source_momentum_projection_path:state/us_short": 1,
-    "tests/provider/test_us_short_batch5_full_universe_theme_producer.py:kwarg:summary_path:provider_samples": 1,
-    "tests/provider/test_us_short_batch5_live_source_packet.py:kwarg:momentum_projection_path:state/us_short": 1,
-    "tests/provider/test_us_short_batch5_live_source_packet.py:kwarg:raw_root:provider_samples": 6,
+    "tests/provider/test_us_short_batch5_incident_log_writer.py:TemporaryDirectory:state/us_short": 1,
+    "tests/provider/test_us_short_batch5_incident_log_writer.py:kwarg:incident_root:state/us_short": 13,
+    "tests/provider/test_us_short_batch5_incident_log_writer.py:mkdir:state/us_short": 3,
+    "tests/provider/test_us_short_batch5_incident_log_writer.py:write_text:state/us_short": 2,
     "tests/provider/test_us_short_batch5_live_source_packet.py:kwarg:raw_sample_ref:provider_samples": 1,
-    "tests/provider/test_us_short_batch5_live_source_packet.py:rmdir:provider_samples": 1,
-    "tests/provider/test_us_short_batch5_massive_corporate_action_shape_probe.py:rmdir:state/us_short": 1,
-    "tests/provider/test_us_short_batch5_massive_corporate_action_shape_probe.py:unlink:state/us_short": 1,
-    "tests/provider/test_us_short_batch5_momentum_price_source.py:kwarg:output_projection_path:provider_samples,state/us_short": 1,
-    "tests/provider/test_us_short_batch5_momentum_price_source.py:kwarg:output_projection_path:state/us_short": 1,
-    "tests/provider/test_us_short_batch5_momentum_price_source.py:kwarg:source_packet_path:state/us_short": 1,
-    "tests/provider/test_us_short_batch5_momentum_price_source.py:kwarg:summary_path:provider_samples": 2,
-    "tests/provider/test_us_short_batch5_momentum_price_source.py:mkdir:provider_samples": 1,
-    "tests/provider/test_us_short_batch5_momentum_price_source.py:rmdir:provider_samples": 1,
-    "tests/provider/test_us_short_batch5_momentum_price_source.py:unlink:provider_samples": 1,
-    "tests/provider/test_us_short_batch5_momentum_price_source.py:unlink:state/us_short": 2,
-    "tests/provider/test_us_short_batch5_momentum_price_source.py:write_text:provider_samples": 1,
-    "tests/provider/test_us_short_batch5_momentum_price_source_packet.py:kwarg:output_source_packet_path:provider_samples,state/us_short": 2,
-    "tests/provider/test_us_short_batch5_momentum_price_source_packet.py:kwarg:raw_root:provider_samples": 8,
-    "tests/provider/test_us_short_batch5_momentum_price_source_packet.py:kwarg:summary_path:provider_samples,state/us_short": 2,
-    "tests/provider/test_us_short_batch5_momentum_price_source_packet.py:rmdir:provider_samples": 1,
-    "tests/provider/test_us_short_batch5_momentum_price_source_packet.py:unlink:provider_samples,state/us_short": 4,
-    "tests/provider/test_us_short_batch5_neutral_projection_inputs.py:kwarg:momentum_projection_path:provider_samples,state/us_short": 1,
-    "tests/provider/test_us_short_batch5_neutral_projection_inputs.py:rmdir:provider_samples": 1,
-    "tests/provider/test_us_short_batch5_pass2_fetch_retry_pacing.py:mkdir:provider_samples": 1,
-    "tests/provider/test_us_short_batch5_provider_live_probe.py:kwarg:dir:provider_samples": 1,
-    "tests/provider/test_us_short_batch5_provider_live_probe.py:mkdir:provider_samples": 1,
-    "tests/provider/test_us_short_batch5_replay_pass2_source_packet_from_raw.py:mkdir:provider_samples": 2,
-    "tests/provider/test_us_short_batch5_status_source_probe.py:kwarg:dir:provider_samples": 4,
-    "tests/provider/test_us_short_batch5_status_source_probe.py:mkdir:provider_samples": 4,
-    "tests/provider/test_us_short_batch5_theme_gics_source.py:kwarg:raw_root:provider_samples": 6,
-    "tests/provider/test_us_short_batch5_theme_gics_source.py:rmdir:provider_samples": 1,
-    "tests/provider/test_us_short_batch5_theme_source.py:kwarg:summary_path:provider_samples": 1,
-    "tests/provider/test_us_short_batch5_theme_source.py:mkdir:provider_samples": 1,
-    "tests/provider/test_us_short_batch5_theme_source.py:rmdir:provider_samples": 1,
-    "tests/provider/test_us_short_batch5_theme_source.py:write_text:provider_samples": 1,
-    "tests/provider/test_us_short_batch5_theme_source_packet.py:kwarg:raw_root:provider_samples": 5,
     "tests/provider/test_us_short_batch5_theme_source_packet.py:kwarg:raw_sample_ref:provider_samples": 1,
-    "tests/provider/test_us_short_cut5_pass2_feasibility_probe.py:kwarg:raw_root:provider_samples,state/us_short": 7,
-    "tests/provider/test_us_short_cut5_pass2_feasibility_probe.py:kwarg:summary_path:provider_samples,state/us_short": 7,
-    "tests/provider/test_us_short_cut5_pass2_feasibility_probe.py:mkdir:provider_samples,state/us_short": 7,
-    "tests/provider/test_us_short_cut5_pass2_feasibility_probe.py:shutil.rmtree:provider_samples,state/us_short": 1,
-    "tests/provider/test_us_short_cut5_pass2_feasibility_probe.py:unlink:provider_samples,state/us_short": 1,
-    "tests/provider/test_us_short_cut5_pass2_feasibility_probe.py:write_bytes:provider_samples,state/us_short": 1,
-    "tests/provider/test_us_short_cut5_pass2_feasibility_probe.py:write_text:provider_samples,state/us_short": 11,
-    "tests/provider/test_us_short_forward_lifecycle_capture.py:kwarg:candidate_path:state/us_short": 5,
-    "tests/provider/test_us_short_forward_lifecycle_capture.py:kwarg:snapshot_path:state/us_short": 2,
-    "tests/provider/test_us_short_forward_lifecycle_capture.py:unlink:state/us_short": 2,
-    "tests/provider/test_us_short_forward_policy_corporate_action_fetch.py:write_bytes:provider_samples": 1,
-    "tests/provider/test_us_short_forward_policy_corporate_action_fetch.py:write_text:provider_samples": 1,
-    "tests/provider/test_us_short_forward_universe_snapshot.py:kwarg:output_path:provider_samples,state/us_short": 1,
-    "tests/provider/test_us_short_massive_corporate_action_normalize.py:kwarg:output_root:provider_samples": 1,
-    "tests/provider/test_us_short_massive_corporate_action_normalize.py:kwarg:raw_root:provider_samples": 1,
-    "tests/provider/test_us_short_massive_corporate_action_normalize.py:mkdir:provider_samples,state/us_short": 1,
-    "tests/provider/test_us_short_massive_corporate_action_normalize.py:shutil.rmtree:provider_samples": 1,
-    "tests/provider/test_us_short_massive_corporate_action_normalize.py:unlink:provider_samples": 1,
-    "tests/provider/test_us_short_massive_corporate_action_normalize.py:write_text:provider_samples,state/us_short": 1,
-    "tests/provider/test_us_short_massive_corporate_action_validation.py:mkdir:state/us_short": 1,
-    "tests/provider/test_us_short_massive_corporate_action_validation.py:rmdir:state/us_short": 2,
-    "tests/provider/test_us_short_massive_corporate_action_validation.py:unlink:state/us_short": 3,
-    "tests/provider/test_us_short_massive_corporate_action_validation.py:write_text:state/us_short": 1,
-    "tests/provider/test_us_short_universe_fetch.py:kwarg:candidate_list_path:state/us_short": 9,
-    "tests/provider/test_us_short_universe_fetch.py:mkdir:state/us_short": 1,
-    "tests/provider/test_us_short_universe_fetch.py:unlink:state/us_short": 8,
-    "tests/provider/test_us_short_universe_fetch.py:write_text:state/us_short": 3,
+    "tests/provider/test_us_short_llm_theme_discovery_fetch_x_merge.py:mkdir:provider_samples,state/us_short": 1,
+    "tests/provider/test_us_short_llm_theme_discovery_fetch_x_merge.py:rename:provider_samples,state/us_short": 1,
+    "tests/provider/test_us_short_llm_theme_discovery_fetch_x_merge.py:unlink:provider_samples,state/us_short": 2,
+    "tests/provider/test_us_short_llm_theme_discovery_fetch_x_merge.py:write_bytes:provider_samples,state/us_short": 3,
+    "tests/provider/test_us_short_llm_theme_discovery_fetch_x_merge.py:write_text:provider_samples,state/us_short": 8,
+    "tests/provider/test_us_short_offline_production_entry_guard.py:write_text:provider_samples,state/us_short": 1,
+    "tests/provider/test_us_short_soft_discovery_query_quality_probe_assess.py:kwarg:row:provider_samples,state/us_short": 1,
     "tests/provider/test_us_short_weekly_capstone.py:mkdir:state/us_short": 1,
     "tests/provider/test_us_short_weekly_capstone.py:write_text:state/us_short": 1,
-    "tests/provider/test_us_short_yfinance_grades_feasibility_probe.py:kwarg:raw_root:provider_samples,state/us_short": 3,
-    "tests/provider/test_us_short_yfinance_grades_feasibility_probe.py:kwarg:summary_path:provider_samples,state/us_short": 3,
-    "tests/provider/test_us_short_yfinance_grades_feasibility_probe.py:shutil.rmtree:provider_samples,state/us_short": 1,
-    "tests/test_us_short_soft_boost_consumption.py:kwarg:dir:provider_samples": 1,
-    "tests/test_us_short_soft_boost_consumption.py:mkdir:provider_samples": 1
+    "tests/test_us_short_capstone_checkpoint.py:kwarg:input_logical_paths:state/us_short": 4,
+    "tests/test_us_short_capstone_checkpoint.py:kwarg:output_logical_paths:state/us_short": 9,
+    "tests/test_us_short_corporate_action_workflow.py:kwarg:lifecycle_observation:provider_samples,state/us_short": 4,
+    "tests/test_us_short_discovery_conformance.py:kwarg:resolved:provider_samples,state/us_short": 1,
+    "tests/test_us_short_forward_policy_outcome.py:kwarg:adjustment_evidence:provider_samples,state/us_short": 1,
+    "tests/test_us_short_forward_policy_private_week.py:kwarg:private_output_path:state/us_short": 1,
+    "tests/test_us_short_result_linkage_cut3.py:kwarg:selection_input_provenance:provider_samples,state/us_short": 2,
+    "tests/test_us_short_weekend_batch4_runner.py:write_text:provider_samples,state/us_short": 2
   },
   "modules": [
-    {
-      "module": "tests/provider/test_us_short_batch5_bankruptcy_8k_candidate_resume_scan.py",
-      "classification": "class2_write_real_root",
-      "protected_roots": [
-        "provider_samples"
-      ],
-      "read_count": 2,
-      "write_count": 12
-    },
-    {
-      "module": "tests/provider/test_us_short_batch5_bankruptcy_8k_candidate_scan.py",
-      "classification": "class2_write_real_root",
-      "protected_roots": [
-        "provider_samples"
-      ],
-      "read_count": 3,
-      "write_count": 5
-    },
     {
       "module": "tests/provider/test_us_short_batch5_bankruptcy_8k_preflight.py",
       "classification": "class1_read_real_root",
@@ -389,13 +119,13 @@
     },
     {
       "module": "tests/provider/test_us_short_batch5_bankruptcy_8k_probe.py",
-      "classification": "class2_write_real_root",
+      "classification": "class1_read_real_root",
       "protected_roots": [
         "provider_samples",
         "state/us_short"
       ],
       "read_count": 1,
-      "write_count": 10
+      "write_count": 0
     },
     {
       "module": "tests/provider/test_us_short_batch5_bankruptcy_8k_source_packet.py",
@@ -404,117 +134,11 @@
         "provider_samples",
         "state/us_short"
       ],
-      "read_count": 4,
-      "write_count": 4
-    },
-    {
-      "module": "tests/provider/test_us_short_batch5_bankruptcy_8k_source_packet_producer.py",
-      "classification": "class2_write_real_root",
-      "protected_roots": [
-        "provider_samples",
-        "state/us_short"
-      ],
-      "read_count": 3,
-      "write_count": 7
+      "read_count": 1,
+      "write_count": 3
     },
     {
       "module": "tests/provider/test_us_short_batch5_capstone_offline_e2e.py",
-      "classification": "class2_write_real_root",
-      "protected_roots": [
-        "provider_samples",
-        "state/us_short"
-      ],
-      "read_count": 5,
-      "write_count": 17
-    },
-    {
-      "module": "tests/provider/test_us_short_batch5_data_context_source_packet.py",
-      "classification": "class1_read_real_root",
-      "protected_roots": [
-        "state/us_short"
-      ],
-      "read_count": 2,
-      "write_count": 0
-    },
-    {
-      "module": "tests/provider/test_us_short_batch5_full_candidate_live_source_packet.py",
-      "classification": "class2_write_real_root",
-      "protected_roots": [
-        "provider_samples",
-        "state/us_short"
-      ],
-      "read_count": 6,
-      "write_count": 23
-    },
-    {
-      "module": "tests/provider/test_us_short_batch5_full_candidate_pass2_preflight.py",
-      "classification": "class2_write_real_root",
-      "protected_roots": [
-        "provider_samples"
-      ],
-      "read_count": 2,
-      "write_count": 1
-    },
-    {
-      "module": "tests/provider/test_us_short_batch5_full_candidate_projection_inputs.py",
-      "classification": "class2_write_real_root",
-      "protected_roots": [
-        "provider_samples"
-      ],
-      "read_count": 4,
-      "write_count": 2
-    },
-    {
-      "module": "tests/provider/test_us_short_batch5_full_universe_momentum_fetch.py",
-      "classification": "class2_write_real_root",
-      "protected_roots": [
-        "provider_samples",
-        "state/us_short"
-      ],
-      "read_count": 20,
-      "write_count": 15
-    },
-    {
-      "module": "tests/provider/test_us_short_batch5_full_universe_momentum_producer.py",
-      "classification": "class2_write_real_root",
-      "protected_roots": [
-        "provider_samples",
-        "state/us_short"
-      ],
-      "read_count": 0,
-      "write_count": 5
-    },
-    {
-      "module": "tests/provider/test_us_short_batch5_full_universe_overextension_producer.py",
-      "classification": "class2_write_real_root",
-      "protected_roots": [
-        "provider_samples",
-        "state/us_short"
-      ],
-      "read_count": 2,
-      "write_count": 4
-    },
-    {
-      "module": "tests/provider/test_us_short_batch5_full_universe_sec_sic_classification_fetch.py",
-      "classification": "class2_write_real_root",
-      "protected_roots": [
-        "provider_samples"
-      ],
-      "read_count": 4,
-      "write_count": 1
-    },
-    {
-      "module": "tests/provider/test_us_short_batch5_full_universe_theme_producer.py",
-      "classification": "class2_write_real_root",
-      "protected_roots": [
-        "provider_samples",
-        "state/us_short"
-      ],
-      "read_count": 0,
-      "write_count": 5
-    },
-    {
-      "module": "tests/provider/test_us_short_batch5_live_source_packet.py",
       "classification": "class2_write_real_root",
       "protected_roots": [
         "provider_samples",
@@ -524,51 +148,32 @@
       "write_count": 9
     },
     {
-      "module": "tests/provider/test_us_short_batch5_massive_corporate_action_shape_probe.py",
-      "classification": "class2_write_real_root",
-      "protected_roots": [
-        "state/us_short"
-      ],
-      "read_count": 7,
-      "write_count": 2
-    },
-    {
-      "module": "tests/provider/test_us_short_batch5_momentum_price_source.py",
-      "classification": "class2_write_real_root",
-      "protected_roots": [
-        "provider_samples",
-        "state/us_short"
-      ],
-      "read_count": 5,
-      "write_count": 11
-    },
-    {
-      "module": "tests/provider/test_us_short_batch5_momentum_price_source_packet.py",
-      "classification": "class2_write_real_root",
-      "protected_roots": [
-        "provider_samples",
-        "state/us_short"
-      ],
-      "read_count": 7,
-      "write_count": 17
-    },
-    {
-      "module": "tests/provider/test_us_short_batch5_neutral_projection_inputs.py",
-      "classification": "class2_write_real_root",
+      "module": "tests/provider/test_us_short_batch5_full_candidate_live_source_packet.py",
+      "classification": "class1_read_real_root",
       "protected_roots": [
         "provider_samples",
         "state/us_short"
       ],
       "read_count": 2,
-      "write_count": 2
+      "write_count": 0
     },
     {
-      "module": "tests/provider/test_us_short_batch5_pass2_fetch_retry_pacing.py",
+      "module": "tests/provider/test_us_short_batch5_incident_log_writer.py",
       "classification": "class2_write_real_root",
       "protected_roots": [
-        "provider_samples"
+        "state/us_short"
       ],
-      "read_count": 0,
+      "read_count": 15,
+      "write_count": 19
+    },
+    {
+      "module": "tests/provider/test_us_short_batch5_live_source_packet.py",
+      "classification": "class2_write_real_root",
+      "protected_roots": [
+        "provider_samples",
+        "state/us_short"
+      ],
+      "read_count": 1,
       "write_count": 1
     },
     {
@@ -581,24 +186,6 @@
       "write_count": 0
     },
     {
-      "module": "tests/provider/test_us_short_batch5_provider_live_probe.py",
-      "classification": "class2_write_real_root",
-      "protected_roots": [
-        "provider_samples"
-      ],
-      "read_count": 0,
-      "write_count": 2
-    },
-    {
-      "module": "tests/provider/test_us_short_batch5_replay_pass2_source_packet_from_raw.py",
-      "classification": "class2_write_real_root",
-      "protected_roots": [
-        "provider_samples"
-      ],
-      "read_count": 0,
-      "write_count": 2
-    },
-    {
       "module": "tests/provider/test_us_short_batch5_status_source_preflight.py",
       "classification": "class1_read_real_root",
       "protected_roots": [
@@ -609,31 +196,13 @@
     },
     {
       "module": "tests/provider/test_us_short_batch5_status_source_probe.py",
-      "classification": "class2_write_real_root",
+      "classification": "class1_read_real_root",
       "protected_roots": [
         "provider_samples",
         "state/us_short"
       ],
       "read_count": 1,
-      "write_count": 8
-    },
-    {
-      "module": "tests/provider/test_us_short_batch5_theme_gics_source.py",
-      "classification": "class2_write_real_root",
-      "protected_roots": [
-        "provider_samples"
-      ],
-      "read_count": 4,
-      "write_count": 7
-    },
-    {
-      "module": "tests/provider/test_us_short_batch5_theme_source.py",
-      "classification": "class2_write_real_root",
-      "protected_roots": [
-        "provider_samples"
-      ],
-      "read_count": 3,
-      "write_count": 4
+      "write_count": 0
     },
     {
       "module": "tests/provider/test_us_short_batch5_theme_source_packet.py",
@@ -642,73 +211,37 @@
         "provider_samples"
       ],
       "read_count": 0,
-      "write_count": 6
-    },
-    {
-      "module": "tests/provider/test_us_short_cut5_pass2_feasibility_probe.py",
-      "classification": "class2_write_real_root",
-      "protected_roots": [
-        "provider_samples",
-        "state/us_short"
-      ],
-      "read_count": 6,
-      "write_count": 35
-    },
-    {
-      "module": "tests/provider/test_us_short_forward_lifecycle_capture.py",
-      "classification": "class2_write_real_root",
-      "protected_roots": [
-        "state/us_short"
-      ],
-      "read_count": 4,
-      "write_count": 9
-    },
-    {
-      "module": "tests/provider/test_us_short_forward_policy_corporate_action_fetch.py",
-      "classification": "class2_write_real_root",
-      "protected_roots": [
-        "provider_samples"
-      ],
-      "read_count": 2,
-      "write_count": 2
-    },
-    {
-      "module": "tests/provider/test_us_short_forward_universe_snapshot.py",
-      "classification": "class2_write_real_root",
-      "protected_roots": [
-        "provider_samples",
-        "state/us_short"
-      ],
-      "read_count": 3,
       "write_count": 1
     },
     {
-      "module": "tests/provider/test_us_short_massive_corporate_action_normalize.py",
+      "module": "tests/provider/test_us_short_llm_theme_discovery_fetch_x_merge.py",
       "classification": "class2_write_real_root",
       "protected_roots": [
         "provider_samples",
         "state/us_short"
       ],
-      "read_count": 6,
-      "write_count": 6
+      "read_count": 11,
+      "write_count": 15
     },
     {
-      "module": "tests/provider/test_us_short_massive_corporate_action_validation.py",
+      "module": "tests/provider/test_us_short_offline_production_entry_guard.py",
       "classification": "class2_write_real_root",
       "protected_roots": [
+        "provider_samples",
         "state/us_short"
       ],
-      "read_count": 9,
-      "write_count": 7
+      "read_count": 1,
+      "write_count": 1
     },
     {
-      "module": "tests/provider/test_us_short_universe_fetch.py",
+      "module": "tests/provider/test_us_short_soft_discovery_query_quality_probe_assess.py",
       "classification": "class2_write_real_root",
       "protected_roots": [
+        "provider_samples",
         "state/us_short"
       ],
-      "read_count": 10,
-      "write_count": 21
+      "read_count": 0,
+      "write_count": 1
     },
     {
       "module": "tests/provider/test_us_short_weekly_capstone.py",
@@ -720,34 +253,23 @@
       "write_count": 2
     },
     {
-      "module": "tests/provider/test_us_short_yfinance_grades_feasibility_probe.py",
+      "module": "tests/test_us_short_capstone_checkpoint.py",
+      "classification": "class2_write_real_root",
+      "protected_roots": [
+        "state/us_short"
+      ],
+      "read_count": 1,
+      "write_count": 13
+    },
+    {
+      "module": "tests/test_us_short_corporate_action_workflow.py",
       "classification": "class2_write_real_root",
       "protected_roots": [
         "provider_samples",
         "state/us_short"
       ],
-      "read_count": 4,
-      "write_count": 7
-    },
-    {
-      "module": "tests/schema/test_us_short_const_coverage.py",
-      "classification": "class1_read_real_root",
-      "protected_roots": [
-        "provider_samples",
-        "state/us_short"
-      ],
-      "read_count": 1,
-      "write_count": 0
-    },
-    {
-      "module": "tests/schema/test_us_short_model_paper_schemas.py",
-      "classification": "class1_read_real_root",
-      "protected_roots": [
-        "provider_samples",
-        "state/us_short"
-      ],
-      "read_count": 3,
-      "write_count": 0
+      "read_count": 0,
+      "write_count": 4
     },
     {
       "module": "tests/test_us_short_discovery_class_guards.py",
@@ -763,8 +285,8 @@
         "provider_samples",
         "state/us_short"
       ],
-      "read_count": 6,
-      "write_count": 0
+      "read_count": 0,
+      "write_count": 1
     },
     {
       "module": "tests/test_us_short_forward_policy_heads.py",
@@ -777,6 +299,25 @@
       "write_count": 0
     },
     {
+      "module": "tests/test_us_short_forward_policy_outcome.py",
+      "classification": "class2_write_real_root",
+      "protected_roots": [
+        "provider_samples",
+        "state/us_short"
+      ],
+      "read_count": 0,
+      "write_count": 1
+    },
+    {
+      "module": "tests/test_us_short_forward_policy_private_week.py",
+      "classification": "class2_write_real_root",
+      "protected_roots": [
+        "state/us_short"
+      ],
+      "read_count": 0,
+      "write_count": 1
+    },
+    {
       "module": "tests/test_us_short_observe_reason_capacity_contract.py",
       "classification": "class1_read_real_root",
       "protected_roots": [
@@ -787,12 +328,23 @@
       "write_count": 0
     },
     {
-      "module": "tests/test_us_short_soft_boost_consumption.py",
+      "module": "tests/test_us_short_result_linkage_cut3.py",
       "classification": "class2_write_real_root",
       "protected_roots": [
-        "provider_samples"
+        "provider_samples",
+        "state/us_short"
       ],
       "read_count": 0,
+      "write_count": 2
+    },
+    {
+      "module": "tests/test_us_short_weekend_batch4_runner.py",
+      "classification": "class2_write_real_root",
+      "protected_roots": [
+        "provider_samples",
+        "state/us_short"
+      ],
+      "read_count": 3,
       "write_count": 2
     }
   ]

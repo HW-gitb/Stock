@@ -10,6 +10,7 @@ from typing import Iterator
 
 
 _OWNERSHIP_MARKER = ".us_short_test_private_root_owned"
+_TEMP_ROOT_MARKER = ".us_short_test_temp_root_owned"
 _LOCKS_GUARD = threading.Lock()
 _ROOT_LOCKS: dict[Path, threading.RLock] = {}
 _THREAD_STATE = threading.local()
@@ -78,6 +79,12 @@ def temporary_provider_directory(
                 (created / _OWNERSHIP_MARKER).touch(exist_ok=True)
             try:
                 with tempfile.TemporaryDirectory(dir=parent) as tempdir:
+                    # Keep every in-repo private test root fail-closed for subprocesses that
+                    # perform a real ``git check-ignore``.  The state wrapper used to add this
+                    # boundary itself, leaving provider roots dependent on the repository's
+                    # parent ignore rules and leaking evidence on a clean checkout.
+                    Path(tempdir, ".gitignore").write_text("*\n", encoding="utf-8")
+                    Path(tempdir, _TEMP_ROOT_MARKER).touch()
                     yield tempdir
             finally:
                 cursor = parent

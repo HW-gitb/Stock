@@ -19,6 +19,7 @@ if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
 from runners import us_short_yfinance_grades_feasibility_probe as probe  # noqa: E402
+from tests.provider.us_short_private_test_root import temporary_us_short_directory  # noqa: E402
 
 
 def _artifacts():
@@ -67,15 +68,18 @@ class FakeClient:
 
 class ProbeTestBase(unittest.TestCase):
     def setUp(self):
+        self._sample_root_context = temporary_us_short_directory(
+            ROOT, Path("provider_samples") / "us_short_yfinance_grades_feasibility_20260710"
+        )
+        self.sample_root = Path(self._sample_root_context.__enter__())
+        self.addCleanup(self._sample_root_context.__exit__, None, None, None)
+        original_raw_rel_root = probe.RAW_REL_ROOT
+        probe.RAW_REL_ROOT = self.sample_root.relative_to(ROOT)
+        self.addCleanup(setattr, probe, "RAW_REL_ROOT", original_raw_rel_root)
         self.candidate, self.momentum, self.actions = _artifacts()
         self.plan = probe.build_probe_plan(self.candidate, self.momentum, self.actions)
-        self.raw_root = ROOT / probe.RAW_REL_ROOT / "_unit_tests" / self.id().split(".")[-1] / "raw"
+        self.raw_root = self.sample_root / "yfinance_grades_feasibility" / "_unit_tests" / self.id().split(".")[-1] / "raw"
         self.summary_path = self.raw_root.parent / "summary.json"
-
-    def tearDown(self):
-        root = ROOT / probe.RAW_REL_ROOT / "_unit_tests"
-        if root.exists():
-            shutil.rmtree(root, ignore_errors=True)
 
     def _run(self, client=None, **kwargs):
         return probe.run_probe(

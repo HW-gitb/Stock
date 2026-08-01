@@ -36,6 +36,10 @@ from tests.provider.test_us_short_batch5_full_candidate_live_source_packet impor
 )
 from tests.provider.test_us_short_batch5_data_context_source_packet import _overextension_projection  # noqa: E402
 from tests.provider.test_us_short_batch5_to_batch4_e2e import _empty_account, _no_build_template  # noqa: E402
+from tests.provider.us_short_private_test_root import (  # noqa: E402
+    temporary_us_short_directory,
+    temporary_us_short_state_directory,
+)
 
 
 STATE_DIR = ROOT / "state" / "us_short"
@@ -66,21 +70,39 @@ class CapstoneOfflineE2ETest(unittest.TestCase):
     output actually composes with the bridge into an honest offline paper report."""
 
     def setUp(self) -> None:
+        self._state_root_context = temporary_us_short_state_directory(ROOT)
+        self.state_root = Path(self._state_root_context.__enter__())
+        self.addCleanup(self._state_root_context.__exit__, None, None, None)
+        self._sample_root_context = temporary_us_short_directory(
+            ROOT, Path("provider_samples") / "us_short_batch5_full_candidate_live_source_packet_20260706"
+        )
+        self.sample_root = Path(self._sample_root_context.__enter__())
+        self.addCleanup(self._sample_root_context.__exit__, None, None, None)
+        self._preflight_root_context = temporary_us_short_directory(
+            ROOT, Path("provider_samples") / "us_short_batch5_full_candidate_pass2_preflight_20260706"
+        )
+        self.preflight_root = Path(self._preflight_root_context.__enter__())
+        self.addCleanup(self._preflight_root_context.__exit__, None, None, None)
+        self._yfinance_root_context = temporary_us_short_directory(
+            ROOT, Path("provider_samples") / "us_short_yfinance_grades_fetch_20260710"
+        )
+        self.yfinance_root = Path(self._yfinance_root_context.__enter__())
+        self.addCleanup(self._yfinance_root_context.__exit__, None, None, None)
         self.slug = f"capstone_e2e_{os.getpid()}_{abs(hash(self._testMethodName)) % 100000}"
-        self.raw_root = SAMPLE_DIR / self.slug / "raw"
+        self.raw_root = self.sample_root / "full_candidate_live_source_packet_20260706" / self.slug / "raw"
         self.paths = {
-            "candidate": STATE_DIR / f"{self.slug}_candidate.json",
-            "momentum": STATE_DIR / f"{self.slug}_momentum.json",
-            "theme": STATE_DIR / f"{self.slug}_theme.json",
-            "overextension": STATE_DIR / f"{self.slug}_overextension.json",
-            "yfinance": STATE_DIR / f"{self.slug}_yfinance_grade_actions.json",
-            "yfinance_source": STATE_DIR / f"{self.slug}_yfinance_grade_source.json",
-            "preflight": PREFLIGHT_SAMPLE_DIR / self.slug / "preflight.json",
-            "summary": SAMPLE_DIR / self.slug / "summary.json",
-            "yfinance_summary": YFINANCE_SAMPLE_DIR / self.slug / "summary.json",
-            "prefix": STATE_DIR / self.slug,
-            "output": STATE_DIR / f"{self.slug}_data_context.json",
-            "components": STATE_DIR / f"{self.slug}_context_components.json",
+            "candidate": self.state_root / f"{self.slug}_candidate.json",
+            "momentum": self.state_root / f"{self.slug}_momentum.json",
+            "theme": self.state_root / f"{self.slug}_theme.json",
+            "overextension": self.state_root / f"{self.slug}_overextension.json",
+            "yfinance": self.state_root / f"{self.slug}_yfinance_grade_actions.json",
+            "yfinance_source": self.state_root / f"{self.slug}_yfinance_grade_source.json",
+            "preflight": self.preflight_root / self.slug / "preflight.json",
+            "summary": self.sample_root / "full_candidate_live_source_packet_20260706" / self.slug / "summary.json",
+            "yfinance_summary": self.yfinance_root / self.slug / "summary.json",
+            "prefix": self.state_root / self.slug,
+            "output": self.state_root / f"{self.slug}_data_context.json",
+            "components": self.state_root / f"{self.slug}_context_components.json",
         }
         self._cleanup_paths()
         _write_json(self.paths["candidate"], _candidate_artifact(("AAPL", "MSFT", "JPM")))
@@ -168,14 +190,6 @@ class CapstoneOfflineE2ETest(unittest.TestCase):
         for path in state_files:
             if path.is_file():
                 path.unlink()
-        for root in (SAMPLE_DIR / self.slug, PREFLIGHT_SAMPLE_DIR / self.slug, YFINANCE_SAMPLE_DIR / self.slug):
-            if root.exists():
-                for item in sorted(root.rglob("*"), reverse=True):
-                    if item.is_file():
-                        item.unlink()
-                    elif item.is_dir():
-                        item.rmdir()
-                root.rmdir()
 
     def tearDown(self) -> None:
         self._cleanup_paths()
@@ -453,7 +467,7 @@ class CapstoneOfflineE2ETest(unittest.TestCase):
             output_source_package_path=self.paths["yfinance_source"],
             output_resolved_actions_path=self.paths["yfinance"],
             summary_path=self.paths["yfinance_summary"],
-            raw_root=YFINANCE_SAMPLE_DIR / self.slug / "raw",
+            raw_root=self.yfinance_root / self.slug / "raw",
             client=_EmptyYFinanceClient(),
             confirm_user_authorization=True,
             generated_at="2026-07-10T12:00:00+00:00",
@@ -681,7 +695,7 @@ class CapstoneOfflineE2ETest(unittest.TestCase):
                 provider_evidence_sha256=evidence_digest,
             )
             packet = json.loads(source_packet_path.read_text(encoding="utf-8"))
-            changed_path = ROOT / packet["paths"]["candidate_artifact_path"]
+            changed_path = self.state_root / Path(packet["paths"]["candidate_artifact_path"]).name
             changed_path.write_text(changed_path.read_text(encoding="utf-8") + "\n", encoding="utf-8")
             with self.assertRaises(e2e.Batch5ToBatch4E2EError):
                 e2e.run_e2e(

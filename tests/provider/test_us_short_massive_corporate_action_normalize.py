@@ -17,6 +17,7 @@ if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
 from runners import us_short_massive_corporate_action_normalize as normalizer  # noqa: E402
+from tests.provider.us_short_private_test_root import temporary_us_short_directory  # noqa: E402
 
 
 def _ny_midnight_ms(day: str) -> int:
@@ -74,7 +75,10 @@ def _wrapper(symbol: str, family: str) -> dict:
 
 class MassiveCorporateActionNormalizeTest(unittest.TestCase):
     def setUp(self):
-        self.root = ROOT / "provider_samples" / f"test_massive_ca_normalize_{__import__('os').getpid()}"
+        self._sample_root_context = temporary_us_short_directory(ROOT, Path("provider_samples"))
+        self.sample_root = Path(self._sample_root_context.__enter__())
+        self.addCleanup(self._sample_root_context.__exit__, None, None, None)
+        self.root = self.sample_root / f"test_massive_ca_normalize_{__import__('os').getpid()}"
         self.raw_root = self.root / "raw"
         self.output_root = self.root / "normalized"
         self._write_all_wrappers()

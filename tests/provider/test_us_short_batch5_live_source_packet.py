@@ -20,6 +20,10 @@ from tests.provider.test_us_short_batch5_data_context import (  # noqa: E402
     _candidate_artifact,
     _constant_projection,
 )
+from tests.provider.us_short_private_test_root import (  # noqa: E402
+    temporary_us_short_directory,
+    temporary_us_short_state_directory,
+)
 
 
 STATE_DIR = ROOT / "state" / "us_short"
@@ -137,17 +141,23 @@ class ScalarPayloadPass2Client(FakePass2Client):
 
 class UsShortBatch5LiveSourcePacketTest(unittest.TestCase):
     def setUp(self):
-        self.slug = f"test_live_packet_{os.getpid()}_{self._testMethodName[:24]}"
-        self.raw_root = (
-            ROOT / "provider_samples" / "us_short_batch5_live_source_packet_20260704" / self.slug / "raw"
+        self._state_root_context = temporary_us_short_state_directory(ROOT)
+        self.state_root = Path(self._state_root_context.__enter__())
+        self.addCleanup(self._state_root_context.__exit__, None, None, None)
+        self._sample_root_context = temporary_us_short_directory(
+            ROOT, Path("provider_samples") / "us_short_batch5_live_source_packet_20260704"
         )
+        self.sample_root = Path(self._sample_root_context.__enter__())
+        self.addCleanup(self._sample_root_context.__exit__, None, None, None)
+        self.slug = f"test_live_packet_{os.getpid()}_{self._testMethodName[:24]}"
+        self.raw_root = self.sample_root / "us_short_batch5_live_source_packet_20260704" / self.slug / "raw"
         self.paths = {
-            "candidate": STATE_DIR / f"{self.slug}_candidate_input.json",
-            "momentum": STATE_DIR / f"{self.slug}_momentum.json",
-            "theme": STATE_DIR / f"{self.slug}_theme.json",
-            "summary": ROOT / "provider_samples" / "us_short_batch5_live_source_packet_20260704" / self.slug / "summary.json",
-            "prefix": STATE_DIR / self.slug,
-            "output": STATE_DIR / f"{self.slug}_data_context.json",
+            "candidate": self.state_root / f"{self.slug}_candidate_input.json",
+            "momentum": self.state_root / f"{self.slug}_momentum.json",
+            "theme": self.state_root / f"{self.slug}_theme.json",
+            "summary": self.sample_root / "us_short_batch5_live_source_packet_20260704" / self.slug / "summary.json",
+            "prefix": self.state_root / self.slug,
+            "output": self.state_root / f"{self.slug}_data_context.json",
         }
         for path in list(self.paths.values()) + [self.raw_root]:
             if path.is_dir():
@@ -210,7 +220,7 @@ class UsShortBatch5LiveSourcePacketTest(unittest.TestCase):
         ]
         for path in cleanup:
             path.unlink(missing_ok=True)
-        root = ROOT / "provider_samples" / "us_short_batch5_live_source_packet_20260704" / self.slug
+        root = self.sample_root / "us_short_batch5_live_source_packet_20260704" / self.slug
         if root.exists():
             for item in sorted(root.rglob("*"), reverse=True):
                 if item.is_file():
@@ -417,7 +427,7 @@ class UsShortBatch5LiveSourcePacketTest(unittest.TestCase):
                 candidate_artifact_path=self.paths["candidate"],
                 expected_decision_date=_DECISION_DATE,
                 selected_symbols=["AAPL"],
-                momentum_projection_path=STATE_DIR / f"{self.slug}_missing_momentum.json",
+                momentum_projection_path=self.state_root / f"{self.slug}_missing_momentum.json",
                 theme_projection_path=self.paths["theme"],
                 output_data_context_path=self.paths["output"],
                 source_artifact_prefix=self.paths["prefix"],
@@ -435,7 +445,7 @@ class UsShortBatch5LiveSourcePacketTest(unittest.TestCase):
         self.assertFalse(self.paths["summary"].exists())
 
     def test_raw_root_must_stay_under_authorized_provider_samples_folder(self):
-        outside_raw = ROOT / "provider_samples" / "other_live_source_packet" / self.slug / "raw"
+        outside_raw = self.sample_root / "other_live_source_packet" / self.slug / "raw"
 
         with self._env(), mock.patch.object(
             runner.sample_validation, "_read_windows_environment_value", return_value=None

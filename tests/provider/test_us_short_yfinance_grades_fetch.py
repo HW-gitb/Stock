@@ -25,11 +25,10 @@ from tests.provider.test_us_short_batch5_data_context import (  # noqa: E402
     _candidate_artifact,
     _constant_projection,
 )
-
-
-STATE_DIR = ROOT / "state" / "us_short"
-SAMPLE_DIR = ROOT / "provider_samples" / "us_short_yfinance_grades_fetch_20260710"
-PREFLIGHT_SAMPLE_DIR = ROOT / "provider_samples" / "us_short_batch5_full_candidate_pass2_preflight_20260706"
+from tests.provider.us_short_private_test_root import (  # noqa: E402
+    temporary_us_short_directory,
+    temporary_us_short_state_directory,
+)
 
 
 def _read_json(path: Path):
@@ -95,16 +94,45 @@ class _NoisyFailingYFinanceClient:
 
 class UsShortYFinanceGradesFetchTest(unittest.TestCase):
     def setUp(self):
+        self._state_root_context = temporary_us_short_state_directory(ROOT)
+        self.state_root = Path(self._state_root_context.__enter__())
+        self.addCleanup(self._state_root_context.__exit__, None, None, None)
+        self._sample_root_context = temporary_us_short_directory(
+            ROOT, Path("provider_samples") / "us_short_yfinance_grades_fetch_20260710"
+        )
+        self.sample_root = Path(self._sample_root_context.__enter__())
+        self.addCleanup(self._sample_root_context.__exit__, None, None, None)
+        self._preflight_root_context = temporary_us_short_directory(
+            ROOT, Path("provider_samples") / "us_short_batch5_full_candidate_pass2_preflight_20260706"
+        )
+        self.preflight_root = Path(self._preflight_root_context.__enter__())
+        self.addCleanup(self._preflight_root_context.__exit__, None, None, None)
+        for module in (runner, preflight_runner):
+            original_git_ignored = module._git_ignored
+            private_roots = tuple(root.resolve() for root in (
+                self.state_root, self.sample_root, self.preflight_root,
+            ))
+
+            def _git_ignored_for_private_test(
+                path, *, _original=original_git_ignored, _private_roots=private_roots,
+            ):
+                resolved = Path(path).resolve()
+                if any(resolved == root or root in resolved.parents for root in _private_roots):
+                    return True
+                return _original(path)
+
+            module._git_ignored = _git_ignored_for_private_test
+            self.addCleanup(setattr, module, "_git_ignored", original_git_ignored)
         self.slug = f"yf_grades_{os.getpid()}_{abs(hash(self._testMethodName)) % 100000}"
         self.paths = {
-            "candidate": STATE_DIR / f"{self.slug}_candidate.json",
-            "momentum": STATE_DIR / f"{self.slug}_momentum.json",
-            "theme": STATE_DIR / f"{self.slug}_theme.json",
-            "preflight": PREFLIGHT_SAMPLE_DIR / self.slug / "preflight.json",
-            "source": STATE_DIR / f"{self.slug}_source_package.json",
-            "resolved": STATE_DIR / f"{self.slug}_resolved_grade_actions.json",
-            "summary": SAMPLE_DIR / self.slug / "summary.json",
-            "raw_root": SAMPLE_DIR / self.slug / "raw",
+            "candidate": self.state_root / f"{self.slug}_candidate.json",
+            "momentum": self.state_root / f"{self.slug}_momentum.json",
+            "theme": self.state_root / f"{self.slug}_theme.json",
+            "preflight": self.preflight_root / self.slug / "preflight.json",
+            "source": self.state_root / f"{self.slug}_source_package.json",
+            "resolved": self.state_root / f"{self.slug}_resolved_grade_actions.json",
+            "summary": self.sample_root / self.slug / "summary.json",
+            "raw_root": self.sample_root / self.slug / "raw",
         }
         for path in self.paths.values():
             self._remove(path)
@@ -155,8 +183,8 @@ class UsShortYFinanceGradesFetchTest(unittest.TestCase):
     def tearDown(self):
         for path in self.paths.values():
             self._remove(path)
-        self._remove(PREFLIGHT_SAMPLE_DIR / self.slug)
-        self._remove(SAMPLE_DIR / self.slug)
+        self._remove(self.preflight_root / self.slug)
+        self._remove(self.sample_root / self.slug)
 
     def _remove(self, path: Path) -> None:
         if path.is_dir():

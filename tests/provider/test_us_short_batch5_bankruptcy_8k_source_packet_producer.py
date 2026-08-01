@@ -17,6 +17,10 @@ if str(ROOT) not in sys.path:
 
 from jsonschema import Draft7Validator  # noqa: E402
 from tests.provider.test_us_short_batch5_data_context import _DECISION_DATE, _candidate_artifact  # noqa: E402
+from tests.provider.us_short_private_test_root import (  # noqa: E402
+    temporary_us_short_directory,
+    temporary_us_short_state_directory,
+)
 
 
 STATE_DIR = ROOT / "state" / "us_short"
@@ -112,15 +116,23 @@ class FakeSecClient:
 
 class Bankruptcy8kSourcePacketProducerTest(unittest.TestCase):
     def setUp(self):
+        self._state_root_context = temporary_us_short_state_directory(ROOT)
+        self.state_dir = Path(self._state_root_context.__enter__())
+        self.addCleanup(self._state_root_context.__exit__, None, None, None)
+        self._sample_root_context = temporary_us_short_directory(
+            ROOT, Path("provider_samples") / "us_short_batch5_bankruptcy_8k_source_packet_producer_20260705"
+        )
+        self.sample_root = Path(self._sample_root_context.__enter__())
+        self.addCleanup(self._sample_root_context.__exit__, None, None, None)
         self.slug = f"test_b8kprod_{os.getpid()}_{self._testMethodName[:24]}"
         self.paths = {
-            "candidate": STATE_DIR / f"{self.slug}_candidate.json",
-            "source_packet": STATE_DIR / f"{self.slug}_packet.json",
-            "screen": STATE_DIR / f"{self.slug}_screen.json",
+            "candidate": self.state_dir / f"{self.slug}_candidate.json",
+            "source_packet": self.state_dir / f"{self.slug}_packet.json",
+            "screen": self.state_dir / f"{self.slug}_screen.json",
             "producer_summary": ROOT / "docs" / f"{self.slug}_producer_summary.json",
             "consumer_summary": ROOT / "docs" / f"{self.slug}_consumer_summary.json",
         }
-        self.raw_root = SAMPLE_ROOT / self.slug / "raw"
+        self.raw_root = self.sample_root / self.slug / "raw"
         for path in self.paths.values():
             path.unlink(missing_ok=True)
             path.with_name(path.name + ".tmp").unlink(missing_ok=True)
@@ -130,14 +142,6 @@ class Bankruptcy8kSourcePacketProducerTest(unittest.TestCase):
         for path in self.paths.values():
             path.unlink(missing_ok=True)
             path.with_name(path.name + ".tmp").unlink(missing_ok=True)
-        root = SAMPLE_ROOT / self.slug
-        if root.exists():
-            for item in sorted(root.rglob("*"), reverse=True):
-                if item.is_file():
-                    item.unlink()
-                elif item.is_dir():
-                    item.rmdir()
-            root.rmdir()
 
     def _env(self, producer):
         return mock.patch.dict(

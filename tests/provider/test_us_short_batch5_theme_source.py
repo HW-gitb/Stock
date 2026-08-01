@@ -23,6 +23,10 @@ from engine.us_short_seam_catalyst import DISPOSITION_SCORED_REALIZED  # noqa: E
 from engine.us_short_seam_momentum import DISPOSITION_SCORED as MOMENTUM_SCORED  # noqa: E402
 from engine.us_short_seam_score import compose_score_inputs  # noqa: E402
 from tests.provider.test_us_short_batch5_data_context import _DECISION_DATE, _candidate_artifact  # noqa: E402
+from tests.provider.us_short_private_test_root import (  # noqa: E402
+    temporary_us_short_directory,
+    temporary_us_short_state_directory,
+)
 
 
 STATE_DIR = ROOT / "state" / "us_short"
@@ -208,12 +212,20 @@ def _catalyst_projection(targets, *, score=50.0):
 
 class ThemeSourceRunnerTest(unittest.TestCase):
     def setUp(self):
+        self._state_root_context = temporary_us_short_state_directory(ROOT)
+        self.state_root = Path(self._state_root_context.__enter__())
+        self.addCleanup(self._state_root_context.__exit__, None, None, None)
+        self._sample_root_context = temporary_us_short_directory(
+            ROOT, Path("provider_samples") / "us_short_batch5_theme_source_20260705"
+        )
+        self.sample_root = Path(self._sample_root_context.__enter__())
+        self.addCleanup(self._sample_root_context.__exit__, None, None, None)
         self.slug = f"test_theme_source_{os.getpid()}_{self._testMethodName}"
         self.paths = {
-            "candidate": STATE_DIR / f"{self.slug}_candidate.json",
-            "source_packet": STATE_DIR / f"{self.slug}_source_packet.json",
-            "projection": STATE_DIR / f"{self.slug}_theme_projection.json",
-            "summary": SAMPLE_ROOT / self.slug / "summary.json",
+            "candidate": self.state_root / f"{self.slug}_candidate.json",
+            "source_packet": self.state_root / f"{self.slug}_source_packet.json",
+            "projection": self.state_root / f"{self.slug}_theme_projection.json",
+            "summary": self.sample_root / "theme_source_20260705" / self.slug / "summary.json",
         }
         for path in self.paths.values():
             path.unlink(missing_ok=True)
@@ -223,14 +235,6 @@ class ThemeSourceRunnerTest(unittest.TestCase):
     def tearDown(self):
         for path in self.paths.values():
             path.unlink(missing_ok=True)
-        root = SAMPLE_ROOT / self.slug
-        if root.exists():
-            for item in sorted(root.rglob("*"), reverse=True):
-                if item.is_file():
-                    item.unlink()
-                elif item.is_dir():
-                    item.rmdir()
-            root.rmdir()
 
     def test_runner_and_schemas_are_routed_artifacts(self):
         self.assertIsNotNone(importlib.util.find_spec(RUNNER_MODULE))
@@ -347,7 +351,7 @@ class ThemeSourceRunnerTest(unittest.TestCase):
         self.assertFalse(self.paths["summary"].exists())
 
     def test_summary_parent_file_fails_closed_before_projection_write(self):
-        bad_parent = SAMPLE_ROOT / self.slug / "summary_parent_file"
+        bad_parent = self.sample_root / "theme_source_20260705" / self.slug / "summary_parent_file"
         bad_parent.parent.mkdir(parents=True, exist_ok=True)
         bad_parent.write_text("not a directory", encoding="utf-8")
         bad_summary_path = bad_parent / "summary.json"

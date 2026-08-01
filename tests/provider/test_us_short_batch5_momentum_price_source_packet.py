@@ -21,6 +21,10 @@ if str(ROOT) not in sys.path:
 
 from jsonschema import Draft7Validator  # noqa: E402
 from tests.provider.test_us_short_batch5_data_context import _DECISION_DATE, _candidate_artifact  # noqa: E402
+from tests.provider.us_short_private_test_root import (  # noqa: E402
+    temporary_us_short_directory,
+    temporary_us_short_state_directory,
+)
 
 
 STATE_DIR = ROOT / "state" / "us_short"
@@ -86,15 +90,28 @@ class FakeMassivePriceClient:
 
 class MomentumPriceSourcePacketProducerTest(unittest.TestCase):
     def setUp(self):
+        self._state_root_context = temporary_us_short_state_directory(ROOT)
+        self.state_root = Path(self._state_root_context.__enter__())
+        self.addCleanup(self._state_root_context.__exit__, None, None, None)
+        self._sample_root_context = temporary_us_short_directory(
+            ROOT, Path("provider_samples") / "us_short_batch5_momentum_price_source_packet_20260705"
+        )
+        self.sample_root = Path(self._sample_root_context.__enter__())
+        self.addCleanup(self._sample_root_context.__exit__, None, None, None)
+        self._consumer_sample_root_context = temporary_us_short_directory(
+            ROOT, Path("provider_samples") / "us_short_batch5_momentum_price_source_20260705"
+        )
+        self.consumer_sample_root = Path(self._consumer_sample_root_context.__enter__())
+        self.addCleanup(self._consumer_sample_root_context.__exit__, None, None, None)
         self.slug = f"test_momentum_price_packet_{os.getpid()}_{self._testMethodName}"
         self.paths = {
-            "candidate": STATE_DIR / f"{self.slug}_candidate.json",
-            "source_packet": STATE_DIR / f"{self.slug}_source_packet.json",
-            "projection": STATE_DIR / f"{self.slug}_momentum_projection.json",
-            "summary": SAMPLE_ROOT / self.slug / "summary.json",
-            "consumer_summary": CONSUMER_SAMPLE_ROOT / self.slug / "consumer_summary.json",
+            "candidate": self.state_root / f"{self.slug}_candidate.json",
+            "source_packet": self.state_root / f"{self.slug}_source_packet.json",
+            "projection": self.state_root / f"{self.slug}_momentum_projection.json",
+            "summary": self.sample_root / "momentum_price_source_packet_20260705" / self.slug / "summary.json",
+            "consumer_summary": self.consumer_sample_root / self.slug / "consumer_summary.json",
         }
-        self.raw_root = SAMPLE_ROOT / self.slug / "raw"
+        self.raw_root = self.sample_root / "momentum_price_source_packet_20260705" / self.slug / "raw"
         for path in self.paths.values():
             path.unlink(missing_ok=True)
         if self.raw_root.exists():
@@ -109,14 +126,6 @@ class MomentumPriceSourcePacketProducerTest(unittest.TestCase):
     def tearDown(self):
         for path in self.paths.values():
             path.unlink(missing_ok=True)
-        for root in (SAMPLE_ROOT / self.slug, CONSUMER_SAMPLE_ROOT / self.slug):
-            if root.exists():
-                for item in sorted(root.rglob("*"), reverse=True):
-                    if item.is_file():
-                        item.unlink()
-                    elif item.is_dir():
-                        item.rmdir()
-                root.rmdir()
 
     def _env(self):
         producer = importlib.import_module(PRODUCER_MODULE)
@@ -297,8 +306,8 @@ class MomentumPriceSourcePacketProducerTest(unittest.TestCase):
         producer = importlib.import_module(PRODUCER_MODULE)
 
         for value in (10**400, 1e18, -1e18):
-            source_packet_path = STATE_DIR / f"{self.slug}_ts_{type(value).__name__}_{abs(hash(value))}.json"
-            summary_path = SAMPLE_ROOT / self.slug / f"ts_{abs(hash(value))}_summary.json"
+            source_packet_path = self.state_root / f"{self.slug}_ts_{type(value).__name__}_{abs(hash(value))}.json"
+            summary_path = self.sample_root / "momentum_price_source_packet_20260705" / self.slug / f"ts_{abs(hash(value))}_summary.json"
             client = FakeMassivePriceClient(row_override={"AAPL": {"t": value}})
             try:
                 with self.subTest(timestamp=value), self._env(), mock.patch.object(
@@ -328,8 +337,8 @@ class MomentumPriceSourcePacketProducerTest(unittest.TestCase):
         producer = importlib.import_module(PRODUCER_MODULE)
 
         for value in (10**400, math.nan, math.inf, {}, "123", True):
-            source_packet_path = STATE_DIR / f"{self.slug}_vol_{abs(hash(str(value)))}.json"
-            summary_path = SAMPLE_ROOT / self.slug / f"vol_{abs(hash(str(value)))}_summary.json"
+            source_packet_path = self.state_root / f"{self.slug}_vol_{abs(hash(str(value)))}.json"
+            summary_path = self.sample_root / "momentum_price_source_packet_20260705" / self.slug / f"vol_{abs(hash(str(value)))}_summary.json"
             client = FakeMassivePriceClient(row_override={"AAPL": {"v": value}})
             try:
                 with self.subTest(volume=repr(value)), self._env(), mock.patch.object(

@@ -1625,6 +1625,8 @@ class ExecutableClosureMatrix:
             second_path = Path(second.__enter__())
             self.assertTrue(first_path.is_dir())
             self.assertTrue(second_path.is_dir())
+            self.assertEqual((first_path / ".gitignore").read_text(encoding="utf-8"), "*\n")
+            self.assertEqual((second_path / ".gitignore").read_text(encoding="utf-8"), "*\n")
             first.__exit__(None, None, None)
             self.assertTrue(
                 private_parent.exists(),

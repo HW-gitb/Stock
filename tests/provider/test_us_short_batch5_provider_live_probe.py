@@ -6,6 +6,7 @@ from unittest import mock
 from urllib.parse import parse_qs, urlparse
 
 from runners import us_short_batch5_provider_live_probe as probe
+from tests.provider.us_short_private_test_root import temporary_us_short_directory
 
 
 class FakeJsonClient:
@@ -82,7 +83,11 @@ class FakeJsonClient:
 
 class UsShortBatch5ProviderLiveProbeTests(unittest.TestCase):
     def _paths(self):
-        raw_parent = probe.ROOT / "provider_samples" / "us_short_batch5_v1_provider_live_20260625"
+        root_context = temporary_us_short_directory(
+            probe.ROOT, Path("provider_samples") / "us_short_batch5_v1_provider_live_20260625"
+        )
+        raw_parent = Path(root_context.__enter__())
+        self.addCleanup(root_context.__exit__, None, None, None)
         raw_parent.mkdir(parents=True, exist_ok=True)
         raw_tmp = tempfile.TemporaryDirectory(prefix="test_raw_", dir=raw_parent)
         summary_tmp = tempfile.TemporaryDirectory(prefix="batch5_summary_", dir=probe.ROOT)

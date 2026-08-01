@@ -22,6 +22,10 @@ from tests.provider.test_us_short_batch5_full_universe_momentum_producer import 
     _ALL_ELIGIBLE,
     _candidate_artifact,
 )
+from tests.provider.us_short_private_test_root import (  # noqa: E402
+    temporary_us_short_directory,
+    temporary_us_short_state_directory,
+)
 
 
 STATE_DIR = ROOT / "state" / "us_short"
@@ -108,14 +112,44 @@ def _fake_grouped_with_dupe():
 
 class FullUniverseMomentumFetchTest(unittest.TestCase):
     def setUp(self):
+        self._state_root_context = temporary_us_short_state_directory(ROOT)
+        self.state_root = Path(self._state_root_context.__enter__())
+        self.addCleanup(self._state_root_context.__exit__, None, None, None)
+        self._sample_root_context = temporary_us_short_directory(
+            ROOT, Path("provider_samples") / "us_short_batch5_full_universe_momentum_fetch"
+        )
+        self.sample_root = Path(self._sample_root_context.__enter__())
+        self.addCleanup(self._sample_root_context.__exit__, None, None, None)
+        self._producer_sample_root_context = temporary_us_short_directory(
+            ROOT, Path("provider_samples") / "us_short_batch5_full_universe_momentum_20260707"
+        )
+        self.producer_sample_root = Path(self._producer_sample_root_context.__enter__())
+        self.addCleanup(self._producer_sample_root_context.__exit__, None, None, None)
+        self._overext_sample_root_context = temporary_us_short_directory(
+            ROOT, Path("provider_samples") / "us_short_batch5_full_universe_overextension_20260709"
+        )
+        self.overext_sample_root = Path(self._overext_sample_root_context.__enter__())
+        self.addCleanup(self._overext_sample_root_context.__exit__, None, None, None)
+        universe_fetch = importlib.import_module("runners.us_short_universe_fetch")
+        original_git_check_ignored = universe_fetch._git_check_ignored
+        state_root = self.state_root.resolve()
+
+        def _git_check_ignored_for_private_test(path):
+            resolved = Path(path).resolve()
+            if resolved == state_root or state_root in resolved.parents:
+                return True
+            return original_git_check_ignored(path)
+
+        universe_fetch._git_check_ignored = _git_check_ignored_for_private_test
+        self.addCleanup(setattr, universe_fetch, "_git_check_ignored", original_git_check_ignored)
         self.slug = f"test_full_universe_momentum_fetch_{os.getpid()}_{self._testMethodName}"
-        self.candidate = STATE_DIR / f"{self.slug}_candidate.json"
-        self.packet = STATE_DIR / f"{self.slug}_packet.json"
-        self.ohlcv_packet = STATE_DIR / f"{self.slug}_ohlcv_packet.json"
-        self.summary = SAMPLE_ROOT / self.slug / "summary.json"
-        self.projection = STATE_DIR / f"{self.slug}_projection.json"
-        self.producer_summary = PRODUCER_SAMPLE_ROOT / self.slug / "summary.json"
-        self.overext_producer_summary = OVEREXT_PRODUCER_SAMPLE_ROOT / self.slug / "summary.json"
+        self.candidate = self.state_root / f"{self.slug}_candidate.json"
+        self.packet = self.state_root / f"{self.slug}_packet.json"
+        self.ohlcv_packet = self.state_root / f"{self.slug}_ohlcv_packet.json"
+        self.summary = self.sample_root / "full_universe_momentum_fetch" / self.slug / "summary.json"
+        self.projection = self.state_root / f"{self.slug}_projection.json"
+        self.producer_summary = self.producer_sample_root / self.slug / "summary.json"
+        self.overext_producer_summary = self.overext_sample_root / self.slug / "summary.json"
         for path in (self.candidate, self.packet, self.ohlcv_packet, self.projection):
             path.unlink(missing_ok=True)
         _write_json(self.candidate, _candidate_artifact(_ALL_ELIGIBLE))
@@ -123,15 +157,6 @@ class FullUniverseMomentumFetchTest(unittest.TestCase):
     def tearDown(self):
         for path in (self.candidate, self.packet, self.ohlcv_packet, self.projection):
             path.unlink(missing_ok=True)
-        for root in (SAMPLE_ROOT / self.slug, PRODUCER_SAMPLE_ROOT / self.slug,
-                     OVEREXT_PRODUCER_SAMPLE_ROOT / self.slug):
-            if root.exists():
-                for item in sorted(root.rglob("*"), reverse=True):
-                    if item.is_file():
-                        item.unlink()
-                    elif item.is_dir():
-                        item.rmdir()
-                root.rmdir()
 
     def _run(self, **overrides):
         kwargs = {
