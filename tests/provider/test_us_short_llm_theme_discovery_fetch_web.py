@@ -597,7 +597,7 @@ class WebFetchTests(unittest.TestCase):
                 self.assertEqual(packet["themes"], [])
                 self.assertIn("invalid_or_unusable_response", [row["reason"] for row in receipt["drop_ledger"]])
 
-    def test_one_bad_llm_theme_is_dropped_without_killing_good_theme(self):
+    def test_model_theme_clock_is_diagnostic_and_does_not_drop_source_bound_theme(self):
         refs = [fetch._source_id("https://example.com/a"), fetch._source_id("https://example.com/b")]
         llm = {"themes": [
             {"theme_id": "good_theme", "display_name": "Good", "summary": "good", "observed_at": "2026-07-24T12:00:00Z", "source_ref_ids": refs, "members": [{"ticker": "AAPL", "source_ref_ids": refs}]},
@@ -607,10 +607,14 @@ class WebFetchTests(unittest.TestCase):
             queries=["x"], search_results=ROWS[:2], llm_response=json.dumps(llm),
             expected_decision_date="20260725", generated_at="2026-07-25T08:00:00Z",
         )
-        self.assertEqual([theme["theme_id"] for theme in packet["themes"]], ["good_theme"])
-        self.assertIn(fetch.THEME_OBSERVED_AFTER_GENERATED_AT_REASON, [row["reason"] for row in receipt["drop_ledger"]])
+        self.assertEqual([theme["theme_id"] for theme in packet["themes"]], ["bad_theme", "good_theme"])
+        self.assertEqual(
+            {theme["observed_at"] for theme in packet["themes"]},
+            {"2026-07-24T10:00:00+00:00"},
+        )
+        self.assertNotIn(fetch.THEME_OBSERVED_AFTER_GENERATED_AT_REASON, [row["reason"] for row in receipt["drop_ledger"]])
 
-    def test_k3_r114_real_future_theme_is_dropped_and_generated_boundary_survives(self):
+    def test_k3_r115_real_model_future_theme_is_rebound_to_recorded_source_clock(self):
         generated = "2026-08-01T04:39:20.410453Z"
         rows = [
             {
@@ -649,11 +653,57 @@ class WebFetchTests(unittest.TestCase):
             queries=["recorded"], search_results=rows, llm_response=json.dumps(llm),
             expected_decision_date="20260802", generated_at=generated,
         )
-        self.assertEqual([theme["theme_id"] for theme in packet["themes"]], ["recorded_good"])
-        self.assertIn(
-            fetch.THEME_OBSERVED_AFTER_GENERATED_AT_REASON,
-            [row["reason"] for row in receipt["drop_ledger"]],
+        self.assertEqual([theme["theme_id"] for theme in packet["themes"]], ["recorded_future", "recorded_good"])
+        self.assertEqual(
+            {theme["observed_at"] for theme in packet["themes"]},
+            {"2026-07-31T05:00:00+00:00"},
         )
+        self.assertNotIn(fetch.THEME_OBSERVED_AFTER_GENERATED_AT_REASON, [row["reason"] for row in receipt["drop_ledger"]])
+
+    def test_k3_r114_bounds_guard_remains_named_and_fail_closed(self):
+        ref_times = {"source": fetch._parse_dt("2026-07-31T05:00:00Z", field="test")}
+        generated = fetch._parse_dt("2026-08-01T04:39:20Z", field="test")
+        with self.assertRaises(fetch._ProviderItemRejected) as lower:
+            fetch._validate_theme_observation_bounds(
+                fetch._parse_dt("2026-07-31T04:00:00Z", field="test"), ref_times, ["source"], generated,
+            )
+        self.assertEqual(lower.exception.reason, fetch.THEME_SOURCE_AFTER_OBSERVATION_REASON)
+        with self.assertRaises(fetch._ProviderItemRejected) as upper:
+            fetch._validate_theme_observation_bounds(
+                fetch._parse_dt("2026-08-01T05:00:00Z", field="test"), ref_times, ["source"], generated,
+            )
+        self.assertEqual(upper.exception.reason, fetch.THEME_OBSERVED_AFTER_GENERATED_AT_REASON)
+        fetch._validate_theme_observation_bounds(ref_times["source"], ref_times, ["source"], generated)
+
+    def test_k3_r115_theme_clock_uses_us_eastern_and_handles_dst_fold(self):
+        ref_times = {
+            "before_fallback": fetch._parse_dt("2026-11-01T01:30:00-04:00", field="test"),
+            "after_fallback": fetch._parse_dt("2026-11-01T01:15:00-05:00", field="test"),
+        }
+        derived = fetch._max_bound_source_observed_at_et(ref_times, list(ref_times))
+        self.assertEqual(derived.isoformat(), "2026-11-01T06:15:00+00:00")
+
+    def test_k3_r115_model_clock_change_does_not_change_artifact_or_digest(self):
+        rows = ROWS[:2]
+        refs = [fetch._source_id(row["url"]) for row in rows]
+        packets = []
+        digests = []
+        for model_observed_at in ("2026-07-23T00:00:00Z", "2026-08-02T00:00:00Z", "not-a-time"):
+            llm = {"themes": [{
+                "theme_id": "power_demand", "display_name": "Power", "summary": "Power",
+                "observed_at": model_observed_at, "source_ref_ids": refs,
+                "members": [{"ticker": "AAPL", "source_ref_ids": refs}],
+            }]}
+            packet, receipt, _ = fetch.build_web_fetch_packet(
+                queries=["x"], search_results=rows, llm_response=json.dumps(llm),
+                expected_decision_date="20260725", generated_at="2026-07-25T08:00:00Z",
+            )
+            packets.append(packet)
+            digests.append(receipt["discovery_artifact_sha256"])
+        self.assertEqual(packets[0], packets[1])
+        self.assertEqual(packets[1], packets[2])
+        self.assertEqual(digests[0], digests[1])
+        self.assertEqual(digests[1], digests[2])
 
     def test_raw_receipt_is_content_hashed_and_never_contains_key(self):
         with temporary_provider_directory(fetch.ROOT) as td:

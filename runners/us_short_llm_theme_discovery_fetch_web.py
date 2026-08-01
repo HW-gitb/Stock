@@ -1159,6 +1159,44 @@ def _parse_llm_json(
     return {"themes": payload["themes"]}
 
 
+def _max_bound_source_observed_at_et(
+    ref_times: dict[str, datetime], theme_refs: list[str],
+) -> datetime:
+    """Derive the frozen theme clock from bound sources in the US business timezone.
+
+    Source timestamps are persisted as UTC instants, but US-short's business clock is
+    America/New_York (including DST).  Convert before taking the maximum so the
+    ownership of the clock is explicit, then normalize the persisted value back to UTC.
+    """
+    return max(
+        (ref_times[ref].astimezone(NEW_YORK) for ref in theme_refs),
+        key=lambda value: value.astimezone(timezone.utc),
+    ).astimezone(timezone.utc)
+
+
+def _validate_theme_observation_bounds(
+    theme_observed_at: datetime, ref_times: dict[str, datetime], theme_refs: list[str],
+    generated_clock: datetime,
+) -> None:
+    """Keep the K3-R114 lower/upper clocks fail-closed in America/New_York time."""
+    theme_clock_et = theme_observed_at.astimezone(NEW_YORK)
+    theme_clock_utc = theme_clock_et.astimezone(timezone.utc)
+    if any(
+        ref_times[ref].astimezone(NEW_YORK).astimezone(timezone.utc) > theme_clock_utc
+        for ref in theme_refs
+    ):
+        raise _ProviderItemRejected(
+            THEME_SOURCE_AFTER_OBSERVATION_REASON,
+            "theme_source_after_observation",
+        )
+    generated_clock_utc = generated_clock.astimezone(NEW_YORK).astimezone(timezone.utc)
+    if theme_clock_utc > generated_clock_utc:
+        raise _ProviderItemRejected(
+            THEME_OBSERVED_AFTER_GENERATED_AT_REASON,
+            "theme_observed_after_generated_at",
+        )
+
+
 def _llm_to_discovery_input(
     llm_payload: dict[str, Any], refs: list[dict[str, Any]],
     *, drop_ledger: list[dict[str, str]] | None = None, source_type: str = "web",
@@ -1178,20 +1216,18 @@ def _llm_to_discovery_input(
             theme_id = raw_theme.get("theme_id")
             display_name = _safe_text(raw_theme.get("display_name"), limit=120)
             summary = _safe_text(raw_theme.get("summary"), limit=1000)
-            observed_at = raw_theme.get("observed_at")
-            try:
-                theme_observed_at = _parse_dt(observed_at, field="theme.observed_at")
-            except Exception as exc:
-                raise _ProviderItemRejected("malformed_theme_observed_at", str(theme_id or "unknown")) from exc
-            if theme_observed_at > generated_clock:
-                raise _ProviderItemRejected(
-                    THEME_OBSERVED_AFTER_GENERATED_AT_REASON,
-                    str(theme_id or "unknown"),
-                )
+            # The model's clock is diagnostic only.  It must not affect acceptance,
+            # frozen identity, or the persisted artifact; the source-bound clock below
+            # is the sole deterministic value.
+            _model_observed_at_diagnostic = raw_theme.get("observed_at")
             raw_theme_refs = raw_theme.get("source_ref_ids")
             if not isinstance(raw_theme_refs, list):
                 raise _ProviderItemRejected("malformed_theme_source_refs", type(raw_theme_refs).__name__)
             theme_refs = [ref for ref in raw_theme_refs if isinstance(ref, str) and ref in allowed_ids]
+            if not theme_refs:
+                raise _ProviderItemRejected("theme_without_bound_source_refs", str(theme_id))
+            theme_observed_at = _max_bound_source_observed_at_et(ref_times, theme_refs)
+            _validate_theme_observation_bounds(theme_observed_at, ref_times, theme_refs, generated_clock)
             raw_members = raw_theme.get("members")
             if not isinstance(raw_members, list):
                 raise _ProviderItemRejected("malformed_theme_members", str(theme_id or "unknown"))
@@ -1223,22 +1259,15 @@ def _llm_to_discovery_input(
                 )
                 if member is not None:
                     members.append(member)
-            if any(ref_times[ref] > theme_observed_at for ref in theme_refs):
-                raise _ProviderItemRejected(
-                    THEME_SOURCE_AFTER_OBSERVATION_REASON,
-                    str(theme_id or "unknown"),
-                )
             if not isinstance(theme_id, str) or not re.fullmatch(r"[a-z0-9][a-z0-9_-]{1,63}", theme_id):
                 raise _ProviderItemRejected("malformed_theme_id", str(theme_id))
-            if not theme_refs:
-                raise _ProviderItemRejected("theme_without_bound_source_refs", theme_id)
             if not members:
                 raise _ProviderItemRejected("theme_without_bound_members", theme_id)
             if not display_name or not summary:
                 raise _ProviderItemRejected("theme_missing_display_or_summary", theme_id)
             return {
                 "theme_id": theme_id, "display_name": display_name, "summary": summary,
-                "status": "provisional_discovered", "observed_at": observed_at,
+                "status": "provisional_discovered", "observed_at": theme_observed_at.isoformat(),
                 "source_ref_ids": theme_refs, "members": members,
                 "cross_industry_validation_status": "not_run", "market_confirmation_status": "not_run",
             }

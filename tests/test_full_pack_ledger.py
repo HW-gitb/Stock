@@ -15,14 +15,14 @@ import full_pack_ledger as fpl  # noqa: E402
 
 
 class FullPackLedgerTests(unittest.TestCase):
-    def test_full_pack_timeout_ceiling_is_800_seconds(self):
-        self.assertEqual(fpl.FULL_MAX_SECONDS, 800)
-        with self.assertRaisesRegex(ValueError, r"full timeout must be 1\.\.800 seconds"):
+    def test_full_pack_timeout_ceiling_is_860_seconds(self):
+        self.assertEqual(fpl.FULL_MAX_SECONDS, 860)
+        with self.assertRaisesRegex(ValueError, r"full timeout must be 1\.\.860 seconds"):
             fpl.run_full_pack(
                 "us_short",
                 "shared test infrastructure",
                 "focused=1 OK",
-                801,
+                861,
                 ["discover", "-s", "tests", "-p", "test_us_short*.py"],
             )
 

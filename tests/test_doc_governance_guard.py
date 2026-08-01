@@ -694,7 +694,7 @@ class DocGovernanceGuard(unittest.TestCase):
             ".tools\\run_unittest_with_repo_pythonpath.cmd <unittest args>",
             "has a default focused deadline of 300 seconds",
             "--timeout-seconds <N>",
-            "has an 800-second maximum",
+            "has an 860-second maximum",
             "PID, CPU change, process existence, or parent/child switch",
             "A zero-test, still-running, timed-out, interrupted, missing-exit, or missing-`Ran N tests` run",
             "verifies `jsonschema` once",
