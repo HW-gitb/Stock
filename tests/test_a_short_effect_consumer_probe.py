@@ -35,7 +35,7 @@ class AShortNatureLedgerTests(unittest.TestCase):
         self.assertEqual(len(natures), 371)
         self.assertEqual(set(natures.values()), {
             "true_dangling", "partial_consumption", "display_audit",
-            "main_decision", "comparison_track",
+            "main_decision", "comparison_track", "duplicate_source",
         })
         self.assertEqual(sum(1 for _ in natures), 371)
 

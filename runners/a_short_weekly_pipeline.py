@@ -653,6 +653,14 @@ def normalize_candidate(cand: dict, price_series: list, overlay_row: dict, iv_pc
         # Knife 12A: keep the complete source payload for the shadow-only
         # comparison track.  No Phase5 branch reads this field yet.
         "data_quality": dict(cand.get("data_quality") or {}) if isinstance(cand.get("data_quality"), dict) else cand.get("data_quality"),
+        # Knife 12B: preserve the complete EGS technical/volatility snapshots
+        # for the formal comparison consumer.  Production Phase5 continues to
+        # derive PIT indicators from price_series and the IV feed; these keys
+        # are deliberately not an alternate production price authority.
+        "source_technical": copy.deepcopy(cand.get("technical") or {})
+        if isinstance(cand.get("technical"), dict) else {},
+        "source_volatility": copy.deepcopy(cand.get("volatility") or {})
+        if isinstance(cand.get("volatility"), dict) else {},
         "llm_enrichment": list(llm_enrichment or []),
         # 语义官方层(Slice 1):official_structured dict {status, events[severity], had_pit_announcements}
         # 或 None(无输入→引擎按 unknown 中性处理)。Phase5 引擎据此融进 M6.7(证据齐全[非空URL]high→否决;缺URL high·medium→待核)。

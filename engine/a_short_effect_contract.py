@@ -78,7 +78,7 @@ _NATURE_RUNTIME_HANDLERS = {
         "industry_trend", "account_cash", "portfolio_risk", "llm_tasks",
         "m4_review_gate",
     }),
-    "comparison_track": frozenset({"data_quality_shadow", "comparison_track"}),
+    "comparison_track": frozenset({"data_quality_shadow", "comparison_track", "technical_volatility_comparison"}),
 }
 
 
@@ -814,7 +814,7 @@ def static_contract_error(contract: dict | None = None, *, inventory: dict | Non
                     "use a proven handler or unresolved_input_group")
         if handler == "unresolved_input_group" and not str(group.get("unresolved_reason") or "").strip():
             return f"effect contract {group['id']} unresolved input group lacks reason"
-        if handler in {"lineage_gate", "phase5_decision", "phase5_risk", "market_regime", "account_cash", "portfolio_risk", "llm_tasks", "data_quality_shadow", "comparison_track", "m4_review_gate"}:
+        if handler in {"lineage_gate", "phase5_decision", "phase5_risk", "market_regime", "account_cash", "portfolio_risk", "llm_tasks", "data_quality_shadow", "comparison_track", "m4_review_gate", "technical_volatility_comparison"}:
             proof_paths = group.get("proven_consumer_paths")
             if not isinstance(proof_paths, list) or sorted(proof_paths) != group_paths:
                 return (f"effect contract {group['id']} direct runtime handler lacks all-leaf "
@@ -830,6 +830,15 @@ def static_contract_error(contract: dict | None = None, *, inventory: dict | Non
             if group.get("producer_binding") != expected_binding:
                 return ("effect contract candidate_derived_flags_m4_review producer binding "
                         "must disclose the current constant-null producer and deferred activation")
+        if group.get("id") == "candidate_volatility":
+            expected_binding = {
+                "status": "constant_null",
+                "source_ref": "A-EGS/egs_main.py::_candidate_from_row.volatility",
+                "activation": "display_audit_only_until_separately_reviewed_volatility_producer",
+            }
+            if group.get("producer_binding") != expected_binding:
+                return ("effect contract candidate_volatility producer binding must disclose the "
+                        "current constant-null producer and deferred activation")
         if policy == "intentionally_independent":
             exception = group.get("intentional_independence")
             if not isinstance(exception, dict) or not all(str(exception.get(key) or "").strip()
@@ -851,6 +860,25 @@ def static_contract_error(contract: dict | None = None, *, inventory: dict | Non
         if group.get("runtime_handler") not in allowed_handlers:
             return (f"effect contract {group['id']} nature={nature} requires runtime_handler in "
                     f"{sorted(allowed_handlers)!r}; got {group.get('runtime_handler')!r}")
+        if nature == "comparison_track":
+            comparison_paths = _paths_for_prefixes(paths, group["source_prefixes"])
+            binding = group.get("comparison_verdict_binding")
+            if not isinstance(binding, dict):
+                return f"effect contract {group['id']} comparison verdict binding missing"
+            if "::" not in str(binding.get("runtime_ref") or ""):
+                return f"effect contract {group['id']} comparison verdict runtime_ref missing"
+            verdict_field = str(binding.get("verdict_field") or "")
+            if not verdict_field or verdict_field.lower() in {"input_sha256", "comparison_digest", "hash", "digest"}:
+                return f"effect contract {group['id']} comparison verdict may not be digest-only"
+            proof = binding.get("variation_proof")
+            if not isinstance(proof, dict):
+                return f"effect contract {group['id']} comparison verdict variation proof missing"
+            if proof.get("mutated_leaf") not in comparison_paths:
+                return f"effect contract {group['id']} comparison verdict mutation leaf is outside group"
+            if (not str(proof.get("baseline_outcome") or "").strip()
+                    or not str(proof.get("variant_outcome") or "").strip()
+                    or proof["baseline_outcome"] == proof["variant_outcome"]):
+                return f"effect contract {group['id']} comparison verdict variation proof must change outcome"
     tracks = contract.get("comparison_tracks")
     if not isinstance(tracks, list) or not tracks:
         return "effect contract comparison_tracks missing"
@@ -1051,6 +1079,42 @@ def _derived_flag_comparison_status(weekly: dict) -> tuple[str, str]:
     return "applied", "vol_confirm 已落到正式 comparison-only 观察项"
 
 
+def _technical_volatility_comparison_status(weekly: dict, family: str) -> tuple[str, str]:
+    """Validate one 12B source-family comparison surface."""
+    reports = weekly.get("reports") or []
+    if not reports:
+        return "not_triggered", "本周没有候选或持仓报告"
+    expected_prefix = f"candidates[].{family}"
+    expected_status = "constant_null" if family == "volatility" else "snapshot_or_constant_null"
+    expected_count = 3 if family == "volatility" else 39
+    saw_observed = False
+    for report in reports:
+        node = ((report.get("machine") or {}).get("technical_volatility_comparison") or {})
+        if (node.get("comparison_only") is not True
+                or node.get("production_effect_enabled") is not False):
+            return "unavailable_manual_review", "technical/volatility comparison boundary diverges"
+        observation = node.get(family)
+        if not isinstance(observation, dict):
+            return "unavailable_manual_review", f"{family} comparison observation missing"
+        if (observation.get("input_leaf_prefix") != expected_prefix
+                or observation.get("producer_status") != expected_status
+                or observation.get("comparison_only") is not True
+                or observation.get("production_effect_enabled") is not False
+                or observation.get("leaf_count") != expected_count
+                or not isinstance(observation.get("input_sha256"), str)
+                or len(observation["input_sha256"]) != 64):
+            return "unavailable_manual_review", f"{family} comparison binding or digest invalid"
+        if observation.get("observed_outcome") == "malformed":
+            return "unavailable_manual_review", f"{family} source snapshot is malformed"
+        if observation.get("observed_outcome") == "snapshot_observed":
+            saw_observed = True
+        elif observation.get("observed_outcome") not in {"constant_null"}:
+            return "unavailable_manual_review", f"{family} comparison outcome invalid"
+    if saw_observed:
+        return "applied", f"{family} source snapshot reached the formal comparison-only surface"
+    return "not_triggered", f"{family} producer is constant-null; no non-null snapshot was observed"
+
+
 def _runtime_status(group: dict, weekly: dict) -> tuple[str, str]:
     handler = group["runtime_handler"]
     if handler == "intentionally_independent":
@@ -1088,6 +1152,11 @@ def _runtime_status(group: dict, weekly: dict) -> tuple[str, str]:
         return "applied", "data_quality_shadow is emitted on the weekly comparison surface"
     if handler == "comparison_track":
         return _derived_flag_comparison_status(weekly)
+    if handler == "technical_volatility_comparison":
+        family = str(group.get("comparison_family") or "")
+        if family not in {"technical", "volatility"}:
+            return "unavailable_manual_review", "technical/volatility comparison family missing"
+        return _technical_volatility_comparison_status(weekly, family)
     if handler == "account_cash":
         return ("applied", "账户现金/持仓已联动现金分配或持仓处置") if weekly.get("cash_allocation") is not None else ("not_triggered", "本周未提供账户，未运行现金分配")
     if handler == "portfolio_risk":

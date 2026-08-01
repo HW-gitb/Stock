@@ -241,6 +241,36 @@
 - **Verify**: 固定主 Python focused 超集（新 schema 测试 + README row-length + route ledger + doc governance）`73 OK / 0.9s`；`py_compile`、`git diff --check` 通过；Web/X future raw roots 均命中 `.gitignore:97 provider_samples/`；`20260802` state/provider_samples 残留检查为 0。schema 反向控制拒绝授权翻真、生产 policy 翻真、复用旧日期、主题预埋、调用上限漂移、事后降门槛和确认效果翻真。
 - **Next**: Claude Code：审查。
 - **Pre-Codex self-review**: `matrix=complete: schema/artifact exact identity + 4 const queries + Web/X separate raw roots + xAI/Tavily/DeepSeek actual-vs-reserved arithmetic + PASS/REVISE/INCONCLUSIVE + all no-effect exits; register=not_applicable: no finding or risk status changed; handoff=existing US-short main handoff updated and desktop checklist updated; focused=73 OK + py_compile + git diff --check + gitignore/BOM/mojibake checks; full-lane=not_triggered: AGENTS rule 3, isolated no-access schema/artifact/test and docs with no production wiring or provider execution; door=route 14 + doc-governance 41 = 55 OK; independent self-review=not_triggered: low-risk isolated schema/docs fast path, main-thread A-F complete, no timeout/restart/fallback`
+## 2026-08-01 — Claude Code 审查 PASS（A-short 12B technical/volatility 改判收口）
+
+- **Verdict/Action**: PASS，已提交并合入 master。42 叶按实际性质改判 `duplicate_source` / `intentionally_independent` 并写明理由，摘要节点降级为展示审计；新增 comparison-track verdict 类级守护。`true_dangling` 仍 241 叶，本批不虚报进度。
+- **Required**: 无。`R-ASHORT-KNIFE12-DIGEST-ONLY-COMPARISON-COUNTS-AS-WIRED` 与 `R-ASHORT-KNIFE12-TRUE-DANGLING-TECHNICAL-VOLATILITY-COMPARISON-WIRING` 均 closed；一条 Optional（退役 handler 分支成不可达代码）同址，正文只见 `docs/system_risk_register.md`。
+- **Verify**: review-evidence:0a08fe899ecf；固定 Python 3.13.8；reviewer 自跑 bounded 超集 `Ran 733 tests in 301.8s — OK`（tier=focused / exit=0 / deadline=1100s）；自写探针 13 项全过：整读 `exit_and_size` 确认 `sup/res/atr` 全取自 `ind` 且零引用 EGS 快照（改判名副其实）、两条声明的 variation_proof 拿到运行时实跑与契约逐字一致、两个 comparison_track 组各 5 种篡改共 10 次攻击全被静态拒、技术叶变更仍逐字节隔离。按门禁未跑全量。
+- **Next**: Codex：无待办；用户可授权下一组 true_dangling 接线。
+
+## 2026-08-01 — Codex 修复 12B digest-only comparison Required（未提交）
+- **Verdict/Action**: 采用审查意见方案②：`candidate_technical` 39 叶与 `candidate_volatility` 3 叶改判为 `duplicate_source` / `intentionally_independent`；`machine.technical_volatility_comparison` 降为 source-snapshot display audit，不再声称正式 comparison。未建 volatility 生产者、未重封冻结包、未提交。
+- **Required**: `R-ASHORT-KNIFE12-DIGEST-ONLY-COMPARISON-COUNTS-AS-WIRED` 待 Claude Code 独立复审；`comparison_track` 类级 verdict 变化守护已补。
+- **Verify**: 固定 Python `C:\Users\cnhea\AppData\Local\Programs\Python\Python313\python.exe` = 3.13.8；`tests.test_a_short_effect_contract` `Ran 35 tests ... OK`；Phase5/weekly/render/consumer focused `Ran 727 tests in 64.591s ... OK`；doc/route gates `Ran 55 tests ... OK`；py_compile、schema meta、`git diff --check` OK；full-pack 与独立 reviewer PASS 仍 `NOT_VERIFIED`。
+- **Proof-of-use**: technical/volatility source mutation 只改变 display audit 节点，主决策保持不变；独立例外缺 reason/owner/review_ref 会转红；comparison group 缺 binding、digest-only 或 baseline/variant 恒定 outcome 会被 `static_contract_error()` 拒绝。
+- **Pre-Codex self-review**: `matrix=complete: duplicate-source exception + class-level non-digest verdict guard + negative controls; register=updated; handoff=updated; focused=35+727 OK; doc-route=55 OK; py_compile/schema-meta/diff=OK; full-lane=NOT_VERIFIED; door=tests.test_route_doc_ledger_status_consistency + tests.test_doc_governance_guard = Ran 55 tests ... OK; freeze-packet=untouched; producer=not-built; independent-review=pending; commit=not performed`
+- **Next**: Claude Code：独立复审 12B digest-only Required 修复
+
+## 2026-08-01 — Claude Code 审查 Pass-with-Required（A-short 12B technical/volatility 批次）
+
+- **Verdict/Action**: Pass-with-Required，未提交。comparison-only 隔离成立（翻任意 technical 叶，整份报告除该节点外逐字节相同）、volatility 的 constant_null 披露与 EGS 实况一致。放行受阻于「摘要即接线」的分类方法。
+- **Required**: `R-ASHORT-KNIFE12-DIGEST-ONLY-COMPARISON-COUNTS-AS-WIRED` —— 该节点只对源快照取 `input_sha256`，从不读同报告的 `machine.indicators`，`verdict` 恒定不随叶变化；这套方法可原样套到剩余 241 叶把计数清零。机制、为何 material、二选一 Required repair、类级守护与 closure tests 正文只见 `docs/system_risk_register.md`。
+- **Verify**: review-evidence:4fc5e1d307bc；固定 Python 3.13.8；reviewer 自跑 bounded 超集 `Ran 732 tests in 292.4s — OK`（tier=focused / exit=0 / deadline=1100s）；自写探针 8 项，5 项通过（隔离、非空洞、volatility 披露、371 叶总数），T2b/T3 转红坐实 Required：同报告已有 `ma5/ma10/ma20/atr14/rsi14/recent_high_20` 可比而未比；`amplitude` 1.0→2.0 只翻 sha256、verdict 不变。分布 `true_dangling 283→241`、`comparison_track 5→47`。按门禁未跑全量。
+- **Next**: Codex：修复
+
+## 2026-08-01 — Codex 执行 12B technical/volatility 接线批次（未提交）
+- **Verdict/Action**: 已按授权只处理 `candidate_technical` 39 叶与 `candidate_volatility` 3 叶；两组接入正式周报 comparison-only machine 节点，不改变 Phase5 主决策、操作、仓位或现金。未创建 volatility 生产者、未重封冻结包、未提交。
+- **Required**: `R-ASHORT-KNIFE12-TRUE-DANGLING-TECHNICAL-VOLATILITY-COMPARISON-WIRING` 待 Claude Code 独立复审；不得扩展到 analyst/catalyst/event 或其他叶族。
+- **Verify**: 固定 Python `C:\Users\cnhea\AppData\Local\Programs\Python\Python313\python.exe` = 3.13.8；核心 `Ran 34 tests in 29.750s ... OK`；Phase5/weekly/render/consumer `Ran 726 tests in 63.512s ... OK`；doc/route gates `Ran 55 tests in 0.832s ... OK`；py_compile、schema meta、`git diff --check` OK；full-pack `NOT_VERIFIED`。
+- **Proof-of-use**: technical source mutation 改变绑定 digest；volatility 非空 mutation 进入 `snapshot_observed`；两者均保持 comparison-only；volatility producer 的 `constant_null`、专属状态判据、AST 前提守卫三件套已绑定；当前 371 叶分布=`true_dangling 241 / partial_consumption 41 / main_decision 36 / comparison_track 47 / display_audit 6`。
+- **Pre-Codex self-review**: `matrix=complete: 39 technical + 3 volatility; comparison-only consumer; constant-null producer disclosure; AST negative control; register=updated; handoff=updated; focused=34+726 OK; doc-route=55 OK; py_compile/schema-meta/diff=OK; full-pack=NOT_VERIFIED; freeze-packet=untouched; independent-review=pending; commit=not performed`
+- **Next**: Claude Code：独立复审 12B technical/volatility 接线批次
+
 ## 2026-08-01 — Claude Code 审查 PASS（A-short candidate_derived_flags 接线刀收口）
 
 - **Verdict/Action**: PASS，已提交并合入 master。M4 门改走专属状态判据，真实恒 null 生产者下报 `not_triggered` 而非 `applied`；`producer_binding` 被静态钉死；两个 machine 观察节点进 m67 schema 并 const-pin 边界。未改 M4 生产逻辑、未启生产 block/degrade。

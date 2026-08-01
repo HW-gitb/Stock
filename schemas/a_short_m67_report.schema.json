@@ -106,6 +106,51 @@
           },
           "description": "Formal comparison-only landing for the upstream vol_confirm observation; it must not alter Phase5 production action or breakout gating."
         },
+        "technical_volatility_comparison": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["comparison_only", "production_effect_enabled", "verdict", "technical", "volatility"],
+          "properties": {
+            "comparison_only": {"const": true},
+            "production_effect_enabled": {"const": false},
+            "verdict": {"enum": ["producer_constant_null", "source_snapshot_observed", "unavailable_manual_review"]},
+            "technical": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": ["input_leaf_prefix", "producer_status", "observed_outcome", "comparison_only",
+                            "production_effect_enabled", "leaf_count", "present_leaf_count", "null_leaf_paths", "input_sha256"],
+              "properties": {
+                "input_leaf_prefix": {"const": "candidates[].technical"},
+                "producer_status": {"const": "snapshot_or_constant_null"},
+                "observed_outcome": {"enum": ["constant_null", "snapshot_observed", "malformed"]},
+                "comparison_only": {"const": true},
+                "production_effect_enabled": {"const": false},
+                "leaf_count": {"const": 39},
+                "present_leaf_count": {"type": "integer", "minimum": 0, "maximum": 39},
+                "null_leaf_paths": {"type": "array", "items": {"type": "string", "minLength": 1}},
+                "input_sha256": {"type": ["string", "null"], "pattern": "^[0-9a-f]{64}$"}
+              }
+            },
+            "volatility": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": ["input_leaf_prefix", "producer_status", "observed_outcome", "comparison_only",
+                            "production_effect_enabled", "leaf_count", "present_leaf_count", "null_leaf_paths", "input_sha256"],
+              "properties": {
+                "input_leaf_prefix": {"const": "candidates[].volatility"},
+                "producer_status": {"const": "constant_null"},
+                "observed_outcome": {"enum": ["constant_null", "snapshot_observed", "malformed"]},
+                "comparison_only": {"const": true},
+                "production_effect_enabled": {"const": false},
+                "leaf_count": {"const": 3},
+                "present_leaf_count": {"type": "integer", "minimum": 0, "maximum": 3},
+                "null_leaf_paths": {"type": "array", "items": {"type": "string", "minLength": 1}},
+                "input_sha256": {"type": ["string", "null"], "pattern": "^[0-9a-f]{64}$"}
+              }
+            }
+          },
+          "description": "Knife 12B technical/volatility source-snapshot audit only; Phase5 recomputes its authoritative values from PIT-bounded inputs, so this node is intentionally independent and never changes action, sizing, cash, veto, or production policy."
+        },
         "holding_management_signal": {"enum": ["hold", "hold_watch", "reduce_review", "clear_review", "manual_review", "none"],
           "description": "S3b R1+R2: 合并引擎从各 holding_row_impact 的 holding_effect 取 severity-max(clear_review>reduce_review>manual_review>hold_watch>hold>none;anti-rescue:正面不降级)。映射到 table.持仓处置。仅 held 报告;非生产/不自动卖出。"},
         "blocked_add_required": {"type": "boolean",
