@@ -137,6 +137,31 @@
 - **Verify**: 固定主 Python focused 超集（新 schema 测试 + README row-length + route ledger + doc governance）`73 OK / 0.9s`；`py_compile`、`git diff --check` 通过；Web/X future raw roots 均命中 `.gitignore:97 provider_samples/`；`20260802` state/provider_samples 残留检查为 0。schema 反向控制拒绝授权翻真、生产 policy 翻真、复用旧日期、主题预埋、调用上限漂移、事后降门槛和确认效果翻真。
 - **Next**: Claude Code：审查。
 - **Pre-Codex self-review**: `matrix=complete: schema/artifact exact identity + 4 const queries + Web/X separate raw roots + xAI/Tavily/DeepSeek actual-vs-reserved arithmetic + PASS/REVISE/INCONCLUSIVE + all no-effect exits; register=not_applicable: no finding or risk status changed; handoff=existing US-short main handoff updated and desktop checklist updated; focused=73 OK + py_compile + git diff --check + gitignore/BOM/mojibake checks; full-lane=not_triggered: AGENTS rule 3, isolated no-access schema/artifact/test and docs with no production wiring or provider execution; door=route 14 + doc-governance 41 = 55 OK; independent self-review=not_triggered: low-risk isolated schema/docs fast path, main-thread A-F complete, no timeout/restart/fallback`
+## 2026-08-01 — Claude Code 审查 PASS（A-short 第五刀两条复审 Optional 收口）
+
+- **Verdict/Action**: PASS，已提交并合入 master。schema 已编译校验器按 `路径+mtime_ns+size` 缓存、packet 仍逐次全量校验；frozen receipt writer 守卫改为 AST 自动派生。未解冻、未起时钟、未重封生产 packet。
+- **Required**: 无。残余边界（同 mtime 刻度同字节数改 schema 会吃旧编译；AST 守卫只认 `ast.Name` 形式的 build 调用）正文只见 `docs/system_risk_register.md`。
+- **Verify**: review-evidence:683fc7242b09；固定 Python 3.13.8；reviewer 自跑 bounded 超集 `Ran 132 tests in 198.092s — OK`（tier=focused / exit=0 / deadline=300s）；自写探针 8 项全过（AST 清单非空洞、guard-after-build 转红、篡改 packet 立即拒、同路径改 schema 不吃旧编译、`hits 200/misses 1/currsize 1`、`57.4→2.00 ms/call`）；按 rule 4 不重跑全量，独立重算指纹 `d8ed7cc1dd8b` 与 ledger `2187 OK` 一致。
+- **Next**: Codex：无待办。
+
+## 2026-08-01 — Codex 修复 A-short 第五刀 Optional 验证完成
+
+- **Verdict/Action**: 两条第五刀 Optional 已实现并完成当前代码态验证：schema validator 只按路径和 metadata 缓存编译结果，packet 仍逐次验证；receipt writer 由 AST 自动派生，未来无 guard writer 会被拒。未解冻、未重封生产 packet、未起时钟、未提交。
+- **Required**: 无新增 Required；Optional 的完整机制、反向控制、性能证据和边界见 `docs/system_risk_register.md#R-ASHORT-FIFTH-KNIFE-PACKET-EPOCH-SOURCE-BINDING`，待 Claude Code 独立复审。
+- **Verify**: 固定 Python 3.13.8；定向 `51 OK`、第五刀五模块 `132 OK`、route/doc guards `66 OK`、本轮 Python `py_compile` 通过；200 次预冻结 query `0.422719s / 2.114 ms-call`；exact-code-state full A-short ledger fingerprint `d8ed7cc1dd8b`：`Ran 2187 tests in 311.837s — OK (skipped=3)`，ledger `PASS / exit=0 / tests=2187 / elapsed=313.2s`。
+- **Proof-of-use**: cache hit 不跳过 packet validation；改坏 packet 立即转红，schema metadata 改变必重编译；AST 自动发现 receipt writer，植入未来无 guard writer 转红。
+- **Pre-Codex self-review**: `matrix=complete: validator cache hit+packet mutation reject+schema metadata miss; receipt AST inventory+future unguarded writer red; register=updated; handoff=updated; focused=132 OK; full-lane=2187 OK skipped=3 fingerprint d8ed7cc1dd8b; door=66 OK; py_compile=OK; independent-review=pending`
+- **Next**: Claude Code：独立复审；PASS 后提交，不 push。
+
+## 2026-08-01 — Codex 修复 A-short 第五刀复审 Optional
+
+- **Verdict/Action**: 已收口 schema validator 重编译热点与 frozen receipt-writer 硬编码清单两项 Optional；只缓存 schema 编译，不缓存 packet；新增 receipt writer 必须被 AST 守卫发现并在首次 build 前验证 identity。未改预冻结/解冻、时钟、生产 packet 或其他系统，未提交。
+- **Required**: 无新增 Required；Optional 技术机制、负控和边界只见 `docs/system_risk_register.md#R-ASHORT-FIFTH-KNIFE-PACKET-EPOCH-SOURCE-BINDING`，仍待 Claude Code 独立复审。
+- **Verify**: 固定 Python 3.13.8；定向 `51 OK`、第五刀五模块 focused superset `132 OK`、本轮 Python `py_compile` 通过；只读 200 次 pre-freeze query 为 `0.422719s / 2.114 ms-call`；route/doc guards `66 OK`。exact-code-state full-pack ledger 待本 entry 最终落盘后执行。
+- **Proof-of-use**: 同一 schema 仅编译一次；同路径 packet 改坏仍立即 schema 拒绝；schema metadata 改变强制重编译；AST 从 import 自动推导 receipt writer，植入无 guard 的未来 writer 转红。
+- **Pre-Codex self-review**: `matrix=validator cache hit+packet mutation reject+schema metadata miss; receipt AST inventory+future unguarded writer red; register=updated; handoff=updated; focused=132 OK; full-lane=NOT_VERIFIED: pending final docs state; door=66 OK; py_compile=OK; independent-review=pending`
+- **Next**: Codex：执行最终门禁与 full-pack；随后 Claude Code 独立复审。
+
 ## 2026-08-01 — Claude Code 审查 PASS（A-short 第五刀 packet/epoch source binding 收口）
 
 - **Verdict/Action**: PASS，已提交并合入 master。冻结包 `freeze_id/schema_version/record_sha256` 已成为七轨 real fingerprint 与 theme epoch / 公开 packet / 三类私有 receipt 的承重绑定；同版自洽重封不再沿用旧 epoch。未解冻任何轨、未起时钟、未重封生产 packet。

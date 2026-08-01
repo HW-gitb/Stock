@@ -117,6 +117,42 @@ def _canonical_json_sha256(value: dict) -> str:
     ).hexdigest()
 
 
+def _freeze_schema_cache_key(path: Path) -> tuple[str, int, int]:
+    """Return the path-and-metadata key for one compiled freeze schema."""
+    try:
+        stat = path.stat()
+        return str(path.resolve()), stat.st_mtime_ns, stat.st_size
+    except OSError as exc:
+        raise EvidenceEpochModeError("cannot read fifth-knife freeze packet schema") from exc
+
+
+@lru_cache(maxsize=8)
+def _compiled_freeze_packet_validator(
+    schema_path: str, mtime_ns: int, size: int,
+):
+    """Compile a schema once per path/content-metadata version.
+
+    Packet bytes are deliberately never cached: every mode query must still
+    observe a changed, malformed, or dishonest packet immediately.  The small
+    cache only avoids repeatedly compiling the fixed local JSON Schema.
+    """
+    del mtime_ns, size  # cache-key inputs; the file is read only on a cache miss.
+    try:
+        schema = json.loads(Path(schema_path).read_text(encoding="utf-8"))
+        validator_type = jsonschema.validators.validator_for(schema)
+        validator_type.check_schema(schema)
+        return validator_type(schema)
+    except (OSError, UnicodeDecodeError, ValueError, jsonschema.SchemaError) as exc:
+        raise EvidenceEpochModeError("invalid fifth-knife freeze packet schema") from exc
+
+
+def _freeze_packet_validator():
+    """Return the current-schema validator without retaining packet contents."""
+    return _compiled_freeze_packet_validator(
+        *_freeze_schema_cache_key(FIFTH_KNIFE_FREEZE_SCHEMA_PATH)
+    )
+
+
 def _validate_fifth_knife_freeze_packet(*, require_contract_hashes: bool) -> dict:
     """Validate the shared freeze packet before any comparison mode is used.
 
@@ -135,10 +171,8 @@ def _validate_fifth_knife_freeze_packet(*, require_contract_hashes: bool) -> dic
             packet.get("schema_version") != "1.0.0":
         raise EvidenceEpochModeError("invalid fifth-knife freeze packet identity")
     try:
-        schema = json.loads(FIFTH_KNIFE_FREEZE_SCHEMA_PATH.read_text(encoding="utf-8"))
-        jsonschema.validate(packet, schema)
-    except (OSError, UnicodeDecodeError, ValueError, jsonschema.ValidationError,
-            jsonschema.SchemaError) as exc:
+        _freeze_packet_validator().validate(packet)
+    except (jsonschema.ValidationError, jsonschema.SchemaError) as exc:
         raise EvidenceEpochModeError("invalid fifth-knife freeze packet schema") from exc
 
     recorded = packet.get("record_sha256")

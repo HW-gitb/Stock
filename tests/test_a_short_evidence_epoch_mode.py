@@ -182,12 +182,71 @@ class PreFreezeEvidenceModeTests(unittest.TestCase):
             # The schema is the first guard.  Bypass it only inside this test
             # to prove the independent runtime honesty check is still
             # load-bearing rather than dead code behind schema consts.
-            with mock.patch.object(epoch_mode.jsonschema, "validate"), \
+            with mock.patch.object(epoch_mode, "_freeze_packet_validator"), \
                     self.assertRaisesRegex(
                         epoch_mode.EvidenceEpochModeError,
                         "dishonest fifth-knife pre-freeze boundary",
                     ):
                 epoch_mode.enforcement_enabled(epoch_mode.TRACKS[0])
+
+    def test_freeze_schema_validator_is_cached_but_packet_validation_is_not(self):
+        with tempfile.TemporaryDirectory() as temp, \
+                patched_epoch_modes("pre_freeze_audit_only"):
+            schema_path = Path(temp) / "freeze.schema.json"
+            schema_path.write_bytes(
+                epoch_mode.FIFTH_KNIFE_FREEZE_SCHEMA_PATH.read_bytes()
+            )
+            packet_path = epoch_mode.FIFTH_KNIFE_FREEZE_PACKET_PATH
+            epoch_mode._compiled_freeze_packet_validator.cache_clear()
+            self.addCleanup(
+                epoch_mode._compiled_freeze_packet_validator.cache_clear
+            )
+            with mock.patch.object(
+                epoch_mode, "FIFTH_KNIFE_FREEZE_SCHEMA_PATH", schema_path,
+            ):
+                self.assertFalse(
+                    epoch_mode.enforcement_enabled(epoch_mode.TRACKS[0])
+                )
+                self.assertFalse(
+                    epoch_mode.enforcement_enabled(epoch_mode.TRACKS[0])
+                )
+                self.assertEqual(
+                    epoch_mode._compiled_freeze_packet_validator.cache_info().misses,
+                    1,
+                )
+
+                packet = json.loads(packet_path.read_text(encoding="utf-8"))
+                original_ship_gate_status = packet["ship_gate"]["status"]
+                packet["ship_gate"]["status"] = "invented_status"
+                packet["record_sha256"] = epoch_mode._canonical_json_sha256({
+                    key: value for key, value in packet.items()
+                    if key != "record_sha256"
+                })
+                packet_path.write_text(json.dumps(packet), encoding="utf-8")
+                with self.assertRaisesRegex(
+                    epoch_mode.EvidenceEpochModeError,
+                    "invalid fifth-knife freeze packet schema",
+                ):
+                    epoch_mode.enforcement_enabled(epoch_mode.TRACKS[0])
+                self.assertEqual(
+                    epoch_mode._compiled_freeze_packet_validator.cache_info().misses,
+                    1,
+                )
+
+                schema_path.write_bytes(schema_path.read_bytes() + b"\n")
+                packet["ship_gate"]["status"] = original_ship_gate_status
+                packet["record_sha256"] = epoch_mode._canonical_json_sha256({
+                    key: value for key, value in packet.items()
+                    if key != "record_sha256"
+                })
+                packet_path.write_text(json.dumps(packet), encoding="utf-8")
+                self.assertFalse(
+                    epoch_mode.enforcement_enabled(epoch_mode.TRACKS[0])
+                )
+                self.assertEqual(
+                    epoch_mode._compiled_freeze_packet_validator.cache_info().misses,
+                    2,
+                )
 
     def test_pre_freeze_rejects_packet_shape_outside_manual_runtime_checks(self):
         with patched_epoch_modes("pre_freeze_audit_only"):

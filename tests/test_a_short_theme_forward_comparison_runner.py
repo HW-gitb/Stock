@@ -854,21 +854,57 @@ class ThemeForwardComparisonRunnerTests(unittest.TestCase):
             source.index("    _write_json_exclusive_idempotent(admission_path, receipt)"),
         )
 
-    def test_every_frozen_receipt_writer_validates_epoch_packet_binding_before_write(self):
-        for function in (
-            runner._sync_cohort_admission_receipts,
-            runner._sync_terminal_outcome_receipts,
-            runner._record_formal_decision_if_due,
-        ):
-            with self.subTest(function=function.__name__):
-                source = inspect.getsource(function)
-                self.assertEqual(
-                    source.count("_validate_epoch_packet_binding("), 1
+    @staticmethod
+    def _frozen_receipt_writer_offenders(tree: ast.Module) -> list[str]:
+        receipt_builders = {
+            alias.asname or alias.name
+            for node in tree.body
+            if isinstance(node, ast.ImportFrom)
+            for alias in node.names
+            if alias.name.startswith("build_") and alias.name.endswith("_receipt")
+        }
+        offenders = []
+        for function in tree.body:
+            if not isinstance(function, (ast.FunctionDef, ast.AsyncFunctionDef)):
+                continue
+            receipt_build_lines = [
+                call.lineno
+                for call in ast.walk(function)
+                if isinstance(call, ast.Call) and isinstance(call.func, ast.Name)
+                and call.func.id in receipt_builders
+            ]
+            if not receipt_build_lines:
+                continue
+            guard_lines = [
+                call.lineno
+                for call in ast.walk(function)
+                if isinstance(call, ast.Call) and (
+                    isinstance(call.func, ast.Name)
+                    and call.func.id == "_validate_epoch_packet_binding"
+                    or isinstance(call.func, ast.Attribute)
+                    and isinstance(call.func.value, ast.Name)
+                    and call.func.value.id == "epoch_mode"
+                    and call.func.attr == "validate_frozen_transition"
                 )
-                self.assertLess(
-                    source.index("_validate_epoch_packet_binding("),
-                    source.index("_write_json_"),
-                )
+            ]
+            if not any(line < min(receipt_build_lines) for line in guard_lines):
+                offenders.append(function.name)
+        return offenders
+
+    def test_every_frozen_receipt_writer_is_ast_derived_and_guarded(self):
+        tree = ast.parse(inspect.getsource(runner))
+        self.assertEqual(self._frozen_receipt_writer_offenders(tree), [])
+
+    def test_frozen_receipt_writer_inventory_rejects_a_future_unguarded_writer(self):
+        tree = ast.parse(inspect.getsource(runner) + """
+def _future_frozen_receipt_writer(epoch, cohort, path):
+    receipt = build_cohort_admission_receipt(cohort, epoch, 5)
+    _write_json_atomic(path, receipt)
+""")
+        self.assertIn(
+            "_future_frozen_receipt_writer",
+            self._frozen_receipt_writer_offenders(tree),
+        )
 
     def test_normal_runner_reports_checkpoint_without_legacy_review_status_key(self):
         packet = {"checkpoints": {"current_checkpoint": "accumulating"}}

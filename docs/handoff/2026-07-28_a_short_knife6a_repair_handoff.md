@@ -553,6 +553,53 @@
 - 当前生产 packet 未重封，七轨未解冻，时钟未启动；EGS、M6.7、active profile、provider、账户均未改。
 - 已有明确测试与 ledger 终态；下一步为 Claude Code 独立复审。PASS 后由 Claude Code 提交，不 push。
 
+## 2026-08-01 追加：第五刀复审 Optional 收口（Codex；待 Claude Code 独立复审）
+
+### 修复范围
+
+- freeze schema validator 仅按 schema 路径和 metadata 缓存编译结果；packet 每次重新读取与完整验证，不会因缓存掩盖 patch、篡改或重封。
+- receipt writer 守卫由 runner 的 `build_*_receipt` import 自动派生，不再依赖三个硬编码函数名；start/admission/outcome/formal 均要求在首次 build 前有 identity/transition guard。
+
+### 负向控制与验证
+
+- 同 schema 两次 query 命中一个 compiled validator；篡改同路径 packet 仍转红；改 schema metadata 后强制 cache miss。200 次预冻结 query 实测 `0.422719s`、约 `2.114 ms/call`。
+- AST 植入未来无 guard receipt writer 必须转红；fixed Python 定向 `51 OK`、五模块 focused `132 OK`、`py_compile` 通过。当前交接写入后的 route/doc guards 和 exact-code-state full-pack 尚待执行。
+
+### 边界与下一步
+
+- 不缓存 packet，不解冻、不重封生产 packet、不起时钟，也不改 EGS、M6.7、active profile、provider 或账户。
+- 跑完最终门禁和 exact-code-state full-pack 后交 Claude Code 独立复审；PASS 后由 Claude Code 提交，不 push。
+
+### 验证补充（2026-08-01）
+
+- 固定 Python 3.13.8 的 route/doc guards 为 `Ran 66 tests in 1.305s — OK`；exact-code-state full A-short ledger fingerprint `d8ed7cc1dd8b` 为 `Ran 2187 tests in 311.837s — OK (skipped=3)`，ledger `PASS / exit=0 / tests=2187 / elapsed=313.2s`。
+- Optional 的下一步仅为 Claude Code 独立复审；PASS 后由其按流程提交，不 push。
+
+## 2026-08-01 追加：第五刀两条复审 Optional 的独立复审收口（Claude Code，PASS）
+
+### 改了什么 / 为什么
+
+- 本轮我不改代码，只复审 Codex 对我上一轮两条 Optional 的收口，并提交合入 master。改动函数只有四个新增/改写的符号：`_freeze_schema_cache_key`、`_compiled_freeze_packet_validator`、`_freeze_packet_validator`、`_validate_fifth_knife_freeze_packet` 的 schema 校验段；加上 runner 测试里把硬编码三函数清单换成 `_frozen_receipt_writer_offenders` AST 扫描。
+- 复审重点不是「快了没有」，而是「快是不是靠少验了东西换来的」。缓存的是 schema 的编译结果，packet 仍每次读盘 + schema-validate + self-hash + honesty + inventory（冻结态还照旧重算八项契约哈希），所以 fail-closed 语义没有被缓存吃掉。
+
+### 验证命令 / 验证结果
+
+- `.tools\run_unittest_with_repo_pythonpath.cmd tests.test_a_short_evidence_epoch_mode tests.test_a_short_theme_forward_comparison tests.test_a_short_theme_forward_comparison_runner tests.schema.test_a_short_fifth_knife_forward_evidence_freeze_schema tests.schema.test_a_short_theme_forward_comparison_governance_schema` → `Ran 132 tests in 198.092s / OK`，bounded `tier=focused status=PASS exit=0 deadline=300s`。与执行方自报的 132 一致，为 reviewer 亲跑。
+- reviewer 自写探针（scratchpad，不入库）8 项全过，逐条见 register 的「Optional 复审证据」行。其中最关键的两条：AST 清单在真模块上非空洞（会自动分出四个 writer，不是靠 offenders 恒为空假绿）；缓存暖起来后就地改坏同一路径的 packet，下一次调用立即 `EvidenceEpochModeError`。
+- 缓存真命中率已实测而非推断：生产单路径 `cache_info()=hits 200 / misses 1 / currsize 1 / maxsize 8`，键数远小于 maxsize，无颠簸；`enforcement_enabled` 由 57.4 ms/call 降到 2.00 ms/call，全量包 `2185/416.4s → 2187/311.8s`。
+- 全量按 AGENTS rule 4 由执行方持有，reviewer 不重跑：独立重算当前代码态 ledger 指纹 `d8ed7cc1dd8b`，与记录的 `2187 OK` 完全一致。
+
+### 失效旧结论
+
+- 我上一轮记在 register 的两条「复审 Optional（不阻断，未修）」已作废，现为已修 + 复审 PASS + 已提交。
+- 「预冻结 `enforcement_enabled()` 57.4 ms/call」是修前实测，已被 2.00 ms/call 取代。
+
+### 下一步注意事项
+
+- 第五刀三条 Required + 两条 Optional 至此全部 closed，本刀无待办。
+- 以后再动 `_validate_fifth_knife_freeze_packet`：**不要**顺手把 packet 解析也塞进 `lru_cache`。测试全靠 `mock.patch.object` 换 `FIFTH_KNIFE_FREEZE_PACKET_PATH` 与就地改写临时 packet，缓存 packet 会让「改坏立刻转红」这条负控假绿。
+- AST receipt-writer 守卫只认 `ast.Name` 形式的 `build_*_receipt` 调用；未来若有人用 `模块.build_xxx_receipt(...)` 或别名调用，扫描不到。真要收这一类可复用 knife 10 的 consumer-guard 做法，但那是更贵的一档，现在七轨仍 pre-freeze，不值得。
+
 ## 2026-08-01 追加：第五刀三条冻结包 Required 的独立复审收口（Claude Code，PASS）
 
 ### 改了什么 / 为什么
