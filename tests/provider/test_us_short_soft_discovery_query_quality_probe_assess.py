@@ -387,7 +387,11 @@ class QueryQualityProbeAssessmentTest(unittest.TestCase):
             "web_tavily", "web_deepseek", "x_xai",
         })
         self.assertFalse(any(payload["prohibited_effects"].values()))
-        self.assertEqual(payload["schema_version"], "1.2.0")
+        self.assertEqual(payload["schema_version"], "1.3.0")
+        self.assertEqual(
+            payload["execution_evidence"]["budget_reservation_attempt_counts"],
+            {"web_tavily": 1, "web_deepseek": 1, "x_xai": 1},
+        )
         self.assertEqual(payload["causal_floor"]["instant"], "2026-08-01T13:00:00Z")
         self.assertIn(
             "x_receipt.provider_response_refs[0].fetched_at",
@@ -560,14 +564,91 @@ class QueryQualityProbeAssessmentTest(unittest.TestCase):
             assess.run_assessment(packet_path=self.packet_path, generated_at=GENERATED_AT)
         self.assertFalse(self.assessment_path.exists())
 
-    def test_budget_scope_drift_is_rejected_before_assessment_write(self):
-        path = web._provider_budget_path("x", "xai", "20260802")
-        payload = json.loads(path.read_text(encoding="utf-8"))
-        payload["reservation_attempt_count"] = 2
-        _write_json(path, payload)
-        with self.assertRaisesRegex(assess.QueryQualityProbeAssessmentError, "reservation_attempt_count"):
-            assess.run_assessment(packet_path=self.packet_path, generated_at=GENERATED_AT)
-        self.assertFalse(self.assessment_path.exists())
+    def test_legal_same_scope_retry_writes_inconclusive_assessment(self):
+        for key in ("web_tavily", "web_deepseek", "x_xai"):
+            with self.subTest(ledger=key):
+                self._write_inputs()
+                self.assessment_path.unlink(missing_ok=True)
+                path = self._packet_and_input_slot_paths()[key]
+                payload = json.loads(path.read_text(encoding="utf-8"))
+                payload["reservation_attempt_count"] = 2
+                _write_json(path, payload)
+                summary = assess.run_assessment(
+                    packet_path=self.packet_path,
+                    generated_at=GENERATED_AT,
+                )
+                self.assertEqual(
+                    summary["verdict"],
+                    "provider_or_execution_inconclusive_do_not_grade_templates",
+                )
+                written = json.loads(self.assessment_path.read_text(encoding="utf-8"))
+                self.assertEqual(
+                    written["execution_evidence"]["budget_reservation_attempt_counts"][key],
+                    2,
+                )
+                self.assertIn(
+                    "actual_call_count_or_scope_cannot_be_proven",
+                    written["execution_evidence"]["inconclusive_reasons"],
+                )
+
+    def test_budget_ledger_tampering_still_fails_before_assessment_write(self):
+        cases = (
+            (
+                "query_sha256",
+                lambda payload: payload.__setitem__("query_sha256", "0" * 64),
+                "mismatch at query_sha256",
+            ),
+            (
+                "query_count",
+                lambda payload: payload.__setitem__("query_count", 3),
+                "mismatch at query_count",
+            ),
+            (
+                "planned_provider_call_count",
+                lambda payload: payload.__setitem__("planned_provider_call_count", 5),
+                "mismatch at planned_provider_call_count",
+            ),
+            (
+                "duplicate_query_reservation",
+                lambda payload: payload["query_reservations"].append(
+                    dict(payload["query_reservations"][0])
+                ),
+                "scope is not exact",
+            ),
+            (
+                "conflicting_query_reservation",
+                lambda payload: payload["query_reservations"][0].__setitem__(
+                    "query_sha256", "1" * 64
+                ),
+                "scope is not exact",
+            ),
+            (
+                "reservation_clock_order",
+                lambda payload: payload.update(
+                    first_reserved_at="2026-08-01T12:00:01Z",
+                    last_reserved_at="2026-08-01T12:00:00Z",
+                ),
+                "cannot follow",
+            ),
+        )
+        for key in ("web_tavily", "web_deepseek", "x_xai"):
+            for label, mutate, error in cases:
+                with self.subTest(ledger=key, mutation=label):
+                    self._write_inputs()
+                    self.assessment_path.unlink(missing_ok=True)
+                    path = self._packet_and_input_slot_paths()[key]
+                    payload = json.loads(path.read_text(encoding="utf-8"))
+                    mutate(payload)
+                    _write_json(path, payload)
+                    with self.assertRaisesRegex(
+                        assess.QueryQualityProbeAssessmentError,
+                        error,
+                    ):
+                        assess.run_assessment(
+                            packet_path=self.packet_path,
+                            generated_at=GENERATED_AT,
+                        )
+                    self.assertFalse(self.assessment_path.exists())
 
     def test_provider_identity_gap_yields_preregistered_inconclusive_verdict(self):
         path = xfetch.default_receipt_path("20260802")
