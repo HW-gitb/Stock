@@ -1,5 +1,11 @@
 # Session Log
 
+## 2026-08-01 — Claude 审查 PASS（K3-R115 两条 Optional 自修收口）
+- **Verdict/Action**: PASS；reviewer 按用户指令自修并自审两条不阻塞 Optional：下界断言保留但 docstring/测试名改为明说「由构造保证、生产路径不可达、不得当在役门引用」；删掉恒等的 `America/New_York` 往返、helper 更名 `_max_bound_source_observed_at`、DST 测试改名为「按绝对时刻比较」。纯重命名 + 删恒等变换，行为不变。
+- **Required**: 无；Register: `K3-R115` 的 Optional (i)/(ii) 已标 CLOSED（正文只见 `docs/system_risk_register.md`）。
+- **Verify**: review-evidence:750518d150d9；走 AGENTS §6a Optional-only 轻量快档：先一次 scope grep 确认作用面只有 producer + 两个测试、无 schema/其他消费者；固定主 Python 最小覆盖包 `tests.provider...fetch_web` + `...fetch_x_merge` = `143 OK / 19.7s`；旧符号名全仓 0 残留；`git diff --check` clean。按用户指令未起全量；上一轮同代码语义的 `CACHED GREEN 5090 OK` 仍适用。另补测热点模块 `..._conformance_executable` 单跑 `11 tests / 730.1s`，与整包 `716.7s` 矛盾，已回写桌面 `harness_test.md`。
+- **Next**: 无。
+
 ## 2026-08-01 — Claude 审查 PASS（K3-R115 主题时钟确定性推导已闭）
 - **Verdict/Action**: PASS；主题 `observed_at` 改为「绑定来源最大值」确定性推导，模型自报值彻底退出冻结身份，上界仍承重，真实 web 形状不再被清零；治理常量 800→860 六处一致、旧锚点 0。K3-R115 CLOSED，已提交并合入 master。另记两条不阻塞 Optional。
 - **Required**: 无；Register: `K3-R115` CLOSED（完整机制、探针与 Optional 只见 `docs/system_risk_register.md`）。

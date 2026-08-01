@@ -1159,38 +1159,36 @@ def _parse_llm_json(
     return {"themes": payload["themes"]}
 
 
-def _max_bound_source_observed_at_et(
+def _max_bound_source_observed_at(
     ref_times: dict[str, datetime], theme_refs: list[str],
 ) -> datetime:
-    """Derive the frozen theme clock from bound sources in the US business timezone.
+    """Derive the frozen theme clock as the latest instant among its bound sources.
 
-    Source timestamps are persisted as UTC instants, but US-short's business clock is
-    America/New_York (including DST).  Convert before taking the maximum so the
-    ownership of the clock is explicit, then normalize the persisted value back to UTC.
+    Timezone-aware datetimes compare as absolute instants, so an America/New_York DST
+    fold cannot reorder two sources whose local wall clocks look inverted.  The result is
+    normalized to UTC because that is the persisted form.
     """
-    return max(
-        (ref_times[ref].astimezone(NEW_YORK) for ref in theme_refs),
-        key=lambda value: value.astimezone(timezone.utc),
-    ).astimezone(timezone.utc)
+    return max(ref_times[ref] for ref in theme_refs).astimezone(timezone.utc)
 
 
 def _validate_theme_observation_bounds(
     theme_observed_at: datetime, ref_times: dict[str, datetime], theme_refs: list[str],
     generated_clock: datetime,
 ) -> None:
-    """Keep the K3-R114 lower/upper clocks fail-closed in America/New_York time."""
-    theme_clock_et = theme_observed_at.astimezone(NEW_YORK)
-    theme_clock_utc = theme_clock_et.astimezone(timezone.utc)
-    if any(
-        ref_times[ref].astimezone(NEW_YORK).astimezone(timezone.utc) > theme_clock_utc
-        for ref in theme_refs
-    ):
+    """Assert the K3-R114 clock bounds on a theme observation instant.
+
+    The upper bound is load-bearing: a source published after this run's output clock
+    still drops its own theme.  The lower bound is an INVARIANT of the derivation above --
+    the clock IS the maximum of these same refs -- so it cannot fire from
+    ``_llm_to_discovery_input`` and is retained only as a defensive assertion for a caller
+    that supplies a clock from elsewhere.  Do not cite it as a live fail-closed gate.
+    """
+    if any(ref_times[ref] > theme_observed_at for ref in theme_refs):
         raise _ProviderItemRejected(
             THEME_SOURCE_AFTER_OBSERVATION_REASON,
             "theme_source_after_observation",
         )
-    generated_clock_utc = generated_clock.astimezone(NEW_YORK).astimezone(timezone.utc)
-    if theme_clock_utc > generated_clock_utc:
+    if theme_observed_at > generated_clock:
         raise _ProviderItemRejected(
             THEME_OBSERVED_AFTER_GENERATED_AT_REASON,
             "theme_observed_after_generated_at",
@@ -1226,7 +1224,7 @@ def _llm_to_discovery_input(
             theme_refs = [ref for ref in raw_theme_refs if isinstance(ref, str) and ref in allowed_ids]
             if not theme_refs:
                 raise _ProviderItemRejected("theme_without_bound_source_refs", str(theme_id))
-            theme_observed_at = _max_bound_source_observed_at_et(ref_times, theme_refs)
+            theme_observed_at = _max_bound_source_observed_at(ref_times, theme_refs)
             _validate_theme_observation_bounds(theme_observed_at, ref_times, theme_refs, generated_clock)
             raw_members = raw_theme.get("members")
             if not isinstance(raw_members, list):

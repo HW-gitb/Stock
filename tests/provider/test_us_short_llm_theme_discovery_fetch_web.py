@@ -660,7 +660,9 @@ class WebFetchTests(unittest.TestCase):
         )
         self.assertNotIn(fetch.THEME_OBSERVED_AFTER_GENERATED_AT_REASON, [row["reason"] for row in receipt["drop_ledger"]])
 
-    def test_k3_r114_bounds_guard_remains_named_and_fail_closed(self):
+    def test_k3_r114_bounds_helper_rejects_both_directions_when_called_directly(self):
+        # The lower branch is unreachable from `_llm_to_discovery_input` (the clock is the
+        # maximum of these same refs); it is asserted here only as a helper-level invariant.
         ref_times = {"source": fetch._parse_dt("2026-07-31T05:00:00Z", field="test")}
         generated = fetch._parse_dt("2026-08-01T04:39:20Z", field="test")
         with self.assertRaises(fetch._ProviderItemRejected) as lower:
@@ -675,12 +677,12 @@ class WebFetchTests(unittest.TestCase):
         self.assertEqual(upper.exception.reason, fetch.THEME_OBSERVED_AFTER_GENERATED_AT_REASON)
         fetch._validate_theme_observation_bounds(ref_times["source"], ref_times, ["source"], generated)
 
-    def test_k3_r115_theme_clock_uses_us_eastern_and_handles_dst_fold(self):
+    def test_k3_r115_theme_clock_compares_absolute_instants_across_a_dst_fold(self):
         ref_times = {
             "before_fallback": fetch._parse_dt("2026-11-01T01:30:00-04:00", field="test"),
             "after_fallback": fetch._parse_dt("2026-11-01T01:15:00-05:00", field="test"),
         }
-        derived = fetch._max_bound_source_observed_at_et(ref_times, list(ref_times))
+        derived = fetch._max_bound_source_observed_at(ref_times, list(ref_times))
         self.assertEqual(derived.isoformat(), "2026-11-01T06:15:00+00:00")
 
     def test_k3_r115_model_clock_change_does_not_change_artifact_or_digest(self):
