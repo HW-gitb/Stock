@@ -138,7 +138,14 @@ class OfflineDiscoveryInvariantTests(unittest.TestCase):
                             expected_decision_date="20260725", generated_at="2026-07-25T08:00:00Z",
                         )
                     self.assertIn("good_theme", [theme["theme_id"] for theme in artifact["themes"]])
-                    self.assertTrue(receipt["drop_ledger"])
+                    model_clock_poisoned = isinstance(poisoned, dict) and poisoned.get("observed_at") in (
+                        None, "bad", "0001-01-01T00:00:00+23:00",
+                    )
+                    if model_clock_poisoned:
+                        self.assertIn("bad_theme", [theme["theme_id"] for theme in artifact["themes"]])
+                        self.assertEqual(receipt["drop_ledger"], [])
+                    else:
+                        self.assertTrue(receipt["drop_ledger"])
 
     def test_every_bad_member_is_dropped_without_erasing_its_good_theme_on_both_lanes(self):
         """K3-R41/R42: raw identity and malformed member fields are per-member boundaries."""

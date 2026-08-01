@@ -882,3 +882,44 @@ K3-R114 **PASS 并合入 master**：两条 lane 的主题时刻现在被 `max(�
 3. register 另记两条不阻塞 Optional（下界无点名测试、成员 drop 行噪音）和一条治理面 Optional：US-short 全量包在当前 800 秒上限下已跑不完（executor 实测 `TIMEOUT 800.2s`），下次真触发 rule 3 前先处理。
 
 **给 Codex 的命令**：`修复 K3-R115`
+
+## 2026-08-01 追加：K3-R115 Required + K3-R114 Optional 修复（Codex executor/fixer）
+
+本轮未调用 provider、未联网、未改 assessor Option。Web/X 共用的主题时钟现在由全部绑定 source 的最大 `observed_at` 确定性推导；比较和 DST 处理明确使用 `America/New_York`，落盘仍规范化为 UTC。模型自报 `observed_at` 只保留为诊断输入，不参与接纳、上下界、冻结主题或 artifact digest。K3-R114 的上界/下界反控仍由命名 helper 保留；下界在 member 循环前执行，避免 doomed theme 先写 member-level lower-drop 噪音。
+
+本轮同时收口三个 Optional：下界 helper 有点名 fail-closed 反控；member-loop 前置消除成员级噪音；full-lane ceiling 从 800 秒按用户命令统一为 860 秒（bounded constant、full-pack ledger、review prompt、AGENTS 与守卫测试同步）。
+
+### 验证命令与结果
+
+- 固定主 Python Web/X + offline malformed-field + timeout/governance focused：`207 OK / 19.9s`；包含真实冻结形状（模型写决策日零点、来源 07-28～07-31）保留主题、早/晚/非法模型值均不改变 artifact/digest、America/New_York DST fold、K3-R114 上下界反控；无 provider/network。
+- 当前 docs 落盘后的 route-doc + doc-governance + README 守卫：`66 OK / 0.9s`。
+- rule-3 最终 fingerprint 的唯一 US-short full selector：`5090 OK / 716.7s`，deadline `860s`，full ledger 已记录 PASS；无 provider/network。此前 `800.2s TIMEOUT` 不重判。
+- 测试前后 `provider_samples` / `state/us_short` 文件数均为 0；tracked `docs/us_short_soft_discovery_query_quality_probe_assessment_20260802.json` 仍不存在；`.tools/state/full_pack_ledger.json` 仅保存本轮 full 账本状态。
+- `CURRENT.md` 未改；20260802 冻结证据未重跑、未重判，仍不可判。当前交接状态：executor/fixer ready for independent review。
+
+**给 Claude Code 的命令**：`审查`
+
+## 2026-08-01 追加：K3-R115 独立复审 PASS（Claude Code，reviewer/committer）
+
+### 结论
+
+**PASS**。主题 `observed_at` 现在由「该主题全部绑定 source 的最大 `observed_at`」确定性推导，模型自报值降级为诊断输入、彻底退出冻结身份；K3-R114 的上界仍然承重。真实 web 形状（模型戳决策日零点）不再被清零——这正是开 K3-R115 的目的。治理面把 full-lane 上限由 800 统一为 860 秒（executor 记为用户指定），六个锚点一致、旧值 0 处。
+
+### 验证命令与结果（reviewer 亲跑，不采信转述）
+
+- focused 超集 `250 OK / 34.3s`：Web/X producer + offline invariants + AGENTS rule 1 点名的 `LanePerItemConformance` + `bounded_unittest` / `full_pack_ledger` / `doc_governance` / `review_tiering` 四个治理守卫。
+- 自跑 `full_pack_ledger.py check us_short` → `CACHED GREEN — us_short = 5090 OK ... on this EXACT code state`，按 tiering rule 4 引用该次、不重跑。
+- **生产路径**探针（不走直接调 helper 的捷径）：① 模型时钟给「决策日零点 / 2020 年 / 等于最大来源 / 非法字符串 / 键缺失」五种值，产出逐字节相同（`sha12=e8a7de6fa8fb`，零 drop）；② 造一条晚于产出时钟、早于决策开盘的来源 → 其主题被 `theme_observed_after_generated_at` 单项丢弃、兄弟存活；③ 五种对抗形状下两条下界命中 0（见 Optional (i)）。
+- `git diff --check` clean；`state/` 与 `provider_samples/` 残留前后一致。
+
+### 失效的旧结论
+
+「K3-R114 的两条 fail-closed 反控仍保留」这句要打折：**下界（含既有的 member 级下界）现在从生产路径不可达**，因为时钟就是被检查的那组 ref 的最大值，而 member refs 又是 theme refs 的子集。上界仍然可达且承重。正文与处理方向见 `docs/system_risk_register.md#K3-R115` 的 Optional (i)/(ii)。
+
+### 下一步注意事项
+
+1. 两条 Optional 都不阻塞，可在下次碰这段代码时顺手处理：下界守卫按「删掉当死代码」或「保留为显式不变式并写明由构造保证」二选一；`America/New_York` 往返是恒等变换，docstring 的措辞要跟行为对齐。
+2. 20260802 冻结产物仍不可判，可判结论只能来自新的非交易槽 + 用户逐次授权。
+3. 全量测试提速的 profile 结果与 harness 硬要求见桌面 `harness_test.md`；其中「单模块占 54.9%」与本轮全量 `5090 OK / 716.7s` 存在口径矛盾，reviewer 已在同轮补测，结论以补测为准。
+
+**给 Codex 的命令**：无（本轮 PASS，无 open Required）

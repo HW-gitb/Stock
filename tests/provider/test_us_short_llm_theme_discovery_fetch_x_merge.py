@@ -570,7 +570,7 @@ class XFetchAndMergeTests(unittest.TestCase):
         self.assertEqual(manifest["summary"]["dropped_theme_count"], 0)
         self.assertEqual(manifest["drop_ledger"], [])
 
-    def test_k3_r114_real_future_theme_is_dropped_and_generated_boundary_survives(self):
+    def test_k3_r115_real_model_future_theme_is_rebound_to_recorded_source_clock(self):
         generated = "2026-08-01T04:50:59.136497Z"
         rows = [
             {
@@ -609,11 +609,34 @@ class XFetchAndMergeTests(unittest.TestCase):
             queries=["recorded"], results=rows, grok_response=json.dumps(response),
             expected_decision_date="20260802", generated_at=generated,
         )
-        self.assertEqual([theme["theme_id"] for theme in packet["themes"]], ["recorded_good"])
-        self.assertIn(
-            web.THEME_OBSERVED_AFTER_GENERATED_AT_REASON,
-            [row["reason"] for row in receipt["drop_ledger"]],
+        self.assertEqual([theme["theme_id"] for theme in packet["themes"]], ["recorded_future", "recorded_good"])
+        self.assertEqual(
+            {theme["observed_at"] for theme in packet["themes"]},
+            {"2026-07-31T05:00:00+00:00"},
         )
+        self.assertNotIn(web.THEME_OBSERVED_AFTER_GENERATED_AT_REASON, [row["reason"] for row in receipt["drop_ledger"]])
+
+    def test_k3_r115_x_model_clock_change_does_not_change_artifact_or_digest(self):
+        rows = X_ROWS
+        refs = [xfetch._source_id(row["url"]) for row in rows]
+        packets = []
+        digests = []
+        for model_observed_at in ("2026-07-23T00:00:00Z", "2026-08-02T00:00:00Z", "not-a-time"):
+            response = {"themes": [{
+                "theme_id": "power_demand", "display_name": "Power", "summary": "Power",
+                "observed_at": model_observed_at, "source_ref_ids": refs,
+                "members": [{"ticker": "AAPL", "source_ref_ids": refs}],
+            }]}
+            packet, receipt, _ = xfetch.build_x_fetch_packet(
+                queries=["power"], results=rows, grok_response=json.dumps(response),
+                expected_decision_date="20260725", generated_at="2026-07-25T08:00:00Z",
+            )
+            packets.append(packet)
+            digests.append(receipt["discovery_artifact_sha256"])
+        self.assertEqual(packets[0], packets[1])
+        self.assertEqual(packets[1], packets[2])
+        self.assertEqual(digests[0], digests[1])
+        self.assertEqual(digests[1], digests[2])
 
     def test_both_requires_two_distinct_documents_not_one_seen_twice(self):
         """Grok may cite a news article Tavily also found. Two lanes pointing at the SAME locator is

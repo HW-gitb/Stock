@@ -1,5 +1,19 @@
 # Session Log
 
+## 2026-08-01 — Claude 审查 PASS（K3-R115 主题时钟确定性推导已闭）
+- **Verdict/Action**: PASS；主题 `observed_at` 改为「绑定来源最大值」确定性推导，模型自报值彻底退出冻结身份，上界仍承重，真实 web 形状不再被清零；治理常量 800→860 六处一致、旧锚点 0。K3-R115 CLOSED，已提交并合入 master。另记两条不阻塞 Optional。
+- **Required**: 无；Register: `K3-R115` CLOSED（完整机制、探针与 Optional 只见 `docs/system_risk_register.md`）。
+- **Verify**: review-evidence:750518d150d9；reviewer 自跑 focused 超集 `250 OK / 34.3s`（Web/X producer + offline invariants + `LanePerItemConformance` + 四个治理守卫）；自跑 `full_pack_ledger.py check us_short` 得 `CACHED GREEN — 5090 OK on this EXACT code state`，按 rule 4 引用不重跑；`git diff --check` clean、残留前后一致。生产路径探针：模型时钟五种值产出逐字节相同（`sha12=e8a7de6fa8fb`）、上界仍单项丢弃且兄弟存活、两条下界五种对抗形状命中 0（记 Optional）。超时原因: 本轮含整读+三组生产路径探针+治理锚点核对+账本校验+两条 Optional 落盘。
+- **Next**: 无。
+
+## 2026-08-01 — Codex 修复 K3-R115 Required + K3-R114 Optional（executor；ready for Claude Code review）
+- **Verdict/Action**: Required 与三个 Optional 已按类修复；Web/X 主题时钟由绑定 source 最大 `observed_at` 确定性推导，明确使用 `America/New_York`（含 DST）比较、UTC 规范化落盘；模型自报值仅作诊断输入，不参与冻结身份；K3-R114 assessor Option 继续忽略。未提交、未 merge、未联网、未调用 provider。
+- **Required**: K3-R115；完整技术细节、真实形状 closure、冻结证据边界只见 `docs/system_risk_register.md` 顶部当前条目。
+- **Optional**: K3-R114 下界点名 fail-closed 反控已补；下界已移到 member 循环前，避免 doomed 主题产生 member-level lower-drop 噪音；full-lane ceiling 已由 800 秒统一为用户指定的 860 秒。
+- **Verify**: 固定主 Python focused `207 OK / 19.9s`；route-doc + doc-governance + README 守卫 `66 OK / 0.9s`；rule-3 最终 fingerprint 的唯一 US-short full selector `5090 OK / 716.7s / deadline=860s`，full ledger 已记录 PASS；覆盖 Web/X 真实冻结形状、模型早/晚/非法值 artifact/digest 不变、America/New_York DST fold、上下界反控与 860 治理门。测试前后 `provider_samples` / `state/us_short` 文件数均为 0；tracked 20260802 assessment 不存在；`git diff --check` clean。无 provider/network，20260802 冻结证据未重跑、不重判。
+- **Next**: Claude Code：审查。
+- **Pre-Codex self-review**: `matrix=complete: K3-R115 Web/X source-bound ET/DST theme clock + model-clock invariance + real-shape survivor + K3-R114 upper/lower reverse controls + member-loop order + 860 governance; register=K3-R115 current top entry updated open P2 ready for independent review with Required/Optional/closure/full evidence; handoff=single docs/handoff/2026-07-28_us_short_soft_discovery_x_live_shape_review_handoff.md appended; focused=207 OK fixed-host; full-lane=5090 OK / 715.4s / 860s official selector and ledger PASS; door=route-doc+doc-governance+README 66 OK / 0.9s after current docs; A=both producer lanes, America/New_York DST fold, model early/late/malformed, source max and generated bounds, named lower reverse control, no-noise order, timeout constant/prompt/AGENTS/ledger guards; B=old model-driven theme clock no longer gates/copies into artifact, stale 800 active anchors 0; C=generated upper, source lower, equality, sibling survival and model-digest invariance controls; D=N-A; E=CURRENT untouched, one risk-register current entry + SESSION top + one US-short handoff append; F=fixed-host full/focused PASS, schema path exercised, BOM/U+FFFD not introduced, git diff --check PASS, residue sweep clean; independent-self-review=not_used: developer forbids unrequested agent spawn, main-thread checklist fallback used, no timeout/restart/fallback/edit/network/provider`
+
 ## 2026-08-01 — Claude 审查 PASS（K3-R114 主题时钟上下界已闭；另开 K3-R115）
 - **Verdict/Action**: PASS；两条 lane 的主题时刻已被 `max(绑定 source) <= observed <= 本次产出时钟` 夹住、越界逐主题丢弃且不杀整批，K3-R113 的 Optional 也补上了具名测试；K3-R114 CLOSED，已提交并合入 master。但用真实冻结产物回放该守卫，真实 web lane 会被清零，故另开 K3-R115，20260802 槽仍不可判。
 - **Required**: K3-R115 — 完整实测数字 / 根因 / 修复边界 / closure tests 只见 `docs/system_risk_register.md`（单一来源，本处不复述）。

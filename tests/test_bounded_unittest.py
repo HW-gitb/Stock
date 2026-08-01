@@ -78,12 +78,12 @@ class BoundedUnittestTests(unittest.TestCase):
         self.assertLess(result.elapsed_seconds, 5)
 
     def test_cli_keeps_separate_full_and_explicit_focused_ceilings(self):
-        self.assertEqual(bounded.FULL_MAX_SECONDS, 800)
+        self.assertEqual(bounded.FULL_MAX_SECONDS, 860)
         self.assertEqual(bounded.FOCUSED_DEFAULT_SECONDS, 300)
         self.assertEqual(bounded.FOCUSED_MAX_SECONDS, 1300)
         self.assertEqual(
-            bounded._parse(["full", "800", "--", "tests"]),
-            ("full", 800, ["tests"]),
+            bounded._parse(["full", "860", "--", "tests"]),
+            ("full", 860, ["tests"]),
         )
         self.assertEqual(
             bounded._parse(["focused", "600", "--", "tests"]),
