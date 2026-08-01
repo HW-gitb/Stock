@@ -782,3 +782,37 @@ Web/X producer 共用 `SOURCE_RAW_PUBLISH_FAILURE_REASONS`；两 lane 的 source
 当某 lane 已完整记录 provider calls、但没有任何可冻结 source/provider-response ref 时，assessor 会先验证该 lane 的 call-count/regroup 或 indexed response-drop 守恒，再把本 lane receipt completion clock 用作 causal 上界，并生成预注册 `provider_or_execution_inconclusive_do_not_grade_templates`；不会借用另一 lane 的 fetch，也不会把零 ref 当模板质量 PASS。零-ref 计数不守恒或 X response index 缺口仍 fail closed。
 
 固定主 Python新反控 `4 OK`、assessor `39 OK`、最终按符号 focused 超集 `195 OK / 17.5s`，`py_compile` / `git diff --check` PASS；唯一 current-diff-only 只读子 agent `PASS`。测试前后 raw/state 文件数与最新 mtime 不变，相关 residue=0。未跑 full、未联网、未调用 provider、未提交、未 merge；下一步固定为 `Claude Code：审查`。
+
+## 2026-08-01 追加：20260802 Web+X 查询质量 probe 已执行 —— 证据齐了，裁决落不了盘（Claude Code，reviewer/committer）
+
+### 这一轮做了什么
+
+用户 2026-08-01 逐次授权执行 packet `docs/us_short_soft_discovery_query_quality_probe_packet_20260730.json` 定义的 20260802 探针。**执行树 = 主树 `D:\cnhea\Stock`**（付费原文必须与 20260731 / 20260801 落在同一 raw 根，且不能随 Codex worktree 被删而消失）；本交接与 register/SESSION_LOG 落在 `5bea`，已先 `merge --ff-only master` 同步到 `47e3412f`。
+
+执行前离线核验（固定主 Python、无联网、无写入）：packet schema 通过、`execution_slot_map` 与两个 runner 的真实默认路径逐项相等、4 条查询计数一致；20260802 的 4 个决策槽与 3 份 budget ledger 全部不存在；两个 raw 根与 `state/*/*.json` 确认 gitignored；预留 tavily 4 / deepseek 25 / xai 4 均在各自 cap（25/25/15）内。查询词由命令直接从 packet 读取，避免转写漂移。
+
+### 验证命令与结果
+
+- **Web**（一次跑完）：`provider_call_count=5`、`accepted_source_count=3`、`validated_theme_count=4`、`dropped_result_count=37`、`raw_receipts_written=true`。drop 分布 = 34 × `published_at_outside_decision_week` + 3 × `missing_published_at`。`regroup_model` 再次实测别名漂移（requested `deepseek-chat` → served `deepseek-v4-flash`，fingerprint 已记），收据如实记录。
+- **X**（第一次被外部 2 分钟终端超时杀死，改后台 `nohup ... &` 重跑成功）：`provider_call_count=4`、`accepted_source_count=13`、`validated_theme_count=5`、`dropped_result_count=4`（全部 `missing_provider_result_rows`）；13 条来源全部 `model_transcribed`，`provider_response_refs=4` 且 raw 已冻结 —— K3-R83 的修复在真实数据上继续成立。
+- **reviewer 独立重算（不采信 assessor）**：web = 4 主题 / 10 个不重复成员 / 3 条来源 / member-bound ratio `1.000`；x = 5 主题 / 32 成员 / 13 来源 / ratio `0.923`。两 lane 的三道结构门都达标 —— **这是诊断，不是裁决**。
+- **assessment**：固定主 Python `--preflight-only` 与写入路径都在 `QueryQualityProbeAssessmentError: x/xai budget ledger mismatch at reservation_attempt_count` 处 exit 1；`docs/us_short_soft_discovery_query_quality_probe_assessment_20260802.json` 不存在（写前 fail-closed，零 partial）。
+
+### 失效的旧结论
+
+- 「两 lane 结构门都过 ⇒ `pass_to_query_planner_implementation`」在本槽**不成立**。packet 的 `probe_boundary.retry_or_rerun_count = 0` 与 `provider_budget.xai.max_actual_calls = 4` 已被这次执行打破：被杀死的第一次 X 尝试很可能已产生 1–3 次 xAI 调用，且**没有任何留痕可以证明**。这正是 packet 预注册的 `actual_call_count_or_scope_cannot_be_proven` → `provider_or_execution_inconclusive_do_not_grade_templates`。
+- 因此 20260802 槽在 K3-R113 闭合前不得被判 pass，也不得据此启动 query planner / 第二阶段 / 4d-iii。
+- 「探针跑通即可给模板打分」的预期也随之失效：本槽只能得到 INCONCLUSIVE 记录，可判的模板质量结论需要另一个全新非交易槽。
+
+### 过程教训（我的，不是代码的）
+
+付费、单次几分钟的 provider 运行**不能**放进 2 分钟前台窗口。以后一律后台执行（`nohup <cmd> > <系统临时目录>/<lane>.log 2>&1 &`）再由 reviewer 查盘上产物。本轮就是因为这条没先想到，白花了一次不可证明的 xAI 调用，并把 20260802 槽从「可判」变成「不可判」。
+
+### 下一步注意事项 + 给 Codex 的命令
+
+1. 先修 **K3-R113**（离线、零 provider 调用、零联网）：按 `docs/system_risk_register.md#K3-R113` 的 Required repair 与 Closure tests 做类级闭合；真正的篡改信号（query sha / count / 超包络 planned / 多条 reservation / first>last）必须继续写前硬失败，不得为了让本槽通过而放宽。
+2. 修完后 20260802 只应产出 INCONCLUSIVE 的 tracked assessment。要拿可判的模板质量结论，必须由用户**另行逐次授权**、在全新非交易决策槽（如 20260808 / 20260809）用一条后台命令重跑 Web+X；禁止复用 20260730 / 20260731 / 20260801 / 20260802。
+3. 诊断层面已经能说的：**X 侧问法出货**（13 条来源 / 5 个跨行业候选主题 / 32 只票），**Web 侧被 7 天窗口卡死**（40 条里 34 条是窗口外旧闻），且幸存主题里混着雅虎财报日历这类清单页噪音（`q2_2026_earnings_reports`）。改模板时先解决 web 侧「捞回本周新闻」，不要动 X 侧问法。
+4. 不得因本轮任何绿灯启动 query planner、第二阶段追证据或 4d-iii 正式一键激活；确认器、席位、试探仓、生命周期与 `theme_soft_boost_enabled` 仍冻结。
+
+**给 Codex 的命令**：`修复 K3-R113`

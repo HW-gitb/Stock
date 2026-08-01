@@ -1,5 +1,11 @@
 # Session Log
 
+## 2026-08-01 — Claude 审查 FAIL（K3-R113 · 20260802 Web+X 查询质量 probe）
+- **Verdict/Action**: 用户逐次授权的 20260802 真实 probe 已执行并冻结证据（Web 5 次 provider 调用 / 3 条来源；X 4 次调用 / 13 条来源 + 4 份 provider response raw），但离线 assessment 写前硬失败、无 tracked 产物；本轮不给 stage1 模板打分，按 packet 预注册口径视为执行不可证明。未提交代码，无代码改动。
+- **Required**: K3-R113 — 完整技术现状 / 真实探针 / 影响 / 修复边界 / closure tests 只见 `docs/system_risk_register.md`（单一来源，本处不复述）。
+- **Verify**: review-evidence:ab55e7c21e57；固定主 Python `--preflight-only` 真实 FAIL 于 `x/xai budget ledger mismatch at reservation_attempt_count`（exit 1，tracked assessment 不存在）；reviewer 独立重算 web 4 主题 / 10 成员 / 3 来源 ratio 1.000、x 5 / 32 / 13 ratio 0.923（诊断，非裁决）；未跑 full（AGENTS rule 3 未触发：零代码改动）。墙钟超 30 分钟原因：等两次真实付费 provider 执行落盘，非流程缺陷。
+- **Next**: Codex：修复 K3-R113。
+
 ## 2026-07-30 — Codex 审查 PASS（K3-R112 最终独立复审）
 - **Verdict/Action**: PASS；K3-R112-R1 至 R7 全部 CLOSED，lane-local causal DAG、零-ref INCONCLUSIVE、raw failure 与同字节 input binding 均通过独立对抗性反控；按 reviewer/committer 流程提交当前已审工作树。
 - **Required**: 无；Register: `K3-R112` CLOSED。
