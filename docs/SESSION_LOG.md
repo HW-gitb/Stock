@@ -1,5 +1,11 @@
 # Session Log
 
+## 2026-08-01 — Claude 交接（这一周的执行范围：规划器四块 + 26 个未隔离测试模块）
+- **Verdict/Action**: 下一个可用探针槽要等 20260808/09（取材窗口 = 决策日往前 7 天，今天跑窗口未开），故本周不空等：把与「问法好不好」无关的规划器机器先建——query-plan schema、版本化模板容器、确定性阶段二纯函数、plan 级预算包络；另做 26 个未隔离测试模块的临时根改造 + 静态守卫。真花钱的一键入口、4d-iii、模板文本定稿仍不做。
+- **Required**: 无 open Required；执行范围、验收谓词（P1-P5 / B1-B6 / 三类分档与假绿自检）与边界全部写在 US-short 软发现主 handoff 的 2026-08-01 交接节。
+- **Verify**: 本条为交接不含代码改动；harness 决策同轮更正——整包实测 `5090 OK / 716.7s`（上限 860s，账本可缓存复用），全量属 rule 3 例外而非默认，故分片 harness **搁置**，重启条件写在桌面 `harness_test.md`：热点查清后仍逼近上限，或全量从例外变高频。
+- **Next**: Codex：执行。
+
 ## 2026-08-01 — Claude 审查 PASS（K3-R115 两条 Optional 自修收口）
 - **Verdict/Action**: PASS；reviewer 按用户指令自修并自审两条不阻塞 Optional：下界断言保留但 docstring/测试名改为明说「由构造保证、生产路径不可达、不得当在役门引用」；删掉恒等的 `America/New_York` 往返、helper 更名 `_max_bound_source_observed_at`、DST 测试改名为「按绝对时刻比较」。纯重命名 + 删恒等变换，行为不变。
 - **Required**: 无；Register: `K3-R115` 的 Optional (i)/(ii) 已标 CLOSED（正文只见 `docs/system_risk_register.md`）。
