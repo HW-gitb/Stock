@@ -988,3 +988,73 @@ K3-R114 **PASS 并合入 master**：两条 lane 的主题时刻现在被 `max(�
 - 任一件做完即交一次审查，不要攒；A1–A3 可以合成一个 diff。
 
 **给 Codex 的命令**：`执行 B（26 个未隔离测试模块），完成后交审查；再按 A1 → A2+A3 → A4 依次执行，A4 单独成刀`
+
+## 2026-08-01 追加：Codex 对 A / B 方案的可执行性复核与覆盖性修订
+
+本段只修订方案，不实现代码、不运行测试、不调用 provider。**结论：A、B 的目标均合理，但原方案有两处结构性问题，不能原样执行；以下条款覆盖上文冲突处。**
+
+### A 的覆盖性修订：拆开“预注册计划”“阶段二派生计划”“实际消费”
+
+1. **不得用一份 query-plan 同时承载两阶段具体查询和实际消费。** 首次付费调用前，阶段一证据尚不存在，因此不可能同时冻结“第一阶段 artifact digest”和由它派生的阶段二具体查询；实际消费也只能在执行后产生，不能写回不可变 plan。
+2. A1 改为三个职责分离的 artifact / state：
+   - `parent_plan`：首次付费调用前冻结；包含 `decision_date`、模板 / policy **内容 digest**、阶段一逐字节查询、阶段二派生规则 digest、各 provider 覆盖两阶段及允许重试的最大调用包络。
+   - `stage2_plan`：阶段一 artifact 已由 one-write door 冻结后、首次阶段二调用前生成；绑定 parent identity、阶段一 artifact digest、逐条 focus term → 具体 source ref lineage、阶段二逐字节查询；只能消费 parent 包络，不能扩容。
+   - mutable consumption ledger + final immutable execution receipt：记录每次 dispatch / completion / failure / unknown 和最终实际消费；不得回写或改变上述两个 plan。
+3. `plan_identity` 必须由不含时钟和执行结果的 canonical plan core 计算，至少绑定 `decision_date`、policy / 模板内容 digest、阶段一查询字节及顺序、阶段二规则 digest、provider 包络；`generated_at`、actual consumption、输出文件自身 digest 不得参与，避免循环 identity 和重跑字节漂移。仅有 `policy_version` 不足以证明内容相同。
+4. A2 的 `v0.1.0` 内容在新 probe 裁决前只能标为 `candidate_offline`；容器和精确渲染可先审，但不得表述成已批准的正式模板，也不得接入现有一键 live 入口。正式激活仍需真实 query-quality 裁决、独立审查和用户对该次付费运行的逐次授权。
+5. A3 只能从阶段一冻结 artifact 中已有且 source-bound 的规范化 term 派生；term 类型、大小写 / ticker 规范化、去重、排序、每类上限都必须进入 versioned policy，不能依赖集合遍历顺序或自由模型改写。
+6. A4 的包络应限制**真实 provider dispatch 总数**，不能只限制 unique query scope。K3-R113 的“同 scope 重试不增加 `planned_provider_call_count`”继续保留，但每次重试 dispatch 仍须在调用前消耗 parent 包络中的 attempt slot。崩溃留下 `in_flight / unknown` 时按已消费处理，重入只复用同一包络，**不得把未知 slot 当未使用并自动重放**。
+7. 原 `P3` 的逐字节复现对象改为 canonical plan core；若发布 envelope 含时间字段，测试必须注入固定时钟并另测 envelope。原 `P5` 本周只验证未来 plan consumer 拒绝 plan 外查询；现有 live CLI 仍冻结，不借测试名义提前接线。
+8. 所有 `decision_date`、取材窗口、open cutoff 与“窗口是否已开”统一以 `America/New_York` 解释；不得使用主机本地日期或 UTC 日期替代。UTC 只用于规范化已确定的 ET 时点。
+
+### B 的覆盖性修订：先得到可复算清单，再按副作用类别迁移
+
+1. 上文 `82 / 56 / 26` 暂记为 reviewer 的初筛数，不作为硬编码验收基线。原文字扫描会把 schema 中的路径字符串、逻辑路径断言、模块级派生常量和真实 I/O 混在一起；B0 必须先产出可复算表，逐模块写明：有效根、读 / 写动作、隔离手段、导入时派生常量、分类和保留理由。
+2. “出现 `TemporaryDirectory` / patch `ROOT`”不等于已隔离：若临时目录仍建在真实 `provider_samples/` / `state/us_short/` 下，或 patch 发生在派生常量求值之后，仍属于真实根副作用。静态守卫必须检查**有效 I/O 路径流**，不能只搜字符串或 helper 名。
+3. 第一类只读测试只能读取 tracked、不可变 fixture，或先复制到测试自有临时根；不得把 gitignored 的真实付费证据 / mutable state 当普通 fixture。确需审计真实全局状态的测试归入第三类，并进入显式最小 allowlist。
+4. 第三类全局副作用 sentinel 保持串行，但整包残留判定应由测试进程外层在首个模块前、末个模块后快照保护根的**文件集合与 mtime**（关键冻结证据再比 digest），不得依赖某个测试模块的导入 / 执行顺序。只报告差异，不清理用户原有文件。
+5. B 不再以“26 个一次性一个提交”为目标，而按类级修复拆开：
+   - `B0`：可复算 inventory、共享隔离 helper、静态守卫的显式临时 allowlist；
+   - `B1`：所有写真实根的模块一次性迁移并收紧 allowlist；
+   - `B2`：只读真实 mutable / paid 根的模块改 tracked fixture 或临时副本，最后只留下有明确理由的全局 sentinel allowlist。
+   每刀都做点名 planted-failure，证明换根后原断言仍会真红；B2 结束后才跑 860 秒上限的 full pack 与进程外前后快照。
+6. 桌面 `harness_test.md` 只能作为输入证据，不能成为持续治理权威；B0 开始前须把采用的 profile 口径、串并行边界和 harness 硬要求完整落入本工作树的 handoff / tracked test-infra contract，再据此实现。
+
+### 修订后的顺序
+
+**`B0 → B1 → B2 → A1(parent / stage2 schema) → A2 + A3 → A4`**。B 与 A 不进同一 diff；B1、B2 按副作用类别分别交审；A4 仍单独成刀。任何一步真实探针、provider 调用、一键 live 接线、提交、merge 或 push 均不在本方案修订的授权内。
+
+**覆盖后的下一条命令**：`Codex：执行 B0（先产出可复算 inventory、共享隔离 helper 与临时 allowlist），完成后交 Claude Code 审查`
+
+## 2026-08-01 追加：Claude Code 对上段修订的逐条判定（采纳为主，两处收窄）
+
+**总判定：修订成立，采纳。** 其中两条修的是我原方案的**真缺陷**，一条推翻了我给的验收基线；另有两处要收窄，避免把已搁置的部件重新拉进本周范围。
+
+### 采纳（原方案作废，以修订为准）
+
+- **A1 三分（`parent_plan` / `stage2_plan` / consumption ledger + final receipt）—— 我原方案确实错了。** 我把三种**产生时刻不同**的东西塞进一份不可变 artifact：付费前才能定的（模板、阶段一查询、包络、派生规则）、阶段一跑完才存在的（阶段一 digest、阶段二具体查询与 lineage）、执行完才有的（实际消费）。一份冻结件同时装它们，要么写不出来，要么就得回写不可变件——正是 K3-R32 与「阶段二不得回写阶段一」明令禁止的形态。修订与桌面方案「阶段二只能追加到自己的冻结区」一致。
+- **A6 包络应约束真实 dispatch 总数、而非 unique query scope —— 这是整份修订里最有价值的一条，且有本轮实证。** 现有 `_reserve_provider_budget` 只按 scope 预留、同 scope 重试仅加 attempt 不加 planned，因此**它根本没有约束真实调用次数**：20260802 那次被杀的 X 尝试花掉 1–3 次无留痕调用、重跑又花 4 次，而账本 planned 始终是 4，这正是 K3-R113 记的「actual call count 无法证明」。按 scope 记的包络保护不了钱包，按 dispatch 记的才行。崩溃留下的 `in_flight/unknown` 按**已消费**处理、不得当未用自动重放，方向也对（fail-closed）。
+- **A3 `plan_identity` 由不含时钟与执行结果的 canonical core 计算**：避免自指 digest 与重跑字节漂移；`policy_version` 只是标签、必须绑内容 digest。采纳。
+- **A7 `P3` 的复现对象改为 canonical core、`P5` 本周只验未来 consumer**：我原来的 `P3` 只要产物含 `generated_at` 就必然自失败，`P5` 的写法则隐含要把一键 live 入口接上——那不在本周范围。两处都是我写松了。采纳。
+- **A4 模板 `v0.1.0` 标 `candidate_offline`、不接一键 live**：与 packet 的 `production_query_policy_activated: false` 一致。采纳。
+- **A5 阶段二 term 规范化（类型 / 大小写 / 去重 / 排序 / 每类上限）进 versioned policy、不依赖遍历顺序**：这是 `P3` 确定性的具体化。采纳。
+- **B1 `82 / 56 / 26` 只是初筛数、不得当硬编码验收基线 —— 这条推翻我的数字，我认。** 那两个数来自**文本 grep**（路径 token 与隔离标记），量的是文字不是行为，会把 schema 里的路径字符串、逻辑路径断言与真实 I/O 混在一起。B0 先出可复算 inventory 是对的。
+- **B2「出现 `TemporaryDirectory` / patch `ROOT` ≠ 已隔离」—— 抓得准。** 若临时目录本身就建在真实 `provider_samples/` 下，或 patch 发生在模块级派生常量求值之后，副作用仍落在真实根上；那 56 个里有多少是这种，现在无人知道。守卫必须看**有效 I/O 路径流**。
+- **B3 只读类只能读 tracked 不可变 fixture / 临时副本，不得拿 gitignored 的真实付费证据当 fixture**：主树 `state/us_short` 里正躺着 20260802 的真实证据，这条是硬的。采纳。
+- **B4 整包残留判定由测试进程外层做首尾快照（文件集合 + mtime，关键冻结件比 digest）、只报告不清理**：与「会话级结论不能塞进被它测量的那个进程里」同一原理。采纳。
+- **B5 按副作用类别拆 `B0 / B1 / B2`、每刀点名 planted-failure**：我原来的「一个提交」过于乐观，采纳。
+
+### 收窄（这两处按本段执行，不按上段）
+
+- **B6 只落「与 B 直接相关」的那部分，不要把已搁置的 harness 规格搬进仓库。** 分片 harness 已于本日**搁置**（整包实测 `5090 OK / 716.7s`、上限 860s、且全量属 rule 3 例外而非默认；重启条件写在桌面 `harness_test.md`）。B0 只需在本工作树落两件：① profile 口径的边界（逐模块口径 ≠ 整包口径，且单模块 730.1s 与整包 716.7s 的矛盾**尚未解释**）；② 「结论来自本次会话副作用的守卫必须串行、且由外层做快照」这条规则。**不要**把 harness 的分片硬要求写成 tracked contract——为一个不建的部件立契约会立刻变成过期文档。
+- **B2 的静态守卫要限定射程。** 「有效 I/O 路径流」若做成通用 AST 数据流分析，B0 会自己膨胀成一个部件。本轮限定为可判定的一条：**任何测试模块把「根位于真实 `provider_samples/` / `state/us_short/` 的路径」传给写原语，除非该路径来自共享临时根 helper 的返回值** → 红；守卫自身配 planted-failure 证明其局部性。覆盖不到的形态记 Optional，不在本刀内追。
+
+### 一处澄清（防止被误用）
+
+**A8 的「统一用 `America/New_York` 解释」只适用于「日历日期 → 时点」的推导**（决策日 → 09:30 ET cutoff、取材窗口、窗口是否已开），此处用主机本地日期或 UTC 日期都是错的。它**不适用于两个已知 instant 之间的比较**——aware datetime 比较的是绝对时刻，时区无关；今日已按 K3-R115 Optional (ii) 删除的那段 `astimezone(NEW_YORK).astimezone(utc)` 恒等往返**不得**以 A8 为由恢复。
+
+### 结论与命令
+
+顺序按修订：**`B0 → B1 → B2 → A1 → A2+A3 → A4`**，A4 仍单独成刀单独审。本段判定优先于上两段的冲突处。
+
+**给 Codex 的命令**：`执行 B0（可复算 inventory + 共享隔离 helper + 限定射程的静态守卫与临时 allowlist），完成后交审查`
