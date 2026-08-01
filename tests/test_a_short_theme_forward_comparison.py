@@ -18,6 +18,7 @@ if str(ROOT) not in sys.path:
 
 from engine import a_short_evidence_epoch_mode as epoch_mode  # noqa: E402
 from engine import a_short_theme_forward_comparison as comparison  # noqa: E402
+from tests._a_short_epoch_mode_test_utils import _resealed_freeze_packet  # noqa: E402
 
 # Synthetic fixtures intentionally span the full 36-week design window.
 def _fixed_test_today():
@@ -99,18 +100,32 @@ def _mutated_contract_helper(*_args, **_kwargs):
 
 class ThemeForwardComparisonTests(unittest.TestCase):
     def setUp(self):
+        self._freeze_temp = tempfile.TemporaryDirectory()
+        self.addCleanup(self._freeze_temp.cleanup)
+        self.freeze_packet_path = Path(self._freeze_temp.name) / "freeze_packet.json"
+        _resealed_freeze_packet(self.freeze_packet_path)
+        freeze_packet = json.loads(
+            self.freeze_packet_path.read_text(encoding="utf-8")
+        )
+        self.freeze_packet_identity = {
+            "freeze_id": freeze_packet["freeze_id"],
+            "schema_version": freeze_packet["schema_version"],
+            "record_sha256": freeze_packet["record_sha256"],
+        }
         patcher = mock.patch.object(comparison, "_today_date", _fixed_test_today)
         patcher.start()
         self.addCleanup(patcher.stop)
 
-    @staticmethod
     def _build_epoch_at_decision(
-        tracker: pd.DataFrame, epoch_id: str, start_as_of: str
+        self, tracker: pd.DataFrame, epoch_id: str, start_as_of: str
     ) -> dict:
         with mock.patch.object(
             comparison, "_today_date", return_value=pd.Timestamp(start_as_of).date()
         ):
-            return comparison.build_frozen_epoch(tracker, epoch_id, start_as_of)
+            return comparison.build_frozen_epoch(
+                tracker, epoch_id, start_as_of,
+                freeze_packet_identity=self.freeze_packet_identity,
+            )
 
     def _packet(self, weeks: int = 12):
         dates = pd.date_range("2026-01-02", periods=weeks, freq="7D").strftime("%Y%m%d")
@@ -131,11 +146,14 @@ class ThemeForwardComparisonTests(unittest.TestCase):
         epoch_path = Path(temp.name) / "epoch.json"
         epoch_path.write_text(json.dumps(epoch), encoding="utf-8")
         with temp, mock.patch.object(comparison, "EPOCH_PATH", epoch_path), \
-                mock.patch.object(epoch_mode, "TRACK_MODE_REGISTRY_PATH", registry_path):
+                mock.patch.object(epoch_mode, "TRACK_MODE_REGISTRY_PATH", registry_path), \
+                mock.patch.object(
+                    epoch_mode, "FIFTH_KNIFE_FREEZE_PACKET_PATH",
+                    self.freeze_packet_path,
+                ):
             yield
 
-    @staticmethod
-    def _frozen_epoch(governance: dict, *, themes: list[str] | None = None,
+    def _frozen_epoch(self, governance: dict, *, themes: list[str] | None = None,
                       decision: dict | None = None) -> dict:
         registry = comparison.load_taxonomy_registry()
         themes = themes or sorted(item["theme_id"] for item in registry["canonical_themes"])
@@ -153,11 +171,15 @@ class ThemeForwardComparisonTests(unittest.TestCase):
                 normalized_decision["archive_relative_path"] or "epochs/theme-v1/formal_packet.json"
             )
             normalized_decision["receipt_sha256"] = normalized_decision["receipt_sha256"] or "f" * 64
+        freeze_packet_identity = self.freeze_packet_identity
         epoch = {
-            "schema_name": "a_short_theme_forward_comparison_epoch", "schema_version": "1.3.0",
+            "schema_name": "a_short_theme_forward_comparison_epoch", "schema_version": "1.4.0",
             "track": "theme_forward_comparison", "mode": "frozen_enforced", "epoch_id": "theme-v1",
             "epoch_start_as_of": "20260102", "governance_fingerprint": comparison._digest(governance),
-            "contract_fingerprint": comparison.comparison_contract_fingerprint(governance, themes, source),
+            "contract_fingerprint": comparison.comparison_contract_fingerprint(
+                governance, themes, source, freeze_packet_identity,
+            ),
+            "freeze_packet_identity": freeze_packet_identity,
             "frozen_theme_ids": themes,
             "taxonomy_registry_fingerprint": comparison._digest(registry),
             "taxonomy_registry_effective_date": registry["effective_date"],
@@ -391,7 +413,10 @@ class ThemeForwardComparisonTests(unittest.TestCase):
             row["ret_10d_t1_net"] = pd.NA
         tracker = pd.DataFrame(rows)
         with mock.patch.object(comparison, "_today_date", return_value=pd.Timestamp("2026-07-24").date()):
-            epoch = comparison.build_frozen_epoch(tracker, "theme-v1", "20260727")
+            epoch = comparison.build_frozen_epoch(
+                tracker, "theme-v1", "20260727",
+                freeze_packet_identity=self.freeze_packet_identity,
+            )
             receipt = comparison.build_cohort_admission_receipt(tracker, epoch, 5)
             eligible, rejected = comparison.eligible_formal_cohorts(
                 comparison.validate_tracker_lineage(tracker), 5
@@ -953,7 +978,10 @@ class ThemeForwardComparisonTests(unittest.TestCase):
     def test_epoch_start_rejects_an_old_forward_cohort(self):
         tracker = pd.DataFrame(_week("20260102") + _week("20260109"))
         with self.assertRaisesRegex(comparison.ThemeForwardComparisonError, "latest source-bound"):
-            comparison.build_frozen_epoch(tracker, "theme-v1", "20260102")
+            comparison.build_frozen_epoch(
+                tracker, "theme-v1", "20260102",
+                freeze_packet_identity=self.freeze_packet_identity,
+            )
 
     def test_epoch_start_rejects_any_observed_challenger_outcome(self):
         tracker = pd.DataFrame(_week("20260102"))
@@ -967,7 +995,10 @@ class ThemeForwardComparisonTests(unittest.TestCase):
         tracker["ret_10d_status"] = "pending_capture"
         tracker["ret_10d_t1_net"] = pd.NA
         with self.assertRaisesRegex(comparison.ThemeForwardComparisonError, "safe non-empty slug"):
-            comparison.build_frozen_epoch(tracker, "../escape", "20260102")
+            comparison.build_frozen_epoch(
+                tracker, "../escape", "20260102",
+                freeze_packet_identity=self.freeze_packet_identity,
+            )
 
     def test_source_configuration_drift_stops_only_the_active_epoch(self):
         rows = _week("20260102") + _week("20260109")
@@ -1144,6 +1175,59 @@ class ThemeForwardComparisonTests(unittest.TestCase):
         profile["criteria"][0]["coverage"]["counted_block_execution_profile"] = []
         with self.assertRaises(comparison.ThemeForwardComparisonError):
             comparison.validate_comparison_packet(profile)
+
+    def test_frozen_public_packet_requires_exact_freeze_packet_identity(self):
+        tracker = pd.DataFrame(_week("20260102"))
+        epoch = self._frozen_epoch(comparison.load_governance())
+        with self._frozen_context(epoch):
+            packet = self._frozen_evaluate(tracker, epoch)
+        for mutation in (
+            "missing", "empty_freeze_id", "old_version", "record_hash", "extra",
+        ):
+            candidate = copy.deepcopy(packet)
+            if mutation == "missing":
+                candidate["epoch"].pop("freeze_packet_identity")
+            elif mutation == "empty_freeze_id":
+                candidate["epoch"]["freeze_packet_identity"]["freeze_id"] = ""
+            elif mutation == "old_version":
+                candidate["epoch"]["freeze_packet_identity"][
+                    "schema_version"
+                ] = "0.9.0"
+            elif mutation == "record_hash":
+                candidate["epoch"]["freeze_packet_identity"][
+                    "record_sha256"
+                ] = "not-a-sha256"
+            else:
+                candidate["epoch"]["freeze_packet_identity"]["extra"] = "bad"
+            with self.subTest(mutation=mutation), self.assertRaisesRegex(
+                comparison.ThemeForwardComparisonError,
+                "exact freeze-packet identity",
+            ):
+                comparison.validate_comparison_packet(candidate)
+
+    def test_formal_receipt_rejects_freeze_packet_identity_drift(self):
+        epoch = self._frozen_epoch(
+            comparison.load_governance(),
+            decision={"status": "recorded", "as_of": "20260102",
+                      "packet_sha256": "d" * 64},
+        )
+        receipt = comparison.build_formal_decision_receipt(
+            epoch, "20260102", "d" * 64,
+            "epochs/theme-v1/formal_packet.json",
+        )
+        epoch["formal_decision"]["receipt_sha256"] = receipt["record_sha256"]
+        candidate = copy.deepcopy(receipt)
+        candidate["freeze_packet_identity"]["freeze_id"] = "other-freeze"
+        candidate["record_sha256"] = comparison._digest({
+            key: value for key, value in candidate.items()
+            if key != "record_sha256"
+        })
+        epoch["formal_decision"]["receipt_sha256"] = candidate["record_sha256"]
+        with self.assertRaisesRegex(
+            comparison.ThemeForwardComparisonError,
+            "does not match active epoch",
+        ):
+            comparison.validate_formal_decision_receipt(candidate, epoch)
 
     def test_recorded_epoch_cannot_reopen_the_same_36_week_decision(self):
         dates = pd.date_range("2026-01-02", periods=36, freq="7D").strftime("%Y%m%d")

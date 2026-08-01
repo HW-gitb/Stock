@@ -1,7 +1,9 @@
 """The sole formal look is consumed only after its receipt is written."""
 from __future__ import annotations
 
+import ast
 import copy
+import inspect
 import json
 import sys
 import tempfile
@@ -17,17 +19,108 @@ if str(ROOT) not in sys.path:
 
 from runners import a_short_theme_forward_comparison as runner  # noqa: E402
 from engine import a_short_theme_forward_comparison as comparison  # noqa: E402
+from tests._a_short_epoch_mode_test_utils import (  # noqa: E402
+    _resealed_freeze_packet, enter_patched_epoch_modes,
+)
 from tests.test_a_short_theme_forward_comparison import _week  # noqa: E402
 
 
 class ThemeForwardComparisonRunnerTests(unittest.TestCase):
+    def setUp(self):
+        enter_patched_epoch_modes(
+            self, "frozen_enforced", tracks=(runner.TRACK_ID,)
+        )
+
+    @staticmethod
+    def _pre_freeze_epoch() -> dict:
+        return {
+            "schema_name": "a_short_theme_forward_comparison_epoch",
+            "schema_version": "1.4.0",
+            "track": "theme_forward_comparison",
+            "mode": "pre_freeze_audit_only",
+            "epoch_id": None,
+            "epoch_start_as_of": None,
+            "governance_fingerprint": None,
+            "contract_fingerprint": None,
+            "epoch_identity_fingerprint": None,
+            "freeze_packet_identity": None,
+            "frozen_theme_ids": [],
+            "taxonomy_registry_fingerprint": None,
+            "taxonomy_registry_effective_date": None,
+            "source_configuration_fingerprints": None,
+            "admission_receipt_manifest": comparison.admission_receipt_manifest({}),
+            "outcome_receipt_manifest": comparison.outcome_receipt_manifest({}),
+            "formal_decision": {
+                "status": "not_recorded",
+                "as_of": None,
+                "packet_sha256": None,
+                "archive_relative_path": None,
+                "receipt_sha256": None,
+            },
+            "boundary": {
+                "historical_replay_counts_as_forward": False,
+                "automatic_promotion": False,
+                "production_replacement_authorized": False,
+            },
+        }
+
+    @staticmethod
+    def _write_registry(path: Path, theme_mode: str) -> None:
+        modes = {
+            track: (
+                theme_mode if track == runner.TRACK_ID else "pre_freeze_audit_only"
+            )
+            for track in runner.epoch_mode.TRACKS
+        }
+        path.write_text(json.dumps({
+            "schema_name": "a_short_evidence_epoch_mode_registry",
+            "schema_version": "1.0.0",
+            "track_modes": modes,
+        }), encoding="utf-8")
+
+    @staticmethod
+    def _corrupt_resealed_packet(path: Path) -> None:
+        _resealed_freeze_packet(path)
+        packet = json.loads(path.read_text(encoding="utf-8"))
+        packet["frozen_contracts"][0]["sha256"] = "0" * 64
+        packet["record_sha256"] = runner.epoch_mode._canonical_json_sha256({
+            key: value for key, value in packet.items() if key != "record_sha256"
+        })
+        path.write_text(json.dumps(packet, ensure_ascii=False), encoding="utf-8")
+
+    @staticmethod
+    def _mirror_freeze_contracts(root: Path, packet_path: Path) -> None:
+        packet_path.write_bytes(
+            runner.epoch_mode.FIFTH_KNIFE_FREEZE_PACKET_PATH.read_bytes()
+        )
+        for relative in runner.epoch_mode._FIFTH_KNIFE_FROZEN_CONTRACTS.values():
+            source = runner.epoch_mode.ROOT / relative
+            target = root / relative
+            target.parent.mkdir(parents=True, exist_ok=True)
+            target.write_bytes(source.read_bytes())
+
+    @staticmethod
+    def _tree_bytes(root: Path) -> dict[str, bytes]:
+        return {
+            path.relative_to(root).as_posix(): path.read_bytes()
+            for path in root.rglob("*")
+            if path.is_file()
+        }
+
     @staticmethod
     def _build_epoch(tracker: pd.DataFrame, epoch_id: str = "theme-v1") -> dict:
         as_of = str(tracker.iloc[0]["as_of"])
         with mock.patch.object(
             comparison, "_today_date", return_value=pd.Timestamp(as_of).date()
         ):
-            return comparison.build_frozen_epoch(tracker, epoch_id, as_of)
+            return comparison.build_frozen_epoch(
+                tracker, epoch_id, as_of,
+                freeze_packet_identity=(
+                    runner.epoch_mode.validated_frozen_packet_identity(
+                        runner.TRACK_ID
+                    )
+                ),
+            )
 
     @staticmethod
     def _admit_pending(tracker: pd.DataFrame, epoch: dict) -> dict[str, dict]:
@@ -166,12 +259,19 @@ class ThemeForwardComparisonRunnerTests(unittest.TestCase):
         epoch = {
             "mode": "frozen_enforced", "epoch_id": "theme-v1", "epoch_start_as_of": "20260904",
             "contract_fingerprint": "a" * 64, "epoch_identity_fingerprint": "e" * 64,
+            "freeze_packet_identity": runner.epoch_mode.validated_frozen_packet_identity(
+                runner.TRACK_ID
+            ),
             "formal_decision": {"status": "not_recorded", "as_of": None, "packet_sha256": None},
         }
         packet = {
             "formal_verdict_allowed": True,
             "checkpoints": {"current_checkpoint": "formal_decision_due", "formal_decision_as_of": "20260904"},
-            "epoch": {"epoch_id": "theme-v1", "epoch_start_as_of": "20260904", "contract_fingerprint": "a" * 64},
+            "epoch": {
+                "epoch_id": "theme-v1", "epoch_start_as_of": "20260904",
+                "contract_fingerprint": "a" * 64,
+                "freeze_packet_identity": epoch["freeze_packet_identity"],
+            },
         }
         with tempfile.TemporaryDirectory() as temp:
             root = Path(temp)
@@ -201,12 +301,19 @@ class ThemeForwardComparisonRunnerTests(unittest.TestCase):
         epoch = {
             "mode": "frozen_enforced", "epoch_id": "theme-v1", "epoch_start_as_of": "20260904",
             "contract_fingerprint": "a" * 64, "epoch_identity_fingerprint": "e" * 64,
+            "freeze_packet_identity": runner.epoch_mode.validated_frozen_packet_identity(
+                runner.TRACK_ID
+            ),
             "formal_decision": {"status": "not_recorded", "as_of": None, "packet_sha256": None},
         }
         packet = {
             "formal_verdict_allowed": True,
             "checkpoints": {"current_checkpoint": "formal_decision_due", "formal_decision_as_of": "20260904"},
-            "epoch": {"epoch_id": "theme-v1", "epoch_start_as_of": "20260904", "contract_fingerprint": "a" * 64},
+            "epoch": {
+                "epoch_id": "theme-v1", "epoch_start_as_of": "20260904",
+                "contract_fingerprint": "a" * 64,
+                "freeze_packet_identity": epoch["freeze_packet_identity"],
+            },
         }
         with tempfile.TemporaryDirectory() as temp:
             root = Path(temp)
@@ -237,10 +344,17 @@ class ThemeForwardComparisonRunnerTests(unittest.TestCase):
     def test_due_packet_cannot_consume_a_replaced_epoch(self):
         epoch = {"mode": "frozen_enforced", "epoch_id": "theme-v2", "epoch_start_as_of": "20260911",
                  "contract_fingerprint": "b" * 64, "epoch_identity_fingerprint": "f" * 64,
+                 "freeze_packet_identity": runner.epoch_mode.validated_frozen_packet_identity(
+                     runner.TRACK_ID
+                 ),
                  "formal_decision": {"status": "not_recorded", "as_of": None, "packet_sha256": None}}
         packet = {"formal_verdict_allowed": True,
                   "checkpoints": {"current_checkpoint": "formal_decision_due", "formal_decision_as_of": "20260904"},
-                  "epoch": {"epoch_id": "theme-v1", "epoch_start_as_of": "20260904", "contract_fingerprint": "a" * 64}}
+                  "epoch": {
+                      "epoch_id": "theme-v1", "epoch_start_as_of": "20260904",
+                      "contract_fingerprint": "a" * 64,
+                      "freeze_packet_identity": epoch["freeze_packet_identity"],
+                  }}
         with tempfile.TemporaryDirectory() as temp:
             root = Path(temp)
             path = root / "packet.json"
@@ -254,10 +368,11 @@ class ThemeForwardComparisonRunnerTests(unittest.TestCase):
 
     def test_explicit_start_then_reset_archives_old_epoch_and_arms_only_track_seven(self):
         pre_epoch = {
-            "schema_name": "a_short_theme_forward_comparison_epoch", "schema_version": "1.3.0",
+            "schema_name": "a_short_theme_forward_comparison_epoch", "schema_version": "1.4.0",
             "track": "theme_forward_comparison", "mode": "pre_freeze_audit_only", "epoch_id": None,
             "epoch_start_as_of": None, "governance_fingerprint": None, "contract_fingerprint": None,
             "epoch_identity_fingerprint": None,
+            "freeze_packet_identity": None,
             "frozen_theme_ids": [],
             "taxonomy_registry_fingerprint": None,
             "taxonomy_registry_effective_date": None,
@@ -280,11 +395,14 @@ class ThemeForwardComparisonRunnerTests(unittest.TestCase):
             registry_path = root / "registry.json"
             registry_path.write_text(json.dumps({"schema_name": "a_short_evidence_epoch_mode_registry",
                                                   "schema_version": "1.0.0", "track_modes": modes}), encoding="utf-8")
+            freeze_packet_path = root / "freeze_packet.json"
+            _resealed_freeze_packet(freeze_packet_path)
             active_path = root / "epoch.json"
             archive_dir = root / "archive"
             with mock.patch.object(runner, "EPOCH_PATH", active_path), \
                     mock.patch.object(runner, "EPOCH_ARCHIVE_DIR", archive_dir), \
                     mock.patch.object(runner.epoch_mode, "TRACK_MODE_REGISTRY_PATH", registry_path), \
+                    mock.patch.object(runner.epoch_mode, "FIFTH_KNIFE_FREEZE_PACKET_PATH", freeze_packet_path), \
                     mock.patch.object(runner, "load_epoch", return_value=pre_epoch), \
                     mock.patch.object(comparison, "_today_date", return_value=pd.Timestamp("20260102").date()):
                 opened = runner._start_or_reset_epoch(
@@ -306,6 +424,7 @@ class ThemeForwardComparisonRunnerTests(unittest.TestCase):
             with mock.patch.object(runner, "EPOCH_PATH", active_path), \
                     mock.patch.object(runner, "EPOCH_ARCHIVE_DIR", archive_dir), \
                     mock.patch.object(runner.epoch_mode, "TRACK_MODE_REGISTRY_PATH", registry_path), \
+                    mock.patch.object(runner.epoch_mode, "FIFTH_KNIFE_FREEZE_PACKET_PATH", freeze_packet_path), \
                     mock.patch.object(runner, "load_epoch", return_value=opened), \
                     mock.patch.object(comparison, "_today_date", return_value=pd.Timestamp("20260102").date()), \
                     mock.patch.object(runner, "_write_json_atomic", side_effect=fail_after_archive):
@@ -318,6 +437,7 @@ class ThemeForwardComparisonRunnerTests(unittest.TestCase):
             with mock.patch.object(runner, "EPOCH_PATH", active_path), \
                     mock.patch.object(runner, "EPOCH_ARCHIVE_DIR", archive_dir), \
                     mock.patch.object(runner.epoch_mode, "TRACK_MODE_REGISTRY_PATH", registry_path), \
+                    mock.patch.object(runner.epoch_mode, "FIFTH_KNIFE_FREEZE_PACKET_PATH", freeze_packet_path), \
                     mock.patch.object(runner, "load_epoch", return_value=opened), \
                     mock.patch.object(comparison, "_today_date", return_value=pd.Timestamp("20260102").date()):
                 replacement = runner._start_or_reset_epoch(
@@ -331,6 +451,7 @@ class ThemeForwardComparisonRunnerTests(unittest.TestCase):
             with mock.patch.object(runner, "EPOCH_PATH", active_path), \
                     mock.patch.object(runner, "EPOCH_ARCHIVE_DIR", archive_dir), \
                     mock.patch.object(runner.epoch_mode, "TRACK_MODE_REGISTRY_PATH", registry_path), \
+                    mock.patch.object(runner.epoch_mode, "FIFTH_KNIFE_FREEZE_PACKET_PATH", freeze_packet_path), \
                     mock.patch.object(runner, "load_epoch", return_value=replacement), \
                     mock.patch.object(comparison, "_today_date", return_value=pd.Timestamp("20260102").date()):
                 with self.assertRaisesRegex(SystemExit, "already used"):
@@ -342,10 +463,11 @@ class ThemeForwardComparisonRunnerTests(unittest.TestCase):
 
     def test_interrupted_epoch_start_resumes_from_matching_admission_receipt(self):
         pre_epoch = {
-            "schema_name": "a_short_theme_forward_comparison_epoch", "schema_version": "1.3.0",
+            "schema_name": "a_short_theme_forward_comparison_epoch", "schema_version": "1.4.0",
             "track": "theme_forward_comparison", "mode": "pre_freeze_audit_only", "epoch_id": None,
             "epoch_start_as_of": None, "governance_fingerprint": None, "contract_fingerprint": None,
-            "epoch_identity_fingerprint": None, "frozen_theme_ids": [],
+            "epoch_identity_fingerprint": None, "freeze_packet_identity": None,
+            "frozen_theme_ids": [],
             "taxonomy_registry_fingerprint": None, "taxonomy_registry_effective_date": None,
             "source_configuration_fingerprints": None,
             "admission_receipt_manifest": comparison.admission_receipt_manifest({}),
@@ -364,6 +486,8 @@ class ThemeForwardComparisonRunnerTests(unittest.TestCase):
             registry_path = root / "registry.json"
             registry_path.write_text(json.dumps({"schema_name": "a_short_evidence_epoch_mode_registry",
                 "schema_version": "1.0.0", "track_modes": modes}), encoding="utf-8")
+            freeze_packet_path = root / "freeze_packet.json"
+            _resealed_freeze_packet(freeze_packet_path)
             active_path = root / "epoch.json"
             private_root = root / "state" / "a_short" / "theme_forward_comparison_private" / "v1"
             real_write = runner._write_json_atomic
@@ -376,6 +500,7 @@ class ThemeForwardComparisonRunnerTests(unittest.TestCase):
             }
             with mock.patch.multiple(runner, **common), \
                     mock.patch.object(runner.epoch_mode, "TRACK_MODE_REGISTRY_PATH", registry_path), \
+                    mock.patch.object(runner.epoch_mode, "FIFTH_KNIFE_FREEZE_PACKET_PATH", freeze_packet_path), \
                     mock.patch.object(runner, "load_epoch", return_value=pre_epoch), \
                     mock.patch.object(comparison, "_today_date", return_value=pd.Timestamp("20260102").date()), \
                     mock.patch.object(runner, "_write_json_atomic", side_effect=fail_active):
@@ -383,11 +508,367 @@ class ThemeForwardComparisonRunnerTests(unittest.TestCase):
                     runner._start_or_reset_epoch(tracker, "theme-v1", "20260102", private_root, reset_epoch=False)
             with mock.patch.multiple(runner, **common), \
                     mock.patch.object(runner.epoch_mode, "TRACK_MODE_REGISTRY_PATH", registry_path), \
+                    mock.patch.object(runner.epoch_mode, "FIFTH_KNIFE_FREEZE_PACKET_PATH", freeze_packet_path), \
                     mock.patch.object(runner, "load_epoch", return_value=pre_epoch), \
                     mock.patch.object(comparison, "_today_date", return_value=pd.Timestamp("20260102").date()):
                 resumed = runner._start_or_reset_epoch(tracker, "theme-v1", "20260102", private_root, reset_epoch=False)
             self.assertEqual(resumed["epoch_id"], "theme-v1")
             self.assertEqual(json.loads(registry_path.read_text(encoding="utf-8"))["track_modes"]["theme_forward_comparison"], "frozen_enforced")
+
+    def test_frozen_transition_drift_leaves_start_reset_and_recovery_trees_byte_identical(self):
+        tracker = pd.DataFrame(_week("20260102"))
+        tracker["ret_10d_status"] = "pending_capture"
+        tracker["ret_10d_t1_net"] = pd.NA
+        with mock.patch.object(
+            comparison, "_today_date", return_value=pd.Timestamp("20260102").date()
+        ):
+            frozen_epoch = comparison.build_frozen_epoch(
+                tracker, "theme-v1", "20260102",
+                freeze_packet_identity=(
+                    runner.epoch_mode.validated_frozen_packet_identity(
+                        runner.TRACK_ID
+                    )
+                ),
+            )
+            frozen_receipt = comparison.build_cohort_admission_receipt(
+                tracker, frozen_epoch, int(comparison.load_governance()["policy"]["top_n"])
+            )
+        self.assertIsNotNone(frozen_receipt)
+        frozen_epoch = copy.deepcopy(frozen_epoch)
+        frozen_epoch["admission_receipt_manifest"] = comparison.admission_receipt_manifest({
+            "20260102": frozen_receipt,
+        })
+        cases = (
+            ("start", self._pre_freeze_epoch(), "pre_freeze_audit_only",
+             "theme-v1", False),
+            ("reset", frozen_epoch, "frozen_enforced", "theme-v2", True),
+            ("recovery", frozen_epoch, "pre_freeze_audit_only",
+             "theme-v1", False),
+        )
+        for name, epoch, registry_mode, requested_epoch_id, reset_epoch in cases:
+            with self.subTest(name=name), tempfile.TemporaryDirectory() as temp:
+                root = Path(temp)
+                registry_path = root / "registry.json"
+                self._write_registry(registry_path, registry_mode)
+                active_path = root / "epoch.json"
+                active_path.write_text(
+                    json.dumps(epoch, ensure_ascii=False), encoding="utf-8"
+                )
+                freeze_packet_path = root / "freeze_packet.json"
+                self._corrupt_resealed_packet(freeze_packet_path)
+                private_root = (
+                    root / "state" / "a_short"
+                    / "theme_forward_comparison_private" / "v1"
+                )
+                if epoch["mode"] == "frozen_enforced":
+                    admission_path = (
+                        runner._epoch_private_dir(private_root, epoch)
+                        / "admissions" / "20260102.json"
+                    )
+                    admission_path.parent.mkdir(parents=True, exist_ok=True)
+                    admission_path.write_text(
+                        json.dumps(frozen_receipt, ensure_ascii=False),
+                        encoding="utf-8",
+                    )
+                before = self._tree_bytes(root)
+                with mock.patch.object(runner, "EPOCH_PATH", active_path), \
+                        mock.patch.object(
+                            runner, "EPOCH_ARCHIVE_DIR", root / "archive",
+                        ), \
+                        mock.patch.object(
+                            runner.epoch_mode, "TRACK_MODE_REGISTRY_PATH",
+                            registry_path,
+                        ), \
+                        mock.patch.object(
+                            runner.epoch_mode, "FIFTH_KNIFE_FREEZE_PACKET_PATH",
+                            freeze_packet_path,
+                        ), \
+                        mock.patch.object(runner, "load_epoch", return_value=epoch), \
+                        mock.patch.object(
+                            comparison, "_today_date",
+                            return_value=pd.Timestamp("20260102").date(),
+                        ):
+                    with self.assertRaisesRegex(
+                        runner.epoch_mode.EvidenceEpochModeError,
+                        "frozen contract drift",
+                    ):
+                        runner._start_or_reset_epoch(
+                            tracker, requested_epoch_id, "20260102",
+                            private_root, reset_epoch=reset_epoch,
+                        )
+                self.assertEqual(self._tree_bytes(root), before)
+
+    def test_valid_transition_guard_runs_once_before_first_write_on_all_three_paths(self):
+        tracker = pd.DataFrame(_week("20260102"))
+        tracker["ret_10d_status"] = "pending_capture"
+        tracker["ret_10d_t1_net"] = pd.NA
+        with tempfile.TemporaryDirectory() as temp:
+            root = Path(temp)
+            registry_path = root / "registry.json"
+            self._write_registry(registry_path, "pre_freeze_audit_only")
+            freeze_packet_path = root / "freeze_packet.json"
+            _resealed_freeze_packet(freeze_packet_path)
+            active_path = root / "epoch.json"
+            archive_dir = root / "archive"
+            private_root = (
+                root / "state" / "a_short"
+                / "theme_forward_comparison_private" / "v1"
+            )
+            real_guard = runner.epoch_mode.validate_frozen_transition
+            real_atomic = runner._write_json_atomic
+            real_atomic_idempotent = runner._write_json_atomic_idempotent
+            real_exclusive_idempotent = runner._write_json_exclusive_idempotent
+
+            def invoke(epoch, requested_epoch_id, reset_epoch):
+                events = []
+
+                def guarded(track):
+                    events.append("guard")
+                    return real_guard(track)
+
+                def atomic(path, payload):
+                    events.append("write")
+                    return real_atomic(path, payload)
+
+                def atomic_idempotent(path, payload):
+                    events.append("write")
+                    return real_atomic_idempotent(path, payload)
+
+                def exclusive_idempotent(path, payload):
+                    events.append("write")
+                    return real_exclusive_idempotent(path, payload)
+
+                with mock.patch.object(runner, "EPOCH_PATH", active_path), \
+                        mock.patch.object(runner, "EPOCH_ARCHIVE_DIR", archive_dir), \
+                        mock.patch.object(
+                            runner.epoch_mode, "TRACK_MODE_REGISTRY_PATH",
+                            registry_path,
+                        ), \
+                        mock.patch.object(
+                            runner.epoch_mode, "FIFTH_KNIFE_FREEZE_PACKET_PATH",
+                            freeze_packet_path,
+                        ), \
+                        mock.patch.object(runner, "load_epoch", return_value=epoch), \
+                        mock.patch.object(
+                            comparison, "_today_date",
+                            return_value=pd.Timestamp("20260102").date(),
+                        ), \
+                        mock.patch.object(
+                            runner.epoch_mode, "validate_frozen_transition",
+                            side_effect=guarded,
+                        ), \
+                        mock.patch.object(
+                            runner, "_write_json_atomic", side_effect=atomic,
+                        ), \
+                        mock.patch.object(
+                            runner, "_write_json_atomic_idempotent",
+                            side_effect=atomic_idempotent,
+                        ), \
+                        mock.patch.object(
+                            runner, "_write_json_exclusive_idempotent",
+                            side_effect=exclusive_idempotent,
+                        ):
+                    result = runner._start_or_reset_epoch(
+                        tracker, requested_epoch_id, "20260102",
+                        private_root, reset_epoch=reset_epoch,
+                    )
+                self.assertEqual(events[0], "guard")
+                self.assertEqual(events.count("guard"), 1)
+                return result
+
+            opened = invoke(self._pre_freeze_epoch(), "theme-v1", False)
+            replacement = invoke(opened, "theme-v2", True)
+            self._write_registry(registry_path, "pre_freeze_audit_only")
+            recovered = invoke(replacement, "theme-v2", False)
+            self.assertEqual(recovered["epoch_id"], "theme-v2")
+
+    def test_synchronized_reseal_blocks_old_epoch_receipts_and_reset_binds_new_identity(self):
+        first = pd.DataFrame(_week("20260102"))
+        first["ret_10d_status"] = "pending_capture"
+        first["ret_10d_t1_net"] = pd.NA
+        second = pd.DataFrame(_week("20260109"))
+        second["ret_10d_status"] = "pending_capture"
+        second["ret_10d_t1_net"] = pd.NA
+        tracker = pd.concat([first, second], ignore_index=True)
+        with tempfile.TemporaryDirectory() as temp:
+            root = Path(temp)
+            packet_path = root / "freeze_packet.json"
+            self._mirror_freeze_contracts(root, packet_path)
+            registry_path = root / "registry.json"
+            self._write_registry(registry_path, "frozen_enforced")
+            active_path = root / "epoch.json"
+            archive_dir = root / "archive"
+            private_root = (
+                root / "state" / "a_short"
+                / "theme_forward_comparison_private" / "v1"
+            )
+            with mock.patch.object(runner.epoch_mode, "ROOT", root), \
+                    mock.patch.object(
+                        runner.epoch_mode, "FIFTH_KNIFE_FREEZE_PACKET_PATH",
+                        packet_path,
+                    ), \
+                    mock.patch.object(
+                        runner.epoch_mode, "TRACK_MODE_REGISTRY_PATH",
+                        registry_path,
+                    ):
+                _resealed_freeze_packet(packet_path)
+                first_identity = runner.epoch_mode.validate_frozen_transition(
+                    runner.TRACK_ID
+                )
+                with mock.patch.object(
+                    comparison, "_today_date",
+                    return_value=pd.Timestamp("20260102").date(),
+                ):
+                    epoch = comparison.build_frozen_epoch(
+                        first, "theme-v1", "20260102",
+                        freeze_packet_identity=first_identity,
+                    )
+                    receipt = comparison.build_cohort_admission_receipt(
+                        first, epoch, 5
+                    )
+                self.assertIsNotNone(receipt)
+                admission_path = (
+                    runner._epoch_private_dir(private_root, epoch)
+                    / "admissions" / "20260102.json"
+                )
+                admission_path.parent.mkdir(parents=True, exist_ok=True)
+                admission_path.write_text(
+                    json.dumps(receipt, ensure_ascii=False), encoding="utf-8"
+                )
+                epoch["admission_receipt_manifest"] = (
+                    comparison.admission_receipt_manifest({"20260102": receipt})
+                )
+                active_path.write_text(
+                    json.dumps(epoch, ensure_ascii=False), encoding="utf-8"
+                )
+
+                shared_contract = root / (
+                    runner.epoch_mode._FIFTH_KNIFE_FROZEN_CONTRACTS[
+                        "weekly_report_schema"
+                    ]
+                )
+                shared_contract.write_bytes(
+                    shared_contract.read_bytes() + b"\n"
+                )
+                _resealed_freeze_packet(packet_path)
+                second_identity = runner.epoch_mode.validate_frozen_transition(
+                    runner.TRACK_ID
+                )
+                self.assertNotEqual(first_identity, second_identity)
+
+                before = self._tree_bytes(root)
+                with mock.patch.object(runner, "EPOCH_PATH", active_path), \
+                        mock.patch.object(
+                            comparison, "_today_date",
+                            return_value=pd.Timestamp("20260109").date(),
+                        ), \
+                        self.assertRaisesRegex(
+                            runner.epoch_mode.EvidenceEpochModeError,
+                            "epoch binding mismatch",
+                        ):
+                    runner._sync_cohort_admission_receipts(
+                        tracker, epoch, private_root
+                    )
+                self.assertEqual(self._tree_bytes(root), before)
+
+                with mock.patch.object(comparison, "load_epoch", return_value=epoch):
+                    context = comparison._epoch_context(
+                        comparison.load_governance()
+                    )
+                self.assertEqual(context["state"], "epoch_contract_mismatch")
+
+                with mock.patch.object(runner, "EPOCH_PATH", active_path), \
+                        mock.patch.object(runner, "EPOCH_ARCHIVE_DIR", archive_dir), \
+                        mock.patch.object(runner, "load_epoch", return_value=epoch), \
+                        mock.patch.object(
+                            comparison, "_today_date",
+                            return_value=pd.Timestamp("20260109").date(),
+                        ):
+                    replacement = runner._start_or_reset_epoch(
+                        tracker, "theme-v2", "20260109",
+                        private_root, reset_epoch=True,
+                    )
+                self.assertEqual(
+                    replacement["freeze_packet_identity"], second_identity
+                )
+                self.assertNotEqual(
+                    replacement["epoch_identity_fingerprint"],
+                    epoch["epoch_identity_fingerprint"],
+                )
+                self.assertEqual(
+                    replacement["admission_receipt_manifest"]["receipt_count"], 1
+                )
+                replacement_receipt = json.loads(
+                    (
+                        runner._epoch_private_dir(private_root, replacement)
+                        / "admissions" / "20260109.json"
+                    ).read_text(encoding="utf-8")
+                )
+                self.assertEqual(
+                    replacement_receipt["freeze_packet_identity"],
+                    second_identity,
+                )
+
+    def test_frozen_registry_writer_inventory_requires_prewrite_transition_guard(self):
+        module_source = inspect.getsource(runner)
+        tree = ast.parse(module_source)
+        writers = set()
+        for node in tree.body:
+            if not isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)):
+                continue
+            has_registry_path = any(
+                isinstance(child, ast.Attribute)
+                and child.attr == "TRACK_MODE_REGISTRY_PATH"
+                for child in ast.walk(node)
+            )
+            has_registry_write = any(
+                isinstance(child, ast.Call)
+                and isinstance(child.func, ast.Name)
+                and child.func.id.startswith("_write_json_")
+                and any(
+                    isinstance(argument, ast.Attribute)
+                    and argument.attr == "TRACK_MODE_REGISTRY_PATH"
+                    for argument in child.args
+                )
+                for child in ast.walk(node)
+            )
+            if has_registry_path and has_registry_write:
+                writers.add(node.name)
+        self.assertEqual(writers, {"_start_or_reset_epoch"})
+        source = inspect.getsource(runner._start_or_reset_epoch)
+        self.assertEqual(
+            source.count("epoch_mode.validate_frozen_transition(TRACK_ID)"), 2
+        )
+        self.assertIn(
+            "packet_identity = epoch_mode.validate_frozen_transition(TRACK_ID)\n"
+            '            if epoch.get("freeze_packet_identity") != packet_identity:',
+            source,
+        )
+        self.assertIn(
+            "packet_identity = epoch_mode.validate_frozen_transition(TRACK_ID)\n"
+            "    new_epoch = build_frozen_epoch(",
+            source,
+        )
+        self.assertLess(
+            source.index("    new_epoch = build_frozen_epoch("),
+            source.index("    _write_json_exclusive_idempotent(admission_path, receipt)"),
+        )
+
+    def test_every_frozen_receipt_writer_validates_epoch_packet_binding_before_write(self):
+        for function in (
+            runner._sync_cohort_admission_receipts,
+            runner._sync_terminal_outcome_receipts,
+            runner._record_formal_decision_if_due,
+        ):
+            with self.subTest(function=function.__name__):
+                source = inspect.getsource(function)
+                self.assertEqual(
+                    source.count("_validate_epoch_packet_binding("), 1
+                )
+                self.assertLess(
+                    source.index("_validate_epoch_packet_binding("),
+                    source.index("_write_json_"),
+                )
 
     def test_normal_runner_reports_checkpoint_without_legacy_review_status_key(self):
         packet = {"checkpoints": {"current_checkpoint": "accumulating"}}

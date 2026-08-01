@@ -21,7 +21,9 @@ if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
 from engine import a_short_evidence_epoch_mode as epoch_mode  # noqa: E402
-from tests._a_short_epoch_mode_test_utils import patched_epoch_modes  # noqa: E402
+from tests._a_short_epoch_mode_test_utils import (  # noqa: E402
+    _resealed_freeze_packet, patched_epoch_modes,
+)
 
 P0V2_CONTRACT_LEGS = (
     "decision_delta_contract",
@@ -55,7 +57,7 @@ SOURCE_IDENTITY_GETSOURCE_CALLS = {
 # pre-freeze roots.  The root must contain the named gate call in its AST.
 SOURCE_IDENTITY_GATES = {
     "engine/a_short_factor_comparison_v2.py": {
-        "_canonical_contracts": "enforcement_enabled",
+        "_canonical_contracts": "validated_frozen_packet_identity",
     },
     "engine/a_short_regime_action_comparison.py": {
         "candidate_effect_policy_fingerprint": "fingerprint_or_pre_freeze",
@@ -64,7 +66,7 @@ SOURCE_IDENTITY_GATES = {
         "_candidate_effect_selector_contract": "fingerprint_or_pre_freeze",
     },
     "runners/a_short_target_policy_comparison_runner.py": {
-        "_contract_fingerprint": "enforcement_enabled",
+        "_contract_fingerprint": "validated_frozen_packet_identity",
     },
     "runners/a_short_final_action_validation_runner.py": {
         "_contract_fingerprint": "fingerprint_or_pre_freeze",
@@ -79,7 +81,7 @@ SOURCE_IDENTITY_GATES = {
         "_contract_fingerprint": "fingerprint_or_pre_freeze",
     },
     "engine/a_short_theme_forward_comparison.py": {
-        "_epoch_context": "enforcement_enabled",
+        "_epoch_context": "validated_frozen_packet_identity",
     },
 }
 
@@ -95,7 +97,9 @@ def _fingerprints() -> dict[str, str]:
     from engine.a_short_industry_weight_comparison import _contract_fingerprint as p5, load_governance
     from engine.a_short_overlay_adjudication import _epoch_context
     from engine.a_short_regime_action_comparison import candidate_effect_policy_fingerprint as p1
+    from engine.egs_industry_heat import _p5_source_fingerprint
     from runners.a_short_final_action_validation_runner import _contract_fingerprint as p3
+    from runners.a_short_regime_comparison_runner import _candidate_effect_policy_key
     from runners.a_short_target_policy_comparison_runner import _contract_fingerprint as p2
     from engine.a_short_theme_forward_comparison import (
         TRACK_ID as theme_track, comparison_contract_fingerprint, load_governance as load_theme_governance,
@@ -108,6 +112,8 @@ def _fingerprints() -> dict[str, str]:
         "p2_target": p2("target_exit"),
         "p2_breakout": p2("breakout_entry"),
         "p1": p1(),
+        "p1_selector": _candidate_effect_policy_key(),
+        "p5_source": _p5_source_fingerprint(),
         "theme_forward": epoch_mode.fingerprint_or_pre_freeze(
             theme_track,
             lambda: comparison_contract_fingerprint(
@@ -152,6 +158,153 @@ class PreFreezeEvidenceModeTests(unittest.TestCase):
         for track in epoch_mode.TRACKS:
             self.assertFalse(epoch_mode.enforcement_enabled(track))
             self.assertFalse(epoch_mode.evidence_counts_toward_clock(track))
+
+    def test_every_individually_frozen_track_rearms_the_shared_freeze_packet(self):
+        for track in epoch_mode.TRACKS:
+            with self.subTest(track=track), \
+                    patched_epoch_modes("frozen_enforced", (track,)), \
+                    mock.patch.object(
+                        epoch_mode, "_validate_fifth_knife_freeze_packet",
+                        wraps=epoch_mode._validate_fifth_knife_freeze_packet,
+                    ) as validate:
+                self.assertTrue(epoch_mode.enforcement_enabled(track))
+                validate.assert_called_once_with(require_contract_hashes=True)
+
+    def test_pre_freeze_still_consumes_packet_identity_and_honesty(self):
+        with patched_epoch_modes("pre_freeze_audit_only", (epoch_mode.TRACKS[0],)):
+            packet_path = epoch_mode.FIFTH_KNIFE_FREEZE_PACKET_PATH
+            packet = json.loads(packet_path.read_text(encoding="utf-8"))
+            packet["boundary"]["effectiveness_claimed"] = True
+            packet["record_sha256"] = epoch_mode._canonical_json_sha256({
+                key: value for key, value in packet.items() if key != "record_sha256"
+            })
+            packet_path.write_text(json.dumps(packet), encoding="utf-8")
+            # The schema is the first guard.  Bypass it only inside this test
+            # to prove the independent runtime honesty check is still
+            # load-bearing rather than dead code behind schema consts.
+            with mock.patch.object(epoch_mode.jsonschema, "validate"), \
+                    self.assertRaisesRegex(
+                        epoch_mode.EvidenceEpochModeError,
+                        "dishonest fifth-knife pre-freeze boundary",
+                    ):
+                epoch_mode.enforcement_enabled(epoch_mode.TRACKS[0])
+
+    def test_pre_freeze_rejects_packet_shape_outside_manual_runtime_checks(self):
+        with patched_epoch_modes("pre_freeze_audit_only"):
+            packet_path = epoch_mode.FIFTH_KNIFE_FREEZE_PACKET_PATH
+            packet = json.loads(packet_path.read_text(encoding="utf-8"))
+            packet["ship_gate"]["status"] = "invented_status"
+            packet["record_sha256"] = epoch_mode._canonical_json_sha256({
+                key: value for key, value in packet.items() if key != "record_sha256"
+            })
+            packet_path.write_text(json.dumps(packet), encoding="utf-8")
+            with self.assertRaisesRegex(
+                epoch_mode.EvidenceEpochModeError,
+                "invalid fifth-knife freeze packet schema",
+            ):
+                epoch_mode.enforcement_enabled(epoch_mode.TRACKS[0])
+
+    def test_any_frozen_track_rejects_drift_in_any_shared_contract(self):
+        for track in epoch_mode.TRACKS:
+            with self.subTest(track=track), \
+                    patched_epoch_modes("frozen_enforced", (track,)):
+                packet_path = epoch_mode.FIFTH_KNIFE_FREEZE_PACKET_PATH
+                packet = json.loads(packet_path.read_text(encoding="utf-8"))
+                packet["frozen_contracts"][-1]["sha256"] = "0" * 64
+                packet["record_sha256"] = epoch_mode._canonical_json_sha256({
+                    key: value for key, value in packet.items()
+                    if key != "record_sha256"
+                })
+                packet_path.write_text(json.dumps(packet), encoding="utf-8")
+                with self.assertRaisesRegex(
+                    epoch_mode.EvidenceEpochModeError,
+                    "fifth-knife frozen contract drift: weekly_report_schema",
+                ):
+                    epoch_mode.enforcement_enabled(track)
+
+    def test_synchronized_packet_reseal_rekeys_every_real_track_fingerprint(self):
+        with tempfile.TemporaryDirectory() as temp:
+            temp_root = Path(temp)
+            original_packet = epoch_mode.FIFTH_KNIFE_FREEZE_PACKET_PATH.read_bytes()
+            packet_path = temp_root / "freeze_packet.json"
+            packet_path.write_bytes(original_packet)
+            for relative in epoch_mode._FIFTH_KNIFE_FROZEN_CONTRACTS.values():
+                source = epoch_mode.ROOT / relative
+                target = temp_root / relative
+                target.parent.mkdir(parents=True, exist_ok=True)
+                target.write_bytes(source.read_bytes())
+            registry_path = temp_root / "registry.json"
+            registry_path.write_text(json.dumps({
+                "schema_name": "a_short_evidence_epoch_mode_registry",
+                "schema_version": "1.0.0",
+                "track_modes": {
+                    track: "frozen_enforced" for track in epoch_mode.TRACKS
+                },
+            }), encoding="utf-8")
+            with mock.patch.object(epoch_mode, "ROOT", temp_root), \
+                    mock.patch.object(
+                        epoch_mode, "FIFTH_KNIFE_FREEZE_PACKET_PATH", packet_path,
+                    ), \
+                    mock.patch.object(
+                        epoch_mode, "TRACK_MODE_REGISTRY_PATH", registry_path,
+                    ):
+                _resealed_freeze_packet(packet_path)
+                before = _fingerprints()
+                shared_contract = temp_root / (
+                    epoch_mode._FIFTH_KNIFE_FROZEN_CONTRACTS[
+                        "weekly_report_schema"
+                    ]
+                )
+                shared_contract.write_bytes(
+                    shared_contract.read_bytes() + b"\n"
+                )
+                _resealed_freeze_packet(packet_path)
+                after = _fingerprints()
+            self.assertEqual(set(before), set(after))
+            self.assertTrue(before)
+            self.assertTrue(all(before[key] != after[key] for key in before))
+
+    def test_bound_identity_rejects_missing_old_version_freeze_id_and_record_hash(self):
+        with patched_epoch_modes(
+            "frozen_enforced", (epoch_mode.TRACKS[0],)
+        ):
+            current = epoch_mode.validated_frozen_packet_identity(
+                epoch_mode.TRACKS[0]
+            )
+            self.assertIsNotNone(current)
+            mutations = (
+                None,
+                {**current, "schema_version": "0.9.0"},
+                {**current, "freeze_id": "other-freeze"},
+                {**current, "record_sha256": "0" * 64},
+            )
+            for expected in mutations:
+                with self.subTest(expected=expected), self.assertRaisesRegex(
+                    epoch_mode.EvidenceEpochModeError, "epoch binding mismatch"
+                ):
+                    epoch_mode.validate_bound_frozen_packet_identity(
+                        epoch_mode.TRACKS[0], expected,
+                    )
+
+    def test_freeze_packet_inventory_cannot_drop_or_duplicate_a_contract(self):
+        for mutation in ("drop", "duplicate"):
+            with self.subTest(mutation=mutation), \
+                    patched_epoch_modes("pre_freeze_audit_only"):
+                packet_path = epoch_mode.FIFTH_KNIFE_FREEZE_PACKET_PATH
+                packet = json.loads(packet_path.read_text(encoding="utf-8"))
+                if mutation == "drop":
+                    packet["frozen_contracts"].pop()
+                else:
+                    packet["frozen_contracts"].append(
+                        dict(packet["frozen_contracts"][0])
+                    )
+                packet["record_sha256"] = epoch_mode._canonical_json_sha256({
+                    key: value for key, value in packet.items()
+                    if key != "record_sha256"
+                })
+                packet_path.write_text(json.dumps(packet), encoding="utf-8")
+                with self.assertRaises(epoch_mode.EvidenceEpochModeError):
+                    epoch_mode.enforcement_enabled(epoch_mode.TRACKS[0])
 
     def test_pre_freeze_fingerprint_is_sha256_shaped_and_track_distinct(self):
         seen = {track: epoch_mode.pre_freeze_fingerprint(track) for track in epoch_mode.TRACKS}

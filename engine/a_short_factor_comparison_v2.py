@@ -216,12 +216,24 @@ def _canonical_contracts(governance: dict) -> dict:
     """Pre-freeze every contract leg is a stable constant; the admission binding
     stays real because it is a governance fact, not an implementation hash.
     See ``engine/a_short_evidence_epoch_mode``."""
-    if not _epoch_mode.enforcement_enabled("p0_factor_comparison_v2"):
+    packet_identity = _epoch_mode.validated_frozen_packet_identity(
+        "p0_factor_comparison_v2"
+    )
+    if packet_identity is None:
         constant = _epoch_mode.pre_freeze_fingerprint("p0_factor_comparison_v2")
         return {"decision_delta_contract": constant, "immutable_common_pool_contract": constant,
                 "outcome_contract": constant, "runtime_wiring_contract": constant,
                 "admission_bindings": _pre_freeze_admission_bindings(governance)}
-    return _real_canonical_contracts(governance)
+    real = _real_canonical_contracts(governance)
+    return {
+        key: (
+            _epoch_mode.bind_frozen_fingerprint(
+                "p0_factor_comparison_v2", value, packet_identity
+            )
+            if key != "admission_bindings" else value
+        )
+        for key, value in real.items()
+    }
 
 
 def _pre_freeze_admission_bindings(governance: dict) -> dict:

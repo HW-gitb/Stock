@@ -154,12 +154,22 @@ def _manifest_is_prefix(expected: dict, receipts: dict[str, dict], manifest_buil
     return False
 
 
+def _validate_epoch_packet_binding(epoch: dict) -> dict[str, str] | None:
+    """Validate the shared packet identity before any frozen receipt write."""
+    if epoch["mode"] != "frozen_enforced":
+        return None
+    return epoch_mode.validate_bound_frozen_packet_identity(
+        TRACK_ID, epoch.get("freeze_packet_identity"),
+    )
+
+
 def _sync_cohort_admission_receipts(
     tracker: pd.DataFrame, epoch: dict, private_root: Path
 ) -> dict[str, dict]:
     """Seal complete decision-time cohorts before any H10 result is observable."""
     if epoch["mode"] != "frozen_enforced":
         return {}
+    _validate_epoch_packet_binding(epoch)
     live = validate_tracker_lineage(tracker)
     live = live[live["as_of"].astype(str) >= str(epoch["epoch_start_as_of"])].copy()
     policy = load_governance()["policy"]
@@ -209,6 +219,7 @@ def _sync_terminal_outcome_receipts(
     """Seal newly terminal cohorts and fail if any prior seal no longer matches."""
     if epoch["mode"] != "frozen_enforced":
         return {}
+    _validate_epoch_packet_binding(epoch)
     live = validate_tracker_lineage(tracker)
     live = live[
         live["as_of"].astype(str) >= str(epoch["epoch_start_as_of"])
@@ -303,8 +314,12 @@ def _record_formal_decision_if_due(packet: dict, packet_path: Path, private_root
     expected_epoch = packet.get("epoch") or {}
     if epoch.get("mode") != "frozen_enforced" or any(
             epoch.get(key) != expected_epoch.get(key)
-            for key in ("epoch_id", "epoch_start_as_of", "contract_fingerprint")):
+            for key in (
+                "epoch_id", "epoch_start_as_of", "contract_fingerprint",
+                "freeze_packet_identity",
+            )):
         raise SystemExit("[FATAL] active epoch changed after packet evaluation; refusing to consume a formal look")
+    _validate_epoch_packet_binding(epoch)
     if decision["status"] != "not_recorded":
         raise SystemExit("[FATAL] formal theme decision was already recorded for this epoch")
     decision_as_of = str((packet.get("checkpoints") or {}).get("formal_decision_as_of") or "")
@@ -350,6 +365,11 @@ def _start_or_reset_epoch(
             # The active epoch pointer is the final durable commitment.  A crash
             # immediately before registry publication resumes by publishing only
             # the matching track switch, never by rebuilding evidence.
+            packet_identity = epoch_mode.validate_frozen_transition(TRACK_ID)
+            if epoch.get("freeze_packet_identity") != packet_identity:
+                raise epoch_mode.EvidenceEpochModeError(
+                    "interrupted epoch start packet identity changed"
+                )
             registry["track_modes"][TRACK_ID] = "frozen_enforced"
             _write_json_atomic(epoch_mode.TRACK_MODE_REGISTRY_PATH, registry)
             return epoch
@@ -357,7 +377,11 @@ def _start_or_reset_epoch(
     proposed_archive_path = EPOCH_ARCHIVE_DIR / f"{epoch_id}.json"
     if proposed_archive_path.exists():
         raise SystemExit("[FATAL] epoch_id was already used; epoch identities and receipts are never reusable")
-    new_epoch = build_frozen_epoch(tracker, epoch_id, start_as_of)
+    packet_identity = epoch_mode.validate_frozen_transition(TRACK_ID)
+    new_epoch = build_frozen_epoch(
+        tracker, epoch_id, start_as_of,
+        freeze_packet_identity=packet_identity,
+    )
     old_archive_path = None
     if reset_epoch:
         if not epoch_is_frozen:

@@ -494,3 +494,87 @@
 **给 Codex 的命令（下一轮）**：修复 `docs/system_risk_register.md` 里 `#R-ASHORT-KNIFE9-EMPTY-POOL-LAUNDERS-A-PRE-L0-FAILURE`、`#R-ASHORT-KNIFE9-L3-EMPTY-SHORTCIRCUIT-SILENCES-ITS-DATA-GUARDS`、`#R-ASHORT-KNIFE9-WEEKLY-NULLABLE-MOMENTUM-READ-FAIL-OPEN` 三条的 Required repair 与 closure tests；`#R-ASHORT-KNIFE9-OPTIONAL-BATCH` 六条逐条写「已修 / 不修 + 理由」（(a)(e) 建议修，(d) 只报不动）。
 
 **下一步注意事项**：修 `legal_empty_pool` 时不要把本刀要支持的合法形态（有票进 L0、全被记账门排除）一起打回 error —— closure test (2) 就是这条反向控制。L3 空表 return 下移后要确认空表仍不触 provider（agent 已 HELD 的那条不能回归）。仍不解冻任何证据轨、不碰 `active_profile` / M6.7 / 生产配置。
+
+## 2026-07-30 追加：第五刀冻结包运行时承重修复（Codex；待 Claude Code 独立审查）
+
+### 修复范围
+
+- 桌面 `ashort_hang.md` 指出的悬空成立：冻结包原来在正式 `engine/` / `runners/` 中零消费者，schema 测试只借 P4a mode 当总开关。
+- 现由七轨共用 `engine/a_short_evidence_epoch_mode.py::enforcement_enabled(track)` 每次消费 packet：预冻结校验 schema / inventory / self-hash / 诚实边界；任一轨单独冻结时校验全部八项 LF-canonical hash，漂移即 fail-closed。
+- freeze schema const-pin 八项身份与顺序，并以 schema / runtime / packet 三角测试防两套清单漂移；README 增加薄路由。
+
+### 验证与反向控制
+
+- 七轨逐一单独冻结均触发共享 full-hash 门；任一轨下植入一个错误 contract hash 均被拒。删项、重复、换名、换路、调序以及 pre-freeze 不诚实声明也全部转红。
+- 最终固定 Python 七轨消费者超集 `346 OK`；exact-final-code full A-short ledger `2175 OK (skipped=3)`，fingerprint `ade9bfc50cc8`；`py_compile` / `git diff --check` 通过。
+- 开发期两次红灯及归因完整记录在 `docs/system_risk_register.md#R-ASHORT-FIFTH-KNIFE-FREEZE-PACKET-RUNTIME-ORPHAN`。
+
+### 边界与下一步
+
+- 当前八项仍有六项 pre-freeze 漂移，七轨 registry 仍全部 `pre_freeze_audit_only`；本轮没有重封、没有解冻、没有启动时钟，也没有改 EGS / M6.7 / active profile / provider / 账户。
+- 下一步仅是 Claude Code 独立审查本修复；PASS 后由 Claude Code 按项目流程提交，不 push。
+
+## 2026-07-30 追加：第五刀 frozen 切换事务旁路修复（Codex；待 Claude Code 独立复审）
+
+### 修复范围
+
+- 复审确认首次 start、显式 reset 与 active-written/registry-not-written 恢复会先写耐久状态、后由消费端 full-hash 门发现漂移，形成 frozen 半开状态。
+- `engine/a_short_evidence_epoch_mode.py::validate_frozen_transition(track)` 现提供不依赖 registry 当前极性的八契约 full-hash transition guard。
+- `runners/a_short_theme_forward_comparison.py::_start_or_reset_epoch()` 的普通 start/reset 在首个 admission 写入前调用该门；恢复分支在 registry mutation/write 前调用。失败不写 admission、archive、active epoch 或 registry。
+
+### 验证与反向控制
+
+- 单项错误 hash 分别攻击 start/reset/带真实 admission 的 active-written 恢复，三条均 fail-closed，临时树逐文件字节不变。
+- 完整临时重封 packet 下三条合法路径完成；植入计数证明每条路径恰好一次 guard 且先于首个 write。
+- AST writer inventory 枚举所有 registry JSON writer，未来新增写 owner 或移走两处 prewrite guard 会转红。
+- 固定 Python：theme transaction `16 OK`；epoch consumer focused superset `255 OK`；`py_compile` 通过；exact-code-state full A-short ledger fingerprint `88933539453c`，`2178 OK (skipped=3)`，ledger PASS。
+
+### 边界与下一步
+
+- 当前生产 freeze packet 仍有六项 hash 漂移，七轨仍全为 `pre_freeze_audit_only`；未重封、未解冻、未启动时钟，未改 EGS / M6.7 / active profile / provider / 账户。
+- Claude Code 需独立复审 `R-ASHORT-FIFTH-KNIFE-FROZEN-TRANSITION-BYPASS`；PASS 后由 Claude Code 提交，不 push。
+
+## 2026-07-30 追加：第五刀 packet/epoch source binding 修复（Codex；运行验证 NOT_VERIFIED）
+
+### 修复范围
+
+- `validate_frozen_transition()` 返回稳定 freeze packet identity；七轨所有 real fingerprint（含 P0 四腿、P2 双组件例外）均绑定该 identity。
+- Theme epoch schema 升至 `1.4.0`，identity 纳入 contract/epoch identity、公开 packet、admission/outcome/formal 三类私有 receipt；运行时 identity 不同即 `epoch_contract_mismatch`。
+- start/reset/recovery 沿用 transition guard 同一次返回值；三类 receipt writer 在首写前重验 epoch-bound identity，formal receipt validator 显式核对同源字段。
+
+### 负向控制与当前证据
+
+- 已编写同步修改共享 weekly schema 并同版重封 packet 的反向控制：旧 epoch 必须停止、不得写新 receipt；七轨 fingerprint 全部改键；显式 reset 绑定新 identity 后只建立新 epoch evidence。
+- 已补 epoch schema、公开 packet、bound runtime、formal receipt 的 missing/空或替换 freeze_id/旧版/错误或替换 record hash/extra 字段负控，以及 receipt writer 静态 inventory。
+- 固定 `C:\Users\cnhea\AppData\Local\Programs\Python\Python313\python.exe` 已确认 Python 3.13.8；focused superset `130 OK`、本轮 Python 文件 `py_compile`、route/doc guards `66 OK` 均通过；exact-code-state full A-short ledger `2185 OK (skipped=3)`，fingerprint `4a77c03a16de`，ledger PASS。
+
+### 边界与下一步
+
+- 当前生产 packet 未重封，七轨未解冻，时钟未启动；EGS、M6.7、active profile、provider、账户均未改。
+- 已有明确测试与 ledger 终态；下一步为 Claude Code 独立复审。PASS 后由 Claude Code 提交，不 push。
+
+## 2026-08-01 追加：第五刀三条冻结包 Required 的独立复审收口（Claude Code，PASS）
+
+### 改了什么 / 为什么
+
+- 本轮我不改代码，只做独立复审并收口。被审工作树 `D:\cnhea\Codex\worktrees\19d3\Stock` 的未提交改动是一个叠了三条 Required 的整体产物：`R-ASHORT-FIFTH-KNIFE-FREEZE-PACKET-RUNTIME-ORPHAN`（冻结包接进七轨运行时）、`R-ASHORT-FIFTH-KNIFE-FROZEN-TRANSITION-BYPASS`（写前 transition guard）、`R-ASHORT-FIFTH-KNIFE-PACKET-EPOCH-SOURCE-BINDING`（packet identity 成为 epoch/fingerprint 的 source binding）。三条状态已在 register 改为 closed 并记入本次复审证据。
+- 复审重点放在最后一条：它要挡的是「改共享契约 + 同版重封 packet」这种自洽绕过，属于证据口径完整性，是这三条里唯一无法靠既有负控覆盖的类。
+
+### 验证命令 / 验证结果
+
+- `.tools\run_unittest_with_repo_pythonpath.cmd -v tests.test_a_short_evidence_epoch_mode tests.test_a_short_theme_forward_comparison tests.test_a_short_theme_forward_comparison_runner tests.schema.test_a_short_fifth_knife_forward_evidence_freeze_schema tests.schema.test_a_short_theme_forward_comparison_governance_schema` → `Ran 130 tests in 224.777s / OK`，bounded `tier=focused status=PASS exit=0 deadline=300s`。计数与执行方自报一致，为 reviewer 亲跑。
+- reviewer 自写探针（scratchpad，不入库，不复用执行方 fixture）：镜像八契约到临时 ROOT → 取身份 I1 → 改 `weekly_report_schema` 并同版重封 → I2；12 项断言全过，含 `I1≠I2` 且仅 `record_sha256` 移动、`bind_frozen_fingerprint(I1)` 拒绝、theme `contract_fingerprint`/`epoch_identity_fingerprint`/冻结轨 real fingerprint 全部改键、预冻结六轨常量不动、未重封的纯漂移 fail-closed，以及一条植入控制（把 identity 从指纹输入拿掉后同一攻击不可见）。
+- 独立重算 `.tools\full_pack_ledger.py` 的当前代码态指纹 = `4a77c03a16de`，与 ledger 记录的 `2185 OK` 完全一致，按 AGENTS rule 4 由执行方持有那一次全量、reviewer 不重跑。
+- 静态确认 `schemas/a_short_fifth_knife_forward_evidence_freeze.schema.json` 声明 2020-12 草案，故新加的 `prefixItems` + `items:false` 在 jsonschema 4.26.0 下真生效（若是 draft-07 会整包拒绝）。
+
+### 失效旧结论
+
+- register 三条的「待 Claude Code 独立复审 / 未提交 / 运行验证 NOT_VERIFIED」状态全部作废，现为 closed 且已提交。
+- 「executor 的 `2178 OK` / `2175 OK` 不覆盖该反向控制」仍成立，但已被本轮 `130 OK` + `2185 OK` 取代为当前终态。
+
+### 下一步注意事项
+
+- 两条 Optional 未修，正文在 register 该条目的「复审 Optional」行：① 预冻结 `enforcement_enabled()` 实测 57.4 ms/call，其中 `jsonschema.validate` 每次重编译校验器占 35.9 ms（预编译后 1.0 ms），全量包由 `2178/265.5s` 变为 `2185/416.4s`；② `test_every_frozen_receipt_writer_validates_epoch_packet_binding_before_write` 是硬编码三函数清单，不是 AST 枚举。
+- 若要做 Optional ①：只缓存已编译校验器是安全的（schema 路径固定、内容不变）；**不要**给 `_validate_fifth_knife_freeze_packet` 直接挂 `lru_cache`，测试靠 `mock.patch.object` 换 `FIFTH_KNIFE_FREEZE_PACKET_PATH`，无键缓存会假绿。要缓存 packet 解析必须以「路径 + mtime + size」为键。
+- 七轨仍全部 `pre_freeze_audit_only`，生产 packet 仍有六项漂移；本轮没有重封、没有解冻、没有启动时钟。桌面方案第 0 节的「设计未定稿前不建冻结件」仍成立：预冻结路径返回常量，改这八个契约文件在预冻结期不会作废任何东西。
+- 后续任何刀若要重命名或移动这八个契约中的任一个，必须同时改 `engine/a_short_evidence_epoch_mode.py::_FIFTH_KNIFE_FROZEN_CONTRACTS`、freeze schema 的 `prefixItems` const 与 packet 三处，否则七轨 epoch-mode 调用会整体抛错。
