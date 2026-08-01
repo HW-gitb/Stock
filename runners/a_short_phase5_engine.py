@@ -645,6 +645,59 @@ def entry_type(inp: dict, ind: dict):
     return "观察", "未到低吸/突破触发"
 
 
+def _m4_review_required(value) -> bool:
+    """Interpret the optional M4 flag without treating legacy null as a veto."""
+    if value is None or value is False:
+        return False
+    if value is True:
+        return True
+    # A malformed non-null value is unsafe: keep the candidate out of a new
+    # entry until the upstream review flag is repaired.
+    return True
+
+
+def _m4_review_observation(inp: dict) -> dict:
+    """Expose the current M4 producer binding without creating a producer."""
+    value = (inp.get("derived") or {}).get("m4_review_required")
+    if value is True:
+        observed_state = "true"
+    elif value is None or value is False:
+        # Preserve the legacy null/missing/false byte-equivalence boundary.
+        observed_state = "inactive"
+    else:
+        observed_state = "malformed_non_null"
+    return {
+        "input_leaf": "candidates[].derived_flags.m4_review_required",
+        "observed_state": observed_state,
+        "producer_status": "constant_null",
+        "producer_ref": "A-EGS/egs_main.py::m4_review_required",
+    }
+
+
+def _derived_flag_comparison(inp: dict) -> dict:
+    """Emit a formal comparison-only observation for the upstream volume flag.
+
+    ``vol_confirm`` is intentionally not a Phase5 breakout gate (#6-ii).  It
+    remains an EGS l4-score input, so this node is the downstream audit
+    surface: mutating the leaf changes the comparison outcome while the
+    production action remains unchanged.
+    """
+    value = (inp.get("derived") or {}).get("vol_confirm")
+    if value is True:
+        observed = "vol_confirm_true"
+    elif value is False:
+        observed = "vol_confirm_false"
+    else:
+        observed = "vol_confirm_unknown"
+    return {
+        "input_leaf": "candidates[].derived_flags.vol_confirm",
+        "observed_outcome": observed,
+        "comparison_only": True,
+        "production_effect_enabled": False,
+        "terminal": "EGS l4_score upstream audit; Phase5 breakout uses is_breakout",
+    }
+
+
 def breakout_source_agreement(inp: dict, ind: dict) -> str:
     """Expose the existing conservative breakout AND-gate without changing it.
 
@@ -1306,6 +1359,8 @@ def model_build_eligible(inp: dict, ind: dict, rule6_gate: dict, *, regime: str,
         "new_exposure_capacity": 1_000_000_000_000_000.0,
     }
     families = classify_risk_families(model_inp, ind, rule6_gate=rule6_gate)
+    if _m4_review_required((model_inp.get("derived") or {}).get("m4_review_required")):
+        return False
     if high_material:
         families["semantic_official"].update(
             hit=True, action="hard_veto",
@@ -1426,6 +1481,9 @@ def build_m67_report(inp: dict, as_of: str, generated_at: str) -> dict:
     hard = [r for f in RISK_FAMILIES if fam[f]["action"] == "hard_veto" for r in fam[f]["reasons"]]
     downgrades = [r for f in RISK_FAMILIES if fam[f]["action"] == "downgrade" for r in fam[f]["reasons"]]
     observe = list(inp.get("observe_only") or [])     # 缺数据项(§3 层3 / §9 盘中类不在此,见 out_of_scope)
+    m4_review_gate = _m4_review_required((inp.get("derived") or {}).get("m4_review_required"))
+    if m4_review_gate:
+        observe.append("m4_review_required:升级审查")
     if not has_position and not final_new_entry_eligible:
         observe.append("analysis_role=非 final，仅观察")
     llm_notes = list(inp.get("llm_enrichment") or []) # §10 Tier C:只解释,不改判决
@@ -1480,6 +1538,9 @@ def build_m67_report(inp: dict, as_of: str, generated_at: str) -> dict:
         action, etype, plan, reject = "否决", "N/A", None, "|".join(hard)
     elif not final_new_entry_eligible:
         action, etype, plan, reject = "观察", "N/A", None, "非 final，仅观察"
+    elif m4_review_gate:
+        action, etype, plan = "观察", "N/A", None
+        reject = "M4 升级审查未完成，禁止新建仓"
     elif margin_source_unavailable:
         action, etype, plan = "观察", "N/A", None
         reject = "系统级：两融数据源本周不可用/覆盖不足，两条两融规则未执行"
@@ -1683,6 +1744,8 @@ def build_m67_report(inp: dict, as_of: str, generated_at: str) -> dict:
         "machine": {
             "indicators": ind, "risk_families": fam,
             "breakout_source_agreement": breakout_agreement,
+            "m4_review_gate": _m4_review_observation(inp),
+            "derived_flag_comparison": _derived_flag_comparison(inp),
             "rule6_gate": rule6_gate,
             "layer": {"hard_veto": hard, "downgrade": downgrades,
                       "observe_only": observe, "llm_enrichment": llm_notes,
@@ -1827,6 +1890,8 @@ def build_holding_report(inp: dict, as_of: str, generated_at: str) -> dict:
         "m67": m67,
         "machine": {
             "indicators": ind, "risk_families": fam,
+            "m4_review_gate": _m4_review_observation(inp),
+            "derived_flag_comparison": _derived_flag_comparison(inp),
             "layer": {"hard_veto": [], "downgrade": sr_down, "observe_only": observe, "llm_enrichment": [],
                       **({"semantic_risk": sc["trace"]} if has_semantic_input else {})},
             "entry_exit_size_star": {"action": "持有", "type": "已有持仓", "star": 0,

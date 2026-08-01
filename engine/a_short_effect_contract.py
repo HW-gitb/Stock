@@ -76,6 +76,7 @@ _NATURE_RUNTIME_HANDLERS = {
     "main_decision": frozenset({
         "lineage_gate", "phase5_decision", "phase5_risk", "market_regime",
         "industry_trend", "account_cash", "portfolio_risk", "llm_tasks",
+        "m4_review_gate",
     }),
     "comparison_track": frozenset({"data_quality_shadow", "comparison_track"}),
 }
@@ -813,13 +814,22 @@ def static_contract_error(contract: dict | None = None, *, inventory: dict | Non
                     "use a proven handler or unresolved_input_group")
         if handler == "unresolved_input_group" and not str(group.get("unresolved_reason") or "").strip():
             return f"effect contract {group['id']} unresolved input group lacks reason"
-        if handler in {"lineage_gate", "phase5_decision", "phase5_risk", "market_regime", "account_cash", "portfolio_risk", "llm_tasks", "data_quality_shadow"}:
+        if handler in {"lineage_gate", "phase5_decision", "phase5_risk", "market_regime", "account_cash", "portfolio_risk", "llm_tasks", "data_quality_shadow", "comparison_track", "m4_review_gate"}:
             proof_paths = group.get("proven_consumer_paths")
             if not isinstance(proof_paths, list) or sorted(proof_paths) != group_paths:
                 return (f"effect contract {group['id']} direct runtime handler lacks all-leaf "
                         "consumer proof; split unresolved leaves or register every leaf")
             if not str(group.get("consumer_proof_ref") or "").strip():
                 return f"effect contract {group['id']} direct runtime handler lacks consumer_proof_ref"
+        if group.get("id") == "candidate_derived_flags_m4_review":
+            expected_binding = {
+                "status": "constant_null",
+                "source_ref": "A-EGS/egs_main.py::m4_review_required",
+                "activation": "not_triggered_until_separately_reviewed_m4_producer",
+            }
+            if group.get("producer_binding") != expected_binding:
+                return ("effect contract candidate_derived_flags_m4_review producer binding "
+                        "must disclose the current constant-null producer and deferred activation")
         if policy == "intentionally_independent":
             exception = group.get("intentional_independence")
             if not isinstance(exception, dict) or not all(str(exception.get(key) or "").strip()
@@ -962,6 +972,32 @@ def _phase5_status(weekly: dict, *, risk_only: bool = False, market_only: bool =
     return "applied", "已写入逐票 M6.7 操作/星级/价格或风险说明"
 
 
+def _m4_review_status(weekly: dict) -> tuple[str, str]:
+    """Report the M4 gate honestly while its upstream producer is still null-only."""
+    reports = weekly.get("reports") or []
+    if not reports:
+        return "not_triggered", "M4 producer is constant-null; this week has no candidate/holding report"
+    saw_true = False
+    for report in reports:
+        node = ((report.get("machine") or {}).get("m4_review_gate"))
+        if not isinstance(node, dict):
+            return "unavailable_manual_review", "m4_review_gate observation is missing"
+        if (node.get("input_leaf") != "candidates[].derived_flags.m4_review_required"
+                or node.get("producer_status") != "constant_null"
+                or node.get("producer_ref") != "A-EGS/egs_main.py::m4_review_required"):
+            return "unavailable_manual_review", "m4_review_gate producer binding diverges"
+        state = node.get("observed_state")
+        if state == "true":
+            saw_true = True
+        elif state == "malformed_non_null":
+            return "unavailable_manual_review", "m4_review_required malformed non-null value was observed"
+        elif state != "inactive":
+            return "unavailable_manual_review", "m4_review_gate observed state is invalid"
+    if saw_true:
+        return "applied", "m4_review_required=true reached the Phase5 new-entry gate"
+    return "not_triggered", "M4 producer is constant-null; no non-null review flag was observed"
+
+
 def _portfolio_status(weekly: dict) -> tuple[str, str]:
     risk = weekly.get("portfolio_risk") or {}
     summary = risk.get("summary") or {}
@@ -996,6 +1032,25 @@ def _llm_status(weekly: dict) -> tuple[str, str]:
     return "applied", "六项 legacy task 已生成、写入逐票 M6.7 与确定性 Phase 4 报告"
 
 
+def _derived_flag_comparison_status(weekly: dict) -> tuple[str, str]:
+    """Validate the formal comparison-only derived-flag landing surface."""
+    reports = weekly.get("reports") or []
+    if not reports:
+        return "not_triggered", "本周没有候选或持仓报告"
+    for report in reports:
+        node = (report.get("machine") or {}).get("derived_flag_comparison")
+        if not isinstance(node, dict):
+            return "unavailable_manual_review", "derived_flag_comparison missing"
+        if (node.get("input_leaf") != "candidates[].derived_flags.vol_confirm"
+                or node.get("comparison_only") is not True
+                or node.get("production_effect_enabled") is not False
+                or node.get("observed_outcome") not in {
+                    "vol_confirm_true", "vol_confirm_false", "vol_confirm_unknown"
+                }):
+            return "unavailable_manual_review", "derived_flag_comparison boundary or outcome invalid"
+    return "applied", "vol_confirm 已落到正式 comparison-only 观察项"
+
+
 def _runtime_status(group: dict, weekly: dict) -> tuple[str, str]:
     handler = group["runtime_handler"]
     if handler == "intentionally_independent":
@@ -1008,6 +1063,8 @@ def _runtime_status(group: dict, weekly: dict) -> tuple[str, str]:
         return _phase5_status(weekly)
     if handler == "phase5_risk":
         return _phase5_status(weekly, risk_only=True)
+    if handler == "m4_review_gate":
+        return _m4_review_status(weekly)
     if handler == "market_regime":
         return _phase5_status(weekly, risk_only=True, market_only=True)
     if handler == "industry_trend":
@@ -1029,6 +1086,8 @@ def _runtime_status(group: dict, weekly: dict) -> tuple[str, str]:
                 or shadow.get("production_effect_enabled") is not False):
             return "unavailable_manual_review", "data_quality_shadow date or comparison-only boundary diverges"
         return "applied", "data_quality_shadow is emitted on the weekly comparison surface"
+    if handler == "comparison_track":
+        return _derived_flag_comparison_status(weekly)
     if handler == "account_cash":
         return ("applied", "账户现金/持仓已联动现金分配或持仓处置") if weekly.get("cash_allocation") is not None else ("not_triggered", "本周未提供账户，未运行现金分配")
     if handler == "portfolio_risk":
