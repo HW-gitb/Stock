@@ -15,6 +15,7 @@ from engine.a_short_effect_consumer_probe import (
 )
 from engine.a_short_effect_contract import (
     build_effect_contract_ledger,
+    leaf_effects,
     leaf_natures,
     load_contract,
     static_contract_error,
@@ -65,10 +66,36 @@ class AShortNatureLedgerTests(unittest.TestCase):
         ledger = build_effect_contract_ledger(weekly)
         self.assertEqual(sum(ledger["summary"]["nature_counts"].values()), 371)
         group = next(row for row in ledger["records"] if row["id"] == "candidate_event_risk")
-        self.assertEqual(group["nature"], "true_dangling")
+        # rule6_checks[].status already reaches Phase5, so the leftover group is
+        # partially consumed -- not wholly dangling.
+        self.assertEqual(group["nature"], "partial_consumption")
         self.assertTrue(group["leaf_natures"])
         track = next(row for row in ledger["records"] if row["id"] == "candidate_data_quality_shadow")
         self.assertEqual(track["nature"], "comparison_track")
+
+    def test_leaf_effect_categories_are_explicit_and_proof_bound(self):
+        effects = leaf_effects()
+        self.assertEqual(len(effects), 371)
+        # true_dangling is now an adjudicated label reachable only through an
+        # explicit override; the un-audited remainder is pending, not dangling.
+        self.assertLessEqual(set(effects.values()), {
+            "m67_main_decision", "formal_comparison_verdict",
+            "upstream_candidate_set_or_rank", "duplicate_or_display_audit",
+            "intentionally_independent_or_delete", "producer_constant_null",
+            "true_dangling", "unclassified_pending_audit",
+        })
+        self.assertIn("unclassified_pending_audit", set(effects.values()))
+        self.assertEqual(effects["candidates[].scores.final_score"],
+                         "upstream_candidate_set_or_rank")
+        self.assertEqual(effects["market_context.market_regime.status"],
+                         "m67_main_decision")
+        self.assertEqual(effects["candidates[].analyst.target_price_mean"],
+                         "producer_constant_null")
+        self.assertEqual(effects["schema_version"],
+                         "intentionally_independent_or_delete")
+        ledger = build_effect_contract_ledger({"as_of": "20260801"})
+        self.assertEqual(sum(ledger["summary"]["effect_counts"].values()), 371)
+        self.assertIsInstance(ledger["records"][0]["leaf_effects"], dict)
 
     def test_unavailable_manual_review_trend_only_allows_flat_or_lower(self):
         previous = {"summary": {"unavailable_manual_review": 21}}

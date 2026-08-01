@@ -317,3 +317,47 @@ The 12B inventory still honestly labels unresolved business groups as `true_dang
 - 我首轮探针把归一字段名写成 `delisting_risk`（真名 `st_or_delisting`）而误红一次——下次先 grep 归一字段真名再写探针，别照契约里的叶名猜。
 - 剩余 33 个 `event_risk` 叶（监管、解禁、rule6 证据、减持统计明细）仍 `true_dangling`，别因为同组已有一个门就整组报绿——现在的拆组正是防这个。
 - 全局剩余工作清单：`true_dangling 237 / partial_consumption 41`（另 `main_decision 40 / duplicate_source 42 / comparison_track 5 / display_audit 6`，合计 371）。
+
+## 2026-08-01 追加：台账 nature 标定口径更正（Claude Code；未提交，交 Codex 修复）
+
+### 改了什么 / 为什么
+
+- 本轮我不改代码。用户质疑「设计原则是主系统每个字段都必须影响 M6.7、对比项每个字段都必须影响对比结果，为什么还有那么多没接线」，我回读代码后确认**用户是对的**：台账把「部分消费」的组一律标成 `true_dangling`，把已经生效的字段记成了悬空。
+- 根因在 `engine/a_short_effect_contract.py`：`static_contract_error()` 要求填真 handler 时 `proven_consumer_paths` 必须覆盖**全组每一叶**，所以只要有一叶未证明，整组只能是 `unresolved_input_group`；而 `leaf_nature_by_group` 把这类组一律标 `true_dangling`。七种 nature 里本就有 `partial_consumption`，且 `_NATURE_RUNTIME_HANDLERS` 允许它配 `unresolved_input_group`——正确标签一直在，只是没用。
+
+### 验证命令 / 验证结果
+
+- 本轮零代码改动，未跑测试。证据全部来自读源码：
+- 逐行坐实六条「已进主输出却被标 true_dangling」的链路，最硬的一条是 `candidates[].scores.final_score` → `runners/a_short_weekly_pipeline.py:599` → `runners/a_short_phase5_engine.py:1795`，**直接印在 M6.7 一览表的「EGS分」列**；其余见 register。
+- 启发式扫描（仅用于定界）：15 个 `nature=true_dangling` 组中 **14 组**已有叶被 `normalize_candidate` 读走；唯一零命中的 `candidate_analyst`(4 叶) 在 `A-EGS/egs_main.py` 里被写死成 `None`，属「上游未建生产者」而非「消费者漏接」。该扫描会在 `name`/`source`/`status` 这类通用叶名上误命中，不可当精确计数。
+
+### 失效旧结论
+
+- 我此前对用户口述、以及本 handoff 里「剩 237 叶 true_dangling 待接线」的表述**作废**。真实缺口是叶级少数，量级待重新标定后给出。
+- 「下一批继续接 true_dangling」这个下一步也作废——在重新标定前继续接线，等于在错的基准上排工。
+
+### 下一步注意事项
+
+**给 Codex 的命令（下一轮）**：修复 `docs/system_risk_register.md#R-ASHORT-LEDGER-LABELS-PARTIAL-CONSUMPTION-AS-TRUE-DANGLING` 的四条 Required repair 与四条 closure tests；只做重新标定，**不接任何新线、不改任何生产代码行为、不重封冻结包**。
+
+- 这一刀的产物应该是三个数而不是一个：**已达终端面的叶数 / 未达终端面的叶数 / 上游无产出的叶数**，三者之和等于 371。现在的单一 `true_dangling` 数把后两类和「组内其他叶没证完」混在一起。
+- 拆组时沿用已验证过的模板：叶级 `proven_consumer_paths` + `consumer_proof_ref`，`nature` 与 `runtime_handler` 双向对齐；「上游恒空」那一类沿用 `producer_binding` 披露（`candidate_analyst` 与 `candidate_volatility` 已知属此类）。
+- **不要为了让数字好看而把未证明的叶硬塞进 proven_consumer_paths**。判据仍是上一轮定的：拿一个能建仓的活样本，只翻这一叶，`m67.table.操作` 或正式 comparison verdict 必须真的变。
+- 已按叶拆分并逐叶验证过的组不需重标：`candidate_derived_flags_*` 四组、`candidate_event_risk_phase5_gates`、`candidate_data_quality`、以及 `candidate_technical` / `candidate_volatility` 的 duplicate-source 改判。
+
+### 2026-08-01 追加：reviewer 对 Codex 收紧意见的复核（Claude Code）
+
+- **采纳，且它修正了 reviewer 两处错误**：① 我用 `.get("<叶名>")` grep 命中当作「该组已被消费」的证据，那只证明读进了局部变量，不证明到达终端面；② 我原写的 Required repair ① 可以被读成「把组标成 `partial_consumption` 就算处理完」，那会让悬空数在没有任何叶被真正接线的情况下下降——正是本系列一直在防的那类自欺。Codex 补的「组级 `partial_consumption` 不得降低组内真实悬空叶计数」必须保留为硬条件。
+- **reviewer 另需自我更正**：我此前说「EGS 包裹进主系统的入口只有 3 处，读完即可穷尽」对 Codex 新增的「影响上游候选集合或排序」这一类**不成立**——那一类的消费发生在 `A-EGS/egs_main.py` 内部、在 analysis_input 被写出之前（例如 `:5172` 按 `final_score / l4_score / pct_20d_n` 排序决定候选次序），根本不经过那 3 个入口。该类必须单独在 egs_main 内取证。
+- **实施注意 1（别撞现有守护）**：Codex 提的七类叶级归属与现有 `_NATURES` 枚举**不是同一套**——新分类里的「影响上游候选集合或排序」「生产者恒空」在 `_NATURES` 里没有对应值，而 `partial_consumption` 是组级概念、不该出现在叶级。请把**叶级归属**做成与组级 `nature` 并列的独立维度，不要为了塞进枚举而扩 `_NATURES`，否则会和 `_NATURE_RUNTIME_HANDLERS` 的双向门打架。
+- **实施注意 2（成本集中在哪）**：前两类（影响 M6.7 / 影响正式 comparison verdict）的正反变异沿用已验证套路，成本低。**第三类「影响上游候选集合或排序」的变异证明最贵**——要在 egs_main 里造候选 dataframe 并证明排序/入选集合真的改变。建议先只对该类挑 1-2 个叶做可行性探针（`pct_20d_n` 是现成靶子），实测成本后再决定这一类是逐叶证还是按「排序键清单」整体证；不要一上来就对该类铺全量。
+- **口径提醒**：在逐叶对账完成前，真实剩余悬空数一律写 `NOT_VERIFIED`。reviewer 此前对用户口述的「预计个位数到几十」同样作废，不得作为排期依据。
+
+### 2026-08-01 追加：用户裁定 + reviewer 收窄本刀目标（Claude Code）
+
+- **用户裁定**：只有第 5 类「真悬空（上游有数据 / 下游没人读 / 上游也没拿它做判定）」是需要关注的，其余四类不是本刀目标。
+- **reviewer 据此收窄 Required**：本刀交付物改为**一份第 5 类清单**，不是「371 叶全部带正反变异证明的登记」。前四类只需**排除级证据**（指明属于哪类 + 依据），**不要求**正反变异证明；正反变异证明推迟到将来真去接某个叶的那一刻（那时本来就要做）。Codex 收紧意见里「前三类必须给出正反变异证明」这一条，在本刀范围内**降级为不要求**；其余各条（grep 命中不算消费证据、组级改标不得降低悬空叶计数、对账完成前一律 NOT_VERIFIED）全部保留为硬条件。
+- **按成本排序的筛法（先便宜后贵，最贵的只作用在最后残量上）**：① 扫 `A-EGS/egs_main.py` AST，字段赋值为常量 `None` 的 → 第 4 类，全自动、最便宜，先从 371 里刨掉；② 读 analysis_input 进入主系统的三个入口（`runners/a_short_weekly_pipeline.py::normalize_candidate`、`:753` `_materialize_legacy_task_reports`、`:1021` `universe_summary.excluded_counts`），**跨界的**叶进第 2 类候选，没跨界的直接判「未进 Phase5」，不必逐叶取证；③ 已判定的 `duplicate_source` 42 叶 → 第 3 类，已完成；④ 剩下的残量才去 `egs_main` 内部查是否用于评分/排序/过滤 → 是=第 1 类、否=**第 5 类**。第 1 类只需给出精确引用点（如 `:5172` 的排序键），不需要造 dataframe 做变异证明。
+- **明确取舍（须写进结论）**：本刀不给前四类补行为级回归保护，所以只能声称「本轮判定它们不在缺口里」，**不得声称它们已被守护**。将来若有人改坏其中一条链，没有测试会转红——这是本轮为省成本主动接受的敞口。
+- **第 5 类清单出来后不必然要接**：每条的处置是三选一——接进决策 / 判为展示审计或重复源 / 删除。由用户逐条拍板，不默认接。
+- **收尾条件**：本刀交付第 5 类清单 + 各类计数（和为 371）后，台账线即收；不再开「关于台账的台账」的后续轮次。

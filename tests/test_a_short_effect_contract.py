@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import copy
+from collections import Counter
 import ast
 import hashlib
 import json
@@ -17,7 +18,8 @@ if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
 from engine.a_short_effect_contract import (  # noqa: E402
-    load_contract, static_contract_error, static_inventory,
+    load_contract, static_contract_error, static_inventory, leaf_effects,
+    build_effect_contract_ledger,
 )
 from engine import a_short_effect_contract as effect_contract_module  # noqa: E402
 from runners.a_short_m67_render import render_weekly_markdown  # noqa: E402
@@ -642,6 +644,85 @@ class EffectContractRuntimeTests(unittest.TestCase):
         self.assertEqual(records["candidate_derived_flags_m4_review"]["nature"], "main_decision")
         self.assertEqual(records["candidate_derived_flags_vol_confirm"]["nature"], "comparison_track")
         self.assertEqual(records["candidate_derived_flags_vol_confirm"]["status"], "applied")
+
+
+class LeafEffectPendingAuditTests(unittest.TestCase):
+    """The published leaf-effect counts may never contradict the producer source."""
+
+    def setUp(self):
+        self.contract = load_contract()
+        self.inventory = static_inventory()
+        self.paths = self.inventory["analysis_input_paths"]
+        self.effects = leaf_effects(self.contract, self.inventory)
+        self.live = {"m67_main_decision", "formal_comparison_verdict",
+                     "upstream_candidate_set_or_rank"}
+
+    def test_producer_constant_null_is_derived_from_the_real_producer(self):
+        from engine.a_short_effect_contract import _producer_literal_leaves
+        source = (ROOT / "A-EGS" / "egs_main.py").read_text(encoding="utf-8")
+        derived = {path for path, kind in _producer_literal_leaves(source).items()
+                   if kind == "constant_null"} & set(self.paths)
+        self.assertEqual(set(self.inventory["producer_constant_null_leaves"]), derived)
+        self.assertGreater(len(derived), 50)
+        # no hard-coded-None leaf may be published as dangling, pending, or live
+        leaked = sorted(path for path in derived if self.effects[path] in (
+            {"true_dangling", "unclassified_pending_audit"} | self.live))
+        self.assertEqual(leaked, [])
+
+    def test_derivation_follows_the_producer_when_a_literal_changes(self):
+        from engine.a_short_effect_contract import _producer_literal_leaves
+        source = (ROOT / "A-EGS" / "egs_main.py").read_text(encoding="utf-8")
+        leaf = "candidates[].derived_flags.m4_review_required"
+        patched = source.replace('"m4_review_required": None,',
+                                 '"m4_review_required": _json_bool(0),', 1)
+        self.assertNotEqual(patched, source)
+        before = {p for p, k in _producer_literal_leaves(source).items() if k == "constant_null"}
+        after = {p for p, k in _producer_literal_leaves(patched).items() if k == "constant_null"}
+        self.assertIn(leaf, before)
+        self.assertNotIn(leaf, after)
+
+    def test_unproven_leaves_are_pending_not_adjudicated_dangling(self):
+        counts = Counter(self.effects.values())
+        self.assertEqual(counts["true_dangling"], 0)
+        self.assertGreater(counts["unclassified_pending_audit"], 0)
+
+    def test_true_dangling_requires_an_explicit_override(self):
+        target = next(p for p, v in self.effects.items()
+                      if v == "unclassified_pending_audit")
+        claimed = copy.deepcopy(self.contract)
+        claimed["leaf_effect_overrides"][target] = {"category": "true_dangling"}
+        self.assertIsNone(static_contract_error(claimed, inventory=self.inventory))
+        unproven = copy.deepcopy(self.contract)
+        unproven["leaf_effect_overrides"][target] = {"category": "m67_main_decision"}
+        self.assertIn("effect proof incomplete",
+                      static_contract_error(unproven, inventory=self.inventory) or "")
+
+    def test_every_group_holding_a_live_leaf_cannot_be_true_dangling(self):
+        from engine.a_short_effect_contract import _paths_for_prefixes
+        checked = 0
+        for group in self.contract["groups"]:
+            group_paths = _paths_for_prefixes(self.paths, group["source_prefixes"])
+            if not any(self.effects[p] in self.live for p in group_paths):
+                continue
+            checked += 1
+            mutated = copy.deepcopy(self.contract)
+            mutated["leaf_nature_by_group"][group["id"]] = "true_dangling"
+            self.assertIn("true_dangling",
+                          static_contract_error(mutated, inventory=self.inventory) or "",
+                          group["id"])
+        self.assertGreaterEqual(checked, 6)
+
+    def test_leaf_effect_reconciles_with_the_full_schema_inventory(self):
+        self.assertEqual(len(self.effects), len(self.paths))
+        self.assertEqual(sum(Counter(self.effects.values()).values()), len(self.paths))
+        weekly = {"as_of": "20260801", "reports": []}
+        summary = build_effect_contract_ledger(weekly, self.contract)["summary"]
+        self.assertEqual(sum(summary["effect_counts"].values()), len(self.paths))
+
+    def test_final_score_terminal_names_the_m67_column(self):
+        override = self.contract["leaf_effect_overrides"]["candidates[].scores.final_score"]
+        self.assertIn("reports[].m67.table.EGS分", override["terminal_surface"])
+        self.assertIn("1795", override["mutation_evidence"])
 
 
 if __name__ == "__main__":

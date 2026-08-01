@@ -1,5 +1,43 @@
 # Session Log
 
+## 2026-08-01 — Claude Code 亲修并自审 PASS（叶级效果分类口径收口）
+
+- **Verdict/Action**: PASS，已提交并合入 master。`producer_constant_null` 改为从 `A-EGS/egs_main.py` AST 机械派生（93 叶）；新增 `unclassified_pending_audit` 并改默认，`true_dangling` 只经显式 override；组内有活叶的组不得标 `true_dangling`，据此改判 6 组为 `partial_consumption`。不接新线、不改决策、未重封冻结包。
+- **Required**: 无。`R-ASHORT-LEDGER-LABELS-PARTIAL-CONSUMPTION-AS-TRUE-DANGLING` 已 closed；同轮复核 Codex 的 Rule6 `severity` 改判成立（rule6 契约零引用 severity，变异不动 M6.7、改 status 才动）。机制、终态计数与边界正文只见 `docs/system_risk_register.md`。
+- **Verify**: 固定 Python 3.13.8；focused `Ran 570 tests in 354.109s — OK`（effect_contract + consumer_probe + weekly_pipeline，bounded exit=0）；闭环探针 16 项全过：派生集合与开条扫描逐项相同、零硬编码 None 残留在 dangling/pending/live、13 个持活叶组改标全转红且 9 个无活叶组仍可合法 true_dangling、改 producer 一处字面量该叶即退出派生集；`py_compile` 与 `git diff --check` 通过。终态各类和 = 371。
+- **Next**: 用户：从 218 叶待判定中指定下一批范围。
+
+## 2026-08-01 — Codex 修复 Rule6 severity 分类（未提交）
+- **Verdict/Action**: 完成本轮小修：`rule6_checks[].severity` 不再标为 M6.7 主决策，改为 `duplicate_or_display_audit`；生产者、M6.7 消费者和冻结包未改。补充 severity-only 与 status mutation 反向测试。
+- **Required**: 独立 reviewer 复核本轮分类和测试；独立 PASS 前不得提交或 merge。`severity` schema/生产字段本身保留。
+- **Verify**: 固定 Python 3.13.8；`Ran 19 tests in 2.351s ... OK`；`git diff --check` OK；full-pack `NOT_VERIFIED`。
+- **Proof-of-use**: `assess_rule6_checks` 按 `status` 生成 Rule6 gate，Phase5 按 gate 结果决定动作；severity-only mutation 不改 M6.7，status mutation 改变 Rule6 终态。
+- **Pre-Codex self-review**: `matrix=complete: severity-only mutation 不改 M6.7 + status mutation 改 Rule6 终态; producer=unchanged; consumer=unchanged; register=updated; handoff=2026-08-01_a_short_rule6_severity_classification_repair_handoff.md; focused=19 OK; full-lane=NOT_VERIFIED: 分类改动零生产行为; door=route/doc/readme guard 绿; independent-review=pending`
+- **Next**: Claude Code：独立复核本轮 Rule6 severity 分类纠错；PASS 后按项目流程提交并 merge。
+
+## 2026-08-01 — A-short 371 叶重新分层交接（未提交）
+- **Verdict/Action**: 已按当前代码核对 Claude 最新分层；确认必须修复的是 M0.5 波动率觉醒链，`selection.cninfo_flag` 应退出 M6.7 决策链；`entry_flag`、旧 cninfo 字段保留方式及新增可选规格需用户拍板。未修复代码、未接线、未重封冻结包、未提交。
+- **Required**: 若授权，producer/consumer 必须一起实现觉醒状态、20%现金回收、觉醒后的 Rule3 50%削减和周报打印；禁止把 `unknown`/`None` 常量接入充数，禁止与 `official_structured` CNINFO 形成双权威。material 详情见 `docs/handoff/2026-08-01_a_short_leaf_wiring_classification_handoff.md` 与桌面 `ashort_leaf_wiring_classification_20260801.md`。
+- **Verify**: 只读代码核对；固定 Python 路径已确认但本轮未运行测试；371 叶逐叶终端双向变异仍 `NOT_VERIFIED`。
+- **Proof-of-use**: IV feed/weekly/Phase5 当前只有 IV 分位链，没有 M0.5 觉醒链；`official_structured` 是当前 CNINFO M6.7 语义消费者；rank/tier、价格时钟、source/quote/account 权威边界已由现有代码承重。
+- **Pre-Codex self-review**: `desktop_note=written`; `handoff=written`; `code_changes=none`; `tests=NOT_RUN`; `commit=NOT_PERFORMED`; `existing_dirty_files=7 before this entry`。
+- **Next**: 用户拍板 optional 处置后，在独立接线工作树授权 M0.5 波动率觉醒链。
+
+## 2026-08-01 - Codex逐叶分类 R-ASHORT-LEDGER-LABELS-PARTIAL-CONSUMPTION-AS-TRUE-DANGLING（未提交）
+- **Verdict/Action**: 已按风险项实现 371 叶逐叶 effect category；组内未证明叶仍为 `true_dangling`，恒空生产者独立计数，未接线剩余叶、未建 M4/volatility producer、未重封冻结包、未提交。
+- **Required**: 风险项仍 `open / Required`；需要独立 reviewer 复核 8 个跨组 override 的 consumer/terminal/mutation 证据，并决定后续 `true_dangling=286` 批次。
+- **Verify**: 固定 Python `C:\Users\cnhea\AppData\Local\Programs\Python\Python313\python.exe` 3.13.8；静态 contract=`None`；`Ran 48 tests in 34.593s ... OK`（consumer probe + effect contract）；ledger 分类总数 371：`true_dangling=286`、`m67_main_decision=29`、`formal_comparison_verdict=6`、`duplicate_or_display_audit=39`、`producer_constant_null=4`、`upstream_candidate_set_or_rank=1`、`intentionally_independent_or_delete=6`。
+- **Proof-of-use**: 8 个 override 已绑定 consumer、terminal surface 与正向 mutation evidence；逐叶 ledger/schema 输出 `leaf_effects` 与 `effect_counts`，防止组内单叶命中冒充整组接线。
+- **Pre-Codex self-review**: `matrix=371 leaves classified; residual=true_dangling 286; full per-leaf mutation for residual=NOT_VERIFIED; fixed-python=OK; independent-review=pending; commit=not performed`
+- **Next**: Claude Code：独立复核本轮逐叶分类
+
+## 2026-08-01 — Claude Code 更正：台账把「部分消费」标成「完全悬空」
+
+- **Verdict/Action**: 用户质疑「设计原则是每个字段都必须影响 M6.7，为什么还有那么多没接线」，我回读代码后确认**用户是对的、我此前的复述是错的**。未改代码、未提交。
+- **Required**: `R-ASHORT-LEDGER-LABELS-PARTIAL-CONSUMPTION-AS-TRUE-DANGLING` —— `unresolved_input_group` 被一刀切映射成 `true_dangling`，导致「组内部分叶已消费」与「全组零消费」同形；机制、逐行反例、Required repair 与 closure tests 正文只见 `docs/system_risk_register.md`。
+- **Verify**: 固定 Python 3.13.8；逐行读出六条已进主输出却被标 true_dangling 的链路，其中 `scores.final_score` → `weekly_pipeline:599` → `phase5:1795` 直接印在 M6.7 「EGS分」列；启发式扫描显示 15 个 true_dangling 组中 14 组已有叶被 `normalize_candidate` 读走，唯一零命中的 `candidate_analyst` 上游 `egs_main` 写死 `None`。本轮零代码改动故未跑测试。据此作废「剩 237 叶待接线」的口述与 handoff 表述，真实缺口为叶级少数、待重新标定后给出。
+- **Next**: Codex：修复
+
 ## 2026-08-01 — Claude Code 审查 PASS（A-short event_risk 四叶 Phase5 门登记）
 
 - **Verdict/Action**: PASS，已提交并合入 master。本批零生产代码改动，只把本来就在承重的 4 个事件风险叶从 `true_dangling` 拆组登记为 `main_decision`；其余 33 叶如实留在 `true_dangling`。未重封冻结包、未建生产者、未启用新阈值。
