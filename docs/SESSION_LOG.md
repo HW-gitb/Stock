@@ -137,6 +137,53 @@
 - **Verify**: 固定主 Python focused 超集（新 schema 测试 + README row-length + route ledger + doc governance）`73 OK / 0.9s`；`py_compile`、`git diff --check` 通过；Web/X future raw roots 均命中 `.gitignore:97 provider_samples/`；`20260802` state/provider_samples 残留检查为 0。schema 反向控制拒绝授权翻真、生产 policy 翻真、复用旧日期、主题预埋、调用上限漂移、事后降门槛和确认效果翻真。
 - **Next**: Claude Code：审查。
 - **Pre-Codex self-review**: `matrix=complete: schema/artifact exact identity + 4 const queries + Web/X separate raw roots + xAI/Tavily/DeepSeek actual-vs-reserved arithmetic + PASS/REVISE/INCONCLUSIVE + all no-effect exits; register=not_applicable: no finding or risk status changed; handoff=existing US-short main handoff updated and desktop checklist updated; focused=73 OK + py_compile + git diff --check + gitignore/BOM/mojibake checks; full-lane=not_triggered: AGENTS rule 3, isolated no-access schema/artifact/test and docs with no production wiring or provider execution; door=route 14 + doc-governance 41 = 55 OK; independent self-review=not_triggered: low-risk isolated schema/docs fast path, main-thread A-F complete, no timeout/restart/fallback`
+## 2026-08-01 — Claude Code 审查 PASS（A-short 第五刀 packet/epoch source binding 收口）
+
+- **Verdict/Action**: PASS，已提交并合入 master。冻结包 `freeze_id/schema_version/record_sha256` 已成为七轨 real fingerprint 与 theme epoch / 公开 packet / 三类私有 receipt 的承重绑定；同版自洽重封不再沿用旧 epoch。未解冻任何轨、未起时钟、未重封生产 packet。
+- **Required**: 无。两条 Optional（预冻结 `enforcement_enabled` 57.4 ms/call 的 jsonschema 重编译热点；receipt-writer 守卫是硬编码三函数清单而非 AST 枚举）正文只见 `docs/system_risk_register.md`。
+- **Verify**: review-evidence:85f3d3ddea5f；固定 Python 3.13.8；reviewer 自跑 bounded 超集 `Ran 130 tests in 224.777s — OK`（tier=focused / exit=0 / deadline=300s）；自写探针 12 项全过（含植入控制与未重封漂移 fail-closed）；独立重算 full-pack 指纹 `4a77c03a16de` 与 ledger 记录 `2185 OK` 一致，按 rule 4 不重跑全量。
+- **Next**: Codex：无待办；两条 Optional 待用户决定是否排期。
+
+## 2026-07-30 — Codex 修复 A-short 第五刀 packet/epoch source binding
+
+- **Verdict/Action**: 已把共享 freeze packet 的 `freeze_id/schema_version/record_sha256` 绑定进七轨全部 real fingerprint，并持久绑定 theme epoch、公开 packet 与三类私有 receipt；同版自洽重封不再沿用旧 epoch。未重封生产 packet、未解冻、未提交。
+- **Required**: `R-ASHORT-FIFTH-KNIFE-PACKET-EPOCH-SOURCE-BINDING` 已按类修复；完整机制、负控、当前验证阻断与终态要求只见 `docs/system_risk_register.md`，仍需固定 Python 验证及 Claude Code 独立复审。
+- **Verify**: 固定 `C:\Users\cnhea\AppData\Local\Programs\Python\Python313\python.exe` = Python 3.13.8；focused superset `Ran 130 tests in 114.736s — OK`；本轮 Python 文件 `py_compile` 通过；route/doc guards `Ran 66 tests in 1.228s — OK`；exact-code-state full A-short ledger fingerprint `4a77c03a16de`：`Ran 2185 tests in 416.377s — OK (skipped=3)`，ledger `PASS / exit=0 / tests=2185 / elapsed=418.8s`。
+- **Proof-of-use**: 同步改共享契约+同版 packet 重封时旧 theme epoch 拒绝且 receipt 树字节不变；七轨 fingerprint 全部改键；reset 绑定新 identity；epoch/public packet/bound runtime/formal receipt 对 missing/空或替换 freeze_id/旧版/错误或替换 record hash/extra fail-closed。
+- **Pre-Codex self-review**: `matrix=complete: 7-track rekey + old-epoch zero-write + reset identity + schema/packet/receipt negatives; register=updated; handoff=updated; focused=130 OK; full-lane=2185 OK skipped=3 fingerprint 4a77c03a16de; door=66 OK; py_compile=OK; independent-review=pending`
+- **Next**: Claude Code：独立复审；PASS 后提交，不 push。
+
+## 2026-07-30 — Codex 独立复审 FAIL（A-short 第五刀冻结包 epoch 绑定）
+
+- **Verdict/Action**: FAIL，未提交。写前 transition guard 已正确覆盖 start/reset/崩溃恢复，但冻结包身份未绑定进 frozen epoch / real fingerprint，同版 packet 可在改契约并自洽重封后继续旧 epoch。
+- **Required**: `R-ASHORT-FIFTH-KNIFE-PACKET-EPOCH-SOURCE-BINDING`；完整技术机制、影响、Required repair、closure tests 与未验证边界只见 `docs/system_risk_register.md`。
+- **Verify**: 主线程逐链静态确认 packet `record_sha256` 在校验后被丢弃，theme epoch schema/build/identity/runtime comparison 均无该身份；强制独立只读 agent 得出相同结论。发现 Required 后未运行聚焦测试或 full pack；既有 `2178 OK` 不覆盖“改共享契约并同步重封同版 packet”的反向控制。
+- **Next**: Codex：修复
+
+## 2026-07-30 — Codex 修复 A-short 第五刀 frozen 切换事务旁路
+
+- **Verdict/Action**: 已新增独立于 registry 极性的 full-hash transition guard，并前置接入 theme epoch 首次启动、reset、崩溃恢复三条路径；任何 admission/archive/active epoch/registry 写入前先 fail-closed。未解冻、未提交。
+- **Required**: `R-ASHORT-FIFTH-KNIFE-FROZEN-TRANSITION-BYPASS` 已按原 closure 条件修复；完整机制、负控与残余边界只见 `docs/system_risk_register.md`，仍需 Claude Code 独立复审。
+- **Verify**: 固定 Python 3.13.8；theme transaction `16 OK`；epoch consumer focused superset `255 OK`；exact-code-state full A-short `2178 OK (skipped=3)` / fingerprint `88933539453c` / ledger PASS；`py_compile` 通过。
+- **Proof-of-use**: start/reset/active-written recovery 各自植入错误 hash 均在首写前拒绝且整树字节不变；完整临时重封三路可完成；调用计数均为一次且先于首写；静态 writer inventory 只允许 `_start_or_reset_epoch` 的两处 guarded publication。
+- **Pre-Codex self-review**: `matrix=complete: start+reset+active-written recovery × invalid-hash zero-write + valid-reseal success + guard-before-first-write count; writer-inventory=complete; register=updated; handoff=existing A-short main appended; focused=255 OK + transaction=16 OK; full-lane=2178 OK skipped=3 fingerprint 88933539453c; door=route/doc/readme 66 OK; independent-window=not-run: multi-agent delegation not authorized, main-thread A-F/B2 fallback complete`
+- **Next**: Claude Code：独立复审；PASS 后提交，不 push。
+
+## 2026-07-30 — Codex 审查 FAIL（A-short 第五刀冻结包切换门）
+
+- **Verdict/Action**: FAIL，未提交。七轨消费端已接共享冻结包门，但 theme 正式 epoch 的首次启动、reset 与崩溃恢复会在 full-hash 校验前写入 admission / archive / active epoch / frozen registry，形成耐久半开状态。
+- **Required**: `R-ASHORT-FIFTH-KNIFE-FROZEN-TRANSITION-BYPASS` — 完整机制、严重度、证据、Required repair、closure tests 与未验证边界只见 `docs/system_risk_register.md`。
+- **Verify**: 固定 Python 3.13.8；主线程整读两处 frozen registry 写路径并确认零 transition-guard 调用，损坏 packet 对九个既有消费入口全拒；强制独立只读 agent 复现 start/reset/恢复三次切换且 `epoch_open_gate_calls=0`。发现 Required 后未再启动业务测试；此前已启动的 bounded 超集终态 `346 OK`，cached full-pack `2175 OK`，两者均不覆盖该事务旁路；doc/route guards `66 OK`。
+- **Next**: Codex：修复
+
+## 2026-07-30 — Codex 修复 A-short 第五刀冻结包运行时悬空
+
+- **Verdict/Action**: 已把第五刀冻结包接入七条正式 comparison/evidence 轨共用 epoch-mode 入口；预冻结校验身份/自封/诚实边界，任一轨单独冻结即校验完整八项契约，漂移 fail-closed。未解冻、未提交。
+- **Required**: 完整 closure 与残余边界见 `docs/system_risk_register.md#R-ASHORT-FIFTH-KNIFE-FREEZE-PACKET-RUNTIME-ORPHAN`；仍需 Claude Code 独立审查。
+- **Verify**: 固定 Python 3.13.8；七轨 focused consumer superset `346 OK`；exact-final-code full A-short ledger `2175 OK (skipped=3)` / fingerprint `ade9bfc50cc8`；`py_compile` / `git diff --check` 通过。
+- **Proof-of-use**: 七轨逐一冻结均触发共享 full-hash 门；任一轨植入单项 hash 漂移、packet 漏项/重复/换名/换路/调序、schema/self-hash/诚实边界篡改均转红。
+- **Pre-Codex self-review**: `matrix=complete: 7 tracks × pre-freeze identity/honesty × frozen full-hash × schema/runtime/packet inventory; register=updated; handoff=existing A-short main appended; focused=346 OK; full-lane=2175 OK skipped=3 fingerprint ade9bfc50cc8; door=route/doc/readme 66 OK; independent-window=not-run: multi-agent delegation not authorized, main-thread A-F/B2 fallback complete`
+- **Next**: Claude Code：独立审查；PASS 后提交，不 push。
 
 ## 2026-07-30 — Codex review PASS (US-short 20260730 universe + SEC-SIC public summaries)
 

@@ -197,13 +197,18 @@ def _breakout_contract_surface() -> dict[str, Any]:
 
 def _contract_fingerprint(track: str | None = None) -> str:
     """Pre-freeze returns a stable per-track constant; see ``engine/a_short_evidence_epoch_mode``."""
-    if not _epoch_mode.enforcement_enabled("p2_target_policy"):
-        if track is not None and track not in TRACK_ADMISSIONS:
-            raise TargetPolicyError("unknown_p2_component")
+    if track is not None and track not in TRACK_ADMISSIONS:
+        raise TargetPolicyError("unknown_p2_component")
+    packet_identity = _epoch_mode.validated_frozen_packet_identity(
+        "p2_target_policy"
+    )
+    if packet_identity is None:
         # Keep the two P2 components in separate epochs even while constant.
         return _epoch_mode.pre_freeze_fingerprint("p2_target_policy") if track is None else _digest(
             {"pre_freeze": _epoch_mode.pre_freeze_fingerprint("p2_target_policy"), "component_id": track})
-    return _real_contract_fingerprint(track)
+    return _epoch_mode.bind_frozen_fingerprint(
+        "p2_target_policy", _real_contract_fingerprint(track), packet_identity
+    )
 
 
 def _real_contract_fingerprint(track: str | None = None) -> str:

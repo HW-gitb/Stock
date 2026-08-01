@@ -6,14 +6,14 @@
   "required": [
     "schema_name", "schema_version", "track", "mode", "epoch_id",
     "epoch_start_as_of", "governance_fingerprint", "contract_fingerprint",
-    "epoch_identity_fingerprint", "frozen_theme_ids",
+    "epoch_identity_fingerprint", "freeze_packet_identity", "frozen_theme_ids",
     "taxonomy_registry_fingerprint", "taxonomy_registry_effective_date",
     "source_configuration_fingerprints", "admission_receipt_manifest", "outcome_receipt_manifest",
     "formal_decision", "boundary"
   ],
   "properties": {
     "schema_name": {"const": "a_short_theme_forward_comparison_epoch"},
-    "schema_version": {"const": "1.3.0"},
+    "schema_version": {"const": "1.4.0"},
     "track": {"const": "theme_forward_comparison"},
     "mode": {"enum": ["pre_freeze_audit_only", "frozen_enforced"]},
     "epoch_id": {"type": ["string", "null"], "pattern": "^[A-Za-z0-9][A-Za-z0-9._-]*$"},
@@ -21,6 +21,12 @@
     "governance_fingerprint": {"type": ["string", "null"], "pattern": "^[0-9a-f]{64}$"},
     "contract_fingerprint": {"type": ["string", "null"], "pattern": "^[0-9a-f]{64}$"},
     "epoch_identity_fingerprint": {"type": ["string", "null"], "pattern": "^[0-9a-f]{64}$"},
+    "freeze_packet_identity": {
+      "oneOf": [
+        {"type": "null"},
+        {"$ref": "#/definitions/freezePacketIdentity"}
+      ]
+    },
     "frozen_theme_ids": {"type": "array", "items": {"type": "string", "minLength": 1}, "uniqueItems": true},
     "taxonomy_registry_fingerprint": {"type": ["string", "null"], "pattern": "^[0-9a-f]{64}$"},
     "taxonomy_registry_effective_date": {"type": ["string", "null"], "pattern": "^[0-9]{8}$"},
@@ -57,6 +63,7 @@
           "governance_fingerprint": {"const": null},
           "contract_fingerprint": {"const": null},
           "epoch_identity_fingerprint": {"const": null},
+          "freeze_packet_identity": {"const": null},
           "frozen_theme_ids": {"const": []},
           "taxonomy_registry_fingerprint": {"const": null},
           "taxonomy_registry_effective_date": {"const": null},
@@ -96,6 +103,7 @@
           "governance_fingerprint": {"type": "string"},
           "contract_fingerprint": {"type": "string"},
           "epoch_identity_fingerprint": {"type": "string"},
+          "freeze_packet_identity": {"$ref": "#/definitions/freezePacketIdentity"},
           "frozen_theme_ids": {"minItems": 1},
           "taxonomy_registry_fingerprint": {"type": "string"},
           "taxonomy_registry_effective_date": {"type": "string"},
@@ -112,6 +120,16 @@
     }
   ],
   "definitions": {
+    "freezePacketIdentity": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["freeze_id", "schema_version", "record_sha256"],
+      "properties": {
+        "freeze_id": {"type": "string", "minLength": 1},
+        "schema_version": {"const": "1.0.0"},
+        "record_sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"}
+      }
+    },
     "outcomeReceiptManifest": {
       "type": "object",
       "additionalProperties": false,

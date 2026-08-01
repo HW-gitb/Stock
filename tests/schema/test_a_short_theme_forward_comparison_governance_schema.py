@@ -59,6 +59,50 @@ class ThemeForwardComparisonGovernanceSchemaTests(unittest.TestCase):
         with self.assertRaises(jsonschema.ValidationError):
             jsonschema.validate(epoch, epoch_schema)
 
+    def test_frozen_epoch_requires_exact_freeze_packet_identity(self):
+        epoch_schema = json.loads(EPOCH_SCHEMA_PATH.read_text(encoding="utf-8"))
+        epoch = json.loads(EPOCH_PATH.read_text(encoding="utf-8"))
+        epoch.update({
+            "mode": "frozen_enforced",
+            "epoch_id": "theme-v1",
+            "epoch_start_as_of": "20260725",
+            "governance_fingerprint": "a" * 64,
+            "contract_fingerprint": "b" * 64,
+            "epoch_identity_fingerprint": "c" * 64,
+            "freeze_packet_identity": {
+                "freeze_id": "a-short-fifth-knife-forward-evidence-freeze-20260724",
+                "schema_version": "1.0.0",
+                "record_sha256": "d" * 64,
+            },
+            "frozen_theme_ids": ["physical_ai"],
+            "taxonomy_registry_fingerprint": "e" * 64,
+            "taxonomy_registry_effective_date": "20260725",
+            "source_configuration_fingerprints": {
+                "industry_trend_configuration_fingerprint": "f" * 64,
+                "theme_taxonomy_configuration_fingerprint": "1" * 64,
+                "runtime_configuration_fingerprint": "2" * 64,
+            },
+        })
+        jsonschema.validate(epoch, epoch_schema)
+        for mutation in (
+            "missing", "empty_freeze_id", "old_version", "record_hash", "extra",
+        ):
+            candidate = copy.deepcopy(epoch)
+            if mutation == "missing":
+                candidate.pop("freeze_packet_identity")
+            elif mutation == "empty_freeze_id":
+                candidate["freeze_packet_identity"]["freeze_id"] = ""
+            elif mutation == "old_version":
+                candidate["freeze_packet_identity"]["schema_version"] = "0.9.0"
+            elif mutation == "record_hash":
+                candidate["freeze_packet_identity"]["record_sha256"] = "bad"
+            else:
+                candidate["freeze_packet_identity"]["extra"] = "not-allowed"
+            with self.subTest(mutation=mutation), self.assertRaises(
+                jsonschema.ValidationError
+            ):
+                jsonschema.validate(candidate, epoch_schema)
+
 
 if __name__ == "__main__":
     unittest.main()

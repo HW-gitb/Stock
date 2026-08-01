@@ -1,6 +1,6 @@
 {
   "schema_name": "a_short_theme_forward_comparison_epoch",
-  "schema_version": "1.3.0",
+  "schema_version": "1.4.0",
   "track": "theme_forward_comparison",
   "mode": "pre_freeze_audit_only",
   "epoch_id": null,
@@ -8,6 +8,7 @@
   "governance_fingerprint": null,
   "contract_fingerprint": null,
   "epoch_identity_fingerprint": null,
+  "freeze_packet_identity": null,
   "frozen_theme_ids": [],
   "taxonomy_registry_fingerprint": null,
   "taxonomy_registry_effective_date": null,

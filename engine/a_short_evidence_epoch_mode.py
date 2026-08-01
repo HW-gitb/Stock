@@ -66,6 +66,8 @@ import json
 from functools import lru_cache
 from pathlib import Path
 
+import jsonschema
+
 _PRE_FREEZE = "pre_freeze_audit_only"
 _FROZEN = "frozen_enforced"
 _VALID_MODES = (_PRE_FREEZE, _FROZEN)
@@ -85,10 +87,149 @@ TRACKS = (
 
 ROOT = Path(__file__).resolve().parents[1]
 TRACK_MODE_REGISTRY_PATH = ROOT / "docs" / "a_short_evidence_epoch_mode_registry_20260725.json"
+FIFTH_KNIFE_FREEZE_PACKET_PATH = (
+    ROOT / "docs" / "a_short_fifth_knife_forward_evidence_freeze_20260724.json"
+)
+FIFTH_KNIFE_FREEZE_SCHEMA_PATH = (
+    ROOT / "schemas" / "a_short_fifth_knife_forward_evidence_freeze.schema.json"
+)
+_FIFTH_KNIFE_FROZEN_CONTRACTS = {
+    "a_short_screening_runtime_policy": "presets/a_short_screening_threshold_governance_20260602.json",
+    "a_short_m67_runtime_policy": "presets/a_short_m67_runtime_policy_20260715.json",
+    "v14_3_action_comparison_governance": "presets/a_short_regime_action_comparison_governance_20260714.json",
+    "v14_3_action_comparison_schema": "schemas/a_short_regime_action_comparison_governance.schema.json",
+    "v14_3_weekly_capture_schema": "schemas/a_short_regime_action_comparison_weekly.schema.json",
+    "p4a_overlay_epoch": "engine/a_short_overlay_adjudication.py",
+    "m67_effect_contract": "schemas/a_short_m67_effect_contract.json",
+    "weekly_report_schema": "schemas/a_short_weekly_report.schema.json",
+}
 
 
 class EvidenceEpochModeError(ValueError):
     """Raised when the evidence mode or a track identifier is not recognised."""
+
+
+def _canonical_json_sha256(value: dict) -> str:
+    return hashlib.sha256(
+        json.dumps(
+            value, ensure_ascii=False, sort_keys=True, separators=(",", ":"),
+        ).encode("utf-8")
+    ).hexdigest()
+
+
+def _validate_fifth_knife_freeze_packet(*, require_contract_hashes: bool) -> dict:
+    """Validate the shared freeze packet before any comparison mode is used.
+
+    The packet is deliberately allowed to carry stale contract hashes while
+    every track is parked in pre-freeze audit-only mode.  Its identity,
+    inventory, self-hash and no-evidence/no-promotion claims are still runtime
+    requirements.  The first individually frozen track re-arms all eight
+    contract hashes before that track can compute or count evidence.
+    """
+    try:
+        packet = json.loads(FIFTH_KNIFE_FREEZE_PACKET_PATH.read_text(encoding="utf-8"))
+    except (OSError, UnicodeDecodeError, ValueError) as exc:
+        raise EvidenceEpochModeError("cannot read fifth-knife freeze packet") from exc
+    if not isinstance(packet, dict) or \
+            packet.get("schema_name") != "a_short_fifth_knife_forward_evidence_freeze" or \
+            packet.get("schema_version") != "1.0.0":
+        raise EvidenceEpochModeError("invalid fifth-knife freeze packet identity")
+    try:
+        schema = json.loads(FIFTH_KNIFE_FREEZE_SCHEMA_PATH.read_text(encoding="utf-8"))
+        jsonschema.validate(packet, schema)
+    except (OSError, UnicodeDecodeError, ValueError, jsonschema.ValidationError,
+            jsonschema.SchemaError) as exc:
+        raise EvidenceEpochModeError("invalid fifth-knife freeze packet schema") from exc
+
+    recorded = packet.get("record_sha256")
+    unsigned = {key: value for key, value in packet.items() if key != "record_sha256"}
+    if not isinstance(recorded, str) or recorded != _canonical_json_sha256(unsigned):
+        raise EvidenceEpochModeError("invalid fifth-knife freeze packet self-hash")
+
+    ship_gate = packet.get("ship_gate")
+    boundary = packet.get("boundary")
+    capture = packet.get("capture_contract")
+    if packet.get("status") != "frozen_not_started" or \
+            not isinstance(ship_gate, dict) or \
+            ship_gate.get("observed_forward_live_months") != 0 or \
+            not isinstance(boundary, dict) or \
+            boundary.get("effectiveness_claimed") is not False or \
+            boundary.get("production_promotion_allowed") is not False or \
+            boundary.get("automatic_orders_allowed") is not False or \
+            not isinstance(capture, dict) or \
+            capture.get("historical_replay_counts_as_forward") is not False:
+        raise EvidenceEpochModeError("dishonest fifth-knife pre-freeze boundary")
+
+    contracts = packet.get("frozen_contracts")
+    if not isinstance(contracts, list):
+        raise EvidenceEpochModeError("invalid fifth-knife frozen-contract inventory")
+    by_name = {}
+    for contract in contracts:
+        if not isinstance(contract, dict):
+            raise EvidenceEpochModeError("invalid fifth-knife frozen-contract entry")
+        name = contract.get("name")
+        if name in by_name:
+            raise EvidenceEpochModeError("duplicate fifth-knife frozen-contract name")
+        by_name[name] = contract
+    if set(by_name) != set(_FIFTH_KNIFE_FROZEN_CONTRACTS):
+        raise EvidenceEpochModeError("incomplete fifth-knife frozen-contract inventory")
+
+    root_resolved = ROOT.resolve()
+    for name, relative in _FIFTH_KNIFE_FROZEN_CONTRACTS.items():
+        contract = by_name[name]
+        if contract.get("path") != relative:
+            raise EvidenceEpochModeError(
+                f"fifth-knife frozen-contract path mismatch: {name}"
+            )
+        recorded_sha = contract.get("sha256")
+        if not isinstance(recorded_sha, str) or len(recorded_sha) != 64 or \
+                any(char not in "0123456789abcdef" for char in recorded_sha):
+            raise EvidenceEpochModeError(
+                f"invalid fifth-knife frozen-contract hash: {name}"
+            )
+        if not require_contract_hashes:
+            continue
+        path = (ROOT / relative).resolve()
+        if root_resolved not in path.parents or not path.is_file():
+            raise EvidenceEpochModeError(
+                f"missing fifth-knife frozen contract: {name}"
+            )
+        try:
+            content = path.read_bytes().replace(b"\r\n", b"\n")
+        except OSError as exc:
+            raise EvidenceEpochModeError(
+                f"cannot read fifth-knife frozen contract: {name}"
+            ) from exc
+        actual = hashlib.sha256(content).hexdigest()
+        if actual != recorded_sha:
+            raise EvidenceEpochModeError(
+                f"fifth-knife frozen contract drift: {name}"
+            )
+    return packet
+
+
+def _freeze_packet_identity(packet: dict) -> dict[str, str]:
+    """Return the immutable identity that every frozen epoch must persist."""
+    identity = {
+        "freeze_id": packet.get("freeze_id"),
+        "schema_version": packet.get("schema_version"),
+        "record_sha256": packet.get("record_sha256"),
+    }
+    if not isinstance(identity["freeze_id"], str) or not identity["freeze_id"] or \
+            identity["schema_version"] != "1.0.0" or \
+            not isinstance(identity["record_sha256"], str) or \
+            len(identity["record_sha256"]) != 64:
+        raise EvidenceEpochModeError("invalid fifth-knife freeze packet identity binding")
+    return identity
+
+
+def validated_frozen_packet_identity(track: str) -> dict[str, str] | None:
+    """Return the current validated identity, or ``None`` while pre-freeze."""
+    mode = _mode(track)
+    packet = _validate_fifth_knife_freeze_packet(
+        require_contract_hashes=(mode == _FROZEN),
+    )
+    return _freeze_packet_identity(packet) if mode == _FROZEN else None
 
 
 def _mode(track: str) -> str:
@@ -111,8 +252,46 @@ def _mode(track: str) -> str:
 
 
 def enforcement_enabled(track: str) -> bool:
-    """Whether a real contract fingerprint governs epoch membership."""
-    return _mode(track) == _FROZEN
+    """Whether a real, freeze-packet-bound fingerprint governs membership."""
+    return validated_frozen_packet_identity(track) is not None
+
+
+def validate_frozen_transition(track: str) -> dict[str, str]:
+    """Authorize a durable pre-freeze -> frozen transition.
+
+    This gate deliberately ignores the registry's current polarity.  A writer
+    must pass the full eight-contract freeze check *before* it publishes any
+    admission receipt, archive, active epoch, or frozen registry state.
+    """
+    _require_track(track)
+    packet = _validate_fifth_knife_freeze_packet(require_contract_hashes=True)
+    return _freeze_packet_identity(packet)
+
+
+def validate_bound_frozen_packet_identity(
+    track: str, expected: dict[str, str],
+) -> dict[str, str]:
+    """Fail closed if a frozen epoch is not bound to the current packet."""
+    current = validated_frozen_packet_identity(track)
+    if current is None or current != expected:
+        raise EvidenceEpochModeError("fifth-knife frozen packet epoch binding mismatch")
+    return current
+
+
+def bind_frozen_fingerprint(
+    track: str, fingerprint: str, packet_identity: dict[str, str],
+) -> str:
+    """Bind one real track fingerprint to the shared freeze-packet identity."""
+    _require_track(track)
+    if not isinstance(fingerprint, str) or len(fingerprint) != 64 or \
+            any(char not in "0123456789abcdef" for char in fingerprint):
+        raise EvidenceEpochModeError("invalid real comparison fingerprint")
+    validate_bound_frozen_packet_identity(track, packet_identity)
+    return _canonical_json_sha256({
+        "track": track,
+        "component_fingerprint": fingerprint,
+        "fifth_knife_freeze_packet_identity": packet_identity,
+    })
 
 
 def evidence_counts_toward_clock(track: str) -> bool:
@@ -142,7 +321,10 @@ def pre_freeze_fingerprint(track: str) -> str:
 def fingerprint_or_pre_freeze(track: str, compute) -> str:
     """Return the track's real fingerprint only while enforcement is enabled."""
     _require_track(track)
-    return compute() if enforcement_enabled(track) else pre_freeze_fingerprint(track)
+    packet_identity = validated_frozen_packet_identity(track)
+    if packet_identity is None:
+        return pre_freeze_fingerprint(track)
+    return bind_frozen_fingerprint(track, compute(), packet_identity)
 
 
 class _StripDocstrings(ast.NodeTransformer):

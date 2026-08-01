@@ -1115,7 +1115,8 @@ def epoch_identity_fingerprint(epoch: dict[str, Any]) -> str:
         key: epoch.get(key)
         for key in (
             "schema_name", "schema_version", "track", "mode", "epoch_id", "epoch_start_as_of",
-            "governance_fingerprint", "contract_fingerprint", "frozen_theme_ids",
+            "governance_fingerprint", "contract_fingerprint", "freeze_packet_identity",
+            "frozen_theme_ids",
             "taxonomy_registry_fingerprint", "taxonomy_registry_effective_date",
             "source_configuration_fingerprints", "boundary",
         )
@@ -1244,6 +1245,7 @@ def _admission_receipt_fields(
     return {
         "epoch_id": epoch["epoch_id"],
         "epoch_identity_fingerprint": epoch["epoch_identity_fingerprint"],
+        "freeze_packet_identity": epoch["freeze_packet_identity"],
         "as_of": next(iter(as_ofs)),
         "row_count": int(len(cohort)),
         "admission_recorded_on": admission_date.strftime("%Y%m%d"),
@@ -1324,6 +1326,7 @@ def build_terminal_outcome_receipt(
         "track": TRACK_ID,
         "epoch_id": epoch["epoch_id"],
         "epoch_identity_fingerprint": epoch["epoch_identity_fingerprint"],
+        "freeze_packet_identity": epoch["freeze_packet_identity"],
         "as_of": next(iter(as_ofs)),
         "row_count": int(len(cohort)),
         "admission_receipt_sha256": admission_receipt["record_sha256"],
@@ -1356,6 +1359,7 @@ def build_formal_decision_receipt(epoch: dict[str, Any], as_of: str, packet_sha2
         "track": TRACK_ID,
         "epoch_id": epoch["epoch_id"],
         "epoch_identity_fingerprint": epoch["epoch_identity_fingerprint"],
+        "freeze_packet_identity": epoch["freeze_packet_identity"],
         "as_of": _as_text(as_of),
         "packet_sha256": _as_text(packet_sha256),
         "archive_relative_path": _as_text(archive_relative_path),
@@ -1370,6 +1374,7 @@ def validate_formal_decision_receipt(receipt: dict[str, Any], epoch: dict[str, A
         for key, expected in (
             ("epoch_id", epoch["epoch_id"]),
             ("epoch_identity_fingerprint", epoch["epoch_identity_fingerprint"]),
+            ("freeze_packet_identity", epoch["freeze_packet_identity"]),
             ("as_of", decision["as_of"]),
             ("packet_sha256", decision["packet_sha256"]),
             ("archive_relative_path", decision["archive_relative_path"]),
@@ -1380,7 +1385,8 @@ def validate_formal_decision_receipt(receipt: dict[str, Any], epoch: dict[str, A
 
 
 def comparison_contract_fingerprint(governance: dict[str, Any], frozen_theme_ids: list[str] | None = None,
-                                    source_configuration_fingerprints: dict[str, str] | None = None) -> str:
+                                    source_configuration_fingerprints: dict[str, str] | None = None,
+                                    freeze_packet_identity: dict[str, str] | None = None) -> str:
     """Bind the full local execution dependency closure and frozen policy."""
     return _digest({
         "governance": governance,
@@ -1401,6 +1407,7 @@ def comparison_contract_fingerprint(governance: dict[str, Any], frozen_theme_ids
         "unobserved_return_statuses": sorted(UNOBSERVED_RETURN_STATUSES),
         "theme_role_values": sorted(THEME_ROLE_VALUES),
         "track_id": TRACK_ID,
+        "fifth_knife_freeze_packet_identity": freeze_packet_identity,
         "private_receipt_schema": PRIVATE_RECEIPT_SCHEMA,
         "required_columns": sorted(REQUIRED_COLUMNS),
         "legacy_optional_columns": list(LEGACY_OPTIONAL_COLUMNS),
@@ -1467,7 +1474,10 @@ def _recorded_formal_packet_matches(packet: dict[str, Any] | None, epoch: dict[s
         (packet.get("checkpoints") or {}).get("current_checkpoint") == "formal_decision_due" and \
         all(
             archived_epoch.get(key) == epoch.get(key)
-            for key in ("epoch_id", "epoch_start_as_of", "contract_fingerprint")
+            for key in (
+                "epoch_id", "epoch_start_as_of", "contract_fingerprint",
+                "freeze_packet_identity",
+            )
         )
 
 
@@ -1480,7 +1490,8 @@ def _epoch_context(
     from engine import a_short_evidence_epoch_mode as epoch_mode
 
     epoch = load_epoch(verify_identity=False)
-    registry_enforced = epoch_mode.enforcement_enabled(TRACK_ID)
+    current_packet_identity = epoch_mode.validated_frozen_packet_identity(TRACK_ID)
+    registry_enforced = current_packet_identity is not None
     epoch_enforced = epoch["mode"] == "frozen_enforced"
     if registry_enforced != epoch_enforced:
         return {"state": "epoch_mode_mismatch", "epoch": epoch}
@@ -1488,6 +1499,8 @@ def _epoch_context(
         return {"state": "audit_only_pre_freeze", "epoch": epoch}
     if epoch.get("epoch_identity_fingerprint") != epoch_identity_fingerprint(epoch):
         return {"state": "epoch_identity_mismatch", "epoch": epoch}
+    if epoch.get("freeze_packet_identity") != current_packet_identity:
+        return {"state": "epoch_contract_mismatch", "epoch": epoch}
     frozen_theme_ids = epoch["frozen_theme_ids"]
     if not frozen_theme_ids:
         return {"state": "epoch_contract_mismatch", "epoch": epoch}
@@ -1497,7 +1510,8 @@ def _epoch_context(
             _as_text(registry.get("effective_date")) != epoch["taxonomy_registry_effective_date"]:
         return {"state": "epoch_contract_mismatch", "epoch": epoch}
     current = comparison_contract_fingerprint(
-        governance, frozen_theme_ids, epoch["source_configuration_fingerprints"]
+        governance, frozen_theme_ids, epoch["source_configuration_fingerprints"],
+        current_packet_identity,
     )
     if current != epoch["contract_fingerprint"] or _digest(governance) != epoch["governance_fingerprint"]:
         return {"state": "epoch_contract_mismatch", "epoch": epoch}
@@ -1676,7 +1690,10 @@ def source_configuration_fingerprints_from_start_cohort(tracker: pd.DataFrame, s
     return {column: next(iter(value)) for column, value in values.items()}
 
 
-def build_frozen_epoch(tracker: pd.DataFrame, epoch_id: str, start_as_of: str) -> dict[str, Any]:
+def build_frozen_epoch(
+    tracker: pd.DataFrame, epoch_id: str, start_as_of: str, *,
+    freeze_packet_identity: dict[str, str],
+) -> dict[str, Any]:
     """Build, but never implicitly persist, a new explicit frozen epoch."""
     if not re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9._-]*", _as_text(epoch_id)):
         raise ThemeForwardComparisonError("epoch_id must be a safe non-empty slug")
@@ -1716,15 +1733,17 @@ def build_frozen_epoch(tracker: pd.DataFrame, epoch_id: str, start_as_of: str) -
         )
     epoch = {
         "schema_name": "a_short_theme_forward_comparison_epoch",
-        "schema_version": "1.3.0",
+        "schema_version": "1.4.0",
         "track": TRACK_ID,
         "mode": "frozen_enforced",
         "epoch_id": _as_text(epoch_id),
         "epoch_start_as_of": _as_text(start_as_of),
         "governance_fingerprint": _digest(governance),
         "contract_fingerprint": comparison_contract_fingerprint(
-            governance, frozen_theme_ids, source_configuration_fingerprints
+            governance, frozen_theme_ids, source_configuration_fingerprints,
+            freeze_packet_identity,
         ),
+        "freeze_packet_identity": freeze_packet_identity,
         "frozen_theme_ids": frozen_theme_ids,
         "taxonomy_registry_fingerprint": taxonomy_fingerprint,
         "taxonomy_registry_effective_date": taxonomy_effective_date,
@@ -1758,6 +1777,26 @@ def validate_comparison_packet(packet: dict[str, Any]) -> None:
         raise ThemeForwardComparisonError("comparison packet crossed the production boundary")
     if boundary.get("return_unit") != RETURN_UNIT:
         raise ThemeForwardComparisonError("comparison packet return unit drift")
+    packet_epoch = packet.get("epoch") or {}
+    packet_freeze_identity = packet_epoch.get("freeze_packet_identity")
+    if packet_epoch.get("mode") == "frozen_enforced":
+        if not isinstance(packet_freeze_identity, dict) or \
+                set(packet_freeze_identity) != {
+                    "freeze_id", "schema_version", "record_sha256",
+                } or \
+                not _as_text(packet_freeze_identity.get("freeze_id")) or \
+                packet_freeze_identity.get("schema_version") != "1.0.0" or \
+                not re.fullmatch(
+                    r"[0-9a-f]{64}",
+                    _as_text(packet_freeze_identity.get("record_sha256")),
+                ):
+            raise ThemeForwardComparisonError(
+                "comparison packet has no exact freeze-packet identity"
+            )
+    elif packet_freeze_identity is not None:
+        raise ThemeForwardComparisonError(
+            "pre-freeze comparison packet cannot claim a frozen packet identity"
+        )
     criteria = packet.get("criteria")
     if not isinstance(criteria, list) or tuple(row.get("criterion_id") for row in criteria) != CRITERION_IDS:
         raise ThemeForwardComparisonError("comparison packet must carry the frozen seven-criterion family")
@@ -2053,6 +2092,7 @@ def evaluate_theme_forward_comparison(
             "epoch_id": epoch_context["epoch"]["epoch_id"],
             "epoch_start_as_of": epoch_context["epoch"]["epoch_start_as_of"],
             "contract_fingerprint": epoch_context["epoch"]["contract_fingerprint"],
+            "freeze_packet_identity": epoch_context["epoch"]["freeze_packet_identity"],
             "formal_decision": epoch_context["epoch"]["formal_decision"],
         },
     }

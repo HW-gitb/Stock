@@ -3,6 +3,19 @@
   "title": "a_short_fifth_knife_forward_evidence_freeze",
   "type": "object",
   "additionalProperties": false,
+  "$defs": {
+    "frozenContract": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["name", "path", "sha256"],
+      "properties": {
+        "name": {"type": "string", "minLength": 1},
+        "path": {"type": "string", "minLength": 1},
+        "sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+        "semantic_fingerprint": {"type": "string", "pattern": "^[0-9a-f]{64}$"}
+      }
+    }
+  },
   "required": [
     "schema_name",
     "schema_version",
@@ -46,17 +59,82 @@
     "frozen_contracts": {
       "type": "array",
       "minItems": 8,
-      "items": {
-        "type": "object",
-        "additionalProperties": false,
-        "required": ["name", "path", "sha256"],
-        "properties": {
-          "name": {"type": "string", "minLength": 1},
-          "path": {"type": "string", "minLength": 1},
-          "sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
-          "semantic_fingerprint": {"type": "string", "pattern": "^[0-9a-f]{64}$"}
+      "maxItems": 8,
+      "prefixItems": [
+        {
+          "allOf": [
+            {"$ref": "#/$defs/frozenContract"},
+            {"properties": {
+              "name": {"const": "a_short_screening_runtime_policy"},
+              "path": {"const": "presets/a_short_screening_threshold_governance_20260602.json"}
+            }}
+          ]
+        },
+        {
+          "allOf": [
+            {"$ref": "#/$defs/frozenContract"},
+            {"properties": {
+              "name": {"const": "a_short_m67_runtime_policy"},
+              "path": {"const": "presets/a_short_m67_runtime_policy_20260715.json"}
+            }}
+          ]
+        },
+        {
+          "allOf": [
+            {"$ref": "#/$defs/frozenContract"},
+            {"properties": {
+              "name": {"const": "v14_3_action_comparison_governance"},
+              "path": {"const": "presets/a_short_regime_action_comparison_governance_20260714.json"}
+            }}
+          ]
+        },
+        {
+          "allOf": [
+            {"$ref": "#/$defs/frozenContract"},
+            {"properties": {
+              "name": {"const": "v14_3_action_comparison_schema"},
+              "path": {"const": "schemas/a_short_regime_action_comparison_governance.schema.json"}
+            }}
+          ]
+        },
+        {
+          "allOf": [
+            {"$ref": "#/$defs/frozenContract"},
+            {"properties": {
+              "name": {"const": "v14_3_weekly_capture_schema"},
+              "path": {"const": "schemas/a_short_regime_action_comparison_weekly.schema.json"}
+            }}
+          ]
+        },
+        {
+          "allOf": [
+            {"$ref": "#/$defs/frozenContract"},
+            {"properties": {
+              "name": {"const": "p4a_overlay_epoch"},
+              "path": {"const": "engine/a_short_overlay_adjudication.py"}
+            }}
+          ]
+        },
+        {
+          "allOf": [
+            {"$ref": "#/$defs/frozenContract"},
+            {"properties": {
+              "name": {"const": "m67_effect_contract"},
+              "path": {"const": "schemas/a_short_m67_effect_contract.json"}
+            }}
+          ]
+        },
+        {
+          "allOf": [
+            {"$ref": "#/$defs/frozenContract"},
+            {"properties": {
+              "name": {"const": "weekly_report_schema"},
+              "path": {"const": "schemas/a_short_weekly_report.schema.json"}
+            }}
+          ]
         }
-      }
+      ],
+      "items": false
     },
     "tracks": {
       "type": "array",
