@@ -608,7 +608,52 @@ class WebFetchTests(unittest.TestCase):
             expected_decision_date="20260725", generated_at="2026-07-25T08:00:00Z",
         )
         self.assertEqual([theme["theme_id"] for theme in packet["themes"]], ["good_theme"])
-        self.assertIn("invalid_theme_dropped", [row["reason"] for row in receipt["drop_ledger"]])
+        self.assertIn(fetch.THEME_OBSERVED_AFTER_GENERATED_AT_REASON, [row["reason"] for row in receipt["drop_ledger"]])
+
+    def test_k3_r114_real_future_theme_is_dropped_and_generated_boundary_survives(self):
+        generated = "2026-08-01T04:39:20.410453Z"
+        rows = [
+            {
+                "url": "https://example.com/k3-r114-good",
+                "title": "Good recorded source",
+                "content": "AAPL and CEG demand",
+                "published_date": "2026-07-31T04:00:00Z",
+            },
+            {
+                "url": "https://example.com/k3-r114-bad",
+                "title": "Bad recorded source",
+                "content": "VST generation",
+                "published_date": "2026-07-31T05:00:00Z",
+            },
+        ]
+        refs = [fetch._source_id(row["url"]) for row in rows]
+        llm = {"themes": [
+            {
+                "theme_id": "recorded_good",
+                "display_name": "Recorded good",
+                "summary": "At the output-clock boundary.",
+                "observed_at": generated,
+                "source_ref_ids": refs,
+                "members": [{"ticker": "AAPL", "source_ref_ids": refs}],
+            },
+            {
+                "theme_id": "recorded_future",
+                "display_name": "Recorded future",
+                "summary": "Later than the output clock.",
+                "observed_at": "2026-08-02T00:00:00Z",
+                "source_ref_ids": refs,
+                "members": [{"ticker": "VST", "source_ref_ids": refs}],
+            },
+        ]}
+        packet, receipt, _ = fetch.build_web_fetch_packet(
+            queries=["recorded"], search_results=rows, llm_response=json.dumps(llm),
+            expected_decision_date="20260802", generated_at=generated,
+        )
+        self.assertEqual([theme["theme_id"] for theme in packet["themes"]], ["recorded_good"])
+        self.assertIn(
+            fetch.THEME_OBSERVED_AFTER_GENERATED_AT_REASON,
+            [row["reason"] for row in receipt["drop_ledger"]],
+        )
 
     def test_raw_receipt_is_content_hashed_and_never_contains_key(self):
         with temporary_provider_directory(fetch.ROOT) as td:

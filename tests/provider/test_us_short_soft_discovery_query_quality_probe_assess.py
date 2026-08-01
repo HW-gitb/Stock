@@ -591,6 +591,33 @@ class QueryQualityProbeAssessmentTest(unittest.TestCase):
                     written["execution_evidence"]["inconclusive_reasons"],
                 )
 
+    def test_invalid_reservation_attempt_count_fails_before_assessment_write(self):
+        cases = (
+            ("zero", lambda payload: payload.__setitem__("reservation_attempt_count", 0)),
+            ("negative", lambda payload: payload.__setitem__("reservation_attempt_count", -1)),
+            ("bool", lambda payload: payload.__setitem__("reservation_attempt_count", True)),
+            ("non_int", lambda payload: payload.__setitem__("reservation_attempt_count", "1")),
+            ("missing", lambda payload: payload.pop("reservation_attempt_count")),
+        )
+        for key in ("web_tavily", "web_deepseek", "x_xai"):
+            for label, mutate in cases:
+                with self.subTest(ledger=key, mutation=label):
+                    self._write_inputs()
+                    self.assessment_path.unlink(missing_ok=True)
+                    path = self._packet_and_input_slot_paths()[key]
+                    payload = json.loads(path.read_text(encoding="utf-8"))
+                    mutate(payload)
+                    _write_json(path, payload)
+                    with self.assertRaisesRegex(
+                        assess.QueryQualityProbeAssessmentError,
+                        "reservation_attempt_count",
+                    ):
+                        assess.run_assessment(
+                            packet_path=self.packet_path,
+                            generated_at=GENERATED_AT,
+                        )
+                    self.assertFalse(self.assessment_path.exists())
+
     def test_budget_ledger_tampering_still_fails_before_assessment_write(self):
         cases = (
             (

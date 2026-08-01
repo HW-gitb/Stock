@@ -1,5 +1,19 @@
 # Session Log
 
+## 2026-08-01 — Claude 审查 PASS（K3-R114 主题时钟上下界已闭；另开 K3-R115）
+- **Verdict/Action**: PASS；两条 lane 的主题时刻已被 `max(绑定 source) <= observed <= 本次产出时钟` 夹住、越界逐主题丢弃且不杀整批，K3-R113 的 Optional 也补上了具名测试；K3-R114 CLOSED，已提交并合入 master。但用真实冻结产物回放该守卫，真实 web lane 会被清零，故另开 K3-R115，20260802 槽仍不可判。
+- **Required**: K3-R115 — 完整实测数字 / 根因 / 修复边界 / closure tests 只见 `docs/system_risk_register.md`（单一来源，本处不复述）。
+- **Verify**: review-evidence:49cee1e6d307；固定主 Python web+x+assessor focused 超集 `180 OK / 41.0s`、mandated `LanePerItemConformance 2 OK`、`git diff --check` clean。reviewer 探针：真实形状主题以 `theme_observed_after_generated_at` 单项丢弃且兄弟存活、边界相等被接纳、下界正反控通过；源码挖空 → 删上界 `3 red`、删下界 `0 red`（记 Optional），跑完按字节还原 sha 一致。真实产物回放：web `4/4`、x `2/5` 会被上界丢弃，下界 0 命中。未跑 full（AGENTS rule 3 未触发；executor 的 full 实测 `TIMEOUT 800.2s` 不作证据）。超时原因: 本轮串了整读+四类探针+源码挖空还原+真实产物回放+两条 register 落盘。
+- **Next**: Codex：修复 K3-R115。
+
+## 2026-08-01 — Codex 修复 K3-R114 Required + K3-R113 Optional（executor；ready for Claude Code review）
+- **Verdict/Action**: K3-R114 Required 已按类修复：Web/X producer 主题接纳边界执行 `max(绑定 source observed_at) <= theme.observed_at <= 本次 generated_at`，逐主题 ledger 丢弃且保留合法兄弟；K3-R113 Optional 已补三槽位 × 五种 `reservation_attempt_count` 畸形值的具名写前硬失败测试。K3-R114 assessor Option（冻结证据因果硬错改 INCONCLUSIVE）按用户要求忽略；未提交、未 merge、未联网、未调用 provider。
+- **Required**: K3-R114；完整机制、真实冻结值 closure、边界与 full timeout 只见 `docs/system_risk_register.md#K3-R114`。
+- **Optional**: K3-R113 `reservation_attempt_count` 类型/下界点名测试已补，待 reviewer 独立复审；Options 不处理。
+- **Verify**: 固定主 Python focused `Ran 180 tests in 28.089s / OK`，覆盖 Web/X 真实冻结形状（Web `2026-08-01T04:39:20.410453Z`、X `2026-08-01T04:50:59.136497Z`）与 output-clock equality 正控、三份 ledger × `0/-1/true/"1"/missing` 写前失败；`git diff --check` clean。按 AGENTS rule 3 唯一 full-pack 真实终端 `TIMEOUT exit=124 tests=UNKNOWN elapsed=800.2s`，不记 PASS、不再扩测；测试后 `provider_samples` / `state/us_short` 无文件（仅空目录），`.tools/state/full_pack_ledger.json` 只有 timeout prepare，无 PASS record。20260802 冻结证据不重跑、不重判。
+- **Next**: Claude Code：审查。
+- **Pre-Codex self-review**: `matrix=complete: K3-R114 Web/X producer upper+lower bound × per-theme ledger × aggregate survivor × normalizer/assessor unchanged; K3-R113 Optional web_tavily/web_deepseek/x_xai × zero/negative/bool/non-int/missing; register=K3-R114 updated repair-ready open P2 with Option left ignored; K3-R113 Optional updated as named-test repair while CLOSED Required remains; handoff=single docs/handoff/2026-07-28_us_short_soft_discovery_x_live_shape_review_handoff.md appended; focused=180 OK fixed-host plus diff-check; full-lane=TIMEOUT: AGENTS rule 3 triggered by Web/X production runner boundary change, exact us_short selector, exit=124/tests=UNKNOWN/800.2s, no PASS and no rerun; door=route-doc+doc-governance 55 OK / 1.255s (launcher elapsed 1.4s); A=both producer lanes, bound-source lower edge, generated-clock upper edge, equality positive, sibling survival, all three ledger slots and five malformed shapes; B=old producer call signature has 0 stale callers after explicit call-site inventory; K3-R114 old assertion replaced by named upper-bound assertion; C=generated-clock equality and source-before-theme controls, future theme per-item drops; D=N-A; E=CURRENT untouched, one register source + SESSION top + one handoff; F=fixed-host compile=PASS, schema=PASS, BOM/U+FFFD=PASS, git diff --check=PASS, residue sweep=provider_samples/state_us_short files=0 (empty directories only); independent-self-review=not_used: developer forbids unrequested agent spawn, main-thread checklist fallback used, no timeout/restart/fallback/edit/network/provider`
+
 ## 2026-08-01 — Claude 审查 FAIL（K3-R114 · 真实证据仍生成不出裁决）
 - **Verdict/Action**: K3-R113 已 PASS 并合入 master（`3cba7fa6`）；但拿真实 20260802 证据跑 assessor 又在因果门硬失败——两条 lane 的模型自报主题时刻晚于其所在产物的生成时刻。probe 记录仍无法生成，stage1 模板质量仍不得判定，20260802 冻结产物即便修好也不可判。
 - **Required**: K3-R114 — 完整技术现状 / 真实探针 / 修复边界 / closure tests / 对已冻结证据的后果只见 `docs/system_risk_register.md`（单一来源，本处不复述）。

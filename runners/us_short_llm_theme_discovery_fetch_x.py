@@ -824,7 +824,9 @@ def build_x_fetch_packet(
     drops.extend(result_drops)
     if payload.get("themes"):
         payload = _coerce_source_urls(payload, refs, drop_ledger=drops)
-        discovery_input = web._llm_to_discovery_input(payload, refs, source_type="x", drop_ledger=drops)
+        discovery_input = web._llm_to_discovery_input(
+            payload, refs, source_type="x", drop_ledger=drops, generated_at=generated,
+        )
     else:
         discovery_input = {"source_refs": [{"source_id": ref["source_id"], "source_type": "x", "observed_at": ref["observed_at"]} for ref in refs], "themes": []}
     from runners.us_short_llm_theme_discovery import normalize_discovery_payload

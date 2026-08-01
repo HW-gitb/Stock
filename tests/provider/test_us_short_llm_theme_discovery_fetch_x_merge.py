@@ -570,6 +570,51 @@ class XFetchAndMergeTests(unittest.TestCase):
         self.assertEqual(manifest["summary"]["dropped_theme_count"], 0)
         self.assertEqual(manifest["drop_ledger"], [])
 
+    def test_k3_r114_real_future_theme_is_dropped_and_generated_boundary_survives(self):
+        generated = "2026-08-01T04:50:59.136497Z"
+        rows = [
+            {
+                "url": "https://x.example/k3-r114-good",
+                "title": "Good recorded post",
+                "text": "AAPL and CEG demand",
+                "created_at": "2026-07-31T04:00:00Z",
+            },
+            {
+                "url": "https://x.example/k3-r114-bad",
+                "title": "Bad recorded post",
+                "text": "VST generation",
+                "created_at": "2026-07-31T05:00:00Z",
+            },
+        ]
+        refs = [xfetch._source_id(row["url"]) for row in rows]
+        response = {"themes": [
+            {
+                "theme_id": "recorded_good",
+                "display_name": "Recorded good",
+                "summary": "At the output-clock boundary.",
+                "observed_at": generated,
+                "source_ref_ids": refs,
+                "members": [{"ticker": "AAPL", "source_ref_ids": refs}],
+            },
+            {
+                "theme_id": "recorded_future",
+                "display_name": "Recorded future",
+                "summary": "Later than the output clock.",
+                "observed_at": "2026-08-02T00:00:00Z",
+                "source_ref_ids": refs,
+                "members": [{"ticker": "VST", "source_ref_ids": refs}],
+            },
+        ]}
+        packet, receipt, _ = xfetch.build_x_fetch_packet(
+            queries=["recorded"], results=rows, grok_response=json.dumps(response),
+            expected_decision_date="20260802", generated_at=generated,
+        )
+        self.assertEqual([theme["theme_id"] for theme in packet["themes"]], ["recorded_good"])
+        self.assertIn(
+            web.THEME_OBSERVED_AFTER_GENERATED_AT_REASON,
+            [row["reason"] for row in receipt["drop_ledger"]],
+        )
+
     def test_both_requires_two_distinct_documents_not_one_seen_twice(self):
         """Grok may cite a news article Tavily also found. Two lanes pointing at the SAME locator is
         one source seen twice, not independent corroboration, so it must not earn the `both` tier."""

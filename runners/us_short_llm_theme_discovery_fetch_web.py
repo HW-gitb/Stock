@@ -72,6 +72,8 @@ INCONCLUSIVE_SEARCH_RESULT_REASONS = frozenset({
 SOURCE_RAW_PUBLISH_FAILURE_REASONS = frozenset({
     "immutable_raw_content_conflict",
 })
+THEME_OBSERVED_AFTER_GENERATED_AT_REASON = "theme_observed_after_generated_at"
+THEME_SOURCE_AFTER_OBSERVATION_REASON = "theme_source_after_observation"
 # A provider credential is validated for AMBIGUITY, not against the one key we happened to observe.
 # The property that protects a paid week is "exactly one credential" — two keys concatenated with no
 # separator is the shape actually found in an operator environment — while an exact sample-derived
@@ -1160,12 +1162,14 @@ def _parse_llm_json(
 def _llm_to_discovery_input(
     llm_payload: dict[str, Any], refs: list[dict[str, Any]],
     *, drop_ledger: list[dict[str, str]] | None = None, source_type: str = "web",
+    generated_at: datetime,
 ) -> dict[str, Any]:
     def drop(reason: str, detail: str) -> None:
         if drop_ledger is not None:
             drop_ledger.append({"stage": "llm", "reason": reason, "detail": detail[:240]})
     allowed_ids = {ref["source_id"] for ref in refs}
     ref_times = {ref["source_id"]: _parse_dt(ref["observed_at"], field="source_ref.observed_at") for ref in refs}
+    generated_clock = generated_at.astimezone(timezone.utc)
     themes: list[dict[str, Any]] = []
     for index, raw_theme in enumerate(llm_payload["themes"]):
         def ingest_theme() -> dict[str, Any]:
@@ -1179,6 +1183,11 @@ def _llm_to_discovery_input(
                 theme_observed_at = _parse_dt(observed_at, field="theme.observed_at")
             except Exception as exc:
                 raise _ProviderItemRejected("malformed_theme_observed_at", str(theme_id or "unknown")) from exc
+            if theme_observed_at > generated_clock:
+                raise _ProviderItemRejected(
+                    THEME_OBSERVED_AFTER_GENERATED_AT_REASON,
+                    str(theme_id or "unknown"),
+                )
             raw_theme_refs = raw_theme.get("source_ref_ids")
             if not isinstance(raw_theme_refs, list):
                 raise _ProviderItemRejected("malformed_theme_source_refs", type(raw_theme_refs).__name__)
@@ -1214,6 +1223,11 @@ def _llm_to_discovery_input(
                 )
                 if member is not None:
                     members.append(member)
+            if any(ref_times[ref] > theme_observed_at for ref in theme_refs):
+                raise _ProviderItemRejected(
+                    THEME_SOURCE_AFTER_OBSERVATION_REASON,
+                    str(theme_id or "unknown"),
+                )
             if not isinstance(theme_id, str) or not re.fullmatch(r"[a-z0-9][a-z0-9_-]{1,63}", theme_id):
                 raise _ProviderItemRejected("malformed_theme_id", str(theme_id))
             if not theme_refs:
@@ -1329,7 +1343,9 @@ def build_web_fetch_packet(
     )
     try:
         llm_payload = _parse_llm_json(llm_response, drop_ledger=drops)
-        discovery_input = _llm_to_discovery_input(llm_payload, refs, drop_ledger=drops)
+        discovery_input = _llm_to_discovery_input(
+            llm_payload, refs, drop_ledger=drops, generated_at=generated,
+        )
     except Exception as exc:
         discovery_input = {"source_refs": [{"source_id": ref["source_id"], "source_type": "web", "observed_at": ref["observed_at"]} for ref in refs], "themes": []}
         drops.append({"stage": "llm", "reason": "invalid_or_unusable_response", "detail": type(exc).__name__})
