@@ -710,23 +710,13 @@ def build_inventory(
     }
 
 
-def build_snapshot(
-    repo_root: Path,
-    *,
-    allowlist: Iterable[str] = (),
-    unresolved_allowlist: Iterable[str] = (),
-) -> dict[str, object]:
-    """Return a compact tracked snapshot while retaining the full live inventory API.
+def snapshot_from_inventory(full: dict[str, object]) -> dict[str, object]:
+    """Return a compact tracked snapshot from one already-built inventory.
 
     Class-0 modules have no direct protected-root I/O, so the snapshot records their count and a
     canonical path-list digest rather than repeating 245 empty rows.  Every module with a direct
     protected read/write or an explicit global sentinel remains listed with its access details.
     """
-    full = build_inventory(
-        repo_root,
-        allowlist=allowlist,
-        unresolved_allowlist=unresolved_allowlist,
-    )
     names = [module["module"] for module in full["modules"]]
     modules = []
     for module in full["modules"]:
@@ -765,6 +755,22 @@ def build_snapshot(
         "protected_write_finding_counts": full["protected_write_finding_counts"],
         "modules": modules,
     }
+
+
+def build_snapshot(
+    repo_root: Path,
+    *,
+    allowlist: Iterable[str] = (),
+    unresolved_allowlist: Iterable[str] = (),
+) -> dict[str, object]:
+    """Build the full inventory once and derive the compact tracked snapshot from it."""
+    return snapshot_from_inventory(
+        build_inventory(
+            repo_root,
+            allowlist=allowlist,
+            unresolved_allowlist=unresolved_allowlist,
+        )
+    )
 
 
 def write_inventory(

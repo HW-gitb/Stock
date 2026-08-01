@@ -23,6 +23,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+import shutil
 import subprocess
 import sys
 import time
@@ -41,6 +42,78 @@ FULL_PACK_DISCOVERY_ARGS = {
 # process quieter on green, stop immediately on the first real red, and retain
 # timing evidence for the next test-only optimization pass.
 FULL_PACK_RUNTIME_ARGS = ("-b", "-f", "--durations", "25")
+PRIVATE_TEST_ROOTS = (ROOT / "provider_samples", ROOT / "state" / "us_short")
+PRIVATE_TEST_ROOT_MARKER = ".us_short_test_temp_root_owned"
+
+
+def cleanup_orphaned_private_test_roots(
+    roots: tuple[Path, ...] = PRIVATE_TEST_ROOTS,
+) -> tuple[Path, ...]:
+    """Remove only helper-marked temporary roots left by an interrupted test process.
+
+    The marker is created by ``temporary_provider_directory``.  We require both that marker
+    and an exact child of one of the two protected lane roots before deleting anything; a
+    user-created or pre-existing private artifact is never a cleanup target.
+    """
+    removed: list[Path] = []
+    for parent in roots:
+        parent = parent.resolve()
+        if not parent.is_dir():
+            continue
+        for candidate in tuple(parent.iterdir()):
+            if not candidate.is_dir() or not (candidate / PRIVATE_TEST_ROOT_MARKER).is_file():
+                continue
+            candidate = candidate.resolve()
+            try:
+                candidate.relative_to(parent)
+            except ValueError:
+                continue
+            try:
+                shutil.rmtree(candidate)
+            except OSError:
+                continue
+            removed.append(candidate)
+    return tuple(removed)
+
+
+def snapshot_private_test_dirs(
+    roots: tuple[Path, ...] = PRIVATE_TEST_ROOTS,
+) -> frozenset[Path]:
+    """Capture existing directories so full-pack cleanup never targets prior evidence."""
+    snapshot: set[Path] = set()
+    for parent in roots:
+        parent = parent.resolve()
+        if parent.is_dir():
+            snapshot.update(
+                path.resolve() for path in parent.rglob("*") if path.is_dir()
+            )
+    return frozenset(snapshot)
+
+
+def cleanup_new_private_test_roots(
+    before: frozenset[Path],
+    roots: tuple[Path, ...] = PRIVATE_TEST_ROOTS,
+) -> tuple[Path, ...]:
+    """Remove only new tempfile-style directories below the protected lane roots."""
+    removed: list[Path] = []
+    candidates: set[Path] = set()
+    for parent in roots:
+        parent = parent.resolve()
+        if parent.is_dir():
+            candidates.update(
+                path.resolve()
+                for path in parent.rglob("tmp*")
+                if path.is_dir() and path.resolve() not in before
+            )
+    for candidate in sorted(candidates, key=lambda path: len(path.parts), reverse=True):
+        if any(candidate == prior or prior in candidate.parents for prior in removed):
+            continue
+        try:
+            shutil.rmtree(candidate)
+        except OSError:
+            continue
+        removed.append(candidate)
+    return tuple(removed)
 
 
 def _is_code_path(rel_path: str) -> bool:
@@ -179,7 +252,19 @@ def run_full_pack(
         f"fingerprint={prepared_fingerprint[:12]}",
         flush=True,
     )
-    result = run_unittest(_runtime_unittest_args(unittest_args), timeout_seconds)
+    private_dirs_before = snapshot_private_test_dirs()
+    try:
+        result = run_unittest(_runtime_unittest_args(unittest_args), timeout_seconds)
+    finally:
+        orphaned = cleanup_orphaned_private_test_roots()
+        new_tmp_dirs = cleanup_new_private_test_roots(private_dirs_before)
+        cleaned = orphaned + new_tmp_dirs
+        if cleaned:
+            print(
+                f"[full-pack-ledger] CLEANUP removed={len(cleaned)} "
+                "new/helper-marked private roots",
+                flush=True,
+            )
     if result.output:
         print(result.output, end="" if result.output.endswith("\n") else "\n")
     count = str(result.tests) if result.tests is not None else "UNKNOWN"

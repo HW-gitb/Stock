@@ -45,7 +45,7 @@ class BoundedUnittestTests(unittest.TestCase):
         self.assertIn("tushare", a_short_error)
         self.assertIsNone(us_short_error)
 
-    def test_us_short_focused_runner_does_not_check_full_pack_dependencies(self):
+    def test_us_short_discovery_uses_the_official_unittest_entry(self):
         passed = bounded.Result("PASS", 0, 1, 0.1, "Ran 1 test in 0.1s\n\nOK\n")
         with (
             patch.object(bounded, "find_spec", return_value=None),
@@ -53,7 +53,11 @@ class BoundedUnittestTests(unittest.TestCase):
         ):
             result = bounded.run_unittest(["discover", "-s", "tests", "-p", "test_us_short*.py"], 10)
         self.assertEqual(result, passed)
-        runner.assert_called_once()
+        runner.assert_called_once_with(
+            [sys.executable, "-m", "unittest", "discover", "-s", "tests", "-p", "test_us_short*.py"],
+            10,
+            cwd=bounded.ROOT,
+        )
 
     def test_zero_exit_without_unittest_summary_is_unknown(self):
         result = bounded.run_command([sys.executable, "-c", "print('not a test result')"], 10)
