@@ -17,6 +17,7 @@
 from __future__ import annotations
 
 import argparse
+import hashlib
 import json
 import math
 import os
@@ -59,6 +60,58 @@ SR_QUALITY = ("strong", "weak", "fallback_extreme")   # 有效支撑质量标记
 MIN_SHARES = _PHASE5_POLICY["min_shares"]
 MIN_AMOUNT = _PHASE5_POLICY["min_amount"]
 IMPACT_COST_FRAC = _PHASE5_POLICY["impact_cost_frac"]
+
+# Knife 12B (technical/volatility batch): these are the exact analysis-input
+# leaves observed by the formal comparison surface below.  The source payload
+# is kept separate from the price-series indicators that remain authoritative
+# for production Phase5 decisions; this prevents a partially populated EGS
+# snapshot from silently becoming a second price authority.
+TECHNICAL_COMPARISON_LEAF_PATHS = (
+    "candidates[].technical.amplitude",
+    "candidates[].technical.atr.atr_14",
+    "candidates[].technical.atr.atr_window",
+    "candidates[].technical.atr.ex_rights_adjusted",
+    "candidates[].technical.avg_amount_20d",
+    "candidates[].technical.avg_amount_5d",
+    "candidates[].technical.bollinger.lower",
+    "candidates[].technical.bollinger.middle",
+    "candidates[].technical.bollinger.upper",
+    "candidates[].technical.close_position_in_range",
+    "candidates[].technical.coarse_reward_risk",
+    "candidates[].technical.direction_lock",
+    "candidates[].technical.drawdown_20d",
+    "candidates[].technical.high_20d",
+    "candidates[].technical.limit_up_count_10d",
+    "candidates[].technical.limit_up_count_20d",
+    "candidates[].technical.low_20d",
+    "candidates[].technical.macd.dea",
+    "candidates[].technical.macd.dif",
+    "candidates[].technical.macd.hist",
+    "candidates[].technical.moving_averages.ma10",
+    "candidates[].technical.moving_averages.ma20",
+    "candidates[].technical.moving_averages.ma5",
+    "candidates[].technical.moving_averages.ma60",
+    "candidates[].technical.pct_20d",
+    "candidates[].technical.pct_20d_n",
+    "candidates[].technical.pct_5d",
+    "candidates[].technical.pct_5d_n",
+    "candidates[].technical.pct_60d",
+    "candidates[].technical.precise_reward_risk",
+    "candidates[].technical.resistance.confidence",
+    "candidates[].technical.resistance.method",
+    "candidates[].technical.resistance.price",
+    "candidates[].technical.rsi_14",
+    "candidates[].technical.support.confidence",
+    "candidates[].technical.support.method",
+    "candidates[].technical.support.price",
+    "candidates[].technical.volume_ratio_5d",
+    "candidates[].technical.yesterday_amount",
+)
+VOLATILITY_COMPARISON_LEAF_PATHS = (
+    "candidates[].volatility.hv_252d",
+    "candidates[].volatility.iv_hv_position_cut_pct",
+    "candidates[].volatility.iv_hv_ratio",
+)
 
 # Compatibility mirror for the pre-existing Phase 5 governance artifact and
 # external readers. Both overheat values still come from the screening JSON;
@@ -225,6 +278,92 @@ def compute_indicators(series: list) -> dict:
             "rsi14": rsi14(closes), "atr14": atr, "support": sup, "support_quality": sup_q,
             "recent_low_20": recent_low_20, "resistance": res, "resistance_quality": res_q,
             "recent_high_20": recent_high_20}
+
+
+def _comparison_leaf_value(payload: dict, full_path: str, prefix: str):
+    """Read one analysis-input leaf without widening the accepted source shape."""
+    relative = full_path.removeprefix(prefix + ".")
+    node = payload if isinstance(payload, dict) else {}
+    for key in relative.split("."):
+        if not isinstance(node, dict) or key not in node:
+            return None
+        node = node[key]
+    return node
+
+
+def _comparison_family_snapshot(payload: dict, paths: tuple[str, ...], prefix: str,
+                                producer_status: str) -> dict:
+    values = {
+        path: _comparison_leaf_value(payload, path, prefix)
+        for path in paths
+    }
+    try:
+        encoded = json.dumps(values, ensure_ascii=False, sort_keys=True,
+                             separators=(",", ":"), allow_nan=False)
+    except (TypeError, ValueError):
+        return {
+            "input_leaf_prefix": prefix,
+            "producer_status": producer_status,
+            "observed_outcome": "malformed",
+            "comparison_only": True,
+            "production_effect_enabled": False,
+            "leaf_count": len(paths),
+            "present_leaf_count": 0,
+            "null_leaf_paths": [],
+            "input_sha256": None,
+        }
+    present = [path for path, value in values.items() if value is not None]
+    null_paths = [path for path, value in values.items() if value is None]
+    if not present:
+        observed = "constant_null"
+    else:
+        observed = "snapshot_observed"
+    return {
+        "input_leaf_prefix": prefix,
+        "producer_status": producer_status,
+        "observed_outcome": observed,
+        "comparison_only": True,
+        "production_effect_enabled": False,
+        "leaf_count": len(paths),
+        "present_leaf_count": len(present),
+        "null_leaf_paths": null_paths,
+        "input_sha256": hashlib.sha256(encoded.encode("utf-8")).hexdigest(),
+    }
+
+
+def technical_volatility_comparison(inp: dict) -> dict:
+    """Emit the 12B technical/volatility source-snapshot audit observation.
+
+    The EGS snapshot is an audit/comparison source only.  Production Phase5
+    continues to use the PIT-bounded ``price_series`` indicators and IV feed.
+    Every listed analysis-input leaf is read into a source-bound digest for
+    display audit; this node is intentionally independent and makes no formal
+    comparison or production claim. Volatility is currently constant-null
+    upstream and is disclosed as ``constant_null`` instead of inventing a
+    producer.
+    """
+    technical = _comparison_family_snapshot(
+        (inp or {}).get("source_technical"), TECHNICAL_COMPARISON_LEAF_PATHS,
+        "candidates[].technical", "snapshot_or_constant_null",
+    )
+    volatility = _comparison_family_snapshot(
+        (inp or {}).get("source_volatility"), VOLATILITY_COMPARISON_LEAF_PATHS,
+        "candidates[].volatility", "constant_null",
+    )
+    if "malformed" in {technical["observed_outcome"], volatility["observed_outcome"]}:
+        verdict = "unavailable_manual_review"
+    elif technical["observed_outcome"] == "constant_null" \
+            and volatility["observed_outcome"] == "constant_null":
+        verdict = "producer_constant_null"
+    else:
+        verdict = "source_snapshot_observed"
+    return {
+        "comparison_only": True,
+        "production_effect_enabled": False,
+        "verdict": verdict,
+        "technical": technical,
+        "volatility": volatility,
+    }
 
 
 # ── P2 shadow-only true-pressure ladder ────────────────────────────────────
@@ -1746,6 +1885,7 @@ def build_m67_report(inp: dict, as_of: str, generated_at: str) -> dict:
             "breakout_source_agreement": breakout_agreement,
             "m4_review_gate": _m4_review_observation(inp),
             "derived_flag_comparison": _derived_flag_comparison(inp),
+            "technical_volatility_comparison": technical_volatility_comparison(inp),
             "rule6_gate": rule6_gate,
             "layer": {"hard_veto": hard, "downgrade": downgrades,
                       "observe_only": observe, "llm_enrichment": llm_notes,
@@ -1892,6 +2032,7 @@ def build_holding_report(inp: dict, as_of: str, generated_at: str) -> dict:
             "indicators": ind, "risk_families": fam,
             "m4_review_gate": _m4_review_observation(inp),
             "derived_flag_comparison": _derived_flag_comparison(inp),
+            "technical_volatility_comparison": technical_volatility_comparison(inp),
             "layer": {"hard_veto": [], "downgrade": sr_down, "observe_only": observe, "llm_enrichment": [],
                       **({"semantic_risk": sc["trace"]} if has_semantic_input else {})},
             "entry_exit_size_star": {"action": "持有", "type": "已有持仓", "star": 0,

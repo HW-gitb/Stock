@@ -302,7 +302,6 @@ class EffectContractStaticTests(unittest.TestCase):
         contract = copy.deepcopy(self.contract)
         group = next(row for row in contract["groups"] if row["id"] == "candidate_technical")
         group["runtime_handler"] = "upstream_candidate_set"
-        group.pop("unresolved_reason")
         error = static_contract_error(contract)
         self.assertIn("may not treat report presence as a field consumer", error)
 
@@ -352,6 +351,89 @@ class EffectContractStaticTests(unittest.TestCase):
             with self.assertRaises(jsonschema.ValidationError):
                 jsonschema.validate(mutant, schema)
 
+    def test_technical_volatility_comparison_is_schema_bound_and_mutation_visible(self):
+        schema = json.loads((ROOT / "schemas" / "a_short_m67_report.schema.json").read_text(encoding="utf-8"))
+        baseline_input = _normalized()
+        baseline = build_m67_report(baseline_input, AS_OF, GEN)
+        jsonschema.validate(baseline, schema)
+        base_node = baseline["machine"]["technical_volatility_comparison"]
+        self.assertTrue(base_node["comparison_only"])
+        self.assertFalse(base_node["production_effect_enabled"])
+        self.assertEqual(base_node["technical"]["leaf_count"], 39)
+        self.assertEqual(base_node["volatility"]["leaf_count"], 3)
+
+        technical_mutant = _normalized()
+        technical_mutant["source_technical"].setdefault("moving_averages", {})
+        technical_mutant["source_technical"]["moving_averages"]["ma10"] = 12.34
+        changed_technical = build_m67_report(technical_mutant, AS_OF, GEN)
+        self.assertNotEqual(
+            base_node["technical"]["input_sha256"],
+            changed_technical["machine"]["technical_volatility_comparison"]["technical"]["input_sha256"],
+        )
+        self.assertEqual(baseline["m67"]["table"]["操作"], changed_technical["m67"]["table"]["操作"])
+
+        volatility_mutant = _normalized()
+        volatility_mutant["source_volatility"]["iv_hv_ratio"] = 1.2
+        changed_volatility = build_m67_report(volatility_mutant, AS_OF, GEN)
+        changed_node = changed_volatility["machine"]["technical_volatility_comparison"]
+        self.assertEqual(changed_node["volatility"]["observed_outcome"], "snapshot_observed")
+        self.assertEqual(changed_node["verdict"], "source_snapshot_observed")
+        self.assertEqual(changed_volatility["m67"]["table"]["操作"], baseline["m67"]["table"]["操作"])
+
+        malformed = _normalized()
+        malformed["source_volatility"]["iv_hv_ratio"] = object()
+        malformed_report = build_m67_report(malformed, AS_OF, GEN)
+        self.assertEqual(
+            malformed_report["machine"]["technical_volatility_comparison"]["verdict"],
+            "unavailable_manual_review",
+        )
+
+    def test_volatility_constant_null_producer_binding_is_ast_guarded(self):
+        group = next(row for row in self.contract["groups"] if row["id"] == "candidate_volatility")
+        self.assertEqual(group["producer_binding"]["status"], "constant_null")
+        source = ast.parse((ROOT / "A-EGS" / "egs_main.py").read_text(encoding="utf-8"))
+        function = next(node for node in source.body
+                        if isinstance(node, ast.FunctionDef) and node.name == "_candidate_from_row")
+        matches = []
+        for node in ast.walk(function):
+            if not isinstance(node, ast.Dict):
+                continue
+            keys = [key.value for key in node.keys if isinstance(key, ast.Constant)]
+            if {"hv_252d", "iv_hv_ratio", "iv_hv_position_cut_pct"}.issubset(keys):
+                matches.append(node)
+        self.assertEqual(len(matches), 1)
+        values = {key.value: value for key, value in zip(matches[0].keys, matches[0].values)
+                  if isinstance(key, ast.Constant)}
+        self.assertTrue(all(isinstance(values[key], ast.Constant) and values[key].value is None
+                            for key in ("hv_252d", "iv_hv_ratio", "iv_hv_position_cut_pct")))
+
+    def test_volatility_producer_binding_mutation_is_rejected(self):
+        contract = copy.deepcopy(self.contract)
+        group = next(row for row in contract["groups"] if row["id"] == "candidate_volatility")
+        group["producer_binding"]["status"] = "available"
+        error = static_contract_error(contract)
+        self.assertIn("candidate_volatility producer binding", error)
+
+    def test_comparison_track_requires_non_digest_verdict_variation_binding(self):
+        contract = copy.deepcopy(self.contract)
+        group = next(row for row in contract["groups"] if row["id"] == "candidate_data_quality")
+        group.pop("comparison_verdict_binding")
+        error = static_contract_error(contract)
+        self.assertIn("comparison verdict binding missing", error)
+
+        contract = copy.deepcopy(self.contract)
+        group = next(row for row in contract["groups"] if row["id"] == "candidate_derived_flags_vol_confirm")
+        group["comparison_verdict_binding"]["verdict_field"] = "input_sha256"
+        error = static_contract_error(contract)
+        self.assertIn("digest-only", error)
+
+        contract = copy.deepcopy(self.contract)
+        group = next(row for row in contract["groups"] if row["id"] == "candidate_data_quality")
+        group["comparison_verdict_binding"]["variation_proof"]["variant_outcome"] = \
+            group["comparison_verdict_binding"]["variation_proof"]["baseline_outcome"]
+        error = static_contract_error(contract)
+        self.assertIn("must change outcome", error)
+
 
 class EffectContractRuntimeTests(unittest.TestCase):
     def test_weekly_json_markdown_and_validator_expose_unwired_or_independent_groups(self):
@@ -365,18 +447,21 @@ class EffectContractRuntimeTests(unittest.TestCase):
                          "candidate_industry_classification", "candidate_scores", "candidate_event_risk",
                          "candidate_liquidity", "portfolio_concentration_factor_resonance",
                          "identity_batch_gate"):
-            self.assertEqual(records[group_id]["status"], "unavailable_manual_review")
+            expected = ("intentionally_independent" if group_id in {"candidate_technical", "candidate_volatility"}
+                        else "unavailable_manual_review")
+            self.assertEqual(records[group_id]["status"], expected)
         self.assertEqual(records["candidate_derived_flags_phase5_risk"]["status"], "applied")
         self.assertEqual(records["candidate_derived_flags_phase5_entry"]["status"], "applied")
         self.assertEqual(records["candidate_derived_flags_m4_review"]["status"], "not_triggered")
         self.assertIn("constant-null", records["candidate_derived_flags_m4_review"]["reason"])
         self.assertEqual(records["candidate_derived_flags_vol_confirm"]["status"], "applied")
         self.assertEqual(records["candidate_data_quality"]["status"], "applied")
+        self.assertEqual(records["candidate_volatility"]["status"], "intentionally_independent")
         self.assertEqual(weekly["effect_contract_ledger"]["summary"]["total"], len(records))
         markdown = render_weekly_markdown(weekly)
         self.assertIn("字段/规则联动台账", markdown)
         self.assertIn("industry_trend=unknown (fail-closed; manual review, no star adjustment)", markdown)
-        self.assertIn("不得因候选存在而误报已联动", markdown)
+        self.assertIn("不能只因本周有候选就报已联动", markdown)
 
         tampered = copy.deepcopy(weekly)
         next(row for row in tampered["effect_contract_ledger"]["records"]

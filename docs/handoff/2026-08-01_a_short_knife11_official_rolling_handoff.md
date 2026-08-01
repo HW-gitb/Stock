@@ -219,3 +219,68 @@ The 12B inventory still honestly labels unresolved business groups as `true_dang
 - **这个模式是后续接线刀的模板**：消费端先建、生产端未建是合法的，但必须做到三件事——① 给该组配自己的状态判据（不要蹭通用 `_phase5_status`，那个只要 Phase5 跑过就报 applied）；② 在契约里写 `producer_binding` 并由 `static_contract_error()` 钉死；③ 补一条 AST 守卫钉住「生产者现状」这个前提，前提一变就红。三件缺一，`true_dangling` 计数就会靠"接了打不着火的线"往下掉。
 - `_m4_review_status()` 要求**每份报告**都带 `machine.m4_review_gate`，缺一个就整组 `unavailable_manual_review`。以后新增任何报告构造路径（候选/持仓之外的第三种）必须同步产出这两个观察节点，否则会被 `unavailable_manual_review 只降不升` 的趋势守护挡住发布。
 - 仍未改 M4 生产逻辑、未重封冻结包、未启用生产 block/degrade。
+
+## 2026-08-01 Append: 12B technical/volatility 接线批次（Codex executor）
+- 用户已授权下一批；本轮严格限定 `candidate_technical` 39 叶 + `candidate_volatility` 3 叶，不扩 analyst/catalyst/event 或其他叶族。
+- 两组均接入 `machine.technical_volatility_comparison` 正式 comparison-only 节点；`comparison_only=true`、`production_effect_enabled=false` const-pin，source mutation 有 digest/outcome 证据，但 Phase5 主决策、操作、仓位、现金保持不变。
+- 接线后 371 叶分布为 `true_dangling 241 / partial_consumption 41 / main_decision 36 / comparison_track 47 / display_audit 6`；剩余 true_dangling 是后续批次，不得借本批次批量改标。
+- volatility 上游 `A-EGS/egs_main.py::_candidate_from_row.volatility` 当前三个值恒 `None`；三件套已落地：专属状态判据 + `producer_binding` + AST 前提守卫。null-only ledger=`not_triggered`，非空 snapshot 才可 `applied`，畸形值 fail-closed；不创建 volatility 生产者。
+- 当前验证：固定 Python 3.13.8；`tests.test_a_short_effect_contract` = `Ran 34 tests ... OK`；Phase5/weekly/render/consumer = `Ran 726 tests ... OK`；doc/route gates = `Ran 55 tests ... OK`；py_compile、schema meta、`git diff --check` OK；full-pack 与 independent reviewer PASS `NOT_VERIFIED`。
+- 未重封冻结包，未启用生产 block/degrade，未 provider/network/DataHub，未 commit/push/merge。下一步：Claude Code 独立复审本批次。
+
+## 2026-08-01 Append: 修复 12B digest-only comparison Required（Codex executor）
+- Claude Code 独立审查确认原 12B 节点只有 digest，不是真正 comparison verdict。按审查意见采用方案②：`candidate_technical` 39 叶与 `candidate_volatility` 3 叶改判 `duplicate_source` / `intentionally_independent`。
+- `machine.technical_volatility_comparison` 仅作 source-snapshot display audit；Phase5 继续以 PIT-bounded `price_series` / IV feed 为权威。volatility producer 仍恒 null，binding activation 已明确为 `display_audit_only_until_separately_reviewed_volatility_producer`。
+- 新增类级守护：所有 `nature=comparison_track` 组必须声明非 digest verdict binding、组内 mutated leaf 和不同 baseline/variant outcome；缺失、digest-only 或恒定 outcome 均拒绝。`candidate_derived_flags_vol_confirm`、`candidate_data_quality` 已补绑定。
+- 当前验证：固定 Python 3.13.8；effect-contract `Ran 35 tests ... OK`；Phase5/weekly/render/consumer focused `Ran 727 tests in 64.591s ... OK`；doc/route gates `Ran 55 tests ... OK`；py_compile、schema meta、`git diff --check` OK。full-pack 与独立复审 `NOT_VERIFIED`；未重封冻结包、未建生产者、未提交。
+
+## 2026-08-01 追加：12B technical/volatility 批次独立审查（Claude Code，Pass-with-Required，未提交）
+
+### 改了什么 / 为什么
+
+- 本轮我不改代码，只审查。改动符号：`runners/a_short_phase5_engine.py` 新增 `technical_volatility_comparison` / `_comparison_family_snapshot` / `_comparison_leaf_value` 与两组叶路径常量，`build_m67_report` / `build_holding_report` 各加一个 machine 节点；`normalize_candidate` 新增 `source_technical` / `source_volatility` 深拷贝；effect contract 两组改 handler 与 nature。
+- 判 Pass-with-Required 不是因为隔离没做好，而是因为**这一批的"接线"判据不成立**：节点只对源快照取哈希，没做任何比较。
+
+### 验证命令 / 验证结果
+
+- `.tools\run_unittest_with_repo_pythonpath.cmd --timeout-seconds 1100 tests.test_a_short_phase5_engine tests.test_a_short_weekly_pipeline tests.test_a_short_effect_contract tests.test_a_short_m67_render tests.test_a_short_data_quality_shadow tests.test_a_short_effect_consumer_probe` → `Ran 732 tests in 292.4s / OK`，bounded `tier=focused status=PASS exit=0 deadline=1100s`。
+- **通过的**：翻任意 technical 叶（`atr.atr_14` / `moving_averages.ma10`），整份报告除 `technical_volatility_comparison` 外逐字节相同，且该节点确实变（探针非空洞）；volatility 的 `producer_binding: constant_null` 与 `A-EGS/egs_main.py` 三个叶的 `None` 常量实况一致——M4 那套披露模板用对了；`json.dumps(allow_nan=False)` 走 `malformed → unavailable_manual_review` 是真的 fail-closed 分支。
+- **转红的两条**：① 同一份报告的 `machine.indicators` 里已经有 `ma5 / ma10 / ma20 / atr14 / rsi14 / recent_high_20`，EGS 快照带着同名同义的量，真正的 like-for-like 比较一步之遥却没做；② 把 `amplitude` 从 1.0 改到 2.0，`input_sha256` 变而 `verdict` 恒定——"只改该叶 → verdict 必须变"这条验收对**任何**叶都由构造自动满足。
+- 分布实测 `true_dangling 283→241`、`comparison_track 5→47`，合计仍 371。
+
+### 失效旧结论
+
+- register 里「implemented; independent review required / P1」已被本轮 Pass-with-Required 取代。
+- Codex 自述「两组接入正式周报 comparison-only machine 节点」字面成立，但「已形成正式 verdict」这层不成立——verdict 只报有没有观察到快照，不报比较结论。
+
+### 下一步注意事项
+
+- Required 是二选一，别两条都做：① 把它做成**真比较**（EGS 快照 vs 同报告 `machine.indicators` 的重叠量，verdict 取 `agree` / `diverged` / `source_missing` 这类随叶值变化的值）；或 ② 按实际性质改判 `duplicate_source` → `intentionally_independent` 并写明「Phase5 按 PIT 从 price_series 重算、EGS 快照非权威」的理由/owner/review_ref。代码注释自己就是这么描述这两份快照的（"不得成为第二个价格权威"），选 ② 更贴事实也更省事。
+- **必须外加那条类级守护**，否则剩下 241 叶还会用同一套方法"接完"：`nature=comparison_track` 的组，其 verdict 必须是叶值的函数——要能举出两组合法叶值使 verdict 不同；只有摘要/哈希变、verdict 恒定的节点不得计为已接线。这条守护本身要有植入用例（合成一个摘要-only 组必须转红，一个 verdict 随叶变化的组必须绿）。
+- 现有正控不许退化：翻任意 technical 叶时整份报告除该节点外逐字节相同；volatility 披露与 producer 实况一致；NaN 仍走 `unavailable_manual_review`。
+- 仍不要重封冻结包、不要建 volatility 生产者。
+
+## 2026-08-01 追加：12B 摘要即接线 Required 收口复审（Claude Code，PASS，已提交）
+
+### 改了什么 / 为什么
+
+- 本轮我不改代码，只复审并提交。Codex 采纳了二选一里的**选项②**：`candidate_technical`(39 叶) 与 `candidate_volatility`(3 叶) 改判 `nature=duplicate_source` / `policy=intentionally_independent` / `runtime_handler=intentionally_independent`，并写明 reason/owner/review_ref；那个摘要节点保留但降级为展示审计，不再声称是 comparison 轨。
+- 我要求的类级守护也建了：`nature=comparison_track` 的组必须带 `comparison_verdict_binding`——`runtime_ref` 含 `::`、`verdict_field` 不得是 `input_sha256`/`digest`/`hash` 之流、`variation_proof` 的 `mutated_leaf` 必须在本组内且 `baseline_outcome != variant_outcome`。
+
+### 验证命令 / 验证结果
+
+- `.tools\run_unittest_with_repo_pythonpath.cmd --timeout-seconds 1100 tests.test_a_short_phase5_engine tests.test_a_short_weekly_pipeline tests.test_a_short_effect_contract tests.test_a_short_m67_render tests.test_a_short_data_quality_shadow tests.test_a_short_effect_consumer_probe` → `Ran 733 tests in 301.8s / OK`，bounded `tier=focused status=PASS exit=0 deadline=1100s`。
+- reviewer 探针 13 项全过，三条最要紧的：**① 改判是事实不是贴标签**——整读 `exit_and_size()` 确认 `sup / res / atr` 全部取自 `ind`（`compute_indicators(price_series)`），函数体内零引用 EGS 快照，所以「非权威副本」名副其实；**② 声明的 variation_proof 是真的**——类级守护只校验声明，声明造假就能蒙混，所以我把两条声明拿到运行时实跑：`vol_confirm` 实测 `vol_confirm_false → vol_confirm_true`、`data_quality` 实测 `block_observed → clean_observed`，与契约里写的逐字一致；**③ 守护逐字段有效**——两个 comparison_track 组各做 5 种篡改（删绑定 / verdict_field 改成 `input_sha256` / runtime_ref 去 `::` / mutated_leaf 挪出组 / baseline==variant），10 次攻击全被静态拒绝、零漏网。
+- 没有制造假进度：`true_dangling` 仍 241 叶（42 叶去了 `duplicate_source`，`comparison_track` 47→5），总数仍 371。翻 `rsi_14` 30→70，整份报告除审计节点外逐字节相同。
+
+### 失效旧结论
+
+- 上一轮 Pass-with-Required 的机制描述已作废，两条 R-ID 均 closed。
+- 「这 42 叶已接进一条 comparison 轨」不成立且已被撤回；终态是桌面方案第 12 刀条目 17 第 6 点的③（有理由的 `intentionally_independent`），不是②。
+
+### 下一步注意事项
+
+- **后续接线刀现在有三条硬约束**（前两条是上一轮定的，第三条本轮新增）：① 消费端先建、生产端未建时要有专属状态判据 + `producer_binding` + AST 前提守卫；② nature 必须与 `runtime_handler` 双向对得上；③ 声称接进 comparison 轨的组，必须给出 `comparison_verdict_binding` 并**举出一条真的会改变 verdict 的叶变异**。第三条挡的正是「拿哈希冒充接线」。
+- 类级守护只校验**声明**，不自动跑那条变异。所以审查方（我）每轮必须把声明拿到运行时实跑一遍对账——这次两条都对上了，但这个动作不能省。
+- Optional 未修：退役后的 `technical_volatility_comparison` handler 分支、`_technical_volatility_comparison_status()` 及其在 `_NATURE_RUNTIME_HANDLERS["comparison_track"]` 里的登记项已无人使用，成为不可达代码。不危险（将来若有人用它仍要过新守护），下次碰这段代码顺手清掉。
+- 仍不要重封冻结包、不要建 volatility 生产者。
