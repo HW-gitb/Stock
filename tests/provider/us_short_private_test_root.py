@@ -97,3 +97,25 @@ def temporary_provider_directory(
             if depths[root] == 0:
                 del depths[root]
                 _release_process_lock(handles.pop(root))
+
+
+@contextmanager
+def temporary_us_short_directory(
+    repo_root: Path,
+    relative_parent: Path,
+) -> Iterator[str]:
+    """Create an isolated US-short private directory below the requested lane root.
+
+    This is the shared seam for tests that need either ``provider_samples`` or
+    ``state/us_short``.  The existing provider helper remains the implementation owner so
+    the process lock, owned-parent markers, and cleanup rules cannot drift between roots.
+    """
+    with temporary_provider_directory(repo_root, relative_parent) as tempdir:
+        yield tempdir
+
+
+@contextmanager
+def temporary_us_short_state_directory(repo_root: Path) -> Iterator[str]:
+    """Create an isolated temporary directory below the US-short state root."""
+    with temporary_us_short_directory(repo_root, Path("state") / "us_short") as tempdir:
+        yield tempdir
