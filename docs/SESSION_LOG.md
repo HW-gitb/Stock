@@ -1,5 +1,35 @@
 # Session Log
 
+## 2026-08-01 — Claude Code 审查 PASS（A-short 第十二刀 12A′/12B′/12C′ 收口）
+
+- **Verdict/Action**: PASS，已提交并合入 master。三条 Required 全部按类修：nature↔runtime 双向绑定、趋势守护接进生产周报并防伪造/防退化、shadow 节点进 schema `required`。未接线任何 true_dangling 叶、未重封冻结包、未开生产 block/degrade。
+- **Required**: 无。`R-ASHORT-KNIFE12-ANTI-DANGLING-MACHINERY-IS-ITSELF-NOT-LOAD-BEARING` 与 `R-ASHORT-KNIFE12-TIGHTENED-THREE-CUTS-STILL-NEED-INDEPENDENT-REVIEW` 均 closed，正文只见 `docs/system_risk_register.md`。
+- **Verify**: review-evidence:cd3f453189f1；固定 Python 3.13.8；reviewer 自跑 bounded 超集 `Ran 585 tests in 295.382s — OK`（tier=focused / exit=0 / deadline=900s，申请 900s 因该超集含 weekly pipeline 全模块、实测 295s）；自写探针 15 项全过：18 个未接线组逐个改标 main_decision 全拒、4 个已接线组逐个改标 true_dangling 全拒、生产 bind 真找到上一周(22/22 checked)、伪造 checked/谎报 skipped/真实计数上升(21→22) 全拒、缺 shadow 被 schema+validator 双拒、comparison-only 隔离未回归。按门禁未跑全量。
+- **Next**: Codex：无待办；用户可授权 291 叶 true_dangling 接线刀。
+
+## 2026-08-01 - Codex repairs Knife 12 anti-dangling machinery Required
+- **Verdict/Action**: Applied the three Required items from the Claude Code FAIL review. Mechanism repair only; no `true_dangling` leaf was wired, no freeze packet was resealed, and no commit was made.
+- **Required**: `R-ASHORT-KNIFE12-ANTI-DANGLING-MACHINERY-IS-ITSELF-NOT-LOAD-BEARING` remains open pending independent re-review. Nature/runtime-handler is now bidirectional; `candidate_data_quality` has a real comparison handler; `portfolio_concentration_factor_resonance` remains `partial_consumption` until split-and-wire.
+- **Verify**: Fixed Python `C:\Users\cnhea\AppData\Local\Programs\Python\Python313\python.exe` = 3.13.8. Required-focused `Ran 43 tests ... OK`; shared weekly pipeline `Ran 515 tests ... OK`; static contract, `py_compile`, JSON Schema meta-check, and `git diff --check` passed.
+- **Proof-of-use**: Relabeling unresolved input as `main_decision`, or a real handler as `true_dangling`, fails; production weekly validation records a checked prior ledger or explicit bootstrap skip and rejects a rising unavailable count; deleting `data_quality_shadow` fails schema and validator.
+- **Pre-Codex self-review**: `matrix=complete; true_dangling wiring=not performed; freeze-packet=untouched; independent-review=pending; commit=not performed`
+- **Next**: Claude Code：独立复审本轮 Knife 12 Required 修复；PASS 后再决定是否授权剩余 `true_dangling` 接线刀。
+
+## 2026-08-01 — Claude Code 审查 FAIL（A-short 第十二刀 12A′/12B′/12C′ 三刀）
+
+- **Verdict/Action**: FAIL，未提交。核心交付成立：12A′ 的 comparison-only 隔离经全字段严格比对通过、371 叶覆盖真实完整、12C′ 边界诚实、未重封冻结包（与第 2 刀已定方案一致）。但本刀新建的三样防悬空件自己没接到承重位。
+- **Required**: `R-ASHORT-KNIFE12-ANTI-DANGLING-MACHINERY-IS-ITSELF-NOT-LOAD-BEARING` —— ① 未接线组可从 `true_dangling` 改标 `main_decision` 而零报错；② `unavailable_manual_review` 趋势守护在生产周报里从未被调用；③ 缺失 `data_quality_shadow` 的周报 validator 与 schema 双双放行。机制、为何 material、Required repair、closure tests 正文只见 `docs/system_risk_register.md`。
+- **Verify**: review-evidence:2fc8b45bdb52；固定 Python 3.13.8；reviewer 自跑 bounded 超集 `Ran 580 tests in 272.508s — OK`（tier=focused / exit=0 / deadline=900s）——既有测试全绿，三条缺口正是测试未覆盖处。自写探针 15 项：P1 四种形态全过（只改 data_quality，整份周报除 shadow 外逐字节相同且 shadow 确实变），P2b/P3/P4 三条转红坐实上述 Required。按门禁未跑全量。
+- **Next**: Codex：修复
+
+## 2026-08-01 - Codex executes A-short Knife 12 tightened three cuts (12A′/12B′/12C′)
+- **Verdict/Action**: Implemented the tightened three-cut code slice; no independent review PASS and no commit. 12A′ is a formal shadow-only data-quality comparison, 12B′ classifies all 371 `analysis_input` leaves with ledger evidence and a trend guard, and 12C′ is a source-bound feasibility probe for three selected leaf-to-consumer chains. Freeze packet was not resealed and production block/degrade remains disabled.
+- **Required**: `R-ASHORT-KNIFE12-TIGHTENED-THREE-CUTS-STILL-NEED-INDEPENDENT-REVIEW`; unresolved `true_dangling`/`partial_consumption` leaves remain honest follow-up work, not silently independent. Full details and closure boundary are in `docs/system_risk_register.md`.
+- **Verify**: Fixed Python 3.13.8 only. Core pack `Ran 65 tests ... OK`; shared weekly pipeline `Ran 515 tests ... OK`; freeze/schema/analysis-input `Ran 45 tests ... OK`; compatibility consumers `Ran 36 tests ... OK`; `py_compile`, JSON Schema meta-check, and `git diff --check` passed. Full A-short pack and independent reviewer PASS are `NOT_VERIFIED`.
+- **Proof-of-use**: 12A′ mutation changes the formal shadow verdict without changing weekly operation/shares; 12B′ covers exactly 371 leaves and rejects a business-group bulk `display_audit` relabel; the 12C′ AST probe records source hashes and negative controls fail when a selected consumer step is removed or tampered.
+- **Pre-Codex self-review**: `matrix=complete: shadow-only production gate + 371-leaf nature coverage + policy/nature anti-rescue + unavailable trend guard + three source-bound consumer probes + negative controls; register=updated; handoff=appended to Knife 11 handoff; freeze-packet=untouched; focused=65 OK; weekly=515 OK; schema/freeze=45 OK; compatibility=36 OK; full-pack=NOT_VERIFIED; independent-review=pending; commit=not performed`
+- **Next**: Claude Code：独立审查第十二刀三刀完整 diff；PASS 后按项目流程提交，Codex 不提交。
+
 ## 2026-08-01 — Claude Code 审查 PASS（A-short 第十一刀 official rolling 收口）
 
 - **Verdict/Action**: PASS，已提交并合入 master。冻结门改为硬钉 `pre_freeze_audit_only`、不再代理任何注册轨；滚动节点的 `paired_count`/`member_count` 改为真实成熟周数。反悬空链路未回归。

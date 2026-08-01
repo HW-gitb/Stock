@@ -645,6 +645,9 @@ def normalize_candidate(cand: dict, price_series: list, overlay_row: dict, iv_pc
         },
         "stateful_risk": dict(stateful_risk or {}),
         "observe_only": list(observe_only or []),
+        # Knife 12A: keep the complete source payload for the shadow-only
+        # comparison track.  No Phase5 branch reads this field yet.
+        "data_quality": dict(cand.get("data_quality") or {}) if isinstance(cand.get("data_quality"), dict) else cand.get("data_quality"),
         "llm_enrichment": list(llm_enrichment or []),
         # 语义官方层(Slice 1):official_structured dict {status, events[severity], had_pit_announcements}
         # 或 None(无输入→引擎按 unknown 中性处理)。Phase5 引擎据此融进 M6.7(证据齐全[非空URL]high→否决;缺URL high·medium→待核)。
@@ -1200,6 +1203,8 @@ def build_weekly_report(normalized_list: list, as_of: str, generated_at: str,
                      "is_validated_alpha": False, "satisfies_ship_gate": False},
     }
     weekly["margin_coverage"] = margin_coverage
+    from engine.a_short_data_quality_shadow import build_data_quality_shadow
+    weekly["data_quality_shadow"] = build_data_quality_shadow(bound_normalized_list, as_of)
     if candidate_exclusions:
         weekly["candidate_exclusions"] = list(candidate_exclusions)
     from engine.a_short_effect_contract import build_effect_contract_ledger
@@ -1311,7 +1316,66 @@ def _validate_legacy_task_closure(report: dict) -> None:
             raise ValueError("legacy earnings manual review must land once as advisory-only operation_impact")
 
 
-def validate_weekly_report(weekly: dict, iv_feed_summary: dict) -> None:
+def _load_previous_effect_contract_ledger(out_path: str | Path, as_of: str) -> tuple[dict | None, dict]:
+    """Resolve the latest prior canonical weekly ledger, or record an explicit bootstrap skip."""
+    output = Path(out_path).resolve()
+    current_dir = output.parent
+    if output.name != "weekly_m67.json" or current_dir.name != str(as_of):
+        return None, {
+            "status": "skipped_no_prior_ledger",
+            "previous_as_of": None,
+            "previous_unavailable_manual_review": None,
+            "current_unavailable_manual_review": 0,
+            "reason": "non-canonical output path; no prior weekly ledger lookup was possible",
+        }
+    root = current_dir.parent
+    prior_dirs = sorted(
+        (entry for entry in root.iterdir()
+         if entry.is_dir() and re.fullmatch(r"[0-9]{8}", entry.name) and entry.name < str(as_of)),
+        key=lambda entry: entry.name,
+        reverse=True,
+    ) if root.is_dir() else []
+    for prior_dir in prior_dirs:
+        candidate = prior_dir / "weekly_m67.json"
+        if not candidate.is_file():
+            continue
+        try:
+            payload = json.loads(candidate.read_text(encoding="utf-8-sig"))
+        except (OSError, UnicodeDecodeError, json.JSONDecodeError) as exc:
+            raise ValueError(f"prior weekly ledger is unreadable: {candidate}") from exc
+        ledger = payload.get("effect_contract_ledger") if isinstance(payload, dict) else None
+        if not isinstance(ledger, dict) or str(ledger.get("as_of") or "") != prior_dir.name:
+            raise ValueError(f"prior weekly ledger is missing or date-mismatched: {candidate}")
+        summary = ledger.get("summary") or {}
+        count = summary.get("unavailable_manual_review")
+        if not isinstance(count, int) or count < 0:
+            raise ValueError(f"prior weekly ledger has invalid unavailable count: {candidate}")
+        return ledger, {
+            "status": "checked",
+            "previous_as_of": prior_dir.name,
+            "previous_unavailable_manual_review": count,
+            "current_unavailable_manual_review": 0,
+            "reason": f"checked latest prior canonical weekly ledger under {root}",
+        }
+    return None, {
+        "status": "skipped_no_prior_ledger",
+        "previous_as_of": None,
+        "previous_unavailable_manual_review": None,
+        "current_unavailable_manual_review": 0,
+        "reason": f"no earlier canonical weekly_m67.json found under {root}",
+    }
+
+
+def _bind_effect_contract_trend_guard(weekly: dict, out_path: str | Path) -> dict | None:
+    """Bind the final ledger to the prior-week trend check before schema validation."""
+    from engine.a_short_effect_contract import build_effect_contract_ledger
+    previous_ledger, trend_guard = _load_previous_effect_contract_ledger(out_path, str(weekly.get("as_of") or ""))
+    weekly["effect_contract_ledger"] = build_effect_contract_ledger(weekly, trend_guard=trend_guard)
+    return previous_ledger
+
+
+def validate_weekly_report(weekly: dict, iv_feed_summary: dict,
+                           *, previous_ledger: dict | None = None) -> None:
     """关闭 P2:消费方校验它读入的 IV feed + 每张 M6.7。"""
     from datetime import datetime
     from runners.a_short_iv_feed_build import validate_feed_summary_consistency
@@ -1363,7 +1427,9 @@ def validate_weekly_report(weekly: dict, iv_feed_summary: dict) -> None:
         raise ValueError("n_stocks 与 reports 长度不一致")
     _validate_portfolio_risk(weekly)
     from engine.a_short_effect_contract import validate_effect_contract_ledger
-    validate_effect_contract_ledger(weekly)
+    validate_effect_contract_ledger(weekly, previous_ledger=previous_ledger)
+    from engine.a_short_data_quality_shadow import validate_data_quality_shadow
+    validate_data_quality_shadow(weekly.get("data_quality_shadow"), expected_as_of=weekly["as_of"])
     if any(b for b in weekly["boundary"].values()):
         raise ValueError("weekly boundary 必须全 false")
     rl = weekly.get("run_lineage") or {}
@@ -1959,6 +2025,7 @@ def _reject_nonprivate_account_output_path(out_path: str, has_account: bool,
 
 def write_weekly_report(weekly: dict, iv_feed_summary: dict, out_path: str) -> None:
     _reject_production_output_path(out_path)
+    previous_ledger = _bind_effect_contract_trend_guard(weekly, out_path)
     with open(SCHEMA_PATH, "r", encoding="utf-8") as f:
         wschema = json.load(f)
     with open(M67_SCHEMA_PATH, "r", encoding="utf-8") as f:
@@ -1966,7 +2033,7 @@ def write_weekly_report(weekly: dict, iv_feed_summary: dict, out_path: str) -> N
     jsonschema.validate(weekly, wschema)
     for rep in weekly["reports"]:
         jsonschema.validate(rep, m67schema)                  # 每张 M6.7 过 m67 schema
-    validate_weekly_report(weekly, iv_feed_summary)
+    validate_weekly_report(weekly, iv_feed_summary, previous_ledger=previous_ledger)
     os.makedirs(os.path.dirname(os.path.abspath(out_path)), exist_ok=True)
     tmp = str(out_path) + ".tmp"
     try:
@@ -2066,6 +2133,7 @@ def publish_weekly_bundle(weekly: dict, iv_feed_summary: dict, out_path: str, md
     from runners.a_short_m67_render import render_weekly_markdown, _weekly_has_account_data
 
     _reject_production_output_path(out_path)
+    previous_ledger = _bind_effect_contract_trend_guard(weekly, out_path)
     if _weekly_has_account_data(weekly):
         _reject_nonprivate_account_output_path(md_path, True, allow_nonprivate_account_out)
     with open(SCHEMA_PATH, "r", encoding="utf-8") as f:
@@ -2074,7 +2142,7 @@ def publish_weekly_bundle(weekly: dict, iv_feed_summary: dict, out_path: str, md
         m67schema = json.load(f)
     for report in weekly["reports"]:
         jsonschema.validate(report, m67schema)
-    validate_weekly_report(weekly, iv_feed_summary)
+    validate_weekly_report(weekly, iv_feed_summary, previous_ledger=previous_ledger)
     markdown = render_weekly_markdown(weekly)
     lineage = weekly["run_lineage"]
     weekly_bytes = (json.dumps(weekly, ensure_ascii=False, indent=2, allow_nan=False) + "\n").encode("utf-8")
@@ -2335,6 +2403,10 @@ def validate_published_weekly_bundle(
         or output.parent.name != str(weekly.get("as_of") or "")
     ):
         raise ValueError("weekly bundle directory does not match artifact as_of")
+    if isinstance(weekly.get("effect_contract_ledger"), dict):
+        from engine.a_short_effect_contract import validate_effect_contract_ledger
+        previous_effect_ledger, _ = _load_previous_effect_contract_ledger(output, str(weekly.get("as_of") or ""))
+        validate_effect_contract_ledger(weekly, previous_ledger=previous_effect_ledger)
     lineage = weekly.get("run_lineage") or {}
     price_freshness = lineage.get("price_freshness") or {}
     temporal_origin = lineage.get("temporal_origin") or {}
@@ -5012,10 +5084,11 @@ def main(argv=None, pro_factory=None, price_provider=None, semantic_provider=Non
     # published contract reflects the actual M6.7 and Phase 4 consumers.
     from engine.a_short_effect_contract import build_effect_contract_ledger
     weekly["effect_contract_ledger"] = build_effect_contract_ledger(weekly)
+    previous_effect_ledger = _bind_effect_contract_trend_guard(weekly, args.out)
     # Validate the completed weekly report before publishing its independent
     # Phase4 views. The builder renders already-created task records and never
     # mutates analysis_input or the M6.7 decision.
-    validate_weekly_report(weekly, feed)
+    validate_weekly_report(weekly, feed, previous_ledger=previous_effect_ledger)
     phase4_report_dir = (
         Path(args.phase4_report_dir) if args.phase4_report_dir else
         (ROOT / "result" / "a_short" / args.as_of / "reports" if official_input

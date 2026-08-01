@@ -12,6 +12,7 @@ import copy
 import hashlib
 import json
 import re
+from collections import Counter
 from functools import lru_cache
 from pathlib import Path
 
@@ -62,6 +63,22 @@ _DEFAULT_STATIC_SNAPSHOT_FILES = tuple(sorted(
 ))
 _STATUSES = frozenset({"applied", "not_triggered", "unavailable_manual_review", "intentionally_independent"})
 _POLICIES = frozenset({"must_affect_result", "intentionally_independent"})
+_NATURES = frozenset({
+    "true_dangling", "partial_consumption", "duplicate_source",
+    "display_audit", "comparison_track", "main_decision", "delete",
+})
+_NATURE_RUNTIME_HANDLERS = {
+    "display_audit": frozenset({"intentionally_independent"}),
+    "duplicate_source": frozenset({"intentionally_independent"}),
+    "delete": frozenset({"intentionally_independent"}),
+    "true_dangling": frozenset({"unresolved_input_group"}),
+    "partial_consumption": frozenset({"unresolved_input_group", "llm_tasks"}),
+    "main_decision": frozenset({
+        "lineage_gate", "phase5_decision", "phase5_risk", "market_regime",
+        "industry_trend", "account_cash", "portfolio_risk", "llm_tasks",
+    }),
+    "comparison_track": frozenset({"data_quality_shadow", "comparison_track"}),
+}
 
 
 def _hash(value) -> str:
@@ -111,6 +128,93 @@ def _matches_prefix(path: str, prefix: str) -> bool:
 
 def _paths_for_prefixes(paths: list[str], prefixes: list[str]) -> list[str]:
     return sorted(path for path in paths if any(_matches_prefix(path, prefix) for prefix in prefixes))
+
+
+def _leaf_nature_map(contract: dict, paths: list[str]) -> dict[str, str]:
+    """Expand the contract's group-level nature rules to every input leaf."""
+    groups = contract.get("groups")
+    mapping = contract.get("leaf_nature_by_group")
+    if not isinstance(mapping, dict):
+        raise ValueError("leaf_nature_by_group missing")
+    group_ids = {group.get("id") for group in groups if isinstance(group, dict)}
+    if set(mapping) != group_ids:
+        raise ValueError("leaf_nature_by_group must name every group exactly once")
+    result: dict[str, str] = {}
+    for group in groups:
+        group_id = group["id"]
+        nature = mapping[group_id]
+        if nature not in _NATURES:
+            raise ValueError(f"unknown nature for {group_id}: {nature!r}")
+        for path in _paths_for_prefixes(paths, group.get("source_prefixes") or []):
+            if path in result:
+                raise ValueError(f"leaf assigned multiple natures: {path}")
+            result[path] = nature
+    if set(result) != set(paths):
+        missing = sorted(set(paths) - set(result))
+        extra = sorted(set(result) - set(paths))
+        raise ValueError(f"leaf nature coverage mismatch: missing={missing[:4]}, extra={extra[:4]}")
+    return result
+
+
+def leaf_natures(contract: dict | None = None, inventory: dict | None = None) -> dict[str, str]:
+    contract = contract if contract is not None else load_contract()
+    inventory = inventory if inventory is not None else static_inventory()
+    return _leaf_nature_map(contract, inventory["analysis_input_paths"])
+
+
+def _default_trend_guard(current_count: int) -> dict:
+    return {
+        "status": "skipped_no_prior_ledger",
+        "previous_as_of": None,
+        "previous_unavailable_manual_review": None,
+        "current_unavailable_manual_review": int(current_count),
+        "reason": (
+            "No prior published effect-contract ledger was supplied; this is an explicit bootstrap skip. "
+            "The production weekly entrypoint must resolve the latest prior canonical weekly artifact before validation."
+        ),
+    }
+
+
+def _validate_trend_guard_record(guard: dict, current_count: int,
+                                 previous_ledger: dict | None) -> None:
+    if not isinstance(guard, dict):
+        raise ValueError("effect-contract trend guard missing")
+    status = guard.get("status")
+    if status not in {"checked", "skipped_no_prior_ledger"}:
+        raise ValueError(f"effect-contract trend guard status invalid: {status!r}")
+    if int(guard.get("current_unavailable_manual_review", -1)) != int(current_count):
+        raise ValueError("effect-contract trend guard current count diverges")
+    reason = str(guard.get("reason") or "").strip()
+    if not reason:
+        raise ValueError("effect-contract trend guard reason missing")
+    if previous_ledger is None:
+        if status != "skipped_no_prior_ledger":
+            raise ValueError("effect-contract trend guard claims checked without a prior ledger")
+        if guard.get("previous_as_of") is not None or guard.get("previous_unavailable_manual_review") is not None:
+            raise ValueError("skipped trend guard must not carry prior-ledger facts")
+        return
+    if status != "checked":
+        raise ValueError("effect-contract trend guard did not record the supplied prior ledger")
+    previous_summary = (previous_ledger.get("summary") or {}) if isinstance(previous_ledger, dict) else {}
+    previous_count = int(previous_summary.get("unavailable_manual_review", -1))
+    if int(guard.get("previous_unavailable_manual_review", -1)) != previous_count:
+        raise ValueError("effect-contract trend guard previous count diverges")
+    previous_as_of = str(previous_ledger.get("as_of") or "") if isinstance(previous_ledger, dict) else ""
+    if str(guard.get("previous_as_of") or "") != previous_as_of:
+        raise ValueError("effect-contract trend guard previous as_of diverges")
+    validate_unavailable_manual_review_trend(previous_ledger, {
+        "summary": {"unavailable_manual_review": current_count},
+    })
+
+
+def validate_unavailable_manual_review_trend(previous_ledger: dict, current_ledger: dict) -> None:
+    """Reject a weekly ledger whose unresolved count rises against a prior ledger."""
+    previous = int(((previous_ledger or {}).get("summary") or {}).get("unavailable_manual_review", 0))
+    current = int(((current_ledger or {}).get("summary") or {}).get("unavailable_manual_review", 0))
+    if current > previous:
+        raise ValueError(
+            f"unavailable_manual_review trend regressed: previous={previous}, current={current}"
+        )
 
 
 def _canonical_ast(node):
@@ -709,7 +813,7 @@ def static_contract_error(contract: dict | None = None, *, inventory: dict | Non
                     "use a proven handler or unresolved_input_group")
         if handler == "unresolved_input_group" and not str(group.get("unresolved_reason") or "").strip():
             return f"effect contract {group['id']} unresolved input group lacks reason"
-        if handler in {"lineage_gate", "phase5_decision", "phase5_risk", "market_regime", "account_cash", "portfolio_risk", "llm_tasks"}:
+        if handler in {"lineage_gate", "phase5_decision", "phase5_risk", "market_regime", "account_cash", "portfolio_risk", "llm_tasks", "data_quality_shadow"}:
             proof_paths = group.get("proven_consumer_paths")
             if not isinstance(proof_paths, list) or sorted(proof_paths) != group_paths:
                 return (f"effect contract {group['id']} direct runtime handler lacks all-leaf "
@@ -721,6 +825,22 @@ def static_contract_error(contract: dict | None = None, *, inventory: dict | Non
             if not isinstance(exception, dict) or not all(str(exception.get(key) or "").strip()
                                                          for key in ("reason", "owner", "review_ref")):
                 return f"effect contract {group['id']} independent exception lacks reason/owner/review_ref"
+    try:
+        nature_by_path = _leaf_nature_map(contract, paths)
+    except (TypeError, ValueError, KeyError) as exc:
+        return f"effect contract nature classification invalid: {exc}"
+    for group in groups:
+        nature = contract["leaf_nature_by_group"][group["id"]]
+        policy = group["policy"]
+        if nature in {"display_audit", "duplicate_source", "delete"} and policy != "intentionally_independent":
+            return f"effect contract {group['id']} nature={nature} requires intentionally_independent policy"
+        if nature in {"true_dangling", "partial_consumption", "main_decision", "comparison_track"} \
+                and policy != "must_affect_result":
+            return f"effect contract {group['id']} nature={nature} requires must_affect_result policy"
+        allowed_handlers = _NATURE_RUNTIME_HANDLERS[nature]
+        if group.get("runtime_handler") not in allowed_handlers:
+            return (f"effect contract {group['id']} nature={nature} requires runtime_handler in "
+                    f"{sorted(allowed_handlers)!r}; got {group.get('runtime_handler')!r}")
     tracks = contract.get("comparison_tracks")
     if not isinstance(tracks, list) or not tracks:
         return "effect contract comparison_tracks missing"
@@ -900,6 +1020,15 @@ def _runtime_status(group: dict, weekly: dict) -> tuple[str, str]:
         if any(detail.get("effect") == "star_down" for detail in details):
             return "applied", "有效 headwind 已传入 Phase5，并使对应报告星级 -1"
         return "not_triggered", "行业趋势已核查；neutral/tailwind 未触发负面降星（tailwind 不重复加星）"
+    if handler == "data_quality_shadow":
+        shadow = weekly.get("data_quality_shadow")
+        if not isinstance(shadow, dict):
+            return "unavailable_manual_review", "data_quality_shadow missing; comparison consumer is not closed"
+        if (shadow.get("as_of") != weekly.get("as_of")
+                or shadow.get("comparison_only") is not True
+                or shadow.get("production_effect_enabled") is not False):
+            return "unavailable_manual_review", "data_quality_shadow date or comparison-only boundary diverges"
+        return "applied", "data_quality_shadow is emitted on the weekly comparison surface"
     if handler == "account_cash":
         return ("applied", "账户现金/持仓已联动现金分配或持仓处置") if weekly.get("cash_allocation") is not None else ("not_triggered", "本周未提供账户，未运行现金分配")
     if handler == "portfolio_risk":
@@ -909,16 +1038,21 @@ def _runtime_status(group: dict, weekly: dict) -> tuple[str, str]:
     raise ValueError(f"unknown effect-contract runtime_handler: {handler}")
 
 
-def build_effect_contract_ledger(weekly: dict, contract: dict | None = None) -> dict:
+def build_effect_contract_ledger(weekly: dict, contract: dict | None = None,
+                                *, trend_guard: dict | None = None) -> dict:
     contract = contract if contract is not None else load_contract()
     validate_static_contract(contract)
+    nature_by_path = leaf_natures(contract)
     records = []
     for group in contract["groups"]:
         status, reason = _runtime_status(group, weekly)
         if status not in _STATUSES:
             raise ValueError(f"invalid effect-contract runtime status: {status}")
+        group_paths = _paths_for_prefixes(list(nature_by_path), group["source_prefixes"])
         records.append({
             "id": group["id"], "policy": group["policy"], "status": status,
+            "nature": contract["leaf_nature_by_group"][group["id"]],
+            "leaf_natures": {path: nature_by_path[path] for path in group_paths},
             "source_prefixes": list(group["source_prefixes"]),
             "source_paths_sha256": group["source_paths_sha256"],
             "terminal_surfaces": list(group["terminal_surfaces"]), "reason": reason,
@@ -926,21 +1060,32 @@ def build_effect_contract_ledger(weekly: dict, contract: dict | None = None) -> 
     for track in contract.get("comparison_tracks") or []:
         records.append({
             "id": track["id"], "policy": track["policy"], "status": "intentionally_independent",
+            "nature": "comparison_track", "leaf_natures": {track["schema_path"]: "comparison_track"},
             "source_prefixes": [track["schema_path"]], "source_paths_sha256": track["schema_sha256"],
             "terminal_surfaces": list(track.get("consumer_refs") or []), "reason": track["reason"],
         })
     counts = {status: sum(record["status"] == status for record in records) for status in sorted(_STATUSES)}
+    nature_counts = {nature: sum(value == nature for value in nature_by_path.values())
+                     for nature in sorted(_NATURES)}
+    guard = copy.deepcopy(trend_guard) if trend_guard is not None else _default_trend_guard(counts["unavailable_manual_review"])
+    guard["current_unavailable_manual_review"] = counts["unavailable_manual_review"]
     return {
         "schema_name": "a_short_effect_contract_ledger", "schema_version": "1.0.0",
         "as_of": str(weekly.get("as_of") or ""), "contract_fingerprint": contract_fingerprint(contract),
-        "records": records, "summary": {"total": len(records), **counts},
+        "records": records, "summary": {"total": len(records), **counts, "nature_counts": nature_counts},
+        "trend_guard": guard,
     }
 
 
-def validate_effect_contract_ledger(weekly: dict) -> None:
+def validate_effect_contract_ledger(weekly: dict, previous_ledger: dict | None = None) -> None:
     actual = weekly.get("effect_contract_ledger")
     if not isinstance(actual, dict):
         raise ValueError("weekly missing effect_contract_ledger")
-    expected = build_effect_contract_ledger(weekly)
+    expected = build_effect_contract_ledger(weekly, trend_guard=actual.get("trend_guard"))
     if actual != expected:
         raise ValueError("effect_contract_ledger diverges from registered field/rule effects")
+    _validate_trend_guard_record(
+        actual["trend_guard"],
+        actual["summary"]["unavailable_manual_review"],
+        previous_ledger,
+    )

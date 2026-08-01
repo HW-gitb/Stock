@@ -322,11 +322,12 @@ class EffectContractRuntimeTests(unittest.TestCase):
         self.assertEqual(records["lineage_metadata"]["status"], "intentionally_independent")
         for group_id in ("candidate_technical", "candidate_fundamental", "candidate_capital_flow",
                          "candidate_catalyst", "candidate_volatility", "candidate_analyst",
-                         "candidate_data_quality", "market_context", "account_context", "candidate_quote",
+                         "market_context", "account_context", "candidate_quote",
                          "candidate_industry_classification", "candidate_scores", "candidate_event_risk",
                          "candidate_liquidity", "portfolio_concentration_factor_resonance",
                          "candidate_derived_flags", "identity_batch_gate"):
             self.assertEqual(records[group_id]["status"], "unavailable_manual_review")
+        self.assertEqual(records["candidate_data_quality"]["status"], "applied")
         self.assertEqual(weekly["effect_contract_ledger"]["summary"]["total"], len(records))
         markdown = render_weekly_markdown(weekly)
         self.assertIn("字段/规则联动台账", markdown)
