@@ -848,3 +848,37 @@ Codex 的 K3-R113 修复经独立复审 **PASS**，提交 `449aad9e`、合入 ma
 3. register 里还留了一条 Option（assessor 对「冻结证据违反因果顺序」要不要也落 INCONCLUSIVE 而非硬崩）和一条 Optional（`reservation_attempt_count` 类型/下界校验没有点名测试），都不阻塞本刀。
 
 **给 Codex 的命令**：`修复 K3-R114`
+
+## 2026-08-01 追加：K3-R114 producer 时间上界与 K3-R113 Optional 点名测试（Codex executor/fixer）
+
+本轮按用户命令同时收口 K3-R114 Required 与 K3-R113 Optional；K3-R114 assessor Option（将冻结证据因果硬错映射为 INCONCLUSIVE）保持忽略，未改 assessor 因果门。Web/X producer 的共用模型主题接纳 helper 现在要求 `max(绑定 source observed_at) <= theme.observed_at <= 本次输出 generated_at`，每个越界主题按自身 ledger reason 丢弃，合法兄弟继续；`theme.observed_at == generated_at` 正控保留。新增测试使用真实冻结值形状：Web `generated_at=2026-08-01T04:39:20.410453Z`、X `generated_at=2026-08-01T04:50:59.136497Z`，两者均丢弃 `2026-08-02T00:00:00Z` 主题并保留 output-clock equality 主题。
+
+K3-R113 Optional 已补为具名写前负控：`web_tavily` / `web_deepseek` / `x_xai` 三个 ledger 槽位分别覆盖 `0`、`-1`、`true`、`"1"`、缺失 `reservation_attempt_count`，每次均要求硬失败且 assessment 不落盘。固定主 Python focused `Ran 180 tests in 28.089s / OK`；未联网、未调用 provider。生产入口改动触发一次 US-short full-pack，但真实终端为 `TIMEOUT exit=124 tests=UNKNOWN elapsed=800.2s`，不记 PASS、停止扩测。`provider_samples` / `state/us_short` 测试后无文件（仅空目录），不重跑或重判 20260802 冻结证据。
+
+当前仍是 executor/fixer ready for independent review；Claude Code 需独立复审本轮 Required 与 Optional。Option 继续忽略，20260802 仍不可判；未来可判结论必须另行授权全新非交易槽。
+
+**给 Claude Code 的命令**：`审查`
+
+## 2026-08-01 追加：K3-R114 独立复审 PASS；真实产物回放开出 K3-R115（Claude Code，reviewer/committer）
+
+### 结论
+
+K3-R114 **PASS 并合入 master**：两条 lane 的主题时刻现在被 `max(绑定 source observed_at) <= theme.observed_at <= 本次产出时钟` 夹住，越界主题逐条丢弃、写自己的 ledger reason、不杀整批；`_llm_to_discovery_input` 的 `generated_at` 是 keyword-only 无默认值，全仓两处调用点（web `:1346` / x `:827`）都已传本次产出时钟。K3-R113 的 Optional（`reservation_attempt_count` 畸形值无点名测试）同轮补上。
+
+### 验证命令与结果（reviewer 亲跑）
+
+- 固定主 Python web+x+assessor focused 超集 `180 OK / 41.0s`；AGENTS rule 1 点名的 `tests.test_us_short_discovery_conformance.LanePerItemConformance` `2 OK`；`git diff --check` clean。
+- 探针：真实形状（模型戳 `2026-08-02T00:00:00Z`、产出时钟 `2026-08-01T04:39:20Z`）→ `theme_observed_after_generated_at` 单项丢弃、兄弟主题存活；`observed_at == generated_at` 边界正控被接纳；下界违反 → `theme_source_after_observation`，`observed_at == max(source)` 边界正控被接纳。
+- 源码挖空（跑完按字节还原、sha 一致）：删上界 → 点名测试 `3 red`；删下界 → `0 red`（该腿无测试，记 Optional (i)）。
+
+### 失效的旧结论
+
+「K3-R114 修好后真实运行就能正常出主题」**不成立**。我用这两条新界回放真实 20260802 冻结产物：**web 4/4 个主题会被上界丢光（survive 0）**，X 2/5 被丢（survive 3），新下界 0 命中。根因是主题 `observed_at` 至今是模型自报字段、prompt 从未交代其语义与上界，模型稳定戳成决策日零点。正文只在 `docs/system_risk_register.md#K3-R115`。
+
+### 下一步注意事项 + 给 Codex 的命令
+
+1. 修 **K3-R115**（离线、零 provider 调用）：把主题 `observed_at` 改为确定性推导（取该主题全部绑定 source 的最大 `observed_at`），模型自报值降级为诊断字段、不参与冻结身份；K3-R114 的两条界作为不变式保留，assessor 因果规则不许放宽。
+2. **在 K3-R115 修完之前不要再发起付费运行**——否则 web lane 会花钱换一条空腿，且事前判据会把它记成「模板质量不合格」而不是「时钟没接好」。
+3. register 另记两条不阻塞 Optional（下界无点名测试、成员 drop 行噪音）和一条治理面 Optional：US-short 全量包在当前 800 秒上限下已跑不完（executor 实测 `TIMEOUT 800.2s`），下次真触发 rule 3 前先处理。
+
+**给 Codex 的命令**：`修复 K3-R115`
