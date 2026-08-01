@@ -1149,3 +1149,125 @@ K3-R114 **PASS 并合入 master**：两条 lane 的主题时刻现在被 `max(�
 **顺序**：`B0 ✅ → B1 → B2 → A1 → A2+A3 → A4`。
 
 **给 Codex 的命令**：`执行 B1（class-2 写真实根模块迁移到共享临时根 helper，逐项从 allowlist 删除并重算 snapshot），完成后交审查`
+
+## 2026-08-01 B1 executor execution
+
+- B1 completed in this worktree. Class-2 writer tests now use the shared temporary-root helpers; fixed canonical provider-root validator tests use isolated children under their canonical private subroots; state helper roots carry a local ignore boundary so real subprocess checks remain truthful.
+- Inventory after migration: 279 modules; class0=262, class1=9, class2=6, class3=2; 23 protected write events; 14 stable residual allowlist keys; unallowlisted findings=0. Residual keys are not closure and remain for B2/reviewer disposition.
+- Fixed Python evidence: B1 focused superset `468 OK / 118.736s / deadline=300s`; inventory `8 OK / 35.830s`; route-doc ledger consistency `14 OK`; py_compile and git diff --check PASS. Full 860-second pack not run; handoff boundary remains B2 then full pack.
+- Reviewer gate: Claude Code independently reviews B1 and decides whether to proceed to B2.
+
+## 2026-08-01 追加：Claude Code 对 B1 的独立审查 —— FAIL
+
+**结论**：B1 不通过、不提交不合入，B2 不得开工。
+
+**先说清楚哪部分是好的**（避免下一轮把对的改掉）：本轮扫描器的两处放松——`TemporaryDirectory` / `mkdtemp` / `NamedTemporaryFile` 无 `dir=` 时判 temporary、unknown 兜底排除 `docs/engine/presets/...` 等非受保护顶层目录——经**旧扫描器重放**核实是正当的模型修正，不是洗白：把 HEAD 上已 PASS 的那份扫描器拿到迁移后的树上跑，class2 = `15`，新扫描器 = `6`，差集 9 个逐条看过全是旧模型的假阳（故意写错路径放在 `assertRaises` 里的负控、`root = Path(temp.name)` 这种 stdlib 临时根）。植入反控也全部仍然命中，包括 `TemporaryDirectory(dir=ROOT/"provider_samples")` 与 `mkdtemp(dir=ROOT/"state"/"us_short")` 各 2 条。
+
+**坏在哪**：迁移只做到 setUp。`..._batch5_momentum_price_source` 的 setUp 已经换成共享 helper，但 `test_hostile_provider_ids_...` 方法体里 L263/L264 仍用模块级 `STATE_DIR = ROOT / "state" / "us_short"`，L269 `_write_json(...)` 真的往真实根写文件；`..._batch5_bankruptcy_8k_candidate_resume_scan` L367/L369 同样真写，而且**被 inventory 判成非 writer**——因为写动作走的是模块自带的 `_write_json()` 包装，扫描器不认识「模块内定义、把入参当路径写出去的函数」。这是同一类盲区第三次出现（`self.<attr>`+`os/shutil` → 变量名启发式 → 模块内写包装），后果是 `0 unallowlisted` 不能读成「真实根已无写入」。与扫描器无关的独立 grep：**14 个模块**函数体内仍引用真实根常量，其中只有 3 个在那 6 个 class2 名单里。
+
+**另外**：残留 14 个 key 在 SESSION_LOG / handoff 里被统一描述成「negative/input/overcount controls」，但至少 `momentum_price_source` 那条既不是负控也不是过度记账，是漏迁的腿——描述必须分类如实，否则 B2 的作业面是错的。
+
+完整逐行证据、14 模块候选集、三步修复方向与三条 Optional 只见 `docs/system_risk_register.md` 顶部 `R-USSHORT-B1-MIGRATION-STOPS-AT-SETUP-AND-ITS-GUARD-CANNOT-SEE-THE-REMAINDER`。
+
+**顺序不变**：`B1（返工）→ B2 → A1 → A2+A3 → A4`。
+
+**审查后补记（全量实测结果）**：本轮 reviewer 按 rule ② 用唯一入口真跑了全量，结果 `TIMEOUT exit=124 tests=UNKNOWN elapsed=860.2s deadline=860s`，ledger 未记 PASS。B0 收口时我记的那条 Optional（「按算术推到 ~860s，这是推算不是实测」）**现在是实测**，另开 `R-USSHORT-FULL-PACK-NOW-EXCEEDS-ITS-OWN-CEILING`，它卡住 B2 的收口条件和今后每一次 rule 3 全量。另外，超时被杀后真实 `provider_samples/` 下留下了共享 helper 的临时目录 `tmpfazztd3f/`（context manager 的清理没跑），reviewer 已按前后快照差集只删这一个、未动既有样本；B2 的验收谓词要补一句「异常终止后也要能清」。还有一条交接件缺陷：`docs/SESSION_LOG.md` 的 B1 entry 标题 `## 2026-08-01 Codex executor B1 execution` 缺少守卫分块用的 `— ` 分隔符，导致整段被并进上一条 reviewer entry、doc-governance 门变红（实测该块 free-form 行数 = 1，就是这行）。
+
+**给 Codex 的命令**：`修复 R-USSHORT-B1-MIGRATION-STOPS-AT-SETUP-AND-ITS-GUARD-CANNOT-SEE-THE-REMAINDER 与 R-USSHORT-FULL-PACK-NOW-EXCEEDS-ITS-OWN-CEILING（含 Optional 与 SESSION_LOG 标题分隔符），完成后交审查`
+
+## 2026-08-01 追加：B1 Required 按类修复（Codex executor/fixer）
+
+- The previous B1 review found a recurring blind spot: setUp migration alone left method-body writes, and module-local/imported write wrappers were invisible to inventory. This repair scans the whole `test_us_short*.py` corpus and moves the six confirmed writer legs to shared temporary roots.
+- Inventory now records local/imported `_write_json`/`write_*` helper calls as protected writes and has planted local/imported helper controls. Current snapshot: 279 modules; class0=264 / class1=8 / class2=5 / class3=2; 16 write events; 8 residual allowlist keys; 0 unallowlisted. Residuals are explicitly split into 5 negative/input controls and 3 static overcount controls; they are not closure by allowlist alone.
+- A fixed-Python AST class sweep over all 279 modules leaves only the marked read-only canonical default-root contract; no migrated writer method still references a direct protected-root constant.
+- Fixed Python evidence: affected superset `81 OK / 24.020s / deadline=300s`; final inventory + route-doc + doc-governance gate `66 OK / 38.297s`; inventory `11 OK / 47.157s`; py_compile and git diff --check PASS. Full 860-second pack remains deferred until the Required repair is independently reviewed.
+- **给 Claude Code 的命令**：独立复审 `R-USSHORT-B1-MIGRATION-STOPS-AT-SETUP-AND-ITS-GUARD-CANNOT-SEE-THE-REMAINDER`；若按类证据与残余分类成立，再决定是否解除 B2 阻断。
+
+## 2026-08-01 追加：Claude Code 对 B1 返工的独立审查 —— FAIL
+
+**结论**：B1 仍不通过、不提交不合入，B2 阻断不解除。
+
+**已修好的（别改回去）**：上一轮点名的两条腿都迁好了——`..._batch5_momentum_price_source` L263/264 现在是 `self.state_root` / `self.sample_root`，`..._bankruptcy_8k_candidate_resume_scan` L367 现在是 `self.state_dir`（`temporary_us_short_state_directory` 的返回）。新增的本地写包装识别有效（植入 `_write_json(ROOT/"state"/"us_short"/"leak.json", {})` → `helper:_write_json` 1 条），非语义别名仍命中，独立 grep 的候选模块由 14 降到 9，`..._weekly_capstone_soft_discovery` 那 12 处全是 `mock.patch.object(..., "STATE_DIR", <临时根>)` 的正当读用法。
+
+**新的阻断项**：类扫只覆盖了**测试文件内定义**的真实根常量，漏掉**从生产模块导入**的那种；而扫描器上一轮新增的 `TemporaryDirectory` 分支在 `dir=` 解析不出来时直接 `return _PathInfo(temporary=True)`。两者叠加的后果是：`tests/provider/test_us_short_llm_theme_discovery_fetch_web.py` L893 / L918 / L1023 用 `tempfile.TemporaryDirectory(dir=fetch.STATE_DIR)` 在**真实 `state/us_short/` 之下**建临时目录并往里写 budget ledger，而 `runners/us_short_llm_theme_discovery_fetch_web.py:48` 的 `STATE_DIR` 就是真实根——该模块本轮被 inventory 判成 `class0 / w=0 / r=0`。植入验证：同一段 `dir=` 写成字面量 `ROOT / "state" / "us_short"` 命中 2 条，写成 `fetch.STATE_DIR` 命中 0 条。**能不能被看见，取决于父目录是写成字面量还是从别处导进来。**这是同一盲区类第四次，而且这次的豁免是无条件的——`dir=` 解析不出就整条链退出模型。
+
+**另一条 Required 本轮没动**：`R-USSHORT-FULL-PACK-NOW-EXCEEDS-ITS-OWN-CEILING` —— executor 自述 `full lane not run`，`_aliases()` 的固定轮数循环没改，反而新增了 `_local_write_helpers()`（每模块每函数再走一遍 AST），成本只增不减。这条卡的是 B2 的收口条件和今后每一次 rule 3 全量，不能一直 not run。
+
+**交接件缺陷仍在**：SESSION_LOG 的 entry 标题要写成 `## YYYY-MM-DD — <内容>`（**日期后面紧跟分隔符**），本轮写的 `## 2026-08-01 Codex executor repair — B1 Required class scan` 仍然不成块，会被并进上一条 reviewer entry，doc-governance 门因此红。
+
+完整机制、行号、植入反控与三步修复方向只见 `docs/system_risk_register.md` 顶部 `R-USSHORT-INVENTORY-UNRESOLVABLE-TEMPDIR-PARENT-LAUNDERS-THE-REAL-ROOT`。
+
+**顺序不变**：`B1（再返工）→ B2 → A1 → A2+A3 → A4`。
+
+**给 Codex 的命令**：`修复 R-USSHORT-INVENTORY-UNRESOLVABLE-TEMPDIR-PARENT-LAUNDERS-THE-REAL-ROOT 与 R-USSHORT-FULL-PACK-NOW-EXCEEDS-ITS-OWN-CEILING（含 SESSION_LOG 标题分隔符），完成后交审查`
+## 2026-08-01 — Codex executor repair: B1 class-wide + full-pack cleanup
+
+## 2026-08-01 - Codex executor repair: class4 unresolved writes and per-module residue guard
+
+The class-level guard is now implemented in this worktree. `tests/provider/us_short_test_io_inventory.py` carries an explicit `_PathInfo.unresolved` state and emits `class4_unresolved_write` with separate counts/allowlist. Acceptance controls cover imported `dir=` parents, `os.path.join(str(ROOT), ...)`, `%` and `.format()` path construction, `Path(str(ROOT), ...)`, a known `probe.ROOT` negative control, and local writer aliases. The current 279-module snapshot is `class0=254 / class1=8 / class2=15 / class3=2 / class4=0`, with 27 explicitly dispositioned class-2 keys and no unallowlisted class-4 finding.
+
+`tests/provider/us_short_module_runner.py` now runs the fixed US-short discovery selector module-by-module. Each module gets before/after snapshots of both `provider_samples/` and `state/us_short`; any surviving new entry produces a named unittest failure. `.tools/bounded_unittest.py` routes only the fixed `test_us_short*.py` discovery selector through this runner; other lanes retain the normal unittest path. Runtime snapshot and failure-injection regressions are green, and suite construction covers all 279 modules / 5105 tests.
+
+Evidence in this repair turn: inventory acceptance `15 OK / 44.317s`; per-module snapshot/failure-injection plus runner routing `3 OK`; no provider/network/live request and no full-lane rerun after the existing 860-second TIMEOUT/UNKNOWN boundary. The full-lane gate remains open pending a real final-code ledger result; review/commit remains with Claude Code.
+
+The preceding B1 migration snapshot (before the class4 scanner and runtime guard repair) was `class0=264 / class1=8 / class2=5 / class3=2`, with 16 protected write events and 8 residual keys. The current snapshot and disposition are recorded in the class4 section immediately above.
+
+The same-class optional repairs are now applied: `temporary_provider_directory()` gives provider and state temporary roots a local `*` `.gitignore`; `_roots()` no longer carries the unreachable `not info.repo_anchor` clause; `_aliases()` precomputes function return nodes before convergence. A fixed-Python single-build inventory benchmark fell from 13.199s to 4.692s for 279 modules without changing inventory output.
+
+The full-pack cleanup gate is hardened for abnormal termination. Each helper root has a marker; the official ledger snapshots `provider_samples/` and `state/us_short/` before spawning the child and, in `finally`, removes only helper-marked roots or new `tmp*` directories absent from that snapshot, with exact protected-root containment checks. Marker and snapshot regressions pass. This addresses the prior timeout-orphan class without deleting pre-existing private evidence.
+
+Evidence on the final code before handoff: fixed-Python changed-test superset `648 OK / 145.577s / deadline=300s`; inventory `11 OK / 15.742s`; cleanup+inventory regression `13 OK / 14.328s`; py_compile `42` modified Python files PASS; marker/tmp/run/k4b/untracked residue scan clean. One official full-pack invocation was started with the governed `860s` ceiling on the pre-final imported-root code state, but the outer terminal stopped waiting at about `304s` before the ledger emitted PASS/FAIL; it is `UNKNOWN` and was not rerun. The two child processes were terminated, and the exact helper-marked orphan root from that probe was removed after path/marker verification. No provider, network, live, secret, commit, push, or merge action occurred.
+
+### Pre-Codex self-review
+
+`matrix=complete; register=updated B1/full-pack current status; handoff=updated; focused=648 OK + inventory 11 OK + cleanup 13 OK; full-lane=UNKNOWN after one official attempt on a pre-final code state; door=55 OK / 0.792s; A=all changed test/helper/inventory/ledger symbols; B=protected-root writes, imported roots, helper wrappers, alias convergence, timeout cleanup; C=class sweep, planted helpers, snapshot exactness, marker/tmp cleanup; D=N-A; E=SESSION_LOG + risk register + handoff; F=py_compile/residue PASS; independent-self-review=not_used`
+
+**Claude Code：独立审查本修复；若最终代码态的 860s official ledger 能完成，再决定 full-pack gate 与 B2 是否解锁。**
+
+## 2026-08-01 追加：Claude Code 对 B1 第三轮的独立审查 —— FAIL
+
+**结论**：B1 仍不通过、不提交不合入，B2 阻断不解除。
+
+**已做好的（别改回去）**：`fetch_web` 那三处 `tempfile.TemporaryDirectory(dir=fetch.STATE_DIR)`（L893 / L918 / L1023）已改成 `temporary_us_short_state_directory(fetch.ROOT)`，全仓复查再无 `dir=<受保护根常量>` 的写法（剩下的 `..._batch5_provider_live_probe.py` L248/258/265 的 `dir=probe.ROOT` 父目录是仓库根，`runners/us_short_batch5_provider_live_probe.py:12` 可证，不在 B1 射程）。共享 helper 现在给**两个**根的临时目录都写 `.gitignore` 与 owner 标记，上轮那条不对称 Optional 已闭；`_roots()` 里不可达的 `not info.repo_anchor` 也删了。`_aliases()` 新增 `function_returns_nodes` 预计算。ledger 新增超时后的两段清理，并配了「无标记不删 / 快照前已存在不删」两条反控——残留那一半确实建起来了。
+
+**仍然 FAIL 的原因**：上一轮 Required 的三条只做了第二条。`_path_info()` 的 `TemporaryDirectory` / `mkdtemp` 分支照旧在 `dir=` 解析不出受保护根时 `return _PathInfo(temporary=True)`，植入实测 `dir=fetch.STATE_DIR`、`mkdtemp(dir=fetch.STATE_DIR)`、`dir=<函数参数>` 全部命中 `0`，而字面量 `dir=ROOT / "state" / "us_short"` 命中 `2`。也就是说**具体那三处堵上了，但下一个用同样写法的测试仍然是隐形的**——而 B0/B1 交付的东西本身就是这个守卫。acceptance 里也没有任何 `dir=` 的植入反控。
+
+**修复时要一起决定的代价**：只把「解析不出就返回 parent_info」是不够的（`fetch.STATE_DIR` 解析成 unknown 且无 repo anchor，经 `_roots()` 仍得空）。要真堵住，`dir=` 存在但解析不出时应返回 `_PathInfo(repo_anchor=True, unknown=True)`；代价是 `provider_live_probe` 那三处 `dir=probe.ROOT` 会变成假阳，需要一并转 helper 或显式进 allowlist 写明理由。**请按这个成本做，别为了避开假阳而跳过它。**
+
+另记两条 ledger 清理的 Optional（跨窗口竞态、`tmp*` 前缀启发式），正文只见 `docs/system_risk_register.md` 顶部两条条目。
+
+**顺序不变**：`B1（再返工）→ B2 → A1 → A2+A3 → A4`。
+
+**补记：为什么这一类会连着出现四次，以及类级怎么修**（reviewer 自认失职：前四轮我每次只把被点名的机制写成 Required，没把类级修法写成命令，所以每轮都只是把同一张白名单往外挪一格）
+
+根因是这个静态模型**默认放行**：`_path_info()` 认不出的形状返回空 / `unknown` / `temporary`，`_roots()` 一律给 `()`，于是「没识别出来」和「确认落在受保护根之外」在结果上一模一样。它是「已识别写法的白名单 + 失败即放行」，所以每一种没枚举到的 Python 写法都是一个静默的洞。四次复发（`self.<attr>` + `os.*`/`shutil.*` → 变量名启发式 → 模块内写包装 → `dir=<解析不出>`）都是这同一个性质。现在还开着的同类：`os.path.join(...)`、`"%s/..." % ROOT` 这类非 `/` 拼接、`Path(str(ROOT), "provider_samples", ...)`、写包装里先 `p = path / "x"` 再写、路径存进 dict 再取出。
+
+类级修法两条并做，已写成 `R-USSHORT-INVENTORY-DEFAULT-IS-FAIL-OPEN-SO-THE-BLIND-SPOT-CLASS-KEEPS-RETURNING`：**(1)** 把默认方向反过来——给「不能证明落在受保护根之外」单立一类 `class4_unresolved_write`，进结果、单独计数、单独 allowlist，acceptance 断言它精确等于一份复核过的清单，于是**新写法会把测试打红而不是悄悄变绿**（第一次开会冒出一批需要逐条判的条目，这是一次性成本）；**(2)** 补一条不依赖 AST 的运行期背靠——把「前后快照」下沉到逐模块，跑前跑后各快照一次，出现新条目就把该模块判红并指名。注意跟 ledger 现有清理区分：**清理是删，这里要的是报**。
+
+**2026-08-01 重新定级（用户质疑「B1 需要按类扫吗，已经修了好多轮」之后）**：质疑成立，reviewer 有不一致。**B0 PASS 那一轮我已经把「模型认不出就放行」记成不阻塞的 Optional 并放行了 B0**，之后却在三轮 B1 里拿同一个性质当 P1 阻塞项反复开——等于拿 B0 的设计问题扣 B1。因此：
+
+- 类级那条 `R-USSHORT-INVENTORY-DEFAULT-IS-FAIL-OPEN-...` **降级为 B2 的开工条件，不再阻塞 B1**；`R-USSHORT-INVENTORY-UNRESOLVABLE-TEMPDIR-PARENT-LAUNDERS-THE-REAL-ROOT` 的 (a)(c) 折入其中，同样不再单独阻塞 B1。守卫完整性本就是 B0 的性质，运行期检测本就规划在 B2（B0 那轮的选项 (b)），在 B2 一次收。
+- **B1 的验收改成结果导向、不依赖模型**：跑整条 us_short lane（不是 focused 子集），测试无红 + 两个受保护根前后快照零新增存活条目。这条不问代码写成什么形状。迁移侧的现有证据已经不弱——独立 grep 由 14 降到 9 且剩下的都是 `mock.patch.object(..., <临时根>)` 读用法、全仓无 `dir=<受保护根常量>`、最近一次全量 reviewer 前后快照零新增。
+- **于是 B1 只剩一个真阻塞：全量跑不完**，验收判据因此无法测量。顺序：修 `R-USSHORT-FULL-PACK-NOW-EXCEEDS-ITS-OWN-CEILING` 的耗时侧 → 跑整条 lane → 量残留 → B1 收口。
+
+~~**给 Codex 的命令**：`修复 R-USSHORT-FULL-PACK-NOW-EXCEEDS-ITS-OWN-CEILING 的耗时侧…`~~ —— 已执行并审查，见下节。
+
+## 2026-08-01 追加：Claude Code 对 B1 第四轮的独立审查 —— FAIL
+
+**结论**：B1 不通过，B2 阻断不解除。
+
+**模型侧本轮做得好（别改回去）**：我上一轮点名「还开着」的六种形状，五种现在都能命中——`TemporaryDirectory(dir=<无法解析的模块属性>)`、`os.path.join(str(ROOT), "provider_samples", ...)`、`"%s/provider_samples" % ROOT`、`Path(str(ROOT), "provider_samples", ...)`、写包装内部先 `target = path / "inner.json"` 再写。四条反向控制全部干净（stdlib 无 `dir=` 临时根 / 共享 helper / `ROOT / "docs"` 均 0，字面量真实根仍 class2）。`class4_unresolved_write` 桶与 per-module 残留守卫（`GuardedModuleSuite` 每模块前后快照 → 具名 failure）都建了，`test_us_short_discovery_conformance` 与 `test_us_short_soft_boost_consumption` 的改动是加强不是削弱。ledger 的超时清理第二次确认有效：`CLEANUP removed=1`，我的前后快照零新增。
+
+**为什么仍然 FAIL**，两条：
+
+1. **官方全量入口被静默换掉，且没有等价性控制。** `.tools/bounded_unittest.py::run_unittest()` 现在按参数形状拦截 canonical selector，改跑 `tests.provider.us_short_module_runner`，而 ledger 的 START/RESULT 输出一字未变——屏幕上看不出来。等价性**这一次是好的**（我自己加载对比：discover `5105` vs runner `5105`，id 对称差 `0`，重复 id 各 10，模块 279），但**仓库里没有任何测试钉住它**：`module_names()` 将来被加个过滤，或 `loadTestsFromName` 对某模块返回空 suite，测试就会静默消失而 ledger 照记绿灯。你当初对 harness 提的硬要求原话就是「跳过模块必须失败、每片计数之和必须等于钉住的总数」——现在这个 runner 就是那个 harness，缺这条控制。
+
+2. **全量第四次 TIMEOUT**（`exit=124 tests=UNKNOWN 860.3s`），所以 B1 那条结果导向的验收判据（整条 lane 绿 + 零存活残留）**还是测不出来**。实测 `build_inventory()` 单次 `55.6s`、acceptance 约调 3 次——**该测量是在全量同时在跑时取的，只能当上界，且我违反了「同一时刻只跑一个重包」，本轮超时不能排除被我加剧**；但四次超时跨四个代码态，结论不受这一次影响。类级工作让扫描更重，与「降成本」方向相反。
+
+完整证据、修复方向与两条 Optional（`--durations` 被静默丢弃；dict 存路径仍逃逸、归 B2）只见 `docs/system_risk_register.md` 顶部 `R-USSHORT-FULL-PACK-SELECTOR-IS-SILENTLY-SUBSTITUTED-WITHOUT-AN-EQUIVALENCE-CONTROL`。
+
+**同轮更正：B1 本体 PASS，已提交并合入 master。** 用户追问「B1 修复的对吗、能 pass 就提交」之后，我把 B1 与 harness 分开验——B1 的验收不该被 harness 的问题绑架。做法：取本刀改过的 **39 个测试模块**，用**显式模块名**交给 bounded runner（显式模块名不触发那个按参数形状的替换，跑的是真 `unittest`），结果 `626 OK / 452.6s / deadline=1300s`；两个受保护根前后快照**完全一致、零存活残留**。关键点：这条路径**不经过** ledger 的清理，所以这个「零」是测试自身达成的，不是被扫地机盖掉的——比之前两次「清理后零残留」更硬。
+
+**本次提交的边界**：迁移本体 + 共享 helper + 扫描器（含 class4）+ 重算的 inventory 快照 + acceptance + 文档。**不含**四个 harness 文件（`.tools/bounded_unittest.py`、`.tools/full_pack_ledger.py`、`tests/provider/us_short_module_runner.py`、`tests/test_full_pack_ledger.py`），它们带着上面那条 open Required 留在工作树；ledger 的超时清理虽然我验过两次有效，但它的测试与 module runner 耦合，一并留下。
+
+**给 Codex 的命令**：`修复 R-USSHORT-FULL-PACK-SELECTOR-IS-SILENTLY-SUBSTITUTED-WITHOUT-AN-EQUIVALENCE-CONTROL 与全量耗时侧（不得跳过 inventory 测试；若判断只能上调 FULL_MAX_SECONDS 则带实测数据提请用户决定），跑通整条 lane 并附前后快照，完成后交审查`

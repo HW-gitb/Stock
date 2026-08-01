@@ -13,6 +13,10 @@ if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
 from runners import us_short_batch5_bankruptcy_8k_source_packet as runner  # noqa: E402
+from tests.provider.us_short_private_test_root import (  # noqa: E402
+    temporary_us_short_directory,
+    temporary_us_short_state_directory,
+)
 
 
 STATE_DIR = ROOT / "state" / "us_short"
@@ -43,10 +47,18 @@ def _sec_submissions(*, forms, filing_dates, accessions, items):
 
 class UsShortBatch5Bankruptcy8kSourcePacketTest(unittest.TestCase):
     def setUp(self):
+        self._state_root_context = temporary_us_short_state_directory(ROOT)
+        self.state_dir = Path(self._state_root_context.__enter__())
+        self.addCleanup(self._state_root_context.__exit__, None, None, None)
+        self._sample_root_context = temporary_us_short_directory(
+            ROOT, Path("provider_samples") / "us_short_batch5_bankruptcy_8k_source_packet_20260705"
+        )
+        self.sample_root = Path(self._sample_root_context.__enter__())
+        self.addCleanup(self._sample_root_context.__exit__, None, None, None)
         self.slug = f"test_bankruptcy_8k_source_{os.getpid()}_{self._testMethodName}"
         self.paths = {
-            "packet": STATE_DIR / f"{self.slug}_packet.json",
-            "screen": STATE_DIR / f"{self.slug}_screen.json",
+            "packet": self.state_dir / f"{self.slug}_packet.json",
+            "screen": self.state_dir / f"{self.slug}_screen.json",
             "summary": ROOT / "docs" / f"{self.slug}_summary.json",
         }
         for path in self.paths.values():
@@ -57,14 +69,6 @@ class UsShortBatch5Bankruptcy8kSourcePacketTest(unittest.TestCase):
         for path in self.paths.values():
             path.unlink(missing_ok=True)
             path.with_name(path.name + ".tmp").unlink(missing_ok=True)
-        root = ROOT / "provider_samples" / "us_short_batch5_bankruptcy_8k_source_packet_20260705" / self.slug
-        if root.exists():
-            for item in sorted(root.rglob("*"), reverse=True):
-                if item.is_file():
-                    item.unlink()
-                elif item.is_dir():
-                    item.rmdir()
-            root.rmdir()
 
     def _packet_payload(self):
         return json.loads(self.paths["packet"].read_text(encoding="utf-8"))

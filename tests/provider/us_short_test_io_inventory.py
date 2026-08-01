@@ -57,6 +57,7 @@ class _PathInfo:
     segments: tuple[str, ...] = ()
     temporary: bool = False
     unknown: bool = False
+    unresolved: bool = False
 
 
 @dataclass(frozen=True)
@@ -67,6 +68,7 @@ class Access:
     mode: str
     roots: tuple[str, ...]
     source: str
+    unresolved: bool = False
 
     @property
     def key(self) -> str:
@@ -74,6 +76,10 @@ class Access:
         # inventory/test snapshot still prevent a new same-operation write from hiding behind an
         # old allowance.
         return f"{self.module}:{self.operation}:{','.join(self.roots)}"
+
+    @property
+    def unresolved_key(self) -> str:
+        return f"{self.key}:class4_unresolved_write"
 
     def as_dict(self, *, allowlisted: bool = False) -> dict[str, object]:
         return {
@@ -84,6 +90,8 @@ class Access:
             "roots": list(self.roots),
             "source": self.source,
             "key": self.key,
+            "classification": "class4_unresolved_write" if self.unresolved else "protected_write",
+            "unresolved": self.unresolved,
             "allowlisted": allowlisted,
         }
 
@@ -118,17 +126,20 @@ def _combine(left: _PathInfo, right: _PathInfo) -> _PathInfo:
         return _PathInfo(temporary=True)
     segments = left.segments + right.segments
     return _PathInfo(
-        repo_anchor=left.repo_anchor or right.repo_anchor or (
+        repo_anchor=left.repo_anchor or right.repo_anchor or left.unresolved or right.unresolved or (
             _relative_protected_anchor(segments) and not (left.unknown or right.unknown)
         ),
         segments=segments,
         unknown=left.unknown or right.unknown,
+        unresolved=left.unresolved or right.unresolved,
     )
 
 
 def _roots(info: _PathInfo) -> tuple[str, ...]:
     if info.temporary or not info.repo_anchor:
         return ()
+    if info.unresolved:
+        return PROTECTED_ROOTS
     segments = tuple(part.lower() for part in info.segments)
     roots: set[str] = set()
     if segments[:1] == ("provider_samples",):
@@ -140,7 +151,13 @@ def _roots(info: _PathInfo) -> tuple[str, ...]:
     # This is the safe result for forms such as ``ROOT / probe.RAW_REL_ROOT`` without pretending
     # to resolve arbitrary imports.  Unknown dynamic suffixes after an exact prefix retain that
     # prefix only (for example ``provider_samples / f"run_{pid}"``).
-    if not roots and info.unknown:
+    if not roots and info.unknown and (
+        not segments
+        or segments[:1] == ("state",)
+        or (segments[:1] and segments[0] not in {
+            "docs", "engine", "presets", "research", "result", "runners", "schemas", "skills", "tests"
+        })
+    ):
         return PROTECTED_ROOTS
     return tuple(sorted(roots))
 
@@ -159,6 +176,13 @@ def _merge_info(prior: _PathInfo, current: _PathInfo) -> _PathInfo:
         return prior
     if prior == _PathInfo() or prior == current:
         return current
+    if prior.unresolved or current.unresolved:
+        return _PathInfo(
+            repo_anchor=prior.repo_anchor or current.repo_anchor,
+            segments=prior.segments if prior.segments == current.segments else ("<unknown>",),
+            unknown=True,
+            unresolved=True,
+        )
     if prior.unknown and not current.unknown:
         return current
     if current.unknown and not prior.unknown:
@@ -167,6 +191,7 @@ def _merge_info(prior: _PathInfo, current: _PathInfo) -> _PathInfo:
         repo_anchor=prior.repo_anchor or current.repo_anchor,
         segments=prior.segments if prior.segments == current.segments else ("<unknown>",),
         unknown=True,
+        unresolved=prior.unresolved or current.unresolved,
     )
 
 
@@ -198,13 +223,41 @@ def _path_info(
             _path_info(node.left, aliases, function_returns),
             _path_info(node.right, aliases, function_returns),
         )
+    if isinstance(node, ast.BinOp) and isinstance(node.op, ast.Mod):
+        info = _combine(
+            _path_info(node.left, aliases, function_returns),
+            _path_info(node.right, aliases, function_returns),
+        )
+        if info.repo_anchor:
+            return _PathInfo(
+                repo_anchor=True,
+                segments=info.segments,
+                unknown=True,
+                unresolved=True,
+            )
+        return info
     if isinstance(node, ast.Attribute):
         key = _target_key(node)
         if key in aliases:
             return aliases[key]
+        # Imported runner modules expose an explicit repo-root ``ROOT`` constant.  Resolve this
+        # one stable contract while keeping sibling constants (for example ``STATE_DIR``) in the
+        # unresolved class until the caller proves their target.
+        if node.attr == "ROOT":
+            return _PathInfo(repo_anchor=True)
         return _path_info(node.value, aliases, function_returns)
     if isinstance(node, ast.Subscript):
         return _path_info(node.value, aliases, function_returns)
+    if isinstance(node, (ast.List, ast.Tuple, ast.Set)):
+        info = _PathInfo()
+        for element in node.elts:
+            info = _combine(info, _path_info(element, aliases, function_returns))
+        return info
+    if isinstance(node, ast.Dict):
+        info = _PathInfo()
+        for element in (*node.keys, *node.values):
+            info = _combine(info, _path_info(element, aliases, function_returns))
+        return info
     if isinstance(node, ast.Call):
         name = _call_name(node)
         if name in function_returns:
@@ -221,16 +274,82 @@ def _path_info(
             for keyword in node.keywords:
                 info = _combine(info, _path_info(keyword.value, aliases, function_returns))
             return info
+        if name in {"TemporaryDirectory", "NamedTemporaryFile", "mkdtemp"}:
+            # Standard-library temporary roots are outside the repository unless an explicit
+            # protected parent is supplied.  Keep the latter visible so B1 still requires the
+            # shared in-repo helper for ``dir=ROOT/provider_samples`` or ``dir=ROOT/state/us_short``.
+            parent = next((keyword.value for keyword in node.keywords if keyword.arg == "dir"), None)
+            if parent is not None:
+                parent_info = _path_info(parent, aliases, function_returns)
+                if parent_info.temporary:
+                    return _PathInfo(temporary=True)
+                if _roots(parent_info):
+                    return parent_info
+                if parent_info.repo_anchor and not parent_info.unknown and not parent_info.unresolved:
+                    return _PathInfo(temporary=True)
+                # An explicit but unresolved ``dir=`` may point into either protected root.  Keep
+                # it visible as class-4 instead of laundering it into the ordinary tempdir class.
+                return _PathInfo(
+                    repo_anchor=True,
+                    segments=parent_info.segments,
+                    unknown=True,
+                    unresolved=True,
+                )
+            return _PathInfo(temporary=True)
         if name in {"Path", "PurePath", "WindowsPath", "PosixPath"}:
             info = _PathInfo()
             for arg in node.args:
                 info = _combine(info, _path_info(arg, aliases, function_returns))
+            if any(
+                isinstance(arg, ast.Call)
+                and _call_name(arg) in {"str", "fspath"}
+                and _path_info(arg, aliases, function_returns).repo_anchor
+                for arg in node.args
+            ) and info.repo_anchor:
+                return _PathInfo(
+                    repo_anchor=True,
+                    segments=info.segments,
+                    unknown=True,
+                    unresolved=True,
+                )
+            return info
+        if name in {"str", "fspath"}:
+            info = _PathInfo()
+            for arg in node.args:
+                info = _combine(info, _path_info(arg, aliases, function_returns))
+            if info.repo_anchor and info.unknown:
+                return _PathInfo(
+                    repo_anchor=True,
+                    segments=info.segments,
+                    unknown=True,
+                    unresolved=True,
+                )
             return info
         if isinstance(node.func, ast.Attribute):
             info = _path_info(node.func.value, aliases, function_returns)
             if node.func.attr == "joinpath":
                 for arg in node.args:
                     info = _combine(info, _path_info(arg, aliases, function_returns))
+            elif node.func.attr == "format":
+                for arg in node.args:
+                    info = _combine(info, _path_info(arg, aliases, function_returns))
+                if info.repo_anchor:
+                    return _PathInfo(
+                        repo_anchor=True,
+                        segments=info.segments,
+                        unknown=True,
+                        unresolved=True,
+                    )
+            elif _target_key(node.func) == "os.path.join":
+                for arg in node.args:
+                    info = _combine(info, _path_info(arg, aliases, function_returns))
+                if info.repo_anchor:
+                    return _PathInfo(
+                        repo_anchor=True,
+                        segments=info.segments,
+                        unknown=True,
+                        unresolved=True,
+                    )
             return info
         return _PathInfo(unknown=True)
     return _PathInfo(unknown=True)
@@ -261,6 +380,12 @@ def _aliases(tree: ast.AST) -> dict[str, _PathInfo]:
         if item.optional_vars is not None
     ]
     functions = [node for node in ast.walk(tree) if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef))]
+    function_returns_nodes = {
+        function.name: tuple(
+            node.value for node in ast.walk(function) if isinstance(node, ast.Return)
+        )
+        for function in functions
+    }
     for _ in range(len(assignments) + len(with_bindings) + len(functions) + 2):
         changed = False
         for node in assignments:
@@ -283,9 +408,8 @@ def _aliases(tree: ast.AST) -> dict[str, _PathInfo]:
                 aliases[name] = merged
                 changed = True
         for function in functions:
-            returns = [node.value for node in ast.walk(function) if isinstance(node, ast.Return)]
             info = _PathInfo()
-            for value in returns:
+            for value in function_returns_nodes[function.name]:
                 info = _merge_info(info, _path_info(value, aliases, function_returns))
             prior = function_returns.get(function.name, _PathInfo())
             merged = _merge_info(prior, info)
@@ -296,6 +420,98 @@ def _aliases(tree: ast.AST) -> dict[str, _PathInfo]:
             break
     aliases.update({f"__function__:{name}": info for name, info in function_returns.items()})
     return aliases
+
+
+def _parameter_names(node: ast.AST, names: frozenset[str]) -> frozenset[str]:
+    return frozenset(
+        item.id
+        for item in ast.walk(node)
+        if isinstance(item, ast.Name) and item.id in names
+    )
+
+
+def _local_write_helpers(tree: ast.AST) -> dict[str, frozenset[str]]:
+    """Find local/imported write wrappers whose path argument reaches a write primitive.
+
+    The inventory is intentionally conservative: a helper named like ``_write_json`` or
+    ``write_*`` is treated as a writer when its path-like parameter is passed to a filesystem
+    write.  Calls are then attributed to the caller's path argument, so a module-level helper
+    cannot hide a protected-root write from the class-2 inventory.
+    """
+    helpers: dict[str, frozenset[str]] = {}
+    imported_hints: set[str] = set()
+    for node in ast.walk(tree):
+        if isinstance(node, ast.ImportFrom):
+            imported_hints.update(
+                alias.asname or alias.name.rsplit(".", 1)[-1]
+                for alias in node.names
+                if alias.name.startswith("_write") or alias.name.startswith("write_")
+            )
+    for function in ast.walk(tree):
+        if not isinstance(function, (ast.FunctionDef, ast.AsyncFunctionDef)):
+            continue
+        params = frozenset(
+            argument.arg
+            for argument in (*function.args.posonlyargs, *function.args.args, *function.args.kwonlyargs)
+        )
+        if not params:
+            continue
+        alias_sources: dict[str, frozenset[str]] = {}
+        assignments = [
+            node for node in ast.walk(function)
+            if isinstance(node, (ast.Assign, ast.AnnAssign))
+        ]
+        for _ in range(len(assignments) + 1):
+            changed = False
+            for assignment in assignments:
+                value_sources = set(_parameter_names(assignment.value, params))
+                for name in tuple(alias_sources):
+                    if name in _parameter_names(assignment.value, frozenset(alias_sources)):
+                        value_sources.update(alias_sources[name])
+                if not value_sources:
+                    continue
+                targets = assignment.targets if isinstance(assignment, ast.Assign) else [assignment.target]
+                for target in targets:
+                    name = _target_key(target)
+                    if name and alias_sources.get(name) != frozenset(value_sources):
+                        alias_sources[name] = frozenset(value_sources)
+                        changed = True
+            if not changed:
+                break
+
+        def path_sources(node: ast.AST | None) -> frozenset[str]:
+            names = set(_parameter_names(node, params)) if node is not None else set()
+            for name in _parameter_names(node, frozenset(alias_sources)) if node is not None else ():
+                names.update(alias_sources[name])
+            return frozenset(names)
+
+        path_params: set[str] = set()
+        for call in ast.walk(function):
+            if not isinstance(call, ast.Call):
+                continue
+            name = _call_name(call)
+            if isinstance(call.func, ast.Attribute) and name in WRITE_METHODS:
+                path_params.update(path_sources(call.func.value))
+            elif name == "open" and call.args:
+                path_params.update(path_sources(call.args[0]))
+            elif (
+                isinstance(call.func, ast.Attribute)
+                and isinstance(call.func.value, ast.Name)
+                and call.func.value.id in {"os", "shutil"}
+            ):
+                qualified = call.func.value.id
+                if qualified == "os" and name in OS_WRITE_CALLS:
+                    path_params.update(path_sources(call.args[-1]) if call.args else ())
+                elif qualified == "shutil" and name in SHUTIL_WRITE_CALLS:
+                    index = 1 if name in DESTINATION_CALLS and len(call.args) > 1 else 0
+                    path_params.update(path_sources(call.args[index]) if call.args else ())
+            elif name in DESTINATION_CALLS | RENAME_CALLS and call.args:
+                index = 1 if name in DESTINATION_CALLS and len(call.args) > 1 else len(call.args) - 1
+                path_params.update(path_sources(call.args[index]))
+        if path_params:
+            helpers[function.name] = frozenset(path_params)
+    helpers.update({name: frozenset() for name in imported_hints if name not in helpers})
+    return helpers
 
 
 def _mode(node: ast.Call, *, method: bool = False) -> str:
@@ -314,18 +530,38 @@ def _mode(node: ast.Call, *, method: bool = False) -> str:
 def _accesses(text: str, module: str) -> tuple[Access, ...]:
     tree = ast.parse(text)
     aliases = _aliases(tree)
+    helper_specs = _local_write_helpers(tree)
     accesses: list[Access] = []
 
     def add(node: ast.Call, operation: str, path_node: ast.AST | None, mode: str) -> None:
-        roots = _roots(_path_info(path_node, aliases))
+        info = _path_info(path_node, aliases)
+        roots = _roots(info)
         if roots:
             source = ast.get_source_segment(text, path_node) or "<path>"
-            accesses.append(Access(module, node.lineno, operation, mode, roots, source))
+            accesses.append(Access(module, node.lineno, operation, mode, roots, source, info.unresolved))
 
     for node in ast.walk(tree):
         if not isinstance(node, ast.Call):
             continue
         name = _call_name(node)
+        if name in helper_specs:
+            # Local wrappers conventionally take the destination first.  For a helper whose
+            # implementation was imported, keep the same conservative first-path convention.
+            candidates = list(node.args[:1])
+            candidates.extend(
+                keyword.value
+                for keyword in node.keywords
+                if keyword.arg in {"path", "output", "destination", "dest", "target", "file"}
+            )
+            seen: set[tuple[str, ...]] = set()
+            for path_node in candidates:
+                info = _path_info(path_node, aliases)
+                roots = _roots(info)
+                if not roots or roots in seen:
+                    continue
+                seen.add(roots)
+                source = ast.get_source_segment(text, path_node) or "<path>"
+                accesses.append(Access(module, node.lineno, f"helper:{name}", "write", roots, source, info.unresolved))
         if isinstance(node.func, ast.Attribute):
             receiver = node.func.value
             qualified_module = receiver.id if isinstance(receiver, ast.Name) else None
@@ -352,8 +588,15 @@ def _accesses(text: str, module: str) -> tuple[Access, ...]:
                 add(node, name, receiver, "read")
             elif name in RENAME_CALLS:
                 add(node, name, node.args[-1] if node.args else None, "write")
+            if name in {"TemporaryDirectory", "mkdtemp", "NamedTemporaryFile"}:
+                directory = next((keyword.value for keyword in node.keywords if keyword.arg == "dir"), None)
+                if directory is not None:
+                    add(node, name, node, "write")
             for keyword in node.keywords:
-                if keyword.arg is None or keyword.arg in NON_PATH_KEYWORDS:
+                if keyword.arg is None or keyword.arg in NON_PATH_KEYWORDS or (
+                    name in {"TemporaryDirectory", "mkdtemp", "NamedTemporaryFile"}
+                    and keyword.arg == "dir"
+                ):
                     continue
                 add(node, f"kwarg:{keyword.arg}", keyword.value, "write")
             continue
@@ -366,13 +609,16 @@ def _accesses(text: str, module: str) -> tuple[Access, ...]:
         elif name in {"TemporaryDirectory", "mkdtemp", "NamedTemporaryFile"}:
             directory = next((keyword.value for keyword in node.keywords if keyword.arg == "dir"), None)
             if directory is not None:
-                add(node, name, directory, "write")
+                add(node, name, node, "write")
         elif name in DESTINATION_CALLS:
             add(node, name, node.args[1] if len(node.args) > 1 else None, "write")
         elif name in RENAME_CALLS:
             add(node, name, node.args[-1] if node.args else None, "write")
         for keyword in node.keywords:
-            if keyword.arg is None or keyword.arg in NON_PATH_KEYWORDS:
+            if keyword.arg is None or keyword.arg in NON_PATH_KEYWORDS or (
+                name in {"TemporaryDirectory", "mkdtemp", "NamedTemporaryFile"}
+                and keyword.arg == "dir"
+            ):
                 continue
             add(node, f"kwarg:{keyword.arg}", keyword.value, "write")
     return tuple(sorted(accesses, key=lambda item: (item.module, item.line, item.operation, item.key)))
@@ -384,6 +630,8 @@ def scan_test_module(path: Path, repo_root: Path) -> dict[str, object]:
     writes = tuple(item for item in accesses if item.mode != "read")
     if relative in GLOBAL_SIDE_EFFECT_SENTINELS:
         classification = "class3_global_sentinel"
+    elif any(access.unresolved for access in writes):
+        classification = "class4_unresolved_write"
     elif writes:
         classification = "class2_write_real_root"
     elif accesses:
@@ -396,12 +644,19 @@ def scan_test_module(path: Path, repo_root: Path) -> dict[str, object]:
         "accesses": [item.as_dict() for item in accesses],
         "write_count": len(writes),
         "read_count": len(accesses) - len(writes),
+        "unresolved_write_count": sum(access.unresolved for access in writes),
     }
 
 
-def build_inventory(repo_root: Path, *, allowlist: Iterable[str] = ()) -> dict[str, object]:
+def build_inventory(
+    repo_root: Path,
+    *,
+    allowlist: Iterable[str] = (),
+    unresolved_allowlist: Iterable[str] = (),
+) -> dict[str, object]:
     repo_root = repo_root.resolve()
     allowlisted = frozenset(allowlist)
+    unresolved_allowlisted = frozenset(unresolved_allowlist)
     modules = [
         scan_test_module(path, repo_root)
         for path in sorted(
@@ -416,9 +671,15 @@ def build_inventory(repo_root: Path, *, allowlist: Iterable[str] = ()) -> dict[s
         for access in module["accesses"]
         if access["mode"] != "read"
     ]
-    unallowlisted = [access for access in findings if access["key"] not in allowlisted]
+    unallowlisted = [
+        access for access in findings
+        if (access["key"] if not access["unresolved"] else f"{access['key']}:class4_unresolved_write")
+        not in (allowlisted if not access["unresolved"] else unresolved_allowlisted)
+    ]
+    unresolved_findings = [access for access in findings if access["unresolved"]]
+    protected_findings = [access for access in findings if not access["unresolved"]]
     return {
-        "inventory_version": "us_short_test_io_inventory.v0.2.0",
+        "inventory_version": "us_short_test_io_inventory.v0.4.0",
         "scope": {"glob": "tests/**/test_us_short*.py", "protected_roots": list(PROTECTED_ROOTS)},
         "module_count": len(modules),
         "classification_counts": {
@@ -428,26 +689,44 @@ def build_inventory(repo_root: Path, *, allowlist: Iterable[str] = ()) -> dict[s
                 "class1_read_real_root",
                 "class2_write_real_root",
                 "class3_global_sentinel",
+                "class4_unresolved_write",
             )
         },
         "allowlist": sorted(allowlisted),
+        "unresolved_allowlist": sorted(unresolved_allowlisted),
         "unallowlisted_write_findings": unallowlisted,
+        "unresolved_write_findings": unresolved_findings,
         "protected_write_finding_counts": {
-            key: sum(access["key"] == key for access in findings)
-            for key in sorted({access["key"] for access in findings})
+            key: sum(access["key"] == key for access in protected_findings)
+            for key in sorted({access["key"] for access in protected_findings})
+        },
+        "unresolved_write_finding_counts": {
+            f"{access['key']}:class4_unresolved_write": sum(
+                item["key"] == access["key"] and item["unresolved"] for item in unresolved_findings
+            )
+            for access in sorted(unresolved_findings, key=lambda item: item["key"])
         },
         "modules": modules,
     }
 
 
-def build_snapshot(repo_root: Path, *, allowlist: Iterable[str] = ()) -> dict[str, object]:
+def build_snapshot(
+    repo_root: Path,
+    *,
+    allowlist: Iterable[str] = (),
+    unresolved_allowlist: Iterable[str] = (),
+) -> dict[str, object]:
     """Return a compact tracked snapshot while retaining the full live inventory API.
 
     Class-0 modules have no direct protected-root I/O, so the snapshot records their count and a
     canonical path-list digest rather than repeating 245 empty rows.  Every module with a direct
     protected read/write or an explicit global sentinel remains listed with its access details.
     """
-    full = build_inventory(repo_root, allowlist=allowlist)
+    full = build_inventory(
+        repo_root,
+        allowlist=allowlist,
+        unresolved_allowlist=unresolved_allowlist,
+    )
     names = [module["module"] for module in full["modules"]]
     modules = []
     for module in full["modules"]:
@@ -469,7 +748,7 @@ def build_snapshot(repo_root: Path, *, allowlist: Iterable[str] = ()) -> dict[st
         access["key"]
         for module in full["modules"]
         for access in module["accesses"]
-        if access["mode"] != "read"
+        if access["mode"] != "read" and not access["unresolved"]
     })
     return {
         "inventory_version": full["inventory_version"],
@@ -479,15 +758,27 @@ def build_snapshot(repo_root: Path, *, allowlist: Iterable[str] = ()) -> dict[st
         "class0_modules_omitted": True,
         "module_path_sha256": hashlib.sha256("\n".join(names).encode("utf-8")).hexdigest(),
         "allowlist": full["allowlist"],
+        "unresolved_allowlist": full["unresolved_allowlist"],
         "unallowlisted_write_findings": full["unallowlisted_write_findings"],
+        "unresolved_write_finding_counts": full["unresolved_write_finding_counts"],
         "protected_write_finding_keys": write_keys,
         "protected_write_finding_counts": full["protected_write_finding_counts"],
         "modules": modules,
     }
 
 
-def write_inventory(repo_root: Path, output: Path, *, allowlist: Iterable[str] = ()) -> None:
-    payload = build_snapshot(repo_root, allowlist=allowlist)
+def write_inventory(
+    repo_root: Path,
+    output: Path,
+    *,
+    allowlist: Iterable[str] = (),
+    unresolved_allowlist: Iterable[str] = (),
+) -> None:
+    payload = build_snapshot(
+        repo_root,
+        allowlist=allowlist,
+        unresolved_allowlist=unresolved_allowlist,
+    )
     output.parent.mkdir(parents=True, exist_ok=True)
     output.write_text(json.dumps(payload, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
 

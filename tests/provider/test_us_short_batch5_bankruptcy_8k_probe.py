@@ -7,6 +7,7 @@ from pathlib import Path
 from unittest import mock
 
 from runners import us_short_batch5_bankruptcy_8k_probe as probe
+from tests.provider.us_short_private_test_root import temporary_us_short_directory
 
 
 ROOT = Path(".").resolve()
@@ -76,13 +77,12 @@ class FakeBankruptcyHttpClient:
 
 class UsShortBatch5Bankruptcy8kProbeTest(unittest.TestCase):
     def _run_under_provider_samples(self, **kwargs: object) -> tuple[dict, FakeBankruptcyHttpClient, Path]:
-        base = (
-            ROOT
-            / "provider_samples"
-            / "us_short_batch5_bankruptcy_8k_20260703"
-            / "raw"
-            / "_unit_tests"
+        root_context = temporary_us_short_directory(
+            ROOT, Path("provider_samples") / "us_short_batch5_bankruptcy_8k_20260703" / "raw"
         )
+        private_root = Path(root_context.__enter__())
+        base = private_root / "_unit_tests"
+        self.addCleanup(root_context.__exit__, None, None, None)
         base.mkdir(parents=True, exist_ok=True)
         client = FakeBankruptcyHttpClient()
         temp_dir = tempfile.TemporaryDirectory(prefix="run_", dir=base)
@@ -157,7 +157,12 @@ class UsShortBatch5Bankruptcy8kProbeTest(unittest.TestCase):
         self.assertNotIn('"filings"', summary_text)
 
     def test_live_probe_requires_confirmations_before_fetch_or_write(self) -> None:
-        base = ROOT / "provider_samples" / "us_short_batch5_bankruptcy_8k_20260703" / "raw" / "_unit_tests"
+        root_context = temporary_us_short_directory(
+            ROOT, Path("provider_samples") / "us_short_batch5_bankruptcy_8k_20260703" / "raw"
+        )
+        private_root = Path(root_context.__enter__())
+        base = private_root / "_unit_tests"
+        self.addCleanup(root_context.__exit__, None, None, None)
         base.mkdir(parents=True, exist_ok=True)
         client = FakeBankruptcyHttpClient()
         with tempfile.TemporaryDirectory(prefix="missing_confirm_", dir=base) as tmp_dir:
@@ -184,7 +189,12 @@ class UsShortBatch5Bankruptcy8kProbeTest(unittest.TestCase):
             self.assertFalse((temp_root / "summary.json").exists())
 
     def test_dry_run_env_checks_boundary_without_fetching_or_writing(self) -> None:
-        base = ROOT / "provider_samples" / "us_short_batch5_bankruptcy_8k_20260703" / "raw" / "_unit_tests"
+        root_context = temporary_us_short_directory(
+            ROOT, Path("provider_samples") / "us_short_batch5_bankruptcy_8k_20260703" / "raw"
+        )
+        private_root = Path(root_context.__enter__())
+        base = private_root / "_unit_tests"
+        self.addCleanup(root_context.__exit__, None, None, None)
         base.mkdir(parents=True, exist_ok=True)
         client = FakeBankruptcyHttpClient()
         with tempfile.TemporaryDirectory(prefix="dry_run_", dir=base) as tmp_dir:
@@ -212,7 +222,12 @@ class UsShortBatch5Bankruptcy8kProbeTest(unittest.TestCase):
             self.assertFalse((temp_root / "summary.json").exists())
 
     def test_schema_invalid_summary_is_not_written(self) -> None:
-        base = ROOT / "provider_samples" / "us_short_batch5_bankruptcy_8k_20260703" / "raw" / "_unit_tests"
+        root_context = temporary_us_short_directory(
+            ROOT, Path("provider_samples") / "us_short_batch5_bankruptcy_8k_20260703" / "raw"
+        )
+        private_root = Path(root_context.__enter__())
+        base = private_root / "_unit_tests"
+        self.addCleanup(root_context.__exit__, None, None, None)
         base.mkdir(parents=True, exist_ok=True)
         client = FakeBankruptcyHttpClient()
         original_build_summary = probe.build_summary
@@ -249,7 +264,12 @@ class UsShortBatch5Bankruptcy8kProbeTest(unittest.TestCase):
             self.assertFalse(summary_path.with_name("summary.json.tmp").exists())
 
     def test_hostile_positive_accession_is_not_emitted_to_tracked_summary(self) -> None:
-        base = ROOT / "provider_samples" / "us_short_batch5_bankruptcy_8k_20260703" / "raw" / "_unit_tests"
+        root_context = temporary_us_short_directory(
+            ROOT, Path("provider_samples") / "us_short_batch5_bankruptcy_8k_20260703" / "raw"
+        )
+        private_root = Path(root_context.__enter__())
+        base = private_root / "_unit_tests"
+        self.addCleanup(root_context.__exit__, None, None, None)
         base.mkdir(parents=True, exist_ok=True)
         client = FakeBankruptcyHttpClient(aapl_positive_accession="sk-live-token@example.com")
         with tempfile.TemporaryDirectory(prefix="hostile_accession_", dir=base) as tmp_dir:

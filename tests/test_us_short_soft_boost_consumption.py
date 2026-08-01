@@ -9,6 +9,7 @@ from pathlib import Path
 
 from engine import us_short_soft_boost_consumption as consumption
 from tests.schema.test_us_short_provisional_theme_validation_schema import _artifact
+from tests.provider.us_short_private_test_root import temporary_us_short_directory
 
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -23,8 +24,9 @@ def _write(path: Path, payload: dict) -> str:
 
 class SoftBoostConsumptionTest(unittest.TestCase):
     def setUp(self):
-        provider_samples = ROOT / "provider_samples"
-        provider_samples.mkdir(parents=True, exist_ok=True)
+        self._sample_root_context = temporary_us_short_directory(ROOT, Path("provider_samples"))
+        provider_samples = Path(self._sample_root_context.__enter__())
+        self.addCleanup(self._sample_root_context.__exit__, None, None, None)
         self._fixture_dir = tempfile.TemporaryDirectory(
             prefix=f"k4b_{self._testMethodName}_",
             dir=provider_samples,

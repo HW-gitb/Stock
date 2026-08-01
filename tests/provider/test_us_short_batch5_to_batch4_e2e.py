@@ -30,9 +30,9 @@ from tests.provider.test_us_short_batch5_data_context import (  # noqa: E402
     _news_source,
     _offering_record,
 )
+from tests.provider.us_short_private_test_root import temporary_us_short_state_directory  # noqa: E402
 
 
-STATE_DIR = ROOT / "state" / "us_short"
 TEMPLATE = ROOT / "schemas" / "examples" / "us_short_weekend_batch4_context_packet.nonempty.example.json"
 
 
@@ -75,19 +75,22 @@ def _no_build_template(path: Path) -> Path:
 
 class Batch5ToBatch4E2ETest(unittest.TestCase):
     def setUp(self) -> None:
+        self._state_root_context = temporary_us_short_state_directory(ROOT)
+        self.state_dir = Path(self._state_root_context.__enter__())
+        self.addCleanup(self._state_root_context.__exit__, None, None, None)
         self.slug = f"test_batch5_to_batch4_e2e_{os.getpid()}_{self._testMethodName}"
         self.paths = {
-            "packet": STATE_DIR / f"{self.slug}_packet.json",
-            "candidate": STATE_DIR / f"{self.slug}_candidate.json",
-            "momentum": STATE_DIR / f"{self.slug}_momentum.json",
-            "theme": STATE_DIR / f"{self.slug}_theme.json",
-            "offering": STATE_DIR / f"{self.slug}_offering.json",
-            "analyst": STATE_DIR / f"{self.slug}_analyst.json",
-            "news": STATE_DIR / f"{self.slug}_news.json",
-            "theme_contract": STATE_DIR / f"{self.slug}_theme_selection_contract.json",
-            "ohlcv": STATE_DIR / f"{self.slug}_ohlcv.json",
-            "data_context": STATE_DIR / f"{self.slug}_data_context.json",
-            "components": STATE_DIR / f"{self.slug}_context_components.json",
+            "packet": self.state_dir / f"{self.slug}_packet.json",
+            "candidate": self.state_dir / f"{self.slug}_candidate.json",
+            "momentum": self.state_dir / f"{self.slug}_momentum.json",
+            "theme": self.state_dir / f"{self.slug}_theme.json",
+            "offering": self.state_dir / f"{self.slug}_offering.json",
+            "analyst": self.state_dir / f"{self.slug}_analyst.json",
+            "news": self.state_dir / f"{self.slug}_news.json",
+            "theme_contract": self.state_dir / f"{self.slug}_theme_selection_contract.json",
+            "ohlcv": self.state_dir / f"{self.slug}_ohlcv.json",
+            "data_context": self.state_dir / f"{self.slug}_data_context.json",
+            "components": self.state_dir / f"{self.slug}_context_components.json",
         }
         for path in self.paths.values():
             path.unlink(missing_ok=True)

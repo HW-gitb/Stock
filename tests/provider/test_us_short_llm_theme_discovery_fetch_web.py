@@ -13,7 +13,10 @@ from datetime import datetime, timezone
 from pathlib import Path
 
 from runners import us_short_llm_theme_discovery_fetch_web as fetch
-from tests.provider.us_short_private_test_root import temporary_provider_directory
+from tests.provider.us_short_private_test_root import (
+    temporary_provider_directory,
+    temporary_us_short_state_directory,
+)
 
 
 class _Search:
@@ -890,7 +893,7 @@ class WebFetchTests(unittest.TestCase):
             self.assertFalse((root / "raw" / "b.json").exists())
 
     def test_public_packet_pair_rolls_back_if_second_publish_fails(self):
-        with tempfile.TemporaryDirectory(dir=fetch.STATE_DIR) as td:
+        with temporary_us_short_state_directory(fetch.ROOT) as td:
             first = Path(td) / "discovery.json"
             second = Path(td) / "receipt.json"
             real_link = fetch.os.link
@@ -915,7 +918,7 @@ class WebFetchTests(unittest.TestCase):
             _, second, _ = fetch.build_web_fetch_packet(generated_at="2026-07-25T08:00:00Z", fetched_at="2026-07-25T08:00:00Z", **base)
             self.assertEqual(first["source_refs"][0]["fetched_at"], second["source_refs"][0]["fetched_at"])
             self.assertEqual(first["source_refs"][0]["content_sha256"], second["source_refs"][0]["content_sha256"])
-        with tempfile.TemporaryDirectory(dir=fetch.STATE_DIR) as td:
+        with temporary_us_short_state_directory(fetch.ROOT) as td:
             original_state = fetch.STATE_DIR
             try:
                 fetch.STATE_DIR = Path(td)
@@ -1020,7 +1023,7 @@ class WebFetchTests(unittest.TestCase):
 
     def test_live_budget_is_capped_and_lets_a_second_query_set_spend_the_rest(self):
         # A test must never reserve against the operator's real state/us_short.
-        with tempfile.TemporaryDirectory(dir=fetch.STATE_DIR) as td:
+        with temporary_us_short_state_directory(fetch.ROOT) as td:
             with mock.patch.object(fetch, "STATE_DIR", Path(td)):
                 fetch._reserve_provider_budget("web", "tavily", "20260726", call_count=20, query_scope=[f"a{i}" for i in range(20)])
                 fetch._reserve_provider_budget("web", "tavily", "20260726", call_count=5, query_scope=[f"b{i}" for i in range(5)])

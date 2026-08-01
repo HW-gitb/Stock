@@ -23,6 +23,10 @@ from tests.provider.test_us_short_batch5_bankruptcy_8k_candidate_scan import (  
     _write_json,
 )
 from tests.provider.test_us_short_batch5_data_context import _DECISION_DATE  # noqa: E402
+from tests.provider.us_short_private_test_root import (  # noqa: E402
+    temporary_us_short_directory,
+    temporary_us_short_state_directory,
+)
 
 
 STATE_DIR = ROOT / "state" / "us_short"
@@ -36,17 +40,39 @@ def _symbols(count: int) -> tuple[str, ...]:
 
 class Bankruptcy8kCandidateResumeScanTest(unittest.TestCase):
     def setUp(self):
+        self._state_root_context = temporary_us_short_state_directory(ROOT)
+        self.state_dir = Path(self._state_root_context.__enter__())
+        self.addCleanup(self._state_root_context.__exit__, None, None, None)
+        self._sample_root_context = temporary_us_short_directory(
+            ROOT, Path("provider_samples") / "us_short_batch5_bankruptcy_8k_candidate_resume_scan_20260705"
+        )
+        self.sample_root = Path(self._sample_root_context.__enter__())
+        self.addCleanup(self._sample_root_context.__exit__, None, None, None)
+        import importlib
+
+        producer = importlib.import_module(MODULE)
+        original_git_ignored = producer._git_ignored
+        state_root = self.state_dir.resolve()
+
+        def _git_ignored_for_private_test(path):
+            resolved = Path(path).resolve()
+            if resolved == state_root or state_root in resolved.parents:
+                return True
+            return original_git_ignored(path)
+
+        producer._git_ignored = _git_ignored_for_private_test
+        self.addCleanup(setattr, producer, "_git_ignored", original_git_ignored)
         self.slug = f"test_b8kresume_{os.getpid()}_{self._testMethodName[:20]}"
         self.symbols = _symbols(115)
         self.paths = {
-            "candidate": STATE_DIR / f"{self.slug}_candidate.json",
-            "manifest": STATE_DIR / f"{self.slug}_manifest.json",
-            "source_packet": STATE_DIR / f"{self.slug}_packet.json",
-            "screen": STATE_DIR / f"{self.slug}_screen.json",
+            "candidate": self.state_dir / f"{self.slug}_candidate.json",
+            "manifest": self.state_dir / f"{self.slug}_manifest.json",
+            "source_packet": self.state_dir / f"{self.slug}_packet.json",
+            "screen": self.state_dir / f"{self.slug}_screen.json",
             "producer_summary": ROOT / "docs" / f"{self.slug}_summary.json",
             "consumer_summary": ROOT / "docs" / f"{self.slug}_consumer_summary.json",
         }
-        self.raw_root = SAMPLE_ROOT / self.slug / "raw"
+        self.raw_root = self.sample_root / self.slug / "raw"
         for path in self.paths.values():
             path.unlink(missing_ok=True)
             path.with_name(path.name + ".tmp").unlink(missing_ok=True)
@@ -56,14 +82,6 @@ class Bankruptcy8kCandidateResumeScanTest(unittest.TestCase):
         for path in self.paths.values():
             path.unlink(missing_ok=True)
             path.with_name(path.name + ".tmp").unlink(missing_ok=True)
-        root = SAMPLE_ROOT / self.slug
-        if root.exists():
-            for item in sorted(root.rglob("*"), reverse=True):
-                if item.is_file():
-                    item.unlink()
-                elif item.is_dir():
-                    item.rmdir()
-            root.rmdir()
 
     def _env(self, producer):
         return mock.patch.dict(
@@ -346,7 +364,7 @@ class Bankruptcy8kCandidateResumeScanTest(unittest.TestCase):
         import importlib
 
         producer = importlib.import_module(MODULE)
-        rogue = STATE_DIR / f"{self.slug}_rogue_raw.json"
+        rogue = self.state_dir / f"{self.slug}_rogue_raw.json"
         self.addCleanup(rogue.unlink, missing_ok=True)
         _write_json(rogue, self._successful_submission_wrapper(producer))
         manifest = self._manifest_with_raw_ref(producer._repo_rel(rogue))

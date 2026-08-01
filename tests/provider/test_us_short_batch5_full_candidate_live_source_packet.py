@@ -26,6 +26,10 @@ from tests.provider.test_us_short_batch5_data_context import (  # noqa: E402
     _constant_projection,
 )
 from tests.provider.us_short_projection_binding_test_helpers import bound_projection  # noqa: E402
+from tests.provider.us_short_private_test_root import (  # noqa: E402
+    temporary_us_short_directory,
+    temporary_us_short_state_directory,
+)
 
 
 STATE_DIR = ROOT / "state" / "us_short"
@@ -240,17 +244,30 @@ class UsShortBatch5FullCandidateLiveSourcePacketTest(unittest.TestCase):
         return approval
 
     def setUp(self):
+        self._state_root_context = temporary_us_short_state_directory(ROOT)
+        self.state_root = Path(self._state_root_context.__enter__())
+        self.addCleanup(self._state_root_context.__exit__, None, None, None)
+        self._sample_root_context = temporary_us_short_directory(
+            ROOT, Path("provider_samples") / "us_short_batch5_full_candidate_live_source_packet_20260706"
+        )
+        self.sample_root = Path(self._sample_root_context.__enter__())
+        self.addCleanup(self._sample_root_context.__exit__, None, None, None)
+        self._preflight_root_context = temporary_us_short_directory(
+            ROOT, Path("provider_samples") / "us_short_batch5_full_candidate_pass2_preflight_20260706"
+        )
+        self.preflight_root = Path(self._preflight_root_context.__enter__())
+        self.addCleanup(self._preflight_root_context.__exit__, None, None, None)
         self.slug = f"fc_live_{os.getpid()}_{abs(hash(self._testMethodName)) % 100000}"
-        self.raw_root = SAMPLE_DIR / self.slug / "raw"
+        self.raw_root = self.sample_root / "full_candidate_live_source_packet_20260706" / self.slug / "raw"
         self.paths = {
-            "candidate": STATE_DIR / f"{self.slug}_candidate.json",
-            "momentum": STATE_DIR / f"{self.slug}_momentum.json",
-            "theme": STATE_DIR / f"{self.slug}_theme.json",
-            "preflight": PREFLIGHT_SAMPLE_DIR / self.slug / "preflight.json",
-            "summary": SAMPLE_DIR / self.slug / "summary.json",
-            "prefix": STATE_DIR / self.slug,
-            "output": STATE_DIR / f"{self.slug}_data_context.json",
-            "components": STATE_DIR / f"{self.slug}_context_components.json",
+            "candidate": self.state_root / f"{self.slug}_candidate.json",
+            "momentum": self.state_root / f"{self.slug}_momentum.json",
+            "theme": self.state_root / f"{self.slug}_theme.json",
+            "preflight": self.preflight_root / self.slug / "preflight.json",
+            "summary": self.sample_root / "full_candidate_live_source_packet_20260706" / self.slug / "summary.json",
+            "prefix": self.state_root / self.slug,
+            "output": self.state_root / f"{self.slug}_data_context.json",
+            "components": self.state_root / f"{self.slug}_context_components.json",
         }
         for path in list(self.paths.values()) + [self.raw_root]:
             if path.is_dir():
@@ -346,22 +363,6 @@ class UsShortBatch5FullCandidateLiveSourcePacketTest(unittest.TestCase):
         ]
         for path in cleanup:
             path.unlink(missing_ok=True)
-        root = SAMPLE_DIR / self.slug
-        if root.exists():
-            for item in sorted(root.rglob("*"), reverse=True):
-                if item.is_file():
-                    item.unlink()
-                elif item.is_dir():
-                    item.rmdir()
-            root.rmdir()
-        preflight_root = PREFLIGHT_SAMPLE_DIR / self.slug
-        if preflight_root.exists():
-            for item in sorted(preflight_root.rglob("*"), reverse=True):
-                if item.is_file():
-                    item.unlink()
-                elif item.is_dir():
-                    item.rmdir()
-            preflight_root.rmdir()
 
     def _env(self):
         return mock.patch.dict(

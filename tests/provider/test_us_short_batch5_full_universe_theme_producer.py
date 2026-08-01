@@ -27,6 +27,10 @@ from tests.provider.test_us_short_batch5_full_universe_momentum_producer import 
 )
 from tests.provider.test_us_short_batch5_data_context import _constant_projection  # noqa: E402
 from tests.provider.us_short_projection_binding_test_helpers import bound_projection  # noqa: E402
+from tests.provider.us_short_private_test_root import (  # noqa: E402
+    temporary_us_short_directory,
+    temporary_us_short_state_directory,
+)
 
 
 STATE_DIR = ROOT / "state" / "us_short"
@@ -108,13 +112,38 @@ _SECTORS = {"AAPL": "Technology", "MSFT": "Technology", "GOOG": "Technology", "A
 
 class FullUniverseThemeProducerTest(unittest.TestCase):
     def setUp(self):
+        self._state_root_context = temporary_us_short_state_directory(ROOT)
+        self.state_root = Path(self._state_root_context.__enter__())
+        self.addCleanup(self._state_root_context.__exit__, None, None, None)
+        self._sample_root_context = temporary_us_short_directory(
+            ROOT, Path("provider_samples") / "us_short_batch5_full_universe_theme_20260707"
+        )
+        self.sample_root = Path(self._sample_root_context.__enter__())
+        self.addCleanup(self._sample_root_context.__exit__, None, None, None)
+        self._projection_sample_root_context = temporary_us_short_directory(
+            ROOT, Path("provider_samples") / "us_short_batch5_full_candidate_projection_inputs_20260706"
+        )
+        self.projection_sample_root = Path(self._projection_sample_root_context.__enter__())
+        self.addCleanup(self._projection_sample_root_context.__exit__, None, None, None)
+        runner = importlib.import_module(RUNNER_MODULE)
+        original_git_ignored = runner._git_ignored
+        state_root = self.state_root.resolve()
+
+        def _git_ignored_for_private_test(path):
+            resolved = Path(path).resolve()
+            if resolved == state_root or state_root in resolved.parents:
+                return True
+            return original_git_ignored(path)
+
+        runner._git_ignored = _git_ignored_for_private_test
+        self.addCleanup(setattr, runner, "_git_ignored", original_git_ignored)
         self.slug = f"test_full_universe_theme_{os.getpid()}_{self._testMethodName}"
         self.paths = {
-            "candidate": STATE_DIR / f"{self.slug}_candidate.json",
-            "series": STATE_DIR / f"{self.slug}_series.json",
-            "classification": STATE_DIR / f"{self.slug}_classification.json",
-            "projection": STATE_DIR / f"{self.slug}_theme_projection.json",
-            "summary": SAMPLE_ROOT / self.slug / "summary.json",
+            "candidate": self.state_root / f"{self.slug}_candidate.json",
+            "series": self.state_root / f"{self.slug}_series.json",
+            "classification": self.state_root / f"{self.slug}_classification.json",
+            "projection": self.state_root / f"{self.slug}_theme_projection.json",
+            "summary": self.sample_root / "full_universe_theme_20260707" / self.slug / "summary.json",
         }
         for path in self.paths.values():
             path.unlink(missing_ok=True)
@@ -123,19 +152,11 @@ class FullUniverseThemeProducerTest(unittest.TestCase):
         _write_json(self.paths["classification"], _classification_packet(dict(_SECTORS)))
 
     def tearDown(self):
-        extra = [STATE_DIR / f"{self.slug}_momentum_src.json",
-                 STATE_DIR / f"{self.slug}_out_momentum.json",
-                 STATE_DIR / f"{self.slug}_out_theme.json"]
+        extra = [self.state_root / f"{self.slug}_momentum_src.json",
+                 self.state_root / f"{self.slug}_out_momentum.json",
+                 self.state_root / f"{self.slug}_out_theme.json"]
         for path in list(self.paths.values()) + extra:
             path.unlink(missing_ok=True)
-        for root in (SAMPLE_ROOT / self.slug, PROJECTION_INPUTS_SAMPLE_ROOT / self.slug):
-            if root.exists():
-                for item in sorted(root.rglob("*"), reverse=True):
-                    if item.is_file():
-                        item.unlink()
-                    elif item.is_dir():
-                        item.rmdir()
-                root.rmdir()
 
     def _run_packet(self, **overrides):
         kwargs = {
@@ -187,7 +208,7 @@ class FullUniverseThemeProducerTest(unittest.TestCase):
     def test_output_projection_feeds_full_candidate_projection_inputs(self):
         self._run_packet()
         projection_inputs = importlib.import_module("runners.us_short_batch5_full_candidate_projection_inputs")
-        momentum_src = STATE_DIR / f"{self.slug}_momentum_src.json"
+        momentum_src = self.state_root / f"{self.slug}_momentum_src.json"
         _write_json(
             momentum_src,
             bound_projection(
@@ -203,14 +224,14 @@ class FullUniverseThemeProducerTest(unittest.TestCase):
             expected_decision_date=_DECISION_DATE,
             source_momentum_projection_path=momentum_src,
             source_theme_projection_path=self.paths["projection"],
-            output_momentum_projection_path=STATE_DIR / f"{self.slug}_out_momentum.json",
-            output_theme_projection_path=STATE_DIR / f"{self.slug}_out_theme.json",
-            summary_path=PROJECTION_INPUTS_SAMPLE_ROOT / self.slug / "summary.json",
+            output_momentum_projection_path=self.state_root / f"{self.slug}_out_momentum.json",
+            output_theme_projection_path=self.state_root / f"{self.slug}_out_theme.json",
+            summary_path=self.projection_sample_root / self.slug / "summary.json",
             generated_at="2026-06-15T12:00:00+00:00",
         )
         self.assertEqual(out_summary["output_projection_contract"]["target_count"], 5)
         self.assertEqual(out_summary["output_projection_contract"]["theme_scored_count"], 3)
-        merged = _read_json(STATE_DIR / f"{self.slug}_out_theme.json")
+        merged = _read_json(self.state_root / f"{self.slug}_out_theme.json")
         self.assertEqual(set(merged["theme_block_by_ticker"]), {"AAPL", "MSFT", "GOOG"})
 
     def test_missing_benchmark_fails_closed(self):

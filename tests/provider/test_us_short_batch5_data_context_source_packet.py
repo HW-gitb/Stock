@@ -46,6 +46,10 @@ from tests.provider.test_us_short_batch5_data_context import (  # noqa: E402
     _offering_source,
 )
 from tests.schema.test_us_short_provisional_theme_validation_schema import _artifact as _theme_artifact  # noqa: E402
+from tests.provider.us_short_private_test_root import (  # noqa: E402
+    temporary_us_short_directory,
+    temporary_us_short_state_directory,
+)
 
 
 STATE_DIR = ROOT / "state" / "us_short"
@@ -58,6 +62,8 @@ class K4bPublicTop15ContractTest(unittest.TestCase):
         self.assertNotIn("_official_top15_tickers", source)
 
     def test_k4b_default_state_root_is_allowed_but_every_output_stays_gitignored(self):
+        # READ-ONLY/NEGATIVE CONTROL: this class audits the canonical default-root contract and
+        # never creates, writes, or removes a file under the real state root.
         self.assertFalse(source_packet_runner._git_ignored(STATE_DIR))
         state_dir = source_packet_runner._validate_soft_boost_state_dir(_rel(STATE_DIR))
         self.assertEqual(state_dir, STATE_DIR)
@@ -139,23 +145,41 @@ def _overextension_projection() -> dict:
 class Batch5DataContextSourcePacketTest(unittest.TestCase):
     def setUp(self):
         self.slug = f"test_source_packet_{os.getpid()}_{self._testMethodName}"
-        self.soft_state_dir = (
-            ROOT / "provider_samples" / self.slug / "state" / "us_short"
+        self._state_root_context = temporary_us_short_state_directory(ROOT)
+        self.state_dir = Path(self._state_root_context.__enter__())
+        self.addCleanup(self._state_root_context.__exit__, None, None, None)
+        self._provider_root_context = temporary_us_short_directory(
+            ROOT, Path("provider_samples") / f"data_context_source_packet_{self.slug}"
         )
+        self.provider_root = Path(self._provider_root_context.__enter__())
+        self.addCleanup(self._provider_root_context.__exit__, None, None, None)
+        self.soft_state_dir = self.provider_root / "state" / "us_short"
+        self.soft_state_dir.mkdir(parents=True, exist_ok=True)
+        original_git_ignored = source_packet_runner._git_ignored
+        private_roots = tuple(root.resolve() for root in (self.state_dir, self.soft_state_dir, self.provider_root))
+
+        def _git_ignored_for_private_test(path):
+            resolved = Path(path).resolve()
+            if any(resolved == root or root in resolved.parents for root in private_roots):
+                return True
+            return original_git_ignored(path)
+
+        source_packet_runner._git_ignored = _git_ignored_for_private_test
+        self.addCleanup(setattr, source_packet_runner, "_git_ignored", original_git_ignored)
         self.paths = {
-            "packet": STATE_DIR / f"{self.slug}_packet.json",
-            "candidate": STATE_DIR / f"{self.slug}_candidate.json",
-            "momentum": STATE_DIR / f"{self.slug}_momentum.json",
-            "theme": STATE_DIR / f"{self.slug}_theme.json",
-            "overextension": STATE_DIR / f"{self.slug}_overextension.json",
-            "offering": STATE_DIR / f"{self.slug}_offering.json",
-            "analyst": STATE_DIR / f"{self.slug}_analyst.json",
-            "yfinance": STATE_DIR / f"{self.slug}_yfinance_analyst.json",
-            "news": STATE_DIR / f"{self.slug}_news.json",
-            "theme_contract": STATE_DIR / f"{self.slug}_theme_selection_contract.json",
-            "output": STATE_DIR / f"{self.slug}_data_context.json",
-            "components": STATE_DIR / f"{self.slug}_context_components.json",
-            "classification": STATE_DIR / f"{self.slug}_classification.json",
+            "packet": self.state_dir / f"{self.slug}_packet.json",
+            "candidate": self.state_dir / f"{self.slug}_candidate.json",
+            "momentum": self.state_dir / f"{self.slug}_momentum.json",
+            "theme": self.state_dir / f"{self.slug}_theme.json",
+            "overextension": self.state_dir / f"{self.slug}_overextension.json",
+            "offering": self.state_dir / f"{self.slug}_offering.json",
+            "analyst": self.state_dir / f"{self.slug}_analyst.json",
+            "yfinance": self.state_dir / f"{self.slug}_yfinance_analyst.json",
+            "news": self.state_dir / f"{self.slug}_news.json",
+            "theme_contract": self.state_dir / f"{self.slug}_theme_selection_contract.json",
+            "output": self.state_dir / f"{self.slug}_data_context.json",
+            "components": self.state_dir / f"{self.slug}_context_components.json",
+            "classification": self.state_dir / f"{self.slug}_classification.json",
             "soft_ingest": self.soft_state_dir / f"{self.slug}_soft_ingest.json",
             "soft_stage": self.soft_state_dir / f"us_short_provisional_theme_stage_receipt_{_DECISION_DATE}.json",
             "soft_validation": self.soft_state_dir / f"us_short_provisional_theme_validation_{_DECISION_DATE}.json",
@@ -168,7 +192,7 @@ class Batch5DataContextSourcePacketTest(unittest.TestCase):
             "soft_ledger": self.soft_state_dir / "shadow_compare_private" / (
                 f"us_short_soft_boost_comparison_ledger_{_DECISION_DATE}.json"
             ),
-            "raw_payload": ROOT / "provider_samples" / f"{self.slug}_raw_payload.json",
+            "raw_payload": self.provider_root / f"{self.slug}_raw_payload.json",
         }
         for path in self.paths.values():
             path.unlink(missing_ok=True)
@@ -177,16 +201,6 @@ class Batch5DataContextSourcePacketTest(unittest.TestCase):
     def tearDown(self):
         for path in self.paths.values():
             path.unlink(missing_ok=True)
-        for path in (
-            self.soft_state_dir / "shadow_compare_private",
-            self.soft_state_dir,
-            self.soft_state_dir.parent,
-            self.soft_state_dir.parent.parent,
-        ):
-            try:
-                path.rmdir()
-            except OSError:
-                pass
 
     def _write_sources_and_packet(self):
         targets = ("AAPL", "MSFT")
@@ -386,7 +400,7 @@ class Batch5DataContextSourcePacketTest(unittest.TestCase):
         self.assertAlmostEqual(written["selection_inputs"]["per_ticker"]["MSFT"]["core_score"], 50.0)
 
     def test_k4b_valid_nonempty_uses_one_source_packet_for_on_and_local_off_shadow(self):
-        operator_shadow_dir = STATE_DIR / "shadow_compare_private"
+        operator_shadow_dir = self.state_dir / "shadow_compare_private"
         operator_shadow_dir_existed = operator_shadow_dir.exists()
         packet = self._packet_payload()
         packet["paths"]["output_context_components_path"] = _rel(self.paths["components"])
@@ -472,7 +486,7 @@ class Batch5DataContextSourcePacketTest(unittest.TestCase):
             _soft_boost_common_input_sha256(changed_holdings, loaded_paths),
         )
         changed_theme_contract = dict(loaded_paths)
-        alternate = STATE_DIR / f"{self.slug}_alternate_theme_contract.json"
+        alternate = self.state_dir / f"{self.slug}_alternate_theme_contract.json"
         _write_json(alternate, {"different": True})
         self.paths["alternate_theme_contract"] = alternate
         changed_theme_contract["theme_selection_contract_path"] = alternate
@@ -1029,7 +1043,7 @@ class Batch5DataContextSourcePacketTest(unittest.TestCase):
         self.assertFalse(self.paths["output"].exists())
 
     def test_malformed_catalyst_governance_is_wrapped_by_packet_runner(self):
-        bad_governance = STATE_DIR / f"{self.slug}_bad_catalyst_governance.json"
+        bad_governance = self.state_dir / f"{self.slug}_bad_catalyst_governance.json"
         self.paths["bad_governance"] = bad_governance
         _write_json(bad_governance, {"broken": True})
         packet = self._packet_payload()

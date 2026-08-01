@@ -7,6 +7,7 @@ from pathlib import Path
 from unittest import mock
 
 from runners import us_short_batch5_status_source_probe as probe
+from tests.provider.us_short_private_test_root import temporary_us_short_directory
 
 
 ROOT = Path(".").resolve()
@@ -49,13 +50,12 @@ class FakeStatusHttpClient:
 
 class UsShortBatch5StatusSourceProbeTest(unittest.TestCase):
     def _run_under_provider_samples(self, **kwargs: object) -> tuple[dict, FakeStatusHttpClient, Path]:
-        base = (
-            ROOT
-            / "provider_samples"
-            / "us_short_batch5_status_source_20260630"
-            / "raw"
-            / "_unit_tests"
+        root_context = temporary_us_short_directory(
+            ROOT, Path("provider_samples") / "us_short_batch5_status_source_20260630" / "raw"
         )
+        private_root = Path(root_context.__enter__())
+        base = private_root / "_unit_tests"
+        self.addCleanup(root_context.__exit__, None, None, None)
         base.mkdir(parents=True, exist_ok=True)
         client = FakeStatusHttpClient()
         temp_dir = tempfile.TemporaryDirectory(prefix="run_", dir=base)
@@ -126,7 +126,12 @@ class UsShortBatch5StatusSourceProbeTest(unittest.TestCase):
         self.assertNotIn("raw_payload", summary_text.lower())
 
     def test_live_probe_requires_confirmations_before_fetch_or_write(self) -> None:
-        base = ROOT / "provider_samples" / "us_short_batch5_status_source_20260630" / "raw" / "_unit_tests"
+        root_context = temporary_us_short_directory(
+            ROOT, Path("provider_samples") / "us_short_batch5_status_source_20260630" / "raw"
+        )
+        private_root = Path(root_context.__enter__())
+        base = private_root / "_unit_tests"
+        self.addCleanup(root_context.__exit__, None, None, None)
         base.mkdir(parents=True, exist_ok=True)
         client = FakeStatusHttpClient()
         with tempfile.TemporaryDirectory(prefix="missing_confirm_", dir=base) as tmp_dir:
@@ -151,7 +156,12 @@ class UsShortBatch5StatusSourceProbeTest(unittest.TestCase):
             self.assertFalse((temp_root / "summary.json").exists())
 
     def test_dry_run_env_checks_boundary_without_fetching_or_writing(self) -> None:
-        base = ROOT / "provider_samples" / "us_short_batch5_status_source_20260630" / "raw" / "_unit_tests"
+        root_context = temporary_us_short_directory(
+            ROOT, Path("provider_samples") / "us_short_batch5_status_source_20260630" / "raw"
+        )
+        private_root = Path(root_context.__enter__())
+        base = private_root / "_unit_tests"
+        self.addCleanup(root_context.__exit__, None, None, None)
         base.mkdir(parents=True, exist_ok=True)
         client = FakeStatusHttpClient()
         with tempfile.TemporaryDirectory(prefix="dry_run_", dir=base) as tmp_dir:
@@ -177,7 +187,12 @@ class UsShortBatch5StatusSourceProbeTest(unittest.TestCase):
             self.assertFalse((temp_root / "summary.json").exists())
 
     def test_schema_invalid_summary_is_not_written(self) -> None:
-        base = ROOT / "provider_samples" / "us_short_batch5_status_source_20260630" / "raw" / "_unit_tests"
+        root_context = temporary_us_short_directory(
+            ROOT, Path("provider_samples") / "us_short_batch5_status_source_20260630" / "raw"
+        )
+        private_root = Path(root_context.__enter__())
+        base = private_root / "_unit_tests"
+        self.addCleanup(root_context.__exit__, None, None, None)
         base.mkdir(parents=True, exist_ok=True)
         client = FakeStatusHttpClient()
         original_build_summary = probe.build_summary

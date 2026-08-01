@@ -16,6 +16,7 @@ if str(ROOT) not in sys.path:
 
 from engine import us_short_status_source as status_source  # noqa: E402
 from runners import us_short_forward_lifecycle_capture as lifecycle  # noqa: E402
+from tests.provider.us_short_private_test_root import temporary_us_short_state_directory  # noqa: E402
 
 
 OBSERVED_AT = "2026-07-13T13:00:00Z"
@@ -110,11 +111,20 @@ def _candidate_payload(decision_date: str, rows: list[dict]) -> dict:
 
 class ForwardLifecycleCaptureTest(unittest.TestCase):
     def setUp(self):
+        self._state_root_context = temporary_us_short_state_directory(ROOT)
+        self.state_dir = Path(self._state_root_context.__enter__())
+        self.addCleanup(self._state_root_context.__exit__, None, None, None)
+        original_state_dir = lifecycle.STATE_DIR
+        original_snapshot_state_dir = lifecycle.forward_snapshot.STATE_US_SHORT_DIR
+        lifecycle.STATE_DIR = self.state_dir
+        lifecycle.forward_snapshot.STATE_US_SHORT_DIR = self.state_dir
+        self.addCleanup(setattr, lifecycle, "STATE_DIR", original_state_dir)
+        self.addCleanup(setattr, lifecycle.forward_snapshot, "STATE_US_SHORT_DIR", original_snapshot_state_dir)
         token = __import__('os').getpid()
-        self.initial_path = STATE_DIR / f"test_forward_lifecycle_{token}_candidate_initial.json"
-        self.current_path = STATE_DIR / f"test_forward_lifecycle_{token}_candidate_current.json"
-        self.snapshot_path = STATE_DIR / "forward_universe_snapshot_20260713.json"
-        self.observation_path = STATE_DIR / "forward_lifecycle_observation_20260713_20260713.json"
+        self.initial_path = self.state_dir / f"test_forward_lifecycle_{token}_candidate_initial.json"
+        self.current_path = self.state_dir / f"test_forward_lifecycle_{token}_candidate_current.json"
+        self.snapshot_path = self.state_dir / "forward_universe_snapshot_20260713.json"
+        self.observation_path = self.state_dir / "forward_lifecycle_observation_20260713_20260713.json"
         self._remove_output_paths()
 
     def tearDown(self):

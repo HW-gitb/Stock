@@ -15,6 +15,7 @@ if str(ROOT) not in sys.path:
 
 from runners import us_short_batch5_massive_corporate_action_shape_probe as probe  # noqa: E402
 from runners import us_egs_sample_validation as sample_validation  # noqa: E402
+from tests.provider.us_short_private_test_root import temporary_us_short_state_directory  # noqa: E402
 
 
 _FAKE_KEY = "FAKE-MASSIVE-KEY-should-never-appear-in-tracked-summary"
@@ -50,13 +51,16 @@ class _FakeMassiveClient:
 
 class MassiveCorporateActionShapeProbeTest(unittest.TestCase):
     def setUp(self):
+        self._state_root_context = temporary_us_short_state_directory(ROOT)
+        self.state_root = Path(self._state_root_context.__enter__())
+        self.addCleanup(self._state_root_context.__exit__, None, None, None)
         self._orig_summary = probe.SUMMARY_PATH
         self._orig_raw = probe.RAW_SAMPLE_ROOT
         self._orig_read_env = sample_validation.read_required_env
         self._orig_gitignored = probe._provider_samples_gitignored
         slug = f"ca_shape_probe_{__import__('os').getpid()}"
-        self.tmp_summary = ROOT / "state" / "us_short" / f"{slug}_summary.json"
-        self.tmp_raw = ROOT / "state" / "us_short" / f"{slug}_raw"
+        self.tmp_summary = self.state_root / f"{slug}_summary.json"
+        self.tmp_raw = self.state_root / f"{slug}_raw"
         probe.SUMMARY_PATH = self.tmp_summary
         probe.RAW_SAMPLE_ROOT = self.tmp_raw
         probe._provider_samples_gitignored = lambda: True  # temp dir is not gitignored; bypass the check
@@ -67,14 +71,6 @@ class MassiveCorporateActionShapeProbeTest(unittest.TestCase):
         probe.RAW_SAMPLE_ROOT = self._orig_raw
         probe._provider_samples_gitignored = self._orig_gitignored
         sample_validation.read_required_env = self._orig_read_env
-        self.tmp_summary.unlink(missing_ok=True)
-        if self.tmp_raw.exists():
-            for item in sorted(self.tmp_raw.rglob("*"), reverse=True):
-                if item.is_file():
-                    item.unlink()
-                elif item.is_dir():
-                    item.rmdir()
-            self.tmp_raw.rmdir()
 
     def test_dry_run_env_makes_no_network_call(self):
         self.assertEqual(probe.main(["--dry-run-env"]), 0)

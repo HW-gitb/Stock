@@ -21,6 +21,7 @@ if str(ROOT) not in sys.path:
 
 from runners import us_short_cut5_pass2_feasibility_probe as probe  # noqa: E402
 from runners import us_egs_sample_validation as sample_validation  # noqa: E402
+from tests.provider.us_short_private_test_root import temporary_us_short_directory  # noqa: E402
 
 
 CIK_MAPPING = {
@@ -101,12 +102,17 @@ class FakeClient:
 
 class Cut5ProbeTestBase(unittest.TestCase):
     def setUp(self):
+        self._sample_root_context = temporary_us_short_directory(
+            ROOT, Path("provider_samples") / "us_short_cut5_pass2_feasibility_20260701"
+        )
+        self.sample_root = Path(self._sample_root_context.__enter__())
+        self.addCleanup(self._sample_root_context.__exit__, None, None, None)
         self._env_backup = {}
         for name in ("FMP_API_KEY", "SEC_USER_AGENT", "MASSIVE_API_KEY"):
             self._env_backup[name] = os.environ.get(name)
             os.environ[name] = f"DUMMY_{name}_VALUE"
-        self._tmp_raw = ROOT / probe.RAW_SAMPLE_REL_ROOT / "raw_test"
-        self._tmp_summary = ROOT / probe.RAW_SAMPLE_REL_ROOT / "test_summary.json"
+        self._tmp_raw = self.sample_root / "cut5_pass2_feasibility" / "raw_test"
+        self._tmp_summary = self.sample_root / "cut5_pass2_feasibility" / "test_summary.json"
         self._cleanup()
 
     def tearDown(self):

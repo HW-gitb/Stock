@@ -25,6 +25,10 @@ from tests.provider.test_us_short_batch5_data_context import (  # noqa: E402
     _PRICE_BASIS_DATE,
     _USED_DATE,
 )
+from tests.provider.us_short_private_test_root import (  # noqa: E402
+    temporary_us_short_directory,
+    temporary_us_short_state_directory,
+)
 
 
 STATE_DIR = ROOT / "state" / "us_short"
@@ -172,12 +176,32 @@ def _series_packet(series_map, *, session: str = _SESSION, adjustment_mode: str 
 
 class FullUniverseOverextensionProducerTest(unittest.TestCase):
     def setUp(self):
+        self._state_root_context = temporary_us_short_state_directory(ROOT)
+        self.state_root = Path(self._state_root_context.__enter__())
+        self.addCleanup(self._state_root_context.__exit__, None, None, None)
+        self._sample_root_context = temporary_us_short_directory(
+            ROOT, Path("provider_samples") / "us_short_batch5_full_universe_overextension_20260709"
+        )
+        self.sample_root = Path(self._sample_root_context.__enter__())
+        self.addCleanup(self._sample_root_context.__exit__, None, None, None)
+        runner = importlib.import_module(RUNNER_MODULE)
+        original_git_ignored = runner._git_ignored
+        state_root = self.state_root.resolve()
+
+        def _git_ignored_for_private_test(path):
+            resolved = Path(path).resolve()
+            if resolved == state_root or state_root in resolved.parents:
+                return True
+            return original_git_ignored(path)
+
+        runner._git_ignored = _git_ignored_for_private_test
+        self.addCleanup(setattr, runner, "_git_ignored", original_git_ignored)
         self.slug = f"test_full_universe_overext_{os.getpid()}_{self._testMethodName}"
         self.paths = {
-            "candidate": STATE_DIR / f"{self.slug}_candidate.json",
-            "packet": STATE_DIR / f"{self.slug}_ohlcv_packet.json",
-            "projection": STATE_DIR / f"{self.slug}_overextension.json",
-            "summary": SAMPLE_ROOT / self.slug / "summary.json",
+            "candidate": self.state_root / f"{self.slug}_candidate.json",
+            "packet": self.state_root / f"{self.slug}_ohlcv_packet.json",
+            "projection": self.state_root / f"{self.slug}_overextension.json",
+            "summary": self.sample_root / "full_universe_overextension_20260709" / self.slug / "summary.json",
         }
         for path in self.paths.values():
             path.unlink(missing_ok=True)
@@ -187,14 +211,6 @@ class FullUniverseOverextensionProducerTest(unittest.TestCase):
     def tearDown(self):
         for path in self.paths.values():
             path.unlink(missing_ok=True)
-        root = SAMPLE_ROOT / self.slug
-        if root.exists():
-            for item in sorted(root.rglob("*"), reverse=True):
-                if item.is_file():
-                    item.unlink()
-                elif item.is_dir():
-                    item.rmdir()
-            root.rmdir()
 
     def _run_packet(self, **overrides):
         kwargs = {

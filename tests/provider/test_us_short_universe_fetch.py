@@ -27,9 +27,14 @@ if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
 import runners.us_short_universe_fetch as _mod
+from tests.provider.us_short_private_test_root import (
+    temporary_us_short_directory,
+    temporary_us_short_state_directory,
+)
 
 _GOV_PATH = ROOT / "presets" / "us_short_eligibility_governance_20260624.json"
 _CAL_PATH = ROOT / "presets" / "us_short_market_calendar_2026_2027.json"
+STATE_DIR = ROOT / "state" / "us_short"
 
 
 def _load_gov():
@@ -913,6 +918,33 @@ class TestGuards(unittest.TestCase):
 
 
 class TestRunFetchE2E(unittest.TestCase):
+    def setUp(self):
+        self._state_root_context = temporary_us_short_state_directory(ROOT)
+        self.state_root = Path(self._state_root_context.__enter__())
+        self.addCleanup(self._state_root_context.__exit__, None, None, None)
+        self._sample_root_context = temporary_us_short_directory(ROOT, Path("provider_samples"))
+        self.sample_root = Path(self._sample_root_context.__enter__())
+        self.addCleanup(self._sample_root_context.__exit__, None, None, None)
+        self._orig_candidate_list_dir = _mod.CANDIDATE_LIST_DIR
+        self._orig_raw_root_dir = _mod.RAW_ROOT_DIR
+        self._orig_summary_dir = _mod.SUMMARY_DIR
+        _mod.CANDIDATE_LIST_DIR = self.state_root
+        _mod.RAW_ROOT_DIR = self.sample_root
+        _mod.SUMMARY_DIR = self.sample_root
+        self.addCleanup(setattr, _mod, "CANDIDATE_LIST_DIR", self._orig_candidate_list_dir)
+        self.addCleanup(setattr, _mod, "RAW_ROOT_DIR", self._orig_raw_root_dir)
+        self.addCleanup(setattr, _mod, "SUMMARY_DIR", self._orig_summary_dir)
+        self._orig_git_check_ignored = _mod._git_check_ignored
+        state_root = self.state_root.resolve()
+
+        def _git_check_ignored_for_private_test(path):
+            resolved = Path(path).resolve()
+            if resolved == state_root or state_root in resolved.parents:
+                return True
+            return self._orig_git_check_ignored(path)
+
+        _mod._git_check_ignored = _git_check_ignored_for_private_test
+        self.addCleanup(setattr, _mod, "_git_check_ignored", self._orig_git_check_ignored)
     def test_tracked_20260706_summary_provider_health_fmp_counts_match_recorded_counts(self):
         summary_path = ROOT / "docs" / "us_short_universe_fetch_summary_20260706.json"
         summary = json.loads(summary_path.read_text(encoding="utf-8"))
@@ -942,7 +974,7 @@ class TestRunFetchE2E(unittest.TestCase):
             return [{"T": "AAPL", "c": 200.0, "v": 50_000_000},   # huge ADV
                     {"T": "LOWADV", "c": 10.0, "v": 100}]          # ~$1k/day ADV → below floor
 
-        cand = ROOT / "state" / "us_short" / "candidate_universe_20260629.json"  # canonical for decision_date 20260629 (gitignored)
+        cand = self.state_root / "candidate_universe_20260629.json"  # canonical for decision_date 20260629 (gitignored)
         cand.unlink(missing_ok=True)
         self.addCleanup(cand.unlink, missing_ok=True)
         self.addCleanup(cand.with_name(cand.name + ".tmp").unlink, missing_ok=True)
@@ -1003,7 +1035,7 @@ class TestRunFetchE2E(unittest.TestCase):
             return [{"T": "AAPL", "c": 200.0, "v": 50_000_000},
                     {"T": "HALT", "c": 20.0, "v": 10_000_000}]
 
-        cand = ROOT / "state" / "us_short" / "candidate_universe_20260629.json"
+        cand = self.state_root / "candidate_universe_20260629.json"
         cand.unlink(missing_ok=True)
         self.addCleanup(cand.unlink, missing_ok=True)
         self.addCleanup(cand.with_name(cand.name + ".tmp").unlink, missing_ok=True)
@@ -1079,7 +1111,7 @@ class TestRunFetchE2E(unittest.TestCase):
                 {"T": "LOWADV", "c": 10.0, "v": 100},
             ]
 
-        cand = ROOT / "state" / "us_short" / "candidate_universe_20260629.json"
+        cand = self.state_root / "candidate_universe_20260629.json"
         cand.unlink(missing_ok=True)
         self.addCleanup(cand.unlink, missing_ok=True)
         self.addCleanup(cand.with_name(cand.name + ".tmp").unlink, missing_ok=True)
@@ -1162,7 +1194,7 @@ class TestRunFetchE2E(unittest.TestCase):
             return [{"T": "AAPL", "c": 200.0, "v": 50_000_000},
                     {"T": "BANKR", "c": 20.0, "v": 10_000_000}]
 
-        cand = ROOT / "state" / "us_short" / "candidate_universe_20260629.json"
+        cand = self.state_root / "candidate_universe_20260629.json"
         cand.unlink(missing_ok=True)
         self.addCleanup(cand.unlink, missing_ok=True)
         self.addCleanup(cand.with_name(cand.name + ".tmp").unlink, missing_ok=True)
@@ -1210,9 +1242,9 @@ class TestRunFetchE2E(unittest.TestCase):
             return [{"T": "AAPL", "c": 200.0, "v": 50_000_000},
                     {"T": "BANKR", "c": 20.0, "v": 10_000_000}]
 
-        screen_a = ROOT / "state" / "us_short" / "test_bankruptcy_screen_a_20260629.json"
-        screen_b = ROOT / "state" / "us_short" / "test_bankruptcy_screen_b_20260629.json"
-        cand = ROOT / "state" / "us_short" / "candidate_universe_20260629.json"
+        screen_a = self.state_root / "test_bankruptcy_screen_a_20260629.json"
+        screen_b = self.state_root / "test_bankruptcy_screen_b_20260629.json"
+        cand = self.state_root / "candidate_universe_20260629.json"
         for p in (screen_a, screen_b, cand):
             p.unlink(missing_ok=True)
             self.addCleanup(p.unlink, missing_ok=True)
@@ -1276,7 +1308,7 @@ class TestRunFetchE2E(unittest.TestCase):
         def fake_grouped(date, key):
             return [{"T": "AAPL", "c": 200.0, "v": 50_000_000}]
 
-        cand = ROOT / "state" / "us_short" / "candidate_universe_20260629.json"
+        cand = self.state_root / "candidate_universe_20260629.json"
         cand.unlink(missing_ok=True)
         self.addCleanup(cand.unlink, missing_ok=True)
         self.addCleanup(cand.with_name(cand.name + ".tmp").unlink, missing_ok=True)
@@ -1331,7 +1363,7 @@ class TestRunFetchE2E(unittest.TestCase):
                 stats_out["actual_request_count"] = 1
             return {}
 
-        cand = ROOT / "state" / "us_short" / "candidate_universe_20260629.json"
+        cand = self.state_root / "candidate_universe_20260629.json"
         cand.unlink(missing_ok=True)
         self.addCleanup(cand.unlink, missing_ok=True)
         self.addCleanup(cand.with_name(cand.name + ".tmp").unlink, missing_ok=True)
@@ -1550,6 +1582,11 @@ class TestRunFetchE2E(unittest.TestCase):
 
 
 class SummarySafetyAndGitignore(unittest.TestCase):
+    def setUp(self):
+        self._state_root_context = temporary_us_short_state_directory(ROOT)
+        self.state_root = Path(self._state_root_context.__enter__())
+        self.addCleanup(self._state_root_context.__exit__, None, None, None)
+
     """R-USSHORT-BATCH5-UNIVERSE-FETCH-SECRET-SCAN-GITIGNORE-GAP (cc_r1 O3): the tracked summary is scanned for
     leaked secrets / provider URLs before write, and the gitignored claims are real `git check-ignore` truths."""
 
@@ -1580,7 +1617,7 @@ class SummarySafetyAndGitignore(unittest.TestCase):
 
     def test_git_check_ignored_true_for_state_json(self):
         # state/us_short/*.json is gitignored (state/*/*.json) → the candidate-artifact claim is a real True
-        self.assertTrue(_mod._git_check_ignored(ROOT / "state" / "us_short" / "candidate_universe_20260629.json"))
+        self.assertTrue(_mod._git_check_ignored(self.state_root / "candidate_universe_20260629.json"))
 
     def test_git_check_ignored_false_for_tracked_docs(self):
         # a tracked docs path is NOT gitignored → the claim cannot be hard-coded True
@@ -1605,6 +1642,14 @@ class SummarySafetyAndGitignore(unittest.TestCase):
 
 
 class CandidatePathGuard(unittest.TestCase):
+    def setUp(self):
+        self._state_root_context = temporary_us_short_state_directory(ROOT)
+        self.state_root = Path(self._state_root_context.__enter__())
+        self.addCleanup(self._state_root_context.__exit__, None, None, None)
+        self._original_candidate_list_dir = _mod.CANDIDATE_LIST_DIR
+        _mod.CANDIDATE_LIST_DIR = self.state_root
+        self.addCleanup(setattr, _mod, "CANDIDATE_LIST_DIR", self._original_candidate_list_dir)
+
     """R-USSHORT-BATCH5-PASS1-LIQUIDITY-LINEAGE-CONTRACT-GAP (Codex reviews 2026-06-30): the per-run candidate
     artifact carries per-row price/ADV/market_cap, so its path is BOUND to the canonical decision_date BEFORE
     any fetch/write — it must be EXACTLY state/us_short/candidate_universe_<decision_date>.json. A non-gitignored
@@ -1618,7 +1663,7 @@ class CandidatePathGuard(unittest.TestCase):
         # Codex probe: a gitignored state/us_short/ .json whose filename date != the run's decision_date must be
         # rejected — the filename must not lie about which decision-date bucket the priced artifact represents.
         with self.assertRaises(RuntimeError) as ctx:
-            _mod._validate_candidate_path(ROOT / "state" / "us_short" / "candidate_universe_19000101.json", "20260629")
+            _mod._validate_candidate_path(self.state_root / "candidate_universe_19000101.json", "20260629")
         self.assertIn("canonical", str(ctx.exception).lower())
 
     def test_non_gitignored_path_rejected(self):
@@ -1654,7 +1699,7 @@ class CandidatePathGuard(unittest.TestCase):
                 "lookback_window": "P90D",
                 "by_ticker": {"AAPL": {"screen_status": "screened_no_filing"}},
             }), encoding="utf-8")
-            cand = ROOT / "state" / "us_short" / "candidate_universe_20260629.json"
+            cand = self.state_root / "candidate_universe_20260629.json"
             cand.unlink(missing_ok=True)
             self.addCleanup(cand.unlink, missing_ok=True)
             self.addCleanup(cand.with_name(cand.name + ".tmp").unlink, missing_ok=True)
@@ -1677,7 +1722,7 @@ class CandidatePathGuard(unittest.TestCase):
             self.assertFalse(summ.exists())
 
     def test_bankruptcy_screen_non_string_status_rejected_without_typeerror(self):
-        screen_path = ROOT / "state" / "us_short" / f"screen_status_bad_{os.getpid()}_{self._testMethodName}.json"
+        screen_path = self.state_root / f"screen_status_bad_{os.getpid()}_{self._testMethodName}.json"
         self.addCleanup(screen_path.unlink, missing_ok=True)
         for bad_status in ([], {}):
             with self.subTest(screen_status=type(bad_status).__name__):
@@ -1707,7 +1752,7 @@ class CandidatePathGuard(unittest.TestCase):
         def fake_grouped(date, key):
             return [{"T": "AAPL", "c": 200.0, "v": 50_000_000}]
 
-        wrong = ROOT / "state" / "us_short" / "candidate_universe_19000101.json"
+        wrong = self.state_root / "candidate_universe_19000101.json"
         wrong.unlink(missing_ok=True)
         self.addCleanup(wrong.unlink, missing_ok=True)
         self.addCleanup(wrong.with_name(wrong.name + ".tmp").unlink, missing_ok=True)

@@ -19,6 +19,7 @@ if str(ROOT) not in sys.path:
 from runners import us_egs_sample_validation as sv  # noqa: E402
 from runners import us_short_batch5_full_candidate_live_source_packet as live  # noqa: E402
 from runners import us_short_batch5_replay_pass2_source_packet_from_raw as replay  # noqa: E402
+from tests.provider.us_short_private_test_root import temporary_us_short_directory  # noqa: E402
 
 
 def _wrapper(provider_id, endpoint_family, symbol, payload, *, http_status=200, ok=True, error_type=None):
@@ -149,8 +150,9 @@ class ReplayClientTest(unittest.TestCase):
                 replay.ReplayClient(root)
 
     def test_bound_capture_rejects_root_alias_and_keeps_original_clock(self):
-        provider_samples = ROOT / "provider_samples"
-        provider_samples.mkdir(parents=True, exist_ok=True)
+        root_context = temporary_us_short_directory(ROOT, Path("provider_samples"))
+        provider_samples = Path(root_context.__enter__())
+        self.addCleanup(root_context.__exit__, None, None, None)
         with tempfile.TemporaryDirectory(prefix="test_replay_source_", dir=str(provider_samples)) as root_dir, \
                 tempfile.TemporaryDirectory(prefix="test_replay_output_", dir=str(provider_samples)) as replay_dir, \
                 tempfile.TemporaryDirectory(prefix="test_replay_summary_", dir=str(provider_samples)) as summary_dir:
@@ -194,8 +196,9 @@ class ReplayClientTest(unittest.TestCase):
             self.assertEqual(kwargs["replay_source_capture"]["source_as_of"], "2026-07-08")
 
     def test_bound_capture_rejects_raw_mutation_and_wrong_preflight_date(self):
-        provider_samples = ROOT / "provider_samples"
-        provider_samples.mkdir(parents=True, exist_ok=True)
+        root_context = temporary_us_short_directory(ROOT, Path("provider_samples"))
+        provider_samples = Path(root_context.__enter__())
+        self.addCleanup(root_context.__exit__, None, None, None)
         with tempfile.TemporaryDirectory(prefix="test_replay_source_", dir=str(provider_samples)) as root_dir, \
                 tempfile.TemporaryDirectory(prefix="test_replay_summary_", dir=str(provider_samples)) as summary_dir:
             root = Path(root_dir)

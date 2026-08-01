@@ -24,6 +24,10 @@ from tests.provider.test_us_short_batch5_data_context import (  # noqa: E402
     _constant_projection,
 )
 from tests.provider.us_short_projection_binding_test_helpers import bound_projection  # noqa: E402
+from tests.provider.us_short_private_test_root import (  # noqa: E402
+    temporary_us_short_directory,
+    temporary_us_short_state_directory,
+)
 
 
 STATE_DIR = ROOT / "state" / "us_short"
@@ -70,15 +74,40 @@ def _constant_catalyst_projection(targets, *, score=50.0):
 
 class FullCandidateProjectionInputsTest(unittest.TestCase):
     def setUp(self):
+        self._state_root_context = temporary_us_short_state_directory(ROOT)
+        self.state_dir = Path(self._state_root_context.__enter__())
+        self.addCleanup(self._state_root_context.__exit__, None, None, None)
+        self._summary_root_context = temporary_us_short_directory(
+            ROOT, Path("provider_samples") / "us_short_batch5_full_candidate_projection_inputs_20260706"
+        )
+        self.summary_root = Path(self._summary_root_context.__enter__())
+        self.addCleanup(self._summary_root_context.__exit__, None, None, None)
+        self._preflight_root_context = temporary_us_short_directory(
+            ROOT, Path("provider_samples") / "us_short_batch5_full_candidate_pass2_preflight_20260706"
+        )
+        self.preflight_root = Path(self._preflight_root_context.__enter__())
+        self.addCleanup(self._preflight_root_context.__exit__, None, None, None)
+        runner = importlib.import_module(MODULE)
+        original_git_ignored = runner._git_ignored
+        state_root = self.state_dir.resolve()
+
+        def _git_ignored_for_private_test(path):
+            resolved = Path(path).resolve()
+            if resolved == state_root or state_root in resolved.parents:
+                return True
+            return original_git_ignored(path)
+
+        runner._git_ignored = _git_ignored_for_private_test
+        self.addCleanup(setattr, runner, "_git_ignored", original_git_ignored)
         self.slug = f"test_projection_inputs_{os.getpid()}_{self._testMethodName[:24]}"
         self.paths = {
-            "candidate": STATE_DIR / f"{self.slug}_candidate.json",
-            "source_momentum": STATE_DIR / f"{self.slug}_source_momentum.json",
-            "source_theme": STATE_DIR / f"{self.slug}_source_theme.json",
-            "output_momentum": STATE_DIR / f"{self.slug}_output_momentum.json",
-            "output_theme": STATE_DIR / f"{self.slug}_output_theme.json",
-            "summary": SUMMARY_DIR / self.slug / "summary.json",
-            "preflight_summary": PREFLIGHT_SUMMARY_DIR / self.slug / "preflight_summary.json",
+            "candidate": self.state_dir / f"{self.slug}_candidate.json",
+            "source_momentum": self.state_dir / f"{self.slug}_source_momentum.json",
+            "source_theme": self.state_dir / f"{self.slug}_source_theme.json",
+            "output_momentum": self.state_dir / f"{self.slug}_output_momentum.json",
+            "output_theme": self.state_dir / f"{self.slug}_output_theme.json",
+            "summary": self.summary_root / self.slug / "summary.json",
+            "preflight_summary": self.preflight_root / f"{self.slug}_preflight" / "preflight_summary.json",
         }
         self.paths["summary"].parent.mkdir(parents=True, exist_ok=True)
         self.paths["preflight_summary"].parent.mkdir(parents=True, exist_ok=True)
@@ -107,22 +136,6 @@ class FullCandidateProjectionInputsTest(unittest.TestCase):
     def tearDown(self):
         for path in self.paths.values():
             path.unlink(missing_ok=True)
-        root = SUMMARY_DIR / self.slug
-        if root.exists():
-            for item in sorted(root.rglob("*"), reverse=True):
-                if item.is_file():
-                    item.unlink()
-                elif item.is_dir():
-                    item.rmdir()
-            root.rmdir()
-        preflight_root = PREFLIGHT_SUMMARY_DIR / self.slug
-        if preflight_root.exists():
-            for item in sorted(preflight_root.rglob("*"), reverse=True):
-                if item.is_file():
-                    item.unlink()
-                elif item.is_dir():
-                    item.rmdir()
-            preflight_root.rmdir()
 
     def test_merges_partial_real_projections_with_explicit_neutral_full_candidate_coverage(self):
         runner = importlib.import_module(MODULE)

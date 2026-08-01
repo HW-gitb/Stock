@@ -20,6 +20,8 @@ from runners.us_short_forward_universe_snapshot import (  # noqa: E402
     build_forward_universe_snapshot,
     write_forward_universe_snapshot,
 )
+from runners import us_short_forward_universe_snapshot as snapshot_runner  # noqa: E402
+from tests.provider.us_short_private_test_root import temporary_us_short_state_directory  # noqa: E402
 
 
 STATE_DIR = ROOT / "state" / "us_short"
@@ -37,9 +39,23 @@ def _write_json(path: Path, payload) -> Path:
 
 class ForwardUniverseSnapshotTest(unittest.TestCase):
     def setUp(self):
+        self._state_root_context = temporary_us_short_state_directory(ROOT)
+        self.state_dir = Path(self._state_root_context.__enter__())
+        self.addCleanup(self._state_root_context.__exit__, None, None, None)
+        original_git_ignored = snapshot_runner._git_ignored
+        state_root = self.state_dir.resolve()
+
+        def _git_ignored_for_private_test(path):
+            resolved = Path(path).resolve()
+            if resolved == state_root or state_root in resolved.parents:
+                return True
+            return original_git_ignored(path)
+
+        snapshot_runner._git_ignored = _git_ignored_for_private_test
+        self.addCleanup(setattr, snapshot_runner, "_git_ignored", original_git_ignored)
         self.slug = f"test_forward_universe_{os.getpid()}_{self._testMethodName}"
-        self.input_path = STATE_DIR / f"{self.slug}_input.json"
-        self.output_path = STATE_DIR / "forward_universe_snapshot_20260706.json"
+        self.input_path = self.state_dir / f"{self.slug}_input.json"
+        self.output_path = snapshot_runner._snapshot_path_for("20260706")
         self.leaky_output = ROOT / "docs" / f"{self.slug}_snapshot.json"
         for path in (self.input_path, self.output_path, self.leaky_output):
             path.unlink(missing_ok=True)

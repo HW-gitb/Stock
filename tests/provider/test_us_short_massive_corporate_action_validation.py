@@ -16,6 +16,7 @@ if str(ROOT) not in sys.path:
 
 from runners import us_egs_sample_validation as sample_validation  # noqa: E402
 from runners import us_short_massive_corporate_action_validation as validation  # noqa: E402
+from tests.provider.us_short_private_test_root import temporary_us_short_state_directory  # noqa: E402
 
 
 _FAKE_KEY = "FAKE-MASSIVE-KEY-must-not-appear-in-summary"
@@ -38,12 +39,15 @@ class _FakeMassiveClient:
 
 class MassiveCorporateActionValidationTest(unittest.TestCase):
     def setUp(self):
+        self._state_root_context = temporary_us_short_state_directory(ROOT)
+        self.state_root = Path(self._state_root_context.__enter__())
+        self.addCleanup(self._state_root_context.__exit__, None, None, None)
         self._orig_read_env = sample_validation.read_required_env
         self._orig_raw_ignored = validation._raw_root_is_gitignored
         self._orig_path = validation._repo_relative_path
         slug = f"massive_ca_validation_{__import__('os').getpid()}"
-        self.tmp_raw = ROOT / "state" / "us_short" / f"{slug}_raw"
-        self.tmp_summary = ROOT / "state" / "us_short" / f"{slug}_summary.json"
+        self.tmp_raw = self.state_root / f"{slug}_raw"
+        self.tmp_summary = self.state_root / f"{slug}_summary.json"
         sample_validation.read_required_env = lambda name: sample_validation.EnvValue(value=_FAKE_KEY, source="test")
         validation._raw_root_is_gitignored = lambda path: True
 
@@ -60,14 +64,6 @@ class MassiveCorporateActionValidationTest(unittest.TestCase):
         sample_validation.read_required_env = self._orig_read_env
         validation._raw_root_is_gitignored = self._orig_raw_ignored
         validation._repo_relative_path = self._orig_path
-        self.tmp_summary.unlink(missing_ok=True)
-        if self.tmp_raw.exists():
-            for path in sorted(self.tmp_raw.rglob("*"), reverse=True):
-                if path.is_file():
-                    path.unlink()
-                elif path.is_dir():
-                    path.rmdir()
-            self.tmp_raw.rmdir()
 
     def test_frozen_packet_validates_and_has_exact_12_call_scope(self):
         packet = validation.load_packet()
@@ -80,7 +76,7 @@ class MassiveCorporateActionValidationTest(unittest.TestCase):
         packet = validation.load_packet()
         broken = copy.deepcopy(packet)
         broken["sample"][2]["symbol"] = "NVDA"
-        path = ROOT / "state" / "us_short" / "massive_ca_validation_bad_packet.json"
+        path = self.state_root / "massive_ca_validation_bad_packet.json"
         path.parent.mkdir(parents=True, exist_ok=True)
         path.write_text(json.dumps(broken), encoding="utf-8")
         try:
