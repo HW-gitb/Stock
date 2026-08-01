@@ -11,6 +11,8 @@
 
 12B technical/volatility 批次的 39+3 叶已按实际性质改判为 `duplicate_source` / `intentionally_independent`；`machine.technical_volatility_comparison` 只保留 source snapshot digest / observed outcome 的 display audit，不声称正式 comparison，也不改变 Phase5 主决策。Phase5 权威值来自 PIT-bounded `price_series` 与 IV feed；volatility 当前生产端 `A-EGS/egs_main.py::_candidate_from_row.volatility` 恒为 `None`，契约仍保留 `producer_binding` 和 AST 前提守卫，且本批次不创建生产者、不重封冻结包。
 
+下一批 `true_dangling` 接线限定为 `candidate_event_risk_phase5_gates` 的 4 个叶：`delisting_warning`、`st_flag`、`active_plan`、`is_suspended`。它们已进入 `phase5_risk` 主决策风险门（`nature=main_decision`），会影响建仓资格和 `m67.table.操作`；其余 33 个 `candidate_event_risk` 叶仍保持 `true_dangling`，不得用这 4 叶替整组报绿。
+
 每一组都必须声明：输入来源、`must_affect_result` 或 `intentionally_independent`、最终结果表面和运行时处理器。刻意独立项必须带原因、owner、review_ref；不能用“默认独立”或空理由躲过检查。
 
 运行时政策不是镜像：`engine/a_short_runtime_config.py` 只接受 `presets/a_short.yaml` 所路由的两份 JSON，并在 EGS、Phase 5 和 weekly 导入时严格校验。effect contract 对每个政策叶字段同时核验“loader 的精确读取点 + 结果模块的精确读取点 + 派生值进入非模块函数结果计算”，并把整张逐字段读取图做指纹；大类的笼统说明或“只赋给未使用常量”都不能代替实际 reader。政策新增字段、删除登记、或把数值重新写回 Python 都会让测试失败。正式 `analysis_input`、`weekly_m67.json` 和 Markdown 均携带同一个配置 fingerprint，因此候选筛选与周报不能混用不同政策版本。

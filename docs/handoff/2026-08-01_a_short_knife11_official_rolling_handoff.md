@@ -2,6 +2,13 @@
 
 ## Scope
 
+## 2026-08-01 Append: candidate_event_risk_phase5_gates 接线批次（Codex executor）
+
+- 用户授权本批只接 4 个 `candidate_event_risk` 叶：`delisting_warning`、`st_flag`、`active_plan`、`is_suspended`；其余 33 个叶仍为 `true_dangling`。
+- 接线链为 `normalize_candidate` → `classify_risk_families` → Phase5 `hard_veto` → `model_build_eligible` / `m67.table.操作`；nature counts 为 `true_dangling 237 / partial_consumption 41 / main_decision 40 / comparison_track 5 / duplicate_source 42 / display_audit 6`。
+- 固定 Python 3.13.8；effect-contract `Ran 36 tests ... OK`；focused `Ran 728 tests ... OK`；文档/路由 `Ran 55 tests ... OK`；`py_compile`、schema meta、`git diff --check` OK；full-pack 与 independent reviewer `NOT_VERIFIED`。
+- 不重封冻结包、不建生产者、不改 provider/network/DataHub、不 commit/push/merge；下一步为 Claude Code 独立复审本批。
+
 Implemented the desktop roadmap Knife 11 / item 6 only. The crash-veto tracker now builds an `official_rolling` node from `official_all_crash_veto` cohorts using equal weighting by mature week. Member rows are never pooled across weeks.
 
 `OFFICIAL_ROLLING_MIN_WEEKS = 3`. A week is mature only when both 5-day and 10-day horizons are ready and each has at least `DECISION_MIN_PAIRS`. Existing decision thresholds are reused; rolling horizon `paired_count`/`member_count` count mature weekly observations rather than inventing a stock-level count, while the per-week pair gate remains enforced before aggregation. The top-level decision set is legacy latest + incremental latest + official rolling, with existing insufficiency/change/keep precedence. Official rolling cohort IDs are included in `final_decision.basis_cohort_ids`.
@@ -284,3 +291,29 @@ The 12B inventory still honestly labels unresolved business groups as `true_dang
 - 类级守护只校验**声明**，不自动跑那条变异。所以审查方（我）每轮必须把声明拿到运行时实跑一遍对账——这次两条都对上了，但这个动作不能省。
 - Optional 未修：退役后的 `technical_volatility_comparison` handler 分支、`_technical_volatility_comparison_status()` 及其在 `_NATURE_RUNTIME_HANDLERS["comparison_track"]` 里的登记项已无人使用，成为不可达代码。不危险（将来若有人用它仍要过新守护），下次碰这段代码顺手清掉。
 - 仍不要重封冻结包、不要建 volatility 生产者。
+
+## 2026-08-01 追加：event_risk 四叶 Phase5 门登记批次独立审查（Claude Code，PASS，已提交）
+
+### 改了什么 / 为什么
+
+- 本轮我不改代码，只审查并提交。本批**零生产代码改动**——只动 `schemas/a_short_m67_effect_contract.json`（拆出 `candidate_event_risk_phase5_gates`）、`tests/test_a_short_effect_contract.py` 与文档。
+- 因此审查的核心问题只有一个：这 4 叶（`delisting_warning` / `st_flag` / `active_plan` / `is_suspended`）**是本来就在承重，还是纸面改标**？`proven_consumer_paths` 只是声明，守卫不会去验证代码真读了它们。
+
+### 验证命令 / 验证结果
+
+- `.toolsun_unittest_with_repo_pythonpath.cmd --timeout-seconds 900 tests.test_a_short_effect_contract tests.test_a_short_weekly_pipeline` → `Ran 551 tests in 297.7s / OK`，bounded `tier=focused status=PASS exit=0 deadline=900s`。按 rule ⑤ 只跑改动符号覆盖面：本批无 Phase5 代码改动，故不付 phase5 整模块税。
+- reviewer 逐叶运行时变异（这是本批唯一真证据）：基线 `建仓`；只翻 `derived.suspended` → `否决`、`hard_veto=[停牌]`；只翻 `event.holder_reduction_active` → `否决`、`[减持进行中]`；只翻 `event.st_or_delisting` → `否决`、`[ST/退市]`。三条门都真在承重。
+- 叶→归一字段逐行核对：`"suspended": fail_closed_risk_bool(susp.get("is_suspended"))`、`"holder_reduction_active": bool(hr.get("active_plan"))`、`"st_or_delisting"` 由 `delist.get("st_flag")` / `delist.get("delisting_warning")` 合成；下游消费点 `a_short_phase5_engine.py::classify_risk_families` 内 `if ev.get("st_or_delisting"):`。
+- **空值方向对**：`st_flag` 与 `delisting_warning` 任一为 `None` 时归一成 `True`（宁可当有风险），不是 `bool(None)=False` 的 fail-open。
+- 拆组穷尽且不重叠：`gate 4 + rest 33 = 37`＝全部 `event_risk` 叶；剩余组仍 `true_dangling` / `unresolved_input_group`；把本组改标回 `true_dangling` 被静态守卫拒。计数 241→237，正好等于真接的 4 叶，无虚报。
+
+### 失效旧结论
+
+- register 里「implemented; independent review required / P1」已被本轮 PASS 取代。
+
+### 下一步注意事项
+
+- **零代码改动的「登记批次」是新形态，审查方式要固定下来**：这类批次不能靠读 diff 判断，只能靠逐叶运行时变异——基线必须是能建仓的活样本，翻一叶必须看到 `操作` 真变且 `hard_veto` 里有可溯源理由。缺任何一条就不算承重。
+- 我首轮探针把归一字段名写成 `delisting_risk`（真名 `st_or_delisting`）而误红一次——下次先 grep 归一字段真名再写探针，别照契约里的叶名猜。
+- 剩余 33 个 `event_risk` 叶（监管、解禁、rule6 证据、减持统计明细）仍 `true_dangling`，别因为同组已有一个门就整组报绿——现在的拆组正是防这个。
+- 全局剩余工作清单：`true_dangling 237 / partial_consumption 41`（另 `main_decision 40 / duplicate_source 42 / comparison_track 5 / display_audit 6`，合计 371）。
