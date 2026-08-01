@@ -153,3 +153,69 @@ The 12B inventory still honestly labels unresolved business groups as `true_dang
 - 接线刀每接一组，必须同时：给该组换上真 `runtime_handler`、在 `_NATURE_RUNTIME_HANDLERS[main_decision]` 里登记该 handler、把 nature 从 `true_dangling` 改成 `main_decision`、补 `proven_consumer_paths` 覆盖全部叶、补一条"只改该叶 → 主决策必须变"的正向变异测试。少任何一步都会被现有守护挡住或留下假账。
 - `unavailable_manual_review` 现在只许降不许升，且首次发布的 `skipped_no_prior_ledger` 必须带理由。接线刀若拆组导致组数变化，注意该计数可能先升——那要么拆法有问题，要么需要用户显式批准一次基线重置，不许悄悄放宽守护。
 - 仍**不要**为接线刀重封冻结包，理由同上一节。
+
+## 2026-08-01 Append: candidate_derived_flags 接线刀（Codex executor）
+
+- 用户已授权执行下一步；本轮按桌面路线先处理 `candidate_derived_flags`，不是一次性批量处理全部剩余叶。
+- 8 个叶已接入：`chasing_high`、`hard_veto`、`has_crash_veto`、`is_lock`、`overheat_flag` → Phase5 风险族；`is_breakout` → entry 类型；`m4_review_required` → 新建仓观察/禁止门；`vol_confirm` → comparison-only 节点（不改变 Phase5 breakout）。
+- `schemas/a_short_m67_effect_contract.json` 已拆成四组，均有真实 handler、完整 `proven_consumer_paths`、source hash；`static_contract_error() = None`。
+- 固定 Python 3.13.8 验证：`Ran 27 tests ... OK`（effect contract）、`Ran 654 tests ... OK`（Phase5/weekly）、`Ran 22 tests ... OK`（consumer/data-quality/EGS）；full-pack=`NOT_VERIFIED`。
+- 最新 nature 分布：`true_dangling 283 / partial_consumption 41 / main_decision 36 / comparison_track 5 / display_audit 6`，合计 371；较上一基线只减少本刀实际接入的 8 叶。
+- 边界：未重封冻结包、未启用生产 block/degrade、未做 provider/network/DataHub、未 commit/push/merge。下一 owner：Claude Code 独立复审本刀完整 diff；PASS 后再授权下一组 `true_dangling` 接线。
+
+## 2026-08-01 追加：candidate_derived_flags 接线刀独立审查（Claude Code，Pass-with-Required，未提交）
+
+### 改了什么 / 为什么
+
+- 本轮我不改代码，只审查。这是第 12 刀系列**第一把真改生产决策**的刀，按最高档验：改动符号为 `runners/a_short_phase5_engine.py` 的 `_m4_review_required` / `_derived_flag_comparison`（新增）+ `model_build_eligible` / `build_m67_report` / `build_holding_report`（改），`runners/a_short_weekly_pipeline.py::normalize_candidate` 的 `derived` 构造，加 effect contract 的四组拆分。
+- 判 Pass-with-Required 不是因为接线错，而是因为台账对其中一叶的宣称超出事实。
+
+### 验证命令 / 验证结果
+
+- `.tools\run_unittest_with_repo_pythonpath.cmd --timeout-seconds 1100 tests.test_a_short_phase5_engine tests.test_a_short_weekly_pipeline tests.test_a_short_effect_contract tests.test_a_short_m67_render tests.test_a_short_data_quality_shadow tests.test_a_short_effect_consumer_probe` → `Ran 725 tests in 280.7s / OK`，bounded `tier=focused status=PASS exit=0 deadline=1100s`。
+- reviewer 探针 11 项，三类都做了：**正向变异**只翻 `m4_review_required=true` → `建仓 → 观察`、触发条件含 `M4 升级审查未完成，禁止新建仓`、`observe_only` 含 `m4_review_required:升级审查`；**旧件字节等价**——缺键 / `null` / `false` 三者报告逐字节相同（该叶刻意不走 `fail_closed_risk_bool`，否则 `None` 会拦掉所有历史候选，这个取舍是对的且被证明没有副作用）；**fail-closed**——`0 / 1 / "" / "false" / "true" / [] / {} / 0.0` 八种畸形非空值全部拦成 `观察`；**comparison-only 反向控制**——翻 `vol_confirm` 只改 `machine.derived_flag_comparison`，整份报告其余逐字节不变，`vol_confirm` 没有偷偷回到 Phase5 突破门（#6-ii 设计意图保住）。
+- 唯一转红的 M5：对 `A-EGS/egs_main.py` 做 AST 全量扫描，`m4_review_required` 的赋值点**只有一处且是 `Constant(value=None)`**，无任何可产出非空值的路径。
+
+### 失效旧结论
+
+- register 里「open P1，待 Claude Code 独立复审」已被本轮 Pass-with-Required 取代。
+- handoff 与 SESSION_LOG 的「`m4_review_required` → 新建仓观察/禁止门」在字面上成立、在事实上误导：消费端建好了，生产端恒发 `None`，门永远打不着火。
+
+### 下一步注意事项
+
+- 只需修一条 Required，且**不要求现在去建 M4 生产者**——只要求台账别宣称它已生效：给该组补生产者现状披露，并让它的 ledger 状态不再走 `phase5_decision` 的通用 `_phase5_status`（那个只要 Phase5 跑过就报 `applied`）。本周无候选带非空 m4 标志时应为 `not_triggered` 加理由。
+- 修的时候顺手把 Optional 一并做也合理：`machine.derived_flag_comparison` 补进 `schemas/a_short_m67_report.schema.json` 并 const-pin `comparison_only` / `production_effect_enabled`（现在 `machine` 没设 `additionalProperties`，靠默认放行，不受约束）。
+- **这一类要形成惯例**：以后每接一叶，除了"变异测试能改主决策"，还要问一句"上游真的会发出这个值吗"。消费端先建、生产端未建是合法的，但必须在契约组里显式披露，否则 `true_dangling` 计数就会靠"接了打不着火的线"往下掉。
+- 现有正控不许退化：缺键/null/false 三者字节等价、畸形非空值 fail-closed、`vol_confirm` 不进 Phase5 突破门。
+
+## 2026-08-01 Append: M4 review gate producer disclosure/status repair（Codex executor）
+
+- 修复 `R-ASHORT-KNIFE12-M4-REVIEW-GATE-WIRED-TO-A-CONSTANT-NULL-PRODUCER`，不创建 M4 生产者，不重封冻结包。
+- `candidate_derived_flags_m4_review` 改用专用 `m4_review_gate` handler；contract 明确记录 `A-EGS/egs_main.py::m4_review_required` 当前恒发 `None`。真实 null-only 周报 ledger 为 `not_triggered`；测试/未来审查后的 `true` 才为 `applied`；畸形非空值为 `unavailable_manual_review`。
+- report machine 新增只读 `m4_review_gate` 节点；M67 schema const-pin 其输入叶、producer status/ref，并 const-pin `derived_flag_comparison` 的 comparison-only 边界。AST 守卫钉住 EGS 唯一赋值仍为 `None`。
+- 固定 Python 3.13.8：effect contract `Ran 31 tests ... OK`；Phase5/weekly/consumer/schema 回归 `Ran 676 tests in 48.897s ... OK`；静态契约、编译、Schema meta、diff check 通过；full-pack `NOT_VERIFIED`。
+- 边界：未改 M4 生产逻辑、未启用生产 block/degrade、未做 provider/network/DataHub、未 commit/push/merge。下一 owner：Claude Code 独立复审本 Required/Optional 修复。
+
+## 2026-08-01 追加：M4 生产者披露 Required + schema 绑定 Optional 收口复审（Claude Code，PASS，已提交）
+
+### 改了什么 / 为什么
+
+- 本轮我不改代码，只复审并提交。Required 按我的意思修的是**诚实**而不是去建 M4 生产者：该组从通用 `phase5_decision` 状态改走专属 `m4_review_gate` handler（`engine/a_short_effect_contract.py::_m4_review_status()`）；Phase5 每份报告新增 `machine.m4_review_gate` 观察节点；契约组新增 `producer_binding`，由 `static_contract_error()` 逐字段钉死。
+- Optional 也一并做了：`derived_flag_comparison` 与 `m4_review_gate` 都写进 `schemas/a_short_m67_report.schema.json`，`additionalProperties=false` 且 const-pin `comparison_only` / `production_effect_enabled` / `producer_status` / `producer_ref`。
+
+### 验证命令 / 验证结果
+
+- `.tools\run_unittest_with_repo_pythonpath.cmd --timeout-seconds 1100 tests.test_a_short_phase5_engine tests.test_a_short_weekly_pipeline tests.test_a_short_effect_contract tests.test_a_short_m67_render tests.test_a_short_data_quality_shadow tests.test_a_short_effect_consumer_probe` → `Ran 729 tests in 298.7s / OK`，bounded `tier=focused status=PASS exit=0 deadline=1100s`。
+- reviewer 探针 13 项全过。核心那条：**真实（恒 null）生产者下，该组 ledger 状态是 `not_triggered`、理由点名 constant-null，不再是 `applied`**；喂进一个真 `true` 才变 `applied`；`0 / 1 / "" / "true" / [] / {}` 六种畸形值全部 `unavailable_manual_review`。`producer_binding` 的四种攻击（改 status / 改 source_ref / 改 activation / 整个删掉）全被静态拒绝、零漏网。前提自失效守卫是真的：`tests/test_a_short_effect_contract.py::test_m4_producer_binding_is_explicit_and_currently_constant_null` 直接 AST 扫 `egs_main.py` 断言唯一赋值点是 `Constant(None)`，我独立复算同一事实（`sites=1`）；将来生产者一变该测试即红，强制重审披露。schema 侧我把 `production_effect_enabled` 篡改成 `true`，实测被 schema 拒。
+- 上一轮三类正控未回归：门仍把 `建仓` 打成 `观察`、`null`/`false`/缺键三者逐字节相同、翻 `vol_confirm` 除比较节点外整份报告不变。
+
+### 失效旧结论
+
+- 上一轮 Pass-with-Required 的机制描述已作废，两条 R-ID 均 closed。
+- 我上一轮写的「台账每周报 `applied`」只对修复前成立；现在恒 null 下是 `not_triggered`。
+
+### 下一步注意事项
+
+- **这个模式是后续接线刀的模板**：消费端先建、生产端未建是合法的，但必须做到三件事——① 给该组配自己的状态判据（不要蹭通用 `_phase5_status`，那个只要 Phase5 跑过就报 applied）；② 在契约里写 `producer_binding` 并由 `static_contract_error()` 钉死；③ 补一条 AST 守卫钉住「生产者现状」这个前提，前提一变就红。三件缺一，`true_dangling` 计数就会靠"接了打不着火的线"往下掉。
+- `_m4_review_status()` 要求**每份报告**都带 `machine.m4_review_gate`，缺一个就整组 `unavailable_manual_review`。以后新增任何报告构造路径（候选/持仓之外的第三种）必须同步产出这两个观察节点，否则会被 `unavailable_manual_review 只降不升` 的趋势守护挡住发布。
+- 仍未改 M4 生产逻辑、未重封冻结包、未启用生产 block/degrade。

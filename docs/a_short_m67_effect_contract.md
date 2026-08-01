@@ -4,9 +4,10 @@
 
 ## 当前覆盖
 
-- `analysis_input.schema.json` 的全部 289 个叶子字段，按业务组逐一覆盖且不允许重叠；新增字段、删除字段或移动字段都会使组指纹不匹配。
+- `analysis_input.schema.json` 的全部 371 个叶子字段，按业务组逐一覆盖且不允许重叠；新增字段、删除字段或移动字段都会使组指纹不匹配。
 - A-short 实际决策文件（EGS、Phase 5、weekly pipeline、M6.7 renderer、组合风险模块和本契约模块）的判断分支；新增或改变判断条件必须更新契约并说明落点。
 - 两份运行时 JSON policy 的全部字段：screening 的 13 项，以及 M6.7 的 Phase 5、组合风险、weekly 时间窗；`operation_impact.source_field`、LLM 六类任务枚举、组合因子枚举，以及 weekly/M6.7 输出 schema。
+- `candidate_derived_flags.m4_review_required` 的生产者绑定当前明确为 `A-EGS/egs_main.py::m4_review_required` 恒发 `None`；因此真实周报的该组 ledger 状态是 `not_triggered`，只有未来经独立审查的 M4 生产者或测试夹具提供 `true` 才会记 `applied`。
 
 每一组都必须声明：输入来源、`must_affect_result` 或 `intentionally_independent`、最终结果表面和运行时处理器。刻意独立项必须带原因、owner、review_ref；不能用“默认独立”或空理由躲过检查。
 

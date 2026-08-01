@@ -202,6 +202,38 @@
 - **Verify**: 固定主 Python focused 超集（新 schema 测试 + README row-length + route ledger + doc governance）`73 OK / 0.9s`；`py_compile`、`git diff --check` 通过；Web/X future raw roots 均命中 `.gitignore:97 provider_samples/`；`20260802` state/provider_samples 残留检查为 0。schema 反向控制拒绝授权翻真、生产 policy 翻真、复用旧日期、主题预埋、调用上限漂移、事后降门槛和确认效果翻真。
 - **Next**: Claude Code：审查。
 - **Pre-Codex self-review**: `matrix=complete: schema/artifact exact identity + 4 const queries + Web/X separate raw roots + xAI/Tavily/DeepSeek actual-vs-reserved arithmetic + PASS/REVISE/INCONCLUSIVE + all no-effect exits; register=not_applicable: no finding or risk status changed; handoff=existing US-short main handoff updated and desktop checklist updated; focused=73 OK + py_compile + git diff --check + gitignore/BOM/mojibake checks; full-lane=not_triggered: AGENTS rule 3, isolated no-access schema/artifact/test and docs with no production wiring or provider execution; door=route 14 + doc-governance 41 = 55 OK; independent self-review=not_triggered: low-risk isolated schema/docs fast path, main-thread A-F complete, no timeout/restart/fallback`
+## 2026-08-01 — Claude Code 审查 PASS（A-short candidate_derived_flags 接线刀收口）
+
+- **Verdict/Action**: PASS，已提交并合入 master。M4 门改走专属状态判据，真实恒 null 生产者下报 `not_triggered` 而非 `applied`；`producer_binding` 被静态钉死；两个 machine 观察节点进 m67 schema 并 const-pin 边界。未改 M4 生产逻辑、未启生产 block/degrade。
+- **Required**: 无。`R-ASHORT-KNIFE12-M4-REVIEW-GATE-WIRED-TO-A-CONSTANT-NULL-PRODUCER` 与 `R-ASHORT-KNIFE12-TRUE-DANGLING-CANDIDATE-DERIVED-FLAGS-WIRING` 均 closed，正文只见 `docs/system_risk_register.md`。
+- **Verify**: review-evidence:385cf5eaa8a9；固定 Python 3.13.8；reviewer 自跑 bounded 超集 `Ran 729 tests in 298.7s — OK`（tier=focused / exit=0 / deadline=1100s）；自写探针 13 项全过：恒 null 周报该组 `not_triggered` 且理由点名 constant-null、喂真 true 才 `applied`、六种畸形值全 `unavailable_manual_review`、`producer_binding` 四种篡改删除全拒、前提自失效守卫经我独立复算 AST（sites=1、Constant(None)）、边界篡改被 schema 拒、上轮三类正控未回归。按门禁未跑全量。
+- **Next**: Codex：无待办；用户可授权下一组 true_dangling 接线。
+
+## 2026-08-01 — Codex 修复 M4 review gate producer disclosure/status（未提交）
+
+- **Verdict/Action**: 已修复 `R-ASHORT-KNIFE12-M4-REVIEW-GATE-WIRED-TO-A-CONSTANT-NULL-PRODUCER`；未创建 M4 生产者、未重封冻结包、未提交。
+- **Required**: `R-ASHORT-KNIFE12-M4-REVIEW-GATE-WIRED-TO-A-CONSTANT-NULL-PRODUCER` — M4 组改用专用 `m4_review_gate` 状态判据；当前 `A-EGS/egs_main.py::m4_review_required` 恒为 `None`，真实 null-only 周报记 `not_triggered`，只有 `true` 才记 `applied`；`docs/system_risk_register.md` 已记录完整边界；等待 Claude Code 独立复审。M4 观察节点与 `derived_flag_comparison` comparison-only 边界均已 const-pin 到 M67 schema。
+- **Verify**: 固定 Python 3.13.8；`static_contract_error() = None`；`Ran 31 tests ... OK`（effect contract）；`Ran 676 tests in 48.897s ... OK`（Phase5/weekly/consumer/schema 回归）；py_compile、Schema meta、diff check=OK；full-pack=NOT_VERIFIED。
+- **Proof-of-use**: AST 守卫确认 EGS 唯一 M4 赋值为 `Constant(None)`；baseline ledger=`not_triggered`，true 变异=`applied`，畸形非空=`unavailable_manual_review`；null/缺键/false 兼容边界保留。
+- **Pre-Codex self-review**: `matrix=complete; register=updated; handoff=updated; focused=31+676 OK; full-lane=NOT_VERIFIED; door=Python 3.13.8 + static/schema/diff gates OK; freeze-packet=untouched; producer=not-built; independent-review=pending; commit=not performed`
+- **Next**: Claude Code：独立复审 M4 Required/Optional 修复。
+
+## 2026-08-01 — Claude Code 审查 Pass-with-Required（A-short candidate_derived_flags 接线刀）
+
+- **Verdict/Action**: Pass-with-Required，未提交。八叶接线成立：七叶真进主决策、`vol_confirm` 真是 comparison-only；旧件（缺键/null/false）逐字节不变，畸形非空值全 fail-closed。放行受阻于台账对 M4 门的过度宣称。
+- **Required**: `R-ASHORT-KNIFE12-M4-REVIEW-GATE-WIRED-TO-A-CONSTANT-NULL-PRODUCER` —— `A-EGS/egs_main.py:893` 恒发 `None`，该门永不触发，台账却按 `phase5_decision` 通用状态每周报 `applied`；只需补披露与该叶自己的状态判据，不需返工接线。另一条 Optional（`machine.derived_flag_comparison` 未进 m67 schema）同址，正文只见 `docs/system_risk_register.md`。
+- **Verify**: review-evidence:c12df1eede32；超时原因:本刀首次真改 Phase5 生产决策，按最高档补做旧件字节等价+八种畸形值 fail-closed+comparison-only 反向控制三类探针，且 725 测试超集需 280s。固定 Python 3.13.8；reviewer 自跑 bounded 超集 `Ran 725 tests in 280.7s — OK`（tier=focused / exit=0 / deadline=1100s）；自写探针 11 项，10 项通过、M5 转红坐实 Required（AST 全扫 `egs_main.py`，`m4_review_required` 唯一赋值点为 `Constant(value=None)`）。按门禁未跑全量。
+- **Next**: Codex：修复
+
+## 2026-08-01 — Codex 执行下一步：candidate_derived_flags 接线刀（未提交）
+
+- **Verdict/Action**: 已按类接入 8 个 `candidate_derived_flags` 叶：7 个进入 Phase5 主决策，`vol_confirm` 进入正式 comparison-only 轨；未重封冻结包、未启用生产 block/degrade、未提交。
+- **Required**: `R-ASHORT-KNIFE12-TRUE-DANGLING-CANDIDATE-DERIVED-FLAGS-WIRING`，等待 Claude Code 独立复审 PASS；剩余 `true_dangling`/`partial_consumption` 继续保留为后续接线范围。
+- **Verify**: 固定 Python 3.13.8；`static_contract_error() = None`；nature counts=`true_dangling 283 / partial_consumption 41 / main_decision 36 / comparison_track 5 / display_audit 6`；聚焦合并 `Ran 703 tests in 71.114s ... OK`，文档治理 `Ran 55 tests ... OK`；full-pack=NOT_VERIFIED。
+- **Proof-of-use**: 逐叶变异证明风险/突破/M4 叶改变 Phase5 结果；`vol_confirm` 只改变 comparison 节点且不改变操作/类型；8 叶均有实际 handler 与完整 `proven_consumer_paths`。
+- **Pre-Codex self-review**: `matrix=complete; residual=true_dangling 283 + partial_consumption 41; freeze-packet=untouched; register=updated; handoff=updated; independent-review=pending; commit=not performed`
+- **Next**: Claude Code：独立审查本刀完整 diff。
+
 ## 2026-08-01 — Claude Code 审查 PASS（A-short 第十二刀 12A′/12B′/12C′ 收口）
 
 - **Verdict/Action**: PASS，已提交并合入 master。三条 Required 全部按类修：nature↔runtime 双向绑定、趋势守护接进生产周报并防伪造/防退化、shadow 节点进 schema `required`。未接线任何 true_dangling 叶、未重封冻结包、未开生产 block/degrade。

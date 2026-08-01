@@ -81,6 +81,31 @@
         "model_build_eligible": {"type": "boolean", "description": "P3 comparison-only model selection after public strategy/veto/RR/entry/stop checks and before current-holding or account-capacity disposition; it never changes official M6.7 action, sizing, or allocation."},
         "iv_gate": {"type": "object"},
         "consumption": {"type": "object"},
+        "m4_review_gate": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["input_leaf", "observed_state", "producer_status", "producer_ref"],
+          "properties": {
+            "input_leaf": {"const": "candidates[].derived_flags.m4_review_required"},
+            "observed_state": {"enum": ["inactive", "true", "malformed_non_null"]},
+            "producer_status": {"const": "constant_null"},
+            "producer_ref": {"const": "A-EGS/egs_main.py::m4_review_required"}
+          },
+          "description": "M4 gate observation only: the current A-EGS producer is pinned to constant null; a true value requires a separately reviewed producer or test fixture."
+        },
+        "derived_flag_comparison": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["input_leaf", "observed_outcome", "comparison_only", "production_effect_enabled", "terminal"],
+          "properties": {
+            "input_leaf": {"const": "candidates[].derived_flags.vol_confirm"},
+            "observed_outcome": {"enum": ["vol_confirm_true", "vol_confirm_false", "vol_confirm_unknown"]},
+            "comparison_only": {"const": true},
+            "production_effect_enabled": {"const": false},
+            "terminal": {"type": "string", "minLength": 1}
+          },
+          "description": "Formal comparison-only landing for the upstream vol_confirm observation; it must not alter Phase5 production action or breakout gating."
+        },
         "holding_management_signal": {"enum": ["hold", "hold_watch", "reduce_review", "clear_review", "manual_review", "none"],
           "description": "S3b R1+R2: 合并引擎从各 holding_row_impact 的 holding_effect 取 severity-max(clear_review>reduce_review>manual_review>hold_watch>hold>none;anti-rescue:正面不降级)。映射到 table.持仓处置。仅 held 报告;非生产/不自动卖出。"},
         "blocked_add_required": {"type": "boolean",

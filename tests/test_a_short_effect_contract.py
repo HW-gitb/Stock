@@ -2,10 +2,12 @@
 from __future__ import annotations
 
 import copy
+import ast
 import hashlib
 import json
 import sys
 import unittest
+import jsonschema
 from unittest.mock import patch
 from pathlib import Path
 
@@ -313,6 +315,43 @@ class EffectContractStaticTests(unittest.TestCase):
             error = static_contract_error(contract)
             self.assertIn("direct runtime handler lacks all-leaf consumer proof", error)
 
+    def test_m4_producer_binding_is_explicit_and_currently_constant_null(self):
+        group = next(row for row in self.contract["groups"]
+                     if row["id"] == "candidate_derived_flags_m4_review")
+        self.assertEqual(group["producer_binding"]["status"], "constant_null")
+        source = ast.parse((ROOT / "A-EGS" / "egs_main.py").read_text(encoding="utf-8"))
+        values = []
+        for node in ast.walk(source):
+            if not isinstance(node, ast.Dict):
+                continue
+            for key, value in zip(node.keys, node.values):
+                if isinstance(key, ast.Constant) and key.value == "m4_review_required":
+                    values.append(value)
+        self.assertEqual(len(values), 1)
+        self.assertIsInstance(values[0], ast.Constant)
+        self.assertIsNone(values[0].value)
+
+    def test_m4_producer_binding_mutation_is_rejected(self):
+        contract = copy.deepcopy(self.contract)
+        group = next(row for row in contract["groups"]
+                     if row["id"] == "candidate_derived_flags_m4_review")
+        group["producer_binding"]["status"] = "available"
+        error = static_contract_error(contract)
+        self.assertIn("producer binding", error)
+
+    def test_m4_and_comparison_machine_nodes_are_schema_bound(self):
+        schema = json.loads((ROOT / "schemas" / "a_short_m67_report.schema.json").read_text(encoding="utf-8"))
+        report = build_m67_report(_normalized(), AS_OF, GEN)
+        jsonschema.validate(report, schema)
+        for node_name, field, value in (
+            ("m4_review_gate", "producer_status", "available"),
+            ("derived_flag_comparison", "comparison_only", False),
+        ):
+            mutant = copy.deepcopy(report)
+            mutant["machine"][node_name][field] = value
+            with self.assertRaises(jsonschema.ValidationError):
+                jsonschema.validate(mutant, schema)
+
 
 class EffectContractRuntimeTests(unittest.TestCase):
     def test_weekly_json_markdown_and_validator_expose_unwired_or_independent_groups(self):
@@ -325,8 +364,13 @@ class EffectContractRuntimeTests(unittest.TestCase):
                          "market_context", "account_context", "candidate_quote",
                          "candidate_industry_classification", "candidate_scores", "candidate_event_risk",
                          "candidate_liquidity", "portfolio_concentration_factor_resonance",
-                         "candidate_derived_flags", "identity_batch_gate"):
+                         "identity_batch_gate"):
             self.assertEqual(records[group_id]["status"], "unavailable_manual_review")
+        self.assertEqual(records["candidate_derived_flags_phase5_risk"]["status"], "applied")
+        self.assertEqual(records["candidate_derived_flags_phase5_entry"]["status"], "applied")
+        self.assertEqual(records["candidate_derived_flags_m4_review"]["status"], "not_triggered")
+        self.assertIn("constant-null", records["candidate_derived_flags_m4_review"]["reason"])
+        self.assertEqual(records["candidate_derived_flags_vol_confirm"]["status"], "applied")
         self.assertEqual(records["candidate_data_quality"]["status"], "applied")
         self.assertEqual(weekly["effect_contract_ledger"]["summary"]["total"], len(records))
         markdown = render_weekly_markdown(weekly)
@@ -339,6 +383,41 @@ class EffectContractRuntimeTests(unittest.TestCase):
              if row["id"] == "industry_trend")["status"] = "applied"
         with self.assertRaises(ValueError):
             validate_weekly_report(tampered, _feed())
+
+    def test_m4_ledger_status_is_not_triggered_until_a_true_flag_is_observed(self):
+        baseline = build_weekly_report([_normalized()], AS_OF, GEN)
+        baseline_record = next(row for row in baseline["effect_contract_ledger"]["records"]
+                              if row["id"] == "candidate_derived_flags_m4_review")
+        self.assertEqual(baseline_record["status"], "not_triggered")
+        self.assertIn("constant-null", baseline_record["reason"])
+        self.assertEqual(baseline["reports"][0]["machine"]["m4_review_gate"]["observed_state"], "inactive")
+        missing = _normalized()
+        missing["derived"].pop("m4_review_required", None)
+        explicit_false = _normalized()
+        explicit_false["derived"]["m4_review_required"] = False
+        self.assertEqual(
+            baseline["reports"][0],
+            build_weekly_report([missing], AS_OF, GEN)["reports"][0],
+        )
+        self.assertEqual(
+            baseline["reports"][0],
+            build_weekly_report([explicit_false], AS_OF, GEN)["reports"][0],
+        )
+
+        flags = copy.deepcopy(_egs_candidate()["derived_flags"])
+        flags["m4_review_required"] = True
+        triggered = build_weekly_report([_normalized(derived_flags=flags)], AS_OF, GEN)
+        triggered_record = next(row for row in triggered["effect_contract_ledger"]["records"]
+                               if row["id"] == "candidate_derived_flags_m4_review")
+        self.assertEqual(triggered_record["status"], "applied")
+        self.assertEqual(triggered["reports"][0]["machine"]["m4_review_gate"]["observed_state"], "true")
+
+        malformed = copy.deepcopy(_egs_candidate()["derived_flags"])
+        malformed["m4_review_required"] = "true"
+        unavailable = build_weekly_report([_normalized(derived_flags=malformed)], AS_OF, GEN)
+        unavailable_record = next(row for row in unavailable["effect_contract_ledger"]["records"]
+                                  if row["id"] == "candidate_derived_flags_m4_review")
+        self.assertEqual(unavailable_record["status"], "unavailable_manual_review")
 
     def test_source_bound_headwind_is_recorded_as_applied(self):
         signal = classify_industry_trend(
@@ -374,6 +453,60 @@ class EffectContractRuntimeTests(unittest.TestCase):
         self.assertEqual(legacy_report["m67"]["table"]["优先级"], normal_report["m67"]["table"]["优先级"])
         self.assertEqual(legacy_report["m67"]["table"]["操作"], normal_report["m67"]["table"]["操作"])
         self.assertNotIn("portfolio", _normalized())
+
+    def test_derived_flags_each_reaches_phase5_or_formal_comparison(self):
+        base_flags = copy.deepcopy(_egs_candidate()["derived_flags"])
+
+        def report_for(source_key, value):
+            flags = copy.deepcopy(base_flags)
+            flags[source_key] = value
+            return build_m67_report(
+                _normalized(derived_flags=flags), AS_OF, GEN,
+            )
+
+        base = build_m67_report(_normalized(), AS_OF, GEN)
+        for source_key in ("chasing_high", "overheat_flag"):
+            changed = report_for(source_key, True)
+            self.assertNotEqual(
+                changed["machine"]["entry_exit_size_star"]["star"],
+                base["machine"]["entry_exit_size_star"]["star"],
+                source_key,
+            )
+        for source_key in ("has_crash_veto", "is_lock", "hard_veto"):
+            changed = report_for(source_key, True)
+            self.assertEqual(changed["m67"]["table"]["操作"], "否决", source_key)
+
+        breakout = report_for("is_breakout", True)
+        self.assertEqual(breakout["machine"]["entry_exit_size_star"]["type"], "突破")
+
+        review = report_for("m4_review_required", True)
+        self.assertEqual(review["m67"]["table"]["操作"], "观察")
+        self.assertIn("m4_review_required:升级审查", review["machine"]["layer"]["observe_only"])
+        self.assertFalse(review["machine"]["model_build_eligible"])
+
+        vol_false = report_for("vol_confirm", False)
+        vol_true = report_for("vol_confirm", True)
+        self.assertEqual(
+            vol_false["machine"]["derived_flag_comparison"]["observed_outcome"],
+            "vol_confirm_false",
+        )
+        self.assertEqual(
+            vol_true["machine"]["derived_flag_comparison"]["observed_outcome"],
+            "vol_confirm_true",
+        )
+        self.assertEqual(vol_false["m67"]["table"]["操作"], vol_true["m67"]["table"]["操作"])
+        self.assertEqual(
+            vol_false["machine"]["entry_exit_size_star"]["type"],
+            vol_true["machine"]["entry_exit_size_star"]["type"],
+        )
+
+        weekly = build_weekly_report([_normalized()], AS_OF, GEN)
+        records = {row["id"]: row for row in weekly["effect_contract_ledger"]["records"]}
+        self.assertEqual(records["candidate_derived_flags_phase5_risk"]["nature"], "main_decision")
+        self.assertEqual(records["candidate_derived_flags_phase5_entry"]["nature"], "main_decision")
+        self.assertEqual(records["candidate_derived_flags_m4_review"]["nature"], "main_decision")
+        self.assertEqual(records["candidate_derived_flags_vol_confirm"]["nature"], "comparison_track")
+        self.assertEqual(records["candidate_derived_flags_vol_confirm"]["status"], "applied")
 
 
 if __name__ == "__main__":
