@@ -1,5 +1,44 @@
 # Session Log
 
+## 2026-08-01 — Claude 审查 PASS（B0 两条 Required 已闭，可进 B1）
+- **Verdict/Action**: PASS。名字过滤整体删除，别名表恢复全收，可见性不再取决于变量名；三个回归模块回到 class2，第一轮点名的四个仍是 class2，改动幅度恰好等于「删掉那道过滤」。B0 基线可作 B1 验收依据。已提交并合入 master。
+- **Required**: 无；Register: `R-USSHORT-B0-ALIAS-NAME-HEURISTIC-REOPENS-THE-BLIND-SPOT` 与 `R-USSHORT-B0-INVENTORY-CERTIFIES-DIRTY-MODULES-CLEAN` 均 CLOSED，另记四条不阻塞 Optional（含全量耗时推算），完整内容只见 `docs/system_risk_register.md` 顶部。
+- **Verify**: review-evidence:805ad0367fe9；固定主 Python 自跑 `tests.test_us_short_test_io_inventory` = `8 OK / 163.2s`、门 `tests.test_doc_governance_guard` + route-doc = `55 OK`。探针：三个回归模块 `class2`（w=10/8/2）、原四个仍 `class2`（w=6/7/2/17）；植入 `d`/`self.workspace`/`base` 命中 2/1/1（上轮全 0）；`ROOT/"docs"` 与 helper 正控仍 0。出厂基线 `233/8/36/2`、writes `274` 与上轮实测的 ungated 模型逐项相同；连跑两次相等；allowlist 置空 → 274。未跑 full（rule 3 未触发）。
+- **Next**: Codex：执行 B1。
+
+## 2026-08-01 — Codex 修复 R-USSHORT-B0-ALIAS-NAME-HEURISTIC-REOPENS-THE-BLIND-SPOT（executor；ready for Claude Code review）
+- **Verdict/Action**: 删除名字启发式别名过滤，恢复全量 Name/Attribute alias flow；补 `base` / `d` / `p` / `self.workspace` 反控，重算 snapshot；未启动 B1/B2，未提交。
+- **Required**: R-USSHORT-B0-ALIAS-NAME-HEURISTIC-REOPENS-THE-BLIND-SPOT；Optional (i) 稳定 key 断言已修，Optional (ii) 保留 fail-closed 保守边界并交 B1 逐条核实。完整细节只见 `docs/system_risk_register.md` 顶部。
+- **Verify**: inventory acceptance `8 OK / 44.3s`；focused US-short offline superset `306 OK / 125.2s / deadline=300s`；当前基线 `279 = class0 233 / class1 8 / class2 36 / class3 2`，`274` write events / `112` stable keys；三个回归模块重新为 class2；受保护根前后均 `0 files / 0 temp_dirs / 0 owned markers`，最新 mtime 为空。
+- **Next**: Claude Code 独立审查 B0 第二轮；PASS 后才进入 B1。
+- **Pre-Codex self-review**: `matrix=complete; register=R-USSHORT-B0-ALIAS-NAME open P1; handoff=repair append; focused=306 OK fixed-host; full-lane=not_triggered B0; door=55 OK / 1.0s; A=scanner/tests/snapshot/docs; B=all alias targets + base/d/p/workspace; C=nonsemantic alias red + stable-key check; D=N-A; E=register+SESSION+handoff; F=inventory/focused/residue/py_compile/diff-check PASS, door PASS; independent-self-review=not_used`
+
+## 2026-08-01 — Claude 审查 FAIL（B0 第二轮 · 名字启发式把 v0.1.0 抓到的三个模块弄瞎）
+- **Verdict/Action**: FAIL，不提交不合入。上一条 Required 点名的四个模块确已改判 class2，`self.<attr>` / kwarg 注入 / `os.*` / `shutil.*` 都命中，helper 正控也不再空；但新加的 `_is_path_alias_key()` 名字过滤让守卫的牙取决于变量叫什么，v0.1.0 抓到的三个模块在 v0.2.0 反而漏成 class0/class1。
+- **Required**: R-USSHORT-B0-ALIAS-NAME-HEURISTIC-REOPENS-THE-BLIND-SPOT —— 三个回归模块的行号证据、23% 规模、植入反控与修复方向只见 `docs/system_risk_register.md` 顶部当前条目；上一条 `R-USSHORT-B0-INVENTORY-CERTIFIES-DIRTY-MODULES-CLEAN` 的主体与两条 Optional 已闭，记在同一条目末尾。
+- **Verify**: review-evidence:ea804e85d807；固定主 Python 自跑 `tests.test_us_short_test_io_inventory` = `7 OK / 19.2s`。探针：四个被点名模块现判 `class2`（w=6/7/2/17）；但 `..._bankruptcy_8k_probe`（`base.mkdir`×5）、`..._status_source_probe`（×4）判 `class1/w=0`，`..._weekly_capstone` 判 `class0/w=0`，这 11 条在 v0.1.0 allowlist 里都有。强制 `_is_path_alias_key→True`：`class2 33→36`、writes `212→274`。植入 `d`/`self.workspace` 命中 0，改名即命中。未跑 full；§6a 未触发。
+- **Next**: Codex：修复 R-USSHORT-B0-ALIAS-NAME-HEURISTIC-REOPENS-THE-BLIND-SPOT。
+
+## 2026-08-01 — Codex 修复 R-USSHORT-B0-INVENTORY-CERTIFIES-DIRTY-MODULES-CLEAN（executor；ready for Claude Code review）
+- **Verdict/Action**: 按 reviewer FAIL 修复 B0 假绿：静态 inventory 扩到实例属性别名、简单函数返回、任意调用 path keyword、`os.*` / `shutil.*` 写原语；`repo_anchor` 与稳定 key/计数 allowlist 同步收紧；未启动 B1/B2，未提交。
+- **Required**: R-USSHORT-B0-INVENTORY-CERTIFIES-DIRTY-MODULES-CLEAN 已按推荐方向 (a) 修复，Optional (i)/(ii) 一并闭合；B1 的 Option 采用“无存活残留 + 并发不互踩”，不要求“不触碰真实 state 根”。完整技术细节只见 `docs/system_risk_register.md` 顶部当前条目。
+- **Verify**: 固定主 Python B0 acceptance `7 OK / 6.2s`；focused US-short offline superset `305 OK / 83.7s / deadline=300s`；inventory `279 = class0 235 / class1 9 / class2 33 / class3 2`，`212` write events / `98` stable keys；本语料植入 `self.<attr>` + kwarg + `os.*`/`shutil.*` 命中，清空 helper 后正控变红；受保护根前后 `0 files / 0 temp_dirs / 0 owned markers`，最新 mtime 为空；full lane 未触发。
+- **Next**: Claude Code 独立审查 B0；PASS 后才进入 B1。
+- **Pre-Codex self-review**: `matrix=complete; register=R-USSHORT-B0 open P1; handoff=single US-short handoff append; focused=305 OK fixed-host; full-lane=not_triggered B0; door=55 OK / 0.9s; A=scanner/tests/snapshot/docs; B=aliases/roots/os-shutil/kwargs; C=real-shape/helper/anchor controls; D=N-A; E=register+SESSION+handoff; F=py_compile/diff-check/door; independent-self-review=not_used`
+
+## 2026-08-01 — Claude 审查 FAIL（B0 · inventory 把真写真实根的模块认证成 class0）
+- **Verdict/Action**: FAIL，不合入。共享 helper 与 allowlist 那条腿没问题，但静态扫描模型漏掉本语料产生残留的主机制（`self.<attr> = ROOT / 受保护根` + 以 `raw_root=` / `state_dir=` kwarg 注入生产 runner + `os.*` / `shutil.*` 写原语），所以 `class0=245 / class2=26` 与 `unallowlisted=[]` 是假绿，B1 不能拿这个基线开工。
+- **Required**: R-USSHORT-B0-INVENTORY-CERTIFIES-DIRTY-MODULES-CLEAN —— 完整机制、四个被误判模块、植入反控实测、修复二选一与两条 Optional 只见 `docs/system_risk_register.md` 顶部当前条目。
+- **Verify**: review-evidence:989f223c41d0；固定主 Python 自跑 `tests.test_us_short_test_io_inventory` = `6 OK / 21.4s`（随刀套件全绿本身即假绿）。探针：`scan_test_module` 对 `..._ca_normalize` / `..._yfinance_grades_feasibility_probe` 返回 `class0 / writes=0`，而两者真在 `provider_samples/` 下 mkdir+write_text；`self.<attr>` 与 `os.*`/`shutil.*` 植入命中 0（期望 3），只有模块级 `ast.Name` 写法命中 1；清空 `TEMPORARY_ROOT_HELPERS` 后正控仍绿；清空 allowlist → 69 命中。纯新增 `49/0`；未跑 full（rule 3 未触发，FAIL 已坐实）；§6a 未触发；受保护根前后一致。
+- **Next**: Codex：修复 R-USSHORT-B0-INVENTORY-CERTIFIES-DIRTY-MODULES-CLEAN。
+
+## 2026-08-01 — Codex 执行 B0（executor；ready for Claude Code review）
+- **Verdict/Action**: B0 已完成：新增可复算 US-short test I/O inventory、共享 `temporary_us_short_directory` / `temporary_us_short_state_directory` 薄包装、限定射程的 protected-root 写原语守卫与 69 条显式临时 allowlist；未迁移 B1/B2 模块，未接 live，未调用 provider，未提交。
+- **Required**: 无新 Required；B0 的 26 个 class-2 写真实根模块仍由 allowlist 暂收，下一刀按 handoff 进入 B1；静态守卫明确不宣称通用 AST 数据流覆盖。
+- **Verify**: 固定主 Python focused 超集 `tests.test_us_short_test_io_inventory` + 直接 helper consumers + US-short conformance / class guards = `304 OK / 90.9s / deadline=300s`；固定主 Python `py_compile` 通过；`git diff --check` clean。Inventory 基线 `279 modules = class0 245 / class1 6 / class2 26 / class3 2`，`69` 个 protected-root 写命中均精确落入 allowlist；测试前后 `provider_samples` / `state/us_short` 均 `0 files / 0 temp_dirs / 0 ownership markers`，最新文件 mtime 均为空。full lane 未触发（B0 为 test-infra、无生产 wiring；按 handoff 留给 B2）；本次 pack 串行执行，session-level residue 由 pack 外层前后快照检查。
+- **Next**: Claude Code：审查 B0；独立通过后执行 B1。
+- **Pre-Codex self-review**: `matrix=complete: inventory scope/path digest + 279-module classification + 69 write keys + class-3 sentinel registry + helper cleanup + planted protected-write red / helper positive green; register=no new material risk, known narrow-model residual routed to B1/B2; handoff=B0 completion section appended to single US-short soft-discovery handoff; focused=304 OK fixed-host; full-lane=not_triggered by AGENTS rule 3 and handoff B0 boundary; door=route-doc+doc-governance 55 OK / 0.9s; A=all changed symbols and direct helper consumers; B=class-2 write roots, class-1 reads, class-3 sentinels, class-0 digest; C=empty allowlist planted red + explicit allowlist exactness + helper cleanup + dynamic-open unknown fail-closed; D=N-A; E=CURRENT untouched, no risk-register change; F=py_compile/diff-check PASS, JSON snapshot matches source, protected roots/residue clean; independent-self-review=not_used: developer forbids unrequested agent spawn, main-thread checklist fallback used, no timeout/restart/fallback/edit/network/provider`
+
 ## 2026-08-01 — Claude 交接（这一周的执行范围：规划器四块 + 26 个未隔离测试模块）
 - **Verdict/Action**: 下一个可用探针槽要等 20260808/09（取材窗口 = 决策日往前 7 天，今天跑窗口未开），故本周不空等：把与「问法好不好」无关的规划器机器先建——query-plan schema、版本化模板容器、确定性阶段二纯函数、plan 级预算包络；另做 26 个未隔离测试模块的临时根改造 + 静态守卫。真花钱的一键入口、4d-iii、模板文本定稿仍不做。
 - **Required**: 无 open Required；执行范围、验收谓词（P1-P5 / B1-B6 / 三类分档与假绿自检）与边界全部写在 US-short 软发现主 handoff 的 2026-08-01 交接节。

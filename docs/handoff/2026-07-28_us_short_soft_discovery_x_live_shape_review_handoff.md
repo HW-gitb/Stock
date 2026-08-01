@@ -1059,3 +1059,93 @@ K3-R114 **PASS 并合入 master**：两条 lane 的主题时刻现在被 `max(�
 顺序按修订：**`B0 → B1 → B2 → A1 → A2+A3 → A4`**，A4 仍单独成刀单独审。本段判定优先于上两段的冲突处。
 
 **给 Codex 的命令**：`执行 B0（可复算 inventory + 共享隔离 helper + 限定射程的静态守卫与临时 allowlist），完成后交审查`
+
+## 2026-08-01 追加：B0 已执行完成（Codex executor；待 Claude Code 独立审查）
+
+### 落地内容
+
+- 新增 `tests/provider/us_short_test_io_inventory.py`：扫描 `tests/**/test_us_short*.py`，按 canonical 相对路径给出 module count / class / protected-root 读写计数；`class0` 模块以全量路径 digest 保留，非 class-0 模块逐模块落表；扫描模型只覆盖“受保护根路径传给写原语”这一 B0 窄边界，不冒充通用 AST 数据流分析。
+- 新增 `docs/us_short_test_io_inventory_20260801.json`：当前可复算基线为 `279` 个模块、`class0=245 / class1=6 / class2=26 / class3=2`，`69` 个 protected-root 写命中；69 个现存命中全部列入显式临时 allowlist。下一刀每迁移一处就从 allowlist 删除一处，新增命中默认转红。
+- 扩展既有 `tests/provider/us_short_private_test_root.py`：增加 `temporary_us_short_directory()` 与 `temporary_us_short_state_directory()` 薄包装，继续复用既有锁、owned-parent marker 和清理实现；没有触碰生产代码。
+- 新增 `tests/test_us_short_test_io_inventory.py`：覆盖 inventory 重复计算、tracked snapshot 一致性、allowlist 精确相等、植入 protected write 必红、shared-helper 正控与 fake-root 清理。
+
+### 验证与边界
+
+- 固定主 Python focused 超集（B0 acceptance + 直接 helper consumers + `test_us_short_discovery_conformance` / class guards）最终为 **`304 OK / 90.9s / deadline=300s`**；固定主 Python 对三个 changed Python 文件 `py_compile` 通过；`git diff --check` clean。
+- 测试前后 `provider_samples` 与 `state/us_short` 均为 `0 files / 0 temp_dirs / 0 ownership markers`，最新文件 mtime 均为空；focused pack 串行执行，受保护根前后快照在 pack 外层完成。没有删除用户既有文件。
+- 本刀离线、无 key / client / reservation / provider / network / live；没有修改生产 runner、assessor、query-quality 判据或 A/US 业务逻辑。full lane 按 B0 边界未触发，B2 收口前不引用 full-pack 证据。
+- B0 的 allowlist 不是永久豁免；B1 负责 class-2 写入迁移，B2 负责 class-1 mutable/paid 根读取迁移与最后的 sentinel 收窄。静态模型未覆盖动态路径容器、外部 loader、普通字符串 fixture 等形态，覆盖不到的形态明确留在后续审查，不得从 B0 PASS 推导已全隔离。
+
+### 下一步
+
+~~`Claude Code：审查 B0；PASS 后执行 B1（class-2 写真实根模块迁移，逐项删除 allowlist）`~~ —— 审查结果为 FAIL，B1 不启动，见下节。
+
+## 2026-08-01 追加：Claude Code 对 B0 的独立审查 —— FAIL
+
+**结论**：B0 不通过、不合入，B1 不得在当前 inventory 上开工。共享 helper（`temporary_us_short_directory` / `temporary_us_short_state_directory`，纯新增、复用既有锁与 owned-parent 清理）和 allowlist 的双向精确相等这两条腿是好的；坏在**静态扫描模型的可见集合**。
+
+**根因一句话**：扫描器只看得见「测试自己拿 `Path` 方法写」，而本语料产生残留的主路径是「setUp 用 `self.<attr> = ROOT / 受保护根 / ...` 算出真实根 → 以 `raw_root=` / `state_dir=` kwarg 注入生产 runner → 由生产代码去写」，外加 `os.makedirs` / `os.remove` / `shutil.rmtree` 这类根本不在写原语集合里的调用。两类都落在模块 docstring 自称覆盖的「repo 锚定的路径表达式」之内，**不属于**上一节免责的「动态路径容器 / 外部 loader / 字符串 fixture」。
+
+**实测（探针，非推理）**：`tests/provider/test_us_short_massive_corporate_action_normalize.py` 与 `tests/provider/test_us_short_yfinance_grades_feasibility_probe.py` 都被判 `class0_no_direct_protected_io / writes=0`，而两者确实在真实 `provider_samples/` 下建目录写文件；另有 `..._batch5_massive_corporate_action_shape_probe`（写 `state/us_short`）与 `..._batch5_capstone_offline_e2e`（写 `provider_samples`）同样被判 class0；全仓 13 个 class0/class1 模块把受保护根绑在实例属性上而无一被计为 writer。随刀的植入反控只用了扫描器唯一看得见的那种写法；随刀的 helper 正控是空的（清空 `TEMPORARY_ROOT_HELPERS` 后依然绿）。allowlist 置空 → 69 命中，这条腿确认有牙。
+
+**因此**：`class2=26` 不是真集合，「把 26 个迁移完」= 假完工；守卫在 B1/B2 之后也仍抓不到新增的同类写法。完整机制、逐个模块的行号证据、植入反控数字、修复方向（扩模型 / 改运行期快照，二选一）与两条 Optional 只见 `docs/system_risk_register.md` 顶部 `R-USSHORT-B0-INVENTORY-CERTIFIES-DIRTY-MODULES-CLEAN`。
+
+**顺序不变**：`B0（返工）→ B1 → B2 → A1 → A2+A3 → A4`。
+
+**给 Codex 的命令**：`修复 R-USSHORT-B0-INVENTORY-CERTIFIES-DIRTY-MODULES-CLEAN（含两条 Optional），完成后交审查`
+
+## 2026-08-01 追加：Codex 修复 B0 假绿（待 Claude Code 独立审查）
+
+### 修复内容
+
+- 采用静态扩展方向，不引入已经搁置的 per-module runtime harness：inventory 现在覆盖 `ast.Attribute` 实例属性别名、简单本地函数返回、任意调用的路径 keyword 注入，以及 `os.*` / `shutil.*` 写原语；repo-root 后接未解析导入常量时保守 fail-closed。
+- `_roots()` 真正使用 `repo_anchor`：接受 `ROOT` 锚定和直接相对 protected-root 前缀；临时目录下拼接同名片段不再误报。
+- allowlist key 去掉行号，改成稳定 `(module, operation, roots)`，snapshot 同时保存逐 key count；acceptance test 对 key/count 双向精确比较。
+- `tests/test_us_short_test_io_inventory.py` 新增 reviewer 实测形状：`self.<attr>` + kwarg + `os.makedirs` / `os.remove` / `shutil.rmtree` 植入红灯；清空 `TEMPORARY_ROOT_HELPERS` 后 helper 正控红灯；临时前缀不报、直接相对根仍报。
+
+### 当前基线与验收
+
+- 复算基线：`279` modules，`class0=235 / class1=9 / class2=33 / class3=2`；`212` protected-root write events、`98` stable keys；tracked snapshot 为 `docs/us_short_test_io_inventory_20260801.json`（inventory v0.2.0）。
+- 固定主 Python B0 acceptance `7 OK / 6.2s`；focused US-short offline superset `305 OK / 83.7s / deadline=300s`；route-doc + doc-governance door `55 OK / 0.9s`；`py_compile` / `git diff --check` 通过。
+- 测试前后 `provider_samples` / `state/us_short` 均 `0 files / 0 temp_dirs / 0 owned markers`，最新文件 mtime 为空；全程离线、无 provider/network/live；full lane 未触发（B0 仍是 test-infra、无生产 wiring）。
+- 采用 B1 Option：验收写成“运行后无存活残留、并发不互踩”，不写成“不触碰真实 `state/us_short` 根”；共享 helper 的真实根位置沿用既有锁、唯一命名、owned marker、自清理语义。
+
+### 下一步
+
+~~下一步：`Claude Code：独立审查 B0 修复；PASS 后执行 B1`~~ —— 审查结果仍为 FAIL，B1 不启动，见下节。
+
+## 2026-08-01 追加：Claude Code 对 B0 第二轮的独立审查 —— FAIL
+
+**结论**：B0 仍不通过、不提交不合入，B1 仍不得开工。上一轮 Required 的**主体确已修好**：被点名的四个模块现在全部判 `class2_write_real_root`（w=6 / 7 / 2 / 17），`self.<attr>` 别名、runner kwarg 注入、`os.*` / `shutil.*` 三类写法都命中，`ROOT / "docs" / "x.json"` 这类非受保护 repo 路径不误报，helper 正控也不再是空的（清空 `TEMPORARY_ROOT_HELPERS` 后真的变红），两条 Optional 也一并闭了。
+
+**新问题**：修复里新加的 `_is_path_alias_key()` / `PATH_ALIAS_HINTS` 把别名收录整体加了一道**变量名**过滤——只有名字含那 33 个英文词根之一才进别名表。于是「这行会不会被守卫看见」取决于作者把变量叫 `raw_root` 还是叫 `base`，而 v0.1.0 是全收的。结果是 v0.1.0 抓到的三个模块在 v0.2.0 反而漏了：`..._batch5_bankruptcy_8k_probe`（`base.mkdir` ×5）与 `..._batch5_status_source_probe`（×4）掉成 `class1 / w=0`，`..._weekly_capstone`（`Path(p).parent.mkdir` + `Path(p).write_text`）掉成 `class0 / w=0`——这 11 条写在 v0.1.0 的 allowlist 里全都有。强制 `_is_path_alias_key→True` 重算，`class2` 由 33 变 36、write events 由 212 变 274，当前基线漏掉约 23%。
+
+**因此**：基线仍不能当 B1 的验收依据，守卫仍可以被「换个变量名」绕过。完整证据、行号、植入反控与修复方向只见 `docs/system_risk_register.md` 顶部 `R-USSHORT-B0-ALIAS-NAME-HEURISTIC-REOPENS-THE-BLIND-SPOT`；上一条 Required 的已闭部分记在同一条目末尾。
+
+**顺序不变**：`B0（再返工）→ B1 → B2 → A1 → A2+A3 → A4`。
+
+**给 Codex 的命令**：`修复 R-USSHORT-B0-ALIAS-NAME-HEURISTIC-REOPENS-THE-BLIND-SPOT（含两条 Optional），完成后交审查`
+
+## 2026-08-01 追加：Codex 修复 B0 第二轮名字启发式回归（待 Claude Code 独立审查）
+
+- 删除 `_is_path_alias_key()` / `PATH_ALIAS_HINTS`；别名表恢复收录所有 `ast.Name` / `ast.Attribute` 赋值目标，路径是否 repo-anchor/unknown 仍是唯一收敛依据。
+- acceptance 新增 `base`、`d`、`p`、`self.workspace` 四种非命名写法反控，并改为真实检测稳定 key 不含数字行号段。
+- 当前复算基线：`279` modules，`class0=233 / class1=8 / class2=36 / class3=2`；`274` write events、`112` stable keys；`docs/us_short_test_io_inventory_20260801.json` 与 pinned counts 已重算。
+- inventory acceptance 已为 `8 OK / 44.3s`；focused US-short offline superset `306 OK / 125.2s / deadline=300s`；route-doc + doc-governance door `55 OK / 1.0s`；`py_compile`、`git diff --check` 通过；交 Claude Code 第二轮独立审查；full lane 仍按 B0 test-infra 边界不触发。
+- Optional (ii) 保留 fail-closed 保守模型；B1 逐条确认未知后缀/路径 kwarg 是否真实写入，不能以 allowlist 清零替代残留快照。
+
+~~下一步：`Claude Code：独立审查 B0 第二轮修复；PASS 后执行 B1`~~ —— 已审，PASS，见下节。
+
+## 2026-08-01 追加：Claude Code 对 B0 第三轮的独立审查 —— PASS，B0 收口
+
+**结论**：B0 通过，两条 Required 全部 CLOSED，已提交并合入 master，B1 可以开工。
+
+**这一轮确认了什么**：名字过滤（`_is_path_alias_key` / `PATH_ALIAS_HINTS`）整体删除，别名表恢复到「全部赋值目标 + 全部 `with ... as` 绑定 + 全部函数返回」，可见性不再由变量名决定。三个回归模块回位——`..._batch5_bankruptcy_8k_probe` `class2 / w=10`、`..._batch5_status_source_probe` `class2 / w=8`、`..._weekly_capstone` `class2 / w=2`；第一轮点名的四个模块也没被这次改动碰掉（w = 6 / 7 / 2 / 17）。reviewer 自写植入：`d` / `self.workspace` / 模块级 `base` 分别命中 2 / 1 / 1（上一轮全是 0），反向控制 `ROOT / "docs" / "x.json"` 与共享 helper 下的写仍是 0。
+
+**改动幅度是可核对的**：本轮出厂基线 `class0=233 / class1=8 / class2=36 / class3=2`、write events `274`，与上一轮 reviewer 强制 `_is_path_alias_key→True` 测得的数字逐项相同——也就是说这次确实只删了那道过滤，没有顺手放松或收紧别处。`build_inventory` 连跑两次相等，allowlist 置空仍得 `274` 条 unallowlisted。
+
+**B1 开工前请带上四条不阻塞 Optional**（正文只见 `docs/system_risk_register.md` 顶部两条 CLOSED 条目）：未知后缀 / 路径 kwarg 是过度记账，burn-down 要逐条核实真实写入；`os.path.join` 一类非 `/` 拼法仍逃逸（当前语料 0 次）；acceptance 模块耗时 `19.2s → 163.2s`，按算术推全量会顶到 `860s` 上限，**这是推算不是实测**，B2 跑全量前先实测再决定优化还是调上限。
+
+**顺序**：`B0 ✅ → B1 → B2 → A1 → A2+A3 → A4`。
+
+**给 Codex 的命令**：`执行 B1（class-2 写真实根模块迁移到共享临时根 helper，逐项从 allowlist 删除并重算 snapshot），完成后交审查`
