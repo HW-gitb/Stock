@@ -1,0 +1,76 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "A-short 12C effect consumer feasibility probe",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_name",
+    "schema_version",
+    "probe_status",
+    "proof_scope",
+    "production_effect_enabled",
+    "source_files",
+    "probes"
+  ],
+  "properties": {
+    "schema_name": {"const": "a_short_effect_consumer_probe"},
+    "schema_version": {"const": "1.0.0"},
+    "probe_status": {"const": "feasible_probe_pass"},
+    "proof_scope": {"type": "string", "minLength": 1},
+    "production_effect_enabled": {"const": false},
+    "source_files": {
+      "type": "array",
+      "minItems": 3,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["path", "sha256"],
+        "properties": {
+          "path": {"type": "string", "minLength": 1},
+          "sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"}
+        }
+      }
+    },
+    "probes": {
+      "type": "array",
+      "minItems": 3,
+      "maxItems": 3,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "id",
+          "leaf",
+          "terminal_kind",
+          "terminal_surface",
+          "proof_status",
+          "consumer_refs",
+          "evidence",
+          "source_refs"
+        ],
+        "properties": {
+          "id": {"type": "string", "minLength": 1},
+          "leaf": {"type": "string", "minLength": 1},
+          "terminal_kind": {"enum": ["main_decision", "comparison_verdict"]},
+          "terminal_surface": {"type": "string", "minLength": 1},
+          "proof_status": {"const": "static_ast_presence"},
+          "consumer_refs": {"type": "array", "minItems": 1, "items": {"type": "string", "minLength": 1}},
+          "evidence": {"type": "array", "minItems": 1, "items": {"type": "string", "minLength": 1}},
+          "source_refs": {
+            "type": "array",
+            "minItems": 1,
+            "items": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": ["path", "sha256"],
+              "properties": {
+                "path": {"type": "string", "minLength": 1},
+                "sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"}
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+}

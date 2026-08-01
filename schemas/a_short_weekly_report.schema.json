@@ -15,7 +15,8 @@
     "run_lineage",
     "boundary",
     "portfolio_risk",
-    "effect_contract_ledger"
+    "effect_contract_ledger",
+    "data_quality_shadow"
   ],
   "properties": {
     "schema_name": {
@@ -1429,7 +1430,8 @@
         "as_of",
         "contract_fingerprint",
         "records",
-        "summary"
+        "summary",
+        "trend_guard"
       ],
       "properties": {
         "schema_name": {
@@ -1456,6 +1458,8 @@
               "id",
               "policy",
               "status",
+              "nature",
+              "leaf_natures",
               "source_prefixes",
               "source_paths_sha256",
               "terminal_surfaces",
@@ -1479,6 +1483,32 @@
                   "unavailable_manual_review",
                   "intentionally_independent"
                 ]
+              },
+              "nature": {
+                "enum": [
+                  "true_dangling",
+                  "partial_consumption",
+                  "duplicate_source",
+                  "display_audit",
+                  "comparison_track",
+                  "main_decision",
+                  "delete"
+                ]
+              },
+              "leaf_natures": {
+                "type": "object",
+                "minProperties": 1,
+                "additionalProperties": {
+                  "enum": [
+                    "true_dangling",
+                    "partial_consumption",
+                    "duplicate_source",
+                    "display_audit",
+                    "comparison_track",
+                    "main_decision",
+                    "delete"
+                  ]
+                }
               },
               "source_prefixes": {
                 "type": "array",
@@ -1515,7 +1545,8 @@
             "applied",
             "not_triggered",
             "unavailable_manual_review",
-            "intentionally_independent"
+            "intentionally_independent",
+            "nature_counts"
           ],
           "properties": {
             "total": {
@@ -1537,9 +1568,76 @@
             "intentionally_independent": {
               "type": "integer",
               "minimum": 0
+            },
+            "nature_counts": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": [
+                "comparison_track",
+                "delete",
+                "display_audit",
+                "duplicate_source",
+                "main_decision",
+                "partial_consumption",
+                "true_dangling"
+              ],
+              "properties": {
+                "comparison_track": {"type": "integer", "minimum": 0},
+                "delete": {"type": "integer", "minimum": 0},
+                "display_audit": {"type": "integer", "minimum": 0},
+                "duplicate_source": {"type": "integer", "minimum": 0},
+                "main_decision": {"type": "integer", "minimum": 0},
+                "partial_consumption": {"type": "integer", "minimum": 0},
+                "true_dangling": {"type": "integer", "minimum": 0}
+              }
             }
           }
+        },
+        "trend_guard": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "status",
+            "previous_as_of",
+            "previous_unavailable_manual_review",
+            "current_unavailable_manual_review",
+            "reason"
+          ],
+          "properties": {
+            "status": {"enum": ["checked", "skipped_no_prior_ledger"]},
+            "previous_as_of": {"type": ["string", "null"], "pattern": "^[0-9]{8}$"},
+            "previous_unavailable_manual_review": {"type": ["integer", "null"], "minimum": 0},
+            "current_unavailable_manual_review": {"type": "integer", "minimum": 0},
+            "reason": {"type": "string", "minLength": 1}
+          }
         }
+      }
+    },
+    "data_quality_shadow": {
+      "type": "object",
+      "description": "12A shadow-only data-quality comparison. It is a formal weekly comparison consumer but cannot change Phase5 action, shares, cash allocation, veto, or production policy.",
+      "additionalProperties": false,
+      "required": [
+        "schema_name",
+        "schema_version",
+        "as_of",
+        "comparison_only",
+        "production_effect_enabled",
+        "policy",
+        "verdict",
+        "summary",
+        "candidates"
+      ],
+      "properties": {
+        "schema_name": {"const": "a_short_data_quality_shadow"},
+        "schema_version": {"const": "1.0.0"},
+        "as_of": {"type": "string", "pattern": "^[0-9]{8}$"},
+        "comparison_only": {"const": true},
+        "production_effect_enabled": {"const": false},
+        "policy": {"type": "object"},
+        "verdict": {"type": "object"},
+        "summary": {"type": "object"},
+        "candidates": {"type": "array"}
       }
     }
   }

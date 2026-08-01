@@ -381,10 +381,12 @@ def _render_effect_contract_ledger(weekly: dict) -> list:
     total = summary.get("total", 0)
     if not total:
         return []
+    nature_counts = summary.get("nature_counts") or {}
     out = ["", "## 字段/规则联动台账",
            "- 已登记 {} 组：已联动 {}；本周未触发 {}；不可自动判定、需人工复核 {}；刻意独立 {}。".format(
                total, summary.get("applied", 0), summary.get("not_triggered", 0),
                summary.get("unavailable_manual_review", 0), summary.get("intentionally_independent", 0))]
+    out.append("- nature_counts=" + json.dumps(nature_counts, ensure_ascii=False, sort_keys=True))
     blocked = [row for row in (ledger.get("records") or [])
                if isinstance(row, dict) and row.get("status") == "unavailable_manual_review"]
     if not blocked:
@@ -395,6 +397,27 @@ def _render_effect_contract_ledger(weekly: dict) -> list:
     for row in blocked:
         out.append("| {} | {} |".format(_cell(row.get("id")), _cell(row.get("reason"))))
     return out
+
+
+def _render_data_quality_shadow(weekly: dict) -> list:
+    shadow = weekly.get("data_quality_shadow")
+    if not isinstance(shadow, dict):
+        return []
+    summary = shadow.get("summary") or {}
+    verdict = shadow.get("verdict") or {}
+    return [
+        "",
+        "## data_quality shadow comparison",
+        "> comparison-only / production_effect_enabled=false；本轮只观察命中分布，未改变操作、仓位、现金分配或否决。",
+        "- verdict={}；样本={}；block={} ({:.2%})；degrade={} ({:.2%})；warn={} ({:.2%})；clean={}".format(
+            _cell(verdict.get("observed_outcome")),
+            summary.get("total_candidates", 0),
+            summary.get("block_count", 0), summary.get("block_rate", 0.0),
+            summary.get("degrade_count", 0), summary.get("degrade_rate", 0.0),
+            summary.get("warn_count", 0), summary.get("warn_rate", 0.0),
+            summary.get("clean_count", 0),
+        ),
+    ]
 
 
 def render_weekly_markdown(weekly: dict) -> str:
@@ -514,6 +537,7 @@ def render_weekly_markdown(weekly: dict) -> str:
             if isinstance(reminder, dict):
                 out.append("- " + str(reminder.get("message", "")))
     out += _render_portfolio_risk(weekly)
+    out += _render_data_quality_shadow(weekly)
     out += _render_effect_contract_ledger(weekly)
     out += ["", "## 一览",
             "| 票 | 名称 | 操作 | 持仓/冷静 | EGS分 | 优先级 | 类型 | 入 | 损 | 盈一 | 盈二 | 股数 |",

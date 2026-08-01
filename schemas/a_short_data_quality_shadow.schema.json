@@ -1,0 +1,81 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "a_short_data_quality_shadow",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_name",
+    "schema_version",
+    "as_of",
+    "comparison_only",
+    "production_effect_enabled",
+    "policy",
+    "verdict",
+    "summary",
+    "candidates"
+  ],
+  "properties": {
+    "schema_name": {"const": "a_short_data_quality_shadow"},
+    "schema_version": {"const": "1.0.0"},
+    "as_of": {"type": "string", "pattern": "^[0-9]{8}$"},
+    "comparison_only": {"const": true},
+    "production_effect_enabled": {"const": false},
+    "policy": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["version", "required_fields", "degrade_floor", "activation"],
+      "properties": {
+        "version": {"const": "shadow_v1"},
+        "required_fields": {"type": "array", "minItems": 1, "items": {"type": "string", "minLength": 1}},
+        "degrade_floor": {"type": "string", "minLength": 1},
+        "activation": {"const": "disabled_pending_shadow_review"}
+      }
+    },
+    "verdict": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["status", "observed_outcome", "production_effect_enabled", "comparison_only"],
+      "properties": {
+        "status": {"const": "shadow_only_pending_activation"},
+        "observed_outcome": {"enum": ["block_observed", "degrade_observed", "warn_observed", "clean_observed", "no_candidates"]},
+        "production_effect_enabled": {"const": false},
+        "comparison_only": {"const": true}
+      }
+    },
+    "summary": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["total_candidates", "block_count", "degrade_count", "warn_count", "clean_count", "block_rate", "degrade_rate", "warn_rate"],
+      "properties": {
+        "total_candidates": {"type": "integer", "minimum": 0},
+        "block_count": {"type": "integer", "minimum": 0},
+        "degrade_count": {"type": "integer", "minimum": 0},
+        "warn_count": {"type": "integer", "minimum": 0},
+        "clean_count": {"type": "integer", "minimum": 0},
+        "block_rate": {"type": "number", "minimum": 0, "maximum": 1},
+        "degrade_rate": {"type": "number", "minimum": 0, "maximum": 1},
+        "warn_rate": {"type": "number", "minimum": 0, "maximum": 1}
+      }
+    },
+    "candidates": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["ts_code", "status", "block", "degrade", "warn", "completeness_score", "missing_fields", "pending_fields", "rule11_required", "reasons"],
+        "properties": {
+          "ts_code": {"type": "string", "minLength": 1},
+          "status": {"enum": ["block", "degrade", "warn", "clean"]},
+          "block": {"type": "boolean"},
+          "degrade": {"type": "boolean"},
+          "warn": {"type": "boolean"},
+          "completeness_score": {"type": ["number", "null"], "minimum": 0, "maximum": 1},
+          "missing_fields": {"type": "array", "items": {"type": "string"}},
+          "pending_fields": {"type": "array", "items": {"type": "string"}},
+          "rule11_required": {"type": "array", "items": {"type": "string"}},
+          "reasons": {"type": "array", "minItems": 1, "items": {"type": "string", "minLength": 1}}
+        }
+      }
+    }
+  }
+}

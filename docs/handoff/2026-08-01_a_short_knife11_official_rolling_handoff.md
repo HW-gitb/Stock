@@ -24,6 +24,36 @@ The focused tests cover: one 340-member positive week plus two 20-member opposit
 
 No provider call, data fetch, production rule change, commit, push, merge, or full-pack claim was made. Independent Claude Code review remains required before any integration action.
 
+## 2026-08-01 Append: Knife 12 tightened three-cut implementation (Codex executor)
+
+### Scope
+
+- **12A′ shadow-only data quality**: `analysis_input.candidates[].data_quality` is preserved through `normalize_candidate` and consumed by a formal weekly `data_quality_shadow` comparison. The block/degrade/warn policy is observable only; `comparison_only=true` and `production_effect_enabled=false` are schema-bound, and no Phase5 action, star, shares, cash allocation, veto, or production threshold is changed. Malformed/duplicate weekly fixtures do not get pre-empted by the shadow; the existing weekly validator remains the owner of identity errors.
+- **12B′ nature classification**: `schemas/a_short_m67_effect_contract.json` now classifies every one of the 371 `analysis_input` leaves through `leaf_nature_by_group`. The ledger exposes per-record `nature`/`leaf_natures` and a seven-value `nature_counts` summary. Nature/policy consistency rejects bulk relabeling of business leaves as display-only; `intentionally_independent` remains an explicit exception. `validate_effect_contract_ledger(..., previous_ledger=...)` provides the non-increasing `unavailable_manual_review` trend guard.
+- **12C′ feasibility probe**: `engine/a_short_effect_consumer_probe.py` and its schema prove only three selected local AST chains: `has_crash_veto → negative_event`, `industry_trend → star`, and `data_quality.completeness_score → shadow verdict`. The probe records source hashes and is explicitly not a generic 371-leaf data-flow proof.
+
+### Verification
+
+Fixed interpreter only: `C:\Users\cnhea\AppData\Local\Programs\Python\Python313\python.exe` (Python 3.13.8).
+
+- Core 12A′/12B′/12C′/renderer pack: `Ran 65 tests ... OK`.
+- Shared weekly pipeline regression: `Ran 515 tests ... OK`.
+- Freeze/schema/analysis-input gates: `Ran 45 tests ... OK`; compatibility consumers: `Ran 36 tests ... OK`.
+- `py_compile`, JSON Schema meta-check, and `git diff --check` passed.
+- The freeze packet was not edited or resealed; no provider/network/full-pack execution occurred.
+
+### Boundary and handoff
+
+The 12B inventory still honestly labels unresolved business groups as `true_dangling`/`partial_consumption`; 12C proves feasibility for three chains only. Full A-short pack and independent reviewer PASS are `NOT_VERIFIED`. No commit, push, merge, freeze transition, or production activation was performed. Next owner: independent Claude Code review of the complete three-cut diff; after PASS, project flow decides submission.
+
+## 2026-08-01 Append: Knife 12 anti-dangling machinery Required repair (Codex executor)
+- The independent repair opinion did not include the later 291-leaf `true_dangling` wiring knife; this slice only makes the anti-dangling machinery load-bearing.
+- Nature/runtime is bidirectional. `candidate_data_quality` now has a four-leaf `data_quality_shadow` comparison handler. `portfolio_concentration_factor_resonance` remains `partial_consumption` until split-and-wire.
+- The weekly production path resolves the prior canonical ledger and records either a checked trend guard or an explicit `skipped_no_prior_ledger` bootstrap; rising unavailable counts fail closed.
+- The weekly schema requires `data_quality_shadow`, and its validator rejects `None`; the shadow remains comparison-only and production-disabled.
+- Fixed Python evidence: Required-focused `Ran 43 tests ... OK`; weekly pipeline `Ran 515 tests ... OK`; static/compile/schema/diff checks passed. No true-dangling wiring, freeze reseal, provider/network work, activation, commit, push, or merge.
+- Next owner: independent Claude Code re-review; only after PASS may the user authorize a separate `true_dangling` wiring knife.
+
 ## 2026-08-01 追加：第十一刀独立审查（Claude Code，Pass-with-Required，未提交）
 
 ### 改了什么 / 为什么
@@ -70,3 +100,56 @@ No provider call, data fetch, production rule change, commit, push, merge, or fu
 
 - 本刀无待办。将来真要给 crash-veto 起时钟，唯一合法路径是统一 switchover：先在 `TRACKS` 与 `docs/a_short_evidence_epoch_mode_registry_20260725.json` 注册它自己的轨，再改 `_official_rolling_epoch_mode()` 去读自己的 mode；不许再回到读别人 mode 的写法。
 - `decide_design(..., minimum_pairs=0)` 只对周级聚合合法。任何新调用点若想传非默认值，必须同时说明「配对单位是什么」并补一条 19/20 边界反向控制，否则就是把个股级样本门悄悄关掉。
+
+## 2026-08-01 追加：第十二刀 12A′/12B′/12C′ 独立审查（Claude Code，FAIL，未提交）
+
+### 改了什么 / 为什么
+
+- 本轮我不改代码，只审查。被审改动：`engine/a_short_effect_contract.py`（新增 `_leaf_nature_map` / `leaf_natures` / `validate_unavailable_manual_review_trend`，改 `static_contract_error` / `build_effect_contract_ledger` / `validate_effect_contract_ledger`）、`runners/a_short_weekly_pipeline.py`（`normalize_candidate` 透传 `data_quality`、`build_weekly_report` 产 shadow、`validate_weekly_report` 校验 shadow）、`runners/a_short_m67_render.py`（新增 `_render_data_quality_shadow`、台账加 `nature_counts` 行）、两个 schema，加四个新文件（shadow 引擎+schema、consumer probe 引擎+schema）与两个新测试模块。
+- 判 FAIL 的理由不是核心功能不对，而是**本刀新建的三样防悬空件自己没接到承重位**。这刀的全部价值就是把"登记为应影响结果、实际没接线"变成一份可信清单；清单能靠改标签变短、警报器没通电、新轨能无声消失，价值就不成立。
+
+### 验证命令 / 验证结果
+
+- `.tools\run_unittest_with_repo_pythonpath.cmd --timeout-seconds 900 tests.test_a_short_weekly_pipeline tests.test_a_short_effect_contract tests.test_a_short_m67_render tests.test_a_short_data_quality_shadow tests.test_a_short_effect_consumer_probe` → `Ran 580 tests in 272.508s / OK`，bounded `tier=focused status=PASS exit=0 deadline=900s`。既有测试全绿——三条缺口正落在测试未覆盖处。申请 900s 上限的实测理由：该超集含 weekly pipeline 全模块，实测 272.5s，超 300s 默认档不安全。
+- reviewer 自写探针（scratchpad，不入库）15 项。**通过的**：只改一只候选的 `data_quality`（block / degrade / warn / 非 dict 四种形态各一次），整份周报除 `data_quality_shadow` 外**逐字节相同**，且 shadow 节点确实变（探针非空洞）——checked-in 测试只比了 `操作`/`股数` 两个字段，这是桌面方案要求的严格形态；`leaf_natures()` 实测 371 叶且与 `analysis_input_paths()` 完全相等。**转红的**三条见 register。
+- 静态核实：`runners/a_short_phase5_engine.py` 对 `data_quality` 零引用；`A-EGS/egs_main.py:1450` 那处读取是上游既有、本轮未改（该文件不在改动清单）。
+
+### 失效旧结论
+
+- Codex SESSION_LOG 的「12B′ Nature/policy consistency rejects bulk relabeling of business leaves」只对**改成展示类**成立；改成 `main_decision` 这一侧完全不设防，实测 `static_contract_error()` 返回 `None`。
+- Codex handoff 的「`validate_effect_contract_ledger(..., previous_ledger=...)` provides the non-increasing trend guard」在生产路径上不成立——生产唯一调用点不传该参数。
+
+### 下一步注意事项
+
+- 三条 Required 是**同一类**，请一起修，别只修被点名的那一处：nature 必须和运行时接线状态交叉校验（不只和 policy）、趋势守护必须在生产周报里真跑、shadow 节点必须进 `required` 且 `None` 不再静默放行。
+- 修 ① 时注意反向也要成立：`nature=true_dangling` 的组必须 `runtime_handler == unresolved_input_group`，否则接完线忘了改标签同样是假账。
+- 修 ② 若拿不到上一份 ledger（首次发布、历史缺失），必须是显式且有理由的跳过并留痕，不能退回"默认 None 就不查"。
+- **不要**为本刀重封冻结包。本轮改了 `weekly_report_schema` 与 `m67_effect_contract` 两个受钉契约，但预冻结期哈希门不比对（当前 8 项已有 6 项漂移而冻结 schema 测试仍绿）；提前重封会把这 6 项漂移一次性洗成新基线，跳过第 2 刀第 5 点要求的逐条 epoch 归属判断。Codex 本轮没重封是对的，保持。
+- 用户已说明：本刀 PASS 后才授权执行剩余 `true_dangling` 接线刀。当前实测工作清单是 `true_dangling 291 叶 / partial_consumption 35 叶`（另 `main_decision 35 / display_audit 6 / comparison_track 4`，合计 371）。这个 291 就是后续每一刀的验收基准，所以①必须先堵死，否则基准可伪造。
+
+## 2026-08-01 追加：第十二刀三条 Required 收口复审（Claude Code，PASS，已提交）
+
+### 改了什么 / 为什么
+
+- 本轮我不改代码，只复审并提交。三条 Required 都按类修，不是只堵被点名那一处：
+  ① 新增 `_NATURE_RUNTIME_HANDLERS`，`static_contract_error()` 把 nature 与 `runtime_handler` **双向**绑死（不只绑 policy）；`candidate_data_quality` 拿到真 handler `data_quality_shadow`。
+  ② 新增 `_load_previous_effect_contract_ledger()` / `_bind_effect_contract_trend_guard()` / `_validate_trend_guard_record()`，趋势结果作为 `trend_guard` 记录进 ledger 本体，绑定点 `write_weekly_report` / `publish_weekly_bundle` / `main()`，`validate_published_weekly_bundle` 再独立重解析一次。
+  ③ `data_quality_shadow` 进 weekly schema `required`，`validate_data_quality_shadow(None)` 改为报错。
+
+### 验证命令 / 验证结果
+
+- `.tools\run_unittest_with_repo_pythonpath.cmd --timeout-seconds 900 tests.test_a_short_weekly_pipeline tests.test_a_short_effect_contract tests.test_a_short_m67_render tests.test_a_short_data_quality_shadow tests.test_a_short_effect_consumer_probe` → `Ran 585 tests in 295.382s / OK`，bounded `tier=focused status=PASS exit=0 deadline=900s`。900s 上限的实测理由：该超集含 weekly pipeline 全模块，实测 295s，300s 默认档不安全。
+- reviewer 探针 15 项全过，关键是**穷举而非抽样**：18 个未接线 `true_dangling` 组逐个改标 `main_decision` 全部被拒、零漏网；反向 4 个已接线组逐个改标 `true_dangling` 也全部被拒。趋势守护在临时 canonical 树里实测能真找到上一周（`checked` / `previous_as_of` 正确 / 22:22），且伪造 `checked`、上一份存在却谎报 `skipped`、真实计数上升（21→22）三种都被拒——第二种正是"退化成永远跳过"那条最可能的假修。缺 shadow 的周报被 schema 与 validator 双拒。comparison-only 隔离未回归。
+- 另核实修复没有制造假进度：`true_dangling` 仍是 291 叶。6 个 `portfolio_concentration_factor_resonance` 叶由 `main_decision` 如实下调为 `partial_consumption`（新双向门下它没有真 handler），`main_decision` 35→29、`partial_consumption` 35→41，总数仍 371。
+
+### 失效旧结论
+
+- 上一轮 FAIL 的三条机制描述全部作废，两条 R-ID 均 closed。
+- 我上一轮记的分布 `partial_consumption 35 / main_decision 35` 已过期，终态见上。
+
+### 下一步注意事项
+
+- 291 叶 `true_dangling` + 41 叶 `partial_consumption` 是后续接线刀的工作清单，且现在这个数字**改标签改不动**——nature 必须与 `runtime_handler` 对得上，接完线必须同时改标签、没接线就不许标成 `main_decision`。
+- 接线刀每接一组，必须同时：给该组换上真 `runtime_handler`、在 `_NATURE_RUNTIME_HANDLERS[main_decision]` 里登记该 handler、把 nature 从 `true_dangling` 改成 `main_decision`、补 `proven_consumer_paths` 覆盖全部叶、补一条"只改该叶 → 主决策必须变"的正向变异测试。少任何一步都会被现有守护挡住或留下假账。
+- `unavailable_manual_review` 现在只许降不许升，且首次发布的 `skipped_no_prior_ledger` 必须带理由。接线刀若拆组导致组数变化，注意该计数可能先升——那要么拆法有问题，要么需要用户显式批准一次基线重置，不许悄悄放宽守护。
+- 仍**不要**为接线刀重封冻结包，理由同上一节。
