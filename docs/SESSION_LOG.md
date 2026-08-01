@@ -1,5 +1,21 @@
 # Session Log
 
+## 2026-08-01 — Claude 审查 PASS（全量上限与入口替换两条 Required 已闭）
+- **Verdict/Action**: PASS，已提交并合入 master。官方全量入口的拦截撤回（`bounded_unittest` 内容与已提交版逐字节相同）并由 argv 断言钉住；acceptance 改为单进程只扫一次，全量四次超时后首次 `5105 OK`。`us_short_module_runner` 降为显式工具、不接官方入口。
+- **Required**: 无；Register: `R-USSHORT-FULL-PACK-SELECTOR-IS-SILENTLY-SUBSTITUTED-WITHOUT-AN-EQUIVALENCE-CONTROL` 与 `R-USSHORT-FULL-PACK-NOW-EXCEEDS-ITS-OWN-CEILING` 均 CLOSED，另记一条不阻塞 Optional（可复算断言变空），完整内容只见 `docs/system_risk_register.md` 顶部。
+- **Verify**: review-evidence:751ee20b09b9；按 rule ② 单入口跑得 `CACHED GREEN - us_short = 5105 OK`，命中指纹 `a50c1a3f…` 与 ledger 记录的 `fingerprint`/`prepared_fingerprint` 一致，故该 PASS 属当前代码态，按 rule 4 引用不重跑；受保护根前后快照零新增；改动的四个治理模块自跑 `93 OK / 5.5s`（含 module runner 的两条残留反控）。`FULL_MAX_SECONDS` 仍 860、六处锚点未动。
+- **Next**: Codex：执行 B2。
+
+## 2026-08-01 - Codex executor repair - official selector and one-scan acceptance
+
+- **Verdict/Action**: restored `.tools/bounded_unittest.py::run_unittest` to the official `python -m unittest` entry; `tests/provider/us_short_module_runner.py` remains an explicit per-module residue tool and is not injected into the official or ledger entry. No commit/merge.
+- **Required**: acceptance now builds the US-short inventory once in `USShortTestIOInventoryTests.setUpClass` and derives the checked-in snapshot from that same object. The prior implicit selector substitution is removed; official discovery and explicit per-module suite retain the same 279-module / 5105-test surface.
+- **Verify**: fixed-Python focused/ledger/inventory/governance superset `119 OK / 19.472s`; official full ledger `5105 OK / 706.903s` (`RESULT PASS`, ledger elapsed `708.0s`, deadline `860s`, fingerprint `a50c1a3f3b2a...`); `check us_short` reports cached green on this exact code state; py_compile and `git diff --check` pass.
+- **Timing explanation**: the historical executable-only run `11 tests / 730.1s` is mutation-heavy and repeatedly launches subprocesses/loads fixtures inside those 11 methods; the historical full run was a different `5090`-test code state and used buffered, fail-fast official discovery. It is therefore not a contradiction that the smaller executable subset had a larger wall-clock time; the final official run is `5105 / 706.903s`.
+- **Before/after protected-root evidence**: `provider_samples` was `27 entries / 27 dirs` before and after; `state/us_short` was `4 entries / 4 dirs` before and after; entry-set delta was `0`, no `tmp*`, helper-marker, or `k4b` residue remained, and only pre-existing directory mtimes changed during fixture writes. Source mtimes stayed unchanged across the lane. Existing `runs_private` and `provider_incidents` were preserved.
+- **Full-lane boundary**: the official lane is green and the full-pack gate is now evidence-backed for this exact code state. No provider/network/live/paid request occurred. Claude Code review/commit remains pending.
+- **Pre-Codex self-review**: `matrix=complete; register=updated; handoff=updated; focused=119 OK; full-lane=official 5105 OK / 706.903s / ledger 708.0s / deadline=860s; selector=official unittest restored; inventory=one build per acceptance process; per-module residue=explicit tool only; before-after protected-root delta=0; door=119 OK / 19.472s; A=bounded entry, explicit runner, inventory cache, ledger path; B=selector equivalence and residue boundary; C=official full run, old 730.1-vs-716.7 timing explanation, mtime/residue; D=N-A; E=SESSION_LOG + risk register + handoff; F=py_compile + diff-check + exact-code-state cached-green check; independent-self-review=not_used`
+
 ## 2026-08-01 — Claude 审查 PASS（B1 迁移本体收口；harness 单独留 Required）
 - **Verdict/Action**: PASS（本轮判定经用户追问后由 FAIL 更正为 PASS：把 B1 与 harness 分开验，B1 本体自证通过）。迁移已提交并合入 master；`.tools/bounded_unittest.py`、`.tools/full_pack_ledger.py`、`tests/provider/us_short_module_runner.py`、`tests/test_full_pack_ledger.py` 四个 harness 文件**不在本次提交内**，留给下一轮。
 - **Required**: R-USSHORT-FULL-PACK-SELECTOR-IS-SILENTLY-SUBSTITUTED-WITHOUT-AN-EQUIVALENCE-CONTROL（P1，未提交的 harness）；R-USSHORT-FULL-PACK-NOW-EXCEEDS-ITS-OWN-CEILING 耗时侧仍 open（第四次 TIMEOUT）；类级守卫与 dict 逃逸归 B2。正文只见 `docs/system_risk_register.md` 顶部当前条目。

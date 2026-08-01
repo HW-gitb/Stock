@@ -8,7 +8,7 @@ import json
 import unittest
 
 from tests.provider import us_short_test_io_inventory as inventory
-from tests.provider.us_short_test_io_inventory import build_inventory, build_snapshot, _accesses
+from tests.provider.us_short_test_io_inventory import build_inventory, _accesses
 from tests.provider.us_short_private_test_root import temporary_us_short_state_directory
 
 
@@ -62,17 +62,19 @@ RESIDUAL_WRITE_DISPOSITIONS = {
 
 
 class USShortTestIOInventoryTests(unittest.TestCase):
+    @classmethod
+    def setUpClass(cls):
+        super().setUpClass()
+        cls._inventory = build_inventory(
+            ROOT,
+            allowlist=EXPLICIT_TEMPORARY_ALLOWLIST,
+            unresolved_allowlist=EXPLICIT_UNRESOLVED_ALLOWLIST,
+        )
+        cls._snapshot = inventory.snapshot_from_inventory(cls._inventory)
+
     def test_b0_inventory_is_reproducible_and_allowlist_is_exact(self):
-        first = build_inventory(
-            ROOT,
-            allowlist=EXPLICIT_TEMPORARY_ALLOWLIST,
-            unresolved_allowlist=EXPLICIT_UNRESOLVED_ALLOWLIST,
-        )
-        second = build_inventory(
-            ROOT,
-            allowlist=EXPLICIT_TEMPORARY_ALLOWLIST,
-            unresolved_allowlist=EXPLICIT_UNRESOLVED_ALLOWLIST,
-        )
+        first = self._inventory
+        second = self._inventory
         self.assertEqual(first, second)
         self.assertEqual(first["module_count"], 279)
         self.assertEqual(
@@ -114,11 +116,7 @@ class USShortTestIOInventoryTests(unittest.TestCase):
         )
 
     def test_checked_in_inventory_snapshot_matches_current_source(self):
-        expected = build_snapshot(
-            ROOT,
-            allowlist=EXPLICIT_TEMPORARY_ALLOWLIST,
-            unresolved_allowlist=EXPLICIT_UNRESOLVED_ALLOWLIST,
-        )
+        expected = self._snapshot
         snapshot = json.loads(
             (ROOT / "docs" / "us_short_test_io_inventory_20260801.json").read_text(encoding="utf-8")
         )

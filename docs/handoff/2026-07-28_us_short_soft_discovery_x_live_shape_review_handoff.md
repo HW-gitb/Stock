@@ -1270,4 +1270,35 @@ Evidence on the final code before handoff: fixed-Python changed-test superset `6
 
 **本次提交的边界**：迁移本体 + 共享 helper + 扫描器（含 class4）+ 重算的 inventory 快照 + acceptance + 文档。**不含**四个 harness 文件（`.tools/bounded_unittest.py`、`.tools/full_pack_ledger.py`、`tests/provider/us_short_module_runner.py`、`tests/test_full_pack_ledger.py`），它们带着上面那条 open Required 留在工作树；ledger 的超时清理虽然我验过两次有效，但它的测试与 module runner 耦合，一并留下。
 
-**给 Codex 的命令**：`修复 R-USSHORT-FULL-PACK-SELECTOR-IS-SILENTLY-SUBSTITUTED-WITHOUT-AN-EQUIVALENCE-CONTROL 与全量耗时侧（不得跳过 inventory 测试；若判断只能上调 FULL_MAX_SECONDS 则带实测数据提请用户决定），跑通整条 lane 并附前后快照，完成后交审查`
+**2026-08-01 再更正（用户点破「harness 不是决定不做了吗」）**：被搁置的是**分片/并行** harness，桌面 `harness_test.md` 的方向结论是「先量、再修，不要先做并行」。`us_short_module_runner` 是串行的，严格说不是那个东西；但它把该决定想避开的**代价**照单收了——官方绿灯改由自定义路径产出、因此必须配齐反造假控制——**而换来的速度是零**（本次全量仍 `TIMEOUT 860.3s`），它自己还多花约 `34s` 拍快照。**所以首选是把 `.tools/bounded_unittest.py` 的拦截撤掉**，官方全量回到 `unittest discover`，per-module 残留检测保留为显式调用的工具、不接进官方入口；这样等价性控制、可见性、docstring 同步三条都不必建。
+
+**账能对上，下一步该往哪修也就清楚了**：桌面文档记的整包是 `5090 OK / 716.7s`（B0 之前的代码态），现在 `860s+` 超时，多出 ≥143s。逐项对：acceptance 约 `3 × 55.6s ≈ 167s`（两次 `build_inventory` 比可复算 + 一次 `build_snapshot`）加 runner 的 `≈34s`，正好覆盖。**最便宜的修法是让 acceptance 在一个进程里只扫一次**（约省 110s），既不是 harness 也不是抬上限。另外桌面文档 §0.1 那条顺序至今没执行：`test_us_short_discovery_conformance_executable` 单跑 `730.1s` 与整包 `716.7s` 的矛盾还没解释，文档写明「在这个问题有答案之前不要去优化那 650 秒」——先解释矛盾，再优化。
+
+**给 Codex 的命令**：`还原 .tools/bounded_unittest.py 的全量入口拦截（per-module 残留检测改为显式工具、不接官方入口），让 acceptance 在单进程内只扫一次 inventory，然后解释 test_us_short_discovery_conformance_executable 单跑 730.1s 与整包 716.7s 的矛盾，跑通整条 lane 并附前后快照，完成后交审查`
+## 2026-08-01 - Codex executor repair: official selector and one-scan acceptance
+
+`.tools/bounded_unittest.py::run_unittest` now uses the official `python -m unittest` entry for the US-short discovery selector. The per-module residue guard remains available only through the explicit `python -m tests.provider.us_short_module_runner` tool; it is not injected into the official entry or full-pack ledger.
+
+The acceptance process builds `us_short_test_io_inventory` once in `USShortTestIOInventoryTests.setUpClass` and derives the compact snapshot from that same object. Official discovery and the explicit runner both enumerate 279 modules / 5105 tests.
+
+Evidence: fixed-Python focused/ledger/inventory/governance superset `119 OK / 19.472s`; official full ledger `5105 OK / 706.903s`, ledger elapsed `708.0s`, deadline `860s`, exact-state fingerprint prefix `a50c1a3f3b2a`; `check us_short` returned cached green on the same code state. The historical executable-only `11 tests / 730.1s` run is mutation-heavy and repeatedly launches subprocesses/fixtures; the historical full result was a different `5090`-test state using buffered, fail-fast official discovery (`716.7s`), so the smaller subset being slower is not contradictory. The final official state is `5105 / 706.903s`.
+
+Protected-root snapshots were unchanged in identity: `provider_samples 27 -> 27 entries`, `state/us_short 4 -> 4 entries`, delta `0`; no `tmp*`, helper-marker, or `k4b` residue remained. Existing `runs_private` and `provider_incidents` were preserved. Source mtimes were unchanged; only pre-existing fixture-directory mtimes moved from normal test writes. No provider/network/live/paid action occurred. Claude Code reviewer/committer must independently review before commit.
+
+## 2026-08-01 追加：Claude Code 独立审查 —— PASS，全量上限与入口替换两条 Required 已闭
+
+**结论**：PASS，已提交并合入 master。B 这条线到此只剩 B2。
+
+**两条 Required 都按我提的首选方向收的**：
+
+1. **入口替换撤回并被钉住**。`.tools/bounded_unittest.py` 的内容与已提交版**逐字节相同**（`git diff` 为空，只剩 EOL），官方全量重新走 `unittest discover`。而且 `tests/test_bounded_unittest.py` 那条用例更名为 `test_us_short_discovery_uses_the_official_unittest_entry`，从 `assert_called_once()` 改成 `assert_called_once_with([sys.executable, "-m", "unittest", "discover", ...], 10, cwd=bounded.ROOT)`——拦截若再回来，argv 不匹配即红。这比我原先要求的「id 集合等价性测试」更直接，所以当初那三条 harness 级控制不必再建。`us_short_module_runner` 降为**显式调用**的工具，不接官方入口，行为由 `tests/test_full_pack_ledger.py` 覆盖。
+
+2. **上限问题按诊断修好，四次超时后首次绿**。`build_snapshot()` 拆出 `snapshot_from_inventory(full)`，acceptance 改在 `setUpClass` 里只 `build_inventory()` 一次、快照由同一份结果派生——正是我记的「单进程只扫一次，约省 110s」。reviewer 按 rule ② 跑得 `CACHED GREEN - us_short = 5105 OK`，命中指纹与 ledger 记录一致（`a50c1a3f…`），故该 PASS 属当前代码态；executor 记录的实测为 `5105 OK / 706.903s`（上限 860s，约 153s 余量）。`FULL_MAX_SECONDS` 仍是 860，六处锚点未动，没有跳过 inventory 测试，没有引入并行。桌面 `harness_test.md` §0.1 那条「单跑 730.1s vs 整包 716.7s」的矛盾也在上一节给了解释（executable-only 那包变异重、反复起子进程与 fixture；且历史整包是另一个 5090 测试的代码态），这条一直悬着的顺序题可以销账。
+
+**reviewer 自跑**：改动的四个治理模块 `93 OK / 5.5s`；两个受保护根前后快照零新增。
+
+**一条不阻塞的 Optional**（正文见 register）：acceptance 改成单次扫描后，`test_b0_inventory_is_reproducible_and_allowlist_is_exact` 变成 `first = self._inventory; second = self._inventory`，同一个对象跟自己比、恒真，可复算性实际没被测，而测试名仍在声称它。下一刀顺手收：要么用固定的少数几个真实模块跑两次 `_accesses()` 比较，要么把 `reproducible` 从断言和名字里一起去掉。
+
+**顺序**：`B0 ✅ → B1 ✅ → 上限/入口 ✅ → B2 → A1 → A2+A3 → A4`。
+
+**给 Codex 的命令**：`执行 B2（class-1 只读真实根模块改用 tracked fixture 或临时副本，只保留写明理由的 global-sentinel 白名单；一并收类级 fail-open 默认与 dict 存路径逃逸，以及上面那条可复算 Optional），完成后交审查`

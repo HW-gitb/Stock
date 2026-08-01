@@ -12,9 +12,42 @@ from unittest.mock import patch
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / ".tools"))
 from bounded_unittest import Result  # noqa: E402
 import full_pack_ledger as fpl  # noqa: E402
+from tests.provider import us_short_module_runner as module_runner  # noqa: E402
 
 
 class FullPackLedgerTests(unittest.TestCase):
+    def test_per_module_private_root_snapshot_reports_new_entries(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            roots = {
+                "provider_samples": Path(tmp) / "provider_samples",
+                "state/us_short": Path(tmp) / "state" / "us_short",
+            }
+            roots["provider_samples"].mkdir(parents=True)
+            before = module_runner.snapshot_protected_entries(roots)
+            (roots["provider_samples"] / "new.json").write_text("{}", encoding="utf-8")
+            after = module_runner.snapshot_protected_entries(roots)
+            self.assertEqual(
+                after - before,
+                frozenset({("provider_samples", "file", "new.json")}),
+            )
+
+    def test_per_module_suite_turns_residue_into_a_test_failure(self):
+        passing = unittest.FunctionTestCase(lambda: None)
+        guarded = module_runner.GuardedModuleSuite(
+            "tests.planted_test_us_short", unittest.TestSuite([passing])
+        )
+        before = frozenset()
+        after = frozenset({("provider_samples", "file", "left.json")})
+        result = unittest.TestResult()
+        with patch.object(
+            module_runner,
+            "snapshot_protected_entries",
+            side_effect=(before, after),
+        ):
+            guarded.run(result)
+        self.assertEqual(len(result.failures), 1)
+        self.assertIn("tests.planted_test_us_short", result.failures[0][0].id())
+
     def test_full_pack_timeout_ceiling_is_860_seconds(self):
         self.assertEqual(fpl.FULL_MAX_SECONDS, 860)
         with self.assertRaisesRegex(ValueError, r"full timeout must be 1\.\.860 seconds"):
@@ -25,6 +58,35 @@ class FullPackLedgerTests(unittest.TestCase):
                 861,
                 ["discover", "-s", "tests", "-p", "test_us_short*.py"],
             )
+
+    def test_interrupted_private_root_cleanup_requires_helper_marker(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            parent = Path(tmp) / "provider_samples"
+            parent.mkdir()
+            marked = parent / "tmp-marked"
+            marked.mkdir()
+            (marked / fpl.PRIVATE_TEST_ROOT_MARKER).write_text("", encoding="utf-8")
+            unmarked = parent / "tmp-unmarked"
+            unmarked.mkdir()
+            (unmarked / "keep.json").write_text("{}", encoding="utf-8")
+            removed = fpl.cleanup_orphaned_private_test_roots((parent,))
+            self.assertEqual(removed, (marked.resolve(),))
+            self.assertFalse(marked.exists())
+            self.assertTrue(unmarked.exists())
+
+    def test_new_tmp_root_cleanup_is_bound_to_run_snapshot(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            parent = Path(tmp) / "provider_samples"
+            parent.mkdir()
+            old = parent / "tmp-old"
+            old.mkdir()
+            before = fpl.snapshot_private_test_dirs((parent,))
+            new = parent / "tmp-new"
+            new.mkdir()
+            (new / "raw.json").write_text("{}", encoding="utf-8")
+            removed = fpl.cleanup_new_private_test_roots(before, (parent,))
+            self.assertEqual(removed, (new.resolve(),))
+            self.assertTrue(old.exists())
 
     def test_docs_and_markdown_edits_do_not_count_as_code_state(self):
         # rule 4: a docs/register/SESSION_LOG-only correction must NOT invalidate a code full-pack.
