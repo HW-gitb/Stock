@@ -1,5 +1,21 @@
 # Session Log
 
+## 2026-08-02 — Claude 审查 PASS（margin coverage 行级缺口不再判死整帧）
+
+- **Verdict/Action**: PASS，已提交并合入 master。用失败那次自己写下的真实缓存归因：`margin_20260731_rule6_v4.pkl` 共 50561 行，缺列 0、坏日期 0 行、非规范 ts_code 0 行、`rzye/rqye` 为 NaN 恰 **16 行**——被修的正是真根因那条腿；同一真实帧喂修复后函数得 `effective_ref_date=20260731 / universe_size=1993 / incomplete`（`MIN_UNIVERSE=1000`）。**同轮自我更正**：我先判「另两条整帧拒绝属同类需按类扫」，回 `get_margin()` 源码后撤回——它逐个请求日调 `margin_detail`，故坏日期/off-calendar 属**源级矛盾**而非行级缺口，整帧 fail-closed 是对的，改逐行反而更糟；真正的类只有 NaN 一条腿，已修完。
+- **Required**: 无；Register: `R-ASHORT-MARGIN-OBSERVATION-STILL-HAS-TWO-SINGLE-ROW-FATAL-REJECTIONS` 已 closed（审查方撤回），另记三条不阻断 Optional（`complete` 仍要求整窗口无 NaN 故风控腿未打开、新测试模块不在 lane 选择器内、三个 invalid 出口不记触发谓词），正文只见 `docs/system_risk_register.md`(单一来源,本处不复述)。
+- **Verify**: review-evidence:f2ddadd185ec；按 rule 3(a)(b)（改了 `A-EGS/egs_main.py` 与 m67 effect-contract schema）跑唯一入口全量 `RESULT status=PASS exit=0 tests=2274 elapsed=418.9s deadline=860s`；本刀改的测试模块**不在** lane 选择器内（实测 `fnmatch('test_egs_margin_coverage.py','test_a_short*.py')=False`），故另单独跑得 `Ran 17 tests ... OK`。reviewer 自写探针 7 条（真实缓存帧逐谓词归因 + 4 类单行坏数据 + BJ 代码正控 `830799.BJ`/`873169.BJ` 原样通过）。
+- **Next**: Codex：执行桌面清单第 6 条（`pct_60d` / `q0_net_income` 全表为空）。
+
+## 2026-08-02 — Codex 修复（margin coverage）
+
+- **Verdict/Action**: 已修复 `R-ASHORT-MARGIN-COVERAGE-NUMERIC-GAP-ZEROES-REFERENCE-UNIVERSE` 的 producer 判定，并修正其 Phase6 回归 fixture 以符合现行 IV feed envelope；缺失历史数值不再把可观察参考日全集清零，批次仍保持 `incomplete` / fail-closed。未提交、未合入。
+- **Required**: 完整根因、调用链、schema / effect-contract 影响、真实缓存边界与未刷新产物只见 `docs/system_risk_register.md` 对应 R-ID。
+- **Verify**: 固定主 Python `C:\Users\cnhea\AppData\Local\Programs\Python\Python313\python.exe`（3.13.8）；focused=4 OK（0.364s）；effect-contract=47 OK（64.252s）；full-lane=2274 OK/skipped=3（468.919s，ledger PASS，deadline=860s）；real-cache=50561 rows/1993 codes/incomplete；phase6=17 OK（4.485s）；diff-check=0。
+- **Proof-of-use**: real-cache 的 16 条历史 `rqye=NaN` 只令批次保持 `incomplete`；不完整源不能建立非两融全集；Rule6 缺值仍为 `unknown`；负向门未放松；fixture 改用 canonical IV envelope 后全模块恢复通过。
+- **Pre-Codex self-review**: matrix=margin-gap+negative controls+consumer+fixture+contract; register=updated; handoff=updated; focused=4+17+47 OK; full-lane=2274 OK/skipped=3; door=diff-check 0; A=producer+fixture; B=public_dict/data_health/Rule6; C=4 margin+IV-envelope; D=N-A; E=three docs; F=Python 3.13.8/no provider/live refresh/untracked preserved; independent=NOT_USED; commit=NOT_PERFORMED。
+- **Next**: Claude Code：独立审查本刀；审查前不得提交/合入。
+
 ## 2026-08-02 — Claude 审查 PASS（第二条：真实两源窗口验证）
 
 - **Verdict/Action**: PASS，已提交并合入 master。未采信执行方转述：回读它写出的四个产物，并把 `iv_feed_20260803/iv_feed.json` 重新过一遍仓库自己的读门（`validate_feed_artifact` ACCEPT）——窗口内 calendar-only 恰为 `['20260803']`、independent-only 为空、series 尾根 `20260731`；M6.7 receipt `stage_status=complete`、`n_stocks=15`、`boundary` 四项全 false、无账户数值与 provider URL。
