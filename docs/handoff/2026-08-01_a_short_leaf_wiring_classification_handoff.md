@@ -279,7 +279,7 @@ Claude Code：独立 reviewer 复核本轮 M0.5 日历全修；PASS 前不得提
 
 - 未实现尾巴只是**不参与等值**，它仍受 `≤ as_of` 与哈希/条数约束，且被排除在 `trusted_calendar` 之外；任何人不得把尾巴喂进 M0.5 邻接。
 - 新增的 `series[-1] == realized_end` 与 builder 的可用日定义不同源（`_observed_trade_dates` 不看 close，`build_daily_iv` 要求 close 为正且当日有可用期权行），fund_daily 有行而当日 IV 不可解时会再次整体挡死写盘——记为 register 的不阻断 Optional，不要当已闭。
-- 真实 `--as-of 20260803` 的 provider 跑仍未执行（需用户授权），本次闭合只到离线证据层。
+- 真实 `--as-of 20260803` 的 provider 跑**已由用户授权单独执行**（只跑写盘门、未跑实盘周报）：写盘成功、`n_days=281`，窗口内 calendar-only 恰为 `['20260803']`、independent-only 为空，根因与修复均由实测确认；详见 register 同条的「真实数据闭合」。仍未做的是带 `-Account` 的完整周报运行。
 
 ## 2026-08-02 追加：Codex executor 当前工作树交接（代码已提交并合并；本节交接文档未提交）
 
