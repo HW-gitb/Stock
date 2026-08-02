@@ -7,16 +7,16 @@
       "state/us_short"
     ]
   },
-  "module_count": 279,
+  "module_count": 280,
   "classification_counts": {
-    "class0_no_direct_protected_io": 219,
+    "class0_no_direct_protected_io": 220,
     "class1_read_real_root": 0,
     "class2_write_real_root": 3,
     "class3_global_sentinel": 5,
     "class4_unresolved_write": 52
   },
   "class0_modules_omitted": true,
-  "module_path_sha256": "bb8c3d9a286366a92bbd660bdf0cf168b510269aee53dbaccdc4496832299ccd",
+  "module_path_sha256": "112264957d7c3e75ec738b1242c8737d41d84c34337462655ef6728e56f8a3c3",
   "allowlist": [
     "tests/provider/test_us_short_batch5_bankruptcy_8k_source_packet.py:kwarg:packet_ref:state/us_short",
     "tests/provider/test_us_short_batch5_bankruptcy_8k_source_packet.py:kwarg:screen_path:state/us_short",

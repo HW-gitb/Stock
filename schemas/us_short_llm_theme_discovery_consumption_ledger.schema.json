@@ -1,0 +1,79 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://stock.local/schemas/us_short_llm_theme_discovery_consumption_ledger.schema.json",
+  "title": "US-short soft-discovery mutable query-plan consumption ledger",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_name", "schema_version", "generated_at", "decision_date", "parent_plan_identity", "parent_plan_artifact", "stage2_plan_identity", "stage2_plan_artifact", "provider_envelope_binding_sha256", "events", "provider_totals", "status", "mutable", "effect_boundary"],
+  "properties": {
+    "schema_name": {"const": "us_short_llm_theme_discovery_consumption_ledger"},
+    "schema_version": {"const": "1.0.0"},
+    "generated_at": {"type": "string", "format": "date-time"},
+    "decision_date": {"type": "string", "pattern": "^[0-9]{8}$"},
+    "parent_plan_identity": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+    "parent_plan_artifact": {"$ref": "#/definitions/artifact_ref"},
+    "stage2_plan_identity": {"type": ["string", "null"], "pattern": "^[0-9a-f]{64}$"},
+    "stage2_plan_artifact": {"$ref": "#/definitions/nullable_artifact_ref"},
+    "provider_envelope_binding_sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+    "events": {"type": "array", "maxItems": 10000, "items": {"$ref": "#/definitions/event"}},
+    "provider_totals": {"type": "array", "minItems": 1, "maxItems": 32, "items": {"$ref": "#/definitions/provider_total"}},
+    "status": {"enum": ["not_started", "in_flight", "complete", "failed", "inconclusive"]},
+    "mutable": {"const": true},
+    "effect_boundary": {"$ref": "#/definitions/effect_boundary"}
+  },
+  "definitions": {
+    "artifact_ref": {
+      "type": "object", "additionalProperties": false, "required": ["path", "sha256"],
+      "properties": {"path": {"type": "string", "minLength": 1}, "sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"}}
+    },
+    "nullable_artifact_ref": {
+      "type": "object", "additionalProperties": false, "required": ["path", "sha256"],
+      "properties": {"path": {"type": ["string", "null"]}, "sha256": {"type": ["string", "null"], "pattern": "^[0-9a-f]{64}$"}}
+    },
+    "event": {
+      "type": "object", "additionalProperties": false,
+      "required": ["sequence", "event_id", "stage", "provider", "query_id", "event_type", "attempt", "occurred_at"],
+      "properties": {
+        "sequence": {"type": "integer", "minimum": 1},
+        "event_id": {"type": "string", "pattern": "^[A-Za-z0-9][A-Za-z0-9_.:/-]{1,127}$"},
+        "stage": {"enum": ["stage1", "stage2"]},
+        "provider": {"type": "string", "pattern": "^[a-z][a-z0-9_-]{1,31}$"},
+        "query_id": {"type": "string", "pattern": "^[A-Za-z0-9][A-Za-z0-9_.:/-]{1,127}$"},
+        "event_type": {"enum": ["dispatch", "completion", "failure", "unknown"]},
+        "attempt": {"type": "integer", "minimum": 1},
+        "occurred_at": {"type": "string", "format": "date-time"}
+      }
+    },
+    "provider_total": {
+      "type": "object", "additionalProperties": false,
+      "required": ["provider", "stage1_max_dispatch_count", "stage2_max_dispatch_count", "retry_max_dispatch_count", "max_dispatch_count", "stage1_dispatch_count", "stage2_dispatch_count", "retry_dispatch_count", "dispatch_count", "completion_count", "failure_count", "unknown_count", "remaining_dispatch_count"],
+      "properties": {
+        "provider": {"type": "string", "pattern": "^[a-z][a-z0-9_-]{1,31}$"},
+        "stage1_max_dispatch_count": {"type": "integer", "minimum": 0},
+        "stage2_max_dispatch_count": {"type": "integer", "minimum": 0},
+        "retry_max_dispatch_count": {"type": "integer", "minimum": 0},
+        "max_dispatch_count": {"type": "integer", "minimum": 0},
+        "stage1_dispatch_count": {"type": "integer", "minimum": 0},
+        "stage2_dispatch_count": {"type": "integer", "minimum": 0},
+        "retry_dispatch_count": {"type": "integer", "minimum": 0},
+        "dispatch_count": {"type": "integer", "minimum": 0},
+        "completion_count": {"type": "integer", "minimum": 0},
+        "failure_count": {"type": "integer", "minimum": 0},
+        "unknown_count": {"type": "integer", "minimum": 0},
+        "remaining_dispatch_count": {"type": "integer", "minimum": 0}
+      }
+    },
+    "effect_boundary": {
+      "type": "object", "additionalProperties": false,
+      "required": ["scoring_eligible", "top15_effect_enabled", "operation_advice_effect_enabled", "dynamic_seats_enabled", "theme_probe_enabled", "lifecycle_actions_enabled"],
+      "properties": {
+        "scoring_eligible": {"const": false},
+        "top15_effect_enabled": {"const": false},
+        "operation_advice_effect_enabled": {"const": false},
+        "dynamic_seats_enabled": {"const": false},
+        "theme_probe_enabled": {"const": false},
+        "lifecycle_actions_enabled": {"const": false}
+      }
+    }
+  }
+}

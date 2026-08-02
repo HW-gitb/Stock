@@ -1331,4 +1331,97 @@ Protected-root snapshots were unchanged in identity: `provider_samples 27 -> 27 
 
 **顺序**：`B0 ✅ → B1 ✅ → 上限/入口 ✅ → B2 ✅ → A1 → A2+A3 → A4`。
 
-**给 Codex 的命令**：`执行 A1（parent_plan / stage2_plan / consumption ledger 三分的 query-plan artifact 与 schema，schema-first、走既有 shared publisher 与 one write door，不另开写门；顺手收两条 B2 Optional），完成后交审查`
+~~**给 Codex 的命令**：`执行 A1（parent_plan / stage2_plan / consumption ledger 三分的 query-plan artifact 与 schema…）`~~ —— 已执行并审查，见本文档末尾 A1 审查节。
+
+## 2026-08-02 追加：Codex executor A1 三分 query-plan 契约落地（待 Claude Code 独立审查）
+
+### 落地内容
+
+- 新增 `engine/us_short_llm_theme_discovery_query_plan.py`，只负责离线构造/校验/发布 A1 契约，不接 live CLI、不创建 provider client、不读 key、不调用网络；A2 模板容器、A3 确定性 Stage-2 规划算法、A4 真实 dispatch 预算预留均留在后续刀。
+- 新增四份 schema：`us_short_llm_theme_discovery_parent_plan`、`us_short_llm_theme_discovery_stage2_plan`、`us_short_llm_theme_discovery_consumption_ledger`、`us_short_llm_theme_discovery_execution_receipt`。父计划 canonical core 绑定 decision date、policy/template 内容 digest、Stage-1 query bytes/order、Stage-2 rule digest、provider envelope；identity 不含 clock、执行结果或自身输出 digest。Stage-2 独立冻结，绑定 parent identity、实际 parent/Stage-1 bytes digest、focus term → source ref lineage 与 envelope binding；消费账本可变但只记录 dispatch/completion/failure/unknown，最终 receipt 绑定 ledger 实际 bytes。
+- 扩展既有 `runners/us_short_discovery_publish_policy.py::write_mutable_ledger` 的受控 kind：保留 provider budget ledger，并仅增加 query-plan consumption ledger；没有新增 filesystem write primitive 或第二个 write door。`.gitignore` 保持 query-plan state slots 私有。
+- 新增 `tests/test_us_short_llm_theme_discovery_query_plan.py`，覆盖 identity clock-free、envelope sum、Stage-1 不可变、source-ref lineage、unknown-as-consumed、ledger/receipt counter tamper 与 offline provider-call false claim 等正/反控。
+
+### Why / invalidated conclusion
+
+- 原 handoff 中“当前代码没有冻结 query-plan 产物”的 settled 地形已被本刀更新为：A1 machine contract 已存在，但仍是 `candidate_offline`，不代表模板质量 PASS、不代表 provider authorization、不代表 live/production activation。
+- 仍保留并强化三分边界：付费前的 parent plan、Stage-1 冻结后的 Stage-2 plan、执行过程中的 mutable consumption ledger/final receipt 不再共用一个可回写 artifact。A4 的真实钱包保护与 A2/A3 的内容语义没有被本刀提前宣称完成。
+
+### Verification / evidence boundary
+
+- 固定主 Python `C:\Users\cnhea\AppData\Local\Programs\Python\Python313\python.exe`：A1 初始 `4 OK`（修正 nullable artifact 形状后）；A1 + discovery conformance + shared writer `52 OK / 17.7s`；Web/X runner `143 OK / 14.5s`；最终改动符号 focused `195 OK / 36.8s`。`py_compile`、四份 schema JSON/UTF-8、`git diff --check` 通过。
+- 每个测试包前后均检查 `state/us_short`、`provider_samples` 文件集合与最新 mtime；当前工作树两者均不存在，未新增 ignored state/raw residue。`__pycache__` 是已有 ignored residue，静态检查前后文件集合 digest 未变，仅既有 pyc mtime 随固定 Python 编译刷新。
+- 按 shared write-door/schema 规则官方 full 只尝试一次：`us_short` / fingerprint `cfe019e3c3fd` / deadline `860s`，在 `108 tests / 33.561s` 因既有测试要求的新工作树 `state/us_short` 目录缺失而 FAIL；失败先于 A1 测试，full 结论为 `NOT_VERIFIED / environment-precondition blocked`，未重跑、未创建伪基线。无 provider/network/live/paid action。
+
+### Pre-Codex self-review / closeout fields
+
+`matrix=complete; register=updated; handoff=updated; focused=195 OK / 36.8s + shared-door Web/X 143 OK / 14.5s; full-lane=NOT_VERIFIED (official one attempt: 108 tests / 33.561s / 860s ceiling, missing state/us_short precondition); door=pre-commit fixed-host hook route-doc 14 OK + doc-governance 41 OK (sandbox path-mapping failure recorded; escalated real-host hook passed); A=parent/stage2/ledger/receipt class separation, canonical identity, source-ref lineage; B=provider envelope sum, terminal-event counter equality, unknown consumed/no-auto-replay, offline provider-call false claim; C=dying controls for envelope, foreign source ref, Stage-1 mutation, counter tamper, offline receipt; D=N-A; E=README + SESSION_LOG + risk register + same-phase handoff; F=py_compile + JSON/UTF-8 + diff-check + ignored-root residue/mtime snapshots; independent-self-review=not_used`
+
+### Next
+
+~~Claude Code：独立审查当前 A1 diff；PASS 后由 Claude Code 提交~~ —— 已审查，见下节（FAIL）。
+
+## 2026-08-02 追加：Claude Code 对 A1 的独立审查 —— FAIL
+
+**结论**：A1 不通过、不提交不合入。契约本体（三分职责分离、canonical identity、门的边界）我核过是成立的，卡住的是两件：新增测试模块把刚收口的 B 线基线打红，以及 Stage-2 lineage 有一处能绑到不存在的 source ref。
+
+**已核实无问题的部分（别改回去）**：
+
+1. **shared write door 的放松是有界的**。我自写 6 条反控实测：`ledger_kind="query_plan_consumption"` 打 `_budget.json` → 拒；默认 `provider_budget` 打 `_consumption.json` → 拒；未知 kind → `unknown mutable ledger kind`；既有 provider-budget 腿仍能正常写（没被改坏）；用新 kind 去覆盖一个不带 `_consumption.json` 后缀的槽 → 拒且目标字节未变。全仓再无第二个 `*_consumption.json` 产出方，新后缀与既有不可变槽名零重叠——这条放松没有把任何现存不可变件变成可替换。
+2. **契约不变式实测承重**：envelope 超发 `6>5` 报 `provider web dispatches exceed the parent envelope`、恰好 5 放行；Stage-2 绑到另一个 parent identity → 拒；已冻结 parent 槽换内容重写 → 拒；`unknown` dispatch 想以 `complete` 收口 → 拒；identity 与 `generated_at` 无关。
+3. **conformance 不是空转**：我自跑 `derived_lane_files()` / `derived_lane_schemas()`，新引擎模块在派生 lane surface 内、四份新 schema 全部在派生 schema 集内，所以闭合 schema / effect flag pin false / 单一 write door / validator armed 这几行真作用在本刀产物上。四份 schema 我逐层看过 `additionalProperties:false`。
+4. **新测试模块本身干净**：只用无 `dir=` 的 `tempfile.TemporaryDirectory()`，不写受保护根；全程零 provider / 零网络，产物 `candidate_offline`、六个 effect flag pin false，与设计权威 `docs/us_short_system_design.md` 的「不接 live、不影响选股」边界一致。
+
+**为什么 FAIL**（正文只在 register，本处只给地图）：
+
+1. `R-USSHORT-A1-NEW-TEST-MODULE-DESYNCS-THE-B-LINE-INVENTORY-BASELINE`（P1）：新测试模块落进 `tests/**/test_us_short*.py`，`279→280`，但 tracked snapshot 与 `tests/test_us_short_test_io_inventory.py:73` 的硬编码数都没重算。实测 `Ran 18 ... FAILED (failures=2)`。带这个 diff，lane 全量不可能绿——而本刀改的正是 shared write door，rule 3/4 的全量门必须过。executor 的 focused 包里没有这条 inventory 守卫，是它漏到 reviewer 的直接原因。
+2. `R-USSHORT-A1-STAGE2-LINEAGE-ACCEPTS-A-SOURCE-REF-WITH-NO-SOURCE-ROW`（P2）：`_stage1_source_ids()` 把 theme/member 的 `source_ref_ids` 也并进「Stage-1 存在的 source ref」集合，于是一个在 `source_refs` 里没有行的 id 也能被 focus term 与 Stage-2 query 绑定（我的植入探针 `HOLE-OPEN`）。lane 自己的生产者不会产出悬空引用，所以只对伪造/外拼的 Stage-1 打开；但 A1 的立场本就是「不信文件、自己再验一遍」，验收谓词 `P2` 也是这么写的，1 行能收。
+3. `R-USSHORT-FULL-LANE-REQUIRES-A-PRE-EXISTING-STATE-US-SHORT-DIRECTORY`（P2，既存非本刀引入）：我按唯一入口跑的官方全量 `RESULT status=FAIL exit=1 tests=108 elapsed=29.0s deadline=860s`，红在既有负控要求真实 `state/us_short` 目录存在，而这棵新工作树下它不存在——与 executor 撞的是同一处。修完前两条后，跑全量前先建这个空的 gitignored 目录（属环境准备），或让该负控自建目录。
+
+**顺序不变**：`B0 ✅ → B1 ✅ → 上限/入口 ✅ → B2 ✅ → A1（返工）→ A2+A3 → A4`。
+
+## 2026-08-02 追加：Codex executor A1 review-FAIL repair（待 Claude Code 独立复审）
+
+### 修复内容
+
+- 按 `docs/system_risk_register.md` 的「A1 类级要求」处理，而非只改 reviewer 点名的两行：inventory snapshot 改为同一次扫描派生，测试期望值从 tracked snapshot 读取；新增测试夹具的临时 artifact path 保持可静态证明为临时根。
+- `_stage1_source_ids()` 现在只接受冻结 Stage-1 `source_refs` 的真实 `source_id` 行；theme/member 自带但没有 source row 的 ghost ref 会在 Stage-2 focus-term 绑定时失败。
+- 新面类 1 的四项承重控制已落地：删除未使用的 suffix 常量/import；symlink 在 `resolve()` 前拒绝；stage1/stage2/retry envelope 分桶计数各自受上限约束；consumption ledger 写入通过既有 Windows named mutex。schemas 同步 provider total 分桶字段。
+- 按先前要求保留并使用 `state/us_short` 空根；未创建 provider_samples，未接 provider/network/live/paid。
+
+### 验证与边界
+
+- 固定主 Python `C:\Users\cnhea\AppData\Local\Programs\Python\Python313\python.exe` 的修复聚焦包：`214 OK / 41.227s`；包含 A1、inventory、conformance、shared writer、Web/X 受影响消费者。
+- 官方 full lane 唯一尝试：`5113 tests in 727.246s`，ledger `RESULT status=PASS exit=0 tests=5113 elapsed=728.9s deadline=860s`，fingerprint `f66f4abdaa44`。
+- full 前 `state/us_short` 为 0 entries，后为 4 个预期空私有目录（`lifecycle`、`runs_private`、`shadow_compare_private`、`runs_private/provider_incidents`），0 files；`provider_samples` 前后均缺失。目录集合 `0→4` 已如实保留，不能写成 zero-entry residue PASS。
+- `py_compile=OK`、五份 JSON/UTF-8 parse=OK、`git diff --check=OK`；未提交、未 push/merge。首次聚焦夹具的 sequence 误写已停止并修正，最终包才计入上述 `214 OK`。
+
+### Pre-Codex self-review / closeout fields
+
+`matrix=complete; register=updated; handoff=updated; focused=214 OK / 41.227s; full-lane=5113 OK / 727.246s / ledger 728.9s / 860s; door=pre-commit fixed-host hook route-doc 14 OK + doc-governance 41 OK; A=inventory/source-row/stage-bucket/symlink/lock symbols; B=single-source baseline, source_refs-only lineage, per-bucket caps, pre-resolve symlink rejection, locked mutable write; C=ghost ref, stage1/stage2/retry overflow, symlink, lock; D=N-A; E=SESSION_LOG + risk register + same-phase handoff; F=py_compile + JSON/UTF-8 + diff-check + protected-root/mtime snapshots; independent-self-review=not_used`
+
+### Next
+
+~~Claude Code：独立复审当前 repair diff；通过后提交。~~ —— 已复审 PASS 并提交，见本文档末尾复审节。
+
+**追加（2026-08-02 用户追问「有同一类的吗、要不要按类修」后）**：8 条里有 4 条同属「声称了但不承重」这一老类（Required 2 + Optional (i)(iii)(iv)），Required 1 的根因是「同一基线写在 JSON 与测试两处」，Required 3 是 B 线在读/存在性轴上的复发。按类修的射程、每类的做法、以及「为什么这轮会一起冒出来」的根因链，全部写在 register 的 `A1 类级要求` 一节，**修复请按那节走，不要只修被点名的两条腿**。
+
+~~**给 Codex 的命令**：`按 register「A1 类级要求」修复 …`~~ —— 已执行并复审通过，见下节。
+
+## 2026-08-02 追加：Claude Code 对 A1 返工的独立复审 —— PASS，A1 收口
+
+**结论**：PASS，已提交并合入 master。`B0 ✅ → B1 ✅ → 上限/入口 ✅ → B2 ✅ → A1 ✅`，下一刀 A2+A3。
+
+**三条 Required 都按「类级要求」那节收的，不是只改被点名的两行**：
+
+1. **类 2（同一基线写两处）根治了**。测试里那 9 行硬编码期望删掉，改从 tracked snapshot 读 `_BASELINE`，与该文件早已存在的 allowlist 取数方式一致——比较的是新鲜扫描 vs 落盘基线，不是自己跟自己比。单一来源化最怕顺手把绊线拆掉，所以我植入了一个新的 `test_us_short_zz_reviewer_planted.py` 重跑 acceptance：`280 != 281`、`failures=2`，**新增模块照样打红**，探针已删、`git status` 无残留。基线只动 `module_count` / `class0` / `module_path_sha256` 三行，allowlist 一行未改，说明新模块真落 `class0`，不是加豁免过关。
+2. **类 1（声称了但不承重）四项全部变承重**：分段包络新增 `_dispatch_bucket()` 逐桶计数逐桶拒超限，我实测 stage1 超 2 / stage2 超 2 / retry 超 1 各自被拒，**而卡满每桶的合法计划仍放行**（2/2/1，total 5，remaining 0），没有过度收紧；篡改落盘分桶数被 validate 抓；schema 的 `provider_total.required` 已含分桶字段，旧形状连 schema 都过不去。symlink guard 移到 `resolve()` 之前，我用真符号链接实测这次真的会拒。`write_consumption_ledger()` 加了 `mutable_ledger_lock`，写入成功且二次写入仍可替换（可变语义没被锁坏）。死常量 `MUTABLE_LEDGER_SUFFIXES` 与死 import `_serialized_sha256` 已删。
+3. **类 3 本轮取证解锁**：executor 按 (a) 先建空的 gitignored `state/us_short`，全量因此跑完 `5113 OK / 727.246s`（ledger PASS，上限 860s）。我没采信转述：按唯一入口跑得 `CACHED GREEN 5113 OK`，并读 `collect_code_state()` 确认指纹把**未跟踪文件**也算进去（本刀六个新文件全未跟踪），所以这条缓存绿确属当前代码态。残留如实：0 files / 4 个空私有子目录，`provider_samples` 未创建；executor 自己也写明是 `0→4` 而非零增量，没有粉饰。
+
+**已核实无问题、下一轮别改回去**：门的放松仍然有界（跨 kind 双向拒、未知 kind 拒、既有 budget 腿仍写、新 kind 覆盖非账本槽被拒且目标字节未变，6 条回归全绿）；ghost ref 被拒的同时合法 source-bound Stage-2 仍能构造发布；四份 schema 闭合、effect flags 全 pin false、`candidate_offline` 未变；A1 仍不接 live CLI、不读 key、零 provider 调用。
+
+**一条不阻塞 Optional**（正文见 register）：本轮 register 新标题 `review-F<U+FEFF>AIL` 混进一个不可见字符，`grep "review-FAIL"` 搜不到；下一刀删掉即可，不必为它建守卫。
+
+**顺序**：`B0 ✅ → B1 ✅ → 上限/入口 ✅ → B2 ✅ → A1 ✅ → A2+A3 → A4`（A4 仍单独成刀、单独审）。
+
+**给 Codex 的命令**：`执行 A2+A3（A2 = 4 条主题无关模板装成 v0.1.0 容器、标 candidate_offline 不接一键 live；A3 = 确定性 Stage-2 规划纯函数，只从冻结 Stage-1 已有且 source-bound 的规范化 term 派生，term 类型/大小写/去重/排序/每类上限进 versioned policy），可合成一个 diff，完成后交审查`

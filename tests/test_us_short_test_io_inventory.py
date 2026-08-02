@@ -70,17 +70,8 @@ class USShortTestIOInventoryTests(unittest.TestCase):
         ):
             source = (ROOT / relative).read_text(encoding="utf-8")
             self.assertEqual(_accesses(source, relative), _accesses(source, relative))
-        self.assertEqual(first["module_count"], 279)
-        self.assertEqual(
-            first["classification_counts"],
-            {
-                "class0_no_direct_protected_io": 219,
-                "class1_read_real_root": 0,
-                "class2_write_real_root": 3,
-                "class3_global_sentinel": 5,
-                "class4_unresolved_write": 52,
-            },
-        )
+        self.assertEqual(first["module_count"], _BASELINE["module_count"])
+        self.assertEqual(first["classification_counts"], _BASELINE["classification_counts"])
         self.assertEqual(first["unallowlisted_write_findings"], [])
         sentinel_modules = {
             module["module"]

@@ -1,0 +1,84 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://stock.local/schemas/us_short_llm_theme_discovery_stage2_plan.schema.json",
+  "title": "US-short soft-discovery immutable source-bound Stage-2 query plan",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_name", "schema_version", "generated_at", "plan_identity", "canonical_stage2_core", "activation_status", "effect_boundary"],
+  "properties": {
+    "schema_name": {"const": "us_short_llm_theme_discovery_stage2_plan"},
+    "schema_version": {"const": "1.0.0"},
+    "generated_at": {"type": "string", "format": "date-time"},
+    "plan_identity": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+    "canonical_stage2_core": {"$ref": "#/definitions/stage2_core"},
+    "activation_status": {"const": "candidate_offline"},
+    "effect_boundary": {"$ref": "#/definitions/effect_boundary"}
+  },
+  "definitions": {
+    "stage2_core": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["decision_date", "parent_plan_identity", "parent_plan_artifact", "stage1_artifact", "stage2_rule_sha256", "provider_envelope_binding_sha256", "focus_terms", "stage2_queries"],
+      "properties": {
+        "decision_date": {"type": "string", "pattern": "^[0-9]{8}$"},
+        "parent_plan_identity": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+        "parent_plan_artifact": {"$ref": "#/definitions/artifact_ref"},
+        "stage1_artifact": {"$ref": "#/definitions/artifact_ref"},
+        "stage2_rule_sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+        "provider_envelope_binding_sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+        "focus_terms": {
+          "type": "array", "minItems": 1, "maxItems": 256,
+          "items": {"$ref": "#/definitions/focus_term"}
+        },
+        "stage2_queries": {
+          "type": "array", "minItems": 1, "maxItems": 256,
+          "items": {"$ref": "#/definitions/stage2_query"}
+        }
+      }
+    },
+    "artifact_ref": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["path", "sha256"],
+      "properties": {
+        "path": {"type": "string", "minLength": 1},
+        "sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"}
+      }
+    },
+    "focus_term": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["term", "term_type", "source_ref_ids"],
+      "properties": {
+        "term": {"type": "string", "minLength": 1, "maxLength": 256},
+        "term_type": {"enum": ["company", "ticker", "industry", "concept"]},
+        "source_ref_ids": {"type": "array", "minItems": 1, "uniqueItems": true, "items": {"type": "string", "pattern": "^[A-Za-z0-9][A-Za-z0-9_.:/-]{1,127}$"}}
+      }
+    },
+    "stage2_query": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["query_id", "query_text", "focus_term", "focus_term_type", "source_ref_ids"],
+      "properties": {
+        "query_id": {"type": "string", "pattern": "^[A-Za-z0-9][A-Za-z0-9_.:/-]{1,127}$"},
+        "query_text": {"type": "string", "minLength": 1, "maxLength": 4000},
+        "focus_term": {"type": "string", "minLength": 1, "maxLength": 256},
+        "focus_term_type": {"enum": ["company", "ticker", "industry", "concept"]},
+        "source_ref_ids": {"type": "array", "minItems": 1, "uniqueItems": true, "items": {"type": "string", "pattern": "^[A-Za-z0-9][A-Za-z0-9_.:/-]{1,127}$"}}
+      }
+    },
+    "effect_boundary": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["scoring_eligible", "top15_effect_enabled", "operation_advice_effect_enabled", "dynamic_seats_enabled", "theme_probe_enabled", "lifecycle_actions_enabled"],
+      "properties": {
+        "scoring_eligible": {"const": false},
+        "top15_effect_enabled": {"const": false},
+        "operation_advice_effect_enabled": {"const": false},
+        "dynamic_seats_enabled": {"const": false},
+        "theme_probe_enabled": {"const": false},
+        "lifecycle_actions_enabled": {"const": false}
+      }
+    }
+  }
+}

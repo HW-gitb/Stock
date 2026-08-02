@@ -1,5 +1,35 @@
 # Session Log
 
+## 2026-08-02 — Claude 审查 PASS（A1 返工收口）
+
+- **Verdict/Action**: PASS，已提交并合入 master。两条 Required 都按类收的：inventory 基线单一来源化（我植入新测试模块实测仍打红，绊线没被拆），Stage-2 lineage 只认 `source_refs` 行（上一轮的 ghost ref 现在被拒、合法路径仍通）。类 1 四项由摆设变承重：分段包络逐桶拒超限且卡满不误杀、symlink guard 移到 `resolve()` 前真会触发、可变账本写入走 `mutable_ledger_lock`、死常量与死 import 已删。
+- **Required**: 无；Register: `R-USSHORT-A1-NEW-TEST-MODULE-DESYNCS-THE-B-LINE-INVENTORY-BASELINE`、`R-USSHORT-A1-STAGE2-LINEAGE-ACCEPTS-A-SOURCE-REF-WITH-NO-SOURCE-ROW`、`R-USSHORT-FULL-LANE-REQUIRES-A-PRE-EXISTING-STATE-US-SHORT-DIRECTORY` 均 CLOSED，另记一条不阻塞 Optional（register 新标题混入 U+FEFF），正文只见 `docs/system_risk_register.md` 顶部。
+- **Verify**: review-evidence:cd41e776ca42；按 rule ② 唯一入口跑得 `CACHED GREEN - us_short = 5113 OK`，ledger `fingerprint=prepared_fingerprint=f66f4abd…`/`recorded_at 13:19:23`，且我读 `collect_code_state()` 确认指纹含未跟踪文件（本刀六个新文件全未跟踪），故属当前代码态、按 rule 4 引用不重跑。reviewer 自写探针 21 条全绿（门跨 kind 双向拒、ghost ref 已拒、stage1/stage2/retry 各自超限拒而卡满放行、篡改分桶计数拒、symlink 拒、锁后写入且仍可变）＋ 植入新测试模块令 inventory `280 != 281` 打红后删除。受保护根 0 files / 4 个空私有目录，`provider_samples` 未创建。
+- **Next**: Codex：执行 A2+A3。
+
+## 2026-08-02 — Codex executor A1 repair after Claude FAIL
+
+- **Verdict/Action**: Required repair 已完成；未提交、未合入、未 push，等待 Claude Code 独立复审。
+- **Required**: inventory snapshot 单一来源、Stage-2 source-row lineage、类 1 四项承重控制与 state/us_short 前置均已处理；详细风险与 Optional disposition 见 `docs/system_risk_register.md` 顶部。
+- **Verify**: fixed-Python focused `214 OK / 41.227s`; official full `5113 OK / 727.246s`, ledger `PASS / 728.9s / 860s`; full 后仅有 4 个预期空私有 state 子目录，0 files，provider_samples 缺失；py_compile/JSON/diff-check 通过。
+- **Next**: Claude Code：审查
+- **Pre-Codex self-review**: `matrix=complete; register=updated; handoff=updated; focused=214 OK / 41.227s; full-lane=5113 OK / 727.246s / ledger 728.9s / 860s; door=pre-commit fixed-host hook route-doc 14 OK + doc-governance 41 OK; A=inventory/source-row/stage-bucket/symlink/lock symbols; B=single-source baseline, source_refs-only lineage, per-bucket caps, pre-resolve symlink rejection, locked mutable write; C=ghost ref, stage1/stage2/retry overflow, symlink, lock; D=N-A; E=SESSION_LOG + risk register + same-phase handoff; F=py_compile + JSON/UTF-8 + diff-check + protected-root/mtime snapshots; independent-self-review=not_used`
+
+## 2026-08-02 — Claude 审查 FAIL（A1 三分 query-plan 契约）
+
+- **Verdict/Action**: FAIL，不提交不合入。契约本体大体成立（三分职责分离、identity 无时钟、门的放松经我 6 条反控证明有界、四份 schema 闭合且真进 conformance 派生面）；但新增的 `tests/test_us_short_llm_theme_discovery_query_plan.py` 落进 inventory 扫描 glob，模块数 `279→280` 而 tracked snapshot 与测试里硬编码的数都没重算，us_short 全量带着这个 diff 永远绿不了。另 Stage-2 lineage 接受一个在 `source_refs` 里没有行的 id。
+- **Required**: `R-USSHORT-A1-NEW-TEST-MODULE-DESYNCS-THE-B-LINE-INVENTORY-BASELINE`(P1)、`R-USSHORT-A1-STAGE2-LINEAGE-ACCEPTS-A-SOURCE-REF-WITH-NO-SOURCE-ROW`(P2)、`R-USSHORT-FULL-LANE-REQUIRES-A-PRE-EXISTING-STATE-US-SHORT-DIRECTORY`(P2，既存非本刀引入) —— 完整 Required/风险/边界/closure 与五条 Optional 见 `docs/system_risk_register.md`(单一来源,本处不复述)。
+- **Verify**: review-evidence:f983a45deaca；focused 超集（新模块+conformance+Web/X+capstone）`171 OK / 65.1s / deadline=300s`；`tests.test_us_short_test_io_inventory` `Ran 18 ... FAILED (failures=2)`（`280 != 279` + snapshot 不一致）；官方全量单入口 `RESULT status=FAIL exit=1 tests=108 elapsed=29.0s deadline=860s`（红在既有 `state/us_short` 目录前置，非 A1 代码）。自写探针 13 条：门跨 kind/未知 kind/覆盖不可变槽全拒、既有 budget 腿仍写、envelope 6>5 拒且 5 放行、foreign parent 拒、冻结槽重写拒、unknown 不得 complete —— 唯 theme-only ghost ref 绑定 `HOLE-OPEN`。受保护根前后均不存在、零新增。
+- **Next**: Codex：按 register `A1 类级要求` 一节修复（类 1「声称了但不承重」逐条补植入反控或删声称、类 2 基线单一来源化、类 3 本地最小修），跑通 us_short 全量后交审查。
+
+## 2026-08-02 - Codex executor A1 query-plan contract
+
+- **Verdict/Action**: A1 implementation complete in this executor worktree; no commit, merge, push, provider, network, live, or paid action. Claude Code reviewer/committer remains the next actor.
+- **Required**: No new executor-side Required remains in the A1 scope; independent Claude Code review is required. Full-lane evidence is NOT_VERIFIED because the official one-attempt run stopped at 108 tests on the pre-existing missing `state/us_short` directory precondition.
+- **Verify**: fixed-Python final focused `195 OK / 36.8s`; shared-door Web/X included `143 OK / 14.5s`; py_compile, four schema JSON/UTF-8, diff-check pass; state/provider_samples remained absent before/after; door=pre-commit fixed-host hook route-doc `14 OK` + doc-governance `41 OK` (sandbox invocation blocked before test exec by `/c/.../python.exe` directory mapping; escalated real-host invocation passed).
+- **Next**: Claude Code：审查
+- **Pre-Codex self-review**: `matrix=complete; register=updated; handoff=updated; focused=195 OK / 36.8s + Web/X 143 OK / 14.5s; full-lane=NOT_VERIFIED (108 tests / 33.561s / 860s ceiling / missing state/us_short); door=pre-commit fixed-host hook route-doc 14 OK + doc-governance 41 OK (sandbox path-mapping failure recorded; escalated real-host hook passed); A=parent/stage2/ledger/receipt class separation, canonical identity, source lineage; B=envelope sum, event counter equality, unknown consumed/no auto-replay, offline provider-call false claim; C=planted envelope/foreign-ref/Stage-1-mutation/counter/offline-receipt controls; D=N-A; E=README + SESSION_LOG + risk register + same-phase handoff; F=py_compile + JSON/UTF-8 + diff-check + residue/mtime snapshots; independent-self-review=not_used`
+
 ## 2026-08-02 — Claude Code 审查 PASS（桌面叶级接线路由文档内容本身）
 
 - **Verdict/Action**: PASS。审查对象=桌面 `ashort_leaf_wiring_classification_20260801.md` 内容本身（非代码）。逐条回 HEAD `ec141834` 源码核实：M0.5 觉醒链在 HEAD 确为空缺、`cninfo_flag`/`entry_flag`/`still_in_pool` 确非主系统消费、`market_regime.status` 确已进主决策，均与文档一致。本轮零代码改动；`19d3` 工作树 13 个改动文件全部是同树 Codex 在跑的 M0.5 刀，不在本次 PASS 范围，故不提交、不 stash、不并入。
