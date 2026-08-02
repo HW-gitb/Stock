@@ -1275,6 +1275,16 @@ Evidence on the final code before handoff: fixed-Python changed-test superset `6
 **账能对上，下一步该往哪修也就清楚了**：桌面文档记的整包是 `5090 OK / 716.7s`（B0 之前的代码态），现在 `860s+` 超时，多出 ≥143s。逐项对：acceptance 约 `3 × 55.6s ≈ 167s`（两次 `build_inventory` 比可复算 + 一次 `build_snapshot`）加 runner 的 `≈34s`，正好覆盖。**最便宜的修法是让 acceptance 在一个进程里只扫一次**（约省 110s），既不是 harness 也不是抬上限。另外桌面文档 §0.1 那条顺序至今没执行：`test_us_short_discovery_conformance_executable` 单跑 `730.1s` 与整包 `716.7s` 的矛盾还没解释，文档写明「在这个问题有答案之前不要去优化那 650 秒」——先解释矛盾，再优化。
 
 **给 Codex 的命令**：`还原 .tools/bounded_unittest.py 的全量入口拦截（per-module 残留检测改为显式工具、不接官方入口），让 acceptance 在单进程内只扫一次 inventory，然后解释 test_us_short_discovery_conformance_executable 单跑 730.1s 与整包 716.7s 的矛盾，跑通整条 lane 并附前后快照，完成后交审查`
+## 2026-08-02 - Codex executor B2 execution
+
+B2 is complete in this executor worktree and is ready for Claude Code independent review/commit. The five class-1 read-back paths now resolve through local temporary/fixture copies or direct `Path` objects; only the three future-root preflights plus discovery/conformance retain explicit global-sentinel reasons. The inventory is `279 modules`, with `class0=219`, `class1=0`, `class2=3`, `class3=5`, `class4=52`; protected findings are `11 keys / 37 events`; unresolved findings are `164 reviewed keys / 511 events`; no unallowlisted class-4 finding exists. The class-4 list is an explicit reviewed disposition, not permission for new writes.
+
+The scanner now has fail-closed class-wide path flow for fixed-point aliases, dict/list containers and subscripts, temporary helper returns, and unknown writes. Planted dict, list, and unknown-write controls are green. The explicit per-module residue tool remains opt-in and does not replace official unittest discovery; the official lane still used root snapshots as the external backstop.
+
+Fixed main Python evidence: inventory acceptance `18 OK / 7.385s`; affected superset `63 OK / 38.791s`; official governed full lane `5108 OK / 806.701s`, ledger `PASS / 810.7s / deadline=860s`, fingerprint prefix `b6addecf4fce`. The full lane leaves approximately `49.3s` margin. Before/after snapshots were identical: `provider_samples 23 dirs / 0 files` and `state/us_short 3 dirs / 0 files`; source mtimes/lengths were unchanged; no new ignored residue remained beyond pre-existing `__pycache__`. No provider, network, live, paid, secret, commit, push, or merge action occurred.
+
+**下一步：Claude Code：审查。**
+
 ## 2026-08-01 - Codex executor repair: official selector and one-scan acceptance
 
 `.tools/bounded_unittest.py::run_unittest` now uses the official `python -m unittest` entry for the US-short discovery selector. The per-module residue guard remains available only through the explicit `python -m tests.provider.us_short_module_runner` tool; it is not injected into the official entry or full-pack ledger.
@@ -1301,4 +1311,24 @@ Protected-root snapshots were unchanged in identity: `provider_samples 27 -> 27 
 
 **顺序**：`B0 ✅ → B1 ✅ → 上限/入口 ✅ → B2 → A1 → A2+A3 → A4`。
 
-**给 Codex 的命令**：`执行 B2（class-1 只读真实根模块改用 tracked fixture 或临时副本，只保留写明理由的 global-sentinel 白名单；一并收类级 fail-open 默认与 dict 存路径逃逸，以及上面那条可复算 Optional），完成后交审查`
+~~**给 Codex 的命令**：`执行 B2（…）`~~ —— 已执行并审查，见下节。
+
+## 2026-08-02 追加：Claude Code 对 B2 的独立审查 —— PASS，B 线收口
+
+**结论**：PASS，已提交并合入 master。`B0 ✅ → B1 ✅ → 上限/入口 ✅ → B2 ✅`，隔离这条线做完了，下一刀进 A1。
+
+**`class1 = 0` 是真的**：把已提交的 8 个 class-1 模块逐个对到新基线——4 个真迁走判 `class0`（`..._batch5_bankruptcy_8k_probe`、`..._batch5_status_source_probe`、`test_us_short_forward_policy_heads`、`test_us_short_observe_reason_capacity_contract`，这 4 个正是本轮 diff 里被编辑过的文件）；3 个转 `class3` sentinel；1 个转 `class4`。没有靠改标签凑数。
+
+**三个新 sentinel 的理由站得住，而且这个豁免位被钉住了**：三者都是 `r=4 / w=0` 的负控，理由写明「快照真实 future provider_samples 根、前后对比一次离线 preflight」——这类断言**必须看真实根**，重定向到临时目录恰好会让它变成空绿，正是 B 交接开篇就点名要避免的形态。豁免位的风险我实测过：`scan_test_module` 里 class3 判定在写判定之前，进了这张表就整体退出写账；但 acceptance 同时钉了 sentinel 集合 = 理由集合、每条理由非空、`classification_counts` 精确等于 `{219, 0, 3, 5, 52}`——我把 `..._incident_log_writer` 塞进去重算，计数变成 `class2 3→2 / class3 5→6`，静默添加必然打红。
+
+**`class2 = 3` 不是被 class4 盖住的**：9 个原 class2 模块转 class4 而**代码没改**，是扫描器变保守了。逐个查过 `weekly_capstone`（`resolved=0 / unresolved=48`）与 `capstone_offline_e2e`（`resolved=0 / unresolved=20`）——它们已经没有任何可确证的真实根写入。
+
+**我上一轮点名的 dict / list 逃逸已关**，而且比要求的更强：植入命中 1 且标 `unresolved=False`，即被**解析成**真实根而不只是「可见」。
+
+**验证**：按你的指令没起全量，按 rule 4 引用 ledger 在当前代码态的缓存绿 `5108 OK`（executor 记录 `806.701s / 860s`）；reviewer 自跑改动面超集 + 两个原 sentinel `97 OK / 65.9s`，受保护根前后快照零新增。
+
+**两条不阻塞 Optional**（正文见 register）：可复算断言仍是 `first = self._inventory; second = self._inventory`，恒真、carried 一轮未做；`scan_test_module` 分类优先级 class4 先于 class2，同时含两类写的模块标签会偏弱（当前语料无此模块）。
+
+**顺序**：`B0 ✅ → B1 ✅ → 上限/入口 ✅ → B2 ✅ → A1 → A2+A3 → A4`。
+
+**给 Codex 的命令**：`执行 A1（parent_plan / stage2_plan / consumption ledger 三分的 query-plan artifact 与 schema，schema-first、走既有 shared publisher 与 one write door，不另开写门；顺手收两条 B2 Optional），完成后交审查`

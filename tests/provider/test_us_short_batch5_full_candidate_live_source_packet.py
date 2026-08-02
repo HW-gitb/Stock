@@ -413,7 +413,9 @@ class UsShortBatch5FullCandidateLiveSourcePacketTest(unittest.TestCase):
         self.assertEqual(summary["source_packet"]["preflight_status"], "offline_preflight_passed")
         self.assertTrue(self.paths["output"].exists())
         self.assertTrue(self.paths["components"].exists())
-        capture_path = ROOT / summary["source_artifacts"]["corporate_action_capture_path"]
+        capture_path = self.paths["prefix"].with_name(
+            self.paths["prefix"].name + "_corporate_action_capture.json"
+        )
         self.assertTrue(capture_path.exists())
         capture = json.loads(capture_path.read_text(encoding="utf-8"))
         self.assertEqual(capture["aggregate_counts"]["split_endpoint_call_count"], 3)

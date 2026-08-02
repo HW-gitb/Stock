@@ -106,7 +106,14 @@ class UsShortBatch5StatusSourceProbeTest(unittest.TestCase):
         for endpoint in summary["endpoint_results"]:
             self.assertEqual(endpoint["status"], "ok")
             self.assertTrue(endpoint["raw_sample_ref"].startswith("provider_samples/"))
-            self.assertTrue((ROOT / endpoint["raw_sample_ref"]).exists())
+            local_raw_path = (
+                temp_root
+                / "raw"
+                / endpoint["provider_id"]
+                / "_market"
+                / f"{endpoint['source_id']}.json"
+            )
+            self.assertTrue(local_raw_path.exists())
 
         ticker_shape = summary["sample_shape_results"]["ticker_reference"]
         self.assertTrue(ticker_shape["feed_shape_valid"])

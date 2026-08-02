@@ -1,5 +1,19 @@
 # Session Log
 
+## 2026-08-02 — Claude 审查 PASS（B2 隔离收口，B 线完）
+- **Verdict/Action**: PASS，已提交并合入 master。`class1=0` 逐个可追（4 个真迁走、3 个转有理由的只读 sentinel、1 个转 class4），`class2=3` 准确不是被 class4 盖住，sentinel 豁免位被 acceptance 三重钉住，dict/list 逃逸已关。B0→B1→上限/入口→B2 全线收口。
+- **Required**: 无；Register: B2 复审明细与两条不阻塞 Optional（可复算断言恒真 carried；class4 优先于 class2 的标签偏弱）只见 `docs/system_risk_register.md` 顶部。
+- **Verify**: review-evidence:df4878668416；按用户指令未起全量，按 rule 4 引用 ledger 当前代码态缓存绿 `CACHED GREEN — us_short = 5108 OK at 2026-08-02T11:15:42 on this EXACT code state`。reviewer 自跑改动面超集 + 两个原 sentinel `97 OK / 65.9s`，受保护根前后快照零新增。探针：把 `..._incident_log_writer` 塞进 sentinel 集 → 计数 `class2 3→2 / class3 5→6` 必打红；`weekly_capstone` `resolved=0/unresolved=48`；dict/list 植入各命中 1 且 `unresolved=False`；两条反控 0。超时原因: 逐个追 8 个 class-1 模块去向 + 四组探针。
+- **Next**: Codex：执行 A1。
+
+## 2026-08-02 - Codex executor B2 execution
+
+- **Verdict/Action**: B2 implementation complete in this worktree; fixed-Python official full lane PASS; no commit/merge.
+- **Required**: class-1 read paths are `0`; class-wide unresolved-write handling, dict/list path flow, and unknown-write planted controls are green; the five global sentinels retain explicit reasons.
+- **Verify**: inventory acceptance `18 OK / 7.385s`; affected superset `63 OK / 38.791s`; official full ledger `5108 OK / 806.701s`, ledger elapsed `810.7s`, deadline `860s`, fingerprint prefix `b6addecf4fce`; protected roots unchanged (`provider_samples 23 dirs / 0 files`, `state/us_short 3 dirs / 0 files`), source mtimes unchanged, no new ignored residue beyond pre-existing `__pycache__`.
+- **Next**: Claude Code：审查。
+- **Pre-Codex self-review**: `matrix=complete; register=updated; handoff=updated; focused=18 OK + affected=63 OK; full-lane=official 5108 OK / 806.701s / ledger 810.7s / deadline=860s; inventory=279 modules / class0=219 / class1=0 / class2=3 / class3=5 / class4=52; unresolved-review=164 keys / 511 events / 0 unallowlisted; door=18 OK / 7.385s; A=class-1 migration, class-wide path flow, runtime residue boundary; B=dict/list aliases, unknown writes, global sentinel reasons; C=planted controls, focused/full lane, protected-root and mtime snapshots; D=N-A; E=SESSION_LOG + risk register + handoff; F=py_compile + git diff --check + residue scan; independent-self-review=not_used`
+
 ## 2026-08-01 — Claude 审查 PASS（全量上限与入口替换两条 Required 已闭）
 - **Verdict/Action**: PASS，已提交并合入 master。官方全量入口的拦截撤回（`bounded_unittest` 内容与已提交版逐字节相同）并由 argv 断言钉住；acceptance 改为单进程只扫一次，全量四次超时后首次 `5105 OK`。`us_short_module_runner` 降为显式工具、不接官方入口。
 - **Required**: 无；Register: `R-USSHORT-FULL-PACK-SELECTOR-IS-SILENTLY-SUBSTITUTED-WITHOUT-AN-EQUIVALENCE-CONTROL` 与 `R-USSHORT-FULL-PACK-NOW-EXCEEDS-ITS-OWN-CEILING` 均 CLOSED，另记一条不阻塞 Optional（可复算断言变空），完整内容只见 `docs/system_risk_register.md` 顶部。

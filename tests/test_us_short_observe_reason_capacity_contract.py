@@ -19,10 +19,10 @@ if str(ROOT) not in sys.path:
 _CONTRACT = ROOT / "presets" / "us_short_action_table_contract_20260620.json"
 # Active surfaces that previously taught the "7 observe_reason_type" contract (must not regress).
 _ACTIVE_SURFACES = (
-    "docs/README.md",
-    "docs/us_short_system_design.md",
-    "engine/us_short_observe_split.py",
-    "engine/us_short_weekend_decision.py",
+    ROOT / "docs" / "README.md",
+    ROOT / "docs" / "us_short_system_design.md",
+    ROOT / "engine" / "us_short_observe_split.py",
+    ROOT / "engine" / "us_short_weekend_decision.py",
 )
 # obsolete claims: "7 observe_reason", "7 个 observe_reason", "the 7 observe_reason", "frozen 7 ... observe_reason"
 _STALE = re.compile(r"7\s*(个\s*)?observe_reason|the\s+7\s+observe_reason|frozen\s+7\b")
@@ -35,28 +35,37 @@ class ObserveReasonCapacityContract(unittest.TestCase):
         self.assertEqual(len(enum), len(set(enum)), "duplicate observe_reason_type value")
 
     def test_no_active_surface_claims_seven_observe_reasons(self):
-        for rel in _ACTIVE_SURFACES:
-            text = (ROOT / rel).read_text(encoding="utf-8")
+        for path in _ACTIVE_SURFACES:
+            text = path.read_text(encoding="utf-8")
             m = _STALE.search(text)
-            self.assertIsNone(m, f"{rel} still hardcodes an obsolete observe_reason count: {m.group(0) if m else ''!r}")
+            self.assertIsNone(
+                m,
+                f"{path.relative_to(ROOT).as_posix()} still hardcodes an obsolete observe_reason count: "
+                f"{m.group(0) if m else ''!r}",
+            )
 
     def test_sizing_below_min_reason_split_co_described(self):
         # Stale-reason guard: wherever the §8 sizing below-min / cap-zero observe reason is described, the
         # cap-0 → capacity_or_budget_deferred split must be co-present — so a regression back to the old
         # "cap-0 → cost_inefficient_min_size only" wording (the same class as the 7→8 count drift) is caught.
         # (a) the sizing engine + its test: if cost_inefficient_min_size is named, capacity must be too.
-        for rel in ("engine/us_short_weekend_sizing.py", "tests/test_us_short_weekend_sizing.py"):
-            text = (ROOT / rel).read_text(encoding="utf-8")
+        for path in (
+            ROOT / "engine" / "us_short_weekend_sizing.py",
+            ROOT / "tests" / "test_us_short_weekend_sizing.py",
+        ):
+            text = path.read_text(encoding="utf-8")
             if "cost_inefficient_min_size" in text:
                 self.assertIn("capacity_or_budget_deferred", text,
-                              f"{rel} describes the sizing below-min reason without the cap-0 capacity split")
+                              f"{path.relative_to(ROOT).as_posix()} describes the sizing below-min reason "
+                              "without the cap-0 capacity split")
         # (b) README / CURRENT route rows citing the sizing slice: a line that names the sizing module and
         # cost_inefficient_min_size must also name capacity_or_budget_deferred.
-        for rel in ("docs/README.md", "docs/CURRENT.md"):
-            for line in (ROOT / rel).read_text(encoding="utf-8").splitlines():
+        for path in (ROOT / "docs" / "README.md", ROOT / "docs" / "CURRENT.md"):
+            for line in path.read_text(encoding="utf-8").splitlines():
                 if "us_short_weekend_sizing" in line and "cost_inefficient_min_size" in line:
                     self.assertIn("capacity_or_budget_deferred", line,
-                                  f"{rel} sizing route row is still cost-only for the cap-0 case")
+                                  f"{path.relative_to(ROOT).as_posix()} sizing route row is still cost-only "
+                                  "for the cap-0 case")
 
 
 if __name__ == "__main__":
