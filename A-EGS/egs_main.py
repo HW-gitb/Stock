@@ -3173,8 +3173,8 @@ def _margin_observation(frame, trade_dates):
 
     work = frame.copy()
     numeric = work[["rzye", "rqye"]].apply(pd.to_numeric, errors="coerce")
-    if numeric.isna().any().any() or not np.isfinite(numeric.to_numpy()).all():
-        return MarginObservation(work, reference_date, None, int(len(work)), 0, False, "invalid")
+    numeric_valid = numeric.notna().all(axis=1)
+    numeric_valid &= np.isfinite(numeric.to_numpy()).all(axis=1)
     work[["rzye", "rqye"]] = numeric
     dates = work["trade_date"].astype(str)
     valid_dates = dates.str.fullmatch(r"[0-9]{8}")
@@ -3186,12 +3186,27 @@ def _margin_observation(frame, trade_dates):
     eligible_dates = [date for date in calendar_dates if date in set(dates)]
     if not eligible_dates:
         return MarginObservation(work, reference_date, None, int(len(work)), 0, False, "unavailable")
-    effective_ref_date = eligible_dates[0]
-    ref_codes = set(valid_codes[dates == effective_ref_date])
+    # A missing numeric field is a row-level coverage defect, not a reason to
+    # erase every otherwise observable reference-date code.  Keep the NaN in
+    # ``work`` so candidate-level Rule6 lookups become ``unknown``; any such
+    # row keeps the batch below ``complete`` and therefore cannot authorize a
+    # non-margin ``not_applicable`` result.
+    valid_value_dates = set(dates[numeric_valid])
+    effective_ref_date = next(
+        (date for date in eligible_dates if date in valid_value_dates), None
+    )
+    if effective_ref_date is None:
+        return MarginObservation(work, reference_date, None, int(len(work)), 0, False, "invalid")
+    ref_mask = (dates == effective_ref_date) & numeric_valid
+    ref_codes = set(valid_codes[ref_mask])
     # A normal D0 publication lag is allowed and explicitly surfaced.  Older
     # data cannot silently become a current, complete margin observation.
     lag_sessions = calendar_dates.index(effective_ref_date)
-    complete = (lag_sessions <= 1 and len(ref_codes) >= MARGIN_ELIGIBILITY_MIN_UNIVERSE)
+    complete = (
+        bool(numeric_valid.all())
+        and lag_sessions <= 1
+        and len(ref_codes) >= MARGIN_ELIGIBILITY_MIN_UNIVERSE
+    )
     return MarginObservation(
         work, reference_date, effective_ref_date, int(len(work)), len(ref_codes), complete,
         "complete" if complete else "incomplete",

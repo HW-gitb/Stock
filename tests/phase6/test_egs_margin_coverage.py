@@ -16,7 +16,7 @@ import pandas as pd
 from engine.data.analysis_input_contract import AnalysisInputContractError, validate_analysis_input_contract
 from runners.a_short_m67_render import render_weekly_markdown
 from runners.a_short_weekly_pipeline import build_weekly_report, validate_weekly_report
-from tests.test_a_short_weekly_pipeline import AS_OF, GEN, _normalized, _weekly
+from tests.test_a_short_weekly_pipeline import AS_OF, GEN, _feed, _normalized, _weekly
 
 
 ROOT = Path(__file__).resolve().parents[2]
@@ -77,6 +77,23 @@ class MarginCoverageTests(unittest.TestCase):
         self.assertEqual(malformed.status, "invalid")
         self.assertEqual(malformed_value.status, "invalid")
         self.assertFalse(any(item.coverage_complete for item in (empty, incomplete, malformed, malformed_value)))
+
+    def test_historical_numeric_gap_preserves_reference_universe_but_stays_incomplete(self):
+        em = self.egs
+        dates = ["20260714", "20260713", "20260710"]
+        frame = pd.DataFrame([
+            {"ts_code": code, "trade_date": date, "rzye": 100.0, "rqye": 100.0}
+            for date in dates[:2] for code in ("600000.SH", "000001.SZ")
+        ] + [
+            {"ts_code": "600000.SH", "trade_date": dates[2], "rzye": 100.0, "rqye": float("nan")},
+        ])
+        with patch.object(em, "MARGIN_ELIGIBILITY_MIN_UNIVERSE", 2):
+            observed = em._margin_observation(frame, dates)
+        self.assertEqual(observed.effective_ref_date, dates[0])
+        self.assertEqual(observed.row_count, 5)
+        self.assertEqual(observed.universe_size, 2)
+        self.assertEqual(observed.status, "incomplete")
+        self.assertFalse(observed.coverage_complete)
 
     def test_cache_observation_and_live_observation_have_the_same_contract(self):
         em = self.egs
@@ -215,8 +232,13 @@ class MarginCoverageTests(unittest.TestCase):
         self.assertFalse(
             weekly["reports"][0]["machine"]["layer"]["decision_reasons"]["margin_source_unavailable"]
         )
-        feed = {"as_of": "20260724", "n_days": 1,
-                "series": [{"trade_date": "20260724", "iv_value": 0.2, "iv_percentile_252d": 50.0}]}
+        feed = copy.deepcopy(_feed())
+        feed.update({
+            "as_of": "20260724",
+            "n_days": 1,
+            "series": [{"trade_date": "20260724", "iv_value": 0.2,
+                         "iv_percentile_252d": 50.0, "hv_value": 0.18}],
+        })
         validate_weekly_report(weekly, feed)
 
         analysis["market_context"]["margin_coverage"]["reference_date"] = "20260727"
