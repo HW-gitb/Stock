@@ -6,6 +6,12 @@
 - **Required**: 无。`Register: non-material` —— 本轮未发现 material finding，未在 `docs/system_risk_register.md` 新开 R-ID。
 - **Verify**: review-evidence:76aa59be55a4；超时原因:中途发现同树 Codex 正在改 13 文件(+817/-37)，三条初稿 finding 须全部改用 `git show HEAD:` 重新证伪。固定 Python 3.13.8 复算台账：371 叶、`static_contract_error()`=None、八档和 371。`git grep` 证 `rule6_hard_veto` 仅被 backtest/ablation import、`still_in_pool` 在 runners+engine 零命中、`trade_calendar` 唯一读者 `engine/data/analysis_input_contract.py:319`。doc-governance `Ran 41 tests ... OK`。
 - **Next**: Codex：无待办（本轮不阻断在跑的 M0.5 刀）。
+## 2026-08-02 — Claude 审查 PASS（B2 两条 Optional 自修自审已闭）
+- **Verdict/Action**: PASS。(i) 删掉恒真的 `first/second` 自比三行并加注；同轮更正我前两轮的错误描述——确定性一直由紧邻的「两个真实模块各重扫一次比较」证明，是我漏看。(ii) 分类优先级调换**试过后撤回**：前提错误，被提升的三个模块的 resolved 写全是字面量逻辑路径名（kwarg 过度记账），提升反而更不准；已还原并把「cannot resolve 优先」写成显式注释。
+- **Required**: 无；Register: B2 两条 Optional 均已收口（(i) CLOSED，(ii) 试过并撤回、注明别再开），正文只见 `docs/system_risk_register.md` 顶部。
+- **Verify**: review-evidence:df4878668416；改动面 = 扫描器 `+5` 行纯注释（行为不变）+ acceptance `+2/-2`（删两行死代码加一行注释）。唯一消费者 `tests.test_us_short_test_io_inventory` 自跑 `18 OK / 7.1s`。撤回前的实测记录在册：调换后 `class2 3→6 / class4 52→49`，三个被提升模块的 resolved 写逐条查为 `"state/us_short/example_packet.json"` 这类字面量。按行为不变未扩测。
+- **Next**: Codex：执行 A1。
+
 ## 2026-08-02 — Claude 审查 PASS（B2 隔离收口，B 线完）
 - **Verdict/Action**: PASS，已提交并合入 master。`class1=0` 逐个可追（4 个真迁走、3 个转有理由的只读 sentinel、1 个转 class4），`class2=3` 准确不是被 class4 盖住，sentinel 豁免位被 acceptance 三重钉住，dict/list 逃逸已关。B0→B1→上限/入口→B2 全线收口。
 - **Required**: 无；Register: B2 复审明细与两条不阻塞 Optional（可复算断言恒真 carried；class4 优先于 class2 的标签偏弱）只见 `docs/system_risk_register.md` 顶部。

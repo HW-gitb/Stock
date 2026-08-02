@@ -61,9 +61,9 @@ class USShortTestIOInventoryTests(unittest.TestCase):
         cls._snapshot = inventory.snapshot_from_inventory(cls._inventory)
 
     def test_b0_inventory_is_reproducible_and_allowlist_is_exact(self):
+        # Determinism is proved by re-scanning real modules below.  Comparing the one cached
+        # inventory with itself would read like a reproducibility check and could never fail.
         first = self._inventory
-        second = self._inventory
-        self.assertEqual(first, second)
         for relative in (
             "tests/provider/test_us_short_batch5_bankruptcy_8k_probe.py",
             "tests/provider/test_us_short_batch5_status_source_probe.py",

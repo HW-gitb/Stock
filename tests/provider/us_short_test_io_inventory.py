@@ -830,6 +830,11 @@ def scan_test_module(path: Path, repo_root: Path) -> dict[str, object]:
     if relative in GLOBAL_SIDE_EFFECT_SENTINELS:
         classification = "class3_global_sentinel"
     elif any(access.unresolved for access in writes):
+        # Deliberate: "cannot resolve" wins when a module has both kinds.  Promoting on the
+        # strength of a resolved write would relabel modules whose only resolved writes are
+        # literal reference strings passed as a path-shaped keyword (the conservative kwarg
+        # over-count), and `class2_write_real_root` reads as "this module writes the real
+        # root".  The resolved accesses are still counted in their own ledger either way.
         classification = "class4_unresolved_write"
     elif writes:
         classification = "class2_write_real_root"
