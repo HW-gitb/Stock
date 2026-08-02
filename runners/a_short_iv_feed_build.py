@@ -201,6 +201,11 @@ def _normalise_trade_calendar(trade_calendar) -> tuple[str, ...] | None:
     return tuple(sorted(normalised))
 
 
+def _calendar_session_positions(sessions: tuple[str, ...]) -> dict[str, int]:
+    """Build the canonical session-to-position index for adjacency checks."""
+    return {date: index for index, date in enumerate(sessions)}
+
+
 def _trade_calendar_sha256(trade_dates: tuple[str, ...] | list[str] | None) -> str:
     """Hash the canonical ordered session list used by the M0.5 state machine."""
     dates = tuple(trade_dates or ())
@@ -238,12 +243,20 @@ def _calendar_metadata(trade_dates: tuple[str, ...] | None,
     return metadata
 
 
-def _feed_dates_are_adjacent(d0: str, d1: str, trade_calendar=None) -> bool:
+def _feed_dates_are_adjacent(
+    d0: str,
+    d1: str,
+    trade_calendar=None,
+    *,
+    calendar_positions: dict[str, int] | None = None,
+) -> bool:
     """Return true only when ``d0`` and ``d1`` are adjacent exchange sessions.
 
     ``None`` means the exchange calendar was unavailable, so the predicate is
     deliberately false (fail closed).  This single predicate is used for both
-    the one-day IV delta and the five-observation awakening window.
+    the one-day IV delta and the five-observation awakening window.  Hot
+    callers may pass the index built from the already-normalised calendar so
+    the same session list is not normalised and indexed for every observation.
     """
     try:
         a, b = str(d0), str(d1)
@@ -251,10 +264,14 @@ def _feed_dates_are_adjacent(d0: str, d1: str, trade_calendar=None) -> bool:
         pd.to_datetime(b, format="%Y%m%d")
     except (TypeError, ValueError):
         return False
-    sessions = _normalise_trade_calendar(trade_calendar)
-    if sessions is None or a >= b:
+    if a >= b:
         return False
-    positions = {date: index for index, date in enumerate(sessions)}
+    positions = calendar_positions
+    if positions is None:
+        sessions = _normalise_trade_calendar(trade_calendar)
+        if sessions is None:
+            return False
+        positions = _calendar_session_positions(sessions)
     return a in positions and positions.get(b) == positions[a] + 1
 
 
@@ -423,6 +440,7 @@ def build_m05_state(iv_df: pd.DataFrame, trade_calendar=None) -> pd.DataFrame:
     active trigger and otherwise yield ``unknown``.
     """
     calendar = _normalise_trade_calendar(trade_calendar)
+    calendar_positions = _calendar_session_positions(calendar) if calendar is not None else None
     columns = list(iv_df.columns if iv_df is not None else [])
     if iv_df is None or iv_df.empty:
         return pd.DataFrame(columns=columns + [c for c in _M05_STATE_COLUMNS if c not in columns])
@@ -446,7 +464,10 @@ def build_m05_state(iv_df: pd.DataFrame, trade_calendar=None) -> pd.DataFrame:
         pct = pct_values[i]
         previous_iv = iv_values[i - 1] if i > 0 else None
         dates_adjacent = i > 0 and _feed_dates_are_adjacent(
-            str(df.loc[i - 1, "trade_date"]), trade_date, calendar
+            str(df.loc[i - 1, "trade_date"]),
+            trade_date,
+            calendar,
+            calendar_positions=calendar_positions,
         )
         change = (round(abs(iv - previous_iv) * 100.0, 6)
                   if dates_adjacent and iv is not None and previous_iv is not None else None)
@@ -473,7 +494,10 @@ def build_m05_state(iv_df: pd.DataFrame, trade_calendar=None) -> pd.DataFrame:
                 enough_history
                 and all(
                     _feed_dates_are_adjacent(
-                        str(df.loc[j - 1, "trade_date"]), str(df.loc[j, "trade_date"]), calendar
+                        str(df.loc[j - 1, "trade_date"]),
+                        str(df.loc[j, "trade_date"]),
+                        calendar,
+                        calendar_positions=calendar_positions,
                     )
                     for j in range(baseline_index + 1, i + 1)
                 )
