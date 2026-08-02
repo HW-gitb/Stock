@@ -4,7 +4,7 @@
 
 - **Verdict/Action**: PASS，已提交并合入 master。这是放松类改动（前瞻日历的未实现尾巴不再参与两源等值），故按强制腿自写反控：realized 窗内删真实开市日、插幻影日、realized_end 越出日历覆盖、用 realized 列表冒充外部前瞻日历、截断 independent 并重算 sha——五路仍全拒；含幻影尾巴与无尾巴两份产物的 M0.5 七字段逐字段相同，尾巴影响不到状态。三处读点归一到 `validate_feed_artifact` 属等价重构：同一 schema 文件、registry 仍被 bucket 不变式承重、旧常量零残留。
 - **Required**: 无；Register: `R-ASHORT-M05-TRADE-CAL-FUND-DAILY-EQUALITY-GATE-BLOCKS-EVERY-LIVE-WEEKLY-RUN` 已 closed，另记三条不阻断 Optional（新增的 `series[-1] == realized_end` 与 builder 可用日定义不同源、尾巴长度无上界、执行方本轮未落 `修复` entry 故其 focused 证据 NOT_VERIFIED），正文只见 `docs/system_risk_register.md` 顶部（单一来源，本处不复述）。
-- **Verify**: review-evidence:ad7a973cd680；按 rule ② 唯一入口对最终代码态全量 `RESULT status=PASS exit=0 tests=2274 elapsed=333.6s deadline=860s`，`2269→2274` 的 `+5` 恰等于三个 IV feed 新用例加两个读点新用例；首轮 `PASS 2272 / 350.7s` 因执行方在其末段又落三处读点共 4 个文件被 ledger 判 code-state-changed 不予记账，故按最终态重跑一次。reviewer 自写探针 13 条全绿，生产形态（as_of 尾巴）经 schema+consistency 两道门放行。
+- **Verify**: review-evidence:ad7a973cd680；超时原因:执行方在我第一次全量的末段又落了三处读点共 4 个文件，首轮全量证据作废、必须按最终代码态再跑一次 333.6s。按 rule ② 唯一入口对最终代码态全量 `RESULT status=PASS exit=0 tests=2274 elapsed=333.6s deadline=860s`，`2269→2274` 的 `+5` 恰等于三个 IV feed 新用例加两个读点新用例；首轮 `PASS 2272 / 350.7s` 因执行方在其末段又落三处读点共 4 个文件被 ledger 判 code-state-changed 不予记账，故按最终态重跑一次。reviewer 自写探针 13 条全绿，生产形态（as_of 尾巴）经 schema+consistency 两道门放行。
 - **Next**: Codex：执行桌面清单第 3 条（`margin_coverage` 的 `universe_size=0`）。
 
 ## 2026-08-02 — Claude 审查 PASS（A2+A3 版本化 policy 容器 + 确定性 Stage-2 规划器）
