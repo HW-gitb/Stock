@@ -1,6 +1,8 @@
 from __future__ import annotations
 
+import contextlib
 import importlib.util
+import io
 import json
 import tempfile
 import unittest
@@ -241,6 +243,52 @@ class ClaudeReviewGateTests(unittest.TestCase):
                 0,
             )
             self.assertFalse(state_path.exists())
+
+    def test_stop_hook_cli_forwards_the_transcript_path_from_stdin(self):
+        """The key name is the whole plumbing: a wrong one degrades to enforcing nothing."""
+        gate = _load_gate()
+        seen = {}
+
+        def fake_handle(*, root=None, state_dir=None, transcript_path=None):
+            seen["transcript_path"] = transcript_path
+            return 0
+
+        original_handle, original_stdin = gate.handle_stop_hook, gate._read_stdin_utf8
+        gate.handle_stop_hook = fake_handle
+        gate._read_stdin_utf8 = lambda: json.dumps(
+            {"cwd": str(ROOT), "transcript_path": "C:/tmp/session.jsonl", "hook_event_name": "Stop"}
+        )
+        try:
+            self.assertEqual(gate.main(["gate", "stop-hook"]), 0)
+            self.assertEqual(seen["transcript_path"], "C:/tmp/session.jsonl")
+            # a payload without the key must reach the handler as None, not crash
+            gate._read_stdin_utf8 = lambda: json.dumps({"cwd": str(ROOT)})
+            self.assertEqual(gate.main(["gate", "stop-hook"]), 0)
+            self.assertIsNone(seen["transcript_path"])
+        finally:
+            gate.handle_stop_hook, gate._read_stdin_utf8 = original_handle, original_stdin
+
+    def test_missing_transcript_is_announced_not_silently_skipped(self):
+        gate = _load_gate()
+        token = "review-evidence:abc123"
+        with tempfile.TemporaryDirectory() as td:
+            root = Path(td)
+            (root / "docs").mkdir()
+            (root / "docs" / "SESSION_LOG.md").write_text(
+                "# log\n\n## 2026-08-02 — Claude 审查 PASS (slice)\n"
+                "- **Verdict/Action**: PASS\n- **Required**: 无\n"
+                f"- **Verify**: ok; {token}\n- **Next**: 无\n",
+                encoding="utf-8",
+            )
+            state_dir = root / "state"
+            state_dir.mkdir()
+            (state_dir / "active_review.json").write_text(
+                json.dumps({"evidence_token": token}), encoding="utf-8")
+            stderr = io.StringIO()
+            with contextlib.redirect_stderr(stderr):
+                code = gate.handle_stop_hook(root=root, state_dir=state_dir, transcript_path=None)
+        self.assertEqual(code, 0)
+        self.assertIn("outstanding-agent check did not run", stderr.getvalue())
 
     def test_agents_pins_review_anti_fabrication_gate(self):
         text = AGENTS.read_text(encoding="utf-8")

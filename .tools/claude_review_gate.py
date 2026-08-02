@@ -481,7 +481,15 @@ def handle_stop_hook(
     if isinstance(armed_at, (int, float)):
         elapsed = max(0.0, datetime.now(timezone.utc).timestamp() - float(armed_at))
     pending_agents: list[str] = []
-    if transcript_path:
+    if not transcript_path:
+        # A silently skipped check is the dead-guard failure this leg exists to prevent: if the
+        # Stop payload ever stops carrying the transcript, say so instead of enforcing nothing.
+        print(
+            "stock-review-gate: no transcript_path in the Stop payload; "
+            "the outstanding-agent check did not run",
+            file=sys.stderr,
+        )
+    else:
         try:
             pending_agents = pending_async_agents(
                 Path(transcript_path).read_text(encoding="utf-8", errors="replace"),
