@@ -7,6 +7,7 @@ import ast
 import hashlib
 import json
 import sys
+import tempfile
 import unittest
 import jsonschema
 from unittest.mock import patch
@@ -19,7 +20,7 @@ if str(ROOT) not in sys.path:
 
 from engine.a_short_effect_contract import (  # noqa: E402
     load_contract, static_contract_error, static_inventory, leaf_effects,
-    build_effect_contract_ledger,
+    build_effect_contract_ledger, validate_effect_contract_ledger, load_legacy_effect_contract,
 )
 from engine import a_short_effect_contract as effect_contract_module  # noqa: E402
 from runners.a_short_m67_render import render_weekly_markdown  # noqa: E402
@@ -27,7 +28,8 @@ from engine.a_short_industry_theme import classify_industry_trend  # noqa: E402
 from engine.egs_industry_heat import load_governance  # noqa: E402
 from runners.a_short_phase5_engine import build_m67_report  # noqa: E402
 from runners.a_short_weekly_pipeline import (  # noqa: E402
-    build_weekly_report, normalize_candidate, validate_weekly_report,
+    build_weekly_report, normalize_candidate, validate_published_weekly_bundle,
+    validate_weekly_report,
 )
 from tests.test_a_short_weekly_pipeline import (  # noqa: E402
     AS_OF, GEN, _egs_candidate, _feed, _normalized, _overlay_row, _series,
@@ -123,6 +125,23 @@ class EffectContractStaticTests(unittest.TestCase):
 
     def test_current_schema_fields_rules_thresholds_and_output_are_registered(self):
         self.assertIsNone(static_contract_error(self.contract))
+
+    def test_legacy_migration_registry_is_static_hash_bound(self):
+        tampered = copy.deepcopy(self.contract)
+        tampered["legacy_migration_sha256"] = "0" * 64
+        self.assertEqual(
+            static_contract_error(tampered),
+            "legacy effect-contract migration registry changed without effect-contract update",
+        )
+
+    def test_legacy_migration_entries_match_git_history(self):
+        for fp in (
+            "ff549e8c9016671fbfae48913bce5a8d74f855c75c5c2175f7b2297a06d8a179",
+            "2fbfc215d3609a2482359b9efefd0dc7ae5ea3a186d14faee3b8673dbec30c12",
+        ):
+            snapshot = load_legacy_effect_contract(fp)
+            self.assertIsInstance(snapshot, dict)
+            self.assertEqual(effect_contract_module.contract_fingerprint(snapshot), fp)
 
     def test_ast_fingerprints_do_not_depend_on_cpython_dump_format(self):
         baseline = static_inventory()
@@ -488,6 +507,58 @@ class EffectContractStaticTests(unittest.TestCase):
 
 
 class EffectContractRuntimeTests(unittest.TestCase):
+    def test_registered_historical_bundle_revalidates_through_publish_boundary(self):
+        from runners.a_short_m67_render import render_weekly_markdown
+        for day in ("20260720", "20260727"):
+            with self.subTest(day=day), tempfile.TemporaryDirectory() as td:
+                source = ROOT / "research" / "results" / "a_short" / day / "weekly_m67.json"
+                weekly = json.loads(source.read_text(encoding="utf-8"))
+                out = Path(td) / day / "weekly_m67.json"
+                out.parent.mkdir(parents=True)
+                weekly_bytes = source.read_bytes()
+                markdown_bytes = render_weekly_markdown(weekly).encode("utf-8")
+                out.write_bytes(weekly_bytes)
+                out.with_suffix(".md").write_bytes(markdown_bytes)
+                lineage = weekly.get("run_lineage") or {}
+                freshness = lineage.get("price_freshness") or {}
+                receipt = {
+                    "schema_name": "a_short_weekly_publish_receipt",
+                    "schema_version": "1.1.0",
+                    "as_of": weekly["as_of"],
+                    "decision_as_of": weekly.get("decision_as_of") or weekly["as_of"],
+                    "run_date": weekly.get("run_date") or lineage.get("run_date") or freshness.get("run_date"),
+                    "price_data_through": weekly.get("price_data_through") or freshness.get("price_data_through"),
+                    "run_id": lineage.get("run_id"),
+                    "candidate_digest": lineage.get("candidate_digest"),
+                    "published_at": "2026-08-02T00:00:00+08:00",
+                    "account_snapshot": lineage.get("account_snapshot"),
+                    "stage_status": "complete",
+                    "outputs": ["weekly_m67.json", "weekly_m67.md"],
+                    "outputs_digest": {
+                        "weekly_m67.json": {"sha256": hashlib.sha256(weekly_bytes).hexdigest(),
+                                            "byte_length": len(weekly_bytes)},
+                        "weekly_m67.md": {"sha256": hashlib.sha256(markdown_bytes).hexdigest(),
+                                           "byte_length": len(markdown_bytes)},
+                    },
+                }
+                receipt_path = out.with_name("weekly_m67.receipt.json")
+                receipt_path.write_text(json.dumps(receipt), encoding="utf-8")
+                validate_published_weekly_bundle(out, receipt_path)
+
+    def test_registered_historical_ledgers_validate_and_tampering_is_rejected(self):
+        paths = (
+            ROOT / "research" / "results" / "a_short" / "20260720" / "weekly_m67.json",
+            ROOT / "research" / "results" / "a_short" / "20260727" / "weekly_m67.json",
+        )
+        for path in paths:
+            with self.subTest(path=path):
+                weekly = json.loads(path.read_text(encoding="utf-8"))
+                validate_effect_contract_ledger(weekly)
+                tampered = copy.deepcopy(weekly)
+                tampered["effect_contract_ledger"]["records"][0]["reason"] = "tampered"
+                with self.assertRaises(ValueError):
+                    validate_effect_contract_ledger(tampered)
+
     def test_weekly_json_markdown_and_validator_expose_unwired_or_independent_groups(self):
         weekly = build_weekly_report([_normalized()], AS_OF, GEN)
         records = {record["id"]: record for record in weekly["effect_contract_ledger"]["records"]}

@@ -12,6 +12,7 @@ import copy
 import hashlib
 import json
 import re
+import subprocess
 from collections import Counter
 from functools import lru_cache
 from pathlib import Path
@@ -19,6 +20,8 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
 CONTRACT_PATH = ROOT / "schemas" / "a_short_m67_effect_contract.json"
+LEGACY_MIGRATION_PATH = ROOT / "schemas" / "a_short_m67_effect_contract_legacy_migrations.json"
+_CONTRACT_RELATIVE_PATH = "schemas/a_short_m67_effect_contract.json"
 ANALYSIS_INPUT_SCHEMA_PATH = ROOT / "schemas" / "analysis_input.schema.json"
 _DECISION_FILES = (
     "A-EGS/egs_main.py",
@@ -51,8 +54,9 @@ _OUTPUT_SCHEMA_FILES = (
     "schemas/a_short_m67_report.schema.json",
 )
 _ANALYSIS_INPUT_SCHEMA_FILE = "schemas/analysis_input.schema.json"
+_LEGACY_MIGRATION_FILE = "schemas/a_short_m67_effect_contract_legacy_migrations.json"
 _STATIC_SOURCE_FILES = tuple(sorted(
-    set(_DECISION_FILES) | set(_CONSTANT_FILES) | {_RUNTIME_CONFIG_FILE}
+    set(_DECISION_FILES) | set(_CONSTANT_FILES) | {_RUNTIME_CONFIG_FILE, _LEGACY_MIGRATION_FILE}
 ))
 _DEFAULT_STATIC_SNAPSHOT_FILES = tuple(sorted(
     set(_STATIC_SOURCE_FILES)
@@ -859,6 +863,7 @@ def _build_static_inventory(*, source_overrides: dict[str, str] | None = None,
                                     and isinstance(row.elts[0].value, str)],
         "output_schema_sha256": {rel: _hash(output_schema_overrides.get(rel, (ROOT / rel).read_text(encoding="utf-8")))
                                  for rel in _OUTPUT_SCHEMA_FILES},
+        "legacy_migration_sha256": _hash(sources[_LEGACY_MIGRATION_FILE]),
     }
 
 
@@ -910,6 +915,68 @@ def load_contract() -> dict:
 
 def contract_fingerprint(contract: dict | None = None) -> str:
     return _hash(contract if contract is not None else load_contract())
+
+
+def load_legacy_effect_contract(contract_fp: str) -> dict | None:
+    """Return a registered historical contract snapshot, or ``None``.
+
+    This is an explicit compatibility registry for already-published ledgers.
+    It never treats an unknown fingerprint as compatible and never substitutes
+    the current contract for a historical one.
+    """
+    if not isinstance(contract_fp, str) or not re.fullmatch(r"[0-9a-f]{64}", contract_fp):
+        return None
+    try:
+        registry_text = LEGACY_MIGRATION_PATH.read_text(encoding="utf-8")
+        registry = json.loads(registry_text)
+    except (OSError, UnicodeDecodeError, json.JSONDecodeError) as exc:
+        raise ValueError("legacy effect-contract migration registry is unreadable") from exc
+    if load_contract().get("legacy_migration_sha256") != _hash(registry_text):
+        raise ValueError("legacy effect-contract migration registry hash is not bound to current contract")
+    if (registry.get("schema_name") != "a_short_m67_effect_contract_legacy_migrations"
+            or registry.get("schema_version") != "1.0.0"):
+        raise ValueError("legacy effect-contract migration registry schema is invalid")
+    migrations = registry.get("migrations")
+    if not isinstance(migrations, list) or not migrations:
+        raise ValueError("legacy effect-contract migration registry is empty")
+    seen = set()
+    match = None
+    for entry in migrations:
+        if not isinstance(entry, dict):
+            raise ValueError("legacy effect-contract migration entry is not an object")
+        fp = entry.get("contract_fingerprint")
+        source_commit = entry.get("source_commit")
+        if (not isinstance(fp, str) or not re.fullmatch(r"[0-9a-f]{64}", fp)
+                or fp in seen
+                or not isinstance(source_commit, str)
+                or not re.fullmatch(r"[0-9a-f]{40}", source_commit)
+                or entry.get("ledger_schema_version") != "1.0.0"):
+            raise ValueError("legacy effect-contract migration entry identity is invalid")
+        seen.add(fp)
+        snapshot = entry.get("contract")
+        if not isinstance(snapshot, dict) or contract_fingerprint(snapshot) != fp:
+            raise ValueError("legacy effect-contract migration snapshot fingerprint mismatch")
+        try:
+            commit_check = subprocess.run(
+                ["git", "-C", str(ROOT), "cat-file", "-e", f"{source_commit}^{{commit}}"],
+                stdout=subprocess.PIPE, stderr=subprocess.PIPE, check=False,
+            )
+            historical = subprocess.run(
+                ["git", "-C", str(ROOT), "show", f"{source_commit}:{_CONTRACT_RELATIVE_PATH}"],
+                stdout=subprocess.PIPE, stderr=subprocess.PIPE, check=False,
+            )
+            if commit_check.returncode != 0 or historical.returncode != 0:
+                raise ValueError("legacy effect-contract source commit/path is unavailable")
+            historical_contract = json.loads(historical.stdout.decode("utf-8"))
+        except (OSError, UnicodeDecodeError, json.JSONDecodeError) as exc:
+            raise ValueError("legacy effect-contract source commit snapshot is unreadable") from exc
+        if (not isinstance(historical_contract, dict)
+                or contract_fingerprint(historical_contract) != fp
+                or historical_contract != snapshot):
+            raise ValueError("legacy effect-contract registry snapshot is not the recorded git snapshot")
+        if fp == contract_fp:
+            match = snapshot
+    return copy.deepcopy(match) if match is not None else None
 
 
 def static_contract_error(contract: dict | None = None, *, inventory: dict | None = None) -> str | None:
@@ -1136,6 +1203,8 @@ def static_contract_error(contract: dict | None = None, *, inventory: dict | Non
         return "portfolio factor field changed without effect contract update"
     if contract.get("output_schema_sha256") != inventory["output_schema_sha256"]:
         return "weekly/M6.7 output schema changed without effect contract update"
+    if contract.get("legacy_migration_sha256") != inventory["legacy_migration_sha256"]:
+        return "legacy effect-contract migration registry changed without effect-contract update"
     return None
 
 
@@ -1327,6 +1396,43 @@ def _runtime_status(group: dict, weekly: dict) -> tuple[str, str]:
     raise ValueError(f"unknown effect-contract runtime_handler: {handler}")
 
 
+def build_legacy_effect_contract_ledger(weekly: dict, contract: dict,
+                                       *, contract_fp: str) -> dict:
+    """Rebuild the exact pre-leaf-classification ledger shape for one registry entry."""
+    if (not isinstance(contract, dict)
+            or contract.get("schema_name") != "a_short_m67_effect_contract"
+            or contract.get("schema_version") != "1.0.0"
+            or contract_fingerprint(contract) != contract_fp):
+        raise ValueError("legacy effect-contract snapshot is invalid")
+    records = []
+    for group in contract.get("groups") or []:
+        status, reason = _runtime_status(group, weekly)
+        if status not in _STATUSES:
+            raise ValueError(f"invalid legacy effect-contract runtime status: {status}")
+        records.append({
+            "id": group["id"], "policy": group["policy"], "status": status,
+            "source_prefixes": list(group["source_prefixes"]),
+            "source_paths_sha256": group["source_paths_sha256"],
+            "terminal_surfaces": list(group["terminal_surfaces"]), "reason": reason,
+        })
+    for track in contract.get("comparison_tracks") or []:
+        records.append({
+            "id": track["id"], "policy": track["policy"],
+            "status": "intentionally_independent",
+            "source_prefixes": [track["schema_path"]],
+            "source_paths_sha256": track["schema_sha256"],
+            "terminal_surfaces": list(track.get("consumer_refs") or []),
+            "reason": track["reason"],
+        })
+    counts = {status: sum(record["status"] == status for record in records)
+              for status in sorted(_STATUSES)}
+    return {
+        "schema_name": "a_short_effect_contract_ledger", "schema_version": "1.0.0",
+        "as_of": str(weekly.get("as_of") or ""), "contract_fingerprint": contract_fp,
+        "records": records, "summary": {"total": len(records), **counts},
+    }
+
+
 def build_effect_contract_ledger(weekly: dict, contract: dict | None = None,
                                 *, trend_guard: dict | None = None) -> dict:
     contract = contract if contract is not None else load_contract()
@@ -1378,11 +1484,23 @@ def validate_effect_contract_ledger(weekly: dict, previous_ledger: dict | None =
     actual = weekly.get("effect_contract_ledger")
     if not isinstance(actual, dict):
         raise ValueError("weekly missing effect_contract_ledger")
-    expected = build_effect_contract_ledger(weekly, trend_guard=actual.get("trend_guard"))
-    if actual != expected:
-        raise ValueError("effect_contract_ledger diverges from registered field/rule effects")
-    _validate_trend_guard_record(
-        actual["trend_guard"],
-        actual["summary"]["unavailable_manual_review"],
-        previous_ledger,
+    actual_fp = actual.get("contract_fingerprint")
+    current_fp = contract_fingerprint()
+    if actual_fp == current_fp:
+        expected = build_effect_contract_ledger(weekly, trend_guard=actual.get("trend_guard"))
+        if actual != expected:
+            raise ValueError("effect_contract_ledger diverges from registered field/rule effects")
+        _validate_trend_guard_record(
+            actual["trend_guard"],
+            actual["summary"]["unavailable_manual_review"],
+            previous_ledger,
+        )
+        return
+    legacy = load_legacy_effect_contract(actual_fp)
+    if legacy is None:
+        raise ValueError("effect_contract_ledger fingerprint is neither current nor registered historical")
+    expected = build_legacy_effect_contract_ledger(
+        weekly, legacy, contract_fp=str(actual_fp)
     )
+    if actual != expected:
+        raise ValueError("historical effect_contract_ledger diverges from its registered contract")

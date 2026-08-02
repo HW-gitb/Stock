@@ -182,6 +182,13 @@ class FetchLineageTests(unittest.TestCase):
         self.assertFalse(report["had_provider_error"])
         self.assertEqual(report["opt_basic_rows"], 40)
         self.assertEqual(report["underlier_rows"], 20)
+        self.assertEqual(report["underlier_trade_dates"], PIT_DATES)
+
+    def test_independent_underlier_dates_are_pit_filtered(self):
+        behaviors = _good_pro_behaviors()
+        behaviors["fund_daily"] = _underlier([*PIT_DATES, "20260701", "bad-date"])
+        _, _, _, report = fetch_probe_inputs(_FakePro(behaviors), AS_OF)
+        self.assertEqual(report["underlier_trade_dates"], PIT_DATES)
 
     def test_max_trade_dates_param_widens_window(self):
         b = _good_pro_behaviors()

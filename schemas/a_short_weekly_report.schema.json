@@ -1601,6 +1601,40 @@
         "remaining_new_exposure_capacity": {
           "type": "number",
           "minimum": 0
+        },
+        "m05_mode": {
+          "const": "conservative_degradation"
+        },
+        "m05_allocation_blocked": {
+          "const": true
+        },
+        "m05_block_reason": {
+          "type": "string",
+          "minLength": 1
+        },
+        "m05_pre_reclaim_cash": {
+          "type": "number",
+          "minimum": 0
+        },
+        "m05_reclaimed_cash": {
+          "type": "number",
+          "minimum": 0
+        },
+        "m05_post_reclaim_cash": {
+          "type": "number",
+          "minimum": 0
+        },
+        "m05_pre_reclaim_new_exposure_capacity": {
+          "type": "number",
+          "minimum": 0
+        },
+        "m05_reclaimed_new_exposure_capacity": {
+          "type": "number",
+          "minimum": 0
+        },
+        "m05_post_reclaim_new_exposure_capacity": {
+          "type": "number",
+          "minimum": 0
         }
       }
     },

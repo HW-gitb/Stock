@@ -79,7 +79,57 @@
         "layer": {"type": "object"},
         "entry_exit_size_star": {"type": "object"},
         "model_build_eligible": {"type": "boolean", "description": "P3 comparison-only model selection after public strategy/veto/RR/entry/stop checks and before current-holding or account-capacity disposition; it never changes official M6.7 action, sizing, or allocation."},
-        "iv_gate": {"type": "object"},
+        "iv_gate": {
+          "type": "object",
+          "properties": {
+            "rule3_status": {"enum": ["normal", "reduce_new_position_50pct", "no_trade", "unknown"]},
+            "awakening_status": {"enum": ["inactive", "active", "cooldown", "unknown"]},
+            "m05_mode": {"enum": [null, "conservative_degradation"]},
+            "cash_reclaim_pct": {
+              "anyOf": [
+                {"type": "number", "minimum": 0, "maximum": 100},
+                {"type": "null"}
+              ]
+            },
+            "iv_change_abs_1d_pctpt": {
+              "anyOf": [
+                {"type": "number", "minimum": 0},
+                {"type": "null"}
+              ]
+            },
+            "awakening_trigger_date": {
+              "anyOf": [
+                {"type": "string", "pattern": "^[0-9]{8}$"},
+                {"type": "null"}
+              ]
+            },
+            "awakening_release_date": {
+              "anyOf": [
+                {"type": "string", "pattern": "^[0-9]{8}$"},
+                {"type": "null"}
+              ]
+            }
+          },
+          "allOf": [
+            {
+              "if": {
+                "anyOf": [
+                  {"required": ["rule3_status"]},
+                  {"required": ["awakening_status"]},
+                  {"required": ["m05_mode"]},
+                  {"required": ["cash_reclaim_pct"]},
+                  {"required": ["iv_change_abs_1d_pctpt"]},
+                  {"required": ["awakening_trigger_date"]},
+                  {"required": ["awakening_release_date"]}
+                ]
+              },
+              "then": {
+                "required": ["rule3_status", "awakening_status", "m05_mode", "cash_reclaim_pct",
+                              "iv_change_abs_1d_pctpt", "awakening_trigger_date", "awakening_release_date"]
+              }
+            }
+          ]
+        },
         "consumption": {"type": "object"},
         "m4_review_gate": {
           "type": "object",

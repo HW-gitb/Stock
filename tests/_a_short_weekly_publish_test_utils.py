@@ -74,6 +74,32 @@ def write_content_bound_bundle(
         else:
             prepared["reports"] = []
     prepared["n_stocks"] = len(prepared["reports"])
+    # The production publisher builds the effect ledger after all reports have
+    # landed.  Rebuild the synthetic default here as well; otherwise a base
+    # ledger created from ``reports=[]`` is stale as soon as this helper merges
+    # the supplied report rows, and the real published-bundle validator must
+    # (correctly) reject it.
+    from engine.a_short_effect_contract import (
+        build_effect_contract_ledger, contract_fingerprint, load_legacy_effect_contract,
+    )
+    supplied_fp = ((supplied.get("effect_contract_ledger") or {}).get("contract_fingerprint"))
+    preserve_registered_legacy = (
+        supplied_fp is not None
+        and supplied_fp != contract_fingerprint()
+        and load_legacy_effect_contract(supplied_fp) is not None
+    )
+    if not preserve_registered_legacy:
+        if not prepared.get("reports") and "data_quality_shadow" in prepared:
+            from engine.a_short_data_quality_shadow import build_data_quality_shadow
+            prepared["data_quality_shadow"] = build_data_quality_shadow(
+                [], str(prepared.get("as_of") or "")
+            )
+        prepared["effect_contract_ledger"] = build_effect_contract_ledger(prepared)
+        # Mirror publish_weekly_bundle's pre-write trend binding so a second
+        # synthetic week in the same temporary root records the prior ledger
+        # instead of failing the production reverse control.
+        from runners.a_short_weekly_pipeline import _bind_effect_contract_trend_guard
+        _bind_effect_contract_trend_guard(prepared, output)
     weekly.clear()
     weekly.update(prepared)
     if output.name != "weekly_m67.json" or output.parent.name != as_of:

@@ -23,9 +23,10 @@ if str(ROOT) not in sys.path:
 
 from runners.a_short_iv_feed_build import (  # noqa: E402
     bs_price, implied_vol, atm_iv_for_maturity, constant_maturity_iv,
-    build_daily_iv, rolling_percentile_252, build_feed_summary,
-    validate_feed_summary_consistency, write_feed, MIN_ROLL_OBS,
-    realized_vol, HV_WINDOW, HV_ANNUALIZE,
+    build_daily_iv, rolling_percentile_252, build_feed_summary, build_m05_state,
+    validate_feed_summary_consistency, validate_feed_artifact, write_feed, MIN_ROLL_OBS,
+    realized_vol, HV_WINDOW, HV_ANNUALIZE, rule3_status_from_percentile,
+    _trade_calendar_sha256,
 )
 
 SCHEMA_PATH = ROOT / "schemas" / "a_short_iv_feed.schema.json"
@@ -131,6 +132,107 @@ class RollingPercentileTests(unittest.TestCase):
         self.assertTrue(pd.isna(out["iv_percentile_252d"].iloc[MIN_ROLL_OBS - 2]))
 
 
+class M05StateTests(unittest.TestCase):
+    def _series(self, iv_values, percentiles):
+        dates = [(pd.Timestamp("2026-06-01") + pd.tseries.offsets.BDay(i)).strftime("%Y%m%d")
+                 for i in range(len(iv_values))]
+        return pd.DataFrame({"trade_date": dates, "iv_value": iv_values,
+                             "iv_percentile_252d": percentiles})
+
+    def test_five_low_days_then_strict_rise_triggers_and_releases_on_one_day(self):
+        df = self._series(
+            [0.20, 0.08, 0.08, 0.08, 0.08, 0.08, 0.14, 0.20, 0.20],
+            [50.0, 5.0, 5.0, 5.0, 5.0, 5.0, 95.0, 50.0, 50.0],
+        )
+        out = build_m05_state(df, trade_calendar=df["trade_date"].tolist())
+        self.assertEqual(out.loc[5, "awakening_status"], "unknown")
+        self.assertEqual(out.loc[6, "awakening_status"], "active")
+        self.assertEqual(out.loc[6, "iv_change_abs_1d_pctpt"], 6.0)
+        self.assertEqual(out.loc[6, "cash_reclaim_pct"], 20.0)
+        self.assertEqual(out.loc[6, "awakening_baseline_iv"], 0.2)
+        self.assertEqual(out.loc[6, "awakening_trigger_date"], "20260609")
+        self.assertEqual(out.loc[7, "awakening_status"], "inactive")
+        self.assertEqual(out.loc[7, "cash_reclaim_pct"], 0.0)
+        self.assertEqual(out.loc[7, "awakening_release_date"], "20260610")
+        self.assertEqual(out.loc[8, "awakening_status"], "inactive")
+        self.assertEqual(out.loc[8, "cash_reclaim_pct"], 0.0)
+        self.assertEqual(out.loc[8, "awakening_release_date"], "20260610")
+
+    def test_low_run_or_rise_at_boundary_does_not_trigger(self):
+        four_low = self._series(
+            [0.20, 0.08, 0.08, 0.08, 0.08, 0.14],
+            [50.0, 5.0, 5.0, 5.0, 5.0, 95.0],
+        )
+        self.assertNotEqual(build_m05_state(four_low, trade_calendar=four_low["trade_date"].tolist()).iloc[-1]["awakening_status"], "active")
+        five_low_boundary = self._series(
+            [0.20, 0.08, 0.08, 0.08, 0.08, 0.08, 0.13],
+            [50.0, 5.0, 5.0, 5.0, 5.0, 5.0, 95.0],
+        )
+        self.assertNotEqual(build_m05_state(five_low_boundary, trade_calendar=five_low_boundary["trade_date"].tolist()).iloc[-1]["awakening_status"], "active")
+
+    def test_rule3_boundaries_are_fail_closed(self):
+        self.assertEqual(rule3_status_from_percentile(None), "unknown")
+        self.assertEqual(rule3_status_from_percentile(80.0), "normal")
+        self.assertEqual(rule3_status_from_percentile(80.1), "reduce_new_position_50pct")
+        self.assertEqual(rule3_status_from_percentile(90.0), "reduce_new_position_50pct")
+        self.assertEqual(rule3_status_from_percentile(90.1), "no_trade")
+        self.assertEqual(rule3_status_from_percentile(float("nan")), "unknown")
+
+    def test_missing_inputs_do_not_clear_active_state(self):
+        df = self._series(
+            [0.20, 0.08, 0.08, 0.08, 0.08, 0.08, 0.14, 0.20],
+            [50.0, 5.0, 5.0, 5.0, 5.0, 5.0, 95.0, None],
+        )
+        out = build_m05_state(df, trade_calendar=df["trade_date"].tolist())
+        self.assertEqual(out.iloc[-1]["awakening_status"], "active")
+        self.assertEqual(out.iloc[-1]["cash_reclaim_pct"], 20.0)
+
+    def test_weekday_gap_cannot_be_counted_as_one_day_iv_jump_or_trigger(self):
+        df = pd.DataFrame({
+            "trade_date": ["20260601", "20260602", "20260603", "20260604",
+                           "20260605", "20260608", "20260618"],
+            "iv_value": [0.20, 0.08, 0.08, 0.08, 0.08, 0.08, 0.14],
+            "iv_percentile_252d": [50.0, 5.0, 5.0, 5.0, 5.0, 5.0, 95.0],
+        })
+        calendar = pd.date_range("20260601", "20260618", freq="B").strftime("%Y%m%d").tolist()
+        out = build_m05_state(df, trade_calendar=calendar)
+        self.assertTrue(pd.isna(out.iloc[-1]["iv_change_abs_1d_pctpt"]))
+        self.assertNotEqual(out.iloc[-1]["awakening_status"], "active")
+
+    def test_exchange_holiday_is_adjacent_but_missing_open_session_is_not(self):
+        df = pd.DataFrame({
+            "trade_date": ["20260617", "20260618", "20260622", "20260623", "20260624", "20260625", "20260626"],
+            "iv_value": [0.20, 0.08, 0.08, 0.08, 0.08, 0.08, 0.14],
+            "iv_percentile_252d": [50.0, 5.0, 5.0, 5.0, 5.0, 5.0, 95.0],
+        })
+        # 20260619 is an exchange holiday in this synthetic calendar, so the
+        # Friday-to-Monday observation is one adjacent session step.
+        holiday_calendar = df["trade_date"].tolist()
+        active = build_m05_state(df, trade_calendar=holiday_calendar)
+        self.assertEqual(active.iloc[-1]["awakening_status"], "active")
+        # If that date is a real open session but its IV row is missing, the
+        # same series must fail closed instead of manufacturing a jump.
+        open_session_calendar = [*holiday_calendar[:2], "20260619", *holiday_calendar[2:]]
+        blocked = build_m05_state(df, trade_calendar=open_session_calendar)
+        self.assertNotEqual(blocked.iloc[-1]["awakening_status"], "active")
+
+    def test_calendar_unavailable_is_visible_and_cannot_trigger(self):
+        df = self._series(
+            [0.20, 0.08, 0.08, 0.08, 0.08, 0.08, 0.14],
+            [50.0, 5.0, 5.0, 5.0, 5.0, 5.0, 95.0],
+        )
+        summary = build_feed_summary(df, AS_OF, "t")
+        self.assertEqual(summary["calendar"]["status"], "calendar_unavailable")
+        self.assertNotEqual(summary["awakening"]["status"], "active")
+        validate_feed_summary_consistency(summary)
+
+    def test_duplicate_trade_date_is_rejected_before_state_machine(self):
+        df = self._series([0.20, 0.08, 0.08], [50.0, 5.0, 5.0])
+        df.loc[2, "trade_date"] = df.loc[1, "trade_date"]
+        with self.assertRaises(ValueError):
+            build_m05_state(df)
+
+
 class ConsistencyAndWriteTests(unittest.TestCase):
     def _good_summary(self):
         dates = ["20260603", "20260604", "20260605", "20260608", "20260609"]
@@ -168,6 +270,142 @@ class ConsistencyAndWriteTests(unittest.TestCase):
         s["as_of"] = "20260631"   # June has 30 days
         with self.assertRaises(ValueError):
             validate_feed_summary_consistency(s)
+
+    def _bound_summary(self):
+        dates = ["20260601", "20260602", "20260603", "20260604", "20260605", "20260608", "20260609"]
+        frame = pd.DataFrame({
+            "trade_date": dates,
+            "iv_value": [0.20, 0.08, 0.08, 0.08, 0.08, 0.08, 0.14],
+            "iv_percentile_252d": [50.0, 5.0, 5.0, 5.0, 5.0, 5.0, 95.0],
+            "hv_value": [None] * len(dates),
+        })
+        return build_feed_summary(
+            frame, AS_OF, "t", trade_calendar=dates,
+            trade_dates_probed=dates,
+        )
+
+    def _independent_bound_summary(self):
+        dates = ["20260601", "20260602", "20260603", "20260604", "20260605", "20260608", "20260609"]
+        frame = pd.DataFrame({
+            "trade_date": dates,
+            "iv_value": [0.20, 0.08, 0.08, 0.08, 0.08, 0.08, 0.14],
+            "iv_percentile_252d": [50.0, 5.0, 5.0, 5.0, 5.0, 5.0, 95.0],
+            "hv_value": [None] * len(dates),
+        })
+        return build_feed_summary(
+            frame, AS_OF, "t", trade_calendar=dates,
+            calendar_source="tushare.trade_cal+fund_daily",
+            trade_dates_probed=dates,
+            independent_trade_dates=dates,
+        )
+
+    def test_calendar_binding_records_probe_hash_and_recomputes_from_probe(self):
+        summary = self._bound_summary()
+        self.assertEqual(summary["calendar"]["status"], "available")
+        self.assertEqual(summary["calendar"]["trade_dates"], summary["calendar"]["probed_trade_dates"])
+        self.assertIn(summary["awakening"]["status"], {"unknown", "inactive", "active"})
+        validate_feed_artifact(summary)
+        validate_feed_artifact(summary, trade_calendar=summary["calendar"]["trade_dates"],
+                                trade_dates_probed=summary["calendar"]["probed_trade_dates"])
+
+    def test_independent_fund_daily_binding_drives_recompute(self):
+        summary = self._independent_bound_summary()
+        calendar = summary["calendar"]
+        self.assertEqual(calendar["source"], "tushare.trade_cal+fund_daily")
+        self.assertEqual(calendar["independent_source"], "tushare.fund_daily")
+        self.assertEqual(calendar["independent_trade_dates"], calendar["trade_dates"])
+        validate_feed_artifact(
+            summary,
+            trade_calendar=calendar["trade_dates"],
+            trade_dates_probed=calendar["probed_trade_dates"],
+            independent_trade_dates=calendar["independent_trade_dates"],
+        )
+
+    def test_independent_date_gap_is_rejected_even_with_self_consistent_trade_cal(self):
+        summary = self._independent_bound_summary()
+        calendar = summary["calendar"]
+        calendar["trade_dates"] = [*calendar["trade_dates"][:2], "20260606", *calendar["trade_dates"][2:]]
+        calendar["coverage_start"] = calendar["trade_dates"][0]
+        calendar["coverage_end"] = calendar["trade_dates"][-1]
+        calendar["n_trade_dates"] = len(calendar["trade_dates"])
+        calendar["trade_dates_sha256"] = _trade_calendar_sha256(calendar["trade_dates"])
+        calendar["probed_trade_dates"] = list(calendar["trade_dates"])
+        calendar["probed_trade_dates_sha256"] = _trade_calendar_sha256(calendar["probed_trade_dates"])
+        with self.assertRaises(ValueError):
+            validate_feed_summary_consistency(summary)
+
+    def test_external_independent_dates_are_checked_at_write_door(self):
+        summary = self._independent_bound_summary()
+        with self.assertRaises(ValueError):
+            validate_feed_artifact(
+                summary,
+                trade_calendar=summary["calendar"]["trade_dates"],
+                trade_dates_probed=summary["calendar"]["probed_trade_dates"],
+                independent_trade_dates=[*summary["calendar"]["independent_trade_dates"], "20260610"],
+            )
+
+    def test_new_source_requires_independent_binding(self):
+        summary = self._independent_bound_summary()
+        summary["calendar"].pop("independent_trade_dates")
+        with self.assertRaises(ValueError):
+            validate_feed_artifact(summary)
+
+    def test_deleted_calendar_session_is_rejected_not_recomputed_as_active(self):
+        summary = self._bound_summary()
+        summary["calendar"]["trade_dates"].remove("20260605")
+        with self.assertRaises(ValueError):
+            validate_feed_summary_consistency(summary)
+
+    def test_inserted_non_session_is_rejected_not_used_for_adjacency(self):
+        summary = self._bound_summary()
+        summary["calendar"]["trade_dates"].insert(5, "20260606")
+        with self.assertRaises(ValueError):
+            validate_feed_summary_consistency(summary)
+
+    def test_external_calendar_window_must_match_bound_calendar(self):
+        summary = self._bound_summary()
+        with self.assertRaises(ValueError):
+            validate_feed_summary_consistency(summary, trade_calendar=[
+                *summary["calendar"]["trade_dates"][:5], "20260606",
+                *summary["calendar"]["trade_dates"][5:]
+            ])
+
+    def test_future_calendar_date_is_rejected(self):
+        summary = self._bound_summary()
+        summary["calendar"]["trade_dates"].append("20260610")
+        with self.assertRaises(ValueError):
+            validate_feed_summary_consistency(summary)
+
+    def test_short_date_is_rejected_by_read_side_schema_gate(self):
+        summary = self._bound_summary()
+        summary["series"][0]["trade_date"] = "2026101"
+        with self.assertRaises(ValueError):
+            validate_feed_artifact(summary)
+
+    def test_schema_version_downgrade_cannot_skip_m05_recompute(self):
+        summary = self._bound_summary()
+        summary["schema_version"] = "1.1.0"
+        summary["series"][-1]["awakening_status"] = "active"
+        summary["series"][-1]["cash_reclaim_pct"] = 20.0
+        with self.assertRaises(ValueError):
+            validate_feed_summary_consistency(summary)
+        with self.assertRaises(ValueError):
+            validate_feed_artifact(summary)
+
+    def test_schema_version_downgrade_with_awakening_only_is_rejected(self):
+        summary = self._bound_summary()
+        summary["schema_version"] = "1.1.0"
+        summary["series"] = [
+            {key: value for key, value in row.items()
+             if key not in {"iv_change_abs_1d_pctpt", "rule3_status", "awakening_status",
+                            "cash_reclaim_pct", "awakening_baseline_iv",
+                            "awakening_trigger_date", "awakening_release_date"}}
+            for row in summary["series"]
+        ]
+        with self.assertRaises(ValueError):
+            validate_feed_summary_consistency(summary)
+        with self.assertRaises(ValueError):
+            validate_feed_artifact(summary)
 
 
 class _FakePro:
@@ -313,8 +551,13 @@ class FeedSchemaTests(unittest.TestCase):
         s["unexpected"] = 1
         self._reject(s)
 
-    def test_schema_version_is_1_1_0(self):
-        self.assertEqual(self.summary["schema_version"], "1.1.0")
+    def test_schema_version_is_1_2_0(self):
+        self.assertEqual(self.summary["schema_version"], "1.2.0")
+
+    def test_legacy_schema_label_cannot_carry_m05_shape(self):
+        s = copy.deepcopy(self.summary)
+        s["schema_version"] = "1.1.0"
+        self._reject(s)
 
     def test_hv_value_null_and_nonneg_ok(self):
         jsonschema.validate(self.summary, self.schema)         # 5-date fixture → hv_value 全 None,仍合法
@@ -417,6 +660,27 @@ class FeedHvIntegrationTests(unittest.TestCase):
         s["series"][-1]["hv_value"] = -0.01
         with self.assertRaises(ValueError):
             validate_feed_summary_consistency(s)
+
+    def test_m05_state_mutation_is_rejected(self):
+        basic, daily, und, last = _varying_market(25)
+        s = build_feed_summary(build_daily_iv(basic, daily, und, last), last, "t")
+        s["awakening"]["status"] = "active" if s["awakening"]["status"] != "active" else "inactive"
+        with self.assertRaises(ValueError):
+            validate_feed_summary_consistency(s)
+
+    def test_legacy_1_1_feed_remains_readable_until_consumer_cut(self):
+        basic, daily, und = _synthetic(["20260603", "20260604"], "20260730", "20260828")
+        s = build_feed_summary(build_daily_iv(basic, daily, und, AS_OF), AS_OF, "t")
+        s["schema_version"] = "1.1.0"
+        s.pop("awakening", None)
+        s.pop("calendar", None)
+        for row in s["series"]:
+            for key in ("iv_change_abs_1d_pctpt", "rule3_status", "awakening_status",
+                        "cash_reclaim_pct", "awakening_baseline_iv",
+                        "awakening_trigger_date", "awakening_release_date"):
+                row.pop(key, None)
+        validate_feed_summary_consistency(s)
+        validate_feed_artifact(s)
 
 
 if __name__ == "__main__":

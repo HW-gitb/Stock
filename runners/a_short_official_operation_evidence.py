@@ -160,11 +160,47 @@ def _load_official_bundle(*, out_path: str | Path, receipt_path: str | Path):
     if not isinstance(weekly, dict) or not isinstance(receipt, dict):
         raise OfficialOperationEvidenceError("official_operation_capture_source_shape_invalid")
     try:
-        jsonschema.validate(weekly, _load_schema(WEEKLY_SCHEMA_PATH))
+        weekly_schema = _load_schema(WEEKLY_SCHEMA_PATH)
+        from engine.a_short_effect_contract import load_legacy_effect_contract
+        ledger = weekly.get("effect_contract_ledger") or {}
+        # A registered effect-contract fingerprint alone is not enough to
+        # bypass the M0.5 shape guard: the weekly bundle must explicitly carry
+        # the pre-M0.5 schema version.  Once M0.5 fields are present, all
+        # semantic/safety validation remains enabled even on a historical
+        # contract.
+        legacy_m05 = (
+            str(weekly.get("schema_version") or "") == "1.0.0"
+            and bool(load_legacy_effect_contract(ledger.get("contract_fingerprint")))
+        )
+        try:
+            jsonschema.validate(weekly, weekly_schema)
+        except jsonschema.ValidationError as exc:
+            # Published 1.0.0 bundles from before the data-quality shadow and
+            # effect-ledger trend guard became required remain readable only
+            # through an explicit historical-contract migration entry.  Do
+            # not weaken the current schema globally and do not let an
+            # unknown fingerprint take this compatibility path.
+            legacy_schema = None
+            if str(weekly.get("schema_version")) == "1.0.0":
+                from engine.a_short_effect_contract import load_legacy_effect_contract
+                ledger = weekly.get("effect_contract_ledger") or {}
+                if load_legacy_effect_contract(ledger.get("contract_fingerprint")):
+                    legacy_schema = copy.deepcopy(weekly_schema)
+                    legacy_schema["required"] = [
+                        key for key in legacy_schema.get("required", [])
+                        if key != "data_quality_shadow"
+                    ]
+                    # validate_published_weekly_bundle has already performed
+                    # the exact old-ledger reconstruction; this envelope pass
+                    # only needs to avoid applying the current ledger shape.
+                    legacy_schema["properties"]["effect_contract_ledger"] = {"type": "object"}
+            if legacy_schema is None:
+                raise
+            jsonschema.validate(weekly, legacy_schema)
         m67_schema = _load_schema(M67_SCHEMA_PATH)
         for report in weekly["reports"]:
             jsonschema.validate(report, m67_schema)
-            validate_m67_consistency(report)
+            validate_m67_consistency(report, allow_legacy_m05=legacy_m05)
     except (KeyError, jsonschema.ValidationError, ValueError) as exc:
         raise OfficialOperationEvidenceError("official_operation_capture_m67_consistency_invalid") from exc
     lineage = weekly.get("run_lineage") or {}
