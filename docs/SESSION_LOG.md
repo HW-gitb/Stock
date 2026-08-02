@@ -1,5 +1,38 @@
 # Session Log
 
+## 2026-08-02 — Codex executor: IV feed realized-window repair follow-up
+
+**Commits**: none (executor role; no commit, push, or merge)
+
+**Relationship to prior session(s)**:
+- Builds on the existing A-short M0.5 realized-window repair slice and its consumer-unification work.
+- The first and second code knives are already committed and merged in the current `master` (`693aba13` and subsequent merge/review commits); only this session's handoff-document edits are uncommitted.
+
+**Worked on**:
+1. Kept the producer-side combined-source realized-window repair: the realized public window is reconciled, the forward calendar tail is excluded from M0.5 adjacency, and series dates cannot exceed the independent realized end.
+2. Routed V14.3 regime comparison IV reads and weekly sidecar IV health through `validate_feed_artifact`; weekly pipeline's existing central route was not duplicated.
+3. Added consumer delegation tests and retained the first knife's realized-window and reverse-control tests.
+
+**Key decisions**:
+- Fail-closed behavior remains in force for realized-window mismatch, source-binding mismatch, hash mismatch, malformed/future series, and provider failure.
+- The three code-level repair surfaces are covered in this worktree; no additional code knife is inferred from the prior numbering.
+- `docs/system_risk_register.md` is clean in the current `HEAD`; it was not edited in this session.
+
+**Alternatives considered and rejected**:
+- Treating the offline focused results from this session as real-provider closure — rejected because no provider fetch was run here.
+- Repeating the merged code knives or full lane without a new scope change — deferred; the code is already merged and the remaining external validation is separately authorized.
+
+**Open questions handed off**:
+- The merged code knives are settled in current `HEAD`; this entry only hands off the new uncommitted documentation changes for normal review/commit handling.
+- Real `--as-of 20260803` provider validation remains `NOT_VERIFIED` and needs explicit provider/live-fetch authorization.
+- The registered Optional about `fund_daily` observed dates versus builder-computable IV dates remains open; this repair did not change that semantic choice.
+
+**Pre-Codex self-review**: `matrix=complete: producer realized-window + source binding + consumer centralization + reverse controls`; `register=clean_in_HEAD`; `handoff=updated`; `focused=64+43+40 OK`; `full-lane=NOT_RERUN_IN_THIS_SESSION:prior merged evidence retained`; `door=git diff --check exit 0`; `A=realized-window/source-binding/consumer surfaces`; `B=producer and all IV read points`; `C=calendar-tail/series-boundary/duplicate/schema/delegation negatives`; `D=N-A`; `E=SESSION_LOG + same-phase handoff`; `F=fixed Python 3.13.8 + current HEAD/status`; `independent-self-review=not_used`
+
+**Next natural step from my view**:
+1. Review/commit only these new handoff-document edits under the normal reviewer/committer flow; do not reopen the merged code knives without a new finding.
+2. If separately authorized, run the real fixed-Python provider validation; otherwise retain the offline `NOT_VERIFIED` boundary.
+
 ## 2026-08-02 — Claude 审查 PASS（IV feed realized-window 判据 + 三处读点归一）
 
 - **Verdict/Action**: PASS，已提交并合入 master。这是放松类改动（前瞻日历的未实现尾巴不再参与两源等值），故按强制腿自写反控：realized 窗内删真实开市日、插幻影日、realized_end 越出日历覆盖、用 realized 列表冒充外部前瞻日历、截断 independent 并重算 sha——五路仍全拒；含幻影尾巴与无尾巴两份产物的 M0.5 七字段逐字段相同，尾巴影响不到状态。三处读点归一到 `validate_feed_artifact` 属等价重构：同一 schema 文件、registry 仍被 bucket 不变式承重、旧常量零残留。
