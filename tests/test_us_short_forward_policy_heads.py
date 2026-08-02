@@ -157,25 +157,25 @@ class ForwardPolicyHeadTests(unittest.TestCase):
             grid["policies"]["overextension_execution_off"]["materialization"],
             "second_wave_live",
         )
-        for relative_path in (
-            "docs/us_short_forward_policy_materialization_contract.md",
-            "engine/us_short_forward_policy_store.py",
-            "schemas/us_short_forward_policy_manifest.schema.json",
-            "tests/test_us_short_forward_policy_store.py",
-            "tests/schema/test_us_short_forward_policy_manifest_schema.py",
+        for path in (
+            ROOT / "docs" / "us_short_forward_policy_materialization_contract.md",
+            ROOT / "engine" / "us_short_forward_policy_store.py",
+            ROOT / "schemas" / "us_short_forward_policy_manifest.schema.json",
+            ROOT / "tests" / "test_us_short_forward_policy_store.py",
+            ROOT / "tests" / "schema" / "test_us_short_forward_policy_manifest_schema.py",
         ):
-            self.assertFalse((ROOT / relative_path).exists(), relative_path)
+            self.assertFalse(path.exists(), path.relative_to(ROOT).as_posix())
         design = (ROOT / "docs" / "us_short_system_design.md").read_text(encoding="utf-8")
         self.assertNotIn("precommitted_delayed_materialization", design)
         self.assertNotIn("forward_policy_store", design)
         self.assertNotIn("sequential materialization", design)
         self.assertNotIn("forward_policy_store", (ROOT / ".gitignore").read_text(encoding="utf-8"))
-        for relative_path in (
-            "runners/us_short_weekly_capstone.py",
-            "runners/us_short_weekly_capstone_stages.py",
-            "engine/us_short_forward_policy_shadow_stage.py",
+        for path in (
+            ROOT / "runners" / "us_short_weekly_capstone.py",
+            ROOT / "runners" / "us_short_weekly_capstone_stages.py",
+            ROOT / "engine" / "us_short_forward_policy_shadow_stage.py",
         ):
-            self.assertNotIn("forward_policy_store", (ROOT / relative_path).read_text(encoding="utf-8"))
+            self.assertNotIn("forward_policy_store", path.read_text(encoding="utf-8"))
 
     def test_catalyst_off_reallocates_only_catalyst_weight(self):
         out = _policy_heads()

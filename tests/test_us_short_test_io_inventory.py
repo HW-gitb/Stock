@@ -1,4 +1,4 @@
-"""B0 acceptance tests for the US-short test-root inventory and narrow static guard."""
+"""B2 acceptance tests for the US-short test-root inventory and narrow static guard."""
 from __future__ import annotations
 
 from pathlib import Path
@@ -8,16 +8,20 @@ import json
 import unittest
 
 from tests.provider import us_short_test_io_inventory as inventory
-from tests.provider.us_short_test_io_inventory import build_inventory, _accesses
+from tests.provider.us_short_test_io_inventory import (
+    GLOBAL_SIDE_EFFECT_SENTINEL_REASONS,
+    GLOBAL_SIDE_EFFECT_SENTINELS,
+    _accesses,
+    build_inventory,
+)
 from tests.provider.us_short_private_test_root import temporary_us_short_state_directory
 
 
 ROOT = Path(__file__).resolve().parents[1]
 
-# B0 is an audit baseline, not permission for future writes.  B1/B2 remove entries as the
-# corresponding modules move behind the shared temporary-root helper.  The checked-in snapshot
-# stores stable (module, operation, roots) keys plus per-key counts, so unrelated line edits do not
-# rewrite the allowlist while an added same-operation write still turns the count check red.
+# The checked-in snapshot stores stable (module, operation, roots) keys plus per-key counts.  The
+# class-4 list is an explicit reviewed disposition, not a permission for new unresolved writes:
+# an added same-operation write still turns this acceptance red.
 _BASELINE = json.loads(
     (ROOT / "docs" / "us_short_test_io_inventory_20260801.json").read_text(encoding="utf-8")
 )
@@ -27,36 +31,20 @@ EXPECTED_ALLOWLIST_COUNTS = {
     key: int(value) for key, value in _BASELINE["protected_write_finding_counts"].items()
 }
 RESIDUAL_WRITE_DISPOSITIONS = {
-    "negative_input": frozenset({
+    "negative_or_contract_fixture": frozenset({
         "tests/provider/test_us_short_batch5_bankruptcy_8k_source_packet.py:kwarg:packet_ref:state/us_short",
         "tests/provider/test_us_short_batch5_bankruptcy_8k_source_packet.py:kwarg:screen_path:state/us_short",
-        "tests/provider/test_us_short_batch5_bankruptcy_8k_source_packet.py:kwarg:summary_path:provider_samples",
         "tests/provider/test_us_short_batch5_live_source_packet.py:kwarg:raw_sample_ref:provider_samples",
         "tests/provider/test_us_short_batch5_theme_source_packet.py:kwarg:raw_sample_ref:provider_samples",
     }),
-    "static_overcount": frozenset({
+    "static_contract_write": frozenset({
         "tests/provider/test_us_short_batch5_incident_log_writer.py:TemporaryDirectory:state/us_short",
         "tests/provider/test_us_short_batch5_incident_log_writer.py:kwarg:incident_root:state/us_short",
         "tests/provider/test_us_short_batch5_incident_log_writer.py:mkdir:state/us_short",
         "tests/provider/test_us_short_batch5_incident_log_writer.py:write_text:state/us_short",
-        "tests/provider/test_us_short_llm_theme_discovery_fetch_x_merge.py:mkdir:provider_samples,state/us_short",
-        "tests/provider/test_us_short_llm_theme_discovery_fetch_x_merge.py:rename:provider_samples,state/us_short",
-        "tests/provider/test_us_short_llm_theme_discovery_fetch_x_merge.py:unlink:provider_samples,state/us_short",
-        "tests/provider/test_us_short_llm_theme_discovery_fetch_x_merge.py:write_bytes:provider_samples,state/us_short",
-        "tests/provider/test_us_short_llm_theme_discovery_fetch_x_merge.py:write_text:provider_samples,state/us_short",
-        "tests/provider/test_us_short_offline_production_entry_guard.py:write_text:provider_samples,state/us_short",
-        "tests/provider/test_us_short_soft_discovery_query_quality_probe_assess.py:kwarg:row:provider_samples,state/us_short",
-        "tests/provider/test_us_short_batch5_capstone_offline_e2e.py:kwarg:source_packet_path:provider_samples,state/us_short",
-        "tests/provider/test_us_short_weekly_capstone.py:mkdir:state/us_short",
-        "tests/provider/test_us_short_weekly_capstone.py:write_text:state/us_short",
         "tests/test_us_short_capstone_checkpoint.py:kwarg:input_logical_paths:state/us_short",
         "tests/test_us_short_capstone_checkpoint.py:kwarg:output_logical_paths:state/us_short",
-        "tests/test_us_short_corporate_action_workflow.py:kwarg:lifecycle_observation:provider_samples,state/us_short",
-        "tests/test_us_short_discovery_conformance.py:kwarg:resolved:provider_samples,state/us_short",
-        "tests/test_us_short_forward_policy_outcome.py:kwarg:adjustment_evidence:provider_samples,state/us_short",
         "tests/test_us_short_forward_policy_private_week.py:kwarg:private_output_path:state/us_short",
-        "tests/test_us_short_result_linkage_cut3.py:kwarg:selection_input_provenance:provider_samples,state/us_short",
-        "tests/test_us_short_weekend_batch4_runner.py:write_text:provider_samples,state/us_short",
     }),
 }
 
@@ -76,27 +64,50 @@ class USShortTestIOInventoryTests(unittest.TestCase):
         first = self._inventory
         second = self._inventory
         self.assertEqual(first, second)
+        for relative in (
+            "tests/provider/test_us_short_batch5_bankruptcy_8k_probe.py",
+            "tests/provider/test_us_short_batch5_status_source_probe.py",
+        ):
+            source = (ROOT / relative).read_text(encoding="utf-8")
+            self.assertEqual(_accesses(source, relative), _accesses(source, relative))
         self.assertEqual(first["module_count"], 279)
         self.assertEqual(
             first["classification_counts"],
             {
-                "class0_no_direct_protected_io": 254,
-                "class1_read_real_root": 8,
-                "class2_write_real_root": 15,
-                "class3_global_sentinel": 2,
-                "class4_unresolved_write": 0,
+                "class0_no_direct_protected_io": 219,
+                "class1_read_real_root": 0,
+                "class2_write_real_root": 3,
+                "class3_global_sentinel": 5,
+                "class4_unresolved_write": 52,
             },
         )
         self.assertEqual(first["unallowlisted_write_findings"], [])
+        sentinel_modules = {
+            module["module"]
+            for module in first["modules"]
+            if module["classification"] == "class3_global_sentinel"
+        }
+        self.assertEqual(sentinel_modules, set(GLOBAL_SIDE_EFFECT_SENTINELS))
+        self.assertEqual(sentinel_modules, set(GLOBAL_SIDE_EFFECT_SENTINEL_REASONS))
+        self.assertTrue(all(GLOBAL_SIDE_EFFECT_SENTINEL_REASONS[name] for name in sentinel_modules))
         observed_unresolved = frozenset(first["unresolved_write_finding_counts"])
         self.assertEqual(observed_unresolved, EXPLICIT_UNRESOLVED_ALLOWLIST)
         observed = Counter(
             access["key"]
             for module in first["modules"]
             for access in module["accesses"]
-            if access["mode"] != "read"
+            if access["mode"] != "read" and not access["unresolved"]
         )
         self.assertEqual(observed, Counter(EXPECTED_ALLOWLIST_COUNTS))
+        observed_unresolved_counts = Counter(
+            f"{access['key']}:class4_unresolved_write"
+            for module in first["modules"]
+            for access in module["accesses"]
+            if access["mode"] != "read" and access["unresolved"]
+        )
+        self.assertEqual(observed_unresolved_counts, Counter(
+            first["unresolved_write_finding_counts"]
+        ))
         for key in EXPLICIT_TEMPORARY_ALLOWLIST:
             module, rest = key.split(":", 1)
             operation, roots = rest.rsplit(":", 1)
@@ -278,6 +289,51 @@ def planted():
             (access.operation, access.roots) for access in findings
         })
 
+    def test_dict_path_container_is_not_a_static_guard_escape(self):
+        source = '''
+from pathlib import Path
+ROOT = Path(__file__).resolve().parents[1]
+paths = {"state": ROOT / "state" / "us_short" / "bad.json"}
+def planted():
+    paths["state"].write_text("{}")
+'''
+        findings = [
+            access for access in _accesses(source, "tests/planted_test_us_short.py")
+            if access.mode != "read"
+        ]
+        self.assertEqual(len(findings), 1)
+        self.assertFalse(findings[0].unresolved)
+        self.assertEqual(findings[0].roots, ("state/us_short",))
+
+    def test_list_path_container_is_not_a_static_guard_escape(self):
+        source = '''
+from pathlib import Path
+ROOT = Path(__file__).resolve().parents[1]
+paths = [ROOT / "provider_samples" / "bad.json"]
+def planted():
+    paths[0].write_text("{}")
+'''
+        findings = [
+            access for access in _accesses(source, "tests/planted_test_us_short.py")
+            if access.mode != "read"
+        ]
+        self.assertEqual(len(findings), 1)
+        self.assertFalse(findings[0].unresolved)
+        self.assertEqual(findings[0].roots, ("provider_samples",))
+
+    def test_unknown_write_path_is_visible_as_unresolved_class4(self):
+        source = '''
+def planted(path):
+    path.write_text("{}")
+'''
+        findings = [
+            access for access in _accesses(source, "tests/planted_test_us_short.py")
+            if access.mode != "read"
+        ]
+        self.assertEqual(len(findings), 1)
+        self.assertTrue(findings[0].unresolved)
+        self.assertEqual(findings[0].roots, ("provider_samples", "state/us_short"))
+
     def test_nonsemantic_alias_names_are_not_a_blind_spot(self):
         source = '''
 from pathlib import Path
@@ -342,8 +398,14 @@ def planted(tempdir):
 '''
         findings = [access for access in _accesses(source, "tests/planted_test_us_short.py")
                     if access.mode != "read"]
-        self.assertEqual(len(findings), 1)
-        self.assertEqual(findings[0].roots, ("state/us_short",))
+        self.assertEqual(len(findings), 2)
+        self.assertEqual(
+            {(access.roots, access.unresolved) for access in findings},
+            {
+                (("provider_samples", "state/us_short"), True),
+                (("state/us_short",), False),
+            },
+        )
 
     def test_shared_state_helper_cleans_its_owned_fake_root(self):
         with TemporaryDirectory() as temp_repo:

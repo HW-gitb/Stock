@@ -136,7 +136,14 @@ class UsShortBatch5Bankruptcy8kProbeTest(unittest.TestCase):
         for endpoint in summary["endpoint_results"]:
             self.assertEqual(endpoint["status"], "ok")
             self.assertTrue(endpoint["raw_sample_ref"].startswith("provider_samples/"))
-            self.assertTrue((ROOT / endpoint["raw_sample_ref"]).exists())
+            local_raw_path = (
+                temp_root
+                / "raw"
+                / "sec_edgar"
+                / endpoint["symbol"]
+                / "company_submissions_recent_filings.json"
+            )
+            self.assertTrue(local_raw_path.exists())
 
         self.assertEqual(
             summary["sample_shape_results"]["by_symbol"]["AAPL"]["bankruptcy_screen_status"],

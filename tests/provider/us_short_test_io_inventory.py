@@ -1,11 +1,12 @@
 """Small, reproducible inventory for US-short test I/O roots.
 
-This is a narrow B0 static guard, not a general Python data-flow analyser.  It follows the
-repo-root and direct relative protected-root path forms used by this test corpus, including
-instance-attribute aliases, simple local function returns, runner-root keyword injection, and
-``os``/``shutil`` filesystem primitives.  An unknown suffix under a repo-root anchor is treated
-conservatively as possibly protected.  Runtime execution and arbitrary dynamic containers remain
-out of scope; B1/B2 can shrink the explicit allowlist as tests move behind the shared helper.
+This is a narrow static guard, not a general Python data-flow analyser.  It follows the repo-root
+and direct relative protected-root path forms used by this test corpus, including instance-
+attribute aliases, simple local function returns, runner-root keyword injection, ``os``/``shutil``
+filesystem primitives, and path containers.  A path that cannot be proven outside a protected root
+is surfaced as an unresolved write rather than silently treated as safe.  Runtime execution and
+arbitrary dynamic containers remain out of scope; the per-module residue tool is the runtime
+backstop.
 """
 from __future__ import annotations
 
@@ -26,9 +27,29 @@ TEMPORARY_ROOT_HELPERS = frozenset({
 })
 ALL_TEMPORARY_ROOT_HELPERS = frozenset(TEMPORARY_ROOT_HELPERS)
 GLOBAL_SIDE_EFFECT_SENTINELS = frozenset({
+    "tests/provider/test_us_short_batch5_bankruptcy_8k_preflight.py",
+    "tests/provider/test_us_short_batch5_provider_live_preflight.py",
+    "tests/provider/test_us_short_batch5_status_source_preflight.py",
     "tests/test_us_short_discovery_class_guards.py",
     "tests/test_us_short_discovery_conformance.py",
 })
+GLOBAL_SIDE_EFFECT_SENTINEL_REASONS = {
+    "tests/provider/test_us_short_batch5_bankruptcy_8k_preflight.py": (
+        "negative control snapshots the real future provider_samples root before/after an offline preflight"
+    ),
+    "tests/provider/test_us_short_batch5_provider_live_preflight.py": (
+        "negative control snapshots the real future provider_samples root before/after an offline preflight"
+    ),
+    "tests/provider/test_us_short_batch5_status_source_preflight.py": (
+        "negative control snapshots the real future provider_samples root before/after an offline preflight"
+    ),
+    "tests/test_us_short_discovery_class_guards.py": (
+        "global sentinel verifies discovery cannot use the production entry path"
+    ),
+    "tests/test_us_short_discovery_conformance.py": (
+        "global sentinel verifies discovery/conformance protected-root behavior"
+    ),
+}
 
 WRITE_METHODS = frozenset({
     "mkdir", "open", "touch", "unlink", "rmdir", "write_bytes", "write_text",
@@ -49,6 +70,39 @@ SHUTIL_WRITE_CALLS = frozenset({
 NON_PATH_KEYWORDS = frozenset({
     "encoding", "errors", "exist_ok", "mode", "parents", "missing_ok", "newline",
 })
+PATH_KEYWORD_HINTS = frozenset({
+    "path", "root", "dir", "directory", "file",
+    "packet_ref", "raw_sample_ref", "screen_path", "summary_path", "source_packet_path",
+    "input_logical_paths", "output_logical_paths", "private_output_path", "incident_root",
+})
+
+
+def _is_path_keyword(name: str) -> bool:
+    lowered = name.lower()
+    return lowered in PATH_KEYWORD_HINTS or lowered.endswith(
+        ("_path", "_paths", "_root", "_dir", "_file", "_ref", "_refs")
+    )
+
+
+def _looks_like_path_value(node: ast.AST | None) -> bool:
+    """Reject obvious sentinel/object values from path-keyword accounting."""
+    if node is None:
+        return False
+    if isinstance(node, ast.Constant):
+        return node.value is not None and not isinstance(node.value, (bool, int, float))
+    if isinstance(node, (ast.List, ast.Tuple, ast.Set)):
+        return bool(node.elts) and any(_looks_like_path_value(item) for item in node.elts)
+    if isinstance(node, ast.Dict):
+        return any(_looks_like_path_value(value) for value in node.values)
+    if isinstance(node, ast.Attribute):
+        if isinstance(node.value, ast.Name) and node.value.id in {"sys", "subprocess"}:
+            return False
+        return True
+    if isinstance(node, ast.Name):
+        return True
+    if isinstance(node, ast.Call):
+        return True
+    return True
 
 
 @dataclass(frozen=True)
@@ -58,6 +112,7 @@ class _PathInfo:
     temporary: bool = False
     unknown: bool = False
     unresolved: bool = False
+    unproven: bool = False
 
 
 @dataclass(frozen=True)
@@ -132,11 +187,12 @@ def _combine(left: _PathInfo, right: _PathInfo) -> _PathInfo:
         segments=segments,
         unknown=left.unknown or right.unknown,
         unresolved=left.unresolved or right.unresolved,
+        unproven=left.unproven or right.unproven,
     )
 
 
 def _roots(info: _PathInfo) -> tuple[str, ...]:
-    if info.temporary or not info.repo_anchor:
+    if info.temporary:
         return ()
     if info.unresolved:
         return PROTECTED_ROOTS
@@ -146,6 +202,32 @@ def _roots(info: _PathInfo) -> tuple[str, ...]:
         roots.add("provider_samples")
     if segments[:2] == ("state", "us_short"):
         roots.add("state/us_short")
+    if info.unproven and not info.repo_anchor and (
+        segments[:1] == ("provider_samples",) or segments[:2] == ("state", "us_short")
+    ):
+        # A path assembled from an unknown prefix (for example ``Path(tempdir) / state /
+        # us_short``) can still have either protected root at runtime; do not collapse it to
+        # the suffix alone.
+        return PROTECTED_ROOTS
+    if roots:
+        return tuple(sorted(roots))
+    # An unproven path is deliberately visible at the write/read boundary.  Returning both
+    # protected roots is conservative: a later alias/container may still resolve to either one.
+    if info.unproven:
+        # A dynamic suffix under a known non-protected repo directory is still outside the
+        # protected roots (for example ``ROOT / "docs" / f"summary_{slug}.json"``).  Keep the
+        # fail-closed treatment for an unanchored or otherwise unknown prefix, but do not turn
+        # every dynamic docs/test fixture name into a false class-4 protected write.
+        if segments[:1] in {
+            ("docs",), ("engine",), ("presets",), ("research",), ("result",),
+            ("runners",), ("schemas",), ("skills",), ("tests",),
+        }:
+            return ()
+        if info.repo_anchor or info.unresolved:
+            return PROTECTED_ROOTS
+        return ()
+    if not info.repo_anchor:
+        return ()
     # A repo-root anchor followed by an unresolved imported constant/call is conservatively
     # considered capable of naming either protected root when no exact protected prefix is known.
     # This is the safe result for forms such as ``ROOT / probe.RAW_REL_ROOT`` without pretending
@@ -171,6 +253,15 @@ def _target_key(node: ast.AST | None) -> str | None:
     return None
 
 
+def _literal_subscript_key(node: ast.AST | None) -> str | None:
+    if isinstance(node, ast.Constant) and isinstance(node.value, (str, int)):
+        return repr(node.value)
+    if isinstance(node, ast.UnaryOp) and isinstance(node.op, ast.USub):
+        if isinstance(node.operand, ast.Constant) and isinstance(node.operand.value, int):
+            return repr(-node.operand.value)
+    return None
+
+
 def _merge_info(prior: _PathInfo, current: _PathInfo) -> _PathInfo:
     if current == _PathInfo():
         return prior
@@ -182,17 +273,51 @@ def _merge_info(prior: _PathInfo, current: _PathInfo) -> _PathInfo:
             segments=prior.segments if prior.segments == current.segments else ("<unknown>",),
             unknown=True,
             unresolved=True,
+            unproven=prior.unproven or current.unproven,
         )
     if prior.unknown and not current.unknown:
-        return current
+        return _PathInfo(
+            repo_anchor=prior.repo_anchor or current.repo_anchor,
+            segments=current.segments,
+            temporary=current.temporary,
+            unknown=True,
+            unresolved=prior.unresolved or current.unresolved,
+            unproven=True,
+        )
     if current.unknown and not prior.unknown:
-        return prior
+        return _PathInfo(
+            repo_anchor=prior.repo_anchor or current.repo_anchor,
+            segments=prior.segments,
+            temporary=prior.temporary,
+            unknown=True,
+            unresolved=prior.unresolved or current.unresolved,
+            unproven=True,
+        )
     return _PathInfo(
         repo_anchor=prior.repo_anchor or current.repo_anchor,
         segments=prior.segments if prior.segments == current.segments else ("<unknown>",),
         unknown=True,
         unresolved=prior.unresolved or current.unresolved,
+        unproven=True,
     )
+
+
+def _container_info(infos: Iterable[_PathInfo]) -> _PathInfo:
+    """Summarize a list/dict path container without folding dict keys into path segments."""
+    values = tuple(infos)
+    if not values:
+        return _PathInfo(unknown=True, unproven=True)
+    first = values[0]
+    if all(value == first for value in values[1:]):
+        return first
+    # Mixed temporary and known non-protected values (a common ``paths.values()`` cleanup loop)
+    # do not reach either protected root.  Preserve a conservative summary only when at least
+    # one value can actually name a protected root or is itself unresolved.
+    if all(not _roots(value) and not value.unresolved for value in values):
+        return _PathInfo()
+    if any(value.repo_anchor or value.unresolved for value in values):
+        return _PathInfo(repo_anchor=True, unknown=True, unresolved=True)
+    return _PathInfo(unknown=True, unproven=True)
 
 
 def _path_info(
@@ -206,7 +331,7 @@ def _path_info(
     if isinstance(node, ast.Name):
         if node.id == "ROOT":
             return _PathInfo(repo_anchor=True)
-        return aliases.get(node.id, function_returns.get(node.id, _PathInfo(unknown=True)))
+        return aliases.get(node.id, function_returns.get(node.id, _PathInfo(unknown=True, unproven=True)))
     if isinstance(node, ast.Constant) and isinstance(node.value, str):
         segments = _literal_segments(node)
         return _PathInfo(repo_anchor=_relative_protected_anchor(segments), segments=segments)
@@ -245,21 +370,47 @@ def _path_info(
         # unresolved class until the caller proves their target.
         if node.attr == "ROOT":
             return _PathInfo(repo_anchor=True)
+        if node.attr in {"values", "keys", "items"}:
+            base_key = _target_key(node.value)
+            if base_key is not None:
+                item_infos = [
+                    value
+                    for key, value in aliases.items()
+                    if key.startswith(f"{base_key}[")
+                ]
+                if item_infos:
+                    return _container_info(item_infos)
         return _path_info(node.value, aliases, function_returns)
     if isinstance(node, ast.Subscript):
+        base_key = _target_key(node.value)
+        subscript_key = _literal_subscript_key(node.slice)
+        if base_key is not None and subscript_key is not None:
+            item_key = f"{base_key}[{subscript_key}]"
+            if item_key in aliases:
+                return aliases[item_key]
         return _path_info(node.value, aliases, function_returns)
     if isinstance(node, (ast.List, ast.Tuple, ast.Set)):
-        info = _PathInfo()
-        for element in node.elts:
-            info = _combine(info, _path_info(element, aliases, function_returns))
-        return info
+        return _container_info(_path_info(element, aliases, function_returns) for element in node.elts)
     if isinstance(node, ast.Dict):
-        info = _PathInfo()
-        for element in (*node.keys, *node.values):
-            info = _combine(info, _path_info(element, aliases, function_returns))
-        return info
+        # Dict keys are labels, not path components.  Only values flow into a later
+        # ``paths["name"].write_text(...)`` access.
+        return _container_info(_path_info(value, aliases, function_returns) for value in node.values)
     if isinstance(node, ast.Call):
         name = _call_name(node)
+        if isinstance(node.func, ast.Attribute) and node.func.attr == "__enter__":
+            # Context-manager aliases such as ``Path(self._tempdir.__enter__())`` retain the
+            # shared helper's temporary-root proof.  Treating ``__enter__`` as an arbitrary call
+            # was the source of a class-wide fail-open false positive in B2.
+            return _path_info(node.func.value, aliases, function_returns)
+        if name and (name.startswith("_write") or name.startswith("write_")):
+            # Local fixture writers conventionally return the destination path.  Propagate the
+            # first path argument before consulting the opaque function-return summary.
+            candidate = node.args[0] if node.args else next(
+                (keyword.value for keyword in node.keywords if keyword.arg and _is_path_keyword(keyword.arg)),
+                None,
+            )
+            if candidate is not None:
+                return _path_info(candidate, aliases, function_returns)
         if name in function_returns:
             return function_returns[name]
         function_key = f"__function__:{name}" if name else None
@@ -268,7 +419,7 @@ def _path_info(
         if name in ALL_TEMPORARY_ROOT_HELPERS:
             if name in TEMPORARY_ROOT_HELPERS:
                 return _PathInfo(temporary=True)
-            info = _PathInfo(unknown=True)
+            info = _PathInfo(unknown=True, unproven=True)
             for arg in node.args:
                 info = _combine(info, _path_info(arg, aliases, function_returns))
             for keyword in node.keywords:
@@ -351,8 +502,8 @@ def _path_info(
                         unresolved=True,
                     )
             return info
-        return _PathInfo(unknown=True)
-    return _PathInfo(unknown=True)
+        return _PathInfo(unknown=True, unproven=True)
+    return _PathInfo(unknown=True, unproven=True)
 
 
 def _assigned_targets(node: ast.AST) -> Iterable[str]:
@@ -379,6 +530,11 @@ def _aliases(tree: ast.AST) -> dict[str, _PathInfo]:
         for item in node.items
         if item.optional_vars is not None
     ]
+    for_bindings = [
+        (node.target, node.iter)
+        for node in ast.walk(tree)
+        if isinstance(node, (ast.For, ast.AsyncFor))
+    ]
     functions = [node for node in ast.walk(tree) if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef))]
     function_returns_nodes = {
         function.name: tuple(
@@ -386,38 +542,52 @@ def _aliases(tree: ast.AST) -> dict[str, _PathInfo]:
         )
         for function in functions
     }
-    for _ in range(len(assignments) + len(with_bindings) + len(functions) + 2):
-        changed = False
+    for _ in range(len(assignments) + len(with_bindings) + len(for_bindings) + len(functions) + 2):
+        next_aliases: dict[str, _PathInfo] = {}
         for node in assignments:
             value = node.value
             info = _path_info(value, aliases, function_returns)
             for name in _assigned_targets(node):
                 if name == "ROOT":
                     info = _PathInfo(repo_anchor=True)
-                merged = _merge_info(aliases.get(name, _PathInfo()), info)
-                if aliases.get(name, _PathInfo()) != merged:
-                    aliases[name] = merged
-                    changed = True
+                next_aliases[name] = _merge_info(next_aliases.get(name, _PathInfo()), info)
+                if isinstance(value, ast.Dict):
+                    for key, element in zip(value.keys, value.values):
+                        literal_key = _literal_subscript_key(key)
+                        if literal_key is not None:
+                            item_name = f"{name}[{literal_key}]"
+                            element_info = _path_info(element, aliases, function_returns)
+                            next_aliases[item_name] = _merge_info(
+                                next_aliases.get(item_name, _PathInfo()), element_info
+                            )
+                elif isinstance(value, (ast.List, ast.Tuple)):
+                    for index, element in enumerate(value.elts):
+                        item_name = f"{name}[{index}]"
+                        element_info = _path_info(element, aliases, function_returns)
+                        next_aliases[item_name] = _merge_info(
+                            next_aliases.get(item_name, _PathInfo()), element_info
+                        )
         for target, value in with_bindings:
             name = _target_key(target)
             if not name:
                 continue
             info = _path_info(value, aliases, function_returns)
-            merged = _merge_info(aliases.get(name, _PathInfo()), info)
-            if aliases.get(name, _PathInfo()) != merged:
-                aliases[name] = merged
-                changed = True
+            next_aliases[name] = _merge_info(next_aliases.get(name, _PathInfo()), info)
+        for target, value in for_bindings:
+            name = _target_key(target)
+            if name:
+                info = _path_info(value, aliases, function_returns)
+                next_aliases[name] = _merge_info(next_aliases.get(name, _PathInfo()), info)
+        next_functions: dict[str, _PathInfo] = {}
         for function in functions:
             info = _PathInfo()
             for value in function_returns_nodes[function.name]:
                 info = _merge_info(info, _path_info(value, aliases, function_returns))
-            prior = function_returns.get(function.name, _PathInfo())
-            merged = _merge_info(prior, info)
-            if prior != merged:
-                function_returns[function.name] = merged
-                changed = True
-        if not changed:
+            next_functions[function.name] = info
+        if aliases == next_aliases and function_returns == next_functions:
             break
+        aliases = next_aliases
+        function_returns = next_functions
     aliases.update({f"__function__:{name}": info for name, info in function_returns.items()})
     return aliases
 
@@ -536,9 +706,32 @@ def _accesses(text: str, module: str) -> tuple[Access, ...]:
     def add(node: ast.Call, operation: str, path_node: ast.AST | None, mode: str) -> None:
         info = _path_info(path_node, aliases)
         roots = _roots(info)
+        if mode == "read" and info.unproven:
+            # Reads do not create residue.  Only retain an exact protected prefix for a read;
+            # an unresolved imported constant/fixture path is not a class-1 real-root finding.
+            lowered = tuple(part.lower() for part in info.segments)
+            exact = set()
+            if lowered[:1] == ("provider_samples",):
+                exact.add("provider_samples")
+            if lowered[:2] == ("state", "us_short"):
+                exact.add("state/us_short")
+            roots = tuple(sorted(exact))
+        elif not roots and mode != "read" and info.unproven:
+            # Writes are fail-closed even when the unknown path has no repo anchor at all.
+            roots = PROTECTED_ROOTS
         if roots:
             source = ast.get_source_segment(text, path_node) or "<path>"
-            accesses.append(Access(module, node.lineno, operation, mode, roots, source, info.unresolved))
+            accesses.append(
+                Access(
+                    module,
+                    node.lineno,
+                    operation,
+                    mode,
+                    roots,
+                    source,
+                    info.unresolved or (info.unproven and mode != "read"),
+                )
+            )
 
     for node in ast.walk(tree):
         if not isinstance(node, ast.Call):
@@ -552,16 +745,22 @@ def _accesses(text: str, module: str) -> tuple[Access, ...]:
                 keyword.value
                 for keyword in node.keywords
                 if keyword.arg in {"path", "output", "destination", "dest", "target", "file"}
+                and _looks_like_path_value(keyword.value)
             )
             seen: set[tuple[str, ...]] = set()
             for path_node in candidates:
                 info = _path_info(path_node, aliases)
                 roots = _roots(info)
+                if not roots and info.unproven:
+                    roots = PROTECTED_ROOTS
                 if not roots or roots in seen:
                     continue
                 seen.add(roots)
                 source = ast.get_source_segment(text, path_node) or "<path>"
-                accesses.append(Access(module, node.lineno, f"helper:{name}", "write", roots, source, info.unresolved))
+                accesses.append(
+                    Access(module, node.lineno, f"helper:{name}", "write", roots, source,
+                           info.unresolved or info.unproven)
+                )
         if isinstance(node.func, ast.Attribute):
             receiver = node.func.value
             qualified_module = receiver.id if isinstance(receiver, ast.Name) else None
@@ -593,10 +792,10 @@ def _accesses(text: str, module: str) -> tuple[Access, ...]:
                 if directory is not None:
                     add(node, name, node, "write")
             for keyword in node.keywords:
-                if keyword.arg is None or keyword.arg in NON_PATH_KEYWORDS or (
+                if keyword.arg is None or keyword.arg in NON_PATH_KEYWORDS or not _is_path_keyword(keyword.arg) or (
                     name in {"TemporaryDirectory", "mkdtemp", "NamedTemporaryFile"}
                     and keyword.arg == "dir"
-                ):
+                ) or not _looks_like_path_value(keyword.value):
                     continue
                 add(node, f"kwarg:{keyword.arg}", keyword.value, "write")
             continue
@@ -615,10 +814,10 @@ def _accesses(text: str, module: str) -> tuple[Access, ...]:
         elif name in RENAME_CALLS:
             add(node, name, node.args[-1] if node.args else None, "write")
         for keyword in node.keywords:
-            if keyword.arg is None or keyword.arg in NON_PATH_KEYWORDS or (
+            if keyword.arg is None or keyword.arg in NON_PATH_KEYWORDS or not _is_path_keyword(keyword.arg) or (
                 name in {"TemporaryDirectory", "mkdtemp", "NamedTemporaryFile"}
                 and keyword.arg == "dir"
-            ):
+            ) or not _looks_like_path_value(keyword.value):
                 continue
             add(node, f"kwarg:{keyword.arg}", keyword.value, "write")
     return tuple(sorted(accesses, key=lambda item: (item.module, item.line, item.operation, item.key)))
