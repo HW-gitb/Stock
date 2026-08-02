@@ -69,7 +69,6 @@ P1_CANDIDATE_EFFECT_LEDGER_FILENAME = "a_short_regime_candidate_effect.json"
 P1_CANDIDATE_EFFECT_SUMMARY_FILENAME = "regime_candidate_effect_summary.json"
 P1_CANDIDATE_EFFECT_MARKDOWN_FILENAME = "regime_candidate_effect_summary.md"
 P1_CANDIDATE_EFFECT_OUTCOME_FILENAME = "candidate_effect_outcome.json"
-IV_FEED_SCHEMA_PATH = ROOT / "schemas" / "a_short_iv_feed.schema.json"
 CANDIDATE_EFFECT_OUTCOME_SCHEMA_PATH = ROOT / "schemas" / "a_short_regime_candidate_effect_outcome.schema.json"
 
 
@@ -84,11 +83,9 @@ def validate_iv_feed(iv_feed: dict) -> None:
     gate (`validate_feed_summary_consistency` — strictly-ascending/no-dup/no-future trade_date,
     iv_value>0, percentile 0-100). Raises on a wrong-schema / duplicate / future / malformed feed so a
     bad IV artifact can't silently flip the V14.3 IV-defense rule."""
-    import jsonschema
-    from runners.a_short_iv_feed_build import validate_feed_summary_consistency
-    schema = json.loads(Path(IV_FEED_SCHEMA_PATH).read_text(encoding="utf-8"))
-    jsonschema.validate(iv_feed, schema)
-    validate_feed_summary_consistency(iv_feed)
+    from runners.a_short_iv_feed_build import validate_feed_artifact
+
+    validate_feed_artifact(iv_feed)
 
 
 def iv_series_to_map(iv_feed: dict | None) -> dict:

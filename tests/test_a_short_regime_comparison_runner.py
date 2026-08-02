@@ -179,6 +179,13 @@ class PureHelperTests(unittest.TestCase):
         self.assertEqual(iv_series_to_map(None), {})
         self.assertEqual(iv_series_to_map(_feed(cal))[cal[0]], 50.0)
 
+    def test_iv_series_to_map_uses_central_feed_validator(self):
+        cal = _dates(3)
+        feed = _feed(cal)
+        with patch("runners.a_short_iv_feed_build.validate_feed_artifact") as gate:
+            self.assertEqual(iv_series_to_map(feed), {date: 50.0 for date in cal})
+        gate.assert_called_once_with(feed)
+
     def test_iv_feed_duplicate_date_rejected(self):
         cal = _dates(3)
         feed = _feed(cal)

@@ -316,18 +316,22 @@ class ConsistencyAndWriteTests(unittest.TestCase):
         )
 
     def _independent_bound_summary(self):
-        dates = ["20260601", "20260602", "20260603", "20260604", "20260605", "20260608", "20260609"]
+        calendar_dates = [
+            "20260601", "20260602", "20260603", "20260604",
+            "20260605", "20260608", "20260609",
+        ]
+        realized_dates = calendar_dates[:-1]
         frame = pd.DataFrame({
-            "trade_date": dates,
-            "iv_value": [0.20, 0.08, 0.08, 0.08, 0.08, 0.08, 0.14],
-            "iv_percentile_252d": [50.0, 5.0, 5.0, 5.0, 5.0, 5.0, 95.0],
-            "hv_value": [None] * len(dates),
+            "trade_date": realized_dates,
+            "iv_value": [0.20, 0.08, 0.08, 0.08, 0.08, 0.14],
+            "iv_percentile_252d": [50.0, 5.0, 5.0, 5.0, 5.0, 95.0],
+            "hv_value": [None] * len(realized_dates),
         })
         return build_feed_summary(
-            frame, AS_OF, "t", trade_calendar=dates,
+            frame, AS_OF, "t", trade_calendar=calendar_dates,
             calendar_source="tushare.trade_cal+fund_daily",
-            trade_dates_probed=dates,
-            independent_trade_dates=dates,
+            trade_dates_probed=calendar_dates,
+            independent_trade_dates=realized_dates,
         )
 
     def test_calendar_binding_records_probe_hash_and_recomputes_from_probe(self):
@@ -344,13 +348,54 @@ class ConsistencyAndWriteTests(unittest.TestCase):
         calendar = summary["calendar"]
         self.assertEqual(calendar["source"], "tushare.trade_cal+fund_daily")
         self.assertEqual(calendar["independent_source"], "tushare.fund_daily")
-        self.assertEqual(calendar["independent_trade_dates"], calendar["trade_dates"])
+        self.assertNotEqual(calendar["independent_trade_dates"], calendar["trade_dates"])
         validate_feed_artifact(
             summary,
             trade_calendar=calendar["trade_dates"],
             trade_dates_probed=calendar["probed_trade_dates"],
             independent_trade_dates=calendar["independent_trade_dates"],
         )
+
+    def test_unrealized_calendar_tail_does_not_change_m05_state(self):
+        summary = self._independent_bound_summary()
+        no_tail = copy.deepcopy(summary)
+        no_tail_calendar = no_tail["calendar"]
+        no_tail_calendar["trade_dates"].pop()
+        no_tail_calendar["probed_trade_dates"].pop()
+        no_tail_calendar["coverage_end"] = no_tail_calendar["trade_dates"][-1]
+        no_tail_calendar["n_trade_dates"] = len(no_tail_calendar["trade_dates"])
+        no_tail_calendar["trade_dates_sha256"] = _trade_calendar_sha256(
+            no_tail_calendar["trade_dates"]
+        )
+        no_tail_calendar["probed_trade_dates_sha256"] = _trade_calendar_sha256(
+            no_tail_calendar["probed_trade_dates"]
+        )
+        validate_feed_artifact(summary)
+        validate_feed_artifact(no_tail)
+        state_fields = (
+            "iv_change_abs_1d_pctpt", "rule3_status", "awakening_status",
+            "cash_reclaim_pct", "awakening_baseline_iv",
+            "awakening_trigger_date", "awakening_release_date",
+        )
+        self.assertEqual(
+            [[row[field] for field in state_fields] for row in summary["series"]],
+            [[row[field] for field in state_fields] for row in no_tail["series"]],
+        )
+
+    def test_series_must_end_at_independent_realized_end(self):
+        summary = self._independent_bound_summary()
+        summary["series"][-1]["trade_date"] = "20260607"
+        with self.assertRaisesRegex(ValueError, "最新 realized observation"):
+            validate_feed_summary_consistency(summary)
+
+    def test_series_date_after_independent_realized_end_is_rejected(self):
+        summary = self._independent_bound_summary()
+        future_row = copy.deepcopy(summary["series"][-1])
+        future_row["trade_date"] = "20260609"
+        summary["series"].append(future_row)
+        summary["n_days"] = len(summary["series"])
+        with self.assertRaisesRegex(ValueError, "超过 fund_daily realized_end"):
+            validate_feed_summary_consistency(summary)
 
     def test_independent_date_gap_is_rejected_even_with_self_consistent_trade_cal(self):
         summary = self._independent_bound_summary()

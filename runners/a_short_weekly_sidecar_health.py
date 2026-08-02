@@ -105,14 +105,17 @@ def _artifact_matches_schema(name: str, path: Path) -> bool:
     if payload is None or schema_path is None:
         return False
     try:
-        schema = json.loads(schema_path.read_text(encoding="utf-8"))
-        jsonschema.validate(payload, schema)
-        if name == "candidate_effect":
-            from engine.a_short_regime_action_comparison import validate_candidate_effect_summary
-            validate_candidate_effect_summary(payload)
-        elif name == "iv_feed":
-            from runners.a_short_iv_feed_build import validate_feed_summary_consistency
-            validate_feed_summary_consistency(payload)
+        if name == "iv_feed":
+            from runners.a_short_iv_feed_build import validate_feed_artifact
+
+            validate_feed_artifact(payload)
+        else:
+            schema = json.loads(schema_path.read_text(encoding="utf-8"))
+            jsonschema.validate(payload, schema)
+            if name == "candidate_effect":
+                from engine.a_short_regime_action_comparison import validate_candidate_effect_summary
+
+                validate_candidate_effect_summary(payload)
     except (OSError, ValueError, TypeError, jsonschema.ValidationError, jsonschema.SchemaError):
         return False
     return True

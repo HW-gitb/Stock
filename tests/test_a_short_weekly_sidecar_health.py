@@ -498,6 +498,17 @@ class AShortSidecarHealthTests(unittest.TestCase):
         self.assertEqual(result["sidecars"][0]["observed_decision_as_of"], "20260720")
         self.assertEqual(result["sidecars"][0]["progress_status"], "stalled")
 
+    def test_iv_feed_artifact_uses_central_feed_validator(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            path = root / "research/results/a_short/iv_feed_20260727/iv_feed.json"
+            path.parent.mkdir(parents=True)
+            payload = _iv_feed(as_of="20260727")
+            path.write_text(json.dumps(payload), encoding="utf-8")
+            with patch("runners.a_short_iv_feed_build.validate_feed_artifact") as gate:
+                self.assertTrue(sidecar_health._artifact_matches_schema("iv_feed", path))
+            gate.assert_called_once_with(payload)
+
     def test_schema_invalid_candidate_summary_fails_closed(self):
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)

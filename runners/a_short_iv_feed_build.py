@@ -212,6 +212,27 @@ def _trade_calendar_sha256(trade_dates: tuple[str, ...] | list[str] | None) -> s
     return hashlib.sha256("\n".join(dates).encode("ascii")).hexdigest() if dates else ""
 
 
+def _realized_window_mismatch_message(
+    calendar_window: tuple[str, ...],
+    independent_window: tuple[str, ...],
+    *,
+    realized_end: str,
+    as_of: str,
+) -> str:
+    calendar_set = set(calendar_window)
+    independent_set = set(independent_window)
+    calendar_only = tuple(date for date in calendar_window if date not in independent_set)
+    independent_only = tuple(date for date in independent_window if date not in calendar_set)
+    return (
+        "trade_cal/fund_daily realized window mismatch: "
+        f"calendar_count={len(calendar_window)}; independent_count={len(independent_window)}; "
+        f"calendar_only_head={list(calendar_only[:3])}; calendar_only_tail={list(calendar_only[-3:])}; "
+        f"independent_only_head={list(independent_only[:3])}; "
+        f"independent_only_tail={list(independent_only[-3:])}; "
+        f"realized_end={realized_end}; as_of={as_of}"
+    )
+
+
 def _calendar_metadata(trade_dates: tuple[str, ...] | None,
                        probed_dates: tuple[str, ...] | None,
                        source: str,
@@ -674,7 +695,8 @@ def validate_feed_summary_consistency(summary: dict, *, trade_calendar=None,
             if supplied_probed is None or supplied_probed != probed_calendar_dates:
                 raise ValueError("外部 trade_dates_probed 与 feed binding 不一致")
         independent_dates = None
-        expected_independent_window = None
+        realized_calendar = None
+        realized_end = None
         if calendar_source == "tushare.trade_cal+fund_daily":
             independent_dates = _normalise_trade_calendar(calendar.get("independent_trade_dates"))
             if (independent_dates is None
@@ -686,12 +708,28 @@ def validate_feed_summary_consistency(summary: dict, *, trade_calendar=None,
             if (calendar.get("independent_trade_dates_sha256")
                     != _trade_calendar_sha256(independent_dates)):
                 raise ValueError("独立 fund_daily 日期哈希不一致")
-            expected_independent_window = tuple(
-                date for date in independent_dates
-                if calendar_dates[0] <= date <= calendar_dates[-1]
+            realized_end = independent_dates[-1]
+            if realized_end > calendar_dates[-1]:
+                raise ValueError(
+                    "独立 fund_daily realized_end 超出 trade_cal 覆盖范围: "
+                    f"realized_end={realized_end}; calendar_end={calendar_dates[-1]}; "
+                    f"as_of={summary['as_of']}"
+                )
+            realized_calendar = tuple(
+                date for date in calendar_dates
+                if date <= realized_end
             )
-            if expected_independent_window != calendar_dates:
-                raise ValueError("trade_cal 与 fund_daily 交易日窗口不一致")
+            realized_independent = tuple(
+                date for date in independent_dates
+                if calendar_dates[0] <= date <= realized_end
+            )
+            if not realized_calendar or realized_calendar != realized_independent:
+                raise ValueError(_realized_window_mismatch_message(
+                    realized_calendar,
+                    realized_independent,
+                    realized_end=realized_end,
+                    as_of=str(summary["as_of"]),
+                ))
             if independent_trade_dates is not None:
                 supplied_independent = _normalise_trade_calendar(independent_trade_dates)
                 if supplied_independent is None or supplied_independent != independent_dates:
@@ -707,25 +745,37 @@ def validate_feed_summary_consistency(summary: dict, *, trade_calendar=None,
         if trade_calendar is not None and supplied_calendar is None:
             raise ValueError("外部 trade calendar 无效")
         if supplied_calendar is not None:
-            trusted_calendar = supplied_calendar
             expected_window = tuple(
                 date for date in supplied_calendar
                 if calendar_dates[0] <= date <= calendar_dates[-1]
             )
             if expected_window != calendar_dates:
                 raise ValueError("外部 trade calendar 未完整覆盖 feed 日历窗口")
-            if expected_independent_window is not None and expected_window != expected_independent_window:
-                raise ValueError("外部 trade calendar 未与 fund_daily 独立窗口对账")
-            if expected_independent_window is not None:
-                trusted_calendar = expected_independent_window
+            trusted_calendar = (realized_calendar
+                                if realized_calendar is not None
+                                else supplied_calendar)
         else:
             if probed_calendar_dates != calendar_dates:
                 raise ValueError("feed 日历与 producer probe 日期清单不一致")
-            # Prefer the independent fund_daily observation when the producer
-            # supplied it; the trade_cal list is then only a value to cross-check.
-            trusted_calendar = (expected_independent_window
-                                if expected_independent_window is not None
+            # Use only the realized public window derived from both sources;
+            # the full trade_cal list remains the forward calendar being checked.
+            trusted_calendar = (realized_calendar
+                                if realized_calendar is not None
                                 else probed_calendar_dates)
+        if realized_end is not None:
+            series = summary["series"]
+            if any(pt["trade_date"] > realized_end for pt in series):
+                raise ValueError(
+                    "IV series 超过 fund_daily realized_end: "
+                    f"realized_end={realized_end}; series_end={series[-1]['trade_date']}; "
+                    f"as_of={summary['as_of']}"
+                )
+            if series and series[-1]["trade_date"] != realized_end:
+                raise ValueError(
+                    "combined-source IV series 未覆盖最新 realized observation: "
+                    f"series_end={series[-1]['trade_date']}; realized_end={realized_end}; "
+                    f"as_of={summary['as_of']}"
+                )
         if any(pt["trade_date"] not in trusted_calendar for pt in summary["series"]):
             raise ValueError("available trade calendar 未覆盖 IV series")
     elif calendar_status == "calendar_unavailable":
