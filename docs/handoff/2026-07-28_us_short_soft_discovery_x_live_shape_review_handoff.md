@@ -1425,3 +1425,46 @@ Protected-root snapshots were unchanged in identity: `provider_samples 27 -> 27 
 **顺序**：`B0 ✅ → B1 ✅ → 上限/入口 ✅ → B2 ✅ → A1 ✅ → A2+A3 → A4`（A4 仍单独成刀、单独审）。
 
 **给 Codex 的命令**：`执行 A2+A3（A2 = 4 条主题无关模板装成 v0.1.0 容器、标 candidate_offline 不接一键 live；A3 = 确定性 Stage-2 规划纯函数，只从冻结 Stage-1 已有且 source-bound 的规范化 term 派生，term 类型/大小写/去重/排序/每类上限进 versioned policy），可合成一个 diff，完成后交审查`
+## 2026-08-02 追加：Codex executor A2+A3 实现（待 Claude Code 独立审查）
+
+### 落地内容
+
+- A2 新增版本化 query policy schema/artifact：`schema_version=1.0.0`、`policy_version=soft_discovery_query_policy_v0.1.0`、`activation_status=candidate_offline`，固定冻结 probe packet 的四条主题无关 Stage-1 模板；Stage-1 不接受 ticker/company/industry/theme 自由文本占位符，模板/source packet/content 都有 digest pin；Stage-2 term type、规范化、排序、分类/总量上限进入同一 policy。
+- A3 新增纯函数 `engine/us_short_llm_theme_discovery_stage2_planner.py::derive_stage2_plan_inputs`：只读并校验冻结 Stage-1，使用已有结构化 `display_name`/`ticker` 派生 `concept`/`ticker`；不从摘要猜 company/industry，不读取 Stage-2 结果，不写文件，不调用 provider；每个 term 只允许绑定 Stage-1 `source_refs[].source_id` 的真实 source row。
+- A3 使用 policy 固定 NFC、trim/collapse whitespace、casefold、项目唯一 `canonical_us_ticker`、term-type rank → normalized term → source refs 的稳定顺序、去重合并 refs、每类 8/总计 32 fail-closed；与 A1 Stage-2 artifact 组合的集成测试保持 candidate-offline。
+- `docs/README.md` route row 已从 A1 更新为 A1-A3；A4 预算 envelope、provider/live/one-click 接线、confirmation/seats/probe/lifecycle/theme_soft_boost 均未触碰。
+
+### Verification / evidence boundary
+
+- 固定主 Python `C:\Users\cnhea\AppData\Local\Programs\Python\Python313\python.exe` focused superset：`69 OK / 21.777s`，包含 A2/A3 policy/planner、Stage-1/A1 schema、query-plan、discovery conformance、private-root guard、IO inventory；首轮 guard 发现 planner 规范化函数未登记后已按既有 canonicalizer 规则修正，并以最终 superset 取证。
+- `py_compile=OK`；6 个 JSON/UTF-8 artifact/schema parse=OK；`git diff --check=OK`。测试前后 `state/us_short` 均为 4 个既有空目录、0 files，目录为 `lifecycle`、`runs_private`、`runs_private/provider_incidents`、`shadow_compare_private`；`provider_samples` 前后均不存在。
+- 按 AGENTS rule 3，本刀没有生产 top-level runner/provider/auth/live 接线，focused conformance 已覆盖直接影响面，故 full lane `NOT_RUN / not_triggered`，不把未执行写成 PASS；无 provider、network、live、paid 请求或文件残留。
+
+### Pre-Codex self-review / closeout fields
+
+`matrix=complete; register=updated; handoff=updated; focused=69 OK / 21.777s; full-lane=NOT_RUN:not_triggered:isolated offline A2/A3 with no production wiring; door=pre-commit fixed-host hook route-doc 14 OK + doc-governance 41 OK; A=versioned candidate-offline policy, exact templates, source-bound deterministic Stage-2 planner; B=policy/content/source hashes, frozen Stage-1 source rows, canonical_us_ticker, normalization/order/limits, no Stage-2 evidence; C=placeholder/activation/digest mutation, ghost ref, Stage-2-only evidence, per-type overflow, deterministic byte equality, conformance; D=N-A; E=README + SESSION_LOG + risk register + same-phase handoff; F=py_compile + JSON/UTF-8 + diff-check + protected-root/mtime snapshots; independent-self-review=not_used`
+
+### Next
+
+~~Claude Code：独立审查当前 A2+A3 diff；通过后由 Claude Code 提交。~~ —— 已审查 PASS 并提交，见下节。
+
+## 2026-08-02 追加：Claude Code 对 A2+A3 的独立审查 —— PASS
+
+**结论**：PASS，已提交并合入 master。`B0 ✅ → B1 ✅ → 上限/入口 ✅ → B2 ✅ → A1 ✅ → A2+A3 ✅`，只剩 A4（单独一刀、单独审）。
+
+**本轮唯一的放松，以及为什么判它安全**：conformance 的 identity guard 加了豁免名 `_canonical_discovery_term`（允许其中出现 `casefold()`）。这条 guard 的存在理由是 K3-R41——折叠能把 Unicode lookalike 折成 ASCII ticker。查证：该 helper **只**作用于 `theme.display_name` 产出 `concept` 词，ticker 走 `canonical_us_ticker`，两条腿不共用（grep 确认）。两层防线我都实测：冻结 Stage-1 schema 的 ticker pattern 先挡掉 `ſAPL`/`ıBM`/`KAPL`(U+212A)/`ＡAPL`/`AAPL\xa0`/`600519`；绕过 schema 直打 `_normalize_ticker`，`canonical_us_ticker` 对这些一律返回 `None` → 拒，只有 ASCII 的 `aapl` 归一成 `AAPL`。反向对照：同样的 `casefold()` 放进普通函数 `_canon` 仍被抓（`line 2: casefold inside _canon`），豁免表恰好只多这一项。
+
+**已核实无问题、下一轮别改回去**：
+
+1. **A2 容器**：四条 Stage-1 模板与冻结 probe packet **逐字节 4/4 相同**（我独立比对，不是采信自述），packet sha256 与 pin 相符；`activation_status` / `production_query_policy_activated` 由 schema `const` 钉死，翻任一个都被拒；Stage-1 模板含 `{company}` 即使重封 digest 也被拒；**全仓无 runner 引用 policy 模块**，未接一键 live。策略默认值（只捞新出现 / 覆盖优先 / 一阶段占多数 / 不再每周问用户）与交接件逐条对上。
+2. **A3 规划器**：只从结构化 `display_name`/`ticker` 派生，不从 prose 猜；refs 只认 `source_refs[].source_id`，ghost 被拒；**反转 themes 与 members 顺序输出逐字节不变**（排序吃 policy rank 不吃遍历顺序）；每类上限 8 承重；注入 policy 想放松限制会先撞 content-digest pin；产物能直接被 A1 `build_stage2_plan` 接受（policy 上限 32 ≪ A1 schema 的 256）。
+3. **覆盖非空洞**：两个新引擎模块与新 policy schema 都在 conformance 的派生 lane 集内；新 schema 每层 object 均 `additionalProperties:false`、七个 effect flag 全 `const:false`。
+4. **基线与残留**：inventory `280→282`、`class0 220→222`，allowlist 未动（新测试模块用无 `dir=` 的临时目录）；全量后 `state/us_short` 0 files、`provider_samples` 不复存在。
+
+**取证边界上我和 executor 的一处分歧（按我的做）**：executor 把 full lane 记成 `NOT_RUN / not_triggered`，理由是本刀没有生产接线。我不接受这个免检——本刀改的是 **lane 级 conformance 守卫本身**，属放松类改动。我按 rule ② 亲跑：`RESULT status=PASS exit=0 tests=5121 elapsed=729.1s deadline=860s`，且 `5113→5121` 的 `+8` 恰等于两个新测试模块的 `6+2` 个用例，没有测试凭空多出或消失。**以后凡是动 conformance/guard 本身的刀，full lane 不得以「无生产接线」免检。**
+
+**两条不阻塞 Optional**（正文见 register）：policy 里 11 个字段代码不读（但 schema 全 `const` 钉死，不构成「声称了但不承重」，只是将来换归一化口径时代码要一起改）；上一轮 register 标题里的 U+FEFF 仍未清。
+
+**顺序**：`B0 ✅ → B1 ✅ → 上限/入口 ✅ → B2 ✅ → A1 ✅ → A2+A3 ✅ → A4`。
+
+**给 Codex 的命令**：`执行 A4（plan 级预算包络：首次付费调用前按 decision_date + parent plan identity 一次性锁死每 provider 最大 dispatch 包络，两阶段与同 scope 重试都只消费它；补齐 B1-B6 六条验收谓词的反控——首付费前预留、二阶段只消费不新开、同 scope 重试只增 attempt 不增 planned、并发不得双扣走 mutable_ledger_lock、崩溃重入复用同一包络不重放 unknown、超包络在发出调用前 fail closed，且 B1/B5 各挖空一次必须让点名测试转红），单独成刀、完成后交审查`

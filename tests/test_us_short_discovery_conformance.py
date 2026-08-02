@@ -78,7 +78,9 @@ FS_MUTATING_NAMES = frozenset({
 # ASCII ticker out of a Unicode lookalike, which is the K3-R41 mechanism.
 CASE_FOLDING_FORBIDDEN = frozenset({"upper", "casefold", "title", "swapcase"})
 CASE_FOLDING_NAMES = CASE_FOLDING_FORBIDDEN | {"lower"}
-IDENTITY_FOLD_ALLOWED_FUNCTIONS = frozenset({"_canonical_industry_code", "canonical_industry_code"})
+IDENTITY_FOLD_ALLOWED_FUNCTIONS = frozenset({
+    "_canonical_industry_code", "canonical_industry_code", "_canonical_discovery_term",
+})
 LOOKALIKE_TICKERS = ("\u0131BM", "\u017fAPL", "\u212aAPL", "\uff21APL", "AAPL\u00a0",
                      "600519", "BAD TICKER")
 RETIRED_SLOT_NAMES = frozenset({
@@ -562,6 +564,8 @@ class LaneIdentityConformance(unittest.TestCase):
                 self.assertTrue(case_folding_offenders(planted))
         self.assertEqual(case_folding_offenders(
             "def _canonical_industry_code(value):\n    return value.strip().upper()\n"), [])
+        self.assertEqual(case_folding_offenders(
+            "def _canonical_discovery_term(value):\n    return value.strip().casefold()\n"), [])
         self.assertEqual(case_folding_offenders("def canon(u):\n    return u.scheme.lower()\n"), [])
 
     def test_every_intake_entrypoint_drops_lookalike_tickers_per_member(self):

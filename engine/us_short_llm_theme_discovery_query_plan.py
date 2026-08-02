@@ -1,9 +1,10 @@
 """Offline, source-bound query-plan artifacts for US-short soft discovery.
 
-This module deliberately stops at the A1 contract boundary.  It does not fetch, call a
-provider, activate the production query policy, or implement the deterministic Stage-2
-planner.  It builds and validates the three time-separated state shapes required before
-those later slices can be implemented:
+This module owns the A1 artifact/state boundary.  It does not fetch, call a
+provider, activate the production query policy, or derive Stage-2 terms.  The
+deterministic Stage-2 planner is implemented separately in
+``us_short_llm_theme_discovery_stage2_planner``.  This module builds and validates
+the three time-separated state shapes required before paid dispatch:
 
 * an immutable parent plan frozen before any paid dispatch;
 * an immutable Stage-2 plan bound to a frozen Stage-1 artifact; and

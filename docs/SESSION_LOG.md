@@ -1,5 +1,20 @@
 # Session Log
 
+## 2026-08-02 — Claude 审查 PASS（A2+A3 版本化 policy 容器 + 确定性 Stage-2 规划器）
+
+- **Verdict/Action**: PASS，已提交并合入 master。本轮唯一放松是 conformance identity guard 多了 `_canonical_discovery_term` 豁免名，我按放松类改动做了强制腿反控：该 helper 只折 `display_name` 产 concept，ticker 走 `canonical_us_ticker`，lookalike 在 Stage-1 schema 与 canonicalizer 两层各自被拒，普通函数里的 casefold/upper 仍被 guard 抓。executor 判 full lane 免检，我不接受（改的是 lane 级守卫本身），亲跑一次全量。
+- **Required**: 无；Register: `R-USSHORT-A2-A3-VERSIONED-OFFLINE-POLICY-AND-SOURCE-BOUND-STAGE2-PLANNER` 已实现并通过独立审查，另记两条不阻塞 Optional（policy 里 11 个描述性字段代码不读但被 schema const 钉死、上一轮 U+FEFF 未清），正文只见 `docs/system_risk_register.md` 顶部。
+- **Verify**: review-evidence:fdb2c236a718；按 rule ② 唯一入口全量 `RESULT status=PASS exit=0 tests=5121 elapsed=729.1s deadline=860s`（fingerprint `59aa78542a0f`），`5113→5121` 的 `+8` 恰等于两个新测试模块的 `6+2` 个用例。reviewer 自写探针 25 条全绿：lookalike ticker 五形态两层皆拒、display_name 不能冒充 ticker、反转 theme/member 顺序输出仍逐字节相同、ghost source 拒、每类超限拒、注入 policy 因 digest pin 无法放松、四条模板与冻结 probe packet 逐字节 4/4 相同、A3 产物能被 A1 `build_stage2_plan` 接受。残留：`state/us_short` 0 files、`provider_samples` 跑完不存在。
+- **Next**: Codex：执行 A4。
+
+## 2026-08-02 — Codex executor A2+A3 execution
+
+- **Verdict/Action**: A2+A3 已在当前 executor 工作树完成；未提交、未合入、未 push，未执行 provider/network/live/paid 操作；等待 Claude Code 独立审查。
+- **Required**: A2/A3 范围未发现新的 executor-side Required；A4 仍是后续独立刀，未实现。详细风险、边界与证据见 `docs/system_risk_register.md` 顶部。
+- **Verify**: 固定主 Python focused `69 OK / 21.777s`；`py_compile=OK`；6 个 JSON/UTF-8 artifact/schema parse=OK；`git diff --check=OK`；`state/us_short` 前后均为 4 个既有空目录、0 files，`provider_samples` 前后均不存在；full-lane `NOT_RUN`（A2/A3 是无生产接线的离线隔离模块，focused conformance 已覆盖直接边界）。
+- **Next**: Claude Code：审查
+- **Pre-Codex self-review**: `matrix=complete; register=updated; handoff=updated; focused=69 OK / 21.777s; full-lane=NOT_RUN:not_triggered:isolated offline A2/A3 with no production wiring; door=pre-commit fixed-host hook route-doc 14 OK + doc-governance 41 OK; A=versioned policy, exact templates, source-bound deterministic planner, normalization/order/limits; B=policy/content/source hashes, frozen Stage-1 schema, canonical_us_ticker, no Stage-2 evidence, candidate_offline effect boundary; C=free-text placeholder, activation/digest mutation, ghost source, Stage-2-only evidence, per-type overflow, deterministic byte equality, conformance; D=N-A; E=README + SESSION_LOG + risk register + same-phase handoff; F=py_compile + JSON/UTF-8 + diff-check + protected-root/mtime snapshots; independent-self-review=not_used`
+
 ## 2026-08-02 — Claude 审查 PASS（A1 返工收口）
 
 - **Verdict/Action**: PASS，已提交并合入 master。两条 Required 都按类收的：inventory 基线单一来源化（我植入新测试模块实测仍打红，绊线没被拆），Stage-2 lineage 只认 `source_refs` 行（上一轮的 ghost ref 现在被拒、合法路径仍通）。类 1 四项由摆设变承重：分段包络逐桶拒超限且卡满不误杀、symlink guard 移到 `resolve()` 前真会触发、可变账本写入走 `mutable_ledger_lock`、死常量与死 import 已删。
