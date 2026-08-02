@@ -1162,6 +1162,17 @@ class GovernanceAndSchemaTests(unittest.TestCase):
         with self.assertRaises(jsonschema.ValidationError):
             jsonschema.validate(r, json.loads(SCHEMA_PATH.read_text(encoding="utf-8")))
 
+    def test_schema_m05_enum_and_partial_state_guard(self):
+        schema = json.loads(SCHEMA_PATH.read_text(encoding="utf-8"))
+        bad_enum = build_m67_report(_good_input(), AS_OF, "t")
+        bad_enum["machine"]["iv_gate"]["rule3_status"] = "not-a-rule3-state"
+        with self.assertRaises(jsonschema.ValidationError):
+            jsonschema.validate(bad_enum, schema)
+        partial = build_m67_report(_good_input(), AS_OF, "t")
+        partial["machine"]["iv_gate"].pop("awakening_status")
+        with self.assertRaises(jsonschema.ValidationError):
+            jsonschema.validate(partial, schema)
+
     def test_write_path_validates(self):
         r = build_m67_report(_good_input(), AS_OF, "t")
         with tempfile.TemporaryDirectory() as d:
@@ -1373,6 +1384,98 @@ class HeldStateActionBindTests(unittest.TestCase):
         r["machine"]["stateful_risk"] = {"position_state": "held", "position": {"ts_code": "600000.SH"}}
         with self.assertRaises(ValueError):
             validate_m67_consistency(r)
+
+
+class M05ConsumerTests(unittest.TestCase):
+    def test_legacy_shape_bypass_does_not_disable_modern_m05_semantics(self):
+        report = build_m67_report(_good_input(iv={
+            "iv_percentile_252d": 55.0,
+            "rule3_status": "normal",
+            "awakening_status": "active",
+            "cash_reclaim_pct": 20.0,
+            "iv_change_abs_1d_pctpt": 6.0,
+            "awakening_trigger_date": AS_OF,
+            "awakening_release_date": None,
+        }, stateful_risk={
+            "position_state": "flat", "position": None,
+            "rule12": {"status": "inactive"}, "rule13": {"status": "none"},
+            "size_multiplier": 1.0, "reasons": [], "m05_rebuild_blocked": True,
+        }), AS_OF, "t")
+        report["m67"]["精简结论区"]["波动率状态"] = report["m67"]["精简结论区"]["波动率状态"].replace(
+            "M0.5 保守降级模式：本周不新建仓", "")
+        with self.assertRaisesRegex(ValueError, "conservative-degradation"):
+            validate_m67_consistency(report, allow_legacy_m05=True)
+
+    def test_legacy_shape_bypass_only_accepts_a_report_with_no_m05_keys(self):
+        report = build_m67_report(_good_input(), AS_OF, "t")
+        for key in ("rule3_status", "awakening_status", "cash_reclaim_pct",
+                    "iv_change_abs_1d_pctpt", "awakening_trigger_date",
+                    "awakening_release_date", "m05_mode"):
+            report["machine"]["iv_gate"].pop(key, None)
+        validate_m67_consistency(report, allow_legacy_m05=True)
+        with self.assertRaises(ValueError):
+            validate_m67_consistency(report, allow_legacy_m05=False)
+
+    def test_rule3_no_trade_state_reaches_m67_veto(self):
+        report = build_m67_report(_good_input(iv={
+            "iv_percentile_252d": 95.0,
+            "rule3_status": "no_trade",
+            "awakening_status": "inactive",
+            "cash_reclaim_pct": 0.0,
+            "iv_change_abs_1d_pctpt": 1.0,
+            "awakening_trigger_date": None,
+            "awakening_release_date": None,
+        }), AS_OF, "t")
+        self.assertEqual(report["m67"]["table"]["\u64cd\u4f5c"], "\u5426\u51b3")
+        self.assertEqual(report["machine"]["iv_gate"]["rule3_status"], "no_trade")
+        self.assertIn("Rule3", report["m67"]["\u7cbe\u7b80\u7ed3\u8bba\u533a"]["\u6ce2\u52a8\u7387\u72b6\u6001"])
+        validate_m67_consistency(report)
+
+    def test_rule3_reduce_state_reaches_size_halve(self):
+        baseline = build_m67_report(_good_input(), AS_OF, "t")
+        reduced = build_m67_report(_good_input(iv={
+            "iv_percentile_252d": 85.0,
+            "rule3_status": "reduce_new_position_50pct",
+            "awakening_status": "inactive",
+            "cash_reclaim_pct": 0.0,
+            "iv_change_abs_1d_pctpt": 1.0,
+            "awakening_trigger_date": None,
+            "awakening_release_date": None,
+        }), AS_OF, "t")
+        self.assertTrue(reduced["machine"]["iv_gate"]["halve"])
+        self.assertLess(reduced["machine"]["entry_exit_size_star"]["plan"]["shares"],
+                        baseline["machine"]["entry_exit_size_star"]["plan"]["shares"])
+        validate_m67_consistency(reduced)
+
+    def test_rule3_unknown_with_finite_percentile_is_rejected(self):
+        report = build_m67_report(_good_input(iv={
+            "iv_percentile_252d": 95.0,
+            "rule3_status": "no_trade",
+            "awakening_status": "inactive",
+            "cash_reclaim_pct": 0.0,
+            "iv_change_abs_1d_pctpt": 1.0,
+            "awakening_trigger_date": None,
+            "awakening_release_date": None,
+        }), AS_OF, "t")
+        report["machine"]["iv_gate"]["rule3_status"] = "unknown"
+        with self.assertRaisesRegex(ValueError, "unknown.*IV 分位"):
+            validate_m67_consistency(report)
+
+    def test_active_awakening_state_blocks_flat_rebuild(self):
+        stateful = {"position_state": "flat", "position": None,
+                    "rule12": {"status": "inactive"}, "rule13": {"status": "none"},
+                    "size_multiplier": 1.0, "reasons": [],
+                    "m05_rebuild_blocked": True}
+        report = build_m67_report(_good_input(
+            iv={"iv_percentile_252d": 55.0, "rule3_status": "normal",
+                "awakening_status": "active", "cash_reclaim_pct": 20.0,
+                "iv_change_abs_1d_pctpt": 6.0,
+                "awakening_trigger_date": AS_OF, "awakening_release_date": None},
+            stateful_risk=stateful), AS_OF, "t")
+        self.assertEqual(report["m67"]["table"]["\u64cd\u4f5c"], "\u5426\u51b3")
+        self.assertTrue(any("M0.5 awakening active" in reason
+                            for reason in report["machine"]["layer"]["hard_veto"]))
+        validate_m67_consistency(report)
 
 
 if __name__ == "__main__":

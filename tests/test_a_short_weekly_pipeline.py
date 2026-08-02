@@ -29,7 +29,7 @@ if str(ROOT) not in sys.path:
 
 from runners.a_short_weekly_pipeline import (  # noqa: E402
     normalize_candidate, build_weekly_report as _build_weekly_report, validate_weekly_report,
-    write_weekly_report, latest_iv_percentile, latest_iv_hv, main, SCHEMA_PATH,
+    write_weekly_report, latest_iv_percentile, latest_iv_hv, latest_m05_state, main, SCHEMA_PATH,
     _fetch_price_series, _prev_trading_day, _load_validated_overlay, MIN_PRICE_OBS, resolve_market_regime,
     _candidate_price_clock, _candidate_price_exclusion,
     validate_account_state, stateful_risk_for_candidate, _ex_div_notices, _fetch_dividends,
@@ -43,6 +43,7 @@ from runners.a_short_weekly_pipeline import (  # noqa: E402
     _financial_trends, _fetch_forecast, _fetch_income, _fetch_balancesheet, _attach_financial_trend_impacts,
     _forecast_red_flags, _income_red_flags, _balancesheet_red_flags, _industry_fundamentals, _FIN_STATEMENT_MARKER,
     _attach_holding_disposition, _factor_comparison_realized_regime, _build_evidence_reminders,
+    _resolve_m05_state, _validate_analysis_input_m05_binding,
 )
 from engine.data.analysis_input_contract import (  # noqa: E402
     build_a_short_run_identity,
@@ -221,7 +222,18 @@ def _feed(last_pct=55.0):
                "iv_percentile_252d": (last_pct if i == 4 else 40.0),
                "hv_value": 0.14 + 0.001 * i}
               for i, d in enumerate(["20260601", "20260602", "20260603", "20260604", AS_OF])]
-    return {"as_of": AS_OF, "n_days": len(series), "series": series}
+    return {
+        "schema_name": "a_short_iv_feed", "schema_version": "1.1.0",
+        "generated_at": "2026-06-10T00:00:00+08:00", "as_of": AS_OF,
+        "underlying": "510050.SH",
+        "params": {"risk_free": 0.02, "div_yield": 0.0, "const_maturity_days": 30,
+                    "min_t_days": 5, "roll_window": 252, "min_roll_obs": 60,
+                    "hv_window": 21},
+        "n_days": len(series), "series": series,
+        "boundary": {"production": False, "real_money": False,
+                      "satisfies_ship_gate": False,
+                      "iv_method": "bs_atm_constant_maturity_feasibility_grade"},
+    }
 
 
 def _valid_overlay_for(codes, as_of=AS_OF):
@@ -624,6 +636,12 @@ class ValidateWeeklyTests(unittest.TestCase):
     def test_rejects_future_dated_feed(self):
         bad_feed = _feed()
         bad_feed["series"][-1]["trade_date"] = "20260631"  # invalid calendar
+        with self.assertRaises(ValueError):
+            validate_weekly_report(_weekly(), bad_feed)
+
+    def test_read_side_schema_rejects_short_date(self):
+        bad_feed = _feed()
+        bad_feed["series"][0]["trade_date"] = "2026101"
         with self.assertRaises(ValueError):
             validate_weekly_report(_weekly(), bad_feed)
 
@@ -6413,6 +6431,83 @@ def capture_after_published_weekly(out_path):
         inventory.pop("runners/a_short_weekly_sidecar_health.py")
         discovered = set(self.ENTRYPOINTS)
         self.assertNotEqual(discovered, set(inventory))
+
+
+class M05WiringTests(unittest.TestCase):
+    def test_latest_m05_state_validates_before_consumption(self):
+        legacy = _feed()
+        state = latest_m05_state(legacy)
+        self.assertIsNone(state["awakening_status"])
+        self.assertIsNone(state["rule3_status"])
+        self.assertIsNone(state["cash_reclaim_pct"])
+
+        forged = copy.deepcopy(legacy)
+        forged["series"][-1].update({"awakening_status": "active", "cash_reclaim_pct": 20.0})
+        with self.assertRaises(ValueError):
+            latest_m05_state(forged)
+
+    def test_negative_cash_inputs_fail_closed_before_m05_audit(self):
+        with self.assertRaisesRegex(ValueError, "available_cash"):
+            build_weekly_report(
+                [_normalized()], AS_OF, GEN, run_lineage=_sized_lineage(),
+                available_cash=-1.0,
+            )
+        with self.assertRaisesRegex(ValueError, "new_exposure_capacity"):
+            build_weekly_report(
+                [_normalized()], AS_OF, GEN, run_lineage=_sized_lineage(),
+                available_cash=1.0, new_exposure_capacity=-1.0,
+            )
+
+    def test_active_awakening_reclaims_cash_and_blocks_flat_rebuild(self):
+        row = _normalized()
+        row["iv"].update({
+            "iv_change_abs_1d_pctpt": 6.0,
+            "rule3_status": "normal",
+            "awakening_status": "active",
+            "cash_reclaim_pct": 20.0,
+            "awakening_trigger_date": AS_OF,
+            "awakening_release_date": None,
+        })
+        weekly = build_weekly_report(
+            [row], AS_OF, GEN, run_lineage=_sized_lineage(),
+            available_cash=100000.0, new_exposure_capacity=200000.0,
+        )
+        cash = weekly["cash_allocation"]
+        self.assertEqual(cash["available_cash_start"], 0.0)
+        self.assertEqual(cash["allocated_cash_total"], 0.0)
+        self.assertEqual(cash["remaining_cash"], 0.0)
+        self.assertEqual(cash["new_exposure_capacity_start"], 0.0)
+        self.assertEqual(cash["remaining_new_exposure_capacity"], 0.0)
+        self.assertEqual(cash["m05_mode"], "conservative_degradation")
+        self.assertTrue(cash["m05_allocation_blocked"])
+        self.assertEqual(cash["m05_pre_reclaim_cash"], 100000.0)
+        self.assertEqual(cash["m05_reclaimed_cash"], 20000.0)
+        self.assertEqual(cash["m05_post_reclaim_cash"], 80000.0)
+        self.assertEqual(cash["m05_pre_reclaim_new_exposure_capacity"], 200000.0)
+        self.assertEqual(cash["m05_reclaimed_new_exposure_capacity"], 40000.0)
+        self.assertEqual(cash["m05_post_reclaim_new_exposure_capacity"], 160000.0)
+        report = weekly["reports"][0]
+        self.assertEqual(report["m67"]["table"]["\u64cd\u4f5c"], "\u5426\u51b3")
+        self.assertTrue(any("M0.5 awakening active" in reason
+                            for reason in report["machine"]["layer"]["hard_veto"]))
+
+    def test_conflicting_m05_state_fails_closed(self):
+        first = _normalized()
+        second = _normalized("600001.SZ")
+        first["iv"].update({"rule3_status": "normal", "awakening_status": "inactive",
+                             "cash_reclaim_pct": 0.0})
+        second["iv"].update({"rule3_status": "no_trade", "awakening_status": "inactive",
+                              "cash_reclaim_pct": 0.0})
+        with self.assertRaises(ValueError):
+            _resolve_m05_state([first, second])
+
+    def test_analysis_input_m05_binding_rejects_stale_populated_leaf(self):
+        ai = {"market_context": {"volatility": {"rule3_status": "no_trade"}}}
+        feed = {"schema_version": "1.2.0"}
+        state = {"rule3_status": "normal", "awakening_status": "inactive",
+                 "iv_change_abs_1d_pctpt": 0.0, "cash_reclaim_pct": 0.0}
+        with self.assertRaises(ValueError):
+            _validate_analysis_input_m05_binding(ai, feed, state)
 
 
 if __name__ == "__main__":

@@ -34,6 +34,10 @@ from engine.a_short_regulatory_advisory import (
     event_fingerprint,
     resolve_regulatory_advisory,
 )
+from runners.a_short_iv_feed_build import (
+    M05_CONSERVATIVE_BLOCK_REASON,
+    M05_CONSERVATIVE_MODE,
+)
 
 SCHEMA_NAME = "a_short_m67_report"
 SCHEMA_VERSION = "1.0.0"
@@ -637,11 +641,29 @@ def _validate_semantic_official(sem, as_of):
 
 
 # ── 风险族分类(§5 归并:每族最多一次硬处理)──────────────────────────────────
+def _m05_rule3_status(iv: dict) -> str:
+    """Read the producer-bound Rule3 state; legacy inputs fall back to IV percentile."""
+    iv = iv or {}
+    explicit = iv.get("rule3_status")
+    if explicit is not None:
+        return explicit if explicit in {"normal", "reduce_new_position_50pct", "no_trade", "unknown"} else "unknown"
+    value = iv.get("iv_percentile_252d")
+    if isinstance(value, bool) or not isinstance(value, (int, float)) or not math.isfinite(float(value)):
+        return "unknown"
+    if value > IV_NOBUILD_PCT:
+        return "no_trade"
+    if value > IV_HALVE_PCT:
+        return "reduce_new_position_50pct"
+    return "normal"
+
+
 def classify_risk_families(inp: dict, ind: dict, rule6_gate: dict | None = None) -> dict:
     d = inp.get("derived", {})
     ev = inp.get("event", {})
     liq = inp.get("liquidity", {})
-    iv_pct = (inp.get("iv") or {}).get("iv_percentile_252d")
+    iv = inp.get("iv") or {}
+    iv_pct = iv.get("iv_percentile_252d")
+    rule3_status = _m05_rule3_status(iv)
     regime = inp.get("market_regime", "震荡期")
     regime_fallback = inp.get("regime_fallback") or {}
     regime_unknown_fallback = bool(regime_fallback.get("active"))
@@ -710,14 +732,14 @@ def classify_risk_families(inp: dict, ind: dict, rule6_gate: dict | None = None)
     mr = []
     if regime_unknown_fallback:
         mr.append(regime_fallback_reason)
-    nobuild_iv = iv_pct is not None and iv_pct > IV_NOBUILD_PCT
+    nobuild_iv = rule3_status == "no_trade"
     held_suffix = "(已有持仓:持仓管理继续,advisory)" if has_position else ""
     if nobuild_iv:
-        mr.append(f"IV分位{iv_pct}>{IV_NOBUILD_PCT} 不可建仓{held_suffix}")
+        mr.append(f"Rule3状态=no_trade(IV分位{iv_pct}) 不可建仓{held_suffix}")
     elif regime == "收缩期":
         mr.append(f"收缩期禁新建仓{held_suffix}")
-    elif iv_pct is not None and iv_pct > IV_HALVE_PCT:
-        mr.append(f"IV分位{iv_pct}>{IV_HALVE_PCT} 减半")
+    elif rule3_status == "reduce_new_position_50pct":
+        mr.append(f"Rule3状态=reduce_new_position_50pct(IV分位{iv_pct}) 减半")
     if held_market_rule6_ids:
         mr.append("Rule6 市场级禁新建仓(" + ",".join(held_market_rule6_ids)
                   + ")；已有持仓继续管理(advisory)")
@@ -751,6 +773,11 @@ def classify_risk_families(inp: dict, ind: dict, rule6_gate: dict | None = None)
         mult = stateful.get("size_multiplier")
         sr_down.append(f"Rule12 recovery_1:恢复首笔仓位上限×{mult if mult is not None else 0.5}")
     r13 = stateful.get("rule13") or {}
+    if stateful.get("m05_rebuild_blocked"):
+        if has_position:
+            sr_down.append("M0.5 awakening active:已有持仓仅管理")
+        else:
+            sr_hard.append("M0.5 awakening active:暂停新建仓")
     if not has_position:
         if r13.get("reentry_blocked") or r13.get("status") == "active_cooldown":
             sr_hard.append(f"Rule13 {r13.get('status', 'active_cooldown')}:禁止止损后再入")
@@ -1575,12 +1602,27 @@ def build_m67_report(inp: dict, as_of: str, generated_at: str) -> dict:
     regime_fallback = inp.get("regime_fallback") or {}
     regime_unknown_fallback = bool(regime_fallback.get("active"))
     regime_fallback_reason = regime_fallback.get("reason") or "EGS market_regime unknown/missing→按震荡期保守处理"
-    iv_pct = (inp.get("iv") or {}).get("iv_percentile_252d")
+    iv_state = inp.get("iv") or {}
+    iv_pct = iv_state.get("iv_percentile_252d")
+    rule3_status = _m05_rule3_status(iv_state)
+    awakening_status = iv_state.get("awakening_status") or "unknown"
+    cash_reclaim_pct = iv_state.get("cash_reclaim_pct")
     iv_hv_note, iv_hv_regime, iv_hv_ratio = iv_hv_vol_note(
         (inp.get("iv") or {}).get("iv_value"), (inp.get("iv") or {}).get("hv_value"))
     eligible = bool((inp.get("overlay") or {}).get("eligible"))
     stateful = inp.get("stateful_risk") or {}
     has_position = stateful.get("position_state") == "held"
+    if awakening_status == "active":
+        stateful = dict(stateful)
+        stateful["m05_mode"] = M05_CONSERVATIVE_MODE
+        stateful["m05_block_reason"] = M05_CONSERVATIVE_BLOCK_REASON
+        if not has_position:
+            stateful["m05_rebuild_blocked"] = True
+            reasons = list(stateful.get("reasons") or [])
+            for reason in (M05_CONSERVATIVE_BLOCK_REASON, "M0.5 awakening active:暂停新建仓"):
+                if reason not in reasons:
+                    reasons.append(reason)
+            stateful["reasons"] = reasons
     analysis_role = str(inp.get("analysis_role") or "")
     final_new_entry_eligible = analysis_role == "final"
     position = stateful.get("position") or {}
@@ -1647,14 +1689,14 @@ def build_m67_report(inp: dict, as_of: str, generated_at: str) -> dict:
     # IV 状态(R-ASHORT-PHASE5-IV-MISSING-FAIL-OPEN):feed 缺失不假装执行 IV 风控
     iv_known = iv_pct is not None
     iv_status = "ok" if iv_known else "observe_only_missing_feed"
-    iv_halve = (iv_known and IV_HALVE_PCT < iv_pct <= IV_NOBUILD_PCT and regime != "收缩期")
+    iv_halve = rule3_status == "reduce_new_position_50pct" and regime != "收缩期"
     if not iv_known:
         observe.append("iv_regime_status=observe_only_missing_feed")
     if regime_unknown_fallback:
         observe.append("market_regime_status=unknown_fallback_to_shock")
     halve_reasons = []
     if iv_halve:
-        halve_reasons.append("IV>80分位 Rule3 再减半")
+        halve_reasons.append("Rule3状态=reduce_new_position_50pct 再减半")
     if not iv_known:
         halve_reasons.append("IV feed 缺失,保守再减半")
     if regime_unknown_fallback:
@@ -1771,6 +1813,9 @@ def build_m67_report(inp: dict, as_of: str, generated_at: str) -> dict:
         "overlay.eligible": "→ comparison display only; no star/risk/action/cash effect",
         "overlay.crowding_hit": "→ comparison display only; no production risk-family effect",
         "iv.iv_percentile_252d": "→ Rule3 IV 闸门(>90否决 / >80减半)",
+        "iv.rule3_status": "→ M0.5生产端Rule3状态；no_trade否决新建仓，reduce_new_position_50pct使新仓再减半",
+        "iv.awakening_status": "→ M0.5觉醒状态；active暂停空仓新建仓并触发现金回收",
+        "iv.cash_reclaim_pct": "→ M0.5全局可用现金/新增敞口上限按生产端百分比收回",
         "industry_trend": "→ deterministic SW L2 headwind only: -1 star; tailwind has no bonus; unknown requires manual review",
         "industry_fundamental_trend": "→ advisory display only; no deterministic decision effect",
         "analysis_role": "→ only analysis_role=final may produce a new-entry plan; non-final is observe-only, while existing holdings stay on holding management",
@@ -1807,12 +1852,17 @@ def build_m67_report(inp: dict, as_of: str, generated_at: str) -> dict:
         price_cost = (f"{inp.get('close')} | 持仓:{position.get('shares')}股/"
                       f"均价{position.get('avg_cost')}/建仓{position.get('entry_date')}/"
                       f"手填参考止损{position.get('stop_loss') if position.get('stop_loss') is not None else '无'}")
+    m05_notice = f" | {M05_CONSERVATIVE_BLOCK_REASON}" if awakening_status == "active" else ""
     m67 = {
         "精简结论区": {
             "当前环境": (regime if not regime_unknown_fallback
                          else f"{regime}(EGS regime unknown,保守fallback)"),
-            "波动率状态": ((f"IV分位≈{iv_pct}% | Rule3减半:{'是' if iv_halve else '否'}"
-                           if iv_known else "IV未知(feed 缺失,未执行 IV 风控,保守减半)")
+            "波动率状态": ((f"IV分位≈{iv_pct}% | Rule3状态:{rule3_status} | 觉醒:{awakening_status}"
+                           f" | M0.5现金回收:{cash_reclaim_pct}% | Rule3减半:{'是' if iv_halve else '否'}"
+                           f"{m05_notice}"
+                           if iv_known else f"IV未知(feed 缺失,未执行 IV 风控,保守减半)"
+                           f" | Rule3状态:{rule3_status} | 觉醒:{awakening_status}"
+                           f" | M0.5现金回收:{cash_reclaim_pct}%{m05_notice}")
                           + f" | {iv_hv_note}"),
             "现价与成本": price_cost,
             "否决审查触发": (("|".join(hard) + (" | " + sem_note if sem_note else "")) if hard
@@ -1901,6 +1951,12 @@ def build_m67_report(inp: dict, as_of: str, generated_at: str) -> dict:
                                      "plan": plan, "reject_reason": reject},
             "model_build_eligible": model_eligible,
             "iv_gate": {"iv_percentile_252d": iv_pct, "halve": iv_halve, "status": iv_status,
+                        "rule3_status": rule3_status, "awakening_status": awakening_status,
+                        "m05_mode": (M05_CONSERVATIVE_MODE if awakening_status == "active" else None),
+                        "cash_reclaim_pct": cash_reclaim_pct,
+                        "iv_change_abs_1d_pctpt": iv_state.get("iv_change_abs_1d_pctpt"),
+                        "awakening_trigger_date": iv_state.get("awakening_trigger_date"),
+                        "awakening_release_date": iv_state.get("awakening_release_date"),
                         "iv_value": (inp.get("iv") or {}).get("iv_value"),
                         "hv_value": (inp.get("iv") or {}).get("hv_value"),
                         "iv_hv_ratio": iv_hv_ratio, "iv_hv_regime": iv_hv_regime},
@@ -1948,7 +2004,15 @@ def build_holding_report(inp: dict, as_of: str, generated_at: str) -> dict:
     stateful = inp.get("stateful_risk") or {}
     position = stateful.get("position") or {}
     regime = inp.get("market_regime", "震荡期")
-    iv_pct = (inp.get("iv") or {}).get("iv_percentile_252d")
+    iv_state = inp.get("iv") or {}
+    iv_pct = iv_state.get("iv_percentile_252d")
+    rule3_status = _m05_rule3_status(iv_state)
+    awakening_status = iv_state.get("awakening_status") or "unknown"
+    cash_reclaim_pct = iv_state.get("cash_reclaim_pct")
+    if awakening_status == "active":
+        stateful = dict(stateful)
+        stateful["m05_mode"] = M05_CONSERVATIVE_MODE
+        stateful["m05_block_reason"] = M05_CONSERVATIVE_BLOCK_REASON
     iv_known = iv_pct is not None
     iv_hv_note, iv_hv_regime, iv_hv_ratio = iv_hv_vol_note(
         (inp.get("iv") or {}).get("iv_value"), (inp.get("iv") or {}).get("hv_value"))
@@ -1982,7 +2046,10 @@ def build_holding_report(inp: dict, as_of: str, generated_at: str) -> dict:
     plan, hl_reject = holding_levels(inp, ind, regime)   # S3a:系统跟踪止损/止盈(被动;Tier-3 有价亦可算)
     price_cost = (f"{close} | 持仓:{position.get('shares')}股/均价{position.get('avg_cost')}/"
                   f"建仓{position.get('entry_date')}/手填参考止损{position.get('stop_loss')}")
-    vol_state = (f"IV分位≈{iv_pct}%" if iv_known else "IV未知(feed 缺失)")
+    vol_state = ((f"IV分位≈{iv_pct}%" if iv_known else "IV未知(feed 缺失)")
+                 + f" | Rule3状态:{rule3_status} | 觉醒:{awakening_status}"
+                 + f" | M0.5现金回收:{cash_reclaim_pct}%"
+                 + (f" | {M05_CONSERVATIVE_BLOCK_REASON}" if awakening_status == "active" else ""))
     iv_status = "holding_uncovered" if iv_known else "observe_only_missing_feed"
     observe = [] if iv_known else ["iv_regime_status:missing"]
     manual_ref = position.get("stop_loss")
@@ -2020,6 +2087,9 @@ def build_holding_report(inp: dict, as_of: str, generated_at: str) -> dict:
     consumption = {"indicators": "→ 持仓技术参考(MA/RSI/ATR/支撑压力)",
                    "risk_families": "→ stateful(Rule12/Rule13)+ EGS 派生族未核查",
                    "iv.iv_percentile_252d": "→ 仅参考(未执行 IV 闸门)",
+                   "iv.rule3_status": "→ M0.5生产端Rule3状态，仅作持仓管理提示",
+                   "iv.awakening_status": "→ M0.5觉醒状态，仅作持仓管理提示",
+                   "iv.cash_reclaim_pct": "→ M0.5现金回收状态，持仓行不执行新建仓分配",
                    "overlay.eligible": "→ 未覆盖",
                    "stateful_risk": "→ 持仓管理 + Rule12/Rule13",
                    "egs_coverage": "未覆盖(粗筛排除;EGS/语义/ST 未自动核查)"}
@@ -2038,6 +2108,12 @@ def build_holding_report(inp: dict, as_of: str, generated_at: str) -> dict:
             "entry_exit_size_star": {"action": "持有", "type": "已有持仓", "star": 0,
                                      "plan": plan, "reject_reason": hl_reject},
             "iv_gate": {"iv_percentile_252d": iv_pct, "halve": False, "status": iv_status,
+                        "rule3_status": rule3_status, "awakening_status": awakening_status,
+                        "m05_mode": (M05_CONSERVATIVE_MODE if awakening_status == "active" else None),
+                        "cash_reclaim_pct": cash_reclaim_pct,
+                        "iv_change_abs_1d_pctpt": iv_state.get("iv_change_abs_1d_pctpt"),
+                        "awakening_trigger_date": iv_state.get("awakening_trigger_date"),
+                        "awakening_release_date": iv_state.get("awakening_release_date"),
                         "iv_value": (inp.get("iv") or {}).get("iv_value"),
                         "hv_value": (inp.get("iv") or {}).get("hv_value"),
                         "iv_hv_ratio": iv_hv_ratio, "iv_hv_regime": iv_hv_regime},
@@ -2295,7 +2371,59 @@ def validate_operation_impact_no_dangling(report: dict) -> None:
             raise ValueError("operation_impact source_field=industry_fundamentals 非法(⑤ 行业基本面 summary_only,绝不产逐票 operation_impact)")
 
 
-def validate_m67_consistency(report: dict) -> None:
+_M05_REQUIRED_KEYS = (
+    "rule3_status", "awakening_status", "cash_reclaim_pct",
+    "iv_change_abs_1d_pctpt", "awakening_trigger_date", "awakening_release_date",
+    "m05_mode",
+)
+
+
+def _validate_m05_consistency(ig: dict, volatility_text: str, machine: dict,
+                              *, allow_legacy_m05: bool) -> None:
+    """Validate M0.5 semantics for every report that carries M0.5 fields.
+
+    ``allow_legacy_m05`` is a shape-only compatibility concession for a
+    registered pre-M0.5 bundle with none of these keys.  It must never disable
+    semantic/safety checks on a partial or modern M0.5 payload.
+    """
+    present = {key for key in _M05_REQUIRED_KEYS if key in ig}
+    if not present:
+        if not allow_legacy_m05:
+            raise ValueError("machine.iv_gate 缺 M0.5 键 rule3_status(生产端状态未闭合)")
+        return
+    missing = [key for key in _M05_REQUIRED_KEYS if key not in ig]
+    if missing:
+        raise ValueError(f"machine.iv_gate 缺 M0.5 键 {missing[0]}(生产端状态未闭合)")
+    if ig["rule3_status"] not in {"normal", "reduce_new_position_50pct", "no_trade", "unknown"}:
+        raise ValueError("machine.iv_gate.rule3_status 非法")
+    if ig["awakening_status"] not in {"inactive", "active", "cooldown", "unknown"}:
+        raise ValueError("machine.iv_gate.awakening_status 非法")
+    if ig["awakening_status"] == "active":
+        if ig.get("m05_mode") != M05_CONSERVATIVE_MODE:
+            raise ValueError("active M0.5 awakening missing conservative mode")
+        if M05_CONSERVATIVE_BLOCK_REASON not in volatility_text:
+            raise ValueError("active M0.5 awakening missing conservative-degradation M6.7 text")
+        if (machine.get("stateful_risk") or {}).get("position_state") != "held" \
+                and machine.get("entry_exit_size_star", {}).get("action") == "建仓":
+            raise ValueError("active M0.5 conservative mode cannot build a flat position")
+    elif ig.get("m05_mode") is not None:
+        raise ValueError("inactive M0.5 report must not carry conservative mode")
+    pct = ig.get("iv_percentile_252d")
+    if (ig["rule3_status"] != "unknown" and isinstance(pct, (int, float))
+            and not isinstance(pct, bool)
+            and ig["rule3_status"] != _m05_rule3_status({"iv_percentile_252d": pct})):
+        raise ValueError("machine.iv_gate.rule3_status 与 IV 分位不一致")
+    if ig["rule3_status"] == "unknown" and pct is not None:
+        raise ValueError("machine.iv_gate.rule3_status=unknown 但 IV 分位非空")
+    reclaim = ig.get("cash_reclaim_pct")
+    if ig["awakening_status"] == "active":
+        if isinstance(reclaim, bool) or not isinstance(reclaim, (int, float)) or not 0 <= reclaim <= 100:
+            raise ValueError("active M0.5 awakening 缺少合法 cash_reclaim_pct")
+    if "Rule3状态:" not in volatility_text or "觉醒:" not in volatility_text or "M0.5现金回收:" not in volatility_text:
+        raise ValueError("M0.5 状态未落到 M6.7 波动率状态")
+
+
+def validate_m67_consistency(report: dict, *, allow_legacy_m05: bool = False) -> None:
     """§4 不变量 + R-ASHORT-M67-...-WRITE-CONTRACT:消费完整性 / 热度不覆盖硬风控 / 诚实护栏 /
     每族一次 / as_of 历法 / table↔machine 一致 / 建仓正数+plan匹配 / 非建仓 null / IV缺失显式。"""
     mc = report["machine"]
@@ -2580,11 +2708,12 @@ def validate_m67_consistency(report: dict) -> None:
     # (单一来源)重算一致**——防 raw/ratio/regime 各自漂移、防 ratio 陈旧(1.5→1.3 仍标 rich)、防 unknown 配有效 raw;
     # 文案与档位绑定(非 unknown 含「IV/HV」、unknown 含「IV-HV未知」)。
     ig = mc["iv_gate"]
+    vs = m67["精简结论区"]["波动率状态"]
+    _validate_m05_consistency(ig, vs, mc, allow_legacy_m05=allow_legacy_m05)
     for k in ("iv_value", "hv_value", "iv_hv_ratio", "iv_hv_regime"):
         if k not in ig:
             raise ValueError(f"machine.iv_gate 缺 IV-HV 键 {k}(机器轨不完整)")
     reg, ratio = ig["iv_hv_regime"], ig["iv_hv_ratio"]
-    vs = m67["精简结论区"]["波动率状态"]
     if reg not in IV_HV_REGIMES:
         raise ValueError(f"iv_hv_regime 非法 {reg!r}(须 ∈ {IV_HV_REGIMES})")
     exp_reg, exp_ratio = iv_hv_tag(ig["iv_value"], ig["hv_value"])   # 由 raw 重算的权威档位/比值(单一来源)
@@ -2601,7 +2730,11 @@ def validate_m67_consistency(report: dict) -> None:
         if "IV/HV" not in vs:
             raise ValueError(f"iv_hv_regime={reg} 但波动率状态缺 IV/HV 文案")
     # 消费完整性
-    for key in ("indicators", "risk_families", "iv.iv_percentile_252d", "overlay.eligible"):
+    consumption_keys = ["indicators", "risk_families", "iv.iv_percentile_252d",
+                        "overlay.eligible"]
+    if not allow_legacy_m05:
+        consumption_keys.extend(("iv.rule3_status", "iv.awakening_status", "iv.cash_reclaim_pct"))
+    for key in consumption_keys:
         if key not in mc["consumption"]:
             raise ValueError(f"消费映射缺 {key}(悬挂输入)")
     # boundary 不得声称已验证

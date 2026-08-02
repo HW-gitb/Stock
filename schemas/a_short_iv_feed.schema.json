@@ -8,7 +8,7 @@
                "params", "n_days", "series", "boundary"],
   "properties": {
     "schema_name": {"const": "a_short_iv_feed"},
-    "schema_version": {"const": "1.1.0"},
+    "schema_version": {"enum": ["1.1.0", "1.2.0"]},
     "generated_at": {"type": "string"},
     "as_of": {"type": "string", "pattern": "^[0-9]{8}$"},
     "underlying": {"const": "510050.SH"},
@@ -27,6 +27,96 @@
       }
     },
     "n_days": {"type": "integer", "minimum": 0},
+    "calendar": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["status", "source", "trade_dates"],
+      "properties": {
+        "status": {"enum": ["available", "calendar_unavailable"]},
+        "source": {"enum": ["tushare.trade_cal", "tushare.trade_cal+fund_daily", "calendar_unavailable"]},
+        "trade_dates": {
+          "type": "array",
+          "items": {"type": "string", "pattern": "^[0-9]{8}$"},
+          "uniqueItems": true
+        },
+        "coverage_start": {
+          "anyOf": [
+            {"type": "string", "pattern": "^[0-9]{8}$"},
+            {"type": "null"}
+          ]
+        },
+        "coverage_end": {
+          "anyOf": [
+            {"type": "string", "pattern": "^[0-9]{8}$"},
+            {"type": "null"}
+          ]
+        },
+        "n_trade_dates": {"type": "integer", "minimum": 0},
+        "trade_dates_sha256": {"type": "string", "pattern": "^(|[0-9a-f]{64})$"},
+        "probed_trade_dates": {
+          "type": "array",
+          "items": {"type": "string", "pattern": "^[0-9]{8}$"},
+          "uniqueItems": true
+        },
+        "probed_trade_dates_sha256": {"type": "string", "pattern": "^(|[0-9a-f]{64})$"}
+        ,"independent_source": {"const": "tushare.fund_daily"}
+        ,"independent_trade_dates": {
+          "type": "array",
+          "items": {"type": "string", "pattern": "^[0-9]{8}$"},
+          "uniqueItems": true
+        }
+        ,"independent_trade_dates_sha256": {"type": "string", "pattern": "^(|[0-9a-f]{64})$"}
+      },
+      "allOf": [
+        {
+          "if": {"properties": {"status": {"const": "available"}}, "required": ["status"]},
+          "then": {
+            "required": ["coverage_start", "coverage_end", "n_trade_dates",
+                          "trade_dates_sha256", "probed_trade_dates", "probed_trade_dates_sha256"],
+            "properties": {
+              "trade_dates": {"minItems": 1},
+              "probed_trade_dates": {"minItems": 1},
+              "coverage_start": {"type": "string"},
+              "coverage_end": {"type": "string"},
+              "n_trade_dates": {"minimum": 1},
+              "trade_dates_sha256": {"pattern": "^[0-9a-f]{64}$"},
+              "probed_trade_dates_sha256": {"pattern": "^[0-9a-f]{64}$"}
+            }
+          }
+        },
+        {
+          "if": {"properties": {"status": {"const": "calendar_unavailable"}}, "required": ["status"]},
+          "then": {
+            "properties": {
+              "trade_dates": {"maxItems": 0},
+              "source": {"const": "calendar_unavailable"},
+              "coverage_start": {"type": "null"},
+              "coverage_end": {"type": "null"},
+              "n_trade_dates": {"const": 0},
+              "trade_dates_sha256": {"const": ""},
+              "probed_trade_dates": {"maxItems": 0},
+              "probed_trade_dates_sha256": {"const": ""},
+              "independent_trade_dates": {"maxItems": 0},
+              "independent_trade_dates_sha256": {"const": ""}
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {"source": {"const": "tushare.trade_cal+fund_daily"}},
+            "required": ["source"]
+          },
+          "then": {
+            "required": ["independent_source", "independent_trade_dates", "independent_trade_dates_sha256"],
+            "properties": {
+              "status": {"const": "available"},
+              "independent_trade_dates": {"minItems": 1},
+              "independent_trade_dates_sha256": {"pattern": "^[0-9a-f]{64}$"}
+            }
+          }
+        }
+      ]
+    },
     "series": {
       "type": "array",
       "items": {
@@ -47,8 +137,97 @@
               {"type": "number", "minimum": 0},
               {"type": "null"}
             ]
+          },
+          "iv_change_abs_1d_pctpt": {
+            "anyOf": [
+              {"type": "number", "minimum": 0},
+              {"type": "null"}
+            ]
+          },
+          "rule3_status": {
+            "enum": ["normal", "reduce_new_position_50pct", "no_trade", "unknown"]
+          },
+          "awakening_status": {
+            "enum": ["inactive", "active", "cooldown", "unknown"]
+          },
+          "cash_reclaim_pct": {
+            "anyOf": [
+              {"type": "number", "minimum": 0, "maximum": 100},
+              {"type": "null"}
+            ]
+          },
+          "awakening_baseline_iv": {
+            "anyOf": [
+              {"type": "number", "exclusiveMinimum": 0},
+              {"type": "null"}
+            ]
+          },
+          "awakening_trigger_date": {
+            "anyOf": [
+              {"type": "string", "pattern": "^[0-9]{8}$"},
+              {"type": "null"}
+            ]
+          },
+          "awakening_release_date": {
+            "anyOf": [
+              {"type": "string", "pattern": "^[0-9]{8}$"},
+              {"type": "null"}
+            ]
           }
         }
+      }
+    },
+    "awakening": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["trade_date", "iv_change_abs_1d_pctpt", "rule3_status", "status",
+                    "cash_reclaim_pct", "baseline_iv", "trigger_date", "release_date",
+                    "production_effect_enabled", "source"],
+      "properties": {
+        "trade_date": {
+          "anyOf": [
+            {"type": "string", "pattern": "^[0-9]{8}$"},
+            {"type": "null"}
+          ]
+        },
+        "iv_change_abs_1d_pctpt": {
+          "anyOf": [
+            {"type": "number", "minimum": 0},
+            {"type": "null"}
+          ]
+        },
+        "rule3_status": {
+          "enum": ["normal", "reduce_new_position_50pct", "no_trade", "unknown"]
+        },
+        "status": {
+          "enum": ["inactive", "active", "cooldown", "unknown"]
+        },
+        "cash_reclaim_pct": {
+          "anyOf": [
+            {"type": "number", "minimum": 0, "maximum": 100},
+            {"type": "null"}
+          ]
+        },
+        "baseline_iv": {
+          "anyOf": [
+            {"type": "number", "exclusiveMinimum": 0},
+            {"type": "null"}
+          ]
+        },
+        "trigger_date": {
+          "anyOf": [
+            {"type": "string", "pattern": "^[0-9]{8}$"},
+            {"type": "null"}
+          ]
+        },
+        "release_date": {
+          "anyOf": [
+            {"type": "string", "pattern": "^[0-9]{8}$"},
+            {"type": "null"}
+          ]
+        },
+        "production_effect_enabled": {"const": false},
+        "source": {"const": "iv_series_state_machine_v1"}
       }
     },
     "boundary": {
@@ -62,5 +241,56 @@
         "iv_method": {"const": "bs_atm_constant_maturity_feasibility_grade"}
       }
     }
-  }
+  },
+  "allOf": [
+    {
+      "if": {
+        "properties": {"schema_version": {"const": "1.2.0"}},
+        "required": ["schema_version"]
+      },
+      "then": {
+        "required": ["awakening", "calendar"],
+        "properties": {
+          "series": {
+            "items": {
+              "required": ["iv_change_abs_1d_pctpt", "rule3_status", "awakening_status",
+                            "cash_reclaim_pct", "awakening_baseline_iv", "awakening_trigger_date",
+                            "awakening_release_date"]
+            }
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {"schema_version": {"const": "1.1.0"}},
+        "required": ["schema_version"]
+      },
+      "then": {
+        "not": {
+          "anyOf": [
+            {"required": ["calendar"]},
+            {"required": ["awakening"]}
+          ]
+        },
+        "properties": {
+          "series": {
+            "items": {
+              "not": {
+                "anyOf": [
+                  {"required": ["iv_change_abs_1d_pctpt"]},
+                  {"required": ["rule3_status"]},
+                  {"required": ["awakening_status"]},
+                  {"required": ["cash_reclaim_pct"]},
+                  {"required": ["awakening_baseline_iv"]},
+                  {"required": ["awakening_trigger_date"]},
+                  {"required": ["awakening_release_date"]}
+                ]
+              }
+            }
+          }
+        }
+      }
+    }
+  ]
 }

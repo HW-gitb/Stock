@@ -75,6 +75,22 @@ def _is_valid_yyyymmdd(value) -> bool:
     return bool(_valid_date_mask(pd.Series([str(value)])).iloc[0])
 
 
+def _observed_trade_dates(df: pd.DataFrame, as_of: str) -> list[str]:
+    """Return the independently observed PIT dates from an existing price feed.
+
+    ``fund_daily`` is already fetched for the IV build.  Keep its session list
+    as a separate producer fact instead of treating the ``trade_cal`` request
+    that drives option probes as its own evidence.
+    """
+    if df is None or df.empty or "trade_date" not in df.columns:
+        return []
+    values = df["trade_date"].astype(str)
+    valid = (values.str.fullmatch(r"[0-9]{8}", na=False)
+             & _valid_date_mask(values)
+             & (values <= str(as_of)))
+    return sorted(set(values[valid].tolist()))
+
+
 def _pit_filter(df: pd.DataFrame, as_of: str) -> pd.DataFrame:
     """只保留 trade_date 合法且 <= as_of 的行(PIT)。"""
     if df is None or df.empty or "trade_date" not in df.columns:
@@ -539,11 +555,22 @@ def fetch_probe_inputs(pro, as_of: str, lookback_days: int = 40, max_trade_dates
     underlier, s = _safe_pro_call(pro, "fund_daily", ts_code=UNDERLYING, start_date=start, end_date=as_of,
                                   fields="ts_code,trade_date,close")
     statuses.append(s)
+    underlier_trade_dates = _observed_trade_dates(underlier, as_of)
     had_provider_error = any(not st["ok"] for st in statuses)
     report = {
         "opt_basic_rows": int(len(opt_basic)), "opt_daily_rows": int(len(opt_daily)),
         "underlier_rows": int(len(underlier)), "trade_dates_planned": len(dates),
         "trade_dates_probed": len(opt_daily_attempted_dates),
+        "trade_dates_probed_dates": list(opt_daily_attempted_dates),
+        # This is the exchange-session authority consumed by the M0.5
+        # producer.  An empty result is explicit unavailability; the builder
+        # must not replace it with a weekday/business-day approximation.
+        "trade_calendar": list(dates),
+        "trade_calendar_status": "available" if dates else "calendar_unavailable",
+        # Independent producer fact from the already-fetched underlying daily
+        # series.  The IV feed builder uses this to cross-check trade_cal in
+        # the exact window that drives M0.5 adjacency.
+        "underlier_trade_dates": underlier_trade_dates,
         "endpoint_statuses": statuses, "had_provider_error": had_provider_error,
         "retry_recoveries": retry_recoveries,
         "opt_daily_fail_fast_triggered": opt_daily_fail_fast_triggered,

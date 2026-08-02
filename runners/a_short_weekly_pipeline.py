@@ -19,6 +19,7 @@ import argparse
 import copy
 import hashlib
 import json
+import math
 import os
 import re
 import sys
@@ -466,6 +467,8 @@ def _append_manual_review_advisories(manual_review: list[dict], semantic_provide
 
 def _build_holdings(acct, candidate_codes, as_of, price_provider, iv_pct, account, regime,
                     regime_fallback, price_data_through, egs_full=None, iv_value=None, hv_value=None,
+                    iv_change_abs_1d_pctpt=None, rule3_status=None, awakening_status=None,
+                    cash_reclaim_pct=None, awakening_trigger_date=None, awakening_release_date=None,
                     semantic_provider=None, web_llm_provider=None, account_integrity=None,
                     manual_review_codes=None):
     """持仓恒列入 S1: 为"持仓 ∖ top-N"构造 M6.7 待分析行(Tier 路由)。**不改 egs_main / 选股 / 语义 /
@@ -530,7 +533,12 @@ def _build_holdings(acct, candidate_codes, as_of, price_provider, iv_pct, accoun
                                     acct, code, as_of, account_integrity=account_integrity),
                                 semantic=(semantic_provider(code) if semantic_provider else None),
                                 semantic_web_llm=(web_llm_provider(code) if web_llm_provider else None),
-                                iv_value=iv_value, hv_value=hv_value)
+                                iv_value=iv_value, hv_value=hv_value,
+                                iv_change_abs_1d_pctpt=iv_change_abs_1d_pctpt,
+                                rule3_status=rule3_status, awakening_status=awakening_status,
+                                cash_reclaim_pct=cash_reclaim_pct,
+                                awakening_trigger_date=awakening_trigger_date,
+                                awakening_release_date=awakening_release_date)
         if rs == "account_position_only":     # Tier-3: 走 build_holding_report(不跑 EGS 风险分类、不伪造 veto)
             n["egs_coverage"] = "uncovered"
         holding_normalized.append(n)
@@ -544,7 +552,9 @@ def normalize_candidate(cand: dict, price_series: list, overlay_row: dict, iv_pc
                         account: dict, regime: str,
                         llm_enrichment=None, observe_only=None, semantic=None,
                         semantic_web_llm=None, regime_fallback=None, stateful_risk=None,
-                        iv_value=None, hv_value=None) -> dict:
+                        iv_value=None, hv_value=None, iv_change_abs_1d_pctpt=None,
+                        rule3_status=None, awakening_status=None, cash_reclaim_pct=None,
+                        awakening_trigger_date=None, awakening_release_date=None) -> dict:
     """把一个 EGS analysis_input 候选 + 价格序列 + overlay 行 + 市场级 IV 分位 + 账户/环境
     归一化成 Phase 5 引擎输入。字段缺失 → 引擎按保守/observe 处理。"""
     d = cand.get("derived_flags", {}) or {}
@@ -632,7 +642,13 @@ def normalize_candidate(cand: dict, price_series: list, overlay_row: dict, iv_pc
                   "regulatory_legacy_vetoed": False},
         "rule6_checks": materialize_50etf_iv_rule6_check(ev.get("rule6_checks"), iv_pct),
         "liquidity": {"avg_amount_5d": liq.get("avg_amount_5d"), "avg_amount_20d": liq.get("avg_amount_20d")},
-        "iv": {"iv_percentile_252d": iv_pct, "iv_value": iv_value, "hv_value": hv_value},
+        "iv": {"iv_percentile_252d": iv_pct, "iv_value": iv_value, "hv_value": hv_value,
+               "iv_change_abs_1d_pctpt": iv_change_abs_1d_pctpt,
+               "rule3_status": rule3_status,
+               "awakening_status": awakening_status,
+               "cash_reclaim_pct": cash_reclaim_pct,
+               "awakening_trigger_date": awakening_trigger_date,
+               "awakening_release_date": awakening_release_date},
         "market_regime": regime,
         "regime_fallback": dict(regime_fallback or {}),
         "account": account or {},
@@ -805,7 +821,7 @@ def _demote_build_for_portfolio_risk(report: dict, rank: int, reason: str) -> No
 
 
 def _allocate_cash(reports: list, available_cash, new_exposure_capacity=None,
-                   portfolio_context=None) -> dict:
+                   portfolio_context=None, m05_context: dict | None = None) -> dict:
     """#3 全局现金分配(价格提案 §4 + §11.3/11.4):多只建仓按**区间上沿 entry_high**(最不利价)统一消耗
     available_cash,确定性排序;不足一手/最小金额 → 转观察。**原地改 reports(只动建仓票)**;返回 weekly 现金摘要 | None。
     只 re-rank 建仓,不 rescue hard veto、不把观察/否决变建仓、不碰持仓/Rule12·13。"""
@@ -813,6 +829,13 @@ def _allocate_cash(reports: list, available_cash, new_exposure_capacity=None,
     from engine.a_short_portfolio_risk import commit_candidate, evaluate_candidate
     if available_cash is None:
         return None
+    if isinstance(available_cash, bool) or not math.isfinite(float(available_cash)) or float(available_cash) < 0:
+        raise ValueError("available_cash must be a finite non-negative number")
+    if (new_exposure_capacity is not None
+            and (isinstance(new_exposure_capacity, bool)
+                 or not math.isfinite(float(new_exposure_capacity))
+                 or float(new_exposure_capacity) < 0)):
+        raise ValueError("new_exposure_capacity must be a finite non-negative number")
     builds = [(i, r) for i, r in enumerate(reports) if r["m67"]["table"]["操作"] == "建仓"]
 
     def _key(ir):
@@ -858,6 +881,27 @@ def _allocate_cash(reports: list, available_cash, new_exposure_capacity=None,
     if new_exposure_capacity is not None:
         summary.update({"new_exposure_capacity_start": round(float(new_exposure_capacity), 2),
                         "remaining_new_exposure_capacity": round(exposure_remaining, 2)})
+    if m05_context is not None:
+        if (m05_context.get("mode") != "conservative_degradation"
+                or m05_context.get("allocation_blocked") is not True):
+            raise ValueError("invalid M0.5 conservative allocation context")
+        summary.update({
+            "m05_mode": m05_context["mode"],
+            "m05_allocation_blocked": True,
+            "m05_block_reason": m05_context["block_reason"],
+            "m05_pre_reclaim_cash": m05_context["pre_reclaim_cash"],
+            "m05_reclaimed_cash": m05_context["reclaimed_cash"],
+            "m05_post_reclaim_cash": m05_context["post_reclaim_cash"],
+        })
+        if "pre_reclaim_new_exposure_capacity" in m05_context:
+            summary.update({
+                "m05_pre_reclaim_new_exposure_capacity": m05_context[
+                    "pre_reclaim_new_exposure_capacity"],
+                "m05_reclaimed_new_exposure_capacity": m05_context[
+                    "reclaimed_new_exposure_capacity"],
+                "m05_post_reclaim_new_exposure_capacity": m05_context[
+                    "post_reclaim_new_exposure_capacity"],
+            })
     return summary
 
 
@@ -1106,6 +1150,40 @@ def _attach_breakout_source_disagreement_notices(reports: list[dict]) -> None:
             table["触发条件"] = (trigger + "；" if trigger else "") + _BREAKOUT_SOURCE_DISAGREEMENT_NOTICE
 
 
+def _resolve_m05_state(normalized_list: list[dict]) -> dict:
+    """Bind one canonical M0.5 state across every candidate in a weekly run."""
+    keys = ("iv_change_abs_1d_pctpt", "rule3_status", "awakening_status",
+            "cash_reclaim_pct", "awakening_trigger_date", "awakening_release_date")
+    observed = []
+    for item in normalized_list or []:
+        iv = item.get("iv") or {}
+        if iv.get("rule3_status") is not None or iv.get("awakening_status") is not None:
+            observed.append({key: iv.get(key) for key in keys})
+    if not observed:
+        return {}
+    first = observed[0]
+    for state in observed[1:]:
+        if state != first:
+            raise ValueError("weekly candidates consume conflicting M0.5 IV states")
+    rule3 = first.get("rule3_status")
+    awakening = first.get("awakening_status")
+    if rule3 not in {"normal", "reduce_new_position_50pct", "no_trade", "unknown"}:
+        raise ValueError("M0.5 rule3_status invalid")
+    if awakening not in {"inactive", "active", "cooldown", "unknown"}:
+        raise ValueError("M0.5 awakening_status invalid")
+    reclaim = first.get("cash_reclaim_pct")
+    if awakening == "active":
+        if isinstance(reclaim, bool) or not isinstance(reclaim, (int, float)) or not 0 <= reclaim <= 100:
+            raise ValueError("active M0.5 awakening requires finite cash_reclaim_pct")
+    elif reclaim is not None and (isinstance(reclaim, bool) or not isinstance(reclaim, (int, float))):
+        raise ValueError("M0.5 cash_reclaim_pct invalid")
+    for key in ("awakening_trigger_date", "awakening_release_date"):
+        value = first.get(key)
+        if value is not None and not _is_valid_date(value):
+            raise ValueError(f"M0.5 {key} invalid")
+    return first
+
+
 def build_weekly_report(normalized_list: list, as_of: str, generated_at: str,
                         iv_feed_ref: str = "", run_lineage: dict = None, available_cash=None,
                         new_exposure_capacity=None, crash_veto_tracking: dict | None = None,
@@ -1159,10 +1237,74 @@ def build_weekly_report(normalized_list: list, as_of: str, generated_at: str,
             raise ValueError("non-complete margin coverage cannot claim complete")
     else:
         raise ValueError("margin coverage has an invalid status")
-    bound_normalized_list = [
-        dict(item, margin_coverage=margin_coverage, price_data_through=price_data_through)
-        for item in normalized_list
-    ]
+    for value, label in ((available_cash, "available_cash"),
+                         (new_exposure_capacity, "new_exposure_capacity")):
+        if (value is not None
+                and (isinstance(value, bool)
+                     or not math.isfinite(float(value))
+                     or float(value) < 0)):
+            raise ValueError(f"{label} must be a finite non-negative number")
+    m05_state = _resolve_m05_state(normalized_list)
+    m05_active = m05_state.get("awakening_status") == "active"
+    effective_available_cash = available_cash
+    effective_new_exposure_capacity = new_exposure_capacity
+    m05_cash_context = None
+    if m05_active:
+        from runners.a_short_iv_feed_build import (
+            M05_CONSERVATIVE_BLOCK_REASON, M05_CONSERVATIVE_MODE,
+        )
+        reclaim = float(m05_state["cash_reclaim_pct"])
+        if available_cash is not None:
+            pre_cash = round(max(0.0, float(available_cash)), 2)
+            reclaimed_cash = round(pre_cash * reclaim / 100.0, 2)
+            post_cash = round(pre_cash - reclaimed_cash, 2)
+            effective_available_cash = 0.0
+            m05_cash_context = {
+                "mode": M05_CONSERVATIVE_MODE,
+                "allocation_blocked": True,
+                "block_reason": M05_CONSERVATIVE_BLOCK_REASON,
+                "pre_reclaim_cash": pre_cash,
+                "reclaimed_cash": reclaimed_cash,
+                "post_reclaim_cash": post_cash,
+            }
+        if new_exposure_capacity is not None:
+            pre_capacity = round(max(0.0, float(new_exposure_capacity)), 2)
+            reclaimed_capacity = round(pre_capacity * reclaim / 100.0, 2)
+            post_capacity = round(pre_capacity - reclaimed_capacity, 2)
+            effective_new_exposure_capacity = 0.0
+            if m05_cash_context is None:
+                m05_cash_context = {
+                    "mode": M05_CONSERVATIVE_MODE,
+                    "allocation_blocked": True,
+                    "block_reason": M05_CONSERVATIVE_BLOCK_REASON,
+                    "pre_reclaim_cash": 0.0,
+                    "reclaimed_cash": 0.0,
+                    "post_reclaim_cash": 0.0,
+                }
+            m05_cash_context.update({
+                "pre_reclaim_new_exposure_capacity": pre_capacity,
+                "reclaimed_new_exposure_capacity": reclaimed_capacity,
+                "post_reclaim_new_exposure_capacity": post_capacity,
+            })
+    bound_normalized_list = []
+    for item in normalized_list:
+        bound = dict(item, margin_coverage=margin_coverage, price_data_through=price_data_through)
+        if m05_active:
+            # The current account contract has no execution-stream authority
+            # for same-day sell proceeds.  Keep the safe side of v14.2: while
+            # awakening is active, flat candidates cannot rebuild a position.
+            stateful = dict(bound.get("stateful_risk") or {})
+            stateful["m05_mode"] = M05_CONSERVATIVE_MODE
+            stateful["m05_block_reason"] = M05_CONSERVATIVE_BLOCK_REASON
+            if stateful.get("position_state") != "held":
+                stateful["m05_rebuild_blocked"] = True
+                reasons = list(stateful.get("reasons") or [])
+                for reason in (M05_CONSERVATIVE_BLOCK_REASON, "M0.5 awakening active:暂停新建仓"):
+                    if reason not in reasons:
+                        reasons.append(reason)
+                stateful["reasons"] = reasons
+            bound["stateful_risk"] = stateful
+        bound_normalized_list.append(bound)
     # 持仓恒列入 S1: 标了 egs_coverage="uncovered" 的(Tier-3 粗筛未覆盖持仓)走 build_holding_report
     # (不跑 EGS 风险分类,避免在缺失数据上伪造 veto);其余(候选 / Tier-1 / Tier-2)走 build_m67_report。
     reports = [(build_holding_report(n, as_of, generated_at)
@@ -1173,7 +1315,9 @@ def build_weekly_report(normalized_list: list, as_of: str, generated_at: str,
     portfolio_context = build_context(
         bound_normalized_list, portfolio_fact_as_of, fact_overrides=portfolio_fact_overrides,
         account_positions=account_positions, missing_holding_codes=missing_holding_codes)
-    cash_summary = _allocate_cash(reports, available_cash, new_exposure_capacity, portfolio_context)
+    cash_summary = _allocate_cash(reports, effective_available_cash,
+                                  effective_new_exposure_capacity, portfolio_context,
+                                  m05_context=m05_cash_context)
     portfolio_risk = _apply_portfolio_risk_results(
         reports, portfolio_context, as_of, portfolio_fact_as_of, portfolio_fact_fetch_status)
     _attach_breakout_source_disagreement_notices(reports)
@@ -1391,7 +1535,7 @@ def validate_weekly_report(weekly: dict, iv_feed_summary: dict,
                            *, previous_ledger: dict | None = None) -> None:
     """关闭 P2:消费方校验它读入的 IV feed + 每张 M6.7。"""
     from datetime import datetime
-    from runners.a_short_iv_feed_build import validate_feed_summary_consistency
+    from runners.a_short_iv_feed_build import validate_feed_artifact
     decision_as_of = str(weekly.get("decision_as_of") or weekly["as_of"])
     price_data_through = str(weekly.get("price_data_through") or weekly["as_of"])
     if decision_as_of != str(weekly["as_of"]):
@@ -1418,7 +1562,7 @@ def validate_weekly_report(weekly: dict, iv_feed_summary: dict,
         datetime.strptime(str(weekly["as_of"]), "%Y%m%d")
     except ValueError:
         raise ValueError(f"weekly as_of {weekly['as_of']} 非合法日历日期")
-    validate_feed_summary_consistency(iv_feed_summary)        # 读取方校验 feed(P2)
+    validate_feed_artifact(iv_feed_summary)        # 读取方 schema + feed binding 校验(P2)
     if weekly.get("crash_veto_tracking") is not None:
         _validate_crash_veto_tracking_summary(weekly["crash_veto_tracking"], expected_as_of=weekly["as_of"])
     if weekly.get("factor_comparison_v2") is not None:
@@ -1508,6 +1652,48 @@ def validate_weekly_report(weekly: dict, iv_feed_summary: dict,
         raise ValueError("run_lineage=(provided,sized) 但 cash_allocation 非对象(sized 必有全局现金分配摘要)")
     if not sized and ca is not None:
         raise ValueError("run_lineage=(absent,observation_only_no_account) 但 cash_allocation 非 null(observation-only 不得有现金分配)")
+    from runners.a_short_iv_feed_build import (
+        M05_CONSERVATIVE_BLOCK_REASON, M05_CONSERVATIVE_MODE,
+    )
+    active_reports = [
+        report for report in weekly.get("reports") or []
+        if ((report.get("machine") or {}).get("iv_gate") or {}).get("awakening_status") == "active"
+    ]
+    for report in active_reports:
+        iv_gate = (report.get("machine") or {}).get("iv_gate") or {}
+        if iv_gate.get("m05_mode") != M05_CONSERVATIVE_MODE:
+            raise ValueError("active M0.5 report missing conservative mode binding")
+        if report.get("m67", {}).get("table", {}).get("操作") == "建仓":
+            raise ValueError("active M0.5 conservative mode cannot publish a new-entry action")
+    if ca is not None and ca.get("m05_mode") is not None:
+        if not active_reports or ca.get("m05_mode") != M05_CONSERVATIVE_MODE:
+            raise ValueError("cash_allocation M0.5 mode is not bound to an active IV state")
+        if (ca.get("m05_allocation_blocked") is not True
+                or M05_CONSERVATIVE_BLOCK_REASON not in str(ca.get("m05_block_reason") or "")):
+            raise ValueError("cash_allocation M0.5 conservative block is not explicit")
+        for key in ("available_cash_start", "allocated_cash_total", "remaining_cash"):
+            if abs(float(ca.get(key, -1.0))) > 0.011:
+                raise ValueError("M0.5 conservative cash allocation must expose actual zero allocatable cash")
+        reclaim = ((active_reports[0].get("machine") or {}).get("iv_gate") or {}).get(
+            "cash_reclaim_pct")
+        pre = float(ca.get("m05_pre_reclaim_cash", -1.0))
+        reclaimed = float(ca.get("m05_reclaimed_cash", -1.0))
+        post = float(ca.get("m05_post_reclaim_cash", -1.0))
+        if pre < -0.011 or abs(reclaimed - round(pre * float(reclaim) / 100.0, 2)) > 0.011 \
+                or abs(post - round(pre - reclaimed, 2)) > 0.011:
+            raise ValueError("M0.5 cash reclaim audit fields do not reconcile")
+        if "m05_pre_reclaim_new_exposure_capacity" in ca:
+            for key in ("new_exposure_capacity_start", "remaining_new_exposure_capacity"):
+                if abs(float(ca.get(key, -1.0))) > 0.011:
+                    raise ValueError("M0.5 conservative new-exposure allocator must be zero")
+            exp_pre = float(ca.get("m05_pre_reclaim_new_exposure_capacity", -1.0))
+            exp_reclaimed = float(ca.get("m05_reclaimed_new_exposure_capacity", -1.0))
+            exp_post = float(ca.get("m05_post_reclaim_new_exposure_capacity", -1.0))
+            if exp_pre < -0.011 or abs(exp_reclaimed - round(exp_pre * float(reclaim) / 100.0, 2)) > 0.011 \
+                    or abs(exp_post - round(exp_pre - exp_reclaimed, 2)) > 0.011:
+                raise ValueError("M0.5 new-exposure reclaim audit fields do not reconcile")
+    elif active_reports and ca is not None and sized:
+        raise ValueError("active M0.5 sized report missing conservative cash-allocation audit")
     candidate_exclusions = weekly.get("candidate_exclusions") or []
     exclusion_codes = [str(item.get("ts_code") or "") for item in candidate_exclusions]
     if len(exclusion_codes) != len(set(exclusion_codes)) or any(not code for code in exclusion_codes):
@@ -2522,6 +2708,63 @@ def latest_iv_hv(iv_feed_summary: dict):
         return None, None
     last = series[-1]
     return last.get("iv_value"), last.get("hv_value")
+
+
+def latest_m05_state(iv_feed_summary: dict) -> dict:
+    """Return only a validated 1.2.0 producer-bound M0.5 state.
+
+    A legacy 1.1.0 feed is still readable for non-M0.5 consumers, but it has
+    no usable M0.5 state.  Validate here as well as at the surrounding read
+    door so a future caller cannot turn an unvalidated series row into a
+    decision input by calling this helper directly.
+    """
+    from runners.a_short_iv_feed_build import validated_m05_series
+    series = validated_m05_series(iv_feed_summary)
+    if not series:
+        return {
+            "iv_change_abs_1d_pctpt": None, "rule3_status": None,
+            "awakening_status": None, "cash_reclaim_pct": None,
+            "awakening_trigger_date": None, "awakening_release_date": None,
+        }
+    last = series[-1]
+    return {key: last.get(key) for key in (
+        "iv_change_abs_1d_pctpt", "rule3_status", "awakening_status",
+        "cash_reclaim_pct", "awakening_trigger_date", "awakening_release_date",
+    )}
+
+
+def _validate_analysis_input_m05_binding(analysis_input: dict, iv_feed_summary: dict,
+                                         m05_state: dict) -> None:
+    """Reject a second/stale M0.5 value hidden in the EGS input artifact.
+
+    The IV feed is the sole producer authority for M0.5. EGS historically
+    emitted these fields as ``None``/``unknown`` because it runs before the
+    separately-built IV feed. Those placeholders are permitted; any
+    populated value must match the validated feed exactly, otherwise the
+    batch fails closed instead of silently ignoring an input leaf.
+    """
+    volatility = ((analysis_input or {}).get("market_context") or {}).get("volatility") or {}
+    bindings = {
+        "iv_change_abs_1d_pctpt": volatility.get("iv_change_abs_1d_pctpt"),
+        "awakening_status": volatility.get("awakening_status"),
+        "cash_reclaim_pct": volatility.get("cash_reclaim_pct"),
+        "rule3_status": volatility.get("rule3_status"),
+    }
+    feed_version = str((iv_feed_summary or {}).get("schema_version") or "")
+    for field, supplied in bindings.items():
+        placeholder = supplied is None or (field in {"awakening_status", "rule3_status"}
+                                             and supplied == "unknown")
+        if placeholder:
+            continue
+        if feed_version != "1.2.0":
+            raise ValueError(f"analysis_input M0.5 {field} 已填值但 IV feed 未提供 1.2.0 状态")
+        expected = m05_state.get(field)
+        if isinstance(expected, (int, float)) and isinstance(supplied, (int, float)):
+            if (isinstance(expected, bool) or isinstance(supplied, bool)
+                    or abs(float(expected) - float(supplied)) > 1e-6):
+                raise ValueError(f"analysis_input M0.5 {field} 与 IV feed 不一致")
+        elif supplied != expected:
+            raise ValueError(f"analysis_input M0.5 {field} 与 IV feed 不一致")
 
 
 def validate_iv_feed_freshness(iv_feed_summary: dict, price_data_through: str) -> dict:
@@ -4543,10 +4786,12 @@ def main(argv=None, pro_factory=None, price_provider=None, semantic_provider=Non
         feed = _load(args.iv_feed)
     except (OSError, UnicodeDecodeError, json.JSONDecodeError) as exc:
         raise SystemExit(f"[FATAL] invalid/stale --iv-feed: {type(exc).__name__}") from exc
-    from runners.a_short_iv_feed_build import validate_feed_summary_consistency
-    validate_feed_summary_consistency(feed)
+    from runners.a_short_iv_feed_build import validate_feed_artifact
+    validate_feed_artifact(feed)
     iv_pct = latest_iv_percentile(feed)        # 市场级 IV 分位(None → 引擎按 missing 处理)
     iv_value, hv_value = latest_iv_hv(feed)    # #6 IV-HV advisory:市场级 IV/HV 原始值(引擎算标签)
+    m05_state = latest_m05_state(feed)
+    _validate_analysis_input_m05_binding(ai, feed, m05_state)
     overlay = _load_validated_overlay(args.overlay, args.as_of) if args.overlay else {}
     weekly_candidates = [c.get("ts_code") for c in ai.get("candidates", [])]
     # overlay 血缘门(#R-ASHORT-WEEKLY-AUX-ARTIFACT-CANDIDATE-SET-MISMATCH):overlay 必须**恰好覆盖**
@@ -4749,7 +4994,13 @@ def main(argv=None, pro_factory=None, price_provider=None, semantic_provider=Non
                                           account_integrity=account_integrity),
                                       semantic=semantic_by_code[str(c["ts_code"])],
                                       semantic_web_llm=(web_llm_provider(c["ts_code"]) if web_llm_provider else None),
-                                      iv_value=iv_value, hv_value=hv_value)
+                                      iv_value=iv_value, hv_value=hv_value,
+                                      iv_change_abs_1d_pctpt=m05_state["iv_change_abs_1d_pctpt"],
+                                      rule3_status=m05_state["rule3_status"],
+                                      awakening_status=m05_state["awakening_status"],
+                                      cash_reclaim_pct=m05_state["cash_reclaim_pct"],
+                                      awakening_trigger_date=m05_state["awakening_trigger_date"],
+                                      awakening_release_date=m05_state["awakening_release_date"])
                   for c in cands]
     unmatched_regulatory_confirmations = set(regulatory_confirmations) - matched_regulatory_confirmations
     if unmatched_regulatory_confirmations:
@@ -4863,6 +5114,11 @@ def main(argv=None, pro_factory=None, price_provider=None, semantic_provider=Non
         holding_normalized, holding_meta, price_manual_review = _build_holdings(
             acct, candidate_codes, args.as_of, price_provider, iv_pct, account, regime,
             regime_fallback, price_data_through, iv_value=iv_value, hv_value=hv_value,
+            iv_change_abs_1d_pctpt=m05_state["iv_change_abs_1d_pctpt"],
+            rule3_status=m05_state["rule3_status"], awakening_status=m05_state["awakening_status"],
+            cash_reclaim_pct=m05_state["cash_reclaim_pct"],
+            awakening_trigger_date=m05_state["awakening_trigger_date"],
+            awakening_release_date=m05_state["awakening_release_date"],
             semantic_provider=_holding_semantic_with_confirmation, web_llm_provider=holding_web_llm_provider,
             account_integrity=account_integrity, manual_review_codes=manual_review_codes)
         _append_manual_review_advisories(

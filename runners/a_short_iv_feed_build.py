@@ -16,10 +16,12 @@ rolling_percentile_252)可用合成 fixture 单测;真实 Tushare 调用复用�
 from __future__ import annotations
 
 import argparse
+import hashlib
 import json
 import math
 import os
 import sys
+from functools import lru_cache
 from pathlib import Path
 
 # Ensure the project root is importable when run directly as `python runners\<this>.py`
@@ -32,7 +34,7 @@ import jsonschema  # noqa: E402
 import pandas as pd  # noqa: E402
 
 SCHEMA_NAME = "a_short_iv_feed"
-SCHEMA_VERSION = "1.1.0"          # 1.1.0:#6 IV-HV——series 增 hv_value(50ETF 已实现波动),params 增 hv_window
+SCHEMA_VERSION = "1.2.0"          # 1.2.0:M0.5——PIT-safe IV delta/觉醒状态/Rule3 state producer
 UNDERLYING = "510050.SH"
 SCHEMA_PATH = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
                            "schemas", "a_short_iv_feed.schema.json")
@@ -45,6 +47,43 @@ ROLL_WINDOW = 252              # 252 日滚动百分位
 MIN_ROLL_OBS = 60             # 滚动百分位最少观测(< 此则 percentile=None)
 HV_WINDOW = 21               # #6 IV-HV:已实现波动回看窗(交易日;≈ 30 日历日恒定到期 IV 的可比口径)
 HV_ANNUALIZE = 252           # 已实现波动年化因子(× √252)
+
+# v14.2 M0.5 producer contract.  ``iv_value`` is a decimal (0.20 = 20%),
+# while the specification's IV movement thresholds are percentage points.
+AWAKENING_LOW_IV_PERCENTILE = 10.0
+AWAKENING_LOW_IV_DAYS = 5
+AWAKENING_RISE_PCTPT = 5.0
+AWAKENING_RELEASE_TOLERANCE_PCTPT = 1.0
+AWAKENING_CASH_RECLAIM_PCT = 20.0
+AWAKENING_STATE_SOURCE = "iv_series_state_machine_v1"
+# M0.5 option (c): the current account contract cannot attribute same-day sell
+# proceeds, so an active awakening is an explicit conservative degradation.
+# Keep these labels in the producer module so weekly/Phase5/render cannot drift
+# into separate authorities.
+M05_CONSERVATIVE_MODE = "conservative_degradation"
+M05_CONSERVATIVE_MODE_LABEL = "M0.5 保守降级模式"
+M05_CONSERVATIVE_BLOCK_REASON = "M0.5 保守降级模式：本周不新建仓"
+
+
+@lru_cache(maxsize=1)
+def _rule3_thresholds() -> tuple[float, float] | None:
+    """Read Rule3 thresholds from the reviewed runtime-policy authority.
+
+    The IV producer must not carry a second copy of the 80/90 thresholds.  A
+    malformed or unavailable policy fails closed to ``unknown`` rather than
+    silently using stale literals.
+    """
+    try:
+        from engine.a_short_runtime_config import load_runtime_configuration
+        phase5 = load_runtime_configuration()["m67"]["phase5"]
+        halve = float(phase5["iv_halve_pct"])
+        nobuild = float(phase5["iv_nobuild_pct"])
+    except (KeyError, TypeError, ValueError, ImportError):
+        return None
+    if not (math.isfinite(halve) and math.isfinite(nobuild)
+            and 0.0 <= halve < nobuild <= 100.0):
+        return None
+    return halve, nobuild
 
 
 # ── Black-Scholes(欧式)+ 隐含波动率反解 ────────────────────────────────────
@@ -124,13 +163,99 @@ def constant_maturity_iv(near_iv, near_T, next_iv, next_T, target_T):
 
 # ── 逐日构建 + 滚动百分位 ─────────────────────────────────────────────────────
 def _valid_date_mask(s: pd.Series) -> pd.Series:
-    return pd.to_datetime(s.astype(str), format="%Y%m%d", errors="coerce").notna()
+    values = s.astype(str)
+    return (values.str.fullmatch(r"[0-9]{8}", na=False)
+            & pd.to_datetime(values, format="%Y%m%d", errors="coerce").notna())
 
 
 def _days_between(d0: str, d1: str) -> int:
     a = pd.to_datetime(str(d0), format="%Y%m%d")
     b = pd.to_datetime(str(d1), format="%Y%m%d")
     return int((b - a).days)
+
+
+def _normalise_trade_calendar(trade_calendar) -> tuple[str, ...] | None:
+    """Return sorted unique exchange sessions, or ``None`` when unavailable.
+
+    The producer receives this list from the same exchange ``trade_cal`` call
+    that plans the option probes.  We never infer sessions from weekdays:
+    exchange holidays are adjacent when they are absent from this list, while
+    a real open session missing from the IV series remains a visible gap.
+    """
+    if trade_calendar is None:
+        return None
+    if isinstance(trade_calendar, pd.DataFrame):
+        if "cal_date" not in trade_calendar.columns:
+            return None
+        values = trade_calendar["cal_date"].tolist()
+    else:
+        try:
+            values = list(trade_calendar)
+        except TypeError:
+            return None
+    normalised = [str(value) for value in values]
+    if not normalised or not _valid_date_mask(pd.Series(normalised)).all():
+        return None
+    if len(normalised) != len(set(normalised)):
+        return None
+    return tuple(sorted(normalised))
+
+
+def _trade_calendar_sha256(trade_dates: tuple[str, ...] | list[str] | None) -> str:
+    """Hash the canonical ordered session list used by the M0.5 state machine."""
+    dates = tuple(trade_dates or ())
+    return hashlib.sha256("\n".join(dates).encode("ascii")).hexdigest() if dates else ""
+
+
+def _calendar_metadata(trade_dates: tuple[str, ...] | None,
+                       probed_dates: tuple[str, ...] | None,
+                       source: str,
+                       independent_trade_dates: tuple[str, ...] | None = None) -> dict:
+    dates = tuple(trade_dates or ())
+    probed = tuple(probed_dates or ())
+    available = trade_dates is not None
+    independent = tuple(independent_trade_dates or ())
+    metadata = {
+        "status": "available" if available else "calendar_unavailable",
+        "source": source if available else "calendar_unavailable",
+        "trade_dates": list(dates),
+        "coverage_start": dates[0] if dates else None,
+        "coverage_end": dates[-1] if dates else None,
+        "n_trade_dates": len(dates),
+        "trade_dates_sha256": _trade_calendar_sha256(dates),
+        # Producer-side attempted-date fact. Read-side recomputation uses
+        # this (or an independently supplied calendar), not the calendar list
+        # being validated, so a row edit cannot redefine adjacency silently.
+        "probed_trade_dates": list(probed),
+        "probed_trade_dates_sha256": _trade_calendar_sha256(probed),
+    }
+    if available and independent_trade_dates is not None:
+        metadata.update({
+            "independent_source": "tushare.fund_daily",
+            "independent_trade_dates": list(independent),
+            "independent_trade_dates_sha256": _trade_calendar_sha256(independent),
+        })
+    return metadata
+
+
+def _feed_dates_are_adjacent(d0: str, d1: str, trade_calendar=None) -> bool:
+    """Return true only when ``d0`` and ``d1`` are adjacent exchange sessions.
+
+    ``None`` means the exchange calendar was unavailable, so the predicate is
+    deliberately false (fail closed).  This single predicate is used for both
+    the one-day IV delta and the five-observation awakening window.
+    """
+    try:
+        a, b = str(d0), str(d1)
+        pd.to_datetime(a, format="%Y%m%d")
+        pd.to_datetime(b, format="%Y%m%d")
+    except (TypeError, ValueError):
+        return False
+    sessions = _normalise_trade_calendar(trade_calendar)
+    if sessions is None or a >= b:
+        return False
+    positions = {date: index for index, date in enumerate(sessions)}
+    return a in positions and positions.get(b) == positions[a] + 1
 
 
 def realized_vol(closes, window: int = HV_WINDOW, annualize: int = HV_ANNUALIZE):
@@ -227,12 +352,208 @@ def rolling_percentile_252(iv_df: pd.DataFrame) -> pd.DataFrame:
     return df
 
 
-def build_feed_summary(iv_df: pd.DataFrame, as_of: str, generated_at: str) -> dict:
+def _finite_optional(value):
+    """Return a finite float or ``None`` without treating bool as a number."""
+    if isinstance(value, bool):
+        return None
+    try:
+        value = float(value)
+    except (TypeError, ValueError):
+        return None
+    return value if math.isfinite(value) else None
+
+
+def rule3_status_from_percentile(iv_percentile):
+    """Derive the v14.2 Rule 3 market state from one IV percentile.
+
+    This is the producer-side state.  Weekly/Phase5 consume the explicit
+    result; the producer itself never silently turns the state into an action.
+    """
+    pct = _finite_optional(iv_percentile)
+    if pct is None or not 0.0 <= pct <= 100.0:
+        return "unknown"
+    thresholds = _rule3_thresholds()
+    if thresholds is None:
+        return "unknown"
+    halve, nobuild = thresholds
+    if pct > nobuild:
+        return "no_trade"
+    if pct > halve:
+        return "reduce_new_position_50pct"
+    return "normal"
+
+
+_M05_STATE_COLUMNS = (
+    "iv_change_abs_1d_pctpt",
+    "rule3_status",
+    "awakening_status",
+    "cash_reclaim_pct",
+    "awakening_baseline_iv",
+    "awakening_trigger_date",
+    "awakening_release_date",
+)
+
+# These fields are the M0.5 producer output.  Version compatibility must be
+# decided from the artifact shape as well as its declared label: a caller must
+# not be able to relabel a 1.2.0-shaped artifact as 1.1.0 and skip recompute.
+_M05_STATE_FIELD_SET = frozenset(_M05_STATE_COLUMNS)
+
+
+def _summary_has_m05_content(summary: dict) -> bool:
+    """Return whether an IV feed carries any 1.2.0/M0.5-only content."""
+    if "calendar" in summary or "awakening" in summary:
+        return True
+    series = summary.get("series")
+    if not isinstance(series, list):
+        return False
+    return any(
+        isinstance(row, dict) and bool(_M05_STATE_FIELD_SET.intersection(row))
+        for row in series
+    )
+
+
+def build_m05_state(iv_df: pd.DataFrame, trade_calendar=None) -> pd.DataFrame:
+    """Build the PIT-safe M0.5 state machine for every IV observation.
+
+    A trigger requires five *prior* consecutive observations below the 10th
+    IV percentile and then a strict one-day IV rise above five percentage
+    points.  The baseline is the IV immediately before that low-IV run.  A
+    trigger remains active until IV returns within one percentage point of the
+    baseline for one trading-day observation.  Missing inputs never clear an
+    active trigger and otherwise yield ``unknown``.
+    """
+    calendar = _normalise_trade_calendar(trade_calendar)
+    columns = list(iv_df.columns if iv_df is not None else [])
+    if iv_df is None or iv_df.empty:
+        return pd.DataFrame(columns=columns + [c for c in _M05_STATE_COLUMNS if c not in columns])
+    raw_dates = [str(value) for value in iv_df["trade_date"].tolist()]
+    if len(raw_dates) != len(set(raw_dates)):
+        raise ValueError("M0.5 state input trade_date contains duplicates")
+    if not _valid_date_mask(pd.Series(raw_dates)).all():
+        raise ValueError("M0.5 state input trade_date contains invalid dates")
+    df = iv_df.sort_values("trade_date").reset_index(drop=True).copy()
+    iv_values = [_finite_optional(value) for value in df["iv_value"].tolist()]
+    pct_values = [_finite_optional(value) for value in df["iv_percentile_252d"].tolist()]
+    active = False
+    baseline_iv = None
+    trigger_date = None
+    release_date = None
+    rows = []
+
+    for i, raw in df.iterrows():
+        trade_date = str(raw["trade_date"])
+        iv = iv_values[i]
+        pct = pct_values[i]
+        previous_iv = iv_values[i - 1] if i > 0 else None
+        dates_adjacent = i > 0 and _feed_dates_are_adjacent(
+            str(df.loc[i - 1, "trade_date"]), trade_date, calendar
+        )
+        change = (round(abs(iv - previous_iv) * 100.0, 6)
+                  if dates_adjacent and iv is not None and previous_iv is not None else None)
+        rule3_status = rule3_status_from_percentile(pct)
+
+        if active:
+            # Never downgrade a live trigger on a missing/invalid observation.
+            if iv is None or pct is None or baseline_iv is None:
+                awakening_status = "active"
+                cash_reclaim_pct = AWAKENING_CASH_RECLAIM_PCT
+            elif abs(iv - baseline_iv) * 100.0 <= AWAKENING_RELEASE_TOLERANCE_PCTPT:
+                active = False
+                awakening_status = "inactive"
+                cash_reclaim_pct = 0.0
+                release_date = trade_date
+            else:
+                awakening_status = "active"
+                cash_reclaim_pct = AWAKENING_CASH_RECLAIM_PCT
+        else:
+            low_run_start = i - AWAKENING_LOW_IV_DAYS
+            baseline_index = low_run_start - 1
+            enough_history = baseline_index >= 0
+            history_contiguous = (
+                enough_history
+                and all(
+                    _feed_dates_are_adjacent(
+                        str(df.loc[j - 1, "trade_date"]), str(df.loc[j, "trade_date"]), calendar
+                    )
+                    for j in range(baseline_index + 1, i + 1)
+                )
+            )
+            low_run = (
+                history_contiguous
+                and all(
+                    pct_values[j] is not None
+                    and pct_values[j] < AWAKENING_LOW_IV_PERCENTILE
+                    and iv_values[j] is not None
+                    for j in range(low_run_start, i)
+                )
+            )
+            baseline = iv_values[baseline_index] if enough_history else None
+            trigger = (
+                low_run
+                and baseline is not None
+                and change is not None
+                and change > AWAKENING_RISE_PCTPT
+            )
+            if trigger:
+                active = True
+                baseline_iv = round(float(baseline), 6)
+                trigger_date = trade_date
+                release_date = None
+                awakening_status = "active"
+                cash_reclaim_pct = AWAKENING_CASH_RECLAIM_PCT
+            elif iv is None or pct is None or not enough_history or not history_contiguous:
+                awakening_status = "unknown"
+                cash_reclaim_pct = None
+            else:
+                awakening_status = "inactive"
+                cash_reclaim_pct = 0.0
+
+        rows.append({
+            "iv_change_abs_1d_pctpt": change,
+            "rule3_status": rule3_status,
+            "awakening_status": awakening_status,
+            "cash_reclaim_pct": cash_reclaim_pct,
+            "awakening_baseline_iv": baseline_iv,
+            "awakening_trigger_date": trigger_date,
+            "awakening_release_date": release_date,
+        })
+
+    state = pd.DataFrame(rows, columns=list(_M05_STATE_COLUMNS))
+    for column in _M05_STATE_COLUMNS:
+        df[column] = state[column]
+    return df
+
+
+def build_feed_summary(iv_df: pd.DataFrame, as_of: str, generated_at: str,
+                       trade_calendar=None, calendar_source: str = "tushare.trade_cal",
+                       trade_dates_probed=None, independent_trade_dates=None) -> dict:
+    calendar_dates = _normalise_trade_calendar(trade_calendar)
+    probed_dates = _normalise_trade_calendar(trade_dates_probed)
+    independent_dates = _normalise_trade_calendar(independent_trade_dates)
     df = rolling_percentile_252(iv_df) if not iv_df.empty else iv_df.assign(iv_percentile_252d=[])
+    df = build_m05_state(df, trade_calendar=calendar_dates)
     series = [{"trade_date": str(r["trade_date"]), "iv_value": float(r["iv_value"]),
                "iv_percentile_252d": (None if pd.isna(r["iv_percentile_252d"]) else float(r["iv_percentile_252d"])),
-               "hv_value": (None if pd.isna(r.get("hv_value")) else float(r["hv_value"]))}
+               "hv_value": (None if pd.isna(r.get("hv_value")) else float(r["hv_value"])),
+               "iv_change_abs_1d_pctpt": (None if pd.isna(r.get("iv_change_abs_1d_pctpt"))
+                                           else float(r["iv_change_abs_1d_pctpt"])),
+               "rule3_status": str(r.get("rule3_status") or "unknown"),
+               "awakening_status": str(r.get("awakening_status") or "unknown"),
+               "cash_reclaim_pct": (None if pd.isna(r.get("cash_reclaim_pct"))
+                                     else float(r["cash_reclaim_pct"])),
+               "awakening_baseline_iv": (None if pd.isna(r.get("awakening_baseline_iv"))
+                                          else float(r["awakening_baseline_iv"])),
+               "awakening_trigger_date": (None if pd.isna(r.get("awakening_trigger_date"))
+                                           else str(r["awakening_trigger_date"])),
+               "awakening_release_date": (None if pd.isna(r.get("awakening_release_date"))
+                                           else str(r["awakening_release_date"]))}
               for _, r in df.iterrows()]
+    latest = series[-1] if series else {
+        "trade_date": None, "iv_change_abs_1d_pctpt": None, "rule3_status": "unknown",
+        "awakening_status": "unknown", "cash_reclaim_pct": None,
+        "awakening_baseline_iv": None, "awakening_trigger_date": None,
+        "awakening_release_date": None,
+    }
     return {
         "schema_name": SCHEMA_NAME,
         "schema_version": SCHEMA_VERSION,
@@ -244,12 +565,43 @@ def build_feed_summary(iv_df: pd.DataFrame, as_of: str, generated_at: str) -> di
                    "roll_window": ROLL_WINDOW, "min_roll_obs": MIN_ROLL_OBS, "hv_window": HV_WINDOW},
         "n_days": len(series),
         "series": series,
+        "calendar": _calendar_metadata(calendar_dates, probed_dates, calendar_source,
+                                        independent_dates),
+        "awakening": {
+            "trade_date": latest["trade_date"],
+            "iv_change_abs_1d_pctpt": latest["iv_change_abs_1d_pctpt"],
+            "rule3_status": latest["rule3_status"],
+            "status": latest["awakening_status"],
+            "cash_reclaim_pct": latest["cash_reclaim_pct"],
+            "baseline_iv": latest["awakening_baseline_iv"],
+            "trigger_date": latest["awakening_trigger_date"],
+            "release_date": latest["awakening_release_date"],
+            "production_effect_enabled": False,
+            "source": AWAKENING_STATE_SOURCE,
+        },
         "boundary": {"production": False, "real_money": False, "satisfies_ship_gate": False,
                      "iv_method": "bs_atm_constant_maturity_feasibility_grade"},
     }
 
 
-def validate_feed_summary_consistency(summary: dict) -> None:
+def validate_feed_summary_consistency(summary: dict, *, trade_calendar=None,
+                                      trade_dates_probed=None,
+                                      independent_trade_dates=None) -> None:
+    if summary.get("schema_name") not in (None, SCHEMA_NAME):
+        raise ValueError("schema_name 必须是 a_short_iv_feed")
+    # Older in-memory test/consumer fixtures predate the explicit envelope
+    # fields; retain their existing 1.1 read compatibility only when the
+    # artifact is genuinely legacy-shaped.  M0.5 content is never allowed to
+    # hide behind a self-declared 1.1.0 label.
+    has_m05_content = _summary_has_m05_content(summary)
+    declared_schema_version = summary.get("schema_version")
+    if declared_schema_version is None and has_m05_content:
+        raise ValueError("携带 M0.5 字段的 IV feed 必须显式声明 schema_version=1.2.0")
+    schema_version = str(declared_schema_version or "1.1.0")
+    if schema_version not in {"1.1.0", SCHEMA_VERSION}:
+        raise ValueError(f"不支持的 IV feed schema_version: {schema_version}")
+    if schema_version == "1.1.0" and has_m05_content:
+        raise ValueError("schema_version=1.1.0 不得携带 M0.5/calendar/awakening 字段")
     if not _valid_date_mask(pd.Series([str(summary["as_of"])])).iloc[0]:
         raise ValueError(f"as_of {summary['as_of']} 不是合法日历日期")
     if summary["n_days"] != len(summary["series"]):
@@ -269,14 +621,205 @@ def validate_feed_summary_consistency(summary: dict) -> None:
         hv = pt.get("hv_value")
         if hv is not None and (not math.isfinite(float(hv)) or float(hv) < 0):
             raise ValueError("hv_value 必须 >= 0 或 null")
+    if schema_version != SCHEMA_VERSION:
+        return
+    calendar = summary.get("calendar")
+    if not isinstance(calendar, dict):
+        raise ValueError("schema 1.2.0 缺少 exchange trade calendar")
+    calendar_status = calendar.get("status")
+    calendar_dates = _normalise_trade_calendar(calendar.get("trade_dates"))
+    probed_calendar_dates = _normalise_trade_calendar(calendar.get("probed_trade_dates"))
+    if calendar_status == "available":
+        calendar_source = calendar.get("source")
+        if calendar_dates is None or probed_calendar_dates is None or not calendar_source:
+            raise ValueError("available trade calendar 缺少 producer probe binding")
+        if (calendar_dates[-1] > str(summary["as_of"])
+                or probed_calendar_dates[-1] > str(summary["as_of"])):
+            raise ValueError("trade calendar 含 as_of 之后的未来日期")
+        if (calendar.get("coverage_start") != calendar_dates[0]
+                or calendar.get("coverage_end") != calendar_dates[-1]):
+            raise ValueError("trade calendar coverage 边界与日期列表不一致")
+        if calendar.get("n_trade_dates") != len(calendar_dates):
+            raise ValueError("trade calendar n_trade_dates 与日期列表不一致")
+        if calendar.get("trade_dates_sha256") != _trade_calendar_sha256(calendar_dates):
+            raise ValueError("trade calendar 日期哈希不一致")
+        if calendar.get("probed_trade_dates_sha256") != _trade_calendar_sha256(probed_calendar_dates):
+            raise ValueError("trade calendar probe 日期哈希不一致")
+        if trade_dates_probed is not None:
+            supplied_probed = _normalise_trade_calendar(trade_dates_probed)
+            if supplied_probed is None or supplied_probed != probed_calendar_dates:
+                raise ValueError("外部 trade_dates_probed 与 feed binding 不一致")
+        independent_dates = None
+        expected_independent_window = None
+        if calendar_source == "tushare.trade_cal+fund_daily":
+            independent_dates = _normalise_trade_calendar(calendar.get("independent_trade_dates"))
+            if (independent_dates is None
+                    or not calendar.get("independent_source")
+                    or calendar.get("independent_source") != "tushare.fund_daily"):
+                raise ValueError("独立 fund_daily 交易日绑定缺失")
+            if any(date > str(summary["as_of"]) for date in independent_dates):
+                raise ValueError("独立 fund_daily 交易日含 as_of 之后的未来日期")
+            if (calendar.get("independent_trade_dates_sha256")
+                    != _trade_calendar_sha256(independent_dates)):
+                raise ValueError("独立 fund_daily 日期哈希不一致")
+            expected_independent_window = tuple(
+                date for date in independent_dates
+                if calendar_dates[0] <= date <= calendar_dates[-1]
+            )
+            if expected_independent_window != calendar_dates:
+                raise ValueError("trade_cal 与 fund_daily 交易日窗口不一致")
+            if independent_trade_dates is not None:
+                supplied_independent = _normalise_trade_calendar(independent_trade_dates)
+                if supplied_independent is None or supplied_independent != independent_dates:
+                    raise ValueError("外部 independent_trade_dates 与 feed binding 不一致")
+        elif calendar_source == "tushare.trade_cal":
+            if any(key in calendar for key in (
+                    "independent_source", "independent_trade_dates",
+                    "independent_trade_dates_sha256")):
+                raise ValueError("旧 trade_cal 日历不得携带独立来源绑定")
+        else:
+            raise ValueError(f"不支持的交易日历来源: {calendar_source}")
+        supplied_calendar = _normalise_trade_calendar(trade_calendar) if trade_calendar is not None else None
+        if trade_calendar is not None and supplied_calendar is None:
+            raise ValueError("外部 trade calendar 无效")
+        if supplied_calendar is not None:
+            trusted_calendar = supplied_calendar
+            expected_window = tuple(
+                date for date in supplied_calendar
+                if calendar_dates[0] <= date <= calendar_dates[-1]
+            )
+            if expected_window != calendar_dates:
+                raise ValueError("外部 trade calendar 未完整覆盖 feed 日历窗口")
+            if expected_independent_window is not None and expected_window != expected_independent_window:
+                raise ValueError("外部 trade calendar 未与 fund_daily 独立窗口对账")
+            if expected_independent_window is not None:
+                trusted_calendar = expected_independent_window
+        else:
+            if probed_calendar_dates != calendar_dates:
+                raise ValueError("feed 日历与 producer probe 日期清单不一致")
+            # Prefer the independent fund_daily observation when the producer
+            # supplied it; the trade_cal list is then only a value to cross-check.
+            trusted_calendar = (expected_independent_window
+                                if expected_independent_window is not None
+                                else probed_calendar_dates)
+        if any(pt["trade_date"] not in trusted_calendar for pt in summary["series"]):
+            raise ValueError("available trade calendar 未覆盖 IV series")
+    elif calendar_status == "calendar_unavailable":
+        if (calendar.get("trade_dates") != []
+                or calendar.get("probed_trade_dates") != []
+                or calendar.get("coverage_start") is not None
+                or calendar.get("coverage_end") is not None
+                or calendar.get("n_trade_dates") != 0
+                or calendar.get("trade_dates_sha256") not in ("", None)
+                or calendar.get("probed_trade_dates_sha256") not in ("", None)
+                or calendar.get("independent_trade_dates") not in (None, [])
+                or calendar.get("independent_trade_dates_sha256") not in ("", None)
+                or calendar.get("independent_source") not in (None, "calendar_unavailable")):
+            raise ValueError("calendar_unavailable 不得携带交易日绑定")
+        if (trade_calendar is not None or trade_dates_probed is not None
+                or independent_trade_dates is not None):
+            raise ValueError("calendar_unavailable 不得携带外部交易日历")
+        trusted_calendar = None
+    else:
+        raise ValueError("trade calendar status 非法")
+    expected = build_m05_state(pd.DataFrame([
+        {"trade_date": pt["trade_date"],
+         "iv_value": pt["iv_value"],
+         "iv_percentile_252d": pt["iv_percentile_252d"]}
+        for pt in summary["series"]
+    ]), trade_calendar=trusted_calendar)
+    state_fields = (
+        "iv_change_abs_1d_pctpt", "rule3_status", "awakening_status",
+        "cash_reclaim_pct", "awakening_baseline_iv", "awakening_trigger_date",
+        "awakening_release_date",
+    )
+    def _normalise_state_value(value):
+        if value is None:
+            return None
+        try:
+            if pd.isna(value):
+                return None
+        except (TypeError, ValueError):
+            pass
+        return value
+
+    def _state_values_equal(expected_value, actual_value):
+        expected_value = _normalise_state_value(expected_value)
+        actual_value = _normalise_state_value(actual_value)
+        if (isinstance(expected_value, (int, float))
+                and not isinstance(expected_value, bool)
+                and isinstance(actual_value, (int, float))
+                and not isinstance(actual_value, bool)):
+            return math.isclose(float(expected_value), float(actual_value), rel_tol=0.0, abs_tol=1e-6)
+        return expected_value == actual_value
+
+    for index, expected_row in expected.iterrows():
+        actual = summary["series"][index]
+        for field in state_fields:
+            if not _state_values_equal(expected_row[field], actual.get(field)):
+                raise ValueError(f"M0.5 state field {field} 与 IV series 不一致")
+    latest = summary["series"][-1] if summary["series"] else {
+        "trade_date": None, "iv_change_abs_1d_pctpt": None,
+        "rule3_status": "unknown", "awakening_status": "unknown",
+        "cash_reclaim_pct": None, "awakening_baseline_iv": None,
+        "awakening_trigger_date": None, "awakening_release_date": None,
+    }
+    awakening = summary.get("awakening")
+    if not isinstance(awakening, dict):
+        raise ValueError("schema 1.2.0 缺少 M0.5 awakening state")
+    mapping = {
+        "trade_date": "trade_date",
+        "iv_change_abs_1d_pctpt": "iv_change_abs_1d_pctpt",
+        "rule3_status": "rule3_status",
+        "status": "awakening_status",
+        "cash_reclaim_pct": "cash_reclaim_pct",
+        "baseline_iv": "awakening_baseline_iv",
+        "trigger_date": "awakening_trigger_date",
+        "release_date": "awakening_release_date",
+    }
+    for target, source in mapping.items():
+        if not _state_values_equal(latest.get(source), awakening.get(target)):
+            raise ValueError(f"M0.5 awakening.{target} 与最新 series 不一致")
+    if awakening.get("production_effect_enabled") is not False:
+        raise ValueError("第 1 刀 M0.5 生产端不得提前启用 production effect")
+    if awakening.get("source") != AWAKENING_STATE_SOURCE:
+        raise ValueError("M0.5 awakening source 不匹配")
 
 
-def write_feed(summary: dict, out_path: str) -> None:
+def validate_feed_artifact(summary: dict, *, trade_calendar=None,
+                           trade_dates_probed=None,
+                           independent_trade_dates=None) -> None:
+    """Validate schema and state binding at every sanctioned read/write door."""
+    try:
+        with open(SCHEMA_PATH, "r", encoding="utf-8") as handle:
+            jsonschema.validate(summary, json.load(handle))
+    except (OSError, json.JSONDecodeError, jsonschema.ValidationError) as exc:
+        raise ValueError(f"IV feed schema validation failed: {type(exc).__name__}") from exc
+    validate_feed_summary_consistency(
+        summary, trade_calendar=trade_calendar, trade_dates_probed=trade_dates_probed,
+        independent_trade_dates=independent_trade_dates,
+    )
+
+
+def validated_m05_series(summary: dict) -> list[dict]:
+    """Return M0.5 rows only after the sanctioned artifact validation gate.
+
+    A valid legacy 1.1.0 artifact remains readable for non-M0.5 consumers, but
+    it deliberately yields no M0.5 rows.  Any 1.1.0 artifact carrying M0.5
+    content is rejected by ``validate_feed_artifact`` before this point.
+    """
+    validate_feed_artifact(summary)
+    if str(summary.get("schema_version") or "") != SCHEMA_VERSION:
+        return []
+    return list(summary.get("series") or [])
+
+
+def write_feed(summary: dict, out_path: str, *, trade_calendar=None,
+               trade_dates_probed=None, independent_trade_dates=None) -> None:
     """唯一 sanctioned 写盘路径:schema + consistency 校验后原子写。"""
-    with open(SCHEMA_PATH, "r", encoding="utf-8") as f:
-        schema = json.load(f)
-    jsonschema.validate(summary, schema)
-    validate_feed_summary_consistency(summary)
+    validate_feed_artifact(summary, trade_calendar=trade_calendar,
+                           trade_dates_probed=trade_dates_probed,
+                           independent_trade_dates=independent_trade_dates)
     os.makedirs(os.path.dirname(os.path.abspath(out_path)), exist_ok=True)
     tmp = str(out_path) + ".tmp"
     with open(tmp, "w", encoding="utf-8") as f:
@@ -333,12 +876,19 @@ def main(argv=None, pro_factory=None):
     daily = opt_daily[opt_daily["ts_code"].astype(str).isin(codes)].copy() if codes and not opt_daily.empty else pd.DataFrame()
     iv_df = build_daily_iv(basic, daily, underlier, args.as_of)
     summary = build_feed_summary(iv_df, args.as_of,
-                                 datetime.now().astimezone().isoformat(timespec="seconds"))
+                                 datetime.now().astimezone().isoformat(timespec="seconds"),
+                                 trade_calendar=report.get("trade_calendar"),
+                                 calendar_source="tushare.trade_cal+fund_daily",
+                                 trade_dates_probed=report.get("trade_dates_probed_dates"),
+                                 independent_trade_dates=report.get("underlier_trade_dates"))
     latest_pct = summary["series"][-1]["iv_percentile_252d"] if summary["series"] else None
     if latest_pct is None:
         raise SystemExit(f"[FATAL] built feed 无可用最新 252d 分位(n_days={summary['n_days']} < MIN_ROLL_OBS={MIN_ROLL_OBS});"
                          "不写盘 — 需取更多历史交易日。Slice B 收不到能驱动 Rule3/M0.5/M1 的 feed。")
-    write_feed(summary, args.out)
+    write_feed(summary, args.out,
+               trade_calendar=report.get("trade_calendar"),
+               trade_dates_probed=report.get("trade_dates_probed_dates"),
+               independent_trade_dates=report.get("underlier_trade_dates"))
     print(f"[iv_build] n_days={summary['n_days']}; latest_iv_pct={latest_pct}; feed -> {args.out}")
 
 

@@ -383,6 +383,95 @@
 - **Verify**: 固定主 Python focused 超集（新 schema 测试 + README row-length + route ledger + doc governance）`73 OK / 0.9s`；`py_compile`、`git diff --check` 通过；Web/X future raw roots 均命中 `.gitignore:97 provider_samples/`；`20260802` state/provider_samples 残留检查为 0。schema 反向控制拒绝授权翻真、生产 policy 翻真、复用旧日期、主题预埋、调用上限漂移、事后降门槛和确认效果翻真。
 - **Next**: Claude Code：审查。
 - **Pre-Codex self-review**: `matrix=complete: schema/artifact exact identity + 4 const queries + Web/X separate raw roots + xAI/Tavily/DeepSeek actual-vs-reserved arithmetic + PASS/REVISE/INCONCLUSIVE + all no-effect exits; register=not_applicable: no finding or risk status changed; handoff=existing US-short main handoff updated and desktop checklist updated; focused=73 OK + py_compile + git diff --check + gitignore/BOM/mojibake checks; full-lane=not_triggered: AGENTS rule 3, isolated no-access schema/artifact/test and docs with no production wiring or provider execution; door=route 14 + doc-governance 41 = 55 OK; independent self-review=not_triggered: low-risk isolated schema/docs fast path, main-thread A-F complete, no timeout/restart/fallback`
+## 2026-08-02 — Claude Code 审查 PASS（A-short M0.5 波动率觉醒链整刀收口）
+
+- **Verdict/Action**: PASS，已提交并合入 master。自述 `schema_version` 可跳过整段 M0.5 重算的那条已按内容判据闭合；前几轮的休市日致盲、`allow_legacy_m05` 全段豁免、日历重算自证、契约指纹漂移四条均已闭并经我自跑反控复验。独立日历改由 `tushare.fund_daily` 二源在写入时对账，实质收窄了「两份日期同源」。
+- **Required**: 无。`R-ASHORT-M05-SELF-DECLARED-SCHEMA-VERSION-SKIPS-THE-WHOLE-M05-RECOMPUTE` 已 closed，闭合证据与三条不阻断 Optional（公开校验函数缺「必须配 schema」硬契约、独立通道强度挂 `calendar_source` 自述值、读侧仍不递独立日历）见 `docs/system_risk_register.md`（单一来源，本处不复述）。
+- **Verify**: review-evidence:3fa563edad6d；超时原因:§6a 独立对抗 agent 单轮约 19 分钟，本轮又改 fail-closed 校验器不可省。固定 Python 3.13.8；rule 3/4 全量走 ledger 单命令 → `CACHED GREEN - a_short = 2267 OK`。用坐实该洞的同一份探针原样重跑：1.1.0 标签带 1.2.0 载荷、只掺一个逐行字段、只掺 calendar 块三种绕过全被拒，正反两方向皆然；正控未误伤（真 1.1.0 仍可读、`latest_m05_state` 给 None，诚实 1.2.0 端到端可读）；消费端经 `validated_m05_series` 遇篡改抛错。agent 报 2 项均 P2 且经其对三处真实调用点实测不可达。
+- **Next**: Codex：无待办；用户可授权下一批 `unclassified_pending_audit` 叶的判定。
+
+## 2026-08-02 — Codex 修复 M0.5 第六轮日历独立日期对账（未提交，待独立 reviewer）
+
+- **Verdict/Action**: 已完成 `R-ASHORT-M05-CALENDAR-IS-AN-UNVERIFIED-INPUT-INSIDE-THE-RECOMPUTE-BOUNDARY` 的剩余代码级全修；`fund_daily` PIT 日期已接入生产 feed 绑定与 M0.5 重算；未提交、未合入。
+- **Required**: 细节、独立日期字段/schema、fail-closed 反向控制与外部数据质量边界只见 `docs/system_risk_register.md` 对应 R-ID。
+- **Verify**: 固定主 Python 3.13.8；IV/probe `Ran 84 tests ... OK`；focused 超集 `Ran 926 tests ... OK`；`.tools/full_pack_ledger.py run a_short` → `RESULT status=PASS exit=0 tests=2267 elapsed=306.3s deadline=900s`（fingerprint `557e5bd9550a`）；`py_compile`、schema JSON、`static_contract_error=None`、`git diff --check` OK；docs-route `Ran 55 tests in 0.923s ... OK`；独立 reviewer `NOT_VERIFIED`。
+- **Proof-of-use**: 生产 source 固定 `tushare.trade_cal+fund_daily`；独立日期缺口/插入非交易日/哈希、窗口、外部独立日期错配以及 combined source 缺字段均拒绝；重算使用独立 fund_daily 窗口，旧合成 fixture 兼容路径不伪装为新生产源。
+- **Pre-Codex self-review**: `matrix=trade_cal+probe+fund_daily`; `register=updated`; `handoff=updated`; `focused=926 OK`; `full-lane=2267 OK`; `door=py_compile+schema+static_contract+diff OK + docs-route=55 OK (0.923s)`; `freeze=untouched`; `reviewer=pending`; `commit=NOT_PERFORMED`。
+- **Next**: Claude Code：独立 reviewer 复核本轮 M0.5 日历全修；PASS 前不得提交/合并。
+
+## 2026-08-02 — Codex 修复 M0.5 第五轮 schema-version 内容绑定 Required（未提交，待独立 reviewer）
+
+- **Verdict/Action**: 已修复 `R-ASHORT-M05-SELF-DECLARED-SCHEMA-VERSION-SKIPS-THE-WHOLE-M05-RECOMPUTE`；按 artifact 内容而非自述版本决定是否进入 M0.5 重算，schema 与消费端同门；未提交、未合入。
+- **Required**: 细节、边界、Optional 与 closure/反向控制只见 `docs/system_risk_register.md` 对应 R-ID。
+- **Verify**: 固定主 Python 3.13.8；IV feed + M0.5 `Ran 60 tests ... OK`；weekly `Ran 521 tests in 53.444s ... OK`；focused 超集 `Ran 921 tests in 122.264s ... OK`；`.tools/full_pack_ledger.py run a_short` → `RESULT status=PASS exit=0 tests=2262 elapsed=283.9s deadline=900s`；docs-route `Ran 55 tests in 0.788s ... OK`；`static_contract_error=None`、`py_compile`、`git diff --check` OK；独立 reviewer `NOT_VERIFIED`。
+- **Proof-of-use**: 1.2.0 形状改成 1.1.0 标签（含 active/inactive、calendar/awakening）被拒；真正无 M0.5 内容的 1.1.0 仍可读但消费端只返回空状态。
+- **Pre-Codex self-review**: `matrix=content+schema+consumer`; `register=updated`; `handoff=updated`; `focused=921 OK`; `full-lane=2262 OK`; `door=docs-route 55 OK + static/compile/diff OK`; `content_gate=complete`; `schema_gate=complete`; `consumer_gate=complete`; `reverse_controls=60 OK`; `effect_contract=static_contract_error None`; `reviewer=pending`; `commit=NOT_PERFORMED`。
+- **Next**: Claude Code：独立 reviewer 复核本轮 M0.5 Required；PASS 前不得提交/合并。
+
+## 2026-08-02 — Claude Code 审查 FAIL（M0.5 第四轮：自述版本号可跳过整段重算）
+
+- **Verdict/Action**: FAIL，未提交、未合入。第三轮日历绑定 Required 已实测闭合（删真实开市日/只改 envelope/协同改哈希三种篡改全被拒，重算改用 probe 清单不再拿被验日历当真值，读侧补上 `validate_feed_artifact` 两道校验，PIT 上界与 sha256/coverage 校验齐备）。阻断点是同类第四次复发：兼容逃生口挂在产物**自述**的 `schema_version` 上，把标签改成 1.1.0 即整段 1.2.0 重算被 `return` 跳过。
+- **Required**: `R-ASHORT-M05-SELF-DECLARED-SCHEMA-VERSION-SKIPS-THE-WHOLE-M05-RECOMPUTE` —— 机制、逐字段复现、生产读路链、Required repair 三项、closure/反向控制、Optional 与「已闭不要返工」清单，正文只见 `docs/system_risk_register.md`（单一来源，本处不复述）。
+- **Verify**: review-evidence:f76cb3b11c13；超时原因:§6a 独立对抗 agent 单轮约 12 分钟，本刀改的是 fail-closed 校验器不可省。固定 Python 3.13.8；rule 3/4 全量走 ledger 单命令 → `CACHED GREEN - a_short = 2258 OK`。自跑探针：同一份篡改产物在 1.2.0 标签下被拒（`M0.5 state field awakening_status 与 IV series 不一致`）、**只改版本标签为 1.1.0 即被接受**，`validate_feed_artifact` 亦接受，`latest_m05_state` 返回伪造的 `active/20.0`；反方向（藏起真实 active）同样被接受；日历五场景反控全部按预期。
+- **Next**: Codex：修复。
+
+## 2026-08-02 — Codex 修复 M0.5 第三轮日历绑定 Required（未提交，待独立 reviewer）
+
+- **Verdict/Action**: 已修复交易日历完整性绑定、1.2.0 重算自证边界与 weekly 读侧 schema 漏检；不返工前两轮已闭 Required，不扩展第十四/十五刀或 371 叶接线，不重封冻结包。
+- **Required**: `R-ASHORT-M05-CALENDAR-IS-AN-UNVERIFIED-INPUT-INSIDE-THE-RECOMPUTE-BOUNDARY` 细节见 `docs/system_risk_register.md`；独立 PASS 前不得提交/合并。
+- **Verify**: 固定主 Python 3.13.8；当前 focused 超集 `Ran 917 tests in 143.744s ... OK`；IV feed `Ran 52 tests ... OK`；weekly `Ran 520 tests ... OK`；probe/probe-execution `Ran 55 tests ... OK`；`.tools/full_pack_ledger.py run a_short` `RESULT status=PASS exit=0 tests=2258 elapsed=312.7s deadline=900s`；静态契约、编译与 `git diff --check` OK；docs-route `Ran 55 tests ... OK`。
+- **Proof-of-use**: envelope 绑定 source/coverage/count/hash 与 producer probe 日期清单；重算不直接采信 `calendar.trade_dates`；删真实开市日、插入非交易日、未来日期、7 位日期及外部窗口不一致均 fail-closed；weekly 两个读入口均走 schema + binding 门。
+- **Pre-Codex self-review**: `matrix=calendar binding + schema read gate complete`; `register=updated`; `handoff=updated`; `focused=917 OK`; `full-lane=PASS 2258/312.7s`; `door=docs+route 55 OK`; `freeze=untouched`; `reviewer=pending`; `commit=NOT_PERFORMED`。
+- **Next**: Claude Code：独立 reviewer 复核本轮日历 Required；PASS 前不得提交/合并。
+
+## 2026-08-02 — Claude Code 审查 FAIL（M0.5 第三轮：日历成了没人验的重算输入）
+
+- **Verdict/Action**: FAIL，未提交、未合入。上一轮两条 Required 均已实测闭合（休市日致盲已用真交易日历修好并接进生产路径；`allow_legacy_m05` 已按形状/语义拆开、安全腿任何路径都拒），迁移登记表经三级递进篡改实测被三层独立守卫拦死。阻断点是新引入的信任边界：交易日历本身无人校验，且 1.2.0 重算分支从被验产物自带的那份日历取输入，只证自洽不证真值。
+- **Required**: `R-ASHORT-M05-CALENDAR-IS-AN-UNVERIFIED-INPUT-INSIDE-THE-RECOMPUTE-BOUNDARY` —— 机制、双向实测、可达性边界、Required repair 三项、closure/反向控制、两条 Optional 与「已闭不要返工」清单，正文只见 `docs/system_risk_register.md`（单一来源，本处不复述）。
+- **Verify**: review-evidence:eab3d82fd832；超时原因:§6a 独立对抗 agent 单轮耗时约 21 分钟，本刀属最高危档（新建 fail-closed 校验器）不可省。固定 Python 3.13.8；rule 3/4 全量走 ledger 单命令 → `CACHED GREEN - a_short = 2251 OK`。自跑探针：日历四场景（连续/休市内含/真开市日缺数据/无日历）、M0.5 校验器两向 9 组反控 + 2 组正控全过。agent 报 1 P1 + 3 低危，P1 复核采纳，registry 三层守卫判 held。
+- **Next**: Codex：修复。
+
+## 2026-08-02 — Codex 修复 M0.5 第二轮 Required（未提交，待独立 reviewer）
+
+- **Verdict/Action**: 已修复交易所休市日相邻判据与 legacy fingerprint 旁路过宽；不扩展第十四/十五刀或 371 叶接线，不重封冻结包。
+- **Required**: `R-ASHORT-M05-EXCHANGE-HOLIDAY-BREAKS-ADJACENCY-AND-BLINDS-THE-AWAKENING-GATE`、`R-ASHORT-M05-ALLOW-LEGACY-BYPASSES-EVERY-M05-SAFETY-CHECK-ON-FINGERPRINT-ALONE` 细节见 `docs/system_risk_register.md`；独立 PASS 前不得提交/合并。
+- **Verify**: 固定主 Python 3.13.8；IV feed `Ran 46 tests ... OK`；Phase5 `146`；effect-contract `47`；weekly `519`；official-operation `15`；probe `55`；`static_contract_error=None`、`py_compile`、`git diff --check` OK；`.tools/full_pack_ledger.py run a_short` `RESULT status=PASS exit=0 tests=2251 elapsed=317.0s deadline=900s`；文档/路由 `Ran 55 tests ... OK`。
+- **Proof-of-use**: `trade_cal` 同时驱动单日 delta/五日窗口，休市可触发、真实开市缺 IV 不触发、日历缺失显式 `calendar_unavailable`；modern M0.5 safety 在 legacy 开关两值均执行，历史 bundle 仍可读。
+- **Pre-Codex self-review**: `matrix=complete`; `register=updated`; `handoff=updated`; `focused=46+146+47+519+15+55 OK`; `full-lane=PASS 2251/317.0s`; `door=docs+route 55 OK`; `freeze=untouched`; `reviewer=pending`; `commit=NOT_PERFORMED`。
+- **Next**: Claude Code：独立复核本轮两项 M0.5 Required；PASS 前不得提交/合并。
+
+## 2026-08-02 — Claude Code 审查 FAIL（M0.5 第二轮：休市日致盲觉醒闸门）
+
+- **Verdict/Action**: FAIL，未提交、未合入。上一轮三项 Required 里两项半已闭（十日跳空不再误触发、重复/非法日期 fail-closed、Rule3 阈值改读 governance 单一来源、负现金拒绝、option (c) `conservative_degradation` 按用户拍板落地），但「相邻交易日」用 `pd.bdate_range` 当代理，使窗口内任一交易所休市日把觉醒闸门整段致盲——错误方向从「误触发」翻成「该触发不触发」。
+- **Required**: `R-ASHORT-M05-EXCHANGE-HOLIDAY-BREAKS-ADJACENCY-AND-BLINDS-THE-AWAKENING-GATE`、`R-ASHORT-M05-ALLOW-LEGACY-BYPASSES-EVERY-M05-SAFETY-CHECK-ON-FINGERPRINT-ALONE` —— 机制、实测、规模估算、Required repair、closure/反向控制、证据边界与「已闭不要返工」清单，正文只见 `docs/system_risk_register.md`（单一来源，本处不复述）。
+- **Verify**: review-evidence:2e6c242406ae；固定 Python 3.13.8；rule 3/4 全量走 ledger 单命令 → `CACHED GREEN - a_short = 2244 OK`（当前代码态命中，不重跑）。自写探针同组 IV 只改日期：连续工作日→`active/6.5/reclaim 20.0`，窗口内插一个休市日→`change=6.5` 仍算出但 `awakening='unknown'`、无 trigger；谓词四点实测；重复/非法日期抛错；触发→解除循环正确；`_rule3_thresholds()=(80.0,90.0)`。legacy-migration 由独立对抗 agent 单独攻，结论到达后并入同轮。
+- **Next**: Codex：修复。
+
+## 2026-08-02 — Codex 修复 M0.5 三项 Required（未提交，待独立 reviewer）
+
+- **Verdict/Action**: 已按 `R-ASHORT-M05-CONTRACT-FINGERPRINT-DRIFT-BREAKS-PUBLISHED-BUNDLE-REVALIDATION`、`R-ASHORT-M05-AWAKENING-STATE-MACHINE-COUNTS-ROWS-NOT-TRADING-SESSIONS`、`R-ASHORT-M05-AWAKENING-TOTAL-BLOCK-MAKES-THE-20PCT-CASH-RECLAIM-INERT` 完成按类修复；不扩展第十四/十五刀、371 叶接线或其他系统，不重封冻结包。
+- **Required**: 历史 effect-contract registry + 旧 ledger 精确重建/legacy-only envelope 兼容；IV feed 连续交易日/重复日期 fail-closed；Option (c) `conservative_degradation` 实际零可分配现金并保留 20% 回收审计，负预算输入拒绝；Rule3 阈值单一读取 reviewed runtime policy。
+- **Verify**: 固定主 Python `3.13.8`；M0.5/effect/消费者 `Ran 192/45/166 tests ... OK`；weekly `Ran 519 tests in 58.075s ... OK`；docs/route `Ran 55 tests in 0.926s ... OK`；full-pack `RESULT status=PASS exit=0 tests=2244 elapsed=319.5s deadline=900s`；`py_compile`/`git diff --check` OK；独立 reviewer `NOT_VERIFIED`。
+- **Proof-of-use**: registry 只放行两个登记旧 fingerprint；旧 bundle 临时 current receipt 正控均通过，未知/篡改拒绝。缺交易日不产一日 IV jump/awakening；active awakening 的 allocator 实际 start/remaining 为 0，周报打印「本周不新建仓」并保留 pre/reclaimed/post 审计。
+- **Pre-Codex self-review**: `matrix=complete`; `register=updated`; `handoff=updated`; `focused=192+45+166 OK`; `full-lane=PASS 2244/319.5s`; `door=docs+route 55 OK`; `freeze=untouched`; `reviewer=pending`; `commit=NOT_PERFORMED`。
+- **Next**: Claude Code 独立 reviewer：复核本轮三项 M0.5 Required；PASS 前不提交、不合并。
+
+## 2026-08-02 — Claude Code 审查 FAIL（M0.5 觉醒链切片）
+
+- **Verdict/Action**: FAIL，未提交、未合入。M0.5 逻辑本身经我逐条探针验证成立，但本刀换掉 effect-contract 的两个引擎 source hash，使 `validate_published_weekly_bundle` 对既有 weekly bundle 一律抛 `effect_contract_ledger diverges…`，官方运营证据/P4a/regime 对比/final-action 四条链同断。未动 Codex 其余在途文件。
+- **Required**: `R-ASHORT-M05-CONTRACT-FINGERPRINT-DRIFT-BREAKS-PUBLISHED-BUNDLE-REVALIDATION`、`R-ASHORT-M05-AWAKENING-STATE-MACHINE-COUNTS-ROWS-NOT-TRADING-SESSIONS`、`R-ASHORT-M05-AWAKENING-TOTAL-BLOCK-MAKES-THE-20PCT-CASH-RECLAIM-INERT` —— 机制、红模块清单、Required repair、Options、closure/反向控制与「已验过不要返工」清单，正文只见 `docs/system_risk_register.md`（单一来源，本处不复述）。
+- **Verify**: review-evidence:4083cea61905；超时原因:全量实测 771.1s 且 §6a agent 与其并行。固定 Python 3.13.8；rule 3(a) 触发、rule 4 单命令 `full_pack_ledger run a_short` → `RESULT status=FAIL exit=1 tests=2238 elapsed=771.1s deadline=860s`。自写探针：Rule3 回退 11 格与 HEAD 等价、`_resolve_m05_state` 5 类 fail-closed、EGS 绑定 4 腿、空仓/持仓分流、台账仍 371。§6a 独立 agent 报 4 项，回源码复核后 2 升 register、2 记 P3。handoff 未追加:文件被同树 Codex 占用。
+- **Next**: Codex：修复。用户 2026-08-02 已拍板 Options=(c)（维持觉醒期全停、正名为「M0.5 保守降级模式」、登记严于 v14.2 并写死回到 (b) 的触发条件），执行方不得重新议 (a)/(b)；落地口径见该 R-ID 的 Required repair 五项。
+
+## 2026-08-02 — Codex 执行 M0.5 觉醒链（未提交）
+
+- **Verdict/Action**: 已实现 IV feed schema 1.2.0 的 M0.5 producer/state，并接入 weekly → Phase5 → M6.7/现金分配/周报；唯一权威为 IV feed，未修改 EGS 业务筛选、未执行第十四/十五刀、未重封冻结包、未提交。
+- **Required**: 独立 reviewer 复核 producer/consumer/source-binding/负向控制和 effect-contract 指纹后才可 PASS；不得把 EGS `None/unknown` 占位当作已接线，非占位值与 feed 不一致必须拒跑。material 详情见 `docs/system_risk_register.md` 的 `R-ASHORT-M05-IV-AWAKENING-PRODUCER-CONSUMER-WIRING` 与 handoff。
+- **Verify**: 固定 Python 3.13.8；M0.5/Phase5/effect-contract/consumer-probe `Ran 240 tests in 67.735s ... OK`；M0.5 weekly wiring/负向 `Ran 3 tests in 2.954s ... OK`；完整 `tests.test_a_short_weekly_pipeline` `Ran 518 tests in 86.890s ... OK`；sidecar health `Ran 39 tests in 9.112s ... OK`；371 叶全量终端双向变异和独立 reviewer PASS `NOT_VERIFIED`。
+- **Proof-of-use**: active 觉醒按 20% 收回可用现金/新增敞口并阻止 flat candidate 重建；Rule3 状态到达 M6.7 否决/减半；周报打印 Rule3/觉醒/现金回收；feed 写盘前重算并校验状态、weekly 绑定 IV 与价格 settled clock。
+- **Pre-Codex self-review**: `scope=M0.5 only`; `producer=iv_feed_schema_1.2.0`; `consumer=weekly+phase5+m67+cash`; `second_authority=blocked`; `effect_contract=updated`; `independent-review=pending`; `commit=NOT_PERFORMED`。
+- **Next**: Codex：固定 Python 跑完整 `tests.test_a_short_weekly_pipeline` 与 `git diff --check`，再交独立 reviewer；不要执行第十四/十五刀。
+
 ## 2026-08-01 — Claude Code 亲修并自审 PASS（叶级效果分类口径收口）
 
 - **Verdict/Action**: PASS，已提交并合入 master。`producer_constant_null` 改为从 `A-EGS/egs_main.py` AST 机械派生（93 叶）；新增 `unclassified_pending_audit` 并改默认，`true_dangling` 只经显式 override；组内有活叶的组不得标 `true_dangling`，据此改判 6 组为 `partial_consumption`。不接新线、不改决策、未重封冻结包。

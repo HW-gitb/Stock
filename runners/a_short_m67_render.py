@@ -14,6 +14,10 @@ import json
 import os
 
 from engine.a_short_runtime_config import load_runtime_configuration
+from runners.a_short_iv_feed_build import (
+    M05_CONSERVATIVE_BLOCK_REASON,
+    M05_CONSERVATIVE_MODE,
+)
 
 _BANNER = ("> ⚠️ **非生产 / A-short risk_filter_only / edge 未验证**。所有「建仓」均为 **试探仓**,"
            "**止损无条件**(盘中由你手动),仅供参考,非买卖指令。\n")
@@ -438,6 +442,18 @@ def render_weekly_markdown(weekly: dict) -> str:
            f"**环境**:{env}　|　**波动率**:{vol}",
            f"**共 {n} 只** — 建仓 {acts.get('建仓',0)} / 持有 {acts.get('持有',0)} / "
            f"观察 {acts.get('观察',0)} / 否决 {acts.get('否决',0)}"]
+    m05_mode = (((reports[0].get("machine") or {}).get("iv_gate") or {}).get("m05_mode")
+                if reports else None)
+    if m05_mode == M05_CONSERVATIVE_MODE:
+        cash = weekly.get("cash_allocation")
+        if isinstance(cash, dict):
+            out.append(
+                f"> ⚠️ **{M05_CONSERVATIVE_BLOCK_REASON}**；20% 回收审计："
+                f"{cash.get('m05_pre_reclaim_cash')} → {cash.get('m05_post_reclaim_cash')}；"
+                "本周实际可分配现金=0，不能用回收后的余额新建仓。"
+            )
+        else:
+            out.append(f"> ⚠️ **{M05_CONSERVATIVE_BLOCK_REASON}**；本周无账户现金分配，不能新建仓。")
     # regime-unknown 全局横幅:把"全员保守压星"说成市场级状态,而非个股质量差(个股质量看下表「EGS分」)。
     if ("regime unknown" in env) or ("保守fallback" in env) or ("保守 fallback" in env):
         out.append("> ⚠️ **市场 regime 未知 → 全员按震荡期保守降级(统一 −1 星)**。星级反映的是**当前市场保守状态**,"

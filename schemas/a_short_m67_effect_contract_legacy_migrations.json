@@ -1,0 +1,2611 @@
+{
+  "schema_name": "a_short_m67_effect_contract_legacy_migrations",
+  "schema_version": "1.0.0",
+  "description": "Explicit historical effect-contract snapshots used only to validate already-published weekly ledgers; current contracts remain exact-match validated.",
+  "migrations": [
+    {
+      "contract_fingerprint": "ff549e8c9016671fbfae48913bce5a8d74f855c75c5c2175f7b2297a06d8a179",
+      "source_commit": "6b28642e5ea0856944008545ea08f824db689eb0",
+      "ledger_schema_version": "1.0.0",
+      "contract": {
+        "schema_name": "a_short_m67_effect_contract",
+        "schema_version": "1.0.0",
+        "analysis_input_all_paths_sha256": "9e25c52757851ff43dcdf02ca02e10f9934669e7e5e858c75c80a1061782363a",
+        "groups": [
+          {
+            "id": "lineage_metadata",
+            "source_prefixes": [
+              "schema_version",
+              "generated_at",
+              "source.input_files",
+              "source.notes"
+            ],
+            "source_paths_sha256": "9010e763e011d4ec7183ce2c0dbb311042fc3cacc1b8003bd3a87c84ea7d396b",
+            "policy": "intentionally_independent",
+            "terminal_surfaces": [
+              "weekly.run_lineage"
+            ],
+            "runtime_handler": "intentionally_independent",
+            "intentional_independence": {
+              "reason": "这些字段只证明报告来自哪一批输入，不表达买卖、星级、仓位或风险。",
+              "owner": "A-short maintainers",
+              "review_ref": "docs/a_short_m67_effect_contract.md"
+            }
+          },
+          {
+            "id": "identity_batch_gate",
+            "source_prefixes": [
+              "trade_date",
+              "preset",
+              "market",
+              "horizon",
+              "schema_name",
+              "source.screening_engine",
+              "source.screening_engine_version",
+              "source.data_provider",
+              "source.l3_mode",
+              "source.l3_pit_strict",
+              "source.l3_snapshot_date",
+              "source.hard_veto_source_health",
+              "source.run_identity",
+              "state_refs"
+            ],
+            "source_paths_sha256": "c02249555b43a7a57519172d918b5f07cfafd235177aa62c6a1c703f22f057db",
+            "policy": "must_affect_result",
+            "terminal_surfaces": [
+              "weekly.effect_contract_ledger",
+              "weekly Markdown 字段/规则联动台账"
+            ],
+            "runtime_handler": "unresolved_input_group",
+            "unresolved_reason": "weekly.run_lineage 只保留部分批次身份；preset、provider、L3 和 state_refs 等其余叶字段尚未逐叶证明 M6.7 消费者，整组不得报已联动。"
+          },
+          {
+            "id": "l3_coverage_provenance",
+            "source_prefixes": [
+              "source.l3_coverage",
+              "source.l3_provider"
+            ],
+            "source_paths_sha256": "e671490d41a60223e24a1c4ddfaa383b16307da640ee466aa188df15408ca6ca",
+            "policy": "must_affect_result",
+            "terminal_surfaces": [
+              "weekly.effect_contract_ledger",
+              "weekly Markdown 字段/规则联动台账"
+            ],
+            "runtime_handler": "unresolved_input_group",
+            "unresolved_reason": "主干新增的 HiThink L3 覆盖与溯源字段尚未逐叶证明被正式 M6.7 消费；必须显式人工复核。"
+          },
+          {
+            "id": "runtime_configuration",
+            "source_prefixes": [
+              "source.runtime_configuration"
+            ],
+            "source_paths_sha256": "373eaaf3512af46778399e9dfcb434996f3d45df0dbb0528c8b69939292c7123",
+            "policy": "must_affect_result",
+            "terminal_surfaces": [
+              "weekly.run_lineage.runtime_configuration",
+              "weekly Markdown 配置 fingerprint"
+            ],
+            "runtime_handler": "lineage_gate",
+            "proven_consumer_paths": [
+              "source.runtime_configuration.configuration_fingerprint",
+              "source.runtime_configuration.policies[].path",
+              "source.runtime_configuration.policies[].policy_id",
+              "source.runtime_configuration.policies[].schema_name",
+              "source.runtime_configuration.policies[].schema_version",
+              "source.runtime_configuration.policies[].sha256",
+              "source.runtime_configuration.schema_name",
+              "source.runtime_configuration.schema_version"
+            ],
+            "consumer_proof_ref": "runners/a_short_weekly_pipeline.py validates the analysis_input policy lineage then writes it to weekly; validation and Markdown rendering bind the same fingerprint."
+          },
+          {
+            "id": "universe_selection",
+            "source_prefixes": [
+              "universe_summary"
+            ],
+            "source_paths_sha256": "669d40c9388ff8b49d1791e661c71a27cef7f0025cbf282129f7e672cd78f06a",
+            "policy": "must_affect_result",
+            "terminal_surfaces": [
+              "weekly.effect_contract_ledger",
+              "weekly Markdown 字段/规则联动台账"
+            ],
+            "runtime_handler": "unresolved_input_group",
+            "unresolved_reason": "筛选统计会随候选进入周报，但尚未逐字段证明各统计量对正式 M6.7 的消费者；不能只因本周有候选就报已联动。"
+          },
+          {
+            "id": "market_context",
+            "source_prefixes": [
+              "market_context"
+            ],
+            "source_paths_sha256": "fc0178fb32c450a6f576232ee2b32abc9819eb648fce3031c61f13775131c898",
+            "policy": "must_affect_result",
+            "terminal_surfaces": [
+              "weekly.effect_contract_ledger",
+              "weekly Markdown 字段/规则联动台账"
+            ],
+            "runtime_handler": "unresolved_input_group",
+            "unresolved_reason": "正式 weekly 当前只读取市场状态等少数字段，整组其余广度、流动性、北向、日历和波动率叶字段尚未逐叶证明消费者；不能报已联动。"
+          },
+          {
+            "id": "account_context",
+            "source_prefixes": [
+              "account_context"
+            ],
+            "source_paths_sha256": "4e6a553cfe533fe69b6609686fd122fc7fa9a7065b451e8a1667b14b7fcb123c",
+            "policy": "must_affect_result",
+            "terminal_surfaces": [
+              "weekly.effect_contract_ledger",
+              "weekly Markdown 字段/规则联动台账"
+            ],
+            "runtime_handler": "unresolved_input_group",
+            "unresolved_reason": "正式现金分配读取独立账户输入；analysis_input.account_context 尚未逐叶证明为 M6.7 消费者，必须人工核查。"
+          },
+          {
+            "id": "candidate_identity_selection",
+            "source_prefixes": [
+              "candidates[].ts_code",
+              "candidates[].name",
+              "candidates[].exchange",
+              "candidates[].board",
+              "candidates[].analysis_role",
+              "candidates[].selection"
+            ],
+            "source_paths_sha256": "02f4f04af10db99c5facbfc4076976e00b99932115993b02cfed412b591a538f",
+            "policy": "must_affect_result",
+            "terminal_surfaces": [
+              "weekly.effect_contract_ledger",
+              "weekly Markdown 字段/规则联动台账"
+            ],
+            "runtime_handler": "unresolved_input_group",
+            "unresolved_reason": "代码和名称会展示，但交易所、板块、角色和 selection 尚未逐字段证明为正式 M6.7 消费者；本组必须人工核查。"
+          },
+          {
+            "id": "candidate_quote",
+            "source_prefixes": [
+              "candidates[].quote"
+            ],
+            "source_paths_sha256": "33545edacf56f19b3e329007eaacdb5debfdc64dc2e07b4f5b345064eb574939",
+            "policy": "must_affect_result",
+            "terminal_surfaces": [
+              "weekly.effect_contract_ledger",
+              "weekly Markdown 字段/规则联动台账"
+            ],
+            "runtime_handler": "unresolved_input_group",
+            "unresolved_reason": "weekly 目前只取 quote.close；其余报价叶字段尚未接入，整组不得报已联动。"
+          },
+          {
+            "id": "candidate_industry_classification",
+            "source_prefixes": [
+              "candidates[].industry.sw_l1_code",
+              "candidates[].industry.sw_l1_name",
+              "candidates[].industry.sw_l2_code",
+              "candidates[].industry.sw_l2_name"
+            ],
+            "source_paths_sha256": "e485df56173691e2dc29394122d25b5c24e5cea7ed364f4d08e7f9a1706c477f",
+            "policy": "must_affect_result",
+            "terminal_surfaces": [
+              "weekly.effect_contract_ledger",
+              "weekly Markdown 字段/规则联动台账"
+            ],
+            "runtime_handler": "unresolved_input_group",
+            "unresolved_reason": "组合模块只使用 SW L2；SW L1 叶字段尚未逐叶证明消费者，整组不得报已联动。"
+          },
+          {
+            "id": "industry_trend",
+            "source_prefixes": [
+              "candidates[].industry.industry_trend",
+              "candidates[].industry.industry_trend_signal",
+              "candidates[].industry.industry_trend_evidence"
+            ],
+            "source_paths_sha256": "3b639bd4afdd78d2311dd4940babb62f880d8dbd47c8aa976ca6b56d760b8409",
+            "policy": "must_affect_result",
+            "terminal_surfaces": [
+              "reports[].m67.table.优先级",
+              "reports[].machine.industry_trend",
+              "weekly_m67.md deterministic industry-trend line"
+            ],
+            "runtime_handler": "industry_trend"
+          },
+          {
+            "id": "industry_fundamental_advisory",
+            "source_prefixes": [
+              "candidates[].industry.industry_fundamental_trend",
+              "candidates[].industry.industry_fundamental_trend_evidence"
+            ],
+            "source_paths_sha256": "5be5ad452b1323b5bc0e54b1410c382fd3940d405b2afcb7eecdb514558d7ef4",
+            "policy": "must_affect_result",
+            "terminal_surfaces": [
+              "weekly.effect_contract_ledger",
+              "weekly Markdown 字段/规则联动台账"
+            ],
+            "runtime_handler": "unresolved_input_group",
+            "unresolved_reason": "主干的行业基本面 LLM advisory 仍是独立的 Phase 3/4 接线；本切片不把它误报为已联动。"
+          },
+          {
+            "id": "candidate_scores",
+            "source_prefixes": [
+              "candidates[].scores"
+            ],
+            "source_paths_sha256": "dad9b9c6d7b1b5aba5a6a86428ee39de5d06b033ab2c9d4feec95867a8eb07d7",
+            "policy": "must_affect_result",
+            "terminal_surfaces": [
+              "weekly.effect_contract_ledger",
+              "weekly Markdown 字段/规则联动台账"
+            ],
+            "runtime_handler": "unresolved_input_group",
+            "unresolved_reason": "weekly 只转入少数 ESP/L4/总分和质量旗标；其余 scores 叶字段未逐叶证明 M6.7 消费者，整组不得报已联动。"
+          },
+          {
+            "id": "candidate_technical",
+            "source_prefixes": [
+              "candidates[].technical"
+            ],
+            "source_paths_sha256": "80565630ed6c1f70d79de9cf1d0e97acb71cc254c8580738917ae76f10717e68",
+            "policy": "must_affect_result",
+            "terminal_surfaces": [
+              "weekly.effect_contract_ledger",
+              "weekly Markdown 字段/规则联动台账"
+            ],
+            "runtime_handler": "unresolved_input_group",
+            "unresolved_reason": "analysis_input.technical 当前没有被 weekly/Phase5 的候选消费者逐叶读取；不得因候选存在而误报已联动。"
+          },
+          {
+            "id": "candidate_fundamental",
+            "source_prefixes": [
+              "candidates[].fundamental"
+            ],
+            "source_paths_sha256": "405baa3c9b2a36dfb11f98d864b1bab75ecfb1d809b67bccdc30b31ef99609a9",
+            "policy": "must_affect_result",
+            "terminal_surfaces": [
+              "weekly.effect_contract_ledger",
+              "weekly Markdown 字段/规则联动台账"
+            ],
+            "runtime_handler": "unresolved_input_group",
+            "unresolved_reason": "少数基本面叶字段会转成财报质量 advisory 或组合事实，但整组仍有未证明的叶字段；未逐叶拆开前不能报已联动。"
+          },
+          {
+            "id": "candidate_capital_flow",
+            "source_prefixes": [
+              "candidates[].capital_flow"
+            ],
+            "source_paths_sha256": "8419d89681cf09249fb516e232cd2c0097b72a5bc2bd8e503d3b3de14f336d2d",
+            "policy": "must_affect_result",
+            "terminal_surfaces": [
+              "weekly.effect_contract_ledger",
+              "weekly Markdown 字段/规则联动台账"
+            ],
+            "runtime_handler": "unresolved_input_group",
+            "unresolved_reason": "北向持股比例和融资占比会进入组合事实，但其余资金流叶字段尚无 weekly 消费者；未逐叶拆开前不能报已联动。"
+          },
+          {
+            "id": "candidate_event_risk",
+            "source_prefixes": [
+              "candidates[].event_risk"
+            ],
+            "source_paths_sha256": "a006204918486233041473e0009d3f6119c1339d152579118346cf0337b912d0",
+            "policy": "must_affect_result",
+            "terminal_surfaces": [
+              "weekly.effect_contract_ledger",
+              "weekly Markdown 字段/规则联动台账"
+            ],
+            "runtime_handler": "unresolved_input_group",
+            "unresolved_reason": "weekly 只转入部分减持、退市和停牌事实；监管、解禁及其余事件叶字段尚未逐叶证明消费者，整组不得报已联动。"
+          },
+          {
+            "id": "candidate_catalyst",
+            "source_prefixes": [
+              "candidates[].catalyst"
+            ],
+            "source_paths_sha256": "4292282ab816163ced1c740f1feab2846093d45c4b7f2f956345abc1faf03e0f",
+            "policy": "must_affect_result",
+            "terminal_surfaces": [
+              "weekly.effect_contract_ledger",
+              "weekly Markdown 字段/规则联动台账"
+            ],
+            "runtime_handler": "unresolved_input_group",
+            "unresolved_reason": "analysis_input.catalyst 当前没有被 weekly/Phase5 的候选消费者逐叶读取；必须人工核查。"
+          },
+          {
+            "id": "candidate_liquidity",
+            "source_prefixes": [
+              "candidates[].liquidity"
+            ],
+            "source_paths_sha256": "a1fe15d3d8daecc1fb846f0123af627c4dea21cc7e859622b290e8f7ea192607",
+            "policy": "must_affect_result",
+            "terminal_surfaces": [
+              "weekly.effect_contract_ledger",
+              "weekly Markdown 字段/规则联动台账"
+            ],
+            "runtime_handler": "unresolved_input_group",
+            "unresolved_reason": "weekly 只使用 5/20 日成交额；其余流动性叶字段尚未逐叶证明消费者，整组不得报已联动。"
+          },
+          {
+            "id": "candidate_volatility",
+            "source_prefixes": [
+              "candidates[].volatility"
+            ],
+            "source_paths_sha256": "5326f1e3f8e751633320ffa0756354ac19bbc267199057757b321c72b20a1675",
+            "policy": "must_affect_result",
+            "terminal_surfaces": [
+              "weekly.effect_contract_ledger",
+              "weekly Markdown 字段/规则联动台账"
+            ],
+            "runtime_handler": "unresolved_input_group",
+            "unresolved_reason": "analysis_input.volatility 当前未接入 weekly 的 IV/HV 输入；周报使用的是独立 IV feed，不能误报本组已联动。"
+          },
+          {
+            "id": "candidate_analyst",
+            "source_prefixes": [
+              "candidates[].analyst"
+            ],
+            "source_paths_sha256": "51c3529d30c2dd9ca290d2796725d25ad104dbe7e99a9604931cd2e3018cb5ab",
+            "policy": "must_affect_result",
+            "terminal_surfaces": [
+              "weekly.effect_contract_ledger",
+              "weekly Markdown 字段/规则联动台账"
+            ],
+            "runtime_handler": "unresolved_input_group",
+            "unresolved_reason": "analysis_input.analyst 当前没有 weekly/Phase5 消费者；必须人工核查。"
+          },
+          {
+            "id": "portfolio_concentration_factor_resonance",
+            "source_prefixes": [
+              "candidates[].portfolio_impact"
+            ],
+            "source_paths_sha256": "5e21e74d63c46deae6b43a5fe83a5ae34d211d0f8f03cdaceedd39f699ff2e35",
+            "policy": "must_affect_result",
+            "terminal_surfaces": [
+              "weekly.effect_contract_ledger",
+              "weekly Markdown 字段/规则联动台账"
+            ],
+            "runtime_handler": "unresolved_input_group",
+            "unresolved_reason": "M5.5/M5.5B 使用部分因子暴露字段；correlation_action、阈值等其余叶字段尚未逐叶证明消费者，整组不得报已联动。"
+          },
+          {
+            "id": "candidate_derived_flags",
+            "source_prefixes": [
+              "candidates[].derived_flags"
+            ],
+            "source_paths_sha256": "27ee95006b78047eaf7fcf4f0210e2dd196f6b962693d844b51b1f78755704de",
+            "policy": "must_affect_result",
+            "terminal_surfaces": [
+              "weekly.effect_contract_ledger",
+              "weekly Markdown 字段/规则联动台账"
+            ],
+            "runtime_handler": "unresolved_input_group",
+            "unresolved_reason": "weekly 使用多个 derived flag，但 m4_review_required 等叶字段尚未逐叶证明消费者；整组不得报已联动。"
+          },
+          {
+            "id": "llm_tasks",
+            "source_prefixes": [
+              "candidates[].llm_tasks"
+            ],
+            "source_paths_sha256": "56cea2bd1f03d0dff185825ead5d47c899e844c1d11347c4789dcac7daa3aff3",
+            "policy": "must_affect_result",
+            "terminal_surfaces": [
+              "reports[].machine.layer.llm_task_results",
+              "weekly.effect_contract_ledger",
+              "weekly Markdown legacy task summaries",
+              "Phase4 deterministic reports"
+            ],
+            "runtime_handler": "llm_tasks",
+            "proven_consumer_paths": [
+              "candidates[].llm_tasks[].inputs",
+              "candidates[].llm_tasks[].prompt",
+              "candidates[].llm_tasks[].status",
+              "candidates[].llm_tasks[].task_id",
+              "candidates[].llm_tasks[].task_type"
+            ],
+            "consumer_proof_ref": "A-EGS/egs_main.py::build_task_configs; runners/a_short_weekly_pipeline.py::_attach_llm_task_results/_materialize_legacy_task_reports; runners/a_short_m67_render.py::_legacy_task_line"
+          },
+          {
+            "id": "candidate_data_quality",
+            "source_prefixes": [
+              "candidates[].data_quality"
+            ],
+            "source_paths_sha256": "680077c4ac6515e5d1a4ac342c6c08bfe66186497725923458b33aed34e44d7b",
+            "policy": "must_affect_result",
+            "terminal_surfaces": [
+              "weekly.effect_contract_ledger",
+              "weekly Markdown 字段/规则联动台账"
+            ],
+            "runtime_handler": "unresolved_input_group",
+            "unresolved_reason": "analysis_input.data_quality 当前未驱动 weekly 的数据缺失处置或操作；必须人工核查。"
+          }
+        ],
+        "decision_predicate_sha256": {
+          "A-EGS/egs_main.py": "bcf13afdd20b39130c36e0f275bf2c94acb5ed235262d7054d6d5dc6274c67ee",
+          "engine/a_short_industry_theme.py": "6a10200f80b3c0d301efc8af1561b53ef2578e1cd26eea7976188dd57b7b6b2b",
+          "runners/a_short_phase5_engine.py": "6fbc79a4e3368eb7103e9be0e8a84bef2d8d91762e092e06e008f9290acc34ec",
+          "runners/a_short_weekly_pipeline.py": "72b037dc07329a5daee807b9871d83a91f6dc8d8845849bc2987799baa82c3b6",
+          "runners/a_short_m67_render.py": "013bf16001687e08bba8f71f4142eac1c05908629467100066fa6234e3e2aa37",
+          "engine/a_short_portfolio_risk.py": "6dbb9c0ddb8319c79315d97f798911220580681fa3cb9664b1085b403d941e45",
+          "engine/a_short_effect_contract.py": "3f32e734c47fe84eb01d403cc3343cee2d427c83c3359cc0bcdd2df37b171af5"
+        },
+        "runtime_constants_sha256": {
+          "A-EGS/egs_main.py": "e3837f40ff86f3903cf961b430e69bd6e39dcf6d9b1042027c688c22e66a1df7",
+          "runners/a_short_phase5_engine.py": "537f47a9e7443e638b675cc7349b7e551eb926f2dd00267f6085433a680d1f3b",
+          "engine/a_short_portfolio_risk.py": "0e49fe267566d8ee2608fb99ac3cbd37c1ddaae027633d791a194fc2e38761ae"
+        },
+        "runtime_policy_paths_sha256": "a164e3baffe8bcb8f82d07549ffc343213e9832f129178527113abc55bfcca53",
+        "runtime_policy_sha256": {
+          "presets/a_short_screening_threshold_governance_20260602.json": "aeccfa2636685f395442a23892d9d816d22fcf50271b0fe7dbc13bf72cffce9d",
+          "presets/a_short_m67_runtime_policy_20260715.json": "2af7fc3e59fa891a63afbe312ebe41dda77ee967965a980b10cc9dad1969ed49",
+          "presets/egs_industry_heat_governance_20260611.json": "8bbbf474ca92321bf0d1c0e5f6e91d13d332e10545d3a222aa9e32caac3fb8da"
+        },
+        "runtime_policy_schema_sha256": {
+          "schemas/a_short_screening_threshold_governance.schema.json": "6a517050ead73ebb4d939c236224d3776fc5be1ff3dc67453303c7329f276217",
+          "schemas/a_short_m67_runtime_policy.schema.json": "682f1e490a20f4b30186bf50431ae19d5d03ab7aea3314f652f70d0d62bebf00"
+        },
+        "runtime_policy_leaf_readers_sha256": "9a2c54dd61df5518fb62f18445aebe3ed78cfea423e51672d4a454f43c07288e",
+        "runtime_policy_bindings": [
+          {
+            "id": "screening_thresholds",
+            "policy_path": "presets/a_short_screening_threshold_governance_20260602.json",
+            "source_prefixes": [
+              "thresholds"
+            ],
+            "source_paths_sha256": "e84c2eaa2a14d33fb280fdf127006407516e7b1934e109c07ea755fb791cf08d",
+            "policy": "must_affect_result",
+            "terminal_surfaces": [
+              "analysis_input candidate selection",
+              "weekly.run_lineage.runtime_configuration"
+            ],
+            "consumer_refs": [
+              "A-EGS/egs_main.py::CONF loads _SCREENING_THRESHOLDS"
+            ]
+          },
+          {
+            "id": "phase5_thresholds",
+            "policy_path": "presets/a_short_m67_runtime_policy_20260715.json",
+            "source_prefixes": [
+              "phase5"
+            ],
+            "source_paths_sha256": "bee5707edbf5398bc7b83fd032b638c9e766094a81434a880255c300e77f3a67",
+            "policy": "must_affect_result",
+            "terminal_surfaces": [
+              "weekly.reports[].m67",
+              "weekly.reports[].machine"
+            ],
+            "consumer_refs": [
+              "runners/a_short_phase5_engine.py imports _PHASE5_POLICY"
+            ]
+          },
+          {
+            "id": "portfolio_risk_thresholds",
+            "policy_path": "presets/a_short_m67_runtime_policy_20260715.json",
+            "source_prefixes": [
+              "portfolio_risk"
+            ],
+            "source_paths_sha256": "c10f308fc2e07dac98c289123a75910f71949cec479eb0b2d8ef7089e56e9c60",
+            "policy": "must_affect_result",
+            "terminal_surfaces": [
+              "weekly.portfolio_risk",
+              "weekly.reports[].machine.operation_impact",
+              "weekly.cash_allocation"
+            ],
+            "consumer_refs": [
+              "engine/a_short_portfolio_risk.py imports _PORTFOLIO_POLICY"
+            ]
+          },
+          {
+            "id": "weekly_result_windows",
+            "policy_path": "presets/a_short_m67_runtime_policy_20260715.json",
+            "source_prefixes": [
+              "weekly_windows"
+            ],
+            "source_paths_sha256": "d88d07b935f4f859bfb542adf0a8378141fb84baaeb03269284704f71bed3914",
+            "policy": "must_affect_result",
+            "terminal_surfaces": [
+              "weekly ex_div_notices/upcoming_events/dragon_list/block_trade",
+              "weekly.reports[].m67"
+            ],
+            "consumer_refs": [
+              "runners/a_short_weekly_pipeline.py imports _WEEKLY_WINDOWS"
+            ]
+          },
+          {
+            "id": "industry_trend_classifier",
+            "policy_path": "presets/egs_industry_heat_governance_20260611.json",
+            "source_prefixes": [
+              "industry_trend_classifier.classifier_version",
+              "industry_trend_classifier.forward_calibration_required",
+              "industry_trend_classifier.headwind_max",
+              "industry_trend_classifier.positive_effect_enabled",
+              "industry_trend_classifier.risk_filter_v1_prior",
+              "industry_trend_classifier.source_id",
+              "industry_trend_classifier.tailwind_min"
+            ],
+            "source_paths_sha256": "e8a3ab0bb77e6bee755895083fdcb1f3eb6d49d415bf18a18cefa9a8ae1d8f8c",
+            "policy": "must_affect_result",
+            "terminal_surfaces": [
+              "analysis_input candidates[].industry.industry_trend_signal",
+              "weekly reports[].machine.industry_trend",
+              "reports[].m67.table.优先级"
+            ],
+            "consumer_refs": [
+              "engine/a_short_industry_theme.py classifier; A-EGS emits; weekly validates master governance"
+            ]
+          },
+          {
+            "id": "industry_trend_semantic_boundary",
+            "policy_path": "presets/egs_industry_heat_governance_20260611.json",
+            "source_prefixes": [
+              "industry_trend_classifier.semantic_boundary"
+            ],
+            "source_paths_sha256": "c8c26254d99700276e35e01531be74c65d1c976c0bc819d7ce0245fa59a3310e",
+            "policy": "intentionally_independent",
+            "terminal_surfaces": [
+              "weekly.effect_contract_ledger",
+              "docs/a_short_m67_effect_contract.md"
+            ],
+            "intentional_independence": {
+              "reason": "Classifier semantic boundary is explanatory metadata: it documents the deterministic-vs-LLM separation and must not itself create a trade effect.",
+              "owner": "A-short maintainers",
+              "review_ref": "docs/a_short_m67_effect_contract.md"
+            }
+          }
+        ],
+        "comparison_tracks": [
+          {
+            "id": "theme_overlay",
+            "policy": "intentionally_independent",
+            "schema_path": "schemas/a_short_theme_overlay_comparison.schema.json",
+            "schema_sha256": "cbab2ac920d72bb1234a016fbd4073d9bd44689c9fe6264ed918f3ebe216cbfe",
+            "reason": "Not a missing connection: overlay is a separate forward comparison track and, before manual promotion, is prohibited from changing formal M6.7 star, risk, action, sizing, cash allocation, or veto.",
+            "owner": "runners/a_short_theme_overlay_comparison.py + runners/a_short_overlay_eval.py",
+            "review_ref": "manual promotion only after forward evidence",
+            "consumer_refs": [
+              "result/a_short/<as_of>/overlay.json",
+              "research/results/a_short/overlay_eval_summary.json"
+            ]
+          }
+        ],
+        "operation_impact_sources": [
+          "financial_quality",
+          "holder_reduction_deduct_30d",
+          "semantic_official_high_confirmed",
+          "semantic_web_llm",
+          "block_trade_appearance",
+          "dragon_list_appearance",
+          "earnings_bad_reaction",
+          "portfolio_concentration_factor_resonance"
+        ],
+        "llm_task_types": [
+          "cross_market_linkage",
+          "earnings_bad_reaction",
+          "hidden_risk",
+          "industry_trend",
+          "policy_news",
+          "regulatory_check"
+        ],
+        "portfolio_factor_fields": [
+          "northbound_holding_ratio_pct",
+          "margin_balance_to_float_mv_pct",
+          "large_index_component_pct",
+          "small_float_mv_pct"
+        ],
+        "output_schema_sha256": {
+          "schemas/a_short_weekly_report.schema.json": "a9caa134a5515f20843ad18c58c37c5a1ca49b9ef65195be1efdbb0a22255722",
+          "schemas/a_short_m67_report.schema.json": "99b61cac33f606fdb5e0105aded8f0d74419bd4720751684e1f7fef3b578d34a"
+        },
+        "analysis_input_paths": [
+          "account_context.available_cash",
+          "account_context.current_gross_exposure",
+          "account_context.mode",
+          "account_context.positions[].current_price",
+          "account_context.positions[].entry_date",
+          "account_context.positions[].entry_price",
+          "account_context.positions[].floating_pnl_pct",
+          "account_context.positions[].name",
+          "account_context.positions[].shares",
+          "account_context.positions[].stop_loss",
+          "account_context.positions[].take_profit_1",
+          "account_context.positions[].take_profit_2",
+          "account_context.positions[].ts_code",
+          "account_context.total_equity",
+          "candidates[].analysis_role",
+          "candidates[].analyst.coverage_count",
+          "candidates[].analyst.downgrade_count_1m",
+          "candidates[].analyst.target_below_current",
+          "candidates[].analyst.target_price_mean",
+          "candidates[].board",
+          "candidates[].capital_flow.block_trade.amount_10d",
+          "candidates[].capital_flow.block_trade.avg_discount_pct",
+          "candidates[].capital_flow.block_trade.discount_trade_count_10d",
+          "candidates[].capital_flow.margin.balance",
+          "candidates[].capital_flow.margin.balance_change_10d_pct",
+          "candidates[].capital_flow.margin.balance_change_5d_pct",
+          "candidates[].capital_flow.margin.balance_to_float_mv_pct",
+          "candidates[].capital_flow.margin.extreme_accumulation",
+          "candidates[].capital_flow.moneyflow.big_order_ratio",
+          "candidates[].capital_flow.moneyflow.divergence_flag",
+          "candidates[].capital_flow.moneyflow.net_inflow_5d",
+          "candidates[].capital_flow.northbound.consecutive_net_sell_days",
+          "candidates[].capital_flow.northbound.holding_ratio",
+          "candidates[].capital_flow.northbound.net_sell_to_total_share_pct",
+          "candidates[].catalyst.concept_strength_score",
+          "candidates[].catalyst.concepts[]",
+          "candidates[].catalyst.earnings.has_recent_report",
+          "candidates[].catalyst.earnings.is_primary_catalyst",
+          "candidates[].catalyst.policy_news[].published_at",
+          "candidates[].catalyst.policy_news[].source",
+          "candidates[].catalyst.policy_news[].title",
+          "candidates[].catalyst.policy_news[].url",
+          "candidates[].catalyst.theme_taxonomy.automatic_promotion",
+          "candidates[].catalyst.theme_taxonomy.canonical_themes[]",
+          "candidates[].catalyst.theme_taxonomy.comparison_metrics.breadth_pass",
+          "candidates[].catalyst.theme_taxonomy.comparison_metrics.comparison_status",
+          "candidates[].catalyst.theme_taxonomy.comparison_metrics.fit_pass",
+          "candidates[].catalyst.theme_taxonomy.comparison_metrics.fit_score",
+          "candidates[].catalyst.theme_taxonomy.comparison_metrics.persistence_mult",
+          "candidates[].catalyst.theme_taxonomy.comparison_metrics.theme_heat_score",
+          "candidates[].catalyst.theme_taxonomy.comparison_status",
+          "candidates[].catalyst.theme_taxonomy.l3_provenance.coverage_complete",
+          "candidates[].catalyst.theme_taxonomy.l3_provenance.coverage_digest",
+          "candidates[].catalyst.theme_taxonomy.l3_provenance.provider",
+          "candidates[].catalyst.theme_taxonomy.l3_provenance.raw_membership_source",
+          "candidates[].catalyst.theme_taxonomy.l3_provenance.scoring_universe",
+          "candidates[].catalyst.theme_taxonomy.l3_provenance.snapshot_date",
+          "candidates[].catalyst.theme_taxonomy.l3_provenance.validation_status",
+          "candidates[].catalyst.theme_taxonomy.primary_canonical_theme_id",
+          "candidates[].catalyst.theme_taxonomy.production_effect_enabled",
+          "candidates[].catalyst.theme_taxonomy.raw_concepts[]",
+          "candidates[].catalyst.theme_taxonomy.source_as_of",
+          "candidates[].catalyst.theme_taxonomy.taxonomy_configuration_fingerprint",
+          "candidates[].catalyst.theme_taxonomy.taxonomy_schema_name",
+          "candidates[].catalyst.theme_taxonomy.taxonomy_schema_version",
+          "candidates[].catalyst.theme_taxonomy.unavailable_reason",
+          "candidates[].catalyst.time_window",
+          "candidates[].data_quality.completeness_score",
+          "candidates[].data_quality.missing_fields[]",
+          "candidates[].data_quality.pending_fields[]",
+          "candidates[].data_quality.rule11_required",
+          "candidates[].derived_flags.chasing_high",
+          "candidates[].derived_flags.hard_veto",
+          "candidates[].derived_flags.has_crash_veto",
+          "candidates[].derived_flags.is_breakout",
+          "candidates[].derived_flags.is_lock",
+          "candidates[].derived_flags.m4_review_required",
+          "candidates[].derived_flags.overheat_flag",
+          "candidates[].derived_flags.vol_confirm",
+          "candidates[].event_risk.delisting.delisting_warning",
+          "candidates[].event_risk.delisting.negative_net_asset",
+          "candidates[].event_risk.delisting.non_standard_audit",
+          "candidates[].event_risk.delisting.st_flag",
+          "candidates[].event_risk.holder_reduction.active_plan",
+          "candidates[].event_risk.holder_reduction.completed_3m_amount",
+          "candidates[].event_risk.holder_reduction.completed_3m_pct_share",
+          "candidates[].event_risk.holder_reduction.observed_at",
+          "candidates[].event_risk.holder_reduction.reduce_penalty",
+          "candidates[].event_risk.holder_reduction.source_status",
+          "candidates[].event_risk.regulatory.evidence[].published_at",
+          "candidates[].event_risk.regulatory.evidence[].source",
+          "candidates[].event_risk.regulatory.evidence[].title",
+          "candidates[].event_risk.regulatory.evidence[].url",
+          "candidates[].event_risk.regulatory.has_inquiry_or_concern_48h",
+          "candidates[].event_risk.regulatory.negative_depth",
+          "candidates[].event_risk.rule6_checks[].evidence[].published_at",
+          "candidates[].event_risk.rule6_checks[].evidence[].source",
+          "candidates[].event_risk.rule6_checks[].evidence[].title",
+          "candidates[].event_risk.rule6_checks[].evidence[].url",
+          "candidates[].event_risk.rule6_checks[].group",
+          "candidates[].event_risk.rule6_checks[].id",
+          "candidates[].event_risk.rule6_checks[].metrics",
+          "candidates[].event_risk.rule6_checks[].name",
+          "candidates[].event_risk.rule6_checks[].notes",
+          "candidates[].event_risk.rule6_checks[].severity",
+          "candidates[].event_risk.rule6_checks[].status",
+          "candidates[].event_risk.suspension.is_suspended",
+          "candidates[].event_risk.suspension.observed_at",
+          "candidates[].event_risk.suspension.recent_suspension_5d",
+          "candidates[].event_risk.suspension.source_status",
+          "candidates[].event_risk.unlock.denominator",
+          "candidates[].event_risk.unlock.large_unlock_flag",
+          "candidates[].event_risk.unlock.observed_at",
+          "candidates[].event_risk.unlock.source_status",
+          "candidates[].event_risk.unlock.unlock_date",
+          "candidates[].event_risk.unlock.unlock_pct",
+          "candidates[].exchange",
+          "candidates[].fundamental.expectation.consensus_profit_growth",
+          "candidates[].fundamental.expectation.earnings_less_than_24h",
+          "candidates[].fundamental.expectation.earnings_report_date",
+          "candidates[].fundamental.expectation.esp_raw",
+          "candidates[].fundamental.expectation.good_data_bad_reaction",
+          "candidates[].fundamental.expectation.guidance_credibility_damaged",
+          "candidates[].fundamental.expectation.ind_median_profit_growth",
+          "candidates[].fundamental.profitability.q0_dt_yoy",
+          "candidates[].fundamental.profitability.q0_net_income",
+          "candidates[].fundamental.profitability.q0_profit_dedt",
+          "candidates[].fundamental.profitability.q1_dt_yoy",
+          "candidates[].fundamental.profitability.roe",
+          "candidates[].fundamental.profitability.ttm_profit_dedt",
+          "candidates[].fundamental.quality.ar_growth_gt_revenue_growth_2q",
+          "candidates[].fundamental.quality.cash_debt_high_risk",
+          "candidates[].fundamental.quality.contract_liability_exemption",
+          "candidates[].fundamental.quality.q0_dt_profit_ratio",
+          "candidates[].fundamental.quality.ttm_ocf_ratio",
+          "candidates[].fundamental.valuation.circ_mv",
+          "candidates[].fundamental.valuation.pb",
+          "candidates[].fundamental.valuation.pe",
+          "candidates[].fundamental.valuation.pe_ttm",
+          "candidates[].fundamental.valuation.peg",
+          "candidates[].fundamental.valuation.total_mv",
+          "candidates[].fundamental.valuation.val_bonus",
+          "candidates[].fundamental.valuation.val_penalty",
+          "candidates[].industry.industry_fundamental_trend",
+          "candidates[].industry.industry_fundamental_trend_evidence[].published_at",
+          "candidates[].industry.industry_fundamental_trend_evidence[].source",
+          "candidates[].industry.industry_fundamental_trend_evidence[].title",
+          "candidates[].industry.industry_fundamental_trend_evidence[].url",
+          "candidates[].industry.industry_trend",
+          "candidates[].industry.industry_trend_evidence[].published_at",
+          "candidates[].industry.industry_trend_evidence[].source",
+          "candidates[].industry.industry_trend_evidence[].title",
+          "candidates[].industry.industry_trend_evidence[].url",
+          "candidates[].industry.industry_trend_signal.classification",
+          "candidates[].industry.industry_trend_signal.classifier_version",
+          "candidates[].industry.industry_trend_signal.configuration_fingerprint",
+          "candidates[].industry.industry_trend_signal.forward_calibration_required",
+          "candidates[].industry.industry_trend_signal.industry_heat_score",
+          "candidates[].industry.industry_trend_signal.industry_trend",
+          "candidates[].industry.industry_trend_signal.positive_effect_enabled",
+          "candidates[].industry.industry_trend_signal.risk_filter_v1_prior",
+          "candidates[].industry.industry_trend_signal.source_as_of",
+          "candidates[].industry.industry_trend_signal.source_id",
+          "candidates[].industry.industry_trend_signal.sw_l2_code",
+          "candidates[].industry.industry_trend_signal.sw_l2_name",
+          "candidates[].industry.industry_trend_signal.thresholds.headwind_max",
+          "candidates[].industry.industry_trend_signal.thresholds.tailwind_min",
+          "candidates[].industry.industry_trend_signal.unavailable_reason",
+          "candidates[].industry.industry_trend_signal.validation_status",
+          "candidates[].industry.sw_l1_code",
+          "candidates[].industry.sw_l1_name",
+          "candidates[].industry.sw_l2_code",
+          "candidates[].industry.sw_l2_name",
+          "candidates[].liquidity.avg_amount_20d",
+          "candidates[].liquidity.avg_amount_5d",
+          "candidates[].liquidity.one_minute_capacity",
+          "candidates[].liquidity.position_amount_cap",
+          "candidates[].liquidity.split_order_required",
+          "candidates[].liquidity.spread_pct",
+          "candidates[].liquidity.turnover_rate",
+          "candidates[].liquidity.yesterday_amount",
+          "candidates[].llm_tasks[].inputs",
+          "candidates[].llm_tasks[].prompt",
+          "candidates[].llm_tasks[].status",
+          "candidates[].llm_tasks[].task_id",
+          "candidates[].llm_tasks[].task_type",
+          "candidates[].name",
+          "candidates[].portfolio_impact.correlation_action",
+          "candidates[].portfolio_impact.factor_exposures[].factor",
+          "candidates[].portfolio_impact.factor_exposures[].status",
+          "candidates[].portfolio_impact.factor_exposures[].threshold",
+          "candidates[].portfolio_impact.factor_exposures[].value",
+          "candidates[].portfolio_impact.same_sw_l2_exposure_after_buy_pct",
+          "candidates[].quote.adjustment",
+          "candidates[].quote.close",
+          "candidates[].quote.current_price",
+          "candidates[].quote.ex_rights_30d",
+          "candidates[].quote.high",
+          "candidates[].quote.low",
+          "candidates[].quote.open",
+          "candidates[].quote.pct_change",
+          "candidates[].quote.pre_close",
+          "candidates[].quote.price_source",
+          "candidates[].quote.price_time",
+          "candidates[].quote.source_trade_date",
+          "candidates[].scores.cat_flag",
+          "candidates[].scores.cat_score",
+          "candidates[].scores.deduct",
+          "candidates[].scores.egs_base",
+          "candidates[].scores.esp_score",
+          "candidates[].scores.final_score",
+          "candidates[].scores.industry_heat_score",
+          "candidates[].scores.l1_score",
+          "candidates[].scores.l2_flags",
+          "candidates[].scores.l4_flag",
+          "candidates[].scores.l4_score",
+          "candidates[].scores.multiplier",
+          "candidates[].selection.cninfo_flag",
+          "candidates[].selection.entry_flag",
+          "candidates[].selection.rank",
+          "candidates[].selection.still_in_pool",
+          "candidates[].selection.tier",
+          "candidates[].technical.amplitude",
+          "candidates[].technical.atr.atr_14",
+          "candidates[].technical.atr.atr_window",
+          "candidates[].technical.atr.ex_rights_adjusted",
+          "candidates[].technical.avg_amount_20d",
+          "candidates[].technical.avg_amount_5d",
+          "candidates[].technical.bollinger.lower",
+          "candidates[].technical.bollinger.middle",
+          "candidates[].technical.bollinger.upper",
+          "candidates[].technical.close_position_in_range",
+          "candidates[].technical.coarse_reward_risk",
+          "candidates[].technical.direction_lock",
+          "candidates[].technical.drawdown_20d",
+          "candidates[].technical.high_20d",
+          "candidates[].technical.limit_up_count_10d",
+          "candidates[].technical.limit_up_count_20d",
+          "candidates[].technical.low_20d",
+          "candidates[].technical.macd.dea",
+          "candidates[].technical.macd.dif",
+          "candidates[].technical.macd.hist",
+          "candidates[].technical.moving_averages.ma10",
+          "candidates[].technical.moving_averages.ma20",
+          "candidates[].technical.moving_averages.ma5",
+          "candidates[].technical.moving_averages.ma60",
+          "candidates[].technical.pct_20d",
+          "candidates[].technical.pct_20d_n",
+          "candidates[].technical.pct_5d",
+          "candidates[].technical.pct_5d_n",
+          "candidates[].technical.pct_60d",
+          "candidates[].technical.precise_reward_risk",
+          "candidates[].technical.resistance.confidence",
+          "candidates[].technical.resistance.method",
+          "candidates[].technical.resistance.price",
+          "candidates[].technical.rsi_14",
+          "candidates[].technical.support.confidence",
+          "candidates[].technical.support.method",
+          "candidates[].technical.support.price",
+          "candidates[].technical.volume_ratio_5d",
+          "candidates[].technical.yesterday_amount",
+          "candidates[].ts_code",
+          "candidates[].volatility.hv_252d",
+          "candidates[].volatility.iv_hv_position_cut_pct",
+          "candidates[].volatility.iv_hv_ratio",
+          "generated_at",
+          "horizon",
+          "market",
+          "market_context.breadth.consecutive_board_height",
+          "market_context.breadth.csi300_pct_change_window",
+          "market_context.breadth.limit_down_count",
+          "market_context.breadth.limit_up_count",
+          "market_context.breadth.limit_up_index_pct_change",
+          "market_context.liquidity.market_turnover_amount",
+          "market_context.liquidity.median_amount_20d",
+          "market_context.market_regime.confidence",
+          "market_context.market_regime.min_reward_risk",
+          "market_context.market_regime.position_cap_single_pct",
+          "market_context.market_regime.position_cap_total_pct",
+          "market_context.market_regime.status",
+          "market_context.market_regime.triggers[].id",
+          "market_context.market_regime.triggers[].status",
+          "market_context.market_regime.triggers[].threshold",
+          "market_context.market_regime.triggers[].value",
+          "market_context.northbound.net_flow_5d",
+          "market_context.northbound.status",
+          "market_context.trade_calendar.calendar_source",
+          "market_context.trade_calendar.holiday_days_ahead",
+          "market_context.trade_calendar.is_pre_holiday_window",
+          "market_context.trade_calendar.latest_trade_date",
+          "market_context.trade_calendar.next_trade_date",
+          "market_context.trade_calendar.recent_trade_dates[]",
+          "market_context.volatility.awakening_status",
+          "market_context.volatility.cash_reclaim_pct",
+          "market_context.volatility.iv_change_abs_1d_pctpt",
+          "market_context.volatility.iv_percentile_252d",
+          "market_context.volatility.iv_symbol",
+          "market_context.volatility.iv_value",
+          "market_context.volatility.rule3_status",
+          "preset",
+          "schema_name",
+          "schema_version",
+          "source.data_provider",
+          "source.hard_veto_source_health.holder_reduction.observed_at",
+          "source.hard_veto_source_health.holder_reduction.status",
+          "source.hard_veto_source_health.suspension.observed_at",
+          "source.hard_veto_source_health.suspension.status",
+          "source.hard_veto_source_health.unlock.observed_at",
+          "source.hard_veto_source_health.unlock.status",
+          "source.input_files[].path",
+          "source.input_files[].role",
+          "source.input_files[].sha256",
+          "source.l3_coverage.catalog_board_count",
+          "source.l3_coverage.catalog_digest",
+          "source.l3_coverage.catalog_tag",
+          "source.l3_coverage.complete",
+          "source.l3_coverage.excluded_non_main_board_member_count",
+          "source.l3_coverage.main_board_member_pair_count",
+          "source.l3_coverage.market_suffix_counts",
+          "source.l3_coverage.out_of_a_share_member_count",
+          "source.l3_coverage.raw_member_row_count",
+          "source.l3_coverage.received_board_count",
+          "source.l3_coverage.scope_filtered_empty_board_count",
+          "source.l3_coverage.scoring_universe",
+          "source.l3_coverage.source",
+          "source.l3_coverage.unique_member_pair_count",
+          "source.l3_coverage.verified_empty_board_count",
+          "source.l3_mode",
+          "source.l3_pit_strict",
+          "source.l3_provider",
+          "source.l3_snapshot_date",
+          "source.notes[]",
+          "source.run_identity.candidate_digest",
+          "source.run_identity.run_id",
+          "source.run_identity.stage_status",
+          "source.runtime_configuration.configuration_fingerprint",
+          "source.runtime_configuration.policies[].path",
+          "source.runtime_configuration.policies[].policy_id",
+          "source.runtime_configuration.policies[].schema_name",
+          "source.runtime_configuration.policies[].schema_version",
+          "source.runtime_configuration.policies[].sha256",
+          "source.runtime_configuration.schema_name",
+          "source.runtime_configuration.schema_version",
+          "source.screening_engine",
+          "source.screening_engine_version",
+          "state_refs.circuit_breaker",
+          "state_refs.execution_log",
+          "state_refs.positions",
+          "state_refs.veto_log",
+          "trade_date",
+          "universe_summary.after_l0_count",
+          "universe_summary.excluded_counts",
+          "universe_summary.final_count",
+          "universe_summary.full_count",
+          "universe_summary.listed_count",
+          "universe_summary.rank_exclusion_counts.l1_industry_leader",
+          "universe_summary.rank_exclusion_counts.l2_quality_risk",
+          "universe_summary.rank_exclusion_counts.rank_unexpected",
+          "universe_summary.watch_count"
+        ],
+        "governed_python_literal_names": {
+          "A-EGS/egs_main.py": [],
+          "runners/a_short_phase5_engine.py": [],
+          "engine/a_short_portfolio_risk.py": [],
+          "runners/a_short_weekly_pipeline.py": []
+        },
+        "runtime_policy_paths": {
+          "presets/a_short_screening_threshold_governance_20260602.json": [
+            "thresholds.daily_stats_min_rows",
+            "thresholds.esp_raw_cap",
+            "thresholds.final_n",
+            "thresholds.min_avg_amount",
+            "thresholds.momentum_std_threshold",
+            "thresholds.overheat_20d",
+            "thresholds.overheat_5d",
+            "thresholds.suspend_daily_min_coverage",
+            "thresholds.suspend_lookback",
+            "thresholds.top_n",
+            "thresholds.unlock_ratio",
+            "thresholds.watch_n"
+          ],
+          "presets/a_short_m67_runtime_policy_20260715.json": [
+            "phase5.atr_mult.收缩期",
+            "phase5.atr_mult.进攻期",
+            "phase5.atr_mult.防御期",
+            "phase5.atr_mult.震荡期",
+            "phase5.breakout_rr_bonus",
+            "phase5.impact_cost_frac",
+            "phase5.iv_halve_pct",
+            "phase5.iv_hv_ratio_hi",
+            "phase5.iv_hv_ratio_lo",
+            "phase5.iv_nobuild_pct",
+            "phase5.lowxi_band",
+            "phase5.min_amount",
+            "phase5.min_avg_amount_5d",
+            "phase5.min_shares",
+            "phase5.resistance_lookback",
+            "phase5.rr_floor.收缩期",
+            "phase5.rr_floor.进攻期",
+            "phase5.rr_floor.防御期",
+            "phase5.rr_floor.震荡期",
+            "phase5.single_cap_pct.收缩期",
+            "phase5.single_cap_pct.进攻期",
+            "phase5.single_cap_pct.防御期",
+            "phase5.single_cap_pct.震荡期",
+            "phase5.sr_spike_atr",
+            "phase5.support_lookback",
+            "portfolio_risk.high_risk_holding_cap_multiplier",
+            "portfolio_risk.large_index_threshold_pct",
+            "portfolio_risk.margin_threshold_pct",
+            "portfolio_risk.northbound_threshold_pct",
+            "portfolio_risk.same_sw_l2_threshold_pct",
+            "portfolio_risk.small_float_mv_rmb",
+            "portfolio_risk.small_float_mv_threshold_pct",
+            "weekly_windows.block_trade_lookback_trading_days",
+            "weekly_windows.dragon_list_lookback_trading_days",
+            "weekly_windows.ex_div_window_days",
+            "weekly_windows.forward_event_window_days",
+            "weekly_windows.min_price_observations"
+          ],
+          "presets/egs_industry_heat_governance_20260611.json": [
+            "industry_trend_classifier.classifier_version",
+            "industry_trend_classifier.forward_calibration_required",
+            "industry_trend_classifier.headwind_max",
+            "industry_trend_classifier.positive_effect_enabled",
+            "industry_trend_classifier.risk_filter_v1_prior",
+            "industry_trend_classifier.semantic_boundary",
+            "industry_trend_classifier.source_id",
+            "industry_trend_classifier.tailwind_min"
+          ]
+        },
+        "runtime_policy_leaf_readers": {
+          "presets/a_short_screening_threshold_governance_20260602.json": {
+            "thresholds.daily_stats_min_rows": [
+              "engine/a_short_runtime_config.py::_validate_screening.raw[\"daily_stats_min_rows\"]",
+              "A-EGS/egs_main.py::CONF[\"daily_stats_min_rows\"]"
+            ],
+            "thresholds.esp_raw_cap": [
+              "engine/a_short_runtime_config.py::_validate_screening.raw[\"esp_raw_cap\"]",
+              "A-EGS/egs_main.py::CONF[\"esp_raw_cap\"]"
+            ],
+            "thresholds.final_n": [
+              "engine/a_short_runtime_config.py::_validate_screening.raw[\"final_n\"]",
+              "A-EGS/egs_main.py::CONF[\"final_n\"]"
+            ],
+            "thresholds.min_avg_amount": [
+              "engine/a_short_runtime_config.py::_validate_screening.raw[\"min_avg_amount\"]",
+              "A-EGS/egs_main.py::CONF[\"min_avg_amount\"]"
+            ],
+            "thresholds.momentum_std_threshold": [
+              "engine/a_short_runtime_config.py::_validate_screening.raw[\"momentum_std_threshold\"]",
+              "A-EGS/egs_main.py::CONF[\"momentum_std_threshold\"]"
+            ],
+            "thresholds.overheat_20d": [
+              "engine/a_short_runtime_config.py::_validate_screening.raw[\"overheat_20d\"]",
+              "A-EGS/egs_main.py::CONF[\"overheat_20d\"]"
+            ],
+            "thresholds.overheat_5d": [
+              "engine/a_short_runtime_config.py::_validate_screening.raw[\"overheat_5d\"]",
+              "A-EGS/egs_main.py::CONF[\"overheat_5d\"]"
+            ],
+            "thresholds.suspend_daily_min_coverage": [
+              "engine/a_short_runtime_config.py::_validate_screening.raw[\"suspend_daily_min_coverage\"]",
+              "A-EGS/egs_main.py::CONF[\"suspend_daily_min_coverage\"]"
+            ],
+            "thresholds.suspend_lookback": [
+              "engine/a_short_runtime_config.py::_validate_screening.raw[\"suspend_lookback\"]",
+              "A-EGS/egs_main.py::CONF[\"suspend_lookback\"]"
+            ],
+            "thresholds.top_n": [
+              "engine/a_short_runtime_config.py::_validate_screening.raw[\"top_n\"]",
+              "A-EGS/egs_main.py::CONF[\"top_n\"]"
+            ],
+            "thresholds.unlock_ratio": [
+              "engine/a_short_runtime_config.py::_validate_screening.raw[\"unlock_ratio\"]",
+              "A-EGS/egs_main.py::CONF[\"unlock_ratio\"]"
+            ],
+            "thresholds.watch_n": [
+              "engine/a_short_runtime_config.py::_validate_screening.raw[\"watch_n\"]",
+              "A-EGS/egs_main.py::CONF[\"watch_n\"]"
+            ]
+          },
+          "presets/a_short_m67_runtime_policy_20260715.json": {
+            "phase5.atr_mult.收缩期": [
+              "engine/a_short_runtime_config.py::_validate_m67.phase[\"atr_mult\"]",
+              "runners/a_short_phase5_engine.py::_PHASE5_POLICY[\"atr_mult\"]"
+            ],
+            "phase5.atr_mult.进攻期": [
+              "engine/a_short_runtime_config.py::_validate_m67.phase[\"atr_mult\"]",
+              "runners/a_short_phase5_engine.py::_PHASE5_POLICY[\"atr_mult\"]"
+            ],
+            "phase5.atr_mult.防御期": [
+              "engine/a_short_runtime_config.py::_validate_m67.phase[\"atr_mult\"]",
+              "runners/a_short_phase5_engine.py::_PHASE5_POLICY[\"atr_mult\"]"
+            ],
+            "phase5.atr_mult.震荡期": [
+              "engine/a_short_runtime_config.py::_validate_m67.phase[\"atr_mult\"]",
+              "runners/a_short_phase5_engine.py::_PHASE5_POLICY[\"atr_mult\"]"
+            ],
+            "phase5.breakout_rr_bonus": [
+              "engine/a_short_runtime_config.py::_validate_m67.phase[\"breakout_rr_bonus\"]",
+              "runners/a_short_phase5_engine.py::_PHASE5_POLICY[\"breakout_rr_bonus\"]"
+            ],
+            "phase5.impact_cost_frac": [
+              "engine/a_short_runtime_config.py::_validate_m67.phase[\"impact_cost_frac\"]",
+              "runners/a_short_phase5_engine.py::_PHASE5_POLICY[\"impact_cost_frac\"]"
+            ],
+            "phase5.iv_halve_pct": [
+              "engine/a_short_runtime_config.py::_validate_m67.phase[\"iv_halve_pct\"]",
+              "runners/a_short_phase5_engine.py::_PHASE5_POLICY[\"iv_halve_pct\"]"
+            ],
+            "phase5.iv_hv_ratio_hi": [
+              "engine/a_short_runtime_config.py::_validate_m67.phase[\"iv_hv_ratio_hi\"]",
+              "runners/a_short_phase5_engine.py::_PHASE5_POLICY[\"iv_hv_ratio_hi\"]"
+            ],
+            "phase5.iv_hv_ratio_lo": [
+              "engine/a_short_runtime_config.py::_validate_m67.phase[\"iv_hv_ratio_lo\"]",
+              "runners/a_short_phase5_engine.py::_PHASE5_POLICY[\"iv_hv_ratio_lo\"]"
+            ],
+            "phase5.iv_nobuild_pct": [
+              "engine/a_short_runtime_config.py::_validate_m67.phase[\"iv_nobuild_pct\"]",
+              "runners/a_short_phase5_engine.py::_PHASE5_POLICY[\"iv_nobuild_pct\"]"
+            ],
+            "phase5.lowxi_band": [
+              "engine/a_short_runtime_config.py::_validate_m67.phase[\"lowxi_band\"]",
+              "runners/a_short_phase5_engine.py::_PHASE5_POLICY[\"lowxi_band\"]"
+            ],
+            "phase5.min_amount": [
+              "engine/a_short_runtime_config.py::_validate_m67.phase[\"min_amount\"]",
+              "runners/a_short_phase5_engine.py::_PHASE5_POLICY[\"min_amount\"]"
+            ],
+            "phase5.min_avg_amount_5d": [
+              "engine/a_short_runtime_config.py::_validate_m67.phase[\"min_avg_amount_5d\"]",
+              "runners/a_short_phase5_engine.py::_PHASE5_POLICY[\"min_avg_amount_5d\"]"
+            ],
+            "phase5.min_shares": [
+              "engine/a_short_runtime_config.py::_validate_m67.phase[\"min_shares\"]",
+              "runners/a_short_phase5_engine.py::_PHASE5_POLICY[\"min_shares\"]"
+            ],
+            "phase5.resistance_lookback": [
+              "engine/a_short_runtime_config.py::_validate_m67.phase[\"resistance_lookback\"]",
+              "runners/a_short_phase5_engine.py::_PHASE5_POLICY[\"resistance_lookback\"]"
+            ],
+            "phase5.rr_floor.收缩期": [
+              "engine/a_short_runtime_config.py::_validate_m67.phase[\"rr_floor\"]",
+              "runners/a_short_phase5_engine.py::_PHASE5_POLICY[\"rr_floor\"]"
+            ],
+            "phase5.rr_floor.进攻期": [
+              "engine/a_short_runtime_config.py::_validate_m67.phase[\"rr_floor\"]",
+              "runners/a_short_phase5_engine.py::_PHASE5_POLICY[\"rr_floor\"]"
+            ],
+            "phase5.rr_floor.防御期": [
+              "engine/a_short_runtime_config.py::_validate_m67.phase[\"rr_floor\"]",
+              "runners/a_short_phase5_engine.py::_PHASE5_POLICY[\"rr_floor\"]"
+            ],
+            "phase5.rr_floor.震荡期": [
+              "engine/a_short_runtime_config.py::_validate_m67.phase[\"rr_floor\"]",
+              "runners/a_short_phase5_engine.py::_PHASE5_POLICY[\"rr_floor\"]"
+            ],
+            "phase5.single_cap_pct.收缩期": [
+              "engine/a_short_runtime_config.py::_validate_m67.phase[\"single_cap_pct\"]",
+              "runners/a_short_phase5_engine.py::_PHASE5_POLICY[\"single_cap_pct\"]"
+            ],
+            "phase5.single_cap_pct.进攻期": [
+              "engine/a_short_runtime_config.py::_validate_m67.phase[\"single_cap_pct\"]",
+              "runners/a_short_phase5_engine.py::_PHASE5_POLICY[\"single_cap_pct\"]"
+            ],
+            "phase5.single_cap_pct.防御期": [
+              "engine/a_short_runtime_config.py::_validate_m67.phase[\"single_cap_pct\"]",
+              "runners/a_short_phase5_engine.py::_PHASE5_POLICY[\"single_cap_pct\"]"
+            ],
+            "phase5.single_cap_pct.震荡期": [
+              "engine/a_short_runtime_config.py::_validate_m67.phase[\"single_cap_pct\"]",
+              "runners/a_short_phase5_engine.py::_PHASE5_POLICY[\"single_cap_pct\"]"
+            ],
+            "phase5.sr_spike_atr": [
+              "engine/a_short_runtime_config.py::_validate_m67.phase[\"sr_spike_atr\"]",
+              "runners/a_short_phase5_engine.py::_PHASE5_POLICY[\"sr_spike_atr\"]"
+            ],
+            "phase5.support_lookback": [
+              "engine/a_short_runtime_config.py::_validate_m67.phase[\"support_lookback\"]",
+              "runners/a_short_phase5_engine.py::_PHASE5_POLICY[\"support_lookback\"]"
+            ],
+            "portfolio_risk.high_risk_holding_cap_multiplier": [
+              "engine/a_short_runtime_config.py::_PORTFOLIO_KEYS/high_risk_holding_cap_multiplier->portfolio[key]",
+              "engine/a_short_portfolio_risk.py::_PORTFOLIO_POLICY[\"high_risk_holding_cap_multiplier\"]"
+            ],
+            "portfolio_risk.large_index_threshold_pct": [
+              "engine/a_short_runtime_config.py::_PORTFOLIO_KEYS/large_index_threshold_pct->portfolio[key]",
+              "engine/a_short_portfolio_risk.py::_PORTFOLIO_POLICY[\"large_index_threshold_pct\"]"
+            ],
+            "portfolio_risk.margin_threshold_pct": [
+              "engine/a_short_runtime_config.py::_PORTFOLIO_KEYS/margin_threshold_pct->portfolio[key]",
+              "engine/a_short_portfolio_risk.py::_PORTFOLIO_POLICY[\"margin_threshold_pct\"]"
+            ],
+            "portfolio_risk.northbound_threshold_pct": [
+              "engine/a_short_runtime_config.py::_PORTFOLIO_KEYS/northbound_threshold_pct->portfolio[key]",
+              "engine/a_short_portfolio_risk.py::_PORTFOLIO_POLICY[\"northbound_threshold_pct\"]"
+            ],
+            "portfolio_risk.same_sw_l2_threshold_pct": [
+              "engine/a_short_runtime_config.py::_PORTFOLIO_KEYS/same_sw_l2_threshold_pct->portfolio[key]",
+              "engine/a_short_portfolio_risk.py::_PORTFOLIO_POLICY[\"same_sw_l2_threshold_pct\"]"
+            ],
+            "portfolio_risk.small_float_mv_rmb": [
+              "engine/a_short_runtime_config.py::_PORTFOLIO_KEYS/small_float_mv_rmb->portfolio[key]",
+              "engine/a_short_portfolio_risk.py::_PORTFOLIO_POLICY[\"small_float_mv_rmb\"]"
+            ],
+            "portfolio_risk.small_float_mv_threshold_pct": [
+              "engine/a_short_runtime_config.py::_PORTFOLIO_KEYS/small_float_mv_threshold_pct->portfolio[key]",
+              "engine/a_short_portfolio_risk.py::_PORTFOLIO_POLICY[\"small_float_mv_threshold_pct\"]"
+            ],
+            "weekly_windows.block_trade_lookback_trading_days": [
+              "engine/a_short_runtime_config.py::_WEEKLY_WINDOW_KEYS/block_trade_lookback_trading_days->windows[key]",
+              "runners/a_short_weekly_pipeline.py::_WEEKLY_WINDOWS[\"block_trade_lookback_trading_days\"]"
+            ],
+            "weekly_windows.dragon_list_lookback_trading_days": [
+              "engine/a_short_runtime_config.py::_WEEKLY_WINDOW_KEYS/dragon_list_lookback_trading_days->windows[key]",
+              "runners/a_short_weekly_pipeline.py::_WEEKLY_WINDOWS[\"dragon_list_lookback_trading_days\"]"
+            ],
+            "weekly_windows.ex_div_window_days": [
+              "engine/a_short_runtime_config.py::_WEEKLY_WINDOW_KEYS/ex_div_window_days->windows[key]",
+              "runners/a_short_weekly_pipeline.py::_WEEKLY_WINDOWS[\"ex_div_window_days\"]"
+            ],
+            "weekly_windows.forward_event_window_days": [
+              "engine/a_short_runtime_config.py::_WEEKLY_WINDOW_KEYS/forward_event_window_days->windows[key]",
+              "runners/a_short_weekly_pipeline.py::_WEEKLY_WINDOWS[\"forward_event_window_days\"]"
+            ],
+            "weekly_windows.min_price_observations": [
+              "engine/a_short_runtime_config.py::_WEEKLY_WINDOW_KEYS/min_price_observations->windows[key]",
+              "runners/a_short_weekly_pipeline.py::_WEEKLY_WINDOWS[\"min_price_observations\"]"
+            ]
+          },
+          "presets/egs_industry_heat_governance_20260611.json": {
+            "industry_trend_classifier.classifier_version": [
+              "engine/a_short_industry_theme.py::industry_trend_classifier[\"classifier_version\"]",
+              "A-EGS/egs_main.py::classify_industry_trend",
+              "runners/a_short_weekly_pipeline.py::_industry_trend_for_candidate"
+            ],
+            "industry_trend_classifier.forward_calibration_required": [
+              "engine/a_short_industry_theme.py::industry_trend_classifier[\"forward_calibration_required\"]",
+              "A-EGS/egs_main.py::classify_industry_trend",
+              "runners/a_short_weekly_pipeline.py::_industry_trend_for_candidate"
+            ],
+            "industry_trend_classifier.headwind_max": [
+              "engine/a_short_industry_theme.py::industry_trend_classifier[\"headwind_max\"]",
+              "A-EGS/egs_main.py::classify_industry_trend",
+              "runners/a_short_weekly_pipeline.py::_industry_trend_for_candidate"
+            ],
+            "industry_trend_classifier.positive_effect_enabled": [
+              "engine/a_short_industry_theme.py::industry_trend_classifier[\"positive_effect_enabled\"]",
+              "A-EGS/egs_main.py::classify_industry_trend",
+              "runners/a_short_weekly_pipeline.py::_industry_trend_for_candidate"
+            ],
+            "industry_trend_classifier.risk_filter_v1_prior": [
+              "engine/a_short_industry_theme.py::industry_trend_classifier[\"risk_filter_v1_prior\"]",
+              "A-EGS/egs_main.py::classify_industry_trend",
+              "runners/a_short_weekly_pipeline.py::_industry_trend_for_candidate"
+            ],
+            "industry_trend_classifier.semantic_boundary": [
+              "intentionally_independent: classifier explanation only"
+            ],
+            "industry_trend_classifier.source_id": [
+              "engine/a_short_industry_theme.py::industry_trend_classifier[\"source_id\"]",
+              "A-EGS/egs_main.py::classify_industry_trend",
+              "runners/a_short_weekly_pipeline.py::_industry_trend_for_candidate"
+            ],
+            "industry_trend_classifier.tailwind_min": [
+              "engine/a_short_industry_theme.py::industry_trend_classifier[\"tailwind_min\"]",
+              "A-EGS/egs_main.py::classify_industry_trend",
+              "runners/a_short_weekly_pipeline.py::_industry_trend_for_candidate"
+            ]
+          }
+        }
+      }
+    },
+    {
+      "contract_fingerprint": "2fbfc215d3609a2482359b9efefd0dc7ae5ea3a186d14faee3b8673dbec30c12",
+      "source_commit": "a40c2fc1005efb8b8c1241a81a92e3458587ab3c",
+      "ledger_schema_version": "1.0.0",
+      "contract": {
+        "schema_name": "a_short_m67_effect_contract",
+        "schema_version": "1.0.0",
+        "analysis_input_all_paths_sha256": "a9aaeca317daad60bbbd808c5a20660c44c28b578a0b73b4b6731dbbb124d188",
+        "groups": [
+          {
+            "id": "lineage_metadata",
+            "source_prefixes": [
+              "schema_version",
+              "generated_at",
+              "source.input_files",
+              "source.notes"
+            ],
+            "source_paths_sha256": "9010e763e011d4ec7183ce2c0dbb311042fc3cacc1b8003bd3a87c84ea7d396b",
+            "policy": "intentionally_independent",
+            "terminal_surfaces": [
+              "weekly.run_lineage"
+            ],
+            "runtime_handler": "intentionally_independent",
+            "intentional_independence": {
+              "reason": "这些字段只证明报告来自哪一批输入，不表达买卖、星级、仓位或风险。",
+              "owner": "A-short maintainers",
+              "review_ref": "docs/a_short_m67_effect_contract.md"
+            }
+          },
+          {
+            "id": "identity_batch_gate",
+            "source_prefixes": [
+              "trade_date",
+              "decision_as_of",
+              "run_date",
+              "price_data_through",
+              "preset",
+              "market",
+              "horizon",
+              "schema_name",
+              "source.screening_engine",
+              "source.screening_engine_version",
+              "source.data_provider",
+              "source.l3_mode",
+              "source.l3_pit_strict",
+              "source.l3_snapshot_date",
+              "source.hard_veto_source_health",
+              "source.run_identity",
+              "source.clocks",
+              "state_refs"
+            ],
+            "source_paths_sha256": "ee93f6b099e2d80954c45bdf83da5a7d9d52d2abe892ad2243ede546db4fe3a1",
+            "policy": "must_affect_result",
+            "terminal_surfaces": [
+              "weekly.effect_contract_ledger",
+              "weekly Markdown 字段/规则联动台账"
+            ],
+            "runtime_handler": "unresolved_input_group",
+            "unresolved_reason": "weekly.run_lineage 只保留部分批次身份；preset、provider、L3 和 state_refs 等其余叶字段尚未逐叶证明 M6.7 消费者，整组不得报已联动。"
+          },
+          {
+            "id": "l3_coverage_provenance",
+            "source_prefixes": [
+              "source.l3_coverage",
+              "source.l3_provider"
+            ],
+            "source_paths_sha256": "e671490d41a60223e24a1c4ddfaa383b16307da640ee466aa188df15408ca6ca",
+            "policy": "must_affect_result",
+            "terminal_surfaces": [
+              "weekly.effect_contract_ledger",
+              "weekly Markdown 字段/规则联动台账"
+            ],
+            "runtime_handler": "unresolved_input_group",
+            "unresolved_reason": "主干新增的 HiThink L3 覆盖与溯源字段尚未逐叶证明被正式 M6.7 消费；必须显式人工复核。"
+          },
+          {
+            "id": "runtime_configuration",
+            "source_prefixes": [
+              "source.runtime_configuration"
+            ],
+            "source_paths_sha256": "373eaaf3512af46778399e9dfcb434996f3d45df0dbb0528c8b69939292c7123",
+            "policy": "must_affect_result",
+            "terminal_surfaces": [
+              "weekly.run_lineage.runtime_configuration",
+              "weekly Markdown 配置 fingerprint"
+            ],
+            "runtime_handler": "lineage_gate",
+            "proven_consumer_paths": [
+              "source.runtime_configuration.configuration_fingerprint",
+              "source.runtime_configuration.policies[].path",
+              "source.runtime_configuration.policies[].policy_id",
+              "source.runtime_configuration.policies[].schema_name",
+              "source.runtime_configuration.policies[].schema_version",
+              "source.runtime_configuration.policies[].sha256",
+              "source.runtime_configuration.schema_name",
+              "source.runtime_configuration.schema_version"
+            ],
+            "consumer_proof_ref": "runners/a_short_weekly_pipeline.py validates the analysis_input policy lineage then writes it to weekly; validation and Markdown rendering bind the same fingerprint."
+          },
+          {
+            "id": "universe_selection",
+            "source_prefixes": [
+              "universe_summary"
+            ],
+            "source_paths_sha256": "669d40c9388ff8b49d1791e661c71a27cef7f0025cbf282129f7e672cd78f06a",
+            "policy": "must_affect_result",
+            "terminal_surfaces": [
+              "weekly.effect_contract_ledger",
+              "weekly Markdown 字段/规则联动台账"
+            ],
+            "runtime_handler": "unresolved_input_group",
+            "unresolved_reason": "筛选统计会随候选进入周报，但尚未逐字段证明各统计量对正式 M6.7 的消费者；不能只因本周有候选就报已联动。"
+          },
+          {
+            "id": "market_context",
+            "source_prefixes": [
+              "market_context"
+            ],
+            "source_paths_sha256": "fc0178fb32c450a6f576232ee2b32abc9819eb648fce3031c61f13775131c898",
+            "policy": "must_affect_result",
+            "terminal_surfaces": [
+              "weekly.effect_contract_ledger",
+              "weekly Markdown 字段/规则联动台账"
+            ],
+            "runtime_handler": "unresolved_input_group",
+            "unresolved_reason": "正式 weekly 当前只读取市场状态等少数字段，整组其余广度、流动性、北向、日历和波动率叶字段尚未逐叶证明消费者；不能报已联动。"
+          },
+          {
+            "id": "account_context",
+            "source_prefixes": [
+              "account_context"
+            ],
+            "source_paths_sha256": "4e6a553cfe533fe69b6609686fd122fc7fa9a7065b451e8a1667b14b7fcb123c",
+            "policy": "must_affect_result",
+            "terminal_surfaces": [
+              "weekly.effect_contract_ledger",
+              "weekly Markdown 字段/规则联动台账"
+            ],
+            "runtime_handler": "unresolved_input_group",
+            "unresolved_reason": "正式现金分配读取独立账户输入；analysis_input.account_context 尚未逐叶证明为 M6.7 消费者，必须人工核查。"
+          },
+          {
+            "id": "candidate_identity_selection",
+            "source_prefixes": [
+              "candidates[].ts_code",
+              "candidates[].name",
+              "candidates[].exchange",
+              "candidates[].board",
+              "candidates[].analysis_role",
+              "candidates[].selection"
+            ],
+            "source_paths_sha256": "02f4f04af10db99c5facbfc4076976e00b99932115993b02cfed412b591a538f",
+            "policy": "must_affect_result",
+            "terminal_surfaces": [
+              "weekly.effect_contract_ledger",
+              "weekly Markdown 字段/规则联动台账"
+            ],
+            "runtime_handler": "unresolved_input_group",
+            "unresolved_reason": "代码和名称会展示，但交易所、板块、角色和 selection 尚未逐字段证明为正式 M6.7 消费者；本组必须人工核查。"
+          },
+          {
+            "id": "candidate_quote",
+            "source_prefixes": [
+              "candidates[].quote"
+            ],
+            "source_paths_sha256": "33545edacf56f19b3e329007eaacdb5debfdc64dc2e07b4f5b345064eb574939",
+            "policy": "must_affect_result",
+            "terminal_surfaces": [
+              "weekly.effect_contract_ledger",
+              "weekly Markdown 字段/规则联动台账"
+            ],
+            "runtime_handler": "unresolved_input_group",
+            "unresolved_reason": "weekly 目前只取 quote.close；其余报价叶字段尚未接入，整组不得报已联动。"
+          },
+          {
+            "id": "candidate_industry_classification",
+            "source_prefixes": [
+              "candidates[].industry.sw_l1_code",
+              "candidates[].industry.sw_l1_name",
+              "candidates[].industry.sw_l2_code",
+              "candidates[].industry.sw_l2_name"
+            ],
+            "source_paths_sha256": "e485df56173691e2dc29394122d25b5c24e5cea7ed364f4d08e7f9a1706c477f",
+            "policy": "must_affect_result",
+            "terminal_surfaces": [
+              "weekly.effect_contract_ledger",
+              "weekly Markdown 字段/规则联动台账"
+            ],
+            "runtime_handler": "unresolved_input_group",
+            "unresolved_reason": "组合模块只使用 SW L2；SW L1 叶字段尚未逐叶证明消费者，整组不得报已联动。"
+          },
+          {
+            "id": "industry_trend",
+            "source_prefixes": [
+              "candidates[].industry.industry_trend",
+              "candidates[].industry.industry_trend_signal",
+              "candidates[].industry.industry_trend_evidence"
+            ],
+            "source_paths_sha256": "3b639bd4afdd78d2311dd4940babb62f880d8dbd47c8aa976ca6b56d760b8409",
+            "policy": "must_affect_result",
+            "terminal_surfaces": [
+              "reports[].m67.table.优先级",
+              "reports[].machine.industry_trend",
+              "weekly_m67.md deterministic industry-trend line"
+            ],
+            "runtime_handler": "industry_trend"
+          },
+          {
+            "id": "industry_fundamental_advisory",
+            "source_prefixes": [
+              "candidates[].industry.industry_fundamental_trend",
+              "candidates[].industry.industry_fundamental_trend_evidence"
+            ],
+            "source_paths_sha256": "5be5ad452b1323b5bc0e54b1410c382fd3940d405b2afcb7eecdb514558d7ef4",
+            "policy": "must_affect_result",
+            "terminal_surfaces": [
+              "weekly.effect_contract_ledger",
+              "weekly Markdown 字段/规则联动台账"
+            ],
+            "runtime_handler": "unresolved_input_group",
+            "unresolved_reason": "主干的行业基本面 LLM advisory 仍是独立的 Phase 3/4 接线；本切片不把它误报为已联动。"
+          },
+          {
+            "id": "candidate_scores",
+            "source_prefixes": [
+              "candidates[].scores"
+            ],
+            "source_paths_sha256": "dad9b9c6d7b1b5aba5a6a86428ee39de5d06b033ab2c9d4feec95867a8eb07d7",
+            "policy": "must_affect_result",
+            "terminal_surfaces": [
+              "weekly.effect_contract_ledger",
+              "weekly Markdown 字段/规则联动台账"
+            ],
+            "runtime_handler": "unresolved_input_group",
+            "unresolved_reason": "weekly 只转入少数 ESP/L4/总分和质量旗标；其余 scores 叶字段未逐叶证明 M6.7 消费者，整组不得报已联动。"
+          },
+          {
+            "id": "candidate_technical",
+            "source_prefixes": [
+              "candidates[].technical"
+            ],
+            "source_paths_sha256": "80565630ed6c1f70d79de9cf1d0e97acb71cc254c8580738917ae76f10717e68",
+            "policy": "must_affect_result",
+            "terminal_surfaces": [
+              "weekly.effect_contract_ledger",
+              "weekly Markdown 字段/规则联动台账"
+            ],
+            "runtime_handler": "unresolved_input_group",
+            "unresolved_reason": "analysis_input.technical 当前没有被 weekly/Phase5 的候选消费者逐叶读取；不得因候选存在而误报已联动。"
+          },
+          {
+            "id": "candidate_fundamental",
+            "source_prefixes": [
+              "candidates[].fundamental"
+            ],
+            "source_paths_sha256": "405baa3c9b2a36dfb11f98d864b1bab75ecfb1d809b67bccdc30b31ef99609a9",
+            "policy": "must_affect_result",
+            "terminal_surfaces": [
+              "weekly.effect_contract_ledger",
+              "weekly Markdown 字段/规则联动台账"
+            ],
+            "runtime_handler": "unresolved_input_group",
+            "unresolved_reason": "少数基本面叶字段会转成财报质量 advisory 或组合事实，但整组仍有未证明的叶字段；未逐叶拆开前不能报已联动。"
+          },
+          {
+            "id": "candidate_capital_flow",
+            "source_prefixes": [
+              "candidates[].capital_flow"
+            ],
+            "source_paths_sha256": "8419d89681cf09249fb516e232cd2c0097b72a5bc2bd8e503d3b3de14f336d2d",
+            "policy": "must_affect_result",
+            "terminal_surfaces": [
+              "weekly.effect_contract_ledger",
+              "weekly Markdown 字段/规则联动台账"
+            ],
+            "runtime_handler": "unresolved_input_group",
+            "unresolved_reason": "北向持股比例和融资占比会进入组合事实，但其余资金流叶字段尚无 weekly 消费者；未逐叶拆开前不能报已联动。"
+          },
+          {
+            "id": "candidate_event_risk",
+            "source_prefixes": [
+              "candidates[].event_risk"
+            ],
+            "source_paths_sha256": "a006204918486233041473e0009d3f6119c1339d152579118346cf0337b912d0",
+            "policy": "must_affect_result",
+            "terminal_surfaces": [
+              "weekly.effect_contract_ledger",
+              "weekly Markdown 字段/规则联动台账"
+            ],
+            "runtime_handler": "unresolved_input_group",
+            "unresolved_reason": "weekly 只转入部分减持、退市和停牌事实；监管、解禁及其余事件叶字段尚未逐叶证明消费者，整组不得报已联动。"
+          },
+          {
+            "id": "candidate_catalyst",
+            "source_prefixes": [
+              "candidates[].catalyst"
+            ],
+            "source_paths_sha256": "4292282ab816163ced1c740f1feab2846093d45c4b7f2f956345abc1faf03e0f",
+            "policy": "must_affect_result",
+            "terminal_surfaces": [
+              "weekly.effect_contract_ledger",
+              "weekly Markdown 字段/规则联动台账"
+            ],
+            "runtime_handler": "unresolved_input_group",
+            "unresolved_reason": "analysis_input.catalyst 当前没有被 weekly/Phase5 的候选消费者逐叶读取；必须人工核查。"
+          },
+          {
+            "id": "candidate_liquidity",
+            "source_prefixes": [
+              "candidates[].liquidity"
+            ],
+            "source_paths_sha256": "a1fe15d3d8daecc1fb846f0123af627c4dea21cc7e859622b290e8f7ea192607",
+            "policy": "must_affect_result",
+            "terminal_surfaces": [
+              "weekly.effect_contract_ledger",
+              "weekly Markdown 字段/规则联动台账"
+            ],
+            "runtime_handler": "unresolved_input_group",
+            "unresolved_reason": "weekly 只使用 5/20 日成交额；其余流动性叶字段尚未逐叶证明消费者，整组不得报已联动。"
+          },
+          {
+            "id": "candidate_volatility",
+            "source_prefixes": [
+              "candidates[].volatility"
+            ],
+            "source_paths_sha256": "5326f1e3f8e751633320ffa0756354ac19bbc267199057757b321c72b20a1675",
+            "policy": "must_affect_result",
+            "terminal_surfaces": [
+              "weekly.effect_contract_ledger",
+              "weekly Markdown 字段/规则联动台账"
+            ],
+            "runtime_handler": "unresolved_input_group",
+            "unresolved_reason": "analysis_input.volatility 当前未接入 weekly 的 IV/HV 输入；周报使用的是独立 IV feed，不能误报本组已联动。"
+          },
+          {
+            "id": "candidate_analyst",
+            "source_prefixes": [
+              "candidates[].analyst"
+            ],
+            "source_paths_sha256": "51c3529d30c2dd9ca290d2796725d25ad104dbe7e99a9604931cd2e3018cb5ab",
+            "policy": "must_affect_result",
+            "terminal_surfaces": [
+              "weekly.effect_contract_ledger",
+              "weekly Markdown 字段/规则联动台账"
+            ],
+            "runtime_handler": "unresolved_input_group",
+            "unresolved_reason": "analysis_input.analyst 当前没有 weekly/Phase5 消费者；必须人工核查。"
+          },
+          {
+            "id": "portfolio_concentration_factor_resonance",
+            "source_prefixes": [
+              "candidates[].portfolio_impact"
+            ],
+            "source_paths_sha256": "5e21e74d63c46deae6b43a5fe83a5ae34d211d0f8f03cdaceedd39f699ff2e35",
+            "policy": "must_affect_result",
+            "terminal_surfaces": [
+              "weekly.effect_contract_ledger",
+              "weekly Markdown 字段/规则联动台账"
+            ],
+            "runtime_handler": "unresolved_input_group",
+            "unresolved_reason": "M5.5/M5.5B 使用部分因子暴露字段；correlation_action、阈值等其余叶字段尚未逐叶证明消费者，整组不得报已联动。"
+          },
+          {
+            "id": "candidate_derived_flags",
+            "source_prefixes": [
+              "candidates[].derived_flags"
+            ],
+            "source_paths_sha256": "27ee95006b78047eaf7fcf4f0210e2dd196f6b962693d844b51b1f78755704de",
+            "policy": "must_affect_result",
+            "terminal_surfaces": [
+              "weekly.effect_contract_ledger",
+              "weekly Markdown 字段/规则联动台账"
+            ],
+            "runtime_handler": "unresolved_input_group",
+            "unresolved_reason": "weekly 使用多个 derived flag，但 m4_review_required 等叶字段尚未逐叶证明消费者；整组不得报已联动。"
+          },
+          {
+            "id": "llm_tasks",
+            "source_prefixes": [
+              "candidates[].llm_tasks"
+            ],
+            "source_paths_sha256": "56cea2bd1f03d0dff185825ead5d47c899e844c1d11347c4789dcac7daa3aff3",
+            "policy": "must_affect_result",
+            "terminal_surfaces": [
+              "reports[].machine.layer.llm_task_results",
+              "weekly.effect_contract_ledger",
+              "weekly Markdown legacy task summaries",
+              "Phase4 deterministic reports"
+            ],
+            "runtime_handler": "llm_tasks",
+            "proven_consumer_paths": [
+              "candidates[].llm_tasks[].inputs",
+              "candidates[].llm_tasks[].prompt",
+              "candidates[].llm_tasks[].status",
+              "candidates[].llm_tasks[].task_id",
+              "candidates[].llm_tasks[].task_type"
+            ],
+            "consumer_proof_ref": "A-EGS/egs_main.py::build_task_configs; runners/a_short_weekly_pipeline.py::_attach_llm_task_results/_materialize_legacy_task_reports; runners/a_short_m67_render.py::_legacy_task_line"
+          },
+          {
+            "id": "candidate_data_quality",
+            "source_prefixes": [
+              "candidates[].data_quality"
+            ],
+            "source_paths_sha256": "680077c4ac6515e5d1a4ac342c6c08bfe66186497725923458b33aed34e44d7b",
+            "policy": "must_affect_result",
+            "terminal_surfaces": [
+              "weekly.effect_contract_ledger",
+              "weekly Markdown 字段/规则联动台账"
+            ],
+            "runtime_handler": "unresolved_input_group",
+            "unresolved_reason": "analysis_input.data_quality 当前未驱动 weekly 的数据缺失处置或操作；必须人工核查。"
+          }
+        ],
+        "decision_predicate_sha256": {
+          "A-EGS/egs_main.py": "4745cd75f0242040497a1cba2a09f500bf9b0ab1477ea086c34daa29c0dbf6b6",
+          "engine/egs_industry_heat.py": "79d8cddefdabb21fa8effd677f320a8e44d86782688f4449145c8789469700b3",
+          "engine/a_short_industry_theme.py": "6a10200f80b3c0d301efc8af1561b53ef2578e1cd26eea7976188dd57b7b6b2b",
+          "runners/a_short_phase5_engine.py": "6f8a297f64df719652a20ad1b1e3d80996c70f182e4c070a148c6399cdb8f3fd",
+          "runners/a_short_weekly_pipeline.py": "d3cf10aa704e2f12fb74f25927f12c94d6e400a538a178a5d6a2f7b973e36fa7",
+          "runners/a_short_m67_render.py": "070bcd409b5e4d30bcf5462e3f49081205799028f9aa12059b554db7ba39b67a",
+          "engine/a_short_portfolio_risk.py": "6dbb9c0ddb8319c79315d97f798911220580681fa3cb9664b1085b403d941e45",
+          "engine/a_short_effect_contract.py": "9f203f087a0c8b95fce97c7c4934b01d1ad4b72b9a582c1ec1db2e272186c8df"
+        },
+        "runtime_constants_sha256": {
+          "A-EGS/egs_main.py": "16714f65c6c1bb952b6754ac0e8d622c42dc81122a4a5a07461a733b084ad6e8",
+          "runners/a_short_phase5_engine.py": "537f47a9e7443e638b675cc7349b7e551eb926f2dd00267f6085433a680d1f3b",
+          "engine/a_short_portfolio_risk.py": "d823756ca1142d648747401ad750c53a2439bcc3cbaaddf0521ac8eafb3dbd94"
+        },
+        "runtime_policy_paths_sha256": "a164e3baffe8bcb8f82d07549ffc343213e9832f129178527113abc55bfcca53",
+        "runtime_policy_sha256": {
+          "presets/a_short_screening_threshold_governance_20260602.json": "aeccfa2636685f395442a23892d9d816d22fcf50271b0fe7dbc13bf72cffce9d",
+          "presets/a_short_m67_runtime_policy_20260715.json": "2af7fc3e59fa891a63afbe312ebe41dda77ee967965a980b10cc9dad1969ed49",
+          "presets/egs_industry_heat_governance_20260611.json": "8bbbf474ca92321bf0d1c0e5f6e91d13d332e10545d3a222aa9e32caac3fb8da"
+        },
+        "runtime_policy_schema_sha256": {
+          "schemas/a_short_screening_threshold_governance.schema.json": "6a517050ead73ebb4d939c236224d3776fc5be1ff3dc67453303c7329f276217",
+          "schemas/a_short_m67_runtime_policy.schema.json": "682f1e490a20f4b30186bf50431ae19d5d03ab7aea3314f652f70d0d62bebf00"
+        },
+        "runtime_policy_leaf_readers_sha256": "bebccc98eff1eeb86ec0e11990dd3543e982c647becfb069d61b35e11d28cb09",
+        "runtime_policy_bindings": [
+          {
+            "id": "screening_thresholds",
+            "policy_path": "presets/a_short_screening_threshold_governance_20260602.json",
+            "source_prefixes": [
+              "thresholds"
+            ],
+            "source_paths_sha256": "e84c2eaa2a14d33fb280fdf127006407516e7b1934e109c07ea755fb791cf08d",
+            "policy": "must_affect_result",
+            "terminal_surfaces": [
+              "analysis_input candidate selection",
+              "weekly.run_lineage.runtime_configuration"
+            ],
+            "consumer_refs": [
+              "A-EGS/egs_main.py::CONF loads _SCREENING_THRESHOLDS"
+            ]
+          },
+          {
+            "id": "phase5_thresholds",
+            "policy_path": "presets/a_short_m67_runtime_policy_20260715.json",
+            "source_prefixes": [
+              "phase5"
+            ],
+            "source_paths_sha256": "bee5707edbf5398bc7b83fd032b638c9e766094a81434a880255c300e77f3a67",
+            "policy": "must_affect_result",
+            "terminal_surfaces": [
+              "weekly.reports[].m67",
+              "weekly.reports[].machine"
+            ],
+            "consumer_refs": [
+              "runners/a_short_phase5_engine.py imports _PHASE5_POLICY"
+            ]
+          },
+          {
+            "id": "portfolio_risk_thresholds",
+            "policy_path": "presets/a_short_m67_runtime_policy_20260715.json",
+            "source_prefixes": [
+              "portfolio_risk.same_sw_l2_threshold_pct",
+              "portfolio_risk.northbound_threshold_pct",
+              "portfolio_risk.margin_threshold_pct",
+              "portfolio_risk.large_index_threshold_pct",
+              "portfolio_risk.small_float_mv_threshold_pct"
+            ],
+            "source_paths_sha256": "992534e67ef7b1619c31178d28269198facfffd4865cd14cfa9021730f330d1d",
+            "policy": "must_affect_result",
+            "terminal_surfaces": [
+              "weekly.portfolio_risk",
+              "weekly.reports[].machine.operation_impact",
+              "weekly.cash_allocation"
+            ],
+            "consumer_refs": [
+              "engine/a_short_portfolio_risk.py imports _PORTFOLIO_POLICY"
+            ]
+          },
+          {
+            "id": "portfolio_risk_runtime_consumers",
+            "policy_path": "presets/a_short_m67_runtime_policy_20260715.json",
+            "source_prefixes": [
+              "portfolio_risk.small_float_mv_rmb",
+              "portfolio_risk.high_risk_holding_cap_multiplier"
+            ],
+            "source_paths_sha256": "428e55f19f11d30e3b64d852ee477f3e85cced9472bf189b8b902142a9d214d0",
+            "policy": "must_affect_result",
+            "terminal_surfaces": [
+              "weekly.portfolio_risk risk action and high-risk cap",
+              "weekly portfolio-risk validator",
+              "weekly JSON and Markdown portfolio-risk labels"
+            ],
+            "consumer_refs": [
+              "engine/a_short_portfolio_risk.py imports _PORTFOLIO_POLICY",
+              "runners/a_short_weekly_pipeline.py imports _PORTFOLIO_RISK_POLICY"
+            ]
+          },
+          {
+            "id": "weekly_result_windows",
+            "policy_path": "presets/a_short_m67_runtime_policy_20260715.json",
+            "source_prefixes": [
+              "weekly_windows"
+            ],
+            "source_paths_sha256": "d88d07b935f4f859bfb542adf0a8378141fb84baaeb03269284704f71bed3914",
+            "policy": "must_affect_result",
+            "terminal_surfaces": [
+              "weekly ex_div_notices/upcoming_events/dragon_list/block_trade",
+              "weekly.reports[].m67"
+            ],
+            "consumer_refs": [
+              "runners/a_short_weekly_pipeline.py imports _WEEKLY_WINDOWS"
+            ]
+          },
+          {
+            "id": "industry_trend_classifier",
+            "policy_path": "presets/egs_industry_heat_governance_20260611.json",
+            "source_prefixes": [
+              "industry_trend_classifier.classifier_version",
+              "industry_trend_classifier.forward_calibration_required",
+              "industry_trend_classifier.headwind_max",
+              "industry_trend_classifier.positive_effect_enabled",
+              "industry_trend_classifier.risk_filter_v1_prior",
+              "industry_trend_classifier.source_id",
+              "industry_trend_classifier.tailwind_min"
+            ],
+            "source_paths_sha256": "e8a3ab0bb77e6bee755895083fdcb1f3eb6d49d415bf18a18cefa9a8ae1d8f8c",
+            "policy": "must_affect_result",
+            "terminal_surfaces": [
+              "analysis_input candidates[].industry.industry_trend_signal",
+              "weekly reports[].machine.industry_trend",
+              "reports[].m67.table.优先级"
+            ],
+            "consumer_refs": [
+              "engine/a_short_industry_theme.py classifier; A-EGS emits; weekly validates master governance"
+            ]
+          },
+          {
+            "id": "industry_trend_semantic_boundary",
+            "policy_path": "presets/egs_industry_heat_governance_20260611.json",
+            "source_prefixes": [
+              "industry_trend_classifier.semantic_boundary"
+            ],
+            "source_paths_sha256": "c8c26254d99700276e35e01531be74c65d1c976c0bc819d7ce0245fa59a3310e",
+            "policy": "intentionally_independent",
+            "terminal_surfaces": [
+              "weekly.effect_contract_ledger",
+              "docs/a_short_m67_effect_contract.md"
+            ],
+            "intentional_independence": {
+              "reason": "Classifier semantic boundary is explanatory metadata: it documents the deterministic-vs-LLM separation and must not itself create a trade effect.",
+              "owner": "A-short maintainers",
+              "review_ref": "docs/a_short_m67_effect_contract.md"
+            }
+          }
+        ],
+        "comparison_tracks": [
+          {
+            "id": "theme_overlay",
+            "policy": "intentionally_independent",
+            "schema_path": "schemas/a_short_theme_overlay_comparison.schema.json",
+            "schema_sha256": "cbab2ac920d72bb1234a016fbd4073d9bd44689c9fe6264ed918f3ebe216cbfe",
+            "reason": "Not a missing connection: overlay is a separate forward comparison track and, before manual promotion, is prohibited from changing formal M6.7 star, risk, action, sizing, cash allocation, or veto.",
+            "owner": "runners/a_short_theme_overlay_comparison.py + runners/a_short_overlay_eval.py",
+            "review_ref": "manual promotion only after forward evidence",
+            "consumer_refs": [
+              "result/a_short/<as_of>/overlay.json",
+              "research/results/a_short/overlay_eval_summary.json"
+            ]
+          },
+          {
+            "id": "target_policy_comparison",
+            "policy": "intentionally_independent",
+            "schema_path": "schemas/a_short_target_policy_comparison_summary.schema.json",
+            "schema_sha256": "6e024b1a80d53a83eeb4acecf44908a738b61a0b6a283ef2d92861c096484400",
+            "reason": "P2 freezes a shadow-only target and breakout comparison. Before separate future reviews, independent re-review, and explicit user confirmation, it is prohibited from changing formal M6.7 target, entry eligibility, star, risk, action, sizing, cash allocation, or veto.",
+            "owner": "runners/a_short_target_policy_comparison_runner.py + engine/a_short_managed_exit.py",
+            "review_ref": "P2 forward review only after the public summary reaches its frozen minimum data thresholds",
+            "consumer_refs": [
+              "logs/a_short_target_policy_comparison.json",
+              "research/results/a_short/target_policy_comparison_summary.json"
+            ]
+          },
+          {
+            "id": "final_action_validation",
+            "policy": "intentionally_independent",
+            "schema_path": "schemas/a_short_final_action_validation_summary.schema.json",
+            "schema_sha256": "614075759ccc1b87ea4b0975923f870e8c486993cf4b0efe3c5302f0c5f14069",
+            "reason": "P3 freezes an account-independent model-selection comparison and optional shared managed-exit evidence. Before future threshold reviews, independent re-review, and explicit user confirmation, it is prohibited from changing EGS, formal M6.7 action, star, sizing, cash allocation, stop, target, veto, or any production policy.",
+            "owner": "runners/a_short_final_action_validation_runner.py + engine/a_short_managed_exit.py",
+            "review_ref": "P3 forward review only after public reminder thresholds; HAC, P3b and production switching remain separately gated",
+            "consumer_refs": [
+              "logs/a_short_final_action_validation.json",
+              "research/results/a_short/final_action_validation_summary.json"
+            ]
+          },
+          {
+            "id": "industry_weight_comparison_p5",
+            "policy": "intentionally_independent",
+            "schema_path": "schemas/a_short_industry_weight_comparison_progress_summary.schema.json",
+            "schema_sha256": "edcf868936ff5fd50cec72b788fcf6f8249bbde2de4952a8cf31f0c4373d1740",
+            "reason": "P5a records cache-only, source-bound profile-weight evidence progress and a P5b build reminder. It is prohibited from changing active_profile, EGS, formal M6.7 action, star, sizing, cash allocation, veto, stop, target, account state, or any production policy.",
+            "owner": "engine/a_short_industry_weight_comparison.py + runners/a_short_industry_weight_comparison.py",
+            "review_ref": "P5b may be implemented only after the frozen eligible/difference-week trigger; every policy change remains separately reviewed and user-gated.",
+            "consumer_refs": [
+              "research/results/a_short/industry_weight_comparison_summary.json",
+              "research/results/a_short/industry_weight_comparison_summary.md"
+            ]
+          },
+          {
+            "id": "overlay_adjudication_p4a",
+            "policy": "intentionally_independent",
+            "schema_path": "schemas/a_short_overlay_adjudication_summary.schema.json",
+            "schema_sha256": "c134fb685dec293ab59f087e5816dc66520984b4ba5772e5d00f94951545b3e8",
+            "reason": "P4a freezes a post-publication Stage3 Top5 rank-source comparison. Before a separately reviewed user receipt with a future effective week, it is prohibited from changing official Top5, EGS, M6.7 action, star, sizing, cash allocation, holdings, exit, veto, or production configuration.",
+            "owner": "engine/a_short_overlay_adjudication.py + runners/a_short_overlay_adjudication.py",
+            "review_ref": "P4a automatic adjudication is advisory-only; P4b and activation remain separately gated.",
+            "consumer_refs": [
+              "research/results/a_short/overlay_adjudication_summary.json",
+              "research/results/a_short/overlay_adjudication_summary.md"
+            ]
+          }
+        ],
+        "operation_impact_sources": [
+          "financial_quality",
+          "holder_reduction_deduct_30d",
+          "semantic_official_high_confirmed",
+          "semantic_web_llm",
+          "block_trade_appearance",
+          "dragon_list_appearance",
+          "earnings_bad_reaction",
+          "portfolio_concentration_factor_resonance"
+        ],
+        "llm_task_types": [
+          "cross_market_linkage",
+          "earnings_bad_reaction",
+          "hidden_risk",
+          "industry_trend",
+          "policy_news",
+          "regulatory_check"
+        ],
+        "portfolio_factor_fields": [
+          "northbound_holding_ratio_pct",
+          "margin_balance_to_float_mv_pct",
+          "large_index_component_pct",
+          "small_float_mv_pct"
+        ],
+        "output_schema_sha256": {
+          "schemas/a_short_weekly_report.schema.json": "8918389b93263588aa76db98a703a9e843b6e2f13b8cf61eb097e5f69f53d7e8",
+          "schemas/a_short_m67_report.schema.json": "9e74525507e9731031b90fdd0add1be74b28afcd78210ff78533070a6946c23c"
+        },
+        "analysis_input_paths": [
+          "account_context.available_cash",
+          "account_context.current_gross_exposure",
+          "account_context.mode",
+          "account_context.positions[].current_price",
+          "account_context.positions[].entry_date",
+          "account_context.positions[].entry_price",
+          "account_context.positions[].floating_pnl_pct",
+          "account_context.positions[].name",
+          "account_context.positions[].shares",
+          "account_context.positions[].stop_loss",
+          "account_context.positions[].take_profit_1",
+          "account_context.positions[].take_profit_2",
+          "account_context.positions[].ts_code",
+          "account_context.total_equity",
+          "candidates[].analysis_role",
+          "candidates[].analyst.coverage_count",
+          "candidates[].analyst.downgrade_count_1m",
+          "candidates[].analyst.target_below_current",
+          "candidates[].analyst.target_price_mean",
+          "candidates[].board",
+          "candidates[].capital_flow.block_trade.amount_10d",
+          "candidates[].capital_flow.block_trade.avg_discount_pct",
+          "candidates[].capital_flow.block_trade.discount_trade_count_10d",
+          "candidates[].capital_flow.margin.balance",
+          "candidates[].capital_flow.margin.balance_change_10d_pct",
+          "candidates[].capital_flow.margin.balance_change_5d_pct",
+          "candidates[].capital_flow.margin.balance_to_float_mv_pct",
+          "candidates[].capital_flow.margin.extreme_accumulation",
+          "candidates[].capital_flow.moneyflow.big_order_ratio",
+          "candidates[].capital_flow.moneyflow.divergence_flag",
+          "candidates[].capital_flow.moneyflow.net_inflow_5d",
+          "candidates[].capital_flow.northbound.consecutive_net_sell_days",
+          "candidates[].capital_flow.northbound.holding_ratio",
+          "candidates[].capital_flow.northbound.net_sell_to_total_share_pct",
+          "candidates[].catalyst.concept_strength_score",
+          "candidates[].catalyst.concepts[]",
+          "candidates[].catalyst.earnings.has_recent_report",
+          "candidates[].catalyst.earnings.is_primary_catalyst",
+          "candidates[].catalyst.policy_news[].published_at",
+          "candidates[].catalyst.policy_news[].source",
+          "candidates[].catalyst.policy_news[].title",
+          "candidates[].catalyst.policy_news[].url",
+          "candidates[].catalyst.theme_taxonomy.automatic_promotion",
+          "candidates[].catalyst.theme_taxonomy.canonical_themes[]",
+          "candidates[].catalyst.theme_taxonomy.comparison_metrics.breadth_pass",
+          "candidates[].catalyst.theme_taxonomy.comparison_metrics.comparison_status",
+          "candidates[].catalyst.theme_taxonomy.comparison_metrics.fit_pass",
+          "candidates[].catalyst.theme_taxonomy.comparison_metrics.fit_score",
+          "candidates[].catalyst.theme_taxonomy.comparison_metrics.persistence_mult",
+          "candidates[].catalyst.theme_taxonomy.comparison_metrics.theme_heat_score",
+          "candidates[].catalyst.theme_taxonomy.comparison_status",
+          "candidates[].catalyst.theme_taxonomy.l3_provenance.coverage_complete",
+          "candidates[].catalyst.theme_taxonomy.l3_provenance.coverage_digest",
+          "candidates[].catalyst.theme_taxonomy.l3_provenance.provider",
+          "candidates[].catalyst.theme_taxonomy.l3_provenance.raw_membership_source",
+          "candidates[].catalyst.theme_taxonomy.l3_provenance.scoring_universe",
+          "candidates[].catalyst.theme_taxonomy.l3_provenance.snapshot_date",
+          "candidates[].catalyst.theme_taxonomy.l3_provenance.validation_status",
+          "candidates[].catalyst.theme_taxonomy.primary_canonical_theme_id",
+          "candidates[].catalyst.theme_taxonomy.production_effect_enabled",
+          "candidates[].catalyst.theme_taxonomy.raw_concepts[]",
+          "candidates[].catalyst.theme_taxonomy.source_as_of",
+          "candidates[].catalyst.theme_taxonomy.taxonomy_configuration_fingerprint",
+          "candidates[].catalyst.theme_taxonomy.taxonomy_schema_name",
+          "candidates[].catalyst.theme_taxonomy.taxonomy_schema_version",
+          "candidates[].catalyst.theme_taxonomy.unavailable_reason",
+          "candidates[].catalyst.time_window",
+          "candidates[].data_quality.completeness_score",
+          "candidates[].data_quality.missing_fields[]",
+          "candidates[].data_quality.pending_fields[]",
+          "candidates[].data_quality.rule11_required",
+          "candidates[].derived_flags.chasing_high",
+          "candidates[].derived_flags.hard_veto",
+          "candidates[].derived_flags.has_crash_veto",
+          "candidates[].derived_flags.is_breakout",
+          "candidates[].derived_flags.is_lock",
+          "candidates[].derived_flags.m4_review_required",
+          "candidates[].derived_flags.overheat_flag",
+          "candidates[].derived_flags.vol_confirm",
+          "candidates[].event_risk.delisting.delisting_warning",
+          "candidates[].event_risk.delisting.negative_net_asset",
+          "candidates[].event_risk.delisting.non_standard_audit",
+          "candidates[].event_risk.delisting.st_flag",
+          "candidates[].event_risk.holder_reduction.active_plan",
+          "candidates[].event_risk.holder_reduction.completed_3m_amount",
+          "candidates[].event_risk.holder_reduction.completed_3m_pct_share",
+          "candidates[].event_risk.holder_reduction.observed_at",
+          "candidates[].event_risk.holder_reduction.reduce_penalty",
+          "candidates[].event_risk.holder_reduction.source_status",
+          "candidates[].event_risk.regulatory.evidence[].published_at",
+          "candidates[].event_risk.regulatory.evidence[].source",
+          "candidates[].event_risk.regulatory.evidence[].title",
+          "candidates[].event_risk.regulatory.evidence[].url",
+          "candidates[].event_risk.regulatory.has_inquiry_or_concern_48h",
+          "candidates[].event_risk.regulatory.negative_depth",
+          "candidates[].event_risk.rule6_checks[].evidence[].published_at",
+          "candidates[].event_risk.rule6_checks[].evidence[].source",
+          "candidates[].event_risk.rule6_checks[].evidence[].title",
+          "candidates[].event_risk.rule6_checks[].evidence[].url",
+          "candidates[].event_risk.rule6_checks[].group",
+          "candidates[].event_risk.rule6_checks[].id",
+          "candidates[].event_risk.rule6_checks[].metrics",
+          "candidates[].event_risk.rule6_checks[].name",
+          "candidates[].event_risk.rule6_checks[].notes",
+          "candidates[].event_risk.rule6_checks[].severity",
+          "candidates[].event_risk.rule6_checks[].status",
+          "candidates[].event_risk.suspension.is_suspended",
+          "candidates[].event_risk.suspension.observed_at",
+          "candidates[].event_risk.suspension.recent_suspension_5d",
+          "candidates[].event_risk.suspension.source_status",
+          "candidates[].event_risk.unlock.denominator",
+          "candidates[].event_risk.unlock.large_unlock_flag",
+          "candidates[].event_risk.unlock.observed_at",
+          "candidates[].event_risk.unlock.source_status",
+          "candidates[].event_risk.unlock.unlock_date",
+          "candidates[].event_risk.unlock.unlock_pct",
+          "candidates[].exchange",
+          "candidates[].fundamental.expectation.consensus_profit_growth",
+          "candidates[].fundamental.expectation.earnings_less_than_24h",
+          "candidates[].fundamental.expectation.earnings_report_date",
+          "candidates[].fundamental.expectation.esp_raw",
+          "candidates[].fundamental.expectation.good_data_bad_reaction",
+          "candidates[].fundamental.expectation.guidance_credibility_damaged",
+          "candidates[].fundamental.expectation.ind_median_profit_growth",
+          "candidates[].fundamental.profitability.q0_dt_yoy",
+          "candidates[].fundamental.profitability.q0_net_income",
+          "candidates[].fundamental.profitability.q0_profit_dedt",
+          "candidates[].fundamental.profitability.q1_dt_yoy",
+          "candidates[].fundamental.profitability.roe",
+          "candidates[].fundamental.profitability.ttm_profit_dedt",
+          "candidates[].fundamental.quality.ar_growth_gt_revenue_growth_2q",
+          "candidates[].fundamental.quality.cash_debt_high_risk",
+          "candidates[].fundamental.quality.contract_liability_exemption",
+          "candidates[].fundamental.quality.q0_dt_profit_ratio",
+          "candidates[].fundamental.quality.ttm_ocf_ratio",
+          "candidates[].fundamental.valuation.circ_mv",
+          "candidates[].fundamental.valuation.pb",
+          "candidates[].fundamental.valuation.pe",
+          "candidates[].fundamental.valuation.pe_ttm",
+          "candidates[].fundamental.valuation.peg",
+          "candidates[].fundamental.valuation.total_mv",
+          "candidates[].fundamental.valuation.val_bonus",
+          "candidates[].fundamental.valuation.val_penalty",
+          "candidates[].industry.industry_fundamental_trend",
+          "candidates[].industry.industry_fundamental_trend_evidence[].published_at",
+          "candidates[].industry.industry_fundamental_trend_evidence[].source",
+          "candidates[].industry.industry_fundamental_trend_evidence[].title",
+          "candidates[].industry.industry_fundamental_trend_evidence[].url",
+          "candidates[].industry.industry_trend",
+          "candidates[].industry.industry_trend_evidence[].published_at",
+          "candidates[].industry.industry_trend_evidence[].source",
+          "candidates[].industry.industry_trend_evidence[].title",
+          "candidates[].industry.industry_trend_evidence[].url",
+          "candidates[].industry.industry_trend_signal.classification",
+          "candidates[].industry.industry_trend_signal.classifier_version",
+          "candidates[].industry.industry_trend_signal.configuration_fingerprint",
+          "candidates[].industry.industry_trend_signal.forward_calibration_required",
+          "candidates[].industry.industry_trend_signal.industry_heat_score",
+          "candidates[].industry.industry_trend_signal.industry_trend",
+          "candidates[].industry.industry_trend_signal.positive_effect_enabled",
+          "candidates[].industry.industry_trend_signal.risk_filter_v1_prior",
+          "candidates[].industry.industry_trend_signal.source_as_of",
+          "candidates[].industry.industry_trend_signal.source_id",
+          "candidates[].industry.industry_trend_signal.sw_l2_code",
+          "candidates[].industry.industry_trend_signal.sw_l2_name",
+          "candidates[].industry.industry_trend_signal.thresholds.headwind_max",
+          "candidates[].industry.industry_trend_signal.thresholds.tailwind_min",
+          "candidates[].industry.industry_trend_signal.unavailable_reason",
+          "candidates[].industry.industry_trend_signal.validation_status",
+          "candidates[].industry.sw_l1_code",
+          "candidates[].industry.sw_l1_name",
+          "candidates[].industry.sw_l2_code",
+          "candidates[].industry.sw_l2_name",
+          "candidates[].liquidity.avg_amount_20d",
+          "candidates[].liquidity.avg_amount_5d",
+          "candidates[].liquidity.one_minute_capacity",
+          "candidates[].liquidity.position_amount_cap",
+          "candidates[].liquidity.split_order_required",
+          "candidates[].liquidity.spread_pct",
+          "candidates[].liquidity.turnover_rate",
+          "candidates[].liquidity.yesterday_amount",
+          "candidates[].llm_tasks[].inputs",
+          "candidates[].llm_tasks[].prompt",
+          "candidates[].llm_tasks[].status",
+          "candidates[].llm_tasks[].task_id",
+          "candidates[].llm_tasks[].task_type",
+          "candidates[].name",
+          "candidates[].portfolio_impact.correlation_action",
+          "candidates[].portfolio_impact.factor_exposures[].factor",
+          "candidates[].portfolio_impact.factor_exposures[].status",
+          "candidates[].portfolio_impact.factor_exposures[].threshold",
+          "candidates[].portfolio_impact.factor_exposures[].value",
+          "candidates[].portfolio_impact.same_sw_l2_exposure_after_buy_pct",
+          "candidates[].quote.adjustment",
+          "candidates[].quote.close",
+          "candidates[].quote.current_price",
+          "candidates[].quote.ex_rights_30d",
+          "candidates[].quote.high",
+          "candidates[].quote.low",
+          "candidates[].quote.open",
+          "candidates[].quote.pct_change",
+          "candidates[].quote.pre_close",
+          "candidates[].quote.price_source",
+          "candidates[].quote.price_time",
+          "candidates[].quote.source_trade_date",
+          "candidates[].scores.cat_flag",
+          "candidates[].scores.cat_score",
+          "candidates[].scores.deduct",
+          "candidates[].scores.egs_base",
+          "candidates[].scores.esp_score",
+          "candidates[].scores.final_score",
+          "candidates[].scores.industry_heat_score",
+          "candidates[].scores.l1_score",
+          "candidates[].scores.l2_flags",
+          "candidates[].scores.l4_flag",
+          "candidates[].scores.l4_score",
+          "candidates[].scores.multiplier",
+          "candidates[].selection.cninfo_flag",
+          "candidates[].selection.entry_flag",
+          "candidates[].selection.rank",
+          "candidates[].selection.still_in_pool",
+          "candidates[].selection.tier",
+          "candidates[].technical.amplitude",
+          "candidates[].technical.atr.atr_14",
+          "candidates[].technical.atr.atr_window",
+          "candidates[].technical.atr.ex_rights_adjusted",
+          "candidates[].technical.avg_amount_20d",
+          "candidates[].technical.avg_amount_5d",
+          "candidates[].technical.bollinger.lower",
+          "candidates[].technical.bollinger.middle",
+          "candidates[].technical.bollinger.upper",
+          "candidates[].technical.close_position_in_range",
+          "candidates[].technical.coarse_reward_risk",
+          "candidates[].technical.direction_lock",
+          "candidates[].technical.drawdown_20d",
+          "candidates[].technical.high_20d",
+          "candidates[].technical.limit_up_count_10d",
+          "candidates[].technical.limit_up_count_20d",
+          "candidates[].technical.low_20d",
+          "candidates[].technical.macd.dea",
+          "candidates[].technical.macd.dif",
+          "candidates[].technical.macd.hist",
+          "candidates[].technical.moving_averages.ma10",
+          "candidates[].technical.moving_averages.ma20",
+          "candidates[].technical.moving_averages.ma5",
+          "candidates[].technical.moving_averages.ma60",
+          "candidates[].technical.pct_20d",
+          "candidates[].technical.pct_20d_n",
+          "candidates[].technical.pct_5d",
+          "candidates[].technical.pct_5d_n",
+          "candidates[].technical.pct_60d",
+          "candidates[].technical.precise_reward_risk",
+          "candidates[].technical.resistance.confidence",
+          "candidates[].technical.resistance.method",
+          "candidates[].technical.resistance.price",
+          "candidates[].technical.rsi_14",
+          "candidates[].technical.support.confidence",
+          "candidates[].technical.support.method",
+          "candidates[].technical.support.price",
+          "candidates[].technical.volume_ratio_5d",
+          "candidates[].technical.yesterday_amount",
+          "candidates[].ts_code",
+          "candidates[].volatility.hv_252d",
+          "candidates[].volatility.iv_hv_position_cut_pct",
+          "candidates[].volatility.iv_hv_ratio",
+          "generated_at",
+          "horizon",
+          "market",
+          "market_context.breadth.consecutive_board_height",
+          "market_context.breadth.csi300_pct_change_window",
+          "market_context.breadth.limit_down_count",
+          "market_context.breadth.limit_up_count",
+          "market_context.breadth.limit_up_index_pct_change",
+          "market_context.liquidity.market_turnover_amount",
+          "market_context.liquidity.median_amount_20d",
+          "market_context.market_regime.confidence",
+          "market_context.market_regime.min_reward_risk",
+          "market_context.market_regime.position_cap_single_pct",
+          "market_context.market_regime.position_cap_total_pct",
+          "market_context.market_regime.status",
+          "market_context.market_regime.triggers[].id",
+          "market_context.market_regime.triggers[].status",
+          "market_context.market_regime.triggers[].threshold",
+          "market_context.market_regime.triggers[].value",
+          "market_context.northbound.net_flow_5d",
+          "market_context.northbound.status",
+          "market_context.trade_calendar.calendar_source",
+          "market_context.trade_calendar.holiday_days_ahead",
+          "market_context.trade_calendar.is_pre_holiday_window",
+          "market_context.trade_calendar.latest_trade_date",
+          "market_context.trade_calendar.next_trade_date",
+          "market_context.trade_calendar.recent_trade_dates[]",
+          "market_context.volatility.awakening_status",
+          "market_context.volatility.cash_reclaim_pct",
+          "market_context.volatility.iv_change_abs_1d_pctpt",
+          "market_context.volatility.iv_percentile_252d",
+          "market_context.volatility.iv_symbol",
+          "market_context.volatility.iv_value",
+          "market_context.volatility.rule3_status",
+          "preset",
+          "schema_name",
+          "schema_version",
+          "source.data_provider",
+          "source.hard_veto_source_health.holder_reduction.observed_at",
+          "source.hard_veto_source_health.holder_reduction.status",
+          "source.hard_veto_source_health.suspension.observed_at",
+          "source.hard_veto_source_health.suspension.status",
+          "source.hard_veto_source_health.unlock.observed_at",
+          "source.hard_veto_source_health.unlock.status",
+          "source.input_files[].path",
+          "source.input_files[].role",
+          "source.input_files[].sha256",
+          "source.l3_coverage.catalog_board_count",
+          "source.l3_coverage.catalog_digest",
+          "source.l3_coverage.catalog_tag",
+          "source.l3_coverage.complete",
+          "source.l3_coverage.excluded_non_main_board_member_count",
+          "source.l3_coverage.main_board_member_pair_count",
+          "source.l3_coverage.market_suffix_counts",
+          "source.l3_coverage.out_of_a_share_member_count",
+          "source.l3_coverage.raw_member_row_count",
+          "source.l3_coverage.received_board_count",
+          "source.l3_coverage.scope_filtered_empty_board_count",
+          "source.l3_coverage.scoring_universe",
+          "source.l3_coverage.source",
+          "source.l3_coverage.unique_member_pair_count",
+          "source.l3_coverage.verified_empty_board_count",
+          "source.l3_mode",
+          "source.l3_pit_strict",
+          "source.l3_provider",
+          "source.l3_snapshot_date",
+          "source.notes[]",
+          "source.run_identity.candidate_digest",
+          "source.run_identity.run_id",
+          "source.run_identity.stage_status",
+          "source.runtime_configuration.configuration_fingerprint",
+          "source.runtime_configuration.policies[].path",
+          "source.runtime_configuration.policies[].policy_id",
+          "source.runtime_configuration.policies[].schema_name",
+          "source.runtime_configuration.policies[].schema_version",
+          "source.runtime_configuration.policies[].sha256",
+          "source.runtime_configuration.schema_name",
+          "source.runtime_configuration.schema_version",
+          "source.screening_engine",
+          "source.screening_engine_version",
+          "state_refs.circuit_breaker",
+          "state_refs.execution_log",
+          "state_refs.positions",
+          "state_refs.veto_log",
+          "trade_date",
+          "universe_summary.after_l0_count",
+          "universe_summary.excluded_counts",
+          "universe_summary.final_count",
+          "universe_summary.full_count",
+          "universe_summary.listed_count",
+          "universe_summary.rank_exclusion_counts.l1_industry_leader",
+          "universe_summary.rank_exclusion_counts.l2_quality_risk",
+          "universe_summary.rank_exclusion_counts.rank_unexpected",
+          "universe_summary.watch_count"
+        ],
+        "governed_python_literal_names": {
+          "A-EGS/egs_main.py": [],
+          "runners/a_short_phase5_engine.py": [],
+          "engine/a_short_portfolio_risk.py": [],
+          "runners/a_short_weekly_pipeline.py": []
+        },
+        "runtime_policy_paths": {
+          "presets/a_short_screening_threshold_governance_20260602.json": [
+            "thresholds.daily_stats_min_rows",
+            "thresholds.esp_raw_cap",
+            "thresholds.final_n",
+            "thresholds.min_avg_amount",
+            "thresholds.momentum_std_threshold",
+            "thresholds.overheat_20d",
+            "thresholds.overheat_5d",
+            "thresholds.suspend_daily_min_coverage",
+            "thresholds.suspend_lookback",
+            "thresholds.top_n",
+            "thresholds.unlock_ratio",
+            "thresholds.watch_n"
+          ],
+          "presets/a_short_m67_runtime_policy_20260715.json": [
+            "phase5.atr_mult.收缩期",
+            "phase5.atr_mult.进攻期",
+            "phase5.atr_mult.防御期",
+            "phase5.atr_mult.震荡期",
+            "phase5.breakout_rr_bonus",
+            "phase5.impact_cost_frac",
+            "phase5.iv_halve_pct",
+            "phase5.iv_hv_ratio_hi",
+            "phase5.iv_hv_ratio_lo",
+            "phase5.iv_nobuild_pct",
+            "phase5.lowxi_band",
+            "phase5.min_amount",
+            "phase5.min_avg_amount_5d",
+            "phase5.min_shares",
+            "phase5.resistance_lookback",
+            "phase5.rr_floor.收缩期",
+            "phase5.rr_floor.进攻期",
+            "phase5.rr_floor.防御期",
+            "phase5.rr_floor.震荡期",
+            "phase5.single_cap_pct.收缩期",
+            "phase5.single_cap_pct.进攻期",
+            "phase5.single_cap_pct.防御期",
+            "phase5.single_cap_pct.震荡期",
+            "phase5.sr_spike_atr",
+            "phase5.support_lookback",
+            "portfolio_risk.high_risk_holding_cap_multiplier",
+            "portfolio_risk.large_index_threshold_pct",
+            "portfolio_risk.margin_threshold_pct",
+            "portfolio_risk.northbound_threshold_pct",
+            "portfolio_risk.same_sw_l2_threshold_pct",
+            "portfolio_risk.small_float_mv_rmb",
+            "portfolio_risk.small_float_mv_threshold_pct",
+            "weekly_windows.block_trade_lookback_trading_days",
+            "weekly_windows.dragon_list_lookback_trading_days",
+            "weekly_windows.ex_div_window_days",
+            "weekly_windows.forward_event_window_days",
+            "weekly_windows.min_price_observations"
+          ],
+          "presets/egs_industry_heat_governance_20260611.json": [
+            "industry_trend_classifier.classifier_version",
+            "industry_trend_classifier.forward_calibration_required",
+            "industry_trend_classifier.headwind_max",
+            "industry_trend_classifier.positive_effect_enabled",
+            "industry_trend_classifier.risk_filter_v1_prior",
+            "industry_trend_classifier.semantic_boundary",
+            "industry_trend_classifier.source_id",
+            "industry_trend_classifier.tailwind_min"
+          ]
+        },
+        "runtime_policy_leaf_readers": {
+          "presets/a_short_screening_threshold_governance_20260602.json": {
+            "thresholds.daily_stats_min_rows": [
+              "engine/a_short_runtime_config.py::_validate_screening.raw[\"daily_stats_min_rows\"]",
+              "A-EGS/egs_main.py::CONF[\"daily_stats_min_rows\"]"
+            ],
+            "thresholds.esp_raw_cap": [
+              "engine/a_short_runtime_config.py::_validate_screening.raw[\"esp_raw_cap\"]",
+              "A-EGS/egs_main.py::CONF[\"esp_raw_cap\"]"
+            ],
+            "thresholds.final_n": [
+              "engine/a_short_runtime_config.py::_validate_screening.raw[\"final_n\"]",
+              "A-EGS/egs_main.py::CONF[\"final_n\"]"
+            ],
+            "thresholds.min_avg_amount": [
+              "engine/a_short_runtime_config.py::_validate_screening.raw[\"min_avg_amount\"]",
+              "A-EGS/egs_main.py::CONF[\"min_avg_amount\"]"
+            ],
+            "thresholds.momentum_std_threshold": [
+              "engine/a_short_runtime_config.py::_validate_screening.raw[\"momentum_std_threshold\"]",
+              "A-EGS/egs_main.py::CONF[\"momentum_std_threshold\"]"
+            ],
+            "thresholds.overheat_20d": [
+              "engine/a_short_runtime_config.py::_validate_screening.raw[\"overheat_20d\"]",
+              "A-EGS/egs_main.py::CONF[\"overheat_20d\"]"
+            ],
+            "thresholds.overheat_5d": [
+              "engine/a_short_runtime_config.py::_validate_screening.raw[\"overheat_5d\"]",
+              "A-EGS/egs_main.py::CONF[\"overheat_5d\"]"
+            ],
+            "thresholds.suspend_daily_min_coverage": [
+              "engine/a_short_runtime_config.py::_validate_screening.raw[\"suspend_daily_min_coverage\"]",
+              "A-EGS/egs_main.py::CONF[\"suspend_daily_min_coverage\"]"
+            ],
+            "thresholds.suspend_lookback": [
+              "engine/a_short_runtime_config.py::_validate_screening.raw[\"suspend_lookback\"]",
+              "A-EGS/egs_main.py::CONF[\"suspend_lookback\"]"
+            ],
+            "thresholds.top_n": [
+              "engine/a_short_runtime_config.py::_validate_screening.raw[\"top_n\"]",
+              "A-EGS/egs_main.py::CONF[\"top_n\"]"
+            ],
+            "thresholds.unlock_ratio": [
+              "engine/a_short_runtime_config.py::_validate_screening.raw[\"unlock_ratio\"]",
+              "A-EGS/egs_main.py::CONF[\"unlock_ratio\"]"
+            ],
+            "thresholds.watch_n": [
+              "engine/a_short_runtime_config.py::_validate_screening.raw[\"watch_n\"]",
+              "A-EGS/egs_main.py::CONF[\"watch_n\"]"
+            ]
+          },
+          "presets/a_short_m67_runtime_policy_20260715.json": {
+            "phase5.atr_mult.收缩期": [
+              "engine/a_short_runtime_config.py::_validate_m67.phase[\"atr_mult\"]",
+              "runners/a_short_phase5_engine.py::_PHASE5_POLICY[\"atr_mult\"]"
+            ],
+            "phase5.atr_mult.进攻期": [
+              "engine/a_short_runtime_config.py::_validate_m67.phase[\"atr_mult\"]",
+              "runners/a_short_phase5_engine.py::_PHASE5_POLICY[\"atr_mult\"]"
+            ],
+            "phase5.atr_mult.防御期": [
+              "engine/a_short_runtime_config.py::_validate_m67.phase[\"atr_mult\"]",
+              "runners/a_short_phase5_engine.py::_PHASE5_POLICY[\"atr_mult\"]"
+            ],
+            "phase5.atr_mult.震荡期": [
+              "engine/a_short_runtime_config.py::_validate_m67.phase[\"atr_mult\"]",
+              "runners/a_short_phase5_engine.py::_PHASE5_POLICY[\"atr_mult\"]"
+            ],
+            "phase5.breakout_rr_bonus": [
+              "engine/a_short_runtime_config.py::_validate_m67.phase[\"breakout_rr_bonus\"]",
+              "runners/a_short_phase5_engine.py::_PHASE5_POLICY[\"breakout_rr_bonus\"]"
+            ],
+            "phase5.impact_cost_frac": [
+              "engine/a_short_runtime_config.py::_validate_m67.phase[\"impact_cost_frac\"]",
+              "runners/a_short_phase5_engine.py::_PHASE5_POLICY[\"impact_cost_frac\"]"
+            ],
+            "phase5.iv_halve_pct": [
+              "engine/a_short_runtime_config.py::_validate_m67.phase[\"iv_halve_pct\"]",
+              "runners/a_short_phase5_engine.py::_PHASE5_POLICY[\"iv_halve_pct\"]"
+            ],
+            "phase5.iv_hv_ratio_hi": [
+              "engine/a_short_runtime_config.py::_validate_m67.phase[\"iv_hv_ratio_hi\"]",
+              "runners/a_short_phase5_engine.py::_PHASE5_POLICY[\"iv_hv_ratio_hi\"]"
+            ],
+            "phase5.iv_hv_ratio_lo": [
+              "engine/a_short_runtime_config.py::_validate_m67.phase[\"iv_hv_ratio_lo\"]",
+              "runners/a_short_phase5_engine.py::_PHASE5_POLICY[\"iv_hv_ratio_lo\"]"
+            ],
+            "phase5.iv_nobuild_pct": [
+              "engine/a_short_runtime_config.py::_validate_m67.phase[\"iv_nobuild_pct\"]",
+              "runners/a_short_phase5_engine.py::_PHASE5_POLICY[\"iv_nobuild_pct\"]"
+            ],
+            "phase5.lowxi_band": [
+              "engine/a_short_runtime_config.py::_validate_m67.phase[\"lowxi_band\"]",
+              "runners/a_short_phase5_engine.py::_PHASE5_POLICY[\"lowxi_band\"]"
+            ],
+            "phase5.min_amount": [
+              "engine/a_short_runtime_config.py::_validate_m67.phase[\"min_amount\"]",
+              "runners/a_short_phase5_engine.py::_PHASE5_POLICY[\"min_amount\"]"
+            ],
+            "phase5.min_avg_amount_5d": [
+              "engine/a_short_runtime_config.py::_validate_m67.phase[\"min_avg_amount_5d\"]",
+              "runners/a_short_phase5_engine.py::_PHASE5_POLICY[\"min_avg_amount_5d\"]"
+            ],
+            "phase5.min_shares": [
+              "engine/a_short_runtime_config.py::_validate_m67.phase[\"min_shares\"]",
+              "runners/a_short_phase5_engine.py::_PHASE5_POLICY[\"min_shares\"]"
+            ],
+            "phase5.resistance_lookback": [
+              "engine/a_short_runtime_config.py::_validate_m67.phase[\"resistance_lookback\"]",
+              "runners/a_short_phase5_engine.py::_PHASE5_POLICY[\"resistance_lookback\"]"
+            ],
+            "phase5.rr_floor.收缩期": [
+              "engine/a_short_runtime_config.py::_validate_m67.phase[\"rr_floor\"]",
+              "runners/a_short_phase5_engine.py::_PHASE5_POLICY[\"rr_floor\"]"
+            ],
+            "phase5.rr_floor.进攻期": [
+              "engine/a_short_runtime_config.py::_validate_m67.phase[\"rr_floor\"]",
+              "runners/a_short_phase5_engine.py::_PHASE5_POLICY[\"rr_floor\"]"
+            ],
+            "phase5.rr_floor.防御期": [
+              "engine/a_short_runtime_config.py::_validate_m67.phase[\"rr_floor\"]",
+              "runners/a_short_phase5_engine.py::_PHASE5_POLICY[\"rr_floor\"]"
+            ],
+            "phase5.rr_floor.震荡期": [
+              "engine/a_short_runtime_config.py::_validate_m67.phase[\"rr_floor\"]",
+              "runners/a_short_phase5_engine.py::_PHASE5_POLICY[\"rr_floor\"]"
+            ],
+            "phase5.single_cap_pct.收缩期": [
+              "engine/a_short_runtime_config.py::_validate_m67.phase[\"single_cap_pct\"]",
+              "runners/a_short_phase5_engine.py::_PHASE5_POLICY[\"single_cap_pct\"]"
+            ],
+            "phase5.single_cap_pct.进攻期": [
+              "engine/a_short_runtime_config.py::_validate_m67.phase[\"single_cap_pct\"]",
+              "runners/a_short_phase5_engine.py::_PHASE5_POLICY[\"single_cap_pct\"]"
+            ],
+            "phase5.single_cap_pct.防御期": [
+              "engine/a_short_runtime_config.py::_validate_m67.phase[\"single_cap_pct\"]",
+              "runners/a_short_phase5_engine.py::_PHASE5_POLICY[\"single_cap_pct\"]"
+            ],
+            "phase5.single_cap_pct.震荡期": [
+              "engine/a_short_runtime_config.py::_validate_m67.phase[\"single_cap_pct\"]",
+              "runners/a_short_phase5_engine.py::_PHASE5_POLICY[\"single_cap_pct\"]"
+            ],
+            "phase5.sr_spike_atr": [
+              "engine/a_short_runtime_config.py::_validate_m67.phase[\"sr_spike_atr\"]",
+              "runners/a_short_phase5_engine.py::_PHASE5_POLICY[\"sr_spike_atr\"]"
+            ],
+            "phase5.support_lookback": [
+              "engine/a_short_runtime_config.py::_validate_m67.phase[\"support_lookback\"]",
+              "runners/a_short_phase5_engine.py::_PHASE5_POLICY[\"support_lookback\"]"
+            ],
+            "portfolio_risk.high_risk_holding_cap_multiplier": [
+              "engine/a_short_runtime_config.py::_PORTFOLIO_KEYS/high_risk_holding_cap_multiplier->portfolio[key]",
+              "engine/a_short_portfolio_risk.py::_PORTFOLIO_POLICY[\"high_risk_holding_cap_multiplier\"]"
+            ],
+            "portfolio_risk.large_index_threshold_pct": [
+              "engine/a_short_runtime_config.py::_PORTFOLIO_KEYS/large_index_threshold_pct->portfolio[key]",
+              "engine/a_short_portfolio_risk.py::_PORTFOLIO_POLICY[\"large_index_threshold_pct\"]"
+            ],
+            "portfolio_risk.margin_threshold_pct": [
+              "engine/a_short_runtime_config.py::_PORTFOLIO_KEYS/margin_threshold_pct->portfolio[key]",
+              "engine/a_short_portfolio_risk.py::_PORTFOLIO_POLICY[\"margin_threshold_pct\"]"
+            ],
+            "portfolio_risk.northbound_threshold_pct": [
+              "engine/a_short_runtime_config.py::_PORTFOLIO_KEYS/northbound_threshold_pct->portfolio[key]",
+              "engine/a_short_portfolio_risk.py::_PORTFOLIO_POLICY[\"northbound_threshold_pct\"]"
+            ],
+            "portfolio_risk.same_sw_l2_threshold_pct": [
+              "engine/a_short_runtime_config.py::_PORTFOLIO_KEYS/same_sw_l2_threshold_pct->portfolio[key]",
+              "engine/a_short_portfolio_risk.py::_PORTFOLIO_POLICY[\"same_sw_l2_threshold_pct\"]"
+            ],
+            "portfolio_risk.small_float_mv_rmb": [
+              "engine/a_short_runtime_config.py::_PORTFOLIO_KEYS/small_float_mv_rmb->portfolio[key]",
+              "engine/a_short_portfolio_risk.py::_PORTFOLIO_POLICY[\"small_float_mv_rmb\"]"
+            ],
+            "portfolio_risk.small_float_mv_threshold_pct": [
+              "engine/a_short_runtime_config.py::_PORTFOLIO_KEYS/small_float_mv_threshold_pct->portfolio[key]",
+              "engine/a_short_portfolio_risk.py::_PORTFOLIO_POLICY[\"small_float_mv_threshold_pct\"]"
+            ],
+            "weekly_windows.block_trade_lookback_trading_days": [
+              "engine/a_short_runtime_config.py::_WEEKLY_WINDOW_KEYS/block_trade_lookback_trading_days->windows[key]",
+              "runners/a_short_weekly_pipeline.py::_WEEKLY_WINDOWS[\"block_trade_lookback_trading_days\"]"
+            ],
+            "weekly_windows.dragon_list_lookback_trading_days": [
+              "engine/a_short_runtime_config.py::_WEEKLY_WINDOW_KEYS/dragon_list_lookback_trading_days->windows[key]",
+              "runners/a_short_weekly_pipeline.py::_WEEKLY_WINDOWS[\"dragon_list_lookback_trading_days\"]"
+            ],
+            "weekly_windows.ex_div_window_days": [
+              "engine/a_short_runtime_config.py::_WEEKLY_WINDOW_KEYS/ex_div_window_days->windows[key]",
+              "runners/a_short_weekly_pipeline.py::_WEEKLY_WINDOWS[\"ex_div_window_days\"]"
+            ],
+            "weekly_windows.forward_event_window_days": [
+              "engine/a_short_runtime_config.py::_WEEKLY_WINDOW_KEYS/forward_event_window_days->windows[key]",
+              "runners/a_short_weekly_pipeline.py::_WEEKLY_WINDOWS[\"forward_event_window_days\"]"
+            ],
+            "weekly_windows.min_price_observations": [
+              "engine/a_short_runtime_config.py::_WEEKLY_WINDOW_KEYS/min_price_observations->windows[key]",
+              "runners/a_short_weekly_pipeline.py::_WEEKLY_WINDOWS[\"min_price_observations\"]"
+            ]
+          },
+          "presets/egs_industry_heat_governance_20260611.json": {
+            "industry_trend_classifier.classifier_version": [
+              "engine/a_short_industry_theme.py::industry_trend_classifier[\"classifier_version\"]",
+              "A-EGS/egs_main.py::classify_industry_trend",
+              "runners/a_short_weekly_pipeline.py::_industry_trend_for_candidate"
+            ],
+            "industry_trend_classifier.forward_calibration_required": [
+              "engine/a_short_industry_theme.py::industry_trend_classifier[\"forward_calibration_required\"]",
+              "A-EGS/egs_main.py::classify_industry_trend",
+              "runners/a_short_weekly_pipeline.py::_industry_trend_for_candidate"
+            ],
+            "industry_trend_classifier.headwind_max": [
+              "engine/a_short_industry_theme.py::industry_trend_classifier[\"headwind_max\"]",
+              "A-EGS/egs_main.py::classify_industry_trend",
+              "runners/a_short_weekly_pipeline.py::_industry_trend_for_candidate"
+            ],
+            "industry_trend_classifier.positive_effect_enabled": [
+              "engine/a_short_industry_theme.py::industry_trend_classifier[\"positive_effect_enabled\"]",
+              "A-EGS/egs_main.py::classify_industry_trend",
+              "runners/a_short_weekly_pipeline.py::_industry_trend_for_candidate"
+            ],
+            "industry_trend_classifier.risk_filter_v1_prior": [
+              "engine/a_short_industry_theme.py::industry_trend_classifier[\"risk_filter_v1_prior\"]",
+              "A-EGS/egs_main.py::classify_industry_trend",
+              "runners/a_short_weekly_pipeline.py::_industry_trend_for_candidate"
+            ],
+            "industry_trend_classifier.semantic_boundary": [
+              "intentionally_independent: classifier explanation only"
+            ],
+            "industry_trend_classifier.source_id": [
+              "engine/a_short_industry_theme.py::industry_trend_classifier[\"source_id\"]",
+              "A-EGS/egs_main.py::classify_industry_trend",
+              "runners/a_short_weekly_pipeline.py::_industry_trend_for_candidate"
+            ],
+            "industry_trend_classifier.tailwind_min": [
+              "engine/a_short_industry_theme.py::industry_trend_classifier[\"tailwind_min\"]",
+              "A-EGS/egs_main.py::classify_industry_trend",
+              "runners/a_short_weekly_pipeline.py::_industry_trend_for_candidate"
+            ]
+          }
+        }
+      }
+    }
+  ]
+}

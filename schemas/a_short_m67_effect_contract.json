@@ -1,6 +1,7 @@
 {
   "schema_name": "a_short_m67_effect_contract",
   "schema_version": "1.0.0",
+  "legacy_migration_sha256": "b99cbb6895b7b2c2877e172fbbd59ff0b84a5c3b9bbf5de2b8ee2aab0d52cc4e",
   "analysis_input_all_paths_sha256": "3e3e5dcb607d1c758ff58c529c0995bbd3057b95ae2419b60e82ca7027b6ffd7",
   "groups": [
     {
@@ -710,15 +711,15 @@
     "A-EGS/egs_main.py": "9b36fd70d79b7d852329b2ca614e4a8932738727557d3fde542f5deaab955889",
     "engine/egs_industry_heat.py": "74932f994ec0658345c41aa932b54b5685c1737c663f5070a193d264f37fced2",
     "engine/a_short_industry_theme.py": "6a10200f80b3c0d301efc8af1561b53ef2578e1cd26eea7976188dd57b7b6b2b",
-    "runners/a_short_phase5_engine.py": "fd365d0b628fcab18f502fa9fdab65213066e988d0bd4f3fb75dd0e379e803ee",
-    "runners/a_short_weekly_pipeline.py": "434209d703064fa6446b180da14f3196983683e81bc480e06c20893b90d1c38d",
-    "runners/a_short_m67_render.py": "765120fe463ecb9dcaff0e0644aa4782259e5999b63b7990f8cc3fd3ca8c7635",
+    "runners/a_short_phase5_engine.py": "f30b7f363a558773cfe1eb09203c24b857303d7e71248a1475a5d6d6c9b532f3",
+    "runners/a_short_weekly_pipeline.py": "46b4932298a9df4ce3d9d865e45280251076f2fd12f49bb628fd68725c65770b",
+    "runners/a_short_m67_render.py": "9753b5e8213b343a7c62595f96bcdc0a760520ac1dd5b8462f83ee4ce40e922f",
     "engine/a_short_portfolio_risk.py": "02b88ac3b5239e8dd4897bde06afab0769ea5593f8a8a3666e5c8fba24486860",
-    "engine/a_short_effect_contract.py": "e19595733318f6b08838823bb382eae8168d6a302355d23dc4b7e7b5ec42bcda"
+    "engine/a_short_effect_contract.py": "7f96b57a88313ec5274835727d65530633e27f3bad98c7573eb598bdfdf523f6"
   },
   "runtime_constants_sha256": {
     "A-EGS/egs_main.py": "7a7db52541d037b08195ddf8275c0c6a9196a30958ee91203d178396071d335e",
-    "runners/a_short_phase5_engine.py": "ebe01cf569094fb26590bac82e2ef316d506025565c53f4538712beaadcc6412",
+    "runners/a_short_phase5_engine.py": "27f947c64df7eaf4e59526b4bc0c150de5baef5a2447187acc98378e4c1f9f00",
     "engine/a_short_portfolio_risk.py": "238ae5ff77e269bc1b9a507014b21561c54e6766169d1854e19119ac5137943e"
   },
   "runtime_policy_paths_sha256": "c3c0721fd095930f6d47f4bbe684aac53d1afb51732e5635d70d404cda70aa42",
@@ -969,8 +970,8 @@
     "small_float_mv_pct"
   ],
   "output_schema_sha256": {
-    "schemas/a_short_weekly_report.schema.json": "6b0f35c36c8d06775e7a9b2dbaa88b49698dcfd781d85e1828ef9dbbb149b884",
-    "schemas/a_short_m67_report.schema.json": "9274db8929b0ef7e7c03892708fda7ad3d13ae72c3c6caa39ecce041cf1f34e5"
+    "schemas/a_short_weekly_report.schema.json": "14e16c626826ca697d6d45e95d03d7308ebe046c7d1a0f63ec87aa0cccf43707",
+    "schemas/a_short_m67_report.schema.json": "a47fc418cc736aa779c37c023105383f61793379f0a7d1bb01830d2bd81a4f2d"
   },
   "analysis_input_paths": [
     "account_context.available_cash",

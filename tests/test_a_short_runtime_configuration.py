@@ -11,9 +11,6 @@ import unittest
 from pathlib import Path
 from unittest.mock import patch
 
-from jsonschema import Draft7Validator
-
-
 ROOT = Path(__file__).resolve().parents[1]
 if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
@@ -196,10 +193,13 @@ class RuntimeConfigurationBehaviorTests(unittest.TestCase):
         self.assertTrue(any(item.endswith(":m67.portfolio_risk.margin_threshold_pct") for item in missing),
                         missing)
 
-    def test_historical_weekly_artifact_stays_schema_valid_but_new_builder_requires_fact_fetch(self) -> None:
-        schema = json.loads((ROOT / "schemas" / "a_short_weekly_report.schema.json").read_text(encoding="utf-8"))
+    def test_historical_weekly_artifact_uses_legacy_contract_compat_but_new_builder_requires_fact_fetch(self) -> None:
         historic = json.loads((ROOT / "research" / "results" / "a_short" / "20260727" / "weekly_m67.json").read_text(encoding="utf-8"))
-        self.assertFalse(list(Draft7Validator(schema).iter_errors(historic)))
+        from engine.a_short_effect_contract import load_legacy_effect_contract, validate_effect_contract_ledger
+        fingerprint = (historic.get("effect_contract_ledger") or {}).get("contract_fingerprint")
+        self.assertIsNotNone(load_legacy_effect_contract(fingerprint))
+        validate_effect_contract_ledger(historic)
+        self.assertNotIn("data_quality_shadow", historic)
 
         new_weekly = baseline_weekly.build_weekly_report([_normalized()], AS_OF, GEN)
         del new_weekly["portfolio_risk"]["fact_fetch"]
