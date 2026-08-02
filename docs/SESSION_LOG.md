@@ -1,5 +1,12 @@
 # Session Log
 
+## 2026-08-02 — Claude Code 审查 PASS（桌面叶级接线路由文档内容本身）
+
+- **Verdict/Action**: PASS。审查对象=桌面 `ashort_leaf_wiring_classification_20260801.md` 内容本身（非代码）。逐条回 HEAD `ec141834` 源码核实：M0.5 觉醒链在 HEAD 确为空缺、`cninfo_flag`/`entry_flag`/`still_in_pool` 确非主系统消费、`market_regime.status` 确已进主决策，均与文档一致。本轮零代码改动；`19d3` 工作树 13 个改动文件全部是同树 Codex 在跑的 M0.5 刀，不在本次 PASS 范围，故不提交、不 stash、不并入。
+- **Required**: 无。`Register: non-material` —— 本轮未发现 material finding，未在 `docs/system_risk_register.md` 新开 R-ID。
+- **Verify**: review-evidence:76aa59be55a4；超时原因:中途发现同树 Codex 正在改 13 文件(+817/-37)，三条初稿 finding 须全部改用 `git show HEAD:` 重新证伪。固定 Python 3.13.8 复算台账：371 叶、`static_contract_error()`=None、八档和 371。`git grep` 证 `rule6_hard_veto` 仅被 backtest/ablation import、`still_in_pool` 在 runners+engine 零命中、`trade_calendar` 唯一读者 `engine/data/analysis_input_contract.py:319`。doc-governance `Ran 41 tests ... OK`。
+- **Next**: Codex：无待办（本轮不阻断在跑的 M0.5 刀）。
+
 ## 2026-08-01 — Claude 审查 PASS（全量上限与入口替换两条 Required 已闭）
 - **Verdict/Action**: PASS，已提交并合入 master。官方全量入口的拦截撤回（`bounded_unittest` 内容与已提交版逐字节相同）并由 argv 断言钉住；acceptance 改为单进程只扫一次，全量四次超时后首次 `5105 OK`。`us_short_module_runner` 降为显式工具、不接官方入口。
 - **Required**: 无；Register: `R-USSHORT-FULL-PACK-SELECTOR-IS-SILENTLY-SUBSTITUTED-WITHOUT-AN-EQUIVALENCE-CONTROL` 与 `R-USSHORT-FULL-PACK-NOW-EXCEEDS-ITS-OWN-CEILING` 均 CLOSED，另记一条不阻塞 Optional（可复算断言变空），完整内容只见 `docs/system_risk_register.md` 顶部。
