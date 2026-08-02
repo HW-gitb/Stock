@@ -1,5 +1,22 @@
 # Session Log
 
+## 2026-08-02 — Claude 审查 PASS（第二条：真实两源窗口验证）
+
+- **Verdict/Action**: PASS，已提交并合入 master。未采信执行方转述：回读它写出的四个产物，并把 `iv_feed_20260803/iv_feed.json` 重新过一遍仓库自己的读门（`validate_feed_artifact` ACCEPT）——窗口内 calendar-only 恰为 `['20260803']`、independent-only 为空、series 尾根 `20260731`；M6.7 receipt `stage_status=complete`、`n_stocks=15`、`boundary` 四项全 false、无账户数值与 provider URL。
+- **Required**: 无；Register: `R-ASHORT-IVFEED-REALRUN-SESSIONLOG-ENTRY-FAILS-THE-COMMIT-DOOR` 已按方案②闭合（用户授权本轮小改自修自审：去掉执行方 entry header 里的「修复」二字，守护只看首行，其正文未动），正文只见 `docs/system_risk_register.md` 顶部。
+- **Verify**: review-evidence:941713883909；零代码改动、按 rule 3 未触发 full-lane，只跑提交门守护：修前 `RESULT tier=focused status=FAIL exit=1 tests=55`（两条红指名执行方 entry header），修后 `Ran 55 tests ... OK`。四个真实产物按执行方交接保持未跟踪、未入库。
+- **Next**: Codex：执行桌面清单第 3 条（`margin_coverage` 的 `universe_size=0`）。
+
+## 2026-08-02 — Codex executor: 20260803 真实 IV/M6.7 验证运行
+
+**Action**: 用户已授权；在当前 `D:\cnhea\Codex\worktrees\0d46\Stock` 只用固定主 Python 执行修复后的 provider/live 验证。旧 Claude 跑次发生在修复提交 `693aba13` 之前，不能作为本轮证据。
+
+**Verify**: `C:\Users\cnhea\AppData\Local\Programs\Python\Python313\python.exe` = `Python 3.13.8`；IV builder exit 0，`12000/181232/336` rows、`282/282` probed、`had_provider_error=False`，写入 `research/results/a_short/iv_feed_20260803/iv_feed.json`；真实窗口为 `trade_cal` 282 天、末根 `20260803`，`fund_daily` 336 天、末根 `20260731`，两源 digest 不同；series 281 行末根 `20260731`。EGS exit 0；M6.7 exit 0，receipt `stage_status=complete`，`as_of=20260803`、`run_date=20260802`、`price_data_through=20260731`、`iv_freshness.status=aligned`，`n_stocks=15`。
+
+**Boundary**: 本轮没有账户、持仓、下单或自动交易；M6.7 `production=false`、`real_money=false`、`satisfies_ship_gate=false`。comparison-only regime 的真实 CLI 尚未执行（当前树无既有 regime ledger，执行需另行 bootstrap）；sidecar health 的真实 launcher manifest 也未生成；两者继续 `NOT_VERIFIED`。既有固定 Python focused evidence `64/43/40 OK` 仍对应当前代码，不能被本轮真实产物替代。
+
+**Next**: 详细真实验证与交接说明已追加到同阶段 handoff；本轮生成的四个 provider/run 产物保持未跟踪，未提交、未 push、未 merge。
+
 ## 2026-08-02 — Codex executor: IV feed realized-window repair follow-up
 
 **Commits**: none (executor role; no commit, push, or merge)
