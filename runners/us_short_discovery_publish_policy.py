@@ -2,8 +2,8 @@
 
 Every filesystem write in the lane goes through this module: the knife-1 ingest artifact,
 the knife-2 validation artifact, the knife-3 web/X/merge packet+receipt pairs, the raw
-provider receipts, and the one deliberately MUTABLE artifact (the live provider
-reservation ledger).  Centralizing them is not tidiness — the recurring defect in this
+provider receipts, and the deliberately MUTABLE ledger families (the live provider
+reservation ledgers and the query-plan consumption ledger).  Centralizing them is not tidiness — the recurring defect in this
 lane was a policy applied at N-1 of N call sites (immutability at one of three writers,
 the credential check at three of five sinks, the date-keyed slot at the writers but not
 the readers, the format checker at six of seven validators).  With one door there is no
@@ -30,9 +30,10 @@ from uuid import uuid4
 CLOCK_KEYS_ARTIFACT: tuple[str, ...] = ("generated_at",)
 CLOCK_KEYS_RECEIPT: tuple[str, ...] = ("generated_at",)
 CLOCK_KEYS_NONE: tuple[str, ...] = ()
-# The lane has exactly ONE mutable artifact family (the per-decision provider reservation
-# counter).  Naming it here means the door - not a call site - decides what may be replaced;
+# These are the only mutable artifact families.  Naming them here means the door - not a call
+# site - decides what may be replaced; all other decision-date artifacts remain immutable.
 MUTABLE_LEDGER_SUFFIX = "_budget.json"
+QUERY_PLAN_CONSUMPTION_SUFFIX = "_consumption.json"
 CONFORMANCE_GUARDS = ("_serialized_payload", "_serialized_sha256")
 
 
@@ -314,19 +315,28 @@ def mutable_ledger_lock(path: Path, *, timeout_seconds: float = 5.0):
 def write_mutable_ledger(
     payload: dict[str, Any], path: Path, *, root: Path, state_dir: Path,
     gitignored: Callable[[Path], bool] | None = None,
+    ledger_kind: str = "provider_budget",
 ) -> None:
-    """The lane's ONE declared mutable write: the live provider reservation counter.
+    """Write one of the lane's explicitly declared mutable ledgers through the shared door.
 
-    A reservation ledger must accumulate attempts across retries, so it is deliberately
-    replaceable — and it lives here rather than at its call site so that "one write door"
+    A reservation ledger must accumulate attempts across retries, and the query-plan
+    consumption ledger must accumulate dispatch lifecycle events, so both are deliberately
+    replaceable.  They live here rather than at their call sites so that "one write door"
     stays a rule with no exceptions for the conformance pack to carve out.
     """
+    allowed_suffix = {
+        "provider_budget": MUTABLE_LEDGER_SUFFIX,
+        "query_plan_consumption": QUERY_PLAN_CONSUMPTION_SUFFIX,
+    }.get(ledger_kind)
+    if allowed_suffix is None:
+        raise DiscoveryPublishPolicyError("unknown mutable ledger kind")
     # Same containment/suffix/gitignore policy as every other write - only the immutability
     # differs - so a second caller cannot aim this at an immutable slot or a tracked file.
     resolved = validate_exact_decision_slot(path, path, root=root, state_dir=state_dir, gitignored=gitignored)
-    if not resolved.name.endswith(MUTABLE_LEDGER_SUFFIX):
+    if not resolved.name.endswith(allowed_suffix):
         raise DiscoveryPublishPolicyError(
-            "the mutable writer may only replace the reservation ledger, never an immutable artifact"
+            "the mutable writer may only replace the reservation ledger or approved query-plan consumption ledger, "
+            "never an immutable artifact"
         )
     serialized = _serialized_payload(payload)
     tmp: Path | None = None

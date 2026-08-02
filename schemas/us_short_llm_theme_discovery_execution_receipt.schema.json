@@ -1,0 +1,68 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://stock.local/schemas/us_short_llm_theme_discovery_execution_receipt.schema.json",
+  "title": "US-short soft-discovery immutable query-plan execution receipt",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_name", "schema_version", "generated_at", "decision_date", "parent_plan_identity", "stage2_plan_identity", "parent_plan_artifact", "stage2_plan_artifact", "consumption_ledger_artifact", "status", "stage_sequence", "provider_totals", "unknown_dispatch_count", "replay_policy", "provider_calls_performed", "execution_mode", "effect_boundary"],
+  "properties": {
+    "schema_name": {"const": "us_short_llm_theme_discovery_execution_receipt"},
+    "schema_version": {"const": "1.0.0"},
+    "generated_at": {"type": "string", "format": "date-time"},
+    "decision_date": {"type": "string", "pattern": "^[0-9]{8}$"},
+    "parent_plan_identity": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+    "stage2_plan_identity": {"type": ["string", "null"], "pattern": "^[0-9a-f]{64}$"},
+    "parent_plan_artifact": {"$ref": "#/definitions/artifact_ref"},
+    "stage2_plan_artifact": {"$ref": "#/definitions/nullable_artifact_ref"},
+    "consumption_ledger_artifact": {"$ref": "#/definitions/artifact_ref"},
+    "status": {"enum": ["complete", "failed", "inconclusive", "unknown_in_flight"]},
+    "stage_sequence": {"type": "array", "minItems": 1, "maxItems": 2, "uniqueItems": true, "items": {"enum": ["stage1", "stage2"]}},
+    "provider_totals": {"type": "array", "minItems": 1, "maxItems": 32, "items": {"$ref": "#/definitions/provider_total"}},
+    "unknown_dispatch_count": {"type": "integer", "minimum": 0},
+    "replay_policy": {"const": "unknown_dispatches_are_consumed_no_auto_replay"},
+    "provider_calls_performed": {"type": "boolean"},
+    "execution_mode": {"enum": ["offline_test", "live_authorized"]},
+    "effect_boundary": {"$ref": "#/definitions/effect_boundary"}
+  },
+  "definitions": {
+    "artifact_ref": {
+      "type": "object", "additionalProperties": false, "required": ["path", "sha256"],
+      "properties": {"path": {"type": "string", "minLength": 1}, "sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"}}
+    },
+    "nullable_artifact_ref": {
+      "type": "object", "additionalProperties": false, "required": ["path", "sha256"],
+      "properties": {"path": {"type": ["string", "null"]}, "sha256": {"type": ["string", "null"], "pattern": "^[0-9a-f]{64}$"}}
+    },
+    "provider_total": {
+      "type": "object", "additionalProperties": false,
+      "required": ["provider", "stage1_max_dispatch_count", "stage2_max_dispatch_count", "retry_max_dispatch_count", "max_dispatch_count", "stage1_dispatch_count", "stage2_dispatch_count", "retry_dispatch_count", "dispatch_count", "completion_count", "failure_count", "unknown_count", "remaining_dispatch_count"],
+      "properties": {
+        "provider": {"type": "string", "pattern": "^[a-z][a-z0-9_-]{1,31}$"},
+        "stage1_max_dispatch_count": {"type": "integer", "minimum": 0},
+        "stage2_max_dispatch_count": {"type": "integer", "minimum": 0},
+        "retry_max_dispatch_count": {"type": "integer", "minimum": 0},
+        "max_dispatch_count": {"type": "integer", "minimum": 0},
+        "stage1_dispatch_count": {"type": "integer", "minimum": 0},
+        "stage2_dispatch_count": {"type": "integer", "minimum": 0},
+        "retry_dispatch_count": {"type": "integer", "minimum": 0},
+        "dispatch_count": {"type": "integer", "minimum": 0},
+        "completion_count": {"type": "integer", "minimum": 0},
+        "failure_count": {"type": "integer", "minimum": 0},
+        "unknown_count": {"type": "integer", "minimum": 0},
+        "remaining_dispatch_count": {"type": "integer", "minimum": 0}
+      }
+    },
+    "effect_boundary": {
+      "type": "object", "additionalProperties": false,
+      "required": ["scoring_eligible", "top15_effect_enabled", "operation_advice_effect_enabled", "dynamic_seats_enabled", "theme_probe_enabled", "lifecycle_actions_enabled"],
+      "properties": {
+        "scoring_eligible": {"const": false},
+        "top15_effect_enabled": {"const": false},
+        "operation_advice_effect_enabled": {"const": false},
+        "dynamic_seats_enabled": {"const": false},
+        "theme_probe_enabled": {"const": false},
+        "lifecycle_actions_enabled": {"const": false}
+      }
+    }
+  }
+}
