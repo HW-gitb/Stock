@@ -525,7 +525,10 @@ def write_health_bundle(payload: dict[str, Any], out_dir: Path) -> tuple[Path, P
     receipt["health_sha256"] = hashlib.sha256(json_bytes).hexdigest()
     md = [
         f"# A-short sidecar health · {payload['as_of']}", "",
-        f"overall={payload['overall']} · advanced={payload['advanced_count']} · stalled={payload['stalled_count']} · failed={payload['failed_count']} · partial={payload['partial_count']}", "",
+        # `m67_status` is half of the `overall` formula, so it is printed next to
+        # the verdict: an all-zero sidecar tally beside `degraded` reads as a
+        # contradiction until the M6.7 leg that actually caused it is visible.
+        f"overall={payload['overall']} · m67={payload['m67_status']} · advanced={payload['advanced_count']} · stalled={payload['stalled_count']} · failed={payload['failed_count']} · partial={payload['partial_count']}", "",
         "| sidecar | execution | progress | decision/data through | error |", "|---|---|---|---|---|",
     ]
     for item in payload["sidecars"]:
@@ -562,7 +565,7 @@ def main(argv: list[str] | None = None) -> int:
         m67_invocation=args.m67_invocation,
     )
     paths = write_health_bundle(payload, out_dir)
-    print(f"[sidecar-health] overall={payload['overall']} failed={payload['failed_count']} stalled={payload['stalled_count']} partial={payload['partial_count']} -> {paths[1].name}")
+    print(f"[sidecar-health] overall={payload['overall']} m67={payload['m67_status']} failed={payload['failed_count']} stalled={payload['stalled_count']} partial={payload['partial_count']} -> {paths[1].name}")
     return 0
 
 

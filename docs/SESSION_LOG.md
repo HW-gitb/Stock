@@ -1,5 +1,13 @@
 # Session Log
 
+## 2026-08-02 — Claude 修复（sidecar 健康总评补打 m67 字段）
+
+- **Verdict/Action**: 用户授权本轮小改自修自审。`overall` 的公式是 `failed 计数 OR m67_status`，但两处输出只打计数、不打 `m67_status`，于是「`degraded` 配 0/0/0/0」读起来自相矛盾。按类改两个出口而非只改被点名的控制台那行：`runners/a_short_weekly_sidecar_health.py:565` 控制台行与 `:528` Markdown 表头都补 `m67=`；JSON 早已有该字段，schema 无需动。纯显示面，不改判定、不改产物结构、不影响选股。
+- **Required**: 无；Register: `non-material`（显示面 Optional，未开 R-ID；桌面清单第 7 条据此可划掉，仅余本条已闭的显示缺口）。
+- **Verify**: 改动面 `5/2` 行、`git diff --check` 干净。scope grep 先行：无测试或 schema 钉住这两个格式串（测试只断言 `[sidecar-health] UNAVAILABLE` 这个另一分支）。最小覆盖包 `tests.test_a_short_weekly_sidecar_health` 一次跑绿 `Ran 40 tests ... OK`；再用本周真实 degraded 产物过一遍改后的 `write_health_bundle`，表头得 `overall=degraded · m67=failed · advanced=0 · stalled=0 · failed=0 · partial=0`，正控（healthy 载荷）得 `overall=healthy · m67=complete`，未凭空宣称失败。
+- **Next**: Codex：执行桌面清单第 3 条（`margin_coverage` 的 `universe_size=0`）。
+- **Pre-Codex self-review**: `matrix=complete: 总评成因字段的全部输出出口 = console + markdown 表头（JSON 已含该字段）`; `register=non-material`; `handoff=not_required: 显示面单字段增列，属 AGENTS §交接记录「不写 handoff」类`; `focused=40 OK / 12.5s`; `full-lane=not_triggered: AGENTS rule 3; reason=仅两处输出格式串，未触及引擎/schema/契约/provider/授权面`; `door=route 14 OK + doc-governance 41 OK（合并跑 Ran 55 tests ... OK）`; A=两出口全覆盖; B=全仓 grep 旧格式串零残留; C=正控 healthy 载荷不误报失败; D=N-A; E=SESSION_LOG 单态; F=`git diff --check` 干净、无 BOM
+
 ## 2026-08-02 — Claude 审查 PASS（第二条：真实两源窗口验证）
 
 - **Verdict/Action**: PASS，已提交并合入 master。未采信执行方转述：回读它写出的四个产物，并把 `iv_feed_20260803/iv_feed.json` 重新过一遍仓库自己的读门（`validate_feed_artifact` ACCEPT）——窗口内 calendar-only 恰为 `['20260803']`、independent-only 为空、series 尾根 `20260731`；M6.7 receipt `stage_status=complete`、`n_stocks=15`、`boundary` 四项全 false、无账户数值与 provider URL。
