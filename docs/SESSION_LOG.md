@@ -383,6 +383,22 @@
 - **Verify**: 固定主 Python focused 超集（新 schema 测试 + README row-length + route ledger + doc governance）`73 OK / 0.9s`；`py_compile`、`git diff --check` 通过；Web/X future raw roots 均命中 `.gitignore:97 provider_samples/`；`20260802` state/provider_samples 残留检查为 0。schema 反向控制拒绝授权翻真、生产 policy 翻真、复用旧日期、主题预埋、调用上限漂移、事后降门槛和确认效果翻真。
 - **Next**: Claude Code：审查。
 - **Pre-Codex self-review**: `matrix=complete: schema/artifact exact identity + 4 const queries + Web/X separate raw roots + xAI/Tavily/DeepSeek actual-vs-reserved arithmetic + PASS/REVISE/INCONCLUSIVE + all no-effect exits; register=not_applicable: no finding or risk status changed; handoff=existing US-short main handoff updated and desktop checklist updated; focused=73 OK + py_compile + git diff --check + gitignore/BOM/mojibake checks; full-lane=not_triggered: AGENTS rule 3, isolated no-access schema/artifact/test and docs with no production wiring or provider execution; door=route 14 + doc-governance 41 = 55 OK; independent self-review=not_triggered: low-risk isolated schema/docs fast path, main-thread A-F complete, no timeout/restart/fallback`
+## 2026-08-02 — Claude Code 审查 PASS（M0.5 相邻判据二次方开销收口）
+
+- **Verdict/Action**: PASS，已提交并合入 master。日历位置索引改为每次 `build_m05_state` 只建一次并透传给判据，旧直接调用仍走原 fallback；A-short 全量从连续两次 `TIMEOUT@860s` 回到 `PASS 2269 tests / 296.4s`。业务语义逐条不变。
+- **Required**: 无。`R-ASHORT-M05-ADJACENCY-PREDICATE-IS-QUADRATIC-AND-BLEW-UP-THE-WHOLE-LANE` 已 closed；替代实现说明与一条不阻断 Optional 见 `docs/system_risk_register.md`（单一来源，本处不复述）。
+- **Verify**: review-evidence:d34ff741b3f7；超时原因:验收指标本身是一次 296.4s 全量包，外加四份既有反控探针复跑。固定 Python 3.13.8；rule 4 由 reviewer 接管全量（死线设成 master 的 860 而非本树 1300，使结果可转到合并门）→ `RESULT status=PASS exit=0 tests=2269 elapsed=296.4s`。自跑 cProfile：同一 260 行 feed 的 `validate_feed_artifact` 6.30s→0.354s。行为等价：日历四场景（连续/休市内含/真开市缺数据/无日历）与五种篡改、`schema_version` 三场景、两条正控，输出与修复前逐字相同。
+- **Next**: Codex：无待办；用户可授权第十四刀 14A。
+
+## 2026-08-02 — Codex 修复 (R-ASHORT-M05-ADJACENCY-PREDICATE-IS-QUADRATIC-AND-BLEW-UP-THE-WHOLE-LANE)
+
+- **Verdict/Action**: 已修复 M0.5 相邻交易日谓词的平方级重复日历索引；单日 delta 与五观察窗口仍共用同一谓词，未改变日期/觉醒语义；未提交、未合入。
+- **Required**: `R-ASHORT-M05-ADJACENCY-PREDICATE-IS-QUADRATIC-AND-BLEW-UP-THE-WHOLE-LANE` — 完整风险、修复边界与 closure 见 `docs/system_risk_register.md`（单一来源，本处不复述）。
+- **Verify**: 固定主 Python 3.13.8；A-short preflight pass；IV/M0.5 `Ran 61 tests in 4.394s ... OK`；weekly consumer `Ran 521 tests in 62.383s ... OK`；py_compile、git diff --check OK；full-lane `NOT_VERIFIED / AGENTS rule 3 not triggered`；独立 reviewer pending。
+- **Proof-of-use**: `rg` 复扫 `_feed_dates_are_adjacent`/`_calendar_session_positions` 仅留 canonical helper 与 builder 两类调用，且单日/窗口均传 cache；`M05StateTests.test_state_machine_builds_calendar_lookup_once` 与 fallback/precomputed 一致性反控均通过；IV 61 + weekly 521 OK；docs/route 55 OK；首次 weekly 无终态未计证据，随后仅重启一次 600s bounded run，未换解释器/未用 fallback。
+- **Pre-Codex self-review**: `matrix=single-day delta + five-window adjacency`; `register=updated`; `handoff=updated: 2026-08-01_a_short_leaf_wiring_classification_handoff.md`; `focused=60+521 OK`; `full-lane=not_triggered: AGENTS rule 3`; `door=py_compile+git diff --check+docs-route=55 OK`; `freeze=untouched`; `reviewer=pending`; `commit=NOT_PERFORMED`。
+- **Next**: Claude Code：独立 reviewer 复核本条；PASS 前不得提交/合并。
+
 ## 2026-08-02 — Claude Code 审查 PASS（A-short M0.5 波动率觉醒链整刀收口）
 
 - **Verdict/Action**: PASS，已提交并合入 master。自述 `schema_version` 可跳过整段 M0.5 重算的那条已按内容判据闭合；前几轮的休市日致盲、`allow_legacy_m05` 全段豁免、日历重算自证、契约指纹漂移四条均已闭并经我自跑反控复验。独立日历改由 `tushare.fund_daily` 二源在写入时对账，实质收窄了「两份日期同源」。

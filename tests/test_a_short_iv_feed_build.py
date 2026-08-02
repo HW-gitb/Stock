@@ -12,6 +12,7 @@ import math
 import sys
 import tempfile
 import unittest
+from unittest.mock import patch
 from pathlib import Path
 
 import jsonschema
@@ -26,7 +27,7 @@ from runners.a_short_iv_feed_build import (  # noqa: E402
     build_daily_iv, rolling_percentile_252, build_feed_summary, build_m05_state,
     validate_feed_summary_consistency, validate_feed_artifact, write_feed, MIN_ROLL_OBS,
     realized_vol, HV_WINDOW, HV_ANNUALIZE, rule3_status_from_percentile,
-    _trade_calendar_sha256,
+    _trade_calendar_sha256, _calendar_session_positions, _feed_dates_are_adjacent,
 )
 
 SCHEMA_PATH = ROOT / "schemas" / "a_short_iv_feed.schema.json"
@@ -231,6 +232,36 @@ class M05StateTests(unittest.TestCase):
         df.loc[2, "trade_date"] = df.loc[1, "trade_date"]
         with self.assertRaises(ValueError):
             build_m05_state(df)
+
+    def test_state_machine_builds_calendar_lookup_once(self):
+        df = self._series(
+            [0.20, 0.08, 0.08, 0.08, 0.08, 0.08, 0.14, 0.20, 0.20],
+            [50.0, 5.0, 5.0, 5.0, 5.0, 5.0, 95.0, 50.0, 50.0],
+        )
+        with patch(
+            "runners.a_short_iv_feed_build._calendar_session_positions",
+            wraps=_calendar_session_positions,
+        ) as build_positions:
+            build_m05_state(df, trade_calendar=df["trade_date"].tolist())
+        self.assertEqual(build_positions.call_count, 1)
+
+    def test_adjacency_fallback_matches_precomputed_index(self):
+        calendar = ["20260601", "20260602", "20260603"]
+        positions = _calendar_session_positions(tuple(calendar))
+        cases = (
+            ("20260601", "20260602", True),
+            ("20260601", "20260603", False),
+            ("20260603", "20260602", False),
+            ("bad", "20260602", False),
+        )
+        for d0, d1, expected in cases:
+            self.assertEqual(_feed_dates_are_adjacent(d0, d1, calendar), expected)
+            self.assertEqual(
+                _feed_dates_are_adjacent(
+                    d0, d1, calendar, calendar_positions=positions,
+                ),
+                expected,
+            )
 
 
 class ConsistencyAndWriteTests(unittest.TestCase):
