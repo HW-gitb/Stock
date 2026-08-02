@@ -1,5 +1,12 @@
 # Session Log
 
+## 2026-08-02 — Claude 审查 FAIL（review-gate 未回报 agent 拦截腿）
+
+- **Verdict/Action**: FAIL，不提交、不回滚（`e5bc7e68` + `13cbc07a` 已在 master 上，留待修复）。设计方向对、`ASYNC_LAUNCH_SIGNATURE` 也确经真实 transcript 核实，但收「已回报」证据的那一半只认 `message.content`，而真实 task-notification 落在 `type="queue-operation"`（顶层 `content`）与 `type="attachment"`（顶层 `attachment`）两种行上，整行被跳过 → 已回报的 agent 永远算挂起，收口只能靠在 Verify 写 `agent-aborted:` 这句假话，直接抵触本 gate 的反造假目的。
+- **Required**: `R-REVIEWGATE-OUTSTANDING-AGENT-CHECK-CANNOT-SEE-REAL-TASK-NOTIFICATIONS`(P1) —— 完整机制/Required/closure 见 `docs/system_risk_register.md`(单一来源,本处不复述)。
+- **Verify**: review-evidence:7be8e7d06b6d；`tests.test_claude_review_gate` + 两道提交门守护一次跑绿 `Ran 66 tests ... OK`（即现有测试**不覆盖**真实 notification 行形态）；reviewer 自写探针：真实 transcript 中 175 份 Agent tool_result / 115 份含该启动文案（签名属实）；四条合成控制（未回报、无 tool_result、同步内联、arm 前启动）全按设计；真实 `3561d35d` transcript 里 `toolu_…P91fGPjX` 确在 `<task-notification>` 块内（全文 28 块）仍被判 pending，5 份大 transcript 有 3 份复现。零代码改动，按 rule 3 未触发 full-lane。
+- **Next**: Codex：按 register 的 Required 修 notification 行形态识别并补真实形态回归。
+
 ## 2026-08-02 — Claude 修复（sidecar 健康总评补打 m67 字段）
 
 - **Verdict/Action**: 用户授权本轮小改自修自审。`overall` 的公式是 `failed 计数 OR m67_status`，但两处输出只打计数、不打 `m67_status`，于是「`degraded` 配 0/0/0/0」读起来自相矛盾。按类改两个出口而非只改被点名的控制台那行：`runners/a_short_weekly_sidecar_health.py:565` 控制台行与 `:528` Markdown 表头都补 `m67=`；JSON 早已有该字段，schema 无需动。纯显示面，不改判定、不改产物结构、不影响选股。
