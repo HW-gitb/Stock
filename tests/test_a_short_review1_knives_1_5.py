@@ -15,7 +15,8 @@ if str(ROOT) not in sys.path:
 
 from runners import a_short_account_state_from_manual_tables as conv  # noqa: E402
 from runners.a_short_weekly_pipeline import (  # noqa: E402
-    _apply_holding_ratchet, account_integrity_from_lineage, resolve_market_regime,
+    _apply_holding_ratchet, _attach_forward_event_impacts, _attach_holding_disposition,
+    account_integrity_from_lineage, resolve_market_regime,
     stateful_risk_for_candidate, validate_iv_feed_freshness)
 from runners.a_short_weekly_pipeline import main as weekly_main  # noqa: E402
 from runners.a_short_phase5_engine import build_m67_report, exit_and_size  # noqa: E402
@@ -249,6 +250,58 @@ class Cut4StopAndRRTests(unittest.TestCase):
         advice = report["m67"]["精简结论区"]["操作建议"]
         self.assertIn(f"跨周最终止损 {final_stop}", advice)
         self.assertNotIn(f"系统跟踪止损 {old}", advice)
+
+    def test_cross_week_ratchet_uses_structured_stop_when_advice_wording_changes(self):
+        stateful = {
+            "position_state": "held",
+            "position": {"ts_code": "600000.SH", "shares": 1000, "avg_cost": 2.70,
+                         "entry_date": "20260620", "stop_loss": 2.70},
+            "rule12": {"status": "inactive"}, "rule13": {"status": "none"},
+            "size_multiplier": 1.0, "reasons": [],
+        }
+        report = build_m67_report(_engine_input(stateful), DECISION, "2026-07-13T08:00:00+08:00")
+        old = report["machine"]["entry_exit_size_star"]["plan"]["stop"]
+        report["m67"]["精简结论区"]["操作建议"] = "已有持仓。上游调整了止损措辞；请人工核查。"
+        previous = {"600000.SH|20260620": {
+            "ts_code": "600000.SH", "entry_date": "20260620", "last_as_of": "20260706",
+            "ratcheted_stop": old + 0.02, "last_disposition": "hold",
+            "last_reduce_price": None, "last_clear_price": old + 0.02,
+            "week_count": 1, "cross_week_price_cross": "none", "bootstrap": True}}
+        _apply_holding_ratchet({"reports": [report]}, previous, DECISION)
+        final_stop = report["machine"]["ratchet"]["ratcheted_stop"]
+        self.assertIn(f"跨周最终止损 {final_stop}", report["m67"]["精简结论区"]["操作建议"])
+        self.assertNotIn(f"系统跟踪止损 {old}", report["m67"]["精简结论区"]["操作建议"])
+
+    def test_cross_week_ratchet_breach_preserves_structured_forward_event_landing(self):
+        stateful = {
+            "position_state": "held",
+            "position": {"ts_code": "600000.SH", "shares": 1000, "avg_cost": 2.70,
+                         "entry_date": "20260620", "stop_loss": 2.70},
+            "rule12": {"status": "inactive"}, "rule13": {"status": "none"},
+            "size_multiplier": 1.0, "reasons": [],
+        }
+        report = build_m67_report(_engine_input(stateful), DECISION, "2026-07-13T08:00:00+08:00")
+        old = report["machine"]["entry_exit_size_star"]["plan"]["stop"]
+        weekly = {"reports": [report], "upcoming_events": {"status": "checked", "events": [{
+            "ts_code": "600000.SH", "name": "测试", "event_type": "earnings_disclosure",
+            "event_date": "20260715", "observed_at": "20260712",
+            "source_id": "tushare.disclosure_date", "expected_effect": "manual_review",
+            "confidence": "medium", "days_to_event": 2}]}}
+        _attach_forward_event_impacts(weekly, DECISION)
+        _attach_holding_disposition(weekly)
+        previous = {"600000.SH|20260620": {
+            "ts_code": "600000.SH", "entry_date": "20260620", "last_as_of": "20260706",
+            "ratcheted_stop": old + 0.50, "last_disposition": "hold",
+            "last_reduce_price": None, "last_clear_price": old + 0.50,
+            "week_count": 1, "cross_week_price_cross": "none", "bootstrap": True}}
+        _apply_holding_ratchet(weekly, previous, DECISION)
+        advice = report["m67"]["精简结论区"]["操作建议"]
+        self.assertIn("未来已知事件", advice)
+        self.assertIn("跨周最终止损", advice)
+        self.assertEqual(len([i for i in report["machine"]["operation_impact"]
+                              if i["source_field"] == "forward_event_earnings_disclosure"]), 1)
+        from runners.a_short_phase5_engine import validate_operation_impact_no_dangling
+        validate_operation_impact_no_dangling(report)
 
 
 class Cut5IVAndRegimeTests(unittest.TestCase):

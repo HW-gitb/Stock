@@ -432,4 +432,109 @@ Claude Code：独立 reviewer 复核本轮 M0.5 日历全修；PASS 前不得提
 
 Claude Code：按 `R-ASHORT-MARGIN-COVERAGE-NUMERIC-GAP-ZEROES-REFERENCE-UNIVERSE` 复核 producer → metrics → Phase5 gate 的完整 diff、partial 正控与 absence/unknown/clock/not_applicable 负控；独立 PASS 前不得提交或合入。
 
+## 2026-08-03 追加：桌面清单 #01（原 P1-1）forward-event / ratchet 文案契约修复
 
+### 文档作用与范围
+
+本节是 A-short executor/fixer 给 Claude Code reviewer/committer 的同阶段交接：记录本条两腿缺陷的判断、调用链、直接消费者、schema/source-binding/写盘边界、负向控制、固定 Python 命令和最终终态。完整风险定义与 Required/NOT_VERIFIED 单一来源在 docs/system_risk_register.md 的 R-ASHORT-P1-1-FORWARD-EVENT-ADVICE-TEXT-CONTRACT；docs/SESSION_LOG.md 只保留本轮最小 cycle facts。本节不授权 provider/live、账户实盘、下单、commit、push 或 merge。
+
+### 意见判断与根因
+
+- 用户意见正确。腿一是 _attach_forward_event_impacts() 先把 forward_event_* 写入 machine.operation_impact 和 操作建议，_apply_holding_ratchet() 的 breach 分支随后整段覆盖 操作建议；事件结构仍在但中文 marker 消失，报告级 no-dangling 旧 guard 拒绝整批周报。
+- 腿二是同一类缺陷的未触发分支：non-breach 路径按 系统跟踪止损 {old_stop} 精确查找，文案措辞、空格或数字格式变化即可 raise。二者共同把人类展示面当成机器跨阶段契约。
+
+### 调用链与直接消费者
+
+main() → _upcoming_events() → _attach_forward_event_impacts() → _attach_holding_disposition() → _apply_holding_ratchet() → validate_weekly_report() / validate_operation_impact_no_dangling() / weekly writer。机器权威是 reports[] 的 machine.operation_impact：source_field=forward_event_{type}、evidence_ref.value=upcoming_events.events[{type}]、evidence_ref.as_of==报告 as_of、source-class analysis-only 与 held/candidate shape/privacy。操作建议是可被 ratchet/处置阶段改写的人类展示面；holdings_manual_review 旁路没有 machine.operation_impact，仍以 reason marker 证明落地。
+
+### 改动与写盘边界
+
+- runners/a_short_phase5_engine.py：删除 forward_event_* 对 操作建议 固定中文 marker 的报告级机器守卫；保留 source-class、blocked-add、weekly calendar evidence 和 fake/mutated impact 的 fail-closed guard。
+- runners/a_short_weekly_pipeline.py：新增 _rewrite_holding_ratchet_advice()，只按 stop 语义标签清理 ratchet-owned 展示片段，最终 stop/t1/t2 全由 machine plan 结构化值生成；不查旧数字、不因文案改写抛错，保留既有 forward-event advisory。breach 后将 _apply_holding_disposition() 的最终 structured disposition 同步到 machine.ratchet 与 sidecar row，闭合 clear_review/hold_watch 结构边界。
+- schemas/a_short_m67_report.schema.json：只补说明，operation_impact 形状/required 字段未改；forward_event_* 的结构化 source-binding 是机器落地权威。schemas/a_short_m67_effect_contract.json：按固定 Python 实际 inventory 同步 phase5/weekly decision predicate 与 M6.7 output schema 指纹。
+- 未改操作、EGS、TopN、选股、股数、production effect、provider/credential、账户/订单路径；测试只写临时目录，未刷新 result/production 或真实私密周报。
+
+### 负向控制与自审
+
+- 结构化 forward_event impact 篡改 production_effect_enabled、veto_class、field_class、new_entry_effect、holding_effect 仍被拒；checked calendar 缺 report impact、fake type/code、impact 缺匹配 calendar evidence 仍被 weekly validator 拒。
+- 中文 操作建议 被改写后 direct no-dangling 通过；non-breach 旧 stop 字面不存在时仍按 plan 写最终跨周止损；breach ratchet 后 forward-event impact 保留、marker 展示保留、blocked-add/no-dangling 通过。
+- Pre-Codex self-review matrix：advice overwrite / exact old phrase / structured operation_impact / plan.stop-table.损 binding / breach disposition synchronization / M6.7 schema / effect-contract fingerprint / weekly reverse evidence / write boundary。无 provider/live、无下单、无 sub-agent；独立审查和提交仍未发生。
+
+### 验证命令与原始终态
+
+- 唯一解释器：C:\Users\cnhea\AppData\Local\Programs\Python\Python313\python.exe；版本：Python 3.13.8。
+- 固定 wrapper：& 'D:\cnhea\Codex\worktrees\29e0\Stock\.tools\run_unittest_with_repo_pythonpath.cmd' --timeout-seconds 1300 tests.test_a_short_weekly_pipeline.ForwardEventRowLandingTests tests.test_a_short_review1_knives_1_5.Cut4StopAndRRTests → Ran 27 tests in 3.674s ... OK；RESULT tier=focused status=PASS exit=0 tests=27。
+- 固定 wrapper：& 'D:\cnhea\Codex\worktrees\29e0\Stock\.tools\run_unittest_with_repo_pythonpath.cmd' --timeout-seconds 1300 tests.test_a_short_effect_contract tests.test_a_short_phase5_engine → Ran 195 tests in 95.932s ... OK；RESULT tier=focused status=PASS exit=0 tests=195。
+- 固定 wrapper：& 'D:\cnhea\Codex\worktrees\29e0\Stock\.tools\run_unittest_with_repo_pythonpath.cmd' --timeout-seconds 1300 tests.test_a_short_weekly_pipeline tests.test_a_short_review1_knives_1_5 → Ran 539 tests in 108.496s ... OK；RESULT tier=focused status=PASS exit=0 tests=539。
+- 官方 full lane：& 'C:\Users\cnhea\AppData\Local\Programs\Python\Python313\python.exe' 'D:\cnhea\Codex\worktrees\29e0\Stock\.tools\full_pack_ledger.py' run a_short 'R-ASHORT-P1-1-FORWARD-EVENT-ADVICE-TEXT-CONTRACT repair' 'focused 27 + effect-contract/phase5 195 + weekly/review1 539 OK; static_contract_error=None' 860 -- discover -s tests -p 'test_a_short*.py' → Ran 2305 tests in 338.683s ... OK (skipped=3)；RESULT status=PASS exit=0 tests=2305 elapsed=341.3s deadline=860s。
+- 固定 Python AST/schema/static 自审：AST/schema/static_contract=None；git diff --check exit 0（只有 CRLF 转换提示）。第一次未重封契约的聚焦命令曾得到 RESULT tier=focused status=FAIL exit=1 tests=27，已修正并重跑；不把该中间结果当最终证据。
+
+### NOT_VERIFIED、审查/提交边界与下一步
+
+- NOT_VERIFIED：provider/network/live、--confirm-fetch-authorized、-Account 新实盘、真实 7 只财报事件复跑、生产产物刷新均未执行；未启动 runner、sub-agent 或自动下单。
+- Claude Code reviewer/committer 尚未独立审查；本节不是 review PASS，也不是 ship/live PASS。commit/push/merge = NOT_PERFORMED；PASS 前不提交。
+- 下一步：Claude Code 独立审查 R-ASHORT-P1-1-FORWARD-EVENT-ADVICE-TEXT-CONTRACT，复核本节列出的调用链、schema/effect-contract 指纹、两条负向控制和文档门。
+
+### 2026-08-03 文档门禁最终复核补充
+
+- 本节追加记录本轮最后的文档治理执行：固定 wrapper `& 'D:\\cnhea\\Codex\\worktrees\\29e0\\Stock\\.tools\\run_unittest_with_repo_pythonpath.cmd' --timeout-seconds 1300 tests.test_doc_governance_guard tests.test_route_doc_ledger_status_consistency tests.test_readme_route_row_length`；原始终态 `Ran 66 tests in 0.899s ... OK`，`RESULT tier=focused status=PASS exit=0 tests=66 elapsed=1.0s deadline=1300s`。解释器仍为 `C:\\Users\\cnhea\\AppData\\Local\\Programs\\Python\\Python313\\python.exe` / `Python 3.13.8`；`git diff --check` exit 0（仅 CRLF 转换提示）。
+
+
+
+### 2026-08-03 Claude Code 独立审查 = FAIL（#01 forward-event/ratchet 文案契约）
+
+- **Verdict**: FAIL，未提交、未合入。原始症状确已消除（marker 在 ratchet 之后仍在、措辞改写不再抛错、止损改用结构化 `plan`），但修复 ③ 的实现比声明宽，把跨周 anti-rescue 打穿。
+- **实测（A/B 探针，两棵树同一 fixture：上周 `last_disposition=clear_review`、本周合并出 `hold`）**：主树 HEAD 得 `ratcheted_disposition=clear_review` / `row.last_disposition=clear_review`；本树得两处均为 `hold` —— 降档且已写进私密 sidecar row。连带 `_ratchet_report_error` 弱不变式 ③ 因赋值在检查之前而变成自比较，永不触发。
+- **Required（三条，正文在 register 单一来源 `R-ASHORT-P1-1-FORWARD-EVENT-ADVICE-TEXT-CONTRACT`）**：① `a_short_weekly_pipeline.py:3634-3637` 改成 `_severity_max_disposition` 合并而非覆盖；② 补降档方向的反向控制 + 破位升档正控；③ 删掉 engine ⑫ 运行时强制并反转其反向控制后，须给出结构化替代或等价反向控制。
+- **按类修的边界（正文见同一 R-ID 的「缺陷类边界」条，本处只留指针）**：Required ①② 属 **类 1「先赋值、后校验」——本刀必须整类修完**：已确认两个实例（③ disposition 为本刀新引入；② stop 因 `plan["stop"] = final_stop` 先于本刀就已退化成 `rs < rs`），须逐条走 `_ratchet_report_error` ①-⑤ 问「它读的量是否在写点被赋成了对照量」，并为 stop / disposition **各**补一条降低方向的反向控制。Required ③ 属 **类 2「中文 marker 当机器契约」——本刀不铺开**：engine 内仍有 5 条同构判据，其中 `blocked_add_required`(:2327) 读的就是 `advice_text` 且 forward_event held 分支正好设它为 true，本刀只是靠新正则保留周边文本躲开；本刀只需补一条覆盖「attach 之后任意阶段整段改写 `操作建议`」的反向控制 + 记 follow-up。
+- **不要返工**：`_rewrite_holding_ratchet_advice` 两条腿、effect-contract 双 runner 指纹与 M6.7 schema 指纹重封。
+- **Verify**: review-evidence:402172fb353a；full lane 在本树 `[full-pack-ledger] CACHED GREEN - a_short = 2305 OK`（与执行方自跑同一 code state，未重复跑）。provider/live 与 `-Account` 实跑 `NOT_VERIFIED`。
+
+## 2026-08-03 追加：Codex 第二轮修复——R4b 写回 anti-rescue 与类2单条反控
+
+### 文档作用与本轮范围
+
+本节是当前 A-short executor/fixer 给 Claude Code reviewer/committer 的同阶段追加交接，承接上一节 Claude FAIL。附件方案判断正确；本轮按「类1整类收口、类2只做一条」执行。完整风险与 follow-up 单一来源为 `docs/system_risk_register.md` 同一 R-ID；本节不授权 provider/live、账户实盘、下单、commit、push 或 merge。
+
+### 根因、优化与调用链
+
+- 根因不是单一覆盖语句，而是 `_ratchet_report_error()` 的判据在 pipeline 写回前读取了已经被改写的 `plan["stop"]` / `machine_ratchet["ratcheted_disposition"]`，导致 stop 退化为自比较、disposition 退化为自比较；上一轮无条件同步还把跨周 `clear_review` 降成了本周 `hold`。
+- 优化后的链路为 `main → _apply_holding_ratchet → _holding_ratchet → _apply_holding_disposition → _ratchet_report_error → state[key] = row`：disposition 用 `_severity_max_disposition` 合并；stop 在写 `plan["stop"]` 前捕获本周有效值；跨周 stop/disposition 在 sidecar 替换前按旧 row 与新 row 做 fail-closed 单向断言。同周重跑仍跳过跨周比较以保持幂等，`entry_date` 继续隔离 re-entry。
+- 类2只新增 held + forward_event + `blocked_add_required` 清空 advice 的真实负控并要求 raise；其余 5 条文案 marker 判据登记后续刀，不在本刀扩大。
+
+### 改动、直接消费者、schema/source-binding 与写盘边界
+
+- `runners/a_short_weekly_pipeline.py`：加入 `_severity_max_disposition`/`_is_finite_num` 局部依赖；修复 ratchet disposition 合并；加入写点 stop 自检和 `state[key]` 前跨周 stop/disposition 断言。
+- `tests/test_a_short_gap_data_registry.py`：新增 disposition 降档反控、破位升档正控、植入 stop 降低反控、植入 disposition 降档反控，共四条 Required。
+- `tests/test_a_short_weekly_pipeline.py`：将类2单条用例改为 held forward-event 清空用户文案后，`blocked_add_required` guard 必须 raise；候选结构化 forward-event advice 可重写的正向覆盖仍由 earnings source guard 测试保留。
+- `schemas/a_short_m67_effect_contract.json`：按固定 Python 重算并同步 weekly runner predicate hash；M6.7 schema 形状和 forward-event `operation_impact/source-binding` 未改。
+- 机器权威仍是 `machine.ratchet` 与私密 sidecar row；`操作建议` 仅展示面。未改 engine `_ratchet_report_error` 签名、EGS/TopN/生产 effect、provider、账户/订单路径。
+
+### 负向控制与自审
+
+- 上周 `clear_review` + 本周 `hold` 不得降档；上周 `hold` + ratchet 破位必须升到 `clear_review` 且不误拒。
+- 植入低于上周的 `ratcheted_stop` 或较低 `last_disposition` 均在 sidecar 写回前 raise；同周 replay 仍幂等。
+- held forward-event 清空 `操作建议` 且清空 `风控触发` 后，`blocked_add_required` 仍必须 raise；这条记录了类2后续结构化统一的现有牙口。
+- 自审矩阵：`disposition merge / cross-week stop / cross-week disposition / pre-write stop / breach escalation / class2 blocked_add / effect-contract / sidecar write boundary`；未改 `_rewrite_holding_ratchet_advice` 两条已通过路径。
+
+### 固定 Python、测试命令与原始终态
+
+- 固定主 Python：`C:\Users\cnhea\AppData\Local\Programs\Python\Python313\python.exe`，版本 `Python 3.13.8`。
+- focused 命令：`& 'D:\cnhea\Codex\worktrees\29e0\Stock\.tools\run_unittest_with_repo_pythonpath.cmd' --timeout-seconds 1300 tests.test_a_short_gap_data_registry.HoldingRatchetS3bR4bTests tests.test_a_short_weekly_pipeline.ForwardEventRowLandingTests tests.test_a_short_review1_knives_1_5.Cut4StopAndRRTests tests.test_a_short_effect_contract tests.test_a_short_phase5_engine` → `Ran 263 tests in 51.174s ... OK`；`RESULT tier=focused status=PASS exit=0 tests=263 elapsed=52.6s deadline=1300s`。
+- 唯一 full lane 命令：`& 'C:\Users\cnhea\AppData\Local\Programs\Python\Python313\python.exe' 'D:\cnhea\Codex\worktrees\29e0\Stock\.tools\full_pack_ledger.py' run a_short 'R-ASHORT-P1-1-FORWARD-EVENT-ADVICE-TEXT-CONTRACT second repair' 'focused 263 OK; disposition merge + cross-week writeback anti-rescue + pre-write stop guard + class2 blocked_add negative control; static_contract_error=None' 860 -- discover -s tests -p 'test_a_short*.py'` → `Ran 2309 tests in 335.740s ... OK (skipped=3)`；`RESULT status=PASS exit=0 tests=2309 elapsed=337.5s deadline=860s`；ledger fingerprint `dd8ced5ed9cb`。
+- 固定 Python effect-contract 自审：weekly predicate hash 已同步，`static_contract_error=None`；provider/live/account 未调用。
+- 文档治理/路由/README：`Ran 66 tests in 0.936s ... OK`，`RESULT tier=focused status=PASS exit=0 tests=66 elapsed=1.1s deadline=1300s`；固定 Python 与上文相同。
+
+### NOT_VERIFIED、审查/提交边界与下一步
+
+- `NOT_VERIFIED`：provider/network/live、`-Account` 新实盘、真实财报事件复跑、生产产物刷新、sub-agent 均未执行；未自动下单。
+- Claude Code 独立复审尚未发生，本节不是 review PASS 或 ship/live PASS；commit/push/merge = `NOT_PERFORMED`。
+- 下一步：Claude Code 独立审查 `R-ASHORT-P1-1-FORWARD-EVENT-ADVICE-TEXT-CONTRACT`，重点复核类1写点断言与类2 follow-up 边界。
+
+### 2026-08-03 Claude Code 独立审查第二轮 = PASS（#01 R4b 写回 anti-rescue）
+
+- **Verdict**: PASS，已提交并合入 master。上一轮三条 Required 全部按指定形态收口；类 1 整类修完（含我未点名、执行方自补的「跨周止损丢失」那条腿），类 2 按边界只补一条反控。
+- **实测（reviewer 四条探针，本树实跑；A 是上一轮 FAIL 的同一份 fixture）**：降档反控 → `ratcheted_disposition` 与 `row.last_disposition` 均保持 `clear_review`（上一轮同 fixture 得 `hold`）；植入降档 → RAISED `R4b ratchet 跨周降档(...): 'clear_review' -> 'hold'`（守卫有牙）；破位升档正控 → 升到 `clear_review` 且不误拒；同周重放 → 跳过跨周检查、不抛错。
+- **计数/指纹**：full lane `CACHED GREEN a_short = 2309 OK`；`2305→2309` 的 `+4` 逐条可解释（gap_data_registry 新增 4 条，weekly_pipeline 那条是改名不新增）；`static_contract_error()=None`。
+- **Follow-up（另起一刀）**：`validate_operation_impact_no_dangling` 内仍有 5 条同构「中文 marker 当机器契约」判据待统一为结构化判据；未修 Optional = `_RATCHET_STOP_ADVICE_RE` 逗号续写会被吞。正文见 register 同一 R-ID。
+- **Verify**: review-evidence:3d088ed82302。provider/live 与 `-Account` 实跑仍 `NOT_VERIFIED`——本周真实 M6.7 能否 emit 要等下一次 `-Account` 周跑。

@@ -1887,7 +1887,8 @@ def validate_weekly_report(weekly: dict, iv_feed_summary: dict,
                 raise ValueError(f"upcoming_events unchecked_codes ts_code {_uc['ts_code']} 不在本周候选/持仓集")
     # 反向 evidence guard(IMPACT-EVIDENCE-GUARD-GAP):每个 report 的 forward_event_ impact 必须有匹配的 checked calendar event
     # (同 ts_code + event_type),否则=伪造/悬空 advisory(日历无此事件/不支持类型)。与上面的正向落地强制成双向闭合;放 _ue block
-    # 外以 catch _ue=None/unknown 却有 impact 的伪造。不删 marker guard(engine ⑫,第二层)——双层。
+    # 外以 catch _ue=None/unknown 却有 impact 的伪造。reports[] 不再另绑可变中文 marker；无 reports 行的 manual-review
+    # 持仓旁路仍在上面的 reason marker 上做落地校验，因为该旁路没有 machine.operation_impact。
     _checked_evs = {(_e["ts_code"], _e["event_type"]) for _e in ((_ue or {}).get("events") or [])
                     if (_ue or {}).get("status") == "checked"}
     for _r in weekly["reports"]:
@@ -2884,7 +2885,7 @@ def _ex_div_notices(code_names, as_of, dividend_provider, window_days=EX_DIV_WIN
 
 
 FORWARD_EVENT_WINDOW_DAYS = _WEEKLY_WINDOWS["forward_event_window_days"]
-_FORWARD_EVENT_MARKER = "未来已知事件"   # holdings_manual_review reason 落地标记:_attach 写入 + validator 据此判 row no-dangling(单一来源,防文案漂移)
+_FORWARD_EVENT_MARKER = "未来已知事件"   # 人类可见提示；reports[] 的机器落地以 operation_impact/source-binding 为准
 # 4.2 forward_events per-type 元数据(builder emit event 用):provider rec 的事件日字段 / source_id / 置信度(解禁日确定=high;财报预约可改期=medium)/ 中文标签。
 # 加第 N 类事件只在此 4 个 map + provider + schema enum 扩,builder/attach/validator/render/guard 全 type-agnostic。
 _FORWARD_EVENT_DATE_FIELD = {"limit_unlock": "float_date", "earnings_disclosure": "pre_date"}
@@ -3024,7 +3025,8 @@ def _attach_forward_event_impacts(weekly, as_of):
         prev = cut.get("风控触发") or "无"
         cut["风控触发"] = txt if prev in ("无", "") else f"{prev}|{txt}"
         # ADVICE-LANDING(R-...-ADVICE-LANDING-GAP):未来事件也落用户主看的 操作建议(不只风控触发),否则候选仍像干净建仓。
-        # advisory 文本(不改 table 操作/EGS/TopN);候选→人工复核/谨慎建仓、持仓→持有观察/谨慎加仓;含 _FORWARD_EVENT_MARKER 供 guard 判落地。
+        # advisory 文本(不改 table 操作/EGS/TopN);候选→人工复核/谨慎建仓、持仓→持有观察/谨慎加仓;
+        # marker 仅为人类提示，reports[] 的机器落地由下面的结构化 impact/source-binding 闭合。
         _adv = (f"⚠️ {_FORWARD_EVENT_MARKER}({len(evs)}项近端将至):"
                 + ("持有观察、谨慎加仓" if held else "先人工复核/转观察/谨慎建仓")
                 + ",不改 EGS/TopN/生产决策(advisory)")
@@ -3522,6 +3524,41 @@ def _attach_holding_disposition(weekly):
 # ── S3b R4b: 跨周持久收紧 ratchet 持久层(IO + apply;纯 ratchet 数学在 engine `_holding_ratchet`/`_ratchet_report_error`)──────
 # 镜像 V14.3 regime-ledger 的**结构**(gitignored sidecar、load→apply→validate→save、idempotent re-run、bootstrap、PIT envelope),
 # 但 ratchet 是**per-(ts_code,entry_date) 就地更新-单向只升不降**(非 regime 的 append-only-immutable-by-date)。涉真实持仓 → 私密路由。
+_RATCHET_STOP_ADVICE_RE = re.compile(
+    r"(?:⚠️\s*)?(?:现价已跌破\s*)?(?:系统跟踪止损|跨周最终止损)"
+    r"\s*[^。；;|｜]*(?:[（(][^）)]*[）)])?"
+    r"(?:[；;]止盈[^。|｜]*)?"
+)
+
+
+def _rewrite_holding_ratchet_advice(advice, plan, final_stop):
+    """Rewrite only the ratchet-owned stop clause from structured plan values.
+
+    The surrounding advice is a display surface and may contain late advisory
+    fragments (for example a forward-event marker).  Remove the known
+    ratchet/engine stop clause by its semantic label without looking up the old
+    numeric text, then append the authoritative structured stop.  If an
+    upstream wording change is not recognized, do not fail the report; the
+    machine plan/table remain the source of truth and the new clause is still
+    rendered.
+    """
+    text = _RATCHET_STOP_ADVICE_RE.sub("", str(advice or ""))
+    text = re.sub(r"[ \t]{2,}", " ", text).strip(" ｜|；;。")
+    if text:
+        text += "。"
+    if plan.get("breached"):
+        ratchet_text = (
+            f"已有持仓，本周禁止自动加仓。⚠️ 现价已跌破跨周最终止损 {final_stop}"
+            " —— 触发后由你盘中无条件手动执行并人工复核。"
+        )
+    else:
+        ratchet_text = (
+            f"跨周最终止损 {final_stop}(无条件、盘中由你手动执行);"
+            f"止盈 盈一 {plan.get('t1')} / 盈二 {plan.get('t2')}。"
+        )
+    return text + ratchet_text
+
+
 def _holding_ratchet_key(ts_code, entry_date):
     return f"{ts_code}|{entry_date}"
 
@@ -3555,7 +3592,8 @@ def _apply_holding_ratchet(weekly, state, as_of):
     无 entry_date → 无稳定身份,跳过 ratchet,诚实不伪造)。re-entry(新 entry_date)= 新 key → bootstrap。写后过 `_ratchet_report_error`
     弱不变式(与 validate_m67_consistency 持有分支单一来源)。返回更新后的 state(就地)。非持仓行 no-op。"""
     from runners.a_short_phase5_engine import (_apply_holding_disposition, _holding_ratchet,
-                                                _ratchet_report_error)
+                                                _ratchet_report_error, _severity_max_disposition,
+                                                _is_finite_num)
     _future = [k for k, r in state.items() if str(r.get("last_as_of") or "") > str(as_of)]
     if _future:                                     # PIT:sidecar 含未来态(乱序/replay 旧周配新 sidecar)→ 拒(镜像 regime ledger future-contamination)
         raise ValueError(f"R4b ratchet sidecar 含未来态(last_as_of > as_of {as_of}):{_future[:3]}(PIT 违反/乱序 run)")
@@ -3579,29 +3617,66 @@ def _apply_holding_ratchet(weekly, state, as_of):
         mc["ratchet"] = machine_ratchet
         final_stop = machine_ratchet.get("ratcheted_stop")
         if isinstance(final_stop, (int, float)) and not isinstance(final_stop, bool) and plan:
+            # Capture the pre-ratchet effective stop before plan["stop"] becomes the
+            # ratcheted value; otherwise _ratchet_report_error would compare the
+            # final value with itself and lose the within-week write-point guard.
+            _orig_eff = [v for v in (
+                plan.get("stop"),
+                (mc.get("move_to_breakeven") or {}).get("breakeven_price"),
+            ) if _is_finite_num(v)]
             # Ratchet is the effective stop, not an advisory side channel. Keep the machine plan,
             # final table and downstream disposition prices on one value.
-            old_stop = plan.get("stop")
             plan["stop"] = final_stop
             table = rep["m67"]["table"]
             table["损"] = final_stop
             if isinstance(mc.get("current_close"), (int, float)) and mc["current_close"] <= final_stop:
                 plan.update({"breached": True, "t1": None, "t2": None})
                 table["盈一"] = table["盈二"] = None
-                rep["m67"]["精简结论区"]["操作建议"] = (
-                    f"已有持仓，本周禁止自动加仓。⚠️ 现价已跌破跨周最终止损 {final_stop}"
-                    " —— 触发后由你盘中无条件手动执行并人工复核。")
-            else:
-                advice = str(rep["m67"]["精简结论区"].get("操作建议") or "")
-                old_phrase = f"系统跟踪止损 {old_stop}"
-                if old_phrase not in advice:
-                    raise ValueError(f"R4b ratchet 无法在操作建议定位旧系统止损 {old_stop}，拒绝留下双口径")
-                rep["m67"]["精简结论区"]["操作建议"] = advice.replace(
-                    old_phrase, f"跨周最终止损 {final_stop}", 1)
+            rep["m67"]["精简结论区"]["操作建议"] = _rewrite_holding_ratchet_advice(
+                rep["m67"]["精简结论区"].get("操作建议"), plan, final_stop)
             _apply_holding_disposition(rep)
+            # A ratchet can make an otherwise safe plan breach this week.  The
+            # disposition merge then correctly escalates to clear_review; keep
+            # the persisted/machine ratchet disposition bound to that final
+            # structured consumer state before the weak invariant is checked.
+            final_disposition = mc.get("holding_management_signal")
+            if final_disposition:
+                merged = _severity_max_disposition(
+                    machine_ratchet["ratcheted_disposition"], final_disposition)
+                machine_ratchet["ratcheted_disposition"] = merged
+                row["last_disposition"] = merged
+            if _orig_eff and final_stop < max(_orig_eff) - 1e-9:
+                raise ValueError(
+                    f"R4b ratchet 止损低于本周最紧止损({ts}/{ed}): "
+                    f"{final_stop!r} < {max(_orig_eff)!r}"
+                )
         _err = _ratchet_report_error(mc)
         if _err:
             raise ValueError(f"R4b ratchet apply 弱不变式失败({ts}/{ed}): {_err}")
+        # Cross-week anti-rescue must be checked immediately before persistence,
+        # against the actual row that is about to replace the prior sidecar row.
+        # Same-week replay is intentionally idempotent and skips this cross-week check.
+        _prev = state.get(key)
+        if _prev is not None and str(_prev.get("last_as_of") or "") != str(as_of):
+            _prev_disposition = _prev.get("last_disposition") or "hold"
+            _new_disposition = row.get("last_disposition") or "hold"
+            if _severity_max_disposition(_new_disposition, _prev_disposition) != _new_disposition:
+                raise ValueError(
+                    f"R4b ratchet 跨周降档({ts}/{ed}): "
+                    f"{_prev_disposition!r} -> {_new_disposition!r}"
+                )
+            _prev_stop, _new_stop = _prev.get("ratcheted_stop"), row.get("ratcheted_stop")
+            if _is_finite_num(_prev_stop) and not _is_finite_num(_new_stop):
+                raise ValueError(
+                    f"R4b ratchet 跨周止损丢失({ts}/{ed}): "
+                    f"{_prev_stop!r} -> {_new_stop!r}"
+                )
+            if _is_finite_num(_prev_stop) and _is_finite_num(_new_stop) \
+                    and _new_stop < _prev_stop - 1e-9:
+                raise ValueError(
+                    f"R4b ratchet 跨周止损下降({ts}/{ed}): "
+                    f"{_prev_stop!r} -> {_new_stop!r}"
+                )
         state[key] = row
     return state
 

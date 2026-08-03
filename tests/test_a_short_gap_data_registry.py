@@ -10,6 +10,7 @@ import copy
 import json
 import sys
 import unittest
+from unittest.mock import patch
 from pathlib import Path
 
 import jsonschema
@@ -1305,6 +1306,74 @@ class HoldingRatchetS3bR4bTests(unittest.TestCase):
         state2 = _apply_holding_ratchet(w2, state, AS_OF)           # 同 as_of re-run
         self.assertEqual(state2, snap)                              # 幂等:week_count 不增
         self.assertEqual(w2["reports"][0]["machine"]["ratchet"]["week_count"], 1)
+
+    def test_r4b_pipeline_persisted_disposition_cannot_downgrade(self):
+        # Required ②(a):上周 clear_review + 本周合并 hold → machine 与 sidecar 都只升不降。
+        w = self._held_weekly()
+        report = w["reports"][0]
+        stop = report["machine"]["entry_exit_size_star"]["plan"]["stop"]
+        key = _holding_ratchet_key("600000.SH", "20260601")
+        previous = {key: self._lw(ratcheted_stop=stop, last_disposition="clear_review",
+                                  last_clear_price=stop, last_as_of="20260610")}
+        state = _apply_holding_ratchet(w, previous, AS_OF)
+        self.assertEqual(report["machine"]["ratchet"]["ratcheted_disposition"], "clear_review")
+        self.assertEqual(state[key]["last_disposition"], "clear_review")
+
+    def test_r4b_pipeline_breach_escalates_disposition_and_persists(self):
+        # Required ②(b):上周 hold + 本周 ratchet 使 close 破位 → 正常升到 clear_review 且不误拒。
+        w = self._held_weekly()
+        report = w["reports"][0]
+        self.assertEqual(report["machine"]["holding_management_signal"], "hold")
+        close = report["machine"]["current_close"]
+        key = _holding_ratchet_key("600000.SH", "20260601")
+        previous = {key: self._lw(ratcheted_stop=close + 0.5, last_disposition="hold",
+                                  last_clear_price=close + 0.5, last_as_of="20260610")}
+        state = _apply_holding_ratchet(w, previous, AS_OF)
+        self.assertEqual(report["machine"]["ratchet"]["ratcheted_disposition"], "clear_review")
+        self.assertEqual(state[key]["last_disposition"], "clear_review")
+
+    def test_r4b_pipeline_writeback_rejects_injected_stop_downgrade(self):
+        # Required ② reverse:绕过纯函数的 max，植入一个低于 sidecar 的 row，写回门必须有牙。
+        w = self._held_weekly()
+        report = w["reports"][0]
+        plan_stop = report["machine"]["entry_exit_size_star"]["plan"]["stop"]
+        key = _holding_ratchet_key("600000.SH", "20260601")
+        previous_stop = plan_stop + 0.5
+        previous = {key: self._lw(ratcheted_stop=previous_stop, last_clear_price=previous_stop,
+                                  last_as_of="20260610")}
+        injected_stop = plan_stop + 0.1
+        injected_machine = {"ratcheted_stop": injected_stop, "ratcheted_disposition": "hold",
+                            "week_count": 2, "cross_week_price_cross": "none", "bootstrap": False}
+        injected_row = self._lw(ratcheted_stop=injected_stop, last_clear_price=injected_stop,
+                                last_as_of=AS_OF)
+        with patch("runners.a_short_phase5_engine._holding_ratchet",
+                   return_value=(injected_machine, injected_row)):
+            with self.assertRaisesRegex(ValueError, "跨周止损下降"):
+                _apply_holding_ratchet(w, previous, AS_OF)
+        self.assertEqual(previous[key]["ratcheted_stop"], previous_stop)
+
+    def test_r4b_pipeline_writeback_rejects_injected_disposition_downgrade(self):
+        # Required ② reverse:直接篡改 engine 输出为 hold，不能绕过写回前的跨周 anti-rescue。
+        w = self._held_weekly()
+        report = w["reports"][0]
+        plan_stop = report["machine"]["entry_exit_size_star"]["plan"]["stop"]
+        key = _holding_ratchet_key("600000.SH", "20260601")
+        previous = {key: self._lw(ratcheted_stop=plan_stop, last_disposition="clear_review",
+                                  last_clear_price=plan_stop, last_as_of="20260610")}
+        from runners import a_short_phase5_engine as engine
+        real_holding_ratchet = engine._holding_ratchet
+
+        def corrupt_disposition(this_week, last_week):
+            machine, row = real_holding_ratchet(this_week, last_week)
+            machine["ratcheted_disposition"] = "hold"
+            row["last_disposition"] = "hold"
+            return machine, row
+
+        with patch("runners.a_short_phase5_engine._holding_ratchet",
+                   side_effect=corrupt_disposition):
+            with self.assertRaisesRegex(ValueError, "跨周降档"):
+                _apply_holding_ratchet(w, previous, AS_OF)
+        self.assertEqual(previous[key]["last_disposition"], "clear_review")
 
     def test_r4b_pipeline_pit_future_rejected(self):
         w = self._held_weekly()

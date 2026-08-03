@@ -3432,9 +3432,8 @@ class ForwardEventRowLandingTests(unittest.TestCase):
         with self.assertRaises(ValueError):
             validate_operation_impact_no_dangling(rep)
         imp["veto_class"] = "none"                                 # 复原
-        rep["m67"]["精简结论区"]["操作建议"] = "试探仓建仓,止损,未验证"   # ⑫: 抹去 earnings 未来事件字样 → 拒
-        with self.assertRaises(ValueError):
-            validate_operation_impact_no_dangling(rep)
+        rep["m67"]["精简结论区"]["操作建议"] = "试探仓建仓,止损,未验证"   # ⑫: 文案可改写；结构化 impact 仍是机器落地
+        validate_operation_impact_no_dangling(rep)
 
     def test_validator_rejects_unlanded_earnings(self):
         # per-type 落地强制:earnings event 但跳过 _attach(无 earnings impact)→ 拒(不靠 main 顺序)
@@ -3488,7 +3487,6 @@ class ForwardEventRowLandingTests(unittest.TestCase):
         repB = next(r for r in w["reports"] if r["ts_code"] == "600001.SH")
         repB["machine"].setdefault("operation_impact", []).append(
             dict(next(i for i in repA["machine"]["operation_impact"] if str(i["source_field"]).startswith("forward_event_"))))
-        repB["m67"]["精简结论区"]["操作建议"] = (repB["m67"]["精简结论区"].get("操作建议") or "") + "｜未来已知事件"   # 过 ⑫,隔离反向
         with self.assertRaises(ValueError):
             validate_weekly_report(w, _feed())
 
@@ -3524,15 +3522,18 @@ class ForwardEventRowLandingTests(unittest.TestCase):
         self.assertIn("未来已知事件", rep["m67"]["精简结论区"]["操作建议"])
         validate_operation_impact_no_dangling(rep)
 
-    def test_advice_guard_rejects_missing_advice(self):
-        # ⑫ guard:forward_event impact 落地但操作建议被抹去未来事件字样(仍像干净建仓)→ engine no-dangling guard 拒
+    def test_blocked_add_guard_rejects_advice_overwrite(self):
+        # 类2本刀唯一反控:held forward_event 的 blocked_add_required 仍须在用户可见文案落地。
         from runners.a_short_phase5_engine import validate_operation_impact_no_dangling
         w = self._w()
         rep = w["reports"][0]
+        rep["machine"]["stateful_risk"] = {"position_state": "held", "rule12": {"status": "inactive"},
+                                           "rule13": {"status": "none"}, "reasons": []}
+        rep["m67"]["精简结论区"]["操作建议"] = "已有持仓,禁止自动加仓。"
         _attach_forward_event_impacts(w, AS_OF)
-        validate_operation_impact_no_dangling(rep)                 # 落地形态过
-        rep["m67"]["精简结论区"]["操作建议"] = "试探仓建仓,止损,edge 未验证"   # 抹去未来事件字样
-        with self.assertRaises(ValueError):
+        rep["m67"]["精简结论区"]["操作建议"] = "上游阶段整段改写"
+        rep["m67"]["精简结论区"]["风控触发"] = ""
+        with self.assertRaisesRegex(ValueError, "blocked_add_required"):
             validate_operation_impact_no_dangling(rep)
 
     def test_advice_lands_in_rendered_markdown(self):
