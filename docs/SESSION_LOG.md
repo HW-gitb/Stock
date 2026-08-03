@@ -1,5 +1,13 @@
 # Session Log
 
+## 2026-08-03 — Claude 修复（转换器接受券商前缀式 ts_code）
+
+- **Verdict/Action**: 用户 2026-08-03 裁决「接受券商前缀写法」后自修自审。`runners/a_short_account_state_from_manual_tables.py::_parse_ts_code` 在原校验**之前**加一次只认 `^(SH|SZ)(\d{6})$` 的改写（输入已 `.strip().upper()`），改写后照常走原格式校验与主板门——两者一行未动。这是放松类改动，故新增用例的重点在「仍然必须拒绝」那一侧。
+- **Required**: 无；Register: 新开 `R-ASHORT-FAILED-WEEKLY-RUN-LEAVES-TRACKED-SUMMARIES-AHEAD-OF-THEIR-LEDGER`(P2)，为本轮跑全量时实测撞到的独立问题，正文只见 `docs/system_risk_register.md` 顶部（本处不复述）。
+- **Verify**: 覆盖模块 `RESULT tier=focused status=PASS exit=0 tests=60`（+4 条新用例）；rule 3(b) 全量走唯一入口 `RESULT status=PASS exit=0 tests=2288 elapsed=364.5s`，`2284→2288` 的 `+4` 恰等于新增用例。反控实测：`SZ2747`/`002747`/`SZ002747.SZ`/`BJ430047`/`HK00700`/`SZ 002747`/`SZ-002747`/空/裸 `SZ` 全部仍拒；`SZ300750` 改写后仍被主板门拦；整表前缀式与后缀式转换出的 account+lineage 逐字段相同。全量首跑曾 `FAILED 692`，红点与本刀无关（见 register 新条），恢复 7 个运行产物后转绿。
+- **Next**: Codex：执行
+- **Pre-Codex self-review**: `matrix=complete: 单一入口 _parse_ts_code`; `register=updated`; `handoff=updated`; `focused=60 OK / 1.3s`; `full-lane=PASS 2288 / 364.5s`; `door=route 14 + doc-governance 41`; A=接受面与拒绝面全枚举; B=grep 无第二处代码校验; C=12 形态反控 + 主板门仍拦; D=N-A; E=handoff 旧结论已划掉; F=diff-check 干净
+
 ## 2026-08-03 — Claude 修复（两融缓存键绑完整窗口，收口同轮 Optional）
 
 - **Verdict/Action**: 用户授权本轮 Optional 自修自审。`window_digest` 原先只摘 `trade_dates[:12]`（实际取数的头部），而 `_margin_observation` 的分类读的是**完整** `calendar_dates`（成员资格 / `eligible_dates` / `lag_sessions` 全靠它），于是「同头不同尾」的两次运行会共用一份缓存身份。改为对完整窗口取 digest，理由写进函数内注释。纯缓存身份扩宽，不动任何决策逻辑、阈值或取数量。

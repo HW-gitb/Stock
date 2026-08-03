@@ -150,6 +150,14 @@ def _parse_int_shares(raw, field: str) -> int:
 
 def _parse_ts_code(raw, field: str) -> str:
     s = ("" if raw is None else str(raw)).strip().upper()
+    # Broker exports write the exchange as a prefix (`SZ002747`); the rest of the
+    # system speaks the suffix form.  Accept exactly that one shape and rewrite it,
+    # so a routine export does not need hand-editing.  Everything else -- a missing
+    # leading zero, no exchange at all, a doubled exchange, any other market -- still
+    # falls through to the same rejection, and the main-board gate below is unmoved.
+    prefixed = re.fullmatch(r"(SH|SZ)(\d{6})", s)
+    if prefixed:
+        s = f"{prefixed.group(2)}.{prefixed.group(1)}"
     if not re.fullmatch(r"\d{6}\.(SH|SZ)", s):
         raise ConvertError(f"{field}={raw!r} 不是合法 A 股代码（须 NNNNNN.SH/.SZ，含前导零）")
     if not is_a_share_main_board(s):

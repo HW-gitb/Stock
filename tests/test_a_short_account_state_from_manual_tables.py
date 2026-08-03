@@ -207,6 +207,41 @@ class DeterminismTests(unittest.TestCase):
         a2, _ = _build_account_state(shuffled, AS_OF)
         self.assertEqual(a1, a2)
 
+    def test_broker_prefixed_code_is_accepted_and_rewritten(self):
+        for raw, expected in (("SZ002747", "002747.SZ"), ("SH600519", "600519.SH"),
+                              ("sz002747", "002747.SZ"), (" SH600519 ", "600519.SH"),
+                              ("600519.SH", "600519.SH")):
+            with self.subTest(raw=raw):
+                self.assertEqual(conv._parse_ts_code(raw, "positions[0].ts_code"), expected)
+
+    def test_prefixed_acceptance_does_not_widen_anything_else(self):
+        # Every one of these was rejected before the prefix form was accepted and
+        # must still be: a dropped leading zero, no exchange, a doubled exchange,
+        # another market, separators, and empty input.
+        for raw in ("SZ2747", "SZ0027470", "002747", "SZ002747.SZ", "002747.SZSZ",
+                    "BJ430047", "HK00700", "SZ 002747", "SZ-002747", "", None, "SZ"):
+            with self.subTest(raw=raw), self.assertRaises(conv.ConvertError):
+                conv._parse_ts_code(raw, "positions[0].ts_code")
+
+    def test_prefixed_form_still_faces_the_main_board_gate(self):
+        # 300750 is ChiNext: the rewrite must hand it to the board gate, not past it.
+        with self.assertRaises(conv.ConvertError) as ctx:
+            conv._parse_ts_code("SZ300750", "positions[0].ts_code")
+        self.assertIn("主板", str(ctx.exception))
+
+    def test_prefixed_and_suffixed_tables_convert_identically(self):
+        suffixed = _tables()
+        prefixed = copy.deepcopy(suffixed)
+        for table in ("positions", "trades", "manual_controls"):
+            for row in prefixed.get(table) or []:
+                code = str(row.get("ts_code") or "")
+                if code.endswith((".SH", ".SZ")):
+                    row["ts_code"] = code[-2:] + code[:6]
+        a1, l1 = _build_account_state(suffixed, AS_OF)
+        a2, l2 = _build_account_state(prefixed, AS_OF)
+        self.assertEqual(a1, a2)
+        self.assertEqual(l1, l2)
+
 
 class Rule13ProgressionTests(unittest.TestCase):
     def test_active_when_within_cooldown(self):
