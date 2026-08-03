@@ -750,3 +750,39 @@
 ### 交接给下一位
 
 - Claude Code 需独立复核当前代码、缓存 source-binding、直接消费者、旧 v4 / wrong-type / incomplete 反向门和风险登记；确认 fingerprint 真随语义/窗口变化后再 PASS。PASS 前不得提交或合入；其他既有未提交修改和四个 20260803 未跟踪产物不在本刀范围，禁止清理或回滚。
+
+## 2026-08-03 追加：`-Account` 实盘周跑的账户 bundle 生成方式（Claude Code 运行侧记录）
+
+### 改了什么
+
+- 手工表目录 `state/a_short/account_state_csv/` 里的 `positions.csv`，把 `ts_code` 列中**交易所前缀式**写法（`SZ` / `SH` + 六位数字）逐行归一为转换器要求的**后缀式**（六位数字 + `.SZ` / `.SH`）。**只改代码写法，未触碰任何数量、成本、日期、止损价**。
+- 归一前原文件已备份为同目录 `positions.csv.bak_20260803`（该目录 gitignored，不入库）。
+- 归一手法：按字节读写（Latin-1 往返）只替换行首 `^SZ(\d{6}),` / `^SH(\d{6}),`，避免把该 CSV 的非 UTF-8 中文名列转码破坏。
+
+### 为什么改
+
+- 不改就跑不起来：`runners/a_short_account_state_from_manual_tables.py` 对 `ts_code` 硬要求 `NNNNNN.SH/.SZ`，遇到前缀式直接 `[FATAL] ... 不是合法 A 股代码（须 NNNNNN.SH/.SZ，含前导零）` 退出 1，bundle 生不出来，带 `-Account` 的周跑连第一步都进不去。
+- 券商导出普遍是前缀式，所以这不是一次性的手误，每次从券商拉表都会再撞一次。
+
+### 验证命令
+
+```
+python runners\a_short_account_state_from_manual_tables.py --input-dir state\a_short\account_state_csv --as-of 20260803 --out state\a_short\account_bundle.json
+```
+
+### 验证结果
+
+- 转换器 exit 0，输出 `[OK] account bundle -> state\a_short\account_bundle.json`。
+- 生成的 bundle 关键身份字段（不含任何金额/持仓明细）：`decision_as_of=20260803`（= 本周 `--as-of`，符合 `validate_account_bundle` 的同日绑定要求）、`facts_as_of=20260731`（= 手工表 `account.as_of`）、`snapshot_id` 前缀 `a-short-account-20260731-`。
+- 该 bundle 随后被 `weekly_screening.ps1 -Account` 正常接受，周跑推进到 M6.7 阶段（最终失败原因是 effect-contract 趋势守卫，与账户输入无关）。
+
+### 失效的旧结论
+
+- 「`state/a_short/account_bundle.json` 不存在，只能以观察档（`sizing_mode=observation_only_no_account`）方式跑」——已失效，bundle 已可按上述方式生成。
+
+### 下一步注意事项
+
+- **每周都要重新生成**：`decision_as_of` 与当周 `--as-of` 硬绑定，上周的 bundle 拿到这周会被 `validate_account_bundle` FATAL 拒绝（这是设计，不是缺陷）。
+- 每次从券商重新导出持仓后，先确认 `ts_code` 是后缀式再跑转换器。
+- 待用户裁决：转换器是否应直接接受券商前缀式写法并在内部归一。**在裁决前不要擅自放宽该校验**——它同时挡住的还有缺前导零等真错误形态。
+- 手工表与 bundle 均落 gitignored 私密路径，不得写进任何 tracked 文件或提交；本节只记方法与身份字段，不记金额与持仓。
