@@ -18,7 +18,7 @@
   "properties": {
     "schema_name": {"const": "us_short_llm_theme_discovery_query_policy"},
     "schema_version": {"const": "1.0.0"},
-    "policy_version": {"const": "soft_discovery_query_policy_v0.1.0"},
+    "policy_version": {"const": "soft_discovery_query_policy_v0.2.0"},
     "activation_status": {"const": "candidate_offline"},
     "production_query_policy_activated": {"const": false},
     "policy_content_sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},

@@ -1,5 +1,35 @@
 # Session Log
 
+## 2026-08-03 — Claude 审查 PASS（模板 v0.2.0 返工：指纹改 canonical，主树的红同轮治好）
+
+- **Verdict/Action**: PASS，已提交并合入 master。source 校验从 `read_bytes()` 换成 `_digest(_read_json(...))` 的 canonical JSON 摘要，换行与排版不再构成身份；「Web 专用」措辞按处置 (b) 删除并如实写明四条模板由两条 lane 共用。合并后主树同模块由 6 errors 转绿。
+- **Required**: 无。`R-USSHORT-QUERY-POLICY-SOURCE-PIN-BOUND-TO-WORKING-COPY-BYTES` 与 `R-USSHORT-QUERY-POLICY-CLAIMS-WEB-SCOPE-WITH-NO-LANE-BINDING` 均 closed；闭合取证、三条 Optional 与审查边界见 `docs/system_risk_register.md`（单一来源，本处不复述）。
+- **Verify**: review-evidence:not_available（本轮 UserPromptSubmit 未注入 token，取证全部来自真实工具结果）；rule 3 未触发故未跑 full、rule 8 未起 §6a agent（engine 净改 18 行、无新函数）。超集包 `discover -s tests -p test_us_short_llm_theme_discovery*` = `252 OK / 18.7s`（251→252 恰为新增换行回归）；door `55 OK`；`git diff --check` clean；`state/us_short` 与 `provider_samples` 前后均 `count=0`。自写探针：正控 LF/CRLF/重排缩进三形态全 `True`；反控改一句 query text、少一行模板均被 `source packet digest is not the reviewed packet` 拒，截断与列表根被判 `unreadable`；`policy_core` 内容锁 C5/C6 未回退。
+- **Next**: Codex：执行
+
+## 2026-08-03 — Codex 修复：模板 v0.2.0 两项审查 Required（独立审查待办）
+
+- **Verdict/Action**: 已修 source packet 换行相关 pin，并如实收窄 policy 为两条 lane 共用；未提交、未 push、未 merge。
+- **Required**: `R-USSHORT-QUERY-POLICY-SOURCE-PIN-BOUND-TO-WORKING-COPY-BYTES` 与 `R-USSHORT-QUERY-POLICY-CLAIMS-WEB-SCOPE-WITH-NO-LANE-BINDING` 保持 OPEN/NOT_VERIFIED；详细闭合条件见 `docs/system_risk_register.md` 顶部。
+- **Verify**: 固定主 Python policy/schema `10 OK`；US-short theme-discovery 超集 `252 OK / 21.491s`；`py_compile`、`git diff --check` OK；door `55 OK`；无 provider/network/live/paid，残留前后均 `count=0`。
+- **Pre-Codex self-review**: `matrix=canonical source digest/LF-CRLF/shared lane claim/冻结 packet/候选离线`; `register=updated`; `handoff=updated`; `focused=10 + 252 OK`; `full-lane=not_triggered: policy validation slice, no runner/live change`; `door=route-ledger + doc-governance: 55 OK`; `commit=NOT_PERFORMED`。
+- **Next**: Claude Code：独立复审两项 v0.2.0 Required；PASS 后按项目流程提交。
+
+## 2026-08-03 — Claude 审查 FAIL（模板 v0.2.0：packet 指纹绑在工作树字节上，主树此刻是红的）
+
+- **Verdict/Action**: FAIL，不提交不合入。四条 Web 模板按记录的规格改对了，`stage2`/键集合/`candidate_offline` 与 effect boundary 一字未动；测试从「逐字节等于 packet」放松成子串断言，经反向控制证明精确字节仍由冻结常量钉死。卡住的是 packet 指纹口径：它哈希磁盘原始字节，而那是 git 换行归一化的产物、不是内容身份；另有「Web policy」措辞没有任何 lane 机制兜底。
+- **Required**: `R-USSHORT-QUERY-POLICY-SOURCE-PIN-BOUND-TO-WORKING-COPY-BYTES`(P2)、`R-USSHORT-QUERY-POLICY-CLAIMS-WEB-SCOPE-WITH-NO-LANE-BINDING`(P2) —— 正文、类 G 类扫表、三条 Optional 与「已核实真闭」清单见 `docs/system_risk_register.md`（单一来源，本处不复述）。
+- **Verify**: review-evidence:7abe43d34a19；rule 3 未触发故未跑 full、rule 8 未起 §6a agent（engine 改动 14 行、无新函数、非 live/secret/新守门）。超集包 `discover -s tests -p test_us_short_llm_theme_discovery*` = `251 OK / 22.8s`；door `55 OK / 1.2s`；`git diff --check` clean；`state/us_short` 与 `provider_samples` 探针前后均 `count=0`。自写探针：内容一字不改仅 CRLF→LF 即抛 `source packet digest is not the reviewed packet`；未被本刀触碰的主树 `D:\cnhea\Stock` 实跑同模块得 `Ran 6 tests ... FAILED (errors=6)` 同一句错误；改模板文本并重封内层 digest 仍被冻结常量拦下；出厂件正控 `True` / 渲染 4 行。
+- **Next**: Codex：修复
+
+## 2026-08-03 — Codex 修复：US-short 模板 v0.2.0 Web 侧离线微调（独立审查待办）
+
+- **Verdict/Action**: 已完成最小 Web policy 微调；v0.1 冻结 artifact、probe packet 与 X 侧问法未改。未提交、未 push、未 merge。
+- **Required**: `R-USSHORT-SOFT-DISCOVERY-WEB-POLICY-V020-PENDING-REVIEW` 保持 OPEN/NOT_VERIFIED；完整 scope、digest 与边界见 `docs/system_risk_register.md` 顶部。
+- **Verify**: 固定主 Python policy/schema focused `9 OK / 0.081s`；`py_compile`、`git diff --check` OK；`state/us_short` 与 `provider_samples` 测前后均 `count=0`；无 provider/network/live/paid。
+- **Pre-Codex self-review**: `matrix=Web 四模板/冻结 packet/X 不变/版本与 digest/离线边界`; `register=updated`; `handoff=updated`; `focused=9 OK`; `full-lane=not_triggered: policy-only offline slice, no AGENTS full-lane trigger`; `door=route-ledger + doc-governance: 55 OK / 1.131s`; `commit=NOT_PERFORMED`。
+- **Next**: Claude Code：独立审查本次 v0.2.0 policy；PASS 后按项目流程提交。
+
 ## 2026-08-03 — Claude 审查 PASS（两融 complete 参考日口径，二轮收口）
 
 - **Verdict/Action**: PASS，已提交并合入 master。上一轮唯一 Required 已按指定形态修好：`allowed_dates` 改为按**完整日历**的 lag 过滤，不再按「已观测日期的位置」切片。我用同一批探针复跑八条：正控 `complete/20260731/1005` 成立（决策 B 的目标），五条强制腿反向控制全部仍关闭，D0 已发布时的范围内择新全净日仍按预期，非参考日坏行只记 warning 且行数正确。

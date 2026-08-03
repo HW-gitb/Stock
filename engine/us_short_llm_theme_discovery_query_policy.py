@@ -1,6 +1,6 @@
 """Offline versioned policy container for US-short soft-discovery queries.
 
-The tracked policy is the only source for the four Stage-1 template bytes and the
+The tracked policy is the only source for the four shared Stage-1 template bytes and the
 deterministic Stage-2 normalization/order/limit rules.  It is explicitly a
 ``candidate_offline`` artifact: loading or rendering it never calls a provider,
 activates the weekly live path, changes scoring, or starts confirmation, seats,
@@ -18,18 +18,18 @@ from engine.us_short_schema_formats import FORMAT_CHECKER
 
 
 ROOT = Path(__file__).resolve().parents[1]
-POLICY_PATH = ROOT / "presets" / "us_short_llm_theme_discovery_query_policy_v0.1.0.json"
+POLICY_PATH = ROOT / "presets" / "us_short_llm_theme_discovery_query_policy_v0.2.0.json"
 POLICY_SCHEMA_PATH = ROOT / "schemas" / "us_short_llm_theme_discovery_query_policy.schema.json"
 EXPECTED_SOURCE_PACKET_PATH = ROOT / "docs" / "us_short_soft_discovery_query_quality_probe_packet_20260730.json"
-EXPECTED_POLICY_VERSION = "soft_discovery_query_policy_v0.1.0"
+EXPECTED_POLICY_VERSION = "soft_discovery_query_policy_v0.2.0"
 EXPECTED_STAGE1_TEMPLATE_IDS = (
     "stage1_new_cross_industry_demand",
     "stage1_capex_orders_capacity",
     "stage1_supply_regulation_bottleneck",
     "stage1_earnings_bookings_guidance",
 )
-EXPECTED_POLICY_CONTENT_SHA256 = "f2a77b1d9fc19792ca5f090459fdf7586b3a81961563762b4c5d363dc17e565e"
-EXPECTED_SOURCE_PACKET_SHA256 = "eda828bf27e3e948f71bd2b90766ff147eb999aa04d7bd3d0c62f1255a71af5f"
+EXPECTED_POLICY_CONTENT_SHA256 = "4b2d282155f34c70d881cda44bb5d6b267ce49cb8d46131d60831f1928c176cd"
+EXPECTED_SOURCE_PACKET_SHA256 = "0c200961d178556e1e86d696e54bcaecd04e7f4cdae9426ee1fb5c1278dd949a"
 
 
 class QueryPolicyError(ValueError):
@@ -88,7 +88,7 @@ def validate_query_policy(policy: Mapping[str, Any], *, root: Path = ROOT) -> bo
         raise QueryPolicyError("query policy must be an object")
     _validate_schema(policy)
     if policy["policy_version"] != EXPECTED_POLICY_VERSION:
-        raise QueryPolicyError("query policy version is not the reviewed v0.1.0 policy")
+        raise QueryPolicyError("query policy version is not the reviewed v0.2.0 policy")
     if policy["activation_status"] != "candidate_offline" or policy["production_query_policy_activated"]:
         raise QueryPolicyError("query policy is not offline-only candidate state")
     core = policy["policy_core"]
@@ -97,7 +97,7 @@ def validate_query_policy(policy: Mapping[str, Any], *, root: Path = ROOT) -> bo
     if policy["policy_content_sha256"] != _digest(core):
         raise QueryPolicyError("query policy content digest does not match policy_core")
     if policy["policy_content_sha256"] != EXPECTED_POLICY_CONTENT_SHA256:
-        raise QueryPolicyError("query policy content is not the reviewed v0.1.0 content")
+        raise QueryPolicyError("query policy content is not the reviewed v0.2.0 content")
     template_ids = tuple(row["query_id"] for row in core["stage1_templates"])
     if template_ids != EXPECTED_STAGE1_TEMPLATE_IDS:
         raise QueryPolicyError("Stage-1 template ids/order drifted from the reviewed container")
@@ -112,8 +112,8 @@ def validate_query_policy(policy: Mapping[str, Any], *, root: Path = ROOT) -> bo
     if source_path.is_symlink():
         raise QueryPolicyError("query-policy source packet may not be a symlink")
     try:
-        source_sha = hashlib.sha256(source_path.read_bytes()).hexdigest()
-    except OSError as exc:
+        source_sha = _digest(_read_json(source_path))
+    except QueryPolicyError as exc:
         raise QueryPolicyError("query-policy source packet is unreadable") from exc
     if source_sha != policy["source_packet"]["sha256"] or source_sha != EXPECTED_SOURCE_PACKET_SHA256:
         raise QueryPolicyError("query-policy source packet digest is not the reviewed packet")

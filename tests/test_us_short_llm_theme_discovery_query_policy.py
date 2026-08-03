@@ -94,20 +94,48 @@ def _stage1() -> dict:
 
 
 class QueryPolicyAndPlannerTests(unittest.TestCase):
-    def test_policy_renders_the_four_exact_probe_templates_and_stays_candidate_offline(self):
+    def test_policy_renders_the_four_shared_templates_and_stays_candidate_offline(self):
         policy = policy_module.load_query_policy()
         packet = json.loads(
             (Path(__file__).resolve().parents[1] / "docs" /
              "us_short_soft_discovery_query_quality_probe_packet_20260730.json").read_text(encoding="utf-8")
         )
-        expected = [
-            {"query_id": row["query_id"], "query_text": row["text"]}
-            for row in packet["query_templates"]
-        ]
-        self.assertEqual(policy_module.render_stage1_queries(policy), expected)
+        packet_text_by_id = {row["query_id"]: row["text"] for row in packet["query_templates"]}
+        rendered = policy_module.render_stage1_queries(policy)
+        self.assertEqual([row["query_id"] for row in rendered], list(packet_text_by_id))
+        self.assertTrue(all("this week" in row["query_text"] for row in rendered))
+        self.assertTrue(all("Exclude" in row["query_text"] for row in rendered))
+        self.assertTrue(any(row["query_text"] != packet_text_by_id[row["query_id"]] for row in rendered))
         self.assertEqual(policy["activation_status"], "candidate_offline")
         self.assertFalse(policy["production_query_policy_activated"])
         self.assertTrue(all(value is False for value in policy["effect_boundary"].values()))
+
+    def test_frozen_probe_packet_remains_unchanged_and_shared_policy_is_the_only_tweak(self):
+        policy = policy_module.load_query_policy()
+        packet_path = Path(__file__).resolve().parents[1] / "docs" / "us_short_soft_discovery_query_quality_probe_packet_20260730.json"
+        packet = json.loads(packet_path.read_text(encoding="utf-8"))
+        packet_rows = [{"query_id": row["query_id"], "query_text": row["text"]} for row in packet["query_templates"]]
+        canonical_packet_sha = hashlib.sha256(
+            json.dumps(packet, ensure_ascii=False, sort_keys=True, separators=(",", ":")).encode("utf-8")
+        ).hexdigest()
+        self.assertEqual(canonical_packet_sha, policy_module.EXPECTED_SOURCE_PACKET_SHA256)
+        self.assertNotEqual(policy_module.render_stage1_queries(policy), packet_rows)
+        self.assertEqual(
+            [row["query_id"] for row in policy["policy_core"]["stage1_templates"]],
+            [row["query_id"] for row in packet["query_templates"]],
+        )
+
+    def test_source_packet_eol_is_not_part_of_policy_identity(self):
+        policy = policy_module.load_query_policy()
+        packet_path = Path(__file__).resolve().parents[1] / "docs" / "us_short_soft_discovery_query_quality_probe_packet_20260730.json"
+        packet_bytes = packet_path.read_bytes().replace(b"\r\n", b"\n")
+        for eol_name, payload in (("lf", packet_bytes), ("crlf", packet_bytes.replace(b"\n", b"\r\n"))):
+            with self.subTest(eol=eol_name), tempfile.TemporaryDirectory() as raw:
+                root = Path(raw)
+                target = root / "docs" / packet_path.name
+                target.parent.mkdir(parents=True)
+                target.write_bytes(payload)
+                self.assertTrue(policy_module.validate_query_policy(copy.deepcopy(policy), root=root))
 
     def test_policy_rejects_free_text_stage1_placeholder_even_if_digest_is_resealed(self):
         policy = policy_module.load_query_policy()

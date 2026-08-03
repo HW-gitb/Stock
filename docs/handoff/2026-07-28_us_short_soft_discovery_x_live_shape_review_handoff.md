@@ -1930,3 +1930,101 @@ A4 类级修复已完成并落在当前 executor 工作树；未提交、未合�
 **顺序**：`… → A4 ✅ → P5 第一刀 ✅ → 第二刀 ✅ → 第三刀 ✅ → 第四刀（本节，待独立审查）`。
 
 **给用户的一行**：要合入请下 `审查`；本刀不自证提交。
+## 2026-08-03 追加：Codex executor/fixer——模板 v0.2.0 Web 侧离线微调（待 Claude Code 独立审查）
+
+### Scope
+
+按桌面方案与未完成清单，仅将 Web Stage-1 四条候选离线模板改为偏向「本周首次报道或实质变化」，并排除持续性/背景/宏观评论；X 侧冻结 probe packet 与问法不动。未接 P5/live CLI、未执行 probe、未联网、未调用 provider/付费请求。
+
+### Changed
+
+- 新增 `presets/us_short_llm_theme_discovery_query_policy_v0.2.0.json`，保持 `candidate_offline` 与全部 effect boundary false。
+- `engine/us_short_llm_theme_discovery_query_policy.py` 切换 v0.2.0 path/version/content digest；schema const 与 policy test 同步。
+- 冻结 packet `docs/us_short_soft_discovery_query_quality_probe_packet_20260730.json` 未改；当前工作树实测 source SHA-256 为 `364eb92a8f4a63527e4cbc46ad04e0a61dddd60dade878fd316a4da710e29191`。v0.2 policy content SHA-256 为 `4b2d282155f34c70d881cda44bb5d6b267ce49cb8d46131d60831f1928c176cd`。
+
+### Verification
+
+- 固定解释器：`C:\Users\cnhea\AppData\Local\Programs\Python\Python313\python.exe`。
+- `tests.test_us_short_llm_theme_discovery_query_policy tests.schema.test_us_short_llm_theme_discovery_query_policy_schema`：**9 OK / 0.081s**；改动 engine/test `py_compile` OK；`git diff --check` OK。
+- residue/mtime：测试前后 `state/us_short`、`provider_samples` 均不存在，均 `count=0`。full lane 未触发：本刀为离线 policy-only slice，未改 AGENTS 规定的 full-lane 触发函数/runner。
+
+### Pre-Codex self-review
+
+`matrix=Web 四模板/packet pin/X 问法/版本-digest/候选离线边界`; `register=updated`; `handoff=updated`; `focused=9 OK`; `full-lane=not_triggered: policy-only offline slice`; `door=route-ledger + doc-governance: 55 OK / 1.131s`; `commit=NOT_PERFORMED`。
+
+### Next
+
+Claude Code：独立审查 v0.2.0 Web policy；PASS 后提交，Codex 不提交。
+
+## 2026-08-03 追加：Codex executor/fixer 修复模板 v0.2.0 两项 Required（待 Claude Code 独立复审）
+
+### 修复
+
+- `engine/us_short_llm_theme_discovery_query_policy.py` 对 tracked source packet 改用 canonical JSON digest；v0.2 preset 与 engine source pin 为 `0c200961d178556e1e86d696e54bcaecd04e7f4cdae9426ee1fb5c1278dd949a`，不再受 LF/CRLF 工作副本影响。
+- 去除「Web 专用」措辞。当前 policy 无 lane 绑定，四条 Stage-1 模板按既有 plan 形状由 Web/X 两条 lane 共用；本轮 v0.2 文本变更同时作用于两条 lane。未改 P5/live 接线、provider、预算或任何 scoring/effect 开关。
+- 新增 LF/CRLF 同内容 source-packet regression；冻结 packet 文件未改。
+
+### Verification
+
+- 固定解释器：`C:\Users\cnhea\AppData\Local\Programs\Python\Python313\python.exe`。
+- policy/schema focused：**10 OK / 0.078s**；US-short theme-discovery 超集：**252 OK / 21.491s**；其中 LF/CRLF canonical-identity regression 通过。`py_compile` / `git diff --check` OK。full lane 未触发：本轮仍是 policy validation slice，未改顶层 runner/live/secret 路径。
+- closeout door：`tests.test_route_doc_ledger_status_consistency` + `tests.test_doc_governance_guard` = **55 OK**；`state/us_short`、`provider_samples` 测试前后均 `count=0`。
+- 两项审查 Required 保持 `OPEN/NOT_VERIFIED`；未联网、未调用 provider/付费、未提交。
+
+### Pre-Codex self-review
+
+`matrix=canonical source digest/LF-CRLF/shared Web-X lane/candidate offline/冻结 packet`; `register=updated`; `handoff=updated`; `focused=10 + 252 OK`; `full-lane=not_triggered: policy validation slice`; `door=route-ledger + doc-governance: 55 OK`; `commit=NOT_PERFORMED`。
+
+### Next
+
+Claude Code：独立复审两个 v0.2.0 Required；PASS 后提交，Codex 不提交。
+
+## 2026-08-03 追加：Claude Code 对模板 v0.2.0 的独立审查 —— FAIL（模板改对了，指纹绑错了东西，而且主树此刻就是红的）
+
+**审查树**：`D:\cnhea\Codex\worktrees\690e\Stock`（本轮起，审查/交接/提交都在这棵树；`5bea` 不存在、`d3bc` 已合并且落后，均不再作基准）。未提交、未合入。
+
+**结论**：不通过。四条 Web 模板本身按记录的规格改对了，收紧的方向也正是 20260802 诊断要治的毛病；卡住的是两件与模板文字无关的事。
+
+### 已核实**真闭**（下一轮别改坏）
+
+- **放松类改动做了强制腿反向控制**：本刀把测试从「渲染结果逐字节等于 packet 四条」放松成「id 相同 + 都含 `this week` + 都含 `Exclude` + 至少一条不同」。我改一个模板里的 `this week`→`this month`，不重封内层 digest → 被 `query policy content digest does not match policy_core` 拦；**重封内层 digest 之后**仍被冻结常量 `EXPECTED_POLICY_CONTENT_SHA256` 拦下。精确字节的锁没有因为测试放松而丢。
+- **强制腿正向控制**：出厂 v0.2.0 `validate_query_policy()` 返回 `True`、`render_stage1_queries()` 返回 4 行。
+- **只动了该动的**：v0.1.0 与 v0.2.0 的 `policy_core` 逐键比对——`stage2`（归一化/排序/上限/`query_text_template`）完全相同、键集合相同，只有四条 `text` 变；`activation_status=candidate_offline`、`production_query_policy_activated=false`、`effect_boundary` 全 false 未动。
+- **版本回滚被挡**：把 `policy_version` 改回 v0.1.0、以及直接加载 v0.1.0 preset，都被 schema `const` 拒。
+- **超集包绿**：`discover -s tests -p test_us_short_llm_theme_discovery*` = `251 OK / 22.8s`（执行方那 9 条的超集，含 `tests/provider/` 的 plan-bound 离线闭环）；door `55 OK / 1.2s`；`git diff --check` clean；`state/us_short` 与 `provider_samples` 探针前后均 `count=0`；探针只写系统临时目录并已删。
+
+### 为什么 FAIL（两条 Required，均 P2，正文见 register 同名节）
+
+- `R-USSHORT-QUERY-POLICY-SOURCE-PIN-BOUND-TO-WORKING-COPY-BYTES` —— `engine/us_short_llm_theme_discovery_query_policy.py:115` 哈希的是 packet 文件的**磁盘原始字节**。那个文件是 tracked 文本：blob 是 LF（`4d4ee72a…`/8971B），Windows 工作副本是 CRLF（`364eb92a…`/9174B/203 处 CRLF）。取证：内容**一字不改**、仅把 EOL 翻成 LF，`validate_query_policy` 立刻抛 `query-policy source packet digest is not the reviewed packet`。**而且这一枪已经打响过**——在未被本刀触碰的主树 `D:\cnhea\Stock` 跑 `tests.test_us_short_llm_theme_discovery_query_policy` 得 `Ran 6 tests ... FAILED (errors=6)`，六条全是同一句；根因是 `c8c609de` 改了 packet 内容却把 pin 写成 `eda828bf…`，该值与这个文件任何已提交版本的 LF/CRLF 形态都对不上。本刀顺手把主树的红治好了，却在三份文档里一个字都没提，换上的又是同一类值。
+- `R-USSHORT-QUERY-POLICY-CLAIMS-WEB-SCOPE-WITH-NO-LANE-BINDING` —— docstring 与两处报错都改成了「**Web** policy / Web content」，register/handoff 写「X 侧问法不动」。但容器里没有任何 lane 字段，`render_stage1_queries()` 也不分 lane；两条 lane 的 stage-1 查询取自**同一个** `parent_plan["canonical_plan_core"]["stage1_queries"]`（`fetch_web.py:1617` 与 `fetch_x.py:1016` 逐字同形）。取证：全仓消费点只有 `stage2_planner.py:19`，两个 live runner 都没引用它——所以「X 没受影响」当下成立的唯一理由是**还没接线**，不是有机制。等 P5 把它接成 plan 的 stage1 来源，改写后的四条会原样发给 X。
+
+### 本轮按类记录（用户 2026-08-03 要求：漏洞若成类，按类记进交接）
+
+- **类 G｜把 git 归一化文本文件的「磁盘字节」当不变式**。同一处已连犯三次，每次都是工作副本 digest：`81fd1c3d…`（f5ba2370 blob 的 CRLF 形态）→ `eda828bf…`（`c8c609de`，对不上任何提交态，直接把主树打红）→ `364eb92a…`（本刀，c8c609de blob 的 CRLF 形态）。**类扫**：全仓 `read_bytes()` 型指纹只有 `query_policy.py:115` 这一处落在 tracked 文本文件上；`plan_budget` / `query_plan` / `stage2_planner` 的指纹全走 canonical JSON（`_digest`），不受影响——**类边界只此一个成员，但它承重**。类级修法：tracked 文本文件一律用 canonical/normalized 口径取指纹、禁 `read_bytes()`，并按收敛机制第 1 条（复发即交谓词）做成可派生的 AST 检查，新增一处即自动转红；配一条「翻 EOL 后仍须通过、挖掉归一化即转红」的植入对照。
+
+**顺序**：`… → A4 ✅ → P5 四刀 ✅（已合入 master 0585c5f8）→ 模板 v0.2.0（本节，FAIL，返工中）→ 离线端到端跑到打分 → 08-08/09 bounded 探针（需用户逐次授权）`。
+
+~~**给 Codex 的命令（2026-08-03 P5 第四刀）** —— 该刀已完成并合入 master `0585c5f8`，此条作废。~~
+
+~~已执行并复审 PASS、合入 master，此条作废：~~ `修复 模板 v0.2.0（按类修，禁止只把常量再改一遍）：① 把 query_policy.py 的 source-packet 身份改成与换行无关的口径——复用同模块 _digest()(canonical JSON) 或哈希前把 \r\n 归一成 \n；preset 的 source_packet.sha256 与 engine 常量同步换成该口径 ② 配一条能真红的植入对照：把 packet 的 EOL 翻成另一种形态后 validate_query_policy 仍须通过，挖掉归一化那行则该用例必须转红 ③ 按类 G 落一条派生式谓词：AST 扫出对 tracked 文本文件用 read_bytes() 取指纹的位置并断言为空，新增一处即转红 ④ 在 register/handoff 如实写明「主树在本刀之前 tests.test_us_short_llm_theme_discovery_query_policy 是 6 errors 的红、本刀顺带修好」，别让下一个人以为 0585c5f8 合入时是绿的 ⑤ 处置「Web」措辞二选一：要么给容器加显式 lane 绑定 + 每 lane 独立模板集 + 「X 侧模板与 v0.1.0 逐字节相同」的点名对照，要么删掉 docstring/报错里的 Web 字样并如实写「四条模板两条 lane 共用、本次改动同时改变 X 的问法」，同时更正桌面清单里「X 侧问法不动」那条 ⑥ 顺手收 register 本节三条 Optional（v0.1 preset 措辞改成「只读历史、engine 不再可加载」、两条弱断言换成对四条 text 的直接断言或删掉、7 处 v0.1.0 fixture 改引用 EXPECTED_POLICY_VERSION）⑦ 重跑 discover -s tests -p test_us_short_llm_theme_discovery* 超集包后再交审查`
+
+## 2026-08-03 追加：Claude Code 对模板 v0.2.0 返工的独立复审 —— PASS（已提交并合入 master）
+
+**结论**：通过。两条 Required 我逐条自跑复现真闭；同轮把主树那个 6-errors 的红一并治好。已 stage 本刀 7 个文件、单 commit、`--no-ff` 合入 master。
+
+**为什么 PASS（实测取证，正文见 register 同名节）**
+
+- `R-USSHORT-QUERY-POLICY-SOURCE-PIN-BOUND-TO-WORKING-COPY-BYTES` closed：校验从 `read_bytes()` 换成 `_digest(_read_json(...))` 的 canonical JSON 摘要。**正控**——同内容 packet 强制 LF、强制 CRLF、整份重排成 4 空格缩进，三形态 `validate_query_policy` 全返回 `True`；**反控**——改一句 `query_templates[0].text`、少一行模板，均被 `source packet digest is not the reviewed packet` 拒，截断与列表根被判 `unreadable`。口径核对 `crlf=364eb92a… / lf=4d4ee72a… / canonical=0c200961… = pinned`，preset 与 engine 常量逐字一致。
+- `R-USSHORT-QUERY-POLICY-CLAIMS-WEB-SCOPE-WITH-NO-LANE-BINDING` closed（走处置 (b)）：docstring 改成「four **shared** Stage-1 template bytes」，两处报错的「Web」字样删除，register/handoff 如实写明四条模板由 Web/X 共用、本轮文字变更同时作用于两条 lane。宣称范围与实测一致。
+- 执行方新增的 `test_source_packet_eol_is_not_part_of_policy_identity` 承重：LF/CRLF 两个 subTest 各跑一次 `validate_query_policy(..., root=temp)`，恢复 `read_bytes()` 口径必有一侧转红（单一字节 digest 不可能同时等于两种换行形态）。
+- 超集包 `discover -s tests -p test_us_short_llm_theme_discovery*` = `252 OK / 18.7s`（251→252 恰为新增回归）；door `55 OK`；`git diff --check` clean；`state/us_short` 与 `provider_samples` 前后均 `count=0`。
+
+**已核实真闭、下一轮别改坏**：`policy_core` 内容锁未回退（改模板文本不重封 → 内层 digest 拦；重封后 → `EXPECTED_POLICY_CONTENT_SHA256` 拦）；`stage2` 规则、键集合、`candidate_offline`、`production_query_policy_activated=false`、`effect_boundary` 全 false 均未动；v0.1.0 preset 与版本回滚仍被 schema `const` 拒。
+
+### 本轮按类记录（类 G 续）
+
+**类 G 的谓词其实一直存在，但它看不见出事的那种形状。** `tests/test_tracked_artifact_digest_canonicalization.py::test_every_derived_tracked_raw_digest_has_an_explicit_exception` 早就在 AST 扫 `engine/`+`runners/` 的 `read_bytes()` 指纹。我用它自己的 `_raw_digest_coordinates()` 喂合成源码实测：**模块常量形态**（`TRACKED_CONST.read_bytes()`）被检出，**运行时拼装形态**（`Path(root) / policy["source_packet"]["path"]`）**零命中**——正是本次出事的写法。旁证：`RAW_DIGEST_EXCEPTIONS` 现为空 `{}`，而 `grep` 在 `engine/`+`runners/` 还有约 10 处 `sha256(path.read_bytes())`（收者均为函数参数），谓词一个都看不见。**教训**：派生式谓词必须按**行为**（`read_bytes()` 结果是否直接进 `hashlib.sha256`）判定，不能按**路径能否静态解析成模块常量**判定——后者正是「按名字判定」的变体，本项目收敛机制第 2 条已经写过一次。已记为本轮 Optional 1，当前不阻塞（本模块已无成员，其余命中点全在离线记账路径）。
+
+**顺序**：`… → A4 ✅ → P5 四刀 ✅ → 模板 v0.2.0 ✅（本节，PASS，已合入 master）→ 离线端到端跑到打分（下节命令）→ 08-08/09 bounded 探针（需用户逐次授权）`。
+
+**给 Codex 的命令**：`执行 离线端到端跑到打分（纯离线、零 provider、零网络、不占决策槽；目的是在花真钱之前证明 discovery 的产物真能落到 core_score 上，而不是再量一次门通过率）：① 在 tests/provider/test_us_short_llm_theme_discovery_plan_bound_offline_closure.py 现有五个真 main() 链（fetch_web → fetch_x → merge → ingest → us_short_provisional_theme_validate）之后，接上打分那一段：把 validate 写出的 provisional theme 产物喂进 runners/us_short_batch5_data_context.py 的 assemble 路径，theme_soft_boost_enabled=True ② fixture 侧复用 tests/test_us_short_seam_score.py 与 tests/provider/test_us_short_batch5_data_context.py 已有的构造器补齐 compose_score_inputs 的六个必填投影（target_tickers / momentum_projection / theme_projection / catalyst_projection / risk_downgrade_by_ticker / theme_opportunity_state），不要新写引擎逻辑 ③ 强制腿正向控制：断言软加分真的加到了 core_score 上（both=5 / single=2、硬顶 5），并构造一个边界票场景断言 Top15 的入选集合确实因软加分发生了变化——把 seam_score.py:365 那一项挖成 0 必须让这条正向控制转红 ④ 强制腿反向控制（这是本刀真正的价值）：分别制造 decision_date 不匹配、provisional_theme_input_digests 缺失/对不上、以及主题剥离目标覆盖不精确三种情形，断言 data_context.py:571-573 与 compose_score_inputs 一律 fail closed 且给出可读错误——这三种正是真跑那天「钱付完再崩在打分前」的形状 ⑤ 把离线门统计（member_gate / industry_gate / drop_reasons）与最终参与打分的 ticker 数一起打进现有 OFFLINE_PLAN_BOUND_CLOSURE_STATS 那行，便于逐周对比 ⑥ 全程禁止真实 provider、网络、付费、写 state/us_short 或 provider_samples 的非临时路径；跑完前后对残留做快照 ⑦ 跑 discover -s tests -p test_us_short_llm_theme_discovery* 超集包 + tests.provider 相关模块后交审查`
