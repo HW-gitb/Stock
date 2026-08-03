@@ -18,6 +18,11 @@ ADOPTION_MARKER = "REVIEW-CYCLE-MINIMAL-TEMPLATE-MARKER"
 # 10-15 minutes; past this hard cap the Stop hook blocks until the Verify line states why.
 WALL_CLOCK_BUDGET_SECONDS = 1800
 OVERRUN_REASON_MARKER = "超时原因"
+# Evidence-completeness gate: a review may close only after every async Agent/Task
+# launched after arming has either reported or is explicitly declared abandoned.
+AGENT_PENDING_OVERRIDE_MARKER = "agent-aborted:"
+AGENT_LAUNCH_TOOLS = ("Agent", "Task")
+ASYNC_LAUNCH_SIGNATURE = "async agent launched"
 
 
 def is_review_prompt(prompt: str) -> bool:
@@ -295,6 +300,148 @@ def handle_prompt_hook(raw: str, *, root: Path | None = None, state_dir: Path | 
     return json.dumps(out, ensure_ascii=False)
 
 
+def _epoch(stamp: object) -> float | None:
+    if not isinstance(stamp, str) or not stamp:
+        return None
+    try:
+        parsed = datetime.fromisoformat(stamp.replace("Z", "+00:00"))
+    except ValueError:
+        return None
+    if parsed.tzinfo is None:
+        parsed = parsed.replace(tzinfo=timezone.utc)
+    return parsed.timestamp()
+
+
+def _content_text(value: object) -> str:
+    if isinstance(value, str):
+        return value
+    if isinstance(value, list):
+        return " ".join(_content_text(item) for item in value)
+    if isinstance(value, dict):
+        return " ".join(_content_text(item) for item in value.values())
+    return ""
+
+
+def _notification_tool_use_ids(row: dict) -> set[str]:
+    """Extract notification ids from the complete transcript row.
+
+    Claude task notifications are not stable message-content blocks: observed rows use
+    top-level ``content`` (``queue-operation``) or top-level ``attachment``. Serializing
+    the complete decoded row keeps the parser bound to the actual notification marker rather
+    than to one transport wrapper.
+    """
+    try:
+        serialized = json.dumps(row, ensure_ascii=False, sort_keys=True)
+    except (TypeError, ValueError):
+        return set()
+    if "<task-notification>" not in serialized.lower():
+        return set()
+    return {
+        tool_use_id.strip()
+        for tool_use_id in re.findall(
+            r"<tool-use-id>\s*([^<]+?)\s*</tool-use-id>", serialized,
+            flags=re.IGNORECASE,
+        )
+        if tool_use_id.strip()
+    }
+
+
+def pending_async_agents(
+    transcript_text: str, *, armed_after_epoch: float | None = None,
+) -> list[str]:
+    """Return async agents launched after arming whose task report is not visible.
+
+    Launches and tool results are read from the assistant/user ``message.content`` blocks,
+    while notifications are matched against the complete JSON row because real transcripts
+    place them in top-level ``content`` or ``attachment`` fields. A structured
+    ``toolUseResult`` async marker is preferred; the legacy launch prose remains a fallback.
+    Missing timestamps do not exempt a launch from the gate (fail closed).
+    """
+    launched: dict[str, dict[str, object]] = {}
+    result_kind: dict[str, str] = {}
+    notified_at: dict[str, int] = {}
+
+    for row_index, line in enumerate(transcript_text.splitlines()):
+        line = line.strip()
+        if not line:
+            continue
+        try:
+            row = json.loads(line)
+        except Exception:
+            continue
+        if not isinstance(row, dict):
+            continue
+
+        for use_id in _notification_tool_use_ids(row):
+            notified_at.setdefault(use_id, row_index)
+
+        row_epoch = _epoch(row.get("timestamp"))
+        message = row.get("message") or {}
+        content = message.get("content") if isinstance(message, dict) else None
+        for block in content if isinstance(content, list) else []:
+            if not isinstance(block, dict):
+                continue
+            kind = block.get("type")
+            if kind == "tool_use" and block.get("name") in AGENT_LAUNCH_TOOLS:
+                use_id = block.get("id")
+                if not isinstance(use_id, str) or not use_id:
+                    continue
+                raw_input = block.get("input")
+                label = ""
+                if isinstance(raw_input, dict):
+                    label = str(
+                        raw_input.get("description")
+                        or raw_input.get("subagent_type")
+                        or ""
+                    )
+                launched[use_id] = {
+                    "label": label.strip() or "unnamed agent",
+                    "epoch": row_epoch,
+                    "row_index": row_index,
+                }
+                continue
+            if kind != "tool_result":
+                continue
+
+            use_id = block.get("tool_use_id")
+            if not isinstance(use_id, str) or not use_id:
+                continue
+            structured = row.get("toolUseResult")
+            if not isinstance(structured, dict):
+                structured = block.get("toolUseResult")
+            structured_async = (
+                isinstance(structured, dict)
+                and (
+                    structured.get("isAsync") is True
+                    or str(structured.get("status") or "").lower() == "async_launched"
+                )
+            )
+            prose_async = ASYNC_LAUNCH_SIGNATURE in _content_text(block.get("content")).lower()
+            if structured_async or prose_async:
+                result_kind[use_id] = "async"
+            elif result_kind.get(use_id) != "async":
+                result_kind[use_id] = "sync"
+
+    pending: list[str] = []
+    for use_id, launch in launched.items():
+        launch_index = int(launch["row_index"])
+        notification_index = notified_at.get(use_id)
+        if notification_index is not None and notification_index >= launch_index:
+            continue
+        when = launch.get("epoch")
+        if (
+            armed_after_epoch is not None
+            and isinstance(when, (int, float))
+            and when < armed_after_epoch
+        ):
+            continue
+        if result_kind.get(use_id) == "sync":
+            continue
+        label = str(launch["label"])
+        pending.append(f"{label} ({use_id[-8:]})")
+    return sorted(pending)
+
+
 def _top_review_entry(text: str) -> str | None:
     zone = text.split(ADOPTION_MARKER, 1)[0] if ADOPTION_MARKER in text else text
     matches = list(re.finditer(r"(?m)^## \d{4}-\d{2}-\d{2}\b.*$", zone))
@@ -308,6 +455,7 @@ def _top_review_entry(text: str) -> str | None:
 def validate_session_log_text(
     text: str, evidence_token: str, *, elapsed_seconds: float | None = None,
     budget_seconds: int = WALL_CLOCK_BUDGET_SECONDS,
+    pending_agents: list[str] | None = None,
 ) -> list[str]:
     errors: list[str] = []
     entry = _top_review_entry(text)
@@ -335,10 +483,20 @@ def validate_session_log_text(
             f"review wall clock {int(elapsed_seconds // 60)} min exceeded the rule-7 budget "
             f"({budget_seconds // 60} min) and the Verify line has no `{OVERRUN_REASON_MARKER}:` note"
         )
+    if pending_agents and not any(
+        AGENT_PENDING_OVERRIDE_MARKER in line for line in verify_lines
+    ):
+        errors.append(
+            "independent agent(s) launched by this review have not reported yet: "
+            + "; ".join(pending_agents)
+        )
     return errors
 
 
-def handle_stop_hook(*, root: Path | None = None, state_dir: Path | None = None) -> int:
+def handle_stop_hook(
+    *, root: Path | None = None, state_dir: Path | None = None,
+    transcript_path: str | None = None,
+) -> int:
     if root is None:
         root = ROOT
     if state_dir is None:
@@ -382,9 +540,29 @@ def handle_stop_hook(*, root: Path | None = None, state_dir: Path | None = None)
     elapsed = None
     if isinstance(armed_at, (int, float)):
         elapsed = max(0.0, datetime.now(timezone.utc).timestamp() - float(armed_at))
+    pending_agents: list[str] = []
+    if not transcript_path:
+        print(
+            "stock-review-gate: no transcript_path in the Stop payload; "
+            "the outstanding-agent check did not run",
+            file=sys.stderr,
+        )
+    else:
+        try:
+            pending_agents = pending_async_agents(
+                Path(transcript_path).read_text(encoding="utf-8", errors="replace"),
+                armed_after_epoch=armed_at if isinstance(armed_at, (int, float)) else None,
+            )
+        except OSError as exc:
+            print(
+                f"stock-review-gate: transcript unreadable ({exc.__class__.__name__}); "
+                "the outstanding-agent check did not run",
+                file=sys.stderr,
+            )
     errors = validate_session_log_text(
         log_path.read_text(encoding="utf-8"), token, elapsed_seconds=elapsed,
         budget_seconds=int(state.get("wall_clock_budget_seconds", WALL_CLOCK_BUDGET_SECONDS)),
+        pending_agents=pending_agents,
     )
     if errors:
         print("stock-review-gate blocked final response:", file=sys.stderr)
@@ -395,6 +573,11 @@ def handle_stop_hook(*, root: Path | None = None, state_dir: Path | None = None)
         print(
             f"If the run overran the rule-7 budget, add `{OVERRUN_REASON_MARKER}:<一句话>` to that same Verify line; "
             "a non-review discussion turn is disarmed with `claude_review_gate.py disarm`.",
+            file=sys.stderr,
+        )
+        print(
+            f"If an agent is still outstanding, wait for its report; only if it died or was abandoned, "
+            f"add `{AGENT_PENDING_OVERRIDE_MARKER}<reason>` to that same Verify line.",
             file=sys.stderr,
         )
         return 2
@@ -425,10 +608,15 @@ def main(argv: list[str]) -> int:
     if mode == "stop-hook":
         raw = _read_stdin_utf8()
         try:
-            cwd = (json.loads(raw) if raw.strip() else {}).get("cwd")
+            payload = json.loads(raw) if raw.strip() else {}
         except Exception:
-            cwd = None
-        return handle_stop_hook(root=resolve_repo_root(cwd))
+            payload = {}
+        cwd = payload.get("cwd")
+        transcript = payload.get("transcript_path")
+        return handle_stop_hook(
+            root=resolve_repo_root(cwd),
+            transcript_path=transcript if isinstance(transcript, str) else None,
+        )
     if mode == "disarm":
         # Escape hatch for a prompt that mentioned a review but produced no review cycle
         # (discussion, planning, rule edits).  Leaves the reason in the state directory.

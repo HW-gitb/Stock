@@ -13,6 +13,8 @@ Use this file to decide which handoff to open. Do not read every handoff by defa
 
 ## Current Phase Handoff
 
+- `2026-08-03_review_gate_task_notification_repair_handoff.md` — review-gate P1 repair for real async task-notification row visibility and Stop-hook transcript plumbing; open this when reviewing `R-REVIEWGATE-OUTSTANDING-AGENT-CHECK-CANNOT-SEE-REAL-TASK-NOTIFICATIONS`.
+
 - `2026-05-27_phase7_kickoff_spec_handoff.md` — Phase 7 provider capability / field catalog contract boundary, with later Phase 7a alpha-validation route and Phase 7a+ alpha reality action guide additions; schema-first, no provider selection, no data fetch, no adapter / DataHub table.
 
 - `2026-07-28_us_short_soft_discovery_x_live_shape_review_handoff.md` — US-short X response-shape repair for K3-R68/K3-R69; step ② awaits independent review and K3-R34 remains frozen.
