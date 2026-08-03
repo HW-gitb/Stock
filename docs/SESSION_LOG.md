@@ -4,7 +4,7 @@
 
 - **Verdict/Action**: PASS，已提交并合入 master。上一轮三条 Required 全按指定形态修好：`:3634-3637` 覆盖改成 `_severity_max_disposition` 合并；写回前新增跨周 anti-rescue 断言（降档 / 止损下降 / 止损丢失）；`plan["stop"]` 改写前捕获 `_orig_eff` 让写点判据重新有牙；类 2 按边界只补一条 `blocked_add_required` 整段改写反控。
 - **Required**: 无。`R-ASHORT-P1-1-FORWARD-EVENT-ADVICE-TEXT-CONTRACT` 已 closed；Follow-up（5 条同构 marker 判据待统一）与未修 Optional（ratchet 正则贪吃）见 `docs/system_risk_register.md`（单一来源，本处不复述）。
-- **Verify**: review-evidence:3d088ed82302；四条探针本树实跑——降档反控保持 `clear_review`（上一轮同 fixture 得 `hold`，回归已消除）、植入降档 RAISED `跨周降档`、破位升档正控升到 `clear_review` 不误拒、同周重放跳过跨周检查不抛错。`static_contract_error()=None`；full lane `CACHED GREEN a_short = 2309 OK`，`2305→2309` 的 `+4` 恰等于 gap_data_registry 新增 4 条（weekly_pipeline 那条是改名不新增）。provider/live 与 `-Account` 实跑仍 `NOT_VERIFIED`。
+- **Verify**: review-evidence:3d088ed82302；四条探针本树实跑——降档反控保持 `clear_review`（上一轮同 fixture 得 `hold`）、植入降档 RAISED `跨周降档`、破位升档正控不误拒、同周重放不抛错。`static_contract_error()=None`（合入后主树同）。合入前 full lane `CACHED GREEN 2309 OK`；**合入后主树复跑** `RESULT status=PASS exit=0 tests=2309 elapsed=288.8s`，合并无回归。provider/live 与 `-Account` 实跑仍 `NOT_VERIFIED`。
 - **Next**: Codex：执行
 
 ## 2026-08-03 — Codex 修复：A-short #01 R4b 写回 anti-rescue 与类2反控（独立审查待办）
