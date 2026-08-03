@@ -300,8 +300,16 @@ def _p5_source_fingerprint() -> str:
     )
 
 
-def _p5_governance_digest(governance_path) -> str:
-    """Content digest of the profile governance, insensitive to JSON formatting."""
+def canonical_governance_digest(governance_path) -> str:
+    """Content digest of the profile governance, insensitive to JSON formatting.
+
+    Public because it is the single shared identity for the industry-heat governance
+    preset: `a_short_experiment_admission_registry`, `a_short_industry_weight_comparison`
+    and `a_short_overlay_adjudication` all bind the same preset through this function.
+    Hashing the file's checkout bytes instead makes the identity depend on the local
+    line-ending policy, which is the class the tracked-artifact canonicalization guard
+    exists to prevent — keep every new call site on this helper.
+    """
     with open(governance_path, "r", encoding="utf-8") as handle:
         return _canonical_digest(json.load(handle))
 
@@ -347,7 +355,7 @@ def build_weight_comparison(full_df: pd.DataFrame, gov_path: str = GOV_PATH,
     governance_path = os.path.abspath(gov_path)
     # Digest the PARSED governance, not its bytes: reformatting or a line-ending
     # change must not invalidate an already-published comparison bundle.
-    governance_sha256 = _p5_governance_digest(governance_path)
+    governance_sha256 = canonical_governance_digest(governance_path)
     return {
         "schema_name": "egs_weight_comparison", "schema_version": "1.0.0",
         "as_of": (None if as_of is None else str(as_of)),

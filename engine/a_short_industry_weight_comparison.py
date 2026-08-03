@@ -346,7 +346,7 @@ def _capture_payload(*, decision_date: str, run_date: str, weekly_bundle, analys
     if not _is_sha256(source_fingerprint) or not _is_sha256(governance_fingerprint) or (
         enforced and (
             source_fingerprint != _source_fingerprint()
-            or governance_fingerprint != heat._p5_governance_digest(PROFILE_GOVERNANCE_PATH)
+            or governance_fingerprint != heat.canonical_governance_digest(PROFILE_GOVERNANCE_PATH)
         )
     ):
         raise IndustryWeightComparisonError("P5 EGS comparison source does not bind current scoring/selector contract")
@@ -378,7 +378,7 @@ def _capture_payload(*, decision_date: str, run_date: str, weekly_bundle, analys
         "official_weekly_receipt_sha256": weekly_bundle.receipt_sha256,
         "full_universe_digest": str(weight_comparison["universe_digest"]),
         "egs_weight_comparison_sha256": _digest(weight_comparison),
-        "profile_governance_sha256": heat._p5_governance_digest(PROFILE_GOVERNANCE_PATH),
+        "profile_governance_sha256": heat.canonical_governance_digest(PROFILE_GOVERNANCE_PATH),
         "source_fingerprint": _source_fingerprint(),
         "contract_fingerprint": contract_fingerprint,
         "admission_bindings": admission_snapshot(*ADMISSION_IDS),
