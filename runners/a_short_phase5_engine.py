@@ -1552,12 +1552,12 @@ def model_build_eligible(inp: dict, ind: dict, rule6_gate: dict, *, regime: str,
 
 
 def _margin_source_is_unavailable(inp: dict, as_of: str) -> bool:
-    """Return true unless the batch coverage and both margin checks are complete."""
+    """Return true unless batch or candidate-level margin coverage is sufficient."""
     coverage = inp.get("margin_coverage")
     if not isinstance(coverage, dict):
         return True
-    if (coverage.get("status") != "complete"
-            or coverage.get("coverage_complete") is not True
+    coverage_status = coverage.get("status")
+    if (coverage_status not in {"complete", "incomplete"}
             or not isinstance(coverage.get("reference_date"), str)
             or not isinstance(coverage.get("effective_ref_date"), str)):
         return True
@@ -1573,7 +1573,7 @@ def _margin_source_is_unavailable(inp: dict, as_of: str) -> bool:
         row_count = int(coverage.get("row_count"))
     except (TypeError, ValueError):
         return True
-    if universe_size < 1000 or row_count < universe_size:
+    if row_count < universe_size:
         return True
     margin_source_ids = {
         "rule6_margin_extreme_accumulation", "rule6_short_selling_surge",
@@ -1582,11 +1582,40 @@ def _margin_source_is_unavailable(inp: dict, as_of: str) -> bool:
         check.get("id"): check for check in (inp.get("rule6_checks") or [])
         if isinstance(check, dict) and check.get("id") in margin_source_ids
     }
-    return any(
-        not isinstance(checks.get(check_id), dict)
-        or (checks[check_id].get("metrics") or {}).get("status") != "complete"
-        for check_id in margin_source_ids
-    )
+    if coverage_status == "complete":
+        if (coverage.get("coverage_complete") is not True
+                or universe_size < 1000):
+            return True
+        return any(
+            not isinstance(checks.get(check_id), dict)
+            or (checks[check_id].get("metrics") or {}).get("status") != "complete"
+            for check_id in margin_source_ids
+        )
+
+    # An incomplete batch cannot establish absence from the margin universe.
+    # It may, however, positively bind a candidate to the effective reference
+    # row.  Only that candidate may consume the two margin checks, and both
+    # checks must have a known outer result.  Source clock/identity fields are
+    # repeated in each metric so a partial result cannot be transplanted from
+    # another window.
+    if coverage.get("coverage_complete") is not False or universe_size < 1:
+        return True
+
+    def _partial_candidate_check_is_known(check):
+        if not isinstance(check, dict) or check.get("status") not in {"pass", "fail"}:
+            return False
+        metrics = check.get("metrics")
+        return (
+            isinstance(metrics, dict)
+            and metrics.get("status") == "incomplete"
+            and metrics.get("coverage_complete") is False
+            and metrics.get("reference_date") == coverage["reference_date"]
+            and metrics.get("effective_ref_date") == coverage["effective_ref_date"]
+            and metrics.get("margin_candidate_eligibility") is True
+        )
+
+    return any(not _partial_candidate_check_is_known(checks.get(check_id))
+               for check_id in margin_source_ids)
 
 
 def build_m67_report(inp: dict, as_of: str, generated_at: str) -> dict:

@@ -409,4 +409,27 @@ Claude Code：独立 reviewer 复核本轮 M0.5 日历全修；PASS 前不得提
 
 - Claude Code：复核 margin producer、fixture 同步、真实缓存只读重算及负向门；通过后再决定是否授权刷新旧 data-health 产物。
 
+## 2026-08-02 追加：融资融券 Optional (a) 候选级降级修复
+
+### 文档作用与范围
+
+本节是本次 Optional 修复的同阶段 handoff：给独立 reviewer 说明改了什么、为什么这样改、如何验证、哪些结论仍不能下。`docs/system_risk_register.md` 保存完整风险机制与 Required/Optional 账；`docs/SESSION_LOG.md` 只保存本轮最小 cycle facts 与提交门字段；本节保存 reviewer 接手所需的调用链、负向控制和边界。三者不是重复契约，也不授权 provider、实盘、账户或下单。
+
+### 修复内容与作用
+
+- 批次级 `margin_coverage` 仍只有全窗口数值完整、日期/规模满足条件才为 `complete`；因此不完整源不会被伪装成完整全集，也不能证明候选缺席为 `not_applicable`。
+- `A-EGS/egs_main.py::_collect_rule6_evaluations()` 对 `incomplete` 且有效参考日滞后不超过一席的参考日出现候选写入 `margin_candidate_eligibility=true`；不在部分参考集、源有坏码或时钟不成立的候选保持 `None`，两项 Rule6 继续 `unknown`。
+- `runners/a_short_phase5_engine.py::_margin_source_is_unavailable()` 新增候选级消费路径：只有两项 Rule6 外层均为 `pass/fail`，metrics 仍明确为 `incomplete`、`coverage_complete=false`、reference/effective 日期与批次一致且资格为 `true` 时，才不再打系统级 margin outage banner；任一缺失、unknown、错绑或 partial 下 `not_applicable` 都继续阻断。
+
+### 验证与边界
+
+- 固定解释器：`C:\Users\cnhea\AppData\Local\Programs\Python\Python313\python.exe`，`Python 3.13.8`。
+- focused producer/consumer/negative lane：`Ran 32 tests in 4.501s ... OK`；effect-contract：`Ran 47 tests in 64.944s ... OK`。
+- rule 3 full lane：`Ran 2274 tests in 442.088s ... OK (skipped=3)`；ledger `RESULT status=PASS exit=0 tests=2274 elapsed=444.2s deadline=860s`。
+- 未刷新真实缓存、`20260803` data-health 或四个既有未跟踪 provider/run 产物；未执行新的 provider/network/live/account/order；未 commit/push/merge。独立 reviewer pending，Optional (b) 的测试文件未被 `test_a_short*.py` 发现选择器覆盖，仍单独记账。
+
+### 交接动作
+
+Claude Code：按 `R-ASHORT-MARGIN-COVERAGE-NUMERIC-GAP-ZEROES-REFERENCE-UNIVERSE` 复核 producer → metrics → Phase5 gate 的完整 diff、partial 正控与 absence/unknown/clock/not_applicable 负控；独立 PASS 前不得提交或合入。
+
 
