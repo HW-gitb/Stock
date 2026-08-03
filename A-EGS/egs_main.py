@@ -72,7 +72,7 @@ v7.5 新增（周频优化 6 项）：
   ⬜ 调研次数扣分：无可用数据源
   ⬜ L1 行业毛利率趋势：固定免检 0.5 分
 """
-import argparse, os, sys, time, pickle, logging, warnings, shutil, uuid, re, hashlib
+import argparse, ast, inspect, os, sys, time, pickle, logging, warnings, shutil, uuid, re, hashlib, textwrap
 from dataclasses import dataclass
 from contextlib import contextmanager, nullcontext
 from datetime import datetime, timedelta
@@ -3188,21 +3188,62 @@ def get_moneyflow(trade_dates):
     save_cache(key, result)
     return result
 
+MARGIN_CACHE_SEMANTICS_VERSION = "rule6_v5"
+MARGIN_FETCH_SESSIONS = 12
+MARGIN_MAX_LAG_SESSIONS = 1
+MARGIN_REQUIRED_COLUMNS = ("ts_code", "trade_date", "rzye", "rqye")
+MARGIN_NUMERIC_COLUMNS = ("rzye", "rqye")
+
+
+def _canonical_ast_dump(obj):
+    source = textwrap.dedent(inspect.getsource(obj))
+    tree = ast.parse(source)
+    return ast.dump(tree, annotate_fields=True, include_attributes=False)
+
+
+def _margin_semantics_fingerprint():
+    """Return a deterministic fingerprint for the cached observation contract."""
+    contract = {
+        "observation": _canonical_ast_dump(_margin_observation),
+        "public_dict": _canonical_ast_dump(MarginObservation.public_dict),
+        "canonical_code": _canonical_ast_dump(_canonical_ashare_ts_code),
+        "required_columns": MARGIN_REQUIRED_COLUMNS,
+        "numeric_columns": MARGIN_NUMERIC_COLUMNS,
+        "fetch_sessions": MARGIN_FETCH_SESSIONS,
+        "max_lag_sessions": MARGIN_MAX_LAG_SESSIONS,
+        "minimum_universe": MARGIN_ELIGIBILITY_MIN_UNIVERSE,
+        "code_pattern": _ASHARE_TS_CODE_RE.pattern,
+    }
+    payload = repr(contract).encode("utf-8")
+    return hashlib.sha256(payload).hexdigest()[:12]
+
+
+def _margin_cache_key(trade_dates):
+    dates = tuple(map(str, trade_dates[:MARGIN_FETCH_SESSIONS]))
+    if not dates:
+        raise ValueError("margin cache requires at least one trade date")
+    window_digest = hashlib.sha256("|".join(dates).encode("utf-8")).hexdigest()[:12]
+    return (
+        f"margin_{dates[0]}_{MARGIN_CACHE_SEMANTICS_VERSION}_"
+        f"{_margin_semantics_fingerprint()}_{window_digest}"
+    )
+
+
 def _margin_observation(frame, trade_dates):
     """Classify margin data without allowing a partial response to look complete."""
     calendar_dates = list(map(str, trade_dates))
     reference_date = calendar_dates[0] if calendar_dates else None
-    required = {"ts_code", "trade_date", "rzye", "rqye"}
+    required = set(MARGIN_REQUIRED_COLUMNS)
     if not isinstance(frame, pd.DataFrame) or frame.empty:
         return MarginObservation(pd.DataFrame(), reference_date, None, 0, 0, False, "unavailable")
     if not required.issubset(frame.columns):
         return MarginObservation(frame, reference_date, None, int(len(frame)), 0, False, "invalid")
 
     work = frame.copy()
-    numeric = work[["rzye", "rqye"]].apply(pd.to_numeric, errors="coerce")
+    numeric = work[list(MARGIN_NUMERIC_COLUMNS)].apply(pd.to_numeric, errors="coerce")
     numeric_valid = numeric.notna().all(axis=1)
     numeric_valid &= np.isfinite(numeric.to_numpy()).all(axis=1)
-    work[["rzye", "rqye"]] = numeric
+    work[list(MARGIN_NUMERIC_COLUMNS)] = numeric
     dates = work["trade_date"].astype(str)
     valid_dates = dates.str.fullmatch(r"[0-9]{8}")
     valid_codes = work["ts_code"].map(_canonical_ashare_ts_code)
@@ -3231,7 +3272,7 @@ def _margin_observation(frame, trade_dates):
     lag_sessions = calendar_dates.index(effective_ref_date)
     complete = (
         bool(numeric_valid.all())
-        and lag_sessions <= 1
+        and lag_sessions <= MARGIN_MAX_LAG_SESSIONS
         and len(ref_codes) >= MARGIN_ELIGIBILITY_MIN_UNIVERSE
     )
     return MarginObservation(
@@ -3242,22 +3283,33 @@ def _margin_observation(frame, trade_dates):
 
 def get_margin(trade_dates):
     # Request the extra predecessor needed when the latest settled session has
-    # not yet published margin_detail.  The v4 cache stores the observation,
+    # not yet published margin_detail.  The versioned cache stores the observation,
     # not a bare DataFrame, so a cache hit cannot bypass the coverage contract.
-    key = f"margin_{trade_dates[0]}_rule6_v4"
-    if (cached := load_cache(key)) is not None:
+    try:
+        key = _margin_cache_key(trade_dates)
+    except (OSError, TypeError, IndentationError, SyntaxError) as exc:
+        # Source-bound cache identity is unavailable: bypass cache rather than
+        # risking reuse of an observation whose semantics cannot be identified.
+        log.warning(f"margin cache fingerprint unavailable; bypassing cache: {exc}")
+        key = None
+    cached = load_cache(key) if key is not None else None
+    if cached is not None:
         if not isinstance(cached, MarginObservation):
             raise RuntimeError("margin cache lacks required observation contract")
         recomputed = _margin_observation(cached.frame, trade_dates)
         if cached.public_dict() != recomputed.public_dict():
-            raise RuntimeError("margin cache observation semantics are inconsistent")
+            log.warning(
+                "margin cache observation semantics changed; discarding cached "
+                "observation and refetching: cached=%s recomputed=%s",
+                cached.public_dict(), recomputed.public_dict(),
+            )
         # Do not keep a lagged or incomplete observation sticky through the
         # provider's normal publication window; fetch a fresh observation.
-        if (recomputed.status == "complete"
+        elif (recomputed.status == "complete"
                 and recomputed.effective_ref_date == recomputed.reference_date):
             return recomputed
     frames = []
-    for d in tqdm(trade_dates[:12], desc="两融"):
+    for d in tqdm(trade_dates[:MARGIN_FETCH_SESSIONS], desc="两融"):
         df = safe_api(pro.margin_detail, trade_date=d, fields="ts_code,trade_date,rzye,rqye")
         if df is not None: frames.append(df)
     result = pd.concat(frames, ignore_index=True) if frames else pd.DataFrame()
@@ -3265,7 +3317,8 @@ def get_margin(trade_dates):
         if not result.empty and column in result.columns:
             result[column] = pd.to_numeric(result[column], errors="coerce")
     observation = _margin_observation(result, trade_dates)
-    save_cache(key, observation)
+    if key is not None:
+        save_cache(key, observation)
     return observation
 
 

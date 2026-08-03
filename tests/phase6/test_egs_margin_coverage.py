@@ -106,12 +106,59 @@ class MarginCoverageTests(unittest.TestCase):
             self.assertEqual(em.get_margin(dates).public_dict(), cached.public_dict())
         safe_api.assert_called_once()
         poisoned = em.MarginObservation(pd.DataFrame(), "20260714", "20260714", 0, 1, True, "complete")
-        with patch.object(em, "load_cache", return_value=poisoned):
-            with self.assertRaisesRegex(RuntimeError, "semantics are inconsistent"):
-                em.get_margin(dates)
+        with patch.object(em, "load_cache", return_value=poisoned), \
+             patch.object(em, "safe_api", return_value=None) as safe_api, \
+             patch.object(em, "save_cache"):
+            observed = em.get_margin(dates)
+        self.assertEqual(observed.status, "unavailable")
+        safe_api.assert_called_once()
         with patch.object(em, "load_cache", return_value=pd.DataFrame()):
             with self.assertRaisesRegex(RuntimeError, "observation contract"):
                 em.get_margin(dates)
+
+    def test_margin_cache_key_is_versioned_and_window_bound(self):
+        em = self.egs
+        dates = ["20260714", "20260713", "20260710"]
+        key = em._margin_cache_key(dates)
+        self.assertIn("rule6_v5", key)
+        self.assertNotIn("rule6_v4", key)
+        self.assertNotEqual(key, em._margin_cache_key([dates[0], "20260709", dates[2]]))
+        with patch.object(em, "MARGIN_ELIGIBILITY_MIN_UNIVERSE", 2):
+            self.assertNotEqual(key, em._margin_cache_key(dates))
+
+    def test_legacy_v4_cache_is_not_loaded(self):
+        em = self.egs
+        dates = ["20260714"]
+        loaded_keys = []
+        frame = pd.DataFrame([
+            {"ts_code": "600000.SH", "trade_date": "20260714", "rzye": 1.0, "rqye": 1.0},
+        ])
+
+        def load(key):
+            loaded_keys.append(key)
+            return None
+
+        with patch.object(em, "load_cache", side_effect=load), \
+             patch.object(em, "safe_api", return_value=frame), \
+             patch.object(em, "save_cache"):
+            em.get_margin(dates)
+        self.assertEqual(len(loaded_keys), 1)
+        self.assertIn("rule6_v5", loaded_keys[0])
+        self.assertNotIn("rule6_v4", loaded_keys[0])
+
+    def test_current_complete_cache_hit_does_not_refetch(self):
+        em = self.egs
+        dates = ["20260714"]
+        frame = pd.DataFrame([
+            {"ts_code": "600000.SH", "trade_date": "20260714", "rzye": 1.0, "rqye": 1.0},
+        ])
+        cached = em.MarginObservation(frame, "20260714", "20260714", 1, 1, True, "complete")
+        with patch.object(em, "MARGIN_ELIGIBILITY_MIN_UNIVERSE", 1), \
+             patch.object(em, "load_cache", return_value=cached), \
+             patch.object(em, "safe_api") as safe_api:
+            observed = em.get_margin(dates)
+        self.assertEqual(observed.public_dict(), cached.public_dict())
+        safe_api.assert_not_called()
 
     def test_rule6_binds_to_effective_reference_and_five_session_short_baseline(self):
         em = self.egs
