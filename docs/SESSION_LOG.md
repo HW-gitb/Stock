@@ -1,5 +1,35 @@
 # Session Log
 
+## 2026-08-03 — Claude 审查 PASS（A-short #01 R4b 写回 anti-rescue，二轮收口）
+
+- **Verdict/Action**: PASS，已提交并合入 master。上一轮三条 Required 全按指定形态修好：`:3634-3637` 覆盖改成 `_severity_max_disposition` 合并；写回前新增跨周 anti-rescue 断言（降档 / 止损下降 / 止损丢失）；`plan["stop"]` 改写前捕获 `_orig_eff` 让写点判据重新有牙；类 2 按边界只补一条 `blocked_add_required` 整段改写反控。
+- **Required**: 无。`R-ASHORT-P1-1-FORWARD-EVENT-ADVICE-TEXT-CONTRACT` 已 closed；Follow-up（5 条同构 marker 判据待统一）与未修 Optional（ratchet 正则贪吃）见 `docs/system_risk_register.md`（单一来源，本处不复述）。
+- **Verify**: review-evidence:3d088ed82302；四条探针本树实跑——降档反控保持 `clear_review`（上一轮同 fixture 得 `hold`，回归已消除）、植入降档 RAISED `跨周降档`、破位升档正控升到 `clear_review` 不误拒、同周重放跳过跨周检查不抛错。`static_contract_error()=None`；full lane `CACHED GREEN a_short = 2309 OK`，`2305→2309` 的 `+4` 恰等于 gap_data_registry 新增 4 条（weekly_pipeline 那条是改名不新增）。provider/live 与 `-Account` 实跑仍 `NOT_VERIFIED`。
+- **Next**: Codex：执行
+
+## 2026-08-03 — Codex 修复：A-short #01 R4b 写回 anti-rescue 与类2反控（独立审查待办）
+
+- **Verdict/Action**: 已按 Claude FAIL 与附件类级方案优化修复：disposition severity-max 合并、写回前跨周 stop/disposition anti-rescue、stop 改写前自检、类2 blocked_add 单条反控。未提交、未 push、未 merge。
+- **Required**: R-ASHORT-P1-1-FORWARD-EVENT-ADVICE-TEXT-CONTRACT；类1整类已处理，类2其余 5 条 marker 判据登记后续刀；详见 register 与 handoff。
+- **Verify**: 固定主 Python C:\Users\cnhea\AppData\Local\Programs\Python\Python313\python.exe（Python 3.13.8）；focused `Ran 263 tests ... OK`，full lane `Ran 2309 tests ... OK (skipped=3)`，`RESULT status=PASS exit=0 tests=2309 elapsed=337.5s deadline=860s`；static_contract_error=None。
+- **Pre-Codex self-review**: matrix=disposition merge/cross-week stop/cross-week disposition/pre-write stop/breach escalation/class2 blocked_add/effect-contract/sidecar write; register=updated; handoff=updated; focused=263 OK; full-lane=2309 OK; door=doc-governance/route/readme 66 OK; provider/live/account=NOT_VERIFIED; independent-review=NOT_VERIFIED; commit=NOT_PERFORMED。
+- **Next**: Claude Code：独立审查 R-ASHORT-P1-1-FORWARD-EVENT-ADVICE-TEXT-CONTRACT。
+
+## 2026-08-03 — Claude 审查 FAIL（A-short #01 forward-event/ratchet 文案契约）
+
+- **Verdict/Action**: FAIL，不提交、不合入。两条腿的主体做对了：ratchet 不再整段覆盖 `操作建议`、不再按旧止损字面串查找，forward-event marker 在 ratchet 之后确实还在。但修复 ③ 的实现比声明宽——声明只覆盖「破位升档」，实现无条件把跨周 `ratcheted_disposition` 与持久化 `last_disposition` 改写成本周信号，把「只升档不降」打穿，并让弱不变式 ③ 变成自比较、永不触发。
+- **Required**: `R-ASHORT-P1-1-FORWARD-EVENT-ADVICE-TEXT-CONTRACT` —— 三条收口（改成 severity-max 合并、补降档方向反向控制、删守卫须有替代强制腿）与「已通过不要返工」的清单见 `docs/system_risk_register.md`（单一来源，本处不复述）。
+- **Verify**: review-evidence:402172fb353a；reviewer 自写 A/B 探针跑两棵树，同一 fixture（上周 `clear_review`、本周合并 `hold`）：主树 HEAD 得 `clear_review`（正确），29e0 得 `hold`（降档并已写入 sidecar row）。full lane 在 29e0 得 `[full-pack-ledger] CACHED GREEN - a_short = 2305 OK`，与执行方自跑同一 code state，故未重复跑；该包全绿正说明缺的是降档方向的反向控制。provider/live 与 `-Account` 实跑仍 `NOT_VERIFIED`。
+- **Next**: Codex：修复
+
+## 2026-08-03 — Codex 修复：A-short #01 forward-event/ratchet 文案契约（独立审查待办）
+
+- **Verdict/Action**: 当前工作树已修复两条同类文案契约缺陷：reports[] 的 forward_event 机器落地改由结构化 operation_impact/source-binding 闭合；ratchet 使用结构化 plan 止损并保留既有 advisory。未提交、未 push、未 merge。
+- **Required**: R-ASHORT-P1-1-FORWARD-EVENT-ADVICE-TEXT-CONTRACT；完整根因、调用链、schema、负向控制和边界见 docs/system_risk_register.md，同阶段接手命令见 docs/handoff/2026-08-01_a_short_leaf_wiring_classification_handoff.md。
+- **Verify**: 固定主 Python C:\Users\cnhea\AppData\Local\Programs\Python\Python313\python.exe（Python 3.13.8）；focused 27/195/539 均 Ran ... OK；官方 A-short full lane Ran 2305 tests ... OK (skipped=3)，RESULT status=PASS exit=0 tests=2305 elapsed=341.3s deadline=860s；AST/schema/static_contract=None；git diff --check exit 0。
+- **Pre-Codex self-review**: matrix=advice overwrite/exact phrase/structured impact/plan.stop/breach disposition/schema/effect-contract/source-binding; register=updated; handoff=updated; focused=27+195+539 OK; full-lane=PASS 2305; door=doc-governance/route/readme 66 OK; provider/live/account=NOT_VERIFIED; independent-review=NOT_VERIFIED; commit=NOT_PERFORMED。
+- **Next**: Claude Code：独立审查 R-ASHORT-P1-1-FORWARD-EVENT-ADVICE-TEXT-CONTRACT。
+
 ## 2026-08-03 — Claude 审查 PASS（两融 complete 参考日口径，二轮收口）
 
 - **Verdict/Action**: PASS，已提交并合入 master。上一轮唯一 Required 已按指定形态修好：`allowed_dates` 改为按**完整日历**的 lag 过滤，不再按「已观测日期的位置」切片。我用同一批探针复跑八条：正控 `complete/20260731/1005` 成立（决策 B 的目标），五条强制腿反向控制全部仍关闭，D0 已发布时的范围内择新全净日仍按预期，非参考日坏行只记 warning 且行数正确。

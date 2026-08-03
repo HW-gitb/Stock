@@ -2180,8 +2180,8 @@ def validate_operation_impact_no_dangling(report: dict) -> None:
       holding_effect∈{none,hold_watch}(source-class 级绑定,防篡改 veto_class/effect 伪装生产硬否决;呼应 semantic-isolation ⑧)。
       **+ 持仓 shape/privacy 闭合(S3b 持仓处置输入)**:held ⟹ holding_row_impact/existing_holding/private;非 held ⟹ candidate_row_impact/
       public_tracked 且 holding_effect=none/无 blocked(防手构把 public/candidate forward_event 提升成私密持仓处置;镜像 ⑬⑭)。
-    ⑫【4.2 forward_events ADVICE-LANDING】任一 forward_event_ impact ⟹ 操作建议含未来事件提示「未来已知事件」
-      (候选/持仓不得仍像干净建仓——未来事件须落用户主看的操作建议,不只风控触发;字面同步 pipeline _FORWARD_EVENT_MARKER)。
+    ⑫【4.2 forward_events ADVICE-LANDING】reports[] 的机器落地由 forward_event_* impact/source-binding 闭合；
+      操作建议仍保留未来事件的人类提示，但可被 ratchet/处置阶段重写，不作为机器契约。
     ⑬⑭【4.2 Round5 龙虎榜/大宗交易 trade-event】source_field ∈ {dragon_list_appearance, block_trade_appearance} ⟹ 永久 analysis-only +
       comparison-only(只记成交事实,绝不改 EGS/TopN/选股/股数/操作/否决):field_class=='structured'、production_effect_enabled is False、
       veto_class=='none'、new_entry_effect∈{informational,none}、holding_effect=='none'、blocked_add_required is False(比 forward_event
@@ -2327,10 +2327,9 @@ def validate_operation_impact_no_dangling(report: dict) -> None:
     if any(imp.get("blocked_add_required") for imp in impacts) and (
             "禁止加仓" not in (advice_text + risk_text) and "禁止自动加仓" not in (advice_text + risk_text)):
         raise ValueError("存在 blocked_add_required=true 但 操作建议/风控触发 未显示禁止加仓(独立旗标必用户可见)")
-    # ⑫ ADVICE-LANDING(R-...-ADVICE-LANDING-GAP):任一 forward_event 落地 ⟹ 操作建议含未来事件提示(候选/持仓不得仍像干净建仓;
-    #   未来事件须落用户主看的操作建议,不只风控触发)。字面「未来已知事件」同步 pipeline _FORWARD_EVENT_MARKER。
-    if any(str(imp.get("source_field", "")).startswith("forward_event_") for imp in impacts) and "未来已知事件" not in advice_text:
-        raise ValueError("存在 forward_event_ impact 但 操作建议未含未来事件提示「未来已知事件」(候选/持仓不得仍像干净建仓)")
+    # ⑫ ADVICE-LANDING(R-...-ADVICE-LANDING-GAP): reports[] 的机器落地由
+    #   forward_event_* operation_impact/source-binding 闭合；操作建议是可被后续
+    #   ratchet/处置阶段重写的人类展示面，不能再把固定中文 marker 当机器契约。
     # ⑬⑭ TRADE-EVENT-LANDING(4.2 Round5):任一 dragon_list_appearance / block_trade_appearance impact ⟹ 板块资金事件含对应 marker
     #   (comparison-only 成交事实须落用户主看的 板块资金事件;字面同步 pipeline _DRAGON_LIST_MARKER / _BLOCK_TRADE_MARKER)。
     for _te_src, _te_marker in _TRADE_EVENT_MARKERS.items():

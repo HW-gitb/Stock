@@ -231,7 +231,7 @@
           "description": "S3b R4b: 跨周持久收紧 ratchet(advisory)。ratcheted_stop=跨周只升不降建议保护止损=max(本周 max(S3a止损,R4a保本),上周 ratcheted_stop);ratcheted_disposition=跨周 severity-max 持仓处置(只升档不降);cross_week_price_cross=滚动到价(现价≥上周减仓价→reduce/现价≤ratcheted_stop→clear);bootstrap=首周/re-entry。**不自动卖/不改 plan.stop/table.损;re-entry(新 entry_date)重置**。仅 held(持久层在 pipeline,gitignored 私密 sidecar)。"},
         "operation_impact": {
           "type": "array",
-          "description": "4.2 第1轮: 逐字段 operation_impact 记录(仍有 M6.7 候选/持仓行的字段). schema 层焊死 m67_landing_surface/terminal_surface_target 非空; 跨字段不变式(production_hard_veto⟹操作=否决 / production_effect_enabled=false 不得升格 / 只落文本须挂后继 slice)由 validate_operation_impact_no_dangling 守. 可选(缺省=无, 向后兼容; Tier-3 持仓粗覆盖不发).",
+          "description": "4.2 第1轮: 逐字段 operation_impact 记录(仍有 M6.7 候选/持仓行的字段). schema 层焊死 m67_landing_surface/terminal_surface_target 非空; forward_event_* 的结构化记录/source-binding 是机器落地权威，操作建议仅为可重写的人类展示面; 跨字段不变式(production_hard_veto⟹操作=否决 / production_effect_enabled=false 不得升格 / 只落文本须挂后继 slice)由 validate_operation_impact_no_dangling 守. 可选(缺省=无, 向后兼容; Tier-3 持仓粗覆盖不发).",
           "items": {
             "type": "object",
             "additionalProperties": false,
