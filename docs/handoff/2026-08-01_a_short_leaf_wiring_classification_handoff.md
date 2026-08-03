@@ -624,3 +624,41 @@ main() → _upcoming_events() → _attach_forward_event_impacts() → _attach_ho
 - **Optional（不阻断，正文见 register 同一 R-ID）**：新测试只覆盖其中两腿，阈值反控与新引入的 fail-closed 行为零覆盖；建议补三条。
 - **影响面澄清**：`env_report` 只在 `A-EGS/egs_main.py:5885` 被 `print`，不进 `analysis_input`（`northbound` 仍是 #08 的恒空叶）、不改选股/veto/仓位。
 - **Verify**: review-evidence:738da66dbd8a；`static_contract_error()=None`；full lane `CACHED GREEN 2311 OK`（同 HEAD `95baf649`）。live `moneyflow_hsgt` 与 `-Account` 实跑 `NOT_VERIFIED`。
+
+## 2026-08-03 追加：#05 Optional 收口与桌面清单 #07(a) CNINFO fail-loud
+
+### 本节文档作用与执行边界
+
+本节继续追加到 `docs/handoff/README.md` 指定的 A-short 叶级接线/效果分类当前 phase handoff；它不是新的路由真相源：风险状态与 Required/Optional 细节以 `docs/system_risk_register.md` 对应 R-ID 为准，`docs/SESSION_LOG.md` 只记录最小 cycle facts。本节记录本次先收口 #05 Optional、再执行桌面 #07(a) 的根因、改动、调用链、直接消费者、schema/source-binding、写盘边界、负向控制、自审、固定 Python、原始测试终态、NOT_VERIFIED、审查/提交边界和下一步。未授权 provider/live、真实周跑、换源、commit、push、merge 或下单。
+
+### #05 Optional：三类回归覆盖补齐
+
+- **问题与判断**：Claude 已独立探针证明 #05 九腿行为正确，但测试只钉住真实样本和 `-60 亿` 触发两腿；阈值反控（-40、严格边界 -50）与全 NaN/空表/缺列/inf/None fail-closed 没有回归。该 Optional 是覆盖缺口，不是重新打开 #05 生产修复。
+- **改动与边界**：只扩 `tests/test_a_short_egs_market_environment.py` 的内存 fixture helper，使其可接受原始 `DataFrame`/`None`，并新增三条点名测试；`A-EGS/egs_main.py::market_environment`、三个既有消费者、schema 和生产写盘均未再改。
+- **负向控制/自审**：`-40 亿`、恰好 `-50 亿`均不出现大幅流出；五种坏输入均出现 `北向资金数据不可用`且不伪造防御信号。自审核对了九腿覆盖、严格 `<` 边界、旧 positive/trigger 控制和本刀不触碰 #07/#08。
+- **固定 Python 与原始终态**：唯一解释器 `C:\Users\cnhea\AppData\Local\Programs\Python\Python313\python.exe`，版本 `Python 3.13.8`。精确聚焦命令 `Set-Location -LiteralPath 'D:\cnhea\Codex\worktrees\29e0\Stock'; & 'C:\Users\cnhea\AppData\Local\Programs\Python\Python313\python.exe' -m unittest tests.test_a_short_egs_market_environment tests.test_a_short_effect_contract` → `Ran 53 tests in 44.147s ... OK`；对应两文件 `py_compile` exit `0`；随后官方 full lane → `Ran 2314 tests in 319.297s ... OK (skipped=3)`，`RESULT status=PASS exit=0 tests=2314 elapsed=321.2s deadline=860s`，fingerprint `6f6610dbce91`。
+- **NOT_VERIFIED/审查边界**：未调用 provider/live、未跑账户实盘、未刷新生产产物、未启动 runner/sub-agent；Optional 尚未独立复审、commit/push/merge 均 `NOT_PERFORMED`。下一步与 #07 一并交 Claude Code review，不把该测试终态称为 review PASS。
+
+### 桌面 #07(a)：CNINFO 监管 advisory 由静默 unknown 改为 fail-loud
+
+- **最终收口门禁**：文档/路由/readme/Slice3 门禁 `Ran 73 tests ... OK`；`git diff --check` exit `0`（仅 CRLF 转换提示）。
+- **精确 #07 聚焦命令**：`Set-Location -LiteralPath 'D:\cnhea\Codex\worktrees\29e0\Stock'; & 'C:\Users\cnhea\AppData\Local\Programs\Python\Python313\python.exe' -m unittest tests.test_a_short_cninfo_health tests.test_a_short_egs_market_environment tests.test_a_short_effect_contract tests.phase6.test_egs_sw_industry_and_watch_pool_health tests.test_semantic_risk_slice3_guard tests.phase6.test_weekly_screening_guardrails` → `Ran 95 tests in 45.079s ... OK`；五文件 `py_compile` → exit `0`。
+
+- **意见判断与范围**：桌面 #07 的“200 空响应已 100% 失效且完全静默”中，旧的“空响应误报 `通过`”其实已经由 Slice 3 修为 `未检查`；本次仍成立的缺陷是空/失败结果没有进入 `data_health`、没有聚合 warning。本次只执行建议的第一步 #07(a) fail-loud；#07(b) 换请求形态或换源是另一个 provider slice，未执行。
+- **根因**：`stage3_ai_clearing::_cninfo_check` 的 `hit is None` 分支覆盖 HTTP 非 200、异常和 HTTP 200 空公告，但循环只保留默认 `cninfo_flag=未检查`，没有保留失败原因或把 source-health 送给 `export_data_health`；15 只候选全走此路时，用户只能看到无原因的“未检查”。
+- **改动与不变式**：`_cninfo_check` 对 `http_status`、`invalid_payload`、`empty_announcements`、`invalid_announcements`、`exception` 返回结构化 unknown reason；Stage3 汇总请求数、已知清白、advisory 命中、unknown 数和 reason counts，unknown 时保留 `未检查`、不转 `通过`，并发一条聚合 `log.warning`。已知关键词仍是 `REGULATOR-ADVISORY`，不删候选、不恢复 `REGULATOR-VETO`/硬否决。
+- **调用链与直接消费者**：`run_egs()` → `stage3_ai_clearing()` → `_cninfo_check()` → HTTP status/JSON/公告形状 → `cninfo_health` → `_cninfo_health_warning()` → `export_data_health(..., sidecar_warnings=...)` → `data_health.json`/`DATA_HEALTH` 汇总。直接消费者只有候选 `cninfo_flag` advisory 展示和 `data_health.warnings`；候选池、排序、M6.7 操作、账户/订单不消费该 warning。
+- **schema/source-binding**：`schemas/data_health.schema.json` 仍为 `1.8.0`，复用既有 issue 的 `check/message` 与允许的附加 metrics，没有新增字段；`schemas/a_short_m67_effect_contract.json` 的 A-EGS `decision_predicate_sha256` 已按固定 Python 重封为 `3b37a4537511f48317581265e08dcb6c5f4adab8c715b791c901daedeeddba77`，`runtime_constants_sha256` 保持 `81ddd1765aef3b079d44c4603d984e3ceb2467aff0f1cac777368e2b3b336d84`。请求参数、PIT 窗口、provider/source 选择未改。
+- **写盘边界**：`data_health` warning 复用既有 EGS 官方输出事务和发布路径；测试只 patch `requests.post`，没有刷新 `result/`、正式周报、缓存或账户状态。不会因 unknown warning 自动删除候选或下单。
+- **负向控制与自审**：正控为已知清白→`通过`且无 warning、监管命中→`REGULATOR-ADVISORY`且候选仍保留；反控为 200 空、非 200、非 dict payload、坏公告形状、异常→`未检查`+具体 reason+health warning。`build_data_health` schema/`overall_status=warn` 点名测试、Slice 3 “空不等于通过/不恢复硬否决”守卫、stage3 调用点守卫均覆盖；未改变 #05/#08 路径。
+- **固定 Python 与原始终态**：唯一解释器仍为 `C:\Users\cnhea\AppData\Local\Programs\Python\Python313\python.exe` / `Python 3.13.8`。#07 影响面精确聚焦命令（含 #05 Optional、effect contract、data_health、Slice 3 与调用点守卫）→ `Ran 95 tests in 45.079s ... OK`；相关五文件 `py_compile` exit `0`；官方命令 `Set-Location -LiteralPath 'D:\cnhea\Codex\worktrees\29e0\Stock'; & 'C:\Users\cnhea\AppData\Local\Programs\Python\Python313\python.exe' 'D:\cnhea\Codex\worktrees\29e0\Stock\.tools\full_pack_ledger.py' run a_short 'R-ASHORT-KNIFE7-CNINFO-EMPTY-RESPONSE-SILENT' 'focused 95 OK; CNINFO unknown outcomes aggregate into data_health warning; advisory hit remains non-deleting; effect contract and py_compile OK' 860 -- discover -s tests -p 'test_a_short*.py'` → `Ran 2318 tests in 296.024s ... OK (skipped=3)`，`RESULT status=PASS exit=0 tests=2318 elapsed=297.9s deadline=860s`，fingerprint `1e8b67194c43`。
+- **NOT_VERIFIED/审查、提交边界与下一步**：真实 CNINFO HTTP 200 空响应、真实 provider/live、`-Account` 周跑、生产/私密产物刷新、#07(b) 换请求形态/换源、自动下单和 sub-agent 均未执行。Claude Code 尚未独立审查；`commit/push/merge=NOT_PERFORMED`。下一步：`Claude Code：独立审查 R-ASHORT-KNIFE7-CNINFO-UNKNOWN-RESULT-SILENT-DOWNGRADE，并同时复核 #05 Optional；PASS 后按项目规则提交。`
+
+### 2026-08-03 Claude Code 独立审查 = PASS（#07a cninfo fail-loud）
+
+- **Verdict**: PASS，已提交并合入 master。沉默通道变有声：五类不可用原因分开计数 + warning + 进 `data_health` 抬 `overall_status=warn`；新增类型守比修前更 fail-closed；`cninfo_flag` 语义与候选池未动。
+- **reviewer 亲核两处**：① 接缝静态读 `egs_main.py:1888` 并实跑端到端用例双证；② `stage3_ai_clearing` 2-tuple→3-tuple 全仓扫过，真实调用仅 `:5917` 一处已更新，无遗留解包。
+- **补了 lane 覆盖不到的一块**：核心接缝用例在 `tests/phase6/`，不匹配 `test_a_short*.py` 选择器；我单独跑得 `Ran 9 tests ... OK / RESULT tier=focused status=PASS exit=0 tests=9`。lane 全量 `CACHED GREEN 2318 OK`，`+7` 逐条可解释。
+- **顺带闭合**：#05 留的三条 Optional 已在本刀补齐。
+- **Optional（结构性，非本刀引入）**：lane 选择器吃不到 `tests/phase6/`，lane 绿≠该接缝绿；建议改名进选择器或在 ledger focused evidence 固定带上。正文见 register 同一 R-ID。
+- **Verify**: review-evidence:943fa9bcc21e。cninfo live 调用与 `-Account` 实周跑 `NOT_VERIFIED`——通道本身仍是死的，那是 #07(b)。

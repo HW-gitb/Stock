@@ -287,6 +287,30 @@ class WatchPoolHealthTest(unittest.TestCase):
         self.assertIn(warning, health["warnings"])
         self.assertIn("NameError: name 'json' is not defined", warning["message"])
 
+    def test_cninfo_unknown_source_is_visible_as_health_warning(self) -> None:
+        warning = self.egs_main._cninfo_health_warning({
+            "requested_count": 13,
+            "known_clear_count": 0,
+            "advisory_hit_count": 0,
+            "unknown_count": 13,
+            "unknown_reasons": {"empty_announcements": 13},
+        })
+        health = self._health(
+            actual_count=13,
+            eligible_count=13,
+            sidecar_warnings=[warning],
+        )
+
+        self.egs_main.validate_json_schema(
+            health,
+            schema_path=str(DATA_HEALTH_SCHEMA),
+            label="cninfo health warning test",
+        )
+        self.assertEqual(health["overall_status"], "warn")
+        self.assertIn(warning, health["warnings"])
+        self.assertEqual(warning["check"], "cninfo_regulatory_advisory")
+        self.assertEqual(warning["unknown_reasons"], {"empty_announcements": 13})
+
     def test_consistency_validator_rejects_forged_watch_accounting(self) -> None:
         health = self._health(actual_count=13, eligible_count=13)
         health["metrics"]["watch_pool_reconciliation"]["reason"] = "target_met"
