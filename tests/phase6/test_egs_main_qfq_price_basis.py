@@ -126,13 +126,15 @@ class EgsMainQfqPriceBasisTest(unittest.TestCase):
         factor_by_date = {frame.iloc[0]["trade_date"]: frame for frame in factors}
         fake_pro = _FakePro(daily_by_date, factor_by_date)
         saved = {}
-        cache_key = self.egs._daily_all_qfq_cache_key("20260602")
         raw_cache = pd.concat(daily, ignore_index=True)
 
-        with patch.object(self.egs, "pro", fake_pro), \
-             patch.object(self.egs, "load_cache", side_effect=lambda key: raw_cache if key == cache_key else None), \
+        with patch.object(self.egs, "DAILY_ALL_QFQ_WINDOW_TRADING_DAYS", 2), \
+             patch.object(self.egs, "DAILY_STATS_LOOKBACKS", {"pct_5d": 1}), \
+             patch.object(self.egs, "pro", fake_pro), \
+             patch.object(self.egs, "load_cache", side_effect=lambda key: raw_cache if "_2d_" in key else None), \
              patch.object(self.egs, "save_cache", side_effect=lambda key, value: saved.setdefault(key, value)), \
              patch.object(self.egs, "safe_api", side_effect=lambda endpoint, **kwargs: endpoint(**kwargs)):
+            cache_key = self.egs._daily_all_qfq_cache_key("20260602")
             panel = self.egs.get_daily_all(["20260602", "20260601"])
 
         self.assertEqual([call[0] for call in fake_pro.daily_calls], ["20260602", "20260601"])
@@ -140,6 +142,39 @@ class EgsMainQfqPriceBasisTest(unittest.TestCase):
         self.assertIn(cache_key, saved)
         self.assertIn("qfq_close", panel.columns)
         self.assertTrue(panel["adj_factor_observed"].all())
+
+    def test_qfq_cache_key_binds_the_65_day_window(self):
+        key = self.egs._daily_all_qfq_cache_key("20260602")
+        self.assertIn("_65d_", key)
+        self.assertNotIn("_60d_", key)
+
+    def test_public_qfq_fetch_uses_the_full_65_day_window(self):
+        dates = [
+            (pd.Timestamp("20260602") - pd.Timedelta(days=i)).strftime("%Y%m%d")
+            for i in range(self.egs.DAILY_ALL_QFQ_WINDOW_TRADING_DAYS)
+        ]
+        daily_by_date = {
+            date: pd.DataFrame([_daily_row(date, 10.0, pre_close=10.0)])
+            for date in dates
+        }
+        factor_by_date = {
+            date: pd.DataFrame([_factor_row(date, 1.0)])
+            for date in dates
+        }
+        fake_pro = _FakePro(daily_by_date, factor_by_date)
+        saved = {}
+        with patch.object(self.egs, "pro", fake_pro), \
+             patch.object(self.egs, "load_cache", return_value=None) as load_cache, \
+             patch.object(self.egs, "save_cache", side_effect=lambda key, value: saved.setdefault(key, value)), \
+             patch.object(self.egs, "safe_api", side_effect=lambda endpoint, **kwargs: endpoint(**kwargs)):
+            panel = self.egs.get_daily_all(dates, price_as_of=dates[0])
+
+        cache_key = self.egs._daily_all_qfq_cache_key(dates[0])
+        self.assertEqual(load_cache.call_args.args[0], cache_key)
+        self.assertEqual(len(fake_pro.daily_calls), 65)
+        self.assertEqual(len(fake_pro.factor_calls), 65)
+        self.assertEqual(panel["trade_date"].nunique(), 65)
+        self.assertIn(cache_key, saved)
 
     def test_qfq_cache_rejects_tampered_adjusted_prices(self):
         daily, factors = self._two_day_frames()

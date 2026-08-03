@@ -1729,7 +1729,7 @@ def build_data_health(df_full, watch_df, tier1_final, analysis_input, latest_td,
     if short_history_candidate_count:
         warnings_.append(_health_issue(
             "short_history_candidate_count",
-            "candidate-universe symbols have fewer than 61 usable closes",
+            f"candidate-universe symbols have fewer than {DAILY_STATS_REQUIRED_CLOSES} usable closes",
             count=short_history_candidate_count,
         ))
 
@@ -2615,13 +2615,38 @@ def _daily_cache_days(df):
 # cross-day indicators as qfq.  Keep the raw columns for exchange-mechanism
 # checks, but make every cross-day price statistic consume this explicit,
 # as-of-anchored qfq view.
+DAILY_STATS_LOOKBACKS = {
+    "pct_5d": 5,
+    "pct_20d": 20,
+    "pct_60d": 60,
+}
+DAILY_STATS_MAX_LOOKBACK_SESSIONS = max(DAILY_STATS_LOOKBACKS.values())
+DAILY_STATS_REQUIRED_CLOSES = DAILY_STATS_MAX_LOOKBACK_SESSIONS + 1
+DAILY_ALL_QFQ_WINDOW_BUFFER_TRADING_DAYS = 4
+DAILY_ALL_QFQ_WINDOW_TRADING_DAYS = (
+    DAILY_STATS_REQUIRED_CLOSES + DAILY_ALL_QFQ_WINDOW_BUFFER_TRADING_DAYS
+)
 DAILY_ALL_QFQ_CACHE_VERSION = "qfq_v1"
 DAILY_ALL_RAW_OHLC_COLUMNS = ("open", "high", "low", "close")
 DAILY_ALL_QFQ_OHLC_COLUMNS = tuple(f"qfq_{column}" for column in DAILY_ALL_RAW_OHLC_COLUMNS)
 
 
+def _validate_daily_qfq_window(n_days):
+    required = max(DAILY_STATS_LOOKBACKS.values()) + 1
+    if DAILY_ALL_QFQ_WINDOW_TRADING_DAYS < required:
+        raise RuntimeError(
+            "daily qfq window configuration is shorter than the longest declared "
+            f"lookback: window={DAILY_ALL_QFQ_WINDOW_TRADING_DAYS}, required={required}"
+        )
+    if n_days < required:
+        raise RuntimeError(
+            "daily qfq window is too short for the longest declared price lookback: "
+            f"window={n_days}, required={required}"
+        )
+
+
 def _daily_all_qfq_cache_key(as_of):
-    return f"daily_all_qfq_{as_of}_60d_{DAILY_ALL_QFQ_CACHE_VERSION}"
+    return f"daily_all_qfq_{as_of}_{DAILY_ALL_QFQ_WINDOW_TRADING_DAYS}d_{DAILY_ALL_QFQ_CACHE_VERSION}"
 
 
 def _date8(value, label):
@@ -2797,7 +2822,8 @@ def _validate_cached_qfq_daily_all(cached, as_of, expected_dates):
 def get_daily_all(trade_dates, price_as_of=None):
     if not trade_dates:
         raise RuntimeError("daily qfq fetch requires trade dates")
-    n_days = min(60, len(trade_dates))
+    n_days = min(DAILY_ALL_QFQ_WINDOW_TRADING_DAYS, len(trade_dates))
+    _validate_daily_qfq_window(n_days)
     expected_dates = [str(value) for value in trade_dates[:n_days]]
     as_of = _date8(price_as_of or expected_dates[0], "daily qfq price_data_through")
     if expected_dates[0] != as_of:
@@ -3768,7 +3794,7 @@ def _short_history_candidate_count(df_stocks, stats_df):
         stats_df["ts_code"].astype(str).isin(main_board_codes)
     ]["price_observation_count"]
     observations = pd.to_numeric(observations, errors="coerce")
-    return int(observations.between(1, 60, inclusive="both").sum())
+    return int(observations.between(1, DAILY_STATS_REQUIRED_CLOSES - 1, inclusive="both").sum())
 
 
 def precompute_stock_stats(codes, all_daily):
@@ -3806,9 +3832,9 @@ def precompute_stock_stats(codes, all_daily):
         closes = grp["qfq_close"].dropna()
         if len(closes) < 1: continue
 
-        pct_20d = _trailing_return_pct(closes, 20)
-        pct_5d  = _trailing_return_pct(closes, 5)
-        pct_60d = _trailing_return_pct(closes, 60)
+        pct_20d = _trailing_return_pct(closes, DAILY_STATS_LOOKBACKS["pct_20d"])
+        pct_5d  = _trailing_return_pct(closes, DAILY_STATS_LOOKBACKS["pct_5d"])
+        pct_60d = _trailing_return_pct(closes, DAILY_STATS_LOOKBACKS["pct_60d"])
         avg_20d = grp.head(20)["amount"].mean() * 1000 if "amount" in grp.columns else np.nan
         avg_5d  = grp.head(5) ["amount"].mean() * 1000 if "amount" in grp.columns else np.nan
 
@@ -4983,7 +5009,10 @@ def run_egs(backtest_mode=False, output_root=None, price_as_of=None):
         raise RuntimeError(
             f"price_data_through {price_data_through} is after decision_as_of {TODAY}"
         )
-    trade_dates = get_trade_dates(65, price_as_of=price_data_through)
+    trade_dates = get_trade_dates(
+        DAILY_ALL_QFQ_WINDOW_TRADING_DAYS,
+        price_as_of=price_data_through,
+    )
     latest_td   = trade_dates[0]
     decision_as_of = TODAY
     run_date = a_share_market_date()

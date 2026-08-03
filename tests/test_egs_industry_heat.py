@@ -91,6 +91,20 @@ class IndustryHeatTests(unittest.TestCase):
         self.assertAlmostEqual(s.iloc[0], 100.0)   # A = hotter industry
         self.assertAlmostEqual(s.iloc[1], 50.0)    # B = cooler
 
+    def test_pct_60d_participates_when_available_and_missing_is_explicit_degradation(self):
+        df = _df([
+            {"ts_code": "HOT.SH", "l2_name": "HOT", "pct_20d_n": 0.0, "pct_60d_n": 100.0},
+            {"ts_code": "MID.SH", "l2_name": "MID", "pct_20d_n": 0.0, "pct_60d_n": 0.0},
+            {"ts_code": "COLD.SH", "l2_name": "COLD", "pct_20d_n": 0.0, "pct_60d_n": -100.0},
+        ])
+        with_60d = compute_industry_heat_score(df)
+        self.assertGreater(with_60d.iloc[0], with_60d.iloc[2])
+
+        missing_60d = df.copy()
+        missing_60d["pct_60d_n"] = np.nan
+        without_60d = compute_industry_heat_score(missing_60d)
+        self.assertTrue(np.allclose(without_60d.to_numpy(), without_60d.iloc[0]))
+
     def test_does_not_mutate_l4(self):
         # l4-overlap treatment: industry_heat is a SEPARATE additive term; it must not touch l4_score.
         df = _universe()

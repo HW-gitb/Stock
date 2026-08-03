@@ -1,5 +1,20 @@
 # Session Log
 
+## 2026-08-03 — Claude 审查 PASS（日线窗口 60→65，pct_60d 复活）
+
+- **Verdict/Action**: PASS，已提交并合入 master。窗口由硬编码 60 改为 `DAILY_STATS_REQUIRED_CLOSES(61)+buffer(4)=65`，缓存键随之由 `_60d_` 变 `_65d_`（旧 60 根缓存不可能被复用），并新增 `_validate_daily_qfq_window` 同时校验配置与实际 n_days。reviewer 实测该守护是真绊线：n_days=60/21 拒、61/65 收；把窗口常量改回 60 立刻被配置腿拒——「谁再悄悄缩窗口」这条复发路已被堵死。全仓复查无 `min(60`/`_60d` 残留。
+- **Required**: 无；Register: 本条对应桌面清单第 4 条与第 6 条的 `pct_60d` 一半，正文只见 `docs/system_risk_register.md` 顶部（单一来源，本处不复述）。
+- **Verify**: review-evidence:1ae75d56495a；rule 3(a) 全量走唯一入口得 `CACHED GREEN - a_short = 2274 OK`（执行方已按当前代码态记账）；本刀改的三个测试模块都不在 lane 选择器内，另单独跑得 `Ran 47 tests ... OK`。自写探针实测根因与修复：`_trailing_return_pct(closes,60)` 在 60 根下为 `nan`、61 根起有值；`_short_history_candidate_count` 在每票 60 根时把 3/3 全标记、61 或 65 根时标记 0，即 3191 那个「恒等于主板数」的假告警随窗口一起消失。effect-contract 双哈希只动 `A-EGS/egs_main.py`，与 diff 一致。
+- **Next**: Codex：执行桌面清单第 6 条剩下的一半（`q0_net_income` 全表为空）。
+
+## 2026-08-03 — Codex 修复（A-short 桌面清单第 4 条：60-day qfq window / pct_60d）
+
+- **Verdict/Action**: 当前工作树已修复日线窗口、缓存 source binding、短历史计数和 pct_60d 生产口径；未提交、未 push、未 merge。
+- **Required**: `R-ASHORT-QFQ-60D-WINDOW-SILENCES-PCT60D`；完整根因、调用链、消费者、负向控制和边界只见 `docs/system_risk_register.md`，handoff 见 `docs/handoff/2026-07-28_a_short_knife6a_repair_handoff.md`。
+- **Verify**: 固定主 Python `C:\Users\cnhea\AppData\Local\Programs\Python\Python313\python.exe` = `Python 3.13.8`；focused `94 OK`；最终 full lane `2274 OK / skipped=3`；py_compile、route/doc door 和 diff-check 均通过。真实 `--as-of 20260803` 未重跑，记 `NOT_VERIFIED`。
+- **Pre-Codex self-review**: matrix=producer+consumer+cache-key+schema+negative; register=updated; handoff=updated; focused=94 OK; full-lane=2274 OK/skipped=3; door=route-doc=55 OK+git-diff-check=0; independent=not_required: incremental existing engine, no live/secret/auth gate; commit=not_performed。
+- **Next**: Claude Code：审查本刀。
+
 ## 2026-08-03 — Claude 审查 PASS（review-gate 未回报 agent 拦截腿）
 
 - **Verdict/Action**: PASS，已提交并合入 master。执行方自己把「真实 transcript 回放」标成 `NOT_VERIFIED`（它读不到会话记录），我用本机真实 transcript 把当初坐实本条的**同一个探针**原样重跑补齐：`3561d35d`/`573e4210`/`fb778a5c` 三份此前各报 1 个假挂起，修复后全部 `pending=0`。整读新函数体确认真通知行两种形态都走整行扫描、结构化 `toolUseResult` 优先、散文串兜底、通知须不早于启动行。
