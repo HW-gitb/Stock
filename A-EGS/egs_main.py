@@ -3469,15 +3469,15 @@ def _collect_rule6_evaluations(watch_df, all_daily, margin_observation, trade_da
     # a stock absent from a reference-date universe that is both COMPLETE
     # (>= MARGIN_ELIGIBILITY_MIN_UNIVERSE canonical codes) and CLEAN (no malformed
     # ts_code) is a genuine non-margin target and the two margin Rule6 checks do
-    # not apply to it.  Any provider anomaly must never become a clear result
-    # (R-ASHORT-RULE6-MARGIN-ELIGIBILITY-DISPOSITION): an empty / sub-floor /
-    # truncated response fails the size gate, and any garbage or malformed
-    # (null / non-canonical) reference-date ts_code fails the clean gate -- so a
-    # selective corruption of one candidate's own row cannot masquerade as its
-    # absence.  In every anomaly eligibility stays None → fail-closed `unknown`.
+    # not apply to it.  An INCOMPLETE source may still positively prove that a
+    # candidate is a margin target from the effective reference-date row, so its
+    # own complete Rule6 window can be evaluated.  It must never prove absence:
+    # candidates not present in that partial reference set stay None and
+    # fail-closed `unknown` (R-ASHORT-RULE6-MARGIN-ELIGIBILITY-DISPOSITION).
     margin_ref_codes = set()
     margin_ref_has_malformed = False
-    if (margin_observation.status == "complete" and isinstance(margin_df, pd.DataFrame) and not margin_df.empty
+    if (margin_observation.status in {"complete", "incomplete"}
+            and isinstance(margin_df, pd.DataFrame) and not margin_df.empty
             and {"ts_code", "trade_date", "rzye", "rqye"}.issubset(margin_df.columns)):
         ref_frame = margin_df[margin_df["trade_date"].astype(str) == str(effective_ref_date)]
         for value in ref_frame["ts_code"].dropna():
@@ -3487,10 +3487,25 @@ def _collect_rule6_evaluations(watch_df, all_daily, margin_observation, trade_da
             else:
                 margin_ref_codes.add(canon)
     margin_universe_present = (
-        len(margin_ref_codes) >= MARGIN_ELIGIBILITY_MIN_UNIVERSE
+        margin_observation.status == "complete"
+        and len(margin_ref_codes) >= MARGIN_ELIGIBILITY_MIN_UNIVERSE
         and not margin_ref_has_malformed
     )
     margin_eligible_codes = _clean_margin_ts_codes(margin_df) if margin_universe_present else None
+    effective_lag_sessions = None
+    if effective_ref_date is not None:
+        try:
+            effective_lag_sessions = list(map(str, trade_dates)).index(str(effective_ref_date))
+        except ValueError:
+            pass
+    partial_margin_codes = (
+        margin_ref_codes
+        if (margin_observation.status == "incomplete"
+                and effective_lag_sessions is not None
+                and effective_lag_sessions <= 1
+                and not margin_ref_has_malformed)
+        else set()
+    )
     source_metrics = {
         **margin_observation.public_dict(),
         "effective_ref_date": effective_ref_date,
@@ -3536,10 +3551,14 @@ def _collect_rule6_evaluations(watch_df, all_daily, margin_observation, trade_da
                     candidate_rows.append({"price": item.get("price"), "vol": item.get("vol"), "close": close})
             block_records[str(trade_date)] = candidate_rows
         canonical_code = _canonical_ashare_ts_code(code)
-        is_margin_eligible = (
-            None if (margin_eligible_codes is None or canonical_code is None)
-            else (canonical_code in margin_eligible_codes)
-        )
+        if canonical_code is None:
+            is_margin_eligible = None
+        elif margin_eligible_codes is not None:
+            is_margin_eligible = canonical_code in margin_eligible_codes
+        elif canonical_code in partial_margin_codes:
+            is_margin_eligible = True
+        else:
+            is_margin_eligible = None
         evaluations_by_code[code] = {
             "rule6_holder_below_5pct": evaluate_holder_below_5pct(code_holder_events, TODAY),
             "rule6_volume_stall": evaluate_volume_stall(daily_6),
@@ -3563,8 +3582,12 @@ def _collect_rule6_evaluations(watch_df, all_daily, margin_observation, trade_da
             ),
             "rule6_block_trade_discount": evaluate_block_trade_discount(trade_dates[:10], block_records),
         }
+        candidate_source_metrics = {
+            **source_metrics,
+            "margin_candidate_eligibility": is_margin_eligible,
+        }
         for check_id in ("rule6_margin_extreme_accumulation", "rule6_short_selling_surge"):
-            evaluations_by_code[code][check_id]["metrics"].update(source_metrics)
+            evaluations_by_code[code][check_id]["metrics"].update(candidate_source_metrics)
     return evaluations_by_code
 
 # ── [崩溃修复②] ─────────────────────────────────────────────────────────────

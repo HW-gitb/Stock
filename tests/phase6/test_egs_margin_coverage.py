@@ -15,6 +15,7 @@ import pandas as pd
 
 from engine.data.analysis_input_contract import AnalysisInputContractError, validate_analysis_input_contract
 from runners.a_short_m67_render import render_weekly_markdown
+from runners.a_short_phase5_engine import _margin_source_is_unavailable
 from runners.a_short_weekly_pipeline import build_weekly_report, validate_weekly_report
 from tests.test_a_short_weekly_pipeline import AS_OF, GEN, _feed, _normalized, _weekly
 
@@ -141,6 +142,43 @@ class MarginCoverageTests(unittest.TestCase):
         self.assertEqual(metrics["effective_ref_date"], margin_dates[0])
         self.assertEqual(metrics["status"], "complete")
         self.assertEqual(result["rule6_margin_extreme_accumulation"]["status"], "fail")
+
+    def test_incomplete_source_opens_only_proven_margin_candidate_rules(self):
+        em = self.egs
+        code, other = "600000.SH", "000001.SZ"
+        dates = [f"202607{day:02d}" for day in range(14, 1, -1)]
+        margin_dates = dates[1:]
+        margin_rows = []
+        for ticker in (code, other):
+            for index, date in enumerate(margin_dates):
+                missing_other_window = ticker == other and index in (5, 10)
+                margin_rows.append({
+                    "ts_code": ticker,
+                    "trade_date": date,
+                    "rzye": (121.0 if (ticker, index) == (code, 0) else
+                              (float("nan") if missing_other_window else 100.0)),
+                    "rqye": float("nan") if missing_other_window else 100.0,
+                })
+        margin = pd.DataFrame(margin_rows)
+        daily = pd.DataFrame([
+            {"ts_code": ticker, "trade_date": date, "vol": 100.0, "pct_chg": 1.0,
+             "high": 11.0, "low": 9.0, "close": 100.0,
+             "qfq_high": 11.0, "qfq_low": 9.0, "qfq_close": 100.0, "qfq_pct_chg": 1.0}
+            for ticker in (code, other) for date in dates
+        ])
+        with patch.object(em, "MARGIN_ELIGIBILITY_MIN_UNIVERSE", 2), \
+             patch.object(em, "get_rule6_balancesheets", return_value={code: [], other: []}), \
+             patch.object(em, "get_rule6_block_trades", return_value={date: [] for date in dates[:10]}):
+            observation = em._margin_observation(margin, dates)
+            results = em._collect_rule6_evaluations(
+                pd.DataFrame({"ts_code": [code, other]}), daily, observation, dates,
+                {"rule6_holder_events": []}, pd.DataFrame(),
+            )
+        self.assertEqual(observation.status, "incomplete")
+        self.assertEqual(results[code]["rule6_margin_extreme_accumulation"]["status"], "fail")
+        self.assertEqual(results[code]["rule6_short_selling_surge"]["status"], "pass")
+        self.assertEqual(results[other]["rule6_margin_extreme_accumulation"]["status"], "unknown")
+        self.assertEqual(results[other]["rule6_short_selling_surge"]["status"], "unknown")
 
     def test_l2_margin_veto_normalizes_integer_trade_dates(self):
         em = self.egs
@@ -359,6 +397,76 @@ class MarginCoverageTests(unittest.TestCase):
                       report["machine"]["entry_exit_size_star"]["reject_reason"])
         markdown = render_weekly_markdown(weekly)
         self.assertEqual(markdown.count("两融数据源本周不可用或覆盖不足"), 1)
+
+    def test_partial_margin_gate_opens_only_positive_candidate_with_two_known_checks(self):
+        coverage = {
+            "reference_date": AS_OF,
+            "effective_ref_date": "20260608",
+            "row_count": 1900,
+            "universe_size": 100,
+            "coverage_complete": False,
+            "status": "incomplete",
+        }
+        checks = [
+            {
+                "id": "rule6_margin_extreme_accumulation",
+                "status": "fail",
+                "metrics": {
+                    "status": "incomplete", "coverage_complete": False,
+                    "reference_date": AS_OF, "effective_ref_date": "20260608",
+                    "margin_candidate_eligibility": True,
+                },
+            },
+            {
+                "id": "rule6_short_selling_surge",
+                "status": "pass",
+                "metrics": {
+                    "status": "incomplete", "coverage_complete": False,
+                    "reference_date": AS_OF, "effective_ref_date": "20260608",
+                    "margin_candidate_eligibility": True,
+                },
+            },
+        ]
+        inp = {"margin_coverage": coverage, "price_data_through": AS_OF,
+               "rule6_checks": checks}
+        self.assertFalse(_margin_source_is_unavailable(inp, AS_OF))
+
+        for mutation in (
+            lambda item: item.update(status="unknown"),
+            lambda item: item["metrics"].update(margin_candidate_eligibility=None),
+            lambda item: item["metrics"].update(effective_ref_date="20260710"),
+        ):
+            mutated = copy.deepcopy(inp)
+            mutation(mutated["rule6_checks"][0])
+            self.assertTrue(_margin_source_is_unavailable(mutated, AS_OF))
+
+        absent_candidate = copy.deepcopy(inp)
+        absent_candidate["rule6_checks"][0]["metrics"]["margin_candidate_eligibility"] = None
+        absent_candidate["rule6_checks"][1]["metrics"]["margin_candidate_eligibility"] = None
+        self.assertTrue(_margin_source_is_unavailable(absent_candidate, AS_OF))
+
+    def test_partial_margin_gate_reaches_weekly_report_without_system_banner(self):
+        normalized = _normalized()
+        for check in normalized["rule6_checks"]:
+            if check["id"] in {
+                "rule6_margin_extreme_accumulation", "rule6_short_selling_surge",
+            }:
+                check["status"] = "pass"
+                check["metrics"] = {
+                    "status": "incomplete", "coverage_complete": False,
+                    "reference_date": AS_OF, "effective_ref_date": "20260608",
+                    "margin_candidate_eligibility": True,
+                }
+        weekly = build_weekly_report(
+            [normalized], AS_OF, GEN,
+            margin_coverage={
+                "reference_date": AS_OF, "effective_ref_date": "20260608",
+                "row_count": 1900, "universe_size": 100,
+                "coverage_complete": False, "status": "incomplete",
+            },
+        )
+        report = weekly["reports"][0]
+        self.assertFalse(report["machine"]["layer"]["decision_reasons"]["margin_source_unavailable"])
 
     def _weekly_with_margin_check_metrics(self, metrics):
         normalized = _normalized()

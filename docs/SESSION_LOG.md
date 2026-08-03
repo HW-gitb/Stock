@@ -14,6 +14,21 @@
 - **Verify**: 改动面 `5/2` 行、`git diff --check` 干净。scope grep 先行：无测试或 schema 钉住这两个格式串（测试只断言 `[sidecar-health] UNAVAILABLE` 这个另一分支）。最小覆盖包 `tests.test_a_short_weekly_sidecar_health` 一次跑绿 `Ran 40 tests ... OK`；再用本周真实 degraded 产物过一遍改后的 `write_health_bundle`，表头得 `overall=degraded · m67=failed · advanced=0 · stalled=0 · failed=0 · partial=0`，正控（healthy 载荷）得 `overall=healthy · m67=complete`，未凭空宣称失败。
 - **Next**: Codex：执行桌面清单第 3 条（`margin_coverage` 的 `universe_size=0`）。
 - **Pre-Codex self-review**: `matrix=complete: 总评成因字段的全部输出出口 = console + markdown 表头（JSON 已含该字段）`; `register=non-material`; `handoff=not_required: 显示面单字段增列，属 AGENTS §交接记录「不写 handoff」类`; `focused=40 OK / 12.5s`; `full-lane=not_triggered: AGENTS rule 3; reason=仅两处输出格式串，未触及引擎/schema/契约/provider/授权面`; `door=route 14 OK + doc-governance 41 OK（合并跑 Ran 55 tests ... OK）`; A=两出口全覆盖; B=全仓 grep 旧格式串零残留; C=正控 healthy 载荷不误报失败; D=N-A; E=SESSION_LOG 单态; F=`git diff --check` 干净、无 BOM
+## 2026-08-03 — Claude 审查 PASS（margin 逐票降级：incomplete 批次只许正向绑定）
+
+- **Verdict/Action**: PASS，已提交并合入 master。放松类改动（`margin_source_unavailable` 挡新建仓，放开即影响选股），故自写 15 条反控实测：仅「正向绑定 + 两项 Rule6 均确定 pass/fail + 时钟身份同批」才放行；未绑定、正向非两融、unknown、not_applicable、参考日移植、伪称 complete、只绑一项、缺第二项、ref 不一致、空全集、torn row_count 十一路全关；complete 老路径含 1000 下限逐条不变。producer 侧核实：证明「不适用」的 `margin_eligible_codes` 仍只在 complete 时构建，incomplete 永远证不了缺席。
+- **Required**: 无；Register: `R-ASHORT-MARGIN-OBSERVATION-STILL-HAS-TWO-SINGLE-ROW-FATAL-REJECTIONS` 的 Optional (a) 由本刀闭合（融资融券风控腿在诚实 incomplete 下重新可用），其余 Optional 与边界正文只见 `docs/system_risk_register.md` 顶部。
+- **Verify**: review-evidence:cef72b7e3bdb；超时原因:探针 fixture 漏了既有 `reference_date==price_data_through` 时钟腿，误报三条后整读函数体重跑才对齐。rule 3(a) 全量走唯一入口得 `CACHED GREEN - a_short = 2274 OK`，指纹 `0c9e5fe9…` 由执行方 `00:01:02` 记账、正是当前代码态；`tests/phase6/test_egs_margin_coverage.py` 不在 lane 选择器内，另单独跑 `Ran 20 tests ... OK`。整读两个 evaluator 确认 `is_margin_eligible=True` 不制造判决。§6a agent 未起：会撞未修的 `R-REVIEWGATE-…-TASK-NOTIFICATIONS`(P1)，收口须写假 `agent-aborted:`；残余=producer 侧第三方视角。
+- **Next**: Codex：执行桌面清单第 6 条（`pct_60d` / `q0_net_income` 全表为空）。
+
+## 2026-08-02 — Codex 修复（margin Optional 逐票降级）
+- **Verdict/Action**: 已修复 `R-ASHORT-MARGIN-COVERAGE-NUMERIC-GAP-ZEROES-REFERENCE-UNIVERSE` 下的 Optional (a)：批次仍诚实保持 `incomplete`；只有被有效参考日正向证明为两融标的、且两项 Rule6 均有已知 `pass/fail` 的候选，才可通过 Phase5 的候选级消费门。缺失/未证明候选继续 `unknown`，不生成 `not_applicable`。未提交、未合入。
+- **Required**: 生产者 `A-EGS/egs_main.py`、Phase5 消费者 `runners/a_short_phase5_engine.py`、effect contract 与 Phase6 负向控制已同步；完整全集路径和 fail-closed 源时钟未放松。
+- **Verify**: 固定主 Python `C:\Users\cnhea\AppData\Local\Programs\Python\Python313\python.exe`（`Python 3.13.8`）；focused `Ran 32 tests in 4.501s ... OK`；effect-contract `Ran 47 tests in 64.944s ... OK`；full-lane `Ran 2274 tests in 442.088s ... OK (skipped=3)`，ledger `RESULT status=PASS exit=0 tests=2274 elapsed=444.2s deadline=860s`；docs-route `Ran 55 tests ... OK`；`git diff --check` exit 0。
+- **Proof-of-use**: partial source 只允许正向候选资格 + 两项已知结果的路径；unknown、时钟错绑、资格缺失、partial 下的 `not_applicable` 均被拒。真实缓存/`20260803` data-health 未刷新，provider/live 未重跑。
+- **Pre-Codex self-review**: `matrix=producer+consumer+schema+negative`; `register=updated`; `handoff=updated`; `focused=32 OK`; `full-lane=2274 OK/skipped=3`; `door=docs-route=55 OK+diff-check=0`; `A=producer/consumer`; `B=source clock+eligibility+Rule6`; `C=unknown/absence/not_applicable negatives`; `D=N-A`; `E=SESSION_LOG+register+handoff`; `F=fixed Python 3.13.8/no provider or data-health refresh`; `independent=NOT_USED`; `commit=NOT_PERFORMED`。
+- **Next**: Claude Code：独立审查本 Optional 修复；PASS 前不得提交/合入。
+
 ## 2026-08-02 — Claude 审查 PASS（margin coverage 行级缺口不再判死整帧）
 
 - **Verdict/Action**: PASS，已提交并合入 master。用失败那次自己写下的真实缓存归因：`margin_20260731_rule6_v4.pkl` 共 50561 行，缺列 0、坏日期 0 行、非规范 ts_code 0 行、`rzye/rqye` 为 NaN 恰 **16 行**——被修的正是真根因那条腿；同一真实帧喂修复后函数得 `effective_ref_date=20260731 / universe_size=1993 / incomplete`（`MIN_UNIVERSE=1000`）。**同轮自我更正**：我先判「另两条整帧拒绝属同类需按类扫」，回 `get_margin()` 源码后撤回——它逐个请求日调 `margin_detail`，故坏日期/off-calendar 属**源级矛盾**而非行级缺口，整帧 fail-closed 是对的，改逐行反而更糟；真正的类只有 NaN 一条腿，已修完。
