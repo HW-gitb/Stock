@@ -30,6 +30,21 @@
 - **Verify**: 改动面 `5/2` 行、`git diff --check` 干净。scope grep 先行：无测试或 schema 钉住这两个格式串（测试只断言 `[sidecar-health] UNAVAILABLE` 这个另一分支）。最小覆盖包 `tests.test_a_short_weekly_sidecar_health` 一次跑绿 `Ran 40 tests ... OK`；再用本周真实 degraded 产物过一遍改后的 `write_health_bundle`，表头得 `overall=degraded · m67=failed · advanced=0 · stalled=0 · failed=0 · partial=0`，正控（healthy 载荷）得 `overall=healthy · m67=complete`，未凭空宣称失败。
 - **Next**: Codex：执行桌面清单第 3 条（`margin_coverage` 的 `universe_size=0`）。
 - **Pre-Codex self-review**: `matrix=complete: 总评成因字段的全部输出出口 = console + markdown 表头（JSON 已含该字段）`; `register=non-material`; `handoff=not_required: 显示面单字段增列，属 AGENTS §交接记录「不写 handoff」类`; `focused=40 OK / 12.5s`; `full-lane=not_triggered: AGENTS rule 3; reason=仅两处输出格式串，未触及引擎/schema/契约/provider/授权面`; `door=route 14 OK + doc-governance 41 OK（合并跑 Ran 55 tests ... OK）`; A=两出口全覆盖; B=全仓 grep 旧格式串零残留; C=正控 healthy 载荷不误报失败; D=N-A; E=SESSION_LOG 单态; F=`git diff --check` 干净、无 BOM
+## 2026-08-03 — Claude 审查 PASS（financial 缓存绑代码集+季度窗+语义）
+
+- **Verdict/Action**: PASS，已提交并合入 master。原键 `financial_{TODAY}_{len(ts_codes)}` 只认「同一天 + 同样只数」，代码集完全不同也照样命中——比两融那条更危险，因为它是**内容盲**的。现改为键里绑代码集 digest、季度窗 digest、`get_financial_data` 的 AST 语义指纹与 `financial_v2` 版本 token，并把缓存值包成 `FinancialObservation` 信封，读时逐项校验（as_of/只数/代码 digest/季度/语义/帧内代码/必需列）。命中路径改为返回 `frame.copy()`，调用方改不动缓存。
+- **Required**: 无；Register: 本条对应 register 顶部条目已闭合，另记一条不阻断 Optional（写盘侧 `_financial_observation` 仍以 `RuntimeError` 抛出、无处理），正文只见 `docs/system_risk_register.md`（单一来源，本处不复述）。
+- **Verify**: review-evidence:57b8b63a5aef；超时原因:合并时 effect-contract 指纹与 master 冲突，需从合并后源码重算并复跑覆盖包。rule 3(a) 全量走唯一入口得 `CACHED GREEN - a_short = 2284 OK`，`2275→2284` 的 `+9` 恰等于新增 `tests/test_a_short_financial_cache_contract.py` 的 9 条用例（该文件在 lane 选择器内，已被全量覆盖）。reviewer 自写探针：干净 provider 首跑 4 次调用、复跑 **0 次**（无额外 provider 花费）；**同只数不同代码集确实重新取数并另开缓存条目**（原缺陷已消失）；provider 返回同 `(ts_code, period)` 重述行时产出仍 `dup_ts_code=0`、**不抛错**，即写盘侧契约不会被真实 provider 抖动触发。
+- **Next**: Codex：修桌面清单第 2 条（带 `-Account` 时 M6.7 被 effect-contract 趋势守卫挡死）。
+
+## 2026-08-03 — Codex 修复（financial 缓存代码集与语义绑定）
+
+- **Verdict/Action**: 当前工作树已修复 `R-ASHORT-FINANCIAL-CACHE-CODESET-AND-SEMANTICS-COLLISION`；旧 `financial_{date}_{count}` 不再读取，缓存改为 `financial_v2` 信封与代码集/报告期/语义指纹绑定；未提交、未 push、未 merge。
+- **Required**: 同数量不同股票集合不得撞键；旧裸 DataFrame、外部代码、元数据篡改或语义失配不得进入财务消费者，必须丢弃并重取；provider 失败不得回退旧帧，coverage/reconciliation 继续 fail-closed。完整细节见风险登记顶部同名条目。
+- **Verify**: 主 Python `C:\Users\cnhea\AppData\Local\Programs\Python\Python313\python.exe`（`Python 3.13.8`）；financial contract=9 OK；最终 focused=94 OK；full-lane=2284 OK/skipped=3，ledger=PASS/exit=0/elapsed=347.7s/deadline=860s；`py_compile`/`git diff --check`=OK；provider/live 与 `--as-of 20260803`=NOT_VERIFIED。
+- **Pre-Codex self-review**: matrix=code-set/key/quarter/semantic envelope/consumer/negative；register=updated；handoff=updated；focused=94 OK；full-lane=2284 OK/skipped=3；door=docs-governance+route-doc=55 OK；A=exact-set key；B=bare/foreign/tampered refetch；C=legacy collision/provider failure negatives；F=fixed main Python/no provider-live；independent=NOT_USED, Claude review required。
+- **Next**: Claude Code：独立审查本刀；PASS 前不得提交/合入。
+
 ## 2026-08-03 — Claude 审查 PASS（两融缓存语义绑定 + 崩溃改降级）
 
 - **Verdict/Action**: PASS，已提交并合入 master。三层都落到位：键升 `rule6_v5`、键里绑 `_margin_observation`/`public_dict`/`_canonical_ashare_ts_code` 的 AST 指纹与全部阈值常量、语义不一致由 `raise` 改为「记警告→丢弃→重取」。reviewer 直接复现生产那次崩溃：把旧语义 observation（`invalid/0`）塞进当前键，修前抛 `RuntimeError`，修后只打警告并真的走了重取路径。fail-closed 强制腿未松：缓存对象不是 `MarginObservation` 仍然硬抛。
