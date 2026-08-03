@@ -653,3 +653,36 @@
 ### 交接给下一位
 
 - Claude Code 需独立审查当前五个代码/测试/schema 文件、风险登记、SESSION_LOG、窗口/缓存 source binding、消费者退化和负向门；PASS 后由 Claude Code 按项目流程提交。当前未授权把 real `--as-of 20260803` 运行结果写成已验证事实。
+
+## 2026-08-03 追加：桌面清单第 6 条 q0_net_income 误分类收口（Codex；待 Claude Code 独立审查）
+
+### 改了什么 / 为什么
+
+- 将桌面第 6 条拆成两个不同类别：`pct_60d` 是已修复的真实计算链缺陷；`q0_net_income` 的全空是既有的有意常量空值，不是漏算因子。
+- `A-EGS/egs_main.py` 保留 `ttm_net_income` / `q0_net_income` 的 nullable 兼容输出，不发起逐票 `income` 调用，不改评分、否决、入场或 schema 形状；质量检查实际读取 `q0_dt_profit_ratio`、`ttm_profit_dedt`、`ttm_ocf_ratio`，`q0_profit_dedt` 仅作为批量派生的伴随输出，不声称数值等价。
+- `schemas/analysis_input.schema.json` 和 `schemas/analysis_input_coverage.md` 现在把 q0 字段标成 intentional unavailable / compatibility-only；effect contract 仍保持现有 group-level unresolved 口径，正式 leaf split/deletion 留给独立 schema migration。
+
+### 改动文件
+
+- `A-EGS/egs_main.py`
+- `schemas/analysis_input.schema.json`
+- `schemas/analysis_input_coverage.md`
+- `tests/test_a_short_effect_contract.py`
+- `docs/system_risk_register.md`（`R-ASHORT-Q0-NET-INCOME-INTENTIONAL-NULL-MISREAD-AS-MISSING-FACTOR`；并同步第 4 条 qfq 风险已合入状态）
+- `docs/SESSION_LOG.md`
+
+### 验证与边界
+
+- 唯一解释器：`C:\Users\cnhea\AppData\Local\Programs\Python\Python313\python.exe`，版本 `Python 3.13.8`。
+- 本轮 focused 需覆盖 effect-contract producer-null guard、q0 文档状态断言、相邻财报质量消费者、schema/文档守卫；full lane 未触发：本刀只改既有 producer 注释、schema description、coverage 文档和测试，不改生产判定或字段形状。
+- `q0_net_income` 不会因本刀重新填值；既有 20260803 全排名 CSV 的空兼容列仍可存在。未执行 provider/live、未覆盖真实新产物、未涉及账户/持仓/下单、未 commit/push/merge。
+
+### 失效旧结论
+
+- “`q0_net_income` 全表为空必然说明 income 数据链断裂”作废；当前代码明确这是批量接口限制下的兼容性空值。
+- “`q0_dt_profit_ratio` 是净利润数值的等价替代”作废；它只替代质量检查用途，`ttm_profit_dedt` 是 OCF 质量检查的规模代理。
+
+### 下一步注意事项
+
+- Claude Code 需独立复核 schema description、coverage 口径、producer constant-null 派生 guard、无决策消费者的调用链与 focused 证据；PASS 后按项目流程提交本轮 PASS 覆盖文件。
+- 若未来要删除字段或把 q0 从 `candidate_fundamental` group 正式拆出，必须另立 schema/effect-contract migration；不得把本次文档澄清当成删除或重新取数授权。
