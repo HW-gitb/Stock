@@ -3219,12 +3219,16 @@ def _margin_semantics_fingerprint():
 
 
 def _margin_cache_key(trade_dates):
-    dates = tuple(map(str, trade_dates[:MARGIN_FETCH_SESSIONS]))
-    if not dates:
+    # Only the head is fetched, but ``_margin_observation`` classifies against the
+    # WHOLE calendar it is handed -- membership, eligible dates and lag position all
+    # read ``calendar_dates``.  Digesting only the fetched head would let two runs
+    # with the same head but a different tail share one cached observation.
+    window = tuple(map(str, trade_dates))
+    if not window:
         raise ValueError("margin cache requires at least one trade date")
-    window_digest = hashlib.sha256("|".join(dates).encode("utf-8")).hexdigest()[:12]
+    window_digest = hashlib.sha256("|".join(window).encode("utf-8")).hexdigest()[:12]
     return (
-        f"margin_{dates[0]}_{MARGIN_CACHE_SEMANTICS_VERSION}_"
+        f"margin_{window[0]}_{MARGIN_CACHE_SEMANTICS_VERSION}_"
         f"{_margin_semantics_fingerprint()}_{window_digest}"
     )
 

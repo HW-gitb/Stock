@@ -1,5 +1,13 @@
 # Session Log
 
+## 2026-08-03 — Claude 修复（两融缓存键绑完整窗口，收口同轮 Optional）
+
+- **Verdict/Action**: 用户授权本轮 Optional 自修自审。`window_digest` 原先只摘 `trade_dates[:12]`（实际取数的头部），而 `_margin_observation` 的分类读的是**完整** `calendar_dates`（成员资格 / `eligible_dates` / `lag_sessions` 全靠它），于是「同头不同尾」的两次运行会共用一份缓存身份。改为对完整窗口取 digest，理由写进函数内注释。纯缓存身份扩宽，不动任何决策逻辑、阈值或取数量。
+- **Required**: 无；Register: `R-ASHORT-MARGIN-CACHE-SEMANTICS-VERSION-STALE` 的同轮 Optional 已闭并写清实测，父条状态同步改为 closed（已合入 `0839f365`），正文只见 `docs/system_risk_register.md` 顶部。
+- **Verify**: 改动面 `A-EGS/egs_main.py` `+8/-4` 与契约指纹 `+1/-1`；`git diff --check` 干净。scope grep 先行：全仓只有 `tests/phase6/test_egs_margin_coverage.py` 钉住键形态。最小覆盖包一次跑绿 `RESULT tier=focused status=PASS exit=0 tests=23`（首跑红在 6 条 `decision predicate changed without effect contract update`，重算 `decision_predicate_sha256` 后 `static_contract_error()` 回到 `None`）。自写探针：同头不同尾键不同、更短窗口键不同、同输入键稳定、空输入仍 `ValueError`。本轮运行产生的 7 个 `research/results/a_short/*` 汇总产物不在本次提交范围。
+- **Next**: Codex：修桌面清单第 2 条（带 `-Account` 时 M6.7 被 effect-contract 趋势守卫挡死）。
+- **Pre-Codex self-review**: `matrix=complete: 单点 Optional`; `register=updated`; `handoff=not_required: 父条已记录该 Optional`; `focused=23 OK / 3.8s`; `full-lane=not_triggered: §6a Optional-only 快档; reason=纯缓存身份扩宽、无决策逻辑改动`; `door=route 14 + doc-governance 41（合跑 55 OK）`; A=键身份全部输入面; B=grep 无旧形态残留; C=空输入/短窗口反控; D=N-A; E=register 单态; F=diff-check 干净、`static_contract_error=None`
+
 ## 2026-08-03 — Claude 修复（A4 落地后的 raw-root 隔离缝 + 两条 review Optional）
 
 - **Verdict/Action**: A4 合入主树后我跑两个 provider 模块发现主树红、执行方树绿、代码逐字节相同。根因：A4 把 `raw_root` 默认值绑进四处签名，import 时求值使 `mock.patch.object(module,"DEFAULT_RAW_ROOT",tmp)` 失效，离线测试一直写真实 raw 根；主树旧收据字节不同 → `immutable_raw_content_conflict` → 主题掉光。四处改回 call-time 解析（`raw_root or DEFAULT_RAW_ROOT` 原就在两个分支，fail-closed 未削弱）。顺带收两条 Optional：两 lane 的 evidence-unavailable 改为打印可机读 summary + exit 2；B5 planted control 不再用 `assertRaises(AssertionError)` 包自身断言。
