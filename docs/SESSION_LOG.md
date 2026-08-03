@@ -1,5 +1,20 @@
 # Session Log
 
+## 2026-08-03 — Claude 审查 PASS（北向资金量纲，#05）
+
+- **Verdict/Action**: PASS，已提交并合入 master。量纲判定正确（万元→元，量级论证决定性且 `hgt+sgt==north_money` 自洽），显示与两个防御判据统一读同一个元口径变量；`np` 已导入无 NameError 风险；`env_report` 只进控制台、不改选股。
+- **Required**: 无。`R-ASHORT-KNIFE5-NORTHBOUND-MONEYFLOW-UNIT-MISMATCH` 已 closed；一条不阻断 Optional（新测试只覆盖 2/9 腿，阈值反控与新 fail-closed 行为零覆盖）见 `docs/system_risk_register.md`（单一来源，本处不复述）。
+- **Verify**: review-evidence:738da66dbd8a；自写九腿探针本树实跑全对——真实样本 `134.00 亿`（修前 `0.01 亿`）、-40 亿不触发、-60 亿触发、恰好 -50 亿不触发、全 NaN/空表/缺列/inf/None 均「不可用」。`static_contract_error()=None`；full lane `CACHED GREEN 2311 OK`（与执行方同 HEAD `95baf649` 自跑一致），`2309→2311` 的 `+2` 恰等于新增用例。live `moneyflow_hsgt` 与 `-Account` 实跑仍 `NOT_VERIFIED`。
+- **Next**: Codex：执行
+
+## 2026-08-03 — Codex 修复：桌面清单 #05（D-2）北向资金量纲与防御阈值（独立审查待办）
+
+- **Verdict/Action**: 已按桌面 #05 修复 `moneyflow_hsgt.north_money` 万元→人民币元的 producer 单位边界；显示、大幅流出阈值和 CSI300 联合静默三条消费者统一读取 `north_flow_yuan`。工作树修复完成，独立审查待办。
+- **Required**: `R-ASHORT-KNIFE5-NORTHBOUND-MONEYFLOW-UNIT-MISMATCH`；完整根因、调用链、schema/source-binding、负向控制、边界与 NOT_VERIFIED 见 `docs/system_risk_register.md`，同阶段详细交接见 `docs/handoff/2026-08-01_a_short_leaf_wiring_classification_handoff.md`。
+- **Verify**: 固定主 Python `C:\Users\cnhea\AppData\Local\Programs\Python\Python313\python.exe`（`Python 3.13.8`）；focused `Ran 50 tests in 50.453s ... OK`；官方稳定 HEAD full lane `Ran 2311 tests in 318.407s ... OK (skipped=3)`，`RESULT status=PASS exit=0 tests=2311 elapsed=320.2s deadline=860s`；`py_compile` exit 0；首次 full lane 因外部 docs-only HEAD 推进被 ledger 拒绝，未采信。
+- **Pre-Codex self-review**: matrix=unit-boundary/display/large-outflow-threshold/silence-consumer/invalid-input/effect-contract/ripple-grep/write-boundary/#08-scope; register=updated; handoff=updated; focused=50 OK; full-lane=2311 OK + RESULT status=PASS; door=final route/doc-governance/readme 66 OK; provider/live/account=#05 NOT_VERIFIED; independent-review=NOT_VERIFIED; commit=NOT_PERFORMED。
+- **Next**: Claude Code：独立审查 `R-ASHORT-KNIFE5-NORTHBOUND-MONEYFLOW-UNIT-MISMATCH`。
+
 ## 2026-08-03 — Claude 审查 PASS（A-short #01 R4b 写回 anti-rescue，二轮收口）
 
 - **Verdict/Action**: PASS，已提交并合入 master。上一轮三条 Required 全按指定形态修好：`:3634-3637` 覆盖改成 `_severity_max_disposition` 合并；写回前新增跨周 anti-rescue 断言（降档 / 止损下降 / 止损丢失）；`plan["stop"]` 改写前捕获 `_orig_eff` 让写点判据重新有牙；类 2 按边界只补一条 `blocked_add_required` 整段改写反控。

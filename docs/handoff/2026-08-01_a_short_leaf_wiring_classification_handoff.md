@@ -574,3 +574,53 @@ main() → _upcoming_events() → _attach_forward_event_impacts() → _attach_ho
 **约束 ③（2026-08-03 Claude Code 补，实读 `schemas/a_short_m67_effect_contract.json`）**：序 11 的 #09 **不必发明新 nature 值**。`leaf_nature_by_group` 已有 `true_dangling` 这一档并已在用——29 个 group 的 nature 分布实测为 `main_decision` 6 / `partial_consumption` 9 / `true_dangling` 9 / `comparison_track` 2 / `duplicate_source` 2 / `display_audit` 1，其中 `candidate_capital_flow`、`candidate_quote`、`account_context` 等 9 个组正用 `true_dangling` 诚实表达「整组真悬空」。所以 #09 的实质是给 `market_context` 这种**组内混合**的情形补一个**叶级出口**，把那 28 条恒空叶按既有 `true_dangling` 逐条标注即可，不是设计能力缺失，也不需要新概念。
 
 **附带实证（不要当缺陷去修）**：`candidates[].capital_flow.margin.*` 五个字段（`balance` / `balance_change_5d_pct` / `balance_change_10d_pct` / `balance_to_float_mv_pct` / `extreme_accumulation`）在 2026-08-03 实盘周跑里 15 只候选**全为 null**，生产者 `A-EGS/egs_main.py:791-794` 写死 `None`。但其所属组已诚实标注 `true_dangling`，属 `docs/CURRENT.md` §0 所述「Remaining `true_dangling` leaves are not yet wired」的**既定待接线存量**，**不是新漏洞**，不进 a_cc_testrun1 清单。同一份两融数据在 `event_risk.rule6_checks[].metrics` 里是有值的（本轮 `600236.SH` 因 `margin_growth=0.2399` vs `price_gain=0.0188` 被 `rule6_margin_extreme_accumulation` 判 `fail` → `rule6_gate.disposition=hard_veto` → M6.7 `操作=否决`），判断链完好，空的只是展示字段。
+
+## 2026-08-03 追加：桌面清单 #05（D-2）北向资金量纲与防御阈值
+
+### 文档作用与范围
+
+本节是当前 A-short executor/fixer 给 Claude Code reviewer/committer 的同日追加交接，记录桌面 `a_cc_testrun1.md` #05 的判断、根因、修复、调用链、直接消费者、schema/source-binding、写盘边界、负向控制、自审、固定 Python、原始测试终态、NOT_VERIFIED 和下一步。`docs/handoff/README.md` 将本文件定义为 A-short 叶级接线/效果分类与本周漏洞的当前 phase handoff；完整风险单一来源为 `docs/system_risk_register.md` 的 `R-ASHORT-KNIFE5-NORTHBOUND-MONEYFLOW-UNIT-MISMATCH`，`docs/SESSION_LOG.md` 只保留最小 cycle facts。本节不授权 provider/live、真实周跑、账户实盘、下单、commit、push 或 merge。
+
+### 意见判断、根因与修复
+
+- **意见正确，且 #05 确实是 #01 闭合后的下一刀**：桌面清单第 3 批把它列为 D-2；当前 handoff 的重排表也明确把 #05 排为序 1，#08 northbound 接线依赖本刀。
+- `pro.moneyflow_hsgt.north_money` 的接口数值口径是**万元**。旧实现直接求和后把数值当人民币元，显示再 `/1e8`，所以 `281077.72 + 341408.12 + 363460.14 + 354101.65 = 1,340,047.63 万元` 被错误显示成 `0.01 亿`，正确值约为 `134.00 亿`。
+- 同一个未归一化数值还被两个防御消费者复用：`north_flow < -50e8` 的大幅流出阈值被错误解释为约 `-50 万亿元` 的原始万元数，实际死掉；CSI300 下跌时的静默条件也读同一错误量。
+- 修复采用一次性、显式的 source boundary：新增 `TUSHARE_MONEYFLOW_HSGT_NORTH_MONEY_UNIT_YUAN = 10_000`，将 `north_money` 先归一为 `north_flow_yuan`；显示、`north_flow_yuan < -50e8` 大幅流出、`north_flow_yuan < 0` 静默三处只消费这个人民币元值。`sum(min_count=1)` 加有限值判断保持空/全无效输入不伪装成零流入，继续输出数据不可用。
+
+### 调用链、消费者、schema/source-binding 与写盘边界
+
+- 调用链：`run_egs()` → `market_environment(trade_dates, stats_df)` → `safe_api(pro.moneyflow_hsgt, start_date=trade_dates[4], end_date=trade_dates[0])` → `north_money`（万元）→ `north_flow_yuan`（人民币元）→ 市场环境字符串 → `env_report` 控制台输出。
+- 直接消费者只有同一函数内的三个市场环境出口：`近一周净流入` 显示、`北向资金大幅流出` 防御提示、CSI300<-10 且北向为负的 `[静默]`。全仓旧独立符号 `north_flow` 与旧 raw-sum 形态均无残留；`#08 market_context.northbound` 结构化接线仍是后续刀，本刀不扩大范围。
+- schema/source-binding：未改变 `analysis_input`、M6.7 或 weekly report 的 schema 形状；`moneyflow_hsgt.north_money` 的万元→人民币元单位绑定落在 EGS producer 代码的显式常量上。因 A-EGS 生产判据/常量改变，按固定 Python inventory 只重封 `schemas/a_short_m67_effect_contract.json` 中 `A-EGS/egs_main.py` 的 `decision_predicate_sha256` 与 `runtime_constants_sha256`；未改 provider endpoint、API 参数、PIT 日期窗口或其他 runtime policy。
+- 写盘边界：`env_report` 仍只由 EGS 现有控制台输出路径打印；本刀未刷新 `result/`、正式分析产物、weekly/private artifact、缓存或账户状态。测试对 `safe_api` / CSI300 返回做内存 patch；full lane 只执行离线测试，不调用 provider/live/network/order。
+
+### 负向控制与自审
+
+- 正向单位控制：四个桌面实测形状数值作为万元 fixture，期望输出 `北向资金近一周净流入: 134.00 亿`，旧 `0.01 亿` 不得出现。
+- 防御负向/正控：`-600000 万元 = -60 亿` 且 CSI300 `-11` 时，必须同时出现 `-60.00 亿`、`北向资金大幅流出，防御信号` 与 `[静默]`；这条同时证明阈值和静默两个消费者不能只修显示腿。
+- 结构自审矩阵：source unit constant → normalized internal value → display → large-outflow threshold → silence predicate → invalid/finite fail-closed → EGS `env_report` write boundary → effect-contract predicate/constant reseal → old-symbol/raw-sum ripple grep → full-lane selection coverage。
+- 全仓残留证据：固定 `rg -n -w 'north_flow' A-EGS engine runners tests` 为 0 hits；固定 `rg -n -F 'df_hsgt["north_money"].sum()' .` 为 0 hits；现存 `north_money` 命中均为 API 字段读取、单位常量说明或本刀测试 fixture，未发现第二个市场环境转换消费者。
+
+### 固定 Python、精确测试命令与原始终态
+
+- 唯一解释器：`C:\Users\cnhea\AppData\Local\Programs\Python\Python313\python.exe`；版本原始终态：`Python 3.13.8`。
+- 聚焦命令：`Set-Location -LiteralPath 'D:\cnhea\Codex\worktrees\29e0\Stock'; & 'C:\Users\cnhea\AppData\Local\Programs\Python\Python313\python.exe' -m unittest tests.test_a_short_egs_market_environment tests.test_a_short_effect_contract` → `Ran 50 tests in 50.453s ... OK`。
+- 语法命令：`& 'C:\Users\cnhea\AppData\Local\Programs\Python\Python313\python.exe' -m py_compile 'D:\cnhea\Codex\worktrees\29e0\Stock\A-EGS\egs_main.py' 'D:\cnhea\Codex\worktrees\29e0\Stock\tests\test_a_short_egs_market_environment.py'` → exit `0`。
+- 官方 full lane 命令：`Set-Location -LiteralPath 'D:\cnhea\Codex\worktrees\29e0\Stock'; & 'C:\Users\cnhea\AppData\Local\Programs\Python\Python313\python.exe' 'D:\cnhea\Codex\worktrees\29e0\Stock\.tools\full_pack_ledger.py' run a_short 'R-ASHORT-KNIFE5-NORTHBOUND-UNIT-CONTRACT' 'focused 50 OK; Tushare north_money 万元 to normalized RMB; display + defensive threshold + silence consumers; static contract and py_compile OK' 860 -- discover -s tests -p 'test_a_short*.py'` → `Ran 2311 tests in 318.407s ... OK (skipped=3)`；`[full-pack-ledger] RESULT status=PASS exit=0 tests=2311 elapsed=320.2s deadline=860s`；ledger fingerprint `f8f172610569`。
+- 第一次同一 full lane 的测试主体虽为 `Ran 2311 tests ... OK`，但 ledger 因运行期间 HEAD 从 `030d7ee4` 推进到 docs-only `95baf649` 而输出 `REFUSED - code state changed during the full run`，不采信为 PASS；在稳定 `95baf649` 上重跑才取得上述有效 PASS。未执行任何 commit。
+- effect-contract 聚焦已证明 `static_contract_error=None`；文档追加后最终 `git diff --check` exit `0`（仅 CRLF 转换提示），最终文档/路由门禁 `Ran 66 tests in 0.942s ... OK`。
+
+### NOT_VERIFIED、审查/提交边界与下一步
+
+- `NOT_VERIFIED`：真实 `pro.moneyflow_hsgt` provider 行为、网络/live、`--confirm-fetch-authorized`、带 `-Account` 的真实周跑、生产/私密产物刷新、#08 `market_context.northbound` 接线及实际防御周报均未执行；未启动 sub-agent，未自动下单。
+- Claude Code reviewer/committer 尚未独立审查；本节不是 review PASS、不是 ship/live PASS。`commit/push/merge = NOT_PERFORMED`；full-pack 的 `RESULT status=PASS` 只证明本次离线测试包，不替代独立审查。
+- 下一步：Claude Code：独立审查 `R-ASHORT-KNIFE5-NORTHBOUND-MONEYFLOW-UNIT-MISMATCH`，逐项复核万元→元 source-binding、三个直接消费者、effect-contract 重封、负向控制与 #08 未越界；审查 PASS 后按项目规则提交。
+
+### 2026-08-03 Claude Code 独立审查 = PASS（#05 北向资金量纲）
+
+- **Verdict**: PASS，已提交并合入 master。量纲（万元→元）判定正确，显示与两个防御判据统一读元口径；执行方另修对一条我未点名的洞——`sum(min_count=1)`+finite-check 让全 NaN 不再假装「0.00 亿」。
+- **实测（reviewer 九腿探针）**：真实样本 `134.00 亿`（修前 `0.01 亿`）；阈值反控 -40 亿不触发、边界恰好 -50 亿不触发、-60 亿触发；全 NaN / 空表 / 缺列 / inf / None 五种坏输入均「北向资金数据不可用」。九腿全对。
+- **Optional（不阻断，正文见 register 同一 R-ID）**：新测试只覆盖其中两腿，阈值反控与新引入的 fail-closed 行为零覆盖；建议补三条。
+- **影响面澄清**：`env_report` 只在 `A-EGS/egs_main.py:5885` 被 `print`，不进 `analysis_input`（`northbound` 仍是 #08 的恒空叶）、不改选股/veto/仓位。
+- **Verify**: review-evidence:738da66dbd8a；`static_contract_error()=None`；full lane `CACHED GREEN 2311 OK`（同 HEAD `95baf649`）。live `moneyflow_hsgt` 与 `-Account` 实跑 `NOT_VERIFIED`。
