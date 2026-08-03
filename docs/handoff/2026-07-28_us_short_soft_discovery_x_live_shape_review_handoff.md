@@ -2160,4 +2160,15 @@ Claude Code：独立复审两个 v0.2.0 Required；PASS 后提交，Codex 不提
 
 **给用户的一行**：不花钱的两件都做完了。下一件是 08-08/08-09 那次 bounded 探针——要真金白银、要你逐次授权、也要你定形状（裁决拿 `pass_to_query_planner_implementation` / `revise_stage1_templates_before_planner` / `inconclusive` 三选一）。在你下命令之前，仓内没有可执行的下一刀。
 
-~~**给 Codex 的命令**：上文「执行 离线端到端跑到打分」那条已执行并复审 PASS、合入 master，此条作废；本轮不产生新的 Codex 命令。~~
+~~**给 Codex 的命令**：上文「执行 离线端到端跑到打分」那条已执行并复审 PASS、合入 master，此条作废。~~
+
+## 2026-08-03 追加：08-08/09 探针的形状裁定 + 两个必须先建的离线缺件
+
+**用户裁定（2026-08-03）**：08-08（六）/ 08-09（日）那次 bounded 查询质量探针的**形状 = 「能跑的都跑」**——四条 Stage-1 模板全上、Web 与 X 两条 lane 都跑，即 packet 结构上限 `Tavily 4 + DeepSeek 4 + xAI 4 = 12` 次实际调用（预留单位 12，预留≠实花）。裁决仍从 `pass_to_query_planner_implementation` / `revise_stage1_templates_before_planner` / `inconclusive` 三选一。真跑当天仍需用户**逐次**授权 + `--live --confirm-user-authorization`。
+
+**为什么现在还跑不了（reviewer 实测的两个硬缺件，都属离线、不花钱）**
+
+1. **没有任何东西能产出 `--parent-plan` 要的那份计划**。`build_parent_plan` 只存在于 `engine/us_short_llm_theme_discovery_query_plan.py`，`runners/` 下**零调用点**；`render_stage1_queries` 除自身模块外**零消费者**。两个 live CLI 确实都接了 `--parent-plan <path>`，但**没有生产者**——计划文件只能手写，而手写恰恰废掉了「正式入口只接受已审模板渲染、不接受操作员自由文本」这条设计。
+2. **20260730 那份 packet 焊死在已烧掉的 `20260802` 槽和 v0.1.0 文本上**。`execution_slot_map.expected_decision_date="20260802"`，四个 decision_outputs / 两个 budget_ledger / assessment 路径全是字面 `..._20260802.json`，且 `output_or_receipt_overrides_allowed=false`、`raw_root_overrides_allowed=false`、`unregistered_slots_allowed=false`；gates 里 `exact_query_bytes_required=true`、`exact_execution_slot_map_match_required=true`、`cli_slot_overrides_forbidden=true`。而评估器 `runners/us_short_soft_discovery_query_quality_probe_assess.py:478` 的期望查询正是 `packet["query_templates"]` 里那四条 **v0.1.0** 原文。所以既换不了槽，也对不上 v0.2.0 的新问法。
+
+**给 Codex 的命令**：`执行 08-08 探针前置两件（纯离线、零 provider、零网络、零付费、不占决策槽；不得触发任何 live 调用）：① 建 plan-builder runner（建议 runners/us_short_llm_theme_discovery_build_parent_plan.py）：唯一输入是 reviewed policy 容器（走 engine.us_short_llm_theme_discovery_query_policy.render_stage1_queries）+ 决策日 + provider envelope，输出两个 live CLI 的 --parent-plan 直接可消费的计划 artifact；**禁止任何自由文本查询入口**（不接受 --query/任意字符串，只接受 policy 渲染结果），写盘前过 query_plan 的 schema/校验；配反控：往计划里塞一条不在 policy 渲染结果里的查询必须在任何扣账与付费之前被拒，挖掉该校验即转红 ② 建 20260808 槽的新探针 packet（docs/us_short_soft_discovery_query_quality_probe_packet_20260808.json + 同名 schema 测试）：结构照抄 20260730 那份，但 execution_slot_map.expected_decision_date=20260808、四个 decision_outputs / 两个 budget_ledger / assessment 路径同步改成 20260808、四条 query 文本换成 v0.2.0 preset 的**逐字节**文本、policy_draft.policy_version 同步；provider_budget 按用户裁定保持 tavily 4 / deepseek 4 / xai 4、max_actual_provider_calls=12；**pre_execution_gates 一个字都不许放松**（exact_query_bytes_required / exact_execution_slot_map_match_required / cli_slot_overrides_forbidden / independent_review_pass_required / fresh_explicit_user_authorization_required 全部保持 true）③ 加一条断言把三者钉在一起：plan-builder 渲染出的四条查询逐字节 == 新 packet 的 query_templates == v0.2.0 preset 的 stage1_templates；任一处漂移即红 ④ 离线 dry-run 走通全链（不加 --live）：build plan → 两个 fetch runner 的 dry-run → 评估器 --preflight-only，产出可审查的 plan 与 preflight ⑤ 20260730 那份旧 packet 保留作只读历史，不要改它、也不要让新 packet 复用它的槽 ⑥ 跑前跑后对 state/us_short 与 provider_samples 做残留快照；禁止真实 provider/网络/付费 ⑦ 跑 discover -s tests -p test_us_short_llm_theme_discovery* 超集 + 相关 schema 包后交审查`
