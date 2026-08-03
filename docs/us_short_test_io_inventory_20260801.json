@@ -7,16 +7,16 @@
       "state/us_short"
     ]
   },
-  "module_count": 282,
+  "module_count": 283,
   "classification_counts": {
-    "class0_no_direct_protected_io": 222,
+    "class0_no_direct_protected_io": 223,
     "class1_read_real_root": 0,
     "class2_write_real_root": 3,
     "class3_global_sentinel": 5,
     "class4_unresolved_write": 52
   },
   "class0_modules_omitted": true,
-  "module_path_sha256": "503c6b261f688599c80c0fc52a239b139defeac9a85d30c8a2e94414e7e05655",
+  "module_path_sha256": "b19c11bc2ff71821a82600e179eb1c85587778a7794e8fbee8e9c67b8340265e",
   "allowlist": [
     "tests/provider/test_us_short_batch5_bankruptcy_8k_source_packet.py:kwarg:packet_ref:state/us_short",
     "tests/provider/test_us_short_batch5_bankruptcy_8k_source_packet.py:kwarg:screen_path:state/us_short",
@@ -26,6 +26,7 @@
     "tests/provider/test_us_short_batch5_incident_log_writer.py:write_text:state/us_short",
     "tests/provider/test_us_short_batch5_live_source_packet.py:kwarg:raw_sample_ref:provider_samples",
     "tests/provider/test_us_short_batch5_theme_source_packet.py:kwarg:raw_sample_ref:provider_samples",
+    "tests/schema/test_us_short_soft_discovery_query_quality_probe_packet_schema.py:kwarg:state_dir:state/us_short",
     "tests/test_us_short_capstone_checkpoint.py:kwarg:input_logical_paths:state/us_short",
     "tests/test_us_short_capstone_checkpoint.py:kwarg:output_logical_paths:state/us_short",
     "tests/test_us_short_forward_policy_private_week.py:kwarg:private_output_path:state/us_short"
@@ -258,7 +259,7 @@
     "tests/provider/test_us_short_forward_policy_corporate_action_fetch.py:kwarg:sample_root:provider_samples,state/us_short:class4_unresolved_write": 1,
     "tests/provider/test_us_short_forward_universe_snapshot.py:kwarg:output_path:provider_samples,state/us_short:class4_unresolved_write": 1,
     "tests/provider/test_us_short_llm_theme_discovery.py:kwarg:output_path:provider_samples,state/us_short:class4_unresolved_write": 16,
-    "tests/provider/test_us_short_llm_theme_discovery_fetch_web.py:replace:provider_samples,state/us_short:class4_unresolved_write": 2,
+    "tests/provider/test_us_short_llm_theme_discovery_fetch_web.py:replace:provider_samples,state/us_short:class4_unresolved_write": 1,
     "tests/provider/test_us_short_llm_theme_discovery_fetch_x_merge.py:helper:rehash:provider_samples,state/us_short:class4_unresolved_write": 3,
     "tests/provider/test_us_short_llm_theme_discovery_fetch_x_merge.py:mkdir:provider_samples,state/us_short:class4_unresolved_write": 2,
     "tests/provider/test_us_short_llm_theme_discovery_fetch_x_merge.py:rename:provider_samples,state/us_short:class4_unresolved_write": 1,
@@ -372,6 +373,7 @@
     "tests/provider/test_us_short_batch5_incident_log_writer.py:write_text:state/us_short",
     "tests/provider/test_us_short_batch5_live_source_packet.py:kwarg:raw_sample_ref:provider_samples",
     "tests/provider/test_us_short_batch5_theme_source_packet.py:kwarg:raw_sample_ref:provider_samples",
+    "tests/schema/test_us_short_soft_discovery_query_quality_probe_packet_schema.py:kwarg:state_dir:state/us_short",
     "tests/test_us_short_capstone_checkpoint.py:kwarg:input_logical_paths:state/us_short",
     "tests/test_us_short_capstone_checkpoint.py:kwarg:output_logical_paths:state/us_short",
     "tests/test_us_short_forward_policy_private_week.py:kwarg:private_output_path:state/us_short"
@@ -385,6 +387,7 @@
     "tests/provider/test_us_short_batch5_incident_log_writer.py:write_text:state/us_short": 2,
     "tests/provider/test_us_short_batch5_live_source_packet.py:kwarg:raw_sample_ref:provider_samples": 1,
     "tests/provider/test_us_short_batch5_theme_source_packet.py:kwarg:raw_sample_ref:provider_samples": 1,
+    "tests/schema/test_us_short_soft_discovery_query_quality_probe_packet_schema.py:kwarg:state_dir:state/us_short": 2,
     "tests/test_us_short_capstone_checkpoint.py:kwarg:input_logical_paths:state/us_short": 4,
     "tests/test_us_short_capstone_checkpoint.py:kwarg:output_logical_paths:state/us_short": 9,
     "tests/test_us_short_forward_policy_private_week.py:kwarg:private_output_path:state/us_short": 1
@@ -683,7 +686,7 @@
         "state/us_short"
       ],
       "read_count": 0,
-      "write_count": 2
+      "write_count": 1
     },
     {
       "module": "tests/provider/test_us_short_llm_theme_discovery_fetch_x_merge.py",
@@ -793,7 +796,7 @@
         "state/us_short"
       ],
       "read_count": 0,
-      "write_count": 2
+      "write_count": 4
     },
     {
       "module": "tests/test_us_short_action_table_renderer.py",

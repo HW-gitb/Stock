@@ -463,7 +463,7 @@ class ProvisionalThemeValidationTests(unittest.TestCase):
         bad_paths = (
             self.test_state_dir / "us_short_provisional_theme_validation_20260616.json",
             self.test_state_dir / "us_short_llm_theme_discovery_web_20260615.json",
-            self.test_state_dir / "us_short_llm_theme_discovery_web_tavily_20260615_budget.json",
+            self.test_state_dir / "us_short_llm_theme_discovery_plan_web_20260615_budget.json",
             self.test_state_dir / "runs_private" / "operator_state.json",
         )
         for output_path in bad_paths:

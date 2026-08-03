@@ -34,6 +34,7 @@ CLOCK_KEYS_NONE: tuple[str, ...] = ()
 # site - decides what may be replaced; all other decision-date artifacts remain immutable.
 MUTABLE_LEDGER_SUFFIX = "_budget.json"
 QUERY_PLAN_CONSUMPTION_SUFFIX = "_consumption.json"
+BUDGET_ABORT_DIAGNOSTIC_SUFFIX = "_budget_abort.json"
 CONFORMANCE_GUARDS = ("_serialized_payload", "_serialized_sha256")
 
 
@@ -327,6 +328,7 @@ def write_mutable_ledger(
     allowed_suffix = {
         "provider_budget": MUTABLE_LEDGER_SUFFIX,
         "query_plan_consumption": QUERY_PLAN_CONSUMPTION_SUFFIX,
+        "budget_abort": BUDGET_ABORT_DIAGNOSTIC_SUFFIX,
     }.get(ledger_kind)
     if allowed_suffix is None:
         raise DiscoveryPublishPolicyError("unknown mutable ledger kind")
@@ -348,3 +350,39 @@ def write_mutable_ledger(
         raise DiscoveryPublishPolicyError("cannot update the provider reservation ledger") from exc
     finally:
         _discard([tmp] if tmp is not None else [])
+
+
+def write_monotonic_mutable_ledger(
+    payload: dict[str, Any], path: Path, *, root: Path, state_dir: Path,
+    gitignored: Callable[[Path], bool] | None = None,
+    ledger_kind: str = "provider_budget",
+    evidence_rank: Callable[[dict[str, Any]], tuple[int, ...]],
+) -> bool:
+    """Replace a mutable ledger only when the new evidence is strictly stronger.
+
+    This is still the same mutable write door: the lock and the final write both live here.  It
+    is used only for retry diagnostics whose operational wrapper may be replaced, while the
+    nested paid packet/receipt evidence remains immutable and digest-addressed.
+    """
+    resolved = validate_exact_decision_slot(
+        path, path, root=root, state_dir=state_dir, gitignored=gitignored,
+    )
+    with mutable_ledger_lock(resolved):
+        if resolved.exists():
+            try:
+                existing = json.loads(resolved.read_text(encoding="utf-8"))
+            except (OSError, UnicodeDecodeError, json.JSONDecodeError, ValueError) as exc:
+                raise DiscoveryPublishPolicyError(
+                    "cannot compare an unreadable monotonic mutable ledger"
+                ) from exc
+            if type(existing) is not dict:
+                raise DiscoveryPublishPolicyError(
+                    "cannot compare a malformed monotonic mutable ledger"
+                )
+            if evidence_rank(existing) >= evidence_rank(payload):
+                return False
+        write_mutable_ledger(
+            payload, resolved, root=root, state_dir=state_dir,
+            gitignored=gitignored, ledger_kind=ledger_kind,
+        )
+    return True

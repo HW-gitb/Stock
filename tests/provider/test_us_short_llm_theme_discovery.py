@@ -282,6 +282,20 @@ class OfflineLLMThemeDiscoveryTests(unittest.TestCase):
         self.assertFalse(race_slot.exists())
         self.assertEqual(list(self.test_state_dir.glob("*.tmp")), [])
 
+        # The mutable budget-abort family is a real second callsite of the shared serializer.
+        # Keep a non-ASCII byte assertion here so the serializer's ensure_ascii policy is
+        # load-bearing for this callsite, not merely exercised by the immutable sibling.
+        mutable = self.test_state_dir / "us_short_llm_theme_discovery_web_20260615_budget_abort.json"
+        mutable_payload = {"ledger": "预算中止", "evidence": "raw remains replayable"}
+        policy.write_mutable_ledger(
+            mutable_payload, mutable, root=ROOT, state_dir=self.test_state_dir,
+            gitignored=lambda path: True, ledger_kind="budget_abort",
+        )
+        self.assertEqual(
+            mutable.read_bytes(),
+            (json.dumps(mutable_payload, ensure_ascii=False, indent=2) + "\n").encode("utf-8"),
+        )
+
     def test_publish_policy_refuses_a_target_outside_this_lane_state_dir(self):
         """The containment term has its own control: the slot pin alone would also refuse, so this
         aims at a path the pin would accept as `expected_path` and only containment can reject."""
@@ -382,7 +396,7 @@ class OfflineLLMThemeDiscoveryTests(unittest.TestCase):
         bad_paths = (
             self.test_state_dir / "us_short_llm_theme_discovery_20260616.json",
             self.test_state_dir / "us_short_llm_theme_discovery_web_20260615.json",
-            self.test_state_dir / "us_short_llm_theme_discovery_web_tavily_20260615_budget.json",
+            self.test_state_dir / "us_short_llm_theme_discovery_plan_web_20260615_budget.json",
             self.test_state_dir / "lifecycle" / "operator_state.json",
         )
         for output_path in bad_paths:

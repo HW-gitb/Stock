@@ -99,10 +99,10 @@
       "max_results_per_query": 10,
       "rows_per_regroup_call": 10,
       "structural_max_actual_calls": 4,
-      "current_ledger_reservation_units": 25
+      "current_ledger_reservation_units": 4
     },
     "max_actual_provider_calls": 12,
-    "current_ledger_reservation_units": 33,
+    "current_ledger_reservation_units": 12,
     "reservation_units_are_not_actual_spend": true,
     "abort_on_scope_or_budget_drift": true
   },
@@ -132,9 +132,8 @@
       "x_receipt": "state/us_short/us_short_llm_theme_discovery_x_20260802_receipt.json"
     },
     "budget_ledgers": {
-      "web_tavily": "state/us_short/us_short_llm_theme_discovery_web_tavily_20260802_budget.json",
-      "web_deepseek": "state/us_short/us_short_llm_theme_discovery_web_deepseek_20260802_budget.json",
-      "x_xai": "state/us_short/us_short_llm_theme_discovery_x_xai_20260802_budget.json"
+      "web": "state/us_short/us_short_llm_theme_discovery_plan_web_20260802_budget.json",
+      "xai": "state/us_short/us_short_llm_theme_discovery_plan_xai_20260802_budget.json"
     },
     "raw_roots": {
       "web": "provider_samples/us_short_llm_theme_discovery_fetch_web",

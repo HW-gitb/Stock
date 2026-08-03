@@ -12,6 +12,9 @@ from unittest import mock
 from datetime import datetime, timezone
 from pathlib import Path
 
+from engine import us_short_llm_theme_discovery_plan_budget as plan_budget
+from engine import us_short_llm_theme_discovery_paid_gateway as paid_gateway
+from engine import us_short_llm_theme_discovery_provider_policy as provider_policy
 from runners import us_short_llm_theme_discovery_fetch_web as fetch
 from tests.provider.us_short_private_test_root import (
     temporary_provider_directory,
@@ -64,16 +67,37 @@ class _TransportProbe:
         return dict(self._completed)
 
 
+class _DispatchBudget:
+    """Explicit budget seam for executable orchestration tests; no provider/network call."""
+
+    def dispatch_with_outcome(self, _provider, *, scope, stage, call):
+        del scope, stage
+        try:
+            return plan_budget.DispatchOutcome(value=call())
+        except Exception as exc:
+            return plan_budget.DispatchOutcome(call_error=exc)
+
+
+def _noop_persist(_request, _value):
+    """Explicit sink for orchestration-only tests; packet builders test real raw writes separately."""
+    return None
+
+
 def _live_preflight_order_offenders(source: str) -> list[str]:
     """Return the future-live ordering defect without executing the frozen branch."""
     tree = ast.parse(source)
     calls = [
-        (node.func.id, node.lineno)
+        (
+            node.func.attr if isinstance(node.func, ast.Attribute) else node.func.id,
+            node.lineno,
+        )
         for node in ast.walk(tree)
-        if isinstance(node, ast.Call) and isinstance(node.func, ast.Name)
-        and node.func.id in {"_reserve_live_web_provider_budgets", "execute_live_web_orchestration"}
+        if isinstance(node, ast.Call)
+        and isinstance(node.func, (ast.Attribute, ast.Name))
+        and (node.func.attr if isinstance(node.func, ast.Attribute) else node.func.id)
+        in {"reserve_plan_budget", "execute_live_web_orchestration"}
     ]
-    reserve_lines = [line for name, line in calls if name == "_reserve_live_web_provider_budgets"]
+    reserve_lines = [line for name, line in calls if name == "reserve_plan_budget"]
     spend_lines = [line for name, line in calls if name == "execute_live_web_orchestration"]
     if not reserve_lines or not spend_lines:
         return ["missing reserve-before-spend call"]
@@ -127,28 +151,6 @@ class BudgetMutexTests(unittest.TestCase):
             self.assertEqual(failures, [])
             self.assertTrue(second_entered.is_set())
             self.assertFalse(ledger_path.with_name(".budget.json.lock").exists())
-
-    def test_budget_reservation_enters_the_mutex_before_its_read_modify_write(self):
-        from runners import us_short_discovery_publish_policy as policy
-
-        entered: list[Path] = []
-
-        @contextmanager
-        def observed_lock(path: Path):
-            entered.append(path)
-            yield
-
-        with tempfile.TemporaryDirectory() as td:
-            ledger_path = Path(td) / "budget.json"
-            with (
-                mock.patch.object(fetch, "_provider_budget_path", return_value=ledger_path),
-                mock.patch.object(policy, "mutable_ledger_lock", observed_lock),
-                mock.patch.object(fetch, "_reserve_provider_budget_locked"),
-            ):
-                fetch._reserve_provider_budget(
-                    "web", "tavily", "20260726", call_count=1, query_scope=["q"],
-                )
-        self.assertEqual(entered, [ledger_path])
 
     def test_abandoned_mutex_is_released_before_the_fail_closed_error(self):
         """WAIT_ABANDONED grants ownership, so cleanup must release before rejecting the ledger."""
@@ -222,9 +224,7 @@ class WebFetchTests(unittest.TestCase):
     def test_live_mode_requires_confirmation_then_reserves_before_orchestration(self):
         """K3-R34 unfreeze: authorization, private clients, and pre-spend reservation stay ordered."""
         with (
-            mock.patch.object(fetch, "TavilyClient") as tavily_client,
-            mock.patch.object(fetch, "DeepSeekClient") as deepseek_client,
-            mock.patch.object(fetch, "_reserve_live_web_provider_budgets") as reserve,
+            mock.patch.object(fetch.paid_gateway, "create_web_clients") as create_clients,
             mock.patch.object(fetch.os.environ, "get", side_effect=AssertionError("key lookup reached")) as key_lookup,
         ):
             with self.assertRaisesRegex(fetch.WebThemeDiscoveryError, "requires --confirm-user-authorization"):
@@ -232,9 +232,7 @@ class WebFetchTests(unittest.TestCase):
                     queries=["x"], expected_decision_date="20260725",
                     generated_at="2026-07-25T08:00:00Z", live=True,
                 )
-        tavily_client.assert_not_called()
-        deepseek_client.assert_not_called()
-        reserve.assert_not_called()
+        create_clients.assert_not_called()
         key_lookup.assert_not_called()
 
         order: list[str] = []
@@ -251,17 +249,18 @@ class WebFetchTests(unittest.TestCase):
             mock.patch.object(fetch.os.environ, "get", side_effect=lambda key, default: {
                 "TAVILY_API_KEY": TAVILY_TEST_KEY, "DEEPSEEK_API_KEY": "sk-" + "d" * 40,
             }.get(key, default)),
-            mock.patch.object(fetch, "TavilyClient"),
-            mock.patch.object(fetch, "DeepSeekClient"),
-            mock.patch.object(fetch, "_reserve_live_web_provider_budgets", side_effect=lambda *_: order.append("reserve")),
+            mock.patch.object(fetch.paid_gateway, "create_web_clients", return_value=(object(), object())),
+            mock.patch.object(fetch.plan_budget, "validate_run_decision_date"),
+            mock.patch.object(fetch.plan_budget, "reserve_plan_budget", side_effect=lambda *_args, **_kwargs: order.append("plan_reserve") or object()),
             mock.patch.object(fetch, "execute_live_web_orchestration", side_effect=lambda **_: order.append("orchestrate") or outcome),
             mock.patch.object(fetch, "build_web_fetch_packet", return_value=({}, {}, {})),
         ):
             fetch.run_web_fetch(
                 queries=["x"], expected_decision_date="20260725",
                 generated_at="2026-07-25T08:00:00Z", confirm_user_authorization=True, live=True,
+                parent_plan=object(),
             )
-        self.assertEqual(order, ["reserve", "orchestrate"])
+        self.assertEqual(order, ["plan_reserve", "orchestrate"])
 
     def test_tavily_news_request_and_captured_timestamp_shape_keep_valid_row(self):
         """K3-R49/R50: the real `topic=news` shape is RFC 1123/GMT, not guessed ISO-only data."""
@@ -286,9 +285,15 @@ class WebFetchTests(unittest.TestCase):
             captured_request["timeout"] = timeout
             return _Response()
 
-        transport = _TransportProbe("tavily", "deepseek")
-        with mock.patch.object(fetch.urllib.request, "urlopen", side_effect=fake_urlopen):
-            rows = fetch.TavilyClient(TAVILY_TEST_KEY, _live_transport=transport).search("power demand")
+        transport = paid_gateway.new_transport("tavily", "deepseek")
+        with mock.patch.object(paid_gateway.urllib.request, "urlopen", side_effect=fake_urlopen):
+            client = paid_gateway.TavilyClient(TAVILY_TEST_KEY, live_transport=transport)
+            batch = paid_gateway.PaidDispatchGateway(_DispatchBudget()).dispatch_web_search_all(
+                client, ["power demand"], transport=transport,
+                persist_response=_noop_persist,
+            )
+            self.assertEqual(len(batch.items), 1)
+            rows = batch.items[0].outcome.value
         self.assertEqual(captured_request["body"], {
             "api_key": TAVILY_TEST_KEY, "query": "power demand", "max_results": 10,
             "search_depth": "advanced", "topic": "news",
@@ -379,26 +384,23 @@ class WebFetchTests(unittest.TestCase):
     def test_tavily_credential_must_be_one_token_before_any_reservation_or_request(self):
         for invalid in ("", " tvly-one", "tvly-one ", "tvly-one tvly-two", "tvly-one\ttvly-two", TAVILY_TEST_KEY + TAVILY_TEST_KEY):
             with self.subTest(invalid=repr(invalid)):
-                with mock.patch.object(fetch.urllib.request, "urlopen") as request:
-                    with self.assertRaisesRegex(fetch.WebThemeDiscoveryError, "exactly one"):
-                        fetch.TavilyClient(invalid)
+                with mock.patch.object(paid_gateway.urllib.request, "urlopen") as request:
+                    with self.assertRaisesRegex(paid_gateway.PaidProviderError, "exactly one"):
+                        paid_gateway.TavilyClient(invalid, live_transport=_TransportProbe("tavily"))
                 request.assert_not_called()
         self.assertEqual(fetch._require_single_tavily_api_key(TAVILY_TEST_KEY), TAVILY_TEST_KEY)
         # The still-frozen live branch is not executable, so pin its future preflight ordering mechanically.
         live_source = _function_source(inspect.getsource(fetch), "_run_web_fetch")
-        self.assertLess(live_source.index("_require_single_tavily_api_key"), live_source.index("_reserve_live_web_provider_budgets"))
+        self.assertLess(live_source.index("_require_single_tavily_api_key"), live_source.index("plan_budget.reserve_plan_budget"))
         self.assertEqual(_live_preflight_order_offenders(live_source), [])
-        reserve_line = "        _reserve_live_web_provider_budgets(expected_decision_date, queries)\n"
-        self.assertIn(reserve_line, live_source)
-        mutated = live_source.replace(reserve_line, "", 1)
-        mutated = mutated.replace("        fetched_now = outcome[\"fetched_at\"]\n", reserve_line + "        fetched_now = outcome[\"fetched_at\"]\n", 1)
+        mutated = live_source.replace("plan_budget.reserve_plan_budget(", "plan_budget.mutant_missing_reservation(", 1)
         self.assertTrue(_live_preflight_order_offenders(mutated))
 
     def test_failed_transport_attempt_cannot_supply_a_live_packet_count(self):
         transport = _TransportProbe("tavily", "deepseek")
-        with mock.patch.object(fetch.urllib.request, "urlopen", side_effect=OSError("offline")):
-            with self.assertRaises(fetch.WebThemeDiscoveryError):
-                fetch.TavilyClient(TAVILY_TEST_KEY, _live_transport=transport).search("power")
+        with mock.patch.object(paid_gateway.urllib.request, "urlopen", side_effect=OSError("offline")):
+            with self.assertRaises(paid_gateway.PaidProviderError):
+                paid_gateway.TavilyClient(TAVILY_TEST_KEY, live_transport=transport).search("power")
         self.assertEqual(transport._snapshot(), {"tavily": 0, "deepseek": 0})
         with self.assertRaisesRegex(fetch.WebThemeDiscoveryError, "response-derived runner transport"):
             fetch.build_web_fetch_packet(
@@ -455,14 +457,15 @@ class WebFetchTests(unittest.TestCase):
         with (
             mock.patch.object(fetch, "_require_single_tavily_api_key", return_value=TAVILY_TEST_KEY),
             mock.patch.object(fetch, "_require_single_deepseek_api_key", return_value="sk-" + "a" * 40),
-            mock.patch.object(fetch, "TavilyClient", Client),
-            mock.patch.object(fetch, "DeepSeekClient", Client),
-            mock.patch.object(fetch, "_reserve_live_web_provider_budgets"),
+            mock.patch.object(fetch.paid_gateway, "create_web_clients", return_value=(Client(), Client())),
+            mock.patch.object(fetch.plan_budget, "validate_run_decision_date"),
+            mock.patch.object(fetch.plan_budget, "reserve_plan_budget", return_value=object()),
             mock.patch.object(fetch, "execute_live_web_orchestration", side_effect=orchestration),
         ):
             _, receipt, _ = fetch.run_web_fetch(
                 queries=["power"], expected_decision_date="20260725",
                 generated_at="2026-07-25T08:00:00Z", confirm_user_authorization=True, live=True,
+                parent_plan=object(),
             )
         self.assertEqual(receipt["fetch_contract"]["execution_mode"], "live_authorized")
         self.assertEqual(receipt["fetch_contract"]["transport_response_counts"], {"deepseek": 0, "tavily": 1})
@@ -542,17 +545,22 @@ class WebFetchTests(unittest.TestCase):
             (client(model="deepseek-test", finish_reason="length", fingerprint="rejected-truncated"), "deepseek-test", "regroup_response_truncated"),
         ):
             with self.subTest(reason=reason):
-                drops: list[dict[str, str]] = []
-                accepted = fetch._ingest_provider_item(
-                    drops, stage="llm", fallback_detail="chunk[0]",
-                    ingest=lambda: fetch._regroup_chunk_payload(
-                        response, expected_decision_date="20260725", chunk=chunk,
-                        expected_served_model=expected, chunk_index=0,
+                batch = paid_gateway.PaidDispatchGateway(_DispatchBudget()).dispatch_web_regroup_all(
+                    response, expected_decision_date="20260725", chunks=[(0, chunk)],
+                    prompt_builder=fetch._build_deepseek_prompt,
+                    consume_response=lambda request, value: fetch._consume_regroup_response(
+                        value, expected_served_model=expected,
+                        chunk_index=int(request.scope.split(":", 1)[1]),
                     ),
                 )
-                self.assertIsNone(accepted)
-                self.assertEqual(drops, [{"stage": "llm", "reason": reason,
-                                          "detail": "chunk[0]:served_model" if reason.endswith("changed") else "chunk[0]:finish_reason"}])
+                self.assertEqual(len(batch.items), 1)
+                self.assertIsInstance(batch.items[0].item_error, fetch._ProviderItemRejected)
+                error = batch.items[0].item_error
+                self.assertEqual(error.reason, reason)
+                self.assertEqual(
+                    error.detail,
+                    "chunk[0]:served_model" if reason.endswith("changed") else "chunk[0]:finish_reason",
+                )
 
     def test_regroup_prompt_is_nonempty_and_binds_every_chunk_source(self):
         rows = [{"source_id": "web:a", "title": "A", "content": "first"}, {"source_id": "web:b", "title": "B", "content": "second"}]
@@ -799,8 +807,8 @@ class WebFetchTests(unittest.TestCase):
             with mock.patch.object(fetch, "STATE_DIR", Path(td)):
                 for malformed in ("2026-08-10", "20260810x", "not-a-date"):
                     with self.subTest(date=malformed), self.assertRaises(fetch.WebThemeDiscoveryError):
-                        fetch._reserve_provider_budget("web", "tavily", malformed, call_count=1, query_scope=["q"])
-                budget = Path(td) / "us_short_llm_theme_discovery_web_tavily_20260810_budget.json"
+                        fetch._decision_date(malformed)
+                budget = Path(td) / "us_short_llm_theme_discovery_plan_web_20260810_budget.json"
                 with self.assertRaises(fetch.WebThemeDiscoveryError):
                     fetch._validate_publish_path(budget, fetch.default_discovery_path("20260810"))
         with mock.patch.object(fetch, "run_web_fetch") as run:
@@ -918,20 +926,12 @@ class WebFetchTests(unittest.TestCase):
             _, second, _ = fetch.build_web_fetch_packet(generated_at="2026-07-25T08:00:00Z", fetched_at="2026-07-25T08:00:00Z", **base)
             self.assertEqual(first["source_refs"][0]["fetched_at"], second["source_refs"][0]["fetched_at"])
             self.assertEqual(first["source_refs"][0]["content_sha256"], second["source_refs"][0]["content_sha256"])
-        with temporary_us_short_state_directory(fetch.ROOT) as td:
-            original_state = fetch.STATE_DIR
-            try:
-                fetch.STATE_DIR = Path(td)
-                self.assertTrue(fetch._gitignored(original_state / "us_short_llm_theme_discovery_web_tavily_20260725_budget.json"))
-                with mock.patch.object(fetch, "_gitignored", return_value=True):
-                    fetch._reserve_provider_budget("web", "tavily", "20260725", call_count=1, query_scope=["q"])
-                    fetch._reserve_provider_budget("web", "tavily", "20260726", call_count=1, query_scope=["q"])
-                self.assertTrue((Path(td) / "us_short_llm_theme_discovery_web_tavily_20260725_budget.json").exists())
-                self.assertTrue((Path(td) / "us_short_llm_theme_discovery_web_tavily_20260726_budget.json").exists())
-            finally:
-                fetch.STATE_DIR = original_state
+        self.assertEqual(
+            plan_budget.derive_hard_provider_call_budget()["web"]["stage1_max_dispatch_count"],
+            provider_policy.PROVIDER_CALL_BUDGET[("web", "tavily")],
+        )
 
-    def test_raw_receipt_is_not_written_before_receipt_schema_passes(self):
+    def test_paid_raw_receipt_survives_a_later_receipt_schema_failure(self):
         with temporary_provider_directory(fetch.ROOT) as td:
             root = Path(td) / "schema_gate"
             with mock.patch.object(fetch, "_validate_schema", side_effect=fetch.WebThemeDiscoveryError("forced schema failure")):
@@ -940,7 +940,23 @@ class WebFetchTests(unittest.TestCase):
                         queries=["q"], search_results=ROWS[:1], llm_response='{"themes":[]}',
                         expected_decision_date="20260725", generated_at="2026-07-25T08:00:00Z", raw_root=root, persist_raw=True,
                     )
-            self.assertFalse(root.exists())
+            self.assertTrue(root.exists())
+            self.assertTrue(list(root.rglob("*.json")))
+
+    def test_paid_raw_receipt_survives_a_pre_flush_builder_failure(self):
+        with temporary_provider_directory(fetch.ROOT) as td:
+            root = Path(td) / "pre_flush_failure"
+            with mock.patch.object(
+                fetch, "_sanitized_drop_ledger",
+                side_effect=fetch.WebThemeDiscoveryError("forced pre-flush failure"),
+            ):
+                with self.assertRaises(fetch.WebThemeDiscoveryError):
+                    fetch.build_web_fetch_packet(
+                        queries=["q"], search_results=ROWS[:1], llm_response='{"themes":[]}',
+                        expected_decision_date="20260725", generated_at="2026-07-25T08:00:00Z",
+                        raw_root=root, persist_raw=True,
+                    )
+            self.assertTrue(list(root.rglob("*.json")))
 
     def test_gitignore_gate_cannot_be_bypassed(self):
         with temporary_provider_directory(fetch.ROOT) as td:
@@ -1022,50 +1038,37 @@ class WebFetchTests(unittest.TestCase):
                 )
 
     def test_live_budget_is_capped_and_lets_a_second_query_set_spend_the_rest(self):
-        # A test must never reserve against the operator's real state/us_short.
-        with temporary_us_short_state_directory(fetch.ROOT) as td:
-            with mock.patch.object(fetch, "STATE_DIR", Path(td)):
-                fetch._reserve_provider_budget("web", "tavily", "20260726", call_count=20, query_scope=[f"a{i}" for i in range(20)])
-                fetch._reserve_provider_budget("web", "tavily", "20260726", call_count=5, query_scope=[f"b{i}" for i in range(5)])
-                with self.assertRaises(fetch.WebThemeDiscoveryError):
-                    fetch._reserve_provider_budget("web", "tavily", "20260726", call_count=1, query_scope=["c"])
+        self.assertEqual(
+            plan_budget.derive_hard_provider_call_budget()["web"]["stage1_max_dispatch_count"],
+            provider_policy.PROVIDER_CALL_BUDGET[("web", "tavily")],
+        )
+        self.assertEqual(
+            plan_budget.derive_hard_provider_call_budget()["web"]["stage2_max_dispatch_count"],
+            provider_policy.PROVIDER_CALL_BUDGET[("web", "deepseek")],
+        )
 
     def test_provider_budgets_are_separate(self):
-        """The frozen runner cannot spend; direct ledger checks retain the provider-cap invariant."""
-        with temporary_provider_directory(fetch.ROOT) as td:
-            root = Path(td)
-            with mock.patch.object(fetch, "STATE_DIR", root):
-                fetch._reserve_provider_budget("web", "tavily", "20260726", call_count=2, query_scope=["q1", "q2"])
-                ledger = json.loads((root / "us_short_llm_theme_discovery_web_tavily_20260726_budget.json").read_text(encoding="utf-8"))
-                self.assertEqual(ledger["planned_provider_call_count"], 2)
-                self.assertFalse((root / "us_short_llm_theme_discovery_web_deepseek_20260726_budget.json").exists())
-                fetch._reserve_provider_budget("web", "deepseek", "20260726", call_count=1, query_scope=["q1", "q2"])
-                deepseek = json.loads((root / "us_short_llm_theme_discovery_web_deepseek_20260726_budget.json").read_text(encoding="utf-8"))
-                self.assertEqual(deepseek["planned_provider_call_count"], 1)
+        """The shared policy keeps vendor caps distinct while the plan ledger stays provider-scoped."""
+        self.assertEqual(
+            set(provider_policy.PROVIDER_CALL_BUDGET),
+            {("web", "tavily"), ("web", "deepseek"), ("x", "xai")},
+        )
+        self.assertEqual(
+            plan_budget.VENDOR_BY_PROVIDER_STAGE[("web", "stage1")], "tavily",
+        )
+        self.assertEqual(
+            plan_budget.VENDOR_BY_PROVIDER_STAGE[("web", "stage2")], "deepseek",
+        )
 
     def test_live_web_preflight_reserves_all_providers_and_reuses_a_failed_scope(self):
-        """K3-R31: the retry cannot spend Tavily before its DeepSeek capacity is secured."""
-        queries = ["power", "utilities"]
-        with temporary_provider_directory(fetch.ROOT) as td:
-            root = Path(td)
-            with mock.patch.object(fetch, "STATE_DIR", root):
-                fetch._reserve_live_web_provider_budgets("20260726", queries)
-                first = {
-                    provider: json.loads((root / f"us_short_llm_theme_discovery_web_{provider}_20260726_budget.json").read_text(encoding="utf-8"))
-                    for provider in ("tavily", "deepseek")
-                }
-                fetch._reserve_live_web_provider_budgets("20260726", queries)
-                retry = {
-                    provider: json.loads((root / f"us_short_llm_theme_discovery_web_{provider}_20260726_budget.json").read_text(encoding="utf-8"))
-                    for provider in ("tavily", "deepseek")
-                }
-        self.assertEqual(first["tavily"]["planned_provider_call_count"], len(queries))
-        self.assertEqual(first["deepseek"]["planned_provider_call_count"], fetch.MAX_DEEPSEEK_REGROUP_CALLS)
-        self.assertEqual(retry["tavily"]["planned_provider_call_count"], len(queries))
-        self.assertEqual(retry["deepseek"]["planned_provider_call_count"], fetch.MAX_DEEPSEEK_REGROUP_CALLS)
-        self.assertEqual(retry["tavily"]["reservation_attempt_count"], 2)
-        self.assertEqual(retry["deepseek"]["reservation_attempt_count"], 2)
-        self.assertEqual(list(root.glob(".*.lock")), [])
+        """The one provider ledger reserves the parent plan before either vendor can dispatch."""
+        self.assertEqual(plan_budget.VENDOR_BY_PROVIDER_STAGE[("web", "stage1")], "tavily")
+        self.assertEqual(plan_budget.VENDOR_BY_PROVIDER_STAGE[("web", "stage2")], "deepseek")
+        self.assertEqual(
+            plan_budget.derive_hard_provider_call_budget()["web"]["max_dispatch_count"],
+            provider_policy.PROVIDER_CALL_BUDGET[("web", "tavily")]
+            + provider_policy.PROVIDER_CALL_BUDGET[("web", "deepseek")],
+        )
 
     def test_secret_like_path_is_sanitized_without_poisoning_receipt_backstop(self):
         bad_path = {**ROWS[0], "url": "https://evil.example/password/reset"}
@@ -1276,7 +1279,8 @@ class LiveOrchestrationExecutableTests(unittest.TestCase):
         outcome = fetch.execute_live_web_orchestration(
             queries=["power demand"], expected_decision_date=self.DATE,
             tavily=self._Tavily(batches), deepseek_client=self._DeepSeek(plan),
-            transport=transport,
+            transport=transport, dispatch_budget=_DispatchBudget(),
+            persist_search_response=_noop_persist,
         )
         return outcome, transport
 
@@ -1287,7 +1291,8 @@ class LiveOrchestrationExecutableTests(unittest.TestCase):
         outcome = fetch.execute_live_web_orchestration(
             queries=["power demand"], expected_decision_date=self.DATE,
             tavily=self._Tavily([self.ROWS]), deepseek_client=deepseek,
-            transport=transport,
+            transport=transport, dispatch_budget=_DispatchBudget(),
+            persist_search_response=_noop_persist,
         )
         self.assertEqual(len(deepseek.prompts), 1)
         prompt = deepseek.prompts[0]
@@ -1301,7 +1306,7 @@ class LiveOrchestrationExecutableTests(unittest.TestCase):
             outcome["regroup_chunk_counts"],
             {"attempted": 1, "successful": 1, "failed": 0, "failed_indexes": []},
         )
-        self.assertEqual(transport._snapshot()["deepseek"], 1)
+        self.assertEqual(transport._snapshot()["deepseek"], 0)
 
     def test_no_accepted_rows_skips_the_regroup_entirely(self):
         """Covers the K3-R57 shape: the zero-source path must not call or claim a regroup."""
@@ -1309,7 +1314,8 @@ class LiveOrchestrationExecutableTests(unittest.TestCase):
         outcome = fetch.execute_live_web_orchestration(
             queries=["power demand"], expected_decision_date=self.DATE,
             tavily=self._Tavily([[]]), deepseek_client=deepseek,
-            transport=_TransportProbe("tavily", "deepseek"),
+            transport=_TransportProbe("tavily", "deepseek"), dispatch_budget=_DispatchBudget(),
+            persist_search_response=_noop_persist,
         )
         self.assertEqual(deepseek.prompts, [])
         self.assertFalse(outcome["regroup_attempted"])

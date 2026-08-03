@@ -1,5 +1,96 @@
 # Session Log
 
+## 2026-08-03 — Claude 审查 PASS（A4 第五次返工：控制规则去重 + 钱路参数必填 + X 腿拒写改抛）
+
+- **Verdict/Action**: PASS，已提交并合入 master。上一轮唯一 Required 按类闭合：`_must_propagate` 重复封装删除、四个 provider 出口直连 `plan_budget.is_control_error`，新增 AST 谓词逐出口点名（新出口不用规范规则会自动红）。我类扫的另两类同轮闭：live orchestration 的持久化回调改必填 + 网关对 stage1 缺 sink 在扣账前 fail closed；X 腿 capture 无记录/写门拒收一律改抛。风险分级=对已审引擎的收紧型小改，按 rule 8 与 §6a 比例原则未起独立 agent（上轮已起过）。
+- **Required**: 无
+- **Verify**: review-evidence:07b73c59f650；全量单入口 `CACHED GREEN 5154 OK`（fingerprint `3e23926b…`，与 executor 记录一致）；doc gates `55 OK`。亲跑变异控制：`is_control_error` 降级 → baseline `32/0/0` 变 `failures=3 errors=5`（四个出口各一条 + 两条控制异常测试），上一轮同变异全绿。停止矩阵：B `paid=1` 停、**C 仅 call_error `paid=3` 继续**（强制腿反控，收紧未误伤正常周）、D/E `stop=PaidEvidenceUnavailableError`；Ctrl-C 四回调点 + client 出口全部 `paid=1` 后逃逸；两个 orchestration 缺回调各抛 `TypeError`，网关缺 sink 抛 `PaidProviderError`；X 非 gitignored raw_root 与三种坏 capture 均抛。残留：探针自清，`provider_samples` 前后均 8 files。
+- **Next**: Codex：执行下一刀（A4 已收口）；register 本节四条 Optional 择机并入下一刀。
+
+## 2026-08-03 — Codex executor/fixer A4 类级修复 follow-up（待 Claude Code 独立复审）
+
+- **Verdict/Action**：按用户同意的类级方案继续收口；删除 `_must_propagate` 重复控制入口，provider `BaseException` 出口直接使用 `plan_budget.is_control_error`；stage1 gateway 在预算调用前强制要求可调用 persistence sink；Web/X 的付费证据拒写统一终止 sibling paid loop。未提交、未合并、未 push，未执行 provider/network/live/paid。
+- **Required**：`R-USSHORT-A4-MUST-PROPAGATE-IS-AN-UNTESTED-CONTROL-GUARD` 已实现为单一 canonical control rule + AST 派生出口反控，当前仍为 implemented/review pending，未提前写成 CLOSED/PASS；此前三条 A4 Required 同样等待 Claude Code 独立复审。
+- **Verify**：固定主 Python；focused `287 OK`（plan32/web68/X76/guards44/IO67）；`compileall`、`git diff --check` OK；full ledger `5154 OK/776.432s`（elapsed 778.1s/860s，fingerprint `3e23926ba514`）；full 前后 state 0，provider_samples 同一 8 个且 path/bytes/mtime 不变；Optional (i)/(iii) 已修，(ii)/parent-plan/P5/签名见 register。
+- **Pre-Codex self-review**：`matrix=complete; register=updated; handoff=updated; focused=287 OK; full-lane=5154 OK/776.432s/ledger elapsed 778.1s/deadline 860s; door=route-doc 14 OK + doc-governance 41 OK; independent-self-review=not_used`
+- **Next**：Claude Code：独立复审当前 A4 工作树；通过后按规则提交。
+
+## 2026-08-03 — Claude 审查 FAIL（A4 第四次返工：三条 Required 真闭，第四条差一个点名反控）
+
+- **Verdict/Action**: FAIL，不提交不合入。三条我实测已闭：`call_error+completion_error` 停在第 1 次付费（上一轮买满 3 次）；付费 raw 由新的 `persist_response` 阶段在续买前落盘、失败即 `PaidEvidenceUnavailableError` 终止；诊断槽走单调写门。谓词也基本长出牙。卡住的是我上一轮点名的四个验收样本里 **M4b 仍全绿**：`_must_propagate` 全仓零测试引用，降级后 Ctrl-C 不再逃逸、连买 3 次——第三轮那条 P1 的形状无人看守。代码当前正确，缺的只是那条反控。
+- **Required**: `R-USSHORT-A4-MUST-PROPAGATE-IS-AN-UNTESTED-CONTROL-GUARD`(P2) — 正文、三条已闭 Required 的取证与六条 Optional 见 `system_risk_register.md`(单一来源)。
+- **Verify**: review-evidence:28aa0469efd7；超时原因:按新 Stop 门等 §6a agent 报告后才动笔，并自跑复核其两条未执行结论。全量单入口 `CACHED GREEN 5150 OK`（fingerprint `43022a78…`，与 executor 记录一致）；doc gates `55 OK`；A4 模块 `28 OK`。自写探针：B `paid=1 stop=PostPaymentDispatchError`；persist 失败 `stop=PaidEvidenceUnavailableError`；Ctrl-C 四处均逃逸；伪造 request 被拒且零扣账；`_must_propagate` 降级→`paid=3 stop=None`；X 腿非 gitignored raw_root→静默返回。agent 变异表 M4/M6/M7/M7b/M8-M12 转红、M4b 绿。残留：探针自清，`provider_samples` 前后均 8 files。
+- **Next**: Codex：补 `_must_propagate` 的点名反控（降级为 return False 后必须转红），或删掉这份重复实现改走 `plan_budget.is_control_error`；顺手收六条 Optional。
+
+## 2026-08-02 — Codex executor/fixer A4 第四次返工（待 Claude Code 独立复审）
+
+- **Verdict/Action**：按用户批准的 gateway 方案完成 A4 本轮修复；未提交、未合并、未 push，未执行 provider/network/live/paid。
+- **Required**：四条当前 A4 Required 已实现但未提前标记 CLOSED/PASS：`call_error+completion_error` 先停付费循环；付费 raw 由 gateway 在下一次付费前经既有单一写门落盘，builder 异常由 finalizer 收尾；P-C/P-D/P-E 反控改为 AST/真实生产路径；budget-abort 诊断槽按证据强度单调写入。offline fake-only、gateway-issued request、control exception 分类、`PROVIDER_CALL_BUDGET` 唯一来源一并收口；下游 `live_authorized_budget_aborted` consumer、P5 query-plan 绑定和账本签名仍 deferred。
+- **Verify**：review-evidence:NOT_VERIFIED（executor 尚无 reviewer verdict）；固定主 Python focused：plan `28 OK`、web `68 OK`、X `76 OK`、offline/conformance `44 OK`、IO/class/producer/validator `67 OK`；`compileall`、`git diff --check` 通过。唯一 full ledger：`5150 tests OK / 837.407s`，`RESULT status=PASS ... elapsed=839.3s deadline=860s`，fingerprint `43022a78bb05f833b1dea25db93f2efdecd99494e27a2d0d123eb25375473942`；超时原因:full lane 接近 860 秒上限，实际在 839.3 秒内正常收口。
+- **Pre-Codex self-review**：`matrix=complete; register=updated; handoff=updated; focused=plan 28 + web 68 + x 76 + offline/conformance 44 + IO/class/producer/validator 67 OK; full-lane=5150 OK/837.407s/ledger elapsed 839.3s/deadline 860s; door=pre-commit fixed-host route-doc 14 OK + doc-governance 41 OK; A=single gateway loop and scoped client allowlist; B=post-payment raw finalizer and sole write door; C=real mutation/AST controls; D=control exception and monotonic diagnostic; E=SESSION_LOG/risk register/same-phase handoff; F=compile/focused/full/residue-mtime; independent-self-review=not_used`
+- **Next**：Claude Code：独立复审当前 A4 修复；通过后按规则提交。
+
+## 2026-08-02 — Claude 审查 FAIL（A4 第三次返工：咽喉建成，但 call_error 腿仍吞 completion_error）
+
+- **Verdict/Action**: FAIL，不提交不合入。唯一咽喉方向对（真实付费出口只剩 gateway 一处），Ctrl-C 行为上真停、reserved scope 已绑、硬顶真派生、中止不占不可变槽。卡住四条：`call_error` 腿丢 `completion_error` 继续买且以干净成功写进不可变槽；付费入队到 flush 间仍有抛点；中止诊断槽可被空重跑覆盖；谓词 8 格变异 4 格全绿。**更正**：我第一版把「两条 lane raw 已先落盘」记为已核实，经 agent 指出后自核属误判，已在 register 划掉。
+- **Required**: `R-USSHORT-A4-COMPLETION-ERROR-STILL-DROPPED-ON-THE-CALL-ERROR-BRANCH`(P1)、`R-USSHORT-A4-PAID-EVIDENCE-STILL-LOST-BETWEEN-PAYMENT-AND-FLUSH`(P1)、`R-USSHORT-A4-P-C-PLANTED-CONTROL-IS-STILL-A-TAUTOLOGY`(P1)、`R-USSHORT-A4-BUDGET-ABORT-DIAGNOSTIC-SLOT-IS-OVERWRITABLE-BY-AN-EMPTY-RETRY`(P2) — 正文、四条类级要求与六条 Optional 见 `system_risk_register.md`(单一来源，按类修)。
+- **Verify**: review-evidence:62eb61cb0d75；全量单入口 `CACHED GREEN 5142 OK`（fingerprint `6e62c361…`，代码 mtime 20:04-20:24 早于该 21:59 full）；doc gates `55 OK`。自写探针：成功+completion_error→`paid=1` 停；call_error+completion_error→`paid=3 stop=None`（洞）；Ctrl-C 在调用与 capture 各 `paid=1` 后抛出；P-C control 在空串上也 `True`。§6a agent 8 格变异 M4/M4b/M6/M7 全绿=dead guard，并用真 budget 复现 4 次付费 + `budget_aborted=False`；HELD 清单与我一致。
+- **Next**: Codex：按 register 四条类级要求修（出口 16 格矩阵、付费→落盘窗口 try/finally、谓词以 M4/M4b/M6/M7 转红为验收、默认值即钱路），四条 Required 一并收口。
+
+## 2026-08-02 — Codex executor A4 最终结构性修复（待 Claude Code 独立复审）
+
+- **Verdict/Action**：A4 按“唯一 paid gateway + plan-level budget + 类级可执行反控”完成；未提交、未合并、未 push，未执行 provider/network/live/paid。六条上一轮 Required 仅标记为 implemented/review pending，未提前写成 CLOSED/PASS。
+- **Required**：本轮六条 A4 Required 均已映射到 register 顶部本轮修复，状态为 implemented/review pending，未提前写成 CLOSED/PASS。
+- **Verify**：固定主 Python extended focused `262 OK`；policy `8 OK`；class guards `5 OK`；conformance dying `1 OK`；slot `2 OK`；inventory `18 OK`；doc gates `66 OK`；`py_compile/schema/diff-check=OK`；full-lane=`5142 OK / 851.5s / ledger PASS / deadline=860s / fingerprint 6e62c3617bb9`；`prepared_fingerprint` 与记录完全一致；full 前后 `state/us_short`、`provider_samples` 文件数均为 0，mtime/bytes 快照见 register。
+- **Pre-Codex self-review**：`matrix=complete; register=updated; handoff=updated; focused=262 OK + policy=8 + class=5 + conformance=1 + slot=2 + inventory=18 + doc-gates=66; full-lane=5142 OK/851.5s/ledger PASS/deadline=860s; door=pre-commit fixed-host route-doc=14 OK + doc-governance=41 OK; unique soft-discovery paid gateway + us_short_discovery_publish_policy sole writer + fixed Python + git diff --check; A=single gateway loop/stop/accounting and scoped client allowlist; B=plan-level web/xai envelope/provider/date/scope identity; C=BaseException control propagation, raw-before-validator flush, normal-drop vs budget-abort; D=runtime P-D/P-E/P-C plus production B1/B5 mutation controls; E=README + SESSION_LOG + risk register + same-phase handoff; F=focused/full/residue-mtime/py_compile/schema; independent-self-review=not_used`
+- **Next**：Claude Code：独立复审当前 A4 结构性修复；通过后按规则提交。
+
+## 2026-08-02 — Claude 审查 FAIL（A4 第二次返工：机制真修了，但谓词假绿 + Ctrl-C 回归）
+
+- **Verdict/Action**: FAIL，不提交不合入。机制侧是真的：`dispatch_with_outcome` 在 `finish()` 抛错时保住付费值、两个 runner 的 `raise budget_error` 已删、硬顶改成从 `PROVIDER_CALL_BUDGET` 派生（我改 legacy 常量派生表跟着变）、vendor 绑到 seam、X 侧 flush 已前移。但四条谓词里三条**没有牙**（P-D/P-C 的变异控制是 `X not in src.replace(X,Y)` 恒真式；P-E 只 grep 文本，我构造的零断言 `mutant_is_red` 测试照样通过，agent 进一步证明删掉 B5 守的生产行后 B5 仍绿），class-D 出口清单漏了 web 侧三个 builder 校验、chunk 路径四个抛点、`call_error` 分支，且把 `except Exception` 放宽成 `except BaseException` 后 **Ctrl-C 停不住付费循环**。
+- **Required**: `R-USSHORT-A4-CTRL-C-NO-LONGER-STOPS-THE-PAID-LOOP`(P1)、`R-USSHORT-A4-PAID-RAW-LOST-WHEN-A-BUILDER-VALIDATOR-RAISES`(P1)、`R-USSHORT-A4-PREDICATES-P-D-P-E-P-C-HAVE-NO-TEETH`(P1)、`R-USSHORT-A4-COMPLETION-ERROR-SWALLOWED-ON-TWO-BRANCHES`(P2)、`R-USSHORT-A4-BUDGET-ABORTED-PARTIAL-PACKET-BRICKS-THE-DECISION-DATE`(P2)、`R-USSHORT-A4-DISPATCH-IGNORES-THE-RESERVED-PROVIDER-SCOPE`(P2) — 正文、六条 Optional 与结构性建议见 `system_risk_register.md`(单一来源)。
+- **Verify**: review-evidence:7271f69f6033；全量真跑 `RESULT status=PASS exit=0 tests=5140 elapsed=655.4s deadline=860s`，`5133→5140` 的 +7 恰等于新模块 12→19、两个被改测试模块用例数未变。我自跑探针：派生硬顶随 legacy 常量变（7/3/2→7/3/10）、单改 stage 被拒、`finish()` 抛错仍带回付费值、P-A 抓到植入的两个 `=None` money 参数、P-E 接受零断言测试、P-D/P-C 的变异控制恒真、协同改 stage+vendor 仍可搬运额度。§6a 独立 agent 报 14 条，我复核六条升为 Required、六条记 Optional；其 HELD 清单（硬顶、同日第二 envelope、stale owner、replay 重复扣费、锁）与我独立一致。
+- **Next**: Codex：先修 P1 三条（Ctrl-C 回归、两 lane flush 顺序、三条谓词换成执行式），再按 register 结构性建议评估「咽喉函数」改法。
+
+## 2026-08-02 — Codex executor A4 修复（待 Claude Code 独立复审）
+
+- **Verdict/Action**：五条 Required 已按类 A/B/C/D 与卫生条修复；未提交、未合并、未 push，未执行 provider/network/live/paid。详细修复与边界见 register。
+- **Required**：五个 A4 R-ID 均为“已实现、待独立复审”，未提前改写为 CLOSED/PASS。
+- **Verify**：固定主 Python changed-symbol focused `162 OK / 13.039s`；A4 `19 OK`；class/inventory/offline gates `5/18/11 PASS`；`py_compile + schema JSON=OK (6)`；P-A/P-D/P-C/P-E 通过；full-lane=`NOT_VERIFIED`（252-pack lock errors，slow executable 无终端结果，未重跑）。
+- **Pre-Codex self-review**：`matrix=complete; register=updated; handoff=updated; focused=162 OK/13.039s + gates=PASS; full-lane=NOT_VERIFIED; door=PASS: docs gates + git diff --check; independent-self-review=not_used`
+- **Next**：Claude Code：独立复审当前 A4 修复；通过后按规则提交。
+
+## 2026-08-02 — Claude 审查 FAIL（A4 返工：上一轮五条 CLOSED，失败面移到付费之后）
+
+- **Verdict/Action**: FAIL，不提交不合入。上一轮五条 Required **逐条 CLOSED**（硬顶成外层、live 缺 plan/日期不符即拒、计数从事件重算、活 owner 不被回收），我 24 条探针与独立 agent 的 HELD 清单双向确认。但门硬化后失败面被推到**付费之后**：`finish()` 在钱花完才可能抛，于是丢计数、丢证据（X 侧整轮 raw 不落盘）、丢整个决策日（packet 建好被 `raise` 吞掉，重跑撞不可重放，唯一恢复是删账本＝重置上限并二次收费）。另有内层 orchestration 仍 `dispatch_budget=None`、硬顶是抄来的字面量且 vendor 靠可改写的 stage 标签分账、owner 只看可回收 PID 且无恢复出口、B5 点名 mutant 删掉分桶守卫仍绿。
+- **Required**: `R-USSHORT-A4-POST-PAYMENT-ABORT-LOSES-CALL-EVIDENCE-AND-DATE`(P1)、`R-USSHORT-A4-B5-MUTANT-CONTROL-CANNOT-GO-RED`(P1)、`R-USSHORT-A4-ORCHESTRATION-BUDGET-STILL-DEFAULTS-TO-NONE`(P2)、`R-USSHORT-A4-HARD-CEILING-COPY-AND-RELABELABLE-VENDOR-SPLIT`(P2)、`R-USSHORT-A4-OWNER-LIVENESS-IS-A-RECYCLABLE-PID-WITH-NO-EXIT`(P2) — 正文、上一轮五条的 CLOSED 依据、四条 Optional 与类级要求见 `system_risk_register.md`(单一来源)。
+- **Verify**: review-evidence:ea4b7b1359fa；全量单入口 `CACHED GREEN 5133 OK`（fingerprint `65eea9e0…`，当前代码态），`5127→5133` 的 +6 恰等于新模块 6→12、两个被改测试模块用例数未变。reviewer 自写探针 24 条全绿（硬顶越界四形态各拒、卡满放行、公开入口 live 缺 plan/日期不符在读 key 前即拒、清零/删行/浮点计数三种篡改皆拒、活 owner 不被回收而死 PID 被回收、锁异常被 coerce 成 fatal、(scope,stage) 分键、中止仍返回已付费行）。§6a 独立 agent 报 9 条，我复核其中五条成立并合成上述 Required；其 HELD 清单与我的探针独立一致。
+- **Next**: Codex：按 register `类级扫描要求` 两段验收修复（先派生四类出口清单逐个修净、每类再落一条带 planted-failure 的谓词 P-A/P-D/P-C/P-E），跑通 us_short 全量后交审查。
+
+## 2026-08-02 — Codex executor A4 类级修复（待 Claude Code 独立审查）
+
+- **Verdict/Action**：A4 类级修复已在当前 executor 工作树完成；未提交、未合并、未 push，未执行 provider/network/live/paid。
+- **Required**：按 register 的类 A/B/C/D 与卫生条处理五条 Required；plan envelope 现在是硬 provider cap 之内的内层约束，live 缺 parent plan 或日期不匹配即拒，in-flight 只回收确认死亡 owner，dispatch 计数从事件重算并严格要求原生 `int`。
+- **Verify**：固定主 Python focused `189 OK / 28.854s`；inventory+A4 `30 OK / 4.655s`；6 个改动模块 `py_compile=OK`；`git diff --check=OK`；官方 full `5133 OK / 630.682s`，ledger `PASS / 631.8s / deadline=860s`，fingerprint `65eea9e0591b`。
+- **Residue/Boundary**：full 前后 `state/us_short` 均为 0 files，仅既有空目录；`provider_samples` 前后均不存在。mtime 快照已记录在 risk register / handoff；既有目录 `lifecycle`、`provider_incidents`、`shadow_compare_private` 被测试触碰，`runs_private` 未变。
+- **Next**：Claude Code：独立审查 A4；通过后按规则提交。
+- **Pre-Codex self-review**：`matrix=complete; register=updated; handoff=updated; focused=189 OK / 28.854s + inventory/A4 30 OK / 4.655s; full-lane=5133 OK / 630.682s / ledger 631.8s / deadline=860s; door=plan_budget mutable_ledger_lock + provider_budget write door + live parent/date fail-closed + git diff --check; A=hard provider cap inner envelope, live parent-plan gate; B=decision-date/parent/provider/stage/scope identity and owner binding; C=dispatch-derived strict-int counts plus count/event mutation controls; D=dead-owner-only recovery and partial budget-abort packet persistence; E=README + SESSION_LOG + risk register + same-phase handoff; F=py_compile + focused/inventory/full + protected-root residue/mtime snapshots; independent-self-review=not_used`
+
+## 2026-08-02 — Claude 审查 FAIL（A4 plan 级预算包络）
+
+- **Verdict/Action**: FAIL，不提交不合入。引擎本体我逐条打过、B1–B6 在 engine 层全部成立（28 条探针 27 绿）；卡住的是接线与对账两件：两个 live runner 的 `parent_plan` 默认 `None`、此时**静默退回旧的按-scope 预留**（A4 立项要替换的那条腿），而且没有任何调用方或 CLI 能把包络打开；另外 `_validate_semantics` 从不用 `dispatches` 事件表重算 `dispatch_counts`，一致地清零计数即可再买真实调用。
+- **Required**: `R-USSHORT-A4-PLAN-ENVELOPE-IS-OPT-IN-AND-LIVE-SILENTLY-FALLS-BACK-TO-THE-WEAK-LEDGER`(P1)、`R-USSHORT-A4-PLAN-ENVELOPE-REPLACES-THE-HARD-WEEKLY-CEILING-WITH-A-SELF-DECLARED-NUMBER`(P1)、`R-USSHORT-A4-PLAN-DATE-IS-NEVER-CHECKED-AGAINST-THE-RUN-DATE`(P1)、`R-USSHORT-A4-RESERVE-REAPS-A-LIVE-PEERS-IN-FLIGHT-DISPATCH`(P1)、`R-USSHORT-A4-DISPATCH-COUNTS-ARE-NEVER-RECONCILED-AGAINST-THE-DISPATCH-LIST`(P2) — 正文与五条 Optional 见 `system_risk_register.md`(单一来源)。
+- **Verify**: review-evidence:0f42f556c5aa；全量单入口 `CACHED GREEN 5127 OK`，fingerprint `8ff74a88…` 与 executor 记录一致、属当前代码态。自写探针 28 条 27 绿：扣账先于 callback 落盘、超额时 callback 未被调用且不消耗、失败仍消耗、重试只加 attempt、崩溃重入复用同一包络且 unknown 不 replay、八种篡改被拒、同日换 plan 不给第二包络；红的一条=计数一致清零后又放行 2 次付费 callback。grep 实证零调用方传 `parent_plan`、两 CLI 无开关。§6a 独立 agent（只读/无网络）另报三条 P1：绕过 `PROVIDER_CALL_BUDGET`（声明 5000 实放 300，legacy 顶 25）、plan 日期不与运行日核对（4 账本/50 次付费）、`reserve()` 收割活 peer 的 in-flight；HELD 清单与我独立一致。
+- **Next**: Codex：按 register `A4 类级要求` 一节修复（四类 + 一条卫生，四个决定收掉五条 Required），跑通 us_short 全量后交审查。
+
+## 2026-08-02 — Codex executor A4 execution
+
+- **Verdict/Action**: A4 已在当前 executor 工作树完成；未提交、未合入、未 push；未执行 provider/network/live/paid；等待 Claude Code 独立审查/提交。
+- **Required**: A4 B1-B6 已落地：parent-plan/date/provider 一次性 envelope、Stage-2 只消费、同 scope retry planned 不增、`mutable_ledger_lock` 并发互斥、崩溃重入 unknown 且不自动 replay、超包络 callback 前 fail-closed；B1/B5 planted mutation 已各能转红。当前无未分类 executor-side Required；Claude Code 仍须审查 A4。
+- **Verify**: fixed-Python `py_compile=OK`；A4 B1-B6 + A1/query-plan + Web/X + conformance focused `183 OK / 32.004s`；inventory+A4 `24 OK / 4.871s`；final official full `5127 OK / 680.991s`，ledger `PASS / 682.1s / 860s`，fingerprint `8ff74a88c4c6`；`git diff --check=OK`；`state/us_short` 测试前后 file set 均为 0（4 个既有目录保留，既有目录 mtime 有测试触碰）；`provider_samples` 测试前后均不存在；无 provider/network/live/paid。
+- **Next**: Claude Code：审查 A4
+- **Pre-Codex self-review**: `matrix=complete; register=updated; handoff=updated; focused=183 OK / 32.004s + inventory/A4 24 OK / 4.871s; full-lane=5127 OK / 680.991s / ledger 682.1s / deadline=860s; door=shared mutable_ledger_lock + write_mutable_ledger provider_budget suffix + git diff --check; A=plan identity/date/provider envelope, begin-before-call, reentry unknown, web/x seams; B=one-time reservation, stage/retry counts, concurrent lock, no replay, pre-call callback guard; C=B1/B5 planted mutations, B2-B4/B6 positive/negative controls, conformance and final full; D=provider/network/live/paid execution, one-click activation, 4d-iii, confirmation/seats/theme_probe/lifecycle/theme_soft_boost; E=README + SESSION_LOG + risk register + same-phase handoff; F=py_compile + schema/conformance + diff-check + protected-root file/mtime snapshots; independent-self-review=not_used`
+
 ## 2026-08-02 — Claude 审查 PASS（A2+A3 版本化 policy 容器 + 确定性 Stage-2 规划器）
 
 - **Verdict/Action**: PASS，已提交并合入 master。本轮唯一放松是 conformance identity guard 多了 `_canonical_discovery_term` 豁免名，我按放松类改动做了强制腿反控：该 helper 只折 `display_name` 产 concept，ticker 走 `canonical_us_ticker`，lookalike 在 Stage-1 schema 与 canonicalizer 两层各自被拒，普通函数里的 casefold/upper 仍被 guard 抓。executor 判 full lane 免检，我不接受（改的是 lane 级守卫本身），亲跑一次全量。

@@ -12,6 +12,8 @@ from pathlib import Path, PurePosixPath
 from types import SimpleNamespace
 from unittest import mock
 
+from engine import us_short_llm_theme_discovery_plan_budget as plan_budget
+from engine import us_short_llm_theme_discovery_paid_gateway as paid_gateway
 from runners import us_short_llm_theme_discovery_fetch_x as xfetch
 from runners import us_short_llm_theme_discovery_merge as merge
 from runners.us_short_llm_theme_discovery_merge import ThemeDiscoveryMergeError, merge_web_x_discovery
@@ -34,6 +36,22 @@ class _TransportProbe:
 
     def _snapshot(self):
         return dict(self._completed)
+
+
+class _DispatchBudget:
+    """Explicit budget seam for executable orchestration tests; no provider/network call."""
+
+    def dispatch_with_outcome(self, _provider, *, scope, stage, call):
+        del scope, stage
+        try:
+            return plan_budget.DispatchOutcome(value=call())
+        except Exception as exc:
+            return plan_budget.DispatchOutcome(call_error=exc)
+
+
+def _noop_persist(_request, _value):
+    """Explicit sink for orchestration-only tests; packet builders test real raw writes separately."""
+    return None
 
 
 class XFetchAndMergeTests(unittest.TestCase):
@@ -104,20 +122,14 @@ class XFetchAndMergeTests(unittest.TestCase):
         load-bearing downstream alternatives instead: no sources earn zero knife-2 members, and a
         source whose frozen bytes no longer hash is refused by merge before knife-2.
         """
-        runner_cells = self._closure_cells(web.run_web_fetch)
-        transport = runner_cells["new_transport"]()
-        consume_cells = self._closure_cells(type(transport)._consume_ticket)
-        forged_ticket = object()
-        consume_cells["issued_tickets"].add(forged_ticket)
+        transport = paid_gateway.new_transport("tavily", "deepseek")
+        forged_ticket = paid_gateway.issue_ticket()
         transport._record_completed_response("tavily")
         return transport, forged_ticket
 
     def _forge_x_live_label_by_closure(self, completed=1):
-        runner_cells = self._closure_cells(xfetch.run_x_fetch)
-        transport = runner_cells["new_transport"]("xai")
-        consume_cells = self._closure_cells(type(transport)._consume_ticket)
-        forged_ticket = object()
-        consume_cells["issued_tickets"].add(forged_ticket)
+        transport = paid_gateway.new_transport("xai")
+        forged_ticket = paid_gateway.issue_ticket()
         for _ in range(completed):
             transport._record_completed_response("xai")
         return transport, forged_ticket
@@ -185,8 +197,8 @@ class XFetchAndMergeTests(unittest.TestCase):
         valid = "xai-" + "a" * 32
         for invalid in ("", "xai-a xai-b", valid + valid):
             with self.subTest(invalid=repr(invalid)):
-                with self.assertRaises(xfetch.XThemeDiscoveryError):
-                    xfetch.GrokXSearchClient(invalid)
+                with self.assertRaises(paid_gateway.PaidProviderError):
+                    paid_gateway.GrokXSearchClient(invalid, live_transport=_TransportProbe("xai"))
 
     def test_x_credential_policy_is_shared_and_accepts_a_rotated_length(self):
         """Both X call sites go through one helper that reuses the web lane's ambiguity rule."""
@@ -251,6 +263,7 @@ class XFetchAndMergeTests(unittest.TestCase):
         client = _Client([good, RuntimeError("boom")])
         outcome = xfetch.execute_live_x_orchestration(
             queries=["q1", "q2"], expected_decision_date="20260725", client=client,
+            dispatch_budget=_DispatchBudget(), persist_response=_noop_persist,
         )
         self.assertEqual(client.queries, ["q1", "q2"])
         self.assertEqual(len(outcome["results"]), len(X_ROWS), "the good query survives the bad one")
@@ -280,7 +293,8 @@ class XFetchAndMergeTests(unittest.TestCase):
         self_response = self._x_response()
         outcome = xfetch.execute_live_x_orchestration(
             queries=["good-first", "missing", "changed", "good-last"],
-            expected_decision_date="20260725", client=Client(),
+            expected_decision_date="20260725", client=Client(), dispatch_budget=_DispatchBudget(),
+            persist_response=_noop_persist,
         )
 
         self.assertEqual(len(outcome["results"]), 2 * len(X_ROWS), "sibling queries survive identity drops")
@@ -696,7 +710,7 @@ class XFetchAndMergeTests(unittest.TestCase):
                     "--web-discovery", "missing-web.json", "--web-receipt", "missing-web-receipt.json",
                     "--x-discovery", "missing-x.json", "--x-receipt", "missing-x-receipt.json",
                     "--expected-decision-date", "20260725", "--generated-at", "2026-07-25T08:00:00Z",
-                    "--discovery-output", str(web.STATE_DIR / "us_short_llm_theme_discovery_web_tavily_20260725_budget.json"),
+                    "--discovery-output", str(web.STATE_DIR / "us_short_llm_theme_discovery_plan_web_20260725_budget.json"),
                 ])
             run.assert_not_called()
 
@@ -1187,6 +1201,25 @@ class XFetchAndMergeTests(unittest.TestCase):
             self.assertEqual(conflicted["provider_response_refs"], [])
             self.assertIn("provider_response_immutable_raw_content_conflict", {row["reason"] for row in conflicted["drop_ledger"]})
 
+    def test_x_paid_raw_receipt_survives_a_pre_flush_builder_failure(self):
+        with temporary_provider_directory(web.ROOT) as td:
+            raw_root = Path(td) / "x_pre_flush_failure"
+            good = self._live_raw_response("pre-flush")
+            transport, ticket = self._forge_x_live_label_by_closure()
+            with mock.patch.object(
+                xfetch, "_normalize_results",
+                side_effect=xfetch.XThemeDiscoveryError("forced pre-flush failure"),
+            ):
+                with self.assertRaises(xfetch.XThemeDiscoveryError):
+                    xfetch.build_x_fetch_packet(
+                        queries=["q"], results=[], grok_response='{"themes":[]}',
+                        expected_decision_date="20260725", generated_at="2026-07-25T08:00:00Z",
+                        raw_root=raw_root, persist_raw=True, execution_mode="live_authorized",
+                        _live_transport=transport, _live_ticket=ticket,
+                        raw_provider_responses=[good],
+                    )
+            self.assertTrue(list(raw_root.rglob("*.json")))
+
     def test_k3_r95_source_conflict_is_not_a_provider_response_drop(self):
         """K3-R95: source freeze failures must not poison response-index accounting."""
         receipt = {
@@ -1430,6 +1463,7 @@ class XFetchAndMergeTests(unittest.TestCase):
 
             outcome = xfetch.execute_live_x_orchestration(
                 queries=["q0", "q1"], expected_decision_date="20260725", client=FirstQueryFails(),
+                dispatch_budget=_DispatchBudget(), persist_response=_noop_persist,
             )
             self.assertEqual(len(outcome["raw_provider_responses"]), 1)
             _, receipt, _ = xfetch.build_x_fetch_packet(
@@ -1702,6 +1736,7 @@ class XFetchAndMergeTests(unittest.TestCase):
 
         outcome = xfetch.execute_live_x_orchestration(
             queries=["power"], expected_decision_date="20260725", client=OrchestrationClient(),
+            dispatch_budget=_DispatchBudget(), persist_response=_noop_persist,
         )
         discovery, receipt, _ = xfetch.build_x_fetch_packet(
             queries=["power"], results=outcome["results"], grok_response=outcome["grok_response"],
@@ -1770,16 +1805,18 @@ class XFetchAndMergeTests(unittest.TestCase):
         }
         with (
             mock.patch.object(xfetch.os.environ, "get", return_value="xai-" + "x" * 40),
-            mock.patch.object(xfetch.web, "_reserve_provider_budget", side_effect=lambda *_args, **_kwargs: order.append("reserve")),
-            mock.patch.object(xfetch, "GrokXSearchClient"),
+            mock.patch.object(xfetch.plan_budget, "validate_run_decision_date"),
+            mock.patch.object(xfetch.plan_budget, "reserve_plan_budget", side_effect=lambda *_args, **_kwargs: order.append("plan_reserve") or object()),
+            mock.patch.object(xfetch.paid_gateway, "create_x_client", return_value=object()),
             mock.patch.object(xfetch, "execute_live_x_orchestration", side_effect=lambda **_: order.append("orchestrate") or outcome),
             mock.patch.object(xfetch, "build_x_fetch_packet", return_value=({}, {}, {})),
         ):
             xfetch.run_x_fetch(
                 queries=["power"], expected_decision_date="20260725",
                 generated_at="2026-07-25T08:00:00Z", confirm_user_authorization=True, live=True,
+                parent_plan=object(),
             )
-        self.assertEqual(order, ["reserve", "orchestrate"])
+        self.assertEqual(order, ["plan_reserve", "orchestrate"])
 
     def test_x_live_receipt_binds_grok_requested_and_served_model(self):
         """K3-R69: model aliases are not replayable evidence without provider-served identity."""
@@ -1810,6 +1847,7 @@ class XFetchAndMergeTests(unittest.TestCase):
         self_response = self._x_response()
         outcome = xfetch.execute_live_x_orchestration(
             queries=["power"], expected_decision_date="20260725", client=Client(),
+            dispatch_budget=_DispatchBudget(), persist_response=_noop_persist,
         )
         _, receipt, _ = xfetch.build_x_fetch_packet(
             queries=["power"], results=outcome["results"], grok_response=outcome["grok_response"],
@@ -1866,14 +1904,16 @@ class XFetchAndMergeTests(unittest.TestCase):
 
         with (
             mock.patch.object(xfetch, "_require_single_xai_api_key", return_value="xai-" + "a" * 40),
-            mock.patch.object(xfetch.web, "_reserve_provider_budget"),
-            mock.patch.object(xfetch, "GrokXSearchClient", Client),
+            mock.patch.object(xfetch.plan_budget, "validate_run_decision_date"),
+            mock.patch.object(xfetch.plan_budget, "reserve_plan_budget", return_value=object()),
+            mock.patch.object(xfetch.paid_gateway, "create_x_client", side_effect=lambda _key, transport: Client(_live_transport=transport)),
             mock.patch.object(xfetch, "execute_live_x_orchestration", side_effect=orchestration),
         ):
             _, receipt, _ = xfetch.run_x_fetch(
                 queries=["power"], expected_decision_date="20260725",
                 generated_at="2026-07-25T08:00:00Z", confirm_user_authorization=True, live=True,
                 raw_root=self._raw_path / "x_live_zero",
+                parent_plan=object(),
             )
         self.assertEqual(receipt["fetch_contract"]["execution_mode"], "live_authorized")
         self.assertEqual(receipt["fetch_contract"]["transport_response_counts"], {"xai": 1})
