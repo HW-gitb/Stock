@@ -48,20 +48,38 @@ class Bankruptcy8kCandidateResumeScanTest(unittest.TestCase):
         )
         self.sample_root = Path(self._sample_root_context.__enter__())
         self.addCleanup(self._sample_root_context.__exit__, None, None, None)
+        self._summary_root_context = temporary_us_short_directory(
+            ROOT, Path("docs") / "us_short_batch5_bankruptcy_8k_candidate_resume_scan_summaries_20260705"
+        )
+        self.summary_root = Path(self._summary_root_context.__enter__())
+        self.addCleanup(self._summary_root_context.__exit__, None, None, None)
         import importlib
 
         producer = importlib.import_module(MODULE)
+        source_packet_runner = producer.source_packet_runner
+        original_docs_dir = producer.DOCS_DIR
+        producer.DOCS_DIR = self.summary_root
+        self.addCleanup(setattr, producer, "DOCS_DIR", original_docs_dir)
+        original_source_docs_dir = source_packet_runner.DOCS_DIR
+        source_packet_runner.DOCS_DIR = self.summary_root
+        self.addCleanup(setattr, source_packet_runner, "DOCS_DIR", original_source_docs_dir)
         original_git_ignored = producer._git_ignored
         state_root = self.state_dir.resolve()
+        summary_root = self.summary_root.resolve()
 
         def _git_ignored_for_private_test(path):
             resolved = Path(path).resolve()
             if resolved == state_root or state_root in resolved.parents:
                 return True
+            if resolved == summary_root or summary_root in resolved.parents:
+                return False
             return original_git_ignored(path)
 
         producer._git_ignored = _git_ignored_for_private_test
         self.addCleanup(setattr, producer, "_git_ignored", original_git_ignored)
+        original_source_git_ignored = source_packet_runner._git_ignored
+        source_packet_runner._git_ignored = _git_ignored_for_private_test
+        self.addCleanup(setattr, source_packet_runner, "_git_ignored", original_source_git_ignored)
         self.slug = f"test_b8kresume_{os.getpid()}_{self._testMethodName[:20]}"
         self.symbols = _symbols(115)
         self.paths = {
@@ -69,8 +87,8 @@ class Bankruptcy8kCandidateResumeScanTest(unittest.TestCase):
             "manifest": self.state_dir / f"{self.slug}_manifest.json",
             "source_packet": self.state_dir / f"{self.slug}_packet.json",
             "screen": self.state_dir / f"{self.slug}_screen.json",
-            "producer_summary": ROOT / "docs" / f"{self.slug}_summary.json",
-            "consumer_summary": ROOT / "docs" / f"{self.slug}_consumer_summary.json",
+            "producer_summary": self.summary_root / f"{self.slug}_summary.json",
+            "consumer_summary": self.summary_root / f"{self.slug}_consumer_summary.json",
         }
         self.raw_root = self.sample_root / self.slug / "raw"
         for path in self.paths.values():

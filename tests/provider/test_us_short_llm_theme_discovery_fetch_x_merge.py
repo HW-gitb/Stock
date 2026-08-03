@@ -6,6 +6,7 @@ import os
 import subprocess
 import sys
 import tempfile
+import threading
 import unittest
 from datetime import datetime, timezone
 from pathlib import Path, PurePosixPath
@@ -14,6 +15,7 @@ from unittest import mock
 
 from engine import us_short_llm_theme_discovery_plan_budget as plan_budget
 from engine import us_short_llm_theme_discovery_paid_gateway as paid_gateway
+from engine import us_short_llm_theme_discovery_query_plan as query_plan
 from runners import us_short_llm_theme_discovery_fetch_x as xfetch
 from runners import us_short_llm_theme_discovery_merge as merge
 from runners.us_short_llm_theme_discovery_merge import ThemeDiscoveryMergeError, merge_web_x_discovery
@@ -27,15 +29,31 @@ X_ROWS = [
 ]
 
 
-class _TransportProbe:
+def _parent_plan(query_text: str) -> dict[str, object]:
+    return query_plan.ParentPlanDocument(query_plan.build_parent_plan(
+        decision_date="20260725", policy_version="soft_discovery_query_policy_v0.1.0",
+        policy_template_content_sha256="a" * 64,
+        stage1_queries=[{"query_id": "stage1-a", "query_text": query_text}],
+        stage2_rule_sha256="b" * 64,
+        provider_envelopes=[
+            {"provider": "web", "stage1_max_dispatch_count": 1, "stage2_max_dispatch_count": 0, "retry_max_dispatch_count": 1, "max_dispatch_count": 2},
+            {"provider": "xai", "stage1_max_dispatch_count": 1, "stage2_max_dispatch_count": 0, "retry_max_dispatch_count": 1, "max_dispatch_count": 2},
+        ],
+        generated_at="2026-07-24T08:00:00Z",
+    ), artifact_sha256="c" * 64, artifact_path="state/us_short/test-parent-plan.json")
+
+
+class _TransportProbe(paid_gateway.LiveTransport):
     def __init__(self, *providers):
-        self._completed = {provider: 0 for provider in providers}
+        super().__init__(
+            object(), tuple(providers), ticket_lock=threading.Lock(), tickets=set(),
+        )
 
+
+class _OrchestrationTransportProbe(_TransportProbe):
+    """A typed fake whose completed count stays reserved for real transport tests."""
     def _record_completed_response(self, provider):
-        self._completed[provider] += 1
-
-    def _snapshot(self):
-        return dict(self._completed)
+        del provider
 
 
 class _DispatchBudget:
@@ -263,7 +281,8 @@ class XFetchAndMergeTests(unittest.TestCase):
         client = _Client([good, RuntimeError("boom")])
         outcome = xfetch.execute_live_x_orchestration(
             queries=["q1", "q2"], expected_decision_date="20260725", client=client,
-            dispatch_budget=_DispatchBudget(), persist_response=_noop_persist,
+            dispatch_budget=_DispatchBudget(), transport=_OrchestrationTransportProbe("xai"),
+            persist_response=_noop_persist, query_records=["q1", "q2"], parent_plan=None,
         )
         self.assertEqual(client.queries, ["q1", "q2"])
         self.assertEqual(len(outcome["results"]), len(X_ROWS), "the good query survives the bad one")
@@ -294,7 +313,8 @@ class XFetchAndMergeTests(unittest.TestCase):
         outcome = xfetch.execute_live_x_orchestration(
             queries=["good-first", "missing", "changed", "good-last"],
             expected_decision_date="20260725", client=Client(), dispatch_budget=_DispatchBudget(),
-            persist_response=_noop_persist,
+            transport=_OrchestrationTransportProbe("xai"), persist_response=_noop_persist,
+            query_records=["good-first", "missing", "changed", "good-last"], parent_plan=None,
         )
 
         self.assertEqual(len(outcome["results"]), 2 * len(X_ROWS), "sibling queries survive identity drops")
@@ -711,6 +731,18 @@ class XFetchAndMergeTests(unittest.TestCase):
                     "--x-discovery", "missing-x.json", "--x-receipt", "missing-x-receipt.json",
                     "--expected-decision-date", "20260725", "--generated-at", "2026-07-25T08:00:00Z",
                     "--discovery-output", str(web.STATE_DIR / "us_short_llm_theme_discovery_plan_web_20260725_budget.json"),
+                ])
+            run.assert_not_called()
+
+    def test_live_x_cli_rejects_free_query_even_when_parent_plan_is_valid(self):
+        parent = _parent_plan("power")
+        with mock.patch.object(xfetch.query_plan, "read_parent_plan", return_value=(parent, "a" * 64, "docs/plan.json")), \
+                mock.patch.object(xfetch, "run_x_fetch") as run:
+            with self.assertRaisesRegex(SystemExit, "live mode accepts queries only from --parent-plan"):
+                xfetch.main([
+                    "--live", "--query", "power", "--parent-plan", "docs/plan.json",
+                    "--expected-decision-date", "20260725", "--generated-at", "2026-07-25T08:00:00Z",
+                    "--confirm-user-authorization",
                 ])
             run.assert_not_called()
 
@@ -1463,7 +1495,8 @@ class XFetchAndMergeTests(unittest.TestCase):
 
             outcome = xfetch.execute_live_x_orchestration(
                 queries=["q0", "q1"], expected_decision_date="20260725", client=FirstQueryFails(),
-                dispatch_budget=_DispatchBudget(), persist_response=_noop_persist,
+                dispatch_budget=_DispatchBudget(), transport=_OrchestrationTransportProbe("xai"),
+                persist_response=_noop_persist, query_records=["q0", "q1"], parent_plan=None,
             )
             self.assertEqual(len(outcome["raw_provider_responses"]), 1)
             _, receipt, _ = xfetch.build_x_fetch_packet(
@@ -1736,7 +1769,8 @@ class XFetchAndMergeTests(unittest.TestCase):
 
         outcome = xfetch.execute_live_x_orchestration(
             queries=["power"], expected_decision_date="20260725", client=OrchestrationClient(),
-            dispatch_budget=_DispatchBudget(), persist_response=_noop_persist,
+            dispatch_budget=_DispatchBudget(), transport=_OrchestrationTransportProbe("xai"),
+            persist_response=_noop_persist, query_records=["power"], parent_plan=None,
         )
         discovery, receipt, _ = xfetch.build_x_fetch_packet(
             queries=["power"], results=outcome["results"], grok_response=outcome["grok_response"],
@@ -1802,6 +1836,7 @@ class XFetchAndMergeTests(unittest.TestCase):
             "results": [], "grok_response": '{"themes":[]}', "query_drops": [],
             "fetched_at": datetime(2026, 7, 25, 8, tzinfo=timezone.utc), "annotation_urls": [],
             "grok_model_identity": xfetch._grok_model_identity(), "grok_attempted": False, "grok_failed": False,
+            "stage1_dispatch_count": 1, "stage1_queries": ["power"],
         }
         with (
             mock.patch.object(xfetch.os.environ, "get", return_value="xai-" + "x" * 40),
@@ -1809,12 +1844,12 @@ class XFetchAndMergeTests(unittest.TestCase):
             mock.patch.object(xfetch.plan_budget, "reserve_plan_budget", side_effect=lambda *_args, **_kwargs: order.append("plan_reserve") or object()),
             mock.patch.object(xfetch.paid_gateway, "create_x_client", return_value=object()),
             mock.patch.object(xfetch, "execute_live_x_orchestration", side_effect=lambda **_: order.append("orchestrate") or outcome),
-            mock.patch.object(xfetch, "build_x_fetch_packet", return_value=({}, {}, {})),
+            mock.patch.object(xfetch, "build_x_fetch_packet", return_value=({}, {"summary": {"query_count": 1}}, {})),
         ):
             xfetch.run_x_fetch(
                 queries=["power"], expected_decision_date="20260725",
                 generated_at="2026-07-25T08:00:00Z", confirm_user_authorization=True, live=True,
-                parent_plan=object(),
+                parent_plan=_parent_plan("power"),
             )
         self.assertEqual(order, ["plan_reserve", "orchestrate"])
 
@@ -1847,7 +1882,8 @@ class XFetchAndMergeTests(unittest.TestCase):
         self_response = self._x_response()
         outcome = xfetch.execute_live_x_orchestration(
             queries=["power"], expected_decision_date="20260725", client=Client(),
-            dispatch_budget=_DispatchBudget(), persist_response=_noop_persist,
+            dispatch_budget=_DispatchBudget(), transport=_OrchestrationTransportProbe("xai"),
+            persist_response=_noop_persist, query_records=["power"], parent_plan=None,
         )
         _, receipt, _ = xfetch.build_x_fetch_packet(
             queries=["power"], results=outcome["results"], grok_response=outcome["grok_response"],
@@ -1900,6 +1936,7 @@ class XFetchAndMergeTests(unittest.TestCase):
                 "raw_provider_responses": [self._live_raw_response("resp-zero-accepted")],
                 "grok_model_identity": xfetch._grok_model_identity(),
                 "grok_attempted": False, "grok_failed": False,
+                "stage1_dispatch_count": 1, "stage1_queries": ["power"],
             }
 
         with (
@@ -1913,7 +1950,7 @@ class XFetchAndMergeTests(unittest.TestCase):
                 queries=["power"], expected_decision_date="20260725",
                 generated_at="2026-07-25T08:00:00Z", confirm_user_authorization=True, live=True,
                 raw_root=self._raw_path / "x_live_zero",
-                parent_plan=object(),
+                parent_plan=_parent_plan("power"),
             )
         self.assertEqual(receipt["fetch_contract"]["execution_mode"], "live_authorized")
         self.assertEqual(receipt["fetch_contract"]["transport_response_counts"], {"xai": 1})

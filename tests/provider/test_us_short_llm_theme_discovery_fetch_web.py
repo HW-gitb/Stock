@@ -14,6 +14,7 @@ from pathlib import Path
 
 from engine import us_short_llm_theme_discovery_plan_budget as plan_budget
 from engine import us_short_llm_theme_discovery_paid_gateway as paid_gateway
+from engine import us_short_llm_theme_discovery_query_plan as query_plan
 from engine import us_short_llm_theme_discovery_provider_policy as provider_policy
 from runners import us_short_llm_theme_discovery_fetch_web as fetch
 from tests.provider.us_short_private_test_root import (
@@ -55,16 +56,32 @@ ROWS = [
 TAVILY_TEST_KEY = "tvly-" + "a" * 52
 
 
-class _TransportProbe:
+def _parent_plan(query_text: str) -> dict[str, object]:
+    return query_plan.ParentPlanDocument(query_plan.build_parent_plan(
+        decision_date="20260725", policy_version="soft_discovery_query_policy_v0.1.0",
+        policy_template_content_sha256="a" * 64,
+        stage1_queries=[{"query_id": "stage1-a", "query_text": query_text}],
+        stage2_rule_sha256="b" * 64,
+        provider_envelopes=[
+            {"provider": "web", "stage1_max_dispatch_count": 1, "stage2_max_dispatch_count": 0, "retry_max_dispatch_count": 1, "max_dispatch_count": 2},
+            {"provider": "xai", "stage1_max_dispatch_count": 1, "stage2_max_dispatch_count": 0, "retry_max_dispatch_count": 1, "max_dispatch_count": 2},
+        ],
+        generated_at="2026-07-24T08:00:00Z",
+    ), artifact_sha256="c" * 64, artifact_path="state/us_short/test-parent-plan.json")
+
+
+class _TransportProbe(paid_gateway.LiveTransport):
     """Orchestration test double; unlike production transport it cannot authorize a receipt."""
     def __init__(self, *providers):
-        self._completed = {provider: 0 for provider in providers}
+        super().__init__(
+            object(), tuple(providers), ticket_lock=threading.Lock(), tickets=set(),
+        )
 
+
+class _OrchestrationTransportProbe(_TransportProbe):
+    """A typed fake whose completed count stays reserved for real transport tests."""
     def _record_completed_response(self, provider):
-        self._completed[provider] += 1
-
-    def _snapshot(self):
-        return dict(self._completed)
+        del provider
 
 
 class _DispatchBudget:
@@ -241,6 +258,7 @@ class WebFetchTests(unittest.TestCase):
             "fetched_at": datetime(2026, 7, 25, 8, tzinfo=timezone.utc),
             "regroup_model_identity": fetch._regroup_model_identity(),
             "regroup_failed": False, "regroup_attempted": False, "provider_call_count": 1,
+            "stage1_dispatch_count": 1, "stage1_queries": ["x"],
             "regroup_chunk_counts": {
                 "attempted": 0, "successful": 0, "failed": 0, "failed_indexes": [],
             },
@@ -253,12 +271,12 @@ class WebFetchTests(unittest.TestCase):
             mock.patch.object(fetch.plan_budget, "validate_run_decision_date"),
             mock.patch.object(fetch.plan_budget, "reserve_plan_budget", side_effect=lambda *_args, **_kwargs: order.append("plan_reserve") or object()),
             mock.patch.object(fetch, "execute_live_web_orchestration", side_effect=lambda **_: order.append("orchestrate") or outcome),
-            mock.patch.object(fetch, "build_web_fetch_packet", return_value=({}, {}, {})),
+            mock.patch.object(fetch, "build_web_fetch_packet", return_value=({}, {"summary": {"query_count": 1}}, {})),
         ):
             fetch.run_web_fetch(
                 queries=["x"], expected_decision_date="20260725",
                 generated_at="2026-07-25T08:00:00Z", confirm_user_authorization=True, live=True,
-                parent_plan=object(),
+                parent_plan=_parent_plan("x"),
             )
         self.assertEqual(order, ["plan_reserve", "orchestrate"])
 
@@ -449,6 +467,7 @@ class WebFetchTests(unittest.TestCase):
                 "fetched_at": datetime(2026, 7, 25, 8, tzinfo=timezone.utc),
                 "regroup_model_identity": fetch._regroup_model_identity(),
                 "regroup_failed": False, "regroup_attempted": False, "provider_call_count": 1,
+                "stage1_dispatch_count": 1, "stage1_queries": ["power"],
                 "regroup_chunk_counts": {
                     "attempted": 0, "successful": 0, "failed": 0, "failed_indexes": [],
                 },
@@ -465,7 +484,7 @@ class WebFetchTests(unittest.TestCase):
             _, receipt, _ = fetch.run_web_fetch(
                 queries=["power"], expected_decision_date="20260725",
                 generated_at="2026-07-25T08:00:00Z", confirm_user_authorization=True, live=True,
-                parent_plan=object(),
+                parent_plan=_parent_plan("power"),
             )
         self.assertEqual(receipt["fetch_contract"]["execution_mode"], "live_authorized")
         self.assertEqual(receipt["fetch_contract"]["transport_response_counts"], {"deepseek": 0, "tavily": 1})
@@ -814,6 +833,18 @@ class WebFetchTests(unittest.TestCase):
         with mock.patch.object(fetch, "run_web_fetch") as run:
             with self.assertRaises(fetch.WebThemeDiscoveryError):
                 fetch.main(["--query", "q", "--expected-decision-date", "20260810", "--generated-at", "2026-08-10T08:00:00Z", "--output-path", str(fetch.ROOT / "docs" / "bad.json")])
+            run.assert_not_called()
+
+    def test_live_cli_rejects_free_query_even_when_parent_plan_is_valid(self):
+        parent = _parent_plan("power")
+        with mock.patch.object(fetch.query_plan, "read_parent_plan", return_value=(parent, "a" * 64, "docs/plan.json")), \
+                mock.patch.object(fetch, "run_web_fetch") as run:
+            with self.assertRaisesRegex(SystemExit, "live mode accepts queries only from --parent-plan"):
+                fetch.main([
+                    "--live", "--query", "power", "--parent-plan", "docs/plan.json",
+                    "--expected-decision-date", "20260725", "--generated-at", "2026-07-25T08:00:00Z",
+                    "--confirm-user-authorization",
+                ])
             run.assert_not_called()
 
     def test_packet_order_and_drop_ledger_are_deterministic(self):
@@ -1275,24 +1306,24 @@ class LiveOrchestrationExecutableTests(unittest.TestCase):
                 "observed_at": "2026-07-29T12:00:00Z", "source_ref_ids": [], "members": []}
 
     def _run(self, batches, plan):
-        transport = _TransportProbe("tavily", "deepseek")
+        transport = _OrchestrationTransportProbe("tavily", "deepseek")
         outcome = fetch.execute_live_web_orchestration(
             queries=["power demand"], expected_decision_date=self.DATE,
             tavily=self._Tavily(batches), deepseek_client=self._DeepSeek(plan),
             transport=transport, dispatch_budget=_DispatchBudget(),
-            persist_search_response=_noop_persist,
+            persist_search_response=_noop_persist, query_records=["power demand"], parent_plan=None,
         )
         return outcome, transport
 
     def test_happy_path_sends_the_reviewed_prompt_and_returns_themes(self):
         """Covers the K3-R55 shape: a prompt builder that returned None or a re-authored string."""
         deepseek = self._DeepSeek([self._response([self._theme("power_demand")])])
-        transport = _TransportProbe("tavily", "deepseek")
+        transport = _OrchestrationTransportProbe("tavily", "deepseek")
         outcome = fetch.execute_live_web_orchestration(
             queries=["power demand"], expected_decision_date=self.DATE,
             tavily=self._Tavily([self.ROWS]), deepseek_client=deepseek,
             transport=transport, dispatch_budget=_DispatchBudget(),
-            persist_search_response=_noop_persist,
+            persist_search_response=_noop_persist, query_records=["power demand"], parent_plan=None,
         )
         self.assertEqual(len(deepseek.prompts), 1)
         prompt = deepseek.prompts[0]
@@ -1314,8 +1345,8 @@ class LiveOrchestrationExecutableTests(unittest.TestCase):
         outcome = fetch.execute_live_web_orchestration(
             queries=["power demand"], expected_decision_date=self.DATE,
             tavily=self._Tavily([[]]), deepseek_client=deepseek,
-            transport=_TransportProbe("tavily", "deepseek"), dispatch_budget=_DispatchBudget(),
-            persist_search_response=_noop_persist,
+            transport=_OrchestrationTransportProbe("tavily", "deepseek"), dispatch_budget=_DispatchBudget(),
+            persist_search_response=_noop_persist, query_records=["power demand"], parent_plan=None,
         )
         self.assertEqual(deepseek.prompts, [])
         self.assertFalse(outcome["regroup_attempted"])

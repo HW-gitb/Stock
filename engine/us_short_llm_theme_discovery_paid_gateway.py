@@ -3,11 +3,12 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, field
+import hashlib
 import json
 import re
 import threading
 import urllib.request
-from typing import Any, Callable, Iterable
+from typing import Any, Callable, Iterable, Mapping
 from urllib.parse import urlsplit
 
 from engine import us_short_llm_theme_discovery_plan_budget as plan_budget
@@ -361,6 +362,10 @@ class PaidDispatchRequest:
     scope: str
     stage: str
     call: Callable[[], Any]
+    query_id: str | None = None
+    query_text: str | None = None
+    query_text_sha256: str | None = None
+    parent_plan_identity: str | None = None
     _gateway_token: object | None = field(default=None, repr=False, compare=False)
 
 
@@ -380,11 +385,67 @@ class PaidDispatchBatch:
     stop_error: BaseException | None = None
 
 
+# --- plan-bound money gate: the whole policy, as data -------------------------------------
+# Axes (total product, 2 x 3 x 2 = 12 rows):
+#   stage    : "stage1" | "other"     — "other" is every non-Stage-1 paid leg (today: the web
+#                                        Stage-2 regroup, which by design carries no query id)
+#   plan     : "absent" | "valid" | "malformed"
+#   identity : "bare"   | "record"
+# `malformed` (a non-None plan the gate cannot read) must FAIL CLOSED, never degrade to
+# "no plan held" — that degradation paid for off-plan text in review.
+PLAN_GATE_ALLOW = "allow"
+PLAN_GATE_VERIFY_MEMBERSHIP = "verify_membership"
+PLAN_GATE_STAGES = ("stage1", "stage2")     # the ONLY paid stages; anything else is denied
+PLAN_GATE_PLAN_STATES = ("absent", "valid", "malformed")
+PLAN_GATE_IDENTITIES = ("bare", "record")
+PLAN_GATE_DENIAL_MESSAGES = {
+    "deny_missing_plan": "plan-bound Stage-1 request requires a parent plan",
+    "deny_missing_record": "plan-bound Stage-1 request requires a plan query record",
+    "deny_stage1_only": "plan-bound query identity is only valid for stage1",
+    "deny_malformed_plan": "parent plan must be a mapping",
+    "deny_unknown_stage": "paid dispatch stage is not a known plan-gate stage",
+}
+PLAN_GATE_DECISIONS: dict[tuple[str, str, str], str] = {
+    ("stage1", "absent", "bare"): PLAN_GATE_ALLOW,               # offline fake-client lane
+    ("stage1", "absent", "record"): "deny_missing_plan",
+    ("stage1", "valid", "bare"): "deny_missing_record",          # the off-plan paid hole
+    ("stage1", "valid", "record"): PLAN_GATE_VERIFY_MEMBERSHIP,
+    ("stage1", "malformed", "bare"): "deny_malformed_plan",
+    ("stage1", "malformed", "record"): "deny_malformed_plan",
+    ("stage2", "absent", "bare"): PLAN_GATE_ALLOW,               # offline regroup
+    ("stage2", "absent", "record"): "deny_stage1_only",
+    ("stage2", "valid", "bare"): PLAN_GATE_ALLOW,                # live Stage-2 regroup: no query id BY DESIGN
+    ("stage2", "valid", "record"): "deny_stage1_only",
+    ("stage2", "malformed", "bare"): "deny_malformed_plan",
+    ("stage2", "malformed", "record"): "deny_malformed_plan",
+}
+
+
+def classify_plan_state(parent_plan: Any) -> str:
+    """Classify the held plan onto the table's axis; anything unreadable is `malformed`."""
+    if parent_plan is None:
+        return "absent"
+    return "valid" if isinstance(parent_plan, Mapping) else "malformed"
+
+
+def plan_gate_decision(*, stage: str, plan_state: str, identity: str) -> str:
+    # Fail closed on an unknown/drifted stage label ("STAGE1", "stage1 ", "", "banana"): a first
+    # cut normalised every non-"stage1" string into one permissive bucket and self-review found
+    # that this handed those labels a free pass past the plan binding AND past the Stage-1
+    # persistence rule. `PLAN_GATE_STAGES` is the declared domain and is checked here (so the
+    # constant is load-bearing, not decorative); the `.get` default covers a row deleted from the
+    # table without its axis entry.
+    if stage not in PLAN_GATE_STAGES:
+        return "deny_unknown_stage"
+    return PLAN_GATE_DECISIONS.get((stage, plan_state, identity), "deny_unknown_stage")
+
+
 class PaidDispatchGateway:
     """Own the paid loop, post-payment stop rule, and outcome handoff."""
 
-    def __init__(self, budget: Any):
+    def __init__(self, budget: Any, *, parent_plan: Mapping[str, Any] | None = None):
         self._budget = budget
+        self._parent_plan = parent_plan if parent_plan is not None else getattr(budget, "parent_plan", None)
         self._request_token = object()
 
     @staticmethod
@@ -395,11 +456,99 @@ class PaidDispatchGateway:
     def _budget_error(exc: BaseException) -> bool:
         return isinstance(exc, plan_budget.PlanBudgetError)
 
-    def _request(self, provider: str, scope: str, stage: str, call: Callable[[], Any]) -> PaidDispatchRequest:
+    def _request(
+        self, provider: str, scope: str, stage: str, call: Callable[[], Any], *,
+        query_id: str | None = None, query_text: str | None = None,
+        query_text_sha256: str | None = None,
+    ) -> PaidDispatchRequest:
         return PaidDispatchRequest(
             provider=provider, scope=scope, stage=stage, call=call,
+            query_id=query_id, query_text=query_text,
+            query_text_sha256=query_text_sha256,
+            parent_plan_identity=(
+                self._parent_plan.get("plan_identity")
+                if isinstance(self._parent_plan, Mapping) else None
+            ),
             _gateway_token=self._request_token,
         )
+
+    @staticmethod
+    def _query_fields(value: Any) -> tuple[str, str, str] | tuple[None, str, None]:
+        if not isinstance(value, Mapping):
+            if type(value) is not str or not value:
+                raise PaidProviderError("stage1 query must be text or a plan query record")
+            return None, value, None
+        expected = {"query_id", "query_text", "stage", "query_text_sha256"}
+        if set(value) != expected:
+            raise PaidProviderError("plan query record has an unexpected field set")
+        query_id = value["query_id"]
+        query_text = value["query_text"]
+        stage = value["stage"]
+        query_text_sha256 = value["query_text_sha256"]
+        if (
+            type(query_id) is not str or not query_id
+            or type(query_text) is not str or not query_text
+            or stage != "stage1"
+            or type(query_text_sha256) is not str
+            or query_text_sha256 != hashlib.sha256(query_text.encode("utf-8")).hexdigest()
+        ):
+            raise PaidProviderError("plan query record identity or text hash is invalid")
+        return query_id, query_text, query_text_sha256
+
+    def _validate_plan_bound_request(self, request: PaidDispatchRequest) -> None:
+        # Every decision comes from PLAN_GATE_DECISIONS — never from an `if` written here. Three
+        # consecutive review rounds each bolted one more conditional onto this function and each
+        # time a neighbouring cell was left wrong (a bare string under a plan was paid for; then
+        # the legitimate Stage-2 regroup was refused AFTER Stage-1 had been paid). The table is
+        # total over its axes and every cell is pinned by a HAND-AUTHORED golden map plus
+        # behavioural cases, so a forgotten OR wrong combination is visible in the table instead of
+        # surfacing as a paid-path defect a round later. (The companion static test catches only a
+        # re-accreted stage literal; broader re-accretion is caught behaviourally — see its
+        # docstring, which states that scope honestly rather than claiming a complete barrier.)
+        decision = plan_gate_decision(
+            stage=request.stage,
+            plan_state=classify_plan_state(self._parent_plan),
+            identity="bare" if request.query_id is None else "record",
+        )
+        if decision == PLAN_GATE_ALLOW:
+            return
+        denial = PLAN_GATE_DENIAL_MESSAGES.get(decision)
+        if denial is not None:
+            raise PaidProviderError(denial)
+        # The membership branch below dereferences the plan. Today only a `valid` cell routes here,
+        # but that is a property of the table's CONTENT; if a future row sends an absent/malformed
+        # plan down this path the dereference would raise a bare AttributeError that slips past
+        # every `except PaidProviderError` on the paid loop. Convert it here, fail closed.
+        if not isinstance(self._parent_plan, Mapping):
+            raise PaidProviderError(PLAN_GATE_DENIAL_MESSAGES["deny_malformed_plan"])
+        # NOT a caller-facing control: `_request` stamps `parent_plan_identity` from THIS gateway's
+        # own plan, so it can only differ if the held plan object is mutated in flight (between
+        # building the request and dispatching it). That is the one thing it catches, and
+        # `test_P5_identity_check_catches_an_in_flight_plan_mutation` is the case that proves it.
+        if request.parent_plan_identity != self._parent_plan.get("plan_identity"):
+            raise PaidProviderError("plan-bound request identity does not match the parent plan")
+        try:
+            plan_budget.validate_plan_stage1_query(
+                self._parent_plan,
+                provider=request.provider,
+                query_id=request.query_id,
+                query_text=request.query_text or "",
+                query_text_sha256=request.query_text_sha256 or "",
+            )
+        except plan_budget.PlanBudgetError as exc:
+            raise PaidProviderError(str(exc)) from exc
+
+    def _require_stage1_query_records(self, queries: Iterable[Any] | None) -> Iterable[Any]:
+        # Same table, same axes: a missing record list is the `bare` identity for stage1.
+        if queries is None:
+            decision = plan_gate_decision(
+                stage="stage1", plan_state=classify_plan_state(self._parent_plan), identity="bare",
+            )
+            denial = PLAN_GATE_DENIAL_MESSAGES.get(decision)
+            if denial is not None:
+                raise PaidProviderError(denial)
+            raise PaidProviderError("stage1 query records are required")
+        return queries
 
     @staticmethod
     def _response_recorder(transport: Any | None, provider: str) -> Callable[[PaidDispatchRequest], Any] | None:
@@ -420,6 +569,7 @@ class PaidDispatchGateway:
         for request in requests:
             if request._gateway_token is not self._request_token:
                 raise PaidProviderError("dispatch request was not issued by this gateway")
+            self._validate_plan_bound_request(request)
             # Stage1 is the paid evidence lane: no request may reserve budget before
             # the caller has supplied the single raw-evidence write door.  Stage2
             # regrouping remains an explicit non-raw contract when no sink is given.
@@ -507,18 +657,23 @@ class PaidDispatchGateway:
         return batch.items[0]
 
     def dispatch_web_search_all(
-        self, client: TavilyClient, queries: Iterable[str], *,
+        self, client: TavilyClient, queries: Iterable[Any], *,
         transport: Any | None = None,
         capture_response: Callable[[PaidDispatchRequest, Any], Any] | None = None,
         persist_response: Callable[[PaidDispatchRequest, Any], Any] | None = None,
         consume_response: Callable[[PaidDispatchRequest, Any], Any] | None = None,
     ) -> PaidDispatchBatch:
+        queries = self._require_stage1_query_records(queries)
         return self.dispatch_all(
             (
                 self._request(
-                    "web", query, "stage1", lambda query=query: client.search(query),
+                    "web", query_id or query_text, "stage1",
+                    lambda query=query_text: client.search(query),
+                    query_id=query_id, query_text=query_text,
+                    query_text_sha256=query_text_sha256,
                 )
                 for query in queries
+                for query_id, query_text, query_text_sha256 in (self._query_fields(query),)
             ),
             record_response=self._response_recorder(transport, "tavily"),
             capture_response=capture_response,
@@ -556,19 +711,23 @@ class PaidDispatchGateway:
         )
 
     def dispatch_x_search_all(
-        self, client: GrokXSearchClient, queries: Iterable[str], *, expected_decision_date: str,
+        self, client: GrokXSearchClient, queries: Iterable[Any], *, expected_decision_date: str,
         transport: Any | None = None,
         capture_response: Callable[[PaidDispatchRequest, Any], Any] | None = None,
         persist_response: Callable[[PaidDispatchRequest, Any], Any] | None = None,
         consume_response: Callable[[PaidDispatchRequest, Any], Any] | None = None,
     ) -> PaidDispatchBatch:
+        queries = self._require_stage1_query_records(queries)
         return self.dispatch_all(
             (
                 self._request(
-                    "xai", query, "stage1",
-                    lambda query=query: client.search(query, expected_decision_date),
+                    "xai", query_id or query_text, "stage1",
+                    lambda query=query_text: client.search(query, expected_decision_date),
+                    query_id=query_id, query_text=query_text,
+                    query_text_sha256=query_text_sha256,
                 )
                 for query in queries
+                for query_id, query_text, query_text_sha256 in (self._query_fields(query),)
             ),
             record_response=self._response_recorder(transport, "xai"),
             capture_response=capture_response,

@@ -52,6 +52,15 @@ class QueryPlanError(ValueError):
     """An A1 query-plan contract or immutable/mutable slot was malformed."""
 
 
+class ParentPlanDocument(dict[str, Any]):
+    """A validated parent plan carrying its immutable file identity."""
+
+    def __init__(self, payload: dict[str, Any], *, artifact_sha256: str, artifact_path: str):
+        super().__init__(payload)
+        self.artifact_sha256 = artifact_sha256
+        self.artifact_path = artifact_path
+
+
 def _read_schema(path: Path) -> dict[str, Any]:
     try:
         value = json.loads(path.read_text(encoding="utf-8"))
@@ -145,6 +154,7 @@ def _normalize_stage1_queries(value: Any) -> list[dict[str, str]]:
         raise QueryPlanError("stage1_queries must be a non-empty ordered list")
     result: list[dict[str, str]] = []
     seen: set[str] = set()
+    seen_text: set[str] = set()
     for index, item in enumerate(value):
         if not isinstance(item, Mapping) or set(item) != {"query_id", "query_text"}:
             raise QueryPlanError("each stage1 query must contain exactly query_id and query_text")
@@ -152,9 +162,13 @@ def _normalize_stage1_queries(value: Any) -> list[dict[str, str]]:
         query_text = item["query_text"]
         if type(query_text) is not str or not query_text.strip():
             raise QueryPlanError(f"stage1_queries[{index}].query_text must be non-empty text")
+        canonical_text = " ".join(query_text.split()).replace("`", "").strip()
         if query_id in seen:
             raise QueryPlanError("stage1 query ids must be unique")
+        if canonical_text in seen_text:
+            raise QueryPlanError("stage1 query texts must be unique")
         seen.add(query_id)
+        seen_text.add(canonical_text)
         result.append({"query_id": query_id, "query_text": query_text})
     return result
 
@@ -266,6 +280,101 @@ def default_parent_plan_path(
     plan_identity = PATH_PROBE_IDENTITY if plan_identity is None else plan_identity
     _ensure_digest(plan_identity, field="plan_identity")
     return Path(state_dir) / f"us_short_llm_theme_discovery_query_plan_parent_{decision_date}_{plan_identity}.json"
+
+
+def read_parent_plan(
+    path: Path | str, *, root: Path = ROOT, state_dir: Path | None = None,
+) -> tuple[dict[str, Any], str, str]:
+    """Read and validate one immutable parent plan before a runner enters its side effects."""
+    repository_root = Path(root).resolve()
+    candidate = _normalize_artifact_path(path, root=repository_root)
+    payload, artifact_sha256, relative_path = _read_artifact(candidate, root=repository_root)
+    validate_parent_plan(payload)
+    canonical_state_dir = (
+        Path(state_dir).resolve()
+        if state_dir is not None
+        else repository_root / "state" / "us_short"
+    )
+    expected = default_parent_plan_path(
+        payload["canonical_plan_core"]["decision_date"], payload["plan_identity"],
+        state_dir=canonical_state_dir,
+    ).resolve()
+    if candidate.resolve() != expected:
+        raise QueryPlanError("parent plan must use its canonical decision slot")
+    return ParentPlanDocument(
+        payload, artifact_sha256=artifact_sha256, artifact_path=relative_path,
+    ), artifact_sha256, relative_path
+
+
+def derive_stage1_query_records(parent_plan: Mapping[str, Any]) -> list[dict[str, str]]:
+    """Derive the ordered Stage-1 query records from a validated parent plan."""
+    validate_parent_plan(dict(parent_plan))
+    rows = parent_plan["canonical_plan_core"]["stage1_queries"]
+    return [
+        {
+            "query_id": row["query_id"],
+            "query_text": row["query_text"],
+            "stage": "stage1",
+            "query_text_sha256": hashlib.sha256(row["query_text"].encode("utf-8")).hexdigest(),
+        }
+        for row in rows
+    ]
+
+
+def derive_stage1_provider_envelope(
+    parent_plan: Mapping[str, Any], *, provider: str,
+) -> dict[str, Any]:
+    """Return the provider envelope after binding its Stage-1 count to the plan query count."""
+    records = derive_stage1_query_records(parent_plan)
+    envelopes = parent_plan["canonical_plan_core"]["provider_envelopes"]
+    envelope = next((row for row in envelopes if row["provider"] == provider), None)
+    if envelope is None:
+        raise QueryPlanError(f"parent plan has no {provider} provider envelope")
+    if envelope["stage1_max_dispatch_count"] != len(records):
+        raise QueryPlanError(
+            f"{provider} stage1 envelope must equal the parent plan query count"
+        )
+    return dict(envelope)
+
+
+def build_stage1_plan_binding(
+    parent_plan: Mapping[str, Any], *, provider: str,
+) -> dict[str, Any]:
+    """Build the receipt binding carried by a plan-driven runner."""
+    artifact_sha256 = getattr(parent_plan, "artifact_sha256", None)
+    artifact_path = getattr(parent_plan, "artifact_path", None)
+    if artifact_sha256 is None or artifact_path is None:
+        raise QueryPlanError("plan-bound stage1 binding requires parent plan artifact")
+    records = derive_stage1_query_records(parent_plan)
+    envelope = derive_stage1_provider_envelope(parent_plan, provider=provider)
+    binding: dict[str, Any] = {
+        "parent_plan_identity": parent_plan["plan_identity"],
+        "provider": provider,
+        "stage": "stage1",
+        "stage1_queries": [
+            {
+                "query_id": row["query_id"],
+                "stage": row["stage"],
+                "query_text_sha256": row["query_text_sha256"],
+            }
+            for row in records
+        ],
+        "provider_envelope": envelope,
+    }
+    binding["parent_plan_artifact"] = {
+        "path": artifact_path,
+        "sha256": _ensure_digest(artifact_sha256, field="parent plan artifact sha256"),
+    }
+    return binding
+
+
+def resolve_stage1_plan_binding(
+    parent_plan: Mapping[str, Any], *, provider: str,
+) -> tuple[list[str], list[dict[str, str]], dict[str, Any]]:
+    """Resolve ordered query text, dispatch records, and receipt binding from one plan."""
+    records = derive_stage1_query_records(parent_plan)
+    binding = build_stage1_plan_binding(parent_plan, provider=provider)
+    return [row["query_text"] for row in records], records, binding
 
 
 def _normalize_artifact_path(path: Path | str, *, root: Path) -> Path:
@@ -787,8 +896,10 @@ def write_execution_receipt(
 
 
 __all__ = [
-    "QueryPlanError", "build_parent_plan", "validate_parent_plan", "write_parent_plan",
-    "default_parent_plan_path", "build_stage2_plan", "validate_stage2_plan", "write_stage2_plan",
+    "QueryPlanError", "ParentPlanDocument", "build_parent_plan", "validate_parent_plan", "write_parent_plan",
+    "default_parent_plan_path", "read_parent_plan", "derive_stage1_query_records",
+    "derive_stage1_provider_envelope", "build_stage1_plan_binding", "resolve_stage1_plan_binding",
+    "build_stage2_plan", "validate_stage2_plan", "write_stage2_plan",
     "default_stage2_plan_path", "build_consumption_ledger", "validate_consumption_ledger",
     "write_consumption_ledger", "default_consumption_ledger_path", "build_execution_receipt",
     "validate_execution_receipt", "write_execution_receipt", "default_execution_receipt_path",

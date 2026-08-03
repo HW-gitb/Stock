@@ -32,12 +32,36 @@
       ]
     },
     "queries": {"type": "array", "minItems": 1, "maxItems": 25, "uniqueItems": true, "items": {"type": "string", "minLength": 1, "maxLength": 300}},
+    "plan_binding": {"$ref": "#/definitions/plan_binding"},
     "source_refs": {"type": "array", "items": {"$ref": "#/definitions/source_ref"}},
     "discovery_artifact_sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
     "drop_ledger": {"type": "array", "items": {"type": "object", "additionalProperties": false, "required": ["stage", "reason", "detail"], "properties": {"stage": {"enum": ["search_result", "llm"]}, "reason": {"type": "string", "minLength": 1}, "detail": {"type": "string"}}}},
     "summary": {"type": "object", "additionalProperties": false, "required": ["query_count", "accepted_source_count", "validated_theme_count", "validated_member_count", "dropped_result_count", "prompt_source_count"], "properties": {"query_count": {"type": "integer", "minimum": 0}, "accepted_source_count": {"type": "integer", "minimum": 0}, "validated_theme_count": {"type": "integer", "minimum": 0}, "validated_member_count": {"type": "integer", "minimum": 0}, "dropped_result_count": {"type": "integer", "minimum": 0}, "prompt_source_count": {"type": "integer", "minimum": 0}}}
   },
   "definitions": {
+    "plan_binding": {
+      "type": "object", "additionalProperties": false,
+      "required": ["parent_plan_identity", "provider", "stage", "parent_plan_artifact", "stage1_queries", "provider_envelope"],
+      "properties": {
+        "parent_plan_identity": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+        "provider": {"const": "web"}, "stage": {"const": "stage1"},
+        "parent_plan_artifact": {
+          "type": "object", "additionalProperties": false, "required": ["path", "sha256"],
+          "properties": {"path": {"type": "string", "minLength": 1}, "sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"}}
+        },
+        "stage1_queries": {
+          "type": "array", "minItems": 1, "maxItems": 64,
+          "items": {"type": "object", "additionalProperties": false, "required": ["query_id", "stage", "query_text_sha256"], "properties": {"query_id": {"type": "string", "pattern": "^[A-Za-z0-9][A-Za-z0-9_.:/-]{1,127}$"}, "stage": {"const": "stage1"}, "query_text_sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"}}}
+        },
+        "provider_envelope": {
+          "type": "object", "additionalProperties": false,
+          "required": ["provider", "stage1_max_dispatch_count", "stage2_max_dispatch_count", "retry_max_dispatch_count", "max_dispatch_count"],
+          "properties": {
+            "provider": {"const": "web"}, "stage1_max_dispatch_count": {"type": "integer", "minimum": 0}, "stage2_max_dispatch_count": {"type": "integer", "minimum": 0}, "retry_max_dispatch_count": {"type": "integer", "minimum": 0}, "max_dispatch_count": {"type": "integer", "minimum": 0}
+          }
+        }
+      }
+    },
     "source_ref": {
       "type": "object", "additionalProperties": false,
       "required": ["source_id", "source_type", "canonical_locator", "observed_at", "fetched_at", "content_sha256", "raw_receipt_ref", "raw_receipt_gitignored"],

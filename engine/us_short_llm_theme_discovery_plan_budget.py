@@ -21,6 +21,8 @@ import uuid
 
 from engine.us_short_llm_theme_discovery_query_plan import (
     QueryPlanError,
+    derive_stage1_provider_envelope,
+    derive_stage1_query_records,
     validate_parent_plan,
 )
 from engine.us_short_schema_formats import FORMAT_CHECKER
@@ -486,6 +488,30 @@ def validate_run_decision_date(
     if actual != expected_decision_date:
         raise PlanBudgetError("parent plan decision_date does not match the run decision_date")
     return actual
+
+
+def validate_plan_stage1_query(
+    parent_plan: Mapping[str, Any], *, provider: str, query_id: str,
+    query_text: str, query_text_sha256: str,
+) -> dict[str, Any]:
+    """Validate one gateway request against the frozen Stage-1 query and envelope."""
+    try:
+        records = derive_stage1_query_records(parent_plan)
+        envelope = derive_stage1_provider_envelope(parent_plan, provider=provider)
+    except QueryPlanError as exc:
+        raise PlanBudgetError(f"parent plan Stage-1 binding is invalid: {exc}") from exc
+    if type(query_id) is not str or not query_id:
+        raise PlanBudgetError("plan-bound Stage-1 request requires query_id")
+    if type(query_text) is not str or not query_text:
+        raise PlanBudgetError("plan-bound Stage-1 request requires query_text")
+    expected = next((row for row in records if row["query_id"] == query_id), None)
+    if expected is None:
+        raise PlanBudgetError("query_id is outside the parent plan Stage-1 query set")
+    if query_text != expected["query_text"]:
+        raise PlanBudgetError("query text does not match the parent plan query_id")
+    if query_text_sha256 != expected["query_text_sha256"]:
+        raise PlanBudgetError("query text hash does not match the parent plan query_id")
+    return envelope
 
 
 def _owner_is_alive(row: Mapping[str, Any], *, now: datetime | None = None) -> bool:
