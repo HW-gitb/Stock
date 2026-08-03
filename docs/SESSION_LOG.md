@@ -1,5 +1,35 @@
 # Session Log
 
+## 2026-08-03 — Claude 审查 PASS（类 G 谓词加固：局部/helper 路径已可解析，三处 governance 指纹转 canonical）
+
+- **Verdict/Action**: PASS，已提交并合入 master。三处对 `presets/egs_industry_heat_governance_20260611.json` 的原始字节指纹改走 `_p5_governance_digest`，`factor_comparison_v2._file_digest` 改走 canonical 并覆盖其四条 `schemas/` 摘要；谓词坐标改成「文件:函数:接收者」，解析扩到函数内局部赋值与单跳 helper 实参回代。
+- **Required**: 无。`R-ASHORT-GOVERNANCE-PRESET-RAW-BYTE-DIGEST-IN-THREE-ENGINES` 与 `R-USSHORT-CANONICALIZATION-PREDICATE-BLIND-TO-LOCAL-AND-HELPER-PATHS` 均 closed；闭合取证、三条 Optional 与审查边界见 `docs/system_risk_register.md`（单一来源，本处不复述）。
+- **Verify**: review-evidence:3ba65aea22a1；超时原因:首个 focused 包因 `--timeout-seconds` 位置写错 exit=2 重起，坐标格式改动后又重写了一版独立审计脚本。未起 §6a agent（engine 净改 10 行）。亲跑 focused 超集 `166 OK / 42.8s`；全量按 rule 4 引用 ledger `a_short 2309 OK` fp `a5deca43…` recorded 20:58（晚于 engine 20:24 / guard 20:52）。探针：LF 与 CRLF 同内容同摘要 `c08bbfb2…` 而原始字节 sha 确实不同；改权重即变；factor-v2 重排+CRLF 不变、加键即变。独立重扫仍落 tracked 的原始字节摘要 `0` 处（上轮 3 处）。door `55 OK`；残留 0/0。
+- **Next**: Codex：执行
+
+## 2026-08-03 — Codex executor/fixer 修复 canonicalization 谓词同类漏洞（待 Claude Code 独立复审）
+
+- **Verdict/Action**：Required 修复完成；未提交、未 push、未 merge。三处 preset 与 factor-v2 schema manifest 已 canonical，class guard 已覆盖局部路径与 one-hop helper。
+- **Required**：两条 material R-ID 保持 `OPEN/NOT_VERIFIED / P2`；此前同类 `R-USSHORT-CANONICALIZATION-PREDICATE-BLIND-TO-RUNTIME-COMPOSED-PATHS` 的 P3 companion 也由本轮一并覆盖，均待 Claude Code 独立复审；Codex 不声称 PASS/CLOSED。
+- **Verify**：固定 Python；class guard `10 OK`，affected focused `127 OK`，AST/diff PASS；EOL canonical 正反控 PASS；唯一 `a_short` full `2309 OK (skipped=3) / exit=0 / 286.9s / 860s`；历史 receipt、残留与详细 digest 证据见 register。
+- **Pre-Codex self-review**：`matrix=class G module/local/direct/imported-hash/keyword-helper/fallback/stable-coordinate 全覆盖; tracked-prefix unexplained=0; exceptions=36/36`; `register=updated`; `handoff=updated`; `focused=10+127 OK`; `full-lane=a_short 2309 OK, one run`; `door=route-doc + doc-governance: 55 OK / exit=0`; `review=NOT_VERIFIED`; `commit=NOT_PERFORMED`; `provider/network/paid=NOT_USED`。
+- **Next**：Claude Code：独立审查本轮 class-level canonicalization repair；PASS 后按项目流程提交，Codex 不提交。
+
+## 2026-08-03 — Claude 审查 FAIL（canonicalization 谓词放宽：豁免表把三个真成员写成了「运行时证据」）
+
+- **Verdict/Action**: FAIL，不提交不合入。谓词本身确实变强（`hashlib.sha256(x.read_bytes())` 现在都成坐标），stale/非空理由两道自检也在，新植入对照用的正是出事那个形状。卡住的是路径**解析**仍只走模块级赋值：函数内局部赋值与 `_file_digest(path)` 单行 helper 参数两类 tracked 路径自动降级成 `<runtime-composed-path>`，于是同一份 tracked preset 的三处原始字节指纹被逐条写进豁免表，理由与事实相反。
+- **Required**: `R-ASHORT-GOVERNANCE-PRESET-RAW-BYTE-DIGEST-IN-THREE-ENGINES`(P2)、`R-USSHORT-CANONICALIZATION-PREDICATE-BLIND-TO-LOCAL-AND-HELPER-PATHS`(P2) —— 四处口径对照表、类 G 三种子形态、两条 Optional 与审查边界见 `docs/system_risk_register.md`（单一来源，本处不复述）。
+- **Verify**: review-evidence:41f0897305d0；rule 3 未触发故未跑 full、rule 8 未起 §6a agent（改动全在 test-infra）。包 `canonicalization + doc-governance + route-doc` = `60 OK / 2.8s`。自写审计脚本逐条解析 33 个豁免坐标的接收者（含函数内局部赋值）：`presets/egs_industry_heat_governance_20260611.json` 命中，磁盘 46 处 CRLF `8e6abc93…` vs LF/blob `8bbbf474…`、`EOL-dependent: True`，全仓无处钉死该值；另两处藏在 helper 参数后、连坐标都不产生。合成源码探针：两步式 / `from hashlib import sha256` / `sha512` 三种写法对模块常量**仍被检出**，函数内局部 tracked 路径则得 `<runtime-composed-path>`。
+- **Next**: Codex：修复
+
+## 2026-08-03 — 追加：Codex executor/fixer 修复 `R-USSHORT-CANONICALIZATION-PREDICATE-BLIND-TO-RUNTIME-COMPOSED-PATHS`（待 Claude Code 独立复审）
+
+- **Verdict/Action**：按类级最小改动修复 canonicalization 派生守卫；保留模块常量/原有 EPOCH raw-reader 反控，并新增只匹配 `hashlib.sha256(<path>.read_bytes())` 的运行时拼装路径判据。未提交、未 push、未 merge。
+- **Required**：`R-USSHORT-CANONICALIZATION-PREDICATE-BLIND-TO-RUNTIME-COMPOSED-PATHS` 保持 `OPEN/NOT_VERIFIED / P3`，等待 Claude Code 独立审查；33 个现有 runtime/evidence 命中已在 `RAW_DIGEST_EXCEPTIONS` 逐条登记理由。
+- **Verify**：固定 Python focused `tests.test_tracked_artifact_digest_canonicalization` = `5 OK / 2.145s`；runtime planted exact hit、module-constant control、runtime-state non-sha256 control、AST parse 与 `git diff --check` 均 PASS。gitignored 前后均 `84`，`provider_samples/state/data/tmp/temp` 均 `0`；仅该测试 `__pycache__` 预期更新（mtime `11:17:36.639828Z→11:47:26.156838Z`，size `11872→20622`）。未联网、未调用 provider、未付费。
+- **Pre-Codex self-review**：`matrix=static tracked reader + direct sha256(read_bytes) + module-constant/runtime-composed planted controls + 33 exception reasons`; `register=updated`; `handoff=updated`; `focused=5 OK / 2.145s`; `full-lane=not_triggered: test-only AST guard, no production runner/engine/provider/live wiring`; `door=route-doc + doc-governance: 55 OK / 0.936s`; `commit=NOT_PERFORMED`。
+- **Next**：Claude Code：独立审查该 Required；PASS 后按项目流程提交，Codex 不提交。
+
 ## 2026-08-03 — Claude 修复（模板 v0.2.0 三条 Optional，用户令自修自审）
 
 - **Verdict/Action**: 收两条、升一条、撤一条。收：v0.1 preset 措辞改成「只读历史、任何路径都加载不了」；两处弱断言 `any(...)`/`assertNotEqual(...)` 换成逐 id 全覆盖断言。升：谓词放宽先量爆炸半径——朴素放宽命中 75 处/40 文件、次优方案 15 模块/约 45 处，绝大多数是合法的运行时证据指纹，故不顺手做，另开 `R-USSHORT-CANONICALIZATION-PREDICATE-BLIND-TO-RUNTIME-COMPOSED-PATHS`(P3)。撤：8 处 v0.1.0 fixture 改引用活常量的建议我自己撤回，理由见 register。

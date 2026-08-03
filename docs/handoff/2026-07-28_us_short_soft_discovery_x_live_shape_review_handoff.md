@@ -2028,3 +2028,93 @@ Claude Code：独立复审两个 v0.2.0 Required；PASS 后提交，Codex 不提
 **顺序**：`… → A4 ✅ → P5 四刀 ✅ → 模板 v0.2.0 ✅（本节，PASS，已合入 master）→ 离线端到端跑到打分（下节命令）→ 08-08/09 bounded 探针（需用户逐次授权）`。
 
 **给 Codex 的命令**：`执行 离线端到端跑到打分（纯离线、零 provider、零网络、不占决策槽；目的是在花真钱之前证明 discovery 的产物真能落到 core_score 上，而不是再量一次门通过率）：① 在 tests/provider/test_us_short_llm_theme_discovery_plan_bound_offline_closure.py 现有五个真 main() 链（fetch_web → fetch_x → merge → ingest → us_short_provisional_theme_validate）之后，接上打分那一段：把 validate 写出的 provisional theme 产物喂进 runners/us_short_batch5_data_context.py 的 assemble 路径，theme_soft_boost_enabled=True ② fixture 侧复用 tests/test_us_short_seam_score.py 与 tests/provider/test_us_short_batch5_data_context.py 已有的构造器补齐 compose_score_inputs 的六个必填投影（target_tickers / momentum_projection / theme_projection / catalyst_projection / risk_downgrade_by_ticker / theme_opportunity_state），不要新写引擎逻辑 ③ 强制腿正向控制：断言软加分真的加到了 core_score 上（both=5 / single=2、硬顶 5），并构造一个边界票场景断言 Top15 的入选集合确实因软加分发生了变化——把 seam_score.py:365 那一项挖成 0 必须让这条正向控制转红 ④ 强制腿反向控制（这是本刀真正的价值）：分别制造 decision_date 不匹配、provisional_theme_input_digests 缺失/对不上、以及主题剥离目标覆盖不精确三种情形，断言 data_context.py:571-573 与 compose_score_inputs 一律 fail closed 且给出可读错误——这三种正是真跑那天「钱付完再崩在打分前」的形状 ⑤ 把离线门统计（member_gate / industry_gate / drop_reasons）与最终参与打分的 ticker 数一起打进现有 OFFLINE_PLAN_BOUND_CLOSURE_STATS 那行，便于逐周对比 ⑥ 全程禁止真实 provider、网络、付费、写 state/us_short 或 provider_samples 的非临时路径；跑完前后对残留做快照 ⑦ 跑 discover -s tests -p test_us_short_llm_theme_discovery* 超集包 + tests.provider 相关模块后交审查`
+## 2026-08-03 Codex executor/fixer：修复 `R-USSHORT-CANONICALIZATION-PREDICATE-BLIND-TO-RUNTIME-COMPOSED-PATHS`（待 Claude Code 独立复审）
+
+### 修复
+
+- 仅修改 `tests/test_tracked_artifact_digest_canonicalization.py`：保留模块常量/原有 EPOCH raw-reader 派生控制，新增只识别直接 `hashlib.sha256(<path>.read_bytes())` 的 `_sha256_read_bytes_path()`。
+- 新增 `RUNTIME_COMPOSED_PATH_LABEL` 与 33 条精确 `RAW_DIGEST_EXCEPTIONS`；每条都说明 runtime/evidence byte binding 为什么不是 tracked JSON contract digest。没有修改 engine/runners 生产代码、schema、provider、selection、PIT 或 live/secret 路径。
+- planted controls：模块常量 `FUTURE_SCHEMA` 仍命中；`Path(root) / policy["source_packet"]["path"]` 命中 `engine/runtime_composed_digest_leg.py:5:<runtime-composed-path>`；非 sha256 的 `state/` raw-reader 仍零命中。
+
+### Verification
+
+- 固定 Python：`C:\Users\cnhea\AppData\Local\Programs\Python\Python313\python.exe`；`tests.test_tracked_artifact_digest_canonicalization` = `5 OK / 2.145s`，AST parse PASS，`git diff --check` PASS。
+- 测试前后真实 gitignored 文件均为 `84`；`provider_samples/state/data/tmp/temp` 均 `0`。仅该测试的预期 `__pycache__` mtime 从 `2026-08-03T11:17:36.639828+00Z` 到 `2026-08-03T11:47:26.156838+00Z`，size `11872→20622`。
+- rule 3 full-lane 未触发，未起子 agent；未联网、未调用 provider、未付费、未提交。
+- closeout door：`tests.test_route_doc_ledger_status_consistency` + `tests.test_doc_governance_guard` = `55 OK / 0.936s`。
+
+### Handoff
+
+- `R-USSHORT-CANONICALIZATION-PREDICATE-BLIND-TO-RUNTIME-COMPOSED-PATHS` 保持 `OPEN/NOT_VERIFIED / P3`；Claude Code 需独立检查直接 sha256 判据、33 条逐条豁免、三类 planted control 与本轮 evidence 后决定是否 PASS/提交。
+- 当前工作树 `D:\cnhea\Codex\worktrees\690e\Stock` 仍由 Codex executor/fixer 持有；Codex 不提交、不 push、不 merge。桌面文档不更新。
+
+## 2026-08-03 追加：Claude Code 对 canonicalization 谓词放宽的独立审查 —— FAIL（谓词变强了，豁免表把三个真成员洗白了）
+
+**结论**：不通过、不提交不合入。判据从「路径能否静态解析成模块常量」扩到「凡 `hashlib.sha256(x.read_bytes())` 皆为坐标」是真进步，两道自检（stale 坐标、非空理由）也真在。卡住的是**路径解析没跟着扩**。
+
+### 已核实真闭（下一轮别改坏）
+
+- 豁免表不会静默腐烂：`:261` 的 stale 坐标断言 + `:263` 的非空理由断言都在，坐标失效即红。
+- 新植入对照 `test_runtime_composed_tracked_raw_hash_is_a_red_control` 用的正是 `Path(root) / policy["source_packet"]["path"]` 这一形状，断言它必须成为坐标——不是恒真式。
+- 谓词对模块常量足够稳：我用合成源码试了三种规避写法——两步式（先 `data = TRACKED.read_bytes()` 再 `sha256(data)`）、`from hashlib import sha256`、`sha512`——**全部仍被检出**。
+- 33 条豁免里 30 条属实（审计脚本逐条解析接收者表达式）。
+- 包 `canonicalization + doc-governance + route-doc` = `60 OK / 2.8s`。
+
+### 为什么 FAIL（两条 Required，均 P2，正文见 register 同名节）
+
+- `R-ASHORT-GOVERNANCE-PRESET-RAW-BYTE-DIGEST-IN-THREE-ENGINES` —— 同一份 tracked preset `presets/egs_industry_heat_governance_20260611.json` 在四处取指纹：`admission_registry:355`、`industry_weight:59`（`_file_digest`）、`overlay_adjudication:381`（`_file_sha256`）三处走**原始字节**，而 `egs_industry_heat.py:303 _p5_governance_digest` 走 canonical 且 docstring 明写「insensitive to JSON formatting」。三处原始字节全被写进豁免表，理由分别是「evidence lineage / caller-supplied input / caller-supplied bundle」——**与事实相反**，调用方给的就是那份 tracked preset。实测该文件磁盘 46 处 CRLF `8e6abc93…`、LF 与 blob 同为 `8bbbf474…`、`EOL-dependent: True`；全仓无处钉死旧值所以还没炸，但换行设置不同的两台机器会为同一份内容记下两个 governance 指纹。
+- `R-USSHORT-CANONICALIZATION-PREDICATE-BLIND-TO-LOCAL-AND-HELPER-PATHS` —— 路径解析仍只走 `_module_constants`（只遍历 `tree.body`）。函数内局部赋值的 tracked 路径实测得 `<runtime-composed-path>`；被 `_file_digest(path)` 这类单行 helper 参数接走的，**连坐标都不产生**。这两类因此自动变成「可豁免」。
+
+### 本轮按类记录（类 G 续 —— 现已知三种子形态）
+
+① **模块常量**接收者：抓得到（三种规避写法均验证）。② **函数内局部赋值**：盲。③ **helper 参数间接**：盲，且不产生坐标，最危险——`_file_digest` / `_file_sha256` 这种一行 helper 本仓至少 3 处。**类级教训**：判定轴仍是「能否静态解析成模块常量」，这是**按名字判定**的变体，本项目收敛机制第 2 条已写过一次，这是同形态第二次复发。**豁免表本身也需要判据**：33 条里 3 条理由与事实相反，说明「写一句理由」不构成审查——豁免应先由机器证明该路径**不落在** tracked 前缀，证明不出来的才允许人工说明。
+
+**顺序**：`… → 模板 v0.2.0 ✅（已合入 master）→ 类 G 谓词加固（本节，FAIL，返工中）→ 离线端到端跑到打分（命令见上文，仍未开工）→ 08-08/09 bounded 探针（需用户逐次授权）`。
+
+**给 Codex 的命令**：`修复 类 G 谓词加固（按类修，禁止只删那三条豁免了事）：① 把 tests/test_tracked_artifact_digest_canonicalization.py 的路径解析从「只走模块级赋值」扩到「函数内局部赋值也解析」——ast.walk 全量 Assign + 复用现有 literal_parts 约 15 行 ② 再补一次单行 return 型 helper 的实参回代：helper 体形如 return hashlib.sha256(<param>.read_bytes()) 时，把每个调用点的实参当作接收者产生坐标（覆盖 _file_digest / _file_sha256 这类）③ 两条各配一条能真红的植入对照：函数内局部 tracked 路径、helper 间接 tracked 路径，都必须判成 tracked 而非 <runtime-composed-path>，把解析回退即转红 ④ 用改好的解析器把 33 条豁免全部重跑并逐条复核理由，凡机器能证明落在 docs/presets/schemas 前缀的一律不许豁免 ⑤ 把 admission_registry:355、industry_weight:59(_file_digest)、overlay_adjudication:381(_file_sha256) 三处对 presets/egs_industry_heat_governance_20260611.json 的原始字节指纹改成 canonical 口径，直接复用 egs_industry_heat._p5_governance_digest 已经写对的做法，并删掉对应豁免 ⑥ 改之前先核一遍有没有历史冻结 receipt 钉住旧的原始字节值（我 grep 源码与仓内 JSON 未发现，但 research/results 下历史产物我没逐个打开），结论写进 register ⑦ 配点名反控：翻转该 preset 的换行后三处指纹必须不变，改回 read_bytes() 即转红 ⑧ 顺手收 register 本节两条 Optional（豁免坐标行号耦合、weekly_pipeline:181 理由措辞不准）⑨ 重跑 canonicalization + doc-governance + route-doc 包后交审查`
+## 2026-08-03 追加：Codex executor/fixer class-level canonicalization repair（待 Claude Code 独立复审）
+
+### Scope / repair
+
+- 当前工作树：`D:\cnhea\Codex\worktrees\690e\Stock`；Codex 仍是 executor/fixer，Claude Code 仍是独立 reviewer/committer；Codex 未提交、未 push、未 merge，桌面文档未改。
+- `R-ASHORT-GOVERNANCE-PRESET-RAW-BYTE-DIGEST-IN-THREE-ENGINES`：admission registry、industry-weight comparison、overlay adjudication 的 `presets/egs_industry_heat_governance_20260611.json` 绑定统一复用 `egs_industry_heat._p5_governance_digest`；类扫额外发现的 factor-v2 四个 tracked schema manifest digest 也改成 canonical JSON digest。
+- `R-USSHORT-CANONICALIZATION-PREDICATE-BLIND-TO-LOCAL-AND-HELPER-PATHS`：canonicalization guard 现在覆盖 module constants、函数局部 `Assign` / `AnnAssign` / `NamedExpr`、direct/imported hash alias `sha256(read_bytes)`、one-hop single-return helper 的 positional/keyword 实参回代、未引用 helper fallback；异常坐标改为稳定符号坐标，不再绑行号。
+- 此前独立登记的 `R-USSHORT-CANONICALIZATION-PREDICATE-BLIND-TO-RUNTIME-COMPOSED-PATHS`（P3）属于同一 class G companion，本轮与 local/helper 子形态一并覆盖；下轮必须合并复核两条入口。
+- 派生结果：`engine/` + `runners/` raw-byte 坐标 `36`，`RAW_DIGEST_EXCEPTIONS=36`，`unexplained=0`、`stale=0`，全非空理由；所有可机械证明落在 `docs/` / `presets/` / `schemas/` 的路径均未豁免。旧三条 tracked preset runtime 豁免与 factor-v2 schema raw-byte 路径均已消失。
+
+### Verification
+
+- 固定 Python：`C:\Users\cnhea\AppData\Local\Programs\Python\Python313\python.exe`。
+- class guard：`tests/test_tracked_artifact_digest_canonicalization.py` = `10 OK / 4.883s`；反控覆盖函数局部 tracked、helper 间接 tracked、imported hash alias + keyword actual、未引用 helper、runtime composed、line relocation、EPOCH reader 与 runtime state 非 sha256。
+- 受影响 consumers focused pack：admission registry、factor-v2、industry-weight、overlay、EGS heat、canonicalization guard 共 `127 OK / 32.944s`；AST compile 与 `git diff --check` PASS。
+- EOL 正反控：preset raw CRLF `8e6abc93…`、LF `8bbbf474…` 不同；canonical `c08bbfb2…` 三态一致；admission / overlay / factor-v2 manifest 生产探针均与 canonical 期望一致。
+- 历史 pin：当前 tracked `research/results` 无旧 CRLF raw receipt 命中；`git log -S<old raw> -- research/results` 无结果；全 tracked 文件无 CRLF raw 值。LF 值在既有 `schemas/a_short_m67_effect_contract*.json` 3 处属于 `runtime_policy_sha256` text-hash contract，不是本轮 `read_bytes()` receipt，未改动。
+- Rule 3(b) 唯一 full lane：`full_pack_ledger.py run a_short ... 860 -- discover -s tests -p test_a_short*.py` → `2309 tests OK (skipped=3)`, `exit=0`, `286.9s / 860s`；ledger 保留在 `.tools/state/full_pack_ledger.json`。
+- 残留：focused 前 `93` 个 gitignored 文件（全为 Python cache），full 后本轮新增的 `logs/suspend_daily_coverage_20260105.json` 已按基线删除；最终 `257`（256 Python cache + full ledger）。`provider_samples/state/data/tmp/temp/logs` 测试前、full 后、最终均为 `0`；最终 mtime inventory SHA256=`f92a35abe8f52669cd5a0eacd271419095df2c91d75174852b9219e2aea4d801`；无 provider/raw/state/data/tmp/temp 新产物。
+
+### Self-review / handoff
+
+- `matrix=class G complete: module + local + direct/imported-hash + helper positional/keyword + unreferenced fallback + stable coordinates; all tracked-prefix exits covered`
+- `register=updated`；`handoff=updated`；`focused=10 OK guard + 127 OK affected consumers`；`full-lane=a_short rule 3(b), 2309 OK skipped=3, one run only`；`door=route-doc + doc-governance: 55 OK / exit=0`；`review=NOT_VERIFIED`；`commit=NOT_PERFORMED`；`provider/network/paid=NOT_USED`。
+- Required 保持 `OPEN/NOT_VERIFIED / P2`，此前 runtime-composed companion 也保持 `OPEN/NOT_VERIFIED / P3`，不能由 Codex 单方面关闭。Claude Code 下一步需独立复核：稳定坐标派生集合与逐条豁免、局部/helper/imported-hash/keyword planted controls、runtime-composed companion、三处 preset canonical 生产调用、factor-v2 schema sibling、历史 pin 与门禁 evidence；PASS 后由 Claude Code 提交，Codex 不提交。
+
+## 2026-08-03 追加：Claude Code 对类 G 谓词加固返工的独立复审 —— PASS（已提交并合入 master）
+
+**结论**：通过。两条 Required 都用**我自己写的**解析器独立重扫复现，不采信被审方的计数。已 stage 本刀 8 个文件、单 commit、`--no-ff` 合入 master。
+
+**为什么 PASS（实测取证，正文见 register 同名节）**
+
+- `R-ASHORT-GOVERNANCE-PRESET-RAW-BYTE-DIGEST-IN-THREE-ENGINES` closed —— 三处改走 `_p5_governance_digest`，`factor_comparison_v2._file_digest` 改成 `_digest(_load_json(path))` 顺带覆盖其四条 `schemas/` 摘要。**正控**：同内容 LF / CRLF 两份得同一摘要 `c08bbfb2…`，而同两份的原始字节 sha 确实不同（探针同时打印，证明正控非恒真）。**反控**：把 active profile 一个权重 +1，摘要立刻变；factor-v2 重排成 4 空格 + 转 CRLF 摘要不变、加一个键即变。**未破坏冻结记录**：四条 `*_schema_sha256` 在全仓 tracked JSON 零命中、源码除产出行外无比较点，上一轮 Required (c) 的顾虑不成立。
+- `R-USSHORT-CANONICALIZATION-PREDICATE-BLIND-TO-LOCAL-AND-HELPER-PATHS` closed —— 坐标改成「文件:函数:接收者」，解析扩到函数内局部赋值 + 单跳 helper 实参回代。合成源码实测：局部路径 → `f:p`；helper 位置实参与关键字实参 → `f:helper=_h:T`；真运行时拼装 → **仍**为 `<runtime-composed-path>`（该抓的抓到、该放的没误伤）。**独立重扫**：我自己的 `literal_parts` + 全量 `ast.walk` + helper 回代扫 `engine/`+`runners/`，仍落在 tracked 前缀的原始字节摘要 **0 处**（上一轮同脚本命中 3 处）；豁免 36 条、`unexplained=[]`、`stale=[]`。
+
+**已核实真闭、下一轮别改坏**：豁免表两道自检（stale 坐标、非空理由）换坐标形态后仍生效；坐标去掉行号，顺带解掉上一轮 Optional 1 的行号耦合；`industry_weight_comparison._file_digest`（`:315/:317`）与 `overlay_adjudication._file_sha256`（`:419`）保留原始字节是**正确**的——它们校验的是 analysis_input / 产物 / receipt 这类运行时件，按字节比对正是其语义，helper 未成孤儿。
+
+**本轮验证**：亲跑 affected focused 超集 `166 OK / 42.8s`（执行方所报 127 的超集）；全量按 rule 4 引用 ledger `a_short 2309 OK` fingerprint `a5deca43…`、`recorded_at 20:58:27`，晚于本刀最后一次代码改动（engine `20:24` / guard `20:52`），故未重跑；door `55 OK`；`git diff --check` clean；`state/us_short` 与 `provider_samples` 均 0。
+
+### 本轮按类记录（类 G 收束）
+
+三种子形态现已全部有谓词覆盖：① 模块常量接收者（原就覆盖，两步式 / `from hashlib import sha256` / `sha512` 三种规避写法均实测仍被检出）② 函数内局部赋值（本轮新增解析）③ 单跳 helper 参数间接（本轮新增实参回代，位置与关键字两种调用形态都覆盖）。**留作下次判据**：真正运行时拼装的路径仍标 `<runtime-composed-path>` 并靠豁免表逐条说明，这是**唯一**还依赖人写理由的口子——上一轮正是这里出的事（3 条理由与事实相反）。所以规矩是：**凡机器能证明落在 `docs/presets/schemas` 前缀的一律不许豁免；只有机器证不出来的才允许人工说明**，而人工说明必须能被独立重扫推翻。
+
+**顺序**：`… → 模板 v0.2.0 ✅ → 类 G 谓词加固 ✅（本节，PASS，已合入 master）→ 离线端到端跑到打分（命令见上文，仍未开工）→ 08-08/09 bounded 探针（需用户逐次授权）`。
+
+**给 Codex 的命令**：见上文「执行 离线端到端跑到打分」那条（九步，仍未开工，本轮不变）。
