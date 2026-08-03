@@ -1,5 +1,11 @@
 # Session Log
 
+## 2026-08-03 — 用户决策：08-08/09 探针形状 = 「能跑的都跑」（Codex 待执行两个离线前置件）
+
+- **决策**: 08-08（六）/ 08-09（日）那次 bounded 查询质量探针按**结构上限**跑——四条 Stage-1 模板全上、Web 与 X 两条 lane 都跑，即 `Tavily 4 + DeepSeek 4 + xAI 4 = 12` 次实际调用（预留 12 单位，预留≠实花）。裁决仍三选一。真跑当天仍需用户逐次授权 + `--live --confirm-user-authorization`。
+- **落点**: reviewer 实测出两个必须先建的**离线**缺件，命令见 `docs/handoff/2026-07-28_us_short_soft_discovery_x_live_shape_review_handoff.md` 同日末节：① `--parent-plan` 那份计划**没有任何生产者**——`build_parent_plan` 在 `runners/` 零调用点、`render_stage1_queries` 零消费者，手写计划会废掉「入口只接受已审模板渲染」这条设计；② 20260730 那份 packet 焊死在已烧掉的 `20260802` 槽与 v0.1.0 文本上（`exact_query_bytes_required` / `exact_execution_slot_map_match_required` / `cli_slot_overrides_forbidden` 均 true，路径全是字面 `..._20260802.json`），评估器 `:478` 的期望查询正取自它，故既换不了槽也对不上 v0.2.0 新问法。
+- **未做**: 未改任何代码，未联网、未调 provider、未付费、未占决策槽。两件前置件本身也全程离线、不花钱。
+
 ## 2026-08-03 — Claude 审查 PASS（离线端到端跑到打分：软加分真落到 core_score 与 Top15，四条 fail-closed 腿真拦）
 
 - **Verdict/Action**: PASS，已提交并合入 master。离线闭环从 `provisional_theme_validate` 继续接进 `compose_score_inputs` 与 `assemble_data_context_with_analyst_grade_risk(theme_soft_boost_enabled=True)`，fixture 全部复用既有构造器、未新写引擎逻辑；零生产代码改动、零 provider/网络/付费、未占决策槽。原有门统计（`member_gate=2/3`、`industry_gate=1/3`、`drop_reasons`）与改动前逐字相同。
