@@ -219,6 +219,10 @@ EGS_API_FAMILIES = [
     "share_float", "stk_holdertrade", "balancesheet", "block_trade", "stock_basic", "namechange", "trade_cal",
     "index_member_all", "index_member", "index_classify",
 ]
+# Tushare ``moneyflow_hsgt.north_money`` is reported in 万元; the market
+# environment consumers below use normalized RMB so display and thresholds
+# share one explicit unit boundary.
+TUSHARE_MONEYFLOW_HSGT_NORTH_MONEY_UNIT_YUAN = 10_000
 REALTIME_CACHE_TTL = CONF["cache_ttl"]
 BACKTEST_CACHE_TTL = 10 * 365 * 24 * 3600
 TODAY = a_share_market_date()
@@ -5582,25 +5586,31 @@ def stage3_ai_clearing(top50_df, red_dict, unlock_set, backtest_mode=False):
 # §8 市场环境
 # ═══════════════════════════════════════════════════
 def market_environment(trade_dates, stats_df):
-    north_flow = None
+    north_flow_yuan = None
     try:
         df_hsgt = safe_api(pro.moneyflow_hsgt, start_date=trade_dates[4], end_date=trade_dates[0])
         if df_hsgt is not None and not df_hsgt.empty and "north_money" in df_hsgt.columns:
-            df_hsgt["north_money"] = pd.to_numeric(df_hsgt["north_money"], errors="coerce")
-            north_flow = df_hsgt["north_money"].sum()
+            north_money_wan = pd.to_numeric(df_hsgt["north_money"], errors="coerce")
+            north_flow_wan = north_money_wan.sum(min_count=1)
+            if pd.notna(north_flow_wan) and np.isfinite(float(north_flow_wan)):
+                north_flow_yuan = (
+                    float(north_flow_wan)
+                    * TUSHARE_MONEYFLOW_HSGT_NORTH_MONEY_UNIT_YUAN
+                )
     except Exception:
         pass
 
     env = []
-    if north_flow is not None:
-        env.append(f"北向资金近一周净流入: {north_flow/1e8:.2f} 亿")
-        if north_flow < -50e8:
+    if north_flow_yuan is not None:
+        env.append(f"北向资金近一周净流入: {north_flow_yuan/1e8:.2f} 亿")
+        if north_flow_yuan < -50e8:
             env.append("[!!] 北向资金大幅流出，防御信号。")
     else:
         env.append("北向资金数据不可用")
 
     csi300_ret = get_csi300_return(trade_dates)
-    if csi300_ret is not None and csi300_ret < -10 and (north_flow is not None and north_flow < 0):
+    if csi300_ret is not None and csi300_ret < -10 and (
+            north_flow_yuan is not None and north_flow_yuan < 0):
         env.append("[静默] 市场进入防御/收缩期：建议静默，禁止开新仓。")
     elif csi300_ret is not None and csi300_ret < -5:
         env.append("[警] 市场偏弱，注意仓位控制。")
