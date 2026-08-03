@@ -1,5 +1,13 @@
 # Session Log
 
+## 2026-08-03 — Claude 修复（模板 v0.2.0 三条 Optional，用户令自修自审）
+
+- **Verdict/Action**: 收两条、升一条、撤一条。收：v0.1 preset 措辞改成「只读历史、任何路径都加载不了」；两处弱断言 `any(...)`/`assertNotEqual(...)` 换成逐 id 全覆盖断言。升：谓词放宽先量爆炸半径——朴素放宽命中 75 处/40 文件、次优方案 15 模块/约 45 处，绝大多数是合法的运行时证据指纹，故不顺手做，另开 `R-USSHORT-CANONICALIZATION-PREDICATE-BLIND-TO-RUNTIME-COMPOSED-PATHS`(P3)。撤：8 处 v0.1.0 fixture 改引用活常量的建议我自己撤回，理由见 register。
+- **Required**: 无。三条 Optional 的逐条处置、爆炸半径实测与撤回理由见 `docs/system_risk_register.md`（单一来源，本处不复述）。
+- **Verify**: review-evidence:not_available（本轮 hook 未注入 token）；rule 8 Optional-only 快档：一次 scope grep 先行（8 处 fixture 全是构造、无断言）、最小覆盖目标只跑一次 `tests.test_us_short_llm_theme_discovery_query_policy + doc-governance + route-doc` = `63 OK / 1.2s`。收紧类改动配植入正控：合成「4 条里 3 条悄悄回退」输入，旧 `any()` 断言仍 `True`、新断言 `False` 且点名 `['b','c','d']`。`git diff --check` clean；`state/us_short` 与 `provider_samples` 前后均 `count=0`；未联网、未调 provider、未付费。
+- **Next**: Codex：执行
+- **Pre-Codex self-review**: `matrix=三条 Optional 逐条判定(收/升/撤)`; `register=updated`; `handoff=not_required: Optional-only 收口，无新交接事实`; `focused=63 OK / 1.2s`; `full-lane=not_triggered: 仅测试断言与 register 措辞，rule 3 无触发面`; `door=route-doc 14 + doc-governance 41 同包内 63 OK`; `scope-grep=8 处 fixture 全为构造、零断言`; `blast-radius=75 命中/40 文件 与 15 模块/45 处 两案实测`; `planted=3-of-4 回退令新断言转红并点名`; `residue=0/0`
+
 ## 2026-08-03 — Claude 审查 PASS（A-short #01 R4b 写回 anti-rescue，二轮收口）
 
 - **Verdict/Action**: PASS，已提交并合入 master。上一轮三条 Required 全按指定形态修好：`:3634-3637` 覆盖改成 `_severity_max_disposition` 合并；写回前新增跨周 anti-rescue 断言（降档 / 止损下降 / 止损丢失）；`plan["stop"]` 改写前捕获 `_orig_eff` 让写点判据重新有牙；类 2 按边界只补一条 `blocked_add_required` 整段改写反控。

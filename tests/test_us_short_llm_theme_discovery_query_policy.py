@@ -105,7 +105,13 @@ class QueryPolicyAndPlannerTests(unittest.TestCase):
         self.assertEqual([row["query_id"] for row in rendered], list(packet_text_by_id))
         self.assertTrue(all("this week" in row["query_text"] for row in rendered))
         self.assertTrue(all("Exclude" in row["query_text"] for row in rendered))
-        self.assertTrue(any(row["query_text"] != packet_text_by_id[row["query_id"]] for row in rendered))
+        # All four were retuned, not merely one: `any(...)` here would stay green even if three
+        # templates silently reverted to the v0.1.0 packet wording.
+        self.assertEqual(
+            [row["query_id"] for row in rendered
+             if row["query_text"] == packet_text_by_id[row["query_id"]]],
+            [],
+        )
         self.assertEqual(policy["activation_status"], "candidate_offline")
         self.assertFalse(policy["production_query_policy_activated"])
         self.assertTrue(all(value is False for value in policy["effect_boundary"].values()))
@@ -119,7 +125,15 @@ class QueryPolicyAndPlannerTests(unittest.TestCase):
             json.dumps(packet, ensure_ascii=False, sort_keys=True, separators=(",", ":")).encode("utf-8")
         ).hexdigest()
         self.assertEqual(canonical_packet_sha, policy_module.EXPECTED_SOURCE_PACKET_SHA256)
-        self.assertNotEqual(policy_module.render_stage1_queries(policy), packet_rows)
+        # The packet stays frozen while the policy moved off it; content itself is locked by
+        # EXPECTED_POLICY_CONTENT_SHA256, so this only pins "policy != packet", per row.
+        rendered_by_id = {row["query_id"]: row["query_text"]
+                          for row in policy_module.render_stage1_queries(policy)}
+        self.assertEqual(
+            [row["query_id"] for row in packet_rows
+             if rendered_by_id[row["query_id"]] == row["query_text"]],
+            [],
+        )
         self.assertEqual(
             [row["query_id"] for row in policy["policy_core"]["stage1_templates"]],
             [row["query_id"] for row in packet["query_templates"]],
