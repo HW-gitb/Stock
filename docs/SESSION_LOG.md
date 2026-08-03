@@ -1,5 +1,13 @@
 # Session Log
 
+## 2026-08-03 — Claude 修复（A4 落地后的 raw-root 隔离缝 + 两条 review Optional）
+
+- **Verdict/Action**: A4 合入主树后我跑两个 provider 模块发现主树红、执行方树绿、代码逐字节相同。根因：A4 把 `raw_root` 默认值绑进四处签名，import 时求值使 `mock.patch.object(module,"DEFAULT_RAW_ROOT",tmp)` 失效，离线测试一直写真实 raw 根；主树旧收据字节不同 → `immutable_raw_content_conflict` → 主题掉光。四处改回 call-time 解析（`raw_root or DEFAULT_RAW_ROOT` 原就在两个分支，fail-closed 未削弱）。顺带收两条 Optional：两 lane 的 evidence-unavailable 改为打印可机读 summary + exit 2；B5 planted control 不再用 `assertRaises(AssertionError)` 包自身断言。
+- **Required**: 无（本轮为 reviewer 自修 Optional + 落地缺陷；A4 的 R-ID 已在 `system_risk_register.md` 记为 resolved）
+- **Verify**: 固定主 Python：改动模块 + class guards + 两个 provider 模块 `184 OK`；直接消费者（offline_invariants / offline_production_entry_guard / capstone_soft_discovery / probe_assess / conformance）`136 OK`；doc gates `66 OK`。反控：新增 AST 谓词拒绝任何 lane runner 把 `DEFAULT_RAW_ROOT` 绑进签名默认，并配植入签名的 must-find 控制；P-A 白名单显式收录四条 `raw_root` 并写明理由（谓词未被放松，是它先把我的改动抓出来的）。残留：`provider_samples`/`state/us_short` 前后未增长。
+- **Pre-Codex self-review**: `matrix=complete（4 处签名全改：web _run_web_fetch/runner + x _run_x_fetch/runner，非只改报错那处）; register=A4 R-ID 已 resolved，本轮无新 R-ID; handoff=不适用（非评审轮）; focused=184 OK + 直接消费者 136 OK + doc gates; full-lane=未跑（收紧型小改，已覆盖全部直接消费者）; door=AST 谓词拒绝签名绑定 DEFAULT_RAW_ROOT + 植入签名 must-find 控制 + P-A 白名单显式收录 raw_root; ripple-grep=两 lane 各两分支的 raw_root or DEFAULT_RAW_ROOT 仍在; 独立对抗 pass: 不适用（单轮非边界、收紧型）`
+- **Next**: Codex：执行下一刀（软发现 P5 一键入口接 plan）
+
 ## 2026-08-02 — Claude 审查 FAIL（review-gate 未回报 agent 拦截腿）
 
 - **Verdict/Action**: FAIL，不提交、不回滚（`e5bc7e68` + `13cbc07a` 已在 master 上，留待修复）。设计方向对、`ASYNC_LAUNCH_SIGNATURE` 也确经真实 transcript 核实，但收「已回报」证据的那一半只认 `message.content`，而真实 task-notification 落在 `type="queue-operation"`（顶层 `content`）与 `type="attachment"`（顶层 `attachment`）两种行上，整行被跳过 → 已回报的 agent 永远算挂起，收口只能靠在 Verify 写 `agent-aborted:` 这句假话，直接抵触本 gate 的反造假目的。
