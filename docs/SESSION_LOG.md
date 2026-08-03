@@ -1,5 +1,20 @@
 # Session Log
 
+## 2026-08-03 — Claude 审查 PASS（离线端到端跑到打分：软加分真落到 core_score 与 Top15，四条 fail-closed 腿真拦）
+
+- **Verdict/Action**: PASS，已提交并合入 master。离线闭环从 `provisional_theme_validate` 继续接进 `compose_score_inputs` 与 `assemble_data_context_with_analyst_grade_risk(theme_soft_boost_enabled=True)`，fixture 全部复用既有构造器、未新写引擎逻辑；零生产代码改动、零 provider/网络/付费、未占决策槽。原有门统计（`member_gate=2/3`、`industry_gate=1/3`、`drop_reasons`）与改动前逐字相同。
+- **Required**: 无；Register: 本轮无新风险条，PASS 取证与两条 Optional 见 `docs/system_risk_register.md`（单一来源，本处不复述）。
+- **Verify**: review-evidence:b39b03932894；rule 3 未触发故未跑 full、rule 8 未起 §6a agent（改动全在 test-infra）。亲跑超集 `discover -s tests -p test_us_short_llm_theme_discovery*` = `252 OK / 21.5s`；door `55 OK`；`git diff --check` clean；残留跑前跑后 `0/0`。**点名植入对照**：把 `seam_score.py` 的加分项挖成 `0.0` → 该测试立刻 `FAIL exit=1`，失败点 `line 280` 的 `AssertionError: 0.0 != 5.0`，植入后已还原并复核不在改动集内。四条反向控制我整读被消费的守卫函数体逐条对上门：`data_context.py:571`/`:573`、identity validator 的 `consumer identity rejected`、`:799` 覆盖不精确。
+- **Next**: Codex：执行
+
+## 2026-08-03 — Codex executor/fixer 执行离线 discovery→score/assemble 闭环（待 Claude Code 独立复审）
+
+- **Verdict/Action**：按 handoff 九步完成现有五个 CLI main 后的 provisional theme→score→assemble 接线；只改当前工作树测试，桌面文档未改，未提交、未 push、未 merge。
+- **Required**：`R-USSHORT-DESKTOP-DOCS-UNFINISHED-LIST-LAGS-THE-REVIEW-WORKTREE-BY-ONE-ROUND` 仍 `OPEN/NOT_VERIFIED / P2`；本轮只证明代码闭环，不替代桌面文档修订或独立审查。
+- **Verify**：固定 Python；discovery 超集 `252 OK / 19.0s`（含 plan-bound）；直接 data-context/seam/validator/schema `112 OK / 2.4s`；stats `member=2/3, industry=1/3, scored_ticker_count=5, scoring_or_top15_effect=true`；py_compile/diff-check PASS；残留前 `257/256 cache/targets=0`、后 `302/301 cache/targets=0`，mtime SHA 见 register。
+- **Pre-Codex self-review**：`matrix=five-main/validation identity/six compose inputs/assemble/boost tier-cap/Top15 boundary/date-digest-coverage negatives`; `register=updated`; `handoff=updated`; `focused=252+112 OK (252 includes plan-bound)`; `full-lane=not_triggered: test-only offline closure`; `door=route-doc + doc-governance: 55 OK / exit=0`; `review=NOT_VERIFIED`; `commit=NOT_PERFORMED`; `provider/network/paid=NOT_USED`。
+- **Next**：Claude Code：独立审查本轮 offline score/assemble 测试与证据；PASS 后按 reviewer/committer 规则提交。
+
 ## 2026-08-03 — Claude 修复（类 G 三条 Optional，用户令自修自审）
 
 - **Verdict/Action**: 收两条、一条本来就已闭。`_p5_governance_digest` 改名为公开的 `canonical_governance_digest` 并补 docstring 写明它是该 preset 的唯一共享身份、新调用点必须走它（全仓 9 处引用同步，旧名零残留）；`a_short_experiment_admission_registry` 与 `a_short_overlay_adjudication` 的函数内 `from engine import egs_industry_heat` 上移到模块顶部（实测无循环依赖）。第三条（`a_short_weekly_pipeline` 豁免理由措辞）上一轮执行方已改准，本轮无需动。纯重命名+导入位置，零行为改动。

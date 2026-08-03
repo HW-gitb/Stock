@@ -2118,3 +2118,46 @@ Claude Code：独立复审两个 v0.2.0 Required；PASS 后提交，Codex 不提
 **顺序**：`… → 模板 v0.2.0 ✅ → 类 G 谓词加固 ✅（本节，PASS，已合入 master）→ 离线端到端跑到打分（命令见上文，仍未开工）→ 08-08/09 bounded 探针（需用户逐次授权）`。
 
 **给 Codex 的命令**：见上文「执行 离线端到端跑到打分」那条（九步，仍未开工，本轮不变）。
+
+## 2026-08-03 追加：Codex executor/fixer 执行离线 discovery→score/assemble 闭环（待 Claude Code 独立复审）
+
+### Scope / implementation
+
+- 当前工作树 `D:\cnhea\Codex\worktrees\690e\Stock`；Codex executor/fixer，Claude Code reviewer/committer；桌面文档未改，未提交、未 push、未 merge。
+- 仅修改 `tests/provider/test_us_short_llm_theme_discovery_plan_bound_offline_closure.py`：沿 Web→X→merge→ingest→provisional validate 之后接入既有 `compose_score_inputs` 与 `assemble_data_context_with_analyst_grade_risk`，显式 `theme_soft_boost_enabled=True`；复用已有 data-context fixtures，不改 engine/runner/schema/provider。
+- 覆盖正向 both/single/cap、Top15 边界票变化、以及 date/digest/coverage 三类 fail-closed 接缝；统计行新增最终 `scored_ticker_count=5` 与 `scoring_or_top15_effect=true`。
+
+### Verification
+
+- 固定 Python：`C:\Users\cnhea\AppData\Local\Programs\Python\Python313\python.exe`。
+- `discover -s tests -p test_us_short_llm_theme_discovery*`：`252 OK / 19.0s`；直接消费者与 validator/schema 包：`112 OK / 2.4s`；最终 plan-bound 测试包含在 252 内且 `1 OK`；`py_compile`、`git diff --check` PASS。
+- 离线统计：`member_gate=2/3`、`industry_gate=1/3`、`drop_reasons` 保持既有两类原因、最终参与打分 `5` 个 ticker；both `+5`、single `+2`、cap `5`；边界票 Top15 集合确实变化。
+- 残留/mtime：前 `257`（256 cache + ledger），targets `provider_samples/state/data/tmp/temp/logs=0`，SHA=`27f6b9a4979a4e977642faa5759061cce804fc79a814e8a16706d53124037113`；后 `302`（301 cache + ledger），targets 仍全 `0`，SHA=`d5f8ae06a222172b48d9310bff48241c1261f3193a48b23e52074529c2f23c47`；最终 door 后固定 Python 复核仍为 `302/301`、targets 全 `0`、`logs=[]`，按 path+mtime_ns+size 的快照 SHA=`f85acd1351b1ad7616703006d690d332379210d606527afd2d5d128f571ff796`；临时 provider 根已清理。
+- 期间每次 focused FAIL 均按门禁停止并修正，最终 focused 通过；未跑 860 秒 full lane（handoff 本步只要求 focused 超集 + 相关 provider tests），未联网、未调用 provider、未付费、未写持久 `state/us_short` 或 `provider_samples`。
+
+### Self-review / handoff
+
+- `matrix=five-main/validation identity/six compose inputs/assemble/boost tier-cap/Top15 boundary/date-digest-coverage negatives`；`register=updated`；`handoff=updated`；`focused=252+112 OK (252 includes plan-bound)`；`full-lane=not_triggered: test-only offline closure`；`door=route-doc + doc-governance: 55 OK / exit=0`；`review=NOT_VERIFIED`；`commit=NOT_PERFORMED`；`provider/network/paid=NOT_USED`。
+- `R-USSHORT-DESKTOP-DOCS-UNFINISHED-LIST-LAGS-THE-REVIEW-WORKTREE-BY-ONE-ROUND` 仍 `OPEN/NOT_VERIFIED / P2`；桌面文档不在本轮 scope。Claude Code 下一步独立审查本测试接线、正反控制、统计与残留证据；PASS 后由 Claude Code 提交。
+
+## 2026-08-03 追加：Claude Code 对「离线端到端跑到打分」的独立审查 —— PASS（已提交并合入 master）
+
+**结论**：通过。这一刀的价值不在「再量一次门通过率」，而在**花真钱之前证明两件事**：discovery 的产物真能走到 `core_score` 与 Top15；对不上时会在打分前就失败。两侧都实测成立。零生产代码改动（只有一个测试模块 +190 行）、零 provider/网络/付费、未占决策槽。
+
+**为什么 PASS（正文见 register 同名节）**
+
+- **正向控制 + 点名植入**：断言 `both=5.0`（AAPL）、`single=2.0`（GOOG）、硬顶 `≤5.0`，`boosted-baseline` 差值恰为 5.0/2.0；16 票边界场景实测 `AAPL` 基线不在 Top15、加分后进 Top15。**我把 `seam_score.py` 的加分项挖成 `0.0`**，测试立刻 `FAIL exit=1`，失败点 `line 280` 的 `AssertionError: 0.0 != 5.0`；植入后 `git checkout --` 还原并复核不在改动集内。
+- **四条反向控制打的是正确的门**（整读被消费的守卫函数体，不只看 `assertRaises` 类型）：`data_context.py:571` 缺 validation、`:573` 缺 digest 收据、identity validator 的 `consumer identity rejected`（decision date 与 digest 对不上两种）、`:799` overextension 覆盖不精确。四条落在四个不同的意图分支。
+- **交叉校验**：`assembled["selection_inputs"]["per_ticker"]` 与直接 `compose_score_inputs` 逐字段相等——assemble 与打分没有第二套口径。
+- **原有目的没被牺牲**：候选宇宙收窄到 5 票后 X 侧成员集合虽调整，`member_gate=2/3`、`industry_gate=1/3`、`drop_reasons` 与改动前逐字相同。
+- 亲跑超集 `252 OK / 21.5s`；door `55 OK`；`git diff --check` clean；残留跑前跑后 `0/0`。
+
+**已核实真闭、下一轮别改坏**：五个真 `main()` 的原链未动；fixture 全部复用既有构造器，未新写引擎逻辑；`OFFLINE_PLAN_BOUND_CLOSURE_STATS` 现同时记 `member_gate` / `industry_gate` / `drop_reasons` / `scored_ticker_count` / `scoring_or_top15_effect`，便于逐周对比。
+
+**两条 Optional（不阻塞，正文在 register）**：① `scoring_or_top15_effect` 这个键在同一份 stdout 里有两个相反的值（validate runner 摘要 `false`、闭环统计 `true`），语义不同却同名同屏，建议测试侧改名；② Top15 边界那条正向控制未被本轮植入**单独**证伪——归零后测试在更靠前的 `line 280` 就红了，后面的 Top15 断言没跑到，其承重性是推出来的，建议拆成独立测试方法。
+
+**顺序**：`… → 模板 v0.2.0 ✅ → 类 G 谓词加固 ✅ → 离线端到端跑到打分 ✅（本节，PASS，已合入 master）→ 08-08（六）/ 08-09（日）bounded 查询质量探针（**要花钱、需用户逐次授权**，此前的离线授权不覆盖）`。
+
+**给用户的一行**：不花钱的两件都做完了。下一件是 08-08/08-09 那次 bounded 探针——要真金白银、要你逐次授权、也要你定形状（裁决拿 `pass_to_query_planner_implementation` / `revise_stage1_templates_before_planner` / `inconclusive` 三选一）。在你下命令之前，仓内没有可执行的下一刀。
+
+~~**给 Codex 的命令**：上文「执行 离线端到端跑到打分」那条已执行并复审 PASS、合入 master，此条作废；本轮不产生新的 Codex 命令。~~
