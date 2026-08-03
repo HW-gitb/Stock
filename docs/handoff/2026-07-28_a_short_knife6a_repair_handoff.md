@@ -625,3 +625,31 @@
 - 若要做 Optional ①：只缓存已编译校验器是安全的（schema 路径固定、内容不变）；**不要**给 `_validate_fifth_knife_freeze_packet` 直接挂 `lru_cache`，测试靠 `mock.patch.object` 换 `FIFTH_KNIFE_FREEZE_PACKET_PATH`，无键缓存会假绿。要缓存 packet 解析必须以「路径 + mtime + size」为键。
 - 七轨仍全部 `pre_freeze_audit_only`，生产 packet 仍有六项漂移；本轮没有重封、没有解冻、没有启动时钟。桌面方案第 0 节的「设计未定稿前不建冻结件」仍成立：预冻结路径返回常量，改这八个契约文件在预冻结期不会作废任何东西。
 - 后续任何刀若要重命名或移动这八个契约中的任一个，必须同时改 `engine/a_short_evidence_epoch_mode.py::_FIFTH_KNIFE_FROZEN_CONTRACTS`、freeze schema 的 `prefixItems` const 与 packet 三处，否则七轨 epoch-mode 调用会整体抛错。
+
+## 2026-08-03 追加：桌面清单第 4 条日线窗口修复（Codex；待 Claude Code 独立审查）
+
+### 改了什么 / 为什么
+
+- 桌面现象 `short_history_candidate_count=3191` 的直接根因是：公共日线面板实际只保留 60 个交易日，而 `pct_60d` 的定义需要当前收盘加上 60 个交易日前的收盘，即至少 61 根有效收盘。于是 `pct_60d` 全部不可算，短历史计数也退化为“有行情的主板票数量”。
+- `A-EGS/egs_main.py` 现在用同一组声明统一 `pct_5d/pct_20d/pct_60d` lookback、所需收盘根数、65 个交易日窗口（61 根需求 + 4 根缓冲）、`run_egs()` 的取数、缓存 key 和短历史告警口径。窗口或配置不足时在 cache/provider 之前 fail closed；没有把 61 改成 21，也没有改变候选阈值。
+- `engine/egs_industry_heat.py` 的既有消费者未改业务逻辑；新增回归证明 `pct_60d` 有值时会参与，全部缺失时才明确退化到 p20-only。effect contract 只同步了本次 A-EGS 变更触发的 predicate/runtime-constant 两个指纹。
+
+### 改动文件
+
+- `A-EGS/egs_main.py`
+- `schemas/a_short_m67_effect_contract.json`
+- `tests/phase6/test_egs_main_daily_stats_guard.py`
+- `tests/phase6/test_egs_main_qfq_price_basis.py`
+- `tests/test_egs_industry_heat.py`
+- `docs/system_risk_register.md`（`R-ASHORT-QFQ-60D-WINDOW-SILENCES-PCT60D`）
+- `docs/SESSION_LOG.md`
+
+### 验证与边界
+
+- 唯一解释器：`C:\Users\cnhea\AppData\Local\Programs\Python\Python313\python.exe`，版本 `Python 3.13.8`。
+- focused：`Ran 94 tests in 58.199s ... OK`；最终 A-short full lane：`Ran 2274 tests in 436.681s ... OK (skipped=3)`，ledger `status=PASS exit=0 tests=2274 elapsed=438.6s deadline=860s`；`py_compile`、`git diff --check` 已执行。第一次 full lane 因未重封 effect contract 先报错，重封后只对最终代码态重跑一次并通过。
+- 未执行新的 provider/live `--as-of 20260803` 运行；当前桌面产物不因本刀刷新。无账户、持仓、下单、自动交易、commit、push、merge。
+
+### 交接给下一位
+
+- Claude Code 需独立审查当前五个代码/测试/schema 文件、风险登记、SESSION_LOG、窗口/缓存 source binding、消费者退化和负向门；PASS 后由 Claude Code 按项目流程提交。当前未授权把 real `--as-of 20260803` 运行结果写成已验证事实。

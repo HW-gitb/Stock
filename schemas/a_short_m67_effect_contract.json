@@ -708,7 +708,7 @@
     "candidate_data_quality": "comparison_track"
   },
   "decision_predicate_sha256": {
-    "A-EGS/egs_main.py": "589b80f8fb4541736d442e6e2a056ef3577e3ca892c0d5d5c8f908c45b5b7ec2",
+    "A-EGS/egs_main.py": "abdb5546d9fb41fbfd2901ece9efde6b67ecfc2eee24ca97933ca85e937e15d9",
     "engine/egs_industry_heat.py": "74932f994ec0658345c41aa932b54b5685c1737c663f5070a193d264f37fced2",
     "engine/a_short_industry_theme.py": "6a10200f80b3c0d301efc8af1561b53ef2578e1cd26eea7976188dd57b7b6b2b",
     "runners/a_short_phase5_engine.py": "57efaa31c638f7ff06a7b9d5a2aaae1792687f766cd34b604532b5d1746141ec",
@@ -718,7 +718,7 @@
     "engine/a_short_effect_contract.py": "7f96b57a88313ec5274835727d65530633e27f3bad98c7573eb598bdfdf523f6"
   },
   "runtime_constants_sha256": {
-    "A-EGS/egs_main.py": "7a7db52541d037b08195ddf8275c0c6a9196a30958ee91203d178396071d335e",
+    "A-EGS/egs_main.py": "5916001ff7786b354c3195fc77fc0a6541372032796d012ab3c533f12ae31e1f",
     "runners/a_short_phase5_engine.py": "27f947c64df7eaf4e59526b4bc0c150de5baef5a2447187acc98378e4c1f9f00",
     "engine/a_short_portfolio_risk.py": "238ae5ff77e269bc1b9a507014b21561c54e6766169d1854e19119ac5137943e"
   },

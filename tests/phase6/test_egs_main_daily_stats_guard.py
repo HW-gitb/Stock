@@ -3,6 +3,7 @@ import math
 import sys
 import unittest
 from pathlib import Path
+from unittest.mock import patch
 
 import pandas as pd
 
@@ -115,6 +116,30 @@ class EgsMainDailyStatsGuardTest(unittest.TestCase):
                     float(stats.loc[0, column]),
                     (10.0 / (10.0 + sessions * 0.01) - 1) * 100,
                 )
+
+    def test_qfq_window_is_long_enough_for_the_longest_declared_lookback(self) -> None:
+        self.assertEqual(self.egs_main.DAILY_STATS_MAX_LOOKBACK_SESSIONS, 60)
+        self.assertEqual(self.egs_main.DAILY_STATS_REQUIRED_CLOSES, 61)
+        self.assertEqual(self.egs_main.DAILY_ALL_QFQ_WINDOW_TRADING_DAYS, 65)
+        self.egs_main._validate_daily_qfq_window(65)
+
+        with self.assertRaisesRegex(RuntimeError, "window=60, required=61"):
+            self.egs_main._validate_daily_qfq_window(60)
+
+        with patch.object(self.egs_main, "DAILY_ALL_QFQ_WINDOW_TRADING_DAYS", 60):
+            with self.assertRaisesRegex(RuntimeError, "configuration is shorter.*window=60, required=61"):
+                self.egs_main._validate_daily_qfq_window(60)
+
+    def test_qfq_fetch_rejects_a_short_trade_date_window_before_cache_or_provider(self) -> None:
+        dates = [
+            (pd.Timestamp("20260602") - pd.Timedelta(days=i)).strftime("%Y%m%d")
+            for i in range(60)
+        ]
+        with self.assertRaisesRegex(RuntimeError, "window is too short.*window=60, required=61"):
+            self.egs_main.get_daily_all(
+                dates,
+                price_as_of=dates[0],
+            )
 
     def test_short_history_count_is_main_board_only(self) -> None:
         stocks = pd.DataFrame({
