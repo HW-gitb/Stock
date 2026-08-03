@@ -1002,7 +1002,10 @@ def execute_live_x_orchestration(
     }
 
 
-def _run_x_fetch(*, queries: list[str] | tuple[str, ...], expected_decision_date: str, generated_at: str, x_client: Any | None = None, confirm_user_authorization: bool = False, live: bool = False, raw_root: Path = DEFAULT_RAW_ROOT, # Class-A allowlist: offline_fake_client has no A1 plan; live uses the registered raw root before credentials.
+# `raw_root=None` resolves to DEFAULT_RAW_ROOT at CALL time (both branches below); binding the
+# default into the signature defeats the `mock.patch.object(module, "DEFAULT_RAW_ROOT", tmp)`
+# isolation seam and sends offline test writes into the real gitignored raw root.
+def _run_x_fetch(*, queries: list[str] | tuple[str, ...], expected_decision_date: str, generated_at: str, x_client: Any | None = None, confirm_user_authorization: bool = False, live: bool = False, raw_root: Path | None = None, # Class-A allowlist: offline_fake_client has no A1 plan; live uses the registered raw root before credentials.
                  parent_plan: Mapping[str, Any] | None = None, _new_transport: Callable[..., object] = _new_live_transport, _issue_ticket: Callable[[], object] = _issue_live_ticket, _revoke_ticket: Callable[[object], None] = _revoke_live_ticket):
     queries = _safe_queries(queries)
     web._decision_date(expected_decision_date)
@@ -1072,7 +1075,7 @@ def _run_x_fetch(*, queries: list[str] | tuple[str, ...], expected_decision_date
 
 def _bind_live_runner(run_impl: Callable[..., Any], new_transport: Callable[..., object], issue_ticket: Callable[[], object], revoke_ticket: Callable[[object], None]) -> Callable[..., Any]:
     """Bind normal-path bookkeeping here; closure placement is not an authorization boundary."""
-    def runner(*, queries: list[str] | tuple[str, ...], expected_decision_date: str, generated_at: str, x_client: Any | None = None, confirm_user_authorization: bool = False, live: bool = False, raw_root: Path = DEFAULT_RAW_ROOT, # Same Class-A allowlist: offline mode may omit the plan.
+    def runner(*, queries: list[str] | tuple[str, ...], expected_decision_date: str, generated_at: str, x_client: Any | None = None, confirm_user_authorization: bool = False, live: bool = False, raw_root: Path | None = None, # Same Class-A allowlist: offline mode may omit the plan; raw_root stays call-time resolved.
                 parent_plan: Mapping[str, Any] | None = None):
         return run_impl(queries=queries, expected_decision_date=expected_decision_date, generated_at=generated_at, x_client=x_client, confirm_user_authorization=confirm_user_authorization, live=live, raw_root=raw_root, parent_plan=parent_plan, _new_transport=new_transport, _issue_ticket=issue_ticket, _revoke_ticket=revoke_ticket)
     return runner
@@ -1156,11 +1159,25 @@ def main(argv: list[str] | None = None) -> int:
         default_receipt_path(args.expected_decision_date),
     )
     if args.live:
-        discovery, receipt, summary = run_x_fetch(
-            queries=args.query, expected_decision_date=args.expected_decision_date,
-            generated_at=args.generated_at, confirm_user_authorization=args.confirm_user_authorization,
-            live=True, raw_root=raw_root,
-        )
+        try:
+            discovery, receipt, summary = run_x_fetch(
+                queries=args.query, expected_decision_date=args.expected_decision_date,
+                generated_at=args.generated_at, confirm_user_authorization=args.confirm_user_authorization,
+                live=True, raw_root=raw_root,
+            )
+        except paid_gateway.PaidEvidenceUnavailableError as exc:
+            # Mirror of the web lane: the one terminal state that leaves no artifact still leaves
+            # a machine-readable line instead of a bare traceback.
+            print(json.dumps({
+                "schema_name": "us_short_llm_theme_discovery_fetch_x_execution_summary",
+                "schema_version": "1.0.0",
+                "status": "live_authorized_paid_evidence_unavailable",
+                "lane": "x", "decision_date": args.expected_decision_date,
+                "detail": type(exc).__name__,
+                "formal_decision_slots_occupied": False,
+                "replay_required": True,
+            }, ensure_ascii=False, indent=2))
+            return 2
     else:
         if not args.fake_response_path:
             raise SystemExit("offline mode requires --fake-response-path")

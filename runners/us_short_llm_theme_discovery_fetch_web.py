@@ -1594,7 +1594,11 @@ def _run_web_fetch(
     *, queries: list[str] | tuple[str, ...], expected_decision_date: str, generated_at: str,
     search_client: Any | None = None, deepseek_client: Any | None = None,
     confirm_user_authorization: bool = False, live: bool = False,
-    raw_root: Path = DEFAULT_RAW_ROOT,
+    # The default is resolved at CALL time (`raw_root or DEFAULT_RAW_ROOT` below), never bound
+    # into the signature: an import-time default silently defeats the established
+    # `mock.patch.object(module, "DEFAULT_RAW_ROOT", tmp)` isolation seam, which sent offline
+    # test writes into the real gitignored raw root and made the suite history-dependent.
+    raw_root: Path | None = None,
     # Class-A allowlist: offline_fake_client intentionally has no A1 plan; live mode rejects
     # this None before credentials or reservation, so the public dual-mode API stays usable.
     parent_plan: Mapping[str, Any] | None = None,
@@ -1705,8 +1709,9 @@ def _bind_live_runner(
     def runner(
         *, queries: list[str] | tuple[str, ...], expected_decision_date: str, generated_at: str,
         search_client: Any | None = None, deepseek_client: Any | None = None,
-        confirm_user_authorization: bool = False, live: bool = False, raw_root: Path = DEFAULT_RAW_ROOT,
+        confirm_user_authorization: bool = False, live: bool = False, raw_root: Path | None = None,
         # Same Class-A allowlist as _run_web_fetch: only offline mode may omit the plan.
+        # `raw_root` stays call-time resolved for the same reason as `_run_web_fetch`.
         parent_plan: Mapping[str, Any] | None = None,
     ) -> tuple[dict[str, Any], dict[str, Any], dict[str, Any]]:
         return run_impl(
@@ -1773,11 +1778,26 @@ def main(argv: list[str] | None = None) -> int:
             generated_at=args.generated_at, search_client=_FakeSearch(), deepseek_client=_FakeDeepSeek(), live=False,
         )
     else:
-        packet, receipt, summary = run_web_fetch(
-            queries=args.query, expected_decision_date=args.expected_decision_date,
-            generated_at=args.generated_at, confirm_user_authorization=args.confirm_user_authorization,
-            live=True, raw_root=raw_root,
-        )
+        try:
+            packet, receipt, summary = run_web_fetch(
+                queries=args.query, expected_decision_date=args.expected_decision_date,
+                generated_at=args.generated_at, confirm_user_authorization=args.confirm_user_authorization,
+                live=True, raw_root=raw_root,
+            )
+        except paid_gateway.PaidEvidenceUnavailableError as exc:
+            # The paid loop already stopped and the earlier responses are on disk; without this
+            # the operator only saw a traceback, so the one terminal state that leaves NO artifact
+            # at least leaves a machine-readable line naming the lane and the decision date.
+            print(json.dumps({
+                "schema_name": "us_short_llm_theme_discovery_fetch_web_execution_summary",
+                "schema_version": "1.0.0",
+                "status": "live_authorized_paid_evidence_unavailable",
+                "lane": "web", "decision_date": args.expected_decision_date,
+                "detail": type(exc).__name__,
+                "formal_decision_slots_occupied": False,
+                "replay_required": True,
+            }, ensure_ascii=False, indent=2))
+            return 2
     if summary.get("status") == "live_authorized_budget_aborted":
         publish_budget_abort_diagnostic(
             "web", args.expected_decision_date,

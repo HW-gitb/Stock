@@ -390,12 +390,18 @@ class PlanBudgetAcceptanceTests(unittest.TestCase):
             # begin() method.  If that real guard is removed, this assertion fails before the
             # callback can be mistaken for a passing B5 control.
             with mock.patch.object(plan_budget, "_enforce_envelope_counts", return_value=None):
-                with self.assertRaises(AssertionError):
-                    budget.dispatch_with_outcome(
-                        "web", scope="over-envelope", stage="stage1",
-                        call=lambda: calls.append("paid"),
-                    )
-                    self.assertEqual(calls, [], "planted missing pre-dispatch guard reached the paid callback")
+                budget.dispatch_with_outcome(
+                    "web", scope="over-envelope", stage="stage1",
+                    call=lambda: calls.append("paid"),
+                )
+            # Asserted directly, not inside `assertRaises(AssertionError)`: that older shape was
+            # satisfied by ANY AssertionError from the dispatch path, so it could go green for a
+            # reason unrelated to the planted mutation.
+            self.assertEqual(
+                calls, ["paid"],
+                "removing the real pre-dispatch envelope guard must let the paid callback run; "
+                "if it does not, this control no longer proves the guard is load-bearing",
+            )
 
     def test_A4_B6_mutated_ledger_identity_is_rejected(self):
         parent = _parent()
@@ -1045,12 +1051,25 @@ class PlanBudgetAcceptanceTests(unittest.TestCase):
         x_path = ROOT / "runners" / "us_short_llm_theme_discovery_fetch_x.py"
         paths = [budget_path, web_path, x_path]
         offenders = _class_a_default_none_offenders(paths)
+        # Exact list on purpose: a NEW default-None on the money path must be added here
+        # consciously, with its reason, instead of silently joining the allowlist.
+        #   parent_plan  — only offline mode may omit it; live rejects None before credentials.
+        #   raw_root     — resolved at CALL time (`raw_root or DEFAULT_RAW_ROOT`) and validated in
+        #                  both branches.  It must NOT be bound into the signature: an import-time
+        #                  default defeats `mock.patch.object(module, "DEFAULT_RAW_ROOT", tmp)`,
+        #                  which sent offline test writes into the real gitignored raw root and
+        #                  made the pack history-dependent (guarded by
+        #                  tests.test_us_short_discovery_class_guards.RawRootIsolationSeamConformance).
         self.assertEqual(
             [(filename, function, argument) for filename, function, argument, _line in offenders],
             [
+                ("us_short_llm_theme_discovery_fetch_web.py", "_run_web_fetch", "raw_root"),
                 ("us_short_llm_theme_discovery_fetch_web.py", "_run_web_fetch", "parent_plan"),
+                ("us_short_llm_theme_discovery_fetch_web.py", "runner", "raw_root"),
                 ("us_short_llm_theme_discovery_fetch_web.py", "runner", "parent_plan"),
+                ("us_short_llm_theme_discovery_fetch_x.py", "_run_x_fetch", "raw_root"),
                 ("us_short_llm_theme_discovery_fetch_x.py", "_run_x_fetch", "parent_plan"),
+                ("us_short_llm_theme_discovery_fetch_x.py", "runner", "raw_root"),
                 ("us_short_llm_theme_discovery_fetch_x.py", "runner", "parent_plan"),
             ],
         )

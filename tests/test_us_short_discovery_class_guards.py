@@ -1,11 +1,15 @@
 """Class-level guards for US-short discovery operator-state and live-authority regressions."""
 from __future__ import annotations
 
+import ast
+import inspect
 import unittest
 from pathlib import Path
 from tempfile import TemporaryDirectory
 
 from engine import us_short_llm_theme_discovery_paid_gateway as paid_gateway
+from runners import us_short_llm_theme_discovery_fetch_web as web_fetch
+from runners import us_short_llm_theme_discovery_fetch_x as x_fetch
 
 
 ROOT = Path(__file__).resolve().parent.parent
@@ -79,6 +83,74 @@ class LiveTransportLifecycleConformance(unittest.TestCase):
                 ticket = paid_gateway.issue_ticket()
                 self.assertTrue(transport._consume_ticket(ticket))
                 self.assertFalse(transport._consume_ticket(ticket))
+
+
+class RawRootIsolationSeamConformance(unittest.TestCase):
+    """`DEFAULT_RAW_ROOT` must stay call-time resolved, never bound into a signature default.
+
+    Binding it into the signature silently defeats `mock.patch.object(module, "DEFAULT_RAW_ROOT",
+    tmp)` — the seam every offline test uses — so offline runs write into the REAL gitignored raw
+    root.  That is invisible until a tree accumulates a same-digest receipt with different bytes,
+    at which point the immutable door drops every source and the lane goes red for a reason that
+    has nothing to do with the code under test.  Observed exactly once, on the A4 landing.
+    """
+
+    LANE_RUNNERS = (
+        ROOT / "runners" / "us_short_llm_theme_discovery_fetch_web.py",
+        ROOT / "runners" / "us_short_llm_theme_discovery_fetch_x.py",
+    )
+
+    @staticmethod
+    def _signature_defaults_naming_the_raw_root(source: str) -> list[tuple[str, str]]:
+        offenders: list[tuple[str, str]] = []
+        for node in ast.walk(ast.parse(source)):
+            if not isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)):
+                continue
+            args = node.args
+            pairs = list(zip(args.args[len(args.args) - len(args.defaults):], args.defaults))
+            pairs += [(a, d) for a, d in zip(args.kwonlyargs, args.kw_defaults) if d is not None]
+            for arg, default in pairs:
+                name = (
+                    default.id if isinstance(default, ast.Name)
+                    else default.attr if isinstance(default, ast.Attribute) else None
+                )
+                if name == "DEFAULT_RAW_ROOT":
+                    offenders.append((node.name, arg.arg))
+        return offenders
+
+    def test_no_lane_runner_binds_the_raw_root_into_a_signature_default(self):
+        for path in self.LANE_RUNNERS:
+            with self.subTest(runner=path.name):
+                offenders = self._signature_defaults_naming_the_raw_root(
+                    path.read_text(encoding="utf-8")
+                )
+                self.assertEqual(
+                    offenders, [],
+                    f"{path.name}: resolve DEFAULT_RAW_ROOT at call time "
+                    f"(`raw_root or DEFAULT_RAW_ROOT`), not in the signature",
+                )
+
+    def test_the_predicate_dies_on_a_planted_signature_default(self):
+        planted = (
+            "from pathlib import Path\n"
+            "DEFAULT_RAW_ROOT = Path('provider_samples')\n"
+            "def _run_lane_fetch(*, raw_root: Path = DEFAULT_RAW_ROOT):\n"
+            "    return raw_root\n"
+        )
+        self.assertEqual(
+            self._signature_defaults_naming_the_raw_root(planted),
+            [("_run_lane_fetch", "raw_root")],
+        )
+
+    def test_offline_runs_honour_a_patched_raw_root(self):
+        """The seam itself: patching the module attribute must redirect every raw write."""
+        for module, runner_name in (
+            (web_fetch, "run_web_fetch"), (x_fetch, "run_x_fetch"),
+        ):
+            with self.subTest(lane=module.__name__.rsplit("_", 2)[-1]):
+                source = inspect.getsource(module)
+                self.assertIn("raw_root or DEFAULT_RAW_ROOT", source)
+                self.assertTrue(callable(getattr(module, runner_name)))
 
 
 if __name__ == "__main__":
