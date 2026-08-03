@@ -1,5 +1,13 @@
 # Session Log
 
+## 2026-08-03 — Claude 修复（类 G 三条 Optional，用户令自修自审）
+
+- **Verdict/Action**: 收两条、一条本来就已闭。`_p5_governance_digest` 改名为公开的 `canonical_governance_digest` 并补 docstring 写明它是该 preset 的唯一共享身份、新调用点必须走它（全仓 9 处引用同步，旧名零残留）；`a_short_experiment_admission_registry` 与 `a_short_overlay_adjudication` 的函数内 `from engine import egs_industry_heat` 上移到模块顶部（实测无循环依赖）。第三条（`a_short_weekly_pipeline` 豁免理由措辞）上一轮执行方已改准，本轮无需动。纯重命名+导入位置，零行为改动。
+- **Required**: 无；Register: 无新条（本轮只收上一轮已登记的 Optional，未引入新风险）。
+- **Verify**: review-evidence:not_available（本轮 hook 未注入 token）；rule 8 Optional-only 快档：先 scope grep 出全部 9 处引用，最小覆盖包只跑一次 `egs_industry_heat + admission_registry + overlay_adjudication + industry_weight_comparison + canonicalization guard + doc 门` = `156 OK / 32.9s`。行为不变正控：改名后同一 preset 摘要仍是 `c08bbfb22077cdde`，与改名前逐字符相同。循环依赖反控：四个模块各在**全新解释器**里单独 `import` 全部成功。`git diff --stat` = `20 insertions / 12 deletions`（无 CRLF 整文件假 diff）；未联网、未调 provider、未付费。
+- **Next**: Codex：执行
+- **Pre-Codex self-review**: `matrix=旧名 9 处引用全枚举 + 两处导入位置 + 第三条已闭确认`; `register=n/a`; `handoff=not_required: Optional-only 收口，无新交接事实`; `focused=156 OK / 32.9s`; `full-lane=not_triggered: 纯重命名与导入位置，无行为面`; `door=doc-governance + route-doc 同包内 156 OK`; `scope-grep=_p5_governance_digest 旧名残留 0`; `positive-control=摘要 c08bbfb2 改名前后一致`; `negative-control=四模块新解释器单独 import 均成功（无循环依赖）`; `residue=0/0`
+
 ## 2026-08-03 — Claude 审查 PASS（类 G 谓词加固：局部/helper 路径已可解析，三处 governance 指纹转 canonical）
 
 - **Verdict/Action**: PASS，已提交并合入 master。三处对 `presets/egs_industry_heat_governance_20260611.json` 的原始字节指纹改走 `_p5_governance_digest`，`factor_comparison_v2._file_digest` 改走 canonical 并覆盖其四条 `schemas/` 摘要；谓词坐标改成「文件:函数:接收者」，解析扩到函数内局部赋值与单跳 helper 实参回代。

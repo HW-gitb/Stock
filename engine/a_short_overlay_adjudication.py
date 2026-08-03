@@ -22,6 +22,7 @@ from typing import Any
 import jsonschema
 
 from engine import a_short_evidence_epoch_mode as _epoch_mode
+from engine import egs_industry_heat as heat
 
 from engine.a_short_experiment_admission_registry import admission_snapshot, get_admission
 from engine.a_short_nullable_bool import require_known_risk_bool
@@ -139,7 +140,6 @@ def _source_files() -> list[Path]:
 def _active_profile_binding() -> dict:
     """Bind the exact profile and weights that formed the official Stage3 run."""
     governance_path = ROOT / "presets" / "egs_industry_heat_governance_20260611.json"
-    from engine import egs_industry_heat as heat
     try:
         governance = _load(governance_path)
         profile = str(governance["active_profile"])
@@ -149,7 +149,7 @@ def _active_profile_binding() -> dict:
     if not isinstance(weights, dict) or not weights:
         raise OverlayAdjudicationError("P4a active industry profile weights are malformed")
     return {"active_profile": profile, "weights": weights,
-            "governance_sha256": heat._p5_governance_digest(governance_path)}
+            "governance_sha256": heat.canonical_governance_digest(governance_path)}
 
 
 def _screening_runtime_recipe_binding() -> dict:
