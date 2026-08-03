@@ -46,6 +46,9 @@ RESIDUAL_WRITE_DISPOSITIONS = {
         "tests/test_us_short_capstone_checkpoint.py:kwarg:input_logical_paths:state/us_short",
         "tests/test_us_short_capstone_checkpoint.py:kwarg:output_logical_paths:state/us_short",
         "tests/test_us_short_forward_policy_private_week.py:kwarg:private_output_path:state/us_short",
+        "tests/provider/test_us_short_llm_theme_discovery_fetch_web.py:kwarg:artifact_path:state/us_short",
+        "tests/provider/test_us_short_llm_theme_discovery_fetch_x_merge.py:kwarg:artifact_path:state/us_short",
+        "tests/test_us_short_llm_theme_discovery_plan_budget.py:kwarg:artifact_path:state/us_short",
     }),
 }
 

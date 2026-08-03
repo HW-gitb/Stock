@@ -28,6 +28,10 @@ def _noop_persist(_request, _value):
     return None
 
 
+def _live_transport(*providers: str) -> paid_gateway.LiveTransport:
+    return paid_gateway.new_transport(*providers)
+
+
 def _parent(*, stage1: int = 1, stage2: int = 1, retry: int = 1) -> dict:
     envelopes = [
         {
@@ -45,7 +49,7 @@ def _parent(*, stage1: int = 1, stage2: int = 1, retry: int = 1) -> dict:
             "max_dispatch_count": 2,
         },
     ]
-    return query_plan.build_parent_plan(
+    return query_plan.ParentPlanDocument(query_plan.build_parent_plan(
         decision_date=DECISION_DATE,
         policy_version="soft_discovery_query_policy_v0.1.0",
         policy_template_content_sha256="a" * 64,
@@ -55,7 +59,7 @@ def _parent(*, stage1: int = 1, stage2: int = 1, retry: int = 1) -> dict:
         stage2_rule_sha256="b" * 64,
         provider_envelopes=envelopes,
         generated_at=STAMP,
-    )
+    ), artifact_sha256="c" * 64, artifact_path="state/us_short/test-parent-plan.json")
 
 
 def _function_source(source: str, name: str) -> str:
@@ -162,6 +166,38 @@ def _class_a_default_none_offenders(paths: list[Path]) -> list[tuple[str, str, s
     return offenders
 
 
+def _live_orchestration_optional_keyword_offenders(path: Path) -> list[tuple[str, str, int]]:
+    """Derive every optional keyword at the paid orchestration boundary from its AST."""
+    return _live_orchestration_optional_keyword_offenders_from_source(
+        path.read_text(encoding="utf-8")
+    )
+
+
+def _live_orchestration_optional_keyword_offenders_from_source(
+    source: str,
+) -> list[tuple[str, str, int]]:
+    tree = ast.parse(source)
+    offenders: list[tuple[str, str, int]] = []
+    for node in ast.walk(tree):
+        if not isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)):
+            continue
+        if not (node.name.startswith("execute_live_") and node.name.endswith("_orchestration")):
+            continue
+        for argument, default in zip(node.args.kwonlyargs, node.args.kw_defaults):
+            if default is not None:
+                offenders.append((node.name, argument.arg, node.lineno))
+        # Same rule on the two axes the keyword-only walk is blind to: a money-path argument
+        # declared positionally with a default, or swallowed by **kwargs, is just as omittable.
+        positional = node.args.posonlyargs + node.args.args
+        for argument, default in zip(positional[len(positional) - len(node.args.defaults):],
+                                     node.args.defaults):
+            if default is not None:
+                offenders.append((node.name, argument.arg, node.lineno))
+        if node.args.kwarg is not None:
+            offenders.append((node.name, f"**{node.args.kwarg.arg}", node.lineno))
+    return sorted(offenders)
+
+
 def _dispatch_outlet_functions(path: Path) -> list[tuple[str, str]]:
     source = path.read_text(encoding="utf-8")
     tree = ast.parse(source)
@@ -226,6 +262,44 @@ class PlanBudgetAcceptanceTests(unittest.TestCase):
         )
         return json.loads(path.read_text(encoding="utf-8"))
 
+    def test_P5_gateway_uses_plan_query_id_and_rejects_plan_external_query_before_budget(self):
+        parent = _parent()
+
+        class Budget:
+            def __init__(self):
+                self.parent_plan = parent
+                self.calls = []
+
+            def dispatch_with_outcome(self, provider, *, scope, stage, call):
+                self.calls.append((provider, scope, stage))
+                return plan_budget.DispatchOutcome(value=call())
+
+        class Client:
+            @staticmethod
+            def search(query):
+                return [{"query": query}]
+
+        budget = Budget()
+        gateway = paid_gateway.PaidDispatchGateway(budget, parent_plan=parent)
+        record = query_plan.derive_stage1_query_records(parent)[0]
+        batch = gateway.dispatch_web_search_all(
+            Client(), [record], persist_response=_noop_persist,
+        )
+        self.assertEqual(len(batch.items), 1)
+        request = batch.items[0].request
+        self.assertEqual(request.query_id, "stage1-a")
+        self.assertEqual(request.scope, "stage1-a")
+        self.assertEqual(request.query_text, record["query_text"])
+        self.assertEqual(len(budget.calls), 1)
+
+        forged = dict(record)
+        forged["query_id"] = "stage1-foreign"
+        with self.assertRaisesRegex(paid_gateway.PaidProviderError, "outside the parent plan"):
+            gateway.dispatch_web_search_all(
+                Client(), [forged], persist_response=_noop_persist,
+            )
+        self.assertEqual(len(budget.calls), 1)
+
     def test_A4_B1_plan_reservation_precedes_first_paid_call_static_reference(self):
         parent = _parent()
         with temporary_us_short_state_directory(ROOT) as raw:
@@ -270,14 +344,15 @@ class PlanBudgetAcceptanceTests(unittest.TestCase):
                 "regroup_failed": False, "regroup_attempted": False,
                 "regroup_chunk_counts": {"attempted": 0, "successful": 0, "failed": 0, "failed_indexes": []},
                 "budget_error": None, "provider_call_count": 0,
+                "stage1_dispatch_count": 1, "stage1_queries": ["Find demand shifts."],
             }
 
         def fake_build(**_kwargs):
             events.append("build")
-            return ({"packet": True}, {"receipt": True}, {"summary": True})
+            return ({"packet": True}, {"summary": {"query_count": 1}}, {"summary": True})
 
         common = {
-            "queries": ["q"], "expected_decision_date": DECISION_DATE,
+            "queries": ["Find demand shifts."], "expected_decision_date": DECISION_DATE,
             "generated_at": STAMP, "confirm_user_authorization": True,
             "live": True, "parent_plan": parent,
             "_new_transport": lambda *_providers: object(), "_issue_ticket": lambda: object(),
@@ -507,8 +582,9 @@ class PlanBudgetAcceptanceTests(unittest.TestCase):
 
         web_outcome = web.execute_live_web_orchestration(
             queries=["q1", "q2"], expected_decision_date=DECISION_DATE,
-            tavily=Tavily(), deepseek_client=object(), transport=object(),
+            tavily=Tavily(), deepseek_client=object(), transport=_live_transport("tavily", "deepseek"),
             dispatch_budget=AbortAfterOne(), persist_search_response=_noop_persist,
+            query_records=["q1", "q2"], parent_plan=None,
         )
         self.assertIsInstance(web_outcome["budget_error"], plan_budget.PlanBudgetError)
         self.assertEqual(len(web_outcome["results"]), 1)
@@ -520,7 +596,8 @@ class PlanBudgetAcceptanceTests(unittest.TestCase):
 
         x_outcome = xfetch.execute_live_x_orchestration(
             queries=["q1", "q2"], expected_decision_date=DECISION_DATE,
-            client=XClient(), dispatch_budget=AbortAfterOne(), persist_response=_noop_persist,
+            client=XClient(), dispatch_budget=AbortAfterOne(), transport=_live_transport("xai"),
+            persist_response=_noop_persist, query_records=["q1", "q2"], parent_plan=None,
         )
         self.assertIsInstance(x_outcome["budget_error"], plan_budget.PlanBudgetError)
         self.assertEqual(len(x_outcome["raw_provider_responses"]), 1)
@@ -571,6 +648,9 @@ class PlanBudgetAcceptanceTests(unittest.TestCase):
                 budget.begin("xai", scope="wrong-scope", stage="stage1")
 
     def test_A4_budget_abort_uses_diagnostic_slot_not_formal_decision_slots(self):
+        self.assertTrue(web.is_diagnostic_only_execution_status("live_authorized_budget_aborted"))
+        self.assertFalse(web.is_diagnostic_only_execution_status("live_authorized_paid_evidence_unavailable"))
+        self.assertFalse(web.is_diagnostic_only_execution_status("live_authorized_completed"))
         with temporary_us_short_state_directory(ROOT) as raw:
             old_state = web.STATE_DIR
             try:
@@ -644,8 +724,9 @@ class PlanBudgetAcceptanceTests(unittest.TestCase):
 
         web_outcome = web.execute_live_web_orchestration(
             queries=["q"], expected_decision_date=DECISION_DATE,
-            tavily=Tavily(), deepseek_client=object(), transport=object(),
+            tavily=Tavily(), deepseek_client=object(), transport=_live_transport("tavily", "deepseek"),
             dispatch_budget=CompletionAfterReturn(), persist_search_response=_noop_persist,
+            query_records=["q"], parent_plan=None,
         )
         self.assertIsInstance(web_outcome["budget_error"], plan_budget.PostPaymentDispatchError)
         self.assertEqual(web_outcome["provider_call_count"], 1)
@@ -657,7 +738,8 @@ class PlanBudgetAcceptanceTests(unittest.TestCase):
 
         x_outcome = xfetch.execute_live_x_orchestration(
             queries=["q"], expected_decision_date=DECISION_DATE,
-            client=XClient(), dispatch_budget=CompletionAfterReturn(), persist_response=_noop_persist,
+            client=XClient(), dispatch_budget=CompletionAfterReturn(), transport=_live_transport("xai"),
+            persist_response=_noop_persist, query_records=["q"], parent_plan=None,
         )
         self.assertIsInstance(x_outcome["budget_error"], plan_budget.PostPaymentDispatchError)
         self.assertEqual(len(x_outcome["raw_provider_responses"]), 1)
@@ -928,8 +1010,9 @@ class PlanBudgetAcceptanceTests(unittest.TestCase):
         with self.assertRaisesRegex(plan_budget.PlanBudgetError, "persist_search_response"):
             web.execute_live_web_orchestration(
                 queries=["q"], expected_decision_date=DECISION_DATE,
-                tavily=object(), deepseek_client=object(), transport=object(),
+                tavily=object(), deepseek_client=object(), transport=_live_transport("tavily", "deepseek"),
                 dispatch_budget=web_budget, persist_search_response=None,
+                query_records=["q"], parent_plan=None,
             )
         self.assertEqual(web_budget.calls, 0)
 
@@ -937,7 +1020,122 @@ class PlanBudgetAcceptanceTests(unittest.TestCase):
         with self.assertRaisesRegex(plan_budget.PlanBudgetError, "persist_response"):
             xfetch.execute_live_x_orchestration(
                 queries=["q"], expected_decision_date=DECISION_DATE,
-                client=object(), dispatch_budget=x_budget, persist_response=None,
+                client=object(), dispatch_budget=x_budget, transport=_live_transport("xai"),
+                persist_response=None, query_records=["q"], parent_plan=None,
+            )
+        self.assertEqual(x_budget.calls, 0)
+
+    def test_P5_paid_orchestration_keywords_are_required_by_derived_ast_predicate(self):
+        paths = [
+            ROOT / "runners" / "us_short_llm_theme_discovery_fetch_web.py",
+            ROOT / "runners" / "us_short_llm_theme_discovery_fetch_x.py",
+        ]
+        for source_path in paths:
+            with self.subTest(module_name=source_path.name):
+                self.assertEqual(_live_orchestration_optional_keyword_offenders(source_path), [])
+                source = source_path.read_text(encoding="utf-8")
+                needle = "query_records: list[str] | list[dict[str, str]],"
+                offset = source.index(needle)
+                replacement = "query_records: list[str] | list[dict[str, str]] = None,"
+                mutated = "".join((source[:offset], replacement, source[offset + len(needle):]))
+                self.assertTrue(
+                    _live_orchestration_optional_keyword_offenders_from_source(mutated),
+                    "a newly optional paid keyword must turn the derived predicate red",
+                )
+        # The keyword-only walk alone was blind to two other escape routes; both must be caught.
+        for label, escape in (
+            ("positional-with-default", "def execute_live_web_orchestration(queries, plan=None):\n    pass\n"),
+            ("**kwargs", "def execute_live_web_orchestration(*, queries, **paid):\n    pass\n"),
+        ):
+            with self.subTest(escape=label):
+                self.assertTrue(
+                    _live_orchestration_optional_keyword_offenders_from_source(escape),
+                    f"a {label} money-path escape must turn the derived predicate red",
+                )
+        self.assertEqual(
+            _live_orchestration_optional_keyword_offenders_from_source(
+                "def execute_live_web_orchestration(*, queries, plan):\n    pass\n"
+            ),
+            [], "an all-required signature must stay green (false-positive control)",
+        )
+
+    def test_P5_parent_plan_rejects_bare_query_records_before_any_budget_call(self):
+        class Budget:
+            def __init__(self):
+                self.calls = 0
+
+            def dispatch_with_outcome(self, _provider, *, scope, stage, call):
+                del scope, stage, call
+                self.calls += 1
+                return plan_budget.DispatchOutcome(value=[])
+
+        class Tavily:
+            def __init__(self):
+                self.calls = []
+
+            def search(self, query):
+                self.calls.append(query)
+                return []
+
+        class XClient:
+            def __init__(self):
+                self.calls = []
+
+            def search(self, query, _expected):
+                self.calls.append(query)
+                return {"text": '{"themes":[]}', "results": [], "annotation_urls": []}
+
+        parent = _parent(stage1=1, stage2=0, retry=0)
+        web_budget = Budget()
+        web_client = Tavily()
+        with self.assertRaisesRegex(paid_gateway.PaidProviderError, "plan query record"):
+            web.execute_live_web_orchestration(
+                queries=["off-plan"], expected_decision_date=DECISION_DATE,
+                tavily=web_client, deepseek_client=object(),
+                transport=_live_transport("tavily", "deepseek"), dispatch_budget=web_budget,
+                persist_search_response=_noop_persist, query_records=None, parent_plan=parent,
+            )
+        self.assertEqual(web_budget.calls, 0)
+        self.assertEqual(web_client.calls, [])
+
+        x_budget = Budget()
+        x_client = XClient()
+        with self.assertRaisesRegex(paid_gateway.PaidProviderError, "plan query record"):
+            xfetch.execute_live_x_orchestration(
+                queries=["off-plan"], expected_decision_date=DECISION_DATE,
+                client=x_client, dispatch_budget=x_budget,
+                transport=_live_transport("xai"), persist_response=_noop_persist,
+                query_records=None, parent_plan=parent,
+            )
+        self.assertEqual(x_budget.calls, 0)
+        self.assertEqual(x_client.calls, [])
+
+    def test_P5_live_orchestration_requires_a_concrete_transport_before_dispatch(self):
+        class Budget:
+            def __init__(self):
+                self.calls = 0
+
+            def dispatch_with_outcome(self, _provider, *, scope, stage, call):
+                del scope, stage, call
+                self.calls += 1
+                return plan_budget.DispatchOutcome(value=[])
+
+        web_budget = Budget()
+        with self.assertRaisesRegex(plan_budget.PlanBudgetError, "transport"):
+            web.execute_live_web_orchestration(
+                queries=["q"], expected_decision_date=DECISION_DATE,
+                tavily=object(), deepseek_client=object(), transport=None,
+                dispatch_budget=web_budget, persist_search_response=_noop_persist,
+                query_records=["q"], parent_plan=None,
+            )
+        self.assertEqual(web_budget.calls, 0)
+
+        x_budget = Budget()
+        with self.assertRaisesRegex(plan_budget.PlanBudgetError, "transport"):
+            xfetch.execute_live_x_orchestration(
+                queries=["q"], expected_decision_date=DECISION_DATE,
+                client=object(), dispatch_budget=x_budget, transport=None,
+                persist_response=_noop_persist, query_records=["q"], parent_plan=None,
             )
         self.assertEqual(x_budget.calls, 0)
 
@@ -957,8 +1155,9 @@ class PlanBudgetAcceptanceTests(unittest.TestCase):
         ):
             outcome = web.execute_live_web_orchestration(
                 queries=["q"], expected_decision_date=DECISION_DATE,
-                tavily=Tavily(), deepseek_client=object(), transport=object(),
+                tavily=Tavily(), deepseek_client=object(), transport=_live_transport("tavily", "deepseek"),
                 dispatch_budget=Budget(), persist_search_response=_noop_persist,
+                query_records=["q"], parent_plan=None,
             )
         self.assertEqual(outcome["results"], [])
 
@@ -993,13 +1192,15 @@ class PlanBudgetAcceptanceTests(unittest.TestCase):
         with self.assertRaisesRegex(plan_budget.PlanBudgetError, "dispatch_budget"):
             web.execute_live_web_orchestration(
                 queries=["q"], expected_decision_date=DECISION_DATE,
-                tavily=object(), deepseek_client=object(), transport=object(),
+                tavily=object(), deepseek_client=object(), transport=_live_transport("tavily", "deepseek"),
                 dispatch_budget=None, persist_search_response=_noop_persist,
+                query_records=["q"], parent_plan=None,
             )
         with self.assertRaisesRegex(plan_budget.PlanBudgetError, "dispatch_budget"):
             xfetch.execute_live_x_orchestration(
                 queries=["q"], expected_decision_date=DECISION_DATE,
-                client=object(), dispatch_budget=None, persist_response=_noop_persist,
+                client=object(), dispatch_budget=None, transport=_live_transport("xai"),
+                persist_response=_noop_persist, query_records=["q"], parent_plan=None,
             )
 
     def test_A4_hard_budget_is_derived_from_shared_provider_call_budget_and_relabel_is_rejected(self):
@@ -1172,6 +1373,256 @@ class PlanBudgetAcceptanceTests(unittest.TestCase):
                 source = inspect.getsource(method)
                 self.assertIn("mock.patch.object", source)
                 self.assertRegex(source, r"(?:plan_budget|web)\.")
+
+
+class _RecordingBudget:
+    """Records the stage of every charge so a test can prove a denial cost nothing."""
+
+    def __init__(self):
+        self.stages = []
+
+    def dispatch_with_outcome(self, _provider, *, scope, stage, call):
+        del scope
+        self.stages.append(stage)
+        return plan_budget.DispatchOutcome(value=call())
+
+
+class _RecordingTavily:
+    def __init__(self):
+        self.paid = []
+
+    def search(self, query):
+        self.paid.append(query)
+        return [{"url": f"https://example.com/{len(self.paid)}", "title": query,
+                 "content": "AAPL demand evidence", "published_date": "2026-08-07T10:00:00Z"}]
+
+
+class _RecordingDeepSeek:
+    """A WORKING regroup double: if Stage-2 is reached at all, it answers."""
+
+    def __init__(self):
+        self.paid = []
+        outer = self
+
+        class _Completions:
+            @staticmethod
+            def create(**kwargs):
+                outer.paid.append(kwargs.get("model"))
+                return {"choices": [{"message": {"content": '{"themes": []}'}}],
+                        "model": "deepseek-v4-flash", "system_fingerprint": "fp_test"}
+
+        class _Chat:
+            completions = _Completions()
+
+        self.chat = _Chat()
+
+
+class PlanGateDecisionTableTests(unittest.TestCase):
+    """The plan-bound money gate is a decision TABLE; these cases are generated from it.
+
+    Three consecutive rounds each bolted one more `if` onto `_validate_plan_bound_request`, and
+    each time a neighbouring cell was left wrong: a bare string under a plan was paid for, and
+    then the legitimate Stage-2 regroup was refused AFTER Stage-1 had already been paid.
+    Generating the cases from the same table the guard reads makes a forgotten combination show
+    up as a missing row here instead of as a paid-path defect one round later.
+    """
+
+    # Hand-authored expectation, deliberately NOT derived from the module under test. Comparing
+    # the engine table against itself only proves the code matches the table — self-review showed
+    # a WRONG cell (membership check flipped to allow) survived every other case in this class.
+    GOLDEN_DECISIONS = {
+        ("stage1", "absent", "bare"): "allow",
+        ("stage1", "absent", "record"): "deny_missing_plan",
+        ("stage1", "valid", "bare"): "deny_missing_record",
+        ("stage1", "valid", "record"): "verify_membership",
+        ("stage1", "malformed", "bare"): "deny_malformed_plan",
+        ("stage1", "malformed", "record"): "deny_malformed_plan",
+        ("stage2", "absent", "bare"): "allow",
+        ("stage2", "absent", "record"): "deny_stage1_only",
+        ("stage2", "valid", "bare"): "allow",
+        ("stage2", "valid", "record"): "deny_stage1_only",
+        ("stage2", "malformed", "bare"): "deny_malformed_plan",
+        ("stage2", "malformed", "record"): "deny_malformed_plan",
+    }
+
+    def test_P5_plan_gate_table_matches_the_hand_authored_expectation(self):
+        self.assertEqual(paid_gateway.PLAN_GATE_DECISIONS, self.GOLDEN_DECISIONS)
+
+    def test_P5_plan_gate_table_is_total_over_its_axes(self):
+        expected = {
+            (stage, plan, identity)
+            for stage in paid_gateway.PLAN_GATE_STAGES
+            for plan in paid_gateway.PLAN_GATE_PLAN_STATES
+            for identity in paid_gateway.PLAN_GATE_IDENTITIES
+        }
+        self.assertEqual(set(paid_gateway.PLAN_GATE_DECISIONS), expected)
+        known = {paid_gateway.PLAN_GATE_ALLOW, paid_gateway.PLAN_GATE_VERIFY_MEMBERSHIP}
+        known |= set(paid_gateway.PLAN_GATE_DENIAL_MESSAGES)
+        self.assertEqual(set(paid_gateway.PLAN_GATE_DECISIONS.values()) - known, set())
+
+    def test_P5_an_unknown_or_drifted_stage_label_is_denied_not_waved_through(self):
+        """A stage string outside the table must fail closed, not fall into a permissive bucket."""
+        parent = _parent()
+        for stage in ("stage2 ", "STAGE1", "stage1 ", "", "banana", "retry", "stage3"):
+            with self.subTest(stage=stage):
+                budget, client = _RecordingBudget(), _RecordingTavily()
+                gateway = paid_gateway.PaidDispatchGateway(budget, parent_plan=parent)
+                request = gateway._request("web", "scope", stage, lambda: client.search("x"))
+                with self.assertRaisesRegex(paid_gateway.PaidProviderError, "not a known plan-gate stage"):
+                    gateway._validate_plan_bound_request(request)
+                self.assertEqual(budget.stages, [])
+                self.assertEqual(client.paid, [])
+
+    def test_P5_identity_check_catches_an_in_flight_plan_mutation(self):
+        """The only thing the identity comparison can catch — so pin exactly that."""
+        parent = _parent()
+        record = query_plan.derive_stage1_query_records(parent)[0]
+        budget = _RecordingBudget()
+        gateway = paid_gateway.PaidDispatchGateway(budget, parent_plan=parent)
+        request = gateway._request(
+            "web", "scope", "stage1", lambda: None, query_id=record["query_id"],
+            query_text=record["query_text"], query_text_sha256=record["query_text_sha256"],
+        )
+        gateway._validate_plan_bound_request(request)          # unmutated: accepted
+        gateway._parent_plan = dict(parent, plan_identity="f" * 64)
+        with self.assertRaisesRegex(paid_gateway.PaidProviderError, "does not match the parent plan"):
+            gateway._validate_plan_bound_request(request)
+        self.assertEqual(budget.stages, [])
+
+    def test_P5_every_table_row_is_enforced_by_the_real_guard_before_any_charge(self):
+        parent = _parent()
+        record = query_plan.derive_stage1_query_records(parent)[0]
+        plans = {"absent": None, "valid": parent, "malformed": object()}
+        for (stage_axis, plan_axis, identity_axis), decision in sorted(
+            paid_gateway.PLAN_GATE_DECISIONS.items()
+        ):
+            with self.subTest(stage=stage_axis, plan=plan_axis, identity=identity_axis):
+                budget, client = _RecordingBudget(), _RecordingTavily()
+                gateway = paid_gateway.PaidDispatchGateway(budget, parent_plan=plans[plan_axis])
+                identity_kwargs = (
+                    {"query_id": record["query_id"], "query_text": record["query_text"],
+                     "query_text_sha256": record["query_text_sha256"]}
+                    if identity_axis == "record" else {}
+                )
+                request = gateway._request(
+                    "web", "scope", stage_axis, lambda: client.search("probe"), **identity_kwargs,
+                )
+                if decision in paid_gateway.PLAN_GATE_DENIAL_MESSAGES:
+                    with self.assertRaises(paid_gateway.PaidProviderError) as caught:
+                        gateway._validate_plan_bound_request(request)
+                    self.assertEqual(str(caught.exception),
+                                     paid_gateway.PLAN_GATE_DENIAL_MESSAGES[decision])
+                    self.assertEqual(budget.stages, [], "a denied cell must cost nothing")
+                    self.assertEqual(client.paid, [], "a denied cell must not reach the provider")
+                else:
+                    gateway._validate_plan_bound_request(request)
+
+    def test_P5_plan_gate_policy_lives_only_in_the_decision_table(self):
+        """The allow/deny decision must come from the table, not from a stage literal in the body.
+
+        SCOPE, stated honestly: this catches the two forms the guard historically regressed into —
+        a comparison against a stage string literal, and an early return before the table lookup.
+        It does NOT catch every conceivable re-accretion (`in PLAN_GATE_STAGES`, `startswith`,
+        `match/case`, a bare `return`); adversarial review confirmed each of those is caught by the
+        BEHAVIOURAL cases in this class instead. Do not read this as a complete creep barrier.
+        """
+        source = Path(paid_gateway.__file__).read_text(encoding="utf-8")
+        node = next(                                  # a METHOD, so walk (not just tree.body)
+            candidate for candidate in ast.walk(ast.parse(source))
+            if isinstance(candidate, (ast.FunctionDef, ast.AsyncFunctionDef))
+            and candidate.name == "_validate_plan_bound_request"
+        )
+        body = ast.get_source_segment(source, node) or ""
+        self.assertIn("plan_gate_decision(", body)
+
+        def stage_literal_creep(candidate: str) -> list[str]:
+            return [token for token in ('"stage1"', "'stage1'", '"stage2"', "'stage2'")
+                    if token in candidate]
+
+        self.assertEqual(stage_literal_creep(body), [],
+                         "a stage literal crept back into the guard body")
+        # PLANTED CONTROL: the detector must fire on a body that really did re-accrete the check.
+        # (A first cut asserted a literal against a string it had just concatenated that literal
+        # into — true for every input, i.e. a tautology. Feed the DETECTOR a crept body instead.)
+        for crept in ('    if request.stage == "stage2":\n        return\n',
+                      "    if request.stage != 'stage1':\n        return\n"):
+            self.assertTrue(stage_literal_creep(crept),
+                            "the detector cannot observe a reintroduced stage comparison")
+        self.assertEqual(stage_literal_creep("    return None\n"), [],
+                         "false-positive control: an unrelated body must stay clean")
+
+    def test_P5_live_plan_run_reaches_stage2_regroup_after_stage1_is_paid(self):
+        """FORCED-LEG POSITIVE CONTROL: tightening the gate must not brick the legitimate path.
+
+        Every other case in this class asserts a denial. Without this one, refusing the Stage-2
+        regroup (which carries no plan query id BY DESIGN) kept the whole lane pack green while a
+        real live run paid for every Tavily call and then died before regrouping.
+        """
+        parent = _parent()
+        records = query_plan.derive_stage1_query_records(parent)
+        budget, tavily, deepseek = _RecordingBudget(), _RecordingTavily(), _RecordingDeepSeek()
+        outcome = web.execute_live_web_orchestration(
+            queries=[row["query_text"] for row in records], expected_decision_date=DECISION_DATE,
+            tavily=tavily, deepseek_client=deepseek,
+            transport=_live_transport("tavily", "deepseek"), dispatch_budget=budget,
+            persist_search_response=_noop_persist, query_records=records, parent_plan=parent,
+        )
+        self.assertEqual(budget.stages, ["stage1"] * len(records) + ["stage2"])
+        self.assertEqual(len(tavily.paid), len(records))
+        self.assertEqual(len(deepseek.paid), 1, "the Stage-2 regroup must actually run")
+        self.assertTrue(outcome["regroup_attempted"])
+
+    def test_P5_live_orchestration_refuses_a_missing_or_foreign_transport(self):
+        """Named control for the transport guard, which shipped with no test at all."""
+        parent = _parent()
+        records = query_plan.derive_stage1_query_records(parent)
+        for label, transport in (("none", None), ("duck", object())):
+            with self.subTest(lane="web", transport=label):
+                budget = _RecordingBudget()
+                with self.assertRaisesRegex(plan_budget.PlanBudgetError, "transport is required"):
+                    web.execute_live_web_orchestration(
+                        queries=[records[0]["query_text"]], expected_decision_date=DECISION_DATE,
+                        tavily=_RecordingTavily(), deepseek_client=_RecordingDeepSeek(),
+                        transport=transport, dispatch_budget=budget,
+                        persist_search_response=_noop_persist,
+                        query_records=records, parent_plan=parent,
+                    )
+                self.assertEqual(budget.stages, [])
+            with self.subTest(lane="x", transport=label):
+                budget = _RecordingBudget()
+                with self.assertRaisesRegex(plan_budget.PlanBudgetError, "transport is required"):
+                    xfetch.execute_live_x_orchestration(
+                        queries=[records[0]["query_text"]], expected_decision_date=DECISION_DATE,
+                        client=object(), dispatch_budget=budget, transport=transport,
+                        persist_response=_noop_persist,
+                        query_records=records, parent_plan=parent,
+                    )
+                self.assertEqual(budget.stages, [])
+
+    def test_P5_the_off_plan_denial_cell_is_load_bearing(self):
+        """Flipping ONLY that cell to `allow` must let the paid call through.
+
+        The previous round closed this hole with a line no test covered: restoring the old
+        permissive behaviour left every lane test green.
+        """
+        parent = _parent()
+        cell = ("stage1", "valid", "bare")
+        self.assertEqual(paid_gateway.PLAN_GATE_DECISIONS[cell], "deny_missing_record")
+        budget, client = _RecordingBudget(), _RecordingTavily()
+        gateway = paid_gateway.PaidDispatchGateway(budget, parent_plan=parent)
+        with self.assertRaises(paid_gateway.PaidProviderError):
+            gateway.dispatch_web_search_all(
+                client, ["off-plan text"], persist_response=_noop_persist,
+            )
+        self.assertEqual(client.paid, [])
+        flipped = dict(paid_gateway.PLAN_GATE_DECISIONS)
+        flipped[cell] = paid_gateway.PLAN_GATE_ALLOW
+        with mock.patch.object(paid_gateway, "PLAN_GATE_DECISIONS", flipped):
+            gateway.dispatch_web_search_all(
+                client, ["off-plan text"], persist_response=_noop_persist,
+            )
+        self.assertEqual(client.paid, ["off-plan text"],
+                         "that cell must be what stops the payment")
 
 
 if __name__ == "__main__":

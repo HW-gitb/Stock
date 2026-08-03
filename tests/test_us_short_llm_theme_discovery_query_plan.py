@@ -1,6 +1,7 @@
 """Offline acceptance tests for the A1 query-plan contract."""
 from __future__ import annotations
 
+import hashlib
 import json
 from pathlib import Path
 import tempfile
@@ -114,6 +115,81 @@ class QueryPlanContractTests(unittest.TestCase):
         broken["canonical_plan_core"]["provider_envelopes"][0]["max_dispatch_count"] += 1
         with self.assertRaises(query_plan.QueryPlanError):
             query_plan.validate_parent_plan(broken)
+
+    def test_stage1_records_and_provider_envelope_are_derived_from_parent_plan(self):
+        parent = self._build_parent()
+        records = query_plan.derive_stage1_query_records(parent)
+        self.assertEqual([row["query_id"] for row in records], ["stage1-a", "stage1-b"])
+        self.assertEqual({row["stage"] for row in records}, {"stage1"})
+        self.assertEqual(
+            records[0]["query_text_sha256"],
+            hashlib.sha256(records[0]["query_text"].encode("utf-8")).hexdigest(),
+        )
+        envelope = query_plan.derive_stage1_provider_envelope(parent, provider="web")
+        self.assertEqual(envelope["stage1_max_dispatch_count"], len(records))
+        with self.assertRaisesRegex(query_plan.QueryPlanError, "requires parent plan artifact"):
+            query_plan.build_stage1_plan_binding(parent, provider="web")
+
+        broken = json.loads(json.dumps(parent))
+        broken["canonical_plan_core"]["provider_envelopes"][0]["stage1_max_dispatch_count"] = 1
+        broken["canonical_plan_core"]["provider_envelopes"][0]["max_dispatch_count"] = 4
+        broken["plan_identity"] = query_plan._digest(broken["canonical_plan_core"])
+        query_plan.validate_parent_plan(broken)
+        with self.assertRaisesRegex(query_plan.QueryPlanError, "must equal"):
+            query_plan.derive_stage1_provider_envelope(broken, provider="web")
+
+    def test_stage1_query_texts_are_unique_even_when_ids_differ(self):
+        for texts in (
+            ["same query", "same query"],
+            ["same  query", "same query"],
+        ):
+            with self.subTest(texts=texts):
+                with self.assertRaisesRegex(query_plan.QueryPlanError, "query texts must be unique"):
+                    query_plan.build_parent_plan(
+                        decision_date=DECISION_DATE,
+                        policy_version="soft_discovery_query_policy_v0.1.0",
+                        policy_template_content_sha256="a" * 64,
+                        stage1_queries=[
+                            {"query_id": "stage1-a", "query_text": texts[0]},
+                            {"query_id": "stage1-b", "query_text": texts[1]},
+                        ],
+                        stage2_rule_sha256="b" * 64,
+                        provider_envelopes=_envelopes(),
+                        generated_at=STAMP,
+                    )
+
+    def test_read_parent_plan_carries_artifact_binding_into_stage1_receipt_binding(self):
+        with tempfile.TemporaryDirectory() as raw:
+            root = Path(raw)
+            state = root / "state" / "us_short"
+            parent = self._build_parent()
+            path = state / (
+                f"us_short_llm_theme_discovery_query_plan_parent_{DECISION_DATE}_{parent['plan_identity']}.json"
+            )
+            query_plan.write_parent_plan(
+                parent, path, state_dir=state, root=root, gitignored=lambda _path: True,
+            )
+            loaded, artifact_sha256, artifact_path = query_plan.read_parent_plan(path, root=root)
+            binding = query_plan.build_stage1_plan_binding(loaded, provider="web")
+            self.assertEqual(binding["parent_plan_artifact"], {
+                "path": artifact_path,
+                "sha256": artifact_sha256,
+            })
+            with self.assertRaisesRegex(query_plan.QueryPlanError, "requires parent plan artifact"):
+                query_plan.build_stage1_plan_binding(dict(loaded), provider="web")
+
+    def test_read_parent_plan_rejects_a_noncanonical_decision_slot(self):
+        with tempfile.TemporaryDirectory() as raw:
+            root = Path(raw)
+            parent = self._build_parent()
+            wrong_path = root / "state" / "us_short" / "wrong-parent.json"
+            with mock.patch.object(
+                query_plan,
+                "_read_artifact",
+                return_value=(parent, "c" * 64, "state/us_short/wrong-parent.json"),
+            ):
+                with self.assertRaisesRegex(query_plan.QueryPlanError, "canonical decision slot"):
+                    query_plan.read_parent_plan(wrong_path, root=root)
 
     def test_artifact_symlink_guard_runs_before_resolution(self):
         with tempfile.TemporaryDirectory() as raw:

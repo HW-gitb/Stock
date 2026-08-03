@@ -24,6 +24,7 @@ if str(ROOT) not in sys.path:
 from engine.us_short_persisted_text_safety import persisted_text_violation
 from engine import us_short_llm_theme_discovery_plan_budget as plan_budget
 from engine import us_short_llm_theme_discovery_paid_gateway as paid_gateway
+from engine import us_short_llm_theme_discovery_query_plan as query_plan
 from engine.us_short_llm_theme_discovery_provider_policy import MAX_X_QUERIES
 from runners import us_short_llm_theme_discovery_fetch_web as web
 from engine.us_short_schema_formats import FORMAT_CHECKER
@@ -69,7 +70,9 @@ def _parse_dt(value: Any, field: str) -> datetime:
     return web._parse_dt(value, field=field)
 
 
-def _safe_queries(queries: list[str] | tuple[str, ...]) -> list[str]:
+def _safe_queries(
+    queries: list[str] | tuple[str, ...], *, deduplicate: bool = True,
+) -> list[str]:
     if not isinstance(queries, (list, tuple)) or not queries or len(queries) > MAX_X_QUERIES:
         raise XThemeDiscoveryError("X query budget must contain 1-15 queries")
     out: list[str] = []
@@ -77,7 +80,7 @@ def _safe_queries(queries: list[str] | tuple[str, ...]) -> list[str]:
         query = web._safe_text(raw, limit=300)
         if not query or web.SECRET_RE.search(query):
             raise XThemeDiscoveryError("query is empty or secret-like")
-        if query not in out:
+        if not deduplicate or query not in out:
             out.append(query)
     return out
 
@@ -737,9 +740,10 @@ def build_x_fetch_packet(
     grok_attempted: bool = False,
     grok_failed: bool = False,
     budget_aborted: bool = False,
+    plan_binding: dict[str, Any] | None = None,
     _pending_raw_writes: list[tuple[Path, dict[str, Any]]] | None = None,
 ) -> tuple[dict[str, Any], dict[str, Any], dict[str, Any]]:
-    queries = _safe_queries(queries)
+    queries = _safe_queries(queries, deduplicate=plan_binding is None)
     generated = _parse_dt(generated_at, "generated_at")
     _guard_generated_before_open(generated, expected_decision_date)
     fetched = _parse_dt(fetched_at, "fetched_at") if fetched_at else generated
@@ -842,6 +846,8 @@ def build_x_fetch_packet(
         "discovery_artifact_sha256": web._discovery_evidence_hash(discovery), "drop_ledger": drops,
         "summary": {"query_count": len(queries), "accepted_source_count": len(refs), "validated_theme_count": len(discovery["themes"]), "validated_member_count": sum(len(t["members"]) for t in discovery["themes"]), "dropped_result_count": len(drops)},
     }
+    if plan_binding is not None:
+        receipt["plan_binding"] = dict(plan_binding)
     # Persist every paid response/source raw before validating the receipt's evidence index.  A
     # completion failure must therefore leave replayable bytes or a visible write-door error, not
     # a receipt that passed against an only-in-memory pending list.
@@ -889,8 +895,10 @@ def _capture_x_reply(reply: Any, raw_provider_responses: list[dict[str, Any]]) -
 
 def execute_live_x_orchestration(
     *, queries: list[str], expected_decision_date: str, client: Any,
-    dispatch_budget: Any, transport: Any | None = None,
+    dispatch_budget: Any, transport: paid_gateway.LiveTransport,
     persist_response: Callable[[paid_gateway.PaidDispatchRequest, Any], Any],
+    query_records: list[str] | list[dict[str, str]],
+    parent_plan: Mapping[str, Any] | None,
 ) -> dict[str, Any]:
     """The live X orchestration, split out so tests can EXECUTE it (same reason as the web lane).
 
@@ -903,7 +911,11 @@ def execute_live_x_orchestration(
         raise plan_budget.PlanBudgetError(
             "persist_response is required for live X orchestration"
         )
-    gateway = paid_gateway.PaidDispatchGateway(dispatch_budget)
+    if not isinstance(transport, paid_gateway.LiveTransport):
+        raise plan_budget.PlanBudgetError(
+            "transport is required for live X orchestration"
+        )
+    gateway = paid_gateway.PaidDispatchGateway(dispatch_budget, parent_plan=parent_plan)
     results: list[dict[str, Any]] = []
     annotation_urls: list[str] = []
     grok_texts: list[str] = []
@@ -935,14 +947,15 @@ def execute_live_x_orchestration(
         return captured
 
     stage1_batch = gateway.dispatch_x_search_all(
-        client, queries, expected_decision_date=expected_decision_date,
+        client, query_records,
+        expected_decision_date=expected_decision_date,
         transport=transport,
         capture_response=lambda _request, reply: _capture_x_reply(reply, raw_provider_responses),
         persist_response=persist_response,
         consume_response=consume_x,
     )
     for item in stage1_batch.items:
-        query = item.request.scope
+        query = item.request.query_text or item.request.scope
         if item.outcome.call_error is not None:
             budget_failure = plan_budget.coerce_budget_error(item.outcome.call_error)
             if budget_failure is not None:
@@ -999,16 +1012,34 @@ def execute_live_x_orchestration(
         "grok_model_identity": {**model_identity, "system_fingerprints": sorted(set(fingerprints))},
         "grok_attempted": grok_attempted, "grok_failed": grok_attempted and not grok_texts,
         "budget_error": fatal_budget_error,
+        "stage1_dispatch_count": len(stage1_batch.items),
+        "stage1_queries": [item.request.query_text for item in stage1_batch.items],
     }
 
 
 # `raw_root=None` resolves to DEFAULT_RAW_ROOT at CALL time (both branches below); binding the
 # default into the signature defeats the `mock.patch.object(module, "DEFAULT_RAW_ROOT", tmp)`
 # isolation seam and sends offline test writes into the real gitignored raw root.
-def _run_x_fetch(*, queries: list[str] | tuple[str, ...], expected_decision_date: str, generated_at: str, x_client: Any | None = None, confirm_user_authorization: bool = False, live: bool = False, raw_root: Path | None = None, # Class-A allowlist: offline_fake_client has no A1 plan; live uses the registered raw root before credentials.
+def _run_x_fetch(*, queries: list[str] | tuple[str, ...] | None, expected_decision_date: str, generated_at: str, x_client: Any | None = None, confirm_user_authorization: bool = False, live: bool = False, raw_root: Path | None = None, # Class-A allowlist: offline_fake_client has no A1 plan; live uses the registered raw root before credentials.
                  parent_plan: Mapping[str, Any] | None = None, _new_transport: Callable[..., object] = _new_live_transport, _issue_ticket: Callable[[], object] = _issue_live_ticket, _revoke_ticket: Callable[[object], None] = _revoke_live_ticket):
-    queries = _safe_queries(queries)
     web._decision_date(expected_decision_date)
+    plan_query_records: list[dict[str, str]] | None = None
+    plan_binding: dict[str, Any] | None = None
+    if parent_plan is not None:
+        caller_queries = None if queries is None else _safe_queries(queries)
+        try:
+            derived_queries, plan_query_records, plan_binding = query_plan.resolve_stage1_plan_binding(
+                parent_plan, provider="xai",
+            )
+        except query_plan.QueryPlanError as exc:
+            raise XThemeDiscoveryError(f"parent plan query binding is invalid: {exc}") from exc
+        if caller_queries is not None and caller_queries != derived_queries:
+            raise XThemeDiscoveryError("caller query set does not match the parent plan")
+        queries = derived_queries
+    if queries is None:
+        raise XThemeDiscoveryError("offline execution requires queries or a parent plan")
+    if parent_plan is None:
+        queries = _safe_queries(queries)
     if live:
         if not confirm_user_authorization:
             raise XThemeDiscoveryError("live execution requires --confirm-user-authorization")
@@ -1018,6 +1049,8 @@ def _run_x_fetch(*, queries: list[str] | tuple[str, ...], expected_decision_date
             raise XThemeDiscoveryError(
                 "live execution requires an A1 parent plan for the plan-level budget"
             )
+        if plan_query_records is None or plan_binding is None:
+            raise XThemeDiscoveryError("live execution requires plan-derived Stage-1 queries")
         plan_budget.validate_run_decision_date(parent_plan, expected_decision_date)
         raw_root = web._validate_raw_root(raw_root or DEFAULT_RAW_ROOT, require_gitignored=True)
         api_key = _require_single_xai_api_key(os.environ.get("XAI_API_KEY", ""))
@@ -1031,18 +1064,22 @@ def _run_x_fetch(*, queries: list[str] | tuple[str, ...], expected_decision_date
         outcome = execute_live_x_orchestration(
             queries=queries, expected_decision_date=expected_decision_date, client=client,
             dispatch_budget=dispatch_budget, transport=transport,
+            query_records=plan_query_records, parent_plan=parent_plan,
             persist_response=lambda request, captured: _persist_live_x_response(
                 request, captured, raw_root=raw_root, expected_decision_date=expected_decision_date,
             ),
         )
         fetched_now = outcome["fetched_at"]
         budget_error = outcome.get("budget_error")
+        dispatched_queries = outcome["stage1_queries"]
         ticket = _issue_ticket()
         try:
-            packet = build_x_fetch_packet(queries=queries, results=outcome["results"], grok_response=outcome["grok_response"], expected_decision_date=expected_decision_date, generated_at=fetched_now.isoformat(), fetched_at=fetched_now.isoformat(), raw_root=raw_root, persist_raw=True, execution_mode="live_authorized", _live_transport=transport, _live_ticket=ticket, extra_drop_ledger=outcome["query_drops"], provider_annotation_urls=outcome["annotation_urls"], raw_provider_responses=outcome.get("raw_provider_responses", []), grok_model_identity=outcome["grok_model_identity"], grok_attempted=outcome["grok_attempted"], grok_failed=outcome["grok_failed"], budget_aborted=budget_error is not None)
+            discovery, receipt, summary = build_x_fetch_packet(queries=dispatched_queries, results=outcome["results"], grok_response=outcome["grok_response"], expected_decision_date=expected_decision_date, generated_at=fetched_now.isoformat(), fetched_at=fetched_now.isoformat(), raw_root=raw_root, persist_raw=True, execution_mode="live_authorized", _live_transport=transport, _live_ticket=ticket, extra_drop_ledger=outcome["query_drops"], provider_annotation_urls=outcome["annotation_urls"], raw_provider_responses=outcome.get("raw_provider_responses", []), grok_model_identity=outcome["grok_model_identity"], grok_attempted=outcome["grok_attempted"], grok_failed=outcome["grok_failed"], budget_aborted=budget_error is not None, plan_binding=plan_binding)
+            if receipt["summary"]["query_count"] != outcome["stage1_dispatch_count"]:
+                raise XThemeDiscoveryError("X receipt query_count does not match Stage-1 dispatch count")
         finally:
             _revoke_ticket(ticket)
-        return packet
+        return discovery, receipt, summary
     if x_client is None:
         raise XThemeDiscoveryError("offline mode requires an injected fake X client")
     paid_gateway.require_offline_fake_client(x_client)
@@ -1070,12 +1107,12 @@ def _run_x_fetch(*, queries: list[str] | tuple[str, ...], expected_decision_date
         ]
     # K3-R64: fake-client output is not exempt from the raw-content gate.
     offline_raw_root = web._validate_raw_root(raw_root or DEFAULT_RAW_ROOT, require_gitignored=True)
-    return build_x_fetch_packet(queries=queries, results=results, grok_response=combined, expected_decision_date=expected_decision_date, generated_at=generated_at, raw_root=offline_raw_root, persist_raw=True, provider_annotation_urls=annotation_urls, extra_drop_ledger=query_drops + response_drops)
+    return build_x_fetch_packet(queries=queries, results=results, grok_response=combined, expected_decision_date=expected_decision_date, generated_at=generated_at, raw_root=offline_raw_root, persist_raw=True, provider_annotation_urls=annotation_urls, extra_drop_ledger=query_drops + response_drops, plan_binding=plan_binding)
 
 
 def _bind_live_runner(run_impl: Callable[..., Any], new_transport: Callable[..., object], issue_ticket: Callable[[], object], revoke_ticket: Callable[[object], None]) -> Callable[..., Any]:
     """Bind normal-path bookkeeping here; closure placement is not an authorization boundary."""
-    def runner(*, queries: list[str] | tuple[str, ...], expected_decision_date: str, generated_at: str, x_client: Any | None = None, confirm_user_authorization: bool = False, live: bool = False, raw_root: Path | None = None, # Same Class-A allowlist: offline mode may omit the plan; raw_root stays call-time resolved.
+    def runner(*, queries: list[str] | tuple[str, ...] | None, expected_decision_date: str, generated_at: str, x_client: Any | None = None, confirm_user_authorization: bool = False, live: bool = False, raw_root: Path | None = None, # Same Class-A allowlist: offline mode may omit the plan; raw_root stays call-time resolved.
                 parent_plan: Mapping[str, Any] | None = None):
         return run_impl(queries=queries, expected_decision_date=expected_decision_date, generated_at=generated_at, x_client=x_client, confirm_user_authorization=confirm_user_authorization, live=live, raw_root=raw_root, parent_plan=parent_plan, _new_transport=new_transport, _issue_ticket=issue_ticket, _revoke_ticket=revoke_ticket)
     return runner
@@ -1138,7 +1175,8 @@ def _combine_grok_responses(responses: list[str]) -> tuple[str, list[dict[str, s
 
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description="Run bounded US-short Grok native-X discovery.")
-    parser.add_argument("--query", action="append", required=True)
+    parser.add_argument("--query", action="append")
+    parser.add_argument("--parent-plan", type=Path)
     parser.add_argument("--expected-decision-date", required=True)
     parser.add_argument("--generated-at", required=True)
     parser.add_argument("--live", action="store_true")
@@ -1151,6 +1189,21 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--raw-root", type=Path, default=DEFAULT_RAW_ROOT)
     args = parser.parse_args(argv)
     web._decision_date(args.expected_decision_date)
+    parent_plan = None
+    if args.parent_plan is not None:
+        try:
+            parent_plan, _parent_plan_sha256, _parent_plan_relative_path = query_plan.read_parent_plan(
+                args.parent_plan, root=ROOT, state_dir=STATE_DIR,
+            )
+        except query_plan.QueryPlanError as exc:
+            raise SystemExit(f"parent plan is invalid: {exc}") from exc
+    if args.live:
+        if parent_plan is None:
+            raise SystemExit("live mode requires --parent-plan")
+        if args.query is not None:
+            raise SystemExit("live mode accepts queries only from --parent-plan")
+    elif parent_plan is None and not args.query:
+        raise SystemExit("offline mode requires --query or --parent-plan")
     raw_root = web._validate_cli_raw_root(args.raw_root, DEFAULT_RAW_ROOT, live=args.live)
     discovery_output, receipt_output = web._decision_publish_paths(
         args.discovery_output or default_discovery_path(args.expected_decision_date),
@@ -1161,9 +1214,9 @@ def main(argv: list[str] | None = None) -> int:
     if args.live:
         try:
             discovery, receipt, summary = run_x_fetch(
-                queries=args.query, expected_decision_date=args.expected_decision_date,
+                queries=None, expected_decision_date=args.expected_decision_date,
                 generated_at=args.generated_at, confirm_user_authorization=args.confirm_user_authorization,
-                live=True, raw_root=raw_root,
+                live=True, raw_root=raw_root, parent_plan=parent_plan,
             )
         except paid_gateway.PaidEvidenceUnavailableError as exc:
             # Mirror of the web lane: the one terminal state that leaves no artifact still leaves
@@ -1194,8 +1247,9 @@ def main(argv: list[str] | None = None) -> int:
         discovery, receipt, summary = run_x_fetch(
             queries=args.query, expected_decision_date=args.expected_decision_date,
             generated_at=args.generated_at, x_client=_CliFake(), live=False,
+            raw_root=raw_root, parent_plan=parent_plan,
         )
-    if summary.get("status") == "live_authorized_budget_aborted":
+    if web.is_diagnostic_only_execution_status(summary.get("status")):
         web.publish_budget_abort_diagnostic(
             "x", args.expected_decision_date,
             packet=discovery, receipt=receipt, summary=summary,

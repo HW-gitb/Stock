@@ -16,6 +16,10 @@ ROOT = Path(__file__).resolve().parent.parent
 PROTECTED_PRIVATE_ROOTS = {
     "state/us_short": ROOT / "state" / "us_short",
     "provider_samples": ROOT / "provider_samples",
+    "docs": ROOT / "docs",
+    "presets": ROOT / "presets",
+    "schemas": ROOT / "schemas",
+    "research": ROOT / "research",
 }
 INITIAL_PRIVATE_FILES = {
     label: frozenset(path.relative_to(root).as_posix() for path in root.rglob("*") if path.is_file())
@@ -48,9 +52,11 @@ class LaneResidueConformance(unittest.TestCase):
                     f"{label} grew during tests: a test or probe left gitignored private evidence",
                 )
 
-    def test_provider_samples_is_a_protected_root(self):
-        """Deleting the raw-evidence root from the pack predicate must turn this control red."""
-        self.assertEqual(PROTECTED_PRIVATE_ROOTS.get("provider_samples"), ROOT / "provider_samples")
+    def test_required_private_and_tracked_roots_are_protected(self):
+        """Deleting a tracked output root from the pack predicate must turn this control red."""
+        for label in ("provider_samples", "state/us_short", "docs", "presets", "schemas", "research"):
+            with self.subTest(root=label):
+                self.assertEqual(PROTECTED_PRIVATE_ROOTS.get(label), ROOT / label)
 
     def test_growth_predicate_dies_in_a_temporary_root(self):
         with TemporaryDirectory() as td:

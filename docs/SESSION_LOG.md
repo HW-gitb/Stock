@@ -280,6 +280,88 @@
 - **Required**: 无；Register: `R-ASHORT-M05-TRADE-CAL-FUND-DAILY-EQUALITY-GATE-BLOCKS-EVERY-LIVE-WEEKLY-RUN` 已 closed，另记三条不阻断 Optional（新增的 `series[-1] == realized_end` 与 builder 可用日定义不同源、尾巴长度无上界、执行方本轮未落 `修复` entry 故其 focused 证据 NOT_VERIFIED），正文只见 `docs/system_risk_register.md` 顶部（单一来源，本处不复述）。
 - **Verify**: review-evidence:ad7a973cd680；超时原因:执行方在我第一次全量的末段又落了三处读点共 4 个文件，首轮全量证据作废、必须按最终代码态再跑一次 333.6s。按 rule ② 唯一入口对最终代码态全量 `RESULT status=PASS exit=0 tests=2274 elapsed=333.6s deadline=860s`，`2269→2274` 的 `+5` 恰等于三个 IV feed 新用例加两个读点新用例；首轮 `PASS 2272 / 350.7s` 因执行方在其末段又落三处读点共 4 个文件被 ledger 判 code-state-changed 不予记账，故按最终态重跑一次。reviewer 自写探针 13 条全绿，生产形态（as_of 尾巴）经 schema+consistency 两道门放行。
 - **Next**: Codex：执行桌面清单第 3 条（`margin_coverage` 的 `universe_size=0`）。
+## 2026-08-03 — Claude 修复（P5 第四刀，用户令 reviewer 亲自执行 + 子 agent 自审）
+
+- **Verdict/Action**: 三条 Required 全闭：stage-2 regroup 不再被误伤、堵洞那格与 transport 守卫各有承重反控、非 Mapping 计划 fail closed。付费门从「摞 if」改成 12 格总表 + 手写 golden 比对 + 强制腿正向控制。写码与自审同一方，故**未提交未合并**，独立审查仍是必经门。
+- **Required**: `R-USSHORT-P5-PLAN-GUARD-BRICKS-THE-STAGE2-REGROUP-AFTER-STAGE1-IS-PAID`、`R-USSHORT-P5-HEADLINE-PLAN-GUARD-AND-TRANSPORT-GUARD-HAVE-NO-PLANTED-CONTROL`、`R-USSHORT-P5-PLAN-GUARD-DEGRADES-OPEN-ON-A-NON-MAPPING-PLAN` — 闭合取证、两轮子 agent 发现与处置、三条 Optional 见 `system_risk_register.md`(单一来源)。
+- **Verify**: review-evidence:acbdc588e17e（executor 视角）；超时原因:两轮自审 agent + 三次全量（其中一次输出被我截断需重跑）。affected focused `294 OK/37.1s`；全量 `Ran 5174 tests in 456.078s — OK`，ledger `PASS/457.2s/deadline=860s`，fingerprint `c384fb90cacd`，`5165→5174` 恰为新增 9 条用例。探针：live+plan → `['stage1','stage1','stage2']` 且 regroup 真跑；漂移 stage 四形态全拒；非 Mapping 三形态 `billed=0`；翻任一承重格 `RED≥1`。残留 `state/us_short` 0 文件、`provider_samples` 2 个不变。
+- **Pre-Codex self-review**: `matrix=stage-axis + golden-table + creep-control + identity-branch complete; register=updated; handoff=updated; focused=294 OK; full-lane=5174 OK/456.078s/fingerprint=c384fb90cacd; door=doc-governance 41 OK + conformance 29 OK + git diff --check; independent-review=two adversarial sub-agents, round 2 found no behavioural red; 未证实项=一次中途全量在 2468 转红但输出被截断、身份未捕获且已不可复现`
+- **Next**: 用户：如需合入，请下 `审查`（本刀不自证提交）。
+
+## 2026-08-03 — Claude 审查 FAIL（P5 第三刀：洞真堵上了，但把 live 通道夹死在付费之后）
+
+- **Verdict/Action**: FAIL，不提交不合入。上轮那条 P1 运行时确实关掉（同一探针 `billed=0/paid=0`），四条处方落地、派生式谓词是真派生。但守卫不分 stage，把网关自己构造的合法 stage-2 regroup 一并拒了：真 live 是「Tavily 钱付完再崩在 regroup 前」；堵洞那行还没有任何点名控制。
+- **Required**: `R-USSHORT-P5-PLAN-GUARD-BRICKS-THE-STAGE2-REGROUP-AFTER-STAGE1-IS-PAID`(P1)、`R-USSHORT-P5-HEADLINE-PLAN-GUARD-AND-TRANSPORT-GUARD-HAVE-NO-PLANTED-CONTROL`(P1)、`R-USSHORT-P5-PLAN-GUARD-DEGRADES-OPEN-ON-A-NON-MAPPING-PLAN`(P2) — 正文、类扫与三条 Optional 见 `system_risk_register.md`(单一来源)。
+- **Verify**: review-evidence:d85efa2f9f0a；超时原因:等 §6a agent 报告后逐条自跑复现，中途发现 stage-2 回归需另写探针。全量 rule 4 引用 `CACHED GREEN 5165 OK`；doc gates 见下一条 entry。探针：带 plan 跑 live 编排 → `['stage1','stage1']` 付 2 次后抛错，无 plan 对照 → `['stage1','stage1','stage2']` 跑完；植回 pre-patch 原体 → `ran=183 failures=0`；`transport is required for live` 在 tests 命中 0；非 Mapping plan 三形态均 `NO RAISE billed=1`；新加任意关键字 → 派生谓词转红。
+- **Next**: Codex：修复 P5 第四刀（守卫加 stage 条件 + 正向控制 + 两条守卫补执行式反控 + 非 Mapping plan fail closed）。
+
+## 2026-08-03 — Codex 修复（P5 第三刀，待独立复审）
+
+- **Verdict/Action**: The latest FAIL is valid. The repair is implemented in the current worktree; no commit, merge, push, provider, network, live, paid, or credential action occurred. Required remains `OPEN/NOT_VERIFIED` pending Claude Code independent review.
+- **Required**: `R-USSHORT-P5-GATEWAY-SKIPS-THE-PLAN-WHEN-THE-CALLER-OMITS-QUERY-RECORDS` repaired as a class: gateway rejects missing plan query records before iteration/budget, both live orchestration signatures require paid-path keywords, concrete transport is runtime-checked, and the derived AST predicate rejects any optional keyword default. Canonical parent-plan slot reads and artifact-only binding are also enforced.
+- **Verify**: `review-evidence:NOT_VERIFIED`; focused `250 OK`; full lane `5165 OK / 687.028s`, ledger `PASS / 688.2s / deadline=860s`, fingerprint=`6d7593977d13`; `py_compile=OK`; `git diff --check=OK`; `state/us_short` 与 `provider_samples` 前后 bytes/mtime/SHA 快照不变；无 provider/network/live/paid。Optional 处置见 register 同节。超时原因:含一次 688.2 秒全量与文档收口。
+- **Pre-Codex self-review**: `matrix=class-D paid-keyword closure + gateway pre-dispatch rejection + canonical-slot/artifact binding + inventory-sync; register=updated; handoff=updated; focused=250 OK; full-lane=5165 OK/687.028s/ledger elapsed 688.2s/deadline 860s/fingerprint=6d7593977d13; door=route-doc/review-tiering 85 OK + py_compile + diff-check + residue-mtime-SHA snapshot; independent-review=not_used`. 超时原因: 本轮包含一次 688.2 秒受限全量、全量后快照和文档收口，超过 review-cycle 墙钟预算。
+- **Next**: Claude Code：独立审查当前 P5 third knife；通过后按 reviewer/committer 规则提交，未经授权不得 push/merge。
+
+## 2026-08-03 — Claude 审查 FAIL（P5 第二刀复审：三类真封，网关在调用方省参时把计划当摆设）
+
+- **Verdict/Action**: FAIL，不提交不合入。上一条 Required（inventory）与两个类级项（证据出处、tracked 根残留）实测真闭；卡住的是我与独立 agent 各自独立打到的同一处——`execute_live_web_orchestration` 省 `query_records` 时带合法 parent plan 也付计划外的钱，属 A4 已闭过的「默认值即钱路」类复发。桌面两份件已按真实代码态更新。
+- **Required**: `R-USSHORT-P5-GATEWAY-SKIPS-THE-PLAN-WHEN-THE-CALLER-OMITS-QUERY-RECORDS`(P1) — 正文、类 D 类扫表、四条 Optional 与「已核实真闭」清单见 `system_risk_register.md`(单一来源)。
+- **Verify**: review-evidence:4ce51e10a73e；超时原因:先审桌面文档、用户改口后重做代码审查，并等 §6a agent 报告后自跑复现。全量按 rule 4 引用 `CACHED GREEN 5161 OK`（fingerprint `e8d5b7b6…`）；doc gates `41 OK`。探针：省 records → 付 2 次计划外调用；传 plan-derived → 只打计划内两条；伪造 record → 0 次即拒；三种拷贝 binding 全 fail closed；schema 删 `parent_plan_artifact` 被拒；诊断谓词植入变异令点名测试转红；四个新 tracked 根各植入残留 `failures=4` 且已清。
+- **Next**: Codex：修复 P5 第三刀（网关侧兜底 + 钱路参数必填 + 两条点名反控），命令见 handoff 末节。
+
+## 2026-08-03 — Claude 审查 FAIL（桌面两份软发现文档 vs 真实代码态：一条说反了、一类滞后一轮）
+
+- **Verdict/Action**: FAIL。纯文档一致性审查，零代码改动、不提交不合入（工作树另有 Codex 未复审的 P5 修复，按 scope gate 不碰）。桌面件对 reviewer 只读，更正一律落 register。两份文档把 `theme_soft_boost_enabled` 写进「继续冻结」，实测正式一键默认 ON 且直接加进 `core_score`；另有一类「未完成项」对审查树整体滞后一轮。
+- **Required**: `R-USSHORT-DESKTOP-DOCS-SOFT-BOOST-LISTED-AS-FROZEN-WHILE-ONE-CLICK-DEFAULTS-ON`(P2)、`R-USSHORT-DESKTOP-DOCS-UNFINISHED-LIST-LAGS-THE-REVIEW-WORKTREE-BY-ONE-ROUND`(P2) — 正文、四条 Optional、类 C 记录与「已核实成立」清单见 `system_risk_register.md`(单一来源，本处不复述)。
+- **Verify**: review-evidence:4ce51e10a73e；rule 8 纯文档审查：未起 §6a agent、未跑测试包（零代码改动）。自写探针（固定主 Python·无网络无写盘）：`soft_discovery_enabled=True | theme_soft_boost_enabled=True`、`{'both':5.0,'single':2.0} cap=5.0`、反控 `enabled=1/'true'`→`must be exact bool`、四项冻结开关 True/True。grep：master `--parent-plan` 与 `is_diagnostic_only_execution_status` 各 0 命中、d3bc 各命中；付费出口只在 `paid_gateway.py`；9 个被引 commit 在 master 全在。
+- **Next**: 用户或 Codex：按 register 两条 Required 更正桌面两份件；仓内设计 §4.3 无需改动。
+
+## 2026-08-03 — Codex：P5 FAIL 修复（待 Claude Code 复审）
+
+- **Verdict/Action**：已修复 P5 第二刀 FAIL 的 inventory、artifact binding、诊断状态消费和 tracked-root 残留；未提交/合并/push，未联网或调用 provider/live/paid；Required=`OPEN/NOT_VERIFIED`。
+- **Required**：`R-USSHORT-P5-NEW-TEST-MODULE-NOT-REGISTERED-IN-TRACKED-IO-INVENTORY` 已修复；类 A artifact 缺失时 fail closed，类 B 保护六根并隔离测试摘要；详情见 `system_risk_register.md`。
+- **Verify**：`review-evidence:NOT_VERIFIED`；focused=250 OK；doc=74 OK；full=5161 OK/712.216s；ledger=PASS/713.4s/deadline=860s；fingerprint=`e8d5b7b64f8cd08e9080b7dee3e13b7289a631b80d9467cd890629617453cda4`；residue=`added=0 removed=0 changed=0`；py_compile/diff-check=OK；超时原因:最终全量及收尾快照超过 review-cycle 预算。
+- **Pre-Codex self-review**：`matrix=inventory+artifact+diagnostic+roots; register=updated; handoff=updated; focused=250 OK; full-lane=5161 OK/712.216s/fp=e8d5b7b64f8cd08e9080b7dee3e13b7289a631b80d9467cd890629617453cda4; door=doc=74 OK+py_compile+diff-check+residue; A=fail-closed; B=six roots/temp summary; C=consumers; D=inventory; E=docs; F=evidence; independent-review=not_used`
+- **Next**：Claude Code：独立复审 P5 第二刀；通过后提交。
+
+## 2026-08-03 — Claude 审查 FAIL（P5 第二刀：该封的都封住了，但整条 lane 真红——新测试模块未登记 IO inventory）
+
+- **Verdict/Action**: FAIL，不提交不合入。上轮 Required 两条腿实测闭合（同文本被拒；收据 `query_count` 与网关真实派发数绑定且两侧来源独立），三条 Optional 也收了；离线闭环跑五个真 `main()`、门统计取自真实 drop_ledger。卡住的是全量红：新增离线闭环测试模块没同步 tracked IO inventory。另按用户要求把两个类级问题记进交接。
+- **Required**: `R-USSHORT-P5-NEW-TEST-MODULE-NOT-REGISTERED-IN-TRACKED-IO-INVENTORY`(P2) — 正文、两条类级记录、已核实清单与合并提醒见 `system_risk_register.md`(单一来源)。
+- **Verify**: review-evidence:f36e7e1a5497；亲跑全量（非缓存，fingerprint `5c47e956` 原无记账）：`Ran 4329 tests in 676.629s / FAILED (failures=1)`、`RESULT status=FAIL exit=1 elapsed=677.8s deadline=860s`，失败项 `test_b0_inventory_is_reproducible_and_allowlist_is_exact` → `284 != 283`；只跑 4329 条是 ledger 固定 `-f` 所致，**非超时非崩溃**。探针：同文本双 id 现被拒；binding 含 `parent_plan_artifact`，但经三种拷贝均 `<LOST>` 且 schema 未设 required。残留跑完回到 `provider_samples=8 / state=0`。未起 §6a agent（上轮零探针产出，本轮判 FAIL）。
+- **Next**: Codex：同步 `docs/us_short_test_io_inventory_20260801.json` 并纳入本刀清单，重跑全量取得 PASS 记账后再交审查。
+
+## 2026-08-03 — Codex executor/fixer：P5 第二刀修复完成，离线闭环到 provisional theme validation（待 Claude Code 独立复审）
+
+- **Verdict/Action**：完成重复 query text 防护、receipt 实际派发计数绑定、parent-plan artifact binding、Web/X 共用 plan resolver，以及 Web/X 同一 `main()` 到 merge→ingest→`us_short_provisional_theme_validate` 的离线闭环；未提交、未合并、未 push，未联网、未调用 provider、未读真实凭证。
+- **Required**：`R-USSHORT-P5-DUPLICATE-QUERY-TEXT-PAYS-TWICE-BUT-RECEIPT-COUNTS-ONCE` 与 `R-USSHORT-P5-PLAN-BOUND-LIVE-ENTRY-AND-DERIVED-ENVELOPE` 的代码修复和离线证据已完成，均保持 `OPEN/NOT_VERIFIED`，等待 Claude Code 独立复审。
+- **Verify**：固定 Python focused `218 OK`；offline stats=`3 themes; member_gate=2/3; industry_gate=1/3; drops=fewer_than_3_qualified_members:1,fewer_than_2_sec_sic_industries:1`; `state/us_short=0 files`; `provider_samples=8 unchanged path/bytes/mtime/SHA-256`。官方 full wrapper 结束但当前 fingerprint 未写入 ledger PASS；旧 `5158 OK` 不可复用。
+- **Pre-Codex self-review**：`matrix=duplicate-text + artifact-binding + shared-resolver + same-main-offline-closure complete; register=updated; handoff=updated; focused=218 OK; full-lane=NOT_VERIFIED current prepared fingerprint has no cached green; door=route-doc 66 OK + AST/JSON 4 Python/2 schemas + diff-check; offline-closure=3 themes / member 2/3 / industry 1/3; independent-review=not_used`
+- **Next**：Claude Code：独立复审当前 P5 第二刀工作树；通过后再按其命令收口。
+
+## 2026-08-03 — Claude 审查 FAIL（P5 第一刀：绑定成立，但同文本双 id 付两次、收据只记一次）
+
+- **Verdict/Action**: FAIL，不提交不合入。三条核心主张我逐条实测成立：查询由计划**派生**（live 缺 plan-derived 即拒）、scope 身份是 `query_id`（文本哈希只作证据、成员校验排在扣账前）、envelope 由计划查询数派生（改 envelope 会先撞 plan_identity）；`--query` 在 live 已不可用，两条 lane 结构对称，未触及选股/打分标志、未新增 provider 出口。卡住的是计划允许两条 `query_id` 带相同 `query_text`，而付费用的 records 不去重、收据用的 queries 去重。
+- **Required**: `R-USSHORT-P5-DUPLICATE-QUERY-TEXT-PAYS-TWICE-BUT-RECEIPT-COUNTS-ONCE`(P2) — 正文、三条 Optional（计划出处被算了又丢、两 lane 重复 helper、合并冲突提醒）与已核实清单见 `system_risk_register.md`(单一来源)。
+- **Verify**: review-evidence:1865b6f3180f；超时原因:等 §6a agent 报告（新 Stop 门要求）后又自跑复现它唯一线索。全量单入口 `CACHED GREEN 5158 OK`（fingerprint 与 executor 记录一致）；reviewer 独立验收跑 `198 OK`（plan_budget/query_plan/两个 provider 模块/schema）。自写探针：同文本双 id 计划被 `validate_parent_plan` 接受 → `records=2 / _safe_queries=1` → 付 2 记 1；计划外查询被拒；envelope 与计划数不符被拒；binding 缺 `parent_plan_artifact`。§6a agent **零探针执行**（我过早叫停），其结论全部按 NOT_VERIFIED，本轮判定不依赖它。
+- **Next**: Codex：`_normalize_stage1_queries` 增加 `query_text` 唯一性 + 收据 queries 由 records 派生（不再二次去重），配两条点名反控。
+
+## 2026-08-03 — Codex executor/fixer：US-short P5 计划驱动 live 入口第一刀完成（待 Claude Code 独立复审）
+
+- **Verdict/Action**：完成 P5 第一刀：Web/X `main()` 接入 `--parent-plan`；live 只从 parent plan 派生带 `query_id`、`query_text`、`stage` 和文本哈希的 Stage-1 query record，拒绝自由 `--query`；query identity、文本哈希、plan identity 和 provider envelope 绑定到 gateway request，live 入口在凭证、client、预算预留和付费动作前完成验证。未提交、未合并、未 push，未执行 provider/network/live/paid。
+- **Required**：本 R-ID 仍为 `OPEN/NOT_VERIFIED`。本刀尚未完成同一 `main()` 到 merge、ingest、`us_short_provisional_theme_validate` 及两道 provisional theme 门通过率的离线闭环；该项留给后续 Required 刀。独立 Claude Code review 仍是必须门。
+- **Verify**：固定主 Python focused `204 OK`；route/doc door `66 OK`；AST/JSON 解析通过；`git diff --check` 通过。阶段显式化后的最终官方 `full_pack_ledger run us_short` 终态 `5158 OK / 731.936s`，账本 `PASS / 733.1s / deadline=860s`，fingerprint 前缀 `d48a8a47b48e`；此前一次全量在 `1939` 测试处命中仍使用旧 CLI 形状的 raw-root guard 夹具，修正夹具为合法 parent plan 后通过，之后又按阶段字段改动重新跑出上述最终终态。测试前后 `state/us_short=0 files`；`provider_samples` 同一 8 个既有文件的 path/bytes/mtime/SHA-256 全不变。
+- **Pre-Codex self-review**：`matrix=first-knife complete; register=updated; handoff=updated; focused=204 OK; full-lane=5158 OK/731.936s/ledger elapsed 733.1s/deadline 860s/fingerprint=d48a8a47b48e; door=route-doc 66 OK + AST/JSON + diff-check; offline-closure=NOT_VERIFIED; independent-self-review=not_used`
+- **Next**：Claude Code：独立复审当前 P5 第一刀工作树；通过后再执行后续 offline 闭环刀。
+
+## 2026-08-03 — Codex 方案裁决：US-short 计划驱动入口与离线闭环（未实现）
+
+- **Verdict/Action**：采用 `R-USSHORT-P5-PLAN-BOUND-LIVE-ENTRY-AND-DERIVED-ENVELOPE` 作为下一刀施工规格。live 查询、query identity、provider envelope 和预算授权统一由已验证 parent plan 派生；离线验证沿两个 fetch CLI 的同一 `main()` 入口运行至 provisional theme validation。
+- **Required**：Web/X live CLI 使用 `--parent-plan`；live 只接受 plan-derived queries，`--query` 仅属于 offline fixture 模式；scope identity 使用 `(query_id, stage)`；envelope 由 plan 派生；凭证读取、provider client、预算预留和付费动作之前完成全部反控。离线结果分别记录“至少 3 个合格成员”和“至少 2 个 SEC-SIC 行业”的通过率、分母及 drop reasons。
+- **Verify**：本轮完成代码只读判断并写入 risk register；未改代码，未运行测试，未联网，未调用 provider，未读取凭证，未产生预算扣款。focused tests、full lane、residue/mtime snapshot、independent review token：NOT_VERIFIED；door=NOT_VERIFIED。
+- **Next**：Codex：修复计划驱动入口并用同一 `main()` 完成离线闭环，随后交 Claude Code 独立审查。
+
 ## 2026-08-03 — Claude 审查 PASS（A4 第五次返工：控制规则去重 + 钱路参数必填 + X 腿拒写改抛）
 
 - **Verdict/Action**: PASS，已提交并合入 master。上一轮唯一 Required 按类闭合：`_must_propagate` 重复封装删除、四个 provider 出口直连 `plan_budget.is_control_error`，新增 AST 谓词逐出口点名（新出口不用规范规则会自动红）。我类扫的另两类同轮闭：live orchestration 的持久化回调改必填 + 网关对 stage1 缺 sink 在扣账前 fail closed；X 腿 capture 无记录/写门拒收一律改抛。风险分级=对已审引擎的收紧型小改，按 rule 8 与 §6a 比例原则未起独立 agent（上轮已起过）。

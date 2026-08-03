@@ -785,6 +785,9 @@ class DocGovernanceGuard(unittest.TestCase):
     # mention of the token (R-PRECODEX-CHECKLIST-HANDOFF-PROOF-LABEL-FALSE-NEGATIVE — the same prose-vs-
     # labeled-line class as the original bug, this time in the guard itself).
     _PROOF_LINE = re.compile(r"(?m)^\s*(?:-\s+)?\*\*(?:Pre-Codex self-review|Proof-of-use)\*\*\s*[:：]")
+    # A `## <date>` header that does not continue with one of the three accepted separators is
+    # invisible to the entry splitter (see `_review_cycle_offenders`).
+    _HEADER_WITHOUT_SEPARATOR = re.compile(r"(?m)^## \d{4}-\d{2}-\d{2}(?! [—–-] ).*$")
 
     @classmethod
     def _review_cycle_offenders(cls, zone_text):
@@ -792,6 +795,13 @@ class DocGovernanceGuard(unittest.TestCase):
         # and its proof can't drift apart). For each review-cycle entry in the COMPLIANT ZONE that
         # cites a Required ID, enforce the EXACT minimal template.
         offenders = []
+        # A dated header that omits the separator is NOT merely unvalidated: the split below cannot
+        # see it, so its whole block is absorbed into the PRECEDING entry and shows up as that
+        # entry's duplicate/unexpected labels. Observed live once (an executor entry titled
+        # `## <date> Codex executor/fixer ...`), which turned a compliant neighbour red and, when it
+        # sat at the top of the file, escaped validation entirely. Flag the shape itself.
+        for stray in cls._HEADER_WITHOUT_SEPARATOR.findall(zone_text):
+            offenders.append(("header-missing-date-separator", stray[:50]))
         parts = re.split(r"(?m)^## (\d{4}-\d{2}-\d{2}) [—–-] ", zone_text)   # — / – / - header separators
         for i in range(1, len(parts), 2):
             block = parts[i + 1]
@@ -944,6 +954,14 @@ class DocGovernanceGuard(unittest.TestCase):
         missing_required_label = ("## 2026-06-14 — Codex `审查` FAIL (R-TEST-FOO)\n"
                                   "- **Verdict/Action**: FAIL\n- **Required**: R-TEST-FOO — see register\n"
                                   "- **Verify**: 22 OK\n")  # missing Next
+        # a dated header with no separator is invisible to the splitter: it silently absorbs its
+        # block into the preceding entry (observed live once), so the SHAPE itself must be red
+        header_without_separator = ("## 2026-06-14 — Codex `审查` FAIL (R-TEST-FOO)\n"
+                                    "- **Verdict/Action**: FAIL\n"
+                                    "- **Required**: R-TEST-FOO — see register\n"
+                                    "- **Verify**: 22 OK\n- **Next**: 修复\n"
+                                    "\n## 2026-06-14 Codex executor repair notes (R-TEST-FOO)\n"
+                                    "- **Verdict/Action**: repaired\n- **Next**: 审查\n")
         duplicate_label = ("## 2026-06-14 — Codex `审查` FAIL (R-TEST-FOO)\n"
                            "- **Verdict/Action**: FAIL\n- **Required**: R-TEST-FOO — see register\n"
                            "- **Verify**: 22 OK\n- **Verify**: extra copied detail\n- **Next**: 修复\n")
@@ -955,7 +973,8 @@ class DocGovernanceGuard(unittest.TestCase):
                              ("verify_placeholder", verify_placeholder),
                              ("crammed_into_one_bullet", crammed_into_one_bullet),
                              ("missing_required_label", missing_required_label),
-                             ("duplicate_label", duplicate_label)):
+                             ("duplicate_label", duplicate_label),
+                             ("header_without_separator", header_without_separator)):
             self.assertTrue(self._review_cycle_offenders(sample),
                             f"structural guard misses planted double-write/incomplete case: {name}")
         compliant = ("## 2026-06-14 — Claude `修复` (R-TEST-FOO)\n"

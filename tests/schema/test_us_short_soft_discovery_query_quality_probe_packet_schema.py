@@ -4,9 +4,11 @@ import copy
 import json
 import unittest
 from pathlib import Path
+from unittest import mock
 
 from engine.us_short_schema_formats import FORMAT_CHECKER
 from engine import us_short_llm_theme_discovery_plan_budget as plan_budget
+from engine import us_short_llm_theme_discovery_query_plan as query_plan
 from engine import us_short_soft_discovery_query_quality_probe_paths as probe_paths
 from runners import us_short_llm_theme_discovery_fetch_web as web
 from runners import us_short_llm_theme_discovery_fetch_x as x
@@ -274,11 +276,24 @@ class UsShortSoftDiscoveryQueryQualityProbePacketSchemaTest(unittest.TestCase):
         decision_date = self._artifact()["probe_boundary"]["expected_decision_date"]
         generated_at = "2026-07-30T10:00:00Z"
         alternate = ROOT / "provider_samples" / "unregistered_query_quality_probe"
+        parent = query_plan.build_parent_plan(
+            decision_date=decision_date,
+            policy_version="soft_discovery_query_policy_v0.1.0",
+            policy_template_content_sha256="a" * 64,
+            stage1_queries=[{"query_id": "stage1-a", "query_text": "offline boundary probe"}],
+            stage2_rule_sha256="b" * 64,
+            provider_envelopes=[
+                {"provider": "web", "stage1_max_dispatch_count": 1, "stage2_max_dispatch_count": 0, "retry_max_dispatch_count": 1, "max_dispatch_count": 2},
+                {"provider": "xai", "stage1_max_dispatch_count": 1, "stage2_max_dispatch_count": 0, "retry_max_dispatch_count": 1, "max_dispatch_count": 2},
+            ],
+            generated_at="2026-07-30T08:00:00Z",
+        )
+        plan_path = ROOT / "docs" / "test_query_quality_probe_parent_plan.json"
         lanes = {
             "web": (
                 web.main,
                 [
-                    "--query", "offline boundary probe",
+                    "--parent-plan", str(plan_path),
                     "--expected-decision-date", decision_date,
                     "--generated-at", generated_at,
                     "--live",
@@ -289,7 +304,7 @@ class UsShortSoftDiscoveryQueryQualityProbePacketSchemaTest(unittest.TestCase):
             "x": (
                 x.main,
                 [
-                    "--query", "offline boundary probe",
+                    "--parent-plan", str(plan_path),
                     "--expected-decision-date", decision_date,
                     "--generated-at", generated_at,
                     "--live",
@@ -300,8 +315,13 @@ class UsShortSoftDiscoveryQueryQualityProbePacketSchemaTest(unittest.TestCase):
         }
         for lane, (main, argv, error) in lanes.items():
             with self.subTest(lane=lane):
-                with self.assertRaisesRegex(error, "live CLI raw_root must use the lane default"):
-                    main(argv)
+                with mock.patch.object(
+                    web.query_plan,
+                    "read_parent_plan",
+                    return_value=(parent, "a" * 64, "docs/test_query_quality_probe_parent_plan.json"),
+                ):
+                    with self.assertRaisesRegex(error, "live CLI raw_root must use the lane default"):
+                        main(argv)
 
     def test_each_live_cli_default_raw_root_passes_the_shared_exact_preflight(self) -> None:
         for lane, raw_root in (("web", web.DEFAULT_RAW_ROOT), ("x", x.DEFAULT_RAW_ROOT)):

@@ -33,6 +33,7 @@ if str(ROOT) not in sys.path:
 from engine.us_short_eligibility_gate import canonical_us_ticker  # noqa: E402
 from engine import us_short_llm_theme_discovery_plan_budget as plan_budget  # noqa: E402
 from engine import us_short_llm_theme_discovery_paid_gateway as paid_gateway  # noqa: E402
+from engine import us_short_llm_theme_discovery_query_plan as query_plan  # noqa: E402
 from engine.us_short_llm_theme_discovery_provider_policy import (  # noqa: E402
     MAX_DEEPSEEK_REGROUP_CALLS,
     MAX_TAVILY_QUERIES,
@@ -98,6 +99,20 @@ _RFC1123_RE = re.compile(
 )
 _RFC1123_UNKNOWN_ZONE_SUFFIX = " -0000"
 CONFORMANCE_GUARDS = ("_guard_generated_before_open",)
+DIAGNOSTIC_ONLY_EXECUTION_STATUSES = frozenset({
+    "live_authorized_budget_aborted",
+})
+
+
+def is_diagnostic_only_execution_status(status: Any) -> bool:
+    """Keep the emitted paid-lane diagnostic out of formal decision publication.
+
+    PaidEvidenceUnavailableError is terminal and is raised before a summary is emitted; it is
+    deliberately not represented as a second, unreachable diagnostic status.
+    """
+    return type(status) is str and status in DIAGNOSTIC_ONLY_EXECUTION_STATUSES
+
+
 # `SECRET_RE` is a TEXTUAL check (free text, queries) and must stay conservative there: "AI token
 # demand" is a legitimate search query.  A LOCATOR needs a STRUCTURAL check instead — a provider may
 # hand back a signed/bearer URL whose credential sits in a generic parameter (`?token=`, `?sig=`,
@@ -589,7 +604,9 @@ def _safe_text(value: Any, *, limit: int) -> str:
     return text[:limit]
 
 
-def _safe_queries(queries: list[str] | tuple[str, ...]) -> list[str]:
+def _safe_queries(
+    queries: list[str] | tuple[str, ...], *, deduplicate: bool = True,
+) -> list[str]:
     if not isinstance(queries, (list, tuple)) or not queries:
         raise WebThemeDiscoveryError("at least one web query is required")
     if len(queries) > MAX_TAVILY_QUERIES:
@@ -599,7 +616,7 @@ def _safe_queries(queries: list[str] | tuple[str, ...]) -> list[str]:
         query = _safe_text(raw, limit=300)
         if not query or SECRET_RE.search(query):
             raise WebThemeDiscoveryError("query is empty or secret-like")
-        if query not in out:
+        if not deduplicate or query not in out:
             out.append(query)
     return out
 
@@ -1167,9 +1184,10 @@ def build_web_fetch_packet(
     regroup_attempted: bool = False,
     regroup_chunk_counts: dict[str, Any] | None = None,
     budget_aborted: bool = False,
+    plan_binding: dict[str, Any] | None = None,
     _pending_raw_writes: list[tuple[Path, dict[str, Any]]] | None = None,
 ) -> tuple[dict[str, Any], dict[str, Any], dict[str, Any]]:
-    queries = _safe_queries(queries)
+    queries = _safe_queries(queries, deduplicate=plan_binding is None)
     generated = _parse_dt(generated_at, field="generated_at")
     _guard_generated_before_open(generated, expected_decision_date)
     fetched = _parse_dt(fetched_at, field="fetched_at") if fetched_at else generated
@@ -1335,6 +1353,8 @@ def build_web_fetch_packet(
             "dropped_result_count": len(drops), "prompt_source_count": len(prompt_rows),
         },
     }
+    if plan_binding is not None:
+        receipt["plan_binding"] = dict(plan_binding)
     _flush_raw_writes(pending_raw_writes)
     _assert_receipt_secret_free(receipt)
     _validate_builder_receipt_evidence(receipt)
@@ -1411,6 +1431,8 @@ def execute_live_web_orchestration(
     *, queries: list[str], expected_decision_date: str, tavily: Any, deepseek_client: Any,
     transport: paid_gateway.LiveTransport, dispatch_budget: Any,
     persist_search_response: Callable[[paid_gateway.PaidDispatchRequest, Any], Any],
+    query_records: list[str] | list[dict[str, str]],
+    parent_plan: Mapping[str, Any] | None,
 ) -> dict[str, Any]:
     """The live web orchestration, split out so tests can EXECUTE it.
 
@@ -1431,11 +1453,15 @@ def execute_live_web_orchestration(
         raise plan_budget.PlanBudgetError(
             "persist_search_response is required for live web orchestration"
         )
-    gateway = paid_gateway.PaidDispatchGateway(dispatch_budget)
+    if not isinstance(transport, paid_gateway.LiveTransport):
+        raise plan_budget.PlanBudgetError(
+            "transport is required for live web orchestration"
+        )
+    gateway = paid_gateway.PaidDispatchGateway(dispatch_budget, parent_plan=parent_plan)
     results: list[dict[str, Any]] = []
     query_drops: list[dict[str, str]] = []
     stage1_batch = gateway.dispatch_web_search_all(
-        tavily, queries,
+        tavily, query_records,
         transport=transport,
         capture_response=lambda _request, response: response,
         persist_response=persist_search_response,
@@ -1444,7 +1470,7 @@ def execute_live_web_orchestration(
     attempted_tavily_calls = len(stage1_batch.items)
     fatal_budget_error: plan_budget.PlanBudgetError | None = None
     for item in stage1_batch.items:
-        query = item.request.scope
+        query = item.request.query_text or item.request.scope
         if item.outcome.call_error is not None:
             budget_failure = plan_budget.coerce_budget_error(item.outcome.call_error)
             if budget_failure is not None:
@@ -1587,11 +1613,13 @@ def execute_live_web_orchestration(
         "regroup_chunk_counts": regroup_chunk_counts,
         "budget_error": fatal_budget_error,
         "provider_call_count": attempted_tavily_calls + attempted_deepseek_calls,
+        "stage1_dispatch_count": attempted_tavily_calls,
+        "stage1_queries": [item.request.query_text for item in stage1_batch.items],
     }
 
 
 def _run_web_fetch(
-    *, queries: list[str] | tuple[str, ...], expected_decision_date: str, generated_at: str,
+    *, queries: list[str] | tuple[str, ...] | None, expected_decision_date: str, generated_at: str,
     search_client: Any | None = None, deepseek_client: Any | None = None,
     confirm_user_authorization: bool = False, live: bool = False,
     # The default is resolved at CALL time (`raw_root or DEFAULT_RAW_ROOT` below), never bound
@@ -1606,8 +1634,24 @@ def _run_web_fetch(
     _issue_ticket: Callable[[], object] = _issue_live_ticket,
     _revoke_ticket: Callable[[object], None] = _revoke_live_ticket,
 ) -> tuple[dict[str, Any], dict[str, Any], dict[str, Any]]:
-    queries = _safe_queries(queries)
     _decision_date(expected_decision_date)
+    plan_query_records: list[dict[str, str]] | None = None
+    plan_binding: dict[str, Any] | None = None
+    if parent_plan is not None:
+        caller_queries = None if queries is None else _safe_queries(queries)
+        try:
+            derived_queries, plan_query_records, plan_binding = query_plan.resolve_stage1_plan_binding(
+                parent_plan, provider="web",
+            )
+        except query_plan.QueryPlanError as exc:
+            raise WebThemeDiscoveryError(f"parent plan query binding is invalid: {exc}") from exc
+        if caller_queries is not None and caller_queries != derived_queries:
+            raise WebThemeDiscoveryError("caller query set does not match the parent plan")
+        queries = derived_queries
+    if queries is None:
+        raise WebThemeDiscoveryError("offline execution requires queries or a parent plan")
+    if parent_plan is None:
+        queries = _safe_queries(queries)
     if live:
         if not confirm_user_authorization:
             raise WebThemeDiscoveryError("live execution requires --confirm-user-authorization")
@@ -1617,6 +1661,8 @@ def _run_web_fetch(
             raise WebThemeDiscoveryError(
                 "live execution requires an A1 parent plan for the plan-level budget"
             )
+        if plan_query_records is None or plan_binding is None:
+            raise WebThemeDiscoveryError("live execution requires plan-derived Stage-1 queries")
         plan_budget.validate_run_decision_date(parent_plan, expected_decision_date)
         raw_root = _validate_raw_root(raw_root or DEFAULT_RAW_ROOT, require_gitignored=True)
         # K3-R51: validate the environment before even a budget reservation.  Do not split or pick a
@@ -1636,16 +1682,18 @@ def _run_web_fetch(
             queries=queries, expected_decision_date=expected_decision_date,
             tavily=tavily, deepseek_client=deepseek, transport=transport,
             dispatch_budget=dispatch_budget,
+            query_records=plan_query_records, parent_plan=parent_plan,
             persist_search_response=lambda request, response: _persist_live_web_search_response(
                 request, response, raw_root=raw_root, expected_decision_date=expected_decision_date,
             ),
         )
         fetched_now = outcome["fetched_at"]
         budget_error = outcome.get("budget_error")
+        dispatched_queries = outcome["stage1_queries"]
         ticket = _issue_ticket()
         try:
             packet, receipt, summary = build_web_fetch_packet(
-                queries=queries, search_results=outcome["results"], llm_response=outcome["llm_response"],
+                queries=dispatched_queries, search_results=outcome["results"], llm_response=outcome["llm_response"],
                 expected_decision_date=expected_decision_date, generated_at=fetched_now.isoformat(),
                 raw_root=raw_root, persist_raw=True, fetched_at=fetched_now.isoformat(), execution_mode="live_authorized",
                 network_access_performed=True, provider_calls_performed=True,
@@ -1656,8 +1704,10 @@ def _run_web_fetch(
                 regroup_model_identity=outcome["regroup_model_identity"],
                 regroup_failed=outcome["regroup_failed"], regroup_attempted=outcome["regroup_attempted"],
                 regroup_chunk_counts=outcome["regroup_chunk_counts"],
-                budget_aborted=budget_error is not None,
+                budget_aborted=budget_error is not None, plan_binding=plan_binding,
             )
+            if receipt["summary"]["query_count"] != outcome["stage1_dispatch_count"]:
+                raise WebThemeDiscoveryError("web receipt query_count does not match Stage-1 dispatch count")
         finally:
             _revoke_ticket(ticket)
         return packet, receipt, summary
@@ -1697,6 +1747,7 @@ def _run_web_fetch(
         expected_decision_date=expected_decision_date, generated_at=generated_at,
         execution_mode="offline_fake_client", network_access_performed=False,
         provider_calls_performed=False, raw_root=offline_raw_root, persist_raw=True,
+        plan_binding=plan_binding,
         extra_drop_ledger=query_drops,
     )
 
@@ -1707,7 +1758,7 @@ def _bind_live_runner(
 ) -> Callable[..., tuple[dict[str, Any], dict[str, Any], dict[str, Any]]]:
     """Bind normal-path bookkeeping here; closure placement is not an authorization boundary."""
     def runner(
-        *, queries: list[str] | tuple[str, ...], expected_decision_date: str, generated_at: str,
+        *, queries: list[str] | tuple[str, ...] | None, expected_decision_date: str, generated_at: str,
         search_client: Any | None = None, deepseek_client: Any | None = None,
         confirm_user_authorization: bool = False, live: bool = False, raw_root: Path | None = None,
         # Same Class-A allowlist as _run_web_fetch: only offline mode may omit the plan.
@@ -1733,7 +1784,8 @@ del _run_web_fetch, _bind_live_runner
 
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description="Run bounded US-short 4a web discovery.")
-    parser.add_argument("--query", action="append", required=True)
+    parser.add_argument("--query", action="append")
+    parser.add_argument("--parent-plan", type=Path)
     parser.add_argument("--expected-decision-date", required=True)
     parser.add_argument("--generated-at", required=True)
     # Defaults are keyed by decision date: an undated slot plus the immutability raise would brick
@@ -1747,6 +1799,21 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--fake-llm-response-path", type=Path)
     args = parser.parse_args(argv)
     _decision_date(args.expected_decision_date)
+    parent_plan = None
+    if args.parent_plan is not None:
+        try:
+            parent_plan, _parent_plan_sha256, _parent_plan_relative_path = query_plan.read_parent_plan(
+                args.parent_plan, root=ROOT, state_dir=STATE_DIR,
+            )
+        except query_plan.QueryPlanError as exc:
+            raise SystemExit(f"parent plan is invalid: {exc}") from exc
+    if args.live:
+        if parent_plan is None:
+            raise SystemExit("live mode requires --parent-plan")
+        if args.query is not None:
+            raise SystemExit("live mode accepts queries only from --parent-plan")
+    elif parent_plan is None and not args.query:
+        raise SystemExit("offline mode requires --query or --parent-plan")
     raw_root = _validate_cli_raw_root(args.raw_root, DEFAULT_RAW_ROOT, live=args.live)
     output, receipt_path = _decision_publish_paths(
         args.output_path or default_discovery_path(args.expected_decision_date),
@@ -1776,13 +1843,14 @@ def main(argv: list[str] | None = None) -> int:
         packet, receipt, summary = run_web_fetch(
             queries=args.query, expected_decision_date=args.expected_decision_date,
             generated_at=args.generated_at, search_client=_FakeSearch(), deepseek_client=_FakeDeepSeek(), live=False,
+            raw_root=raw_root, parent_plan=parent_plan,
         )
     else:
         try:
             packet, receipt, summary = run_web_fetch(
-                queries=args.query, expected_decision_date=args.expected_decision_date,
+                queries=None, expected_decision_date=args.expected_decision_date,
                 generated_at=args.generated_at, confirm_user_authorization=args.confirm_user_authorization,
-                live=True, raw_root=raw_root,
+                live=True, raw_root=raw_root, parent_plan=parent_plan,
             )
         except paid_gateway.PaidEvidenceUnavailableError as exc:
             # The paid loop already stopped and the earlier responses are on disk; without this
@@ -1798,7 +1866,7 @@ def main(argv: list[str] | None = None) -> int:
                 "replay_required": True,
             }, ensure_ascii=False, indent=2))
             return 2
-    if summary.get("status") == "live_authorized_budget_aborted":
+    if is_diagnostic_only_execution_status(summary.get("status")):
         publish_budget_abort_diagnostic(
             "web", args.expected_decision_date,
             packet=packet, receipt=receipt, summary=summary,

@@ -1,5 +1,121 @@
 # US-short soft-discovery X live response-shape re-review — 2026-07-28
 
+## 2026-08-03 Codex executor/fixer handoff — P5 third knife repair (Claude Code review pending)
+
+### 结论与根因
+
+上轮 FAIL 合理。付费 plan binding 的最后一段仍由调用方是否传 `query_records` 决定；合法 `parent_plan` 与省略 records 并存时，网关先把裸字符串当成合法请求，形成 off-plan paid path。这个形状与 A4 的“可选保护参数即钱路”属于同一类，必须由 gateway 和派生门禁共同封死。
+
+### 本轮实现
+
+- `PaidDispatchGateway` 在 Stage-1 迭代前拒绝缺失 query records，并在 plan-bound request 缺 `query_id` 时于预算/付费前失败。
+- Web/X live orchestration 的 `query_records`、`parent_plan`、`transport` 改为 required keyword-only；两条腿都要求 `LiveTransport`，不再允许 X 腿的 `Any | None = None` 兼容缝。
+- AST 反控从两个 `execute_live_*_orchestration` 的全部 keyword-only 参数派生；植入任意 optional keyword 会转红。点名执行反控验证合法 plan + omitted records 为 0 budget/0 client call，`transport=None` 同样在 dispatch 前失败。
+- `read_parent_plan` 要求 canonical decision slot，并由 Web/X runner 传入各自的 `STATE_DIR`，不破坏 private-root offline main 测试。
+- `build_stage1_plan_binding` 删除显式 artifact path/SHA 注入参数，只接受 `ParentPlanDocument` 的 immutable attributes；普通复制形态 fail closed。
+- 死诊断状态 `live_authorized_paid_evidence_unavailable` 已移除；因为 evidence failure 在 summary 前 terminal raise，不再保留不可达枚举成员。
+
+### Closure tests / evidence
+
+- Fixed Python: `C:\Users\cnhea\AppData\Local\Programs\Python\Python313\python.exe`。
+- Focused affected pack: `250 OK`（包含 Web/X/query-plan/plan-budget、offline `main()` 闭环、schema/conformance、IO inventory）。
+- Full lane: `5165 OK / 687.028s`; ledger `PASS / 688.2s / 860s`; exact fingerprint prefix `6d7593977d13`; `full_pack_ledger check us_short` cached green on the same code state。
+- Inventory: `284` modules, classification `222/0/4/5/53`, module-path SHA `5440689bebfb09229e590c28d0c3c3202d192e62f1f48dc5374888f990bec235`; inventory test `18 OK`。
+- Residue snapshot: `state/us_short=0 files` before/after; `provider_samples=8` existing files before/after, path/bytes/mtime/SHA unchanged. No provider/network/live/paid/credential action. `py_compile=OK`; `git diff --check=OK`。
+
+### Required / Optional / next owner
+
+- Required `R-USSHORT-P5-GATEWAY-SKIPS-THE-PLAN-WHEN-THE-CALLER-OMITS-QUERY-RECORDS` is implemented but remains `OPEN/NOT_VERIFIED` until independent Claude Code review.
+- Optional dispositions are accepted in this executor slice: dead status removed; binding injection arguments removed; canonical decision-slot read enforced. They are not separate closure gates.
+- Worktree is uncommitted. Claude Code is reviewer/committer; after independent review it may commit if approved. No push/merge is authorized。
+
+### Pre-Codex self-review
+
+`matrix=class-D paid-keyword closure + gateway pre-dispatch rejection + canonical-slot/artifact binding + inventory-sync; register=updated; handoff=updated; focused=250 OK; full-lane=5165 OK/687.028s/ledger elapsed 688.2s/deadline 860s/fingerprint=6d7593977d13; door=route-doc/review-tiering final gate + py_compile + diff-check + residue-mtime-SHA snapshot; independent-review=not_used`
+
+## 2026-08-03 追加：Codex executor/fixer P5 第二刀 FAIL 修复交接（待 Claude Code 独立复审）
+
+**交接状态**：上一条 P5 FAIL 已在当前工作树修复；未提交、未合并、未 push。Claude Code 仍是 reviewer/committer。P5 Required 保持 `OPEN/NOT_VERIFIED`，不得因本轮 focused/full 变绿直接改成 `CLOSED/PASS`。
+
+### 本轮修复
+
+- **inventory**：把 `tests/provider/test_us_short_llm_theme_discovery_plan_bound_offline_closure.py` 及其 3 个 class-4 unresolved write 纳入 `docs/us_short_test_io_inventory_20260801.json`；最终快照 `module_count=284`、`module_path_sha256=5440689bebfb09229e590c28d0c3c3202d192e62f1f48dc5374888f990bec235`、分类 `222/0/4/5/53`。
+- **类 A**：plan-bound `build_stage1_plan_binding` 现在没有父计划 artifact path/SHA 就拒绝；Web/X schema 将 `parent_plan_artifact` 设为 required；`dict`/JSON copy 丢失身份时不再产出看似合法 binding。`live_authorized_budget_aborted` 与 `live_authorized_paid_evidence_unavailable` 由共享诊断状态谓词消费，Web/X `main()` 共同走 diagnostic-only 槽，正式决策槽不接收它们。
+- **类 B**：class guard 监视 `state/us_short`、`provider_samples`、`docs`、`presets`、`schemas`、`research`；bankruptcy resume 测试把 producer/source-packet 摘要写到可清理的临时 docs 子目录，并为两个 runner 注入对应 `DOCS_DIR`/git-ignore seam，保留 summary schema 的 `docs/` 逻辑路径。
+
+### Closure tests 与证据
+
+- 固定 Python：`C:\Users\cnhea\AppData\Local\Programs\Python\Python313\python.exe`。
+- affected focused：`250 OK / 41.6s / deadline=300s`；route/doc/review-tiering：`74 OK / 3.0s`；schema/inventory 收尾：`24 OK / 4.93s`；`py_compile OK`；`git diff --check OK`。
+- 最终官方 full：`Ran 5161 tests in 712.216s / OK`；`RESULT status=PASS exit=0 tests=5161 elapsed=713.4s deadline=860s`；完整 fingerprint `e8d5b7b64f8cd08e9080b7dee3e13b7289a631b80d9467cd890629617453cda4`，prepared fingerprint 一致。
+- 六个受保护根目录前后 `added=0 / removed=0 / changed=0`；`state/us_short` 与 `provider_samples` 既有 private 文件 path/bytes/mtime/SHA-256 未变。全程无 provider/network/live/paid action。
+
+### Pre-Codex self-review
+
+`matrix=inventory-sync + artifact-required-binding + diagnostic-status-consumer + tracked-root-residue-guard complete; register=updated; handoff=updated; focused=250 OK + governance=74 OK + schema/inventory=24 OK; full-lane=5161 OK/712.216s/ledger elapsed 713.4s/deadline 860s/fingerprint=e8d5b7b64f8cd08e9080b7dee3e13b7289a631b80d9467cd890629617453cda4; door=route-doc/review-tiering 74 OK + py_compile + schema JSON + diff-check + residue-mtime-SHA snapshot; A=artifact identity fail-closed; B=six protected roots and isolated summaries; C=diagnostic statuses consumed; D=inventory exact; E=all required docs updated; F=focused/full/fixed-Python evidence; independent-review=not_used`
+
+**Next**：Claude Code：独立复审当前 P5 第二刀修复；通过后提交，未经授权不得 push/merge。
+
+## 2026-08-03 追加：Codex executor/fixer P5 第二刀修复交接（待 Claude Code 独立复审）
+
+**交接状态**：重复 query text、receipt 计数、artifact binding、共享 resolver 和同路径离线闭环已落在本工作树；未提交、未合并、未 push。Claude Code 仍是 reviewer/committer。两个 P5 Required 保持 `OPEN/NOT_VERIFIED`，不得由 focused 或离线结果直接改成 PASS。
+
+### 本轮修复
+
+- query plan 拒绝相同规范化 `query_text`；计划记录成为 paid packet queries 的唯一来源，Web/X 不再分别做第二次文本去重。
+- live Web/X 返回实际 Stage-1 dispatch count/query list，receipt summary 必须与真实派发数一致；plan artifact SHA/path 写入 `parent_plan_artifact`；两腿共用 `resolve_stage1_plan_binding`。
+- offline Web/X `main()` 显式把 fake `raw_root` 传到 runner，避免测试假数据落到默认 gitignored provider 根。
+- 新增真实入口闭环测试：Web `main()` + X `main()` → merge `main()` → ingest `main()` → provisional theme validation；使用本地 fake client/raw root/fixture，无 provider/network/凭证/真实扣款。
+
+### 离线结果与门
+
+- 3 个主题：成员门 `2/3` 通过、`1` 失败；SEC-SIC 行业门 `1/3` 通过、`2` 失败。
+- drop reasons：`fewer_than_3_qualified_members=1`、`fewer_than_2_sec_sic_industries=1`。
+- 计划身份、query identity、plan-derived envelope、receipt count 和同文本双 id reverse control 均有 focused 覆盖。
+
+### 证据边界
+
+- 固定 Python：`C:\Users\cnhea\AppData\Local\Programs\Python\Python313\python.exe`；focused `218 OK`；route/doc door `66 OK`；AST/JSON `4 Python + 2 schemas`；`git diff --check` 通过。
+- 测试前后 `state/us_short=0 files`；`provider_samples` 原有 8 个文件的 path/bytes/mtime/SHA-256 未变化。
+- 官方 full wrapper 已按 860 秒启动并结束，但当前 prepared fingerprint 未写入 ledger PASS；旧 fingerprint 的 `5158 OK` 不可引用，故 `full-lane=NOT_VERIFIED`，不重复全量。
+
+### Claude Code 接手
+
+请独立复审当前工作树：确认 query text 唯一性、records→packet→receipt 单一派生链、artifact binding、Web/X 对称性、offline main 闭环和残留快照；审查通过后由 Claude Code 提交，未经授权不得 push/merge。共享 policy v0.2.0、ledger 签名/手改防护和真实 provider activation 仍分别立项。
+
+### Pre-Codex self-review
+
+`matrix=duplicate-text + artifact-binding + shared-resolver + same-main-offline-closure complete; register=updated; handoff=updated; focused=218 OK; full-lane=NOT_VERIFIED current prepared fingerprint has no cached green; door=route-doc 66 OK + AST/JSON + diff-check; independent-review=not_used`
+
+## 2026-08-03 追加：Codex executor/fixer P5 计划驱动 live 入口第一刀（待 Claude Code 独立复审）
+
+**交接状态**：本刀在当前工作树完成；未提交、未合并、未 push，未执行 provider/network/live/paid。Claude Code 仍是 reviewer/committer。P5 Required 仍保持 `OPEN/NOT_VERIFIED`，因为同路径 offline 闭环尚未执行。
+
+### 本轮实现
+
+- Web/X 两个 live CLI 增加 `--parent-plan`；live 分支只接受 parent plan，带自由 `--query` 或缺 parent plan 均在 runner、凭证、client、预算预留和付费动作前失败。`--query` 仅保留给 offline fixture 模式。
+- `query_plan` 派生有序 Stage-1 records，每条显式包含 `query_id`、`query_text`、`stage` 和 query text SHA-256，并派生 provider envelope 和 plan binding；gateway request 的 paid scope 使用 `(query_id, stage)` 的 query-id 身份，文本哈希作为证据字段，不作为 scope 身份。
+- `plan_budget` 在 dispatch 前验证 query-id、文本及其哈希属于 parent plan；Web/X receipt schema 接收 plan binding；gateway 继续复用既有单一写门，不新增写文件出口。
+- 原有 live raw-root guard 测试夹具已补合法 parent plan，再继续验证未注册 raw-root 拒绝；生产契约没有为迁就旧夹具而放宽。
+
+### 验证与边界
+
+- 固定主 Python：`C:\Users\cnhea\AppData\Local\Programs\Python\Python313\python.exe`。
+- changed-symbol focused：`204 OK`；route/doc door：`66 OK`；AST/JSON 解析通过；`git diff --check` 通过。
+- 阶段显式化后的最终官方账本终态：`Ran 5158 tests in 731.936s — OK`；`full_pack_ledger`：`PASS / exit=0 / tests=5158 / elapsed=733.1s / deadline=860s`，fingerprint 前缀 `d48a8a47b48e`。此前官方终态在 `1939` 测试处因旧测试夹具未提供 parent plan 而停止；夹具修复后通过，阶段字段收紧后又重新跑出本最终终态。
+- 测试前后 `state/us_short` 均 `0 files`；`provider_samples` 均为同一 8 个既有 gitignored 文件，逐文件 path/bytes/mtime/SHA-256 全相同。未联网、未读真实凭证、未创建 provider 请求、未产生真实预算扣款。
+
+### 未完成与下一步
+
+- 本刀只完成计划驱动 live 入口及其身份/包络绑定；尚未用同一 Web/X `main()` 跑到现有 merge、ingest、`us_short_provisional_theme_validate`，也尚未统计“每主题至少 3 个合格成员”和“至少 2 个 SEC-SIC 行业”两道门的离线通过率。该项仍属于本 R-ID 的后续 Required 刀。
+- P5 不得因本轮 focused/full 变绿而提前写成 `CLOSED/PASS`；需先由 Claude Code 独立复审本刀，再执行后续 offline 闭环。
+
+### Pre-Codex self-review
+
+`matrix=first-knife complete; register=updated; handoff=updated; focused=204 OK; full-lane=5158 OK/731.936s/ledger elapsed 733.1s/deadline 860s/fingerprint=d48a8a47b48e; door=route-doc 66 OK + AST/JSON + diff-check; offline-closure=NOT_VERIFIED; independent-self-review=not_used`。
+
+**Next**：Claude Code 独立复审当前 P5 第一刀工作树；通过后再执行后续 offline 闭环刀。
+
 ## 2026-08-03 追加：Codex executor/fixer A4 类级修复 follow-up（待 Claude Code 独立复审）
 
 **交接状态**：本轮继续按用户同意的类级方案修复；当前工作树未提交、未合并、未 push，未执行 provider/network/live/paid。Claude Code 仍是 reviewer/committer。Required 不提前标记 `CLOSED`/`PASS`。
@@ -1690,4 +1806,127 @@ A4 类级修复已完成并落在当前 executor 工作树；未提交、未合�
 
 **顺序**：`B0 ✅ → B1 ✅ → 上限/入口 ✅ → B2 ✅ → A1 ✅ → A2+A3 ✅ → A4 ✅（收口）`。
 
-**给 Codex 的命令**：`执行下一刀；register 本节四条 Optional 择机并入下一刀`
+~~**给 Codex 的命令**：`执行下一刀；register 本节四条 Optional 择机并入下一刀`~~ —— 已执行 P5 第一刀并复审，结论见下节。
+
+## 2026-08-03 追加：Claude Code 对 P5 第一刀（计划驱动 live 入口）的独立复审 —— FAIL
+
+**结论**：不通过、不提交不合入。绑定这件事本身是做成了——查询由计划派生、身份用 `query_id`、包络由计划查询数派生、live 不再接受自由 `--query`；卡住的是计划允许同一段文本挂两个 `query_id`，于是真付两次而收据只记一次。
+
+**已核实无问题（下一轮别改坏）**：派生而非校验（live 缺 plan-derived 即拒，两条 lane 四道门对称）；成员校验排在扣账与付费之前；scope 是 `query_id`、文本哈希只作证据；envelope 与计划查询数不符即拒，改 envelope 会先撞 `plan_identity`；caller 多传一条计划外查询被拒（有序列表相等）；`_run_*_fetch` 绑定后被 `del`，只剩一个入口；未触及选股/打分/席位标志，未新增 provider 出口。
+
+**为什么 FAIL**（一条 Required，P2）：`R-USSHORT-P5-DUPLICATE-QUERY-TEXT-PAYS-TWICE-BUT-RECEIPT-COUNTS-ONCE`。取证：我构造两条同文本不同 id 的合法计划 → `validate_parent_plan` 接受 → `plan_query_records=2`（喂 gateway，两个独立账本 scope）而 `_safe_queries(derived)=1`（喂收据）→ **付 2 记 1**。正文、三条 Optional 与已核实清单只在 register 顶部同节。
+
+**过程说明**：§6a 独立对抗 agent 起了但**零探针执行**（我在墙钟压力下过早叫停），其结论按 NOT_VERIFIED，本轮判定全部基于我自己的探针；它给的唯一线索由我独立复现后才采信。
+
+**合并提醒**：本树落后 master 36 个提交且不含 `d4361c78`（raw_root 改回 call-time）。x 腿签名是单行、两边都改过，合并会冲突，两处改动都要保留；合并后重跑 `tests.test_us_short_discovery_class_guards`。
+
+**顺序**：`B0 ✅ → B1 ✅ → 上限/入口 ✅ → B2 ✅ → A1 ✅ → A2+A3 ✅ → A4 ✅ → P5 第一刀（返工）→ P5 第二刀（同路径离线闭环）`。
+
+~~**给 Codex 的命令**：`修复 P5 第一刀：…`~~ —— 已执行并复审，结论见下节。
+
+## 2026-08-03 追加：Claude Code 对 P5 第二刀的独立复审 —— FAIL（修复成立，但整条 lane 是红的）
+
+**结论**：不通过、不提交不合入。上轮 Required 的两条腿与三条 Optional 我都实测闭合，离线闭环也是真闭环；卡住的是全量真红——新增的离线闭环测试模块没同步 tracked IO inventory。
+
+**已核实无问题（下一轮别改坏）**：同文本双 id 在计划校验层被拒（上轮 ACCEPTED）；`_safe_queries` 二次去重改为仅无计划时执行，两条 lane 各有「收据 `query_count` == 网关真实派发数」的断言且两侧来源独立；出处已进 binding（上轮 ABSENT）；两 lane 合并为共享 `resolve_stage1_plan_binding`；`validate_plan_stage1_query` 四种篡改一处封死；离线闭环跑五个真 `main()`、门统计取自真实 `drop_ledger` 且夹具各造一个失败样本；全量跑完受保护根回到 `provider_samples=8 / state=0`。
+
+**为什么 FAIL**（一条 Required，P2）：`R-USSHORT-P5-NEW-TEST-MODULE-NOT-REGISTERED-IN-TRACKED-IO-INVENTORY`。取证：我亲跑全量 `Ran 4329 tests in 676.629s / FAILED (failures=1)`、`RESULT status=FAIL exit=1 elapsed=677.8s deadline=860s`，失败项 `test_b0_inventory_is_reproducible_and_allowlist_is_exact` → `284 != 283`。**顺带回答"修复时全量为什么没跑完"**：不是超时（677.8s < 860s）也不是崩溃，是这条真红 + ledger 固定的 `-f` 快速失败，所以 wrapper 正常结束却拒绝记 PASS。
+
+### 本轮按类记录（用户 2026-08-03 要求：漏洞若成类，按类记进交接）
+
+- **类 A｜声明了证据字段，却不强制被填写或被读取（静默降级）**。成员：`parent_plan_artifact`（挂在 `ParentPlanDocument` 的**属性**上，`dict()`/JSON 往返/`plan_budget.py:584` 三种拷贝我实测全丢，而两份 schema 的 `plan_binding.required` 都不含它）、`live_authorized_budget_aborted`（无消费者）、`live_authorized_paid_evidence_unavailable`（无消费者）。类级修法：schema 对该产出形态设 `required`（缺失即 fail-closed）或把出处放进 payload 本体；状态串至少给一个消费点。正文与实测输出见 register 同节。
+- **类 B｜测试把产物写进 tracked 目录，而 residue 守卫只盯两个 private root**。实测：全量运行期间 `docs/` 下出现两个 `test_b8kresume_*.json`（无 gitignore 规则命中 → 进 `git status`），由 `test_us_short_batch5_bankruptcy_8k_candidate_resume_scan.py` 写出、结束时自清；跑挂就会留下，且此刻 `git add -A` 会把它扫进提交。`PROTECTED_PRIVATE_ROOTS` 只有 `state/us_short` 与 `provider_samples`。类级修法：把 tracked 根纳入 residue 守卫监视集（让守卫自己枚举越界者），写产物的测试一律用临时目录。
+
+**顺序**：`B0 ✅ → B1 ✅ → 上限/入口 ✅ → B2 ✅ → A1 ✅ → A2+A3 ✅ → A4 ✅ → P5 第一刀 ✅ → P5 第二刀（返工：补 inventory）`。
+
+**给 Codex 的命令**：`修复 P5 第二刀：① 同步 docs/us_short_test_io_inventory_20260801.json（新增 test_us_short_llm_theme_discovery_plan_bound_offline_closure 的 IO 条目 + module_count 283→284）并把该文件纳入本刀改动清单 ② 亲跑全量直到 ledger 为当前 fingerprint 记下 PASS（注意 ledger 带 -f，第一条红就停，别把「跑了 4329 条」当跑完）③ 按 register 本节「类级记录」两类各做一次收口：类 A 把 parent_plan_artifact 在 plan-bound 产出形态下设为 schema required 或改为随 payload 传递，并给两个 live_authorized_* 状态串各接一个消费点或明写为诊断专用；类 B 把 docs/presets/schemas/research 纳入 residue 守卫的 PROTECTED 根并让越界测试改用临时目录 ④ 合并前注意：本树落后 master 40 个提交、x 腿签名单行两边都改过，合并须同时保留 master 的 raw_root 改动，合并后重跑 tests.test_us_short_discovery_class_guards`
+
+## 2026-08-03 追加：Claude Code 对桌面两份软发现文档的一致性审查 —— FAIL（不是代码刀）
+
+**审查对象与基准**：桌面《方案与执行_20260725》《未完成清单_20260728》两份（对 reviewer 只读）对照 d3bc 审查树 + master + `docs/us_short_system_design.md` + register/SESSION_LOG/本 handoff。本节不涉及任何代码改动，也不对本轮 Codex 刚落的 P5 修复表态（那是下一轮 `复审` 的事）。
+
+**为什么 FAIL**（两条 Required，均 P2）：
+
+- `R-USSHORT-DESKTOP-DOCS-SOFT-BOOST-LISTED-AS-FROZEN-WHILE-ONE-CLICK-DEFAULTS-ON` —— 两份文档都把 `theme_soft_boost_enabled` 列进「继续冻结的五项」，但探针实测 `CapstoneContext` 两个软发现字段发行默认值都是 `True`、CLI 只有紧急 opt-out、`seam_score.py:365` 把 boost 直接加进 `core_score`，设计权威 §4.3（`us_short_system_design.md:168`）也写的是「底层缺省 OFF、**正式一键路径显式 ON**」。这是那五项里**唯一**已经作用于选股的开关，说反了会让人以为周报不带软加分。
+- `R-USSHORT-DESKTOP-DOCS-UNFINISHED-LIST-LAGS-THE-REVIEW-WORKTREE-BY-ONE-ROUND` —— 类级。
+
+### 本轮按类记录（用户 2026-08-03 要求：漏洞若成类，按类记进交接）
+
+- **类 C｜桌面「未完成清单」按 master 写，对在飞的审查树整体滞后一轮，且没有任何「有工作树在飞」的指针**。成员（三条，均已实测两态）：① P5「一键入口接 plan 机器」——master `--parent-plan` 0 命中（文档对 master 成立），d3bc 两个 runner 都已有该参数且 live 拒自由 `--query`，文档自列的三件事全部已实现并经两轮复审；② 两个 `live_authorized_*` 状态串「无下游消费者」——master 0 命中成立，d3bc 已由 `is_diagnostic_only_execution_status` 接消费点；③「离线端到端跑到打分」——通过率目的已达成（`member_gate=2/3`、`industry_gate=1/3`），但链止于 `provisional_theme_validate`、**没到打分**，属部分作废。**类级修法**：桌面件加「在飞工作树」指针并按 master / 审查树两态标注，或把「未完成项」单一来源整体退役到 register + 本 handoff，桌面只留设计与红线。四条不阻塞 Optional（`provider_samples` 残留数 8 vs 实测 163/2、头部版本行与「当前建序」过期、全量数字 `5121` 过期、20260730 运行形状未标历史）正文见 register 同节。
+
+**已核实成立、下一轮别乱改**：A4「唯一付费出口」在 master 实证成立（真实 `.search()/.create()/urlopen()` 与三个 client 构造只在 `paid_gateway.py`，runner 的 `.search(` 全是 `SECRET_RE`）；`20260802` 槽确实烧掉（web/x 冻结件 + 三个 `_budget.json` 在 master 盘上）；模板仍是 v0.1.0 且 `EXPECTED_POLICY_CONTENT_SHA256` 在位；账本行确实无签名；handoff 确实连续两轮缺 executor 小节（本轮仍缺）；两开关真冻结；≤5 分分档口径与设计 §4.3 一致；文档引用的 9 个 commit 在 master 全部存在。
+
+**顺序**：`B0 ✅ → B1 ✅ → 上限/入口 ✅ → B2 ✅ → A1 ✅ → A2+A3 ✅ → A4 ✅ → P5 第一刀 ✅ → P5 第二刀（修复已落，待复审）｜桌面文档一致性（本节，FAIL）`。
+
+**给用户的一行**：桌面两份件对我只读，所以这两条 Required 的落地要么你自己改，要么下命令让 executor 改；仓内权威（设计 §4.3）无需改动。（**已由下节的复审收口**：用户当轮改口「按代码更新桌面两份件」，两份件已按真实代码态更新完毕。）
+
+## 2026-08-03 追加：Claude Code 对 P5 第二刀 FAIL 修复的独立复审 —— FAIL（该封的三类真封了，网关那条是老类复发）
+
+**结论**：不通过、不提交不合入。上一条 Required（inventory 漏记）与两个类级项（类 A 证据出处、类 B tracked 根残留）我逐条实测**真闭**；卡住的是一条我与独立对抗 agent **各自独立**打到的付费洞。
+
+**已核实真闭（下一轮别改坏）**：inventory 三处计数 + sha 同步、全量对当前代码态 `CACHED GREEN 5161 OK`；`build_stage1_plan_binding` 对 `dict()` / JSON 往返 / `plan_budget` 式复制三种形态全部 fail closed，半供给与畸形摘要同拒，两份 schema 把 `parent_plan_artifact` 真设成 required（删掉即被 jsonschema 拒）；`is_diagnostic_only_execution_status` 逐值精确且植入变异让点名测试转红；四个新纳管 tracked 根各自能被植入残留打红（我的植入已清干净）；bankruptcy 测试换目录后**仍在验生产合同**（`_git_ignored` 对 summary 根返 `False`）；inventory allowlist 增的 3 条是字符串字面量收据字段、不是写盘，且被独立的增长守卫兜住。设计意图零漂移，卫生 clean。
+
+**为什么 FAIL**（一条 Required，P1）：`R-USSHORT-P5-GATEWAY-SKIPS-THE-PLAN-WHEN-THE-CALLER-OMITS-QUERY-RECORDS`。取证：`execute_live_web_orchestration(parent_plan=<合法计划>)` 省略 `query_records`（shipped 默认）→ **付了 2 次计划外的钱**（`['OFF PLAN PAID ONE','OFF PLAN PAID TWO']`，计划里根本没有这两句）；传了 plan-derived records 就只打计划内两条，传伪造 record 则零扣账即拒。根因是 `_query_fields` 把裸 `str` 映成 `query_id=None`，而 `_validate_plan_bound_request` 第一行 `if request.query_id is None: return` —— 有计划也不看。两个 `main()` 当前都显式传 records，所以 shipped CLI 是绑住的；洞在于这条不变式住在**调用方的实参表**里，不住在网关里。
+
+### 本轮按类记录（用户 2026-08-03 要求：漏洞若成类，按类记进交接）
+
+- **类 D｜「默认值即钱路」复发（第三次）**。历史：① `R-USSHORT-A4-ORCHESTRATION-BUDGET-STILL-DEFAULTS-TO-NONE`（08-02，P2）② A4 第五次返工的两个 persist 回调（08-03 已闭：required keyword-only + 网关扣账前兜底 + `tests/test_us_short_llm_theme_discovery_plan_budget.py:947-951` 的无默认值静态断言）③ 本轮。**本轮 AST 类扫全表**（钱路参数逐个查默认值）：
+
+  | 成员 | 位置 | 现状 |
+  |---|---|---|
+  | `query_records` | web `:1431` / x `:900` | **未修**：默认 `None` → `:1457`/`:946` 回落裸字符串 → 网关跳过计划 |
+  | `parent_plan` | web `:1432` / x `:901` | **未修**：默认 `None`，与上一条无互斥校验 |
+  | `request.query_id is None` 早退 | `paid_gateway.py:444` | **未修**：网关自身无「有计划就必须带 query_id」兜底 |
+  | **`transport`（类扫新发现，此前无人提过）** | web `:1429` vs x `:898` | **未修 + 两条 lane 契约不对称**：web 是 `transport: paid_gateway.LiveTransport`（必填、具体类型），x 是 `transport: Any \| None = None` 且函数体只对 `dispatch_budget`/`persist_response` 抛错、不校验 transport；而 `live_authorized` 归属正由「真 transport 进 `build_x_fetch_packet`」铸出。行为影响（省它是否会「付了钱却拿不到 live 归属/录不到 provider 原文」= K3-R83 老伤形态）**NOT_VERIFIED，只做了静态对照** |
+  | `dispatch_budget` / 两个 persist 回调 | 两条 lane | 已修 |
+
+- **类级修法：这一轮的交付物必须是「从仓库派生的谓词」，不是再补一个点名 assert**。根因诊断：前两次的反控都是**手写具体名字**（`:947-951` 只断言 `persist_search_response` 一个参数），手写清单锁得住已知实例、锁不住类——`query_records` / `parent_plan` / x 侧 `transport` 就是这么连着漏过去的。这违反了本项目自己的收敛机制第 7 条（矩阵两根轴都要从仓库派生、新出口自动出格子、无需有人手写清单）。要落的三条派生式谓词：
+  1. **钱路参数必填**：从 `paid_gateway` 的 dispatch 入口与两条 lane 的 live 入口 AST 派生「钱路参数集合」，逐个断言 `default is inspect.Parameter.empty`；新加一个带宽松默认值的钱路参数即自动转红。
+  2. **状态串必须双向有主**：`DIAGNOSTIC_ONLY_EXECUTION_STATUSES` 及各 summary 状态枚举的每个成员，必须同时存在 ≥1 产出表达式与 ≥1 消费点（本轮实测：四个正常状态各 2–3 处，`live_authorized_paid_evidence_unavailable` 仅 1 处=零产出点）。这条同时防「写了没人读」和「读了没人写」。
+  3. **两条 lane 同名钱路参数契约一致**：web/x 同名参数的默认值与类型注解必须一致，不一致即红——`transport` 正是被这条漏掉的。
+  另配两条便宜的：把「每轮 handoff 必须有 executor 小节」并进已有 doc-governance guard（现在只管 SESSION_LOG，所以 K3-R82/K3-R109 那条交接纪律类照样复发到第三轮）；每条新谓词都要配一次**能真红**的植入对照，不得再出现恒真式。正文与实测输出见 register 同节。
+
+**四条 Optional**（`live_authorized_paid_evidence_unavailable` 是无产出点的死常量、显式出处参数不校验内容、`read_parent_plan` 不校 canonical 决策槽、handoff 连续三轮缺 executor 小节）正文同在 register。
+
+**顺序**：`B0 ✅ → B1 ✅ → 上限/入口 ✅ → B2 ✅ → A1 ✅ → A2+A3 ✅ → A4 ✅ → P5 第一刀 ✅ → P5 第二刀 ✅ → P5 第三刀（返工：网关侧兜底 + 钱路参数必填 + 点名反控）`。（**已由本文末节收口**：第三刀已执行并复审，结论 FAIL，见文末。）
+
+**桌面两份件已按本轮真实代码态更新**（用户当轮授权）：`us_short_软发现通道_方案与执行_20260725.md` 与 `..._未完成清单_20260728.md` 追加了 2026-08-03 覆盖节——更正「`theme_soft_boost_enabled` 冻结」的错述、标明 P5 三刀的真实状态与「在飞工作树 = d3bc、未合入」。
+
+**给 Codex 的命令**：`修复 P5 第三刀（按类修，禁止只补被点名那条腿）：① paid_gateway._validate_plan_bound_request 在 self._parent_plan 是合法 Mapping 而 request.query_id is None 时，于任何扣账与付费之前抛错（对齐 A4 的 stage1 缺 sink 兜底）② 两条 lane 的 execute_live_*_orchestration 把 query_records 改成 required keyword-only 或与 parent_plan 互斥校验（给了 plan 必须给 records）③ x 侧 transport 对齐 web：改成必填 + 具体类型 LiveTransport，并先跑一次探针确认「省 transport 是否会付了钱却拿不到 live 归属」，结论写进 register ④ 落三条派生式谓词替代手写点名 assert：(a) 从 paid_gateway dispatch 入口与两条 live 入口 AST 派生钱路参数集合、逐个断言 default is inspect.Parameter.empty (b) 每个 summary/诊断状态串必须同时有 ≥1 产出表达式与 ≥1 消费点 (c) web/x 同名钱路参数的默认值与类型注解必须一致；三条各配一次能真红的植入对照，禁恒真式 ⑤ 顺手收 register 本节四条 Optional，其中 live_authorized_paid_evidence_unavailable 二选一：走诊断槽或从集合删除并注释说明 ⑥ 把「每轮 handoff 必须有 executor 小节」并进 tests/test_doc_governance_guard.py ⑦ 重跑全量取得当前 fingerprint 的 PASS 记账后再交审查`
+
+## 2026-08-03 追加：Claude Code 对 P5 第三刀的独立复审 —— FAIL（洞真堵上了，但把 live 通道夹死在付费之后）
+
+**结论**：不通过、不提交不合入。上一轮那条 P1 在**运行时确实关掉了**，四条处方全部落地，而且我上轮最看重的那件——**派生式谓词是真派生**——经我植入一个全新关键字验证通过。卡住的是收紧收过了头，以及保护补丁的控制不存在。
+
+**已核实真闭（下一轮别改坏）**：上轮探针原样重跑 `billed=0/paid=0`；省 `query_records` 直接 `TypeError`（required keyword-only 落地）；给 live 编排加一个**任何清单里都没有的**新关键字 `brand_new_money_knob=None` → 谓词立刻报红（基线 `[]`），证明它走 `kwonlyargs` 全量而非硬编码名表；两条 lane 的 `query_records`/`parent_plan`/`transport` 契约已对齐且 transport 有运行时 `isinstance`；canonical 决策槽守卫成立；`live_authorized_paid_evidence_unavailable` 按二选一从诊断集合移除、死常量消解；全量 `CACHED GREEN 5165 OK`。
+
+**为什么 FAIL**（三条 Required，两条 P1）：
+
+- `R-USSHORT-P5-PLAN-GUARD-BRICKS-THE-STAGE2-REGROUP-AFTER-STAGE1-IS-PAID`(P1)：守卫不看 `request.stage`，把网关自己在 `:618` 构造的**合法 stage-2 regroup**（设计上就没有 query_id）一并拒了。实测 shipped 形状：`billed=['stage1','stage1'] tavily_paid=2 deepseek_paid=0` 后抛错；无 plan 对照 `['stage1','stage1','stage2']` 正常跑完。**钱付完才崩，异常还逃出编排器**（两个 runner 内零 `PaidProviderError` 处理点）。
+- `R-USSHORT-P5-HEADLINE-PLAN-GUARD-AND-TRANSPORT-GUARD-HAVE-NO-PLANTED-CONTROL`(P1)：把 pre-patch 原体植回去，四个相关测试模块 `ran=183 failures=0` —— 堵洞那行零点名控制；transport 守卫在 `tests/` grep 命中 0。
+- `R-USSHORT-P5-PLAN-GUARD-DEGRADES-OPEN-ON-A-NON-MAPPING-PLAN`(P2)：`object()`/`list`/`SimpleNamespace` 三种非 Mapping plan 均 `NO RAISE billed=1`，守卫降级成「没有计划」。
+
+### 本轮按类记录（用户 2026-08-03 要求：漏洞若成类，按类记进交接）
+
+- **类 E｜收紧类改动没有配「强制腿正向控制」**。放松类改动我们一直要求反向控制；这轮反过来吃亏：四条新测试**全是否定控制**（断言该拒的拒了），没有一条正向控制跑通「live + plan → stage1→stage2 完成」，于是把合法 stage-2 一起拒掉的回归、全量绿也照过。类扫（合法无 query_id 的付费出口）：网关三个 `self._request(` 里只有 `:618` web stage2 regroup 属此类，X 腿单阶段不受影响——**类边界只此一个成员，但它承重**。类级修法：凡收紧一道守卫，必须同时补一条「合法路径仍跑通」的正向控制，并挖空该守卫条件验证它会转红。
+- **类 F｜新守卫零点名控制（本轮两处）**。`plan-bound Stage-1 request requires a plan query record` 的**裸字符串分支**与 `transport is required for live` 都没有能真红的控制（前者植入原体 183 全绿，后者 tests 命中 0）。这与上一轮已记的「手写点名 vs 派生谓词」同源：本刀把**谓词**做对了，却漏了**给新守卫本身配控制**。类级修法：每新增一道 fail-closed 守卫，同轮必须交一条执行式反控（删掉守卫即转红），并把「新守卫必须有对应反控」做成可派生检查。
+
+**顺序**：`B0 ✅ → B1 ✅ → 上限/入口 ✅ → B2 ✅ → A1 ✅ → A2+A3 ✅ → A4 ✅ → P5 第一刀 ✅ → 第二刀 ✅ → 第三刀 ✅（洞已堵）→ 第四刀（返工：stage 条件 + 正向控制 + 两条守卫补反控 + 非 Mapping fail closed）`。
+
+**给 Codex 的命令**：`修复 P5 第四刀（按类修）：① paid_gateway._validate_plan_bound_request 的 query_id is None 分支加 stage 条件——只对 request.stage == "stage1" 要求 plan query record，stage2 regroup 放行 ② 补正向控制：live + 合法 plan 跑通 stage1→stage2，断言计费序列恰为 ['stage1','stage1','stage2'] 且 regroup 真执行；挖空该 stage 条件必须让这条正向控制转红 ③ 给两条零控制的守卫各配执行式反控：持有计划 + query_records=["裸字符串"] 必抛且 billed=0（守卫改回早退即转红）、live 编排传 transport=None/鸭子类型必抛且零扣账（删 isinstance 即转红）④ parent_plan 非 None 且非 Mapping 时 fail closed，不得降级成「无计划」，配点名反控 ⑤ 顺手收 register 本节三条 Optional：envelope 读了又丢（把已派发次数绑到 stage1_max_dispatch_count）、派生谓词补 positional/**kwargs 两轴、handoff 补 executor 小节 ⑥ 重跑全量取得当前 fingerprint 的 PASS 记账后再交审查`
+
+## 2026-08-03 追加：P5 第四刀 executor 小节（Claude Code 亲自执行；两轮子 agent 自审）
+
+**为什么是我执行**：用户本轮明确指令「你自己修，修完起子 agent 自审」，并要求「一直改到 pass，不然就循环修复-自审」。故本刀由 reviewer 亲自实施，**未提交未合并**——写代码的人不给自己发通过证。（本节同时补上连续四轮缺失的 executor 小节，Optional 已闭。）
+
+**改了什么**：把付费门的判定从三轮摞上去的 `if` 换成一张总表 `PLAN_GATE_DECISIONS`（轴 = `stage × plan_state × identity`，2×3×2=12 格全填），`_validate_plan_bound_request` 与 `_require_stage1_query_records` 只读表；`plan_gate_decision` 先查 `PLAN_GATE_STAGES` 再查表，未知/漂移 stage 一律 `deny_unknown_stage`；membership 分支前加非 Mapping 的 fail-closed 转换，避免裸 `AttributeError` 溜过 `except PaidProviderError`。
+
+**测试侧**：手写 `GOLDEN_DECISIONS`（不从被测模块派生）逐格比对 + 12 格逐格驱动真网关（拒的格子断言零扣账零 provider 触碰）+ **强制腿正向控制**（live+plan 跑通 stage1→stage2、断言计费序列恰为 `['stage1','stage1','stage2']`）+ transport 守卫反控 + 漂移 stage 拒绝 + 计划中途被改的身份用例。另把派生关键字谓词补上 positional-default 与 `**kwargs` 两条盲轴，doc-governance 守卫补上「`## 日期` 缺分隔符会吞掉邻居 entry」的漏洞（含植入用例）。
+
+**两轮自审的账**（详见 register 同节）：第一轮 4 条全是真问题、全部已修，其中两条是我自己写坏的——stage 轴折成一个放行桶（`banana`/`STAGE1`/空串在持有计划时都被放行）、以及一条**恒真式** anti-creep 控制。第二轮行为面无红，4 条 Optional 收 3 条（`PLAN_GATE_STAGES` 零消费、`verify_membership` 裸 `AttributeError`、静态 creep 检测器的注释吹牛已如实收窄），第 4 条「9/12 格只有 golden 表兜」判定不改并写明理由。
+
+**验证**：affected focused `294 OK/37.1s`；官方全量 `Ran 5174 tests in 456.078s — OK`，ledger `PASS/457.2s/deadline=860s`，fingerprint `c384fb90cacd`；`5165→5174` 恰为新增 9 条用例；残留 `state/us_short` 0 文件、`provider_samples` 2 个不变；`git diff --check` clean；未联网、未调 provider、未付费。**一处如实未解**：返工中途一次全量在第 2468 条 fail-fast 转红，输出被我自己 `tail` 截断、失败身份未捕获，修完 stage 轴等四条后连续两次全量 `5174 OK`、已不可复现；最可能原因是当时过宽的 stage 桶（推断，未经证实）。
+
+**顺序**：`… → A4 ✅ → P5 第一刀 ✅ → 第二刀 ✅ → 第三刀 ✅ → 第四刀（本节，待独立审查）`。
+
+**给用户的一行**：要合入请下 `审查`；本刀不自证提交。
