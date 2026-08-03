@@ -24,7 +24,7 @@
       "const": "data_health"
     },
     "schema_version": {
-      "const": "1.7.0"
+      "const": "1.8.0"
     },
     "generated_at": {
       "type": "string"
@@ -115,6 +115,7 @@
         "rank_universe_reconciliation",
         "suspend_daily_coverage",
         "margin_coverage",
+        "moneyflow_coverage",
         "completeness_score_min",
         "completeness_score_below_95_count",
         "completeness_score_below_75_count"
@@ -454,6 +455,56 @@
           "allOf": [
             {"if": {"properties": {"status": {"const": "complete"}}}, "then": {"properties": {"reference_date": {"type": "string", "pattern": "^[0-9]{8}$"}, "coverage_complete": {"const": true}, "effective_ref_date": {"type": "string", "pattern": "^[0-9]{8}$"}, "row_count": {"minimum": 1000}, "universe_size": {"minimum": 1000}}}},
             {"if": {"properties": {"status": {"enum": ["incomplete", "unavailable", "invalid"]}}}, "then": {"properties": {"coverage_complete": {"const": false}}}}
+          ]
+        },
+        "moneyflow_coverage": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "reference_date",
+            "requested_trade_dates",
+            "observed_trade_dates",
+            "row_count",
+            "universe_size",
+            "target_universe_size",
+            "target_complete_count",
+            "coverage_complete",
+            "status"
+          ],
+          "properties": {
+            "reference_date": {"type": ["string", "null"], "pattern": "^[0-9]{8}$"},
+            "requested_trade_dates": {
+              "type": "array",
+              "items": {"type": "string", "pattern": "^[0-9]{8}$"}
+            },
+            "observed_trade_dates": {
+              "type": "array",
+              "items": {"type": "string", "pattern": "^[0-9]{8}$"}
+            },
+            "row_count": {"type": "integer", "minimum": 0},
+            "universe_size": {"type": "integer", "minimum": 0},
+            "target_universe_size": {"type": "integer", "minimum": 0},
+            "target_complete_count": {"type": "integer", "minimum": 0},
+            "coverage_complete": {"type": "boolean"},
+            "status": {"enum": ["complete", "incomplete", "unavailable", "invalid"]}
+          },
+          "allOf": [
+            {
+              "if": {"properties": {"status": {"const": "complete"}}},
+              "then": {
+                "properties": {
+                  "reference_date": {"type": "string", "pattern": "^[0-9]{8}$"},
+                  "requested_trade_dates": {"minItems": 5},
+                  "observed_trade_dates": {"minItems": 5},
+                  "row_count": {"minimum": 1},
+                  "coverage_complete": {"const": true}
+                }
+              }
+            },
+            {
+              "if": {"properties": {"status": {"enum": ["incomplete", "unavailable", "invalid"]}}},
+              "then": {"properties": {"coverage_complete": {"const": false}}}
+            }
           ]
         },
         "completeness_score_min": {

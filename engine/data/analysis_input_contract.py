@@ -162,10 +162,12 @@ def _validate_pit_invariants(payload: dict[str, Any], label: str, official_input
     l3_provider = source.get("l3_provider")
     l3_coverage = source.get("l3_coverage")
     schema_version = payload.get("schema_version")
-    if schema_version == "1.3.0":
+    if schema_version in {"1.3.0", "1.4.0"}:
         margin = (payload.get("market_context") or {}).get("margin_coverage")
         if not isinstance(margin, dict):
-            raise AnalysisInputContractError(f"{label} margin coverage is required for schema_version 1.3.0")
+            raise AnalysisInputContractError(
+                f"{label} margin coverage is required for schema_version {schema_version}"
+            )
         reference_date = _parse_date8(margin.get("reference_date"), "margin_coverage.reference_date", label)
         if reference_date != price_data_through:
             raise AnalysisInputContractError(
@@ -190,6 +192,84 @@ def _validate_pit_invariants(payload: dict[str, Any], label: str, official_input
                     or universe_size < 1000 or row_count < universe_size):
                 raise AnalysisInputContractError(
                     f"{label} complete margin coverage is below the universe floor"
+                )
+        if schema_version == "1.4.0":
+            moneyflow = (payload.get("market_context") or {}).get("moneyflow_coverage")
+            if not isinstance(moneyflow, dict):
+                raise AnalysisInputContractError(
+                    f"{label} moneyflow coverage is required for schema_version 1.4.0"
+                )
+            moneyflow_reference = moneyflow.get("reference_date")
+            if moneyflow_reference is not None:
+                parsed_moneyflow_reference = _parse_date8(
+                    moneyflow_reference, "moneyflow_coverage.reference_date", label
+                )
+                if parsed_moneyflow_reference != price_data_through:
+                    raise AnalysisInputContractError(
+                        f"{label} moneyflow coverage reference_date must equal price_data_through"
+                    )
+            moneyflow_status = moneyflow.get("status")
+            requested_dates = moneyflow.get("requested_trade_dates")
+            observed_dates = moneyflow.get("observed_trade_dates")
+            if not isinstance(requested_dates, list) or not isinstance(observed_dates, list):
+                raise AnalysisInputContractError(
+                    f"{label} moneyflow coverage dates must be lists"
+                )
+            for date_index, date_value in enumerate(requested_dates):
+                _parse_date8(
+                    date_value,
+                    f"moneyflow_coverage.requested_trade_dates[{date_index}]",
+                    label,
+                )
+            for date_index, date_value in enumerate(observed_dates):
+                _parse_date8(
+                    date_value,
+                    f"moneyflow_coverage.observed_trade_dates[{date_index}]",
+                    label,
+                )
+            if len(set(requested_dates)) != len(requested_dates) or len(set(observed_dates)) != len(observed_dates):
+                raise AnalysisInputContractError(
+                    f"{label} moneyflow coverage dates contain duplicates"
+                )
+            if not set(observed_dates).issubset(set(requested_dates)):
+                raise AnalysisInputContractError(
+                    f"{label} moneyflow observed dates must be within requested dates"
+                )
+            try:
+                target_total = int(moneyflow.get("target_universe_size"))
+                target_complete = int(moneyflow.get("target_complete_count"))
+                row_count = int(moneyflow.get("row_count"))
+                universe_size = int(moneyflow.get("universe_size"))
+            except (TypeError, ValueError) as exc:
+                raise AnalysisInputContractError(
+                    f"{label} moneyflow coverage has invalid counts"
+                ) from exc
+            if (
+                target_total < 0
+                or target_complete < 0
+                or target_complete > target_total
+                or row_count < 0
+                or universe_size < 0
+            ):
+                raise AnalysisInputContractError(
+                    f"{label} moneyflow coverage counts are inconsistent"
+                )
+            if moneyflow_status == "complete":
+                if (
+                    moneyflow_reference is None
+                    or moneyflow.get("coverage_complete") is not True
+                    or len(requested_dates) != 5
+                    or len(observed_dates) != 5
+                    or observed_dates != requested_dates
+                    or row_count <= 0
+                    or target_complete != target_total
+                ):
+                    raise AnalysisInputContractError(
+                        f"{label} complete moneyflow coverage is inconsistent"
+                    )
+            elif moneyflow.get("coverage_complete"):
+                raise AnalysisInputContractError(
+                    f"{label} incomplete moneyflow coverage cannot claim complete"
                 )
     if l3_mode == "pit":
         if not l3_snapshot_date:

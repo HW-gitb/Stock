@@ -47,7 +47,8 @@
 
 ### 验证命令与结果
 
-- 审查方亲跑 focused 超集 `.toolsun_unittest_with_repo_pythonpath.cmd tests.schema.test_analysis_input_contract tests.test_a_short_effect_contract tests.test_a_short_weekly_pipeline` = `538 OK / 46.8s / exit 0`，与执行方计数一致；按 `AGENTS` rule 4 未重跑执行方已记账的 `full_pack_ledger run a_short = 2072 OK / 205.8s / exit 0`。
+- 审查方亲跑 focused 超集 `.tools
+un_unittest_with_repo_pythonpath.cmd tests.schema.test_analysis_input_contract tests.test_a_short_effect_contract tests.test_a_short_weekly_pipeline` = `538 OK / 46.8s / exit 0`，与执行方计数一致；按 `AGENTS` rule 4 未重跑执行方已记账的 `full_pack_ledger run a_short = 2072 OK / 205.8s / exit 0`。
 - 真数据探针：用真校验器对主树 13 个官方 `analysis_input` 与 27 个 `result/a_short/backtest/generated/*` 产物逐个跑 `official_input=False/True` 对照。仅 `20260727` 两档皆过；6 个批次由 lenient-PASS 翻成 official-REJECT；回测子树 27/27 会被判官方，但因缺 `run_identity` 早被既有官方门 FATAL，故不可达。
 - 桌面验收 ③（`close` 与 `ma5/ma10/ma20/support/atr` 恒同源同日）由构造成立：`_candidate_price_clock` 与 `:4374` 的 `observed candidate price clock != price_data_through` FATAL 已把序列末根钉在 `price_data_through`。`close=None` 的反方向不可达：`cands = eligible_cands` 之前已做 `_candidate_price_exclusion` 与 `len(series) < MIN_PRICE_OBS` 整批 FATAL；持仓腿 `:511` 同门。
 - 官方腿真接线：`runners/weekly_screening.ps1:428` 传的正是 `result/a_short/<AsOf>/analysis_input.json`。
@@ -84,7 +85,8 @@
 
 ### 验证命令与结果
 
-- 审查方亲跑 focused 超集 `.toolsun_unittest_with_repo_pythonpath.cmd tests.schema.test_analysis_input_contract tests.phase6.test_egs_analysis_input_contract tests.test_a_short_effect_contract tests.test_a_short_weekly_pipeline` = `552 OK / 54.1s / exit 0`；执行方已记账 `full_pack_ledger run a_short = 2072 OK / 258.2s / exit 0`（rule 4，审查方不重跑）。
+- 审查方亲跑 focused 超集 `.tools
+un_unittest_with_repo_pythonpath.cmd tests.schema.test_analysis_input_contract tests.phase6.test_egs_analysis_input_contract tests.test_a_short_effect_contract tests.test_a_short_weekly_pipeline` = `552 OK / 54.1s / exit 0`；执行方已记账 `full_pack_ledger run a_short = 2072 OK / 258.2s / exit 0`（rule 4，审查方不重跑）。
 - 正控 + 反控直打契约（真产物 `result/a_short/20260714/analysis_input.json`）：宽松档仍 PASS；官方档报新的 must-declare；补 `price_data_through=20260713` 后官方档 PASS；改成 `20260710` 后官方档仍拒。路径谓词逐例：官方日期目录 True、`backtest/generated` False、`snapshot.json` False、非日期目录 False、`..` 归一化后 True。旧符号 `_is_official_analysis_input_path` 全仓零残留。
 - `test_a_short_effect_contract` 在超集内且绿，故本轮未动 `decision_predicate_sha256`。
 
@@ -147,7 +149,8 @@
 
 ### 验证命令与结果
 
-- 审查方亲跑最小覆盖包 `.toolsun_unittest_with_repo_pythonpath.cmd tests.test_a_short_m67_render tests.test_a_short_phase5_engine tests.test_a_short_effect_contract tests.test_a_short_weekly_pipeline` = `687 OK / 46.0s / exit 0`。按用户本轮指令未起独立 agent、未跑全量（风险分级=低危：纯搬家 + 测试补齐，不新增也不改变 fail-closed 判定）。
+- 审查方亲跑最小覆盖包 `.tools
+un_unittest_with_repo_pythonpath.cmd tests.test_a_short_m67_render tests.test_a_short_phase5_engine tests.test_a_short_effect_contract tests.test_a_short_weekly_pipeline` = `687 OK / 46.0s / exit 0`。按用户本轮指令未起独立 agent、未跑全量（风险分级=低危：纯搬家 + 测试补齐，不新增也不改变 fail-closed 判定）。
 - 零残留：`weekly_pipeline import summarize_breakout_source_agreement` 全仓 0 命中；`_PHASE5_POLICY` 在 `weekly_pipeline` 0 命中。
 
 ### 失效的旧结论
@@ -173,7 +176,8 @@
 
 ### 验证命令与结果
 
-- 审查方亲跑最小覆盖包 `.toolsun_unittest_with_repo_pythonpath.cmd tests.test_a_short_effect_contract` = `26 OK / 39.8s / exit 0`；执行方已记账 `full_pack_ledger run a_short = 2077 OK / 243.7s / exit 0`（rule 4，未重跑）。
+- 审查方亲跑最小覆盖包 `.tools
+un_unittest_with_repo_pythonpath.cmd tests.test_a_short_effect_contract` = `26 OK / 39.8s / exit 0`；执行方已记账 `full_pack_ledger run a_short = 2077 OK / 243.7s / exit 0`（rule 4，未重跑）。
 - 审查方自写探针，把新门按三种真实漂移形态各打一遍：**不存在的文件**、**缺 `::` 的散文**、**张冠李戴的符号**——全部被拒并在错误串里点名；基线 `static_contract_error() = None`。
 - 风险分级=低危（治理契约 + 一道静态断言，不碰引擎/选股/provider/PIT）；按用户指令未起独立 agent、未跑全量。
 
@@ -221,7 +225,8 @@
 
 ### 验证命令与结果
 
-- 审查方亲跑 `.toolsun_unittest_with_repo_pythonpath.cmd tests.test_a_short_overlay_adjudication` = `28 OK / 6.8s / exit 0`；执行方已记账 `full_pack_ledger run a_short = 2080 OK`（rule 4，未重跑）。
+- 审查方亲跑 `.tools
+un_unittest_with_repo_pythonpath.cmd tests.test_a_short_overlay_adjudication` = `28 OK / 6.8s / exit 0`；执行方已记账 `full_pack_ledger run a_short = 2080 OK`（rule 4，未重跑）。
 - **等价性亲证（这是本次最关键的一条）**：逐项对照 registry 值与被替换的旧字面量 —— `preliminary.mean_delta_pp_min .25`、`block_win_rate_min .55`、`negative_mean_delta_pp_max -.25`、`promotion.bootstrap_lower_pp_min .25`、`signflip_p_max .025`、`minimum_months 6`、`monthly_cluster_t_min 2.0`、`no_count_rate_pct_max 20.0 → .20`、`negative_at_36.mean_delta_pp_max -.25`、`bootstrap_upper_pp_max 0.0`，**11 项全等、零不等**；新增合取项 `promotion.mean_delta_pp_min 0.25` 不高于 preliminary 同名值，故不收紧。行为保持不变。
 - **复现上一轮探针**：`nonoverlap_block_minimums["36"] = 999` 现由「纹丝不动」变为 `continue_accumulating`，Required 坐实已闭。
 - **新门的反向控制**：`signflip_p_max = 0` / `negative_at_36.mean_delta_pp_max` 取正 / `minimum_months` 传 bool / `promotion` 整段删除 —— 四例全部抛 `OverlayAdjudicationError`。
@@ -310,7 +315,8 @@
 
 ### 验证命令与结果
 
-- 审查方亲跑 `.toolsun_unittest_with_repo_pythonpath.cmd tests.test_a_short_overlay_adjudication tests.test_a_short_weekly_pipeline` = `525 OK / 35.2s / exit 0`；执行方已记账 `full_pack_ledger run a_short = 2080 OK`（rule 4，未重跑）。
+- 审查方亲跑 `.tools
+un_unittest_with_repo_pythonpath.cmd tests.test_a_short_overlay_adjudication tests.test_a_short_weekly_pipeline` = `525 OK / 35.2s / exit 0`；执行方已记账 `full_pack_ledger run a_short = 2080 OK`（rule 4，未重跑）。
 - **边界逐点量清**（新约束写 `> 0` 而不是 `>= 0` 是对的）：`bootstrap_upper_pp_max = 99.0` → 抛（复现审查方原探针，上轮此值是被接受的）；已封值 `0.0` → **仍接受**，不误伤；`0.001` 这种轻微正值 → 即拒，门是紧的；`-1.0` 这种更严的值 → 接受。它与 sibling `mean_delta_pp_max`（已封值 -0.25、要求严格 `< 0`）的宽严差异来自各自的已封值，不是遗留的不对称。
 - **植入控制（证明合并门不是空转）**：把决策日 `20260609` 塞进龙虎榜窗口后，该 wiring 测试由绿转红。候选腿的 `== price_data_through` 同样非空转 —— 该场景下 `price_data_through = 20260608` 与 as_of `20260609` 本就不同，所以这条等式排除的正是「把决策日当价格日」这个错误。
 
@@ -817,3 +823,49 @@ python runners\a_short_account_state_from_manual_tables.py --input-dir state\a_s
 
 - 这是**放松类**改动：日后若再有人想扩大接受形态（例如带市场后缀的其它写法、或允许 5 位代码），必须同样先补一组「仍然必须拒绝」的反控，再动正则。
 - 主板门与「缺前导零」这两条是本次刻意保留的安全腿，不得以「券商也这么导」为由继续放宽。
+## 2026-08-03 追加：moneyflow_ 缓存窗口/部分覆盖修复（Codex executor；待 Claude Code 独立审查）
+### 修复范围
+- 根因是旧 `moneyflow_{trade_dates[0]}` 只绑定窗口首日，未绑定完整五日窗口、源帧、目标标的覆盖和 producer 语义；部分日期或全失败结果也可能进入缓存，L4 只看非空帧就可能加大单资金流分。
+- `A-EGS/egs_main.py` 已改为 `MoneyflowObservation` 信封：精确五日窗口、`moneyflow_v2`、窗口摘要、AST/常量语义指纹、源字段/数值/重复键/`trade_amount`/帧摘要校验；旧裸 DataFrame、旧 key、外部代码集、篡改或语义不匹配均丢弃并重取；不可用/不完整结果不写缓存。
+- `score_l4()` 只接受与本轮目标集合绑定的 complete receipt，且每个目标标的都覆盖全部五日，才允许大单流向加分；否则 fail-closed，`big_ratio` 保持空值。
+### 调用链 / 不变边界
+- `run_egs()` -> `get_trade_dates()` -> `get_moneyflow()` -> cache/`MoneyflowObservation` -> `_moneyflow_usage_receipt()` -> `score_l4()` -> `analysis_input`/data-health -> rank/manifest。
+- analysis input 升为 1.4.0，data health 升为 1.8.0，均写入并校验 `moneyflow_coverage`，并绑定 `price_data_through`；effect contract 已按固定主 Python 的实际清单重封。
+- 本刀不改 provider 选择、实盘/`--as-of 20260803` 数据刷新、financial/margin/block-trade/suspend/relisted/unlock/reduction 缓存族、评分阈值或自动交易边界；四个既有 20260803 未跟踪产物原样保留。
+### 负向控制与验证
+- 新 moneyflow 合同测试覆盖：旧 key 隔离、窗口/语义轮换、裸帧/外部集合/元数据篡改重取、部分/全失败不写缓存、目标覆盖不足不加分、完整目标覆盖才加分。
+- 固定解释器 `C:\Users\cnhea\AppData\Local\Programs\Python\Python313\python.exe`（`Python 3.13.8`）最终 moneyflow+effect pack：`Ran 60 tests ... OK`；schema/data-health/margin：`Ran 53 tests ... OK`；moneyflow/financial/rank：`Ran 35 tests ... OK`；syntax/JSON、`git diff --check` 已通过。
+- 直接 exporter/health 19-test pack 有 2 个既有 IV feed fixture 因缺少 `schema_name` 报错，与本刀无关，记 `NOT_VERIFIED`；provider/live 和新 `--as-of 20260803` 仍未执行。
+### 交接给下一位
+- Claude Code 独立审查 producer/source-binding、精确窗口、L4 消费者、schema/data-health、effect-contract、负向控制和本交接；未取得 review PASS 前不得提交或合并。
+
+## 2026-08-03 追加：私密 lane legacy effect-contract bootstrap 修复（Codex executor；待 Claude Code 独立审查）
+### 问题与修复
+- 私密 lane `state/a_short/weekly_private/<as_of>/` 的最近历史周报早于 effect-contract ledger 特性，JSON 没有 `effect_contract_ledger`。旧加载器把“完全没有这个键”和“键存在但日期/类型/计数错误”都抛成同一个异常，导致带 `-Account` 的 M6.7 周跑被误挡。
+- `_load_previous_effect_contract_ledger()` 现在只对 dict 中完全缺少该键的 prior 报告记录 legacy date 并跳过；会继续寻找更早的可用 ledger。若全是 pre-feature 报告，返回已有 `skipped_no_prior_ledger`，reason 明确记录跳过日期。
+- 键存在但为非 dict、`as_of` 与目录不一致、summary 计数非法，或 JSON 不可读/非对象，仍硬失败，保持 fail-closed。
+### 调用链 / 边界
+- `weekly_screening.ps1 -Account` -> private weekly output -> `publish_weekly_bundle()` -> `_bind_effect_contract_trend_guard()` -> `_load_previous_effect_contract_ledger()` -> `build_effect_contract_ledger()` -> `validate_weekly_report()` -> M6.7 bundle。
+- 没有读取或修改用户真实 private 历史文件，没有执行 provider/live、账户/订单、`-Account` 新实盘或 `--as-of 20260803`；moneyflow 本刀及四个既有未跟踪 20260803 产物均保留。
+### 负向控制 / 验证
+- 新增：legacy-only 显式 bootstrap skip；较新 legacy 后继续命中较早 valid ledger；present-but-malformed 仍抛错。
+- 固定主 Python `C:\Users\cnhea\AppData\Local\Programs\Python\Python313\python.exe`（`Python 3.13.8`）：effect consumer `Ran 15 tests ... OK`；weekly pipeline `Ran 521 tests ... OK`；effect contract `Ran 48 tests ... OK`；syntax/JSON `SYNTAX_JSON_OK`。
+- runner 的 effect-contract decision predicate hash 已重封；无 full/live 结论，独立审查仍待完成。
+### 交接
+- Claude Code 独立审查上述历史分类、旧报告跳过后的 older-valid fallback、present-key 反向控制、effect-contract reseal 与私密 lane 调用链；审查 PASS 前不得提交或合并。
+
+## 2026-08-03 审查收口：M6.7 legacy ledger bootstrap + moneyflow 二审（Claude Code 独立审查 = FAIL）
+
+### Verdict
+- **初判 FAIL → 同轮更正为 PASS，已提交并合入 master。** 代码侧两刀一直是通过的；唯一红点在 docs 层（`R-ASHORT-SESSIONLOG-HEADER-SEPARATOR-BREAKS-REVIEW-TEMPLATE-GUARD`，已 CLOSED）。用户授权「自己修自己审查」后由 Claude Code 同轮自修自验：四条 Required 一次做完，pre-commit 双门 `RESULT tier=focused status=PASS exit=0 tests=55`，唯一入口全量 `RESULT status=PASS exit=0 tests=2299 elapsed=317.6s`（`2284→2299` 的 `+15` 可被新增用例逐条解释）。
+
+### 代码侧实测结论（无 Required）
+- **legacy bootstrap**：把 0d46 的代码指向真实私密库 `D:\cnhea\Stock\state\a_short\weekly_private` 重放桌面第 2 项的实盘阻断——三份历史 `20260612/20260622/20260629` 实测全部无 `effect_contract_ledger`，修后返回 `skipped_no_prior_ledger` 且 reason 点名三个被跳过的日期，原 `prior weekly ledger is missing or date-mismatched` 不再抛出。7 条强制腿反向控制（as_of 不符 / None / list / 计数为负 / 计数为字符串 / payload 非对象 / 不可解析）全部仍 fail-closed。
+- **moneyflow**：`leaf_natures()=leaf_effects()=380` 与新常量一致，`static_contract_error()=None`；`score_l4()` 只在 `status=complete` 且 `coverage_complete is True` 时 `+5`，否则告警且 `big_ratio` 留 `NaN`；声称 complete 却缺 `MoneyflowObservation` 信封或缺必需列则硬抛。coverage receipt 与 `df_l3` 同源，`score_l4` / `analysis_input` / `data_health` 三处口径一致，无目标集合漂移。
+
+### 阻断项（Required 全文见 register，本处只列指针）
+- 两条新 SESSION_LOG 标题缺 `— ` 分隔符 → 模板守卫分块错位 → doc-governance 与 preflight pre-commit 双红 → 唯一入口全量 `RESULT status=FAIL exit=1 tests=1081 elapsed=157.7s`。植入探针证明：只补分隔符仍残留 `missing-proof-of-use`，收口需四条一起做。
+- **过程根因（连续第二轮）**：执行方 `Verify` 只列 `Ran 15/521/48 ... OK`，改动触及 fingerprint-governed 的 `A-EGS/egs_main.py` 与 `runners/a_short_weekly_pipeline.py`，按 rule 3 本就必须跑 lane 全量。
+
+### 交接给下一位
+- Codex：按 register 四条收口后**自己跑一次唯一入口全量**并贴终端 `RESULT status=PASS`；PASS 前不得提交或合并。provider/live、`-Account` 新实盘与 `--as-of 20260803` 仍 `NOT_VERIFIED`。

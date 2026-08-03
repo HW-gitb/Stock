@@ -190,8 +190,8 @@ logging.basicConfig(
 )
 log = logging.getLogger("EGS")
 
-EGS_VERSION = "v7.12"
-ANALYSIS_INPUT_SCHEMA_VERSION = "1.3.0"
+EGS_VERSION = "v7.13"
+ANALYSIS_INPUT_SCHEMA_VERSION = "1.4.0"
 SUSPEND_DAILY_COVERAGE_LOG_SCHEMA_VERSION = "1.0.0"
 _LAST_SUSPEND_DAILY_COVERAGE_OBSERVATION = None
 _LAST_HARD_VETO_SOURCE_HEALTH = {
@@ -1093,6 +1093,7 @@ def export_analysis_input(df_full, watch_df, tier1_final, latest_td, trade_dates
                           tier1_csv_path, full_csv_path, output_root=None,
                           rank_reconciliation=None, rule6_evaluations_by_code=None,
                           price_data_through=None, run_date=None, margin_observation=None,
+                          moneyflow_coverage=None,
                           l0_excluded_counts=None):
     import json as _json
 
@@ -1103,6 +1104,13 @@ def export_analysis_input(df_full, watch_df, tier1_final, latest_td, trade_dates
         base_root = os.path.join(project_root, "result", "a_short")
     price_data_through = str(price_data_through or latest_td)
     run_date = str(run_date or a_share_market_date())
+    moneyflow_coverage = dict(
+        moneyflow_coverage
+        or _default_moneyflow_coverage(
+            price_data_through,
+            list(trade_dates[:MONEYFLOW_FETCH_SESSIONS]),
+        )
+    )
     out_dir = os.path.join(base_root, latest_td)
     os.makedirs(out_dir, exist_ok=True)
 
@@ -1242,6 +1250,7 @@ def export_analysis_input(df_full, watch_df, tier1_final, latest_td, trade_dates
                 else {"reference_date": price_data_through, "effective_ref_date": None, "row_count": 0,
                       "universe_size": 0, "coverage_complete": False, "status": "unavailable"}
             ),
+            "moneyflow_coverage": moneyflow_coverage,
         },
         "account_context": {
             "mode": "new_entry",
@@ -1382,7 +1391,7 @@ def export_stage3_selection_snapshot(top50, tier1_final, latest_td, run_identity
     return out_path
 
 
-DATA_HEALTH_SCHEMA_VERSION = "1.7.0"
+DATA_HEALTH_SCHEMA_VERSION = "1.8.0"
 DATA_HEALTH_SCHEMA_PATH = os.path.join(PROJECT_ROOT, "schemas", "data_health.schema.json")
 
 
@@ -1402,6 +1411,52 @@ class MarginObservation:
         return {
             "reference_date": self.reference_date,
             "effective_ref_date": self.effective_ref_date,
+            "row_count": self.row_count,
+            "universe_size": self.universe_size,
+            "coverage_complete": self.coverage_complete,
+            "status": self.status,
+        }
+
+
+MONEYFLOW_CACHE_SEMANTICS_VERSION = "moneyflow_v2"
+MONEYFLOW_FETCH_SESSIONS = 5
+MONEYFLOW_PROVIDER_FIELDS = (
+    "ts_code", "trade_date",
+    "buy_elg_amount", "sell_elg_amount",
+    "buy_lg_amount", "sell_lg_amount",
+    "buy_md_amount", "sell_md_amount",
+    "buy_sm_amount", "sell_sm_amount",
+    "net_mf_amount",
+)
+MONEYFLOW_AMOUNT_FIELDS = (
+    "buy_elg_amount", "sell_elg_amount",
+    "buy_lg_amount", "sell_lg_amount",
+    "buy_md_amount", "sell_md_amount",
+    "buy_sm_amount", "sell_sm_amount",
+)
+MONEYFLOW_REQUIRED_COLUMNS = MONEYFLOW_PROVIDER_FIELDS + ("trade_amount",)
+
+
+@dataclass(frozen=True)
+class MoneyflowObservation:
+    """Source-bound cache envelope for the five-session moneyflow window."""
+
+    frame: pd.DataFrame
+    reference_date: str | None
+    requested_trade_dates: tuple[str, ...]
+    observed_trade_dates: tuple[str, ...]
+    row_count: int
+    universe_size: int
+    coverage_complete: bool
+    status: str
+    semantics_sha256: str
+    frame_sha256: str
+
+    def public_dict(self):
+        return {
+            "reference_date": self.reference_date,
+            "requested_trade_dates": list(self.requested_trade_dates),
+            "observed_trade_dates": list(self.observed_trade_dates),
             "row_count": self.row_count,
             "universe_size": self.universe_size,
             "coverage_complete": self.coverage_complete,
@@ -1547,6 +1602,7 @@ def build_data_health(df_full, watch_df, tier1_final, analysis_input, latest_td,
                       tier1_csv_path, full_csv_path, rank_reconciliation=None,
                       rank_reconciliation_path=None, watch_eligible_count=None,
                       sidecar_warnings=None, margin_observation=None,
+                      moneyflow_coverage=None,
                       short_history_candidate_count=0):
     errors = []
     warnings_ = []
@@ -1603,6 +1659,24 @@ def build_data_health(df_full, watch_df, tier1_final, analysis_input, latest_td,
             **margin_coverage,
         ))
 
+    declared_moneyflow_coverage = None
+    if isinstance(analysis_input, dict):
+        declared_moneyflow_coverage = (
+            (analysis_input.get("market_context") or {}).get("moneyflow_coverage")
+        )
+    moneyflow_coverage = dict(
+        moneyflow_coverage
+        or declared_moneyflow_coverage
+        or _default_moneyflow_coverage(
+            str((analysis_input or {}).get("price_data_through") or latest_td)
+        )
+    )
+    if moneyflow_coverage.get("status") != "complete":
+        warnings_.append(_health_issue(
+            "moneyflow_coverage", "moneyflow source is not complete for every scored target",
+            **moneyflow_coverage,
+        ))
+
     if not isinstance(analysis_input, dict):
         errors.append(_health_issue("analysis_input", "analysis_input is not a JSON object"))
     else:
@@ -1632,6 +1706,19 @@ def build_data_health(df_full, watch_df, tier1_final, analysis_input, latest_td,
             errors.append(_health_issue(
                 "margin_coverage_clock_binding",
                 "margin reference date is not bound to price_data_through",
+            ))
+        if declared_moneyflow_coverage is not None and declared_moneyflow_coverage != moneyflow_coverage:
+            errors.append(_health_issue(
+                "moneyflow_coverage_consistency",
+                "analysis_input and data_health do not share the same moneyflow observation",
+            ))
+        elif (
+            declared_moneyflow_coverage is not None
+            and moneyflow_coverage.get("reference_date") != analysis_input.get("price_data_through")
+        ):
+            errors.append(_health_issue(
+                "moneyflow_coverage_clock_binding",
+                "moneyflow reference date is not bound to price_data_through",
             ))
         expected_data_provider = (
             "mixed" if source.get("l3_provider") == HITHINK_L3_SOURCE_ID else "tushare"
@@ -1812,6 +1899,7 @@ def build_data_health(df_full, watch_df, tier1_final, analysis_input, latest_td,
             "rank_universe_reconciliation": rank_reconciliation,
             "suspend_daily_coverage": _current_suspend_daily_coverage_observation(),
             "margin_coverage": margin_coverage,
+            "moneyflow_coverage": moneyflow_coverage,
             "completeness_score_min": min(quality_scores) if quality_scores else None,
             "completeness_score_below_95_count": low_quality_count,
             "completeness_score_below_75_count": severe_quality_count,
@@ -1886,6 +1974,37 @@ def validate_data_health_consistency(health):
             raise ValueError("data_health complete margin coverage is inconsistent")
     elif margin.get("coverage_complete"):
         raise ValueError("data_health incomplete margin coverage cannot claim complete")
+    moneyflow = metrics.get("moneyflow_coverage")
+    if not isinstance(moneyflow, dict):
+        raise ValueError("data_health missing moneyflow_coverage")
+    moneyflow_status = moneyflow.get("status")
+    if moneyflow_status not in {"complete", "incomplete", "unavailable", "invalid"}:
+        raise ValueError("data_health moneyflow_coverage has an invalid status")
+    requested = moneyflow.get("requested_trade_dates")
+    observed = moneyflow.get("observed_trade_dates")
+    if not isinstance(requested, list) or not isinstance(observed, list):
+        raise ValueError("data_health moneyflow_coverage dates must be lists")
+    if len(set(requested)) != len(requested) or len(set(observed)) != len(observed):
+        raise ValueError("data_health moneyflow_coverage dates contain duplicates")
+    if not set(observed).issubset(set(requested)):
+        raise ValueError("data_health moneyflow observed dates are outside the requested window")
+    target_total = int(moneyflow.get("target_universe_size") or 0)
+    target_complete = int(moneyflow.get("target_complete_count") or 0)
+    if target_total < 0 or target_complete < 0 or target_complete > target_total:
+        raise ValueError("data_health moneyflow target coverage counts are inconsistent")
+    if moneyflow_status == "complete":
+        if (
+            not isinstance(moneyflow.get("reference_date"), str)
+            or not re.fullmatch(r"[0-9]{8}", moneyflow["reference_date"])
+            or moneyflow.get("coverage_complete") is not True
+            or len(requested) != MONEYFLOW_FETCH_SESSIONS
+            or observed != requested
+            or int(moneyflow.get("row_count") or 0) <= 0
+            or target_complete != target_total
+        ):
+            raise ValueError("data_health complete moneyflow coverage is inconsistent")
+    elif moneyflow.get("coverage_complete"):
+        raise ValueError("data_health incomplete moneyflow coverage cannot claim complete")
     return health
 
 
@@ -1894,6 +2013,7 @@ def export_data_health(df_full, watch_df, tier1_final, analysis_input, latest_td
                        tier1_csv_path, full_csv_path, rank_reconciliation=None,
                        rank_reconciliation_path=None, watch_eligible_count=None,
                        sidecar_warnings=None, margin_observation=None,
+                       moneyflow_coverage=None,
                        short_history_candidate_count=0):
     health = build_data_health(
         df_full=df_full,
@@ -1911,6 +2031,7 @@ def export_data_health(df_full, watch_df, tier1_final, analysis_input, latest_td
         watch_eligible_count=watch_eligible_count,
         sidecar_warnings=sidecar_warnings,
         margin_observation=margin_observation,
+        moneyflow_coverage=moneyflow_coverage,
         short_history_candidate_count=short_history_candidate_count,
     )
     validate_json_schema(health, schema_path=DATA_HEALTH_SCHEMA_PATH, label=f"data_health export {latest_td}")
@@ -3210,41 +3331,76 @@ def get_financial_data(ts_codes):
     return df_merged
 
 def get_moneyflow(trade_dates):
-    key = f"moneyflow_{trade_dates[0]}"
-    if (cached := load_cache(key)) is not None: return cached
-    frames, collected = [], 0
-    for d in tqdm(trade_dates[:5], desc="资金流"):
-        df = safe_api(pro.moneyflow, trade_date=d,
-                      fields="ts_code,trade_date,"
-                             "buy_elg_amount,sell_elg_amount,"
-                             "buy_lg_amount,sell_lg_amount,"
-                             "buy_md_amount,sell_md_amount,"
-                             "buy_sm_amount,sell_sm_amount,"
-                             "net_mf_amount",
-                      retries=2)
-        if df is not None and len(df) > 0:
-            frames.append(df)
-            collected += 1
-            if collected >= 5: break
-        else:
-            log.warning(f"资金流日期 {d} 无数据，已跳过")
+    requested_dates = _canonical_moneyflow_dates(trade_dates)
+    try:
+        semantics_sha256 = _moneyflow_semantics_fingerprint()
+        key = _moneyflow_cache_key(requested_dates, semantics_sha256)
+    except (OSError, TypeError, IndentationError, SyntaxError) as exc:
+        log.warning(f"moneyflow cache fingerprint unavailable; bypassing cache: {exc}")
+        semantics_sha256 = None
+        key = None
+
+    cached = load_cache(key) if key is not None else None
+    if cached is not None:
+        valid, reason = _validate_moneyflow_observation(
+            cached, requested_dates, semantics_sha256,
+        )
+        if valid:
+            return MoneyflowObservation(
+                frame=cached.frame.copy(),
+                reference_date=cached.reference_date,
+                requested_trade_dates=cached.requested_trade_dates,
+                observed_trade_dates=cached.observed_trade_dates,
+                row_count=cached.row_count,
+                universe_size=cached.universe_size,
+                coverage_complete=cached.coverage_complete,
+                status=cached.status,
+                semantics_sha256=cached.semantics_sha256,
+                frame_sha256=cached.frame_sha256,
+            )
+        log.warning(
+            "moneyflow cache observation invalid; discarding and refetching: %s",
+            reason,
+        )
+
+    frames = []
+    for date_str in tqdm(requested_dates, desc="资金流"):
+        frame = safe_api(
+            pro.moneyflow,
+            trade_date=date_str,
+            fields=",".join(MONEYFLOW_PROVIDER_FIELDS),
+            retries=2,
+        )
+        if frame is None or frame.empty:
+            log.warning(f"资金流日期 {date_str} 无数据，已跳过")
+            continue
+        try:
+            frames.append(_prepare_moneyflow_frame(frame, expected_date=date_str))
+        except ValueError as exc:
+            raise RuntimeError(
+                f"moneyflow provider payload is invalid for {date_str}: {exc}"
+            ) from exc
+
     if not frames:
         log.error("近5日资金流全部拉取失败，大单流向加分将缺失")
-        save_cache(key, pd.DataFrame())
-        return pd.DataFrame()
-    result = pd.concat(frames, ignore_index=True)
-    # trade_amount 不是 Tushare 有效字段，本地从各档位买卖额之和推算
-    buy_cols  = ["buy_elg_amount","buy_lg_amount","buy_md_amount","buy_sm_amount"]
-    sell_cols = ["sell_elg_amount","sell_lg_amount","sell_md_amount","sell_sm_amount"]
-    for col in buy_cols + sell_cols:
-        if col in result.columns:
-            result[col] = pd.to_numeric(result[col], errors="coerce").fillna(0)
-    result["trade_amount"] = (
-        sum(result[c] for c in buy_cols  if c in result.columns) +
-        sum(result[c] for c in sell_cols if c in result.columns)
+        return _moneyflow_unavailable_observation(
+            requested_dates, semantics_sha256 or "unavailable",
+        )
+
+    observation = _moneyflow_observation(
+        pd.concat(frames, ignore_index=True),
+        requested_dates,
+        semantics_sha256 or "uncacheable",
     )
-    save_cache(key, result)
-    return result
+    if observation.status != "complete":
+        log.warning(
+            "moneyflow source window incomplete; moneyflow bonus will be disabled: %s",
+            observation.public_dict(),
+        )
+        return observation
+    if key is not None:
+        save_cache(key, observation)
+    return observation
 
 MARGIN_CACHE_SEMANTICS_VERSION = "rule6_v5"
 MARGIN_FETCH_SESSIONS = 12
@@ -3257,6 +3413,236 @@ def _canonical_ast_dump(obj):
     source = textwrap.dedent(inspect.getsource(obj))
     tree = ast.parse(source)
     return ast.dump(tree, annotate_fields=True, include_attributes=False)
+
+
+def _canonical_moneyflow_dates(trade_dates):
+    try:
+        dates = tuple(str(value).strip() for value in list(trade_dates)[:MONEYFLOW_FETCH_SESSIONS])
+    except TypeError as exc:
+        raise ValueError("moneyflow trade_dates must be an iterable") from exc
+    if len(dates) != MONEYFLOW_FETCH_SESSIONS:
+        raise ValueError(
+            f"moneyflow requires exactly {MONEYFLOW_FETCH_SESSIONS} trade dates"
+        )
+    if any(not re.fullmatch(r"[0-9]{8}", value) for value in dates):
+        raise ValueError("moneyflow trade_dates contain an invalid date")
+    if len(set(dates)) != len(dates):
+        raise ValueError("moneyflow trade_dates contain duplicates")
+    return dates
+
+
+def _prepare_moneyflow_frame(frame, expected_date=None):
+    if not isinstance(frame, pd.DataFrame) or frame.empty:
+        raise ValueError("provider frame is empty or not a DataFrame")
+    missing = set(MONEYFLOW_PROVIDER_FIELDS) - set(frame.columns)
+    if missing:
+        raise ValueError(f"missing provider columns: {sorted(missing)}")
+
+    work = frame.copy()
+    work["ts_code"] = work["ts_code"].map(_canonical_ashare_ts_code)
+    if work["ts_code"].isna().any():
+        raise ValueError("provider frame contains invalid A-share codes")
+    work["trade_date"] = work["trade_date"].astype(str).str.strip()
+    if not work["trade_date"].str.fullmatch(r"[0-9]{8}").all():
+        raise ValueError("provider frame contains invalid trade dates")
+    if expected_date is not None and not (work["trade_date"] == str(expected_date)).all():
+        raise ValueError("provider frame contains a trade date different from the request")
+    if work.duplicated(["ts_code", "trade_date"]).any():
+        raise ValueError("provider frame contains duplicate ts_code/trade_date rows")
+
+    numeric = work[list(MONEYFLOW_AMOUNT_FIELDS) + ["net_mf_amount"]].apply(
+        pd.to_numeric, errors="coerce"
+    )
+    numeric_array = numeric.to_numpy(dtype=float)
+    if numeric.isna().any().any() or not np.isfinite(numeric_array).all():
+        raise ValueError("provider frame contains missing or non-finite numeric values")
+    if (numeric[list(MONEYFLOW_AMOUNT_FIELDS)] < 0).any().any():
+        raise ValueError("provider frame contains negative buy/sell amounts")
+    work[list(MONEYFLOW_AMOUNT_FIELDS) + ["net_mf_amount"]] = numeric
+    derived_trade_amount = numeric[list(MONEYFLOW_AMOUNT_FIELDS)].sum(axis=1)
+    if "trade_amount" in work.columns:
+        supplied = pd.to_numeric(work["trade_amount"], errors="coerce")
+        if supplied.isna().any() or not np.isfinite(supplied.to_numpy(dtype=float)).all():
+            raise ValueError("provider/cache frame contains invalid trade_amount values")
+        if not np.allclose(
+            supplied.to_numpy(dtype=float),
+            derived_trade_amount.to_numpy(dtype=float),
+            rtol=0.0,
+            atol=1e-9,
+        ):
+            raise ValueError("trade_amount does not match the source amount columns")
+    work["trade_amount"] = derived_trade_amount
+    return work
+
+
+def _moneyflow_frame_digest(frame):
+    prepared = _prepare_moneyflow_frame(frame)
+    canonical = (
+        prepared[list(MONEYFLOW_REQUIRED_COLUMNS)]
+        .sort_values(["trade_date", "ts_code"], kind="mergesort")
+        .reset_index(drop=True)
+    )
+    payload = canonical.to_json(orient="records", double_precision=15)
+    return hashlib.sha256(payload.encode("utf-8")).hexdigest()
+
+
+def _moneyflow_semantics_fingerprint():
+    contract = {
+        "prepare": _canonical_ast_dump(_prepare_moneyflow_frame),
+        "observation": _canonical_ast_dump(_moneyflow_observation),
+        "usage": _canonical_ast_dump(_moneyflow_usage_receipt),
+        "provider_fields": MONEYFLOW_PROVIDER_FIELDS,
+        "amount_fields": MONEYFLOW_AMOUNT_FIELDS,
+        "required_columns": MONEYFLOW_REQUIRED_COLUMNS,
+        "fetch_sessions": MONEYFLOW_FETCH_SESSIONS,
+    }
+    return hashlib.sha256(repr(contract).encode("utf-8")).hexdigest()[:16]
+
+
+def _moneyflow_cache_key(trade_dates, semantics_sha256=None):
+    dates = _canonical_moneyflow_dates(trade_dates)
+    window_digest = hashlib.sha256("|".join(dates).encode("utf-8")).hexdigest()[:12]
+    semantic_digest = semantics_sha256 or _moneyflow_semantics_fingerprint()
+    return (
+        f"moneyflow_{dates[0]}_{MONEYFLOW_CACHE_SEMANTICS_VERSION}_"
+        f"{window_digest}_{semantic_digest}"
+    )
+
+
+def _moneyflow_observation(frame, requested_dates, semantics_sha256):
+    requested = _canonical_moneyflow_dates(requested_dates)
+    prepared = _prepare_moneyflow_frame(frame)
+    frame_dates = set(prepared["trade_date"].tolist())
+    if not frame_dates.issubset(set(requested)):
+        raise ValueError("moneyflow frame contains dates outside the requested window")
+    observed = tuple(date for date in requested if date in frame_dates)
+    complete = observed == requested
+    return MoneyflowObservation(
+        frame=prepared,
+        reference_date=requested[0],
+        requested_trade_dates=requested,
+        observed_trade_dates=observed,
+        row_count=int(len(prepared)),
+        universe_size=int(prepared["ts_code"].nunique()),
+        coverage_complete=complete,
+        status="complete" if complete else "incomplete",
+        semantics_sha256=str(semantics_sha256),
+        frame_sha256=_moneyflow_frame_digest(prepared),
+    )
+
+
+def _moneyflow_unavailable_observation(requested_dates, semantics_sha256):
+    requested = _canonical_moneyflow_dates(requested_dates)
+    return MoneyflowObservation(
+        frame=pd.DataFrame(columns=MONEYFLOW_REQUIRED_COLUMNS),
+        reference_date=requested[0],
+        requested_trade_dates=requested,
+        observed_trade_dates=(),
+        row_count=0,
+        universe_size=0,
+        coverage_complete=False,
+        status="unavailable",
+        semantics_sha256=str(semantics_sha256),
+        frame_sha256=hashlib.sha256(b"").hexdigest(),
+    )
+
+
+def _validate_moneyflow_observation(observation, requested_dates, semantics_sha256):
+    if not isinstance(observation, MoneyflowObservation):
+        return False, "cache object is not a MoneyflowObservation"
+    if semantics_sha256 is None:
+        return False, "current semantics fingerprint is unavailable"
+    requested = _canonical_moneyflow_dates(requested_dates)
+    if observation.semantics_sha256 != str(semantics_sha256):
+        return False, "semantics fingerprint mismatch"
+    if tuple(observation.requested_trade_dates) != requested:
+        return False, "requested trade-date window mismatch"
+    try:
+        recomputed = _moneyflow_observation(
+            observation.frame, requested, semantics_sha256,
+        )
+    except (TypeError, ValueError) as exc:
+        return False, f"frame contract mismatch: {exc}"
+    if recomputed.public_dict() != observation.public_dict():
+        return False, "observation metadata mismatch"
+    if recomputed.frame_sha256 != observation.frame_sha256:
+        return False, "frame digest mismatch"
+    if observation.status != "complete" or observation.coverage_complete is not True:
+        return False, "cached observation is not complete"
+    return True, ""
+
+
+def _default_moneyflow_coverage(reference_date, requested_trade_dates=None, status="unavailable"):
+    requested = [str(value) for value in (requested_trade_dates or [])]
+    return {
+        "reference_date": str(reference_date) if reference_date else None,
+        "requested_trade_dates": requested,
+        "observed_trade_dates": [],
+        "row_count": 0,
+        "universe_size": 0,
+        "target_universe_size": 0,
+        "target_complete_count": 0,
+        "coverage_complete": False,
+        "status": status,
+    }
+
+
+def _moneyflow_usage_receipt(observation, target_codes):
+    if not isinstance(observation, MoneyflowObservation):
+        return _default_moneyflow_coverage(None, status="invalid")
+    requested = tuple(observation.requested_trade_dates)
+    target = []
+    for value in target_codes or []:
+        code = _canonical_ashare_ts_code(value)
+        if code is None:
+            return _default_moneyflow_coverage(
+                observation.reference_date,
+                requested,
+                status="invalid",
+            )
+        target.append(code)
+    if len(set(target)) != len(target):
+        return _default_moneyflow_coverage(
+            observation.reference_date,
+            requested,
+            status="invalid",
+        )
+
+    try:
+        prepared = _prepare_moneyflow_frame(observation.frame)
+        dates_by_code = prepared.groupby("ts_code")["trade_date"].agg(set)
+        complete_codes = {
+            code for code, dates in dates_by_code.items()
+            if set(requested) == set(dates)
+        }
+    except (TypeError, ValueError):
+        return _default_moneyflow_coverage(
+            observation.reference_date,
+            requested,
+            status="invalid",
+        )
+
+    target_complete_count = sum(code in complete_codes for code in target)
+    target_count = len(target)
+    coverage_complete = (
+        observation.status == "complete"
+        and observation.coverage_complete is True
+        and target_complete_count == target_count
+    )
+    status = "complete" if coverage_complete else (
+        "incomplete" if observation.status == "complete" else observation.status
+    )
+    return {
+        "reference_date": observation.reference_date,
+        "requested_trade_dates": list(requested),
+        "observed_trade_dates": list(observation.observed_trade_dates),
+        "row_count": int(observation.row_count),
+        "universe_size": int(observation.universe_size),
+        "target_universe_size": target_count,
+        "target_complete_count": int(target_complete_count),
+        "coverage_complete": bool(coverage_complete),
+        "status": status,
+    }
 
 
 def _canonical_financial_codes(ts_codes):
@@ -4759,7 +5145,7 @@ def score_l3(df, trade_dates, all_daily):
     return df
 
 
-def score_l4(df, mf_df):
+def score_l4(df, mf_observation, moneyflow_coverage=None):
     df = df.copy()
     if df.empty:
         return _empty_scored_frame(df, {
@@ -4822,26 +5208,43 @@ def score_l4(df, mf_df):
 
     df["l4_flag"] = df.apply(limit_flag, axis=1)
 
-    if not mf_df.empty:
-        for col in ["buy_elg_amount","sell_elg_amount","buy_lg_amount","sell_lg_amount","trade_amount"]:
-            if col in mf_df.columns:
-                mf_df[col] = pd.to_numeric(mf_df[col], errors="coerce").fillna(0)
-        needed = ["buy_elg_amount","sell_elg_amount","buy_lg_amount","sell_lg_amount","trade_amount"]
-        if all(c in mf_df.columns for c in needed):
-            mf_agg = mf_df.groupby("ts_code").agg(
-                elg_buy  = ("buy_elg_amount","sum"),
-                elg_sell = ("sell_elg_amount","sum"),
-                lg_buy   = ("buy_lg_amount","sum"),
-                lg_sell  = ("sell_lg_amount","sum"),
-                total    = ("trade_amount","sum"),
-            ).reset_index()
-            mf_agg["big_net"]   = (mf_agg["elg_buy"] - mf_agg["elg_sell"]) + (mf_agg["lg_buy"] - mf_agg["lg_sell"])
-            mf_agg["big_ratio"] = mf_agg["big_net"] / mf_agg["total"].clip(lower=1)
-            df = df.merge(mf_agg[["ts_code","big_ratio"]], on="ts_code", how="left")
-            df.loc[df["big_ratio"] > 0.15, "l4_score"] += 5
-            df["l4_score"] = df["l4_score"].clip(0, 100)
+    df["big_ratio"] = np.nan
+    coverage = moneyflow_coverage or _moneyflow_usage_receipt(
+        mf_observation,
+        df.get("ts_code", pd.Series(dtype=str)).tolist(),
+    )
+    needed = ["buy_elg_amount", "sell_elg_amount", "buy_lg_amount", "sell_lg_amount", "trade_amount"]
+    if coverage.get("status") == "complete" and coverage.get("coverage_complete") is True:
+        if not isinstance(mf_observation, MoneyflowObservation):
+            raise RuntimeError("complete moneyflow coverage lacks its observation envelope")
+        missing = [column for column in needed if column not in mf_observation.frame.columns]
+        if missing:
+            raise RuntimeError(f"complete moneyflow observation is missing columns: {missing}")
+        mf_df = mf_observation.frame.copy()
+        mf_agg = mf_df.groupby("ts_code").agg(
+            elg_buy=("buy_elg_amount", "sum"),
+            elg_sell=("sell_elg_amount", "sum"),
+            lg_buy=("buy_lg_amount", "sum"),
+            lg_sell=("sell_lg_amount", "sum"),
+            total=("trade_amount", "sum"),
+        ).reset_index()
+        mf_agg["big_net"] = (
+            (mf_agg["elg_buy"] - mf_agg["elg_sell"])
+            + (mf_agg["lg_buy"] - mf_agg["lg_sell"])
+        )
+        mf_agg["big_ratio"] = mf_agg["big_net"] / mf_agg["total"].clip(lower=1)
+        df = df.drop(columns=["big_ratio"], errors="ignore").merge(
+            mf_agg[["ts_code", "big_ratio"]], on="ts_code", how="left"
+        )
+        df.loc[df["big_ratio"] > 0.15, "l4_score"] += 5
+        df["l4_score"] = df["l4_score"].clip(0, 100)
     else:
-        log.warning("资金流数据为空，大单流向加分跳过")
+        log.warning(
+            "资金流覆盖不完整（status=%s, target=%s/%s），本轮大单流向加分整体跳过",
+            coverage.get("status"),
+            coverage.get("target_complete_count", 0),
+            coverage.get("target_universe_size", 0),
+        )
 
     # 所有加分完成后再判定 TIER2_FORCED，避免资金流加分后仍被冤枉降级
     df["l4_flag"] = df.apply(
@@ -5347,7 +5750,7 @@ def run_egs(backtest_mode=False, output_root=None, price_as_of=None):
     else:
         global_ind_med = {}
 
-    mf_df = get_moneyflow(trade_dates)
+    moneyflow_observation = get_moneyflow(trade_dates)
     margin_observation = get_margin(trade_dates)
     mg_df = margin_observation.frame
 
@@ -5365,7 +5768,15 @@ def run_egs(backtest_mode=False, output_root=None, price_as_of=None):
         margin_observation=margin_observation,
     )
     df_l3 = score_l3(df_l2, trade_dates, all_daily)
-    df_l4 = score_l4(df_l3, mf_df)
+    moneyflow_coverage = _moneyflow_usage_receipt(
+        moneyflow_observation,
+        df_l3.get("ts_code", pd.Series(dtype=str)).tolist(),
+    )
+    df_l4 = score_l4(
+        df_l3,
+        moneyflow_observation,
+        moneyflow_coverage=moneyflow_coverage,
+    )
     df_full, top50 = score_l5(df_l4, sw_map)
 
     rank_reconciliation, rank_reconciliation_detail = build_rank_universe_reconciliation(
@@ -5646,6 +6057,7 @@ def run_egs(backtest_mode=False, output_root=None, price_as_of=None):
             price_data_through=price_data_through,
             run_date=run_date,
             margin_observation=margin_observation,
+            moneyflow_coverage=moneyflow_coverage,
             l0_excluded_counts=l0_excluded_counts,
         )
         log.info(f"[OK] analysis_input saved to {analysis_path}")
@@ -5713,6 +6125,7 @@ def run_egs(backtest_mode=False, output_root=None, price_as_of=None):
             watch_eligible_count=watch_eligible_count,
             sidecar_warnings=comparison_sidecar_warnings,
             margin_observation=margin_observation,
+            moneyflow_coverage=moneyflow_coverage,
             short_history_candidate_count=short_history_candidate_count,
         )
         log_data_health_summary(health_path, health)
