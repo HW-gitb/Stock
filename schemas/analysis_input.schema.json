@@ -1492,7 +1492,7 @@
                 },
                 "q0_net_income": {
                   "$ref": "#/$defs/numberNullable",
-                  "description": "Unit: CNY."
+                  "description": "Unit: CNY. A-short compatibility field: intentionally unavailable because the batched income endpoint is not supported. Retained as nullable for schema compatibility; not a live decision input. Quality checks use q0_dt_profit_ratio and ttm_profit_dedt with ttm_ocf_ratio; q0_profit_dedt remains a batch-derived companion output."
                 },
                 "ttm_profit_dedt": {
                   "$ref": "#/$defs/numberNullable",

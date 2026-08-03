@@ -740,6 +740,18 @@ class LeafEffectPendingAuditTests(unittest.TestCase):
             {"true_dangling", "unclassified_pending_audit"} | self.live))
         self.assertEqual(leaked, [])
 
+    def test_q0_net_income_compatibility_null_is_explicitly_documented(self):
+        schema = json.loads((ROOT / "schemas" / "analysis_input.schema.json").read_text(encoding="utf-8"))
+        description = schema["$defs"]["candidate"]["properties"]["fundamental"][
+            "properties"]["profitability"]["properties"]["q0_net_income"]["description"]
+        self.assertIn("intentionally unavailable", description)
+        self.assertIn("not a live decision input", description)
+        self.assertIn("q0_dt_profit_ratio", description)
+        coverage = (ROOT / "schemas" / "analysis_input_coverage.md").read_text(encoding="utf-8")
+        self.assertIn("有意不可用的兼容字段", coverage)
+        self.assertIn("q0_net_income", coverage)
+        self.assertIn("q0_dt_profit_ratio", coverage)
+
     def test_derivation_follows_the_producer_when_a_literal_changes(self):
         from engine.a_short_effect_contract import _producer_literal_leaves
         source = (ROOT / "A-EGS" / "egs_main.py").read_text(encoding="utf-8")

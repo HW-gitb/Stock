@@ -3134,7 +3134,8 @@ def get_financial_data(ts_codes):
     ttm_dedt.columns = ["ts_code","ttm_profit_dedt"]
     df_merged = df_merged.merge(ttm_dedt, on="ts_code", how="left")
 
-    # income 接口不支持批量，净利润改由 dtprofit_to_profit 比率替代质量检查
+    # income 接口不支持批量；q0/TTM 净利润字段故意保留为兼容性空值，不是实时决策因子。
+    # 质量检查使用可批量取得的 fina_indicator 派生字段（dtprofit_to_profit、profit_dedt、ocf_to_profit）。
     df_merged["ttm_net_income"] = np.nan
     df_merged["q0_net_income"]  = np.nan
 

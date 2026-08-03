@@ -22,6 +22,21 @@
 - **Verify**: 改动面 `5/2` 行、`git diff --check` 干净。scope grep 先行：无测试或 schema 钉住这两个格式串（测试只断言 `[sidecar-health] UNAVAILABLE` 这个另一分支）。最小覆盖包 `tests.test_a_short_weekly_sidecar_health` 一次跑绿 `Ran 40 tests ... OK`；再用本周真实 degraded 产物过一遍改后的 `write_health_bundle`，表头得 `overall=degraded · m67=failed · advanced=0 · stalled=0 · failed=0 · partial=0`，正控（healthy 载荷）得 `overall=healthy · m67=complete`，未凭空宣称失败。
 - **Next**: Codex：执行桌面清单第 3 条（`margin_coverage` 的 `universe_size=0`）。
 - **Pre-Codex self-review**: `matrix=complete: 总评成因字段的全部输出出口 = console + markdown 表头（JSON 已含该字段）`; `register=non-material`; `handoff=not_required: 显示面单字段增列，属 AGENTS §交接记录「不写 handoff」类`; `focused=40 OK / 12.5s`; `full-lane=not_triggered: AGENTS rule 3; reason=仅两处输出格式串，未触及引擎/schema/契约/provider/授权面`; `door=route 14 OK + doc-governance 41 OK（合并跑 Ran 55 tests ... OK）`; A=两出口全覆盖; B=全仓 grep 旧格式串零残留; C=正控 healthy 载荷不误报失败; D=N-A; E=SESSION_LOG 单态; F=`git diff --check` 干净、无 BOM
+## 2026-08-03 — Claude 审查 PASS（q0_net_income 定性为有意退役的兼容空值）
+
+- **Verdict/Action**: PASS，已提交并合入 master。执行方取「留字段 + 写清有意退役」这条（我给过的两条路之一），零行为改动：唯一的 .py 改动是注释，schema 只动 `description` 不动约束，其余是覆盖文档与一条新守护测试。三条实质断言我逐条回源码核过并成立：`q0_net_income` 确由 `egs_main.py:3138-3139` 无条件置 `np.nan`；它不进任何打分/否决（全仓只有产出端、周报原样抄、一个诊断脚本读它）；替代物是真承重的——`:4243` 用 `q0_dt_profit_ratio` 判非经常性损益、`:4250-4251` 用 `ttm_profit_dedt`+`ttm_ocf_ratio` 判 OCF，两处都会打 `ESP-Q`。
+- **Required**: 无；Register: 桌面清单第 6 条的 `q0_net_income` 一半由本刀收口（定性为有意退役、非数据缺口），另记一条不阻断 Optional，正文只见 `docs/system_risk_register.md` 顶部。
+- **Verify**: review-evidence:132a1d6adb9f；rule 3(a)(b) 全量走唯一入口 `RESULT status=PASS exit=0 tests=2275 elapsed=320.7s deadline=860s`，`2274→2275` 的 `+1` 恰等于新增那条守护测试。effect-contract 的 `decision_predicate_sha256` 本轮未变而全量仍绿，与 `_producer_literal_leaves` 走 AST 派生一致——注释改动本就不该移动指纹。真实产物复核：`q0_dt_profit_ratio` 15 只里填了 14 只（样本 92.88/92.25），`q0_net_income` 填 0，与文档陈述一致。
+- **Next**: Codex：无待办（桌面清单阻断级与数据质量项已全部收口）。
+
+## 2026-08-03 — Codex 修复（A-short q0_net_income intentional-null disposition）
+
+- **Verdict/Action**: 已将 `q0_net_income` 从“待补数据因子”改为明确的 nullable 兼容字段口径；未删除字段、未逐票调用 `income`、未改评分或决策链。
+- **Required**: `R-ASHORT-Q0-NET-INCOME-INTENTIONAL-NULL-MISREAD-AS-MISSING-FACTOR`；完整调用链、替代字段和迁移边界见 `docs/system_risk_register.md`。
+- **Verify**: 固定主 Python `C:\Users\cnhea\AppData\Local\Programs\Python\Python313\python.exe`（`Python 3.13.8`）；focused `Ran 241 tests ... OK`；`py_compile` OK；交接门 `Ran 55 tests ... OK`；`git diff --check` 无错误。未执行 provider/live `--as-of 20260803`。
+- **Pre-Codex self-review**: matrix=producer constant-null + schema/coverage + q0 全部运行时引用；register=updated；handoff=updated；focused=241 OK；full-lane=not_triggered: metadata-only schema description/comment/coverage/test，无 schema shape/runtime decision 变化；door=route/doc-governance 55 OK；independent=not_required: Optional/低风险文档契约澄清，无新 fail-closed/provider/authorization surface。
+- **Next**: Claude Code：审查本刀。
+
 ## 2026-08-03 — Claude 审查 PASS（日线窗口 60→65，pct_60d 复活）
 
 - **Verdict/Action**: PASS，已提交并合入 master。窗口由硬编码 60 改为 `DAILY_STATS_REQUIRED_CLOSES(61)+buffer(4)=65`，缓存键随之由 `_60d_` 变 `_65d_`（旧 60 根缓存不可能被复用），并新增 `_validate_daily_qfq_window` 同时校验配置与实际 n_days。reviewer 实测该守护是真绊线：n_days=60/21 拒、61/65 收；把窗口常量改回 60 立刻被配置腿拒——「谁再悄悄缩窗口」这条复发路已被堵死。全仓复查无 `min(60`/`_60d` 残留。
