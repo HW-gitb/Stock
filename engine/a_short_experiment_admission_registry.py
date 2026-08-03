@@ -343,6 +343,7 @@ def _p4_admission() -> dict:
     }
     governance_path = ROOT / "presets" / "egs_industry_heat_governance_20260611.json"
     governance = _load(governance_path)
+    from engine import egs_industry_heat as industry_heat
     try:
         active_profile = str(governance["active_profile"])
         active_weights = governance["profiles"][active_profile]
@@ -352,7 +353,7 @@ def _p4_admission() -> dict:
         raise AdmissionRegistryError("P4 active industry profile weights are malformed")
     active_profile_dependency = {
         "governance_path": str(governance_path.relative_to(ROOT)),
-        "governance_sha256": hashlib.sha256(governance_path.read_bytes()).hexdigest(),
+        "governance_sha256": industry_heat._p5_governance_digest(governance_path),
         "active_profile": active_profile,
         "weights": active_weights,
     }

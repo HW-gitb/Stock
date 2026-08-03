@@ -70,7 +70,7 @@ def _digest(value: Any) -> str:
 
 
 def _file_digest(path: Path) -> str:
-    return hashlib.sha256(path.read_bytes()).hexdigest()
+    return _digest(_load_json(path))
 
 
 def _load_json(path: Path) -> Any:
