@@ -6,6 +6,7 @@ import unittest
 from pathlib import Path
 
 from engine.us_short_schema_formats import FORMAT_CHECKER
+from engine import us_short_llm_theme_discovery_plan_budget as plan_budget
 from engine import us_short_soft_discovery_query_quality_probe_paths as probe_paths
 from runners import us_short_llm_theme_discovery_fetch_web as web
 from runners import us_short_llm_theme_discovery_fetch_x as x
@@ -188,7 +189,7 @@ class UsShortSoftDiscoveryQueryQualityProbePacketSchemaTest(unittest.TestCase):
         self.assertEqual(budget["tavily"]["max_actual_calls"], 4)
         self.assertEqual(budget["deepseek"]["structural_max_actual_calls"], 4)
         self.assertEqual(budget["max_actual_provider_calls"], 12)
-        self.assertEqual(budget["current_ledger_reservation_units"], 33)
+        self.assertEqual(budget["current_ledger_reservation_units"], 12)
         self.assertTrue(budget["reservation_units_are_not_actual_spend"])
 
     def test_execution_slot_map_is_exactly_derived_from_runner_defaults(self) -> None:
@@ -208,14 +209,15 @@ class UsShortSoftDiscoveryQueryQualityProbePacketSchemaTest(unittest.TestCase):
         self.assertEqual(
             slots["budget_ledgers"],
             {
-                "web_tavily": self._repo_relative(
-                    web._provider_budget_path("web", "tavily", decision_date)
+                "web": self._repo_relative(
+                    plan_budget.default_plan_budget_path(
+                        "web", decision_date, state_dir=ROOT / "state" / "us_short"
+                    )
                 ),
-                "web_deepseek": self._repo_relative(
-                    web._provider_budget_path("web", "deepseek", decision_date)
-                ),
-                "x_xai": self._repo_relative(
-                    web._provider_budget_path("x", "xai", decision_date)
+                "xai": self._repo_relative(
+                    plan_budget.default_plan_budget_path(
+                        "xai", decision_date, state_dir=ROOT / "state" / "us_short"
+                    )
                 ),
             },
         )

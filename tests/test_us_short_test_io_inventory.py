@@ -36,6 +36,7 @@ RESIDUAL_WRITE_DISPOSITIONS = {
         "tests/provider/test_us_short_batch5_bankruptcy_8k_source_packet.py:kwarg:screen_path:state/us_short",
         "tests/provider/test_us_short_batch5_live_source_packet.py:kwarg:raw_sample_ref:provider_samples",
         "tests/provider/test_us_short_batch5_theme_source_packet.py:kwarg:raw_sample_ref:provider_samples",
+        "tests/schema/test_us_short_soft_discovery_query_quality_probe_packet_schema.py:kwarg:state_dir:state/us_short",
     }),
     "static_contract_write": frozenset({
         "tests/provider/test_us_short_batch5_incident_log_writer.py:TemporaryDirectory:state/us_short",

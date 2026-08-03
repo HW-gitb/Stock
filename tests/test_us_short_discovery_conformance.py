@@ -497,7 +497,22 @@ class LaneSlotConformance(unittest.TestCase):
                 with self.subTest(helper=f"{module_name}.{attribute}"):
                     # Assert on the COMPUTED value: a retired name assembled by concatenation or
                     # an f-string would evade a source-text check.
-                    self.assertNotIn(helper("20260727").name, RETIRED_SLOT_NAMES)
+                    required_positional = [
+                        parameter
+                        for parameter in inspect.signature(helper).parameters.values()
+                        if parameter.kind in {
+                            inspect.Parameter.POSITIONAL_ONLY,
+                            inspect.Parameter.POSITIONAL_OR_KEYWORD,
+                        }
+                        and parameter.default is inspect.Parameter.empty
+                    ]
+                    if len(required_positional) == 1:
+                        computed = helper("20260727")
+                    elif len(required_positional) == 2:
+                        computed = helper("web", "20260727")
+                    else:
+                        self.fail("default path helper must expose one date or provider plus date")
+                    self.assertNotIn(computed.name, RETIRED_SLOT_NAMES)
 
 
 class LaneSchemaConformance(unittest.TestCase):
@@ -1851,8 +1866,11 @@ class LaneGuardRegistryConformance(unittest.TestCase):
          "tests.provider.test_us_short_llm_theme_discovery_fetch_web.WebFetchTests"
          ".test_public_packet_pair_rolls_back_if_second_publish_fails"),
         ("runners.us_short_discovery_publish_policy", "write_mutable_ledger",
-         "tests.provider.test_us_short_llm_theme_discovery_fetch_web.WebFetchTests"
-         ".test_identical_later_refetch_is_idempotent_and_budget_is_per_decision_date"),
+         "tests.test_us_short_llm_theme_discovery_plan_budget.PlanBudgetAcceptanceTests"
+         ".test_A4_B1_plan_reservation_precedes_first_paid_call_static_reference"),
+        ("runners.us_short_discovery_publish_policy", "write_monotonic_mutable_ledger",
+         "tests.test_us_short_llm_theme_discovery_plan_budget.PlanBudgetAcceptanceTests"
+         ".test_A4_empty_budget_abort_retry_cannot_overwrite_paid_diagnostic_evidence"),
         ("runners.us_short_discovery_publish_policy", "mutable_ledger_lock",
          "tests.provider.test_us_short_llm_theme_discovery_fetch_web.BudgetMutexTests"
          ".test_budget_ledger_lock_serializes_two_contenders_without_a_state_file"),
@@ -1995,6 +2013,17 @@ class LaneGuardRegistryConformance(unittest.TestCase):
             "write_immutable_json": blind_write,
             "publish_immutable_pair": blind_pair,
             "write_mutable_ledger": lambda payload, path, **_kwargs: None,
+            "write_monotonic_mutable_ledger": lambda payload, path, **kwargs: (
+                __import__(
+                    "runners.us_short_discovery_publish_policy",
+                    fromlist=["write_mutable_ledger"],
+                ).write_mutable_ledger(
+                    payload, path, **{
+                        key: value for key, value in kwargs.items()
+                        if key != "evidence_rank"
+                    },
+                ) or True
+            ),
             "mutable_ledger_lock": unlocked_ledger,
             "frozen_artifact_matches": lambda payload, path, **_kwargs: False,
             "evidence_bytes": lambda payload, **_kwargs: json.dumps(payload, sort_keys=True).encode("utf-8"),

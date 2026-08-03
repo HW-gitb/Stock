@@ -1,7 +1,7 @@
 """Offline assessor for the separately authorized US-short query-quality probe.
 
 This runner never calls a provider.  It consumes the frozen probe packet plus
-the exact Web/X discovery, receipt, and provider-budget slots registered by
+the exact Web/X discovery, receipt, and plan-level budget slots registered by
 that packet, computes the preregistered query-quality metrics, and writes one
 immutable counts/digests/timestamps-only assessment.  It has no scoring, confirmation,
 seat, lifecycle, operation-advice, or forward-clock effect.
@@ -25,6 +25,7 @@ if str(ROOT) not in sys.path:
 
 from engine.us_short_schema_formats import FORMAT_CHECKER  # noqa: E402
 from engine import us_short_soft_discovery_query_quality_probe_paths as probe_paths  # noqa: E402
+from engine import us_short_llm_theme_discovery_plan_budget as plan_budget  # noqa: E402
 from runners import us_short_llm_theme_discovery_fetch_web as web  # noqa: E402
 from runners import us_short_llm_theme_discovery_fetch_x as xfetch  # noqa: E402
 from runners.us_short_discovery_publish_policy import (  # noqa: E402
@@ -35,6 +36,7 @@ from runners.us_short_discovery_publish_policy import (  # noqa: E402
 
 DEFAULT_PACKET_PATH = ROOT / "docs" / "us_short_soft_discovery_query_quality_probe_packet_20260730.json"
 PACKET_SCHEMA_PATH = ROOT / "schemas" / "us_short_soft_discovery_query_quality_probe_packet.schema.json"
+PLAN_BUDGET_SCHEMA_PATH = ROOT / "schemas" / "us_short_llm_theme_discovery_plan_budget.schema.json"
 ASSESSMENT_SCHEMA_PATH = ROOT / "schemas" / "us_short_soft_discovery_query_quality_probe_assessment.schema.json"
 DISCOVERY_SCHEMA_PATH = ROOT / "schemas" / "us_short_llm_theme_discovery.schema.json"
 
@@ -169,8 +171,8 @@ def _causal_order_and_floor(
         ledger_instants[key] = (first, last)
 
     ledger_keys_by_lane = {
-        "web": ("web_tavily", "web_deepseek"),
-        "x": ("x_xai",),
+        "web": ("web",),
+        "x": ("xai",),
     }
     for lane, discovery, receipt in (
         ("web", web_discovery, web_receipt),
@@ -431,6 +433,7 @@ def _exact_existing_path(raw: Any, expected: Path, *, field: str) -> Path:
 
 
 def _expected_slot_map(decision_date: str) -> dict[str, Any]:
+    state_dir = ROOT / "state" / "us_short"
     return {
         "expected_decision_date": decision_date,
         "decision_outputs": {
@@ -440,9 +443,12 @@ def _expected_slot_map(decision_date: str) -> dict[str, Any]:
             "x_receipt": _repo_relative(xfetch.default_receipt_path(decision_date)),
         },
         "budget_ledgers": {
-            "web_tavily": _repo_relative(web._provider_budget_path("web", "tavily", decision_date)),
-            "web_deepseek": _repo_relative(web._provider_budget_path("web", "deepseek", decision_date)),
-            "x_xai": _repo_relative(web._provider_budget_path("x", "xai", decision_date)),
+            "web": _repo_relative(
+                plan_budget.default_plan_budget_path("web", decision_date, state_dir=state_dir)
+            ),
+            "xai": _repo_relative(
+                plan_budget.default_plan_budget_path("xai", decision_date, state_dir=state_dir)
+            ),
         },
         "raw_roots": {
             "web": _repo_relative(web.DEFAULT_RAW_ROOT),
@@ -666,21 +672,28 @@ def _validate_discovery_and_receipt(
 
 
 def _validate_budget_ledger(
-    ledger: dict[str, Any], *, lane: str, provider: str, decision_date: str,
+    ledger: dict[str, Any], *, provider: str, decision_date: str,
     queries: list[str], expected_call_count: int,
 ) -> int:
-    expected_query_sha = _sha256_bytes(_canonical_bytes(queries))
+    label = f"{provider} plan budget ledger"
+    _validate_schema(ledger, PLAN_BUDGET_SCHEMA_PATH, label=label)
     required_identity = {
-        "lane": lane,
+        "lane": "us_short",
         "provider": provider,
-        "expected_decision_date": decision_date,
-        "query_sha256": expected_query_sha,
-        "query_count": len(queries),
+        "decision_date": decision_date,
         "planned_provider_call_count": expected_call_count,
     }
     for key, expected in required_identity.items():
         if ledger.get(key) != expected:
-            raise QueryQualityProbeAssessmentError(f"{lane}/{provider} budget ledger mismatch at {key}")
+            raise QueryQualityProbeAssessmentError(f"{label} mismatch at {key}")
+    envelope = ledger.get("provider_envelope")
+    if (
+        not isinstance(envelope, dict)
+        or envelope.get("provider") != provider
+        or envelope.get("max_dispatch_count") != expected_call_count
+    ):
+        raise QueryQualityProbeAssessmentError(f"{label} provider envelope is not exact")
+
     attempt_count = ledger.get("reservation_attempt_count")
     if (
         isinstance(attempt_count, bool)
@@ -688,28 +701,59 @@ def _validate_budget_ledger(
         or attempt_count < 1
     ):
         raise QueryQualityProbeAssessmentError(
-            f"{lane}/{provider} budget ledger mismatch at reservation_attempt_count"
+            f"{label} mismatch at reservation_attempt_count"
         )
+
     reservations = ledger.get("query_reservations")
-    if reservations != [{
-        "query_sha256": expected_query_sha,
-        "query_count": len(queries),
-        "call_count": expected_call_count,
-    }]:
-        raise QueryQualityProbeAssessmentError(f"{lane}/{provider} budget ledger scope is not exact")
+    if not isinstance(reservations, list):
+        raise QueryQualityProbeAssessmentError(f"{label} query scope is not exact")
+    reservation_keys = [
+        (row.get("query_sha256"), row.get("stage"), row.get("vendor"))
+        for row in reservations if isinstance(row, dict)
+    ]
+    if len(reservation_keys) != len(reservations) or len(set(reservation_keys)) != len(reservation_keys):
+        raise QueryQualityProbeAssessmentError(f"{label} query scope is not exact")
+    expected_stage1_vendor = "tavily" if provider == "web" else "xai"
+    expected_stage1 = {
+        (_sha256_bytes(query.encode("utf-8")), "stage1", expected_stage1_vendor)
+        for query in queries
+    }
+    actual_stage1 = set(reservation_keys) & {
+        (key[0], key[1], key[2]) for key in reservation_keys
+        if key[1] == "stage1" and key[2] == expected_stage1_vendor
+    }
+    if actual_stage1 != expected_stage1:
+        raise QueryQualityProbeAssessmentError(f"{label} query scope is not exact")
+    for row in reservations:
+        if (
+            row.get("query_count") != 1
+            or row.get("planned_provider_call_count") != 1
+            or row.get("attempt_count", 0) < 1
+            or row.get("last_status") not in {"in_flight", "complete", "failure", "unknown"}
+        ):
+            raise QueryQualityProbeAssessmentError(f"{label} query scope is not exact")
+
+    counts = ledger.get("dispatch_counts", {})
+    if (
+        counts.get("dispatch_count")
+        != counts.get("stage1_dispatch_count", 0)
+        + counts.get("stage2_dispatch_count", 0)
+        + counts.get("retry_dispatch_count", 0)
+    ):
+        raise QueryQualityProbeAssessmentError(f"{label} dispatch counts are inconsistent")
     instants: dict[str, datetime] = {}
     for field in ("first_reserved_at", "last_reserved_at"):
         try:
             instants[field] = _parse_instant(
-                ledger[field], label=f"{lane}/{provider} budget ledger {field}"
+                ledger[field], label=f"{label} {field}"
             )
         except KeyError as exc:
             raise QueryQualityProbeAssessmentError(
-                f"{lane}/{provider} budget ledger has bad {field}"
+                f"{label} has bad {field}"
             ) from exc
     if instants["first_reserved_at"] > instants["last_reserved_at"]:
         raise QueryQualityProbeAssessmentError(
-            f"{lane}/{provider} budget ledger first_reserved_at cannot follow last_reserved_at"
+            f"{label} first_reserved_at cannot follow last_reserved_at"
         )
     return attempt_count
 
@@ -773,7 +817,7 @@ def _build_assessment_with_snapshots(
     }
     ledger_paths = {
         key: _exact_existing_path(slots["budget_ledgers"][key], ROOT / expected["budget_ledgers"][key], field=key)
-        for key in ("web_tavily", "web_deepseek", "x_xai")
+        for key in ("web", "xai")
     }
     input_snapshots = {
         "web_discovery": _read_json_snapshot(paths["web_discovery"], label="web discovery"),
@@ -799,19 +843,16 @@ def _build_assessment_with_snapshots(
         lane_inconclusive_reasons["web"] + lane_inconclusive_reasons["x"]
     )
     expected_calls = {
-        "web_tavily": packet["provider_budget"]["tavily"]["current_ledger_reservation_units"],
-        "web_deepseek": packet["provider_budget"]["deepseek"]["current_ledger_reservation_units"],
-        "x_xai": packet["provider_budget"]["xai"]["current_ledger_reservation_units"],
-    }
-    ledger_identity = {
-        "web_tavily": ("web", "tavily"),
-        "web_deepseek": ("web", "deepseek"),
-        "x_xai": ("x", "xai"),
+        "web": (
+            packet["provider_budget"]["tavily"]["current_ledger_reservation_units"]
+            + packet["provider_budget"]["deepseek"]["current_ledger_reservation_units"]
+        ),
+        "xai": packet["provider_budget"]["xai"]["current_ledger_reservation_units"],
     }
     ledger_snapshots = {
         key: _read_json_snapshot(
             path,
-            label=f"{ledger_identity[key][0]}/{ledger_identity[key][1]} budget ledger",
+            label=f"{key} plan budget ledger",
         )
         for key, path in ledger_paths.items()
     }
@@ -819,17 +860,16 @@ def _build_assessment_with_snapshots(
     ledgers = {key: snapshot.payload for key, snapshot in ledger_snapshots.items()}
     budget_reservation_attempt_counts: dict[str, int] = {}
     for key, ledger in ledgers.items():
-        lane, provider = ledger_identity[key]
         attempt_count = _validate_budget_ledger(
             ledger,
-            lane=lane, provider=provider, decision_date=decision_date, queries=queries,
+            provider=key, decision_date=decision_date, queries=queries,
             expected_call_count=expected_calls[key],
         )
         budget_reservation_attempt_counts[key] = attempt_count
         if attempt_count > 1:
             retry_reason = "actual_call_count_or_scope_cannot_be_proven"
             inconclusive.append(retry_reason)
-            lane_inconclusive_reasons[lane].append(retry_reason)
+            lane_inconclusive_reasons["web" if key == "web" else "x"].append(retry_reason)
 
     actual_counts = {
         "tavily": web_receipt["fetch_contract"]["transport_response_counts"]["tavily"],
@@ -883,7 +923,7 @@ def _build_assessment_with_snapshots(
         )
     assessment = {
         "schema_name": "us_short_soft_discovery_query_quality_probe_assessment",
-        "schema_version": "1.3.0",
+        "schema_version": "1.4.0",
         "schema_ref": "schemas/us_short_soft_discovery_query_quality_probe_assessment.schema.json",
         "generated_at": parsed_generated.isoformat(),
         "causal_floor": causal_floor,

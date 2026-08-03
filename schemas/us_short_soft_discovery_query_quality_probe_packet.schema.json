@@ -269,7 +269,7 @@
               "const": 4
             },
             "current_ledger_reservation_units": {
-              "const": 25
+              "const": 4
             }
           }
         },
@@ -277,7 +277,7 @@
           "const": 12
         },
         "current_ledger_reservation_units": {
-          "const": 33
+          "const": 12
         },
         "reservation_units_are_not_actual_spend": {
           "const": true
@@ -400,19 +400,15 @@
           "type": "object",
           "additionalProperties": false,
           "required": [
-            "web_tavily",
-            "web_deepseek",
-            "x_xai"
+            "web",
+            "xai"
           ],
           "properties": {
-            "web_tavily": {
-              "const": "state/us_short/us_short_llm_theme_discovery_web_tavily_20260802_budget.json"
+            "web": {
+              "const": "state/us_short/us_short_llm_theme_discovery_plan_web_20260802_budget.json"
             },
-            "web_deepseek": {
-              "const": "state/us_short/us_short_llm_theme_discovery_web_deepseek_20260802_budget.json"
-            },
-            "x_xai": {
-              "const": "state/us_short/us_short_llm_theme_discovery_x_xai_20260802_budget.json"
+            "xai": {
+              "const": "state/us_short/us_short_llm_theme_discovery_plan_xai_20260802_budget.json"
             }
           }
         },

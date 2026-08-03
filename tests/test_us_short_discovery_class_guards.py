@@ -5,8 +5,7 @@ import unittest
 from pathlib import Path
 from tempfile import TemporaryDirectory
 
-from runners import us_short_llm_theme_discovery_fetch_web as web
-from runners import us_short_llm_theme_discovery_fetch_x as xfetch
+from engine import us_short_llm_theme_discovery_paid_gateway as paid_gateway
 
 
 ROOT = Path(__file__).resolve().parent.parent
@@ -61,31 +60,23 @@ class LaneResidueConformance(unittest.TestCase):
 class LiveTransportLifecycleConformance(unittest.TestCase):
     """One-shot tickets preserve normal-runner lifecycle correctness, not provenance."""
 
-    LANES = {"web": (web, "run_web_fetch"), "x": (xfetch, "run_x_fetch")}
-    @staticmethod
-    def _closure(function):
-        return dict(zip(function.__code__.co_freevars, (
-            cell.cell_contents for cell in function.__closure__ or ()
-        )))
+    LANES = {"web": ("tavily", "deepseek"), "x": ("xai",)}
 
     def test_ticket_registry_holds_objects_and_is_revoked_after_runner_error(self):
-        for lane, (module, runner_name) in self.LANES.items():
+        for lane, providers in self.LANES.items():
             with self.subTest(lane=lane):
-                cells = self._closure(getattr(module, runner_name))
-                issue = cells["issue_ticket"]
-                registry = self._closure(issue)["issued_tickets"]
-                ticket = issue()
+                ticket = paid_gateway.issue_ticket()
+                registry = paid_gateway._CAPABILITY_TICKETS
                 self.assertIn(ticket, registry, f"{lane}: registry must keep the ticket object")
-                cells["revoke_ticket"](ticket)
+                paid_gateway.revoke_ticket(ticket)
                 self.assertNotIn(ticket, registry, f"{lane}: unconsumed ticket must be revoked")
 
     def test_ticket_is_one_shot_and_foreign_objects_are_refused(self):
-        for lane, (module, runner_name) in self.LANES.items():
+        for lane, providers in self.LANES.items():
             with self.subTest(lane=lane):
-                cells = self._closure(getattr(module, runner_name))
-                transport = cells["new_transport"]()
+                transport = paid_gateway.new_transport(*providers)
                 self.assertFalse(transport._consume_ticket(object()))
-                ticket = cells["issue_ticket"]()
+                ticket = paid_gateway.issue_ticket()
                 self.assertTrue(transport._consume_ticket(ticket))
                 self.assertFalse(transport._consume_ticket(ticket))
 

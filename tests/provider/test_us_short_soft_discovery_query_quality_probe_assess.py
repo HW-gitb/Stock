@@ -11,6 +11,7 @@ import unittest
 from pathlib import Path
 from unittest import mock
 
+from engine import us_short_llm_theme_discovery_plan_budget as plan_budget
 from engine import us_short_soft_discovery_query_quality_probe_paths as probe_paths
 from runners import us_short_llm_theme_discovery_fetch_web as web
 from runners import us_short_llm_theme_discovery_fetch_x as xfetch
@@ -194,25 +195,89 @@ def _receipt(lane: str, discovery: dict, queries: list[str]) -> dict:
     }
 
 
-def _ledger(lane: str, provider: str, queries: list[str], call_count: int) -> dict:
-    query_sha = hashlib.sha256(
-        json.dumps(queries, ensure_ascii=False, sort_keys=True, separators=(",", ":")).encode("utf-8")
-    ).hexdigest()
+def _ledger(provider: str, queries: list[str], call_count: int) -> dict:
+    if provider == "web":
+        envelope = {
+            "provider": "web",
+            "stage1_max_dispatch_count": 4,
+            "stage2_max_dispatch_count": 4,
+            "retry_max_dispatch_count": 0,
+            "max_dispatch_count": 8,
+        }
+        scopes = [
+            (query, "stage1", "tavily") for query in queries
+        ] + [
+            (f"chunk:{index}", "stage2", "deepseek")
+            for index in range(len(queries))
+        ]
+    else:
+        envelope = {
+            "provider": "xai",
+            "stage1_max_dispatch_count": 4,
+            "stage2_max_dispatch_count": 0,
+            "retry_max_dispatch_count": 0,
+            "max_dispatch_count": 4,
+        }
+        scopes = [(query, "stage1", "xai") for query in queries]
+    reservations = [
+        {
+            "query_sha256": hashlib.sha256(scope.encode("utf-8")).hexdigest(),
+            "stage": stage,
+            "vendor": vendor,
+            "query_count": 1,
+            "planned_provider_call_count": 1,
+            "attempt_count": 1,
+            "last_status": "complete",
+        }
+        for scope, stage, vendor in scopes
+    ]
+    dispatches = [
+        {
+            "dispatch_id": index,
+            "query_sha256": row["query_sha256"],
+            "stage": row["stage"],
+            "vendor": row["vendor"],
+            "attempt": 1,
+            "status": "complete",
+            "started_at": "2026-08-01T11:01:00+00:00",
+            "owner_pid": 1,
+            "owner_run_id": "b" * 32,
+            "owner_started_at": "2026-08-01T11:00:00+00:00",
+            "owner_heartbeat_at": "2026-08-01T11:02:00+00:00",
+            "finished_at": "2026-08-01T11:02:00+00:00",
+        }
+        for index, row in enumerate(reservations, start=1)
+    ]
+    stage1_count = len(queries)
+    stage2_count = len(queries) if provider == "web" else 0
     return {
-        "lane": lane,
+        "schema_name": "us_short_llm_theme_discovery_plan_budget",
+        "schema_version": "1.0.0",
+        "budget_mode": "parent_plan_envelope",
+        "lane": "us_short",
         "provider": provider,
-        "expected_decision_date": "20260802",
-        "query_sha256": query_sha,
-        "query_count": 4,
-        "query_reservations": [{
-            "query_sha256": query_sha,
-            "query_count": 4,
-            "call_count": call_count,
-        }],
-        "reservation_attempt_count": 1,
+        "decision_date": "20260802",
+        "parent_plan_identity": "a" * 64,
+        "provider_envelope": envelope,
         "planned_provider_call_count": call_count,
+        "reservation_attempt_count": 1,
         "first_reserved_at": "2026-08-01T11:00:00+00:00",
         "last_reserved_at": "2026-08-01T11:00:00+00:00",
+        "query_reservations": reservations,
+        "dispatches": dispatches,
+        "dispatch_counts": {
+            "stage1_dispatch_count": stage1_count,
+            "stage2_dispatch_count": stage2_count,
+            "retry_dispatch_count": 0,
+            "dispatch_count": len(dispatches),
+            "unknown_dispatch_count": 0,
+        },
+        "vendor_dispatch_counts": {
+            "tavily": stage1_count if provider == "web" else 0,
+            "deepseek": stage2_count,
+            "xai": stage1_count if provider == "xai" else 0,
+        },
+        "recovery_events": [],
     }
 
 
@@ -263,12 +328,10 @@ class QueryQualityProbeAssessmentTest(unittest.TestCase):
             web.default_receipt_path("20260802"): _receipt("web", web_discovery, self.queries),
             xfetch.default_discovery_path("20260802"): x_discovery,
             xfetch.default_receipt_path("20260802"): _receipt("x", x_discovery, self.queries),
-            web._provider_budget_path("web", "tavily", "20260802"):
-                _ledger("web", "tavily", self.queries, 4),
-            web._provider_budget_path("web", "deepseek", "20260802"):
-                _ledger("web", "deepseek", self.queries, 25),
-            web._provider_budget_path("x", "xai", "20260802"):
-                _ledger("x", "xai", self.queries, 4),
+            self._plan_budget_path("web"):
+                _ledger("web", self.queries, 8),
+            self._plan_budget_path("xai"):
+                _ledger("xai", self.queries, 4),
         }
         for path, payload in payloads.items():
             _write_json(path, payload)
@@ -280,10 +343,14 @@ class QueryQualityProbeAssessmentTest(unittest.TestCase):
             "web_receipt": web.default_receipt_path("20260802"),
             "x_discovery": xfetch.default_discovery_path("20260802"),
             "x_receipt": xfetch.default_receipt_path("20260802"),
-            "web_tavily": web._provider_budget_path("web", "tavily", "20260802"),
-            "web_deepseek": web._provider_budget_path("web", "deepseek", "20260802"),
-            "x_xai": web._provider_budget_path("x", "xai", "20260802"),
+            "web": self._plan_budget_path("web"),
+            "xai": self._plan_budget_path("xai"),
         }
+
+    def _plan_budget_path(self, provider: str) -> Path:
+        return plan_budget.default_plan_budget_path(
+            provider, "20260802", state_dir=self.state,
+        )
 
     def _set_lane_execution_clocks(
         self,
@@ -297,14 +364,11 @@ class QueryQualityProbeAssessmentTest(unittest.TestCase):
         if lane == "web":
             discovery_path = web.default_discovery_path("20260802")
             receipt_path = web.default_receipt_path("20260802")
-            ledger_paths = (
-                web._provider_budget_path("web", "tavily", "20260802"),
-                web._provider_budget_path("web", "deepseek", "20260802"),
-            )
+            ledger_paths = (self._plan_budget_path("web"),)
         else:
             discovery_path = xfetch.default_discovery_path("20260802")
             receipt_path = xfetch.default_receipt_path("20260802")
-            ledger_paths = (web._provider_budget_path("x", "xai", "20260802"),)
+            ledger_paths = (self._plan_budget_path("xai"),)
         discovery = json.loads(discovery_path.read_text(encoding="utf-8"))
         receipt = json.loads(receipt_path.read_text(encoding="utf-8"))
         discovery["generated_at"] = discovery_generated_at
@@ -384,13 +448,13 @@ class QueryQualityProbeAssessmentTest(unittest.TestCase):
         self.assertEqual(payload["verdict"], "pass_to_query_planner_implementation")
         self.assertEqual(set(payload["input_bindings"]), {
             "web_discovery", "web_receipt", "x_discovery", "x_receipt",
-            "web_tavily", "web_deepseek", "x_xai",
+            "web", "xai",
         })
         self.assertFalse(any(payload["prohibited_effects"].values()))
-        self.assertEqual(payload["schema_version"], "1.3.0")
+        self.assertEqual(payload["schema_version"], "1.4.0")
         self.assertEqual(
             payload["execution_evidence"]["budget_reservation_attempt_counts"],
-            {"web_tavily": 1, "web_deepseek": 1, "x_xai": 1},
+            {"web": 1, "xai": 1},
         )
         self.assertEqual(payload["causal_floor"]["instant"], "2026-08-01T13:00:00Z")
         self.assertIn(
@@ -492,9 +556,8 @@ class QueryQualityProbeAssessmentTest(unittest.TestCase):
             web.default_receipt_path("20260802"),
             xfetch.default_discovery_path("20260802"),
             xfetch.default_receipt_path("20260802"),
-            web._provider_budget_path("web", "tavily", "20260802"),
-            web._provider_budget_path("web", "deepseek", "20260802"),
-            web._provider_budget_path("x", "xai", "20260802"),
+            self._plan_budget_path("web"),
+            self._plan_budget_path("xai"),
         ]
         original_is_symlink = Path.is_symlink
         for target in targets:
@@ -565,7 +628,7 @@ class QueryQualityProbeAssessmentTest(unittest.TestCase):
         self.assertFalse(self.assessment_path.exists())
 
     def test_legal_same_scope_retry_writes_inconclusive_assessment(self):
-        for key in ("web_tavily", "web_deepseek", "x_xai"):
+        for key in ("web", "xai"):
             with self.subTest(ledger=key):
                 self._write_inputs()
                 self.assessment_path.unlink(missing_ok=True)
@@ -599,7 +662,7 @@ class QueryQualityProbeAssessmentTest(unittest.TestCase):
             ("non_int", lambda payload: payload.__setitem__("reservation_attempt_count", "1")),
             ("missing", lambda payload: payload.pop("reservation_attempt_count")),
         )
-        for key in ("web_tavily", "web_deepseek", "x_xai"):
+        for key in ("web", "xai"):
             for label, mutate in cases:
                 with self.subTest(ledger=key, mutation=label):
                     self._write_inputs()
@@ -622,13 +685,17 @@ class QueryQualityProbeAssessmentTest(unittest.TestCase):
         cases = (
             (
                 "query_sha256",
-                lambda payload: payload.__setitem__("query_sha256", "0" * 64),
-                "mismatch at query_sha256",
+                lambda payload: payload["query_reservations"][0].__setitem__(
+                    "query_sha256", "0" * 64
+                ),
+                "query scope is not exact",
             ),
             (
                 "query_count",
-                lambda payload: payload.__setitem__("query_count", 3),
-                "mismatch at query_count",
+                lambda payload: payload["query_reservations"][0].__setitem__(
+                    "query_count", 3
+                ),
+                "query scope is not exact",
             ),
             (
                 "planned_provider_call_count",
@@ -658,7 +725,7 @@ class QueryQualityProbeAssessmentTest(unittest.TestCase):
                 "cannot follow",
             ),
         )
-        for key in ("web_tavily", "web_deepseek", "x_xai"):
+        for key in ("web", "xai"):
             for label, mutate, error in cases:
                 with self.subTest(ledger=key, mutation=label):
                     self._write_inputs()
@@ -789,9 +856,8 @@ class QueryQualityProbeAssessmentTest(unittest.TestCase):
             for index in range(len(x_receipt["provider_response_refs"]))
         )
         for ledger_name, ledger_path in (
-            ("web tavily", web._provider_budget_path("web", "tavily", "20260802")),
-            ("web deepseek", web._provider_budget_path("web", "deepseek", "20260802")),
-            ("x xai", web._provider_budget_path("x", "xai", "20260802")),
+            ("web", self._plan_budget_path("web")),
+            ("xai", self._plan_budget_path("xai")),
         ):
             for field in ("first_reserved_at", "last_reserved_at"):
                 mutations.append((f"{ledger_name} ledger {field}", ledger_path, (field,)))
@@ -860,7 +926,7 @@ class QueryQualityProbeAssessmentTest(unittest.TestCase):
             f"x_receipt.provider_response_refs[{index}].fetched_at"
             for index in range(4)
         )
-        for ledger in ("web_tavily", "web_deepseek", "x_xai"):
+        for ledger in ("web", "xai"):
             expected.add(f"{ledger}_ledger.first_reserved_at")
             expected.add(f"{ledger}_ledger.last_reserved_at")
         self.assertEqual(actual, expected)
@@ -891,7 +957,7 @@ class QueryQualityProbeAssessmentTest(unittest.TestCase):
         cases = [
             (
                 "ledger first after last",
-                web._provider_budget_path("web", "tavily", "20260802"),
+                self._plan_budget_path("web"),
                 ("first_reserved_at",),
                 "2026-08-01T12:00:00Z",
             ),
@@ -941,7 +1007,7 @@ class QueryQualityProbeAssessmentTest(unittest.TestCase):
             ),
             (
                 "reservation after evidence fetch",
-                web._provider_budget_path("web", "tavily", "20260802"),
+                self._plan_budget_path("web"),
                 ("last_reserved_at",),
                 "2026-08-01T12:00:01Z",
                 None,
@@ -1023,9 +1089,8 @@ class QueryQualityProbeAssessmentTest(unittest.TestCase):
 
     def test_each_ledger_is_bounded_only_by_its_own_lane_execution(self):
         cases = (
-            ("web_tavily", web._provider_budget_path("web", "tavily", "20260802")),
-            ("web_deepseek", web._provider_budget_path("web", "deepseek", "20260802")),
-            ("x_xai", web._provider_budget_path("x", "xai", "20260802")),
+            ("web", self._plan_budget_path("web")),
+            ("xai", self._plan_budget_path("xai")),
         )
         for label, path in cases:
             with self.subTest(ledger=label):

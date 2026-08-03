@@ -12,17 +12,19 @@ import json
 import os
 import re
 import sys
-import threading
 import urllib.parse
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Any, Callable
+from typing import Any, Callable, Mapping
 
 ROOT = Path(__file__).resolve().parents[1]
 if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
 from engine.us_short_persisted_text_safety import persisted_text_violation
+from engine import us_short_llm_theme_discovery_plan_budget as plan_budget
+from engine import us_short_llm_theme_discovery_paid_gateway as paid_gateway
+from engine.us_short_llm_theme_discovery_provider_policy import MAX_X_QUERIES
 from runners import us_short_llm_theme_discovery_fetch_web as web
 from engine.us_short_schema_formats import FORMAT_CHECKER
 
@@ -38,9 +40,7 @@ def default_receipt_path(expected_decision_date: str) -> Path:
     return STATE_DIR / f"us_short_llm_theme_discovery_x_{expected_decision_date}_receipt.json"
 DEFAULT_RAW_ROOT = ROOT / "provider_samples" / "us_short_llm_theme_discovery_fetch_x"
 SCHEMA_PATH = ROOT / "schemas" / "us_short_llm_theme_discovery_fetch_x.schema.json"
-XAI_BASE_URL = "https://api.x.ai/v1"
-GROK_MODEL = "grok-4.3"
-MAX_X_QUERIES = 15
+GROK_MODEL = paid_gateway.GROK_MODEL
 MAX_GROK_SOURCES = 500
 PROVIDER_RESPONSE_DROP_REASONS = frozenset({
     "provider_response_capture_unavailable",
@@ -55,61 +55,10 @@ class XThemeDiscoveryError(ValueError):
     """The bounded X discovery packet cannot be consumed safely."""
 
 
-def _make_live_capabilities() -> tuple[
-    Callable[..., object], Callable[[object], bool], Callable[[], object], Callable[[object], None],
-]:
-    """Keep the normal X runner path one-shot; this is not a security boundary.
-
-    Same contract and same in-process limit as the web lane: closure inspection can forge this
-    bookkeeping, so only downstream raw-receipt/hash re-derivation is relied on for refusing a
-    label without intact evidence.  Tickets are held as objects, never as `id()` values, so a
-    leaked address cannot validate a later unrelated object.
-    """
-    issuer = object()
-    issued_tickets: set[object] = set()
-    ticket_lock = threading.Lock()
-
-    class LiveTransport:
-        def __init__(self, supplied_issuer: object, providers: tuple[str, ...]):
-            if supplied_issuer is not issuer:
-                raise XThemeDiscoveryError("live transport capability is runner-private")
-            self._completed = {provider: 0 for provider in providers}
-
-        def _record_completed_response(self, provider: str) -> None:
-            if provider not in self._completed:
-                raise XThemeDiscoveryError("unknown live transport provider")
-            self._completed[provider] += 1
-
-        def _snapshot(self) -> dict[str, int]:
-            return dict(self._completed)
-
-        def _consume_ticket(self, ticket: object | None) -> bool:
-            with ticket_lock:
-                if ticket is None or ticket not in issued_tickets:
-                    return False
-                issued_tickets.discard(ticket)
-                return True
-
-    def new_transport(*providers: str) -> object:
-        return LiveTransport(issuer, providers or ("xai",))
-
-    def is_transport(candidate: object) -> bool:
-        return isinstance(candidate, LiveTransport)
-
-    def issue_ticket() -> object:
-        ticket = object()
-        with ticket_lock:
-            issued_tickets.add(ticket)
-        return ticket
-
-    def revoke_ticket(ticket: object) -> None:
-        with ticket_lock:
-            issued_tickets.discard(ticket)
-
-    return new_transport, is_transport, issue_ticket, revoke_ticket
-
-
-_new_live_transport, _is_live_transport, _issue_live_ticket, _revoke_live_ticket = _make_live_capabilities()
+_new_live_transport = paid_gateway.new_transport
+_is_live_transport = paid_gateway.is_transport
+_issue_live_ticket = paid_gateway.issue_ticket
+_revoke_live_ticket = paid_gateway.revoke_ticket
 
 
 def _source_id(locator: str) -> str:
@@ -664,6 +613,31 @@ def _provider_response_refs(
     return refs
 
 
+def _persist_live_x_response(
+    request: paid_gateway.PaidDispatchRequest, captured: Any, *,
+    raw_root: Path, expected_decision_date: str,
+) -> None:
+    """Freeze one paid X response before the gateway advances to another query."""
+    if request.stage != "stage1" or not isinstance(captured, dict):
+        if request.stage != "stage1":
+            return
+        raise XThemeDiscoveryError("paid X response capture is unavailable")
+    record = captured.get("record")
+    if not isinstance(record, dict) or not isinstance(record.get("response"), dict):
+        raise XThemeDiscoveryError("paid X response capture is unavailable")
+    pending: list[tuple[Path, dict[str, Any]]] = []
+    drops: list[dict[str, Any]] = []
+    refs = _provider_response_refs(
+        [record], raw_root=raw_root, persist_raw=True,
+        execution_mode="live_authorized", completed_response_count=1,
+        expected_decision_date=expected_decision_date,
+        fetched_at=datetime.now(timezone.utc), pending_raw_writes=pending, drops=drops,
+    )
+    if drops or len(refs) != 1:
+        raise XThemeDiscoveryError("paid X evidence could not reach the raw write door")
+    web._flush_raw_writes(pending)
+
+
 # No producer-side deletion of provider response raws.  A retry can leave a digest-named raw that
 # the winning immutable receipt does not reference; the receipt stays the ONLY authority on which
 # bytes are evidence (merge accepts a ref only when the receipt names it), and the leftover file is
@@ -746,6 +720,7 @@ def _guard_generated_before_open(generated: datetime, expected_decision_date: st
         raise XThemeDiscoveryError(str(exc)) from exc
 
 
+@web._with_raw_evidence_finalizer
 def build_x_fetch_packet(
     *, queries: list[str] | tuple[str, ...], results: list[Any], grok_response: str,
     expected_decision_date: str, generated_at: str, fetched_at: str | None = None,
@@ -761,6 +736,8 @@ def build_x_fetch_packet(
     grok_model_identity: dict[str, Any] | None = None,
     grok_attempted: bool = False,
     grok_failed: bool = False,
+    budget_aborted: bool = False,
+    _pending_raw_writes: list[tuple[Path, dict[str, Any]]] | None = None,
 ) -> tuple[dict[str, Any], dict[str, Any], dict[str, Any]]:
     queries = _safe_queries(queries)
     generated = _parse_dt(generated_at, "generated_at")
@@ -800,7 +777,7 @@ def build_x_fetch_packet(
     provider_calls_performed = provider_call_count > 0
     if raw_root is not None:
         raw_root = web._validate_raw_root(raw_root, require_gitignored=execution_mode == "live_authorized")
-    pending_raw_writes: list[tuple[Path, dict[str, Any]]] = []
+    pending_raw_writes = _pending_raw_writes if _pending_raw_writes is not None else []
     drops: list[dict[str, Any]] = []
     provider_response_refs = _provider_response_refs(
         raw_provider_responses, raw_root=raw_root, persist_raw=persist_raw,
@@ -865,11 +842,14 @@ def build_x_fetch_packet(
         "discovery_artifact_sha256": web._discovery_evidence_hash(discovery), "drop_ledger": drops,
         "summary": {"query_count": len(queries), "accepted_source_count": len(refs), "validated_theme_count": len(discovery["themes"]), "validated_member_count": sum(len(t["members"]) for t in discovery["themes"]), "dropped_result_count": len(drops)},
     }
-    web._assert_receipt_secret_free(receipt)
-    _validate_builder_receipt_evidence(receipt, completed_response_count)
-    _validate_schema(receipt)
+    # Persist every paid response/source raw before validating the receipt's evidence index.  A
+    # completion failure must therefore leave replayable bytes or a visible write-door error, not
+    # a receipt that passed against an only-in-memory pending list.
     web._flush_raw_writes(pending_raw_writes)
-    summary = {"schema_name": "us_short_llm_theme_discovery_fetch_x_execution_summary", "schema_version": "1.0.0", "status": "offline_fake_client_completed" if execution_mode == "offline_fake_client" else ("live_authorized_completed" if refs else "live_authorized_no_accepted_sources"), "network_access_performed": network_access_performed, "provider_calls_performed": provider_calls_performed, "network_call_count": network_call_count, "provider_call_count": provider_call_count, "scoring_or_top15_effect": False, "operation_advice_effect": False, "accepted_source_count": len(refs), "validated_theme_count": len(discovery["themes"]), "dropped_result_count": len(drops)}
+    web._assert_receipt_secret_free(receipt)
+    _validate_schema(receipt)
+    _validate_builder_receipt_evidence(receipt, completed_response_count)
+    summary = {"schema_name": "us_short_llm_theme_discovery_fetch_x_execution_summary", "schema_version": "1.0.0", "status": "offline_fake_client_completed" if execution_mode == "offline_fake_client" else ("live_authorized_budget_aborted" if budget_aborted else ("live_authorized_completed" if refs else "live_authorized_no_accepted_sources")), "network_access_performed": network_access_performed, "provider_calls_performed": provider_calls_performed, "network_call_count": network_call_count, "provider_call_count": provider_call_count, "scoring_or_top15_effect": False, "operation_advice_effect": False, "accepted_source_count": len(refs), "validated_theme_count": len(discovery["themes"]), "dropped_result_count": len(drops)}
     return discovery, receipt, summary
 
 
@@ -884,14 +864,46 @@ def _require_single_xai_api_key(value: Any) -> str:
     return value
 
 
+def _capture_x_reply(reply: Any, raw_provider_responses: list[dict[str, Any]]) -> dict[str, Any]:
+    """Capture one paid reply before any metadata or model validation can reject it."""
+    record: dict[str, Any] = {"error_reason": "missing_response"}
+    raw_provider_responses.append(record)
+    try:
+        text, provider_rows, annotations, reply_identity, raw_response, response_error = _coerce_x_client_reply(reply)
+    except (KeyboardInterrupt, SystemExit, GeneratorExit, MemoryError, RecursionError, SystemError):
+        raise
+    except Exception as exc:
+        record["error_reason"] = type(exc).__name__
+        return {"parse_error": exc, "record": record}
+    if raw_response is not None:
+        record.pop("error_reason", None)
+        record["response"] = raw_response
+    elif response_error is not None:
+        record["error_reason"] = response_error
+    return {
+        "text": text, "provider_rows": provider_rows, "annotations": annotations,
+        "reply_identity": reply_identity, "response_error": response_error,
+        "record": record,
+    }
+
+
 def execute_live_x_orchestration(
     *, queries: list[str], expected_decision_date: str, client: Any,
+    dispatch_budget: Any, transport: Any | None = None,
+    persist_response: Callable[[paid_gateway.PaidDispatchRequest, Any], Any],
 ) -> dict[str, Any]:
     """The live X orchestration, split out so tests can EXECUTE it (same reason as the web lane).
 
     Mints no packet and no `live_authorized` label: the attestation still comes only from a real
     transport inside ``build_x_fetch_packet``.
     """
+    if dispatch_budget is None:
+        raise plan_budget.PlanBudgetError("dispatch_budget is required for live X orchestration")
+    if not callable(persist_response):
+        raise plan_budget.PlanBudgetError(
+            "persist_response is required for live X orchestration"
+        )
+    gateway = paid_gateway.PaidDispatchGateway(dispatch_budget)
     results: list[dict[str, Any]] = []
     annotation_urls: list[str] = []
     grok_texts: list[str] = []
@@ -899,59 +911,85 @@ def execute_live_x_orchestration(
     query_drops: list[dict[str, str]] = []
     model_identity = _grok_model_identity()
     fingerprints: list[str] = []
-    grok_attempted = False
-    for query in queries:
-        grok_attempted = True
-        try:
-            reply = client.search(query, expected_decision_date)
-        except Exception as exc:
-            # The provider call never completed, so the transport counted nothing and this query
-            # must NOT consume a completed-response ordinal (K3-R97).
-            query_drops.append({"stage": "llm", "reason": "provider_response_dropped", "detail": type(exc).__name__})
+    grok_attempted = bool(queries)
+    fatal_budget_error: plan_budget.PlanBudgetError | None = None
+    def consume_x(_request: paid_gateway.PaidDispatchRequest, captured: dict[str, Any]) -> dict[str, Any]:
+        parse_error = captured.get("parse_error")
+        if parse_error is not None:
+            raise parse_error
+        response_error = captured.get("response_error")
+        if response_error is not None:
+            return captured
+        reply_identity = captured.get("reply_identity")
+        if reply_identity is not None:
+            served_model = reply_identity.get("served_model")
+            expected_model = model_identity["served_model"]
+            if not isinstance(served_model, str) or not served_model:
+                raise web._ProviderItemRejected("served_model_missing", _request.scope)
+            if expected_model is not None and served_model != expected_model:
+                raise web._ProviderItemRejected("served_model_changed", _request.scope)
+            model_identity["served_model"] = served_model
+            fingerprint = reply_identity.get("system_fingerprint")
+            if isinstance(fingerprint, str) and fingerprint:
+                fingerprints.append(fingerprint)
+        return captured
+
+    stage1_batch = gateway.dispatch_x_search_all(
+        client, queries, expected_decision_date=expected_decision_date,
+        transport=transport,
+        capture_response=lambda _request, reply: _capture_x_reply(reply, raw_provider_responses),
+        persist_response=persist_response,
+        consume_response=consume_x,
+    )
+    for item in stage1_batch.items:
+        query = item.request.scope
+        if item.outcome.call_error is not None:
+            budget_failure = plan_budget.coerce_budget_error(item.outcome.call_error)
+            if budget_failure is not None:
+                fatal_budget_error = budget_failure
+                break
+            query_drops.append({
+                "stage": "llm", "reason": "provider_response_dropped",
+                "detail": type(item.outcome.call_error).__name__,
+            })
             continue
-        # Past this point the transport has recorded one completed response, so this call owns
-        # exactly one record however badly the reply then reads.
-        record: dict[str, Any] = {"error_reason": "missing_response"}
-        raw_provider_responses.append(record)
-        try:
-            text, provider_rows, annotations, reply_identity, raw_response, response_error = _coerce_x_client_reply(reply)
-            if raw_response is not None:
-                record.pop("error_reason", None)
-                record["response"] = raw_response
-            elif response_error is not None:
-                record["error_reason"] = response_error
-            if response_error is not None:
+        if item.item_error is not None:
+            error = item.item_error
+            record = item.captured.get("record") if isinstance(item.captured, dict) else None
+            if isinstance(error, web._ProviderItemRejected):
+                if isinstance(record, dict) and "response" not in record:
+                    record["error_reason"] = error.reason
+                query_drops.append({"stage": "llm", "reason": error.reason, "detail": error.detail})
+            else:
+                if isinstance(record, dict) and "response" not in record:
+                    record["error_reason"] = type(error).__name__
                 query_drops.append({
                     "stage": "llm", "reason": "provider_response_dropped",
-                    "detail": f"{query}:{response_error}",
+                    "detail": type(error).__name__,
                 })
-                continue
-            if reply_identity is not None:
-                served_model = reply_identity.get("served_model")
-                expected_model = model_identity["served_model"]
-                if not isinstance(served_model, str) or not served_model:
-                    raise web._ProviderItemRejected("served_model_missing", query)
-                if expected_model is not None and served_model != expected_model:
-                    raise web._ProviderItemRejected("served_model_changed", query)
-                model_identity["served_model"] = served_model
-                fingerprint = reply_identity.get("system_fingerprint")
-                if isinstance(fingerprint, str) and fingerprint:
-                    fingerprints.append(fingerprint)
-            grok_texts.append(text)
-            results.extend(provider_rows)
-            annotation_urls.extend(annotations)
-            if not provider_rows:
-                query_drops.append({"stage": "search_result", "reason": "missing_provider_result_rows", "detail": query})
-        except web._ProviderItemRejected as exc:
-            # A captured response stays captured: the call was paid for even when its metadata is
-            # rejected, so only an uncaptured record inherits the failure reason.
-            if "response" not in record:
-                record["error_reason"] = exc.reason
-            query_drops.append({"stage": "llm", "reason": exc.reason, "detail": exc.detail})
-        except Exception as exc:
-            if "response" not in record:
-                record["error_reason"] = type(exc).__name__
-            query_drops.append({"stage": "llm", "reason": "provider_response_dropped", "detail": type(exc).__name__})
+            continue
+        captured = item.value
+        if captured.get("response_error") is not None:
+            query_drops.append({
+                "stage": "llm", "reason": "provider_response_dropped",
+                "detail": f"{query}:{captured['response_error']}",
+            })
+            continue
+        grok_texts.append(captured["text"])
+        results.extend(captured["provider_rows"])
+        annotation_urls.extend(captured["annotations"])
+        if not captured["provider_rows"]:
+            query_drops.append({"stage": "search_result", "reason": "missing_provider_result_rows", "detail": query})
+    if fatal_budget_error is None and stage1_batch.stop_error is not None:
+        budget_failure = plan_budget.coerce_budget_error(stage1_batch.stop_error)
+        if budget_failure is None:
+            raise stage1_batch.stop_error
+        fatal_budget_error = budget_failure
+    if fatal_budget_error is not None:
+        query_drops.append({
+            "stage": "budget", "reason": "plan_budget_aborted",
+            "detail": type(fatal_budget_error).__name__,
+        })
     combined, response_drops = _combine_grok_responses(grok_texts)
     return {
         "results": results, "grok_response": combined,
@@ -960,54 +998,12 @@ def execute_live_x_orchestration(
         "raw_provider_responses": raw_provider_responses,
         "grok_model_identity": {**model_identity, "system_fingerprints": sorted(set(fingerprints))},
         "grok_attempted": grok_attempted, "grok_failed": grok_attempted and not grok_texts,
+        "budget_error": fatal_budget_error,
     }
 
 
-class GrokXSearchClient:
-    def __init__(self, api_key: str, *, timeout: float = 45.0, _live_transport: object | None = None):
-        _require_single_xai_api_key(api_key)
-        try:
-            from openai import OpenAI
-            self.client = OpenAI(api_key=api_key, base_url=XAI_BASE_URL, timeout=timeout)
-            self.network_call_count, self._live_transport = 0, _live_transport
-        except Exception as exc:
-            raise XThemeDiscoveryError("OpenAI-compatible xAI client is unavailable") from exc
-
-    def search(self, query: str, expected_decision_date: str) -> dict[str, Any]:
-        try:
-            self.network_call_count += 1
-            response = self.client.responses.create(model=GROK_MODEL, tools=[{"type": "x_search"}], input=_prompt(expected_decision_date, [{"source_id": "query", "title": query, "text": query}]))
-            if self._live_transport is not None:
-                self._live_transport._record_completed_response("xai")
-        except Exception as exc:
-            raise XThemeDiscoveryError(f"Grok X request failed: {type(exc).__name__}") from exc
-        raw_response = None
-        response_error = None
-        try:
-            raw_response = _raw_provider_response_payload(response)
-        except XThemeDiscoveryError:
-            response_error = "raw_provider_response_not_json_serializable"
-        if raw_response is not None and not _provider_response_is_safe(raw_response):
-            raw_response = None
-            response_error = "raw_provider_response_unsafe_to_persist"
-        try:
-            text = _response_text(response)
-            rows = _provider_result_rows(response)
-            annotations = _provider_annotation_urls(response)
-        except Exception as exc:
-            text, rows, annotations = '{"themes":[]}', [], []
-            response_error = response_error or f"provider_response_{type(exc).__name__}"
-        return {
-            "text": text, "results": rows, "annotation_urls": annotations,
-            "raw_response": raw_response, "response_error": response_error,
-            "model_identity": {
-                "served_model": getattr(response, "model", None),
-                "system_fingerprint": getattr(response, "system_fingerprint", None),
-            },
-        }
-
-
-def _run_x_fetch(*, queries: list[str] | tuple[str, ...], expected_decision_date: str, generated_at: str, x_client: Any | None = None, confirm_user_authorization: bool = False, live: bool = False, raw_root: Path | None = None, _new_transport: Callable[..., object] = _new_live_transport, _issue_ticket: Callable[[], object] = _issue_live_ticket, _revoke_ticket: Callable[[object], None] = _revoke_live_ticket):
+def _run_x_fetch(*, queries: list[str] | tuple[str, ...], expected_decision_date: str, generated_at: str, x_client: Any | None = None, confirm_user_authorization: bool = False, live: bool = False, raw_root: Path = DEFAULT_RAW_ROOT, # Class-A allowlist: offline_fake_client has no A1 plan; live uses the registered raw root before credentials.
+                 parent_plan: Mapping[str, Any] | None = None, _new_transport: Callable[..., object] = _new_live_transport, _issue_ticket: Callable[[], object] = _issue_live_ticket, _revoke_ticket: Callable[[object], None] = _revoke_live_ticket):
     queries = _safe_queries(queries)
     web._decision_date(expected_decision_date)
     if live:
@@ -1015,30 +1011,47 @@ def _run_x_fetch(*, queries: list[str] | tuple[str, ...], expected_decision_date
             raise XThemeDiscoveryError("live execution requires --confirm-user-authorization")
         if x_client is not None:
             raise XThemeDiscoveryError("live execution does not accept an injected client")
+        if parent_plan is None:
+            raise XThemeDiscoveryError(
+                "live execution requires an A1 parent plan for the plan-level budget"
+            )
+        plan_budget.validate_run_decision_date(parent_plan, expected_decision_date)
+        raw_root = web._validate_raw_root(raw_root or DEFAULT_RAW_ROOT, require_gitignored=True)
         api_key = _require_single_xai_api_key(os.environ.get("XAI_API_KEY", ""))
-        web._reserve_provider_budget(
-            "x", "xai", expected_decision_date, call_count=len(queries), query_scope=queries,
+        dispatch_budget = plan_budget.reserve_plan_budget(
+            parent_plan, lane=plan_budget.PLAN_LANE,
+            state_dir=STATE_DIR, root=ROOT, gitignored=web._gitignored,
+            expected_decision_date=expected_decision_date, providers=("xai",),
         )
         transport = _new_transport("xai")
-        client = GrokXSearchClient(api_key, _live_transport=transport)
+        client = paid_gateway.create_x_client(api_key, transport)
         outcome = execute_live_x_orchestration(
             queries=queries, expected_decision_date=expected_decision_date, client=client,
+            dispatch_budget=dispatch_budget, transport=transport,
+            persist_response=lambda request, captured: _persist_live_x_response(
+                request, captured, raw_root=raw_root, expected_decision_date=expected_decision_date,
+            ),
         )
         fetched_now = outcome["fetched_at"]
+        budget_error = outcome.get("budget_error")
         ticket = _issue_ticket()
         try:
-            return build_x_fetch_packet(queries=queries, results=outcome["results"], grok_response=outcome["grok_response"], expected_decision_date=expected_decision_date, generated_at=fetched_now.isoformat(), fetched_at=fetched_now.isoformat(), raw_root=raw_root or DEFAULT_RAW_ROOT, persist_raw=True, execution_mode="live_authorized", _live_transport=transport, _live_ticket=ticket, extra_drop_ledger=outcome["query_drops"], provider_annotation_urls=outcome["annotation_urls"], raw_provider_responses=outcome.get("raw_provider_responses", []), grok_model_identity=outcome["grok_model_identity"], grok_attempted=outcome["grok_attempted"], grok_failed=outcome["grok_failed"])
+            packet = build_x_fetch_packet(queries=queries, results=outcome["results"], grok_response=outcome["grok_response"], expected_decision_date=expected_decision_date, generated_at=fetched_now.isoformat(), fetched_at=fetched_now.isoformat(), raw_root=raw_root, persist_raw=True, execution_mode="live_authorized", _live_transport=transport, _live_ticket=ticket, extra_drop_ledger=outcome["query_drops"], provider_annotation_urls=outcome["annotation_urls"], raw_provider_responses=outcome.get("raw_provider_responses", []), grok_model_identity=outcome["grok_model_identity"], grok_attempted=outcome["grok_attempted"], grok_failed=outcome["grok_failed"], budget_aborted=budget_error is not None)
         finally:
             _revoke_ticket(ticket)
+        return packet
     if x_client is None:
         raise XThemeDiscoveryError("offline mode requires an injected fake X client")
+    paid_gateway.require_offline_fake_client(x_client)
     responses: list[str] = []
     results: list[dict[str, Any]] = []
     annotation_urls: list[str] = []
     query_drops: list[dict[str, str]] = []
     for query in queries:
         try:
-            text, provider_rows, annotations, _, _, _ = _coerce_x_client_reply(x_client.search(query, expected_decision_date))
+            text, provider_rows, annotations, _, _, _ = _coerce_x_client_reply(
+                paid_gateway.offline_x_search(x_client, query, expected_decision_date),
+            )
             responses.append(text)
             results.extend(provider_rows)
             annotation_urls.extend(annotations)
@@ -1059,13 +1072,14 @@ def _run_x_fetch(*, queries: list[str] | tuple[str, ...], expected_decision_date
 
 def _bind_live_runner(run_impl: Callable[..., Any], new_transport: Callable[..., object], issue_ticket: Callable[[], object], revoke_ticket: Callable[[object], None]) -> Callable[..., Any]:
     """Bind normal-path bookkeeping here; closure placement is not an authorization boundary."""
-    def runner(*, queries: list[str] | tuple[str, ...], expected_decision_date: str, generated_at: str, x_client: Any | None = None, confirm_user_authorization: bool = False, live: bool = False, raw_root: Path | None = None):
-        return run_impl(queries=queries, expected_decision_date=expected_decision_date, generated_at=generated_at, x_client=x_client, confirm_user_authorization=confirm_user_authorization, live=live, raw_root=raw_root, _new_transport=new_transport, _issue_ticket=issue_ticket, _revoke_ticket=revoke_ticket)
+    def runner(*, queries: list[str] | tuple[str, ...], expected_decision_date: str, generated_at: str, x_client: Any | None = None, confirm_user_authorization: bool = False, live: bool = False, raw_root: Path = DEFAULT_RAW_ROOT, # Same Class-A allowlist: offline mode may omit the plan.
+                parent_plan: Mapping[str, Any] | None = None):
+        return run_impl(queries=queries, expected_decision_date=expected_decision_date, generated_at=generated_at, x_client=x_client, confirm_user_authorization=confirm_user_authorization, live=live, raw_root=raw_root, parent_plan=parent_plan, _new_transport=new_transport, _issue_ticket=issue_ticket, _revoke_ticket=revoke_ticket)
     return runner
 
 
 run_x_fetch = _bind_live_runner(_run_x_fetch, _new_live_transport, _issue_live_ticket, _revoke_live_ticket)
-del _make_live_capabilities, _new_live_transport, _issue_live_ticket, _revoke_live_ticket
+del _new_live_transport, _issue_live_ticket, _revoke_live_ticket
 del _run_x_fetch, _bind_live_runner
 
 
@@ -1164,10 +1178,16 @@ def main(argv: list[str] | None = None) -> int:
             queries=args.query, expected_decision_date=args.expected_decision_date,
             generated_at=args.generated_at, x_client=_CliFake(), live=False,
         )
-    web.publish_decision_pair(
-        discovery, discovery_output, default_discovery_path(args.expected_decision_date),
-        receipt, receipt_output, default_receipt_path(args.expected_decision_date),
-    )
+    if summary.get("status") == "live_authorized_budget_aborted":
+        web.publish_budget_abort_diagnostic(
+            "x", args.expected_decision_date,
+            packet=discovery, receipt=receipt, summary=summary,
+        )
+    else:
+        web.publish_decision_pair(
+            discovery, discovery_output, default_discovery_path(args.expected_decision_date),
+            receipt, receipt_output, default_receipt_path(args.expected_decision_date),
+        )
     print(json.dumps(summary, ensure_ascii=False, sort_keys=True))
     return 0
     return 0

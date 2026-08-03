@@ -1,0 +1,159 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "US-short soft-discovery plan-level provider budget ledger",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_name",
+    "schema_version",
+    "budget_mode",
+    "lane",
+    "provider",
+    "decision_date",
+    "parent_plan_identity",
+    "provider_envelope",
+    "planned_provider_call_count",
+    "reservation_attempt_count",
+    "first_reserved_at",
+    "last_reserved_at",
+    "query_reservations",
+    "dispatches",
+    "dispatch_counts",
+    "vendor_dispatch_counts",
+    "recovery_events"
+  ],
+  "properties": {
+    "schema_name": {"const": "us_short_llm_theme_discovery_plan_budget"},
+    "schema_version": {"const": "1.0.0"},
+    "budget_mode": {"const": "parent_plan_envelope"},
+    "lane": {"type": "string", "pattern": "^[a-z][a-z0-9_-]{1,31}$"},
+    "provider": {"type": "string", "enum": ["web", "xai"]},
+    "decision_date": {"type": "string", "pattern": "^[0-9]{8}$"},
+    "parent_plan_identity": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+    "provider_envelope": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "provider",
+        "stage1_max_dispatch_count",
+        "stage2_max_dispatch_count",
+        "retry_max_dispatch_count",
+        "max_dispatch_count"
+      ],
+      "properties": {
+        "provider": {"type": "string", "enum": ["web", "xai"]},
+        "stage1_max_dispatch_count": {"type": "integer", "minimum": 0},
+        "stage2_max_dispatch_count": {"type": "integer", "minimum": 0},
+        "retry_max_dispatch_count": {"type": "integer", "minimum": 0},
+        "max_dispatch_count": {"type": "integer", "minimum": 0}
+      }
+    },
+    "planned_provider_call_count": {"type": "integer", "minimum": 0},
+    "reservation_attempt_count": {"type": "integer", "minimum": 1},
+    "first_reserved_at": {"type": "string", "format": "date-time"},
+    "last_reserved_at": {"type": "string", "format": "date-time"},
+    "query_reservations": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+        "query_sha256",
+          "stage",
+          "vendor",
+          "query_count",
+          "planned_provider_call_count",
+          "attempt_count",
+          "last_status"
+        ],
+        "properties": {
+          "query_sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+          "stage": {"enum": ["stage1", "stage2"]},
+          "vendor": {"enum": ["tavily", "deepseek", "xai"]},
+          "query_count": {"type": "integer", "minimum": 1},
+          "planned_provider_call_count": {"type": "integer", "const": 1},
+          "attempt_count": {"type": "integer", "minimum": 1},
+          "last_status": {"enum": ["in_flight", "complete", "failure", "unknown"]}
+        }
+      }
+    },
+    "dispatches": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "dispatch_id",
+          "query_sha256",
+          "stage",
+          "vendor",
+          "attempt",
+          "status",
+          "started_at",
+          "owner_pid",
+          "owner_run_id",
+          "owner_started_at",
+          "owner_heartbeat_at"
+        ],
+        "properties": {
+          "dispatch_id": {"type": "integer", "minimum": 1},
+          "query_sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+          "stage": {"enum": ["stage1", "stage2"]},
+          "vendor": {"enum": ["tavily", "deepseek", "xai"]},
+          "attempt": {"type": "integer", "minimum": 1},
+          "status": {"enum": ["in_flight", "complete", "failure", "unknown"]},
+          "started_at": {"type": "string", "format": "date-time"},
+          "owner_pid": {"type": "integer", "minimum": 1},
+          "owner_run_id": {"type": "string", "pattern": "^[0-9a-f]{32}$"},
+          "owner_started_at": {"type": "string", "format": "date-time"},
+          "owner_heartbeat_at": {"type": "string", "format": "date-time"},
+          "finished_at": {"type": "string", "format": "date-time"},
+          "unknown_reason": {"type": "string", "minLength": 1}
+        }
+      }
+    },
+    "dispatch_counts": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "stage1_dispatch_count",
+        "stage2_dispatch_count",
+        "retry_dispatch_count",
+        "dispatch_count",
+        "unknown_dispatch_count"
+      ],
+      "properties": {
+        "stage1_dispatch_count": {"type": "integer", "minimum": 0},
+        "stage2_dispatch_count": {"type": "integer", "minimum": 0},
+        "retry_dispatch_count": {"type": "integer", "minimum": 0},
+        "dispatch_count": {"type": "integer", "minimum": 0},
+        "unknown_dispatch_count": {"type": "integer", "minimum": 0}
+      }
+    },
+    "vendor_dispatch_counts": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["tavily", "deepseek", "xai"],
+      "properties": {
+        "tavily": {"type": "integer", "minimum": 0},
+        "deepseek": {"type": "integer", "minimum": 0},
+        "xai": {"type": "integer", "minimum": 0}
+      }
+    },
+    "recovery_events": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["recovery_id", "dispatch_id", "owner_run_id", "recovered_at", "reason"],
+        "properties": {
+          "recovery_id": {"type": "string", "pattern": "^[0-9a-f]{32}$"},
+          "dispatch_id": {"type": "integer", "minimum": 1},
+          "owner_run_id": {"type": "string", "pattern": "^[0-9a-f]{32}$"},
+          "recovered_at": {"type": "string", "format": "date-time"},
+          "reason": {"type": "string", "minLength": 1}
+        }
+      }
+    }
+  }
+}
