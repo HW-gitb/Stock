@@ -750,3 +750,50 @@
 ### 交接给下一位
 
 - Claude Code 需独立复核当前代码、缓存 source-binding、直接消费者、旧 v4 / wrong-type / incomplete 反向门和风险登记；确认 fingerprint 真随语义/窗口变化后再 PASS。PASS 前不得提交或合入；其他既有未提交修改和四个 20260803 未跟踪产物不在本刀范围，禁止清理或回滚。
+
+## 2026-08-03 追加：moneyflow_ 缓存窗口/部分覆盖修复（Codex executor；待 Claude Code 独立审查）
+### 修复范围
+- 根因是旧 `moneyflow_{trade_dates[0]}` 只绑定窗口首日，未绑定完整五日窗口、源帧、目标标的覆盖和 producer 语义；部分日期或全失败结果也可能进入缓存，L4 只看非空帧就可能加大单资金流分。
+- `A-EGS/egs_main.py` 已改为 `MoneyflowObservation` 信封：精确五日窗口、`moneyflow_v2`、窗口摘要、AST/常量语义指纹、源字段/数值/重复键/`trade_amount`/帧摘要校验；旧裸 DataFrame、旧 key、外部代码集、篡改或语义不匹配均丢弃并重取；不可用/不完整结果不写缓存。
+- `score_l4()` 只接受与本轮目标集合绑定的 complete receipt，且每个目标标的都覆盖全部五日，才允许大单流向加分；否则 fail-closed，`big_ratio` 保持空值。
+### 调用链 / 不变边界
+- `run_egs()` -> `get_trade_dates()` -> `get_moneyflow()` -> cache/`MoneyflowObservation` -> `_moneyflow_usage_receipt()` -> `score_l4()` -> `analysis_input`/data-health -> rank/manifest。
+- analysis input 升为 1.4.0，data health 升为 1.8.0，均写入并校验 `moneyflow_coverage`，并绑定 `price_data_through`；effect contract 已按固定主 Python 的实际清单重封。
+- 本刀不改 provider 选择、实盘/`--as-of 20260803` 数据刷新、financial/margin/block-trade/suspend/relisted/unlock/reduction 缓存族、评分阈值或自动交易边界；四个既有 20260803 未跟踪产物原样保留。
+### 负向控制与验证
+- 新 moneyflow 合同测试覆盖：旧 key 隔离、窗口/语义轮换、裸帧/外部集合/元数据篡改重取、部分/全失败不写缓存、目标覆盖不足不加分、完整目标覆盖才加分。
+- 固定解释器 `C:\Users\cnhea\AppData\Local\Programs\Python\Python313\python.exe`（`Python 3.13.8`）最终 moneyflow+effect pack：`Ran 60 tests ... OK`；schema/data-health/margin：`Ran 53 tests ... OK`；moneyflow/financial/rank：`Ran 35 tests ... OK`；syntax/JSON、`git diff --check` 已通过。
+- 直接 exporter/health 19-test pack 有 2 个既有 IV feed fixture 因缺少 `schema_name` 报错，与本刀无关，记 `NOT_VERIFIED`；provider/live 和新 `--as-of 20260803` 仍未执行。
+### 交接给下一位
+- Claude Code 独立审查 producer/source-binding、精确窗口、L4 消费者、schema/data-health、effect-contract、负向控制和本交接；未取得 review PASS 前不得提交或合并。
+
+## 2026-08-03 追加：私密 lane legacy effect-contract bootstrap 修复（Codex executor；待 Claude Code 独立审查）
+### 问题与修复
+- 私密 lane `state/a_short/weekly_private/<as_of>/` 的最近历史周报早于 effect-contract ledger 特性，JSON 没有 `effect_contract_ledger`。旧加载器把“完全没有这个键”和“键存在但日期/类型/计数错误”都抛成同一个异常，导致带 `-Account` 的 M6.7 周跑被误挡。
+- `_load_previous_effect_contract_ledger()` 现在只对 dict 中完全缺少该键的 prior 报告记录 legacy date 并跳过；会继续寻找更早的可用 ledger。若全是 pre-feature 报告，返回已有 `skipped_no_prior_ledger`，reason 明确记录跳过日期。
+- 键存在但为非 dict、`as_of` 与目录不一致、summary 计数非法，或 JSON 不可读/非对象，仍硬失败，保持 fail-closed。
+### 调用链 / 边界
+- `weekly_screening.ps1 -Account` -> private weekly output -> `publish_weekly_bundle()` -> `_bind_effect_contract_trend_guard()` -> `_load_previous_effect_contract_ledger()` -> `build_effect_contract_ledger()` -> `validate_weekly_report()` -> M6.7 bundle。
+- 没有读取或修改用户真实 private 历史文件，没有执行 provider/live、账户/订单、`-Account` 新实盘或 `--as-of 20260803`；moneyflow 本刀及四个既有未跟踪 20260803 产物均保留。
+### 负向控制 / 验证
+- 新增：legacy-only 显式 bootstrap skip；较新 legacy 后继续命中较早 valid ledger；present-but-malformed 仍抛错。
+- 固定主 Python `C:\Users\cnhea\AppData\Local\Programs\Python\Python313\python.exe`（`Python 3.13.8`）：effect consumer `Ran 15 tests ... OK`；weekly pipeline `Ran 521 tests ... OK`；effect contract `Ran 48 tests ... OK`；syntax/JSON `SYNTAX_JSON_OK`。
+- runner 的 effect-contract decision predicate hash 已重封；无 full/live 结论，独立审查仍待完成。
+### 交接
+- Claude Code 独立审查上述历史分类、旧报告跳过后的 older-valid fallback、present-key 反向控制、effect-contract reseal 与私密 lane 调用链；审查 PASS 前不得提交或合并。
+
+## 2026-08-03 审查收口：M6.7 legacy ledger bootstrap + moneyflow 二审（Claude Code 独立审查 = FAIL）
+
+### Verdict
+- **初判 FAIL → 同轮更正为 PASS，已提交并合入 master。** 代码侧两刀一直是通过的；唯一红点在 docs 层（`R-ASHORT-SESSIONLOG-HEADER-SEPARATOR-BREAKS-REVIEW-TEMPLATE-GUARD`，已 CLOSED）。用户授权「自己修自己审查」后由 Claude Code 同轮自修自验：四条 Required 一次做完，pre-commit 双门 `RESULT tier=focused status=PASS exit=0 tests=55`，唯一入口全量 `RESULT status=PASS exit=0 tests=2299 elapsed=317.6s`（`2284→2299` 的 `+15` 可被新增用例逐条解释）。
+
+### 代码侧实测结论（无 Required）
+- **legacy bootstrap**：把 0d46 的代码指向真实私密库 `D:\cnhea\Stock\state\a_short\weekly_private` 重放桌面第 2 项的实盘阻断——三份历史 `20260612/20260622/20260629` 实测全部无 `effect_contract_ledger`，修后返回 `skipped_no_prior_ledger` 且 reason 点名三个被跳过的日期，原 `prior weekly ledger is missing or date-mismatched` 不再抛出。7 条强制腿反向控制（as_of 不符 / None / list / 计数为负 / 计数为字符串 / payload 非对象 / 不可解析）全部仍 fail-closed。
+- **moneyflow**：`leaf_natures()=leaf_effects()=380` 与新常量一致，`static_contract_error()=None`；`score_l4()` 只在 `status=complete` 且 `coverage_complete is True` 时 `+5`，否则告警且 `big_ratio` 留 `NaN`；声称 complete 却缺 `MoneyflowObservation` 信封或缺必需列则硬抛。coverage receipt 与 `df_l3` 同源，`score_l4` / `analysis_input` / `data_health` 三处口径一致，无目标集合漂移。
+
+### 阻断项（Required 全文见 register，本处只列指针）
+- 两条新 SESSION_LOG 标题缺 `— ` 分隔符 → 模板守卫分块错位 → doc-governance 与 preflight pre-commit 双红 → 唯一入口全量 `RESULT status=FAIL exit=1 tests=1081 elapsed=157.7s`。植入探针证明：只补分隔符仍残留 `missing-proof-of-use`，收口需四条一起做。
+- **过程根因（连续第二轮）**：执行方 `Verify` 只列 `Ran 15/521/48 ... OK`，改动触及 fingerprint-governed 的 `A-EGS/egs_main.py` 与 `runners/a_short_weekly_pipeline.py`，按 rule 3 本就必须跑 lane 全量。
+
+### 交接给下一位
+- Codex：按 register 四条收口后**自己跑一次唯一入口全量**并贴终端 `RESULT status=PASS`；PASS 前不得提交或合并。provider/live、`-Account` 新实盘与 `--as-of 20260803` 仍 `NOT_VERIFIED`。

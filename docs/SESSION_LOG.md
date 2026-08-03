@@ -1,5 +1,41 @@
 # Session Log
 
+## 2026-08-03 — Claude 审查 PASS（docs 门收口后全量转绿，两刀合入 master）
+
+- **Verdict/Action**: PASS，已提交并合入 master。同日 FAIL 的唯一红点是 docs 层：两条新 SESSION_LOG 标题缺破折号分隔符，把 review-cycle 模板守卫的分块打错位，连带 pre-commit 与 lane 全量整体变红。用户授权「自己修自己审查」后，我按 register 四条 Required 一次做完（补分隔符、补两条 `修复` 条目的 `Pre-Codex self-review` 行、legacy 条目补引 R-ID、补跑唯一入口全量）。**代码侧结论不变**：真实私密 lane 重放确认桌面第 2 项实盘阻断已解除，7 条强制腿反向控制仍 fail-closed，`static_contract_error()=None`，`score_l4` 覆盖不足不加分、声称完整却缺信封则硬抛。
+- **Required**: 无。`R-ASHORT-SESSIONLOG-HEADER-SEPARATOR-BREAKS-REVIEW-TEMPLATE-GUARD` 已 CLOSED；`R-ASHORT-M67-LEGACY-WEEKLY-LEDGER-BOOTSTRAP-GUARD` 与 `R-ASHORT-MONEYFLOW-CACHE-WINDOW-SEMANTICS-AND-PARTIAL-COVERAGE` 均已闭合，另记一条不阻断 Optional（`checked` 分支的 reason 未带出被跳过的较新 legacy 日期）。正文只见 `docs/system_risk_register.md`（单一来源，本处不复述）。
+- **Verify**: review-evidence:2c2b0c97025b；pre-commit 双门 `RESULT tier=focused status=PASS exit=0 tests=55`；唯一入口全量 `RESULT status=PASS exit=0 tests=2299 elapsed=317.6s deadline=860s`，`2284→2299` 的 `+15` 恰等于新增 moneyflow 契约 12 条 + effect consumer 新增 3 条 legacy/strict 用例。provider/live、`-Account` 新实盘与 `--as-of 20260803` 仍 `NOT_VERIFIED`。超时原因:同轮先出 FAIL 结论再按用户授权自修自审，含两次 lane 全量（157.7s 红 + 317.6s 绿）。
+- **Next**: Codex：执行
+
+## 2026-08-03 — Claude 审查 FAIL（M6.7 legacy ledger bootstrap + moneyflow 二审）
+
+- **Verdict/Action**: FAIL，不提交、不合入。**代码侧两刀我都实测通过**：私密 lane 拿真实三份 pre-feature 周报重放，修后返回 `skipped_no_prior_ledger` 并在 reason 里点名被跳过的日期，桌面第 2 项的实盘阻断确已解除；7 条反向控制仍全部 fail-closed；`static_contract_error()=None`、`leaf_natures()=380` 与新常量一致；`score_l4` 只在 `status=complete` 且 `coverage_complete is True` 时加分，覆盖不足只告警、声称 complete 却缺信封则硬抛。**红在 docs 层**：本刀新加的两条 SESSION_LOG 标题缺破折号分隔符，把 review-cycle 模板守卫的分块打错位，连带 pre-commit 与 lane 全量整体变红。
+- **Required**: `R-ASHORT-SESSIONLOG-HEADER-SEPARATOR-BREAKS-REVIEW-TEMPLATE-GUARD`（新立，本刀唯一阻断，收口需四条一起做）；`R-ASHORT-MONEYFLOW-CACHE-WINDOW-SEMANTICS-AND-PARTIAL-COVERAGE` 上一轮 Required ① 已闭、② 仍未做；`R-ASHORT-M67-LEGACY-WEEKLY-LEDGER-BOOTSTRAP-GUARD` 代码侧无 Required（另记一条不阻断 Optional）。完整正文与 closure tests 见 `docs/system_risk_register.md`（单一来源，本处不复述）。
+- **Verify**: review-evidence:2c2b0c97025b；唯一入口全量 `RESULT status=FAIL exit=1 tests=1081 elapsed=157.7s deadline=860s`（`-f` 首红即停故未跑满）。植入探针实证：把两条标题补上分隔符后重跑守卫**仍残留** `missing-proof-of-use`，故只改标题不能转绿。真实私密 lane 重放（指向 `D:\cnhea\Stock` 真库）与 7 条反向控制均为我自写探针实跑。执行方 `Verify` 只列 `Ran 15/521/48 ... OK`，**连续第二轮未跑 lane 全量**。provider/live 与 `-Account` 实跑仍 `NOT_VERIFIED`。
+- **Next**: Codex：修复
+
+## 2026-08-03 — Codex 修复：私密周报 legacy effect-contract bootstrap（独立审查待办）
+- **Verdict/Action**: 当前工作树已修复第 2 项：历史周报缺少 `effect_contract_ledger` 时不再被误判为损坏而阻断 M6.7；会显式记录 `skipped_no_prior_ledger`，并继续寻找更早的可用 ledger；未提交、未 push、未 merge，未执行 `-Account` provider/live 实跑。
+- **Required**: `R-ASHORT-M67-LEGACY-WEEKLY-LEDGER-BOOTSTRAP-GUARD` —— 仅对 prior JSON 中完全缺少 `effect_contract_ledger` 的 pre-feature 报告做 legacy skip；键存在但类型错误、日期不匹配、summary 计数非法仍 fail-closed。effect-contract runner 指纹已按固定主 Python 重封；新增历史兼容与负向测试。完整正文见 `docs/system_risk_register.md`（单一来源）。
+- **Verify**: 唯一解释器 `C:\Users\cnhea\AppData\Local\Programs\Python\Python313\python.exe`（`Python 3.13.8`）；`Ran 15 tests ... OK`（effect consumer，含新增 legacy/strict tests）；`Ran 521 tests ... OK`（weekly pipeline）；`Ran 48 tests ... OK`（effect contract）；`SYNTAX_JSON_OK`；provider/live、`-Account` 新实盘与 `--as-of 20260803` 均 `NOT_VERIFIED`。
+- **Pre-Codex self-review**: 本行由 Claude Code 于 2026-08-03 收口时补齐（执行方原条目缺该行）；matrix=legacy-vs-present-key/older-valid fallback/strict negatives/reseal；register=updated；handoff=updated；focused=15+521+48 OK（执行方原报）；full-lane=执行方 NOT_RUN，由 reviewer 代跑，结果见同日审查条目；door=BLOCKED: 执行方未跑 pre-commit 门，由 reviewer 收口时代跑。
+- **Next**: Claude Code：独立审查本刀；PASS 前不得提交/合并。
+
+
+## 2026-08-03 — Claude 审查 FAIL（moneyflow 缓存窗口/覆盖契约）
+
+- **Verdict/Action**: FAIL，不提交、不合入。缓存身份本身按前两刀同法做对了（`moneyflow_v2` + 精确五日窗 digest + AST 语义指纹 + `MoneyflowObservation` 信封），新增的 `moneyflow_coverage` 也与既有 `margin_coverage` 同构地接进 analysis_input / data_health 并带一致性与时钟绑定检查。但按 rule 3(a) 跑唯一入口全量**当场红**：`AssertionError: 380 != 371`。红点不是漏登记——我实跑 `leaf_natures()` 得 380、9 个新叶已全部登记为 `partial_consumption`、`static_contract_error()` 为 `None`；红的是叶数测试里写死的 `371`。
+- **Required**: `R-ASHORT-MONEYFLOW-CACHE-WINDOW-SEMANTICS-AND-PARTIAL-COVERAGE` —— 完整 Required（两处常量 + 补跑全量）与 closure 见 `docs/system_risk_register.md`（单一来源，本处不复述）。
+- **Verify**: review-evidence:not_available（本轮 review-gate 未 arm、无 token 注入；证据全部来自真实工具结果）。唯一入口全量 `RESULT status=FAIL exit=1 tests=175 elapsed=6.1s deadline=860s`。schema 侧另核：`market_context.moneyflow_coverage` 在 analysis_input 里**非必需**（旧产物仍可通过校验），`data_health.metrics.moneyflow_coverage` 虽必需但两道校验只在写盘前调用（`egs_main.py:2037-2038`），无消费者校验历史 data_health，故不构成 legacy 破坏。执行方 `Verify` 只列 60/53/35 三个 focused 包，未跑 lane 全量。
+- **Next**: Codex：修复
+
+## 2026-08-03 — Codex 修复：moneyflow_ 缓存窗口/覆盖契约（独立审查待办）
+- **Verdict/Action**: 当前工作树已实现 `R-ASHORT-MONEYFLOW-CACHE-WINDOW-SEMANTICS-AND-PARTIAL-COVERAGE` 的代码、schema、data-health、effect-contract 与负向测试修复；未提交、未 push、未 merge；未执行 provider/live 或新的 `--as-of 20260803`。
+- **Required**: 旧 `moneyflow_{首日}` 缓存不得进入当前消费者；只有精确五日、源字段/帧完整、目标标的全覆盖且 receipt 为 `complete` 时，L4 才允许资金流大单加分；完整根因、调用链和反向控制见 `docs/system_risk_register.md` 同名条目。
+- **Verify**: 唯一解释器 `C:\Users\cnhea\AppData\Local\Programs\Python\Python313\python.exe`（`Python 3.13.8`）；`Ran 60 tests ... OK`（moneyflow + effect contract，固定主 Python）；`Ran 53 tests ... OK`（schema/data-health/margin）；`Ran 35 tests ... OK`（moneyflow/financial/rank）；`SYNTAX_JSON_OK`；`git diff --check` 无错误。此前直接 exporter/health 19-test pack 为 `FAILED (2 errors)`，原因是既有 IV feed fixture 缺少 `schema_name`，与本刀无关，记为 `NOT_VERIFIED`；provider/live 仍 `NOT_VERIFIED`。
+- **Pre-Codex self-review**: 本行由 Claude Code 于 2026-08-03 收口时补齐（执行方原条目缺该行）；matrix=producer envelope/exact-window+source binding/L4 target coverage/schema+data-health/reseal/negatives；register=updated；handoff=updated；focused=60+53+35 OK（执行方原报）；full-lane=执行方 NOT_RUN，由 reviewer 代跑，结果见同日审查条目；door=BLOCKED: 执行方未跑 pre-commit 门，由 reviewer 收口时代跑。
+- **Next**: Claude Code：独立审查本刀；PASS 前不得提交/合并。
+
 ## 2026-08-03 — Claude 审查 PASS（financial 缓存绑代码集+季度窗+语义）
 
 - **Verdict/Action**: PASS，已提交并合入 master。原键 `financial_{TODAY}_{len(ts_codes)}` 只认「同一天 + 同样只数」，代码集完全不同也照样命中——比两融那条更危险，因为它是**内容盲**的。现改为键里绑代码集 digest、季度窗 digest、`get_financial_data` 的 AST 语义指纹与 `financial_v2` 版本 token，并把缓存值包成 `FinancialObservation` 信封，读时逐项校验（as_of/只数/代码 digest/季度/语义/帧内代码/必需列）。命中路径改为返回 `frame.copy()`，调用方改不动缓存。

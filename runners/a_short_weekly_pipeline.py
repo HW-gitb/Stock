@@ -1474,7 +1474,14 @@ def _validate_legacy_task_closure(report: dict) -> None:
 
 
 def _load_previous_effect_contract_ledger(out_path: str | Path, as_of: str) -> tuple[dict | None, dict]:
-    """Resolve the latest prior canonical weekly ledger, or record an explicit bootstrap skip."""
+    """Resolve the latest prior ledger, skipping pre-effect-contract legacy reports explicitly.
+
+    A canonical weekly report created before the effect-contract ledger existed
+    is not evidence that the prior trend is clean or broken.  It is therefore
+    a bootstrap boundary, not a malformed current ledger.  Reports that do
+    contain the key remain strict: wrong types, wrong dates, or invalid counts
+    must fail closed.
+    """
     output = Path(out_path).resolve()
     current_dir = output.parent
     if output.name != "weekly_m67.json" or current_dir.name != str(as_of):
@@ -1492,6 +1499,7 @@ def _load_previous_effect_contract_ledger(out_path: str | Path, as_of: str) -> t
         key=lambda entry: entry.name,
         reverse=True,
     ) if root.is_dir() else []
+    skipped_legacy_as_of: list[str] = []
     for prior_dir in prior_dirs:
         candidate = prior_dir / "weekly_m67.json"
         if not candidate.is_file():
@@ -1500,7 +1508,12 @@ def _load_previous_effect_contract_ledger(out_path: str | Path, as_of: str) -> t
             payload = json.loads(candidate.read_text(encoding="utf-8-sig"))
         except (OSError, UnicodeDecodeError, json.JSONDecodeError) as exc:
             raise ValueError(f"prior weekly ledger is unreadable: {candidate}") from exc
-        ledger = payload.get("effect_contract_ledger") if isinstance(payload, dict) else None
+        if not isinstance(payload, dict):
+            raise ValueError(f"prior weekly ledger is not a JSON object: {candidate}")
+        if "effect_contract_ledger" not in payload:
+            skipped_legacy_as_of.append(prior_dir.name)
+            continue
+        ledger = payload["effect_contract_ledger"]
         if not isinstance(ledger, dict) or str(ledger.get("as_of") or "") != prior_dir.name:
             raise ValueError(f"prior weekly ledger is missing or date-mismatched: {candidate}")
         summary = ledger.get("summary") or {}
@@ -1514,12 +1527,16 @@ def _load_previous_effect_contract_ledger(out_path: str | Path, as_of: str) -> t
             "current_unavailable_manual_review": 0,
             "reason": f"checked latest prior canonical weekly ledger under {root}",
         }
+    legacy_note = (
+        f"; skipped pre-effect-contract legacy weekly reports: {','.join(skipped_legacy_as_of)}"
+        if skipped_legacy_as_of else ""
+    )
     return None, {
         "status": "skipped_no_prior_ledger",
         "previous_as_of": None,
         "previous_unavailable_manual_review": None,
         "current_unavailable_manual_review": 0,
-        "reason": f"no earlier canonical weekly_m67.json found under {root}",
+        "reason": f"no earlier usable effect-contract ledger found under {root}{legacy_note}",
     }
 
 

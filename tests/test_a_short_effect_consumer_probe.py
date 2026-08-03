@@ -33,12 +33,12 @@ from runners.a_short_weekly_pipeline import build_weekly_report
 class AShortNatureLedgerTests(unittest.TestCase):
     def test_all_analysis_input_leaves_have_explicit_nature(self):
         natures = leaf_natures()
-        self.assertEqual(len(natures), 371)
+        self.assertEqual(len(natures), 380)
         self.assertEqual(set(natures.values()), {
             "true_dangling", "partial_consumption", "display_audit",
             "main_decision", "comparison_track", "duplicate_source",
         })
-        self.assertEqual(sum(1 for _ in natures), 371)
+        self.assertEqual(sum(1 for _ in natures), 380)
 
     def test_missing_or_bulk_independent_relabel_fails_closed(self):
         contract = load_contract()
@@ -61,10 +61,10 @@ class AShortNatureLedgerTests(unittest.TestCase):
         error = static_contract_error(contract, inventory=static_inventory())
         self.assertIn("requires runtime_handler", error)
 
-    def test_ledger_records_leaf_natures_and_371_leaf_summary(self):
+    def test_ledger_records_leaf_natures_and_380_leaf_summary(self):
         weekly = {"as_of": "20260727"}
         ledger = build_effect_contract_ledger(weekly)
-        self.assertEqual(sum(ledger["summary"]["nature_counts"].values()), 371)
+        self.assertEqual(sum(ledger["summary"]["nature_counts"].values()), 380)
         group = next(row for row in ledger["records"] if row["id"] == "candidate_event_risk")
         # rule6_checks[].status already reaches Phase5, so the leftover group is
         # partially consumed -- not wholly dangling.
@@ -75,7 +75,7 @@ class AShortNatureLedgerTests(unittest.TestCase):
 
     def test_leaf_effect_categories_are_explicit_and_proof_bound(self):
         effects = leaf_effects()
-        self.assertEqual(len(effects), 371)
+        self.assertEqual(len(effects), 380)
         # true_dangling is now an adjudicated label reachable only through an
         # explicit override; the un-audited remainder is pending, not dangling.
         self.assertLessEqual(set(effects.values()), {
@@ -94,7 +94,7 @@ class AShortNatureLedgerTests(unittest.TestCase):
         self.assertEqual(effects["schema_version"],
                          "intentionally_independent_or_delete")
         ledger = build_effect_contract_ledger({"as_of": "20260801"})
-        self.assertEqual(sum(ledger["summary"]["effect_counts"].values()), 371)
+        self.assertEqual(sum(ledger["summary"]["effect_counts"].values()), 380)
         self.assertIsInstance(ledger["records"][0]["leaf_effects"], dict)
 
     def test_unavailable_manual_review_trend_only_allows_flat_or_lower(self):
@@ -148,6 +148,74 @@ class AShortNatureLedgerTests(unittest.TestCase):
                 "checked",
             )
             validate_weekly_report(weekly, _feed(), previous_ledger=previous)
+
+    def test_pre_effect_legacy_prior_report_is_an_explicit_bootstrap_skip(self):
+        weekly = build_weekly_report([_normalized()], AS_OF, GEN)
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            prior_dir = root / "20260608"
+            current_dir = root / AS_OF
+            prior_dir.mkdir()
+            current_dir.mkdir()
+            (prior_dir / "weekly_m67.json").write_text(
+                json.dumps({"as_of": "20260608", "reports": []}), encoding="utf-8"
+            )
+            previous = _bind_effect_contract_trend_guard(
+                weekly, current_dir / "weekly_m67.json"
+            )
+            self.assertIsNone(previous)
+            guard = weekly["effect_contract_ledger"]["trend_guard"]
+            self.assertEqual(guard["status"], "skipped_no_prior_ledger")
+            self.assertIsNone(guard["previous_as_of"])
+            self.assertIn("pre-effect-contract legacy", guard["reason"])
+            validate_weekly_report(weekly, _feed())
+
+    def test_pre_effect_legacy_report_is_skipped_before_an_older_valid_ledger(self):
+        weekly = build_weekly_report([_normalized()], AS_OF, GEN)
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            legacy_dir = root / "20260629"
+            valid_dir = root / "20260608"
+            current_dir = root / AS_OF
+            legacy_dir.mkdir()
+            valid_dir.mkdir()
+            current_dir.mkdir()
+            (legacy_dir / "weekly_m67.json").write_text(
+                json.dumps({"as_of": "20260629", "reports": []}), encoding="utf-8"
+            )
+            prior_ledger = build_effect_contract_ledger({"as_of": "20260608"})
+            prior_ledger["summary"]["unavailable_manual_review"] = 999
+            (valid_dir / "weekly_m67.json").write_text(
+                json.dumps({"as_of": "20260608", "effect_contract_ledger": prior_ledger}),
+                encoding="utf-8",
+            )
+            previous = _bind_effect_contract_trend_guard(
+                weekly, current_dir / "weekly_m67.json"
+            )
+            self.assertIsNotNone(previous)
+            self.assertEqual(previous["as_of"], "20260608")
+            self.assertEqual(
+                weekly["effect_contract_ledger"]["trend_guard"]["status"], "checked"
+            )
+            self.assertEqual(
+                weekly["effect_contract_ledger"]["trend_guard"]["previous_as_of"], "20260608"
+            )
+            validate_weekly_report(weekly, _feed(), previous_ledger=previous)
+
+    def test_present_but_malformed_prior_ledger_still_fails_closed(self):
+        weekly = build_weekly_report([_normalized()], AS_OF, GEN)
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            prior_dir = root / "20260608"
+            current_dir = root / AS_OF
+            prior_dir.mkdir()
+            current_dir.mkdir()
+            (prior_dir / "weekly_m67.json").write_text(
+                json.dumps({"as_of": "20260608", "effect_contract_ledger": None}),
+                encoding="utf-8",
+            )
+            with self.assertRaisesRegex(ValueError, "missing or date-mismatched"):
+                _bind_effect_contract_trend_guard(weekly, current_dir / "weekly_m67.json")
 
     def test_missing_shadow_is_rejected_by_validator(self):
         weekly = build_weekly_report([_normalized()], AS_OF, GEN)

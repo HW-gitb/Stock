@@ -180,16 +180,16 @@ class EgsMainSuspendGuardTest(unittest.TestCase):
             health["metrics"]["suspend_daily_coverage"]["coverage_ratio"],
             0.98,
         )
-        self.assertEqual(health["schema_version"], "1.7.0")
+        self.assertEqual(health["schema_version"], "1.8.0")
         schema = json.loads(DATA_HEALTH_SCHEMA.read_text(encoding="utf-8"))
         Draft7Validator.check_schema(schema)
-        self.assertEqual(schema["properties"]["schema_version"]["const"], "1.7.0")
+        self.assertEqual(schema["properties"]["schema_version"]["const"], "1.8.0")
         self.assertFalse(list(Draft7Validator(schema).iter_errors(health)))
 
     def test_export_data_health_validates_schema_before_write(self) -> None:
         invalid_health = {
             "schema_name": "data_health",
-            "schema_version": "1.7.0",
+            "schema_version": "1.8.0",
             "generated_at": "2026-06-01T00:00:00+08:00",
             "trade_date": "20260529",
             "preset": "a_short",
@@ -232,6 +232,17 @@ class EgsMainSuspendGuardTest(unittest.TestCase):
                     "schema_name": "suspend_daily_coverage_log",
                     "schema_version": "1.0.0",
                     "status": "not_observed",
+                },
+                "moneyflow_coverage": {
+                    "reference_date": "20260529",
+                    "requested_trade_dates": [],
+                    "observed_trade_dates": [],
+                    "row_count": 0,
+                    "universe_size": 0,
+                    "target_universe_size": 0,
+                    "target_complete_count": 0,
+                    "coverage_complete": False,
+                    "status": "unavailable",
                 },
                 "completeness_score_min": 100,
                 "completeness_score_below_95_count": 0,

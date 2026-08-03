@@ -2,7 +2,7 @@
   "schema_name": "a_short_m67_effect_contract",
   "schema_version": "1.0.0",
   "legacy_migration_sha256": "b99cbb6895b7b2c2877e172fbbd59ff0b84a5c3b9bbf5de2b8ee2aab0d52cc4e",
-  "analysis_input_all_paths_sha256": "3e3e5dcb607d1c758ff58c529c0995bbd3057b95ae2419b60e82ca7027b6ffd7",
+  "analysis_input_all_paths_sha256": "883be23a1c559955741e836f0ad4bf134de225b4ad438304d274bd2413b3701c",
   "groups": [
     {
       "id": "lineage_metadata",
@@ -113,7 +113,7 @@
       "source_prefixes": [
         "market_context"
       ],
-      "source_paths_sha256": "81b6d462c255004b3332334f2fbab9ee46dcfdbec5e968a545bf18f07494c01c",
+      "source_paths_sha256": "3a13b7ade0f56f1951bee824a210e4fed726e2037a4ece49260a3e26b52c81c2",
       "policy": "must_affect_result",
       "terminal_surfaces": [
         "weekly.effect_contract_ledger",
@@ -708,17 +708,17 @@
     "candidate_data_quality": "comparison_track"
   },
   "decision_predicate_sha256": {
-    "A-EGS/egs_main.py": "e264001319cde38999f6e214c515af4fe51f18aae6f3b9938a96ab64e7fecede",
+    "A-EGS/egs_main.py": "521d89abc9faf3e7685e8a59dcec52eef2f0c7649c298b84624ac6cdbbd9cdc2",
     "engine/egs_industry_heat.py": "74932f994ec0658345c41aa932b54b5685c1737c663f5070a193d264f37fced2",
     "engine/a_short_industry_theme.py": "6a10200f80b3c0d301efc8af1561b53ef2578e1cd26eea7976188dd57b7b6b2b",
     "runners/a_short_phase5_engine.py": "57efaa31c638f7ff06a7b9d5a2aaae1792687f766cd34b604532b5d1746141ec",
-    "runners/a_short_weekly_pipeline.py": "46b4932298a9df4ce3d9d865e45280251076f2fd12f49bb628fd68725c65770b",
+    "runners/a_short_weekly_pipeline.py": "5becf027ef14df221c9d9afffb0bb337a549940b1ce9b9ef974444142522784c",
     "runners/a_short_m67_render.py": "9753b5e8213b343a7c62595f96bcdc0a760520ac1dd5b8462f83ee4ce40e922f",
     "engine/a_short_portfolio_risk.py": "02b88ac3b5239e8dd4897bde06afab0769ea5593f8a8a3666e5c8fba24486860",
     "engine/a_short_effect_contract.py": "7f96b57a88313ec5274835727d65530633e27f3bad98c7573eb598bdfdf523f6"
   },
   "runtime_constants_sha256": {
-    "A-EGS/egs_main.py": "d057966480def03db28922a4aa5d5047e2476acdaa66637e6757450283288b2f",
+    "A-EGS/egs_main.py": "e4a85fb55502477720ad111fa177cc3db89c65e3fed9043eada79c500311ca39",
     "runners/a_short_phase5_engine.py": "27f947c64df7eaf4e59526b4bc0c150de5baef5a2447187acc98378e4c1f9f00",
     "engine/a_short_portfolio_risk.py": "238ae5ff77e269bc1b9a507014b21561c54e6766169d1854e19119ac5137943e"
   },
@@ -1249,6 +1249,12 @@
     "market_context.breadth.limit_up_index_pct_change",
     "market_context.liquidity.market_turnover_amount",
     "market_context.liquidity.median_amount_20d",
+    "market_context.margin_coverage.coverage_complete",
+    "market_context.margin_coverage.effective_ref_date",
+    "market_context.margin_coverage.reference_date",
+    "market_context.margin_coverage.row_count",
+    "market_context.margin_coverage.status",
+    "market_context.margin_coverage.universe_size",
     "market_context.market_regime.confidence",
     "market_context.market_regime.min_reward_risk",
     "market_context.market_regime.position_cap_single_pct",
@@ -1258,6 +1264,15 @@
     "market_context.market_regime.triggers[].status",
     "market_context.market_regime.triggers[].threshold",
     "market_context.market_regime.triggers[].value",
+    "market_context.moneyflow_coverage.coverage_complete",
+    "market_context.moneyflow_coverage.observed_trade_dates[]",
+    "market_context.moneyflow_coverage.reference_date",
+    "market_context.moneyflow_coverage.requested_trade_dates[]",
+    "market_context.moneyflow_coverage.row_count",
+    "market_context.moneyflow_coverage.status",
+    "market_context.moneyflow_coverage.target_complete_count",
+    "market_context.moneyflow_coverage.target_universe_size",
+    "market_context.moneyflow_coverage.universe_size",
     "market_context.northbound.net_flow_5d",
     "market_context.northbound.status",
     "market_context.trade_calendar.calendar_source",

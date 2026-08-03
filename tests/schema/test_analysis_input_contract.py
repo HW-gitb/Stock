@@ -118,9 +118,82 @@ class AnalysisInputContractTest(unittest.TestCase):
 
     def test_unknown_schema_version_fails_closed(self) -> None:
         payload = cloned_minimal_analysis_input_payload()
-        payload["schema_version"] = "1.3.0"
+        payload["schema_version"] = "9.9.9"
 
         with self.assertRaisesRegex(ValueError, "schema validation failed"):
+            validate_analysis_input_contract(payload)
+
+    def test_current_moneyflow_coverage_receipt_is_required_and_clock_bound(self) -> None:
+        payload = cloned_minimal_analysis_input_payload()
+        payload["schema_version"] = "1.4.0"
+        payload["price_data_through"] = payload["trade_date"]
+        payload["source"].update({
+            "l3_mode": "neutralize",
+            "l3_pit_strict": False,
+            "l3_snapshot_date": None,
+            "l3_provider": "neutralized",
+        })
+        payload["market_context"]["margin_coverage"] = {
+            "reference_date": payload["trade_date"],
+            "effective_ref_date": None,
+            "row_count": 0,
+            "universe_size": 0,
+            "coverage_complete": False,
+            "status": "unavailable",
+        }
+        payload["market_context"]["moneyflow_coverage"] = {
+            "reference_date": payload["trade_date"],
+            "requested_trade_dates": ["20260522", "20260521", "20260520", "20260519", "20260518"],
+            "observed_trade_dates": [],
+            "row_count": 0,
+            "universe_size": 0,
+            "target_universe_size": 2,
+            "target_complete_count": 0,
+            "coverage_complete": False,
+            "status": "unavailable",
+        }
+
+        validate_analysis_input_contract(payload)
+
+        payload["market_context"]["moneyflow_coverage"]["reference_date"] = "20260521"
+        with self.assertRaisesRegex(AnalysisInputContractError, "reference_date must equal price_data_through"):
+            validate_analysis_input_contract(payload)
+
+    def test_complete_moneyflow_receipt_requires_target_and_window_reconciliation(self) -> None:
+        payload = cloned_minimal_analysis_input_payload()
+        payload["schema_version"] = "1.4.0"
+        payload["price_data_through"] = payload["trade_date"]
+        payload["source"].update({
+            "l3_mode": "neutralize",
+            "l3_pit_strict": False,
+            "l3_snapshot_date": None,
+            "l3_provider": "neutralized",
+        })
+        payload["market_context"]["margin_coverage"] = {
+            "reference_date": payload["trade_date"],
+            "effective_ref_date": None,
+            "row_count": 0,
+            "universe_size": 0,
+            "coverage_complete": False,
+            "status": "unavailable",
+        }
+        dates = ["20260522", "20260521", "20260520", "20260519", "20260518"]
+        payload["market_context"]["moneyflow_coverage"] = {
+            "reference_date": payload["trade_date"],
+            "requested_trade_dates": dates,
+            "observed_trade_dates": dates,
+            "row_count": 10,
+            "universe_size": 2,
+            "target_universe_size": 2,
+            "target_complete_count": 2,
+            "coverage_complete": True,
+            "status": "complete",
+        }
+
+        validate_analysis_input_contract(payload)
+
+        payload["market_context"]["moneyflow_coverage"]["target_complete_count"] = 1
+        with self.assertRaisesRegex(AnalysisInputContractError, "complete moneyflow coverage is inconsistent"):
             validate_analysis_input_contract(payload)
 
     def test_today_hithink_snapshot_date_must_not_be_after_trade_date(self) -> None:
