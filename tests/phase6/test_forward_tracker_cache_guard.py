@@ -343,10 +343,70 @@ class ForwardTrackerCacheGuardTests(unittest.TestCase):
                 rc = forward_tracker.backfill([5, 10, 20])
 
         out = buf.getvalue()
-        self.assertEqual(rc, 0)
+        # The banner alone dies with the terminal, so a stalled ledger must also leave a
+        # distinct exit code for the launcher to record.
+        self.assertEqual(rc, forward_tracker.EXIT_LEDGER_STALLED)
+        self.assertNotEqual(rc, 0)
         self.assertIn("FORWARD-TRACKER CACHE STALE", out)
         self.assertIn("forward_tracker.py refresh", out)
         self.assertIn("20260515", out)
+
+    def test_globally_blocked_cache_also_reports_stalled_not_success(self) -> None:
+        # The other way the ledger freezes: the cache is readable but its benchmark
+        # frames are not same-anchor, so every cohort is blocked at once.
+        import io
+        from contextlib import redirect_stdout
+
+        no_anchor = pd.DataFrame([
+            {"trade_date": "20260201", "close": 3010.0},   # no `open` -> not same-anchor
+            {"trade_date": "20260220", "close": 3100.0},
+        ])
+        benchmarks = {name: no_anchor.copy() for name in forward_tracker.BENCHMARKS}
+        dates = pd.bdate_range("20260201", periods=40).strftime("%Y%m%d").tolist()
+
+        with tempfile.TemporaryDirectory() as tmp:
+            cache_path = Path(tmp) / "forward_daily.pkl"
+            tracker_path = Path(tmp) / "forward_tracker.csv"
+            self._write_cache(cache_path, benchmarks, stock_trade_dates=dates)
+            df = pd.DataFrame([_tracker_row("20260202", "000001.SZ")])
+            with patch.object(forward_tracker, "TRACKER_CSV", tracker_path):
+                forward_tracker._write_tracker(df)
+            buf = io.StringIO()
+            with (
+                patch.object(forward_tracker, "FORWARD_DAILY_CACHE", cache_path),
+                patch.object(forward_tracker, "TRACKER_CSV", tracker_path),
+                patch.object(forward_tracker, "_today_yyyymmdd", return_value="20260701"),
+                redirect_stdout(buf),
+            ):
+                rc = forward_tracker.backfill([5, 10, 20])
+
+        self.assertEqual(rc, forward_tracker.EXIT_LEDGER_STALLED)
+        self.assertIn("FORWARD-TRACKER CACHE STALE", buf.getvalue())
+
+    def test_nothing_to_settle_is_not_reported_as_stalled(self) -> None:
+        # An empty tracker and a tracker with no matured cohort are both honest zeros:
+        # the ledger is not stuck, there is simply nothing owed.
+        import io
+        from contextlib import redirect_stdout
+
+        with tempfile.TemporaryDirectory() as tmp:
+            tracker_path = Path(tmp) / "forward_tracker.csv"
+            buf = io.StringIO()
+            with (
+                patch.object(forward_tracker, "TRACKER_CSV", tracker_path),
+                patch.object(forward_tracker, "_today_yyyymmdd", return_value="20260701"),
+                redirect_stdout(buf),
+            ):
+                self.assertEqual(forward_tracker.backfill([5, 10, 20]), 0)
+            df = pd.DataFrame([_tracker_row("20260630", "000001.SZ")])   # captured yesterday
+            with patch.object(forward_tracker, "TRACKER_CSV", tracker_path):
+                forward_tracker._write_tracker(df)
+            with (
+                patch.object(forward_tracker, "TRACKER_CSV", tracker_path),
+                patch.object(forward_tracker, "_today_yyyymmdd", return_value="20260701"),
+                redirect_stdout(buf),
+            ):
+                self.assertEqual(forward_tracker.backfill([5, 10, 20]), 0)
 
     def test_refresh_fetches_with_refresh_true_for_matured_cohorts(self) -> None:
         df = pd.DataFrame([_tracker_row("20260515", "000001.SZ")])

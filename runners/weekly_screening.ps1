@@ -450,11 +450,20 @@ if ($SkipTracker) {
         & $PythonExe runners\forward_tracker.py backfill --windows 5,10,20
         $TrackerBackfillExitCode = $LASTEXITCODE
         if ($null -eq $TrackerBackfillExitCode) { $TrackerBackfillExitCode = 1 }
-        if ($TrackerBackfillExitCode -ne 0) {
+        # Exit 3 = the process was fine but the shared forward_daily cache kept a matured
+        # cohort from settling. The console banner vanishes with the terminal, so record
+        # it as `stalled` instead of `succeeded` and let the health artifact carry it.
+        if ($TrackerBackfillExitCode -eq 3) {
+            Write-Host "[WARN] forward_tracker backfill ran, but the shared forward_daily cache is stale: the candidate-effect ledger did NOT advance. Refresh it (see the banner above); EGS/M6.7 continue unchanged." -ForegroundColor Yellow
+        } elseif ($TrackerBackfillExitCode -ne 0) {
             Write-Host "[WARN] forward_tracker cache-only backfill exit $TrackerBackfillExitCode; P1 remains pending and EGS/M6.7 continue unchanged." -ForegroundColor Yellow
         }
         Add-SidecarOutcome -Name 'forward_tracker_capture' -Expected $true -Attempted $true -ExecutionStatus 'succeeded' -ProgressStatus 'advanced' -ObservedDecisionAsOf $AsOf
-        Add-SidecarOutcome -Name 'forward_tracker_backfill' -Expected $true -Attempted $true -ExecutionStatus $(if($TrackerBackfillExitCode -eq 0){'succeeded'}else{'failed'}) -ProgressStatus $(if($TrackerBackfillExitCode -eq 0){'not_applicable'}else{'unavailable'}) -ErrorCode $(if($TrackerBackfillExitCode -eq 0){$null}else{'process_failed'})
+        if ($TrackerBackfillExitCode -eq 3) {
+            Add-SidecarOutcome -Name 'forward_tracker_backfill' -Expected $true -Attempted $true -ExecutionStatus 'succeeded' -ProgressStatus 'stalled' -ErrorCode 'forward_daily_cache_stale'
+        } else {
+            Add-SidecarOutcome -Name 'forward_tracker_backfill' -Expected $true -Attempted $true -ExecutionStatus $(if($TrackerBackfillExitCode -eq 0){'succeeded'}else{'failed'}) -ProgressStatus $(if($TrackerBackfillExitCode -eq 0){'not_applicable'}else{'unavailable'}) -ErrorCode $(if($TrackerBackfillExitCode -eq 0){$null}else{'process_failed'})
+        }
         if ($IsHistoricalAsOf) {
             Add-SidecarOutcome -Name 'theme_forward_comparison' -Expected $false -Attempted $false -ExecutionStatus 'not_due' -ProgressStatus 'not_applicable' -SkipReason 'historical_replay'
         } else {

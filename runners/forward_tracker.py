@@ -145,6 +145,13 @@ TRACKER_STRING_COLUMNS = {
 }
 
 DEFAULT_WINDOWS = [5, 10, 20]
+# `backfill` succeeded as a process but the shared cache kept at least one MATURED
+# cohort from settling, so the candidate-effect ledger did not advance.  The console
+# banner alone disappears with the terminal and the recorded sidecar outcome used to
+# read `succeeded`; this distinct code lets the launcher record `stalled` instead of
+# claiming progress that did not happen.  Not used for immature cohorts: those have
+# simply not aged yet and will settle on their own.
+EXIT_LEDGER_STALLED = 3
 # Calendar-day pad beyond the trading-day window estimate. Lets the cache
 # refresh job land Tushare's close before tracker tries to read it.
 MATURE_BUFFER_CALENDAR_DAYS = 3
@@ -475,7 +482,7 @@ def backfill(windows: list[int]) -> int:
         for line in _cache_refresh_hint(block_msg):
             print(line)
         _print_cache_stale_banner(mature_as_ofs, block_msg)
-        return 0
+        return EXIT_LEDGER_STALLED
     if immature:
         print(f"[INFO] {len(immature)} cohort(s) captured but not yet +{max_window} trading days old; "
               f"will settle in a later week: {immature}")
@@ -483,7 +490,7 @@ def backfill(windows: list[int]) -> int:
         _print_cache_stale_banner(needs_refresh, "shared cache does not reach these matured cohorts")
     if not ready:
         print(f"[OK] no cohort has +{max_window} trading-day cache coverage yet; nothing to settle this run")
-        return 0
+        return EXIT_LEDGER_STALLED if needs_refresh else 0
 
     # Strictly cache-only: settle from the already-read cache payload; never
     # fetch here. attach_forward_returns expects samples with a trade_date
@@ -548,7 +555,9 @@ def backfill(windows: list[int]) -> int:
     deferred = len(needs_refresh) + len(immature)
     print(f"[OK] backfilled {len(updated_keys)} rows across {len(ready)} as_of date(s)"
           + (f"; deferred {deferred} cohort(s)" if deferred else ""))
-    return 0
+    # Some cohorts settled, but a matured one still could not: the ledger is only
+    # partly advanced, so report stalled rather than a clean success.
+    return EXIT_LEDGER_STALLED if needs_refresh else 0
 
 
 def refresh(windows: list[int]) -> int:

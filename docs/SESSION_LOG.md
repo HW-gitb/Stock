@@ -1,5 +1,13 @@
 # Session Log
 
+## 2026-08-03 — Claude 修复（forward 缓存陈旧改为如实记 stalled）
+
+- **Verdict/Action**: 用户选「最轻档」后自修自审。原来 `backfill` 打完陈旧横幅仍 `return 0`，PS1 只看退出码，于是 `sidecar_health.json` 把「账本没推进」记成 `succeeded`——唯一的提醒是一块随终端消失的横幅，留下的记录还说成功。现新增 `EXIT_LEDGER_STALLED=3`：**已到期**却因缓存结算不了（全局阻塞或 cohort 不在缓存里）时返回 3，PS1 映射为 `ExecutionStatus=succeeded / ProgressStatus=stalled / ErrorCode=forward_daily_cache_stale`。未改任何取数行为，仍严格 cache-only。
+- **Required**: 无；Register: 无新条（本轮只让既有状态如实上报，未引入新风险）。同轮记一条不阻断 Optional：`_load_cache_for_coverage` 在缓存文件缺失且路径不在仓库根下时会因 `Path.relative_to` 抛 `ValueError`（生产路径恒在根下，仅测试构造可达）。
+- **Verify**: 覆盖模块四个一次跑绿 `RESULT tier=focused status=PASS exit=0 tests=81`；rule 3(a) 全量走唯一入口 `RESULT status=PASS exit=0 tests=2288 elapsed=335.8s`（新测试位于 `tests/phase6/`，不在 lane 选择器内，故全量计数不变）。反控：**未到期** cohort 单独存在时仍返回 `0`（不得误报 stalled）、空账本与无到期 cohort 均 `0`、缓存全局阻塞与 cohort 缺失两条路径都返回 3；PS1 守卫断言 stalled 那行必须是 `succeeded` 且**不得**带 `process_failed`。
+- **Next**: Codex：执行
+- **Pre-Codex self-review**: `matrix=complete: backfill 全部 return 点`; `register=n/a`; `handoff=not_required: 运行可观测性小改`; `focused=81 OK / 12.5s`; `full-lane=PASS 2288 / 335.8s`; `door=route 14 + doc-governance 41`; A=三处陈旧出口全覆盖; B=grep 无第二处退出码解释点; C=未到期/空账本正控不误报; D=N-A; E=SESSION_LOG 单态; F=diff-check 干净
+
 ## 2026-08-03 — Claude 修复（转换器接受券商前缀式 ts_code）
 
 - **Verdict/Action**: 用户 2026-08-03 裁决「接受券商前缀写法」后自修自审。`runners/a_short_account_state_from_manual_tables.py::_parse_ts_code` 在原校验**之前**加一次只认 `^(SH|SZ)(\d{6})$` 的改写（输入已 `.strip().upper()`），改写后照常走原格式校验与主板门——两者一行未动。这是放松类改动，故新增用例的重点在「仍然必须拒绝」那一侧。

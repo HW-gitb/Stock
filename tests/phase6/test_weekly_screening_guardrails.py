@@ -151,6 +151,20 @@ class WeeklyScreeningGuardrailTest(unittest.TestCase):
             text,
         )
 
+    def test_stale_forward_cache_is_recorded_as_stalled_not_succeeded(self) -> None:
+        # The stale-cache banner only lives in the console. The machine-readable sidecar
+        # outcome used to say `succeeded`, so a frozen candidate-effect ledger looked
+        # healthy in every artifact. Exit 3 must map to a stalled progress status.
+        text = SCRIPT.read_text(encoding="utf-8")
+        self.assertIn("$TrackerBackfillExitCode -eq 3", text)
+        self.assertIn("-ProgressStatus 'stalled'", text)
+        self.assertIn("forward_daily_cache_stale", text)
+        # ...and it must NOT be mislabelled as a process failure.
+        stalled_line = next(line for line in text.splitlines()
+                            if "forward_daily_cache_stale" in line)
+        self.assertIn("-ExecutionStatus 'succeeded'", stalled_line)
+        self.assertNotIn("process_failed", stalled_line)
+
     def test_m67_stage_passes_account_and_labels_missing(self) -> None:
         # R-ASHORT-WEEKLYSCREENING-M67-MISSING-ACCOUNT: the one-click M6.7 stage must pass --account when a
         # reviewed account is provided, and the missing-account path must be LOUDLY labelled (not silently
