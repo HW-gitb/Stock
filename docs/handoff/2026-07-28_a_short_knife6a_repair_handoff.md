@@ -686,3 +686,35 @@
 
 - Claude Code 需独立复核 schema description、coverage 口径、producer constant-null 派生 guard、无决策消费者的调用链与 focused 证据；PASS 后按项目流程提交本轮 PASS 覆盖文件。
 - 若未来要删除字段或把 q0 从 `candidate_fundamental` group 正式拆出，必须另立 schema/effect-contract migration；不得把本次文档澄清当成删除或重新取数授权。
+
+## 2026-08-03 追加：桌面清单第 1 条两融缓存语义版本失配修复（Codex executor；待 Claude Code 独立审查）
+
+### 改了什么 / 为什么
+
+- 根因是 `get_margin()` 对旧 `margin_{date}_rule6_v4` 缓存按当前 `_margin_observation()` 重算并做等值比较；此前行级缺失值修复改变了 observation 语义，旧缓存因此触发 `margin cache observation semantics are inconsistent`，把 EGS 主流程直接打崩。
+- `A-EGS/egs_main.py` 现在使用 `rule6_v5`，并把 observation/public-dict 逻辑、canonical `ts_code` 绑定、字段/窗口/滞后/最小全集常量和代码格式约束纳入确定性 AST/常量指纹；实际 trade-date 窗口也进入 key。旧 v4 不会被加载。
+- 缓存命中后若语义不一致，只记录警告、丢弃该 observation 并重新调用 `margin_detail`；不返回旧帧、不就地重写旧帧。缓存对象不是 `MarginObservation` 仍硬失败；指纹无法计算时绕过缓存并重新取数。原有 `complete + 当前 reference_date` 快速命中仍保留。
+
+### 调用链 / 不变边界
+
+- `get_margin()` -> cache key/load -> `_margin_observation()` / `MarginObservation.public_dict()` -> Rule6 评估 -> `analysis_input` / data-health `margin_coverage` -> Phase5 / weekly。
+- 本刀只改两融缓存身份和失配处置；不改 `financial_`、`moneyflow_`、block-trade、suspend/relisted/reduction 等其他缓存族，不把 `incomplete` 改成 `complete`，不放松 provider 失败的 fail-closed 行为，不涉及账户、持仓、下单或自动交易。
+
+### 改动文件
+
+- `A-EGS/egs_main.py`
+- `tests/phase6/test_egs_margin_coverage.py`
+- `schemas/a_short_m67_effect_contract.json`（按固定主 Python 实际指纹重封）
+- `docs/system_risk_register.md`、`docs/SESSION_LOG.md`、本 handoff
+- `C:\Users\cnhea\Desktop\a_cc_testrun1.md`（桌面问题记录）
+
+### 负向控制与验证
+
+- 负向控制覆盖：只读 v5、不读 v4；语义失配必须重新取数；错误类型仍抛错；非 complete/参考日不一致不走缓存快路；完整且当前的缓存不增加 provider 调用。
+- 唯一解释器：`C:\Users\cnhea\AppData\Local\Programs\Python\Python313\python.exe`，`Python 3.13.8`。
+- `tests.phase6.test_egs_margin_coverage`：`Ran 23 tests ... OK`；`tests.test_a_short_effect_contract`：`Ran 48 tests ... OK`；A-short 官方 full lane：`Ran 2275 tests ... OK (skipped=3)`，ledger `RESULT status=PASS exit=0 tests=2275 elapsed=353.7s deadline=860s`；`py_compile` / `git diff --check` OK。
+- 未执行 provider/live 或 `--as-of 20260803`；保留的旧 v4 原路径真实回放为 `NOT_VERIFIED`，仅改名为 `.stale` 后重跑不构成该验收证据。当前未 commit/push/merge。
+
+### 交接给下一位
+
+- Claude Code 需独立复核当前代码、缓存 source-binding、直接消费者、旧 v4 / wrong-type / incomplete 反向门和风险登记；确认 fingerprint 真随语义/窗口变化后再 PASS。PASS 前不得提交或合入；其他既有未提交修改和四个 20260803 未跟踪产物不在本刀范围，禁止清理或回滚。

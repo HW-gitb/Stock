@@ -1,5 +1,20 @@
 # Session Log
 
+## 2026-08-03 — Claude 审查 PASS（两融缓存语义绑定 + 崩溃改降级）
+
+- **Verdict/Action**: PASS，已提交并合入 master。三层都落到位：键升 `rule6_v5`、键里绑 `_margin_observation`/`public_dict`/`_canonical_ashare_ts_code` 的 AST 指纹与全部阈值常量、语义不一致由 `raise` 改为「记警告→丢弃→重取」。reviewer 直接复现生产那次崩溃：把旧语义 observation（`invalid/0`）塞进当前键，修前抛 `RuntimeError`，修后只打警告并真的走了重取路径。fail-closed 强制腿未松：缓存对象不是 `MarginObservation` 仍然硬抛。
+- **Required**: 无；Register: 桌面清单第 1 条对应条目已闭合，另记一条不阻断 Optional（缓存键只摘 `trade_dates[:12]` 而判据吃完整 `calendar_dates`），正文只见 `docs/system_risk_register.md` 顶部。
+- **Verify**: review-evidence:99b9b8d6bde8；rule 3(a) 全量走唯一入口得 `CACHED GREEN - a_short = 2275 OK`；本刀改的 `tests/phase6/test_egs_margin_coverage.py` 不在 lane 选择器内，另单独跑 `RESULT tier=focused status=PASS exit=0 tests=23`（较上轮 20 增 3）。reviewer 自写探针 10 条全绿：旧语义缓存→重取、类型错→仍抛、指纹随阈值轮换且可复原、不同窗口不同键、`inspect.getsource` 不可用→绕过缓存不崩不存盘；**正控**：完整且当期的好缓存仍被复用且 `fetches=0`，未引入额外 provider 花费。
+- **Next**: Codex：修桌面清单第 2 条（带 `-Account` 时 M6.7 被 effect-contract 趋势守卫挡死）。
+
+## 2026-08-03 — Codex 修复（桌面清单第 1 条：两融缓存语义版本失配）
+
+- **Verdict/Action**: 当前工作树已修复 `R-ASHORT-MARGIN-CACHE-SEMANTICS-VERSION-STALE`；`rule6_v4` 不再被读取，缓存键绑定 `rule6_v5`、语义/窗口指纹，语义不一致时丢弃并重新取数；未提交、未 push、未 merge。
+- **Required**: 这是 P1 的缓存 source-binding / 生产可用性修复；类型错误仍硬失败，旧帧不会返回或就地改写，provider 失败仍保持 `unavailable/incomplete`，不把 Rule6 风控腿伪造为 `complete`。完整调用链、消费者和其他缓存族边界见 `docs/system_risk_register.md` 顶部同名条目。
+- **Verify**: 主 Python `C:\Users\cnhea\AppData\Local\Programs\Python\Python313\python.exe`（`Python 3.13.8`）；focused=23+48 OK；full-lane=2275 OK/skipped=3，ledger=PASS/exit=0/elapsed=353.7s/deadline=860s；`py_compile`/`git diff --check`=OK；provider/live、`--as-of 20260803` 和旧 v4 原路径回放=NOT_VERIFIED。
+- **Pre-Codex self-review**: matrix=cache key/semantic fingerprint/consumer/source-binding/negative；register=updated；handoff=updated；focused=23+48 OK；full-lane=2275 OK/skipped=3；door=docs-governance+route-doc=55 OK, py_compile/diff-check=OK；A=失配重取；B=wrong-type/incomplete fail-closed；C=legacy-v4/wrong-type/stale negatives；F=fixed main Python/no provider-live；independent=NOT_USED, Claude review required。
+- **Next**: Claude Code：独立审查本刀；PASS 前不得提交/合入。
+
 ## 2026-08-03 — Claude 审查 PASS（q0_net_income 定性为有意退役的兼容空值）
 
 - **Verdict/Action**: PASS，已提交并合入 master。执行方取「留字段 + 写清有意退役」这条（我给过的两条路之一），零行为改动：唯一的 .py 改动是注释，schema 只动 `description` 不动约束，其余是覆盖文档与一条新守护测试。三条实质断言我逐条回源码核过并成立：`q0_net_income` 确由 `egs_main.py:3138-3139` 无条件置 `np.nan`；它不进任何打分/否决（全仓只有产出端、周报原样抄、一个诊断脚本读它）；替代物是真承重的——`:4243` 用 `q0_dt_profit_ratio` 判非经常性损益、`:4250-4251` 用 `ttm_profit_dedt`+`ttm_ocf_ratio` 判 OCF，两处都会打 `ESP-Q`。
