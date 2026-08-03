@@ -18,12 +18,8 @@ ADOPTION_MARKER = "REVIEW-CYCLE-MINIMAL-TEMPLATE-MARKER"
 # 10-15 minutes; past this hard cap the Stop hook blocks until the Verify line states why.
 WALL_CLOCK_BUDGET_SECONDS = 1800
 OVERRUN_REASON_MARKER = "超时原因"
-# The reviewer's own closeout order (user-directed 2026-08-02): wait until the evidence is
-# complete -- full pack, own probes, AND any independent agent that was launched -- before
-# writing register / SESSION_LOG / handoff.  Writing early cost three full doc rewrites and
-# published one wrong "verified good" claim that the agent's report then refuted, so this is
-# machine-enforced instead of remembered: a review cannot close while an agent it launched is
-# still outstanding, unless the Verify line says why it was abandoned.
+# Evidence-completeness gate: a review may close only after every async Agent/Task
+# launched after arming has either reported or is explicitly declared abandoned.
 AGENT_PENDING_OVERRIDE_MARKER = "agent-aborted:"
 AGENT_LAUNCH_TOOLS = ("Agent", "Task")
 ASYNC_LAUNCH_SIGNATURE = "async agent launched"
@@ -316,20 +312,56 @@ def _epoch(stamp: object) -> float | None:
     return parsed.timestamp()
 
 
-def pending_async_agents(transcript_text: str, *, armed_after_epoch: float | None = None) -> list[str]:
-    """Name every agent launched after the review armed whose report never came back.
+def _content_text(value: object) -> str:
+    if isinstance(value, str):
+        return value
+    if isinstance(value, list):
+        return " ".join(_content_text(item) for item in value)
+    if isinstance(value, dict):
+        return " ".join(_content_text(item) for item in value.values())
+    return ""
 
-    Shapes are read from a real transcript, not guessed: an async launch is an assistant
-    `tool_use` block named `Agent`/`Task` whose `tool_result` says the agent was launched, and
-    its report arrives later as a separate message carrying `<tool-use-id>...</tool-use-id>`
-    inside a `<task-notification>`.  A synchronous agent returns its report in the tool_result
-    itself and is therefore never pending.
+
+def _notification_tool_use_ids(row: dict) -> set[str]:
+    """Extract notification ids from the complete transcript row.
+
+    Claude task notifications are not stable message-content blocks: observed rows use
+    top-level ``content`` (``queue-operation``) or top-level ``attachment``. Serializing
+    the complete decoded row keeps the parser bound to the actual notification marker rather
+    than to one transport wrapper.
     """
-    launched: dict[str, str] = {}
-    launched_at: dict[str, float | None] = {}
-    results: dict[str, str] = {}
-    notified: set[str] = set()
-    for line in transcript_text.splitlines():
+    try:
+        serialized = json.dumps(row, ensure_ascii=False, sort_keys=True)
+    except (TypeError, ValueError):
+        return set()
+    if "<task-notification>" not in serialized.lower():
+        return set()
+    return {
+        tool_use_id.strip()
+        for tool_use_id in re.findall(
+            r"<tool-use-id>\s*([^<]+?)\s*</tool-use-id>", serialized,
+            flags=re.IGNORECASE,
+        )
+        if tool_use_id.strip()
+    }
+
+
+def pending_async_agents(
+    transcript_text: str, *, armed_after_epoch: float | None = None,
+) -> list[str]:
+    """Return async agents launched after arming whose task report is not visible.
+
+    Launches and tool results are read from the assistant/user ``message.content`` blocks,
+    while notifications are matched against the complete JSON row because real transcripts
+    place them in top-level ``content`` or ``attachment`` fields. A structured
+    ``toolUseResult`` async marker is preferred; the legacy launch prose remains a fallback.
+    Missing timestamps do not exempt a launch from the gate (fail closed).
+    """
+    launched: dict[str, dict[str, object]] = {}
+    result_kind: dict[str, str] = {}
+    notified_at: dict[str, int] = {}
+
+    for row_index, line in enumerate(transcript_text.splitlines()):
         line = line.strip()
         if not line:
             continue
@@ -337,45 +369,75 @@ def pending_async_agents(transcript_text: str, *, armed_after_epoch: float | Non
             row = json.loads(line)
         except Exception:
             continue
+        if not isinstance(row, dict):
+            continue
+
+        for use_id in _notification_tool_use_ids(row):
+            notified_at.setdefault(use_id, row_index)
+
         row_epoch = _epoch(row.get("timestamp"))
         message = row.get("message") or {}
         content = message.get("content") if isinstance(message, dict) else None
-        if isinstance(content, str) and "<task-notification>" in content:
-            notified.update(re.findall(r"<tool-use-id>([^<]+)</tool-use-id>", content))
         for block in content if isinstance(content, list) else []:
             if not isinstance(block, dict):
                 continue
             kind = block.get("type")
             if kind == "tool_use" and block.get("name") in AGENT_LAUNCH_TOOLS:
                 use_id = block.get("id")
-                if isinstance(use_id, str) and use_id:
-                    raw_input = block.get("input")
-                    label = ""
-                    if isinstance(raw_input, dict):
-                        label = str(raw_input.get("description") or raw_input.get("subagent_type") or "")
-                    launched[use_id] = label.strip() or "unnamed agent"
-                    launched_at[use_id] = row_epoch
-            elif kind == "tool_result":
-                use_id = block.get("tool_use_id")
-                body = block.get("content")
-                if isinstance(body, list):
-                    body = " ".join(
-                        str(part.get("text", "")) for part in body if isinstance(part, dict)
+                if not isinstance(use_id, str) or not use_id:
+                    continue
+                raw_input = block.get("input")
+                label = ""
+                if isinstance(raw_input, dict):
+                    label = str(
+                        raw_input.get("description")
+                        or raw_input.get("subagent_type")
+                        or ""
                     )
-                if isinstance(use_id, str):
-                    results[use_id] = str(body or "")
-            elif kind == "text" and "<task-notification>" in str(block.get("text", "")):
-                notified.update(re.findall(r"<tool-use-id>([^<]+)</tool-use-id>", str(block.get("text"))))
+                launched[use_id] = {
+                    "label": label.strip() or "unnamed agent",
+                    "epoch": row_epoch,
+                    "row_index": row_index,
+                }
+                continue
+            if kind != "tool_result":
+                continue
+
+            use_id = block.get("tool_use_id")
+            if not isinstance(use_id, str) or not use_id:
+                continue
+            structured = row.get("toolUseResult")
+            if not isinstance(structured, dict):
+                structured = block.get("toolUseResult")
+            structured_async = (
+                isinstance(structured, dict)
+                and (
+                    structured.get("isAsync") is True
+                    or str(structured.get("status") or "").lower() == "async_launched"
+                )
+            )
+            prose_async = ASYNC_LAUNCH_SIGNATURE in _content_text(block.get("content")).lower()
+            if structured_async or prose_async:
+                result_kind[use_id] = "async"
+            elif result_kind.get(use_id) != "async":
+                result_kind[use_id] = "sync"
+
     pending: list[str] = []
-    for use_id, label in launched.items():
-        if use_id in notified:
+    for use_id, launch in launched.items():
+        launch_index = int(launch["row_index"])
+        notification_index = notified_at.get(use_id)
+        if notification_index is not None and notification_index >= launch_index:
             continue
-        when = launched_at.get(use_id)
-        if armed_after_epoch is not None and when is not None and when < armed_after_epoch:
-            continue  # an agent from an earlier turn is not this review's obligation
-        result = results.get(use_id)
-        if result is not None and ASYNC_LAUNCH_SIGNATURE not in result.lower():
-            continue  # a synchronous agent already returned its report inline
+        when = launch.get("epoch")
+        if (
+            armed_after_epoch is not None
+            and isinstance(when, (int, float))
+            and when < armed_after_epoch
+        ):
+            continue
+        if result_kind.get(use_id) == "sync":
+            continue
+        label = str(launch["label"])
         pending.append(f"{label} ({use_id[-8:]})")
     return sorted(pending)
 
@@ -421,8 +483,6 @@ def validate_session_log_text(
             f"review wall clock {int(elapsed_seconds // 60)} min exceeded the rule-7 budget "
             f"({budget_seconds // 60} min) and the Verify line has no `{OVERRUN_REASON_MARKER}:` note"
         )
-    # Evidence-completeness teeth: an independent agent this review launched must have reported
-    # before the closeout is written, because its findings can refute what the entry already says.
     if pending_agents and not any(
         AGENT_PENDING_OVERRIDE_MARKER in line for line in verify_lines
     ):
@@ -482,8 +542,6 @@ def handle_stop_hook(
         elapsed = max(0.0, datetime.now(timezone.utc).timestamp() - float(armed_at))
     pending_agents: list[str] = []
     if not transcript_path:
-        # A silently skipped check is the dead-guard failure this leg exists to prevent: if the
-        # Stop payload ever stops carrying the transcript, say so instead of enforcing nothing.
         print(
             "stock-review-gate: no transcript_path in the Stop payload; "
             "the outstanding-agent check did not run",
@@ -496,7 +554,6 @@ def handle_stop_hook(
                 armed_after_epoch=armed_at if isinstance(armed_at, (int, float)) else None,
             )
         except OSError as exc:
-            # Unknown is not the same as clean: say so instead of silently enforcing nothing.
             print(
                 f"stock-review-gate: transcript unreadable ({exc.__class__.__name__}); "
                 "the outstanding-agent check did not run",
@@ -519,8 +576,8 @@ def handle_stop_hook(
             file=sys.stderr,
         )
         print(
-            f"If an agent is still outstanding, WAIT for its report before writing the closeout; "
-            f"only if it died or was abandoned, add `{AGENT_PENDING_OVERRIDE_MARKER}<原因>` to that same Verify line.",
+            f"If an agent is still outstanding, wait for its report; only if it died or was abandoned, "
+            f"add `{AGENT_PENDING_OVERRIDE_MARKER}<reason>` to that same Verify line.",
             file=sys.stderr,
         )
         return 2

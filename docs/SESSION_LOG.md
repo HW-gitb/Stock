@@ -14,6 +14,21 @@
 - **Verify**: 改动面 `5/2` 行、`git diff --check` 干净。scope grep 先行：无测试或 schema 钉住这两个格式串（测试只断言 `[sidecar-health] UNAVAILABLE` 这个另一分支）。最小覆盖包 `tests.test_a_short_weekly_sidecar_health` 一次跑绿 `Ran 40 tests ... OK`；再用本周真实 degraded 产物过一遍改后的 `write_health_bundle`，表头得 `overall=degraded · m67=failed · advanced=0 · stalled=0 · failed=0 · partial=0`，正控（healthy 载荷）得 `overall=healthy · m67=complete`，未凭空宣称失败。
 - **Next**: Codex：执行桌面清单第 3 条（`margin_coverage` 的 `universe_size=0`）。
 - **Pre-Codex self-review**: `matrix=complete: 总评成因字段的全部输出出口 = console + markdown 表头（JSON 已含该字段）`; `register=non-material`; `handoff=not_required: 显示面单字段增列，属 AGENTS §交接记录「不写 handoff」类`; `focused=40 OK / 12.5s`; `full-lane=not_triggered: AGENTS rule 3; reason=仅两处输出格式串，未触及引擎/schema/契约/provider/授权面`; `door=route 14 OK + doc-governance 41 OK（合并跑 Ran 55 tests ... OK）`; A=两出口全覆盖; B=全仓 grep 旧格式串零残留; C=正控 healthy 载荷不误报失败; D=N-A; E=SESSION_LOG 单态; F=`git diff --check` 干净、无 BOM
+## 2026-08-03 — Claude 审查 PASS（review-gate 未回报 agent 拦截腿）
+
+- **Verdict/Action**: PASS，已提交并合入 master。执行方自己把「真实 transcript 回放」标成 `NOT_VERIFIED`（它读不到会话记录），我用本机真实 transcript 把当初坐实本条的**同一个探针**原样重跑补齐：`3561d35d`/`573e4210`/`fb778a5c` 三份此前各报 1 个假挂起，修复后全部 `pending=0`。整读新函数体确认真通知行两种形态都走整行扫描、结构化 `toolUseResult` 优先、散文串兜底、通知须不早于启动行。
+- **Required**: 无；Register: `R-REVIEWGATE-OUTSTANDING-AGENT-CHECK-CANNOT-SEE-REAL-TASK-NOTIFICATIONS` 已 closed，另记一条不阻断 Optional（整行扫描不区分「真通知」与「助手引用通知文本」，实测可静默清零），正文只见 `docs/system_risk_register.md` 顶部。
+- **Verify**: review-evidence:475ad1a75682；超时原因:合并时 master 已有该功能的旧实现，四个文件冲突需逐个取修复版并重验。本刀改的是审查工具而非业务面，rule 3 未触发 lane 全量。超集 `tests.test_claude_review_gate` + 两道提交门守护 `RESULT tier=focused status=PASS exit=0 tests=67`；单跑该模块 `Ran 12 tests ... OK`，6 条新增用例逐条实见（真实两形态 + 去通知转红的植入失败 + Stop hook 端到端 + transcript 转发 + 缺 transcript 告示）。reviewer 自写探针 13 条：四条反控不退化、两种真实行清零、两种结构化异步标记仍挂起、通知早于启动/属于他人仍挂起。§6a agent 未起：主树 hook 仍是修复前版本，起 agent 会自我死锁。
+- **Next**: Codex：执行桌面清单第 4/6 条（日线窗口 60 根导致 `pct_60d` 全空与 3191 误报）。
+
+## 2026-08-03 — Codex 修复（review-gate task-notification 可见性）
+
+- **Verdict/Action**: working tree 已修复 `R-REVIEWGATE-OUTSTANDING-AGENT-CHECK-CANNOT-SEE-REAL-TASK-NOTIFICATIONS`；未提交、未合入，未启动独立 agent。
+- **Required**: 详情、Required repair、反向控制和边界只见 `docs/system_risk_register.md`（单一来源）；handoff 见 `docs/handoff/2026-08-03_review_gate_task_notification_repair_handoff.md`。
+- **Verify**: 固定主 Python `C:\Users\cnhea\AppData\Local\Programs\Python\Python313\python.exe`（`Python 3.13.8`）；两份 Python `py_compile` OK；`tests.test_claude_review_gate` `Ran 12 tests in 0.382s ... OK`；当前树无真实 transcript 可回放，标记 `NOT_VERIFIED`；full-lane 未触发。
+- **Pre-Codex self-review**: matrix=notification parser+structured result+Stop hook+reverse controls; register=updated; handoff=updated; focused=12 OK; full-lane=not_triggered: AGENTS rule 3; reason=review-gate test-infra/docs only; door=route-doc=14 OK + doc-governance=41 OK。
+- **Next**: Claude Code：独立审查该 P1 修复；PASS 前不得提交/合入。
+
 ## 2026-08-03 — Claude 审查 PASS（margin 逐票降级：incomplete 批次只许正向绑定）
 
 - **Verdict/Action**: PASS，已提交并合入 master。放松类改动（`margin_source_unavailable` 挡新建仓，放开即影响选股），故自写 15 条反控实测：仅「正向绑定 + 两项 Rule6 均确定 pass/fail + 时钟身份同批」才放行；未绑定、正向非两融、unknown、not_applicable、参考日移植、伪称 complete、只绑一项、缺第二项、ref 不一致、空全集、torn row_count 十一路全关；complete 老路径含 1000 下限逐条不变。producer 侧核实：证明「不适用」的 `margin_eligible_codes` 仍只在 complete 时构建，incomplete 永远证不了缺席。
