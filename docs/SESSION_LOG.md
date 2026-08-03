@@ -1,5 +1,11 @@
 # Session Log
 
+## 2026-08-03 — 用户决策：两融 complete 口径改为「只看参考日」（Codex 待执行）
+
+- **决策**: 桌面清单第 4 项需要的是口径拍板不是缺陷修复。现有 `complete` 要求整个 12 会话窗口（本轮 `row_count=52987`）每一行数值都有效，而真正被消费的只有 `effective_ref_date` 那一天；门与用途不匹配，导致本轮 `universe_size` 已从 0 恢复到 4419 却仍 `incomplete`，两项 Rule6 两融检查长期停在 `unknown`。用户 2026-08-03 选定选项 B：第一条腿只要求参考日当天全部有效，时效性与基数下限两腿不动；A（维持最严）与 C（坏行占比阈值）否决。
+- **落点**: `R-ASHORT-MARGIN-COMPLETE-CALIBER-REFERENCE-DATE-ONLY` —— 执行规格（含配套的参考日选取改动、非参考日坏行只记 warning、缓存语义指纹不得绕过、effect-contract 重封）与含反向控制的 closure tests 见 `docs/system_risk_register.md`（单一来源，本处不复述）；Codex 命令见 `docs/handoff/2026-07-28_a_short_knife6a_repair_handoff.md` 同日追加节。
+- **未做**: 未改任何代码。「候选级降级是否让那两项 Rule6 真正生效」属下一次带 `-Account` 周跑的观察项，不得用单测替代。
+
 ## 2026-08-03 — Claude 修复（forward 缓存陈旧改为如实记 stalled）
 
 - **Verdict/Action**: 用户选「最轻档」后自修自审。原来 `backfill` 打完陈旧横幅仍 `return 0`，PS1 只看退出码，于是 `sidecar_health.json` 把「账本没推进」记成 `succeeded`——唯一的提醒是一块随终端消失的横幅，留下的记录还说成功。现新增 `EXIT_LEDGER_STALLED=3`：**已到期**却因缓存结算不了（全局阻塞或 cohort 不在缓存里）时返回 3，PS1 映射为 `ExecutionStatus=succeeded / ProgressStatus=stalled / ErrorCode=forward_daily_cache_stale`。未改任何取数行为，仍严格 cache-only。

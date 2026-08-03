@@ -869,3 +869,18 @@ python runners\a_short_account_state_from_manual_tables.py --input-dir state\a_s
 
 ### 交接给下一位
 - Codex：按 register 四条收口后**自己跑一次唯一入口全量**并贴终端 `RESULT status=PASS`；PASS 前不得提交或合并。provider/live、`-Account` 新实盘与 `--as-of 20260803` 仍 `NOT_VERIFIED`。
+
+## 2026-08-03 追加：两融 complete 口径决策 B（用户已拍板；Codex 待执行）
+
+### 决策
+- 用户 2026-08-03 选定选项 B：`complete` 的第一条腿由「整个 12 会话窗口每一行数值有效」改为「**只要求 `effective_ref_date` 当天的行全部有效**」；时效性（`MARGIN_MAX_LAG_SESSIONS`）与基数下限（`MARGIN_ELIGIBILITY_MIN_UNIVERSE`）两腿不动。选项 A（维持最严）、C（坏行占比阈值）已否决。
+- 理由：真正被消费的只有参考日那一天（`ref_mask` / `margin_ref_codes` 均由 `ref_frame` 得出），窗口内更早的日期只用于在发布延迟时找一个可用参考日；用「全窗口无瑕疵」去卡「只读一天」的决策，门与用途不匹配，导致 Rule6 两融两项检查长期停在 `unknown`。
+
+### Codex 命令
+- **执行** `R-ASHORT-MARGIN-COMPLETE-CALIBER-REFERENCE-DATE-ONLY`：按 `docs/system_risk_register.md` 同名条目的 Required ①–⑤ 改 `A-EGS/egs_main.py::_margin_observation`（完整口径、参考日选取、非参考日坏行只记 warning、缓存指纹不得绕过、effect-contract 重封），并落齐该条目 Closure tests ①–⑤（含全部反向控制）。register 的 Required 与 Closure tests 是唯一权威，本处不复述。
+- 交付前按 `docs/pre_codex_self_review_checklist.md` 自查，并**自己跑一次唯一入口 lane 全量**、把终端 `RESULT` 行贴进 handoff 与 SESSION_LOG 的 `Pre-Codex self-review` 行（`door=` / `full-lane=` 不得留空或占位）。
+- 不得提交或合并；等 Claude Code 独立审查。
+
+### 边界
+- 不动 analysis_input / data_health 契约与 380 叶账本；不新增 schema 字段；不改 `MARGIN_FETCH_SESSIONS` / `MARGIN_MAX_LAG_SESSIONS` / `MARGIN_ELIGIBILITY_MIN_UNIVERSE` 三个常量的取值；不执行 provider/live 与 `-Account` 实跑。
+- 「候选级降级是否让那两项 Rule6 真正生效」属下一次带 `-Account` 周跑的观察项，不得用本刀单测替代。
