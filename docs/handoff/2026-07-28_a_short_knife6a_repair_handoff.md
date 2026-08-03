@@ -687,6 +687,38 @@
 - Claude Code 需独立复核 schema description、coverage 口径、producer constant-null 派生 guard、无决策消费者的调用链与 focused 证据；PASS 后按项目流程提交本轮 PASS 覆盖文件。
 - 若未来要删除字段或把 q0 从 `candidate_fundamental` group 正式拆出，必须另立 schema/effect-contract migration；不得把本次文档澄清当成删除或重新取数授权。
 
+## 2026-08-03 追加：financial 派生缓存代码集/语义碰撞修复（Codex executor；待 Claude Code 独立审查）
+
+### 改了什么 / 为什么
+
+- 原键 `financial_{TODAY}_{len(ts_codes)}` 只绑定股票数量。同一日期的两个不同股票集合只要数量相同就会复用同一财务 DataFrame；缓存命中也不核对报告期、producer 语义或输出代码集合。
+- `A-EGS/egs_main.py` 现在规范化请求代码集合，使用 `financial_v2` + 代码集合摘要 + 报告期窗口摘要 + producer AST/常量指纹。缓存值改为 `FinancialObservation`，保存请求身份、报告期、语义指纹和实际 frame 代码身份。
+- 命中时校验 envelope、代码集合、重复/外部代码、必需输出列和 frame 摘要；旧裸 DataFrame、外部集合、元数据篡改或语义不一致一律警告、丢弃并重取。重取失败不得返回旧帧。
+
+### 调用链 / 不变边界
+
+- `run_egs()` -> `get_financial_data()` -> `global_ind_med` / `build_master()` -> L2 财务质量、PEG、ESP-Q -> Rule6 revenue-period -> rank reconciliation / `analysis_input`。
+- 本刀不改财务评分阈值、PIT 规则、公共 schema 形状、coverage/reconciliation 的 fail-closed 门，也不改 `moneyflow_`、block-trade、suspend/relisted/unlock/reduction 等缓存。
+
+### 改动文件
+
+- `A-EGS/egs_main.py`
+- `tests/test_a_short_financial_cache_contract.py`
+- `schemas/a_short_m67_effect_contract.json`（固定主 Python 实际指纹核对）
+- `docs/system_risk_register.md`、`docs/SESSION_LOG.md`、本 handoff
+- `C:\Users\cnhea\Desktop\a_cc_testrun1.md`（补充问题记录）
+
+### 负向控制与验证
+
+- 新测试覆盖：同数量不同集合撞键、顺序规范化、报告期/语义轮换、旧键隔离、精确命中零 provider 调用、外部代码/裸 DataFrame/篡改信封重取，以及 provider 失败不返回旧帧。
+- 唯一解释器：`C:\Users\cnhea\AppData\Local\Programs\Python\Python313\python.exe`，`Python 3.13.8`。
+- final focused：`Ran 94 tests ... OK`；官方 full lane：`Ran 2284 tests ... OK (skipped=3)`，ledger `RESULT status=PASS exit=0 tests=2284 elapsed=347.7s deadline=860s`；`py_compile` / `git diff --check` OK。
+- 未执行 provider/live 或 `--as-of 20260803`。旧 `financial_20260803_5534.pkl` 保留不删，新键不会读取它；这证明隔离，不证明新鲜全市场财务数据已重取。当前未 commit/push/merge。
+
+### 交接给下一位
+
+- Claude Code 需独立复核代码集 digest 是否绑定实际请求、AST/常量指纹是否覆盖生产语义、信封失配是否绝不返回旧帧、财务消费者和 coverage/reconciliation 负向门；PASS 前不得提交或合入。四个既有 20260803 未跟踪产物不在本刀范围，禁止清理。
+
 ## 2026-08-03 追加：桌面清单第 1 条两融缓存语义版本失配修复（Codex executor；待 Claude Code 独立审查）
 
 ### 改了什么 / 为什么

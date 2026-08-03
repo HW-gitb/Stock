@@ -1409,6 +1409,45 @@ class MarginObservation:
         }
 
 
+FINANCIAL_CACHE_SEMANTICS_VERSION = "financial_v2"
+FINANCIAL_FETCH_QUARTERS = 4
+FINANCIAL_FINA_INDICATOR_FIELDS = (
+    "ts_code", "ann_date", "end_date", "dt_netprofit_yoy", "tr_yoy",
+    "ocf_to_profit", "profit_dedt", "dtprofit_to_profit", "roe",
+)
+FINANCIAL_CACHE_REQUIRED_COLUMNS = (
+    "ts_code", "q0_ann_date", "q1_ann_date", "q0_end_date", "q1_end_date",
+    "q0_dt_yoy", "q1_dt_yoy", "q0_revenue_yoy", "q1_revenue_yoy",
+    "q0_profit_dedt", "q0_dt_profit_ratio", "ttm_profit_dedt",
+    "ttm_ocf_ratio", "roe", "ttm_net_income", "q0_net_income",
+)
+
+
+@dataclass(frozen=True)
+class FinancialObservation:
+    """Source-bound cache envelope for the derived financial matrix."""
+
+    frame: pd.DataFrame
+    as_of: str
+    requested_code_count: int
+    requested_codes_sha256: str
+    quarters: tuple[str, ...]
+    semantics_sha256: str
+    frame_code_count: int
+    frame_codes_sha256: str
+
+    def public_dict(self):
+        return {
+            "as_of": self.as_of,
+            "requested_code_count": self.requested_code_count,
+            "requested_codes_sha256": self.requested_codes_sha256,
+            "quarters": list(self.quarters),
+            "semantics_sha256": self.semantics_sha256,
+            "frame_code_count": self.frame_code_count,
+            "frame_codes_sha256": self.frame_codes_sha256,
+        }
+
+
 def _health_issue(check, message, **metrics):
     issue = {"check": check, "message": message}
     issue.update({k: _json_value(v) for k, v in metrics.items()})
@@ -3042,11 +3081,27 @@ def _latest_quarters(n=4):
     return result
 
 def get_financial_data(ts_codes):
-    key = f"financial_{TODAY}_{len(ts_codes)}"
-    if (cached := load_cache(key)) is not None: return cached
+    code_list = _canonical_financial_codes(ts_codes)
+    if not code_list:
+        return pd.DataFrame()
+    quarters = _latest_quarters(FINANCIAL_FETCH_QUARTERS)  # 4季：配额充足，TTM精度最高
+    try:
+        semantics_sha256 = _financial_semantics_fingerprint(quarters)
+        key = _financial_cache_key(TODAY, code_list, quarters, semantics_sha256)
+    except (OSError, TypeError, IndentationError, SyntaxError) as exc:
+        log.warning(f"financial cache fingerprint unavailable; bypassing cache: {exc}")
+        semantics_sha256 = None
+        key = None
 
-    quarters  = _latest_quarters(4)   # 4季：配额充足（每日上限10万次），TTM精度最高
-    code_list = list(ts_codes)
+    cached = load_cache(key) if key is not None else None
+    if cached is not None:
+        valid, reason = _validate_financial_observation(
+            cached, TODAY, code_list, quarters, semantics_sha256,
+        )
+        if valid:
+            return cached.frame.copy()
+        log.warning(f"financial cache observation invalid; discarding and refetching: {reason}")
+
     fin_chunk_size = int(CONF.get("financial_chunk_size", CONF["chunk_size"]))
     chunks    = to_chunks(code_list, fin_chunk_size)
     log.info(f"财务矩阵拉取：{len(code_list)}只 / {len(chunks)}批 / {len(quarters)}季")
@@ -3059,8 +3114,7 @@ def get_financial_data(ts_codes):
             pro.fina_indicator,
             ts_code=chunk_str,
             period=q,
-            fields=("ts_code,ann_date,end_date,dt_netprofit_yoy,"
-                    "tr_yoy,ocf_to_profit,profit_dedt,dtprofit_to_profit,roe"),
+            fields=",".join(FINANCIAL_FINA_INDICATOR_FIELDS),
             retries=2,
         )
         if fi is not None:
@@ -3148,7 +3202,11 @@ def get_financial_data(ts_codes):
         if col in df_merged.columns:
             df_merged[col] = pd.to_numeric(df_merged[col], errors="coerce")
 
-    save_cache(key, df_merged)
+    if key is not None:
+        observation = _financial_observation(
+            df_merged, TODAY, code_list, quarters, semantics_sha256,
+        )
+        save_cache(key, observation)
     return df_merged
 
 def get_moneyflow(trade_dates):
@@ -3199,6 +3257,101 @@ def _canonical_ast_dump(obj):
     source = textwrap.dedent(inspect.getsource(obj))
     tree = ast.parse(source)
     return ast.dump(tree, annotate_fields=True, include_attributes=False)
+
+
+def _canonical_financial_codes(ts_codes):
+    return sorted({str(code).strip() for code in ts_codes if str(code).strip()})
+
+
+def _financial_codes_digest(codes):
+    return hashlib.sha256("|".join(codes).encode("utf-8")).hexdigest()[:16]
+
+
+def _financial_semantics_fingerprint(quarters):
+    contract = {
+        "producer": _canonical_ast_dump(get_financial_data),
+        "fields": FINANCIAL_FINA_INDICATOR_FIELDS,
+        "quarters": tuple(quarters),
+        "fetch_quarters": FINANCIAL_FETCH_QUARTERS,
+        "chunk_size": int(CONF.get("financial_chunk_size", CONF["chunk_size"])),
+        "min_chunk": int(CONF.get("financial_min_chunk", 10)),
+        "required_columns": FINANCIAL_CACHE_REQUIRED_COLUMNS,
+    }
+    return hashlib.sha256(repr(contract).encode("utf-8")).hexdigest()[:16]
+
+
+def _financial_cache_key(as_of, codes, quarters, semantics_sha256=None):
+    codes = _canonical_financial_codes(codes)
+    if not codes:
+        raise ValueError("financial cache requires at least one code")
+    code_digest = _financial_codes_digest(codes)
+    quarter_digest = hashlib.sha256("|".join(map(str, quarters)).encode("utf-8")).hexdigest()[:12]
+    semantic_digest = semantics_sha256 or _financial_semantics_fingerprint(quarters)
+    return (
+        f"financial_{as_of}_{FINANCIAL_CACHE_SEMANTICS_VERSION}_"
+        f"{len(codes)}_{code_digest}_{quarter_digest}_{semantic_digest}"
+    )
+
+
+def _financial_frame_codes(frame):
+    if not isinstance(frame, pd.DataFrame) or "ts_code" not in frame.columns:
+        return None
+    if frame["ts_code"].isna().any():
+        return None
+    codes = [str(code).strip() for code in frame["ts_code"].tolist()]
+    if any(not code for code in codes) or len(set(codes)) != len(codes):
+        return None
+    return sorted(codes)
+
+
+def _financial_observation(frame, as_of, codes, quarters, semantics_sha256):
+    frame_codes = _financial_frame_codes(frame)
+    if frame_codes is None:
+        raise RuntimeError("financial producer returned an invalid frame code contract")
+    missing = set(FINANCIAL_CACHE_REQUIRED_COLUMNS) - set(frame.columns)
+    if missing:
+        raise RuntimeError(f"financial producer missing required output columns: {sorted(missing)}")
+    requested_codes = _canonical_financial_codes(codes)
+    if not set(frame_codes).issubset(set(requested_codes)):
+        raise RuntimeError("financial producer returned codes outside the requested universe")
+    return FinancialObservation(
+        frame=frame,
+        as_of=str(as_of),
+        requested_code_count=len(requested_codes),
+        requested_codes_sha256=_financial_codes_digest(requested_codes),
+        quarters=tuple(map(str, quarters)),
+        semantics_sha256=str(semantics_sha256),
+        frame_code_count=len(frame_codes),
+        frame_codes_sha256=_financial_codes_digest(frame_codes),
+    )
+
+
+def _validate_financial_observation(observation, as_of, codes, quarters, semantics_sha256):
+    if not isinstance(observation, FinancialObservation):
+        return False, "cache object is not a FinancialObservation"
+    requested_codes = _canonical_financial_codes(codes)
+    if observation.as_of != str(as_of):
+        return False, "as_of mismatch"
+    if observation.requested_code_count != len(requested_codes):
+        return False, "requested code count mismatch"
+    if observation.requested_codes_sha256 != _financial_codes_digest(requested_codes):
+        return False, "requested code digest mismatch"
+    if tuple(observation.quarters) != tuple(map(str, quarters)):
+        return False, "quarter window mismatch"
+    if observation.semantics_sha256 != str(semantics_sha256):
+        return False, "semantics fingerprint mismatch"
+    frame_codes = _financial_frame_codes(observation.frame)
+    if frame_codes is None:
+        return False, "frame code contract mismatch"
+    if set(frame_codes) - set(requested_codes):
+        return False, "frame contains foreign codes"
+    if set(FINANCIAL_CACHE_REQUIRED_COLUMNS) - set(observation.frame.columns):
+        return False, "frame output columns mismatch"
+    if observation.frame_code_count != len(frame_codes):
+        return False, "frame code count mismatch"
+    if observation.frame_codes_sha256 != _financial_codes_digest(frame_codes):
+        return False, "frame code digest mismatch"
+    return True, ""
 
 
 def _margin_semantics_fingerprint():
