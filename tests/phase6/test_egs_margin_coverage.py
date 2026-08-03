@@ -79,7 +79,7 @@ class MarginCoverageTests(unittest.TestCase):
         self.assertEqual(malformed_value.status, "invalid")
         self.assertFalse(any(item.coverage_complete for item in (empty, incomplete, malformed, malformed_value)))
 
-    def test_historical_numeric_gap_preserves_reference_universe_but_stays_incomplete(self):
+    def test_non_reference_numeric_gap_does_not_block_clean_reference_day(self):
         em = self.egs
         dates = ["20260714", "20260713", "20260710"]
         frame = pd.DataFrame([
@@ -92,6 +92,73 @@ class MarginCoverageTests(unittest.TestCase):
             observed = em._margin_observation(frame, dates)
         self.assertEqual(observed.effective_ref_date, dates[0])
         self.assertEqual(observed.row_count, 5)
+        self.assertEqual(observed.universe_size, 2)
+        self.assertEqual(observed.status, "complete")
+        self.assertTrue(observed.coverage_complete)
+
+    def test_newest_fully_valid_allowed_date_wins_over_newer_partial_date(self):
+        em = self.egs
+        dates = ["20260714", "20260713", "20260710"]
+        frame = pd.DataFrame([
+            {"ts_code": code, "trade_date": dates[0], "rzye": 100.0,
+             "rqye": float("nan") if code == "000001.SZ" else 100.0}
+            for code in ("600000.SH", "000001.SZ")
+        ] + [
+            {"ts_code": code, "trade_date": date, "rzye": 100.0, "rqye": 100.0}
+            for date in dates[1:] for code in ("600000.SH", "000001.SZ")
+        ])
+        with patch.object(em, "MARGIN_ELIGIBILITY_MIN_UNIVERSE", 2):
+            observed = em._margin_observation(frame, dates)
+        self.assertEqual(observed.effective_ref_date, dates[1])
+        self.assertEqual(observed.universe_size, 2)
+        self.assertEqual(observed.status, "complete")
+        self.assertTrue(observed.coverage_complete)
+
+    def test_reference_selection_does_not_cross_actual_calendar_lag_when_d0_missing(self):
+        em = self.egs
+        dates = ["20260731", "20260730", "20260729"]
+        frame = pd.DataFrame([
+            {"ts_code": "600000.SH", "trade_date": dates[1], "rzye": 100.0, "rqye": 100.0},
+            {"ts_code": "000001.SZ", "trade_date": dates[1], "rzye": 100.0, "rqye": float("nan")},
+        ] + [
+            {"ts_code": code, "trade_date": dates[2], "rzye": 100.0, "rqye": 100.0}
+            for code in ("600000.SH", "000001.SZ")
+        ])
+        with patch.object(em, "MARGIN_ELIGIBILITY_MIN_UNIVERSE", 2):
+            observed = em._margin_observation(frame, dates)
+        self.assertEqual(observed.effective_ref_date, dates[1])
+        self.assertEqual(observed.universe_size, 1)
+        self.assertEqual(observed.status, "incomplete")
+        self.assertFalse(observed.coverage_complete)
+
+    def test_no_fully_valid_allowed_date_keeps_existing_partial_selection(self):
+        em = self.egs
+        dates = ["20260714", "20260713", "20260710"]
+        frame = pd.DataFrame([
+            {"ts_code": code, "trade_date": date, "rzye": 100.0,
+             "rqye": float("nan") if code == "000001.SZ" else 100.0}
+            for date in dates[:2] for code in ("600000.SH", "000001.SZ")
+        ] + [
+            {"ts_code": code, "trade_date": dates[2], "rzye": 100.0, "rqye": 100.0}
+            for code in ("600000.SH", "000001.SZ")
+        ])
+        with patch.object(em, "MARGIN_ELIGIBILITY_MIN_UNIVERSE", 2):
+            observed = em._margin_observation(frame, dates)
+        self.assertEqual(observed.effective_ref_date, dates[0])
+        self.assertEqual(observed.universe_size, 1)
+        self.assertEqual(observed.status, "incomplete")
+        self.assertFalse(observed.coverage_complete)
+
+    def test_clean_day_beyond_allowed_lag_stays_incomplete(self):
+        em = self.egs
+        dates = ["20260714", "20260713", "20260710"]
+        frame = pd.DataFrame([
+            {"ts_code": code, "trade_date": dates[2], "rzye": 100.0, "rqye": 100.0}
+            for code in ("600000.SH", "000001.SZ")
+        ])
+        with patch.object(em, "MARGIN_ELIGIBILITY_MIN_UNIVERSE", 2):
+            observed = em._margin_observation(frame, dates)
+        self.assertEqual(observed.effective_ref_date, dates[2])
         self.assertEqual(observed.universe_size, 2)
         self.assertEqual(observed.status, "incomplete")
         self.assertFalse(observed.coverage_complete)
@@ -125,6 +192,17 @@ class MarginCoverageTests(unittest.TestCase):
         self.assertNotEqual(key, em._margin_cache_key([dates[0], "20260709", dates[2]]))
         with patch.object(em, "MARGIN_ELIGIBILITY_MIN_UNIVERSE", 2):
             self.assertNotEqual(key, em._margin_cache_key(dates))
+
+    def test_margin_cache_key_rotates_with_observation_semantics_fingerprint(self):
+        em = self.egs
+        dates = ["20260714", "20260713"]
+        with patch.object(em, "_margin_semantics_fingerprint", return_value="old-contract"):
+            old_key = em._margin_cache_key(dates)
+        with patch.object(em, "_margin_semantics_fingerprint", return_value="new-contract"):
+            new_key = em._margin_cache_key(dates)
+        self.assertNotEqual(old_key, new_key)
+        self.assertIn("old-contract", old_key)
+        self.assertIn("new-contract", new_key)
 
     def test_legacy_v4_cache_is_not_loaded(self):
         em = self.egs
@@ -198,7 +276,7 @@ class MarginCoverageTests(unittest.TestCase):
         margin_rows = []
         for ticker in (code, other):
             for index, date in enumerate(margin_dates):
-                missing_other_window = ticker == other and index in (5, 10)
+                missing_other_window = ticker == other and index in (0, 1, 5, 10)
                 margin_rows.append({
                     "ts_code": ticker,
                     "trade_date": date,

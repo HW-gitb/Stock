@@ -3794,27 +3794,56 @@ def _margin_observation(frame, trade_dates):
         return MarginObservation(work, reference_date, None, int(len(work)), 0, False, "invalid")
     if not set(dates).issubset(set(calendar_dates)):
         return MarginObservation(work, reference_date, None, int(len(work)), 0, False, "invalid")
-    eligible_dates = [date for date in calendar_dates if date in set(dates)]
+    observed_dates = set(dates)
+    eligible_dates = [date for date in calendar_dates if date in observed_dates]
     if not eligible_dates:
         return MarginObservation(work, reference_date, None, int(len(work)), 0, False, "unavailable")
     # A missing numeric field is a row-level coverage defect, not a reason to
     # erase every otherwise observable reference-date code.  Keep the NaN in
     # ``work`` so candidate-level Rule6 lookups become ``unknown``; any such
-    # row keeps the batch below ``complete`` and therefore cannot authorize a
-    # non-margin ``not_applicable`` result.
+    # row on the selected reference date keeps the batch below ``complete`` and
+    # therefore cannot authorize a non-margin ``not_applicable`` result.
     valid_value_dates = set(dates[numeric_valid])
-    effective_ref_date = next(
-        (date for date in eligible_dates if date in valid_value_dates), None
+    # An unpublished calendar session is absent from ``eligible_dates``.  Do
+    # not let that omission shift an older observed day into the permitted
+    # lag window: the lag gate is defined by the full decision calendar.
+    allowed_dates = [
+        date for date in eligible_dates
+        if calendar_dates.index(date) <= MARGIN_MAX_LAG_SESSIONS
+    ]
+    fully_valid_allowed_dates = [
+        date for date in allowed_dates
+        if bool((dates == date).any())
+        and bool(numeric_valid[dates == date].all())
+    ]
+    # Prefer the newest fully valid day inside the permitted publication-lag
+    # window.  If no such day exists, retain the historical "newest day with
+    # any valid numeric row" selection so the lag and coverage gates remain
+    # observable and fail closed.
+    effective_ref_date = (
+        fully_valid_allowed_dates[0]
+        if fully_valid_allowed_dates
+        else next((date for date in eligible_dates if date in valid_value_dates), None)
     )
     if effective_ref_date is None:
         return MarginObservation(work, reference_date, None, int(len(work)), 0, False, "invalid")
-    ref_mask = (dates == effective_ref_date) & numeric_valid
-    ref_codes = set(valid_codes[ref_mask])
+    reference_day_mask = dates == effective_ref_date
+    ref_valid_mask = reference_day_mask & numeric_valid
+    ref_codes = set(valid_codes[ref_valid_mask])
+    non_reference_invalid_count = int((~numeric_valid & ~reference_day_mask).sum())
+    if non_reference_invalid_count:
+        log.warning(
+            "margin source has %d invalid numeric rows outside effective reference "
+            "date %s; those rows do not decide reference-date completeness",
+            non_reference_invalid_count,
+            effective_ref_date,
+        )
     # A normal D0 publication lag is allowed and explicitly surfaced.  Older
     # data cannot silently become a current, complete margin observation.
     lag_sessions = calendar_dates.index(effective_ref_date)
+    reference_day_complete = bool(numeric_valid[reference_day_mask].all())
     complete = (
-        bool(numeric_valid.all())
+        reference_day_complete
         and lag_sessions <= MARGIN_MAX_LAG_SESSIONS
         and len(ref_codes) >= MARGIN_ELIGIBILITY_MIN_UNIVERSE
     )

@@ -1,5 +1,35 @@
 # Session Log
 
+## 2026-08-03 — Claude 审查 PASS（两融 complete 参考日口径，二轮收口）
+
+- **Verdict/Action**: PASS，已提交并合入 master。上一轮唯一 Required 已按指定形态修好：`allowed_dates` 改为按**完整日历**的 lag 过滤，不再按「已观测日期的位置」切片。我用同一批探针复跑八条：正控 `complete/20260731/1005` 成立（决策 B 的目标），五条强制腿反向控制全部仍关闭，D0 已发布时的范围内择新全净日仍按预期，非参考日坏行只记 warning 且行数正确。
+- **Required**: 无。`R-ASHORT-MARGIN-COMPLETE-CALIBER-REFERENCE-DATE-ONLY` 已 closed，回归用例与 closure tests 对照见 `docs/system_risk_register.md`（单一来源，本处不复述）。
+- **Verify**: review-evidence:d313cbfb1cdb；A/B 复测——D0 未发布 + D1 有坏行 + D2 全净时得 `ref=20260730 lag=1 incomplete universe=1003`，与**修前逐字段一致**，下游正向绑定恢复可用。`static_contract_error()=None`、叶数 380。执行方自跑记账 `CACHED GREEN — a_short = 2303 OK at 16:33:04 on this EXACT code state`，另报 margin 28 + superset 597 OK（2303 不含本刀新用例，其文件不在 lane 选择器内）。provider/live 与 `-Account` 实跑仍 `NOT_VERIFIED`。
+- **Next**: Codex：执行
+
+## 2026-08-03 — Codex 修复：两融实际 lag 窗口越界（独立审查待办）
+
+- **Verdict/Action**: 已按 `R-ASHORT-MARGIN-COMPLETE-CALIBER-REFERENCE-DATE-ONLY` 上一轮审查 Required 修复：`allowed_dates` 改按完整交易日历的真实 lag 过滤；D0 未发布时不会把 D2 越过 lag 门选为参考日。未提交、未 push、未 merge。
+- **Required**: 上一轮 FAIL 的三项收口已完成；完整根因、A/B 回归和边界见 `docs/system_risk_register.md` 顶部同名 R-ID。
+- **Verify**: 固定主 Python `C:\Users\cnhea\AppData\Local\Programs\Python\Python313\python.exe`（Python 3.13.8）；margin `28 OK`、focused superset `597 OK`、docs/preflight `73 OK`；`static_contract_error()=None`；full lane `RESULT status=PASS exit=0 tests=2303 elapsed=364.2s deadline=860s`；`py_compile` / `git diff --check` 通过。provider/live、`-Account`、`--as-of 20260803` 仍 `NOT_VERIFIED`。
+- **Pre-Codex self-review**: `matrix=真实 calendar lag/参考日选择/complete 三腿/反向控制/cache fingerprint/消费者链`; `register=updated`; `handoff=updated with exact command`; `focused=28 + 597 OK`; `full-lane=PASS 2303 / 364.2s`; `doc/preflight=73 OK`; `door=submission gate not_run:未 commit/merge`; `A=D0缺失+D1坏+D2全净固定 ref=D1 lag=1`; `B=不越过 lag/不放松时效与全集门`; `C=static_contract_error=None`; `D=N-A`; `E=SESSION_LOG/register/handoff 同步`; `F=diff-check 干净`。
+- **Next**: Claude Code：独立复审本次 Required 修复；PASS 前不得提交或合入。
+
+## 2026-08-03 — Claude 审查 FAIL（两融 complete 参考日口径）
+
+- **Verdict/Action**: FAIL，不提交、不合入。决策 B 的主体做对了：参考日全净、更早日期有坏行 → `complete`（修前必判 incomplete），五条强制腿反向控制全部仍关闭，非参考日坏行只记 warning。但配套的参考日选取把「允许范围」量错了——用**已观测日期的位置**切片，而 lag 门量的是**完整日历的位置**；两者只在 D0 已发布时重合。
+- **Required**: `R-ASHORT-MARGIN-COMPLETE-CALIBER-REFERENCE-DATE-ONLY` —— 三条收口（按真实 lag 过滤、补 A/B 回归用例、重做重封与全量）与「已通过不要返工」的清单见 `docs/system_risk_register.md`（单一来源，本处不复述）。
+- **Verify**: review-evidence:a09ba76cef47；reviewer 自写 A/B 同探针跑两棵树：D0 未发布 + D1 有坏行 + D2 全净时，**修前** `ref=20260730 lag=1`、下游正向绑定可用；**修后** `ref=20260729 lag=2`、同一处不可用——信息净损失，仍 fail-closed。执行方本轮**已自跑 lane 全量** `RESULT status=PASS exit=0 tests=2303`（过程缺陷未复发），但该包不覆盖本刀新增用例。provider/live 与 `-Account` 实跑仍 `NOT_VERIFIED`。
+- **Next**: Codex：修复
+
+## 2026-08-03 — Codex 修复：两融 complete 参考日口径（独立审查待办）
+
+- **Verdict/Action**: 当前工作树已按用户选择 B 修复 `R-ASHORT-MARGIN-COMPLETE-CALIBER-REFERENCE-DATE-ONLY`：允许滞后窗口内优先采用最新全净参考日；`complete` 只要求选定参考日当天数值完整，非参考日坏行只告警；滞后、全集下限、非法源和 fail-closed 消费门不变。未提交、未 push、未 merge。
+- **Required**: `R-ASHORT-MARGIN-COMPLETE-CALIBER-REFERENCE-DATE-ONLY`；完整调用链、消费者边界、反向控制和单一来源记录见 `docs/system_risk_register.md` 顶部。
+- **Verify**: 固定主 Python `C:\Users\cnhea\AppData\Local\Programs\Python\Python313\python.exe`（Python 3.13.8）；margin `27 OK`、focused superset `596 OK`、docs/preflight gates `73 OK`；`static_contract_error()=None`；full lane `RESULT status=PASS exit=0 tests=2303 elapsed=313.1s deadline=860s`；`py_compile` / `git diff --check` 通过。provider/live、`-Account` 新实盘与 `--as-of 20260803` 仍 `NOT_VERIFIED`。
+- **Pre-Codex self-review**: `matrix=参考日选取/complete 三腿/非参考日 warning/lag-floor-invalid 反控/cache fingerprint/消费者链`; `register=updated`; `handoff=updated with exact full-lane command`; `focused=27 + 596 OK`; `full-lane=PASS 2303 / 313.1s`; `doc/preflight=73 OK`; `door=submission gate not_run:未 commit/merge`; `A=允许窗口全净日优先且无全净日保留旧选取`; `B=参考日坏行、lag>1、全集不足、非法日期/代码、空帧/缺列均未放松`; `C=语义指纹轮换与失配重取`; `D=N-A`; `E=SESSION_LOG/register/handoff 同步`; `F=diff-check 干净`。
+- **Next**: Claude Code：独立审查本刀；PASS 前不得提交或合入。
+
 ## 2026-08-03 — 用户决策：两融 complete 口径改为「只看参考日」（Codex 待执行）
 
 - **决策**: 桌面清单第 4 项需要的是口径拍板不是缺陷修复。现有 `complete` 要求整个 12 会话窗口（本轮 `row_count=52987`）每一行数值都有效，而真正被消费的只有 `effective_ref_date` 那一天；门与用途不匹配，导致本轮 `universe_size` 已从 0 恢复到 4419 却仍 `incomplete`，两项 Rule6 两融检查长期停在 `unknown`。用户 2026-08-03 选定选项 B：第一条腿只要求参考日当天全部有效，时效性与基数下限两腿不动；A（维持最严）与 C（坏行占比阈值）否决。

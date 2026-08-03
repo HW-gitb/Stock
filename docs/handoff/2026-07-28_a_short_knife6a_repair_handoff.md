@@ -884,3 +884,89 @@ python runners\a_short_account_state_from_manual_tables.py --input-dir state\a_s
 ### 边界
 - 不动 analysis_input / data_health 契约与 380 叶账本；不新增 schema 字段；不改 `MARGIN_FETCH_SESSIONS` / `MARGIN_MAX_LAG_SESSIONS` / `MARGIN_ELIGIBILITY_MIN_UNIVERSE` 三个常量的取值；不执行 provider/live 与 `-Account` 实跑。
 - 「候选级降级是否让那两项 Rule6 真正生效」属下一次带 `-Account` 周跑的观察项，不得用本刀单测替代。
+
+## 2026-08-03 追加：R-ASHORT-MARGIN-COMPLETE-CALIBER-REFERENCE-DATE-ONLY 执行（Codex executor；待 Claude Code 独立审查）
+
+### 改了什么 / 为什么
+
+- 按用户 2026-08-03 选择 B 收口两融 `complete` 口径：允许 `MARGIN_MAX_LAG_SESSIONS` 范围内优先选择最新的“当天所有数值有效”参考日；若允许范围内没有全净日，则保留原“最新含任意有效数值的日期”选取并保持 `incomplete` 的 fail-closed 结果。
+- `complete` 现在只检查选定参考日当天的 `rzye/rqye` 数值有效性；窗口内非参考日坏数值不再一票否决，但按行数写 warning。`lag_sessions` 与 `MARGIN_ELIGIBILITY_MIN_UNIVERSE` 两腿未放松，非法代码/日期、空帧、缺列仍返回原有 `invalid/unavailable`。
+- `_margin_observation()` 的 AST 已纳入既有 `rule6_v5` 语义指纹，`decision_predicate_sha256` 已用固定主 Python 重封；没有加白名单、没有返回旧缓存帧、没有改 schema / analysis_input / data_health 形状。
+
+### 调用链 / 不变边界
+
+- `get_margin()` → `_margin_observation()` → `MarginObservation` → `_collect_rule6_evaluations()` / L2 两融消费 → `analysis_input` / data-health / weekly。
+- 本刀只校准 source completeness 与参考日选择；不改 provider 选择、取数次数、候选评分阈值、账户/持仓/订单/自动交易，也不执行 provider/live、`-Account` 新实盘或 `--as-of 20260803`。
+
+### 改动文件
+
+- `A-EGS/egs_main.py`
+- `tests/phase6/test_egs_margin_coverage.py`
+- `schemas/a_short_m67_effect_contract.json`
+- `docs/system_risk_register.md`
+- `docs/SESSION_LOG.md`
+- 本 handoff
+
+### 负向控制与验证
+
+- 覆盖正控：参考日全净且更早日期有坏行时变为 `complete`；允许窗口内较新的部分日让位于较旧全净日；语义 fingerprint 变化轮换缓存 key。
+- 覆盖反向控制：参考日坏行、允许窗口内无全净日、`lag_sessions > 1`、全集不足、非法 `ts_code`/`trade_date`、日历外日期、空帧/缺列仍 fail-closed；缓存信封失配仍丢弃并重取。
+- 固定解释器：`C:\\Users\\cnhea\\AppData\\Local\\Programs\\Python\\Python313\\python.exe`，Python 3.13.8。
+- 专项：`Ran 27 tests in 2.861s ... OK`；margin/effect-contract/weekly focused superset：`Ran 596 tests ... OK`；`static_contract_error()=None`；`py_compile` / `git diff --check` 通过。
+- 本次实际 full-lane 命令：
+
+  ```powershell
+  & 'C:\\Users\\cnhea\\AppData\\Local\\Programs\\Python\\Python313\\python.exe' .tools\\full_pack_ledger.py run a_short 'R-ASHORT-MARGIN-COMPLETE-CALIBER-REFERENCE-DATE-ONLY closure' 'margin focused 26 + effect-contract/weekly focused superset 596 OK; decision predicate resealed' 860 -- discover -s tests -p 'test_a_short*.py'
+  ```
+
+- Full lane：`Ran 2303 tests in 311.215s — OK (skipped=3)`；ledger `RESULT status=PASS exit=0 tests=2303 elapsed=313.1s deadline=860s`。文档治理与 A-short preflight gates：`Ran 73 tests ... OK`。当前未 commit/push/merge；四个既有 `20260803` 未跟踪产物原样保留。
+
+### 交接给下一位
+
+- Claude Code 独立复核 `_margin_observation()` 的参考日选择与三腿门、非参考日 warning、`rule6_v5` source-binding / 失配重取、L2/Rule6/analysis_input/data-health 消费链和所有反向控制；确认 `static_contract_error()=None` 后再 PASS。PASS 前不得提交或合入。
+- 下一次带 `-Account` 的真实周跑只作为观察项：验证候选级降级是否使两项 Rule6 实际生效；本刀离线测试不能替代该观察。
+
+## 2026-08-03 审查收口：两融 complete 参考日口径（Claude Code 独立审查 = FAIL）
+
+### Verdict
+- **初判 FAIL → 二轮更正为 PASS，已提交并合入 master。** 决策 B 的主体一直正确；唯一红点是配套的参考日选取用错了「允许范围」的度量，已按指定形态修好（`calendar_dates.index(d) <= MARGIN_MAX_LAG_SESSIONS`）。reviewer 同批探针复跑八条全绿，A/B 情形恢复到与修前逐字段一致；该 R-ID 已 closed。完整 Required 与「已通过不要返工」清单见 `docs/system_risk_register.md` 同名条目（单一来源）。
+
+### 根因（一句话）
+- `allowed_dates = eligible_dates[:MARGIN_MAX_LAG_SESSIONS + 1]` 是在**已观测日期**里数位置；而 `lag_sessions = calendar_dates.index(...)` 是在**完整日历**里数位置。只有 D0 已发布时两者才相同。
+
+### reviewer A/B（同一探针跑两棵树，非推断）
+- 构造：D0=20260731 未发布、D1=20260730 有 2 行坏值、D2=20260729 全净。
+- 修前 `ref=20260730 lag=1` → `partial_margin_codes`（`egs_main.py:4124-4131`，要求 `lag<=1`）**可用**；修后 `ref=20260729 lag=2` → **不可用**。比修前少一条正向绑定，方向仍 fail-closed。
+
+### 已通过（不要返工）
+- 正控 `complete/ref=20260731/universe=1005`；五条强制腿反向控制全关；D0 已发布时的范围内择新全净日按预期（`ref=20260730/complete`）；非参考日 warning 行数正确。
+
+### 过程面
+- 执行方本轮**已自跑 lane 全量**并记账（`RESULT status=PASS exit=0 tests=2303`），上轮缺陷未复发。注意该包不覆盖本刀新增用例（在 `tests/phase6/test_egs_margin_coverage.py`，不在 `test_a_short*.py` 选择器内）。
+
+### Codex 命令
+- **修复** `R-ASHORT-MARGIN-COMPLETE-CALIBER-REFERENCE-DATE-ONLY` 的三条 Required；改完重封指纹、重跑 lane 全量与 margin focused，把终端 `RESULT` 行贴进 `Pre-Codex self-review`（`door=` / `full-lane=` 不得留空或占位）。PASS 前不得提交或合并。
+
+## 2026-08-03 追加：R-ASHORT-MARGIN-COMPLETE-CALIBER-REFERENCE-DATE-ONLY 实际 lag 窗口修复（Codex executor；待 Claude Code 独立审查）
+
+### 上一轮 FAIL 的根因与修复
+
+- 上一轮实现用 `eligible_dates[:MARGIN_MAX_LAG_SESSIONS + 1]` 按已观测日期位置切片；D0 未发布时，D1/D2 会向前挤位，导致真实 lag=2 的 D2 被当成允许日。
+- 现在 `allowed_dates` 对完整 `calendar_dates` 使用真实 `calendar_dates.index(date) <= MARGIN_MAX_LAG_SESSIONS` 过滤。D0 未发布、D1 有坏值、D2 全净时，保持 `effective_ref_date=D1`、`lag=1`、`status=incomplete`，不会越过时效门选 D2。
+- 固定主 Python 重新计算 effect-contract：`decision_predicate_sha256` 仍为 `53809dcf...ecad3c`，`static_contract_error()=None`；本次没有伪造契约变更或修改无关 schema。
+
+### 验证与边界
+
+- 固定解释器：`C:\Users\cnhea\AppData\Local\Programs\Python\Python313\python.exe`，Python 3.13.8。
+- margin 专项：`Ran 28 tests in 3.349s — OK`；margin/effect-contract/weekly focused superset：`Ran 597 tests in 117.208s — OK`。
+- 本次实际 full-lane 命令：
+
+  ```powershell
+  & 'C:\Users\cnhea\AppData\Local\Programs\Python\Python313\python.exe' .tools\full_pack_ledger.py run a_short 'R-ASHORT-MARGIN-COMPLETE-CALIBER-REFERENCE-DATE-ONLY actual-calendar-lag correction closure' 'margin focused 28 + effect-contract/weekly focused superset 597 OK; static contract revalidated' 860 -- discover -s tests -p 'test_a_short*.py'
+  ```
+
+- Full lane：`Ran 2303 tests in 361.817s — OK (skipped=3)`；ledger `RESULT status=PASS exit=0 tests=2303 elapsed=364.2s deadline=860s`；docs/preflight `Ran 73 tests ... OK`。`py_compile` / `git diff --check` 通过。未执行 provider/live、`-Account` 新实盘或 `--as-of 20260803`；未 commit/push/merge；四个既有未跟踪产物原样保留。
+
+### 交接给下一位
+
+- Claude Code 独立复核真实 calendar lag 过滤、D0 未发布 A/B 回归、参考日/complete 三腿、`partial_margin_codes` 消费门、缓存语义指纹和 fail-closed 反向控制；PASS 前不得提交或合入。
