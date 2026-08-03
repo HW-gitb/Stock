@@ -1513,6 +1513,28 @@ def _health_issue(check, message, **metrics):
     return issue
 
 
+def _cninfo_health_warning(cninfo_health):
+    if not isinstance(cninfo_health, dict):
+        return None
+    unknown_count = int(cninfo_health.get("unknown_count") or 0)
+    if unknown_count <= 0:
+        return None
+    requested_count = int(cninfo_health.get("requested_count") or 0)
+    return _health_issue(
+        "cninfo_regulatory_advisory",
+        (
+            f"巨潮监管公告检查有 {unknown_count}/{requested_count} 只候选未能验证；"
+            "cninfo_flag 保留‘未检查’，不得视为通过"
+        ),
+        status="unknown",
+        requested_count=requested_count,
+        known_clear_count=int(cninfo_health.get("known_clear_count") or 0),
+        advisory_hit_count=int(cninfo_health.get("advisory_hit_count") or 0),
+        unknown_count=unknown_count,
+        unknown_reasons=dict(cninfo_health.get("unknown_reasons") or {}),
+    )
+
+
 def _comparison_sidecar_warning(sidecar_name, exc):
     return _health_issue(
         f"comparison_sidecar_{sidecar_name}",
@@ -5466,14 +5488,24 @@ def score_l5(df, sw_map):
 def stage3_ai_clearing(top50_df, red_dict, unlock_set, backtest_mode=False):
     import requests as _requests
 
+    def _cninfo_health_snapshot(requested_count=0):
+        return {
+            "status": "not_observed",
+            "requested_count": int(requested_count),
+            "known_clear_count": 0,
+            "advisory_hit_count": 0,
+            "unknown_count": 0,
+            "unknown_reasons": {},
+        }
+
     if top50_df.empty:
-        return top50_df, {}
+        return top50_df, {}, _cninfo_health_snapshot()
     df = top50_df.copy()
 
-    def _finalize_stage3(final_df, cninfo_checked):
+    def _finalize_stage3(final_df, cninfo_checked, cninfo_health):
         if final_df.empty:
             log.info("[Stage3] 三级漏斗完成，无满足条件股票")
-            return final_df, cninfo_checked
+            return final_df, cninfo_checked, cninfo_health
 
         final_df = final_df.sort_values("final_score", ascending=False).reset_index(drop=True)
         pool, l1c, l2c = [], {}, {}
@@ -5490,7 +5522,7 @@ def stage3_ai_clearing(top50_df, red_dict, unlock_set, backtest_mode=False):
 
         result = pd.DataFrame(pool).head(5)
         log.info(f"[Stage3] 三级漏斗完成，最终Tier1候选池 {len(result)} 只")
-        return result, cninfo_checked
+        return result, cninfo_checked, cninfo_health
 
     # ① 大股东减持一票否决
     veto_10d = red_dict.get("veto_10d", set())
@@ -5509,7 +5541,11 @@ def stage3_ai_clearing(top50_df, red_dict, unlock_set, backtest_mode=False):
         cninfo_checked = {code: "回测跳过" for code in df["ts_code"].tolist()} if "ts_code" in df.columns else {}
         df["cninfo_flag"] = "回测跳过"
         log.info("[Stage3] backtest mode: skip cninfo advisory check")
-        return _finalize_stage3(df, cninfo_checked)
+        return _finalize_stage3(
+            df,
+            cninfo_checked,
+            _cninfo_health_snapshot(len(df)),
+        )
 
     # ③ 巨潮资讯监管公告检查
     REGULATOR_KEYWORDS = ["问询函","立案调查","监管关注","警示函"]
@@ -5547,39 +5583,63 @@ def stage3_ai_clearing(top50_df, red_dict, unlock_set, backtest_mode=False):
                 timeout=10,
             )
             if resp.status_code != 200:
-                return None, None
-            anns = resp.json().get("announcements") or []
+                return None, None, "http_status"
+            payload = resp.json()
+            if not isinstance(payload, dict):
+                return None, None, "invalid_payload"
+            anns = payload.get("announcements")
             if not anns:
-                return None, None   # 200 但空公告:legacy 形态(stock=code,market 非契约 code,orgId)可能失败 → 无法证明 clear, 标「未核查」非「通过」(修假清白)
+                return None, None, "empty_announcements"  # 200 但空公告:无法证明 clear, 标「未核查」非「通过」(修假清白)
+            if not isinstance(anns, list) or any(not isinstance(ann, dict) for ann in anns):
+                return None, None, "invalid_announcements"
             for ann in anns:
                 title = ann.get("announcementTitle","")
                 for kw in REGULATOR_KEYWORDS:
                     if kw in title:
-                        return True, f"{kw}（{title[:60]}）"
-            return False, None
+                        return True, f"{kw}（{title[:60]}）", None
+            return False, None, None
         except Exception as e:
             log.warning(f"[Stage3] 巨潮爬取失败 {ts_code}: {e}")
-            return None, None
+            return None, None, "exception"
 
     # cninfo 监管检查降为 advisory-only(Slice 3 reconciliation, 2026-06-20):**不再删生产候选**。
     # legacy 曾对命中 REGULATOR_KEYWORDS 的候选硬删除(production veto);与「web/LLM/语义 advisory-only、
     # 生产硬否决须 opt-in 重建」原则一致,降为仅写 cninfo_flag(advisory 展示,进 M6.7),不改生产候选池。
     cninfo_checked = {}   # ts_code -> cninfo_flag，供调用方回写 watch_df(advisory 展示)
+    cninfo_health = _cninfo_health_snapshot(len(df))
     df["cninfo_flag"] = "未检查"
     for idx, row in df.iterrows():
-        hit, reason = _cninfo_check(row["ts_code"])
+        hit, reason, unavailable_reason = _cninfo_check(row["ts_code"])
         if hit is True:
             df.at[idx, "cninfo_flag"] = reason
             cninfo_checked[row["ts_code"]] = reason
+            cninfo_health["advisory_hit_count"] += 1
             log.info(f"[Stage3] {row['ts_code']} {row.get('name','')} → REGULATOR-ADVISORY（{reason}; advisory, 不删生产候选）")
         elif hit is False:
             df.at[idx, "cninfo_flag"] = "通过"
             cninfo_checked[row["ts_code"]] = "通过"
-        # hit is None(HTTP 失败/异常/200 空公告)→ 无法证明 clear, 保留默认「未检查」(不伪装通过)
+            cninfo_health["known_clear_count"] += 1
+        else:
+            # hit is None(HTTP 失败/异常/200 空公告)→ 无法证明 clear, 保留默认「未检查」(不伪装通过)
+            cninfo_health["unknown_count"] += 1
+            reason_key = unavailable_reason or "unknown"
+            reasons = cninfo_health["unknown_reasons"]
+            reasons[reason_key] = int(reasons.get(reason_key, 0)) + 1
+
+    if cninfo_health["unknown_count"]:
+        cninfo_health["status"] = "unknown"
+        log.warning(
+            "[Stage3] 巨潮监管公告检查不可验证：%s/%s 只候选保留‘未检查’，不得视为通过；原因=%s",
+            cninfo_health["unknown_count"],
+            cninfo_health["requested_count"],
+            cninfo_health["unknown_reasons"],
+        )
+    elif cninfo_health["requested_count"]:
+        cninfo_health["status"] = "complete"
 
     # ④ DeepSeek 行业政策 POL-RISK-VETO 已于 Slice 3 reconciliation(2026-06-20)**整段移除**(见上方注释):
     # web/LLM 绝不自动生产硬否决;非生产政策/语义 advisory 由 weekly M6.7 DeepSeek adapter 承担。
-    return _finalize_stage3(df, cninfo_checked)
+    return _finalize_stage3(df, cninfo_checked, cninfo_health)
 
 
 # ═══════════════════════════════════════════════════
@@ -5849,11 +5909,17 @@ def run_egs(backtest_mode=False, output_root=None, price_as_of=None):
     # transaction.  A failed sidecar must not block EGS, but it must also never
     # be accidentally bound into a fresh official publish marker as stale bytes.
     comparison_sidecar_warnings = []
+    data_health_warnings = []
     _weight_comparison_published = False
     _p4_overlay_score_path = None
     _p4_overlay_inputs = None
 
-    tier1_final, cninfo_checked = stage3_ai_clearing(top50, red_dict, unlock_set, backtest_mode=backtest_mode)
+    tier1_final, cninfo_checked, cninfo_health = stage3_ai_clearing(
+        top50, red_dict, unlock_set, backtest_mode=backtest_mode
+    )
+    cninfo_warning = _cninfo_health_warning(cninfo_health)
+    if cninfo_warning is not None:
+        data_health_warnings.append(cninfo_warning)
     env_report  = market_environment(trade_dates, stats_df)
 
     # ── 计算 entry_flag ────────────────────────────────────────────────────────
@@ -6162,7 +6228,7 @@ def run_egs(backtest_mode=False, output_root=None, price_as_of=None):
             rank_reconciliation=rank_reconciliation,
             rank_reconciliation_path=rank_reconciliation_path,
             watch_eligible_count=watch_eligible_count,
-            sidecar_warnings=comparison_sidecar_warnings,
+            sidecar_warnings=[*comparison_sidecar_warnings, *data_health_warnings],
             margin_observation=margin_observation,
             moneyflow_coverage=moneyflow_coverage,
             short_history_candidate_count=short_history_candidate_count,

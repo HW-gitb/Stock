@@ -45,6 +45,21 @@
 - **Verify**: review-evidence:not_available（本轮 hook 未注入 token）；rule 8 Optional-only 快档：一次 scope grep 先行（8 处 fixture 全是构造、无断言）、最小覆盖目标只跑一次 `tests.test_us_short_llm_theme_discovery_query_policy + doc-governance + route-doc` = `63 OK / 1.2s`。收紧类改动配植入正控：合成「4 条里 3 条悄悄回退」输入，旧 `any()` 断言仍 `True`、新断言 `False` 且点名 `['b','c','d']`。`git diff --check` clean；`state/us_short` 与 `provider_samples` 前后均 `count=0`；未联网、未调 provider、未付费。
 - **Next**: Codex：执行
 - **Pre-Codex self-review**: `matrix=三条 Optional 逐条判定(收/升/撤)`; `register=updated`; `handoff=not_required: Optional-only 收口，无新交接事实`; `focused=63 OK / 1.2s`; `full-lane=not_triggered: 仅测试断言与 register 措辞，rule 3 无触发面`; `door=route-doc 14 + doc-governance 41 同包内 63 OK`; `scope-grep=8 处 fixture 全为构造、零断言`; `blast-radius=75 命中/40 文件 与 15 模块/45 处 两案实测`; `planted=3-of-4 回退令新断言转红并点名`; `residue=0/0`
+## 2026-08-03 — Claude 审查 PASS（cninfo fail-loud，#07a）
+
+- **Verdict/Action**: PASS，已提交并合入 master。取数失败/空响应不再静默塌成「未检查」：五类不可用原因分开计数、打 warning、并进 `data_health` 把 `overall_status` 抬到 `warn`；新增 payload/announcements 类型守，比修前更 fail-closed。`cninfo_flag` 语义未动、候选不删、不进 veto/选股。
+- **Required**: 无。`R-ASHORT-KNIFE7-CNINFO-UNKNOWN-RESULT-SILENT-DOWNGRADE` 已 closed，`R-ASHORT-KNIFE5-...-UNIT-MISMATCH` 的 Optional 亦在本刀收口；一条结构性 Optional（lane 选择器吃不到 `tests/phase6/`）见 `docs/system_risk_register.md`（单一来源，本处不复述）。
+- **Verify**: review-evidence:943fa9bcc21e；接缝自核——静态读 `egs_main.py:1888` `warnings_.extend(sidecar_warnings or [])` → `warn`，并实跑端到端用例复证。签名 2-tuple→3-tuple 全仓扫过，真实调用仅 `:5917` 一处已更新、无遗留解包。lane 外的接缝包我单独跑 `Ran 9 tests ... OK / RESULT tier=focused status=PASS exit=0 tests=9`；lane 全量 `CACHED GREEN a_short = 2318 OK`，`2311→2318` 的 `+7` 逐条可解释。cninfo live 与 `-Account` 实跑仍 `NOT_VERIFIED`。
+- **Next**: Codex：执行
+
+## 2026-08-03 — Codex 修复：#05 Optional 与桌面清单 #07(a) CNINFO fail-loud（独立审查待办）
+
+- **Verdict/Action**: #05 的测试覆盖 Optional 已补齐；桌面 #07 只执行 #07(a) fail-loud：CNINFO 空/失败/畸形结果保留 `未检查`，进入既有 `data_health` warning 并发聚合 warning；不改请求形态/换源，不恢复监管硬否决。
+- **Required**: `R-ASHORT-KNIFE7-CNINFO-UNKNOWN-RESULT-SILENT-DOWNGRADE` = implemented / `OPEN-NOT_VERIFIED`，待 Claude Code 独立审查；`R-ASHORT-KNIFE5-NORTHBOUND-MONEYFLOW-UNIT-MISMATCH` 的 Required 已按先前 review closed，本次只补 Optional。
+- **Verify**: 固定主 Python `C:\Users\cnhea\AppData\Local\Programs\Python\Python313\python.exe`（`Python 3.13.8`）；#05 `Ran 53 tests ... OK`；#07 `Ran 95 tests ... OK`；py_compile=0；full `Ran 2318 tests ... OK (skipped=3)` / `RESULT status=PASS exit=0 tests=2318` / fingerprint `1e8b67194c43`；文档门禁 `Ran 73 tests ... OK`；diff-check=0；live/provider/真实周跑均 `NOT_VERIFIED`。
+- **Pre-Codex self-review**: matrix=CNINFO response→unknown→flag→health warning→write；positive=clear/hit；negative=empty/non-200/malformed/exception；contract=predicate resealed/constants unchanged；register=updated；handoff=updated；focused=95 OK；full-lane=2318 OK；door=doc-governance/route/readme/Slice3 73 OK；scope=#05 Optional + #07(a)；provider/live/account/sub-agent/commit=NOT_VERIFIED/NOT_PERFORMED。
+- **Next**: Claude Code：独立审查 `R-ASHORT-KNIFE7-CNINFO-UNKNOWN-RESULT-SILENT-DOWNGRADE`，并同时复核 #05 Optional；PASS 后按项目规则提交。
+
 ## 2026-08-03 — Claude 审查 PASS（北向资金量纲，#05）
 
 - **Verdict/Action**: PASS，已提交并合入 master。量纲判定正确（万元→元，量级论证决定性且 `hgt+sgt==north_money` 自洽），显示与两个防御判据统一读同一个元口径变量；`np` 已导入无 NameError 风险；`env_report` 只进控制台、不改选股。
