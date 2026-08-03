@@ -570,3 +570,7 @@ main() → _upcoming_events() → _attach_forward_event_impacts() → _attach_ho
 **两条不许违反的约束**：① 第 4 批的 #09 与 #08 强耦合——#09 单独落地会让 28 条恒空叶暴露成叶级悬空、守卫当场红，必须同刀带处置。② #06 反向依赖 #08-market_regime，序 10 的裁决不做就别开工序 17。
 
 **共 17 刀**（记账两条不计）。第 1 批五把加起来约等于一把 ★★★，却消除两条「看起来正常实则已死」的假象、清掉一处脏状态、并止住每跑一次就毁一次的追踪基线。
+
+**约束 ③（2026-08-03 Claude Code 补，实读 `schemas/a_short_m67_effect_contract.json`）**：序 11 的 #09 **不必发明新 nature 值**。`leaf_nature_by_group` 已有 `true_dangling` 这一档并已在用——29 个 group 的 nature 分布实测为 `main_decision` 6 / `partial_consumption` 9 / `true_dangling` 9 / `comparison_track` 2 / `duplicate_source` 2 / `display_audit` 1，其中 `candidate_capital_flow`、`candidate_quote`、`account_context` 等 9 个组正用 `true_dangling` 诚实表达「整组真悬空」。所以 #09 的实质是给 `market_context` 这种**组内混合**的情形补一个**叶级出口**，把那 28 条恒空叶按既有 `true_dangling` 逐条标注即可，不是设计能力缺失，也不需要新概念。
+
+**附带实证（不要当缺陷去修）**：`candidates[].capital_flow.margin.*` 五个字段（`balance` / `balance_change_5d_pct` / `balance_change_10d_pct` / `balance_to_float_mv_pct` / `extreme_accumulation`）在 2026-08-03 实盘周跑里 15 只候选**全为 null**，生产者 `A-EGS/egs_main.py:791-794` 写死 `None`。但其所属组已诚实标注 `true_dangling`，属 `docs/CURRENT.md` §0 所述「Remaining `true_dangling` leaves are not yet wired」的**既定待接线存量**，**不是新漏洞**，不进 a_cc_testrun1 清单。同一份两融数据在 `event_risk.rule6_checks[].metrics` 里是有值的（本轮 `600236.SH` 因 `margin_growth=0.2399` vs `price_gain=0.0188` 被 `rule6_margin_extreme_accumulation` 判 `fail` → `rule6_gate.disposition=hard_veto` → M6.7 `操作=否决`），判断链完好，空的只是展示字段。
