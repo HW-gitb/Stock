@@ -1,0 +1,308 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "schemas/us_short_market_diagnostic_26w_policy.schema.json",
+  "title": "US-short 26-week market diagnostic policy",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_name",
+    "schema_version",
+    "policy_id",
+    "status",
+    "diagnostic_boundary",
+    "account",
+    "window",
+    "clocks",
+    "status_resolution",
+    "benchmarks",
+    "strategy_quality",
+    "benchmark_quality",
+    "existing_probe_reuse",
+    "v1_1",
+    "storage",
+    "source_refs"
+  ],
+  "properties": {
+    "schema_name": {"const": "us_short_market_diagnostic_26w_policy"},
+    "schema_version": {"const": "1.0.0"},
+    "policy_id": {"const": "us_short_market_diagnostic_26w_v1"},
+    "status": {"const": "knife0_contract_baseline"},
+    "diagnostic_boundary": {"$ref": "#/definitions/diagnostic_boundary"},
+    "account": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "initial_normalized_capital",
+        "currency",
+        "capital_kind",
+        "seed_once",
+        "diagnostic_starts_only_after_first_settled_nav",
+        "diagnostic_may_seed_account",
+        "manual_account_read"
+      ],
+      "properties": {
+        "initial_normalized_capital": {"const": "100000.000000"},
+        "currency": {"const": "USD"},
+        "capital_kind": {"const": "normalized_notional"},
+        "seed_once": {"const": true},
+        "diagnostic_starts_only_after_first_settled_nav": {"const": true},
+        "diagnostic_may_seed_account": {"const": false},
+        "manual_account_read": {"const": false}
+      }
+    },
+    "window": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "window_weeks",
+        "min_joint_evaluable_weeks",
+        "non_overlapping",
+        "calendar_week_denominator_includes_no_count",
+        "no_count_extends_window",
+        "first_week_requires_real_settlement",
+        "backfill_allowed",
+        "future_data_allowed"
+      ],
+      "properties": {
+        "window_weeks": {"const": 26},
+        "min_joint_evaluable_weeks": {"const": 20},
+        "non_overlapping": {"const": true},
+        "calendar_week_denominator_includes_no_count": {"const": true},
+        "no_count_extends_window": {"const": false},
+        "first_week_requires_real_settlement": {"const": true},
+        "backfill_allowed": {"const": false},
+        "future_data_allowed": {"const": false}
+      }
+    },
+    "clocks": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["diagnostic", "a1_shadow", "ship_gate", "must_be_independent"],
+      "properties": {
+        "diagnostic": {"const": "26 canonical decision weeks"},
+        "a1_shadow": {"const": "24/36 divergence weeks"},
+        "ship_gate": {"const": "24/36 months"},
+        "must_be_independent": {"const": true}
+      }
+    },
+    "status_resolution": {"$ref": "#/definitions/status_resolution"},
+    "benchmarks": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["VTI", "IWB", "SPY", "QQQ"],
+      "properties": {
+        "VTI": {"$ref": "#/definitions/benchmark"},
+        "IWB": {"$ref": "#/definitions/benchmark"},
+        "SPY": {"$ref": "#/definitions/benchmark"},
+        "QQQ": {"$ref": "#/definitions/benchmark"}
+      }
+    },
+    "strategy_quality": {"$ref": "#/definitions/strategy_quality"},
+    "benchmark_quality": {"$ref": "#/definitions/benchmark_quality"},
+    "existing_probe_reuse": {"$ref": "#/definitions/probe_reuse"},
+    "v1_1": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "min_evaluable_weeks_before_implementation",
+        "max_evaluable_weeks_before_due",
+        "requires_paper_evaluable_weeks",
+        "reminder_from_first_calendar_week",
+        "reminder_statuses",
+        "opens_new_attribution_epoch",
+        "historical_backfill_without_source_binding"
+      ],
+      "properties": {
+        "min_evaluable_weeks_before_implementation": {"const": 4},
+        "max_evaluable_weeks_before_due": {"const": 8},
+        "requires_paper_evaluable_weeks": {"const": true},
+        "reminder_from_first_calendar_week": {"const": true},
+        "reminder_statuses": {
+          "type": "array",
+          "items": {"enum": ["pending", "ready_for_v1_1_implementation", "overdue", "active"]},
+          "minItems": 4,
+          "maxItems": 4,
+          "uniqueItems": true
+        },
+        "opens_new_attribution_epoch": {"const": true},
+        "historical_backfill_without_source_binding": {"const": false}
+      }
+    },
+    "storage": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "private_weekly_root",
+        "public_summary_root",
+        "private_path_fail_closed",
+        "public_output_deidentified"
+      ],
+      "properties": {
+        "private_weekly_root": {"const": "state/us_short/market_diagnostic_private/"},
+        "public_summary_root": {"const": "research/results/us_short/market_diagnostic_26w/"},
+        "private_path_fail_closed": {"const": true},
+        "public_output_deidentified": {"const": true}
+      }
+    },
+    "source_refs": {
+      "type": "array",
+      "items": {"type": "string", "minLength": 1},
+      "minItems": 3,
+      "uniqueItems": true
+    }
+  },
+  "definitions": {
+    "diagnostic_boundary": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "diagnostic_only",
+        "comparison_only",
+        "counts_ship_gate",
+        "changes_selection_or_action",
+        "automatic_policy_switch",
+        "broker_or_order_automation"
+      ],
+      "properties": {
+        "diagnostic_only": {"const": true},
+        "comparison_only": {"const": true},
+        "counts_ship_gate": {"const": false},
+        "changes_selection_or_action": {"const": false},
+        "automatic_policy_switch": {"const": false},
+        "broker_or_order_automation": {"const": false}
+      }
+    },
+    "benchmark": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["role", "proxy_kind", "required"],
+      "properties": {
+        "role": {"enum": [
+          "ship_gate_economic_continuity",
+          "russell_1000_investable_proxy",
+          "broad_large_cap_sensitivity",
+          "growth_technology_sensitivity"
+        ]},
+        "proxy_kind": {"const": "investable_etf"},
+        "required": {"const": true}
+      }
+    },
+    "strategy_quality": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "allowed_statuses",
+        "paper_evaluable_false_counts_as_joint_evaluable",
+        "price_only_strategy_may_be_recorded",
+        "price_only_strategy_may_claim_ahead_or_behind"
+      ],
+      "properties": {
+        "allowed_statuses": {
+          "type": "array",
+          "items": {"enum": ["evaluable", "diagnostic_data_degraded", "not_evaluable"]},
+          "minItems": 3,
+          "maxItems": 3,
+          "uniqueItems": true
+        },
+        "paper_evaluable_false_counts_as_joint_evaluable": {"const": false},
+        "price_only_strategy_may_be_recorded": {"const": true},
+        "price_only_strategy_may_claim_ahead_or_behind": {"const": false}
+      }
+    },
+    "status_resolution": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["priority", "mixed_ruleset_window"],
+      "properties": {
+        "priority": {
+          "const": [
+            "unavailable",
+            "data_insufficient",
+            "data_degraded",
+            "mixed_across_benchmarks",
+            "ahead_diagnostic",
+            "behind_diagnostic"
+          ]
+        },
+        "mixed_ruleset_window": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "enabled",
+            "when_multiple_strategy_rulesets",
+            "single_ruleset_min_evaluable_weeks",
+            "blocks_single_ruleset_performance_claim"
+          ],
+          "properties": {
+            "enabled": {"const": true},
+            "when_multiple_strategy_rulesets": {"const": true},
+            "single_ruleset_min_evaluable_weeks": {"const": 20},
+            "blocks_single_ruleset_performance_claim": {"const": true}
+          }
+        }
+      }
+    },
+    "benchmark_quality": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "allowed_statuses",
+        "missing_dividend_action",
+        "missing_dividend_fill_zero",
+        "fixed_yield_fallback",
+        "silent_benchmark_substitution",
+        "total_return_requires_price_and_dividend"
+      ],
+      "properties": {
+        "allowed_statuses": {
+          "type": "array",
+          "items": {"enum": ["total_return_evaluable", "price_return_diagnostic", "unavailable"]},
+          "minItems": 3,
+          "maxItems": 3,
+          "uniqueItems": true
+        },
+        "missing_dividend_action": {"const": "price_return_diagnostic"},
+        "missing_dividend_fill_zero": {"const": false},
+        "fixed_yield_fallback": {"const": false},
+        "silent_benchmark_substitution": {"const": false},
+        "total_return_requires_price_and_dividend": {"const": true}
+      }
+    },
+    "probe_reuse": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "generic_probe_reexecute",
+        "probe_role",
+        "etf_specific_sidecar_required",
+        "etf_symbols",
+        "endpoint_families",
+        "provider_calls_require_explicit_authorization",
+        "raw_payloads_gitignored",
+        "tracked_summary_no_secrets_urls_or_raw_rows"
+      ],
+      "properties": {
+        "generic_probe_reexecute": {"const": false},
+        "probe_role": {"const": "endpoint_shape_and_bounded_sample_evidence"},
+        "etf_specific_sidecar_required": {"const": true},
+        "etf_symbols": {
+          "type": "array",
+          "items": {"enum": ["SPY", "QQQ", "IWB", "VTI"]},
+          "minItems": 4,
+          "maxItems": 4,
+          "uniqueItems": true
+        },
+        "endpoint_families": {
+          "type": "array",
+          "items": {"enum": ["dividends", "splits", "daily_adjusted", "daily_unadjusted"]},
+          "minItems": 4,
+          "maxItems": 4,
+          "uniqueItems": true
+        },
+        "provider_calls_require_explicit_authorization": {"const": true},
+        "raw_payloads_gitignored": {"const": true},
+        "tracked_summary_no_secrets_urls_or_raw_rows": {"const": true}
+      }
+    }
+  }
+}
