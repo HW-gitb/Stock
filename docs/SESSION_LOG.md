@@ -1,5 +1,12 @@
 # Session Log
 
+## 2026-08-04 — Claude 审查 Pass-with-Required（队列批 3 方案，自审自订）
+
+- **Verdict/Action**: Pass-with-Required —— 方向与数据前提成立，但起草有三处问题，均已在 handoff 就地更正：① 「取最狠不相乘」误引 v14.2 `:164` 为依据（原文限定于 regime 过渡期单一参数的取值歧义，非两道独立门叠加）；② 漏报结构前置——全仓没有现金系数栈，`_allocate_cash` 只有单一 `cash_factor`，接第二道门须先改造，否则最省事写法就是被禁止的连乘；③ 队列「批 N」与桌面「第 N 批」编号撞车，已致执行方误做桌面第 3 批。
+- **Required**: `R-ASHORT-BATCH3-DRAFT-FALSE-AUTHORITY-AND-MISSING-FACTOR-STACK` —— 三条与「复核成立、无须返工」的清单见 `docs/system_risk_register.md`（单一来源，本处不复述）。更正已随本轮落盘，队列批 3 可开工。
+- **Verify**: review-evidence:not_available（本轮未触发 gate 快照注入）；三条均实读坐实——v14.2 `:164` 原文逐字比对、`_allocate_cash` 全仓 `cash_factor` 命中集中在 `:1152-1159` 单点相乘、桌面清单 `## 第 3 批` 确为 #06 且执行方 SESSION_LOG 自述据此只做了验证。复核成立项：`rzye`/`rzrqye` 取舍、三年深度、单位为元、每日 3 行，均有序 21 探针实证。本轮为文档审查，无代码 diff，按 rule 3 未跑全量。
+- **Next**: Codex：执行
+
 ## 2026-08-04 — Claude 修复（收据完整性整类 + rule 4 裁决落地，用户令自修）
 
 - **Verdict/Action**: 两条 Optional 收口。① `_receipt_id` 由「只封 `code_fingerprint + unittest_args`」改为**封整个 receipt body**，故 `tests` 等被引用字段不再能改而不破封，且将来新增字段自动进封；② 按用户裁决改 `AGENTS.md` rule 4——执行方跑全量、reviewer 引用其 ledger 不重跑，并明写「不是必须跑就不跑」。
