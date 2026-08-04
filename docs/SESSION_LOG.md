@@ -4,7 +4,7 @@
 
 - **Verdict/Action**: PASS，已提交并合入 master。三条 Required 全按指定形态修好：① 窗口对账复用同文件 `_canonical_moneyflow_dates`/`MONEYFLOW_FETCH_SESSIONS`，集合相等+行数=5+去重=5 三重校验，任一不满足即 fail-closed，覆盖计数已发布进契约；② 门降级 `production_effect_enabled=False`（选项 b），待频率证据再翻真；③ 不可达 held guard 已删并补真植入失败测试。上轮四条 Optional 也被一并收口。
 - **Required**: 无。三条 R-ID 均已 closed；对账矩阵、开关承重证明、伪造反控与仍为 NOT_VERIFIED 的边界见 `docs/system_risk_register.md`（单一来源，本处不复述）。
-- **Verify**: review-evidence:58d2c70395b6；亲跑九类 provider 形状全部 fail-closed（1场/3场/全重复/窗口外/6行/NaN/缺列/空/None 一律 `unknown`），5 场时单位精确 `-6.0e10` CNY。开关实测承重：同一封门事实下 `effect=False` → 建仓保留、`allocated=199520.0`；`effect=True` → 观察、`allocated=0.0`。伪造 `new_entry_blocked` 被 validator 拒。full lane `CACHED GREEN a_short = 2363 OK`（`+4` 全在 lane 选择器内）。真实 provider 部分覆盖现场与门的历史触发频率仍 `NOT_VERIFIED`。
+- **Verify**: review-evidence:58d2c70395b6；亲跑九类 provider 形状全部 fail-closed（1场/3场/全重复/窗口外/6行/NaN/缺列/空/None 一律 `unknown`），5 场时单位精确 `-6.0e10` CNY。开关实测承重：同一封门事实下 `effect=False` → 建仓保留、`allocated=199520.0`；`effect=True` → 观察、`allocated=0.0`。伪造 `new_entry_blocked` 被 validator 拒。full lane `CACHED GREEN a_short = 2363 OK`（`+4` 全在 lane 选择器内）。真实 provider 部分覆盖现场与门的历史触发频率仍 `NOT_VERIFIED`。超时原因:文档守卫两轮红（PASS header 含「修复」被判修复轮、Verify 超长）各返工一次，另一次 `cmd.exe` 调用挂死占掉 2 分钟。
 - **Next**: Codex：执行
 
 ## 2026-08-04 — Codex executor/fixer 修复批 1 Required + Optional（待 Claude Code 独立复审）
