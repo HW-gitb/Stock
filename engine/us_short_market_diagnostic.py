@@ -417,10 +417,16 @@ def _validate_benchmark(benchmark: Mapping[str, Any], strategy: Mapping[str, Any
 
 
 def _validate_rows(
-    rows: Sequence[Mapping[str, Any]], *, as_of_date: str | None = None
+    rows: Sequence[Mapping[str, Any]],
+    *,
+    as_of_date: str | None = None,
+    expected_weeks: int | None = WINDOW_WEEKS,
+    require_canonical_window: bool = True,
 ) -> dict[str, Any]:
-    if isinstance(rows, (str, bytes)) or not isinstance(rows, Sequence) or len(rows) != WINDOW_WEEKS:
-        _fail("a diagnostic window must contain exactly 26 weekly records")
+    if isinstance(rows, (str, bytes)) or not isinstance(rows, Sequence) or not rows:
+        _fail("diagnostic records must be a non-empty sequence")
+    if expected_weeks is not None and len(rows) != expected_weeks:
+        _fail(f"diagnostic records must contain exactly {expected_weeks} weekly records")
     if as_of_date is not None:
         as_of = _date8_value(as_of_date, "as_of_date")
     else:
@@ -485,13 +491,21 @@ def _validate_rows(
         normalized.append(row)
     start_week, end_week = weeks[0], weeks[-1]
     canonical_window = window_for_week(end_week)
-    if canonical_window is None or canonical_window["window_start_week"] != start_week:
-        _fail("window does not start on a canonical non-overlapping 26-week boundary")
-    canonical_window_id = canonical_window["window_id"]
-    if any(row["window_id"] != canonical_window_id for row in normalized):
-        _fail("window_id does not match the canonical 26-week clock")
+    if require_canonical_window:
+        if canonical_window is None or canonical_window["window_start_week"] != start_week:
+            _fail("window does not start on a canonical non-overlapping 26-week boundary")
+        canonical_window_id = canonical_window["window_id"]
+        if any(row["window_id"] != canonical_window_id for row in normalized):
+            _fail("window_id does not match the canonical 26-week clock")
+    else:
+        if start_week != 1:
+            _fail("since-inception records must start at calendar week 1")
+        if any(row["window_id"] != window_containing_week(week)["window_id"] for row, week in zip(normalized, weeks)):
+            _fail("window_id does not match the canonical 26-week clock")
+        if canonical_window is None:
+            canonical_window = window_containing_week(end_week)
     if len(set(epochs)) != 1:
-        _fail("diagnostic_epoch cannot be silently joined across one window")
+        _fail("diagnostic_epoch cannot be silently joined across one diagnostic sequence")
     _strategy_returns(normalized)
     return {
         "rows": normalized,
@@ -709,8 +723,10 @@ def evaluate_window_trigger(
     }
 
 
-def _full_metric(values: Sequence[float | None], function: Any) -> float | None:
-    if len(values) != WINDOW_WEEKS or any(value is None for value in values):
+def _full_metric(
+    values: Sequence[float | None], function: Any, *, expected_weeks: int = WINDOW_WEEKS
+) -> float | None:
+    if len(values) != expected_weeks or any(value is None for value in values):
         return None
     return function([value for value in values if value is not None])
 
@@ -729,7 +745,12 @@ def _average_ratio(rows: Sequence[Mapping[str, Any]], field: str) -> float | Non
     return sum(values) / len(values) if values else None
 
 
-def _summary_strategy(rows: Sequence[Mapping[str, Any]], strategy_returns: Sequence[float | None]) -> dict[str, Any]:
+def _summary_strategy(
+    rows: Sequence[Mapping[str, Any]],
+    strategy_returns: Sequence[float | None],
+    *,
+    expected_weeks: int = WINDOW_WEEKS,
+) -> dict[str, Any]:
     strategies = [_mapping(row["strategy"], "strategy") for row in rows]
     evaluable_weeks = sum(int(strategy["strategy_evaluable"]) for strategy in strategies)
     no_count_weeks = sum(int(strategy["no_count"]) for strategy in strategies)
@@ -755,18 +776,18 @@ def _summary_strategy(rows: Sequence[Mapping[str, Any]], strategy_returns: Seque
     return {
         "status": status,
         "final_nav": _money_text(_money(strategies[-1]["nav"], "strategy.nav")),
-        "cumulative_return": _full_metric(strategy_returns, cumulative_return),
-        "since_inception_return": _full_metric(strategy_returns, cumulative_return),
+        "cumulative_return": _full_metric(strategy_returns, cumulative_return, expected_weeks=expected_weeks),
+        "since_inception_return": _full_metric(strategy_returns, cumulative_return, expected_weeks=expected_weeks),
         "strategy_evaluable_weeks": evaluable_weeks,
         "no_count_weeks": no_count_weeks,
         "paper_degraded_weeks": paper_degraded_weeks,
-        "max_drawdown": _full_metric(strategy_returns, maximum_drawdown),
+        "max_drawdown": _full_metric(strategy_returns, maximum_drawdown, expected_weeks=expected_weeks),
         "cumulative_cost_paid": _money_text(cumulative_cost),
         "cash_ratio": _average_ratio(rows, "cash"),
         "equity_ratio": _average_ratio(rows, "market_value"),
         "turnover": turnover,
         "unfilled_order_count": unfilled_count,
-        "data_coverage": sum(value is not None for value in strategy_returns) / WINDOW_WEEKS,
+        "data_coverage": sum(value is not None for value in strategy_returns) / expected_weeks,
     }
 
 
@@ -774,6 +795,8 @@ def _benchmark_summary(
     rows: Sequence[Mapping[str, Any]],
     strategy_returns: Sequence[float | None],
     symbol: str,
+    *,
+    expected_weeks: int = WINDOW_WEEKS,
 ) -> tuple[dict[str, Any], str | None]:
     observations = [_mapping(row["benchmarks"][symbol], f"benchmarks.{symbol}") for row in rows]
     benchmark_returns: list[float | None] = [
@@ -802,7 +825,7 @@ def _benchmark_summary(
         observation["benchmark_evaluable"] and observation["return_quality"] == "price_return_diagnostic"
         for observation in observations
     )
-    unavailable_count = WINDOW_WEEKS - benchmark_evaluable_count
+    unavailable_count = expected_weeks - benchmark_evaluable_count
     quality_degraded = any(
         observation["return_quality"] == "price_return_diagnostic" or not observation["benchmark_evaluable"]
         for observation in observations
@@ -836,7 +859,7 @@ def _benchmark_summary(
     )
     summary = {
         "role": BENCHMARK_ROLES[symbol],
-        "cumulative_return": _full_metric(benchmark_returns, cumulative_return),
+        "cumulative_return": _full_metric(benchmark_returns, cumulative_return, expected_weeks=expected_weeks),
         "relative_wealth": relative_wealth,
         "raw_excess": raw_excess,
         "information_ratio": information_ratio(joint_excesses),
@@ -845,8 +868,8 @@ def _benchmark_summary(
         "total_return_evaluable_weeks": total_count,
         "price_only_weeks": price_only_count,
         "unavailable_weeks": unavailable_count,
-        "max_drawdown": _full_metric(benchmark_returns, maximum_drawdown),
-        "data_coverage": benchmark_evaluable_count / WINDOW_WEEKS,
+        "max_drawdown": _full_metric(benchmark_returns, maximum_drawdown, expected_weeks=expected_weeks),
+        "data_coverage": benchmark_evaluable_count / expected_weeks,
         "status": status,
     }
     return summary, status
@@ -868,6 +891,27 @@ def _overall_status(benchmark_statuses: Mapping[str, str]) -> tuple[str, str]:
     return "mixed_across_benchmarks", "benchmark_directions_are_not_uniform"
 
 
+def _performance_metrics(
+    rows: Sequence[Mapping[str, Any]], *, expected_weeks: int
+) -> tuple[dict[str, Any], dict[str, dict[str, Any]], str, str]:
+    strategy_returns = _strategy_returns(rows)
+    strategy_summary = _summary_strategy(rows, strategy_returns, expected_weeks=expected_weeks)
+    benchmark_summaries: dict[str, dict[str, Any]] = {}
+    benchmark_statuses: dict[str, str] = {}
+    for symbol in BENCHMARKS:
+        summary, status = _benchmark_summary(
+            rows,
+            strategy_returns,
+            symbol,
+            expected_weeks=expected_weeks,
+        )
+        benchmark_summaries[symbol] = summary
+        assert status is not None
+        benchmark_statuses[symbol] = status
+    overall_status, reason = _overall_status(benchmark_statuses)
+    return strategy_summary, benchmark_summaries, overall_status, reason
+
+
 def summarize_window(
     rows: Sequence[Mapping[str, Any]], *, as_of_date: str | None = None
 ) -> dict[str, Any]:
@@ -875,15 +919,10 @@ def summarize_window(
 
     validated = _validate_rows(rows, as_of_date=as_of_date)
     normalized = validated["rows"]
-    strategy_returns = _strategy_returns(normalized)
-    strategy_summary = _summary_strategy(normalized, strategy_returns)
-    benchmark_summaries: dict[str, dict[str, Any]] = {}
-    benchmark_statuses: dict[str, str] = {}
-    for symbol in BENCHMARKS:
-        summary, status = _benchmark_summary(normalized, strategy_returns, symbol)
-        benchmark_summaries[symbol] = summary
-        benchmark_statuses[symbol] = status
-    overall_status, reason = _overall_status(benchmark_statuses)
+    strategy_summary, benchmark_summaries, overall_status, reason = _performance_metrics(
+        normalized,
+        expected_weeks=WINDOW_WEEKS,
+    )
     reminders = [_mapping(row["v1_1_reminder"], "v1_1_reminder") for row in normalized]
     reminder = dict(reminders[-1])
     source_digests: list[str] = []
@@ -913,6 +952,43 @@ def summarize_window(
     }
 
 
+def summarize_since_inception(
+    rows: Sequence[Mapping[str, Any]], *, as_of_date: str | None = None
+) -> dict[str, Any]:
+    """Build de-identified performance metrics from week 1 through the latest supplied week.
+
+    This is intentionally separate from ``summarize_window``: a fixed report block is
+    exactly 26 weeks, while since-inception may contain 26, 52, 78, or more weeks.
+    The same row validation and metric/status functions are reused so the two views
+    cannot silently develop different calculation rules.
+    """
+
+    validated = _validate_rows(
+        rows,
+        as_of_date=as_of_date,
+        expected_weeks=None,
+        require_canonical_window=False,
+    )
+    normalized = validated["rows"]
+    expected_weeks = len(normalized)
+    strategy_summary, benchmark_summaries, overall_status, reason = _performance_metrics(
+        normalized,
+        expected_weeks=expected_weeks,
+    )
+    return {
+        "diagnostic_epoch": validated["diagnostic_epoch"],
+        "calendar_week_count": expected_weeks,
+        "through_calendar_week": validated["end_week"],
+        "through_window_id": window_containing_week(validated["end_week"])["window_id"],
+        "mixed_ruleset_window": mixed_ruleset_window(normalized),
+        "strategy": strategy_summary,
+        "benchmarks": benchmark_summaries,
+        "overall_status": overall_status,
+        "status_reason": reason,
+        "ruleset_fingerprints": ruleset_fingerprints(normalized),
+    }
+
+
 __all__ = [
     "BENCHMARKS",
     "BENCHMARK_ROLES",
@@ -935,6 +1011,7 @@ __all__ = [
     "newey_west_hac_t",
     "ruleset_fingerprints",
     "segment_epoch_and_ruleset",
+    "summarize_since_inception",
     "summarize_window",
     "validate_weekly_record",
     "validate_window",

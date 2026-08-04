@@ -1,0 +1,239 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://stock.local/schemas/us_short_market_diagnostic_report.schema.json",
+  "title": "US-short 26-week market diagnostic report",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_name",
+    "schema_version",
+    "window_summary",
+    "since_inception",
+    "ruleset_segments",
+    "boundary"
+  ],
+  "properties": {
+    "schema_name": {"const": "us_short_market_diagnostic_report"},
+    "schema_version": {"const": "1.0.0"},
+    "window_summary": {
+      "$ref": "https://stock.local/schemas/us_short_market_diagnostic_summary.schema.json"
+    },
+    "since_inception": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "diagnostic_epoch",
+        "calendar_week_count",
+        "through_calendar_week",
+        "through_window_id",
+        "mixed_ruleset_window",
+        "strategy",
+        "benchmarks",
+        "overall_status",
+        "status_reason",
+        "ruleset_fingerprints"
+      ],
+      "properties": {
+        "diagnostic_epoch": {"type": "string", "minLength": 1},
+        "calendar_week_count": {"type": "integer", "minimum": 1},
+        "through_calendar_week": {"type": "integer", "minimum": 1},
+        "through_window_id": {"type": "string", "pattern": "^26w-[1-9][0-9]*-[1-9][0-9]*$"},
+        "mixed_ruleset_window": {"type": "boolean"},
+        "strategy": {"$ref": "https://stock.local/schemas/us_short_market_diagnostic_report.schema.json#/definitions/since_inception_strategy"},
+        "benchmarks": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["VTI", "IWB", "SPY", "QQQ"],
+          "properties": {
+            "VTI": {"$ref": "https://stock.local/schemas/us_short_market_diagnostic_report.schema.json#/definitions/since_inception_benchmark"},
+            "IWB": {"$ref": "https://stock.local/schemas/us_short_market_diagnostic_report.schema.json#/definitions/since_inception_benchmark"},
+            "SPY": {"$ref": "https://stock.local/schemas/us_short_market_diagnostic_report.schema.json#/definitions/since_inception_benchmark"},
+            "QQQ": {"$ref": "https://stock.local/schemas/us_short_market_diagnostic_report.schema.json#/definitions/since_inception_benchmark"}
+          }
+        },
+        "overall_status": {
+          "enum": [
+            "ahead_diagnostic",
+            "behind_diagnostic",
+            "mixed_across_benchmarks",
+            "data_insufficient",
+            "data_degraded",
+            "unavailable"
+          ]
+        },
+        "status_reason": {"type": "string", "minLength": 1},
+        "ruleset_fingerprints": {
+          "type": "array",
+          "items": {"$ref": "https://stock.local/schemas/us_short_market_diagnostic_report.schema.json#/definitions/sha256"},
+          "minItems": 1,
+          "uniqueItems": true
+        }
+      }
+    },
+    "ruleset_segments": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["fixed_window", "since_inception"],
+      "properties": {
+        "fixed_window": {
+          "type": "array",
+          "minItems": 1,
+          "items": {"$ref": "https://stock.local/schemas/us_short_market_diagnostic_report.schema.json#/definitions/ruleset_segment"}
+        },
+        "since_inception": {
+          "type": "array",
+          "minItems": 1,
+          "items": {"$ref": "https://stock.local/schemas/us_short_market_diagnostic_report.schema.json#/definitions/ruleset_segment"}
+        }
+      }
+    },
+    "boundary": {"$ref": "https://stock.local/schemas/us_short_market_diagnostic_report.schema.json#/definitions/boundary"}
+  },
+  "definitions": {
+    "sha256": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{64}$"
+    },
+    "money": {
+      "type": "string",
+      "pattern": "^(0|[1-9][0-9]*)\\.[0-9]{6}$"
+    },
+    "number_or_null": {
+      "type": ["number", "null"]
+    },
+    "ratio_or_null": {
+      "anyOf": [
+        {"type": "number", "minimum": 0, "maximum": 1},
+        {"type": "null"}
+      ]
+    },
+    "nonnegative_number_or_null": {
+      "anyOf": [
+        {"type": "number", "minimum": 0},
+        {"type": "null"}
+      ]
+    },
+    "since_inception_strategy": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "status",
+        "final_nav",
+        "cumulative_return",
+        "since_inception_return",
+        "strategy_evaluable_weeks",
+        "no_count_weeks",
+        "paper_degraded_weeks",
+        "max_drawdown",
+        "cumulative_cost_paid",
+        "cash_ratio",
+        "equity_ratio",
+        "turnover",
+        "unfilled_order_count",
+        "data_coverage"
+      ],
+      "properties": {
+        "status": {"enum": ["evaluable", "diagnostic_data_degraded", "not_evaluable"]},
+        "final_nav": {"$ref": "https://stock.local/schemas/us_short_market_diagnostic_report.schema.json#/definitions/money"},
+        "cumulative_return": {"$ref": "https://stock.local/schemas/us_short_market_diagnostic_report.schema.json#/definitions/number_or_null"},
+        "since_inception_return": {"$ref": "https://stock.local/schemas/us_short_market_diagnostic_report.schema.json#/definitions/number_or_null"},
+        "strategy_evaluable_weeks": {"type": "integer", "minimum": 0},
+        "no_count_weeks": {"type": "integer", "minimum": 0},
+        "paper_degraded_weeks": {"type": "integer", "minimum": 0},
+        "max_drawdown": {"$ref": "https://stock.local/schemas/us_short_market_diagnostic_report.schema.json#/definitions/number_or_null"},
+        "cumulative_cost_paid": {"anyOf": [{"$ref": "https://stock.local/schemas/us_short_market_diagnostic_report.schema.json#/definitions/money"}, {"type": "null"}]},
+        "cash_ratio": {"$ref": "https://stock.local/schemas/us_short_market_diagnostic_report.schema.json#/definitions/ratio_or_null"},
+        "equity_ratio": {"$ref": "https://stock.local/schemas/us_short_market_diagnostic_report.schema.json#/definitions/ratio_or_null"},
+        "turnover": {"$ref": "https://stock.local/schemas/us_short_market_diagnostic_report.schema.json#/definitions/nonnegative_number_or_null"},
+        "unfilled_order_count": {"anyOf": [{"type": "integer", "minimum": 0}, {"type": "null"}]},
+        "data_coverage": {"$ref": "https://stock.local/schemas/us_short_market_diagnostic_report.schema.json#/definitions/ratio_or_null"}
+      }
+    },
+    "since_inception_benchmark": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "role",
+        "cumulative_return",
+        "relative_wealth",
+        "raw_excess",
+        "information_ratio",
+        "hac_t",
+        "joint_evaluable_weeks",
+        "total_return_evaluable_weeks",
+        "price_only_weeks",
+        "unavailable_weeks",
+        "data_coverage",
+        "status"
+      ],
+      "properties": {
+        "role": {"enum": [
+          "ship_gate_economic_continuity",
+          "russell_1000_investable_proxy",
+          "broad_large_cap_sensitivity",
+          "growth_technology_sensitivity"
+        ]},
+        "cumulative_return": {"$ref": "https://stock.local/schemas/us_short_market_diagnostic_report.schema.json#/definitions/number_or_null"},
+        "relative_wealth": {"$ref": "https://stock.local/schemas/us_short_market_diagnostic_report.schema.json#/definitions/number_or_null"},
+        "raw_excess": {"$ref": "https://stock.local/schemas/us_short_market_diagnostic_report.schema.json#/definitions/number_or_null"},
+        "information_ratio": {"$ref": "https://stock.local/schemas/us_short_market_diagnostic_report.schema.json#/definitions/number_or_null"},
+        "hac_t": {"$ref": "https://stock.local/schemas/us_short_market_diagnostic_report.schema.json#/definitions/number_or_null"},
+        "joint_evaluable_weeks": {"type": "integer", "minimum": 0},
+        "total_return_evaluable_weeks": {"type": "integer", "minimum": 0},
+        "price_only_weeks": {"type": "integer", "minimum": 0},
+        "unavailable_weeks": {"type": "integer", "minimum": 0},
+        "max_drawdown": {"$ref": "https://stock.local/schemas/us_short_market_diagnostic_report.schema.json#/definitions/number_or_null"},
+        "data_coverage": {"$ref": "https://stock.local/schemas/us_short_market_diagnostic_report.schema.json#/definitions/ratio_or_null"},
+        "status": {"enum": [
+          "ahead_diagnostic",
+          "behind_diagnostic",
+          "flat_diagnostic",
+          "mixed_across_benchmarks",
+          "data_insufficient",
+          "data_degraded",
+          "unavailable"
+        ]}
+      }
+    },
+    "ruleset_segment": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "diagnostic_epoch",
+        "strategy_ruleset_fingerprint",
+        "start_week",
+        "end_week",
+        "calendar_weeks",
+        "strategy_evaluable_weeks"
+      ],
+      "properties": {
+        "diagnostic_epoch": {"type": "string", "minLength": 1},
+        "strategy_ruleset_fingerprint": {"$ref": "https://stock.local/schemas/us_short_market_diagnostic_report.schema.json#/definitions/sha256"},
+        "start_week": {"type": "integer", "minimum": 1},
+        "end_week": {"type": "integer", "minimum": 1},
+        "calendar_weeks": {"type": "integer", "minimum": 1},
+        "strategy_evaluable_weeks": {"type": "integer", "minimum": 0}
+      }
+    },
+    "boundary": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "diagnostic_only",
+        "comparison_only",
+        "counts_ship_gate",
+        "changes_selection_or_action",
+        "automatic_policy_switch",
+        "broker_or_order_automation"
+      ],
+      "properties": {
+        "diagnostic_only": {"const": true},
+        "comparison_only": {"const": true},
+        "counts_ship_gate": {"const": false},
+        "changes_selection_or_action": {"const": false},
+        "automatic_policy_switch": {"const": false},
+        "broker_or_order_automation": {"const": false}
+      }
+    }
+  }
+}

@@ -116,6 +116,22 @@
 - **Required**: 无，未新开 register 条目。纯新增、零改动既有文件。**但 raw 里浮出两件本探针按设计不回答的事，留给刀③**：①**语料是否 current 未证**——返回序是**任意序**（日期在 2007–2025 间乱跳，非按日期排）且四只全带 `next_url`，故 10 行只是大语料里的任意一页；样本里最新只到 `2025-12-22`（QQQ），但这是抽样假象而非陈旧证据，两个方向都没证。该未知**不需要再起探针**：刀③ 本来就用按 `ex_dividend_date` 窗口过滤的市场级查询，那正是能回答它的查询形状；配一条「26 周窗口内基准季付票应 ≥1 个除息日，为 0 即 `not_evaluable`」的 fail-closed 断言即可把它转成运行时门。②**分红字段有两个口径**——`cash_amount` 与 `split_adjusted_cash_amount` 并存，另有 `historical_adjustment_factor`；因基准价格序列走 Massive grouped 已是拆股复权，总回报要自洽就必须选**拆股复权那一支**，刀① 冻口径时须显式指定、不得靠默认。另记一条小异常：`IWB` 的 `frequency=0`（其余三只为 4），不影响本腿（只用 ex-date + cash），但刀③ 不得依赖 `frequency`。
 - **Verify**: 本轮未注入 review-evidence token，故不引用。新包 `13 OK / 0.24s`；`git status` = 恰 3 个新文件 + README 一行，**零既有文件被改**，故按改动性质未起 lane 全量（覆盖范围就是本模块自身）。**植入对照**（不采信自指断言）：从 `_coverage_verdict` 摘掉 `matched_rows != row_count` 那道门 → 端到端用例 `test_provider_ignoring_the_ticker_filter_is_not_read_as_covered` 与阶梯用例**双双转红**（`covered` vs `rows_do_not_match_queried_ticker`），恢复后 13 OK。真实 `--dry-run-env` 实跑：`MASSIVE_API_KEY present: True` / `raw root gitignored: True` / `planned calls: 4 (max 4)`，即真跑前置条件已具备。
 - **Next**: 刀①（方法冻结）。分红源已定为 Massive，冻口径时须落定「用 `split_adjusted_cash_amount`」与「窗口内零基准除息日即 `not_evaluable`」两条。方案全文在桌面 `usshort-compare.md`（按用户令不进仓库）。
+## 2026-08-04 — Claude Code 审查 PASS（26 周诊断轨 刀4：聚合器 + 放松类改动经反向控制确认被围住）
+
+- **Verdict/Action**: PASS。本刀含放松类改动（`_validate_rows` 新增 `expected_weeks`/`require_canonical_window`，可跳过「恰 26 行」与刀1 的 canonical 锚点门），理由正当（§2.1/§8.2 的 since-inception 双输出）且默认值未动；`expected_weeks` 由 `len(normalized)` 内部推出，覆盖率分母喂不错；两个视图形状分离，since-inception 冒充不了固定区块摘要。
+- **Required**: 无。反向控制判据与一条沿用 Optional 只见 `docs/system_risk_register.md`（单一来源）。
+- **Verify**: review-evidence:fc224a344a23。焦点超集包 `108 OK / 7.7s / exit 0`。按不可删规则对放松腿自写五项反向控制：固定区块路仍拒 weeks 5–30（刀1 成果未被重构冲掉）与 20 行；since-inception 拒非第 1 周起点（放松的门被换成另一条真约束、非净减）与周序断档；正向腿未误伤，5 周 since-inception 得 `data_insufficient` 且 `data_coverage` 分母取实际长度。另脚本递归扫描新报告 schema：逐层 `additionalProperties:false` 零开放对象，且已进 `SCHEMA_NAMES` 受刀0 闭世界测试覆盖。
+- **Next**: 提交并合入 master。
+
+
+## 2026-08-04 — Codex executor/fixer 执行刀4（独立复审未完成）
+
+- **Verdict/Action**：刀4 26 周聚合与发布已落地；新增固定 26 周区块 + since-inception 双视图、四基准并列、ruleset 分段、去标识化 JSON/Markdown、幂等与半成品/冲突保护。当前真实 model-paper 私有根尚未启动，未生成真实成绩单、未播种 10 万美元账户，未联网、未调用 provider、未写真实账户。
+- **Required**：无新增自审 Required；刀4 仍需 Claude Code 独立复审，不能把本轮执行证据写成 PASS 或已提交。
+- **Verify**：固定 Python 相关回归包 `75 OK / exit 0`（聚合器、诊断引擎、lifecycle、本地适配、model-paper 读路径、schema）；文档治理包 `66 OK / exit 0`；`py_compile`、源码导入/闭世界 schema/编码探针和 `git diff --check` 通过。新增刀4测试覆盖未启动、25周不发布、26/52周双视图、发布幂等、半成品/冲突拒绝与 lifecycle 整链路。
+- **Pre-Codex self-review**：`matrix=Knife3 settled records -> canonical 26/52/78 boundary -> fixed/since-inception summaries -> JSON/Markdown pair`; `report=Draft7 + closed-world + four benchmarks`; `boundary=diagnostic_only/comparison_only/no_selection_action/no_ship_gate`; `focused=75 OK`; `door=doc-governance=66 OK`; `full-lane=not_triggered: diagnostic-only report slice`; `review=NOT_VERIFIED`; `commit=NOT_PERFORMED`; `provider/network/paid=NOT_USED`; `real_account_write=NOT_USED`。
+- **Next**：Claude Code：独立复审当前工作树的 Knife4 聚合器、schema、测试和文档改动。
+
 ## 2026-08-04 — Claude Code 复审 PASS（26 周诊断轨 刀3：窗口算术回到单一来源）
 
 - **Verdict/Action**: PASS。新增 `window_containing_week` 作唯一边界来源，`26w-` 前缀与 `//`/`+` 算术都只剩它一份；`validate_weekly_record`、`window_for_week`、lifecycle `_register_from_records` 三处全部改为委托，lifecycle 里写死的 26/25 已清除。

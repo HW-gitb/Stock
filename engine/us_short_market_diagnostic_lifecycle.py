@@ -374,6 +374,14 @@ def load_lifecycle_register(root: str | Path = DEFAULT_ROOT) -> dict[str, Any]:
     return register
 
 
+def load_settled_weekly_records(root: str | Path = DEFAULT_ROOT) -> list[dict[str, Any]]:
+    """Load every settled diagnostic week after revalidating the private register and records."""
+
+    store_root = _private_root(root)
+    register = load_lifecycle_register(store_root)
+    return _load_records_for_register(store_root, register)
+
+
 def _load_existing_records(store_root: Path) -> tuple[dict[str, Any] | None, list[dict[str, Any]]]:
     register_path = _private_path(store_root, REGISTER_FILENAME)
     if register_path.is_file():
@@ -511,6 +519,7 @@ __all__ = [
     "build_v1_1_reminder",
     "build_weekly_report_reminder",
     "load_lifecycle_register",
+    "load_settled_weekly_records",
     "persist_settled_weekly_record",
     "render_weekly_report_reminder",
 ]

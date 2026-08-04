@@ -16,6 +16,7 @@ SCHEMA_NAMES = [
     "us_short_market_diagnostic_summary.schema.json",
     "us_short_market_diagnostic_local_price_packet.schema.json",
     "us_short_market_diagnostic_lifecycle_register.schema.json",
+    "us_short_market_diagnostic_report.schema.json",
 ]
 
 
@@ -355,6 +356,17 @@ class UsShortMarketDiagnosticSchemaTest(unittest.TestCase):
         forged = copy.deepcopy(_summary())
         forged["extra"] = True
         self.assertTrue(list(Draft7Validator(schema).iter_errors(forged)))
+
+    def test_report_schema_keeps_fixed_and_since_inception_views_separate(self) -> None:
+        schema = _schema(SCHEMA_NAMES[5])
+        self.assertEqual(
+            ["window_summary", "since_inception", "ruleset_segments", "boundary"],
+            schema["required"][2:],
+        )
+        self.assertIn("since_inception_strategy", schema["definitions"])
+        self.assertIn("since_inception_benchmark", schema["definitions"])
+        self.assertIn("fixed_window", schema["properties"]["ruleset_segments"]["required"])
+        self.assertIn("since_inception", schema["properties"]["ruleset_segments"]["required"])
 
 
 if __name__ == "__main__":
