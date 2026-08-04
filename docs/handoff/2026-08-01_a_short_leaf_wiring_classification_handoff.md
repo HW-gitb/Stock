@@ -1304,3 +1304,88 @@ Claude Code：独立审查 `R-ASHORT-KNIFE12-NORTHBOUND-MARKET-WIRING` 及 `R-AS
 - 固定 Python `py_compile` exit `0`；序 20 static scan 只有 1 条边界 docstring `egs` 命中，逐项 EGS 依赖判定均为“否”；effect contract static error 为 `None`。
 - NOT_VERIFIED：Claude Code 独立审查、真实 provider/live/真实周跑和触发频率（历史结构化 facts 为 0 周）尚未验证；full/focused 绿不等于 review/live/ship-gate PASS。
 - 审查/提交边界：当前工作树仍未 commit/push/merge，未启动 sub-agent；下一步由 reviewer 独立审查两条 register，PASS 后按项目规则提交，executor 不提交。
+
+## 2026-08-04 追加：序 18（#14 短史候选降级）与序 21（全市场两融端点形状探针）执行方案起草
+
+用户令「起草 #14」+「起草两融探针」。两把**不同批**：#14 纯离线改准入判据，探针是取数刀，性质与授权边界都不同。序 21 的授权范围由 reviewer 自行拍板（见该节），不再回问用户。
+
+---
+
+### 序 18 · #14 短史候选降级（★★☆☆☆，1 刀）
+
+**已定口径（2026-08-04 用户裁决，实现不得再自行解释）**
+
+走**降级**不走排除：可用收盘价不足门槛的候选**仍进打分池参与排名**（`full_count` 不得因此变化），但**禁止进入 Tier1 与最终建议**。理由：61 根这条线的含义是「技术指标算不稳」而非「这票不好」，直接排除会系统性错过次新股。
+
+**起草时的实读事实（实现方须复核，不得直接采信）**
+
+1. 判据已存在但**只产计数、不产逐票事实**：`A-EGS/egs_main.py:4753 _short_history_candidate_count(df_stocks, stats_df)` 取主板 code ∩ `stats_df.price_observation_count`，用 `observations.between(1, DAILY_STATS_REQUIRED_CLOSES - 1, inclusive="both").sum()` 得一个整数。阈值常量在 `:3131`：`DAILY_STATS_REQUIRED_CLOSES = DAILY_STATS_MAX_LOOKBACK_SESSIONS + 1`。
+2. **调节表里没有任何「历史不足」处置**：实读 `result/a_short/20260803/rank_universe_reconciliation.csv`，1437 只 L0 的 reason 只有 `l1_industry_leader_elim` 351、`l2_crash_veto` 251、`l2_margin_growth_veto` 8、`l2_espq_valuation_veto` 8。即这 33 只（占打分池 `full_count=819` 的 4.0%）照常参与排名。
+3. 本周 15 只入选票 `price_observation_count` 全为 64-65 根——**是没撞上，不是被拦住**。
+4. Tier1 产出点为 `A-EGS/egs_main.py:6377` 的 `tier1_final, cninfo_checked, cninfo_health = stage3_ai_clearing(...)`；观察池选择器为 `:121` 导入的 `select_profile_watch_pool`。
+
+**实现范围**
+
+1. **计数升为逐票事实**：在 `stats_df` 已有的 `price_observation_count` 基础上派生 per-candidate 短史标记。**必须复用 `DAILY_STATS_REQUIRED_CLOSES` 这一个常量**，不得另立阈值；判据须与 `_short_history_candidate_count` 逐字同口径，否则计数与标记会各说各话。
+2. **降级点**：禁止短史票进入 Tier1 与最终建议，但**不得**把它们移出打分池。接缝候选为 `stage3_ai_clearing`（`:6377`）与 `select_profile_watch_pool`；**实现方必须在 handoff 写明最终绑到哪一处及为什么**，不得两处都改。
+3. **调节表出理由**：`rank_universe_reconciliation.csv` 必须出现可识别的短史处置理由，**不得复用** `l2_crash_veto` 等既有理由，也不得让这些票在表里显示为普通 `ranked`。
+4. **0 观测的处置必须显式定义**：现判据是 `between(1, N-1)`，即 `price_observation_count == 0` 的票**不在计数内**。本刀须明确 0 根票走哪条路（大概率应与短史同等或更严），并写进 handoff；不得默认放行。
+5. **计数一致性断言**：`data_health.short_history_candidate_count` 与逐票标记数必须相等，加一条断言防止两者漂移。
+6. **契约**：若新增 `analysis_input` 叶，必须**同刀接上消费者**并重封指纹（`leaf_effect_overrides` + `decision_predicate_sha256`），照 #06 / 序 12 的做法——只填真值不接消费者会立刻造出 `true_dangling` 叶。
+
+**验收（正控 + 三反控 + 一植入）**
+
+| # | 类型 | 断言 |
+|---|---|---|
+| ① | 正控 | 造一只 `price_observation_count=40` 的票 → **拿不到 Tier1/最终席位**，但仍出现在打分池（`full_count` 计入）且在调节表里带短史理由 |
+| ② | 反控·满历史 | `price_observation_count=65` 的票 → 名次、席位、现金结果**逐字段不变** |
+| ③ | 反控·边界 | 恰好 `= DAILY_STATS_REQUIRED_CLOSES` 根 → **正常通过**（不得把边界值误判成短史） |
+| ④ | 反控·退化输入 | `price_observation_count` 为 0 / 缺列 / 非数值 → 按第 4 条既定口径处置，且**不得崩** |
+| ⑤ | 植入控制 | 摘掉降级腿 → ① 的正控必须转红 |
+
+**测试落点**：新增用例必须落在 `test_a_short*.py` 选择器内。
+
+**边界（不得扩大）**：不排除候选、不改 EGS 打分/权重/TopN 排序、不改 `DAILY_STATS_REQUIRED_CLOSES` 的值、不改主板范围判据（`is_a_share_main_board`）、不动 M6.7 操作判定与已有持仓处置、不碰 provider 参数与 PIT 窗口、不并入 #16 或 #02。
+
+---
+
+### 序 21 · 全市场两融端点形状探针（★☆☆☆☆，1 刀，取数）
+
+**目标**：查清「全市场两融余额」的端点、权限、字段名、单位与历史深度，产一张**真实形状表**。序 19（#16 融资过热接线）与北向回看统计两把都要靠它写代码。**本刀只产形状与结论，不写任何消费代码。**
+
+**为什么必须先探**：`#07(b)` 的教训——实现方假设 cninfo `orgId` 是 `gss[hz]` 格式直接写解析，真实数据里纯数字占 56%，规范化后丢弃 77.5% 的行，赔进一个完整 FAIL 轮。全市场两融是**全新端点**，端点名、权限、字段、历史深度四样全未知，正是同一形状的坑。
+
+**已实读的边界事实**
+
+- `A-EGS/egs_main.py:228` 的 `EGS_API_FAMILIES` 已含 `margin_detail`（**逐票**两融），即该家族已在授权范围内；**市场层总量是另一个端点，权限未知**。
+- 逐票两融的既有消费者是 v14.2 `:288`（融资余额>流通市值 12%→盈亏比 2.0:1）与 `:324`（融资余额占流通市值比因子>8%），与本条要的**全市场历史分位**不是一回事。
+
+**授权范围（reviewer 自行拍板，实现方不得扩大）**
+
+- **端点白名单**：`pro.margin`（交易所层两融汇总）为主目标；若其不可用，允许再探一次 `pro.margin_detail` 的**聚合可行性**（只取一个日期看能否按市场求和），不得逐日全量拉取。
+- **调用次数上限 12 次**，超出即中止并如实记录。
+- **日期点 ≤5**：3 个近期交易日（验字段与单位）+ 2 个远期日期（验历史深度，建议取约 1 年前与约 3 年前各一个）。
+- **不得**做全历史序列拉取、不得写分位计算、不得接任何消费者、不得改 EGS/pipeline/schema。
+
+**实现范围（模板复用 `runners/a_short_rule6_tushare_d_tier_probe.py`）**
+
+1. 新建 `runners/a_short_margin_market_shape_probe.py`，沿用该模板的骨架：`RAW_ROOT = provider_samples/a_short_margin_market_shape_probe_<PROBE_DATE>/`（**gitignored**）、`SUMMARY_PATH = docs/a_short_margin_market_shape_probe_summary_<PROBE_DATE>.json`（tracked）、`_shape()` / `_error_category()` / `run_probe(pro_client, raw_root)` / `main(argv)`。
+2. **tracked summary 只许含**：端点名、是否需要 `exchange` 参数、HTTP/API 状态、返回列名清单、行数、每列的类型与是否全空、单位线索（字段名或文档措辞）、历史深度判定（远期日期是否有数据）、限频观察。**不得含** token、请求 URL、任何 raw 行值。
+3. **失败分类必须可分辨四类**：无权限 / 端点不存在 / 限频 / 空数据。混成一个「失败」等于没探。
+4. **单位必须探明并写进结论**：两融余额常见为元或万元；这一条若留空，序 19 会重蹈北向「万元当元」的覆辙。
+5. **产出结论写回本 handoff**：字段名→用途映射、单位、可用历史深度（决定分位窗口能开多长）、限频、以及「序 19 与北向回看能否共用同一取数脚手架」的判定。
+
+**验收**
+
+| 场景 | 必须满足 |
+|---|---|
+| 密钥卫生 | tracked summary 过 secret scan：无 token / 无请求 URL / 无 raw 行；raw 全部落在 gitignored 根 |
+| 调用预算 | 实际调用次数 ≤12 并如实记录；超限中止 |
+| 失败可分辨 | 四类失败各自有独立 `error_category`，不得合并 |
+| 结论完整 | 字段名、单位、历史深度、限频四项齐全；任一探不到须明写「未探明」及原因，不得留空或猜 |
+
+**边界**：不写分位计算、不接消费者、不改 `EGS_API_FAMILIES` 之外的行为、不改任何生产 runner/schema、不做全历史拉取。探针结论出来之前，**序 19 与北向回看统计两把都不得开工**。
+
+---
+
+**批次安排**：序 18 与序 21 **不同批、可并行**——前者纯离线改准入，后者是取数刀，两者不碰同一处代码。序 21 回来后，序 19（#16）与北向回看统计**才**可以合批写代码（共用同一套「历史序列→统计」脚手架）。
