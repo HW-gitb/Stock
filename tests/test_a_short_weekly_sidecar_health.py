@@ -318,6 +318,53 @@ class AShortSidecarHealthTests(unittest.TestCase):
         self.assertIsNone(persisted["candidate_digest"])
         self.assertEqual(len(persisted["source_receipt_sha256"]), 64)
 
+    def test_failed_receipt_keeps_successful_launcher_sidecars_and_surfaces_missing_pipeline_outcomes(self):
+        pipeline_names = [
+            "official_operation_capture",
+            "official_operation_settlement",
+            "factor_v2_capture",
+            "industry_weight_capture",
+            "industry_weight_settlement",
+            "target_policy_capture",
+            "final_action_capture",
+            "overlay_adjudication_capture",
+            "overlay_adjudication_settlement",
+        ]
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            out_dir = root / "20260727"
+            out_dir.mkdir(parents=True)
+            (out_dir / "weekly_m67.receipt.json").write_text(json.dumps({
+                "schema_name": "a_short_weekly_publish_receipt",
+                "schema_version": "1.1.0",
+                "as_of": "20260727",
+                "stage_status": "failed",
+                "failure_reason": "weekly_pipeline_failed",
+                "exit_code": 37,
+            }), encoding="utf-8")
+            launcher = _manifest(
+                [_row("data_canary")],
+                expected=["data_canary", *pipeline_names],
+            )
+            result = build_health(
+                as_of="20260727",
+                launcher_manifest=launcher,
+                project_root=root,
+                m67_out_dir=out_dir,
+                m67_invocation="requested",
+            )
+        self.assertEqual(result["m67_status"], "failed")
+        self.assertEqual(result["overall"], "degraded")
+        self.assertEqual(result["failed_count"], len(pipeline_names))
+        self.assertEqual(len(result["sidecars"]), 1 + len(pipeline_names))
+        by_name = {row["name"]: row for row in result["sidecars"]}
+        self.assertEqual(by_name["data_canary"]["execution_status"], "succeeded")
+        for name in pipeline_names:
+            self.assertEqual(by_name[name]["execution_status"], "missing_outcome")
+            self.assertEqual(by_name[name]["error_code"], "missing_outcome")
+            self.assertFalse(by_name[name]["attempted"])
+        self.assertEqual(len(result["source_receipt_sha256"]), 64)
+
     def test_empty_sidecars_are_rejected_for_complete_health(self):
         with tempfile.TemporaryDirectory() as tmp:
             out_dir = _write_valid_weekly_bundle(Path(tmp))
