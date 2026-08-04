@@ -1,5 +1,35 @@
 # Session Log
 
+## 2026-08-04 — Claude Code 复审 PASS（26 周诊断轨 刀1：计算路的窗口锚点已自守）
+
+- **Verdict/Action**: PASS。`_validate_rows` 不再自拼 `f"26w-{start}-{end}"`，改调 `window_for_week(end_week)` 并要求非 `None` 且起点相符，触发路与计算路共用同一份边界算术。实测全仓只剩 `window_for_week` 内一处 `26w-{...}` 字面量。
+- **Required**: 无新开。`R-USSHORT-26W-DIAG-KNIFE1-COMPUTE-PATH-DOES-NOT-ENFORCE-CANONICAL-WINDOW-ANCHOR` 转 resolved；判据与遗留 Optional 只见 `docs/system_risk_register.md`（单一来源）。
+- **Verify**: review-evidence:6119c71c2896。焦点超集包 `86 OK / 1.0s / exit 0`（较上轮 `84` +2，引擎用例 12→14）。自写探针含上轮原样复跑：weeks 5–30 现由 `summarize_window` 与 `validate_window` **两个入口都拒**（上轮为 ACCEPTED）；另造上轮没测过的 weeks 14–39 同样拒；canonical `1-26`/`27-52` 正向未误伤；`window_id` 撒谎另由第二道守卫拒。新增两测覆盖正反两向。
+- **Next**: 提交并合入 master。
+
+## 2026-08-04 — Codex executor/fixer 修复刀1 canonical window anchor（独立复审未完成）
+
+- **Verdict/Action**: 用户本轮“修复”授权有效；Required 判断正确且在刀1范围内。计算入口已复用 `window_for_week(end_week)`，非 canonical 起点不再生成摘要；未提交，provider/network/paid 未使用。
+- **Required**: `R-USSHORT-26W-DIAG-KNIFE1-COMPUTE-PATH-DOES-NOT-ENFORCE-CANONICAL-WINDOW-ANCHOR` 已修复；前轮 Optional「单基准持平状态词」选择 defer，因不阻断本 Required 且会扩大状态词范围。
+- **Verify**: 固定 Python focused `20 OK / 0.2s`；新增平移第5—30周反向测试与第27—52周正向测试；`py_compile=OK`；最终 `git diff --check=clean`；文档门禁结果见本条交接证据。
+- **Pre-Codex self-review**: `A=计算入口/触发入口/两出口矩阵；B=旧行内起止推导不再作为canonical权威，grep残留0；C=非canonical平移反向测试+第二窗口正向测试；D=N-A；E=SESSION_LOG/register单一实时状态、CURRENT不写瞬态；F=BOM/FFFD=0+diff clean；matrix=Required已修/Optional已分类；register=updated；handoff=updated: anchor contract同步到owner handoff；focused=20 OK；full-lane=not_triggered: 隔离模块无生产接线；door=55 OK；review=NOT_VERIFIED；commit=NOT_PERFORMED；provider/network/paid=NOT_USED`。
+- **Next**: Claude Code：独立复审 Knife1 当前最终 diff；PASS 后由 Claude Code 提交。
+
+## 2026-08-04 — Claude Code 审查 FAIL（26 周诊断轨 刀1：非重叠窗口规则只在触发路上守，算的那条路没守）
+
+- **Verdict/Action**: FAIL，一条 Required，未提交。引擎主体数学、状态优先级、触发幂等和既有 fail-closed 校验均通过检查；唯一 Required 是方案 §2.1 的非重叠区块规则只在触发路强制，计算路未校验 canonical 锚点，详情见 `docs/system_risk_register.md`。
+- **Required**: 一条，详情只在 `docs/system_risk_register.md`（单一来源）：`R-USSHORT-26W-DIAG-KNIFE1-COMPUTE-PATH-DOES-NOT-ENFORCE-CANONICAL-WINDOW-ANCHOR`。一条不阻断 Optional 同处。
+- **Verify**: review-evidence:292790978dd2；焦点超集 `84 OK / 1.0s / exit 0 / deadline=300s`；独立探针实测 `summarize_window(26w-5-30)` 接受而 `window_for_week(30)` 返回 `None`，确认计算/触发两路不一致；完整细节见 `docs/system_risk_register.md`。
+- **Next**: Codex：修复该 Required。
+
+## 2026-08-04 — Codex executor 执行刀1（独立复审未完成）
+
+- **Verdict/Action**: 刀1纯计算引擎、合成26周 fixture、记录/摘要 schema 扩展、路由和 handoff 已落地；不读账户、不联网、不调用 provider，不改变选股、操作建议、sizing、NAV 或 Ship gate。
+- **Required**: 无新增。既有刀0 Required 已由上一条 Claude Code PASS 结清；前轮 Optional「周收益波动」按刀4前处理，本刀不扩范围。
+- **Verify**: 固定 Python focused `18 OK / 0.3s`；`py_compile=OK`；route-doc + doc-governance `55 OK / 0.9s`；`git diff --check=clean`；B 侧禁止 import/选股操作残留均 `0 hits`。
+- **Pre-Codex self-review**: `A=引擎/两张schema/测试/路由矩阵；B=禁止副作用与选股操作grep 0；C=边界/缺失/反向测试；D=N-A；E=README/CURRENT/handoff单态；F=BOM/FFFD=0+diff clean；matrix=Knife1全出口已分类；register=n/a无新material risk；handoff=updated；focused=18 OK+py_compile；full-lane=not_triggered: 隔离新模块且无生产接线；door=55 OK；review=NOT_VERIFIED；commit=NOT_PERFORMED；provider/network/paid=NOT_USED`。
+- **Next**: Claude Code：独立复审 Knife1 当前 diff；PASS 后由 Claude Code 提交。
+
 ## 2026-08-04 — Claude Code 复审 PASS（26 周市场诊断轨 刀0：三条 Required 实测全闭）
 
 - **Verdict/Action**: PASS。三条都不是靠加字段糊过去的，而是补上了**把散文契约绑到机器契约**的那一层：设计文档新增一个可机器读的 JSON 契约块（`v1_summary_strategy_metric_fields` / `v1_summary_benchmark_metric_fields` / `status_priority`），测试从该块逐字段断言摘要 schema 的 `properties` **与** `required`，块缺失即直接 `AssertionError`。R1 的七项字段位到齐（`since_inception_return`/`cash_ratio`/`equity_ratio`/`turnover`/`unfilled_order_count`/`data_coverage` + `information_ratio`/`hac_t`）。R2 三处词表现已一致为 `['evaluable','diagnostic_data_degraded','not_evaluable']`，且是**双绑**——policy schema 自身 const 钉住该 enum，测试再 `assertEqual` 横比 preset/周记录/摘要三处。R3 的五级优先级按方案 §七 原序进 `status_resolution.priority`（preset + policy schema 双钉），`mixed_ruleset_window` 进 preset/policy schema/摘要 `required`。

@@ -241,6 +241,15 @@ class UsShortMarketDiagnosticSchemaTest(unittest.TestCase):
         bad_no_count["strategy"]["no_count_reason"] = None
         self.assertTrue(list(Draft7Validator(schema).iter_errors(bad_no_count)))
 
+        execution_metrics = copy.deepcopy(_weekly())
+        execution_metrics["strategy"]["turnover"] = 0.1
+        execution_metrics["strategy"]["unfilled_order_count"] = None
+        self.assertEqual([], list(Draft7Validator(schema).iter_errors(execution_metrics)))
+
+        bad_execution_metrics = copy.deepcopy(execution_metrics)
+        bad_execution_metrics["strategy"]["turnover"] = -0.1
+        self.assertTrue(list(Draft7Validator(schema).iter_errors(bad_execution_metrics)))
+
     def test_summary_requires_all_four_benchmarks_and_closed_world(self) -> None:
         schema = _schema(SCHEMA_NAMES[2])
         missing = copy.deepcopy(_summary())
