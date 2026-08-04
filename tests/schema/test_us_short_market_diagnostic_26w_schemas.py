@@ -15,6 +15,7 @@ SCHEMA_NAMES = [
     "us_short_market_diagnostic_weekly_record.schema.json",
     "us_short_market_diagnostic_summary.schema.json",
     "us_short_market_diagnostic_local_price_packet.schema.json",
+    "us_short_market_diagnostic_lifecycle_register.schema.json",
 ]
 
 
@@ -204,6 +205,49 @@ def _local_price_packet() -> dict:
     }
 
 
+def _lifecycle_register() -> dict:
+    return {
+        "schema_name": "us_short_market_diagnostic_lifecycle_register",
+        "schema_version": "1.0.0",
+        "diagnostic_epoch": "us_short_market_diagnostic_26w_v1",
+        "calendar_week_count": 1,
+        "evaluable_week_count": 1,
+        "non_evaluable_week_count": 0,
+        "last_calendar_week_index": 1,
+        "last_decision_date": "20260804",
+        "last_valuation_date": "20260803",
+        "current_window_id": "26w-1-26",
+        "current_window_week_count": 1,
+        "record_refs": [
+            {
+                "calendar_week_index": 1,
+                "decision_date": "20260804",
+                "valuation_date": "20260803",
+                "weekly_record_relative_path": "weeks/20260804/weekly_record.json",
+                "weekly_record_sha256": "f" * 64,
+                "strategy_evaluable": True,
+            }
+        ],
+        "v1_1_reminder": {
+            "status": "pending",
+            "evaluable_week_count": 1,
+            "text": "v1.1 reminder is pending.",
+        },
+        "boundary": {
+            "diagnostic_only": True,
+            "comparison_only": True,
+            "counts_ship_gate": False,
+            "changes_selection_or_action": False,
+            "automatic_policy_switch": False,
+            "broker_or_order_automation": False,
+            "provider_fetch": False,
+            "account_write": False,
+            "diagnostic_store_write": True,
+            "private_store_only": True,
+        },
+    }
+
+
 class UsShortMarketDiagnosticSchemaTest(unittest.TestCase):
     def test_all_schemas_are_valid_draft7_and_closed_world_at_root(self) -> None:
         for name in SCHEMA_NAMES:
@@ -222,6 +266,7 @@ class UsShortMarketDiagnosticSchemaTest(unittest.TestCase):
         self.assertEqual([], list(Draft7Validator(_schema(SCHEMA_NAMES[1])).iter_errors(_weekly())))
         self.assertEqual([], list(Draft7Validator(_schema(SCHEMA_NAMES[2])).iter_errors(_summary())))
         self.assertEqual([], list(Draft7Validator(_schema(SCHEMA_NAMES[3])).iter_errors(_local_price_packet())))
+        self.assertEqual([], list(Draft7Validator(_schema(SCHEMA_NAMES[4])).iter_errors(_lifecycle_register())))
 
     def test_design_metrics_statuses_and_priority_are_bound_to_schema(self) -> None:
         policy = json.loads(

@@ -1,0 +1,115 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://stock.local/schemas/us_short_market_diagnostic_lifecycle_register.schema.json",
+  "title": "US-short market diagnostic lifecycle register",
+  "description": "Private, de-identified accumulator for immutable weekly market-diagnostic records. Counts are derived again by the runtime persister from record_refs and are not an authorization or policy-switch gate.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_name",
+    "schema_version",
+    "diagnostic_epoch",
+    "calendar_week_count",
+    "evaluable_week_count",
+    "non_evaluable_week_count",
+    "last_calendar_week_index",
+    "last_decision_date",
+    "last_valuation_date",
+    "current_window_id",
+    "current_window_week_count",
+    "record_refs",
+    "v1_1_reminder",
+    "boundary"
+  ],
+  "properties": {
+    "schema_name": {"const": "us_short_market_diagnostic_lifecycle_register"},
+    "schema_version": {"const": "1.0.0"},
+    "diagnostic_epoch": {"type": "string", "minLength": 1},
+    "calendar_week_count": {"type": "integer", "minimum": 1},
+    "evaluable_week_count": {"type": "integer", "minimum": 0},
+    "non_evaluable_week_count": {"type": "integer", "minimum": 0},
+    "last_calendar_week_index": {"type": "integer", "minimum": 1},
+    "last_decision_date": {"$ref": "#/definitions/date8"},
+    "last_valuation_date": {"$ref": "#/definitions/date8"},
+    "current_window_id": {"type": "string", "pattern": "^26w-[1-9][0-9]*-[1-9][0-9]*$"},
+    "current_window_week_count": {"type": "integer", "minimum": 1, "maximum": 26},
+    "record_refs": {
+      "type": "array",
+      "minItems": 1,
+      "items": {"$ref": "#/definitions/record_ref"}
+    },
+    "v1_1_reminder": {"$ref": "#/definitions/v1_1_reminder"},
+    "boundary": {"$ref": "#/definitions/boundary"}
+  },
+  "definitions": {
+    "date8": {
+      "type": "string",
+      "pattern": "^[0-9]{8}$"
+    },
+    "sha256": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{64}$"
+    },
+    "record_ref": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "calendar_week_index",
+        "decision_date",
+        "valuation_date",
+        "weekly_record_relative_path",
+        "weekly_record_sha256",
+        "strategy_evaluable"
+      ],
+      "properties": {
+        "calendar_week_index": {"type": "integer", "minimum": 1},
+        "decision_date": {"$ref": "#/definitions/date8"},
+        "valuation_date": {"$ref": "#/definitions/date8"},
+        "weekly_record_relative_path": {
+          "type": "string",
+          "pattern": "^weeks/[0-9]{8}/weekly_record[.]json$"
+        },
+        "weekly_record_sha256": {"$ref": "#/definitions/sha256"},
+        "strategy_evaluable": {"type": "boolean"}
+      }
+    },
+    "v1_1_reminder": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["status", "evaluable_week_count", "text"],
+      "properties": {
+        "status": {"enum": ["pending", "ready_for_v1_1_implementation", "overdue", "active"]},
+        "evaluable_week_count": {"type": "integer", "minimum": 0},
+        "text": {"type": "string", "minLength": 1}
+      }
+    },
+    "boundary": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "diagnostic_only",
+        "comparison_only",
+        "counts_ship_gate",
+        "changes_selection_or_action",
+        "automatic_policy_switch",
+        "broker_or_order_automation",
+        "provider_fetch",
+        "account_write",
+        "diagnostic_store_write",
+        "private_store_only"
+      ],
+      "properties": {
+        "diagnostic_only": {"const": true},
+        "comparison_only": {"const": true},
+        "counts_ship_gate": {"const": false},
+        "changes_selection_or_action": {"const": false},
+        "automatic_policy_switch": {"const": false},
+        "broker_or_order_automation": {"const": false},
+        "provider_fetch": {"const": false},
+        "account_write": {"const": false},
+        "diagnostic_store_write": {"const": true},
+        "private_store_only": {"const": true}
+      }
+    }
+  }
+}

@@ -259,6 +259,20 @@ Knife 2 的本地适配器是 `engine/us_short_market_diagnostic_local_adapter.p
 - 只用拆股调整收盘价构造价格型周收益。股息 sidecar 即使存在也不在本刀消费，输出固定为 `price_return_diagnostic`、`dividend_sidecar_sha256 = null` 和明确的数据质量原因；缺价格或缺前值则输出 `unavailable`，绝不填零。
 - 每周输出保留价格日期、来源、价格包 SHA 和源 digest，随后由刀3负责不可变周记录、26 周计数器和 reminder 接线。适配器不调用 provider、不创建 10 万美元账户、不读取真实手工账户、不改变选股、操作建议、仓位、NAV 或 Ship gate。
 
+## 12.4 Knife 3：不可变逐周记录、26 周计数器和 v1.1 reminder
+
+刀3的实现入口是 `engine/us_short_market_diagnostic_lifecycle.py`，窗口身份、起止周和 `calendar_weeks` 统一由计算引擎的 `window_containing_week()` 生成；私有输出根是：
+
+    state/us_short/market_diagnostic_private/
+
+每次只能接收已经由刀2从 settled model-paper 周构造好的 weekly record。第一条必须是 `calendar_week_index = 1`；之后只能按 `+1` 追加，不能跳周、回填或把不同 `diagnostic_epoch` 静默混在一起。重复提交完全相同的周返回幂等结果；修改同一周的任何内容则 fail-closed。
+
+逐周文件写入 `weeks/<decision_date>/weekly_record.json`，首次写入后不可变；`lifecycle_register.json` 只保存每周文件的相对路径、SHA、周号、日期和 `strategy_evaluable` 标记，以及由这些文件重新计算出的累计数。寄存器不保存 ticker、持仓、订单或账户金额。寄存器缺失、周文件孤儿、SHA 不一致或累计数不是由逐周文件推导出来时拒绝继续。
+
+这里的“可评估周”定义为 weekly record 中 `strategy.strategy_evaluable = true` 的周；`paper_evaluable = false` 或 `no_count = true` 不进入 v1.1 计数，但仍保留为日历周记录。第4个可评估周状态为 `ready_for_v1_1_implementation`，第8个及以后仍未启用 v1.1 时为 `overdue`。每周生成的 `us_short_market_diagnostic_v1_1` reminder block 注册到周报第12节，显示日历周数、可评估周数、当前状态和大白话作用说明。刀3不实现 v1.1 归因本身，也不生成26周摘要；摘要留给刀4，归因留给刀6。
+
+刀3的写入只写诊断轨私有目录；`provider_fetch=false`、`account_write=false`、`changes_selection_or_action=false`、`automatic_policy_switch=false`、`counts_ship_gate=false`。当前真实 model-paper 私有根尚未启动时，不创建 head、不生成虚假的第1周；刀3只通过临时夹具验证该接线。
+
 ## 13. Knife 0 验收
 
 刀0完成必须证明：

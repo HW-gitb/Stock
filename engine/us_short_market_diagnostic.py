@@ -502,6 +502,82 @@ def _validate_rows(
     }
 
 
+def validate_weekly_record(
+    row: Mapping[str, Any], *, as_of_date: str | None = None
+) -> dict[str, Any]:
+    """Validate one weekly record before lifecycle persistence.
+
+    ``validate_window`` intentionally requires all 26 rows.  Knife 3 needs a
+    smaller gate at the point a settled week is published, so this function
+    applies the same field, evaluability, source, and diagnostic-boundary
+    checks to one row and additionally enforces the canonical 26-week window
+    id for that row's calendar week.
+    """
+
+    record = _mapping(row, "weekly_record")
+    if record.get("schema_name") != "us_short_market_diagnostic_weekly_record":
+        _fail("weekly_record.schema_name is unknown")
+    if record.get("schema_version") != "1.0.0":
+        _fail("weekly_record.schema_version is unsupported")
+    week = _week_index(record)
+    decision = _date8_value(_required(record, "decision_date", "weekly_record"), "decision_date")
+    valuation = _date8_value(_required(record, "valuation_date", "weekly_record"), "valuation_date")
+    if valuation > decision:
+        _fail("valuation_date cannot be after decision_date")
+    if as_of_date is not None:
+        as_of = _date8_value(as_of_date, "as_of_date")
+        if decision > as_of or valuation > as_of:
+            _fail("future diagnostic data is not allowed")
+
+    containing_window = window_containing_week(week)
+    expected_window_id = containing_window["window_id"]
+    window_id = _required(record, "window_id", "weekly_record")
+    if window_id != expected_window_id:
+        _fail("weekly_record.window_id does not match the canonical 26-week clock")
+
+    epoch = _required(record, "diagnostic_epoch", "weekly_record")
+    if not isinstance(epoch, str) or not epoch:
+        _fail("diagnostic_epoch must be non-empty")
+    _sha(_required(record, "diagnostic_policy_sha256", "weekly_record"), "diagnostic_policy_sha256")
+    _sha(_required(record, "strategy_ruleset_fingerprint", "weekly_record"), "strategy_ruleset_fingerprint")
+
+    strategy = _mapping(_required(record, "strategy", "weekly_record"), "strategy")
+    _validate_strategy(strategy)
+    benchmarks = _mapping(_required(record, "benchmarks", "weekly_record"), "benchmarks")
+    if set(benchmarks) != set(BENCHMARKS):
+        _fail("weekly record must contain exactly VTI, IWB, SPY, and QQQ")
+    for symbol in BENCHMARKS:
+        _validate_benchmark(_mapping(benchmarks[symbol], f"benchmarks.{symbol}"), strategy, symbol)
+
+    source_refs = record.get("source_refs")
+    if not isinstance(source_refs, Sequence) or isinstance(source_refs, (str, bytes)) or not source_refs:
+        _fail("weekly_record.source_refs must be a non-empty digest list")
+    for source_ref in source_refs:
+        _sha(source_ref, "weekly_record.source_refs")
+    boundary = _mapping(_required(record, "boundary", "weekly_record"), "boundary")
+    if dict(boundary) != BOUNDARY:
+        _fail("weekly record crosses the diagnostic boundary")
+    reminder = _mapping(_required(record, "v1_1_reminder", "weekly_record"), "v1_1_reminder")
+    if reminder.get("status") not in {"pending", "ready_for_v1_1_implementation", "overdue", "active"}:
+        _fail("v1_1_reminder.status is unknown")
+    count = reminder.get("evaluable_week_count")
+    if isinstance(count, bool) or not isinstance(count, int) or count < 0:
+        _fail("v1_1_reminder.evaluable_week_count must be a non-negative integer")
+    if not isinstance(reminder.get("text"), str) or not reminder["text"]:
+        _fail("v1_1_reminder.text must be non-empty")
+    _strategy_returns([record])
+    return {
+        "calendar_week_index": week,
+        "decision_date": decision,
+        "valuation_date": valuation,
+        "window_id": containing_window["window_id"],
+        "window_start_week": containing_window["window_start_week"],
+        "window_end_week": containing_window["window_end_week"],
+        "calendar_weeks": containing_window["calendar_weeks"],
+        "diagnostic_epoch": epoch,
+    }
+
+
 def validate_window(rows: Sequence[Mapping[str, Any]], *, as_of_date: str | None = None) -> dict[str, Any]:
     """Validate and return the canonical identity of one 26-week window."""
 
@@ -577,21 +653,33 @@ def mixed_ruleset_window(rows: Sequence[Mapping[str, Any]]) -> bool:
     return len(fingerprints) > 1 and max(counts.values(), default=0) < MIN_JOINT_EVALUABLE_WEEKS
 
 
-def window_for_week(calendar_week_index: int) -> dict[str, Any] | None:
-    """Return the non-overlapping canonical window only on a boundary week."""
+def window_containing_week(calendar_week_index: int) -> dict[str, Any]:
+    """Return the one canonical non-overlapping window containing a calendar week.
+
+    This is the single source for window boundary arithmetic and the ``26w-``
+    identity.  All callers that need either a boundary trigger or a week-level
+    window identity must delegate here.
+    """
 
     if isinstance(calendar_week_index, bool) or not isinstance(calendar_week_index, int) or calendar_week_index < 1:
         _fail("calendar_week_index must be a positive integer")
-    if calendar_week_index % WINDOW_WEEKS != 0:
-        return None
-    end_week = calendar_week_index
-    start_week = end_week - WINDOW_WEEKS + 1
+    start_week = ((calendar_week_index - 1) // WINDOW_WEEKS) * WINDOW_WEEKS + 1
+    end_week = start_week + WINDOW_WEEKS - 1
     return {
         "window_id": f"26w-{start_week}-{end_week}",
         "window_start_week": start_week,
         "window_end_week": end_week,
         "calendar_weeks": WINDOW_WEEKS,
     }
+
+
+def window_for_week(calendar_week_index: int) -> dict[str, Any] | None:
+    """Return the containing window only when the supplied week closes it."""
+
+    window = window_containing_week(calendar_week_index)
+    if calendar_week_index != window["window_end_week"]:
+        return None
+    return window
 
 
 def evaluate_window_trigger(
@@ -848,7 +936,9 @@ __all__ = [
     "ruleset_fingerprints",
     "segment_epoch_and_ruleset",
     "summarize_window",
+    "validate_weekly_record",
     "validate_window",
     "weekly_excess",
+    "window_containing_week",
     "window_for_week",
 ]
