@@ -1,5 +1,12 @@
 # Session Log
 
+## 2026-08-04 — 起刀 0：基准 ETF 分红覆盖探针（26 周市场诊断轨的前置未知）
+
+- **Verdict/Action**: 已建并提交，**尚未真跑**（需一次 `--confirm-user-authorization`）。26 周诊断轨的基准腿要含息总回报，就必须有基准 ETF 的 `ex_dividend_date` + `cash_amount`。查证结论：本仓库**从未向 Massive 问过任何 ETF 的分红**——0707 shape probe = AAPL/MSFT，0712 validation = AAPL/MSFT/TSLA，全是个股；而市场级窗口查询（`us_short_forward_policy_corporate_action_fetch.py`）register 5330 行自述 "No real provider call was executed"，`provider_samples/` 亦无对应目录。故「Massive 覆盖 SPY/QQQ/IWB/VTI 分红」是**未验证假设**，且它是设计分叉（无覆盖就得换源），必须在冻方法之前钉死，不能等 26 周后才发现基准腿是错的。
+- **Required**: 无，未新开 register 条目。纯新增、零改动既有文件。
+- **Verify**: 本轮未注入 review-evidence token，故不引用。新包 `13 OK / 0.24s`；`git status` = 恰 3 个新文件 + README 一行，**零既有文件被改**，故按改动性质未起 lane 全量（覆盖范围就是本模块自身）。**植入对照**（不采信自指断言）：从 `_coverage_verdict` 摘掉 `matched_rows != row_count` 那道门 → 端到端用例 `test_provider_ignoring_the_ticker_filter_is_not_read_as_covered` 与阶梯用例**双双转红**（`covered` vs `rows_do_not_match_queried_ticker`），恢复后 13 OK。真实 `--dry-run-env` 实跑：`MASSIVE_API_KEY present: True` / `raw root gitignored: True` / `planned calls: 4 (max 4)`，即真跑前置条件已具备。
+- **Next**: 用户授权后跑真的 4 调用；结果决定诊断轨刀 ③ 分红腿的源（Massive 行 / FMP 另批 / 固定股息率常数兜底）。方案全文在桌面 `usshort-compare.md`（按用户令不进仓库）。
+
 ## 2026-08-04 — 交付：20260808 探针运行日操作单（用户令，纯文档）
 
 - **交付物**: `docs/us_short_soft_discovery_probe_20260808_runbook.md` + `docs/README.md` 路由表一行。此前「怎么建」的命令齐全，但「那天怎么跑」只存在于对话里；这是唯一一次花钱的运行，临场拼命令是剩下的最大风险。

@@ -1,0 +1,179 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "US-short benchmark-ETF (SPY/QQQ/IWB/VTI) Massive dividend coverage probe summary",
+  "description": "Go/no-go source-availability record for the planned 26-week market diagnostic track's total-return benchmark leg. Counts, status classes, field NAMES and derived booleans only: no secret, no request URL, no raw payload row or value. Every gate flag is pinned closed.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["scope", "symbol_results", "coverage_findings", "storage", "gate_flags"],
+  "properties": {
+    "scope": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "probe",
+        "authorization_ref",
+        "generated_at",
+        "purpose",
+        "endpoint_family_allowlist",
+        "symbols",
+        "required_dividend_field_names",
+        "max_total_endpoint_calls",
+        "actual_total_endpoint_calls"
+      ],
+      "properties": {
+        "probe": { "const": "benchmark_etf_dividend_coverage" },
+        "authorization_ref": { "type": "string", "minLength": 1 },
+        "generated_at": { "type": "string", "minLength": 1 },
+        "purpose": { "type": "string", "minLength": 1 },
+        "endpoint_family_allowlist": {
+          "type": "array",
+          "items": { "const": "dividends" },
+          "minItems": 1,
+          "maxItems": 1
+        },
+        "symbols": {
+          "type": "array",
+          "items": { "type": "string", "pattern": "^[A-Z][A-Z0-9.-]{0,9}$" },
+          "minItems": 1,
+          "maxItems": 4,
+          "uniqueItems": true
+        },
+        "required_dividend_field_names": {
+          "type": "array",
+          "items": { "type": "string", "minLength": 1 },
+          "minItems": 1,
+          "uniqueItems": true
+        },
+        "max_total_endpoint_calls": { "type": "integer", "minimum": 1, "maximum": 4 },
+        "actual_total_endpoint_calls": { "type": "integer", "minimum": 0, "maximum": 4 }
+      }
+    },
+    "symbol_results": {
+      "type": "array",
+      "minItems": 0,
+      "maxItems": 4,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "symbol",
+          "endpoint_family",
+          "http_status",
+          "ok",
+          "error_type",
+          "raw_sample_ref",
+          "response_shape",
+          "row_count",
+          "rows_matching_queried_ticker",
+          "required_field_names_present",
+          "coverage_verdict"
+        ],
+        "properties": {
+          "symbol": { "type": "string", "pattern": "^[A-Z][A-Z0-9.-]{0,9}$" },
+          "endpoint_family": { "const": "dividends" },
+          "http_status": { "type": ["integer", "null"] },
+          "ok": { "type": "boolean" },
+          "error_type": { "type": ["string", "null"] },
+          "raw_sample_ref": { "type": "string" },
+          "response_shape": {
+            "type": ["object", "null"],
+            "additionalProperties": false,
+            "required": [
+              "payload_type",
+              "top_level_keys",
+              "event_container_key",
+              "event_count",
+              "event_item_key_names",
+              "has_pagination_field"
+            ],
+            "properties": {
+              "payload_type": { "type": "string" },
+              "top_level_keys": { "type": "array", "items": { "type": "string" } },
+              "event_container_key": { "type": ["string", "null"] },
+              "event_count": { "type": "integer", "minimum": 0 },
+              "event_item_key_names": { "type": "array", "items": { "type": "string" } },
+              "has_pagination_field": { "type": "boolean" }
+            }
+          },
+          "row_count": { "type": "integer", "minimum": 0 },
+          "rows_matching_queried_ticker": { "type": "integer", "minimum": 0 },
+          "required_field_names_present": { "type": "boolean" },
+          "coverage_verdict": {
+            "enum": [
+              "covered",
+              "queried_ok_but_no_rows",
+              "rows_do_not_match_queried_ticker",
+              "rows_missing_required_fields",
+              "endpoint_error"
+            ]
+          }
+        }
+      }
+    },
+    "coverage_findings": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "benchmark_dividend_source_viable",
+        "covered_symbol_count",
+        "http_status_classes",
+        "observed_event_item_key_names"
+      ],
+      "properties": {
+        "benchmark_dividend_source_viable": {
+          "enum": ["viable_all", "viable_partial", "not_viable", "endpoint_error"],
+          "description": "Source-availability roll-up only. NOT a claim that total-return computation is correct, reconciled, or authorized."
+        },
+        "covered_symbol_count": { "type": "integer", "minimum": 0, "maximum": 4 },
+        "http_status_classes": { "type": "array", "items": { "type": ["integer", "null"] } },
+        "observed_event_item_key_names": { "type": "array", "items": { "type": "string" } }
+      }
+    },
+    "storage": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "raw_payload_root",
+        "raw_payload_root_gitignored",
+        "tracked_summary_contains_secrets",
+        "tracked_summary_contains_request_urls",
+        "tracked_summary_contains_raw_payload_rows"
+      ],
+      "properties": {
+        "raw_payload_root": { "type": "string" },
+        "raw_payload_root_gitignored": { "const": true },
+        "tracked_summary_contains_secrets": { "const": false },
+        "tracked_summary_contains_request_urls": { "const": false },
+        "tracked_summary_contains_raw_payload_rows": { "const": false }
+      }
+    },
+    "gate_flags": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "provider_selected",
+        "binding_or_parser_built",
+        "total_return_calculation_performed",
+        "market_diagnostic_track_wired",
+        "corporate_action_reconciliation_claimed",
+        "private_state_written",
+        "datahub_consumed",
+        "production_or_ship_gate_claimed",
+        "sr_provider_001_closed",
+        "a_share_crossing_performed"
+      ],
+      "properties": {
+        "provider_selected": { "const": false },
+        "binding_or_parser_built": { "const": false },
+        "total_return_calculation_performed": { "const": false },
+        "market_diagnostic_track_wired": { "const": false },
+        "corporate_action_reconciliation_claimed": { "const": false },
+        "private_state_written": { "const": false },
+        "datahub_consumed": { "const": false },
+        "production_or_ship_gate_claimed": { "const": false },
+        "sr_provider_001_closed": { "const": false },
+        "a_share_crossing_performed": { "const": false }
+      }
+    }
+  }
+}
