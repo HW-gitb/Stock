@@ -72,13 +72,14 @@ def _parse_dt(value: Any, field: str) -> datetime:
 
 def _safe_queries(
     queries: list[str] | tuple[str, ...], *, deduplicate: bool = True,
+    preserve: bool = False,
 ) -> list[str]:
     if not isinstance(queries, (list, tuple)) or not queries or len(queries) > MAX_X_QUERIES:
         raise XThemeDiscoveryError("X query budget must contain 1-15 queries")
     out: list[str] = []
     for raw in queries:
-        query = web._safe_text(raw, limit=300)
-        if not query or web.SECRET_RE.search(query):
+        query = web._safe_text(raw, limit=4000, preserve=preserve)
+        if not query or not query.strip() or web.SECRET_RE.search(query):
             raise XThemeDiscoveryError("query is empty or secret-like")
         if not deduplicate or query not in out:
             out.append(query)
@@ -743,7 +744,9 @@ def build_x_fetch_packet(
     plan_binding: dict[str, Any] | None = None,
     _pending_raw_writes: list[tuple[Path, dict[str, Any]]] | None = None,
 ) -> tuple[dict[str, Any], dict[str, Any], dict[str, Any]]:
-    queries = _safe_queries(queries, deduplicate=plan_binding is None)
+    queries = _safe_queries(
+        queries, deduplicate=plan_binding is None, preserve=plan_binding is not None,
+    )
     generated = _parse_dt(generated_at, "generated_at")
     _guard_generated_before_open(generated, expected_decision_date)
     fetched = _parse_dt(fetched_at, "fetched_at") if fetched_at else generated
@@ -1026,7 +1029,7 @@ def _run_x_fetch(*, queries: list[str] | tuple[str, ...] | None, expected_decisi
     plan_query_records: list[dict[str, str]] | None = None
     plan_binding: dict[str, Any] | None = None
     if parent_plan is not None:
-        caller_queries = None if queries is None else _safe_queries(queries)
+        caller_queries = None if queries is None else _safe_queries(queries, preserve=True)
         try:
             derived_queries, plan_query_records, plan_binding = query_plan.resolve_stage1_plan_binding(
                 parent_plan, provider="xai",
@@ -1194,6 +1197,7 @@ def main(argv: list[str] | None = None) -> int:
         try:
             parent_plan, _parent_plan_sha256, _parent_plan_relative_path = query_plan.read_parent_plan(
                 args.parent_plan, root=ROOT, state_dir=STATE_DIR,
+                require_reviewed_policy=args.live,
             )
         except query_plan.QueryPlanError as exc:
             raise SystemExit(f"parent plan is invalid: {exc}") from exc
@@ -1204,13 +1208,15 @@ def main(argv: list[str] | None = None) -> int:
             raise SystemExit("live mode accepts queries only from --parent-plan")
     elif parent_plan is None and not args.query:
         raise SystemExit("offline mode requires --query or --parent-plan")
-    raw_root = web._validate_cli_raw_root(args.raw_root, DEFAULT_RAW_ROOT, live=args.live)
     discovery_output, receipt_output = web._decision_publish_paths(
         args.discovery_output or default_discovery_path(args.expected_decision_date),
         default_discovery_path(args.expected_decision_date),
         args.receipt_output or default_receipt_path(args.expected_decision_date),
         default_receipt_path(args.expected_decision_date),
     )
+    if args.live:
+        web._ensure_live_decision_slots_absent((discovery_output, receipt_output))
+    raw_root = web._validate_cli_raw_root(args.raw_root, DEFAULT_RAW_ROOT, live=args.live)
     if args.live:
         try:
             discovery, receipt, summary = run_x_fetch(

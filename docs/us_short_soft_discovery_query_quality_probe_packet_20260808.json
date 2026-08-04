@@ -1,0 +1,204 @@
+{
+  "schema_name": "us_short_soft_discovery_query_quality_probe_packet",
+  "schema_version": "1.1.0",
+  "schema_ref": "schemas/us_short_soft_discovery_query_quality_probe_packet_20260808.schema.json",
+  "generated_at": "2026-08-03T12:00:00+00:00",
+  "approval_ref": "user_chat_20260803_08_08_probe_shape_and_offline_prerequisites",
+  "scope": {
+    "market": "US",
+    "route": "US-short",
+    "purpose": "stage1_theme_agnostic_query_quality_calibration",
+    "status": "offline_probe_packet_not_executed",
+    "network_access_performed": false,
+    "provider_calls_performed": false,
+    "provider_execution_authorized_by_this_packet": false,
+    "explicit_user_authorization_required_for_execution": true,
+    "test_level_only": true,
+    "production_query_policy_activated": false
+  },
+  "policy_draft": {
+    "policy_version": "soft_discovery_query_policy_v0.2.0",
+    "theme_selection_by_user": false,
+    "discovery_window": "newly_emerging_only",
+    "optimization_priority": "coverage_first_fail_closed_downstream",
+    "future_stage1_budget_share": "majority",
+    "stage2_generation_mode": "deterministic_templates_from_frozen_stage1_focus_terms",
+    "stage2_source_binding_required": true,
+    "weekly_user_knob_selection_required": false
+  },
+  "probe_boundary": {
+    "expected_decision_date": "20260808",
+    "decision_date_is_non_trading_test_slot": true,
+    "forbidden_reused_decision_dates": [
+      "20260730",
+      "20260731",
+      "20260801",
+      "20260802"
+    ],
+    "lanes": [
+      "web",
+      "x"
+    ],
+    "stage": "stage1_only",
+    "query_count_per_lane": 4,
+    "same_queries_on_both_lanes": true,
+    "retry_or_rerun_count": 0,
+    "full_week_run": false,
+    "merge_or_knife2_execution": false,
+    "result_interpretation": "query_quality_calibration_only"
+  },
+  "query_templates": [
+    {
+      "query_id": "stage1_new_cross_industry_demand",
+      "text": "Identify US-listed companies first reported or materially affected this week by a newly emerging demand shift spanning at least two otherwise unrelated industries. Exclude broad background commentary and ongoing stories; include only source-supported company examples and state the common development.",
+      "angles": [
+        "new_demand",
+        "cross_industry"
+      ]
+    },
+    {
+      "query_id": "stage1_capex_orders_capacity",
+      "text": "Which capital-spending commitments, order changes, or capacity expansions were first reported or materially changed this week and are affecting US-listed companies across multiple industries? Exclude routine or continuing commentary; cite independent evidence for every company included.",
+      "angles": [
+        "capital_expenditure",
+        "orders",
+        "capacity"
+      ]
+    },
+    {
+      "query_id": "stage1_supply_regulation_bottleneck",
+      "text": "What supply constraint, regulatory change, or infrastructure bottleneck was first reported or materially changed this week and is creating direct business effects for US-listed companies in at least two different industries? Exclude broad macro commentary and include only companies explicitly named by sources.",
+      "angles": [
+        "supply_chain",
+        "regulation",
+        "infrastructure"
+      ]
+    },
+    {
+      "query_id": "stage1_earnings_bookings_guidance",
+      "text": "Which US-listed companies in different industries were independently cited this week for the same newly reported or materially changed earnings, bookings, or guidance pattern that was not broadly visible in the prior quarter? Exclude routine recaps and broad market commentary; cite the evidence tying each company to the shared pattern.",
+      "angles": [
+        "earnings",
+        "bookings",
+        "guidance"
+      ]
+    }
+  ],
+  "provider_budget": {
+    "xai": {
+      "planned_calls": 4,
+      "max_actual_calls": 4,
+      "current_ledger_reservation_units": 4
+    },
+    "tavily": {
+      "planned_calls": 4,
+      "max_actual_calls": 4,
+      "current_ledger_reservation_units": 4
+    },
+    "deepseek": {
+      "query_count": 4,
+      "max_results_per_query": 10,
+      "rows_per_regroup_call": 10,
+      "structural_max_actual_calls": 4,
+      "current_ledger_reservation_units": 4
+    },
+    "max_actual_provider_calls": 12,
+    "current_ledger_reservation_units": 12,
+    "reservation_units_are_not_actual_spend": true,
+    "abort_on_scope_or_budget_drift": true
+  },
+  "pre_execution_gates": {
+    "independent_review_pass_required": true,
+    "fresh_explicit_user_authorization_required": true,
+    "main_python_required": "C:\\Users\\cnhea\\AppData\\Local\\Programs\\Python\\Python313\\python.exe",
+    "schema_validation_required": true,
+    "exact_query_bytes_required": true,
+    "exact_execution_slot_map_match_required": true,
+    "cli_slot_overrides_forbidden": true,
+    "live_cli_default_raw_root_required": true,
+    "assessment_path_preflight_required": true,
+    "decision_slots_must_be_absent": true,
+    "provider_budget_ledgers_must_be_absent": true,
+    "provider_samples_gitignored_required": true,
+    "existing_environment_keys_only": true,
+    "no_key_value_logging": true,
+    "no_retry_or_rerun_without_new_authorization": true
+  },
+  "execution_slot_map": {
+    "expected_decision_date": "20260808",
+    "decision_outputs": {
+      "web_discovery": "state/us_short/us_short_llm_theme_discovery_web_20260808.json",
+      "web_receipt": "state/us_short/us_short_llm_theme_discovery_web_20260808_receipt.json",
+      "x_discovery": "state/us_short/us_short_llm_theme_discovery_x_20260808.json",
+      "x_receipt": "state/us_short/us_short_llm_theme_discovery_x_20260808_receipt.json"
+    },
+    "budget_ledgers": {
+      "web": "state/us_short/us_short_llm_theme_discovery_plan_web_20260808_budget.json",
+      "xai": "state/us_short/us_short_llm_theme_discovery_plan_xai_20260808_budget.json"
+    },
+    "raw_roots": {
+      "web": "provider_samples/us_short_llm_theme_discovery_fetch_web",
+      "x": "provider_samples/us_short_llm_theme_discovery_fetch_x"
+    },
+    "assessment_path": "docs/us_short_soft_discovery_query_quality_probe_assessment_20260808.json",
+    "output_or_receipt_overrides_allowed": false,
+    "raw_root_overrides_allowed": false,
+    "unregistered_slots_allowed": false
+  },
+  "preregistered_evaluation": {
+    "transport_inconclusive_conditions": [
+      "provider_auth_or_transport_failure",
+      "served_model_identity_failure",
+      "web_regroup_failed",
+      "raw_receipt_or_immutable_publish_failure",
+      "actual_call_count_or_scope_cannot_be_proven"
+    ],
+    "metric_definitions": {
+      "validated_theme_count": "count of themes surviving the existing lane packet builder",
+      "source_bound_member_count": "count of distinct canonical member tickers surviving the existing frozen-text source binding in that lane",
+      "member_bound_source_ratio": "distinct accepted source_ref_ids used by at least one surviving member divided by accepted_source_count; zero when accepted_source_count is zero",
+      "combined_distinct_candidate_theme_ids": "diagnostic union of emitted theme_id strings across Web and X; no semantic equivalence is inferred"
+    },
+    "per_lane_quality_thresholds": {
+      "minimum_validated_theme_count": 1,
+      "minimum_source_bound_member_count": 3,
+      "minimum_member_bound_source_ratio": 0.5
+    },
+    "combined_quality_thresholds": {
+      "distinct_candidate_theme_ids_diagnostic_target": 2,
+      "breadth_diagnostic_is_pass_gate": false,
+      "both_lanes_must_meet_per_lane_thresholds": true
+    },
+    "pass_verdict": "pass_to_query_planner_implementation",
+    "quality_fail_verdict": "revise_stage1_templates_before_planner",
+    "inconclusive_verdict": "provider_or_execution_inconclusive_do_not_grade_templates",
+    "no_posthoc_threshold_change": true
+  },
+  "storage_and_secret_boundary": {
+    "raw_roots_source": "execution_slot_map.raw_roots",
+    "assessment_path_source": "execution_slot_map.assessment_path",
+    "raw_must_be_gitignored": true,
+    "tracked_raw_rows_allowed": false,
+    "tracked_request_urls_allowed": false,
+    "tracked_secrets_allowed": false,
+    "production_storage_authorized": false
+  },
+  "prohibited_effects": {
+    "theme_confirmation": false,
+    "theme_soft_boost_enablement": false,
+    "top15_or_scoring_effect": false,
+    "seat_or_probe_allocation": false,
+    "lifecycle_transition": false,
+    "operation_advice": false,
+    "forward_clock_start": false,
+    "ship_gate_evidence": false,
+    "broker_or_order_execution": false,
+    "a_share_crossing": false
+  },
+  "next_steps": [
+    "Independently review this packet, its exact v0.2.0 query bytes, budget arithmetic, preregistered thresholds, and no-effect boundary before any provider execution.",
+    "After review PASS, ask the user for a fresh explicit authorization for this exact 20260808 Web+X probe; do not infer authorization from creation of this packet or the offline preflight.",
+    "If the probe passes, implement the separate versioned query-plan schema, deterministic stage2 planner, one-click plan consumer, and plan-level provider budget envelope.",
+    "If the probe fails quality thresholds, revise and re-review only the stage1 templates before implementing the planner; if execution is inconclusive, do not grade the templates."
+  ]
+}

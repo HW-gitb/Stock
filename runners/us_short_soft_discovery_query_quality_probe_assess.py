@@ -36,6 +36,8 @@ from runners.us_short_discovery_publish_policy import (  # noqa: E402
 
 DEFAULT_PACKET_PATH = ROOT / "docs" / "us_short_soft_discovery_query_quality_probe_packet_20260730.json"
 PACKET_SCHEMA_PATH = ROOT / "schemas" / "us_short_soft_discovery_query_quality_probe_packet.schema.json"
+NEW_PACKET_PATH = ROOT / "docs" / "us_short_soft_discovery_query_quality_probe_packet_20260808.json"
+NEW_PACKET_SCHEMA_PATH = ROOT / "schemas" / "us_short_soft_discovery_query_quality_probe_packet_20260808.schema.json"
 PLAN_BUDGET_SCHEMA_PATH = ROOT / "schemas" / "us_short_llm_theme_discovery_plan_budget.schema.json"
 ASSESSMENT_SCHEMA_PATH = ROOT / "schemas" / "us_short_soft_discovery_query_quality_probe_assessment.schema.json"
 DISCOVERY_SCHEMA_PATH = ROOT / "schemas" / "us_short_llm_theme_discovery.schema.json"
@@ -432,6 +434,28 @@ def _exact_existing_path(raw: Any, expected: Path, *, field: str) -> Path:
     return _exact_input_path(candidate, expected, field=field)
 
 
+def _packet_spec(packet_path: Path) -> tuple[Path, Path]:
+    """Resolve one of the explicitly registered, versioned packet slots."""
+    raw_candidate = Path(packet_path)
+    candidate = (
+        raw_candidate
+        if raw_candidate.is_absolute()
+        else ROOT / raw_candidate
+    ).absolute()
+    # Keep DEFAULT_PACKET_PATH in this registry rather than inlining the old path so
+    # the existing test isolation seam that patches that constant remains valid.
+    registered = {
+        DEFAULT_PACKET_PATH.absolute(): PACKET_SCHEMA_PATH,
+        NEW_PACKET_PATH.absolute(): NEW_PACKET_SCHEMA_PATH,
+    }
+    try:
+        return candidate, registered[candidate]
+    except KeyError as exc:
+        raise QueryQualityProbeAssessmentError(
+            "packet path is not a registered versioned decision slot"
+        ) from exc
+
+
 def _expected_slot_map(decision_date: str) -> dict[str, Any]:
     state_dir = ROOT / "state" / "us_short"
     return {
@@ -464,14 +488,15 @@ def _expected_slot_map(decision_date: str) -> dict[str, Any]:
 def _validate_packet(
     packet_path: Path,
 ) -> tuple[dict[str, Any], Path, str, list[str], _JsonSnapshot]:
+    expected_packet_path, packet_schema_path = _packet_spec(packet_path)
     packet_path = _exact_input_path(
         packet_path,
-        DEFAULT_PACKET_PATH,
+        expected_packet_path,
         field="packet path",
     )
     snapshot = _read_json_snapshot(packet_path, label="query-quality probe packet")
     packet = snapshot.payload
-    _validate_schema(packet, PACKET_SCHEMA_PATH, label="query-quality probe packet")
+    _validate_schema(packet, packet_schema_path, label="query-quality probe packet")
     decision_date = packet["probe_boundary"]["expected_decision_date"]
     if packet["execution_slot_map"] != _expected_slot_map(decision_date):
         raise QueryQualityProbeAssessmentError("packet execution_slot_map no longer matches real runner defaults")

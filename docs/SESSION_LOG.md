@@ -14,6 +14,51 @@
 - **落点**: `docs/pre_codex_self_review_checklist.md` A 节新增第 6 点（矩阵第二根轴 = 判据 × 权威来源；终点只允许冻结常量或仓库派生谓词；Proof-of-use 的 A 行要写出权威链，写不出就写 `authority: NONE`）；C 节新增 C2（植入对照唯一判据 = 被 patch 的必须是**门**、不能是**判据的来源**，附本轮三处无效实例与已知恒真式模板）。
 - **未做（并说明理由）**: 原计划把 C2 焊成机器守卫，**实测后放弃**——「植入对照里 patch 生产模块属性」这条句法规则在本仓命中 **23 处**，其中绝大多数是**合法**的守卫中和（`plan_budget._enforce_envelope_counts`、`web._parse_llm_json` 等）。合法与无效之别是语义的、句法判不出，按 `AGENTS.md` item 16d 不焊；理由已写进 C2 正文，避免下次有人重提。
 - **验证**: 仅文档改动 `+14` 行；`doc-governance + route-doc` = `55 OK / 1.5s`；`git diff --check` clean。
+## 2026-08-04 — Claude 修复（扣账层的自我豁免开关，用户令自修自审）
+
+- **Verdict/Action**: 已收口。`plan_budget` 两处的 `policy_version == EXPECTED` 条件删除，改成 `require_reviewed_policy: bool = True` 的调用方显式声明，沿 `PlanDispatchBudget.__init__` → `reserve_plan_budget` 透传（与 `read_parent_plan` 同形）；4 处合成 fixture 各自显式 opt-out。连带把 `test_A4_B1_...production_mutant` 改用 builder 真实发布的计划——它驱动真 `_run_web_fetch`，合成计划等于绕过生产权威门。顺手清掉本轮造成的孤儿 import。
+- **Required**: 无。`R-USSHORT-PLAN-BUDGET-AUTHORITY-CHECK-IS-OPT-OUT-BY-THE-PLAN-ITSELF` 已 closed；闭合取证、我自己犯的两个错、以及「付费门仍不查权威」这条如实未收的边界，见 `docs/system_risk_register.md`（单一来源，本处不复述）。
+- **Verify**: review-evidence:not_available（本轮 hook 未注入 token）；超时原因:并发误用导致两个包作废后重跑，定版超集单跑 502.9 秒。反控：漂移 `policy_version` 的伪造计划在两道门现均被 `not bound to the reviewed policy version` 拒（修前均 NO RAISE）。正控：诚实计划仍过、账本正常写。点名植入：条件只加回 `_provider_envelopes` 一处 → `AssertionError: PlanBudgetError not raised`，还原后转绿。覆盖包 `64 OK`；lane 超集 `455 OK / 502.9s`（单跑、对最终字节）。`provider_samples`=0，`git diff --check` clean。
+- **Next**: Codex：执行
+- **Pre-Codex self-review**: `matrix=两个入口 + 4 处 fixture + 一处真 runner 控制 + 逐门独立反控`; `register=updated`; `handoff=updated`; `focused=64 OK + 超集 455 OK / 502.9s`; `full-lane=not_triggered: 上一轮 ledger us_short 5194 OK 仍覆盖同一 lane，本轮仅收窄一处 opt-out 语义`; `door=doc-governance + route-doc 见下条提交前 hook`; `planted=条件只复原一处即转红`; `self-caught=①第一版反控被另一道门兜住(已补逐门断言) ②并发两个重包违反 rule 7c(两包作废并清临时根后单跑)`; `residue=0`
+
+## 2026-08-04 — Claude 审查 FAIL（类 H 返工：三条真闭，但扣账那层的检查可被计划自己关掉）
+
+- **Verdict/Action**: FAIL，不提交不合入。上一轮三条 Required 我逐条自跑复现**全部真闭**：权威绑定四项齐（版本/内容摘要/stage1 逐字节/stage2 指纹）且正反控制都成立；builder 的比较换成独立来源 packet，恒真消解；决策日绑到 packet 且三个错误日期全拒。付费前的槽占用门也落地了、两条 lane 对称。卡住的是 `plan_budget` 两处新增校验被包在 `policy_version == EXPECTED` 里——**由被检对象自己决定要不要受检**。
+- **Required**: `R-USSHORT-PLAN-BUDGET-AUTHORITY-CHECK-IS-OPT-OUT-BY-THE-PLAN-ITSELF`(P2) —— 取证、为何不降级为 Optional（P5 网关先例）、根因（迁就 8 处 v0.1.0 fixture，即我 08-03 撤回的那条 Optional）、已核实真闭清单与审查边界见 `docs/system_risk_register.md`（单一来源，本处不复述）。
+- **Verify**: review-evidence:09e46321bf6d；超时原因:超集包 456.8 秒且 bounded runner 全程缓冲，等它落地才动笔。亲跑超集 `discover -s tests -p test_us_short*discovery*` = `455 OK / 456.8s`；全量按 rule 4 引用 ledger `us_short 5194 OK` fp `a22ab4c39f61…` recorded 11:42:14（晚于最后代码改动 11:12:21）。探针：漂移 `policy_version` 的伪造计划在 `validate_run_decision_date` / `_provider_envelopes` / 付费门**全部 NO RAISE**；保持已审版本号的同一伪造计划三处全拒（证明门是活的）；`read_parent_plan` 那道无条件门直调实测会拒漂移版本。残留 `provider_samples`=0、`state/us_short` 仅三个空目录。
+- **Next**: Codex：修复
+
+## 2026-08-04 — Codex executor/fixer final class-H repair evidence (review pending)
+
+- **Verdict/Action**：Required 修复与 protected-test inventory 同步完成；当前工作树未提交、未 push、未 merge，未联网、未调用 provider、未付费。独立 review 仍未完成。
+- **Required**：`R-USSHORT-PARENT-PLAN-IS-ITS-OWN-AUTHORITY-NO-POLICY-BINDING`、`R-USSHORT-BUILDER-POLICY-COMPARISON-IS-A-TAUTOLOGY`、`R-USSHORT-PLAN-BUILDER-DECISION-DATE-UNBOUND-TO-PACKET` 保持 `OPEN/NOT_VERIFIED`；完整细节见 `docs/system_risk_register.md` 顶部。
+- **Verify**：固定 Python；affected focused `299 OK`，inventory `18 OK`，`py_compile=OK`，`git diff --check=OK`；最终 full `5194 OK / 616.781s / ledger elapsed 617.8s / deadline 860s / fingerprint=a22ab4c39f61`；full 后 `state/us_short=0 files`、preflight root absent，selected residue count remained `1` with ledger-only mtime/hash change。
+- **Pre-Codex self-review**：`matrix=class-H authority/default-secure offline exception + independent packet/date + both-lane slot/byte guards + inventory; register=updated; handoff=updated; focused=299+18 OK; full-lane=5194 OK/616.781s; door=route-doc + doc-governance=66 OK + fixed-Python py_compile/diff-check=OK + residue-mtime-SHA recorded; review=NOT_VERIFIED; commit=NOT_PERFORMED; provider/network/paid=NOT_USED`。
+- **Next**：Claude Code：独立复审本轮最终工作树；PASS 后由 Claude Code 提交。
+
+## 2026-08-04 — Codex executor/fixer 修复 08-08 前置两件：类 H 权威绑定（OPEN/NOT_VERIFIED）
+
+- **Verdict/Action**：已按 Claude handoff 完成修复，当前工作树只保留未提交修复；未联网、未调用 provider、未付费、未提交。独立 review 仍未完成。
+- **Required**：`R-USSHORT-PARENT-PLAN-IS-ITS-OWN-AUTHORITY-NO-POLICY-BINDING`、`R-USSHORT-BUILDER-POLICY-COMPARISON-IS-A-TAUTOLOGY`、`R-USSHORT-PLAN-BUILDER-DECISION-DATE-UNBOUND-TO-PACKET` 均为 `OPEN/NOT_VERIFIED`，完整技术细节与类矩阵见 `docs/system_risk_register.md` 顶部本节。
+- **Verify**：固定 Python 下 builder `10 OK`、query-plan `9 OK`、plan-budget `45 OK`、Web `70 OK`、X/merge `77 OK`；builder 独立 packet/20260802 日期反控、current-root reader 与 reserve ledger 前 forged-plan 反控、双 lane occupied-slot 反控均为真实测试；新 builder 临时 state-dir dry-run 无 provider/network，正式旧 parent plan 已核对 identity 后删除。
+- **Pre-Codex self-review**：`matrix=authority reader/reserve/stage2 + independent packet/date + Web/X query-preserve/slot-preflight + positive honest plan`; `register=updated`; `handoff=updated`; `focused=10+9+45+70+77 OK`; `full-lane=deferred until final stable diff, rule 3 requires one 860s run`; `door=pending final docs gate`; `review=NOT_VERIFIED`; `commit=NOT_PERFORMED`; `provider/network/paid=NOT_USED`。
+- **Next**：Claude Code：独立审查本轮修复。
+
+## 2026-08-04 — Claude 审查 FAIL（08-08 前置两件：计划自己就是权威，policy 根本没被绑住）
+
+- **Verdict/Action**: FAIL，不提交不合入。builder 的输入面确实收得死（policy 路径逐字锁定、envelope 形状精确、无查询文本入口），新 packet 也干净（槽 20260808、文本与 v0.2.0 逐字节相同、gates 零放松、预算恰为裁定的 12）。卡住的是本刀的立项前提：付费门拿**计划**当唯一权威，而链路上没有任何一处把计划绑回 reviewed policy——谁能往规范槽放一份 schema-valid 的 JSON，谁就定义了要花钱买什么。
+- **Required**: `R-USSHORT-PARENT-PLAN-IS-ITS-OWN-AUTHORITY-NO-POLICY-BINDING`(P1)、`R-USSHORT-BUILDER-POLICY-COMPARISON-IS-A-TAUTOLOGY`(P2)、`R-USSHORT-PLAN-BUILDER-DECISION-DATE-UNBOUND-TO-PACKET`(P2) —— 正文、已核实真闭清单、三条 Optional 与审查边界见 `docs/system_risk_register.md`（单一来源，本处不复述）。
+- **Verify**: review-evidence:8baf9004df9c；超时原因:等 §6a 对抗 agent（12.5 分钟）与 654.6 秒超集包串行落地后才动笔，另加一轮自跑复现。超集 `450 OK / 654.6s`。自跑复现 P1：伪造计划（policy sha 置 `"0"*64`、查询换自由文本、重算 identity）→ `validate_parent_plan` 返回 `True`，付费门 `validate_plan_stage1_query` **NO RAISE** 返回 envelope；反控：计划外文本仍被 `query_id is outside the parent plan Stage-1 query set` 拒。另实测 builder 的 policy 比较两侧源码逐字符相同、`builder.main.__doc__ is None`（均恒真）。残留 `provider_samples`=0、`state/us_short`=1（dry-run 计划件，已核为复用非冲突）。
+- **Next**: Codex：修复
+
+## 2026-08-03 — Codex executor/fixer 执行 08-08 探针前置两件（待 Claude Code 独立复审）
+
+- **Verdict/Action**：两项离线前置完成；parent plan、20260808 packet、两条 dry-run lane 与 assessor preflight 已落地，未 live、未 provider、未联网、未付费、未提交。
+- **Required**：`R-USSHORT-QUERY-BYTES-TRUNCATED-BELOW-REVIEWED-V020-TEMPLATES` 保持 `OPEN/NOT_VERIFIED / P2`；原 v0.2.0 policy Required 也未因本轮离线结果关闭，详见 `docs/system_risk_register.md`。
+- **Verify**：固定 Python；builder/packet/assessor `51 OK`；discovery 超集 `258 OK`；相关 schema `30 OK`；preflight `preflight_passed_no_write`；residue before=after `count=2 / mtime-sha=5701025f…`，`state/us_short=1`、`provider_samples=0`、assessment 不存在。
+- **Pre-Codex self-review**：`matrix=policy-rendered query bytes/packet slots/budgets/gates/rogue-query/both-lane offline chain`；`register=updated`；`handoff=updated`；`focused=51+258+30 OK`；`full-lane=not_triggered: offline-only preflight`；`door=route-doc + doc-governance: 66 OK / exit=0`；`review=NOT_VERIFIED`；`commit=NOT_PERFORMED`；`provider/network/paid=NOT_USED`。
+- **Next**：Claude Code：独立审查
 
 ## 2026-08-03 — 用户决策：08-08/09 探针形状 = 「能跑的都跑」（Codex 待执行两个离线前置件）
 

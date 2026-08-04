@@ -7,16 +7,16 @@
       "state/us_short"
     ]
   },
-  "module_count": 284,
+  "module_count": 286,
   "classification_counts": {
     "class0_no_direct_protected_io": 222,
     "class1_read_real_root": 0,
     "class2_write_real_root": 4,
     "class3_global_sentinel": 5,
-    "class4_unresolved_write": 53
+    "class4_unresolved_write": 55
   },
   "class0_modules_omitted": true,
-  "module_path_sha256": "5440689bebfb09229e590c28d0c3c3202d192e62f1f48dc5374888f990bec235",
+  "module_path_sha256": "deeea74d92c31b65a6c37fd78e8233c96298f6414f16f6d0b2e780cb12464f74",
   "allowlist": [
     "tests/provider/test_us_short_batch5_bankruptcy_8k_source_packet.py:kwarg:packet_ref:state/us_short",
     "tests/provider/test_us_short_batch5_bankruptcy_8k_source_packet.py:kwarg:screen_path:state/us_short",
@@ -93,6 +93,7 @@
     "tests/provider/test_us_short_forward_policy_corporate_action_fetch.py:kwarg:sample_root:provider_samples,state/us_short:class4_unresolved_write",
     "tests/provider/test_us_short_forward_universe_snapshot.py:kwarg:output_path:provider_samples,state/us_short:class4_unresolved_write",
     "tests/provider/test_us_short_llm_theme_discovery.py:kwarg:output_path:provider_samples,state/us_short:class4_unresolved_write",
+    "tests/provider/test_us_short_llm_theme_discovery_build_parent_plan.py:kwarg:state_dir:provider_samples,state/us_short:class4_unresolved_write",
     "tests/provider/test_us_short_llm_theme_discovery_fetch_web.py:replace:provider_samples,state/us_short:class4_unresolved_write",
     "tests/provider/test_us_short_llm_theme_discovery_fetch_x_merge.py:helper:rehash:provider_samples,state/us_short:class4_unresolved_write",
     "tests/provider/test_us_short_llm_theme_discovery_fetch_x_merge.py:mkdir:provider_samples,state/us_short:class4_unresolved_write",
@@ -161,6 +162,7 @@
     "tests/test_us_short_forward_policy_shadow_stage.py:write_text:provider_samples,state/us_short:class4_unresolved_write",
     "tests/test_us_short_lifecycle_store.py:unlink:provider_samples,state/us_short:class4_unresolved_write",
     "tests/test_us_short_lifecycle_store.py:write_text:provider_samples,state/us_short:class4_unresolved_write",
+    "tests/test_us_short_llm_theme_discovery_query_policy.py:replace:provider_samples,state/us_short:class4_unresolved_write",
     "tests/test_us_short_model_paper_capstone_wiring.py:helper:write_json:provider_samples,state/us_short:class4_unresolved_write",
     "tests/test_us_short_model_paper_capstone_wiring.py:mkdir:provider_samples,state/us_short:class4_unresolved_write",
     "tests/test_us_short_model_paper_capstone_wiring.py:write_text:provider_samples,state/us_short:class4_unresolved_write",
@@ -261,6 +263,7 @@
     "tests/provider/test_us_short_forward_policy_corporate_action_fetch.py:kwarg:sample_root:provider_samples,state/us_short:class4_unresolved_write": 1,
     "tests/provider/test_us_short_forward_universe_snapshot.py:kwarg:output_path:provider_samples,state/us_short:class4_unresolved_write": 1,
     "tests/provider/test_us_short_llm_theme_discovery.py:kwarg:output_path:provider_samples,state/us_short:class4_unresolved_write": 16,
+    "tests/provider/test_us_short_llm_theme_discovery_build_parent_plan.py:kwarg:state_dir:provider_samples,state/us_short:class4_unresolved_write": 1,
     "tests/provider/test_us_short_llm_theme_discovery_fetch_web.py:replace:provider_samples,state/us_short:class4_unresolved_write": 1,
     "tests/provider/test_us_short_llm_theme_discovery_fetch_x_merge.py:helper:rehash:provider_samples,state/us_short:class4_unresolved_write": 3,
     "tests/provider/test_us_short_llm_theme_discovery_fetch_x_merge.py:mkdir:provider_samples,state/us_short:class4_unresolved_write": 2,
@@ -329,6 +332,7 @@
     "tests/test_us_short_forward_policy_shadow_stage.py:write_text:provider_samples,state/us_short:class4_unresolved_write": 3,
     "tests/test_us_short_lifecycle_store.py:unlink:provider_samples,state/us_short:class4_unresolved_write": 2,
     "tests/test_us_short_lifecycle_store.py:write_text:provider_samples,state/us_short:class4_unresolved_write": 3,
+    "tests/test_us_short_llm_theme_discovery_query_policy.py:replace:provider_samples,state/us_short:class4_unresolved_write": 2,
     "tests/test_us_short_model_paper_capstone_wiring.py:helper:write_json:provider_samples,state/us_short:class4_unresolved_write": 5,
     "tests/test_us_short_model_paper_capstone_wiring.py:mkdir:provider_samples,state/us_short:class4_unresolved_write": 2,
     "tests/test_us_short_model_paper_capstone_wiring.py:write_text:provider_samples,state/us_short:class4_unresolved_write": 3,
@@ -690,6 +694,16 @@
       "write_count": 16
     },
     {
+      "module": "tests/provider/test_us_short_llm_theme_discovery_build_parent_plan.py",
+      "classification": "class4_unresolved_write",
+      "protected_roots": [
+        "provider_samples",
+        "state/us_short"
+      ],
+      "read_count": 0,
+      "write_count": 1
+    },
+    {
       "module": "tests/provider/test_us_short_llm_theme_discovery_fetch_web.py",
       "classification": "class4_unresolved_write",
       "protected_roots": [
@@ -896,6 +910,16 @@
       ],
       "read_count": 0,
       "write_count": 1
+    },
+    {
+      "module": "tests/test_us_short_llm_theme_discovery_query_policy.py",
+      "classification": "class4_unresolved_write",
+      "protected_roots": [
+        "provider_samples",
+        "state/us_short"
+      ],
+      "read_count": 0,
+      "write_count": 2
     },
     {
       "module": "tests/test_us_short_model_paper_capstone_wiring.py",

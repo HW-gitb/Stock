@@ -83,6 +83,16 @@ def validate_exact_decision_slot(
     return resolved
 
 
+def ensure_decision_slots_absent(paths: Sequence[Path | str]) -> None:
+    """Fail before a paid run if any formal immutable decision slot is already occupied."""
+    for raw_path in paths:
+        path = Path(raw_path).resolve()
+        if path.exists() or path.is_symlink():
+            raise DiscoveryPublishPolicyError(
+                f"formal decision slot is already occupied: {path.name}"
+            )
+
+
 def evidence_bytes(
     payload: Any, *, clock_keys: Sequence[str] = CLOCK_KEYS_ARTIFACT, recursive: bool = False,
     evidence_projection: Callable[[Any], Any] | None = None,
