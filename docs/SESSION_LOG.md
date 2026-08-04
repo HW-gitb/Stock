@@ -1,5 +1,13 @@
 # Session Log
 
+## 2026-08-04 — Claude 修复（收据完整性整类 + rule 4 裁决落地，用户令自修）
+
+- **Verdict/Action**: 两条 Optional 收口。① `_receipt_id` 由「只封 `code_fingerprint + unittest_args`」改为**封整个 receipt body**，故 `tests` 等被引用字段不再能改而不破封，且将来新增字段自动进封；② 按用户裁决改 `AGENTS.md` rule 4——执行方跑全量、reviewer 引用其 ledger 不重跑，并明写「不是必须跑就不跑」。
+- **Required**: 无。`R-TOOLS-RECEIPT-FIELDS-OUTSIDE-INTEGRITY-SEAL` 已 closed；类修法、13 向量复现与兼容影响见 `docs/system_risk_register.md`（单一来源，本处不复述）。
+- **Verify**: 复现 reviewer 原探针（`tests` 17→99999）现落 `integrity check failed`；整类扫描 13 个字段**全部被拒**、诚实收据仍 `(True,'OK')`、探针后收据逐字节还原。focused `tests.test_verification_receipt tests.test_full_pack_ledger` `Ran 34 tests ... OK`（`32→34` 为本轮新增两例），铸出 `receipt:ef1a57edea3a21a0b6bff718`。**未跑全量**：改动只在 `.tools/` 验证机器与其测试，非生产 runner、非共享生产 schema，focused 已框住影响面——正是本轮所落 rule 4「不是必须跑就不跑」的第一次应用。
+- **Pre-Codex self-review**: A-F checked。A 类不修实例：不补单字段而封整个 body，新增字段自动覆盖；矩阵测试另带「有字段逃出矩阵」自检。A.6 权威链：`receipt_id -> sha256(整个 body) -> 冻结算法`，终点是自身内容而非外部可变值。B：`_receipt_id` 全仓仅两处调用点，均已改，`grep` 0 残留。C 反向：诚实收据仍通过、旧格式收据被拒（期望）。D=N-A。E：register 与 SESSION_LOG 单态。F：`git diff --check` 干净。matrix=整 body 封/两调用点/13 向量/新增两测试/旧收据兼容；register=updated；handoff=n/a（非业务刀）；focused=34 OK；full-lane=not_triggered: AGENTS rule 3; reason=仅 `.tools` 验证机器与测试，无生产面；door=route 14 + doc-governance 41。
+- **Next**: Claude Code：审查
+
 ## 2026-08-04 — Claude 审查（流程时间损耗，无代码 diff）
 
 - **Verdict/Action**: 无正确性缺陷可审——工作树干净、无 diff，按 rule 8 未起全量、未起 agent。本轮审的是本会话实测的执行/修复时间损耗，得三条可机器化项：① 守卫 `bullet-too-long` 不说是哪条 bullet 超了多少，逼出「写→红→猜→重写」循环；② JSON writer 注册表守卫不在 pre-commit 门内，新增写盘口要等 full lane 才红；③ 从 Bash 调 `.cmd` runner 会挂死。

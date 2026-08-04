@@ -32,6 +32,49 @@ class VerificationReceiptTests(unittest.TestCase):
         self.assertIsNotNone(receipt)
         return receipt or {}
 
+    def test_every_recorded_field_is_inside_the_integrity_seal(self):
+        """Class fix: no recorded field may sit outside receipt_id's hash.
+
+        The first form hashed only code_fingerprint + unittest_args, so `tests`
+        -- the number quoted as evidence -- could be inflated and still
+        validate.  Mutating ANY field must now break the integrity check.
+        """
+        state = {"engine/a_short_effect_contract.py": "sha", "@HEAD": "head"}
+        with tempfile.TemporaryDirectory() as tmp:
+            receipt = self._receipt(state, Path(tmp) / "r.json")
+        mutations = {
+            "tests": 99999,
+            "elapsed_seconds": 0.001,
+            "timeout_seconds": 1300,
+            "recorded_at": "1999-01-01T00:00:00",
+            "schema_version": "9.9",
+            "tier": "full",
+            "status": "PASS ",
+            "exit_code": 0,
+        }
+        self.assertTrue(set(mutations).issubset(receipt), "a recorded field escaped this matrix")
+        for field, value in mutations.items():
+            if receipt[field] == value:
+                continue
+            tampered = dict(receipt, **{field: value})
+            self.assertNotEqual(
+                receipt["receipt_id"],
+                receipts._receipt_id(tampered),
+                f"{field} is outside the integrity seal",
+            )
+        # And the honest receipt still validates against its own seal.
+        self.assertEqual(receipt["receipt_id"], receipts._receipt_id(receipt))
+
+    def test_inflated_test_count_is_rejected_end_to_end(self):
+        """The exact reviewer probe that found the hole: 17 -> 99999."""
+        state = {"engine/a_short_effect_contract.py": "sha", "@HEAD": "head"}
+        with tempfile.TemporaryDirectory() as tmp:
+            receipt = self._receipt(state, Path(tmp) / "r.json")
+        inflated = dict(receipt, tests=99999)
+        ok, reason = receipts.validate_receipt(inflated, state=state)
+        self.assertFalse(ok)
+        self.assertIn("integrity check failed", reason)
+
     def test_effect_surface_requires_both_contract_and_consumer_modules(self):
         state = {
             "engine/a_short_effect_contract.py": "sha",

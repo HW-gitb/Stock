@@ -128,11 +128,19 @@ def receipt_token(receipt: dict) -> str:
     return f"receipt:{receipt['receipt_id']}"
 
 
-def _receipt_id(code_fingerprint: str, unittest_args: list[str]) -> str:
+def _receipt_id(body: dict) -> str:
+    """Hash the WHOLE receipt body, so no recorded field sits outside the seal.
+
+    An earlier form hashed only ``code_fingerprint`` + ``unittest_args``, which
+    left ``tests`` -- the very number quoted as evidence -- editable without
+    breaking the integrity check.  Everything except ``receipt_id`` itself is
+    covered now; adding a future field seals it automatically.
+    """
     raw = json.dumps(
-        {"code_fingerprint": code_fingerprint, "unittest_args": unittest_args},
+        {key: value for key, value in body.items() if key != "receipt_id"},
         sort_keys=True,
         ensure_ascii=True,
+        default=str,
     ).encode("utf-8")
     return hashlib.sha256(raw).hexdigest()[:24]
 
@@ -155,7 +163,6 @@ def write_focused_receipt(
     code_fp = fingerprint(current_state)
     receipt = {
         "schema_version": RECEIPT_SCHEMA_VERSION,
-        "receipt_id": _receipt_id(code_fp, list(unittest_args)),
         "status": "PASS",
         "tier": "focused",
         "exit_code": 0,
@@ -169,6 +176,7 @@ def write_focused_receipt(
         "code_fingerprint": code_fp,
         "recorded_at": time.strftime("%Y-%m-%dT%H:%M:%S"),
     }
+    receipt["receipt_id"] = _receipt_id(receipt)
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text(json.dumps(receipt, indent=1, ensure_ascii=False), encoding="utf-8")
     return receipt
@@ -202,9 +210,7 @@ def validate_receipt(
     ):
         return False, "focused acceptance receipt has invalid unittest arguments"
     code_fingerprint = receipt.get("code_fingerprint")
-    if not isinstance(code_fingerprint, str) or receipt.get("receipt_id") != _receipt_id(
-        code_fingerprint, unittest_args
-    ):
+    if not isinstance(code_fingerprint, str) or receipt.get("receipt_id") != _receipt_id(receipt):
         return False, "focused acceptance receipt integrity check failed"
     recorded_bundles = receipt.get("bundles")
     if not isinstance(recorded_bundles, list) or any(not isinstance(item, str) for item in recorded_bundles):
