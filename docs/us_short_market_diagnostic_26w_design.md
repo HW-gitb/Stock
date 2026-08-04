@@ -232,6 +232,18 @@ The v1 summary schema must carry the metrics promised in section 8. The followin
 
 The weekly strategy status and the summary strategy status use the same three values: `evaluable`, `diagnostic_data_degraded`, and `not_evaluable`. The summary `overall_status` uses the six-value priority list above. `mixed_ruleset_window` is true when more than one strategy ruleset fingerprint appears in the 26-week window and no single fingerprint has at least 20 strategy-evaluable weeks; it blocks a single-ruleset performance claim.
 
+## 12.2 Knife 1 calculation contract
+
+刀1的计算器是纯函数：调用方传入已经准备好的周记录，计算器不读取账户文件、不联网、不调用 provider，也不改变选股、操作建议、仓位或 NAV。
+
+- 策略周收益优先由 `prior_nav` 和 `nav` 构造；首周使用冻结的 `100000.000000` 归一化本金。记录中若同时有 `weekly_return`，必须与构造结果一致；`no_count` 周不补零；
+- 复利财富从 1 开始，累计收益不年化；`raw_excess` 是 joint 周内策略复利财富减基准复利财富，`relative_wealth` 是 `(1 + 策略累计收益) / (1 + 基准累计收益) - 1`；
+- Information Ratio 使用周算术超额收益的样本标准差，不年化；HAC 使用 Newey-West、`lag = min(4, n - 1)`，只作描述；
+- 任一基准少于 20 个 `joint_evaluable` 周时不得给 `ahead_diagnostic` 或 `behind_diagnostic`；price-only 或缺失数据保留 `data_degraded` / `unavailable`，不把缺失改成零，也不替换基准；
+- 26 周始终是分母；窗口为 `1—26`、`27—52`、`53—78` 等互不重叠区块。重复触发同一个 `window_id` 返回幂等的“不再触发”；
+- 每周记录可带 `turnover` 和 `unfilled_order_count`。缺失时摘要输出 `null`，而不是伪造 0；
+- epoch 混入同一摘要窗口会 fail-closed；ruleset 按连续区段输出，并在单一 ruleset 不足 20 个可评估周时设置 `mixed_ruleset_window`。
+
 私有路径必须受 gitignore 和 fail-closed 路径保护。公开摘要不得包含 ticker、逐笔交易、持仓明细、账户余额、原始价格或可还原个人账户的信息。
 
 ## 13. Knife 0 验收

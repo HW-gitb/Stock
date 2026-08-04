@@ -100,6 +100,8 @@
         "cash": {"anyOf": [{"$ref": "#/definitions/money"}, {"type": "null"}]},
         "market_value": {"anyOf": [{"$ref": "#/definitions/money"}, {"type": "null"}]},
         "cumulative_cost_paid": {"anyOf": [{"$ref": "#/definitions/money"}, {"type": "null"}]},
+        "turnover": {"anyOf": [{"type": "number", "minimum": 0}, {"type": "null"}]},
+        "unfilled_order_count": {"anyOf": [{"type": "integer", "minimum": 0}, {"type": "null"}]},
         "no_count": {"type": "boolean"},
         "no_count_reason": {"anyOf": [{"type": "string", "minLength": 1}, {"type": "null"}]},
         "source_sha256": {"anyOf": [{"$ref": "#/definitions/sha256"}, {"type": "null"}]},

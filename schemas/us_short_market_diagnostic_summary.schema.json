@@ -127,7 +127,7 @@
         "cash_ratio": {"$ref": "#/definitions/ratio_or_null"},
         "equity_ratio": {"$ref": "#/definitions/ratio_or_null"},
         "turnover": {"$ref": "#/definitions/nonnegative_number_or_null"},
-        "unfilled_order_count": {"type": "integer", "minimum": 0},
+        "unfilled_order_count": {"anyOf": [{"type": "integer", "minimum": 0}, {"type": "null"}]},
         "data_coverage": {"$ref": "#/definitions/ratio_or_null"}
       }
     },
