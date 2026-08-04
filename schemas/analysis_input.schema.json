@@ -582,6 +582,20 @@
             "csi300_pct_change_window": {
               "$ref": "#/$defs/numberNullable",
               "description": "Unit: percent, 1 means 1%."
+            },
+            "csi300_window": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": ["start_date", "end_date", "length", "length_unit"],
+              "properties": {
+                "start_date": {"$ref": "#/$defs/date8Nullable"},
+                "end_date": {"$ref": "#/$defs/date8Nullable"},
+                "length": {"type": ["integer", "null"], "minimum": 1},
+                "length_unit": {
+                  "type": ["string", "null"],
+                  "enum": ["trading_sessions", "calendar_days", null]
+                }
+              }
             }
           }
         },
@@ -615,6 +629,21 @@
                 "flat",
                 "unknown"
               ]
+            },
+            "requested_session_count": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "observed_session_count": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "coverage_complete": {
+              "type": "boolean"
+            },
+            "production_effect_enabled": {
+              "const": false,
+              "description": "Historical trigger-frequency evidence is not yet producer-backed; observation only."
             }
           }
         },

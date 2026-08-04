@@ -1,0 +1,43 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "a_short_northbound_market_silence_lookback_summary",
+  "description": "Counts-only comparison artifact for the structured northbound/CSI300 new-entry gate. It never changes production decisions.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_name",
+    "schema_version",
+    "as_of",
+    "lookback_basis",
+    "lookback_week_count",
+    "weeks_considered",
+    "source_artifact_count",
+    "structured_fact_week_count",
+    "eligible_week_count",
+    "trigger_count",
+    "status",
+    "comparison_only",
+    "production_effect_enabled",
+    "not_verified"
+  ],
+  "properties": {
+    "schema_name": {"const": "a_short_northbound_market_silence_lookback_summary"},
+    "schema_version": {"const": "1.0.0"},
+    "as_of": {"type": "string", "pattern": "^[0-9]{8}$"},
+    "lookback_basis": {"const": "available_tracked_weekly_artifacts"},
+    "lookback_week_count": {"type": "integer", "minimum": 0},
+    "weeks_considered": {
+      "type": "array",
+      "items": {"type": "string", "pattern": "^[0-9]{8}$"},
+      "uniqueItems": true
+    },
+    "source_artifact_count": {"type": "integer", "minimum": 0},
+    "structured_fact_week_count": {"type": "integer", "minimum": 0},
+    "eligible_week_count": {"type": "integer", "minimum": 0},
+    "trigger_count": {"type": ["integer", "null"], "minimum": 0},
+    "status": {"const": "NOT_VERIFIED"},
+    "comparison_only": {"const": true},
+    "production_effect_enabled": {"const": false},
+    "not_verified": {"type": "array", "minItems": 1, "items": {"type": "string", "minLength": 1}}
+  }
+}

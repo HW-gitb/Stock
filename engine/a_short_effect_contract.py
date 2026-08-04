@@ -27,6 +27,7 @@ _DECISION_FILES = (
     "A-EGS/egs_main.py",
     "engine/egs_industry_heat.py",
     "engine/a_short_industry_theme.py",
+    "engine/a_short_northbound.py",
     "runners/a_short_phase5_engine.py",
     "runners/a_short_weekly_pipeline.py",
     "runners/a_short_m67_render.py",
@@ -35,6 +36,7 @@ _DECISION_FILES = (
 )
 _CONSTANT_FILES = (
     "A-EGS/egs_main.py",
+    "engine/a_short_northbound.py",
     "runners/a_short_phase5_engine.py",
     "engine/a_short_portfolio_risk.py",
 )

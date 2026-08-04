@@ -2,7 +2,7 @@
   "schema_name": "a_short_m67_effect_contract",
   "schema_version": "1.0.0",
   "legacy_migration_sha256": "b99cbb6895b7b2c2877e172fbbd59ff0b84a5c3b9bbf5de2b8ee2aab0d52cc4e",
-  "analysis_input_all_paths_sha256": "883be23a1c559955741e836f0ad4bf134de225b4ad438304d274bd2413b3701c",
+  "analysis_input_all_paths_sha256": "b149abe9749795bdb1ca918168d1987bf9fee8cb09097ab73b5d079cdb404c9e",
   "groups": [
     {
       "id": "lineage_metadata",
@@ -113,14 +113,14 @@
       "source_prefixes": [
         "market_context"
       ],
-      "source_paths_sha256": "3a13b7ade0f56f1951bee824a210e4fed726e2037a4ece49260a3e26b52c81c2",
+      "source_paths_sha256": "c6c36ee2a08d0d9728469557e898dc0f70924a355db7c1db8dedc1c537605943",
       "policy": "must_affect_result",
       "terminal_surfaces": [
         "weekly.effect_contract_ledger",
         "weekly Markdown 字段/规则联动台账"
       ],
       "runtime_handler": "unresolved_input_group",
-      "unresolved_reason": "正式 weekly 当前只读取市场状态等少数字段，整组其余广度、流动性、北向、日历和波动率叶字段尚未逐叶证明消费者；不能报已联动。"
+      "unresolved_reason": "北向 5 日净流与 CSI300 窗口已由结构化 northbound_control 接入新建仓门并落到 operation_impact；其余广度、流动性、日历和波动率叶字段仍未逐叶证明消费者，不能报整组已联动。"
     },
     {
       "id": "account_context",
@@ -675,6 +675,52 @@
       "terminal_surface": "weekly market regime and operation impact",
       "mutation_evidence": "positive mutation changes market-regime action"
     },
+    "market_context.breadth.csi300_pct_change_window": {
+      "category": "m67_main_decision",
+      "consumer_ref": "runners/a_short_weekly_pipeline.py::_northbound_control_from_analysis -> _apply_northbound_market_gate",
+      "terminal_surface": "weekly.northbound_control and reports[].machine.operation_impact / M6.7 new-entry action",
+      "mutation_evidence": "a CSI300 window at or above the unchanged -10% threshold leaves new-entry builds intact; a bound value below it only blocks when the structured northbound flow is outflow"
+    },
+    "market_context.breadth.csi300_window.start_date": "duplicate_or_display_audit",
+    "market_context.breadth.csi300_window.end_date": "duplicate_or_display_audit",
+    "market_context.breadth.csi300_window.length": "duplicate_or_display_audit",
+    "market_context.breadth.csi300_window.length_unit": "duplicate_or_display_audit",
+    "market_context.northbound.coverage_complete": {
+      "category": "m67_main_decision",
+      "consumer_ref": "runners/a_short_weekly_pipeline.py::_normalise_northbound_control -> should_block_new_entries",
+      "terminal_surface": "weekly.northbound_control coverage receipt and fail-closed new-entry gate",
+      "mutation_evidence": "partial, duplicate, or out-of-window provider dates force unknown/null and cannot enable the gate"
+    },
+    "market_context.northbound.net_flow_5d": {
+      "category": "m67_main_decision",
+      "consumer_ref": "runners/a_short_weekly_pipeline.py::_northbound_control_from_analysis -> _apply_northbound_market_gate",
+      "terminal_surface": "weekly.northbound_control and reports[].machine.operation_impact / M6.7 new-entry action",
+      "mutation_evidence": "a bound negative CNY five-day flow only blocks new entries with the unchanged CSI300 dual condition; null/unknown never becomes flat or a block"
+    },
+    "market_context.northbound.status": {
+      "category": "m67_main_decision",
+      "consumer_ref": "runners/a_short_weekly_pipeline.py::_normalise_northbound_control -> should_block_new_entries",
+      "terminal_surface": "weekly.northbound_control.status and structured new-entry gate",
+      "mutation_evidence": "status is required to agree with the structured flow sign; unknown fails closed and cannot enable the gate"
+    },
+    "market_context.northbound.observed_session_count": {
+      "category": "m67_main_decision",
+      "consumer_ref": "runners/a_short_weekly_pipeline.py::_normalise_northbound_control -> should_block_new_entries",
+      "terminal_surface": "weekly.northbound_control coverage receipt and fail-closed new-entry gate",
+      "mutation_evidence": "a count below the requested five sessions cannot be relabelled complete or used for a block"
+    },
+    "market_context.northbound.production_effect_enabled": {
+      "category": "m67_main_decision",
+      "consumer_ref": "runners/a_short_weekly_pipeline.py::_normalise_northbound_control -> _apply_northbound_market_gate",
+      "terminal_surface": "weekly.northbound_control.production_effect_enabled and new-entry action",
+      "mutation_evidence": "the current analysis schema pins false until lookback evidence; a true synthetic control is required before the gate can demote a build"
+    },
+    "market_context.northbound.requested_session_count": {
+      "category": "m67_main_decision",
+      "consumer_ref": "runners/a_short_weekly_pipeline.py::_normalise_northbound_control",
+      "terminal_surface": "weekly.northbound_control coverage receipt",
+      "mutation_evidence": "a requested-session count other than the fixed five-session contract is rejected before the gate"
+    },
     "market_context.trade_calendar.is_pre_holiday_window": {
       "category": "m67_main_decision",
       "consumer_ref": "runners/a_short_weekly_pipeline.py::_pre_holiday_control_from_analysis -> _allocate_cash",
@@ -726,17 +772,19 @@
     "candidate_data_quality": "comparison_track"
   },
   "decision_predicate_sha256": {
-    "A-EGS/egs_main.py": "d4356510ed3f7b7b762d45f3c03a6c34cc26f5cce5e9c7aa2554be2d85cdbde6",
+    "A-EGS/egs_main.py": "f52e447b3ed70167b0997853c46860570a17e4f56aa2f7770f32751efadf6614",
     "engine/egs_industry_heat.py": "74932f994ec0658345c41aa932b54b5685c1737c663f5070a193d264f37fced2",
     "engine/a_short_industry_theme.py": "6a10200f80b3c0d301efc8af1561b53ef2578e1cd26eea7976188dd57b7b6b2b",
+    "engine/a_short_northbound.py": "e48d20a9c49d06480443815755d97f5674fa98fe1e13284f2d4aaaa19361d71a",
     "runners/a_short_phase5_engine.py": "bd9c17a7032066d7c3c9074a8fedb16e5e11b559d973d95987458fb8eca6dd5e",
-    "runners/a_short_weekly_pipeline.py": "f2179d862e13fc9c1aff27790e801f93d166f0523a3b55f55e0a78776d458d1e",
-    "runners/a_short_m67_render.py": "9753b5e8213b343a7c62595f96bcdc0a760520ac1dd5b8462f83ee4ce40e922f",
+    "runners/a_short_weekly_pipeline.py": "7d4cfda49d2bc4e6b4962a61ad3fbe51f830cc1d137f5d7bc7632a29d2878532",
+    "runners/a_short_m67_render.py": "146e6c47814b0421bb973e2741d96e7d4773c06d9fc1104d54f9100100deac51",
     "engine/a_short_portfolio_risk.py": "02b88ac3b5239e8dd4897bde06afab0769ea5593f8a8a3666e5c8fba24486860",
     "engine/a_short_effect_contract.py": "7f96b57a88313ec5274835727d65530633e27f3bad98c7573eb598bdfdf523f6"
   },
   "runtime_constants_sha256": {
     "A-EGS/egs_main.py": "fd73d445741e9a1264f436f50ba9fdd462fb768a98779275e85e2a4ca40d0b84",
+    "engine/a_short_northbound.py": "74ed0d20a4b1e4cd26d73e8425299bb04802fd234f9171220b631b3b948fe695",
     "runners/a_short_phase5_engine.py": "27f947c64df7eaf4e59526b4bc0c150de5baef5a2447187acc98378e4c1f9f00",
     "engine/a_short_portfolio_risk.py": "238ae5ff77e269bc1b9a507014b21561c54e6766169d1854e19119ac5137943e"
   },
@@ -972,6 +1020,7 @@
     "block_trade_appearance",
     "dragon_list_appearance",
     "earnings_bad_reaction",
+    "northbound_market_silence_gate",
     "portfolio_concentration_factor_resonance"
   ],
   "llm_task_types": [
@@ -988,7 +1037,7 @@
     "small_float_mv_pct"
   ],
   "output_schema_sha256": {
-    "schemas/a_short_weekly_report.schema.json": "bfaf8e5ac8aec721f6fd0f546da097ba1431fb84a0a2592467a743b93a7f686d",
+    "schemas/a_short_weekly_report.schema.json": "da13195dc55c86f3144caa1725ba648375aa9e91db30dac0ad888c9209cfd67c",
     "schemas/a_short_m67_report.schema.json": "cdf7c83a3947e42702f7efe90edec4911c33bec7ca8b25c882dd706dc680a2be"
   },
   "analysis_input_paths": [
@@ -1262,6 +1311,10 @@
     "market",
     "market_context.breadth.consecutive_board_height",
     "market_context.breadth.csi300_pct_change_window",
+    "market_context.breadth.csi300_window.end_date",
+    "market_context.breadth.csi300_window.length",
+    "market_context.breadth.csi300_window.length_unit",
+    "market_context.breadth.csi300_window.start_date",
     "market_context.breadth.limit_down_count",
     "market_context.breadth.limit_up_count",
     "market_context.breadth.limit_up_index_pct_change",
@@ -1291,7 +1344,11 @@
     "market_context.moneyflow_coverage.target_complete_count",
     "market_context.moneyflow_coverage.target_universe_size",
     "market_context.moneyflow_coverage.universe_size",
+    "market_context.northbound.coverage_complete",
     "market_context.northbound.net_flow_5d",
+    "market_context.northbound.observed_session_count",
+    "market_context.northbound.production_effect_enabled",
+    "market_context.northbound.requested_session_count",
     "market_context.northbound.status",
     "market_context.trade_calendar.calendar_source",
     "market_context.trade_calendar.holiday_days_ahead",

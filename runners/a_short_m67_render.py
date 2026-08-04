@@ -474,6 +474,14 @@ def render_weekly_markdown(weekly: dict) -> str:
         out.append("> ⚠️ **两融数据源本周不可用或覆盖不足：两条两融规则未执行，"
                    "新建仓统一观察处理。** 参考日=`" + str(margin.get("effective_ref_date")) +
                    "`，状态=`" + margin_state + "`。")
+    northbound = weekly.get("northbound_control") or {}
+    if northbound.get("predicate_triggered"):
+        if not northbound.get("production_effect_enabled"):
+            out.append("> ℹ️ **北向资金联合静默门仅记录未生效**：历史触发频率证据尚未闭合，"
+                       "本周未改变新建仓、现金或持仓处置。")
+        elif northbound.get("new_entry_blocked") and acts.get("建仓", 0) == 0:
+            out.append("> ⚠️ **北向资金联合静默门已触发**：本周没有可被该门降级的新建仓候选；"
+                       "已有持仓不受该门影响。")
     # Knife 7: this is a batch-local diagnostic only.  It never alters the
     # conservative breakout AND-gate, and no marker means no clean conclusion.
     breakout_summary = summarize_breakout_source_agreement(cand_reports)
