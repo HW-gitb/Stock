@@ -10,6 +10,7 @@ import unittest
 
 from jsonschema import Draft7Validator
 
+import engine.us_short_market_diagnostic as diagnostic
 from engine.us_short_market_diagnostic import (
     MarketDiagnosticError,
     compound_wealth,
@@ -21,6 +22,8 @@ from engine.us_short_market_diagnostic import (
     segment_epoch_and_ruleset,
     summarize_window,
     validate_window,
+    window_containing_week,
+    window_for_week,
 )
 
 
@@ -267,6 +270,25 @@ class UsShortMarketDiagnosticEngineTest(unittest.TestCase):
         self.assertEqual(second["window"]["window_id"], "26w-27-52")
         self.assertEqual(second["window"]["window_start_week"], 27)
         self.assertEqual(second["window"]["window_end_week"], 52)
+
+    def test_window_containing_week_is_the_single_boundary_source(self) -> None:
+        original = diagnostic.WINDOW_WEEKS
+        try:
+            diagnostic.WINDOW_WEEKS = 13
+            containing = window_containing_week(26)
+            self.assertEqual(
+                {
+                    "window_id": "26w-14-26",
+                    "window_start_week": 14,
+                    "window_end_week": 26,
+                    "calendar_weeks": 13,
+                },
+                containing,
+            )
+            self.assertEqual(containing, window_for_week(26))
+            self.assertIsNone(window_for_week(25))
+        finally:
+            diagnostic.WINDOW_WEEKS = original
 
     def test_wrong_clock_date_and_future_inputs_fail_closed(self) -> None:
         bad_clock = _weekly_rows()

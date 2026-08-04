@@ -1,5 +1,37 @@
 # Session Log
 
+## 2026-08-04 — Claude Code 复审 PASS（26 周诊断轨 刀3：窗口算术回到单一来源）
+
+- **Verdict/Action**: PASS。新增 `window_containing_week` 作唯一边界来源，`26w-` 前缀与 `//`/`+` 算术都只剩它一份；`validate_weekly_record`、`window_for_week`、lifecycle `_register_from_records` 三处全部改为委托，lifecycle 里写死的 26/25 已清除。
+- **Required**: 无。`R-USSHORT-26W-DIAG-KNIFE3-CANONICAL-WINDOW-ARITHMETIC-RE-DUPLICATED` 转 resolved；一条沿用 Optional 只见 `docs/system_risk_register.md`。
+- **Verify**: review-evidence:3c52327a2f40。焦点超集包 `101 OK / 2.1s / exit 0`（较上轮 `99` +2）。自写探针为上轮那条原样复跑：把 `WINDOW_WEEKS` 置 13 后，`window_containing_week(26)`、`window_for_week(26)`、lifecycle 侧三者**同返 start_week 14**（上轮 lifecycle 仍按 26 周分块而分歧）；`inspect.getsource(_register_from_records)` 中字面量 `// 26`/`+ 25` 已消失、`window_containing_week` 命中；`validate_weekly_record` 不再自建 f-string。新增测试 `test_window_containing_week_is_the_single_boundary_source` 正是翻转常量后比对两处并带 `finally` 复原。
+- **Next**: 提交并合入 master。
+
+
+## 2026-08-04 — Codex executor/fixer 修复刀3 canonical window arithmetic（独立复审未完成）
+
+- **Verdict/Action**：本轮只修复 `R-USSHORT-26W-DIAG-KNIFE3-CANONICAL-WINDOW-ARITHMETIC-RE-DUPLICATED`；`window_containing_week()` 现在是窗口起止、`calendar_weeks` 和 `26w-` 身份的唯一来源，未提交。
+- **Required**：该 Required 已实现但仍保持 `OPEN/NOT_VERIFIED`，不得在 Claude Code 独立复审前写成 resolved 或 PASS。
+- **Verify**：修复后固定 Python 修复聚焦包 `29 OK / exit 0`，相关回归包 `73 OK / exit 0`，文档治理包 `66 OK / exit 0`；临时把 `WINDOW_WEEKS` 改为 13 周时，`window_for_week`、`validate_weekly_record` 和 lifecycle register 同时得到同一窗口身份；源码探针、`py_compile`、`git diff --check`、targeted BOM/FFFD 检查通过；未联网、未调用 provider、未访问真实账户、未提交。
+- **Pre-Codex self-review**：`matrix=canonical helper -> trigger/weekly validation/lifecycle register; dynamic 13-week regression`; `register=updated`; `handoff=updated`; `focused=29+73 OK`; `door=route-doc + doc-governance=66 OK`; `full-lane=not_triggered: diagnostic-only lifecycle seam`; `review=NOT_VERIFIED`; `commit=NOT_PERFORMED`; `provider/network/paid=NOT_USED`; `real_account_write=NOT_USED`。
+- **Next**：Claude Code：独立复审当前工作树的 Knife3 Required。
+
+## 2026-08-04 — Claude Code 审查 FAIL（26 周诊断轨 刀3：刀1 刚焊死的窗口算术单一来源被拆成三处）
+
+- **Verdict/Action**: FAIL，一条 Required，未提交。账本主体扎实：摘要判幂等、严格 append-by-one、epoch 变更拒续写、孤儿只认逐字节相同的第 1 周、先写不可变周记录再写可变账本。刀2 遗留的可诊断性 Optional 也真修了（`.gitignore` 新增不带尾斜杠的 `state/*/market_diagnostic_private`，实测目录未创建时 `git check-ignore` 即命中）。但刀1 的闭合判据被本刀推翻。
+- **Required**: 一条，详情与探针判据只见 `docs/system_risk_register.md`（单一来源）：`R-USSHORT-26W-DIAG-KNIFE3-CANONICAL-WINDOW-ARITHMETIC-RE-DUPLICATED`。一条沿用的 Optional 同处。
+- **Verify**: review-evidence:d7d90d171fec。焦点超集包 `99 OK / 1.9s / exit 0`，即该 Required **不是测试红**。自写探针坐实：`inspect.getsource(_register_from_records)` 中 `WINDOW_WEEKS` 命中为 `False`、字面量为 `26`/`26`/`25`；临时把 `WINDOW_WEEKS` 置 13 后 `window_for_week(26)` 返 13 周窗口而 lifecycle 仍按 26 周分块，三处就此不一致；`grep -rn WINDOW_WEEKS` 在两个相关测试模块**零命中**，无任何测试绑住三者。另实测 `_private_root` 现接受尚未播种的 canonical 私有根，确认刀2 Optional 已闭。
+- **Next**: Codex：修复该 Required。
+
+
+## 2026-08-04 — Codex executor/fixer 执行刀3（独立复审未完成）
+
+- **Verdict/Action**：刀3已完成：新增诊断轨私有不可变逐周记录、26周顺序计数、从记录反推的 lifecycle register，以及周报第12节 `us_short_market_diagnostic_v1_1` reminder block；未创建 model-paper head、未启动真实计时、未联网、未调用 provider、未提交。
+- **Required**：无新增 material risk。刀3仅接受刀2已校验的 settled weekly record；不保存 ticker/持仓/订单，`provider_fetch=false`、`account_write=false`、不改变选股/操作建议/sizing/NAV/Ship gate。
+- **Verify**：固定 Python 刀3/刀0-2 聚焦与文档门禁 `99 OK / 1.710s`；model-paper 受影响回归 `43 OK / 1.786s`；fixed-Python `py_compile=OK`；`git diff --check=clean`；targeted BOM=0。第4个可评估周 `ready_for_v1_1_implementation`、第8个 `overdue`、重复周幂等、跳周/跨 epoch/寄存器篡改/ tracked 路径均有反向测试。
+- **Pre-Codex self-review**：`matrix=settled-only weekly record -> immutable file -> digest-derived register -> section-12 reminder; first-week/contiguous-week/epoch/date/window guards; no ticker/account/provider/selection boundary`; `register=n/a，无新增 material risk`; `handoff=updated: Knife3 persistence/counter/reminder and current real-root boundary`; `focused=99+43 OK`; `full-lane=not_triggered: diagnostic-only private lifecycle seam, no real account/provider/shared selection path`; `door=route-doc + doc-governance=99 OK`; `py_compile=OK`; `diff-check=clean`; `BOM=0`; `review=NOT_VERIFIED`; `commit=NOT_PERFORMED`; `provider/network/paid=NOT_USED`; `real_account_write=NOT_USED`。
+- **Next**：Claude Code：独立复审刀3当前工作树；PASS 后由 Claude Code 提交。
+
 ## 2026-08-04 — Claude Code 审查 PASS（26 周诊断轨 刀2：本地价格/账户适配 + 刀1 Optional 收口）
 
 - **Verdict/Action**: PASS。刀1 遗留 Optional 修得干净：新增独立 `BENCHMARK_STATUSES` 并引入 `flat_diagnostic`，per-benchmark 词表与 `OVERALL_STATUSES` 分家。适配器只读本地、无 provider import，缺价不零填、刀5 之前不可能冒充总回报。

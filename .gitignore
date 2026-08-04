@@ -60,6 +60,7 @@ state/*/holding_ratchet/
 #   tracked 只放脱敏汇总(无票名/无 $)。实现期 fail-closed 护栏测试 = P0 Required(§18.0)。
 state/*/runs_private/
 state/*/model_paper_private/
+state/*/market_diagnostic_private
 state/*/lifecycle/
 state/*/shadow_compare_private/
 state/*/factor_comparison_private/
