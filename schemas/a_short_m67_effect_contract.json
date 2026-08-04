@@ -674,6 +674,24 @@
       "consumer_ref": "runners/a_short_weekly_pipeline.py::_market_regime",
       "terminal_surface": "weekly market regime and operation impact",
       "mutation_evidence": "positive mutation changes market-regime action"
+    },
+    "market_context.trade_calendar.is_pre_holiday_window": {
+      "category": "m67_main_decision",
+      "consumer_ref": "runners/a_short_weekly_pipeline.py::_pre_holiday_control_from_analysis -> _allocate_cash",
+      "terminal_surface": "weekly.cash_allocation.pre_holiday_control and new-entry cash allocation",
+      "mutation_evidence": "a qualifying pre-holiday mutation changes the cash factor and can demote a build to observe"
+    },
+    "market_context.trade_calendar.holiday_days_ahead": {
+      "category": "m67_main_decision",
+      "consumer_ref": "runners/a_short_weekly_pipeline.py::_normalise_pre_holiday_control",
+      "terminal_surface": "weekly.cash_allocation.pre_holiday_control and pre-holiday eligibility gate",
+      "mutation_evidence": "a closure below the five-day threshold disables the cash reduction; a qualifying gap enables it"
+    },
+    "market_context.trade_calendar.next_trade_date": {
+      "category": "duplicate_or_display_audit",
+      "consumer_ref": "A-EGS/egs_main.py::get_trade_calendar_context -> export_analysis_input",
+      "terminal_surface": "analysis_input.market_context.trade_calendar and weekly.cash_allocation.pre_holiday_control",
+      "mutation_evidence": "the source-bound next session is preserved in the machine-readable calendar audit surface; it is not used as a weekday guess"
     }
   },
   "leaf_nature_by_group": {
@@ -708,17 +726,17 @@
     "candidate_data_quality": "comparison_track"
   },
   "decision_predicate_sha256": {
-    "A-EGS/egs_main.py": "0a454e4b8356f321271228a685f7670415c81c47187c06ae10b46e7040bbd936",
+    "A-EGS/egs_main.py": "d4356510ed3f7b7b762d45f3c03a6c34cc26f5cce5e9c7aa2554be2d85cdbde6",
     "engine/egs_industry_heat.py": "74932f994ec0658345c41aa932b54b5685c1737c663f5070a193d264f37fced2",
     "engine/a_short_industry_theme.py": "6a10200f80b3c0d301efc8af1561b53ef2578e1cd26eea7976188dd57b7b6b2b",
     "runners/a_short_phase5_engine.py": "bd9c17a7032066d7c3c9074a8fedb16e5e11b559d973d95987458fb8eca6dd5e",
-    "runners/a_short_weekly_pipeline.py": "e6e70d69f105ffae07b18278dfb729aaa95f9b845eb325f7593bee00cd865735",
+    "runners/a_short_weekly_pipeline.py": "b0e63b8dc31f8e76e13fb8edbc3808270a0aec10035fbef806a63d30d9b1e805",
     "runners/a_short_m67_render.py": "9753b5e8213b343a7c62595f96bcdc0a760520ac1dd5b8462f83ee4ce40e922f",
     "engine/a_short_portfolio_risk.py": "02b88ac3b5239e8dd4897bde06afab0769ea5593f8a8a3666e5c8fba24486860",
     "engine/a_short_effect_contract.py": "7f96b57a88313ec5274835727d65530633e27f3bad98c7573eb598bdfdf523f6"
   },
   "runtime_constants_sha256": {
-    "A-EGS/egs_main.py": "90c84c0d54edf84b4b85cf130a16e92d222074008d3af9be6dedf28ef44eec18",
+    "A-EGS/egs_main.py": "fd73d445741e9a1264f436f50ba9fdd462fb768a98779275e85e2a4ca40d0b84",
     "runners/a_short_phase5_engine.py": "27f947c64df7eaf4e59526b4bc0c150de5baef5a2447187acc98378e4c1f9f00",
     "engine/a_short_portfolio_risk.py": "238ae5ff77e269bc1b9a507014b21561c54e6766169d1854e19119ac5137943e"
   },
@@ -970,7 +988,7 @@
     "small_float_mv_pct"
   ],
   "output_schema_sha256": {
-    "schemas/a_short_weekly_report.schema.json": "14e16c626826ca697d6d45e95d03d7308ebe046c7d1a0f63ec87aa0cccf43707",
+    "schemas/a_short_weekly_report.schema.json": "bfaf8e5ac8aec721f6fd0f546da097ba1431fb84a0a2592467a743b93a7f686d",
     "schemas/a_short_m67_report.schema.json": "cdf7c83a3947e42702f7efe90edec4911c33bec7ca8b25c882dd706dc680a2be"
   },
   "analysis_input_paths": [

@@ -1602,6 +1602,55 @@
           "type": "number",
           "minimum": 0
         },
+        "pre_holiday_control": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "source_as_of",
+            "next_trade_date",
+            "is_pre_holiday_window",
+            "holiday_days_ahead",
+            "regime_status",
+            "cash_factor"
+          ],
+          "properties": {
+            "source_as_of": {
+              "type": "string",
+              "pattern": "^[0-9]{8}$"
+            },
+            "next_trade_date": {
+              "type": [
+                "string",
+                "null"
+              ],
+              "pattern": "^[0-9]{8}$"
+            },
+            "is_pre_holiday_window": {
+              "type": "boolean"
+            },
+            "holiday_days_ahead": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "regime_status": {
+              "type": "string",
+              "enum": [
+                "attack",
+                "shock",
+                "defense",
+                "contraction",
+                "unknown"
+              ]
+            },
+            "cash_factor": {
+              "type": "number",
+              "enum": [
+                0.8,
+                1.0
+              ]
+            }
+          }
+        },
         "m05_mode": {
           "const": "conservative_degradation"
         },

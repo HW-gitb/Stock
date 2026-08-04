@@ -230,6 +230,9 @@ EGS_API_FAMILIES = [
 TUSHARE_MONEYFLOW_HSGT_NORTH_MONEY_UNIT_YUAN = 10_000
 REALTIME_CACHE_TTL = CONF["cache_ttl"]
 BACKTEST_CACHE_TTL = 10 * 365 * 24 * 3600
+TRADE_CALENDAR_FORWARD_DAYS = 60
+PRE_HOLIDAY_MIN_CLOSED_DAYS = 5
+WEEKLY_RUN_CADENCE_DAYS = 7
 TODAY = a_share_market_date()
 TODAY_DT = a_share_market_wall_time()
 # Third-knife clock split: TODAY is the decision/PIT clock; price features use
@@ -1222,7 +1225,7 @@ def export_analysis_input(df_full, watch_df, tier1_final, latest_td, trade_dates
                           rank_reconciliation=None, rule6_evaluations_by_code=None,
                           price_data_through=None, run_date=None, margin_observation=None,
                           moneyflow_coverage=None,
-                          l0_excluded_counts=None):
+                          l0_excluded_counts=None, trade_calendar_context=None):
     import json as _json
 
     project_root = os.path.dirname(SCRIPT_DIR)
@@ -1232,6 +1235,23 @@ def export_analysis_input(df_full, watch_df, tier1_final, latest_td, trade_dates
         base_root = os.path.join(project_root, "result", "a_short")
     price_data_through = str(price_data_through or latest_td)
     run_date = str(run_date or a_share_market_date())
+    if not isinstance(trade_calendar_context, dict):
+        raise RuntimeError("source-bound trade calendar context is required")
+    if str(trade_calendar_context.get("decision_as_of") or "") != str(latest_td):
+        raise RuntimeError("trade calendar context is not bound to decision_as_of")
+    calendar_next_trade_date = trade_calendar_context.get("next_trade_date")
+    if calendar_next_trade_date is not None:
+        calendar_next_trade_date = _date8(calendar_next_trade_date, "next_trade_date")
+    calendar_is_pre_holiday = trade_calendar_context.get("is_pre_holiday_window")
+    if not isinstance(calendar_is_pre_holiday, bool):
+        raise RuntimeError("trade calendar is_pre_holiday_window must be boolean")
+    calendar_holiday_days = trade_calendar_context.get("holiday_days_ahead")
+    if (isinstance(calendar_holiday_days, bool)
+            or not isinstance(calendar_holiday_days, int)
+            or calendar_holiday_days < 0):
+        raise RuntimeError("trade calendar holiday_days_ahead must be a non-negative integer")
+    if calendar_is_pre_holiday and calendar_holiday_days < PRE_HOLIDAY_MIN_CLOSED_DAYS:
+        raise RuntimeError("pre-holiday calendar flag is below the closed-day threshold")
     moneyflow_coverage = dict(
         moneyflow_coverage
         or _default_moneyflow_coverage(
@@ -1334,11 +1354,13 @@ def export_analysis_input(df_full, watch_df, tier1_final, latest_td, trade_dates
         "market_context": {
             "trade_calendar": {
                 "latest_trade_date": price_data_through,
-                "next_trade_date": None,
-                "calendar_source": "tushare.trade_cal",
+                "next_trade_date": calendar_next_trade_date,
+                "calendar_source": trade_calendar_context.get(
+                    "calendar_source", "tushare.trade_cal"
+                ),
                 "recent_trade_dates": list(trade_dates),
-                "is_pre_holiday_window": False,
-                "holiday_days_ahead": None,
+                "is_pre_holiday_window": calendar_is_pre_holiday,
+                "holiday_days_ahead": calendar_holiday_days,
             },
             "market_regime": {
                 "status": "unknown",
@@ -2487,6 +2509,123 @@ def get_trade_dates(n=25, price_as_of=None):
         raise RuntimeError(f"official trade calendar returned only {len(dates)} dates; need {n}")
     save_cache(key, dates)
     return dates[:n]
+
+
+def _normalise_trade_calendar_rows(raw, *, decision_as_of: str, end_date: str) -> list[dict]:
+    """Validate the official open/closed calendar used by forward controls."""
+    if isinstance(raw, pd.DataFrame):
+        if "cal_date" not in raw.columns or "is_open" not in raw.columns:
+            raise RuntimeError("official forward trade calendar payload must contain cal_date,is_open")
+        records = raw[["cal_date", "is_open"]].to_dict("records")
+    elif isinstance(raw, list):
+        records = raw
+    else:
+        raise RuntimeError("official forward trade calendar payload has invalid shape")
+
+    anchor_dt = datetime.strptime(str(decision_as_of), "%Y%m%d")
+    end_dt = datetime.strptime(str(end_date), "%Y%m%d")
+    normalized = []
+    seen = set()
+    for record in records:
+        if not isinstance(record, dict):
+            raise RuntimeError("official forward trade calendar row is not an object")
+        value = record.get("cal_date")
+        text = str(value).strip()
+        if text.endswith(".0"):
+            text = text[:-2]
+        if not re.fullmatch(r"\d{8}", text):
+            raise RuntimeError(f"official forward trade calendar contains invalid cal_date {value!r}")
+        parsed = datetime.strptime(text, "%Y%m%d")
+        if parsed < anchor_dt or parsed > end_dt:
+            raise RuntimeError(f"official forward trade calendar date out of bound: {text}")
+        if text in seen:
+            raise RuntimeError(f"official forward trade calendar contains duplicate cal_date {text}")
+        seen.add(text)
+        is_open = record.get("is_open")
+        if isinstance(is_open, bool):
+            open_flag = int(is_open)
+        else:
+            if is_open is None or (not isinstance(is_open, str) and pd.isna(is_open)):
+                raise RuntimeError(f"official forward trade calendar has invalid is_open for {text}")
+            token = str(is_open).strip().lower()
+            if token in {"1", "1.0", "true"}:
+                open_flag = 1
+            elif token in {"0", "0.0", "false"}:
+                open_flag = 0
+            else:
+                raise RuntimeError(f"official forward trade calendar has invalid is_open for {text}")
+        normalized.append({"cal_date": text, "is_open": open_flag})
+    normalized.sort(key=lambda row: row["cal_date"])
+    if not normalized or not any(
+        row["cal_date"] == str(decision_as_of) and row["is_open"] == 1
+        for row in normalized
+    ):
+        raise RuntimeError("official forward trade calendar does not contain an open decision_as_of")
+    return normalized
+
+
+def get_trade_calendar_context(decision_as_of: str) -> dict:
+    """Return source-bound next-session and weekly pre-holiday facts.
+
+    The decision clock is deliberately separate from ``price_as_of``: a Monday
+    pre-market weekly run may consume Friday prices while still needing to see
+    the holiday closure after Monday.  The official ``trade_cal`` rows include
+    both open and closed dates so a long closure is counted rather than guessed
+    from weekdays.
+    """
+    decision_as_of = _date8(decision_as_of, "decision_as_of")
+    end_date = (
+        datetime.strptime(decision_as_of, "%Y%m%d")
+        + timedelta(days=TRADE_CALENDAR_FORWARD_DAYS)
+    ).strftime("%Y%m%d")
+    key = f"trade_calendar_forward_{decision_as_of}_{TRADE_CALENDAR_FORWARD_DAYS}d_v1"
+    try:
+        cached = load_cache(key)
+    except Exception:
+        cached = None
+    if cached is None:
+        raw = safe_api(
+            pro.trade_cal,
+            exchange="SSE",
+            start_date=decision_as_of,
+            end_date=end_date,
+            fields="cal_date,is_open",
+        )
+        if raw is None or (isinstance(raw, pd.DataFrame) and raw.empty):
+            raise RuntimeError("official forward trade calendar source unavailable")
+        rows = _normalise_trade_calendar_rows(
+            raw, decision_as_of=decision_as_of, end_date=end_date
+        )
+        save_cache(key, rows)
+    else:
+        rows = _normalise_trade_calendar_rows(
+            cached, decision_as_of=decision_as_of, end_date=end_date
+        )
+
+    open_dates = [row["cal_date"] for row in rows if row["is_open"] == 1]
+    next_trade_date = next((date for date in open_dates if date > decision_as_of), None)
+    next_weekly_run = datetime.strptime(decision_as_of, "%Y%m%d") + timedelta(
+        days=WEEKLY_RUN_CADENCE_DAYS
+    )
+    selected_gap_days = 0
+    for current, following in zip(open_dates, open_dates[1:]):
+        current_dt = datetime.strptime(current, "%Y%m%d")
+        following_dt = datetime.strptime(following, "%Y%m%d")
+        if current < decision_as_of:
+            continue
+        closed_days = (following_dt - current_dt).days - 1
+        gap_start = current_dt + timedelta(days=1)
+        if (closed_days >= PRE_HOLIDAY_MIN_CLOSED_DAYS
+                and gap_start <= next_weekly_run):
+            selected_gap_days = closed_days
+            break
+    return {
+        "decision_as_of": decision_as_of,
+        "next_trade_date": next_trade_date,
+        "is_pre_holiday_window": bool(selected_gap_days),
+        "holiday_days_ahead": int(selected_gap_days),
+        "calendar_source": "tushare.trade_cal",
+    }
 
 def _namechange_date(value, field_name):
     """Return one optional canonical Tushare date or fail before historical replay."""
@@ -5864,6 +6003,7 @@ def run_egs(backtest_mode=False, output_root=None, price_as_of=None):
     latest_td   = trade_dates[0]
     decision_as_of = TODAY
     run_date = a_share_market_date()
+    trade_calendar_context = get_trade_calendar_context(decision_as_of)
 
     df_stocks  = get_stock_list()
     sw_map     = get_sw_industry_map()
@@ -6331,6 +6471,7 @@ def run_egs(backtest_mode=False, output_root=None, price_as_of=None):
             margin_observation=margin_observation,
             moneyflow_coverage=moneyflow_coverage,
             l0_excluded_counts=l0_excluded_counts,
+            trade_calendar_context=trade_calendar_context,
         )
         log.info(f"[OK] analysis_input saved to {analysis_path}")
         log.info(f"[OK] snapshot saved to {snapshot_path}")

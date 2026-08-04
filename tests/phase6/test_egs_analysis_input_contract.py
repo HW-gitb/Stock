@@ -226,12 +226,21 @@ class EgsMainAnalysisInputContractTest(unittest.TestCase):
             ],
         }
         feed = {
-            "as_of": as_of, "n_days": 5,
+            "schema_name": "a_short_iv_feed", "schema_version": "1.1.0",
+            "generated_at": "2026-05-22T15:30:00+08:00", "as_of": as_of,
+            "underlying": "510050.SH",
+            "params": {"risk_free": 0.02, "div_yield": 0.0,
+                        "const_maturity_days": 30, "min_t_days": 5,
+                        "roll_window": 252, "min_roll_obs": 60, "hv_window": 21},
+            "n_days": 5,
             "series": [
                 {"trade_date": day, "iv_value": 0.20 + i * 0.001,
                  "iv_percentile_252d": 50.0, "hv_value": 0.18 + i * 0.001}
                 for i, day in enumerate(["20260518", "20260519", "20260520", "20260521", as_of])
             ],
+            "boundary": {"production": False, "real_money": False,
+                         "satisfies_ship_gate": False,
+                         "iv_method": "bs_atm_constant_maturity_feasibility_grade"},
         }
         prices = [{"high": 10.2, "low": 9.8, "close": 10.0} for _ in range(30)]
         with tempfile.TemporaryDirectory(dir=str(ROOT)) as tmp:
@@ -261,10 +270,21 @@ class EgsMainAnalysisInputContractTest(unittest.TestCase):
 
         as_of = "20260522"
         reconciliation = {"l0_count": 3, "unexpected_stage_change_count": 0, "stage_counts": []}
-        feed = {"as_of": as_of, "n_days": 5, "series": [
+        feed = {
+            "schema_name": "a_short_iv_feed", "schema_version": "1.1.0",
+            "generated_at": "2026-05-22T15:30:00+08:00", "as_of": as_of,
+            "underlying": "510050.SH",
+            "params": {"risk_free": 0.02, "div_yield": 0.0,
+                        "const_maturity_days": 30, "min_t_days": 5,
+                        "roll_window": 252, "min_roll_obs": 60, "hv_window": 21},
+            "n_days": 5, "series": [
             {"trade_date": day, "iv_value": 0.20, "iv_percentile_252d": 50.0, "hv_value": 0.18}
             for day in ["20260518", "20260519", "20260520", "20260521", as_of]
-        ]}
+            ],
+            "boundary": {"production": False, "real_money": False,
+                         "satisfies_ship_gate": False,
+                         "iv_method": "bs_atm_constant_maturity_feasibility_grade"},
+        }
         prices = [{"high": 10.2, "low": 9.8, "close": 10.0} for _ in range(30)]
         with tempfile.TemporaryDirectory(dir=str(ROOT)) as tmp:
             analysis_path, _, _, _ = self._export(tmp, latest_td=as_of, rank_reconciliation=reconciliation)
@@ -315,6 +335,13 @@ class EgsMainAnalysisInputContractTest(unittest.TestCase):
             output_root=output_root,
             rank_reconciliation=rank_reconciliation,
             l0_excluded_counts=l0_excluded_counts,
+            trade_calendar_context={
+                "decision_as_of": latest_td,
+                "next_trade_date": None,
+                "is_pre_holiday_window": False,
+                "holiday_days_ahead": 0,
+                "calendar_source": "tushare.trade_cal",
+            },
         )
 
 

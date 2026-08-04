@@ -66,6 +66,8 @@ _WEEKLY_WINDOWS = _RUNTIME_CONFIGURATION["m67"]["weekly_windows"]
 _PORTFOLIO_RISK_POLICY = _RUNTIME_CONFIGURATION["m67"]["portfolio_risk"]
 SMALL_FLOAT_MV_RMB = _PORTFOLIO_RISK_POLICY["small_float_mv_rmb"]
 HIGH_RISK_HOLDING_CAP_MULTIPLIER = _PORTFOLIO_RISK_POLICY["high_risk_holding_cap_multiplier"]
+PRE_HOLIDAY_CASH_FACTOR = 0.8
+PRE_HOLIDAY_MIN_CLOSED_DAYS = 5
 
 SCHEMA_NAME = "a_short_weekly_report"
 SCHEMA_VERSION = "1.0.0"
@@ -810,6 +812,79 @@ _PORTFOLIO_RISK_MARKER = "组合集中度/因子共振"
 _PORTFOLIO_RISK_SOURCE = "portfolio_concentration_factor_resonance"
 
 
+def _normalise_pre_holiday_control(context: dict | None, as_of: str) -> dict:
+    """Validate the EGS calendar fact before it can change new-entry sizing."""
+    supplied = dict(context or {})
+    source_as_of = str(supplied.get("source_as_of") or as_of)
+    if not _is_valid_date(source_as_of) or source_as_of != str(as_of):
+        raise ValueError("pre-holiday control is not bound to weekly as_of")
+    window = supplied.get("is_pre_holiday_window", False)
+    if not isinstance(window, bool):
+        raise ValueError("pre-holiday is_pre_holiday_window must be boolean")
+    closed_days = supplied.get("holiday_days_ahead", 0)
+    if closed_days is None:
+        closed_days = 0
+    if (isinstance(closed_days, bool) or not isinstance(closed_days, int)
+            or closed_days < 0):
+        raise ValueError("pre-holiday holiday_days_ahead must be a non-negative integer")
+    next_trade_date = supplied.get("next_trade_date")
+    if next_trade_date is not None:
+        next_trade_date = str(next_trade_date)
+        if not _is_valid_date(next_trade_date) or next_trade_date <= source_as_of:
+            raise ValueError("pre-holiday next_trade_date is not after source_as_of")
+    if window and (closed_days < PRE_HOLIDAY_MIN_CLOSED_DAYS or next_trade_date is None):
+        raise ValueError("pre-holiday flag lacks a qualifying source-bound closure")
+    regime_status = str(supplied.get("regime_status") or "unknown")
+    if regime_status not in {"attack", "shock", "defense", "contraction", "unknown"}:
+        raise ValueError("pre-holiday regime_status is invalid")
+    cash_factor = 1.0
+    if window and regime_status != "attack":
+        cash_factor = PRE_HOLIDAY_CASH_FACTOR
+    supplied_factor = supplied.get("cash_factor")
+    if supplied_factor is not None:
+        if (isinstance(supplied_factor, bool)
+                or not math.isfinite(float(supplied_factor))
+                or abs(float(supplied_factor) - cash_factor) > 1e-9):
+            raise ValueError("pre-holiday cash_factor disagrees with source control")
+    return {
+        "source_as_of": source_as_of,
+        "next_trade_date": next_trade_date,
+        "is_pre_holiday_window": window,
+        "holiday_days_ahead": int(closed_days),
+        "regime_status": regime_status,
+        "cash_factor": cash_factor,
+    }
+
+
+def _pre_holiday_control_from_analysis(ai: dict, as_of: str) -> dict:
+    """Bind the weekly cash control to the validated EGS analysis_input."""
+    market_context = (ai or {}).get("market_context") or {}
+    calendar = market_context.get("trade_calendar")
+    if not isinstance(calendar, dict):
+        raise ValueError("analysis_input.trade_calendar is required for pre-holiday control")
+    decision_as_of = str(
+        (ai or {}).get("decision_as_of")
+        or (ai or {}).get("trade_date")
+        or ((ai or {}).get("source") or {}).get("clocks", {}).get("decision_as_of")
+        or ""
+    )
+    if decision_as_of != str(as_of):
+        raise ValueError("analysis_input decision_as_of is not bound to weekly as_of")
+    calendar_source = calendar.get("calendar_source")
+    if calendar_source not in (None, "tushare.trade_cal"):
+        raise ValueError("analysis_input trade_calendar source is invalid")
+    if calendar.get("is_pre_holiday_window") and calendar_source != "tushare.trade_cal":
+        raise ValueError("pre-holiday window requires a source-bound trade calendar")
+    regime = market_context.get("market_regime") or {}
+    return _normalise_pre_holiday_control({
+        "source_as_of": decision_as_of,
+        "next_trade_date": calendar.get("next_trade_date"),
+        "is_pre_holiday_window": calendar.get("is_pre_holiday_window", False),
+        "holiday_days_ahead": calendar.get("holiday_days_ahead"),
+        "regime_status": regime.get("status"),
+    }, as_of)
+
+
 def _demote_build_for_portfolio_risk(report: dict, rank: int, reason: str) -> None:
     """Reuse the canonical observe conversion, then replace its cash-only reason."""
     _demote_build_to_observe(report, rank)
@@ -821,7 +896,9 @@ def _demote_build_for_portfolio_risk(report: dict, rank: int, reason: str) -> No
 
 
 def _allocate_cash(reports: list, available_cash, new_exposure_capacity=None,
-                   portfolio_context=None, m05_context: dict | None = None) -> dict:
+                   portfolio_context=None, m05_context: dict | None = None,
+                   pre_holiday_control: dict | None = None,
+                   *, as_of: str | None = None) -> dict:
     """#3 全局现金分配(价格提案 §4 + §11.3/11.4):多只建仓按**区间上沿 entry_high**(最不利价)统一消耗
     available_cash,确定性排序;不足一手/最小金额 → 转观察。**原地改 reports(只动建仓票)**;返回 weekly 现金摘要 | None。
     只 re-rank 建仓,不 rescue hard veto、不把观察/否决变建仓、不碰持仓/Rule12·13。"""
@@ -836,6 +913,29 @@ def _allocate_cash(reports: list, available_cash, new_exposure_capacity=None,
                  or not math.isfinite(float(new_exposure_capacity))
                  or float(new_exposure_capacity) < 0)):
         raise ValueError("new_exposure_capacity must be a finite non-negative number")
+    raw_pre_holiday_control = dict(pre_holiday_control or {
+        "source_as_of": None,
+        "next_trade_date": None,
+        "is_pre_holiday_window": False,
+        "holiday_days_ahead": 0,
+        "regime_status": "unknown",
+        "cash_factor": 1.0,
+    })
+    if pre_holiday_control is None:
+        pre_holiday_control = raw_pre_holiday_control
+    else:
+        if as_of is None:
+            raise ValueError("pre-holiday cash allocation requires weekly as_of")
+        pre_holiday_control = _normalise_pre_holiday_control(raw_pre_holiday_control, as_of)
+    cash_factor = pre_holiday_control.get("cash_factor", 1.0)
+    if (isinstance(cash_factor, bool) or not math.isfinite(float(cash_factor))
+            or float(cash_factor) <= 0 or float(cash_factor) > 1):
+        raise ValueError("pre-holiday cash_factor must be in (0,1]")
+    effective_available_cash = round(float(available_cash) * float(cash_factor), 2)
+    effective_new_exposure_capacity = (
+        None if new_exposure_capacity is None
+        else round(float(new_exposure_capacity) * float(cash_factor), 2)
+    )
     builds = [(i, r) for i, r in enumerate(reports) if r["m67"]["table"]["操作"] == "建仓"]
 
     def _key(ir):
@@ -846,9 +946,9 @@ def _allocate_cash(reports: list, available_cash, new_exposure_capacity=None,
                 -(plan.get("rr_at_entry_high") or 0.0), -(plan.get("avg_amount_5d") or 0.0),
                 i, str(r.get("ts_code", "")))     # original_topN_rank=i;ts_code 末位 tie-break 保确定性
 
-    remaining, allocated_total = max(0.0, float(available_cash)), 0.0
-    exposure_remaining = (None if new_exposure_capacity is None
-                          else max(0.0, float(new_exposure_capacity)))
+    remaining, allocated_total = max(0.0, effective_available_cash), 0.0
+    exposure_remaining = (None if effective_new_exposure_capacity is None
+                          else max(0.0, effective_new_exposure_capacity))
     for rank, (i, r) in enumerate(sorted(builds, key=_key), start=1):
         plan = r["machine"]["entry_exit_size_star"]["plan"]
         eh, raw = plan["entry_high"], plan["shares"]
@@ -876,11 +976,12 @@ def _allocate_cash(reports: list, available_cash, new_exposure_capacity=None,
             commit_candidate(portfolio_context, projection)
         if allocated < raw:
             r["m67"]["精简结论区"]["操作建议"] += f"(组合现金分配:股数由 {raw} 降至 {allocated},占用现金 {cost})"
-    summary = {"available_cash_start": round(float(available_cash), 2),
+    summary = {"available_cash_start": round(effective_available_cash, 2),
                "allocated_cash_total": round(allocated_total, 2), "remaining_cash": round(remaining, 2)}
     if new_exposure_capacity is not None:
-        summary.update({"new_exposure_capacity_start": round(float(new_exposure_capacity), 2),
+        summary.update({"new_exposure_capacity_start": round(effective_new_exposure_capacity, 2),
                         "remaining_new_exposure_capacity": round(exposure_remaining, 2)})
+    summary["pre_holiday_control"] = dict(pre_holiday_control)
     if m05_context is not None:
         if (m05_context.get("mode") != "conservative_degradation"
                 or m05_context.get("allocation_blocked") is not True):
@@ -1193,7 +1294,8 @@ def build_weekly_report(normalized_list: list, as_of: str, generated_at: str,
                         candidate_exclusions: list[dict] | None = None,
                         margin_coverage: dict | None = None,
                         portfolio_fact_as_of: str | None = None,
-                        portfolio_fact_fetch_status: str = "not_requested") -> dict:
+                        portfolio_fact_fetch_status: str = "not_requested",
+                        pre_holiday_control: dict | None = None) -> dict:
     from runners.a_short_phase5_engine import build_m67_report, build_holding_report
     incoming_lineage = dict(run_lineage or {})
     incoming_price_freshness = incoming_lineage.get("price_freshness") or {}
@@ -1209,6 +1311,7 @@ def build_weekly_report(normalized_list: list, as_of: str, generated_at: str,
         raise ValueError("portfolio fact clock must equal weekly price_data_through")
     if portfolio_fact_fetch_status not in {"not_requested", "ok", "not_published", "unavailable"}:
         raise ValueError("portfolio fact fetch status invalid")
+    pre_holiday_control = _normalise_pre_holiday_control(pre_holiday_control, as_of)
     if margin_coverage is None:
         margin_coverage = {
             "reference_date": price_data_through, "effective_ref_date": None,
@@ -1317,7 +1420,9 @@ def build_weekly_report(normalized_list: list, as_of: str, generated_at: str,
         account_positions=account_positions, missing_holding_codes=missing_holding_codes)
     cash_summary = _allocate_cash(reports, effective_available_cash,
                                   effective_new_exposure_capacity, portfolio_context,
-                                  m05_context=m05_cash_context)
+                                  m05_context=m05_cash_context,
+                                  pre_holiday_control=pre_holiday_control,
+                                  as_of=as_of)
     portfolio_risk = _apply_portfolio_risk_results(
         reports, portfolio_context, as_of, portfolio_fact_as_of, portfolio_fact_fetch_status)
     _attach_breakout_source_disagreement_notices(reports)
@@ -1669,6 +1774,15 @@ def validate_weekly_report(weekly: dict, iv_feed_summary: dict,
         raise ValueError("run_lineage=(provided,sized) 但 cash_allocation 非对象(sized 必有全局现金分配摘要)")
     if not sized and ca is not None:
         raise ValueError("run_lineage=(absent,observation_only_no_account) 但 cash_allocation 非 null(observation-only 不得有现金分配)")
+    if ca is not None:
+        supplied_pre_holiday = ca.get("pre_holiday_control")
+        if not isinstance(supplied_pre_holiday, dict):
+            raise ValueError("cash_allocation 缺少 pre_holiday_control")
+        expected_pre_holiday = _normalise_pre_holiday_control(
+            supplied_pre_holiday, weekly["as_of"]
+        )
+        if supplied_pre_holiday != expected_pre_holiday:
+            raise ValueError("cash_allocation.pre_holiday_control 未按 source control 归一化")
     from runners.a_short_iv_feed_build import (
         M05_CONSERVATIVE_BLOCK_REASON, M05_CONSERVATIVE_MODE,
     )
@@ -4951,6 +5065,7 @@ def main(argv=None, pro_factory=None, price_provider=None, semantic_provider=Non
     # 市场 regime 只取自 analysis_input(EGS 分类)。unknown/missing 不允许被账户配置覆盖成进攻期;
     # 按 2026-06-14 用户决策:unknown → 震荡期 + 降级 + 保守减半 + M6.7 明确提示。
     regime, regime_fallback = resolve_market_regime(ai)
+    pre_holiday_control = _pre_holiday_control_from_analysis(ai, args.as_of)
     # available_cash 是用户必填输入。零现金仍须管理已有持仓,但不得建立新仓;
     # 未提供 --account → observation-only(sizing_mode 标进 run_lineage,读者不会把 sizing 假象的「观察」当真 avoid 信号)。
     available_cash = acct.get("available_cash")
@@ -5381,7 +5496,8 @@ def main(argv=None, pro_factory=None, price_provider=None, semantic_provider=Non
                                  missing_holding_codes=[item.get("ts_code") for item in holdings_manual_review],
                                  candidate_exclusions=candidate_exclusions,
                                  portfolio_fact_as_of=price_data_through,
-                                 portfolio_fact_fetch_status=portfolio_fact_fetch_status)
+                                 portfolio_fact_fetch_status=portfolio_fact_fetch_status,
+                                 pre_holiday_control=pre_holiday_control)
     weekly["decision_as_of"] = str(args.as_of)
     weekly["run_date"] = str(args.run_date) if args.run_date else None
     weekly["price_data_through"] = price_data_through
