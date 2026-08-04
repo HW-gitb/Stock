@@ -12,6 +12,8 @@ from importlib.util import find_spec
 from dataclasses import dataclass
 from pathlib import Path
 
+import verification_receipt as receipts
+
 ROOT = Path(__file__).resolve().parent.parent
 FULL_MAX_SECONDS = 860
 FOCUSED_DEFAULT_SECONDS = 300
@@ -145,20 +147,57 @@ def main(argv: list[str]) -> int:
     if hasattr(sys.stdout, "reconfigure"):
         sys.stdout.reconfigure(encoding="utf-8", errors="replace")
     try:
+        pin_error = receipts.pinned_python_error()
+        if pin_error:
+            raise ValueError(pin_error)
         tier, timeout, unittest_args = _parse(argv)
+        state_before = receipts.collect_code_state() if tier == "focused" else None
         result = run_unittest(unittest_args, timeout)
     except (ValueError, OSError) as exc:
         print(f"[bounded-unittest] REFUSED: {exc}")
         return 2
     if result.output:
         print(result.output, end="" if result.output.endswith("\n") else "\n")
+    receipt = None
+    receipt_error = None
+    if tier == "focused" and result.status == "PASS":
+        try:
+            state_after = receipts.collect_code_state()
+            if receipts.fingerprint(state_before or {}) != receipts.fingerprint(state_after):
+                receipt_error = "code state changed during focused run"
+            else:
+                receipt = receipts.write_focused_receipt(
+                    result_status=result.status,
+                    result_exit_code=result.exit_code,
+                    tests=result.tests,
+                    elapsed_seconds=result.elapsed_seconds,
+                    timeout_seconds=timeout,
+                    unittest_args=unittest_args,
+                    state=state_after,
+                    path=receipts.RECEIPT_PATH,
+                )
+                if receipt is None:
+                    receipt_error = "focused result did not contain positive terminal test evidence"
+        except OSError as exc:
+            receipt_error = f"could not write focused acceptance receipt: {exc}"
+    reported_status = "FAIL" if receipt_error else result.status
+    reported_exit = 2 if receipt_error else result.exit_code
     count = str(result.tests) if result.tests is not None else "UNKNOWN"
     print(
-        f"[bounded-unittest] RESULT tier={tier} status={result.status} "
-        f"exit={result.exit_code} tests={count} elapsed={result.elapsed_seconds:.1f}s "
+        f"[bounded-unittest] RESULT tier={tier} status={reported_status} "
+        f"exit={reported_exit} tests={count} elapsed={result.elapsed_seconds:.1f}s "
         f"deadline={timeout}s"
     )
-    return result.exit_code
+    if receipt_error:
+        print(f"[bounded-unittest] REFUSED - {receipt_error}")
+    elif receipt is not None:
+        bundles = ",".join(receipt["bundles"]) or "none"
+        print(
+            f"[bounded-unittest] FOCUSED_RECEIPT token={receipts.receipt_token(receipt)} "
+            f"tests={receipt['tests']} bundles={bundles} "
+            f"python={receipt['python_executable']}"
+        )
+    return reported_exit
 
 
 if __name__ == "__main__":

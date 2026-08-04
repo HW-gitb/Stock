@@ -74,3 +74,35 @@ The closure pack has named controls for: A-share provider absence blocks a_short
 - 旧的“当前 full-lane 上限 1300 秒”已失效；仅历史命令与历史结果中的 1300 仍有效。
 - 本刀只收紧测试基础设施的运行时预算，不改 discovery selector、测试覆盖、业务代码、provider 边界或 PASS-only 记账。它不触发 lane full regression；下一次 rule-3 full run 必须在 800 秒内完成，否则诚实返回 `TIMEOUT`，不得抬上限或把 UNKNOWN 当 PASS。
 - 唯一 scheduled 独立自审曾指出审查入口仍写 focused“最多 300 秒”；主线程已按类改成“默认 300 / 显式慢包最高 1300”，并在 review-tiering 守卫中同时钉住 300、1300、800。该窗口随后按 checklist 关闭，不做内容驱动复审。
+## 2026-08-04 追加：focused/full 证据机器化门禁
+
+### 改了什么
+
+- 新增 `.tools/verification_receipt.py`；bounded launcher 在真实 focused PASS 后写入本地 receipt，绑定精确 unittest args、`Ran N tests`、固定 Python、当前非文档代码指纹和派生 bundle。
+- `full_pack_ledger.run_full_pack` 现在对所有调用拒绝自由文本、缺失/过期/篡改 receipt；effect producer/consumer/schema surface 强制同一 focused pack 同时包含 `tests.test_a_short_effect_contract` 与 `tests.test_a_short_effect_consumer_probe`。
+- full process 启动前自动执行 `git diff --check` 与 changed-Python `py_compile`；launcher 清除 PATH/PYTHONPATH 污染，仅保留 pinned Python、固定 Git 和 Windows 工具；pre-commit 对 staged 非文档改动硬阻断无当前 receipt。
+
+### 为什么改
+
+旧流程把 focused 证据当自由文本，无法机器识别“实际跑了什么”，也无法阻止 effect consumer 漏包；这会让 full lane 的执行门依赖人工记忆。此次只补证据和门禁，不改变业务规则或 full-lane 条件。
+
+### 验证命令 / 验证结果
+
+- 固定主 Python：`C:\Users\cnhea\AppData\Local\Programs\Python\Python313\python.exe`，版本 `Python 3.13.8`。
+- `.tools\run_unittest_with_repo_pythonpath.cmd tests.test_verification_receipt tests.test_bounded_unittest tests.test_full_pack_ledger tests.test_a_short_preflight tests.test_doc_governance_guard`：`Ran 102 tests in 8.533s` / `OK`；receipt `receipt:b4af4edcf4a0e314c39595f6`；`.tools\verification_receipt.py` 自校验 `PASS - OK`。
+- `git diff --check` 与 changed-tool/test `py_compile` 均 exit 0；full lane `not_triggered`，因为本刀仅为流程工具/门禁改动。
+
+### 失效旧结论
+
+旧的 `focused=<文字>` 不再是 full-pack 合法证据；full command 必须传 `receipt:<receipt-id>`。focused green 仍不等于独立 review、provider/live、production 或 ship-gate PASS。
+
+### 下一步注意事项
+
+Claude Code 独立审查本轮工具、bundle surface 映射、receipt integrity 和 pre-commit 行为；review PASS 后由 reviewer/committer 按项目规则提交。`OPEN/NOT_VERIFIED`、provider/network/live/account/sub-agent 均保持边界。
+## 2026-08-04 Addendum: final focused evidence correction
+
+The prior `102 tests` / `receipt:b4af4edcf4a0e314c39595f6` line was an intermediate run. The final combined focused pack, including route-doc governance, returned `Ran 116 tests in 11.561s` / `OK` under `C:\Users\cnhea\AppData\Local\Programs\Python\Python313\python.exe` (`Python 3.13.8`) and wrote `receipt:ac0a3b275409bb88adaf36f9`. The receipt self-check returned `PASS - OK`; `git diff --check` and changed-tool/test `py_compile` returned exit 0. Full lane remains `not_triggered` under AGENTS rule 3 for this process-tool-only repair. Independent review and submission remain `NOT_VERIFIED` / `NOT_PERFORMED`.
+
+## 2026-08-04 Addendum: internal prepare receipt hardening
+
+The remaining process bypass was in the internal `full_pack_ledger.prepare()` API: the retired CLI and normal `run_full_pack()` path were guarded, but a direct caller could still pass free-text focused evidence and write ledger state. `prepare()` now requires and validates the current `receipt:<receipt_id>` against the current code state and pinned Python before writing; `run_full_pack()` passes the same receipt path through. The new negative test proves free text is rejected before ledger creation. Fixed-Python focused evidence: `Ran 117 tests in 9.256s` / `OK`, receipt `receipt:2032d1904f546c7cbeafe54c`; receipt self-check `PASS - OK`; `git diff --check` and changed-tool/test `py_compile` returned exit 0; full lane remains `not_triggered` under AGENTS rule 3. Independent review and submission remain `NOT_VERIFIED` / `NOT_PERFORMED`.

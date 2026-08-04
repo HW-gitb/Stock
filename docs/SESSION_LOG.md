@@ -13,6 +13,34 @@
 - **Required**: 无。`R-ASHORT-KNIFE21-MARGIN-MARKET-SHAPE-PROBE` 与 `R-ASHORT-KNIFE14-SHORT-HISTORY-DOWNGRADE` 详情、对起草方案的两处更正、以及一条未修的观测性 Optional 见 `docs/system_risk_register.md`（单一来源，本处不复述）。
 - **Verify**: 固定 Python 3.13.8；新增 `tests.test_a_short_short_history_downgrade` `Ran 8 tests ... OK`；写盘守卫 10 OK（新探针 `_write_json` 已登记进 `PUBLIC_WRITER_FUNCTIONS`——首轮全量正是被它拦红）；full lane `status=PASS exit=0 tests=2371 elapsed=330.1s`，`2363→2371` 的 `+8` 全在 lane 选择器内；`static_contract_error=None`；探针 summary 密钥扫描 0 命中、raw 全在 gitignored 根。真实周跑与独立审查均 `NOT_VERIFIED`。A-F 自审已走完，逐条证据（权威链／ripple grep 零残留／反向控制／门结果）见 register 同两条 R-ID。
 - **Next**: Claude Code：审查
+## 2026-08-04 — Claude 审查 PASS（流程机器化：focused 收据 + 全量前置静态门）
+
+- **Verdict/Action**: PASS，已提交并合入 master。把「自由文本 focused 证据」换成指纹绑定的 `receipt:<id>` 机器令牌，全量前加 `git diff --check` + `py_compile` 廉价门。主审方向是「有没有改动能让红看起来像绿」——没有：收据写入失败只会把 PASS 降级为 FAIL，不存在反向路径。
+- **Required**: 无。三条不阻断 Optional（`tests` 计数不在完整性哈希内、收据按 §A.6 仍可徒手伪造属范围边界、reviewer 独立复跑全量多一步）见 `docs/system_risk_register.md`（单一来源，本处不复述）。
+- **Verify**: review-evidence:not_available（本轮未触发 gate 快照注入）；自写 7 条篡改控制 6 拒 1 过——翻 status/exit/指纹/解释器/测试参数/冒领 bundle 全被拒，唯 `tests` 由 32 改 99999 仍验证通过（即 Optional ①）；陈旧收据被拒、纯 .md 改动不误伤。亲跑：新 `.cmd` 焦点包 `Ran 32 tests ... OK` 铸出 `receipt:e0d0bcbe1214df8aa2c389b5`，带令牌全量 `status=PASS exit=0 tests=2363 elapsed=307.0s`。29e0 基线旧于 master，合并后 master 需复验。
+- **Next**: Codex：执行
+
+## 2026-08-04 - Codex executor/fixer repair: prepare receipt hardening (latest; review pending)
+- **Verdict/Action**: Closed the remaining internal `prepare()` free-text bypass. The repair remains uncommitted, unpushed, unmerged, offline, provider/live-free, and sub-agent-free.
+- **Required**: `R-PROCESS-FOCUSED-RECEIPT-AND-BUNDLE-GATE-GAP` remains `OPEN/NOT_VERIFIED`; the residual bypass and closure criteria are recorded in `docs/system_risk_register.md`.
+- **Verify**: fixed Python `C:\Users\cnhea\AppData\Local\Programs\Python\Python313\python.exe` (`Python 3.13.8`); combined focused pack `Ran 117 tests in 9.256s` / `OK`; receipt `receipt:2032d1904f546c7cbeafe54c`; receipt self-check `PASS - OK`; `git diff --check` and changed-tool/test `py_compile` exit 0; full lane not triggered under AGENTS rule 3 because this is process-tool-only.
+- **Pre-Codex self-review**: `matrix=public prepare API + run_full_pack + cached-green + free-text negative control + receipt/token/code-fingerprint`; `register=updated`; `handoff=updated`; `focused=117 OK`; `full-lane=not_triggered: AGENTS rule 3; reason=process-tool-only`; `door=route-doc + doc-governance included in focused pack; staged-hook execution=NOT_VERIFIED`; `review=NOT_VERIFIED`; `commit=NOT_PERFORMED`; `provider/live/sub-agent=NOT_USED`.
+- **Next**: Claude Code independently reviews the process gates; after PASS, reviewer/committer follows project submission rules.
+
+## 2026-08-04 - Codex evidence correction (latest; review pending)
+- **Verdict/Action**: The earlier 102-test line was an intermediate focused run; this entry supersedes its evidence. The process-tool repair remains uncommitted, unpushed, unmerged, offline, provider/live-free, and sub-agent-free.
+- **Required**: `R-PROCESS-FOCUSED-RECEIPT-AND-BUNDLE-GATE-GAP` remains `OPEN/NOT_VERIFIED`; full details remain in `docs/system_risk_register.md`.
+- **Verify**: fixed Python `C:\Users\cnhea\AppData\Local\Programs\Python\Python313\python.exe` (`Python 3.13.8`); combined focused pack including route-doc governance `Ran 116 tests in 11.561s` / `OK`; receipt `receipt:ac0a3b275409bb88adaf36f9`; receipt self-check `PASS - OK`; `git diff --check` and changed-tool/test `py_compile` exit 0; full lane not triggered under AGENTS rule 3 because this is process-tool-only.
+- **Pre-Codex self-review**: `matrix=receipt/token/code-fingerprint + effect producer-consumer bundle + PATH/PYTHONPATH + static/compile`; `register=updated`; `handoff=updated`; `focused=116 OK`; `full-lane=not_triggered: AGENTS rule 3; reason=process-tool-only`; `door=pre-commit focused-receipt hard gate + doc-governance focused`; `review=NOT_VERIFIED`; `commit=NOT_PERFORMED`; `provider/live/sub-agent=NOT_USED`.
+- **Next**: Claude Code independent review of the process gates; after PASS, reviewer/committer follows project submission rules.
+
+## 2026-08-04 — Codex executor/fixer 修复：focused/full 证据机器化门禁（review pending）
+
+- **Verdict/Action**: 流程工具修复完成；未提交、未 push、未 merge，未联网、未调用 provider/live、未起 sub-agent。
+- **Required**: `R-PROCESS-FOCUSED-RECEIPT-AND-BUNDLE-GATE-GAP` 保持 `OPEN/NOT_VERIFIED`，完整根因、边界和修复见 `docs/system_risk_register.md`。
+- **Verify**: 固定 Python `C:\Users\cnhea\AppData\Local\Programs\Python\Python313\python.exe`；bounded focused `Ran 102 tests in 8.533s` / `OK`，receipt `receipt:b4af4edcf4a0e314c39595f6`；receipt 自校验 `PASS`；full lane 未触发。
+- **Pre-Codex self-review**: `matrix=receipt/token/code-fingerprint + effect producer-consumer bundle + PATH/PYTHONPATH + static/compile`; `register=updated`; `handoff=updated`; `focused=102 OK`; `full-lane=not_triggered: AGENTS rule 3; reason=process-tool-only`; `door=pre-commit focused-receipt hard gate + doc-governance focused`; `review=NOT_VERIFIED`; `commit=NOT_PERFORMED`; `provider/live/sub-agent=NOT_USED`。
+- **Next**: Claude Code：独立审查本轮流程门禁；PASS 后按项目规则提交。
 
 ## 2026-08-04 — Claude 审查 PASS（批 1 二轮：北向窗口覆盖收口 + 门降级 + 死码测试收口）
 

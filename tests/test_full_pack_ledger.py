@@ -14,8 +14,30 @@ from bounded_unittest import Result  # noqa: E402
 import full_pack_ledger as fpl  # noqa: E402
 from tests.provider import us_short_module_runner as module_runner  # noqa: E402
 
+FOCUSED_RECEIPT = "receipt:test"
+
 
 class FullPackLedgerTests(unittest.TestCase):
+    def setUp(self):
+        # Production run_full_pack always requires a real receipt and static
+        # gate.  These tests use synthetic code states, so inject only the
+        # evidence boundary rather than weakening the implementation.
+        self._receipt_gate = patch.object(
+            fpl,
+            "_receipt_matches_current_state",
+            return_value=(
+                {"tests": 12, "bundles": []},
+                "OK",
+            ),
+        )
+        self._static_gate = patch.object(fpl, "_pre_full_static_checks", return_value=True)
+        self._receipt_gate.start()
+        self._static_gate.start()
+
+    def tearDown(self):
+        self._static_gate.stop()
+        self._receipt_gate.stop()
+
     def test_per_module_private_root_snapshot_reports_new_entries(self):
         with tempfile.TemporaryDirectory() as tmp:
             roots = {
@@ -54,7 +76,7 @@ class FullPackLedgerTests(unittest.TestCase):
             fpl.run_full_pack(
                 "us_short",
                 "shared test infrastructure",
-                "focused=1 OK",
+                FOCUSED_RECEIPT,
                 861,
                 ["discover", "-s", "tests", "-p", "test_us_short*.py"],
             )
@@ -105,7 +127,7 @@ class FullPackLedgerTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as tmp:
             ledger = Path(tmp) / "ledger.json"
             state = {"engine/x.py": "aaa", "@HEAD": "h1"}
-            fpl.prepare("us_short", "shared engine", "focused=12 OK", state=state, ledger=ledger)
+            fpl.prepare("us_short", "shared engine", FOCUSED_RECEIPT, state=state, ledger=ledger)
             fpl.record("us_short", "4497 OK", state=state, ledger=ledger)
             # same code state -> hit; it returns the count so a re-run "just for a number" is unnecessary.
             hit = fpl.cached_green("us_short", state=state, ledger=ledger)
@@ -121,7 +143,7 @@ class FullPackLedgerTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as tmp:
             ledger = Path(tmp) / "ledger.json"
             code_state = {"engine/x.py": "aaa", "@HEAD": "h1"}       # docs paths are filtered out by collect_code_state
-            fpl.prepare("us_short", "shared engine", "focused=12 OK", state=code_state, ledger=ledger)
+            fpl.prepare("us_short", "shared engine", FOCUSED_RECEIPT, state=code_state, ledger=ledger)
             fpl.record("us_short", "4497 OK", state=code_state, ledger=ledger)
             self.assertIsNotNone(fpl.cached_green("us_short", state=code_state, ledger=ledger))
 
@@ -137,7 +159,7 @@ class FullPackLedgerTests(unittest.TestCase):
             ledger = Path(tmp) / "ledger.json"
             prepared_state = {"engine/x.py": "aaa", "@HEAD": "h1"}
             changed_state = {"engine/x.py": "bbb", "@HEAD": "h1"}
-            fpl.prepare("a_short", "production consumer", "focused=20 OK",
+            fpl.prepare("a_short", "production consumer", FOCUSED_RECEIPT,
                         state=prepared_state, ledger=ledger)
             with self.assertRaisesRegex(ValueError, "matching prepare"):
                 fpl.record("a_short", "2000 OK", state=changed_state, ledger=ledger)
@@ -148,14 +170,22 @@ class FullPackLedgerTests(unittest.TestCase):
             ledger = Path(tmp) / "ledger.json"
             state = {"engine/x.py": "aaa", "@HEAD": "h1"}
             with self.assertRaisesRegex(ValueError, "trigger reason"):
-                fpl.prepare("a_short", "", "focused=20 OK", state=state, ledger=ledger)
+                fpl.prepare("a_short", "", FOCUSED_RECEIPT, state=state, ledger=ledger)
             with self.assertRaisesRegex(ValueError, "focused-test evidence"):
                 fpl.prepare("a_short", "production consumer", "", state=state, ledger=ledger)
+
+    def test_prepare_rejects_free_text_before_writing_a_ledger(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            ledger = Path(tmp) / "ledger.json"
+            state = {"engine/x.py": "aaa", "@HEAD": "h1"}
+            with self.assertRaisesRegex(ValueError, "machine focused receipt token"):
+                fpl.prepare("a_short", "production consumer", "focused=20 OK", state=state, ledger=ledger)
+            self.assertFalse(ledger.exists())
 
     def test_cli_prepare_refuses_missing_attestation_without_a_traceback(self):
         output = StringIO()
         with redirect_stdout(output):
-            self.assertEqual(fpl.main(["ledger", "prepare", "a_short", "", "focused=20 OK"]), 2)
+            self.assertEqual(fpl.main(["ledger", "prepare", "a_short", "", FOCUSED_RECEIPT]), 2)
         self.assertIn("REFUSED", output.getvalue())
 
     def test_public_manual_record_is_retired(self):
@@ -168,20 +198,20 @@ class FullPackLedgerTests(unittest.TestCase):
         with patch.object(fpl, "run_full_pack", return_value=0) as runner:
             self.assertEqual(
                 fpl.main([
-                    "ledger", "run", "a_short", "shared schema", "focused=12 OK",
+                    "ledger", "run", "a_short", "shared schema", FOCUSED_RECEIPT,
                     "30", "--", "discover", "-s", "tests", "-p", "test_a_short*.py",
                 ]),
                 0,
             )
         runner.assert_called_once_with(
-            "a_short", "shared schema", "focused=12 OK", 30,
+            "a_short", "shared schema", FOCUSED_RECEIPT, 30,
             ["discover", "-s", "tests", "-p", "test_a_short*.py"],
         )
 
     def test_cli_run_argument_errors_are_explicit_and_never_start_a_pack(self):
         for argv, expected in (
-            (["ledger", "run", "a_short", "shared schema", "focused=12 OK", "30"], "missing `--`"),
-            (["ledger", "run", "a_short", "shared schema", "focused=12 OK", "30", "unexpected", "--", "discover"],
+            (["ledger", "run", "a_short", "shared schema", FOCUSED_RECEIPT, "30"], "missing `--`"),
+            (["ledger", "run", "a_short", "shared schema", FOCUSED_RECEIPT, "30", "unexpected", "--", "discover"],
              "expected `run <lane>"),
         ):
             with self.subTest(argv=argv), patch.object(fpl, "run_full_pack") as runner:
@@ -191,6 +221,31 @@ class FullPackLedgerTests(unittest.TestCase):
                 self.assertIn("REFUSED", output.getvalue())
                 self.assertIn(expected, output.getvalue())
                 runner.assert_not_called()
+
+    def test_full_pack_rejects_free_text_before_spawning_any_test(self):
+        state = {"engine/x.py": "aaa", "@HEAD": "h1"}
+        with tempfile.TemporaryDirectory() as tmp:
+            with patch.object(
+                fpl,
+                "_receipt_matches_current_state",
+                return_value=(None, "focused evidence must be the machine token"),
+            ), patch.object(fpl, "external_test_dependency_error", return_value=None), patch.object(
+                fpl, "run_unittest"
+            ) as runner:
+                output = StringIO()
+                with redirect_stdout(output):
+                    result = fpl.run_full_pack(
+                        "a_short",
+                        "shared schema",
+                        "focused=12 OK",
+                        30,
+                        ["discover", "-s", "tests", "-p", "test_a_short*.py"],
+                        state=state,
+                        ledger=Path(tmp) / "ledger.json",
+                    )
+            self.assertEqual(result, 2)
+            self.assertIn("REFUSED", output.getvalue())
+            runner.assert_not_called()
 
     def test_full_pack_prints_start_before_spawning_each_lane(self):
         for lane, args in fpl.FULL_PACK_DISCOVERY_ARGS.items():
@@ -214,7 +269,7 @@ class FullPackLedgerTests(unittest.TestCase):
                     with redirect_stdout(output):
                         self.assertEqual(
                             fpl.run_full_pack(
-                                lane, "shared test tool", "focused=12 OK", 30, list(args),
+                                lane, "shared test tool", FOCUSED_RECEIPT, 30, list(args),
                                 state=state, ledger=ledger,
                             ),
                             0,
@@ -249,7 +304,7 @@ class FullPackLedgerTests(unittest.TestCase):
                 with patch.object(fpl, "external_test_dependency_error", return_value="missing test dependency"), \
                         patch.object(fpl, "run_unittest") as runner, redirect_stdout(output):
                     self.assertEqual(
-                        fpl.run_full_pack(lane, "shared test tool", "focused=12 OK", 30, list(args),
+                        fpl.run_full_pack(lane, "shared test tool", FOCUSED_RECEIPT, 30, list(args),
                                           state=state, ledger=Path(tmp) / "ledger.json"),
                         fpl.DEPENDENCY_EXIT,
                     )
@@ -258,13 +313,13 @@ class FullPackLedgerTests(unittest.TestCase):
 
         with tempfile.TemporaryDirectory() as tmp:
             ledger = Path(tmp) / "ledger.json"
-            fpl.prepare("a_short", "shared test tool", "focused=12 OK", state=state, ledger=ledger)
+            fpl.prepare("a_short", "shared test tool", FOCUSED_RECEIPT, state=state, ledger=ledger)
             fpl.record("a_short", "3 OK", state=state, ledger=ledger)
             output = StringIO()
             with patch.object(fpl, "run_unittest") as runner, redirect_stdout(output):
                 self.assertEqual(
                     fpl.run_full_pack(
-                        "a_short", "shared test tool", "focused=12 OK", 30,
+                        "a_short", "shared test tool", FOCUSED_RECEIPT, 30,
                         ["discover", "-s", "tests", "-p", "test_a_short*.py"],
                         state=state, ledger=ledger,
                     ),
@@ -277,7 +332,7 @@ class FullPackLedgerTests(unittest.TestCase):
         output = StringIO()
         with redirect_stdout(output), self.assertRaisesRegex(ValueError, "unknown lane"):
             fpl.run_full_pack(
-                "unknown", "shared test tool", "focused=12 OK", 30,
+                "unknown", "shared test tool", FOCUSED_RECEIPT, 30,
                 ["discover", "-s", "tests", "-p", "test_unknown*.py"], state=state,
             )
         self.assertNotIn("START lane=", output.getvalue())
@@ -292,7 +347,7 @@ class FullPackLedgerTests(unittest.TestCase):
                     fpl.run_full_pack(
                         "a_short",
                         "shared schema",
-                        "focused=12 OK",
+                        FOCUSED_RECEIPT,
                         30,
                         ["discover", "-s", "tests", "-p", "test_a_short*.py"],
                         state=state,
@@ -308,7 +363,7 @@ class FullPackLedgerTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as tmp:
             ledger = Path(tmp) / "ledger.json"
             state = {"engine/x.py": "aaa", "@HEAD": "h1"}
-            fpl.prepare("a_short", "shared schema", "focused=12 OK", state=state, ledger=ledger)
+            fpl.prepare("a_short", "shared schema", FOCUSED_RECEIPT, state=state, ledger=ledger)
             fpl.record("a_short", "3 OK", state=state, ledger=ledger)
             passed = Result("PASS", 0, 3, 0.2, "Ran 3 tests in 0.1s\n\nOK\n")
             with patch.object(
@@ -321,7 +376,7 @@ class FullPackLedgerTests(unittest.TestCase):
                 with redirect_stdout(output):
                     self.assertEqual(
                         fpl.run_full_pack(
-                            "a_short", "shared schema", "focused=12 OK", 30,
+                            "a_short", "shared schema", FOCUSED_RECEIPT, 30,
                             ["discover", "-s", "tests", "-p", "test_a_short*.py"],
                             state=state, ledger=ledger,
                         ),
@@ -330,7 +385,7 @@ class FullPackLedgerTests(unittest.TestCase):
                     self.assertEqual(fpl._check("a_short", state=state, ledger=ledger), 1)
                     self.assertEqual(
                         fpl.run_full_pack(
-                            "us_short", "shared schema", "focused=12 OK", 30,
+                            "us_short", "shared schema", FOCUSED_RECEIPT, 30,
                             ["discover", "-s", "tests", "-p", "test_us_short*.py"],
                             state=state, ledger=ledger,
                         ),
@@ -352,7 +407,7 @@ class FullPackLedgerTests(unittest.TestCase):
                 for lane, args in fpl.FULL_PACK_DISCOVERY_ARGS.items():
                     with self.subTest(lane=lane):
                         self.assertEqual(
-                            fpl.run_full_pack(lane, "shared schema", "focused=12 OK", 30, list(args),
+                            fpl.run_full_pack(lane, "shared schema", FOCUSED_RECEIPT, 30, list(args),
                                               state=state, ledger=ledger),
                             fpl.DEPENDENCY_EXIT,
                         )
@@ -364,18 +419,18 @@ class FullPackLedgerTests(unittest.TestCase):
             ledger = Path(tmp) / "ledger.json"
             with self.assertRaisesRegex(ValueError, "test_a_short\\*\\.py"):
                 fpl.run_full_pack(
-                    "a_short", "shared schema", "focused=12 OK", 30, ["tests.test_x"],
+                    "a_short", "shared schema", FOCUSED_RECEIPT, 30, ["tests.test_x"],
                     state=state, ledger=ledger,
                 )
             with self.assertRaisesRegex(ValueError, "test_a_short\\*\\.py"):
                 fpl.run_full_pack(
-                    "a_short", "shared schema", "focused=12 OK", 30,
+                    "a_short", "shared schema", FOCUSED_RECEIPT, 30,
                     ["discover", "-s", "other", "-p", "test_a_short*.py"],
                     state=state, ledger=ledger,
                 )
             with self.assertRaisesRegex(ValueError, "unknown lane"):
                 fpl.run_full_pack(
-                    "unknown", "shared schema", "focused=12 OK", 30,
+                    "unknown", "shared schema", FOCUSED_RECEIPT, 30,
                     ["discover", "-s", "tests", "-p", "test_unknown*.py"],
                     state=state, ledger=ledger,
                 )
@@ -390,7 +445,7 @@ class FullPackLedgerTests(unittest.TestCase):
                     fpl.run_full_pack(
                         "a_short",
                         "shared schema",
-                        "focused=12 OK",
+                        FOCUSED_RECEIPT,
                         30,
                         ["discover", "-s", "tests", "-p", "test_a_short*.py"],
                         state=state,
@@ -404,7 +459,7 @@ class FullPackLedgerTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as tmp:
             ledger = Path(tmp) / "ledger.json"
             state = {"engine/x.py": "aaa", "@HEAD": "h1"}
-            fpl.prepare("a_short", "shared schema", "focused=31 OK", state=state, ledger=ledger)
+            fpl.prepare("a_short", "shared schema", FOCUSED_RECEIPT, state=state, ledger=ledger)
             fpl.record("a_short", "2000 OK", state=state, ledger=ledger)
             output = StringIO()
             with redirect_stdout(output):
@@ -432,7 +487,7 @@ class FullPackLedgerTests(unittest.TestCase):
             with patch.object(fpl, "run_unittest", return_value=passed) as runner:
                 self.assertEqual(
                     fpl.run_full_pack(
-                        "a_short", "production entrypoint", "focused=9 OK", 30,
+                        "a_short", "production entrypoint", FOCUSED_RECEIPT, 30,
                         ["discover", "-s", "tests", "-p", "test_a_short*.py"],
                         state=state, ledger=ledger,
                     ),
