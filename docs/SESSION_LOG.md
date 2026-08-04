@@ -1,5 +1,13 @@
 # Session Log
 
+## 2026-08-04 — Claude 修复（R-ASHORT-ROW22A 整类扫描，用户令）
+
+- **Verdict/Action**: 上一轮 `c9053abd` 只修了被点名的单个实例，未做整类扫描；本轮补做。类的边界是**可达性不是语法**——只有能收到 numpy 标量（数据来自 pandas/provider 帧）的判定在类内。扫描结论：全仓 142 处 `(int, float)` 判定里，该类**当前只有两个成员**，因为只有 `a_short_northbound` 与 `a_short_market_history` 直接归约 provider 原始行，其余都在 JSON 边界之后。
+- **Required**: 无新增。`R-ASHORT-ROW22A-NUMPY-SCALAR-REGRESSION` 的整类处置、六个候选文件的逐处判定理由、以及为何不做全仓机器扫描，见 `docs/system_risk_register.md`（单一来源，本处不复述）。
+- **Verify**: 全仓 `(int, float)`/`(float, int)` 数值判定 142 处 → 收窄到 import numpy/pandas 的 6 个文件 → 逐处判定**全部不在类内**（`egs_main` 三处在 `:6144` 的 `np.number` 边界转换之后；其余五处均为 JSON 路径，其中两处有 docstring/注释直接佐证）。新增配对守卫钉住该类仅有的两个成员：四种 numpy 数值型全过、`np.bool_` 与非有限全拒。`tests.test_a_short_market_history` `Ran 16 tests ... OK`（`14→16`）。逐处判定理由与「为何不做全仓机器扫描」见 register。
+- **Pre-Codex self-review**: A-F checked。本轮**就是**类扫：142 处逐层收窄、逐处判定、0 遗漏未判。A.6 权威链：类成员资格 → 「是否直接归约 provider 原始行」→ 两模块 docstring 互相点名固定。C 反向已补（两成员各断言一次拒 `np.bool_` 与非有限）。D=N-A；E 单态；F `git diff --check` 干净。matrix=142扫描/6文件逐判/配对守卫/反向拒；register=updated；handoff=n/a；focused=16 OK；full-lane=not_triggered: AGENTS rule 3; reason=仅新增测试与孤立纯函数模块；door=route 14 + doc-governance 41
+- **Next**: Claude Code：审查
+
 ## 2026-08-04 — Claude 审查 Pass-with-Required（队列序 22a，自写自审）
 
 - **Verdict/Action**: 只审了 22a——序 19 与 22b 尚未编写，**批 3 代码整体审查未完成**。22a 自审抓到一条本会话刚修过的同类洞在新模块复发：`_is_finite_number` 用 `isinstance(value, (int, float))`，`numpy.int64`/`float32` 被拒，会把 dtype 问题伪装成「覆盖不完整」。已同轮改为 `numbers.Real` 与 `engine/a_short_northbound.py` 对齐并补测试；另把 DataFrame/generator 的 fail-closed 边界写进 docstring 并钉测试。

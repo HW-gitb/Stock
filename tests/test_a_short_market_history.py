@@ -130,6 +130,44 @@ class ReconcileDatedSeriesTests(unittest.TestCase):
         )
 
 
+class RawProviderRowNumericAcceptanceTests(unittest.TestCase):
+    """Pin the two raw-provider-row judges together so they cannot diverge again.
+
+    This class has exactly two members today: `a_short_northbound` (five-session
+    northbound flow) and `a_short_market_history` (multi-year windows).  They are
+    the only engines that reduce provider rows directly -- everywhere else the
+    numbers arrive already serialised through JSON, where numpy scalars cannot
+    appear and `isinstance(value, (int, float))` is correct.
+
+    Both regressed to the builtin form once.  A future third raw-row consumer
+    belongs in this test rather than in a repo-wide sweep of ~142 call sites,
+    almost none of which are in this class.
+    """
+
+    def _judges(self):
+        from engine.a_short_market_history import _is_finite_number as history_judge
+        from engine.a_short_northbound import _finite_number as northbound_judge
+
+        return {"a_short_market_history": history_judge, "a_short_northbound": northbound_judge}
+
+    def test_both_judges_accept_numpy_scalars_from_provider_frames(self):
+        import numpy as np
+
+        for name, judge in self._judges().items():
+            for maker in (np.float64, np.float32, np.int64, np.int32):
+                with self.subTest(module=name, dtype=maker.__name__):
+                    self.assertTrue(judge(maker(1)), f"{name} rejects {maker.__name__}")
+
+    def test_both_judges_still_reject_bools_and_non_finite(self):
+        import numpy as np
+
+        for name, judge in self._judges().items():
+            for bad in (True, False, np.bool_(True), float("nan"), float("inf"),
+                        np.float64("nan"), None, "1", object()):
+                with self.subTest(module=name, value=repr(bad)):
+                    self.assertFalse(judge(bad), f"{name} accepts {bad!r}")
+
+
 class PercentileRankTests(unittest.TestCase):
     def test_rank_is_the_fraction_at_or_below(self):
         self.assertEqual(percentile_rank([1, 2, 3, 4], 3), 0.75)
