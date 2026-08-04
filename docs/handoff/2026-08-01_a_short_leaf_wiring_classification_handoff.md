@@ -937,3 +937,70 @@ main() → _upcoming_events() → _attach_forward_event_impacts() → _attach_ho
 - **两条植入控制均被抓到**：删 `:670` 的状态门 / 把 `iv_feed_failed` 的 receipt 目录改错 → 各得 `FAILED (failures=5)`；植入后 `cmp` 逐字节还原。
 - **Optional**：lane 内新测试全为源码文本断言，post-EGS 失败路径无端到端执行覆盖（`-PythonExe` 只收固定主 Python，无法桩替 pipeline）。正文见 register 同一 R-ID。
 - **Verify**: review-evidence:c4d7c7cdeb9b；full lane `RESULT status=PASS exit=0 tests=2341`。
+
+## 2026-08-04 Codex execution: desktop #06 (OPEN / NOT_VERIFIED)
+### This document's content, role, append position, and format
+
+This handoff remains the detailed same-phase A-short leaf-wiring/classification handoff. Its role is to preserve the implementation judgment, root cause, call chain, direct consumers, schema/source-binding and write boundaries, negative controls, exact fixed-Python evidence, NOT_VERIFIED boundary, and the next reviewer command. This section is appended at EOF in reverse chronological order; future same-phase A-short execution/review entries append another dated section below it and do not rewrite earlier entries. `docs/SESSION_LOG.md` carries only the short cycle pointer, while `docs/system_risk_register.md` is the single detailed risk record for `R-ASHORT-KNIFE06-PRE-HOLIDAY-CASH-GUARD`.
+
+### Judgment and optimized repair
+
+The desktop #06 plan is correct. I executed it with three review-hardening constraints: the producer binds the forward calendar to `decision_as_of` rather than `price_data_through`; the final weekly run uses one validated official open/closed calendar and selects only a gap of at least five closed days beginning by the next seven-day weekly run; and only raw regime `attack` exempts the conservative `0.8` factor. `unknown`, `shock`, `defense`, and `contraction` are not treated as an exemption. The structured control is normalized in the analysis consumer and revalidated at the `_allocate_cash` entry with the weekly `as_of`, so a direct caller cannot supply an unbound numeric factor.
+
+### Root cause and repair
+
+The old EGS fields were placeholders (`is_pre_holiday_window=False`, `holiday_days_ahead=None`, `next_trade_date=None`) and weekly allocation had no consumer. The repair adds `A-EGS/egs_main.py::get_trade_calendar_context()` and strict `cal_date,is_open` normalization; `run_egs()` passes that context through `export_analysis_input()`; weekly `main()` consumes it through `_pre_holiday_control_from_analysis()` and `_normalise_pre_holiday_control()`; and `_allocate_cash()` scales only `available_cash` and `new_exposure_capacity` before the existing deterministic build allocation. Existing holding rows are outside the allocator's `操作=建仓` set and remain untouched.
+
+### Call chain, consumers, schema/source binding, and write boundary
+
+- Call chain: `run_egs()` → `get_trade_calendar_context(decision_as_of)` → `export_analysis_input()` → `analysis_input.market_context.trade_calendar` → weekly `main()` → `_pre_holiday_control_from_analysis()` → `_normalise_pre_holiday_control()` → `build_weekly_report()` → `_allocate_cash(..., as_of=...)` → `weekly.cash_allocation.pre_holiday_control` plus the new-entry cash/capacity summaries.
+- Direct consumers: the weekly cash allocator and its validator are the decision consumers; the analysis-input calendar and weekly cash summary are machine-readable audit surfaces. Human advisory text is not used as a predicate.
+- Schema/effect contract: `schemas/a_short_weekly_report.schema.json` requires the structured control when sized cash allocation exists. `schemas/a_short_m67_effect_contract.json` records `is_pre_holiday_window`, `holiday_days_ahead`, and `next_trade_date` with their consumers, terminal surfaces, mutation evidence, and fixed-Python hashes.
+- Source binding: `calendar_source=tushare.trade_cal`, official fields `cal_date,is_open`; `decision_as_of` is separate from `price_data_through`; positive windows require a valid source, source date equal to weekly `as_of`, a later next trade date, and at least five closed days. The analysis contract accepts legacy fixtures with no positive window by falling back to its bound `trade_date`, but a positive window without the official source is rejected.
+- Write boundary: existing EGS cache/write paths and weekly report/schema validation are reused; cache persistence remains atomic through `save_cache`; no provider/live/account run or production artifact refresh occurred.
+
+### Negative controls and self-review
+
+The new regression file covers the 20260928 positive seven-day closure, 20260921 two-weeks-early negative, four-closed-day negative, malformed calendar fail-closed, unknown `0.8`, attack `1.0`, capacity scaling, invalid/unbound source and clock, and direct allocator calls without `as_of`. Existing weekly and holding consumers remain in the final full lane. The phase6 IV fixtures changed in this section only add fields already required by the current IV schema so the EGS→weekly consumer tests reach the intended #06 path.
+
+### Fixed Python, exact tests, raw terminal state, and review boundary
+
+- Governance: `... -m unittest tests.test_doc_governance_guard tests.test_route_doc_ledger_status_consistency tests.test_readme_route_row_length tests.test_semantic_risk_slice3_guard` → `Ran 73 tests in 1.459s ... OK`; full-pack `check a_short` → `CACHED GREEN — a_short = 2348 OK`, no rerun required.
+
+- Fixed interpreter: `C:\Users\cnhea\AppData\Local\Programs\Python\Python313\python.exe`; version: `Python 3.13.8`.
+- `... -m unittest tests.test_a_short_pre_holiday_cash_guard` → `Ran 7 tests in 4.157s ... OK`.
+- `... -m unittest tests.test_a_short_weekly_pipeline` → `Ran 521 tests in 90.084s ... OK`.
+- `... -m unittest tests.test_a_short_pre_holiday_cash_guard tests.test_a_short_effect_contract tests.test_a_short_effect_consumer_probe tests.test_a_short_review1_knives_6_10 tests.phase6.test_egs_analysis_input_contract` → `Ran 102 tests in 79.598s ... OK`.
+- `... -m unittest tests.phase6.test_egs_analysis_input_contract` → `Ran 11 tests in 9.190s ... OK`.
+- Full lane: `[full-pack-ledger] START lane=a_short deadline=860s fingerprint=e5ed58a41494`; `Ran 2348 tests in 451.433s`; `OK (skipped=3)`; `[full-pack-ledger] RESULT status=PASS exit=0 tests=2348 elapsed=453.6s deadline=860s`.
+- Fixed-Python `py_compile` exit `0`; `git diff --check` exit `0` with only normal CRLF warnings. No provider/live/account/real weekly run, sub-agent, independent review, commit, push, or merge was performed; those remain `NOT_VERIFIED` / `NOT_PERFORMED`.
+- Next command: `Claude Code：独立审查 R-ASHORT-KNIFE06-PRE-HOLIDAY-CASH-GUARD；通过后按项目规则提交。`
+
+## 2026-08-04 追加：Claude Code 独立审查 #06（节前减仓接线）= PASS
+
+- **结论**：PASS，已提交。桌面 #06 三条已定口径全部按指定形态落地——`attack` 唯一豁免（举证式，#08 落地后自动生效）、
+  触发判据是「as_of 后至 as_of+7 之间存在 ≥5 天休市」而非规格字面的节前 2 日、只压新建仓的钱不动已有持仓。
+- **三条植入控制均被抓到**：中和 `cash_factor` 折扣 → consumer 红；只摘 `and gap_start <= next_weekly_run` →
+  两周前反控 `FAILED (failures=1)`；`PRE_HOLIDAY_MIN_CLOSED_DAYS` 5→4 → 四天反控 `FAILED (failures=1)`。
+  三次均 `filecmp` 逐字节还原 True。附带证明 effect-contract 指纹门是活的。
+- **独立重算**：伪造 `calendar_source` 被拒；同组 reports 在 1.0 vs 0.8 下 allocated 由 99760.0 压到 80040.0。
+- **测试落点**：`+7` 全在 `test_a_short*.py` 选择器内（避开了 #03+#04 的坑）；lane 外的
+  `tests.phase6.test_egs_analysis_input_contract` 由我单独跑 `Ran 11 tests ... OK`。
+- **Optional 四条**（默认分支不自洽 / `next_trade_date` 叶登记措辞 / validator 够不着权威 / SESSION_LOG 多一个标签）
+  正文见 register 同一 R-ID。
+- **Verify**: review-evidence:3544906e5d33；full lane `CACHED GREEN a_short = 2348 OK`。
+
+## 2026-08-04 追加：#06 四条 Optional 自修自审 = PASS
+
+- **修了什么**：① `_allocate_cash` 单一归一化路径、`as_of` 必填（删掉会产出 `source_as_of: None` 的默认分支）；
+  ② `next_trade_date` 叶改记 `m67_main_decision` + 改正 mutation_evidence；
+  ③ `validate_weekly_report` 加 `expected_pre_holiday_control`，`main()` 传入 analysis_input 派生的控制；
+  ④ 折掉 SESSION_LOG 超模板的 `Governance` 标签。
+- **为什么**：①是死分支与新 schema 不自洽；②叶登记措辞与实际行为不符；③校验腿的权威链终点原来是它自己，
+  看不见「窗口被整体写成 false」这种自洽形状；④极简模板精确集合。
+- **验证命令与结果**：focused `tests.test_a_short_pre_holiday_cash_guard tests.test_a_short_industry_theme
+  tests.phase6.test_egs_margin_coverage tests.phase6.test_egs_analysis_input_contract` → `status=PASS exit=0 tests=62`；
+  full lane `RESULT status=PASS exit=0 tests=2350 elapsed=414.3s deadline=860s`（fingerprint `e89706d37ae3`，`2348→2350` 的 `+2` 为本轮新增两条强制腿）。
+- **失效旧结论**：上一轮审查记的 Optional ①②③④ 全部作废（已修）；`validate_weekly_report` 不再是纯形状校验器，
+  在生产路径上它已绑定 analysis_input 的交易日历。
+- **下一步注意**：真实 `trade_cal` 取数与带 `-Account` 的真实周跑仍未验；天然验收正控是 2026-09-28 那次周跑。

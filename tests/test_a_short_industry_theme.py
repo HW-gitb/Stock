@@ -76,7 +76,7 @@ class IndustryTrendTests(unittest.TestCase):
                                  "avg_amount_5d": 1e8}}}}
         headwind = report("000001.SZ", star=2, egs=90)
         neutral = report("000002.SZ", star=3, egs=80)
-        _allocate_cash([headwind, neutral], 20000.0)
+        _allocate_cash([headwind, neutral], 20000.0, as_of="20260609")
         self.assertEqual(headwind["machine"]["entry_exit_size_star"]["plan"]["cash_allocation_rank"], 1)
         self.assertEqual(neutral["machine"]["entry_exit_size_star"]["plan"]["cash_allocation_rank"], 2)
 

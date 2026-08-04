@@ -149,6 +149,28 @@
 - **Verify**: review-evidence:not_available（本轮 hook 未注入 token）；rule 8 Optional-only 快档：一次 scope grep 先行（8 处 fixture 全是构造、无断言）、最小覆盖目标只跑一次 `tests.test_us_short_llm_theme_discovery_query_policy + doc-governance + route-doc` = `63 OK / 1.2s`。收紧类改动配植入正控：合成「4 条里 3 条悄悄回退」输入，旧 `any()` 断言仍 `True`、新断言 `False` 且点名 `['b','c','d']`。`git diff --check` clean；`state/us_short` 与 `provider_samples` 前后均 `count=0`；未联网、未调 provider、未付费。
 - **Next**: Codex：执行
 - **Pre-Codex self-review**: `matrix=三条 Optional 逐条判定(收/升/撤)`; `register=updated`; `handoff=not_required: Optional-only 收口，无新交接事实`; `focused=63 OK / 1.2s`; `full-lane=not_triggered: 仅测试断言与 register 措辞，rule 3 无触发面`; `door=route-doc 14 + doc-governance 41 同包内 63 OK`; `scope-grep=8 处 fixture 全为构造、零断言`; `blast-radius=75 命中/40 文件 与 15 模块/45 处 两案实测`; `planted=3-of-4 回退令新断言转红并点名`; `residue=0/0`
+## 2026-08-04 — Claude 修复+自审 PASS（#06 四条 Optional）
+
+- **Verdict/Action**: 自修自审，四条 Optional 全部收口，已提交并合入 master。① `_allocate_cash` 收成单一归一化路径、`as_of` 变必填，产出 `source_as_of: None` 的默认分支已删（唯一依赖它的 `tests/test_a_short_industry_theme.py` 同刀补 `as_of`）；② `next_trade_date` 叶由 `duplicate_or_display_audit` 改记 `m67_main_decision` 并改正 mutation_evidence；③ `validate_weekly_report` 新增 `expected_pre_holiday_control`，`main()` 把 analysis_input 派生的控制传进去，堵上「窗口被整体写成 false」这类自洽形状；④ 折掉 Codex entry 超出极简模板的 `Governance` 标签。
+- **Required**: 无。`R-ASHORT-KNIFE06-PRE-HOLIDAY-CASH-GUARD` 保持 closed；四条 Optional 的逐条处置与新增反向控制见 `docs/system_risk_register.md`（单一来源，本处不复述）。
+- **Verify**: review-evidence:3544906e5d33；两条新强制腿实测承重（丢窗口的报告自洽、单跑 validator 会放行，带上 source control 即抛「交易日历不一致」）。focused `status=PASS exit=0 tests=62`，含 lane 外两个 `validate_weekly_report` 调用点。full lane `RESULT status=PASS exit=0 tests=2350 elapsed=414.3s deadline=860s`（fingerprint `e89706d37ae3`，`2348→2350` 的 `+2` 为本轮新增两条强制腿）。 逐条处置与反向控制见 register。真实周跑仍 `NOT_VERIFIED`。
+- **Pre-Codex self-review**: matrix=allocate-default/leaf-category/validator-binding/session-label 四条全标已修；register=updated；handoff=updated；focused=62 OK；full-lane=2350 OK/skipped=3；door=governance 73 OK；provider/live/account/真实周跑=NOT_PERFORMED。
+- **Next**: Codex：执行
+
+## 2026-08-04 — Claude 审查 PASS（#06 节前减仓接线）
+
+- **Verdict/Action**: PASS，已提交。桌面 #06 三条已定口径逐条核过：只有 `attack` 免打折（unknown/shock/defense/contraction 一律打折，按「豁免需举证」写）、判据是「本次 as_of 后至下次周跑前存在 ≥5 天休市」而非规格字面的节前 2 日、只压本周新建仓的钱（`_allocate_cash` 仅过滤 `操作=建仓` 行）不动已有持仓。三条恒空叶同刀转真值并接线，effect contract 四处指纹已重封。
+- **Required**: 无。`R-ASHORT-KNIFE06-PRE-HOLIDAY-CASH-GUARD` 已 closed；四条不阻断 Optional 见 `docs/system_risk_register.md`（单一来源，本处不复述）。
+- **Verify**: review-evidence:3544906e5d33；三条植入控制全咬——中和打折门→consumer 红；去掉 `gap_start <= next_weekly_run` 合取→两周前反控红；阈值 5→4→四天反控红；植入后 `filecmp` 逐字节还原 True。独立重算：伪造 `calendar_source` 被拒，×0.8 实打把 allocated 由 99760.0 压到 80040.0。lane 外的 `tests.phase6.test_egs_analysis_input_contract` 我亲跑 `Ran 11 tests ... OK`。full lane `CACHED GREEN a_short = 2348 OK`（同 code state 未重跑），`+7` 恰为新 guard 且全在 `test_a_short*.py` 选择器内。真实周跑与真 `trade_cal` 取数仍 `NOT_VERIFIED`。
+- **Next**: Codex：执行
+
+## 2026-08-04 — Codex execution: desktop #06 (OPEN / NOT_VERIFIED)
+- **Verdict/Action**: Implemented desktop #06 (C-2) as one complete defect class. The diagnosis is correct; the execution was tightened so the producer uses a decision-clock-bound official open/closed calendar, and the consumer never trusts rendered text or an unbound numeric factor. The change is limited to pre-holiday new-entry cash allocation; EGS scoring, selection, TopN, M6.7 classification, existing holdings, provider/live/account execution, and order behavior are out of scope.
+- **Required**: `R-ASHORT-KNIFE06-PRE-HOLIDAY-CASH-GUARD` remains `OPEN-NOT_VERIFIED` pending independent review. Full details, call chain, consumers, source binding, write boundary, negative controls, and review boundary are in `docs/system_risk_register.md` and the same-day handoff.
+- **Verify**: fixed Python `C:\Users\cnhea\AppData\Local\Programs\Python\Python313\python.exe`, `Python 3.13.8`; new guard `Ran 7 tests in 4.157s ... OK`; final weekly consumer `Ran 521 tests in 90.084s ... OK`; final focused contract/consumer/review-1/EGS pack `Ran 102 tests in 79.598s ... OK`; EGS-to-weekly direct consumer `Ran 11 tests in 9.190s ... OK`; A-short full lane `Ran 2348 tests in 451.433s ... OK (skipped=3)` with `[full-pack-ledger] RESULT status=PASS exit=0 tests=2348 elapsed=453.6s deadline=860s`; `py_compile` exit `0`; `git diff --check` exit `0` with only normal CRLF warnings; governance door `Ran 73 tests in 1.459s ... OK`; post-doc full-pack `check a_short` returned `CACHED GREEN — a_short = 2348 OK` and required no rerun.
+- **Pre-Codex self-review**: `matrix=decision-clock/calendar source-binding/threshold/attack-vs-unknown/new-entry-only/allocator revalidation/schema/effect-contract/negative controls`; `register=updated`; `handoff=updated`; `provider/live/account/real weekly run/sub-agent/commit/push/merge=NOT_PERFORMED`.
+- **Next**: `Claude Code：独立审查 R-ASHORT-KNIFE06-PRE-HOLIDAY-CASH-GUARD；PASS 后按项目规则提交。`
+
 ## 2026-08-03 — Claude 审查 PASS（#03+#04 M6.7 失败收口）
 
 - **Verdict/Action**: PASS，已提交并合入 master。桌面规格九条实现项逐条核过：单点末尾 `exit $FinalExitCode`、`Set-M67Failure` 汇聚四类 post-EGS 失败并只留首个失败码、`-DeferHealth` 交末尾 finalizer、Stage 5 四态矩阵（失败态 daily-only 不绑 raw regime 与 M6.7 report）、九项 pipeline expected 在失败态仍保留、manifest 原子写 + 旧 health 先作废。
