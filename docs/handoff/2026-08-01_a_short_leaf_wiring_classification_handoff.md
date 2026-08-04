@@ -790,3 +790,101 @@ main() → _upcoming_events() → _attach_forward_event_impacts() → _attach_ho
 - **计数**：full lane `CACHED GREEN a_short = 2328 OK`，`2327→2328` 的 `+1` 为新增 manual-review 用例。
 - **仍挂 Optional（#12，不阻断）**：读失败跳过本周写盘，损坏会自我传播到下周。
 - **Verify**: review-evidence:63adac82ec8a。provider/live 与 `-Account` 实跑 `NOT_VERIFIED`。
+
+### 2026-08-04 Codex 执行：桌面 #07(b) CNINFO orgId 请求形态（不涉及 #03+#04）
+
+#### 本节内容、作用与追加位置
+
+本 handoff 是 A-short leaf wiring/classification 阶段的详细交接源；本节记录 #07(b) 的判断、根因、最小实现、调用链、直接消费者、schema/source-binding、缓存与写盘边界、负向控制、固定 Python、精确测试命令、原始终态、NOT_VERIFIED 项和审查边界。`docs/SESSION_LOG.md` 只保留本轮 cycle 摘要，`docs/system_risk_register.md` 是 R-ID 与风险/Required 单一来源。本节按同日 reverse-chronological 追加在现有 handoff 尾部，不覆盖 #11/#12/#13 历史审查记录；后续执行继续在本文件追加同格式小节。
+
+#### #07(b) 判断、根因与最小改动
+
+- 桌面意见正确：#07(a) 已把 HTTP 200 空公告正确保留为 `未检查`，但没有修复旧请求的机器身份形态；旧 `stock=code,sh/sz` 会在接口层返回 200 空结果，正确契约是 `stock=code,orgId`。因此本刀必须连同“映射/缓存”和“请求参数”一起收口，不能只调整 warning。
+- `A-EGS/egs_main.py` 新增官方 map URL `http://www.cninfo.com.cn/new/data/szse_stock.json`、`cninfo_org_id_map_v1` cache key、`code/orgId` 归一化与缓存验证。只接受六位代码和 `gss[h|z]` 编码中末六位一致的 `orgId`；缓存读坏、源 HTTP 非 200、payload 无合法映射、异常或候选 code 缺失均 fail-closed。
+- `stage3_ai_clearing::_cninfo_check()` 先规范化 canonical `ts_code` 并从结构化 map 取 `orgId`，再以 `stock=f"{stock_code},{org_id}"` 发公告查询；没有有效 `orgId` 时不发 POST，返回 unknown reason，`cninfo_flag` 继续为 `未检查`，既有 data-health warning 继续承接。原有公告 response/status/shape guard、监管命中 advisory-only 和候选不删除不变。
+- #03+#04 明确排除；没有换源、没有恢复生产监管 hard veto、没有改 `runners/weekly_screening.ps1`、没有真实 provider/live/账户运行。
+
+#### 调用链、直接消费者、schema/source-binding 与写盘边界
+
+- 调用链：`run_egs()` → `stage3_ai_clearing()` → `_load_cninfo_org_id_map()`（既有 `load_cache/save_cache` → 官方 map source）→ `_cninfo_check()`（canonical `ts_code` → source-bound `orgId`）→ `http://www.cninfo.com.cn/new/hisAnnouncement/query` → status/JSON/announcements guard → `cninfo_flag` 与 `cninfo_health` → `_cninfo_health_warning()` / `export_data_health(..., sidecar_warnings=...)` → `data_health.json`/汇总。
+- 直接消费者只有候选 `cninfo_flag` advisory 展示与 data-health warning；本刀不让 map/公告结果进入 EGS/TopN 排名、候选删除、生产 hard veto、M6.7 machine decision、订单或账户。
+- schema 没有新增业务字段；`schemas/a_short_m67_effect_contract.json` 只按固定 Python 实际 inventory 更新 `A-EGS/egs_main.py` 的 `decision_predicate_sha256` 和 `runtime_constants_sha256` 两项。source binding 由固定官方 URL、code/orgId 编码一致性、canonical `ts_code` 精确映射共同约束；未知映射不会降级成 market 短名或“通过”。
+- map 使用既有 `CONF["cache_dir"]` 的 `load_cache/save_cache`，cache write 保持既有临时文件 + `os.replace` 原子边界；坏缓存不删除、不覆盖既有官方产物，源已验证但 cache write 失败时只 warning 并使用本次 map。既有 report/data-health 输出写盘路径和原子写策略未改。
+
+#### 负向控制与自审项目
+
+- `tests/test_a_short_cninfo_health.py` 覆盖：valid map 请求精确为 `600900,gssh0600900` 且缓存写入；valid cache 命中不再 GET；缺 code 不发 POST且 reason=`org_id_missing`；map HTTP 失败不发 POST且 reason=`org_id_map_http_status`；orgId 不匹配 payload 不发 POST且 reason=`org_id_map_invalid_payload`；原有 empty/non-200/invalid JSON/invalid announcements/exception 仍保留 `未检查`。
+- 反向边界：旧 `600900,sh` 不再作为请求参数；异常映射不会伪造“通过”；监管关键词命中仍只写 advisory、不删候选；没有把中文展示文案作为 map/query 机器契约。#03+#04 的 `runners/weekly_screening.ps1` diff 为空，未起 sub-agent。
+- effect-contract 诊断只发现 `A-EGS/egs_main.py` 两项实际 hash 变化，已按 actual inventory reseal；`static_contract_error()` 在效果契约测试中通过。
+
+#### 固定 Python、精确命令与原始终态
+
+- 唯一允许解释器：`C:\Users\cnhea\AppData\Local\Programs\Python\Python313\python.exe`，版本 `Python 3.13.8`；本轮所有测试、检查和 full runner 均显式使用该路径。
+- 专项命令：`$env:PYTHONPATH='D:\cnhea\Codex\worktrees\29e0\Stock'; & 'C:\Users\cnhea\AppData\Local\Programs\Python\Python313\python.exe' -m unittest tests.test_a_short_cninfo_health` → `Ran 9 tests in 0.627s ... OK`。
+- 语法命令：`$env:PYTHONPATH='D:\cnhea\Codex\worktrees\29e0\Stock'; & 'C:\Users\cnhea\AppData\Local\Programs\Python\Python313\python.exe' -m py_compile 'D:\cnhea\Codex\worktrees\29e0\Stock\A-EGS\egs_main.py' 'D:\cnhea\Codex\worktrees\29e0\Stock\tests\test_a_short_cninfo_health.py'` → exit `0`。
+- 效果契约命令：`$env:PYTHONPATH='D:\cnhea\Codex\worktrees\29e0\Stock'; & 'C:\Users\cnhea\AppData\Local\Programs\Python\Python313\python.exe' -m unittest tests.test_a_short_effect_contract` → `Ran 48 tests in 69.142s ... OK`。
+- 影响面聚焦命令：`$env:PYTHONPATH='D:\cnhea\Codex\worktrees\29e0\Stock'; & 'C:\Users\cnhea\AppData\Local\Programs\Python\Python313\python.exe' -m unittest tests.test_a_short_cninfo_health tests.test_a_short_egs_market_environment tests.test_a_short_effect_contract tests.phase6.test_egs_sw_industry_and_watch_pool_health tests.test_semantic_risk_slice3_guard tests.phase6.test_weekly_screening_guardrails` → `Ran 100 tests in 72.589s ... OK`。
+- 官方 full lane：`$env:PYTHONPATH='D:\cnhea\Codex\worktrees\29e0\Stock'; & 'C:\Users\cnhea\AppData\Local\Programs\Python\Python313\python.exe' 'D:\cnhea\Codex\worktrees\29e0\Stock\.tools\full_pack_ledger.py' run a_short 'R-ASHORT-KNIFE7-CNINFO-ORG-ID-REQUEST-SHAPE' 'focused 100 OK; CNINFO code-to-orgId cache and source-bound request shape; missing or invalid orgId remains unknown; no source replacement; effect contract sealed' 860 -- discover -s tests -p 'test_a_short*.py'` → START fingerprint=`2200e426e083`；`Ran 2333 tests in 468.029s ... OK (skipped=3)`；`[full-pack-ledger] RESULT status=PASS exit=0 tests=2333 elapsed=470.2s deadline=860s`。
+- 文档治理命令：`$env:PYTHONPATH='D:\cnhea\Codex\worktrees\29e0\Stock'; & 'C:\Users\cnhea\AppData\Local\Programs\Python\Python313\python.exe' -m unittest tests.test_doc_governance_guard tests.test_route_doc_ledger_status_consistency tests.test_readme_route_row_length tests.test_semantic_risk_slice3_guard` → `Ran 73 tests in 1.950s ... OK`。`git diff --check` exit `0`（仅 CRLF warning）；`git diff --name-only -- runners/weekly_screening.ps1` 为空。
+
+#### NOT_VERIFIED、审查/提交边界与下一步
+
+- 未执行真实 CNINFO map/query HTTP、provider/live、账户周跑、真实生产/私密 artifact 刷新或自动下单；因此不把离线测试称为实盘验证、production PASS 或 ship PASS。真实 CNINFO 对 valid orgId 是否返回非空公告仍 `NOT_VERIFIED`。
+- Claude Code 独立审查尚未进行；`sub-agent`、`commit`、`push`、`merge` 均 `NOT_PERFORMED`。下一步：`Claude Code：独立审查 R-ASHORT-KNIFE7-CNINFO-ORG-ID-REQUEST-SHAPE；PASS 后按项目规则提交。`
+
+### 2026-08-03 Claude Code 独立审查 = FAIL（#07b cninfo orgId）
+
+- **Verdict**: FAIL，未提交、未合入。方向对，格式假设错。
+- **实测（用被审代码自己的规范化函数跑真实 payload）**：6227 行 → 只留 1403 条（丢 77.5%）；orgId 真实前缀分布为纯数字 3481 / `gfbj` 943 / `gssh` 881 / `gssz` 599 / `nssc` 207 / `GD` 37 / `qsgn` 29 / `gshk` 20，正则只认 `gss[hz]`。本周 15 只候选 **8 只**解析不到 → 仍「未检查」；独立实打 `603259.SH`（orgId `9900035584`）得 2 条真公告，证明不是没公告。
+- **Required 三条**（正文见 register 同一 R-ID）：① source binding 改用行内 `code` 字段匹配，不解析 orgId 结构（放宽后实测 6227/6227、候选 15/15）；② 市场后缀换确定来源（56% orgId 是纯数字，没有 h/z 字母）；③ 补真实五类前缀形态的覆盖用例 + 覆盖率下限断言。
+- **Optional**：as-of 跑的 `cache_ttl` 为 10 年且 miss 不重取，新上市股票会永久「未检查」。
+- **不要返工**：失败原因分类接进 #07a health、重复 code 整表拒、`column`/`plate` 保持原样——都正确。
+- **Verify**: review-evidence:92f18e931d60；full lane `CACHED GREEN 2333 OK` 全绿未抓到，正是 Required ③ 的理由。
+
+### 2026-08-04 Codex 修复 #07(b) 审查 Required ①–③ + 缓存 Optional（不涉及 #03+#04）
+
+#### 本节内容、作用与追加位置
+
+本 handoff 继续作为 A-short leaf wiring/classification 阶段的详细交接源；本节 supersede 上一节“只接受 `gss[hz]`”的实现描述，完整记录真实形态缺陷、四项修复、调用链、直接消费者、schema/source-binding、cache/写盘边界、负向控制、固定 Python、精确命令、原始终态和审查边界。`docs/SESSION_LOG.md` 只放 cycle 指针，`docs/system_risk_register.md` 保存 R-ID 单一风险详情；本节按 reverse-chronological 追加在 2026-08-03 Claude FAIL 后，不覆盖历史。
+
+#### 上轮 FAIL 判断与全修方案
+
+- 上轮三条 Required 判断全部正确：真实 `szse_stock.json` 中 `orgId` 有纯数字、`gfbj`、`gssh`、`gssz`、`nssc` 等形态，不能解析 orgId 内部结构；市场后缀必须来自确定的 code 来源；测试必须锁住五类形态和覆盖率下限。
+- `A-EGS/egs_main.py::_cninfo_org_id_entry()` 现在只校验源行 `code` 为六位数字、`orgId` 非空且不含逗号/空白/控制字符；不再用正则解析 orgId。市场由 code 确定映射：`6/9→.SH`、`0/2/3→.SZ`、`4/8→.BJ`，缓存回读走同一绑定函数。
+- `_normalize_cninfo_org_id_map()` 对可识别 rows 施加至少 80% 的规范化覆盖率，不足则整张 map invalid、保持 fail-closed；重复 code 对应不同 orgId 仍整表拒绝。新增离线 fixture 覆盖纯数字 / `gfbj` / `gssh` / `gssz` / `nssc` 五类，断言映射数量和每个 `ts_code`。
+- 上轮缓存 Optional 也收口：Stage3 把本批 canonical candidate code 集合传入 `_load_cninfo_org_id_map(required_ts_codes)`；valid cache 缺当前候选会 source refresh 一次。若 refresh HTTP/JSON 失败，保留已验证 cache 给已存在候选使用，缺失候选仍返回结构化 map failure reason；不循环请求，不把缺失转为“通过”。
+
+#### 调用链、直接消费者、schema/source-binding 与写盘边界
+
+- 调用链：`run_egs()` → `stage3_ai_clearing()` → required-code-aware `_load_cninfo_org_id_map()` → cache/source map normalize/validate → `_cninfo_check()` canonical `ts_code` lookup → `hisAnnouncement/query` with `stock=code,orgId` → response guard → `cninfo_flag`/`cninfo_health` → 既有 `_cninfo_health_warning()` / `export_data_health(..., sidecar_warnings=...)`。
+- 直接消费者仍只有候选 `cninfo_flag` advisory 展示和 data-health warning；map/公告不进 EGS/TopN 排名、候选删除、生产 hard veto、M6.7 machine decision、订单或账户。
+- 无新增业务 schema；`schemas/a_short_m67_effect_contract.json` 只更新 `A-EGS/egs_main.py` 的实际 decision/runtime hash。source binding 是源行 code + code-derived market + orgId delimiter guard + canonical `ts_code`，不是 orgId 前缀猜测。
+- cache 继续使用既有 `CONF["cache_dir"]`、`load_cache/save_cache` 和临时文件+`os.replace` 原子边界；本轮不清理/迁移既有 cache 或官方 report/data-health artifact，不改 provider/live 或 #03+#04 写盘边界。
+
+#### 负向控制与自审项目
+
+- 新增五类真实形态/覆盖率测试：纯数字 orgId（含 `603259` 类形态）、`gfbj`、`gssh`、`gssz`、`nssc` 均解析；code 决定 `.SH/.SZ`，不读取 orgId 内部字母。
+- 新增 cache partial miss 回归：缓存缺本批 code 时只刷新一次并使用新 map；缓存完整时不 GET；HTTP/非法 payload/异常、低覆盖率、逗号污染、code 缺失均不发公告 POST或保持 `未检查`；既有 empty/non-200/invalid announcements/exception 与 advisory 不删候选继续通过。
+- 自审确认：旧 `stock=code,sh/sz` 无残留请求写点；`runners/weekly_screening.ps1` 无 diff；未起 sub-agent；未触碰 #03+#04。
+
+#### 固定 Python、精确命令与原始终态
+
+- 唯一解释器：`C:\Users\cnhea\AppData\Local\Programs\Python\Python313\python.exe`，版本 `Python 3.13.8`。
+- 专项：`$env:PYTHONPATH='D:\cnhea\Codex\worktrees\29e0\Stock'; & 'C:\Users\cnhea\AppData\Local\Programs\Python\Python313\python.exe' -m unittest tests.test_a_short_cninfo_health` → `Ran 11 tests in 0.437s ... OK`。
+- 语法：`$env:PYTHONPATH='D:\cnhea\Codex\worktrees\29e0\Stock'; & 'C:\Users\cnhea\AppData\Local\Programs\Python\Python313\python.exe' -m py_compile 'D:\cnhea\Codex\worktrees\29e0\Stock\A-EGS\egs_main.py' 'D:\cnhea\Codex\worktrees\29e0\Stock\tests\test_a_short_cninfo_health.py'` → exit `0`。
+- 影响面聚焦：`$env:PYTHONPATH='D:\cnhea\Codex\worktrees\29e0\Stock'; & 'C:\Users\cnhea\AppData\Local\Programs\Python\Python313\python.exe' -m unittest tests.test_a_short_cninfo_health tests.test_a_short_egs_market_environment tests.test_a_short_effect_contract tests.phase6.test_egs_sw_industry_and_watch_pool_health tests.test_semantic_risk_slice3_guard tests.phase6.test_weekly_screening_guardrails` → `Ran 102 tests in 51.832s ... OK`。
+- 官方 full lane：`$env:PYTHONPATH='D:\cnhea\Codex\worktrees\29e0\Stock'; & 'C:\Users\cnhea\AppData\Local\Programs\Python\Python313\python.exe' 'D:\cnhea\Codex\worktrees\29e0\Stock\.tools\full_pack_ledger.py' run a_short 'R-ASHORT-KNIFE7-CNINFO-ORG-ID-REQUEST-SHAPE' 'focused 102 OK; bind by source-row code; accept numeric/gfbj/gssh/gssz/nssc orgIds; deterministic market; coverage floor; cache miss refresh; fail-closed unknown' 860 -- discover -s tests -p 'test_a_short*.py'` → START fingerprint=`165357abecef`；`Ran 2335 tests in 323.538s ... OK (skipped=3)`；`[full-pack-ledger] RESULT status=PASS exit=0 tests=2335 elapsed=325.4s deadline=860s`。
+- 文档治理/最终门：`$env:PYTHONPATH='D:\cnhea\Codex\worktrees\29e0\Stock'; & 'C:\Users\cnhea\AppData\Local\Programs\Python\Python313\python.exe' -m unittest tests.test_doc_governance_guard tests.test_route_doc_ledger_status_consistency tests.test_readme_route_row_length tests.test_semantic_risk_slice3_guard` → `Ran 73 tests in 0.948s ... OK`；`git diff --check` exit `0`（仅 CRLF warning）；`git diff --name-only -- runners/weekly_screening.ps1` 为空。测试证据不等于独立 review PASS、production PASS 或 ship PASS。
+
+#### NOT_VERIFIED、审查/提交边界与下一步
+
+- 本轮未执行真实 CNINFO map/query、provider/live、账户周跑、真实 artifact 刷新或自动下单；真实接口实盘结果仍 `NOT_VERIFIED`。Claude Code 独立审查尚未完成，`sub-agent/commit/push/merge=NOT_PERFORMED`。
+- 下一步：`Claude Code：独立审查 R-ASHORT-KNIFE7-CNINFO-ORG-ID-REQUEST-SHAPE 的 Required ①–③ 与缓存 Optional；PASS 后按项目规则提交。`
+
+### 2026-08-03 Claude Code 第二轮独立审查 = PASS（#07b cninfo orgId）
+
+- **Verdict**: PASS，已提交并合入 master。三条 Required + 上轮 Optional 全部收口。
+- **对真实源实测**：`6227 → 6227`，覆盖率 **1.0000**、dropped **0**（上轮 1403 / 丢 77.5%）；本周 15 只候选解析失败 **0**（上轮 8 只）；80% 地板余量 1245 行。市场推导抽查含 `688981→.SH`、`900901→.SH`、`430047→.BJ` 全对。
+- **五条植入控制全 PASS**：覆盖率地板 70% 整表拒 / 冲突重复整表拒 / 含逗号·空白·控制符的 orgId 一律丢弃（防污染 `code,orgId` 请求）/ 缓存缺必需候选触发重取 / 已覆盖则不重取。
+- **Verify**: review-evidence:cb12b83185f2；full lane `CACHED GREEN 2335 OK`（`+2` 新增用例）。
+- **仍 NOT_VERIFIED**：真实周跑的逐票命中率——(a) 的 warning 是否噤声要等下次 `-Account` 周跑，那是 (a)+(b) 的天然验收正控。

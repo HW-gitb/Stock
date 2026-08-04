@@ -273,6 +273,125 @@ def save_cache(key, data):
         pickle.dump(data, f)
     os.replace(tmp, p)
 
+
+CNINFO_ORG_ID_MAP_URL = "http://www.cninfo.com.cn/new/data/szse_stock.json"
+CNINFO_ORG_ID_CACHE_KEY = "cninfo_org_id_map_v1"
+_CNINFO_ORG_ID_VALUE_RE = re.compile(r"^[^,\s\x00-\x1f\x7f]+$")
+_CNINFO_STOCK_CODE_RE = re.compile(r"^\d{6}$")
+
+
+def _cninfo_market_from_code(code):
+    if code.startswith(("6", "9")):
+        return ".SH"
+    if code.startswith(("0", "2", "3")):
+        return ".SZ"
+    if code.startswith(("4", "8")):
+        return ".BJ"
+    return None
+
+
+def _cninfo_org_id_entry(code, org_id):
+    """Return a source-bound ``ts_code -> orgId`` entry, or None for bad input."""
+    code = str(code or "").strip()
+    org_id = str(org_id or "").strip()
+    if not _CNINFO_STOCK_CODE_RE.fullmatch(code):
+        return None
+    if not _CNINFO_ORG_ID_VALUE_RE.fullmatch(org_id):
+        return None
+    market = _cninfo_market_from_code(code)
+    if market is None:
+        return None
+    return f"{code}{market}", org_id
+
+
+def _normalize_cninfo_org_id_map(payload):
+    """Normalize CNINFO's code/orgId list without accepting an ambiguous map."""
+    rows = payload if isinstance(payload, list) else None
+    if isinstance(payload, dict):
+        for key in ("data", "stockList", "stock_list", "records", "rows"):
+            if isinstance(payload.get(key), list):
+                rows = payload[key]
+                break
+    if not isinstance(rows, list):
+        return None
+    mapping = {}
+    for row in rows:
+        if not isinstance(row, dict):
+            continue
+        entry = _cninfo_org_id_entry(row.get("code"), row.get("orgId"))
+        if entry is None:
+            continue
+        ts_code, org_id = entry
+        previous = mapping.get(ts_code)
+        if previous is not None and previous != org_id:
+            return None
+        mapping[ts_code] = org_id
+    required_coverage = max(1, (len(rows) * 4 + 4) // 5)
+    if len(mapping) < required_coverage:
+        return None
+    return mapping or None
+
+
+def _validate_cached_cninfo_org_id_map(cached):
+    if not isinstance(cached, dict) or not cached:
+        return None
+    validated = {}
+    for ts_code, org_id in cached.items():
+        ts_code = str(ts_code or "")
+        if not re.fullmatch(r"\d{6}\.(?:SH|SZ|BJ)", ts_code):
+            return None
+        entry = _cninfo_org_id_entry(ts_code[:6], org_id)
+        if entry is None or entry[0] != ts_code:
+            return None
+        validated[ts_code] = entry[1]
+    return validated
+
+
+def _load_cninfo_org_id_map(required_ts_codes=None):
+    """Load the bounded CNINFO code->orgId map; return (map, failure_reason)."""
+    required_ts_codes = {
+        str(ts_code or "").strip().upper()
+        for ts_code in (required_ts_codes or ())
+    }
+    try:
+        cached = load_cache(CNINFO_ORG_ID_CACHE_KEY)
+    except Exception as exc:
+        log.warning(f"CNINFO orgId cache read failed; refetching the source map: {exc}")
+        cached = None
+    validated = _validate_cached_cninfo_org_id_map(cached)
+    if validated is not None and required_ts_codes.issubset(validated):
+        return validated, None
+    if validated is not None:
+        missing = sorted(required_ts_codes - set(validated))
+        log.warning(
+            f"CNINFO orgId cache misses {len(missing)} required candidate(s); "
+            "refetching the source map"
+        )
+    if validated is None and cached is not None:
+        log.warning("CNINFO orgId cache is invalid; refetching the source map")
+
+    try:
+        import requests as _requests
+        response = _requests.get(
+            CNINFO_ORG_ID_MAP_URL,
+            headers={"User-Agent": "Mozilla/5.0"},
+            timeout=10,
+        )
+        if response.status_code != 200:
+            return validated, "org_id_map_http_status"
+        payload = response.json()
+        mapping = _normalize_cninfo_org_id_map(payload)
+        if mapping is None:
+            return validated, "org_id_map_invalid_payload"
+        try:
+            save_cache(CNINFO_ORG_ID_CACHE_KEY, mapping)
+        except Exception as exc:
+            log.warning(f"CNINFO orgId cache write failed; using fetched map: {exc}")
+        return mapping, None
+    except Exception as exc:
+        log.warning(f"CNINFO orgId map fetch failed: {exc}")
+        return validated, "org_id_map_exception"
+
 def ensure_writable(path):
     if os.path.exists(path):
         try:
@@ -5556,10 +5675,14 @@ def stage3_ai_clearing(top50_df, red_dict, unlock_set, backtest_mode=False):
     # ③ 巨潮资讯监管公告检查
     REGULATOR_KEYWORDS = ["问询函","立案调查","监管关注","警示函"]
 
-    def _cninfo_check(ts_code):
+    def _cninfo_check(ts_code, org_id_map, org_id_map_error):
+        ts_code = str(ts_code or "").strip().upper()
         stock_code = ts_code.split(".")[0]
         market     = "sz" if ts_code.endswith(".SZ") else "sh"
         column     = "szse" if market == "sz" else "sse"
+        org_id     = (org_id_map or {}).get(str(ts_code))
+        if not org_id:
+            return None, None, org_id_map_error or "org_id_missing"
         d30        = dstr(30)
         start_str  = f"{d30[:4]}-{d30[4:6]}-{d30[6:]}"
         end_str    = f"{TODAY[:4]}-{TODAY[4:6]}-{TODAY[6:]}"
@@ -5567,7 +5690,7 @@ def stage3_ai_clearing(top50_df, red_dict, unlock_set, backtest_mode=False):
             resp = _requests.post(
                 "http://www.cninfo.com.cn/new/hisAnnouncement/query",
                 data={
-                    "stock":     f"{stock_code},{market}",
+                    "stock":     f"{stock_code},{org_id}",
                     "tabName":   "fulltext",
                     "pageSize":  30,
                     "pageNum":   1,
@@ -5613,9 +5736,15 @@ def stage3_ai_clearing(top50_df, red_dict, unlock_set, backtest_mode=False):
     # 生产硬否决须 opt-in 重建」原则一致,降为仅写 cninfo_flag(advisory 展示,进 M6.7),不改生产候选池。
     cninfo_checked = {}   # ts_code -> cninfo_flag，供调用方回写 watch_df(advisory 展示)
     cninfo_health = _cninfo_health_snapshot(len(df))
+    cninfo_required_codes = set(df["ts_code"].astype(str).str.strip().str.upper()) if len(df) else set()
+    cninfo_org_ids, cninfo_org_id_error = (
+        _load_cninfo_org_id_map(cninfo_required_codes) if len(df) else ({}, None)
+    )
     df["cninfo_flag"] = "未检查"
     for idx, row in df.iterrows():
-        hit, reason, unavailable_reason = _cninfo_check(row["ts_code"])
+        hit, reason, unavailable_reason = _cninfo_check(
+            row["ts_code"], cninfo_org_ids, cninfo_org_id_error,
+        )
         if hit is True:
             df.at[idx, "cninfo_flag"] = reason
             cninfo_checked[row["ts_code"]] = reason
