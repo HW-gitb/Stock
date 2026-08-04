@@ -1,5 +1,12 @@
 # Session Log
 
+## 2026-08-04 — Claude 审查（流程时间损耗，无代码 diff）
+
+- **Verdict/Action**: 无正确性缺陷可审——工作树干净、无 diff，按 rule 8 未起全量、未起 agent。本轮审的是本会话实测的执行/修复时间损耗，得三条可机器化项：① 守卫 `bullet-too-long` 不说是哪条 bullet 超了多少，逼出「写→红→猜→重写」循环；② JSON writer 注册表守卫不在 pre-commit 门内，新增写盘口要等 full lane 才红；③ 从 Bash 调 `.cmd` runner 会挂死。
+- **Required**: 无。`Register: non-material` —— 三条均为流程效率，不影响 data integrity / PIT / schema / 执行正确性，按 15a 不入 register、不阻断。
+- **Verify**: review-evidence:b03f9f931344；三条均本会话实测：① `tests/test_doc_governance_guard.py:827` 只 append `(code, tag)`，而 label 就在同处 `m.group(1)`——对比 `:835` 的 `unexpected-label` 已带 label，故那次一改即对，`bullet-too-long` 两次靠猜；② `.githooks/pre-commit` 只跑 route-doc + doc-governance，未登记 writer 直到 full lane 才红（`Ran 1147 tests in 145.771s` `FAILED`），而该守卫单跑 `4.622s`；③ 从 Bash 调 `.cmd` 两次各挂满 120s，换 PowerShell 即通。
+- **Next**: Codex：修复
+
 ## 2026-08-04 — Claude 执行序 18 + 序 21（用户令自执行，未独立审查）
 
 - **Verdict/Action**: 两把均已落地。序 21 两融形状探针真跑成功（5/12 次调用、零错误），`pro.margin` 有权限、9 字段、每日 3 行按 SSE/SZSE/BSE 分、历史 ≥3 年、**单位经量级判定为元**，序 19 与北向回看据此可写代码。序 18 短史降级接线：`watch_pool_eligible_frame()` 一个机制喂两处 `select_profile_watch_pool` 调用点，打分池不动、Tier1/观察池不得进，另加硬不变式而非日志。
