@@ -1,5 +1,21 @@
 # Session Log
 
+## 2026-08-04 — Claude Code 审查 PASS（26 周诊断轨 刀4：聚合器 + 放松类改动经反向控制确认被围住）
+
+- **Verdict/Action**: PASS。本刀含放松类改动（`_validate_rows` 新增 `expected_weeks`/`require_canonical_window`，可跳过「恰 26 行」与刀1 的 canonical 锚点门），理由正当（§2.1/§8.2 的 since-inception 双输出）且默认值未动；`expected_weeks` 由 `len(normalized)` 内部推出，覆盖率分母喂不错；两个视图形状分离，since-inception 冒充不了固定区块摘要。
+- **Required**: 无。反向控制判据与一条沿用 Optional 只见 `docs/system_risk_register.md`（单一来源）。
+- **Verify**: review-evidence:fc224a344a23。焦点超集包 `108 OK / 7.7s / exit 0`。按不可删规则对放松腿自写五项反向控制：固定区块路仍拒 weeks 5–30（刀1 成果未被重构冲掉）与 20 行；since-inception 拒非第 1 周起点（放松的门被换成另一条真约束、非净减）与周序断档；正向腿未误伤，5 周 since-inception 得 `data_insufficient` 且 `data_coverage` 分母取实际长度。另脚本递归扫描新报告 schema：逐层 `additionalProperties:false` 零开放对象，且已进 `SCHEMA_NAMES` 受刀0 闭世界测试覆盖。
+- **Next**: 提交并合入 master。
+
+
+## 2026-08-04 — Codex executor/fixer 执行刀4（独立复审未完成）
+
+- **Verdict/Action**：刀4 26 周聚合与发布已落地；新增固定 26 周区块 + since-inception 双视图、四基准并列、ruleset 分段、去标识化 JSON/Markdown、幂等与半成品/冲突保护。当前真实 model-paper 私有根尚未启动，未生成真实成绩单、未播种 10 万美元账户，未联网、未调用 provider、未写真实账户。
+- **Required**：无新增自审 Required；刀4 仍需 Claude Code 独立复审，不能把本轮执行证据写成 PASS 或已提交。
+- **Verify**：固定 Python 相关回归包 `75 OK / exit 0`（聚合器、诊断引擎、lifecycle、本地适配、model-paper 读路径、schema）；文档治理包 `66 OK / exit 0`；`py_compile`、源码导入/闭世界 schema/编码探针和 `git diff --check` 通过。新增刀4测试覆盖未启动、25周不发布、26/52周双视图、发布幂等、半成品/冲突拒绝与 lifecycle 整链路。
+- **Pre-Codex self-review**：`matrix=Knife3 settled records -> canonical 26/52/78 boundary -> fixed/since-inception summaries -> JSON/Markdown pair`; `report=Draft7 + closed-world + four benchmarks`; `boundary=diagnostic_only/comparison_only/no_selection_action/no_ship_gate`; `focused=75 OK`; `door=doc-governance=66 OK`; `full-lane=not_triggered: diagnostic-only report slice`; `review=NOT_VERIFIED`; `commit=NOT_PERFORMED`; `provider/network/paid=NOT_USED`; `real_account_write=NOT_USED`。
+- **Next**：Claude Code：独立复审当前工作树的 Knife4 聚合器、schema、测试和文档改动。
+
 ## 2026-08-04 — Claude Code 复审 PASS（26 周诊断轨 刀3：窗口算术回到单一来源）
 
 - **Verdict/Action**: PASS。新增 `window_containing_week` 作唯一边界来源，`26w-` 前缀与 `//`/`+` 算术都只剩它一份；`validate_weekly_record`、`window_for_week`、lifecycle `_register_from_records` 三处全部改为委托，lifecycle 里写死的 26/25 已清除。

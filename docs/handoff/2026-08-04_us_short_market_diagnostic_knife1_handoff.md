@@ -4,6 +4,8 @@
 
 Knife1 是不读账户、不联网、不调用 provider 的纯计算层。Knife2 在其上增加本地只读适配：校验既有 model-paper store 和本地四基准价格包，再投影为 schema-shaped 逐周记录；两刀都不改变选股、操作建议、sizing、model-paper NAV 或 Ship gate。
 
+本轮已继续落地 Knife3 生命周期读取之后的 Knife4 聚合器：它只在第 26、52、78 等 canonical 边界生成当前 26 周固定区块 + since-inception 双视图，输出确定性的去标识化 JSON/Markdown；当前真实 model-paper 私有根尚未启动，所以没有真实成绩单或真实 10 万美元账户状态被创建。
+
 ## 已固化的计算契约
 
 - 策略周收益由 prior NAV/NAV 构造；首周使用 `100000.000000`，`no_count` 周不补零。
@@ -29,8 +31,11 @@ Knife1 是不读账户、不联网、不调用 provider 的纯计算层。Knife2
 - 刀3 lifecycle persister：`engine/us_short_market_diagnostic_lifecycle.py`
 - 刀3 lifecycle register schema：`schemas/us_short_market_diagnostic_lifecycle_register.schema.json`
 - 刀3 计数、幂等、提醒和私有路径反向测试：`tests/test_us_short_market_diagnostic_lifecycle.py`
+- 刀4 26 周聚合与发布：`engine/us_short_market_diagnostic_aggregator.py`
+- 刀4 报告 schema：`schemas/us_short_market_diagnostic_report.schema.json`
+- 刀4 聚合、幂等、半成品保护和 lifecycle 发布测试：`tests/test_us_short_market_diagnostic_aggregator.py`
 - 设计入口：`docs/us_short_market_diagnostic_26w_design.md`
 
 ## 后续边界
 
-刀3 已接周记录、26 周计数器和 v1.1 reminder 生命周期：只接受 settled model-paper 周的刀2输出，逐周文件不可变，寄存器从文件 digest/strategy_evaluable 反推，周报第12节使用 `us_short_market_diagnostic_v1_1` 脱敏 reminder block。当前真实 model-paper 根尚未启动，因此没有真实第1周记录。ETF 总回报 sidecar、provider 调用、26周摘要和 v1.1 归因仍在各自后续刀，不能由刀3自行补齐。
+刀3 已接周记录、26 周计数器和 v1.1 reminder 生命周期；Knife4 已在其上增加只读聚合与公开报告发布。聚合器只接受 lifecycle 已校验的 settled 记录；同一 `window_id` 重跑字节级幂等，JSON/Markdown 缺一不可，冲突或半成品拒绝覆盖。ETF 总回报 sidecar 仍留给 Knife5，v1.1 仓位归因仍留给 Knife6；当前真实 model-paper 根尚未启动，因此不会出现真实 26 周成绩单。

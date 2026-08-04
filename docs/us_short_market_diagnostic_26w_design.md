@@ -273,6 +273,18 @@ Knife 2 的本地适配器是 `engine/us_short_market_diagnostic_local_adapter.p
 
 刀3的写入只写诊断轨私有目录；`provider_fetch=false`、`account_write=false`、`changes_selection_or_action=false`、`automatic_policy_switch=false`、`counts_ship_gate=false`。当前真实 model-paper 私有根尚未启动时，不创建 head、不生成虚假的第1周；刀3只通过临时夹具验证该接线。
 
+## 12.5 Knife 4：26 周聚合器与公开报告
+
+Knife 4 的实现入口是 `engine/us_short_market_diagnostic_aggregator.py`，输入只来自 Knife 3 已校验的私有 settled weekly records；它不读取 provider、真实账户、持仓明细或订单，也不创建 10 万美元 model-paper 账户。
+
+- 只有当最后一条记录正好落在 `26`、`52`、`78` 等 canonical 边界时才生成报告；不足 26 周、缺周、断档或窗口不完整时返回“尚未到期”或 fail-closed，不凑数、不补零；
+- 报告同时保留当前 26 周固定区块和从第 1 周到当前的 since-inception 视图。固定区块继续复用 Knife 1 的四基准、状态、数据质量、成本后 NAV、回撤、现金/权益比例、turnover、joint 周数、IR 和 HAC 等既有字段；本刀不改 Knife 0 已冻结 schema，也不新增“周收益波动”字段；
+- 四个基准始终是 `VTI`、`IWB`、`SPY`、`QQQ`，不按结果替换。Knife 5 接入 ETF 股息 sidecar 之前，缺股息的周仍明确标成 `price_return_diagnostic` / `data_degraded`，不能冒充 total return；
+- `ruleset_segments` 同时记录固定区块和 since-inception 的 epoch/ruleset 连续分段，防止跨规则版本把成绩混成一个结论；
+- 去标识化报告输出到 `research/results/us_short/market_diagnostic_26w/`，每个窗口一对 `<window_id>.json` 和 `<window_id>.md`。JSON 是机器接口，Markdown 是人读摘要；不写逐周原始记录、持仓、交易、原始价格或可还原个人账户的信息；
+- 写入采用确定性字节序列：同一窗口重复运行返回幂等；只存在 JSON 或 Markdown 的半成品、或内容冲突时拒绝覆盖，避免产生两份不同成绩单；
+- 报告只是比较诊断，不改变选股、最终操作建议、仓位、NAV 或 Ship gate。当前真实 model-paper 私有根尚未启动时，不会生成实际第 26 周成绩单，测试只用临时夹具验证逻辑。
+
 ## 13. Knife 0 验收
 
 刀0完成必须证明：
@@ -286,3 +298,14 @@ Knife 2 的本地适配器是 `engine/us_short_market_diagnostic_local_adapter.p
 7. no_count、幂等、未来日期和错误时钟边界进入 schema/测试契约；
 8. v1.1 的4—8周时机、每周提醒和 overdue 规则被固定；
 9. 刀0不联网、不调用 provider、不写 state 运行态、不改变正式选股或操作建议。
+
+## 14. Knife 4 验收
+
+Knife 4 完成必须证明：
+
+1. 第 26 周之前不发布报告，第 26、52、78 周边界可按同一规则生成固定区块；
+2. 固定 26 周与 since-inception 两套视图分别通过 schema，四个基准和 ruleset 分段完整；
+3. 公开 JSON/Markdown 不包含逐周记录，且不改变诊断边界；
+4. 同一窗口重复运行字节级幂等，半成品或冲突内容 fail-closed；
+5. 从 Knife 3 私有 lifecycle 读取时只消费已 settled 记录；没有真实私有根时不创建真实输出；
+6. 固定 Python 下聚合器、诊断引擎、lifecycle、schema 和文档治理测试通过。
