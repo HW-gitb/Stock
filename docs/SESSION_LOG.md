@@ -1,5 +1,13 @@
 # Session Log
 
+## 2026-08-04 — Claude 起草批 1 方案并交接 executor（序 20 + 序 12）
+
+- **Verdict/Action**: 起草完成并交接，未改任何生产代码。序 20 = IV feed 依赖验证（纯查证、不产功能）；序 12 = #08 northbound 接线，复杂度由 ★★☆☆☆ **上修 ★★★☆☆** —— 实读推翻上一版「两头现成、零待裁项」的排期依据，详见下方 Verify。用户已确认序 12 的唯一开口：只把 `market_environment()` 里那条只输出文本的「静默」规则做成真门，双条件与阈值原样不变。
+- **Required**: 无（本轮为起草，非审查）。两份方案全文与 executor 命令见 `docs/handoff/2026-08-01_a_short_leaf_wiring_classification_handoff.md` 同日追加节；executor 按命令建 `R-ASHORT-KNIFE20-IV-FEED-DEPENDENCY-PROBE` 与 `R-ASHORT-KNIFE12-NORTHBOUND-MARKET-WIRING` 两条 register 条目。
+- **Verify**: 纯文档轮，未跑行为测试；提交由 `.githooks/pre-commit` 两道守卫把关。方案中的代码事实均为实读：`A-EGS/egs_main.py:5925-5934` 已算出 `north_flow_yuan`（万元 ×10000 → 元），`:5937-5949` 两条防御规则**只 append 进 env 文本**、对最终表零影响；`:5928` 是五日**求和**而 v14.2 `:224` 要的是「**连续**5日净流出」且属三选二触发（另两输入不存在）；schema `market_context.northbound = {net_flow_5d(Unit: CNY), status enum[inflow/outflow/flat/unknown]}`；`runners/a_short_iv_feed_build.py::main` 的 CLI 仅 `--as-of/--out/--failure-receipt-out/--confirm-fetch-authorized`，`build_daily_iv(opt_basic, opt_daily, underlier, ...)` 吃期权链与标的行情，**无任何 EGS 入参**（强先验：不依赖，待序 20 证实）。执行树 29e0 已 reset 到本 commit。
+- **Pre-Codex self-review**: A-F checked（纯文档轮）。A.6 权威链：v14.2 `:224` 那条门的权威链断在「另两输入不存在」，故不采用；改用 `market_environment()` 里既有的 `-50e8` / `-10` 常量（authority: 代码内既有常量，非新造阈值）。B: 全仓 grep `northbound|北向` 三面（egs_main / schemas / weekly_pipeline），消费侧 0 命中。C: 方案已含三反控 + 一植入控制。E: 队列表同轮刷新、旧结论已标失效。D/F/matrix/focused=N-A（无代码面）。register=executor 建；handoff=updated；full-lane=not_triggered: AGENTS rule 3; reason=纯文档无生产代码面；door=route 14 + doc-governance 41
+- **Next**: Codex：执行
+
 ## 2026-08-04 — 起刀 0：基准 ETF 分红覆盖探针（26 周市场诊断轨的前置未知）
 
 - **Verdict/Action**: 已建、已提交、**已按用户授权真跑**。26 周诊断轨的基准腿要含息总回报，就必须有基准 ETF 的 `ex_dividend_date` + `cash_amount`。跑前查证：本仓库**从未向 Massive 问过任何 ETF 的分红**——0707 shape probe = AAPL/MSFT，0712 validation = AAPL/MSFT/TSLA，全是个股；市场级窗口查询（`us_short_forward_policy_corporate_action_fetch.py`）register 5330 行自述 "No real provider call was executed"，`provider_samples/` 亦无对应目录。故这是未验证假设，且是设计分叉（无覆盖就得换源），必须在冻方法之前钉死。**真跑结果 = `viable_all`**（4/4 covered、4 调用全 HTTP 200、每只 10 行且 10/10 行的自带 `ticker` 与查询符号相符、两个必需字段齐全）→ **设计分叉解除，刀③ 分红腿留在 Massive，不必换源、不必另批 FMP**。

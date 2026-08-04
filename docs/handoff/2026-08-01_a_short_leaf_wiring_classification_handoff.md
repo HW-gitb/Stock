@@ -1109,9 +1109,9 @@ The new regression file covers the 20260928 positive seven-day closure, 20260921
 
    后者是一条**真的仓位规则**，条件与阈值都已写死在代码里，但它对最终表零影响。本刀的实质即：把这句打印变成真门。
 
-**待用户确认（本刀唯一开口，未确认前不得开工）**
+**已定口径（2026-08-04 用户确认，实现不得再自行解释）**
 
-做哪一条门。**起草建议 = 只做「静默」那条，且保持其现有双条件与阈值原样不变**（CSI300 窗口跌幅 `< -10` 且北向五日净流出 `< 0` → 本周禁止新建仓）；`-50亿` 那条保持 advisory（其信息已由 `net_flow_5d` 真值字段表达，不需额外后果）。理由：阈值不是新发明的、是代码里已有的，在无回测依据时自造新数字风险更高；这也正是 #05 立意里「让『北向大幅流出→防御』这条死掉的风控复活」。
+做哪一条门 —— **只做「静默」那条，且保持其现有双条件与阈值原样不变**（CSI300 窗口跌幅 `< -10` 且北向五日净流出 `< 0` → 本周禁止新建仓）；`-50亿` 那条保持 advisory（其信息已由 `net_flow_5d` 真值字段表达，不需额外后果）。理由：阈值不是新发明的、是代码里已有的，在无回测依据时自造新数字风险更高；这也正是 #05 立意里「让『北向大幅流出→防御』这条死掉的风控复活」。**本刀开口已关（2026-08-04 用户「确认」），可开工。**
 
 **风险披露（必须让用户看到）**：「禁止新建仓」是一把大锤——条件一旦满足，当周所有新仓位都不建。该规则从未真正生效过，**历史触发频率未知**。因此实现范围第 5 条为硬要求：同刀产出回看统计供用户决定是否保留该门。
 
@@ -1141,3 +1141,32 @@ The new regression file covers the 20260928 positive seven-day closure, 20260921
 ---
 
 **本批共同约定**：两把刀在**同一棵 worktree**内连续起草、各自独立 slice + 自审，**loop 中不 commit**；effect contract 只在两把都落地后**统一重封一次**；最后一次全量、一次收口、一次提交。执行前 worktree 已由 reviewer reset 到 master `fa71f184`（本日六条裁决已在树内）。
+
+### 批 1 交接：给 executor 的命令（2026-08-04 reviewer 写入）
+
+**命令**：执行批 1 —— **序 20（IV feed 依赖关系验证）** 与 **序 12（#08 northbound 接线）**。范围、验收、边界一律以本 handoff 同日「批 1 执行方案起草」节的两份方案为准，不得自行扩大或重新解释口径。
+
+**执行树**：`D:\cnhea\Codex\worktrees\29e0\Stock`，reviewer 已 reset 到 master（本日六条裁决 + 两份方案 + 本命令均在树内）。**命令与口径只认这棵树里的文档**。
+
+**register 条目（executor 建，用这两个 ID 以便跨轮对照）**：
+- 序 20 → `R-ASHORT-KNIFE20-IV-FEED-DEPENDENCY-PROBE`
+- 序 12 → `R-ASHORT-KNIFE12-NORTHBOUND-MARKET-WIRING`
+
+**顺序与批内约定**：序 20 先做（纯查证，**三选一结论必须写回本 handoff**），序 12 后做。两把在同一棵树内连续起草、各自独立 slice + 自审，**loop 中不 commit**；effect contract 只在序 12 落地后**统一重封一次**；最后一次全量、一次收口。
+
+**开工前必读**：`AGENTS.md`、`docs/CURRENT.md`、`docs/system_risk_register.md` 顶部未关闭条目、`docs/SESSION_LOG.md` 顶 1-3 条、`docs/pre_codex_self_review_checklist.md`（起草/修复必走 A-F，含 A.6 权威链与 C2 植入对照判据；SESSION_LOG 必带 Proof-of-use 行）。
+
+**不得做**：
+- **不读桌面文档** —— `C:\Users\cnhea\Desktop\a_cc_testrun1.md` 不是工程输入，只在 merge 后由 reviewer 回写状态位。
+- **不 commit / push / merge** —— 提交与合入由 reviewer 在独立审查 PASS 后负责。
+- **不并入 #14 / #16** —— 前者会改「谁能进 Tier1」，混批后选股变动无法归因；后者要真取数，性质不同。
+- **不碰 #08 liquidity** —— 用途仍未决，用户本轮未答；无消费点接线必造 `true_dangling` 叶。
+- 不改选股 / EGS 打分 / TopN / M6.7 操作判定 / 已有持仓处置 / provider 参数 / PIT 窗口；不动逐票 `capital_flow.northbound`（hk_hold 已停发）。
+
+**完成条件（交 reviewer 前逐条自检）**：
+1. 序 20 的三选一结论已写回本 handoff，且每条静态命中都有「是/否 EGS 依赖」逐条判定。
+2. 序 12 的五条验收全过：正控（封门 + 元值 + status=outflow）、三条反控（单条件 / 数据缺失 unknown 不封门 / 单位 ×10000）、一条植入控制（中和消费门 → 正控转红）。
+3. 回看统计已产出（counts-only、不进生产决策）。
+4. effect contract 叶账本 + `leaf_effect_overrides` + 指纹已统一重封一次。
+5. 两条 register 条目已建；`docs/SESSION_LOG.md` 按极简模板写一条并带 Proof-of-use 行（`matrix=` / `register=` / `handoff=` / `focused=` / `full-lane=` / `door=` 六字段齐全）。
+6. 新增用例全部落在 `test_a_short*.py` 选择器内。
