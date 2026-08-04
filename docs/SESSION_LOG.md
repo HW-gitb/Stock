@@ -1,5 +1,13 @@
 # Session Log
 
+## 2026-08-03 — Claude 修复（master 全量红：未分类公共入口 `heat`）
+
+- **Verdict/Action**: 用户授权后自修自审。`engine/a_short_overlay_adjudication.py:25` 的模块级 import 别名 `as heat` 被 inventory 守卫判为未分类公共入口，令任何人在主树跑 a_short 全量都红。改为 `as _heat`（同文件上一行 `as _epoch_mode` 即既有写法），同步 `:152` 唯一使用点。别名不是本模块入口，登记它会给「每个 import 别名都要注册」开先例。
+- **Required**: 无；Register: 无新条（零选股/真钱影响，纯 lane 可用性）。
+- **Verify**: 非我合并所致——该文件最近改动为 `4e31c8d5`/`0a632b47`，我的 `6dc0f8e6` 碰它 0 处；引入 hoist 的 `f238c8d5` 不是我分支 `bc10357f` 的祖先、却是合并前 master `c38a9d53` 的祖先（两边各自绿，合后首次同跑）。残留 `heat.` 0、全仓无 `.heat` 外部引用；`_heat.canonical_governance_digest` 仍是该模块 `governance_sha256` 唯一来源。
+- **Next**: Codex：执行
+- **Pre-Codex self-review**: matrix=该模块全部 import 别名 + 全仓 ENTRYPOINTS 枚举复算; register=n/a 无新条; handoff=not_required 一行别名改非刀; focused=枚举探针 offender 1→0 + 植入控制守卫仍抓; full-lane=PASS 2328 / 445.9s（修前同命令 FAIL 2214）; door=doc-governance 41 OK; A=类只此一处一名; B=grep 无第二处; C=植入公共别名仍被抓; D=N-A; E=SESSION_LOG 单态; F=diff-check 干净
+
 ## 2026-08-04 — 协议改动：交接 checklist 加「权威链」轴 + 植入对照判据（用户令，防同类复发）
 
 - **动因**: 用户问「怎么避免下次审查再出同类漏洞」。实测口径：类 D（默认值即钱路）、类 G（磁盘字节当身份）、类 H（计划自己就是权威）**是同一个问题**——门的判据没有权威来源。而规则并不缺：类 G 的谓词本来就存在，仍因按名字判定而对两种形态全盲。故只改已有条目，不加新章节。
