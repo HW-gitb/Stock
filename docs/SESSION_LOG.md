@@ -51,6 +51,22 @@
 - **Required**: 无，未新开 register 条目。纯新增、零改动既有文件。**但 raw 里浮出两件本探针按设计不回答的事，留给刀③**：①**语料是否 current 未证**——返回序是**任意序**（日期在 2007–2025 间乱跳，非按日期排）且四只全带 `next_url`，故 10 行只是大语料里的任意一页；样本里最新只到 `2025-12-22`（QQQ），但这是抽样假象而非陈旧证据，两个方向都没证。该未知**不需要再起探针**：刀③ 本来就用按 `ex_dividend_date` 窗口过滤的市场级查询，那正是能回答它的查询形状；配一条「26 周窗口内基准季付票应 ≥1 个除息日，为 0 即 `not_evaluable`」的 fail-closed 断言即可把它转成运行时门。②**分红字段有两个口径**——`cash_amount` 与 `split_adjusted_cash_amount` 并存，另有 `historical_adjustment_factor`；因基准价格序列走 Massive grouped 已是拆股复权，总回报要自洽就必须选**拆股复权那一支**，刀① 冻口径时须显式指定、不得靠默认。另记一条小异常：`IWB` 的 `frequency=0`（其余三只为 4），不影响本腿（只用 ex-date + cash），但刀③ 不得依赖 `frequency`。
 - **Verify**: 本轮未注入 review-evidence token，故不引用。新包 `13 OK / 0.24s`；`git status` = 恰 3 个新文件 + README 一行，**零既有文件被改**，故按改动性质未起 lane 全量（覆盖范围就是本模块自身）。**植入对照**（不采信自指断言）：从 `_coverage_verdict` 摘掉 `matched_rows != row_count` 那道门 → 端到端用例 `test_provider_ignoring_the_ticker_filter_is_not_read_as_covered` 与阶梯用例**双双转红**（`covered` vs `rows_do_not_match_queried_ticker`），恢复后 13 OK。真实 `--dry-run-env` 实跑：`MASSIVE_API_KEY present: True` / `raw root gitignored: True` / `planned calls: 4 (max 4)`，即真跑前置条件已具备。
 - **Next**: 刀①（方法冻结）。分红源已定为 Massive，冻口径时须落定「用 `split_adjusted_cash_amount`」与「窗口内零基准除息日即 `not_evaluable`」两条。方案全文在桌面 `usshort-compare.md`（按用户令不进仓库）。
+## 2026-08-04 — Claude Code 审查 PASS（26 周诊断轨 刀2：本地价格/账户适配 + 刀1 Optional 收口）
+
+- **Verdict/Action**: PASS。刀1 遗留 Optional 修得干净：新增独立 `BENCHMARK_STATUSES` 并引入 `flat_diagnostic`，per-benchmark 词表与 `OVERALL_STATUSES` 分家。适配器只读本地、无 provider import，缺价不零填、刀5 之前不可能冒充总回报。
+- **Required**: 无。两条不阻断 Optional 与全部探针判据只见 `docs/system_risk_register.md`（单一来源）。
+- **Verify**: review-evidence:9d18ad922c9d。超时原因: 一处探针把设计允许的「仓外绝对路径放行」误判为漏洞，回查设计 §11.6 与两棵树的 `git check-ignore` 才定性，多花约 6 分钟。焦点超集包 `93 OK / 1.6s / exit 0`。自写探针六项：路径穿越两形态均拒；仓内 tracked 目录拒、仓外绝对放行（合 §11.6）；canonical JSON 字节级校验；单周跨基准 `price_date` 偏斜拒；适配器全文零 `total_return_evaluable`/零零填充；引擎 `_validate_benchmark` 的 `joint_evaluable` 三重联合门绕不过。
+- **Next**: 提交并合入 master。
+
+
+## 2026-08-04 — Codex executor/fixer 修复刀1 Optional并执行刀2（独立复审未完成）
+
+- **Verdict/Action**：用户授权的两项工作已完成；单基准恰好持平改为 `flat_diagnostic`，刀2新增本地只读 model-paper/四基准价格适配；未提交，未联网，未调用 provider，未付费。
+- **Required**：无新增 Required。Optional「单一基准持平状态词」同刀状态为 implemented/OPEN-NOT_VERIFIED；刀2仅复用本地 head/settlement/state/NAV 和价格包，不创建账户、不推进 head、不改变选股、操作建议、仓位、NAV 或 Ship gate。
+- **Verify**：固定 Python 聚焦 `27 OK`；model-paper 受影响包 `48 OK`；route-doc + doc-governance `66 OK`；fixed-Python `py_compile=OK`；`git diff --check=clean`；BOM/FFFD=0。
+- **Pre-Codex self-review**：`matrix=flat tie/status enum/overall six-value preservation + local packet schema/date/source SHA/missing-price/settlement-state-NAV digest/tamper/read-only controls`; `register=updated: Optional implemented pending review`; `handoff=updated: Knife1/Knife2 boundary and next Knife3`; `focused=27+48 OK`; `full-lane=not_triggered: diagnostic-only local adapter, no production runner/shared selection/provider/account path`; `door=route-doc + doc-governance=66 OK`; `py_compile=OK`; `diff-check=clean`; `review=NOT_VERIFIED`; `commit=NOT_PERFORMED`; `provider/network/paid=NOT_USED`; `real_account_write=NOT_USED`。
+- **Next**：Claude Code：独立复审本轮 Optional 与刀2；PASS 后按 reviewer/committer 流程提交。
+
 ## 2026-08-04 — Claude Code 复审 PASS（26 周诊断轨 刀1：计算路的窗口锚点已自守）
 
 - **Verdict/Action**: PASS。`_validate_rows` 不再自拼 `f"26w-{start}-{end}"`，改调 `window_for_week(end_week)` 并要求非 `None` 且起点相符，触发路与计算路共用同一份边界算术。实测全仓只剩 `window_for_week` 内一处 `26w-{...}` 字面量。
