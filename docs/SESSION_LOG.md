@@ -1,5 +1,13 @@
 # Session Log
 
+## 2026-08-04 — Claude 修复（08-08 前最后两件：残留清理 + 读门正向腿，用户令自修自审）
+
+- **Verdict/Action**: 两件都做完。① `provider_samples/` 清掉 115 个测试残留（109 个 `k4b_<pid>_test_*` + 6 个 `tmp*`），保留 48 个真样本约 2.5 GB——**此前记的「163 个残留」是错的**，按它一把清会删掉 `us_short_llm_theme_discovery_fetch_web/_fetch_x` 这两条装着三次付费原文的 live raw 根。② 补 `read_parent_plan` 的**正向**腿：原来只有「伪造被拒」，拒绝腿单侧存在时「门拒绝一切」也全绿。付费门那条按用户拍板记为条件触发，08-08 前不动。
+- **Required**: 无；Register: 无新风险条。三类残留划分与保留清单、正向腿取证、以及 `R-USSHORT-PAID-GATE-DOES-NOT-VERIFY-PLAN-AUTHORITY` 的触发条件与建议修法（盖章式，非每请求重载）见 `docs/system_risk_register.md`（单一来源，本处不复述）。
+- **Verify**: review-evidence:not_available（本轮 hook 未注入 token）。清理前后 `ls provider_samples | wc -l` = `163 → 48`，两条 live raw 根与抽查具名样本均在，未改代码。新测试跑 `build → write → read_parent_plan(require_reviewed_policy=True) → resolve_stage1_plan_binding`，web/xai 两条 lane 派生查询与计划逐字节一致，全程落 `ROOT` 下临时目录、不碰正式 20260808 槽。**点名植入**：把权威门里 `stage1_queries != expected` 翻成 `==`（门变成拒诚实放伪造）→ 新正向腿与既有预留对照**双双转红**，还原转绿。覆盖包 `66 OK / 2.6s`（单跑，无并发）。
+- **Next**: 用户：授权 08-08/09 bounded 探针
+- **Pre-Codex self-review**: `matrix=三类残留逐类判定 + 读门正反两腿`; `register=updated`; `handoff=not_required: 无新交接事实，条件触发项已进 register`; `focused=66 OK / 2.6s`; `full-lane=not_triggered: 仅新增一条测试，无生产代码改动`; `door=doc-governance + route-doc 见提交前 hook`; `planted=翻转权威门比较符 → 正反两腿同时转红`; `residue=163→48，删的 115 个全部逐类证明为测试产物`
+
 ## 2026-08-03 — Claude 修复（master 全量红：未分类公共入口 `heat`）
 
 - **Verdict/Action**: 用户授权后自修自审。`engine/a_short_overlay_adjudication.py:25` 的模块级 import 别名 `as heat` 被 inventory 守卫判为未分类公共入口，令任何人在主树跑 a_short 全量都红。改为 `as _heat`（同文件上一行 `as _epoch_mode` 即既有写法），同步 `:152` 唯一使用点。别名不是本模块入口，登记它会给「每个 import 别名都要注册」开先例。

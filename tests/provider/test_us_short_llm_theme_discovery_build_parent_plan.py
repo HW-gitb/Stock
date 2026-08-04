@@ -168,6 +168,39 @@ class UsShortBuildParentPlanTests(unittest.TestCase):
                     path, root=builder.ROOT, state_dir=state, require_reviewed_policy=True,
                 )
 
+    def test_published_plan_round_trips_through_the_live_read_door(self) -> None:
+        """The 08-08 opening sequence, forward leg: build -> publish -> read back -> derive.
+
+        The sibling test above only proves a forged plan is refused.  A refusal-only pair
+        would still pass if the door rejected everything, so this asserts the honest plan
+        survives the same door and yields the reviewed queries to both lanes.
+        """
+        payload = self._payload()
+        expected = [row["query_text"] for row in payload["canonical_plan_core"]["stage1_queries"]]
+        with tempfile.TemporaryDirectory(prefix="us_short_plan_round_trip_", dir=str(builder.ROOT)) as raw:
+            state = Path(raw) / "state" / "us_short"
+            path = query_plan.default_parent_plan_path(
+                "20260808", payload["plan_identity"], state_dir=state,
+            )
+            query_plan.write_parent_plan(
+                payload, path, state_dir=state, root=builder.ROOT,
+                gitignored=lambda _path: True,
+            )
+            document, artifact_sha256, relative_path = query_plan.read_parent_plan(
+                path, root=builder.ROOT, state_dir=state, require_reviewed_policy=True,
+            )
+            self.assertEqual(len(artifact_sha256), 64)
+            self.assertTrue(relative_path.endswith(".json"))
+            for provider in ("web", "xai"):
+                derived, records, _binding = query_plan.resolve_stage1_plan_binding(
+                    document, provider=provider,
+                )
+                self.assertEqual(derived, expected)
+                self.assertEqual(
+                    [row["query_id"] for row in records],
+                    [row["query_id"] for row in payload["canonical_plan_core"]["stage1_queries"]],
+                )
+
     def test_provider_envelope_must_keep_four_query_no_retry_shape(self) -> None:
         bad = builder._default_provider_envelopes(4)
         bad[0]["max_dispatch_count"] = 9
