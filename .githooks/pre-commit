@@ -44,6 +44,19 @@ fi
 # cites the ledger instead of re-running mid-review. It NEVER blocks: the ledger is per-worktree and
 # advisory (fingerprint = diff-from-HEAD), so a real hard gate would need a tracked, commit-keyed
 # ledger — a separate slice. This branch only warns to stderr; it never blocks the commit.
+# Every staged non-document change must have a current bounded focused receipt.
+# This is the small hard gate; the rule-3 full lane below remains conditional.
+code_changed="$(git diff --cached --name-only | grep -vE '^(docs/|.*\\.md$)' || true)"
+if [ -n "$code_changed" ]; then
+  "$PY" .tools/verification_receipt.py 1>&2
+  if [ "$?" -ne 0 ]; then
+    echo "" 1>&2
+    echo "pre-commit BLOCKED: no current bounded focused acceptance receipt for staged code." 1>&2
+    echo "Run .tools\\run_unittest_with_repo_pythonpath.cmd with the focused acceptance pack, then retry." 1>&2
+    exit 1
+  fi
+fi
+
 if [ -n "$PY" ]; then
   prod_changed="$(git diff --cached --name-only | grep -E '^(A-EGS/|runners/a_short_|engine/a_short_|engine/egs_|schemas/a_short_|presets/a_short_|presets/egs_)' || true)"
   if [ -n "$prod_changed" ] && ! "$PY" .tools/full_pack_ledger.py check a_short >/dev/null 2>&1; then
@@ -52,7 +65,8 @@ if [ -n "$PY" ]; then
     echo "full-pack GREEN is recorded for this code state (AGENTS.md §Verification tiering rule 3/4)." 1>&2
     echo "At the PASS/merge gate run the a_short full pack ONCE with the atomic ledger command" 1>&2
     echo "(it prepares, bounds, verifies and records in one step; manual prepare/record is retired):" 1>&2
-    echo "  .tools\\codex_main_python.ps1 .tools\\full_pack_ledger.py run a_short \"<trigger>\" \"<focused evidence>\" 1200 -- <unittest args>" 1>&2
+    echo "  C:\\Users\\cnhea\\AppData\\Local\\Programs\\Python\\Python313\\python.exe .tools\\full_pack_ledger.py run a_short \"<trigger>\" \"receipt:<receipt-id>\" 1200 -- <unittest args>" 1>&2
+    echo "The focused receipt is produced by .tools\\run_unittest_with_repo_pythonpath.cmd and is bound to this exact code state." 1>&2
     echo "(If focused tests bound the impact per rule 6, ignore this.)" 1>&2
   fi
 fi

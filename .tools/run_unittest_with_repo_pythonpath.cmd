@@ -14,6 +14,11 @@ set "PYTHON_EXE=%PINNED_PYTHON%"
 rem The hard-coded executable is authoritative; inherited overrides are ignored and cleared.
 set "STOCK_PYTHON="
 set "STOCK_TEST_PYTHON="
+rem Do not inherit PATH/PYTHONPATH pollution: the child must resolve only the pinned
+rem Python and Windows process-control tools used by the bounded runner.
+set "PINNED_PYTHON_DIR=C:\Users\cnhea\AppData\Local\Programs\Python\Python313"
+set "PYTHONPATH="
+set "PATH=%PINNED_PYTHON_DIR%;%PINNED_PYTHON_DIR%\Scripts;%ProgramFiles%\Git\cmd;%SystemRoot%\System32;%SystemRoot%;%SystemRoot%\System32\Wbem;%SystemRoot%\System32\WindowsPowerShell\v1.0"
 set "TIMEOUT_SECONDS=300"
 set "EXPLICIT_TIMEOUT="
 set "UNITTEST_ARGS="

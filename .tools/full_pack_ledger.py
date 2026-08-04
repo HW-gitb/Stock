@@ -9,7 +9,7 @@ cached green instead of re-running a multi-minute pack for a number they already
 records written before the preparation gate are historical evidence only and are never reusable.
 
 Usage:
-   .\tools\codex_main_python.ps1 .tools\full_pack_ledger.py run <lane> <full-trigger-reason> <focused-evidence> <timeout-seconds> -- <unittest args>
+   C:\Users\cnhea\AppData\Local\Programs\Python\Python313\python.exe .tools\full_pack_ledger.py run <lane> <full-trigger-reason> receipt:<receipt-id> <timeout-seconds> -- <unittest args>
    .\tools\codex_main_python.ps1 .tools\full_pack_ledger.py check <lane>
 
 `run` accepts only the lane's fixed full-discovery selector: `a_short` = `discover -s tests -p test_a_short*.py`; `us_short` = `discover -s tests -p test_us_short*.py`.  The ledger itself prepends the fixed `-b -f --durations 25` runtime flags; they quiet passing output, stop on the first red, and retain timing evidence without narrowing discovery.
@@ -21,8 +21,8 @@ runs one bounded unittest process, verifies its exit code and test count, and re
 """
 from __future__ import annotations
 
-import hashlib
 import json
+import py_compile
 import shutil
 import subprocess
 import sys
@@ -30,9 +30,11 @@ import time
 from pathlib import Path
 
 from bounded_unittest import DEPENDENCY_EXIT, FULL_MAX_SECONDS, external_test_dependency_error, run_unittest
+import verification_receipt as receipts
 
 ROOT = Path(__file__).resolve().parent.parent
 DEFAULT_LEDGER = ROOT / ".tools" / "state" / "full_pack_ledger.json"
+FOCUSED_RECEIPT_PATH = receipts.RECEIPT_PATH
 PREPARES_KEY = "_prepares"
 FULL_PACK_DISCOVERY_ARGS = {
     "a_short": ("discover", "-s", "tests", "-p", "test_a_short*.py"),
@@ -118,10 +120,7 @@ def cleanup_new_private_test_roots(
 
 def _is_code_path(rel_path: str) -> bool:
     """A docs/register/SESSION_LOG-only edit must NOT invalidate a code full-pack (rule 4)."""
-    r = rel_path.replace("\\", "/")
-    if r.startswith("docs/") or r.endswith(".md"):
-        return False
-    return True
+    return receipts.is_code_path(rel_path)
 
 
 def _git(*args: str) -> str:
@@ -130,21 +129,11 @@ def _git(*args: str) -> str:
 
 def collect_code_state() -> dict[str, str]:
     """Map every code file that differs from HEAD or is untracked to its content sha (+ HEAD)."""
-    changed = [line for line in _git("diff", "HEAD", "--name-only").splitlines() if line]
-    untracked = [line for line in _git("ls-files", "--others", "--exclude-standard").splitlines() if line]
-    state: dict[str, str] = {}
-    for rel in set(changed) | set(untracked):
-        if not _is_code_path(rel):
-            continue
-        path = ROOT / rel
-        state[rel] = hashlib.sha256(path.read_bytes()).hexdigest() if path.is_file() else "ABSENT"
-    state["@HEAD"] = _git("rev-parse", "HEAD").strip()
-    return state
+    return receipts.collect_code_state()
 
 
 def fingerprint(state: dict[str, str]) -> str:
-    canonical = "\n".join(f"{key}:{state[key]}" for key in sorted(state))
-    return hashlib.sha256(canonical.encode("utf-8")).hexdigest()
+    return receipts.fingerprint(state)
 
 
 def _load(ledger: Path) -> dict:
@@ -154,12 +143,31 @@ def _load(ledger: Path) -> dict:
         return {}
 
 
-def prepare(lane: str, trigger_reason: str, focused_evidence: str, *,
-            state: dict[str, str] | None = None, ledger: Path = DEFAULT_LEDGER) -> str:
+def prepare(
+    lane: str,
+    trigger_reason: str,
+    focused_evidence: str,
+    *,
+    state: dict[str, str] | None = None,
+    ledger: Path = DEFAULT_LEDGER,
+    focused_receipt_path: Path = FOCUSED_RECEIPT_PATH,
+) -> str:
     """Attest that the focused loop and A-F review are complete for this code state."""
-    if not str(trigger_reason).strip() or not str(focused_evidence).strip():
+    if not str(trigger_reason).strip():
         raise ValueError("prepare requires a full-trigger reason and focused-test evidence")
-    fp = fingerprint(state if state is not None else collect_code_state())
+    if not str(focused_evidence).strip():
+        raise ValueError("prepare requires a full-trigger reason and focused-test evidence")
+    if not isinstance(focused_evidence, str) or not focused_evidence.startswith("receipt:"):
+        raise ValueError("prepare requires the machine focused receipt token `receipt:<receipt_id>`")
+    current_state = state if state is not None else collect_code_state()
+    receipt, receipt_reason = _receipt_matches_current_state(
+        focused_evidence,
+        state=current_state,
+        path=focused_receipt_path,
+    )
+    if receipt is None:
+        raise ValueError(f"prepare requires a current focused receipt: {receipt_reason}")
+    fp = fingerprint(current_state)
     data = _load(ledger)
     prepares = data.setdefault(PREPARES_KEY, {})
     prepares[lane] = {
@@ -201,6 +209,47 @@ def record(lane: str, count: str, *, state: dict[str, str] | None = None, ledger
     return fp
 
 
+def _pre_full_static_checks(state: dict[str, str]) -> bool:
+    """Run the cheap, deterministic gates immediately before the one full process."""
+    diff_check = subprocess.run(
+        ["git", "-C", str(ROOT), "diff", "--check"],
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    if diff_check.returncode != 0:
+        detail = (diff_check.stdout + diff_check.stderr).strip()
+        print(f"[full-pack-ledger] REFUSED - git diff --check failed\n{detail}")
+        return False
+    compiled = 0
+    try:
+        for rel in sorted(state):
+            if rel == "@HEAD" or not rel.endswith(".py"):
+                continue
+            path = ROOT / rel
+            if path.is_file():
+                py_compile.compile(str(path), doraise=True)
+                compiled += 1
+    except (OSError, py_compile.PyCompileError) as exc:
+        print(f"[full-pack-ledger] REFUSED - py_compile failed: {exc}")
+        return False
+    print(f"[full-pack-ledger] STATIC status=PASS diff_check=PASS py_compile={compiled}")
+    return True
+
+
+def _receipt_matches_current_state(
+    focused_evidence: str,
+    *,
+    state: dict[str, str],
+    path: Path = FOCUSED_RECEIPT_PATH,
+) -> tuple[dict | None, str]:
+    return receipts.validate_focused_evidence(
+        focused_evidence,
+        state=state,
+        path=path,
+    )
+
+
 def _runtime_unittest_args(unittest_args: list[str]) -> list[str]:
     """Add runtime-only flags without moving discovery options out of its subparser."""
     if unittest_args and unittest_args[0] == "discover":
@@ -217,6 +266,7 @@ def run_full_pack(
     *,
     state: dict[str, str] | None = None,
     ledger: Path = DEFAULT_LEDGER,
+    focused_receipt_path: Path = FOCUSED_RECEIPT_PATH,
 ) -> int:
     """Run the simplified check/prepare/test/record chain."""
     if timeout_seconds <= 0 or timeout_seconds > FULL_MAX_SECONDS:
@@ -236,16 +286,36 @@ def run_full_pack(
               f"elapsed=0.0s deadline={timeout_seconds}s\n[full-pack-ledger] {dependency_error}")
         return DEPENDENCY_EXIT
     current_state = state if state is not None else collect_code_state()
-    hit = cached_green(lane, state=current_state, ledger=ledger)
+    receipt, receipt_reason = _receipt_matches_current_state(
+        focused_evidence,
+        state=current_state,
+        path=focused_receipt_path,
+    )
+    if receipt is None:
+        print(f"[full-pack-ledger] REFUSED - {receipt_reason}")
+        return 2
+    print(
+        f"[full-pack-ledger] FOCUSED_RECEIPT status=PASS tests={receipt['tests']} "
+        f"bundles={','.join(receipt['bundles']) or 'none'}"
+    )
+    hit = cached_green(
+        lane,
+        state=current_state,
+        ledger=ledger,
+        focused_receipt_path=focused_receipt_path,
+    )
     if hit is not None:
         print(f"[full-pack-ledger] CACHED GREEN - {lane} = {hit['count']}; full run skipped.")
         return 0
+    if not _pre_full_static_checks(current_state):
+        return 2
     prepared_fingerprint = prepare(
         lane,
         trigger_reason,
         focused_evidence,
         state=current_state,
         ledger=ledger,
+        focused_receipt_path=focused_receipt_path,
     )
     print(
         f"[full-pack-ledger] START lane={lane} deadline={timeout_seconds}s "
@@ -282,12 +352,26 @@ def run_full_pack(
     return 0
 
 
-def cached_green(lane: str, *, state: dict[str, str] | None = None, ledger: Path = DEFAULT_LEDGER) -> dict | None:
+def cached_green(
+    lane: str,
+    *,
+    state: dict[str, str] | None = None,
+    ledger: Path = DEFAULT_LEDGER,
+    focused_receipt_path: Path = FOCUSED_RECEIPT_PATH,
+) -> dict | None:
     """Return the cached record iff the current code state matches a recorded run for the lane."""
     current_state = state if state is not None else collect_code_state()
     fp = fingerprint(current_state)
     record_for_lane = _load(ledger).get(lane)
     matching_prepare = prepared_review(lane, state=current_state, ledger=ledger)
+    if matching_prepare is not None:
+        receipt, _ = _receipt_matches_current_state(
+            str(matching_prepare.get("focused_evidence", "")),
+            state=current_state,
+            path=focused_receipt_path,
+        )
+        if receipt is None:
+            return None
     if (record_for_lane and record_for_lane.get("fingerprint") == fp
             and record_for_lane.get("prepared_fingerprint") == fp
             and matching_prepare is not None):
@@ -332,6 +416,10 @@ def _check(lane: str, *, state: dict[str, str] | None = None,
 def main(argv: list[str]) -> int:
     if hasattr(sys.stdout, "reconfigure"):
         sys.stdout.reconfigure(encoding="utf-8", errors="replace")
+    pin_error = receipts.pinned_python_error()
+    if pin_error:
+        print(f"[full-pack-ledger] REFUSED - {pin_error}")
+        return 2
     if len(argv) >= 2 and argv[1] == "run":
         if "--" not in argv:
             print("[full-pack-ledger] REFUSED - invalid run arguments; missing `--` before unittest args")
