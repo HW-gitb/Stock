@@ -3597,6 +3597,38 @@ def _apply_holding_ratchet(weekly, state, as_of):
     _future = [k for k, r in state.items() if str(r.get("last_as_of") or "") > str(as_of)]
     if _future:                                     # PIT:sidecar 含未来态(乱序/replay 旧周配新 sidecar)→ 拒(镜像 regime ledger future-contamination)
         raise ValueError(f"R4b ratchet sidecar 含未来态(last_as_of > as_of {as_of}):{_future[:3]}(PIT 违反/乱序 run)")
+    # A bootstrap row is synthetic evidence for the week that created it, but
+    # a legitimate first-week row is still the only available baseline for the
+    # same holding in the following week.  Remove only orphan bootstrap rows
+    # whose compound identity is absent from this week's held reports.  This
+    # cuts unrelated stale synthetic rows without restarting a valid ratchet.
+    _active_holding_keys = set()
+    for _rep in weekly.get("reports", []):
+        if ((_rep.get("m67") or {}).get("table") or {}).get("操作") != "持有":
+            continue
+        _position = ((_rep.get("machine") or {}).get("stateful_risk") or {}).get("position") or {}
+        _entry_date = _position.get("entry_date")
+        if _entry_date:
+            _active_holding_keys.add(
+                _holding_ratchet_key(str(_rep.get("ts_code") or ""), str(_entry_date))
+            )
+    # Manual-review holdings intentionally bypass reports[] when price/entry data are unavailable.
+    # They have no entry_date, so preserve any bootstrap row for the same ts_code until the holding
+    # returns to a report row and can continue the compound-key ratchet.
+    _active_manual_review_codes = {
+        str(_item.get("ts_code") or "")
+        for _item in (weekly.get("holdings_manual_review") or [])
+        if _item.get("ts_code")
+    }
+    _orphan_bootstrap = [
+        key for key, row in state.items()
+        if isinstance(row, dict)
+        and row.get("bootstrap") is True
+        and key not in _active_holding_keys
+        and str(row.get("ts_code") or "") not in _active_manual_review_codes
+    ]
+    for key in _orphan_bootstrap:
+        state.pop(key, None)
     for rep in weekly.get("reports", []):
         mc = rep.get("machine") or {}
         if ((rep.get("m67") or {}).get("table") or {}).get("操作") != "持有":

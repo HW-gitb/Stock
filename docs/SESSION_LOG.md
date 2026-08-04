@@ -1,5 +1,49 @@
 # Session Log
 
+## 2026-08-03 — Claude 审查 PASS（#11/#12/#13 三轮收口）
+
+- **Verdict/Action**: PASS，已提交并合入 master。上一轮唯一 Required 已按指定形态修好：`holdings_manual_review` 旁路持仓按 `ts_code` 纳入活跃集（该旁路行无 `entry_date`），orphan 判据收窄为「key 不在本周持仓且 ts_code 不在本周 manual-review」。#12/#13 维持前两轮结论。
+- **Required**: 无。`R-ASHORT-KNIFE11/12/13` 三条均已 closed；#12 一条不阻断 Optional（读失败跳过本周写盘、损坏自我传播）见 `docs/system_risk_register.md`（单一来源，本处不复述）。
+- **Verify**: review-evidence:63adac82ec8a；三腿探针复跑——连续两周 `wc=2/bootstrap=False`、孤儿清理仍生效、**停牌周已修好**（`W3 复牌 stop=10.5/wc=2/bootstrap=False`）。对抗探针证按 ts_code 保留不会过度保留：新 entry_date 复牌得 `stop=10.5/wc=1/bootstrap=True`，未继承旧仓 3.05，旧行随后自动清掉。full lane `CACHED GREEN a_short = 2328 OK`，`2327→2328` 的 `+1` 为新增 manual-review 用例。provider/live 与 `-Account` 实跑仍 `NOT_VERIFIED`。
+- **Next**: Codex：执行
+
+## 2026-08-03 — Codex 修复上轮 #11 二轮 Required（manual-review 旁路；排除 #03+#04）
+
+- **Verdict/Action**: 已把本周 `holdings_manual_review` 的 `ts_code` 纳入 bootstrap 活跃保护；停牌/无价周不进 `reports[]` 时保留合法 baseline，复牌后继续 compound-key ratchet。连续周、孤儿清理、anti-rescue 不返工；#12/#13 与 #03+#04 未涉及；未提交、未 push、未 merge。
+- **Required**: `R-ASHORT-KNIFE11-RATCHET-STALE-BOOTSTRAP-STATE` 二轮最后一条已实现：W1 bootstrap → manual-review 周保留 → W3 复牌继续 `week_count=2`、`bootstrap=False`、保留较高 stop；状态仍 `OPEN-NOT_VERIFIED`，待 Claude Code 独立复审。
+- **Verify**: 固定 Python=`C:\Users\cnhea\AppData\Local\Programs\Python\Python313\python.exe`（Python 3.13.8）；ratchet focused `Ran 45 tests in 0.146s ... OK`；combined focused `Ran 109 tests in 71.289s ... OK`；`static_contract_error=None`；full lane `Ran 2328 tests in 472.934s ... OK (skipped=3)` / `[full-pack-ledger] RESULT status=PASS exit=0 tests=2328 elapsed=475.4s deadline=860s`。
+- **Pre-Codex self-review**: matrix=manual-review/3-week preserve/orphan/two-week/anti-rescue；call-chain=weekly→manual-review filter→phase5→machine/sidecar；schema=unchanged+effect hash stable；register=updated；handoff=updated；focused=109 OK；full-lane=2328 OK/skipped=3；door=governance 73 OK；#03+#04=untouched；provider/live/account/review=NOT_VERIFIED；commit/push/merge=NOT_PERFORMED。
+- **Next**: Claude Code：复审 `R-ASHORT-KNIFE11-RATCHET-STALE-BOOTSTRAP-STATE` 最后一条旁路 Required；通过后按项目规则提交。
+
+## 2026-08-03 — Claude 审查 FAIL（#11 二轮：停牌周仍丢 bootstrap 基线）
+
+- **Verdict/Action**: FAIL，不提交、不合入。主回归已修好——连续两周正常延续、陈旧合成行正确清掉。但同一缺陷类还剩一条腿：`holdings_manual_review` 旁路持仓按设计不进 `reports[]`，于是它们的 bootstrap 行被当孤儿丢，复牌后重新 bootstrap、跨周止损被放松。
+- **Required**: `R-ASHORT-KNIFE11-RATCHET-STALE-BOOTSTRAP-STATE` —— 一条收窄（把 `holdings_manual_review` 的 ts_code 也算作活跃；该旁路行无 `entry_date`，用 ts_code 粒度）与「不要返工」清单见 `docs/system_risk_register.md`（单一来源，本处不复述）。
+- **Verify**: review-evidence:f807ad117ba8；三腿探针本树实跑——① 连续两周 `W2 stop=10.5/wc=2/bootstrap=False` OK；② 孤儿 `600519.SH|20250101` 已清 OK；③ 停牌周 `W1 10.5 → W2 被丢 → W3 stop=10.0/wc=1/bootstrap=True`，跨周止损被放松。full lane `CACHED GREEN a_short = 2327 OK`，`2325→2327` 的 `+2` 为本轮新增用例。provider/live 与 `-Account` 实跑仍 `NOT_VERIFIED`。
+- **Next**: Codex：修复
+
+## 2026-08-03 — Codex 修复上轮审查 Required（#11；明确排除 #03+#04）
+
+- **Verdict/Action**: 已按 `R-ASHORT-KNIFE11-RATCHET-STALE-BOOTSTRAP-STATE` 收窄 bootstrap 清理：只移除与本周任何持仓 compound key 对不上的 bootstrap 行；同一持仓上周合法 bootstrap 保留并进入跨周 ratchet。#12/#13 不返工，#03+#04 未涉及；未提交、未 push、未 merge。
+- **Required**: 上轮 FAIL 的两条均已实现：连续两周同一持仓正控（W1 bootstrap → W2 `week_count=2`、`bootstrap=False`、保留较高 `ratcheted_stop`）与跨周 anti-rescue 反控可达；状态仍为 `OPEN-NOT_VERIFIED`，待 Claude Code 独立审查。
+- **Verify**: 固定 Python=`C:\Users\cnhea\AppData\Local\Programs\Python\Python313\python.exe`（Python 3.13.8）；`py_compile=0`；focused `Ran 108 tests in 44.445s ... OK`；A-short full lane `Ran 2327 tests in 347.739s ... OK (skipped=3)` / `[full-pack-ledger] RESULT status=PASS exit=0 tests=2327 elapsed=349.4s deadline=860s`；治理门 `Ran 73 tests in 1.906s ... OK`。
+- **Pre-Codex self-review**: matrix=two-week/orphan/anti-rescue/future/effect-contract；call-chain=weekly→phase5→machine/sidecar；schema=unchanged+weekly hash resealed；register=updated；handoff=updated；focused=108 OK；full-lane=2327 OK/skipped=3；door=governance 73 OK；#03+#04=untouched；provider/live/account/review=NOT_VERIFIED；commit/push/merge=NOT_PERFORMED。
+- **Next**: Claude Code：独立审查 `R-ASHORT-KNIFE11-RATCHET-STALE-BOOTSTRAP-STATE`；通过后按项目规则提交。
+
+## 2026-08-03 — Claude 审查 FAIL（#11 ratchet 陈旧 bootstrap 行）
+
+- **Verdict/Action**: FAIL，不提交、不合入。#13 措辞修正与 #12 分版本快照都对；但 #11 的 pop 判据 `bootstrap is True and last_as_of != as_of` 太宽——首周合法写出的 bootstrap 行在第二周必然被丢，导致每周重新 bootstrap，跨周 ratchet 永远建立不起来，且绕过 P1-1 第二轮刚加的跨周断言。
+- **Required**: `R-ASHORT-KNIFE11-RATCHET-STALE-BOOTSTRAP-STATE` —— 两条收口（收窄 pop 判据使其不命中上周合法 bootstrap 行、补连续两周正控 + 断言可达反控）与「不要返工」清单见 `docs/system_risk_register.md`（单一来源，本处不复述）。
+- **Verify**: review-evidence:37325941927c；两周序列 A/B 探针跑两棵树，本周止损 10.0 低于上周 10.5：主树 `W2 stop=10.5 week_count=2 bootstrap=False`（正确），29e0 `W2 stop=10.0 week_count=1 bootstrap=True`（跨周止损被降、计数不前进）。full lane `CACHED GREEN a_short = 2325 OK` 全绿未抓到，因无任何用例跑过同一持仓连续两周。provider/live 与 `-Account` 实跑仍 `NOT_VERIFIED`。
+- **Next**: Codex：修复
+
+## 2026-08-03 — Codex 修复：A-short 桌面 #11/#13/#12（独立审查待办）
+- **Verdict/Action**: 三项一次收口：#11 丢弃跨周旧 bootstrap；#13 分离日历够龄与缓存覆盖日志；#12 按 as_of 版本化并只读严格前一期；未提交、未 push、未 merge。
+- **Required**: `R-ASHORT-KNIFE11-RATCHET-STALE-BOOTSTRAP-STATE`、`R-ASHORT-KNIFE13-FORWARD-TRACKER-MATURITY-LOG-CONTRADICTION`、`R-ASHORT-KNIFE12-LAST-SELECTION-ASOF-BASELINE-OVERWRITE` = implemented / OPEN-NOT_VERIFIED；完整详情见 `docs/system_risk_register.md`。
+- **Verify**: Python=`C:\Users\cnhea\AppData\Local\Programs\Python\Python313\python.exe` 3.13.8；`Ran 58 tests ... OK`、`Ran 12 tests ... OK`、`Ran 48 tests ... OK`；py_compile=0；full lane=`Ran 2325 tests in 298.938s ... OK (skipped=3)` / `RESULT status=PASS exit=0 tests=2325 elapsed=300.8s`；独立审查/provider/live/account=NOT_VERIFIED。
+- **Pre-Codex self-review**: matrix=stale bootstrap/same-week/future；calendar-age/cache/no-fetch；prior/current/future/legacy/schema/atomic write；effect hashes；register=updated；handoff=updated；focused=58/12/48 OK；full-lane=2325 OK/skipped=3；door=docs-governance/route/readme 73 OK；未起 sub-agent。
+- **Next**: Claude Code：独立审查上述三个 R-ID；PASS 后按项目规则提交。
+
 ## 2026-08-03 — Claude 审查 PASS（cninfo fail-loud，#07a）
 
 - **Verdict/Action**: PASS，已提交并合入 master。取数失败/空响应不再静默塌成「未检查」：五类不可用原因分开计数、打 warning、并进 `data_health` 把 `overall_status` 抬到 `warn`；新增 payload/announcements 类型守，比修前更 fail-closed。`cninfo_flag` 语义未动、候选不删、不进 veto/选股。

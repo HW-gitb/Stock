@@ -1,0 +1,35 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "A-short per-as_of candidate tracking snapshot",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_name", "schema_version", "as_of", "records"],
+  "properties": {
+    "schema_name": {"const": "a_short_last_selection"},
+    "schema_version": {"const": "1.0.0"},
+    "as_of": {"type": "string", "pattern": "^[0-9]{8}$"},
+    "records": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "ts_code", "name", "final_score", "tier", "entry_flag", "cninfo_flag",
+          "close", "price_basis", "run_date", "still_in_pool"
+        ],
+        "properties": {
+          "ts_code": {"type": "string", "minLength": 1},
+          "name": {"type": "string"},
+          "final_score": {"type": ["number", "null"]},
+          "tier": {"type": "string"},
+          "entry_flag": {"type": "string"},
+          "cninfo_flag": {"type": "string"},
+          "close": {"type": ["number", "null"]},
+          "price_basis": {"const": "qfq_anchored_as_of"},
+          "run_date": {"type": "string", "pattern": "^[0-9]{8}$"},
+          "still_in_pool": {"type": "boolean"}
+        }
+      }
+    }
+  }
+}

@@ -22,6 +22,7 @@ IV feed 是**市场级、跨 run 复用**,不放进 run 桶(单独目录,用 `--
 from __future__ import annotations
 
 import os
+import re
 
 PROJECT_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 # 未来运行结果按 lane 归档的根:research/results/<lane>/(约定见 docs/a_short_run_bundle_convention)。
@@ -40,6 +41,47 @@ def lane_output_root(lane: str, project_root: str | None = None) -> str:
     return os.path.join(root, RESEARCH_RESULTS_REL, lane)
 # 生产流缺省根(egs_main 默认;forward_tracker 从这里读)
 PRODUCTION_OUTPUT_ROOT = os.path.join("result", "a_short")
+
+# Candidate tracking is a per-decision-date snapshot, not a mutable singleton.
+# Keep the filename contract here so producers and tests share one source of truth.
+LAST_SELECTION_PREFIX = "egs_last_selection_qfq_v1"
+_LAST_SELECTION_VERSION_RE = re.compile(
+    rf"^{re.escape(LAST_SELECTION_PREFIX)}_(\d{{8}})\.json$"
+)
+
+
+def _validate_last_selection_as_of(as_of: str) -> str:
+    value = str(as_of)
+    if re.fullmatch(r"[0-9]{8}", value) is None:
+        raise ValueError(f"last-selection as_of must be YYYYMMDD, got {as_of!r}")
+    return value
+
+
+def last_selection_version_path(as_of: str, *, result_dir: str) -> str:
+    """Return the immutable per-as_of candidate-tracking snapshot path."""
+    value = _validate_last_selection_as_of(as_of)
+    return os.path.join(os.fspath(result_dir), f"{LAST_SELECTION_PREFIX}_{value}.json")
+
+
+def last_selection_version_as_of(path: str) -> str | None:
+    """Extract the bound as_of from a versioned snapshot filename."""
+    match = _LAST_SELECTION_VERSION_RE.fullmatch(os.path.basename(os.fspath(path)))
+    return match.group(1) if match else None
+
+
+def previous_last_selection_version_path(as_of: str, *, result_dir: str) -> str | None:
+    """Return the latest strictly earlier versioned snapshot, never a same-day file."""
+    value = _validate_last_selection_as_of(as_of)
+    if not os.path.isdir(result_dir):
+        return None
+    candidates = []
+    for name in os.listdir(result_dir):
+        match = _LAST_SELECTION_VERSION_RE.fullmatch(name)
+        if match and match.group(1) < value:
+            candidates.append((match.group(1), name))
+    if not candidates:
+        return None
+    return os.path.join(os.fspath(result_dir), max(candidates)[1])
 
 
 def resolve_base_root(output_root: str | None = None, project_root: str | None = None) -> str:

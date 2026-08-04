@@ -11,6 +11,7 @@ Pins the consolidated run-folder rule (bundle = <EGS output_root>/<as_of>/) and:
 from __future__ import annotations
 
 import sys
+import tempfile
 import unittest
 from pathlib import Path
 
@@ -21,6 +22,8 @@ if str(ROOT) not in sys.path:
 from engine.a_short_run_paths import (  # noqa: E402
     ANALYSIS_OUTPUT_ROOT, LANES, lane_output_root, run_bundle_dir, analysis_input_path,
     weight_comparison_path, weekly_m67_path, account_path,
+    last_selection_version_path, last_selection_version_as_of,
+    previous_last_selection_version_path,
 )
 from runners.a_short_weekly_pipeline import _reject_production_output_path  # noqa: E402
 from runners.forward_tracker import LIVE_RESULT_ROOT  # noqa: E402
@@ -73,6 +76,30 @@ class RunPathTests(unittest.TestCase):
         # that's why production flow does not put pipeline M6.7 there).
         with self.assertRaises(ValueError):
             _reject_production_output_path(weekly_m67_path(AS_OF))  # default output_root → result/a_short
+
+
+class LastSelectionPathTests(unittest.TestCase):
+    def test_previous_snapshot_is_strictly_earlier_and_ignores_singleton(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            result_dir = Path(tmp)
+            current = Path(last_selection_version_path("20260617", result_dir=tmp))
+            previous = Path(last_selection_version_path("20260609", result_dir=tmp))
+            future = Path(last_selection_version_path("20260624", result_dir=tmp))
+            current.write_text("{}", encoding="utf-8")
+            previous.write_text("{}", encoding="utf-8")
+            future.write_text("{}", encoding="utf-8")
+            (result_dir / "egs_last_selection_qfq_v1.json").write_text("[]", encoding="utf-8")
+
+            self.assertEqual(last_selection_version_as_of(str(current)), "20260617")
+            self.assertEqual(
+                previous_last_selection_version_path("20260617", result_dir=tmp),
+                str(previous),
+            )
+            self.assertIsNone(previous_last_selection_version_path("20260609", result_dir=tmp))
+
+    def test_versioned_snapshot_rejects_non_canonical_as_of(self):
+        with self.assertRaises(ValueError):
+            last_selection_version_path("2026-06-17", result_dir=".")
 
 
 if __name__ == "__main__":

@@ -408,6 +408,40 @@ class ForwardTrackerCacheGuardTests(unittest.TestCase):
             ):
                 self.assertEqual(forward_tracker.backfill([5, 10, 20]), 0)
 
+    def test_backfill_logs_calendar_age_separately_from_cache_coverage(self) -> None:
+        import io
+        from contextlib import redirect_stdout
+
+        as_of = "20260706"
+        stock_dates = pd.bdate_range(as_of, periods=3).strftime("%Y%m%d").tolist()
+        same_anchor = pd.DataFrame([
+            {"trade_date": as_of, "open": 3000.0, "close": 3010.0},
+            {"trade_date": stock_dates[-1], "open": 3050.0, "close": 3100.0},
+        ])
+        benchmarks = {name: same_anchor.copy() for name in forward_tracker.BENCHMARKS}
+
+        with tempfile.TemporaryDirectory() as tmp:
+            cache_path = Path(tmp) / "forward_daily.pkl"
+            tracker_path = Path(tmp) / "forward_tracker.csv"
+            self._write_cache(cache_path, benchmarks, stock_trade_dates=stock_dates)
+            with patch.object(forward_tracker, "TRACKER_CSV", tracker_path):
+                forward_tracker._write_tracker(pd.DataFrame([_tracker_row(as_of, "000001.SZ")]))
+            buf = io.StringIO()
+            with (
+                patch.object(forward_tracker, "FORWARD_DAILY_CACHE", cache_path),
+                patch.object(forward_tracker, "TRACKER_CSV", tracker_path),
+                patch.object(forward_tracker, "_today_yyyymmdd", return_value="20260803"),
+                redirect_stdout(buf),
+            ):
+                rc = forward_tracker.backfill([5, 10, 20])
+
+        out = buf.getvalue()
+        self.assertEqual(rc, 0)
+        self.assertIn("calendar-age eligible as_of with pending rows", out)
+        self.assertIn("calendar-age eligible cohort(s) lack +20 trading-day cache coverage", out)
+        self.assertIn("no calendar-age eligible cohort has +20 trading-day cache coverage", out)
+        self.assertNotIn("captured but not yet +20 trading days old", out)
+
     def test_refresh_fetches_with_refresh_true_for_matured_cohorts(self) -> None:
         df = pd.DataFrame([_tracker_row("20260515", "000001.SZ")])
         fake_payload = {
