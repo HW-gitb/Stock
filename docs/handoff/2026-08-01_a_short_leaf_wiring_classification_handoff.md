@@ -989,3 +989,18 @@ The new regression file covers the 20260928 positive seven-day closure, 20260921
 - **Optional 四条**（默认分支不自洽 / `next_trade_date` 叶登记措辞 / validator 够不着权威 / SESSION_LOG 多一个标签）
   正文见 register 同一 R-ID。
 - **Verify**: review-evidence:3544906e5d33；full lane `CACHED GREEN a_short = 2348 OK`。
+
+## 2026-08-04 追加：#06 四条 Optional 自修自审 = PASS
+
+- **修了什么**：① `_allocate_cash` 单一归一化路径、`as_of` 必填（删掉会产出 `source_as_of: None` 的默认分支）；
+  ② `next_trade_date` 叶改记 `m67_main_decision` + 改正 mutation_evidence；
+  ③ `validate_weekly_report` 加 `expected_pre_holiday_control`，`main()` 传入 analysis_input 派生的控制；
+  ④ 折掉 SESSION_LOG 超模板的 `Governance` 标签。
+- **为什么**：①是死分支与新 schema 不自洽；②叶登记措辞与实际行为不符；③校验腿的权威链终点原来是它自己，
+  看不见「窗口被整体写成 false」这种自洽形状；④极简模板精确集合。
+- **验证命令与结果**：focused `tests.test_a_short_pre_holiday_cash_guard tests.test_a_short_industry_theme
+  tests.phase6.test_egs_margin_coverage tests.phase6.test_egs_analysis_input_contract` → `status=PASS exit=0 tests=62`；
+  full lane `RESULT status=PASS exit=0 tests=2350 elapsed=414.3s deadline=860s`（fingerprint `e89706d37ae3`，`2348→2350` 的 `+2` 为本轮新增两条强制腿）。
+- **失效旧结论**：上一轮审查记的 Optional ①②③④ 全部作废（已修）；`validate_weekly_report` 不再是纯形状校验器，
+  在生产路径上它已绑定 analysis_input 的交易日历。
+- **下一步注意**：真实 `trade_cal` 取数与带 `-Account` 的真实周跑仍未验；天然验收正控是 2026-09-28 那次周跑。

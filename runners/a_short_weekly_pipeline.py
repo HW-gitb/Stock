@@ -913,20 +913,11 @@ def _allocate_cash(reports: list, available_cash, new_exposure_capacity=None,
                  or not math.isfinite(float(new_exposure_capacity))
                  or float(new_exposure_capacity) < 0)):
         raise ValueError("new_exposure_capacity must be a finite non-negative number")
-    raw_pre_holiday_control = dict(pre_holiday_control or {
-        "source_as_of": None,
-        "next_trade_date": None,
-        "is_pre_holiday_window": False,
-        "holiday_days_ahead": 0,
-        "regime_status": "unknown",
-        "cash_factor": 1.0,
-    })
-    if pre_holiday_control is None:
-        pre_holiday_control = raw_pre_holiday_control
-    else:
-        if as_of is None:
-            raise ValueError("pre-holiday cash allocation requires weekly as_of")
-        pre_holiday_control = _normalise_pre_holiday_control(raw_pre_holiday_control, as_of)
+    if as_of is None:
+        raise ValueError("pre-holiday cash allocation requires weekly as_of")
+    # A missing control is still normalised, so the emitted audit object can
+    # never carry the un-bound `source_as_of: None` shape the schema rejects.
+    pre_holiday_control = _normalise_pre_holiday_control(pre_holiday_control, as_of)
     cash_factor = pre_holiday_control.get("cash_factor", 1.0)
     if (isinstance(cash_factor, bool) or not math.isfinite(float(cash_factor))
             or float(cash_factor) <= 0 or float(cash_factor) > 1):
@@ -1654,7 +1645,8 @@ def _bind_effect_contract_trend_guard(weekly: dict, out_path: str | Path) -> dic
 
 
 def validate_weekly_report(weekly: dict, iv_feed_summary: dict,
-                           *, previous_ledger: dict | None = None) -> None:
+                           *, previous_ledger: dict | None = None,
+                           expected_pre_holiday_control: dict | None = None) -> None:
     """关闭 P2:消费方校验它读入的 IV feed + 每张 M6.7。"""
     from datetime import datetime
     from runners.a_short_iv_feed_build import validate_feed_artifact
@@ -1783,6 +1775,15 @@ def validate_weekly_report(weekly: dict, iv_feed_summary: dict,
         )
         if supplied_pre_holiday != expected_pre_holiday:
             raise ValueError("cash_allocation.pre_holiday_control 未按 source control 归一化")
+        # Self-consistency alone cannot see a window that was dropped to false.
+        # When the caller still holds the analysis_input-derived control, bind to it.
+        if expected_pre_holiday_control is not None:
+            source_control = _normalise_pre_holiday_control(
+                expected_pre_holiday_control, weekly["as_of"]
+            )
+            if supplied_pre_holiday != source_control:
+                raise ValueError(
+                    "cash_allocation.pre_holiday_control 与 analysis_input 交易日历不一致")
     from runners.a_short_iv_feed_build import (
         M05_CONSERVATIVE_BLOCK_REASON, M05_CONSERVATIVE_MODE,
     )
@@ -5597,7 +5598,8 @@ def main(argv=None, pro_factory=None, price_provider=None, semantic_provider=Non
     # Validate the completed weekly report before publishing its independent
     # Phase4 views. The builder renders already-created task records and never
     # mutates analysis_input or the M6.7 decision.
-    validate_weekly_report(weekly, feed, previous_ledger=previous_effect_ledger)
+    validate_weekly_report(weekly, feed, previous_ledger=previous_effect_ledger,
+                           expected_pre_holiday_control=pre_holiday_control)
     phase4_report_dir = (
         Path(args.phase4_report_dir) if args.phase4_report_dir else
         (ROOT / "result" / "a_short" / args.as_of / "reports" if official_input

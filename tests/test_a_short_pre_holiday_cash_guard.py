@@ -197,6 +197,39 @@ class PreHolidayCashConsumerTests(unittest.TestCase):
         self.assertEqual(holiday_attack["cash_allocation"]["pre_holiday_control"]["cash_factor"], 1.0)
         self.assertEqual(holiday_attack["reports"][0]["m67"]["table"]["操作"], "建仓")
 
+    def test_validator_binds_the_report_to_the_analysis_input_calendar(self):
+        source = _pre_holiday_control_from_analysis({
+            "decision_as_of": AS_OF,
+            "market_context": {
+                "trade_calendar": {"next_trade_date": "20260610",
+                                   "calendar_source": "tushare.trade_cal",
+                                   "is_pre_holiday_window": True,
+                                   "holiday_days_ahead": 7},
+                "market_regime": {"status": "unknown"}},
+        }, AS_OF)
+        holiday = build_weekly_report(
+            self._rows(), AS_OF, GEN, run_lineage=_sized_lineage(),
+            available_cash=1_000_000.0, pre_holiday_control=source)
+        validate_weekly_report(holiday, _feed(), expected_pre_holiday_control=source)
+        # A week that silently dropped the window is internally consistent, so
+        # self-normalisation accepts it and only the source binding can reject it.
+        dropped = build_weekly_report(
+            self._rows(), AS_OF, GEN, run_lineage=_sized_lineage(),
+            available_cash=1_000_000.0)
+        validate_weekly_report(dropped, _feed())
+        with self.assertRaisesRegex(ValueError, "交易日历不一致"):
+            validate_weekly_report(dropped, _feed(), expected_pre_holiday_control=source)
+
+    def test_absent_control_still_emits_a_source_bound_audit_object(self):
+        weekly = build_weekly_report(
+            self._rows(), AS_OF, GEN, run_lineage=_sized_lineage(),
+            available_cash=1_000_000.0)
+        control = weekly["cash_allocation"]["pre_holiday_control"]
+        self.assertEqual(control["source_as_of"], AS_OF)
+        self.assertIsNone(control["next_trade_date"])
+        self.assertFalse(control["is_pre_holiday_window"])
+        self.assertEqual(control["cash_factor"], 1.0)
+
     def test_bad_or_unbound_calendar_control_is_rejected(self):
         with self.assertRaisesRegex(ValueError, "qualifying source-bound closure"):
             build_weekly_report(

@@ -688,10 +688,10 @@
       "mutation_evidence": "a closure below the five-day threshold disables the cash reduction; a qualifying gap enables it"
     },
     "market_context.trade_calendar.next_trade_date": {
-      "category": "duplicate_or_display_audit",
-      "consumer_ref": "A-EGS/egs_main.py::get_trade_calendar_context -> export_analysis_input",
+      "category": "m67_main_decision",
+      "consumer_ref": "runners/a_short_weekly_pipeline.py::_normalise_pre_holiday_control -> _allocate_cash",
       "terminal_surface": "analysis_input.market_context.trade_calendar and weekly.cash_allocation.pre_holiday_control",
-      "mutation_evidence": "the source-bound next session is preserved in the machine-readable calendar audit surface; it is not used as a weekday guess"
+      "mutation_evidence": "a positive pre-holiday window is rejected when the source-bound next session is absent, so removing it disables the cash reduction instead of only losing an audit field"
     }
   },
   "leaf_nature_by_group": {
@@ -730,7 +730,7 @@
     "engine/egs_industry_heat.py": "74932f994ec0658345c41aa932b54b5685c1737c663f5070a193d264f37fced2",
     "engine/a_short_industry_theme.py": "6a10200f80b3c0d301efc8af1561b53ef2578e1cd26eea7976188dd57b7b6b2b",
     "runners/a_short_phase5_engine.py": "bd9c17a7032066d7c3c9074a8fedb16e5e11b559d973d95987458fb8eca6dd5e",
-    "runners/a_short_weekly_pipeline.py": "b0e63b8dc31f8e76e13fb8edbc3808270a0aec10035fbef806a63d30d9b1e805",
+    "runners/a_short_weekly_pipeline.py": "f2179d862e13fc9c1aff27790e801f93d166f0523a3b55f55e0a78776d458d1e",
     "runners/a_short_m67_render.py": "9753b5e8213b343a7c62595f96bcdc0a760520ac1dd5b8462f83ee4ce40e922f",
     "engine/a_short_portfolio_risk.py": "02b88ac3b5239e8dd4897bde06afab0769ea5593f8a8a3666e5c8fba24486860",
     "engine/a_short_effect_contract.py": "7f96b57a88313ec5274835727d65530633e27f3bad98c7573eb598bdfdf523f6"
