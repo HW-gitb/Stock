@@ -1,0 +1,133 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://stock.local/schemas/us_short_market_diagnostic_local_price_packet.schema.json",
+  "title": "US-short 26-week diagnostic local benchmark price packet",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_name",
+    "schema_version",
+    "window_id",
+    "diagnostic_epoch",
+    "price_basis",
+    "benchmark_symbols",
+    "weeks",
+    "source_refs",
+    "boundary"
+  ],
+  "properties": {
+    "schema_name": {"const": "us_short_market_diagnostic_local_price_packet"},
+    "schema_version": {"const": "1.0.0"},
+    "window_id": {"type": "string", "pattern": "^26w-[1-9][0-9]*-[1-9][0-9]*$"},
+    "diagnostic_epoch": {"type": "string", "minLength": 1},
+    "price_basis": {"const": "split_adjusted_close"},
+    "benchmark_symbols": {
+      "const": ["VTI", "IWB", "SPY", "QQQ"]
+    },
+    "weeks": {
+      "type": "array",
+      "minItems": 1,
+      "maxItems": 26,
+      "items": {"$ref": "#/definitions/week"}
+    },
+    "source_refs": {
+      "type": "array",
+      "items": {"$ref": "#/definitions/sha256"},
+      "minItems": 1,
+      "maxItems": 32,
+      "uniqueItems": true
+    },
+    "boundary": {"$ref": "#/definitions/boundary"}
+  },
+  "definitions": {
+    "date8": {
+      "type": "string",
+      "pattern": "^[0-9]{8}$"
+    },
+    "sha256": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{64}$"
+    },
+    "money": {
+      "type": "string",
+      "pattern": "^(0|[1-9][0-9]*)\\.[0-9]{6}$"
+    },
+    "money_or_null": {
+      "anyOf": [
+        {"$ref": "#/definitions/money"},
+        {"type": "null"}
+      ]
+    },
+    "sha_or_null": {
+      "anyOf": [
+        {"$ref": "#/definitions/sha256"},
+        {"type": "null"}
+      ]
+    },
+    "week": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["calendar_week_index", "decision_date", "settlement_decision_date", "valuation_date", "benchmarks"],
+      "properties": {
+        "calendar_week_index": {"type": "integer", "minimum": 1},
+        "decision_date": {"$ref": "#/definitions/date8"},
+        "settlement_decision_date": {"$ref": "#/definitions/date8"},
+        "valuation_date": {"$ref": "#/definitions/date8"},
+        "benchmarks": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["VTI", "IWB", "SPY", "QQQ"],
+          "properties": {
+            "VTI": {"$ref": "#/definitions/benchmark"},
+            "IWB": {"$ref": "#/definitions/benchmark"},
+            "SPY": {"$ref": "#/definitions/benchmark"},
+            "QQQ": {"$ref": "#/definitions/benchmark"}
+          }
+        }
+      }
+    },
+    "benchmark": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "price_date",
+        "prior_close",
+        "close",
+        "source_kind",
+        "source_sha256",
+        "dividend_sidecar_sha256"
+      ],
+      "properties": {
+        "price_date": {
+          "anyOf": [
+            {"$ref": "#/definitions/date8"},
+            {"type": "null"}
+          ]
+        },
+        "prior_close": {"$ref": "#/definitions/money_or_null"},
+        "close": {"$ref": "#/definitions/money_or_null"},
+        "source_kind": {
+          "enum": ["grouped_market_window", "local_etf_price_packet", "missing"]
+        },
+        "source_sha256": {"$ref": "#/definitions/sha_or_null"},
+        "dividend_sidecar_sha256": {"$ref": "#/definitions/sha_or_null"}
+      }
+    },
+    "boundary": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "local_only",
+        "provider_calls_performed",
+        "account_write_performed",
+        "broker_or_order_automation"
+      ],
+      "properties": {
+        "local_only": {"const": true},
+        "provider_calls_performed": {"const": false},
+        "account_write_performed": {"const": false},
+        "broker_or_order_automation": {"const": false}
+      }
+    }
+  }
+}

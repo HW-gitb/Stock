@@ -14,6 +14,7 @@ SCHEMA_NAMES = [
     "us_short_market_diagnostic_26w_policy.schema.json",
     "us_short_market_diagnostic_weekly_record.schema.json",
     "us_short_market_diagnostic_summary.schema.json",
+    "us_short_market_diagnostic_local_price_packet.schema.json",
 ]
 
 
@@ -53,6 +54,8 @@ def _benchmark() -> dict:
         "cumulative_return": 0.01,
         "raw_excess": 0.0,
         "relative_wealth": 0.0,
+        "price_date": "20260803",
+        "price_source": "synthetic_price_packet",
         "price_packet_sha256": "a" * 64,
         "dividend_sidecar_sha256": None,
         "data_quality_reasons": ["dividend_sidecar_not_complete"],
@@ -114,6 +117,7 @@ def _summary() -> dict:
         "data_coverage": 0.5,
         "status": "data_degraded",
     }
+
     return {
         "schema_name": "us_short_market_diagnostic_summary",
         "schema_version": "1.0.0",
@@ -158,6 +162,48 @@ def _summary() -> dict:
     }
 
 
+def _local_price_packet() -> dict:
+    def observation(source_kind: str, source_seed: int) -> dict:
+        return {
+            "price_date": "20260803",
+            "prior_close": "100.000000",
+            "close": "101.000000",
+            "source_kind": source_kind,
+            "source_sha256": f"{source_seed:064x}",
+            "dividend_sidecar_sha256": None,
+        }
+
+    return {
+        "schema_name": "us_short_market_diagnostic_local_price_packet",
+        "schema_version": "1.0.0",
+        "window_id": "26w-1-26",
+        "diagnostic_epoch": "us_short_market_diagnostic_26w_v1",
+        "price_basis": "split_adjusted_close",
+        "benchmark_symbols": ["VTI", "IWB", "SPY", "QQQ"],
+        "weeks": [
+            {
+                "calendar_week_index": 1,
+                "decision_date": "20260804",
+                "settlement_decision_date": "20260727",
+                "valuation_date": "20260803",
+                "benchmarks": {
+                    "VTI": observation("local_etf_price_packet", 10),
+                    "IWB": observation("local_etf_price_packet", 11),
+                    "SPY": observation("grouped_market_window", 12),
+                    "QQQ": observation("grouped_market_window", 13),
+                },
+            }
+        ],
+        "source_refs": [f"{14:064x}"],
+        "boundary": {
+            "local_only": True,
+            "provider_calls_performed": False,
+            "account_write_performed": False,
+            "broker_or_order_automation": False,
+        },
+    }
+
+
 class UsShortMarketDiagnosticSchemaTest(unittest.TestCase):
     def test_all_schemas_are_valid_draft7_and_closed_world_at_root(self) -> None:
         for name in SCHEMA_NAMES:
@@ -175,6 +221,7 @@ class UsShortMarketDiagnosticSchemaTest(unittest.TestCase):
         self.assertEqual([], list(Draft7Validator(_schema(SCHEMA_NAMES[0])).iter_errors(policy)))
         self.assertEqual([], list(Draft7Validator(_schema(SCHEMA_NAMES[1])).iter_errors(_weekly())))
         self.assertEqual([], list(Draft7Validator(_schema(SCHEMA_NAMES[2])).iter_errors(_summary())))
+        self.assertEqual([], list(Draft7Validator(_schema(SCHEMA_NAMES[3])).iter_errors(_local_price_packet())))
 
     def test_design_metrics_statuses_and_priority_are_bound_to_schema(self) -> None:
         policy = json.loads(
@@ -201,6 +248,10 @@ class UsShortMarketDiagnosticSchemaTest(unittest.TestCase):
         summary_statuses = strategy_summary["properties"]["status"]["enum"]
         self.assertEqual(expected_statuses, weekly_statuses)
         self.assertEqual(expected_statuses, summary_statuses)
+        self.assertIn(
+            "flat_diagnostic",
+            benchmark_summary["properties"]["status"]["enum"],
+        )
         self.assertEqual(policy["status_resolution"]["priority"], contract["status_priority"])
         self.assertIn("mixed_ruleset_window", summary_schema["required"])
 

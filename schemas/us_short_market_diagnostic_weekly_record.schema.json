@@ -147,6 +147,8 @@
         "cumulative_return",
         "raw_excess",
         "relative_wealth",
+        "price_date",
+        "price_source",
         "price_packet_sha256",
         "dividend_sidecar_sha256",
         "data_quality_reasons"
@@ -159,6 +161,8 @@
         "cumulative_return": {"$ref": "#/definitions/number_or_null"},
         "raw_excess": {"$ref": "#/definitions/number_or_null"},
         "relative_wealth": {"$ref": "#/definitions/number_or_null"},
+        "price_date": {"anyOf": [{"$ref": "#/definitions/date8"}, {"type": "null"}]},
+        "price_source": {"anyOf": [{"type": "string", "minLength": 1}, {"type": "null"}]},
         "price_packet_sha256": {"anyOf": [{"$ref": "#/definitions/sha256"}, {"type": "null"}]},
         "dividend_sidecar_sha256": {"anyOf": [{"$ref": "#/definitions/sha256"}, {"type": "null"}]},
         "data_quality_reasons": {

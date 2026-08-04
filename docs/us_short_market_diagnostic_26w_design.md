@@ -79,6 +79,7 @@
 - window_id；
 - decision_date；
 - valuation_date；
+- 每个基准的 price_date、price_source、price_packet_sha256 和数据质量；
 - strategy_evaluable；
 - joint_evaluable；
 - total_return_evaluable；
@@ -232,6 +233,8 @@ The v1 summary schema must carry the metrics promised in section 8. The followin
 
 The weekly strategy status and the summary strategy status use the same three values: `evaluable`, `diagnostic_data_degraded`, and `not_evaluable`. The summary `overall_status` uses the six-value priority list above. `mixed_ruleset_window` is true when more than one strategy ruleset fingerprint appears in the 26-week window and no single fingerprint has at least 20 strategy-evaluable weeks; it blocks a single-ruleset performance claim.
 
+Each benchmark summary may additionally use `flat_diagnostic` when its own joint compounded excess is exactly zero. `mixed_across_benchmarks` remains an overall cross-benchmark status and is never used to label one benchmark's individual tie. A flat benchmark does not make the overall result ahead or behind; the overall six-value status contract stays unchanged.
+
 ## 12.2 Knife 1 calculation contract
 
 刀1的计算器是纯函数：调用方传入已经准备好的周记录，计算器不读取账户文件、不联网、不调用 provider，也不改变选股、操作建议、仓位或 NAV。
@@ -245,6 +248,16 @@ The weekly strategy status and the summary strategy status use the same three va
 - epoch 混入同一摘要窗口会 fail-closed；ruleset 按连续区段输出，并在单一 ruleset 不足 20 个可评估周时设置 `mixed_ruleset_window`。
 
 私有路径必须受 gitignore 和 fail-closed 路径保护。公开摘要不得包含 ticker、逐笔交易、持仓明细、账户余额、原始价格或可还原个人账户的信息。
+
+## 12.3 Knife 2 local adapter contract
+
+Knife 2 的本地适配器是 `engine/us_short_market_diagnostic_local_adapter.py`，输入契约是 `schemas/us_short_market_diagnostic_local_price_packet.schema.json`。它只读，不写入 model-paper store，也不推进 `head_manifest`。
+
+- 策略侧先通过既有 model-paper store 的 `head_manifest` 校验，再读取指定结算周的 `settlement.json`、`portfolio_state.json` 和 `nav_snapshot.json`；三份文件必须互相绑定，最近结算还必须与 head 指针一致。
+- 价格包固定包含 VTI/IWB/SPY/QQQ。`grouped_market_window` 可继续提供 SPY/QQQ，`local_etf_price_packet` 提供 IWB/VTI；适配器不根据结果替换或挑选基准。
+- 价格包的 `settlement_decision_date` 是被读取的 `weeks/<decision_date>/` 目录日期；输出记录的 `decision_date` 是结算完成后可观察该周的报告决策日期，`valuation_date` 必须与 NAV 和价格日期一致且不晚于输出决策日期。
+- 只用拆股调整收盘价构造价格型周收益。股息 sidecar 即使存在也不在本刀消费，输出固定为 `price_return_diagnostic`、`dividend_sidecar_sha256 = null` 和明确的数据质量原因；缺价格或缺前值则输出 `unavailable`，绝不填零。
+- 每周输出保留价格日期、来源、价格包 SHA 和源 digest，随后由刀3负责不可变周记录、26 周计数器和 reminder 接线。适配器不调用 provider、不创建 10 万美元账户、不读取真实手工账户、不改变选股、操作建议、仓位、NAV 或 Ship gate。
 
 ## 13. Knife 0 验收
 

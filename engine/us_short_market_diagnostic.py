@@ -42,6 +42,15 @@ BENCHMARK_RETURN_QUALITIES = (
     "price_return_diagnostic",
     "unavailable",
 )
+BENCHMARK_STATUSES = (
+    "ahead_diagnostic",
+    "behind_diagnostic",
+    "flat_diagnostic",
+    "mixed_across_benchmarks",
+    "data_insufficient",
+    "data_degraded",
+    "unavailable",
+)
 OVERALL_STATUSES = (
     "ahead_diagnostic",
     "behind_diagnostic",
@@ -369,7 +378,14 @@ def _validate_strategy(strategy: Mapping[str, Any]) -> None:
 
 
 def _validate_benchmark(benchmark: Mapping[str, Any], strategy: Mapping[str, Any], symbol: str) -> None:
-    for field in ("return_quality", "benchmark_evaluable", "joint_evaluable", "weekly_return"):
+    for field in (
+        "return_quality",
+        "benchmark_evaluable",
+        "joint_evaluable",
+        "weekly_return",
+        "price_date",
+        "price_source",
+    ):
         _required(benchmark, field, f"benchmarks.{symbol}")
     quality = benchmark["return_quality"]
     if quality not in BENCHMARK_RETURN_QUALITIES:
@@ -378,6 +394,12 @@ def _validate_benchmark(benchmark: Mapping[str, Any], strategy: Mapping[str, Any
         benchmark["joint_evaluable"], bool
     ):
         _fail(f"benchmarks.{symbol} evaluability flags must be boolean")
+    if benchmark["price_date"] is not None:
+        _date8_value(benchmark["price_date"], f"benchmarks.{symbol}.price_date")
+    if benchmark["price_source"] is not None and (
+        not isinstance(benchmark["price_source"], str) or not benchmark["price_source"]
+    ):
+        _fail(f"benchmarks.{symbol}.price_source must be a non-empty string or null")
     if benchmark["benchmark_evaluable"]:
         if quality == "unavailable" or benchmark["weekly_return"] is None:
             _fail(f"benchmarks.{symbol} evaluable return is missing")
@@ -705,7 +727,13 @@ def _benchmark_summary(
         status = "data_degraded"
     else:
         joint_excess_total = compound_wealth(joint_strategy) - compound_wealth(joint_benchmark)
-        status = "ahead_diagnostic" if joint_excess_total > 0 else "behind_diagnostic" if joint_excess_total < 0 else "mixed_across_benchmarks"
+        status = (
+            "ahead_diagnostic"
+            if joint_excess_total > 0
+            else "behind_diagnostic"
+            if joint_excess_total < 0
+            else "flat_diagnostic"
+        )
     joint_strategy_wealth = compound_wealth(joint_strategy) if joint_strategy else None
     joint_benchmark_wealth = compound_wealth(joint_benchmark) if joint_benchmark else None
     raw_excess = (
@@ -800,6 +828,7 @@ def summarize_window(
 __all__ = [
     "BENCHMARKS",
     "BENCHMARK_ROLES",
+    "BENCHMARK_STATUSES",
     "BOUNDARY",
     "HAC_MAX_LAGS",
     "MIN_JOINT_EVALUABLE_WEEKS",

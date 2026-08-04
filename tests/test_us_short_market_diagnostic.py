@@ -99,6 +99,8 @@ def _weekly_rows(
                 "cumulative_return": None,
                 "raw_excess": None,
                 "relative_wealth": None,
+                "price_date": (decision_start + timedelta(days=7 * (week - 1)) - timedelta(days=1)).strftime("%Y%m%d"),
+                "price_source": "synthetic_price_packet",
                 "price_packet_sha256": f"{(100 + week):064x}",
                 "dividend_sidecar_sha256": None if price_only else f"{(200 + week):064x}",
                 "data_quality_reasons": ["dividend_sidecar_not_complete"] if price_only else [],
@@ -307,6 +309,17 @@ class UsShortMarketDiagnosticEngineTest(unittest.TestCase):
         summary = summarize_window(rows)
         self.assertEqual(summary["overall_status"], "behind_diagnostic")
         self.assertLess(summary["benchmarks"]["VTI"]["raw_excess"], 0)
+
+    def test_single_benchmark_exact_tie_uses_flat_status_not_cross_benchmark_mixed(self) -> None:
+        rows = _weekly_rows()
+        for row in rows:
+            row["benchmarks"]["VTI"]["weekly_return"] = row["strategy"]["weekly_return"]
+        summary = summarize_window(rows)
+        self.assertEqual(summary["benchmarks"]["VTI"]["status"], "flat_diagnostic")
+        self.assertAlmostEqual(summary["benchmarks"]["VTI"]["raw_excess"], 0.0)
+        self.assertAlmostEqual(summary["benchmarks"]["VTI"]["relative_wealth"], 0.0)
+        self.assertNotEqual(summary["benchmarks"]["VTI"]["status"], "mixed_across_benchmarks")
+        _assert_schema_valid(self, "us_short_market_diagnostic_summary.schema.json", summary)
 
     def test_unavailable_benchmark_wins_status_priority_without_zero_fill(self) -> None:
         rows = _weekly_rows()
