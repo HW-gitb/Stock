@@ -1,5 +1,12 @@
 # Session Log
 
+## 2026-08-04 — Claude 审查 Pass-with-Required（队列序 22a，自写自审）
+
+- **Verdict/Action**: 只审了 22a——序 19 与 22b 尚未编写，**批 3 代码整体审查未完成**。22a 自审抓到一条本会话刚修过的同类洞在新模块复发：`_is_finite_number` 用 `isinstance(value, (int, float))`，`numpy.int64`/`float32` 被拒，会把 dtype 问题伪装成「覆盖不完整」。已同轮改为 `numbers.Real` 与 `engine/a_short_northbound.py` 对齐并补测试；另把 DataFrame/generator 的 fail-closed 边界写进 docstring 并钉测试。
+- **Required**: `R-ASHORT-ROW22A-NUMPY-SCALAR-REGRESSION` 已 closed；同类性质、复核成立项与仍未编写的部分见 `docs/system_risk_register.md`（单一来源，本处不复述）。
+- **Verify**: review-evidence:8dfff9be78be；独立探针（打我自己测试未覆盖的向量）实测 `np.float64→True / np.int64→False / np.float32→False`，坐实缺陷；修后 `float64/float32/int64/int32` 四型全过、`np.bool_` 仍拒。focused `tests.test_a_short_market_history` `Ran 14 tests ... OK`（`12→14` 为本轮新增两例），receipt `receipt:dd7fe34e22c5650836cd8edd`。未跑全量：22a 为新增孤立纯函数模块、无生产接线，按 rule 3 不触发。22a 未提交；序 19/22b 未编写故 `NOT_VERIFIED`。
+- **Next**: Claude Code：执行
+
 ## 2026-08-04 — Claude 审查 Pass-with-Required（队列批 3 方案，自审自订）
 
 - **Verdict/Action**: Pass-with-Required —— 方向与数据前提成立，但起草有三处问题，均已在 handoff 就地更正：① 「取最狠不相乘」误引 v14.2 `:164` 为依据（原文限定于 regime 过渡期单一参数的取值歧义，非两道独立门叠加）；② 漏报结构前置——全仓没有现金系数栈，`_allocate_cash` 只有单一 `cash_factor`，接第二道门须先改造，否则最省事写法就是被禁止的连乘；③ 队列「批 N」与桌面「第 N 批」编号撞车，已致执行方误做桌面第 3 批。
