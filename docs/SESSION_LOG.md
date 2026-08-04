@@ -81,6 +81,36 @@
 - **Verify**: review-evidence:not_available（本轮 hook 未注入 token）；rule 8 Optional-only 快档：一次 scope grep 先行（8 处 fixture 全是构造、无断言）、最小覆盖目标只跑一次 `tests.test_us_short_llm_theme_discovery_query_policy + doc-governance + route-doc` = `63 OK / 1.2s`。收紧类改动配植入正控：合成「4 条里 3 条悄悄回退」输入，旧 `any()` 断言仍 `True`、新断言 `False` 且点名 `['b','c','d']`。`git diff --check` clean；`state/us_short` 与 `provider_samples` 前后均 `count=0`；未联网、未调 provider、未付费。
 - **Next**: Codex：执行
 - **Pre-Codex self-review**: `matrix=三条 Optional 逐条判定(收/升/撤)`; `register=updated`; `handoff=not_required: Optional-only 收口，无新交接事实`; `focused=63 OK / 1.2s`; `full-lane=not_triggered: 仅测试断言与 register 措辞，rule 3 无触发面`; `door=route-doc 14 + doc-governance 41 同包内 63 OK`; `scope-grep=8 处 fixture 全为构造、零断言`; `blast-radius=75 命中/40 文件 与 15 模块/45 处 两案实测`; `planted=3-of-4 回退令新断言转红并点名`; `residue=0/0`
+## 2026-08-03 — Claude 审查 PASS（#07b cninfo orgId，二轮收口）
+
+- **Verdict/Action**: PASS，已提交并合入 master。三条 Required 全按指定形态修好：orgId 不再受格式正则约束、source binding 改由行内 `code` 承担；市场后缀改从 code 前缀推导；新增 80% 覆盖率地板。上一轮的缓存 Optional 也一并收口——缺任一必需候选即重取。
+- **Required**: 无。`R-ASHORT-KNIFE7-CNINFO-ORG-ID-REQUEST-SHAPE` 已 closed；边界与五条植入控制见 `docs/system_risk_register.md`（单一来源，本处不复述）。
+- **Verify**: review-evidence:cb12b83185f2；用被审代码自身函数跑真实 payload：`6227 → 6227`、覆盖率 1.0000、dropped 0（上轮 1403 / 丢 77.5%），本周 15 只候选解析失败 0（上轮 8 只）；市场推导抽查含科创板/B股/北交所全对。五条植入控制全 PASS：覆盖率地板 70% 整表拒、冲突重复整表拒、含逗号空白控制符的 orgId 一律丢弃、缓存缺候选触发重取、已覆盖则不重取。full lane `CACHED GREEN a_short = 2335 OK`，`+2` 为新增用例。真实周跑的最终命中率仍 `NOT_VERIFIED`。
+- **Next**: Codex：执行
+
+## 2026-08-04 — Codex 修复桌面 #07(b) Required + Optional（OPEN-NOT_VERIFIED）
+
+- **Verdict/Action**: 已修复上轮 FAIL 的三条 Required 与缓存 Optional：按源行 code 绑定 orgId、由 code 确定市场、覆盖率下限锁住五类真实形态，cache 缺当前候选时单次刷新；不涉及 #03+#04。未提交、未 push、未 merge。
+- **Required**: `R-ASHORT-KNIFE7-CNINFO-ORG-ID-REQUEST-SHAPE` = implemented / `OPEN-NOT_VERIFIED`；完整根因、调用链、消费者、边界和负向控制见 register/handoff。
+- **Verify**: 固定主 Python `C:\Users\cnhea\AppData\Local\Programs\Python\Python313\python.exe` 3.13.8；专项 11 OK，聚焦 102 OK，py_compile=0；full 2335 OK/skipped=3，`RESULT status=PASS`，fingerprint=`165357abecef`；治理门 73 OK，weekly_screening.ps1 无 diff。
+- **Pre-Codex self-review**: matrix=code-binding/market/5-shapes/coverage/cache-refresh/fail-closed；register=updated；handoff=updated；focused=102 OK；full-lane=2335 OK/skipped=3；door=governance 73 OK；#03+#04=untouched；real CNINFO/provider/live/account/review=NOT_VERIFIED；commit/push/merge=NOT_PERFORMED。
+- **Next**: Claude Code：独立审查 `R-ASHORT-KNIFE7-CNINFO-ORG-ID-REQUEST-SHAPE`；PASS 后按项目规则提交。
+
+## 2026-08-03 — Claude 审查 FAIL（#07b cninfo orgId 请求形态）
+
+- **Verdict/Action**: FAIL，不提交、不合入。换 orgId 的方向对，但 `_CNINFO_ORG_ID_RE` 只认 `gss[hz]` 一族，而真实 6227 行里纯数字占 56%、另有 `gfbj`/`nssc`/`qsgn` 等前缀——规范化后只剩 1403 条、丢 77.5%；本周 15 只候选有 8 只解析不到 orgId 仍旧「未检查」。市场后缀又从 orgId 的 h/z 字母推导，纯数字 orgId 没有该字母，属第二处耦合。
+- **Required**: `R-ASHORT-KNIFE7-CNINFO-ORG-ID-REQUEST-SHAPE` —— 三条收口（source binding 改用行内 code 字段而非解析 orgId 结构、市场后缀换确定来源、补真实五类前缀形态的覆盖用例）与一条缓存耐久性 Optional、「不要返工」清单见 `docs/system_risk_register.md`（单一来源，本处不复述）。
+- **Verify**: review-evidence:92f18e931d60；用被审代码自身的 `_normalize_cninfo_org_id_map` 跑真实 payload：6227 行 → 1403 条，前缀分布纯数字 3481 / gfbj 943 / gssh 881 / gssz 599 / nssc 207；本周候选 8/15 解析失败。放宽为「code 6 位 + orgId 非空」得 6227/6227、候选 15/15。独立验证被丢的 `603259.SH`（orgId `9900035584`）实打得 `totalRecordNum=2` 两条真公告——不是没公告，是映射被错误丢弃。full lane `CACHED GREEN a_short = 2333 OK` 全绿未抓到，因 fixture 只造了 `gss[hz]` 一种形态。
+- **Next**: Codex：修复
+
+## 2026-08-04 — Codex 执行桌面 #07(b) CNINFO orgId 请求形态（OPEN-NOT_VERIFIED）
+
+- **Verdict/Action**: 已按桌面 #07(b) 完成最小修复：CNINFO 先读取并缓存 `code→orgId` 映射，再发送 `stock=code,orgId`；映射缺失、非法或不可用时保持 `未检查` 并进入既有 health warning，不伪造“通过”；不换源、不恢复监管硬否决，不涉及 #03+#04。未提交、未 push、未 merge。
+- **Required**: `R-ASHORT-KNIFE7-CNINFO-ORG-ID-REQUEST-SHAPE` = implemented / `OPEN-NOT_VERIFIED`，根因、调用链、消费者、schema/source-binding、写盘边界、负向控制和下一步见 `docs/system_risk_register.md` 与同阶段 handoff。
+- **Verify**: 固定主 Python `C:\Users\cnhea\AppData\Local\Programs\Python\Python313\python.exe`（`Python 3.13.8`）；专项 9 OK，效果契约 48 OK，影响面聚焦 100 OK，py_compile=0；full lane 2333 OK/skipped=3，`RESULT status=PASS`，fingerprint=`2200e426e083`；治理门 73 OK；`runners/weekly_screening.ps1` 无 diff，`git diff --check`=0（仅 CRLF warning）。
+- **Pre-Codex self-review**: matrix=map/cache/request/source-binding/unknown-health；register=updated；handoff=updated；focused=100 OK；full-lane=2333 OK/skipped=3；door=governance 73 OK；#03+#04=untouched；real CNINFO/provider/live/account/review=NOT_VERIFIED；commit/push/merge=NOT_PERFORMED。
+- **Next**: Claude Code：独立审查 `R-ASHORT-KNIFE7-CNINFO-ORG-ID-REQUEST-SHAPE`；PASS 后按项目规则提交。
+
 ## 2026-08-03 — Claude 审查 PASS（#11/#12/#13 三轮收口）
 
 - **Verdict/Action**: PASS，已提交并合入 master。上一轮唯一 Required 已按指定形态修好：`holdings_manual_review` 旁路持仓按 `ts_code` 纳入活跃集（该旁路行无 `entry_date`），orphan 判据收窄为「key 不在本周持仓且 ts_code 不在本周 manual-review」。#12/#13 维持前两轮结论。
