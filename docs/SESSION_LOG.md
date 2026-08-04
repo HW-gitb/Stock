@@ -1,5 +1,20 @@
 # Session Log
 
+## 2026-08-03 — Claude 审查 PASS（#03+#04 M6.7 失败收口）
+
+- **Verdict/Action**: PASS，已提交并合入 master。桌面规格九条实现项逐条核过：单点末尾 `exit $FinalExitCode`、`Set-M67Failure` 汇聚四类 post-EGS 失败并只留首个失败码、`-DeferHealth` 交末尾 finalizer、Stage 5 四态矩阵（失败态 daily-only 不绑 raw regime 与 M6.7 report）、九项 pipeline expected 在失败态仍保留、manifest 原子写 + 旧 health 先作废。
+- **Required**: 无。`R-ASHORT-KNIFE03-04-M67-FAILURE-CLOSEOUT` 已 closed；一条不阻断 Optional（lane 内新测试全为源码文本断言、post-EGS 失败路径无端到端执行覆盖）见 `docs/system_risk_register.md`（单一来源，本处不复述）。
+- **Verify**: review-evidence:c4d7c7cdeb9b；全仓 `exit` 静态枚举证 9 处早退全在 EGS 之前、M6.7/Stage5/收尾无早退、末尾单点退出；四处状态赋值实读真实文件确认落在正确分支。两条植入控制（删 `M67InvocationState` 门 / 改错 receipt 目录）均使用例包 `FAILED (failures=5)`，植入后 `cmp` 逐字节还原。full lane `RESULT status=PASS exit=0 tests=2341 elapsed=292.6s`。真实周跑失败态端到端仍 `NOT_VERIFIED`。超时原因:两条植入控制与逐字节还原核查串行占用了预算。
+- **Next**: Codex：执行
+
+## 2026-08-04 — Codex 执行桌面 #03+#04（OPEN / NOT_VERIFIED）
+
+- **Verdict/Action**：已按桌面 #03+#04 完成最小修复；#03 与 #04 判断为同一 post-EGS M6.7 早退根因。四类 M6.7 失败现在统一写失败收据、延后 health、继续 Stage 5，并由唯一末尾 closeout 原子写 launcher manifest/health；未涉及 #02、EGS/TopN/决策/持仓/provider/PIT/real live。
+- **Required**：`R-ASHORT-KNIFE03-04-M67-FAILURE-CLOSEOUT` 已实现，当前 `OPEN-NOT_VERIFIED`，完整根因、调用链、直接消费者、schema/source-binding/写盘边界和负向控制见 `docs/system_risk_register.md`；详细同日追加见 `docs/handoff/2026-08-01_a_short_leaf_wiring_classification_handoff.md`。
+- **Verify**：唯一固定解释器 `C:\Users\cnhea\AppData\Local\Programs\Python\Python313\python.exe`，版本 `Python 3.13.8`。focused `Ran 68 tests in 10.589s ... OK`；extended `Ran 89 tests in 15.460s ... OK`；A-short full lane `Ran 2341 tests in 297.848s ... OK (skipped=3)`，`RESULT status=PASS exit=0 tests=2341 elapsed=299.5s deadline=860s`，fingerprint `8cb7e493f12f`；治理门 `Ran 73 tests in 0.904s ... OK`；PowerShell parser=`POWERSHELL_PARSE_OK`、py_compile exit `0`、`git diff --check` exit `0`。
+- **Pre-Codex self-review**：`matrix=complete/failed/skipped/historical`；`register=updated`；`handoff=updated`；`focused=68 OK, extended=89 OK`；`full-lane=2341 OK, skipped=3`；`door=governance 73 OK`；A-F 控制、四个 post-EGS failure call site、唯一末尾 exit、daily-only 无伪造 M6.7 参数、失败收据 SHA 绑定、stale surface invalidation、incomplete health negative control 已检查；第一次 full lane 的旧兼容断言失败已迁移到新契约并在最终 lane 通过。provider/live/account/真实周跑、独立审查、sub-agent、commit/push/merge=`NOT_VERIFIED/NOT_PERFORMED`。
+- **Next**：`Claude Code：独立审查 R-ASHORT-KNIFE03-04-M67-FAILURE-CLOSEOUT；PASS 后按项目规则提交。`
+
 ## 2026-08-03 — Claude 审查 PASS（#07b cninfo orgId，二轮收口）
 
 - **Verdict/Action**: PASS，已提交并合入 master。三条 Required 全按指定形态修好：orgId 不再受格式正则约束、source binding 改由行内 `code` 承担；市场后缀改从 code 前缀推导；新增 80% 覆盖率地板。上一轮的缓存 Optional 也一并收口——缺任一必需候选即重取。

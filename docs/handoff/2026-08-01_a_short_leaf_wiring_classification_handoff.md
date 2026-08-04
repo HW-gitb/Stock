@@ -888,3 +888,52 @@ main() → _upcoming_events() → _attach_forward_event_impacts() → _attach_ho
 - **五条植入控制全 PASS**：覆盖率地板 70% 整表拒 / 冲突重复整表拒 / 含逗号·空白·控制符的 orgId 一律丢弃（防污染 `code,orgId` 请求）/ 缓存缺必需候选触发重取 / 已覆盖则不重取。
 - **Verify**: review-evidence:cb12b83185f2；full lane `CACHED GREEN 2335 OK`（`+2` 新增用例）。
 - **仍 NOT_VERIFIED**：真实周跑的逐票命中率——(a) 的 warning 是否噤声要等下次 `-Account` 周跑，那是 (a)+(b) 的天然验收正控。
+
+### 2026-08-04 Codex 执行：桌面 #03+#04 M6.7 failure closeout（OPEN / NOT_VERIFIED）
+
+#### 本节内容、作用与追加位置
+
+本节是 A-short leaf wiring/classification 阶段对桌面 #03+#04 的详细执行交接，记录本轮判断、根因、最小修复、调用链、直接消费者、schema/source-binding/写盘边界、负向控制、固定 Python、原始终态、NOT_VERIFIED 项和审查/提交边界。`docs/SESSION_LOG.md` 顶部只保留本轮 cycle 摘要，`docs/system_risk_register.md` 顶部保存 `R-ASHORT-KNIFE03-04-M67-FAILURE-CLOSEOUT` 的单一风险详情；本节按同日 reverse-chronological 规则追加在现有 handoff 末尾，不覆盖 #07b/#11/#12/#13 历史记录，后续同一刀继续在本文件追加。
+
+#### 意见判断、根因与修复
+
+- 桌面 #03「post-EGS M6.7 失败早退跳过 Stage 5」与 #04「失败 receipt/helper 把 health 变成空表面」判断正确，不能分开修；共同根因是四条 post-EGS failure branch 直接 `exit`，且失败写盘在 final launcher/health closeout 之前发生。
+- `runners/weekly_screening.ps1` 现在用显式 `M67InvocationState`、失败原因/码、`FinalExitCode` 和 `IvFeedReady` 表示状态。`analysis_input_missing`、IV failure、account path missing、weekly pipeline failure 全部经 `Set-M67Failure -Directory ...` 汇聚；首个正式失败码不被后续步骤覆盖，post-EGS 分支不再退出。
+- `Write-M67FailureReceipt -DeferHealth` 先原子写 failed receipt，health 延后；Stage 5 采用 `complete/failed/skipped/historical` 矩阵。complete 才绑定同一 source/as-of 的 raw regime + M6.7 report；failed、semantic-risk skip、historical 走 daily-safe 或 not-applicable 路径，不能传空/伪造 M6.7 参数。最终只在 closeout 处退出一次。
+- final closeout 原子写 launcher manifest，保留成功前置 sidecars，requested live 固定补齐九个 pipeline；health 只调用一次。三件套（launcher/health/pipeline manifest）缺任一或失败 receipt 存在时，当前 health surface 作废并输出 `UNAVAILABLE`，但保留失败 receipt 与 manifest。
+
+#### 调用链、直接消费者、schema/source-binding 与写盘边界
+
+- 调用链：`weekly_screening.ps1` EGS success → IV/M6.7 invocation → `Set-M67Failure` / failed receipt → Stage 5 daily/full regime runner → atomic launcher manifest → health closeout。
+- 直接消费者：Stage 5 runner 参数、pipeline outcome manifest、health summary/data-health 与失败 receipt SHA。EGS/TopN、M6.7 decision predicate、position/order/account/provider 不在本刀消费者范围。
+- schema：本轮没有新增或改业务 schema，复用现有 M6.7 outcome、health/publish receipt schema。source binding：complete 的 raw regime 与 M6.7 report 必须同一 analysis input/as-of；failed/skipped 只允许 daily-safe as-of/regime 参数；可用 IV feed 才可作为 optional daily input。
+- 写盘：post-EGS failure 先失效旧 M6.7/health/pipeline/launcher surface，再用临时文件 + `Move-Item` 原子写 receipt/launcher/health；失败 health 绑定 receipt SHA；缺 pipeline manifest 写 `missing_outcome`，不写成功假象。没有清理或覆盖用户既有无关产物。
+
+#### 负向控制与自审项目
+
+- 新增 `tests/test_a_short_weekly_screening_m67_failure_closeout.py`：四个 failure aggregator call、post-EGS 无 branch exit、唯一末尾 exit、complete/failed 参数隔离、skip/historical、atomic launcher/health、九个 requested pipeline。
+- `tests/test_a_short_weekly_sidecar_health.py`：failed receipt 下成功前置 sidecar 保留、九个 `missing_outcome`、failed/degraded、receipt SHA；既有 phase6/review1 测试已从旧 `exit 21/22/23` 迁移为统一 failure aggregator 契约。
+- 自审结果：四状态矩阵、failed daily-only 无 raw/M6.7 伪造、首个失败码保留、receipt/manifest/health source binding、stale surface invalidation、incomplete health fail-closed、唯一末尾退出均已静态/功能检查。第一次 full lane 捕获了旧测试断言残留，修正测试后以最新 runner fingerprint 重跑；PowerShell 混合换行解析问题也已修正为 CRLF。
+
+#### 固定 Python、精确命令与原始终态
+
+- 唯一解释器：`C:\Users\cnhea\AppData\Local\Programs\Python\Python313\python.exe`；版本：`Python 3.13.8`。本轮没有调用 PATH `python/python3`、bundled Python 或其他解释器。
+- focused：`& 'C:\Users\cnhea\AppData\Local\Programs\Python\Python313\python.exe' -m unittest tests.test_a_short_weekly_screening_m67_failure_closeout tests.test_a_short_weekly_sidecar_health tests.phase6.test_weekly_screening_guardrails` → `Ran 68 tests in 10.589s ... OK`。
+- extended：同命令追加 `tests.test_a_short_review1_knives_6_10` → `Ran 89 tests in 15.460s ... OK`。
+- full lane：`.tools/full_pack_ledger.py run a_short 'R-ASHORT-KNIFE03-04-M67-FAILURE-CLOSEOUT' 'post-EGS M6.7 failure closeout, daily-only regime continuation, truthful launcher/health, stale-output negative controls' 860 -- discover -s tests -p 'test_a_short*.py'`（以固定 Python 和绝对工作树路径调用）→ `Ran 2341 tests in 297.848s ... OK (skipped=3)`；`RESULT status=PASS exit=0 tests=2341 elapsed=299.5s deadline=860s`；fingerprint `8cb7e493f12f`。
+- 治理/语法：`tests.test_doc_governance_guard tests.test_route_doc_ledger_status_consistency tests.test_readme_route_row_length tests.test_semantic_risk_slice3_guard` → `Ran 73 tests in 0.904s ... OK`；PowerShell parser=`POWERSHELL_PARSE_OK`；四个测试文件 py_compile exit `0`；`git diff --check` exit `0`。
+
+#### NOT_VERIFIED、审查/提交边界与下一步
+
+- 未执行真实 provider/live/account/`-Account` 周跑、真实 sidecar/artifact 刷新或自动下单；离线 focused/full 证据不等于实盘、生产或 ship PASS。没有验证真实四类 failure 在生产数据上的 artifact 形状，只验证了静态契约与离线负向控制。
+- Claude Code 独立审查尚未完成；本轮未启动 sub-agent，未 commit/push/merge。当前工作树改动仍待 reviewer 判断，不能在本 executor 交接中称 review PASS。
+- 下一步：`Claude Code：独立审查 R-ASHORT-KNIFE03-04-M67-FAILURE-CLOSEOUT；核对四状态矩阵、失败收据 SHA、成功 sidecar 保留、九个 pipeline outcome 与唯一末尾退出；PASS 后按项目规则提交。`
+
+### 2026-08-03 Claude Code 独立审查 = PASS（#03+#04 M6.7 失败收口）
+
+- **Verdict**: PASS，已提交并合入 master。规格九条实现项全部成立。
+- **静态出口枚举**：9 处早退全在 EGS 之前 + `:406 exit $EgsExitCode` + 末尾单点 `:876 exit $FinalExitCode`；M6.7/Stage5/收尾无早退。
+- **四处状态赋值实读真实文件核对**（不采信过滤 diff）：`IvFeedReady`(:578) 与 `M67InvocationState='complete'`(:679) 均在成功分支；`account_path_missing` 先置 `$RunM67=$false`(:663)；`:670` 的门防止已失败后仍跑 pipeline。
+- **两条植入控制均被抓到**：删 `:670` 的状态门 / 把 `iv_feed_failed` 的 receipt 目录改错 → 各得 `FAILED (failures=5)`；植入后 `cmp` 逐字节还原。
+- **Optional**：lane 内新测试全为源码文本断言，post-EGS 失败路径无端到端执行覆盖（`-PythonExe` 只收固定主 Python，无法桩替 pipeline）。正文见 register 同一 R-ID。
+- **Verify**: review-evidence:c4d7c7cdeb9b；full lane `RESULT status=PASS exit=0 tests=2341`。

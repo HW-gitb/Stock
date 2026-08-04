@@ -271,8 +271,16 @@ class RunIdentityAndPublishTest(unittest.TestCase):
 
     def test_wrapper_m67_failure_paths_exit_nonzero(self) -> None:
         text = (ROOT / "runners" / "weekly_screening.ps1").read_text(encoding="utf-8")
-        for code in ("exit 21", "exit 22", "exit 23", "exit $M67ExitCode"):
-            self.assertIn(code, text)
+        for reason in (
+            "analysis_input_missing",
+            "iv_feed_failed",
+            "account_path_missing",
+            "weekly_pipeline_failed",
+        ):
+            self.assertIn(f"Set-M67Failure -Reason '{reason}'", text)
+        self.assertIn("$script:FinalExitCode = $ExitCode", text)
+        self.assertIn("exit $FinalExitCode", text)
+        self.assertNotIn("exit $M67ExitCode", text)
         self.assertIn("stage_status = 'failed'", text)
 
 

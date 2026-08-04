@@ -121,7 +121,7 @@ function Invalidate-M67Artifact {
     }
 }
 function Write-M67FailureReceipt {
-    param([string]$Directory, [string]$Reason, [int]$ExitCode, [string]$FailureDetailRef = '', [string]$AnalysisInput = $null)
+    param([string]$Directory, [string]$Reason, [int]$ExitCode, [string]$FailureDetailRef = '', [string]$AnalysisInput = $null, [switch]$DeferHealth)
     $ErrorActionPreference = 'Stop'
     New-Item -ItemType Directory -Force -Path $Directory -ErrorAction Stop | Out-Null
     $Receipt = Join-Path $Directory 'weekly_m67.receipt.json'
@@ -175,6 +175,12 @@ function Write-M67FailureReceipt {
         ($Payload | ConvertTo-Json -Depth 4) + "`n"
     )
     Move-Item -LiteralPath $Tmp -Destination $Receipt -Force -ErrorAction Stop
+    if ($DeferHealth) {
+        # Post-EGS failures still have independent pre-M6.7 outcomes to close out.
+        # Leave health publication to the single finalizer after Stage 5 so it can
+        # retain those outcomes instead of publishing an empty intermediate view.
+        return
+    }
     $FailureHealthScript = Join-Path $ProjectRoot 'runners\a_short_weekly_sidecar_health.py'
     if (Test-Path -LiteralPath $FailureHealthScript -PathType Leaf) {
         $FailureHealthArgs = @(
@@ -212,6 +218,20 @@ function Write-M67FailureReceipt {
     } else {
         Write-Host "[WARN] failed M6.7 receipt published but health companion is missing; stale health remains invalidated." -ForegroundColor Yellow
     }
+}
+function Set-M67Failure {
+    param([string]$Reason, [int]$ExitCode, [string]$FailureDetailRef = '', [string]$AnalysisInput = $null, [string]$Directory)
+    if ($script:M67InvocationState -eq 'failed') { return }
+    if ([string]::IsNullOrWhiteSpace($Directory)) { throw 'M6.7 failure closeout directory is required' }
+    $script:M67InvocationState = 'failed'
+    $script:M67FailureReason = $Reason
+    $script:M67FailureCode = $ExitCode
+    if ($script:FinalExitCode -eq 0) {
+        $script:FinalExitCode = $ExitCode
+    }
+    Write-M67FailureReceipt -Directory $Directory -Reason $Reason -ExitCode $ExitCode `
+        -FailureDetailRef $FailureDetailRef -AnalysisInput $AnalysisInput -DeferHealth
+    Write-Host "[FATAL] M6.7 requested: $Reason (exit $ExitCode); continuing independent closeout" -ForegroundColor Red
 }
 function Write-KnownM67FailureReceipt {
     param([string]$Reason, [int]$ExitCode)
@@ -386,6 +406,14 @@ if ($EgsExitCode -ne 0) {
     exit $EgsExitCode
 }
 
+# Post-EGS failures must retain their first formal M6.7 code while still
+# allowing independent Stage 5 and final health closeout to run.
+$script:FinalExitCode = 0
+$script:M67InvocationState = if ($SkipSemanticRisk) { 'skipped' } else { 'requested' }
+$script:M67FailureReason = $null
+$script:M67FailureCode = 0
+$script:IvFeedReady = $false
+
 # --- Stage 2: data_canary ---
 if ($SkipCanary) {
     Add-SidecarOutcome -Name 'data_canary' -Expected $false -Attempted $false -ExecutionStatus 'skipped' -ProgressStatus 'not_applicable' -SkipReason 'skip_canary'
@@ -516,9 +544,8 @@ if ($SkipSemanticRisk) {
     $SemAnalysisInput = Join-Path $ProjectRoot "result\a_short\$AsOf\analysis_input.json"
     if (-not (Test-Path $SemAnalysisInput)) {
         $M67Dir = if ($Account) { Join-Path $ProjectRoot "state\a_short\weekly_private\$AsOf" } else { Join-Path $ProjectRoot "research\results\a_short\$AsOf" }
-        Write-M67FailureReceipt -Directory $M67Dir -Reason 'analysis_input_missing' -ExitCode 21
-        Write-Host "[FATAL] M6.7 requested but analysis_input is missing: $SemAnalysisInput" -ForegroundColor Red
-        exit 21
+        Add-SidecarOutcome -Name 'iv_feed' -Expected $true -Attempted $false -ExecutionStatus 'failed' -ProgressStatus 'unavailable' -ErrorCode 'analysis_input_missing'
+        Set-M67Failure -Reason 'analysis_input_missing' -ExitCode 21 -Directory $M67Dir
     } else {
         # 持仓恒列入隐私护栏(固化):带 -Account 的周报含真实持仓(代码/成本/止损)→ 落 gitignored 私密目录
         # state\a_short\weekly_private\<as_of>\(.gitignore: state/*/weekly_private/),绝不入 git 追踪的 research lane。
@@ -545,11 +572,10 @@ if ($SkipSemanticRisk) {
         if ($IvExitCode -ne 0 -or -not (Test-Path $IvFeed)) {
             Add-SidecarOutcome -Name 'iv_feed' -Expected $true -Attempted $true -ExecutionStatus 'failed' -ProgressStatus 'unavailable' -ErrorCode 'process_failed'
             $IvFailureDetailRef = if (Test-Path $IvFailureReceipt) { [System.IO.Path]::GetFileName($IvFailureReceipt) } else { '' }
-            Write-M67FailureReceipt -Directory $M67Dir -Reason 'iv_feed_failed' -ExitCode 22 -FailureDetailRef $IvFailureDetailRef -AnalysisInput $SemAnalysisInput
-            Write-Host "[FATAL] M6.7 requested but IV feed build failed (exit $IvExitCode)" -ForegroundColor Red
-            exit 22
+            Set-M67Failure -Reason 'iv_feed_failed' -ExitCode 22 -FailureDetailRef $IvFailureDetailRef -AnalysisInput $SemAnalysisInput -Directory $M67Dir
         } else {
             Add-SidecarOutcome -Name 'iv_feed' -Expected $true -Attempted $true -ExecutionStatus 'succeeded' -ProgressStatus 'advanced' -ObservedDecisionAsOf $AsOf
+            $script:IvFeedReady = $true
             $M67Args = @('runners\a_short_weekly_pipeline.py', '--as-of', $AsOf, '--price-as-of', $PriceAsOf, '--run-date', $RunDate, '--analysis-input', $SemAnalysisInput, '--iv-feed', $IvFeed, '--out', $M67Out, '--confirm-fetch-authorized')
             if ($CrashVetoSummaryReady) { $M67Args += @('--crash-veto-summary', $CrashVetoSummary) }
             if (-not $IsHistoricalAsOf) {
@@ -634,24 +660,23 @@ if ($SkipSemanticRisk) {
                     $M67Args += @('--account', $Account)
                 } else {
                     # bad -Account path: fail the requested M6.7; never emit a misleading sizing-less artifact.
-                    Write-M67FailureReceipt -Directory $M67Dir -Reason 'account_path_missing' -ExitCode 23 -AnalysisInput $SemAnalysisInput
+                    $RunM67 = $false
                     Write-Host "[FATAL] M6.7 requested but -Account path was not found: $Account" -ForegroundColor Red
-                    exit 23
+                    Set-M67Failure -Reason 'account_path_missing' -ExitCode 23 -AnalysisInput $SemAnalysisInput -Directory $M67Dir
                 }
             } else {
                 Write-Host "[WARN] M6.7 no -Account: observation-only (no position sizing/holding-state). The weekly_m67 artifact is marked sizing_mode=observation_only_no_account - 建仓 candidates render as 观察 (sizing artifact, NOT a real avoid signal). Pass -Account <a_short_account_bundle JSON generated by a_short_account_state_from_manual_tables.py> for real sizing and holding-state decisions." -ForegroundColor Yellow
             }
-            if ($RunM67) {
+            if ($RunM67 -and $M67InvocationState -eq 'requested') {
                 Write-Host "[4/4] Running M6.7 pipeline: runners\a_short_weekly_pipeline.py --as-of $AsOf ..." -ForegroundColor Yellow
                 & $PythonExe @M67Args
                 $M67ExitCode = $LASTEXITCODE
                 if ($null -eq $M67ExitCode) { $M67ExitCode = 1 }
                 if ($M67ExitCode -ne 0) {
                     # requested M6.7 是本次正式运维产物；失败必须显式传播，不能返回选股成功假象。
-                    Write-M67FailureReceipt -Directory $M67Dir -Reason 'weekly_pipeline_failed' -ExitCode $M67ExitCode -AnalysisInput $SemAnalysisInput
-                    Write-Host "[FATAL] M6.7 requested and weekly pipeline failed (exit $M67ExitCode)" -ForegroundColor Red
-                    exit $M67ExitCode
+                    Set-M67Failure -Reason 'weekly_pipeline_failed' -ExitCode $M67ExitCode -AnalysisInput $SemAnalysisInput -Directory $M67Dir
                 } else {
+                    $script:M67InvocationState = 'complete'
                     Write-Host "[OPERATION] authoritative M6.7 weekly report -> $M67Out. Older analysis reports remain research-only inputs." -ForegroundColor Yellow
                 }
             }
@@ -659,11 +684,10 @@ if ($SkipSemanticRisk) {
     }
 }
 
-# --- Stage 5: V14.3 regime comparison ledger (旁路 sidecar;comparison-only 非生产,V14.2 仍冻结;失败绝不阻断
-#     周报)。只在 live 运行(as_of>=运行日:今日 或 前瞻 canonical 周一)跑——regime ledger 是 forward 累积的
-#     已结算交易日证据,真·过去回放(as_of<运行日,$IsHistoricalAsOf)不该推进它。
-#     无 ledger→一次性 --bootstrap(252日回填,首跑数分钟)、有→increment(秒级)。runner 把 as_of 收敛到最新已结算
-#     交易日(盘中周一→上周五),复用本次已建的 IV feed(有则传)。egs 成功才会走到这(egs 失败已在上面 exit)。
+# --- Stage 5: V14.3 regime comparison ledger (旁路 sidecar; comparison-only 非生产,V14.2 仍冻结;失败绝不阻断
+#     周报)。Stage 5 的 live daily 证据独立于 M6.7；只有 M6.7 complete 才绑定 raw regime + weekly report，
+#     失败/跳过状态绝不伪造 D2 source binding。真·过去回放(as_of<运行日,$IsHistoricalAsOf)不推进 forward ledger。
+#     无 ledger→一次性 --bootstrap(252日回填,首跑数分钟)、有→increment(秒级)。
 if ($SkipRegime) {
     Add-SidecarOutcome -Name 'regime_daily' -Expected $false -Attempted $false -ExecutionStatus 'skipped' -ProgressStatus 'not_applicable' -SkipReason 'skip_regime'
     Add-SidecarOutcome -Name 'regime_action' -Expected $false -Attempted $false -ExecutionStatus 'skipped' -ProgressStatus 'not_applicable' -SkipReason 'skip_regime'
@@ -680,31 +704,39 @@ if ($SkipRegime) {
     Write-Host ""
     $RegimeLedger = Join-Path $ProjectRoot "research\results\a_short\regime_daily_ledger.json"
     $RegimeIvFeed = Join-Path $ProjectRoot "research\results\a_short\iv_feed_$AsOf\iv_feed.json"
-    # The comparison baseline must use the same effective V14.2 state as M6.7. EGS currently emits
-    # unknown in its frozen slot; production resolves that to shock, so never compare V14.3 to literal
-    # unknown while the actual weekly posture is shock.
+    # The daily comparison baseline is fail-closed shock. A complete M6.7 run may
+    # additionally bind the raw analysis-input regime and published weekly bundle.
     $EffectiveV142Regime = 'shock'
     $RawV142Regime = 'unknown'
-    try {
-        $RawV142Regime = (Get-Content -Raw -Encoding UTF8 $SemAnalysisInput | ConvertFrom-Json).market_context.market_regime.status
-        if ($RawV142Regime -in @('attack', 'shock', 'defense', 'contraction')) {
-            $EffectiveV142Regime = $RawV142Regime
-        }
-    } catch {
-        Write-Host "[regime] unable to read production regime from analysis_input; using fail-closed effective shock" -ForegroundColor Yellow
-    }
     $RegimeArgs = @('runners\a_short_regime_comparison_runner.py', '--as-of', $AsOf,
-                    '--v14_2-regime', $EffectiveV142Regime,
-                    '--v14_2-raw-regime', $RawV142Regime,
-                    '--m67-report', $M67Out,
-                    '--confirm-fetch-authorized')
+                    '--v14_2-regime', $EffectiveV142Regime)
+    if ($M67InvocationState -eq 'complete') {
+        try {
+            $RawV142Regime = (Get-Content -Raw -Encoding UTF8 $SemAnalysisInput | ConvertFrom-Json).market_context.market_regime.status
+            if ($RawV142Regime -in @('attack', 'shock', 'defense', 'contraction')) {
+                $EffectiveV142Regime = $RawV142Regime
+                $RegimeArgs[4] = $EffectiveV142Regime
+            }
+        } catch {
+            Write-Host "[regime] unable to read production regime from analysis_input; using fail-closed effective shock" -ForegroundColor Yellow
+        }
+        # D2 and candidate-effect are source-bound to this same complete bundle.
+        $RegimeArgs += @('--v14_2-raw-regime', $RawV142Regime, '--m67-report', $M67Out)
+    } elseif ($M67InvocationState -eq 'failed') {
+        Write-Host "[regime] M6.7 failed; running daily-only regime evidence without raw regime or M6.7 report binding" -ForegroundColor Yellow
+    } else {
+        Write-Host "[regime] M6.7 not requested; running independent daily-only regime evidence" -ForegroundColor DarkGray
+    }
     if (-not (Test-Path $RegimeLedger)) {
         Write-Host "[regime] no existing ledger -> one-time --bootstrap (252-day backfill; may take several minutes)" -ForegroundColor Yellow
         $RegimeArgs += '--bootstrap'
     } else {
         Write-Host "[regime] existing ledger found -> incremental append (settled trading days since last)" -ForegroundColor Yellow
     }
-    if (Test-Path $RegimeIvFeed) { $RegimeArgs += @('--iv-feed', $RegimeIvFeed) }
+    if ($script:IvFeedReady -and (Test-Path -LiteralPath $RegimeIvFeed -PathType Leaf)) {
+        $RegimeArgs += @('--iv-feed', $RegimeIvFeed)
+    }
+    $RegimeArgs += '--confirm-fetch-authorized'
     Write-Host "[5/5] Running $PythonExe $($RegimeArgs -join ' ') ..." -ForegroundColor Yellow
     & $PythonExe @RegimeArgs
     $RegimeExitCode = $LASTEXITCODE
@@ -719,42 +751,52 @@ if ($SkipRegime) {
     $RegimeProgress = if($RegimeExitCode -eq 0){'advanced'}else{'unavailable'}
     $RegimeError = if($RegimeExitCode -eq 0){$null}else{'process_failed'}
     Add-SidecarOutcome -Name 'regime_daily' -Expected $true -Attempted $true -ExecutionStatus $RegimeStatus -ProgressStatus $RegimeProgress -ErrorCode $RegimeError -ExpectedDataThrough $PriceAsOf -ObservedDataThrough $(if($RegimeExitCode -eq 0){$PriceAsOf}else{$null})
-    Add-SidecarOutcome -Name 'regime_action' -Expected $true -Attempted $true -ExecutionStatus $RegimeStatus -ProgressStatus $RegimeProgress -ErrorCode $RegimeError -ObservedDecisionAsOf $(if($RegimeExitCode -eq 0){$AsOf}else{$null})
-    $CandidateEffectOutcome = Join-Path $ProjectRoot 'research\results\a_short\candidate_effect_outcome.json'
-    $CandidateEffectStatus = 'failed'
-    $CandidateEffectProgress = 'unavailable'
-    $CandidateEffectError = 'candidate_effect_outcome_missing_or_invalid'
-    $CandidateEffectObserved = $null
-    # The receipt writer validates status/reason_code against
-    # schemas/a_short_regime_candidate_effect_outcome.schema.json and refuses to write a
-    # mismatched pair, so the launcher deliberately does NOT re-implement that enum table or
-    # pin the schema version: one contract, one place.  It checks identity and field shape
-    # only, and the Python health observer stays authoritative for the real evidence clock.
-    if ($RegimeExitCode -eq 0 -and (Test-Path -LiteralPath $CandidateEffectOutcome -PathType Leaf)) {
-        try {
-            $CandidateEffectReceipt = Get-Content -Raw -Encoding UTF8 $CandidateEffectOutcome | ConvertFrom-Json
-            $CandidateEffectReceiptStatus = [string]$CandidateEffectReceipt.status
-            $CandidateEffectReceiptReason = [string]$CandidateEffectReceipt.reason_code
-            $CandidateEffectObservedCandidate = [string]$CandidateEffectReceipt.observed_as_of
-            $CandidateEffectObservedValid = (
-                [string]::IsNullOrWhiteSpace($CandidateEffectObservedCandidate) -or
-                $CandidateEffectObservedCandidate -match '^[0-9]{8}$'
-            )
-            if ([string]$CandidateEffectReceipt.schema_name -eq 'a_short_regime_candidate_effect_outcome' -and
-                [string]$CandidateEffectReceipt.as_of -eq [string]$AsOf -and
-                $CandidateEffectReceiptStatus -match '^[a-z0-9_]+$' -and
-                $CandidateEffectReceiptReason -match '^[a-z0-9_]+$' -and
-                $CandidateEffectObservedValid) {
-                $CandidateEffectStatus = 'succeeded'
-                $CandidateEffectObserved = $CandidateEffectObservedCandidate
-                $CandidateEffectProgress = if ($CandidateEffectReceiptStatus -eq 'updated') { 'advanced' } elseif ([string]::IsNullOrWhiteSpace($CandidateEffectObserved)) { 'unavailable' } else { 'stalled' }
-                $CandidateEffectError = if ($CandidateEffectReceiptStatus -eq 'updated') { $null } else { $CandidateEffectReceiptReason }
-            }
-        } catch { }
-    } elseif ($RegimeExitCode -ne 0) {
-        $CandidateEffectError = 'process_failed'
+    if ($M67InvocationState -eq 'failed') {
+        # The daily-only invocation cannot produce a D2 action or candidate-effect
+        # record. Keep both expectations visible as failed, unattempted dependencies.
+        Add-SidecarOutcome -Name 'regime_action' -Expected $true -Attempted $false -ExecutionStatus 'failed' -ProgressStatus 'unavailable' -ErrorCode 'm67_failed'
+        Add-SidecarOutcome -Name 'candidate_effect' -Expected $true -Attempted $false -ExecutionStatus 'failed' -ProgressStatus 'unavailable' -ErrorCode 'm67_failed'
+    } elseif ($M67InvocationState -eq 'skipped') {
+        Add-SidecarOutcome -Name 'regime_action' -Expected $false -Attempted $false -ExecutionStatus 'skipped' -ProgressStatus 'not_applicable' -SkipReason 'skip_semantic_risk'
+        Add-SidecarOutcome -Name 'candidate_effect' -Expected $false -Attempted $false -ExecutionStatus 'skipped' -ProgressStatus 'not_applicable' -SkipReason 'skip_semantic_risk'
+    } else {
+        Add-SidecarOutcome -Name 'regime_action' -Expected $true -Attempted $true -ExecutionStatus $RegimeStatus -ProgressStatus $RegimeProgress -ErrorCode $RegimeError -ObservedDecisionAsOf $(if($RegimeExitCode -eq 0){$AsOf}else{$null})
+        $CandidateEffectOutcome = Join-Path $ProjectRoot 'research\results\a_short\candidate_effect_outcome.json'
+        $CandidateEffectStatus = 'failed'
+        $CandidateEffectProgress = 'unavailable'
+        $CandidateEffectError = 'candidate_effect_outcome_missing_or_invalid'
+        $CandidateEffectObserved = $null
+        # The receipt writer validates status/reason_code against
+        # schemas/a_short_regime_candidate_effect_outcome.schema.json and refuses to write a
+        # mismatched pair, so the launcher deliberately does NOT re-implement that enum table or
+        # pin the schema version: one contract, one place. It checks identity and field shape
+        # only, and the Python health observer stays authoritative for the real evidence clock.
+        if ($RegimeExitCode -eq 0 -and (Test-Path -LiteralPath $CandidateEffectOutcome -PathType Leaf)) {
+            try {
+                $CandidateEffectReceipt = Get-Content -Raw -Encoding UTF8 $CandidateEffectOutcome | ConvertFrom-Json
+                $CandidateEffectReceiptStatus = [string]$CandidateEffectReceipt.status
+                $CandidateEffectReceiptReason = [string]$CandidateEffectReceipt.reason_code
+                $CandidateEffectObservedCandidate = [string]$CandidateEffectReceipt.observed_as_of
+                $CandidateEffectObservedValid = (
+                    [string]::IsNullOrWhiteSpace($CandidateEffectObservedCandidate) -or
+                    $CandidateEffectObservedCandidate -match '^[0-9]{8}$'
+                )
+                if ([string]$CandidateEffectReceipt.schema_name -eq 'a_short_regime_candidate_effect_outcome' -and
+                    [string]$CandidateEffectReceipt.as_of -eq [string]$AsOf -and
+                    $CandidateEffectReceiptStatus -match '^[a-z0-9_]+$' -and
+                    $CandidateEffectReceiptReason -match '^[a-z0-9_]+$' -and
+                    $CandidateEffectObservedValid) {
+                    $CandidateEffectStatus = 'succeeded'
+                    $CandidateEffectObserved = $CandidateEffectObservedCandidate
+                    $CandidateEffectProgress = if ($CandidateEffectReceiptStatus -eq 'updated') { 'advanced' } elseif ([string]::IsNullOrWhiteSpace($CandidateEffectObserved)) { 'unavailable' } else { 'stalled' }
+                    $CandidateEffectError = if ($CandidateEffectReceiptStatus -eq 'updated') { $null } else { $CandidateEffectReceiptReason }
+                }
+            } catch { }
+        } elseif ($RegimeExitCode -ne 0) {
+            $CandidateEffectError = 'process_failed'
+        }
+        Add-SidecarOutcome -Name 'candidate_effect' -Expected $true -Attempted $true -ExecutionStatus $CandidateEffectStatus -ProgressStatus $CandidateEffectProgress -ErrorCode $CandidateEffectError -ObservedDecisionAsOf $CandidateEffectObserved
     }
-    Add-SidecarOutcome -Name 'candidate_effect' -Expected $true -Attempted $true -ExecutionStatus $CandidateEffectStatus -ProgressStatus $CandidateEffectProgress -ErrorCode $CandidateEffectError -ObservedDecisionAsOf $CandidateEffectObserved
 }
 
  # P4: health is a separate post-run companion.  The already-published M6.7
@@ -784,23 +826,51 @@ $LauncherManifest = [ordered]@{
     sidecars = @($LauncherSidecarOutcomes)
 }
 $Utf8NoBom = [System.Text.UTF8Encoding]::new($false)
-New-Item -ItemType Directory -Force -Path $HealthDir | Out-Null
-[System.IO.File]::WriteAllText($LauncherManifestPath, ($LauncherManifest | ConvertTo-Json -Depth 8) + "`n", $Utf8NoBom)
 $PipelineManifestPath = Join-Path $HealthDir 'weekly_m67.pipeline_sidecar_outcomes.json'
-$HealthArgs = @(
-    'runners\a_short_weekly_sidecar_health.py', '--as-of', $AsOf,
-    '--project-root', $ProjectRoot, '--out-dir', $HealthDir,
-    '--launcher-outcomes', $LauncherManifestPath,
-    '--m67-invocation', $(if ($SkipSemanticRisk) { 'skipped' } else { 'requested' })
-)
-if (-not $SkipSemanticRisk) {
-    $HealthArgs += @('--pipeline-outcomes', $PipelineManifestPath)
+$LauncherManifestWritten = $false
+try {
+    New-Item -ItemType Directory -Force -Path $HealthDir -ErrorAction Stop | Out-Null
+    $LauncherManifestTmp = "$LauncherManifestPath.tmp.$PID"
+    Write-M67Utf8NoBom -LiteralPath $LauncherManifestTmp -Text (($LauncherManifest | ConvertTo-Json -Depth 8) + "`n")
+    Move-Item -LiteralPath $LauncherManifestTmp -Destination $LauncherManifestPath -Force -ErrorAction Stop
+    $LauncherManifestWritten = $true
+} catch {
+    Invalidate-M67Artifact -LiteralPath $LauncherManifestPath | Out-Null
+    Write-Host "[sidecar-health] UNAVAILABLE (launcher outcome manifest closeout failed; M6.7/selection unchanged)" -ForegroundColor Red
 }
-& $PythonExe @HealthArgs
-$HealthExitCode = $LASTEXITCODE
-if ($null -eq $HealthExitCode) { $HealthExitCode = 1 }
-if ($HealthExitCode -ne 0) {
-    Write-Host "[sidecar-health] UNAVAILABLE (health companion failed; M6.7/selection unchanged)" -ForegroundColor Red
+
+if ($LauncherManifestWritten) {
+    # A failed companion must never leave a previous valid health bundle visible.
+    foreach ($Leaf in @('sidecar_health.receipt.json', 'sidecar_health.json', 'sidecar_health.md')) {
+        Invalidate-M67Artifact -LiteralPath (Join-Path $HealthDir $Leaf) | Out-Null
+    }
+    $HealthArgs = @(
+        'runners\a_short_weekly_sidecar_health.py', '--as-of', $AsOf,
+        '--project-root', $ProjectRoot, '--out-dir', $HealthDir,
+        '--launcher-outcomes', $LauncherManifestPath,
+        '--m67-invocation', $(if ($SkipSemanticRisk) { 'skipped' } else { 'requested' })
+    )
+    if (-not $SkipSemanticRisk) {
+        $HealthArgs += @('--pipeline-outcomes', $PipelineManifestPath)
+    }
+    & $PythonExe @HealthArgs
+    $HealthExitCode = $LASTEXITCODE
+    if ($null -eq $HealthExitCode) { $HealthExitCode = 1 }
+    $HealthComplete = ($HealthExitCode -eq 0)
+    foreach ($Leaf in @('sidecar_health.receipt.json', 'sidecar_health.json', 'sidecar_health.md')) {
+        $HealthPath = Join-Path $HealthDir $Leaf
+        if (-not (Test-Path -LiteralPath $HealthPath -PathType Leaf)) {
+            $HealthComplete = $false
+        } elseif ((Get-Item -LiteralPath $HealthPath).Length -le 0) {
+            $HealthComplete = $false
+        }
+    }
+    if (-not $HealthComplete) {
+        foreach ($Leaf in @('sidecar_health.receipt.json', 'sidecar_health.json', 'sidecar_health.md')) {
+            Invalidate-M67Artifact -LiteralPath (Join-Path $HealthDir $Leaf) | Out-Null
+        }
+        Write-Host "[sidecar-health] UNAVAILABLE (health companion failed or returned an incomplete JSON/Markdown/receipt trio; M6.7/selection unchanged)" -ForegroundColor Red
+    }
 }
 Write-Host "=== Pipeline done ===" -ForegroundColor Cyan
-exit 0
+exit $FinalExitCode
