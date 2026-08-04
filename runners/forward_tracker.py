@@ -465,9 +465,9 @@ def backfill(windows: list[int]) -> int:
     today = _today_yyyymmdd()
     mature_as_ofs = _mature_as_ofs(df, today, windows)
     if not mature_as_ofs:
-        print(f"[OK] no mature as_of with pending rows (today={today})")
+        print(f"[OK] no calendar-age eligible as_of with pending rows (today={today})")
         return 0
-    print(f"[INFO] mature as_of with pending rows: {mature_as_ofs}")
+    print(f"[INFO] calendar-age eligible as_of with pending rows: {mature_as_ofs}")
 
     max_window = max(windows)
     # Per-cohort coverage. The tracker is a sidebar: it must not trigger a
@@ -484,12 +484,13 @@ def backfill(windows: list[int]) -> int:
         _print_cache_stale_banner(mature_as_ofs, block_msg)
         return EXIT_LEDGER_STALLED
     if immature:
-        print(f"[INFO] {len(immature)} cohort(s) captured but not yet +{max_window} trading days old; "
-              f"will settle in a later week: {immature}")
+        print(f"[INFO] {len(immature)} calendar-age eligible cohort(s) lack +{max_window} "
+              f"trading-day cache coverage; deferred: {immature}")
     if needs_refresh:
         _print_cache_stale_banner(needs_refresh, "shared cache does not reach these matured cohorts")
     if not ready:
-        print(f"[OK] no cohort has +{max_window} trading-day cache coverage yet; nothing to settle this run")
+        print(f"[INFO] no calendar-age eligible cohort has +{max_window} trading-day cache coverage; "
+              "nothing to settle this run")
         return EXIT_LEDGER_STALLED if needs_refresh else 0
 
     # Strictly cache-only: settle from the already-read cache payload; never

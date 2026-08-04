@@ -1282,8 +1282,8 @@ class HoldingRatchetS3bR4bTests(unittest.TestCase):
             validate_m67_consistency(r)
 
     # ── pipeline IO(load/apply/save;私密 sidecar)──
-    def _held_weekly(self):
-        return {"reports": [build_m67_report(_good_input(stateful_risk=_held_state()), AS_OF, "t")]}
+    def _held_weekly(self, as_of=AS_OF):
+        return {"reports": [build_m67_report(_good_input(stateful_risk=_held_state()), as_of, "t")]}
 
     def test_r4b_pipeline_bootstrap_and_roundtrip(self):
         import os
@@ -1307,6 +1307,80 @@ class HoldingRatchetS3bR4bTests(unittest.TestCase):
         self.assertEqual(state2, snap)                              # 幂等:week_count 不增
         self.assertEqual(w2["reports"][0]["machine"]["ratchet"]["week_count"], 1)
 
+    def test_r4b_pipeline_discards_stale_bootstrap_baseline(self):
+        # An unrelated synthetic bootstrap row is orphaned and must not survive write-back.
+        w = self._held_weekly()
+        key = _holding_ratchet_key("600000.SH", "20260601")
+        unrelated_key = _holding_ratchet_key("600519.SH", "20260601")
+        previous = {
+            unrelated_key: self._lw(
+                ts_code="600519.SH", ratcheted_stop=888.0,
+                last_clear_price=888.0, last_as_of="20260610",
+            ),
+        }
+
+        state = _apply_holding_ratchet(w, previous, AS_OF)
+        current_stop = w["reports"][0]["machine"]["ratchet"]["ratcheted_stop"]
+
+        self.assertNotEqual(current_stop, 888.0)
+        self.assertEqual(state[key]["last_as_of"], AS_OF)
+        self.assertTrue(state[key]["bootstrap"])
+        self.assertNotIn(unrelated_key, state)
+
+    def test_r4b_pipeline_preserves_bootstrap_baseline_across_two_weeks(self):
+        # W1 bootstrap is the legitimate baseline for the same held identity in W2.
+        w1 = self._held_weekly("20260610")
+        w1["reports"][0]["machine"]["entry_exit_size_star"]["plan"]["stop"] = 3.0
+        state = _apply_holding_ratchet(w1, {}, "20260610")
+        key = _holding_ratchet_key("600000.SH", "20260601")
+        self.assertTrue(state[key]["bootstrap"])
+
+        w2 = self._held_weekly(AS_OF)
+        w2["reports"][0]["machine"]["entry_exit_size_star"]["plan"]["stop"] = 2.5
+        state = _apply_holding_ratchet(w2, state, AS_OF)
+
+        self.assertEqual(state[key]["week_count"], 2)
+        self.assertFalse(state[key]["bootstrap"])
+        self.assertEqual(state[key]["ratcheted_stop"], 3.0)
+
+    def test_r4b_pipeline_preserves_bootstrap_through_manual_review_week(self):
+        # A no-price/suspended week bypasses reports[], but the held ts_code remains active.
+        w1 = self._held_weekly("20260610")
+        w1["reports"][0]["machine"]["entry_exit_size_star"]["plan"]["stop"] = 3.0
+        state = _apply_holding_ratchet(w1, {}, "20260610")
+        key = _holding_ratchet_key("600000.SH", "20260601")
+
+        manual_review_week = {
+            "reports": [],
+            "holdings_manual_review": [{
+                "ts_code": "600000.SH", "name": "测试持仓", "reason": "停牌/无价，人工复核",
+            }],
+        }
+        state = _apply_holding_ratchet(manual_review_week, state, AS_OF)
+        self.assertTrue(state[key]["bootstrap"])
+        self.assertEqual(state[key]["last_as_of"], "20260610")
+
+        w3 = self._held_weekly("20260624")
+        w3["reports"][0]["machine"]["entry_exit_size_star"]["plan"]["stop"] = 2.5
+        state = _apply_holding_ratchet(w3, state, "20260624")
+        self.assertEqual(state[key]["week_count"], 2)
+        self.assertFalse(state[key]["bootstrap"])
+        self.assertEqual(state[key]["ratcheted_stop"], 3.0)
+
+    def test_r4b_pipeline_bootstrap_baseline_keeps_cross_week_guard_reachable(self):
+        # A preserved W1 bootstrap row must still reach the write-back anti-rescue guard in W2.
+        w = self._held_weekly()
+        key = _holding_ratchet_key("600000.SH", "20260601")
+        previous = {key: self._lw(ratcheted_stop=10.0, last_as_of="20260610", bootstrap=True)}
+        injected_machine = {"ratcheted_stop": 9.0, "ratcheted_disposition": "hold",
+                            "week_count": 2, "cross_week_price_cross": "none", "bootstrap": False}
+        injected_row = self._lw(ratcheted_stop=9.0, last_clear_price=9.0,
+                                last_as_of=AS_OF, bootstrap=False)
+        with patch("runners.a_short_phase5_engine._holding_ratchet",
+                   return_value=(injected_machine, injected_row)):
+            with self.assertRaisesRegex(ValueError, "跨周止损下降"):
+                _apply_holding_ratchet(w, previous, AS_OF)
+
     def test_r4b_pipeline_persisted_disposition_cannot_downgrade(self):
         # Required ②(a):上周 clear_review + 本周合并 hold → machine 与 sidecar 都只升不降。
         w = self._held_weekly()
@@ -1314,7 +1388,7 @@ class HoldingRatchetS3bR4bTests(unittest.TestCase):
         stop = report["machine"]["entry_exit_size_star"]["plan"]["stop"]
         key = _holding_ratchet_key("600000.SH", "20260601")
         previous = {key: self._lw(ratcheted_stop=stop, last_disposition="clear_review",
-                                  last_clear_price=stop, last_as_of="20260610")}
+                                  last_clear_price=stop, last_as_of="20260610", bootstrap=False)}
         state = _apply_holding_ratchet(w, previous, AS_OF)
         self.assertEqual(report["machine"]["ratchet"]["ratcheted_disposition"], "clear_review")
         self.assertEqual(state[key]["last_disposition"], "clear_review")
@@ -1327,7 +1401,7 @@ class HoldingRatchetS3bR4bTests(unittest.TestCase):
         close = report["machine"]["current_close"]
         key = _holding_ratchet_key("600000.SH", "20260601")
         previous = {key: self._lw(ratcheted_stop=close + 0.5, last_disposition="hold",
-                                  last_clear_price=close + 0.5, last_as_of="20260610")}
+                                  last_clear_price=close + 0.5, last_as_of="20260610", bootstrap=False)}
         state = _apply_holding_ratchet(w, previous, AS_OF)
         self.assertEqual(report["machine"]["ratchet"]["ratcheted_disposition"], "clear_review")
         self.assertEqual(state[key]["last_disposition"], "clear_review")
@@ -1340,7 +1414,7 @@ class HoldingRatchetS3bR4bTests(unittest.TestCase):
         key = _holding_ratchet_key("600000.SH", "20260601")
         previous_stop = plan_stop + 0.5
         previous = {key: self._lw(ratcheted_stop=previous_stop, last_clear_price=previous_stop,
-                                  last_as_of="20260610")}
+                                  last_as_of="20260610", bootstrap=False)}
         injected_stop = plan_stop + 0.1
         injected_machine = {"ratcheted_stop": injected_stop, "ratcheted_disposition": "hold",
                             "week_count": 2, "cross_week_price_cross": "none", "bootstrap": False}
@@ -1359,7 +1433,7 @@ class HoldingRatchetS3bR4bTests(unittest.TestCase):
         plan_stop = report["machine"]["entry_exit_size_star"]["plan"]["stop"]
         key = _holding_ratchet_key("600000.SH", "20260601")
         previous = {key: self._lw(ratcheted_stop=plan_stop, last_disposition="clear_review",
-                                  last_clear_price=plan_stop, last_as_of="20260610")}
+                                  last_clear_price=plan_stop, last_as_of="20260610", bootstrap=False)}
         from runners import a_short_phase5_engine as engine
         real_holding_ratchet = engine._holding_ratchet
 

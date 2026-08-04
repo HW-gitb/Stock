@@ -662,3 +662,131 @@ main() → _upcoming_events() → _attach_forward_event_impacts() → _attach_ho
 - **顺带闭合**：#05 留的三条 Optional 已在本刀补齐。
 - **Optional（结构性，非本刀引入）**：lane 选择器吃不到 `tests/phase6/`，lane 绿≠该接缝绿；建议改名进选择器或在 ledger focused evidence 固定带上。正文见 register 同一 R-ID。
 - **Verify**: review-evidence:943fa9bcc21e。cninfo live 调用与 `-Account` 实周跑 `NOT_VERIFIED`——通道本身仍是死的，那是 #07(b)。
+### 2026-08-03 Codex 修复：桌面 #11/#13/#12 一次收口
+
+#### 文档作用与本轮边界
+
+本节是当前 A-short leaf wiring/classification phase handoff 的同日追加，记录桌面 `a_cc_testrun1.md` 的 #11、#13、#12 三项问题各自的作用、根因、调用链、直接消费者、schema/source-binding、写盘边界、负向控制、自审和验证边界。风险详情以 `docs/system_risk_register.md` 的三个 R-ID 为准；`docs/SESSION_LOG.md` 只保留本轮最小 cycle facts。本轮不执行 provider/live/account、真实周跑、runner、sub-agent、commit、push 或 merge。
+
+#### #11：ratchet 不再消费跨周旧 bootstrap 状态
+
+- 根因：`runners/a_short_weekly_pipeline.py::_apply_holding_ratchet()` 原先以 `(ts_code, entry_date)` 查 sidecar 后直接把 `bootstrap=true` 的旧合成行交给 `_holding_ratchet()`；生产 `state/a_short/holding_ratchet/ratchet_state.json` 中的旧 bootstrap stop 因而可能成为当前持仓的跨周止损基线，即使该 stop 来自另一周的 bootstrap 上下文。
+- 修复链：`main()` → `_apply_holding_ratchet(weekly, state, as_of)` → future-state PIT guard → 删除 `bootstrap is True and last_as_of != as_of` 的 state 行 → `_holding_ratchet(this_week, None)` 重新以本周结构化 `plan.stop`/breakeven bootstrap → `machine.ratchet`、`m67.table`、advice 与 `state[key]` 写回。相同 `as_of` 的 replay 保留原行，跨周非 bootstrap ratchet 仍走原有 stop/disposition anti-rescue。
+- 直接消费者/契约：机器权威是 `machine.ratchet`、`entry_exit_size_star.plan.stop` 与 sidecar row；`schemas/a_short_holding_ratchet.schema.json` 未改，`bootstrap`/`last_as_of` 字段语义保持不变。展示 advice 不是 ratchet 数据源；未改 EGS/TopN/生产决策或账户下单边界。
+- 负向控制/自审：旧 bootstrap 的荒谬 stop 不得穿透、无关旧 bootstrap 行被清除、同周 replay 仍幂等、未来 `last_as_of` 仍先于过滤而 fail-closed；保留既有跨周 disposition/stop 降级反控与 breach 升档正控。新增 `test_r4b_pipeline_discards_stale_bootstrap_baseline`，并以既有同周 positive control 对照。
+
+#### #13：tracker 日志明确区分日历够龄与缓存覆盖
+
+- 根因：`runners/forward_tracker.py::backfill()` 的 `_mature_as_ofs()` 以日历年龄挑出 pending cohort，而 `_partition_asof_coverage()` 再按 shared cache 的实际交易日覆盖决定 ready/immature/needs_refresh；旧日志把两者都称作“mature/未到 +N trading days”，同一 cohort 会产生相互矛盾的可观测语义。
+- 修复链：只改 `backfill()` 四处日志标签：`calendar-age eligible as_of` 表示日历年龄门已满足；`calendar-age eligible cohort(s) lack +N trading-day cache coverage` 表示缓存覆盖门未满足；no-ready 日志也保留 calendar-age 前缀。`_mature_as_ofs()`、`_partition_asof_coverage()`、cache-only 写回和退出码不变。
+- 直接消费者/写盘边界：周 launcher/人工运维只消费 stdout 与 `backfill()` 退出码；tracker CSV、`forward_daily.pkl`、ledger settlement、refresh/provider 调用均未改。该修复是 observability-only，不把日志变更当作 ledger progress 或 PASS。
+- 负向控制/自审：有日历够龄但缓存只有 3 个交易日的 fixture 时，必须同时看到 calendar-age eligible、lack cache coverage、no cohort has cache coverage，且不再出现旧的“captured but not yet +20 trading days old”；返回仍为 0，无 provider fetch。
+
+#### #12：候选追踪按 as_of 版本化并严格读取前一期
+
+- 根因：`A-EGS/egs_main.py` 原来把所有候选追踪写入同一个 `Result/egs_last_selection_qfq_v1.json`；同一个 canonical `as_of` 重跑会覆盖 run_date，下一次 tracking 只能看到同日记录，无法建立真实上一周 baseline。
+- 修复链：`engine/a_short_run_paths.py` 统一提供 `last_selection_version_path(as_of)`、`previous_last_selection_version_path(as_of)`、文件名日期解析与严格 YYYYMMDD 校验。`run_egs()` 只读 `<result_dir>/egs_last_selection_qfq_v1_<as_of>.json` 之前最近的版本；同日、未来文件和旧 singleton 均不作为 prior。读取 envelope 后校验 `schemas/a_short_last_selection.schema.json`，并要求文件名日期等于 payload `as_of` 且严格早于 decision_as_of；校验失败不写新 tracking，避免空 baseline 覆盖事实。写盘为 schema-bound envelope，仍使用既有 atomic writer；旧 singleton 保留但只记录 ignored warning，不删除、不覆盖、不迁移。
+- 直接消费者/契约/边界：唯一直接消费者是 `run_egs()` 的上一候选池周内收益/高低点报告与当前 leaver 保留逻辑；`run_egs(backtest_mode=True)` 不读取 mutable prior。新 schema 对记录字段、`price_basis=qfq_anchored_as_of`、`run_date`、`still_in_pool` 和 additionalProperties 做 fail-closed 约束；文件名与 payload 双 source-binding 防止同日自读/错日读取。
+- 负向控制/自审：path helper 只选择严格更早版本，忽略 singleton/current/future；schema 拒绝 extra field 与非 canonical as_of；source test 约束 prior envelope load、versioned atomic write 和 legacy 不被 open；effect-contract 的 `A-EGS/egs_main.py` decision/runtime hashes 用固定 Python 实际 inventory 重封。没有读取/删除桌面文件或现有未版本化 artifact。
+
+#### 固定 Python、验证、NOT_VERIFIED 与审查边界
+
+- 固定解释器：`C:\Users\cnhea\AppData\Local\Programs\Python\Python313\python.exe`，版本 `Python 3.13.8`。本轮聚焦原始终态：`Ran 58 tests in 0.203s ... OK`（#11/#13）；`Ran 12 tests in 0.012s ... OK`（#12 path/schema）；`Ran 48 tests in 41.619s ... OK`（effect contract）；相关 `py_compile` exit `0`；schema meta check `schema OK`。
+- 精确聚焦命令：`& 'C:\Users\cnhea\AppData\Local\Programs\Python\Python313\python.exe' -m unittest tests.test_a_short_gap_data_registry.HoldingRatchetS3bR4bTests tests.phase6.test_forward_tracker_cache_guard`；`... -m unittest tests.test_a_short_run_paths tests.schema.test_a_short_last_selection_schema`；`... -m unittest tests.test_a_short_effect_contract`。
+- A-short full lane 原始终态：`Ran 2325 tests in 298.938s ... OK (skipped=3)`；`[full-pack-ledger] RESULT status=PASS exit=0 tests=2325 elapsed=300.8s deadline=860s`；START fingerprint=`4220c0a2e304`。治理门原始终态 `Ran 73 tests in 0.979s ... OK`，`git diff --check` exit `0`（仅 CRLF 转换 warning）。provider/network/live/account/真实周跑/真实 ratchet artifact 刷新/sub-agent/Claude 独立审查/commit/push/merge 均为 `NOT_VERIFIED` 或 `NOT_PERFORMED`，不称 review PASS、ship PASS 或 production PASS。
+- 下一步：Codex 完成文档治理门与当前树 A-short full lane；随后 Claude Code 独立审查 `R-ASHORT-KNIFE11-RATCHET-STALE-BOOTSTRAP-STATE`、`R-ASHORT-KNIFE13-FORWARD-TRACKER-MATURITY-LOG-CONTRADICTION`、`R-ASHORT-KNIFE12-LAST-SELECTION-ASOF-BASELINE-OVERWRITE`，PASS 后按项目规则提交。
+
+### 2026-08-03 Claude Code 独立审查 = FAIL（#11；#12/#13 本身通过）
+
+- **Verdict**: FAIL，未提交、未合入。#11 的 pop 判据 `bootstrap is True and last_as_of != as_of` 命中了合法路径——首周恒写 `bootstrap=True`，第二周必然被丢 → 每周重 bootstrap → 跨周 ratchet 永不成立；且 pop 在 `_prev = state.get(key)` 之前，把 P1-1 第二轮刚加的跨周断言绕成不可达。
+- **A/B 实测**（同一持仓连续三周，本周止损 10.0 < 上周 10.5）：主树 `W2 stop=10.5/wc=2/bootstrap=False`；本树 `W2 stop=10.0/wc=1/bootstrap=True`。
+- **Required 两条**（正文见 register 同一 R-ID）：① 收窄 pop 判据（按陈旧程度或 key 对不上，而非 `!= as_of`）；② 补连续两周正控 + 跨周断言可达反控——full lane `2325 OK` 没抓到，是因为没有用例跑过同一持仓两周。
+- **不要返工**：#13 措辞修正、#12 分版本快照（严格更早 + schema + 文件名↔文档 as_of 绑定 + 拒 `>=` + legacy 只告警）都正确。
+- **Optional（#12）**：读失败会跳过本周写盘，损坏会自我传播到下周。
+- **Verify**: review-evidence:37325941927c。
+
+### 2026-08-03 Codex 修复：#11 review FAIL 收口（不涉及 #03+#04）
+
+#### 本文档内容、作用与追加位置
+
+本 handoff 是 A-short leaf wiring/classification 阶段的详细交接源：记录本刀的根因、实现、调用链、直接消费者、schema/source-binding、写盘边界、负向控制、自审、固定 Python、精确命令和审查边界；`docs/SESSION_LOG.md` 只保留 cycle 摘要，`docs/system_risk_register.md` 保留风险与 Required 单一来源。本节按同日 reverse-chronological 追加在上一条 Claude #11 FAIL 后；后续执行在本文件继续追加同格式小节，不覆盖历史审查记录。
+
+#### #11 当前判定与根因
+
+- 上轮 FAIL 的判断正确：`bootstrap=True and last_as_of != as_of` 把合法的“同一持仓首周 bootstrap”误判为陈旧。第二周进入前被删除后，`_holding_ratchet()` 收到 `None`，`week_count` 每周回到 1，较高的跨周 stop 丢失，且在 `_prev = state.get(key)` 之前清理会让跨周 anti-rescue 失去可达性。
+- 本轮修复范围只针对 `R-ASHORT-KNIFE11-RATCHET-STALE-BOOTSTRAP-STATE`；#12/#13 不返工，#03+#04 不涉及，`runners/weekly_screening.ps1` 未改。
+
+#### 实现、调用链与直接消费者
+
+- `runners/a_short_weekly_pipeline.py::_apply_holding_ratchet()` 保留既有 `last_as_of > as_of` future-state PIT 拒绝；从本周 `reports[]` 中只收集 `m67.table.操作 == 持有` 且存在 `machine.stateful_risk.position.entry_date` 的 `(ts_code, entry_date)` compound key。
+- 仅删除 `bootstrap is True` 且不在本周 active holding key 集合中的 orphan sidecar 行；同一持仓上周合法 bootstrap 行保留。保留后链路为：`main()` → `_apply_holding_ratchet()` → `runners/a_short_phase5_engine.py::_holding_ratchet()` → `machine.ratchet` / `entry_exit_size_star.plan.stop` / `m67.table` / disposition-advice → `state[key]` → 既有 `save_holding_ratchet()`。
+- 直接机器消费者是 `machine.ratchet`、结构化 `plan.stop` 和 sidecar row；中文操作建议只是展示面，不参与 ratchet 基线或清理判定。既有非 bootstrap 跨周 stop/disposition 只升不降和 breach escalation 保持不变。
+
+#### schema、source-binding 与写盘边界
+
+- `schemas/a_short_holding_ratchet.schema.json` 未修改，`bootstrap` 与 `last_as_of` 的字段契约不变；本次补的是 consumer 侧“bootstrap 行必须与本周 held compound key 绑定”的跨字段/跨运行语义，未把渲染文字当机器契约。
+- `schemas/a_short_m67_effect_contract.json` 本轮只把 `decision_predicate_sha256["runners/a_short_weekly_pipeline.py"]` 从旧值重封为固定 Python 实际值 `e6e70d69f105ffae07b18278dfb729aaa95f9b845eb325f7593bee00cd865735`；其他既有 #12 effect-contract 变化保留。
+- 生产调用仍只写既有 ratchet sidecar/state 位置并遵守原子写路径；本轮测试没有 provider/live/account、没有刷新真实 `state/a_short/holding_ratchet/ratchet_state.json`，没有改变 EGS/TopN、生产决策、订单或账户写盘边界。
+
+#### 负向控制与自审项目
+
+- `test_r4b_pipeline_discards_stale_bootstrap_baseline`：不匹配本周任何持仓的 orphan bootstrap 行不能污染本周 stop，且会被移除。
+- `test_r4b_pipeline_preserves_bootstrap_baseline_across_two_weeks`：W1 bootstrap → W2 `week_count=2`、`bootstrap=False`、`ratcheted_stop` 保留 W1 较高值；证明合法首周基线不会被误删。
+- `test_r4b_pipeline_bootstrap_baseline_keeps_cross_week_guard_reachable`：保留 W1 bootstrap 时注入跨周降止损写回，仍命中 `跨周止损下降` guard；证明 `_prev` 与 anti-rescue 没被清理动作绕过。
+- 既有 same-week 幂等、future-state fail-closed、disposition/stop anti-rescue、breach escalation 和 effect-contract mutation guards 一并复核；未起 sub-agent。
+
+#### 固定 Python、精确命令与原始终态
+
+- 唯一解释器：`C:\Users\cnhea\AppData\Local\Programs\Python\Python313\python.exe`，版本 `Python 3.13.8`。
+- 语法命令：`Set-Location -LiteralPath 'D:\cnhea\Codex\worktrees\29e0\Stock'; & 'C:\Users\cnhea\AppData\Local\Programs\Python\Python313\python.exe' -m py_compile 'D:\cnhea\Codex\worktrees\29e0\Stock\runners\a_short_weekly_pipeline.py' 'D:\cnhea\Codex\worktrees\29e0\Stock\tests\test_a_short_gap_data_registry.py' 'D:\cnhea\Codex\worktrees\29e0\Stock\schemas\a_short_m67_effect_contract.json'` → exit `0`。
+- 焦点命令：`Set-Location -LiteralPath 'D:\cnhea\Codex\worktrees\29e0\Stock'; & 'C:\Users\cnhea\AppData\Local\Programs\Python\Python313\python.exe' -m unittest tests.test_a_short_effect_contract tests.test_a_short_gap_data_registry.HoldingRatchetS3bR4bTests tests.phase6.test_forward_tracker_cache_guard` → `Ran 108 tests in 44.445s ... OK`。
+- full lane 命令：`Set-Location -LiteralPath 'D:\cnhea\Codex\worktrees\29e0\Stock'; & 'C:\Users\cnhea\AppData\Local\Programs\Python\Python313\python.exe' '.tools\full_pack_ledger.py' run a_short 'R-ASHORT-KNIFE11-RATCHET-BOOTSTRAP-PRESERVATION' 'focused 108 OK; preserve same-key W1 bootstrap across W2; orphan bootstrap cleanup; bootstrap anti-rescue reachability; effect contract resealed' 860 -- discover -s tests -p 'test_a_short*.py'` → `Ran 2327 tests in 347.739s ... OK (skipped=3)`；`[full-pack-ledger] RESULT status=PASS exit=0 tests=2327 elapsed=349.4s deadline=860s`。
+- 文档/治理命令：`Set-Location -LiteralPath 'D:\cnhea\Codex\worktrees\29e0\Stock'; & 'C:\Users\cnhea\AppData\Local\Programs\Python\Python313\python.exe' -m unittest tests.test_doc_governance_guard tests.test_route_doc_ledger_status_consistency tests.test_readme_route_row_length tests.test_semantic_risk_slice3_guard` → `Ran 73 tests in 1.906s ... OK`。
+- 收口核对：`git diff --name-only -- runners/weekly_screening.ps1` 为空；provider/live/account/真实周报与 sidecar artifact、独立 review、commit/push/merge = `NOT_VERIFIED`/`NOT_PERFORMED`。测试终态是 test-pack evidence，不等于 review PASS、production PASS 或 ship PASS。
+
+### 2026-08-03 Claude Code 第二轮独立审查 = FAIL（#11 最后一条腿）
+
+- **Verdict**: FAIL，未提交、未合入。主回归已修好，剩最后一条同类腿。
+- **三腿实测**：① 连续两周 `W2 stop=10.5/wc=2/bootstrap=False` **OK**；② 孤儿陈旧行已清 **OK**；③ **停牌周仍失守**——`holdings_manual_review` 旁路持仓不进 `reports[]`，其 bootstrap 行被当孤儿丢，复牌后 `stop 10.5 → 10.0`、重新 bootstrap。
+- **Required 一条**（正文见 register 同一 R-ID）：把 `holdings_manual_review` 的 `ts_code` 也算作活跃；该旁路行没有 `entry_date`，用 ts_code 粒度即可（sidecar 行自带 ts_code）。
+- **不要返工**：连续两周延续、孤儿清理、`(ts_code, entry_date)` 复合身份、pop 不再绕过跨周断言——四项实测已通过。#12/#13 维持上一轮结论。
+- **Verify**: review-evidence:f807ad117ba8；full lane `CACHED GREEN a_short = 2327 OK`（`+2` 为本轮新增用例）。
+
+### 2026-08-03 Codex 修复：#11 二轮 FAIL 最后一条腿（manual-review 旁路；不涉及 #03+#04）
+
+#### 本 handoff 的内容、作用与追加位置
+
+本 handoff 继续作为 A-short leaf wiring/classification 的详细交接源，记录本轮旁路根因、最小改动、调用链、直接消费者、schema/source-binding、写盘边界、负向控制、固定 Python、精确测试命令、原始终态和审查边界；SESSION_LOG 只记 cycle 摘要，system risk register 记 Required 与风险单一来源。本节按同日 reverse-chronological 追加在二轮 Claude FAIL 后，未覆盖历史记录；后续执行仍在本文件追加同格式小节。
+
+#### 根因与最小改动
+
+- 上轮修复只把 `reports[]` 中 `m67.table.操作 == 持有` 且有 `entry_date` 的 `(ts_code, entry_date)` 作为 active。停牌/无价/陈旧价格持仓按设计进入 `holdings_manual_review`、不进 `reports[]`，所以其上一周合法 bootstrap sidecar 行被误删。
+- `runners/a_short_weekly_pipeline.py::_apply_holding_ratchet()` 现在同时收集 `holdings_manual_review[].ts_code`。只有 bootstrap 行既不匹配本周 report compound key、也不匹配本周 manual-review `ts_code` 时才作为 orphan 删除。manual-review 周不伪造机器 ratchet；复牌报告出现后仍按 compound key 消费并继续 ratchet。
+
+#### 调用链、直接消费者、schema/source-binding 与写盘边界
+
+- 调用链：`main()` → `_apply_holding_ratchet(weekly, state, as_of)` → reports compound-key + manual-review ts_code active filter → 复牌时 `runners/a_short_phase5_engine.py::_holding_ratchet()` → `machine.ratchet` / `entry_exit_size_star.plan.stop` / `m67.table` / disposition-advice → `state[key]` → 既有 `save_holding_ratchet()`。
+- 直接机器消费者仍是 `machine.ratchet`、结构化 `plan.stop` 和 sidecar row；`holdings_manual_review.reason` 只用于人工旁路展示，不成为 ratchet 基线。复合 key 仍保护 re-entry 不继承旧 entry_date。
+- `schemas/a_short_holding_ratchet.schema.json` 未修改；sidecar 的既有 `ts_code` 支持旁路保护，`entry_date` 仍只在复牌 report 中完成 source-binding。effect-contract 指纹未变化，`static_contract_error=None`。没有改 EGS/TopN、生产决策、provider/PIT、订单、账户或真实 state artifact 写盘边界。
+
+#### 负向控制与自审
+
+- 新增 `test_r4b_pipeline_preserves_bootstrap_through_manual_review_week`：W1 bootstrap → W2 只有 `holdings_manual_review` 且无 reports → W3 复牌使用更低 stop；断言 W2 保留 W1 行，W3 `week_count=2`、`bootstrap=False`、`ratcheted_stop` 保持 W1 较高值。
+- 上一轮 `test_r4b_pipeline_preserves_bootstrap_baseline_across_two_weeks`、孤儿清理、`test_r4b_pipeline_bootstrap_baseline_keeps_cross_week_guard_reachable` 及 future-state/same-week/disposition/breach controls 继续通过；#12/#13 不返工，#03+#04 未触碰，未起 sub-agent。
+
+#### 固定 Python、精确命令与原始终态
+
+- 唯一解释器：`C:\Users\cnhea\AppData\Local\Programs\Python\Python313\python.exe`，版本 `Python 3.13.8`。
+- 语法/单类命令：`$env:PYTHONPATH='D:\cnhea\Codex\worktrees\29e0\Stock'; & 'C:\Users\cnhea\AppData\Local\Programs\Python\Python313\python.exe' -m py_compile 'D:\cnhea\Codex\worktrees\29e0\Stock\runners\a_short_weekly_pipeline.py' 'D:\cnhea\Codex\worktrees\29e0\Stock\tests\test_a_short_gap_data_registry.py'; & 'C:\Users\cnhea\AppData\Local\Programs\Python\Python313\python.exe' -m unittest tests.test_a_short_gap_data_registry.HoldingRatchetS3bR4bTests` → py_compile exit `0`；`Ran 45 tests in 0.146s ... OK`。
+- 焦点组合命令：`$env:PYTHONPATH='D:\cnhea\Codex\worktrees\29e0\Stock'; & 'C:\Users\cnhea\AppData\Local\Programs\Python\Python313\python.exe' -m unittest tests.test_a_short_effect_contract tests.test_a_short_gap_data_registry.HoldingRatchetS3bR4bTests tests.phase6.test_forward_tracker_cache_guard` → `Ran 109 tests in 71.289s ... OK`。
+- full lane 命令：`Set-Location -LiteralPath 'D:\cnhea\Codex\worktrees\29e0\Stock'; & 'C:\Users\cnhea\AppData\Local\Programs\Python\Python313\python.exe' '.tools\full_pack_ledger.py' run a_short 'R-ASHORT-KNIFE11-RATCHET-MANUAL-REVIEW-BOOTSTRAP-PRESERVATION' 'focused 109 OK; preserve same-key W1 bootstrap through holdings_manual_review week; W3 resume ratchet; orphan cleanup; anti-rescue reachability' 860 -- discover -s tests -p 'test_a_short*.py'` → `Ran 2328 tests in 472.934s ... OK (skipped=3)`；`[full-pack-ledger] RESULT status=PASS exit=0 tests=2328 elapsed=475.4s deadline=860s`。
+- 收口边界：`static_contract_error=None`；provider/live/account/真实周报与 sidecar artifact、独立 review、commit/push/merge = `NOT_VERIFIED`/`NOT_PERFORMED`；测试终态不等于 review PASS、production PASS 或 ship PASS。#03+#04 的 `runners/weekly_screening.ps1` 未产生 diff。
+
+### 2026-08-03 Claude Code 第三轮独立审查 = PASS（#11/#12/#13）
+
+- **Verdict**: PASS，已提交并合入 master。#11 三轮收口完成；#12/#13 维持前两轮结论。
+- **三腿复跑**：连续两周 `wc=2/bootstrap=False`；孤儿清理仍生效；**停牌周已修好**——`W1 10.5 → W2 manual_review 行幸存 → W3 复牌 stop=10.5/wc=2/bootstrap=False`。
+- **对抗探针（过度保留反控）**：旧仓 `600000.SH|20250101`（stop=3.05）在 manual-review 周被保留，但新 entry_date 复牌得 `stop=10.5/wc=1/bootstrap=True`——**未继承 3.05**，复合 key 仍是基线唯一判据；旧行随后自动清掉。
+- **计数**：full lane `CACHED GREEN a_short = 2328 OK`，`2327→2328` 的 `+1` 为新增 manual-review 用例。
+- **仍挂 Optional（#12，不阻断）**：读失败跳过本周写盘，损坏会自我传播到下周。
+- **Verify**: review-evidence:63adac82ec8a。provider/live 与 `-Account` 实跑 `NOT_VERIFIED`。

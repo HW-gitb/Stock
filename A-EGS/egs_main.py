@@ -132,7 +132,12 @@ from engine.a_short_hithink_l3 import (
     catalog_digest,
     fetch_complete_concept_graph,
 )
-from engine.a_short_run_paths import weight_comparison_path
+from engine.a_short_run_paths import (
+    last_selection_version_as_of,
+    last_selection_version_path,
+    previous_last_selection_version_path,
+    weight_comparison_path,
+)
 from engine.a_short_runtime_config import load_runtime_configuration, runtime_configuration_lineage
 from engine.a_share_market_clock import a_share_market_date, a_share_market_wall_time
 from engine.a_short_tushare_client import init_tushare_pro
@@ -1397,6 +1402,7 @@ def export_stage3_selection_snapshot(top50, tier1_final, latest_td, run_identity
 
 DATA_HEALTH_SCHEMA_VERSION = "1.8.0"
 DATA_HEALTH_SCHEMA_PATH = os.path.join(PROJECT_ROOT, "schemas", "data_health.schema.json")
+LAST_SELECTION_SCHEMA_PATH = os.path.join(PROJECT_ROOT, "schemas", "a_short_last_selection.schema.json")
 
 
 @dataclass(frozen=True)
@@ -5737,15 +5743,40 @@ def run_egs(backtest_mode=False, output_root=None, price_as_of=None):
 
     # ── 上期候选股追踪（v7.5扩展：周内高低点、最大收益/回撤、是否仍在池）──────────
     import json as _json
-    # The former tracker persisted raw closes.  Do not compare those legacy
-    # records with the qfq production series after this price-basis migration.
-    _LAST_SEL_FILE = _rp("egs_last_selection_qfq_v1.json")
-    _last_sel_raw   = []
+    # Candidate tracking is versioned by decision_as_of.  Never read the
+    # same-day output (or the old singleton): the baseline must be the latest
+    # strictly earlier snapshot, otherwise a same-as_of rerun self-compares.
+    _LAST_SEL_FILE = last_selection_version_path(
+        decision_as_of, result_dir=CONF["result_dir"]
+    )
+    _PRIOR_LAST_SEL_FILE = previous_last_selection_version_path(
+        decision_as_of, result_dir=CONF["result_dir"]
+    )
+    _LEGACY_LAST_SEL_FILE = _rp("egs_last_selection_qfq_v1.json")
+    _last_sel_raw = []
     _last_sel_report = []
-    if (not backtest_mode) and os.path.exists(_LAST_SEL_FILE):
+    _last_sel_read_failed = False
+    if (not backtest_mode) and _PRIOR_LAST_SEL_FILE:
         try:
-            with open(_LAST_SEL_FILE, "r", encoding="utf-8") as _f:
-                _last_sel_raw = _json.load(_f)
+            with open(_PRIOR_LAST_SEL_FILE, "r", encoding="utf-8") as _f:
+                _prior_last_sel = _json.load(_f)
+            validate_json_schema(
+                _prior_last_sel,
+                schema_path=LAST_SELECTION_SCHEMA_PATH,
+                label=f"last selection {_PRIOR_LAST_SEL_FILE}",
+            )
+            _prior_file_as_of = last_selection_version_as_of(_PRIOR_LAST_SEL_FILE)
+            if _prior_file_as_of != str(_prior_last_sel.get("as_of") or ""):
+                raise ValueError(
+                    f"filename as_of {_prior_file_as_of!r} != document as_of "
+                    f"{_prior_last_sel.get('as_of')!r}"
+                )
+            if str(_prior_last_sel["as_of"]) >= str(decision_as_of):
+                raise ValueError(
+                    f"prior snapshot as_of {_prior_last_sel['as_of']} is not earlier "
+                    f"than decision_as_of {decision_as_of}"
+                )
+            _last_sel_raw = _prior_last_sel["records"]
             if _last_sel_raw:
                 _latest_day = pd.DataFrame()
                 if not all_daily.empty and "trade_date" in all_daily.columns:
@@ -5801,10 +5832,17 @@ def run_egs(backtest_mode=False, output_root=None, price_as_of=None):
                         "周内最大回": _max_draw,
                     })
         except Exception as _e:
+            _last_sel_read_failed = True
             log.warning(f"上期候选股记录读取失败: {_e}")
     # ─────────────────────────────────────────────────────────────────────────
 
     # [崩溃修复①] 传入 trade_dates 供回退使用
+    elif (not backtest_mode) and os.path.exists(_LEGACY_LAST_SEL_FILE):
+        log.warning(
+            f"ignoring legacy singleton candidate tracker {_LEGACY_LAST_SEL_FILE}; "
+            "a versioned prior as_of snapshot is required"
+        )
+
     df_db = get_daily_basic(latest_td, trade_dates)
 
     suspended_set = get_suspend_info(trade_dates)
@@ -6310,8 +6348,29 @@ def run_egs(backtest_mode=False, output_root=None, price_as_of=None):
             _current_leavers = [r for r in _current_leavers if r.get("run_date","") == _last_run_date]
 
         _records_to_save = _records + _current_leavers
-        write_json_atomic(_LAST_SEL_FILE, _records_to_save)
-        log.info(f"[OK] 本次候选池记录（{len(watch_df)}/{watch_n}）已保存至 {_LAST_SEL_FILE}")
+        if _last_sel_read_failed:
+            log.warning(
+                "candidate tracking write skipped because the strictly earlier "
+                "snapshot failed schema/source binding validation"
+            )
+        else:
+            _last_sel_doc = {
+                "schema_name": "a_short_last_selection",
+                "schema_version": "1.0.0",
+                "as_of": str(decision_as_of),
+                "records": _records_to_save,
+            }
+            validate_json_schema(
+                _last_sel_doc,
+                schema_path=LAST_SELECTION_SCHEMA_PATH,
+                label=f"last selection {_LAST_SEL_FILE}",
+            )
+            if last_selection_version_as_of(_LAST_SEL_FILE) != str(decision_as_of):
+                raise ValueError(
+                    f"output filename as_of mismatch for decision_as_of {decision_as_of}"
+                )
+            write_json_atomic(_LAST_SEL_FILE, _last_sel_doc)
+            log.info(f"[OK] 本次候选池记录（{len(watch_df)}/{watch_n}）已保存至 {_LAST_SEL_FILE}")
     except Exception as _e:
         log.warning(f"候选池记录保存失败: {_e}")
 
