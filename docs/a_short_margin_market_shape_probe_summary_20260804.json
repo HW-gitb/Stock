@@ -1,0 +1,308 @@
+{
+  "schema_name": "a_short_margin_market_shape_probe_summary",
+  "schema_version": "1.0.0",
+  "generated_at": "2026-08-04T13:41:55+00:00",
+  "scope": {
+    "market": "A-share",
+    "purpose": "market_level_margin_endpoint_shape_probe_only",
+    "queue_row": 21,
+    "downstream_rows_blocked_until_reviewed": [
+      "19_margin_overheat",
+      "northbound_lookback"
+    ],
+    "percentile_computed": false,
+    "consumer_wired": false,
+    "egs_or_weekly_behavior_changed": false,
+    "production_or_ship_gate_claimed": false,
+    "broker_or_order_action": false
+  },
+  "sample": {
+    "recent_trade_dates": [
+      "20260731",
+      "20260730",
+      "20260729"
+    ],
+    "history_windows": [
+      {
+        "label": "about_one_year_back",
+        "start_date": "20250728",
+        "end_date": "20250801"
+      },
+      {
+        "label": "about_three_years_back",
+        "start_date": "20230731",
+        "end_date": "20230804"
+      }
+    ],
+    "fallback_probed": false,
+    "pinned_tushare_version": "1.4.29"
+  },
+  "execution": {
+    "call_budget": 12,
+    "calls_made": 5,
+    "within_budget": true,
+    "ok_calls": 5,
+    "error_calls": 0,
+    "status": "completed"
+  },
+  "shape_results": [
+    {
+      "label": "margin_recent_20260731",
+      "endpoint": "margin",
+      "parameters": {
+        "trade_date": "20260731"
+      },
+      "status": "ok",
+      "shape": {
+        "kind": "dataframe",
+        "row_count": 3,
+        "columns": [
+          "exchange_id",
+          "rqmcl",
+          "rqye",
+          "rqyl",
+          "rzche",
+          "rzmre",
+          "rzrqye",
+          "rzye",
+          "trade_date"
+        ],
+        "column_dtypes": {
+          "trade_date": "str",
+          "exchange_id": "str",
+          "rzye": "float64",
+          "rzmre": "float64",
+          "rzche": "float64",
+          "rqye": "float64",
+          "rqmcl": "float64",
+          "rzrqye": "float64",
+          "rqyl": "float64"
+        },
+        "all_null_columns": []
+      }
+    },
+    {
+      "label": "margin_recent_20260730",
+      "endpoint": "margin",
+      "parameters": {
+        "trade_date": "20260730"
+      },
+      "status": "ok",
+      "shape": {
+        "kind": "dataframe",
+        "row_count": 3,
+        "columns": [
+          "exchange_id",
+          "rqmcl",
+          "rqye",
+          "rqyl",
+          "rzche",
+          "rzmre",
+          "rzrqye",
+          "rzye",
+          "trade_date"
+        ],
+        "column_dtypes": {
+          "trade_date": "str",
+          "exchange_id": "str",
+          "rzye": "float64",
+          "rzmre": "float64",
+          "rzche": "float64",
+          "rqye": "float64",
+          "rqmcl": "float64",
+          "rzrqye": "float64",
+          "rqyl": "float64"
+        },
+        "all_null_columns": []
+      }
+    },
+    {
+      "label": "margin_recent_20260729",
+      "endpoint": "margin",
+      "parameters": {
+        "trade_date": "20260729"
+      },
+      "status": "ok",
+      "shape": {
+        "kind": "dataframe",
+        "row_count": 3,
+        "columns": [
+          "exchange_id",
+          "rqmcl",
+          "rqye",
+          "rqyl",
+          "rzche",
+          "rzmre",
+          "rzrqye",
+          "rzye",
+          "trade_date"
+        ],
+        "column_dtypes": {
+          "trade_date": "str",
+          "exchange_id": "str",
+          "rzye": "float64",
+          "rzmre": "float64",
+          "rzche": "float64",
+          "rqye": "float64",
+          "rqmcl": "float64",
+          "rzrqye": "float64",
+          "rqyl": "float64"
+        },
+        "all_null_columns": []
+      }
+    },
+    {
+      "label": "margin_about_one_year_back",
+      "endpoint": "margin",
+      "parameters": {
+        "start_date": "20250728",
+        "end_date": "20250801"
+      },
+      "status": "ok",
+      "shape": {
+        "kind": "dataframe",
+        "row_count": 15,
+        "columns": [
+          "exchange_id",
+          "rqmcl",
+          "rqye",
+          "rqyl",
+          "rzche",
+          "rzmre",
+          "rzrqye",
+          "rzye",
+          "trade_date"
+        ],
+        "column_dtypes": {
+          "trade_date": "str",
+          "exchange_id": "str",
+          "rzye": "float64",
+          "rzmre": "float64",
+          "rzche": "float64",
+          "rqye": "float64",
+          "rqmcl": "float64",
+          "rzrqye": "float64",
+          "rqyl": "float64"
+        },
+        "all_null_columns": []
+      }
+    },
+    {
+      "label": "margin_about_three_years_back",
+      "endpoint": "margin",
+      "parameters": {
+        "start_date": "20230731",
+        "end_date": "20230804"
+      },
+      "status": "ok",
+      "shape": {
+        "kind": "dataframe",
+        "row_count": 15,
+        "columns": [
+          "exchange_id",
+          "rqmcl",
+          "rqye",
+          "rqyl",
+          "rzche",
+          "rzmre",
+          "rzrqye",
+          "rzye",
+          "trade_date"
+        ],
+        "column_dtypes": {
+          "trade_date": "str",
+          "exchange_id": "str",
+          "rzye": "float64",
+          "rzmre": "float64",
+          "rzche": "float64",
+          "rqye": "float64",
+          "rqmcl": "float64",
+          "rzrqye": "float64",
+          "rqyl": "float64"
+        },
+        "all_null_columns": []
+      }
+    }
+  ],
+  "surface_observations": {
+    "market_margin_endpoint_available": true,
+    "nonempty_recent_session_seen": true,
+    "field_presence": {
+      "financing_balance": {
+        "markers": [
+          "rzye"
+        ],
+        "present": [
+          "rzye"
+        ]
+      },
+      "short_selling_balance": {
+        "markers": [
+          "rqye",
+          "rqyl"
+        ],
+        "present": [
+          "rqye",
+          "rqyl"
+        ]
+      },
+      "combined_balance": {
+        "markers": [
+          "rzrqye"
+        ],
+        "present": [
+          "rzrqye"
+        ]
+      },
+      "exchange_key": {
+        "markers": [
+          "exchange_id",
+          "exchange"
+        ],
+        "present": [
+          "exchange_id"
+        ]
+      },
+      "date_key": {
+        "markers": [
+          "trade_date"
+        ],
+        "present": [
+          "trade_date"
+        ]
+      }
+    },
+    "history_reach_by_window": {
+      "about_one_year_back": true,
+      "about_three_years_back": true
+    },
+    "distinct_error_categories": [],
+    "exchange_id_values": [
+      "BSE",
+      "SSE",
+      "SZSE"
+    ],
+    "rows_per_trading_day": 3,
+    "history_depth_conclusion": "non-empty windows at both about_one_year_back and about_three_years_back, so a percentile window of at least three years is reachable without further entitlement work"
+  },
+  "unit_determination": {
+    "resolved": true,
+    "unit": "CNY",
+    "method": "magnitude_derivation_from_gitignored_raw",
+    "evidence": "observed magnitude order across the three exchanges is 1e12; the A-share margin balance is publicly known to be ~1.5-2 trillion CNY, so 1e12 fixes the unit as CNY. A 万元 unit would imply a scale four orders of magnitude too large.",
+    "raw_values_in_tracked_summary": false,
+    "must_be_settled_before": "19_margin_overheat"
+  },
+  "storage": {
+    "raw_payload_root": "provider_samples/a_short_margin_market_shape_probe_20260804",
+    "raw_payload_root_gitignored": true,
+    "tracked_summary_contains_raw_rows": false,
+    "tracked_summary_contains_request_urls": false,
+    "tracked_summary_contains_secret": false
+  },
+  "decision": {
+    "row_19_wiring_authorized": false,
+    "northbound_lookback_wiring_authorized": false,
+    "separate_review_required_before_any_future_use": true
+  }
+}

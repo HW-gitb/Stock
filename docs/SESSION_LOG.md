@@ -1,5 +1,12 @@
 # Session Log
 
+## 2026-08-04 — Claude 执行序 18 + 序 21（用户令自执行，未独立审查）
+
+- **Verdict/Action**: 两把均已落地。序 21 两融形状探针真跑成功（5/12 次调用、零错误），`pro.margin` 有权限、9 字段、每日 3 行按 SSE/SZSE/BSE 分、历史 ≥3 年、**单位经量级判定为元**，序 19 与北向回看据此可写代码。序 18 短史降级接线：`watch_pool_eligible_frame()` 一个机制喂两处 `select_profile_watch_pool` 调用点，打分池不动、Tier1/观察池不得进，另加硬不变式而非日志。
+- **Required**: 无。`R-ASHORT-KNIFE21-MARGIN-MARKET-SHAPE-PROBE` 与 `R-ASHORT-KNIFE14-SHORT-HISTORY-DOWNGRADE` 详情、对起草方案的两处更正、以及一条未修的观测性 Optional 见 `docs/system_risk_register.md`（单一来源，本处不复述）。
+- **Verify**: 固定 Python 3.13.8；新增 `tests.test_a_short_short_history_downgrade` `Ran 8 tests ... OK`；写盘守卫 10 OK（新探针 `_write_json` 已登记进 `PUBLIC_WRITER_FUNCTIONS`——首轮全量正是被它拦红）；full lane `status=PASS exit=0 tests=2371 elapsed=330.1s`，`2363→2371` 的 `+8` 全在 lane 选择器内；`static_contract_error=None`；探针 summary 密钥扫描 0 命中、raw 全在 gitignored 根。真实周跑与独立审查均 `NOT_VERIFIED`。A-F 自审已走完，逐条证据（权威链／ripple grep 零残留／反向控制／门结果）见 register 同两条 R-ID。
+- **Next**: Claude Code：审查
+
 ## 2026-08-04 — Claude 审查 PASS（批 1 二轮：北向窗口覆盖收口 + 门降级 + 死码测试收口）
 
 - **Verdict/Action**: PASS，已提交并合入 master。三条 Required 全按指定形态修好：① 窗口对账复用同文件 `_canonical_moneyflow_dates`/`MONEYFLOW_FETCH_SESSIONS`，集合相等+行数=5+去重=5 三重校验，任一不满足即 fail-closed，覆盖计数已发布进契约；② 门降级 `production_effect_enabled=False`（选项 b），待频率证据再翻真；③ 不可达 held guard 已删并补真植入失败测试。上轮四条 Optional 也被一并收口。

@@ -1389,3 +1389,17 @@ Claude Code：独立审查 `R-ASHORT-KNIFE12-NORTHBOUND-MARKET-WIRING` 及 `R-AS
 ---
 
 **批次安排**：序 18 与序 21 **不同批、可并行**——前者纯离线改准入，后者是取数刀，两者不碰同一处代码。序 21 回来后，序 19（#16）与北向回看统计**才**可以合批写代码（共用同一套「历史序列→统计」脚手架）。
+
+## 2026-08-04 追加：序 21 探针结论 + 序 18 落地（reviewer 自执行）
+
+**序 21 结论（解锁序 19 与北向回看）**：`pro.margin` 有权限；每交易日 3 行按 `exchange_id` = `SSE`/`SZSE`/`BSE`；字段 `rzye`/`rzmre`/`rzche`/`rqye`/`rqmcl`/`rzrqye`/`rqyl` + `trade_date`/`exchange_id`，数值列 `float64`；**单位 = 元**（三所 `rzrqye` 合计量级 1e12 ≈ 2.6 万亿元，与公开规模吻合；万元则大四个数量级）；**历史 ≥3 年**（1 年前与 3 年前窗口均非空），故分位窗口可开到 3 年。调用 5/12、零错误、无限频。`margin_detail` 聚合回退未触发。留给序 19 的唯一确认点：`BSE` 是否计入（占比 ≈0.3%；与 breadth「全市场」裁决一致的做法是全计）。
+
+**序 18 落地**：`watch_pool_eligible_frame()` + `_short_history_mask()` 同时喂两处 `select_profile_watch_pool` 调用点；`df_full` 不删行；短史 code 漏进 `watch_df`/`top50` 直接 `RuntimeError`。判据 `< DAILY_STATS_REQUIRED_CLOSES`(=61)，含 0 与非数值，严于既有计数器的 `between(1,60)`。
+
+**对我自己起草方案的两处更正**：① 「计数必须相等」不成立——计数器口径是全体主板 ∩ stats，拦截作用在打分帧，population 不同；② 「调节表出短史理由」放错了表——`rank_universe_reconciliation` 建模 L0→ranked，而短史票本就该被 ranked，拦截在排名之后，加理由等于谎称它们未进排名。正文见 register 同两条 R-ID。
+
+**验证命令与结果**：`tests.test_a_short_short_history_downgrade` 8 OK；写盘守卫 10 OK；full lane `status=PASS tests=2371 elapsed=330.1s`；`static_contract_error=None`。
+
+**失效旧结论**：起草节里「计数一致性断言(必须相等)」与「调节表须出现短史处置理由」两条作废，理由如上。
+
+**下一步注意**：序 19 与北向回看现在可以合批写代码（共用「历史序列→统计」脚手架），但两者仍须各自独立审查；序 18 留了一条观测性 Optional（无 tracked 字段直说本周拦了几只），见 register。

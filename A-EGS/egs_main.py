@@ -4770,6 +4770,35 @@ def _short_history_candidate_count(df_stocks, stats_df):
     return int(observations.between(1, DAILY_STATS_REQUIRED_CLOSES - 1, inclusive="both").sum())
 
 
+def _short_history_mask(df):
+    """Mark scored rows whose usable closes fall below the indicator requirement.
+
+    Shares ``DAILY_STATS_REQUIRED_CLOSES`` with ``_short_history_candidate_count``
+    so the published count and this bar can never drift apart.  The bar uses
+    ``< required`` rather than that counter's ``between(1, required - 1)``: a row
+    with zero observations is strictly worse than a short one and must not slip
+    through the gap the counter leaves open.  ``price_observation_count`` is
+    guaranteed non-null here -- the momentum merge raises before this point.
+    """
+    if not isinstance(df, pd.DataFrame) or "price_observation_count" not in df.columns:
+        return pd.Series(False, index=getattr(df, "index", None))
+    observations = pd.to_numeric(df["price_observation_count"], errors="coerce")
+    return observations.isna() | (observations < DAILY_STATS_REQUIRED_CLOSES)
+
+
+def watch_pool_eligible_frame(df):
+    """Drop short-history rows before watch-pool selection, keeping them scored.
+
+    2026-08-04 user ruling: names with too little history are DOWNGRADED, not
+    excluded -- they stay in the scoring pool (``full_count`` is unchanged) but
+    may not reach Tier1 or the final recommendation, because a sub-61-close row
+    produces unstable ATR/percentile inputs, not because the name is bad.
+    """
+    if not isinstance(df, pd.DataFrame) or df.empty:
+        return df
+    return df[~_short_history_mask(df)].copy()
+
+
 def precompute_stock_stats(codes, all_daily):
     min_rows = int(CONF["daily_stats_min_rows"])
     if all_daily.empty:
@@ -5795,7 +5824,7 @@ def score_l5(df, sw_map):
     # One governed selector serves production and all future P5 arms.  It
     # preserves the prior Tier1/order/concentration behavior while preventing
     # a comparison-only profile from silently using a different pool shape.
-    top_df = select_profile_watch_pool(df, top_n=CONF["top_n"])
+    top_df = select_profile_watch_pool(watch_pool_eligible_frame(df), top_n=CONF["top_n"])
     return df, top_df
 
 
@@ -6414,8 +6443,30 @@ def run_egs(backtest_mode=False, output_root=None, price_as_of=None):
 
     # ── Top 15 候选观察池 ─────────────────────────────────────────────────────
     watch_n   = CONF["watch_n"]
-    watch_df  = select_profile_watch_pool(df_full, top_n=watch_n)
+    # Same single bar as score_l5's Tier1 pool: one mechanism, two selector call
+    # sites, so the watch pool and Tier1 can never disagree about short history.
+    watch_df  = select_profile_watch_pool(watch_pool_eligible_frame(df_full), top_n=watch_n)
     watch_eligible_count = int(len(top50))
+    short_history_barred_count = int(_short_history_mask(df_full).sum())
+    # Hard invariant, not a log line: the downgrade is only real if no short
+    # -history code can reach Tier1 or the watch pool, while the scoring pool
+    # itself keeps them (``df_full`` is deliberately not filtered).
+    _short_history_codes = set(
+        df_full.loc[_short_history_mask(df_full), "ts_code"].astype(str)
+    ) if "ts_code" in df_full.columns else set()
+    for _pool_name, _pool in (("watch_df", watch_df), ("top50", top50)):
+        _leaked = _short_history_codes & (
+            set(_pool["ts_code"].astype(str)) if isinstance(_pool, pd.DataFrame)
+            and "ts_code" in _pool.columns else set()
+        )
+        if _leaked:
+            raise RuntimeError(
+                f"short-history downgrade breached: {len(_leaked)} code(s) reached {_pool_name}"
+            )
+    log.info(
+        "短史降级：%s 只可用收盘价 < %s 根，保留在打分池但不进 Tier1/观察池",
+        short_history_barred_count, DAILY_STATS_REQUIRED_CLOSES,
+    )
 
     # backtest 模式下，若 Tier1 候选不足 watch_n（常见于 esp 准入硬条件激活时），
     # 从 Tier2 按 final_score 补足，让回测样本量稳定在 watch_n。
