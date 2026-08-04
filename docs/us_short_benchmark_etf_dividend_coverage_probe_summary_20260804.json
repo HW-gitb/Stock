@@ -1,0 +1,217 @@
+{
+  "coverage_findings": {
+    "benchmark_dividend_source_viable": "viable_all",
+    "covered_symbol_count": 4,
+    "http_status_classes": [
+      200
+    ],
+    "observed_event_item_key_names": [
+      "cash_amount",
+      "currency",
+      "declaration_date",
+      "distribution_type",
+      "ex_dividend_date",
+      "frequency",
+      "historical_adjustment_factor",
+      "id",
+      "pay_date",
+      "record_date",
+      "split_adjusted_cash_amount",
+      "ticker"
+    ]
+  },
+  "gate_flags": {
+    "a_share_crossing_performed": false,
+    "binding_or_parser_built": false,
+    "corporate_action_reconciliation_claimed": false,
+    "datahub_consumed": false,
+    "market_diagnostic_track_wired": false,
+    "private_state_written": false,
+    "production_or_ship_gate_claimed": false,
+    "provider_selected": false,
+    "sr_provider_001_closed": false,
+    "total_return_calculation_performed": false
+  },
+  "scope": {
+    "actual_total_endpoint_calls": 4,
+    "authorization_ref": "user_chat_20260804_massive_benchmark_etf_dividend_coverage_probe",
+    "endpoint_family_allowlist": [
+      "dividends"
+    ],
+    "generated_at": "2026-08-04T00:00:00+00:00",
+    "max_total_endpoint_calls": 4,
+    "probe": "benchmark_etf_dividend_coverage",
+    "purpose": "go/no-go source-availability fact for the planned 26w diagnostic total-return benchmark leg; not a builder",
+    "required_dividend_field_names": [
+      "ex_dividend_date",
+      "cash_amount"
+    ],
+    "symbols": [
+      "SPY",
+      "QQQ",
+      "IWB",
+      "VTI"
+    ]
+  },
+  "storage": {
+    "raw_payload_root": "provider_samples/us_short_benchmark_etf_dividend_coverage_probe_20260804",
+    "raw_payload_root_gitignored": true,
+    "tracked_summary_contains_raw_payload_rows": false,
+    "tracked_summary_contains_request_urls": false,
+    "tracked_summary_contains_secrets": false
+  },
+  "symbol_results": [
+    {
+      "coverage_verdict": "covered",
+      "endpoint_family": "dividends",
+      "error_type": null,
+      "http_status": 200,
+      "ok": true,
+      "raw_sample_ref": "provider_samples/us_short_benchmark_etf_dividend_coverage_probe_20260804/raw/massive/SPY/dividends.json",
+      "required_field_names_present": true,
+      "response_shape": {
+        "event_container_key": "results",
+        "event_count": 10,
+        "event_item_key_names": [
+          "cash_amount",
+          "currency",
+          "declaration_date",
+          "distribution_type",
+          "ex_dividend_date",
+          "frequency",
+          "historical_adjustment_factor",
+          "id",
+          "pay_date",
+          "record_date",
+          "split_adjusted_cash_amount",
+          "ticker"
+        ],
+        "has_pagination_field": true,
+        "payload_type": "dict",
+        "top_level_keys": [
+          "next_url",
+          "request_id",
+          "results",
+          "status"
+        ]
+      },
+      "row_count": 10,
+      "rows_matching_queried_ticker": 10,
+      "symbol": "SPY"
+    },
+    {
+      "coverage_verdict": "covered",
+      "endpoint_family": "dividends",
+      "error_type": null,
+      "http_status": 200,
+      "ok": true,
+      "raw_sample_ref": "provider_samples/us_short_benchmark_etf_dividend_coverage_probe_20260804/raw/massive/QQQ/dividends.json",
+      "required_field_names_present": true,
+      "response_shape": {
+        "event_container_key": "results",
+        "event_count": 10,
+        "event_item_key_names": [
+          "cash_amount",
+          "currency",
+          "declaration_date",
+          "distribution_type",
+          "ex_dividend_date",
+          "frequency",
+          "historical_adjustment_factor",
+          "id",
+          "pay_date",
+          "record_date",
+          "split_adjusted_cash_amount",
+          "ticker"
+        ],
+        "has_pagination_field": true,
+        "payload_type": "dict",
+        "top_level_keys": [
+          "next_url",
+          "request_id",
+          "results",
+          "status"
+        ]
+      },
+      "row_count": 10,
+      "rows_matching_queried_ticker": 10,
+      "symbol": "QQQ"
+    },
+    {
+      "coverage_verdict": "covered",
+      "endpoint_family": "dividends",
+      "error_type": null,
+      "http_status": 200,
+      "ok": true,
+      "raw_sample_ref": "provider_samples/us_short_benchmark_etf_dividend_coverage_probe_20260804/raw/massive/IWB/dividends.json",
+      "required_field_names_present": true,
+      "response_shape": {
+        "event_container_key": "results",
+        "event_count": 10,
+        "event_item_key_names": [
+          "cash_amount",
+          "currency",
+          "declaration_date",
+          "distribution_type",
+          "ex_dividend_date",
+          "frequency",
+          "historical_adjustment_factor",
+          "id",
+          "pay_date",
+          "record_date",
+          "split_adjusted_cash_amount",
+          "ticker"
+        ],
+        "has_pagination_field": true,
+        "payload_type": "dict",
+        "top_level_keys": [
+          "next_url",
+          "request_id",
+          "results",
+          "status"
+        ]
+      },
+      "row_count": 10,
+      "rows_matching_queried_ticker": 10,
+      "symbol": "IWB"
+    },
+    {
+      "coverage_verdict": "covered",
+      "endpoint_family": "dividends",
+      "error_type": null,
+      "http_status": 200,
+      "ok": true,
+      "raw_sample_ref": "provider_samples/us_short_benchmark_etf_dividend_coverage_probe_20260804/raw/massive/VTI/dividends.json",
+      "required_field_names_present": true,
+      "response_shape": {
+        "event_container_key": "results",
+        "event_count": 10,
+        "event_item_key_names": [
+          "cash_amount",
+          "currency",
+          "declaration_date",
+          "distribution_type",
+          "ex_dividend_date",
+          "frequency",
+          "historical_adjustment_factor",
+          "id",
+          "pay_date",
+          "record_date",
+          "split_adjusted_cash_amount",
+          "ticker"
+        ],
+        "has_pagination_field": true,
+        "payload_type": "dict",
+        "top_level_keys": [
+          "next_url",
+          "request_id",
+          "results",
+          "status"
+        ]
+      },
+      "row_count": 10,
+      "rows_matching_queried_ticker": 10,
+      "symbol": "VTI"
+    }
+  ]
+}

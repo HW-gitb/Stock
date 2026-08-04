@@ -2,10 +2,10 @@
 
 ## 2026-08-04 — 起刀 0：基准 ETF 分红覆盖探针（26 周市场诊断轨的前置未知）
 
-- **Verdict/Action**: 已建并提交，**尚未真跑**（需一次 `--confirm-user-authorization`）。26 周诊断轨的基准腿要含息总回报，就必须有基准 ETF 的 `ex_dividend_date` + `cash_amount`。查证结论：本仓库**从未向 Massive 问过任何 ETF 的分红**——0707 shape probe = AAPL/MSFT，0712 validation = AAPL/MSFT/TSLA，全是个股；而市场级窗口查询（`us_short_forward_policy_corporate_action_fetch.py`）register 5330 行自述 "No real provider call was executed"，`provider_samples/` 亦无对应目录。故「Massive 覆盖 SPY/QQQ/IWB/VTI 分红」是**未验证假设**，且它是设计分叉（无覆盖就得换源），必须在冻方法之前钉死，不能等 26 周后才发现基准腿是错的。
-- **Required**: 无，未新开 register 条目。纯新增、零改动既有文件。
+- **Verdict/Action**: 已建、已提交、**已按用户授权真跑**。26 周诊断轨的基准腿要含息总回报，就必须有基准 ETF 的 `ex_dividend_date` + `cash_amount`。跑前查证：本仓库**从未向 Massive 问过任何 ETF 的分红**——0707 shape probe = AAPL/MSFT，0712 validation = AAPL/MSFT/TSLA，全是个股；市场级窗口查询（`us_short_forward_policy_corporate_action_fetch.py`）register 5330 行自述 "No real provider call was executed"，`provider_samples/` 亦无对应目录。故这是未验证假设，且是设计分叉（无覆盖就得换源），必须在冻方法之前钉死。**真跑结果 = `viable_all`**（4/4 covered、4 调用全 HTTP 200、每只 10 行且 10/10 行的自带 `ticker` 与查询符号相符、两个必需字段齐全）→ **设计分叉解除，刀③ 分红腿留在 Massive，不必换源、不必另批 FMP**。
+- **Required**: 无，未新开 register 条目。纯新增、零改动既有文件。**但 raw 里浮出两件本探针按设计不回答的事，留给刀③**：①**语料是否 current 未证**——返回序是**任意序**（日期在 2007–2025 间乱跳，非按日期排）且四只全带 `next_url`，故 10 行只是大语料里的任意一页；样本里最新只到 `2025-12-22`（QQQ），但这是抽样假象而非陈旧证据，两个方向都没证。该未知**不需要再起探针**：刀③ 本来就用按 `ex_dividend_date` 窗口过滤的市场级查询，那正是能回答它的查询形状；配一条「26 周窗口内基准季付票应 ≥1 个除息日，为 0 即 `not_evaluable`」的 fail-closed 断言即可把它转成运行时门。②**分红字段有两个口径**——`cash_amount` 与 `split_adjusted_cash_amount` 并存，另有 `historical_adjustment_factor`；因基准价格序列走 Massive grouped 已是拆股复权，总回报要自洽就必须选**拆股复权那一支**，刀① 冻口径时须显式指定、不得靠默认。另记一条小异常：`IWB` 的 `frequency=0`（其余三只为 4），不影响本腿（只用 ex-date + cash），但刀③ 不得依赖 `frequency`。
 - **Verify**: 本轮未注入 review-evidence token，故不引用。新包 `13 OK / 0.24s`；`git status` = 恰 3 个新文件 + README 一行，**零既有文件被改**，故按改动性质未起 lane 全量（覆盖范围就是本模块自身）。**植入对照**（不采信自指断言）：从 `_coverage_verdict` 摘掉 `matched_rows != row_count` 那道门 → 端到端用例 `test_provider_ignoring_the_ticker_filter_is_not_read_as_covered` 与阶梯用例**双双转红**（`covered` vs `rows_do_not_match_queried_ticker`），恢复后 13 OK。真实 `--dry-run-env` 实跑：`MASSIVE_API_KEY present: True` / `raw root gitignored: True` / `planned calls: 4 (max 4)`，即真跑前置条件已具备。
-- **Next**: 用户授权后跑真的 4 调用；结果决定诊断轨刀 ③ 分红腿的源（Massive 行 / FMP 另批 / 固定股息率常数兜底）。方案全文在桌面 `usshort-compare.md`（按用户令不进仓库）。
+- **Next**: 刀①（方法冻结）。分红源已定为 Massive，冻口径时须落定「用 `split_adjusted_cash_amount`」与「窗口内零基准除息日即 `not_evaluable`」两条。方案全文在桌面 `usshort-compare.md`（按用户令不进仓库）。
 
 ## 2026-08-04 — 交付：20260808 探针运行日操作单（用户令，纯文档）
 
