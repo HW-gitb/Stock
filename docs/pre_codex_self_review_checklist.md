@@ -38,6 +38,9 @@
 5. **const-pin 必须落在 schema(自足校验器)本身、不止测试**(治理/契约 schema 连撞两次):被治理的**身份/常量**(权重 / 枚举 / 列集 / 节集 / 不变式 / banner 身份…)要 **const-pin 进 schema**——schema 是可复用校验器、是上面矩阵里的一个**出口**;只在测试里断言「当前这份 preset 对」、而 schema 仍接受 **same-shape drift**(同形改值 / 改名 / 乱序),= 漏了 schema 这个出口(任何只拿 schema 校验的消费者会放行)。测试留给 **draft-07 表达不了的跨字段不变式 + 单一来源/三角守护**(如 `schema-const == preset == design` 三角)。**非 ASCII / Chinese 内容别因「怕硬编码」退回只靠测试守**——从权威源字节生成 preset + 三角测试兜转写即可,不是把 const 踢出 schema 的理由。
 - 反例(本项目真实):PIT 在 future 出口修了,漏了 bad-shape/unparseable/status;feasibility 在 per-candidate 修了,漏了 batch;**(本会话)scoring-profile `const-pin` 钉了 4 档里的 balanced+theme_off 两档就交,漏了 theme_plus/aggressive → Codex 同类 re-FAIL**。
 - 反例(schema 欠钉,本会话**连撞两次**):scoring-profile 权重起初只 shape-only;weekly_report 节集 / banner-tag / lifecycle 规则只靠测试守、schema 仍接受 same-shape drift → Codex `审查` 各 FAIL 一轮。根治 = 治理身份**全 const 进 schema**、测试只做三角 + 跨字段不变式(= 上面 point 5)。
+6. **矩阵的第二根轴:判据 × 权威来源(authority chain)**。上面 1-5 问的是「这个类会从哪些**出口**冒出来」;这一条问的是「这道门**凭什么**算数」。凡是「A 校验 B」的门(digest 比对、版本比对、计划/契约/清单驱动的放行、任何 `expected == actual`),交付前必须写出 B 的**权威链**,终点只允许两种:**冻结常量**(如 `EXPECTED_*_SHA256`)或**从仓库派生的谓词**(AST/registry 扫出来、新成员自动进格)。终点若是「运行时传进来的文件」「磁盘字节」「调用方给的参数」「另一份同样没人钉的产物」,**这道门就不存在**。写不出终点 = 该项不算完成。
+- 这一条把三次重复的类合并成一根轴,不是新规则:类 D「默认值即钱路」= 权威链断在**参数缺省**;类 G「磁盘字节当身份」= 权威链终点是**本机 checkout 的换行设置**(同内容换台机器就变);类 H「计划自己就是权威」= 付费门拿 `parent_plan` 当唯一真相,而 `policy_template_content_sha256` 只查 64 位十六进制**形状**、`stage1_queries` 从不与 `render_stage1_queries()` 比对 → 往规范槽放一份 schema-valid 的 JSON 就能定义要花钱买什么(2026-08-04 实测:伪造计划 `validate_parent_plan` 返回 `True`、付费门 `NO RAISE`)。
+- **Proof-of-use 的 A 行要写出权威链**,格式如 `authority: plan.stage1_queries -> render_stage1_queries() -> EXPECTED_POLICY_CONTENT_SHA256(冻结常量)`;写不出就写 `authority: NONE`,让审查一眼看见这道门是空的。
 
 ## B. 连带 grep(ripple grep,机械步,**改完必做;一次全仓 + 贴零残留证据**)
 任何**行为 / 符号名 / 机制 / 规则措辞**改动后,做**一次全仓 grep 旧形态**(`rg` 跨 `*.py` + `*.md` + 测试),逐一更新或确认,并把**零残留证据**(实际命令 + `0 hits`,排除档案/历史/无关同名)贴进 proof-of-use 行——"我 grep 了"不算,要"0 残留":
@@ -64,6 +67,17 @@
 - 误报 ↔ 漏报、over-suppress ↔ under-suppress、too-strict ↔ too-lax、修了 look-ahead 却把合法当日数据也挡了。
 - 给反方向补一条测试。
 - 反例:为压 routine 误报加一刀切负向模式 → 把真风险整改件压成 clear(漏报,比原问题更严重)。
+
+### C2. 植入对照的唯一判据:被 patch 的必须是**门**,不能是**判据的来源**
+
+植入对照(planted/mutation control)的目的只有一个:**证明这条断言承重**。判断它真假只看一句话——
+
+> 把植入去掉之后,**真实输入能走到的那条路**是否真的变了?
+
+- **合法**(本仓大量正确用例):把**守卫本身**换成 no-op / 恢复 pre-patch 原体 / 把加分项挖成 `0.0` / 翻转文件的换行,然后断言该测试转红。这等价于「删掉这道门」,真实输入确实会走进去。
+- **无效**(2026-08-04 一轮撞到三处):patch 掉**被比较的那个来源**再断言门会响。它证明的只是「patch 生效了」,因为没有任何真实输入能造出那个状态。三处实例:① builder 把 `render_stage1_queries` mock 成含 rogue 行再断言抛错,而 `expected` 表达式与该函数的返回表达式**逐字符相同**、对同一个 policy 永远相等;② `assertNotIn("--query", main.__doc__ or "")`——`main.__doc__ is None`,等价于对空串断言;③ `assertTrue(any(row != packet_row for row in rendered))`——四条里回退三条仍绿。
+- 已知的恒真式模板(直接判无效,不必讨论):`X not in src.replace(X, Y)`、`assertIn(X, 刚拼进 X 的串)`、对 `or ""` 兜底后的 `None` 做 `assertNotIn`、`any(...)` 冒充「全员都变了」。
+- **不做机器守卫**:2026-08-04 实测,「植入对照里出现 `mock.patch(生产模块属性)`」这条句法规则会命中 **23 处**,其中绝大多数是**合法**的守卫中和(如 `plan_budget._enforce_envelope_counts`、`web._parse_llm_json`)。合法与无效的差别是语义的、句法判不出来,按 `AGENTS.md` item 16d(只对能配植入失败测试、且不造全仓税的类焊守卫)**不焊**。这一条靠上面那句判据人工执行。
 
 ## D. 歧义自然语言分类:别穷举关键词
 对"标题/文本是不是某类风险"这种**歧义自然语言**判断:
