@@ -14,6 +14,27 @@
 - **Required**: 无，未新开 register 条目。纯新增、零改动既有文件。**但 raw 里浮出两件本探针按设计不回答的事，留给刀③**：①**语料是否 current 未证**——返回序是**任意序**（日期在 2007–2025 间乱跳，非按日期排）且四只全带 `next_url`，故 10 行只是大语料里的任意一页；样本里最新只到 `2025-12-22`（QQQ），但这是抽样假象而非陈旧证据，两个方向都没证。该未知**不需要再起探针**：刀③ 本来就用按 `ex_dividend_date` 窗口过滤的市场级查询，那正是能回答它的查询形状；配一条「26 周窗口内基准季付票应 ≥1 个除息日，为 0 即 `not_evaluable`」的 fail-closed 断言即可把它转成运行时门。②**分红字段有两个口径**——`cash_amount` 与 `split_adjusted_cash_amount` 并存，另有 `historical_adjustment_factor`；因基准价格序列走 Massive grouped 已是拆股复权，总回报要自洽就必须选**拆股复权那一支**，刀① 冻口径时须显式指定、不得靠默认。另记一条小异常：`IWB` 的 `frequency=0`（其余三只为 4），不影响本腿（只用 ex-date + cash），但刀③ 不得依赖 `frequency`。
 - **Verify**: 本轮未注入 review-evidence token，故不引用。新包 `13 OK / 0.24s`；`git status` = 恰 3 个新文件 + README 一行，**零既有文件被改**，故按改动性质未起 lane 全量（覆盖范围就是本模块自身）。**植入对照**（不采信自指断言）：从 `_coverage_verdict` 摘掉 `matched_rows != row_count` 那道门 → 端到端用例 `test_provider_ignoring_the_ticker_filter_is_not_read_as_covered` 与阶梯用例**双双转红**（`covered` vs `rows_do_not_match_queried_ticker`），恢复后 13 OK。真实 `--dry-run-env` 实跑：`MASSIVE_API_KEY present: True` / `raw root gitignored: True` / `planned calls: 4 (max 4)`，即真跑前置条件已具备。
 - **Next**: 刀①（方法冻结）。分红源已定为 Massive，冻口径时须落定「用 `split_adjusted_cash_amount`」与「窗口内零基准除息日即 `not_evaluable`」两条。方案全文在桌面 `usshort-compare.md`（按用户令不进仓库）。
+## 2026-08-04 — Claude Code 复审 PASS（26 周市场诊断轨 刀0：三条 Required 实测全闭）
+
+- **Verdict/Action**: PASS。三条都不是靠加字段糊过去的，而是补上了**把散文契约绑到机器契约**的那一层：设计文档新增一个可机器读的 JSON 契约块（`v1_summary_strategy_metric_fields` / `v1_summary_benchmark_metric_fields` / `status_priority`），测试从该块逐字段断言摘要 schema 的 `properties` **与** `required`，块缺失即直接 `AssertionError`。R1 的七项字段位到齐（`since_inception_return`/`cash_ratio`/`equity_ratio`/`turnover`/`unfilled_order_count`/`data_coverage` + `information_ratio`/`hac_t`）。R2 三处词表现已一致为 `['evaluable','diagnostic_data_degraded','not_evaluable']`，且是**双绑**——policy schema 自身 const 钉住该 enum，测试再 `assertEqual` 横比 preset/周记录/摘要三处。R3 的五级优先级按方案 §七 原序进 `status_resolution.priority`（preset + policy schema 双钉），`mixed_ruleset_window` 进 preset/policy schema/摘要 `required`。
+- **Required**: 无新开。三条转 resolved，判据只见 `docs/system_risk_register.md`（单一来源）。两条不阻断 Optional 见 Next。
+- **Verify**: review-evidence:701fa2458caf。整读 `_design_contract()` 与两个新测试的函数体。焦点超集包 `82 OK / 16.9s / exit 0 / deadline=300s`（较上轮 `80` +2，恰为新增两测）。**自写植入对照（不采信它自带的三个 fail-closed 用例）**：①从摘要 schema 摘掉 `information_ratio` 的 property + required → `test_design_metrics_statuses_and_priority_are_bound_to_schema` 转红；②把 preset `allowed_statuses[1]` 改成 `data_degraded` → `test_policy_and_runtime_contract_examples_validate` 转红并报 `'data_degraded' is not one of [...]`，证明 policy schema 这一层也承重、不只靠测试横比。两处恢复后同模块 `6 OK`。路由改动复核不变：CURRENT/README 仍各 `+1/0`、无 CRLF 整文件翻转。
+- **Next**: 提交并合入 master。Optional①：桌面权威方案 §四 把「周收益波动」列为 v1 核心指标，但 in-repo 设计文档实测 `波动`/`volatility` 命中均为 0，故该项既未进契约块也无字段位；IR 已隐含 tracking error，不阻断，建议刀4 前补一句取舍说明。Optional②：891a 停在 `f700b96f`，落后主线；本刀改的 `CURRENT.md`/`README.md` 主线亦已动过，合并时需人工看一眼两行。
+
+## 2026-08-04 — Codex executor/fixer 修复刀0 Required（review pending）
+
+- **Verdict/Action**: 三项 Required 已修复；工作树未提交；独立 review 仍未完成；provider/network/paid 未使用。
+- **Required**: `R-USSHORT-26W-DIAG-KNIFE0-SUMMARY-SCHEMA-CANNOT-CARRY-ITS-OWN-MANDATED-V1-METRICS`；`R-USSHORT-26W-DIAG-KNIFE0-STRATEGY-STATUS-VOCABULARY-DRIFT`；`R-USSHORT-26W-DIAG-KNIFE0-STATUS-PRIORITY-AND-MIXED-RULESET-WINDOW-NOT-FROZEN`；详情见 `docs/system_risk_register.md`。
+- **Verify**: fixed Python；刀0 schema 6 OK；route 11 OK；ledger 14 OK；doc-governance 41 OK；artifact digest 10 OK；git diff check OK。
+- **Pre-Codex self-review**: `matrix=三项 Required 逐条回验 + schema 反向植入；register=updated；handoff=updated；focused=6+11+14+41+10 OK；full-lane=not_triggered: docs/schema-only repair；door=doc-governance=41 OK + route-doc-ledger=14 OK；review=NOT_VERIFIED；commit=NOT_PERFORMED；provider/network/paid=NOT_USED`。
+- **Next**: Claude Code：独立复审本轮最终工作树；PASS 后由 Claude Code 提交。
+
+## 2026-08-04 — Claude Code 审查 FAIL — US-short 26周诊断轨刀0
+
+- **Verdict/Action**: FAIL；三项 Required；未提交；详见 `docs/system_risk_register.md`。
+- **Required**: `R-USSHORT-26W-DIAG-KNIFE0-SUMMARY-SCHEMA-CANNOT-CARRY-ITS-OWN-MANDATED-V1-METRICS`；`R-USSHORT-26W-DIAG-KNIFE0-STRATEGY-STATUS-VOCABULARY-DRIFT`；`R-USSHORT-26W-DIAG-KNIFE0-STATUS-PRIORITY-AND-MIXED-RULESET-WINDOW-NOT-FROZEN`；详见 `docs/system_risk_register.md`。
+- **Verify**: review-evidence:61654418a30e；焦点包 80 OK；本轮未联网、未调用 provider。
+- **Next**: Codex：修复三项 Required。
 
 ## 2026-08-04 — 交付：20260808 探针运行日操作单（用户令，纯文档）
 

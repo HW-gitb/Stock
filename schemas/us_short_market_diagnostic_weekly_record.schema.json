@@ -1,0 +1,200 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://stock.local/schemas/us_short_market_diagnostic_weekly_record.schema.json",
+  "title": "US-short 26-week market diagnostic weekly record",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_name",
+    "schema_version",
+    "decision_date",
+    "valuation_date",
+    "calendar_week_index",
+    "window_id",
+    "diagnostic_epoch",
+    "diagnostic_policy_sha256",
+    "strategy_ruleset_fingerprint",
+    "strategy",
+    "benchmarks",
+    "v1_1_reminder",
+    "source_refs",
+    "boundary"
+  ],
+  "properties": {
+    "schema_name": {"const": "us_short_market_diagnostic_weekly_record"},
+    "schema_version": {"const": "1.0.0"},
+    "decision_date": {"$ref": "#/definitions/date8"},
+    "valuation_date": {"$ref": "#/definitions/date8"},
+    "calendar_week_index": {"type": "integer", "minimum": 1},
+    "window_id": {"type": "string", "pattern": "^26w-[1-9][0-9]*-[1-9][0-9]*$"},
+    "diagnostic_epoch": {"type": "string", "minLength": 1},
+    "diagnostic_policy_sha256": {"$ref": "#/definitions/sha256"},
+    "strategy_ruleset_fingerprint": {"$ref": "#/definitions/sha256"},
+    "strategy": {"$ref": "#/definitions/strategy"},
+    "benchmarks": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["VTI", "IWB", "SPY", "QQQ"],
+      "properties": {
+        "VTI": {"$ref": "#/definitions/benchmark"},
+        "IWB": {"$ref": "#/definitions/benchmark"},
+        "SPY": {"$ref": "#/definitions/benchmark"},
+        "QQQ": {"$ref": "#/definitions/benchmark"}
+      }
+    },
+    "v1_1_reminder": {"$ref": "#/definitions/v1_1_reminder"},
+    "source_refs": {
+      "type": "array",
+      "items": {"$ref": "#/definitions/sha256"},
+      "minItems": 1,
+      "maxItems": 32,
+      "uniqueItems": true
+    },
+    "boundary": {"$ref": "#/definitions/boundary"}
+  },
+  "definitions": {
+    "date8": {
+      "type": "string",
+      "pattern": "^[0-9]{8}$"
+    },
+    "sha256": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{64}$"
+    },
+    "money": {
+      "type": "string",
+      "pattern": "^(0|[1-9][0-9]*)\\.[0-9]{6}$"
+    },
+    "number_or_null": {
+      "type": ["number", "null"]
+    },
+    "strategy": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "paper_evaluable",
+        "performance_status",
+        "strategy_evaluable",
+        "initial_capital",
+        "prior_nav",
+        "nav",
+        "weekly_return",
+        "cumulative_return",
+        "cash",
+        "market_value",
+        "cumulative_cost_paid",
+        "no_count",
+        "no_count_reason",
+        "source_sha256",
+        "degradation_reasons"
+      ],
+      "properties": {
+        "paper_evaluable": {"type": "boolean"},
+        "performance_status": {"enum": ["evaluable", "diagnostic_data_degraded", "not_evaluable"]},
+        "strategy_evaluable": {"type": "boolean"},
+        "initial_capital": {"const": "100000.000000"},
+        "prior_nav": {"anyOf": [{"$ref": "#/definitions/money"}, {"type": "null"}]},
+        "nav": {"$ref": "#/definitions/money"},
+        "weekly_return": {"$ref": "#/definitions/number_or_null"},
+        "cumulative_return": {"$ref": "#/definitions/number_or_null"},
+        "cash": {"anyOf": [{"$ref": "#/definitions/money"}, {"type": "null"}]},
+        "market_value": {"anyOf": [{"$ref": "#/definitions/money"}, {"type": "null"}]},
+        "cumulative_cost_paid": {"anyOf": [{"$ref": "#/definitions/money"}, {"type": "null"}]},
+        "no_count": {"type": "boolean"},
+        "no_count_reason": {"anyOf": [{"type": "string", "minLength": 1}, {"type": "null"}]},
+        "source_sha256": {"anyOf": [{"$ref": "#/definitions/sha256"}, {"type": "null"}]},
+        "degradation_reasons": {
+          "type": "array",
+          "items": {"type": "string", "minLength": 1},
+          "uniqueItems": true
+        }
+      },
+      "allOf": [
+        {
+          "if": {
+            "properties": {"no_count": {"const": true}},
+            "required": ["no_count"]
+          },
+          "then": {
+            "properties": {
+              "no_count_reason": {"type": "string", "minLength": 1}
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {"no_count": {"const": false}},
+            "required": ["no_count"]
+          },
+          "then": {
+            "properties": {
+              "no_count_reason": {"type": "null"}
+            }
+          }
+        }
+      ]
+    },
+    "benchmark": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "return_quality",
+        "benchmark_evaluable",
+        "joint_evaluable",
+        "weekly_return",
+        "cumulative_return",
+        "raw_excess",
+        "relative_wealth",
+        "price_packet_sha256",
+        "dividend_sidecar_sha256",
+        "data_quality_reasons"
+      ],
+      "properties": {
+        "return_quality": {"enum": ["total_return_evaluable", "price_return_diagnostic", "unavailable"]},
+        "benchmark_evaluable": {"type": "boolean"},
+        "joint_evaluable": {"type": "boolean"},
+        "weekly_return": {"$ref": "#/definitions/number_or_null"},
+        "cumulative_return": {"$ref": "#/definitions/number_or_null"},
+        "raw_excess": {"$ref": "#/definitions/number_or_null"},
+        "relative_wealth": {"$ref": "#/definitions/number_or_null"},
+        "price_packet_sha256": {"anyOf": [{"$ref": "#/definitions/sha256"}, {"type": "null"}]},
+        "dividend_sidecar_sha256": {"anyOf": [{"$ref": "#/definitions/sha256"}, {"type": "null"}]},
+        "data_quality_reasons": {
+          "type": "array",
+          "items": {"type": "string", "minLength": 1},
+          "uniqueItems": true
+        }
+      }
+    },
+    "v1_1_reminder": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["status", "evaluable_week_count", "text"],
+      "properties": {
+        "status": {"enum": ["pending", "ready_for_v1_1_implementation", "overdue", "active"]},
+        "evaluable_week_count": {"type": "integer", "minimum": 0},
+        "text": {"type": "string", "minLength": 1}
+      }
+    },
+    "boundary": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "diagnostic_only",
+        "comparison_only",
+        "counts_ship_gate",
+        "changes_selection_or_action",
+        "automatic_policy_switch",
+        "broker_or_order_automation"
+      ],
+      "properties": {
+        "diagnostic_only": {"const": true},
+        "comparison_only": {"const": true},
+        "counts_ship_gate": {"const": false},
+        "changes_selection_or_action": {"const": false},
+        "automatic_policy_switch": {"const": false},
+        "broker_or_order_automation": {"const": false}
+      }
+    }
+  }
+}

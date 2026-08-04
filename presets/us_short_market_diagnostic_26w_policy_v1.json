@@ -1,0 +1,144 @@
+{
+  "schema_name": "us_short_market_diagnostic_26w_policy",
+  "schema_version": "1.0.0",
+  "policy_id": "us_short_market_diagnostic_26w_v1",
+  "status": "knife0_contract_baseline",
+  "diagnostic_boundary": {
+    "diagnostic_only": true,
+    "comparison_only": true,
+    "counts_ship_gate": false,
+    "changes_selection_or_action": false,
+    "automatic_policy_switch": false,
+    "broker_or_order_automation": false
+  },
+  "account": {
+    "initial_normalized_capital": "100000.000000",
+    "currency": "USD",
+    "capital_kind": "normalized_notional",
+    "seed_once": true,
+    "diagnostic_starts_only_after_first_settled_nav": true,
+    "diagnostic_may_seed_account": false,
+    "manual_account_read": false
+  },
+  "window": {
+    "window_weeks": 26,
+    "min_joint_evaluable_weeks": 20,
+    "non_overlapping": true,
+    "calendar_week_denominator_includes_no_count": true,
+    "no_count_extends_window": false,
+    "first_week_requires_real_settlement": true,
+    "backfill_allowed": false,
+    "future_data_allowed": false
+  },
+  "clocks": {
+    "diagnostic": "26 canonical decision weeks",
+    "a1_shadow": "24/36 divergence weeks",
+    "ship_gate": "24/36 months",
+    "must_be_independent": true
+  },
+  "status_resolution": {
+    "priority": [
+      "unavailable",
+      "data_insufficient",
+      "data_degraded",
+      "mixed_across_benchmarks",
+      "ahead_diagnostic",
+      "behind_diagnostic"
+    ],
+    "mixed_ruleset_window": {
+      "enabled": true,
+      "when_multiple_strategy_rulesets": true,
+      "single_ruleset_min_evaluable_weeks": 20,
+      "blocks_single_ruleset_performance_claim": true
+    }
+  },
+  "benchmarks": {
+    "VTI": {
+      "role": "ship_gate_economic_continuity",
+      "proxy_kind": "investable_etf",
+      "required": true
+    },
+    "IWB": {
+      "role": "russell_1000_investable_proxy",
+      "proxy_kind": "investable_etf",
+      "required": true
+    },
+    "SPY": {
+      "role": "broad_large_cap_sensitivity",
+      "proxy_kind": "investable_etf",
+      "required": true
+    },
+    "QQQ": {
+      "role": "growth_technology_sensitivity",
+      "proxy_kind": "investable_etf",
+      "required": true
+    }
+  },
+  "strategy_quality": {
+    "allowed_statuses": [
+      "evaluable",
+      "diagnostic_data_degraded",
+      "not_evaluable"
+    ],
+    "paper_evaluable_false_counts_as_joint_evaluable": false,
+    "price_only_strategy_may_be_recorded": true,
+    "price_only_strategy_may_claim_ahead_or_behind": false
+  },
+  "benchmark_quality": {
+    "allowed_statuses": [
+      "total_return_evaluable",
+      "price_return_diagnostic",
+      "unavailable"
+    ],
+    "missing_dividend_action": "price_return_diagnostic",
+    "missing_dividend_fill_zero": false,
+    "fixed_yield_fallback": false,
+    "silent_benchmark_substitution": false,
+    "total_return_requires_price_and_dividend": true
+  },
+  "existing_probe_reuse": {
+    "generic_probe_reexecute": false,
+    "probe_role": "endpoint_shape_and_bounded_sample_evidence",
+    "etf_specific_sidecar_required": true,
+    "etf_symbols": [
+      "SPY",
+      "QQQ",
+      "IWB",
+      "VTI"
+    ],
+    "endpoint_families": [
+      "dividends",
+      "splits",
+      "daily_adjusted",
+      "daily_unadjusted"
+    ],
+    "provider_calls_require_explicit_authorization": true,
+    "raw_payloads_gitignored": true,
+    "tracked_summary_no_secrets_urls_or_raw_rows": true
+  },
+  "v1_1": {
+    "min_evaluable_weeks_before_implementation": 4,
+    "max_evaluable_weeks_before_due": 8,
+    "requires_paper_evaluable_weeks": true,
+    "reminder_from_first_calendar_week": true,
+    "reminder_statuses": [
+      "pending",
+      "ready_for_v1_1_implementation",
+      "overdue",
+      "active"
+    ],
+    "opens_new_attribution_epoch": true,
+    "historical_backfill_without_source_binding": false
+  },
+  "storage": {
+    "private_weekly_root": "state/us_short/market_diagnostic_private/",
+    "public_summary_root": "research/results/us_short/market_diagnostic_26w/",
+    "private_path_fail_closed": true,
+    "public_output_deidentified": true
+  },
+  "source_refs": [
+    "docs/us_short_system_design.md",
+    "docs/us_short_market_diagnostic_26w_design.md",
+    "docs/us_short_massive_corporate_action_validation_summary_20260712.json"
+  ]
+}
