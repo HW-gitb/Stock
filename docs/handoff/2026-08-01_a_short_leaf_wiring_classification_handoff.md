@@ -1170,3 +1170,137 @@ The new regression file covers the 20260928 positive seven-day closure, 20260921
 4. effect contract 叶账本 + `leaf_effect_overrides` + 指纹已统一重封一次。
 5. 两条 register 条目已建；`docs/SESSION_LOG.md` 按极简模板写一条并带 Proof-of-use 行（`matrix=` / `register=` / `handoff=` / `focused=` / `full-lane=` / `door=` 六字段齐全）。
 6. 新增用例全部落在 `test_a_short*.py` 选择器内。
+
+## 2026-08-04 追加：批 1 执行结果（序 20 IV feed 依赖验证 + 序 12 #08 northbound 接线）
+
+### 交接文档作用确认
+
+- `docs/handoff/README.md` 是交接目录的路由、文档角色和同日追加格式说明；本轮未改变路由，因此不改该文件。
+- 本文件是序 20 / 序 12 的范围、验收、边界和执行证据唯一同日交接载体；本节追加实际终态，供 reviewer 复核。
+- `docs/handoff/` 其他文件仍按各自主题保存历史方案/交接，不是本批命令的替代真相源；本批未从其他工作树或桌面文件借用结论。
+
+### 序 20：IV feed 依赖关系验证——已选 A，纯查证完成
+
+**Verdict/Action**：结论为 **A：调换次序让 IV feed 先跑**。验证证明 `runners/a_short_iv_feed_build.py` 不读取 EGS 产物；因此不需要 EGS 跑两趟，也不需要把 IV 判定挪入 weekly pipeline。本序不改编排、不改 IV 行为、不接 volatility 叶。
+
+**静态依赖清单（逐条判定）**：
+
+| 搜索项 | 实际命中 | 是否 EGS 产出依赖 |
+|---|---|---|
+| `result/a_short` | 0 | 否 |
+| `analysis_input` | 0 | 否 |
+| `candidates` | 0 | 否 |
+| `snapshot` | 0 | 否 |
+| `data_health` | 0 | 否 |
+| `egs` | 1 条模块边界 docstring（“不动 production / egs_main / V14.2”），不是读盘、导入或数据访问 | 否 |
+
+**静态输入清单**：
+
+| 输入 | 位置/形状 | EGS 之前可得 |
+|---|---|---|
+| `--as-of` | CLI canonical decision date | 是 |
+| `--out` | CLI feed 写盘目标 | 是；只决定本序输出，不读取 EGS |
+| `--failure-receipt-out` | CLI sanitized failure receipt 目标 | 是；只决定本序输出 |
+| `--confirm-fetch-authorized` | CLI provider-call gate | 是；本轮未开启真实取数 |
+| `TUSHARE_TOKEN` | provider 初始化环境变量 | 是；本轮 fake provider 未使用真实 token |
+| `trade_cal` / `option_basic` / `opt_daily` / underlier `fund_daily` 家族 | `a_short_iv_feed_probe.fetch_probe_inputs` 的 provider 输入 | 是；与候选集无关 |
+| EGS `analysis_input` / `candidates.csv` / `snapshot.json` / `data_health` | 全部无读路径 | 不适用：本序没有该前置 |
+
+**动态无 EGS 证据**：在 fake-provider、临时输出根、未先跑 EGS 的路径直接运行：
+
+`& 'C:\Users\cnhea\AppData\Local\Programs\Python\Python313\python.exe' -m unittest tests.test_a_short_iv_feed_build.BuildMainRegressionTests.test_enough_dates_writes_nonnull_latest_percentile` → `Ran 1 test in 0.907s ... OK`，临时目录成功写出 feed；同模块完整回归 → `Ran 64 tests in 4.533s ... OK`。该路径没有报缺 EGS 产物；使用 fake provider，不是 provider/live 证据。
+
+**反向判定**：动态路径未失败，因此不存在“缺少 EGS 产物”的失败项；真实 provider、真实 EGS 周跑和生产编排仍未验证。下一刀如需改编排，只需保持 IV feed 的独立输入/写盘边界并让它先于 EGS 消费，不在本批扩展。
+
+## 2026-08-04 Codex 批 1 Required + Optional 修复交接（未提交，待独立 reviewer）
+
+### 交接文档作用与追加位置
+
+- `docs/handoff/README.md`：交接目录路由、角色分工和同日追加格式；本轮只读取并遵循，未改其稳定内容。
+- 本文件：序 12 northbound wiring 的同日执行/修复事实、调用链、验收和边界唯一 handoff 载体；本节追加在文件末尾，保留此前历史交接。
+- `docs/system_risk_register.md`：三条 material Required 的完整根因、修复状态和风险边界单一来源；本轮新增同日修复登记，仍是 `OPEN-NOT_VERIFIED`。
+- `docs/SESSION_LOG.md`：reverse-chrono 的极简 review-cycle 入口；本轮已在顶部追加一条，详细内容不在此重复。
+
+### Verdict / Action
+
+序 12 的三条 Required 与五条 Optional 已完成最小修复；未提交、未 push、未 merge，未启动 provider/live、runner、sub-agent 或任何真实历史取数。序 20 的既有 PASS 结论未改变。下一个动作是 Claude Code 对 parent wiring 与三条 Required 做独立复审。
+
+### Required 修复
+
+1. **P1 窗口覆盖**：`A-EGS/egs_main.py::_northbound_provider_facts()` 现在要求请求侧恰好 5 个唯一 `trade_date`，响应侧恰好 5 行、5 个唯一日期、日期集合完全落在且等于 `trade_dates[4]..trade_dates[0]`；重复、缺失、窗口外、非法日期、非有限 `north_money` 均 fail-closed 为 `unknown + null`，不再部分求和。`requested_session_count`、`observed_session_count`、`coverage_complete` 随 `analysis_input.market_context.northbound` 写盘。
+2. **P2 回看空证据**：选择“不扩展历史 provider 授权”的方案 (b)。`NORTHBOUND_MARKET_GATE_PRODUCTION_EFFECT_ENABLED=False`，analysis-input schema const-pin 为 false；weekly 仍计算/记录 `predicate_triggered`，但 `production_effect_enabled=false` 时不改变建仓。`research/results/a_short/northbound_market_silence_lookback_summary.json` 保持 counts-only、`NOT_VERIFIED`、`comparison_only`，不进入生产决策。
+3. **P3 held guard**：删除不可达的 `position_state == held` guard；`test_existing_holding_is_not_changed_by_new_entry_gate` 改为比较完整 held 报告/机器记录，直接验证已有持仓不受新建仓门影响。
+
+### Optional 修复
+
+- `validate_weekly_report()` 增加 `expected_northbound_control`，main 传入同一 analysis_input 派生控制，防止周报控制对象只靠自身重算而脱离 source。
+- Markdown 增加两种市场级可见性：谓词触发但 production effect disabled 时显示“仅记录未生效”；实际封门但没有建仓候选时显示“没有可被该门降级的新建仓候选”。
+- `csi300_window` 结构化发布 start/end/length/length_unit，并写入 analysis/weekly schema 与 effect contract；完整窗口按交易日，短输入 fallback 明确为自然日。
+- `_finite_number()` 使用 `numbers.Real`，兼容 numpy 实数且保持 bool/NaN/Inf fail-closed；删除测试中的 unused `control` 赋值。
+- 本次新增 8 个 analysis-input 结构化叶后，effect consumer probe 的固定叶节点基线从 380 更新为 388；这是契约实际扩展，不是放宽断言。
+
+### 调用链、消费者、schema、source-binding 与写盘边界
+
+`market_environment()` → `_northbound_provider_facts()` → `export_analysis_input()` → `analysis_input.market_context.northbound` / `breadth.csi300_window` → `_northbound_control_from_analysis()` → `_normalise_northbound_control()` → `validate_weekly_report(expected_northbound_control=...)` → `_apply_northbound_market_gate()` → weekly reports/operation impact/Markdown。生产 effect 由代码常量和 analysis schema 双重关闭；weekly schema 要求覆盖、谓词、effect、理由与 CSI 窗口字段。未完整对账的 provider 数据不能进入求和、source-binding 或生产门；未触发/未生效时仍保留结构化记录和 Markdown 提示。effect contract 已同步 decision/runtime/schema fingerprints，最终 `static_contract_error=None`。
+
+### 负向控制与自审
+
+- 5 日完整正控按真实符号判定；1 行、3 行、窗口外、重复、非法/非有限值全部 `unknown/null` 且不封门。
+- 只满足 CSI、只满足北向、缺失北向、缺失 CSI、held 行、production effect disabled、无建仓候选、消费者植入回归均有覆盖。
+- 已检查调用链、直接消费者、schema required/const、source_paths/effect contract、写盘和 renderer 边界；未改选股、TopN、Phase5、逐票 `capital_flow.northbound` 或 provider 参数。
+
+### Verify / 原始终态
+
+- 固定解释器：`C:\Users\cnhea\AppData\Local\Programs\Python\Python313\python.exe`，`Python 3.13.8`。
+- `& 'C:\Users\cnhea\AppData\Local\Programs\Python\Python313\python.exe' -m unittest tests.test_a_short_egs_market_environment tests.test_a_short_northbound_market_wiring` → `Ran 18 tests in 3.133s` / `OK`。
+- `& 'C:\Users\cnhea\AppData\Local\Programs\Python\Python313\python.exe' -m unittest tests.test_a_short_weekly_pipeline` → `Ran 521 tests in 55.232s` / `OK`。
+- `& 'C:\Users\cnhea\AppData\Local\Programs\Python\Python313\python.exe' -m unittest tests.test_a_short_official_operation_evidence tests.test_a_short_effect_contract tests.schema.test_analysis_input_contract` → `Ran 88 tests in 43.815s` / `OK`。
+- full lane 首次因 `test_all_analysis_input_leaves_have_explicit_nature` 的旧 `380` 断言失败：`Ran 194 tests in 4.970s` / `FAILED (failures=1)`；更新为 388 后最终同一 full-pack 命令：`Ran 2363 tests in 295.405s` / `OK (skipped=3)`，`[full-pack-ledger] RESULT status=PASS exit=0 tests=2363 elapsed=297.1s deadline=860s`。
+- `static_contract_error=None`；`git diff --check` 无 whitespace error，仅有行尾转换提示。
+
+### Pre-Codex self-review / NOT_VERIFIED
+
+`matrix=Required P1/P2/P3 + Optional 1-5`; `register=updated`; `handoff=updated`; `focused=18+521+88 OK`; `full-lane=2363 OK (skipped=3), stale 380 baseline repaired`; `door=route-doc + doc-governance: 66 OK / exit=0`; `review=NOT_VERIFIED`; `commit=NOT_PERFORMED`; `provider/live/account/sub-agent=NOT_USED`。
+
+仍未验证：Claude Code 独立复审、真实 provider/live、真实历史结构化周报与触发频率、review PASS、commit/push/merge。自动化测试绿不等于这些结论；下步只执行独立 review，不自行提交。
+
+### Next
+
+Claude Code：独立审查 `R-ASHORT-KNIFE12-NORTHBOUND-MARKET-WIRING` 及 `R-ASHORT-KNIFE12-NORTHBOUND-WINDOW-COVERAGE-UNVALIDATED`、`R-ASHORT-KNIFE12-LOOKBACK-DELIVERABLE-EMPTY-WHILE-GATE-LIVE`、`R-ASHORT-KNIFE12-HELD-GUARD-TEST-NOT-LOAD-BEARING`；确认后按项目规则决定提交。
+
+### 序 12：#08 northbound 接线——实现完成，待独立审查
+
+**根因**：EGS 已把 `north_money` 五日求和转换为 CNY，并在 `market_environment()` 打印「静默、禁止开新仓」文字，但此前只写渲染文本；weekly 没有结构化 producer/consumer，机器无法把该双条件落实到新建仓结果。
+
+**实现与调用链**：
+
+1. `engine/a_short_northbound.py` 集中保存 `-10.0` CSI300 阈值、`inflow/outflow/flat/unknown` 分类和 `should_block_new_entries()`；未知、非有限值不进入门。
+2. `A-EGS/egs_main.py::market_environment()` 保留原五日窗口 `trade_dates[4]..trade_dates[0]` 和原 `north_money × 10000` 元单位，返回结构化 `{northbound: {net_flow_5d, status}, csi300_pct_change_window}`；`run_egs()` 将 facts 传给 `export_analysis_input()`，写入 `analysis_input.market_context`。`-50e8` 仍是 advisory 文本。
+3. `runners/a_short_weekly_pipeline.py::_northbound_control_from_analysis()` 只读结构化 `analysis_input`，校验 `decision_as_of`、`source_paths`、flow/status 一致性；`_normalise_northbound_control()` 对缺失数据归一为 `null + unknown`。
+4. `build_weekly_report()` 在账户覆盖校验后、portfolio context/cash allocation 前调用 `_apply_northbound_market_gate()`；只对 `操作=建仓` 且非已有 `stateful_risk.position_state=held` 的行复用 canonical observe demotion，已有持仓不动；命中时追加 `machine.operation_impact` 与周报级 `northbound_control`。
+5. `schemas/a_short_weekly_report.schema.json` 现在把 `northbound_control` 作为当前周报必需 envelope 字段；旧已审 `1.0.0` legacy migration 在 `runners/a_short_official_operation_evidence.py` 仅对旧契约豁免该新字段，当前 schema/validator 仍 fail-closed。
+
+**结构化边界**：`market_context.northbound.net_flow_5d` 单位为 CNY；`unknown` 必须保持 `net_flow_5d=null`，不得伪造 `0/flat`。消费者的唯一生产门是“CSI300 `< -10` 且北向五日 flow `< 0`”，不使用 v14.2 的“连续五日净流出三选二”门，不触碰逐票 `capital_flow.northbound`。
+
+**回看统计（counts-only）**：已产出 `research/results/a_short/northbound_market_silence_lookback_summary.json`，schema 为 `schemas/a_short_northbound_market_silence_lookback_summary.schema.json`。扫描现有 4 份 tracked weekly artifact（`20260612/20260706/20260720/20260727`）得到 `structured_fact_week_count=0`、`eligible_week_count=0`、`trigger_count=null`、`status=NOT_VERIFIED`；因历史周报没有结构化北向/CSI300 facts，未从历史文案反推触发次数。该 artifact 明确 `comparison_only=true`、`production_effect_enabled=false`，不进入 weekly 决策。
+
+**验收与负向控制**：
+
+- 正控：`test_dual_condition_demotes_every_new_entry_and_lands_structured_impact` 证明双条件下所有新建仓降为观察、flow 为负元值、status=`outflow`、impact/source/evidence 落地。
+- 单条件反控：`test_single_condition_does_not_block` 覆盖只跌、只流出、flat 三组，建仓不变。
+- 缺失反控：`test_missing_data_is_unknown_or_unavailable_and_does_not_block` 覆盖 `null+unknown` 与 CSI 缺失，均不封门。
+- 单位/producer 反控：`tests/test_a_short_egs_market_environment.py` 的 7 条回归覆盖 `万元 ×10000 → 元`、双防御文字边界、结构化 facts 和 export 写盘。
+- 持仓边界：`test_existing_holding_is_not_changed_by_new_entry_gate` 证明 held 行不被新建仓门改写。
+- 植入控制：`test_disabling_gate_makes_positive_control_red` patch 掉 consumer 后，双条件正控重新保持“建仓”，证明门本身而非 fixture 使正控通过。
+- schema/summary 控制：`test_lookback_summary_is_counts_only_and_explicitly_not_verified` 校验回看统计不含逐票/raw 结果且不具生产效力。
+
+**effect contract**：已在两刀落地后统一重封一次；新增 `engine/a_short_northbound.py` decision/runtime constant fingerprints，注册 `northbound_market_silence_gate`，为 `market_context.breadth.csi300_pct_change_window`、`market_context.northbound.net_flow_5d`、`.status` 增加 `m67_main_decision` 叶覆盖，并更新 weekly output schema hash。固定 Python 计算 `static_contract_error=None`。
+
+### 批 1 验证终态与边界
+
+- 固定主 Python：`C:\Users\cnhea\AppData\Local\Programs\Python\Python313\python.exe`，版本 `Python 3.13.8`；所有测试、检查、ledger 均显式使用该解释器；未使用 PATH/python/python3/bundled Python。
+- focused：北向接线 `Ran 7 tests ... OK`；EGS facts/export `Ran 7 tests ... OK`；IV feed `Ran 64 tests ... OK`；effect contract `Ran 48 tests ... OK`；schema required 后核心 combined `Ran 583 tests ... OK`；直接消费者兼容修复后 combined `Ran 598 tests ... OK`。
+- final full lane：`& 'C:\Users\cnhea\AppData\Local\Programs\Python\Python313\python.exe' '.tools\full_pack_ledger.py' run a_short 'batch1 final closure after northbound schema required + legacy migration compatibility repair' 'fixed-Python focused: northbound 7 OK; EGS facts/export 7 OK; IV build 64 OK; effect contract 48 OK; weekly 521 OK; post-schema combined 583 OK; direct-consumer combined 598 OK; static_contract_error=None; no-provider fixture' 860 '--' discover -s tests -p 'test_a_short*.py'` → `[full-pack-ledger] RESULT status=PASS exit=0 tests=2359 elapsed=344.9s deadline=860s`，原始 unittest `Ran 2359 tests in 343.263s`、`OK (skipped=3)`。
+- 固定 Python `py_compile` exit `0`；序 20 static scan 只有 1 条边界 docstring `egs` 命中，逐项 EGS 依赖判定均为“否”；effect contract static error 为 `None`。
+- NOT_VERIFIED：Claude Code 独立审查、真实 provider/live/真实周跑和触发频率（历史结构化 facts 为 0 周）尚未验证；full/focused 绿不等于 review/live/ship-gate PASS。
+- 审查/提交边界：当前工作树仍未 commit/push/merge，未启动 sub-agent；下一步由 reviewer 独立审查两条 register，PASS 后按项目规则提交，executor 不提交。

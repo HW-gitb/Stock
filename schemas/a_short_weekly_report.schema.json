@@ -16,7 +16,8 @@
     "boundary",
     "portfolio_risk",
     "effect_contract_ledger",
-    "data_quality_shadow"
+    "data_quality_shadow",
+    "northbound_control"
   ],
   "properties": {
     "schema_name": {
@@ -1684,6 +1685,97 @@
         "m05_post_reclaim_new_exposure_capacity": {
           "type": "number",
           "minimum": 0
+        }
+      }
+    },
+    "northbound_control": {
+      "type": "object",
+      "description": "Structured, source-bound market-level new-entry control. It is derived from analysis_input facts and never from rendered market text.",
+      "additionalProperties": false,
+      "required": [
+        "source_as_of",
+        "source_paths",
+        "net_flow_5d",
+        "status",
+        "csi300_pct_change_window",
+        "csi300_window",
+        "requested_session_count",
+        "observed_session_count",
+        "coverage_complete",
+        "production_effect_enabled",
+        "predicate_triggered",
+        "new_entry_blocked",
+        "reason"
+      ],
+      "properties": {
+        "source_as_of": {
+          "type": "string",
+          "pattern": "^[0-9]{8}$"
+        },
+        "source_paths": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["northbound", "csi300"],
+          "properties": {
+            "northbound": {
+              "const": "analysis_input.market_context.northbound"
+            },
+            "csi300": {
+              "const": "analysis_input.market_context.breadth.csi300_pct_change_window"
+            }
+          }
+        },
+        "net_flow_5d": {
+          "type": ["number", "null"]
+        },
+        "status": {
+          "type": "string",
+          "enum": ["inflow", "outflow", "flat", "unknown"]
+        },
+        "csi300_pct_change_window": {
+          "type": ["number", "null"]
+        },
+        "csi300_window": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["start_date", "end_date", "length", "length_unit"],
+          "properties": {
+            "start_date": {"type": "string", "pattern": "^[0-9]{8}$"},
+            "end_date": {"type": "string", "pattern": "^[0-9]{8}$"},
+            "length": {"type": "integer", "minimum": 1},
+            "length_unit": {"enum": ["trading_sessions", "calendar_days"]}
+          }
+        },
+        "requested_session_count": {
+          "type": "integer",
+          "const": 5
+        },
+        "observed_session_count": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 5
+        },
+        "coverage_complete": {
+          "type": "boolean"
+        },
+        "production_effect_enabled": {
+          "type": "boolean"
+        },
+        "predicate_triggered": {
+          "type": "boolean"
+        },
+        "new_entry_blocked": {
+          "type": "boolean"
+        },
+        "reason": {
+          "type": "string",
+          "enum": [
+            "dual_condition",
+            "production_effect_disabled",
+            "northbound_unknown",
+            "csi300_unavailable",
+            "conditions_not_met"
+          ]
         }
       }
     },

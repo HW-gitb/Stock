@@ -1,5 +1,35 @@
 # Session Log
 
+## 2026-08-04 — Claude 审查 PASS（批 1 二轮：北向窗口覆盖收口 + 门降级 + 死码测试收口）
+
+- **Verdict/Action**: PASS，已提交并合入 master。三条 Required 全按指定形态修好：① 窗口对账复用同文件 `_canonical_moneyflow_dates`/`MONEYFLOW_FETCH_SESSIONS`，集合相等+行数=5+去重=5 三重校验，任一不满足即 fail-closed，覆盖计数已发布进契约；② 门降级 `production_effect_enabled=False`（选项 b），待频率证据再翻真；③ 不可达 held guard 已删并补真植入失败测试。上轮四条 Optional 也被一并收口。
+- **Required**: 无。三条 R-ID 均已 closed；对账矩阵、开关承重证明、伪造反控与仍为 NOT_VERIFIED 的边界见 `docs/system_risk_register.md`（单一来源，本处不复述）。
+- **Verify**: review-evidence:58d2c70395b6；亲跑九类 provider 形状全部 fail-closed（1场/3场/全重复/窗口外/6行/NaN/缺列/空/None 一律 `unknown`），5 场时单位精确 `-6.0e10` CNY。开关实测承重：同一封门事实下 `effect=False` → 建仓保留、`allocated=199520.0`；`effect=True` → 观察、`allocated=0.0`。伪造 `new_entry_blocked` 被 validator 拒。full lane `CACHED GREEN a_short = 2363 OK`（`+4` 全在 lane 选择器内）。真实 provider 部分覆盖现场与门的历史触发频率仍 `NOT_VERIFIED`。
+- **Next**: Codex：执行
+
+## 2026-08-04 — Codex executor/fixer 修复批 1 Required + Optional（待 Claude Code 独立复审）
+
+- **Verdict/Action**: Required 三项与 Optional 五项已修复；未提交、未 push、未 merge。
+- **Required**: `R-ASHORT-KNIFE12-NORTHBOUND-WINDOW-COVERAGE-UNVALIDATED`、`R-ASHORT-KNIFE12-LOOKBACK-DELIVERABLE-EMPTY-WHILE-GATE-LIVE`、`R-ASHORT-KNIFE12-HELD-GUARD-TEST-NOT-LOAD-BEARING` 均为修复待复审；完整根因、调用链、schema、source-binding、写盘边界和负向控制见 `docs/system_risk_register.md` 与同日 handoff。
+- **Verify**: 固定 Python；`18 OK`、`521 OK`、`88 OK`；full lane 首轮因叶节点旧基线 `380` 失败后已更新为 `388`，最终 `Ran 2363 tests in 295.405s`、`OK (skipped=3)`，ledger `RESULT status=PASS exit=0`；`static_contract_error=None`。
+- **Pre-Codex self-review**: `matrix=Required P1/P2/P3 + Optional 1-5`; `register=updated`; `handoff=updated`; `focused=18+521+88 OK`; `full-lane=2363 OK (skipped=3), first stale-count failure repaired`; `door=route-doc + doc-governance: 66 OK / exit=0`; `review=NOT_VERIFIED`; `commit=NOT_PERFORMED`; `provider/live/account/sub-agent=NOT_USED`。
+- **Next**: Claude Code：独立审查三条 Required 与 parent northbound wiring 风险；PASS 后按项目规则提交。
+
+## 2026-08-04 — Claude 审查 FAIL（批 1：序 20 PASS / 序 12 北向门）
+
+- **Verdict/Action**: FAIL，不提交、不合入。序 20 IV feed 依赖验证 PASS（静态零命中 + 未跑 EGS 的动态跑通，选定方案 A）。序 12 北向门的结构、单位、谓词、契约、爆炸半径都对，但**喂给门的那个数没有窗口校验**：`market_environment` 把 provider 返回的 `north_money` 整列直接求和，不看 `trade_date`、不数条数、不去重，而门只看符号，故 provider 部分覆盖会**双向**翻转真钱门。
+- **Required**: `R-ASHORT-KNIFE12-NORTHBOUND-WINDOW-COVERAGE-UNVALIDATED`(P1)、`R-ASHORT-KNIFE12-LOOKBACK-DELIVERABLE-EMPTY-WHILE-GATE-LIVE`(P2)、`R-ASHORT-KNIFE12-HELD-GUARD-TEST-NOT-LOAD-BEARING`(P3) 三条，与五条 Optional、以及「已确认不必返工」清单，全部见 `docs/system_risk_register.md`（单一来源，本处不复述）。
+- **Verify**: review-evidence:2f4e43ed28ec；P1 自读坐实：`egs_main.py:5952-5960` 求和处零校验，同文件逐票侧却有 `MONEYFLOW_FETCH_SESSIONS=5`(`:1600`) 与硬校验(`:2200`/`:3740`)。独立重算：门真值表 12 例全对、四条伪造向量全被拒、封门周 `allocated_cash_total` 299280.0→0.0。独立对抗 agent（worktree 只读）另出 1×P1(同源)+1×P2+3×P3，其植入失败证明 held-guard 测试不承重。full lane `CACHED GREEN a_short = 2359 OK`。真实 provider 部分覆盖场景仍 `NOT_VERIFIED`。超时原因:等对抗 agent 回报占约 15 分钟墙钟。
+- **Next**: Codex：修复
+
+## 2026-08-04 — Codex executor/fixer 修复批 1（待 Claude Code 独立审查）
+
+- **Verdict/Action**: 序 20 已选 A 并完成纯查证；序 12 已完成结构化北向 producer→analysis_input→weekly 新建仓门接线；未提交、未 push、未 merge。
+- **Required**: `R-ASHORT-KNIFE20-IV-FEED-DEPENDENCY-PROBE`、`R-ASHORT-KNIFE12-NORTHBOUND-MARKET-WIRING` 保持 `OPEN-NOT_VERIFIED`，完整细节见 `docs/system_risk_register.md` 与同日 handoff。
+- **Verify**: 固定 Python；northbound 7 OK、EGS facts/export 7 OK、IV 64 OK、effect contract 48 OK、直接消费者 598 OK；最终 `[full-pack-ledger] RESULT status=PASS exit=0 tests=2359 elapsed=344.9s deadline=860s`；static_contract_error=None。
+- **Pre-Codex self-review**: `matrix=seq20逐条依赖/输入/无EGS动态+seq12 producer-consumer/schema/source-binding/write-boundary/正反控/植入/持仓边界`; `register=updated`; `handoff=updated`; `focused=598 OK`; `full-lane=2359 OK (skipped=3), one final ledger run`; `door=route-doc + doc-governance: 55 OK / exit=0`; `review=NOT_VERIFIED`; `commit=NOT_PERFORMED`; `provider/live/account/sub-agent=NOT_USED`。
+- **Next**: Claude Code：独立审查 `R-ASHORT-KNIFE20-IV-FEED-DEPENDENCY-PROBE` 与 `R-ASHORT-KNIFE12-NORTHBOUND-MARKET-WIRING`；PASS 后按项目规则提交。
+
 ## 2026-08-04 — Claude 起草批 1 方案并交接 executor（序 20 + 序 12）
 
 - **Verdict/Action**: 起草完成并交接，未改任何生产代码。序 20 = IV feed 依赖验证（纯查证、不产功能）；序 12 = #08 northbound 接线，复杂度由 ★★☆☆☆ **上修 ★★★☆☆** —— 实读推翻上一版「两头现成、零待裁项」的排期依据，详见下方 Verify。用户已确认序 12 的唯一开口：只把 `market_environment()` 里那条只输出文本的「静默」规则做成真门，双条件与阈值原样不变。

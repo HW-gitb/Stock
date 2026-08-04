@@ -188,7 +188,7 @@ def _load_official_bundle(*, out_path: str | Path, receipt_path: str | Path):
                     legacy_schema = copy.deepcopy(weekly_schema)
                     legacy_schema["required"] = [
                         key for key in legacy_schema.get("required", [])
-                        if key != "data_quality_shadow"
+                        if key not in {"data_quality_shadow", "northbound_control"}
                     ]
                     # validate_published_weekly_bundle has already performed
                     # the exact old-ledger reconstruction; this envelope pass

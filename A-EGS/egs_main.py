@@ -140,6 +140,11 @@ from engine.a_short_run_paths import (
 )
 from engine.a_short_runtime_config import load_runtime_configuration, runtime_configuration_lineage
 from engine.a_share_market_clock import a_share_market_date, a_share_market_wall_time
+from engine.a_short_northbound import (
+    NORTHBOUND_MARKET_GATE_PRODUCTION_EFFECT_ENABLED,
+    classify_northbound_status,
+    should_block_new_entries,
+)
 from engine.a_short_tushare_client import init_tushare_pro
 from engine.a_short_rule6_contract import (
     RULE6_CONDITIONAL_NA_REASONS,
@@ -1225,7 +1230,8 @@ def export_analysis_input(df_full, watch_df, tier1_final, latest_td, trade_dates
                           rank_reconciliation=None, rule6_evaluations_by_code=None,
                           price_data_through=None, run_date=None, margin_observation=None,
                           moneyflow_coverage=None,
-                          l0_excluded_counts=None, trade_calendar_context=None):
+                          l0_excluded_counts=None, trade_calendar_context=None,
+                          market_context_facts=None):
     import json as _json
 
     project_root = os.path.dirname(SCRIPT_DIR)
@@ -1252,6 +1258,52 @@ def export_analysis_input(df_full, watch_df, tier1_final, latest_td, trade_dates
         raise RuntimeError("trade calendar holiday_days_ahead must be a non-negative integer")
     if calendar_is_pre_holiday and calendar_holiday_days < PRE_HOLIDAY_MIN_CLOSED_DAYS:
         raise RuntimeError("pre-holiday calendar flag is below the closed-day threshold")
+    market_context_facts = dict(market_context_facts or {})
+    northbound_facts = dict(market_context_facts.get("northbound") or {})
+    requested_session_count = northbound_facts.get(
+        "requested_session_count", MONEYFLOW_FETCH_SESSIONS
+    )
+    observed_session_count = northbound_facts.get("observed_session_count", 0)
+    coverage_complete = northbound_facts.get("coverage_complete") is True
+    if (
+        isinstance(requested_session_count, bool)
+        or not isinstance(requested_session_count, int)
+        or requested_session_count != MONEYFLOW_FETCH_SESSIONS
+        or isinstance(observed_session_count, bool)
+        or not isinstance(observed_session_count, int)
+        or not 0 <= observed_session_count <= requested_session_count
+        or not coverage_complete
+        or observed_session_count != requested_session_count
+    ):
+        requested_session_count = MONEYFLOW_FETCH_SESSIONS
+        observed_session_count = max(
+            0, min(int(observed_session_count or 0), requested_session_count)
+        ) if isinstance(observed_session_count, (int, float)) and not isinstance(observed_session_count, bool) else 0
+        coverage_complete = False
+    northbound_flow = northbound_facts.get("net_flow_5d") if coverage_complete else None
+    northbound_status = northbound_facts.get("status", "unknown") if coverage_complete else "unknown"
+    if northbound_status not in {"inflow", "outflow", "flat", "unknown"}:
+        northbound_status = "unknown"
+        northbound_flow = None
+    if northbound_status == "unknown":
+        northbound_flow = None
+    elif (
+        isinstance(northbound_flow, bool)
+        or not isinstance(northbound_flow, (int, float))
+        or not np.isfinite(float(northbound_flow))
+        or classify_northbound_status(northbound_flow) != northbound_status
+    ):
+        northbound_status = "unknown"
+        northbound_flow = None
+    else:
+        northbound_flow = float(northbound_flow)
+    csi300_pct_change_window = market_context_facts.get("csi300_pct_change_window")
+    if (isinstance(csi300_pct_change_window, bool)
+            or not isinstance(csi300_pct_change_window, (int, float))
+            or not np.isfinite(float(csi300_pct_change_window))):
+        csi300_pct_change_window = None
+    else:
+        csi300_pct_change_window = float(csi300_pct_change_window)
     moneyflow_coverage = dict(
         moneyflow_coverage
         or _default_moneyflow_coverage(
@@ -1384,15 +1436,20 @@ def export_analysis_input(df_full, watch_df, tier1_final, latest_td, trade_dates
                 "limit_down_count": None,
                 "limit_up_index_pct_change": None,
                 "consecutive_board_height": None,
-                "csi300_pct_change_window": None,
+                "csi300_pct_change_window": csi300_pct_change_window,
+                "csi300_window": _csi300_window_metadata(trade_dates),
             },
             "liquidity": {
                 "market_turnover_amount": None,
                 "median_amount_20d": None,
             },
             "northbound": {
-                "net_flow_5d": None,
-                "status": "unknown",
+                "net_flow_5d": northbound_flow,
+                "status": northbound_status,
+                "requested_session_count": requested_session_count,
+                "observed_session_count": observed_session_count,
+                "coverage_complete": coverage_complete,
+                "production_effect_enabled": NORTHBOUND_MARKET_GATE_PRODUCTION_EFFECT_ENABLED,
             },
             "margin_coverage": (
                 margin_observation.public_dict()
@@ -5919,20 +5976,101 @@ def stage3_ai_clearing(top50_df, red_dict, unlock_set, backtest_mode=False):
 # ═══════════════════════════════════════════════════
 # §8 市场环境
 # ═══════════════════════════════════════════════════
-def market_environment(trade_dates, stats_df):
-    north_flow_yuan = None
+def _northbound_provider_facts(df_hsgt, requested_trade_dates):
+    """Reduce one northbound response only after exact five-session reconciliation."""
     try:
-        df_hsgt = safe_api(pro.moneyflow_hsgt, start_date=trade_dates[4], end_date=trade_dates[0])
-        if df_hsgt is not None and not df_hsgt.empty and "north_money" in df_hsgt.columns:
-            north_money_wan = pd.to_numeric(df_hsgt["north_money"], errors="coerce")
-            north_flow_wan = north_money_wan.sum(min_count=1)
-            if pd.notna(north_flow_wan) and np.isfinite(float(north_flow_wan)):
-                north_flow_yuan = (
-                    float(north_flow_wan)
-                    * TUSHARE_MONEYFLOW_HSGT_NORTH_MONEY_UNIT_YUAN
-                )
+        requested = _canonical_moneyflow_dates(requested_trade_dates)
+    except Exception:
+        requested = tuple()
+    facts = {
+        "net_flow_5d": None,
+        "status": "unknown",
+        "requested_session_count": len(requested),
+        "observed_session_count": 0,
+        "coverage_complete": False,
+        "production_effect_enabled": NORTHBOUND_MARKET_GATE_PRODUCTION_EFFECT_ENABLED,
+    }
+    if len(requested) != MONEYFLOW_FETCH_SESSIONS:
+        return facts
+    if not isinstance(df_hsgt, pd.DataFrame) or df_hsgt.empty:
+        return facts
+    if not {"trade_date", "north_money"}.issubset(df_hsgt.columns):
+        return facts
+
+    raw_dates = df_hsgt["trade_date"].map(lambda value: str(value).strip())
+    valid_dates = {
+        value for value in raw_dates
+        if re.fullmatch(r"[0-9]{8}", value) and value in set(requested)
+    }
+    facts["observed_session_count"] = len(valid_dates)
+    dates_complete = (
+        len(raw_dates) == MONEYFLOW_FETCH_SESSIONS
+        and len(set(raw_dates)) == MONEYFLOW_FETCH_SESSIONS
+        and set(raw_dates) == set(requested)
+    )
+    if not dates_complete:
+        return facts
+
+    north_money_wan = pd.to_numeric(df_hsgt["north_money"], errors="coerce")
+    if north_money_wan.isna().any():
+        return facts
+    try:
+        values = north_money_wan.astype(float).to_numpy()
+    except (TypeError, ValueError):
+        return facts
+    if not np.isfinite(values).all():
+        return facts
+    north_flow_wan = float(values.sum())
+    if not np.isfinite(north_flow_wan):
+        return facts
+    north_flow_yuan = north_flow_wan * TUSHARE_MONEYFLOW_HSGT_NORTH_MONEY_UNIT_YUAN
+    facts.update({
+        "net_flow_5d": float(north_flow_yuan),
+        "status": classify_northbound_status(north_flow_yuan),
+        "coverage_complete": True,
+    })
+    return facts
+
+
+def _csi300_window_metadata(trade_dates):
+    """Describe the exact requested CSI300 window, including the short-input fallback."""
+    dates = tuple(str(value).strip() for value in (trade_dates or ()))
+    if not dates or any(not re.fullmatch(r"[0-9]{8}", value) for value in dates):
+        return {
+            "start_date": None,
+            "end_date": None,
+            "length": None,
+            "length_unit": None,
+        }
+    if len(dates) >= 20:
+        return {
+            "start_date": dates[-1],
+            "end_date": dates[0],
+            "length": len(dates),
+            "length_unit": "trading_sessions",
+        }
+    return {
+        "start_date": dstr(35),
+        "end_date": dates[0],
+        "length": 35,
+        "length_unit": "calendar_days",
+    }
+
+
+def market_environment(trade_dates, stats_df, *, return_facts=False):
+    northbound_facts = _northbound_provider_facts(None, trade_dates)
+    try:
+        requested_trade_dates = _canonical_moneyflow_dates(trade_dates)
+        df_hsgt = safe_api(
+            pro.moneyflow_hsgt,
+            start_date=requested_trade_dates[-1],
+            end_date=requested_trade_dates[0],
+        )
+        northbound_facts = _northbound_provider_facts(df_hsgt, requested_trade_dates)
     except Exception:
         pass
+    north_flow_yuan = northbound_facts["net_flow_5d"]
+    northbound_status = northbound_facts["status"]
 
     env = []
     if north_flow_yuan is not None:
@@ -5943,8 +6081,10 @@ def market_environment(trade_dates, stats_df):
         env.append("北向资金数据不可用")
 
     csi300_ret = get_csi300_return(trade_dates)
-    if csi300_ret is not None and csi300_ret < -10 and (
-            north_flow_yuan is not None and north_flow_yuan < 0):
+    if should_block_new_entries(
+            north_flow_yuan,
+            northbound_status,
+            csi300_ret):
         env.append("[静默] 市场进入防御/收缩期：建议静默，禁止开新仓。")
     elif csi300_ret is not None and csi300_ret < -5:
         env.append("[警] 市场偏弱，注意仓位控制。")
@@ -5970,7 +6110,20 @@ def market_environment(trade_dates, stats_df):
 
     env.append("融资过热判断：待接入两融余额历史分位")
     env.append("全市场风险提示：请结合当日政策新闻判断")
-    return "\n".join(env)
+    facts_csi300_ret = (
+        float(csi300_ret)
+        if (isinstance(csi300_ret, (int, float, np.number))
+            and not isinstance(csi300_ret, bool)
+            and np.isfinite(float(csi300_ret)))
+        else None
+    )
+    facts = {
+        "northbound": northbound_facts,
+        "csi300_pct_change_window": facts_csi300_ret,
+        "csi300_window": _csi300_window_metadata(trade_dates),
+    }
+    rendered = "\n".join(env)
+    return (rendered, facts) if return_facts else rendered
 
 
 # ═══════════════════════════════════════════════════
@@ -6227,7 +6380,9 @@ def run_egs(backtest_mode=False, output_root=None, price_as_of=None):
     cninfo_warning = _cninfo_health_warning(cninfo_health)
     if cninfo_warning is not None:
         data_health_warnings.append(cninfo_warning)
-    env_report  = market_environment(trade_dates, stats_df)
+    env_report, market_context_facts = market_environment(
+        trade_dates, stats_df, return_facts=True
+    )
 
     # ── 计算 entry_flag ────────────────────────────────────────────────────────
     def _entry_flag(row):
@@ -6472,6 +6627,7 @@ def run_egs(backtest_mode=False, output_root=None, price_as_of=None):
             moneyflow_coverage=moneyflow_coverage,
             l0_excluded_counts=l0_excluded_counts,
             trade_calendar_context=trade_calendar_context,
+            market_context_facts=market_context_facts,
         )
         log.info(f"[OK] analysis_input saved to {analysis_path}")
         log.info(f"[OK] snapshot saved to {snapshot_path}")

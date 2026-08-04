@@ -1,0 +1,18 @@
+{
+  "schema_name": "a_short_northbound_market_silence_lookback_summary",
+  "schema_version": "1.0.0",
+  "as_of": "20260804",
+  "lookback_basis": "available_tracked_weekly_artifacts",
+  "lookback_week_count": 4,
+  "weeks_considered": ["20260612", "20260706", "20260720", "20260727"],
+  "source_artifact_count": 4,
+  "structured_fact_week_count": 0,
+  "eligible_week_count": 0,
+  "trigger_count": null,
+  "status": "NOT_VERIFIED",
+  "comparison_only": true,
+  "production_effect_enabled": false,
+  "not_verified": [
+    "现存四份 tracked weekly_m67.json 均没有 market_context.northbound 结构化 flow/status 与 market_context.breadth.csi300_pct_change_window；历史渲染文字不是机器契约，未从文案反推触发次数。"
+  ]
+}

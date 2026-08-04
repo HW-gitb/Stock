@@ -48,6 +48,11 @@ from engine.a_short_industry_theme import (  # noqa: E402
 )
 from engine.egs_industry_heat import load_governance  # noqa: E402
 from engine.a_short_nullable_bool import fail_closed_risk_bool  # noqa: E402
+from engine.a_short_northbound import (  # noqa: E402
+    NORTHBOUND_CSI300_SILENCE_THRESHOLD_PCT,
+    classify_northbound_status,
+    should_block_new_entries,
+)
 
 from engine.a_short_rule6_evaluation import materialize_50etf_iv_rule6_check
 from engine.a_short_regulatory_advisory import (
@@ -68,6 +73,10 @@ SMALL_FLOAT_MV_RMB = _PORTFOLIO_RISK_POLICY["small_float_mv_rmb"]
 HIGH_RISK_HOLDING_CAP_MULTIPLIER = _PORTFOLIO_RISK_POLICY["high_risk_holding_cap_multiplier"]
 PRE_HOLIDAY_CASH_FACTOR = 0.8
 PRE_HOLIDAY_MIN_CLOSED_DAYS = 5
+_NORTHBOUND_SOURCE = "northbound_market_silence_gate"
+_NORTHBOUND_MARKER = "北向资金联合静默门"
+_NORTHBOUND_SOURCE_PATH = "analysis_input.market_context.northbound"
+_CSI300_SOURCE_PATH = "analysis_input.market_context.breadth.csi300_pct_change_window"
 
 SCHEMA_NAME = "a_short_weekly_report"
 SCHEMA_VERSION = "1.0.0"
@@ -885,6 +894,228 @@ def _pre_holiday_control_from_analysis(ai: dict, as_of: str) -> dict:
     }, as_of)
 
 
+def _is_finite_market_number(value) -> bool:
+    return (
+        not isinstance(value, bool)
+        and isinstance(value, (int, float))
+        and math.isfinite(float(value))
+    )
+
+
+def _normalise_csi300_window(window: dict | None) -> dict:
+    supplied = dict(window or {})
+    start_date = supplied.get("start_date")
+    end_date = supplied.get("end_date")
+    length = supplied.get("length")
+    length_unit = supplied.get("length_unit")
+    if start_date is not None and not _is_valid_date(start_date):
+        raise ValueError("northbound csi300 window start_date is invalid")
+    if end_date is not None and not _is_valid_date(end_date):
+        raise ValueError("northbound csi300 window end_date is invalid")
+    if start_date is None or end_date is None:
+        raise ValueError("northbound csi300 window dates are required")
+    if isinstance(length, bool) or not isinstance(length, int) or length <= 0:
+        raise ValueError("northbound csi300 window length is invalid")
+    if length_unit not in {"trading_sessions", "calendar_days"}:
+        raise ValueError("northbound csi300 window length_unit is invalid")
+    return {
+        "start_date": str(start_date),
+        "end_date": str(end_date),
+        "length": int(length),
+        "length_unit": length_unit,
+    }
+
+
+def _normalise_northbound_control(context: dict | None, as_of: str) -> dict:
+    """Validate the structured EGS facts consumed by the new-entry market gate."""
+    supplied = dict(context or {})
+    source_as_of = str(supplied.get("source_as_of") or as_of)
+    if not _is_valid_date(source_as_of) or source_as_of != str(as_of):
+        raise ValueError("northbound control is not bound to weekly as_of")
+    expected_paths = {
+        "northbound": _NORTHBOUND_SOURCE_PATH,
+        "csi300": _CSI300_SOURCE_PATH,
+    }
+    source_paths = supplied.get("source_paths")
+    if source_paths is None:
+        source_paths = expected_paths
+    if source_paths != expected_paths:
+        raise ValueError("northbound control source paths are not analysis_input-bound")
+    coverage_fields = {
+        "requested_session_count",
+        "observed_session_count",
+        "coverage_complete",
+        "production_effect_enabled",
+        "csi300_window",
+    }
+    if not coverage_fields.issubset(supplied):
+        raise ValueError("northbound control is missing window/effect coverage facts")
+    requested_session_count = supplied.get("requested_session_count")
+    observed_session_count = supplied.get("observed_session_count")
+    coverage_complete = supplied.get("coverage_complete")
+    if (
+        isinstance(requested_session_count, bool)
+        or not isinstance(requested_session_count, int)
+        or requested_session_count != 5
+        or isinstance(observed_session_count, bool)
+        or not isinstance(observed_session_count, int)
+        or not 0 <= observed_session_count <= requested_session_count
+        or not isinstance(coverage_complete, bool)
+    ):
+        raise ValueError("northbound control coverage facts are invalid")
+    if coverage_complete and observed_session_count != requested_session_count:
+        raise ValueError("complete northbound control must observe every requested session")
+    csi300_window = _normalise_csi300_window(supplied.get("csi300_window"))
+    production_effect_enabled = supplied.get("production_effect_enabled")
+    if not isinstance(production_effect_enabled, bool):
+        raise ValueError("northbound control production_effect_enabled must be boolean")
+    status = supplied.get("status", "unknown")
+    if status not in {"inflow", "outflow", "flat", "unknown"}:
+        raise ValueError("northbound control status is invalid")
+    flow = supplied.get("net_flow_5d")
+    if not coverage_complete:
+        if status != "unknown" or flow is not None:
+            raise ValueError("incomplete northbound coverage must be unknown with null flow")
+        flow = None
+    elif status == "unknown":
+        if flow is not None:
+            raise ValueError("unknown northbound control must have null net_flow_5d")
+        flow = None
+    elif (not _is_finite_market_number(flow)
+          or classify_northbound_status(flow) != status):
+        raise ValueError("northbound control flow/status mismatch")
+    else:
+        flow = float(flow)
+    csi300 = supplied.get("csi300_pct_change_window")
+    if csi300 is not None:
+        if not _is_finite_market_number(csi300):
+            raise ValueError("northbound control csi300 window is invalid")
+        csi300 = float(csi300)
+    predicate_triggered = should_block_new_entries(flow, status, csi300)
+    blocked = predicate_triggered and production_effect_enabled
+    if status == "unknown":
+        reason = "northbound_unknown"
+    elif predicate_triggered and not production_effect_enabled:
+        reason = "production_effect_disabled"
+    elif blocked:
+        reason = "dual_condition"
+    elif csi300 is None:
+        reason = "csi300_unavailable"
+    else:
+        reason = "conditions_not_met"
+    if "new_entry_blocked" in supplied and supplied["new_entry_blocked"] is not blocked:
+        raise ValueError("northbound control new_entry_blocked disagrees with source facts")
+    if "predicate_triggered" in supplied and supplied["predicate_triggered"] is not predicate_triggered:
+        raise ValueError("northbound control predicate_triggered disagrees with source facts")
+    if "reason" in supplied and supplied["reason"] != reason:
+        raise ValueError("northbound control reason disagrees with source facts")
+    return {
+        "source_as_of": source_as_of,
+        "source_paths": expected_paths,
+        "net_flow_5d": flow,
+        "status": status,
+        "csi300_pct_change_window": csi300,
+        "csi300_window": csi300_window,
+        "requested_session_count": requested_session_count,
+        "observed_session_count": observed_session_count,
+        "coverage_complete": coverage_complete,
+        "production_effect_enabled": production_effect_enabled,
+        "predicate_triggered": predicate_triggered,
+        "new_entry_blocked": blocked,
+        "reason": reason,
+    }
+
+
+def _northbound_control_from_analysis(ai: dict, as_of: str) -> dict:
+    """Bind the gate to validated analysis_input facts, never to market text."""
+    market_context = (ai or {}).get("market_context") or {}
+    northbound = market_context.get("northbound") or {}
+    breadth = market_context.get("breadth") or {}
+    decision_as_of = str(
+        (ai or {}).get("decision_as_of")
+        or (ai or {}).get("trade_date")
+        or ((ai or {}).get("source") or {}).get("clocks", {}).get("decision_as_of")
+        or ""
+    )
+    if decision_as_of != str(as_of):
+        raise ValueError("analysis_input decision_as_of is not bound to weekly as_of")
+    csi300_window = breadth.get("csi300_window") or {
+        "start_date": decision_as_of,
+        "end_date": decision_as_of,
+        "length": 1,
+        "length_unit": "trading_sessions",
+    }
+    return _normalise_northbound_control({
+        "source_as_of": decision_as_of,
+        "source_paths": {
+            "northbound": _NORTHBOUND_SOURCE_PATH,
+            "csi300": _CSI300_SOURCE_PATH,
+        },
+        "net_flow_5d": northbound.get("net_flow_5d"),
+        "status": northbound.get("status", "unknown"),
+        "csi300_pct_change_window": breadth.get("csi300_pct_change_window"),
+        "csi300_window": csi300_window,
+        "requested_session_count": northbound.get("requested_session_count", 5),
+        "observed_session_count": northbound.get("observed_session_count", 0),
+        "coverage_complete": northbound.get("coverage_complete", False),
+        "production_effect_enabled": northbound.get("production_effect_enabled", False),
+    }, as_of)
+
+
+def _append_northbound_market_impact(report: dict, control: dict, reason: str) -> None:
+    impacts = report["machine"].setdefault("operation_impact", [])
+    if any(item.get("source_field") == _NORTHBOUND_SOURCE for item in impacts):
+        return
+    impacts.append({
+        "source_field": _NORTHBOUND_SOURCE,
+        "field_class": "structured",
+        "visibility_shape": "candidate_row_impact",
+        "impact_scope": "new_entry",
+        "new_entry_effect": "observe_required",
+        "holding_effect": "none",
+        "blocked_add_required": False,
+        "veto_class": "none",
+        "reason": reason,
+        "evidence_ref": {
+            "kind": "lineage_key",
+            "value": _NORTHBOUND_SOURCE_PATH,
+            "as_of": control["source_as_of"],
+        },
+        "confidence": "high",
+        "pit_basis": "observed_date",
+        "production_effect_enabled": True,
+        "implementation_status": "implemented",
+        "m67_landing_surface": "table.操作/股数/触发条件 + machine.operation_impact + weekly.northbound_control",
+        "terminal_surface_target": "already_structured",
+        "pending_successor_slice": None,
+        "privacy_class": "public_tracked",
+    })
+
+
+def _apply_northbound_market_gate(reports: list, control: dict) -> None:
+    """Make the existing EGS silence condition a new-entry-only weekly gate."""
+    if not control["production_effect_enabled"] or not control["new_entry_blocked"]:
+        return
+    reason = (
+        f"{_NORTHBOUND_MARKER}: CSI300窗口 "
+        f"{control['csi300_pct_change_window']:.2f}% < "
+        f"{NORTHBOUND_CSI300_SILENCE_THRESHOLD_PCT:g}，"
+        f"北向5日净流出 {control['net_flow_5d']:.2f} 元；本周禁止新建仓"
+    )
+    for rank, report in enumerate(reports, start=1):
+        if report["m67"]["table"].get("操作") != "建仓":
+            continue
+        _demote_build_to_observe(report, rank)
+        table = report["m67"]["table"]
+        layer = report["machine"]["entry_exit_size_star"]
+        layer["reject_reason"] = reason
+        table["触发条件"] = reason
+        cut = report["m67"]["精简结论区"]
+        cut["风控触发"] = f"{cut.get('风控触发') or ''}｜{_NORTHBOUND_MARKER}".lstrip("｜")
+        cut["操作建议"] = f"{reason}。本周不建仓。"
+        _append_northbound_market_impact(report, control, reason)
+
+
 def _demote_build_for_portfolio_risk(report: dict, rank: int, reason: str) -> None:
     """Reuse the canonical observe conversion, then replace its cash-only reason."""
     _demote_build_to_observe(report, rank)
@@ -1286,7 +1517,8 @@ def build_weekly_report(normalized_list: list, as_of: str, generated_at: str,
                         margin_coverage: dict | None = None,
                         portfolio_fact_as_of: str | None = None,
                         portfolio_fact_fetch_status: str = "not_requested",
-                        pre_holiday_control: dict | None = None) -> dict:
+                        pre_holiday_control: dict | None = None,
+                        northbound_control: dict | None = None) -> dict:
     from runners.a_short_phase5_engine import build_m67_report, build_holding_report
     incoming_lineage = dict(run_lineage or {})
     incoming_price_freshness = incoming_lineage.get("price_freshness") or {}
@@ -1303,6 +1535,28 @@ def build_weekly_report(normalized_list: list, as_of: str, generated_at: str,
     if portfolio_fact_fetch_status not in {"not_requested", "ok", "not_published", "unavailable"}:
         raise ValueError("portfolio fact fetch status invalid")
     pre_holiday_control = _normalise_pre_holiday_control(pre_holiday_control, as_of)
+    if northbound_control is None:
+        northbound_control = {
+            "source_as_of": str(as_of),
+            "source_paths": {
+                "northbound": _NORTHBOUND_SOURCE_PATH,
+                "csi300": _CSI300_SOURCE_PATH,
+            },
+            "net_flow_5d": None,
+            "status": "unknown",
+            "csi300_pct_change_window": None,
+            "csi300_window": {
+                "start_date": str(as_of),
+                "end_date": str(as_of),
+                "length": 1,
+                "length_unit": "trading_sessions",
+            },
+            "requested_session_count": 5,
+            "observed_session_count": 0,
+            "coverage_complete": False,
+            "production_effect_enabled": False,
+        }
+    northbound_control = _normalise_northbound_control(northbound_control, as_of)
     if margin_coverage is None:
         margin_coverage = {
             "reference_date": price_data_through, "effective_ref_date": None,
@@ -1405,6 +1659,7 @@ def build_weekly_report(normalized_list: list, as_of: str, generated_at: str,
                 if n.get("egs_coverage") == "uncovered" else build_m67_report(n, as_of, generated_at))
                for n in bound_normalized_list]
     _validate_account_position_coverage(account_positions, reports, missing_holding_codes)
+    _apply_northbound_market_gate(reports, northbound_control)
     from engine.a_short_portfolio_risk import build_context
     portfolio_context = build_context(
         bound_normalized_list, portfolio_fact_as_of, fact_overrides=portfolio_fact_overrides,
@@ -1450,6 +1705,7 @@ def build_weekly_report(normalized_list: list, as_of: str, generated_at: str,
         "price_data_through": (lineage.get("price_freshness") or {}).get("price_data_through", as_of),
         "iv_feed_ref": iv_feed_ref, "n_stocks": len(reports), "reports": reports,
         "cash_allocation": cash_summary,
+        "northbound_control": northbound_control,
         "portfolio_risk": portfolio_risk,
         "run_lineage": lineage,
         "boundary": {"production": False, "real_money": False,
@@ -1646,7 +1902,8 @@ def _bind_effect_contract_trend_guard(weekly: dict, out_path: str | Path) -> dic
 
 def validate_weekly_report(weekly: dict, iv_feed_summary: dict,
                            *, previous_ledger: dict | None = None,
-                           expected_pre_holiday_control: dict | None = None) -> None:
+                           expected_pre_holiday_control: dict | None = None,
+                           expected_northbound_control: dict | None = None) -> None:
     """关闭 P2:消费方校验它读入的 IV feed + 每张 M6.7。"""
     from datetime import datetime
     from runners.a_short_iv_feed_build import validate_feed_artifact
@@ -1784,6 +2041,20 @@ def validate_weekly_report(weekly: dict, iv_feed_summary: dict,
             if supplied_pre_holiday != source_control:
                 raise ValueError(
                     "cash_allocation.pre_holiday_control 与 analysis_input 交易日历不一致")
+    northbound_control = weekly.get("northbound_control")
+    if not isinstance(northbound_control, dict):
+        raise ValueError("weekly 缺少 northbound_control")
+    if northbound_control != _normalise_northbound_control(
+            northbound_control, weekly["as_of"]):
+        raise ValueError("weekly.northbound_control 未按 source facts 归一化")
+    if expected_northbound_control is not None:
+        source_northbound = _normalise_northbound_control(
+            expected_northbound_control, weekly["as_of"]
+        )
+        if northbound_control != source_northbound:
+            raise ValueError(
+                "weekly.northbound_control 与 analysis_input 北向事实不一致"
+            )
     from runners.a_short_iv_feed_build import (
         M05_CONSERVATIVE_BLOCK_REASON, M05_CONSERVATIVE_MODE,
     )
@@ -5067,6 +5338,7 @@ def main(argv=None, pro_factory=None, price_provider=None, semantic_provider=Non
     # 按 2026-06-14 用户决策:unknown → 震荡期 + 降级 + 保守减半 + M6.7 明确提示。
     regime, regime_fallback = resolve_market_regime(ai)
     pre_holiday_control = _pre_holiday_control_from_analysis(ai, args.as_of)
+    northbound_control = _northbound_control_from_analysis(ai, args.as_of)
     # available_cash 是用户必填输入。零现金仍须管理已有持仓,但不得建立新仓;
     # 未提供 --account → observation-only(sizing_mode 标进 run_lineage,读者不会把 sizing 假象的「观察」当真 avoid 信号)。
     available_cash = acct.get("available_cash")
@@ -5498,7 +5770,8 @@ def main(argv=None, pro_factory=None, price_provider=None, semantic_provider=Non
                                  candidate_exclusions=candidate_exclusions,
                                  portfolio_fact_as_of=price_data_through,
                                  portfolio_fact_fetch_status=portfolio_fact_fetch_status,
-                                 pre_holiday_control=pre_holiday_control)
+                                 pre_holiday_control=pre_holiday_control,
+                                 northbound_control=northbound_control)
     weekly["decision_as_of"] = str(args.as_of)
     weekly["run_date"] = str(args.run_date) if args.run_date else None
     weekly["price_data_through"] = price_data_through
@@ -5599,7 +5872,8 @@ def main(argv=None, pro_factory=None, price_provider=None, semantic_provider=Non
     # Phase4 views. The builder renders already-created task records and never
     # mutates analysis_input or the M6.7 decision.
     validate_weekly_report(weekly, feed, previous_ledger=previous_effect_ledger,
-                           expected_pre_holiday_control=pre_holiday_control)
+                           expected_pre_holiday_control=pre_holiday_control,
+                           expected_northbound_control=northbound_control)
     phase4_report_dir = (
         Path(args.phase4_report_dir) if args.phase4_report_dir else
         (ROOT / "result" / "a_short" / args.as_of / "reports" if official_input
