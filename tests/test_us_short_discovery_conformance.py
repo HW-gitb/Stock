@@ -1843,6 +1843,9 @@ class LaneGuardRegistryConformance(unittest.TestCase):
         ("runners.us_short_discovery_publish_policy", "validate_exact_decision_slot",
          "tests.provider.test_us_short_llm_theme_discovery.OfflineLLMThemeDiscoveryTests"
          ".test_only_own_decision_date_slot_can_be_published"),
+        ("runners.us_short_discovery_publish_policy", "ensure_decision_slots_absent",
+         "tests.provider.test_us_short_llm_theme_discovery_fetch_web.WebFetchTests"
+         ".test_live_cli_rejects_occupied_formal_slot_before_runner_on_both_lanes"),
         ("runners.us_short_discovery_publish_policy", "write_immutable_json",
          "tests.provider.test_us_short_llm_theme_discovery.OfflineLLMThemeDiscoveryTests"
          ".test_immutable_retry_reuses_only_same_evidence"),
@@ -2010,6 +2013,7 @@ class LaneGuardRegistryConformance(unittest.TestCase):
 
         mutants = {
             "validate_exact_decision_slot": lambda path, expected_path, **_kwargs: Path(path),
+            "ensure_decision_slots_absent": lambda _paths: None,
             "write_immutable_json": blind_write,
             "publish_immutable_pair": blind_pair,
             "write_mutable_ledger": lambda payload, path, **_kwargs: None,

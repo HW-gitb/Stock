@@ -137,6 +137,12 @@ def render_stage1_queries(policy: Mapping[str, Any] | None = None) -> list[dict[
     ]
 
 
+def stage2_rule_sha256(policy: Mapping[str, Any]) -> str:
+    """Return the reviewed policy's canonical Stage-2 rule fingerprint."""
+    validate_query_policy(policy)
+    return _digest(policy["policy_core"]["stage2"])
+
+
 __all__ = [
     "EXPECTED_POLICY_CONTENT_SHA256",
     "EXPECTED_POLICY_VERSION",
@@ -146,5 +152,6 @@ __all__ = [
     "QueryPolicyError",
     "load_query_policy",
     "render_stage1_queries",
+    "stage2_rule_sha256",
     "validate_query_policy",
 ]

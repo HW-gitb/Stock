@@ -20,6 +20,22 @@ from tests.provider.us_short_private_test_root import temporary_us_short_state_d
 
 ROOT = plan_budget.ROOT
 DECISION_DATE = "20260808"
+
+
+def _reviewed_parent_plan() -> dict:
+    """The plan the shipped builder publishes, i.e. the one production actually accepts.
+
+    Wrapped like `_parent()` so the artifact binding the runner needs is present; only the
+    policy-bound fields differ from the synthetic fixture.
+    """
+    from runners import us_short_llm_theme_discovery_build_parent_plan as _builder
+    payload = _builder.build_parent_plan_from_reviewed_policy(
+        decision_date=DECISION_DATE, generated_at=STAMP,
+    )
+    return query_plan.ParentPlanDocument(
+        payload, artifact_sha256="c" * 64,
+        artifact_path="state/us_short/test-parent-plan.json",
+    )
 STAMP = "2026-08-02T12:00:00Z"
 
 
@@ -254,6 +270,8 @@ class PlanBudgetAcceptanceTests(unittest.TestCase):
     def _reserved(self, parent: dict, state: Path) -> plan_budget.PlanDispatchBudget:
         return plan_budget.reserve_plan_budget(
             parent, state_dir=state, root=ROOT, gitignored=lambda _path: True,
+            # synthetic plan fixture: the CALLER declares the opt-out, never the plan itself.
+            require_reviewed_policy=False,
         )
 
     def _ledger(self, state: Path, provider: str = "web") -> dict:
@@ -326,7 +344,11 @@ class PlanBudgetAcceptanceTests(unittest.TestCase):
             cell.cell_contents for cell in (web.run_web_fetch.__closure__ or ())
             if getattr(cell.cell_contents, "__name__", "") == "_run_web_fetch"
         )
-        parent = _parent()
+        # This control drives the real _run_web_fetch, which validates the plan against the
+        # reviewed policy before it reserves.  A synthetic plan would only prove that the
+        # authority check can be dodged, so use the plan the builder actually publishes.
+        parent = _reviewed_parent_plan()
+        reviewed_queries = [row["query_text"] for row in parent["canonical_plan_core"]["stage1_queries"]]
         fake_budget = object()
         events: list[str] = []
 
@@ -344,7 +366,7 @@ class PlanBudgetAcceptanceTests(unittest.TestCase):
                 "regroup_failed": False, "regroup_attempted": False,
                 "regroup_chunk_counts": {"attempted": 0, "successful": 0, "failed": 0, "failed_indexes": []},
                 "budget_error": None, "provider_call_count": 0,
-                "stage1_dispatch_count": 1, "stage1_queries": ["Find demand shifts."],
+                "stage1_dispatch_count": 1, "stage1_queries": list(reviewed_queries),
             }
 
         def fake_build(**_kwargs):
@@ -352,7 +374,7 @@ class PlanBudgetAcceptanceTests(unittest.TestCase):
             return ({"packet": True}, {"summary": {"query_count": 1}}, {"summary": True})
 
         common = {
-            "queries": ["Find demand shifts."], "expected_decision_date": DECISION_DATE,
+            "queries": reviewed_queries, "expected_decision_date": DECISION_DATE,
             "generated_at": STAMP, "confirm_user_authorization": True,
             "live": True, "parent_plan": parent,
             "_new_transport": lambda *_providers: object(), "_issue_ticket": lambda: object(),
@@ -434,6 +456,8 @@ class PlanBudgetAcceptanceTests(unittest.TestCase):
                     self._reserved(parent, state)
                 recovered = plan_budget.PlanDispatchBudget(
                     parent, state_dir=state, root=ROOT, gitignored=lambda _path: True,
+                    # synthetic plan fixture: the CALLER declares the opt-out, never the plan itself.
+                    require_reviewed_policy=False,
                 )
                 recovered.recover_stale_in_flight(
                     "web", dispatch_id=1, recovery_reason="executor heartbeat expired",
@@ -518,6 +542,8 @@ class PlanBudgetAcceptanceTests(unittest.TestCase):
                 plan_budget.reserve_plan_budget(
                     parent, expected_decision_date="20260809", state_dir=Path(raw),
                     root=ROOT, gitignored=lambda _path: True,
+                    # synthetic plan fixture: the CALLER declares the opt-out, never the plan itself.
+                    require_reviewed_policy=False,
                 )
             self.assertEqual(list(Path(raw).glob("*.json")), [])
 
@@ -643,6 +669,8 @@ class PlanBudgetAcceptanceTests(unittest.TestCase):
             budget = plan_budget.reserve_plan_budget(
                 parent, state_dir=Path(raw), root=ROOT, gitignored=lambda _path: True,
                 providers=("web",),
+                # synthetic plan fixture: the CALLER declares the opt-out, never the plan itself.
+                require_reviewed_policy=False,
             )
             with self.assertRaisesRegex(plan_budget.PlanBudgetError, "outside the reserved provider scope"):
                 budget.begin("xai", scope="wrong-scope", stage="stage1")

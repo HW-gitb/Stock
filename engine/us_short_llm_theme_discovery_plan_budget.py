@@ -24,6 +24,7 @@ from engine.us_short_llm_theme_discovery_query_plan import (
     derive_stage1_provider_envelope,
     derive_stage1_query_records,
     validate_parent_plan,
+    validate_parent_plan_against_reviewed_policy,
 )
 from engine.us_short_schema_formats import FORMAT_CHECKER
 from runners import us_short_discovery_publish_policy as publish_policy
@@ -231,9 +232,16 @@ def _validate_hard_provider_envelope(provider: str, envelope: Mapping[str, Any])
         raise PlanBudgetError(f"{provider} provider envelope exceeds the hard provider call budget")
 
 
-def _provider_envelopes(parent_plan: Mapping[str, Any]) -> dict[str, dict[str, Any]]:
+def _provider_envelopes(
+    parent_plan: Mapping[str, Any], *, require_reviewed_policy: bool = True,
+) -> dict[str, dict[str, Any]]:
     try:
         validate_parent_plan(parent_plan)
+        if require_reviewed_policy:
+            # The opt-out is the CALLER's to declare, never the plan's.  Keying it on
+            # the plan's own `policy_version` would let a forged plan skip the whole
+            # authority check simply by claiming a different version.
+            validate_parent_plan_against_reviewed_policy(parent_plan)
     except QueryPlanError as exc:
         raise PlanBudgetError(f"parent plan is not valid: {exc}") from exc
     core = parent_plan.get("canonical_plan_core")
@@ -479,9 +487,13 @@ def coerce_budget_error(exc: BaseException) -> PlanBudgetError | None:
 
 def validate_run_decision_date(
     parent_plan: Mapping[str, Any], expected_decision_date: str,
+    *, require_reviewed_policy: bool = True,
 ) -> str:
     try:
         validate_parent_plan(parent_plan)
+        if require_reviewed_policy:
+            # Same rule as `_provider_envelopes`: the caller declares the opt-out.
+            validate_parent_plan_against_reviewed_policy(parent_plan)
     except QueryPlanError as exc:
         raise PlanBudgetError(f"parent plan is not valid: {exc}") from exc
     actual = parent_plan["canonical_plan_core"]["decision_date"]
@@ -575,12 +587,18 @@ class PlanDispatchBudget:
         gitignored: Callable[[Path], bool] | None = None,
         expected_decision_date: str | None = None,
         providers: tuple[str, ...] = PLAN_PROVIDERS,
+        require_reviewed_policy: bool = True,
     ) -> None:
-        envelopes = _provider_envelopes(parent_plan)
+        envelopes = _provider_envelopes(
+            parent_plan, require_reviewed_policy=require_reviewed_policy,
+        )
         if lane != PLAN_LANE:
             raise PlanBudgetError(f"plan budget lane must be {PLAN_LANE}")
         if expected_decision_date is not None:
-            validate_run_decision_date(parent_plan, expected_decision_date)
+            validate_run_decision_date(
+                parent_plan, expected_decision_date,
+                require_reviewed_policy=require_reviewed_policy,
+            )
         self.parent_plan = dict(parent_plan)
         self.lane = lane
         self.state_dir = Path(state_dir)
@@ -907,11 +925,13 @@ def reserve_plan_budget(
     gitignored: Callable[[Path], bool] | None = None,
     expected_decision_date: str | None = None,
     providers: tuple[str, ...] = PLAN_PROVIDERS,
+    require_reviewed_policy: bool = True,
 ) -> PlanDispatchBudget:
     """Build and reserve the one-time parent-plan envelope."""
     budget = PlanDispatchBudget(
         parent_plan, lane=lane, state_dir=state_dir, root=root, gitignored=gitignored,
         expected_decision_date=expected_decision_date, providers=providers,
+        require_reviewed_policy=require_reviewed_policy,
     )
     budget.reserve()
     return budget

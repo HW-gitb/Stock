@@ -40,6 +40,7 @@ from engine.us_short_llm_theme_discovery_provider_policy import (  # noqa: E402
 )
 from engine.us_short_persisted_text_safety import SECRET_TEXT_RE, credential_query_keys  # noqa: E402
 from engine.us_short_schema_formats import FORMAT_CHECKER  # noqa: E402
+from runners import us_short_discovery_publish_policy as publish_policy  # noqa: E402
 from runners.us_short_discovery_publish_policy import (  # noqa: E402
     CLOCK_KEYS_RECEIPT,
     DiscoveryPublishPolicyError,
@@ -333,6 +334,14 @@ def _decision_publish_paths(
     return first, second
 
 
+def _ensure_live_decision_slots_absent(paths: tuple[Path, Path] | list[Path]) -> None:
+    """Refuse a live paid attempt when either formal decision slot is occupied."""
+    try:
+        publish_policy.ensure_decision_slots_absent(paths)
+    except DiscoveryPublishPolicyError as exc:
+        raise WebThemeDiscoveryError(str(exc)) from exc
+
+
 def publish_decision_pair(
     first_payload: Any, first_path: Path, first_expected_path: Path,
     second_payload: Any, second_path: Path, second_expected_path: Path,
@@ -592,8 +601,12 @@ def _validate_cli_raw_root(path: Path, expected_path: Path, *, live: bool) -> Pa
     return resolved
 
 
-def _safe_text(value: Any, *, limit: int) -> str:
-    text = " ".join(str(value or "").split()).replace("`", "").strip()
+def _safe_text(value: Any, *, limit: int, preserve: bool = False) -> str:
+    raw = str(value or "")
+    if preserve:
+        text = raw if raw.strip() and len(raw) <= limit else ""
+    else:
+        text = " ".join(raw.split()).replace("`", "").strip()[:limit]
     # Provider/model text is persisted in raw evidence and public receipts.  A lone
     # surrogate cannot be encoded as UTF-8, so keep it out of the accepted item and
     # let the per-item ingestion boundary ledger that item instead of killing a batch.
@@ -601,11 +614,12 @@ def _safe_text(value: Any, *, limit: int) -> str:
         text.encode("utf-8")
     except UnicodeEncodeError:
         return ""
-    return text[:limit]
+    return text
 
 
 def _safe_queries(
     queries: list[str] | tuple[str, ...], *, deduplicate: bool = True,
+    preserve: bool = False,
 ) -> list[str]:
     if not isinstance(queries, (list, tuple)) or not queries:
         raise WebThemeDiscoveryError("at least one web query is required")
@@ -613,8 +627,8 @@ def _safe_queries(
         raise WebThemeDiscoveryError("Tavily query budget exceeds 25 per week")
     out: list[str] = []
     for raw in queries:
-        query = _safe_text(raw, limit=300)
-        if not query or SECRET_RE.search(query):
+        query = _safe_text(raw, limit=4000, preserve=preserve)
+        if not query or not query.strip() or SECRET_RE.search(query):
             raise WebThemeDiscoveryError("query is empty or secret-like")
         if not deduplicate or query not in out:
             out.append(query)
@@ -1187,7 +1201,9 @@ def build_web_fetch_packet(
     plan_binding: dict[str, Any] | None = None,
     _pending_raw_writes: list[tuple[Path, dict[str, Any]]] | None = None,
 ) -> tuple[dict[str, Any], dict[str, Any], dict[str, Any]]:
-    queries = _safe_queries(queries, deduplicate=plan_binding is None)
+    queries = _safe_queries(
+        queries, deduplicate=plan_binding is None, preserve=plan_binding is not None,
+    )
     generated = _parse_dt(generated_at, field="generated_at")
     _guard_generated_before_open(generated, expected_decision_date)
     fetched = _parse_dt(fetched_at, field="fetched_at") if fetched_at else generated
@@ -1638,7 +1654,7 @@ def _run_web_fetch(
     plan_query_records: list[dict[str, str]] | None = None
     plan_binding: dict[str, Any] | None = None
     if parent_plan is not None:
-        caller_queries = None if queries is None else _safe_queries(queries)
+        caller_queries = None if queries is None else _safe_queries(queries, preserve=True)
         try:
             derived_queries, plan_query_records, plan_binding = query_plan.resolve_stage1_plan_binding(
                 parent_plan, provider="web",
@@ -1804,6 +1820,7 @@ def main(argv: list[str] | None = None) -> int:
         try:
             parent_plan, _parent_plan_sha256, _parent_plan_relative_path = query_plan.read_parent_plan(
                 args.parent_plan, root=ROOT, state_dir=STATE_DIR,
+                require_reviewed_policy=args.live,
             )
         except query_plan.QueryPlanError as exc:
             raise SystemExit(f"parent plan is invalid: {exc}") from exc
@@ -1814,13 +1831,15 @@ def main(argv: list[str] | None = None) -> int:
             raise SystemExit("live mode accepts queries only from --parent-plan")
     elif parent_plan is None and not args.query:
         raise SystemExit("offline mode requires --query or --parent-plan")
-    raw_root = _validate_cli_raw_root(args.raw_root, DEFAULT_RAW_ROOT, live=args.live)
     output, receipt_path = _decision_publish_paths(
         args.output_path or default_discovery_path(args.expected_decision_date),
         default_discovery_path(args.expected_decision_date),
         args.receipt_path or default_receipt_path(args.expected_decision_date),
         default_receipt_path(args.expected_decision_date),
     )
+    if args.live:
+        _ensure_live_decision_slots_absent((output, receipt_path))
+    raw_root = _validate_cli_raw_root(args.raw_root, DEFAULT_RAW_ROOT, live=args.live)
     if not args.live:
         if not args.fake_results_path or not args.fake_llm_response_path:
             raise SystemExit("offline mode requires --fake-results-path and --fake-llm-response-path")

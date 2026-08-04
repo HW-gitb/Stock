@@ -23,6 +23,7 @@ from pathlib import Path
 import re
 from typing import Any, Callable, Mapping
 
+from engine import us_short_llm_theme_discovery_query_policy as query_policy
 from engine.us_short_schema_formats import FORMAT_CHECKER
 from runners.us_short_discovery_publish_policy import (
     DiscoveryPublishPolicyError,
@@ -273,6 +274,34 @@ def validate_parent_plan(payload: dict[str, Any]) -> bool:
     return True
 
 
+def validate_parent_plan_against_reviewed_policy(payload: Mapping[str, Any]) -> bool:
+    """Bind a consumable plan to the tracked reviewed policy, not to its own claims.
+
+    ``validate_parent_plan`` proves only that a plan is internally coherent.  This
+    second door is deliberately separate so generic schema/identity fixtures can
+    remain useful while the current paid route still has an independent authority
+    check before reservation or dispatch.
+    """
+    candidate = dict(payload)
+    validate_parent_plan(candidate)
+    try:
+        policy = query_policy.load_query_policy(query_policy.POLICY_PATH, root=ROOT)
+        expected_queries = query_policy.render_stage1_queries(policy)
+        expected_stage2_sha256 = query_policy.stage2_rule_sha256(policy)
+    except query_policy.QueryPolicyError as exc:
+        raise QueryPlanError("reviewed query policy authority is unavailable") from exc
+    core = candidate["canonical_plan_core"]
+    if core["policy_version"] != query_policy.EXPECTED_POLICY_VERSION:
+        raise QueryPlanError("parent plan is not bound to the reviewed policy version")
+    if core["policy_template_content_sha256"] != query_policy.EXPECTED_POLICY_CONTENT_SHA256:
+        raise QueryPlanError("parent plan is not bound to the reviewed policy content digest")
+    if core["stage1_queries"] != expected_queries:
+        raise QueryPlanError("parent plan Stage-1 queries are not bound to the reviewed policy")
+    if core["stage2_rule_sha256"] != expected_stage2_sha256:
+        raise QueryPlanError("parent plan Stage-2 rule is not bound to the reviewed policy")
+    return True
+
+
 def default_parent_plan_path(
     decision_date: str, plan_identity: str | None = None, *, state_dir: Path = STATE_DIR,
 ) -> Path:
@@ -284,12 +313,21 @@ def default_parent_plan_path(
 
 def read_parent_plan(
     path: Path | str, *, root: Path = ROOT, state_dir: Path | None = None,
+    require_reviewed_policy: bool = True,
 ) -> tuple[dict[str, Any], str, str]:
-    """Read and validate one immutable parent plan before a runner enters its side effects."""
+    """Read one immutable parent plan before a runner enters its side effects.
+
+    Structural validation is also used by offline fixture closures.  The
+    stronger tracked-policy authority check is the secure default; the Web/X
+    offline fake-client path explicitly opts out because it is not a paid
+    dispatch route.
+    """
     repository_root = Path(root).resolve()
     candidate = _normalize_artifact_path(path, root=repository_root)
     payload, artifact_sha256, relative_path = _read_artifact(candidate, root=repository_root)
     validate_parent_plan(payload)
+    if require_reviewed_policy and repository_root == ROOT.resolve():
+        validate_parent_plan_against_reviewed_policy(payload)
     canonical_state_dir = (
         Path(state_dir).resolve()
         if state_dir is not None

@@ -17,6 +17,7 @@ from engine import us_short_llm_theme_discovery_paid_gateway as paid_gateway
 from engine import us_short_llm_theme_discovery_query_plan as query_plan
 from engine import us_short_llm_theme_discovery_provider_policy as provider_policy
 from runners import us_short_llm_theme_discovery_fetch_web as fetch
+from runners import us_short_llm_theme_discovery_fetch_x as xfetch
 from tests.provider.us_short_private_test_root import (
     temporary_provider_directory,
     temporary_us_short_state_directory,
@@ -846,6 +847,36 @@ class WebFetchTests(unittest.TestCase):
                     "--confirm-user-authorization",
                 ])
             run.assert_not_called()
+
+    def test_live_cli_rejects_occupied_formal_slot_before_runner_on_both_lanes(self):
+        parent = _parent_plan("power")
+        with temporary_us_short_state_directory(fetch.ROOT) as td:
+            state = Path(td)
+            web_slot = state / "us_short_llm_theme_discovery_web_20260725.json"
+            x_slot = state / "us_short_llm_theme_discovery_x_20260725.json"
+            web_slot.write_text("{}", encoding="utf-8")
+            x_slot.write_text("{}", encoding="utf-8")
+            common = [
+                "--live", "--parent-plan", "state/us_short/plan.json",
+                "--expected-decision-date", "20260725",
+                "--generated-at", "2026-07-25T08:00:00Z",
+                "--confirm-user-authorization",
+            ]
+            with (
+                mock.patch.object(fetch, "STATE_DIR", state),
+                mock.patch.object(xfetch, "STATE_DIR", state),
+                mock.patch.object(fetch, "_gitignored", return_value=True),
+                mock.patch.object(fetch.query_plan, "read_parent_plan", return_value=(parent, "a" * 64, "state/plan.json")),
+                mock.patch.object(fetch, "run_web_fetch") as web_run,
+                mock.patch.object(xfetch.query_plan, "read_parent_plan", return_value=(parent, "a" * 64, "state/plan.json")),
+                mock.patch.object(xfetch, "run_x_fetch") as x_run,
+            ):
+                with self.assertRaisesRegex(fetch.WebThemeDiscoveryError, "occupied"):
+                    fetch.main(common)
+                with self.assertRaisesRegex(fetch.WebThemeDiscoveryError, "occupied"):
+                    xfetch.main(common)
+            web_run.assert_not_called()
+            x_run.assert_not_called()
 
     def test_packet_order_and_drop_ledger_are_deterministic(self):
         kwargs = dict(queries=["q"], llm_response=self._llm(), expected_decision_date="20260725", generated_at="2026-07-25T08:00:00Z")
