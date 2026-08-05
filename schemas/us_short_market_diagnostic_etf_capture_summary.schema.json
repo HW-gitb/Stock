@@ -1,0 +1,204 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "US-short Knife5 ETF capture summary",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_name", "schema_version", "scope", "family_results", "daily_reconciliation", "storage", "boundary"],
+  "properties": {
+    "schema_name": { "const": "us_short_market_diagnostic_etf_capture_summary" },
+    "schema_version": { "const": "1.0.0" },
+    "scope": { "$ref": "#/definitions/scope" },
+    "family_results": {
+      "type": "array",
+      "minItems": 16,
+      "maxItems": 16,
+      "items": { "$ref": "#/definitions/familyResult" }
+    },
+    "daily_reconciliation": {
+      "type": "array",
+      "minItems": 4,
+      "maxItems": 4,
+      "items": { "$ref": "#/definitions/dailyReconciliation" }
+    },
+    "storage": { "$ref": "#/definitions/storage" },
+    "boundary": { "$ref": "#/definitions/boundary" }
+  },
+  "definitions": {
+    "sha256": { "type": "string", "pattern": "^[0-9a-f]{64}$" },
+    "date": { "type": ["string", "null"], "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}$" },
+    "dateTime": { "type": "string", "format": "date-time" },
+    "scope": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "authorization_ref",
+        "capture_date",
+        "provider_id",
+        "symbols",
+        "endpoint_families",
+        "price_window",
+        "generated_at",
+        "nominal_logical_calls",
+        "max_total_http_attempts",
+        "actual_logical_requests",
+        "actual_http_attempts",
+        "retry_count_used"
+      ],
+      "properties": {
+        "authorization_ref": { "const": "user_chat_20260805_knife5_live_etf_total_return_fetch" },
+        "capture_date": { "const": "20260805" },
+        "provider_id": { "const": "massive" },
+        "symbols": { "const": ["SPY", "QQQ", "IWB", "VTI"] },
+        "endpoint_families": { "const": ["dividends", "splits", "daily_adjusted", "daily_unadjusted"] },
+        "price_window": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["from", "to"],
+          "properties": {
+            "from": { "const": "2019-01-01" },
+            "to": { "const": "2026-07-10" }
+          }
+        },
+        "generated_at": { "$ref": "#/definitions/dateTime" },
+        "nominal_logical_calls": { "const": 32 },
+        "max_total_http_attempts": { "const": 40 },
+        "actual_logical_requests": { "type": "integer", "minimum": 0, "maximum": 32 },
+        "actual_http_attempts": { "type": "integer", "minimum": 0, "maximum": 40 },
+        "retry_count_used": { "type": "integer", "minimum": 0, "maximum": 8 }
+      }
+    },
+    "familyResult": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "symbol",
+        "endpoint_family",
+        "pages_captured",
+        "pagination_complete",
+        "http_success_pages",
+        "final_http_status",
+        "error_types",
+        "row_count",
+        "matched_symbol_row_count",
+        "field_names",
+        "required_field_names",
+        "required_fields_present",
+        "source_date_from",
+        "source_date_to",
+        "observed_at",
+        "source_sha256",
+        "status"
+      ],
+      "properties": {
+        "symbol": { "enum": ["SPY", "QQQ", "IWB", "VTI"] },
+        "endpoint_family": { "enum": ["dividends", "splits", "daily_adjusted", "daily_unadjusted"] },
+        "pages_captured": { "type": "integer", "minimum": 0, "maximum": 2 },
+        "pagination_complete": { "type": "boolean" },
+        "http_success_pages": { "type": "integer", "minimum": 0, "maximum": 2 },
+        "final_http_status": { "type": ["integer", "null"] },
+        "error_types": { "type": "array", "uniqueItems": true, "items": { "type": "string" } },
+        "row_count": { "type": "integer", "minimum": 0 },
+        "matched_symbol_row_count": { "type": "integer", "minimum": 0 },
+        "field_names": { "type": "array", "uniqueItems": true, "items": { "type": "string" } },
+        "required_field_names": { "type": "array", "uniqueItems": true, "items": { "type": "string" } },
+        "required_fields_present": { "type": "boolean" },
+        "source_date_from": { "$ref": "#/definitions/date" },
+        "source_date_to": { "$ref": "#/definitions/date" },
+        "observed_at": { "$ref": "#/definitions/dateTime" },
+        "source_sha256": { "$ref": "#/definitions/sha256" },
+        "status": {
+          "enum": [
+            "covered",
+            "provider_error",
+            "empty",
+            "missing_required_fields",
+            "rows_do_not_match_symbol",
+            "pagination_incomplete"
+          ]
+        }
+      }
+    },
+    "dailyReconciliation": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "symbol",
+        "status",
+        "adjusted_session_count",
+        "unadjusted_session_count",
+        "overlap_session_count",
+        "numeric_pair_count",
+        "adjusted_source_sha256",
+        "unadjusted_source_sha256",
+        "observed_at"
+      ],
+      "properties": {
+        "symbol": { "enum": ["SPY", "QQQ", "IWB", "VTI"] },
+        "status": { "enum": ["session_coverage_match", "session_coverage_mismatch", "not_evaluable"] },
+        "adjusted_session_count": { "type": "integer", "minimum": 0 },
+        "unadjusted_session_count": { "type": "integer", "minimum": 0 },
+        "overlap_session_count": { "type": "integer", "minimum": 0 },
+        "numeric_pair_count": { "type": "integer", "minimum": 0 },
+        "adjusted_source_sha256": { "$ref": "#/definitions/sha256" },
+        "unadjusted_source_sha256": { "$ref": "#/definitions/sha256" },
+        "observed_at": { "$ref": "#/definitions/dateTime" }
+      }
+    },
+    "storage": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "raw_payload_root",
+        "normalized_capture_path",
+        "normalized_capture_gitignored",
+        "tracked_summary_path",
+        "tracked_summary_contains_secrets",
+        "tracked_summary_contains_request_urls",
+        "tracked_summary_contains_raw_payload_rows",
+        "tracked_summary_contains_raw_price_values",
+        "tracked_summary_contains_raw_event_values"
+      ],
+      "properties": {
+        "raw_payload_root": { "const": "provider_samples/us_short_market_diagnostic_etf_capture_20260805/raw" },
+        "normalized_capture_path": { "const": "provider_samples/us_short_market_diagnostic_etf_capture_20260805/normalized_capture.json" },
+        "normalized_capture_gitignored": { "const": true },
+        "tracked_summary_path": { "const": "docs/us_short_market_diagnostic_etf_capture_summary_20260805.json" },
+        "tracked_summary_contains_secrets": { "const": false },
+        "tracked_summary_contains_request_urls": { "const": false },
+        "tracked_summary_contains_raw_payload_rows": { "const": false },
+        "tracked_summary_contains_raw_price_values": { "const": false },
+        "tracked_summary_contains_raw_event_values": { "const": false }
+      }
+    },
+    "boundary": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "provider_calls_performed",
+        "capture_segment_performed",
+        "week_aligned_sidecar_written",
+        "total_return_calculation_performed",
+        "diagnostic_clock_started",
+        "real_account_written",
+        "selection_or_action_changed",
+        "production_or_ship_gate_claimed",
+        "datahub_consumed",
+        "provider_selected",
+        "sr_provider_001_closed"
+      ],
+      "properties": {
+        "provider_calls_performed": { "const": true },
+        "capture_segment_performed": { "const": true },
+        "week_aligned_sidecar_written": { "const": false },
+        "total_return_calculation_performed": { "const": false },
+        "diagnostic_clock_started": { "const": false },
+        "real_account_written": { "const": false },
+        "selection_or_action_changed": { "const": false },
+        "production_or_ship_gate_claimed": { "const": false },
+        "datahub_consumed": { "const": false },
+        "provider_selected": { "const": false },
+        "sr_provider_001_closed": { "const": false }
+      }
+    }
+  }
+}

@@ -1,5 +1,13 @@
 # Session Log
 
+## 2026-08-05 — Claude Code 代执行刀5 捕获段（Codex 额度耗尽，用户令）+ 自审
+
+- **Verdict/Action**: 已跑完并提交。Codex 建好了 runner/packet/schema/测试但平台拒绝其 Python，故未跑过任何东西；我接手后先跑测试，发现 `26 tests / 2 errors`——`_FakeClient` 调了自己没定义的 `assertIn`，纯夹具缺陷（runner 只有一处 `client.get_json`）。修夹具、补一条缺失的截断路径测试、把名不副实的测试改名，产品代码零改动。真实抓取用 16 次调用（上限 40）完成。
+- **Required**: 无。捕获结果、安全面实测与一处窗口口径落差只见 `docs/system_risk_register.md`（单一来源）。
+- **Verify**: 本轮为代执行 + 自审、非 slice 审查门，hook 未注入 token，故不引用。焦点包 `68 OK / 1.5s / exit 0`。整类扫描确认 `assertIn` 是 `_FakeClient` 内唯一未定义引用（AST 比对 defined/assigned/used）。**植入对照**：把 runner 页上限 +1 → 原测试仍绿（证其名不副实、根本没验上限），新增的截断测试转红；恢复后 5 OK。真跑前另花 1 次调用试探 SPY 分红：78 行、无 `next_url`，据此判定 2 页上限足够，避免整批回 incomplete。跑后实测：16/16 调用、13 covered + 3 empty(splits)、`pagination_complete` 全 True、四 ETF `session_coverage_match`、tracked 摘要无 key/URL/payload、raw 全在 `git check-ignore` 证实的忽略目录。
+- **Next**: Codex 额度恢复后接刀5 第二段（week-aligned sidecar），仍须等 `设计完成` 通知与 `diagnostic_start_receipt`。
+
+
 ## 2026-08-05 — Claude Code 复审 PASS（补扫六条全部实测闭合，含那条 P1）
 
 - **Verdict/Action**: PASS。六条逐条由审查方原样复打补扫时的探针确认。最重的 F1：`dividend_sidecar_sha256` 在 knife-1 引擎由 **0 次增至 6 次**，把 price-only 周改标签并置空摘要现被拒（`total return requires a dividend sidecar digest`）。F2 的修法对路——价格包新增 `prior_price_date`，sidecar 自报区间被拉宽时**降级**为 `price_return_diagnostic`（0.01 纯价格收益）而非抛错或升级。

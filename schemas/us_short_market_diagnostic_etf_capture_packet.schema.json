@@ -1,0 +1,118 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "US-short Knife5 ETF capture execution packet",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_name",
+    "schema_version",
+    "capture_date",
+    "authorization_ref",
+    "scope",
+    "storage",
+    "execution",
+    "boundary"
+  ],
+  "properties": {
+    "schema_name": { "const": "us_short_market_diagnostic_etf_capture_packet" },
+    "schema_version": { "const": "1.0.0" },
+    "capture_date": { "const": "20260805" },
+    "authorization_ref": { "const": "user_chat_20260805_knife5_live_etf_total_return_fetch" },
+    "scope": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["purpose", "provider_id", "symbols", "endpoint_families", "price_window"],
+      "properties": {
+        "purpose": { "const": "knife5_capture_segment_coverage_reconciliation_evidence_only" },
+        "provider_id": { "const": "massive" },
+        "symbols": { "const": ["SPY", "QQQ", "IWB", "VTI"] },
+        "endpoint_families": { "const": ["dividends", "splits", "daily_adjusted", "daily_unadjusted"] },
+        "price_window": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["from", "to"],
+          "properties": {
+            "from": { "const": "2019-01-01" },
+            "to": { "const": "2026-07-10" }
+          }
+        }
+      }
+    },
+    "storage": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "raw_payload_root",
+        "normalized_capture_path",
+        "tracked_summary_path",
+        "raw_must_be_gitignored",
+        "tracked_summary_must_exclude"
+      ],
+      "properties": {
+        "raw_payload_root": {
+          "const": "provider_samples/us_short_market_diagnostic_etf_capture_20260805/raw"
+        },
+        "normalized_capture_path": {
+          "const": "provider_samples/us_short_market_diagnostic_etf_capture_20260805/normalized_capture.json"
+        },
+        "tracked_summary_path": {
+          "const": "docs/us_short_market_diagnostic_etf_capture_summary_20260805.json"
+        },
+        "raw_must_be_gitignored": { "const": true },
+        "tracked_summary_must_exclude": {
+          "const": ["secrets", "request_urls", "raw_payload_rows", "raw_price_values", "raw_event_values"]
+        }
+      }
+    },
+    "execution": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "max_pages_per_symbol_family",
+        "nominal_logical_calls",
+        "max_total_http_attempts",
+        "max_retries_per_page",
+        "pace_seconds",
+        "retry_backoff_seconds",
+        "retry_only_on_http_429",
+        "requires_explicit_confirmation"
+      ],
+      "properties": {
+        "max_pages_per_symbol_family": { "const": 2 },
+        "nominal_logical_calls": { "const": 32 },
+        "max_total_http_attempts": { "const": 40 },
+        "max_retries_per_page": { "const": 2 },
+        "pace_seconds": { "const": 13 },
+        "retry_backoff_seconds": { "const": 2 },
+        "retry_only_on_http_429": { "const": true },
+        "requires_explicit_confirmation": { "const": true }
+      }
+    },
+    "boundary": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "provider_calls_allowed",
+        "capture_segment_allowed",
+        "week_aligned_sidecar_allowed",
+        "total_return_calculation_allowed",
+        "diagnostic_clock_start_allowed",
+        "real_account_write_allowed",
+        "selection_or_action_change_allowed",
+        "production_or_ship_gate_claim_allowed",
+        "datahub_consumption_allowed"
+      ],
+      "properties": {
+        "provider_calls_allowed": { "const": true },
+        "capture_segment_allowed": { "const": true },
+        "week_aligned_sidecar_allowed": { "const": false },
+        "total_return_calculation_allowed": { "const": false },
+        "diagnostic_clock_start_allowed": { "const": false },
+        "real_account_write_allowed": { "const": false },
+        "selection_or_action_change_allowed": { "const": false },
+        "production_or_ship_gate_claim_allowed": { "const": false },
+        "datahub_consumption_allowed": { "const": false }
+      }
+    }
+  }
+}
