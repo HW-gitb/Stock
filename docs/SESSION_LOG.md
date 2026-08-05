@@ -1,5 +1,35 @@
 # Session Log
 
+## 2026-08-05 — Claude 审查 PASS（序 22b 两条 P1 收口）
+
+- **Verdict/Action**: PASS，已提交并合入 master。两条 P1 都按指定形态闭合：① 新建 `engine/a_short_csi300_window.py` 单一来源化窗口语义（20=最小长度守卫、65=实盘窗口），回看改用 65，并用测试断言把它钉到 `DAILY_ALL_QFQ_WINDOW_TRADING_DAYS`；② runner 加 row-cap 检测与分段取数。上轮那个误导性的 `trigger_count = 0` 已消除。
+- **Required**: 无。两条 R-ID 均 closed；覆盖计数、植入对照、两条 deferred Optional 与仍未覆盖的边界见 `docs/system_risk_register.md`（单一来源，本处不复述）。
+- **Verify**: review-evidence:7b1f49e37051；覆盖实测三项皆动且自洽——eligible `57→123`、unavailable `98→32`（`warm_up=13`/`fetch_truncated=0`/`source_gap=19`，合计 32）、trigger `0→5`，且 `123+32=155`、`5<=123`。植入对照证钉子承重：`CSI300_LIVE_WINDOW_SESSIONS` 65→64 → phase6 守卫 `FAILED (failures=1)`，还原逐字节一致。我复跑验收包 `Ran 45 tests ... OK`；执行方 full lane `2402 OK` 按新 rule 4 引用不重跑。32 周仍无覆盖，三年频率仍 `NOT_VERIFIED`。
+- **Next**: Codex：执行
+
+## 2026-08-05 — Codex executor/fixer — seq22b P1 repair（review pending）
+
+- **Verdict/Action**: 按用户 `修复22b` 修复 Claude FAIL 点名的两条 P1：CSI300 回看窗口绑定与 provider row-cap 分段/分类；未改生产 effect、未 commit、未 push、未 merge。
+- **Required**: `R-ASHORT-SEQ22B-CSI300-WINDOW-MISMATCH`、`R-ASHORT-SEQ22B-FETCH-TRUNCATED-AT-PROVIDER-ROW-CAP` = implemented / `OPEN-NOT_VERIFIED`；两个 review Optional 均 deferred，完整细节只见 `docs/system_risk_register.md` 与同日 handoff。
+- **Verify**: 固定 Python 3.13.8；provider `4/6` calls、`155 weeks / 123 eligible / 32 unavailable / 5 triggers`，breakdown `warm_up=13 / fetch_truncated=0 / source_gap=19`，summary `PARTIAL`；focused `Ran 132 tests in 82.568s` / `OK`，receipt `receipt:ca0c033c553615ccfa934ecc`；final full `Ran 2402 tests in 476.578s` / `OK (skipped=3)`，`RESULT status=PASS exit=0`；static/schema/diff 与交接门 `Ran 55 tests in 1.733s` / `OK`。
+- **Pre-Codex self-review**: `A-F checked; matrix=two P1 Required + two Optional dispositions; register=updated; handoff=updated; focused=132 OK; full-lane=2402 OK; door=route-doc + doc-governance 55 OK; provider=bounded 4/6; sub-agent=NOT_USED; review=NOT_VERIFIED; commit/push/merge=NOT_PERFORMED`。
+- **Next**: Claude Code：审查序22b P1修复
+
+## 2026-08-05 — Claude 审查 FAIL（序 22b 北向回看统计）
+
+- **Verdict/Action**: FAIL，不提交、不合入。工程质量本身不差——同一谓词、精确对账、分母诚实、单位正确、产物可复算全部成立。但**这刀的产出目的（给真钱门的通电裁决供证据）没有达成**：`trigger_count = 0` 测的是与实盘门不同的条件，又只测了一段结构上不含任何实盘触发期的样本。两条 P1 必须都修。
+- **Required**: `R-ASHORT-SEQ22B-CSI300-WINDOW-MISMATCH`(P1)、`R-ASHORT-SEQ22B-FETCH-TRUNCATED-AT-PROVIDER-ROW-CAP`(P1)，与两条 P2 Optional、以及「已确认不必返工」清单，全部见 `docs/system_risk_register.md`（单一来源，本处不复述）。
+- **Verify**: review-evidence:not_available（本轮未触发 gate 快照注入）。P1-① 我自读坐实：`get_csi300_return` 的 `>= 20` 是最小长度守卫（在 `trade_dates[-1]` 与 35 自然日兜底间二选一），真实窗口是 `trade_dates` 整跨度＝65 根，而回看写死 20。P1-② 我实读 gitignored raw：恰好 300 行、`20250429→20260804`，而同区间 `index_daily` 返回 726 根，`calls_made=2/6`。独立对抗 agent（worktree 只读）在产物自带的 726 根真实序列上重算：20 根窗口 1/151 命中、65 根窗口 7/142，且 7 个命中**全部**落在北向被截断掉的区间。我复跑验收包 `Ran 31 tests ... OK`；执行方 full lane `2398 OK` 按新 rule 4 引用不重跑。超时原因:独立对抗 agent 回报占用约 8 分钟墙钟。
+- **Next**: Codex：修复
+
+## 2026-08-05 — Codex executor/fixer — seq22b（review pending）
+
+- **Verdict/Action**: 仅执行序 22b。新增 bounded provider lookback、counts-only comparison artifact、schema、回归/负向测试，并补登记新 runner 的有限 JSON writer；未改生产门或生产决策链，未提交、未 push、未 merge。
+- **Required**: `R-ASHORT-SEQ22B-NORTHBOUND-LOOKBACK-PARTIAL-COVERAGE` 保持 `OPEN-NOT_VERIFIED`：155 周中 57 周 eligible、98 周 `unavailable`，产物为 `PARTIAL`，故触发频率不能称为三年已验证；原空产物问题已在本树补上 producer，详情见 `docs/system_risk_register.md` 与同日 handoff。
+- **Verify**: 固定主 Python `C:\Users\cnhea\AppData\Local\Programs\Python\Python313\python.exe`（Python 3.13.8）；`moneyflow_hsgt` + `index_daily(000300.SH)` 实际 `2/6` calls，raw 仅 gitignored，replay 未新增 call。合并 focused `Ran 118 tests in 79.241s` / `OK`，receipt `receipt:d836041f06598d5ef608b0de`；`py_compile=0 json=0 static_residue_scan=0`，`git diff --check` exit 0。首次 full 因 writer registry 未登记真实失败 `Ran 1174 tests in 208.981s` / `FAILED (failures=1)`；登记后最终 full `Ran 2398 tests in 459.278s` / `OK (skipped=3)`，ledger `RESULT status=PASS exit=0`。post-doc door：`Ran 55 tests in 1.691s` / `OK`，receipt `receipt:fd123cc7f41a2e3a220d0bb1`。
+- **Pre-Codex self-review**: A-F checked；调用链、直接消费者、schema/source-binding、CNY 单位、5/20-session 窗口、写盘边界、缺覆盖/单条件/错误 benchmark/谓词植入负控均复核；`register=updated`，`handoff=updated`，`focused=118 OK`，`full-lane=2398 OK`，`provider/live=bounded provider only`，`sub-agent=NOT_USED`，`review=NOT_VERIFIED`，`commit/push/merge=NOT_PERFORMED`。
+- **Next**: Claude Code：审查
+
 ## 2026-08-04 — Claude 修复（R-ASHORT-ROW22A 整类扫描，用户令）
 
 - **Verdict/Action**: 上一轮 `c9053abd` 只修了被点名的单个实例，未做整类扫描；本轮补做。类的边界是**可达性不是语法**——只有能收到 numpy 标量（数据来自 pandas/provider 帧）的判定在类内。扫描结论：全仓 142 处 `(int, float)` 判定里，该类**当前只有两个成员**，因为只有 `a_short_northbound` 与 `a_short_market_history` 直接归约 provider 原始行，其余都在 JSON 边界之后。

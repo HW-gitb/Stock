@@ -1,7 +1,7 @@
 {
   "$schema": "http://json-schema.org/draft-07/schema#",
   "title": "a_short_northbound_market_silence_lookback_summary",
-  "description": "Counts-only comparison artifact for the structured northbound/CSI300 new-entry gate. It never changes production decisions.",
+  "description": "Counts-only comparison artifact for the structured northbound/CSI300 new-entry gate. It never changes production decisions and never stores provider rows.",
   "type": "object",
   "additionalProperties": false,
   "required": [
@@ -9,35 +9,167 @@
     "schema_version",
     "as_of",
     "lookback_basis",
+    "lookback_start",
     "lookback_week_count",
     "weeks_considered",
     "source_artifact_count",
     "structured_fact_week_count",
     "eligible_week_count",
     "trigger_count",
+    "unavailable_week_count",
+    "weeks",
     "status",
     "comparison_only",
     "production_effect_enabled",
+    "source_binding",
+    "unavailable_breakdown",
+    "northbound_fetch",
+    "execution",
+    "storage",
     "not_verified"
   ],
   "properties": {
     "schema_name": {"const": "a_short_northbound_market_silence_lookback_summary"},
-    "schema_version": {"const": "1.0.0"},
+    "schema_version": {"const": "2.0.0"},
     "as_of": {"type": "string", "pattern": "^[0-9]{8}$"},
-    "lookback_basis": {"const": "available_tracked_weekly_artifacts"},
+    "lookback_basis": {"const": "provider_historical_week_endpoints"},
+    "lookback_start": {"type": "string", "pattern": "^[0-9]{8}$"},
     "lookback_week_count": {"type": "integer", "minimum": 0},
     "weeks_considered": {
       "type": "array",
       "items": {"type": "string", "pattern": "^[0-9]{8}$"},
       "uniqueItems": true
     },
-    "source_artifact_count": {"type": "integer", "minimum": 0},
+    "source_artifact_count": {"type": "integer", "minimum": 0, "maximum": 2},
     "structured_fact_week_count": {"type": "integer", "minimum": 0},
     "eligible_week_count": {"type": "integer", "minimum": 0},
     "trigger_count": {"type": ["integer", "null"], "minimum": 0},
-    "status": {"const": "NOT_VERIFIED"},
+    "unavailable_week_count": {"type": "integer", "minimum": 0},
+    "weeks": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "week_end",
+          "northbound_coverage",
+          "csi300_coverage",
+          "verdict",
+          "unavailable_reason",
+          "predicate_consistent"
+        ],
+        "properties": {
+          "week_end": {"type": "string", "pattern": "^[0-9]{8}$"},
+          "northbound_coverage": {"enum": ["complete", "unavailable"]},
+          "csi300_coverage": {"enum": ["complete", "unavailable"]},
+          "verdict": {"enum": ["triggered", "eligible_not_triggered", "unavailable"]},
+          "unavailable_reason": {"enum": ["warm_up", "fetch_truncated", "source_gap", null]},
+          "predicate_consistent": {"const": true}
+        }
+      }
+    },
+    "status": {"enum": ["COMPLETE", "PARTIAL", "NOT_VERIFIED"]},
     "comparison_only": {"const": true},
     "production_effect_enabled": {"const": false},
-    "not_verified": {"type": "array", "minItems": 1, "items": {"type": "string", "minLength": 1}}
+    "source_binding": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "northbound",
+        "northbound_unit",
+        "northbound_window_sessions",
+        "csi300",
+        "csi300_window_sessions",
+        "predicate",
+        "calendar_basis"
+      ],
+      "properties": {
+        "northbound": {"const": "tushare:moneyflow_hsgt.north_money"},
+        "northbound_unit": {"const": "CNY_after_provider_wan_times_10000"},
+        "northbound_window_sessions": {"const": 5},
+        "csi300": {"const": "tushare:index_daily.000300.SH.close"},
+        "csi300_window_sessions": {"const": 65},
+        "predicate": {"const": "engine.a_short_northbound.should_block_new_entries"},
+        "calendar_basis": {"const": "index_daily.000300.SH.trade_date"}
+      }
+    },
+    "unavailable_breakdown": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["warm_up", "fetch_truncated", "source_gap"],
+      "properties": {
+        "warm_up": {"type": "integer", "minimum": 0},
+        "fetch_truncated": {"type": "integer", "minimum": 0},
+        "source_gap": {"type": "integer", "minimum": 0}
+      }
+    },
+    "northbound_fetch": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "row_cap",
+        "segment_max_sessions",
+        "segment_count",
+        "requested_session_count",
+        "observed_session_count",
+        "truncated_segment_count",
+        "truncated",
+        "status"
+      ],
+      "properties": {
+        "row_cap": {"type": ["integer", "null"], "minimum": 1},
+        "segment_max_sessions": {"type": ["integer", "null"], "minimum": 1},
+        "segment_count": {"type": "integer", "minimum": 0},
+        "requested_session_count": {"type": "integer", "minimum": 0},
+        "observed_session_count": {"type": "integer", "minimum": 0},
+        "truncated_segment_count": {"type": "integer", "minimum": 0},
+        "truncated": {"type": "boolean"},
+        "status": {"enum": ["complete", "partial", "not_attempted", "not_supplied"]}
+      }
+    },
+    "execution": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "call_budget",
+        "calls_made",
+        "within_budget",
+        "successful_calls",
+        "failed_or_skipped_calls",
+        "status",
+        "tushare_version"
+      ],
+      "properties": {
+        "call_budget": {"const": 6},
+        "calls_made": {"type": "integer", "minimum": 0, "maximum": 6},
+        "within_budget": {"const": true},
+        "successful_calls": {"type": "integer", "minimum": 0, "maximum": 6},
+        "failed_or_skipped_calls": {"type": "integer", "minimum": 0, "maximum": 6},
+        "status": {"enum": ["completed", "completed_with_errors"]},
+        "tushare_version": {"type": "string", "minLength": 1}
+      }
+    },
+    "storage": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "raw_payload_root",
+        "raw_payload_root_gitignored",
+        "tracked_summary_contains_raw_rows",
+        "tracked_summary_contains_request_urls",
+        "tracked_summary_contains_secret"
+      ],
+      "properties": {
+        "raw_payload_root": {"type": "string", "pattern": "^provider_samples/"},
+        "raw_payload_root_gitignored": {"const": true},
+        "tracked_summary_contains_raw_rows": {"const": false},
+        "tracked_summary_contains_request_urls": {"const": false},
+        "tracked_summary_contains_secret": {"const": false}
+      }
+    },
+    "not_verified": {
+      "type": "array",
+      "items": {"type": "string", "minLength": 1}
+    }
   }
 }
