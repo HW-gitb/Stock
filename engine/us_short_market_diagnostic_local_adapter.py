@@ -8,12 +8,14 @@ provider for data:
 * a small local benchmark price packet that keeps SPY/QQQ from the existing
   grouped market window and accepts the IWB/VTI local slice.
 
-This adapter deliberately emits price-return diagnostics only.  A dividend
-sidecar may be present in the input for lineage, but it is not consumed here;
-Knife 5 owns the reviewed total-return upgrade.  Missing prices are left
-missing and become ``unavailable`` rather than zero-filled.  The adapter does
-not write files, advance the model-paper head, create the normalized $100,000
-account, call a provider, or alter selection/action/sizing/NAV decisions.
+This adapter emits price-return diagnostics by default.  An optional,
+source-bound Knife 5 dividend sidecar can be supplied to upgrade each
+validated ETF-week to total-return evaluation; a failed or incomplete sidecar
+keeps that ETF-week on price return with an explicit degradation reason.
+Missing prices are left missing and become ``unavailable`` rather than
+zero-filled.  The adapter does not write files, advance the model-paper head,
+create the normalized $100,000 account, call a provider, or alter
+selection/action/sizing/NAV decisions.
 """
 
 from __future__ import annotations
@@ -34,6 +36,11 @@ from engine.us_short_market_diagnostic import (
     BOUNDARY,
     construct_simple_return,
     construct_weekly_return,
+)
+from engine.us_short_market_diagnostic_total_return import (
+    TotalReturnSidecarError,
+    build_total_return_benchmark_observation,
+    validate_etf_total_return_sidecar,
 )
 from engine.us_short_model_paper_portfolio import (
     ModelPaperPortfolioError,
@@ -310,14 +317,51 @@ def adapt_benchmark_week(
     *,
     strategy_evaluable: bool,
     strategy_weekly_return: float | None,
+    total_return_sidecar: Mapping[str, Any] | None = None,
 ) -> dict[str, dict[str, Any]]:
-    """Project one local price week into the diagnostic weekly benchmark shape."""
+    """Project one local price week into the diagnostic weekly benchmark shape.
+
+    The optional sidecar is already-captured input.  It is validated and
+    reconciled locally; this function never obtains it from a provider.
+    """
 
     packet = validate_local_price_packet(packet)
     week = _packet_week(packet, calendar_week_index)
+    sidecar_benchmarks: Mapping[str, Any] | None = None
+    if total_return_sidecar is not None:
+        try:
+            sidecar = validate_etf_total_return_sidecar(total_return_sidecar)
+        except TotalReturnSidecarError as exc:
+            raise LocalMarketDiagnosticAdapterError(f"invalid ETF total-return sidecar: {exc}") from exc
+        if sidecar["window_id"] != packet["window_id"]:
+            _fail("total-return sidecar window_id does not match local price packet")
+        if sidecar["diagnostic_epoch"] != packet["diagnostic_epoch"]:
+            _fail("total-return sidecar diagnostic_epoch does not match local price packet")
+        sidecar_week = next(
+            (candidate for candidate in sidecar["weeks"] if candidate["calendar_week_index"] == calendar_week_index),
+            None,
+        )
+        if sidecar_week is None:
+            _fail(f"total-return sidecar has no calendar week {calendar_week_index}")
+        if sidecar_week["valuation_date"] != week["valuation_date"]:
+            _fail("total-return sidecar valuation_date does not match local price packet")
+        sidecar_benchmarks = sidecar_week["benchmarks"]
     result: dict[str, dict[str, Any]] = {}
     for symbol in BENCHMARKS:
         observation = week["benchmarks"][symbol]
+        if sidecar_benchmarks is not None:
+            try:
+                result[symbol] = build_total_return_benchmark_observation(
+                    sidecar_observation=sidecar_benchmarks[symbol],
+                    price_observation=observation,
+                    strategy_evaluable=strategy_evaluable,
+                    strategy_weekly_return=strategy_weekly_return,
+                )
+            except TotalReturnSidecarError as exc:
+                raise LocalMarketDiagnosticAdapterError(
+                    f"cannot reconcile {symbol} total-return sidecar: {exc}"
+                ) from exc
+            continue
         prior_close = observation["prior_close"]
         close = observation["close"]
         source_sha = observation["source_sha256"]
@@ -381,6 +425,7 @@ def build_weekly_record_from_local(
     strategy_ruleset_fingerprint: str,
     v1_1_reminder: Mapping[str, Any],
     prior_nav: str | None,
+    total_return_sidecar: Mapping[str, Any] | None = None,
 ) -> dict[str, Any]:
     """Build one schema-shaped weekly record from already-settled local inputs.
 
@@ -391,6 +436,12 @@ def build_weekly_record_from_local(
     """
 
     packet = validate_local_price_packet(benchmark_packet)
+    validated_total_return_sidecar: Mapping[str, Any] | None = None
+    if total_return_sidecar is not None:
+        try:
+            validated_total_return_sidecar = validate_etf_total_return_sidecar(total_return_sidecar)
+        except TotalReturnSidecarError as exc:
+            raise LocalMarketDiagnosticAdapterError(f"invalid ETF total-return sidecar: {exc}") from exc
     if isinstance(calendar_week_index, bool) or not isinstance(calendar_week_index, int) or calendar_week_index < 1:
         _fail("calendar_week_index must be a positive integer")
     week = _packet_week(packet, calendar_week_index)
@@ -429,12 +480,14 @@ def build_weekly_record_from_local(
         calendar_week_index,
         strategy_evaluable=strategy_evaluable,
         strategy_weekly_return=strategy_weekly_return,
+        total_return_sidecar=validated_total_return_sidecar,
     )
     source_refs = _dedupe_sha256(
         [
             *paper_week["digests"].values(),
             *packet["source_refs"],
             *(benchmark["price_packet_sha256"] for benchmark in benchmarks.values()),
+            *(benchmark["dividend_sidecar_sha256"] for benchmark in benchmarks.values()),
         ]
     )
     if len(source_refs) > 32:

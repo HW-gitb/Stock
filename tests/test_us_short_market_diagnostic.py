@@ -343,6 +343,18 @@ class UsShortMarketDiagnosticEngineTest(unittest.TestCase):
         self.assertNotEqual(summary["benchmarks"]["VTI"]["status"], "mixed_across_benchmarks")
         _assert_schema_valid(self, "us_short_market_diagnostic_summary.schema.json", summary)
 
+    def test_all_four_flat_benchmarks_use_an_explicit_overall_reason(self) -> None:
+        rows = _weekly_rows()
+        for row in rows:
+            for symbol in BENCHMARKS:
+                row["benchmarks"][symbol]["weekly_return"] = row["strategy"]["weekly_return"]
+        summary = summarize_window(rows)
+        self.assertEqual(summary["overall_status"], "mixed_across_benchmarks")
+        self.assertEqual(summary["status_reason"], "all_four_benchmarks_show_flat_diagnostic_excess")
+        for symbol in BENCHMARKS:
+            self.assertEqual(summary["benchmarks"][symbol]["status"], "flat_diagnostic")
+        _assert_schema_valid(self, "us_short_market_diagnostic_summary.schema.json", summary)
+
     def test_unavailable_benchmark_wins_status_priority_without_zero_fill(self) -> None:
         rows = _weekly_rows()
         for row in rows:

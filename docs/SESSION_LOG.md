@@ -1,5 +1,21 @@
 # Session Log
 
+## 2026-08-05 — Claude Code 审查 PASS（26 周诊断轨 刀5：ETF 总回报 sidecar 离线半刀）
+
+- **Verdict/Action**: PASS。本刀解锁此前不可达的 `total_return_evaluable`，故对解锁腿做了反向控制。算式用拆股复权后的现金分红，与已拆股复权的价格序列口径自洽。门要五件齐：四个 coverage 全真 + 五个来源摘要 + `source_date`/`observed_at` + 价格区间严格递增 + 零降级原因。本刀不含真实抓取，故该状态目前只是可达、尚无真实周达到。
+- **Required**: 无。反向控制判据、一处审查方自身更正、一条沿用 Optional 只见 `docs/system_risk_register.md`（单一来源）。
+- **Verify**: review-evidence:29044a8680e1。超时原因: 第一轮探针用错事件日期字段名导致一次假发现，复核字段并重打探针多花约 5 分钟。焦点超集包 `119 OK / 11.1s / exit 0`。自写反向控制六项全过：complete 但缺摘要/带降级原因/缺 observed_at 均拒；拆股复权现金与因子对不上拒；`ex_date` 越界前后两侧均拒；夹带未知键由 schema 路径拒。正向腿：基线得 `total_return_evaluable`、`weekly_return=0.02`（含息）。另证无 sidecar 时默认 `None`、刀2 行为原样保留；模块与相关 runner 内 provider/网络代码 grep 零命中。
+- **Next**: 提交并合入 master。
+
+
+## 2026-08-05 — Codex executor/fixer：flat overall status 修复 + Knife5 ETF total-return sidecar 离线接线（独立审查未完成）
+
+- **Verdict/Action**：已按用户授权修复刀2以来遗留的 `_overall_status` 分支：四个基准全部为 `flat_diagnostic` 时仍使用冻结的 `mixed_across_benchmarks` overall enum，但理由改为 `all_four_benchmarks_show_flat_diagnostic_excess`；没有新增 overall `flat_diagnostic`，也没有改变 unavailable/data_insufficient/data_degraded 优先级。Knife5 新增四 ETF sidecar schema、纯校验/复算器和本地周记录可选接线；完整周升级 `total_return_evaluable`，不完整周按 ETF/周保留 `price_return_diagnostic`。
+- **Required**：无新增 Required。整个 sidecar 仍需结构和来源绑定合规；真实 provider/raw 获取不在本轮授权范围内。
+- **Verify**：固定 Python 聚焦包 `40 OK`；聚合/lifecycle/README route/route-ledger/doc-governance 包 `79 OK`；合并相关包 `119 OK`；`py_compile=OK`；`git diff --check=clean`。另一个既有编码治理包为 `80 OK + 1 FAIL`，失败来自两个旧 provider 测试未固定子进程编码，不属于本轮变更，未修 unrelated。provider/network/paid/raw/account 写入=NOT_USED；review=NOT_VERIFIED；commit=NOT_PERFORMED。
+- **Pre-Codex self-review**：matrix=flat overall reason/sidecar coverage/source binding/boundary；register=updated；handoff=updated；focused=40 OK；full-lane=not_triggered；door=route-doc 79 OK + doc-governance 79 OK
+- **Next**：Claude Code：独立审查 flat 修复与 Knife5 当前 diff；PASS 后按 reviewer/committer 流程提交。
+
 ## 2026-08-04 — Claude Code 审查 PASS（26 周诊断轨 刀4：聚合器 + 放松类改动经反向控制确认被围住）
 
 - **Verdict/Action**: PASS。本刀含放松类改动（`_validate_rows` 新增 `expected_weeks`/`require_canonical_window`，可跳过「恰 26 行」与刀1 的 canonical 锚点门），理由正当（§2.1/§8.2 的 since-inception 双输出）且默认值未动；`expected_weeks` 由 `len(normalized)` 内部推出，覆盖率分母喂不错；两个视图形状分离，since-inception 冒充不了固定区块摘要。
