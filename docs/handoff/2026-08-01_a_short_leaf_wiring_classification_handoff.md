@@ -1587,3 +1587,57 @@ Claude Code：独立审查 `R-ASHORT-KNIFE12-NORTHBOUND-MARKET-WIRING` 及 `R-AS
 - `NOT_VERIFIED`：Claude Code 对当前修复 diff 的独立复审、用户翻转生产 effect、完整 live/weekly 消费、commit/push/merge；本轮未起 sub-agent，未改变生产 effect contract。
 - 两条 P1 只有经 Claude Code 独立复审确认后才能关闭并按项目规则提交；full lane `PASS` 只代表自动化回归通过，不代表独立审查 PASS，也不代表历史频率已经 COMPLETE。
 - 下一步：`Claude Code：审查序22b P1修复`。
+
+## 2026-08-05 追加：序 23 · 北向静默门通电（★☆☆☆☆，1 刀，真钱门激活）
+
+**性质**：这不是修缺陷，是**把一道已建好、已审过、已用真实历史验过的风控从「只记录」翻成「真生效」**。改动极小，但落点是真钱边界，故按满标准走。
+
+### 证据基础（序 22b 产出，已独立审查 PASS 并合入 `f93e2125`）
+
+- 三年 155 周中 **123 周可用**，门会触发 **5 次 = 4.1%**。
+- 5 次全部落在 **2023-11-10 / 12-08 / 12-15 / 12-22 / 2024-01-12**，即 2023 年底至 2024 年初那一波持续下跌；**此后两年半（2024-01 → 2026-08）一次未触发**。形态是「事件型」而非「闪烁型」——真跌时响，平时安静。
+- 未覆盖的 32 周中 13 周 warm-up 落在 **2023-08~11**，与上述触发段同属一波下跌。**故 4.1% 是下限不是上限**；补齐覆盖只会抬高触发率，不会翻转结论。
+- **行为后果（必须让用户在授权前知道）**：开启后按历史节奏约**每年 1–2 次、每次连续数周不建新仓**。这是真实的行为改变，不是纸面标记。已有持仓不受影响（门只降级 `操作=建仓` 行）。
+
+### 已定口径（实现不得再自行解释）
+
+1. **只翻一个常量**：`engine/a_short_northbound.py:12` 的 `NORTHBOUND_MARKET_GATE_PRODUCTION_EFFECT_ENABLED` 由 `False` 改 `True`。
+2. **不动阈值、不动判据**：`NORTHBOUND_CSI300_SILENCE_THRESHOLD_PCT = -10.0` 与 `should_block_new_entries` 的双条件逻辑**一个字不改**。本刀只改「生不生效」，不改「什么时候该响」。
+3. **不动降级机制**：`_apply_northbound_market_gate` 仍只降 `操作=建仓` 且不碰已有持仓；不改成压现金系数（那是节前减仓与序 19 的机制，与本门不同）。
+
+### 不得碰的三处同名字段（起草时实读确认，防误改）
+
+实现方会 grep 到 `production_effect_enabled` 的多个命中，**其中三处与本门无关**：
+
+- `runners/a_short_weekly_pipeline.py:607` —— 主题 **overlay** 的字段。
+- `runners/a_short_weekly_pipeline.py:758` —— `earnings_bad_reaction` 的 **operation_impact** 条目。
+- `engine/a_short_northbound_lookback.py:405` + schema `{"const": false}` —— 语义是「**回看产物自身**无生产效力（comparison-only）」，**不是门的状态镜像**。翻门时**必须保持 false**，否则 `tests/test_a_short_northbound_market_wiring.py:210` 的 `assertFalse` 会红，而那条断言是对的。
+
+> **顺带记一条可读性陷阱（Optional，本刀可不修）**：同一个字段名 `production_effect_enabled` 在 `analysis_input.market_context.northbound`（= 门的状态）与回看产物（= 产物属性）里含义不同。日后读者可能据回看产物的 `false` 误判门是关的。建议某刀把回看侧改名为 `artifact_production_effect` 或补 schema `description`。
+
+### 实现范围
+
+1. 翻常量（第 1 条）。
+2. **契约重封**：`engine/a_short_northbound.py` 同时在 `_DECISION_FILES` 与 `_CONSTANT_FILES` 内，故 `runtime_constants_sha256`（及可能的 `decision_predicate_sha256`）必变，须用 `_build_static_inventory()` 重算重封，收工后 `static_contract_error()` 必须为 `None`。
+3. **测试从「钉 OFF 态」改为「钉一致性」**：起草时实读确认**没有任何测试直接断言该常量为 `False`**（grep 命中 0），故翻转不会引起意外红。但现有 `tests/test_a_short_northbound_market_wiring.py` 用显式参数 `production_effect_enabled=True/False` 双向覆盖，本刀须**新增一条断言把生产默认值钉住**——即「不显式传参时，`_northbound_control_from_analysis` 得到的 `production_effect_enabled` 等于 `engine.a_short_northbound` 的常量」，防止将来两侧再分叉。
+4. **产物可见性**：确认 `analysis_input.market_context.northbound.production_effect_enabled` 与 `weekly.northbound_control.production_effect_enabled` 均随之变 `true`，且 `m67_render` 的横幅从「仅记录未生效」切到「已触发」分支（该分支已在序 12 建好）。
+
+### 验收（正控 + 三反控 + 一植入）
+
+| # | 类型 | 断言 |
+|---|---|---|
+| ① | 正控 | 注入 `status=outflow` + `net_flow_5d<0` + `csi300 < -10` → 本周所有 `建仓` 降为 `观察`，`new_entry_blocked=true`、`reason="dual_condition"`，`allocated_cash_total` 归 0 |
+| ② | 反控·单条件 | 只跌不流出 / 只流出不跌 → 现金与操作**逐字段不变** |
+| ③ | 反控·数据缺失 | `status="unknown"` 或覆盖不全 → **不封门**，`reason` 为 `northbound_unknown` / `csi300_unavailable` |
+| ④ | 反控·持仓不受影响 | 同一封门周内，已有持仓行的 `m67` 与 `machine` **逐字节不变** |
+| ⑤ | 植入控制 | 把常量改回 `False` → ① 的正控**必须转红**（这是本刀唯一真正新增的行为，必须证明它承重）|
+
+**测试落点**：新增/改动用例必须落在 `test_a_short*.py` 选择器内。
+
+### 边界（不得扩大）
+
+不改阈值 `-10.0`、不改双条件判据、不改降级机制、不改选股/EGS 打分/TopN/M6.7 操作判定/已有持仓处置/provider 参数/PIT 窗口；不动上面点名的三处同名字段；不并入序 19；不改回看产物的 `comparison_only` 与 `production_effect_enabled`。
+
+### 前置：用户明确授权
+
+本刀是**真钱门激活**，`AGENTS.md` 的执行边界要求这类改动由用户明示。用户已于 2026-08-05 在对话中要求起草本刀；**开工前仍需一句明确的执行授权**（起草 ≠ 授权激活）。执行方不得自行开工。
