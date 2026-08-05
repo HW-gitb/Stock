@@ -121,6 +121,10 @@ GATES = frozenset(
         # store and hands back what the next week must be, so a caller cannot
         # choose the index or continue the NAV series from a number it invented.
         "next_week_inputs",
+        # The single four-state decider every reader goes through. It calls the
+        # gated receipt and register loaders itself and hands back what it found,
+        # so a reader cannot reach its own conclusion about a store it never read.
+        "diagnostic_store_state",
     }
 )
 
@@ -176,7 +180,9 @@ EXEMPT = {
     "engine/us_short_market_diagnostic_start_receipt.py::start_receipt_sha256": "pure digest of a receipt already in hand",
     "engine/us_short_market_diagnostic_start_receipt.py::validate_start_receipt": "validates the authorization itself",
     "engine/us_short_market_diagnostic_weekly_producer.py::_load_preset": "reads a named preset file; no store",
-    "engine/us_short_market_diagnostic_weekly_producer.py::register_exists": "existence probe only; reads no content and authorizes nothing",
+    "engine/us_short_market_diagnostic_weekly_producer.py::has_counted_weeks": "existence probe over the weekly records; reads no content and authorizes nothing",
+    "engine/us_short_market_diagnostic_weekly_producer.py::model_paper_week_is_settled": "reads the model-paper store, not the diagnostic store",
+    "engine/us_short_market_diagnostic_weekly_producer.py::build_no_count_record": "projects a packet in hand; touches no store",
     "engine/us_short_market_diagnostic_weekly_producer.py::_target_week": "picks the packet week the gated inputs allow; reads through the gated loader",
     "engine/us_short_market_diagnostic_weekly_producer.py::diagnostic_policy_sha256": "pure digest of a preset",
     "engine/us_short_market_diagnostic_weekly_producer.py::strategy_ruleset_fingerprint": "pure digest of the declared governed presets",

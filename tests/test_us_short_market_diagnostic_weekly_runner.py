@@ -14,11 +14,13 @@ import tempfile
 import unittest
 
 from engine.us_short_model_paper_portfolio import canonical_json_bytes
+from engine.us_short_market_diagnostic_lifecycle import persist_settled_weekly_record
 from runners.us_short_market_diagnostic_weekly import (
     MarketDiagnosticWeeklyRunnerError,
     clock_status,
     main,
     open_clock,
+    publish_window,
     record_week,
 )
 from tests.test_us_short_market_diagnostic import _weekly_rows
@@ -225,6 +227,62 @@ class OperatorMistakeTest(_StoreCase):
             ),
         )
         self.assertFalse(self.store.exists())
+
+
+class ScorecardTriggerTest(_StoreCase):
+    """The one artifact this whole track exists to produce, and its trigger.
+
+    The engine has been able to publish since Knife 4; nothing ever called it. So
+    this covers the trigger, not the aggregation: does a scorecard appear exactly
+    when a 26-week window closes, and never before.
+    """
+
+    def _fill(self, weeks: int) -> None:
+        self._open()
+        for row in self.rows[:weeks]:
+            persist_settled_weekly_record(row, root=self.store, as_of_date="20260801")
+
+    def test_no_scorecard_before_the_window_closes(self) -> None:
+        with tempfile.TemporaryDirectory() as td:
+            output_root = Path(td) / "public"
+            self._fill(25)
+            self.assertEqual(
+                "not_ready", publish_window(root=self.store, output_root=output_root, as_of_date="20260801")["status"]
+            )
+            self.assertFalse(output_root.exists(), "a non-boundary week left public bytes behind")
+
+    def test_the_scorecard_appears_at_week_26_and_a_rerun_is_idempotent(self) -> None:
+        with tempfile.TemporaryDirectory() as td:
+            output_root = Path(td) / "public"
+            self._fill(26)
+            first = publish_window(root=self.store, output_root=output_root, as_of_date="20260801")
+            self.assertEqual("published", first["status"])
+            self.assertEqual("26w-1-26", first["window_id"])
+            self.assertEqual(26, first["last_calendar_week_index"])
+            json_bytes = (output_root / "26w-1-26.json").read_bytes()
+            markdown_bytes = (output_root / "26w-1-26.md").read_bytes()
+
+            second = publish_window(root=self.store, output_root=output_root, as_of_date="20260801")
+            self.assertEqual("idempotent", second["status"])
+            self.assertEqual(json_bytes, (output_root / "26w-1-26.json").read_bytes())
+            self.assertEqual(markdown_bytes, (output_root / "26w-1-26.md").read_bytes())
+
+            self.assertEqual(
+                0,
+                main([
+                    "--root", str(self.store), "publish",
+                    "--output-root", str(output_root), "--as-of-date", "20260801",
+                ]),
+            )
+
+    def test_publishing_from_a_store_that_never_started_fails_closed(self) -> None:
+        with tempfile.TemporaryDirectory() as td:
+            output_root = Path(td) / "public"
+            self.assertEqual(
+                {"status": "not_started"},
+                publish_window(root=self.store, output_root=output_root, as_of_date="20260801"),
+            )
+            self.assertFalse(output_root.exists())
 
 
 if __name__ == "__main__":

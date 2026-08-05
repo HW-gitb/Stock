@@ -34,17 +34,21 @@ from __future__ import annotations
 
 import hashlib
 import json
-from pathlib import Path
+from pathlib import Path, PurePosixPath, PureWindowsPath
 from typing import Any, Mapping
 
+from engine.us_short_market_diagnostic import BOUNDARY
 from engine.us_short_market_diagnostic_local_adapter import (
     LocalMarketDiagnosticAdapterError,
+    adapt_benchmark_week,
     build_weekly_record_from_local,
+    load_model_paper_week,
+    validate_local_price_packet,
 )
 from engine.us_short_market_diagnostic_lifecycle import (
     DEFAULT_ROOT,
-    REGISTER_FILENAME,
     MarketDiagnosticLifecycleError,
+    _record_files,
     build_v1_1_reminder,
     load_lifecycle_register,
     load_settled_weekly_records,
@@ -60,6 +64,8 @@ from engine.us_short_model_paper_portfolio import artifact_sha256, canonical_jso
 ROOT = Path(__file__).resolve().parent.parent
 POLICY_PRESET_PATH = ROOT / "presets" / "us_short_market_diagnostic_26w_policy_v1.json"
 RULESET_PRESET_PATH = ROOT / "presets" / "us_short_market_diagnostic_strategy_ruleset_v1.json"
+# The frozen normalized paper capital every diagnostic NAV series starts from.
+NORMALIZED_CAPITAL = "100000.000000"
 
 
 class MarketDiagnosticWeeklyProducerError(RuntimeError):
@@ -85,9 +91,11 @@ def diagnostic_policy_sha256() -> str:
 def strategy_ruleset_fingerprint() -> str:
     """Digest over the declared governance presets in force.
 
-    Over the DECLARED list, canonicalized, with each preset's own digest inside —
-    so editing any governed rule moves the fingerprint, editing the declaration
-    moves it, and re-formatting a preset does not.
+    Over the DECLARED list, canonicalized, with each preset's own digest inside.
+    Precisely: editing any governed rule moves the fingerprint; adding or removing
+    an entry moves it; re-formatting a preset does not; and neither does
+    reordering or duplicating entries in the declaration, because the payload is a
+    sorted map keyed by path rather than a list.
     """
 
     declaration = _load_preset(RULESET_PRESET_PATH, "strategy ruleset preset")
@@ -102,6 +110,24 @@ def strategy_ruleset_fingerprint() -> str:
             raise MarketDiagnosticWeeklyProducerError(
                 "strategy ruleset preset lists a governed preset that is not a path"
             )
+        # The whole argument for a declared list is that its own change shows up in
+        # a diff. An absolute path silently discards ROOT, and `..` walks out of
+        # the repo, so either one fingerprints something no reviewer will see.
+        # Checked in both path flavours: on Windows ``Path("/etc/passwd")`` is not
+        # "absolute" (it has no drive), so a POSIX-rooted entry would slip through
+        # a naive check on one platform and not the other.
+        candidate = Path(relative)
+        posix = PurePosixPath(relative)
+        if (
+            candidate.is_absolute()
+            or posix.is_absolute()
+            or PureWindowsPath(relative).is_absolute()
+            or ".." in candidate.parts
+            or ".." in posix.parts
+        ):
+            raise MarketDiagnosticWeeklyProducerError(
+                f"governed preset must be a repo-relative path inside the tree: {relative}"
+            )
         path = ROOT / relative
         if not path.is_file():
             raise MarketDiagnosticWeeklyProducerError(
@@ -109,25 +135,80 @@ def strategy_ruleset_fingerprint() -> str:
                 f"fingerprinted: {relative}"
             )
         digests[relative] = artifact_sha256(_load_preset(path, f"governed preset {relative}"))
-    payload = {
-        "ruleset_id": declaration.get("ruleset_id"),
-        "governed_preset_sha256": digests,
-    }
+    ruleset_id = declaration.get("ruleset_id")
+    if not isinstance(ruleset_id, str) or not ruleset_id:
+        raise MarketDiagnosticWeeklyProducerError(
+            "strategy ruleset preset has no ruleset_id, so the fingerprint would not say which ruleset it is"
+        )
+    payload = {"ruleset_id": ruleset_id, "governed_preset_sha256": digests}
     return hashlib.sha256(canonical_json_bytes(payload)).hexdigest()
 
 
-def register_exists(root: str | Path = DEFAULT_ROOT) -> bool:
-    """Whether this store has ever counted a week.
+def has_counted_weeks(root: str | Path = DEFAULT_ROOT) -> bool:
+    """Whether this store holds any weekly record at all.
 
-    Used to tell "never opened" apart from "opened, counted, and then lost its
-    receipt". Those two look identical from the receipt alone and mean opposite
-    things: one is a clean slate, the other is destroyed evidence.
+    The evidence of counted weeks is the immutable weekly records, NOT the
+    mutable register beside them. An earlier version probed
+    ``lifecycle_register.json``, which meant a store whose two top-level JSONs had
+    both been deleted — a partial restore, or an operator "resetting the clock" —
+    reported ten weeks of destroyed evidence as a clean slate. The guard was on
+    every path; its argument was the wrong artifact.
     """
 
     try:
-        return (Path(root) / REGISTER_FILENAME).is_file()
-    except (OSError, TypeError, ValueError):
-        return False
+        return bool(_record_files(Path(root)))
+    except (MarketDiagnosticLifecycleError, OSError, TypeError, ValueError):
+        # An unreadable weeks/ tree is not an empty one.
+        return True
+
+
+def diagnostic_store_state(
+    root: str | Path = DEFAULT_ROOT, *, as_of_date: str | None = None
+) -> dict[str, Any]:
+    """The one place that decides which of four things this store is.
+
+    ``not_started`` — no receipt and no records: a clean slate, and the normal
+    state of this track today.
+    ``fresh`` — a receipt, no weeks yet: the clock was opened this week and the
+    first ``settle-week`` has not run. NOT broken; reporting it as broken is how
+    an operator learns to ignore the word.
+    ``running`` — a receipt and a readable register.
+    ``broken`` — anything else: records with no receipt, an unreadable receipt,
+    an unreadable register, a register that does not derive from its records.
+
+    Three readers used to answer this question three slightly different ways, and
+    all three got a different case wrong.
+    """
+
+    counted = has_counted_weeks(root)
+    try:
+        receipt = load_start_receipt(root, verify_design_against_disk=False)
+    except DiagnosticStartReceiptError as exc:
+        return {"state": "broken", "problem": str(exc), "receipt": None, "register": None, "records": []}
+    if receipt is None:
+        if counted:
+            return {
+                "state": "broken",
+                "problem": (
+                    "weeks have been counted but the start receipt that authorized them is gone"
+                ),
+                "receipt": None,
+                "register": None,
+                "records": [],
+            }
+        return {"state": "not_started", "problem": None, "receipt": None, "register": None, "records": []}
+    if not counted:
+        return {"state": "fresh", "problem": None, "receipt": receipt, "register": None, "records": []}
+    try:
+        register = load_lifecycle_register(root, as_of_date=as_of_date)
+        records = load_settled_weekly_records(root, as_of_date=as_of_date)
+    except MarketDiagnosticLifecycleError as exc:
+        # Deliberately not swallowed into "no records yet". Any store fault used
+        # to become "week 1, prior NAV None", and the public builder would then
+        # hand back a week-1 record restarting the NAV series from the normalized
+        # capital — a lie the store had to catch on the caller's behalf.
+        return {"state": "broken", "problem": str(exc), "receipt": receipt, "register": None, "records": []}
+    return {"state": "running", "problem": None, "receipt": receipt, "register": register, "records": records}
 
 
 def next_week_inputs(
@@ -141,27 +222,17 @@ def next_week_inputs(
     that lost its predecessor is a store problem, not something to paper over.
     """
 
-    try:
-        receipt = load_start_receipt(root, verify_design_against_disk=False)
-    except DiagnosticStartReceiptError as exc:
-        raise MarketDiagnosticWeeklyProducerError(
-            f"the diagnostic clock cannot be read: {exc}"
-        ) from exc
-    if receipt is None:
-        if register_exists(root):
-            raise MarketDiagnosticWeeklyProducerError(
-                "weeks have been counted but the start receipt that authorized them is gone; "
-                "this is a broken clock, not one that was never opened"
-            )
+    state = diagnostic_store_state(root, as_of_date=as_of_date)
+    if state["state"] == "not_started":
         raise MarketDiagnosticWeeklyProducerError(
             "the 26-week diagnostic clock has not been opened; run open-clock first"
         )
-
-    try:
-        records = load_settled_weekly_records(root, as_of_date=as_of_date)
-    except MarketDiagnosticLifecycleError:
-        records = []
-    if not records:
+    if state["state"] == "broken":
+        raise MarketDiagnosticWeeklyProducerError(
+            f"the diagnostic store cannot be read, so the next week is unknown: {state['problem']}"
+        )
+    receipt = state["receipt"]
+    if state["state"] == "fresh":
         return {
             "calendar_week_index": 1,
             "prior_nav": None,
@@ -169,12 +240,8 @@ def next_week_inputs(
             "diagnostic_epoch": receipt["diagnostic_epoch"],
         }
 
-    try:
-        register = load_lifecycle_register(root, as_of_date=as_of_date)
-    except MarketDiagnosticLifecycleError as exc:
-        raise MarketDiagnosticWeeklyProducerError(
-            f"the diagnostic store cannot be read, so the next week is unknown: {exc}"
-        ) from exc
+    register = state["register"]
+    records = state["records"]
     attribution = register["v1_1_attribution"]
     return {
         "calendar_week_index": register["last_calendar_week_index"] + 1,
@@ -240,6 +307,136 @@ def _target_week(
     )
 
 
+def model_paper_week_is_settled(
+    model_paper_root: str | Path,
+    benchmark_packet: Mapping[str, Any],
+    calendar_week_index: int,
+    *,
+    as_of_date: str | None = None,
+) -> bool:
+    """Whether the model-paper account actually settled the week this packet names.
+
+    Asked before projecting, so an unsettled week becomes a recorded ``no_count``
+    rather than an exception. Only the "not settled yet" refusal answers False; a
+    tampered or digest-mismatched artifact must still raise, because that is a
+    fault and not an honest gap.
+    """
+
+    for week in benchmark_packet.get("weeks", []):
+        if isinstance(week, Mapping) and week.get("calendar_week_index") == calendar_week_index:
+            settlement_date = week.get("settlement_decision_date")
+            break
+    else:
+        raise MarketDiagnosticWeeklyProducerError(
+            f"the benchmark price packet has no calendar week {calendar_week_index}"
+        )
+    try:
+        load_model_paper_week(model_paper_root, settlement_date, as_of_date=as_of_date)
+    except LocalMarketDiagnosticAdapterError as exc:
+        if "requires a settled model-paper week" in str(exc):
+            return False
+        raise MarketDiagnosticWeeklyProducerError(
+            f"the model-paper week {settlement_date} cannot be read: {exc}"
+        ) from exc
+    return True
+
+
+def build_no_count_record(
+    *,
+    benchmark_packet: Mapping[str, Any],
+    calendar_week_index: int,
+    prior_nav: str | None,
+    v1_1_reminder: Mapping[str, Any],
+    reason: str,
+    as_of_date: str | None = None,
+) -> dict[str, Any]:
+    """One calendar week the strategy could not be evaluated for, recorded honestly.
+
+    The benchmarks are still projected — the market did happen, and section 5 wants
+    those weeks visible — while the strategy block carries nulls, ``no_count`` and
+    an explicit reason. NAV is the prior settled NAV because an unsettled week did
+    not move the account; for week 1 it is the frozen normalized capital. The
+    strategy digest is the benchmark packet's, since the packet is the only
+    evidence this week existed at all.
+    """
+
+    if not isinstance(reason, str) or not reason:
+        raise MarketDiagnosticWeeklyProducerError("a no_count week must say why")
+    try:
+        packet = validate_local_price_packet(benchmark_packet, as_of_date=as_of_date)
+        week = next(
+            item for item in packet["weeks"] if item["calendar_week_index"] == calendar_week_index
+        )
+        benchmarks = adapt_benchmark_week(
+            packet,
+            calendar_week_index,
+            strategy_evaluable=False,
+            strategy_weekly_return=None,
+            as_of_date=as_of_date,
+        )
+    except (LocalMarketDiagnosticAdapterError, StopIteration) as exc:
+        raise MarketDiagnosticWeeklyProducerError(
+            f"a no_count week {calendar_week_index} cannot be projected: {exc}"
+        ) from exc
+
+    nav = prior_nav if prior_nav is not None else NORMALIZED_CAPITAL
+    packet_digest = artifact_sha256(dict(packet))
+    # Same binding rule as a settled week: every benchmark's own price and dividend
+    # digests must appear in source_refs, so a no_count week is as source-bound as
+    # any other. It is a week with no strategy result, not a week with no evidence.
+    source_refs = list(
+        dict.fromkeys(
+            [
+                packet_digest,
+                *packet["source_refs"],
+                *(benchmark["price_packet_sha256"] for benchmark in benchmarks.values()),
+                *(
+                    benchmark["dividend_sidecar_sha256"]
+                    for benchmark in benchmarks.values()
+                    if benchmark["dividend_sidecar_sha256"] is not None
+                ),
+            ]
+        )
+    )
+    return {
+        "schema_name": "us_short_market_diagnostic_weekly_record",
+        "schema_version": "1.0.0",
+        "decision_date": week["decision_date"],
+        "valuation_date": week["valuation_date"],
+        "calendar_week_index": calendar_week_index,
+        "window_id": packet["window_id"],
+        "diagnostic_epoch": packet["diagnostic_epoch"],
+        "diagnostic_policy_sha256": diagnostic_policy_sha256(),
+        "strategy_ruleset_fingerprint": strategy_ruleset_fingerprint(),
+        "strategy": {
+            "paper_evaluable": False,
+            # Section 12.1's strategy vocabulary is exactly three values; a week the
+            # account never settled is `not_evaluable`, and `no_count_reason`
+            # carries why. "unavailable" belongs to the benchmark vocabulary.
+            "performance_status": "not_evaluable",
+            "strategy_evaluable": False,
+            "initial_capital": NORMALIZED_CAPITAL,
+            "prior_nav": prior_nav,
+            "nav": nav,
+            "weekly_return": None,
+            "cumulative_return": None,
+            "cash": None,
+            "market_value": None,
+            "cumulative_cost_paid": None,
+            "turnover": None,
+            "unfilled_order_count": None,
+            "no_count": True,
+            "no_count_reason": reason,
+            "source_sha256": packet_digest,
+            "degradation_reasons": [reason],
+        },
+        "benchmarks": benchmarks,
+        "v1_1_reminder": dict(v1_1_reminder),
+        "source_refs": source_refs,
+        "boundary": dict(BOUNDARY),
+    }
+
+
 def build_next_weekly_record(
     *,
     model_paper_root: str | Path,
@@ -263,6 +460,21 @@ def build_next_weekly_record(
             "the benchmark price packet belongs to a different diagnostic epoch than this clock"
         )
     target, prior_nav = _target_week(benchmark_packet, inputs, root, as_of_date=as_of_date)
+    if not model_paper_week_is_settled(model_paper_root, benchmark_packet, target, as_of_date=as_of_date):
+        # Design sections 3 and 5: a week the account could not settle is recorded
+        # as no_count and STILL occupies its calendar slot. Without this the whole
+        # weekly act stalled on one unevaluable week — the next week refused with
+        # "must append 3, got 4" and the only way forward was hand-authoring a
+        # record, which is the manual step this slice exists to remove. The 26-week
+        # window is never extended to wait for a week that did not happen.
+        return build_no_count_record(
+            benchmark_packet=benchmark_packet,
+            calendar_week_index=target,
+            prior_nav=prior_nav,
+            v1_1_reminder=inputs["v1_1_reminder"],
+            reason="model_paper_week_not_settled",
+            as_of_date=as_of_date,
+        )
     try:
         return build_weekly_record_from_local(
             model_paper_root=model_paper_root,
@@ -309,7 +521,11 @@ __all__ = [
     "POLICY_PRESET_PATH",
     "RULESET_PRESET_PATH",
     "build_next_weekly_record",
+    "build_no_count_record",
     "diagnostic_policy_sha256",
+    "diagnostic_store_state",
+    "has_counted_weeks",
+    "model_paper_week_is_settled",
     "next_week_inputs",
     "settle_next_week",
     "strategy_ruleset_fingerprint",

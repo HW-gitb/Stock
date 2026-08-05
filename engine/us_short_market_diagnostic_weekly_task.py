@@ -39,16 +39,9 @@ from engine.us_short_market_diagnostic_attribution import (
 )
 from engine.us_short_market_diagnostic_lifecycle import (
     DEFAULT_ROOT,
-    MarketDiagnosticLifecycleError,
-    load_lifecycle_register,
-    load_settled_weekly_records,
     render_weekly_report_reminder,
 )
-from engine.us_short_market_diagnostic_start_receipt import (
-    DiagnosticStartReceiptError,
-    load_start_receipt,
-)
-from engine.us_short_market_diagnostic_weekly_producer import register_exists
+from engine.us_short_market_diagnostic_weekly_producer import diagnostic_store_state
 
 
 def weekly_diagnostic_step(
@@ -65,44 +58,31 @@ def weekly_diagnostic_step(
     having to remember a dormancy check of its own.
     """
 
-    try:
-        receipt = load_start_receipt(root, verify_design_against_disk=False)
-    except DiagnosticStartReceiptError as exc:
+    state = diagnostic_store_state(root, as_of_date=as_of_date)
+    if state["state"] == "not_started":
+        return {"status": "not_started", "report_lines": [], "attribution": None}
+    if state["state"] == "fresh":
+        # A clock opened this week with no settled week yet is not a fault. Saying
+        # "broken" here was how an operator would be taught to ignore the word.
         return {
-            "status": "broken",
-            "problem": str(exc),
-            "report_lines": [
-                "26 周诊断轨：起始收据无法读取，本周未记账；这是故障，不是「尚未开始」。"
-            ],
+            "status": "fresh",
+            "diagnostic_epoch": state["receipt"]["diagnostic_epoch"],
+            "calendar_week_count": 0,
+            "report_lines": ["26 周诊断轨：时钟已开，等待本周第一次记账。"],
             "attribution": None,
         }
-    if receipt is None:
-        if register_exists(root):
-            # Counted weeks with no receipt is destroyed evidence, and it reads
-            # exactly like a clean slate unless something says otherwise.
-            return {
-                "status": "broken",
-                "problem": "weeks have been counted but the start receipt that authorized them is gone",
-                "report_lines": [
-                    "26 周诊断轨：已记过周，但授权它们的起始收据不见了；这是故障，不是「尚未开始」。"
-                ],
-                "attribution": None,
-            }
-        return {"status": "not_started", "report_lines": [], "attribution": None}
-
-    try:
-        register = load_lifecycle_register(root, as_of_date=as_of_date)
-        records = load_settled_weekly_records(root, as_of_date=as_of_date)
-    except MarketDiagnosticLifecycleError as exc:
+    if state["state"] == "broken":
         return {
             "status": "broken",
-            "problem": str(exc),
+            "problem": state["problem"],
             "report_lines": [
                 "26 周诊断轨：账本无法读取，已积累的周数暂不可知；这是故障，不是「尚未开始」。"
             ],
             "attribution": None,
         }
 
+    register = state["register"]
+    records = state["records"]
     lines = [render_weekly_report_reminder(register)]
     attribution_state = register["v1_1_attribution"]
     result: dict[str, Any] = {

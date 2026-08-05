@@ -60,7 +60,7 @@ from engine.us_short_market_diagnostic_lifecycle import (  # noqa: E402
 )
 from engine.us_short_market_diagnostic_weekly_producer import (  # noqa: E402
     MarketDiagnosticWeeklyProducerError,
-    register_exists,
+    diagnostic_store_state,
     settle_next_week,
 )
 from engine.us_short_market_diagnostic_start_receipt import (  # noqa: E402
@@ -279,47 +279,38 @@ def publish_window(
 
 
 def clock_status(*, root: Path = DEFAULT_ROOT) -> dict[str, Any]:
-    """Say plainly whether the clock is running, without opening anything.
+    """Say plainly which of four things this clock is, without opening anything.
 
-    A store that cannot be read is reported as broken, never as a clock with zero
-    weeks. Those two look identical to an operator and mean opposite things: one
-    says "nothing has happened yet", the other says "eighteen weeks of evidence
-    are unreadable". Reading is not an AUTHORIZE moment, so the contract digest is
-    not re-checked here.
+    ``not_started`` / ``fresh`` / ``running`` / ``broken`` come from the single
+    store-state decider, so this cannot disagree with what the weekly task or the
+    producer sees. Three readers used to answer this separately and each got a
+    different case wrong: a clock opened this week read as broken, and a store
+    whose receipt had been deleted under counted weeks read as never started.
     """
 
-    try:
-        receipt = load_start_receipt(root, verify_design_against_disk=False)
-    except DiagnosticStartReceiptError as exc:
-        return {
-            "clock_status": "broken",
-            "diagnostic_epoch": None,
-            "calendar_week_count": None,
-            "problem": str(exc),
-        }
-    if receipt is None:
-        if register_exists(root):
-            return {
-                "clock_status": "broken",
-                "diagnostic_epoch": None,
-                "calendar_week_count": None,
-                "problem": "weeks have been counted but the start receipt that authorized them is gone",
-            }
+    state = diagnostic_store_state(root)
+    if state["state"] == "not_started":
         return {"clock_status": "not_started", "diagnostic_epoch": None, "calendar_week_count": 0}
-    try:
-        register = load_lifecycle_register(root)
-    except MarketDiagnosticLifecycleError as exc:
+    if state["state"] == "fresh":
+        return {
+            "clock_status": "fresh",
+            "diagnostic_epoch": state["receipt"]["diagnostic_epoch"],
+            "first_decision_date": state["receipt"]["first_calendar_week"]["decision_date"],
+            "calendar_week_count": 0,
+        }
+    if state["state"] == "broken":
+        receipt = state["receipt"]
         return {
             "clock_status": "broken",
-            "diagnostic_epoch": receipt["diagnostic_epoch"],
-            "first_decision_date": receipt["first_calendar_week"]["decision_date"],
+            "diagnostic_epoch": None if receipt is None else receipt["diagnostic_epoch"],
             "calendar_week_count": None,
-            "problem": str(exc),
+            "problem": state["problem"],
         }
+    register = state["register"]
     return {
         "clock_status": "started",
-        "diagnostic_epoch": receipt["diagnostic_epoch"],
-        "first_decision_date": receipt["first_calendar_week"]["decision_date"],
+        "diagnostic_epoch": register["diagnostic_epoch"],
+        "first_decision_date": state["receipt"]["first_calendar_week"]["decision_date"],
         "calendar_week_count": register["calendar_week_count"],
     }
 

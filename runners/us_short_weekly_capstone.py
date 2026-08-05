@@ -414,13 +414,20 @@ def _run_market_diagnostic(ctx: CapstoneContext) -> dict[str, Any]:
     may never block selection or action.
     """
 
-    from engine.us_short_market_diagnostic_weekly_task import weekly_diagnostic_step
-
-    root = ctx.market_diagnostic_root
-    if root is None:
-        return {"clock_status": "not_started", "report_lines": [], "provider_calls_performed": False}
     try:
-        step = weekly_diagnostic_step(root=root, as_of_date=ctx.decision_date)
+        # Imported inside the try, not above it. Six modules in this chain load a
+        # JSON schema at import time; with the import outside, a missing or corrupt
+        # schema file raised out of a DORMANT stage, and because this stage is
+        # strict that aborted the output transaction and rolled back a
+        # weekly_report.md the bridge had already produced. A diagnostic that is
+        # not even switched on must not be able to discard a finished week.
+        from engine.us_short_market_diagnostic_weekly_task import weekly_diagnostic_step
+
+        # Omitting ``root`` lets the diagnostic track supply its own default,
+        # rather than this module naming the private store — which would put all
+        # ~90 functions here into the diagnostic authorization surface.
+        overrides = {} if ctx.market_diagnostic_root is None else {"root": ctx.market_diagnostic_root}
+        step = weekly_diagnostic_step(as_of_date=ctx.decision_date, **overrides)
     except Exception as exc:  # noqa: BLE001 — see below; this is the whole point of the stage
         # The one broad catch in this file, and it is load-bearing. Design section
         # 1.2: the diagnostic track may never change or block selection. It also
@@ -531,6 +538,7 @@ def resolve_capstone_context(
     max_total_http_attempts: int | None = None,
     model_paper_store_root: Path | None = None,
     model_paper_run_account_mode: str | None = None,
+    market_diagnostic_root: Path | None = None,
     soft_discovery_enabled: bool = True,
     theme_soft_boost_enabled: bool = True,
     state_dir: Path = STATE_DIR,
@@ -577,6 +585,15 @@ def resolve_capstone_context(
         max_total_http_attempts=max_total_http_attempts,
         model_paper_store_root=Path(model_paper_store_root) if model_paper_store_root is not None else None,
         model_paper_run_account_mode=model_paper_run_account_mode,
+        # ``None`` means "the diagnostic track's own default root", resolved
+        # lazily in the stage adapter. The default is NOT spelled out here: naming
+        # the private root in this module would drag all ~90 of its functions into
+        # the diagnostic authorization surface, where they would need ~90
+        # exemptions — and an exemption list that large is an off switch, not a
+        # list of exceptions.
+        market_diagnostic_root=Path(market_diagnostic_root)
+        if market_diagnostic_root is not None
+        else None,
         soft_discovery_enabled=soft_discovery_enabled,
         theme_soft_boost_enabled=theme_soft_boost_enabled,
         state_dir=Path(state_dir),

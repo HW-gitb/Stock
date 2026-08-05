@@ -1,5 +1,12 @@
 # Session Log
 
+## 2026-08-06 — Claude Code 独立审查刀 7b（1 对抗 + 1 广度）Pass-with-Required，7 条同轮全修
+
+- **Verdict/Action**: 起两个独立 agent；对抗方打 14 个植入回归、**10 个现有测试发现不了**，广度方跑 20 种操作员误用 + 全 commit 泄露扫描。核心判断：**库本身是真 fail-closed**——五条路径都塞不进错周次。7 条 Required 全在读/报告侧与 capstone 接缝，其中两条又是 Class I：门在正确位置、绑错制品。全部同轮修完。**驳回 1 条**：广度方报「公开 JSON 泄露账户金额」，设计 §12.2 有 2026-08-05 用户裁决明文允许归一化模拟盘金额进公开摘要，agent 未读到该裁决。
+- **Required**: 全数已闭，判据与逐条实测只见 `docs/system_risk_register.md`（单一来源）。最重一条：休眠 stage 的 lazy import 在守卫外，schema 文件损坏即可让 bridge 已产出的 weekly_report.md 被回滚——一个没开的诊断能扔掉做完的选股周报。另六条：`register_exists` 探错制品（十周记录被报成白板）；任何库故障被吞成「第 1 周」且公开 builder 真把 NAV 从 $100k 重启；刚开钟被报 broken；指纹漏掉 6 份真定选股规则的 preset（含 core_score 权重档）多列 1 份无加载点的；`market_diagnostic_root` 无生产者使 stage 永远读不到钟；一周不可评估即卡死整条周任务（设计 §3/§5 要求写 no_count 仍占日历周）。
+- **Verify**: 自打 10 个植入回归 **10/10 转红**（两条随重构按新形状重打）。焦点包 `Ran 291 tests in 180.6s / PASS`，`receipt:69ac36559c1bc8f31ab01291`；全 lane `Ran 5389 tests / FAILED (failures=2)`——仅剩 discovery live-CLI 两条，与本轮前逐条相同（本机 gitignored 实盘产物占正式决策位，相关三文件本轮 diff 为空）。修 broken/fresh/not_started 三态时把三个读取方统一到单个四态判定器（此前各自判、各错一种）。**过程中被自己的 conformance 守卫抓住一次**：把诊断私有根字面量写进 capstone，导致该模块 ~90 个函数被拉进授权论域、需要 ~90 条豁免——正是本轮在批评的「豁免名单=关掉开关」形态；改由诊断轨自己提供默认根，论域回到 6 个模块。
+- **Next**: 提交并合入 master；刀 6 三条 P1 仍待修
+
 ## 2026-08-05 — Claude Code 执行刀 7b（接线四件）+ 补做刀 6 独立复审：7b 完成，刀 6 判 FAIL
 
 - **Verdict/Action**: 刀 7b 四个子件全部完成（周记录产出器 `settle-week`、成绩单自动触发 `publish`、v1.1 周读取、挂进 weekly capstone），工程闭环差的最后一块补上：此前钟就算开了第 1 周也**产不出来**——刀 2 适配器全仓零调用方，`record-week` 只抬一份没人算的 JSON。同轮把桌面表挂了很久的「刀 6 待独立复审」补做，独立对抗 agent 判 **FAIL**。
