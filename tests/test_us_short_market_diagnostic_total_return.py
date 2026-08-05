@@ -117,6 +117,7 @@ def _sidecar(
 def _price_observation() -> dict:
     return {
         "price_date": "20260724",
+        "prior_price_date": "20260723",
         "prior_close": "100.000000",
         "close": "101.000000",
         "source_kind": "local_etf_price_packet",
@@ -203,6 +204,34 @@ class UsShortMarketDiagnosticTotalReturnTest(unittest.TestCase):
         self.assertEqual("price_return_diagnostic", benchmark["return_quality"])
         self.assertAlmostEqual(0.01, benchmark["weekly_return"])
         self.assertIn("sidecar_price_date_mismatch", benchmark["data_quality_reasons"])
+
+    def test_unavailable_price_does_not_publish_sidecar_digest(self) -> None:
+        sidecar = _sidecar()
+        missing_price = _price_observation()
+        missing_price.update({"prior_price_date": None, "price_date": None, "prior_close": None, "close": None})
+        benchmark = build_total_return_benchmark_observation(
+            sidecar_observation=sidecar["weeks"][0]["benchmarks"]["VTI"],
+            price_observation=missing_price,
+            strategy_evaluable=True,
+            strategy_weekly_return=0.03,
+        )
+        self.assertEqual("unavailable", benchmark["return_quality"])
+        self.assertIsNone(benchmark["dividend_sidecar_sha256"])
+
+    def test_as_of_date_rejects_future_sidecar_observation(self) -> None:
+        with self.assertRaises(TotalReturnSidecarError):
+            validate_etf_total_return_sidecar(_sidecar(), as_of_date="20260724")
+
+    def test_huge_price_number_is_a_typed_rejection(self) -> None:
+        price = _price_observation()
+        price["prior_close"] = "1" + ("0" * 400) + ".000000"
+        with self.assertRaises(TotalReturnSidecarError):
+            build_total_return_benchmark_observation(
+                sidecar_observation=_sidecar()["weeks"][0]["benchmarks"]["VTI"],
+                price_observation=price,
+                strategy_evaluable=True,
+                strategy_weekly_return=0.03,
+            )
 
 
 if __name__ == "__main__":

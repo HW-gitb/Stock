@@ -18,9 +18,11 @@ changes selection/action/sizing/NAV, or qualifies for Ship gate.
 from __future__ import annotations
 
 from copy import deepcopy
+from datetime import date
 import json
 import os
 from pathlib import Path
+import re
 import uuid
 from typing import Any, Mapping
 
@@ -54,10 +56,29 @@ STORE_BOUNDARY = {
 }
 
 _SCHEMA_CACHE: dict[str, dict[str, Any]] = {}
+_DATE8 = re.compile(r"^[0-9]{8}$")
 
 
 class MarketDiagnosticLifecycleError(RuntimeError):
     """Raised when a diagnostic weekly record or lifecycle register is unsafe to persist/use."""
+
+
+def _date8(value: object, field: str) -> date:
+    if not isinstance(value, str) or not value.isascii() or _DATE8.fullmatch(value) is None:
+        raise MarketDiagnosticLifecycleError(f"{field} must be an ASCII YYYYMMDD date")
+    try:
+        return date(int(value[0:4]), int(value[4:6]), int(value[6:8]))
+    except ValueError as exc:
+        raise MarketDiagnosticLifecycleError(f"{field} is not a real calendar date") from exc
+
+
+def _as_of(value: object) -> date:
+    return _date8(value, "as_of_date")
+
+
+def _not_future(value: date, field: str, as_of_date: date | None) -> None:
+    if as_of_date is not None and value > as_of_date:
+        raise MarketDiagnosticLifecycleError(f"{field} is after as_of_date")
 
 
 def _load_schema(path: Path, key: str) -> dict[str, Any]:
@@ -155,7 +176,9 @@ def _atomic_write(path: Path, value: Mapping[str, Any]) -> None:
                 pass
 
 
-def _validate_weekly_record_for_store(record: Mapping[str, Any]) -> dict[str, Any]:
+def _validate_weekly_record_for_store(
+    record: Mapping[str, Any], *, as_of_date: str | None = None
+) -> dict[str, Any]:
     if not isinstance(record, Mapping):
         raise MarketDiagnosticLifecycleError("weekly record must be an object")
     _schema_validate(
@@ -165,7 +188,7 @@ def _validate_weekly_record_for_store(record: Mapping[str, Any]) -> dict[str, An
         label="weekly record",
     )
     try:
-        identity = validate_weekly_record(record)
+        identity = validate_weekly_record(record, as_of_date=as_of_date)
     except MarketDiagnosticError as exc:
         raise MarketDiagnosticLifecycleError(f"weekly record calculation contract violation: {exc}") from exc
     return identity
@@ -317,7 +340,9 @@ def _record_files(root: Path) -> set[str]:
     return result
 
 
-def _register_from_records(records: list[dict[str, Any]]) -> dict[str, Any]:
+def _register_from_records(
+    records: list[dict[str, Any]], *, as_of_date: str | None = None
+) -> dict[str, Any]:
     if not records:
         raise MarketDiagnosticLifecycleError("cannot build an empty diagnostic lifecycle register")
     first = records[0]
@@ -327,7 +352,12 @@ def _register_from_records(records: list[dict[str, Any]]) -> dict[str, Any]:
     previous_decision: str | None = None
     previous_valuation: str | None = None
     for expected_week, record in enumerate(records, start=1):
-        identity = _validate_weekly_record_for_store(record)
+        record_date = _date8(record["decision_date"], "weekly_record.decision_date")
+        record_valuation = _date8(record["valuation_date"], "weekly_record.valuation_date")
+        as_of = _as_of(as_of_date) if as_of_date is not None else None
+        _not_future(record_date, "weekly_record.decision_date", as_of)
+        _not_future(record_valuation, "weekly_record.valuation_date", as_of)
+        identity = _validate_weekly_record_for_store(record, as_of_date=as_of_date)
         if identity["calendar_week_index"] != expected_week:
             raise MarketDiagnosticLifecycleError("diagnostic calendar weeks must start at 1 and be consecutive")
         if record["diagnostic_epoch"] != epoch:
@@ -383,7 +413,9 @@ def _register_from_records(records: list[dict[str, Any]]) -> dict[str, Any]:
     }
 
 
-def _load_records_for_register(root: Path, register: Mapping[str, Any]) -> list[dict[str, Any]]:
+def _load_records_for_register(
+    root: Path, register: Mapping[str, Any], *, as_of_date: str | None = None
+) -> list[dict[str, Any]]:
     _schema_validate(
         register,
         schema_path=REGISTER_SCHEMA_PATH,
@@ -404,7 +436,7 @@ def _load_records_for_register(root: Path, register: Mapping[str, Any]) -> list[
         record, digest = _read_canonical_json(path)
         if digest != ref["weekly_record_sha256"]:
             raise MarketDiagnosticLifecycleError(f"weekly record digest mismatch: {relative}")
-        identity = _validate_weekly_record_for_store(record)
+        identity = _validate_weekly_record_for_store(record, as_of_date=as_of_date)
         if (
             identity["calendar_week_index"] != ref["calendar_week_index"]
             or record["decision_date"] != ref["decision_date"]
@@ -429,34 +461,42 @@ def _load_records_for_register(root: Path, register: Mapping[str, Any]) -> list[
     return records
 
 
-def load_lifecycle_register(root: str | Path = DEFAULT_ROOT) -> dict[str, Any]:
+def load_lifecycle_register(
+    root: str | Path = DEFAULT_ROOT, *, as_of_date: str | None = None
+) -> dict[str, Any]:
     """Load the private register and re-derive every count/ref before returning it."""
 
     store_root = _private_root(root)
+    if as_of_date is not None:
+        _as_of(as_of_date)
     path = _private_path(store_root, REGISTER_FILENAME)
     if not path.is_file():
         raise MarketDiagnosticLifecycleError("diagnostic lifecycle register is not initialized")
     register, _digest = _read_canonical_json(path)
-    records = _load_records_for_register(store_root, register)
-    expected = _register_from_records(records)
+    records = _load_records_for_register(store_root, register, as_of_date=as_of_date)
+    expected = _register_from_records(records, as_of_date=as_of_date)
     if expected != register:
         raise MarketDiagnosticLifecycleError("diagnostic lifecycle register is not derived from weekly records")
     return register
 
 
-def load_settled_weekly_records(root: str | Path = DEFAULT_ROOT) -> list[dict[str, Any]]:
+def load_settled_weekly_records(
+    root: str | Path = DEFAULT_ROOT, *, as_of_date: str | None = None
+) -> list[dict[str, Any]]:
     """Load every settled diagnostic week after revalidating the private register and records."""
 
     store_root = _private_root(root)
-    register = load_lifecycle_register(store_root)
-    return _load_records_for_register(store_root, register)
+    register = load_lifecycle_register(store_root, as_of_date=as_of_date)
+    return _load_records_for_register(store_root, register, as_of_date=as_of_date)
 
 
-def _load_existing_records(store_root: Path) -> tuple[dict[str, Any] | None, list[dict[str, Any]]]:
+def _load_existing_records(
+    store_root: Path, *, as_of_date: str | None = None
+) -> tuple[dict[str, Any] | None, list[dict[str, Any]]]:
     register_path = _private_path(store_root, REGISTER_FILENAME)
     if register_path.is_file():
-        register = load_lifecycle_register(store_root)
-        records = _load_records_for_register(store_root, register)
+        register = load_lifecycle_register(store_root, as_of_date=as_of_date)
+        records = _load_records_for_register(store_root, register, as_of_date=as_of_date)
         return register, records
     record_paths = _record_files(store_root)
     if record_paths:
@@ -466,7 +506,7 @@ def _load_existing_records(store_root: Path) -> tuple[dict[str, Any] | None, lis
             )
         relative = next(iter(record_paths))
         record, _digest = _read_canonical_json(_private_path(store_root, relative))
-        identity = _validate_weekly_record_for_store(record)
+        identity = _validate_weekly_record_for_store(record, as_of_date=as_of_date)
         if identity["calendar_week_index"] != 1 or relative != _record_relative_path(record):
             raise MarketDiagnosticLifecycleError("orphan diagnostic record is not a valid week-1 recovery candidate")
         return None, [record]
@@ -477,6 +517,7 @@ def persist_settled_weekly_record(
     weekly_record: Mapping[str, Any],
     *,
     root: str | Path = DEFAULT_ROOT,
+    as_of_date: str | None = None,
 ) -> dict[str, Any]:
     """Publish one already-built settled weekly record and update the counter.
 
@@ -489,10 +530,12 @@ def persist_settled_weekly_record(
 
     if not isinstance(weekly_record, Mapping):
         raise MarketDiagnosticLifecycleError("weekly_record must be an object")
+    if as_of_date is not None:
+        _as_of(as_of_date)
     store_root = _private_root(root)
     incoming = deepcopy(dict(weekly_record))
-    incoming_identity = _validate_weekly_record_for_store(incoming)
-    register, records = _load_existing_records(store_root)
+    incoming_identity = _validate_weekly_record_for_store(incoming, as_of_date=as_of_date)
+    register, records = _load_existing_records(store_root, as_of_date=as_of_date)
     incoming_week = incoming_identity["calendar_week_index"]
     incoming_path_relative = _record_relative_path(incoming)
     incoming_path = _private_path(store_root, incoming_path_relative)
@@ -508,10 +551,10 @@ def persist_settled_weekly_record(
             active=orphan_state["status"] == "active",
             attribution_epoch=orphan_state["attribution_epoch"],
         )
-        _validate_weekly_record_for_store(incoming)
+        _validate_weekly_record_for_store(incoming, as_of_date=as_of_date)
         if _record_relative_path(orphan) != incoming_path_relative or artifact_sha256(orphan) != artifact_sha256(incoming):
             raise MarketDiagnosticLifecycleError("orphan diagnostic weekly record conflicts with the retry input")
-        recovered_register = _register_from_records(records)
+        recovered_register = _register_from_records(records, as_of_date=as_of_date)
         _atomic_write(_private_path(store_root, REGISTER_FILENAME), recovered_register)
         return {
             "status": "recovered",
@@ -531,7 +574,7 @@ def persist_settled_weekly_record(
             if _record_relative_path(existing) != incoming_path_relative:
                 raise MarketDiagnosticLifecycleError("immutable week identity conflicts with its existing record")
             incoming["v1_1_reminder"] = dict(existing["v1_1_reminder"])
-            _validate_weekly_record_for_store(incoming)
+            _validate_weekly_record_for_store(incoming, as_of_date=as_of_date)
             if artifact_sha256(existing) != artifact_sha256(incoming):
                 raise MarketDiagnosticLifecycleError("immutable diagnostic weekly record conflict")
             return {
@@ -565,7 +608,7 @@ def persist_settled_weekly_record(
         active=next_state["status"] == "active",
         attribution_epoch=next_state["attribution_epoch"],
     )
-    _validate_weekly_record_for_store(incoming)
+    _validate_weekly_record_for_store(incoming, as_of_date=as_of_date)
     if incoming_path.is_file():
         existing, existing_digest = _read_canonical_json(incoming_path)
         if existing_digest != artifact_sha256(incoming):
@@ -575,7 +618,7 @@ def persist_settled_weekly_record(
     else:
         _atomic_write(incoming_path, incoming)
 
-    next_register = _register_from_records(next_records)
+    next_register = _register_from_records(next_records, as_of_date=as_of_date)
     register_path = _private_path(store_root, REGISTER_FILENAME)
     _atomic_write(register_path, next_register)
     return {

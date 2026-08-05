@@ -70,7 +70,15 @@ def _two_window_rows() -> list[dict]:
             previous_cost + Decimal(row["strategy"]["cumulative_cost_paid"])
         )
         row["strategy"]["source_sha256"] = f"{600 + week:064x}"
-        row["source_refs"] = [f"{900 + week:064x}"]
+        row["source_refs"] = [
+            digest
+            for benchmark in row["benchmarks"].values()
+            for digest in (
+                benchmark["price_packet_sha256"],
+                benchmark["dividend_sidecar_sha256"],
+            )
+            if digest is not None
+        ] + [f"{900 + week:064x}"]
         previous_nav = current_nav
     return first + second
 
@@ -121,6 +129,10 @@ class UsShortMarketDiagnosticAggregatorTest(unittest.TestCase):
         self.assertEqual("26w-1-26", report["window_summary"]["window_id"])
         self.assertEqual(26, report["since_inception"]["calendar_week_count"])
         self.assertEqual(["VTI", "IWB", "SPY", "QQQ"], list(report["window_summary"]["benchmarks"]))
+        self.assertEqual(
+            "v1.1 attribution is active and remains sticky after automatic activation.",
+            report["window_summary"]["v1_1_reminder"]["text"],
+        )
         self.assertEqual(1, len(report["ruleset_segments"]["fixed_window"]))
         _validate_report_schema(report)
 
@@ -158,6 +170,11 @@ class UsShortMarketDiagnosticAggregatorTest(unittest.TestCase):
             changed["since_inception"]["status_reason"] = "intentional conflict"
             with self.assertRaises(MarketDiagnosticAggregationError):
                 write_market_diagnostic_report(changed, output_root=output_root)
+
+            changed_reminder = copy.deepcopy(report)
+            changed_reminder["window_summary"]["v1_1_reminder"]["text"] = "PII must not enter public output"
+            with self.assertRaises(MarketDiagnosticAggregationError):
+                write_market_diagnostic_report(changed_reminder, output_root=output_root)
 
             markdown_path.unlink()
             with self.assertRaises(MarketDiagnosticAggregationError):
