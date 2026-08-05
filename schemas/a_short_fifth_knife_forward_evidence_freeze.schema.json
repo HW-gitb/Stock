@@ -7,12 +7,14 @@
     "frozenContract": {
       "type": "object",
       "additionalProperties": false,
-      "required": ["name", "path", "sha256"],
+      "required": ["name", "path", "projection", "semantic_fingerprint"],
       "properties": {
         "name": {"type": "string", "minLength": 1},
         "path": {"type": "string", "minLength": 1},
-        "sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
-        "semantic_fingerprint": {"type": "string", "pattern": "^[0-9a-f]{64}$"}
+        "projection": {"type": "string", "enum": ["json_effect_contract_decisions", "json_governance", "json_schema_validation", "python_semantic_module"],
+                       "description": "How this contract is reduced to the substance that can change a comparison verdict. Whole-file bytes are deliberately not a gate: a comment or a reordered key must not be able to discard evidence."},
+        "semantic_fingerprint": {"type": "string", "pattern": "^[0-9a-f]{64}$",
+                                 "description": "sha256 over the canonical projection. The sole per-contract epoch gate."}
       }
     }
   },

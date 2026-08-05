@@ -104,7 +104,7 @@ class AShortFifthKnifeForwardEvidenceFreezeTests(unittest.TestCase):
                 "frozen_enforced", ("p2_target_policy",)):
             artifact_path = epoch_mode.FIFTH_KNIFE_FREEZE_PACKET_PATH
             artifact = json.loads(artifact_path.read_text(encoding="utf-8"))
-            artifact["frozen_contracts"][0]["sha256"] = "0" * 64
+            artifact["frozen_contracts"][0]["semantic_fingerprint"] = "0" * 64
             artifact["record_sha256"] = _digest({
                 key: value for key, value in artifact.items()
                 if key != "record_sha256"
@@ -112,7 +112,7 @@ class AShortFifthKnifeForwardEvidenceFreezeTests(unittest.TestCase):
             artifact_path.write_text(json.dumps(artifact), encoding="utf-8")
             with self.assertRaisesRegex(
                     epoch_mode.EvidenceEpochModeError,
-                    "fifth-knife frozen contract drift",
+                    "fifth-knife frozen contract semantic drift",
             ):
                 epoch_mode.enforcement_enabled("p2_target_policy")
 

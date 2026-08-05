@@ -82,7 +82,7 @@ class ThemeForwardComparisonRunnerTests(unittest.TestCase):
     def _corrupt_resealed_packet(path: Path) -> None:
         _resealed_freeze_packet(path)
         packet = json.loads(path.read_text(encoding="utf-8"))
-        packet["frozen_contracts"][0]["sha256"] = "0" * 64
+        packet["frozen_contracts"][0]["semantic_fingerprint"] = "0" * 64
         packet["record_sha256"] = runner.epoch_mode._canonical_json_sha256({
             key: value for key, value in packet.items() if key != "record_sha256"
         })
@@ -590,7 +590,7 @@ class ThemeForwardComparisonRunnerTests(unittest.TestCase):
                         ):
                     with self.assertRaisesRegex(
                         runner.epoch_mode.EvidenceEpochModeError,
-                        "frozen contract drift",
+                        "frozen contract semantic drift",
                     ):
                         runner._start_or_reset_epoch(
                             tracker, requested_epoch_id, "20260102",
@@ -747,8 +747,13 @@ class ThemeForwardComparisonRunnerTests(unittest.TestCase):
                         "weekly_report_schema"
                     ]
                 )
-                shared_contract.write_bytes(
-                    shared_contract.read_bytes() + b"\n"
+                # A genuine contract change, not a trailing newline: the epoch
+                # now gates on validation keywords, so cosmetic edits
+                # deliberately keep the identity and cannot stand in for one.
+                document = json.loads(shared_contract.read_text(encoding="utf-8"))
+                document["properties"]["__epoch_reseal_probe__"] = {"type": "string"}
+                shared_contract.write_text(
+                    json.dumps(document), encoding="utf-8",
                 )
                 _resealed_freeze_packet(packet_path)
                 second_identity = runner.epoch_mode.validate_frozen_transition(

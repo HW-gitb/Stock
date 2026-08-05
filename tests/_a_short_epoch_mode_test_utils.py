@@ -2,7 +2,6 @@
 from __future__ import annotations
 
 import json
-import hashlib
 import tempfile
 from contextlib import contextmanager
 from pathlib import Path
@@ -16,10 +15,13 @@ def _resealed_freeze_packet(path: Path) -> None:
         epoch_mode.FIFTH_KNIFE_FREEZE_PACKET_PATH.read_text(encoding="utf-8")
     )
     for contract in packet["frozen_contracts"]:
-        source = epoch_mode.ROOT / contract["path"]
-        contract["sha256"] = hashlib.sha256(
-            source.read_bytes().replace(b"\r\n", b"\n")
-        ).hexdigest()
+        # Seal what decides, not the file bytes: a comment or a reordered key
+        # must not be able to discard accumulated evidence.
+        contract.pop("sha256", None)
+        contract["projection"] = epoch_mode._CONTRACT_PROJECTIONS[contract["name"]]
+        contract["semantic_fingerprint"] = epoch_mode.contract_semantic_fingerprint(
+            contract["name"]
+        )
     packet["record_sha256"] = epoch_mode._canonical_json_sha256({
         key: value for key, value in packet.items() if key != "record_sha256"
     })

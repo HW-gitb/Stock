@@ -269,7 +269,7 @@ class PreFreezeEvidenceModeTests(unittest.TestCase):
                     patched_epoch_modes("frozen_enforced", (track,)):
                 packet_path = epoch_mode.FIFTH_KNIFE_FREEZE_PACKET_PATH
                 packet = json.loads(packet_path.read_text(encoding="utf-8"))
-                packet["frozen_contracts"][-1]["sha256"] = "0" * 64
+                packet["frozen_contracts"][-1]["semantic_fingerprint"] = "0" * 64
                 packet["record_sha256"] = epoch_mode._canonical_json_sha256({
                     key: value for key, value in packet.items()
                     if key != "record_sha256"
@@ -277,11 +277,11 @@ class PreFreezeEvidenceModeTests(unittest.TestCase):
                 packet_path.write_text(json.dumps(packet), encoding="utf-8")
                 with self.assertRaisesRegex(
                     epoch_mode.EvidenceEpochModeError,
-                    "fifth-knife frozen contract drift: weekly_report_schema",
+                    "fifth-knife frozen contract semantic drift: weekly_report_schema",
                 ):
                     epoch_mode.enforcement_enabled(track)
 
-    def test_synchronized_packet_reseal_rekeys_every_real_track_fingerprint(self):
+    def test_a_cosmetic_shared_contract_edit_costs_nothing_but_a_semantic_one_rekeys_all(self):
         with tempfile.TemporaryDirectory() as temp:
             temp_root = Path(temp)
             original_packet = epoch_mode.FIFTH_KNIFE_FREEZE_PACKET_PATH.read_bytes()
@@ -314,14 +314,34 @@ class PreFreezeEvidenceModeTests(unittest.TestCase):
                         "weekly_report_schema"
                     ]
                 )
-                shared_contract.write_bytes(
-                    shared_contract.read_bytes() + b"\n"
+                # Cosmetic first: reformatting and rewording a shared contract
+                # must cost nothing.  This is the whole reason the gate moved
+                # off whole-file bytes -- edits like these fired twice in one
+                # week and silently discarded every accumulated week.
+                document = json.loads(shared_contract.read_text(encoding="utf-8"))
+                document["description"] = "reworded during an unfinished design"
+                document["$comment"] = "and annotated"
+                shared_contract.write_text(
+                    json.dumps(document, indent=4) + "\n", encoding="utf-8",
                 )
                 _resealed_freeze_packet(packet_path)
-                after = _fingerprints()
-            self.assertEqual(set(before), set(after))
+                after_cosmetic = _fingerprints()
+
+                # Semantic second: a validation keyword genuinely changes which
+                # payloads are admissible, so every track must be rekeyed.
+                document["properties"]["__epoch_semantic_probe__"] = {"type": "string"}
+                shared_contract.write_text(
+                    json.dumps(document, indent=4) + "\n", encoding="utf-8",
+                )
+                _resealed_freeze_packet(packet_path)
+                after_semantic = _fingerprints()
             self.assertTrue(before)
-            self.assertTrue(all(before[key] != after[key] for key in before))
+            self.assertEqual(set(before), set(after_cosmetic))
+            self.assertEqual(before, after_cosmetic,
+                             "a cosmetic edit discarded evidence")
+            self.assertEqual(set(before), set(after_semantic))
+            self.assertTrue(all(before[key] != after_semantic[key] for key in before),
+                            "a semantic edit failed to rekey every track")
 
     def test_bound_identity_rejects_missing_old_version_freeze_id_and_record_hash(self):
         with patched_epoch_modes(
@@ -955,6 +975,215 @@ class PreFreezeVerdictGateTests(unittest.TestCase):
         self.assertEqual((parked["p5b_build_due"], parked["p5b_checkpoint_notice"]), (False, "accumulating"))
         self.assertEqual((enforced["p5b_build_due"], enforced["p5b_checkpoint_notice"]),
                          (True, "p5b_implementation_due_at_12"))
+
+
+class SemanticProjectionTests(unittest.TestCase):
+    """The freeze packet gates on what decides, not on file bytes.
+
+    Whole-file hashing meant an edit that could not change any verdict still
+    discarded every accumulated week.  With eight remaining knives to land
+    before the design settles, that made starting a 12-week clock impossible:
+    row 11 rewrites the effect contract's leaf ledger, which decides nothing
+    about a comparison verdict, and under byte hashing it would have thrown
+    away the whole accumulation.
+    """
+
+    def _temp_tree(self):
+        temp = tempfile.TemporaryDirectory()
+        self.addCleanup(temp.cleanup)
+        root = Path(temp.name)
+        for relative in epoch_mode._FIFTH_KNIFE_FROZEN_CONTRACTS.values():
+            target = root / relative
+            target.parent.mkdir(parents=True, exist_ok=True)
+            target.write_bytes((epoch_mode.ROOT / relative).read_bytes())
+        return root
+
+    def _fingerprint_after(self, root, name, mutate):
+        relative = epoch_mode._FIFTH_KNIFE_FROZEN_CONTRACTS[name]
+        path = root / relative
+        with mock.patch.object(epoch_mode, "ROOT", root):
+            before = epoch_mode.contract_semantic_fingerprint(name)
+            mutate(path)
+            after = epoch_mode.contract_semantic_fingerprint(name)
+        return before, after
+
+    @staticmethod
+    def _rewrite_json(path, edit):
+        document = json.loads(path.read_text(encoding="utf-8"))
+        edit(document)
+        path.write_text(json.dumps(document, indent=1) + "\n", encoding="utf-8")
+
+    def test_every_frozen_contract_declares_exactly_one_projection(self):
+        self.assertEqual(set(epoch_mode._CONTRACT_PROJECTIONS),
+                         set(epoch_mode._FIFTH_KNIFE_FROZEN_CONTRACTS))
+        for name in epoch_mode._FIFTH_KNIFE_FROZEN_CONTRACTS:
+            projection = epoch_mode.contract_semantic_projection(name)
+            self.assertEqual(projection["projection"], epoch_mode._CONTRACT_PROJECTIONS[name])
+            self.assertRegex(epoch_mode.contract_semantic_fingerprint(name), r"^[0-9a-f]{64}$")
+
+    def test_rewriting_the_effect_contract_leaf_ledger_keeps_the_epoch(self):
+        """Row 11 rewrites every one of these keys and decides nothing here."""
+        root = self._temp_tree()
+
+        def rewrite_ledger(document):
+            document["leaf_effect_overrides"] = {"candidates[].invented": "true_dangling"}
+            document["leaf_nature_by_group"] = {"market_context": "true_dangling"}
+            document["groups"] = []
+            document["analysis_input_paths"] = ["candidates[].invented"]
+            document["analysis_input_all_paths_sha256"] = "f" * 64
+            document["legacy_migration_sha256"] = "e" * 64
+
+        before, after = self._fingerprint_after(
+            root, "m67_effect_contract",
+            lambda path: self._rewrite_json(path, rewrite_ledger),
+        )
+        self.assertEqual(before, after)
+
+    def test_moving_the_effect_contract_decision_surface_breaks_the_epoch(self):
+        """The other half of the same file does decide, and must still bite."""
+        root = self._temp_tree()
+        before, after = self._fingerprint_after(
+            root, "m67_effect_contract",
+            lambda path: self._rewrite_json(
+                path,
+                lambda document: document["decision_predicate_sha256"].update(
+                    {"A-EGS/egs_main.py": "0" * 64}
+                ),
+            ),
+        )
+        self.assertNotEqual(before, after)
+
+    def test_an_unclassified_effect_contract_key_is_bound_rather_than_ignored(self):
+        """Over-binding costs one re-arm; under-binding turns stale evidence valid."""
+        root = self._temp_tree()
+        before, after = self._fingerprint_after(
+            root, "m67_effect_contract",
+            lambda path: self._rewrite_json(
+                path,
+                lambda document: document.update({"invented_decision_key": {"cap": 0.5}}),
+            ),
+        )
+        self.assertNotEqual(before, after)
+
+    def test_reformatting_and_annotating_a_schema_keeps_the_epoch(self):
+        for name in ("weekly_report_schema", "v14_3_action_comparison_schema"):
+            with self.subTest(contract=name):
+                root = self._temp_tree()
+
+                def annotate(document):
+                    document["description"] = "reworded mid-design"
+                    document["$comment"] = "and annotated"
+                    document["title"] = "retitled"
+
+                before, after = self._fingerprint_after(
+                    root, name, lambda path: self._rewrite_json(path, annotate),
+                )
+                self.assertEqual(before, after)
+
+    def test_a_validation_keyword_change_breaks_a_schema_epoch(self):
+        root = self._temp_tree()
+        before, after = self._fingerprint_after(
+            root, "weekly_report_schema",
+            lambda path: self._rewrite_json(
+                path,
+                lambda document: document["properties"].update(
+                    {"__probe__": {"type": "string"}}
+                ),
+            ),
+        )
+        self.assertNotEqual(before, after)
+
+    def test_reformatting_a_governance_preset_keeps_the_epoch(self):
+        root = self._temp_tree()
+        before, after = self._fingerprint_after(
+            root, "a_short_m67_runtime_policy",
+            lambda path: self._rewrite_json(
+                path, lambda document: document.update({"description": "reworded"}),
+            ),
+        )
+        self.assertEqual(before, after)
+
+    def test_changing_a_governed_threshold_breaks_the_epoch(self):
+        """Governance presets are small and every real value in them decides."""
+        root = self._temp_tree()
+        before, after = self._fingerprint_after(
+            root, "a_short_m67_runtime_policy",
+            lambda path: self._rewrite_json(
+                path,
+                lambda document: document["phase5"].update({"__probe_threshold__": 0.99}),
+            ),
+        )
+        self.assertNotEqual(before, after)
+
+    def test_a_comment_in_the_python_contract_keeps_the_epoch_but_code_breaks_it(self):
+        root = self._temp_tree()
+        relative = epoch_mode._FIFTH_KNIFE_FROZEN_CONTRACTS["p4a_overlay_epoch"]
+        path = root / relative
+        original = path.read_text(encoding="utf-8")
+
+        with mock.patch.object(epoch_mode, "ROOT", root):
+            before = epoch_mode.contract_semantic_fingerprint("p4a_overlay_epoch")
+            path.write_text("# a comment added mid-design\n" + original, encoding="utf-8")
+            commented = epoch_mode.contract_semantic_fingerprint("p4a_overlay_epoch")
+            path.write_text(original + "\n\ndef __epoch_probe__():\n    return 1\n",
+                            encoding="utf-8")
+            recoded = epoch_mode.contract_semantic_fingerprint("p4a_overlay_epoch")
+
+        self.assertEqual(before, commented, "a comment discarded evidence")
+        self.assertNotEqual(before, recoded, "new executable code kept the old epoch")
+
+    def test_the_python_projection_never_imports_or_consults_inspect(self):
+        """Packet validation must not answer to a patched ``getsourcefile``.
+
+        The overlay module imports this one, so importing it back would be a
+        cycle; routing through ``inspect`` also let any caller's patch decide
+        what the packet validates against.
+        """
+        with mock.patch.object(epoch_mode.inspect, "getsourcefile",
+                               side_effect=AssertionError("inspect was consulted")):
+            self.assertRegex(
+                epoch_mode.contract_semantic_fingerprint("p4a_overlay_epoch"),
+                r"^[0-9a-f]{64}$",
+            )
+
+    def test_semantic_drift_is_reported_with_the_contract_and_its_projection(self):
+        """Losing evidence is sometimes right; losing it silently never is."""
+        track = epoch_mode.TRACKS[0]
+        with patched_epoch_modes("frozen_enforced", (track,)):
+            packet_path = epoch_mode.FIFTH_KNIFE_FREEZE_PACKET_PATH
+            packet = json.loads(packet_path.read_text(encoding="utf-8"))
+            for entry in packet["frozen_contracts"]:
+                if entry["name"] == "m67_effect_contract":
+                    entry["semantic_fingerprint"] = "0" * 64
+            packet["record_sha256"] = epoch_mode._canonical_json_sha256({
+                key: value for key, value in packet.items() if key != "record_sha256"
+            })
+            packet_path.write_text(json.dumps(packet), encoding="utf-8")
+            with self.assertRaisesRegex(
+                epoch_mode.EvidenceEpochModeError,
+                r"semantic drift: m67_effect_contract .*projection="
+                r"json_effect_contract_decisions",
+            ):
+                epoch_mode.enforcement_enabled(track)
+
+    def test_a_packet_projection_that_disagrees_with_the_code_is_rejected(self):
+        """The packet says how it was sealed; the code is the authority."""
+        track = epoch_mode.TRACKS[0]
+        with patched_epoch_modes("pre_freeze_audit_only", (track,)):
+            packet_path = epoch_mode.FIFTH_KNIFE_FREEZE_PACKET_PATH
+            packet = json.loads(packet_path.read_text(encoding="utf-8"))
+            for entry in packet["frozen_contracts"]:
+                if entry["name"] == "weekly_report_schema":
+                    entry["projection"] = "json_governance"
+            packet["record_sha256"] = epoch_mode._canonical_json_sha256({
+                key: value for key, value in packet.items() if key != "record_sha256"
+            })
+            packet_path.write_text(json.dumps(packet), encoding="utf-8")
+            with self.assertRaisesRegex(
+                epoch_mode.EvidenceEpochModeError,
+                "projection mismatch: weekly_report_schema",
+            ):
+                epoch_mode.enforcement_enabled(track)
 
 
 if __name__ == "__main__":

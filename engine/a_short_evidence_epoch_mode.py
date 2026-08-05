@@ -40,21 +40,32 @@ same class of dishonesty this module exists to remove.
 Restoring enforcement
 ---------------------
 Freeze only the intended entry in ``TRACK_MODE_REGISTRY_PATH`` once that
-track's design is settled.  There is deliberately no all-track switch.  Before
-freezing a track, converge its real fingerprint onto semantic contracts (governance
-JSON / preset / schema / admission snapshot plus ``inspect.getsource`` of the
-evidence-producing functions) rather than whole-file bytes, and make any
-retained file-level hash LF-canonical -- otherwise the original churn returns
-at exactly the moment it starts costing real evidence.
+track's design is settled.  There is deliberately no all-track switch.
 
-The fifth-knife freeze packet is also pre-freeze while this mode is active. At
-the same switchover, rehash all eight frozen contracts LF-canonically,
-recompute P4a's semantic fingerprint and the packet self-hash, then record an
-explicit epoch judgment in ``docs/SESSION_LOG.md`` for each changed contract.
-In particular, a hash-only effect-contract change may remain in the epoch;
-the P4a pre-freeze adjudication gate is behavioural but is conservative and
-has zero countable forward evidence, so it too requires an explicit judgment
-rather than an implicit reseal.
+The shared prerequisite is done (2026-08-05).  The fifth-knife freeze packet
+used to gate on whole-file bytes, which would have returned the original churn
+at exactly the moment it started costing real evidence: eight knives are still
+to land before the design settles, and row 11 alone rewrites the effect
+contract's entire leaf ledger while changing no comparison verdict.  Each of
+the eight contracts now declares a **projection** in ``_CONTRACT_PROJECTIONS``
+and is sealed on the substance that can actually move a verdict:
+
+* governance presets -- canonical JSON, annotations dropped, so reformatting
+  and rewording are free while every real value still decides;
+* JSON Schemas -- validation keywords only, so a reworded ``description``
+  cannot discard a week;
+* the P4a Python contract -- executable AST with docstrings stripped, read
+  from the checked-in file rather than imported, so neither an import cycle
+  nor a patched ``inspect`` can decide what the packet validates against;
+* the effect contract -- the decision surface only.  Its leaf ledger
+  (``_EFFECT_CONTRACT_LEAF_LEDGER_KEYS``) is excluded; every other key is
+  bound, **including keys added later**, because over-binding costs one re-arm
+  while under-binding silently turns stale evidence into apparent evidence.
+
+Drift is still fatal to an epoch and is now always named: the error says which
+contract moved and under which projection.  Losing evidence is sometimes
+correct; losing it without being told which change did it is what this
+replaces.
 """
 from __future__ import annotations
 
@@ -105,6 +116,57 @@ _FIFTH_KNIFE_FROZEN_CONTRACTS = {
 }
 
 
+#: How each frozen contract is reduced to the substance that can actually change
+#: a comparison verdict.  Whole-file bytes were the original gate, and they made
+#: a comment, a reordered key or a new leaf-ledger entry cost every accumulated
+#: week -- churn with no protection, which is the exact failure this module was
+#: written to remove.  A projection binds what decides and ignores what does not.
+_PROJECTION_JSON_GOVERNANCE = "json_governance"
+_PROJECTION_JSON_SCHEMA = "json_schema_validation"
+_PROJECTION_PYTHON_MODULE = "python_semantic_module"
+_PROJECTION_EFFECT_CONTRACT = "json_effect_contract_decisions"
+
+_CONTRACT_PROJECTIONS = {
+    # Small governed presets: every key is a decision, but formatting and key
+    # order are not.  Canonical JSON, annotations dropped.
+    "a_short_screening_runtime_policy": _PROJECTION_JSON_GOVERNANCE,
+    "a_short_m67_runtime_policy": _PROJECTION_JSON_GOVERNANCE,
+    "v14_3_action_comparison_governance": _PROJECTION_JSON_GOVERNANCE,
+    # JSON Schemas decide only through their validation keywords.  A reworded
+    # description cannot change whether a payload is accepted.
+    "v14_3_action_comparison_schema": _PROJECTION_JSON_SCHEMA,
+    "v14_3_weekly_capture_schema": _PROJECTION_JSON_SCHEMA,
+    "weekly_report_schema": _PROJECTION_JSON_SCHEMA,
+    # Python: executable AST, docstrings stripped, bound the same way the P4a
+    # track itself binds this module so the two cannot disagree.
+    "p4a_overlay_epoch": _PROJECTION_PYTHON_MODULE,
+    # The effect contract is two documents in one file: a leaf ledger and a set
+    # of hashes over the production decision surface.  Only the latter can move
+    # a comparison verdict.
+    "m67_effect_contract": _PROJECTION_EFFECT_CONTRACT,
+}
+
+#: Annotation-only JSON Schema keywords.  Dropping these cannot change which
+#: payloads validate; keeping them made every wording fix an epoch break.
+_ANNOTATION_ONLY_SCHEMA_KEYWORDS = frozenset({
+    "title", "description", "$comment", "examples", "deprecated", "readOnly", "writeOnly",
+})
+
+#: Effect-contract keys that are leaf bookkeeping, not decision surface.  Row 11
+#: rewrites every one of them while changing no comparison judgment.  Everything
+#: else in the document is bound, including keys added later: an unclassified key
+#: is bound by default, because over-binding costs one re-arm while under-binding
+#: silently turns stale evidence into apparently valid evidence.
+_EFFECT_CONTRACT_LEAF_LEDGER_KEYS = frozenset({
+    "groups",
+    "leaf_effect_overrides",
+    "leaf_nature_by_group",
+    "analysis_input_paths",
+    "analysis_input_all_paths_sha256",
+    "legacy_migration_sha256",
+})
+
+
 class EvidenceEpochModeError(ValueError):
     """Raised when the evidence mode or a track identifier is not recognised."""
 
@@ -115,6 +177,90 @@ def _canonical_json_sha256(value: dict) -> str:
             value, ensure_ascii=False, sort_keys=True, separators=(",", ":"),
         ).encode("utf-8")
     ).hexdigest()
+
+
+def _strip_schema_annotations(value):
+    """Drop annotation-only keywords everywhere, keeping every validation keyword.
+
+    Recurses through objects and arrays.  A key whose own name is an annotation
+    keyword is dropped; its value is never inspected, so a property legitimately
+    *named* ``description`` inside ``properties`` survives -- that is a schema
+    subtree, reached through ``properties``, not an annotation.
+    """
+    if isinstance(value, dict):
+        return {
+            key: _strip_schema_annotations(item)
+            for key, item in value.items()
+            if key not in _ANNOTATION_ONLY_SCHEMA_KEYWORDS
+        }
+    if isinstance(value, list):
+        return [_strip_schema_annotations(item) for item in value]
+    return value
+
+
+def _load_contract_json(name: str, path: Path):
+    try:
+        return json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, UnicodeDecodeError, ValueError) as exc:
+        raise EvidenceEpochModeError(f"cannot read frozen contract: {name}") from exc
+
+
+def contract_semantic_projection(name: str) -> dict:
+    """Return the decision-bearing substance of one frozen contract.
+
+    Everything outside the projection is free to move while the design is still
+    being built, which is the whole point: an edit that cannot change a verdict
+    must not be able to discard evidence.
+    """
+    try:
+        relative = _FIFTH_KNIFE_FROZEN_CONTRACTS[name]
+        projection = _CONTRACT_PROJECTIONS[name]
+    except KeyError as exc:
+        raise EvidenceEpochModeError(f"unregistered frozen contract: {name}") from exc
+
+    path = (ROOT / relative).resolve()
+    if ROOT.resolve() not in path.parents or not path.is_file():
+        raise EvidenceEpochModeError(f"missing fifth-knife frozen contract: {name}")
+
+    if projection == _PROJECTION_PYTHON_MODULE:
+        # Read the file, never import it.  Importing would create a cycle (the
+        # overlay module imports this one) and would route through
+        # ``inspect.getsourcefile``, making packet validation answer to whatever
+        # a caller has patched.  The checked-in bytes are the authority.
+        try:
+            source = path.read_text(encoding="utf-8")
+        except (OSError, UnicodeDecodeError) as exc:
+            raise EvidenceEpochModeError(f"cannot read frozen contract: {name}") from exc
+        tree = _cached_semantic_source_tree(str(path), source)
+        return {"projection": projection, "substance": {
+            # No exclusions here.  A track excludes the functions that compute
+            # its own fingerprint to avoid self-reference; this projection is
+            # computed from outside, so binding everything is both simpler and
+            # more conservative.
+            "bound_functions": sorted(_top_level_function_nodes(tree)),
+            "semantic_ast_sha256": _semantic_ast_sha256(list(tree.body)),
+        }}
+
+    document = _load_contract_json(name, path)
+    if projection == _PROJECTION_JSON_GOVERNANCE:
+        substance = _strip_schema_annotations(document)
+    elif projection == _PROJECTION_JSON_SCHEMA:
+        substance = _strip_schema_annotations(document)
+    elif projection == _PROJECTION_EFFECT_CONTRACT:
+        if not isinstance(document, dict):
+            raise EvidenceEpochModeError(f"malformed frozen contract: {name}")
+        substance = {
+            key: value for key, value in document.items()
+            if key not in _EFFECT_CONTRACT_LEAF_LEDGER_KEYS
+        }
+    else:  # pragma: no cover - _CONTRACT_PROJECTIONS is closed and tested
+        raise EvidenceEpochModeError(f"unknown projection for frozen contract: {name}")
+    return {"projection": projection, "substance": substance}
+
+
+def contract_semantic_fingerprint(name: str) -> str:
+    """The 64-hex fingerprint of one contract's decision-bearing substance."""
+    return _canonical_json_sha256(contract_semantic_projection(name))
 
 
 def _freeze_schema_cache_key(path: Path) -> tuple[str, int, int]:
@@ -208,36 +354,32 @@ def _validate_fifth_knife_freeze_packet(*, require_contract_hashes: bool) -> dic
     if set(by_name) != set(_FIFTH_KNIFE_FROZEN_CONTRACTS):
         raise EvidenceEpochModeError("incomplete fifth-knife frozen-contract inventory")
 
-    root_resolved = ROOT.resolve()
     for name, relative in _FIFTH_KNIFE_FROZEN_CONTRACTS.items():
         contract = by_name[name]
         if contract.get("path") != relative:
             raise EvidenceEpochModeError(
                 f"fifth-knife frozen-contract path mismatch: {name}"
             )
-        recorded_sha = contract.get("sha256")
-        if not isinstance(recorded_sha, str) or len(recorded_sha) != 64 or \
-                any(char not in "0123456789abcdef" for char in recorded_sha):
+        recorded = contract.get("semantic_fingerprint")
+        if not isinstance(recorded, str) or len(recorded) != 64 or \
+                any(char not in "0123456789abcdef" for char in recorded):
             raise EvidenceEpochModeError(
-                f"invalid fifth-knife frozen-contract hash: {name}"
+                f"invalid fifth-knife frozen-contract semantic fingerprint: {name}"
+            )
+        if contract.get("projection") != _CONTRACT_PROJECTIONS[name]:
+            raise EvidenceEpochModeError(
+                f"fifth-knife frozen-contract projection mismatch: {name}"
             )
         if not require_contract_hashes:
             continue
-        path = (ROOT / relative).resolve()
-        if root_resolved not in path.parents or not path.is_file():
+        if contract_semantic_fingerprint(name) != recorded:
+            # Named, never silent.  Losing evidence is sometimes correct; losing
+            # it without being told which contract moved is what this replaces.
             raise EvidenceEpochModeError(
-                f"missing fifth-knife frozen contract: {name}"
-            )
-        try:
-            content = path.read_bytes().replace(b"\r\n", b"\n")
-        except OSError as exc:
-            raise EvidenceEpochModeError(
-                f"cannot read fifth-knife frozen contract: {name}"
-            ) from exc
-        actual = hashlib.sha256(content).hexdigest()
-        if actual != recorded_sha:
-            raise EvidenceEpochModeError(
-                f"fifth-knife frozen contract drift: {name}"
+                f"fifth-knife frozen contract semantic drift: {name} "
+                f"(projection={_CONTRACT_PROJECTIONS[name]}); the decision-bearing "
+                "substance changed, so evidence accumulated under the old epoch "
+                "no longer applies"
             )
     return packet
 
