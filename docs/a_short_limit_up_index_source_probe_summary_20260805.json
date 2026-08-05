@@ -1,7 +1,7 @@
 {
   "schema_name": "a_short_limit_up_index_source_probe_summary",
   "schema_version": "1.0.0",
-  "generated_at": "2026-08-05T07:15:51+00:00",
+  "generated_at": "2026-08-05T07:37:56+00:00",
   "scope": {
     "market": "A-share",
     "purpose": "limit_up_index_source_binding_probe_only",
@@ -39,7 +39,8 @@
     "MSCI",
     "OTH",
     "CICC",
-    "ths_index"
+    "ths_index",
+    "hithink_catalog"
   ],
   "universes_reachable": [
     "index_basic_CICC",
@@ -109,6 +110,62 @@
   "candidate_count": 0,
   "candidates": [],
   "history_reach": {},
+  "hithink_catalog": {
+    "status": "searched",
+    "tags_probed": [
+      "cn_concept",
+      "cn_industry",
+      "cn_region",
+      "cn_style",
+      "cn_special",
+      "cn_tech",
+      ""
+    ],
+    "tags_reachable": [
+      "cn_concept",
+      ""
+    ],
+    "per_tag": {
+      "cn_concept": {
+        "status": "ok",
+        "boards": 390,
+        "hits": 0
+      },
+      "cn_industry": {
+        "status": "unreachable",
+        "error_class": "HiThinkL3SourceError"
+      },
+      "cn_region": {
+        "status": "unreachable",
+        "error_class": "HiThinkL3SourceError"
+      },
+      "cn_style": {
+        "status": "unreachable",
+        "error_class": "HiThinkL3SourceError"
+      },
+      "cn_special": {
+        "status": "unreachable",
+        "error_class": "HiThinkL3SourceError"
+      },
+      "cn_tech": {
+        "status": "unreachable",
+        "error_class": "HTTPError"
+      },
+      "": {
+        "status": "ok",
+        "boards": 390,
+        "hits": 0
+      }
+    },
+    "boards_searched": 390,
+    "surface_endpoint_kinds": [
+      "catalog",
+      "constituents"
+    ],
+    "surface_endpoint_count": 2,
+    "publishes_index_level_or_return": false,
+    "why_that_matters": "the v14.2 predicate is a statement about an index's daily change; a catalog plus constituents can only yield membership"
+  },
   "error_categories": [
     "permission_or_entitlement"
   ],
@@ -434,6 +491,7 @@
   "verdict": "no_matching_published_index_reachable",
   "NOT_VERIFIED": [
     "whether any candidate is what the v14.2 author meant",
+    "taxonomies this account cannot reach on either vendor surface",
     "construction method, unit and point-in-time semantics of any candidate",
     "independent review of this probe",
     "any decision between binding a source and adopting the V14.3 substitute"

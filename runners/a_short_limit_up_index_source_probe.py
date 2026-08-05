@@ -53,6 +53,13 @@ INDEX_BASIC_MARKETS = ("SSE", "SZSE", "CSI", "SW", "MSCI", "OTH", "CICC")
 # permission error is itself a usable answer.
 THS_INDEX_SPEC = {"endpoint": "ths_index", "parameters": {}}
 
+# The project's own HiThink surface.  ``cn_concept`` is the taxonomy L3
+# already consumes; the rest are probed so a miss means "not in any taxonomy
+# this account can reach", not "not in the one I happened to ask for".
+HITHINK_CATALOG_PATH_PREFIX = "/api/a-share-index/catalog/ths-index-list?tag="
+HITHINK_CATALOG_TAGS = ("cn_concept", "cn_industry", "cn_region", "cn_style",
+                        "cn_special", "cn_tech", "")
+
 # A name carrying any of these is a candidate for what the spec meant.  Kept
 # deliberately wide: a false positive costs one line of reading, a false
 # negative costs the whole decision.
@@ -173,8 +180,71 @@ def _match_candidates(frame: Any, source: str) -> list[dict[str, str]]:
     return matched
 
 
-def run_probe(pro_client: Any, raw_root: Path = RAW_ROOT) -> dict[str, Any]:
-    """Run a budgeted set of read-only index-reference calls against an injected client."""
+def probe_hithink_catalog(requester: Any = None, api_key: str | None = None) -> dict[str, Any]:
+    """Search the project's own HiThink (同花顺) board catalog for a limit-up board.
+
+    Two facts decide this leg, and the second is the harder one.  First, whether
+    any reachable taxonomy names such a board.  Second -- established from the
+    client module rather than a call -- that this surface publishes a catalog
+    and its constituents and nothing else: there is no quote endpoint, so even
+    a board that existed would yield member stocks, never the index level that
+    "涨停指数跌>3%" is a statement about.
+    """
+    from engine import a_short_hithink_l3 as hithink
+
+    try:
+        key = hithink._require_api_key(api_key)
+    except Exception as exc:
+        return {"status": "not_configured", "error_class": type(exc).__name__,
+                "tags_reachable": [], "boards_searched": 0, "candidates": []}
+
+    request_json = requester or hithink._default_requester
+    headers = {"X-api-key": key}
+    catalog_base = hithink.API_BASE_URL + HITHINK_CATALOG_PATH_PREFIX
+    per_tag: dict[str, Any] = {}
+    matched: list[dict[str, str]] = []
+    for tag in HITHINK_CATALOG_TAGS:
+        try:
+            payload = request_json(catalog_base + tag, headers)
+            rows = hithink._catalog_rows(hithink._response_items(payload, tag))
+        except Exception as exc:
+            per_tag[tag] = {"status": "unreachable", "error_class": type(exc).__name__}
+            continue
+        hits = [
+            {"source": f"hithink:{tag or 'default'}", "code": row["code"], "name": row["name"],
+             "matched_markers": [m for m in NAME_MARKERS if m in row["name"]]}
+            for row in rows if any(m in row["name"] for m in NAME_MARKERS)
+        ]
+        matched.extend(hits)
+        per_tag[tag] = {"status": "ok", "boards": len(rows), "hits": len(hits)}
+
+    reachable = [tag for tag, result in per_tag.items() if result["status"] == "ok"]
+    return {
+        "status": "searched" if reachable else "no_reachable_taxonomy",
+        "tags_probed": list(HITHINK_CATALOG_TAGS),
+        "tags_reachable": reachable,
+        "per_tag": per_tag,
+        "boards_searched": max((per_tag[t].get("boards", 0) for t in reachable), default=0),
+        # A statement about the client module, not about any response.  Kinds,
+        # not paths: a tracked summary carries no request URL.
+        "surface_endpoint_kinds": ["catalog", "constituents"],
+        "surface_endpoint_count": 2,
+        "publishes_index_level_or_return": False,
+        "why_that_matters": (
+            "the v14.2 predicate is a statement about an index's daily change; a "
+            "catalog plus constituents can only yield membership"
+        ),
+        "candidates": matched,
+    }
+
+
+def run_probe(pro_client: Any, raw_root: Path = RAW_ROOT,
+              hithink_probe: Any = None) -> dict[str, Any]:
+    """Run a budgeted set of read-only index-reference calls against an injected client.
+
+    ``hithink_probe`` is injectable for the same reason ``pro_client`` is: a
+    unit test must never reach a vendor.
+    """
     raw_root = Path(raw_root)
     results: list[dict[str, Any]] = []
     raw_by_label: dict[str, Any] = {}
@@ -238,6 +308,13 @@ def run_probe(pro_client: Any, raw_root: Path = RAW_ROOT) -> dict[str, Any]:
     _, ths_payload = _call("ths_index", THS_INDEX_SPEC["endpoint"], THS_INDEX_SPEC["parameters"])
     candidates.extend(_match_candidates(ths_payload, "ths_index"))
 
+    # Tushare's ths_index relay is entitlement-gated, but the project holds its
+    # own HiThink (同花顺) credential and already uses that surface for L3.
+    # Searching only the Tushare side would have declared the one taxonomy most
+    # likely to publish a 昨日涨停 board "unseen" while we could in fact see it.
+    hithink = (hithink_probe or probe_hithink_catalog)()
+    candidates.extend(hithink.pop("candidates", []))
+
     # Only spend history calls if there is something to spend them on, and only
     # on the first candidate -- depth is a property of the surface, not of each
     # individual board.
@@ -280,7 +357,7 @@ def run_probe(pro_client: Any, raw_root: Path = RAW_ROOT) -> dict[str, Any]:
         },
         "call_budget": {"budget": CALL_BUDGET, "used": calls},
         "name_markers_searched": list(NAME_MARKERS),
-        "universes_probed": list(INDEX_BASIC_MARKETS) + ["ths_index"],
+        "universes_probed": list(INDEX_BASIC_MARKETS) + ["ths_index", "hithink_catalog"],
         "universes_reachable": sorted(r["label"] for r in reachable),
         "universe_coverage": universe_coverage,
         "universes_fully_searched": sorted(m for m, c in universe_coverage.items() if c["exhausted"]),
@@ -291,6 +368,7 @@ def run_probe(pro_client: Any, raw_root: Path = RAW_ROOT) -> dict[str, Any]:
         "candidate_count": len(candidates),
         "candidates": candidates,
         "history_reach": history_reach,
+        "hithink_catalog": hithink,
         "error_categories": error_categories,
         "calls": results,
         "raw_root": str(raw_root),
@@ -299,10 +377,12 @@ def run_probe(pro_client: Any, raw_root: Path = RAW_ROOT) -> dict[str, Any]:
             "candidates_found" if candidates
             else "no_matching_published_index_reachable"
             if all(c["exhausted"] for c in universe_coverage.values())
+            and hithink["status"] == "searched"
             else "negative_but_universe_coverage_incomplete"
         ),
         "NOT_VERIFIED": [
             "whether any candidate is what the v14.2 author meant",
+            "taxonomies this account cannot reach on either vendor surface",
             "construction method, unit and point-in-time semantics of any candidate",
             "independent review of this probe",
             "any decision between binding a source and adopting the V14.3 substitute",

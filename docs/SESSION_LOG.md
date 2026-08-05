@@ -2,7 +2,7 @@
 
 ## 2026-08-05 — Claude Code 执行：v14.2「涨停指数」数据源查证刀（序 14 前置）
 
-- **Verdict/Action**: 查证完成，结论 = **当前权限下取不到**。枚举 `index_basic` 全部 7 个发布方分区共 10,506 条指数，按六个中文标记匹配名称 → 0 条命中，每个分区均由不足页证明已穷尽；`ths_index`（同花顺概念板块）返回 `permission_or_entitlement`，账号无权限、是唯一没看到的地方（`NOT_VERIFIED`，不写成「已确认不存在」）。故选项 A（绑真实指数）当前不可行，决策收敛向 B（V14.3 晋级率/炸板率）。未改任何生产行为。
+- **Verdict/Action**: 查证完成，结论 = **当前权限下取不到**。枚举 `index_basic` 全部 7 个发布方分区共 10,506 条指数，按六个中文标记匹配名称 → 0 条命中，每个分区均由不足页证明已穷尽；Tushare 的 `ths_index` 转发无权限；**但用户指出项目自有同花顺通道，同轮补搜**：`HITHINK_FINANCE_API_KEY`（L3 生产凭证）的板块目录 `cn_concept` 共 390 个板块**同样 0 命中**，另五个 tag 该账号不可达。更致命的是该 API **只有目录与成分两个端点、没有行情端点**——即便存在该板块也只给成分股、给不出指数涨跌幅，而判据是对日涨跌幅的陈述，买权限也解决不了。故选项 A 在两条可达通道上均不可行，决策收敛向 B（V14.3 晋级率/炸板率）。未改任何生产行为。
 - **Required**: 无代码 Required；A/B 为用户裁决项。首轮自查出一条同类复发并同轮闭合：`index_basic(CSI)` 恰好返回 8000 行即报「不存在」，实测 offset=8000 还有 863 行，只搜了 92.5%——与序 22b 的 provider 行上限截断同类。两条 finding 正文见 `docs/system_risk_register.md`，本处不复述。
 - **Verify**: focused `Ran 33 tests in 10.5s / OK`（`tests.test_a_short_limit_up_index_source_probe` + writer registry guard + effect consumer probe），`receipt:e7dc1e7b238bb48db37c26c7`。**植入对照**：把 exhausted 判据改回「第一页即全部」→ 三条转红，关键断言 `'no_matching_published_index_reachable' != 'negative_but_universe_coverage_incomplete'`；还原后 `Ran 8 tests ... OK`。证据卫生：raw 在 gitignored `provider_samples/`（`git check-ignore` 确认），tracked summary grep 无 token/secret/URL。provider 调用 9/20，只读参考端点。`NOT_VERIFIED`：同花顺板块内是否存在此类指数、任何候选与 v14.2 原意是否一致。
 - **Next**: 用户在 A（买权限再查）与 B（换判据 + 起 12 周时钟）之间裁定；序 14 可先做不依赖该指数的部分

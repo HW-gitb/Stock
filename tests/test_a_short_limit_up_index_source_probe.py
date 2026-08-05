@@ -61,14 +61,29 @@ def _all_markets(**overrides) -> dict[str, list[pd.DataFrame]]:
     return pages
 
 
+def _searched_hithink(candidates=None) -> dict:
+    return {"status": "searched", "tags_probed": list(probe.HITHINK_CATALOG_TAGS),
+            "tags_reachable": ["cn_concept"], "per_tag": {}, "boards_searched": 390,
+            "surface_endpoint_kinds": [], "surface_endpoint_count": 2,
+            "publishes_index_level_or_return": False,
+            "why_that_matters": "", "candidates": candidates or []}
+
+
+def _hithink_envelope(names: list[str]) -> dict:
+    return {"code": 0, "data": {"item": [
+        {"thscode": f"{88300 + i}.TI", "name": name} for i, name in enumerate(names)
+    ]}}
+
+
 class LimitUpIndexSourceProbeTest(unittest.TestCase):
     def setUp(self) -> None:
         self._tmp = tempfile.TemporaryDirectory()
         self.raw_root = Path(self._tmp.name) / "raw"
         self.addCleanup(self._tmp.cleanup)
 
-    def _run(self, client) -> dict:
-        return probe.run_probe(client, raw_root=self.raw_root)
+    def _run(self, client, hithink=None) -> dict:
+        return probe.run_probe(client, raw_root=self.raw_root,
+                               hithink_probe=hithink or (lambda: _searched_hithink()))
 
     def test_a_universe_larger_than_one_page_is_paged_until_a_short_page_proves_it_is_done(self):
         full = _frame([f"index {i}" for i in range(PAGE)])
@@ -157,6 +172,70 @@ class LimitUpIndexSourceProbeTest(unittest.TestCase):
         self.assertIsNone(probe._raw_json_value(frame)["rows"][0]["base_point"])
         with self.assertRaises(ValueError):
             probe._write_json(self.raw_root / "guard.json", {"v": float("nan")})
+
+
+class HithinkCatalogLegTest(unittest.TestCase):
+    """The project holds its own 同花顺 credential; searching only Tushare would
+    have declared the taxonomy most likely to carry a 昨日涨停 board unseen."""
+
+    def _requester(self, by_tag):
+        def request(url, headers):
+            tag = url.split("tag=", 1)[1]
+            if tag not in by_tag:
+                raise RuntimeError(f"{tag} returned a non-success envelope")
+            return by_tag[tag]
+        return request
+
+    def test_a_limit_up_board_in_the_catalog_is_reported_with_its_code(self):
+        result = probe.probe_hithink_catalog(
+            requester=self._requester({"cn_concept": _hithink_envelope(["人工智能", "昨日涨停"])}),
+            api_key="k",
+        )
+        self.assertEqual(result["status"], "searched")
+        self.assertEqual(len(result["candidates"]), 1)
+        self.assertEqual(result["candidates"][0]["name"], "昨日涨停")
+        self.assertTrue(result["candidates"][0]["code"].endswith(".TI"))
+
+    def test_every_taxonomy_is_tried_so_a_miss_means_not_in_any_reachable_one(self):
+        result = probe.probe_hithink_catalog(
+            requester=self._requester({"cn_concept": _hithink_envelope(["人工智能"])}),
+            api_key="k",
+        )
+        self.assertEqual(result["candidates"], [])
+        self.assertEqual(result["tags_reachable"], ["cn_concept"])
+        self.assertEqual(set(result["per_tag"]), set(probe.HITHINK_CATALOG_TAGS))
+        unreachable = [t for t, r in result["per_tag"].items() if r["status"] == "unreachable"]
+        self.assertTrue(unreachable)
+
+    def test_no_reachable_taxonomy_is_not_a_negative_result(self):
+        result = probe.probe_hithink_catalog(requester=self._requester({}), api_key="k")
+        self.assertEqual(result["status"], "no_reachable_taxonomy")
+        self.assertEqual(result["boards_searched"], 0)
+
+    def test_a_missing_credential_is_reported_rather_than_read_as_absence(self):
+        result = probe.probe_hithink_catalog(requester=self._requester({}), api_key="")
+        self.assertEqual(result["status"], "not_configured")
+
+    def test_the_surface_is_recorded_as_unable_to_publish_an_index_level(self):
+        """The decisive fact: catalog + constituents can only yield membership,
+        never the daily change the v14.2 predicate is a statement about."""
+        result = probe.probe_hithink_catalog(
+            requester=self._requester({"cn_concept": _hithink_envelope(["人工智能"])}),
+            api_key="k",
+        )
+        self.assertFalse(result["publishes_index_level_or_return"])
+        self.assertEqual(result["surface_endpoint_kinds"], ["catalog", "constituents"])
+
+    def test_an_unsearched_hithink_leg_downgrades_the_overall_verdict(self):
+        import tempfile
+        from pathlib import Path as _Path
+        with tempfile.TemporaryDirectory() as tmp:
+            summary = probe.run_probe(
+                _FakeClient(_all_markets()), raw_root=_Path(tmp),
+                hithink_probe=lambda: {"status": "not_configured", "candidates": [],
+                                       "tags_reachable": [], "boards_searched": 0},
+            )
+        self.assertEqual(summary["verdict"], "negative_but_universe_coverage_incomplete")
 
 
 if __name__ == "__main__":
