@@ -888,6 +888,8 @@ def _overall_status(benchmark_statuses: Mapping[str, str]) -> tuple[str, str]:
         return "ahead_diagnostic", "all_four_benchmarks_show_diagnostic_excess"
     if directions == {"behind_diagnostic"}:
         return "behind_diagnostic", "all_four_benchmarks_show_diagnostic_underperformance"
+    if directions == {"flat_diagnostic"}:
+        return "mixed_across_benchmarks", "all_four_benchmarks_show_flat_diagnostic_excess"
     return "mixed_across_benchmarks", "benchmark_directions_are_not_uniform"
 
 

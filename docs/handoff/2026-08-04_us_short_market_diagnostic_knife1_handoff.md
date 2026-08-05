@@ -38,4 +38,14 @@ Knife1 是不读账户、不联网、不调用 provider 的纯计算层。Knife2
 
 ## 后续边界
 
-刀3 已接周记录、26 周计数器和 v1.1 reminder 生命周期；Knife4 已在其上增加只读聚合与公开报告发布。聚合器只接受 lifecycle 已校验的 settled 记录；同一 `window_id` 重跑字节级幂等，JSON/Markdown 缺一不可，冲突或半成品拒绝覆盖。ETF 总回报 sidecar 仍留给 Knife5，v1.1 仓位归因仍留给 Knife6；当前真实 model-paper 根尚未启动，因此不会出现真实 26 周成绩单。
+刀3 已接周记录、26 周计数器和 v1.1 reminder 生命周期；Knife4 已在其上增加只读聚合与公开报告发布。聚合器只接受 lifecycle 已校验的 settled 记录；同一 `window_id` 重跑字节级幂等，JSON/Markdown 缺一不可，冲突或半成品拒绝覆盖。Knife5 已补上四 ETF total-return sidecar 的离线 schema、纯复算器和本地适配接线；真实 provider 获取仍需单独授权，v1.1 仓位归因仍留给 Knife6；当前真实 model-paper 根尚未启动，因此不会出现真实 26 周成绩单。
+
+## Knife5 新增实现入口
+
+- sidecar schema：`schemas/us_short_market_diagnostic_etf_total_return_sidecar.schema.json`
+- sidecar 纯校验/复算：`engine/us_short_market_diagnostic_total_return.py`
+- 本地周记录接线：`engine/us_short_market_diagnostic_local_adapter.py`
+- sidecar 回归：`tests/test_us_short_market_diagnostic_total_return.py`
+- adapter 接线回归：`tests/test_us_short_market_diagnostic_local_adapter.py`
+
+Knife5 只消费已捕获的 source-bound sidecar：完整覆盖周升级为 `total_return_evaluable`，缺失或错配只降级对应 ETF 周为 `price_return_diagnostic`，不补零、不改变策略收益、NAV、选股或操作建议。当前实现没有 provider/network/raw/account 写入。

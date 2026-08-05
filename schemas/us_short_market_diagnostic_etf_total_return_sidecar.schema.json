@@ -1,0 +1,209 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://stock.local/schemas/us_short_market_diagnostic_etf_total_return_sidecar.schema.json",
+  "title": "US-short ETF total-return sidecar",
+  "description": "Source-bound inputs for the four ETF total-return upgrade. The sidecar is not provider selection, an account write, or ship-gate evidence.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_name",
+    "schema_version",
+    "window_id",
+    "diagnostic_epoch",
+    "price_basis",
+    "benchmark_symbols",
+    "weeks",
+    "source_refs",
+    "boundary"
+  ],
+  "properties": {
+    "schema_name": {"const": "us_short_market_diagnostic_etf_total_return_sidecar"},
+    "schema_version": {"const": "1.0.0"},
+    "window_id": {"type": "string", "pattern": "^26w-[1-9][0-9]*-[1-9][0-9]*$"},
+    "diagnostic_epoch": {"type": "string", "minLength": 1},
+    "price_basis": {"const": "split_adjusted_close"},
+    "benchmark_symbols": {"const": ["VTI", "IWB", "SPY", "QQQ"]},
+    "weeks": {
+      "type": "array",
+      "minItems": 1,
+      "maxItems": 26,
+      "items": {"$ref": "#/definitions/week"}
+    },
+    "source_refs": {
+      "type": "array",
+      "items": {"$ref": "#/definitions/sha256"},
+      "minItems": 1,
+      "maxItems": 64,
+      "uniqueItems": true
+    },
+    "boundary": {"$ref": "#/definitions/boundary"}
+  },
+  "definitions": {
+    "date8": {
+      "type": "string",
+      "pattern": "^[0-9]{8}$"
+    },
+    "sha256": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{64}$"
+    },
+    "money": {
+      "type": "string",
+      "pattern": "^(0|[1-9][0-9]*)\\.[0-9]{6}$"
+    },
+    "number_or_null": {
+      "type": ["number", "null"]
+    },
+    "sha_or_null": {
+      "anyOf": [
+        {"$ref": "#/definitions/sha256"},
+        {"type": "null"}
+      ]
+    },
+    "date_time_or_null": {
+      "anyOf": [
+        {"type": "string", "minLength": 1},
+        {"type": "null"}
+      ]
+    },
+    "week": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["calendar_week_index", "valuation_date", "benchmarks"],
+      "properties": {
+        "calendar_week_index": {"type": "integer", "minimum": 1},
+        "valuation_date": {"$ref": "#/definitions/date8"},
+        "benchmarks": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["VTI", "IWB", "SPY", "QQQ"],
+          "properties": {
+            "VTI": {"$ref": "#/definitions/benchmark"},
+            "IWB": {"$ref": "#/definitions/benchmark"},
+            "SPY": {"$ref": "#/definitions/benchmark"},
+            "QQQ": {"$ref": "#/definitions/benchmark"}
+          }
+        }
+      }
+    },
+    "benchmark": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "prior_price_date",
+        "price_date",
+        "dividend_events",
+        "split_events",
+        "coverage",
+        "source_binding",
+        "data_quality_reasons"
+      ],
+      "properties": {
+        "prior_price_date": {"anyOf": [{"$ref": "#/definitions/date8"}, {"type": "null"}]},
+        "price_date": {"anyOf": [{"$ref": "#/definitions/date8"}, {"type": "null"}]},
+        "dividend_events": {
+          "type": "array",
+          "items": {"$ref": "#/definitions/dividend_event"}
+        },
+        "split_events": {
+          "type": "array",
+          "items": {"$ref": "#/definitions/split_event"}
+        },
+        "coverage": {"$ref": "#/definitions/coverage"},
+        "source_binding": {"$ref": "#/definitions/source_binding"},
+        "data_quality_reasons": {
+          "type": "array",
+          "items": {"type": "string", "minLength": 1},
+          "uniqueItems": true
+        }
+      }
+    },
+    "dividend_event": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "ex_date",
+        "cash_amount",
+        "split_adjustment_factor",
+        "split_adjusted_cash_amount",
+        "source_sha256"
+      ],
+      "properties": {
+        "ex_date": {"$ref": "#/definitions/date8"},
+        "cash_amount": {"$ref": "#/definitions/money"},
+        "split_adjustment_factor": {"type": "number", "exclusiveMinimum": 0},
+        "split_adjusted_cash_amount": {"$ref": "#/definitions/money"},
+        "source_sha256": {"$ref": "#/definitions/sha256"}
+      }
+    },
+    "split_event": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["ex_date", "split_from", "split_to", "source_sha256"],
+      "properties": {
+        "ex_date": {"$ref": "#/definitions/date8"},
+        "split_from": {"type": "number", "exclusiveMinimum": 0},
+        "split_to": {"type": "number", "exclusiveMinimum": 0},
+        "source_sha256": {"$ref": "#/definitions/sha256"}
+      }
+    },
+    "coverage": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "pagination_complete",
+        "dividend_complete",
+        "split_complete",
+        "adjusted_unadjusted_reconciled"
+      ],
+      "properties": {
+        "pagination_complete": {"type": "boolean"},
+        "dividend_complete": {"type": "boolean"},
+        "split_complete": {"type": "boolean"},
+        "adjusted_unadjusted_reconciled": {"type": "boolean"}
+      }
+    },
+    "source_binding": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "adjusted_price_sha256",
+        "unadjusted_price_sha256",
+        "dividend_sha256",
+        "split_sha256",
+        "raw_capture_sha256",
+        "source_date",
+        "observed_at"
+      ],
+      "properties": {
+        "adjusted_price_sha256": {"$ref": "#/definitions/sha_or_null"},
+        "unadjusted_price_sha256": {"$ref": "#/definitions/sha_or_null"},
+        "dividend_sha256": {"$ref": "#/definitions/sha_or_null"},
+        "split_sha256": {"$ref": "#/definitions/sha_or_null"},
+        "raw_capture_sha256": {"$ref": "#/definitions/sha_or_null"},
+        "source_date": {"anyOf": [{"$ref": "#/definitions/date8"}, {"type": "null"}]},
+        "observed_at": {"$ref": "#/definitions/date_time_or_null"}
+      }
+    },
+    "boundary": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "sidecar_only",
+        "provider_selection_performed",
+        "provider_call_performed_by_reconciler",
+        "account_write_performed",
+        "paper_gate_upgrade_performed",
+        "ship_gate_or_production_authorized"
+      ],
+      "properties": {
+        "sidecar_only": {"const": true},
+        "provider_selection_performed": {"const": false},
+        "provider_call_performed_by_reconciler": {"const": false},
+        "account_write_performed": {"const": false},
+        "paper_gate_upgrade_performed": {"const": false},
+        "ship_gate_or_production_authorized": {"const": false}
+      }
+    }
+  }
+}

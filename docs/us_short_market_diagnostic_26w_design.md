@@ -234,6 +234,7 @@ The v1 summary schema must carry the metrics promised in section 8. The followin
 The weekly strategy status and the summary strategy status use the same three values: `evaluable`, `diagnostic_data_degraded`, and `not_evaluable`. The summary `overall_status` uses the six-value priority list above. `mixed_ruleset_window` is true when more than one strategy ruleset fingerprint appears in the 26-week window and no single fingerprint has at least 20 strategy-evaluable weeks; it blocks a single-ruleset performance claim.
 
 Each benchmark summary may additionally use `flat_diagnostic` when its own joint compounded excess is exactly zero. `mixed_across_benchmarks` remains an overall cross-benchmark status and is never used to label one benchmark's individual tie. A flat benchmark does not make the overall result ahead or behind; the overall six-value status contract stays unchanged.
+When all four benchmark statuses are `flat_diagnostic`, the overall status remains the non-directional `mixed_across_benchmarks` bucket, but the reason must be `all_four_benchmarks_show_flat_diagnostic_excess`; it must not claim that benchmark directions are non-uniform.
 
 ## 12.2 Knife 1 calculation contract
 
@@ -279,11 +280,22 @@ Knife 4 的实现入口是 `engine/us_short_market_diagnostic_aggregator.py`，�
 
 - 只有当最后一条记录正好落在 `26`、`52`、`78` 等 canonical 边界时才生成报告；不足 26 周、缺周、断档或窗口不完整时返回“尚未到期”或 fail-closed，不凑数、不补零；
 - 报告同时保留当前 26 周固定区块和从第 1 周到当前的 since-inception 视图。固定区块继续复用 Knife 1 的四基准、状态、数据质量、成本后 NAV、回撤、现金/权益比例、turnover、joint 周数、IR 和 HAC 等既有字段；本刀不改 Knife 0 已冻结 schema，也不新增“周收益波动”字段；
-- 四个基准始终是 `VTI`、`IWB`、`SPY`、`QQQ`，不按结果替换。Knife 5 接入 ETF 股息 sidecar 之前，缺股息的周仍明确标成 `price_return_diagnostic` / `data_degraded`，不能冒充 total return；
+- 四个基准始终是 `VTI`、`IWB`、`SPY`、`QQQ`，不按结果替换。没有合格 ETF 股息 sidecar 的周仍明确标成 `price_return_diagnostic` / `data_degraded`，不能冒充 total return；
 - `ruleset_segments` 同时记录固定区块和 since-inception 的 epoch/ruleset 连续分段，防止跨规则版本把成绩混成一个结论；
 - 去标识化报告输出到 `research/results/us_short/market_diagnostic_26w/`，每个窗口一对 `<window_id>.json` 和 `<window_id>.md`。JSON 是机器接口，Markdown 是人读摘要；不写逐周原始记录、持仓、交易、原始价格或可还原个人账户的信息；
 - 写入采用确定性字节序列：同一窗口重复运行返回幂等；只存在 JSON 或 Markdown 的半成品、或内容冲突时拒绝覆盖，避免产生两份不同成绩单；
 - 报告只是比较诊断，不改变选股、最终操作建议、仓位、NAV 或 Ship gate。当前真实 model-paper 私有根尚未启动时，不会生成实际第 26 周成绩单，测试只用临时夹具验证逻辑。
+
+## 12.6 Knife 5：四 ETF total-return sidecar
+
+Knife 5 的离线实现入口是 `engine/us_short_market_diagnostic_total_return.py`，输入契约是 `schemas/us_short_market_diagnostic_etf_total_return_sidecar.schema.json`，由 `engine/us_short_market_diagnostic_local_adapter.py` 作为可选输入接到每周记录。它只消费已经捕获并绑定来源的 sidecar，不在复算器内选择 provider、发请求或写入 raw 数据。
+
+- sidecar 固定覆盖 `VTI`、`IWB`、`SPY`、`QQQ`，按 `window_id`、`diagnostic_epoch`、`calendar_week_index` 和 `valuation_date` 与本地价格包逐周对齐；
+- 每个 ETF 周必须记录分页、股息、拆分、adjusted/unadjusted 对账状态，以及 adjusted price、unadjusted price、股息、拆分、raw capture 的 SHA、来源日期和带时区的 `observed_at`；所有事件日期必须落在 prior price date（不含）到 price date（含）的区间内；
+- 完整周按已拆分调整的价格基础计算 `(split_adjusted_close + split_adjusted_cash_dividends) / prior_close - 1`，并升级为 `total_return_evaluable`；周记录用 `dividend_sidecar_sha256` 绑定该 ETF 的 sidecar 观测，sidecar 自己保留完整 `source_refs`；
+- 单个 ETF 的 sidecar 观测缺数据、分页未完成、股息/拆分未完成、日期不匹配或 adjusted/unadjusted 未对账时，只把该 ETF 周保留为 `price_return_diagnostic` 并附原因；已有价格收益积累继续，不补股息、不补零、不替换基准。若整个 sidecar 结构或来源绑定不合规，则整包 fail-closed，不生成伪造的升级结果；
+- sidecar 不改变策略收益、model-paper NAV、选股、操作建议、仓位、v1.1 reminder 或 Ship gate。它只改善比较轨的基准收益口径；
+- 真实 provider 获取仍是单独授权的后续执行。raw 只能进入 gitignored 私有目录，tracked 摘要不得包含 secret、request URL、原始价格或原始事件行。本刀的 schema、纯复算器和本地接线测试不代表已经取得真实 ETF 股息数据。
 
 ## 13. Knife 0 验收
 
@@ -309,3 +321,14 @@ Knife 4 完成必须证明：
 4. 同一窗口重复运行字节级幂等，半成品或冲突内容 fail-closed；
 5. 从 Knife 3 私有 lifecycle 读取时只消费已 settled 记录；没有真实私有根时不创建真实输出；
 6. 固定 Python 下聚合器、诊断引擎、lifecycle、schema 和文档治理测试通过。
+
+## 15. Knife 5 验收
+
+Knife 5 完成必须证明：
+
+1. 四 ETF sidecar schema 为合法 Draft 7、根与嵌套对象 closed-world，来源 digest 能回溯到 root `source_refs`；
+2. 完整 sidecar 周可按同一输入复算 total return，并能升级为 `total_return_evaluable`；
+3. sidecar 不完整、日期错配或对账失败时只降级对应 ETF 周，仍保留价格收益和明确原因；
+4. sidecar 与本地价格包的窗口、epoch、周号和估值日不一致时 fail-closed；
+5. 周记录与 model-paper 私有 store 仍只读，任何 sidecar 输入不触发 provider、账户写入、选股/操作建议或 Ship gate 变化；
+6. 固定 Python 下 sidecar schema、纯复算器、本地适配器和 flat overall status 回归测试通过。

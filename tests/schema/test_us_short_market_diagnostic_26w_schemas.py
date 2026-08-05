@@ -17,6 +17,7 @@ SCHEMA_NAMES = [
     "us_short_market_diagnostic_local_price_packet.schema.json",
     "us_short_market_diagnostic_lifecycle_register.schema.json",
     "us_short_market_diagnostic_report.schema.json",
+    "us_short_market_diagnostic_etf_total_return_sidecar.schema.json",
 ]
 
 
@@ -256,6 +257,13 @@ class UsShortMarketDiagnosticSchemaTest(unittest.TestCase):
                 schema = _schema(name)
                 Draft7Validator.check_schema(schema)
                 self.assertFalse(schema["additionalProperties"])
+
+    def test_etf_total_return_sidecar_is_closed_world_for_all_object_definitions(self) -> None:
+        schema = _schema("us_short_market_diagnostic_etf_total_return_sidecar.schema.json")
+        for name, definition in schema["definitions"].items():
+            if definition.get("type") == "object":
+                with self.subTest(definition=name):
+                    self.assertFalse(definition["additionalProperties"])
 
     def test_policy_and_runtime_contract_examples_validate(self) -> None:
         policy = json.loads(

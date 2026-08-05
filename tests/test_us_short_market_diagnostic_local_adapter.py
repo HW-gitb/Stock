@@ -18,6 +18,7 @@ from engine.us_short_market_diagnostic_local_adapter import (
 from engine.us_short_model_paper_portfolio import canonical_json_bytes
 from runners.us_short_model_paper_weekly_capstone import run_offline_model_paper_capstone
 from tests.test_us_short_model_paper_weekly import _order, _plan, _point, _raw_for
+from tests.test_us_short_market_diagnostic_total_return import _sidecar
 
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -156,6 +157,71 @@ class UsShortMarketDiagnosticLocalAdapterTest(unittest.TestCase):
         self.assertIsNone(record["benchmarks"]["VTI"]["dividend_sidecar_sha256"])
         self.assertGreater(record["strategy"]["weekly_return"], 0)
         self.assertGreaterEqual(len(record["source_refs"]), 5)
+
+    def test_complete_sidecar_upgrades_each_benchmark_without_writing_model_paper(self) -> None:
+        packet = _packet()
+        sidecar = _sidecar()
+        direct = adapt_benchmark_week(
+            packet,
+            1,
+            strategy_evaluable=True,
+            strategy_weekly_return=0.03,
+            total_return_sidecar=sidecar,
+        )
+        self.assertEqual(set(BENCHMARKS), set(direct))
+        for benchmark in direct.values():
+            self.assertEqual("total_return_evaluable", benchmark["return_quality"])
+            self.assertAlmostEqual(0.02, benchmark["weekly_return"])
+            self.assertIsNotNone(benchmark["dividend_sidecar_sha256"])
+
+        with tempfile.TemporaryDirectory() as td:
+            root = Path(td) / "model_paper_private"
+            _start_local_paper_store(root)
+            before = {path: path.read_bytes() for path in root.rglob("*.json")}
+            record = build_weekly_record_from_local(
+                model_paper_root=root,
+                benchmark_packet=packet,
+                calendar_week_index=1,
+                diagnostic_policy_sha256="b" * 64,
+                strategy_ruleset_fingerprint="c" * 64,
+                v1_1_reminder={
+                    "status": "pending",
+                    "evaluable_week_count": 0,
+                    "text": "v1.1 remains a later attribution explanation step.",
+                },
+                prior_nav=None,
+                total_return_sidecar=sidecar,
+            )
+            after = {path: path.read_bytes() for path in root.rglob("*.json")}
+
+        errors = list(
+            Draft7Validator(
+                json.loads(
+                    (ROOT / "schemas" / "us_short_market_diagnostic_weekly_record.schema.json").read_text(
+                        encoding="utf-8"
+                    )
+                )
+            ).iter_errors(record)
+        )
+        self.assertEqual([], errors)
+        self.assertEqual(before, after)
+        for symbol in BENCHMARKS:
+            self.assertEqual("total_return_evaluable", record["benchmarks"][symbol]["return_quality"])
+            self.assertAlmostEqual(0.02, record["benchmarks"][symbol]["weekly_return"])
+            self.assertIn(record["benchmarks"][symbol]["dividend_sidecar_sha256"], record["source_refs"])
+
+    def test_sidecar_window_mismatch_is_rejected_before_projection(self) -> None:
+        packet = _packet()
+        sidecar = _sidecar()
+        sidecar["window_id"] = "26w-27-52"
+        with self.assertRaises(LocalMarketDiagnosticAdapterError):
+            adapt_benchmark_week(
+                packet,
+                1,
+                strategy_evaluable=True,
+                strategy_weekly_return=0.03,
+                total_return_sidecar=sidecar,
+            )
 
     def test_model_paper_week_tamper_is_rejected_before_projection(self) -> None:
         with tempfile.TemporaryDirectory() as td:
