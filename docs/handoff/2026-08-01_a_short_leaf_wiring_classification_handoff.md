@@ -1750,3 +1750,32 @@ Claude Code：独立审查 `R-ASHORT-KNIFE12-NORTHBOUND-MARKET-WIRING` 及 `R-AS
 - **交易理由（续）**：③ M6.7 是逐票操作表，大盘成交额落不到任何一行的买点或止损位上，唯一合理落点是仓位总闸——而那是 regime 的杠杆，绕回冻结规格；④ 短线真正的流动性风险在**个股出不去**，那道防线已由逐票绝对额门槛承担；⑤ 日成交额是落定的历史事实、随时可从 provider 回取，**没有 PIT 脆弱性**，所以「先留着攒历史」这个理由不成立。
 - **将来重新接的触发条件**：forward 账本显示「缩量区间里胜率/盈亏比系统性变差」。那时按北向门的同一条治理路走（带真实消费者的刀 → 先只记录 → 回看统计 → 用户看过证据拍板 → 通电），并同刀定义清楚口径（两市还是含北交所、绝对额还是相对 20 日中位的量比）。
 - **对序 11 的影响**：这两条叶将不再存在，序 11 的全叶账本不必为它们举证；effect contract 只按新 schema 动态 inventory 结算，不得为了「保留 388」留假叶，也不得把删除写成 `main_decision`。
+
+## 2026-08-05 追加：序 14 前置查证刀 —— v14.2「涨停指数」数据源探针（reviewer 自执行）
+
+### 为什么打这一刀
+
+序 16 被序 14 的「涨停指数 source-binding」卡住，而这个 source 到底存不存在**从来没有人查过**——V14.3 设计文档只是绕过它。在用户面前摆 A/B 选项之前，得先知道 A 是不是根本不可行。
+
+### 结论：当前权限下取不到
+
+- 枚举 `index_basic` 全部 7 个发布方分区共 **10,506 条指数**，按 `涨停/跌停/打板/连板/首板/涨跌停` 匹配名称 → **0 条命中**；每个分区均由不足页证明已穷尽。
+- `ths_index`（同花顺概念板块）→ `permission_or_entitlement`，**账号无此权限**。这是唯一没能看到的地方，属 `NOT_VERIFIED`，不得写成「已确认不存在」。
+- 故**选项 A（绑定真实「涨停指数」）在当前权限下不可行**；要走 A 须先买同花顺权限，且那仍是厂商自造指数、构造法不可验证，**证明不了它就是 v14.2 所指**。
+
+### 首轮差点报错结论（同类复发，已闭）
+
+首轮在 `index_basic(market='CSI')` 返回**恰好 8000 行**时就报了「不存在」——实测 `offset=8000` 还有 863 行，即只搜了 92.5%。**与序 22b 的 `FETCH-TRUNCATED-AT-PROVIDER-ROW-CAP` 同类**。已改为按页取到不足页为止，并让未穷尽分区把 verdict 降级为 `negative_but_universe_coverage_incomplete`。register 单一来源两条：`R-ASHORT-V142-LIMIT-UP-INDEX-HAS-NO-REACHABLE-PUBLISHED-SOURCE`、`R-ASHORT-LIMIT-UP-INDEX-PROBE-FIRST-PASS-TRUNCATED-AT-PROVIDER-ROW-CAP`。
+
+### 边界与产物
+
+- 新增 `runners/a_short_limit_up_index_source_probe.py`（bounded、只读、注入式 client）与 `tests/test_a_short_limit_up_index_source_probe.py`（8 条，含防截断植入对照）。writer 已登记进 `PUBLIC_WRITER_FUNCTIONS`（序 22b 的教训）。
+- raw 落 gitignored `provider_samples/a_short_limit_up_index_source_probe_20260805/`；tracked summary `docs/a_short_limit_up_index_source_probe_summary_20260805.json` 只含形状/计数/命中项的代码与名称，无 raw 行、无请求 URL、无密钥（已 grep 验证）。
+- **未改任何生产行为**：不碰 EGS/weekly/TopN/M6.7/仓位/冻结规格；不做 regime 分类；不接消费者。
+- provider 调用 `9/20`，全部只读参考端点。
+
+### 下一步（用户裁决项）
+
+- **A**：买同花顺板块权限再查一次（代价：花钱 + 即便查到也证明不了口径一致）
+- **B**：采用 V14.3 的晋级率/炸板率替代（数据侧已有 281 天逐日历史；代价：动冻结规格 + 切换门要 ≥12 周前向证据，当前 `total_forward_weeks=0`）
+- 序 14 的涨跌停家数/连板高度**不依赖本指数**，可先做，完成后状态为 partial；序 16 在裁定前不得开工。

@@ -1,0 +1,441 @@
+{
+  "schema_name": "a_short_limit_up_index_source_probe_summary",
+  "schema_version": "1.0.0",
+  "generated_at": "2026-08-05T07:15:51+00:00",
+  "scope": {
+    "market": "A-share",
+    "purpose": "limit_up_index_source_binding_probe_only",
+    "queue_row": 14,
+    "question": "does a retrievable published index match v14.2 M1's undefined 涨停指数",
+    "downstream_rows_blocked_until_reviewed": [
+      "14_breadth",
+      "16_market_regime"
+    ],
+    "regime_classified": false,
+    "consumer_wired": false,
+    "egs_or_weekly_behavior_changed": false,
+    "frozen_spec_modified": false,
+    "production_or_ship_gate_claimed": false,
+    "broker_or_order_action": false
+  },
+  "call_budget": {
+    "budget": 20,
+    "used": 9
+  },
+  "name_markers_searched": [
+    "涨停",
+    "跌停",
+    "打板",
+    "连板",
+    "首板",
+    "昨日涨停",
+    "涨跌停"
+  ],
+  "universes_probed": [
+    "SSE",
+    "SZSE",
+    "CSI",
+    "SW",
+    "MSCI",
+    "OTH",
+    "CICC",
+    "ths_index"
+  ],
+  "universes_reachable": [
+    "index_basic_CICC",
+    "index_basic_CSI",
+    "index_basic_CSI_p1",
+    "index_basic_MSCI",
+    "index_basic_OTH",
+    "index_basic_SSE",
+    "index_basic_SW",
+    "index_basic_SZSE"
+  ],
+  "universe_coverage": {
+    "SSE": {
+      "pages": 1,
+      "rows": 208,
+      "exhausted": true,
+      "page_size": 8000
+    },
+    "SZSE": {
+      "pages": 1,
+      "rows": 485,
+      "exhausted": true,
+      "page_size": 8000
+    },
+    "CSI": {
+      "pages": 2,
+      "rows": 8863,
+      "exhausted": true,
+      "page_size": 8000
+    },
+    "SW": {
+      "pages": 1,
+      "rows": 950,
+      "exhausted": true,
+      "page_size": 8000
+    },
+    "MSCI": {
+      "pages": 1,
+      "rows": 0,
+      "exhausted": true,
+      "page_size": 8000
+    },
+    "OTH": {
+      "pages": 1,
+      "rows": 0,
+      "exhausted": true,
+      "page_size": 8000
+    },
+    "CICC": {
+      "pages": 1,
+      "rows": 0,
+      "exhausted": true,
+      "page_size": 8000
+    }
+  },
+  "universes_fully_searched": [
+    "CICC",
+    "CSI",
+    "MSCI",
+    "OTH",
+    "SSE",
+    "SW",
+    "SZSE"
+  ],
+  "universes_left_incomplete": [],
+  "indices_searched": 10506,
+  "candidate_count": 0,
+  "candidates": [],
+  "history_reach": {},
+  "error_categories": [
+    "permission_or_entitlement"
+  ],
+  "calls": [
+    {
+      "label": "index_basic_SSE",
+      "endpoint": "index_basic",
+      "parameters": {
+        "market": "SSE",
+        "offset": 0,
+        "limit": 8000
+      },
+      "status": "ok",
+      "shape": {
+        "kind": "dataframe",
+        "row_count": 208,
+        "columns": [
+          "base_date",
+          "base_point",
+          "category",
+          "list_date",
+          "market",
+          "name",
+          "publisher",
+          "ts_code"
+        ],
+        "column_dtypes": {
+          "ts_code": "str",
+          "name": "str",
+          "market": "str",
+          "publisher": "str",
+          "category": "str",
+          "base_date": "str",
+          "base_point": "float64",
+          "list_date": "str"
+        },
+        "all_null_columns": []
+      }
+    },
+    {
+      "label": "index_basic_SZSE",
+      "endpoint": "index_basic",
+      "parameters": {
+        "market": "SZSE",
+        "offset": 0,
+        "limit": 8000
+      },
+      "status": "ok",
+      "shape": {
+        "kind": "dataframe",
+        "row_count": 485,
+        "columns": [
+          "base_date",
+          "base_point",
+          "category",
+          "list_date",
+          "market",
+          "name",
+          "publisher",
+          "ts_code"
+        ],
+        "column_dtypes": {
+          "ts_code": "str",
+          "name": "str",
+          "market": "str",
+          "publisher": "str",
+          "category": "str",
+          "base_date": "str",
+          "base_point": "float64",
+          "list_date": "str"
+        },
+        "all_null_columns": []
+      }
+    },
+    {
+      "label": "index_basic_CSI",
+      "endpoint": "index_basic",
+      "parameters": {
+        "market": "CSI",
+        "offset": 0,
+        "limit": 8000
+      },
+      "status": "ok",
+      "shape": {
+        "kind": "dataframe",
+        "row_count": 8000,
+        "columns": [
+          "base_date",
+          "base_point",
+          "category",
+          "list_date",
+          "market",
+          "name",
+          "publisher",
+          "ts_code"
+        ],
+        "column_dtypes": {
+          "ts_code": "str",
+          "name": "str",
+          "market": "str",
+          "publisher": "str",
+          "category": "str",
+          "base_date": "str",
+          "base_point": "float64",
+          "list_date": "str"
+        },
+        "all_null_columns": []
+      }
+    },
+    {
+      "label": "index_basic_CSI_p1",
+      "endpoint": "index_basic",
+      "parameters": {
+        "market": "CSI",
+        "offset": 8000,
+        "limit": 8000
+      },
+      "status": "ok",
+      "shape": {
+        "kind": "dataframe",
+        "row_count": 863,
+        "columns": [
+          "base_date",
+          "base_point",
+          "category",
+          "list_date",
+          "market",
+          "name",
+          "publisher",
+          "ts_code"
+        ],
+        "column_dtypes": {
+          "ts_code": "str",
+          "name": "str",
+          "market": "str",
+          "publisher": "str",
+          "category": "str",
+          "base_date": "str",
+          "base_point": "float64",
+          "list_date": "str"
+        },
+        "all_null_columns": []
+      }
+    },
+    {
+      "label": "index_basic_SW",
+      "endpoint": "index_basic",
+      "parameters": {
+        "market": "SW",
+        "offset": 0,
+        "limit": 8000
+      },
+      "status": "ok",
+      "shape": {
+        "kind": "dataframe",
+        "row_count": 950,
+        "columns": [
+          "base_date",
+          "base_point",
+          "category",
+          "list_date",
+          "market",
+          "name",
+          "publisher",
+          "ts_code"
+        ],
+        "column_dtypes": {
+          "ts_code": "str",
+          "name": "str",
+          "market": "str",
+          "publisher": "str",
+          "category": "str",
+          "base_date": "str",
+          "base_point": "float64",
+          "list_date": "str"
+        },
+        "all_null_columns": []
+      }
+    },
+    {
+      "label": "index_basic_MSCI",
+      "endpoint": "index_basic",
+      "parameters": {
+        "market": "MSCI",
+        "offset": 0,
+        "limit": 8000
+      },
+      "status": "ok",
+      "shape": {
+        "kind": "dataframe",
+        "row_count": 0,
+        "columns": [
+          "base_date",
+          "base_point",
+          "category",
+          "list_date",
+          "market",
+          "name",
+          "publisher",
+          "ts_code"
+        ],
+        "column_dtypes": {
+          "ts_code": "object",
+          "name": "object",
+          "market": "object",
+          "publisher": "object",
+          "category": "object",
+          "base_date": "object",
+          "base_point": "object",
+          "list_date": "object"
+        },
+        "all_null_columns": [
+          "base_date",
+          "base_point",
+          "category",
+          "list_date",
+          "market",
+          "name",
+          "publisher",
+          "ts_code"
+        ]
+      }
+    },
+    {
+      "label": "index_basic_OTH",
+      "endpoint": "index_basic",
+      "parameters": {
+        "market": "OTH",
+        "offset": 0,
+        "limit": 8000
+      },
+      "status": "ok",
+      "shape": {
+        "kind": "dataframe",
+        "row_count": 0,
+        "columns": [
+          "base_date",
+          "base_point",
+          "category",
+          "list_date",
+          "market",
+          "name",
+          "publisher",
+          "ts_code"
+        ],
+        "column_dtypes": {
+          "ts_code": "object",
+          "name": "object",
+          "market": "object",
+          "publisher": "object",
+          "category": "object",
+          "base_date": "object",
+          "base_point": "object",
+          "list_date": "object"
+        },
+        "all_null_columns": [
+          "base_date",
+          "base_point",
+          "category",
+          "list_date",
+          "market",
+          "name",
+          "publisher",
+          "ts_code"
+        ]
+      }
+    },
+    {
+      "label": "index_basic_CICC",
+      "endpoint": "index_basic",
+      "parameters": {
+        "market": "CICC",
+        "offset": 0,
+        "limit": 8000
+      },
+      "status": "ok",
+      "shape": {
+        "kind": "dataframe",
+        "row_count": 0,
+        "columns": [
+          "base_date",
+          "base_point",
+          "category",
+          "list_date",
+          "market",
+          "name",
+          "publisher",
+          "ts_code"
+        ],
+        "column_dtypes": {
+          "ts_code": "object",
+          "name": "object",
+          "market": "object",
+          "publisher": "object",
+          "category": "object",
+          "base_date": "object",
+          "base_point": "object",
+          "list_date": "object"
+        },
+        "all_null_columns": [
+          "base_date",
+          "base_point",
+          "category",
+          "list_date",
+          "market",
+          "name",
+          "publisher",
+          "ts_code"
+        ]
+      }
+    },
+    {
+      "label": "ths_index",
+      "endpoint": "ths_index",
+      "parameters": {},
+      "status": "error",
+      "error_class": "Exception",
+      "error_category": "permission_or_entitlement"
+    }
+  ],
+  "raw_root": "provider_samples\\a_short_limit_up_index_source_probe_20260805",
+  "raw_root_is_gitignored": true,
+  "verdict": "no_matching_published_index_reachable",
+  "NOT_VERIFIED": [
+    "whether any candidate is what the v14.2 author meant",
+    "construction method, unit and point-in-time semantics of any candidate",
+    "independent review of this probe",
+    "any decision between binding a source and adopting the V14.3 substitute"
+  ]
+}

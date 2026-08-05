@@ -33,6 +33,7 @@ PUBLIC_WRITER_FUNCTIONS = frozenset({
     "runners/a_short_iv_feed_build.py:write_feed",
     "runners/a_short_iv_feed_probe.py:write_fetch_failure_summary",
     "runners/a_short_iv_feed_probe.py:write_probe_summary",
+    "runners/a_short_limit_up_index_source_probe.py:_write_json",
     "runners/a_short_margin_market_shape_probe.py:_write_json",
     "runners/a_short_northbound_market_silence_lookback.py:_write_json",
     "runners/a_short_official_operation_evidence.py:_atomic_write",
