@@ -23,7 +23,7 @@ Use this file to decide which handoff to open. Do not read every handoff by defa
 
 ## Phase Index
 
-- `2026-08-01_a_short_leaf_wiring_classification_handoff.md` — A-short analysis_input 371 叶的效果分类漏斗与逐类归属；查「某字段到底有没有影响 M6.7」时开。
+- `2026-08-01_a_short_leaf_wiring_classification_handoff.md` — A-short analysis_input 全叶（当前 388，数量取自 schema 动态计算）的效果分类漏斗与逐类归属；查「某字段到底有没有影响 M6.7」时开。
 - `2026-08-01_a_short_rule6_severity_classification_repair_handoff.md` — Rule6 `severity` 由主决策改判展示审计的纠错记录与反向控制。
 
 - `2026-08-01_a_short_knife11_official_rolling_handoff.md` — A-short desktop Knife 11 official rolling crash-veto verdict repair; focused evidence is complete and independent review remains pending.
