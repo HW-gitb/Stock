@@ -217,6 +217,9 @@ class CapstoneContext:
     max_total_http_attempts: int | None = None
     model_paper_store_root: Path | None = None
     model_paper_run_account_mode: str | None = None
+    # None until a 26-week diagnostic clock exists. Dormant by default and dormant
+    # forever until a start receipt is issued, which no code path here can do.
+    market_diagnostic_root: Path | None = None
     soft_discovery_enabled: bool = True
     theme_soft_boost_enabled: bool = True
     soft_discovery_run_result: dict[str, Any] | None = None
@@ -393,6 +396,55 @@ class CapstoneContext:
 
 def _model_paper_enabled(ctx: CapstoneContext) -> bool:
     return ctx.model_paper_store_root is not None
+
+
+def _run_market_diagnostic(ctx: CapstoneContext) -> dict[str, Any]:
+    """Read the 26-week diagnostic clock once a week, or say nothing at all.
+
+    Knife 7b-iv. Design section 12.8 duty 4 wants the official weekly task to read
+    ``v1_1_attribution`` by itself and call Knife 6 the moment it activates,
+    without depending on anybody remembering. Until this stage existed, nothing in
+    any runner had ever read it.
+
+    Dormant is the normal state and has to be free: with no clock opened the step
+    returns ``not_started``, this stage writes nothing, contributes no report
+    line, and the weekly report is byte-identical to a run without it. A store
+    that cannot be read is reported as ``broken`` rather than swallowed into
+    silence — but it still never fails the weekly run, because a diagnostic track
+    may never block selection or action.
+    """
+
+    from engine.us_short_market_diagnostic_weekly_task import weekly_diagnostic_step
+
+    root = ctx.market_diagnostic_root
+    if root is None:
+        return {"clock_status": "not_started", "report_lines": [], "provider_calls_performed": False}
+    try:
+        step = weekly_diagnostic_step(root=root, as_of_date=ctx.decision_date)
+    except Exception as exc:  # noqa: BLE001 — see below; this is the whole point of the stage
+        # The one broad catch in this file, and it is load-bearing. Design section
+        # 1.2: the diagnostic track may never change or block selection. It also
+        # cannot be `best_effort` (reserved for comparison capture) or
+        # `zero_effect` (that policy means the soft-discovery receipt shape), so
+        # the only honest way to keep a read-only diagnostic from taking down a
+        # week of stock selection is for its adapter to be total. The failure is
+        # reported, not hidden.
+        return {
+            "clock_status": "broken",
+            "problem": f"{type(exc).__name__}: {exc}",
+            "report_lines": [
+                "26 周诊断轨：本周读取失败，已记为故障；不影响选股与操作建议。"
+            ],
+            "provider_calls_performed": False,
+        }
+    return {
+        "clock_status": step["status"],
+        "v1_1_status": step.get("v1_1_status"),
+        "calendar_week_count": step.get("calendar_week_count"),
+        "report_lines": step["report_lines"],
+        "problem": step.get("problem"),
+        "provider_calls_performed": False,
+    }
 
 
 def _write_private_json(path: Path, value: dict) -> None:
@@ -678,6 +730,13 @@ def default_pipeline(
               lambda c: ([c.ohlcv_series_packet_path, _official_output_paths(c)[0], _official_output_paths(c)[2]]
                          if _model_paper_enabled(c) else []),
               lambda c: [_official_output_paths(c)[0]] if _model_paper_enabled(c) else [], _run_model_paper_weekly,
+              contract_version="1.0.0", reuse_policy="never"),
+        # Last, and deliberately inert: it reads a clock that is not running yet
+        # and claims no artifact. Ordinary strict policy — `best_effort` is
+        # reserved for comparison-capture stages and `zero_effect` carries the
+        # soft-discovery receipt shape; this stage is neither and must not
+        # borrow either label. Its adapter is total instead.
+        Stage("market_diagnostic", False, lambda c: [], lambda c: [], _run_market_diagnostic,
               contract_version="1.0.0", reuse_policy="never"),
     ]
     excluded = set()
@@ -1034,7 +1093,11 @@ def _provider_execution_receipt(ctx: CapstoneContext, results: list[dict[str, An
     expected = tuple(
         stage.name for stage in default_pipeline()
         if stage.name not in {
+            # Post-bridge and adapter stages: this receipt binds the PRE-bridge
+            # provider-relevant sequence, and market_diagnostic runs after the
+            # bridge, reads only a local clock, and performs no provider call.
             "weekly_bridge", "model_paper_adapter", "model_paper_weekly", "soft_discovery",
+            "market_diagnostic",
         } and not stage.best_effort
     )
     if completed != expected:

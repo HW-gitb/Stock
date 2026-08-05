@@ -12,13 +12,22 @@ flag, and the calendar week being frozen as week 1. Re-running it with the same
 inputs is a no-op; re-running it with different ones is refused rather than
 allowed to re-anchor a clock other artifacts have already been counted against.
 
-``record-week`` persists one already-settled weekly record. It reads, it never
-computes a week: the record comes from the local adapter, and this runner only
-carries it through the gate and reports what the lifecycle now says.
+``settle-week`` is the ordinary weekly act: it computes the next week from the
+already-local model-paper artifacts and a local benchmark price packet, stores it
+through the gate, and — because a closing week must not depend on somebody
+remembering a second command — attempts publication every time, which is a no-op
+except on a 26/52/78-week boundary.
 
-Neither subcommand calls a provider, seeds or writes the model-paper account, or
-changes selection, action, sizing or NAV. Everything written lands under the
-private, git-ignored diagnostic root; nothing here publishes.
+``record-week`` carries a weekly record somebody already produced. It is the
+repair and replay path, not the weekly one.
+
+``publish`` emits the scorecard on its own, for the case where a week was stored
+with ``--no-publish`` or publication failed and is being retried.
+
+No subcommand calls a provider, seeds or writes the model-paper account, or
+changes selection, action, sizing or NAV. Weekly evidence lands under the
+private, git-ignored diagnostic root; the only thing published is the
+de-identified 26-week scorecard the design asks for.
 """
 from __future__ import annotations
 
@@ -37,12 +46,22 @@ _PYTHON_LIBS = ROOT / ".tools" / "python_libs"
 if _PYTHON_LIBS.exists() and str(_PYTHON_LIBS) not in sys.path:
     sys.path.insert(0, str(_PYTHON_LIBS))
 
+from engine.us_short_market_diagnostic_aggregator import (  # noqa: E402
+    DEFAULT_PUBLIC_ROOT,
+    MarketDiagnosticAggregationError,
+    publish_completed_market_diagnostic_window,
+)
 from engine.us_short_market_diagnostic_lifecycle import (  # noqa: E402
     DEFAULT_ROOT,
     MarketDiagnosticLifecycleError,
     load_lifecycle_register,
     persist_settled_weekly_record,
     render_weekly_report_reminder,
+)
+from engine.us_short_market_diagnostic_weekly_producer import (  # noqa: E402
+    MarketDiagnosticWeeklyProducerError,
+    register_exists,
+    settle_next_week,
 )
 from engine.us_short_market_diagnostic_start_receipt import (  # noqa: E402
     DiagnosticStartReceiptError,
@@ -175,6 +194,90 @@ def record_week(
     }
 
 
+def settle_week(
+    *,
+    model_paper_root: Path,
+    benchmark_packet_path: Path,
+    root: Path = DEFAULT_ROOT,
+    total_return_sidecar_path: Path | None = None,
+    as_of_date: str | None = None,
+    publish: bool = True,
+    output_root: Path = DEFAULT_PUBLIC_ROOT,
+) -> dict[str, Any]:
+    """Compute this week from local inputs, store it, and publish if a window closed.
+
+    This is the subcommand the track was missing. ``record-week`` carries a record
+    somebody else produced; nobody produced one, so the clock could be opened and
+    then immediately fail to advance. Here the week is computed from the local
+    model-paper artifacts and the local benchmark packet, at the index the store
+    itself says is next.
+
+    The benchmark packet is a file the caller names because nothing in the repo
+    produces one yet. That is a real remaining gap, recorded as such, and it is
+    still better than the alternative: a producer that invents prices when its
+    upstream is absent is exactly the failure this whole track exists to detect.
+    """
+
+    if as_of_date is None:
+        as_of_date = _date.today().strftime("%Y%m%d")
+    packet = _read_json(benchmark_packet_path, "benchmark price packet")
+    sidecar = (
+        _read_json(total_return_sidecar_path, "total-return sidecar")
+        if total_return_sidecar_path is not None
+        else None
+    )
+    try:
+        result = settle_next_week(
+            model_paper_root=model_paper_root,
+            benchmark_packet=packet,
+            root=root,
+            total_return_sidecar=sidecar,
+            as_of_date=as_of_date,
+        )
+        register = load_lifecycle_register(root, as_of_date=as_of_date)
+    except (MarketDiagnosticWeeklyProducerError, MarketDiagnosticLifecycleError) as exc:
+        raise MarketDiagnosticWeeklyRunnerError(str(exc)) from exc
+
+    settled = {
+        "status": result["status"],
+        "calendar_week_index": result["calendar_week_index"],
+        "calendar_week_count": result["calendar_week_count"],
+        "evaluable_week_count": result["evaluable_week_count"],
+        "v1_1_reminder": result["v1_1_reminder"],
+        "weekly_report_reminder_text": render_weekly_report_reminder(register),
+    }
+    # Publishing is attempted every week and is a no-op except on a boundary, so a
+    # closing week cannot be missed by nobody remembering to run a second command.
+    settled["publication"] = (
+        publish_window(root=root, output_root=output_root, as_of_date=as_of_date)
+        if publish
+        else {"status": "skipped"}
+    )
+    return settled
+
+
+def publish_window(
+    *,
+    root: Path = DEFAULT_ROOT,
+    output_root: Path = DEFAULT_PUBLIC_ROOT,
+    as_of_date: str | None = None,
+) -> dict[str, Any]:
+    """Emit the 26/52/78-week scorecard when a window has closed; otherwise say so.
+
+    The engine has been able to do this since Knife 4; nothing ever called it, so
+    the one artifact this track exists to produce had no way of being produced.
+    """
+
+    if as_of_date is None:
+        as_of_date = _date.today().strftime("%Y%m%d")
+    try:
+        return publish_completed_market_diagnostic_window(
+            lifecycle_root=root, output_root=output_root, as_of_date=as_of_date
+        )
+    except MarketDiagnosticAggregationError as exc:
+        raise MarketDiagnosticWeeklyRunnerError(str(exc)) from exc
+
+
 def clock_status(*, root: Path = DEFAULT_ROOT) -> dict[str, Any]:
     """Say plainly whether the clock is running, without opening anything.
 
@@ -195,6 +298,13 @@ def clock_status(*, root: Path = DEFAULT_ROOT) -> dict[str, Any]:
             "problem": str(exc),
         }
     if receipt is None:
+        if register_exists(root):
+            return {
+                "clock_status": "broken",
+                "diagnostic_epoch": None,
+                "calendar_week_count": None,
+                "problem": "weeks have been counted but the start receipt that authorized them is gone",
+            }
         return {"clock_status": "not_started", "diagnostic_epoch": None, "calendar_week_count": 0}
     try:
         register = load_lifecycle_register(root)
@@ -227,9 +337,25 @@ def _parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     opener.add_argument("--diagnostic-epoch", required=True)
     opener.add_argument("--first-decision-date", required=True, help="YYYYMMDD of week 1")
 
-    weekly = sub.add_parser("record-week", help="persist one already-settled weekly record")
+    settle = sub.add_parser("settle-week", help="compute this week from local inputs and store it")
+    settle.add_argument("--model-paper-root", type=Path, required=True)
+    settle.add_argument("--benchmark-packet-path", type=Path, required=True)
+    settle.add_argument("--total-return-sidecar-path", type=Path)
+    settle.add_argument("--output-root", type=Path, default=DEFAULT_PUBLIC_ROOT)
+    settle.add_argument(
+        "--no-publish",
+        action="store_true",
+        help="store the week but do not emit a scorecard even if this week closes a window",
+    )
+    settle.add_argument("--as-of-date", help="YYYYMMDD; defaults to today so future data fails closed")
+
+    weekly = sub.add_parser("record-week", help="carry one already-settled weekly record (repair/replay)")
     weekly.add_argument("--weekly-record-path", type=Path, required=True)
     weekly.add_argument("--as-of-date", help="YYYYMMDD; defaults to today so future data fails closed")
+
+    emit = sub.add_parser("publish", help="emit the scorecard if a 26-week window has closed")
+    emit.add_argument("--output-root", type=Path, default=DEFAULT_PUBLIC_ROOT)
+    emit.add_argument("--as-of-date", help="YYYYMMDD; defaults to today so future data fails closed")
 
     sub.add_parser("status", help="report whether the clock is running")
     return parser.parse_args(argv)
@@ -256,6 +382,34 @@ def main(argv: list[str] | None = None) -> int:
                 print(f"  notification: {result['notification_first_line']}")
             else:
                 print(f"clock {result['status']}: epoch={result['receipt']['diagnostic_epoch']}")
+        elif args.command == "settle-week":
+            result = settle_week(
+                model_paper_root=args.model_paper_root,
+                benchmark_packet_path=args.benchmark_packet_path,
+                root=args.root,
+                total_return_sidecar_path=args.total_return_sidecar_path,
+                as_of_date=args.as_of_date,
+                publish=not args.no_publish,
+                output_root=args.output_root,
+            )
+            print(
+                f"week {result['calendar_week_index']} {result['status']}: "
+                f"{result['calendar_week_count']} calendar / {result['evaluable_week_count']} evaluable"
+            )
+            print(result["weekly_report_reminder_text"])
+            publication = result["publication"]
+            if publication["status"] in {"published", "idempotent"}:
+                print(f"scorecard {publication['status']}: {publication['window_id']}")
+            else:
+                print(f"scorecard: {publication['status']}")
+        elif args.command == "publish":
+            result = publish_window(
+                root=args.root, output_root=args.output_root, as_of_date=args.as_of_date
+            )
+            if result["status"] in {"published", "idempotent"}:
+                print(f"scorecard {result['status']}: {result['window_id']}")
+            else:
+                print(f"scorecard: {result['status']}")
         elif args.command == "record-week":
             result = record_week(
                 weekly_record_path=args.weekly_record_path,

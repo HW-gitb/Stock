@@ -117,6 +117,10 @@ GATES = frozenset(
         "publish_completed_market_diagnostic_window",
         "_authorized_records",
         "build_market_diagnostic_report",
+        # Supplier-style, like _authorized_records: it reads the clock and the
+        # store and hands back what the next week must be, so a caller cannot
+        # choose the index or continue the NAV series from a number it invented.
+        "next_week_inputs",
     }
 )
 
@@ -171,6 +175,11 @@ EXEMPT = {
     "engine/us_short_market_diagnostic_start_receipt.py::load_start_receipt": "reads the authorization itself",
     "engine/us_short_market_diagnostic_start_receipt.py::start_receipt_sha256": "pure digest of a receipt already in hand",
     "engine/us_short_market_diagnostic_start_receipt.py::validate_start_receipt": "validates the authorization itself",
+    "engine/us_short_market_diagnostic_weekly_producer.py::_load_preset": "reads a named preset file; no store",
+    "engine/us_short_market_diagnostic_weekly_producer.py::register_exists": "existence probe only; reads no content and authorizes nothing",
+    "engine/us_short_market_diagnostic_weekly_producer.py::_target_week": "picks the packet week the gated inputs allow; reads through the gated loader",
+    "engine/us_short_market_diagnostic_weekly_producer.py::diagnostic_policy_sha256": "pure digest of a preset",
+    "engine/us_short_market_diagnostic_weekly_producer.py::strategy_ruleset_fingerprint": "pure digest of the declared governed presets",
     "runners/us_short_market_diagnostic_weekly.py::_parse_args": "argument parsing",
     "runners/us_short_market_diagnostic_weekly.py::_read_json": "reads one named file the caller resolved",
     "runners/us_short_market_diagnostic_weekly.py::_read_notification": "reads one named file the caller resolved",

@@ -1,5 +1,12 @@
 # Session Log
 
+## 2026-08-05 — Claude Code 执行刀 7b（接线四件）+ 补做刀 6 独立复审：7b 完成，刀 6 判 FAIL
+
+- **Verdict/Action**: 刀 7b 四个子件全部完成（周记录产出器 `settle-week`、成绩单自动触发 `publish`、v1.1 周读取、挂进 weekly capstone），工程闭环差的最后一块补上：此前钟就算开了第 1 周也**产不出来**——刀 2 适配器全仓零调用方，`record-week` 只抬一份没人算的 JSON。同轮把桌面表挂了很久的「刀 6 待独立复审」补做，独立对抗 agent 判 **FAIL**。
+- **Required**: 刀 7b 无（自查两洞已在同轮修：重复跑不幂等、receipt 被删被报成「从未开始」）。刀 6 三条 P1，判据只见 `docs/system_risk_register.md`（单一来源）：①256 digest 上限使 26 周窗口在真实 provenance 下第 24 周即不可达——模块唯一目的不可达；②`requested_exposure` 无从重推，自洽篡改可把实际成交仓位洗成规则目标仓位并通过报告门（更正既有 resolved 记录为**部分**闭合）；③现金腿从不与它定价的那一周绑定，同一行固定利率可喂满 26 周。
+- **Verify**: **自打 10 个植入回归全红**（p7「prior NAV 取错周」首轮为绿，补针对性测试后转红）；agent 对刀 6 打 14 个，**5 个现有测试发现不了**。焦点包 `Ran 264 tests in 206.4s / PASS`，`receipt:46d0d503bf871815c9191f5d`；全 lane `Ran 5369 tests / FAILED (failures=2)`——仅剩 discovery live-CLI 两条，与本轮前逐条相同（本机 gitignored 实盘产物占正式决策位，相关三文件本轮 diff 为空）。**注：本刀只有自验，没有独立审查**——自打 10 个植入回归全红，但按本项目历史自验漏检是常态。撞到三道既有治理门（best_effort 限 comparison-capture、zero_effect 携带 soft-discovery 收据形状、research_live receipt 绑 pre-bridge 序列），按各自语义分别处理而非放宽，详见 register。刀 6 的 R1 直接打在 7b-iii：原本 `except AttributionError` 与「缺数据」同形，已改为独立状态 `attribution_faulted` 并配反向用例。
+- **Next**: 提交并合入 master；刀 6 三条 P1 待修
+
 ## 2026-08-05 — Claude Code 第四次审查刀7：结构修法产品层真闭，缺陷移到执行层，已同轮全修收口
 
 - **Verdict/Action**: 起两个子 agent（1 独立对抗 + 1 广度）均判 Pass-with-Required；两方 10 条 Required + 16 条 Optional 已**同轮全部修完**。产品层结构修法经 agent 17 个植入验证为真：调用方递来的数据到不了已发布裁决，store 的每个写入方与读取方（含孤儿恢复）都在门后，本轮变更内无任何 Class II 自证式校验。**但同类缺陷在执行层原样重现**——为看住发布路径而写的 conformance 测试把发布路径本身放进了 `EXEMPT`，实测内联拆门后 41 测全绿、receipt 已删的 store 照常发布 26 周成绩单。

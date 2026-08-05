@@ -29,11 +29,19 @@ _STAGE_NAMES = [
     "soft_discovery", "theme_producer",
     "projection_inputs", "pass2_preflight", "yfinance_grades_fetch", "pass2_fetch", "vix_regime", "forward_policy_shadow",
     "forward_policy_corporate_actions", "forward_policy_maturity", "soft_boost_comparison_maturity", "soft_boost_comparison_capture", "weekly_bridge",
+    # Post-bridge, local-only, no artifact: reads the 26-week diagnostic clock, which is dormant.
+    "market_diagnostic",
 ]
+_POST_BRIDGE_STAGE_NAMES = ("market_diagnostic",)
+_PRE_BRIDGE_STAGE_NAMES = [
+    name for name in _STAGE_NAMES if name not in {"weekly_bridge", *_POST_BRIDGE_STAGE_NAMES}
+]
+_PRE_BRIDGE_THROUGH_BRIDGE = _PRE_BRIDGE_STAGE_NAMES + ["weekly_bridge"]
 _RECEIPT_STAGE_NAMES = tuple(
     name for name in _STAGE_NAMES if name not in {
         "soft_discovery", "forward_policy_shadow", "forward_policy_corporate_actions",
         "forward_policy_maturity", "soft_boost_comparison_maturity", "soft_boost_comparison_capture", "weekly_bridge",
+        "market_diagnostic",
     }
 )
 
@@ -256,6 +264,8 @@ class CapstoneFakeChainTest(unittest.TestCase):
                     (c.official_output_root or c.private_root) / "weekly_private" / c.decision_date / "action_table.csv",
                     (c.official_output_root or c.private_root) / "runs_private" / c.decision_date / "machine_record.json",
                 ],
+                # Reads the dormant 26-week diagnostic clock; produces no artifact.
+                "market_diagnostic": lambda c: [],
             }[name]
 
         stages = []
@@ -540,7 +550,9 @@ class CapstoneFakeChainTest(unittest.TestCase):
         summary = self._run(order, stages=self._fake_stages(
             order, skip_output_stage="weekly_bridge",
             bridge_batch4={"emitted": False, "no_emit_reason": "provider_health_blocked"}))
-        self.assertEqual(order, _STAGE_NAMES)                 # ran the whole chain
+        # A no-emit bridge aborts the output transaction and returns immediately, so
+        # every post-bridge stage is skipped by design; the chain ran up to the bridge.
+        self.assertEqual(order, _PRE_BRIDGE_THROUGH_BRIDGE)
         self.assertFalse(summary["emitted"])
         self.assertEqual(summary["no_emit_reason"], "provider_health_blocked")
 
@@ -1289,7 +1301,7 @@ class CapstoneStageAuthAndSourceBindingTest(unittest.TestCase):
                 },
                 "result": provider_results.get(name, {}),
             }
-            for name in _STAGE_NAMES[:-1]
+            for name in _PRE_BRIDGE_STAGE_NAMES
         ]
         manifest = (("candidate_artifact_path", str(ctx.source_packet_path.resolve()),
                      hashlib.sha256(ctx.source_packet_path.read_bytes()).hexdigest()),)

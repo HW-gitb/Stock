@@ -1,0 +1,23 @@
+{
+  "schema_name": "us_short_market_diagnostic_strategy_ruleset",
+  "schema_version": "1.0.0",
+  "ruleset_id": "us_short_strategy_ruleset_v1",
+  "purpose": "Names the frozen US-short governance presets whose contents define the selection and action rules in force. The weekly diagnostic record fingerprints exactly this list so a 26-week report can segment by rule version. Design section 6: the fingerprint is factual metadata, never an input to adjudication, and a rule upgrade segments the report rather than resetting the 26-week clock.",
+  "why_a_declared_list": "A fingerprint over 'whatever the engine happened to import' is not reviewable and drifts silently. A fingerprint over the weekly decision artifact would change every week and make mixed_ruleset_window permanently true, which destroys the thing section 6 wants it for. So the list is declared here, in a file whose own change is visible in a diff.",
+  "governed_presets": [
+    "presets/us_short_action_governance_20260620.json",
+    "presets/us_short_action_table_contract_20260620.json",
+    "presets/us_short_cash_allocation_governance_20260620.json",
+    "presets/us_short_catalyst_governance_20260630.json",
+    "presets/us_short_eligibility_governance_20260624.json",
+    "presets/us_short_hard_veto_governance_20260620.json",
+    "presets/us_short_lifecycle_calibration_governance_20260620.json",
+    "presets/us_short_lifecycle_threshold_authority_20260622.json",
+    "presets/us_short_macro_cluster_governance_20260620.json"
+  ],
+  "boundary": {
+    "diagnostic_only": true,
+    "used_for_adjudication": false,
+    "changes_selection_or_action": false
+  }
+}

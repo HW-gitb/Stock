@@ -18,15 +18,15 @@
   ],
   "class0_modules_omitted": true,
   "classification_counts": {
-    "class0_no_direct_protected_io": 231,
+    "class0_no_direct_protected_io": 232,
     "class1_read_real_root": 0,
     "class2_write_real_root": 4,
     "class3_global_sentinel": 5,
     "class4_unresolved_write": 59
   },
   "inventory_version": "us_short_test_io_inventory.v0.4.0",
-  "module_count": 299,
-  "module_path_sha256": "51b26a99fb6e9a85a2e2918474e933d3125d1c41020e4a06841a58f1c28b2153",
+  "module_count": 300,
+  "module_path_sha256": "cd23216265271efb3796f02b48794aa5ce999e1c285f498cc873a0fcd9bb2e6a",
   "modules": [
     {
       "classification": "class4_unresolved_write",
