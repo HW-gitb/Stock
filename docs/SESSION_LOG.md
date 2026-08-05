@@ -1,5 +1,12 @@
 # Session Log
 
+## 2026-08-05 — 用户裁决：设计定稿前不起 12 周时钟，epoch 维持 pre-freeze
+
+- **Verdict/Action**: 裁决落定。不起时钟；epoch 七条轨维持 `pre_freeze_audit_only`（不废除、不激活）；剩余 8 刀照常推进不受阻；序 16 随之推后。核心论证：关着哈希起 → 12 周证据没意义（可能中途改判据）；开着哈希起 → 设计还在动反复归零。两者互斥，语义投影只能减少冤枉归零、消不掉矛盾。
+- **Required**: 无。同日两条自纠已记入 register：①「起时钟成本近乎零、建议起」框架错误；②「序 7/8/13/14/15 不作废」是错的——`decision_predicate_sha256` 哈希 9 个生产文件的全部 `if`/`while`/`assert` 条件，剩余每刀都会改到。正文单一来源 `R-ASHORT-TWELVE-WEEK-CLOCK-DEFERRED-UNTIL-DESIGN-FREEZE`。
+- **Verify**: 现状实读确认（非推断）：`pre_freeze_audit_only` 下轨指纹是固定常量、`require_contract_hashes=False` 使 8 份契约哈希校验根本不跑、`evidence_counts_toward_clock()` 恒 False —— 当前改任何代码都不作废任何东西。同日语义投影刀 `97d4e1da` 价值为延后生效，后半段（按轨分绑）当前不做，列为将来起时钟的第 1 步前置。
+- **Next**: 剩余 8 刀照常，下一刀序 19；AI 协作者不得自行提议起时钟
+
 ## 2026-08-05 — Claude Code 执行：epoch 语义投影刀（解开 12 周时钟死锁）
 
 - **Verdict/Action**: 完成。冻结包 8 份契约由整文件字节哈希改为按契约声明的语义投影，只绑真正能改变对比判定的substance。死锁解开：序 11 重写效果契约叶账本**不再作废**已攒证据（本刀头号目标，专测钉住），而真正改判定的改动仍然作废且会点名是哪份契约哪种投影。未翻任何轨的 `pre_freeze_audit_only`——起不起时钟是用户决策。
