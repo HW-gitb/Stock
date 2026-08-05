@@ -29,15 +29,32 @@ ROOT = Path(__file__).resolve().parents[1]
 
 class UsShortMarketDiagnosticLifecycleTest(unittest.TestCase):
     def test_v1_1_reminder_has_plain_language_thresholds(self) -> None:
-        self.assertEqual("pending", build_v1_1_reminder(0)["status"])
-        self.assertEqual("pending", build_v1_1_reminder(3)["status"])
-        self.assertEqual("ready_for_v1_1_implementation", build_v1_1_reminder(4)["status"])
-        self.assertEqual("ready_for_v1_1_implementation", build_v1_1_reminder(7)["status"])
-        self.assertEqual("overdue", build_v1_1_reminder(8)["status"])
-        text = build_v1_1_reminder(4)["text"]
-        self.assertIn("仓位/现金", text)
+        self.assertEqual(
+            "pending",
+            build_v1_1_reminder(0, consecutive_paper_evaluable_week_count=0)["status"],
+        )
+        self.assertEqual(
+            "pending",
+            build_v1_1_reminder(3, consecutive_paper_evaluable_week_count=3)["status"],
+        )
+        self.assertEqual(
+            "active",
+            build_v1_1_reminder(4, consecutive_paper_evaluable_week_count=4)["status"],
+        )
+        self.assertEqual(
+            "active",
+            build_v1_1_reminder(7, consecutive_paper_evaluable_week_count=7)["status"],
+        )
+        self.assertEqual(
+            "active",
+            build_v1_1_reminder(8, consecutive_paper_evaluable_week_count=8)["status"],
+        )
+        text = build_v1_1_reminder(
+            4, consecutive_paper_evaluable_week_count=4
+        )["text"]
+        self.assertIn("仓位和现金", text)
         self.assertIn("主动系统能力", text)
-        self.assertIn("当前v1只能告诉总成绩", text)
+        self.assertIn("自动启用", text)
 
     def test_persists_immutable_weeks_and_derives_counter_and_report_block(self) -> None:
         rows = _weekly_rows()
@@ -49,16 +66,21 @@ class UsShortMarketDiagnosticLifecycleTest(unittest.TestCase):
             weekly_bytes = (root / "weeks" / "20260102" / "weekly_record.json").read_bytes()
 
             self.assertEqual("pending", outputs[0]["v1_1_reminder"]["status"])
-            self.assertEqual("ready_for_v1_1_implementation", outputs[3]["v1_1_reminder"]["status"])
-            self.assertEqual("overdue", outputs[7]["v1_1_reminder"]["status"])
+            self.assertEqual("active", outputs[3]["v1_1_reminder"]["status"])
+            self.assertEqual("active", outputs[7]["v1_1_reminder"]["status"])
             self.assertEqual(8, register["calendar_week_count"])
             self.assertEqual(8, register["evaluable_week_count"])
+            self.assertEqual(8, register["consecutive_paper_evaluable_week_count"])
+            self.assertEqual("active", register["v1_1_attribution"]["status"])
+            self.assertEqual(4, register["v1_1_attribution"]["activation_trigger_week_index"])
+            self.assertEqual(5, register["v1_1_attribution"]["effective_from_week_index"])
+            self.assertTrue(register["v1_1_attribution"]["attribution_epoch"])
             self.assertEqual(8, register["last_calendar_week_index"])
             self.assertEqual("26w-1-26", register["current_window_id"])
             self.assertEqual(8, register["current_window_week_count"])
             self.assertEqual(8, len(list((root / "weeks").rglob("weekly_record.json"))))
-            self.assertIn("可评估周=8", render_weekly_report_reminder(register))
-            self.assertIn("v1.1归因", outputs[-1]["weekly_report_reminder"]["text"])
+            self.assertIn("连续可评估周=8", render_weekly_report_reminder(register))
+            self.assertIn("v1.1 归因", outputs[-1]["weekly_report_reminder"]["text"])
             self.assertEqual(register_bytes, (root / "lifecycle_register.json").read_bytes())
             self.assertEqual(weekly_bytes, (root / "weeks" / "20260102" / "weekly_record.json").read_bytes())
 
@@ -87,7 +109,7 @@ class UsShortMarketDiagnosticLifecycleTest(unittest.TestCase):
             first = persist_settled_weekly_record(row, root=root)
             replay = copy.deepcopy(row)
             replay["v1_1_reminder"] = {
-                "status": "overdue",
+                "status": "active",
                 "evaluable_week_count": 999,
                 "text": "caller cannot author lifecycle state",
             }
@@ -112,6 +134,23 @@ class UsShortMarketDiagnosticLifecycleTest(unittest.TestCase):
             self.assertEqual(1, second["evaluable_week_count"])
             register = load_lifecycle_register(root)
             self.assertEqual(1, register["non_evaluable_week_count"])
+            self.assertEqual(1, register["consecutive_paper_evaluable_week_count"])
+            self.assertEqual("pending", register["v1_1_attribution"]["status"])
+
+    def test_v1_1_activation_requires_four_consecutive_paper_evaluable_weeks_and_is_sticky(self) -> None:
+        rows = _weekly_rows(paper_false_weeks={3, 8})
+        with tempfile.TemporaryDirectory() as td:
+            root = Path(td) / "market_diagnostic_private"
+            outputs = [persist_settled_weekly_record(row, root=root) for row in rows[:8]]
+            register = load_lifecycle_register(root)
+
+            self.assertEqual("pending", outputs[5]["v1_1_reminder"]["status"])
+            self.assertEqual("active", outputs[6]["v1_1_reminder"]["status"])
+            self.assertEqual("active", outputs[7]["v1_1_reminder"]["status"])
+            self.assertEqual(0, register["consecutive_paper_evaluable_week_count"])
+            self.assertEqual(7, register["v1_1_attribution"]["activation_trigger_week_index"])
+            self.assertEqual(8, register["v1_1_attribution"]["effective_from_week_index"])
+            self.assertEqual("active", register["v1_1_attribution"]["status"])
 
     def test_gap_epoch_and_register_drift_fail_closed(self) -> None:
         rows = _weekly_rows()

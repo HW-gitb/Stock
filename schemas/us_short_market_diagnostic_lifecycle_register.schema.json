@@ -2,7 +2,7 @@
   "$schema": "http://json-schema.org/draft-07/schema#",
   "$id": "https://stock.local/schemas/us_short_market_diagnostic_lifecycle_register.schema.json",
   "title": "US-short market diagnostic lifecycle register",
-  "description": "Private, de-identified accumulator for immutable weekly market-diagnostic records. Counts are derived again by the runtime persister from record_refs and are not an authorization or policy-switch gate.",
+  "description": "Private, de-identified accumulator for immutable weekly market-diagnostic records. Counts and the sticky v1.1 attribution activation are derived again by the runtime persister from record_refs; attribution activation never changes selection, advice, sizing, NAV, or Ship gate.",
   "type": "object",
   "additionalProperties": false,
   "required": [
@@ -12,6 +12,7 @@
     "calendar_week_count",
     "evaluable_week_count",
     "non_evaluable_week_count",
+    "consecutive_paper_evaluable_week_count",
     "last_calendar_week_index",
     "last_decision_date",
     "last_valuation_date",
@@ -19,15 +20,17 @@
     "current_window_week_count",
     "record_refs",
     "v1_1_reminder",
+    "v1_1_attribution",
     "boundary"
   ],
   "properties": {
     "schema_name": {"const": "us_short_market_diagnostic_lifecycle_register"},
-    "schema_version": {"const": "1.0.0"},
+    "schema_version": {"const": "1.1.0"},
     "diagnostic_epoch": {"type": "string", "minLength": 1},
     "calendar_week_count": {"type": "integer", "minimum": 1},
     "evaluable_week_count": {"type": "integer", "minimum": 0},
     "non_evaluable_week_count": {"type": "integer", "minimum": 0},
+    "consecutive_paper_evaluable_week_count": {"type": "integer", "minimum": 0},
     "last_calendar_week_index": {"type": "integer", "minimum": 1},
     "last_decision_date": {"$ref": "#/definitions/date8"},
     "last_valuation_date": {"$ref": "#/definitions/date8"},
@@ -39,6 +42,7 @@
       "items": {"$ref": "#/definitions/record_ref"}
     },
     "v1_1_reminder": {"$ref": "#/definitions/v1_1_reminder"},
+    "v1_1_attribution": {"$ref": "#/definitions/v1_1_attribution"},
     "boundary": {"$ref": "#/definitions/boundary"}
   },
   "definitions": {
@@ -78,9 +82,40 @@
       "additionalProperties": false,
       "required": ["status", "evaluable_week_count", "text"],
       "properties": {
-        "status": {"enum": ["pending", "ready_for_v1_1_implementation", "overdue", "active"]},
+        "status": {"enum": ["pending", "active"]},
         "evaluable_week_count": {"type": "integer", "minimum": 0},
         "text": {"type": "string", "minLength": 1}
+      }
+    },
+    "v1_1_attribution": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "status",
+        "trigger_consecutive_weeks",
+        "current_consecutive_paper_evaluable_weeks",
+        "activation_trigger_week_index",
+        "effective_from_week_index",
+        "attribution_epoch",
+        "sticky_after_activation"
+      ],
+      "properties": {
+        "status": {"enum": ["pending", "active"]},
+        "trigger_consecutive_weeks": {"const": 4},
+        "current_consecutive_paper_evaluable_weeks": {"type": "integer", "minimum": 0},
+        "activation_trigger_week_index": {
+          "anyOf": [{"type": "integer", "minimum": 1}, {"type": "null"}]
+        },
+        "effective_from_week_index": {
+          "anyOf": [{"type": "integer", "minimum": 2}, {"type": "null"}]
+        },
+        "attribution_epoch": {
+          "anyOf": [
+            {"type": "string", "pattern": "^us-short-v1[.]1-[0-9a-f]{24}$"},
+            {"type": "null"}
+          ]
+        },
+        "sticky_after_activation": {"const": true}
       }
     },
     "boundary": {
