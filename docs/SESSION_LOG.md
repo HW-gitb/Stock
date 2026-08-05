@@ -1,5 +1,14 @@
 # Session Log
 
+## 2026-08-05 — Claude Code 补扫已合并的 26 周诊断轨刀 1–5：六条 Required，含一条 P1
+
+- **Verdict/Action**: 已合并代码存在六条缺陷，最重一条使「缺股息不得冒充总回报」这条本轨诚实保证形同虚设。均不影响选股/操作建议/仓位/NAV/ship-gate，但损坏的正是本轨唯一产品——诊断结论。已记条目，未修（交执行方）。
+- **Required**: 六条，详情与判据只见 `docs/system_risk_register.md`（单一来源），另含一条需用户裁决项（公开件是否可含归一化模拟金额）。
+- **Verify**: 本轮为补扫审计、非 slice 审查门，hook 未注入 token，故不引用。按 rule 8 起一个独立对抗 agent 扫 master 已并的五个模块，以刀6 缺陷类为假设。**两条最重的由我自己复现**：①`dividend_sidecar_sha256` 在刀1 引擎 `grep -c`=**0**；同一 price-only 夹具诚实态 `data_degraded`/`tr_weeks=0`，仅改标签并把摘要置 `None` 后校验器**接受**、整窗变 `ahead_diagnostic`/`tr_weeks=26`。②价格包实测无 prior-date 字段，`prior_price_date` 纯由 sidecar 自报；拉宽至约 7 个月并放三笔季度分红，同一价格对周收益 `0.02`→`0.04` 仍判 `total_return_evaluable`。
+- **更正**: 我在刀2 审查写的「刀5 之前不可能冒充总回报」只对生产端成立、未核校验端；第②条落在我刀5 亲验过的那道门内部。
+- **Next**: Codex：修复六条 Required（建议先 P1）。
+
+
 ## 2026-08-05 — Claude Code 补跑 us_short 全量（还 08-04 探针欠的 rule 3(c)），揪出一条操作机上长期假红的测试
 
 - **Verdict/Action**: 补跑完成，结果 FAIL。红的与 26 周诊断轨无关，也非探针回归，而是一条**不隔离操作员状态**的测试；已立条目，未修（属 soft-discovery lane，交执行方）。
