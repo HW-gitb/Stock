@@ -713,7 +713,7 @@
       "category": "m67_main_decision",
       "consumer_ref": "runners/a_short_weekly_pipeline.py::_normalise_northbound_control -> _apply_northbound_market_gate",
       "terminal_surface": "weekly.northbound_control.production_effect_enabled and new-entry action",
-      "mutation_evidence": "the current analysis schema pins false until lookback evidence; a true synthetic control is required before the gate can demote a build"
+      "mutation_evidence": "the reviewed analysis schema pins the live gate true; an explicit false control is the negative control that must preserve new-entry builds"
     },
     "market_context.northbound.requested_session_count": {
       "category": "m67_main_decision",
@@ -784,7 +784,7 @@
   },
   "runtime_constants_sha256": {
     "A-EGS/egs_main.py": "fd73d445741e9a1264f436f50ba9fdd462fb768a98779275e85e2a4ca40d0b84",
-    "engine/a_short_northbound.py": "74ed0d20a4b1e4cd26d73e8425299bb04802fd234f9171220b631b3b948fe695",
+    "engine/a_short_northbound.py": "07363ce1dbdc2bea07b414e3f626155f3bfb4258e58a19d270c1b8746350ebc4",
     "runners/a_short_phase5_engine.py": "27f947c64df7eaf4e59526b4bc0c150de5baef5a2447187acc98378e4c1f9f00",
     "engine/a_short_portfolio_risk.py": "238ae5ff77e269bc1b9a507014b21561c54e6766169d1854e19119ac5137943e"
   },

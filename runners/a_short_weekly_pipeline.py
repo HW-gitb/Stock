@@ -50,6 +50,7 @@ from engine.egs_industry_heat import load_governance  # noqa: E402
 from engine.a_short_nullable_bool import fail_closed_risk_bool  # noqa: E402
 from engine.a_short_northbound import (  # noqa: E402
     NORTHBOUND_CSI300_SILENCE_THRESHOLD_PCT,
+    NORTHBOUND_MARKET_GATE_PRODUCTION_EFFECT_ENABLED,
     classify_northbound_status,
     should_block_new_entries,
 )
@@ -1058,7 +1059,10 @@ def _northbound_control_from_analysis(ai: dict, as_of: str) -> dict:
         "requested_session_count": northbound.get("requested_session_count", 5),
         "observed_session_count": northbound.get("observed_session_count", 0),
         "coverage_complete": northbound.get("coverage_complete", False),
-        "production_effect_enabled": northbound.get("production_effect_enabled", False),
+        "production_effect_enabled": northbound.get(
+            "production_effect_enabled",
+            NORTHBOUND_MARKET_GATE_PRODUCTION_EFFECT_ENABLED,
+        ),
     }, as_of)
 
 

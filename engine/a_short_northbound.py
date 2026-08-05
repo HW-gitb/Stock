@@ -6,10 +6,9 @@ import numbers
 
 
 NORTHBOUND_CSI300_SILENCE_THRESHOLD_PCT = -10.0
-# Historical trigger frequency is not yet evidenced by a producer-backed
-# lookback.  Keep the structured predicate available for comparison/tests, but
-# do not let the current producer change a weekly production decision.
-NORTHBOUND_MARKET_GATE_PRODUCTION_EFFECT_ENABLED = False
+# The producer-backed lookback has passed independent review; the live weekly
+# producer may now apply this already-tested new-entry-only gate.
+NORTHBOUND_MARKET_GATE_PRODUCTION_EFFECT_ENABLED = True
 
 
 def _finite_number(value) -> bool:

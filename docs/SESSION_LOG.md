@@ -1,5 +1,28 @@
 # Session Log
 
+## 2026-08-05 — Claude 修复+自审（收据自毁 P1 + 门状态两文件 Optional）
+
+- **Verdict/Action**: 两条都闭。P1 是**整类修**：全仓 spawn launcher 的测试共 4 处 3 文件，每处都会覆盖收据；加 `STOCK_BOUNDED_UNITTEST_ACTIVE` 嵌套标记（覆盖 launcher→launcher 任意深度、零改调用点）+ 四处显式带标记（hook 用裸 python 跑守卫，仅靠标记覆盖不到——第一版修法即因此失败）+ AST 守卫防新增点漏网。Optional 加 schema-const 与引擎常量的三角断言，单改一边即报「两文件一起翻」。
+- **Required**: 无。`R-TOOLS-PRECOMMIT-RECEIPT-SELF-CLOBBER` 已 closed；4 处枚举、两层修法、植入对照与决定性验证见 `docs/system_risk_register.md`（单一来源，本处不复述）。
+- **Verify**: 植入对照——摘掉 `test_doc_governance_guard.py:1477` 的标记 → 守卫 `FAILED` 并点名该行，还原逐字节一致。`tests.test_bounded_unittest` `Ran 14 tests ... OK`。**决定性验证**：原症状为「提交永久被拦」，修后同一批暂存文件的 `git commit` 通过 pre-commit（见本轮 commit）。全程未用 `--no-verify`。
+- **Pre-Codex self-review**: A-F checked。A：不修被演示的单点——先枚举全仓 4 处 spawn 点再逐处修，并加 AST 守卫使新增点无法漏。A.6 权威链：收据写入唯一入口 `bounded_unittest.main` → 标记 → 冻结常量名。B：grep `STOCK_BOUNDED_UNITTEST_ACTIVE` 三文件命中 3/3/1，0 遗漏。C：反向已补（守卫植入转红；nested 打印显式而非静默）。D=N-A；E 单态；F `git diff --check` 干净。matrix=4 spawn 点/嵌套标记/AST 守卫/三角断言/植入；register=updated；handoff=n/a；focused=14 OK + 验收包；full-lane=交由执行方记账，reviewer 按 rule 4 不重跑；door=route 14 + doc-governance 41。
+- **Next**: Codex：执行
+
+## 2026-08-05 — Claude 审查 PASS（序 23 北向静默门通电）
+
+- **Verdict/Action**: PASS，已提交并合入 master。真钱门激活：常量 `False → True`，此后北向静默条件成立的那一周会真的把所有 `建仓` 降为 `观察`。改动约 10 行，阈值与双条件判据一字未改；兜底默认由硬编码 `False` 改读共享常量（消除重复字面量，正确）；方案要求的「默认值 == 共享常量」断言已加。
+- **Required**: 无。植入对照、三处同名字段的未误改确认、向后兼容实测、以及一条操作性 Optional（紧急关闭需改两文件）见 `docs/system_risk_register.md`（单一来源，本处不复述）。
+- **Verify**: review-evidence:0d39db727af4；植入对照——常量翻回 `False` → `test_analysis_default_uses_shared_production_switch` `FAILED`（可归因），另 12 条 ERROR 为 schema `const:true` 连带，还原逐字节一致。向后兼容实读：`analysis_input.schema.json` 的 `northbound` 无 `required`，故该字段可选；14 份历史 `analysis_input.json`（含 `20260803`）该字段**不存在**而非 `false`，全部仍通过校验。验收包 `Ran 82 tests ... OK`（`bundles=a_short_effect_contract`）。全量按 rule 4 引用执行方记账未重跑。真实周跑仍 `NOT_VERIFIED`。
+- **Next**: Codex：执行
+
+## 2026-08-05 — Codex executor/fixer — 执行序23（北向静默门通电；待序19后统一最终全量）
+
+- **Verdict/Action**: 按用户明确授权执行序23；北向新建仓门由只记录切为真实生效。改动仅限共享开关、analysis_input schema/契约重封、weekly 默认回退同源和对应回归断言；未改阈值、谓词、降级机制、持仓分支或回看 comparison-only 产物；未 commit/push/merge。
+- **Required**: `R-ASHORT-SEQ23-NORTHBOUND-GATE-ACTIVATION` = working-tree implemented / `OPEN-NOT_VERIFIED`，独立审查与提交仍未发生；完整调用链、边界和负控见 `docs/system_risk_register.md` 与同日 handoff。
+- **Verify**: 固定主 Python `C:\Users\cnhea\AppData\Local\Programs\Python\Python313\python.exe`，版本 `3.13.8`；合并 focused `tests.test_a_short_northbound_market_wiring tests.test_a_short_egs_market_environment tests.test_a_short_effect_contract tests.test_a_short_effect_consumer_probe tests.test_a_short_weekly_pipeline tests.test_a_short_public_json_writer_nonfinite_guard` → `Ran 613 tests in 120.190s` / `OK`，receipt `receipt:69cfa1f3b213189f4541a954`；`static_contract_error=None`、py_compile=0、`git diff --check`=0。未跑序23单独 full lane，按连续执行序19后的“一次最终 full lane”安排；该 full lane 当前 `NOT_VERIFIED`。
+- **Pre-Codex self-review**: `A-F checked; matrix=producer/schema/default-binding/dual-condition/单条件/coverage/holding/disabled-control/summary comparison-only; register=updated; handoff=updated; focused=613 OK; full-lane=NOT_VERIFIED deferred to seq19 batch; door=static_contract_error None + py_compile 0 + diff-check 0; provider/live/account/order=NOT_RUN; sub-agent=NOT_USED; review=NOT_VERIFIED; commit/push/merge=NOT_PERFORMED`。
+- **Next**: Codex：执行序19
+
 ## 2026-08-05 — Claude 审查（更正「北向门不能通电」的判断）
 
 - **Verdict/Action**: executor 给出的四条「不能通电」理由，三条不成立。① 「开关仍是 false 所以只做研究」是**循环论证**——陈述现状不是拒绝改变现状的理由。② 「123/155 仍 PARTIAL」**方向弄反**：13 周 warm-up 缺口落在 2023-08~11，与那 5 次触发同属一波下跌，补齐只会**增加**触发数，故 4.1% 是**下限**，PARTIAL 让估计偏保守而非不可信。③ 「还没通过独立复审」**事实错误**（见 Verify）。④ 「需用户明确授权」**成立，且是唯一真门**。

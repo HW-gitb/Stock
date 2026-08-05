@@ -1661,3 +1661,37 @@ Claude Code：独立审查 `R-ASHORT-KNIFE12-NORTHBOUND-MARKET-WIRING` 及 `R-AS
 ### 前置：用户明确授权
 
 本刀是**真钱门激活**，`AGENTS.md` 的执行边界要求这类改动由用户明示。用户已于 2026-08-05 在对话中要求起草本刀；**开工前仍需一句明确的执行授权**（起草 ≠ 授权激活）。执行方不得自行开工。
+
+## 2026-08-05 追加：Codex 执行序23（北向静默门通电；待序19后统一最终全量）
+
+### 本次问题、根因与改动
+
+- 不是谓词缺陷，而是序22b已审查通过的真钱门仍处于 governance OFF：`NORTHBOUND_MARKET_GATE_PRODUCTION_EFFECT_ENABLED=False` 只记录、不改变新建仓。
+- 用户本轮明确授权后，将 `engine/a_short_northbound.py` 的共享开关改为 `True`；`-10.0` 阈值、`should_block_new_entries` 双条件、`_apply_northbound_market_gate` 新建仓-only/持仓不变逻辑均未改。
+- `schemas/analysis_input.schema.json` 北向开关同步为 `const=true`；effect contract 的事实说明同步并重封 `runtime_constants_sha256`。
+- `runners/a_short_weekly_pipeline.py::_northbound_control_from_analysis` 的缺省开关改为读取同一共享常量，新增默认 source-binding 测试，防止 producer/consumer 分叉。
+- 生产者测试同步 active；北向回看 artifact 的 comparison-only `production_effect_enabled=false` 反控保持原样。
+
+### 调用链、直接消费者、schema/source-binding、写盘边界
+
+`engine.a_short_northbound` shared switch → `A-EGS/egs_main.py::market_environment/_northbound_provider_facts` → `analysis_input.market_context.northbound.production_effect_enabled` → `_northbound_control_from_analysis` / `_normalise_northbound_control` → shared `should_block_new_entries` → `_apply_northbound_market_gate` → `weekly.northbound_control` + M6.7 new-entry action + `reports[].machine.operation_impact` + Markdown banner。
+
+- schema 边界是 `analysis_input.schema.json` 的北向 `const=true`；effect contract 的 `runtime_constants_sha256` 已更新，`static_contract_error()` 为 `None`。
+- 同名字段边界已保留：`runners/a_short_weekly_pipeline.py` 主题 overlay/earnings impact 和 `engine/a_short_northbound_lookback.py` comparison-only 产物仍不变；回看产物不进入生产决策。
+- 本轮没有 provider/live/account/order/正式周跑、没有刷新 raw/summary 运行产物；只改 tracked code/schema/contract/tests。
+
+### 验收、负向控制与自审
+
+- 正控：outflow + 5/5 complete + CSI300 `< -10%` + active → new-entry builds 全降为观察、`new_entry_blocked=true`、`reason=dual_condition`、结构化 impact 落地。
+- 反控：只满足一个条件、unknown/partial coverage、已有持仓、显式 `effect=False` 均不错误封门；中和 `_apply_northbound_market_gate` 后正控转红；comparison-only summary 仍为 false。
+- 固定主 Python：`C:\Users\cnhea\AppData\Local\Programs\Python\Python313\python.exe`，版本 `3.13.8`。
+- 精确 focused 命令：
+  `Set-Location -LiteralPath 'D:\cnhea\Codex\worktrees\29e0\Stock'; & '.tools\run_unittest_with_repo_pythonpath.cmd' 'tests.test_a_short_northbound_market_wiring' 'tests.test_a_short_egs_market_environment' 'tests.test_a_short_effect_contract' 'tests.test_a_short_effect_consumer_probe' 'tests.test_a_short_weekly_pipeline' 'tests.test_a_short_public_json_writer_nonfinite_guard'`
+  原始终态：`Ran 613 tests in 120.190s` / `OK`；`receipt:69cfa1f3b213189f4541a954`。
+- static contract `None`、changed Python `py_compile=0`、`git diff --check=0`；A-F self-review complete。`sub-agent=NOT_USED`。
+
+### NOT_VERIFIED、审查/提交边界与下一步
+
+- `NOT_VERIFIED`：与序19合并后的最终 full lane、Claude Code 独立复审、用户后续 live/账户影响、commit/push/merge；本轮不称 PASS。
+- 序23单独 full lane 按连续序19执行后的“一次最终 full lane”规则暂不启动；序19结束后最终行为/契约状态只跑一次 full lane，之后只做 docs-only 追加。
+- 当前审查/提交边界：executor/fixer 不 commit；独立 reviewer PASS 后按项目流程提交。下一步：`Codex：执行序19`。

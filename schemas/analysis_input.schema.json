@@ -642,8 +642,8 @@
               "type": "boolean"
             },
             "production_effect_enabled": {
-              "const": false,
-              "description": "Historical trigger-frequency evidence is not yet producer-backed; observation only."
+              "const": true,
+              "description": "Producer-backed lookback evidence has passed review; the new-entry-only gate is active."
             }
           }
         },
