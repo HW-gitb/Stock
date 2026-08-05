@@ -7,6 +7,8 @@ from unittest.mock import patch
 
 import pandas as pd
 
+from engine.a_short_csi300_window import CSI300_LIVE_WINDOW_SESSIONS
+
 
 ROOT = Path(__file__).resolve().parents[2]
 EGS_SCRIPT = ROOT / "A-EGS" / "egs_main.py"
@@ -121,6 +123,10 @@ class EgsMainDailyStatsGuardTest(unittest.TestCase):
         self.assertEqual(self.egs_main.DAILY_STATS_MAX_LOOKBACK_SESSIONS, 60)
         self.assertEqual(self.egs_main.DAILY_STATS_REQUIRED_CLOSES, 61)
         self.assertEqual(self.egs_main.DAILY_ALL_QFQ_WINDOW_TRADING_DAYS, 65)
+        self.assertEqual(
+            self.egs_main.DAILY_ALL_QFQ_WINDOW_TRADING_DAYS,
+            CSI300_LIVE_WINDOW_SESSIONS,
+        )
         self.egs_main._validate_daily_qfq_window(65)
 
         with self.assertRaisesRegex(RuntimeError, "window=60, required=61"):

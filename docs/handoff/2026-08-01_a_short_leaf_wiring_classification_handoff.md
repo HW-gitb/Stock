@@ -1490,3 +1490,100 @@ Claude Code：独立审查 `R-ASHORT-KNIFE12-NORTHBOUND-MARKET-WIRING` 及 `R-AS
 **授权范围（reviewer 自定，实现方不得扩大）**：本批历史取数**总预算 12 次调用**——序 19 的 `pro.margin` 三年窗口 ≤6 次，序 22b 的 `moneyflow_hsgt` + `index_daily` 合计 ≤6 次。raw 一律落 gitignored `provider_samples/`，tracked summary 只记计数/覆盖/分位，**不得含 raw 行、请求 URL、密钥**。超预算即中止并如实记录。
 
 **批内约定**：**22a（已完成）→ 22b → 序 19** 顺序做（2026-08-05 更正，理由见本节开头的顺序更正块），同一棵树内连续起草、各自独立 slice + 自审，**loop 中不 commit**；effect contract 只在序 19 落地后统一重封一次（22b 不动契约叶，纯 comparison/research 产物）；最后一次全量、一次收口。
+
+## 2026-08-05 — Codex executor/fixer 同日追加：执行序 22b（review pending）
+
+### 本次问题、根因与改动
+
+- 原 `research/results/a_short/northbound_market_silence_lookback_summary.json` 是空占位产物，只有测试读取，没有 producer；无法重算序 12 北向门的历史触发频率。
+- 新增 `engine/a_short_northbound_lookback.py` 纯统计核心、`runners/a_short_northbound_market_silence_lookback.py` bounded provider runner、`schemas/a_short_northbound_market_silence_lookback_summary.schema.json` 2.0.0、tracked summary 与两组 lookback/runner 测试。
+- runner 的 provider boundary 将有限 numeric string 规范化后才进入 22a `reconcile_dated_series`；覆盖缺失、重复、越界、错误 benchmark、非法/非有限值均 fail-closed 为 `unavailable`，不插值、不移动窗口、不把不可用周放进分母。
+- 最终 full lane 发现新增 `_write_json` 未注册公共 writer registry；已作最小登记修复，未改变 payload、路径或生产链。
+
+### 调用链、消费者、schema、source-binding 与写盘边界
+
+`moneyflow_hsgt.north_money`（provider 万元值 × 10,000 = CNY）+ `index_daily(000300.SH)`（calendar trade dates）→ raw `provider_samples/a_short_northbound_lookback_20260804/` → numeric-string boundary → 22a exact-date reconciliation → `engine/a_short_northbound.py::should_block_new_entries` → counts-only `research/results/a_short/northbound_market_silence_lookback_summary.json`。
+
+- 北向窗口固定 5 sessions；CSI300 窗口固定复用 `get_csi300_return` 的 20-session 口径。
+- 直接消费者只有 comparison/research artifact；不导入 weekly/EGS，不写 `analysis_input`，不进入任何 production decision path；`production_effect_enabled` 保持 `false`。
+- schema 固定 endpoint、`000300.SH`、单位、5/20 sessions、共享 live predicate、`comparison_only=true`、`production_effect_enabled=false`。
+- raw 只写 gitignored `provider_samples/`；tracked summary 只写周数/覆盖数/判定，不写 raw rows、request URL、token/secret。
+
+### 实际结果与原始终态
+
+- as-of `20260804`，lookback start `20230804`；`weeks_considered=155`、`eligible_week_count=57`、`unavailable_week_count=98`、`trigger_count=0`，57 周为 `eligible_not_triggered`，summary `status=PARTIAL`，`NOT_VERIFIED` 明确写出 98 周覆盖不足。
+- provider 实际调用 `2/6`：`moneyflow_hsgt`、`index_daily` 各一次且成功；随后 `replay_raw` 复用同一 raw，未新增调用。raw 观测形状为 flow 300 rows（最早 `20250429`）和 CSI300 726 rows（最早 `20230804`），未把行值写入 tracked 文档/产物。
+- 固定主 Python：`C:\Users\cnhea\AppData\Local\Programs\Python\Python313\python.exe`，版本 `3.13.8`。
+- focused 精确命令：
+
+  `Set-Location -LiteralPath 'D:\cnhea\Codex\worktrees\29e0\Stock'; & '.tools\run_unittest_with_repo_pythonpath.cmd' 'tests.test_a_short_northbound_lookback' 'tests.test_a_short_northbound_lookback_runner' 'tests.test_a_short_northbound_market_wiring' 'tests.test_a_short_market_history' 'tests.test_a_short_egs_market_environment' 'tests.test_a_short_effect_consumer_probe' 'tests.test_a_short_effect_contract' 'tests.test_a_short_public_json_writer_nonfinite_guard'`
+
+  原始终态：`Ran 118 tests in 79.241s` / `OK`；receipt `receipt:d836041f06598d5ef608b0de`。
+- 静态/编译/JSON：`py_compile=0 json=0 static_residue_scan=0`；`git diff --check` exit 0。
+- full 精确命令：
+
+  `Set-Location -LiteralPath 'D:\cnhea\Codex\worktrees\29e0\Stock'; & 'C:\Users\cnhea\AppData\Local\Programs\Python\Python313\python.exe' '.tools\full_pack_ledger.py' run a_short 'R-ASHORT-SEQ22B-NORTHBOUND-LOOKBACK-PROVIDER-RAW-BOUNDARY' 'receipt:d836041f06598d5ef608b0de' 860 -- discover -s tests -p 'test_a_short*.py'`
+
+  原始终态：`Ran 2398 tests in 459.278s` / `OK (skipped=3)`；`[full-pack-ledger] RESULT status=PASS exit=0 tests=2398`。
+- 首次 full 的真实失败也保留：`Ran 1174 tests in 208.981s` / `FAILED (failures=1)`，根因是新增 `_write_json` 未登记；登记后按同一触发器修复重跑并通过。
+
+### 负向控制、自审、审查与提交边界
+
+- 已覆盖/复核：正控触发、单条件不触发、缺最新 flow 日不后移、错误 `ts_code`、非有限/非法 provider 行、替换回看谓词的一致性断言、raw root/production output guard、summary 无 raw/url/secret、生产门未启用。
+- `NOT_VERIFIED`：独立 Claude Code review、用户翻转生产门、完整 live/weekly 消费、commit/push/merge；未起 sub-agent，未跑 provider/live 以外的 live 行为。
+- 本次只改 22b 及其必要 writer registry；不处理序 19，不 commit。当前下一步：`Claude Code：审查`。
+
+## 2026-08-05 追加：序 22b 两条 P1 修复（待 Claude Code 独立复审）
+
+### 修复目标、判断与边界
+
+本轮按 Claude Code 同日 FAIL 修复两条 P1：
+
+1. `R-ASHORT-SEQ22B-CSI300-WINDOW-MISMATCH`：实盘 `get_csi300_return(trade_dates)` 的 `>=20` 只是最小长度守卫；当前生产传入的 `trade_dates` 为 65 个交易日，实际 return 跨完整 65-session span。回看不再使用独立 20-session 常量。
+2. `R-ASHORT-SEQ22B-FETCH-TRUNCATED-AT-PROVIDER-ROW-CAP`：`moneyflow_hsgt` 的单次 300-row 上限不能当成完整三年证据；runner 改为先取得 CSI300 日历，再分段取 flow，并记录截断和覆盖分类。
+
+> **历史纠正**：本文件前一节执行记录中的「CSI300 20-session 口径」及 schema「5/20 sessions」表述已由本节 supersede；20 只表示生产函数的最小长度守卫，当前 live span 与本回看契约均为 65 sessions。
+
+本轮仍只处理序 22b comparison/research slice：不改 `A-EGS/egs_main.py` 生产运行代码、不改 weekly/EGS/TopN/M6.7/仓位、不打开 `production_effect_enabled`，不处理序 19。Claude review 的两个 P2 Optional 留作 deferred，不在本轮冒充已修。
+
+### 调用链、消费者、schema/source-binding 与写盘边界
+
+`index_daily(000300.SH)` 交易日历 → `moneyflow_hsgt` 按最多 250 sessions 的日期段读取（单次 provider cap = 300 rows）→ raw `provider_samples/a_short_northbound_lookback_20260804/`（含分段 payload 与 counts-only fetch manifest，均 gitignored）→ numeric-string boundary → 22a `reconcile_dated_series` exact-date reconciliation → `engine/a_short_northbound.py::should_block_new_entries` → counts-only `research/results/a_short/northbound_market_silence_lookback_summary.json`。
+
+- `engine/a_short_csi300_window.py` 是回看窗口契约源：`CSI300_LIVE_WINDOW_SESSIONS=65`；`tests/phase6/test_egs_main_daily_stats_guard.py` 把它与生产 `A-EGS/egs_main.py::DAILY_ALL_QFQ_WINDOW_TRADING_DAYS=65` 断言绑定。生产 EGS 文件本轮保持不变，避免 comparison-only 修复无故改变 effect-contract fingerprint。
+- 北向仍为 5-session `north_money × 10000 = CNY`；CSI300 回看使用 65-session live span；两者都经过 22a exact reconciliation，不补值、不滑窗。
+- 每周 `unavailable_reason` 只允许 `warm_up`、`fetch_truncated`、`source_gap` 或 eligible 周的 `null`；summary 增加 `unavailable_breakdown`，runner 增加 `northbound_fetch`（row cap、分段上限、分段数、请求/观测数、截断数、状态）。schema 对 65-session、字段枚举和安全边界做 const/closed-world 约束。
+- 直接消费者仍只有 comparison/research artifact；`comparison_only=true`、`production_effect_enabled=false`；tracked summary 不写 raw rows、request URL、token/secret。
+
+### 负向控制与实际 provider 重算
+
+- 65-session vs 20-session 分歧控制：构造 65-session 跌破 −10% 而最近 20-session 未跌破的序列，修复后触发，旧回看口径不会误绿。
+- 分段控制：726 个 CSI300 交易日必须生成 3 个 flow segments；300-row fake response 必须写 `truncated=true` 并将受影响周归入 `fetch_truncated`；删最新 flow 日且无 row-cap 标记归入 `source_gap`；前 65-session 不足归入 `warm_up`。
+- 固定主 Python 下已实际重算：`as_of=20260804`、`calls=4/6`（CSI300 1 + flow 3）、`segment_count=3`、`truncated_segment_count=0`、请求 726、观测 702；`weeks=155`、`eligible=123`、`unavailable=32`、`breakdown={warm_up:13, fetch_truncated:0, source_gap:19}`、`trigger_count=5`、`status=PARTIAL`。`PARTIAL` 保持诚实，不宣称三年 COMPLETE 或 production PASS。
+
+### 验证命令与原始终态
+
+- Python identity：`C:\Users\cnhea\AppData\Local\Programs\Python\Python313\python.exe` / `Python 3.13.8`。
+- focused bounded command：
+
+  `Set-Location -LiteralPath 'D:\cnhea\Codex\worktrees\29e0\Stock'; & '.tools\run_unittest_with_repo_pythonpath.cmd' 'tests.test_a_short_northbound_lookback' 'tests.test_a_short_northbound_lookback_runner' 'tests.test_a_short_northbound_market_wiring' 'tests.test_a_short_egs_market_environment' 'tests.phase6.test_egs_main_daily_stats_guard' 'tests.test_a_short_market_history' 'tests.test_a_short_effect_consumer_probe' 'tests.test_a_short_effect_contract' 'tests.test_a_short_public_json_writer_nonfinite_guard'`
+
+  原始终态：`Ran 132 tests in 82.568s` / `OK`；receipt `receipt:ca0c033c553615ccfa934ecc`。
+- provider command：
+
+  `Set-Location -LiteralPath 'D:\cnhea\Codex\worktrees\29e0\Stock'; & 'C:\Users\cnhea\AppData\Local\Programs\Python\Python313\python.exe' 'runners/a_short_northbound_market_silence_lookback.py' '--as-of' '20260804' '--raw-root' 'provider_samples/a_short_northbound_lookback_20260804' '--out' 'research/results/a_short/northbound_market_silence_lookback_summary.json'`
+
+  原始终态：`completed calls=4/6 weeks=155 eligible=123 triggers=5`；summary schema 校验通过。provider raw 未进入 tracked 文件。
+- static command：固定 Python 对 6 个 changed Python `py_compile=0`；summary `jsonschema=0`；`git diff --check` exit 0。
+- final full lane：
+
+  `Set-Location -LiteralPath 'D:\cnhea\Codex\worktrees\29e0\Stock'; & 'C:\Users\cnhea\AppData\Local\Programs\Python\Python313\python.exe' '.tools\full_pack_ledger.py' run a_short 'R-ASHORT-SEQ22B-P1-WINDOW-MATCH-AND-PROVIDER-ROW-CAP-REPAIR' 'receipt:ca0c033c553615ccfa934ecc' 860 -- discover -s tests -p 'test_a_short*.py'`
+
+  原始终态：`Ran 2402 tests in 476.578s` / `OK (skipped=3)`；`[full-pack-ledger] RESULT status=PASS exit=0 tests=2402`。
+- 交接门：固定 Python bounded command `tests.test_route_doc_ledger_status_consistency` + `tests.test_doc_governance_guard`，最终文档落盘后复跑 `Ran 55 tests in 1.732s` / `OK`；receipt `receipt:fa397a6712f19cd5c229ddbe`。
+
+### NOT_VERIFIED、审查/提交边界与下一步
+
+- `NOT_VERIFIED`：Claude Code 对当前修复 diff 的独立复审、用户翻转生产 effect、完整 live/weekly 消费、commit/push/merge；本轮未起 sub-agent，未改变生产 effect contract。
+- 两条 P1 只有经 Claude Code 独立复审确认后才能关闭并按项目规则提交；full lane `PASS` 只代表自动化回归通过，不代表独立审查 PASS，也不代表历史频率已经 COMPLETE。
+- 下一步：`Claude Code：审查序22b P1修复`。

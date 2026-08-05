@@ -190,14 +190,28 @@ class NorthboundMarketGateTests(unittest.TestCase):
         self.assertIn("北向资金联合静默门已触发", markdown)
         self.assertIn("没有可被该门降级的新建仓候选", markdown)
 
-    def test_lookback_summary_is_counts_only_and_explicitly_not_verified(self):
+    def test_lookback_summary_is_provider_bound_counts_only_and_never_production(self):
         schema = json.loads((ROOT / "schemas" / "a_short_northbound_market_silence_lookback_summary.schema.json").read_text(encoding="utf-8"))
         summary = json.loads((ROOT / "research" / "results" / "a_short" / "northbound_market_silence_lookback_summary.json").read_text(encoding="utf-8"))
         jsonschema.validate(summary, schema)
-        self.assertEqual(summary["status"], "NOT_VERIFIED")
-        self.assertIsNone(summary["trigger_count"])
+        self.assertIn(summary["status"], {"COMPLETE", "PARTIAL", "NOT_VERIFIED"})
+        self.assertEqual(summary["lookback_week_count"], len(summary["weeks_considered"]))
+        self.assertEqual(summary["lookback_week_count"], len(summary["weeks"]))
+        self.assertEqual(
+            summary["eligible_week_count"] + summary["unavailable_week_count"],
+            summary["lookback_week_count"],
+        )
+        if summary["status"] == "NOT_VERIFIED":
+            self.assertIsNone(summary["trigger_count"])
+        else:
+            self.assertIsInstance(summary["trigger_count"], int)
+        self.assertEqual(summary["source_binding"]["predicate"], "engine.a_short_northbound.should_block_new_entries")
         self.assertTrue(summary["comparison_only"])
         self.assertFalse(summary["production_effect_enabled"])
+        self.assertTrue(summary["storage"]["raw_payload_root_gitignored"])
+        self.assertFalse(summary["storage"]["tracked_summary_contains_raw_rows"])
+        self.assertFalse(summary["storage"]["tracked_summary_contains_request_urls"])
+        self.assertFalse(summary["storage"]["tracked_summary_contains_secret"])
 
 
 if __name__ == "__main__":
