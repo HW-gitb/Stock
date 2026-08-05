@@ -248,7 +248,9 @@ When all four benchmark statuses are `flat_diagnostic`, the overall status remai
 - 每周记录可带 `turnover` 和 `unfilled_order_count`。缺失时摘要输出 `null`，而不是伪造 0；
 - epoch 混入同一摘要窗口会 fail-closed；ruleset 按连续区段输出，并在单一 ruleset 不足 20 个可评估周时设置 `mixed_ruleset_window`。
 
-私有路径必须受 gitignore 和 fail-closed 路径保护。公开摘要不得包含 ticker、逐笔交易、持仓明细、账户余额、原始价格或可还原个人账户的信息。
+私有路径必须受 gitignore 和 fail-closed 路径保护。公开摘要不得包含 ticker、逐笔交易、持仓明细、真实账户余额、原始价格或可还原个人账户的信息。
+
+**归一化模拟金额裁决（2026-08-05 用户定，刀0 冻结口径成立）**：公开摘要**允许**携带 model-paper 归一化模拟盘的金额字段（`final_nav`、`cumulative_cost_paid` 等，见 `schemas/us_short_market_diagnostic_summary.schema.json`）。它们由固定的 $100,000 归一化本金推出，**不是用户真实账户余额、也不可反推真实资金规模**，故不属上句「账户余额」之禁。上句的禁止对象是**真实**账户余额与真实持仓。本裁决是对刀0 已冻结 schema 与本节措辞之间歧义的收口，不得据此把任何真实账户数字放进公开件。
 
 ## 12.3 Knife 2 local adapter contract
 
