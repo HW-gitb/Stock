@@ -21,6 +21,7 @@ from engine.us_short_market_diagnostic import (
     BENCHMARKS,
     BOUNDARY,
     MarketDiagnosticError,
+    STATUS_REASONS,
     segment_epoch_and_ruleset,
     summarize_since_inception,
     summarize_window,
@@ -39,6 +40,13 @@ DEFAULT_PUBLIC_ROOT = ROOT / "research" / "results" / "us_short" / "market_diagn
 REPORT_SCHEMA_PATH = ROOT / "schemas" / "us_short_market_diagnostic_report.schema.json"
 SUMMARY_SCHEMA_PATH = ROOT / "schemas" / "us_short_market_diagnostic_summary.schema.json"
 WINDOW_ID_PATTERN = re.compile(r"^26w-[1-9][0-9]*-[1-9][0-9]*$")
+PUBLIC_REMINDER_TEXT = {
+    "pending": "v1.1 attribution is system-derived and waits for four consecutive paper-evaluable weeks.",
+    "ready_for_v1_1_implementation": "v1.1 attribution is system-derived and waits for four consecutive paper-evaluable weeks.",
+    "overdue": "v1.1 attribution is system-derived and waits for four consecutive paper-evaluable weeks.",
+    "active": "v1.1 attribution is active and remains sticky after automatic activation.",
+}
+PUBLIC_IDENTIFIER = re.compile(r"^[A-Za-z0-9_.-]{1,128}$")
 REPORT_BOUNDARY = dict(BOUNDARY)
 
 
@@ -58,6 +66,8 @@ def _load_schema(path: Path) -> dict[str, Any]:
 def _validate_report(report: Mapping[str, Any]) -> None:
     if not isinstance(report, Mapping):
         raise MarketDiagnosticAggregationError("diagnostic report must be an object")
+    _validate_public_summary(report.get("window_summary"), require_reminder=True)
+    _validate_public_summary(report.get("since_inception"), require_reminder=False)
     summary_schema = _load_schema(SUMMARY_SCHEMA_PATH)
     summary_errors = sorted(
         jsonschema.Draft7Validator(summary_schema).iter_errors(report.get("window_summary")),
@@ -84,6 +94,36 @@ def _validate_report(report: Mapping[str, Any]) -> None:
         error = errors[0]
         location = ".".join(str(part) for part in error.absolute_path) or "<root>"
         raise MarketDiagnosticAggregationError(f"diagnostic report schema violation at {location}: {error.message}")
+
+
+def _validate_public_summary(summary: object, *, require_reminder: bool) -> None:
+    if not isinstance(summary, Mapping):
+        return
+    reason = summary.get("status_reason")
+    if reason not in STATUS_REASONS:
+        raise MarketDiagnosticAggregationError("public diagnostic status_reason is not a machine reason")
+    epoch = summary.get("diagnostic_epoch")
+    if not isinstance(epoch, str) or PUBLIC_IDENTIFIER.fullmatch(epoch) is None:
+        raise MarketDiagnosticAggregationError("public diagnostic diagnostic_epoch is not a safe identifier")
+    if not require_reminder:
+        return
+    reminder = summary.get("v1_1_reminder")
+    if not isinstance(reminder, Mapping):
+        raise MarketDiagnosticAggregationError("public diagnostic reminder is not an object")
+    status = reminder.get("status")
+    if status not in PUBLIC_REMINDER_TEXT or reminder.get("text") != PUBLIC_REMINDER_TEXT[status]:
+        raise MarketDiagnosticAggregationError("public diagnostic reminder contains non-canonical text")
+
+
+def _publicize_window_summary(summary: Mapping[str, Any]) -> dict[str, Any]:
+    public = dict(summary)
+    reminder = dict(summary["v1_1_reminder"])
+    status = reminder["status"]
+    if status not in PUBLIC_REMINDER_TEXT:
+        raise MarketDiagnosticAggregationError("diagnostic reminder status is unknown")
+    reminder["text"] = PUBLIC_REMINDER_TEXT[status]
+    public["v1_1_reminder"] = reminder
+    return public
 
 
 def _report_output_paths(window_id: str, output_root: str | Path) -> tuple[Path, Path]:
@@ -122,7 +162,9 @@ def build_market_diagnostic_report(
     if len(block_rows) != boundary["calendar_weeks"]:
         raise MarketDiagnosticAggregationError("completed diagnostic window does not have 26 settled records")
     try:
-        window_summary = summarize_window(block_rows, as_of_date=as_of_date)
+        window_summary = _publicize_window_summary(
+            summarize_window(block_rows, as_of_date=as_of_date)
+        )
     except MarketDiagnosticError as exc:
         raise MarketDiagnosticAggregationError(f"fixed-window validation failed: {exc}") from exc
 
@@ -274,7 +316,7 @@ def publish_completed_market_diagnostic_window(
     if lifecycle_path.is_absolute() and not lifecycle_path.exists():
         return {"status": "not_started"}
     try:
-        records = load_settled_weekly_records(lifecycle_root)
+        records = load_settled_weekly_records(lifecycle_root, as_of_date=as_of_date)
     except MarketDiagnosticLifecycleError as exc:
         raise MarketDiagnosticAggregationError(f"cannot load settled diagnostic lifecycle: {exc}") from exc
     report = build_market_diagnostic_report(records, as_of_date=as_of_date)

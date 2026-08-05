@@ -86,13 +86,26 @@ def _mapping(value: object, field: str) -> Mapping[str, Any]:
     return value
 
 
-def _date8(value: object, field: str) -> date:
+def _date8(value: object, field: str, *, allow_none: bool = False) -> date | None:
+    if value is None and allow_none:
+        return None
     if not isinstance(value, str) or not value.isascii() or _DATE8.fullmatch(value) is None:
         _fail(f"{field} must be an ASCII YYYYMMDD date")
     try:
         return date(int(value[0:4]), int(value[4:6]), int(value[6:8]))
     except ValueError as exc:
         raise LocalMarketDiagnosticAdapterError(f"{field} is not a real calendar date") from exc
+
+
+def _as_of(value: object) -> date:
+    parsed = _date8(value, "as_of_date")
+    assert parsed is not None
+    return parsed
+
+
+def _not_future(value: date | None, field: str, as_of_date: date | None) -> None:
+    if value is not None and as_of_date is not None and value > as_of_date:
+        _fail(f"{field} is after as_of_date")
 
 
 def _sha(value: object, field: str, *, allow_none: bool = False) -> str | None:
@@ -125,10 +138,13 @@ def _schema_validate(packet: Mapping[str, Any]) -> None:
         _fail(f"local price packet schema violation at {path}: {error.message}")
 
 
-def validate_local_price_packet(packet: Mapping[str, Any]) -> dict[str, Any]:
+def validate_local_price_packet(
+    packet: Mapping[str, Any], *, as_of_date: str | None = None
+) -> dict[str, Any]:
     """Validate one local weekly benchmark price packet and return it unchanged."""
 
     _schema_validate(_mapping(packet, "price_packet"))
+    as_of = _as_of(as_of_date) if as_of_date is not None else None
     if packet["benchmark_symbols"] != list(BENCHMARKS):
         _fail("price_packet.benchmark_symbols must be exactly VTI/IWB/SPY/QQQ")
     if not isinstance(packet["window_id"], str) or _WINDOW_ID.fullmatch(packet["window_id"]) is None:
@@ -147,6 +163,9 @@ def validate_local_price_packet(packet: Mapping[str, Any]) -> dict[str, Any]:
             f"weeks[{index}].settlement_decision_date",
         )
         valuation = _date8(week["valuation_date"], f"weeks[{index}].valuation_date")
+        _not_future(decision, f"weeks[{index}].decision_date", as_of)
+        _not_future(settlement_decision, f"weeks[{index}].settlement_decision_date", as_of)
+        _not_future(valuation, f"weeks[{index}].valuation_date", as_of)
         if settlement_decision > valuation:
             _fail("local price packet settlement_decision_date cannot be after valuation_date")
         if valuation > decision:
@@ -158,11 +177,15 @@ def validate_local_price_packet(packet: Mapping[str, Any]) -> dict[str, Any]:
             _fail("local price packet must contain exactly VTI, IWB, SPY, and QQQ")
         for symbol in BENCHMARKS:
             observation = _mapping(benchmarks[symbol], f"weeks[{index}].benchmarks.{symbol}")
-            price_date = observation["price_date"]
-            if price_date is not None:
-                parsed_price_date = _date8(price_date, f"weeks[{index}].benchmarks.{symbol}.price_date")
-            else:
-                parsed_price_date = None
+            field = f"weeks[{index}].benchmarks.{symbol}"
+            parsed_price_date = _date8(observation["price_date"], f"{field}.price_date", allow_none=True)
+            parsed_prior_price_date = _date8(
+                observation["prior_price_date"],
+                f"{field}.prior_price_date",
+                allow_none=True,
+            )
+            _not_future(parsed_price_date, f"{field}.price_date", as_of)
+            _not_future(parsed_prior_price_date, f"{field}.prior_price_date", as_of)
             prior_close = _money(
                 observation["prior_close"],
                 f"weeks[{index}].benchmarks.{symbol}.prior_close",
@@ -174,9 +197,19 @@ def validate_local_price_packet(packet: Mapping[str, Any]) -> dict[str, Any]:
                 allow_none=True,
             )
             if close is not None and parsed_price_date != valuation:
-                _fail(f"weeks[{index}].benchmarks.{symbol}.price_date must equal valuation_date")
+                _fail(f"{field}.price_date must equal valuation_date")
             if close is None and parsed_price_date is not None:
-                _fail(f"weeks[{index}].benchmarks.{symbol}.missing close cannot carry price_date")
+                _fail(f"{field}.missing close cannot carry price_date")
+            if prior_close is not None and parsed_prior_price_date is None:
+                _fail(f"{field}.prior close requires prior_price_date")
+            if prior_close is None and parsed_prior_price_date is not None:
+                _fail(f"{field}.missing prior close cannot carry prior_price_date")
+            if (
+                parsed_prior_price_date is not None
+                and parsed_price_date is not None
+                and parsed_prior_price_date >= parsed_price_date
+            ):
+                _fail(f"{field}.price interval must be strictly increasing")
             source_sha = _sha(
                 observation["source_sha256"],
                 f"weeks[{index}].benchmarks.{symbol}.source_sha256",
@@ -240,10 +273,14 @@ def _read_canonical_json(path: Path) -> tuple[dict[str, Any], str]:
     return value, hashlib.sha256(payload).hexdigest()
 
 
-def load_model_paper_week(root: str | Path, decision_date: str) -> dict[str, Any]:
+def load_model_paper_week(
+    root: str | Path, decision_date: str, *, as_of_date: str | None = None
+) -> dict[str, Any]:
     """Read one settled local model-paper week and re-check all cross-artifact digests."""
 
     requested_date = _date8(decision_date, "decision_date")
+    as_of = _as_of(as_of_date) if as_of_date is not None else None
+    _not_future(requested_date, "decision_date", as_of)
     store_root = _private_root(root)
     try:
         head = load_head(store_root)
@@ -266,6 +303,10 @@ def load_model_paper_week(root: str | Path, decision_date: str) -> dict[str, Any
 
     if settlement["decision_date"] != decision_date:
         _fail("settlement decision_date does not match requested week")
+    _not_future(_date8(settlement["decision_date"], "settlement.decision_date"), "settlement.decision_date", as_of)
+    _not_future(_date8(settlement["maturity_as_of"], "settlement.maturity_as_of"), "settlement.maturity_as_of", as_of)
+    _not_future(_date8(state["as_of"], "portfolio_state.as_of"), "portfolio_state.as_of", as_of)
+    _not_future(_date8(nav["as_of"], "nav_snapshot.as_of"), "nav_snapshot.as_of", as_of)
     if state["as_of"] != settlement["maturity_as_of"] or nav["as_of"] != settlement["maturity_as_of"]:
         _fail("settlement, portfolio state, and NAV dates do not agree")
     if state_digest != settlement["post_state_sha256"]:
@@ -311,6 +352,21 @@ def _packet_week(packet: Mapping[str, Any], calendar_week_index: int) -> Mapping
     _fail(f"local price packet has no calendar week {calendar_week_index}")
 
 
+def _expected_price_intervals(packet: Mapping[str, Any]) -> dict[tuple[int, str], tuple[object, object]]:
+    intervals: dict[tuple[int, str], tuple[object, object]] = {}
+    for raw_week in packet["weeks"]:
+        week = _mapping(raw_week, "price_packet.week")
+        week_index = week["calendar_week_index"]
+        benchmarks = _mapping(week["benchmarks"], f"price_packet.weeks[{week_index}].benchmarks")
+        for symbol in BENCHMARKS:
+            observation = _mapping(benchmarks[symbol], f"price_packet.weeks[{week_index}].benchmarks.{symbol}")
+            intervals[(week_index, symbol)] = (
+                observation["prior_price_date"],
+                observation["price_date"],
+            )
+    return intervals
+
+
 def adapt_benchmark_week(
     packet: Mapping[str, Any],
     calendar_week_index: int,
@@ -318,6 +374,7 @@ def adapt_benchmark_week(
     strategy_evaluable: bool,
     strategy_weekly_return: float | None,
     total_return_sidecar: Mapping[str, Any] | None = None,
+    as_of_date: str | None = None,
 ) -> dict[str, dict[str, Any]]:
     """Project one local price week into the diagnostic weekly benchmark shape.
 
@@ -325,12 +382,16 @@ def adapt_benchmark_week(
     reconciled locally; this function never obtains it from a provider.
     """
 
-    packet = validate_local_price_packet(packet)
+    packet = validate_local_price_packet(packet, as_of_date=as_of_date)
     week = _packet_week(packet, calendar_week_index)
     sidecar_benchmarks: Mapping[str, Any] | None = None
     if total_return_sidecar is not None:
         try:
-            sidecar = validate_etf_total_return_sidecar(total_return_sidecar)
+            sidecar = validate_etf_total_return_sidecar(
+                total_return_sidecar,
+                expected_price_intervals=_expected_price_intervals(packet),
+                as_of_date=as_of_date,
+            )
         except TotalReturnSidecarError as exc:
             raise LocalMarketDiagnosticAdapterError(f"invalid ETF total-return sidecar: {exc}") from exc
         if sidecar["window_id"] != packet["window_id"]:
@@ -356,6 +417,7 @@ def adapt_benchmark_week(
                     price_observation=observation,
                     strategy_evaluable=strategy_evaluable,
                     strategy_weekly_return=strategy_weekly_return,
+                    as_of_date=as_of_date,
                 )
             except TotalReturnSidecarError as exc:
                 raise LocalMarketDiagnosticAdapterError(
@@ -426,6 +488,7 @@ def build_weekly_record_from_local(
     v1_1_reminder: Mapping[str, Any],
     prior_nav: str | None,
     total_return_sidecar: Mapping[str, Any] | None = None,
+    as_of_date: str | None = None,
 ) -> dict[str, Any]:
     """Build one schema-shaped weekly record from already-settled local inputs.
 
@@ -435,11 +498,15 @@ def build_weekly_record_from_local(
     the exact prior settled NAV rather than silently restarting the series.
     """
 
-    packet = validate_local_price_packet(benchmark_packet)
+    packet = validate_local_price_packet(benchmark_packet, as_of_date=as_of_date)
     validated_total_return_sidecar: Mapping[str, Any] | None = None
     if total_return_sidecar is not None:
         try:
-            validated_total_return_sidecar = validate_etf_total_return_sidecar(total_return_sidecar)
+            validated_total_return_sidecar = validate_etf_total_return_sidecar(
+                total_return_sidecar,
+                expected_price_intervals=_expected_price_intervals(packet),
+                as_of_date=as_of_date,
+            )
         except TotalReturnSidecarError as exc:
             raise LocalMarketDiagnosticAdapterError(f"invalid ETF total-return sidecar: {exc}") from exc
     if isinstance(calendar_week_index, bool) or not isinstance(calendar_week_index, int) or calendar_week_index < 1:
@@ -447,7 +514,11 @@ def build_weekly_record_from_local(
     week = _packet_week(packet, calendar_week_index)
     decision_date = week["decision_date"]
     settlement_decision_date = week["settlement_decision_date"]
-    paper_week = load_model_paper_week(model_paper_root, settlement_decision_date)
+    paper_week = load_model_paper_week(
+        model_paper_root,
+        settlement_decision_date,
+        as_of_date=as_of_date,
+    )
     if paper_week["decision_date"] != settlement_decision_date:
         _fail("model-paper settlement decision date does not match local benchmark week")
     if paper_week["valuation_date"] != week["valuation_date"]:
@@ -481,6 +552,7 @@ def build_weekly_record_from_local(
         strategy_evaluable=strategy_evaluable,
         strategy_weekly_return=strategy_weekly_return,
         total_return_sidecar=validated_total_return_sidecar,
+        as_of_date=as_of_date,
     )
     source_refs = _dedupe_sha256(
         [

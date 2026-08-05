@@ -101,7 +101,7 @@ def _weekly() -> dict:
             "evaluable_week_count": 1,
             "text": "v1.1 reminder is pending.",
         },
-        "source_refs": ["e" * 64],
+        "source_refs": ["a" * 64, "e" * 64],
         "boundary": _boundary(),
     }
 
@@ -171,6 +171,7 @@ def _local_price_packet() -> dict:
     def observation(source_kind: str, source_seed: int) -> dict:
         return {
             "price_date": "20260803",
+            "prior_price_date": "20260802",
             "prior_close": "100.000000",
             "close": "101.000000",
             "source_kind": source_kind,
@@ -180,7 +181,7 @@ def _local_price_packet() -> dict:
 
     return {
         "schema_name": "us_short_market_diagnostic_local_price_packet",
-        "schema_version": "1.0.0",
+        "schema_version": "1.1.0",
         "window_id": "26w-1-26",
         "diagnostic_epoch": "us_short_market_diagnostic_26w_v1",
         "price_basis": "split_adjusted_close",

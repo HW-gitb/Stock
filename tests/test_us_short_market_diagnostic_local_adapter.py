@@ -31,6 +31,7 @@ def _packet() -> dict:
         source_seed = 10 + BENCHMARKS.index(symbol)
         return {
             "price_date": "20260724",
+            "prior_price_date": "20260723",
             "prior_close": "100.000000",
             "close": "101.000000",
             "source_kind": source_kind,
@@ -40,7 +41,7 @@ def _packet() -> dict:
 
     return {
         "schema_name": "us_short_market_diagnostic_local_price_packet",
-        "schema_version": "1.0.0",
+        "schema_version": "1.1.0",
         "window_id": "26w-1-26",
         "diagnostic_epoch": "us_short_market_diagnostic_26w_v1",
         "price_basis": "split_adjusted_close",
@@ -100,6 +101,7 @@ class UsShortMarketDiagnosticLocalAdapterTest(unittest.TestCase):
     def test_missing_prior_price_is_unavailable_and_never_zero_filled(self) -> None:
         packet = _packet()
         packet["weeks"][0]["benchmarks"]["VTI"]["prior_close"] = None
+        packet["weeks"][0]["benchmarks"]["VTI"]["prior_price_date"] = None
         benchmark = adapt_benchmark_week(
             packet,
             1,
@@ -223,6 +225,17 @@ class UsShortMarketDiagnosticLocalAdapterTest(unittest.TestCase):
                 total_return_sidecar=sidecar,
             )
 
+    def test_sidecar_price_interval_must_bind_to_local_price_packet(self) -> None:
+        sidecar = _sidecar(prior_price_date="20260722")
+        with self.assertRaises(LocalMarketDiagnosticAdapterError):
+            adapt_benchmark_week(
+                _packet(),
+                1,
+                strategy_evaluable=True,
+                strategy_weekly_return=0.03,
+                total_return_sidecar=sidecar,
+            )
+
     def test_model_paper_week_tamper_is_rejected_before_projection(self) -> None:
         with tempfile.TemporaryDirectory() as td:
             root = Path(td) / "model_paper_private"
@@ -247,6 +260,9 @@ class UsShortMarketDiagnosticLocalAdapterTest(unittest.TestCase):
             benchmark["price_date"] = "20260721"
         with self.assertRaises(LocalMarketDiagnosticAdapterError):
             validate_local_price_packet(future)
+
+        with self.assertRaises(LocalMarketDiagnosticAdapterError):
+            validate_local_price_packet(_packet(), as_of_date="20260723")
 
         missing_source = _packet()
         missing_source["weeks"][0]["benchmarks"]["VTI"]["source_sha256"] = None

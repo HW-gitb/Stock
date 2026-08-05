@@ -69,6 +69,7 @@ US-short 当前仍是工作基线，设计尚未完成。现在必须保持：
 - 策略侧 paper_evaluable = false 时，该周只能保存观察数字；
 - strategy paper_evaluable = false 的周不计入 joint_evaluable_weeks，不得显示 ahead 或 behind；
 - 策略侧 paper_evaluable = true 后，基准若只有价格收益，结果仍标记 data_degraded；
+- 任何可评估基准都必须带 price packet 日期、来源和 SHA；`total_return_evaluable` 还必须带已绑定的 dividend sidecar SHA，`unavailable` 不得导出 dividend sidecar SHA；周记录的 `source_refs` 必须逐项包含这些证据 SHA；
 - 缺失股息不得填零、不得静默换基准、不得使用固定年化股息率。
 
 ## 5. 时间和窗口
@@ -268,7 +269,8 @@ Knife 2 的本地适配器是 `engine/us_short_market_diagnostic_local_adapter.p
 - 策略侧先通过既有 model-paper store 的 `head_manifest` 校验，再读取指定结算周的 `settlement.json`、`portfolio_state.json` 和 `nav_snapshot.json`；三份文件必须互相绑定，最近结算还必须与 head 指针一致。
 - 价格包固定包含 VTI/IWB/SPY/QQQ。`grouped_market_window` 可继续提供 SPY/QQQ，`local_etf_price_packet` 提供 IWB/VTI；适配器不根据结果替换或挑选基准。
 - 价格包的 `settlement_decision_date` 是被读取的 `weeks/<decision_date>/` 目录日期；输出记录的 `decision_date` 是结算完成后可观察该周的报告决策日期，`valuation_date` 必须与 NAV 和价格日期一致且不晚于输出决策日期。
-- 只用拆股调整收盘价构造价格型周收益。股息 sidecar 即使存在也不在本刀消费，输出固定为 `price_return_diagnostic`、`dividend_sidecar_sha256 = null` 和明确的数据质量原因；缺价格或缺前值则输出 `unavailable`，绝不填零。
+- 价格包每个基准同时保存 `prior_price_date` 和 `price_date`；只用拆股调整收盘价构造价格型周收益。可选的股息 sidecar 已接入本地适配器：完整且与价格包区间逐周一致时升级为 `total_return_evaluable`，否则保留 `price_return_diagnostic` 和明确原因；缺价格或缺前值则输出 `unavailable`，绝不填零，且不导出 dividend sidecar SHA。
+- 适配器、sidecar 校验器和生命周期写入都接受可选 `as_of_date`；决策日、估值日、价格区间和 sidecar 事件/观察时间晚于该日期时 fail-closed。
 - 每周输出保留价格日期、来源、价格包 SHA 和源 digest，随后由刀3负责不可变周记录、26 周计数器和 reminder 接线。适配器不调用 provider、不创建 10 万美元账户、不读取真实手工账户、不改变选股、操作建议、仓位、NAV 或 Ship gate。
 
 ## 12.4 Knife 3：不可变逐周记录、26 周计数器和 v1.1 reminder
@@ -293,6 +295,7 @@ Knife 4 的实现入口是 `engine/us_short_market_diagnostic_aggregator.py`，�
 - 报告同时保留当前 26 周固定区块和从第 1 周到当前的 since-inception 视图。固定区块继续复用 Knife 1 的四基准、状态、数据质量、成本后 NAV、回撤、现金/权益比例、turnover、joint 周数、IR 和 HAC 等既有字段；本刀不改 Knife 0 已冻结 schema，也不新增“周收益波动”字段；
 - 四个基准始终是 `VTI`、`IWB`、`SPY`、`QQQ`，不按结果替换。没有合格 ETF 股息 sidecar 的周仍明确标成 `price_return_diagnostic` / `data_degraded`，不能冒充 total return；
 - `ruleset_segments` 同时记录固定区块和 since-inception 的 epoch/ruleset 连续分段，防止跨规则版本把成绩混成一个结论；
+- 公开 JSON/Markdown 只允许机器化 `status_reason`、安全的 epoch 标识和固定的 v1.1 reminder 文案；内部周记录中的自由文本不得直接进入公开报告；
 - 去标识化报告输出到 `research/results/us_short/market_diagnostic_26w/`，每个窗口一对 `<window_id>.json` 和 `<window_id>.md`。JSON 是机器接口，Markdown 是人读摘要；不写逐周原始记录、持仓、交易、原始价格或可还原个人账户的信息；
 - 写入采用确定性字节序列：同一窗口重复运行返回幂等；只存在 JSON 或 Markdown 的半成品、或内容冲突时拒绝覆盖，避免产生两份不同成绩单；
 - 报告只是比较诊断，不改变选股、最终操作建议、仓位、NAV 或 Ship gate。当前真实 model-paper 私有根尚未启动时，不会生成实际第 26 周成绩单，测试只用临时夹具验证逻辑。
@@ -302,9 +305,10 @@ Knife 4 的实现入口是 `engine/us_short_market_diagnostic_aggregator.py`，�
 Knife 5 的离线实现入口是 `engine/us_short_market_diagnostic_total_return.py`，输入契约是 `schemas/us_short_market_diagnostic_etf_total_return_sidecar.schema.json`，由 `engine/us_short_market_diagnostic_local_adapter.py` 作为可选输入接到每周记录。它只消费已经捕获并绑定来源的 sidecar，不在复算器内选择 provider、发请求或写入 raw 数据。
 
 - sidecar 固定覆盖 `VTI`、`IWB`、`SPY`、`QQQ`，按 `window_id`、`diagnostic_epoch`、`calendar_week_index` 和 `valuation_date` 与本地价格包逐周对齐；
-- 每个 ETF 周必须记录分页、股息、拆分、adjusted/unadjusted 对账状态，以及 adjusted price、unadjusted price、股息、拆分、raw capture 的 SHA、来源日期和带时区的 `observed_at`；所有事件日期必须落在 prior price date（不含）到 price date（含）的区间内；
+- 每个 ETF 周必须记录分页、股息、拆分、adjusted/unadjusted 对账状态，以及 adjusted price、unadjusted price、股息、拆分、raw capture 的 SHA、来源日期和带时区的 `observed_at`；所有事件日期必须落在 sidecar 自己的 prior price date（不含）到 price date（含）的区间内，并由本地价格包再次提供该区间作外部绑定；
 - 完整周按已拆分调整的价格基础计算 `(split_adjusted_close + split_adjusted_cash_dividends) / prior_close - 1`，并升级为 `total_return_evaluable`；周记录用 `dividend_sidecar_sha256` 绑定该 ETF 的 sidecar 观测，sidecar 自己保留完整 `source_refs`；
 - 单个 ETF 的 sidecar 观测缺数据、分页未完成、股息/拆分未完成、日期不匹配或 adjusted/unadjusted 未对账时，只把该 ETF 周保留为 `price_return_diagnostic` 并附原因；已有价格收益积累继续，不补股息、不补零、不替换基准。若整个 sidecar 结构或来源绑定不合规，则整包 fail-closed，不生成伪造的升级结果；
+- 价格不可用时 sidecar 摘要不进入该周公开基准记录；任何巨整数、非有限数和未来日期均转换为本模块的 typed error，不把底层 `OverflowError` 等异常泄露给调用方；
 - sidecar 不改变策略收益、model-paper NAV、选股、操作建议、仓位、v1.1 reminder 或 Ship gate。它只改善比较轨的基准收益口径；
 - 真实 provider 获取仍是单独授权的后续执行。raw 只能进入 gitignored 私有目录，tracked 摘要不得包含 secret、request URL、原始价格或原始事件行。本刀的 schema、纯复算器和本地接线测试不代表已经取得真实 ETF 股息数据。
 

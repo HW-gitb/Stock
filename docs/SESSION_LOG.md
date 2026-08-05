@@ -1,5 +1,22 @@
 # Session Log
 
+## 2026-08-05 — Claude Code 复审 PASS（补扫六条全部实测闭合，含那条 P1）
+
+- **Verdict/Action**: PASS。六条逐条由审查方原样复打补扫时的探针确认。最重的 F1：`dividend_sidecar_sha256` 在 knife-1 引擎由 **0 次增至 6 次**，把 price-only 周改标签并置空摘要现被拒（`total return requires a dividend sidecar digest`）。F2 的修法对路——价格包新增 `prior_price_date`，sidecar 自报区间被拉宽时**降级**为 `price_return_diagnostic`（0.01 纯价格收益）而非抛错或升级。
+- **Required**: 无新开。六条转 resolved，逐条判据只见 `docs/system_risk_register.md`（单一来源）。
+- **Verify**: review-evidence:9d24b3b3cd23。焦点超集包 `139 OK / 13.8s / exit 0`。自写复现六项：F1 见上；F2 拉宽区间放三笔季度分红 → `price_return_diagnostic / 0.01`（补扫时为 `total_return_evaluable / 0.04`）；F3 `as_of_date` 在 lifecycle/adapter/total_return 由 0/0/0 增至 33/17/23，`persist_settled_weekly_record` 具该参数且实证透传；F4 公开报告校验器拒不安全 `diagnostic_epoch`，且 `write_*` 与 `publish_*` 两条写入路径均经该校验；F5 巨整数现抛 typed `MarketDiagnosticError`；F6 unavailable 周的 `dividend_sidecar_sha256` 为 `None`。
+- **Next**: 提交并合入 master。
+
+
+## 2026-08-05 — Codex executor/fixer 修复补扫 F1-F6 + Optional（独立复审未完成）
+
+- **Verdict/Action**：补扫六条 Required 已在诊断主引擎、local adapter、lifecycle、total-return sidecar、aggregator、schema 和回归测试中修复；`flat_diagnostic` overall 分支本来已在当前代码中，本轮以精确持平回归确认，未再把它留作未修 Optional。
+- **Required**：`R-USSHORT-26W-DIAG-SUPPLEMENTAL-F1-RETURN-QUALITY-NOT-EVIDENCE-BOUND`、`...-F2-SIDECAR-SELF-REPORTED-INTERVAL`、`...-F3-AS-OF-NOT-TRANSITIVE`、`...-F4-FREE-TEXT-PUBLIC-ARTIFACT`、`...-F5-UNTYPED-NUMERIC-ESCAPE`、`...-F6-UNAVAILABLE-PUBLISHES-SIDECAR`；完整细节只见 `docs/system_risk_register.md` 顶部。
+- **Verify**：固定 Python US-short 诊断定向包 `73 OK`、route/doc governance `66 OK`、`py_compile=OK`、`git diff --check=clean`；本轮未联网、未调用 provider、未付费、未读写真实账户、未创建 diagnostic start receipt；`review=NOT_VERIFIED`；`commit=NOT_PERFORMED`。
+- **Pre-Codex self-review**：matrix=`F1-F6 + Optional flat overall + source/date/public-output reverse controls`; register=`updated`; handoff=`updated`; focused=`73 OK`; full-lane=`not_triggered: diagnostic-only offline seam`; door=`route-doc + doc-governance 66 OK`。
+- **Proof-of-use**：F1 source-ref 缺失、F2 sidecar 区间错绑、F3 future price/as-of、F4 公开 reminder 篡改、F5 巨整数、F6 unavailable sidecar digest 和四基准 flat overall reason 均有回归覆盖；设计起点仍未设置。
+- **Next**：Claude Code：独立复审本轮补扫修复。
+
 ## 2026-08-05 — Claude Code 复审 PASS（刀6 三条 Required 全闭）+ 裁定补扫六条仍原样成立
 
 - **Verdict/Action**: PASS。三条实测闭合，其中 g\* 那条的修法强于我给的判据——report 落盘四个 `constraint_exposures`，validator 据此**重推** `g_star` 而非只比大小。同轮附带的 v1.1 自动启用经整读判正确：连续 `paper_evaluable` 计数遇假清零、首达 4 连即锁定且不再改锚、归因自触发**次周**起效不回填、epoch 由触发身份摘要派生。

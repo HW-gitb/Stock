@@ -67,6 +67,17 @@ STATUS_PRIORITY = (
     "ahead_diagnostic",
     "behind_diagnostic",
 )
+STATUS_REASONS = frozenset(
+    {
+        "at_least_one_benchmark_unavailable",
+        "at_least_one_benchmark_below_20_joint_weeks",
+        "at_least_one_benchmark_is_price_only_or_incomplete",
+        "all_four_benchmarks_show_diagnostic_excess",
+        "all_four_benchmarks_show_diagnostic_underperformance",
+        "all_four_benchmarks_show_flat_diagnostic_excess",
+        "benchmark_directions_are_not_uniform",
+    }
+)
 BOUNDARY = {
     "diagnostic_only": True,
     "comparison_only": True,
@@ -105,7 +116,10 @@ def _finite(value: object, field: str, *, allow_none: bool = False) -> float | N
         return None
     if isinstance(value, bool) or not isinstance(value, (int, float, Decimal)):
         _fail(f"{field} must be a finite number")
-    result = float(value)
+    try:
+        result = float(value)
+    except (OverflowError, ValueError, TypeError) as exc:
+        raise MarketDiagnosticError(f"{field} must be a finite number") from exc
     if not math.isfinite(result):
         _fail(f"{field} must be a finite number")
     return result
@@ -181,8 +195,10 @@ def construct_weekly_return(
 
     prior = _money(initial_capital if prior_nav is None else prior_nav, "prior_nav")
     current = _money(nav, "nav")
-    assert prior is not None and current is not None
-    return construct_simple_return(float(prior), float(current), field="nav")
+    prior_number = _finite(prior, "prior_nav")
+    current_number = _finite(current, "nav")
+    assert prior_number is not None and current_number is not None
+    return construct_simple_return(prior_number, current_number, field="nav")
 
 
 def _returns(values: Iterable[object], field: str) -> list[float]:
@@ -326,6 +342,7 @@ def _validate_strategy(strategy: Mapping[str, Any]) -> None:
         "market_value",
         "cumulative_cost_paid",
         "no_count",
+        "source_sha256",
     ):
         _required(strategy, field, "strategy")
     if not isinstance(strategy["paper_evaluable"], bool):
@@ -338,6 +355,7 @@ def _validate_strategy(strategy: Mapping[str, Any]) -> None:
         _fail("strategy.initial_capital is not the frozen normalized capital")
     if not isinstance(strategy["no_count"], bool):
         _fail("strategy.no_count must be boolean")
+    _sha(strategy["source_sha256"], "strategy.source_sha256")
     _money(strategy["nav"], "strategy.nav")
     _money(strategy["prior_nav"], "strategy.prior_nav", allow_none=True)
     _money(strategy["cash"], "strategy.cash", allow_none=True)
@@ -377,7 +395,13 @@ def _validate_strategy(strategy: Mapping[str, Any]) -> None:
             _fail("strategy.unfilled_order_count must be a non-negative integer or null")
 
 
-def _validate_benchmark(benchmark: Mapping[str, Any], strategy: Mapping[str, Any], symbol: str) -> None:
+def _validate_benchmark(
+    benchmark: Mapping[str, Any],
+    strategy: Mapping[str, Any],
+    symbol: str,
+    *,
+    as_of_date: date | None = None,
+) -> None:
     for field in (
         "return_quality",
         "benchmark_evaluable",
@@ -385,6 +409,9 @@ def _validate_benchmark(benchmark: Mapping[str, Any], strategy: Mapping[str, Any
         "weekly_return",
         "price_date",
         "price_source",
+        "price_packet_sha256",
+        "dividend_sidecar_sha256",
+        "data_quality_reasons",
     ):
         _required(benchmark, field, f"benchmarks.{symbol}")
     quality = benchmark["return_quality"]
@@ -395,20 +422,47 @@ def _validate_benchmark(benchmark: Mapping[str, Any], strategy: Mapping[str, Any
     ):
         _fail(f"benchmarks.{symbol} evaluability flags must be boolean")
     if benchmark["price_date"] is not None:
-        _date8_value(benchmark["price_date"], f"benchmarks.{symbol}.price_date")
+        price_date = _date8_value(benchmark["price_date"], f"benchmarks.{symbol}.price_date")
+        if as_of_date is not None and price_date > as_of_date:
+            _fail(f"benchmarks.{symbol}.price_date is after as_of_date")
     if benchmark["price_source"] is not None and (
         not isinstance(benchmark["price_source"], str) or not benchmark["price_source"]
     ):
         _fail(f"benchmarks.{symbol}.price_source must be a non-empty string or null")
+    for field in ("price_packet_sha256", "dividend_sidecar_sha256"):
+        if benchmark[field] is not None:
+            _sha(benchmark[field], f"benchmarks.{symbol}.{field}")
+    reasons = benchmark["data_quality_reasons"]
+    if not isinstance(reasons, Sequence) or isinstance(reasons, (str, bytes)):
+        _fail(f"benchmarks.{symbol}.data_quality_reasons must be a list of strings")
+    if any(not isinstance(reason, str) or not reason for reason in reasons):
+        _fail(f"benchmarks.{symbol}.data_quality_reasons must contain non-empty strings")
+    if len(set(reasons)) != len(reasons):
+        _fail(f"benchmarks.{symbol}.data_quality_reasons must not contain duplicates")
     if benchmark["benchmark_evaluable"]:
         if quality == "unavailable" or benchmark["weekly_return"] is None:
             _fail(f"benchmarks.{symbol} evaluable return is missing")
+        if benchmark["price_date"] is None or benchmark["price_source"] is None:
+            _fail(f"benchmarks.{symbol} evaluable return is missing price evidence")
+        if benchmark["price_packet_sha256"] is None:
+            _fail(f"benchmarks.{symbol} evaluable return is missing price packet evidence")
         number = _finite(benchmark["weekly_return"], f"benchmarks.{symbol}.weekly_return")
         assert number is not None
         if number <= -1.0:
             _fail(f"benchmarks.{symbol}.weekly_return must be greater than -1")
-    elif benchmark["weekly_return"] is not None:
-        _fail(f"benchmarks.{symbol} unavailable return must be null")
+    else:
+        if quality != "unavailable" or benchmark["weekly_return"] is not None:
+            _fail(f"benchmarks.{symbol} unavailable return must be null and marked unavailable")
+        if benchmark["dividend_sidecar_sha256"] is not None:
+            _fail(f"benchmarks.{symbol} unavailable return cannot publish dividend evidence")
+    if quality == "total_return_evaluable":
+        if not benchmark["benchmark_evaluable"] or benchmark["dividend_sidecar_sha256"] is None:
+            _fail(f"benchmarks.{symbol} total return requires a dividend sidecar digest")
+        if reasons:
+            _fail(f"benchmarks.{symbol} total return cannot carry degradation reasons")
+    elif quality == "price_return_diagnostic":
+        if not benchmark["benchmark_evaluable"] or not reasons:
+            _fail(f"benchmarks.{symbol} price-only return requires a degradation reason")
     if benchmark["joint_evaluable"]:
         if not strategy["paper_evaluable"] or not strategy["strategy_evaluable"]:
             _fail(f"benchmarks.{symbol} joint_evaluable bypasses the paper gate")
@@ -467,12 +521,25 @@ def _validate_rows(
         if set(benchmarks) != set(BENCHMARKS):
             _fail("weekly record must contain exactly VTI, IWB, SPY, and QQQ")
         for symbol in BENCHMARKS:
-            _validate_benchmark(_mapping(benchmarks[symbol], f"benchmarks.{symbol}"), strategy, symbol)
+            _validate_benchmark(
+                _mapping(benchmarks[symbol], f"benchmarks.{symbol}"),
+                strategy,
+                symbol,
+                as_of_date=as_of,
+            )
         source_refs = row.get("source_refs")
         if not isinstance(source_refs, Sequence) or isinstance(source_refs, (str, bytes)) or not source_refs:
             _fail("weekly_record.source_refs must be a non-empty digest list")
         for source_ref in source_refs:
             _sha(source_ref, "weekly_record.source_refs")
+        for symbol in BENCHMARKS:
+            benchmark = _mapping(benchmarks[symbol], f"benchmarks.{symbol}")
+            for field in ("price_packet_sha256", "dividend_sidecar_sha256"):
+                digest = benchmark[field]
+                if digest is not None and digest not in source_refs:
+                    _fail(
+                        f"weekly_record.source_refs must bind benchmarks.{symbol}.{field}"
+                    )
         boundary = _mapping(_required(row, "boundary", "weekly_record"), "boundary")
         if dict(boundary) != BOUNDARY:
             _fail("weekly record crosses the diagnostic boundary")
@@ -542,6 +609,8 @@ def validate_weekly_record(
         as_of = _date8_value(as_of_date, "as_of_date")
         if decision > as_of or valuation > as_of:
             _fail("future diagnostic data is not allowed")
+    else:
+        as_of = None
 
     containing_window = window_containing_week(week)
     expected_window_id = containing_window["window_id"]
@@ -561,13 +630,24 @@ def validate_weekly_record(
     if set(benchmarks) != set(BENCHMARKS):
         _fail("weekly record must contain exactly VTI, IWB, SPY, and QQQ")
     for symbol in BENCHMARKS:
-        _validate_benchmark(_mapping(benchmarks[symbol], f"benchmarks.{symbol}"), strategy, symbol)
+        _validate_benchmark(
+            _mapping(benchmarks[symbol], f"benchmarks.{symbol}"),
+            strategy,
+            symbol,
+            as_of_date=as_of,
+        )
 
     source_refs = record.get("source_refs")
     if not isinstance(source_refs, Sequence) or isinstance(source_refs, (str, bytes)) or not source_refs:
         _fail("weekly_record.source_refs must be a non-empty digest list")
     for source_ref in source_refs:
         _sha(source_ref, "weekly_record.source_refs")
+    for symbol in BENCHMARKS:
+        benchmark = _mapping(benchmarks[symbol], f"benchmarks.{symbol}")
+        for field in ("price_packet_sha256", "dividend_sidecar_sha256"):
+            digest = benchmark[field]
+            if digest is not None and digest not in source_refs:
+                _fail(f"weekly_record.source_refs must bind benchmarks.{symbol}.{field}")
     boundary = _mapping(_required(record, "boundary", "weekly_record"), "boundary")
     if dict(boundary) != BOUNDARY:
         _fail("weekly record crosses the diagnostic boundary")
@@ -741,7 +821,9 @@ def _average_ratio(rows: Sequence[Mapping[str, Any]], field: str) -> float | Non
             return None
         if nav <= 0:
             _fail("strategy.nav must be positive")
-        values.append(float(amount / nav))
+        ratio = _finite(amount / nav, f"strategy.{field}.ratio")
+        assert ratio is not None
+        values.append(ratio)
     return sum(values) / len(values) if values else None
 
 
@@ -929,9 +1011,9 @@ def summarize_window(
     reminder = dict(reminders[-1])
     source_digests: list[str] = []
     for row in normalized:
-        for source_ref in row["source_refs"]:
-            if source_ref not in source_digests:
-                source_digests.append(source_ref)
+        source_ref = _sha(row["strategy"]["source_sha256"], "strategy.source_sha256")
+        if source_ref not in source_digests:
+            source_digests.append(source_ref)
     if not source_digests:
         _fail("summary requires at least one source digest")
     return {
@@ -1000,6 +1082,7 @@ __all__ = [
     "MIN_JOINT_EVALUABLE_WEEKS",
     "MarketDiagnosticError",
     "STATUS_PRIORITY",
+    "STATUS_REASONS",
     "WINDOW_WEEKS",
     "compound_wealth",
     "construct_simple_return",

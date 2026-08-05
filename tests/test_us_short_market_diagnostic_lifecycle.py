@@ -177,6 +177,17 @@ class UsShortMarketDiagnosticLifecycleTest(unittest.TestCase):
         with self.assertRaises(MarketDiagnosticLifecycleError):
             persist_settled_weekly_record(_weekly_rows()[0], root=ROOT / "docs" / "diagnostic_private")
 
+    def test_lifecycle_as_of_date_rejects_future_week(self) -> None:
+        row = _weekly_rows()[0]
+        with tempfile.TemporaryDirectory() as td:
+            root = Path(td) / "market_diagnostic_private"
+            with self.assertRaises(MarketDiagnosticLifecycleError):
+                persist_settled_weekly_record(row, root=root, as_of_date="20260101")
+            persist_settled_weekly_record(row, root=root, as_of_date="20260102")
+            with self.assertRaises(MarketDiagnosticLifecycleError):
+                load_lifecycle_register(root, as_of_date="20260101")
+            self.assertEqual(1, load_lifecycle_register(root, as_of_date="20260102")["calendar_week_count"])
+
 
 if __name__ == "__main__":
     unittest.main()

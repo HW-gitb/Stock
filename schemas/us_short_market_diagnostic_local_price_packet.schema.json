@@ -17,7 +17,7 @@
   ],
   "properties": {
     "schema_name": {"const": "us_short_market_diagnostic_local_price_packet"},
-    "schema_version": {"const": "1.0.0"},
+    "schema_version": {"const": "1.1.0"},
     "window_id": {"type": "string", "pattern": "^26w-[1-9][0-9]*-[1-9][0-9]*$"},
     "diagnostic_epoch": {"type": "string", "minLength": 1},
     "price_basis": {"const": "split_adjusted_close"},
@@ -91,6 +91,7 @@
       "additionalProperties": false,
       "required": [
         "price_date",
+        "prior_price_date",
         "prior_close",
         "close",
         "source_kind",
@@ -99,6 +100,12 @@
       ],
       "properties": {
         "price_date": {
+          "anyOf": [
+            {"$ref": "#/definitions/date8"},
+            {"type": "null"}
+          ]
+        },
+        "prior_price_date": {
           "anyOf": [
             {"$ref": "#/definitions/date8"},
             {"type": "null"}

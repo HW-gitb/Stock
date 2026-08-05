@@ -21,6 +21,7 @@ from engine.us_short_market_diagnostic import (
     newey_west_hac_t,
     segment_epoch_and_ruleset,
     summarize_window,
+    validate_weekly_record,
     validate_window,
     window_containing_week,
     window_for_week,
@@ -137,7 +138,11 @@ def _weekly_rows(
                     "evaluable_week_count": evaluable_count,
                     "text": "v1.1 is active." if v1_1_active else "v1.1 reminder is pending.",
                 },
-                "source_refs": [f"{(300 + week):064x}"],
+                "source_refs": [
+                    f"{(100 + week):064x}",
+                    f"{(200 + week):064x}",
+                    f"{(300 + week):064x}",
+                ],
                 "boundary": dict(BOUNDARY),
             }
         )
@@ -159,6 +164,10 @@ class UsShortMarketDiagnosticEngineTest(unittest.TestCase):
             construct_simple_return(None, 100)
         with self.assertRaises(MarketDiagnosticError):
             compound_wealth([0.1, None])
+        with self.assertRaises(MarketDiagnosticError):
+            construct_simple_return(10**400, 100)
+        with self.assertRaises(MarketDiagnosticError):
+            construct_weekly_return("1" + ("0" * 400) + ".000000", "100.000000")
 
     def test_hac_is_recomputed_with_fixed_newey_west_lag(self) -> None:
         values = [0.010, 0.020, 0.000, 0.015, -0.005, 0.012]
@@ -369,12 +378,26 @@ class UsShortMarketDiagnosticEngineTest(unittest.TestCase):
             benchmark["benchmark_evaluable"] = False
             benchmark["joint_evaluable"] = False
             benchmark["weekly_return"] = None
+            benchmark["dividend_sidecar_sha256"] = None
             benchmark["data_quality_reasons"] = ["price_packet_missing"]
         summary = summarize_window(rows)
         self.assertEqual(summary["overall_status"], "unavailable")
         self.assertEqual(summary["benchmarks"]["VTI"]["status"], "unavailable")
         self.assertIsNone(summary["benchmarks"]["VTI"]["cumulative_return"])
         self.assertEqual(summary["benchmarks"]["VTI"]["unavailable_weeks"], 26)
+
+    def test_benchmark_evidence_must_be_bound_by_weekly_source_refs(self) -> None:
+        row = _weekly_rows()[0]
+        digest = row["benchmarks"]["VTI"]["dividend_sidecar_sha256"]
+        row["source_refs"].remove(digest)
+        with self.assertRaises(MarketDiagnosticError):
+            validate_weekly_record(row)
+
+    def test_as_of_date_rejects_future_benchmark_price_evidence(self) -> None:
+        row = _weekly_rows()[0]
+        row["benchmarks"]["VTI"]["price_date"] = "20260103"
+        with self.assertRaises(MarketDiagnosticError):
+            validate_weekly_record(row, as_of_date="20260102")
 
     def test_module_has_no_external_or_io_imports(self) -> None:
         source = (ROOT / "engine" / "us_short_market_diagnostic.py").read_text(encoding="utf-8")

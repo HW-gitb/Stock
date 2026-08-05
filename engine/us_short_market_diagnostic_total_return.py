@@ -14,6 +14,7 @@ from datetime import date, datetime
 from decimal import Decimal, InvalidOperation
 import hashlib
 import json
+import math
 from pathlib import Path
 from typing import Any
 
@@ -69,6 +70,17 @@ def _date8(value: object, field: str, *, allow_none: bool = False) -> date | Non
         raise TotalReturnSidecarError(f"{field} is not a real calendar date") from exc
 
 
+def _as_of(value: object) -> date:
+    parsed = _date8(value, "as_of_date")
+    assert parsed is not None
+    return parsed
+
+
+def _not_future(value: date | None, field: str, as_of_date: date | None) -> None:
+    if value is not None and as_of_date is not None and value > as_of_date:
+        _fail(f"{field} is after as_of_date")
+
+
 def _money(value: object, field: str, *, allow_none: bool = False, positive: bool = False) -> Decimal | None:
     if value is None and allow_none:
         return None
@@ -80,7 +92,11 @@ def _money(value: object, field: str, *, allow_none: bool = False, positive: boo
         raise TotalReturnSidecarError(f"{field} must be a six-decimal money string") from exc
     if not parsed.is_finite() or parsed < 0 or (positive and parsed <= 0):
         _fail(f"{field} must be {'positive ' if positive else ''}finite money")
-    if parsed.quantize(_MONEY_QUANTUM) != parsed:
+    try:
+        quantized = parsed.quantize(_MONEY_QUANTUM)
+    except (InvalidOperation, ValueError, OverflowError) as exc:
+        raise TotalReturnSidecarError(f"{field} must be representable money") from exc
+    if quantized != parsed:
         _fail(f"{field} must have exactly six decimal places")
     return parsed
 
@@ -93,7 +109,7 @@ def _sha(value: object, field: str, *, allow_none: bool = False) -> str | None:
     return value
 
 
-def _observed_at(value: object, field: str) -> None:
+def _observed_at(value: object, field: str, *, as_of_date: date | None = None) -> None:
     if value is None:
         return
     if not isinstance(value, str):
@@ -104,6 +120,7 @@ def _observed_at(value: object, field: str) -> None:
         raise TotalReturnSidecarError(f"{field} must be an ISO timestamp") from exc
     if parsed.tzinfo is None or parsed.utcoffset() is None:
         _fail(f"{field} must include a timezone")
+    _not_future(parsed.date(), field, as_of_date)
 
 
 def _schema_validate(sidecar: Mapping[str, Any]) -> None:
@@ -120,11 +137,12 @@ def _validate_event_dates(
     prior_date: date | None,
     price_date: date | None,
     field: str,
+    as_of_date: date | None = None,
 ) -> None:
     previous: date | None = None
     for index, event in enumerate(events):
         event_date = _date8(event["ex_date"], f"{field}[{index}].ex_date")
-        assert event_date is not None
+        _not_future(event_date, f"{field}[{index}].ex_date", as_of_date)
         if previous is not None and event_date < previous:
             _fail(f"{field} must be ordered by ex_date")
         if prior_date is not None and price_date is not None and not prior_date < event_date <= price_date:
@@ -132,9 +150,16 @@ def _validate_event_dates(
         previous = event_date
 
 
-def _validate_benchmark_sidecar(observation: Mapping[str, Any], field: str) -> set[str]:
+def _validate_benchmark_sidecar(
+    observation: Mapping[str, Any],
+    field: str,
+    *,
+    as_of_date: date | None = None,
+) -> set[str]:
     prior_date = _date8(observation["prior_price_date"], f"{field}.prior_price_date", allow_none=True)
     price_date = _date8(observation["price_date"], f"{field}.price_date", allow_none=True)
+    _not_future(prior_date, f"{field}.prior_price_date", as_of_date)
+    _not_future(price_date, f"{field}.price_date", as_of_date)
     if (prior_date is None) != (price_date is None):
         _fail(f"{field}.prior_price_date and price_date must be both present or both null")
     if prior_date is not None and price_date is not None and prior_date >= price_date:
@@ -156,27 +181,58 @@ def _validate_benchmark_sidecar(observation: Mapping[str, Any], field: str) -> s
             ) from exc
         if not factor.is_finite() or factor <= 0:
             _fail(f"{field}.dividend_events[{index}].split_adjustment_factor must be positive")
-        assert cash is not None and adjusted is not None
-        if (cash * factor).quantize(_MONEY_QUANTUM) != adjusted:
+        if cash is None or adjusted is None:
+            _fail(f"{field}.dividend_events[{index}] cash fields are required")
+        try:
+            adjusted_from_cash = (cash * factor).quantize(_MONEY_QUANTUM)
+        except (InvalidOperation, ValueError, OverflowError) as exc:
+            raise TotalReturnSidecarError(
+                f"{field}.dividend_events[{index}] split-adjusted cash is not representable"
+            ) from exc
+        if adjusted_from_cash != adjusted:
             _fail(f"{field}.dividend_events[{index}] split-adjusted cash does not match its factor")
         _sha(event["source_sha256"], f"{field}.dividend_events[{index}].source_sha256")
-    _validate_event_dates(dividend_events, prior_date=prior_date, price_date=price_date, field=f"{field}.dividend_events")
+    _validate_event_dates(
+        dividend_events,
+        prior_date=prior_date,
+        price_date=price_date,
+        field=f"{field}.dividend_events",
+        as_of_date=as_of_date,
+    )
 
     split_events = [_mapping(event, f"{field}.split_events[{index}]") for index, event in enumerate(observation["split_events"])]
     for index, event in enumerate(split_events):
-        split_from = float(event["split_from"])
-        split_to = float(event["split_to"])
+        try:
+            split_from = float(event["split_from"])
+            split_to = float(event["split_to"])
+        except (OverflowError, ValueError, TypeError) as exc:
+            raise TotalReturnSidecarError(
+                f"{field}.split_events[{index}] ratios must be finite numbers"
+            ) from exc
+        if not math.isfinite(split_from) or not math.isfinite(split_to):
+            _fail(f"{field}.split_events[{index}] ratios must be finite numbers")
         if split_from <= 0 or split_to <= 0 or split_from == split_to:
             _fail(f"{field}.split_events[{index}] must contain a changing positive ratio")
         _sha(event["source_sha256"], f"{field}.split_events[{index}].source_sha256")
-    _validate_event_dates(split_events, prior_date=prior_date, price_date=price_date, field=f"{field}.split_events")
+    _validate_event_dates(
+        split_events,
+        prior_date=prior_date,
+        price_date=price_date,
+        field=f"{field}.split_events",
+        as_of_date=as_of_date,
+    )
 
     coverage = _mapping(observation["coverage"], f"{field}.coverage")
     source_binding = _mapping(observation["source_binding"], f"{field}.source_binding")
     for name in _SOURCE_DIGEST_FIELDS:
         _sha(source_binding[name], f"{field}.source_binding.{name}", allow_none=True)
-    _date8(source_binding["source_date"], f"{field}.source_binding.source_date", allow_none=True)
-    _observed_at(source_binding["observed_at"], f"{field}.source_binding.observed_at")
+    source_date = _date8(source_binding["source_date"], f"{field}.source_binding.source_date", allow_none=True)
+    _not_future(source_date, f"{field}.source_binding.source_date", as_of_date)
+    _observed_at(
+        source_binding["observed_at"],
+        f"{field}.source_binding.observed_at",
+        as_of_date=as_of_date,
+    )
     reasons = observation["data_quality_reasons"]
     coverage_requirements = {
         "pagination_complete": "raw_capture_sha256",
@@ -210,13 +266,24 @@ def _validate_benchmark_sidecar(observation: Mapping[str, Any], field: str) -> s
     return digests
 
 
-def validate_etf_total_return_sidecar(sidecar: Mapping[str, Any]) -> dict[str, Any]:
-    """Validate a four-ETF sidecar and return a shallow copy without mutating it."""
+def validate_etf_total_return_sidecar(
+    sidecar: Mapping[str, Any],
+    *,
+    expected_price_intervals: Mapping[tuple[int, str], tuple[object, object]] | None = None,
+    as_of_date: str | None = None,
+) -> dict[str, Any]:
+    """Validate a four-ETF sidecar and return a shallow copy without mutating it.
+
+    ``expected_price_intervals`` is supplied by the local price packet at the
+    evaluation seam.  Without that external binding, a sidecar only proves its
+    own internal shape; it cannot by itself upgrade a benchmark week.
+    """
 
     sidecar = _mapping(sidecar, "total_return_sidecar")
     _schema_validate(sidecar)
     if sidecar["benchmark_symbols"] != list(BENCHMARKS):
         _fail("total_return_sidecar.benchmark_symbols must be exactly VTI/IWB/SPY/QQQ")
+    as_of = _as_of(as_of_date) if as_of_date is not None else None
     source_refs = set(sidecar["source_refs"])
     previous_index: int | None = None
     previous_valuation: date | None = None
@@ -227,14 +294,47 @@ def validate_etf_total_return_sidecar(sidecar: Mapping[str, Any]) -> dict[str, A
         if previous_index is not None and week_index != previous_index + 1:
             _fail("total_return_sidecar weeks must be consecutive and ordered")
         valuation = _date8(week["valuation_date"], f"weeks[{index}].valuation_date")
-        assert valuation is not None
+        _not_future(valuation, f"weeks[{index}].valuation_date", as_of)
         if previous_valuation is not None and valuation <= previous_valuation:
             _fail("total_return_sidecar valuation dates must be strictly increasing")
         for symbol in BENCHMARKS:
+            benchmark = _mapping(week["benchmarks"][symbol], f"weeks[{index}].benchmarks.{symbol}")
+            if expected_price_intervals is not None:
+                try:
+                    expected_prior_raw, expected_price_raw = expected_price_intervals[(week_index, symbol)]
+                except (KeyError, TypeError, ValueError) as exc:
+                    raise TotalReturnSidecarError(
+                        f"missing expected price interval for week {week_index} {symbol}"
+                    ) from exc
+                expected_prior = _date8(
+                    expected_prior_raw,
+                    f"expected_price_intervals[{week_index},{symbol}].prior_price_date",
+                    allow_none=True,
+                )
+                expected_price = _date8(
+                    expected_price_raw,
+                    f"expected_price_intervals[{week_index},{symbol}].price_date",
+                    allow_none=True,
+                )
+                observed_prior = _date8(
+                    benchmark["prior_price_date"],
+                    f"weeks[{index}].benchmarks.{symbol}.prior_price_date",
+                    allow_none=True,
+                )
+                observed_price = _date8(
+                    benchmark["price_date"],
+                    f"weeks[{index}].benchmarks.{symbol}.price_date",
+                    allow_none=True,
+                )
+                if (observed_prior, observed_price) != (expected_prior, expected_price):
+                    _fail(
+                        f"weeks[{index}].benchmarks.{symbol} price interval does not match the local price packet"
+                    )
             observed_digests.update(
                 _validate_benchmark_sidecar(
-                    _mapping(week["benchmarks"][symbol], f"weeks[{index}].benchmarks.{symbol}"),
+                    benchmark,
                     f"weeks[{index}].benchmarks.{symbol}",
+                    as_of_date=as_of,
                 )
             )
         previous_index = week_index
@@ -258,6 +358,16 @@ def _price_money(value: object, field: str, *, allow_none: bool = False) -> Deci
     return _money(value, field, allow_none=allow_none)
 
 
+def _finite_float(value: object, field: str) -> float:
+    try:
+        result = float(value)
+    except (OverflowError, ValueError, TypeError) as exc:
+        raise TotalReturnSidecarError(f"{field} must be a finite number") from exc
+    if not math.isfinite(result):
+        _fail(f"{field} must be a finite number")
+    return result
+
+
 def _append_reason(reasons: list[str], reason: str) -> None:
     if reason not in reasons:
         reasons.append(reason)
@@ -269,19 +379,28 @@ def build_total_return_benchmark_observation(
     price_observation: Mapping[str, Any],
     strategy_evaluable: bool,
     strategy_weekly_return: float | None,
+    as_of_date: str | None = None,
 ) -> dict[str, Any]:
     """Build the existing weekly benchmark shape from one sidecar and one price observation."""
 
     sidecar = _mapping(sidecar_observation, "sidecar_observation")
     price = _mapping(price_observation, "price_observation")
+    as_of = _as_of(as_of_date) if as_of_date is not None else None
     try:
-        _validate_benchmark_sidecar(sidecar, "sidecar_observation")
+        _validate_benchmark_sidecar(sidecar, "sidecar_observation", as_of_date=as_of)
     except (KeyError, TypeError, IndexError) as exc:
         raise TotalReturnSidecarError("sidecar_observation is not a valid ETF sidecar observation") from exc
     sidecar_digest = sidecar_observation_sha256(sidecar)
     prior_close = _price_money(price.get("prior_close"), "price_observation.prior_close", allow_none=True)
     close = _price_money(price.get("close"), "price_observation.close", allow_none=True)
+    price_prior_date = _date8(
+        price.get("prior_price_date"),
+        "price_observation.prior_price_date",
+        allow_none=True,
+    )
     price_date = _date8(price.get("price_date"), "price_observation.price_date", allow_none=True)
+    _not_future(price_prior_date, "price_observation.prior_price_date", as_of)
+    _not_future(price_date, "price_observation.price_date", as_of)
     source_sha = _sha(price.get("source_sha256"), "price_observation.source_sha256", allow_none=True)
     sidecar_price_date = _date8(sidecar.get("price_date"), "sidecar_observation.price_date", allow_none=True)
     sidecar_prior_date = _date8(
@@ -293,6 +412,7 @@ def build_total_return_benchmark_observation(
     price_evaluable = prior_close is not None and close is not None
     date_bound = (
         sidecar_price_date == price_date
+        and sidecar_prior_date == price_prior_date
         and sidecar_prior_date is not None
         and price_date is not None
     )
@@ -314,12 +434,19 @@ def build_total_return_benchmark_observation(
             Decimal("0.000000"),
         )
         assert prior_close is not None and close is not None
-        weekly_return = float((close + dividend_total) / prior_close - Decimal("1"))
+        weekly_return = _finite_float(
+            (close + dividend_total) / prior_close - Decimal("1"),
+            "benchmark.total_return",
+        )
         return_quality = "total_return_evaluable"
         reasons = []
     else:
         assert prior_close is not None and close is not None
-        weekly_return = construct_simple_return(float(prior_close), float(close), field="benchmark.close")
+        weekly_return = construct_simple_return(
+            _finite_float(prior_close, "price_observation.prior_close"),
+            _finite_float(close, "price_observation.close"),
+            field="benchmark.close",
+        )
         return_quality = "price_return_diagnostic"
         _append_reason(reasons, "dividend_sidecar_not_reconciled")
         if complete and not date_bound:
@@ -348,15 +475,25 @@ def build_total_return_benchmark_observation(
         "price_date": price["price_date"],
         "price_source": price.get("source_kind"),
         "price_packet_sha256": source_sha,
-        "dividend_sidecar_sha256": sidecar_digest,
+        "dividend_sidecar_sha256": sidecar_digest if price_evaluable else None,
         "data_quality_reasons": reasons,
     }
 
 
-def sidecar_week(sidecar: Mapping[str, Any], calendar_week_index: int) -> Mapping[str, Any]:
+def sidecar_week(
+    sidecar: Mapping[str, Any],
+    calendar_week_index: int,
+    *,
+    expected_price_intervals: Mapping[tuple[int, str], tuple[object, object]] | None = None,
+    as_of_date: str | None = None,
+) -> Mapping[str, Any]:
     """Return one validated sidecar week by calendar index."""
 
-    validated = validate_etf_total_return_sidecar(sidecar)
+    validated = validate_etf_total_return_sidecar(
+        sidecar,
+        expected_price_intervals=expected_price_intervals,
+        as_of_date=as_of_date,
+    )
     for week in validated["weeks"]:
         if week["calendar_week_index"] == calendar_week_index:
             return week
