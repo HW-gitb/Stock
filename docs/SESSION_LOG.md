@@ -192,6 +192,14 @@
 - **Required**: 无，未新开 register 条目。纯新增、零改动既有文件。**但 raw 里浮出两件本探针按设计不回答的事，留给刀③**：①**语料是否 current 未证**——返回序是**任意序**（日期在 2007–2025 间乱跳，非按日期排）且四只全带 `next_url`，故 10 行只是大语料里的任意一页；样本里最新只到 `2025-12-22`（QQQ），但这是抽样假象而非陈旧证据，两个方向都没证。该未知**不需要再起探针**：刀③ 本来就用按 `ex_dividend_date` 窗口过滤的市场级查询，那正是能回答它的查询形状；配一条「26 周窗口内基准季付票应 ≥1 个除息日，为 0 即 `not_evaluable`」的 fail-closed 断言即可把它转成运行时门。②**分红字段有两个口径**——`cash_amount` 与 `split_adjusted_cash_amount` 并存，另有 `historical_adjustment_factor`；因基准价格序列走 Massive grouped 已是拆股复权，总回报要自洽就必须选**拆股复权那一支**，刀① 冻口径时须显式指定、不得靠默认。另记一条小异常：`IWB` 的 `frequency=0`（其余三只为 4），不影响本腿（只用 ex-date + cash），但刀③ 不得依赖 `frequency`。
 - **Verify**: 本轮未注入 review-evidence token，故不引用。新包 `13 OK / 0.24s`；`git status` = 恰 3 个新文件 + README 一行，**零既有文件被改**，故按改动性质未起 lane 全量（覆盖范围就是本模块自身）。**植入对照**（不采信自指断言）：从 `_coverage_verdict` 摘掉 `matched_rows != row_count` 那道门 → 端到端用例 `test_provider_ignoring_the_ticker_filter_is_not_read_as_covered` 与阶梯用例**双双转红**（`covered` vs `rows_do_not_match_queried_ticker`），恢复后 13 OK。真实 `--dry-run-env` 实跑：`MASSIVE_API_KEY present: True` / `raw root gitignored: True` / `planned calls: 4 (max 4)`，即真跑前置条件已具备。
 - **Next**: 刀①（方法冻结）。分红源已定为 Massive，冻口径时须落定「用 `split_adjusted_cash_amount`」与「窗口内零基准除息日即 `not_evaluable`」两条。方案全文在桌面 `usshort-compare.md`（按用户令不进仓库）。
+## 2026-08-05 — Claude Code 代执行刀5 捕获段（Codex 额度耗尽，用户令）+ 自审
+
+- **Verdict/Action**: 已跑完并提交。Codex 建好了 runner/packet/schema/测试但平台拒绝其 Python，故未跑过任何东西；我接手后先跑测试，发现 `26 tests / 2 errors`——`_FakeClient` 调了自己没定义的 `assertIn`，纯夹具缺陷（runner 只有一处 `client.get_json`）。修夹具、补一条缺失的截断路径测试、把名不副实的测试改名，产品代码零改动。真实抓取用 16 次调用（上限 40）完成。
+- **Required**: 无。捕获结果、安全面实测与一处窗口口径落差只见 `docs/system_risk_register.md`（单一来源）。
+- **Verify**: 本轮为代执行 + 自审、非 slice 审查门，hook 未注入 token，故不引用。焦点包 `68 OK / 1.5s / exit 0`。整类扫描确认 `assertIn` 是 `_FakeClient` 内唯一未定义引用（AST 比对 defined/assigned/used）。**植入对照**：把 runner 页上限 +1 → 原测试仍绿（证其名不副实、根本没验上限），新增的截断测试转红；恢复后 5 OK。真跑前另花 1 次调用试探 SPY 分红：78 行、无 `next_url`，据此判定 2 页上限足够，避免整批回 incomplete。跑后实测：16/16 调用、13 covered + 3 empty(splits)、`pagination_complete` 全 True、四 ETF `session_coverage_match`、tracked 摘要无 key/URL/payload、raw 全在 `git check-ignore` 证实的忽略目录。
+- **Next**: Codex 额度恢复后接刀5 第二段（week-aligned sidecar），仍须等 `设计完成` 通知与 `diagnostic_start_receipt`。
+
+
 ## 2026-08-05 — Claude Code 复审 PASS（补扫六条全部实测闭合，含那条 P1）
 
 - **Verdict/Action**: PASS。六条逐条由审查方原样复打补扫时的探针确认。最重的 F1：`dividend_sidecar_sha256` 在 knife-1 引擎由 **0 次增至 6 次**，把 price-only 周改标签并置空摘要现被拒（`total return requires a dividend sidecar digest`）。F2 的修法对路——价格包新增 `prior_price_date`，sidecar 自报区间被拉宽时**降级**为 `price_return_diagnostic`（0.01 纯价格收益）而非抛错或升级。

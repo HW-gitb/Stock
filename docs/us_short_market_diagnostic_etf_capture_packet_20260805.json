@@ -1,0 +1,41 @@
+{
+  "schema_name": "us_short_market_diagnostic_etf_capture_packet",
+  "schema_version": "1.0.0",
+  "capture_date": "20260805",
+  "authorization_ref": "user_chat_20260805_knife5_live_etf_total_return_fetch",
+  "scope": {
+    "purpose": "knife5_capture_segment_coverage_reconciliation_evidence_only",
+    "provider_id": "massive",
+    "symbols": ["SPY", "QQQ", "IWB", "VTI"],
+    "endpoint_families": ["dividends", "splits", "daily_adjusted", "daily_unadjusted"],
+    "price_window": {"from": "2019-01-01", "to": "2026-07-10"}
+  },
+  "storage": {
+    "raw_payload_root": "provider_samples/us_short_market_diagnostic_etf_capture_20260805/raw",
+    "normalized_capture_path": "provider_samples/us_short_market_diagnostic_etf_capture_20260805/normalized_capture.json",
+    "tracked_summary_path": "docs/us_short_market_diagnostic_etf_capture_summary_20260805.json",
+    "raw_must_be_gitignored": true,
+    "tracked_summary_must_exclude": ["secrets", "request_urls", "raw_payload_rows", "raw_price_values", "raw_event_values"]
+  },
+  "execution": {
+    "max_pages_per_symbol_family": 2,
+    "nominal_logical_calls": 32,
+    "max_total_http_attempts": 40,
+    "max_retries_per_page": 2,
+    "pace_seconds": 13,
+    "retry_backoff_seconds": 2,
+    "retry_only_on_http_429": true,
+    "requires_explicit_confirmation": true
+  },
+  "boundary": {
+    "provider_calls_allowed": true,
+    "capture_segment_allowed": true,
+    "week_aligned_sidecar_allowed": false,
+    "total_return_calculation_allowed": false,
+    "diagnostic_clock_start_allowed": false,
+    "real_account_write_allowed": false,
+    "selection_or_action_change_allowed": false,
+    "production_or_ship_gate_claim_allowed": false,
+    "datahub_consumption_allowed": false
+  }
+}
