@@ -143,9 +143,22 @@ def _parse(argv: list[str]) -> tuple[str, int, list[str]]:
     return tier, timeout, unittest_args
 
 
+NESTED_RUN_MARKER = "STOCK_BOUNDED_UNITTEST_ACTIVE"
+
+
 def main(argv: list[str]) -> int:
     if hasattr(sys.stdout, "reconfigure"):
         sys.stdout.reconfigure(encoding="utf-8", errors="replace")
+    # A run launched from inside another bounded run must never overwrite the
+    # acceptance receipt.  Several tests legitimately spawn this launcher
+    # (the jsonschema self-check, the preflight guard, this tool's own tests);
+    # each of those wrote a bundle-less receipt over the real one, which made
+    # `.githooks/pre-commit` destroy the very evidence it then demanded and
+    # left every bundle-requiring commit permanently blocked.  The marker is
+    # set before the child is spawned, so nesting at any depth is covered
+    # without touching a single call site.
+    nested = os.environ.get(NESTED_RUN_MARKER) == "1"
+    os.environ[NESTED_RUN_MARKER] = "1"
     try:
         pin_error = receipts.pinned_python_error()
         if pin_error:
@@ -160,7 +173,7 @@ def main(argv: list[str]) -> int:
         print(result.output, end="" if result.output.endswith("\n") else "\n")
     receipt = None
     receipt_error = None
-    if tier == "focused" and result.status == "PASS":
+    if tier == "focused" and result.status == "PASS" and not nested:
         try:
             state_after = receipts.collect_code_state()
             if receipts.fingerprint(state_before or {}) != receipts.fingerprint(state_after):
@@ -188,6 +201,10 @@ def main(argv: list[str]) -> int:
         f"exit={reported_exit} tests={count} elapsed={result.elapsed_seconds:.1f}s "
         f"deadline={timeout}s"
     )
+    if nested and tier == "focused" and result.status == "PASS":
+        # Say so rather than skip silently: an unexplained missing receipt is
+        # its own trap for whoever is trying to satisfy the pre-commit gate.
+        print("[bounded-unittest] NESTED - acceptance receipt left untouched")
     if receipt_error:
         print(f"[bounded-unittest] REFUSED - {receipt_error}")
     elif receipt is not None:

@@ -129,7 +129,7 @@ class EgsMarketEnvironmentNorthboundUnitTest(unittest.TestCase):
         self.assertEqual(facts["northbound"]["requested_session_count"], 5)
         self.assertEqual(facts["northbound"]["observed_session_count"], 5)
         self.assertTrue(facts["northbound"]["coverage_complete"])
-        self.assertFalse(facts["northbound"]["production_effect_enabled"])
+        self.assertTrue(facts["northbound"]["production_effect_enabled"])
         self.assertEqual(facts["csi300_pct_change_window"], -12.0)
         self.assertEqual(facts["csi300_window"]["length_unit"], "calendar_days")
 
@@ -217,7 +217,7 @@ class EgsAnalysisInputNorthboundWiringTest(unittest.TestCase):
                 "requested_session_count": 5,
                 "observed_session_count": 5,
                 "coverage_complete": True,
-                "production_effect_enabled": False,
+                "production_effect_enabled": True,
             },
         )
         self.assertEqual(payload["market_context"]["breadth"]["csi300_pct_change_window"], -12.0)

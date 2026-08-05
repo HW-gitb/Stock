@@ -8,6 +8,7 @@ from unittest.mock import patch
 
 import jsonschema
 
+import engine.a_short_northbound as northbound
 from runners.a_short_weekly_pipeline import build_weekly_report
 import runners.a_short_weekly_pipeline as weekly_pipeline
 from runners.a_short_m67_render import render_weekly_markdown
@@ -94,6 +95,36 @@ class NorthboundMarketGateTests(unittest.TestCase):
         self.assertEqual(weekly["northbound_control"]["reason"], "production_effect_disabled")
         self.assertEqual(weekly["reports"][0]["m67"]["table"]["操作"], "建仓")
         self.assertIn("仅记录未生效", render_weekly_markdown(weekly))
+
+    def test_analysis_default_uses_shared_production_switch(self):
+        analysis_input = {
+            "decision_as_of": AS_OF,
+            "market_context": {
+                "northbound": {
+                    "net_flow_5d": -123.0,
+                    "status": "outflow",
+                    "requested_session_count": 5,
+                    "observed_session_count": 5,
+                    "coverage_complete": True,
+                },
+                "breadth": {
+                    "csi300_pct_change_window": -12.0,
+                    "csi300_window": {
+                        "start_date": "20260501",
+                        "end_date": AS_OF,
+                        "length": 20,
+                        "length_unit": "trading_sessions",
+                    },
+                },
+            },
+        }
+        control = weekly_pipeline._northbound_control_from_analysis(analysis_input, AS_OF)
+        self.assertEqual(
+            control["production_effect_enabled"],
+            northbound.NORTHBOUND_MARKET_GATE_PRODUCTION_EFFECT_ENABLED,
+        )
+        self.assertTrue(control["production_effect_enabled"])
+        self.assertTrue(control["new_entry_blocked"])
 
     def test_single_condition_does_not_block(self):
         cases = (
@@ -216,3 +247,46 @@ class NorthboundMarketGateTests(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class GateStateTriangleTests(unittest.TestCase):
+    """The schema const and the engine constant must be flipped together.
+
+    The schema const-pins the gate's active state, which is what stops it being
+    switched off silently.  The cost is that the kill path is two files: flipping
+    only the constant leaves every weekly report failing schema validation with
+    no hint why.  This assertion turns that mystery red into an instruction.
+    """
+
+    def test_schema_const_matches_the_engine_switch(self):
+        from engine.a_short_northbound import NORTHBOUND_MARKET_GATE_PRODUCTION_EFFECT_ENABLED as live
+
+        schema = json.loads(
+            (ROOT / "schemas" / "analysis_input.schema.json").read_text(encoding="utf-8")
+        )
+
+        def _find(node):
+            if isinstance(node, dict):
+                props = node.get("properties") or {}
+                nb = props.get("northbound")
+                if isinstance(nb, dict) and "net_flow_5d" in (nb.get("properties") or {}):
+                    return (nb["properties"].get("production_effect_enabled") or {})
+                for value in node.values():
+                    found = _find(value)
+                    if found is not None:
+                        return found
+            elif isinstance(node, list):
+                for value in node:
+                    found = _find(value)
+                    if found is not None:
+                        return found
+            return None
+
+        pinned = _find(schema)
+        self.assertIsNotNone(pinned, "analysis_input schema lost the northbound switch pin")
+        self.assertIn("const", pinned, "the switch must stay const-pinned in the schema")
+        self.assertEqual(
+            pinned["const"], live,
+            "engine/a_short_northbound.py and schemas/analysis_input.schema.json disagree about "
+            "the gate state -- the kill path is BOTH files, flip them together",
+        )

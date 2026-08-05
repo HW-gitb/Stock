@@ -106,7 +106,7 @@ class BoundedUnittestTests(unittest.TestCase):
                 "tests.test_bounded_unittest.BoundedUnittestTests.test_zero_tests_is_unknown_not_pass",
             ],
             cwd=str(launcher.parents[1]),
-            env=os.environ.copy(),
+            env=dict(os.environ, STOCK_BOUNDED_UNITTEST_ACTIVE="1"),
             text=True,
             stdout=subprocess.PIPE,
             stderr=subprocess.STDOUT,
@@ -126,7 +126,7 @@ class BoundedUnittestTests(unittest.TestCase):
                 result = subprocess.run(
                     [str(launcher), *args],
                     cwd=str(launcher.parents[1]),
-                    env=os.environ.copy(),
+                    env=dict(os.environ, STOCK_BOUNDED_UNITTEST_ACTIVE="1"),
                     text=True,
                     stdout=subprocess.PIPE,
                     stderr=subprocess.STDOUT,
@@ -185,3 +185,70 @@ class BoundedUnittestTests(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class NestedRunDoesNotClobberReceiptTests(unittest.TestCase):
+    """A launcher run started from inside another run must not touch the receipt.
+
+    Several tests legitimately spawn the launcher -- the jsonschema self-check
+    in the doc-governance guard, the preflight guard, and this module.  Each of
+    those minted a bundle-less receipt over the real one, so `.githooks/pre-commit`
+    destroyed the evidence it then demanded and every bundle-requiring commit was
+    permanently blocked.  The fix is a nesting marker in bounded_unittest, so this
+    covers the whole class rather than the one spawn site that demonstrated it.
+    """
+
+    def test_marker_suppresses_the_receipt_write(self):
+        launcher = Path(__file__).resolve().parents[1] / ".tools" / "run_unittest_with_repo_pythonpath.cmd"
+        root = launcher.parents[1]
+        receipt_path = root / ".tools" / "state" / "focused_acceptance_receipt.json"
+        before = receipt_path.read_bytes() if receipt_path.exists() else None
+
+        env = os.environ.copy()
+        env["STOCK_BOUNDED_UNITTEST_ACTIVE"] = "1"
+        result = subprocess.run(
+            [str(launcher), "tests.test_doc_governance_guard.JsonschemaImportSmoke"],
+            cwd=str(root), env=env, text=True,
+            stdout=subprocess.PIPE, stderr=subprocess.STDOUT, timeout=300,
+        )
+        self.assertEqual(result.returncode, 0, result.stdout)
+        self.assertIn("NESTED - acceptance receipt left untouched", result.stdout)
+
+        after = receipt_path.read_bytes() if receipt_path.exists() else None
+        self.assertEqual(before, after, "a nested run overwrote the acceptance receipt")
+
+    def test_every_launcher_spawn_in_tests_sets_the_marker(self):
+        """No new spawn site may forget it -- that is how this class recurs.
+
+        Patching the four existing sites fixes today; this guard fixes tomorrow.
+        A test that spawns the launcher without the marker mints a bundle-less
+        receipt over the real one, which is what blocked every bundle-requiring
+        commit until it was found.
+        """
+        import ast
+
+        tests_dir = Path(__file__).resolve().parent
+        offenders = []
+        for path in sorted(tests_dir.rglob("test_*.py")):
+            tree = ast.parse(path.read_text(encoding="utf-8"))
+            # The marker may be set at the call or where its env dict is built,
+            # so the enclosing function is the honest scope to search.
+            scopes = [n for n in ast.walk(tree)
+                      if isinstance(n, (ast.FunctionDef, ast.AsyncFunctionDef))]
+            for scope in scopes:
+                marked = "STOCK_BOUNDED_UNITTEST_ACTIVE" in ast.dump(scope)
+                for node in ast.walk(scope):
+                    if not isinstance(node, ast.Call):
+                        continue
+                    if getattr(node.func, "attr", None) != "run" or not node.args:
+                        continue
+                    argv = ast.dump(node.args[0])
+                    if "launcher" not in argv and "run_unittest_with_repo_pythonpath" not in argv:
+                        continue
+                    if not marked:
+                        offenders.append(f"{path.name}:{node.lineno}")
+        self.assertEqual(
+            offenders, [],
+            "these launcher spawns would clobber the acceptance receipt; pass "
+            "STOCK_BOUNDED_UNITTEST_ACTIVE=1 in their env: " + ", ".join(offenders),
+        )

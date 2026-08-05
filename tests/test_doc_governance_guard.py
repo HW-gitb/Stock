@@ -1476,7 +1476,7 @@ class DocGovernanceGuard(unittest.TestCase):
         result = subprocess.run(
             [str(launcher), "tests.test_doc_governance_guard.JsonschemaImportSmoke"],
             cwd=str(ROOT),
-            env=os.environ.copy(),
+            env=dict(os.environ, STOCK_BOUNDED_UNITTEST_ACTIVE="1"),
             text=True,
             stdout=subprocess.PIPE,
             stderr=subprocess.STDOUT,

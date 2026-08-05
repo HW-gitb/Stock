@@ -184,7 +184,7 @@ class AShortPreflightTests(unittest.TestCase):
         cmd = Path(os.environ["ComSpec"])
         launcher = ROOT / ".tools" / "run_unittest_with_repo_pythonpath.cmd"
         non_pinned = str(self._powershell())
-        environment = os.environ.copy()
+        environment = dict(os.environ, STOCK_BOUNDED_UNITTEST_ACTIVE="1")
         environment.update({
             "STOCK_PYTHON": non_pinned,
             "STOCK_TEST_PYTHON": non_pinned,
@@ -209,7 +209,7 @@ class AShortPreflightTests(unittest.TestCase):
             self.skipTest("The strict Stock Python pin is a Windows checkout contract.")
         cmd = Path(os.environ["ComSpec"])
         launcher = ROOT / ".tools" / "run_unittest_with_repo_pythonpath.cmd"
-        environment = os.environ.copy()
+        environment = dict(os.environ, STOCK_BOUNDED_UNITTEST_ACTIVE="1")
         for name in ("STOCK_PYTHON", "STOCK_TEST_PYTHON", "PYTHON_EXE"):
             environment.pop(name, None)
         environment.update({
@@ -319,7 +319,7 @@ class AShortPreflightTests(unittest.TestCase):
             fake_python = Path(temporary_directory) / "python"
             fake_python.write_text("#!/bin/sh\nexit 86\n", encoding="utf-8")
             fake_python.chmod(0o755)
-            environment = os.environ.copy()
+            environment = dict(os.environ, STOCK_BOUNDED_UNITTEST_ACTIVE="1")
             environment["PATH"] = os.pathsep.join((
                 temporary_directory,
                 str(Path(os.environ["ProgramFiles"]) / "Git" / "cmd"),
