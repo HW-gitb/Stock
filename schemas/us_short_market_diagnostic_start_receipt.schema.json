@@ -1,0 +1,112 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://stock.local/schemas/us_short_market_diagnostic_start_receipt.schema.json",
+  "title": "US-short 26-week market diagnostic start receipt",
+  "description": "The single artifact that may open the 26-week diagnostic clock. The design digest is checkable against the frozen contract block on disk; the notification digest is only self-consistent, because both halves live inside the receipt. A date, a component completion, an account seeding, or a historical commit is never a substitute. Patterns end with \\Z rather than $, because Python's $ also matches before a trailing newline and a newline is a rendering-injection vector.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_name",
+    "schema_version",
+    "diagnostic_epoch",
+    "design_authority",
+    "completion_notification",
+    "first_calendar_week",
+    "boundary"
+  ],
+  "properties": {
+    "schema_name": {"const": "us_short_market_diagnostic_start_receipt"},
+    "schema_version": {"const": "1.0.0"},
+    "diagnostic_epoch": {
+      "type": "string",
+      "pattern": "^[a-z0-9][a-z0-9._-]{2,63}\\Z",
+      "description": "Controlled identifier only. Free text is refused so the epoch cannot smuggle identifying detail into anything that renders it."
+    },
+    "design_authority": {"$ref": "#/definitions/design_authority"},
+    "completion_notification": {"$ref": "#/definitions/completion_notification"},
+    "first_calendar_week": {"$ref": "#/definitions/first_calendar_week"},
+    "boundary": {"$ref": "#/definitions/boundary"}
+  },
+  "definitions": {
+    "sha256": {"type": "string", "pattern": "^[0-9a-f]{64}\\Z"},
+    "date8": {"type": "string", "pattern": "^[0-9]{8}\\Z"},
+    "design_authority": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["document_path", "contract_anchor", "contract_sha256"],
+      "properties": {
+        "document_path": {
+          "const": "docs/us_short_market_diagnostic_26w_design.md",
+          "description": "Pinned so a receipt cannot be bound to some other document that happens to hash conveniently."
+        },
+        "contract_anchor": {
+          "const": "12.1 Machine-bound v1 summary and status contract",
+          "description": "Names the frozen block the digest covers. The digest is deliberately NOT over the whole document: the design is still being written, and a mandated prose edit must not brick a running clock."
+        },
+        "contract_sha256": {"$ref": "#/definitions/sha256"}
+      }
+    },
+    "completion_notification": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["issued_at", "issuer", "notification_text", "notification_sha256"],
+      "properties": {
+        "issued_at": {
+          "type": "string",
+          "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}(\\.[0-9]+)?(Z|[+-][0-9]{2}:[0-9]{2})\\Z",
+          "description": "Timezone-aware instant the notification was issued. Naive local time is refused."
+        },
+        "issuer": {"enum": ["codex"]},
+        "notification_text": {
+          "type": "string",
+          "minLength": 16,
+          "maxLength": 4096,
+          "description": "The notification itself, kept so its digest is verifiable rather than merely asserted."
+        },
+        "notification_sha256": {"$ref": "#/definitions/sha256"}
+      }
+    },
+    "first_calendar_week": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["calendar_week_index", "decision_date", "window_id"],
+      "properties": {
+        "calendar_week_index": {
+          "const": 1,
+          "description": "A start receipt can only ever freeze week 1."
+        },
+        "decision_date": {"$ref": "#/definitions/date8"},
+        "window_id": {"const": "26w-1-26"}
+      }
+    },
+    "boundary": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "diagnostic_only",
+        "comparison_only",
+        "counts_ship_gate",
+        "changes_selection_or_action",
+        "automatic_policy_switch",
+        "broker_or_order_automation",
+        "provider_fetch",
+        "account_write",
+        "issued_by_automatic_inference"
+      ],
+      "properties": {
+        "diagnostic_only": {"const": true},
+        "comparison_only": {"const": true},
+        "counts_ship_gate": {"const": false},
+        "changes_selection_or_action": {"const": false},
+        "automatic_policy_switch": {"const": false},
+        "broker_or_order_automation": {"const": false},
+        "provider_fetch": {"const": false},
+        "account_write": {"const": false},
+        "issued_by_automatic_inference": {
+          "const": false,
+          "description": "Pinned false: a receipt is never derived from a file date, a component completion, an account seeding, or a commit."
+        }
+      }
+    }
+  }
+}

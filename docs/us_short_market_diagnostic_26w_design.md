@@ -2,7 +2,7 @@
 
 > 状态：Knife 0 contract baseline  
 > 性质：诊断轨；不改变 US-short 选股、操作建议、paper 账户或 Ship gate。  
-> 本文件是仓库内执行契约；桌面执行总方案是 C:/Users/cnhea/Desktop/usshort-compare.md。
+> 本文件是仓库内执行契约；桌面另有一份执行总方案（`usshort-compare.md`，不在仓库内，路径见会话记录）。
 
 ## 1. 目的
 
@@ -336,7 +336,7 @@ Knife7 是最后一刀，共负责四件事：
 3. 启动后按日历周推进；部件或数据缺失周写 `no_count` / `unavailable`，不延后 26 周边界；
 4. 正式 weekly task 每周自动读取 lifecycle 的 `v1_1_attribution`：pending 时只提醒；active 时自动调用 Knife6。缺 VTI total return、PIT 现金收益或 `g*` 时产出 `unavailable`，不要求用户手动操作。
 
-当前 Knife7 尚未执行，因此本文件中的启动门是冻结设计，不是启动通知；当前仍无真实第 1 周、真实 10 万美元 model-paper 账户、真实 ETF sidecar 或 PIT 现金归因结果。
+Knife7 的启动门已实现（`engine/us_short_market_diagnostic_start_receipt.py` + `runners/us_short_market_diagnostic_weekly.py`）；门建成不等于门打开。本文件写下的仍是冻结设计，不是启动通知：至今没有签发过 receipt，也仍无真实第 1 周、真实 10 万美元 model-paper 账户、真实 ETF sidecar 或 PIT 现金归因结果。上文第 4 条（正式 weekly task 自动读取 `v1_1_attribution`）尚未接线。
 
 ## 13. Knife 0 验收
 

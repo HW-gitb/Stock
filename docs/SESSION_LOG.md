@@ -1,5 +1,21 @@
 # Session Log
 
+## 2026-08-05 — Claude Code 第四次审查刀7：结构修法产品层真闭，缺陷移到执行层，已同轮全修收口
+
+- **Verdict/Action**: 起两个子 agent（1 独立对抗 + 1 广度）均判 Pass-with-Required；两方 10 条 Required + 16 条 Optional 已**同轮全部修完**。产品层结构修法经 agent 17 个植入验证为真：调用方递来的数据到不了已发布裁决，store 的每个写入方与读取方（含孤儿恢复）都在门后，本轮变更内无任何 Class II 自证式校验。**但同类缺陷在执行层原样重现**——为看住发布路径而写的 conformance 测试把发布路径本身放进了 `EXEMPT`，实测内联拆门后 41 测全绿、receipt 已删的 store 照常发布 26 周成绩单。
+- **Required**: 全数已闭，判据与逐条修前实测状态只见 `docs/system_risk_register.md`（单一来源）。根因与前四轮同一条、只是换了层：豁免名单是机械生成的（「当前没门调用的先豁免」），而不是先问「这个测试必须对谁有管辖权」。通用修法=豁免必须在结构上不可覆盖发布路径。
+- **Verify**: **审查方自打 10 个植入回归，10/10 转红**（修前其中 5 个是绿的：位置限定参数 `records=None, /`、`**records`、参数改名 `settled_weeks`、内联拆门、`if False:` 里的门调用）。收口后焦点包 `Ran 146 tests in 187.8s / PASS`，`receipt:76c0b4e194edd7f4644f0585`；全 lane `Ran 5344 tests / FAILED (failures=2)`——仅剩 discovery live-CLI 两条，根因是本机 gitignored 实盘产物 `state/us_short/us_short_llm_theme_discovery_web_20260802.json`（8/1 生成）占住正式决策位，使断言等待的 raw_root 报错前先抛槽位占用；相关三个文件（fetch_web / publish_policy / 该测试）本轮 `git diff HEAD` 为空，非本轮回归，也不删他人实盘数据。植入脚本改真文件、`finally` 保证还原，跑完 `git status` 核对无残留。
+- **Next**: 提交并合入 master
+
+## 2026-08-05 — Claude Code 修完刀7 全部 Required/Optional，第三次冷打 FAIL：同类第四次复发，根因定位
+
+- **Verdict/Action**: FAIL，三条新 P1/P2，未提交。上一轮所修的具体洞多数为真（agent 列 20 项攻而未破，含删 receipt 后全读者拒、register 指针伪造被抓、26 连日被拒、周末首周被拒、设计文档换掉在授权路被抓）。但**授权门是空的**：`_require_authorized_clock(lifecycle_root)` 从不与它认证的 `records`/`report` 比对，二者是独立参数。
+- **Required**: 三条，判据与根因只见 `docs/system_risk_register.md`（单一来源）：门空转、conformance 判语法非语义、18 个植入回归有 9 个全套件不红。
+- **Verify**: review-evidence:e4a95cd5ecca。焦点包 `98 OK`——三条全非测试红。**审查方自证**：授权 store 仅 1 周，另造 26 周伪造史（epoch 改为 `fabricated-never-authorized`）经 `build_market_diagnostic_report` 产出 `26w-1-26 / ahead_diagnostic`，`write_market_diagnostic_report` 落盘两文件。agent 另以 11 种规避形态量化守卫：抓 6 逃 5，逃逸形态之一「调门名但丢弃结果、对另一 root 操作」**正是本仓 aggregator 当前形状**。
+- **Pre-Codex self-review**: 四轮复发根因已定位并写入 register：每轮都在语法层修（让「叫门」的东西出现在正确位置），缺陷始终在语义层（门的实参是否等于被保护制品的来源）。通用修法改为「让错误组合不可表达」而非「可表达再检查」。独立对抗 pass: 已跑（第三次冷打）。
+- **Next**: 按结构性修法重做：产出者只收 root、自行经门取数，不接调用方递来的 records/report。
+
+
 ## 2026-08-05 — 用户裁决：设计定稿前不起 12 周时钟，epoch 维持 pre-freeze
 
 - **Verdict/Action**: 裁决落定。不起时钟；epoch 七条轨维持 `pre_freeze_audit_only`（不废除、不激活）；剩余 8 刀照常推进不受阻；序 16 随之推后。核心论证：关着哈希起 → 12 周证据没意义（可能中途改判据）；开着哈希起 → 设计还在动反复归零。两者互斥，语义投影只能减少冤枉归零、消不掉矛盾。
@@ -14,12 +30,37 @@
 - **Verify**: focused `Ran 117 tests in 95.3s / OK`，`receipt:728b842b330d5995304d1fb9`。a_short 全量 `RESULT status=PASS exit=0 tests=2430 elapsed=550.9s`，账本 REFUSED 记录（跑的 550 秒里另一窗口改 us_short，绿真但未绑稳定指纹）。**植入对照两次**：效果契约投影改回绑整份文档 → 头号测试转红；去掉注解剥离 → 三条装饰改动测试转红；还原后逐字节一致。契约文件按文本外科修改，diff 从 308/92+76/14 降到 5/3+14/9，无格式 churn。
 - **Next**: 用户决定起不起 12 周时钟
 
+## 2026-08-05 — Claude Code 自修刀7 三条 Required + 建两条机械守卫，冷打自审 FAIL（守卫本身有同类缺陷）
+
+- **Verdict/Action**: FAIL，三条新 P1，未提交。上一轮三条 Required 的具体洞经独立复核确认真闭（设计摘要复核生效、锚点落 register 且每次读写复核、七日节律生效、四个植入回归全被杀）。但冷打打出三条更深的，其中最重一条**打在我为防复发而建的 conformance 守卫本身**：它用「参数叫什么名字」代替「碰不碰 store」，于是漏掉了最该管的那批出口。
+- **Required**: 三条，判据只见 `docs/system_risk_register.md`（单一来源）：枚举器用代理非性质、报告产出者未接门、锚点身份 week-1 后不再复核。另有四条既有条目须并案处理（含通知非 source-bound 建议升 Required）与四条新 Optional 同处。
+- **Verify**: review-evidence:36dd7b2ca608。焦点包 `103 OK`——三条 Required 全非测试红。按用户令起冷打 agent（不告知实现、不对准 diff、专猎两类复发缺陷并要求量化覆盖）。**审查方自证两条**：①枚举器对 aggregator 12 个顶层函数只看得见 1 个，三个公开产出者全在盲区；②真实私有 store 不存在时 `build_market_diagnostic_report` 仍直出 `26w-1-26` / `ahead_diagnostic`。agent 另以镜像树植入 4 个未接门消费者，实测只抓到参数恰好叫 `root` 的那 1 个。
+- **Pre-Codex self-review**: A=本轮按「先建枚举器再修洞」执行且枚举器确实纠正了我的论域猜测，但枚举判据取了代理，故同类在更高一层复发；B=旧符号零残留；C=植入对照证三道门承重；独立对抗 pass: 已跑（冷打，发现 3×P1 → 未修，转 Required）。
+- **Next**: 修三条 Required，先改枚举器再修洞（枚举器改对后会直接列出还有哪些产出者未接门）。
+
+
+## 2026-08-05 — Claude Code 修完刀7 三条 Required + 五条 Optional，冷打自审 FAIL（读路径无门）
+
+- **Verdict/Action**: FAIL，三条新 Required，未提交。上一轮八项均已实现且经复核真闭（设计摘要对磁盘重算、锚点摘要落 register 并在写入时复核、pattern 全改 `\Z`、`O_EXCL`、空测试重写、门已装进新 runner）。但冷打打穿一面：我把「授权必须持续成立」量词化成「所有**写入**路径」，正确论域是「所有**消费这口钟产物**的路径」。成绩单不是写入，故读取/发布全链路无门——而成绩单正是这一刀存在的理由。
+- **Required**: 三条，判据只见 `docs/system_risk_register.md`（单一来源）：读/发布路径无授权门、冻结首周几乎不受约束、runner 从不透传 `as_of_date`。五条 Optional 与一条 NOT_VERIFIED 同处。
+- **Verify**: review-evidence:d9850a09b00f。焦点包 `96 OK`——三条 Required 全非测试红。按 §3.5 起独立对抗 agent 冷打（不告知实现、不对准 diff、要求自行推导不变量并报覆盖率）。**审查方自证**：开钟→写满 26 周→删 receipt→`load_lifecycle_register` 仍返回 `weeks=26`、`publish_completed_market_diagnostic_window` **发布成功** `published 26w-1-26`。另证 register 的派生自校验对锚点字段是恒等式（自供值喂回再自比），其余字段确由周文件重算。
+- **Pre-Codex self-review**: A=类枚举当轮做了但论域取窄（写入 vs 消费），本条即其后果；B=旧符号零残留；C=植入 agent 原回归证空测试已转红；独立对抗 pass: 已跑（冷打，发现 2×P1 → 未修，转 Required）。
+- **Next**: Codex 额度恢复后修三条 Required；在此之前该门不得视为已建成。
+
 ## 2026-08-05 — Claude Code 执行：v14.2「涨停指数」数据源查证刀（序 14 前置）
 
 - **Verdict/Action**: 查证完成，结论 = **当前权限下取不到**。枚举 `index_basic` 全部 7 个发布方分区共 10,506 条指数，按六个中文标记匹配名称 → 0 条命中，每个分区均由不足页证明已穷尽；Tushare 的 `ths_index` 转发无权限；**但用户指出项目自有同花顺通道，同轮补搜**：`HITHINK_FINANCE_API_KEY`（L3 生产凭证）的板块目录 `cn_concept` 共 390 个板块**同样 0 命中**，另五个 tag 该账号不可达。更致命的是该 API **只有目录与成分两个端点、没有行情端点**——即便存在该板块也只给成分股、给不出指数涨跌幅，而判据是对日涨跌幅的陈述，买权限也解决不了。故选项 A 在两条可达通道上均不可行，决策收敛向 B（V14.3 晋级率/炸板率）。未改任何生产行为。
 - **Required**: 无代码 Required；A/B 为用户裁决项。首轮自查出一条同类复发并同轮闭合：`index_basic(CSI)` 恰好返回 8000 行即报「不存在」，实测 offset=8000 还有 863 行，只搜了 92.5%——与序 22b 的 provider 行上限截断同类。两条 finding 正文见 `docs/system_risk_register.md`，本处不复述。
 - **Verify**: focused `Ran 33 tests in 10.5s / OK`（`tests.test_a_short_limit_up_index_source_probe` + writer registry guard + effect consumer probe），`receipt:e7dc1e7b238bb48db37c26c7`。**植入对照**：把 exhausted 判据改回「第一页即全部」→ 三条转红，关键断言 `'no_matching_published_index_reachable' != 'negative_but_universe_coverage_incomplete'`；还原后 `Ran 8 tests ... OK`。证据卫生：raw 在 gitignored `provider_samples/`（`git check-ignore` 确认），tracked summary grep 无 token/secret/URL。provider 调用 9/20，只读参考端点。`NOT_VERIFIED`：同花顺板块内是否存在此类指数、任何候选与 v14.2 原意是否一致。
 - **Next**: 用户在 A（买权限再查）与 B（换判据 + 起 12 周时钟）之间裁定；序 14 可先做不依赖该指数的部分
+
+## 2026-08-05 — Claude Code 自建刀7 启动门 + 独立对抗审查 FAIL（两条 P1 在我自己的代码里）
+
+- **Verdict/Action**: FAIL，三条 Required，未提交。Codex 额度耗尽故由我代建；按用户令起独立对抗 agent。门确实挡住了设计点名的四种假起点，但没挡住任何一份形状正确的手写 JSON——设计 §3 要 source-bound，我实现成了「receipt 记录了一个声明」。承重的部分也有：两条开钟路径都接了门（含容易漏的孤儿恢复那条），接上后既有测试立刻红 6 条、我给它们发真 receipt 而非放松门。
+- **Required**: 三条，判据只见 `docs/system_risk_register.md`（单一来源）：摘要从不复核、授权不落盘、空测试。五条 Optional 与范围说明同处。
+- **Verify**: review-evidence:d03f28bc9fc6。焦点包 `87 OK`——**三条 Required 全非测试红**。三条均由我自己复现、不采信 agent 转述：①手写 receipt 两个摘要全填 `0`×64（磁盘真值 `a0118a14…`）→ 开钟成功 week=1；②正常开钟写完 week1 后**删掉 receipt** → week2 仍 `published`，register 内 receipt 相关键命中 False；③传完全合法的 notification、只留 `epoch="e1"` → 仍抛 `schema violation at diagnostic_epoch`，证明那三个 `assertRaises` 从不因 notification 而满足。agent 另以植入回归证实：删掉 notification 绑定后 52 测试全绿。
+- **更正**: 这是本会话我第三次写出「因错误原因而通过」的测试（前两次：探针写错事件日期字段名、探针误改 `long_only_cap`）。前两次是探针、这次是交付的测试，性质更重。
+- **Next**: Codex 额度恢复后修三条 Required；在此之前该门不得视为已建成。
 
 ## 2026-08-05 — Claude 修复+自审（收据自毁 P1 + 门状态两文件 Optional）
 

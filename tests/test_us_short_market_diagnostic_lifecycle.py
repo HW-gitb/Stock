@@ -20,11 +20,37 @@ from engine.us_short_market_diagnostic_lifecycle import (
     persist_settled_weekly_record,
     render_weekly_report_reminder,
 )
+from engine.us_short_market_diagnostic_start_receipt import (
+    issue_start_receipt,
+    load_start_receipt,
+    start_receipt_sha256,
+)
 from engine.us_short_model_paper_portfolio import canonical_json_bytes
 from tests.test_us_short_market_diagnostic import _weekly_rows
 
 
 ROOT = Path(__file__).resolve().parents[1]
+
+
+
+def _open_clock(root, row):
+    """Issue the start receipt that Knife 7 now requires before week 1.
+
+    These tests exercise the store, not the gate, so they need a genuine receipt
+    rather than a relaxed store. The gate itself is proven separately in
+    tests/test_us_short_market_diagnostic_start_receipt.py.
+    """
+
+    return issue_start_receipt(
+        diagnostic_epoch=row["diagnostic_epoch"],
+        completion_notification={
+            "issued_at": "2025-12-29T00:00:00+00:00",
+            "issuer": "codex",
+            "notification_text": "US-short 26-week diagnostic design is complete.",
+        },
+        first_decision_date=row["decision_date"],
+        root=root,
+    )
 
 
 class UsShortMarketDiagnosticLifecycleTest(unittest.TestCase):
@@ -60,6 +86,7 @@ class UsShortMarketDiagnosticLifecycleTest(unittest.TestCase):
         rows = _weekly_rows()
         with tempfile.TemporaryDirectory() as td:
             root = Path(td) / "market_diagnostic_private"
+            _open_clock(root, rows[0])
             outputs = [persist_settled_weekly_record(row, root=root) for row in rows[:8]]
             register = load_lifecycle_register(root)
             register_bytes = (root / "lifecycle_register.json").read_bytes()
@@ -106,6 +133,7 @@ class UsShortMarketDiagnosticLifecycleTest(unittest.TestCase):
         row = _weekly_rows()[0]
         with tempfile.TemporaryDirectory() as td:
             root = Path(td) / "market_diagnostic_private"
+            _open_clock(root, row)
             first = persist_settled_weekly_record(row, root=root)
             replay = copy.deepcopy(row)
             replay["v1_1_reminder"] = {
@@ -126,6 +154,7 @@ class UsShortMarketDiagnosticLifecycleTest(unittest.TestCase):
         rows = _weekly_rows(paper_false_weeks={1})
         with tempfile.TemporaryDirectory() as td:
             root = Path(td) / "market_diagnostic_private"
+            _open_clock(root, rows[0])
             first = persist_settled_weekly_record(rows[0], root=root)
             self.assertEqual(1, first["calendar_week_count"])
             self.assertEqual(0, first["evaluable_week_count"])
@@ -141,6 +170,7 @@ class UsShortMarketDiagnosticLifecycleTest(unittest.TestCase):
         rows = _weekly_rows(paper_false_weeks={3, 8})
         with tempfile.TemporaryDirectory() as td:
             root = Path(td) / "market_diagnostic_private"
+            _open_clock(root, rows[0])
             outputs = [persist_settled_weekly_record(row, root=root) for row in rows[:8]]
             register = load_lifecycle_register(root)
 
@@ -156,6 +186,7 @@ class UsShortMarketDiagnosticLifecycleTest(unittest.TestCase):
         rows = _weekly_rows()
         with tempfile.TemporaryDirectory() as td:
             root = Path(td) / "market_diagnostic_private"
+            _open_clock(root, rows[0])
             persist_settled_weekly_record(rows[0], root=root)
             with self.assertRaises(MarketDiagnosticLifecycleError):
                 persist_settled_weekly_record(rows[2], root=root)
@@ -181,12 +212,94 @@ class UsShortMarketDiagnosticLifecycleTest(unittest.TestCase):
         row = _weekly_rows()[0]
         with tempfile.TemporaryDirectory() as td:
             root = Path(td) / "market_diagnostic_private"
+            _open_clock(root, row)
             with self.assertRaises(MarketDiagnosticLifecycleError):
                 persist_settled_weekly_record(row, root=root, as_of_date="20260101")
             persist_settled_weekly_record(row, root=root, as_of_date="20260102")
             with self.assertRaises(MarketDiagnosticLifecycleError):
                 load_lifecycle_register(root, as_of_date="20260101")
             self.assertEqual(1, load_lifecycle_register(root, as_of_date="20260102")["calendar_week_count"])
+
+
+class OrphanRecoveryTest(unittest.TestCase):
+    """The crash-between-writes path, which had a gate and no other coverage.
+
+    The weekly record is written before the register, so a process killed between
+    them leaves a record with no register. Retrying the same week must recover;
+    every other shape of orphan must refuse, because adopting an unknown file is
+    how a store silently acquires a week nobody recorded.
+    """
+
+    def setUp(self) -> None:
+        self.rows = _weekly_rows()
+        holder = tempfile.TemporaryDirectory()
+        self.addCleanup(holder.cleanup)
+        self.store = Path(holder.name) / "market_diagnostic_private"
+        _open_clock(self.store, self.rows[0])
+
+    def _orphan(self, row) -> None:
+        """Reproduce the crash: the record lands, the register never does."""
+
+        persist_settled_weekly_record(row, root=self.store)
+        (self.store / "lifecycle_register.json").unlink()
+
+    def test_retrying_the_interrupted_week_recovers_the_register(self) -> None:
+        self._orphan(self.rows[0])
+        result = persist_settled_weekly_record(self.rows[0], root=self.store)
+        self.assertEqual("recovered", result["status"])
+        self.assertEqual(1, result["calendar_week_index"])
+        self.assertEqual(1, load_lifecycle_register(self.store)["calendar_week_count"])
+        # And the recovered clock keeps counting.
+        self.assertEqual("published", persist_settled_weekly_record(self.rows[1], root=self.store)["status"])
+
+    def test_a_recovered_register_is_still_bound_to_the_start_receipt(self) -> None:
+        self._orphan(self.rows[0])
+        persist_settled_weekly_record(self.rows[0], root=self.store)
+        register = load_lifecycle_register(self.store)
+        self.assertEqual(
+            register["start_receipt_sha256"],
+            start_receipt_sha256(load_start_receipt(self.store)),
+        )
+
+    def test_recovery_is_refused_when_the_clock_was_never_authorized(self) -> None:
+        self._orphan(self.rows[0])
+        (self.store / "diagnostic_start_receipt.json").unlink()
+        with self.assertRaises(MarketDiagnosticLifecycleError) as ctx:
+            persist_settled_weekly_record(self.rows[0], root=self.store)
+        self.assertIn("start receipt", str(ctx.exception))
+
+    def test_a_different_week_may_not_adopt_the_orphan(self) -> None:
+        self._orphan(self.rows[0])
+        with self.assertRaises(MarketDiagnosticLifecycleError) as ctx:
+            persist_settled_weekly_record(self.rows[1], root=self.store)
+        self.assertIn("conflicts with the retry input", str(ctx.exception))
+
+    def test_an_orphan_that_is_not_week_one_is_not_a_recovery_candidate(self) -> None:
+        persist_settled_weekly_record(self.rows[0], root=self.store)
+        persist_settled_weekly_record(self.rows[1], root=self.store)
+        (self.store / "lifecycle_register.json").unlink()
+        week1 = self.store / lifecycle._record_relative_path(self.rows[0])
+        week1.unlink()
+        with self.assertRaises(MarketDiagnosticLifecycleError) as ctx:
+            persist_settled_weekly_record(self.rows[1], root=self.store)
+        self.assertIn("not a valid week-1 recovery candidate", str(ctx.exception))
+
+    def test_more_than_one_orphan_is_never_silently_reconstructed(self) -> None:
+        persist_settled_weekly_record(self.rows[0], root=self.store)
+        persist_settled_weekly_record(self.rows[1], root=self.store)
+        (self.store / "lifecycle_register.json").unlink()
+        with self.assertRaises(MarketDiagnosticLifecycleError) as ctx:
+            persist_settled_weekly_record(self.rows[0], root=self.store)
+        self.assertIn("refuse silent reconstruction", str(ctx.exception))
+
+    def test_a_tampered_orphan_cannot_be_adopted_by_its_own_retry(self) -> None:
+        self._orphan(self.rows[0])
+        path = self.store / lifecycle._record_relative_path(self.rows[0])
+        record = json.loads(path.read_bytes().decode("utf-8"))
+        record["strategy"]["nav"] = "999999.000000"
+        path.write_bytes(canonical_json_bytes(record))
+        with self.assertRaises(MarketDiagnosticLifecycleError):
+            persist_settled_weekly_record(self.rows[0], root=self.store)
 
 
 if __name__ == "__main__":

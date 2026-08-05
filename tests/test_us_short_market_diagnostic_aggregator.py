@@ -20,6 +20,7 @@ from engine.us_short_market_diagnostic_aggregator import (
     write_market_diagnostic_report,
 )
 from engine.us_short_market_diagnostic_lifecycle import persist_settled_weekly_record
+from engine.us_short_market_diagnostic_start_receipt import issue_start_receipt
 from tests.test_us_short_market_diagnostic import _weekly_rows
 
 
@@ -70,7 +71,11 @@ def _two_window_rows() -> list[dict]:
             previous_cost + Decimal(row["strategy"]["cumulative_cost_paid"])
         )
         row["strategy"]["source_sha256"] = f"{600 + week:064x}"
-        row["source_refs"] = [
+        # De-duplicate: benchmarks share price packets, and a record whose source
+        # digests repeat is rejected by the store. These rows now have to survive
+        # persistence, because the report is derived from the store rather than
+        # handed to the builder.
+        digests = [
             digest
             for benchmark in row["benchmarks"].values()
             for digest in (
@@ -79,6 +84,7 @@ def _two_window_rows() -> list[dict]:
             )
             if digest is not None
         ] + [f"{900 + week:064x}"]
+        row["source_refs"] = list(dict.fromkeys(digests))
         previous_nav = current_nav
     return first + second
 
@@ -105,6 +111,32 @@ def _validate_report_schema(report: dict) -> None:
         raise AssertionError(errors[0].message)
 
 
+def _authorized_store(testcase, rows):
+    """A real, authorized lifecycle store that outlives the test body.
+
+    Knife 7 makes producing a verdict need the same authorization as reading the
+    weeks it summarises, so these tests can no longer hand a bare list of records
+    to the builder: they open a clock the way an operator would.
+    """
+
+    holder = tempfile.TemporaryDirectory()
+    testcase.addCleanup(holder.cleanup)
+    root = Path(holder.name) / "market_diagnostic_private"
+    issue_start_receipt(
+        diagnostic_epoch=rows[0]["diagnostic_epoch"],
+        completion_notification={
+            "issued_at": "2025-12-29T00:00:00+00:00",
+            "issuer": "codex",
+            "notification_text": "US-short 26-week diagnostic design is complete.",
+        },
+        first_decision_date=rows[0]["decision_date"],
+        root=root,
+    )
+    for row in rows:
+        persist_settled_weekly_record(row, root=root)
+    return root
+
+
 class UsShortMarketDiagnosticAggregatorTest(unittest.TestCase):
     def test_missing_real_lifecycle_is_not_started_and_creates_no_public_output(self) -> None:
         with tempfile.TemporaryDirectory() as td:
@@ -120,10 +152,14 @@ class UsShortMarketDiagnosticAggregatorTest(unittest.TestCase):
             self.assertFalse(output_root.exists())
 
     def test_does_not_publish_before_a_canonical_26_week_boundary(self) -> None:
-        self.assertIsNone(build_market_diagnostic_report(_weekly_rows()[:25]))
+        rows = _weekly_rows()[:25]
+        store = _authorized_store(self, rows)
+        self.assertIsNone(build_market_diagnostic_report(lifecycle_root=store))
 
     def test_builds_fixed_window_since_inception_and_deidentified_markdown(self) -> None:
-        report = build_market_diagnostic_report(_weekly_rows())
+        rows = _weekly_rows()
+        store = _authorized_store(self, rows)
+        report = build_market_diagnostic_report(lifecycle_root=store)
         self.assertIsNotNone(report)
         assert report is not None
         self.assertEqual("26w-1-26", report["window_summary"]["window_id"])
@@ -142,8 +178,45 @@ class UsShortMarketDiagnosticAggregatorTest(unittest.TestCase):
         self.assertNotIn("20260102", markdown)
         self.assertNotIn("100000.000000", markdown)
 
+    def test_the_public_projection_refuses_free_text_and_unsafe_identifiers(self) -> None:
+        """What stops the private store's Chinese reminder and raw fields reaching a shared file.
+
+        This coverage used to ride on the write-once test, which handed a mutated
+        report to the writer. The writer no longer takes one, and the guard was
+        left with nothing exercising it: stubbing it out kept the whole pack
+        green. ``render_market_diagnostic_markdown`` is the remaining consumer
+        that takes a report in hand, so the projection is asserted through it.
+        """
+
+        store = _authorized_store(self, _weekly_rows())
+        report = build_market_diagnostic_report(lifecycle_root=store)
+        assert report is not None
+        self.assertTrue(render_market_diagnostic_markdown(report))
+
+        cases = {
+            "non-canonical reminder text": ("window_summary", "v1_1_reminder", "text",
+                                            "PII must not enter public output"),
+            "unknown reminder status": ("window_summary", "v1_1_reminder", "status", "surprise"),
+            "free-text status reason": ("window_summary", "status_reason", None,
+                                        "because the market was strange this quarter"),
+            "unsafe epoch identifier": ("window_summary", "diagnostic_epoch", None,
+                                        "epoch for cnhea's account"),
+            "unsafe epoch in since_inception": ("since_inception", "diagnostic_epoch", None,
+                                                "epoch\nwith a newline"),
+        }
+        for label, (scope, field, subfield, value) in cases.items():
+            with self.subTest(label):
+                tampered = copy.deepcopy(report)
+                if subfield is None:
+                    tampered[scope][field] = value
+                else:
+                    tampered[scope][field][subfield] = value
+                with self.assertRaises(MarketDiagnosticAggregationError):
+                    render_market_diagnostic_markdown(tampered)
+
     def test_second_boundary_keeps_fixed_block_separate_from_since_inception(self) -> None:
-        report = build_market_diagnostic_report(_two_window_rows())
+        store = _authorized_store(self, _two_window_rows())
+        report = build_market_diagnostic_report(lifecycle_root=store)
         self.assertIsNotNone(report)
         assert report is not None
         self.assertEqual("26w-27-52", report["window_summary"]["window_id"])
@@ -153,36 +226,49 @@ class UsShortMarketDiagnosticAggregatorTest(unittest.TestCase):
         _validate_report_schema(report)
 
     def test_public_pair_is_immutable_and_identical_rerun_is_idempotent(self) -> None:
-        report = build_market_diagnostic_report(_weekly_rows())
+        rows = _weekly_rows()
+        store = _authorized_store(self, rows)
+        report = build_market_diagnostic_report(lifecycle_root=store)
         assert report is not None
         with tempfile.TemporaryDirectory() as td:
             output_root = Path(td) / "market_diagnostic_26w"
-            self.assertEqual("published", write_market_diagnostic_report(report, output_root=output_root))
+            self.assertEqual("published", write_market_diagnostic_report(lifecycle_root=store, output_root=output_root))
             json_path = output_root / "26w-1-26.json"
             markdown_path = output_root / "26w-1-26.md"
             json_bytes = json_path.read_bytes()
             markdown_bytes = markdown_path.read_bytes()
-            self.assertEqual("idempotent", write_market_diagnostic_report(report, output_root=output_root))
+            self.assertEqual("idempotent", write_market_diagnostic_report(lifecycle_root=store, output_root=output_root))
             self.assertEqual(json_bytes, json_path.read_bytes())
             self.assertEqual(markdown_bytes, markdown_path.read_bytes())
 
-            changed = copy.deepcopy(report)
-            changed["since_inception"]["status_reason"] = "intentional conflict"
+            # A conflicting verdict can no longer be handed in — the writer derives
+            # its own report — so the only way two verdicts can now collide is two
+            # genuinely different authorized stores aiming at the same window.
+            other_rows = copy.deepcopy(rows)
+            for row in other_rows:
+                row["diagnostic_epoch"] = "us-short-26w-other"
+            other_store = _authorized_store(self, other_rows)
             with self.assertRaises(MarketDiagnosticAggregationError):
-                write_market_diagnostic_report(changed, output_root=output_root)
-
-            changed_reminder = copy.deepcopy(report)
-            changed_reminder["window_summary"]["v1_1_reminder"]["text"] = "PII must not enter public output"
-            with self.assertRaises(MarketDiagnosticAggregationError):
-                write_market_diagnostic_report(changed_reminder, output_root=output_root)
+                write_market_diagnostic_report(lifecycle_root=other_store, output_root=output_root)
 
             markdown_path.unlink()
             with self.assertRaises(MarketDiagnosticAggregationError):
-                write_market_diagnostic_report(report, output_root=output_root)
+                write_market_diagnostic_report(lifecycle_root=store, output_root=output_root)
 
     def test_lifecycle_publish_only_emits_at_week_26(self) -> None:
         with tempfile.TemporaryDirectory() as td:
             lifecycle_root = Path(td) / "market_diagnostic_private"
+            rows = _weekly_rows()
+            issue_start_receipt(
+                diagnostic_epoch=rows[0]["diagnostic_epoch"],
+                completion_notification={
+                    "issued_at": "2025-12-29T00:00:00+00:00",
+                    "issuer": "codex",
+                    "notification_text": "US-short 26-week diagnostic design is complete.",
+                },
+                first_decision_date=rows[0]["decision_date"],
+                root=lifecycle_root,
+            )
             output_root = Path(td) / "market_diagnostic_26w"
             for row in _weekly_rows()[:25]:
                 persist_settled_weekly_record(row, root=lifecycle_root)

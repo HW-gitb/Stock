@@ -12,7 +12,7 @@ import os
 from pathlib import Path
 import re
 import uuid
-from typing import Any, Mapping, Sequence
+from typing import Any, Mapping
 
 import jsonschema
 from referencing import Registry, Resource
@@ -32,6 +32,7 @@ from engine.us_short_market_diagnostic_lifecycle import (
     MarketDiagnosticLifecycleError,
     load_settled_weekly_records,
 )
+from engine.us_short_market_diagnostic_start_receipt import DiagnosticStartReceiptError
 from engine.us_short_model_paper_portfolio import canonical_json_bytes
 
 
@@ -126,6 +127,27 @@ def _publicize_window_summary(summary: Mapping[str, Any]) -> dict[str, Any]:
     return public
 
 
+def _authorized_records(
+    lifecycle_root: str | Path, *, as_of_date: str | None = None
+) -> list[dict[str, Any]]:
+    """The only way weeks enter a verdict: fetched from the store, through the gate.
+
+    Returning the records rather than returning ``None`` is the point. A guard that
+    merely asserts and hands control back invites the caller to summarise something
+    else; a guard that *supplies* the data leaves nothing else to summarise.
+    """
+
+    try:
+        records = load_settled_weekly_records(lifecycle_root, as_of_date=as_of_date)
+    except (MarketDiagnosticLifecycleError, DiagnosticStartReceiptError) as exc:
+        raise MarketDiagnosticAggregationError(
+            f"the diagnostic clock is not authorized, so no verdict may be produced: {exc}"
+        ) from exc
+    if not records:
+        raise MarketDiagnosticAggregationError("the authorized diagnostic store holds no settled weeks")
+    return records
+
+
 def _report_output_paths(window_id: str, output_root: str | Path) -> tuple[Path, Path]:
     if not isinstance(window_id, str) or WINDOW_ID_PATTERN.fullmatch(window_id) is None:
         raise MarketDiagnosticAggregationError("report window_id is not a canonical 26-week id")
@@ -141,13 +163,20 @@ def _report_output_paths(window_id: str, output_root: str | Path) -> tuple[Path,
 
 
 def build_market_diagnostic_report(
-    records: Sequence[Mapping[str, Any]], *, as_of_date: str | None = None
+    *, lifecycle_root: str | Path, as_of_date: str | None = None
 ) -> dict[str, Any] | None:
-    """Build the next report, or return ``None`` until a canonical boundary closes."""
+    """Build the next report, or return ``None`` until a canonical boundary closes.
 
-    if isinstance(records, (str, bytes)) or not isinstance(records, Sequence) or not records:
-        raise MarketDiagnosticAggregationError("settled diagnostic records must be a non-empty sequence")
-    normalized = list(records)
+    There is deliberately no ``records`` parameter. An earlier version took the
+    records and the store as independent arguments and checked the store — which
+    proved that *a* clock was authorized while saying nothing about the history
+    being published, so a fabricated 26 weeks published against a store holding
+    one. The summarised weeks are now fetched here, through the gated loader, so
+    publishing a history the store does not contain is not something this API can
+    express.
+    """
+
+    normalized = _authorized_records(lifecycle_root, as_of_date=as_of_date)
     try:
         since_inception = summarize_since_inception(normalized, as_of_date=as_of_date)
     except MarketDiagnosticError as exc:
@@ -275,10 +304,24 @@ def _write_bytes(path: Path, payload: bytes) -> None:
 
 
 def write_market_diagnostic_report(
-    report: Mapping[str, Any], *, output_root: str | Path = DEFAULT_PUBLIC_ROOT
+    *,
+    lifecycle_root: str | Path,
+    output_root: str | Path = DEFAULT_PUBLIC_ROOT,
+    as_of_date: str | None = None,
 ) -> str:
-    """Write one JSON/Markdown pair; identical reruns are idempotent and conflicts fail closed."""
+    """Write one JSON/Markdown pair; identical reruns are idempotent and conflicts fail closed.
 
+    Like the builder, this takes no caller-supplied report. Publication is
+    write-once per window, so a report accepted from a caller could pre-empt the
+    genuine one permanently; deriving it here from the authorized store removes
+    the opportunity rather than checking for it.
+    """
+
+    report = build_market_diagnostic_report(
+        lifecycle_root=lifecycle_root, as_of_date=as_of_date
+    )
+    if report is None:
+        raise MarketDiagnosticAggregationError("no canonical diagnostic window has closed yet")
     _validate_report(report)
     window_id = report["window_summary"]["window_id"]
     json_path, markdown_path = _report_output_paths(window_id, output_root)
@@ -315,21 +358,22 @@ def publish_completed_market_diagnostic_window(
     lifecycle_path = Path(lifecycle_root)
     if lifecycle_path.is_absolute() and not lifecycle_path.exists():
         return {"status": "not_started"}
-    try:
-        records = load_settled_weekly_records(lifecycle_root, as_of_date=as_of_date)
-    except MarketDiagnosticLifecycleError as exc:
-        raise MarketDiagnosticAggregationError(f"cannot load settled diagnostic lifecycle: {exc}") from exc
-    report = build_market_diagnostic_report(records, as_of_date=as_of_date)
+    report = build_market_diagnostic_report(lifecycle_root=lifecycle_root, as_of_date=as_of_date)
     if report is None:
+        records = _authorized_records(lifecycle_root, as_of_date=as_of_date)
         return {
             "status": "not_ready",
             "last_calendar_week_index": records[-1]["calendar_week_index"],
         }
-    status = write_market_diagnostic_report(report, output_root=output_root)
+    status = write_market_diagnostic_report(
+        lifecycle_root=lifecycle_root, output_root=output_root, as_of_date=as_of_date
+    )
+    # Both fields come out of the same derivation, so this result cannot report a
+    # window from one read of the store and a week count from another.
     return {
         "status": status,
         "window_id": report["window_summary"]["window_id"],
-        "last_calendar_week_index": records[-1]["calendar_week_index"],
+        "last_calendar_week_index": report["since_inception"]["through_calendar_week"],
     }
 
 

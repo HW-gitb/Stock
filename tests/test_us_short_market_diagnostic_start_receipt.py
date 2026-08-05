@@ -1,0 +1,315 @@
+from __future__ import annotations
+
+import copy
+import json
+from pathlib import Path
+import tempfile
+import unittest
+
+import engine.us_short_market_diagnostic_start_receipt as receipts
+from engine.us_short_market_diagnostic_lifecycle import (
+    MarketDiagnosticLifecycleError,
+    load_lifecycle_register,
+    persist_settled_weekly_record,
+)
+from engine.us_short_market_diagnostic_start_receipt import (
+    DiagnosticStartReceiptError,
+    RECEIPT_FILENAME,
+    build_start_receipt,
+    design_authority_sha256,
+    issue_start_receipt,
+    load_start_receipt,
+    start_receipt_sha256,
+    validate_start_receipt,
+)
+from engine.us_short_model_paper_portfolio import canonical_json_bytes
+from tests.test_us_short_market_diagnostic import _weekly_rows
+
+
+NOTIFICATION = {
+    "issued_at": "2025-12-29T00:00:00+00:00",
+    "issuer": "codex",
+    "notification_text": "US-short 26-week diagnostic design is complete.",
+}
+LEGAL_EPOCH = "us-short-26w-alt"
+
+
+def _issue(root, row, **overrides):
+    kwargs = {
+        "diagnostic_epoch": row["diagnostic_epoch"],
+        "completion_notification": dict(NOTIFICATION),
+        "first_decision_date": row["decision_date"],
+        "root": root,
+    }
+    kwargs.update(overrides)
+    return issue_start_receipt(**kwargs)
+
+
+def _receipt(row, **overrides):
+    kwargs = {
+        "diagnostic_epoch": row["diagnostic_epoch"],
+        "completion_notification": dict(NOTIFICATION),
+        "first_decision_date": row["decision_date"],
+    }
+    kwargs.update(overrides)
+    return build_start_receipt(**kwargs)
+
+
+class StartReceiptTest(unittest.TestCase):
+    """The clock has one door; these tests are about who may open it."""
+
+    def setUp(self) -> None:
+        self.rows = _weekly_rows()
+        self.row = self.rows[0]
+
+    # ---- the gate on the store -------------------------------------------------
+
+    def test_week_one_is_refused_without_a_receipt(self) -> None:
+        with tempfile.TemporaryDirectory() as td:
+            root = Path(td) / "market_diagnostic_private"
+            with self.assertRaises(MarketDiagnosticLifecycleError) as ctx:
+                persist_settled_weekly_record(self.row, root=root)
+            self.assertIn("start receipt", str(ctx.exception))
+            self.assertFalse((root / "lifecycle_register.json").exists())
+
+    def test_orphan_recovery_cannot_open_the_clock_either(self) -> None:
+        """The second door: an orphan week-1 file with no register."""
+
+        with tempfile.TemporaryDirectory() as td:
+            root = Path(td) / "market_diagnostic_private"
+            orphan = root / "weeks" / self.row["decision_date"] / "weekly_record.json"
+            orphan.parent.mkdir(parents=True, exist_ok=True)
+            orphan.write_bytes(canonical_json_bytes(self.row))
+            with self.assertRaises(MarketDiagnosticLifecycleError) as ctx:
+                persist_settled_weekly_record(self.row, root=root)
+            self.assertIn("start receipt", str(ctx.exception))
+            self.assertFalse((root / "lifecycle_register.json").exists())
+
+    def test_a_receipt_opens_the_clock_and_its_digest_is_recorded(self) -> None:
+        with tempfile.TemporaryDirectory() as td:
+            root = Path(td) / "market_diagnostic_private"
+            issued = _issue(root, self.row)
+            self.assertEqual("issued", issued["status"])
+            result = persist_settled_weekly_record(self.row, root=root)
+            self.assertEqual(1, result["calendar_week_index"])
+            register = load_lifecycle_register(root)
+            self.assertEqual(issued["receipt_sha256"], register["start_receipt_sha256"])
+
+    def test_a_receipt_for_another_week_does_not_authorize_this_one(self) -> None:
+        """A receipt is not a blanket permit; it names one decision date."""
+
+        with tempfile.TemporaryDirectory() as td:
+            root = Path(td) / "market_diagnostic_private"
+            _issue(root, self.row, first_decision_date=self.rows[3]["decision_date"])
+            with self.assertRaises(MarketDiagnosticLifecycleError) as ctx:
+                persist_settled_weekly_record(self.row, root=root)
+            self.assertIn("decision date", str(ctx.exception))
+
+    def test_a_receipt_from_another_epoch_does_not_authorize_this_one(self) -> None:
+        with tempfile.TemporaryDirectory() as td:
+            root = Path(td) / "market_diagnostic_private"
+            _issue(root, self.row, diagnostic_epoch=LEGAL_EPOCH)
+            with self.assertRaises(MarketDiagnosticLifecycleError) as ctx:
+                persist_settled_weekly_record(self.row, root=root)
+            self.assertIn("epoch", str(ctx.exception))
+
+    def test_the_gates_own_assertions_each_have_a_case(self) -> None:
+        """The week/window checks inside the gate, driven directly.
+
+        Through the store these are shadowed by the record validator, so without
+        this they would be free to rot: deleting either check keeps every other
+        test green.
+        """
+
+        with tempfile.TemporaryDirectory() as td:
+            root = Path(td) / "market_diagnostic_private"
+            _issue(root, self.row)
+            for field, value, expected in (
+                ("calendar_week_index", 2, "calendar week"),
+                ("window_id", "26w-27-52", "window"),
+            ):
+                mutated = copy.deepcopy(self.row)
+                mutated[field] = value
+                with self.assertRaises(DiagnosticStartReceiptError) as ctx:
+                    receipts.assert_first_week_is_authorized(mutated, root=root)
+                self.assertIn(expected, str(ctx.exception))
+
+    # ---- the digests must be earned, not asserted ------------------------------
+
+    def test_a_receipt_whose_design_digest_is_invented_opens_nothing(self) -> None:
+        """The forgery that used to work: a hand-written receipt full of zeros."""
+
+        with tempfile.TemporaryDirectory() as td:
+            root = Path(td) / "market_diagnostic_private"
+            root.mkdir(parents=True)
+            forged = _receipt(self.row)
+            forged["design_authority"]["contract_sha256"] = "0" * 64
+            (root / RECEIPT_FILENAME).write_bytes(canonical_json_bytes(forged))
+            with self.assertRaises(MarketDiagnosticLifecycleError) as ctx:
+                persist_settled_weekly_record(self.row, root=root)
+            self.assertIn("contract on disk", str(ctx.exception))
+            self.assertFalse((root / "lifecycle_register.json").exists())
+
+    def test_a_notification_digest_must_match_its_own_text(self) -> None:
+        forged = _receipt(self.row)
+        forged["completion_notification"]["notification_sha256"] = "0" * 64
+        with self.assertRaises(DiagnosticStartReceiptError) as ctx:
+            validate_start_receipt(forged)
+        self.assertIn("notification text", str(ctx.exception))
+
+    def test_the_notification_is_the_only_variable_that_can_block_minting(self) -> None:
+        """No default notification exists: the clock cannot start by omission.
+
+        The epoch is deliberately a legal one here. An illegal epoch would make
+        every case below raise for a reason that has nothing to do with the
+        notification, which is exactly how this test used to pass while proving
+        nothing.
+        """
+
+        self.assertIsNotNone(_receipt(self.row, diagnostic_epoch=LEGAL_EPOCH))
+
+        with self.assertRaises(TypeError):
+            build_start_receipt(
+                diagnostic_epoch=LEGAL_EPOCH,
+                first_decision_date=self.row["decision_date"],
+            )
+        for broken in (
+            {**NOTIFICATION, "issued_at": "2026-08-05 00:00:00"},   # no timezone
+            {**NOTIFICATION, "notification_text": "too short"},      # not a notification
+            {k: v for k, v in NOTIFICATION.items() if k != "notification_text"},
+            {},
+        ):
+            with self.assertRaises(DiagnosticStartReceiptError):
+                build_start_receipt(
+                    diagnostic_epoch=LEGAL_EPOCH,
+                    completion_notification=broken,
+                    first_decision_date=self.row["decision_date"],
+                )
+
+    # ---- authorization has to survive the moment it is granted -----------------
+
+    def test_deleting_the_receipt_stops_the_clock_it_opened(self) -> None:
+        with tempfile.TemporaryDirectory() as td:
+            root = Path(td) / "market_diagnostic_private"
+            _issue(root, self.row)
+            persist_settled_weekly_record(self.rows[0], root=root)
+            (root / RECEIPT_FILENAME).unlink()
+            with self.assertRaises(MarketDiagnosticLifecycleError) as ctx:
+                persist_settled_weekly_record(self.rows[1], root=root)
+            self.assertIn("missing", str(ctx.exception))
+
+    def test_swapping_the_receipt_stops_the_clock_it_opened(self) -> None:
+        with tempfile.TemporaryDirectory() as td:
+            root = Path(td) / "market_diagnostic_private"
+            _issue(root, self.row)
+            persist_settled_weekly_record(self.rows[0], root=root)
+            replacement = _receipt(self.row, diagnostic_epoch=LEGAL_EPOCH)
+            (root / RECEIPT_FILENAME).write_bytes(canonical_json_bytes(replacement))
+            with self.assertRaises(MarketDiagnosticLifecycleError) as ctx:
+                persist_settled_weekly_record(self.rows[1], root=root)
+            self.assertIn("no longer matches", str(ctx.exception))
+
+    def test_a_register_carried_to_a_store_with_no_receipt_cannot_continue(self) -> None:
+        with tempfile.TemporaryDirectory() as td:
+            source = Path(td) / "market_diagnostic_private"
+            _issue(source, self.row)
+            persist_settled_weekly_record(self.rows[0], root=source)
+            elsewhere = Path(td) / "runs_private"
+            elsewhere.mkdir(parents=True)
+            for item in source.rglob("*"):
+                if item.is_file() and item.name != RECEIPT_FILENAME:
+                    target = elsewhere / item.relative_to(source)
+                    target.parent.mkdir(parents=True, exist_ok=True)
+                    target.write_bytes(item.read_bytes())
+            with self.assertRaises(MarketDiagnosticLifecycleError):
+                persist_settled_weekly_record(self.rows[1], root=elsewhere)
+
+    # ---- the receipt file itself -----------------------------------------------
+
+    def test_reissuing_the_same_receipt_is_idempotent_but_re_anchoring_is_refused(self) -> None:
+        with tempfile.TemporaryDirectory() as td:
+            root = Path(td) / "market_diagnostic_private"
+            first = _issue(root, self.row)
+            again = _issue(root, self.row)
+            self.assertEqual("idempotent", again["status"])
+            self.assertEqual(first["receipt_sha256"], again["receipt_sha256"])
+            with self.assertRaises(DiagnosticStartReceiptError) as ctx:
+                _issue(root, self.row, first_decision_date=self.rows[5]["decision_date"])
+            self.assertIn("already anchors", str(ctx.exception))
+
+    def test_a_tampered_or_reflowed_stored_receipt_is_refused_on_load(self) -> None:
+        with tempfile.TemporaryDirectory() as td:
+            root = Path(td) / "market_diagnostic_private"
+            _issue(root, self.row)
+            path = root / RECEIPT_FILENAME
+
+            doctored = json.loads(path.read_bytes().decode("utf-8"))
+            doctored["boundary"]["counts_ship_gate"] = True
+            path.write_bytes(canonical_json_bytes(doctored))
+            with self.assertRaises(DiagnosticStartReceiptError):
+                load_start_receipt(root)
+
+            path.write_text(json.dumps(_receipt(self.row), indent=2), encoding="utf-8")
+            with self.assertRaises(DiagnosticStartReceiptError) as ctx:
+                load_start_receipt(root)
+            self.assertIn("canonical", str(ctx.exception))
+
+    def test_a_trailing_newline_cannot_ride_through_any_pattern(self) -> None:
+        """Python's ``$`` also matches before a trailing newline; ``\\Z`` does not."""
+
+        base = _receipt(self.row)
+        for path in (
+            ("diagnostic_epoch",),
+            ("design_authority", "contract_sha256"),
+            ("completion_notification", "notification_sha256"),
+            ("first_calendar_week", "decision_date"),
+        ):
+            mutated = copy.deepcopy(base)
+            target = mutated
+            for key in path[:-1]:
+                target = target[key]
+            target[path[-1]] = f"{target[path[-1]]}\n"
+            with self.assertRaises(DiagnosticStartReceiptError, msg=f"{path} accepted a newline"):
+                validate_start_receipt(mutated)
+
+    def test_nothing_but_a_decision_can_produce_a_receipt(self) -> None:
+        """The design's named bypasses are all shut by construction."""
+
+        receipt = _receipt(self.row)
+        self.assertIs(False, receipt["boundary"]["issued_by_automatic_inference"])
+        self.assertEqual(1, receipt["first_calendar_week"]["calendar_week_index"])
+        self.assertEqual("26w-1-26", receipt["first_calendar_week"]["window_id"])
+        self.assertEqual(design_authority_sha256(), receipt["design_authority"]["contract_sha256"])
+
+        flipped = copy.deepcopy(receipt)
+        flipped["boundary"]["issued_by_automatic_inference"] = True
+        with self.assertRaises(DiagnosticStartReceiptError):
+            validate_start_receipt(flipped)
+
+        swapped = copy.deepcopy(receipt)
+        swapped["design_authority"]["document_path"] = "docs/CURRENT.md"
+        with self.assertRaises(DiagnosticStartReceiptError):
+            validate_start_receipt(swapped)
+
+    def test_public_entries_raise_the_modules_own_error_for_junk_input(self) -> None:
+        for bad in (None, 0, 10 ** 400, float("nan"), [], {}, b"x", set(), object()):
+            with self.assertRaises(DiagnosticStartReceiptError, msg=f"{bad!r} escaped typed"):
+                load_start_receipt(bad)
+            with self.assertRaises(DiagnosticStartReceiptError, msg=f"{bad!r} escaped typed"):
+                receipts.assert_first_week_is_authorized(self.row, root=bad)
+
+    def test_the_anchor_digest_is_what_the_register_is_checked_against(self) -> None:
+        with tempfile.TemporaryDirectory() as td:
+            root = Path(td) / "market_diagnostic_private"
+            issued = _issue(root, self.row)
+            self.assertEqual(
+                issued["receipt_sha256"], start_receipt_sha256(load_start_receipt(root))
+            )
+            with self.assertRaises(DiagnosticStartReceiptError):
+                receipts.assert_clock_authorization_still_holds("f" * 64, root=root)
+            with self.assertRaises(DiagnosticStartReceiptError):
+                receipts.assert_clock_authorization_still_holds(None, root=root)
+
+
+if __name__ == "__main__":
+    unittest.main()

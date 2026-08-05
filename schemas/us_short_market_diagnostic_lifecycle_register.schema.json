@@ -9,6 +9,7 @@
     "schema_name",
     "schema_version",
     "diagnostic_epoch",
+    "start_receipt_sha256",
     "calendar_week_count",
     "evaluable_week_count",
     "non_evaluable_week_count",
@@ -24,26 +25,73 @@
     "boundary"
   ],
   "properties": {
-    "schema_name": {"const": "us_short_market_diagnostic_lifecycle_register"},
-    "schema_version": {"const": "1.1.0"},
-    "diagnostic_epoch": {"type": "string", "minLength": 1},
-    "calendar_week_count": {"type": "integer", "minimum": 1},
-    "evaluable_week_count": {"type": "integer", "minimum": 0},
-    "non_evaluable_week_count": {"type": "integer", "minimum": 0},
-    "consecutive_paper_evaluable_week_count": {"type": "integer", "minimum": 0},
-    "last_calendar_week_index": {"type": "integer", "minimum": 1},
-    "last_decision_date": {"$ref": "#/definitions/date8"},
-    "last_valuation_date": {"$ref": "#/definitions/date8"},
-    "current_window_id": {"type": "string", "pattern": "^26w-[1-9][0-9]*-[1-9][0-9]*$"},
-    "current_window_week_count": {"type": "integer", "minimum": 1, "maximum": 26},
+    "schema_name": {
+      "const": "us_short_market_diagnostic_lifecycle_register"
+    },
+    "schema_version": {
+      "const": "1.2.0",
+      "description": "1.2.0 adds the required start_receipt_sha256 anchor. The version is the only thing that tells a later reader which shape they are holding, so a required field may not be added without moving it."
+    },
+    "diagnostic_epoch": {
+      "type": "string",
+      "minLength": 1
+    },
+    "calendar_week_count": {
+      "type": "integer",
+      "minimum": 1
+    },
+    "evaluable_week_count": {
+      "type": "integer",
+      "minimum": 0
+    },
+    "non_evaluable_week_count": {
+      "type": "integer",
+      "minimum": 0
+    },
+    "consecutive_paper_evaluable_week_count": {
+      "type": "integer",
+      "minimum": 0
+    },
+    "last_calendar_week_index": {
+      "type": "integer",
+      "minimum": 1
+    },
+    "last_decision_date": {
+      "$ref": "#/definitions/date8"
+    },
+    "last_valuation_date": {
+      "$ref": "#/definitions/date8"
+    },
+    "current_window_id": {
+      "type": "string",
+      "pattern": "^26w-[1-9][0-9]*-[1-9][0-9]*$"
+    },
+    "current_window_week_count": {
+      "type": "integer",
+      "minimum": 1,
+      "maximum": 26
+    },
     "record_refs": {
       "type": "array",
       "minItems": 1,
-      "items": {"$ref": "#/definitions/record_ref"}
+      "items": {
+        "$ref": "#/definitions/record_ref"
+      }
     },
-    "v1_1_reminder": {"$ref": "#/definitions/v1_1_reminder"},
-    "v1_1_attribution": {"$ref": "#/definitions/v1_1_attribution"},
-    "boundary": {"$ref": "#/definitions/boundary"}
+    "v1_1_reminder": {
+      "$ref": "#/definitions/v1_1_reminder"
+    },
+    "v1_1_attribution": {
+      "$ref": "#/definitions/v1_1_attribution"
+    },
+    "boundary": {
+      "$ref": "#/definitions/boundary"
+    },
+    "start_receipt_sha256": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{64}\\Z",
+      "description": "Digest of the start receipt this clock was opened with. Recorded so every later write can re-check that the anchor is still the one the count began from."
+    }
   },
   "definitions": {
     "date8": {
@@ -66,25 +114,51 @@
         "strategy_evaluable"
       ],
       "properties": {
-        "calendar_week_index": {"type": "integer", "minimum": 1},
-        "decision_date": {"$ref": "#/definitions/date8"},
-        "valuation_date": {"$ref": "#/definitions/date8"},
+        "calendar_week_index": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "decision_date": {
+          "$ref": "#/definitions/date8"
+        },
+        "valuation_date": {
+          "$ref": "#/definitions/date8"
+        },
         "weekly_record_relative_path": {
           "type": "string",
           "pattern": "^weeks/[0-9]{8}/weekly_record[.]json$"
         },
-        "weekly_record_sha256": {"$ref": "#/definitions/sha256"},
-        "strategy_evaluable": {"type": "boolean"}
+        "weekly_record_sha256": {
+          "$ref": "#/definitions/sha256"
+        },
+        "strategy_evaluable": {
+          "type": "boolean"
+        }
       }
     },
     "v1_1_reminder": {
       "type": "object",
       "additionalProperties": false,
-      "required": ["status", "evaluable_week_count", "text"],
+      "required": [
+        "status",
+        "evaluable_week_count",
+        "text"
+      ],
       "properties": {
-        "status": {"enum": ["pending", "active"]},
-        "evaluable_week_count": {"type": "integer", "minimum": 0},
-        "text": {"type": "string", "minLength": 1}
+        "status": {
+          "enum": [
+            "pending",
+            "active"
+          ]
+        },
+        "evaluable_week_count": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "text": {
+          "type": "string",
+          "minLength": 1
+        }
       }
     },
     "v1_1_attribution": {
@@ -100,22 +174,55 @@
         "sticky_after_activation"
       ],
       "properties": {
-        "status": {"enum": ["pending", "active"]},
-        "trigger_consecutive_weeks": {"const": 4},
-        "current_consecutive_paper_evaluable_weeks": {"type": "integer", "minimum": 0},
+        "status": {
+          "enum": [
+            "pending",
+            "active"
+          ]
+        },
+        "trigger_consecutive_weeks": {
+          "const": 4
+        },
+        "current_consecutive_paper_evaluable_weeks": {
+          "type": "integer",
+          "minimum": 0
+        },
         "activation_trigger_week_index": {
-          "anyOf": [{"type": "integer", "minimum": 1}, {"type": "null"}]
+          "anyOf": [
+            {
+              "type": "integer",
+              "minimum": 1
+            },
+            {
+              "type": "null"
+            }
+          ]
         },
         "effective_from_week_index": {
-          "anyOf": [{"type": "integer", "minimum": 2}, {"type": "null"}]
+          "anyOf": [
+            {
+              "type": "integer",
+              "minimum": 2
+            },
+            {
+              "type": "null"
+            }
+          ]
         },
         "attribution_epoch": {
           "anyOf": [
-            {"type": "string", "pattern": "^us-short-v1[.]1-[0-9a-f]{24}$"},
-            {"type": "null"}
+            {
+              "type": "string",
+              "pattern": "^us-short-v1[.]1-[0-9a-f]{24}$"
+            },
+            {
+              "type": "null"
+            }
           ]
         },
-        "sticky_after_activation": {"const": true}
+        "sticky_after_activation": {
+          "const": true
+        }
       }
     },
     "boundary": {
@@ -134,16 +241,36 @@
         "private_store_only"
       ],
       "properties": {
-        "diagnostic_only": {"const": true},
-        "comparison_only": {"const": true},
-        "counts_ship_gate": {"const": false},
-        "changes_selection_or_action": {"const": false},
-        "automatic_policy_switch": {"const": false},
-        "broker_or_order_automation": {"const": false},
-        "provider_fetch": {"const": false},
-        "account_write": {"const": false},
-        "diagnostic_store_write": {"const": true},
-        "private_store_only": {"const": true}
+        "diagnostic_only": {
+          "const": true
+        },
+        "comparison_only": {
+          "const": true
+        },
+        "counts_ship_gate": {
+          "const": false
+        },
+        "changes_selection_or_action": {
+          "const": false
+        },
+        "automatic_policy_switch": {
+          "const": false
+        },
+        "broker_or_order_automation": {
+          "const": false
+        },
+        "provider_fetch": {
+          "const": false
+        },
+        "account_write": {
+          "const": false
+        },
+        "diagnostic_store_write": {
+          "const": true
+        },
+        "private_store_only": {
+          "const": true
+        }
       }
     }
   }

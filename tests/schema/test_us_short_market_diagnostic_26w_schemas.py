@@ -17,6 +17,7 @@ SCHEMA_NAMES = [
     "us_short_market_diagnostic_local_price_packet.schema.json",
     "us_short_market_diagnostic_lifecycle_register.schema.json",
     "us_short_market_diagnostic_report.schema.json",
+    "us_short_market_diagnostic_start_receipt.schema.json",
     "us_short_market_diagnostic_etf_total_return_sidecar.schema.json",
     "us_short_market_diagnostic_attribution_input.schema.json",
     "us_short_market_diagnostic_attribution_report.schema.json",
@@ -213,8 +214,9 @@ def _local_price_packet() -> dict:
 def _lifecycle_register() -> dict:
     return {
         "schema_name": "us_short_market_diagnostic_lifecycle_register",
-        "schema_version": "1.1.0",
+        "schema_version": "1.2.0",
         "diagnostic_epoch": "us_short_market_diagnostic_26w_v1",
+        "start_receipt_sha256": "a" * 64,
         "calendar_week_count": 1,
         "evaluable_week_count": 1,
         "non_evaluable_week_count": 0,

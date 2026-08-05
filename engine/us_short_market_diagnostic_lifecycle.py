@@ -34,6 +34,12 @@ from engine.us_short_market_diagnostic import (
     validate_weekly_record,
     window_containing_week,
 )
+from engine.us_short_market_diagnostic_start_receipt import (
+    DiagnosticStartReceiptError,
+    assert_clock_authorization_still_holds,
+    assert_first_week_is_authorized,
+    start_receipt_sha256,
+)
 from engine.us_short_model_paper_portfolio import artifact_sha256, canonical_json_bytes
 from engine.us_short_private_paths import PrivatePathError, reject_nonprivate_output_path
 
@@ -269,7 +275,14 @@ def _derive_v1_1_attribution(records: list[dict[str, Any]]) -> dict[str, Any]:
 
 
 def build_weekly_report_reminder(register: Mapping[str, Any]) -> dict[str, Any]:
-    """Build the registered, de-identified §13 weekly-report reminder block."""
+    """Build the registered, de-identified §13 weekly-report reminder block.
+
+    The comparison below is a self-consistency check on a register in hand, not a
+    verification: expected and actual both come out of the same object, so it
+    catches a hand-edited field and nothing else. The verification that the
+    register is derived from the records lives in ``load_lifecycle_register``,
+    which is where it can compare two different artifacts.
+    """
 
     if not isinstance(register, Mapping):
         raise MarketDiagnosticLifecycleError("lifecycle register must be an object")
@@ -321,6 +334,60 @@ def render_weekly_report_reminder(register: Mapping[str, Any]) -> str:
     )
 
 
+def _require_start_receipt(record: Mapping[str, Any], store_root: Path) -> dict[str, Any]:
+    """Week 1 exists only if a design-completion notification said so.
+
+    Knife 7 gate. Every other check in this store is about a week being
+    well-formed; this is the one check about whether the clock may be running
+    at all. It is applied to BOTH paths that can create a register, because
+    orphan recovery opens the clock just as surely as the ordinary path.
+    """
+
+    try:
+        return assert_first_week_is_authorized(record, root=store_root)
+    except DiagnosticStartReceiptError as exc:
+        raise MarketDiagnosticLifecycleError(str(exc)) from exc
+
+
+def _require_unchanged_anchor(register: Mapping[str, Any], store_root: Path) -> dict[str, Any]:
+    """Every later write re-checks the anchor, not just the first one.
+
+    Week 1's gate proves the clock opened legitimately; this proves nobody has
+    since deleted, corrupted or swapped the receipt underneath a running count.
+    """
+
+    try:
+        refs = register.get("record_refs") or []
+        first_ref = refs[0] if refs else None
+        return assert_clock_authorization_still_holds(
+            register.get("start_receipt_sha256"),
+            root=store_root,
+            first_record={
+                "decision_date": (first_ref or {}).get("decision_date"),
+                "diagnostic_epoch": register.get("diagnostic_epoch"),
+            }
+            if first_ref is not None
+            else None,
+        )
+    except DiagnosticStartReceiptError as exc:
+        raise MarketDiagnosticLifecycleError(str(exc)) from exc
+
+
+def _require_weekly_cadence(previous: str, current: str) -> None:
+    """A calendar week has to be a week.
+
+    Strictly increasing dates alone would let twenty-six consecutive *days* publish
+    as a twenty-six *week* verdict, which is exactly the shape a reader of the
+    scorecard cannot see.
+    """
+
+    gap = (_date8(current, "decision_date") - _date8(previous, "decision_date")).days
+    if gap != 7:
+        raise MarketDiagnosticLifecycleError(
+            f"diagnostic calendar weeks must advance exactly seven days, got {gap}"
+        )
+
+
 def _record_relative_path(record: Mapping[str, Any]) -> str:
     return f"weeks/{record['decision_date']}/{WEEKLY_RECORD_FILENAME}"
 
@@ -341,7 +408,8 @@ def _record_files(root: Path) -> set[str]:
 
 
 def _register_from_records(
-    records: list[dict[str, Any]], *, as_of_date: str | None = None
+    records: list[dict[str, Any]], *, as_of_date: str | None = None,
+    start_receipt_digest: str | None = None,
 ) -> dict[str, Any]:
     if not records:
         raise MarketDiagnosticLifecycleError("cannot build an empty diagnostic lifecycle register")
@@ -364,6 +432,8 @@ def _register_from_records(
             raise MarketDiagnosticLifecycleError("diagnostic_epoch cannot be silently mixed in one lifecycle register")
         if previous_decision is not None and record["decision_date"] <= previous_decision:
             raise MarketDiagnosticLifecycleError("diagnostic decision dates must be strictly increasing")
+        if previous_decision is not None:
+            _require_weekly_cadence(previous_decision, record["decision_date"])
         if previous_valuation is not None and record["valuation_date"] <= previous_valuation:
             raise MarketDiagnosticLifecycleError("diagnostic valuation dates must be strictly increasing")
         previous_decision = record["decision_date"]
@@ -386,8 +456,9 @@ def _register_from_records(
     attribution = _derive_v1_1_attribution(records)
     return {
         "schema_name": "us_short_market_diagnostic_lifecycle_register",
-        "schema_version": "1.1.0",
+        "schema_version": "1.2.0",
         "diagnostic_epoch": epoch,
+        "start_receipt_sha256": start_receipt_digest,
         "calendar_week_count": len(records),
         "evaluable_week_count": evaluable_week_count,
         "non_evaluable_week_count": len(records) - evaluable_week_count,
@@ -447,6 +518,8 @@ def _load_records_for_register(
             raise MarketDiagnosticLifecycleError(f"lifecycle register ref does not bind weekly record: {relative}")
         if previous_decision is not None and record["decision_date"] <= previous_decision:
             raise MarketDiagnosticLifecycleError("diagnostic decision dates must be strictly increasing")
+        if previous_decision is not None:
+            _require_weekly_cadence(previous_decision, record["decision_date"])
         if previous_valuation is not None and record["valuation_date"] <= previous_valuation:
             raise MarketDiagnosticLifecycleError("diagnostic valuation dates must be strictly increasing")
         previous_decision = record["decision_date"]
@@ -474,7 +547,12 @@ def load_lifecycle_register(
         raise MarketDiagnosticLifecycleError("diagnostic lifecycle register is not initialized")
     register, _digest = _read_canonical_json(path)
     records = _load_records_for_register(store_root, register, as_of_date=as_of_date)
-    expected = _register_from_records(records, as_of_date=as_of_date)
+    # The anchor digest is derived from the receipt on disk, never from the register's
+    # own claim: feeding a value back in and comparing it to itself verifies nothing.
+    anchor = _require_unchanged_anchor(register, store_root)
+    expected = _register_from_records(
+        records, as_of_date=as_of_date, start_receipt_digest=start_receipt_sha256(anchor)
+    )
     if expected != register:
         raise MarketDiagnosticLifecycleError("diagnostic lifecycle register is not derived from weekly records")
     return register
@@ -542,6 +620,7 @@ def persist_settled_weekly_record(
 
     if register is None and records:
         orphan = records[0]
+        anchor = _require_start_receipt(orphan, store_root)
         orphan_state = _derive_v1_1_attribution(records)
         incoming["v1_1_reminder"] = build_v1_1_reminder(
             int(orphan["strategy"]["strategy_evaluable"]),
@@ -554,7 +633,9 @@ def persist_settled_weekly_record(
         _validate_weekly_record_for_store(incoming, as_of_date=as_of_date)
         if _record_relative_path(orphan) != incoming_path_relative or artifact_sha256(orphan) != artifact_sha256(incoming):
             raise MarketDiagnosticLifecycleError("orphan diagnostic weekly record conflicts with the retry input")
-        recovered_register = _register_from_records(records, as_of_date=as_of_date)
+        recovered_register = _register_from_records(
+            records, as_of_date=as_of_date, start_receipt_digest=start_receipt_sha256(anchor)
+        )
         _atomic_write(_private_path(store_root, REGISTER_FILENAME), recovered_register)
         return {
             "status": "recovered",
@@ -575,6 +656,7 @@ def persist_settled_weekly_record(
                 raise MarketDiagnosticLifecycleError("immutable week identity conflicts with its existing record")
             incoming["v1_1_reminder"] = dict(existing["v1_1_reminder"])
             _validate_weekly_record_for_store(incoming, as_of_date=as_of_date)
+            _require_unchanged_anchor(register, store_root)
             if artifact_sha256(existing) != artifact_sha256(incoming):
                 raise MarketDiagnosticLifecycleError("immutable diagnostic weekly record conflict")
             return {
@@ -586,6 +668,8 @@ def persist_settled_weekly_record(
                 "v1_1_reminder": dict(register["v1_1_reminder"]),
                 "weekly_report_reminder": build_weekly_report_reminder(register),
             }
+        _require_unchanged_anchor(register, store_root)
+        anchor = None
         expected_week = register["last_calendar_week_index"] + 1
         if incoming_week != expected_week:
             raise MarketDiagnosticLifecycleError(
@@ -596,6 +680,7 @@ def persist_settled_weekly_record(
     else:
         if incoming_week != 1:
             raise MarketDiagnosticLifecycleError("the first diagnostic weekly record must be calendar week 1")
+        anchor = _require_start_receipt(incoming, store_root)
 
     next_records = [*records, incoming]
     next_state = _derive_v1_1_attribution(next_records)
@@ -609,6 +694,20 @@ def persist_settled_weekly_record(
         attribution_epoch=next_state["attribution_epoch"],
     )
     _validate_weekly_record_for_store(incoming, as_of_date=as_of_date)
+    # Derive the next register BEFORE the record lands. Everything that can refuse
+    # this week — cadence, ordering, counts — lives in that derivation, and a record
+    # written ahead of it becomes an orphan the store can never reconcile again:
+    # one mistyped week would otherwise brick the store permanently, with no
+    # recovery that does not mean hand-deleting a file the design calls immutable.
+    anchor_digest_precheck = (
+        start_receipt_sha256(anchor)
+        if anchor is not None
+        else register["start_receipt_sha256"]
+    )
+    _register_from_records(
+        next_records, as_of_date=as_of_date, start_receipt_digest=anchor_digest_precheck
+    )
+
     if incoming_path.is_file():
         existing, existing_digest = _read_canonical_json(incoming_path)
         if existing_digest != artifact_sha256(incoming):
@@ -618,7 +717,14 @@ def persist_settled_weekly_record(
     else:
         _atomic_write(incoming_path, incoming)
 
-    next_register = _register_from_records(next_records, as_of_date=as_of_date)
+    anchor_digest = (
+        start_receipt_sha256(anchor)
+        if anchor is not None
+        else register["start_receipt_sha256"]
+    )
+    next_register = _register_from_records(
+        next_records, as_of_date=as_of_date, start_receipt_digest=anchor_digest
+    )
     register_path = _private_path(store_root, REGISTER_FILENAME)
     _atomic_write(register_path, next_register)
     return {
