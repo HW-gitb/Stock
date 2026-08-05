@@ -31,7 +31,16 @@
 
 ## 3. 账户启动和本地输入
 
-10 万美元是一次性播种的归一化 model-paper 本金，不是真实账户资金。刀0不播种账户、不创建 head_manifest、不启动26周时钟。
+US-short 当前仍是工作基线，设计尚未完成。现在必须保持：
+
+- `diagnostic_start = null`；
+- `diagnostic_epoch = unset`；
+- `clock_status = not_started`；
+- 不产生第 1 周，不做历史回填。
+
+26 周时钟的唯一启动门是：未来由 Codex 完成设计审计后明确发出独立的 `设计完成` 通知，并在同一操作生成 source-bound、不可变、幂等的 `diagnostic_start_receipt`。通知、receipt、冻结的首个 canonical decision week 三者缺一，生命周期写入必须 fail-closed。`2026-06-20`、本文件日期、部件完成日期、账户播种日期和任何历史提交都不是起点。
+
+10 万美元是一次性播种的归一化 model-paper 本金，不是真实账户资金。刀0不播种账户、不创建 head_manifest、不生成启动 receipt、不启动26周时钟。
 
 正式 model-paper 路径启动后，必须先产生：
 
@@ -40,7 +49,7 @@
 - 首份真实已结算 settlement；
 - 首份 nav_snapshot。
 
-首份真实已结算 nav_snapshot 才是诊断第1个 calendar week。禁止 fixture、历史回填、事后重建和未来数据。
+启动 receipt 冻结的首个 canonical decision week 才是第 1 个 calendar week；起点由未来的完成通知确定，不由某个部件何时建完决定。首份真实已结算 `nav_snapshot` 只决定该周是否可评估，不得推迟或重置时钟。若启动后某周因部件或数据缺失不能评估，必须记为 `no_count` / `unavailable`，仍占一个日历周；禁止 fixture、历史回填、事后重建和未来数据。
 
 策略侧每周从私有 model-paper store 读取：
 
@@ -153,17 +162,21 @@ HAC t 值只作描述，不作自动通过、失败或策略切换。
 
 v1只回答总成绩；v1.1解释总成绩来自仓位、现金，还是主动系统效果。
 
-v1.1在4—8个连续、真实、paper_evaluable = true 的可评估周后实施：
+v1.1 代码可以提前存在，但运行态必须按以下机器规则自动启用，不依赖人工记忆：
 
-- 第4个可评估周：状态变为 ready_for_v1_1_implementation；
-- 第4—8个可评估周：完成独立 schema、代码、测试和审查；
-- 第8个可评估周仍未启用：状态为 overdue；
+- 启用前只统计连续、真实、`paper_evaluable = true` 的周；
+- 任一 `false` / `no_count` / `missing` 周把连续计数清零；
+- 第 4 个连续真周结算后，状态自动变为 `active`，下一周开始实际归因；
+- 激活时生成确定、不可变的 `attribution_epoch`；重复运行不得重复激活；
+- 激活后保持 active，后续缺数据只让该周归因为 `unavailable`，不自动停用；
 - v1.1不重置v1的26周时钟；
-- v1.1开启新的 attribution_epoch，不回填不可复现的历史归因。
+- v1.1不回填激活前无法按原时点重现的历史归因。
 
 从第1个 calendar week 起，weekly report 的 lifecycle reminder 必须显示：
 
-v1.1归因：待做。当前已积累 X 个可评估周，计划在4—8个可评估周后实施。作用：解释领先或落后主要来自仓位/现金，还是来自主动系统能力。当前v1只能告诉总成绩，暂时不能完整解释原因。
+未激活时显示：`v1.1 归因：等待自动启用；当前连续 paper_evaluable=true 周=X/4。作用：解释领先或落后主要来自仓位和现金，还是来自主动系统能力。`
+
+激活后显示：`v1.1 归因：已自动启用；缺少 VTI 总收益、PIT 现金收益或 g* 时只报 unavailable，不补零、不停用。`
 
 ## 10. 状态
 
@@ -181,8 +194,6 @@ v1.1归因：待做。当前已积累 X 个可评估周，计划在4—8个可�
 v1.1 reminder 状态：
 
 - pending；
-- ready_for_v1_1_implementation；
-- overdue；
 - active。
 
 ## 11. 规则版本
@@ -272,7 +283,7 @@ Knife 2 的本地适配器是 `engine/us_short_market_diagnostic_local_adapter.p
 
 逐周文件写入 `weeks/<decision_date>/weekly_record.json`，首次写入后不可变；`lifecycle_register.json` 只保存每周文件的相对路径、SHA、周号、日期和 `strategy_evaluable` 标记，以及由这些文件重新计算出的累计数。寄存器不保存 ticker、持仓、订单或账户金额。寄存器缺失、周文件孤儿、SHA 不一致或累计数不是由逐周文件推导出来时拒绝继续。
 
-这里的“可评估周”定义为 weekly record 中 `strategy.strategy_evaluable = true` 的周；`paper_evaluable = false` 或 `no_count = true` 不进入 v1.1 计数，但仍保留为日历周记录。第4个可评估周状态为 `ready_for_v1_1_implementation`，第8个及以后仍未启用 v1.1 时为 `overdue`。每周生成的 `us_short_market_diagnostic_v1_1` reminder block 注册到周报第12节，显示日历周数、可评估周数、当前状态和大白话作用说明。刀3不实现 v1.1 归因本身，也不生成26周摘要；摘要留给刀4，归因留给刀6。
+v1.1 的触发口径是 weekly record 中 `strategy.paper_evaluable = true` 的**连续周**，不是累计 `strategy_evaluable` 周数。启用前遇到 `paper_evaluable = false`、`no_count = true` 或 missing 周，连续计数归零；第 4 个连续真周结算后自动激活并生成确定的 `attribution_epoch`，从下一周生效。激活后状态保持 `active`。每周生成的 `us_short_market_diagnostic_v1_1` reminder block 注册到周报第12节，显示日历周数、累计可评估周数、连续可评估周数、当前状态和大白话作用说明。Knife3 负责自动激活状态，Knife6 负责归因计算；Knife7 负责把两者接入正式周任务。
 
 刀3的写入只写诊断轨私有目录；`provider_fetch=false`、`account_write=false`、`changes_selection_or_action=false`、`automatic_policy_switch=false`、`counts_ship_gate=false`。当前真实 model-paper 私有根尚未启动时，不创建 head、不生成虚假的第1周；刀3只通过临时夹具验证该接线。
 
@@ -299,6 +310,30 @@ Knife 5 的离线实现入口是 `engine/us_short_market_diagnostic_total_return
 - sidecar 不改变策略收益、model-paper NAV、选股、操作建议、仓位、v1.1 reminder 或 Ship gate。它只改善比较轨的基准收益口径；
 - 真实 provider 获取仍是单独授权的后续执行。raw 只能进入 gitignored 私有目录，tracked 摘要不得包含 secret、request URL、原始价格或原始事件行。本刀的 schema、纯复算器和本地接线测试不代表已经取得真实 ETF 股息数据。
 
+## 12.7 Knife 6：v1.1 仓位归因（诊断扩展）
+
+Knife 6 只解释“为什么和 VTI 的差距会这样”，不重新选股、不重算操作建议、不改 v1 周记录、NAV 或账户。实现入口是 `engine/us_short_market_diagnostic_attribution.py`，输入和输出分别是 `schemas/us_short_market_diagnostic_attribution_input.schema.json` 与 `schemas/us_short_market_diagnostic_attribution_report.schema.json`。
+
+- 输入必须逐周绑定四类来源：v1 的 paper 周收益、Knife5 已确认的 VTI total-return sidecar、决策时点可用的 PIT 3M T-bill 周收益，以及规则隐含的目标股票暴露 `g*`；目标暴露由“已持仓暴露 + 新订单暴露”再经过现金容量、环境仓位上限和 long-only 上限取最小值，不能从实际成交或事后 NAV 倒推；
+- 匹配基准为 `g* × VTI total return + (1 − g*) × PIT 3M T-bill return`。每周输出 `raw_excess`、`exposure_effect` 和 `active_system_effect`，其中后者是“策略实际收益 − 匹配基准收益”，因此保留选股、操作建议、仓位、执行限制和成本的综合影响，不冒充单独的选股效果；
+- 每周和窗口摘要都必须满足 `raw_excess = exposure_effect + active_system_effect`，允许的浮点残差只作机器精度归零；
+- 只要任一周缺少可复现的决策时点、VTI total return、PIT 现金收益或规则目标暴露，整份归因报告为 `unavailable`，相关指标保持 `null`，不补零、不使用固定现金利率、不用未来数据；
+- `attribution_epoch` 独立于 v1 的 `diagnostic_epoch`，用于标识归因规则版本。Knife 6 不回填无法按原时点重现的历史归因，也不修改既有 weekly/report schema；当前实现只提供离线契约和纯计算器，真实 model-paper、PIT T-bill 与 ETF 数据仍需各自获得授权后才能形成真实可评估结果；
+- 报告必须携带 `requested_exposure` 和四个约束值，由 validator 重新计算 `g* = min(requested, cash_capacity, environment_cap, long_only_cap)` 及 binding constraints；不得把实际成交仓位洗成规则目标仓位；
+- input、report 和 builder 全部接受 `as_of_date`，未来 `decision_date` / `valuation_date` / `available_at` 必须 fail-closed；公开入口统一抛 `AttributionError`；
+- 输入与报告边界固定为 `diagnostic_only=true`、`comparison_only=true`、`counts_ship_gate=false`、不改变选股/操作建议、不自动调仓、不调用 provider、不写账户。测试入口是 `tests/test_us_short_market_diagnostic_attribution.py`，schema 闭世界检查沿用 `tests/schema/test_us_short_market_diagnostic_26w_schemas.py`。
+
+## 12.8 Knife 7：完成通知门、诊断起点与正式周任务接线
+
+Knife7 是最后一刀，共负责四件事：
+
+1. 增加 `diagnostic_start_receipt` schema 和不可变私有落盘；receipt 只能由未来 Codex 的独立 `设计完成` 通知触发，且必须绑定设计权威摘要、通知摘要、通知时间、首个 canonical decision week 与 `diagnostic_epoch`；
+2. lifecycle 没有合格 receipt 时拒绝写第 1 周；不得从 `2026-06-20`、文件日期、部件日期或账户日期推断起点；
+3. 启动后按日历周推进；部件或数据缺失周写 `no_count` / `unavailable`，不延后 26 周边界；
+4. 正式 weekly task 每周自动读取 lifecycle 的 `v1_1_attribution`：pending 时只提醒；active 时自动调用 Knife6。缺 VTI total return、PIT 现金收益或 `g*` 时产出 `unavailable`，不要求用户手动操作。
+
+当前 Knife7 尚未执行，因此本文件中的启动门是冻结设计，不是启动通知；当前仍无真实第 1 周、真实 10 万美元 model-paper 账户、真实 ETF sidecar 或 PIT 现金归因结果。
+
 ## 13. Knife 0 验收
 
 刀0完成必须证明：
@@ -310,7 +345,7 @@ Knife 5 的离线实现入口是 `engine/us_short_market_diagnostic_total_return
 5. 策略 paper_evaluable 与基准 return quality 被分开；
 6. 价格收益降级不伪装成 total return；
 7. no_count、幂等、未来日期和错误时钟边界进入 schema/测试契约；
-8. v1.1 的4—8周时机、每周提醒和 overdue 规则被固定；
+8. v1.1 的连续4周自动激活、sticky active、每周提醒和 attribution_epoch 规则被固定；
 9. 刀0不联网、不调用 provider、不写 state 运行态、不改变正式选股或操作建议。
 
 ## 14. Knife 4 验收
@@ -334,3 +369,15 @@ Knife 5 完成必须证明：
 4. sidecar 与本地价格包的窗口、epoch、周号和估值日不一致时 fail-closed；
 5. 周记录与 model-paper 私有 store 仍只读，任何 sidecar 输入不触发 provider、账户写入、选股/操作建议或 Ship gate 变化；
 6. 固定 Python 下 sidecar schema、纯复算器、本地适配器和 flat overall status 回归测试通过。
+
+## 16. Knife 6 验收
+
+Knife 6 完成必须证明：
+
+1. attribution input/report schema 为合法 Draft 7，根和所有对象均 closed-world，source refs 能逐层回溯；
+2. `g*` 由规则目标暴露和现金/环境/long-only 约束计算，不读实际成交、不从事后 NAV 倒推；
+3. VTI 只有在 Knife5 `total_return_evaluable` 且 sidecar digest 齐全时进入归因；PIT 3M T-bill 必须同时满足有效期、as-of 和 decision-time 顺序；
+4. 每周和窗口摘要都输出 `raw_excess`、`exposure_effect`、`active_system_effect`，并通过恒等式回归；
+5. 缺少任一必要输入、发生 look-ahead、历史回填或边界篡改时 fail-closed，报告为 `unavailable` 且不把缺失值写成 0；
+6. 刀6不修改 v1 weekly/report schema，不改变选股、操作建议、NAV、账户或 Ship gate；
+7. 固定 Python 下 attribution 聚焦测试、旧诊断引擎回归和 schema/doc governance 测试通过。

@@ -133,6 +133,46 @@
 - **Required**: 无，未新开 register 条目。纯新增、零改动既有文件。**但 raw 里浮出两件本探针按设计不回答的事，留给刀③**：①**语料是否 current 未证**——返回序是**任意序**（日期在 2007–2025 间乱跳，非按日期排）且四只全带 `next_url`，故 10 行只是大语料里的任意一页；样本里最新只到 `2025-12-22`（QQQ），但这是抽样假象而非陈旧证据，两个方向都没证。该未知**不需要再起探针**：刀③ 本来就用按 `ex_dividend_date` 窗口过滤的市场级查询，那正是能回答它的查询形状；配一条「26 周窗口内基准季付票应 ≥1 个除息日，为 0 即 `not_evaluable`」的 fail-closed 断言即可把它转成运行时门。②**分红字段有两个口径**——`cash_amount` 与 `split_adjusted_cash_amount` 并存，另有 `historical_adjustment_factor`；因基准价格序列走 Massive grouped 已是拆股复权，总回报要自洽就必须选**拆股复权那一支**，刀① 冻口径时须显式指定、不得靠默认。另记一条小异常：`IWB` 的 `frequency=0`（其余三只为 4），不影响本腿（只用 ex-date + cash），但刀③ 不得依赖 `frequency`。
 - **Verify**: 本轮未注入 review-evidence token，故不引用。新包 `13 OK / 0.24s`；`git status` = 恰 3 个新文件 + README 一行，**零既有文件被改**，故按改动性质未起 lane 全量（覆盖范围就是本模块自身）。**植入对照**（不采信自指断言）：从 `_coverage_verdict` 摘掉 `matched_rows != row_count` 那道门 → 端到端用例 `test_provider_ignoring_the_ticker_filter_is_not_read_as_covered` 与阶梯用例**双双转红**（`covered` vs `rows_do_not_match_queried_ticker`），恢复后 13 OK。真实 `--dry-run-env` 实跑：`MASSIVE_API_KEY present: True` / `raw root gitignored: True` / `planned calls: 4 (max 4)`，即真跑前置条件已具备。
 - **Next**: 刀①（方法冻结）。分红源已定为 Massive，冻口径时须落定「用 `split_adjusted_cash_amount`」与「窗口内零基准除息日即 `not_evaluable`」两条。方案全文在桌面 `usshort-compare.md`（按用户令不进仓库）。
+## 2026-08-05 — Claude Code 复审 PASS（刀6 三条 Required 全闭）+ 裁定补扫六条仍原样成立
+
+- **Verdict/Action**: PASS。三条实测闭合，其中 g\* 那条的修法强于我给的判据——report 落盘四个 `constraint_exposures`，validator 据此**重推** `g_star` 而非只比大小。同轮附带的 v1.1 自动启用经整读判正确：连续 `paper_evaluable` 计数遇假清零、首达 4 连即锁定且不再改锚、归因自触发**次周**起效不回填、epoch 由触发身份摘要派生。
+- **Required**: 无新开。三条转 resolved。**补扫六条全部原样成立、无一被本轮触及**，判据与 F3 的「同类只修一处」注记只见 `docs/system_risk_register.md`（单一来源）。
+- **Verify**: review-evidence:c756450ea4f9。超时原因: 首轮 g\* 探针误改 `long_only_cap` 致拒绝来自错误的门，重新构造精准探针多花约 5 分钟。焦点超集包 `132 OK / 13.3s / exit 0`。自写复现：`g_star=0.9/requested=0.1` 且四约束保持合法 → 拒；四入口 `as_of_date` 经 `inspect.signature` 实测全 True 且 `getsource` 证 `build_attribution_input` 确有透传；400 位巨整数现抛 typed `AttributionError`。**自我更正**已记 register。Q2 静态实测：knife-1 引擎/`_total_return`/`_aggregator` 均不在本轮改动清单，`dividend_sidecar_sha256` 在 knife-1 仍 0 次，`as_of_date` 在三兄弟仍 0/0/0。
+- **Next**: 提交并合入 master。
+
+
+## 2026-08-05 — Codex executor/fixer 修复 Knife6 Required + 连续4周自动激活（独立复审未完成）
+
+- **Verdict/Action**：独立审查的三条 Required 均判断正确并已实现修复：report validator 重算规则隐含 `g*`/binding constraints，归因全入口接 `as_of_date`，公开失败统一为 `AttributionError`；lifecycle 改为连续4个 `paper_evaluable=true` 周后自动生成 attribution epoch、下一周生效且激活后 sticky。桌面 `usshort-compare.md` 已原地更新为8刀干净执行方案，新增 Knife7 完成通知 receipt + 正式周任务接线。
+- **Required**：三条仍为 `OPEN/NOT_VERIFIED`，等待 Claude Code 独立复审；Knife7 尚未执行。当前 US-short 仍是设计工作基线，本轮没有发出完成通知、没有启动 receipt、没有真实第1周。
+- **Verify**：固定 Python attribution `11 OK`、lifecycle/schema `17 OK`、刀1—6诊断轨 `66 OK`、route/doc governance `66 OK`；`py_compile=OK`；`git diff --check=clean`；`rg -n "ready_for_v1_1_implementation|overdue|4—8" <桌面方案+诊断设计+lifecycle owner/schema/test>` = `0 hits`；触及文件 `BOM/FFFD=0`；provider/network/paid/raw/account write=NOT_USED；commit=NOT_PERFORMED。
+- **Pre-Codex self-review**：matrix=`g* laundering / PIT future / exception family / 4-week activation reset+sticky / start-gate docs`；register=updated；handoff=updated；focused=`11 OK + 17 OK`；full-lane=`66 OK`；door=`route/doc governance 66 OK`；review=NOT_VERIFIED；commit=NOT_PERFORMED。
+- **Next**：Claude Code：独立复审 Knife6 修复与自动激活改动；PASS 后按 reviewer/committer 流程提交。
+
+## 2026-08-05 — Claude Code 审查 FAIL（26 周诊断轨 刀6 v1.1 归因：立项所依赖的 g* 规则没被守住）
+
+- **Verdict/Action**: FAIL，三条 Required（两条 P2 + 一条 P3），未提交。核心计算是对的：恒等式构造上成立、累计腿从复利净值重算、任一周 unavailable 则整段不出累计，且 `validate_attribution_report` 的闭世界重算挡下了我植入的全部五种篡改。但报告校验器不看 `g_star <= requested_exposure`，实际成交后的仓位可以洗进 `g_star` 而恒等式照样自洽——那正是本刀存在的理由所反对的。另本刀是全轨唯一没接前视门的模块。
+- **Required**: 三条，详情与判据只见 `docs/system_risk_register.md`（单一来源）：`...-REPORT-VALIDATOR-ALLOWS-REALIZED-EXPOSURE-LAUNDERING`、`...-NO-POINT-IN-TIME-FUTURE-DATA-GUARD`、`...-UNTYPED-EXCEPTIONS-ESCAPE-THE-PUBLIC-API`。六条 Optional 同处。
+- **Verify**: review-evidence:b746313bda4e。超时原因: 本刀按 rule 8 升级面起了独立对抗 agent，其运行约 10.3 分钟，占满预算。焦点超集包 `127 OK / 12.0s / exit 0`——三条 Required **全非测试红**。自写植入五项（含伪造 `identity_residual` 掩盖）全被拒；两条 P2 Required **由我自己复现、不采信 agent 转述**：篡改后 `g_star=0.9 > requested=0.1` 实测 ACCEPTED；`inspect.signature` 实测 attribution 三入口无 `as_of_date`、兄弟 `validate_weekly_record` 有，且 `getsource` 正则实测调用点未透传。设计意图另核：`selection_effect` 零命中、无固定收益率兜底、现金硬钉 `pit_3m_tbill`、`_reminder_status` 0 周即 `pending`。
+- **Next**: Codex：修复三条 Required。
+
+
+## 2026-08-05 — Codex executor/fixer 执行刀6：v1.1 仓位归因离线契约（独立审查未完成）
+
+- **Verdict/Action**：新增独立 attribution input/report schema 与纯计算器。输入以 source digest 绑定 v1 paper 周收益、Knife5 VTI total return、PIT 3M T-bill 和规则隐含目标暴露 `g*`；完整输入才计算 `raw_excess = exposure_effect + active_system_effect`，缺任一周输入则整份归因为 `unavailable`。不改 v1 weekly/report、选股、操作建议、NAV、账户或 Ship gate。
+- **Required**：无新增实现 Required；真实 PIT T-bill、真实 ETF sidecar 与真实 model-paper 数据仍未启动，不能把合成 fixture 结果写成真实成绩。
+- **Verify**：固定 Python 刀6聚焦 `7 OK`；刀1-6完整诊断轨回归 `61 OK`；route/doc governance `66 OK`；`py_compile=OK`；provider/network/paid/raw/account 写入=NOT_USED；review=NOT_VERIFIED；commit=NOT_PERFORMED。
+- **Pre-Codex self-review**：matrix=source-bound g*/PIT/VTI 四输入、恒等式、look-ahead、不可用与历史回填边界；register=updated；handoff=updated；focused=7 OK；full-lane=61 OK；door=route/doc governance 66 OK；review=NOT_VERIFIED；commit=NOT_PERFORMED。
+- **Next**：Claude Code：独立审查刀6当前 diff；PASS 后按 reviewer/committer 流程提交。
+
+## 2026-08-05 — Codex executor/fixer 修复 R-USSHORT-26W-DIAG-FLAT-OVERALL-REASON：清理过时风险记录（代码已在 Knife5 提交中）
+
+- **Verdict/Action**：核对确认 `_overall_status` 的 `directions == {"flat_diagnostic"}` 分支和四基准全持平回归已经包含在当前 HEAD `847546bd`；本轮修复的是风险登记仍把该项写成“未修”的活动文案，现改为已收口并明确旧条目仅为历史记录。
+- **Required**：无新增代码 Required；overall 六值契约、状态优先级和既有测试不变。
+- **Verify**：`git blame` 确认分支与回归均来自 `847546bd`；固定 Python 诊断聚焦 + route/doc governance `83 OK`；`git diff --check=clean`；provider/network/account 写入=NOT_USED；commit=NOT_PERFORMED。
+- **Pre-Codex self-review**：matrix=HEAD branch/test/risk-register consistency；register=updated；handoff=updated；focused=83 OK；full-lane=not_triggered；door=route-doc + doc-governance 83 OK
+- **Next**：Claude Code：独立审查本条风险状态修复；PASS 后按 reviewer/committer 流程提交。
+
 ## 2026-08-05 — Claude Code 审查 PASS（26 周诊断轨 刀5：ETF 总回报 sidecar 离线半刀）
 
 - **Verdict/Action**: PASS。本刀解锁此前不可达的 `total_return_evaluable`，故对解锁腿做了反向控制。算式用拆股复权后的现金分红，与已拆股复权的价格序列口径自洽。门要五件齐：四个 coverage 全真 + 五个来源摘要 + `source_date`/`observed_at` + 价格区间严格递增 + 零降级原因。本刀不含真实抓取，故该状态目前只是可达、尚无真实周达到。

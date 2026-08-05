@@ -1,0 +1,197 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://stock.local/schemas/us_short_market_diagnostic_attribution_report.schema.json",
+  "title": "US-short v1.1 attribution report",
+  "description": "Diagnostic-only decomposition of strategy excess into exposure and active-system effects.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_name",
+    "schema_version",
+    "attribution_epoch",
+    "diagnostic_epoch",
+    "window_id",
+    "status",
+    "weeks",
+    "summary",
+    "source_refs",
+    "boundary"
+  ],
+  "properties": {
+    "schema_name": {"const": "us_short_market_diagnostic_attribution_report"},
+    "schema_version": {"const": "1.0.0"},
+    "attribution_epoch": {"type": "string", "minLength": 1},
+    "diagnostic_epoch": {"type": "string", "minLength": 1},
+    "window_id": {"type": "string", "pattern": "^26w-[1-9][0-9]*-[1-9][0-9]*$"},
+    "status": {"enum": ["evaluable", "unavailable"]},
+    "weeks": {
+      "type": "array",
+      "minItems": 1,
+      "maxItems": 26,
+      "items": {"$ref": "#/definitions/week"}
+    },
+    "summary": {"$ref": "#/definitions/summary"},
+    "source_refs": {
+      "type": "array",
+      "items": {"$ref": "#/definitions/sha256"},
+      "minItems": 1,
+      "maxItems": 256,
+      "uniqueItems": true
+    },
+    "boundary": {"$ref": "#/definitions/boundary"}
+  },
+  "definitions": {
+    "date8": {
+      "type": "string",
+      "pattern": "^[0-9]{8}$"
+    },
+    "sha256": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{64}$"
+    },
+    "number_or_null": {
+      "type": ["number", "null"]
+    },
+    "reasons": {
+      "type": "array",
+      "items": {"type": "string", "minLength": 1},
+      "uniqueItems": true
+    },
+    "week": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "calendar_week_index",
+        "decision_date",
+        "valuation_date",
+        "status",
+        "strategy_weekly_return",
+        "vti_total_return",
+        "cash_weekly_return",
+        "g_star",
+        "requested_exposure",
+        "constraint_exposures",
+        "matched_target_return",
+        "raw_excess",
+        "exposure_effect",
+        "active_system_effect",
+        "identity_residual",
+        "binding_constraints",
+        "source_refs",
+        "unavailable_reasons"
+      ],
+      "properties": {
+        "calendar_week_index": {"type": "integer", "minimum": 1},
+        "decision_date": {"$ref": "#/definitions/date8"},
+        "valuation_date": {"$ref": "#/definitions/date8"},
+        "status": {"enum": ["evaluable", "unavailable"]},
+        "strategy_weekly_return": {"$ref": "#/definitions/number_or_null"},
+        "vti_total_return": {"$ref": "#/definitions/number_or_null"},
+        "cash_weekly_return": {"$ref": "#/definitions/number_or_null"},
+        "g_star": {"$ref": "#/definitions/number_or_null"},
+        "requested_exposure": {"$ref": "#/definitions/number_or_null"},
+        "constraint_exposures": {"$ref": "#/definitions/constraint_exposures"},
+        "matched_target_return": {"$ref": "#/definitions/number_or_null"},
+        "raw_excess": {"$ref": "#/definitions/number_or_null"},
+        "exposure_effect": {"$ref": "#/definitions/number_or_null"},
+        "active_system_effect": {"$ref": "#/definitions/number_or_null"},
+        "identity_residual": {"$ref": "#/definitions/number_or_null"},
+        "binding_constraints": {
+          "type": "array",
+          "items": {
+            "enum": [
+              "requested_exposure",
+              "cash_capacity_exposure",
+              "environment_position_cap",
+              "long_only_cap"
+            ]
+          },
+          "maxItems": 4,
+          "uniqueItems": true
+        },
+        "source_refs": {
+          "type": "array",
+          "items": {"$ref": "#/definitions/sha256"},
+          "minItems": 1,
+          "maxItems": 64,
+          "uniqueItems": true
+        },
+        "unavailable_reasons": {"$ref": "#/definitions/reasons"}
+      }
+    },
+    "constraint_exposures": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "requested_exposure",
+        "cash_capacity_exposure",
+        "environment_position_cap",
+        "long_only_cap"
+      ],
+      "properties": {
+        "requested_exposure": {"$ref": "#/definitions/number_or_null"},
+        "cash_capacity_exposure": {"$ref": "#/definitions/number_or_null"},
+        "environment_position_cap": {"$ref": "#/definitions/number_or_null"},
+        "long_only_cap": {"$ref": "#/definitions/number_or_null"}
+      }
+    },
+    "summary": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "calendar_weeks",
+        "evaluable_weeks",
+        "unavailable_weeks",
+        "strategy_cumulative_return",
+        "vti_cumulative_return",
+        "matched_target_cumulative_return",
+        "raw_excess",
+        "exposure_effect",
+        "active_system_effect",
+        "identity_residual",
+        "weekly_identity_max_abs_residual"
+      ],
+      "properties": {
+        "calendar_weeks": {"type": "integer", "minimum": 1, "maximum": 26},
+        "evaluable_weeks": {"type": "integer", "minimum": 0, "maximum": 26},
+        "unavailable_weeks": {"type": "integer", "minimum": 0, "maximum": 26},
+        "strategy_cumulative_return": {"$ref": "#/definitions/number_or_null"},
+        "vti_cumulative_return": {"$ref": "#/definitions/number_or_null"},
+        "matched_target_cumulative_return": {"$ref": "#/definitions/number_or_null"},
+        "raw_excess": {"$ref": "#/definitions/number_or_null"},
+        "exposure_effect": {"$ref": "#/definitions/number_or_null"},
+        "active_system_effect": {"$ref": "#/definitions/number_or_null"},
+        "identity_residual": {"$ref": "#/definitions/number_or_null"},
+        "weekly_identity_max_abs_residual": {"$ref": "#/definitions/number_or_null"}
+      }
+    },
+    "boundary": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "diagnostic_only",
+        "comparison_only",
+        "counts_ship_gate",
+        "changes_selection_or_action",
+        "automatic_policy_switch",
+        "broker_or_order_automation",
+        "v1_record_mutated",
+        "historical_backfill_performed",
+        "provider_fetch_performed",
+        "account_write_performed"
+      ],
+      "properties": {
+        "diagnostic_only": {"const": true},
+        "comparison_only": {"const": true},
+        "counts_ship_gate": {"const": false},
+        "changes_selection_or_action": {"const": false},
+        "automatic_policy_switch": {"const": false},
+        "broker_or_order_automation": {"const": false},
+        "v1_record_mutated": {"const": false},
+        "historical_backfill_performed": {"const": false},
+        "provider_fetch_performed": {"const": false},
+        "account_write_performed": {"const": false}
+      }
+    }
+  }
+}

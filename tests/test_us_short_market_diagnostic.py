@@ -59,6 +59,8 @@ def _weekly_rows(
     previous_nav = Decimal("100000.000000")
     decision_start = date(2026, 1, 2)
     cumulative_cost = Decimal("0.000000")
+    consecutive_paper_evaluable = 0
+    v1_1_active = False
     for week in range(1, 27):
         no_count = week == no_count_week
         paper_evaluable = week not in paper_false_weeks
@@ -68,6 +70,10 @@ def _weekly_rows(
         if not no_count:
             cumulative_cost += Decimal("10.000000")
         strategy_evaluable = paper_evaluable and not no_count
+        consecutive_paper_evaluable = (
+            consecutive_paper_evaluable + 1 if strategy_evaluable else 0
+        )
+        v1_1_active = v1_1_active or consecutive_paper_evaluable >= 4
         strategy_status = "evaluable" if strategy_evaluable else "diagnostic_data_degraded"
         strategy = {
             "paper_evaluable": paper_evaluable,
@@ -127,9 +133,9 @@ def _weekly_rows(
                 "strategy": strategy,
                 "benchmarks": benchmarks,
                 "v1_1_reminder": {
-                    "status": "pending" if evaluable_count < 4 else "ready_for_v1_1_implementation",
+                    "status": "active" if v1_1_active else "pending",
                     "evaluable_week_count": evaluable_count,
-                    "text": "v1.1 reminder is pending." if evaluable_count < 4 else "v1.1 is ready for implementation.",
+                    "text": "v1.1 is active." if v1_1_active else "v1.1 reminder is pending.",
                 },
                 "source_refs": [f"{(300 + week):064x}"],
                 "boundary": dict(BOUNDARY),

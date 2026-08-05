@@ -18,6 +18,8 @@ SCHEMA_NAMES = [
     "us_short_market_diagnostic_lifecycle_register.schema.json",
     "us_short_market_diagnostic_report.schema.json",
     "us_short_market_diagnostic_etf_total_return_sidecar.schema.json",
+    "us_short_market_diagnostic_attribution_input.schema.json",
+    "us_short_market_diagnostic_attribution_report.schema.json",
 ]
 
 
@@ -210,11 +212,12 @@ def _local_price_packet() -> dict:
 def _lifecycle_register() -> dict:
     return {
         "schema_name": "us_short_market_diagnostic_lifecycle_register",
-        "schema_version": "1.0.0",
+        "schema_version": "1.1.0",
         "diagnostic_epoch": "us_short_market_diagnostic_26w_v1",
         "calendar_week_count": 1,
         "evaluable_week_count": 1,
         "non_evaluable_week_count": 0,
+        "consecutive_paper_evaluable_week_count": 1,
         "last_calendar_week_index": 1,
         "last_decision_date": "20260804",
         "last_valuation_date": "20260803",
@@ -234,6 +237,15 @@ def _lifecycle_register() -> dict:
             "status": "pending",
             "evaluable_week_count": 1,
             "text": "v1.1 reminder is pending.",
+        },
+        "v1_1_attribution": {
+            "status": "pending",
+            "trigger_consecutive_weeks": 4,
+            "current_consecutive_paper_evaluable_weeks": 1,
+            "activation_trigger_week_index": None,
+            "effective_from_week_index": None,
+            "attribution_epoch": None,
+            "sticky_after_activation": True,
         },
         "boundary": {
             "diagnostic_only": True,
@@ -264,6 +276,29 @@ class UsShortMarketDiagnosticSchemaTest(unittest.TestCase):
             if definition.get("type") == "object":
                 with self.subTest(definition=name):
                     self.assertFalse(definition["additionalProperties"])
+
+    def test_attribution_schemas_are_closed_world_for_all_object_definitions(self) -> None:
+        def assert_closed_world(node: object, path: str) -> None:
+            if isinstance(node, dict):
+                if node.get("type") == "object":
+                    self.assertIs(
+                        False,
+                        node.get("additionalProperties"),
+                        f"open object schema at {path}",
+                    )
+                for key, value in node.items():
+                    assert_closed_world(value, f"{path}.{key}")
+            elif isinstance(node, list):
+                for index, value in enumerate(node):
+                    assert_closed_world(value, f"{path}[{index}]")
+
+        for schema_name in (
+            "us_short_market_diagnostic_attribution_input.schema.json",
+            "us_short_market_diagnostic_attribution_report.schema.json",
+        ):
+            schema = _schema(schema_name)
+            with self.subTest(schema=schema_name):
+                assert_closed_world(schema, schema_name)
 
     def test_policy_and_runtime_contract_examples_validate(self) -> None:
         policy = json.loads(

@@ -171,35 +171,78 @@ def _validate_weekly_record_for_store(record: Mapping[str, Any]) -> dict[str, An
     return identity
 
 
-def _reminder_status(evaluable_week_count: int) -> str:
-    if evaluable_week_count < 4:
-        return "pending"
-    if evaluable_week_count < 8:
-        return "ready_for_v1_1_implementation"
-    return "overdue"
-
-
-def build_v1_1_reminder(evaluable_week_count: int) -> dict[str, Any]:
-    """Return the plain-language v1.1 reminder for a derived count.
-
-    Knife 3 never emits ``active``.  That state belongs to a later, separately
-    reviewed v1.1 attribution implementation; until then the reminder remains
-    visible every week, including after the eighth evaluable week.
-    """
+def build_v1_1_reminder(
+    evaluable_week_count: int,
+    *,
+    consecutive_paper_evaluable_week_count: int,
+    active: bool | None = None,
+    attribution_epoch: str | None = None,
+) -> dict[str, Any]:
+    """Return the weekly v1.1 state without requiring a human reminder."""
 
     if isinstance(evaluable_week_count, bool) or not isinstance(evaluable_week_count, int) or evaluable_week_count < 0:
         raise MarketDiagnosticLifecycleError("evaluable_week_count must be a non-negative integer")
-    status = _reminder_status(evaluable_week_count)
-    text = (
-        f"v1.1归因：待做。当前已积累 {evaluable_week_count} 个可评估周，计划在4—8个可评估周后实施。"
-        "作用：解释领先或落后主要来自仓位/现金，还是来自主动系统能力。"
-        "当前v1只能告诉总成绩，暂时不能完整解释原因。"
-    )
-    if status == "ready_for_v1_1_implementation":
-        text += "现在已进入 v1.1 实施窗口。"
-    elif status == "overdue":
-        text += "已经超过第8个可评估周，v1.1 仍未启用，请安排实施。"
+    consecutive = consecutive_paper_evaluable_week_count
+    if isinstance(consecutive, bool) or not isinstance(consecutive, int) or consecutive < 0:
+        raise MarketDiagnosticLifecycleError(
+            "consecutive_paper_evaluable_week_count must be a non-negative integer"
+        )
+    is_active = consecutive >= 4 if active is None else active
+    if not isinstance(is_active, bool):
+        raise MarketDiagnosticLifecycleError("active must be boolean")
+    if attribution_epoch is not None and (not isinstance(attribution_epoch, str) or not attribution_epoch):
+        raise MarketDiagnosticLifecycleError("attribution_epoch must be null or non-empty")
+    status = "active" if is_active else "pending"
+    if is_active:
+        epoch_text = f"；attribution_epoch={attribution_epoch}" if attribution_epoch else ""
+        text = (
+            f"v1.1 归因：已自动启用{epoch_text}。"
+            "作用：解释领先或落后主要来自仓位和现金，还是来自主动系统能力。"
+            "缺少 VTI 总收益、PIT 现金收益或 g* 时只报 unavailable，不补零、不停用。"
+        )
+    else:
+        text = (
+            f"v1.1 归因：等待自动启用；当前连续 paper_evaluable=true 周={consecutive}/4。"
+            "作用：解释领先或落后主要来自仓位和现金，还是来自主动系统能力。"
+            "在启用前，任一 false/no_count/missing 周都会把连续计数清零。"
+        )
     return {"status": status, "evaluable_week_count": evaluable_week_count, "text": text}
+
+
+def _derive_v1_1_attribution(records: list[dict[str, Any]]) -> dict[str, Any]:
+    consecutive = 0
+    trigger: dict[str, Any] | None = None
+    for record in records:
+        if record["strategy"]["paper_evaluable"]:
+            consecutive += 1
+        else:
+            consecutive = 0
+        if trigger is None and consecutive >= 4:
+            trigger = {
+                "diagnostic_epoch": record["diagnostic_epoch"],
+                "calendar_week_index": record["calendar_week_index"],
+                "decision_date": record["decision_date"],
+                "strategy_ruleset_fingerprint": record["strategy_ruleset_fingerprint"],
+            }
+    if trigger is None:
+        return {
+            "status": "pending",
+            "trigger_consecutive_weeks": 4,
+            "current_consecutive_paper_evaluable_weeks": consecutive,
+            "activation_trigger_week_index": None,
+            "effective_from_week_index": None,
+            "attribution_epoch": None,
+            "sticky_after_activation": True,
+        }
+    return {
+        "status": "active",
+        "trigger_consecutive_weeks": 4,
+        "current_consecutive_paper_evaluable_weeks": consecutive,
+        "activation_trigger_week_index": trigger["calendar_week_index"],
+        "effective_from_week_index": trigger["calendar_week_index"] + 1,
+        "attribution_epoch": f"us-short-v1.1-{artifact_sha256(trigger)[:24]}",
+        "sticky_after_activation": True,
+    }
 
 
 def build_weekly_report_reminder(register: Mapping[str, Any]) -> dict[str, Any]:
@@ -213,7 +256,20 @@ def build_weekly_report_reminder(register: Mapping[str, Any]) -> dict[str, Any]:
     count = register.get("evaluable_week_count")
     if isinstance(count, bool) or not isinstance(count, int) or count < 0:
         raise MarketDiagnosticLifecycleError("lifecycle register evaluable_week_count is invalid")
-    expected = build_v1_1_reminder(count)
+    consecutive = register.get("consecutive_paper_evaluable_week_count")
+    if isinstance(consecutive, bool) or not isinstance(consecutive, int) or consecutive < 0:
+        raise MarketDiagnosticLifecycleError(
+            "lifecycle register consecutive_paper_evaluable_week_count is invalid"
+        )
+    attribution = register.get("v1_1_attribution")
+    if not isinstance(attribution, Mapping):
+        raise MarketDiagnosticLifecycleError("lifecycle register has no v1.1 attribution state")
+    expected = build_v1_1_reminder(
+        count,
+        consecutive_paper_evaluable_week_count=consecutive,
+        active=attribution.get("status") == "active",
+        attribution_epoch=attribution.get("attribution_epoch"),
+    )
     if dict(reminder) != expected:
         raise MarketDiagnosticLifecycleError("lifecycle register reminder is not derived from its count")
     calendar_count = register.get("calendar_week_count")
@@ -225,6 +281,7 @@ def build_weekly_report_reminder(register: Mapping[str, Any]) -> dict[str, Any]:
         "status": reminder["status"],
         "calendar_week_count": calendar_count,
         "evaluable_week_count": count,
+        "consecutive_paper_evaluable_week_count": consecutive,
         "text": reminder["text"],
     }
 
@@ -235,7 +292,8 @@ def render_weekly_report_reminder(register: Mapping[str, Any]) -> str:
     block = build_weekly_report_reminder(register)
     return (
         f"- [{block['registry_key']}] 状态={block['status']}；"
-        f"日历周={block['calendar_week_count']}；可评估周={block['evaluable_week_count']}；"
+        f"日历周={block['calendar_week_count']}；累计可评估周={block['evaluable_week_count']}；"
+        f"连续可评估周={block['consecutive_paper_evaluable_week_count']}；"
         f"{block['text']}"
     )
 
@@ -295,20 +353,32 @@ def _register_from_records(records: list[dict[str, Any]]) -> dict[str, Any]:
 
     last = records[-1]
     current_window = window_containing_week(last["calendar_week_index"])
+    attribution = _derive_v1_1_attribution(records)
     return {
         "schema_name": "us_short_market_diagnostic_lifecycle_register",
-        "schema_version": "1.0.0",
+        "schema_version": "1.1.0",
         "diagnostic_epoch": epoch,
         "calendar_week_count": len(records),
         "evaluable_week_count": evaluable_week_count,
         "non_evaluable_week_count": len(records) - evaluable_week_count,
+        "consecutive_paper_evaluable_week_count": attribution[
+            "current_consecutive_paper_evaluable_weeks"
+        ],
         "last_calendar_week_index": last["calendar_week_index"],
         "last_decision_date": last["decision_date"],
         "last_valuation_date": last["valuation_date"],
         "current_window_id": current_window["window_id"],
         "current_window_week_count": last["calendar_week_index"] - current_window["window_start_week"] + 1,
         "record_refs": refs,
-        "v1_1_reminder": build_v1_1_reminder(evaluable_week_count),
+        "v1_1_reminder": build_v1_1_reminder(
+            evaluable_week_count,
+            consecutive_paper_evaluable_week_count=attribution[
+                "current_consecutive_paper_evaluable_weeks"
+            ],
+            active=attribution["status"] == "active",
+            attribution_epoch=attribution["attribution_epoch"],
+        ),
+        "v1_1_attribution": attribution,
         "boundary": dict(STORE_BOUNDARY),
     }
 
@@ -429,7 +499,15 @@ def persist_settled_weekly_record(
 
     if register is None and records:
         orphan = records[0]
-        incoming["v1_1_reminder"] = build_v1_1_reminder(int(orphan["strategy"]["strategy_evaluable"]))
+        orphan_state = _derive_v1_1_attribution(records)
+        incoming["v1_1_reminder"] = build_v1_1_reminder(
+            int(orphan["strategy"]["strategy_evaluable"]),
+            consecutive_paper_evaluable_week_count=orphan_state[
+                "current_consecutive_paper_evaluable_weeks"
+            ],
+            active=orphan_state["status"] == "active",
+            attribution_epoch=orphan_state["attribution_epoch"],
+        )
         _validate_weekly_record_for_store(incoming)
         if _record_relative_path(orphan) != incoming_path_relative or artifact_sha256(orphan) != artifact_sha256(incoming):
             raise MarketDiagnosticLifecycleError("orphan diagnostic weekly record conflicts with the retry input")
@@ -472,15 +550,21 @@ def persist_settled_weekly_record(
             )
         if incoming["diagnostic_epoch"] != register["diagnostic_epoch"]:
             raise MarketDiagnosticLifecycleError("diagnostic_epoch changed; start a new diagnostic epoch explicitly")
-        expected_evaluable_count = register["evaluable_week_count"] + int(
-            incoming["strategy"]["strategy_evaluable"]
-        )
     else:
         if incoming_week != 1:
             raise MarketDiagnosticLifecycleError("the first diagnostic weekly record must be calendar week 1")
-        expected_evaluable_count = int(incoming["strategy"]["strategy_evaluable"])
 
-    incoming["v1_1_reminder"] = build_v1_1_reminder(expected_evaluable_count)
+    next_records = [*records, incoming]
+    next_state = _derive_v1_1_attribution(next_records)
+    expected_evaluable_count = sum(int(record["strategy"]["strategy_evaluable"]) for record in next_records)
+    incoming["v1_1_reminder"] = build_v1_1_reminder(
+        expected_evaluable_count,
+        consecutive_paper_evaluable_week_count=next_state[
+            "current_consecutive_paper_evaluable_weeks"
+        ],
+        active=next_state["status"] == "active",
+        attribution_epoch=next_state["attribution_epoch"],
+    )
     _validate_weekly_record_for_store(incoming)
     if incoming_path.is_file():
         existing, existing_digest = _read_canonical_json(incoming_path)
@@ -491,7 +575,6 @@ def persist_settled_weekly_record(
     else:
         _atomic_write(incoming_path, incoming)
 
-    next_records = [*records, incoming]
     next_register = _register_from_records(next_records)
     register_path = _private_path(store_root, REGISTER_FILENAME)
     _atomic_write(register_path, next_register)
