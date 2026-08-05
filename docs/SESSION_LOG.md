@@ -1,5 +1,13 @@
 # Session Log
 
+## 2026-08-05 — Claude Code 补跑 us_short 全量（还 08-04 探针欠的 rule 3(c)），揪出一条操作机上长期假红的测试
+
+- **Verdict/Action**: 补跑完成，结果 FAIL。红的与 26 周诊断轨无关，也非探针回归，而是一条**不隔离操作员状态**的测试；已立条目，未修（属 soft-discovery lane，交执行方）。
+- **Required**: 一条，详情只见 `docs/system_risk_register.md`：`R-USSHORT-SOFT-DISCOVERY-LIVE-CLI-TEST-READS-OPERATOR-STATE`。
+- **Verify**: `full_pack_ledger run us_short` = `FAIL / exit 1 / 1977 tests / 275.9s`（failfast 首红即停）。首红 traceback 被 `-b` 吞掉，故去缓冲诊断复跑取身份（新信息、非重复确认）：`test_each_live_cli_rejects_an_unregistered_raw_root_before_provider_access (lane='web')`，实抛 `formal decision slot is already occupied: …web_20260802.json` 而非断言期待的 raw_root 消息。按 rule 7(d) 先查残留：阻塞件 `git check-ignore` 命中、未提交、mtime `Aug 1 12:39`，即真实运行产物。两道守卫均正确，错的是断言对守卫先后的假设。
+- **Next**: Codex：修复该 Required（只改测试隔离，不碰 runner 守卫）。
+
+
 ## 2026-08-04 — Claude 修复（R-ASHORT-ROW22A 整类扫描，用户令）
 
 - **Verdict/Action**: 上一轮 `c9053abd` 只修了被点名的单个实例，未做整类扫描；本轮补做。类的边界是**可达性不是语法**——只有能收到 numpy 标量（数据来自 pandas/provider 帧）的判定在类内。扫描结论：全仓 142 处 `(int, float)` 判定里，该类**当前只有两个成员**，因为只有 `a_short_northbound` 与 `a_short_market_history` 直接归约 provider 原始行，其余都在 JSON 边界之后。
