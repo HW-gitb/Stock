@@ -1489,4 +1489,4 @@ Claude Code：独立审查 `R-ASHORT-KNIFE12-NORTHBOUND-MARKET-WIRING` 及 `R-AS
 
 **授权范围（reviewer 自定，实现方不得扩大）**：本批历史取数**总预算 12 次调用**——序 19 的 `pro.margin` 三年窗口 ≤6 次，序 22b 的 `moneyflow_hsgt` + `index_daily` 合计 ≤6 次。raw 一律落 gitignored `provider_samples/`，tracked summary 只记计数/覆盖/分位，**不得含 raw 行、请求 URL、密钥**。超预算即中止并如实记录。
 
-**批内约定**：22a → 19 → 22b 顺序做，同一棵树内连续起草、各自独立 slice + 自审，**loop 中不 commit**；effect contract 只在序 19 落地后统一重封一次；最后一次全量、一次收口。
+**批内约定**：**22a（已完成）→ 22b → 序 19** 顺序做（2026-08-05 更正，理由见本节开头的顺序更正块），同一棵树内连续起草、各自独立 slice + 自审，**loop 中不 commit**；effect contract 只在序 19 落地后统一重封一次（22b 不动契约叶，纯 comparison/research 产物）；最后一次全量、一次收口。
