@@ -29,6 +29,7 @@ selection, action, sizing or NAV.
 """
 from __future__ import annotations
 
+from datetime import date as _date
 from pathlib import Path
 from typing import Any, Mapping
 
@@ -56,8 +57,15 @@ def weekly_diagnostic_step(
     Returns a dict whose ``report_lines`` is always a list — empty whenever the
     caller must add nothing — so a host can splice it in unconditionally without
     having to remember a dormancy check of its own.
+
+    ``as_of_date`` defaults to today rather than to ``None``. Left unset it
+    reached four public attribution entries with their look-ahead guard switched
+    off, so a week dated 2099 would have been summarised without complaint. Both
+    current callers pass one; the default is what protects the next caller.
     """
 
+    if as_of_date is None:
+        as_of_date = _date.today().strftime("%Y%m%d")
     state = diagnostic_store_state(root, as_of_date=as_of_date)
     if state["state"] == "not_started":
         return {"status": "not_started", "report_lines": [], "attribution": None}

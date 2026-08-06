@@ -15,6 +15,7 @@ import tempfile
 import unittest
 
 import engine.us_short_market_diagnostic_weekly_producer as producer
+import engine.us_short_market_diagnostic_weekly_task as task
 from engine.us_short_market_diagnostic_lifecycle import (
     load_lifecycle_register,
     persist_settled_weekly_record,
@@ -655,6 +656,49 @@ class StoreStateTest(unittest.TestCase):
             build_next_weekly_record(
                 model_paper_root=self.store, benchmark_packet=_packet(), root=self.store
             )
+
+    def test_the_step_defaults_its_as_of_date_to_today(self) -> None:
+        """The default was the whole point of the change and nothing exercised it.
+
+        With the look-ahead guard off (`as_of_date=None`) a store holding a week
+        dated after the host date reads as a normal running clock. With the
+        default on it is refused, and the paths that must NOT change -- an unopened
+        root, a clock opened but not yet counted, a store read after its newest
+        week -- answer exactly as before.
+        """
+
+        import unittest.mock as mock
+
+        self._open()
+        for row in self.rows[:3]:
+            persist_settled_weekly_record(row, root=self.store)
+        newest = self.rows[2]["decision_date"]
+
+        with self.subTest("a week the host cannot have seen yet"):
+            with mock.patch.object(task, "_date") as clock:
+                clock.today.return_value = date(2026, 1, 10)  # before week 3's decision
+                self.assertEqual("broken", weekly_diagnostic_step(root=self.store)["status"])
+
+        with self.subTest("the same store read after its newest week"):
+            with mock.patch.object(task, "_date") as clock:
+                clock.today.return_value = date(2026, 3, 1)
+                self.assertEqual("running", weekly_diagnostic_step(root=self.store)["status"])
+            self.assertEqual(
+                "running",
+                weekly_diagnostic_step(root=self.store, as_of_date=newest)["status"],
+                "an explicit as_of_date must still win over the default",
+            )
+
+    def test_the_default_does_not_disturb_the_dormant_or_fresh_paths(self) -> None:
+        """The two states that must never be called a fault, with the default on."""
+
+        import unittest.mock as mock
+
+        with mock.patch.object(task, "_date") as clock:
+            clock.today.return_value = date(2026, 1, 10)
+            self.assertEqual("not_started", weekly_diagnostic_step(root=self.store)["status"])
+            self._open()
+            self.assertEqual("fresh", weekly_diagnostic_step(root=self.store)["status"])
 
     def test_an_empty_directory_is_not_started(self) -> None:
         self.assertEqual("not_started", producer.diagnostic_store_state(self.store)["state"])

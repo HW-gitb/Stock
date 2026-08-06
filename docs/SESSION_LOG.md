@@ -1,5 +1,29 @@
 # Session Log
 
+## 2026-08-06 — Claude Code 刀 6 归因第三～八轮收口：行为在第五轮就收敛，之后长的是证明不是缺陷
+
+- **Verdict/Action**: 用户中止「改到 agent 判 PASS 为止」的循环并要求解释「为什么越修漏洞越多」，我给的结论是方法问题不是代码问题，用户据此选择直接收口。**根因三条**：①审查用的是变异覆盖法（枚举每处守卫、删掉、看有没有测试变红），第七轮量到 59/187 处被绑定——池子里还剩 128 处，只要非空每轮都能稳定交出 5 条，这个数衡量的是「变异空间还剩多少没扫」不是「代码还有多少错」；②我每轮往 report 门补 input 门已有的规则，等于每修一次就把下一轮要量的面积扩大一次（CLAUDE.md §5 说的过度防御：56 扇门铺满，看不出哪扇是真的）；③我给 agent 的任务书写死「至少植入十二个且与此前各轮不重复」，这是配额，结构上保证它不可能返回「没发现」。**第一～四轮是真缺陷**（除数选错、带子太松到与 1981 年真实利率不可分、我自己的测试把 bug 锁进去、懒加载放在休眠门外、`register_exists` 探错制品）；**第五～七轮共 11 条 Required 全是「守卫是活的、判得对、缺一条反向用例」，零行为缺陷**。按 `feedback_review_proportional_to_selection_impact` 分级，本轨 `counts_ship_gate=false`、不进选股、不动仓位、不碰真钱，停止加轮，剩余覆盖缺口按 Optional 记 register。
+- **Required**: 第七轮 5 条已全闭，判据与逐条实测只见 `docs/system_risk_register.md`（单一来源）。最实的一条是第三道重算门：给每周 `matched_target_return` 加 0.03 再**从它**重算两个效果，恒等式 `raw = exposure + active` 依旧精确成立、效果重算读的是伪造值故自洽，只有「用 g\*、VTI、现金重推 matched」会响；实测汇总口径 (−0.000651 / +0.005865) → (+0.092134 / −0.086920)，两个符号同时翻转。另四条：input 门五个敞口分量的 [0,1]/非空界无测试（放松后裸 `TypeError` 逃出公开入口）、report 门三元上限两门皆无测试、`evaluable 报告不得含 unavailable 周`（§16 验收 5 核心）被计数门遮蔽从无独立用例、`weekly_task` 的 `as_of_date` 默认改动整段无测试。
+- **Optional**: 同轮修 8 条（`_TOLERANCE` 补值钉、report 收益下限由 1/3 字段扩到逐字段、unavailable 行十字段元组拆成逐条并补两道从无夹具的守卫、`window_id` 归属与 `valuation_date ≤ decision_date` 各补两门、docstring 与三处死 import、register:238 自相矛盾的旧陈述）。删三处冗余：两处 decision 日期「严格递增」（7 天节律规则已拒一切非 7 天步长含 0 与负）、`if not refs`（上方 `_refs(required=True)` 已拒空）。**记录不修 1 条**：两份 schema 的 `number_or_null` 在 draft-07 下允许 `NaN`/`Infinity` 字面量——引擎两门都拒、写入方 `allow_nan=False`，只有第三方单用 jsonschema 校验已发布 JSON 才够得着，两份 schema 对称非漂移，按 §5 属过度防御。
+- **Verify**: 15 个植入 **15 红**，每个都红在点名它的那条测试上（含删掉 `weekly_task` 那两行默认后周产出模块转红）。针对性 131 测绿（归因 87 + 周产出 44）。focused=`Ran 259 tests in 61.5s PASS receipt:efdbd2db9a982956c7088a50`；full-lane=``Ran 5467 tests in 627.9s FAILED(failures=2)`——两条是同一测试的两个 lane（`test_each_live_cli_rejects_an_unregistered_raw_root_before_provider_access`，web/x），本轮已抓到确切 traceback 归因：本机 gitignored 实盘产物 `state/us_short/us_short_llm_theme_discovery_web_20260802.json` 占住正式决策位，`_ensure_live_decision_slots_absent` 比断言目标更靠前抛出，涉及的测试与两个 runner 本轮 `git diff HEAD` 均为空，与本刀无交集`；door=`tests.test_route_doc_ledger_status_consistency` + `tests.test_doc_governance_guard` 合计 `Ran 55 OK`；matrix=第七轮五条 Required 各按 Required 文本枚举整类后逐出口封（三道重算门补齐第三道／五个分量逐个越界+缺失／三元上限两门同补／§16 验收 5 用「计数改对、缺失行保持 null、汇总只对两周复利」的完整伪造件隔离出唯一反对者／默认值用 mock 冻主机日期从两侧钉）；register=第七、八轮记录已写入并更正 :238；handoff=刀 6 无独立 handoff，本条即收口。
+- **Next**: 提交并合入 master；本部件工程侧到此为止，余下靠真周数积累
+
+## 2026-08-06 — Claude 审查 FAIL（US-short 26 周诊断轨 刀 6 归因）
+
+- **Verdict/Action**: FAIL，未提交。前两轮的改动我逐条核过，质量高：root/week 分层绑定、现金腿绑本周、target 补 `as_of_date`、VTI sidecar 逐周互异、旁表错键不再静默吞，都封到类而非探针那条腿；三处放松也都站得住（见 Verify）。把第三条 Required 改挂未建生产者的判断，我对照设计 §12.7 原文复核后认可。拦住本轮的是另一件事：报告把重算出来的和调用方随手填的摆在一起，自己不说哪个是哪个。
+- **Required**: `R-USSHORT-26W-DIAG-REPORT-DOES-NOT-SAY-ITS-EXPOSURES-ARE-ASSERTED`（P2，最窄改法=给既有 `boundary` 加第 11 个 const 旗标）。正文只见 `docs/system_risk_register.md`。
+- **Verify**: review-evidence:00132cdf18fb。验收超集 `Ran 147 tests / PASS / 74.8s`、`receipt:88eef60dbabc3f472ccd1733`。三处放松的反向控制均成立：删 `_exact_boundary`（两份 schema 实读 closed + 10 属性全 const 全 required）、`decision_time_reproducible` 改降级（实走 `if reasons:` 出 `unavailable` 且不进 `evaluable_rows`）、删 `available_at>as_of_date`（`available<=decision<=as_of` 不可达）。Required 由报告 schema 与 emit 端 grep 零命中坐实。执行方 full lane 记 `FAILED(failures=2)`，其归因我未复核，不作 PASS 依据。
+- **Next**: Codex：修复
+
+## 2026-08-06 — Claude Code 修复刀 6 三条 P1 + 五条 Optional：按 Required 文本封整类
+
+- **Verdict/Action**: 走 codex-fix-gate 硬门。§1 从 Required 文本枚举整类而非照探针：R1 类 = 逼出「周级 refs 全量上卷到窗口根」的整条链（六个出口，含那条「week ⊆ root」不变式——正是它逼出上卷），只调大 256 上限是把墙挪远不是修；R2 类 = 「validator 声称重推、制品却没带输入」的所有值，逐个复核确认只有 `requested_exposure` 一个；R3 类 = 「调用方旁表按周次做键、观测自身无时间身份」的所有观测——探针只演示现金，同类的 `target_exposure` **整个 schema 无任何日期字段**，比现金更彻底，VTI 取自该周记录故已绑周。三条全按类修完，五条 Optional 一并修。
+- **Required**: 全数已闭，判据与逐条实测只见 `docs/system_risk_register.md`（单一来源）。一处不照审查方意见办并写明理由：`_exact_boundary` 建议删，实为**代码常量 vs schema const** 的交叉校验（两个来源），缺的是那条从没写过的测试，已补而非删。
+- **Verify**: 复现审查方三条确切探针，全部 fail-closed：26 周真实 provenance 现在 `evaluable`（root 26 条、每周 10 条，此前死在第 24 周）；自洽仓位洗白被拒，更强变体（components 也改自洽）被算术门拒；同一行 12 月现金喂满 26 周被拒。**自打 12 个植入回归，首轮 11 红 1 绿**——k10 逃掉，因我只测「日期对不上」未测「evaluable 但 as_of_date 为 null」（schema `anyOf [date8, null]` 放行，引擎那道是唯一的门），补测试后 12/12 全红。焦点包 `Ran 283 tests in 49.2s / PASS`，`receipt:409277330f8327478609c8aa`。
+- **Pre-Codex self-review**: matrix=三条 Required 各按 Required 文本枚举整类后逐出口修（R1 六个出口／R2 逐值复核后确认单值／R3 现金+target 两个观测，VTI 已绑周经复核）；register=已翻 fixed + 单源 Repair 注；handoff=本条即刀 6 收口，无独立 handoff；focused=`Ran 283 tests in 49.2s PASS receipt:409277330f8327478609c8aa`；full-lane=`Ran 5399 tests FAILED(failures=2)`（仅本机 live-state 的 discovery 两条，与改动无关、逐条同前）；door=`tests.test_route_doc_ledger_status_consistency Ran 14 OK` + `tests.test_doc_governance_guard Ran 41 OK`。独立对抗 pass: 已跑（本刀已 ≥1 轮 FAIL 且改动落在 PIT／fail-closed 边界，触发条件命中；agent 不告知修法、要求自行推出完整不变量后黑盒攻整制品并报覆盖率）。连带 grep：旧 rollup 符号全仓归零；反向失败逐条检查未把误报修成漏报；`as_of_date` 歧义按最窄安全侧（必填且必须等于 decision_date）。
+- **Next**: 待对抗 agent 结论；PASS 则提交合入 master
+
+
 ## 2026-08-06 — Claude Code 独立审查刀 7b（1 对抗 + 1 广度）Pass-with-Required，7 条同轮全修
 
 - **Verdict/Action**: 起两个独立 agent；对抗方打 14 个植入回归、**10 个现有测试发现不了**，广度方跑 20 种操作员误用 + 全 commit 泄露扫描。核心判断：**库本身是真 fail-closed**——五条路径都塞不进错周次。7 条 Required 全在读/报告侧与 capstone 接缝，其中两条又是 Class I：门在正确位置、绑错制品。全部同轮修完。**驳回 1 条**：广度方报「公开 JSON 泄露账户金额」，设计 §12.2 有 2026-08-05 用户裁决明文允许归一化模拟盘金额进公开摘要，agent 未读到该裁决。
