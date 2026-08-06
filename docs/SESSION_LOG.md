@@ -1,5 +1,13 @@
 # Session Log
 
+## 2026-08-06 — Claude Code 刀 10b：每周一键真正推进 26 周时钟（v1 全线打通）；10a 上游卡住已记账
+
+- **Verdict/Action**: 刀 7b 把诊断轨挂进了每周 capstone，但只当**读取方**——`weekly_diagnostic_step` 只汇报库里已有的东西、从不往里加，所以钟开了也会永远停在第 0 周而一键照跑不误。本刀补上缺的那个「周动作」：`market_diagnostic_fetch`（gated，真调厂商）+ `market_diagnostic_settle`，都排在 `model_paper_weekly` 之后、读取方之前；同时把刀 9 产的现金腿真交给读取方（此前 v1.1 守着一个装着答案的文件报 `unavailable`）。**周身份全部从两个库推出，没有任何参数能指定日期**（`inspect.signature` 反向断言）。
+- **刀 10a 不建，理由已落 register**（`R-USSHORT-26W-DIAG-DECISION-TIME-EXPOSURE-NEVER-LANDS`）：逐字段定位后，g\* 五分量里 `cash_capacity_exposure` 与 `environment_position_cap` **在主选股路径上从不落盘**（`position_cap` 只在 `us_short_regime.py:106` 算完即弃，`grep -rl position_cap schemas/` 无任何输出产物；`market_risk_regime` 只在 forward-policy **对比轨**的包里，其 schema 自称 "cannot change primary selection"，借来即错绑）。按方案自订的「定位不到就 unavailable、不许近似」，硬造会同时违反 §12.7 与「生产者必须推导而非断言」，且比诚实的 unavailable 更坏。最窄解法=让周决策路径顺手多落一份只读的决策时敞口记录（数已算出，只是算完就扔），属主路径改动 → 用户级决策。**v1 不受影响**：大盘对比不需要 g\*。
+- **三处自审改出来的东西**: ①**诊断周的决策日不是模型账那周的决策日**——合同要求 `settlement ≤ valuation ≤ decision`，账户那周决策在前估值在后，而诊断周的决策是本周即将做的那次；改成由 receipt 冻结的首周 + 7 天节律推出，仍无人能指定。②**「账户还没结出新一周」被我写成了错误**，capstone 会报成 `failed`，但这是每周大部分时间的正常态——正是刀 7b 那课（把正常的第一周叫 broken 就是教人忽略这个词）；改 `waiting_for_paper_week` 等待态。③**我那条「总适配器」测试根本没测到适配器**：它用不存在的根，而那读起来就是「钟没开」→ 走 dormant 直接返回，异常路径一次没进，植入把 `except Exception` 收窄成 `except ValueError` 照样绿；改成真让底层抛一个没人枚举过的异常。另删一处不可达守卫（`next_week_inputs` 已是授权门，过了它 receipt 必然存在）。
+- **Verify**: review-evidence:c14ae00f52ef。14 条针对性测试；**15 个植入 14 红 1 SKIP**（SKIP 那条的守卫已因不可达删除）。**首轮 15 个里 7 个逃掉**，全因我只测了第 1 周：`7*(index-1)` 在第 1 周恒为 0，故节律、周对齐、前一估值日取自账本还是账户、capstone 是否真交现金腿，四类一条都没被打中；补「第 2 周」「三日期不对齐」「真异常总适配器」「现金腿交接」四条后转红。**授权一致性守卫两次拦住我**（新增的 `_read_json` 与 `_date8` 进论域），按机制加豁免并写明理由，不是关开关。焦点包 `Ran 325 tests in 55.4s PASS` `receipt:5b718135f2ffff38643e5215`（311→325 无回归）；capstone 消费方 + 治理门 `Ran 150 OK`。
+- **Next**: 与用户讨论刀 10a 的上游记录；全量 lane 走 `full_pack_ledger run` 记账补一次 PASS
+
 ## 2026-08-06 — Claude Code 刀 9：PIT 现金收益生产器（FRED DGS3MO）
 
 - **Verdict/Action**: v1.1 归因的现金腿（`(1 - g*)` 那一半）全仓无生产者，周任务一直传 `None`，所以 v1.1 就算自动激活也每周 `unavailable` 空转。本刀补上。**为什么必须钉 real-time vintage**：探针实测 FRED 的 DGS3MO 是可修订视图，而修订不在数字上、在**行的存在与否**上——2026-06-22 那天的视图里根本没有 06-19（Juneteenth）这一行，今天有了、值是 `"."`。周现金收益要除以「这周有几个交易日」，不钉 vintage 就等于用事后信息重算历史。

@@ -427,7 +427,20 @@ def _run_market_diagnostic(ctx: CapstoneContext) -> dict[str, Any]:
         # rather than this module naming the private store — which would put all
         # ~90 functions here into the diagnostic authorization surface.
         overrides = {} if ctx.market_diagnostic_root is None else {"root": ctx.market_diagnostic_root}
-        step = weekly_diagnostic_step(as_of_date=ctx.decision_date, **overrides)
+        # Knife 10b: the cash leg is now produced weekly, so hand it over instead
+        # of leaving v1.1 to report `unavailable` beside a file that holds the
+        # answer. Loaded by the diagnostic track's own reader, keyed off the
+        # ledger's settled weeks rather than off whatever a directory happens to
+        # contain. (`target_exposure_by_week` stays absent: its two constraint
+        # inputs are never landed by the selection path, and inventing them is
+        # what section 12.7 forbids.)
+        from runners.us_short_market_diagnostic_weekly_fetch import load_cash_returns
+
+        step = weekly_diagnostic_step(
+            as_of_date=ctx.decision_date,
+            cash_return_by_week=load_cash_returns(as_of_date=ctx.decision_date, **overrides),
+            **overrides,
+        )
     except Exception as exc:  # noqa: BLE001 — see below; this is the whole point of the stage
         # The one broad catch in this file, and it is load-bearing. Design section
         # 1.2: the diagnostic track may never change or block selection. It also
@@ -450,6 +463,70 @@ def _run_market_diagnostic(ctx: CapstoneContext) -> dict[str, Any]:
         "calendar_week_count": step.get("calendar_week_count"),
         "report_lines": step["report_lines"],
         "problem": step.get("problem"),
+        "provider_calls_performed": False,
+    }
+
+
+def _diagnostic_overrides(ctx: CapstoneContext) -> dict[str, Any]:
+    """Only ever an override; the default root stays the diagnostic track's own.
+
+    Naming the private store here would pull every function in this module into
+    that track's authorization surface — the ~90-exemption shape Knife 7b hit and
+    backed out of.
+    """
+
+    return {} if ctx.market_diagnostic_root is None else {"root": ctx.market_diagnostic_root}
+
+
+def _run_market_diagnostic_fetch(ctx: CapstoneContext) -> dict[str, Any]:
+    """Knife 10b: capture this week's benchmark prices and cash rate, or do nothing.
+
+    The first of the two steps that finally make the clock ADVANCE rather than
+    only be read. Dormant is free in the strongest sense: with no clock opened
+    this performs no request and writes no byte, so a weekly run is unchanged by
+    whether the diagnostic track exists.
+    """
+
+    try:
+        from runners.us_short_market_diagnostic_weekly_fetch import fetch_next_week
+
+        result = fetch_next_week(as_of_date=ctx.decision_date, **_diagnostic_overrides(ctx))
+    except Exception as exc:  # noqa: BLE001 — a diagnostic may never block selection
+        return {
+            "fetch_status": "failed",
+            "problem": f"{type(exc).__name__}: {exc}",
+            "report_lines": [],
+            "provider_calls_performed": False,
+        }
+    return {
+        "fetch_status": result["status"],
+        "calendar_week_index": result.get("calendar_week_index"),
+        "cash_status": result.get("cash_status"),
+        "evaluable_symbols": result.get("evaluable_symbols"),
+        "report_lines": [],
+        "provider_calls_performed": result["status"] == "captured",
+    }
+
+
+def _run_market_diagnostic_settle(ctx: CapstoneContext) -> dict[str, Any]:
+    """Knife 10b: settle the captured week, and let a closed window publish itself."""
+
+    try:
+        from runners.us_short_market_diagnostic_weekly_fetch import settle_captured_week
+
+        result = settle_captured_week(as_of_date=ctx.decision_date, **_diagnostic_overrides(ctx))
+    except Exception as exc:  # noqa: BLE001 — same rule as the stage above
+        return {
+            "settle_status": "failed",
+            "problem": f"{type(exc).__name__}: {exc}",
+            "report_lines": [],
+            "provider_calls_performed": False,
+        }
+    return {
+        "settle_status": result["status"],
+        "calendar_week_index": result.get("calendar_week_index"),
+        "publication": result.get("publication"),
+        "report_lines": [],
         "provider_calls_performed": False,
     }
 
@@ -753,6 +830,13 @@ def default_pipeline(
         # reserved for comparison-capture stages and `zero_effect` carries the
         # soft-discovery receipt shape; this stage is neither and must not
         # borrow either label. Its adapter is total instead.
+        # Knife 10b: the two steps that make the clock advance, not merely be
+        # read. Both are total adapters for the same reason the reader below is,
+        # and both are inert while the clock is dormant.
+        Stage("market_diagnostic_fetch", True, lambda c: [], lambda c: [],
+              _run_market_diagnostic_fetch, contract_version="1.0.0", reuse_policy="never"),
+        Stage("market_diagnostic_settle", False, lambda c: [], lambda c: [],
+              _run_market_diagnostic_settle, contract_version="1.0.0", reuse_policy="never"),
         Stage("market_diagnostic", False, lambda c: [], lambda c: [], _run_market_diagnostic,
               contract_version="1.0.0", reuse_policy="never"),
     ]
@@ -1114,7 +1198,10 @@ def _provider_execution_receipt(ctx: CapstoneContext, results: list[dict[str, An
             # provider-relevant sequence, and market_diagnostic runs after the
             # bridge, reads only a local clock, and performs no provider call.
             "weekly_bridge", "model_paper_adapter", "model_paper_weekly", "soft_discovery",
-            "market_diagnostic",
+            # All three diagnostic steps sit after the bridge. The fetch one is
+            # gated because it really does call a vendor, but it is not part of
+            # the PRE-bridge provider-relevant sequence this receipt binds.
+            "market_diagnostic", "market_diagnostic_fetch", "market_diagnostic_settle",
         } and not stage.best_effort
     )
     if completed != expected:

@@ -188,6 +188,12 @@ EXEMPT = {
     "engine/us_short_market_diagnostic_weekly_producer.py::strategy_ruleset_fingerprint": "pure digest of the declared governed presets",
     "runners/us_short_market_diagnostic_weekly.py::_parse_args": "argument parsing",
     "runners/us_short_market_diagnostic_weekly.py::_read_json": "reads one named file the caller resolved",
+    # Knife 10b. Same class as its sibling above: the four functions around it
+    # each go through a gate (`diagnostic_store_state`, `next_week_inputs`,
+    # `load_settled_weekly_records`) before deriving the path handed here, and
+    # every path it is ever handed is under the weekly INPUTS root, not the ledger.
+    "runners/us_short_market_diagnostic_weekly_fetch.py::_read_json": "reads one named inputs file the gated caller resolved",
+    "runners/us_short_market_diagnostic_weekly_fetch.py::_date8": "parses a date",
     "runners/us_short_market_diagnostic_weekly.py::_read_notification": "reads one named file the caller resolved",
     "runners/us_short_market_diagnostic_weekly.py::main": "dispatches to gated or exempt subcommands",
     "runners/us_short_market_diagnostic_weekly.py::open_clock": "is the operator act of authorizing",

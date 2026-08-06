@@ -29,10 +29,14 @@ _STAGE_NAMES = [
     "soft_discovery", "theme_producer",
     "projection_inputs", "pass2_preflight", "yfinance_grades_fetch", "pass2_fetch", "vix_regime", "forward_policy_shadow",
     "forward_policy_corporate_actions", "forward_policy_maturity", "soft_boost_comparison_maturity", "soft_boost_comparison_capture", "weekly_bridge",
-    # Post-bridge, local-only, no artifact: reads the 26-week diagnostic clock, which is dormant.
-    "market_diagnostic",
+    # Post-bridge, no artifact. Knife 10b added the two that ADVANCE the 26-week
+    # clock either side of the one that reads it; all three are inert while it is
+    # dormant, and the fetch one is gated because it really does call a vendor.
+    "market_diagnostic_fetch", "market_diagnostic_settle", "market_diagnostic",
 ]
-_POST_BRIDGE_STAGE_NAMES = ("market_diagnostic",)
+_POST_BRIDGE_STAGE_NAMES = (
+    "market_diagnostic_fetch", "market_diagnostic_settle", "market_diagnostic",
+)
 _PRE_BRIDGE_STAGE_NAMES = [
     name for name in _STAGE_NAMES if name not in {"weekly_bridge", *_POST_BRIDGE_STAGE_NAMES}
 ]
@@ -41,7 +45,7 @@ _RECEIPT_STAGE_NAMES = tuple(
     name for name in _STAGE_NAMES if name not in {
         "soft_discovery", "forward_policy_shadow", "forward_policy_corporate_actions",
         "forward_policy_maturity", "soft_boost_comparison_maturity", "soft_boost_comparison_capture", "weekly_bridge",
-        "market_diagnostic",
+        "market_diagnostic", "market_diagnostic_fetch", "market_diagnostic_settle",
     }
 )
 
@@ -101,7 +105,10 @@ class CapstoneDryRunTest(unittest.TestCase):
         self.assertEqual([s["name"] for s in plan["stages"]], _STAGE_NAMES)
         self.assertEqual(plan["gated_stages_need_authorization"],
                          ["universe_fetch", "momentum_fetch", "sic_fetch", "yfinance_grades_fetch", "pass2_fetch",
-                          "vix_regime", "forward_policy_corporate_actions"])
+                          # Knife 10b: the benchmark and cash captures really do call a
+                          # vendor, so the diagnostic fetch joins the authorization list
+                          # rather than sneaking a request in behind an ungated stage.
+                          "vix_regime", "forward_policy_corporate_actions", "market_diagnostic_fetch"])
 
     def test_cli_default_private_root_lands_in_gitignored_state_dir(self):
         """--private-root omitted on the CLI defaults to the gitignored state/us_short tree, so the weekly report /
@@ -264,15 +271,17 @@ class CapstoneFakeChainTest(unittest.TestCase):
                     (c.official_output_root or c.private_root) / "weekly_private" / c.decision_date / "action_table.csv",
                     (c.official_output_root or c.private_root) / "runs_private" / c.decision_date / "machine_record.json",
                 ],
-                # Reads the dormant 26-week diagnostic clock; produces no artifact.
+                # Read and advance the dormant 26-week diagnostic clock; no artifact.
                 "market_diagnostic": lambda c: [],
+                "market_diagnostic_fetch": lambda c: [],
+                "market_diagnostic_settle": lambda c: [],
             }[name]
 
         stages = []
         for name in _STAGE_NAMES:
             outs = outs_for(name)
             gated = name in ("universe_fetch", "momentum_fetch", "sic_fetch", "yfinance_grades_fetch", "pass2_fetch",
-                             "vix_regime", "forward_policy_corporate_actions")
+                             "vix_regime", "forward_policy_corporate_actions", "market_diagnostic_fetch")
 
             def make_run(nm, outfn):
                 def run(ctx):
