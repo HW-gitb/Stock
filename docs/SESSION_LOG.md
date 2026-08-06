@@ -1,5 +1,14 @@
 # Session Log
 
+## 2026-08-06 — Claude Code 软发现 live-CLI 测试隔离已闭：全量 lane 首次归零
+
+- **Verdict/Action**: 自修自审。此前四次提交都带着 `full lane FAILED(failures=2)` 的环境红落地，归因一直写「本机 gitignored 实盘产物占住正式决策位」但从未真正闭掉。本轮先抓到确切 traceback 坐实归因，再修：`tests/schema/test_us_short_soft_discovery_query_quality_probe_packet_schema.py::test_each_live_cli_rejects_an_unregistered_raw_root_before_provider_access` 直接对着仓库真实的 `state/us_short/` 驱动两条 live CLI，而它用的决策日写死在 `docs/us_short_soft_discovery_query_quality_probe_packet_20260730.json` 里（`expected_decision_date=20260802`），正是用户 8/1 那次真实实盘发布过的槽位；于是 `_ensure_live_decision_slots_absent`（main:1841）比它要断言的 `_validate_cli_raw_root`（main:1842）先抛，断言的正则对不上。
+- **不动 production 的理由**: 两道门都对、都在 provider 之前、都是 fail-closed，顺序本身没坏（CLAUDE.md §3：没坏就别改）。用户 8/8、8/9 还要跑这条线的实盘，这几天不动花钱的 runner。真正坏的是测试读了操作者的实盘状态。**也不改 `ARTIFACT_PATH` 指向新 packet**：仓库里那份 `..._20260808.json` 的 `expected_decision_date=20260808`，改指向只会让测试转而跟 8/8 的实盘撞车。
+- **修法**: 照抄仓库里已有的正确做法（`tests/provider/test_us_short_llm_theme_discovery_fetch_web.py:851`）——`temporary_us_short_state_directory` + 同时 patch `web.STATE_DIR` / `x.STATE_DIR` / `web._gitignored`。`x.STATE_DIR` 在 import 时绑成自己的模块属性，只 patch web 一侧不够，两个都要。
+- **同类扫描**: 全仓另外三处驱动 `--live` CLI 的测试**不同类**，不改：用的决策日是 `20260725`，且各自撞的守卫（live 不许 `--query`、live 必须有 `--parent-plan`）在 `main` 里排在 `_decision_publish_paths` 之前，走不到槽位那一步。
+- **Verify**: 该模块 13 测 OK。**植入验证**：把 `_validate_cli_raw_root` 的 `if live and resolved != expected` 改成 `if False and ...`，该测试立即转红——隔离没有把它改软。实盘产物 `..._web_20260802.json`(6542B/Aug 1 12:39) 与 `..._x_20260802.json`(15160B/Aug 1 12:51) 大小与时间戳未变，`state/us_short/` 无临时目录残留，植入脚本 `finally` 还原后 `git diff` 为空。**全量 `Ran 5467 tests in 650.8s / OK / tier=full status=PASS`——failures 首次归零**，此前所有 handoff 里那句「仅剩 discovery live-CLI 两条」的环境保留自此作废。
+- **Next**: 无
+
 ## 2026-08-06 — Claude Code 刀 6 归因第三～八轮收口：行为在第五轮就收敛，之后长的是证明不是缺陷
 
 - **Verdict/Action**: 用户中止「改到 agent 判 PASS 为止」的循环并要求解释「为什么越修漏洞越多」，我给的结论是方法问题不是代码问题，用户据此选择直接收口。**根因三条**：①审查用的是变异覆盖法（枚举每处守卫、删掉、看有没有测试变红），第七轮量到 59/187 处被绑定——池子里还剩 128 处，只要非空每轮都能稳定交出 5 条，这个数衡量的是「变异空间还剩多少没扫」不是「代码还有多少错」；②我每轮往 report 门补 input 门已有的规则，等于每修一次就把下一轮要量的面积扩大一次（CLAUDE.md §5 说的过度防御：56 扇门铺满，看不出哪扇是真的）；③我给 agent 的任务书写死「至少植入十二个且与此前各轮不重复」，这是配额，结构上保证它不可能返回「没发现」。**第一～四轮是真缺陷**（除数选错、带子太松到与 1981 年真实利率不可分、我自己的测试把 bug 锁进去、懒加载放在休眠门外、`register_exists` 探错制品）；**第五～七轮共 11 条 Required 全是「守卫是活的、判得对、缺一条反向用例」，零行为缺陷**。按 `feedback_review_proportional_to_selection_impact` 分级，本轨 `counts_ship_gate=false`、不进选股、不动仓位、不碰真钱，停止加轮，剩余覆盖缺口按 Optional 记 register。

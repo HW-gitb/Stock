@@ -12,6 +12,7 @@ from engine import us_short_llm_theme_discovery_query_plan as query_plan
 from engine import us_short_soft_discovery_query_quality_probe_paths as probe_paths
 from runners import us_short_llm_theme_discovery_fetch_web as web
 from runners import us_short_llm_theme_discovery_fetch_x as x
+from tests.provider.us_short_private_test_root import temporary_us_short_state_directory
 
 
 ROOT = Path(__file__).resolve().parents[2]
@@ -313,15 +314,28 @@ class UsShortSoftDiscoveryQueryQualityProbePacketSchemaTest(unittest.TestCase):
                 web.WebThemeDiscoveryError,
             ),
         }
-        for lane, (main, argv, error) in lanes.items():
-            with self.subTest(lane=lane):
-                with mock.patch.object(
-                    web.query_plan,
-                    "read_parent_plan",
-                    return_value=(parent, "a" * 64, "docs/test_query_quality_probe_parent_plan.json"),
-                ):
-                    with self.assertRaisesRegex(error, "live CLI raw_root must use the lane default"):
-                        main(argv)
+        # Both live CLIs resolve their decision slots under the REAL state root, so
+        # once an operator has actually published this packet's decision date the
+        # already-occupied guard fires first and this test sees the wrong message.
+        # Both guards are correct and both are pre-provider -- what was wrong is that
+        # the test read the operator's live state at all. Isolated the same way the
+        # sibling slot test does (tests/provider/test_us_short_llm_theme_discovery_fetch_web.py).
+        with temporary_us_short_state_directory(ROOT) as tempdir:
+            state = Path(tempdir)
+            for lane, (main, argv, error) in lanes.items():
+                with self.subTest(lane=lane):
+                    with (
+                        mock.patch.object(web, "STATE_DIR", state),
+                        mock.patch.object(x, "STATE_DIR", state),
+                        mock.patch.object(web, "_gitignored", return_value=True),
+                        mock.patch.object(
+                            web.query_plan,
+                            "read_parent_plan",
+                            return_value=(parent, "a" * 64, "docs/test_query_quality_probe_parent_plan.json"),
+                        ),
+                    ):
+                        with self.assertRaisesRegex(error, "live CLI raw_root must use the lane default"):
+                            main(argv)
 
     def test_each_live_cli_default_raw_root_passes_the_shared_exact_preflight(self) -> None:
         for lane, raw_root in (("web", web.DEFAULT_RAW_ROOT), ("x", x.DEFAULT_RAW_ROOT)):
