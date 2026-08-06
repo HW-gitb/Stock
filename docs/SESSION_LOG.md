@@ -1,5 +1,21 @@
 # Session Log
 
+## 2026-08-06 — Claude Code 刀 8：基准周价格包生产器（喂料层第一件）
+
+- **Verdict/Action**: 刀 7b 的 `settle_week` docstring 自认「nothing in the repo produces one yet」——本刀补上那个生产者。**分层不是风格选择**：冻结 schema 把 `boundary.provider_calls_performed` 钉成常量 `false`，所以「造包时没调过 provider」是包合法的前提，网络只能在 runner 里、造包只能读已落盘的 capture。**一周一包**：累积包会把每周的 raw digest 都塞进 `source_refs`，而消费它的周记录把上卷 provenance 封在 32 个 digest（正是刀 6 第 24 周撞死的同一类天花板），每周 4 个则永远够不着。
+- **两处按实证偏离原方案**（桌面 §10.5 条 32 已同步更正）：①原写「`Capital Gains`/`Stock Splits` 非零显式拒绝」是过度防御——`price_basis` 常量即 `split_adjusted_close`（拆股由声明口径 handle），资本利得只影响*总回报*不使*价格回报*错误，按原写法会为非问题烧掉一个日历周；改为「必进 capture 并被 digest 绑进 provenance」，硬拒留给真正会双计的 `auto_adjust != false`（收盘价已含股息，日后叠加 sidecar 必重复计息）。②`source_kind` 枚举无 vendor 成员，故用 `local_etf_price_packet`（枚举描述的是「来自哪类本地制品」，vendor 身份由 `source_sha256` 指向的 capture 记录）——不动冻结 schema。
+- **失败即常态路径**：yfinance 读非官方端点，周期性断供是预期内。每只每周都写 capture（含抓取失败的），因为「看过且没有」本身就是 provenance——没有它，全面断供会让 `source_refs` 为空、schema 拒包、`settle-week` 无周可打，时钟卡在断供上等厂商恢复，正是设计 §2.2 禁止的窗口顺延。
+- **自审抓到两个我自己的洞**：①`O_EXCL` 全无测试——正常路径永远先被上面的 `exists()` 拦住，换成 `O_TRUNC` 全绿而已存周的证据变得可静默替换；补直测后转红。②私密路径守卫只挡写不挡读——四份 capture 与包都已存在时走复用分支、一次不写，于是一个填满的非私密目录被静默接受；改为在 `capture_week` 开头一次性验整个周目录。随后原来那道写时守卫成了同一输入的第二扇门（路径由 `directory / 常量文件名` 构造，逃不出目录），按 CLAUDE.md §5 删掉，只留一扇真门。
+- **Verify**: review-evidence:c14ae00f52ef。24 条针对性测试；**17 个植入 17 红**（含两条「有意不拒绝」的决定被反向植入亦转红，证明是决定不是疏忽），零残留。**过程中被自己的植入残留咬了一次**：P14 把私密守卫换成 `pass` 跑整模块，真在 `docs/benchmark/` 写出了文件，脚本还原源码却没清字节，导致下一轮 `test_a_non_private_destination_is_refused` 假红；已按「先查残留再怀疑代码」定位，并给植入脚本加了每轮清扫 + 末尾 residue 断言。验收条件达成：所造包在演练 store 上经 `settle_next_week` 真结出第 1 周（`published` / `calendar_week_count=1`）。焦点包 `Ran 283 tests in 41.6s PASS` `receipt:045ef954c55a5e06a3fdba85`（259→283 无回归）；门 `tests.test_doc_governance_guard` + `test_route_doc_ledger_status_consistency` + `test_us_short_private_paths` 合计 `Ran 65 OK`。
+- **Next**: 刀 9（FRED DGS3MO PIT 现金收益生产器）
+
+## 2026-08-06 — Claude 审查 Pass-with-Required（US-short 刀 6 归因 三～八轮 + 假红隔离）
+
+- **Verdict/Action**: Pass-with-Required。代码侧我认可：上轮那条 Required 执行方没照我建议加第 11 个 boundary 旗标，改为在 report schema `constraint_exposures.description` 写明 `PRODUCER-ASSERTED` 及其完整边界——按 item 15a 这是被承认的权威面且比我的建议更完整，**我自行改判为实质闭合**，残余差额降 Optional。执行方对三～八轮的自我诊断（变异覆盖法保证每轮非空、越补越铺满=§5 过度防御）我复核后同意。缺的只有一件：已合入的状态没有任何一次绿全量。
+- **Required**: `R-USSHORT-26W-DIAG-NO-GREEN-FULL-LANE-FOR-THE-COMMITTED-STATE`（P2）。正文只见 `docs/system_risk_register.md`。
+- **Verify**: review-evidence:3b155751929e。验收超集 `Ran 214 tests / PASS / 86.0s`、`receipt:a2dd82975c7423ba259b5b75`，含那条长期假红所在模块，绿。`052c39ce` 隔离修法实读正确（`temporary_us_short_state_directory` + 两 lane `STATE_DIR` patch，与兄弟测试同款）。未违反设计 §12.7：全仓 grep 无读成交/事后 NAV。boundary 仍 10 旗标全 const 全 required。执行方末次全量 `5467 FAILED(2)` **早于** `052c39ce`，故当前 HEAD 无全量记录，rule 3 已触发而 rule 4 未完成。
+- **Next**: Codex：执行
+
 ## 2026-08-06 — Claude Code 软发现 live-CLI 测试隔离已闭：全量 lane 首次归零
 
 - **Verdict/Action**: 自修自审。此前四次提交都带着 `full lane FAILED(failures=2)` 的环境红落地，归因一直写「本机 gitignored 实盘产物占住正式决策位」但从未真正闭掉。本轮先抓到确切 traceback 坐实归因，再修：`tests/schema/test_us_short_soft_discovery_query_quality_probe_packet_schema.py::test_each_live_cli_rejects_an_unregistered_raw_root_before_provider_access` 直接对着仓库真实的 `state/us_short/` 驱动两条 live CLI，而它用的决策日写死在 `docs/us_short_soft_discovery_query_quality_probe_packet_20260730.json` 里（`expected_decision_date=20260802`），正是用户 8/1 那次真实实盘发布过的槽位；于是 `_ensure_live_decision_slots_absent`（main:1841）比它要断言的 `_validate_cli_raw_root`（main:1842）先抛，断言的正则对不上。

@@ -61,6 +61,7 @@ state/*/holding_ratchet/
 state/*/runs_private/
 state/*/model_paper_private/
 state/*/market_diagnostic_private
+state/*/market_diagnostic_inputs_private
 state/*/lifecycle/
 state/*/shadow_compare_private/
 state/*/factor_comparison_private/
