@@ -64,8 +64,8 @@ def week_directory(decision_date: str, *, inputs_root: Path = DEFAULT_INPUTS_ROO
     return Path(inputs_root).resolve() / "benchmark" / decision_date
 
 
-def _write_private_json(path: Path, payload: Mapping[str, Any]) -> str:
-    """Write once, never overwrite.
+def write_private_json_once(path: Path, payload: Mapping[str, Any]) -> str:
+    """Write once, never overwrite. Shared with the Knife 9 cash fetcher.
 
     Privacy is proven by ``capture_week`` on the whole week directory before any
     branch is taken, and every path here is that directory joined with a constant
@@ -236,7 +236,7 @@ def capture_week(
         capture = capture_symbol(
             symbol, start=start, end_exclusive=end_exclusive, module=module, now=now
         )
-        digest = _write_private_json(path, capture)
+        digest = write_private_json_once(path, capture)
         captures[symbol] = {"capture": capture, "sha256": digest}
 
     try:
@@ -273,7 +273,7 @@ def capture_week(
             "reused_captures": reused,
             "evaluable_symbols": _evaluable(packet),
         }
-    _write_private_json(packet_path, packet)
+    write_private_json_once(packet_path, packet)
     return {
         "status": "captured",
         "packet_path": str(packet_path),

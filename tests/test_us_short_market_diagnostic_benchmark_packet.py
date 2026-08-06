@@ -372,10 +372,10 @@ class BenchmarkFetchRunnerTest(unittest.TestCase):
         """
 
         path = fetch.week_directory(DECISION, inputs_root=self.inputs) / "VTI.json"
-        digest = fetch._write_private_json(path, _capture("VTI"))
+        digest = fetch.write_private_json_once(path, _capture("VTI"))
         self.assertRegex(digest, r"^[0-9a-f]{64}$")
         with self.assertRaises(fetch.BenchmarkFetchError) as ctx:
-            fetch._write_private_json(path, _capture("VTI", observed_at="2026-08-07T12:00:00Z"))
+            fetch.write_private_json_once(path, _capture("VTI", observed_at="2026-08-07T12:00:00Z"))
         self.assertIn("written once", str(ctx.exception))
         self.assertIn('"2026-08-06T12:00:00Z"', path.read_text(encoding="utf-8"))
 

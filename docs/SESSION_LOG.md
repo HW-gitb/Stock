@@ -1,5 +1,15 @@
 # Session Log
 
+## 2026-08-06 — Claude Code 刀 9：PIT 现金收益生产器（FRED DGS3MO）
+
+- **Verdict/Action**: v1.1 归因的现金腿（`(1 - g*)` 那一半）全仓无生产者，周任务一直传 `None`，所以 v1.1 就算自动激活也每周 `unavailable` 空转。本刀补上。**为什么必须钉 real-time vintage**：探针实测 FRED 的 DGS3MO 是可修订视图，而修订不在数字上、在**行的存在与否**上——2026-06-22 那天的视图里根本没有 06-19（Juneteenth）这一行，今天有了、值是 `"."`。周现金收益要除以「这周有几个交易日」，不钉 vintage 就等于用事后信息重算历史。
+- **本模块的 PIT 规则比消费方的门更严，且必须如此**：消费方只能判它拿到的那个 `available_at` 时间戳，而**挑哪一条观测交给它**正是本模块的职责。所以逐条从新往旧挑时，同时跳过三类——晚于估值日的、值为 `"."` 的、以及**日期早于决策日但发布日晚于决策日**的（决策当时根本拿不到，用了就是穿着合理日期的前视）。
+- **`"."` 不是 0**：假日或尚未发布就往前顺延，整窗口都没有则该周 `unavailable` 并写明原因。缺 key 同样 fail-closed——**不回退到不要 key 的公开 CSV 口**，那个口给的是修订后视图，用它等于把事后诸葛悄悄塞进 PIT 数字。
+- **key 卫生**：urllib 失败时抛的消息里带着它请求的 URL，而 URL 里有 key。所以厂商异常一律只留**异常类名**，绝不留消息原文；测试用一个假 secret 跑失败路径，再逐字节断言所有落盘文件里既无该 secret 也无 `api_key` 字样。
+- **本轮最重要的方法学发现（差点让所有植入结论作废）**：P24 把 `start <` 改成 `start >`——**字节长度完全相同**，而植入与还原发生在同一秒内。CPython 判 `.pyc` 失效只看 (mtime, size)，两者都没变，于是此后的进程一直在拿**植入版字节码**跑还原后的源码。表现是焦点包里一条测试莫名假红、单跑也红、`inspect.getsource` 显示源码却是对的。**已定位并硬化**：两个植入脚本改用 `python -B` + `PYTHONDONTWRITEBYTECODE=1`，并把刀 8、刀 9 的 battery **全部重跑**——刀 8 17/17 红、刀 9 24/24 红，此前的结论以本次为准。
+- **Verify**: review-evidence:c14ae00f52ef。28 条针对性测试；**24 个植入 24 红**（清缓存后重验），零 GREEN 零 SKIP 零残留。自审抓到一个我自己的洞：`day > valuation` 那道边界原本无测试——capture 门只挡到 `as_of`（08-06），而估值日是 07-24，中间十几天的利率会被选中给这周定价；补测试时第一版夹具还挑错了（那条被发布日规则先拦住，没走到该边界），换成「日期晚于估值日但决策日当天已发布」才真正打中。验收条件达成：产出的现金腿被 v1.1 真输入门 `build_attribution_input` 接受，缺失时该周在报告里降级为 `unavailable` 而非抛错。焦点包 `Ran 311 tests in 44.1s PASS` `receipt:b9b2f8155eec4ec0616c51d9`（283→311 无回归）；门 `doc_governance_guard` + `route_doc_ledger` + `private_paths` 合计 `Ran 65 OK`。
+- **Next**: 刀 10a（g* 目标敞口生产器，同轮闭 register 两条挂账）
+
 ## 2026-08-06 — Claude Code 刀 8：基准周价格包生产器（喂料层第一件）
 
 - **Verdict/Action**: 刀 7b 的 `settle_week` docstring 自认「nothing in the repo produces one yet」——本刀补上那个生产者。**分层不是风格选择**：冻结 schema 把 `boundary.provider_calls_performed` 钉成常量 `false`，所以「造包时没调过 provider」是包合法的前提，网络只能在 runner 里、造包只能读已落盘的 capture。**一周一包**：累积包会把每周的 raw digest 都塞进 `source_refs`，而消费它的周记录把上卷 provenance 封在 32 个 digest（正是刀 6 第 24 周撞死的同一类天花板），每周 4 个则永远够不着。
