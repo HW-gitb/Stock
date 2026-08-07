@@ -1,5 +1,12 @@
 # Session Log
 
+## 2026-08-07 — Claude 自修自审 PASS（判别器改读 `Verdict/Action` 值，不读 header 措辞）
+
+- **Verdict/Action**: PASS，已提交并合入 master。用户授权本轮由审查方自修自审，走 Optional 快档。修的是我自己上一轮记的残留：`is_fix` 第二支原按「header 里有没有 verdict token」判，而本仓 header 是描述性句子，「Optional 已闭（复审 PASS 后收尾）」就能靠措辞免掉证据行。改为读该 entry 自己的 `Verdict/Action` **值**，且用 `match` 锚在值的开头——用 `search` 的话，正文复述「上一轮 PASS」会把同一个洞重新打开，所以那一支也配了自己的植入样本。`REVIEW_HEADER_KEYS`（进不进论域）仍按 header 判，未动。
+- **Required**: 无。`R-DOCGOV-CLOSEOUT-HEADER-THAT-MENTIONS-PASS-STILL-SKIPS-THE-PROOF-LINE` 已翻 resolved，Repair 与 Closure 只在 `docs/system_risk_register.md`（单一来源，本处不复述）。
+- **Verify**: review-evidence:f9e85f944cac。scope grep 先做：`is_fix` 只在本模块内算与用（两处），`_review_cycle_offenders` 全仓无外部消费方，故改动面就是这一个函数。最小目标跑一次 `tests.test_doc_governance_guard` + `tests.test_route_doc_ledger_status_consistency` `Ran 55 OK receipt:b058fe96fed91664b71b2a6b`。自审植入 **3 红**、控制组先绿、还原后零残留：`match` 换回 `search` / 判别器改回读 header / 去掉整支 carve-out。新增两条假阳性对照，其中「header 不带 token、verdict 只在正文」证明新判别器严格优于旧的。
+- **Next**: 无。
+
 ## 2026-08-07 — Claude 审查 PASS（评审循环守卫 header 分类器补 `已闭`）
 
 - **Verdict/Action**: PASS，已提交并合入 master。改动 4 文件、守卫本体 +59/-2，纯治理机器、不碰选股/真钱/PIT，按 rule 8 快档：整读 `_review_cycle_offenders` 分类与 `is_fix` 两处判定全文 + 六条新样本，不起 agent、不跑全量（无代码路径改动，rule 3 未触发）。取②机器侧而非①约定侧我认可：①要求人在 header 里写「修复」，与收尾条的写法直接冲突，靠人记得正是本 finding 描述的失效模式。`收口` 不入表也认可——它是量出来的取舍，不是漏掉。
