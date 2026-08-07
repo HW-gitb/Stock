@@ -1,5 +1,20 @@
 # Session Log
 
+## 2026-08-07 — Claude 审查 PASS（a-short 纯文档轮：两条排版 Optional 收口 + 序 7 建造顺序入册）
+
+- **Verdict/Action**: PASS，已提交并合入 master。本轮零代码改动。两条排版 Optional 按字节复核都真闭了；「只补一处空行、不碰 marker 之下 59 处 grandfather 历史」这个自律是对的，我核过 SESSION_LOG 本轮 `9/0` 全是新增、零删除。序 7 的七步建造顺序读下来一致，我另给一条开工时才用得上的 Optional（守卫改断内部自洽后的权威链终点）。
+- **Required**: 无。两条排版 Optional 的收口复核、同类另外 2 个实例的处置见 `docs/system_risk_register.md` 的 `R-ASHORT-ANTI-DANGLING-GUARD-IS-GROUP-GRAINED-SO-A-NEW-FIELD-IS-NEVER-ASKED`；序 7 七步顺序复核与我新增的那条 Optional 见同文件 `R-ASHORT-FAILED-WEEKLY-RUN-LEAVES-TRACKED-SUMMARIES-AHEAD-OF-THEIR-LEDGER`（单一来源，本处不复述）。
+- **Verify**: review-evidence:e7fd9f4f7b52。字节复核：目标 handoff 孤立 CR `2 → 0`（现 `CRLF=0`，纯 LF，`numstat` 30/2 证明非整文件翻转），SESSION_LOG / register 仍纯 CRLF 且孤立 CR 为 0。我独立重跑整类扫描：79 份 tracked `docs/**/*.md` 中另有且仅有 2 份各含 1 个孤立 CR，**且我查了上下文——两处都落在同一个 `.tools`↔`run_unittest...` 位置，是同类实例**。治理门 `Ran 55 tests ... OK`。零代码变更故无 focused；rule 3 不触发，全量未跑。
+- **Next**: Codex：执行
+
+## 2026-08-07 — Claude Code 修复（两条排版 Optional 收口；序 7 裁定选项 (a)，建造顺序已定但本轮未实现）
+
+- **Verdict/Action**: 修完，未 commit，**纯文档改动、零代码变更**。审查方点的第 1 条不是转义写错而是**真实 CR 字节**（全文无 CRLF 却夹 2 个孤立 CR），已按字节改回反斜杠。第 2 条只补它点名的**那一处**空行——**刻意没有全文修**：一次扫全文会插 60 处，其中 59 处在 marker 之下的 append-only 历史区，为排版动它属越界，已回退改单点。**序 7 用户裁定选项 (a)，本轮明确未实现**，只把七步建造顺序落进 register。
+- **Required**: 无。两条排版 Optional 的处置见 `docs/system_risk_register.md` 的 `R-ASHORT-ANTI-DANGLING-GUARD-IS-GROUP-GRAINED-SO-A-NEW-FIELD-IS-NEVER-ASKED`；序 7 选项 (a) 的裁定、七步建造顺序与规模实测见同文件 `R-ASHORT-FAILED-WEEKLY-RUN-LEAVES-TRACKED-SUMMARIES-AHEAD-OF-THEIR-LEDGER`（单一来源，本处不复述）。
+- **Verify**: 字节核对——handoff 孤立 CR `2 → 0`、CRLF 恒为 0；SESSION_LOG `git diff --numstat` 为 `1/0`（只插一空行，marker 之下 59 处历史相邻标题原样未动）。同一转义机制在本轮追加时**又复发 5 处**，已发现根因是用 bash heredoc 写文档正文多剥一层反斜杠，改用编辑器写入后复验归零。附带扫描 79 份 tracked `docs/**/*.md`：另有 2 份各含 1 个孤立 CR，属既有面、未动只记。交接门 `Ran 55 tests ... OK`。
+- **Pre-Codex self-review**: A-F checked。A：CR 类不只修被点名那 2 处，全仓 79 份 tracked docs markdown 一次扫净并列出既有面 2 处。B：`.tools\run_unittest_with_repo_pythonpath.cmd` 正确形态全文 10 处，`toolsun_` 零残留。C：反向=只补 1 处空行，marker 之下 59 处历史未被波及（回退过一次全文误修）。D：n/a。E：未动 CURRENT。F：文件无 BOM、无 mojibake、孤立 CR 归零。matrix=CR 修净+单点空行+序7裁定入册+建造顺序；register=updated（两条）；handoff=主 handoff 追加；focused=n/a（本轮零代码变更）；full-lane=not_triggered: AGENTS rule 3; reason=纯文档改动；door=55 OK
+- **Next**: Claude Code：审查
+
 ## 2026-08-07 — Claude 审查 PASS（a-short 序 11 Optional 收口：反向棘轮腿 + 裸字符串 live 声明）
 
 - **Verdict/Action**: PASS，已提交并合入 master。我上一轮那条 Optional 闭得干净，且执行方顺手把同类的另一半也修了——效果证明循环原先跳过一切非 dict override，于是「唯一装不下证据的写法」恰好也是「唯一被免除提供证据的写法」；这是真口子不是形态整理，判定采纳。行为仍未变：398 叶七类计数与上一轮逐项相同，基线 225 == pending 225，`static_contract_error()` 返回 `None`。
@@ -14,6 +29,7 @@
 - **Verify**: 先复现审查方原探针——显式登记 `{"category": "unclassified_pending_audit"}` 后 pending 226 / 基线 225 而 `static_contract_error()` 返回 `None`，洞属实；修后同一输入报 `baseline does not list ... universe_summary.after_l0_count`。焦点包 `Ran 120 tests in 265.6s ... OK`（`receipt:e77eb544bdb7ac56e42b3755`，bundle 已带；118→120 恰为两条新测试）。植入 2/2 中和的都是门本身：反向腿挖空 → 新债那条单点红；`isinstance` 门挖掉 → 裸字符串 live 那条红。反向不误伤：4 条既有裸字符串 override 与诚实基线仍 `None`。
 - **Pre-Codex self-review**: A-F checked。A：观察③ 按类修（live 三类 × 所有 override 形态）；另枚举 tracked 公共汇总 7 轨 13 文件，确认 publish 之前恰 4 轨 8 个。B：grep 零生产调用者。C：既有 4 条非 live 裸字符串仍合法。D：n/a。E：未动 CURRENT。F：py_compile／diff --check／JSON 过。matrix=反向腿+裸字符串门+docstring+重封；register=updated；handoff=主 handoff 追加；focused=120 OK（`receipt:e77eb544bdb7ac56e42b3755`）；full-lane=not_triggered: AGENTS rule 3; reason=仅改无生产调用者的 `static_contract_error` 与一处 docstring；door=55 OK
 - **Next**: Claude Code：审查
+
 ## 2026-08-07 — Claude 审查 PASS（a-short 序 11 · #09 新叶闸 + 冻结基线棘轮）
 
 - **Verdict/Action**: PASS，已提交并合入 master。增量棘轮版按用户 2026-08-05 裁定落地，未借刀改任何业务判据。行为不变我独立坐实：现算 398 叶七类计数与所报逐项相同，冻结基线 225 == 今日 pending 225（双向差集皆空），`static_contract_error()` 返回 `None`——同时证明预判据重封与现算 inventory 精确相等。防换血锚点在另一文件，与活基线各 225 条、双向差集皆空。

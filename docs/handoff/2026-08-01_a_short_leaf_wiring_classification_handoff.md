@@ -2250,7 +2250,7 @@ margin 两模块 56 绿；验收包 682 绿（`receipt:c1de5807ed0db575bfec092e`
 
 **验证命令与结果**
 
-- focused 验收包（6 模块一次合并）：`.toolsun_unittest_with_repo_pythonpath.cmd --timeout-seconds 900 tests.test_a_short_effect_contract tests.test_a_short_effect_consumer_probe tests.test_a_short_evidence_epoch_mode tests.test_a_short_weekly_pipeline tests.test_a_short_regime_action_comparison tests.test_a_short_final_action_validation` → `Ran 677 tests in 457.6s ... OK`，`receipt:9daf87eb2e0c10a6ad85d19c`，`bundles=a_short_effect_contract`。300s 默认不够（实测跑到约 380 条被截断），按 AGENTS rule 5 抬到 900s。
+- focused 验收包（6 模块一次合并）：`.tools\run_unittest_with_repo_pythonpath.cmd --timeout-seconds 900 tests.test_a_short_effect_contract tests.test_a_short_effect_consumer_probe tests.test_a_short_evidence_epoch_mode tests.test_a_short_weekly_pipeline tests.test_a_short_regime_action_comparison tests.test_a_short_final_action_validation` → `Ran 677 tests in 457.6s ... OK`，`receipt:9daf87eb2e0c10a6ad85d19c`，`bundles=a_short_effect_contract`。300s 默认不够（实测跑到约 380 条被截断），按 AGENTS rule 5 抬到 900s。
 - full lane（rule 3(b)：共享 effect 引擎 + 契约 JSON 喂生产周报管道，只跑一次）：`RESULT status=PASS exit=0 tests=2521 elapsed=235.6s deadline=860s mode=parallel`，`COUNT_GATE discovered=2521 ran=2521 equal=True`。2510 + 本刀 11 条新测试 = 2521。
 - 行为不变逐字节正控：同一进程内用 `git show HEAD:` 的引擎源码对同一份磁盘输入重算，`leaf_effects()` 与 `leaf_natures()` 均与改造后逐字节相同；各类计数不变，合计 398。
 - 三个植入对照（中和的都是门本身，非判据来源）：挖掉新叶闸的 `raise` → 两条新叶测试转红；棘轮腿恒空 → 三条 `..._may_not_stay_on_the_baseline` 全红；往活基线追加一条新债 → 防换血腿转红。探针改真文件、跑合规入口、事后按字节还原。
@@ -2310,7 +2310,7 @@ margin 两模块 56 绿；验收包 682 绿（`receipt:c1de5807ed0db575bfec092e`
 
 **验证命令与结果**
 
-- focused：`.toolsun_unittest_with_repo_pythonpath.cmd tests.test_a_short_effect_contract tests.test_a_short_effect_consumer_probe tests.test_a_short_evidence_epoch_mode` → `Ran 120 tests in 265.6s ... OK`，`receipt:e77eb544bdb7ac56e42b3755`，`bundles=a_short_effect_contract`。118 → 120 恰为本轮两条新测试。
+- focused：`.tools\run_unittest_with_repo_pythonpath.cmd tests.test_a_short_effect_contract tests.test_a_short_effect_consumer_probe tests.test_a_short_evidence_epoch_mode` → `Ran 120 tests in 265.6s ... OK`，`receipt:e77eb544bdb7ac56e42b3755`，`bundles=a_short_effect_contract`。118 → 120 恰为本轮两条新测试。
 - 植入对照 2/2，中和的都是门本身：反向腿挖成 `unlisted_pending = []` → `test_new_debt_cannot_be_booked_through_an_explicit_override` 单点红；live-claim 的 `isinstance` 门挖掉 → `test_a_live_claim_may_not_be_written_in_the_evidence_free_form` 红。
 - **full lane 未触发**：本轮只改 `static_contract_error`（全仓 grep 零生产调用者）与一处 docstring，未碰 `_leaf_effect_map`，AGENTS rule 3 (a)-(e) 均不成立；按 rule 8 起全量属过度校验。
 - 静态：`py_compile` 3 文件过、`git diff --check` 干净、契约 JSON 解析通过、`static_contract_error()` 返回 `None`。
@@ -2353,3 +2353,52 @@ margin 两模块 56 绿；验收包 682 绿（`receipt:c1de5807ed0db575bfec092e`
 ### 下一步
 
 序 11 全部收口（新叶闸 + 双向棘轮 + live 声明形态）。序 7 需用户先裁那条守卫判据再开工；队列其余为序 8 / 13 / 14 / 15 与文末两把小刀。
+
+## 2026-08-07 追加：两条排版 Optional 收口 + 序 7 裁定为选项 (a)（建造顺序已定，代码未动）
+
+**改了什么**
+
+1. 本文件上一节的验证命令修好了：那不是转义写错，是**两个真实的 CR 字节**——全文没有一处 CRLF，却夹着 2 个孤立 CR，于是「`.tools` + CR + `un_unittest_...`」渲染成 `.toolsun_...`。按字节换成反斜杠后，全文孤立 CR 归零。
+2. `docs/SESSION_LOG.md` 只补审查方点名的那**一处**空行（第 17 行前）。**刻意没有全文修**：一次扫全文会插 60 处，其中 59 处在 `REVIEW-CYCLE-MINIMAL-TEMPLATE-MARKER` 之下的 grandfather 历史区，那是 append-only 的，为排版去动它属越界；已回退后改为单点修。
+
+**为什么改**
+
+两条都不影响任何守卫（治理门本轮仍 `Ran 55 tests ... OK`），但第 1 条会让照抄命令的人直接失败，属 checklist B 的「emit 到产物里的字符串」那一面。
+
+**验证命令与结果**
+
+- 本轮**纯文档改动**，无代码变更，故无 focused、full lane 按 AGENTS rule 3 不触发。
+- 交接门：`.tools\run_unittest_with_repo_pythonpath.cmd tests.test_route_doc_ledger_status_consistency tests.test_doc_governance_guard` → `Ran 55 tests ... OK`。
+- 字节核对：本文件孤立 CR 计数 2 → 0；SESSION_LOG `git diff --numstat` 为 `1/0`（仅插一空行）。
+- **本轮的过程教训（已改习惯）**：这两处 CR 的来源不是编辑失误，而是**用 bash heredoc 写文档正文时多剥了一层反斜杠转义**（`\r` / `\n` 被还原成真的 CR / LF）。同一机制在本轮追加时又复发一次（5 处），故文档正文改用编辑器写入、不再走 shell heredoc。附带扫描：全仓 79 份 tracked `docs/**/*.md` 中另有 2 份各含 1 个孤立 CR（`2026-07-28_repair_closeout_shared_flow_handoff.md`、`2026-08-01_a_short_knife11_official_rolling_handoff.md`），属既有面、本轮未动，只记。
+
+**序 7：用户裁定选项 (a)，本轮未实现**
+
+- 裁定内容：桌面 1-6 全做，**并且**把 tracked reproducibility 守卫从「等于冻结快照」改成断「内部自洽」。七步建造顺序已写进 register `R-ASHORT-FAILED-WEEKLY-RUN-LEAVES-TRACKED-SUMMARIES-AHEAD-OF-THEIR-LEDGER`，下次开工照做即可，不必重新推导。
+- **本轮没有动任何代码**，理由是规模实测：改动面五个模块合计约 1 万行（`a_short_weekly_pipeline.py` 一个就 6346 行）+ 一个新事务器模块 + 4 份 schema，focused 必进的测试模块 8 个约 9.3k 行，验收矩阵 7 行各需植入对照，最后还要一次 full lane。它改的是**生产周报的发布与持久化路径**——一部分轨走了事务器、一部分还留旧写法的半转换态，比完全不动更危险。故整刀单独开一轮，不在本轮夹带。
+
+**下一步注意事项**
+
+- 序 7 开工时第一件事是建 `engine/a_short_artifact_set_transaction.py` 并**先**写它自己的 crash/recovery 测试（验收矩阵第 3、4 行直接打它），再动四轨；不要先改 pipeline 排序。
+- 记住第 3 步那个易漏点：capture 推进账本之后必须**重新 prepare 一次**再 commit，否则公共汇总仍是 capture 前的口径，等于把缺陷从「公共领先账本」换成「公共落后账本」。
+
+## 2026-08-07 追加：纯文档轮独立审查 —— PASS
+
+### 判定
+
+**PASS，已提交并合入 master。** 本轮零代码改动，两条排版 Optional 都真闭了。
+
+### 我实际验了什么
+
+- **按字节，不看渲染**：本文件孤立 CR `2 → 0`（现 `CRLF=0 / totalCR=0`，纯 LF），`git diff --numstat` 30/2 证明不是整文件换行翻转；`docs/SESSION_LOG.md` 与 `docs/system_risk_register.md` 仍是纯 CRLF、孤立 CR 皆 0。
+- **「只补一处空行」的自律成立**：SESSION_LOG 本轮 `9/0` 全为新增、零删除，marker 之下 59 处 grandfather 历史一行未动。回退全文误修那一步是对的。
+- **整类扫描我自己重跑了一遍**：79 份 tracked `docs/**/*.md` 中另有且仅有 2 份各含 1 个孤立 CR，与执行方所报**逐份相同**；我另查了上下文，**两处 CR 都落在 `.tools` 与 `run_unittest_with_repo_pythonpath.cmd` 之间**，即那两份文档里的命令同样渲染成 `.toolsun_...`——是同一个类的另外两个实例。本轮不修它们我同意（分属别的刀、其中一份的独立审查在别窗未收口），已记 Optional。
+- **一个探针经验值得留**：`grep "toolsun_"` 永远命中不了这一类——字节里根本没有那个串，是 CR 造成的渲染错觉。查这一类只能用字节扫描。
+
+### 序 7 七步顺序：一致，另加一条开工时的 Optional
+
+顺序读下来对，两个关键点我认可：先建事务器并先写它自己的 crash/recovery 测试；capture 推进账本后必须重新 prepare 一次再 commit（否则只是把「公共领先账本」换成「公共落后账本」）。**新增 Optional**：第 5 步守卫改断「内部自洽」之后要留意权威链终点——若重算只回到公共 JSON 自述的 `source_*` 字段，终点就落在被检查的那份产物自己身上，能抓 JSON↔Markdown 不同源、抓不住整对被一致重写。建议分强弱两档或让公共 JSON 携带一个公共侧无法自证的量，正文在 register。
+
+### 未覆盖维度与诚实边界
+
+本轮零代码，故无 focused、无全量；用户对序 7 选项 (a) 的裁定发生在别的窗口，**我无法独立验证该裁定本身**，只按已记录的裁定复核方案一致性；序 7 的六件方案与事务器实现本轮无代码可审。
