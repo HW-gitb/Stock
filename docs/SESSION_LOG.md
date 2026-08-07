@@ -1,5 +1,35 @@
 # Session Log
 
+## 2026-08-07 — Claude 审查 PASS（a-short：合并态验证门收口）
+
+- **Verdict/Action**: PASS，已提交并合入 master。上轮那条 Required 闭得比我给的两条方案都好：不解析 `sh`，改用 `git -c alias.gateprobe` 让条件跑在 **git 自己的 shell**（即将来真执行 hook 的那个）里——不依赖 PATH、不硬编码路径、更忠实。我警告的「跳过会让反向腿变空转」被 `assertIn(decision,{FIRED,SKIPPED})` 正面堵住。门本身的 `NOT_VERIFIED` 同时解除。
+- **Required**: 无。`R-TOOLS-MERGE-GATE-TEST-CANNOT-PASS-UNDER-THE-MANDATED-RUNNER` 已 CLOSED，`R-TOOLS-MERGE-COMBINED-STATE-GATE` 的 reviewer 验证已补，两条详见 `docs/system_risk_register.md`（单一来源，本处不复述）。
+- **Verify**: review-evidence:dde32af0de6a。合规入口 `Ran 29 tests ... OK`、`receipt:bd9d841d643708030fa21a98`；`-v` 确认该用例 `ok`（真跑非跳过）。**植入对照 6/6**：挖掉 hook 的合并子句 → 只带文档的合并由 `FIRED` 变 `SKIPPED`，还原复 `FIRED`；抽取片段确含 `MERGE_HEAD`，来自已发布 hook 正文；探针未改仓库任何文件。未起全量（本刀只动 .tools/hook/测试，rule 3 未触发）。
+- **Next**: Codex：执行
+
+## 2026-08-07 — Claude Code 修复（合并门测试改用 git 自己的 shell，不再靠 PATH 找 sh）
+
+- **Verdict/Action**: 修完，未 commit。判据完全成立、是我的缺陷——当初只在普通 Bash 环境验了 `sh` 可用，没在合规入口下验。已照原探针复现：launcher 下 `TypeError: ... not NoneType`、`FAILED (errors=1)`。**审查方倾向的 (a) 我没采用**：它的 `skipTest` 腿会让这条反向对照在合规环境里**静默空转**（控制被跳过=什么都没证明），还要写死 `Git\usr\bin` 这类会过期的安装路径。改用第三条路——`git -c "alias.gateprobe=!<snippet>"`，由 **git 自己的 shell** 执行，那正是将来真跑这个 hook 的 shell。
+- **Required**: `R-TOOLS-MERGE-GATE-TEST-CANNOT-PASS-UNDER-THE-MANDATED-RUNNER` → working-tree repaired，closed pending 审查。与审查方一致**不动 launcher 的 PATH 白名单**（为一条测试放宽所有测试的环境边界，方向反了）。Repair 与整类枚举只见 register。
+- **Verify**: 全部在净化 PATH（该环境 `which('sh')` 确为 `None`）下实跑——① 合规入口全模块 `Ran 21 tests ... OK`、`status=PASS exit=0`，`-v` 显示该用例 `ok` 非 `skipped`；② 两条腿判定不同：docs-only **合并** → `FIRED`，同样 docs 改动**无合并** → `SKIPPED`；③ **回归对照** `git show HEAD:` 修前条件在同一真合并里 → `SKIPPED`，改回去仍会被抓。不存在 skip 分支：shell 没走到分支即 rc≠0 并断言判定须为 FIRED/SKIPPED 之一，大声失败。
+- **Pre-Codex self-review**: A-F checked。A：整类扫净——全仓靠 PATH 取外部可执行文件共 8 处 5 文件，净化 PATH 下 `powershell`/`cmd`/`git` 均解析得到、`pwsh` 已有兜底，**只有 `sh` 这一个成员是坏的**。B：`import shutil` 因本次改动成孤儿，已删。C：反向=修前条件仍 SKIPPED。D：取最窄安全解，不碰 launcher 白名单。E 未动 CURRENT。F `sh -n` 过、diff-check 干净。matrix=git-shell 执行器+两条腿+回归对照+整类枚举；register=updated；handoff=n/a；focused=合规入口 162 OK（`receipt:ce69d8ca0f14dabfd3c5cbc2`）；full-lane=not_run（工具链改动、a_short lane 无模块引用 `verification_receipt`，rule 3 未触发）；door=治理门 76 OK
+- **Next**: Claude Code：审查
+
+## 2026-08-07 — Claude 审查 FAIL（a-short：合并态验证门；一条新测试在合规入口下必红）
+
+- **Verdict/Action**: FAIL，未提交。合并门的实现我读过，**逻辑正确**，还补上了我方案里没识别出的一个洞（合并时 `collect_code_state` 只看得见一侧，故改为按 `merge-base` 并起两侧再推 bundle）。挡住的是它的测试：靠 `shutil.which("sh")` 找 shell，而项目强制的 focused 入口把 `sh` 所在目录清出了 `PATH`，于是这条测试**构造上不可能通过**，把整条验证链染红。
+- **Required**: `R-TOOLS-MERGE-GATE-TEST-CANNOT-PASS-UNDER-THE-MANDATED-RUNNER`（P2，含两条可行修法与明确不接受的那条）；门本身的判定另记 `R-TOOLS-MERGE-COMBINED-STATE-GATE`。均见 `docs/system_risk_register.md`（单一来源，本处不复述）。
+- **Verify**: review-evidence:2698a611e0f5。焦点包 `Ran 72 tests ... FAIL exit=1`（71 过、1 ERROR）。坐实三步：普通环境 `which('sh')` = `Git\usr\bin\sh.EXE`；launcher `:21` 的固定 PATH 含 `Git\cmd` 但不含 `Git\usr\bin`；该入口下 `which('sh')` = `None` → `TypeError ... not NoneType`，单跑该用例 `Ran 1 test ... FAIL`。门的行为本身记 `NOT_VERIFIED by reviewer`——测试红使本模块本轮拿不到合规入口下的绿。未起全量（rule 3 的那次全量本就会被这条红挡住）。
+- **Next**: Codex：修复
+
+## 2026-08-07 — Claude Code 修复（合并态无人验证：收据门对 merge 无条件生效 + bundle 取双侧并集）
+
+- **Verdict/Action**: 修完，未 commit。采纳审查方 (a)。**先逐条核实，其中 ② 不成立并已在 register 更正**：「主树恰好已有对得上的收据就不要求新验证」不对——合并未提交时 HEAD 还是合并前的 tip、工作树已是合并结果，指纹必然是新的，旧收据对不上；能过门的只可能是在合并态上重铸的，那正是正确行为。① 属实，(a) 第二半（bundle 只看得见 incoming 一侧）也属实，两者都修。
+- **Required**: `R-TOOLS-NOTHING-VERIFIES-THE-COMBINED-STATE-A-MERGE-CREATES` → working-tree repaired，closed pending 审查。Repair 与 Closure tests 只见 register。**合并后强制全量故意没做成硬门**：us_short 全量目前在 860s 内仍跑不完（本会话实测 `TIMEOUT exit=124 / 860.2s`），做成硬门今天就是不可用的，改为合并时打一条不阻断提醒。
+- **Verify**: 反向对照是**真合并 + 执行真 hook 里抽出的那几行条件**，非文本断言。构造 base → 对侧只改 `docs/note.md` → 我方改 `engine/a_short_effect_contract.py` → `merge --no-commit`，staged 仅 `docs/note.md`：**`git show HEAD:` 的修前条件 `SKIPPED`（复现审查方 ①）、修后 `FIRED`**；bundle 推导 **单侧 `()` → 双侧 `('a_short_effect_contract',)`**。反向腿：同样纯文档改动但不在合并中 → `SKIPPED`。29 OK；受影响面 focused 162 OK（`receipt:617b1d21c379b5b544ea47b1`）。
+- **Pre-Codex self-review**: A-F checked。A：整类=「从单侧视角决定该验什么」的门，两处都改（hook 条件、bundle 推导），并核过 a_short lane 无模块引用 `verification_receipt`。B：无孤儿，`required_bundles_for_state` 保留为纯函数并仍有测试。C：反向两腿（修前 SKIPPED、非合并 SKIPPED），后者防止把门整体放宽。D：不越界——不把全量做成合并硬门，理由有实测支撑。E 未动 CURRENT。F `sh -n` 过、diff-check 干净。matrix=hook条件+merge_side_paths+required_bundles_now+真合并双腿；register=updated；handoff=n/a；focused=162 OK；full-lane=not_run（无生产面改动、rule 3 未触发，改动限于工具链）；door=治理门 75 OK
+- **Next**: Claude Code：审查
+
 ## 2026-08-07 — Claude 审查 PASS（a-short：并行刀两条 Optional 已闭）
 
 - **Verdict/Action**: PASS。两条 Optional 都闭，且比我要的多做一半：我只提了「账本记墙钟」，他们连「墙钟被哪个模块钉住」这个可行动的一半也一并记了（`slowest_module` + `WALL_CLOCK_FLOOR` 控制台行）。A 的底层工作（把 `theme_forward_comparison` 变快）**明确未做且明确不塞进 Optional 轮**，理由是那要先 profile、属独立提速刀——判断正确，我那条本就是观察不是优化要求。

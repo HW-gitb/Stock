@@ -95,11 +95,46 @@ def fingerprint(state: dict[str, str]) -> str:
     return hashlib.sha256(canonical.encode("utf-8")).hexdigest()
 
 
-def required_bundles_for_state(state: dict[str, str]) -> tuple[str, ...]:
-    changed = {_normalise(path) for path in state if path != "@HEAD"}
-    if changed & EFFECT_CONTRACT_SURFACES:
+def _bundles_for_paths(paths: Iterable[str]) -> tuple[str, ...]:
+    if set(paths) & EFFECT_CONTRACT_SURFACES:
         return ("a_short_effect_contract",)
     return ()
+
+
+def required_bundles_for_state(state: dict[str, str]) -> tuple[str, ...]:
+    return _bundles_for_paths(_normalise(path) for path in state if path != "@HEAD")
+
+
+def merge_in_progress() -> bool:
+    return bool(_git("rev-parse", "-q", "--verify", "MERGE_HEAD").strip())
+
+
+def merge_side_paths() -> frozenset[str]:
+    """Code paths either side of a merge changed since their common base.
+
+    ``collect_code_state`` sees a merge from one side only: HEAD is the first
+    parent, so everything already on our side reads as unchanged and only the
+    incoming half shapes the evidence being demanded.  A merge is the moment a
+    combination first exists, so what it has to show should be derived from
+    both of the things being combined.  Empty when no merge is in progress.
+    """
+    if not merge_in_progress():
+        return frozenset()
+    base = _git("merge-base", "HEAD", "MERGE_HEAD").strip()
+    if not base:
+        return frozenset()
+    paths: set[str] = set()
+    for side in ("HEAD", "MERGE_HEAD"):
+        paths.update(
+            line for line in _git("diff", "--name-only", f"{base}..{side}").splitlines() if line
+        )
+    return frozenset(_normalise(path) for path in paths if is_code_path(path))
+
+
+def required_bundles_now(state: dict[str, str]) -> tuple[str, ...]:
+    """What this commit must show, widened across both sides when merging."""
+    changed = {_normalise(path) for path in state if path != "@HEAD"}
+    return _bundles_for_paths(changed | set(merge_side_paths()))
 
 
 def bundle_for_args(unittest_args: Iterable[str]) -> tuple[str, ...]:
@@ -224,7 +259,7 @@ def validate_receipt(
     current_state = state if state is not None else collect_code_state()
     if receipt.get("code_fingerprint") != fingerprint(current_state):
         return False, "focused acceptance receipt does not match the current code state"
-    required = required_bundles if required_bundles is not None else required_bundles_for_state(current_state)
+    required = required_bundles if required_bundles is not None else required_bundles_now(current_state)
     recorded_bundle_set = set(recorded_bundles)
     missing = [name for name in required if name not in recorded_bundle_set]
     if missing:
