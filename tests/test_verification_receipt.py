@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import subprocess
 import tempfile
 import unittest
 from pathlib import Path
@@ -9,6 +10,73 @@ import sys
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / ".tools"))
 import verification_receipt as receipts  # noqa: E402
+
+
+def _run_git(repo: Path, *args: str) -> None:
+    subprocess.run(["git", "-C", str(repo), *args], check=True,
+                   stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+
+
+def build_docs_only_merge(repo: Path) -> None:
+    """A merge whose incoming side touches documents only, while ours touched code.
+
+    This is the shape the gate used to walk straight past: the staged diff holds
+    no code, so nothing asked for evidence -- even though the merge is the first
+    time these two sides have ever existed together.
+    """
+    contract = repo / "engine" / "a_short_effect_contract.py"
+    contract.parent.mkdir(parents=True, exist_ok=True)
+    (repo / "docs").mkdir(exist_ok=True)
+    _run_git(repo, "init", "-b", "main")
+    _run_git(repo, "config", "user.email", "t@example.com")
+    _run_git(repo, "config", "user.name", "t")
+    contract.write_text("BASE = 1\n", encoding="utf-8")
+    (repo / "docs" / "note.md").write_text("base\n", encoding="utf-8")
+    _run_git(repo, "add", "-A")
+    _run_git(repo, "commit", "-m", "base")
+
+    _run_git(repo, "checkout", "-b", "incoming")
+    (repo / "docs" / "note.md").write_text("incoming edits documents only\n", encoding="utf-8")
+    _run_git(repo, "add", "-A")
+    _run_git(repo, "commit", "-m", "docs only")
+
+    _run_git(repo, "checkout", "main")
+    contract.write_text("BASE = 2\n", encoding="utf-8")   # our side moved a contract surface
+    _run_git(repo, "add", "-A")
+    _run_git(repo, "commit", "-m", "ours")
+    subprocess.run(["git", "-C", str(repo), "merge", "--no-commit", "--no-ff", "incoming"],
+                   stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, check=False)
+
+
+class MergeCombinedStateTests(unittest.TestCase):
+    def test_a_merge_widens_the_required_bundles_across_both_sides(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            repo = Path(tmp) / "repo"
+            repo.mkdir()
+            build_docs_only_merge(repo)
+            with patch.object(receipts, "ROOT", repo):
+                self.assertTrue(receipts.merge_in_progress())
+                # The staged diff is documents only, so the one-sided view asks for nothing...
+                self.assertEqual(receipts.required_bundles_for_state({"@HEAD": "x"}), ())
+                # ...while the surface our own side moved since the base still has to be shown.
+                self.assertIn("engine/a_short_effect_contract.py", receipts.merge_side_paths())
+                self.assertEqual(
+                    receipts.required_bundles_now({"@HEAD": "x"}),
+                    ("a_short_effect_contract",),
+                )
+
+    def test_without_a_merge_nothing_is_widened(self):
+        # The widening has to be specific to merges; making every commit demand both sides
+        # would be a different, much broader gate than the one that was asked for.
+        with tempfile.TemporaryDirectory() as tmp:
+            repo = Path(tmp) / "repo"
+            repo.mkdir()
+            build_docs_only_merge(repo)
+            _run_git(repo, "merge", "--abort")
+            with patch.object(receipts, "ROOT", repo):
+                self.assertFalse(receipts.merge_in_progress())
+                self.assertEqual(receipts.merge_side_paths(), frozenset())
+                self.assertEqual(receipts.required_bundles_now({"@HEAD": "x"}), ())
 
 
 class VerificationReceiptTests(unittest.TestCase):

@@ -9,10 +9,15 @@ Two mechanical layers must not silently regress:
 from __future__ import annotations
 
 import importlib.util
+import subprocess
+import sys
+import tempfile
 import unittest
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
+sys.path.insert(0, str(ROOT))
+from tests.test_verification_receipt import build_docs_only_merge  # noqa: E402
 
 
 def _load_review_gate():
@@ -276,6 +281,60 @@ class PreCommitReminderTests(unittest.TestCase):
         blocked = "pre-commit BLOCKED: no current bounded focused acceptance receipt"
         self.assertIn(blocked, ahead)
         self.assertIn("exit 1", ahead[ahead.index(blocked):])
+
+    def _receipt_gate_condition(self):
+        """Lift the gate's real decision lines out of the hook, so this runs what ships."""
+        lines = self.hook.splitlines()
+        picked = {}
+        for line in lines:
+            for key, prefix in (("merging", "merging="), ("changed", "code_changed="),
+                                ("branch", 'if [ -n "$code_changed" ]')):
+                if line.strip().startswith(prefix) and key not in picked:
+                    picked[key] = line.strip()
+        self.assertEqual(sorted(picked), ["branch", "changed", "merging"])
+        self.assertIn("MERGE_HEAD", picked["merging"])
+        return "; ".join([picked["merging"], picked["changed"], picked["branch"]]) + \
+            " echo FIRED; else echo SKIPPED; fi"
+
+    def _decide(self, repo, snippet):
+        """Run the hook's own condition under the shell git runs hooks with.
+
+        Taking `sh` off PATH reads simpler and is wrong here: the mandated
+        launcher resets PATH to a fixed allowlist that carries git but not the
+        directory holding `sh.exe`, so the test would skip in exactly the
+        environment the project requires -- and a control that skips is a
+        control that proves nothing.  A `!` alias runs under git's own shell,
+        which is the shell that will execute this hook for real, and it needs
+        no hard-coded install path to find.
+        """
+        done = subprocess.run(
+            ["git", "-C", str(repo), "-c", "alias.gateprobe=!" + snippet, "gateprobe"],
+            capture_output=True, text=True,
+        )
+        self.assertEqual(done.returncode, 0, done.stderr)
+        decision = done.stdout.strip().splitlines()[-1]
+        # Fail loudly rather than skip if the shell never reached the branch.
+        self.assertIn(decision, {"FIRED", "SKIPPED"}, done.stdout)
+        return decision
+
+    def test_a_documents_only_merge_still_demands_a_receipt(self):
+        # The reviewer's case: a merge carrying the other side's code in, with a staged diff that
+        # holds no code at all. The old condition looked only at the staged diff and walked past.
+        script = self._receipt_gate_condition()
+        with tempfile.TemporaryDirectory() as tmp:
+            repo = Path(tmp) / "repo"
+            repo.mkdir()
+            build_docs_only_merge(repo)
+            staged = subprocess.run(["git", "-C", str(repo), "diff", "--cached", "--name-only"],
+                                    capture_output=True, text=True).stdout.split()
+            self.assertTrue(staged and all(name.endswith(".md") for name in staged), staged)
+            self.assertEqual(self._decide(repo, script), "FIRED")
+            # Reverse leg: the same documents-only change with no merge under way must NOT be
+            # gated, or this would have become a blanket widening rather than a merge rule.
+            subprocess.run(["git", "-C", str(repo), "merge", "--abort"], check=True)
+            (repo / "docs" / "note.md").write_text("plain docs edit\n", encoding="utf-8")
+            subprocess.run(["git", "-C", str(repo), "add", "-A"], check=True)
+            self.assertEqual(self._decide(repo, script), "SKIPPED")
 
     def test_hook_uses_only_the_pinned_stock_python(self):
         self.assertIn(

@@ -43,8 +43,14 @@ fi
 # This is the small hard gate; the rule-3 full lane below remains conditional.
 # Keep this above the reminder header: that header documents the advisory branch
 # and says "NEVER blocks", so a blocking gate under it makes the file lie.
+# A merge is gated unconditionally, documents or not. The staged diff answers
+# "was this code tested"; it never answers "was this COMBINATION tested", and a
+# merge is the moment a combination first exists. A docs-only merge can still
+# carry the other side's code into this tree, and that pairing has been tested
+# by nobody. verification_receipt widens the required bundles across both sides.
+merging="$(git rev-parse -q --verify MERGE_HEAD 2>/dev/null || true)"
 code_changed="$(git diff --cached --name-only | grep -vE '^(docs/|.*\\.md$)' || true)"
-if [ -n "$code_changed" ]; then
+if [ -n "$code_changed" ] || [ -n "$merging" ]; then
   "$PY" .tools/verification_receipt.py 1>&2
   if [ "$?" -ne 0 ]; then
     echo "" 1>&2
@@ -72,5 +78,12 @@ if [ -n "$PY" ]; then
     echo "The focused receipt is produced by .tools\\run_unittest_with_repo_pythonpath.cmd and is bound to this exact code state." 1>&2
     echo "(If focused tests bound the impact per rule 6, ignore this.)" 1>&2
   fi
+fi
+
+if [ -n "$merging" ]; then
+  echo "" 1>&2
+  echo "pre-commit REMINDER (advisory, does NOT block): this is a MERGE, so the combined state is new." 1>&2
+  echo "A full-pack green on either side was measured on a tree that did not contain the other side." 1>&2
+  echo "Per AGENTS.md rule 3, run each affected lane's full pack once on the merge result before relying on it." 1>&2
 fi
 exit 0
