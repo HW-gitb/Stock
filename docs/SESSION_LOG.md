@@ -1,5 +1,43 @@
 # Session Log
 
+## 2026-08-07 — Claude 审查 PASS（演练刀第二轮：崩溃改为如实展示卡死图景）
+
+- **Verdict/Action**: PASS，已提交并合入 master。整读修法：捕获抽成 `_settle_one_week` 外包一层 total（try 内仅此一调用，静态确认），语义对齐真 capstone 那两个本就 total 的 stage；**刻意不包 model-paper 链**的理由成立且值得保——六次夹具错误靠它崩出来。`StarvedMiddleWeekTest` 用的正是我的探针参数，且 docstring 明说钉的是「当前图景非意图图景」、留了 A 裁决后的改断言钩子。A 条不修是正确的 judge-before-execute：其 Required 文本自己要求用户裁决——本轮期间用户已在并行窗口裁决 candidate ①（settle 自补），实施属下一刀，见 register。
+- **Required**: 无。`R-USSHORT-26W-DIAG-REHEARSAL-STARVING-A-MIDDLE-WEEK-CRASHES-THE-HARNESS` resolved 认可；`...A-MISSED-WEEK-JAMS...` 仍 open（已裁决待实施）。本轮我另更正 register 两处措辞：A 条「无任何生产者」收窄为「inputs 缺失侧无路径」（`build_next_weekly_record:464-477` 在 paper 侧缺席时确产 no_count，与 `:23` 实施形态记录自洽）；triage 条对 `KNIFE7B-NO-COUNT` 的「从不调用」同步修正。正文只在 register。
+- **Verify**: review-evidence:de109dd9415f。验收超集 `Ran 124 in 265.3s PASS receipt:d77437553e576376f9aa5335`（演练+weekly_advance+io inventory+授权一致性+doc 门；与我植入子进程并行故偏慢）。自写 2 植入 **2 红**、零残留：收窄捕获→中间周用例复现原崩溃；`problem` 置 None→「后续周如实报 jam」两断言红。抽验 triage 强证据 1 条成立（`records = []` 已不存在）、并纠出其 1 条弱表述（见 Required 段更正）。超时原因:验收包与我的植入争核实测 265s，加 no_count 生产路径的对质多读一轮。
+- **Next**: Codex：执行
+
+## 2026-08-07 — Claude Code 演练刀「饿中间周就崩」已闭；卡钟那条留给用户裁决
+
+- **Verdict/Action**: 两条里只修一条。B（演练刀崩）已闭：把每周 settle 抽成 `_settle_one_week` 并外包一层 total 捕获，语义对齐真实 capstone 那两个本来就是 total adapter 的 stage；失败周记 `failed`+`problem`、继续跑、报告行照常交付。**刻意只包这一层**——model-paper 那条链在真 capstone 里也不 total，本会话六次夹具错误全靠它崩出来才被发现。A（断供后钟永久卡死、no_count 无生产者）**不修**：其 Required 自己写明「具体形态属设计决策、须用户裁决后另刀实施」，我不替你选。
+- **Required**: `R-USSHORT-26W-DIAG-REHEARSAL-STARVING-A-MIDDLE-WEEK-CRASHES-THE-HARNESS` 已翻 resolved；`R-USSHORT-26W-DIAG-A-MISSED-WEEK-JAMS-THE-CLOCK-FOREVER-AND-NOTHING-WRITES-NO-COUNT` 仍 open 待裁决——两条的机制、取舍与两个候选形态只在 `docs/system_risk_register.md`。
+- **Verify**: 复现审查方确切参数 `weeks=4, no_count_weeks=(2,)`，得逐字相同的 `WeeklyAdvanceError: week 2 does not line up…`。修后同参跑出真实图景：第 1 周 `published`、第 2 周 `waiting_for_inputs`、第 3/4 周 `failed` 带对齐原因，而四周报告 §12 全写 `日历周=1`——钟冻在第 1 周，A 那条从此可看不可辩。中间周三例绿；4 植入 **4 红**（拿掉捕获 / 失败周不带原因 / 失败周装成 published / 失败周不交付报告行），控制组先全绿。焦点包 6 模块 `Ran 97 tests in 92.4s PASS receipt:3f15f619fe57111f07ba5bc2`。
+- **Pre-Codex self-review**: matrix=按「主循环里哪些每周步骤会抛且抛了就整场死」枚举，逐个判该不该 total：capture / settle / 读+splice 在真 capstone 里是 total → 包（本轮包 settle，capture 与读侧本就走各自 total 入口）；model-paper 构造链在真 capstone 里不 total → **不包**，理由如上。同时确认既有两处饿周用例饿的都是末周，与被测行为共享同一个假设，故新增用例专饿中间周。register=B 翻 resolved、A 保持 open 并写明待裁决。handoff=不追加（同一刀的执行节已在，B 属其内部修正）。focused=`receipt:3f15f619fe57111f07ba5bc2`。full-lane=无生产改动，不触发。door=doc-governance + route-doc ledger。独立对抗 pass：不适用。
+- **Next**: 等用户对 A 的裁决；本轮改动交另一工作树审查。
+
+## 2026-08-07 — Claude 审查 FAIL（演练刀首轮：中间周断供崩掉整个 harness，并暴露生产钟的永久卡死）
+
+- **Verdict/Action**: FAIL，未提交。先说好的：门三方向 + 非空拒删、零 provider import（vendor/opener 经参数注入）、`open_clock` 走操作员入口而非绕到 receipt writer、sidecar 双模对照把「一键路径的真相」与「v1.1 完整身份」分开展示、26 周直达成绩单——主链是真的通了，两个新文件整读完，质量高。拦住的是主要旋钮的主路径：`--no-count-weeks` 饿任何**非末周**都让整个 rehearsal 未捕获崩溃，而规格示例推荐的正是中间周号；顺着崩溃往上挖出生产侧缺口——断供一周后诊断钟**永久卡死**且全仓无人写 no_count，违反设计 §3/§12.8 duty 3 的「缺失周占日历周、不顺延」。
+- **Required**: `R-USSHORT-26W-DIAG-A-MISSED-WEEK-JAMS-THE-CLOCK-FOREVER-AND-NOTHING-WRITES-NO-COUNT`（P2，生产缺口，形态属设计决策待用户裁）+ `R-USSHORT-26W-DIAG-REHEARSAL-STARVING-A-MIDDLE-WEEK-CRASHES-THE-HARNESS`（P3，演练刀自身）。正文只在 `docs/system_risk_register.md`。
+- **Verify**: review-evidence:f720d6aa12f7。验收超集 `Ran 121 in 159.5s PASS receipt:5e4b25a2aeeeef61975ddd0d`（演练全部测试+weekly_advance+io inventory+授权一致性+doc 门）——包绿但按规则探针坐实即出结论。对抗探针实跑 `weeks=4, no_count_weeks=(2,)` → 第 3 周 `WeeklyAdvanceError: week 2 does not line up…20260814…20260810` 未捕获崩溃；机制实读 `next_week_identity:157` 不等式 + `valuation_date` 取 head 最新 as_of，第 k+1 周起恒不成立，真实 capstone 被 total adapter 吞成每周 failed、钟不动、自动补抓也被同一检查拦死。测试盲区确认：两处饿周用例全饿末周。零残留。
+- **Next**: Codex：修复
+
+## 2026-08-07 — Claude Code 演练刀 Optional 已闭（`--with-total-return-sidecar` 补齐，v1.1 完整身份第一次被打印出来）
+
+- **Verdict/Action**: 上一轮按规格第二拆刀条件拆出的旗标已实施。打开后改走 `settle_week` 手动路径，sidecar **从当周刚捕获的价格包里派生**（`window_id`/`diagnostic_epoch`/`valuation_date`/逐只 `prior_price_date`·`price_date` 全取自包本身）——适配器要把两者对账，自带一套日期的 sidecar 只是在考演练自己的记账。实跑读出 `raw_excess=-0.0356 = 仓位效果 -0.0317 + 主动系统效果 -0.0039`；同样五周在默认模式下是 `0/5 周可评估`。
+- **Required**: 无。实施记录、为什么默认仍关（`settle_captured_week` 无 sidecar 参数，wiring 缺口已挂账）、以及饿死周的落回行为，写在 `docs/handoff/2026-08-04_us_short_market_diagnostic_knife1_handoff.md` 执行节。
+- **Verify**: 新增 4 例（开旗标打印身份且 `raw_excess ≈ exposure + active` 三数自洽 / 关旗标同样五周仍是一键路径的 `0/5 周可评估` / sidecar 三个身份字段逐周与包一致 / 开着旗标的饿死周落回 `waiting_for_inputs` 不崩）。焦点包 6 模块 `Ran 85 tests in 89.7s PASS receipt:292a972bac27b7f13bbb76ce`（含授权论域守卫、IO 清单、类守卫、总收益 sidecar 本家）。5 个植入 **5 红**，控制组先全绿。无生产改动，不触发 rule 3。
+- **Pre-Codex self-review**: matrix=按「旗标打开后哪一环松了就会假装看见完整数字」枚举并各配一植入：旗标被忽略、sidecar 身份字段写死不取包、逐周日期写死、饿死周不落回、sidecar 自称股息覆盖不完整。第一版 S5 植入写成 `[] or [{...}]` 是个空操作、假绿，改成翻 `dividend_complete` 才真红——**植入自己也要先证明它真的改了行为**。两种模式并存是有意的：默认那条才是当前一键路径的真相，不能被"更好看的那条"取代。register=本轮无新风险。handoff=执行节回写。focused=`receipt:292a972bac27b7f13bbb76ce`。full-lane=不触发。door=doc-governance + route-doc ledger。独立对抗 pass：不适用（沙箱工具、不碰选股面）。
+- **Next**: 交另一工作树审查。
+
+## 2026-08-07 — Claude Code 执行：演练刀已实施（26 周第一次从头走到尾）
+
+- **Verdict/Action**: 按 handoff 的演练刀规格实施 `runners/us_short_market_diagnostic_rehearsal.py` + 测试，零生产代码改动。26 周实跑 52s 走完全链、第 26 周自动出成绩单，前 25 周 `not_ready`——本轨第一次有一次运行让 26 个连续周走完整条链。逐周全部走公开入口（store 自身 freeze/commit、真 `capture_week`/`capture_cash_week` 注入本地 vendor、真敞口 writer、`settle_captured_week`、`weekly_diagnostic_step`、真 renderer + splice），五个根显式传参。
+- **Required**: 无。规格与实施记录、两处与规格字面不同的取舍、以及按第二拆刀条件拆出的 `--with-total-return-sidecar`，全部写在 `docs/handoff/2026-08-04_us_short_market_diagnostic_knife1_handoff.md` 的执行节。
+- **Verify**: 新测试 12 例（门四拒 / 零网络 poison socket+urlopen / 六周链含一个饿死周 / 26 周成绩单与前 25 周 not_ready）；焦点包 7 模块 `Ran 123 tests in 79.9s PASS receipt:262294364ac16b890d4c100a`（含授权论域守卫、IO 清单、类守卫、weekly advance/runner、现金腿）。实跑制品上读出：v1.1 第 4 个连续真周后自转 active、第 5 周报告出现 `attribution_epoch=`；饿死周 `waiting_for_inputs` 且日历周照走。无生产改动，不触发 rule 3。
+- **Pre-Codex self-review**: matrix=开钟入口按规格字面应调 `issue_start_receipt`，实测那样会把本模块拉进授权论域、需 **20 条豁免**（register 自己写过「豁免多到那个程度是开关不是例外」），故改走真正被演练的操作员入口 `open_clock`，`SURFACE` 实测归空；沙箱门四个方向各配一拒（相对路径 / 仓内五个真根 / 非空根不清空 / 周末首周），并加一条真跑后核对仓库受保护根零增长。register=本轮无新风险，不开条。handoff=执行节已追加。focused=`receipt:262294364ac16b890d4c100a`。full-lane=不触发。door=doc-governance + route-doc ledger。独立对抗 pass：不适用（新建沙箱工具、不碰选股面，且门本身四拒有测）。
+- **Next**: 交另一工作树审查。
+
 ## 2026-08-07 — Claude 审查 PASS（现金 key 测试的环境隔离一刀）
 
 - **Verdict/Action**: PASS，已提交并合入 master。整读修后测试全文与被消费链（`_run:387-400` → `capture_cash_week:201` 的 `api_key if api_key is not None else _api_key()` → `:73` env 回退）。修法两条腿都对：隔离腿在 `patch.dict` 内 pop 掉键；**正向对照是这轮真正的增量**——没有它，把 env 回退整个删掉两个测试照样绿，「因为没 key」与「因为回退没了」不可分辨。执行方复现探针的方法（shell 读不到用户级变量故注入假 key）与我探测时的处境一致，合理。
