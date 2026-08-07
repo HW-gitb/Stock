@@ -821,13 +821,8 @@ class DocGovernanceGuard(unittest.TestCase):
             if not re.search(r"R-[A-Z0-9][A-Z0-9-]+", block):
                 continue                                  # only entries citing a Required ID
             tag = header[:50]
-            # A closeout header IS the repair round it closes, so it owes the same one-line
-            # Proof-of-use — unless it also carries a verdict token, which makes it a
-            # reviewer's PASS/FAIL entry that merely mentions the closure it accepted.
-            is_fix = "修复" in header or (
-                "已闭" in header and not cls._VERDICT_TOKEN_RE.search(header)
-            )
             labels = []
+            verdict_value = ""
             for ln in lines[1:]:
                 s = ln.strip()
                 if not s or s.startswith("<!--") or s.startswith(">"):
@@ -837,10 +832,24 @@ class DocGovernanceGuard(unittest.TestCase):
                     offenders.append(("free-form-or-non-template-line", tag))
                     continue
                 labels.append(m.group(1).strip())
+                if m.group(1).strip() == "Verdict/Action" and not verdict_value:
+                    verdict_value = s[m.end():].strip().lstrip("*").lstrip()
                 if len(s) > cls.MAX_BULLET_LEN:
                     offenders.append(("bullet-too-long", tag))   # detail crammed into one bullet
                 if m.group(1).strip() == "Verify" and any(ph in s for ph in cls.VERIFY_PLACEHOLDERS):
                     offenders.append(("verify-placeholder", tag))
+            # A closeout header IS the repair round it closes, so it owes the same one-line
+            # Proof-of-use — unless this entry's OWN verdict is a PASS/FAIL, which makes it a
+            # reviewer's verdict entry that merely mentions the closure it accepted.
+            # Read from the `Verdict/Action` VALUE, not from the header
+            # (R-DOCGOV-CLOSEOUT-HEADER-THAT-MENTIONS-PASS-STILL-SKIPS-THE-PROOF-LINE): headers here
+            # are descriptive sentences, so "Optional 已闭（复审 PASS 后收口）" used to buy an
+            # implementer its way out of the evidence line by wording alone. A verdict lives at the
+            # START of that value, so anchor there rather than searching it — otherwise a repair
+            # entry recounting "上一轮 PASS" reopens the same hole one level down.
+            is_fix = "修复" in header or (
+                "已闭" in header and not cls._VERDICT_TOKEN_RE.match(verdict_value)
+            )
             present = set(labels)
             allowed_here = cls.EXPECTED_BASE_LABELS | (cls.PROOF_LABELS if is_fix else frozenset())
             for miss in sorted(cls.EXPECTED_BASE_LABELS - present):
@@ -1002,7 +1011,23 @@ class DocGovernanceGuard(unittest.TestCase):
                               "风险说明、修复要求、边界、关闭证据全部复制在这里。\n"
                               "- **Verify**: 22 OK\n"
                               "- **Pre-Codex self-review**: matrix= register= \n- **Next**: 审查\n")
+        # R-DOCGOV-CLOSEOUT-HEADER-THAT-MENTIONS-PASS-STILL-SKIPS-THE-PROOF-LINE: while the
+        # verdict token was read off the HEADER, an implementer could drop the evidence line by
+        # merely naming a PASS in its title. The verdict is now read off this entry's own
+        # `Verdict/Action` value, so a closeout that recounts someone else's PASS still owes it.
+        closeout_header_mentions_pass = ("## 2026-06-14 — Claude Code Optional 已闭（R-TEST-FOO 复审 PASS 后收尾）\n"
+                                         "- **Verdict/Action**: closed it\n"
+                                         "- **Required**: R-TEST-FOO — see register\n"
+                                         "- **Verify**: 22 OK\n- **Next**: 审查\n")
+        # …and the reason the value is matched at its START rather than searched: a repair round
+        # whose Verdict/Action recounts someone else's PASS is still a repair round.
+        closeout_verdict_recounts_a_pass = ("## 2026-06-14 — Claude Code Optional 已闭（R-TEST-FOO 收尾）\n"
+                                            "- **Verdict/Action**: 上一轮复审 PASS，本轮据其收尾\n"
+                                            "- **Required**: R-TEST-FOO — see register\n"
+                                            "- **Verify**: 22 OK\n- **Next**: 审查\n")
         for name, sample in (("same_day_no_pointer", same_day_no_pointer),
+                             ("closeout_header_mentions_pass", closeout_header_mentions_pass),
+                             ("closeout_verdict_recounts_a_pass", closeout_verdict_recounts_a_pass),
                              ("chinese_duplicated", chinese_duplicated),
                              ("finding_style_duplicated", finding_style_duplicated),
                              ("repair_missing_proof", repair_missing_proof),
@@ -1027,7 +1052,8 @@ class DocGovernanceGuard(unittest.TestCase):
                          "guard false-positives a compliant minimal entry")
         # false-positive controls for the closeout key: a compliant closeout repair round passes,
         # and a REVIEWER's verdict entry that merely says a finding is 已闭 is not a repair round
-        # and owes no proof line (the verdict token is what tells them apart).
+        # and owes no proof line (its own `Verdict/Action` value is what tells them apart —
+        # a reviewer whose title omits the token is still a reviewer, see the last control).
         compliant_closeout = ("## 2026-06-14 — Claude Code Optional 已闭（R-TEST-FOO 收尾）\n"
                               "- **Verdict/Action**: closed it\n"
                               "- **Required**: R-TEST-FOO — 详情见 system_risk_register.md(单一来源)\n"
@@ -1041,6 +1067,14 @@ class DocGovernanceGuard(unittest.TestCase):
                                 "- **Verify**: 22 OK\n- **Next**: 无\n")
         self.assertEqual(self._review_cycle_offenders(reviewer_says_closed), [],
                          "a reviewer verdict that mentions a closure must not be forced to carry a proof line")
+        # …and the same reviewer whose TITLE omits the token: reading the verdict off the value
+        # rather than the header is strictly better, so this must pass too.
+        reviewer_verdict_only_in_body = ("## 2026-06-14 — Claude 审查（R-TEST-FOO 已闭）\n"
+                                         "- **Verdict/Action**: PASS，已提交\n"
+                                         "- **Required**: 无。R-TEST-FOO — see register\n"
+                                         "- **Verify**: 22 OK\n- **Next**: 无\n")
+        self.assertEqual(self._review_cycle_offenders(reviewer_verdict_only_in_body), [],
+                         "a reviewer verdict stated in the body must not be read as a repair round")
         # robustness control: a hyphen-separated review header (Codex's newer "- Codex `review …`" format)
         # must be isolated as its own block, NOT absorbed into the preceding entry (which would double
         # its labels). If the split regresses to em-dash-only this produces a duplicate-label offender.
