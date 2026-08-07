@@ -90,6 +90,8 @@ from engine.us_short_weekend_analysis import analyze_rows
 from engine.us_short_weekend_basket import resolve_build_capacity
 from engine.us_short_weekend_cash import apply_cash_allocation
 from engine.us_short_weekend_cost_floor import apply_probe_cost_floor
+from engine.us_short_decision_exposure import (
+    build_decision_exposure_record, write_decision_exposure)
 from engine.us_short_weekend_decision import decide_actions
 from engine.us_short_weekend_lifecycle_stage import run_lifecycle_eval_stage
 from engine.us_short_weekend_machine_record import assemble_machine_record
@@ -489,6 +491,22 @@ def run_weekend_pipeline(now_et, pipeline_context, *, run_mode="offline_test", r
     cash = apply_cash_allocation(cost_floored, available_cash=pc["available_cash"],
                                  portfolio_capacity=portfolio_capacity)
     ranked = apply_action_rank(cash)
+    # Write down the exposure limits this decision just worked to. Nothing is
+    # computed here that the decision did not already have, and nothing above
+    # reads the result, so selection, actions, sizing and NAV are byte-identical
+    # whether or not this succeeds. Total adapter for exactly that reason: a
+    # diagnostic note may never take down a week of stock selection (design
+    # section 1.3), so a failure leaves no note and the diagnostic week is
+    # honestly unavailable.
+    try:
+        write_decision_exposure(
+            build_decision_exposure_record(
+                decision_date=decision_date, account_state=pc["account_state"],
+                regime=decided["regime"], rows=ranked["rows"],
+                portfolio_capacity=portfolio_capacity),
+            runs_private_root=pc["runs_private_root"])
+    except Exception:                                                             # noqa: BLE001 — see above
+        pass
     holding_action_state = None
     if state_writable:
         try:

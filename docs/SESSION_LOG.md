@@ -1,5 +1,21 @@
 # Session Log
 
+## 2026-08-07 — Claude Code 刀 10a：让周决策把它工作到的仓位上限写下来，v1.1 归因随之点亮
+
+- **Verdict/Action**: 用户批准动主选股路径后当轮完成。**问题从来不是「算不出来」，是「算完就扔」**：每周选股都会算出环境仓位上限、现金能撑多少、已带多少、这周计划加多少，用完四个数做决定，然后一个都不留。v1.1 的全部工作就是把「选股差」和「规矩让我们少持股」分开，而它需要的是**规则隐含的**仓位——§12.7 禁止从成交或事后 NAV 倒推，事后重算又等于拿它当时没见过的数据重跑规则。所以唯一诚实的来源是**在数还在手上的那一刻记下来**。
+- **主路径改动的最小性与安全性**: `engine/us_short_decision_exposure.py` 是纯计算 + 落盘，orchestrator 里只多两句：算记录、写记录，**包在 total adapter 里**。不新算任何值（全部取自决策当时已有的 `account_state` / `decided["regime"]` / `portfolio_capacity` / 已分配现金行），**orchestrator 从不回读自己写的东西**（有 `getsource` 断言 `write_` 出现 1 次、`load_` 出现 0 次），故选股、操作建议、仓位、NAV 逐字节不变。任一输入缺失 → 整条记 `unavailable` 并写明原因，绝不填零：把缺失的持仓市值当 0，会让账户看起来持得比实际少，而 v1.1 会把这个差额记到选股头上——正是本轨存在的意义所要防的那个错误答案。
+- **隐私**: 记录只带比率、不带 bucket 与现金金额，有逐字节断言（把余额塞回去的植入转红）。
+- **第 11 个 boundary 旗标不加，理由入册**: 归因引擎无法验证调用方递来的目标敞口从哪来，所以 `const: true` 的旗标是在断言**校验器查不了的事**——正是那条 finding 自己批评的形态（CLAUDE.md §5 装饰性防御）。真正的改善是目标观测带上了**指向决策时记录的 digest**：可解析、可比对、缺失即不进目标表。schema 里既有的 PRODUCER-ASSERTED 披露保留，因为经其他路径手工递入时那句话仍成立。
+- **Verify**: review-evidence:c14ae00f52ef。33 条针对性测试（决策记录 16 + 周推进 17）；**17 个植入 16 红**，唯一的绿是语义等价改写（`return {}` 与「空列表走完循环」结果相同，非放松）。首轮 3 个逃掉：出界守卫无用例、capstone 是否真交目标腿无断言、以及上述等价改写；前两个补测后转红。**端到端验收达成**：决策留下的记录 → 归因门独立重推出 `g*=0.50`、`binding_constraints=["cash_capacity_exposure"]`、`requested=0.60`——正是设计 §5.1 自己举的那个例子（想持 60%、现金只撑得住 50%）。焦点包 `Ran 328 tests in 70.8s PASS` `receipt:02dcad61d9534939dec91731`（325→328 无回归）；**主路径回归** `tests.test_us_short_weekend_orchestrator` + capstone + 授权一致性 + 治理门合计 `Ran 193 OK`。register 两条挂账（`...DECISION-TIME-EXPOSURE-NEVER-LANDS`、`...TARGET-EXPOSURE-PRODUCER-MUST-DERIVE-NOT-ASSERT`）同轮翻 resolved。
+- **Next**: 全量 lane 走 `full_pack_ledger run` 记账补一次 PASS
+
+## 2026-08-07 — Claude 审查 FAIL（US-short 26 周诊断轨 刀 10b：基准价格包 + PIT 现金腿 + 周一键推进时钟）
+
+- **Verdict/Action**: FAIL，已合入 master 故无法靠不提交拦住。时钟起点门我 16 条探针验过是**真的**（无 receipt 不能有第 1 周、摘要当场从设计文档算、休眠零字节零请求），这刀最该被怀疑的地方没问题。拦住的是取数侧四条：现金腿两处 PIT 破口、基准取数在调用已花后抛出并发布假「零调用」、两个取数入口无函数级授权门。
+- **Required**: `R-USSHORT-26W-DIAG-CASH-LEG-PIT-AND-BENCHMARK-FETCH-EVIDENCE`（四条 F1-F4，均 P2）。另三条 Optional 同条记录。正文只见 `docs/system_risk_register.md`。
+- **Verify**: review-evidence:81bc88b07e0f。验收超集 `Ran 310 tests / PASS / 45.7s`、`receipt:c12f1cbf0c677c870c481100`。自写探针 25 条全过（时钟门 16 + 总适配器 9）。F1/F3 我实读确认：`first_published` 与 `value` 由两个独立条件选出、来自不同 vintage；`validate_benchmark_capture` 确在 `try/except` 之外。独立对抗 agent 覆盖取数侧，7 条发现 + 9 类攻而未破。**自我更正**：我先前把 `provider_calls_performed: False` 读成正确 fail-closed，F3 证明该值可能是假的。full lane `NOT_VERIFIED`。超时原因:对抗 agent 覆盖 1500 行取数面耗 600 秒，加我 25 条探针两轮修夹具。
+- **Next**: Codex：修复
+
 ## 2026-08-06 — Claude Code 刀 10b：每周一键真正推进 26 周时钟（v1 全线打通）；10a 上游卡住已记账
 
 - **Verdict/Action**: 刀 7b 把诊断轨挂进了每周 capstone，但只当**读取方**——`weekly_diagnostic_step` 只汇报库里已有的东西、从不往里加，所以钟开了也会永远停在第 0 周而一键照跑不误。本刀补上缺的那个「周动作」：`market_diagnostic_fetch`（gated，真调厂商）+ `market_diagnostic_settle`，都排在 `model_paper_weekly` 之后、读取方之前；同时把刀 9 产的现金腿真交给读取方（此前 v1.1 守着一个装着答案的文件报 `unavailable`）。**周身份全部从两个库推出，没有任何参数能指定日期**（`inspect.signature` 反向断言）。

@@ -238,6 +238,105 @@ class WeeklyAdvanceTest(unittest.TestCase):
                     self._identity_with(head)
                 self.assertIn("does not line up", str(ctx.exception))
 
+    def test_the_target_exposure_leg_reaches_the_attribution_gate(self) -> None:
+        """Knife 10a end to end: the note the decision took becomes g*.
+
+        The gate re-derives ``g* = min(...)`` and the binding constraints from
+        these five numbers rather than trusting them, which is what stops a
+        filled position passing itself off as the rule-implied one. Here the
+        account wants 0.60 and may hold 0.50, so the cash capacity binds — the
+        exact case v1.1 exists to explain.
+        """
+
+        from engine.us_short_decision_exposure import (
+            build_decision_exposure_record, write_decision_exposure)
+
+        self._open_clock()
+        self._fetch()
+        self._settle()
+        decision_date = self.packet["weeks"][0]["decision_date"]
+        runs = self.base / "runs_private"
+        write_decision_exposure(
+            build_decision_exposure_record(
+                decision_date=decision_date,
+                account_state={
+                    "us_short_bucket_capital": 100000.0,
+                    "us_short_available_cash": 30000.0,
+                },
+                regime={"market_risk_regime": "谨慎", "position_cap": 0.8},
+                rows=[{
+                    "cash_allocation_status": "allocated",
+                    "cash_required_at_entry_high": 40000.0,
+                }],
+                portfolio_capacity={"existing_positions": [
+                    {"ticker": "AAA", "shares": 100, "mark_price": 200.0}
+                ]},
+            ),
+            runs_private_root=runs,
+        )
+        targets = advance.load_target_exposures(
+            root=self.store, runs_private_root=runs, as_of_date=AS_OF
+        )
+        self.assertEqual([1], sorted(targets))
+        self.assertEqual(decision_date, targets[1]["as_of_date"])
+
+        from engine.us_short_market_diagnostic_attribution import (
+            build_attribution_input, build_attribution_report)
+        from tests.test_us_short_market_diagnostic import _weekly_rows
+
+        rows = _weekly_rows()[:1]
+        rows[0]["decision_date"] = decision_date
+        rows[0]["valuation_date"] = self.packet["weeks"][0]["valuation_date"]
+        packet = build_attribution_input(
+            rows,
+            attribution_epoch="us_short_market_diagnostic_attribution_v1",
+            target_exposure_by_week={1: targets[1]},
+            cash_return_by_week=advance.load_cash_returns(
+                root=self.store, inputs_root=self.inputs, as_of_date=AS_OF),
+            as_of_date=AS_OF,
+        )
+        report = build_attribution_report(packet, as_of_date=AS_OF)
+        week = report["weeks"][0]
+        self.assertAlmostEqual(0.50, week["g_star"], places=9)
+        self.assertEqual(["cash_capacity_exposure"], week["binding_constraints"])
+        self.assertAlmostEqual(0.60, week["requested_exposure"], places=9)
+
+    def test_a_week_with_no_exposure_note_is_absent_rather_than_guessed(self) -> None:
+        self._open_clock()
+        self._fetch()
+        self._settle()
+        self.assertEqual(
+            {},
+            advance.load_target_exposures(
+                root=self.store, runs_private_root=self.base / "runs_private", as_of_date=AS_OF
+            ),
+        )
+
+    def test_an_unavailable_exposure_note_is_not_offered_as_a_target(self) -> None:
+        """Its own producer already said it could not be trusted."""
+
+        from engine.us_short_decision_exposure import (
+            build_decision_exposure_record, write_decision_exposure)
+
+        self._open_clock()
+        self._fetch()
+        self._settle()
+        runs = self.base / "runs_private"
+        write_decision_exposure(
+            build_decision_exposure_record(
+                decision_date=self.packet["weeks"][0]["decision_date"],
+                account_state={"us_short_bucket_capital": 0.0, "us_short_available_cash": 0.0},
+                regime={"position_cap": 0.8},
+                rows=[],
+                portfolio_capacity={"existing_positions": []},
+            ),
+            runs_private_root=runs,
+        )
+        self.assertEqual(
+            {},
+            advance.load_target_exposures(root=self.store, runs_private_root=runs, as_of_date=AS_OF),
+        )
+
     def test_the_cash_reader_keys_off_the_ledger_not_off_a_directory(self) -> None:
         """A stray folder must not be able to introduce a week nobody counted."""
 
@@ -347,8 +446,13 @@ class CapstoneStageTest(unittest.TestCase):
                 self.assertIn("RuntimeError", result["problem"])
                 self.assertFalse(result["provider_calls_performed"])
 
-    def test_the_reader_is_handed_the_cash_leg_that_was_captured(self) -> None:
-        """Otherwise v1.1 reports `unavailable` beside a file holding the answer."""
+    def test_the_reader_is_handed_both_legs_that_were_captured(self) -> None:
+        """Otherwise v1.1 reports `unavailable` beside files holding the answer.
+
+        Both legs, not one: the cash rate and the rule-implied target exposure are
+        produced separately and either one going missing silently leaves the
+        attribution dark for a different reason.
+        """
 
         import unittest.mock as mock
 
@@ -364,6 +468,7 @@ class CapstoneStageTest(unittest.TestCase):
         ) as step:
             capstone._run_market_diagnostic(_Ctx())
         self.assertIn("cash_return_by_week", step.call_args.kwargs)
+        self.assertIn("target_exposure_by_week", step.call_args.kwargs)
 
 
 if __name__ == "__main__":  # pragma: no cover

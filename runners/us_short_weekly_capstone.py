@@ -434,11 +434,13 @@ def _run_market_diagnostic(ctx: CapstoneContext) -> dict[str, Any]:
         # contain. (`target_exposure_by_week` stays absent: its two constraint
         # inputs are never landed by the selection path, and inventing them is
         # what section 12.7 forbids.)
-        from runners.us_short_market_diagnostic_weekly_fetch import load_cash_returns
+        from runners.us_short_market_diagnostic_weekly_fetch import (
+            load_cash_returns, load_target_exposures)
 
         step = weekly_diagnostic_step(
             as_of_date=ctx.decision_date,
             cash_return_by_week=load_cash_returns(as_of_date=ctx.decision_date, **overrides),
+            target_exposure_by_week=load_target_exposures(as_of_date=ctx.decision_date, **overrides),
             **overrides,
         )
     except Exception as exc:  # noqa: BLE001 — see below; this is the whole point of the stage

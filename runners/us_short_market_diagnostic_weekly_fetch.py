@@ -46,6 +46,11 @@ from engine.us_short_market_diagnostic_weekly_producer import (  # noqa: E402
     diagnostic_store_state,
     next_week_inputs,
 )
+from engine.us_short_decision_exposure import (  # noqa: E402
+    DecisionExposureError,
+    load_decision_exposure,
+)
+from engine.us_short_model_paper_portfolio import artifact_sha256  # noqa: E402
 from engine.us_short_model_paper_store import ModelPaperStoreError, load_head  # noqa: E402
 from runners.us_short_market_diagnostic_benchmark_fetch import (  # noqa: E402
     DEFAULT_INPUTS_ROOT,
@@ -323,4 +328,56 @@ def load_cash_returns(
         observation = stored.get("observation")
         if isinstance(observation, dict):
             result[record["calendar_week_index"]] = observation
+    return result
+
+DEFAULT_RUNS_PRIVATE_ROOT = ROOT / "state" / "us_short" / "runs_private"
+
+
+def load_target_exposures(
+    *,
+    root: str | Path = DEFAULT_ROOT,
+    runs_private_root: str | Path = DEFAULT_RUNS_PRIVATE_ROOT,
+    as_of_date: str | None = None,
+) -> dict[int, dict[str, Any]]:
+    """Knife 10a: every week's rule-implied target exposure, keyed by calendar week.
+
+    The five components are not computed here and never could be: section 12.7
+    forbids recovering a target position from fills or from a later NAV, so the
+    only honest source is the note the decision itself took while it still had
+    the numbers. This reads that note and shapes it for the attribution gate,
+    which then re-derives ``g*`` and the binding constraints from it — so a
+    filled position still cannot pass itself off as the rule-implied one.
+
+    Keyed off the ledger's settled weeks, like the cash leg beside it: a stray
+    run directory must not introduce a week nobody counted.
+    """
+
+    try:
+        records = load_settled_weekly_records(root, as_of_date=as_of_date)
+    except MarketDiagnosticLifecycleError:
+        return {}
+    result: dict[int, dict[str, Any]] = {}
+    for record in records:
+        decision_date = record["decision_date"]
+        try:
+            note = load_decision_exposure(decision_date, runs_private_root=runs_private_root)
+        except DecisionExposureError:
+            # An unreadable note is a missing note. The week degrades; it does not
+            # take the packet down, and nothing is filled in for it.
+            note = None
+        if note is None or note.get("status") != "evaluable":
+            continue
+        result[record["calendar_week_index"]] = {
+            "status": "evaluable",
+            # The attribution gate requires this to equal the decision date, which
+            # is what binds the observation to the week it describes.
+            "as_of_date": decision_date,
+            "carried_holdings_exposure": note["carried_holdings_exposure"],
+            "new_order_exposure": note["new_order_exposure"],
+            "cash_capacity_exposure": note["cash_capacity_exposure"],
+            "environment_position_cap": note["environment_position_cap"],
+            "long_only_cap": note["long_only_cap"],
+            "source_refs": [artifact_sha256(note)],
+            "data_quality_reasons": [],
+        }
     return result
