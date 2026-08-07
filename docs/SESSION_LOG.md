@@ -1,5 +1,27 @@
 # Session Log
 
+## 2026-08-07 — Claude 审查 PASS（a-short 序 7 第 5 步：强档已删，守卫在两种树上判定相同）
+
+- **Verdict/Action**: PASS，已提交并合入 master。取 (b) 而非 (a) 我同意，理由是**构造性否证**不是偏好：`build_public_progress` 的 `"status": "not_configured" if root is None else ...` 决定了传 root 就永远产不出 tracked 那一支去标识化产物，故强档在当前实现下不存在——这正是我在 Required 里留的那个出口。守卫改名并在 docstring 写明只证同源、两条被否决的设计连理由一并留档。
+- **Required**: 无。`R-ASHORT-STRONG-TIER-DEMANDS-A-PRIVATE-REBUILD-THE-TRACKED-ARTIFACT-IS-NOT` 已 CLOSED；构造性否证、我的跨树复核与整类扫描见 `docs/system_risk_register.md`（单一来源，本处不复述）。
+- **Verify**: review-evidence:b67fe1403b16。**这轮我没有只在弱档树上收工**：把 `DEFAULT_PRIVATE_ROOT` 指向主树**真实**账本（`exists=True`、2 条目，比合成空目录更强）跑该守卫 `run=1 failures=0 errors=0`，再指向不存在路径同样 `failures=0`，**两种树判定完全相同**；跑完 tracked JSON 字节未变。整类独立扫过：`tests/` 里按私密根分支的实例只有这一条，其余命中都是测试自建临时根。焦点模块 `Ran 21 tests in 20.6s ... OK`（`receipt:0e8808a622f896a7e15f7770`）。零生产代码改动，rule 3 未触发。
+- **Next**: Codex：执行
+
+## 2026-08-07 — Claude Code 修复（序 7 第 5 步：删掉强档，守卫只证同源并明说不证账本一致）
+
+- **Verdict/Action**: 修完，未 commit，**零生产代码改动**。判据成立、是我的缺陷。**取 (b) 而非 (a)**：(a) 在当前实现下构造上不存在——`build_public_progress` 的 `"status": "not_configured" if root is None else ...` 决定了只要传 root 就永远产不出去标识化那一支；把 (a) 读成「比 `root=None` 重建」又会把第 5 步要消灭的原缺陷装回来。审查方在 (a) 里留的出口正是这条。强档删除，守卫改名并在 docstring 写明只证同源、指明「与账本一致」由写盘时序保住。
+- **Required**: `R-ASHORT-STRONG-TIER-DEMANDS-A-PRIVATE-REBUILD-THE-TRACKED-ARTIFACT-IS-NOT` → working-tree repaired，closed pending 审查。(a) 的构造性否证、三项 Closure、整类扫描结果见 `docs/system_risk_register.md`（单一来源，本处不复述）。
+- **Verify**: **复现审查方探针**：本树构造一棵 canonical 私密根的「有账本」树 → 与 tracked 逐键比对，**唯一不同的顶层键就是 `status`**（`not_configured` vs `accumulating`），与主树实跑逐字一致。**新 Closure 等价于主树复验**：把 `DEFAULT_PRIVATE_ROOT` 分别指向存在/不存在两种路径各跑一遍，判定必须完全相同——在任何树上都能跑，堵死「弱档树绿、操作者树红」整类；跑完断言 tracked 字节未变。focused `Ran 28 tests ... OK`（`receipt:2de840de561d4d6d868fb9af`）。
+- **Pre-Codex self-review**: A-F checked。A：整类 = 「守卫按它跑在哪棵树上分支」；全仓 `tests/` grep 私密根 `.exists()` 分支除本条外零命中（唯一命中 `.pyc`），类已闭。B：孤儿 `DEFAULT_PRIVATE_ROOT` import 随强档删除。C：反空洞控制保留并加强（改进 Markdown 的字段必须被抓）。D：n/a。E：未动 CURRENT；两条被否决设计连理由留在 docstring，防止重走。F：`git diff --check` 干净。matrix=删强档+改名与 docstring+跨树等价 Closure+反向控制+整类扫描+孤儿清理；register=updated；handoff=主 handoff 追加；focused=28 OK；full-lane=not_triggered: AGENTS rule 3; reason=零生产代码改动，仅一个测试模块；door=55 OK
+- **Next**: Claude Code：审查
+
+## 2026-08-07 — Claude 审查 FAIL（a-short 序 7 第 5 步：强档在真有账本的那棵树上当场红）
+
+- **Verdict/Action**: FAIL，**未合入 master**（合并已 abort，master 未被污染；worktree 侧 `afe04b0e` 保留待修）。**这是对我同轮早先 PASS 结论的更正**：那次结论只在 worktree（无私密根、走弱档）取证，而强档分支只在**操作者的主树**上才会被选中——我在主树实跑后它当场红。范围判断与弱档承重那两条结论不变，仍成立。
+- **Required**: `R-ASHORT-STRONG-TIER-DEMANDS-A-PRIVATE-REBUILD-THE-TRACKED-ARTIFACT-IS-NOT`（P2，含机制、两条可选修法与三项 Closure tests，并写明「把强档重建写进 tracked 产物」和「skipTest 跳过」都不接受）。见 `docs/system_risk_register.md`（单一来源，本处不复述）。
+- **Verify**: review-evidence:88cdd7a26c01。主树实跑：`DEFAULT_PRIVATE_ROOT` 存在 → 选中强档 → `Ran 75 tests ... FAILED (failures=1)`，唯一红点即该用例；逐键比对 `as_of` 同为 `20260727`，**唯一不同的顶层键是 `status`**（tracked `not_configured` vs 私密重建 `accumulating`）——tracked 那份按设计就是「无私密根」的去标识化投影。worktree 侧先前的绿是弱档（`tier=weak`）取得的，不覆盖强档。超时原因:并发窗口改同一 register 需重新冻结范围，且合并态才暴露强档红、结论由 PASS 更正为 FAIL。
+- **Next**: Codex：修复
+
 ## 2026-08-07 — Claude 审查 PASS（a-short 序 7 第 5 步：tracked 对守卫改两档内部自洽）
 
 - **Verdict/Action**: PASS，已提交并合入 master。范围判断对：全仓只有 `test_a_short_industry_weight_comparison` 一条是冻结快照式，target_policy 本来就是内部自洽形态、另两轨没有这类守卫——我自己扫过一遍，与所报一致。两档实现按已裁的 (i)，弱档通过不会被读成强档。第 4 步「不做」的理由成立；审查途中另一窗口已把用户裁定（不加字段）写进 register，故不再重复征询，方向与我判断一致。

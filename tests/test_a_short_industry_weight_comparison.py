@@ -19,7 +19,7 @@ if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
 from engine.a_short_industry_weight_comparison import (  # noqa: E402
-    ADMISSION_IDS, DEFAULT_PRIVATE_ROOT, PROGRAM_ID, IndustryWeightComparisonError,
+    ADMISSION_IDS, PROGRAM_ID, IndustryWeightComparisonError,
     _atomic_write, _boundary, _contract_fingerprint,
     _digest, _epoch_id, _runtime_source_fingerprint,
     _aggregate_terminal_verdict, _p_value_function, _validate_private_record, build_public_progress, cache_consumer_windows,
@@ -335,60 +335,84 @@ class IndustryWeightComparisonTests(unittest.TestCase):
                 _atomic_write(path, {"nonfinite": float("nan")})
             self.assertFalse(path.exists())
 
-    def test_tracked_public_pair_is_reproducible_at_the_strongest_available_tier(self):
-        """The tracked pair must be reproducible, at whichever tier this tree allows.
+    TRACKED_PUBLIC_JSON = ROOT / "research" / "results" / "a_short" / "industry_weight_comparison_summary.json"
 
-        This guard used to assert equality with `build_public_progress(root=None,
-        as_of="20260727")` -- a frozen date and the no-private-root branch nailed
-        into the test.  That made **any** successful weekly run turn it red, since
-        a real run legitimately advances the pair; the failed-run defect this lane
-        chased was only one way to trip it.
-
-        Two tiers, because the honest anchor is not always reachable:
-
-        * **strong** -- with the private ledger present, rebuild the summary from
-          that ledger at the pair's own declared `as_of` and require equality.
-          The authority is the ledger, not the artifact under test.
-        * **weak** -- without a private ledger (this and every reviewer worktree),
-          only same-source is provable: the Markdown must re-render byte-exactly
-          from this very JSON.  That catches a JSON and Markdown drifting apart;
-          it CANNOT catch the pair being rewritten consistently.  The tier is
-          asserted explicitly so a weak pass is never read as a strong one.
-        """
-        tracked_json = ROOT / "research" / "results" / "a_short" / "industry_weight_comparison_summary.json"
+    def _assert_tracked_pair_is_a_matched_writer_pair(self):
+        """Same-source only: the Markdown must re-render from this exact JSON."""
+        tracked_json = self.TRACKED_PUBLIC_JSON
         tracked_md = tracked_json.with_suffix(".md")
         tracked = json.loads(tracked_json.read_text(encoding="utf-8"))
+        validate_public_progress(tracked)
+        # Compare as text, not bytes: the checkout's line endings are a local git
+        # setting, so byte equality here would assert `core.autocrlf` rather than
+        # the artifact's identity.
+        rendered = prepare_public_artifact_set(
+            tracked, json_path=tracked_json, markdown_path=tracked_md)
+        self.assertEqual(json.loads(rendered[tracked_json].decode("utf-8")), tracked)
+        self.assertEqual(rendered[tracked_md].decode("utf-8").splitlines(),
+                         tracked_md.read_text(encoding="utf-8").splitlines())
+        return tracked
+
+    def test_tracked_public_pair_is_a_matched_writer_pair_and_claims_nothing_more(self):
+        """The tracked pair must be self-consistent. It is NOT checked against a ledger.
+
+        Two rejected designs, both tried in this repository:
+
+        * `build_public_progress(root=None, as_of="20260727")` -- a frozen date
+          and the no-private-root branch nailed into the test. Any successful
+          weekly run advances the pair legitimately and turns this red.
+        * a "strong tier" rebuilding from `DEFAULT_PRIVATE_ROOT`. That is red on
+          sight in the one tree that actually has a ledger: `build_public_progress`
+          sets `status = "not_configured" if root is None else ...`, so passing a
+          root can never reproduce a de-identified tracked artifact. There is no
+          ledger-aware-but-ledger-blind projection to compare against, so the
+          strong tier does not exist in this implementation. Writing a private
+          rebuild INTO the tracked artifact would "fix" it by pushing
+          ledger-derived content into `research/results`, which the
+          de-identification boundary exists to prevent.
+
+        So this guard proves same-source and nothing else, and says so. Agreement
+        between a published pair and its ledger is enforced where it can be: at
+        write time, by publishing the pair only after the post-publish capture has
+        advanced the ledger it was derived from (`runners/a_short_weekly_pipeline.py`),
+        committed as one artifact set.
+        """
         with patched_epoch_modes("pre_freeze_audit_only", ("p5_industry_weight",)):
-            validate_public_progress(tracked)
-            # Compare as text, not bytes: the checkout's line endings are a local
-            # git setting, so byte equality here would be asserting `core.autocrlf`
-            # rather than the artifact's identity.
-            rendered = prepare_public_artifact_set(
-                tracked, json_path=tracked_json, markdown_path=tracked_md)
-            self.assertEqual(json.loads(rendered[tracked_json].decode("utf-8")), tracked)
-            self.assertEqual(rendered[tracked_md].decode("utf-8").splitlines(),
-                             tracked_md.read_text(encoding="utf-8").splitlines())
-
-            tier = "strong" if DEFAULT_PRIVATE_ROOT.exists() else "weak"
-            if tier == "strong":
-                self.assertEqual(
-                    tracked,
-                    build_public_progress(root=DEFAULT_PRIVATE_ROOT, as_of=tracked["as_of"]),
-                    "strong tier: the pair must equal a rebuild from the private ledger")
-            else:
-                self.assertFalse(
-                    DEFAULT_PRIVATE_ROOT.exists(),
-                    "weak tier claimed while the private ledger is right there")
-
+            tracked = self._assert_tracked_pair_is_a_matched_writer_pair()
+            tracked_md = self.TRACKED_PUBLIC_JSON.with_suffix(".md")
             # Anti-vacuity: the same-source check must actually bite.  `message`
             # is rendered into the Markdown, so a changed JSON cannot keep the
             # tracked Markdown.
             altered = copy.deepcopy(tracked)
             altered["message"] = tracked["message"] + "（篡改）"
             self.assertNotEqual(
-                prepare_public_artifact_set(altered, json_path=tracked_json,
+                prepare_public_artifact_set(altered, json_path=self.TRACKED_PUBLIC_JSON,
                                             markdown_path=tracked_md)[tracked_md].decode("utf-8").splitlines(),
                 tracked_md.read_text(encoding="utf-8").splitlines())
+
+    def test_the_tracked_pair_guard_does_not_depend_on_a_private_ledger_being_present(self):
+        """Closure: the verdict must be identical in the operator's tree and a worktree.
+
+        The previous version branched on `DEFAULT_PRIVATE_ROOT.exists()` and so was
+        green in every reviewer worktree and red on sight in the only tree that
+        actually runs the weekly. Pointing the module's private root at a directory
+        that exists reproduces that tree here.
+        """
+        import engine.a_short_industry_weight_comparison as p5
+
+        before = self.TRACKED_PUBLIC_JSON.read_bytes()
+        with tempfile.TemporaryDirectory() as td:
+            # Canonical shape, so the simulated operator tree is one the module
+            # would actually accept as a private root.
+            populated = Path(td) / "state" / "a_short" / "industry_weight_comparison_private" / "v1"
+            (populated / "weeks").mkdir(parents=True)
+            for private_root in (populated, populated.with_name("absent")):
+                with self.subTest(private_root_exists=private_root.exists()):
+                    with mock.patch.object(p5, "DEFAULT_PRIVATE_ROOT", private_root):
+                        with patched_epoch_modes("pre_freeze_audit_only", ("p5_industry_weight",)):
+                            self._assert_tracked_pair_is_a_matched_writer_pair()
+        self.assertEqual(self.TRACKED_PUBLIC_JSON.read_bytes(), before,
+                         "the guard must never write ledger-derived content into tracked space")
 
     def test_legacy_boundary_record_remains_readable(self):
         record = {"schema_name": "a_short_industry_weight_comparison_private_record", "schema_version": "1.0.0",
