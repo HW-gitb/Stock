@@ -7,16 +7,16 @@
       "state/us_short"
     ]
   },
-  "module_count": 304,
+  "module_count": 305,
   "classification_counts": {
     "class0_no_direct_protected_io": 234,
-    "class1_read_real_root": 0,
+    "class1_read_real_root": 1,
     "class2_write_real_root": 4,
     "class3_global_sentinel": 5,
     "class4_unresolved_write": 61
   },
   "class0_modules_omitted": true,
-  "module_path_sha256": "fcea1ae69d5384cf018f73c6a12e885d85be561106e6d4b7c2e5b7efb6d2370a",
+  "module_path_sha256": "8e6641e71669cdaf780fd099d3ad26b3b41ea7ff177242b6b000646481086904",
   "allowlist": [
     "tests/provider/test_us_short_batch5_bankruptcy_8k_source_packet.py:kwarg:packet_ref:state/us_short",
     "tests/provider/test_us_short_batch5_bankruptcy_8k_source_packet.py:kwarg:screen_path:state/us_short",
@@ -974,6 +974,16 @@
       ],
       "read_count": 0,
       "write_count": 5
+    },
+    {
+      "module": "tests/test_us_short_market_diagnostic_rehearsal.py",
+      "classification": "class1_read_real_root",
+      "protected_roots": [
+        "provider_samples",
+        "state/us_short"
+      ],
+      "read_count": 2,
+      "write_count": 0
     },
     {
       "module": "tests/test_us_short_market_diagnostic_start_receipt.py",

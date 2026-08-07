@@ -145,3 +145,19 @@ Knife3 lifecycle 同步改为机器自动激活 v1.1：启用前按连续 `paper
 **规模估计**：连测试 ~400–600 行，一刀（半天）。**验证**：焦点 = 新测试模块 + `tests.test_us_short_market_diagnostic_weekly_advance`（同入口消费方）；不触发 rule 3（无生产改动）。
 
 **给 Codex 的命令**：`执行` = 按本节实施 `runners/us_short_market_diagnostic_rehearsal.py` + 测试；先修 register `R-USSHORT-CASH-KEY-TEST-READS-THE-OPERATORS-ENVIRONMENT`（不修它，本机任何含 cash_return 模块的包都是红的，演练刀自己的验证包会被它污染）。
+
+## 2026-08-07 执行：演练刀已实施——26 周第一次真的从头走到尾
+
+**结果**：`runners/us_short_market_diagnostic_rehearsal.py` + `tests/test_us_short_market_diagnostic_rehearsal.py`（零生产代码改动）。26 周实跑 52s 走完全链，第 26 周自动出成绩单（`26w-1-26.json` + `.md`），前 25 周 `not_ready`。**这是本轨第一次有一次运行让 26 个连续周走完整条链**——三次「每刀单测全绿、接起来是死的」正是没有这个台子才发现得那么晚。
+
+**逐周链条按规格全部走公开入口**：store 自己的 `initialize_store`/`freeze_decision_bundle`/`commit_settlement_and_freeze_next` → 真 `capture_week`（注入确定性本地 vendor，走 `module=` 参数）→ 真 `capture_cash_week`（注入 `opener`）→ 真 `build_decision_exposure_record`+`write_decision_exposure` → `settle_captured_week`（与一键路径同一入口）→ `weekly_diagnostic_step`（现金腿/敞口腿都经 `load_*` 传入）→ 真 renderer + `splice_diagnostic_report_lines`。五个根全部显式传参。
+
+**开钟改走 `open_clock` 而不是 `issue_start_receipt`**（与规格的字面不同，理由更强）：①它才是被演练的那个操作员动作，绕过它就是在演练一条没人走的路；②直接 import 起点 receipt 模块会把本模块拉进授权论域，实测需要 **20 条豁免**——而 register 自己写过「豁免多到那个程度就不是例外清单而是开关」。改走 `open_clock` 后本模块自然不在论域内，`SURFACE` 实测为空。receipt schema 把 issuer 钉死在唯一能开真钟的角色上，故演练在通知正文里写明身份，靠 epoch 前缀与沙箱门把两者分开。
+
+**实跑观察到的两件事**：①v1.1 在第 4 个连续真周结算后自动转 `active`，第 5 周报告里出现 `attribution_epoch=`——设计 §5.2 的自动启用在制品上可见，不是只在代码里；②`active` 之后每周仍是 `0/N 周可评估`，因为默认模式不带 VTI 总收益 sidecar——**这正是当前一键路径会给出的样子**，不是演练的缺陷。
+
+**`--with-total-return-sidecar` 已补齐（2026-08-07 同日）**：默认仍关。打开后改走 `settle_week` 手动路径，并**从当周刚捕获的价格包里派生** sidecar（`window_id` / `diagnostic_epoch` / `valuation_date` / 逐只 `prior_price_date`·`price_date` 全部取自包本身）——适配器要把两者对账，自带一套日期的 sidecar 只是在考演练自己的记账。实跑读出 v1.1 的完整身份：`raw_excess=-0.0356 = 仓位效果 -0.0317 + 主动系统效果 -0.0039`，而同样五周在默认模式下是 `0/5 周可评估`。**两种模式都要保留**：默认那条才是当前一键路径真会给出的样子（`settle_captured_week` 没有 sidecar 参数，该 wiring 缺口已在 register 挂账）。开着旗标遇到饿死周时，没有包可对账，自动落回一键入口拿诚实的 `waiting_for_inputs`，不是崩。
+
+**验证**：`tests.test_us_short_market_diagnostic_rehearsal` 12 例（门四拒 / 零网络 / 六周链含一个饿死周 / 26 周成绩单）；焦点包 7 模块 `Ran 123 tests in 79.9s PASS`（含授权论域守卫、IO 清单、类守卫、weekly advance/runner、现金腿）。无生产改动，不触发 rule 3。
+
+**边界**：演练产物永远不是诊断证据——沙箱必须是仓外绝对路径且为空（门实测四拒），epoch 前缀 `rehearsal-`，每份周报第 1 节带「REHEARSAL — 非诊断证据」横幅，且有一条测试在真跑之后核对仓库受保护根零增长。真钟仍未开：没有签发过任何真 receipt。
