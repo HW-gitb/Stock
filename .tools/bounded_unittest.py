@@ -23,6 +23,12 @@ FOCUSED_MAX_SECONDS = 1300
 TIMEOUT_EXIT = 124
 INVALID_EVIDENCE_EXIT = 125
 DEPENDENCY_EXIT = 126
+# These flags do not select or skip tests.  They make the one official full
+# process quieter on green, stop immediately on the first real red, and retain
+# timing evidence for the next test-only optimization pass.  They live here
+# rather than in the ledger because the parallel driver applies them per worker
+# and the ledger owns the run: one definition, no pair to keep in agreement.
+FULL_PACK_RUNTIME_ARGS = ("-b", "-f", "--durations", "25")
 REQUIRED_TEST_MODULES_BY_LANE = {
     "a_short": (
         "akshare", "jsonschema", "numpy", "openpyxl", "pandas", "requests", "tqdm", "tushare",
@@ -74,11 +80,19 @@ def _stop_owned_tree(process: subprocess.Popen[str]) -> None:
             pass
 
 
-def run_command(command: list[str], timeout_seconds: int, *, cwd: Path = ROOT) -> Result:
+def run_command(
+    command: list[str],
+    timeout_seconds: int,
+    *,
+    cwd: Path = ROOT,
+    extra_env: dict[str, str] | None = None,
+) -> Result:
     if timeout_seconds <= 0:
         raise ValueError("timeout must be positive")
     creationflags = subprocess.CREATE_NEW_PROCESS_GROUP if os.name == "nt" else 0
     child_env = os.environ.copy()
+    if extra_env:
+        child_env.update(extra_env)
     started = time.monotonic()
     process = subprocess.Popen(
         command,
@@ -122,8 +136,19 @@ def run_command(command: list[str], timeout_seconds: int, *, cwd: Path = ROOT) -
     return Result("PASS", 0, tests, elapsed, output or "")
 
 
-def run_unittest(args: list[str], timeout_seconds: int, *, cwd: Path = ROOT) -> Result:
-    return run_command([sys.executable, "-m", "unittest", *args], timeout_seconds, cwd=cwd)
+def run_unittest(
+    args: list[str],
+    timeout_seconds: int,
+    *,
+    cwd: Path = ROOT,
+    extra_env: dict[str, str] | None = None,
+) -> Result:
+    return run_command(
+        [sys.executable, "-m", "unittest", *args],
+        timeout_seconds,
+        cwd=cwd,
+        extra_env=extra_env,
+    )
 
 
 def _parse(argv: list[str]) -> tuple[str, int, list[str]]:

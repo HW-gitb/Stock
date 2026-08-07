@@ -35,6 +35,8 @@ PUBLIC_WRITER_FUNCTIONS = frozenset({
     "runners/a_short_iv_feed_probe.py:write_probe_summary",
     "runners/a_short_limit_up_index_source_probe.py:_write_json",
     "runners/a_short_margin_market_shape_probe.py:_write_json",
+    "runners/a_short_margin_overheat_percentile.py:_write_json",
+    "runners/a_short_margin_ratio_source_probe.py:_write_json",
     "runners/a_short_northbound_market_silence_lookback.py:_write_json",
     "runners/a_short_official_operation_evidence.py:_atomic_write",
     "runners/a_short_phase5_engine.py:write_m67_report",
@@ -347,7 +349,10 @@ class PublicJsonWriterNonfiniteGuardTests(unittest.TestCase):
             root = Path(tmp)
             weekly_target = root / "weekly.json"
             with (
-                mock.patch.object(weekly_pipeline.jsonschema, "validate"),
+                # Schema validation moved behind the cached-validator seam; the
+                # neutralisation follows it so this test still isolates the
+                # writer's own allow_nan policy.
+                mock.patch.object(weekly_pipeline, "_validate_against_schema_file"),
                 mock.patch.object(weekly_pipeline, "validate_weekly_report"),
             ):
                 with self.assertRaises(ValueError):
@@ -356,7 +361,7 @@ class PublicJsonWriterNonfiniteGuardTests(unittest.TestCase):
             self.assertFalse(Path(str(weekly_target) + ".tmp").exists())
 
             sidecar_target = root / "sidecar.json"
-            with mock.patch.object(weekly_pipeline.jsonschema, "validate"):
+            with mock.patch.object(weekly_pipeline, "_validate_against_schema_file"):
                 with self.assertRaises(ValueError):
                     weekly_pipeline._write_pipeline_sidecar_outcomes(
                         sidecar_target, as_of="20260729", run_id=None, candidate_digest=None,

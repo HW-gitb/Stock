@@ -28,6 +28,7 @@ _DECISION_FILES = (
     "engine/egs_industry_heat.py",
     "engine/a_short_industry_theme.py",
     "engine/a_short_northbound.py",
+    "engine/a_short_margin_overheat.py",
     "runners/a_short_phase5_engine.py",
     "runners/a_short_weekly_pipeline.py",
     "runners/a_short_m67_render.py",
@@ -37,6 +38,7 @@ _DECISION_FILES = (
 _CONSTANT_FILES = (
     "A-EGS/egs_main.py",
     "engine/a_short_northbound.py",
+    "engine/a_short_margin_overheat.py",
     "runners/a_short_phase5_engine.py",
     "engine/a_short_portfolio_risk.py",
 )
@@ -145,8 +147,26 @@ def _matches_prefix(path: str, prefix: str) -> bool:
     return path == prefix or path.startswith(prefix + ".") or path.startswith(prefix + "[]")
 
 
+@lru_cache(maxsize=2048)
+def _paths_for_prefixes_cached(paths: tuple[str, ...], prefixes: tuple[str, ...]) -> tuple[str, ...]:
+    return tuple(sorted(
+        path for path in paths
+        if any(_matches_prefix(path, prefix) for prefix in prefixes)
+    ))
+
+
 def _paths_for_prefixes(paths: list[str], prefixes: list[str]) -> list[str]:
-    return sorted(path for path in paths if any(_matches_prefix(path, prefix) for prefix in prefixes))
+    """Select the leaves a group owns.
+
+    Memoized on the exact (paths, prefixes) pair.  One weekly report rebuilds
+    the effect ledger, and one ledger asks this question ~210 times over the
+    same 396-leaf list, so the uncached form spent 2.7M prefix comparisons per
+    report -- 93% of the ledger's runtime by profile, and the single largest
+    cost in the whole A-short lane.  The full path list is part of the key, so
+    any change to the leaf set produces a different entry rather than a stale
+    answer.
+    """
+    return list(_paths_for_prefixes_cached(tuple(paths), tuple(prefixes)))
 
 
 def _leaf_nature_map(contract: dict, paths: list[str]) -> dict[str, str]:

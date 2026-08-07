@@ -1,0 +1,678 @@
+{
+  "schema_name": "a_short_margin_ratio_source_probe",
+  "schema_version": "1.0.0",
+  "probe_date": "20260805",
+  "generated_at": "2026-08-05T20:19:36+00:00",
+  "purpose": "establish whether a market float-value denominator is reachable, in which unit, and how deep both it and pro.margin go -- so row 19's quantity change and the three-vs-six-year fetch are decided on data",
+  "call_budget": {
+    "budget": 12,
+    "used": 11
+  },
+  "indices": {
+    "000985.CSI": {
+      "label": "中证全指",
+      "breadth": "whole_a_share_market",
+      "reachable": false,
+      "windows_with_rows": [],
+      "columns": [
+        "float_mv",
+        "float_share",
+        "free_share",
+        "pb",
+        "pe",
+        "pe_ttm",
+        "total_mv",
+        "total_share",
+        "trade_date",
+        "ts_code",
+        "turnover_rate",
+        "turnover_rate_f"
+      ],
+      "float_mv_unit": {
+        "unit": null,
+        "scale_to_yuan": null,
+        "exponent": null,
+        "basis": "no finite positive value observed"
+      },
+      "windows": {
+        "recent": {
+          "requested": {
+            "start_date": "20260729",
+            "end_date": "20260804"
+          },
+          "row_count": 0,
+          "possibly_truncated": false,
+          "has_float_mv": true,
+          "has_total_mv": true,
+          "latest_trade_date": null,
+          "latest_float_mv_raw": null
+        },
+        "three_years_back": {
+          "requested": {
+            "start_date": "20230801",
+            "end_date": "20230807"
+          },
+          "row_count": 0,
+          "possibly_truncated": false,
+          "has_float_mv": true,
+          "has_total_mv": true,
+          "latest_trade_date": null,
+          "latest_float_mv_raw": null
+        },
+        "six_years_back": {
+          "requested": {
+            "start_date": "20200803",
+            "end_date": "20200807"
+          },
+          "row_count": 0,
+          "possibly_truncated": false,
+          "has_float_mv": true,
+          "has_total_mv": true,
+          "latest_trade_date": null,
+          "latest_float_mv_raw": null
+        }
+      }
+    },
+    "000300.SH": {
+      "label": "沪深300",
+      "breadth": "large_cap_sse_szse",
+      "reachable": true,
+      "windows_with_rows": [
+        "recent",
+        "six_years_back",
+        "three_years_back"
+      ],
+      "columns": [
+        "float_mv",
+        "float_share",
+        "free_share",
+        "pb",
+        "pe",
+        "pe_ttm",
+        "total_mv",
+        "total_share",
+        "trade_date",
+        "ts_code",
+        "turnover_rate",
+        "turnover_rate_f"
+      ],
+      "float_mv_unit": {
+        "unit": "CNY",
+        "scale_to_yuan": 1.0,
+        "exponent": 13,
+        "basis": "inferred from order of magnitude; confirm with the ratio cross-check"
+      },
+      "windows": {
+        "recent": {
+          "requested": {
+            "start_date": "20260729",
+            "end_date": "20260804"
+          },
+          "row_count": 5,
+          "possibly_truncated": false,
+          "has_float_mv": true,
+          "has_total_mv": true,
+          "latest_trade_date": "20260804",
+          "latest_float_mv_raw": 51765979695971.59
+        },
+        "three_years_back": {
+          "requested": {
+            "start_date": "20230801",
+            "end_date": "20230807"
+          },
+          "row_count": 5,
+          "possibly_truncated": false,
+          "has_float_mv": true,
+          "has_total_mv": true,
+          "latest_trade_date": "20230807",
+          "latest_float_mv_raw": 39475088858687.0
+        },
+        "six_years_back": {
+          "requested": {
+            "start_date": "20200803",
+            "end_date": "20200807"
+          },
+          "row_count": 5,
+          "possibly_truncated": false,
+          "has_float_mv": true,
+          "has_total_mv": true,
+          "latest_trade_date": "20200807",
+          "latest_float_mv_raw": 33381779845283.0
+        }
+      }
+    },
+    "000001.SH": {
+      "label": "上证综指",
+      "breadth": "sse_only",
+      "reachable": true,
+      "windows_with_rows": [
+        "recent",
+        "six_years_back",
+        "three_years_back"
+      ],
+      "columns": [
+        "float_mv",
+        "float_share",
+        "free_share",
+        "pb",
+        "pe",
+        "pe_ttm",
+        "total_mv",
+        "total_share",
+        "trade_date",
+        "ts_code",
+        "turnover_rate",
+        "turnover_rate_f"
+      ],
+      "float_mv_unit": {
+        "unit": "CNY",
+        "scale_to_yuan": 1.0,
+        "exponent": 13,
+        "basis": "inferred from order of magnitude; confirm with the ratio cross-check"
+      },
+      "windows": {
+        "recent": {
+          "requested": {
+            "start_date": "20260729",
+            "end_date": "20260804"
+          },
+          "row_count": 5,
+          "possibly_truncated": false,
+          "has_float_mv": true,
+          "has_total_mv": true,
+          "latest_trade_date": "20260804",
+          "latest_float_mv_raw": 58925330398020.03
+        },
+        "three_years_back": {
+          "requested": {
+            "start_date": "20230801",
+            "end_date": "20230807"
+          },
+          "row_count": 5,
+          "possibly_truncated": false,
+          "has_float_mv": true,
+          "has_total_mv": true,
+          "latest_trade_date": "20230807",
+          "latest_float_mv_raw": 44336226976824.0
+        },
+        "six_years_back": {
+          "requested": {
+            "start_date": "20200803",
+            "end_date": "20200807"
+          },
+          "row_count": 5,
+          "possibly_truncated": false,
+          "has_float_mv": true,
+          "has_total_mv": true,
+          "latest_trade_date": "20200807",
+          "latest_float_mv_raw": 34171825896158.0
+        }
+      }
+    }
+  },
+  "recommended_denominator": "000300.SH",
+  "recommended_denominator_breadth": "large_cap_sse_szse",
+  "margin_numerator": {
+    "latest_complete_session": "20260804",
+    "three_exchange_rzye_yuan": 2592313734952.0,
+    "six_years_back_row_count": 10,
+    "six_years_back_reachable": true
+  },
+  "margin_ratio_cross_check": {
+    "ratio": 0.05007755576494446,
+    "ratio_pct": 5.0077555764944455,
+    "plausible_band_pct": [
+      0.5,
+      8.0
+    ],
+    "plausible": true,
+    "reason": "financing balance over market float value lands in the band A-shares have historically occupied"
+  },
+  "denominator_six_years_reachable": true,
+  "calls": [
+    {
+      "label": "index_dailybasic_000985_CSI_recent",
+      "endpoint": "index_dailybasic",
+      "status": "ok",
+      "shape": {
+        "kind": "dataframe",
+        "row_count": 0,
+        "columns": [
+          "float_mv",
+          "float_share",
+          "free_share",
+          "pb",
+          "pe",
+          "pe_ttm",
+          "total_mv",
+          "total_share",
+          "trade_date",
+          "ts_code",
+          "turnover_rate",
+          "turnover_rate_f"
+        ],
+        "column_dtypes": {
+          "ts_code": "object",
+          "trade_date": "object",
+          "total_mv": "object",
+          "float_mv": "object",
+          "total_share": "object",
+          "float_share": "object",
+          "free_share": "object",
+          "turnover_rate": "object",
+          "turnover_rate_f": "object",
+          "pe": "object",
+          "pe_ttm": "object",
+          "pb": "object"
+        },
+        "all_null_columns": [
+          "float_mv",
+          "float_share",
+          "free_share",
+          "pb",
+          "pe",
+          "pe_ttm",
+          "total_mv",
+          "total_share",
+          "trade_date",
+          "ts_code",
+          "turnover_rate",
+          "turnover_rate_f"
+        ],
+        "possibly_truncated": false
+      }
+    },
+    {
+      "label": "index_dailybasic_000985_CSI_three_years_back",
+      "endpoint": "index_dailybasic",
+      "status": "ok",
+      "shape": {
+        "kind": "dataframe",
+        "row_count": 0,
+        "columns": [
+          "float_mv",
+          "float_share",
+          "free_share",
+          "pb",
+          "pe",
+          "pe_ttm",
+          "total_mv",
+          "total_share",
+          "trade_date",
+          "ts_code",
+          "turnover_rate",
+          "turnover_rate_f"
+        ],
+        "column_dtypes": {
+          "ts_code": "object",
+          "trade_date": "object",
+          "total_mv": "object",
+          "float_mv": "object",
+          "total_share": "object",
+          "float_share": "object",
+          "free_share": "object",
+          "turnover_rate": "object",
+          "turnover_rate_f": "object",
+          "pe": "object",
+          "pe_ttm": "object",
+          "pb": "object"
+        },
+        "all_null_columns": [
+          "float_mv",
+          "float_share",
+          "free_share",
+          "pb",
+          "pe",
+          "pe_ttm",
+          "total_mv",
+          "total_share",
+          "trade_date",
+          "ts_code",
+          "turnover_rate",
+          "turnover_rate_f"
+        ],
+        "possibly_truncated": false
+      }
+    },
+    {
+      "label": "index_dailybasic_000985_CSI_six_years_back",
+      "endpoint": "index_dailybasic",
+      "status": "ok",
+      "shape": {
+        "kind": "dataframe",
+        "row_count": 0,
+        "columns": [
+          "float_mv",
+          "float_share",
+          "free_share",
+          "pb",
+          "pe",
+          "pe_ttm",
+          "total_mv",
+          "total_share",
+          "trade_date",
+          "ts_code",
+          "turnover_rate",
+          "turnover_rate_f"
+        ],
+        "column_dtypes": {
+          "ts_code": "object",
+          "trade_date": "object",
+          "total_mv": "object",
+          "float_mv": "object",
+          "total_share": "object",
+          "float_share": "object",
+          "free_share": "object",
+          "turnover_rate": "object",
+          "turnover_rate_f": "object",
+          "pe": "object",
+          "pe_ttm": "object",
+          "pb": "object"
+        },
+        "all_null_columns": [
+          "float_mv",
+          "float_share",
+          "free_share",
+          "pb",
+          "pe",
+          "pe_ttm",
+          "total_mv",
+          "total_share",
+          "trade_date",
+          "ts_code",
+          "turnover_rate",
+          "turnover_rate_f"
+        ],
+        "possibly_truncated": false
+      }
+    },
+    {
+      "label": "index_dailybasic_000300_SH_recent",
+      "endpoint": "index_dailybasic",
+      "status": "ok",
+      "shape": {
+        "kind": "dataframe",
+        "row_count": 5,
+        "columns": [
+          "float_mv",
+          "float_share",
+          "free_share",
+          "pb",
+          "pe",
+          "pe_ttm",
+          "total_mv",
+          "total_share",
+          "trade_date",
+          "ts_code",
+          "turnover_rate",
+          "turnover_rate_f"
+        ],
+        "column_dtypes": {
+          "ts_code": "str",
+          "trade_date": "str",
+          "total_mv": "float64",
+          "float_mv": "float64",
+          "total_share": "float64",
+          "float_share": "float64",
+          "free_share": "float64",
+          "turnover_rate": "float64",
+          "turnover_rate_f": "float64",
+          "pe": "float64",
+          "pe_ttm": "float64",
+          "pb": "float64"
+        },
+        "all_null_columns": [],
+        "possibly_truncated": false
+      }
+    },
+    {
+      "label": "index_dailybasic_000300_SH_three_years_back",
+      "endpoint": "index_dailybasic",
+      "status": "ok",
+      "shape": {
+        "kind": "dataframe",
+        "row_count": 5,
+        "columns": [
+          "float_mv",
+          "float_share",
+          "free_share",
+          "pb",
+          "pe",
+          "pe_ttm",
+          "total_mv",
+          "total_share",
+          "trade_date",
+          "ts_code",
+          "turnover_rate",
+          "turnover_rate_f"
+        ],
+        "column_dtypes": {
+          "ts_code": "str",
+          "trade_date": "str",
+          "total_mv": "float64",
+          "float_mv": "float64",
+          "total_share": "float64",
+          "float_share": "float64",
+          "free_share": "float64",
+          "turnover_rate": "float64",
+          "turnover_rate_f": "float64",
+          "pe": "float64",
+          "pe_ttm": "float64",
+          "pb": "float64"
+        },
+        "all_null_columns": [],
+        "possibly_truncated": false
+      }
+    },
+    {
+      "label": "index_dailybasic_000300_SH_six_years_back",
+      "endpoint": "index_dailybasic",
+      "status": "ok",
+      "shape": {
+        "kind": "dataframe",
+        "row_count": 5,
+        "columns": [
+          "float_mv",
+          "float_share",
+          "free_share",
+          "pb",
+          "pe",
+          "pe_ttm",
+          "total_mv",
+          "total_share",
+          "trade_date",
+          "ts_code",
+          "turnover_rate",
+          "turnover_rate_f"
+        ],
+        "column_dtypes": {
+          "ts_code": "str",
+          "trade_date": "str",
+          "total_mv": "float64",
+          "float_mv": "float64",
+          "total_share": "float64",
+          "float_share": "float64",
+          "free_share": "float64",
+          "turnover_rate": "float64",
+          "turnover_rate_f": "float64",
+          "pe": "float64",
+          "pe_ttm": "float64",
+          "pb": "float64"
+        },
+        "all_null_columns": [],
+        "possibly_truncated": false
+      }
+    },
+    {
+      "label": "index_dailybasic_000001_SH_recent",
+      "endpoint": "index_dailybasic",
+      "status": "ok",
+      "shape": {
+        "kind": "dataframe",
+        "row_count": 5,
+        "columns": [
+          "float_mv",
+          "float_share",
+          "free_share",
+          "pb",
+          "pe",
+          "pe_ttm",
+          "total_mv",
+          "total_share",
+          "trade_date",
+          "ts_code",
+          "turnover_rate",
+          "turnover_rate_f"
+        ],
+        "column_dtypes": {
+          "ts_code": "str",
+          "trade_date": "str",
+          "total_mv": "float64",
+          "float_mv": "float64",
+          "total_share": "float64",
+          "float_share": "float64",
+          "free_share": "float64",
+          "turnover_rate": "float64",
+          "turnover_rate_f": "float64",
+          "pe": "float64",
+          "pe_ttm": "float64",
+          "pb": "float64"
+        },
+        "all_null_columns": [],
+        "possibly_truncated": false
+      }
+    },
+    {
+      "label": "index_dailybasic_000001_SH_three_years_back",
+      "endpoint": "index_dailybasic",
+      "status": "ok",
+      "shape": {
+        "kind": "dataframe",
+        "row_count": 5,
+        "columns": [
+          "float_mv",
+          "float_share",
+          "free_share",
+          "pb",
+          "pe",
+          "pe_ttm",
+          "total_mv",
+          "total_share",
+          "trade_date",
+          "ts_code",
+          "turnover_rate",
+          "turnover_rate_f"
+        ],
+        "column_dtypes": {
+          "ts_code": "str",
+          "trade_date": "str",
+          "total_mv": "float64",
+          "float_mv": "float64",
+          "total_share": "float64",
+          "float_share": "float64",
+          "free_share": "float64",
+          "turnover_rate": "float64",
+          "turnover_rate_f": "float64",
+          "pe": "float64",
+          "pe_ttm": "float64",
+          "pb": "float64"
+        },
+        "all_null_columns": [],
+        "possibly_truncated": false
+      }
+    },
+    {
+      "label": "index_dailybasic_000001_SH_six_years_back",
+      "endpoint": "index_dailybasic",
+      "status": "ok",
+      "shape": {
+        "kind": "dataframe",
+        "row_count": 5,
+        "columns": [
+          "float_mv",
+          "float_share",
+          "free_share",
+          "pb",
+          "pe",
+          "pe_ttm",
+          "total_mv",
+          "total_share",
+          "trade_date",
+          "ts_code",
+          "turnover_rate",
+          "turnover_rate_f"
+        ],
+        "column_dtypes": {
+          "ts_code": "str",
+          "trade_date": "str",
+          "total_mv": "float64",
+          "float_mv": "float64",
+          "total_share": "float64",
+          "float_share": "float64",
+          "free_share": "float64",
+          "turnover_rate": "float64",
+          "turnover_rate_f": "float64",
+          "pe": "float64",
+          "pe_ttm": "float64",
+          "pb": "float64"
+        },
+        "all_null_columns": [],
+        "possibly_truncated": false
+      }
+    },
+    {
+      "label": "margin_recent",
+      "endpoint": "margin",
+      "status": "ok",
+      "shape": {
+        "kind": "dataframe",
+        "row_count": 15,
+        "columns": [
+          "exchange_id",
+          "rzye",
+          "trade_date"
+        ],
+        "column_dtypes": {
+          "trade_date": "str",
+          "exchange_id": "str",
+          "rzye": "float64"
+        },
+        "all_null_columns": [],
+        "possibly_truncated": false
+      }
+    },
+    {
+      "label": "margin_six_years_back",
+      "endpoint": "margin",
+      "status": "ok",
+      "shape": {
+        "kind": "dataframe",
+        "row_count": 10,
+        "columns": [
+          "exchange_id",
+          "rzye",
+          "trade_date"
+        ],
+        "column_dtypes": {
+          "trade_date": "str",
+          "exchange_id": "str",
+          "rzye": "float64"
+        },
+        "all_null_columns": [],
+        "possibly_truncated": false
+      }
+    }
+  ],
+  "raw_root": "provider_samples\\a_short_margin_ratio_source_probe_20260805",
+  "raw_root_is_gitignored": true,
+  "verdict": "denominator_and_six_year_history_available",
+  "comparison_only": true,
+  "production_effect_enabled": false,
+  "NOT_VERIFIED": [
+    "the vendor's documented unit for float_mv; this probe infers it from magnitude, which makes a 万元-vs-元 assumption error impossible but leaves the cross-check blind to a whole unit step -- it catches a denominator wrong by a non-unit factor, not by 1e4",
+    "whether the ratio's percentile discriminates better than the raw level's -- that needs the full recomputation, not this probe",
+    "any percentile threshold or cash factor; both remain user adjudications",
+    "index rebalancing effects on the float-value series across years",
+    "independent review of this probe"
+  ]
+}

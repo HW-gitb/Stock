@@ -383,7 +383,13 @@ def _cohort_formal_error(
     all_scores = [_finite(value) for value in cohort["final_score"]]
     if any(value is None for value in all_scores):
         return "nonfinite_stage3_final_score"
-    for _, row in cohort.iterrows():
+    # One conversion serves both row loops below.  ``iterrows`` builds a Series
+    # per row and pays a pandas indexing call per field read; this function runs
+    # once per cohort per admission/outcome receipt, which by profile made it a
+    # top sink of the whole theme suite.  Row consumers only use ``.get``, which
+    # behaves identically on these dict rows.
+    cohort_rows = cohort.to_dict(orient="records")
+    for row in cohort_rows:
         theme_error = _theme_row_error(row)
         if theme_error:
             return theme_error
@@ -417,7 +423,7 @@ def _cohort_formal_error(
     if _as_text(cohort.iloc[0]["theme_taxonomy_source_as_of"]).removesuffix(".0") != as_of:
         return "theme_taxonomy_source_clock_mismatch"
     try:
-        for _, row in cohort.iterrows():
+        for row in cohort_rows:
             _validate_industry_trend_row(row, as_of, price_date.strftime("%Y%m%d"))
             _validate_theme_l3_row(row, as_of, price_date.strftime("%Y%m%d"))
     except ThemeForwardComparisonError as exc:
@@ -828,46 +834,48 @@ def _predictive_summary(rows: list[dict[str, Any]], positive: Callable[[dict[str
     }
 
 
+def _row_theme_ids(row: dict[str, Any]) -> set[str]:
+    return {
+        _as_text(value)
+        for value in _parse_json(row.get("canonical_theme_ids"), list, [])
+        if _as_text(value)
+    }
+
+
 def _theme_groups(live: pd.DataFrame, policy: dict[str, Any],
                   frozen_theme_ids: list[str] | None = None) -> list[dict[str, Any]]:
     frozen = set(frozen_theme_ids or [])
-    observed = {
-        _as_text(theme_id)
-        for row in live.to_dict(orient="records")
-        for theme_id in _parse_json(row.get("canonical_theme_ids"), list, [])
-        if _as_text(theme_id)
-    }
+    # Converted and parsed once, outside the per-theme loop.  The old form
+    # re-ran ``to_dict``/``_parse_json`` for every theme over the same frame --
+    # ~1,500 conversions in one 36-week test by profile -- for byte-identical
+    # inputs.  Rows are read-only throughout this function.
+    live_rows = [(row, _row_theme_ids(row)) for row in live.to_dict(orient="records")]
+    observed = {theme_id for _, ids in live_rows for theme_id in ids}
+    cohort_data = []
+    for _, cohort in live.groupby("as_of", dropna=False):
+        cohort_rows = cohort.to_dict(orient="records")
+        interval = _complete_cohort_interval(cohort_rows)
+        if interval is None:
+            continue
+        usable = []
+        for row in cohort_rows:
+            if _as_text(row.get(RETURN_STATUS_COLUMN)) != "ok":
+                continue
+            value = _finite(row.get(RETURN_COLUMN))
+            if value is None:
+                continue
+            usable.append((value, _row_theme_ids(row)))
+        cohort_data.append((interval, usable))
     family = sorted(frozen or observed)
     results = []
     for index, theme_id in enumerate(family):
-        rows = [
-            row for row in live.to_dict(orient="records")
-            if theme_id in {
-                _as_text(value)
-                for value in _parse_json(row.get("canonical_theme_ids"), list, [])
-                if _as_text(value)
-            }
-        ]
+        rows = [row for row, ids in live_rows if theme_id in ids]
         weeks = len({_as_text(row.get("as_of")) for row in rows})
         paired: list[tuple[str, str, float]] = []
-        for _, cohort in live.groupby("as_of", dropna=False):
-            cohort_rows = cohort.to_dict(orient="records")
-            interval = _complete_cohort_interval(cohort_rows)
-            if interval is None:
-                continue
+        for interval, usable in cohort_data:
             member = []
             nonmember = []
-            for row in cohort_rows:
-                if _as_text(row.get(RETURN_STATUS_COLUMN)) != "ok":
-                    continue
-                value = _finite(row.get(RETURN_COLUMN))
-                if value is None:
-                    continue
-                ids = {
-                    _as_text(item)
-                    for item in _parse_json(row.get("canonical_theme_ids"), list, [])
-                    if _as_text(item)
-                }
+            for value, ids in usable:
                 (member if theme_id in ids else nonmember).append(value)
             if member and nonmember:
                 paired.append((interval[0], interval[1], float(np.mean(member) - np.mean(nonmember))))
@@ -1890,7 +1898,7 @@ def evaluate_theme_forward_comparison(
         governance, formal_decision_receipt, recorded_formal_packet
     )
     all_rows = int(len(tracker))
-    flag_values = [_forward_flags(row) for _, row in tracker.iterrows()]
+    flag_values = [_forward_flags(row) for row in tracker.to_dict(orient="records")]
     forward_live_rows = sum(flags == (True, False) for flags in flag_values)
     legacy_boundary_rows = sum(flags is None for flags in flag_values)
     policy_live = live

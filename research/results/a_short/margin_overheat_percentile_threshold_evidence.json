@@ -1,0 +1,2281 @@
+{
+  "schema_name": "a_short_margin_overheat_percentile_evidence",
+  "schema_version": "2.0.0",
+  "as_of": "20260806",
+  "window_start": "20230807",
+  "window_end": "20260805",
+  "requested_session_count": 726,
+  "observed_session_count": 726,
+  "coverage_complete": true,
+  "evidence_window": {
+    "start": "20200806",
+    "end": "20260805",
+    "session_count": 1454
+  },
+  "exchange_observed_session_count": {
+    "SSE": 1454,
+    "SZSE": 1454,
+    "BSE": 845
+  },
+  "bse_effective_from": "20230213",
+  "current_percentile": 0.9118457300275482,
+  "current_ratio": 0.043573551741746416,
+  "current_balance_yuan": 2604537143099.0,
+  "current_denominator_float_mv_yuan": 59773349635019.01,
+  "status": "PARTIAL",
+  "comparison_only": true,
+  "production_effect_enabled": false,
+  "source_binding": {
+    "margin": "tushare:pro.margin.rzye",
+    "margin_unit": "CNY",
+    "exchanges": [
+      "SSE",
+      "SZSE",
+      "BSE"
+    ],
+    "exchange_set_rule": "date_effective_bse_from_first_published_session",
+    "denominator": "tushare:index_dailybasic.000001.SH.float_mv",
+    "denominator_unit": "CNY",
+    "calendar_basis": "tushare:trade_cal.SSE.cal_date",
+    "reconciliation": "engine.a_short_market_history.reconcile_dated_series",
+    "predicate": "engine.a_short_margin_overheat.should_reduce_new_exposure",
+    "window_years": 3,
+    "evidence_history_years": 6
+  },
+  "threshold_evidence": {
+    "basis": "live_caliber_rolling_3y_min_600_sessions",
+    "week_count": 308,
+    "evaluable_week_count": 181,
+    "unavailable_week_count": 127,
+    "unavailable_breakdown": {
+      "warm_up": 127,
+      "source_gap": 0
+    },
+    "by_threshold": [
+      {
+        "percentile_threshold": 0.8,
+        "trigger_week_count": 54,
+        "longest_consecutive_trigger_weeks": 25,
+        "trigger_weeks_by_year": {
+          "2025": 23,
+          "2026": 31
+        }
+      },
+      {
+        "percentile_threshold": 0.85,
+        "trigger_week_count": 52,
+        "longest_consecutive_trigger_weeks": 25,
+        "trigger_weeks_by_year": {
+          "2025": 21,
+          "2026": 31
+        }
+      },
+      {
+        "percentile_threshold": 0.9,
+        "trigger_week_count": 48,
+        "longest_consecutive_trigger_weeks": 24,
+        "trigger_weeks_by_year": {
+          "2025": 18,
+          "2026": 30
+        }
+      },
+      {
+        "percentile_threshold": 0.95,
+        "trigger_week_count": 40,
+        "longest_consecutive_trigger_weeks": 18,
+        "trigger_weeks_by_year": {
+          "2025": 17,
+          "2026": 23
+        }
+      }
+    ],
+    "weeks": [
+      {
+        "week_end": "20200807",
+        "trailing_session_count": 2,
+        "percentile": null,
+        "verdict": "unavailable",
+        "unavailable_reason": "warm_up"
+      },
+      {
+        "week_end": "20200814",
+        "trailing_session_count": 7,
+        "percentile": null,
+        "verdict": "unavailable",
+        "unavailable_reason": "warm_up"
+      },
+      {
+        "week_end": "20200821",
+        "trailing_session_count": 12,
+        "percentile": null,
+        "verdict": "unavailable",
+        "unavailable_reason": "warm_up"
+      },
+      {
+        "week_end": "20200828",
+        "trailing_session_count": 17,
+        "percentile": null,
+        "verdict": "unavailable",
+        "unavailable_reason": "warm_up"
+      },
+      {
+        "week_end": "20200904",
+        "trailing_session_count": 22,
+        "percentile": null,
+        "verdict": "unavailable",
+        "unavailable_reason": "warm_up"
+      },
+      {
+        "week_end": "20200911",
+        "trailing_session_count": 27,
+        "percentile": null,
+        "verdict": "unavailable",
+        "unavailable_reason": "warm_up"
+      },
+      {
+        "week_end": "20200918",
+        "trailing_session_count": 32,
+        "percentile": null,
+        "verdict": "unavailable",
+        "unavailable_reason": "warm_up"
+      },
+      {
+        "week_end": "20200925",
+        "trailing_session_count": 37,
+        "percentile": null,
+        "verdict": "unavailable",
+        "unavailable_reason": "warm_up"
+      },
+      {
+        "week_end": "20200930",
+        "trailing_session_count": 40,
+        "percentile": null,
+        "verdict": "unavailable",
+        "unavailable_reason": "warm_up"
+      },
+      {
+        "week_end": "20201009",
+        "trailing_session_count": 41,
+        "percentile": null,
+        "verdict": "unavailable",
+        "unavailable_reason": "warm_up"
+      },
+      {
+        "week_end": "20201016",
+        "trailing_session_count": 46,
+        "percentile": null,
+        "verdict": "unavailable",
+        "unavailable_reason": "warm_up"
+      },
+      {
+        "week_end": "20201023",
+        "trailing_session_count": 51,
+        "percentile": null,
+        "verdict": "unavailable",
+        "unavailable_reason": "warm_up"
+      },
+      {
+        "week_end": "20201030",
+        "trailing_session_count": 56,
+        "percentile": null,
+        "verdict": "unavailable",
+        "unavailable_reason": "warm_up"
+      },
+      {
+        "week_end": "20201106",
+        "trailing_session_count": 61,
+        "percentile": null,
+        "verdict": "unavailable",
+        "unavailable_reason": "warm_up"
+      },
+      {
+        "week_end": "20201113",
+        "trailing_session_count": 66,
+        "percentile": null,
+        "verdict": "unavailable",
+        "unavailable_reason": "warm_up"
+      },
+      {
+        "week_end": "20201120",
+        "trailing_session_count": 71,
+        "percentile": null,
+        "verdict": "unavailable",
+        "unavailable_reason": "warm_up"
+      },
+      {
+        "week_end": "20201127",
+        "trailing_session_count": 76,
+        "percentile": null,
+        "verdict": "unavailable",
+        "unavailable_reason": "warm_up"
+      },
+      {
+        "week_end": "20201204",
+        "trailing_session_count": 81,
+        "percentile": null,
+        "verdict": "unavailable",
+        "unavailable_reason": "warm_up"
+      },
+      {
+        "week_end": "20201211",
+        "trailing_session_count": 86,
+        "percentile": null,
+        "verdict": "unavailable",
+        "unavailable_reason": "warm_up"
+      },
+      {
+        "week_end": "20201218",
+        "trailing_session_count": 91,
+        "percentile": null,
+        "verdict": "unavailable",
+        "unavailable_reason": "warm_up"
+      },
+      {
+        "week_end": "20201225",
+        "trailing_session_count": 96,
+        "percentile": null,
+        "verdict": "unavailable",
+        "unavailable_reason": "warm_up"
+      },
+      {
+        "week_end": "20201231",
+        "trailing_session_count": 100,
+        "percentile": null,
+        "verdict": "unavailable",
+        "unavailable_reason": "warm_up"
+      },
+      {
+        "week_end": "20210108",
+        "trailing_session_count": 105,
+        "percentile": null,
+        "verdict": "unavailable",
+        "unavailable_reason": "warm_up"
+      },
+      {
+        "week_end": "20210115",
+        "trailing_session_count": 110,
+        "percentile": null,
+        "verdict": "unavailable",
+        "unavailable_reason": "warm_up"
+      },
+      {
+        "week_end": "20210122",
+        "trailing_session_count": 115,
+        "percentile": null,
+        "verdict": "unavailable",
+        "unavailable_reason": "warm_up"
+      },
+      {
+        "week_end": "20210129",
+        "trailing_session_count": 120,
+        "percentile": null,
+        "verdict": "unavailable",
+        "unavailable_reason": "warm_up"
+      },
+      {
+        "week_end": "20210205",
+        "trailing_session_count": 125,
+        "percentile": null,
+        "verdict": "unavailable",
+        "unavailable_reason": "warm_up"
+      },
+      {
+        "week_end": "20210210",
+        "trailing_session_count": 128,
+        "percentile": null,
+        "verdict": "unavailable",
+        "unavailable_reason": "warm_up"
+      },
+      {
+        "week_end": "20210219",
+        "trailing_session_count": 130,
+        "percentile": null,
+        "verdict": "unavailable",
+        "unavailable_reason": "warm_up"
+      },
+      {
+        "week_end": "20210226",
+        "trailing_session_count": 135,
+        "percentile": null,
+        "verdict": "unavailable",
+        "unavailable_reason": "warm_up"
+      },
+      {
+        "week_end": "20210305",
+        "trailing_session_count": 140,
+        "percentile": null,
+        "verdict": "unavailable",
+        "unavailable_reason": "warm_up"
+      },
+      {
+        "week_end": "20210312",
+        "trailing_session_count": 145,
+        "percentile": null,
+        "verdict": "unavailable",
+        "unavailable_reason": "warm_up"
+      },
+      {
+        "week_end": "20210319",
+        "trailing_session_count": 150,
+        "percentile": null,
+        "verdict": "unavailable",
+        "unavailable_reason": "warm_up"
+      },
+      {
+        "week_end": "20210326",
+        "trailing_session_count": 155,
+        "percentile": null,
+        "verdict": "unavailable",
+        "unavailable_reason": "warm_up"
+      },
+      {
+        "week_end": "20210402",
+        "trailing_session_count": 160,
+        "percentile": null,
+        "verdict": "unavailable",
+        "unavailable_reason": "warm_up"
+      },
+      {
+        "week_end": "20210409",
+        "trailing_session_count": 164,
+        "percentile": null,
+        "verdict": "unavailable",
+        "unavailable_reason": "warm_up"
+      },
+      {
+        "week_end": "20210416",
+        "trailing_session_count": 169,
+        "percentile": null,
+        "verdict": "unavailable",
+        "unavailable_reason": "warm_up"
+      },
+      {
+        "week_end": "20210423",
+        "trailing_session_count": 174,
+        "percentile": null,
+        "verdict": "unavailable",
+        "unavailable_reason": "warm_up"
+      },
+      {
+        "week_end": "20210430",
+        "trailing_session_count": 179,
+        "percentile": null,
+        "verdict": "unavailable",
+        "unavailable_reason": "warm_up"
+      },
+      {
+        "week_end": "20210507",
+        "trailing_session_count": 181,
+        "percentile": null,
+        "verdict": "unavailable",
+        "unavailable_reason": "warm_up"
+      },
+      {
+        "week_end": "20210514",
+        "trailing_session_count": 186,
+        "percentile": null,
+        "verdict": "unavailable",
+        "unavailable_reason": "warm_up"
+      },
+      {
+        "week_end": "20210521",
+        "trailing_session_count": 191,
+        "percentile": null,
+        "verdict": "unavailable",
+        "unavailable_reason": "warm_up"
+      },
+      {
+        "week_end": "20210528",
+        "trailing_session_count": 196,
+        "percentile": null,
+        "verdict": "unavailable",
+        "unavailable_reason": "warm_up"
+      },
+      {
+        "week_end": "20210604",
+        "trailing_session_count": 201,
+        "percentile": null,
+        "verdict": "unavailable",
+        "unavailable_reason": "warm_up"
+      },
+      {
+        "week_end": "20210611",
+        "trailing_session_count": 206,
+        "percentile": null,
+        "verdict": "unavailable",
+        "unavailable_reason": "warm_up"
+      },
+      {
+        "week_end": "20210618",
+        "trailing_session_count": 210,
+        "percentile": null,
+        "verdict": "unavailable",
+        "unavailable_reason": "warm_up"
+      },
+      {
+        "week_end": "20210625",
+        "trailing_session_count": 215,
+        "percentile": null,
+        "verdict": "unavailable",
+        "unavailable_reason": "warm_up"
+      },
+      {
+        "week_end": "20210702",
+        "trailing_session_count": 220,
+        "percentile": null,
+        "verdict": "unavailable",
+        "unavailable_reason": "warm_up"
+      },
+      {
+        "week_end": "20210709",
+        "trailing_session_count": 225,
+        "percentile": null,
+        "verdict": "unavailable",
+        "unavailable_reason": "warm_up"
+      },
+      {
+        "week_end": "20210716",
+        "trailing_session_count": 230,
+        "percentile": null,
+        "verdict": "unavailable",
+        "unavailable_reason": "warm_up"
+      },
+      {
+        "week_end": "20210723",
+        "trailing_session_count": 235,
+        "percentile": null,
+        "verdict": "unavailable",
+        "unavailable_reason": "warm_up"
+      },
+      {
+        "week_end": "20210730",
+        "trailing_session_count": 240,
+        "percentile": null,
+        "verdict": "unavailable",
+        "unavailable_reason": "warm_up"
+      },
+      {
+        "week_end": "20210806",
+        "trailing_session_count": 245,
+        "percentile": null,
+        "verdict": "unavailable",
+        "unavailable_reason": "warm_up"
+      },
+      {
+        "week_end": "20210813",
+        "trailing_session_count": 250,
+        "percentile": null,
+        "verdict": "unavailable",
+        "unavailable_reason": "warm_up"
+      },
+      {
+        "week_end": "20210820",
+        "trailing_session_count": 255,
+        "percentile": null,
+        "verdict": "unavailable",
+        "unavailable_reason": "warm_up"
+      },
+      {
+        "week_end": "20210827",
+        "trailing_session_count": 260,
+        "percentile": null,
+        "verdict": "unavailable",
+        "unavailable_reason": "warm_up"
+      },
+      {
+        "week_end": "20210903",
+        "trailing_session_count": 265,
+        "percentile": null,
+        "verdict": "unavailable",
+        "unavailable_reason": "warm_up"
+      },
+      {
+        "week_end": "20210910",
+        "trailing_session_count": 270,
+        "percentile": null,
+        "verdict": "unavailable",
+        "unavailable_reason": "warm_up"
+      },
+      {
+        "week_end": "20210917",
+        "trailing_session_count": 275,
+        "percentile": null,
+        "verdict": "unavailable",
+        "unavailable_reason": "warm_up"
+      },
+      {
+        "week_end": "20210924",
+        "trailing_session_count": 278,
+        "percentile": null,
+        "verdict": "unavailable",
+        "unavailable_reason": "warm_up"
+      },
+      {
+        "week_end": "20210930",
+        "trailing_session_count": 282,
+        "percentile": null,
+        "verdict": "unavailable",
+        "unavailable_reason": "warm_up"
+      },
+      {
+        "week_end": "20211008",
+        "trailing_session_count": 283,
+        "percentile": null,
+        "verdict": "unavailable",
+        "unavailable_reason": "warm_up"
+      },
+      {
+        "week_end": "20211015",
+        "trailing_session_count": 288,
+        "percentile": null,
+        "verdict": "unavailable",
+        "unavailable_reason": "warm_up"
+      },
+      {
+        "week_end": "20211022",
+        "trailing_session_count": 293,
+        "percentile": null,
+        "verdict": "unavailable",
+        "unavailable_reason": "warm_up"
+      },
+      {
+        "week_end": "20211029",
+        "trailing_session_count": 298,
+        "percentile": null,
+        "verdict": "unavailable",
+        "unavailable_reason": "warm_up"
+      },
+      {
+        "week_end": "20211105",
+        "trailing_session_count": 303,
+        "percentile": null,
+        "verdict": "unavailable",
+        "unavailable_reason": "warm_up"
+      },
+      {
+        "week_end": "20211112",
+        "trailing_session_count": 308,
+        "percentile": null,
+        "verdict": "unavailable",
+        "unavailable_reason": "warm_up"
+      },
+      {
+        "week_end": "20211119",
+        "trailing_session_count": 313,
+        "percentile": null,
+        "verdict": "unavailable",
+        "unavailable_reason": "warm_up"
+      },
+      {
+        "week_end": "20211126",
+        "trailing_session_count": 318,
+        "percentile": null,
+        "verdict": "unavailable",
+        "unavailable_reason": "warm_up"
+      },
+      {
+        "week_end": "20211203",
+        "trailing_session_count": 323,
+        "percentile": null,
+        "verdict": "unavailable",
+        "unavailable_reason": "warm_up"
+      },
+      {
+        "week_end": "20211210",
+        "trailing_session_count": 328,
+        "percentile": null,
+        "verdict": "unavailable",
+        "unavailable_reason": "warm_up"
+      },
+      {
+        "week_end": "20211217",
+        "trailing_session_count": 333,
+        "percentile": null,
+        "verdict": "unavailable",
+        "unavailable_reason": "warm_up"
+      },
+      {
+        "week_end": "20211224",
+        "trailing_session_count": 338,
+        "percentile": null,
+        "verdict": "unavailable",
+        "unavailable_reason": "warm_up"
+      },
+      {
+        "week_end": "20211231",
+        "trailing_session_count": 343,
+        "percentile": null,
+        "verdict": "unavailable",
+        "unavailable_reason": "warm_up"
+      },
+      {
+        "week_end": "20220107",
+        "trailing_session_count": 347,
+        "percentile": null,
+        "verdict": "unavailable",
+        "unavailable_reason": "warm_up"
+      },
+      {
+        "week_end": "20220114",
+        "trailing_session_count": 352,
+        "percentile": null,
+        "verdict": "unavailable",
+        "unavailable_reason": "warm_up"
+      },
+      {
+        "week_end": "20220121",
+        "trailing_session_count": 357,
+        "percentile": null,
+        "verdict": "unavailable",
+        "unavailable_reason": "warm_up"
+      },
+      {
+        "week_end": "20220128",
+        "trailing_session_count": 362,
+        "percentile": null,
+        "verdict": "unavailable",
+        "unavailable_reason": "warm_up"
+      },
+      {
+        "week_end": "20220211",
+        "trailing_session_count": 367,
+        "percentile": null,
+        "verdict": "unavailable",
+        "unavailable_reason": "warm_up"
+      },
+      {
+        "week_end": "20220218",
+        "trailing_session_count": 372,
+        "percentile": null,
+        "verdict": "unavailable",
+        "unavailable_reason": "warm_up"
+      },
+      {
+        "week_end": "20220225",
+        "trailing_session_count": 377,
+        "percentile": null,
+        "verdict": "unavailable",
+        "unavailable_reason": "warm_up"
+      },
+      {
+        "week_end": "20220304",
+        "trailing_session_count": 382,
+        "percentile": null,
+        "verdict": "unavailable",
+        "unavailable_reason": "warm_up"
+      },
+      {
+        "week_end": "20220311",
+        "trailing_session_count": 387,
+        "percentile": null,
+        "verdict": "unavailable",
+        "unavailable_reason": "warm_up"
+      },
+      {
+        "week_end": "20220318",
+        "trailing_session_count": 392,
+        "percentile": null,
+        "verdict": "unavailable",
+        "unavailable_reason": "warm_up"
+      },
+      {
+        "week_end": "20220325",
+        "trailing_session_count": 397,
+        "percentile": null,
+        "verdict": "unavailable",
+        "unavailable_reason": "warm_up"
+      },
+      {
+        "week_end": "20220401",
+        "trailing_session_count": 402,
+        "percentile": null,
+        "verdict": "unavailable",
+        "unavailable_reason": "warm_up"
+      },
+      {
+        "week_end": "20220408",
+        "trailing_session_count": 405,
+        "percentile": null,
+        "verdict": "unavailable",
+        "unavailable_reason": "warm_up"
+      },
+      {
+        "week_end": "20220415",
+        "trailing_session_count": 410,
+        "percentile": null,
+        "verdict": "unavailable",
+        "unavailable_reason": "warm_up"
+      },
+      {
+        "week_end": "20220422",
+        "trailing_session_count": 415,
+        "percentile": null,
+        "verdict": "unavailable",
+        "unavailable_reason": "warm_up"
+      },
+      {
+        "week_end": "20220429",
+        "trailing_session_count": 420,
+        "percentile": null,
+        "verdict": "unavailable",
+        "unavailable_reason": "warm_up"
+      },
+      {
+        "week_end": "20220506",
+        "trailing_session_count": 422,
+        "percentile": null,
+        "verdict": "unavailable",
+        "unavailable_reason": "warm_up"
+      },
+      {
+        "week_end": "20220513",
+        "trailing_session_count": 427,
+        "percentile": null,
+        "verdict": "unavailable",
+        "unavailable_reason": "warm_up"
+      },
+      {
+        "week_end": "20220520",
+        "trailing_session_count": 432,
+        "percentile": null,
+        "verdict": "unavailable",
+        "unavailable_reason": "warm_up"
+      },
+      {
+        "week_end": "20220527",
+        "trailing_session_count": 437,
+        "percentile": null,
+        "verdict": "unavailable",
+        "unavailable_reason": "warm_up"
+      },
+      {
+        "week_end": "20220602",
+        "trailing_session_count": 441,
+        "percentile": null,
+        "verdict": "unavailable",
+        "unavailable_reason": "warm_up"
+      },
+      {
+        "week_end": "20220610",
+        "trailing_session_count": 446,
+        "percentile": null,
+        "verdict": "unavailable",
+        "unavailable_reason": "warm_up"
+      },
+      {
+        "week_end": "20220617",
+        "trailing_session_count": 451,
+        "percentile": null,
+        "verdict": "unavailable",
+        "unavailable_reason": "warm_up"
+      },
+      {
+        "week_end": "20220624",
+        "trailing_session_count": 456,
+        "percentile": null,
+        "verdict": "unavailable",
+        "unavailable_reason": "warm_up"
+      },
+      {
+        "week_end": "20220701",
+        "trailing_session_count": 461,
+        "percentile": null,
+        "verdict": "unavailable",
+        "unavailable_reason": "warm_up"
+      },
+      {
+        "week_end": "20220708",
+        "trailing_session_count": 466,
+        "percentile": null,
+        "verdict": "unavailable",
+        "unavailable_reason": "warm_up"
+      },
+      {
+        "week_end": "20220715",
+        "trailing_session_count": 471,
+        "percentile": null,
+        "verdict": "unavailable",
+        "unavailable_reason": "warm_up"
+      },
+      {
+        "week_end": "20220722",
+        "trailing_session_count": 476,
+        "percentile": null,
+        "verdict": "unavailable",
+        "unavailable_reason": "warm_up"
+      },
+      {
+        "week_end": "20220729",
+        "trailing_session_count": 481,
+        "percentile": null,
+        "verdict": "unavailable",
+        "unavailable_reason": "warm_up"
+      },
+      {
+        "week_end": "20220805",
+        "trailing_session_count": 486,
+        "percentile": null,
+        "verdict": "unavailable",
+        "unavailable_reason": "warm_up"
+      },
+      {
+        "week_end": "20220812",
+        "trailing_session_count": 491,
+        "percentile": null,
+        "verdict": "unavailable",
+        "unavailable_reason": "warm_up"
+      },
+      {
+        "week_end": "20220819",
+        "trailing_session_count": 496,
+        "percentile": null,
+        "verdict": "unavailable",
+        "unavailable_reason": "warm_up"
+      },
+      {
+        "week_end": "20220826",
+        "trailing_session_count": 501,
+        "percentile": null,
+        "verdict": "unavailable",
+        "unavailable_reason": "warm_up"
+      },
+      {
+        "week_end": "20220902",
+        "trailing_session_count": 506,
+        "percentile": null,
+        "verdict": "unavailable",
+        "unavailable_reason": "warm_up"
+      },
+      {
+        "week_end": "20220909",
+        "trailing_session_count": 511,
+        "percentile": null,
+        "verdict": "unavailable",
+        "unavailable_reason": "warm_up"
+      },
+      {
+        "week_end": "20220916",
+        "trailing_session_count": 515,
+        "percentile": null,
+        "verdict": "unavailable",
+        "unavailable_reason": "warm_up"
+      },
+      {
+        "week_end": "20220923",
+        "trailing_session_count": 520,
+        "percentile": null,
+        "verdict": "unavailable",
+        "unavailable_reason": "warm_up"
+      },
+      {
+        "week_end": "20220930",
+        "trailing_session_count": 525,
+        "percentile": null,
+        "verdict": "unavailable",
+        "unavailable_reason": "warm_up"
+      },
+      {
+        "week_end": "20221014",
+        "trailing_session_count": 530,
+        "percentile": null,
+        "verdict": "unavailable",
+        "unavailable_reason": "warm_up"
+      },
+      {
+        "week_end": "20221021",
+        "trailing_session_count": 535,
+        "percentile": null,
+        "verdict": "unavailable",
+        "unavailable_reason": "warm_up"
+      },
+      {
+        "week_end": "20221028",
+        "trailing_session_count": 540,
+        "percentile": null,
+        "verdict": "unavailable",
+        "unavailable_reason": "warm_up"
+      },
+      {
+        "week_end": "20221104",
+        "trailing_session_count": 545,
+        "percentile": null,
+        "verdict": "unavailable",
+        "unavailable_reason": "warm_up"
+      },
+      {
+        "week_end": "20221111",
+        "trailing_session_count": 550,
+        "percentile": null,
+        "verdict": "unavailable",
+        "unavailable_reason": "warm_up"
+      },
+      {
+        "week_end": "20221118",
+        "trailing_session_count": 555,
+        "percentile": null,
+        "verdict": "unavailable",
+        "unavailable_reason": "warm_up"
+      },
+      {
+        "week_end": "20221125",
+        "trailing_session_count": 560,
+        "percentile": null,
+        "verdict": "unavailable",
+        "unavailable_reason": "warm_up"
+      },
+      {
+        "week_end": "20221202",
+        "trailing_session_count": 565,
+        "percentile": null,
+        "verdict": "unavailable",
+        "unavailable_reason": "warm_up"
+      },
+      {
+        "week_end": "20221209",
+        "trailing_session_count": 570,
+        "percentile": null,
+        "verdict": "unavailable",
+        "unavailable_reason": "warm_up"
+      },
+      {
+        "week_end": "20221216",
+        "trailing_session_count": 575,
+        "percentile": null,
+        "verdict": "unavailable",
+        "unavailable_reason": "warm_up"
+      },
+      {
+        "week_end": "20221223",
+        "trailing_session_count": 580,
+        "percentile": null,
+        "verdict": "unavailable",
+        "unavailable_reason": "warm_up"
+      },
+      {
+        "week_end": "20221230",
+        "trailing_session_count": 585,
+        "percentile": null,
+        "verdict": "unavailable",
+        "unavailable_reason": "warm_up"
+      },
+      {
+        "week_end": "20230106",
+        "trailing_session_count": 589,
+        "percentile": null,
+        "verdict": "unavailable",
+        "unavailable_reason": "warm_up"
+      },
+      {
+        "week_end": "20230113",
+        "trailing_session_count": 594,
+        "percentile": null,
+        "verdict": "unavailable",
+        "unavailable_reason": "warm_up"
+      },
+      {
+        "week_end": "20230120",
+        "trailing_session_count": 599,
+        "percentile": null,
+        "verdict": "unavailable",
+        "unavailable_reason": "warm_up"
+      },
+      {
+        "week_end": "20230203",
+        "trailing_session_count": 604,
+        "percentile": 0.013245033112582781,
+        "verdict": "evaluable",
+        "unavailable_reason": null
+      },
+      {
+        "week_end": "20230210",
+        "trailing_session_count": 609,
+        "percentile": 0.019704433497536946,
+        "verdict": "evaluable",
+        "unavailable_reason": null
+      },
+      {
+        "week_end": "20230217",
+        "trailing_session_count": 614,
+        "percentile": 0.03420195439739414,
+        "verdict": "evaluable",
+        "unavailable_reason": null
+      },
+      {
+        "week_end": "20230224",
+        "trailing_session_count": 619,
+        "percentile": 0.035541195476575124,
+        "verdict": "evaluable",
+        "unavailable_reason": null
+      },
+      {
+        "week_end": "20230303",
+        "trailing_session_count": 624,
+        "percentile": 0.00641025641025641,
+        "verdict": "evaluable",
+        "unavailable_reason": null
+      },
+      {
+        "week_end": "20230310",
+        "trailing_session_count": 629,
+        "percentile": 0.057233704292527825,
+        "verdict": "evaluable",
+        "unavailable_reason": null
+      },
+      {
+        "week_end": "20230317",
+        "trailing_session_count": 634,
+        "percentile": 0.0583596214511041,
+        "verdict": "evaluable",
+        "unavailable_reason": null
+      },
+      {
+        "week_end": "20230324",
+        "trailing_session_count": 639,
+        "percentile": 0.06572769953051644,
+        "verdict": "evaluable",
+        "unavailable_reason": null
+      },
+      {
+        "week_end": "20230331",
+        "trailing_session_count": 644,
+        "percentile": 0.06366459627329192,
+        "verdict": "evaluable",
+        "unavailable_reason": null
+      },
+      {
+        "week_end": "20230407",
+        "trailing_session_count": 648,
+        "percentile": 0.05401234567901234,
+        "verdict": "evaluable",
+        "unavailable_reason": null
+      },
+      {
+        "week_end": "20230414",
+        "trailing_session_count": 653,
+        "percentile": 0.05972434915773354,
+        "verdict": "evaluable",
+        "unavailable_reason": null
+      },
+      {
+        "week_end": "20230421",
+        "trailing_session_count": 658,
+        "percentile": 0.08814589665653495,
+        "verdict": "evaluable",
+        "unavailable_reason": null
+      },
+      {
+        "week_end": "20230428",
+        "trailing_session_count": 663,
+        "percentile": 0.012066365007541479,
+        "verdict": "evaluable",
+        "unavailable_reason": null
+      },
+      {
+        "week_end": "20230505",
+        "trailing_session_count": 665,
+        "percentile": 0.009022556390977444,
+        "verdict": "evaluable",
+        "unavailable_reason": null
+      },
+      {
+        "week_end": "20230512",
+        "trailing_session_count": 670,
+        "percentile": 0.056716417910447764,
+        "verdict": "evaluable",
+        "unavailable_reason": null
+      },
+      {
+        "week_end": "20230519",
+        "trailing_session_count": 675,
+        "percentile": 0.05185185185185185,
+        "verdict": "evaluable",
+        "unavailable_reason": null
+      },
+      {
+        "week_end": "20230526",
+        "trailing_session_count": 680,
+        "percentile": 0.11470588235294117,
+        "verdict": "evaluable",
+        "unavailable_reason": null
+      },
+      {
+        "week_end": "20230602",
+        "trailing_session_count": 685,
+        "percentile": 0.0905109489051095,
+        "verdict": "evaluable",
+        "unavailable_reason": null
+      },
+      {
+        "week_end": "20230609",
+        "trailing_session_count": 690,
+        "percentile": 0.06811594202898551,
+        "verdict": "evaluable",
+        "unavailable_reason": null
+      },
+      {
+        "week_end": "20230616",
+        "trailing_session_count": 695,
+        "percentile": 0.0057553956834532375,
+        "verdict": "evaluable",
+        "unavailable_reason": null
+      },
+      {
+        "week_end": "20230621",
+        "trailing_session_count": 698,
+        "percentile": 0.07593123209169055,
+        "verdict": "evaluable",
+        "unavailable_reason": null
+      },
+      {
+        "week_end": "20230630",
+        "trailing_session_count": 703,
+        "percentile": 0.025604551920341393,
+        "verdict": "evaluable",
+        "unavailable_reason": null
+      },
+      {
+        "week_end": "20230707",
+        "trailing_session_count": 708,
+        "percentile": 0.03389830508474576,
+        "verdict": "evaluable",
+        "unavailable_reason": null
+      },
+      {
+        "week_end": "20230714",
+        "trailing_session_count": 713,
+        "percentile": 0.004207573632538569,
+        "verdict": "evaluable",
+        "unavailable_reason": null
+      },
+      {
+        "week_end": "20230721",
+        "trailing_session_count": 718,
+        "percentile": 0.03203342618384401,
+        "verdict": "evaluable",
+        "unavailable_reason": null
+      },
+      {
+        "week_end": "20230728",
+        "trailing_session_count": 723,
+        "percentile": 0.0013831258644536654,
+        "verdict": "evaluable",
+        "unavailable_reason": null
+      },
+      {
+        "week_end": "20230804",
+        "trailing_session_count": 728,
+        "percentile": 0.005494505494505495,
+        "verdict": "evaluable",
+        "unavailable_reason": null
+      },
+      {
+        "week_end": "20230811",
+        "trailing_session_count": 730,
+        "percentile": 0.0273972602739726,
+        "verdict": "evaluable",
+        "unavailable_reason": null
+      },
+      {
+        "week_end": "20230818",
+        "trailing_session_count": 730,
+        "percentile": 0.06301369863013699,
+        "verdict": "evaluable",
+        "unavailable_reason": null
+      },
+      {
+        "week_end": "20230825",
+        "trailing_session_count": 730,
+        "percentile": 0.10136986301369863,
+        "verdict": "evaluable",
+        "unavailable_reason": null
+      },
+      {
+        "week_end": "20230901",
+        "trailing_session_count": 730,
+        "percentile": 0.024657534246575342,
+        "verdict": "evaluable",
+        "unavailable_reason": null
+      },
+      {
+        "week_end": "20230908",
+        "trailing_session_count": 730,
+        "percentile": 0.043835616438356165,
+        "verdict": "evaluable",
+        "unavailable_reason": null
+      },
+      {
+        "week_end": "20230915",
+        "trailing_session_count": 730,
+        "percentile": 0.17534246575342466,
+        "verdict": "evaluable",
+        "unavailable_reason": null
+      },
+      {
+        "week_end": "20230922",
+        "trailing_session_count": 730,
+        "percentile": 0.15342465753424658,
+        "verdict": "evaluable",
+        "unavailable_reason": null
+      },
+      {
+        "week_end": "20230928",
+        "trailing_session_count": 730,
+        "percentile": 0.1506849315068493,
+        "verdict": "evaluable",
+        "unavailable_reason": null
+      },
+      {
+        "week_end": "20231013",
+        "trailing_session_count": 730,
+        "percentile": 0.2493150684931507,
+        "verdict": "evaluable",
+        "unavailable_reason": null
+      },
+      {
+        "week_end": "20231020",
+        "trailing_session_count": 730,
+        "percentile": 0.32602739726027397,
+        "verdict": "evaluable",
+        "unavailable_reason": null
+      },
+      {
+        "week_end": "20231027",
+        "trailing_session_count": 730,
+        "percentile": 0.29315068493150687,
+        "verdict": "evaluable",
+        "unavailable_reason": null
+      },
+      {
+        "week_end": "20231103",
+        "trailing_session_count": 730,
+        "percentile": 0.3013698630136986,
+        "verdict": "evaluable",
+        "unavailable_reason": null
+      },
+      {
+        "week_end": "20231110",
+        "trailing_session_count": 730,
+        "percentile": 0.34383561643835614,
+        "verdict": "evaluable",
+        "unavailable_reason": null
+      },
+      {
+        "week_end": "20231117",
+        "trailing_session_count": 730,
+        "percentile": 0.36575342465753424,
+        "verdict": "evaluable",
+        "unavailable_reason": null
+      },
+      {
+        "week_end": "20231124",
+        "trailing_session_count": 730,
+        "percentile": 0.39315068493150684,
+        "verdict": "evaluable",
+        "unavailable_reason": null
+      },
+      {
+        "week_end": "20231201",
+        "trailing_session_count": 730,
+        "percentile": 0.40136986301369865,
+        "verdict": "evaluable",
+        "unavailable_reason": null
+      },
+      {
+        "week_end": "20231208",
+        "trailing_session_count": 730,
+        "percentile": 0.4986301369863014,
+        "verdict": "evaluable",
+        "unavailable_reason": null
+      },
+      {
+        "week_end": "20231215",
+        "trailing_session_count": 730,
+        "percentile": 0.5465753424657535,
+        "verdict": "evaluable",
+        "unavailable_reason": null
+      },
+      {
+        "week_end": "20231222",
+        "trailing_session_count": 730,
+        "percentile": 0.547945205479452,
+        "verdict": "evaluable",
+        "unavailable_reason": null
+      },
+      {
+        "week_end": "20231229",
+        "trailing_session_count": 730,
+        "percentile": 0.4438356164383562,
+        "verdict": "evaluable",
+        "unavailable_reason": null
+      },
+      {
+        "week_end": "20240105",
+        "trailing_session_count": 730,
+        "percentile": 0.5054794520547945,
+        "verdict": "evaluable",
+        "unavailable_reason": null
+      },
+      {
+        "week_end": "20240112",
+        "trailing_session_count": 730,
+        "percentile": 0.5397260273972603,
+        "verdict": "evaluable",
+        "unavailable_reason": null
+      },
+      {
+        "week_end": "20240119",
+        "trailing_session_count": 730,
+        "percentile": 0.5726027397260274,
+        "verdict": "evaluable",
+        "unavailable_reason": null
+      },
+      {
+        "week_end": "20240126",
+        "trailing_session_count": 730,
+        "percentile": 0.35205479452054794,
+        "verdict": "evaluable",
+        "unavailable_reason": null
+      },
+      {
+        "week_end": "20240202",
+        "trailing_session_count": 730,
+        "percentile": 0.410958904109589,
+        "verdict": "evaluable",
+        "unavailable_reason": null
+      },
+      {
+        "week_end": "20240208",
+        "trailing_session_count": 730,
+        "percentile": 0.02054794520547945,
+        "verdict": "evaluable",
+        "unavailable_reason": null
+      },
+      {
+        "week_end": "20240223",
+        "trailing_session_count": 729,
+        "percentile": 0.0027434842249657062,
+        "verdict": "evaluable",
+        "unavailable_reason": null
+      },
+      {
+        "week_end": "20240301",
+        "trailing_session_count": 730,
+        "percentile": 0.015068493150684932,
+        "verdict": "evaluable",
+        "unavailable_reason": null
+      },
+      {
+        "week_end": "20240308",
+        "trailing_session_count": 730,
+        "percentile": 0.01643835616438356,
+        "verdict": "evaluable",
+        "unavailable_reason": null
+      },
+      {
+        "week_end": "20240315",
+        "trailing_session_count": 730,
+        "percentile": 0.04657534246575343,
+        "verdict": "evaluable",
+        "unavailable_reason": null
+      },
+      {
+        "week_end": "20240322",
+        "trailing_session_count": 730,
+        "percentile": 0.13150684931506848,
+        "verdict": "evaluable",
+        "unavailable_reason": null
+      },
+      {
+        "week_end": "20240329",
+        "trailing_session_count": 730,
+        "percentile": 0.10684931506849316,
+        "verdict": "evaluable",
+        "unavailable_reason": null
+      },
+      {
+        "week_end": "20240403",
+        "trailing_session_count": 728,
+        "percentile": 0.06318681318681318,
+        "verdict": "evaluable",
+        "unavailable_reason": null
+      },
+      {
+        "week_end": "20240412",
+        "trailing_session_count": 729,
+        "percentile": 0.13031550068587106,
+        "verdict": "evaluable",
+        "unavailable_reason": null
+      },
+      {
+        "week_end": "20240419",
+        "trailing_session_count": 729,
+        "percentile": 0.04526748971193416,
+        "verdict": "evaluable",
+        "unavailable_reason": null
+      },
+      {
+        "week_end": "20240426",
+        "trailing_session_count": 729,
+        "percentile": 0.013717421124828532,
+        "verdict": "evaluable",
+        "unavailable_reason": null
+      },
+      {
+        "week_end": "20240430",
+        "trailing_session_count": 727,
+        "percentile": 0.0041265474552957355,
+        "verdict": "evaluable",
+        "unavailable_reason": null
+      },
+      {
+        "week_end": "20240510",
+        "trailing_session_count": 729,
+        "percentile": 0.0013717421124828531,
+        "verdict": "evaluable",
+        "unavailable_reason": null
+      },
+      {
+        "week_end": "20240517",
+        "trailing_session_count": 729,
+        "percentile": 0.0013717421124828531,
+        "verdict": "evaluable",
+        "unavailable_reason": null
+      },
+      {
+        "week_end": "20240524",
+        "trailing_session_count": 729,
+        "percentile": 0.04526748971193416,
+        "verdict": "evaluable",
+        "unavailable_reason": null
+      },
+      {
+        "week_end": "20240531",
+        "trailing_session_count": 729,
+        "percentile": 0.0438957475994513,
+        "verdict": "evaluable",
+        "unavailable_reason": null
+      },
+      {
+        "week_end": "20240607",
+        "trailing_session_count": 729,
+        "percentile": 0.03566529492455418,
+        "verdict": "evaluable",
+        "unavailable_reason": null
+      },
+      {
+        "week_end": "20240614",
+        "trailing_session_count": 728,
+        "percentile": 0.06318681318681318,
+        "verdict": "evaluable",
+        "unavailable_reason": null
+      },
+      {
+        "week_end": "20240621",
+        "trailing_session_count": 729,
+        "percentile": 0.10013717421124829,
+        "verdict": "evaluable",
+        "unavailable_reason": null
+      },
+      {
+        "week_end": "20240628",
+        "trailing_session_count": 729,
+        "percentile": 0.07818930041152264,
+        "verdict": "evaluable",
+        "unavailable_reason": null
+      },
+      {
+        "week_end": "20240705",
+        "trailing_session_count": 729,
+        "percentile": 0.0644718792866941,
+        "verdict": "evaluable",
+        "unavailable_reason": null
+      },
+      {
+        "week_end": "20240712",
+        "trailing_session_count": 729,
+        "percentile": 0.01783264746227709,
+        "verdict": "evaluable",
+        "unavailable_reason": null
+      },
+      {
+        "week_end": "20240719",
+        "trailing_session_count": 729,
+        "percentile": 0.0013717421124828531,
+        "verdict": "evaluable",
+        "unavailable_reason": null
+      },
+      {
+        "week_end": "20240726",
+        "trailing_session_count": 729,
+        "percentile": 0.05898491083676269,
+        "verdict": "evaluable",
+        "unavailable_reason": null
+      },
+      {
+        "week_end": "20240802",
+        "trailing_session_count": 729,
+        "percentile": 0.06035665294924554,
+        "verdict": "evaluable",
+        "unavailable_reason": null
+      },
+      {
+        "week_end": "20240809",
+        "trailing_session_count": 729,
+        "percentile": 0.1083676268861454,
+        "verdict": "evaluable",
+        "unavailable_reason": null
+      },
+      {
+        "week_end": "20240816",
+        "trailing_session_count": 729,
+        "percentile": 0.04526748971193416,
+        "verdict": "evaluable",
+        "unavailable_reason": null
+      },
+      {
+        "week_end": "20240823",
+        "trailing_session_count": 729,
+        "percentile": 0.037037037037037035,
+        "verdict": "evaluable",
+        "unavailable_reason": null
+      },
+      {
+        "week_end": "20240830",
+        "trailing_session_count": 729,
+        "percentile": 0.04526748971193416,
+        "verdict": "evaluable",
+        "unavailable_reason": null
+      },
+      {
+        "week_end": "20240906",
+        "trailing_session_count": 729,
+        "percentile": 0.17832647462277093,
+        "verdict": "evaluable",
+        "unavailable_reason": null
+      },
+      {
+        "week_end": "20240913",
+        "trailing_session_count": 729,
+        "percentile": 0.24691358024691357,
+        "verdict": "evaluable",
+        "unavailable_reason": null
+      },
+      {
+        "week_end": "20240920",
+        "trailing_session_count": 727,
+        "percentile": 0.171939477303989,
+        "verdict": "evaluable",
+        "unavailable_reason": null
+      },
+      {
+        "week_end": "20240927",
+        "trailing_session_count": 729,
+        "percentile": 0.0013717421124828531,
+        "verdict": "evaluable",
+        "unavailable_reason": null
+      },
+      {
+        "week_end": "20240930",
+        "trailing_session_count": 727,
+        "percentile": 0.001375515818431912,
+        "verdict": "evaluable",
+        "unavailable_reason": null
+      },
+      {
+        "week_end": "20241011",
+        "trailing_session_count": 729,
+        "percentile": 0.07270233196159122,
+        "verdict": "evaluable",
+        "unavailable_reason": null
+      },
+      {
+        "week_end": "20241018",
+        "trailing_session_count": 729,
+        "percentile": 0.12071330589849108,
+        "verdict": "evaluable",
+        "unavailable_reason": null
+      },
+      {
+        "week_end": "20241025",
+        "trailing_session_count": 729,
+        "percentile": 0.24691358024691357,
+        "verdict": "evaluable",
+        "unavailable_reason": null
+      },
+      {
+        "week_end": "20241101",
+        "trailing_session_count": 729,
+        "percentile": 0.42661179698216734,
+        "verdict": "evaluable",
+        "unavailable_reason": null
+      },
+      {
+        "week_end": "20241108",
+        "trailing_session_count": 729,
+        "percentile": 0.46502057613168724,
+        "verdict": "evaluable",
+        "unavailable_reason": null
+      },
+      {
+        "week_end": "20241115",
+        "trailing_session_count": 729,
+        "percentile": 0.6364883401920439,
+        "verdict": "evaluable",
+        "unavailable_reason": null
+      },
+      {
+        "week_end": "20241122",
+        "trailing_session_count": 729,
+        "percentile": 0.7421124828532236,
+        "verdict": "evaluable",
+        "unavailable_reason": null
+      },
+      {
+        "week_end": "20241129",
+        "trailing_session_count": 729,
+        "percentile": 0.6570644718792867,
+        "verdict": "evaluable",
+        "unavailable_reason": null
+      },
+      {
+        "week_end": "20241206",
+        "trailing_session_count": 729,
+        "percentile": 0.5912208504801097,
+        "verdict": "evaluable",
+        "unavailable_reason": null
+      },
+      {
+        "week_end": "20241213",
+        "trailing_session_count": 729,
+        "percentile": 0.6680384087791496,
+        "verdict": "evaluable",
+        "unavailable_reason": null
+      },
+      {
+        "week_end": "20241220",
+        "trailing_session_count": 729,
+        "percentile": 0.7283950617283951,
+        "verdict": "evaluable",
+        "unavailable_reason": null
+      },
+      {
+        "week_end": "20241227",
+        "trailing_session_count": 729,
+        "percentile": 0.6310013717421125,
+        "verdict": "evaluable",
+        "unavailable_reason": null
+      },
+      {
+        "week_end": "20250103",
+        "trailing_session_count": 728,
+        "percentile": 0.8392857142857143,
+        "verdict": "evaluable",
+        "unavailable_reason": null
+      },
+      {
+        "week_end": "20250110",
+        "trailing_session_count": 729,
+        "percentile": 0.8545953360768176,
+        "verdict": "evaluable",
+        "unavailable_reason": null
+      },
+      {
+        "week_end": "20250117",
+        "trailing_session_count": 729,
+        "percentile": 0.7585733882030178,
+        "verdict": "evaluable",
+        "unavailable_reason": null
+      },
+      {
+        "week_end": "20250124",
+        "trailing_session_count": 729,
+        "percentile": 0.6652949245541838,
+        "verdict": "evaluable",
+        "unavailable_reason": null
+      },
+      {
+        "week_end": "20250127",
+        "trailing_session_count": 727,
+        "percentile": 0.5598349381017882,
+        "verdict": "evaluable",
+        "unavailable_reason": null
+      },
+      {
+        "week_end": "20250207",
+        "trailing_session_count": 728,
+        "percentile": 0.6016483516483516,
+        "verdict": "evaluable",
+        "unavailable_reason": null
+      },
+      {
+        "week_end": "20250214",
+        "trailing_session_count": 728,
+        "percentile": 0.6304945054945055,
+        "verdict": "evaluable",
+        "unavailable_reason": null
+      },
+      {
+        "week_end": "20250221",
+        "trailing_session_count": 728,
+        "percentile": 0.6373626373626373,
+        "verdict": "evaluable",
+        "unavailable_reason": null
+      },
+      {
+        "week_end": "20250228",
+        "trailing_session_count": 728,
+        "percentile": 0.8337912087912088,
+        "verdict": "evaluable",
+        "unavailable_reason": null
+      },
+      {
+        "week_end": "20250307",
+        "trailing_session_count": 728,
+        "percentile": 0.7692307692307693,
+        "verdict": "evaluable",
+        "unavailable_reason": null
+      },
+      {
+        "week_end": "20250314",
+        "trailing_session_count": 728,
+        "percentile": 0.7101648351648352,
+        "verdict": "evaluable",
+        "unavailable_reason": null
+      },
+      {
+        "week_end": "20250321",
+        "trailing_session_count": 728,
+        "percentile": 0.875,
+        "verdict": "evaluable",
+        "unavailable_reason": null
+      },
+      {
+        "week_end": "20250328",
+        "trailing_session_count": 728,
+        "percentile": 0.8585164835164835,
+        "verdict": "evaluable",
+        "unavailable_reason": null
+      },
+      {
+        "week_end": "20250403",
+        "trailing_session_count": 727,
+        "percentile": 0.7854195323246217,
+        "verdict": "evaluable",
+        "unavailable_reason": null
+      },
+      {
+        "week_end": "20250411",
+        "trailing_session_count": 729,
+        "percentile": 0.6159122085048011,
+        "verdict": "evaluable",
+        "unavailable_reason": null
+      },
+      {
+        "week_end": "20250418",
+        "trailing_session_count": 729,
+        "percentile": 0.5432098765432098,
+        "verdict": "evaluable",
+        "unavailable_reason": null
+      },
+      {
+        "week_end": "20250425",
+        "trailing_session_count": 729,
+        "percentile": 0.5253772290809328,
+        "verdict": "evaluable",
+        "unavailable_reason": null
+      },
+      {
+        "week_end": "20250430",
+        "trailing_session_count": 727,
+        "percentile": 0.515818431911967,
+        "verdict": "evaluable",
+        "unavailable_reason": null
+      },
+      {
+        "week_end": "20250509",
+        "trailing_session_count": 729,
+        "percentile": 0.4993141289437586,
+        "verdict": "evaluable",
+        "unavailable_reason": null
+      },
+      {
+        "week_end": "20250516",
+        "trailing_session_count": 729,
+        "percentile": 0.48010973936899864,
+        "verdict": "evaluable",
+        "unavailable_reason": null
+      },
+      {
+        "week_end": "20250523",
+        "trailing_session_count": 729,
+        "percentile": 0.49657064471879286,
+        "verdict": "evaluable",
+        "unavailable_reason": null
+      },
+      {
+        "week_end": "20250530",
+        "trailing_session_count": 729,
+        "percentile": 0.5006858710562414,
+        "verdict": "evaluable",
+        "unavailable_reason": null
+      },
+      {
+        "week_end": "20250606",
+        "trailing_session_count": 729,
+        "percentile": 0.4609053497942387,
+        "verdict": "evaluable",
+        "unavailable_reason": null
+      },
+      {
+        "week_end": "20250613",
+        "trailing_session_count": 729,
+        "percentile": 0.5020576131687243,
+        "verdict": "evaluable",
+        "unavailable_reason": null
+      },
+      {
+        "week_end": "20250620",
+        "trailing_session_count": 729,
+        "percentile": 0.5171467764060357,
+        "verdict": "evaluable",
+        "unavailable_reason": null
+      },
+      {
+        "week_end": "20250627",
+        "trailing_session_count": 729,
+        "percentile": 0.49382716049382713,
+        "verdict": "evaluable",
+        "unavailable_reason": null
+      },
+      {
+        "week_end": "20250704",
+        "trailing_session_count": 729,
+        "percentile": 0.4279835390946502,
+        "verdict": "evaluable",
+        "unavailable_reason": null
+      },
+      {
+        "week_end": "20250711",
+        "trailing_session_count": 729,
+        "percentile": 0.44170096021947874,
+        "verdict": "evaluable",
+        "unavailable_reason": null
+      },
+      {
+        "week_end": "20250718",
+        "trailing_session_count": 729,
+        "percentile": 0.5034293552812071,
+        "verdict": "evaluable",
+        "unavailable_reason": null
+      },
+      {
+        "week_end": "20250725",
+        "trailing_session_count": 729,
+        "percentile": 0.551440329218107,
+        "verdict": "evaluable",
+        "unavailable_reason": null
+      },
+      {
+        "week_end": "20250801",
+        "trailing_session_count": 729,
+        "percentile": 0.6337448559670782,
+        "verdict": "evaluable",
+        "unavailable_reason": null
+      },
+      {
+        "week_end": "20250808",
+        "trailing_session_count": 729,
+        "percentile": 0.607681755829904,
+        "verdict": "evaluable",
+        "unavailable_reason": null
+      },
+      {
+        "week_end": "20250815",
+        "trailing_session_count": 729,
+        "percentile": 0.6433470507544582,
+        "verdict": "evaluable",
+        "unavailable_reason": null
+      },
+      {
+        "week_end": "20250822",
+        "trailing_session_count": 729,
+        "percentile": 0.6707818930041153,
+        "verdict": "evaluable",
+        "unavailable_reason": null
+      },
+      {
+        "week_end": "20250829",
+        "trailing_session_count": 729,
+        "percentile": 0.9423868312757202,
+        "verdict": "evaluable",
+        "unavailable_reason": null
+      },
+      {
+        "week_end": "20250905",
+        "trailing_session_count": 729,
+        "percentile": 0.9958847736625515,
+        "verdict": "evaluable",
+        "unavailable_reason": null
+      },
+      {
+        "week_end": "20250912",
+        "trailing_session_count": 729,
+        "percentile": 0.9972565157750343,
+        "verdict": "evaluable",
+        "unavailable_reason": null
+      },
+      {
+        "week_end": "20250919",
+        "trailing_session_count": 730,
+        "percentile": 1.0,
+        "verdict": "evaluable",
+        "unavailable_reason": null
+      },
+      {
+        "week_end": "20250926",
+        "trailing_session_count": 730,
+        "percentile": 0.9986301369863013,
+        "verdict": "evaluable",
+        "unavailable_reason": null
+      },
+      {
+        "week_end": "20250930",
+        "trailing_session_count": 728,
+        "percentile": 0.9862637362637363,
+        "verdict": "evaluable",
+        "unavailable_reason": null
+      },
+      {
+        "week_end": "20251010",
+        "trailing_session_count": 729,
+        "percentile": 0.9890260631001372,
+        "verdict": "evaluable",
+        "unavailable_reason": null
+      },
+      {
+        "week_end": "20251017",
+        "trailing_session_count": 729,
+        "percentile": 0.9917695473251029,
+        "verdict": "evaluable",
+        "unavailable_reason": null
+      },
+      {
+        "week_end": "20251024",
+        "trailing_session_count": 729,
+        "percentile": 0.9725651577503429,
+        "verdict": "evaluable",
+        "unavailable_reason": null
+      },
+      {
+        "week_end": "20251031",
+        "trailing_session_count": 729,
+        "percentile": 0.9835390946502057,
+        "verdict": "evaluable",
+        "unavailable_reason": null
+      },
+      {
+        "week_end": "20251107",
+        "trailing_session_count": 729,
+        "percentile": 0.9657064471879286,
+        "verdict": "evaluable",
+        "unavailable_reason": null
+      },
+      {
+        "week_end": "20251114",
+        "trailing_session_count": 729,
+        "percentile": 0.9657064471879286,
+        "verdict": "evaluable",
+        "unavailable_reason": null
+      },
+      {
+        "week_end": "20251121",
+        "trailing_session_count": 729,
+        "percentile": 1.0,
+        "verdict": "evaluable",
+        "unavailable_reason": null
+      },
+      {
+        "week_end": "20251128",
+        "trailing_session_count": 729,
+        "percentile": 0.99039780521262,
+        "verdict": "evaluable",
+        "unavailable_reason": null
+      },
+      {
+        "week_end": "20251205",
+        "trailing_session_count": 729,
+        "percentile": 0.9821673525377229,
+        "verdict": "evaluable",
+        "unavailable_reason": null
+      },
+      {
+        "week_end": "20251212",
+        "trailing_session_count": 729,
+        "percentile": 0.9972565157750343,
+        "verdict": "evaluable",
+        "unavailable_reason": null
+      },
+      {
+        "week_end": "20251219",
+        "trailing_session_count": 729,
+        "percentile": 0.9917695473251029,
+        "verdict": "evaluable",
+        "unavailable_reason": null
+      },
+      {
+        "week_end": "20251226",
+        "trailing_session_count": 729,
+        "percentile": 0.9753086419753086,
+        "verdict": "evaluable",
+        "unavailable_reason": null
+      },
+      {
+        "week_end": "20251231",
+        "trailing_session_count": 727,
+        "percentile": 0.9669876203576341,
+        "verdict": "evaluable",
+        "unavailable_reason": null
+      },
+      {
+        "week_end": "20260109",
+        "trailing_session_count": 728,
+        "percentile": 0.9464285714285714,
+        "verdict": "evaluable",
+        "unavailable_reason": null
+      },
+      {
+        "week_end": "20260116",
+        "trailing_session_count": 728,
+        "percentile": 1.0,
+        "verdict": "evaluable",
+        "unavailable_reason": null
+      },
+      {
+        "week_end": "20260123",
+        "trailing_session_count": 728,
+        "percentile": 0.9917582417582418,
+        "verdict": "evaluable",
+        "unavailable_reason": null
+      },
+      {
+        "week_end": "20260130",
+        "trailing_session_count": 733,
+        "percentile": 0.990450204638472,
+        "verdict": "evaluable",
+        "unavailable_reason": null
+      },
+      {
+        "week_end": "20260206",
+        "trailing_session_count": 733,
+        "percentile": 0.975443383356071,
+        "verdict": "evaluable",
+        "unavailable_reason": null
+      },
+      {
+        "week_end": "20260213",
+        "trailing_session_count": 733,
+        "percentile": 0.897680763983629,
+        "verdict": "evaluable",
+        "unavailable_reason": null
+      },
+      {
+        "week_end": "20260227",
+        "trailing_session_count": 727,
+        "percentile": 0.9270976616231087,
+        "verdict": "evaluable",
+        "unavailable_reason": null
+      },
+      {
+        "week_end": "20260306",
+        "trailing_session_count": 727,
+        "percentile": 0.9188445667125172,
+        "verdict": "evaluable",
+        "unavailable_reason": null
+      },
+      {
+        "week_end": "20260313",
+        "trailing_session_count": 727,
+        "percentile": 0.953232462173315,
+        "verdict": "evaluable",
+        "unavailable_reason": null
+      },
+      {
+        "week_end": "20260320",
+        "trailing_session_count": 727,
+        "percentile": 0.9958734525447043,
+        "verdict": "evaluable",
+        "unavailable_reason": null
+      },
+      {
+        "week_end": "20260327",
+        "trailing_session_count": 727,
+        "percentile": 0.9917469050894085,
+        "verdict": "evaluable",
+        "unavailable_reason": null
+      },
+      {
+        "week_end": "20260403",
+        "trailing_session_count": 727,
+        "percentile": 0.9834938101788171,
+        "verdict": "evaluable",
+        "unavailable_reason": null
+      },
+      {
+        "week_end": "20260410",
+        "trailing_session_count": 727,
+        "percentile": 0.951856946354883,
+        "verdict": "evaluable",
+        "unavailable_reason": null
+      },
+      {
+        "week_end": "20260417",
+        "trailing_session_count": 727,
+        "percentile": 0.9559834938101788,
+        "verdict": "evaluable",
+        "unavailable_reason": null
+      },
+      {
+        "week_end": "20260424",
+        "trailing_session_count": 727,
+        "percentile": 0.9738651994497937,
+        "verdict": "evaluable",
+        "unavailable_reason": null
+      },
+      {
+        "week_end": "20260430",
+        "trailing_session_count": 726,
+        "percentile": 0.9490358126721763,
+        "verdict": "evaluable",
+        "unavailable_reason": null
+      },
+      {
+        "week_end": "20260508",
+        "trailing_session_count": 727,
+        "percentile": 0.9917469050894085,
+        "verdict": "evaluable",
+        "unavailable_reason": null
+      },
+      {
+        "week_end": "20260515",
+        "trailing_session_count": 727,
+        "percentile": 1.0,
+        "verdict": "evaluable",
+        "unavailable_reason": null
+      },
+      {
+        "week_end": "20260522",
+        "trailing_session_count": 727,
+        "percentile": 0.9986244841815681,
+        "verdict": "evaluable",
+        "unavailable_reason": null
+      },
+      {
+        "week_end": "20260529",
+        "trailing_session_count": 727,
+        "percentile": 0.9972489683631361,
+        "verdict": "evaluable",
+        "unavailable_reason": null
+      },
+      {
+        "week_end": "20260605",
+        "trailing_session_count": 727,
+        "percentile": 1.0,
+        "verdict": "evaluable",
+        "unavailable_reason": null
+      },
+      {
+        "week_end": "20260612",
+        "trailing_session_count": 727,
+        "percentile": 0.9834938101788171,
+        "verdict": "evaluable",
+        "unavailable_reason": null
+      },
+      {
+        "week_end": "20260618",
+        "trailing_session_count": 726,
+        "percentile": 0.9986225895316805,
+        "verdict": "evaluable",
+        "unavailable_reason": null
+      },
+      {
+        "week_end": "20260626",
+        "trailing_session_count": 728,
+        "percentile": 1.0,
+        "verdict": "evaluable",
+        "unavailable_reason": null
+      },
+      {
+        "week_end": "20260703",
+        "trailing_session_count": 728,
+        "percentile": 0.9972527472527473,
+        "verdict": "evaluable",
+        "unavailable_reason": null
+      },
+      {
+        "week_end": "20260710",
+        "trailing_session_count": 728,
+        "percentile": 0.9862637362637363,
+        "verdict": "evaluable",
+        "unavailable_reason": null
+      },
+      {
+        "week_end": "20260717",
+        "trailing_session_count": 728,
+        "percentile": 0.9835164835164835,
+        "verdict": "evaluable",
+        "unavailable_reason": null
+      },
+      {
+        "week_end": "20260724",
+        "trailing_session_count": 728,
+        "percentile": 0.9409340659340659,
+        "verdict": "evaluable",
+        "unavailable_reason": null
+      },
+      {
+        "week_end": "20260731",
+        "trailing_session_count": 728,
+        "percentile": 0.9189560439560439,
+        "verdict": "evaluable",
+        "unavailable_reason": null
+      },
+      {
+        "week_end": "20260805",
+        "trailing_session_count": 726,
+        "percentile": 0.9118457300275482,
+        "verdict": "evaluable",
+        "unavailable_reason": null
+      }
+    ]
+  },
+  "not_verified": [
+    "no percentile threshold or cash factor is proposed here; both remain user adjudications",
+    "the pre-BSE portion of the ratio sums two exchanges by the date-effective rule; BSE is about 0.3% of the total, an accepted step at its first published session",
+    "weeks whose rolling three-year window reaches before the fetched history are reported as warm-up, not scored",
+    "this artifact was rebuilt from persisted raw payloads without any new provider call; the raw files are gitignored and mutable, so their lineage is only as strong as the raw root"
+  ],
+  "margin_fetch": {
+    "row_cap": 2000,
+    "segment_max_sessions": 300,
+    "segment_count": 10,
+    "truncated_segment_count": 0,
+    "truncated": false,
+    "status": "complete"
+  },
+  "execution": {
+    "call_budget": 12,
+    "calls_made": 0,
+    "within_budget": true,
+    "successful_calls": 0,
+    "failed_or_skipped_calls": 0,
+    "status": "completed_with_errors",
+    "tushare_version": "replayed_without_new_call"
+  },
+  "storage": {
+    "raw_payload_root": "provider_samples/a_short_margin_overheat_20260806",
+    "raw_payload_root_gitignored": true,
+    "tracked_summary_contains_raw_rows": false,
+    "tracked_summary_contains_request_urls": false,
+    "tracked_summary_contains_secret": false
+  }
+}

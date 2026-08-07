@@ -1652,6 +1652,171 @@
             }
           }
         },
+        "margin_overheat_control": {
+          "type": "object",
+          "description": "#16 全市场融资过热现金控制(队列序 19)。percentile/balance 来自 analysis_input.market_context.margin_overheat；percentile_threshold 与 cash_factor 只来自 engine/a_short_margin_overheat.py 的治理常量，不接受 analysis_input 传入。",
+          "additionalProperties": false,
+          "required": [
+            "source_as_of",
+            "source_path",
+            "percentile",
+            "ratio",
+            "balance_yuan",
+            "denominator_float_mv_yuan",
+            "balance_unit",
+            "window_start",
+            "window_end",
+            "requested_session_count",
+            "observed_session_count",
+            "coverage_complete",
+            "production_effect_enabled",
+            "percentile_threshold",
+            "predicate_triggered",
+            "cash_factor",
+            "reason"
+          ],
+          "properties": {
+            "source_as_of": {
+              "type": "string",
+              "pattern": "^[0-9]{8}$"
+            },
+            "source_path": {
+              "const": "analysis_input.market_context.margin_overheat"
+            },
+            "percentile": {
+              "type": [
+                "number",
+                "null"
+              ],
+              "minimum": 0,
+              "maximum": 1
+            },
+            "ratio": {
+              "type": [
+                "number",
+                "null"
+              ],
+              "exclusiveMinimum": 0,
+              "maximum": 1
+            },
+            "balance_yuan": {
+              "type": [
+                "number",
+                "null"
+              ],
+              "exclusiveMinimum": 0
+            },
+            "denominator_float_mv_yuan": {
+              "type": [
+                "number",
+                "null"
+              ],
+              "exclusiveMinimum": 0
+            },
+            "balance_unit": {
+              "const": "CNY"
+            },
+            "window_start": {
+              "type": [
+                "string",
+                "null"
+              ],
+              "pattern": "^[0-9]{8}$"
+            },
+            "window_end": {
+              "type": [
+                "string",
+                "null"
+              ],
+              "pattern": "^[0-9]{8}$"
+            },
+            "requested_session_count": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "observed_session_count": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "coverage_complete": {
+              "type": "boolean"
+            },
+            "production_effect_enabled": {
+              "type": "boolean"
+            },
+            "percentile_threshold": {
+              "type": [
+                "number",
+                "null"
+              ],
+              "exclusiveMinimum": 0,
+              "maximum": 1
+            },
+            "predicate_triggered": {
+              "type": "boolean"
+            },
+            "cash_factor": {
+              "type": "number",
+              "exclusiveMinimum": 0,
+              "maximum": 1
+            },
+            "reason": {
+              "type": "string",
+              "enum": [
+                "coverage_incomplete",
+                "threshold_unset",
+                "not_overheated",
+                "production_effect_disabled",
+                "cash_factor_unset",
+                "margin_overheated"
+              ]
+            }
+          }
+        },
+        "cash_factor_stack": {
+          "type": "object",
+          "description": "多道现金系数门相遇时取最小值、绝不相乘(队列序 19 口径 5)。binding_controls 记录取到最小值的那些控制。",
+          "additionalProperties": false,
+          "required": [
+            "effective_cash_factor",
+            "control_factors",
+            "binding_controls"
+          ],
+          "properties": {
+            "effective_cash_factor": {
+              "type": "number",
+              "exclusiveMinimum": 0,
+              "maximum": 1
+            },
+            "control_factors": {
+              "type": "object",
+              "additionalProperties": false,
+              "properties": {
+                "pre_holiday_control": {
+                  "type": "number",
+                  "exclusiveMinimum": 0,
+                  "maximum": 1
+                },
+                "margin_overheat_control": {
+                  "type": "number",
+                  "exclusiveMinimum": 0,
+                  "maximum": 1
+                }
+              }
+            },
+            "binding_controls": {
+              "type": "array",
+              "uniqueItems": true,
+              "items": {
+                "type": "string",
+                "enum": [
+                  "pre_holiday_control",
+                  "margin_overheat_control"
+                ]
+              }
+            }
+          }
+        },
         "m05_mode": {
           "const": "conservative_degradation"
         },

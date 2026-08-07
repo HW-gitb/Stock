@@ -342,8 +342,10 @@ def _p4_admission() -> dict:
         "negative_at_36": {"mean_delta_pp_max": -0.25, "bootstrap_upper_pp_max": 0.0},
         "automatic_production_write": False,
     }
+    # Written in the direct `_load(ROOT / ...)` form on purpose: the authority
+    # guard reads call sites statically and treats indirection as unreadable.
+    governance = _load(ROOT / "presets" / "egs_industry_heat_governance_20260611.json")
     governance_path = ROOT / "presets" / "egs_industry_heat_governance_20260611.json"
-    governance = _load(governance_path)
     try:
         active_profile = str(governance["active_profile"])
         active_weights = governance["profiles"][active_profile]
@@ -379,8 +381,49 @@ def _p4_admission() -> dict:
     )
 
 
-def admissions() -> dict[str, dict]:
-    """Return every active P0/P1/P2/P3/P4/P5 admission, fully revalidated."""
+#: Every file `admissions()` reads.  The registry cache below keys on these
+#: exact bytes (plus the sealing context), so an edited preset re-runs the full
+#: revalidation instead of ever returning a stale registry.  Adding a `_load`
+#: to a builder without extending this tuple would break that authority;
+#: `tests/test_a_short_experiment_admission_registry.py::
+#: AdmissionSourcePresetGuardTests` pins this module's `_load(ROOT / ...)`
+#: call sites to exactly this list and fails loudly on shapes it cannot read.
+_ADMISSION_SOURCE_PRESETS = (
+    "presets/a_short_factor_comparison_v2_governance_20260718.json",
+    "presets/a_short_factor_comparison_governance_20260714.json",
+    "presets/a_short_regime_action_comparison_governance_20260714.json",
+    "presets/a_short_industry_weight_comparison_governance_20260722.json",
+    # The guard exposed this fifth read the original enumeration missed: the
+    # P4 builder loads the industry-heat governance behind a variable, so an
+    # edit to it would have silently kept serving the stale cached registry.
+    "presets/egs_industry_heat_governance_20260611.json",
+)
+
+
+def _registry_authority_key() -> tuple:
+    """The complete external input of `admissions()`, as content, for caching."""
+    reads = []
+    for rel in _ADMISSION_SOURCE_PRESETS:
+        try:
+            reads.append((rel, (ROOT / rel).read_bytes()))
+        except OSError as exc:
+            raise AdmissionRegistryError(f"cannot read frozen admission source {rel}") from exc
+    return tuple(reads) + (_sealing_cache_context(),)
+
+
+@lru_cache(maxsize=4)
+def _cached_registry(authority_key: tuple) -> dict[str, dict]:
+    """One fully revalidated registry per exact byte-content of its inputs.
+
+    Comparison-track fingerprints call `admission_snapshot` per record, and the
+    uncached build re-sealed and re-parsed every admission each time -- ~36ms a
+    call, one of the two largest sinks in the whole A-short lane by profile.
+    The key holds the raw bytes of everything the build reads, so this is the
+    same revalidation, just not repeated for identical inputs.  The returned
+    object is shared and read-only inside this module; public callers get
+    copies.
+    """
+    del authority_key  # binds the cache key; the builders below re-read live
     out = {}
     for source in (_p0_admissions(), {"p1_regime_action_proxy": _p1_admission()}, _p2_admissions(), _p3_admissions(),
                    {"p4_stage3_rank_source": _p4_admission()}, _p5_admissions()):
@@ -391,16 +434,21 @@ def admissions() -> dict[str, dict]:
     return out
 
 
+def admissions() -> dict[str, dict]:
+    """Return every active P0/P1/P2/P3/P4/P5 admission, fully revalidated."""
+    return copy.deepcopy(_cached_registry(_registry_authority_key()))
+
+
 def get_admission(admission_id: str) -> dict:
     try:
-        return copy.deepcopy(admissions()[admission_id])
+        return copy.deepcopy(_cached_registry(_registry_authority_key())[admission_id])
     except KeyError as exc:
         raise AdmissionRegistryError(f"unknown active admission {admission_id!r}") from exc
 
 
 def admission_snapshot(*admission_ids: str) -> dict[str, dict]:
     """Public-safe identity data used by a lane's private epoch and public summary."""
-    registry = admissions()
+    registry = _cached_registry(_registry_authority_key())
     selected = {}
     for admission_id in admission_ids:
         admission = registry.get(admission_id)
@@ -416,8 +464,14 @@ def admission_snapshot(*admission_ids: str) -> dict[str, dict]:
     return selected
 
 
-def admission_snapshot_sha256(*admission_ids: str) -> str:
+@lru_cache(maxsize=64)
+def _snapshot_sha256_from_authority(admission_ids: tuple[str, ...], authority_key: tuple) -> str:
+    del authority_key  # binds the cache key; the snapshot reads the cached registry
     return _digest(admission_snapshot(*admission_ids))
+
+
+def admission_snapshot_sha256(*admission_ids: str) -> str:
+    return _snapshot_sha256_from_authority(tuple(admission_ids), _registry_authority_key())
 
 
 def p3b_external_comparison_tracks() -> tuple[dict[str, Any], ...]:

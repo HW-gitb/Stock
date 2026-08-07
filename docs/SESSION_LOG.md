@@ -1,5 +1,127 @@
 # Session Log
 
+## 2026-08-07 — Claude 审查 PASS（a-short：并行刀两条 Optional 已闭）
+
+- **Verdict/Action**: PASS。两条 Optional 都闭，且比我要的多做一半：我只提了「账本记墙钟」，他们连「墙钟被哪个模块钉住」这个可行动的一半也一并记了（`slowest_module` + `WALL_CLOCK_FLOOR` 控制台行）。A 的底层工作（把 `theme_forward_comparison` 变快）**明确未做且明确不塞进 Optional 轮**，理由是那要先 profile、属独立提速刀——判断正确，我那条本就是观察不是优化要求。
+- **Required**: 无。两条 Optional 的处置与 closure 见 `docs/system_risk_register.md` 的 `R-ASHORT-PARALLEL-LANE-RUNNER-REVIEW`（单一来源，本处不复述）。
+- **Verify**: review-evidence:148f3707fdbd。按用户指示不起全量（上轮 `CACHED GREEN 2510 OK` 仍绑当前代码态，按 rule 4 引用不重跑）。改动符号焦点包 `Ran 80 tests in 74.0s / OK`、`receipt:358f7a1cc6e2534e08416501`。整读 82 行 delta：`elapsed_seconds`/`deadline_seconds`/`slowest_module` 进 `run_detail`，`_report` 多一行 `WALL_CLOCK_FLOOR`。测试承重——植入 `time.sleep(3)` 的慢模块，断言 `slowest_module` 必须点名它（点名别的即红），另一条验 `run_detail` 经账本往返仍可被 `cached_green` 读到。
+- **Next**: Codex：执行
+
+## 2026-08-07 — Claude Code 修复（并行刀两条 Optional：墙钟进账本 + 下界模块显式化）
+
+- **Verdict/Action**: 修完，未 commit。两条要的是同一份数据，一起做。**B（账本不带墙钟）判据与方案都对，照做**——`run_detail` 增 `elapsed_seconds` / `deadline_seconds` / `slowest_module` / `slowest_module_seconds`，按 rule 4 引用账本的人不必再去 `.tools/state/runs/` 反算，那份 sidecar 是本机瞬态、换台机器就没了。**A 是前瞻观察、原文没给修法**，其可修部分是「让这个风险出现在审查方真会读的那份产物里」，故同一份数据加一行 `WALL_CLOCK_FLOOR`，明说下界由哪个模块决定、加 worker 到不了它下面。
+- **Required**: 无——`R-ASHORT-PARALLEL-LANE-RUNNER-REVIEW` 已 CLOSED，本轮是它收口后新增的两条 Optional。处置与 Closure tests 只见 register。**A 的底层工作（把 `test_a_short_theme_forward_comparison` 变快）明确未做**：那是独立提速刀、需先 profile，不塞进 optional 修复。
+- **Verify**: 闭合证据就是账本本身——`run_detail` 现在直接读得到 `elapsed_seconds: 239.9 / deadline_seconds: 860 / slowest_module: test_a_short_theme_forward_comparison / slowest_module_seconds: 236.7`；输出行 `WALL_CLOCK_FLOOR 236.7s of 239.9s (98.7%)`，**独立复现了审查方 97.8% 那条观察**。全量 `PASS 2510 / 239.9s / mode=parallel`，收据 `receipt:86584af981bffe1054bfaad8`（207 OK，effect bundle 已带）；driver 17 OK、driver+账本+launcher 60 OK。
+- **Pre-Codex self-review**: A-F checked。A：两条 Optional 同源、一并处置，非只修被点名那条。B：无孤儿。C：反向=植入一个 `time.sleep(3)` 的模块做**下界对照**，`slowest_module` 与 `WALL_CLOCK_FLOOR` 行必须点名它、报任何其他模块即红（否则该字段只是装饰）；账本侧断言 `run_detail` 逐键落盘并可被 `cached_green` 读回。D：A 取最窄解——记录风险，不越界起提速刀。E 未动 CURRENT。F diff-check 干净、`py_compile=24`。matrix=run_detail四字段+FLOOR行+下界植入+账本落盘；register=updated；handoff=n/a（同刀节已在册）；focused=207 OK；full-lane=`2510 OK / 239.9s / mode=parallel`；door=治理门 75 OK
+- **Next**: Claude Code：审查（序 19 批 + 并行刀 + 三轮修复同树）
+
+## 2026-08-07 — Claude 审查 PASS（a-short：并行 runner 刀首次真实全量绿，序 19 批整体收口）
+
+- **Verdict/Action**: PASS，已提交并合入 master。上轮唯一挡路的「并行驱动从未扛过一次全量」已闭：ledger 记 `2510 OK`，计数门满口径（103/103 模块、2510/2510 用例、未派发 0、串行尾巴**空集**）。墙钟我从 sidecar 独立算出约 338s（逐模块合计 2261s、最长单模块 330.7s），对比改造前 826.4s，距 860 上限余 61%。`R-ASHORT-FULL-PACK-NOW-EXCEEDS-ITS-OWN-CEILING` 一并闭合。
+- **Required**: 无。两条 Optional（墙钟现由单一模块 `theme_forward_comparison` 决定 97.8%；账本 `run_detail` 不带 elapsed）记在 `R-ASHORT-PARALLEL-LANE-RUNNER-REVIEW`，与随之闭合的 `R-ASHORT-FULL-PACK-NOW-EXCEEDS-ITS-OWN-CEILING` 同见 `docs/system_risk_register.md`（单一来源，本处不复述），均不阻塞。
+- **Verify**: review-evidence:27cfc9949e43。全量按 rule 4 引用执行方记账不重跑：`CACHED GREEN a_short = 2510 OK`、`count_gate_equal=True`、`mode=parallel/workers=8`。本轮我另跑工具链验收 `Ran 131 / PASS`（上轮 `receipt:8c2fcdedfd7e309241cb7297`）与 us_short 侧 `Ran 165 / PASS / 4.5s`（`receipt:5961dcc60d25cefe6137359c`）。sidecar 103 行逐模块全 PASS。序 19 比率刀与提速刀批 numstat 与我跑绿那轮逐字相同，按 rule 8 未重审。上轮 Optional 的加固已实读接线（`matching_module_files` 由 `discover_modules:222` 消费，非死代码）。超时原因:核账本与 sidecar 反算墙钟、并二次确认工具文件 mtime 早于本轮开审（排除审查中途被改）。
+- **Next**: Codex：执行
+
+## 2026-08-07 — Claude Code 修复（并行刀 Optional：给计数门补一个独立于 loader 的锚）+ 审查方 Required 全量已记账
+
+- **Verdict/Action**: 修完，未 commit。审查方 Optional 的**判据成立**（计数门比的是「并行 vs 它自己的 discovery」，两侧会一起缩），但**他给的加固方案我没照做**：钉「上一次串行全量的 `Ran N`」会因测试数合法变化而天天假红、账本 `data[lane]` 每次覆写根本没存历史、且那个锚是已经跑不完的串行、只会永久失效。改用**每次重算的独立侧**：按 selector glob 文件系统（只降进有 `__init__.py` 的包，镜像 discovery 走法），把每个模块名解析回文件，要求匹配到的文件无一漏报。按 §5 只挡危险方向——少报 fail-closed 拒绝，多报只 loud 报出。
+- **Required**: 审查方 Required（并行驱动从未真正扛过一次真实全量）**已闭**——`PASS 2510 / 339.5s / mode=parallel`，收据 `receipt:d2e7165b5a712b211449d30e`（205 OK，`bundles=a_short_effect_contract`）。同时是 `R-ASHORT-FULL-PACK-NOW-EXCEEDS-ITS-OWN-CEILING` 的闭合条件。锚点顺手抓到一条真缺陷，新立 `R-USSHORT-SOFT-BOOST-CONSUMPTION-TEST-MODULE-IS-IMPORTED-TWICE`（open P3，未修，us_short 面）。正文均只见 register。
+- **Verify**: 植入对照用**审查方那条确切探针**（把 `discover_modules` 整体降一个模块）：**锚点关掉时 `PASS ran=3 discovered=3 count_gate_equal=True`——精确复现他观察到的假绿**；打开时 `REFUSED ... did not report 1 file(s); first: test_beta.py`。真 lane 不变量：两 lane 皆无文件漏报。driver+账本+launcher `58 OK`；focused `205 OK`；全量 `2510/2510` 计数门相等、`serial_tail=0`、a_short 无 DOUBLE_IMPORT；`py_compile=24`、`git diff --check` 干净。
+- **Pre-Codex self-review**: A-F checked。A：门按后果分级——少报会藏覆盖→拒，多报藏不住→只报，不是两头都拒。B：无孤儿。C：反向=关掉锚点复现假绿那一格。D：真 lane 断言取「无漏报」而非「模块数==文件数」——后者会被那条真实存在的双导入打红，而它并未丢任何覆盖。E 未动 CURRENT。F diff-check / py_compile 过。matrix=文件锚+解析回文件+双导入 loud+植入两格；register=updated；handoff=n/a（同刀节已在册）；focused=205 OK（effect bundle 已带）；full-lane=`2510 OK / 339.5s / mode=parallel`；door=治理门 75 OK
+- **Next**: Claude Code：审查（序 19 批 + 并行刀 + 两轮修复同树）
+
+## 2026-08-07 — Claude 审查 Pass-with-Required（a-short：并行 runner 刀 + 提交钩子边界；比率刀未变未重审）
+
+- **Verdict/Action**: Pass-with-Required，未提交。并行 runner 刀单元层面扎实：我给的四条修正落了三条（嵌套标记、计数门只挂绿路径、串行尾巴派生而非手写），第四条顺序建议未采纳但未造成冲突。pre-commit 那条是纯诚实性修复（阻塞门原先坐在「NEVER blocks」注释头下），判 PASS。序 19 比率刀 numstat 与上轮跑绿时逐字相同，按 rule 8 未重审。拦住的是：这个驱动**从未真正扛过一次全量**。
+- **Required**: `R-ASHORT-PARALLEL-LANE-RUNNER-REVIEW`（含闭合条件，同时闭合 `R-ASHORT-FULL-PACK-NOW-EXCEEDS-ITS-OWN-CEILING`）。正文只见 `docs/system_risk_register.md`。
+- **Verify**: review-evidence:82da9bcacdd3。验收超集 `Ran 131 tests / PASS / 112.2s`、`receipt:8c2fcdedfd7e309241cb7297`。自写探针：合成三模块六用例树并行 `PASS ran=6/6 count_gate_equal=True`；结构验证「计数不等→UNKNOWN」「未派发→FAIL」「清单来自调用方 selector」。按 rule 6 escalation 尝试真实全量，被 ledger **正当拒绝**（`missing bundle(s): a_short_effect_contract`），`check a_short` 亦报 `no cached green`。故并行的墙钟收益仍 `NOT_VERIFIED`。超时原因:先起工具链包再读 548 行 driver 与派生逻辑，并额外起了一次被拒的全量尝试。
+- **Next**: Codex：执行
+
+## 2026-08-07 — Claude Code 修复（提交钩子的 advisory/硬门边界；另两条判定后不修）
+
+- **Verdict/Action**: 修完，未 commit。先判后修：① 钩子那条**测试是对的、hook 是错的**——`9439c0b4` 把收据硬门插进了 advisory 注释头与其正文之间，于是文件字面上在「NEVER blocks」正下方放了道 `exit 1`；只改测试取窗是掩盖，故改 hook（**只挪注释、零行为改动**）并给硬门自己的头。② 我自己写的状态行与正文自相矛盾（正文已写闭合证据、状态行仍 `open P2`），改正。③ us_short 清单基线**判定不该我修**，见 Required。
+- **Required**: `R-TOOLS-PRECOMMIT-ADVISORY-BLOCK-TEST-IS-STALE-VS-THE-HOOK` → working-tree repaired。`R-ASHORT-FULL-PACK-NOW-EXCEEDS-ITS-OWN-CEILING` → closed by evidence，pending 审查。**不修** `R-USSHORT-TEST-IO-INVENTORY-BASELINE-REDS-ON-ANY-LANE-ADDING-A-TEST`：基线须按所在树重算，我树里多了 4 个别处没有的测试文件，在此重算会给别窗生成一份错的基线。正文均只见 register。
+- **Verify**: 三条治理门 `Ran 75 tests / OK`（修前 74 跑出 1 红）；`sh -n` 通过、hook diff 9 增 6 删（非整文件 CRLF 翻转）。**植入对照三行**：修后布局两条皆 PASS；`git show HEAD:` 的修前布局 → `warn_only` RED 且复现原始报错原文；只删硬门 `exit 1` → `warn_only` 仍 PASS、**新增反向控制转 RED**（证明新那条非冗余）。全量重跑 `PASS 2510 / 340.8s / mode=parallel`，`receipt:99a86eedd8e6bcb4f98facc8`(203 OK)。
+- **Pre-Codex self-review**: A-F checked。A：整类已扫——全仓读 `.githooks/` 的另三个测试只断言字符串与语法、不涉块结构，本类恰好只此一条断言。B：无孤儿（只挪注释、零行为改动）。C：反向=植入三行，含「只删硬门 `exit 1`」那格证明新断言非冗余。D：取最窄安全解（改 hook，不放宽测试取窗）。E 未动 CURRENT。F `sh -n` 过、diff 非整文件翻转。**动手前实证否掉自己一个怀疑**：第 49 行 `.md` 排除并未失效，故不虚报不立条目。matrix=注释挪位+反向控制+植入三行；register=updated；handoff=n/a（同刀节已在册）；focused=203 OK；full-lane=`2510 OK / 340.8s / mode=parallel`；door=治理门 75 OK
+- **Next**: Claude Code：审查（序 19 批 + 并行刀 + 本次修复同树）
+
+## 2026-08-06 — Claude Code 执行：并行 runner 刀 T1+T2（全量 826s→338.7s，已入账）
+
+- **Verdict/Action**: 完成，未 commit。用户批准整刀；方案第 4 条前置（等序 19 审查）已由本页上一条 Pass-with-Required 满足。a_short 全量 `PASS tests=2510 elapsed=338.7s deadline=860s mode=parallel` 已入账本——**860 上限一个字没动**，不是挪墙是让包装得下（96%→39%）。T1 把清单来源由静态扫描改成运行时观测（静态精度撑不住，一个模块静态报 51 处可疑而实测零仓库改动），103 模块逐个跑全部零仓库写；唯一真阳性是我上轮自己加的注册表 snapshot 腿，已密闭（实测由动 1 个文件变 0）。
+- **Required**: `R-ASHORT-PARALLEL-LANE-T2-DRIVER` 与 `R-ASHORT-PARALLEL-LANE-T1-ISOLATION` = working-tree implemented / `OPEN-NOT_VERIFIED`；`R-ASHORT-FULL-PACK-NOW-EXCEEDS-ITS-OWN-CEILING` 闭合证据已取得（待审查确认）。另**新立** `R-USSHORT-TEST-IO-INVENTORY-BASELINE-REDS-ON-ANY-LANE-ADDING-A-TEST`（open P3，未修，属 us_short lane 的面）。正文均只见 register。
+- **Verify**: review-evidence:not_available（本轮为执行非审查，未触发 gate hook，证据全为工具实跑回显）。验收矩阵八格实跑：计数门 `2510==2510`；植入红→归属到模块+用例名；植入挂死→单模块被杀且 deadline 内返回；植入 `os._exit(0)`→UNKNOWN 不冒充绿；少派一个模块→全绿仍 FAIL(125)；连烧 3 遍 `2510/2510/2510` 零 flaky（237.8/241.3/341.1s）；103 并发后收据完好（`tests=180`+bundle）。driver 测试 14 OK、账本+launcher 52 OK、`receipt:11eabf5e5dead775fc6fca42`（180 OK）。**抓到一条串行原理上看不见的缺陷**：`us_short_private_test_root` 的 `msvcrt.locking` 跨进程锁使 5 个 us_short 模块并发假红，已按方案建**派生式**串行尾巴（判据=import 闭包能否到达持锁源码；a_short 空集、us_short 59 个；植入对照走中间 helper 间接 import）。**两条削弱如实记**：验收④真 lane 上取不到串行侧（两 lane 串行皆 TIMEOUT@860）；按模块分进程比串行更隔离，跨模块副作用耦合不再被覆盖。
+- **Pre-Codex self-review**: A-F checked。A：常量单点化（`FULL_PACK_RUNTIME_ARGS` 移入 `bounded_unittest`，消掉两份需同步的定义）；串行尾巴判据整类扫（`msvcrt.locking`/`fcntl.flock|lockf` 三形态）。B：`_runtime_unittest_args` 因我的改动成孤儿已删，全仓引用=0。C：反向=植入对照七格。D：worker import path 走最窄安全解（继承 discovery 自报的 `sys.path`，不加 `tests.` 前缀——加前缀会导入另一个模块对象）。E 未动 CURRENT。F `git diff --check` 干净、`py_compile=23`。matrix=driver14+ledger/launcher52+focused180；register=updated；handoff=updated；full-lane=`2510 OK / 338.7s / mode=parallel`；door=doc-governance 在 focused 包内。
+- **Next**: Claude Code：审查（序 19 批与本刀在同一工作树，一起看）
+
+## 2026-08-06 — Claude 审查 Pass-with-Required（序 19 比率刀 + 准入守卫 + 提速刀批）
+
+- **Verdict/Action**: Pass-with-Required，未提交。代码侧我逐条独立验过，全绿：比率刀三条核心声称属实（首日未写死、反截断用冻结常量、证据窗已与实盘门同常量）、产物自洽、换量确实奏效（周分位中位数由 0.9861 降到 0.4966）。我上轮那条 Required 闭得比要求更严（含我点名的 `:466` 腿，且清单由 4 补到 5，证实当时确已漏一个读点）。唯一挡住 clean PASS 的是全量天花板——基础设施问题，非本刀缺陷，需你裁。
+- **Required**: `R-ASHORT-FULL-PACK-NOW-EXCEEDS-ITS-OWN-CEILING`（open，二选一均需用户裁）。本轮审查记录见 `R-ASHORT-SEQ19-RATIO-KNIFE-REVIEW`。正文只见 `docs/system_risk_register.md`。
+- **Verify**: review-evidence:not_available（本轮命令未触发 review-gate hook，无注入 token，证据全为工具实跑回显）。验收超集 `Ran 875 tests in 685.1s / OK`、`receipt:dd83d6ae0844b864e2e6b65a`。自写探针 9/9：万元分母与自相矛盾 ratio 均被恒等式拒；BSE 日期生效三腿（首日前 1400/1400 对账、首日后缺一日 fail-closed、零 BSE 触及冻结日判截断）；证据默认常量 == 实盘 600。产物复算 `|r×d−b|/b = 0.0`、实盘窗 726/726 与证据窗 1454 已分报、`181+127=308`。`20230213` 全仓零命中确认未写死。full lane 仍 `NOT_VERIFIED`（860 秒结构性越线）。
+- **Next**: 用户裁定全量上限或并行刀
+
+## 2026-08-06 — Claude Code 修复（比率刀产物的双窗口口径混报）
+
+- **Verdict/Action**: 修完，未 commit。**先更正一个事实**：主树审查方尚未对比率刀出新 verdict，register 里审查方开出的三条（注册表守卫 P2、下限门 P2、九条 Optional）状态已是 repaired/dispositioned，故本轮修的是**我自己上轮自审立项、当时判轻了的那条**。产物顶层把六年证据窗跨度与三年实盘窗计数混在一起报，`coverage_complete=true` 与 `726/1454` 并列，读者会算出 49.9% 覆盖率或把分位读成六年窗的数——而分位正是裁阈值要用的量。顶层五项统一为实盘窗，六年史另开 `evidence_window`。
+- **Required**: 双窗口修复节与 Closure 写进 `R-ASHORT-SEQ19-RATIO-CRITERION-KNIFE`（原「复审可裁是否改名」的轻判已在该条作废）。另**补立** `R-ASHORT-FULL-PACK-NOW-EXCEEDS-ITS-OWN-CEILING`（P2）：全量在最终代码态无绿记录，此前只记 SESSION_LOG 未入 register 是我的漏项；与 `R-USSHORT-FULL-PACK-NOW-EXCEEDS-ITS-OWN-CEILING` 同类，两 lane 同时越各自上限。正文均只见 register。
+- **Verify**: review-evidence:199d71b8dc50。两 margin 模块 `Ran 57 tests / OK`。**植入对照实跑**：顶层计数改回 `len(sessions)` → `AssertionError: 1450 != 783 : a complete live window must not look half-covered`，还原后 sha256 逐字节一致。产物零调用 replay 重生成并过 schema：实盘窗 `20230807..20260805` `726/726` complete、证据窗 `20200806..20260805` 1454，**分位 0.9118 / 比率 0.043574 逐位不变**。`py_compile` + JSON 校验过。full lane 未重跑：上轮已 `TIMEOUT@860 UNKNOWN`、越线原因未变，按 rule 7(e) 不重跑碰运气。
+- **Pre-Codex self-review**: A-F checked。A：双窗口整类三面核过（顶层五项、`evidence_window` 块、schema required+说明），非只改被点名那一处。A.6 权威链终点=`margin_overheat.window_start()` 的滚动窗定义。B：全仓 `len(sessions)` 作顶层计数残留=0。C：反向即植入对照。D=N-A；E 未动 CURRENT/README。F `git diff --check` 干净。matrix=顶层五项+evidence_window+schema+植入；register=updated；handoff=n/a（同刀节已在册）；focused=57 OK；full-lane=not_rerun: 上轮 TIMEOUT 原因未变（rule 7(e)）；door=route+doc-governance 见下条命令。
+- **Next**: Claude Code：审查
+
+## 2026-08-06 — Claude Code 执行：序 19 判据换比率刀（裁决①②）+ ③已修毕确认 + ④实测净亏回滚
+
+- **Verdict/Action**: 完成，未 commit。①②：过热量改为 `rzye合计/000001.SH float_mv` 比率、交易所集按日期生效（BSE 自数据自证的 `20230213` 起必需，反作弊三腿）、证据升实盘同口径（每周完整滚动 3 年窗）+ 真实 6 年取数 11/12 调用。③上轮复审 Required 已在前节修毕、register 无新增。④effect memo 缓存实测净亏损（77s→102s，memo 测试本意测冷构建）已回滚还原。执行中抓到并修一条真缺陷：分母当日发布 vs margin 滞后一日 → 对账前按请求集筛行，否则实盘每天必 fail-closed。
+- **Required**: `R-ASHORT-SEQ19-RATIO-CRITERION-KNIFE` = working-tree implemented / `OPEN-NOT_VERIFIED`（判据、选项(a)落法、新表数字、口径差声明均在 register 单一来源）。
+- **Verify**: review-evidence:8d4064e07587。margin 两模块 56 OK；验收包 682 OK（`receipt:c1de5807ed0db575bfec092e`）；终树收据 119 OK（`receipt:774df899adaa7d984eb4c8e5`）。真实取数：1454/1454 六年全齐、当前比率 4.357%、**比率分位 0.912**、BSE 生效日 20230213；实盘同口径 181 可评周 p80/85/90/95 触发 54/52/48/40、最长连 25/25/24/18。**full lane `TIMEOUT exit=124 UNKNOWN elapsed=860.4s`**——上轮 PASS 826.4s、本轮 +25 条测试已结构性越线，按 rule 5 不上调上限、按 rule 7(e) 不重跑碰运气；860 内已打印用例无失败。万元反控/日期生效三腿/发布延迟对照见 register。
+- **Pre-Codex self-review**: A-F checked。A：新叶两条全员 override 三件套；日期生效整类三腿；A.6 权威链终点=冻结常量 `BSE_MARGIN_EXPECTED_BY`+数据自证首日。B：expanding-window 口径残留 grep=0。C：反向=万元分母拒/BSE 缺日拒补回过/2026 无 BSE 拒。D=N-A；E 未动 CURRENT。F diff-check/py_compile/JSON 过。matrix=engine14+evidence6+cash10+binding7+runner15+producer4；register=updated；handoff=updated；focused=56+682+119 OK；full-lane=TIMEOUT@860 UNKNOWN（越线待用户裁上限或并行刀）；door=route+doc-governance 55 OK。
+- **Next**: 用户裁：full lane 上限（如 1000s）或批并行 runner 刀；随后 Claude Code：审查
+
+## 2026-08-06 — Claude Code 修复（复审 FAIL 的注册表缓存权威守卫）
+
+- **Verdict/Action**: 修复完成，未 commit。按 Required 方案 (a) 把注释承诺的 AST 守卫真落地（不可解析 `_load` 形态 loud 标记，不隐形）。**守卫首跑抓到第五个真实读点**——`_p4_admission` 经变量间接读 industry-heat 治理 preset、不在清单内，修复前改它不会让缓存失效；已改直连形态并补清单第五份。顺手修留档条目的 dtype 语义差 Optional（两条等价性断言）。主动未做：不动 `del key` 第三处（审查方点名不在本类）。
+- **Required**: `R-ASHORT-ADMISSION-REGISTRY-CACHE-AUTHORITY-TUPLE-IS-UNGUARDED` → working-tree repaired；修复节 + Closure 五证（含 `:466` snapshot 腿）只见 `docs/system_risk_register.md`，本处不复述。
+- **Verify**: 守卫谓词=审查方转录版；植入两向（多一读点→转红；`_load(Path(name))`→loud 转红）。第五份 preset 同款权威植入：改字节→misses 1→2 重建，还原→命中原条目、字节复原。snapshot 腿：改 preset → `admission_snapshot_sha256` 重派生，还原逐位复原。消费者验收 8 模块 `Ran 218 tests / OK / 379s`（收据因我中途补测试被指纹守卫拒，行为正确）；终树态 `Ran 30 tests / OK`、`receipt:2ec5d0b26dfb73f92a621620`；registry 模块 17 OK。`static_contract_error=None`、`git diff --check` 干净。
+- **Pre-Codex self-review**: A-F checked。A：缺陷类按审查方清单逐项（只修共用 `_registry_authority_key` 的两处、一守卫覆盖四消费点、`:466` 腿单独断言）；A.6 终点=从仓库 AST 派生的谓词。B：`_ADMISSION_SOURCE_PRESETS` 全仓仅引擎+守卫两处。C：反向=两条植入。D=N-A；E 未动 CURRENT。F 过。matrix=守卫3+snapshot1+dtype2；register=updated；handoff=updated；focused=218+30+17 OK `receipt:2ec5d0b26dfb73f92a621620`；full-lane=not_triggered: 生产 runner 未动，`PASS 2498/826.4s` 仍有效；door=route+doc-governance 55 OK。
+- **Next**: Claude Code：复审
+
+## 2026-08-06 — Claude 复审 FAIL（序 19 P2 收口 + lane 提速刀批）
+
+- **Verdict/Action**: FAIL，未提交。序 19 的 P2 **已按指定最窄改法闭合**并经我植入对照证明承重（`build_evidence` 改判 `facts` 而非 `reconciled`、两种不可用原因分开点名、截断窗口状态由 `PARTIAL` 改 `NOT_VERIFIED`），我上轮点的 O-1/O-3/O-4 也有对应测试。拦住本轮的是提速刀批的新问题：准入注册表新缓存的权威清单，靠一条**注释声称存在、全仓实际没有**的守卫兜底。
+- **Required**: `R-ASHORT-ADMISSION-REGISTRY-CACHE-AUTHORITY-TUPLE-IS-UNGUARDED`（P2，含可直接抄的 AST 谓词与植入对照要求）；另 `R-ASHORT-SPEED-KNIFE-BATCH-CACHE-REVIEW` 留档七处缓存实测与一条 dtype 语义差 Optional。正文只见 `docs/system_risk_register.md`。
+- **Verify**: review-evidence:ae863bd36b9f。**植入对照**：挖掉 `MARGIN_OVERHEAT_MIN_WINDOW_SESSIONS` → 500 日窗口由 `NOT_VERIFIED/0档` 变回 `PARTIAL/4档/pct=1.0`，复现修复前缺陷，还原后逐字段一致。四处缓存 `cache_info()` hits>misses、currsize<<maxsize。Required 由 tests/ 全仓零命中 + AST 取四个 `_load` 点坐实，修复轮后复验仍成立。验收超集 `Ran 869 tests in 677.9s OK`、`receipt:823fd1e46b61f61117592229`（**结论后回写**：按 rule 3 在探针坐实后先出结论未等该包，包返回与结论一致，此前记的 UNKNOWN 作废）。full lane 按 rule 4 引用执行方 `PASS 2498/826.4s`。超时原因:等 678 秒超集且树在审查中移动需二次复验。
+- **Next**: Codex：修复
+
+## 2026-08-06 — Claude Code 修复（序 19 审查 FAIL 的 P2 + 九条 Optional 处置 + lane 提速刀收口）
+
+- **Verdict/Action**: 修复完成，未 commit。P2 按 register 点名的最窄改法修（证据表改受 `facts["coverage_complete"]` 的 600 日下限门保护，短窗点名会话数、空表、NOT_VERIFIED）；Optional 六修（O-1/3/4/5/6/7）二延（O-2/8 留通电刀）一声明闭合（O-9）；lane 提速六处内容键缓存全部单独立条声明。主动未做：不代拍阈值/换判据（用户裁决项）。
+- **Required**: `R-ASHORT-SEQ19-EVIDENCE-LEG-SKIPS-THE-MIN-WINDOW-FLOOR` → working-tree repaired；处置总表在 `R-ASHORT-SEQ19-REVIEW-OPTIONAL-BATCH`；缓存声明在 `R-ASHORT-LANE-SPEED-REGRESSION-CONTENT-KEYED-CACHES`（均 register 单一来源，本处不复述）。
+- **Verify**: **full lane `RESULT status=PASS exit=0 tests=2498 elapsed=826.4s`（ledger 已记 PASS，此前 TIMEOUT 无记录）**。margin 两模块 51 OK（closure ①500/599 ②725）；③植入实跑分支翻回 `reconciled` → ① `FAILED(1)`，还原逐字节一致。12 模块验收 848 OK/469s；守卫 10 OK；产物重生成分位/余额逐位不变、四档最长连续→全部 29、replay calls=0。旧形态残留 grep 三类 = 0。
+- **Pre-Codex self-review**: A-F checked。A：下限门三腿核过（生产原有/证据本补/weekly 原有），O 批九条逐项处置；权威链终点 `MARGIN_OVERHEAT_MIN_WINDOW_SESSIONS` 冻结常量。B：残留 0（见 Verify）。C：反向补齐（599 拒 725 发；None=未供给；replay 不误伤实抓）。D=N-A；E 未动 CURRENT。F diff-check/py_compile/JSON 过。matrix=P2 三 closure+O 九条；register=updated；handoff=updated；focused=51+10+848 OK `receipt:9589391b595cc9642deaaeef`；full-lane=PASS 2498/826.4s；door=route+doc-governance 55 OK。
+- **Next**: Claude Code：复审
+
+## 2026-08-06 — Claude Code 执行 B0（序 19 换量前置：分母源探针）
+
+- **Verdict/Action**: 完成，未 commit。三个假设换成事实：`index_dailybasic` 可达、`float_mv` 单位是**元**、六年深度在分母侧成立；中证全指本档不发布；**`pro.margin` 六年前只有沪深两所、没有北交所**，与「三所全计 + 逐所 exact-date 对账」直接冲突。换量方向已被数据证实：同口径六年，余额水平漂 +84.1%，除上证综指后的比率只漂 +6.8%。
+- **Required**: 无代码 Required。事实、量化对比、两个待决决定的新形态与诚实边界见 `docs/system_risk_register.md` 的 `R-ASHORT-SEQ19-RATIO-DENOMINATOR-PROBE`（单一来源，本处不复述）。
+- **Verify**: 离线 `Ran 17 tests ... OK`、`receipt:dc138a6d4a19e4a4009059c5`。真取数 11/12 调用零错误；raw `git check-ignore` 命中 `.gitignore:98`，tracked 摘要 token/secret/URL grep = 0。**植入对照**：拆掉比率带 → 窄分母场景由 `denominator_reachable_but_unit_unresolved` 翻成 `available`，还原后回原判。**自审抓到并已改**：首版把「整档 1e4 偏差」当成交叉校验能抓的случай，实为设计吸收，测试因此不承重——已改判据 + 补一条明写该边界的负向测试。**并发事实**：`runners/a_short_weekly_pipeline.py` 在我 21:21 的验收包之后被另一窗口改过（+223→+266，新增 schema 编译 `lru_cache`），`test_reviewer_named_weekly_and_ledger_writers_reject_nonfinite_without_publishing` 现为 ERROR；不属本轮与序 19 审查范围，未动。
+- **Pre-Codex self-review**: A-F checked。A：三个候选指数 × 三个窗口全员一次覆盖，不只探一个。A.6 权威链 `float_mv 观测量级 -> infer_unit 分档 -> 比率带`，终点是冻结常量 `_UNIT_BY_EXPONENT` 与 `PLAUSIBLE_RATIO_BAND`。B：writer 已登记进 `PUBLIC_WRITER_FUNCTIONS`（序 22b 教训），全仓无旧形态残留。C：反向已补（不可达 / 无 `float_mv` / 不完整交易日 / 窄分母四类均不得读成可用）。D=N-A；E 未动 CURRENT/README。F `git diff --check` 干净、UTF-8 无 BOM。matrix=单位分档×比率带×可达性×深度四轴；register=updated；handoff=updated；focused=17 OK；full-lane=not_triggered: AGENTS rule 3; reason=新增独立只读 probe，无生产接线；door=route+doc-governance 66 OK。
+- **Next**: 用户裁定「决定 2」的三选一，并决定要不要追加 2-3 次调用探深证综指/北证50
+
+## 2026-08-05 — Claude 审查 FAIL（序 19 融资过热接线）
+
+- **Verdict/Action**: FAIL，未提交。七条口径、验收八格、权威链与卫生均成立且经我独立复算；一条 P2 拦住——600 交易日下限只保护 `current_percentile`，没保护整张四档阈值证据表：截断窗口下照样出表，且 `status` 与诚实满覆盖运行同为 `PARTIAL`，读者无法区分。同类第三次复发。
+- **Required**: `R-ASHORT-SEQ19-EVIDENCE-LEG-SKIPS-THE-MIN-WINDOW-FLOOR`（P2，含最窄改法与三条 closure tests）；另 `R-ASHORT-SEQ19-REVIEW-OPTIONAL-BATCH` 九条 Optional。机制 / 判据 / 边界见 `docs/system_risk_register.md`（单一来源，本处不复述）。
+- **Verify**: `review-evidence:not_available`（本轮未触发 review-gate hook，无注入 token）。验收超集我亲跑 `Ran 741 tests in 102.078s / OK`、`receipt:ebdd2262d4fef2d9c3c44291`。自写探针：取最小非连乘 (0.8,0.7)→0.7 / (0.6,0.9)→0.6；注入 synthetic 阈值证开关承重 on=0.7 / off=1.0；伪造 `production_effect_enabled=true` 被 schema `const:false` 拒；599 日声称 complete 被拒。独立对抗 agent 20 条探针隔离取数腿，六类均 HELD、已发布产物双向重算逐位相符。full lane 执行方记 `TIMEOUT exit=124 UNKNOWN`，本刀要回修，按 rule 8 我不代跑，须修复后由执行方重跑。真实 provider 行为双方均 `NOT_VERIFIED`。
+- **Next**: Codex：修复
+
+## 2026-08-05 — Claude Code 执行序 19（#16 全市场融资过热接线 + 现金系数栈改造）
+
+- **Verdict/Action**: 完成，未 commit。`market_context.margin_overheat` 八条新叶同刀接进现金系数栈，全部落 `m67_main_decision`、零悬空；`_allocate_cash` 由单一系数改为多控制**取最小、禁连乘**，单控制场景逐字段不变。分位阈值与现金系数按口径 7 留空、开关 `False`，故本刀不改任何一周的选股与操作。真实取数 4/6 调用，产出四档阈值证据。
+- **Required**: `R-ASHORT-SEQ19-MARGIN-OVERHEAT-WIRING` = working-tree implemented / `OPEN-NOT_VERIFIED`；七条口径如何落地、验收八格、发布延迟处置与阈值证据见 `docs/system_risk_register.md`（单一来源，本处不复述）。
+- **Verify**: focused `Ran 105 tests in 212.7s / OK`（`bundles=a_short_effect_contract`，`receipt:05d164abf600e8887f054e56`）；另 `Ran 756 tests` 广包首轮红 1 条（叶数硬编码 388），改为按 schema 动态取后该模块 `Ran 15 tests / OK`。**full lane `status=TIMEOUT exit=124 tests=UNKNOWN elapsed=860.3s`**——已打印约 780 条无失败但按 rule 5 记 `NOT_VERIFIED`，上限未经批准不上调。植入对照：中和 `_resolve_cash_factor_stack` → 正控由 `cash*0.7` 变回 `cash*1.0` 转红，还原绿。真实取数 725/725 三所全齐、当前分位 `0.8276`；raw 已 `git check-ignore`，tracked 摘要无 token/URL。`static_contract_error=None`、`py_compile=9`、`diff_check=PASS`、BOM/U+FFFD=0。
+- **Pre-Codex self-review**: A-F checked。A：八条叶全员一次覆盖，每条 override 带 consumer_ref/terminal_surface/mutation_evidence；A.6 权威链 `analysis_input.margin_overheat → _normalise_margin_overheat_control → engine 治理常量(None/False)`，阈值与系数不接受 analysis_input 传入。B：全仓 grep「待接入两融余额历史分位」生产侧 0 残留（仅剩历史 handoff 与守卫测试）；effect 面硬编码 `388` 0 残留。C：反向已补（开关关闭逐字段不变；取最小只会更严不会更松，且 >1 系数被拒）。D=N-A；E 未动 CURRENT/README。F `git diff --check` 干净。matrix=验收八格全绿；register=updated；handoff=updated；focused=105 OK；full-lane=TIMEOUT@860s UNKNOWN；door=route+doc-governance 55 OK。
+- **Next**: Claude Code：审查
+
 ## 2026-08-05 — 用户裁决：设计定稿前不起 12 周时钟，epoch 维持 pre-freeze
 
 - **Verdict/Action**: 裁决落定。不起时钟；epoch 七条轨维持 `pre_freeze_audit_only`（不废除、不激活）；剩余 8 刀照常推进不受阻；序 16 随之推后。核心论证：关着哈希起 → 12 周证据没意义（可能中途改判据）；开着哈希起 → 设计还在动反复归零。两者互斥，语义投影只能减少冤枉归零、消不掉矛盾。

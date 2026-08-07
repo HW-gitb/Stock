@@ -38,14 +38,11 @@ if [ "$?" -ne 0 ]; then
   exit 1
 fi
 
-# ── Verification-tiering reminder (advisory, NEVER blocks) — AGENTS.md §Verification tiering rule 3/4 ──
-# If this commit changes the a-short PRODUCTION surface but no full-pack GREEN is recorded for this
-# exact code state, print a reminder so the reviewer runs the pack ONCE at the PASS/merge gate and
-# cites the ledger instead of re-running mid-review. It NEVER blocks: the ledger is per-worktree and
-# advisory (fingerprint = diff-from-HEAD), so a real hard gate would need a tracked, commit-keyed
-# ledger — a separate slice. This branch only warns to stderr; it never blocks the commit.
+# ── Focused acceptance receipt (HARD gate, BLOCKS) ──
 # Every staged non-document change must have a current bounded focused receipt.
 # This is the small hard gate; the rule-3 full lane below remains conditional.
+# Keep this above the reminder header: that header documents the advisory branch
+# and says "NEVER blocks", so a blocking gate under it makes the file lie.
 code_changed="$(git diff --cached --name-only | grep -vE '^(docs/|.*\\.md$)' || true)"
 if [ -n "$code_changed" ]; then
   "$PY" .tools/verification_receipt.py 1>&2
@@ -57,6 +54,12 @@ if [ -n "$code_changed" ]; then
   fi
 fi
 
+# ── Verification-tiering reminder (advisory, NEVER blocks) — AGENTS.md §Verification tiering rule 3/4 ──
+# If this commit changes the a-short PRODUCTION surface but no full-pack GREEN is recorded for this
+# exact code state, print a reminder so the reviewer runs the pack ONCE at the PASS/merge gate and
+# cites the ledger instead of re-running mid-review. It NEVER blocks: the ledger is per-worktree and
+# advisory (fingerprint = diff-from-HEAD), so a real hard gate would need a tracked, commit-keyed
+# ledger — a separate slice. This branch only warns to stderr; it never blocks the commit.
 if [ -n "$PY" ]; then
   prod_changed="$(git diff --cached --name-only | grep -E '^(A-EGS/|runners/a_short_|engine/a_short_|engine/egs_|schemas/a_short_|presets/a_short_|presets/egs_)' || true)"
   if [ -n "$prod_changed" ] && ! "$PY" .tools/full_pack_ledger.py check a_short >/dev/null 2>&1; then

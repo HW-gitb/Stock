@@ -23,7 +23,7 @@ Use this file to decide which handoff to open. Do not read every handoff by defa
 
 ## Phase Index
 
-- `2026-08-01_a_short_leaf_wiring_classification_handoff.md` — A-short analysis_input 全叶（当前 388，数量取自 schema 动态计算）的效果分类漏斗与逐类归属；查「某字段到底有没有影响 M6.7」时开。
+- `2026-08-01_a_short_leaf_wiring_classification_handoff.md` — A-short analysis_input 全叶（数量取自 schema 动态计算）的效果分类漏斗与逐类归属，**并已成为「序 N」工程队列的主 handoff**（队列表、逐刀执行方案、每刀的执行与审查收口都追加在此）；查「某字段到底有没有影响 M6.7」或任何一把序 N 刀时开。
 - `2026-08-01_a_short_rule6_severity_classification_repair_handoff.md` — Rule6 `severity` 由主决策改判展示审计的纠错记录与反向控制。
 
 - `2026-08-01_a_short_knife11_official_rolling_handoff.md` — A-short desktop Knife 11 official rolling crash-veto verdict repair; focused evidence is complete and independent review remains pending.
@@ -50,6 +50,6 @@ schema / runner / policy / historical finding.
 - Phase 6:
   - `2026-05-26_phase6a_kickoff_spec_handoff.md` — Phase 6a 开工边界:forward evidence、A 短 benchmark sensitivity、forward tracker → aggregate evidence flow、steady/variant/burst/long-spec 边界。
   - `2026-07-28_a_short_knife6a_repair_handoff.md` — **桌面 `ashort_r1.md` 批次的主 handoff（第六刀 6A/6B + 第七刀）**：A-short 第六刀 6A（组合事实价格时钟、北向因子退役、provider 三态、I1 历史 schema 兼容、H1 runtime-policy 孤儿读点守卫与 repair-closeout 机器门）**及 6B 追加节**（候选 `close` 改取 price_series 末根、官方档 `source_trade_date == price_data_through` 加严、`_is_official_analysis_input_path`）；6B 审查判 Pass-with-Required、第六刀未闭，状态见 SESSION_LOG 顶部与 register。
-  - `2026-07-28_repair_closeout_shared_flow_handoff.md` — Shared A-short/US-short repair-closeout matrix and lane-specific focused/full-lane evidence boundary.
+  - `2026-07-28_repair_closeout_shared_flow_handoff.md` — Shared A-short/US-short repair-closeout matrix, lane-specific focused/full-lane evidence boundary, and the parallel full-lane runner (T1 isolation scan + T2 driver; implemented 2026-08-06, a_short full lane 826s -> 338.7s recorded at `mode=parallel`, awaiting independent review).
 - Phase 7:
   - `2026-05-27_phase7_kickoff_spec_handoff.md` — Phase 7 开工边界:provider capability / field catalog contract v1.0.0;schema-first,不选 provider、不抓数据、不建 adapter/DataHub table。**含** Phase 7a alpha-validation route + Phase 7a+ alpha reality action guide additions(同一文件,非独立 handoff)。

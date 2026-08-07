@@ -12,7 +12,9 @@ Usage:
    C:\Users\cnhea\AppData\Local\Programs\Python\Python313\python.exe .tools\full_pack_ledger.py run <lane> <full-trigger-reason> receipt:<receipt-id> <timeout-seconds> -- <unittest args>
    .\tools\codex_main_python.ps1 .tools\full_pack_ledger.py check <lane>
 
-`run` accepts only the lane's fixed full-discovery selector: `a_short` = `discover -s tests -p test_a_short*.py`; `us_short` = `discover -s tests -p test_us_short*.py`.  The ledger itself prepends the fixed `-b -f --durations 25` runtime flags; they quiet passing output, stop on the first red, and retain timing evidence without narrowing discovery.
+`run` accepts only the lane's fixed full-discovery selector: `a_short` = `discover -s tests -p test_a_short*.py`; `us_short` = `discover -s tests -p test_us_short*.py`.  The fixed `-b -f --durations 25` runtime flags are applied to every worker; they quiet passing output, stop on the first red, and retain timing evidence without narrowing discovery.
+
+The pack is carried by concurrent module-level workers (`parallel_lane_runner`) under the same single total deadline.  The module list and the expected case total come from that same selector, and a green is recorded only when the cases the workers actually ran sum to the discovered total -- a dropped module is a FAIL, never a smaller green.
 
 `check` exit code: 0 = cached green on the current exact code state (do NOT re-run; cite it);
 1 = no cached green for the current code state (a full run is warranted only if tiering rule 3
@@ -29,7 +31,13 @@ import sys
 import time
 from pathlib import Path
 
-from bounded_unittest import DEPENDENCY_EXIT, FULL_MAX_SECONDS, external_test_dependency_error, run_unittest
+from bounded_unittest import (
+    DEPENDENCY_EXIT,
+    FULL_MAX_SECONDS,
+    FULL_PACK_RUNTIME_ARGS,
+    external_test_dependency_error,
+)
+import parallel_lane_runner
 import verification_receipt as receipts
 
 ROOT = Path(__file__).resolve().parent.parent
@@ -40,10 +48,6 @@ FULL_PACK_DISCOVERY_ARGS = {
     "a_short": ("discover", "-s", "tests", "-p", "test_a_short*.py"),
     "us_short": ("discover", "-s", "tests", "-p", "test_us_short*.py"),
 }
-# These flags do not select or skip tests.  They make the one official full
-# process quieter on green, stop immediately on the first real red, and retain
-# timing evidence for the next test-only optimization pass.
-FULL_PACK_RUNTIME_ARGS = ("-b", "-f", "--durations", "25")
 PRIVATE_TEST_ROOTS = (ROOT / "provider_samples", ROOT / "state" / "us_short")
 PRIVATE_TEST_ROOT_MARKER = ".us_short_test_temp_root_owned"
 
@@ -192,7 +196,8 @@ def prepared_review(lane: str, *, state: dict[str, str] | None = None,
     return None
 
 
-def record(lane: str, count: str, *, state: dict[str, str] | None = None, ledger: Path = DEFAULT_LEDGER) -> str:
+def record(lane: str, count: str, *, state: dict[str, str] | None = None,
+           ledger: Path = DEFAULT_LEDGER, run_detail: dict | None = None) -> str:
     current_state = state if state is not None else collect_code_state()
     fp = fingerprint(current_state)
     if prepared_review(lane, state=current_state, ledger=ledger) is None:
@@ -203,6 +208,10 @@ def record(lane: str, count: str, *, state: dict[str, str] | None = None, ledger
         "prepared_fingerprint": fp,
         "count": count,
         "recorded_at": time.strftime("%Y-%m-%dT%H:%M:%S"),
+        # How the count was obtained is part of what a reviewer is citing, so
+        # the per-module detail travels with the record rather than living only
+        # in a console scrollback.
+        "run_detail": dict(run_detail) if run_detail else None,
     }
     ledger.parent.mkdir(parents=True, exist_ok=True)
     ledger.write_text(json.dumps(data, indent=1, ensure_ascii=False), encoding="utf-8")
@@ -250,11 +259,22 @@ def _receipt_matches_current_state(
     )
 
 
-def _runtime_unittest_args(unittest_args: list[str]) -> list[str]:
-    """Add runtime-only flags without moving discovery options out of its subparser."""
-    if unittest_args and unittest_args[0] == "discover":
-        return ["discover", *FULL_PACK_RUNTIME_ARGS, *unittest_args[1:]]
-    return [*FULL_PACK_RUNTIME_ARGS, *unittest_args]
+def _execute_full_pack(
+    lane: str, unittest_args: list[str], timeout_seconds: int
+) -> tuple[object, dict]:
+    """Carry the lane's one full pack, concurrently, under the same total deadline.
+
+    Only the process count changes here.  The module list and the expected case
+    total are derived from ``unittest_args`` -- the same selector a serial run
+    would hand to ``unittest`` -- and the runtime flags are applied per worker,
+    so what is being verified is unchanged and only the wall clock moves.
+    """
+    return parallel_lane_runner.run_parallel_pack(
+        lane,
+        unittest_args,
+        timeout_seconds,
+        runtime_args=FULL_PACK_RUNTIME_ARGS,
+    )
 
 
 def run_full_pack(
@@ -324,7 +344,7 @@ def run_full_pack(
     )
     private_dirs_before = snapshot_private_test_dirs()
     try:
-        result = run_unittest(_runtime_unittest_args(unittest_args), timeout_seconds)
+        result, run_detail = _execute_full_pack(lane, unittest_args, timeout_seconds)
     finally:
         orphaned = cleanup_orphaned_private_test_roots()
         new_tmp_dirs = cleanup_new_private_test_roots(private_dirs_before)
@@ -340,7 +360,8 @@ def run_full_pack(
     count = str(result.tests) if result.tests is not None else "UNKNOWN"
     print(
         f"[full-pack-ledger] RESULT status={result.status} exit={result.exit_code} "
-        f"tests={count} elapsed={result.elapsed_seconds:.1f}s deadline={timeout_seconds}s"
+        f"tests={count} elapsed={result.elapsed_seconds:.1f}s deadline={timeout_seconds}s "
+        f"mode={run_detail.get('mode', 'unknown')}"
     )
     if result.status != "PASS":
         return result.exit_code
@@ -348,7 +369,7 @@ def run_full_pack(
     if fingerprint(final_state) != fingerprint(current_state):
         print("[full-pack-ledger] REFUSED - code state changed during the full run")
         return 2
-    record(lane, f"{result.tests} OK", state=final_state, ledger=ledger)
+    record(lane, f"{result.tests} OK", state=final_state, ledger=ledger, run_detail=run_detail)
     return 0
 
 

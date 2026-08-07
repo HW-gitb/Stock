@@ -145,6 +145,7 @@ from engine.a_short_northbound import (
     classify_northbound_status,
     should_block_new_entries,
 )
+from engine import a_short_margin_overheat as margin_overheat
 from engine.a_short_tushare_client import init_tushare_pro
 from engine.a_short_rule6_contract import (
     RULE6_CONDITIONAL_NA_REASONS,
@@ -225,7 +226,7 @@ def _record_hard_veto_source(name, status, observed_at=None, **details):
 # regex parsing. When adding a new Tushare call, update this list.
 EGS_API_FAMILIES = [
     "daily", "adj_factor", "daily_basic", "fina_indicator", "index_daily",
-    "moneyflow", "moneyflow_hsgt", "margin_detail",
+    "moneyflow", "moneyflow_hsgt", "margin_detail", "margin",
     "share_float", "stk_holdertrade", "balancesheet", "block_trade", "stock_basic", "namechange", "trade_cal",
     "index_member_all", "index_member", "index_classify",
 ]
@@ -1297,6 +1298,16 @@ def export_analysis_input(df_full, watch_df, tier1_final, latest_td, trade_dates
         northbound_flow = None
     else:
         northbound_flow = float(northbound_flow)
+    # The producer's own reduction already fails closed on a partial window, and
+    # the weekly consumer re-derives every verdict from these leaves, so this is
+    # a shape default for a caller that supplies no facts -- not a third gate.
+    margin_overheat_leaves = margin_overheat.margin_overheat_facts(None, requested_dates=())
+    supplied_overheat = market_context_facts.get("margin_overheat")
+    if isinstance(supplied_overheat, dict):
+        margin_overheat_leaves = {
+            key: supplied_overheat.get(key, margin_overheat_leaves[key])
+            for key in margin_overheat_leaves
+        }
     csi300_pct_change_window = market_context_facts.get("csi300_pct_change_window")
     if (isinstance(csi300_pct_change_window, bool)
             or not isinstance(csi300_pct_change_window, (int, float))
@@ -1450,6 +1461,18 @@ def export_analysis_input(df_full, watch_df, tier1_final, latest_td, trade_dates
                 "observed_session_count": observed_session_count,
                 "coverage_complete": coverage_complete,
                 "production_effect_enabled": NORTHBOUND_MARKET_GATE_PRODUCTION_EFFECT_ENABLED,
+            },
+            "margin_overheat": {
+                "percentile": margin_overheat_leaves["percentile"],
+                "ratio": margin_overheat_leaves["ratio"],
+                "balance_yuan": margin_overheat_leaves["balance_yuan"],
+                "denominator_float_mv_yuan": margin_overheat_leaves["denominator_float_mv_yuan"],
+                "window_start": margin_overheat_leaves["window_start"],
+                "window_end": margin_overheat_leaves["window_end"],
+                "requested_session_count": margin_overheat_leaves["requested_session_count"],
+                "observed_session_count": margin_overheat_leaves["observed_session_count"],
+                "coverage_complete": margin_overheat_leaves["coverage_complete"],
+                "production_effect_enabled": margin_overheat.MARGIN_OVERHEAT_PRODUCTION_EFFECT_ENABLED,
             },
             "margin_coverage": (
                 margin_observation.public_dict()
@@ -6061,6 +6084,94 @@ def _northbound_provider_facts(df_hsgt, requested_trade_dates):
     return facts
 
 
+def _margin_overheat_window_sessions(window_end):
+    """Return the exact SSE session list for the rolling margin window, newest first.
+
+    The requested set comes from the official calendar rather than from whatever
+    margin rows come back, so a missing session stays visible as a gap instead
+    of quietly shortening the window a percentile is taken over.
+    """
+    end = str(window_end).strip()
+    if not re.fullmatch(r"[0-9]{8}", end):
+        return ()
+    start = margin_overheat.window_start(end)
+    df = safe_api(pro.trade_cal, exchange="SSE", start_date=start, end_date=end,
+                  is_open="1", fields="cal_date")
+    if df is None or not isinstance(df, pd.DataFrame) or df.empty or "cal_date" not in df.columns:
+        return ()
+    if len(df) >= margin_overheat.MARGIN_PROVIDER_ROW_CAP:
+        return ()          # a capped calendar response is truncated, not a short market history
+    dates = {
+        value for value in df["cal_date"].dropna().astype(str).map(str.strip)
+        if re.fullmatch(r"[0-9]{8}", value) and start <= value <= end
+    }
+    return tuple(sorted(dates, reverse=True))
+
+
+def _margin_overheat_segment_leg(sessions, fetcher):
+    """Fetch one segmented leg, or ``None`` on any empty/capped segment."""
+    rows = []
+    for segment in margin_overheat.fetch_segments(sessions):
+        df = fetcher(segment)
+        if df is None or not isinstance(df, pd.DataFrame) or df.empty:
+            return None
+        if len(df) >= margin_overheat.MARGIN_PROVIDER_ROW_CAP:
+            return None
+        rows.extend(df.to_dict(orient="records"))
+    return rows
+
+
+def _margin_overheat_provider_facts(window_end):
+    """Fetch the rolling three-year margin + denominator windows into leaves.
+
+    The overheat quantity is the ratio of the required-exchange ``rzye`` total
+    to the Shanghai Composite free-float market value (adjudicated 2026-08-06);
+    both legs reconcile exactly or the facts stay unavailable.
+    """
+    unavailable = margin_overheat.margin_overheat_facts(None, requested_dates=())
+    try:
+        sessions = _margin_overheat_window_sessions(window_end)
+        if len(sessions) < margin_overheat.MARGIN_OVERHEAT_MIN_WINDOW_SESSIONS:
+            return unavailable
+        rows = _margin_overheat_segment_leg(
+            sessions,
+            lambda segment: safe_api(pro.margin, start_date=segment[-1], end_date=segment[0],
+                                     fields="trade_date,exchange_id,rzye"),
+        )
+        if rows is None:
+            return margin_overheat.margin_overheat_facts(None, requested_dates=sessions)
+        denominator_rows = _margin_overheat_segment_leg(
+            sessions,
+            lambda segment: safe_api(
+                pro.index_dailybasic,
+                ts_code=margin_overheat.MARGIN_RATIO_DENOMINATOR_INDEX,
+                start_date=segment[-1], end_date=segment[0],
+                fields=f"ts_code,trade_date,{margin_overheat.MARGIN_RATIO_DENOMINATOR_FIELD}",
+            ),
+        )
+        if denominator_rows is None:
+            return margin_overheat.margin_overheat_facts(None, requested_dates=sessions)
+        # The vendor publishes the market balance one session late, so the window
+        # closes at the newest fully published session rather than at the decision
+        # date; a longer silence returns an empty window and fails closed.
+        published = margin_overheat.resolve_published_window(rows, calendar_dates=sessions)
+        return margin_overheat.margin_overheat_facts(
+            rows, denominator_rows, requested_dates=published or sessions
+        )
+    except Exception:
+        return unavailable
+
+
+def _margin_overheat_environment_line(facts):
+    """One honest sentence: the caliber, the number, and whether it moved money."""
+    caliber = "融资过热判断：融资余额/上证综指流通市值比率(沪深北按日期生效合计)近3年分位"
+    percentile = (facts or {}).get("percentile")
+    if not (facts or {}).get("coverage_complete") or percentile is None:
+        return f"{caliber}不可用(窗口覆盖不完整)"
+    effect = "已生效压仓" if (facts or {}).get("production_effect_enabled") else "仅记录,未压仓"
+    return f"{caliber} {float(percentile) * 100:.1f}%（{effect}）"
+
+
 def _csi300_window_metadata(trade_dates):
     """Describe the exact requested CSI300 window, including the short-input fallback."""
     dates = tuple(str(value).strip() for value in (trade_dates or ()))
@@ -6137,7 +6248,10 @@ def market_environment(trade_dates, stats_df, *, return_facts=False):
     else:
         env.append("动量因子有效性：数据不足，无法判断")
 
-    env.append("融资过热判断：待接入两融余额历史分位")
+    margin_overheat_facts = _margin_overheat_provider_facts(
+        (tuple(trade_dates) or ("",))[0]
+    )
+    env.append(_margin_overheat_environment_line(margin_overheat_facts))
     env.append("全市场风险提示：请结合当日政策新闻判断")
     facts_csi300_ret = (
         float(csi300_ret)
@@ -6148,6 +6262,7 @@ def market_environment(trade_dates, stats_df, *, return_facts=False):
     )
     facts = {
         "northbound": northbound_facts,
+        "margin_overheat": margin_overheat_facts,
         "csi300_pct_change_window": facts_csi300_ret,
         "csi300_window": _csi300_window_metadata(trade_dates),
     }

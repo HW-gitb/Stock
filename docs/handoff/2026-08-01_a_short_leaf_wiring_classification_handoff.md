@@ -1848,3 +1848,388 @@ focused `Ran 117 tests ... OK`（`receipt:728b842b330d5995304d1fb9`）；a_short
 ### 边界
 
 **AI 协作者不得自行提议起时钟。** 单一来源：`docs/system_risk_register.md` 的 `R-ASHORT-TWELVE-WEEK-CLOCK-DEFERRED-UNTIL-DESIGN-FREEZE`。
+
+## 2026-08-05 追加：执行序 19（#16 全市场融资过热接线，含现金系数栈改造）
+
+> 执行方 = Claude Code（本工作树 `wt/ashort_r1`）；未 commit / 未 merge / 未 push，等独立审查。finding 正文单一来源 = `docs/system_risk_register.md` 的 `R-ASHORT-SEQ19-MARGIN-OVERHEAT-WIRING`，本节不复述。
+
+### 改了什么
+
+1. **新引擎 `engine/a_short_margin_overheat.py`**（纯离线）：三所 `rzye` 逐所过 22a `reconcile_dated_series` 后求和 → 滚动 3 年分位；`should_reduce_new_exposure` fail-closed 谓词；`fetch_segments` 按 vendor 行上限分段；`resolve_published_window` 处理发布延迟；`threshold_trigger_evidence` 产四档触发统计。两条治理常量（分位阈值、现金系数）**留空 `None`**，`MARGIN_OVERHEAT_PRODUCTION_EFFECT_ENABLED = False`。
+2. **`runners/a_short_weekly_pipeline.py::_allocate_cash` 现金系数栈改造**：单一 `pre_holiday_control.cash_factor` → `_resolve_cash_factor_stack` 取各控制**最小值**；新增 `_normalise_margin_overheat_control` / `_margin_overheat_control_from_analysis`；`build_weekly_report` 与 `validate_weekly_report` 各加一个参数把控制绑回 analysis_input；`cash_allocation` 新增 `margin_overheat_control` 与 `cash_factor_stack` 两个审计对象。
+3. **`A-EGS/egs_main.py` 生产者接线**：`market_environment` 里取 3 年 `trade_cal` + 分段 `pro.margin`（各自截断即 fail-closed），写进 `analysis_input.market_context.margin_overheat` 八条叶；`EGS_API_FAMILIES` 加 `margin`；**占位文案「待接入两融余额历史分位」换成与实际口径一致的句子**（口径 2 要求）。
+4. **schema**：`analysis_input.schema.json` 新增 `market_context.margin_overheat`（`production_effect_enabled` const-pin 为 `false`，与引擎常量三角断言）；`a_short_weekly_report.schema.json` 的 `cash_allocation` 新增两个对象；新建 `schemas/a_short_margin_overheat_percentile_evidence.schema.json`。
+5. **契约重封**：`engine/a_short_effect_contract.py` 的 `_DECISION_FILES` / `_CONSTANT_FILES` 收编新引擎；`schemas/a_short_m67_effect_contract.json` 补 8 条 `leaf_effect_overrides` 并重算 `analysis_input_all_paths_sha256` / `market_context` 组指纹 / `decision_predicate_sha256` / `runtime_constants_sha256` / `output_schema_sha256`。
+6. **取数刀 `runners/a_short_margin_overheat_percentile.py`** + tracked 产物 `research/results/a_short/margin_overheat_percentile_threshold_evidence.json`；writer 已登记进 `PUBLIC_WRITER_FUNCTIONS`（序 22b 的教训）。
+
+### 为什么改
+
+序 19 的三条硬约束决定了形状：① 新增叶必须**同刀接消费者**，否则立刻造 `true_dangling` 撞序 11 的账本；② 多门相遇**取最小不相乘**，而全仓原本没有现金系数栈，最省事的写法正好是被禁止的连乘，所以栈改造是前置而不是附带；③ 阈值不许发明，所以同刀必须产出用户裁决所需的四档触发频率。
+
+### 验证命令
+
+- focused：`.tools\run_unittest_with_repo_pythonpath.cmd --timeout-seconds 900 tests.test_a_short_margin_overheat_wiring tests.test_a_short_margin_overheat_percentile_runner tests.test_a_short_market_history tests.test_a_short_egs_market_environment tests.test_a_short_northbound_market_wiring tests.test_a_short_pre_holiday_cash_guard tests.test_a_short_weekly_pipeline tests.test_a_short_effect_contract tests.test_a_short_effect_consumer_probe tests.test_a_short_public_json_writer_nonfinite_guard tests.test_a_short_evidence_epoch_mode tests.schema.test_analysis_input_contract tests.schema.test_a_short_fifth_knife_forward_evidence_freeze_schema`
+- 取数：`python runners/a_short_margin_overheat_percentile.py`（真跑，4/6 调用）；`--replay-raw`（零调用重算）
+- 静态：`py_compile`、`git diff --check`、`static_contract_error`、JSON/schema 校验、BOM/U+FFFD 扫描
+- full lane：`.tools\full_pack_ledger.py run a_short "<trigger>" "receipt:<focused>" 860 -- discover -s tests -p "test_a_short*.py"`（按 AGENTS rule 3(a)：改了 `runners/a_short_weekly_pipeline.py` 与 `A-EGS/egs_main.py` 两个生产顶层入口）
+
+### 验证结果
+
+见 SESSION_LOG 顶条与 register 的 Closure tests 节（单一来源，本处不复述计数）。**真实取数结论**：窗口 `20230807..20260804`、725/725 交易日三所全齐、当前分位 `0.8276`、三所合计约 `2.59e12` 元；四档触发统计 p80/p85/p90/p95 = 53/51/50/45 周（可评 53 周），**最长连续 53/51/50/32 周**。
+
+**⚠️ full lane 未跑完**：`RESULT status=TIMEOUT exit=124 tests=UNKNOWN elapsed=860.3s`。已打印的约 780 条无一失败（仅 3 skip），但按 AGENTS rule 5 超时即 UNKNOWN，不得记为通过；860 秒上限未经用户批准不得上调。本机当前吞吐异常低（今天 756 条聚焦用例跑了 754 秒，历史同 lane 是 2430 条 / 551 秒），与另一窗口并发占用一致。审查方若要完整全量属 rule 6 escalation。
+
+### 失效的旧结论
+
+- **「序 19 只有 ★★★☆☆」失效**：`_allocate_cash` 改造属实是本刀最大的一块，星级实际不止（队列表与桌面已提前更正过，这里确认属实）。
+- **「窗口右端 = 决策日」失效**：`pro.margin` 有一个交易日的发布延迟（2026-08-05 实测当天无行、最新到 08-04）。窗口右端改为「最新一个三所齐全的已发布交易日」，滞后超过 1 个交易日即 fail-closed。
+- **「等 22b 的回看统计给出触发频率」早已被 2026-08-05 更正块判错**：本刀确实自己产出了这份频率，那条更正属实。
+- **`A-EGS/egs_main.py:5971` 的占位行**不复存在；本文件上方约第 1030 行对它的引用是历史记录，按 doc-drift materiality gate 属非实质，未回改。
+
+### 下一步注意事项
+
+1. **这道门现在压不了任何仓**：分位阈值与现金系数两个治理常量都是 `None`，`production_effect_enabled=False`。要通电需要**同时**定这三样，缺一道都不生效——这是有意的双门。
+2. **⚠️ 别照搬 p90**：实测三年里融资余额持续上行，「当前值处于近 3 年 90% 分位」几乎恒成立（可评 53 周里触发 50 周、最长连续 50 周）。照搬会变成无差别常态压仓。可选方向：改用变化率/斜率、更高分位配更短窗口、或判定该门在当前市场结构下不成立。这是**用户裁决项**，实现方不得代拍。
+3. **证据口径与实盘门不同**：本刀发布的是 `expanding_trailing_window_min_480_sessions`（每周只用它之前的历史），实盘门比的是完整滚动 3 年；要按周复现实盘同口径需要 6 年历史，超出本批 ≤6 次的授权预算，故 101 个早期周如实记 `warm_up`。将来若要补齐，须另行授权更宽的取数。
+4. **EGS 每周会多 4 次 provider 调用**（1 次 `trade_cal` + 3 次分段 `margin`），任一失败或截断都只让本门 unavailable，不影响其余周跑。
+5. **真实 EGS 周跑内的这条腿未跑过**（本刀只用注入式 client 覆盖），属 `NOT_VERIFIED`。
+6. 本刀未动 epoch 七条轨、未动逐票两融、未动选股/TopN/M6.7/持仓/PIT 窗口。
+
+## 2026-08-05 追加：序 19 独立审查 —— FAIL（一条 P2 + 九条 Optional）
+
+### 判定
+
+**FAIL，未提交。** 七条已定口径逐条落地属实、验收八格覆盖到位、权威链闭合、卫生干净、已发布产物非伪造——这些我都独立复算过。拦住它的是一条 P2：**600 交易日下限只保护了 `current_percentile`，没保护整张四档阈值证据表。**
+
+### 那条 P2 是什么
+
+`runners/a_short_margin_overheat_percentile.py:143-187` 把同一份 rows 归约了两次：`margin_overheat_facts()` 里有 600 交易日下限，`market_margin_totals()` 里没有——它只做逐所 exact-date 对账，不认识「窗口该多长」。而 `:162` 的分支和 `:178` 的证据计算都吃后者。于是一个 500 交易日的窗口会写出 `coverage_complete: false` / `observed_session_count: 0` / `current_percentile: null`，**同时**写出一张 101 周、四档齐全的触发表，并通过 schema（该 schema 无任何跨字段约束）。
+
+最要命的是 `status`：截断运行是 `PARTIAL`，而 2026-08-05 那次诚实的 725/725 满覆盖运行**也是** `PARTIAL`（因为有 warm_up 周）。**读者无法靠状态区分「窗口短了」和「早期周训练不足」**，而这两件事对那张表的可信度是天壤之别。
+
+判它是缺陷而不是过度防御，理由是同一条规则的**兄弟实现已经挡了**：`A-EGS/egs_main.py::_margin_overheat_provider_facts` 明写 `if len(sessions) < MARGIN_OVERHEAT_MIN_WINDOW_SESSIONS: return unavailable`。生产腿有下限、证据腿没有，是同一不变式两处实现不一致。这也是本项目**同类第三次复发**（序 22b 行上限截断、涨停指数探针 8000 行截断）。
+
+改法与三条 closure tests 见 `docs/system_risk_register.md` 的 `R-ASHORT-SEQ19-EVIDENCE-LEG-SKIPS-THE-MIN-WINDOW-FLOOR`（单一来源，本处不复述）。
+
+### 我实际验了什么
+
+- **验收超集亲跑**：`Ran 741 tests in 102.078s / OK`、`receipt:ebdd2262d4fef2d9c3c44291`（margin wiring + percentile runner + effect contract + consumer probe + epoch + weekly pipeline + market history + phase6 analysis_input/margin coverage + freeze schema）。
+- **自写探针（不复用执行方的测试）**：取最小非连乘 `(0.8,0.7)→0.7`、`(0.6,0.9)→0.6`、并列时两个控制都记进 `binding_controls`，`0.56` 从未出现；注入 synthetic 阈值 0.9 / 系数 0.7 后 `on=0.7` / `off=1.0`，证明开关在未来真的承重；把 `production_effect_enabled: true` 伪造进 analysis_input → 被 schema `const: false` 拒；599 交易日声称 complete → 被消费端拒；不完整覆盖带 percentile → 被拒。
+- **独立对抗 agent**（只读、隔离在取数腿）：20 条探针。覆盖 fail-closed、调用预算、惰性、secret / raw 卫生、字段与单位、产物是否伪造——**六类全部 HELD**；它独立从 raw 重算出的 `current_balance_yuan=2592313734952.0` 与 `current_percentile=0.8275862068965517` 与已发布值**逐位相同**，四档触发数、最长连续、年度分布也都能从产物自身的 `weeks[]` 复现。
+- **两处性能缓存实测命中**（按「提速刀必验真命中」）：`_paths_for_prefixes` `hits=205 / misses=65 / currsize=65 < 2048`；epoch fingerprint `hits=16 / misses=8 / currsize=8`（恰 8 份契约）。键分别含完整叶路径元组与每次现读的文件正文，改叶集 / 改契约必换键，正确。
+
+### full lane 的处置
+
+执行方记 `TIMEOUT exit=124 tests=UNKNOWN elapsed=860.3s`，即 AGENTS rule 3 的义务**未完成**。按 rule 6 我本可 escalate 自己跑（记录不可得就是 escalation 条件），但按 rule 8 我**不代跑**：本刀要回修，任何现在跑出来的全量都会被后续改动作废，那是纯浪费。**须由执行方在修复后重跑一次。**
+
+顺带一个新事实：执行方超时时归因于「本机每条用例慢约 4 倍，与另一窗口并发一致」。我今天跑 741 条只花 102 秒，即那次超时确实是并发争用的产物，不是代码变慢——修复后重跑很可能能在 860 秒内跑完，不需要申请上调上限。
+
+### 未覆盖维度（诚实边界）
+
+- **真实 provider 行为**：我与 agent 都没有联网。`trade_cal` 真实返回短窗口 / 改格式的概率是 `NOT_VERIFIED`，故上面那条 P2 判的是「门缺失」，不是「已发生的错误产物」——2026-08-05 那份已发布产物经双向独立重算为真，**没有**被这个缺陷污染。
+- **真实 EGS 周跑内的这条腿**：只有注入式 client 覆盖，未跑真实周跑。
+- **阈值本身**：四档触发频率没有区分度（p80 触发 53/53、p95 触发 45/53，53 个可评周里 percentile 最小 0.8216、中位 0.9861），根因是证据用扩张窗口、实盘门用定长滚动三年，两个估计量不同。执行方已在 register 里如实点破并给了三个方向。**这是用户裁决项，不是我判它 FAIL 的理由。**
+
+## 2026-08-05 追加：序 19 修复轮 —— 给执行窗口的指令（Codex 额度不足，改由另一个 Claude 窗口执行）
+
+### 先读这三条硬约束
+
+1. **必须在 `D:\cnhea\Stock-wt\ashort_r1` 这棵树里做。** 序 19 的整份成果是**未提交**的工作树改动，别的树看不见它；在别处「修复序 19」只会凭空重写一遍。
+2. **这棵树里有并发的无关脏改动，绝不 sweep。** `engine/a_short_experiment_admission_registry.py` 与 `engine/a_short_theme_forward_comparison.py` 是另一个窗口的**提速刀**，与序 19 无关，**不在本轮审查范围、不得改、不得暂存、不得提交**。本轮只碰下面「本刀文件清单」里的文件。
+3. **本轮触发 `codex-fix-gate`**（输入含「修复」）。按 `.claude/skills/codex-fix-gate/SKILL.md` 走：从 register 的 `Required repair` + `Closure tests` **全文**枚举出整个缺陷类成 checklist，复现审查方的确切探针，SESSION_LOG 评审循环条目每 bullet ≤450 字一次过 doc-governance guard。
+
+### 本刀文件清单（本轮唯一可动范围）
+
+已跟踪改动：`A-EGS/egs_main.py`、`engine/a_short_effect_contract.py`、`engine/a_short_evidence_epoch_mode.py`、`runners/a_short_weekly_pipeline.py`、`schemas/analysis_input.schema.json`、`schemas/a_short_weekly_report.schema.json`、`schemas/a_short_m67_effect_contract.json`、`tests/test_a_short_effect_consumer_probe.py`、`tests/test_a_short_public_json_writer_nonfinite_guard.py`。
+未跟踪新增：`engine/a_short_margin_overheat.py`、`runners/a_short_margin_overheat_percentile.py`、`schemas/a_short_margin_overheat_percentile_evidence.schema.json`、`tests/test_a_short_margin_overheat_wiring.py`、`tests/test_a_short_margin_overheat_percentile_runner.py`、`research/results/a_short/margin_overheat_percentile_threshold_evidence.json`。
+文档：`docs/SESSION_LOG.md`、`docs/system_risk_register.md`、本 handoff、`docs/handoff/README.md`。
+
+---
+
+### 刀 A（**零授权、现在就做**）：闭掉 FAIL
+
+**A-1 Required（唯一阻塞项）**：`R-ASHORT-SEQ19-EVIDENCE-LEG-SKIPS-THE-MIN-WINDOW-FLOOR`。按 register 该条的 `Required repair` 做最窄改法，并把三条 `Closure tests` 全部落地（含**植入对照**：改回读 `reconciled["coverage_complete"]` 必须让反控转红）。**不要**用抬高 `MARGIN_OVERHEAT_EVIDENCE_MIN_TRAILING_SESSIONS` 冒充修复——那改的是逐周训练期门槛，不是整窗下限。
+
+**A-2 同轮必做（产物诚实性，与 A-1 改同一处 `not_verified` 列表）**：现在产物的 `not_verified[0]` 只说「早期周记 warm_up」，读者会以为局限只在覆盖度。必须明说：**已发布的四档触发频率来自「锚定起点的扩张窗口」估计量，与实盘门的「定长滚动三年」不是同一个口径，因此这些频率不能当作实盘门的预期触发频率**。理由：这份产物会随本刀合入并作为用户裁定阈值的存档材料。
+
+**A-3 Optional（按项目规矩「修复轮 Optional 合理就一并修」）**：`R-ASHORT-SEQ19-REVIEW-OPTIONAL-BATCH` 九条。审查方建议**一并修** O-1（replay 无 provenance）、O-2（截断探测器不可达却报 complete）、O-3（非有限 `rzye` 崩溃且不落 raw）、O-4（中止报错原因不对）、O-5（连续周跨零交易周桥接 + ISO 年/自然年混用）——这五条都在同两个文件里、成本低。**建议延后**：O-6、O-7（消费端已挡，仅两侧不对称）、O-8（留给通电刀）。**O-9 不改代码**，只需在本轮 SESSION_LOG 与 handoff 里**显式声明**：本刀附带了 `_paths_for_prefixes` 与 `contract_semantic_fingerprint` 两处性能缓存，属超出实现范围五步的夹带，审查方已实测命中率与键正确性。
+
+**A-4 验证**：focused 超集须覆盖 changed producer + 直接消费者 + schema/effect + 写盘 + 负向控制（审查方本轮跑的那套 741 条可直接沿用）。**rule 3 触发且上一轮 full lane 是 `TIMEOUT/UNKNOWN`，本轮必须由执行方跑完一次真正的 full lane**；860 秒上限未经用户批准不得上调。参考事实：审查方今天跑 741 条只花 102 秒，上次超时是并发争用不是代码变慢，本轮大概率能跑完。
+
+**A-5 边界**：刀 A **完全离线**，不发任何 provider 请求，不重算证据表数值（只改它的诚实文案与产出条件）。不动 epoch 七轨、不动逐票两融、不动选股/EGS 打分/TopN/M6.7/持仓/PIT 窗口。不 commit（审查方 PASS 后提交）。
+
+---
+
+### 刀 B（**需要用户两个授权，未授权前不得开工**）：换掉被排序的那个量
+
+**为什么要换**：融资余额的**绝对元数**长年随市场规模上行，拿它跟自己的历史比，量到的是「时间」不是「温度」。实测后果：53 个可评周里 percentile 最小 0.8216、中位 0.9861，p80 触发 100%、p95 触发 85%——四档之间没有区分度，照搬任何一档都等于全年永久压仓。一个能一眼看懂的佐证：当前三所合计融资余额约 **2.59 万亿元**，已高于 2015 年泡沫顶部的约 2.27 万亿（该历史数字为审查方引用，**须核**），而今天显然不是 2015 式泡沫——因为分母（流通市值）翻了一倍多。
+
+**要换成什么（按优先级，探针结果回来后由审查方定口径）**：
+1. **融资余额 ÷ 全市场流通市值**（首选，经济含义正确、跨年可比、真会均值回归）。取数最便宜的路子是 Tushare `index_dailybasic` 的指数 `float_mv`（一次调用拿一条指数的全历史），用沪深 300 或上证综指当规模代理；**该端点在本权限档能否取到未验证，必须先打形状探针**。
+2. **融资余额 ÷ 自身 250 日均线的偏离度**（退路，只用已抓到的数据、零新授权，能去掉趋势漂移但经济含义弱一些）。
+3. **纯 20 日变化率**：不推荐单独用（噪音大、会让现金仓位每周抖），只可作第二确认条件。
+
+**用户须做的两个决定（缺任一即不得开工）**：
+- **决定 1**：是否授权 1–2 次 `index_dailybasic` 形状探针（沿用序 21 探针模板：bounded、只读、注入式 client、raw 落 gitignored、tracked 摘要无 secret/URL/raw 行）。
+- **决定 2**：是否把 `pro.margin` 历史由 3 年补到 6 年（约 +6–8 次调用）。补了才能让证据表用与实盘门**完全相同**的「定长滚动三年」口径逐周回看，A-2 那条诚实边界也随之消失；不补则证据表继续是扩张窗口近似。
+
+**阈值定法（换量之后，写死进本轮方案，防止「看完结果再挑数字」）**：不要再问「p80 还是 p90」，先定**目标触发频率**，再从平稳化后的历史里反读出对应分位。审查方建议目标 **5–10% 的周（一年 2–5 周）**，与北向门实测的 3–4% 同量级。现金系数须与触发率配着定：一年响 3 周可到 0.5–0.6，一年响 15 周只能 0.85–0.9。
+
+---
+
+### 刀 C（等刀 B 的证据表过审后）
+
+用户一次性裁定两个数（overheat percentile threshold + cash factor）→ 通电刀只落这两个数、把 `production_effect_enabled` 翻真、重封 schema/effect contract，验收沿用既有五格 + 取最小不相乘 + 已有持仓不受阻。
+
+### 顺序建议
+
+**A → 审查 → PASS 合入 → B（若已授权）→ 审查 → C。** 刀 A 不依赖任何授权，先把已验证正确的接线、现金系数栈与 fail-closed 银行进去；把 B 压在 A 后面，避免 P2 的闭合被 provider 授权卡住。
+
+## 2026-08-06 追加：B0 分母源探针（reviewer 自执行，用户 `B0 授权`）
+
+### 为什么打这一刀
+
+序 19 的四档阈值表没有区分度（p80 触发 100%、p95 触发 85%），根因是被排序的量——融资余额的绝对元数——长年随市场规模上行。要换成比率，就得先知道分母拿不拿得到。这三件事此前全是假设：`index_dailybasic` 可达吗、`float_mv` 什么单位、两边历史各有多深。
+
+### 三个假设变成事实
+
+1. **分母可达，单位是元**。12 列，含 `float_mv`/`total_mv`/`float_share`/`free_share`。沪深300 于 `20260804` 的 `float_mv` = `5.1766e13`，量级 1e13 即元。单位是从观测量级读出来的，不是假设的。
+2. **没有单一的全市场指数**。`000985.CSI`（中证全指）三窗口全 0 行且无报错——本权限档不发布。可达的是沪深300 与上证综指，两者六年前均有数据。
+3. **`pro.margin` 六年前只有两所**。`20200803`–`20200807` 每日只有 `SSE`+`SZSE`（10 行），`20260729`–`20260804` 才三所齐全（15 行）。北交所 2021-11 才开市。
+
+### 换量方向被数据证实了
+
+只比 `SSE+SZSE`（口径可比），`20200807 → 20260804`：
+
+| 量 | 2020-08-07 | 2026-08-04 | 六年漂移 |
+|---|---|---|---|
+| 融资余额（两所） | 1.404 万亿 | 2.584 万亿 | **+84.1%** |
+| 沪深300 流通市值 | 33.4 万亿 | 51.8 万亿 | +55.1% |
+| 上证综指 流通市值 | 34.2 万亿 | 58.9 万亿 | +72.4% |
+| **比率 ÷ 上证综指** | 4.1075% | 4.3855% | **+6.8%** |
+| 比率 ÷ 沪深300 | 4.2048% | 4.9920% | +18.7% |
+
+一个六年漂 84% 的量撑不起分位阈值；漂 6.8% 的可以。**上证综指去趋势明显优于沪深300**——它覆盖全部沪市个股，而沪深300 只有 300 只大盘股、其占全市场流通市值的比重本身在变。
+
+**水平不可跨口径比**：上面 4.1–4.4% 的绝对值不能与「全市场两融占流通市值常态 2.0–2.5%、2015 顶 4.7%」直接对照，因为分子是三所全市场余额而分母只是沪市。对分位而言重要的是平稳性，不是水平。
+
+### 决定 2 变形了：不再是预算问题
+
+「补到六年」与已定口径 3「三所全计」直接冲突——`market_margin_totals` 要求每所都覆盖整窗，任何一个北交所不存在的交易日都会让整窗 fail-closed。三选一：**(a)** 交易所必需集随时间生效（北交所自其首个有数据的交易日起才必需）；**(b)** 接受三年窗口（北交所全程存在，无冲突）；**(c)** 从口径去掉北交所（约 0.3%，但与用户已定口径冲突，须明确改口径）。**审查方倾向 (a)**：保住「三所全计」的原意，代价是一条按日期生效的必需集规则加它的反控测试。
+
+### 还能用 2-3 次调用问掉的一件事
+
+分子是三所，分母目前只有沪市。若 `399106.SZ`（深证综指）与 `899050.BJ`（北证50）同样可达，分母就能与分子**同口径**相加。本轮预算 11/12 用尽，未探；这是一次独立的小额授权决定，不阻塞任何东西。
+
+### 边界与产物
+
+- 新增 `runners/a_short_margin_ratio_source_probe.py`（bounded、只读、注入式 client、`--confirm-fetch-authorized` 必填）与 `tests/test_a_short_margin_ratio_source_probe.py`（17 条，含植入对照与一条明写「整档偏差被设计吸收且这是正确的」的负向测试）。writer 已登记进 `PUBLIC_WRITER_FUNCTIONS`。
+- raw 落 gitignored `provider_samples/a_short_margin_ratio_source_probe_20260805/`；tracked 摘要 `docs/a_short_margin_ratio_source_probe_summary_20260805.json` 无 token/URL/raw 行。
+- **未改任何生产行为**：不碰 EGS/weekly/TopN/M6.7/仓位/序 19 的任何文件；不接消费者；不提议阈值。
+- **一处自审纠错**：首版把「分母恰好差 1e4」当成比率交叉校验能抓的情形，实测被 `infer_unit` 的分档设计吸收，那条测试因此不承重。已改用非整档扰动（窄 100 倍）作判据，并补一条负向测试明写该边界是设计使然、不是漏洞。
+
+### 并发事实（不属本轮范围，但下一个动这棵树的人必须知道）
+
+`runners/a_short_weekly_pipeline.py` 在审查方 21:21 的验收包**之后**被另一窗口改过（diff 由 +223 变 +266，新增 schema 编译 `lru_cache` 与 `_validate_against_schema_file`），`tests.test_a_short_public_json_writer_nonfinite_guard` 的 `test_reviewer_named_weekly_and_ledger_writers_reject_nonfinite_without_publishing` 现为 ERROR（`Additional properties are not allowed ('value' was unexpected)`）。该改动不在序 19 审查范围内，B0 未动它。**序 19 的 FAIL verdict 是对 21:21 那个树态下的判断。**
+
+## 2026-08-06 追加：序 19 审查 FAIL 修复（P2 下限门 + 九条 Optional 处置）与 lane 提速刀
+
+> 执行方 = Claude Code；未 commit。finding 正文单一来源 = register 的 `R-ASHORT-SEQ19-EVIDENCE-LEG-SKIPS-THE-MIN-WINDOW-FLOOR`（已 working-tree repaired）、`R-ASHORT-SEQ19-REVIEW-OPTIONAL-BATCH`（六修/二延/一声明闭合）、`R-ASHORT-LANE-SPEED-REGRESSION-CONTENT-KEYED-CACHES`（六处内容键缓存全声明）。本节只记交接事实。
+
+### 改了什么 / 为什么
+
+1. **P2 修复**：`build_evidence` 的分支由 `reconciled["coverage_complete"]` 改判 `facts["coverage_complete"]`（register 点名的第一种最窄改法），窗口短于 600 时点名会话数、空表、`NOT_VERIFIED`；未动 480 训练期门槛。
+2. **Optional 六修**：O-1 replay 恒带标记不再抄旧 summary；O-3 raw 捕获路径 `_nonfinite_safe` 后落盘（tracked 仍严格拒）；O-4 预算中止保留日历+专用归因句；O-5 最长连续改 ISO 日历相邻断段、归年改 ISO 年；O-6 输入 schema 补 percentile 0..1 / balance>0；O-7 回声校验兄弟对齐（None=未供给，非数值=ValueError）。O-2/O-8 延后（schema 词表/通电刀），O-9 以 register 单独条目声明闭合。
+3. **上一节「并发事实」点名的守卫 ERROR 已修**：schema 校验移进缓存校验器后，守卫测试的中和缝隙跟着从 `jsonschema.validate` 换到 `_validate_against_schema_file`，被测策略（写盘器拒 NaN 且零残留）不变，模块 10 OK。
+4. **lane 提速刀（用户令「修复全量测试」）**：六处重复重算改内容键缓存 + 两处循环外提升，明细与植入对照全在 register 速度条目；测试零删减、860 上限未动。
+
+### 验证命令与结果
+
+- 两 margin 模块（含 P2 closure ①② 与 Optional 各测）`Ran 51 tests / OK`；植入对照③实跑转红后逐字节还原。
+- 守卫模块 `Ran 10 tests / OK`；12 模块验收 `Ran 848 tests / OK / 469s`；重铸 bundle 收据 `Ran 109 tests / OK`（`receipt:9589391b595cc9642deaaeef`）。
+- 产物按修后代码 `--replay-raw` 重生成：分位 `0.8276` 与余额逐位不变；**四档最长连续 53/51/50/32 → 全部 29**（春节周不再被桥接），ISO 年重归 2025:22/2026:31；replay 标记诚实（calls=0）。
+- full lane 最新态见 SESSION_LOG 顶条（多次背景运行被会话回收，PASS 记录以 ledger 为准）。
+
+### 失效旧结论
+
+- 「最长连续 53 周」作废——那是跨零交易周的假连续；修正后四档在同一个 **29 连续周**段封顶，对阈值裁决更有区分度（触发计数 53/51/50/45 不变）。
+- 「replay 产物与实抓不可区分」不再成立。
+
+### 下一步注意
+
+- B0 比率探针结论已在 register 顶部（分母可达/单位元/六年史与北交所冲突的三选一），阈值与换判据仍是**用户裁决项**；本轮修复不代拍。
+- O-2 / O-8 留给通电刀（schema 词表与跨字段校验一起动）。
+
+## 2026-08-06 追加：序 19 P2 收口 + 提速刀批 独立审查 —— FAIL（一条 P2）
+
+### 判定
+
+**FAIL，未提交。** 上一轮那条 P2 修得干净利落；拦住本轮的是**这一批提速刀里的新问题**。
+
+### 序 19 的 P2：已闭合，且我证明了它承重
+
+`build_evidence` 现在判 `facts["coverage_complete"]`（内含 600 交易日下限）而不是 `reconciled["coverage_complete"]`（只有逐所对账、不认识窗口长度），并把两种不可用原因分开点名——短窗口那条会写出实际交易日数与下限值。截断运行的 `status` 也由 `PARTIAL` 改成 `NOT_VERIFIED`，与诚实满覆盖运行（仍是 `PARTIAL`）**终于可区分**。
+
+**我自己的植入对照（决定性）**：把 `MARGIN_OVERHEAT_MIN_WINDOW_SESSIONS` 挖成 0 等于拆掉这道门 —— 同一个 500 交易日窗口立刻由 `NOT_VERIFIED / 0 档 / pct=None` 变回 `PARTIAL / 4 档 / pct=1.0`，**精确复现修复前的缺陷**；还原后与基线逐字段一致。这道门是承重的，不是恰好没触发。
+
+closure ①（500 与 599 双边界）与 ②（725 满窗仍出表）都已落地且断言精确。我上一轮列的 Optional 里，O-1（replay 标记）、O-3（非有限值仍落 raw）、O-4（预算中止报对原因）也都有对应测试名。
+
+### 拦住本轮的：一道被声称存在、实际不存在的守卫
+
+提速刀给 `admissions()` 加了 `_cached_registry`，键是四份 preset 的原始字节；缓存体内 `del authority_key` 后再实读一次那些文件——**「键完整」是唯一让它不返回陈旧注册表的东西**。而模块注释白纸黑字写着「which is why the guard test pins the `_load(ROOT / ...)` call sites to this list」，**那道守卫全仓不存在**（`grep -rn` 除引擎自身零命中）。
+
+今天没有错误产物：我用 AST 取出四个 `_load(ROOT / ...)` 调用点，与声明元组**完全相等**。缺的是防它日后漂掉的门，以及那句会误导下一个实现者的假声称。修法与可直接抄的 AST 谓词见 register 的 `R-ASHORT-ADMISSION-REGISTRY-CACHE-AUTHORITY-TUPLE-IS-UNGUARDED`。
+
+### 七处新缓存：实测都真在省，键也都是完整权威
+
+按「提速刀必验真命中」的规矩实跑 `cache_info()`：`_paths_for_prefixes_cached` 147/65（currsize 65 << 2048）、epoch fingerprint 16/8（currsize 恰 8 份契约）、`_cached_registry` 3/1、`_compiled_schema_validator` 4/2。没有刀 6 那种「maxsize 装不下键导致颠簸」。键分别含完整叶路径元组 / 现读文件正文 / schema 文本 / preset 字节，改源即换键。
+
+`_compiled_schema_validator` 与 `jsonschema.validate` 的等价性我双路验过：类选择与 `check_schema` 逐条对应，同一必拒实例两边同判 `ValidationError`；唯一差异是 `best_match` 与首错的**文案**差别，`test_..._nonfinite_guard` 已相应改 patch 新接缝。
+
+**两处未覆盖**：`_structurally_validated_packet` 与 `_track_modes_from_source` 在我的探针路径上 hits=0/misses=0，即未被触达，命中率 `NOT_VERIFIED`。
+
+**theme_forward 是纯提升不是缓存**，但有一处语义差值得执行方自己确认：`iterrows()` 会把混合 dtype 行向上转型（int 可能变 float），`to_dict(orient="records")` 保留各列 dtype。方向上后者更忠实，但这是行为变化而非纯提速，建议补一条混合 dtype 的等价性断言。
+
+### 验收包的诚实边界
+
+**结论后回写的更正**：15 模块验收超集最终返回 `Ran 869 tests in 677.9s / OK`（`receipt:823fd1e46b61f61117592229`，deadline 900 秒内完成）。我发结论时它还没落盘（bounded runner 缓冲输出，文件当时 0 字节），当时按 rule 6 记了 `UNKNOWN`——**那条记载是错的，已作废**。本轮 FAIL 按 rule 3 由已坐实的探针得出、不依赖该包，包返回后与结论一致。full lane 按 rule 4 引用执行方记账 `PASS 2498/826.4s`，未重跑。教训：678 秒的超集不要在结论前当成「饿死」，`0 字节` 只说明缓冲未刷，不说明进程没进展。
+
+## 2026-08-06 追加：复审 FAIL 的 P2 修复（准入注册表缓存权威守卫落地，并抓到第五个漏网读点）
+
+> 执行方 = Claude Code；未 commit。正文单一来源 = register 的 `R-ASHORT-ADMISSION-REGISTRY-CACHE-AUTHORITY-TUPLE-IS-UNGUARDED`（working-tree repaired）。
+
+### 改了什么 / 为什么
+
+1. 把引擎注释承诺却不存在的守卫真落地：`AdmissionSourcePresetGuardTests` 以 AST 走查 `_load(ROOT / ...)` 调用点，断言相对路径集合恰好等于 `_ADMISSION_SOURCE_PRESETS`；不可解析的 `_load` 形态产生 loud 标记（不隐形）。
+2. **守卫首跑抓到第五个真实读点**（审查方内联枚举漏掉的）：`_p4_admission` 经变量间接读 `egs_industry_heat_governance_20260611.json`——修复前改这份 preset 不会让注册表缓存失效。调用点改直连形态，清单补第五份，并做同款权威植入（改字节必 miss、还原命中）。
+3. 按缺陷类清单把 `admission_snapshot_sha256`（`:466`）腿也断言到；顺手补上审查方留档条目里的 dtype 语义差 Optional（混合 dtype 行在 dict/Series 两形态下消费者判定一致 + `.0` 后缀由时钟比较吸收，两条测试钉住）。
+
+### 验证命令与结果
+
+- 注册表模块 `Ran 17 tests / OK`（守卫 4 条 + snapshot 腿 1 条全在内）；注册表+治理+dtype 类 `Ran 29 tests / OK`。
+- 消费者验收包（注册表+治理+factor_v2+regime_action+industry_weight+final_action+target_policy+theme）结果见 SESSION_LOG 顶条。
+- full lane 未重触发：本轮改动 = 测试新增 + 引擎一处注释与一处调用点等价改写 + 清单补一份；生产顶层 runner 未动，既有 `PASS 2498/826.4s` 记录对生产面仍有效。
+
+### 失效旧结论
+
+- 「四个 `_load` 调用点与声明清单完全相等」失效——真实是五个，第五个藏在变量间接后面；这正是守卫要求「不可读形态必须 loud」的原因。
+
+### 下一步注意
+
+- 给注册表加新 `_load` 时必须同步扩清单，守卫会拦；写法必须用直连 `_load(ROOT / ...)` 形态，间接形态会被 loud 标记拦下。
+
+## 2026-08-06 追加：序 19 判据换比率刀（用户裁决 ①换比率 ②选 a）+ 首份实盘同口径阈值证据
+
+> 执行方 = Claude Code；未 commit。正文单一来源 = register 的 `R-ASHORT-SEQ19-RATIO-CRITERION-KNIFE`。同轮处置：③上轮复审 Required 已在前一节修毕；④effect memo 缓存实测为净亏损已回滚（memo 测试本意就测冷构建，缓存帮不到反加键构造税，模块 77s→102s，还原后 63 条绿）。
+
+### 改了什么
+
+1. **引擎**：过热量改为比率（required-exchange `rzye` 合计 ÷ `000001.SH float_mv`）；交易所集按日期生效（BSE 自数据自证的首日 `20230213` 起必需，反作弊三腿）；证据函数升实盘同口径（每周完整滚动 3 年窗、与实盘门同一 600 下限）；新增 `margin_ratio_series` / `required_exchanges` / `_bse_effective_from`。
+2. **对账缝修复**：分母当日发布 vs margin 滞后一日 → 两腿对账前按请求集筛行（窗内缺/重/NaN 仍拒），否则实盘每天必 fail-closed。
+3. **生产者**：EGS 加分母腿取数（每周 +3 次 `index_dailybasic`），emit `ratio` + `denominator_float_mv_yuan` 两新叶。
+4. **消费者**：weekly 控制回声新增比率恒等式（`ratio×denominator==balance`，容差 1e-6 相对），万元滑移当场拒。
+5. **schema**：analysis_input 两新叶带界；weekly 控制块两新字段；证据 schema 升 2.0.0（比率/分母/BSE 生效日/预算 12/绑定规则）。
+6. **契约**：重封（两新叶 `m67_main_decision` 带三件套 override）。
+7. **真实取数**：11/12 调用，6 年窗 1454/1454 全齐，产出比率基准阈值证据。
+
+### 验证结果
+
+margin 两模块 56 绿；验收包 682 绿（`receipt:c1de5807ed0db575bfec092e`）；full lane 见 SESSION_LOG 顶条。**关键数字**：当前比率 4.357%、比率分位 0.912、BSE 生效日 20230213；181 个实盘同口径可评周——p80 54(30%)/连25、p85 52/25、p90 48(27%)/24、p95 40(22%)/18。
+
+### 失效旧结论
+
+- 「水平分位无区分度（p90 恒触发 94%）」的裁决困境**已解**：比率判据触发率 22-30%、最长段约半年，表可用了。
+- 上一份水平基准证据产物（p80-95=53/51/50/45、longest 29）被比率基准 2.0.0 产物整体取代。
+- 「六年史与三所全计冲突」已由日期生效集消解；BSE 数据起点是 20230213 而非开市日。
+
+### 下一步注意
+
+- 阈值+现金系数+通电三件仍等用户按新表一次裁定；O-2/O-8 仍留通电刀。
+- 顶层两个 session 计数口径差（全窗 1454 vs 实盘窗 726）已在 register 声明，复审可裁改名。
+
+## 2026-08-06 追加：比率刀 + 准入守卫 + 提速刀批 独立审查 —— Pass-with-Required
+
+### 判定
+
+**Pass-with-Required，未提交。** 代码侧我认可，全部独立验过；唯一挡住 clean PASS 的是全量在 860 秒硬上限处越线——**基础设施天花板，不是本刀的缺陷**，但按 closeout gate 无全量绿记录不能给干净 PASS。
+
+### 比率刀：三条核心声称我逐条独立验证，全部属实
+
+1. **`20230213` 全仓未写死**（`grep` engine/runners/A-EGS/schemas 零命中）。北交所首个有 margin 数据的交易日确实由取数自证——它比北交所开市日晚一年余，写死开市日常量就会错。
+2. **`BSE_MARGIN_EXPECTED_BY="20260101"` 是冻结常量**（`:88` 定义、`:244` 消费）做反截断，权威链终点合格。
+3. **证据窗已改用与实盘门同一个 600 常量**，旧的 480 已不存在。我最早提的「证据用扩张窗口、实盘门用定长滚动三年，两个估计量不同」这条**根治了**。
+
+### 我自己的植入对照 9/9
+
+比率恒等式承重：万元分母（1e4 偏小）被当场拒、`ratio×2` 的自相矛盾同拒。日期生效必需集三腿：首日前两所窗口正常对账（1400/1400）、首日后缺一天 fail-closed、整窗零 BSE 且触及冻结日判截断。证据口径两腿：默认常量 == 实盘常量、退役常量确已移除。
+
+### 产物独立复算：自洽，且换量确实奏效
+
+恒等式 `|ratio×denominator − balance| / balance = 0.0` 精确；实盘窗 `20230807..20260805` `726/726 complete` 与证据窗 `20200806..20260805` 1454 会话**已分开报**——执行方自查出的那个「六年跨度配 726/1454 还写 complete」的自相矛盾确实修好了；`181+127=308` 对得上。
+
+**决定性对比**：周分位**中位数 0.4966**（最小 0.0014、最大 1.0000）。旧的水平分位是最小 0.8216、中位 0.9861、p80 触发 100%。一个跨 [0,1] 铺开的分布，正是平稳量该有的样子。
+
+### 给用户裁阈值时要知道的一条（不是缺陷）
+
+四档触发率 p80 29.8% / p85 28.7% / p90 26.5% / p95 22.1%，**彼此只差 7.7 个百分点**；触发周几乎全落在 2025-2026（p90 `{2025:18, 2026:30}`），最长连续 24 周约半年。即：换比率之后判据**有了真实区分度**（相对旧口径的 94%），但它是个**区间指标不是事件触发器**——四档之间仍不太分得开。若目标是「一年响 2-5 周」，这四档都到不了，得往 p98 以上找。刀本身不该发明阈值，这条只是把裁决所需的事实摆清楚。
+
+### 上一轮 Required 的闭合情况：比我要求的更严
+
+`AdmissionSourcePresetGuardTests` 四条——AST 谓词、我点名的植入对照、**不可读 `_load` 形态 loud 报错**（我没要求的硬化）、以及我特别强调的 `admission_snapshot_sha256` `:466` 腿。假声称的注释改成点名具体测试类。**声明清单由 4 份补到 5 份**：证实我审查时那份手写枚举确实已经漏了一个读点，不是理论风险。dtype Optional 也补了 `MixedDtypeRowEquivalenceTests`，其中一条主动断言差异真实存在再证消费面剥后缀，比我要的更诚实。
+
+### 唯一未闭：全量天花板
+
+`R-ASHORT-FULL-PACK-NOW-EXCEEDS-ITS-OWN-CEILING`。rule 3 已触发（生产顶层 runner + 共享 engine + provider），rule 4 要一次全量，而它在 860 秒处 TIMEOUT。两条路都要你裁：**(a)** 批准上调上限（如 1000s）后执行方重跑取绿；**(b)** 批准并行 runner 刀（方案见 `docs/handoff/2026-07-28_repair_closeout_shared_flow_handoff.md`）。裁完取得全量绿，我复核后提交并合入 master。
+
+### 本轮验证
+
+验收超集 `Ran 875 tests in 685.1s / OK`、`receipt:dd83d6ae0844b864e2e6b65a`。**本轮无 review-gate token**（命令未触发 hook），证据全部为工具实跑回显，已在 SESSION_LOG 如实写 `review-evidence:not_available`。
+
+## 2026-08-06 追加：下一步两把小刀 —— 触发周成绩对账（①）+ 变化率族并列发布（②）
+
+> **状态：待做，用户 2026-08-06 指定为下一个事项。** 前置：序 19 当前批（比率刀 + 准入守卫 + 提速刀）取得全量绿并合入 master 之后再开工——两把都要读比率刀的产物，不要跟未提交的树抢。
+
+### 为什么现在要打这两把
+
+审查复算出的事实：四档触发率 p80 29.8% / p85 28.7% / p90 26.5% / p95 22.1%，**彼此只差 7.7 个百分点**；触发周几乎全落 2025-2026（p90 `{2025:18, 2026:30}`，2023/2024 **一次未触发**），最长连续 24 周约半年。
+
+两个后果：
+
+1. **四档之间分不开，裁阈值缺依据。** 触发周不是散布在 80-95 之间，而是扎堆挤在最顶上，所以画哪条线都是「约四分之一的周」。更要命的是——**我们只知道门会在哪些周亮，完全不知道那些周是不是真的更差。** 频率有了，结果证据一个字都没有。
+2. **信号性质与消费点错配。** 这道门接 `_allocate_cash`、压的是**每周新建仓现金**，而系统持股 5-15 天，这是个**战术**杠杆；而「水平分位连亮 24 周」是个**战略/区间**信号。照现有四档通电，等于在 2025-2026 的上行段里连续半年把新建仓砍到七折——代价确定、收益未验证。
+
+### 刀 ①：触发周 × 实际表现对账（★★☆☆☆，纯离线，无新取数）
+
+**目标**：回答「门亮的那些周，是不是真的更该少建仓」。产出一份对账表，让用户拿证据裁阈值，而不是拍脑袋。
+
+**第 0 步必须先做（不做完不要写计算代码）**：确认**哪份产物能提供逐周实际表现，且覆盖够不够到 2025-2026**。已知风险：`forward_daily` 缓存长期不刷（曾停在 `20260227`，见 memory 提醒），comparison-only 轨的账本也不随实盘推进。**若覆盖够不到触发密集的 2025-2026，本刀的结论就是「现有证据无法评估该门」——那本身就是给用户的有效答案，如实产出即可，不得用残缺样本硬算。**
+
+**口径（关键，别用错）**：
+- 被评的对象是**该周新建仓的那批票的前向表现**（这道门只压新建仓、从不动已有持仓），**不是**组合整体的周 NAV 变化——后者混进了门根本碰不到的存量持仓，会把结论稀释成噪音。
+- 触发标记直接取自 `research/results/a_short/margin_overheat_percentile_threshold_evidence.json` 的 `threshold_evidence.weeks[]`（每周带 `week_end` / `percentile` / `verdict`），四档各自的触发集由该周 percentile 与候选阈值比较得出，**不要重算分位**。
+- 至少给出：触发周 vs 未触发周的**胜率、平均/中位前向收益、最大回撤、样本数**；四档各算一遍；并按 ISO 年切一刀（因为触发全在 2025-2026，全样本平均会被区间效应主导）。
+
+**防 p-hacking（本项目自己的规矩，务必遵守）**：四档 × 多个结果指标 × 多种切法 = 多重检验。**开工前先在 register 写死「哪一个比较决定结论」**（建议：p90、新建仓周前向收益中位数、按年分层），其余全部标为探索性。**绝不允许看完结果再改口径或改阈值**（AGENTS item 13）。样本量小（181 周里触发 40-54 周，且集中在一年半内）时必须如实标注统计功效不足，不得用「看起来更差」下结论。
+
+**边界**：不新取数、不接消费者、不提议阈值、不动开关；产物落 `research/results/a_short/`，comparison-only。
+
+### 刀 ②：变化率族并列发布（★☆☆☆☆，同一条序列换统计量）
+
+**目标**：给用户第二张表做对照——**事件型**信号长什么样。
+
+**做什么**：复用比率刀已抓好的 6 年比率序列（`20200806..20260805`，1454 会话，已在 gitignored raw 与产物里），**不发任何新请求**，只多算几个统计量并列发布：
+- 比率的 **4 周变化**（战术尺度）
+- 比率的 **13 周变化**（季度尺度）
+- 比率相对**自身 52 周均值的偏离度**
+
+对每一族照样出「候选分位 × 触发周数 / 最长连续 / 年度分布」，与现有水平分位那张表**并排放同一份产物**，字段上标清是哪一族。预期形态与水平分位截然不同：短促、一年响几次、最长连续短——那才对得上短线战术消费点。
+
+**必须沿用的既有纪律**（不要另起一套）：逐所 exact-date 对账、日期生效必需集、≥600 会话下限与实盘门同常量、比率恒等式。任何一族算不出来时该族 `unavailable`，不得补零。
+
+**边界**：不新取数、不接消费者、**不提议任何阈值**、不动开关与治理常量；schema 版本按加字段升 minor。
+
+### 两把刀的关系与顺序
+
+**② 先做也行、并行也行**（它便宜且不依赖 ①），但 **① 是裁阈值的必要条件**。理想顺序：② 产出第二张表 → ① 对两族分别做同一套对账 → 用户拿着「两族 × 各自触发集 × 实际表现」一次裁定用哪一族、哪个阈值、什么系数。
+
+**在 ① 出结果之前，不得给融资过热门通电**——否则就是用确定的成本换未验证的保护。

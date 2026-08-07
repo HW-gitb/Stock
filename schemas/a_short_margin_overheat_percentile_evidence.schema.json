@@ -1,0 +1,256 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://local/schemas/a_short_margin_overheat_percentile_evidence.schema.json",
+  "title": "A-short margin overheat percentile threshold evidence",
+  "description": "Queue row 19 (#16), ratio basis (adjudicated 2026-08-06). Counts, coverage and percentiles for the overheat RATIO (date-effective required-exchange rzye total over 000001.SH float_mv, both CNY) with each week scored at the live gate's own rolling three-year caliber over six years of history, plus the per-candidate-threshold trigger frequency the user needs before adjudicating a threshold and a cash factor. Comparison/research only: it proposes no threshold, enters no production decision path, and never flips production_effect_enabled.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_name",
+    "schema_version",
+    "as_of",
+    "window_start",
+    "window_end",
+    "requested_session_count",
+    "observed_session_count",
+    "coverage_complete",
+    "evidence_window",
+    "exchange_observed_session_count",
+    "bse_effective_from",
+    "current_percentile",
+    "current_ratio",
+    "current_balance_yuan",
+    "current_denominator_float_mv_yuan",
+    "status",
+    "comparison_only",
+    "production_effect_enabled",
+    "source_binding",
+    "threshold_evidence",
+    "margin_fetch",
+    "execution",
+    "storage",
+    "not_verified"
+  ],
+  "properties": {
+    "schema_name": {"const": "a_short_margin_overheat_percentile_evidence"},
+    "schema_version": {"const": "2.0.0"},
+    "as_of": {"type": "string", "pattern": "^[0-9]{8}$"},
+    "window_start": {
+      "type": ["string", "null"], "pattern": "^[0-9]{8}$",
+      "description": "LIVE window start (rolling three years). This window, not the evidence window, is what current_percentile is taken over."
+    },
+    "window_end": {"type": ["string", "null"], "pattern": "^[0-9]{8}$"},
+    "requested_session_count": {
+      "type": "integer", "minimum": 0,
+      "description": "Sessions requested in the LIVE window; pairs with observed_session_count and coverage_complete, so the three are one consistent statement."
+    },
+    "observed_session_count": {"type": "integer", "minimum": 0},
+    "coverage_complete": {"type": "boolean"},
+    "evidence_window": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["start", "end", "session_count"],
+      "description": "The six-year history the weekly threshold table is scored across. Deliberately separate from the live window above: reporting one span with the other's counts let a reader compute a bogus coverage ratio or read the percentile as spanning six years.",
+      "properties": {
+        "start": {"type": ["string", "null"], "pattern": "^[0-9]{8}$"},
+        "end": {"type": ["string", "null"], "pattern": "^[0-9]{8}$"},
+        "session_count": {"type": "integer", "minimum": 0}
+      }
+    },
+    "exchange_observed_session_count": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["SSE", "SZSE", "BSE"],
+      "properties": {
+        "SSE": {"type": "integer", "minimum": 0},
+        "SZSE": {"type": "integer", "minimum": 0},
+        "BSE": {"type": "integer", "minimum": 0}
+      }
+    },
+    "bse_effective_from": {
+      "type": ["string", "null"],
+      "pattern": "^[0-9]{8}$",
+      "description": "First session with published BSE margin data, discovered from the fetched rows; the required exchange set includes BSE from this date (adjudicated option (a))."
+    },
+    "current_percentile": {"type": ["number", "null"], "minimum": 0, "maximum": 1},
+    "current_ratio": {"type": ["number", "null"], "exclusiveMinimum": 0, "maximum": 1},
+    "current_balance_yuan": {"type": ["number", "null"], "exclusiveMinimum": 0},
+    "current_denominator_float_mv_yuan": {"type": ["number", "null"], "exclusiveMinimum": 0},
+    "status": {"type": "string", "enum": ["COMPLETE", "PARTIAL", "NOT_VERIFIED"]},
+    "comparison_only": {"const": true},
+    "production_effect_enabled": {"const": false},
+    "source_binding": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "margin",
+        "margin_unit",
+        "exchanges",
+        "exchange_set_rule",
+        "denominator",
+        "denominator_unit",
+        "calendar_basis",
+        "reconciliation",
+        "predicate",
+        "window_years",
+        "evidence_history_years"
+      ],
+      "properties": {
+        "margin": {"const": "tushare:pro.margin.rzye"},
+        "margin_unit": {"const": "CNY"},
+        "exchanges": {"const": ["SSE", "SZSE", "BSE"]},
+        "exchange_set_rule": {"const": "date_effective_bse_from_first_published_session"},
+        "denominator": {"const": "tushare:index_dailybasic.000001.SH.float_mv"},
+        "denominator_unit": {"const": "CNY"},
+        "calendar_basis": {"const": "tushare:trade_cal.SSE.cal_date"},
+        "reconciliation": {"const": "engine.a_short_market_history.reconcile_dated_series"},
+        "predicate": {"const": "engine.a_short_margin_overheat.should_reduce_new_exposure"},
+        "window_years": {"const": 3},
+        "evidence_history_years": {"const": 6}
+      }
+    },
+    "threshold_evidence": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "basis",
+        "week_count",
+        "evaluable_week_count",
+        "unavailable_week_count",
+        "unavailable_breakdown",
+        "by_threshold",
+        "weeks"
+      ],
+      "properties": {
+        "basis": {
+          "type": ["string", "null"],
+          "description": "Names the window each week was scored against. Not the live gate's full rolling three years: that needs six years of history."
+        },
+        "week_count": {"type": "integer", "minimum": 0},
+        "evaluable_week_count": {"type": "integer", "minimum": 0},
+        "unavailable_week_count": {"type": "integer", "minimum": 0},
+        "unavailable_breakdown": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["warm_up", "source_gap"],
+          "properties": {
+            "warm_up": {"type": "integer", "minimum": 0},
+            "source_gap": {"type": "integer", "minimum": 0}
+          }
+        },
+        "by_threshold": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "percentile_threshold",
+              "trigger_week_count",
+              "longest_consecutive_trigger_weeks",
+              "trigger_weeks_by_year"
+            ],
+            "properties": {
+              "percentile_threshold": {"type": "number", "exclusiveMinimum": 0, "maximum": 1},
+              "trigger_week_count": {"type": "integer", "minimum": 0},
+              "longest_consecutive_trigger_weeks": {"type": "integer", "minimum": 0},
+              "trigger_weeks_by_year": {
+                "type": "object",
+                "propertyNames": {"pattern": "^[0-9]{4}$"},
+                "additionalProperties": {"type": "integer", "minimum": 0}
+              }
+            }
+          }
+        },
+        "weeks": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "week_end",
+              "trailing_session_count",
+              "percentile",
+              "verdict",
+              "unavailable_reason"
+            ],
+            "properties": {
+              "week_end": {"type": "string", "pattern": "^[0-9]{8}$"},
+              "trailing_session_count": {"type": "integer", "minimum": 0},
+              "percentile": {"type": ["number", "null"], "minimum": 0, "maximum": 1},
+              "verdict": {"type": "string", "enum": ["evaluable", "unavailable"]},
+              "unavailable_reason": {
+                "type": ["string", "null"],
+                "enum": ["warm_up", "source_gap", null]
+              }
+            }
+          }
+        }
+      }
+    },
+    "margin_fetch": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "row_cap",
+        "segment_max_sessions",
+        "segment_count",
+        "truncated_segment_count",
+        "truncated",
+        "status"
+      ],
+      "properties": {
+        "row_cap": {"type": "integer", "minimum": 1},
+        "segment_max_sessions": {"type": "integer", "minimum": 1},
+        "segment_count": {"type": "integer", "minimum": 0},
+        "truncated_segment_count": {"type": "integer", "minimum": 0},
+        "truncated": {"type": "boolean"},
+        "status": {"type": "string", "enum": ["not_attempted", "partial", "complete"]}
+      }
+    },
+    "execution": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "call_budget",
+        "calls_made",
+        "within_budget",
+        "successful_calls",
+        "failed_or_skipped_calls",
+        "status",
+        "tushare_version"
+      ],
+      "properties": {
+        "call_budget": {"type": "integer", "minimum": 0, "maximum": 12},
+        "calls_made": {"type": "integer", "minimum": 0, "maximum": 12},
+        "within_budget": {"const": true},
+        "successful_calls": {"type": "integer", "minimum": 0},
+        "failed_or_skipped_calls": {"type": "integer", "minimum": 0},
+        "status": {"type": "string", "enum": ["completed", "completed_with_errors"]},
+        "tushare_version": {"type": "string", "minLength": 1}
+      }
+    },
+    "storage": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "raw_payload_root",
+        "raw_payload_root_gitignored",
+        "tracked_summary_contains_raw_rows",
+        "tracked_summary_contains_request_urls",
+        "tracked_summary_contains_secret"
+      ],
+      "properties": {
+        "raw_payload_root": {"type": "string", "pattern": "^provider_samples/"},
+        "raw_payload_root_gitignored": {"const": true},
+        "tracked_summary_contains_raw_rows": {"const": false},
+        "tracked_summary_contains_request_urls": {"const": false},
+        "tracked_summary_contains_secret": {"const": false}
+      }
+    },
+    "not_verified": {
+      "type": "array",
+      "minItems": 1,
+      "items": {"type": "string", "minLength": 1}
+    }
+  }
+}
