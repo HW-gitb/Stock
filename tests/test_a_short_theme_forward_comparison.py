@@ -1278,5 +1278,42 @@ class ThemeForwardComparisonTests(unittest.TestCase):
         ))
 
 
+class MixedDtypeRowEquivalenceTests(unittest.TestCase):
+    """The `iterrows -> to_dict(records)` hoists must not change row semantics.
+
+    `iterrows` upcasts a mixed-dtype row (int becomes float, `_as_text` then
+    yields `"1.0"`); `to_dict(orient="records")` keeps each column's own dtype
+    (`"1"`).  The repaired consumers must reach the same verdict either way
+    (review `R-ASHORT-SPEED-KNIFE-BATCH-CACHE-REVIEW` dtype note).
+    """
+
+    def test_repaired_row_consumers_agree_between_series_and_dict_rows(self):
+        frame = pd.DataFrame([
+            {"forward_live": 1, "historical_replay": 0, "weight": 0.5},
+            {"forward_live": 0, "historical_replay": 1, "weight": 1.5},
+        ])
+        # Mixed dtypes force the iterrows upcast this test is about.
+        self.assertEqual(str(frame["forward_live"].dtype), "int64")
+        self.assertEqual(str(frame["weight"].dtype), "float64")
+        dict_rows = frame.to_dict(orient="records")
+        series_rows = [row for _, row in frame.iterrows()]
+        for dict_row, series_row in zip(dict_rows, series_rows):
+            self.assertEqual(
+                comparison._forward_flags(dict_row),
+                comparison._forward_flags(series_row),
+            )
+
+    def test_upcast_text_forms_are_absorbed_by_the_clock_suffix_strip(self):
+        # The `"1.0"`-vs-`"1"` divergence is real for _as_text; the date-like
+        # consumers strip the upcast suffix, so both row forms agree there too.
+        frame = pd.DataFrame([{"industry_trend_source_as_of": 20260609, "weight": 0.5}])
+        dict_text = comparison._as_text(frame.to_dict(orient="records")[0].get("industry_trend_source_as_of"))
+        series_text = comparison._as_text(next(iter(frame.iterrows()))[1].get("industry_trend_source_as_of"))
+        self.assertEqual(dict_text.removesuffix(".0"), series_text.removesuffix(".0"))
+        self.assertNotEqual(dict_text, series_text)  # the divergence exists ...
+        # ... and the repaired loops feed such values only through the
+        # suffix-stripping clock comparisons, never through raw string equality.
+
+
 if __name__ == "__main__":
     unittest.main()

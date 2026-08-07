@@ -260,10 +260,22 @@ class PreCommitReminderTests(unittest.TestCase):
 
     def test_reminder_block_is_warn_only(self):
         # From the reminder marker to EOF must contain no `exit 1`: the reminder can never block.
+        # The marker is that branch's own header, so anything a later edit inserts beneath it is
+        # claimed by "NEVER blocks" — which is how a blocking receipt gate once landed inside here.
         marker = "Verification-tiering reminder"
         self.assertEqual(self.hook.count(marker), 1)
         block = self.hook[self.hook.index(marker):]
         self.assertNotIn("exit 1", block)
+
+    def test_the_receipt_gate_ahead_of_the_reminder_really_blocks(self):
+        # Reverse control for the test above. On its own, "warn only" is satisfiable by moving the
+        # marker below every gate, which would pass while proving nothing; the hard gate has to be
+        # asserted hard somewhere, and it lives ahead of the marker.
+        marker = "Verification-tiering reminder"
+        ahead = self.hook[: self.hook.index(marker)]
+        blocked = "pre-commit BLOCKED: no current bounded focused acceptance receipt"
+        self.assertIn(blocked, ahead)
+        self.assertIn("exit 1", ahead[ahead.index(blocked):])
 
     def test_hook_uses_only_the_pinned_stock_python(self):
         self.assertIn(

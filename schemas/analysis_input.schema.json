@@ -647,6 +647,52 @@
             }
           }
         },
+        "margin_overheat": {
+          "type": "object",
+          "additionalProperties": false,
+          "description": "#16 market-wide financing-balance overheat (queue row 19): rzye summed over SSE+SZSE+BSE, positioned inside its own rolling three-year distribution.",
+          "properties": {
+            "percentile": {
+              "$ref": "#/$defs/numberNullable",
+              "minimum": 0,
+              "maximum": 1,
+              "description": "Fraction of the rolling window at or below the current overheat RATIO (balance over Shanghai Composite float_mv); null unless both legs reconciled exactly."
+            },
+            "ratio": {
+              "$ref": "#/$defs/numberNullable",
+              "exclusiveMinimum": 0,
+              "maximum": 1,
+              "description": "Current rzye total divided by 000001.SH float_mv, both CNY; the de-trended quantity the percentile is taken over."
+            },
+            "balance_yuan": {
+              "$ref": "#/$defs/numberNullable",
+              "exclusiveMinimum": 0,
+              "description": "Current required-exchange rzye total (date-effective SSE/SZSE/BSE set). Unit: CNY."
+            },
+            "denominator_float_mv_yuan": {
+              "$ref": "#/$defs/numberNullable",
+              "exclusiveMinimum": 0,
+              "description": "Current 000001.SH free-float market value. Unit: CNY."
+            },
+            "window_start": {"$ref": "#/$defs/date8Nullable"},
+            "window_end": {"$ref": "#/$defs/date8Nullable"},
+            "requested_session_count": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "observed_session_count": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "coverage_complete": {
+              "type": "boolean"
+            },
+            "production_effect_enabled": {
+              "const": false,
+              "description": "Row 19 publishes the percentile and its trigger-frequency evidence only; the percentile threshold and cash factor remain user adjudications, so this control changes no allocation."
+            }
+          }
+        },
         "margin_coverage": {
           "type": "object",
           "additionalProperties": false,

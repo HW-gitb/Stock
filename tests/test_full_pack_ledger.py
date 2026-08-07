@@ -230,7 +230,7 @@ class FullPackLedgerTests(unittest.TestCase):
                 "_receipt_matches_current_state",
                 return_value=(None, "focused evidence must be the machine token"),
             ), patch.object(fpl, "external_test_dependency_error", return_value=None), patch.object(
-                fpl, "run_unittest"
+                fpl, "_execute_full_pack"
             ) as runner:
                 output = StringIO()
                 with redirect_stdout(output):
@@ -255,17 +255,15 @@ class FullPackLedgerTests(unittest.TestCase):
                 output = StringIO()
                 passed = Result("PASS", 0, 3, 0.2, "Ran 3 tests in 0.1s\n\nOK\n")
 
-                def observed_run(actual_args, timeout_seconds):
-                    self.assertEqual(
-                        actual_args,
-                        ["discover", *fpl.FULL_PACK_RUNTIME_ARGS, *args[1:]],
-                    )
+                def observed_run(actual_lane, actual_args, timeout_seconds):
+                    self.assertEqual(actual_lane, lane)
+                    self.assertEqual(actual_args, list(args))
                     self.assertEqual(timeout_seconds, 30)
                     self.assertIn(f"START lane={lane}", output.getvalue())
                     self.assertIn("fingerprint=", output.getvalue())
-                    return passed
+                    return passed, {"mode": "parallel"}
 
-                with patch.object(fpl, "run_unittest", side_effect=observed_run):
+                with patch.object(fpl, "_execute_full_pack", side_effect=observed_run):
                     with redirect_stdout(output):
                         self.assertEqual(
                             fpl.run_full_pack(
@@ -287,14 +285,15 @@ class FullPackLedgerTests(unittest.TestCase):
                 self.assertIn("-p", discovery)
                 self.assertTrue(discovery[-1].startswith("test_"))
                 self.assertTrue(discovery[-1].endswith("*.py"))
-                self.assertEqual(
-                    fpl._runtime_unittest_args(list(discovery)),
-                    ["discover", *fpl.FULL_PACK_RUNTIME_ARGS, *discovery[1:]],
+                # The selector must reach the runner untouched, and the runtime
+                # flags must reach it as flags -- not spliced into discovery,
+                # where an unrecognised one could quietly change selection.
+                with patch.object(fpl.parallel_lane_runner, "run_parallel_pack") as spawn:
+                    spawn.return_value = (Result("PASS", 0, 1, 0.1, ""), {"mode": "parallel"})
+                    fpl._execute_full_pack(lane, list(discovery), 30)
+                spawn.assert_called_once_with(
+                    lane, list(discovery), 30, runtime_args=fpl.FULL_PACK_RUNTIME_ARGS,
                 )
-        self.assertEqual(
-            fpl._runtime_unittest_args(["tests.test_example"]),
-            [*fpl.FULL_PACK_RUNTIME_ARGS, "tests.test_example"],
-        )
 
     def test_only_a_real_unittest_spawn_may_print_start(self):
         state = {"engine/x.py": "aaa", "@HEAD": "h1"}
@@ -302,7 +301,7 @@ class FullPackLedgerTests(unittest.TestCase):
             with self.subTest(lane=lane, case="dependency"), tempfile.TemporaryDirectory() as tmp:
                 output = StringIO()
                 with patch.object(fpl, "external_test_dependency_error", return_value="missing test dependency"), \
-                        patch.object(fpl, "run_unittest") as runner, redirect_stdout(output):
+                        patch.object(fpl, "_execute_full_pack") as runner, redirect_stdout(output):
                     self.assertEqual(
                         fpl.run_full_pack(lane, "shared test tool", FOCUSED_RECEIPT, 30, list(args),
                                           state=state, ledger=Path(tmp) / "ledger.json"),
@@ -316,7 +315,7 @@ class FullPackLedgerTests(unittest.TestCase):
             fpl.prepare("a_short", "shared test tool", FOCUSED_RECEIPT, state=state, ledger=ledger)
             fpl.record("a_short", "3 OK", state=state, ledger=ledger)
             output = StringIO()
-            with patch.object(fpl, "run_unittest") as runner, redirect_stdout(output):
+            with patch.object(fpl, "_execute_full_pack") as runner, redirect_stdout(output):
                 self.assertEqual(
                     fpl.run_full_pack(
                         "a_short", "shared test tool", FOCUSED_RECEIPT, 30,
@@ -342,7 +341,7 @@ class FullPackLedgerTests(unittest.TestCase):
             ledger = Path(tmp) / "ledger.json"
             state = {"engine/x.py": "aaa", "@HEAD": "h1"}
             passed = Result("PASS", 0, 3, 0.2, "Ran 3 tests in 0.1s\n\nOK\n")
-            with patch.object(fpl, "run_unittest", return_value=passed):
+            with patch.object(fpl, "_execute_full_pack", return_value=(passed, {"mode": "parallel"})):
                 self.assertEqual(
                     fpl.run_full_pack(
                         "a_short",
@@ -359,6 +358,29 @@ class FullPackLedgerTests(unittest.TestCase):
             self.assertIsNotNone(hit)
             self.assertEqual(hit["count"], "3 OK")
 
+    def test_the_recorded_green_carries_how_it_was_obtained(self):
+        # Rule 4 has the reviewer cite this record instead of re-running. A count alone cannot
+        # support the claim the run was making, so whatever the executor measured travels with it.
+        detail = {"mode": "parallel", "elapsed_seconds": 339.5, "deadline_seconds": 860,
+                  "slowest_module": "test_a_short_theme_forward_comparison",
+                  "slowest_module_seconds": 330.7, "count_gate_equal": True}
+        with tempfile.TemporaryDirectory() as tmp:
+            ledger = Path(tmp) / "ledger.json"
+            state = {"engine/x.py": "aaa", "@HEAD": "h1"}
+            passed = Result("PASS", 0, 3, 0.2, "Ran 3 tests in 0.1s\n\nOK\n")
+            with patch.object(fpl, "_execute_full_pack", return_value=(passed, detail)):
+                self.assertEqual(
+                    fpl.run_full_pack(
+                        "a_short", "shared schema", FOCUSED_RECEIPT, 30,
+                        ["discover", "-s", "tests", "-p", "test_a_short*.py"],
+                        state=state, ledger=ledger,
+                    ),
+                    0,
+                )
+            self.assertEqual(
+                fpl.cached_green("a_short", state=state, ledger=ledger)["run_detail"], detail
+            )
+
     def test_a_share_provider_dependency_blocks_only_a_short_full_pack(self):
         with tempfile.TemporaryDirectory() as tmp:
             ledger = Path(tmp) / "ledger.json"
@@ -371,7 +393,9 @@ class FullPackLedgerTests(unittest.TestCase):
                 "external_test_dependency_error",
                 side_effect=lambda lane: "required external test modules unavailable: akshare, tushare"
                 if lane == "a_short" else None,
-            ), patch.object(fpl, "run_unittest", return_value=passed) as runner:
+            ), patch.object(
+                fpl, "_execute_full_pack", return_value=(passed, {"mode": "parallel"})
+            ) as runner:
                 output = StringIO()
                 with redirect_stdout(output):
                     self.assertEqual(
@@ -403,7 +427,7 @@ class FullPackLedgerTests(unittest.TestCase):
                 fpl,
                 "external_test_dependency_error",
                 return_value="required external test modules unavailable: jsonschema",
-            ), patch.object(fpl, "run_unittest") as runner:
+            ), patch.object(fpl, "_execute_full_pack") as runner:
                 for lane, args in fpl.FULL_PACK_DISCOVERY_ARGS.items():
                     with self.subTest(lane=lane):
                         self.assertEqual(
@@ -440,7 +464,7 @@ class FullPackLedgerTests(unittest.TestCase):
             ledger = Path(tmp) / "ledger.json"
             state = {"engine/x.py": "aaa", "@HEAD": "h1"}
             timed_out = Result("TIMEOUT", 124, None, 1.0, "")
-            with patch.object(fpl, "run_unittest", return_value=timed_out):
+            with patch.object(fpl, "_execute_full_pack", return_value=(timed_out, {"mode": "parallel"})):
                 self.assertEqual(
                     fpl.run_full_pack(
                         "a_short",
@@ -484,7 +508,9 @@ class FullPackLedgerTests(unittest.TestCase):
             self.assertIn("not reusable closeout evidence", output.getvalue())
 
             passed = Result("PASS", 0, 2, 0.1, "Ran 2 tests in 0.1s\n\nOK\n")
-            with patch.object(fpl, "run_unittest", return_value=passed) as runner:
+            with patch.object(
+                fpl, "_execute_full_pack", return_value=(passed, {"mode": "parallel"})
+            ) as runner:
                 self.assertEqual(
                     fpl.run_full_pack(
                         "a_short", "production entrypoint", FOCUSED_RECEIPT, 30,

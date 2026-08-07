@@ -205,6 +205,19 @@ def _load_contract_json(name: str, path: Path):
         raise EvidenceEpochModeError(f"cannot read frozen contract: {name}") from exc
 
 
+def _frozen_contract_path(name: str) -> tuple[str, Path]:
+    """Resolve one registered frozen contract to its projection and file."""
+    try:
+        relative = _FIFTH_KNIFE_FROZEN_CONTRACTS[name]
+        projection = _CONTRACT_PROJECTIONS[name]
+    except KeyError as exc:
+        raise EvidenceEpochModeError(f"unregistered frozen contract: {name}") from exc
+    path = (ROOT / relative).resolve()
+    if ROOT.resolve() not in path.parents or not path.is_file():
+        raise EvidenceEpochModeError(f"missing fifth-knife frozen contract: {name}")
+    return projection, path
+
+
 def contract_semantic_projection(name: str) -> dict:
     """Return the decision-bearing substance of one frozen contract.
 
@@ -212,15 +225,7 @@ def contract_semantic_projection(name: str) -> dict:
     being built, which is the whole point: an edit that cannot change a verdict
     must not be able to discard evidence.
     """
-    try:
-        relative = _FIFTH_KNIFE_FROZEN_CONTRACTS[name]
-        projection = _CONTRACT_PROJECTIONS[name]
-    except KeyError as exc:
-        raise EvidenceEpochModeError(f"unregistered frozen contract: {name}") from exc
-
-    path = (ROOT / relative).resolve()
-    if ROOT.resolve() not in path.parents or not path.is_file():
-        raise EvidenceEpochModeError(f"missing fifth-knife frozen contract: {name}")
+    projection, path = _frozen_contract_path(name)
 
     if projection == _PROJECTION_PYTHON_MODULE:
         # Read the file, never import it.  Importing would create a cycle (the
@@ -258,9 +263,27 @@ def contract_semantic_projection(name: str) -> dict:
     return {"projection": projection, "substance": substance}
 
 
-def contract_semantic_fingerprint(name: str) -> str:
-    """The 64-hex fingerprint of one contract's decision-bearing substance."""
+@lru_cache(maxsize=64)
+def _contract_semantic_fingerprint_from_source(name: str, source: str) -> str:
     return _canonical_json_sha256(contract_semantic_projection(name))
+
+
+def contract_semantic_fingerprint(name: str) -> str:
+    """The 64-hex fingerprint of one contract's decision-bearing substance.
+
+    Memoized on the contract's exact bytes.  Every freeze-packet validation asks
+    for all eight fingerprints, and the Python projection deep-copies and
+    ``ast.dump``s a whole module to answer -- by profile the single most
+    expensive operation in the A-short lane.  The file content is the cache key,
+    so an edited contract always produces a new fingerprint rather than a stale
+    one; that is the same authority the uncached form had.
+    """
+    _projection, path = _frozen_contract_path(name)
+    try:
+        source = path.read_text(encoding="utf-8")
+    except (OSError, UnicodeDecodeError) as exc:
+        raise EvidenceEpochModeError(f"cannot read frozen contract: {name}") from exc
+    return _contract_semantic_fingerprint_from_source(name, source)
 
 
 def _freeze_schema_cache_key(path: Path) -> tuple[str, int, int]:
@@ -307,10 +330,45 @@ def _validate_fifth_knife_freeze_packet(*, require_contract_hashes: bool) -> dic
     inventory, self-hash and no-evidence/no-promotion claims are still runtime
     requirements.  The first individually frozen track re-arms all eight
     contract hashes before that track can compute or count evidence.
+
+    Structural validation is memoized on the packet's exact text plus the
+    schema's identity: comparison tracks call this once per record, and the
+    uncached schema-validate + self-hash cost was a top lane sink by profile.
+    An edited packet is a different key and revalidates in full.  The eight
+    fingerprint comparisons stay outside the memo -- each fingerprint is
+    already keyed on its own contract's bytes, so an edited contract still
+    fails here even when the packet text is unchanged.
     """
     try:
-        packet = json.loads(FIFTH_KNIFE_FREEZE_PACKET_PATH.read_text(encoding="utf-8"))
-    except (OSError, UnicodeDecodeError, ValueError) as exc:
+        packet_source = FIFTH_KNIFE_FREEZE_PACKET_PATH.read_text(encoding="utf-8")
+    except (OSError, UnicodeDecodeError) as exc:
+        raise EvidenceEpochModeError("cannot read fifth-knife freeze packet") from exc
+    packet = copy.deepcopy(_structurally_validated_packet(
+        packet_source, _freeze_schema_cache_key(FIFTH_KNIFE_FREEZE_SCHEMA_PATH)
+    ))
+    if require_contract_hashes:
+        by_name = {contract["name"]: contract for contract in packet["frozen_contracts"]}
+        for name in _FIFTH_KNIFE_FROZEN_CONTRACTS:
+            recorded = by_name[name]["semantic_fingerprint"]
+            if contract_semantic_fingerprint(name) != recorded:
+                # Named, never silent.  Losing evidence is sometimes correct; losing
+                # it without being told which contract moved is what this replaces.
+                raise EvidenceEpochModeError(
+                    f"fifth-knife frozen contract semantic drift: {name} "
+                    f"(projection={_CONTRACT_PROJECTIONS[name]}); the decision-bearing "
+                    "substance changed, so evidence accumulated under the old epoch "
+                    "no longer applies"
+                )
+    return packet
+
+
+@lru_cache(maxsize=8)
+def _structurally_validated_packet(packet_source: str, schema_key: tuple) -> dict:
+    """Validate everything about the packet that is a pure function of its text."""
+    del schema_key  # binds the cache key; the validator below is cached on the same key
+    try:
+        packet = json.loads(packet_source)
+    except ValueError as exc:
         raise EvidenceEpochModeError("cannot read fifth-knife freeze packet") from exc
     if not isinstance(packet, dict) or \
             packet.get("schema_name") != "a_short_fifth_knife_forward_evidence_freeze" or \
@@ -370,17 +428,6 @@ def _validate_fifth_knife_freeze_packet(*, require_contract_hashes: bool) -> dic
             raise EvidenceEpochModeError(
                 f"fifth-knife frozen-contract projection mismatch: {name}"
             )
-        if not require_contract_hashes:
-            continue
-        if contract_semantic_fingerprint(name) != recorded:
-            # Named, never silent.  Losing evidence is sometimes correct; losing
-            # it without being told which contract moved is what this replaces.
-            raise EvidenceEpochModeError(
-                f"fifth-knife frozen contract semantic drift: {name} "
-                f"(projection={_CONTRACT_PROJECTIONS[name]}); the decision-bearing "
-                "substance changed, so evidence accumulated under the old epoch "
-                "no longer applies"
-            )
     return packet
 
 
@@ -408,12 +455,12 @@ def validated_frozen_packet_identity(track: str) -> dict[str, str] | None:
     return _freeze_packet_identity(packet) if mode == _FROZEN else None
 
 
-def _mode(track: str) -> str:
-    """Return one registered track's mode; the registry is the sole authority."""
-    track = _require_track(track)
+@lru_cache(maxsize=4)
+def _track_modes_from_source(source: str) -> tuple[tuple[str, str], ...]:
+    """Parse and validate the mode registry once per exact registry text."""
     try:
-        registry = json.loads(TRACK_MODE_REGISTRY_PATH.read_text(encoding="utf-8"))
-    except (OSError, ValueError) as exc:
+        registry = json.loads(source)
+    except ValueError as exc:
         raise EvidenceEpochModeError(f"cannot read evidence epoch mode registry: {exc}") from exc
     if registry.get("schema_name") != "a_short_evidence_epoch_mode_registry" or \
             registry.get("schema_version") != "1.0.0":
@@ -421,10 +468,25 @@ def _mode(track: str) -> str:
     modes = registry.get("track_modes")
     if not isinstance(modes, dict) or set(modes) != set(TRACKS):
         raise EvidenceEpochModeError("evidence epoch mode registry must name every registered track exactly once")
-    mode = modes.get(track)
-    if mode not in _VALID_MODES:
-        raise EvidenceEpochModeError(f"unknown evidence epoch mode for track: {track}")
-    return mode
+    for track, mode in modes.items():
+        if mode not in _VALID_MODES:
+            raise EvidenceEpochModeError(f"unknown evidence epoch mode for track: {track}")
+    return tuple(sorted(modes.items()))
+
+
+def _mode(track: str) -> str:
+    """Return one registered track's mode; the registry is the sole authority.
+
+    The registry file is read on every call -- the text is the cache key, so a
+    flipped registry takes effect immediately; only re-parsing identical text
+    is skipped.
+    """
+    track = _require_track(track)
+    try:
+        source = TRACK_MODE_REGISTRY_PATH.read_text(encoding="utf-8")
+    except OSError as exc:
+        raise EvidenceEpochModeError(f"cannot read evidence epoch mode registry: {exc}") from exc
+    return dict(_track_modes_from_source(source))[track]
 
 
 def enforcement_enabled(track: str) -> bool:

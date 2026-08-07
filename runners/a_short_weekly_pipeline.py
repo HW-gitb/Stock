@@ -26,6 +26,7 @@ import sys
 import tempfile
 import time
 from datetime import datetime
+from functools import lru_cache
 from pathlib import Path
 
 # Ensure the project root is importable when run directly as `python runners\<this>.py`
@@ -54,6 +55,9 @@ from engine.a_short_northbound import (  # noqa: E402
     classify_northbound_status,
     should_block_new_entries,
 )
+# Imported as a module, not by name: the governance threshold and cash factor
+# are read at call time so there is exactly one place to change (or patch) them.
+from engine import a_short_margin_overheat as margin_overheat  # noqa: E402
 
 from engine.a_short_rule6_evaluation import materialize_50etf_iv_rule6_check
 from engine.a_short_regulatory_advisory import (
@@ -78,6 +82,7 @@ _NORTHBOUND_SOURCE = "northbound_market_silence_gate"
 _NORTHBOUND_MARKER = "北向资金联合静默门"
 _NORTHBOUND_SOURCE_PATH = "analysis_input.market_context.northbound"
 _CSI300_SOURCE_PATH = "analysis_input.market_context.breadth.csi300_pct_change_window"
+_MARGIN_OVERHEAT_SOURCE_PATH = "analysis_input.market_context.margin_overheat"
 
 SCHEMA_NAME = "a_short_weekly_report"
 SCHEMA_VERSION = "1.0.0"
@@ -866,6 +871,39 @@ def _normalise_pre_holiday_control(context: dict | None, as_of: str) -> dict:
     }
 
 
+#: Independent cash-factor controls, in a fixed order so the recorded stack is
+#: deterministic.  They are combined by taking the harshest factor and never by
+#: multiplying: 0.8 x 0.8 = 0.64 is a discount depth nobody adjudicated, while
+#: each individual 0.8 was adjudicated on its own.
+_CASH_FACTOR_CONTROL_ORDER = ("pre_holiday_control", "margin_overheat_control")
+
+
+def _resolve_cash_factor_stack(controls: dict[str, dict | None]) -> dict:
+    """Combine independent cash controls by the harshest factor, not a product."""
+    unknown = sorted(set(controls) - set(_CASH_FACTOR_CONTROL_ORDER))
+    if unknown:
+        raise ValueError(f"unknown cash factor control: {unknown[0]}")
+    factors: dict[str, float] = {}
+    for name in _CASH_FACTOR_CONTROL_ORDER:
+        control = controls.get(name)
+        if control is None:
+            continue
+        factor = control.get("cash_factor", 1.0)
+        if (isinstance(factor, bool) or not isinstance(factor, (int, float))
+                or not math.isfinite(float(factor))
+                or float(factor) <= 0 or float(factor) > 1):
+            raise ValueError(f"{name} cash_factor must be in (0,1]")
+        factors[name] = float(factor)
+    effective = min(factors.values()) if factors else 1.0
+    return {
+        "effective_cash_factor": effective,
+        "control_factors": factors,
+        "binding_controls": sorted(
+            name for name, factor in factors.items() if factor == effective
+        ),
+    }
+
+
 def _pre_holiday_control_from_analysis(ai: dict, as_of: str) -> dict:
     """Bind the weekly cash control to the validated EGS analysis_input."""
     market_context = (ai or {}).get("market_context") or {}
@@ -1066,6 +1104,169 @@ def _northbound_control_from_analysis(ai: dict, as_of: str) -> dict:
     }, as_of)
 
 
+def _normalise_margin_overheat_control(context: dict | None, as_of: str) -> dict:
+    """Validate the structured EGS facts consumed by the margin-overheat cash control.
+
+    The percentile and its coverage receipt come from ``analysis_input``; the
+    threshold and the cash factor never do.  A provider-fed document must not be
+    able to move the number that decides how much cash is withheld, so both are
+    read from the governance constants in :mod:`engine.a_short_margin_overheat`.
+    """
+    supplied = dict(context or {})
+    source_as_of = str(supplied.get("source_as_of") or as_of)
+    if not _is_valid_date(source_as_of) or source_as_of != str(as_of):
+        raise ValueError("margin overheat control is not bound to weekly as_of")
+    source_path = supplied.get("source_path")
+    if source_path is None:
+        source_path = _MARGIN_OVERHEAT_SOURCE_PATH
+    if source_path != _MARGIN_OVERHEAT_SOURCE_PATH:
+        raise ValueError("margin overheat control source path is not analysis_input-bound")
+    # An absent control still normalises, so a run without margin facts emits the
+    # unavailable audit object instead of a shape the schema would reject.
+    requested_session_count = supplied.get("requested_session_count", 0)
+    observed_session_count = supplied.get("observed_session_count", 0)
+    coverage_complete = supplied.get("coverage_complete", False)
+    if (
+        isinstance(requested_session_count, bool)
+        or not isinstance(requested_session_count, int)
+        or requested_session_count < 0
+        or isinstance(observed_session_count, bool)
+        or not isinstance(observed_session_count, int)
+        or not 0 <= observed_session_count <= requested_session_count
+        or not isinstance(coverage_complete, bool)
+    ):
+        raise ValueError("margin overheat control coverage facts are invalid")
+    if coverage_complete and observed_session_count != requested_session_count:
+        raise ValueError("complete margin overheat control must observe every requested session")
+    if coverage_complete and requested_session_count < margin_overheat.MARGIN_OVERHEAT_MIN_WINDOW_SESSIONS:
+        raise ValueError("complete margin overheat coverage requires a full rolling window")
+    production_effect_enabled = supplied.get(
+        "production_effect_enabled",
+        margin_overheat.MARGIN_OVERHEAT_PRODUCTION_EFFECT_ENABLED,
+    )
+    if not isinstance(production_effect_enabled, bool):
+        raise ValueError("margin overheat control production_effect_enabled must be boolean")
+    window_start = supplied.get("window_start")
+    window_end = supplied.get("window_end")
+    for value in (window_start, window_end):
+        if value is not None and not _is_valid_date(value):
+            raise ValueError("margin overheat control window dates are invalid")
+    window_start = None if window_start is None else str(window_start)
+    window_end = None if window_end is None else str(window_end)
+    percentile = supplied.get("percentile")
+    ratio = supplied.get("ratio")
+    balance_yuan = supplied.get("balance_yuan")
+    denominator_float_mv_yuan = supplied.get("denominator_float_mv_yuan")
+    if not coverage_complete:
+        if (percentile is not None or ratio is not None or balance_yuan is not None
+                or denominator_float_mv_yuan is not None):
+            raise ValueError("incomplete margin overheat coverage must have null percentile/ratio/balance")
+        ratio = None
+        denominator_float_mv_yuan = None
+    else:
+        if window_start is None or window_end is None or window_start > window_end or window_end > str(as_of):
+            raise ValueError("complete margin overheat control needs a bound window ending by as_of")
+        if not _is_finite_market_number(percentile) or not 0.0 <= float(percentile) <= 1.0:
+            raise ValueError("complete margin overheat control needs a percentile in [0,1]")
+        if not _is_finite_market_number(ratio) or not 0.0 < float(ratio) <= 1.0:
+            raise ValueError("complete margin overheat control needs a ratio in (0,1]")
+        if not _is_finite_market_number(balance_yuan) or float(balance_yuan) <= 0:
+            raise ValueError("complete margin overheat control needs a positive CNY balance")
+        if (not _is_finite_market_number(denominator_float_mv_yuan)
+                or float(denominator_float_mv_yuan) <= 0):
+            raise ValueError("complete margin overheat control needs a positive CNY denominator")
+        percentile = float(percentile)
+        ratio = float(ratio)
+        balance_yuan = float(balance_yuan)
+        denominator_float_mv_yuan = float(denominator_float_mv_yuan)
+        # The three numbers must be one consistent statement: a unit slip on
+        # either leg (万元-vs-元) breaks this identity by four orders of
+        # magnitude and is caught here instead of scaling the gate silently.
+        if abs(ratio * denominator_float_mv_yuan - balance_yuan) > 1e-6 * balance_yuan:
+            raise ValueError("margin overheat control ratio does not equal balance over denominator")
+    percentile_threshold = margin_overheat.MARGIN_OVERHEAT_PERCENTILE_THRESHOLD
+    governance_cash_factor = margin_overheat.MARGIN_OVERHEAT_CASH_FACTOR
+    predicate_triggered = margin_overheat.should_reduce_new_exposure(
+        percentile, percentile_threshold
+    )
+    applied = predicate_triggered and production_effect_enabled and governance_cash_factor is not None
+    cash_factor = float(governance_cash_factor) if applied else 1.0
+    if not coverage_complete:
+        reason = "coverage_incomplete"
+    elif percentile_threshold is None:
+        reason = "threshold_unset"
+    elif not predicate_triggered:
+        reason = "not_overheated"
+    elif not production_effect_enabled:
+        reason = "production_effect_disabled"
+    elif governance_cash_factor is None:
+        reason = "cash_factor_unset"
+    else:
+        reason = "margin_overheated"
+    for key, expected in (
+        ("predicate_triggered", predicate_triggered),
+        ("reason", reason),
+    ):
+        if key in supplied and supplied[key] != expected:
+            raise ValueError(f"margin overheat control {key} disagrees with source facts")
+    supplied_cash_factor = supplied.get("cash_factor")
+    if supplied_cash_factor is not None and (
+            isinstance(supplied_cash_factor, bool)
+            or not isinstance(supplied_cash_factor, (int, float))
+            or float(supplied_cash_factor) != cash_factor):
+        raise ValueError("margin overheat control cash_factor disagrees with source facts")
+    return {
+        "source_as_of": source_as_of,
+        "source_path": _MARGIN_OVERHEAT_SOURCE_PATH,
+        "percentile": percentile,
+        "ratio": ratio,
+        "balance_yuan": balance_yuan,
+        "denominator_float_mv_yuan": denominator_float_mv_yuan,
+        "balance_unit": margin_overheat.MARGIN_BALANCE_UNIT,
+        "window_start": window_start,
+        "window_end": window_end,
+        "requested_session_count": requested_session_count,
+        "observed_session_count": observed_session_count,
+        "coverage_complete": coverage_complete,
+        "production_effect_enabled": production_effect_enabled,
+        "percentile_threshold": percentile_threshold,
+        "predicate_triggered": predicate_triggered,
+        "cash_factor": cash_factor,
+        "reason": reason,
+    }
+
+
+def _margin_overheat_control_from_analysis(ai: dict, as_of: str) -> dict:
+    """Bind the cash control to validated analysis_input facts, never to text."""
+    market_context = (ai or {}).get("market_context") or {}
+    overheat = market_context.get("margin_overheat") or {}
+    decision_as_of = str(
+        (ai or {}).get("decision_as_of")
+        or (ai or {}).get("trade_date")
+        or ((ai or {}).get("source") or {}).get("clocks", {}).get("decision_as_of")
+        or ""
+    )
+    if decision_as_of != str(as_of):
+        raise ValueError("analysis_input decision_as_of is not bound to weekly as_of")
+    return _normalise_margin_overheat_control({
+        "source_as_of": decision_as_of,
+        "source_path": _MARGIN_OVERHEAT_SOURCE_PATH,
+        "percentile": overheat.get("percentile"),
+        "ratio": overheat.get("ratio"),
+        "balance_yuan": overheat.get("balance_yuan"),
+        "denominator_float_mv_yuan": overheat.get("denominator_float_mv_yuan"),
+        "window_start": overheat.get("window_start"),
+        "window_end": overheat.get("window_end"),
+        "requested_session_count": overheat.get("requested_session_count", 0),
+        "observed_session_count": overheat.get("observed_session_count", 0),
+        "coverage_complete": overheat.get("coverage_complete", False),
+        "production_effect_enabled": overheat.get(
+            "production_effect_enabled",
+            margin_overheat.MARGIN_OVERHEAT_PRODUCTION_EFFECT_ENABLED,
+        ),
+    }, as_of)
+
+
 def _append_northbound_market_impact(report: dict, control: dict, reason: str) -> None:
     impacts = report["machine"].setdefault("operation_impact", [])
     if any(item.get("source_field") == _NORTHBOUND_SOURCE for item in impacts):
@@ -1133,6 +1334,7 @@ def _demote_build_for_portfolio_risk(report: dict, rank: int, reason: str) -> No
 def _allocate_cash(reports: list, available_cash, new_exposure_capacity=None,
                    portfolio_context=None, m05_context: dict | None = None,
                    pre_holiday_control: dict | None = None,
+                   margin_overheat_control: dict | None = None,
                    *, as_of: str | None = None) -> dict:
     """#3 全局现金分配(价格提案 §4 + §11.3/11.4):多只建仓按**区间上沿 entry_high**(最不利价)统一消耗
     available_cash,确定性排序;不足一手/最小金额 → 转观察。**原地改 reports(只动建仓票)**;返回 weekly 现金摘要 | None。
@@ -1153,10 +1355,12 @@ def _allocate_cash(reports: list, available_cash, new_exposure_capacity=None,
     # A missing control is still normalised, so the emitted audit object can
     # never carry the un-bound `source_as_of: None` shape the schema rejects.
     pre_holiday_control = _normalise_pre_holiday_control(pre_holiday_control, as_of)
-    cash_factor = pre_holiday_control.get("cash_factor", 1.0)
-    if (isinstance(cash_factor, bool) or not math.isfinite(float(cash_factor))
-            or float(cash_factor) <= 0 or float(cash_factor) > 1):
-        raise ValueError("pre-holiday cash_factor must be in (0,1]")
+    margin_overheat_control = _normalise_margin_overheat_control(margin_overheat_control, as_of)
+    cash_factor_stack = _resolve_cash_factor_stack({
+        "pre_holiday_control": pre_holiday_control,
+        "margin_overheat_control": margin_overheat_control,
+    })
+    cash_factor = cash_factor_stack["effective_cash_factor"]
     effective_available_cash = round(float(available_cash) * float(cash_factor), 2)
     effective_new_exposure_capacity = (
         None if new_exposure_capacity is None
@@ -1208,6 +1412,8 @@ def _allocate_cash(reports: list, available_cash, new_exposure_capacity=None,
         summary.update({"new_exposure_capacity_start": round(effective_new_exposure_capacity, 2),
                         "remaining_new_exposure_capacity": round(exposure_remaining, 2)})
     summary["pre_holiday_control"] = dict(pre_holiday_control)
+    summary["margin_overheat_control"] = dict(margin_overheat_control)
+    summary["cash_factor_stack"] = cash_factor_stack
     if m05_context is not None:
         if (m05_context.get("mode") != "conservative_degradation"
                 or m05_context.get("allocation_blocked") is not True):
@@ -1522,7 +1728,8 @@ def build_weekly_report(normalized_list: list, as_of: str, generated_at: str,
                         portfolio_fact_as_of: str | None = None,
                         portfolio_fact_fetch_status: str = "not_requested",
                         pre_holiday_control: dict | None = None,
-                        northbound_control: dict | None = None) -> dict:
+                        northbound_control: dict | None = None,
+                        margin_overheat_control: dict | None = None) -> dict:
     from runners.a_short_phase5_engine import build_m67_report, build_holding_report
     incoming_lineage = dict(run_lineage or {})
     incoming_price_freshness = incoming_lineage.get("price_freshness") or {}
@@ -1561,6 +1768,7 @@ def build_weekly_report(normalized_list: list, as_of: str, generated_at: str,
             "production_effect_enabled": False,
         }
     northbound_control = _normalise_northbound_control(northbound_control, as_of)
+    margin_overheat_control = _normalise_margin_overheat_control(margin_overheat_control, as_of)
     if margin_coverage is None:
         margin_coverage = {
             "reference_date": price_data_through, "effective_ref_date": None,
@@ -1672,6 +1880,7 @@ def build_weekly_report(normalized_list: list, as_of: str, generated_at: str,
                                   effective_new_exposure_capacity, portfolio_context,
                                   m05_context=m05_cash_context,
                                   pre_holiday_control=pre_holiday_control,
+                                  margin_overheat_control=margin_overheat_control,
                                   as_of=as_of)
     portfolio_risk = _apply_portfolio_risk_results(
         reports, portfolio_context, as_of, portfolio_fact_as_of, portfolio_fact_fetch_status)
@@ -1907,7 +2116,8 @@ def _bind_effect_contract_trend_guard(weekly: dict, out_path: str | Path) -> dic
 def validate_weekly_report(weekly: dict, iv_feed_summary: dict,
                            *, previous_ledger: dict | None = None,
                            expected_pre_holiday_control: dict | None = None,
-                           expected_northbound_control: dict | None = None) -> None:
+                           expected_northbound_control: dict | None = None,
+                           expected_margin_overheat_control: dict | None = None) -> None:
     """关闭 P2:消费方校验它读入的 IV feed + 每张 M6.7。"""
     from datetime import datetime
     from runners.a_short_iv_feed_build import validate_feed_artifact
@@ -2045,6 +2255,26 @@ def validate_weekly_report(weekly: dict, iv_feed_summary: dict,
             if supplied_pre_holiday != source_control:
                 raise ValueError(
                     "cash_allocation.pre_holiday_control 与 analysis_input 交易日历不一致")
+        supplied_margin_overheat = ca.get("margin_overheat_control")
+        if not isinstance(supplied_margin_overheat, dict):
+            raise ValueError("cash_allocation 缺少 margin_overheat_control")
+        if supplied_margin_overheat != _normalise_margin_overheat_control(
+                supplied_margin_overheat, weekly["as_of"]):
+            raise ValueError("cash_allocation.margin_overheat_control 未按 source control 归一化")
+        if expected_margin_overheat_control is not None:
+            source_margin = _normalise_margin_overheat_control(
+                expected_margin_overheat_control, weekly["as_of"]
+            )
+            if supplied_margin_overheat != source_margin:
+                raise ValueError(
+                    "cash_allocation.margin_overheat_control 与 analysis_input 融资余额事实不一致")
+        supplied_stack = ca.get("cash_factor_stack")
+        if not isinstance(supplied_stack, dict):
+            raise ValueError("cash_allocation 缺少 cash_factor_stack")
+        if supplied_stack != _resolve_cash_factor_stack({
+                "pre_holiday_control": supplied_pre_holiday,
+                "margin_overheat_control": supplied_margin_overheat}):
+            raise ValueError("cash_allocation.cash_factor_stack 未按各控制取最狠系数重算")
     northbound_control = weekly.get("northbound_control")
     if not isinstance(northbound_control, dict):
         raise ValueError("weekly 缺少 northbound_control")
@@ -2630,16 +2860,33 @@ def _reject_nonprivate_account_output_path(out_path: str, has_account: bool,
         " state/<系统类型>/weekly_private/<as_of>/。确需写仓库内他处请显式传 --allow-nonprivate-account-out。")
 
 
+@lru_cache(maxsize=16)
+def _compiled_schema_validator(schema_source: str):
+    """One compiled validator per exact schema text.
+
+    ``jsonschema.validate`` re-checks and re-compiles the schema on every call
+    -- ~20ms for the weekly schema alone, paid per report across the whole
+    test lane.  The schema's text is the cache key, so an edited schema file
+    always compiles fresh; this changes cost, never authority.  The class
+    choice and check_schema mirror ``jsonschema.validate`` exactly.
+    """
+    schema = json.loads(schema_source)
+    validator_cls = jsonschema.validators.validator_for(schema)
+    validator_cls.check_schema(schema)
+    return validator_cls(schema)
+
+
+def _validate_against_schema_file(instance, schema_path) -> None:
+    with open(schema_path, "r", encoding="utf-8") as f:
+        _compiled_schema_validator(f.read()).validate(instance)
+
+
 def write_weekly_report(weekly: dict, iv_feed_summary: dict, out_path: str) -> None:
     _reject_production_output_path(out_path)
     previous_ledger = _bind_effect_contract_trend_guard(weekly, out_path)
-    with open(SCHEMA_PATH, "r", encoding="utf-8") as f:
-        wschema = json.load(f)
-    with open(M67_SCHEMA_PATH, "r", encoding="utf-8") as f:
-        m67schema = json.load(f)
-    jsonschema.validate(weekly, wschema)
+    _validate_against_schema_file(weekly, SCHEMA_PATH)
     for rep in weekly["reports"]:
-        jsonschema.validate(rep, m67schema)                  # 每张 M6.7 过 m67 schema
+        _validate_against_schema_file(rep, M67_SCHEMA_PATH)  # 每张 M6.7 过 m67 schema
     validate_weekly_report(weekly, iv_feed_summary, previous_ledger=previous_ledger)
     os.makedirs(os.path.dirname(os.path.abspath(out_path)), exist_ok=True)
     tmp = str(out_path) + ".tmp"
@@ -2724,8 +2971,7 @@ def _write_pipeline_sidecar_outcomes(path: str | Path, *, as_of: str, run_id: st
         "sidecars": outcomes,
     }
     schema_path = ROOT / "schemas" / "a_short_weekly_sidecar_outcomes.schema.json"
-    with schema_path.open("r", encoding="utf-8") as handle:
-        jsonschema.validate(payload, json.load(handle))
+    _validate_against_schema_file(payload, schema_path)
     target = Path(path)
     target.parent.mkdir(parents=True, exist_ok=True)
     tmp = target.with_name(f".{target.name}.tmp")
@@ -2743,12 +2989,9 @@ def publish_weekly_bundle(weekly: dict, iv_feed_summary: dict, out_path: str, md
     previous_ledger = _bind_effect_contract_trend_guard(weekly, out_path)
     if _weekly_has_account_data(weekly):
         _reject_nonprivate_account_output_path(md_path, True, allow_nonprivate_account_out)
-    with open(SCHEMA_PATH, "r", encoding="utf-8") as f:
-        jsonschema.validate(weekly, json.load(f))
-    with open(M67_SCHEMA_PATH, "r", encoding="utf-8") as f:
-        m67schema = json.load(f)
+    _validate_against_schema_file(weekly, SCHEMA_PATH)
     for report in weekly["reports"]:
-        jsonschema.validate(report, m67schema)
+        _validate_against_schema_file(report, M67_SCHEMA_PATH)
     validate_weekly_report(weekly, iv_feed_summary, previous_ledger=previous_ledger)
     markdown = render_weekly_markdown(weekly)
     lineage = weekly["run_lineage"]
@@ -2779,8 +3022,7 @@ def publish_weekly_bundle(weekly: dict, iv_feed_summary: dict, out_path: str, md
             for name, payload in output_bytes.items()
         },
     }
-    with open(WEEKLY_RECEIPT_SCHEMA_PATH, "r", encoding="utf-8") as f:
-        jsonschema.validate(receipt, json.load(f))
+    _validate_against_schema_file(receipt, WEEKLY_RECEIPT_SCHEMA_PATH)
     receipt_path = os.path.splitext(out_path)[0] + ".receipt.json"
     payloads = {
         out_path: weekly_bytes,
@@ -5343,6 +5585,7 @@ def main(argv=None, pro_factory=None, price_provider=None, semantic_provider=Non
     regime, regime_fallback = resolve_market_regime(ai)
     pre_holiday_control = _pre_holiday_control_from_analysis(ai, args.as_of)
     northbound_control = _northbound_control_from_analysis(ai, args.as_of)
+    margin_overheat_control = _margin_overheat_control_from_analysis(ai, args.as_of)
     # available_cash 是用户必填输入。零现金仍须管理已有持仓,但不得建立新仓;
     # 未提供 --account → observation-only(sizing_mode 标进 run_lineage,读者不会把 sizing 假象的「观察」当真 avoid 信号)。
     available_cash = acct.get("available_cash")
@@ -5775,7 +6018,8 @@ def main(argv=None, pro_factory=None, price_provider=None, semantic_provider=Non
                                  portfolio_fact_as_of=price_data_through,
                                  portfolio_fact_fetch_status=portfolio_fact_fetch_status,
                                  pre_holiday_control=pre_holiday_control,
-                                 northbound_control=northbound_control)
+                                 northbound_control=northbound_control,
+                                 margin_overheat_control=margin_overheat_control)
     weekly["decision_as_of"] = str(args.as_of)
     weekly["run_date"] = str(args.run_date) if args.run_date else None
     weekly["price_data_through"] = price_data_through
@@ -5877,7 +6121,8 @@ def main(argv=None, pro_factory=None, price_provider=None, semantic_provider=Non
     # mutates analysis_input or the M6.7 decision.
     validate_weekly_report(weekly, feed, previous_ledger=previous_effect_ledger,
                            expected_pre_holiday_control=pre_holiday_control,
-                           expected_northbound_control=northbound_control)
+                           expected_northbound_control=northbound_control,
+                           expected_margin_overheat_control=margin_overheat_control)
     phase4_report_dir = (
         Path(args.phase4_report_dir) if args.phase4_report_dir else
         (ROOT / "result" / "a_short" / args.as_of / "reports" if official_input

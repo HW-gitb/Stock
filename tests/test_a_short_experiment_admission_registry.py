@@ -187,5 +187,106 @@ class AdmissionRegistryTests(unittest.TestCase):
         self.assertNotIn("profile_weights", encoded)
 
 
+def _loaded_preset_paths(source: str) -> set[str]:
+    """Every relative path the module hands to ``_load(ROOT / ... / ...)``.
+
+    This is the guard the engine's `_ADMISSION_SOURCE_PRESETS` comment promises
+    (`R-ASHORT-ADMISSION-REGISTRY-CACHE-AUTHORITY-TUPLE-IS-UNGUARDED`): the
+    registry cache key holds exactly these files' bytes, so a `_load` call site
+    outside the declared tuple would let an edited preset return a stale
+    registry from the cache.
+    """
+    import ast
+
+    paths: set[str] = set()
+    for node in ast.walk(ast.parse(source)):
+        if not (isinstance(node, ast.Call) and isinstance(node.func, ast.Name)
+                and node.func.id == "_load" and node.args):
+            continue
+        segments: list[str] = []
+        current = node.args[0]
+        while isinstance(current, ast.BinOp) and isinstance(current.op, ast.Div):
+            right = current.right
+            if not (isinstance(right, ast.Constant) and isinstance(right.value, str)):
+                segments = []
+                break
+            segments.append(right.value)
+            current = current.left
+        if segments and isinstance(current, ast.Name) and current.id == "ROOT":
+            paths.add("/".join(reversed(segments)))
+        else:
+            # An unrecognised `_load` argument shape must fail the guard loudly
+            # rather than be silently invisible to it.
+            paths.add(f"__unrecognised_load_call_at_line_{node.lineno}__")
+    return paths
+
+
+class AdmissionSourcePresetGuardTests(unittest.TestCase):
+    SOURCE_PATH = ROOT / "engine" / "a_short_experiment_admission_registry.py"
+
+    def test_every_load_call_site_is_in_the_declared_authority_tuple(self):
+        source = self.SOURCE_PATH.read_text(encoding="utf-8")
+        self.assertEqual(
+            _loaded_preset_paths(source),
+            set(registry._ADMISSION_SOURCE_PRESETS),
+            msg="a _load call site outside _ADMISSION_SOURCE_PRESETS would let an "
+                "edited preset return a stale cached registry; extend the tuple",
+        )
+
+    def test_planted_extra_load_call_site_turns_the_guard_red(self):
+        source = self.SOURCE_PATH.read_text(encoding="utf-8")
+        planted = source + (
+            "\n\ndef _planted_probe_builder():\n"
+            "    return _load(ROOT / \"presets\" / \"planted_probe_governance.json\")\n"
+        )
+        extracted = _loaded_preset_paths(planted)
+        self.assertIn("presets/planted_probe_governance.json", extracted)
+        self.assertNotEqual(extracted, set(registry._ADMISSION_SOURCE_PRESETS))
+
+    def test_an_unrecognised_load_argument_shape_is_loud_not_invisible(self):
+        source = self.SOURCE_PATH.read_text(encoding="utf-8")
+        planted = source + (
+            "\n\ndef _planted_dynamic_builder(name):\n"
+            "    return _load(Path(name))\n"
+        )
+        extracted = _loaded_preset_paths(planted)
+        self.assertNotEqual(extracted, set(registry._ADMISSION_SOURCE_PRESETS))
+        self.assertTrue(any(item.startswith("__unrecognised_load_call") for item in extracted))
+
+    def test_snapshot_sha_leg_rederives_when_a_declared_preset_changes(self):
+        # The register's defect-class note: one guard covers all four
+        # `_registry_authority_key` consumption points, but the closure must
+        # assert the `admission_snapshot_sha256` leg too, not only `admissions()`.
+        #
+        # Sealed on purpose: the earlier form edited the real preset in place
+        # and restored it.  Correct serially, but under a parallel lane another
+        # worker can read the probe bytes and go red for no reason, so the edit
+        # happens in a temporary tree and only `ROOT` is redirected.
+        relative = Path("presets") / "egs_industry_heat_governance_20260611.json"
+        original = (ROOT / relative).read_bytes()
+        before = registry.admission_snapshot_sha256("p4_stage3_rank_source")
+        with tempfile.TemporaryDirectory() as tmp:
+            sealed_root = Path(tmp)
+            for source in registry._ADMISSION_SOURCE_PRESETS:
+                target = sealed_root / source
+                target.parent.mkdir(parents=True, exist_ok=True)
+                target.write_bytes((ROOT / source).read_bytes())
+            doc = json.loads(original.decode("utf-8"))
+            doc["__authority_probe__"] = "x"
+            (sealed_root / relative).write_bytes(
+                json.dumps(doc, ensure_ascii=False, indent=2).encode("utf-8"))
+            with mock.patch.object(registry, "ROOT", sealed_root):
+                try:
+                    rederived = registry.admission_snapshot_sha256(
+                        "p4_stage3_rank_source") != before
+                except Exception:
+                    # Revalidation rejecting the edited preset also proves the
+                    # leg re-derives instead of serving the cached digest.
+                    rederived = True
+        self.assertTrue(rederived)
+        self.assertEqual(registry.admission_snapshot_sha256("p4_stage3_rank_source"), before)
+        self.assertEqual((ROOT / relative).read_bytes(), original)
+
+
 if __name__ == "__main__":
     unittest.main()

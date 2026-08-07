@@ -57,6 +57,7 @@ class BoundedUnittestTests(unittest.TestCase):
             [sys.executable, "-m", "unittest", "discover", "-s", "tests", "-p", "test_us_short*.py"],
             10,
             cwd=bounded.ROOT,
+            extra_env=None,
         )
 
     def test_zero_exit_without_unittest_summary_is_unknown(self):
