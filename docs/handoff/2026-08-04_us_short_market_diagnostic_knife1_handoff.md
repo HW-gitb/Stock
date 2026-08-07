@@ -105,3 +105,43 @@ Knife3 lifecycle 同步改为机器自动激活 v1.1：启用前按连续 `paper
 **该 Optional 已闭（2026-08-07 执行方）**：取审查方给的第一种修法——把上一节那句改成实际载体，并写明为什么没走 ledger；没取第二种（补跑一次 `full_pack_ledger run`）的理由记在 register 同一条内。
 
 **该收尾轮审查 verdict = PASS（2026-08-07 审查方）**：整读三处文档改动全文，纯文档故按 rule 8 快档（不起 agent、不跑全量）。改法与不取第二种修法的理由均认可；执行方多做的一步——补上 register `Closure` 里此前缺的全量证据——正是单一来源该有的样子。验收 `tests.test_doc_governance_guard` + `tests.test_route_doc_ledger_status_consistency` → `Ran 55 in 1.7s PASS receipt:bddd2d84688b3fbf02b43b5c`；类声明独立复核：全仓 durable doc 里声称承载本刀全量证据的确实只有被改那一句。本轮另记一条与本刀无关的 Optional（评审循环守卫按 header 动词分类，收尾式 header 会整条跳过），正文只在 `docs/system_risk_register.md::R-DOCGOV-A-REPAIR-ROUND-ESCAPES-THE-TEMPLATE-GUARD-BY-NOT-SAYING-修复`。
+
+## 2026-08-07 追加：接缝审计 verdict = 六处接缝全部成立（一条环境耦合测试红另挂 Required）
+
+**审的问题只有一个**：状态从上一刀流到下一刀有没有断——本轨一周内三次自我发现的缺陷全是「每刀单测绿、接起来是死的」这一类。
+
+**逐缝证据**：①receipt→store：`runners/us_short_market_diagnostic_weekly_fetch.py::next_week_identity:132-133` 周次由冻结首周 + 7 天节律推出、`:157` 强制 `settlement<=valuation<=decision`；审查方活体探针（repo 外临时根、`python -B`）证 `not_started→发 receipt→fresh`、重复签发被 `DiagnosticStartReceiptError` 拒。②model-paper→identity：首周 prior 取种子自身 `as_of`（`:146-155`）、账户未推进走 `WeeklyAdvanceNotReady` 等待态而非故障（`:162`）。③captures→settle：包缺→`waiting_for_inputs`（`:289-296`）、结算委托唯一 owner `settle_week`（边界 publish 与幂等单点，`:297-308` 注释明说不复制该策略）。④cash/g\* loaders：以账本已结周做键、游离目录进不来（`load_cash_returns:332-350` 周次交叉核；`load_target_exposures:375-402` `as_of=decision_date` 绑定 + note digest 进 `source_refs`）。⑤记录→step/聚合器：引用刀 10b 审查轮 16 探针与家族测试包。⑥step→capstone：引用今晨 10c 审查轮 7 植入（staging root 名单量词化 + splice 落 §12）。
+
+**根管道事实（写给未来读者）**：capstone 的 `market_diagnostic_root` 只覆盖诊断 store 根；`inputs_root` / `model_paper_root` / `runs_private_root` / `output_root` 各有默认、指真树。实跑全默认=一致；任何 sandbox 用法（含演练刀）五根**必须全部显式传参**。
+
+**唯一发现**：`FRED_API_KEY` 已进操作者环境后，`tests/test_us_short_market_diagnostic_cash_return.py:426` 恒红（测试断言 key 缺失却未隔离环境）——`R-USSHORT-CASH-KEY-TEST-READS-THE-OPERATORS-ENVIRONMENT`（Required，正文只在 register）。另一条非缺陷 wiring 留痕（一键 settle 无 sidecar 绑定参数）已追加进股息条目。
+
+## 2026-08-07 追加：演练刀（rehearsal harness）执行规格 — 待用户 `执行` 后由 Codex 实施
+
+**为什么要这刀**：刀 0–10c 全部建完并接线，但从没有任何一次运行让 26 个连续周走完整条链；本轨一周内三次自我发现的缺陷（报告行无读取方、staging root 未注入、周任务只读不推进）共同点都是「每刀单测全绿、接起来是死的」。开钟不可回滚（第 1 周由 receipt 冻结），在那之前需要一个能反复空跑、产物可读的检查台。**演练产物永远不是诊断证据，不进任何真根，不可被引用。**
+
+**新建文件（零生产代码改动）**：`runners/us_short_market_diagnostic_rehearsal.py` + `tests/test_us_short_market_diagnostic_rehearsal.py`。授权一致性守卫把新函数拉进论域时按机制加豁免并写明理由（参照 `splice_diagnostic_report_lines` 那条的形态）。
+
+**CLI**：`--root`（必填）、`--weeks`（默认 26）、`--first-decision-date`（必填，YYYYMMDD，须为交易周一；receipt schema 拒周末，审查方已实测）、`--no-count-weeks`（可选，逗号分隔周号）、`--with-total-return-sidecar`（可选旗标，见下）。
+
+**唯一的门（fail-closed，~10 行）**：`--root` 必须为绝对路径，且 `resolve()` 后**不在仓库树内**（与 `engine.us_short_private_paths.ROOT` 比较）——这同时排除了所有 engine 默认根（`market_diagnostic_private` / `market_diagnostic_inputs_private` / `model_paper_private` / `runs_private` / `DEFAULT_PUBLIC_ROOT` 全在仓内）。非空根直接拒绝（操作者自己删；不做 `--reset`）。**审查方已探针实证**：repo 外 TemporaryDirectory 被 store 守卫接受（`reject_nonprivate_output_path` 明文放行仓外绝对路径），故此门**不需要动任何守卫或白名单**——原第一拆刀条件解除。
+
+**sandbox 布局**（runner 在 `--root` 下自建）：`diag/`（诊断 store）、`inputs/`（inputs_root）、`model_paper/`、`runs/`（runs_private）、`public/`（成绩单 output_root）、`reports/<decision_date>/weekly_report.md`。
+
+**rehearsal 标记**：`diagnostic_epoch="rehearsal-<YYYYMMDD>-<n>"`（审查方已实测过 schema）；每份周报第 1 节内容带「REHEARSAL — 非诊断证据」横幅（横幅是节内容，不改 renderer 契约）。
+
+**每周链条（全部复用现有公开入口，不绕道）**：①model-paper 周：`initialize_store` 一次播种 + 逐周 `freeze_decision_bundle` → `commit_settlement_and_freeze_next`（`paper_evaluable=true`；seed/bundle/settlement 形状抄 `tests/test_us_short_model_paper_store.py` 的 fixtures；价格路径用确定性序列，零随机）；②基准包：优先复用 fetch 模块「下载」与「组包」的分层（若可分），否则按 schema 直接合成 `benchmark_week_directory(decision_date, inputs_root)/PACKET_FILENAME`，由 settle 的 `validate_local_price_packet` 守门；③现金观测：按 capture schema 1.1.0 合成 `cash_week_directory(...)/OBSERVATION_FILENAME`（顶层带 `calendar_week_index` + `observation`，`available_from` 语义）；④敞口记录：用真 writer `engine/us_short_decision_exposure.py::build_decision_exposure_record` + `write_decision_exposure` 写进 `runs/`；⑤结算：`settle_captured_week(root=diag, model_paper_root=…, inputs_root=…, output_root=public, as_of_date=该周 decision_date)`——与 capstone 一键路径同一入口，边界周自动出成绩单、幂等已由引擎自证；⑥读取：`weekly_diagnostic_step(root=diag, as_of, cash_return_by_week=load_cash_returns(root=diag, inputs_root=…), target_exposure_by_week=load_target_exposures(root=diag, runs_private_root=…))`；⑦周报：用真 renderer 渲染 13 节报告（参照 producer 测试的 `_rendered_weekly_report`），`splice_diagnostic_report_lines` 把该周行拼进 §12。**关键**：五个根全部显式传参——capstone 的 `market_diagnostic_root` 只覆盖 store 根，兄弟根默认指真树，rehearsal 一个都不能省。
+
+**`--no-count-weeks`**：那几周跳过②③（不写 captures）→ 引擎自然走 `waiting_for_inputs` / 该周按引擎规则记 no_count/unavailable；报告可见、26 周分母保留。注意设计 §5.2：启用前的 no-count 会清零 v1.1 连续计数——文档示例用激活后的周号（如 7）。
+
+**`--with-total-return-sidecar`**：默认关。开了则改走 `settle_week(benchmark_packet_path=…, total_return_sidecar_path=…)`（`runners/us_short_market_diagnostic_weekly.py` 的手动路径），VTI sidecar fixture 抄 `tests/test_us_short_market_diagnostic_total_return.py`——这是全仓唯一能**看见** v1.1 完整数字（`raw_excess = exposure + active`）的方式；默认关的原因：一键路径 `settle_captured_week` 没有 sidecar 参数（该 wiring 缺口已记入 register 股息条目 addendum），默认模式如实展示当前一键路径会给出的样子（v1.1 active 但周周 `unavailable`）。若 sidecar fixture 合成过重，此旗标允许拆成后续小刀（第二拆刀条件）。
+
+**零网络**：不 import 任何 provider 模块；测试 poison `socket`/`urlopen` 跑一次最小演练证零请求。
+
+**测试（最小集）**：门三拒（仓内路径 / 省略 `--root` / 非空根）；零网络；N 周跑完产物齐（逐周报告带 §12 行、第 4→5 周 X/4→active 转移可见、边界周成绩单存在、rehearsal 横幅存在）；`--no-count-weeks` 的周在报告可见且分母不变；跑后 `git status` 零变化。
+
+**剩余拆刀条件（撞上即停并报，不硬顶）**：①跨周摘要链（`prior_state_sha256` 类）靠 store 公开 API 拼不出——可能性低，`commit_settlement_and_freeze_next` 存在的理由就是兜它；②sidecar fixture 过重 → 拆 `--with-total-return-sidecar`。
+
+**规模估计**：连测试 ~400–600 行，一刀（半天）。**验证**：焦点 = 新测试模块 + `tests.test_us_short_market_diagnostic_weekly_advance`（同入口消费方）；不触发 rule 3（无生产改动）。
+
+**给 Codex 的命令**：`执行` = 按本节实施 `runners/us_short_market_diagnostic_rehearsal.py` + 测试；先修 register `R-USSHORT-CASH-KEY-TEST-READS-THE-OPERATORS-ENVIRONMENT`（不修它，本机任何含 cash_return 模块的包都是红的，演练刀自己的验证包会被它污染）。
