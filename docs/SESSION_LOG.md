@@ -1,5 +1,20 @@
 # Session Log
 
+## 2026-08-07 — Claude 审查 PASS（现金 key 测试的环境隔离一刀）
+
+- **Verdict/Action**: PASS，已提交并合入 master。整读修后测试全文与被消费链（`_run:387-400` → `capture_cash_week:201` 的 `api_key if api_key is not None else _api_key()` → `:73` env 回退）。修法两条腿都对：隔离腿在 `patch.dict` 内 pop 掉键；**正向对照是这轮真正的增量**——没有它，把 env 回退整个删掉两个测试照样绿，「因为没 key」与「因为回退没了」不可分辨。执行方复现探针的方法（shell 读不到用户级变量故注入假 key）与我探测时的处境一致，合理。
+- **Required**: 无。`R-USSHORT-CASH-KEY-TEST-READS-THE-OPERATORS-ENVIRONMENT` resolved 我认可（`Register: already covered`，正文只在 register）。
+- **Verify**: review-evidence:77ff4643d215。自跑验收超集 `Ran 88 in 1.9s PASS receipt:14cb52e75cb5b58f1a93b568`（无 key 世界）；自建**有假 key 世界**子进程整模块对照绿——两个世界独立复核成立，真实 key 全程未读。自写 2 植入 **2 红**、零残留：撤回隔离→有 key 世界复现原错 `FAILED(failures=1)`（无 key 世界仍绿，正是原「借来的绿」形态）；删掉 `:201` env 回退→正向对照红。类扫描抽查：生产侧 env 读点集合与 register 所列一致（7 键 + `API_KEY_ENV`），MASSIVE 侧测试实用 `patch.dict` 造环境。改动仅测试文件，rule 3 未触发，不起 agent。
+- **Next**: 无。
+
+## 2026-08-07 — Claude Code 现金 key 测试的环境依赖已闭（断言「没有 key」，读的却是操作者的机器）
+
+- **Verdict/Action**: 复现审查方探针（本会话 shell 早于该用户级变量启动、读不到它，故注入**假 key** 复现）：`AssertionError: 'unavailable' != 'evaluable'`，逐字一致；真实 key 全程未读未打印未落盘。修法照 Required 两条都做：该测试自建「没有 key」的世界（`mock.patch.dict(os.environ)` 内 pop 掉 `FRED_API_KEY`），并加正向对照——种一个假 key 进被 patch 的环境、同样省略 `api_key`，断言捕获真经该 key 到达厂商。没有第二条，把 env 回退整个删掉也照样绿。
+- **Required**: `R-USSHORT-CASH-KEY-TEST-READS-THE-OPERATORS-ENVIRONMENT` 已翻 resolved——机制、类扫描口径、刻意没做的那件事与闭合证据只在 `docs/system_risk_register.md`（单一来源，本处不复述）。
+- **Verify**: 该模块在**设了** key 与**完全没有**该变量的两个进程下各 `Ran 33 tests OK`；焦点包 4 模块两种环境世界各 `Ran 202 tests PASS`（`receipt:ed47432ae82ad4eca45c6810` / `receipt:6ce6a121704e8ee917cf8b76`）。3 个植入 **3 红**（撤回隔离→设了 key 的机器复现原错；删 env 回退→正向对照红；正向对照不自建环境→无 key 机器红），控制组先全绿。`git diff --check` clean；改动只在测试文件，不触发 rule 3。
+- **Pre-Codex self-review**: matrix=类扫描**从生产侧数**而非测试侧——本例测试自己压根没写 `os.environ`，读它的是被调 runner，只 grep 测试必漏。`engine/us_short*`+`runners/us_short*` 共 8 个 ambient env 读点逐个查其测试，其余全部已用 `patch.dict`/patch `get` 造好环境，只此一处没有；间接调用方也逐个确认显式传 key 或整个 mock 掉。register=同轮 resolved 并写明不新增类守卫的理由。handoff=不追加：测试卫生单点，无 phase 级决定。focused=两条 receipt 见 Verify。full-lane=不触发。door=doc-governance + route-doc ledger。独立对抗 pass：不适用（测试隔离单点，已配 3 植入 3 红）。
+- **Next**: 交另一工作树审查。
+
 ## 2026-08-07 — Claude 审查（26 周诊断轨六处接缝审计）+ 演练刀规格落 handoff
 
 - **Verdict/Action**: 接缝审查结论=**六处接缝全部成立**（receipt→store→settle→loaders→step→capstone 的周次推导、对齐不变式、账本键控与 digest 绑定逐缝实读+活体探针；逐缝证据与行号见主 handoff 本日「接缝审计 verdict」追加节），一条环境耦合测试红挂 Required。同轮把**演练刀执行规格**追加到主 handoff（入口/五根显式传参/门/标记/拆刀条件/验收全钉死），其中两个关键事实由本轮探针实证：repo 外临时根被 store 守卫接受（原拆刀条件①解除）、`rehearsal-` epoch 过 schema。

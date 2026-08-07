@@ -3,9 +3,11 @@ from __future__ import annotations
 import copy
 from datetime import datetime, timezone
 import json
+import os
 from pathlib import Path
 import tempfile
 import unittest
+from unittest import mock
 
 from engine.us_short_market_diagnostic_attribution import (
     build_attribution_input,
@@ -424,13 +426,41 @@ class CashFetchRunnerTest(unittest.TestCase):
         self.assertIn("realtime_end=2026-08-06", self.requests[0])
 
     def test_a_missing_key_fails_closed_without_touching_the_network(self) -> None:
-        """No fallback to the unpinned public download: that view is revised."""
+        """No fallback to the unpinned public download: that view is revised.
 
-        result = self._run(api_key=None)
+        The world where the operator has no key is BUILT here, not borrowed from
+        whoever happens to run the tests. Omitting ``api_key`` lets
+        ``_api_key()`` fall back to ``FRED_API_KEY`` — a deliberate design, since
+        the CLI takes no key argument — so on the machine that has one set for
+        the coming real weeks this asserted `unavailable` and got `evaluable`.
+        Green here used to mean "nobody has configured the vendor yet".
+        """
+
+        with mock.patch.dict(os.environ):
+            os.environ.pop(cash.API_KEY_ENV, None)
+            result = self._run(api_key=None)
         self.assertEqual("unavailable", result["cash_status"])
         self.assertEqual([], self.requests)
         stored = cash.week_directory(DECISION, inputs_root=self.inputs) / cash.CAPTURE_FILENAME
         self.assertIn("MissingApiKey", stored.read_text(encoding="utf-8"))
+
+    def test_the_environment_fallback_is_what_supplies_the_key(self) -> None:
+        """The other half, or the test above passes for the wrong reason.
+
+        Asserting only the empty environment would stay green if the fallback
+        were deleted outright — `unavailable` for the wrong reason reads exactly
+        like `unavailable` for the right one. So the same omitted argument, with
+        a key planted in the environment, must reach the vendor through that key.
+        """
+
+        planted = "e" + "n" * 31
+        with mock.patch.dict(os.environ, {cash.API_KEY_ENV: planted}):
+            result = self._run(api_key=None)
+        self.assertEqual("evaluable", result["cash_status"])
+        self.assertEqual(1, len(self.requests), "the env key did not reach the vendor")
+        self.assertIn(f"api_key={planted}", self.requests[0])
+        stored = cash.week_directory(DECISION, inputs_root=self.inputs) / cash.CAPTURE_FILENAME
+        self.assertNotIn(planted, stored.read_text(encoding="utf-8"))
 
     def test_the_key_never_reaches_any_stored_byte(self) -> None:
         """urllib puts the failing URL, and therefore the key, into its message."""
