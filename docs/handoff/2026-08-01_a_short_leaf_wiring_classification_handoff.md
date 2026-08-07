@@ -2294,3 +2294,62 @@ margin 两模块 56 绿；验收包 682 绿（`receipt:c1de5807ed0db575bfec092e`
 ### 下一步
 
 序 11 收口。队列上仍未开工的是序 7（#02 汇总/账本事务性）、序 8（#10 `price_as_of` 双口径）、序 13/14/15，以及本文件文末那两把小刀（①触发周成绩对账 ②变化率族）——后者是用户 2026-08-06 指定的下一个事项，前置（序 19 批合入 master）已满足。
+
+## 2026-08-07 追加：序 11 审查方 Optional 收口 + 序 7 开工前范围核查（含一条必须先裁的方案缺口）
+
+**改了什么**
+
+1. `engine/a_short_effect_contract.py::static_contract_error` 加**反向棘轮腿**：`pending - set(baseline)` 非空即报错。原来只有 `baseline ⊆ pending` 一半，于是显式登记 `{"category": "unclassified_pending_audit"}` 就能绕开兜底闸把新债入账。报错措辞刻意写「用真实 category 裁定它」而不是「加进基线」。
+2. 同一函数的效果证明循环去掉 `if not isinstance(override, dict): continue`：**live 三类的 override 必须是 dict**，裸字符串只允许命名非 live 类别。原来唯一装不下证据的写法恰好也是唯一被免除提供证据的写法。既有 4 条裸字符串 override 都是 `duplicate_or_display_audit`，原样不动。
+3. `engine/a_short_effect_consumer_probe.py` docstring 的「371-leaf inventory」改成「数量取自 schema」。
+4. `schemas/a_short_m67_effect_contract.json` 只重封 `decision_predicate_sha256` 的 `engine/a_short_effect_contract.py` 一键。
+
+**为什么改**
+
+审查方那条 Optional 判据成立且我复现过：给 `universe_summary.after_l0_count` 显式登记 pending 后，pending 226 / 基线 225 而 `static_contract_error()` 仍返回 `None`。按 `pre_codex_self_review_checklist` §A.5，这种门要钉在自足校验器里，不能只靠测试。第 2 条是我自己记的观察③ 的**整类版本**——桌面把它列成「4 条裸字符串统一成 object」的形态整理，实读发现背后是一个真实的证据豁免口子，故修类不修实例。
+
+**验证命令与结果**
+
+- focused：`.toolsun_unittest_with_repo_pythonpath.cmd tests.test_a_short_effect_contract tests.test_a_short_effect_consumer_probe tests.test_a_short_evidence_epoch_mode` → `Ran 120 tests in 265.6s ... OK`，`receipt:e77eb544bdb7ac56e42b3755`，`bundles=a_short_effect_contract`。118 → 120 恰为本轮两条新测试。
+- 植入对照 2/2，中和的都是门本身：反向腿挖成 `unlisted_pending = []` → `test_new_debt_cannot_be_booked_through_an_explicit_override` 单点红；live-claim 的 `isinstance` 门挖掉 → `test_a_live_claim_may_not_be_written_in_the_evidence_free_form` 红。
+- **full lane 未触发**：本轮只改 `static_contract_error`（全仓 grep 零生产调用者）与一处 docstring，未碰 `_leaf_effect_map`，AGENTS rule 3 (a)-(e) 均不成立；按 rule 8 起全量属过度校验。
+- 静态：`py_compile` 3 文件过、`git diff --check` 干净、契约 JSON 解析通过、`static_contract_error()` 返回 `None`。
+
+**序 7（#02 汇总/账本事务性）—— 只做了开工前范围核查，代码未动**
+
+- 写盘面整类枚举与桌面一致：tracked 的周跑 sidecar 公共汇总共 7 轨 13 文件，但落在 `publish_weekly_bundle()` **之前**的恰是桌面点名的 4 轨 8 个（`runners/a_short_weekly_pipeline.py:5929-6007`）；`official_operation_evidence` 在 `:6160` 之后，两条 regime 汇总由 PS1 Stage 5 独立进程写。
+- **发现一条必须先裁的方案缺口**：桌面验收「成功路径 → tracked reproducibility 守卫绿」靠方案 1-6 达不到。`tests/test_a_short_industry_weight_comparison.py:337` 拿 tracked JSON 比 `build_public_progress(root=None, as_of="20260727")`——写死日期 + 写死「无私密根」那一支，所以**成功的周跑同样会打红它**。详见 register 同名条目的「执行前范围核查」节。
+- 另：方案第 3 条的「目录 fsync」在 Windows 上不可实现，实现时会替换为 journal 文件 fsync + `os.replace` + 读前回滚，不假装做了目录级持久化。
+
+**失效旧结论**
+
+- register `R-ASHORT-ANTI-DANGLING-GUARD-IS-GROUP-GRAINED-...` 的「未修的观察 ②③」已处置（②已修、③改成整类修）；观察① 维持不修，理由在同条。
+
+**下一步注意事项**
+
+- 序 7 尚未实现。开工前需用户就上面那条守卫判据裁一刀：方案第 4 条（`source_ledger_as_of` / `source_projection_sha256` / `source_status`）与守卫改判「内部自洽」要么同刀做、要么都不做——只做其一都会留下没人消费的指纹或没有锚的守卫。
+
+## 2026-08-07 追加：序 11 Optional 收口 独立审查 —— PASS
+
+### 判定
+
+**PASS，已提交并合入 master。** 我那条 Optional（棘轮只有单向）闭得干净，且执行方把同一类的另一半也一并修了。
+
+### 我实际验了什么
+
+- **反向腿承重**：用上一轮的确切探针——`universe_summary.after_l0_count` 显式登记 `{"category": "unclassified_pending_audit"}`——现在被点名拒绝；把该段从源码副本整体挖掉，同一输入立刻回到 `None`，精确复现我报的那个洞。
+- **裸字符串 live 声明**：三类 live 全部被拒；把该腿还原成修前的 `continue`，`m67_main_decision` 立刻放行。既有 4 条裸字符串 override 实测全是 `duplicate_or_display_audit`，修前修后诚实契约都 `None`——没有误伤。
+- **行为不变 / 重封正确**：398 叶七类计数与上一轮逐项相同，基线 225 == pending 225，`static_contract_error()` 返回 `None`。焦点超集 `Ran 76 tests ... OK`（`receipt:cdc8046ab5d1ec337ca2243c`）；治理门 55 OK。
+- **未触发全量的判据**：全仓 grep 确认 `static_contract_error` / `validate_static_contract` 在测试与本模块之外零调用者，`_leaf_effect_map` 本轮未动，rule 3 不成立——同意不跑。
+
+### 序 7 那条待裁的缺口，我复核过，成立
+
+`tests/test_a_short_industry_weight_comparison.py:337` 确实把 tracked JSON 与 `build_public_progress(root=None, as_of="20260727")` 作相等断言（写死 as_of + 钉死无私密根那一支），所以**成功**的周跑一样会打红它。执行方给的方向（守卫改断内部自洽 + 方案第 4 条三个 source 字段同刀做）判据正确，但那是改守卫判据本身，属用户级裁决，我不代拍。
+
+### 未覆盖维度与诚实边界
+
+全量本轮未触发也未跑（静态判断 + focused 覆盖，不是全量证据）；执行方焦点包 3 模块 120 条，我按 rule ⑤ 只跑覆盖改动符号的 2 模块 76 条；序 7 只审了结论与那条守卫判据，其余六件无代码可审。
+
+### 下一步
+
+序 11 全部收口（新叶闸 + 双向棘轮 + live 声明形态）。序 7 需用户先裁那条守卫判据再开工；队列其余为序 8 / 13 / 14 / 15 与文末两把小刀。

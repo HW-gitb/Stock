@@ -1109,6 +1109,20 @@ def static_contract_error(contract: dict | None = None, *, inventory: dict | Non
         return ("effect contract unclassified_pending_audit_baseline still lists "
                 f"{len(stale_baseline)} leaf/leaves that no longer classify as pending "
                 f"(e.g. {stale_baseline[0]}); remove them -- the list may only shrink")
+    # The other direction.  `_leaf_effect_map`'s gate only guards the fallback
+    # branch, and an explicit override outranks it: writing
+    # ``{"category": "unclassified_pending_audit"}`` for an unlisted leaf books
+    # new debt without ever touching the baseline.  Closing only the fallback
+    # would leave that door open in the self-contained validator and rely on a
+    # test to notice.
+    unlisted_pending = sorted(path for path, category in effect_by_path.items()
+                              if category == "unclassified_pending_audit"
+                              and path not in set(baseline))
+    if unlisted_pending:
+        return ("effect contract declares "
+                f"{len(unlisted_pending)} leaf/leaves unclassified that the frozen baseline "
+                f"does not list (e.g. {unlisted_pending[0]}); adjudicate them with a real "
+                "category -- new debt may not be added to the baseline")
     _LIVE_EFFECTS = {"m67_main_decision", "formal_comparison_verdict",
                      "upstream_candidate_set_or_rank"}
     for group in groups:
@@ -1121,14 +1135,19 @@ def static_contract_error(contract: dict | None = None, *, inventory: dict | Non
                     f"{len(live)} of its leaves already reach a live terminal "
                     f"(e.g. {live[0]}); use partial_consumption")
     for path, override in (contract.get("leaf_effect_overrides") or {}).items():
-        if not isinstance(override, dict):
-            continue
         category = effect_by_path[path]
-        if category in {"m67_main_decision", "formal_comparison_verdict",
-                        "upstream_candidate_set_or_rank"}:
-            if not all(str(override.get(key) or "").strip()
-                       for key in ("consumer_ref", "terminal_surface", "mutation_evidence")):
-                return f"effect contract leaf {path} effect proof incomplete"
+        if category not in {"m67_main_decision", "formal_comparison_verdict",
+                            "upstream_candidate_set_or_rank"}:
+            continue
+        # A bare-string override names a category and carries no evidence, so
+        # skipping it here would let a live claim in through the one form that
+        # cannot hold the proof.  Only a non-live category may stay bare.
+        if not isinstance(override, dict):
+            return (f"effect contract leaf {path} claims a live effect as a bare string; "
+                    "a live claim must carry consumer_ref / terminal_surface / mutation_evidence")
+        if not all(str(override.get(key) or "").strip()
+                   for key in ("consumer_ref", "terminal_surface", "mutation_evidence")):
+            return f"effect contract leaf {path} effect proof incomplete"
     for group in groups:
         nature = contract["leaf_nature_by_group"][group["id"]]
         policy = group["policy"]
