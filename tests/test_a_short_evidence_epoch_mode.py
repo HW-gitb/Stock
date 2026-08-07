@@ -1032,6 +1032,9 @@ class SemanticProjectionTests(unittest.TestCase):
             document["analysis_input_paths"] = ["candidates[].invented"]
             document["analysis_input_all_paths_sha256"] = "f" * 64
             document["legacy_migration_sha256"] = "e" * 64
+            # Wiring or deleting a leaf shrinks this list every time; that shrink
+            # decides nothing, so it must not invalidate accumulated evidence.
+            document["unclassified_pending_audit_baseline"] = ["candidates[].invented"]
 
         before, after = self._fingerprint_after(
             root, "m67_effect_contract",

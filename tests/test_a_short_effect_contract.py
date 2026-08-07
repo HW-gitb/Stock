@@ -36,6 +36,240 @@ from tests.test_a_short_weekly_pipeline import (  # noqa: E402
 )
 
 
+#: The 225 analysis_input leaves that nothing mechanical classified on the day
+#: the pending-audit gate landed (2026-08-07).  Frozen here, in a different
+#: file from the contract, so the live baseline can be checked against an
+#: anchor a contract edit does not travel with.  Entries may leave this list
+#: (a leaf gets wired or deleted); nothing may ever be added.
+_PENDING_AUDIT_LANDING_SNAPSHOT = (
+    "account_context.mode",
+    "account_context.positions[].current_price",
+    "account_context.positions[].entry_date",
+    "account_context.positions[].entry_price",
+    "account_context.positions[].floating_pnl_pct",
+    "account_context.positions[].name",
+    "account_context.positions[].shares",
+    "account_context.positions[].stop_loss",
+    "account_context.positions[].take_profit_1",
+    "account_context.positions[].take_profit_2",
+    "account_context.positions[].ts_code",
+    "candidates[].analysis_role",
+    "candidates[].board",
+    "candidates[].capital_flow.moneyflow.big_order_ratio",
+    "candidates[].catalyst.concept_strength_score",
+    "candidates[].catalyst.concepts[]",
+    "candidates[].catalyst.policy_news[].published_at",
+    "candidates[].catalyst.policy_news[].source",
+    "candidates[].catalyst.policy_news[].title",
+    "candidates[].catalyst.policy_news[].url",
+    "candidates[].catalyst.theme_taxonomy.automatic_promotion",
+    "candidates[].catalyst.theme_taxonomy.canonical_themes[]",
+    "candidates[].catalyst.theme_taxonomy.comparison_metrics.breadth_pass",
+    "candidates[].catalyst.theme_taxonomy.comparison_metrics.comparison_status",
+    "candidates[].catalyst.theme_taxonomy.comparison_metrics.fit_pass",
+    "candidates[].catalyst.theme_taxonomy.comparison_metrics.fit_score",
+    "candidates[].catalyst.theme_taxonomy.comparison_metrics.persistence_mult",
+    "candidates[].catalyst.theme_taxonomy.comparison_status",
+    "candidates[].catalyst.theme_taxonomy.l3_provenance.coverage_complete",
+    "candidates[].catalyst.theme_taxonomy.l3_provenance.coverage_digest",
+    "candidates[].catalyst.theme_taxonomy.l3_provenance.provider",
+    "candidates[].catalyst.theme_taxonomy.l3_provenance.raw_membership_source",
+    "candidates[].catalyst.theme_taxonomy.l3_provenance.scoring_universe",
+    "candidates[].catalyst.theme_taxonomy.l3_provenance.snapshot_date",
+    "candidates[].catalyst.theme_taxonomy.l3_provenance.validation_status",
+    "candidates[].catalyst.theme_taxonomy.primary_canonical_theme_id",
+    "candidates[].catalyst.theme_taxonomy.production_effect_enabled",
+    "candidates[].catalyst.theme_taxonomy.raw_concepts[]",
+    "candidates[].catalyst.theme_taxonomy.source_as_of",
+    "candidates[].catalyst.theme_taxonomy.taxonomy_configuration_fingerprint",
+    "candidates[].catalyst.theme_taxonomy.taxonomy_schema_name",
+    "candidates[].catalyst.theme_taxonomy.taxonomy_schema_version",
+    "candidates[].catalyst.theme_taxonomy.unavailable_reason",
+    "candidates[].catalyst.time_window",
+    "candidates[].event_risk.holder_reduction.observed_at",
+    "candidates[].event_risk.holder_reduction.reduce_penalty",
+    "candidates[].event_risk.holder_reduction.source_status",
+    "candidates[].event_risk.regulatory.evidence[].published_at",
+    "candidates[].event_risk.regulatory.evidence[].source",
+    "candidates[].event_risk.regulatory.evidence[].title",
+    "candidates[].event_risk.regulatory.evidence[].url",
+    "candidates[].event_risk.regulatory.negative_depth",
+    "candidates[].event_risk.rule6_checks[].evidence[].published_at",
+    "candidates[].event_risk.rule6_checks[].evidence[].source",
+    "candidates[].event_risk.rule6_checks[].evidence[].title",
+    "candidates[].event_risk.rule6_checks[].evidence[].url",
+    "candidates[].event_risk.rule6_checks[].group",
+    "candidates[].event_risk.rule6_checks[].id",
+    "candidates[].event_risk.rule6_checks[].metrics",
+    "candidates[].event_risk.rule6_checks[].name",
+    "candidates[].event_risk.rule6_checks[].notes",
+    "candidates[].event_risk.suspension.observed_at",
+    "candidates[].event_risk.suspension.source_status",
+    "candidates[].event_risk.unlock.denominator",
+    "candidates[].event_risk.unlock.large_unlock_flag",
+    "candidates[].event_risk.unlock.observed_at",
+    "candidates[].event_risk.unlock.source_status",
+    "candidates[].event_risk.unlock.unlock_date",
+    "candidates[].event_risk.unlock.unlock_pct",
+    "candidates[].exchange",
+    "candidates[].fundamental.expectation.esp_raw",
+    "candidates[].fundamental.expectation.ind_median_profit_growth",
+    "candidates[].fundamental.profitability.q0_net_income",
+    "candidates[].fundamental.profitability.q0_profit_dedt",
+    "candidates[].fundamental.profitability.q1_dt_yoy",
+    "candidates[].fundamental.profitability.roe",
+    "candidates[].fundamental.profitability.ttm_profit_dedt",
+    "candidates[].fundamental.quality.q0_dt_profit_ratio",
+    "candidates[].fundamental.quality.ttm_ocf_ratio",
+    "candidates[].fundamental.valuation.pb",
+    "candidates[].fundamental.valuation.pe",
+    "candidates[].fundamental.valuation.pe_ttm",
+    "candidates[].fundamental.valuation.peg",
+    "candidates[].fundamental.valuation.total_mv",
+    "candidates[].fundamental.valuation.val_bonus",
+    "candidates[].fundamental.valuation.val_penalty",
+    "candidates[].industry.industry_fundamental_trend",
+    "candidates[].industry.industry_fundamental_trend_evidence[].published_at",
+    "candidates[].industry.industry_fundamental_trend_evidence[].source",
+    "candidates[].industry.industry_fundamental_trend_evidence[].title",
+    "candidates[].industry.industry_fundamental_trend_evidence[].url",
+    "candidates[].industry.industry_trend",
+    "candidates[].industry.industry_trend_evidence[].published_at",
+    "candidates[].industry.industry_trend_evidence[].source",
+    "candidates[].industry.industry_trend_evidence[].title",
+    "candidates[].industry.industry_trend_evidence[].url",
+    "candidates[].industry.industry_trend_signal.classification",
+    "candidates[].industry.industry_trend_signal.classifier_version",
+    "candidates[].industry.industry_trend_signal.configuration_fingerprint",
+    "candidates[].industry.industry_trend_signal.forward_calibration_required",
+    "candidates[].industry.industry_trend_signal.industry_heat_score",
+    "candidates[].industry.industry_trend_signal.industry_trend",
+    "candidates[].industry.industry_trend_signal.positive_effect_enabled",
+    "candidates[].industry.industry_trend_signal.risk_filter_v1_prior",
+    "candidates[].industry.industry_trend_signal.source_as_of",
+    "candidates[].industry.industry_trend_signal.source_id",
+    "candidates[].industry.industry_trend_signal.sw_l2_code",
+    "candidates[].industry.industry_trend_signal.sw_l2_name",
+    "candidates[].industry.industry_trend_signal.thresholds.headwind_max",
+    "candidates[].industry.industry_trend_signal.thresholds.tailwind_min",
+    "candidates[].industry.industry_trend_signal.unavailable_reason",
+    "candidates[].industry.industry_trend_signal.validation_status",
+    "candidates[].industry.sw_l1_code",
+    "candidates[].industry.sw_l1_name",
+    "candidates[].industry.sw_l2_code",
+    "candidates[].industry.sw_l2_name",
+    "candidates[].liquidity.avg_amount_20d",
+    "candidates[].liquidity.turnover_rate",
+    "candidates[].name",
+    "candidates[].portfolio_impact.correlation_action",
+    "candidates[].portfolio_impact.factor_exposures[].factor",
+    "candidates[].portfolio_impact.factor_exposures[].status",
+    "candidates[].portfolio_impact.factor_exposures[].threshold",
+    "candidates[].quote.adjustment",
+    "candidates[].quote.close",
+    "candidates[].quote.current_price",
+    "candidates[].quote.price_source",
+    "candidates[].quote.price_time",
+    "candidates[].quote.source_trade_date",
+    "candidates[].scores.cat_flag",
+    "candidates[].scores.cat_score",
+    "candidates[].scores.deduct",
+    "candidates[].scores.egs_base",
+    "candidates[].scores.esp_score",
+    "candidates[].scores.industry_heat_score",
+    "candidates[].scores.l1_score",
+    "candidates[].scores.l2_flags",
+    "candidates[].scores.l4_flag",
+    "candidates[].scores.l4_score",
+    "candidates[].scores.multiplier",
+    "candidates[].selection.cninfo_flag",
+    "candidates[].selection.entry_flag",
+    "candidates[].selection.rank",
+    "candidates[].selection.still_in_pool",
+    "candidates[].selection.tier",
+    "candidates[].ts_code",
+    "decision_as_of",
+    "horizon",
+    "market",
+    "market_context.margin_coverage.coverage_complete",
+    "market_context.margin_coverage.effective_ref_date",
+    "market_context.margin_coverage.reference_date",
+    "market_context.margin_coverage.row_count",
+    "market_context.margin_coverage.status",
+    "market_context.margin_coverage.universe_size",
+    "market_context.market_regime.confidence",
+    "market_context.market_regime.triggers[].id",
+    "market_context.market_regime.triggers[].status",
+    "market_context.market_regime.triggers[].threshold",
+    "market_context.market_regime.triggers[].value",
+    "market_context.moneyflow_coverage.coverage_complete",
+    "market_context.moneyflow_coverage.observed_trade_dates[]",
+    "market_context.moneyflow_coverage.reference_date",
+    "market_context.moneyflow_coverage.requested_trade_dates[]",
+    "market_context.moneyflow_coverage.row_count",
+    "market_context.moneyflow_coverage.status",
+    "market_context.moneyflow_coverage.target_complete_count",
+    "market_context.moneyflow_coverage.target_universe_size",
+    "market_context.moneyflow_coverage.universe_size",
+    "market_context.trade_calendar.calendar_source",
+    "market_context.trade_calendar.latest_trade_date",
+    "market_context.trade_calendar.recent_trade_dates[]",
+    "market_context.volatility.awakening_status",
+    "market_context.volatility.iv_symbol",
+    "market_context.volatility.rule3_status",
+    "preset",
+    "price_data_through",
+    "run_date",
+    "schema_name",
+    "source.clocks.decision_as_of",
+    "source.clocks.price_data_through",
+    "source.clocks.run_date",
+    "source.data_provider",
+    "source.hard_veto_source_health.holder_reduction.observed_at",
+    "source.hard_veto_source_health.holder_reduction.status",
+    "source.hard_veto_source_health.suspension.observed_at",
+    "source.hard_veto_source_health.suspension.status",
+    "source.hard_veto_source_health.unlock.observed_at",
+    "source.hard_veto_source_health.unlock.status",
+    "source.l3_coverage.catalog_board_count",
+    "source.l3_coverage.catalog_digest",
+    "source.l3_coverage.catalog_tag",
+    "source.l3_coverage.complete",
+    "source.l3_coverage.excluded_non_main_board_member_count",
+    "source.l3_coverage.main_board_member_pair_count",
+    "source.l3_coverage.market_suffix_counts",
+    "source.l3_coverage.out_of_a_share_member_count",
+    "source.l3_coverage.raw_member_row_count",
+    "source.l3_coverage.received_board_count",
+    "source.l3_coverage.scope_filtered_empty_board_count",
+    "source.l3_coverage.scoring_universe",
+    "source.l3_coverage.source",
+    "source.l3_coverage.unique_member_pair_count",
+    "source.l3_coverage.verified_empty_board_count",
+    "source.l3_mode",
+    "source.l3_pit_strict",
+    "source.l3_provider",
+    "source.l3_snapshot_date",
+    "source.run_identity.candidate_digest",
+    "source.run_identity.run_id",
+    "source.run_identity.stage_status",
+    "source.screening_engine",
+    "source.screening_engine_version",
+    "state_refs.circuit_breaker",
+    "state_refs.execution_log",
+    "state_refs.positions",
+    "state_refs.veto_log",
+    "trade_date",
+    "universe_summary.excluded_counts",
+    "universe_summary.final_count",
+    "universe_summary.full_count",
+    "universe_summary.rank_exclusion_counts.l1_industry_leader",
+    "universe_summary.rank_exclusion_counts.l2_quality_risk",
+    "universe_summary.rank_exclusion_counts.rank_unexpected",
+    "universe_summary.watch_count",
+)
+
+
 class EffectContractMemoTests(unittest.TestCase):
     def setUp(self):
         effect_contract_module._default_static_inventory_from_snapshot.cache_clear()
@@ -774,9 +1008,21 @@ class LeafEffectPendingAuditTests(unittest.TestCase):
                       if v == "unclassified_pending_audit")
         claimed = copy.deepcopy(self.contract)
         claimed["leaf_effect_overrides"][target] = {"category": "true_dangling"}
+        # Adjudicating a leaf is two steps: record the category and take the
+        # leaf off the frozen debt list.  Doing only the first is refused.
+        self.assertIn("may only shrink",
+                      static_contract_error(claimed, inventory=self.inventory) or "")
+        claimed["unclassified_pending_audit_baseline"] = [
+            path for path in claimed["unclassified_pending_audit_baseline"]
+            if path != target
+        ]
         self.assertIsNone(static_contract_error(claimed, inventory=self.inventory))
         unproven = copy.deepcopy(self.contract)
         unproven["leaf_effect_overrides"][target] = {"category": "m67_main_decision"}
+        unproven["unclassified_pending_audit_baseline"] = [
+            path for path in unproven["unclassified_pending_audit_baseline"]
+            if path != target
+        ]
         self.assertIn("effect proof incomplete",
                       static_contract_error(unproven, inventory=self.inventory) or "")
 
@@ -806,6 +1052,129 @@ class LeafEffectPendingAuditTests(unittest.TestCase):
         override = self.contract["leaf_effect_overrides"]["candidates[].scores.final_score"]
         self.assertIn("reports[].m67.table.EGS分", override["terminal_surface"])
         self.assertIn("1795", override["mutation_evidence"])
+
+
+class UnclassifiedPendingBaselineGateTests(unittest.TestCase):
+    """Today's unproven remainder is frozen debt; a new arrival must be judged.
+
+    The old fallback silently absorbed any leaf nothing else classified, so
+    adding or reworking a field never forced the question "does this reach a
+    result?".  The baseline turns that fallback into a closed list: it may
+    shrink as leaves get wired or deleted, and nothing new may join it.
+    """
+
+    #: The pending set on the day this gate landed.  The live baseline is
+    #: asserted to be a subset of it, so the list can never be refreshed with
+    #: new debt -- only entries present on landing day may remain.
+    LANDING_SNAPSHOT = frozenset(_PENDING_AUDIT_LANDING_SNAPSHOT)
+
+    #: A group whose leaves are computed, must affect a result, and are not
+    #: proven -- the shape a genuinely new business field arrives in.
+    UNPROVEN_GROUP_PREFIX = "state_refs"
+    #: A group that is adjudicated independent, so new leaves classify without
+    #: anyone being asked.
+    INDEPENDENT_GROUP_PREFIX = "source.input_files"
+
+    def setUp(self):
+        self.contract = load_contract()
+        self.inventory = static_inventory()
+        self.paths = self.inventory["analysis_input_paths"]
+        self.derived_null = tuple(self.inventory["producer_constant_null_leaves"])
+        self.effects = leaf_effects(self.contract, self.inventory)
+        self.baseline = self.contract["unclassified_pending_audit_baseline"]
+
+    def _classify(self, contract, paths, derived_null=None):
+        return effect_contract_module._leaf_effect_map(
+            contract, paths,
+            self.derived_null if derived_null is None else derived_null)
+
+    def test_the_baseline_is_exactly_todays_unclassified_remainder(self):
+        pending = {path for path, category in self.effects.items()
+                   if category == "unclassified_pending_audit"}
+        self.assertEqual(set(self.baseline), pending)
+        self.assertEqual(self.baseline, sorted(set(self.baseline)))
+
+    def test_the_baseline_may_only_shrink_from_the_landing_snapshot(self):
+        added = sorted(set(self.baseline) - self.LANDING_SNAPSHOT)
+        self.assertEqual(added, [], "the frozen debt list may not gain members")
+
+    def test_a_new_computed_leaf_must_be_adjudicated_when_it_arrives(self):
+        new_leaf = f"{self.UNPROVEN_GROUP_PREFIX}.invented_business_field"
+        self.assertNotIn(new_leaf, self.paths)
+        with self.assertRaises(ValueError) as caught:
+            self._classify(self.contract, self.paths + [new_leaf])
+        self.assertIn(new_leaf, str(caught.exception))
+        self.assertIn("leaf_effect_overrides", str(caught.exception))
+
+    def test_the_baseline_is_what_refuses_the_new_leaf(self):
+        """Control: same input, gate opened -- the leaf classifies, no raise."""
+        new_leaf = f"{self.UNPROVEN_GROUP_PREFIX}.invented_business_field"
+        opened = copy.deepcopy(self.contract)
+        opened["unclassified_pending_audit_baseline"] = sorted(
+            set(self.baseline) | {new_leaf})
+        effects = self._classify(opened, self.paths + [new_leaf])
+        self.assertEqual(effects[new_leaf], "unclassified_pending_audit")
+
+    def test_a_leaf_that_stops_being_producer_null_must_be_adjudicated(self):
+        target = next(path for path in self.derived_null
+                      if self.effects[path] == "producer_constant_null"
+                      and path not in self.contract["leaf_effect_overrides"])
+        shrunk = tuple(path for path in self.derived_null if path != target)
+        with self.assertRaises(ValueError) as caught:
+            self._classify(self.contract, self.paths, derived_null=shrunk)
+        self.assertIn(target, str(caught.exception))
+
+    def test_a_new_leaf_that_classifies_mechanically_is_not_asked_about(self):
+        independent_leaf = f"{self.INDEPENDENT_GROUP_PREFIX}.invented_lineage_note"
+        effects = self._classify(self.contract, self.paths + [independent_leaf])
+        self.assertIn(effects[independent_leaf],
+                      {"duplicate_or_display_audit", "intentionally_independent_or_delete"})
+        null_leaf = f"{self.UNPROVEN_GROUP_PREFIX}.invented_null_field"
+        effects = self._classify(self.contract, self.paths + [null_leaf],
+                                 derived_null=self.derived_null + (null_leaf,))
+        self.assertEqual(effects[null_leaf], "producer_constant_null")
+
+    def test_a_wired_leaf_may_not_stay_on_the_baseline(self):
+        target = self.baseline[0]
+        wired = copy.deepcopy(self.contract)
+        wired["leaf_effect_overrides"][target] = {"category": "true_dangling"}
+        error = static_contract_error(wired, inventory=self.inventory) or ""
+        self.assertIn("may only shrink", error)
+        self.assertIn(target, error)
+
+    def test_a_deleted_leaf_may_not_stay_on_the_baseline(self):
+        stale = copy.deepcopy(self.contract)
+        stale["unclassified_pending_audit_baseline"] = sorted(
+            set(self.baseline) | {"candidates[].removed_last_release"})
+        error = static_contract_error(stale, inventory=self.inventory) or ""
+        self.assertIn("may only shrink", error)
+        self.assertIn("candidates[].removed_last_release", error)
+
+    def test_a_leaf_turned_constant_null_may_not_stay_on_the_baseline(self):
+        target = self.baseline[0]
+        inventory = dict(self.inventory)
+        inventory["producer_constant_null_leaves"] = list(self.derived_null) + [target]
+        error = static_contract_error(self.contract, inventory=inventory) or ""
+        self.assertIn("may only shrink", error)
+        self.assertIn(target, error)
+
+    def test_the_baseline_must_stay_sorted_and_duplicate_free(self):
+        churned = copy.deepcopy(self.contract)
+        churned["unclassified_pending_audit_baseline"] = list(reversed(self.baseline))
+        self.assertIn("sorted and duplicate-free",
+                      static_contract_error(churned, inventory=self.inventory) or "")
+        duplicated = copy.deepcopy(self.contract)
+        duplicated["unclassified_pending_audit_baseline"] = self.baseline + [self.baseline[0]]
+        self.assertIn("sorted and duplicate-free",
+                      static_contract_error(duplicated, inventory=self.inventory) or "")
+
+    def test_a_missing_baseline_is_refused_rather_than_defaulted(self):
+        absent = copy.deepcopy(self.contract)
+        del absent["unclassified_pending_audit_baseline"]
+        self.assertIn("unclassified_pending_audit_baseline",
+                      static_contract_error(absent, inventory=self.inventory) or "")
+        with self.assertRaises(ValueError):
+            self._classify(absent, self.paths)
 
 
 if __name__ == "__main__":

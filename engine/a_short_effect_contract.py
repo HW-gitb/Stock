@@ -266,6 +266,10 @@ def _leaf_effect_map(contract: dict, paths: list[str],
     overrides = contract.get("leaf_effect_overrides")
     if not isinstance(overrides, dict):
         raise ValueError("leaf_effect_overrides missing")
+    baseline = contract.get("unclassified_pending_audit_baseline")
+    if not isinstance(baseline, list) or any(not isinstance(item, str) for item in baseline):
+        raise ValueError("unclassified_pending_audit_baseline missing")
+    baseline_pending = set(baseline)
     path_set = set(paths)
     unknown = sorted(set(overrides) - path_set)
     if unknown:
@@ -302,6 +306,19 @@ def _leaf_effect_map(contract: dict, paths: list[str],
                     # ``true_dangling`` requires an explicit, evidenced override so
                     # the published count can never pass an un-audited remainder
                     # off as a finished audit.
+                    #
+                    # This branch is frozen debt, not a default landing zone.  A
+                    # leaf reaches it only when nothing mechanical classifies it,
+                    # so a leaf arriving here that is not already on the baseline
+                    # is exactly the one worth asking about: a new computed leaf,
+                    # a producer that stopped emitting a literal ``None``, a
+                    # renamed path, or a leaf that fell out of its group's proof.
+                    if path not in baseline_pending:
+                        raise ValueError(
+                            "unclassified analysis_input leaf outside the frozen "
+                            f"pending-audit baseline: {path}; register it in "
+                            "leaf_effect_overrides with a category, or prove its "
+                            "consumer -- the baseline may only shrink")
                     category = "unclassified_pending_audit"
             if category not in _LEAF_EFFECT_CATEGORIES:
                 raise ValueError(f"unknown leaf effect category for {path}: {category!r}")
@@ -1073,11 +1090,25 @@ def static_contract_error(contract: dict | None = None, *, inventory: dict | Non
         nature_by_path = _leaf_nature_map(contract, paths)
     except (TypeError, ValueError, KeyError) as exc:
         return f"effect contract nature classification invalid: {exc}"
+    baseline = contract.get("unclassified_pending_audit_baseline")
+    if not isinstance(baseline, list) or any(not isinstance(item, str) for item in baseline):
+        return "effect contract unclassified_pending_audit_baseline missing or malformed"
+    if baseline != sorted(set(baseline)):
+        return "effect contract unclassified_pending_audit_baseline must be sorted and duplicate-free"
     try:
         effect_by_path = _leaf_effect_map(
             contract, paths, tuple(inventory["producer_constant_null_leaves"]))
     except (TypeError, ValueError, KeyError) as exc:
         return f"effect contract leaf effect classification invalid: {exc}"
+    # Ratchet: the baseline is a debt list, so every entry must still be a real
+    # debt.  A leaf that has since been wired, deleted, renamed, or turned
+    # constant-null must leave the list; nothing may be parked there.
+    stale_baseline = sorted(path for path in baseline
+                            if effect_by_path.get(path) != "unclassified_pending_audit")
+    if stale_baseline:
+        return ("effect contract unclassified_pending_audit_baseline still lists "
+                f"{len(stale_baseline)} leaf/leaves that no longer classify as pending "
+                f"(e.g. {stale_baseline[0]}); remove them -- the list may only shrink")
     _LIVE_EFFECTS = {"m67_main_decision", "formal_comparison_verdict",
                      "upstream_candidate_set_or_rank"}
     for group in groups:
