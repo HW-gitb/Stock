@@ -1,5 +1,28 @@
 # Session Log
 
+## 2026-08-07 — Claude 审查 PASS（US-short 刀 10c：诊断报告行接进周报 §12；并发假红 Optional 收口）
+
+- **Verdict/Action**: PASS，已提交并合入 master。整读被消费的函数体而非只看 diff：`splice_diagnostic_report_lines`、`_deliver_diagnostic_report_lines`、三个 `market_diagnostic*` stage、`_official_output_paths` 与 publish 事务。设计对照成立：§1.3 只动已注册区块、休眠周不打开文件、诊断异常不 abort 周任务；§5.2 的 X/4 与 §13 累计状态这次真到达周报。两处「放松」判为正确：`outputs=[]`（声明为 output 会要求本周必变，正好打死休眠周）、授权豁免仅一函数且与既有同类同形。
+- **Required**: 无。`Register: already covered by R-USSHORT-26W-DIAG-REPORT-LINES-HAVE-NO-CONSUMER + R-USSHORT-A-TEST-WRITES-THE-REAL-LIFECYCLE-REGISTER-AND-A-CONCURRENT-GUARD-SEES-IT`（同批 resolved；另记一条 Optional，正文只在 register）。
+- **Verify**: review-evidence:c1d76cf12e07。自跑焦点超集 `Ran 253 in 106.0s PASS receipt:d57ba0bd7c83bfc3b10d778d`＋capstone 消费方 `Ran 89 in 23.5s PASS receipt:fe404aabd63ffaf6a784bab2`。自写 **7 植入 7 红**、控制组先全绿、零残留（`python -B`）：staging 名单漏 stage／休眠打开文件／交付失败 raise 进周任务／两个 §12 标题被收／贴下一标题插入／`capture_failed` 不发行／新类守卫被绕过。独立核承重假设：renderer 缺任一节即拒渲染，`## 12. ` 恒存在。全量按 rule 4 引用执行方 `5561/5561`，未重跑。超时原因:对象在 hook 快照之后才落树，前半程先按「无审查对象」核了一遍。
+- **Next**: 无。
+
+## 2026-08-07 — Claude Code Optional 已闭（并发全量偶发假红的根因是一次真树写入，不是 carrier）
+
+- **Verdict/Action**: 上一轮挂的 Optional 收口，动手前先把自己的归因证伪了两处：写入方**不是**我先前点名的 `test_us_short_weekend_batch4_context_builder`（它的 `--lifecycle-register` 指向临时根），而是 `test_us_short_weekend_lifecycle_stage::DefaultRegisterPath` 真往 `state/us_short/lifecycle/lifecycle_register.json` 写完再删；「未改树上也红的 5 个模块」也不是 carrier 缺陷，是我 kill 掉的两次跑留下的 worker 仍持着跨进程锁。全仓 AST 扫描证明这类写法只此一处、三条腿。
+- **Required**: `R-USSHORT-A-TEST-WRITES-THE-REAL-LIFECYCLE-REGISTER-AND-A-CONCURRENT-GUARD-SEES-IT`（同轮 resolved；开条时的旧 ID 已在 register 内注明）——机制、两处更正、被否掉的两个原方案与未做的边界只在 `docs/system_risk_register.md`（单一来源，本处不复述）。
+- **Verify**: 焦点包 `Ran 87 tests in 23.5s PASS receipt:edfded37936cfe96c08a6b0e`（lifecycle stage + 类守卫 + IO 清单 + lifecycle store + discovery conformance）；4 个植入 **4 红**、控制组先全绿；终稿 diff 的并发全量 `PASS 5561/5561 803.9s`（计数门相等）——背靠背第二跑在 860s 上限 `TIMEOUT`（5430/5561 已派发），是墙钟不是红，故不再排第三次（rule 5）；`docs/us_short_test_io_inventory_20260801.json` 只减一条 `class4_unresolved_write` 键（3 增 5 删，未重排整文件）；`git diff --check` clean。
+- **Pre-Codex self-review**: matrix=先按「把写方法作用在 engine/runners 导出路径常量上」这一形状 AST 扫全部 `tests/**/test_us_short*.py`（唯一命中即该模块三条腿 mkdir/write_text/unlink），再逐条判定原 Required 的两个方案：塞串行尾巴会让守卫 import 基线包含整波残留（假红换假绿）、按 worker 重取基线在模块各占一进程时物理上做不到，故两者皆否、改为去掉那次写。register=旧条按实测重写并改名、同轮 resolved。handoff=repair-closeout 主 handoff 追加根因节。focused=`receipt:edfded37936cfe96c08a6b0e`。full-lane=见 Verify。door=doc-governance + route-doc ledger。独立对抗 pass：不适用（测试基础设施、不碰选股面；4 植入全红）。
+- **Next**: 交另一工作树审查。
+
+## 2026-08-07 — Claude Code 刀 10c 已闭（26 周诊断轨报告行接进周报已注册的 §12 区块）
+
+- **Verdict/Action**: 接线一刀收口。`weekly_diagnostic_step` 四态都算出 `report_lines`，而全仓读取方为零——三个 `market_diagnostic*` stage 都排在 `weekly_bridge` 之后，周报渲染完就没人再碰，于是钟一旦跑起来，设计 §5.2 要的 X/4 每周提醒与 §13 要的「经已注册 reminder 区块暴露累计状态」都只到内存为止。落点取自注册自身发布的 `section_number=12`，不新开自由文本 H2（§1.3 明令禁止）。
+- **Required**: `R-USSHORT-26W-DIAG-REPORT-LINES-HAVE-NO-CONSUMER`（本轮新开、同轮 resolved）与 `R-USSHORT-PARALLEL-FULL-LANE-MANUFACTURES-A-RED-THE-SERIAL-PACK-NEVER-SEES`（新开 P2，证据通道）——完整机制、缺陷类枚举、刻意不发行的取舍与基线对照只在 `docs/system_risk_register.md`（单一来源，本处不复述）。
+- **Verify**: 焦点包 `Ran 412 tests in 77.5s PASS receipt:c2e5f1b1aa86c992731b06f6`；自打 18 植入 **18 红**、控制组先全绿；全量按 rule 3a（改动含生产顶层 runner `runners/us_short_weekly_capstone.py`）以 `workers=1` 承载 `parallel_lane_runner us_short workers=1 → `RESULT status=PASS tests=5559 elapsed=766.8s`、计数门 discovered=5559 ran=5559 equal=True`——并发 carrier 假红（记账运行两次复现），`git stash` 后在未改树上跑同一并发 carrier 另有 5 个模块红、均不在本轮改动面，理由见上条 register；`git diff --check` clean。
+- **Pre-Codex self-review**: matrix=按 §1 量词化论域（三个 stage × 全部状态 = 19 个产出分支逐条判定）：被点名的读取腿之外，另有 5 个失败/停滞态此前一律静默（fetch 的 `capture_failed` 与异常、settle 的两个 `waiting_*` 与异常），一并接线并改单出口；离线全绿后自审再抓到第三条腿——诊断 stage 拿不到本次 transaction 的 staging root，实跑每周投递失败而离线测试照样绿，已按 pipeline 量词化守卫。register=两条新条目。handoff=主 handoff 追加 + 索引同步。focused=`receipt:c2e5f1b1aa86c992731b06f6`。full-lane=见 Verify。door=doc-governance + route-doc ledger。独立对抗 pass：不适用（单轮接线、不碰选股面；18 植入全红）。
+- **Next**: 交另一工作树审查。
+
 ## 2026-08-07 — Claude Code 并行全量实测：加速只有 10.6%，但计数门抓到一个久未发现的真缺陷
 
 - **Verdict/Action**: 在 `wt/us-short_r28` 实测并行全量。`parallel_lane_runner us_short` 首跑 `status=UNKNOWN exit=125`，因计数门 `discovered=5560 ran=5570 equal=False`。查清并修复后重跑 **`status=PASS`、`5540=5540`、471.3s**，对比串行记账 526.9s，**省 55.6s（10.6%）**。并行结果自此可当合法全量引用。

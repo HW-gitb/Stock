@@ -36,6 +36,69 @@ from tests.test_us_short_market_diagnostic_local_adapter import _packet, _start_
 
 
 ROOT = Path(__file__).resolve().parents[1]
+_REPORT_CONTRACT = json.loads(
+    (ROOT / "presets" / "us_short_weekly_report_contract_20260620.json").read_text(encoding="utf-8")
+)
+
+
+def _rendered_weekly_report() -> str:
+    """A real §11.2 report, produced by the real renderer.
+
+    Hand-writing the markdown would test the splice against this file's idea of
+    the surface rather than against the frozen one, which is the drift the
+    contract preset exists to prevent.
+    """
+
+    from engine.us_short_weekly_report_renderer import render_weekly_report
+
+    return render_weekly_report(
+        {
+            "banner": {
+                "price_clock": {
+                    "price_data_through": "20260619",
+                    "news_window_through": "20260619",
+                    "session_scope": "RTH",
+                    "decision_date": "20260622",
+                }
+            },
+            "lifecycle_reminder_count": {"section_1": 3, "section_12": 3},
+            "sections": {
+                str(index): ["(content %d)" % index]
+                for index in range(1, len(_REPORT_CONTRACT["sections"]) + 1)
+            },
+        }
+    )
+
+
+def _section_body(report: str, section: int | None = None) -> list[str]:
+    """The lines under one section header, exclusive of the next header."""
+
+    if section is None:
+        section = task.REPORT_REMINDER_SECTION
+    lines = report.splitlines()
+    start = lines.index("## %d. %s" % (section, _REPORT_CONTRACT["sections"][section - 1]))
+    end = next(
+        (index for index in range(start + 1, len(lines)) if lines[index].startswith("## ")),
+        len(lines),
+    )
+    return [line for line in lines[start + 1:end] if line.strip()]
+
+
+def _rename_registered_section(report: str) -> str:
+    """The same report with its registered section header renamed out of existence.
+
+    Written line-wise rather than with ``str.replace``: the repository's test-I/O
+    inventory reads a bare ``replace`` call as ``Path.replace``, and a string
+    method masquerading as a filesystem write is exactly the false positive that
+    guard has been taught not to accept.
+    """
+
+    prefix = "## %d. " % task.REPORT_REMINDER_SECTION
+    lines = [
+        "## 99. 不存在的节" if line.startswith(prefix) else line
+        for line in report.splitlines()
+    ]
+    return "\n".join(lines) + ("\n" if report.endswith("\n") else "")
 
 
 def _open_clock(root: Path, *, epoch: str, first_decision_date: str) -> None:
@@ -712,16 +775,41 @@ class WeeklyHostStageTest(unittest.TestCase):
         holder = tempfile.TemporaryDirectory()
         self.addCleanup(holder.cleanup)
         self.store = Path(holder.name) / "market_diagnostic_private"
+        self.output_root = Path(holder.name) / "official_output"
+        self.report_path = self.output_root / "weekly_private" / "20260801" / "weekly_report.md"
         self.rows = _weekly_rows()
 
-    @staticmethod
-    def _ctx(root):
+    def _ctx(self, root, *, output_root=None):
         from runners.us_short_weekly_capstone import CapstoneContext
 
         context = CapstoneContext.__new__(CapstoneContext)
         object.__setattr__(context, "market_diagnostic_root", root)
         object.__setattr__(context, "decision_date", "20260801")
+        # The stages annotate the weekly report the bridge already produced, so a
+        # context that cannot name one is a context whose lines have nowhere to go.
+        object.__setattr__(context, "private_root", output_root or self.output_root)
+        object.__setattr__(context, "official_output_root", None)
         return context
+
+    def _running(self, weeks: int) -> None:
+        _open_clock(
+            self.store,
+            epoch=self.rows[0]["diagnostic_epoch"],
+            first_decision_date=self.rows[0]["decision_date"],
+        )
+        for row in self.rows[:weeks]:
+            persist_settled_weekly_record(row, root=self.store)
+
+    def _seed_report(self) -> str:
+        # Written through the attribute the temporary root proves, not through a
+        # helper's return value: the test-I/O inventory can follow the former.
+        self.report_path.parent.mkdir(parents=True, exist_ok=True)
+        rendered = _rendered_weekly_report()
+        self.report_path.write_text(rendered, encoding="utf-8")
+        return rendered
+
+    def _section_12(self) -> list[str]:
+        return _section_body(self.report_path.read_text(encoding="utf-8"))
 
     def test_the_stage_is_registered_in_the_weekly_plan(self) -> None:
         """The whole point of 7b-iv: the official weekly task reaches this track."""
@@ -777,6 +865,57 @@ class WeeklyHostStageTest(unittest.TestCase):
         ) as step:
             capstone._run_market_diagnostic(self._ctx(self.store))
         self.assertEqual(self.store, step.call_args.kwargs["root"])
+
+    def test_every_diagnostic_stage_is_handed_this_run_s_staging_root(self) -> None:
+        """Otherwise the whole splice is wired and inert on a live run.
+
+        A live run keeps `weekly_private/<decision_date>/` empty until the
+        terminal publish moves staging into it, so a diagnostic stage handed the
+        published root would look for a weekly report that is not there yet and
+        report `report_lines_delivered=False` every single week — while every
+        offline test, which has no transaction, passed.
+
+        Quantified over the pipeline rather than over the three names known
+        today: a fourth diagnostic stage joins this requirement by existing.
+        """
+
+        from runners.us_short_weekly_capstone import (
+            _OFFICIAL_ARTIFACT_STAGES,
+            default_pipeline,
+        )
+
+        diagnostic = {
+            stage.name
+            for stage in default_pipeline(include_model_paper=True, include_soft_discovery=True)
+            if stage.name.startswith("market_diagnostic")
+        }
+        self.assertTrue(diagnostic, "the pipeline scan found no diagnostic stage at all")
+        self.assertEqual(
+            set(),
+            diagnostic - _OFFICIAL_ARTIFACT_STAGES,
+            "a diagnostic stage would be handed the published root, where this run has no report yet",
+        )
+
+    def test_the_staging_root_wins_over_the_published_one(self) -> None:
+        """The report this run may still annotate is the staged one, not last week's."""
+
+        import runners.us_short_weekly_capstone as capstone
+
+        self._seed_report()
+        staged = self.output_root / "staging"
+        staged_report = staged / "weekly_private" / "20260801" / "weekly_report.md"
+        staged_report.parent.mkdir(parents=True, exist_ok=True)
+        staged_report.write_text(_rendered_weekly_report(), encoding="utf-8")
+        published_before = self.report_path.read_bytes()
+
+        context = self._ctx(self.store)
+        object.__setattr__(context, "official_output_root", staged)
+        self._running(2)
+        result = capstone._run_market_diagnostic(context)
+
+        self.assertTrue(result["report_lines_delivered"])
+        self.assertIn("v1.1", "\n".join(_section_body(staged_report.read_text(encoding="utf-8"))))
+        self.assertEqual(published_before, self.report_path.read_bytes())
 
     def test_a_dormant_clock_makes_the_stage_a_no_op(self) -> None:
         from runners.us_short_weekly_capstone import _run_market_diagnostic
@@ -888,6 +1027,305 @@ class WeeklyHostStageTest(unittest.TestCase):
         self.assertEqual("broken", result["clock_status"])
         self.assertIn("disk went away", result["problem"])
         self.assertFalse(result["provider_calls_performed"])
+
+    # --- Knife 10c: the lines have to reach the report a human actually reads ---
+
+    def test_a_dormant_run_leaves_the_weekly_report_byte_identical(self) -> None:
+        """The hard constraint, asserted on bytes rather than on intent.
+
+        All three stages run on a clock nobody opened; the report the bridge
+        produced must come out of them unchanged, down to its mtime-independent
+        bytes, and no temporary must be left beside it.
+        """
+
+        from runners.us_short_weekly_capstone import (
+            _run_market_diagnostic,
+            _run_market_diagnostic_fetch,
+            _run_market_diagnostic_settle,
+        )
+
+        self._seed_report()
+        before = self.report_path.read_bytes()   # bytes, because that is the claim
+        for stage in (_run_market_diagnostic_fetch, _run_market_diagnostic_settle,
+                      _run_market_diagnostic):
+            with self.subTest(stage=stage.__name__):
+                result = stage(self._ctx(self.store))
+                self.assertEqual([], result["report_lines"])
+                self.assertNotIn("report_lines_delivered", result)
+        self.assertEqual(before, self.report_path.read_bytes())
+        self.assertEqual(
+            ["weekly_report.md"],
+            sorted(path.name for path in self.report_path.parent.iterdir()),
+        )
+
+    def test_a_pending_clock_puts_its_x_of_4_reminder_into_the_report(self) -> None:
+        """Design section 5.2: the X/4 line, from calendar week one, without being asked."""
+
+        from runners.us_short_weekly_capstone import _run_market_diagnostic
+
+        self._seed_report()
+        self._running(2)
+        result = _run_market_diagnostic(self._ctx(self.store))
+        self.assertTrue(result["report_lines_delivered"])
+        body = self._section_12()
+        self.assertEqual(1, len([line for line in body if "v1.1" in line]))
+        self.assertIn("2/4", "\n".join(body))
+        self.assertIn("累计可评估周", "\n".join(body))
+
+    def test_an_active_clock_puts_both_of_its_lines_into_the_report(self) -> None:
+        from runners.us_short_weekly_capstone import _run_market_diagnostic
+
+        self._seed_report()
+        self._running(5)
+        result = _run_market_diagnostic(self._ctx(self.store))
+        self.assertTrue(result["report_lines_delivered"])
+        self.assertEqual(
+            result["report_lines"], self._section_12()[len(_section_body(_rendered_weekly_report())):]
+        )
+
+    def test_a_broken_clock_says_so_in_the_report(self) -> None:
+        from runners.us_short_weekly_capstone import _run_market_diagnostic
+
+        self._seed_report()
+        self._running(2)
+        (self.store / "diagnostic_start_receipt.json").unlink()
+        result = _run_market_diagnostic(self._ctx(self.store))
+        self.assertTrue(result["report_lines_delivered"])
+        self.assertIn("故障", "\n".join(self._section_12()))
+
+    def test_the_splice_never_moves_the_report_off_its_frozen_surface(self) -> None:
+        """No new second-level heading, no reordered section: the §11.2 surface holds."""
+
+        from engine.us_short_weekend_private_write import _validate_weekly_report_surface
+        from runners.us_short_weekly_capstone import _run_market_diagnostic
+
+        before = self._seed_report()
+        self._running(5)
+        _run_market_diagnostic(self._ctx(self.store))
+        after = self.report_path.read_text(encoding="utf-8")
+        _validate_weekly_report_surface(after)
+        headings = [line for line in after.splitlines() if line.startswith("## ")]
+        self.assertEqual([line for line in before.splitlines() if line.startswith("## ")], headings)
+        for section in range(1, len(_REPORT_CONTRACT["sections"]) + 1):
+            if section == task.REPORT_REMINDER_SECTION:
+                continue
+            with self.subTest(section=section):
+                self.assertEqual(_section_body(before, section), _section_body(after, section))
+
+    def test_a_failed_capture_reaches_the_report_without_carrying_its_reason(self) -> None:
+        """A paid boundary that died must be visible — and must not paste a URL into the report.
+
+        The cash capture's errors can echo a request URL that contains the API
+        key, and `problem` carries absolute paths besides, so the report gets a
+        fixed sentence and the detail stays in the run summary.
+        """
+
+        from unittest import mock
+
+        import runners.us_short_weekly_capstone as capstone
+
+        self._seed_report()
+        secret = "https://api.example.invalid/fred?api_key=NOTAREALKEY0000000000000000000000"
+        with mock.patch(
+            "runners.us_short_market_diagnostic_weekly_fetch.fetch_next_week",
+            side_effect=RuntimeError(secret),
+        ):
+            result = capstone._run_market_diagnostic_fetch(self._ctx(self.store))
+        self.assertEqual("failed", result["fetch_status"])
+        self.assertTrue(result["provider_calls_performed"], "an unknown at a paid boundary is not False")
+        self.assertTrue(result["report_lines_delivered"])
+        body = "\n".join(self._section_12())
+        self.assertIn("抓取失败", body)
+        self.assertNotIn(secret, body)
+        self.assertNotIn("api_key", body)
+
+        with mock.patch(
+            "runners.us_short_market_diagnostic_weekly_fetch.fetch_next_week",
+            return_value={"status": "capture_failed", "problem": secret, "provider_calls": 4,
+                          "calendar_week_index": 3, "report_lines": []},
+        ):
+            second = capstone._run_market_diagnostic_fetch(self._ctx(self.store))
+        self.assertEqual("capture_failed", second["fetch_status"])
+        self.assertTrue(second["report_lines_delivered"])
+        self.assertNotIn(secret, "\n".join(self._section_12()))
+
+    def test_a_successful_capture_adds_no_line_of_its_own(self) -> None:
+        """Only the reader stage speaks in a healthy week; the rest would be noise."""
+
+        from unittest import mock
+
+        import runners.us_short_weekly_capstone as capstone
+
+        before = self._seed_report()
+        for status, extra in (
+            ("captured", {"provider_calls": 4, "cash_status": "evaluable"}),
+            ("dormant", {}),
+            # `broken` is the reader stage's line, and it is last and always runs.
+            ("broken", {"problem": "the ledger cannot be read"}),
+            ("waiting_for_paper_week", {"reason": "no new week"}),
+        ):
+            with self.subTest(status=status):
+                with mock.patch(
+                    "runners.us_short_market_diagnostic_weekly_fetch.fetch_next_week",
+                    return_value={"status": status, "report_lines": [], **extra},
+                ):
+                    result = capstone._run_market_diagnostic_fetch(self._ctx(self.store))
+                self.assertEqual([], result["report_lines"])
+        self.assertEqual(before, self.report_path.read_text(encoding="utf-8"))
+
+    def test_a_settle_that_did_not_advance_says_so_in_the_report(self) -> None:
+        from unittest import mock
+
+        import runners.us_short_weekly_capstone as capstone
+
+        for status, marker in (
+            ("waiting_for_paper_week", "还没有结算出新的一周"),
+            ("waiting_for_inputs", "没有捕获到"),
+        ):
+            with self.subTest(status=status):
+                self._seed_report()
+                with mock.patch(
+                    "runners.us_short_market_diagnostic_weekly_fetch.settle_captured_week",
+                    return_value={"status": status, "report_lines": []},
+                ):
+                    result = capstone._run_market_diagnostic_settle(self._ctx(self.store))
+                self.assertEqual(status, result["settle_status"])
+                self.assertTrue(result["report_lines_delivered"])
+                self.assertIn(marker, "\n".join(self._section_12()))
+
+        self._seed_report()
+        with mock.patch(
+            "runners.us_short_market_diagnostic_weekly_fetch.settle_captured_week",
+            side_effect=RuntimeError("D:/private/ledger.json is unreadable"),
+        ):
+            failed = capstone._run_market_diagnostic_settle(self._ctx(self.store))
+        self.assertEqual("failed", failed["settle_status"])
+        body = "\n".join(self._section_12())
+        self.assertIn("结算失败", body)
+        self.assertNotIn("D:/private/ledger.json", body)
+
+    def test_a_settled_week_adds_no_settle_line(self) -> None:
+        from unittest import mock
+
+        import runners.us_short_weekly_capstone as capstone
+
+        before = self._seed_report()
+        for status in ("settled", "dormant", "broken"):
+            with self.subTest(status=status):
+                with mock.patch(
+                    "runners.us_short_market_diagnostic_weekly_fetch.settle_captured_week",
+                    return_value={"status": status, "calendar_week_index": 1, "report_lines": []},
+                ):
+                    result = capstone._run_market_diagnostic_settle(self._ctx(self.store))
+                self.assertEqual([], result["report_lines"])
+        self.assertEqual(before, self.report_path.read_text(encoding="utf-8"))
+
+    def test_a_report_that_cannot_be_annotated_never_fails_the_week(self) -> None:
+        """The diagnostic may not block selection, and that includes its own reporting."""
+
+        from runners.us_short_weekly_capstone import _run_market_diagnostic
+
+        self._running(2)
+        result = _run_market_diagnostic(self._ctx(self.store))   # no report was seeded
+        self.assertEqual("running", result["clock_status"])
+        self.assertTrue(result["report_lines"])
+        self.assertFalse(result["report_lines_delivered"])
+        self.assertIn("WeeklyReportSpliceError", result["report_lines_problem"])
+
+        # And the same when the report exists but has lost the registered section.
+        damaged = _rename_registered_section(self._seed_report())
+        self.report_path.write_text(damaged, encoding="utf-8")
+        second = _run_market_diagnostic(self._ctx(self.store))
+        self.assertEqual("running", second["clock_status"])
+        self.assertFalse(second["report_lines_delivered"])
+        self.assertEqual(damaged, self.report_path.read_text(encoding="utf-8"))
+
+
+class DiagnosticReportSpliceTest(unittest.TestCase):
+    """Knife 10c: the splice itself — where it writes, and what it refuses."""
+
+    def setUp(self) -> None:
+        holder = tempfile.TemporaryDirectory()
+        self.addCleanup(holder.cleanup)
+        self.report = Path(holder.name) / "weekly_report.md"
+        self.rendered = _rendered_weekly_report()
+        self.report.write_text(self.rendered, encoding="utf-8")
+
+    def test_the_section_it_writes_into_is_the_registered_one(self) -> None:
+        """The claim `已注册区块`, bound to the frozen contract rather than to a habit.
+
+        Design section 1.3 permits exactly one thing to vary in the weekly report
+        — the reminder block registered on the lifecycle path — so the section
+        number has to be the lifecycle-reminder section, not a number that once
+        happened to point at it.
+        """
+
+        self.assertEqual(
+            "字段·模块生命周期提醒",
+            _REPORT_CONTRACT["sections"][task.REPORT_REMINDER_SECTION - 1],
+        )
+        self.assertEqual(
+            task.REPORT_REMINDER_SECTION,
+            _REPORT_CONTRACT["lifecycle_reminder_count_consistency"]["section_number_b"],
+        )
+
+    def test_lines_land_at_the_end_of_that_section(self) -> None:
+        self.assertTrue(
+            task.splice_diagnostic_report_lines(self.report, ["- 甲", "- 乙"])
+        )
+        after = self.report.read_text(encoding="utf-8")
+        self.assertEqual(
+            [*_section_body(self.rendered), "- 甲", "- 乙"], _section_body(after)
+        )
+        self.assertTrue(after.endswith("\n"), "the trailing newline must survive")
+        self.assertEqual(
+            [line for line in self.rendered.splitlines() if line.startswith("## ")],
+            [line for line in after.splitlines() if line.startswith("## ")],
+        )
+
+    def test_no_lines_does_not_even_open_the_file(self) -> None:
+        """A dormant week's guarantee, proved on a path that cannot be read at all."""
+
+        missing = self.report.parent / "there-is-no-report.md"
+        self.assertFalse(task.splice_diagnostic_report_lines(missing, []))
+        self.assertFalse(missing.exists())
+        self.assertFalse(task.splice_diagnostic_report_lines(self.report, ()))
+        self.assertEqual(self.rendered, self.report.read_text(encoding="utf-8"))
+
+    def test_a_missing_report_is_refused(self) -> None:
+        with self.assertRaises(task.WeeklyReportSpliceError):
+            task.splice_diagnostic_report_lines(
+                self.report.parent / "there-is-no-report.md", ["- 甲"]
+            )
+
+    def test_a_report_without_the_registered_section_is_refused(self) -> None:
+        damaged = _rename_registered_section(self.rendered)
+        self.report.write_text(damaged, encoding="utf-8")
+        with self.assertRaises(task.WeeklyReportSpliceError) as ctx:
+            task.splice_diagnostic_report_lines(self.report, ["- 甲"])
+        self.assertIn("0 section-%d headers" % task.REPORT_REMINDER_SECTION, str(ctx.exception))
+        self.assertEqual(damaged, self.report.read_text(encoding="utf-8"))
+
+    def test_a_report_with_two_registered_sections_is_refused(self) -> None:
+        """Two candidate homes is not a home: writing into either one is a guess."""
+
+        header = "## %d. %s" % (
+            task.REPORT_REMINDER_SECTION,
+            _REPORT_CONTRACT["sections"][task.REPORT_REMINDER_SECTION - 1],
+        )
+        self.report.write_text(self.rendered + header + "\n- 重复\n", encoding="utf-8")
+        doubled = self.report.read_text(encoding="utf-8")
+        with self.assertRaises(task.WeeklyReportSpliceError):
+            task.splice_diagnostic_report_lines(self.report, ["- 甲"])
+        self.assertEqual(doubled, self.report.read_text(encoding="utf-8"))
+
+    def test_it_writes_after_the_section_body_not_against_the_next_heading(self) -> None:
+        task.splice_diagnostic_report_lines(self.report, ["- 甲"])
+        lines = self.report.read_text(encoding="utf-8").splitlines()
+        index = lines.index("- 甲")
+        self.assertEqual("(content %d)" % task.REPORT_REMINDER_SECTION, lines[index - 1])
+        self.assertEqual("", lines[index + 1])
+        self.assertTrue(lines[index + 2].startswith("## %d. " % (task.REPORT_REMINDER_SECTION + 1)))
 
 
 if __name__ == "__main__":

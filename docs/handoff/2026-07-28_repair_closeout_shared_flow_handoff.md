@@ -217,3 +217,17 @@ T1 的运行时观测**原理上抓不到它**（它写了又删，串行留不�
 ### 下一步（给审查方）
 
 审查面 = 上列改动 + `R-ASHORT-PARALLEL-LANE-T1-ISOLATION` / `R-ASHORT-PARALLEL-LANE-T2-DRIVER` 两条 register。序 19 那一批仍在同一工作树未提交，两批一起看。
+
+## 2026-08-07 追加：并发全量偶发假红的根因是一次真树写入，不是 carrier
+
+**症状**：`full_pack_ledger run us_short`（现走并行 driver）偶发红在 `test_us_short_discovery_class_guards.LaneResidueConformance`：`state/us_short` 新增 `lifecycle/lifecycle_register.json`。
+
+**根因**：`tests/test_us_short_weekend_lifecycle_stage.py::DefaultRegisterPath` 为证明默认路径，真往那个规范私有路径 `mkdir`+`write_text`、跑完 `unlink`。串行包里守卫与它同进程且排在前面，生灭都看不见；模块各占一进程的并发包里，那个瞬时文件落进另一个进程「拍完基线、还没断言」的窗口。**偶发**：安静环境下并发全量 `PASS 5559/5559 640.6s`，撞上时才红。完整机制、两处更正与被否掉的两个原方案见 `docs/system_risk_register.md` 的 `R-USSHORT-A-TEST-WRITES-THE-REAL-LIFECYCLE-REGISTER-AND-A-CONCURRENT-GUARD-SEES-IT`（单一来源）。
+
+**修法**：去掉那次写。「默认被消费」改为 patch 掉 `stage.LIFECYCLE_REGISTER_PATH` 后跑一次；「默认是规范私有位置」改为常量恒等式 + `reject_nonprivate_output_path` 断言。两条都比原来强——原来那条 `skipIf(LIFECYCLE_REGISTER_PATH.exists())` 在真有账本的机器上直接跳过。
+
+**防复发**：`LaneResidueConformance` 新增类扫描 `test_no_test_writes_a_canonical_real_path_an_engine_declares`（AST 扫全部 `tests/**/test_us_short*.py`，禁止把写方法作用在从 `engine`/`runners` 导入的路径常量上）。这一类残留守卫抓不住（瞬时）、静态 I/O 清单也只当成 `class4_unresolved_write` 放行（常量解析不下去）。
+
+**没做的事（明说边界）**：并发包里「残留守卫只看得见自己那一小段窗口」的结构性弱点仍在——整包级残留检查只有 harness 做得了，本轮不动 `.tools/parallel_lane_runner.py`。要搬进 harness 是另一刀。`serial_tail_modules` 也未改：把守卫塞进串行尾巴会让它的 import 时基线包含整波残留，等于把假红换成假绿。
+
+**验证**：焦点包 `Ran 87 tests in 23.5s PASS`（lifecycle stage + class guards + IO inventory + lifecycle store + discovery conformance）；4 植入 4 红；`docs/us_short_test_io_inventory_20260801.json` 随之减少一条 `class4_unresolved_write` 键（3 增 5 删的最小 diff，未重排整文件）。

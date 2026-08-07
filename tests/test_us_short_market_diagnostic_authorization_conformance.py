@@ -186,6 +186,12 @@ EXEMPT = {
     "engine/us_short_market_diagnostic_weekly_producer.py::_target_week": "picks the packet week the gated inputs allow; reads through the gated loader",
     "engine/us_short_market_diagnostic_weekly_producer.py::diagnostic_policy_sha256": "pure digest of a preset",
     "engine/us_short_market_diagnostic_weekly_producer.py::strategy_ruleset_fingerprint": "pure digest of the declared governed presets",
+    # Knife 10c. It is handed one already-rendered report path and a list of lines
+    # the gated `weekly_diagnostic_step` produced; it reads no store and decides
+    # nothing about the clock, so a gate here would be a second door on an input
+    # the first already shut.
+    "engine/us_short_market_diagnostic_weekly_task.py::splice_diagnostic_report_lines":
+        "writes lines in hand into a report path the caller resolved; no store read",
     "runners/us_short_market_diagnostic_weekly.py::_parse_args": "argument parsing",
     "runners/us_short_market_diagnostic_weekly.py::_read_json": "reads one named file the caller resolved",
     # Knife 10b. Same class as its sibling above: the four functions around it

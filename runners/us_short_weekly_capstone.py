@@ -398,6 +398,81 @@ def _model_paper_enabled(ctx: CapstoneContext) -> bool:
     return ctx.model_paper_store_root is not None
 
 
+# The lines the two advance stages contribute. Fixed strings by construction: a
+# stage's `problem` carries absolute paths, and the cash capture's errors can echo
+# a URL that contains an API key, so what goes into the report is a sentence and
+# the detail stays in the run summary and the checkpoint.
+_DIAGNOSTIC_FETCH_FAILED_LINE = (
+    "26 周诊断轨：本周基准价格或现金数据抓取失败，诊断周未推进；原因见本次运行摘要。"
+    "不影响选股与操作建议。"
+)
+# Only the settle stage speaks for "the week did not advance". Both stages derive
+# the next week from the same two stores in the same run, so a waiting fetch is
+# always a waiting settle, and saying it twice would only teach a reader to skim.
+# `broken` is likewise left to the reader stage below, which is last, always runs,
+# and already reports it with the reason.
+_DIAGNOSTIC_SETTLE_LINES = {
+    "waiting_for_paper_week": (
+        "26 周诊断轨：model-paper 账户本周还没有结算出新的一周，诊断周未推进。"
+        "不影响选股与操作建议。"
+    ),
+    "waiting_for_inputs": (
+        "26 周诊断轨：本周的基准与现金输入没有捕获到，诊断周未推进。"
+        "不影响选股与操作建议。"
+    ),
+    "failed": (
+        "26 周诊断轨：本周结算失败，诊断周未推进；原因见本次运行摘要。"
+        "不影响选股与操作建议。"
+    ),
+}
+
+
+# Stages that touch THIS run's still-unpublished official artifacts, and so must be
+# handed the staging root instead of the published one. A live run keeps
+# `weekly_private/<decision_date>/` empty until the terminal publish moves staging
+# into it, so a stage left off this list would look for the weekly report where
+# there is not one yet — wired and inert, which is the exact failure this track
+# keeps finding in itself. Membership is asserted against the pipeline in
+# `tests/test_us_short_market_diagnostic_weekly_producer.py`, so a fourth
+# diagnostic stage joins by existing rather than by being remembered.
+_OFFICIAL_ARTIFACT_STAGES = frozenset({
+    "weekly_bridge",
+    "model_paper_weekly",
+    "market_diagnostic_fetch",
+    "market_diagnostic_settle",
+    "market_diagnostic",
+})
+
+
+def _deliver_diagnostic_report_lines(ctx: CapstoneContext, result: dict[str, Any]) -> dict[str, Any]:
+    """Hand this stage's lines to the weekly report, or record why they did not land.
+
+    Knife 10c. Every diagnostic stage already produced ``report_lines`` and no
+    code path in the repository consumed one, so the whole track was invisible in
+    the only artifact an operator reads. The lines go into the section the
+    reminder registers itself under; this module does not choose a location and
+    does not invent a banner of its own (design section 1.3).
+
+    Total, like the adapters that call it: a report that cannot be annotated is
+    reported through the stage result, never raised into the weekly run.
+    """
+
+    lines = result.get("report_lines") or []
+    if not lines:
+        # No lines is the dormant path, and it must not so much as open the file.
+        return result
+    try:
+        from engine.us_short_market_diagnostic_weekly_task import splice_diagnostic_report_lines
+
+        result["report_lines_delivered"] = splice_diagnostic_report_lines(
+            _official_output_paths(ctx)[0], lines
+        )
+    except Exception as exc:  # noqa: BLE001 — a diagnostic may never block selection
+        result["report_lines_delivered"] = False
+        result["report_lines_problem"] = f"{type(exc).__name__}: {exc}"
+    return result
+
+
 def _run_market_diagnostic(ctx: CapstoneContext) -> dict[str, Any]:
     """Read the 26-week diagnostic clock once a week, or say nothing at all.
 
@@ -412,6 +487,11 @@ def _run_market_diagnostic(ctx: CapstoneContext) -> dict[str, Any]:
     that cannot be read is reported as ``broken`` rather than swallowed into
     silence — but it still never fails the weekly run, because a diagnostic track
     may never block selection or action.
+
+    Knife 10c: whatever it does say now reaches the weekly report's registered
+    lifecycle-reminder section. This stage claims no artifact of its own and
+    still declares none — it annotates the report the bridge already produced,
+    and only in the weeks it has something to say.
     """
 
     try:
@@ -451,7 +531,7 @@ def _run_market_diagnostic(ctx: CapstoneContext) -> dict[str, Any]:
         # the only honest way to keep a read-only diagnostic from taking down a
         # week of stock selection is for its adapter to be total. The failure is
         # reported, not hidden.
-        return {
+        result = {
             "clock_status": "broken",
             "problem": f"{type(exc).__name__}: {exc}",
             "report_lines": [
@@ -459,14 +539,16 @@ def _run_market_diagnostic(ctx: CapstoneContext) -> dict[str, Any]:
             ],
             "provider_calls_performed": False,
         }
-    return {
-        "clock_status": step["status"],
-        "v1_1_status": step.get("v1_1_status"),
-        "calendar_week_count": step.get("calendar_week_count"),
-        "report_lines": step["report_lines"],
-        "problem": step.get("problem"),
-        "provider_calls_performed": False,
-    }
+    else:
+        result = {
+            "clock_status": step["status"],
+            "v1_1_status": step.get("v1_1_status"),
+            "calendar_week_count": step.get("calendar_week_count"),
+            "report_lines": step["report_lines"],
+            "problem": step.get("problem"),
+            "provider_calls_performed": False,
+        }
+    return _deliver_diagnostic_report_lines(ctx, result)
 
 
 def _diagnostic_overrides(ctx: CapstoneContext) -> dict[str, Any]:
@@ -495,32 +577,38 @@ def _run_market_diagnostic_fetch(ctx: CapstoneContext) -> dict[str, Any]:
         # This stage is `gated`, so the pipeline has already made the operator
         # authorize a live fetch before it runs; passing that through is what the
         # direct and CLI paths now also have to do explicitly.
-        result = fetch_next_week(
+        outcome = fetch_next_week(
             as_of_date=ctx.decision_date,
             confirm_user_authorization=True,
             **_diagnostic_overrides(ctx),
         )
     except Exception as exc:  # noqa: BLE001 — a diagnostic may never block selection
-        return {
+        result = {
             "fetch_status": "failed",
             "problem": f"{type(exc).__name__}: {exc}",
-            "report_lines": [],
+            # A capture that died is exactly the week a reader must not have to
+            # infer from the report saying nothing.
+            "report_lines": [_DIAGNOSTIC_FETCH_FAILED_LINE],
             # Unknown, and an unknown at a paid boundary is not a `False`. Nothing
             # reached the point of counting, so the honest answer is that we
             # cannot say -- reported as True so a reader is never told "no
             # provider call" on the strength of an exception.
             "provider_calls_performed": True,
         }
-    return {
-        "fetch_status": result["status"],
-        "calendar_week_index": result.get("calendar_week_index"),
-        "cash_status": result.get("cash_status"),
-        "evaluable_symbols": result.get("evaluable_symbols"),
-        "problem": result.get("problem"),
-        "report_lines": [],
-        # The count the capture actually kept, not an inference from its status.
-        "provider_calls_performed": bool(result.get("provider_calls", 0)),
-    }
+    else:
+        result = {
+            "fetch_status": outcome["status"],
+            "calendar_week_index": outcome.get("calendar_week_index"),
+            "cash_status": outcome.get("cash_status"),
+            "evaluable_symbols": outcome.get("evaluable_symbols"),
+            "problem": outcome.get("problem"),
+            "report_lines": (
+                [_DIAGNOSTIC_FETCH_FAILED_LINE] if outcome["status"] == "capture_failed" else []
+            ),
+            # The count the capture actually kept, not an inference from its status.
+            "provider_calls_performed": bool(outcome.get("provider_calls", 0)),
+        }
+    return _deliver_diagnostic_report_lines(ctx, result)
 
 
 def _run_market_diagnostic_settle(ctx: CapstoneContext) -> dict[str, Any]:
@@ -529,21 +617,27 @@ def _run_market_diagnostic_settle(ctx: CapstoneContext) -> dict[str, Any]:
     try:
         from runners.us_short_market_diagnostic_weekly_fetch import settle_captured_week
 
-        result = settle_captured_week(as_of_date=ctx.decision_date, **_diagnostic_overrides(ctx))
+        outcome = settle_captured_week(as_of_date=ctx.decision_date, **_diagnostic_overrides(ctx))
     except Exception as exc:  # noqa: BLE001 — same rule as the stage above
-        return {
+        result = {
             "settle_status": "failed",
             "problem": f"{type(exc).__name__}: {exc}",
-            "report_lines": [],
+            "report_lines": [_DIAGNOSTIC_SETTLE_LINES["failed"]],
             "provider_calls_performed": False,
         }
-    return {
-        "settle_status": result["status"],
-        "calendar_week_index": result.get("calendar_week_index"),
-        "publication": result.get("publication"),
-        "report_lines": [],
-        "provider_calls_performed": False,
-    }
+    else:
+        status = outcome["status"]
+        stalled = _DIAGNOSTIC_SETTLE_LINES.get(status)
+        result = {
+            "settle_status": status,
+            "calendar_week_index": outcome.get("calendar_week_index"),
+            "publication": outcome.get("publication"),
+            # A week that did not advance says so; a week that settled is already
+            # described by the reader stage's registered reminder line.
+            "report_lines": [stalled] if stalled is not None else [],
+            "provider_calls_performed": False,
+        }
+    return _deliver_diagnostic_report_lines(ctx, result)
 
 
 def _write_private_json(path: Path, value: dict) -> None:
@@ -2018,10 +2112,11 @@ def run_weekly_capstone(
                         private_root=ctx.forward_policy_comparison_ledger_path.parent,
                     ),
                 )
-            if stage.name in {"weekly_bridge", "model_paper_weekly"}:
-                # Both stages operate on this transaction's unpublished official
+            if stage.name in _OFFICIAL_ARTIFACT_STAGES:
+                # These stages operate on this transaction's unpublished official
                 # artifacts.  Only the bridge consumes the provider receipt;
-                # model-paper terminal merely reads the bridge outputs.
+                # model-paper terminal merely reads the bridge outputs, and the
+                # diagnostic stages annotate the report's registered section.
                 receipt = _provider_execution_receipt(ctx, results) if production_run and stage.name == "weekly_bridge" else None
                 stage_ctx = replace(
                     ctx,
