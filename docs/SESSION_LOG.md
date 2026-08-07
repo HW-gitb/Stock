@@ -225,7 +225,7 @@
 
 - **Verdict/Action**: PASS，已提交并合入 master。取 (b) 而非 (a) 我同意，理由是**构造性否证**不是偏好：`build_public_progress` 的 `"status": "not_configured" if root is None else ...` 决定了传 root 就永远产不出 tracked 那一支去标识化产物，故强档在当前实现下不存在——这正是我在 Required 里留的那个出口。守卫改名并在 docstring 写明只证同源、两条被否决的设计连理由一并留档。
 - **Required**: 无。`R-ASHORT-STRONG-TIER-DEMANDS-A-PRIVATE-REBUILD-THE-TRACKED-ARTIFACT-IS-NOT` 已 CLOSED；构造性否证、我的跨树复核与整类扫描见 `docs/system_risk_register.md`（单一来源，本处不复述）。
-- **Verify**: review-evidence:b67fe1403b16。**这轮我没有只在弱档树上收工**：把 `DEFAULT_PRIVATE_ROOT` 指向主树**真实**账本（`exists=True`、2 条目，比合成空目录更强）跑该守卫 `run=1 failures=0 errors=0`，再指向不存在路径同样 `failures=0`，**两种树判定完全相同**；跑完 tracked JSON 字节未变。整类独立扫过：`tests/` 里按私密根分支的实例只有这一条，其余命中都是测试自建临时根。焦点模块 `Ran 21 tests in 20.6s ... OK`（`receipt:0e8808a622f896a7e15f7770`）。零生产代码改动，rule 3 未触发。
+- **Verify**: review-evidence:b67fe1403b16。**这轮我没有只在弱档树上收工**：把 `DEFAULT_PRIVATE_ROOT` 指向主树**真实**账本（`exists=True`、2 条目，比合成空目录更强）跑该守卫 `run=1 failures=0 errors=0`，再指向不存在路径同样 `failures=0`，**两种树判定完全相同**；跑完 tracked JSON 字节未变。整类独立扫过：`tests/` 里按私密根分支的实例只有这一条，其余命中都是测试自建临时根。焦点模块 `Ran 21 tests in 20.6s ... OK`（`receipt:0e8808a622f896a7e15f7770`）。**合并后、提交合并前在主树亲跑** `Ran 76 tests ... OK`，Closure ① 就地闭合。零生产代码改动，rule 3 未触发。超时原因:改为「合并后先在主树跑一次再提交合并」，多一轮真实环境验证。
 - **Next**: Codex：执行
 
 ## 2026-08-07 — Claude Code 修复（序 7 第 5 步：删掉强档，守卫只证同源并明说不证账本一致）
