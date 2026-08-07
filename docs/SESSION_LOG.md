@@ -1,5 +1,20 @@
 # Session Log
 
+## 2026-08-07 — Claude 审查 PASS（US-short 10c 收尾：全量载体措辞改成实际载体）
+
+- **Verdict/Action**: PASS，已提交并合入 master。纯文档 3 文件 +13/-3，按 rule 8 走快档：整读三处改动全文，不起 agent、不跑全量。改法取的是我给的第一种，且比要求多做一步——顺手补上 register `Closure` 里此前**根本没记**的全量证据（单一来源却缺一项）。不取第二种（补跑 `full_pack_ledger run`）的理由我认可：实测 803.9s、860s 上限未经批准不得上调、背靠背第二跑正是在该上限 `TIMEOUT`，一次十几分钟换一个可能 UNKNOWN 的结果不划算。
+- **Required**: 无。新记一条 Optional `R-DOCGOV-A-REPAIR-ROUND-ESCAPES-THE-TEMPLATE-GUARD-BY-NOT-SAYING-修复`（P3，审查流程机器），正文只在 `docs/system_risk_register.md`。
+- **Verify**: review-evidence:e50133110f3e。验收包 `tests.test_doc_governance_guard` + `tests.test_route_doc_ledger_status_consistency` `Ran 55 in 1.7s PASS receipt:bddd2d84688b3fbf02b43b5c`。独立复核类声明：全仓 durable doc grep `full_pack_ledger`，声称承载**本刀**证据的只有被改那一句，其余是别的刀/lane 的真 ledger 记录或流程说明。自写 2 植入 **2 绿=缺口**（把 Proof-of-use 标签改名、往 `Verify` 塞一个禁用的空计数写法），据 `:810` 的 `REVIEW_HEADER_KEYS` 定位机制并入册；对照组是本条——同两类违规在带「审查」的 header 下当场被守卫抓红，缺口只在 header 分类那一步。被审两条 entry 自身合规，故不阻塞。零残留。
+- **Next**: 无。
+
+## 2026-08-07 — Claude Code Optional 已闭（全量载体那句写的是 ledger，实际是 parallel_lane_runner）
+
+- **Verdict/Action**: 复现审查方探针后认账：`.tools/state/full_pack_ledger.json` 对该代码态只有 `_prepares`（fingerprint `1fd77cff…`、trigger 写明 10c、focused `receipt:411aab9a14cec2bcf5fa2ebb`），**无 PASS 记录**，而主 handoff 那句写的是「经 `full_pack_ledger.py run us_short` 记账」。取审查方给的第一种修法：改成实际载体 `parallel_lane_runner us_short workers=1`，并写明为什么没走 ledger。全仓 durable doc 扫一遍 `full_pack_ledger` 声明，涉及本刀的只此一句。
+- **Required**: `R-USSHORT-26W-DIAG-REPORT-LINES-HAVE-NO-CONSUMER` 的 Optional 段已翻已闭；不取第二种修法（补跑一次 `full_pack_ledger run`）的理由、以及本刀全量证据的实际落点，只在 `docs/system_risk_register.md` 同一条内（单一来源，本处不复述）。
+- **Verify**: 复现探针=直读 ledger JSON，us_short 下只有 `_prepares/{fingerprint,trigger_reason,focused_evidence,prepared_at}`、无 PASS 节。改动为纯文档三处（handoff 那句 + handoff 内该 Optional 的闭合注、register Optional 翻闭 + 该条 Closure 补上此前缺的全量证据）；`tests.test_doc_governance_guard` + `tests.test_route_doc_ledger_status_consistency` `Ran 55 OK`。无代码改动，故不重跑焦点包与全量。
+- **Pre-Codex self-review**: matrix=按「durable doc 声称某工具承载了某次证据、而该工具自己的记录对不上」这一类扫 `docs/*.md` + `docs/handoff/*.md`：涉及本刀的只有该一句；两条 `SESSION_LOG` 与 register 记的都是实际载体，无需改；顺带发现本刀 register 的 Closure 此前根本没记全量证据（单一来源却缺一项），一并补上。register=Optional 段翻已闭并写明二选一的取舍。handoff=同文件内回写闭合注，不删审查方原话。focused=无代码改动。full-lane=同上。door=doc-governance + route-doc ledger。独立对抗 pass：不适用（纯文档措辞）。
+- **Next**: 交另一工作树审查。
+
 ## 2026-08-07 — Claude 审查 PASS（US-short 刀 10c：诊断报告行接进周报 §12；并发假红 Optional 收口）
 
 - **Verdict/Action**: PASS，已提交并合入 master。整读被消费的函数体而非只看 diff：`splice_diagnostic_report_lines`、`_deliver_diagnostic_report_lines`、三个 `market_diagnostic*` stage、`_official_output_paths` 与 publish 事务。设计对照成立：§1.3 只动已注册区块、休眠周不打开文件、诊断异常不 abort 周任务；§5.2 的 X/4 与 §13 累计状态这次真到达周报。两处「放松」判为正确：`outputs=[]`（声明为 output 会要求本周必变，正好打死休眠周）、授权豁免仅一函数且与既有同类同形。
