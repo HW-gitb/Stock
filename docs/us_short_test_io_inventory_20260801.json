@@ -210,7 +210,6 @@
     "tests/test_us_short_weekend_batch4_runner.py:mkdir:provider_samples,state/us_short:class4_unresolved_write",
     "tests/test_us_short_weekend_batch4_runner.py:write_text:provider_samples,state/us_short:class4_unresolved_write",
     "tests/test_us_short_weekend_lifecycle_stage.py:kwarg:register_path:provider_samples,state/us_short:class4_unresolved_write",
-    "tests/test_us_short_weekend_lifecycle_stage.py:mkdir:provider_samples,state/us_short:class4_unresolved_write",
     "tests/test_us_short_weekend_lifecycle_stage.py:unlink:provider_samples,state/us_short:class4_unresolved_write",
     "tests/test_us_short_weekend_lifecycle_stage.py:write_text:provider_samples,state/us_short:class4_unresolved_write",
     "tests/test_us_short_weekend_orchestrator.py:open:provider_samples,state/us_short:class4_unresolved_write",
@@ -393,9 +392,8 @@
     "tests/test_us_short_weekend_batch4_runner.py:mkdir:provider_samples,state/us_short:class4_unresolved_write": 1,
     "tests/test_us_short_weekend_batch4_runner.py:write_text:provider_samples,state/us_short:class4_unresolved_write": 5,
     "tests/test_us_short_weekend_lifecycle_stage.py:kwarg:register_path:provider_samples,state/us_short:class4_unresolved_write": 2,
-    "tests/test_us_short_weekend_lifecycle_stage.py:mkdir:provider_samples,state/us_short:class4_unresolved_write": 1,
-    "tests/test_us_short_weekend_lifecycle_stage.py:unlink:provider_samples,state/us_short:class4_unresolved_write": 2,
-    "tests/test_us_short_weekend_lifecycle_stage.py:write_text:provider_samples,state/us_short:class4_unresolved_write": 3,
+    "tests/test_us_short_weekend_lifecycle_stage.py:unlink:provider_samples,state/us_short:class4_unresolved_write": 1,
+    "tests/test_us_short_weekend_lifecycle_stage.py:write_text:provider_samples,state/us_short:class4_unresolved_write": 2,
     "tests/test_us_short_weekend_orchestrator.py:open:provider_samples,state/us_short:class4_unresolved_write": 4,
     "tests/test_us_short_weekend_report.py:kwarg:soft_discovery_receipt_paths:provider_samples,state/us_short:class4_unresolved_write": 1
   },
@@ -1105,7 +1103,7 @@
         "state/us_short"
       ],
       "read_count": 0,
-      "write_count": 8
+      "write_count": 5
     },
     {
       "module": "tests/test_us_short_weekend_orchestrator.py",

@@ -66,6 +66,74 @@ class LaneResidueConformance(unittest.TestCase):
             residue.write_text("{}", encoding="utf-8")
             self.assertEqual(self._growth(root, frozenset()), ["raw/receipt.json"])
 
+    def test_no_test_writes_a_canonical_real_path_an_engine_declares(self):
+        """The one write shape the residue guard above structurally cannot catch.
+
+        The guard is a snapshot-and-compare inside one process. A test that
+        creates a real protected-root file and deletes it again before the guard
+        looks has left nothing to find — under the sequential pack. Under the
+        module-per-process parallel pack the same transient file is visible to a
+        guard running in a *different* process at that moment, and turns an
+        unrelated module red for the few hundred milliseconds it exists.
+
+        The static test-I/O inventory does record the write, but only as
+        `class4_unresolved_write` — the path is an ALL-CAPS constant imported
+        from an engine module, so resolution stops at a name it cannot follow,
+        and the finding lands in the same bucket as the ~60 temp-directory false
+        positives and is tolerated by the reviewed `unresolved_allowlist`.
+        `DefaultRegisterPath` really did write
+        `state/us_short/lifecycle/lifecycle_register.json` this way for as long
+        as both machines had a reason not to call it out.
+
+        So the shape itself is checked: no us_short test may call a write method
+        on a path rooted at a constant it imported from `engine` / `runners`.
+        Point a test at a temporary directory, and assert the constant's identity
+        separately.
+        """
+
+        writes = {"write_text", "write_bytes", "mkdir", "unlink", "touch", "replace", "rmdir"}
+        offenders = []
+        modules = sorted(
+            [*(ROOT / "tests").glob("test_us_short*.py"),
+             *(ROOT / "tests").glob("*/test_us_short*.py")]
+        )
+        self.assertGreater(len(modules), 100, "the module scan found suspiciously little")
+        for path in modules:
+            source = path.read_text(encoding="utf-8", errors="replace")
+            try:
+                tree = ast.parse(source)
+            except SyntaxError:
+                continue
+            declared = {
+                alias.asname or alias.name
+                for node in ast.walk(tree)
+                if isinstance(node, ast.ImportFrom)
+                and node.module
+                and node.module.split(".")[0] in {"engine", "runners"}
+                for alias in node.names
+                if (alias.asname or alias.name).isupper()
+                or (alias.asname or alias.name).endswith(("_PATH", "_DIR", "_ROOT"))
+            }
+            if not declared:
+                continue
+            for node in ast.walk(tree):
+                if not (isinstance(node, ast.Call) and isinstance(node.func, ast.Attribute)):
+                    continue
+                if node.func.attr not in writes:
+                    continue
+                receiver = ast.get_source_segment(source, node.func.value) or ""
+                base = receiver.split(".")[0].split("[")[0].split("(")[0].strip()
+                if base in declared:
+                    offenders.append(
+                        f"{path.relative_to(ROOT).as_posix()}:{node.lineno}: {node.func.attr} on {base}"
+                    )
+        self.assertEqual(
+            [],
+            offenders,
+            "a test writes a real canonical path an engine declares; use a temporary directory and "
+            "assert the constant's identity separately",
+        )
+
 
 class LiveTransportLifecycleConformance(unittest.TestCase):
     """One-shot tickets preserve normal-runner lifecycle correctness, not provenance."""

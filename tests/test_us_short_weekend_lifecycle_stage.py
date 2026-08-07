@@ -27,7 +27,10 @@ from engine.us_short_lifecycle_store import (  # noqa: E402
     LifecycleRegisterError,
     StaleLifecycleArtifactError,
 )
-from engine.us_short_private_paths import PrivatePathError  # noqa: E402
+from engine.us_short_private_paths import (  # noqa: E402
+    PrivatePathError,
+    reject_nonprivate_output_path,
+)
 
 CAL = json.loads((ROOT / "presets" / "us_short_lifecycle_calibration_governance_20260620.json").read_text(encoding="utf-8"))
 GOV_TITLE = {g["number"]: g["title"] for g in CAL["calibration_items"]}
@@ -154,17 +157,41 @@ class FailClosed(unittest.TestCase):
 
 
 class DefaultRegisterPath(unittest.TestCase):
-    @unittest.skipIf(LIFECYCLE_REGISTER_PATH.exists(), "a real lifecycle_register exists; do not clobber it")
-    def test_default_path_is_canonical_private_location(self):
-        # omitting register_path uses LIFECYCLE_REGISTER_PATH (state/us_short/lifecycle/, gitignored)
-        try:
-            LIFECYCLE_REGISTER_PATH.parent.mkdir(parents=True, exist_ok=True)
-            LIFECYCLE_REGISTER_PATH.write_text(json.dumps(_full_register(as_of="20260112")), encoding="utf-8")
-            res = stage.run_lifecycle_eval_stage(decision_date="20260112")
-            self.assertEqual(res["readiness"]["total_items"], 39)
-        finally:
-            if LIFECYCLE_REGISTER_PATH.exists():
-                LIFECYCLE_REGISTER_PATH.unlink()
+    """The default is proved by binding and by identity, never by writing the real path.
+
+    The earlier version wrote a register to the real
+    ``state/us_short/lifecycle/lifecycle_register.json`` and deleted it again.
+    Two things were wrong with that. It is a write into a protected private root
+    during a test run — the thing ``LaneResidueConformance`` exists to forbid —
+    and under the module-per-process parallel pack that transient file is visible
+    to a residue guard running in another process at the same moment, which turns
+    an unrelated module red for a few hundred milliseconds a week. It also
+    ``skipIf``-ed itself out of existence the moment a real register existed, so
+    on the one machine that matters it was providing no coverage at all.
+
+    The same two facts are asserted directly instead: the stage consults its
+    module default when no path is given, and that default is the canonical
+    gitignored private location.
+    """
+
+    def test_the_stage_consults_its_module_default_when_no_path_is_given(self):
+        from unittest import mock
+
+        with tempfile.TemporaryDirectory() as d:
+            substitute = _write(d, _full_register(as_of="20260112"))
+            with mock.patch.object(stage, "LIFECYCLE_REGISTER_PATH", substitute):
+                res = stage.run_lifecycle_eval_stage(decision_date="20260112")
+        self.assertEqual(res["readiness"]["total_items"], 39)
+
+    def test_that_default_is_the_canonical_private_location(self):
+        self.assertEqual(
+            ROOT / "state" / "us_short" / "lifecycle" / "lifecycle_register.json",
+            LIFECYCLE_REGISTER_PATH,
+        )
+        self.assertIs(stage.LIFECYCLE_REGISTER_PATH, LIFECYCLE_REGISTER_PATH)
+        # And it is a location the §18.0 private-path guard actually accepts, which
+        # is the property "canonical private location" is shorthand for.
+        reject_nonprivate_output_path(LIFECYCLE_REGISTER_PATH)
 
 
 if __name__ == "__main__":

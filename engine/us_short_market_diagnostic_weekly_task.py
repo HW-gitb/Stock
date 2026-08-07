@@ -31,7 +31,7 @@ from __future__ import annotations
 
 from datetime import date as _date
 from pathlib import Path
-from typing import Any, Mapping
+from typing import Any, Mapping, Sequence
 
 from engine.us_short_market_diagnostic_attribution import (
     AttributionError,
@@ -40,9 +40,22 @@ from engine.us_short_market_diagnostic_attribution import (
 )
 from engine.us_short_market_diagnostic_lifecycle import (
     DEFAULT_ROOT,
+    REPORT_REMINDER_SECTION,
     render_weekly_report_reminder,
 )
 from engine.us_short_market_diagnostic_weekly_producer import diagnostic_store_state
+
+# The registered reminder block says where it lives: `build_weekly_report_reminder`
+# publishes `section_number`, and that is the section the lines are spliced into.
+# Design section 1.3 allows the diagnostic track to change exactly ONE thing in the
+# weekly report — that registered block — and forbids adding a free-text banner of
+# its own, so the home is read from the registration rather than chosen here.
+_REMINDER_SECTION_HEADER_PREFIX = "## %d. " % REPORT_REMINDER_SECTION
+_SECTION_HEADER_PREFIX = "## "
+
+
+class WeeklyReportSpliceError(Exception):
+    """The weekly report cannot carry the registered reminder block."""
 
 
 def weekly_diagnostic_step(
@@ -148,4 +161,67 @@ def weekly_diagnostic_step(
     return result
 
 
-__all__ = ["weekly_diagnostic_step"]
+def splice_diagnostic_report_lines(report_path: str | Path, lines: Sequence[str]) -> bool:
+    """Put this week's diagnostic lines into the weekly report's registered section.
+
+    Until this existed, every state above computed ``report_lines`` and nothing in
+    the repository ever read one: the clock could run for 26 weeks and the weekly
+    report would never mention it, while design sections 5.2 and 13 both require
+    the opposite — the X/4 pending reminder from calendar week one, and the
+    accumulated state exposed through the *registered* block rather than through
+    prose somebody remembered to write.
+
+    With no lines this does not open the file at all. A dormant week must leave
+    the report byte-identical, and never touching it is a stronger guarantee than
+    rewriting it with the same bytes.
+
+    Returns True when the report was rewritten. Raises ``WeeklyReportSpliceError``
+    rather than writing into a report whose registered section it cannot find —
+    a caller that cannot show the reminder must say so, not put it somewhere else.
+    """
+
+    if not lines:
+        return False
+    path = Path(report_path)
+    try:
+        text = path.read_text(encoding="utf-8")
+    except OSError as exc:
+        raise WeeklyReportSpliceError(f"the weekly report cannot be read: {exc}") from exc
+    body = text.splitlines()
+    headers = [
+        index
+        for index, line in enumerate(body)
+        if line.startswith(_REMINDER_SECTION_HEADER_PREFIX)
+    ]
+    if len(headers) != 1:
+        raise WeeklyReportSpliceError(
+            f"the weekly report carries {len(headers)} section-{REPORT_REMINDER_SECTION} headers, "
+            "so there is no one registered block to write into"
+        )
+    start = headers[0]
+    end = next(
+        (
+            index
+            for index in range(start + 1, len(body))
+            if body[index].startswith(_SECTION_HEADER_PREFIX)
+        ),
+        len(body),
+    )
+    # Land after the section's own content and before the blank line that closes
+    # it, so the block reads as part of section 12 rather than as an orphan
+    # paragraph pushed against the next heading.
+    while end > start + 1 and not body[end - 1].strip():
+        end -= 1
+    body[end:end] = list(lines)
+    rewritten = "\n".join(body) + ("\n" if text.endswith("\n") else "")
+    temporary = path.with_name(f".{path.name}.market-diagnostic.tmp")
+    temporary.write_text(rewritten, encoding="utf-8")
+    temporary.replace(path)
+    return True
+
+
+__all__ = [
+    "WeeklyReportSpliceError",
+    "splice_diagnostic_report_lines",
+    "weekly_diagnostic_step",
+]
