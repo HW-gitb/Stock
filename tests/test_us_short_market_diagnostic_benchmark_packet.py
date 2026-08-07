@@ -379,42 +379,24 @@ class BenchmarkFetchRunnerTest(unittest.TestCase):
         self.assertIn("written once", str(ctx.exception))
         self.assertIn('"2026-08-06T12:00:00Z"', path.read_text(encoding="utf-8"))
 
-    def test_a_non_private_destination_is_refused_before_anything_is_read(self) -> None:
-        """Checked on the directory, not on each write.
+    def test_a_non_private_destination_is_refused_before_anything_is_fetched(self) -> None:
+        """Checked on the week's directory, not on each write.
 
         A week whose captures already exist takes the reuse branch and writes
-        nothing, so a guard living only on the write path lets a fully populated
-        non-private directory through in silence. Both shapes are covered here:
-        an empty destination and a pre-populated one.
+        nothing, so a guard living only on the write path would let a populated
+        non-private directory through in silence. What separates the two
+        placements is measured here WITHOUT writing anything into the tree: an
+        up-front guard refuses having asked the vendor nothing, while a
+        write-path one would have spent four requests first.
         """
 
+        vendor = _FakeVendor()
         outside = Path(fetch.ROOT) / "docs"
-        for label, prepare in (
-            ("empty destination", lambda: None),
-            ("already populated", lambda: self._prepopulate(outside)),
-        ):
-            with self.subTest(label):
-                prepare()
-                try:
-                    with self.assertRaises(fetch.BenchmarkFetchError) as ctx:
-                        self._capture_week(_FakeVendor(), inputs_root=outside)
-                    self.assertIn("non-private", str(ctx.exception))
-                finally:
-                    self._cleanup(outside)
-                self.assertFalse(
-                    (outside / "benchmark").exists(), "the refusal still left bytes behind"
-                )
-
-    def _prepopulate(self, inputs_root: Path) -> None:
-        directory = fetch.week_directory(DECISION, inputs_root=inputs_root)
-        directory.mkdir(parents=True, exist_ok=True)
-        for symbol in BENCHMARKS:
-            (directory / f"{symbol}.json").write_text("{}", encoding="utf-8")
-
-    def _cleanup(self, inputs_root: Path) -> None:
-        import shutil
-
-        shutil.rmtree(Path(inputs_root).resolve() / "benchmark", ignore_errors=True)
+        with self.assertRaises(fetch.BenchmarkFetchError) as ctx:
+            self._capture_week(vendor, inputs_root=outside)
+        self.assertIn("non-private", str(ctx.exception))
+        self.assertEqual([], vendor.calls, "it reached the vendor before refusing")
+        self.assertFalse((outside / "benchmark").exists(), "the refusal left bytes behind")
 
     def test_a_conflicting_packet_for_the_same_week_is_refused(self) -> None:
         """Same captures, different week identity: the inputs of a week are immutable."""

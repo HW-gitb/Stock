@@ -1,5 +1,14 @@
 # Session Log
 
+## 2026-08-07 — Claude Code 全量 lane 首次记账绿；并行可行性只读实测已挂账
+
+- **Verdict/Action**: `full_pack_ledger run us_short` → **`Ran 5552 tests in 611.6s / status=PASS`**，绑定当前代码指纹记入 ledger。这是这条 lane 第一次拿到「已提交状态 + 记账」的绿全量，`R-USSHORT-26W-DIAG-NO-GREEN-FULL-LANE-FOR-THE-COMMITTED-STATE` 随之 resolved。
+- **过程中抓到一条真红，且是我引起的**: 首次记账跑判 FAIL，两条失败在 `tests/test_us_short_test_io_inventory.py`——它维护一份 tracked 的「哪些测试做 I/O」快照并断言与源码一致，而刀 8–10a 新增的四个测试文件没同步。**这恰好证明了那条 finding 的价值**：若沿用「与改动无关」的旧归因，这条真红会被当成此前那两条已知环境红放过。教训与今天早些时候「先拿到失败名再归因」一致。
+- **12 条写入发现里只有一处是真问题**: `test_us_short_market_diagnostic_benchmark_packet.py` 的 `_prepopulate` 真往 `docs/benchmark/` 写文件再 `finally` 删——正是今天植入残留咬过我的那个位置，也正是我同轮挂账的并行 finding 要消除的同一类。**一边说要消除真树写入一边新增一个说不过去**，故改法不是加豁免而是去掉写入：用**「零厂商调用」**区分守卫位置（上游守卫一次请求都不发就拒绝；写路径守卫会先花掉四次），同样抓得住「守卫被挪回写路径」，且完全不写盘，植入 P18 仍红。其余 11 条逐行核实全部在 `TemporaryDirectory` 内或预期被拒因而根本不写，按机制进 `unresolved_allowlist`（键格式我先写错过一次——unresolved 条目须带 `:class4_unresolved_write` 后缀，已更正）；**受保护根的 `allowlist` 保持 15 不变**，即本轮未新增任何真树写入。
+- **并行 runner 可行性（只读实测，未改系统）**: 已挂账 `R-USSHORT-FULL-LANE-SPENDS-ITS-WALL-CLOCK-ON-ONE-CORE`。`wt/ashort_r1` 里的 `parallel_lane_runner.py` + `test_isolation_scan.py` 都是 lane 无关设计、尚未并入 master。用 scratchpad 包装器把扫描器 ROOT 指向 master 的 tests 跑了一次：84 个 us_short 模块被标不安全，其中**确证写真树的仅 11 个**，其余 73 个是静态分析解不出临时目录的 fail-closed 记账。三步顺序不可颠倒：等工具落地 → 封那 11 个（修法今天已实证：`052c39ce` 的 `temporary_us_short_state_directory` + patch 两个 lane 的 `STATE_DIR`）→ 再实测加速比。预估 150–250s 明确标注未实测。**硬前置：先有稳定串行绿再谈并行——并行是省时间的手段，不是查错的手段。**
+- **Verify**: review-evidence:c14ae00f52ef。inventory guard `Ran 18 OK`（`unallowlisted_write_findings` 归零）；`tests.test_us_short_market_diagnostic_benchmark_packet` `Ran 24 OK` 且植入 P18 仍红；焦点包 `Ran 328 tests in 44.8s PASS` `receipt:8e7fd6fc13abd955bcce089a`；**记账全量 `Ran 5552 in 611.6s PASS`**；`tests.test_doc_governance_guard Ran 41 OK`。
+- **Next**: 等 a_short 并行工具并入 master 后起「封 11 个模块 + 开并行」一刀
+
 ## 2026-08-07 — Claude Code 刀 10a：让周决策把它工作到的仓位上限写下来，v1.1 归因随之点亮
 
 - **Verdict/Action**: 用户批准动主选股路径后当轮完成。**问题从来不是「算不出来」，是「算完就扔」**：每周选股都会算出环境仓位上限、现金能撑多少、已带多少、这周计划加多少，用完四个数做决定，然后一个都不留。v1.1 的全部工作就是把「选股差」和「规矩让我们少持股」分开，而它需要的是**规则隐含的**仓位——§12.7 禁止从成交或事后 NAV 倒推，事后重算又等于拿它当时没见过的数据重跑规则。所以唯一诚实的来源是**在数还在手上的那一刻记下来**。
