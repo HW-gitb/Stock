@@ -2516,3 +2516,131 @@ margin 两模块 56 绿；验收包 682 绿（`receipt:c1de5807ed0db575bfec092e`
 ### 下一步
 
 序 7 的第 4 步（三个 `source_*` 字段）与第 5 步（守卫改断内部自洽，取两档方案）仍未做，用户选的 (a) 尚未交付完整；在这两步落地前，「成功跑之后 lane 还绿」仍不成立。
+
+## 2026-08-07 追加：序 7 第 5 步落地（守卫改两档），第 4 步判为不做并摆给审查方
+
+**改了什么**
+
+`tests/test_a_short_industry_weight_comparison.py` 的 tracked-pair 守卫从「等于 `build_public_progress(root=None, as_of="20260727")`」改成两档内部自洽：先 `validate_public_progress` + 由该 JSON 自身重渲染 Markdown；**有私密根**按该对自己声明的 `as_of` 从 ledger 重建并要求相等（强档），**无私密根**只证 same-source（弱档），并显式断言当前是哪一档。加反向控制：改 `message`（进 Markdown）后重渲染必须不同。本轮**零生产代码改动**。
+
+**为什么改**
+
+旧守卫把日期和「无私密根」那一支都写死，于是**任何一次成功的周跑**都会打红它，与失败与否无关。
+
+**验证命令与结果**
+
+- 实跑对照：拿「成功周跑合法推进到 20260803」的配对同时喂两版守卫 → **旧守卫 FAIL、新守卫 PASS**；本树 `private ledger present: False`，故 `tier = weak`。
+- focused `Ran 61 tests in 64.9s ... OK`（`receipt:a2b72fa836c79bfef0a11992`）。零生产代码改动，AGENTS rule 3 未触发，未起全量。`git diff --numstat` 仅 `54/12` 一个测试模块。
+- 实现坑：不能拿渲染字节比 checkout 字节——tracked 在本机是 CRLF、writer 出 LF，那样比的是 `core.autocrlf` 不是产物身份。已改按解析 JSON + 按行文本比较，与原守卫同口径。
+
+**失效旧结论**
+
+- 上一节「第 5 步仍未做、成功跑之后 lane 不绿」已作废：第 5 步已落地，该行验收现在成立。
+- 「第 5 步要改四条守卫」的预估作废：实读后只有 industry_weight 一条是冻结快照式；target_policy 本来就是内部自洽形态，overlay 与 final_action 没有这类守卫。
+
+**下一步注意事项**
+
+- **第 4 步（三个 `source_*` 字段）我判为不做，理由摆在 register 里等审查方裁**：强档的锚是私密 ledger 本身（比字段更强），弱档按定义只证 same-source（多这三个字段也证不出更多）；加了等于四份 schema 各多三个无人消费的字段，其中 `source_projection_sha256` 还是个新哈希。且 industry_weight 已有 `source_hash` 与 `status`，实质上就是其中两个。若认为字段本身对读产物的人有独立价值，说一声我照加。
+
+## 2026-08-07 追加：序 7 第 5 步独立审查 —— PASS（第 4 步转 Options 交用户）
+
+### 判定
+
+**PASS，已提交并合入 master。** 守卫从「等于 2026-07-27 那份冻结重建」改成两档内部自洽，跑完一次成功的真周跑不再必红。
+
+### 我实际验了什么
+
+- **范围我自己扫过，与所报一致**：四轨里只有 `tests/test_a_short_industry_weight_comparison.py` 是冻结快照式；`tests/test_a_short_target_policy_comparison.py:364` 实读确认本来就是内部自洽形态；overlay 与 final_action 没有这类守卫。所以这一步是改一条，不是漏改三条。
+- **弱档在承重**：本树 `tier=weak`（无私密根），由 tracked JSON 重渲染的 Markdown 与磁盘逐行相同；改 `message` 一个字立刻不同 —— 同源检查不是空洞的。
+- **盲区量化（这是我这轮的主要贡献）**：弱档只覆盖会进 Markdown 的字段。实测篡改 `source_hash`（64 个 `0`）与 `as_of` 时 Markdown 逐行不变、**抓不到**。旧守卫恰好点名过 `source_hash` 那格，但它靠的正是「等于冻结快照」——也正是它跑完真周跑必红的原因。强档能覆盖这两格，却在任何 reviewer / CI 树上都不会执行。执行方 docstring 已写明这条边界，我只是把「具体哪几个字段」记成可查事实。
+- 焦点模块 `Ran 20 tests in 21.7s ... OK`（`receipt:d150c7ac4c05bd16f554eaf0`）；本轮零生产代码改动，rule 3 未触发。
+
+### 两条 Optional 与一条 Options
+
+Optional：① 上面那条弱档盲区，读「绿」时要记得；② 弱档分支里的 `assertFalse(DEFAULT_PRIVATE_ROOT.exists())` 是恒真的（`tier` 由同一表达式算出），作自述可以，作断言证明不了任何事。第 4 步（三个 `source_*` 字段）执行方判为不做，理由成立且与我开工前那条权威链 Optional 同向；审查途中另一窗口已把用户裁定（不加字段）写进 register，故我不再作为 Options 重复征询，只声明该裁定不在本窗口发生、我无法独立验证其本身。
+
+### 未覆盖维度与诚实边界
+
+强档分支在本树无法执行，其正确性仅由实读判断，记 **NOT_VERIFIED**；其余三轨守卫我只实读未逐条重跑；全量未跑（rule 3 未触发）。
+
+### 下一步
+
+`R-ASHORT-FAILED-WEEKLY-RUN-...` 的处置：第 5 步已交付，第 4 步按已记录的用户裁定不做，选项 (a) 的交付范围收敛为一件。
+
+## 2026-08-07 追加：序 7 第 5 步 —— 结论更正为 FAIL（强档在主树当场红）
+
+### 更正说明（覆盖同日上一节的 PASS）
+
+同日上一节我判 PASS，那是**只在 worktree 取证**的结论：那棵树没有私密根，守卫走弱档。把同一份代码放到**操作者的主树**（有私密根）上，强档分支被选中并**当场红**。上一节的两条结论（范围只有一处、弱档确实承重）仍成立；PASS 这个总判定作废。
+
+### 主树实跑
+
+`DEFAULT_PRIVATE_ROOT = state/a_short/industry_weight_comparison_private/v1`，`exists = True` → `tier = strong` → `Ran 75 tests ... FAILED (failures=1)`，唯一红点就是这条守卫。逐键比对：`as_of` 两边同为 `20260727`，**唯一不同的顶层键是 `status`**——tracked 是 `not_configured`，按私密账本重建是 `accumulating`。
+
+### 为什么这是净退步
+
+仓库里 tracked 的那份产物**按设计就是「无私密根」的去标识化投影**，不是私密账本的重建。所以强档要求的相等在构造上不可能成立。旧守卫至少两棵树都绿；新守卫把红从「跑完一次成功周跑之后」提前到了「什么都还没跑」。而第 5 步的全部价值主张正是「跑完之后 lane 还绿」。
+
+### 修法与红线
+
+见 register `R-ASHORT-STRONG-TIER-DEMANDS-A-PRIVATE-REBUILD-THE-TRACKED-ARTIFACT-IS-NOT`：要么强档改成与「该产物自称的那种去标识化投影」比较，要么老实去掉强档只留弱档并写明其边界。**不接受**把强档重建结果写进 tracked 产物（那会把私密派生内容推进 tracked 空间），也**不接受** `skipTest` 跳过（跳过 = 控制空转）。
+
+### 我这轮的流程教训（记下来）
+
+强档/弱档这种**按环境分支**的守卫，只在其中一档的树上取证就宣布通过是不够的——另一档恰恰是生产那棵树。以后遇到条件分支的守卫，要么在两种环境各跑一次，要么就把未执行的那一档明确写成阻断项而不是 `NOT_VERIFIED`。
+
+## 2026-08-07 追加：序 7 第 5 步复审 FAIL 修复 —— 强档删除，守卫只证同源并明说
+
+**改了什么**
+
+`tests/test_a_short_industry_weight_comparison.py` 删掉强档分支，守卫改为只证 same-source（schema 校验 + 由该 JSON 自身重渲染 Markdown + 反空洞控制），并在命名与 docstring 里**明说它不证与账本一致**、同时指明「与账本一致」由写盘时序保住（公共对只在 post-publish capture 推进账本之后提交，整对一次事务落盘）。新增 `test_the_tracked_pair_guard_does_not_depend_on_a_private_ledger_being_present`。孤儿 `DEFAULT_PRIVATE_ROOT` import 一并删。
+
+**为什么改**
+
+强档断言「tracked == 私密根重建」，但 tracked 那份按设计是去标识化投影。`build_public_progress` 那行 `"status": "not_configured" if root is None else ...` 决定了**只要传 root 就永远产不出 `not_configured`**，所以在任何有账本的树上必红——而它恰恰只在那种树上被选中。审查方的 (a) 因此在当前实现下构造上不存在（(a) 自己留了这个出口），取 (b)。
+
+**验证命令与结果**
+
+- 复现审查方探针：在本树构造一棵 canonical 私密根的「有账本」树 → `build_public_progress(root=..., as_of=tracked["as_of"])` 与 tracked 逐键比对，**唯一不同的顶层键就是 `status`**（`not_configured` vs `accumulating`），与主树实跑逐字一致。
+- 新 Closure：把 `DEFAULT_PRIVATE_ROOT` 分别指向存在 / 不存在两种路径各跑一遍，判定必须完全相同——**在任何树上都能跑，等价于主树复验**，堵死「弱档树绿、操作者树红」整类。跑完断言 tracked 字节未变。
+- 整类扫描：全仓 `tests/` grep 私密根 `.exists()` 分支，除本条外零命中（唯一命中是 `.pyc`）。
+- focused `Ran 28 tests ... OK`（`receipt:2de840de561d4d6d868fb9af`）；零生产代码改动（`numstat` 仅该测试模块 68/44），rule 3 未触发，未起全量。
+
+**失效旧结论**
+
+- 「两档守卫（强档 = 私密 ledger 重建）」作废：强档在当前实现下不存在。docstring 里保留了两条被否决设计（冻结日期版、强档版）及否决理由，防止下一个人再走一遍。
+
+**下一步注意事项**
+
+- 这条守卫现在**只证同源**。谁要加「与账本一致」的证明，别再往这条守卫里塞——它拿不到不写进 tracked 就自证不了的锚；该证明属于写盘侧。
+- 审查方仍应在主树亲跑一次该模块（Closure ①），我在本树只能做等价复验。
+
+## 2026-08-07 追加：序 7 第 5 步复审 —— PASS（强档已删，跨树判定一致）
+
+### 判定
+
+**PASS，已提交并合入 master。** 上一轮那条 P2 已闭，修法取 (b)（删强档、只证同源并写明边界）。
+
+### 为什么 (b) 是对的，不是偷懒
+
+执行方给的是构造性否证：`build_public_progress` 里 `"status": "not_configured" if root is None else ...` —— 只要传 root，就永远产不出 tracked 那一支去标识化产物。所以「强档」在当前实现下**不存在**，不是没做好。这正是我在 Required 里为 (a) 留的出口：无法产出「有账本但仍去标识化」的形态，就老实承认强档不存在。
+
+### 我这轮的关键一步（上一轮漏的就是它）
+
+不在弱档树上宣布通过。我把 `DEFAULT_PRIVATE_ROOT` 指向**主树真实的那个账本**（`exists=True`、2 个条目，比执行方用的合成空目录更强）跑该守卫：`run=1 failures=0 errors=0`；再指向不存在的路径：同样 `failures=0`。**两种树判定完全相同**，上一轮「弱档绿、操作者树红」的缺陷从根上消失了。跑完 tracked JSON 字节未变。
+
+### 整类我独立扫过
+
+全仓 `tests/` 找「按私密根是否存在分支」的实例：命中的 `tests/provider/test_us_short_batch5_*` 各处都是对测试自建临时私密根的断言，不属本类。本类只有这一条，已随强档删除；测试模块里残留的 `DEFAULT_PRIVATE_ROOT` 只剩 docstring 的两处否决说明与新 Closure 的 `mock.patch.object`，无活分支。
+
+### 新 Closure 的性质要说清
+
+`test_the_tracked_pair_guard_does_not_depend_on_a_private_ledger_being_present` 对当前代码恒成立（代码根本不读那个常量），它的价值是**防复发**：谁把强档装回来，`populated` 那一格立刻红。合法的回归钉，不是空洞控制。
+
+### 未覆盖维度与诚实边界
+
+零生产代码改动，rule 3 未触发、全量未跑；其余三轨的 tracked-pair 守卫只实读未逐条重跑（上一轮已确认不属本类）。
+
+### 下一步
+
+序 7 的第 5 步收口；第 4 步按已记录的用户裁定不做。`R-ASHORT-FAILED-WEEKLY-RUN-...` 可据此评估关闭条件。

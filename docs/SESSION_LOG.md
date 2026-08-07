@@ -221,6 +221,43 @@
 - **Verify**: review-evidence:e4a95cd5ecca。焦点包 `98 OK`——三条全非测试红。**审查方自证**：授权 store 仅 1 周，另造 26 周伪造史（epoch 改为 `fabricated-never-authorized`）经 `build_market_diagnostic_report` 产出 `26w-1-26 / ahead_diagnostic`，`write_market_diagnostic_report` 落盘两文件。agent 另以 11 种规避形态量化守卫：抓 6 逃 5，逃逸形态之一「调门名但丢弃结果、对另一 root 操作」**正是本仓 aggregator 当前形状**。
 - **Pre-Codex self-review**: 四轮复发根因已定位并写入 register：每轮都在语法层修（让「叫门」的东西出现在正确位置），缺陷始终在语义层（门的实参是否等于被保护制品的来源）。通用修法改为「让错误组合不可表达」而非「可表达再检查」。独立对抗 pass: 已跑（第三次冷打）。
 - **Next**: 按结构性修法重做：产出者只收 root、自行经门取数，不接调用方递来的 records/report。
+## 2026-08-07 — Claude 审查 PASS（a-short 序 7 第 5 步：强档已删，守卫在两种树上判定相同）
+
+- **Verdict/Action**: PASS，已提交并合入 master。取 (b) 而非 (a) 我同意，理由是**构造性否证**不是偏好：`build_public_progress` 的 `"status": "not_configured" if root is None else ...` 决定了传 root 就永远产不出 tracked 那一支去标识化产物，故强档在当前实现下不存在——这正是我在 Required 里留的那个出口。守卫改名并在 docstring 写明只证同源、两条被否决的设计连理由一并留档。
+- **Required**: 无。`R-ASHORT-STRONG-TIER-DEMANDS-A-PRIVATE-REBUILD-THE-TRACKED-ARTIFACT-IS-NOT` 已 CLOSED；构造性否证、我的跨树复核与整类扫描见 `docs/system_risk_register.md`（单一来源，本处不复述）。
+- **Verify**: review-evidence:b67fe1403b16。**这轮我没有只在弱档树上收工**：把 `DEFAULT_PRIVATE_ROOT` 指向主树**真实**账本（`exists=True`、2 条目，比合成空目录更强）跑该守卫 `run=1 failures=0 errors=0`，再指向不存在路径同样 `failures=0`，**两种树判定完全相同**；跑完 tracked JSON 字节未变。整类独立扫过：`tests/` 里按私密根分支的实例只有这一条，其余命中都是测试自建临时根。焦点模块 `Ran 21 tests in 20.6s ... OK`（`receipt:0e8808a622f896a7e15f7770`）。零生产代码改动，rule 3 未触发。
+- **Next**: Codex：执行
+
+## 2026-08-07 — Claude Code 修复（序 7 第 5 步：删掉强档，守卫只证同源并明说不证账本一致）
+
+- **Verdict/Action**: 修完，未 commit，**零生产代码改动**。判据成立、是我的缺陷。**取 (b) 而非 (a)**：(a) 在当前实现下构造上不存在——`build_public_progress` 的 `"status": "not_configured" if root is None else ...` 决定了只要传 root 就永远产不出去标识化那一支；把 (a) 读成「比 `root=None` 重建」又会把第 5 步要消灭的原缺陷装回来。审查方在 (a) 里留的出口正是这条。强档删除，守卫改名并在 docstring 写明只证同源、指明「与账本一致」由写盘时序保住。
+- **Required**: `R-ASHORT-STRONG-TIER-DEMANDS-A-PRIVATE-REBUILD-THE-TRACKED-ARTIFACT-IS-NOT` → working-tree repaired，closed pending 审查。(a) 的构造性否证、三项 Closure、整类扫描结果见 `docs/system_risk_register.md`（单一来源，本处不复述）。
+- **Verify**: **复现审查方探针**：本树构造一棵 canonical 私密根的「有账本」树 → 与 tracked 逐键比对，**唯一不同的顶层键就是 `status`**（`not_configured` vs `accumulating`），与主树实跑逐字一致。**新 Closure 等价于主树复验**：把 `DEFAULT_PRIVATE_ROOT` 分别指向存在/不存在两种路径各跑一遍，判定必须完全相同——在任何树上都能跑，堵死「弱档树绿、操作者树红」整类；跑完断言 tracked 字节未变。focused `Ran 28 tests ... OK`（`receipt:2de840de561d4d6d868fb9af`）。
+- **Pre-Codex self-review**: A-F checked。A：整类 = 「守卫按它跑在哪棵树上分支」；全仓 `tests/` grep 私密根 `.exists()` 分支除本条外零命中（唯一命中 `.pyc`），类已闭。B：孤儿 `DEFAULT_PRIVATE_ROOT` import 随强档删除。C：反空洞控制保留并加强（改进 Markdown 的字段必须被抓）。D：n/a。E：未动 CURRENT；两条被否决设计连理由留在 docstring，防止重走。F：`git diff --check` 干净。matrix=删强档+改名与 docstring+跨树等价 Closure+反向控制+整类扫描+孤儿清理；register=updated；handoff=主 handoff 追加；focused=28 OK；full-lane=not_triggered: AGENTS rule 3; reason=零生产代码改动，仅一个测试模块；door=55 OK
+- **Next**: Claude Code：审查
+
+## 2026-08-07 — Claude 审查 FAIL（a-short 序 7 第 5 步：强档在真有账本的那棵树上当场红）
+
+- **Verdict/Action**: FAIL，**未合入 master**（合并已 abort，master 未被污染；worktree 侧 `afe04b0e` 保留待修）。**这是对我同轮早先 PASS 结论的更正**：那次结论只在 worktree（无私密根、走弱档）取证，而强档分支只在**操作者的主树**上才会被选中——我在主树实跑后它当场红。范围判断与弱档承重那两条结论不变，仍成立。
+- **Required**: `R-ASHORT-STRONG-TIER-DEMANDS-A-PRIVATE-REBUILD-THE-TRACKED-ARTIFACT-IS-NOT`（P2，含机制、两条可选修法与三项 Closure tests，并写明「把强档重建写进 tracked 产物」和「skipTest 跳过」都不接受）。见 `docs/system_risk_register.md`（单一来源，本处不复述）。
+- **Verify**: review-evidence:88cdd7a26c01。主树实跑：`DEFAULT_PRIVATE_ROOT` 存在 → 选中强档 → `Ran 75 tests ... FAILED (failures=1)`，唯一红点即该用例；逐键比对 `as_of` 同为 `20260727`，**唯一不同的顶层键是 `status`**（tracked `not_configured` vs 私密重建 `accumulating`）——tracked 那份按设计就是「无私密根」的去标识化投影。worktree 侧先前的绿是弱档（`tier=weak`）取得的，不覆盖强档。超时原因:并发窗口改同一 register 需重新冻结范围，且合并态才暴露强档红、结论由 PASS 更正为 FAIL。
+- **Next**: Codex：修复
+
+## 2026-08-07 — Claude 审查 PASS（a-short 序 7 第 5 步：tracked 对守卫改两档内部自洽）
+
+- **Verdict/Action**: PASS，已提交并合入 master。范围判断对：全仓只有 `test_a_short_industry_weight_comparison` 一条是冻结快照式，target_policy 本来就是内部自洽形态、另两轨没有这类守卫——我自己扫过一遍，与所报一致。两档实现按已裁的 (i)，弱档通过不会被读成强档。第 4 步「不做」的理由成立；审查途中另一窗口已把用户裁定（不加字段）写进 register，故不再重复征询，方向与我判断一致。
+- **Required**: 无。范围复核、弱档盲区的量化（哪些字段抓得到、哪些抓不到）、一处恒真断言与第 4 步的处置，见 `docs/system_risk_register.md` 的 `R-ASHORT-FAILED-WEEKLY-RUN-LEAVES-TRACKED-SUMMARIES-AHEAD-OF-THEIR-LEDGER`（单一来源，本处不复述）。
+- **Verify**: review-evidence:88cdd7a26c01。自写探针：本树 `tier=weak`（无私密根），同源关系今天成立（重渲染 Markdown 与磁盘逐行相同）；**反向控制真会咬**——改 `message` 一个字，重渲染立刻不同。**盲区也量化了**：篡改 `source_hash`（64 个 `0`）与 `as_of` 时 Markdown 逐行不变、弱档抓不到，与 docstring 自述的边界一致。焦点模块 `Ran 20 tests in 21.7s ... OK`（`receipt:d150c7ac4c05bd16f554eaf0`）。本轮零生产代码改动，rule 3 未触发，全量未跑。强档分支本树不可执行，记 NOT_VERIFIED。超时原因:并发窗口在审查途中改了同一条 register，重新冻结范围并改写结论口径。
+- **Next**: Codex：执行
+
+## 2026-08-07 — Claude Code 执行（序 7 第 5 步：守卫改两档内部自洽；第 4 步经用户裁定不加字段）
+
+- **Verdict/Action**: 做完，未 commit，**零生产代码改动**。实读后第 5 步范围比预想小：四轨里只有 `tests/test_a_short_industry_weight_comparison.py:337` 是冻结快照式，target_policy 本来就是内部自洽形态、overlay 与 final_action 没有这类守卫。已按已裁的 (i) 改成两档——有私密根按该对自己声明的 `as_of` 从 ledger 重建求相等（强档），无私密根只证 same-source（弱档），并**显式断言当前是哪一档**，弱档的通过永不会被读成强档。**第 4 步（三个 `source_*` 字段）我判为不做，用户 2026-08-07 裁定采纳「不加」**，故选项 (a) 的交付范围收敛为第 5 步一件，本刀 register 条目的收口条件只剩独立审查 PASS。
+- **Required**: 无。第 5 步的改法、验收实跑、第 4 步不做的完整理由与「若认为字段有独立价值我照加」的口子，见 `docs/system_risk_register.md` 的 `R-ASHORT-FAILED-WEEKLY-RUN-LEAVES-TRACKED-SUMMARIES-AHEAD-OF-THEIR-LEDGER`（单一来源，本处不复述）。
+- **Verify**: 直打验收那一行——拿「成功周跑合法推进到 20260803」的配对同时喂两版守卫：**旧守卫 FAIL**（它比写死 20260727 的重建）、**新守卫 PASS**；本树 `private ledger present: False` 故 `tier = weak`。反向控制：改 `message`（进 Markdown）后重渲染必须与 tracked 不同，证明 same-source 检查承重。focused `Ran 61 tests in 64.9s ... OK`（`receipt:a2b72fa836c79bfef0a11992`）。探针跑完 `git status research/results/` 干净，未动任何 tracked 汇总。
+- **Pre-Codex self-review**: A-F checked。A：四轨守卫逐个实读后才定范围，未按预估盲改四处；两档判据对强/弱两种树都给出确定行为。B：无符号改名，无连带。C：反向=篡改进 Markdown 的字段必须被 same-source 抓到。D：n/a。E：未动 CURRENT。F：踩到并修正一处——不能拿渲染字节比 checkout 字节（tracked 本机 CRLF、writer 出 LF，比的是 `core.autocrlf` 不是产物身份），已改按解析 JSON + 按行文本比较。matrix=两档守卫+显式档位断言+反向控制+第4步判断入册；register=updated；handoff=主 handoff 追加；focused=61 OK（`receipt:a2b72fa836c79bfef0a11992`）；full-lane=not_triggered: AGENTS rule 3; reason=本轮零生产代码改动，仅一个测试模块；door=55 OK
+- **Next**: Claude Code：审查
+
 ## 2026-08-07 — Claude 审查 PASS（a-short 序 7 · #02：事务器死结已闭，公共写盘全部移到 publish 之后）
 
 - **Verdict/Action**: PASS，已提交并合入 master。三项 Required 全闭；我最看重的是**放宽的方向被反向验住了**——`recover()` 从「拒绝」改成「永不拒绝」是一次放宽，而真半应用态仍然回滚到旧字节、in-flight 侧仍严格抛错。执行方还自查出一条我没点的：journal 改原子写后多消耗一次 `os.replace`，原按序号注入的三条测试会打偏、其中两条变恒真，已改成只数公共目标。
