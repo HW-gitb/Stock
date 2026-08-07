@@ -23,6 +23,7 @@ from pathlib import Path
 from statistics import median
 
 from engine import a_short_evidence_epoch_mode as _epoch_mode
+from engine.a_short_artifact_set_transaction import commit_artifact_set
 from typing import Any
 
 import jsonschema
@@ -41,6 +42,8 @@ ROOT = Path(__file__).resolve().parents[1]
 PRIVATE_LEDGER_DEFAULT = ROOT / "logs" / "a_short_final_action_validation.json"
 PUBLIC_SUMMARY_DEFAULT = ROOT / "research" / "results" / "a_short" / "final_action_validation_summary.json"
 PUBLIC_MARKDOWN_DEFAULT = ROOT / "research" / "results" / "a_short" / "final_action_validation_summary.md"
+#: Gitignored (`state/*/artifact_set_journal/`); rollback journal + old-byte backups only.
+DEFAULT_ARTIFACT_SET_JOURNAL_DIR = ROOT / "state" / "a_short" / "artifact_set_journal" / "final_action_validation"
 TRACKER_DEFAULT = ROOT / "logs" / "forward_tracker.csv"
 SCHEMA_PATH = ROOT / "schemas" / "a_short_final_action_validation_summary.schema.json"
 SCHEMA_NAME = "a_short_final_action_validation_summary"
@@ -71,14 +74,18 @@ def _digest(value: Any) -> str:
     ).hexdigest()
 
 
+def _public_json_bytes(payload: dict[str, Any]) -> bytes:
+    """The exact bytes `_atomic_write` would have written, without writing them."""
+    return (json.dumps(payload, ensure_ascii=False, indent=2, allow_nan=False) + "\n").encode("utf-8")
+
+
 def _atomic_write(path: str | Path, payload: dict[str, Any]) -> None:
     target = Path(path)
     target.parent.mkdir(parents=True, exist_ok=True)
     fd, tmp_name = tempfile.mkstemp(prefix=f".{target.name}.", suffix=".tmp", dir=str(target.parent))
     try:
-        with os.fdopen(fd, "w", encoding="utf-8") as handle:
-            json.dump(payload, handle, ensure_ascii=False, indent=2, allow_nan=False)
-            handle.write("\n")
+        with os.fdopen(fd, "wb") as handle:
+            handle.write(_public_json_bytes(payload))
         os.replace(tmp_name, target)
     except Exception:
         try:
@@ -730,29 +737,38 @@ def _render_summary_markdown(summary: dict[str, Any]) -> str:
     ])
 
 
-def write_public_summary(summary: dict[str, Any], *, summary_path: str | Path,
-                         markdown_path: str | Path) -> None:
+def prepare_public_artifact_set(summary: dict[str, Any], *, summary_path: str | Path,
+                                markdown_path: str | Path) -> dict[Path, bytes]:
+    """Validate and render the whole public pair, writing nothing."""
     validate_public_summary(summary)
-    _atomic_write(summary_path, summary)
-    path = Path(markdown_path)
-    path.parent.mkdir(parents=True, exist_ok=True)
-    fd, tmp_name = tempfile.mkstemp(prefix=f".{path.name}.", suffix=".tmp", dir=str(path.parent))
-    try:
-        with os.fdopen(fd, "w", encoding="utf-8") as handle:
-            handle.write(_render_summary_markdown(summary))
-        os.replace(tmp_name, path)
-    except Exception:
-        try:
-            os.unlink(tmp_name)
-        except OSError:
-            pass
-        raise
+    return {
+        Path(summary_path): _public_json_bytes(summary),
+        Path(markdown_path): _render_summary_markdown(summary).encode("utf-8"),
+    }
+
+
+def commit_public_artifact_set(files: dict[Path, bytes], *,
+                               journal_dir: str | Path | None = None) -> None:
+    """The one write entry point for the public pair: both files or neither."""
+    commit_artifact_set(journal_dir or DEFAULT_ARTIFACT_SET_JOURNAL_DIR, files)
+
+
+def write_public_summary(summary: dict[str, Any], *, summary_path: str | Path,
+                         markdown_path: str | Path,
+                         journal_dir: str | Path | None = None) -> None:
+    """Compatibility facade for the standalone runner: prepare then commit."""
+    commit_public_artifact_set(
+        prepare_public_artifact_set(summary, summary_path=summary_path, markdown_path=markdown_path),
+        journal_dir=journal_dir)
 
 
 def settle_and_summarize(*, root: str | Path | None, as_of: str, tracker_path: str | Path = TRACKER_DEFAULT,
                          daily_cache_path: str | Path | None = None,
                          summary_path: str | Path = PUBLIC_SUMMARY_DEFAULT,
-                         markdown_path: str | Path = PUBLIC_MARKDOWN_DEFAULT) -> dict[str, Any]:
+                         markdown_path: str | Path = PUBLIC_MARKDOWN_DEFAULT,
+                         write_public: bool = True) -> dict[str, Any]:
+    """``write_public=False`` is the weekly-pipeline path: the published pair may
+    only move after the official bundle publishes and the private capture lands."""
     as_of = _date(as_of)
     if not root:
         return unavailable_public_summary(as_of)
@@ -776,15 +792,13 @@ def settle_and_summarize(*, root: str | Path | None, as_of: str, tracker_path: s
             _validate_ledger(ledger)
             _atomic_write(private_path, ledger)
         summary = _summary_from_ledger(ledger, as_of)
-        write_public_summary(summary, summary_path=summary_path, markdown_path=markdown_path)
+        if write_public:
+            write_public_summary(summary, summary_path=summary_path, markdown_path=markdown_path)
         return summary
     except Exception:
-        summary = unavailable_public_summary(as_of)
-        try:
-            write_public_summary(summary, summary_path=summary_path, markdown_path=markdown_path)
-        except Exception:
-            pass
-        return summary
+        # An outage must not overwrite last week's checked pair with a fresh
+        # "unavailable" one; the caller records it in the sidecar outcomes.
+        return unavailable_public_summary(as_of)
 
 
 def main(argv: list[str] | None = None) -> int:

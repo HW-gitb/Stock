@@ -18,6 +18,10 @@ A_SHORT_WRITER_PATHS = frozenset({
 # mechanism.  The AST traversal below makes an unregistered JSON file writer fail
 # the test as soon as it is added anywhere in an A-short module.
 PUBLIC_WRITER_FUNCTIONS = frozenset({
+    # Writes the rollback journal that lets a tracked artifact set be undone.
+    # The journal is private, but it is a JSON file write like any other and a
+    # non-finite value in it would make the undo unreadable.
+    "engine/a_short_artifact_set_transaction.py:commit_artifact_set",
     "engine/a_short_factor_comparison.py:_atomic_write",
     "engine/a_short_factor_comparison_v2.py:_atomic_write",
     "engine/a_short_industry_weight_comparison.py:_atomic_write",

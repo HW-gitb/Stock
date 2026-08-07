@@ -59,6 +59,10 @@ state/*/holding_ratchet/
 #   含真实持仓/选股/表现 → 私密,绝不入库(同 weekly_private scheme,a_short/a_long/us_short/us_long 同一 scheme,git check-ignore 守门);
 #   tracked 只放脱敏汇总(无票名/无 $)。实现期 fail-closed 护栏测试 = P0 Required(§18.0)。
 state/*/runs_private/
+# Rollback journals + old-byte backups written while a tracked artifact set is
+# being replaced.  Never tracked: the whole point is to keep half-written state
+# out of the repository.
+state/*/artifact_set_journal/
 state/*/model_paper_private/
 state/*/market_diagnostic_private
 state/*/market_diagnostic_inputs_private
