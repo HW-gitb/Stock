@@ -14,12 +14,14 @@ from engine import us_short_soft_boost_comparison_adjudication as comparison_adj
 from engine import us_short_soft_discovery_weekly_report as weekly
 from engine import us_short_weekly_report_renderer as renderer
 from runners import us_short_weekly_capstone_stages as capstone_stages
-from tests.test_us_short_soft_boost_consumption import DATE, SoftBoostConsumptionTest, _write
+# The FIXTURE, not the TestCase beside it: importing the latter made unittest
+# discover its ten cases here as well, so they ran twice on every full lane.
+from tests.test_us_short_soft_boost_consumption import DATE, SoftBoostFixture, _write
 
 ROOT = Path(__file__).resolve().parents[1]
 
 
-class SoftDiscoveryWeeklyReportTests(SoftBoostConsumptionTest):
+class SoftDiscoveryWeeklyReportTests(SoftBoostFixture, unittest.TestCase):
     """§4c snapshots are built solely from the already-tested K4a/K4b receipt fixtures."""
 
     def _publish(self, resolved, *, on=None, off=None, boosts=None, on_top15=None, off_top15=None):

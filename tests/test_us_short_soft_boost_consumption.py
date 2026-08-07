@@ -22,7 +22,17 @@ def _write(path: Path, payload: dict) -> str:
     return hashlib.sha256(path.read_bytes()).hexdigest()
 
 
-class SoftBoostConsumptionTest(unittest.TestCase):
+class SoftBoostFixture:
+    """Just the fixture, deliberately NOT a TestCase.
+
+    A sibling module reuses this setUp by inheriting from it. When what it
+    inherited was a TestCase subclass, importing it made unittest discover the
+    ten cases below in BOTH modules -- they ran twice on every full lane, and the
+    parallel runner's count gate is what finally noticed (discovered 5560, ran
+    5570). Splitting the fixture off is what stops a shared setUp from dragging
+    its owner's tests along with it.
+    """
+
     def setUp(self):
         self._sample_root_context = temporary_us_short_directory(ROOT, Path("provider_samples"))
         provider_samples = Path(self._sample_root_context.__enter__())
@@ -123,6 +133,8 @@ class SoftBoostConsumptionTest(unittest.TestCase):
         kwargs.update(overrides)
         return consumption.resolve_soft_boost_consumption(**kwargs)
 
+
+class SoftBoostConsumptionTest(SoftBoostFixture, unittest.TestCase):
     def test_valid_nonempty_is_the_only_state_that_enables_scoring(self):
         resolved = self._resolve()
         self.assertTrue(resolved["effective_enabled"], resolved)
