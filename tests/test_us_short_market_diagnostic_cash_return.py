@@ -35,7 +35,7 @@ AS_OF = "20260806"
 
 
 def _observation(day: str, value: str, published: str | None) -> dict:
-    return {"date": day, "value": value, "first_published": published}
+    return {"date": day, "value": value, "available_from": published}
 
 
 def _capture(observations: list[dict] | None = None, *, status: str = FETCH_OK, **overrides) -> dict:
@@ -218,6 +218,29 @@ class CashObservationTest(unittest.TestCase):
         self.assertEqual("20260724", observation["as_of_date"])
         self.assertAlmostEqual(0.00074219, observation["weekly_return"], places=8)
 
+    def test_a_rate_more_than_one_week_stale_is_refused(self) -> None:
+        """The only bound that keeps a stale rate out, so it is pinned exactly.
+
+        The published effective period is the canonical week by construction, so
+        the consumer's "period may not span more than 21 days" check can never
+        fire however old the rate is. Nothing downstream would notice a
+        three-week-old rate presented as this week's.
+        """
+
+        for label, day, expected in (
+            ("seven days back is still this week's", "20260717", "evaluable"),
+            ("eight days back is not", "20260716", "unavailable"),
+        ):
+            with self.subTest(label):
+                observation = _build(
+                    _capture(
+                        [_observation(day, "3.87", f"{day[:4]}-{day[4:6]}-{int(day[6:]) + 1:02d}")],
+                        observation_window_start="2026-07-03",
+                        observation_window_end=VALUATION,
+                    )
+                )
+                self.assertEqual(expected, observation["status"])
+
     def test_an_empty_window_is_unavailable_and_says_why(self) -> None:
         for label, capture in (
             ("all placeholders", _capture([_observation("20260724", MISSING_VALUE, None)])),
@@ -369,9 +392,18 @@ class CashFetchRunnerTest(unittest.TestCase):
             opener=self._opener(self._ROWS),
             api_key="k" * 32,
             now=lambda: datetime(2026, 8, 6, 12, 0, tzinfo=timezone.utc),
+            confirm_user_authorization=True,
         )
         kwargs.update(overrides)
         return cash.capture_cash_week(**kwargs)
+
+    def test_a_live_capture_without_authorization_is_refused(self) -> None:
+        """FRED is a real vendor; the direct and CLI paths had no door."""
+
+        with self.assertRaises(cash.CashFetchError) as ctx:
+            self._run(confirm_user_authorization=False)
+        self.assertIn("authorization", str(ctx.exception))
+        self.assertEqual([], self.requests, "it reached the vendor before the gate")
 
     def test_a_week_is_captured_once_and_never_re_requested(self) -> None:
         first = self._run()
@@ -418,6 +450,21 @@ class CashFetchRunnerTest(unittest.TestCase):
                 self.assertNotIn("api_key", text)
         self.assertIn("RuntimeError", (directory / cash.CAPTURE_FILENAME).read_text(encoding="utf-8"))
 
+    def test_rows_the_module_refuses_degrade_the_week_rather_than_raising(self) -> None:
+        """A vendor that ANSWERS with unusable rows is a failed fetch, not a crash.
+
+        Validation used to sit after the try, so FRED returning an observation
+        dated past the as-of escaped `_build_capture` entirely instead of becoming
+        the ordinary `failed` capture the honesty fields below describe.
+        """
+
+        future = [{"realtime_start": "2099-01-02", "realtime_end": "9999-12-31",
+                   "date": "2099-01-01", "value": "3.87"}]
+        result = self._run(opener=self._opener(future))
+        self.assertEqual("unavailable", result["cash_status"])
+        stored = cash.week_directory(DECISION, inputs_root=self.inputs) / cash.CAPTURE_FILENAME
+        self.assertIn(FETCH_FAILED, stored.read_text(encoding="utf-8"))
+
     def test_a_non_private_destination_is_refused(self) -> None:
         with self.assertRaises(cash.CashFetchError) as ctx:
             self._run(inputs_root=Path(cash.ROOT) / "docs")
@@ -430,18 +477,48 @@ class CashFetchRunnerTest(unittest.TestCase):
             self._run(calendar_week_index=2)
         self.assertIn("immutable", str(ctx.exception))
 
-    def test_collapse_takes_the_as_of_value_and_the_earliest_publication(self) -> None:
-        """One request answers both questions; this pins which row answers which."""
+    def test_a_value_and_its_availability_date_come_from_one_vintage(self) -> None:
+        """The reviewer's probe, verbatim: a revision must not inherit the old date.
+
+        FRED revised DGS3MO for 2026-06-01 from 4.20 to 3.00 on 06-08. Taking the
+        value from the vintage current at the read but the date from the EARLIEST
+        vintage of the day paired 3.00 with 06-02 — a rate nobody could have seen,
+        wearing a date that made it look point-in-time. Both now come from the one
+        vintage that was current at the real-time end being read.
+        """
 
         rows = [
-            # An older vintage that was later superseded.
-            {"realtime_start": "2026-07-25", "realtime_end": "2026-07-27", "date": "2026-07-24", "value": "3.80"},
-            {"realtime_start": "2026-07-28", "realtime_end": "9999-12-31", "date": "2026-07-24", "value": "3.87"},
+            {"realtime_start": "2026-06-02", "realtime_end": "2026-06-07", "date": "2026-06-01", "value": "4.20"},
+            {"realtime_start": "2026-06-08", "realtime_end": "9999-12-31", "date": "2026-06-01", "value": "3.00"},
         ]
-        collapsed = cash._collapse(rows, realtime_end="2026-08-06")
-        self.assertEqual(
-            [{"date": "20260724", "value": "3.87", "first_published": "2026-07-25"}], collapsed
+        with self.subTest("read today: the revision, dated when it was revised"):
+            self.assertEqual(
+                [{"date": "20260601", "value": "3.00", "available_from": "2026-06-08"}],
+                cash._collapse(rows, realtime_end="2026-08-06"),
+            )
+        with self.subTest("read as the world stood on 06-03: only the original"):
+            self.assertEqual(
+                [{"date": "20260601", "value": "4.20", "available_from": "2026-06-02"}],
+                cash._collapse(rows, realtime_end="2026-06-03"),
+            )
+
+    def test_a_revision_is_not_usable_by_a_decision_that_predates_it(self) -> None:
+        """The same probe carried through to the observation the gate consumes."""
+
+        capture = _capture(
+            [_observation("20260601", "3.00", "2026-06-08")],
+            observation_window_start="2026-05-11",
+            observation_window_end="2026-06-01",
         )
+        observation = build_cash_observation(
+            capture=capture,
+            capture_sha256=DIGEST,
+            valuation_date="20260601",
+            decision_date="20260603",
+            as_of_date=AS_OF,
+        )
+        self.assertEqual("unavailable", observation["status"])
+        self.assertEqual([REASON_NO_PUBLISHED_RATE], observation["data_quality_reasons"])
 
     def test_collapse_reports_a_day_absent_from_the_as_of_vintage_as_a_placeholder(self) -> None:
         rows = [
@@ -449,7 +526,7 @@ class CashFetchRunnerTest(unittest.TestCase):
         ]
         collapsed = cash._collapse(rows, realtime_end="2026-08-06")
         self.assertEqual(MISSING_VALUE, collapsed[0]["value"])
-        self.assertIsNone(collapsed[0]["first_published"])
+        self.assertIsNone(collapsed[0]["available_from"])
 
 
 if __name__ == "__main__":  # pragma: no cover

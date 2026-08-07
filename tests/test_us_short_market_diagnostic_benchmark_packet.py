@@ -271,6 +271,7 @@ class _FakeTicker:
         self._vendor.calls.append((self._symbol, kwargs))
         if self._symbol in self._vendor.broken:
             raise RuntimeError("vendor endpoint changed shape")
+        close = float("nan") if self._symbol in self._vendor.nan_close else 101.0
         rows = [
             (
                 _FakeIndex(date(2026, 7, 23)),
@@ -278,16 +279,17 @@ class _FakeTicker:
             ),
             (
                 _FakeIndex(date(2026, 7, 24)),
-                {"Close": 101.0, "Dividends": 0.25, "Stock Splits": 0.0, "Capital Gains": 0.0},
+                {"Close": close, "Dividends": 0.25, "Stock Splits": 0.0, "Capital Gains": 0.0},
             ),
         ]
         return _FakeFrame(rows)
 
 
 class _FakeVendor:
-    def __init__(self, broken: set[str] | None = None) -> None:
+    def __init__(self, broken: set[str] | None = None, nan_close: set[str] | None = None) -> None:
         self.calls: list = []
         self.broken = broken or set()
+        self.nan_close = nan_close or set()
 
     def Ticker(self, symbol: str) -> _FakeTicker:  # noqa: N802 - mirrors the vendor API
         return _FakeTicker(symbol, self)
@@ -313,9 +315,41 @@ class BenchmarkFetchRunnerTest(unittest.TestCase):
             inputs_root=self.inputs,
             module=vendor,
             now=lambda: datetime(2026, 8, 6, 12, 0, tzinfo=timezone.utc),
+            confirm_user_authorization=True,
         )
         kwargs.update(overrides)
         return fetch.capture_week(**kwargs)
+
+    def test_a_live_capture_without_authorization_is_refused(self) -> None:
+        """The sibling live fetchers' unconditional gate, which this lacked.
+
+        The pipeline path is protected by its stage being `gated`, so the hole was
+        only ever on the direct and CLI paths -- which is exactly where a vendor
+        gets called with nothing in the way.
+        """
+
+        vendor = _FakeVendor()
+        with self.assertRaises(fetch.BenchmarkFetchError) as ctx:
+            self._capture_week(vendor, confirm_user_authorization=False)
+        self.assertIn("authorization", str(ctx.exception))
+        self.assertEqual([], vendor.calls, "it reached the vendor before the gate")
+
+    def test_a_symbol_whose_bars_are_refused_degrades_only_itself(self) -> None:
+        """The reviewer's probe: a NaN close must not take the week down.
+
+        Validation used to sit outside the try, so a vendor that ANSWERED with a
+        bar this module refuses escaped the whole capture -- the symbols already
+        fetched lost their evidence, and the failure surfaced claiming no provider
+        call after real requests had gone out.
+        """
+
+        vendor = _FakeVendor(nan_close={"SPY"})
+        result = self._capture_week(vendor)
+        self.assertEqual("captured", result["status"])
+        self.assertEqual(["VTI", "IWB", "QQQ"], result["evaluable_symbols"])
+        self.assertEqual(4, result["provider_calls"], "the requests it made were not counted")
+        directory = fetch.week_directory(DECISION, inputs_root=self.inputs)
+        self.assertTrue((directory / "SPY.json").exists(), "the refused symbol lost its evidence")
 
     def test_a_week_is_captured_once_and_never_re_fetched(self) -> None:
         """Idempotence with a cost: a re-run must not spend a call to overwrite

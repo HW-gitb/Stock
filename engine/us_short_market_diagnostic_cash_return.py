@@ -35,7 +35,7 @@ import re
 from typing import Any
 
 CAPTURE_SCHEMA_NAME = "us_short_market_diagnostic_cash_capture"
-CAPTURE_SCHEMA_VERSION = "1.0.0"
+CAPTURE_SCHEMA_VERSION = "1.1.0"
 SERIES_ID = "DGS3MO"
 INSTRUMENT = "pit_3m_tbill"
 VENDOR = "fred"
@@ -48,10 +48,17 @@ FETCH_FAILED = "failed"
 # invisible: the number would simply be wrong by a constant.
 _WEEK_DAYS = 7
 _DAYS_PER_YEAR = 365
-# How far back to look for a published rate before giving up on the week. A
-# T-bill rate three weeks stale is not this week's rate, and the consumer's
-# effective-period bound refuses a span beyond 21 days anyway.
-_MAX_LOOKBACK_DAYS = 21
+# How far back to look for a published rate before giving up on the week, and
+# the ONLY thing that keeps a stale rate out.
+#
+# The effective period published below is the canonical week by construction --
+# the return is converted for exactly seven days, so the period is seven days --
+# which means the consumer's "period may not span more than 21 days" bound can
+# never fire no matter how old the rate is. Twenty-one days of lookback here
+# therefore let a three-week-old rate be published as this week's, with every
+# downstream check still green. The bound that matters is this one, so it is the
+# one that is set honestly and tested.
+_MAX_RATE_STALENESS_DAYS = 7
 
 MISSING_VALUE = "."
 
@@ -142,18 +149,18 @@ def validate_cash_capture(capture: object, *, as_of_date: str | None = None) -> 
         value = raw.get("value")
         if not isinstance(value, str) or (value != MISSING_VALUE and _RATE.fullmatch(value) is None):
             _fail(f"{field}.value must be a decimal string or {MISSING_VALUE!r}")
-        published = raw.get("first_published")
+        published = raw.get("available_from")
         if value == MISSING_VALUE:
             if published is not None:
                 _fail(f"{field} has no rate, so it cannot have been published")
         else:
             if published is None:
                 _fail(f"{field} carries a rate with no publication date")
-            published_day = _iso_date(published, f"{field}.first_published")
+            published_day = _iso_date(published, f"{field}.available_from")
             if published_day < day:
                 _fail(f"{field} claims it was published before the day it measures")
             if as_of is not None and published_day > as_of:
-                _fail(f"{field}.first_published is after as_of_date")
+                _fail(f"{field}.available_from is after as_of_date")
     return dict(capture)
 
 
@@ -209,7 +216,7 @@ def build_cash_observation(
     if validated["fetch_status"] == FETCH_FAILED:
         return _unavailable([REASON_FETCH_FAILED])
 
-    earliest = valuation - timedelta(days=_MAX_LOOKBACK_DAYS)
+    earliest = valuation - timedelta(days=_MAX_RATE_STALENESS_DAYS)
     chosen: Mapping[str, Any] | None = None
     for raw in reversed(validated["observations"]):
         day = _date8(raw["date"], "observation.date")
@@ -218,7 +225,7 @@ def build_cash_observation(
         if raw["value"] == MISSING_VALUE:
             # A holiday, or a day the Fed has not published. Step back; never zero.
             continue
-        if _iso_date(raw["first_published"], "observation.first_published") > decision:
+        if _iso_date(raw["available_from"], "observation.available_from") > decision:
             # Dated before the decision but not yet PUBLISHED when it was made.
             # Using it would be look-ahead wearing a plausible date.
             continue
@@ -232,17 +239,18 @@ def build_cash_observation(
         "status": "evaluable",
         "instrument": INSTRUMENT,
         "weekly_return": weekly_return,
-        # The consumer's two containment checks together force the end of the
-        # effective period to be the valuation date exactly, so this is not a
-        # choice; the start is one canonical week before it, which is the interval
-        # the return was converted for.
+        # Not a choice: the consumer's two containment checks force the end to be
+        # the valuation date exactly, and the start is one canonical week before
+        # it because that is the interval the rate was converted for. What keeps
+        # this honest is not the period -- it is the staleness bound above, which
+        # is why that bound and not this line is where the rule lives.
         "effective_start_date": (valuation - timedelta(days=_WEEK_DAYS)).strftime("%Y%m%d"),
         "effective_end_date": valuation.strftime("%Y%m%d"),
         "as_of_date": chosen["date"],
         # End of the publication day rather than its start: the vendor gives a
         # date, not a time, and claiming midnight would assert the rate was in
         # hand earlier than it can be shown to have been.
-        "available_at": f"{chosen['first_published']}T23:59:59Z",
+        "available_at": f"{chosen['available_from']}T23:59:59Z",
         "source_sha256": capture_sha256,
         "source_refs": [capture_sha256],
         "data_quality_reasons": [],

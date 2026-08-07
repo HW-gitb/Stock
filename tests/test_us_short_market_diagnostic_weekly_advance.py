@@ -70,6 +70,7 @@ class WeeklyAdvanceTest(unittest.TestCase):
             benchmark_module=vendor if vendor is not None else _FakeVendor(),
             cash_opener=self._opener,
             cash_api_key="k" * 32,
+            confirm_user_authorization=True,
         )
         kwargs.update(overrides)
         return advance.fetch_next_week(**kwargs)
@@ -146,6 +147,24 @@ class WeeklyAdvanceTest(unittest.TestCase):
         self.assertEqual("waiting_for_paper_week", again["status"])
         self.assertEqual(1, len(self.requests), "the vendor was asked again with nothing to fetch")
         self.assertEqual("waiting_for_paper_week", self._settle()["status"])
+
+    def test_a_failure_after_the_benchmark_calls_still_reports_them(self) -> None:
+        """Four requests went out; the failure must not report them as none.
+
+        The count is recorded before each request and carried through the
+        failure, so a paid boundary is never described by inferring from whether
+        the capture returned normally.
+        """
+
+        import unittest.mock as mock
+
+        self._open_clock()
+        with mock.patch.object(
+            advance, "capture_cash_week", side_effect=advance.CashFetchError("FRED refused")
+        ):
+            result = self._fetch()
+        self.assertEqual("capture_failed", result["status"])
+        self.assertEqual(4, result["provider_calls"], "the benchmark requests were reported as none")
 
     def test_the_week_identity_comes_from_the_stores_not_the_caller(self) -> None:
         """No parameter names a date, so no caller can point at another week."""
@@ -430,10 +449,14 @@ class CapstoneStageTest(unittest.TestCase):
             market_diagnostic_root = None
 
         boom = RuntimeError("the store exploded in a way nobody enumerated")
-        for runner, key, module, symbol in (
-            (capstone._run_market_diagnostic_fetch, "fetch_status", fetch_module, "fetch_next_week"),
-            (capstone._run_market_diagnostic_settle, "settle_status", fetch_module, "settle_captured_week"),
-            (capstone._run_market_diagnostic, "clock_status", task_module, "weekly_diagnostic_step"),
+        # `calls_unknown` marks the one stage that can reach a vendor. When it
+        # dies before anything counted, "no provider call" is a claim nobody can
+        # support, so it must NOT report False -- an unknown at a paid boundary is
+        # not a zero. The two that never call anything report False truthfully.
+        for runner, key, module, symbol, calls_unknown in (
+            (capstone._run_market_diagnostic_fetch, "fetch_status", fetch_module, "fetch_next_week", True),
+            (capstone._run_market_diagnostic_settle, "settle_status", fetch_module, "settle_captured_week", False),
+            (capstone._run_market_diagnostic, "clock_status", task_module, "weekly_diagnostic_step", False),
         ):
             with self.subTest(runner.__name__):
                 with mock.patch.object(module, symbol, side_effect=boom):
@@ -444,7 +467,35 @@ class CapstoneStageTest(unittest.TestCase):
                 # carried, rather than raised into the weekly run.
                 self.assertIn(result[key], {"failed", "broken"})
                 self.assertIn("RuntimeError", result["problem"])
-                self.assertFalse(result["provider_calls_performed"])
+                self.assertEqual(calls_unknown, result["provider_calls_performed"])
+
+    def test_a_capture_that_dies_part_way_still_reports_the_calls_it_made(self) -> None:
+        """The reviewer's second point on F3, at the boundary that matters.
+
+        Reporting `provider_calls_performed: False` after real requests went out
+        is a false statement about a paid boundary. The count is now carried
+        through the failure rather than inferred from whether the capture
+        returned normally.
+        """
+
+        import unittest.mock as mock
+
+        from runners import us_short_weekly_capstone as capstone
+        from runners import us_short_market_diagnostic_weekly_fetch as fetch_module
+
+        class _Ctx:
+            decision_date = "20260727"
+            market_diagnostic_root = None
+
+        with mock.patch.object(
+            fetch_module,
+            "fetch_next_week",
+            return_value={"status": "capture_failed", "problem": "vendor died",
+                          "provider_calls": 3, "report_lines": []},
+        ):
+            result = capstone._run_market_diagnostic_fetch(_Ctx())
+        self.assertEqual("capture_failed", result["fetch_status"])
+        self.assertTrue(result["provider_calls_performed"], "three real requests were reported as none")
 
     def test_the_reader_is_handed_both_legs_that_were_captured(self) -> None:
         """Otherwise v1.1 reports `unavailable` beside files holding the answer.

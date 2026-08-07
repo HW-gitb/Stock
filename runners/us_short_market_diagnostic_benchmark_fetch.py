@@ -163,31 +163,41 @@ def capture_symbol(
     status = FETCH_OK
     error_kind: str | None = None
     bars: list[dict[str, Any]] = []
+    def _capture(fetch_status: str, kind: str | None, rows: list[dict[str, Any]]) -> dict[str, Any]:
+        return {
+            "schema_name": CAPTURE_SCHEMA_NAME,
+            "schema_version": CAPTURE_SCHEMA_VERSION,
+            "symbol": symbol,
+            "vendor": VENDOR,
+            "auto_adjust": False,
+            "observed_at": observed_at,
+            "fetch_status": fetch_status,
+            "error_kind": kind,
+            "requested_start": start,
+            "requested_end_exclusive": end_exclusive,
+            "bars": rows,
+        }
+
     try:
         bars = fetch_symbol_bars(symbol, start=start, end_exclusive=end_exclusive, module=module)
+        capture = _capture(status, error_kind, bars)
+        # Validated INSIDE the try, because a vendor that answers with a bar this
+        # module refuses -- a NaN close, a repeated date -- is a degraded symbol
+        # exactly like one that does not answer at all. Left outside, that refusal
+        # escaped the whole week's capture: the three symbols already fetched lost
+        # their evidence, and the failure surfaced with `provider_calls_performed`
+        # false after three real requests had gone out.
+        validate_benchmark_capture(capture, symbol=symbol)
     except Exception as exc:  # noqa: BLE001 - any vendor failure is one degraded symbol
-        status = FETCH_FAILED
-        error_kind = type(exc).__name__
-        bars = []
-    capture = {
-        "schema_name": CAPTURE_SCHEMA_NAME,
-        "schema_version": CAPTURE_SCHEMA_VERSION,
-        "symbol": symbol,
-        "vendor": VENDOR,
-        "auto_adjust": False,
-        "observed_at": observed_at,
-        "fetch_status": status,
-        "error_kind": error_kind,
-        "requested_start": start,
-        "requested_end_exclusive": end_exclusive,
-        "bars": bars,
-    }
-    validate_benchmark_capture(capture, symbol=symbol)
+        capture = _capture(FETCH_FAILED, type(exc).__name__, [])
+        validate_benchmark_capture(capture, symbol=symbol)
     return capture
 
 
 def capture_week(
     *,
+    confirm_user_authorization: bool = False,
+    call_log: list[str] | None = None,
     decision_date: str,
     valuation_date: str,
     prior_valuation_date: str,
@@ -202,6 +212,16 @@ def capture_week(
 ) -> dict[str, Any]:
     """Capture every benchmark for one week and build that week's packet."""
 
+    if not confirm_user_authorization:
+        # Same unconditional gate the sibling live fetchers carry
+        # (`us_short_batch5_full_universe_momentum_fetch`). The pipeline path is
+        # additionally protected by its stage being `gated`, but a direct call or
+        # the CLI reaches a real vendor with nothing in the way.
+        raise BenchmarkFetchError(
+            "a live benchmark capture requires explicit user authorization "
+            "(confirm_user_authorization=True)"
+        )
+    attempts = call_log if call_log is not None else []
     directory = week_directory(decision_date, inputs_root=inputs_root)
     # Checked once, here, rather than only inside each write. A week whose
     # captures already exist takes the reuse branch and never writes anything, so
@@ -233,6 +253,10 @@ def capture_week(
             raise BenchmarkFetchError(
                 f"--dry-run cannot capture {symbol}; it validates an already-captured week"
             )
+        # Recorded BEFORE the request, so a failure cannot erase the fact that
+        # one went out. `provider_calls_performed` is then a count of what really
+        # happened rather than something inferred from a status string.
+        attempts.append(symbol)
         capture = capture_symbol(
             symbol, start=start, end_exclusive=end_exclusive, module=module, now=now
         )
@@ -260,6 +284,7 @@ def capture_week(
             "packet_path": str(packet_path),
             "reused_captures": reused,
             "evaluable_symbols": _evaluable(packet),
+            "provider_calls": len(attempts),
         }
     if packet_path.exists():
         existing, _ = _read_private_json(packet_path)
@@ -272,6 +297,7 @@ def capture_week(
             "packet_path": str(packet_path),
             "reused_captures": reused,
             "evaluable_symbols": _evaluable(packet),
+            "provider_calls": len(attempts),
         }
     write_private_json_once(packet_path, packet)
     return {
@@ -279,6 +305,7 @@ def capture_week(
         "packet_path": str(packet_path),
         "reused_captures": reused,
         "evaluable_symbols": _evaluable(packet),
+        "provider_calls": len(attempts),
     }
 
 
@@ -319,6 +346,7 @@ def main(argv: list[str] | None = None) -> int:
             as_of_date=as_of,
             inputs_root=args.inputs_root,
             dry_run=args.dry_run,
+            confirm_user_authorization=args.confirm_user_authorization,
         )
     except (BenchmarkFetchError, BenchmarkPacketError) as exc:
         print(f"ERROR: {exc}")

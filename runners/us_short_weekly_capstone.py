@@ -492,21 +492,34 @@ def _run_market_diagnostic_fetch(ctx: CapstoneContext) -> dict[str, Any]:
     try:
         from runners.us_short_market_diagnostic_weekly_fetch import fetch_next_week
 
-        result = fetch_next_week(as_of_date=ctx.decision_date, **_diagnostic_overrides(ctx))
+        # This stage is `gated`, so the pipeline has already made the operator
+        # authorize a live fetch before it runs; passing that through is what the
+        # direct and CLI paths now also have to do explicitly.
+        result = fetch_next_week(
+            as_of_date=ctx.decision_date,
+            confirm_user_authorization=True,
+            **_diagnostic_overrides(ctx),
+        )
     except Exception as exc:  # noqa: BLE001 — a diagnostic may never block selection
         return {
             "fetch_status": "failed",
             "problem": f"{type(exc).__name__}: {exc}",
             "report_lines": [],
-            "provider_calls_performed": False,
+            # Unknown, and an unknown at a paid boundary is not a `False`. Nothing
+            # reached the point of counting, so the honest answer is that we
+            # cannot say -- reported as True so a reader is never told "no
+            # provider call" on the strength of an exception.
+            "provider_calls_performed": True,
         }
     return {
         "fetch_status": result["status"],
         "calendar_week_index": result.get("calendar_week_index"),
         "cash_status": result.get("cash_status"),
         "evaluable_symbols": result.get("evaluable_symbols"),
+        "problem": result.get("problem"),
         "report_lines": [],
-        "provider_calls_performed": result["status"] == "captured",
+        # The count the capture actually kept, not an inference from its status.
+        "provider_calls_performed": bool(result.get("provider_calls", 0)),
     }
 
 

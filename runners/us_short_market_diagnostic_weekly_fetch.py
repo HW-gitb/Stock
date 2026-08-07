@@ -176,6 +176,7 @@ def next_week_identity(
 
 def fetch_next_week(
     *,
+    confirm_user_authorization: bool = False,
     root: str | Path = DEFAULT_ROOT,
     model_paper_root: str | Path = DEFAULT_MODEL_PAPER_ROOT,
     inputs_root: Path = DEFAULT_INPUTS_ROOT,
@@ -200,32 +201,51 @@ def fetch_next_week(
         )
     except WeeklyAdvanceNotReady as exc:
         return {"status": "waiting_for_paper_week", "reason": str(exc), "report_lines": []}
-    benchmark = capture_week(
-        decision_date=identity["decision_date"],
-        valuation_date=identity["valuation_date"],
-        prior_valuation_date=identity["prior_valuation_date"],
-        settlement_decision_date=identity["settlement_decision_date"],
-        calendar_week_index=identity["calendar_week_index"],
-        diagnostic_epoch=identity["diagnostic_epoch"],
-        as_of_date=as_of_date,
-        inputs_root=inputs_root,
-        module=benchmark_module,
-    )
-    cash = capture_cash_week(
-        decision_date=identity["decision_date"],
-        valuation_date=identity["valuation_date"],
-        calendar_week_index=identity["calendar_week_index"],
-        as_of_date=as_of_date,
-        inputs_root=inputs_root,
-        opener=cash_opener,
-        api_key=cash_api_key,
-    )
+    # One log across both captures. A failure part-way through must still report
+    # the requests that already went out: reporting "no provider call" after real
+    # ones is a false statement about a paid boundary, which is why the count is
+    # carried rather than inferred from whether this returned normally.
+    attempts: list[str] = []
+    try:
+        benchmark = capture_week(
+            confirm_user_authorization=confirm_user_authorization,
+            call_log=attempts,
+            decision_date=identity["decision_date"],
+            valuation_date=identity["valuation_date"],
+            prior_valuation_date=identity["prior_valuation_date"],
+            settlement_decision_date=identity["settlement_decision_date"],
+            calendar_week_index=identity["calendar_week_index"],
+            diagnostic_epoch=identity["diagnostic_epoch"],
+            as_of_date=as_of_date,
+            inputs_root=inputs_root,
+            module=benchmark_module,
+        )
+        cash = capture_cash_week(
+            confirm_user_authorization=confirm_user_authorization,
+            call_log=attempts,
+            decision_date=identity["decision_date"],
+            valuation_date=identity["valuation_date"],
+            calendar_week_index=identity["calendar_week_index"],
+            as_of_date=as_of_date,
+            inputs_root=inputs_root,
+            opener=cash_opener,
+            api_key=cash_api_key,
+        )
+    except (BenchmarkFetchError, CashFetchError) as exc:
+        return {
+            "status": "capture_failed",
+            "problem": str(exc),
+            "calendar_week_index": identity["calendar_week_index"],
+            "provider_calls": len(attempts),
+            "report_lines": [],
+        }
     return {
         "status": "captured",
         "calendar_week_index": identity["calendar_week_index"],
         "benchmark_status": benchmark["status"],
         "evaluable_symbols": benchmark["evaluable_symbols"],
         "cash_status": cash["cash_status"],
+        "provider_calls": len(attempts),
         "report_lines": [],
     }
 

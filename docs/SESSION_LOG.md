@@ -1,5 +1,15 @@
 # Session Log
 
+## 2026-08-07 — Claude Code 修复复审方四条 Required（现金腿 PIT / 陈旧上限 / 总适配器 / 授权门）
+
+- **Verdict/Action**: 并发复审方 + 独立对抗 agent 判我当日提交的刀 9/10b `审查 FAIL`，四条 Required 我全部认并同日修完。走 codex-fix-gate §1 **从 Required 文本枚举整类**：F3 实为**四条腿**（基准侧校验进 try、**现金侧同一缺陷复审方未点名**、编排层失败时保住调用计数、capstone 不再由状态字符串推断），F4 实为**五处入口**（两个 `capture_*` + `fetch_next_week` + 两个 CLI 各加 `--confirm-user-authorization`）。
+- **F1 值与其可得日必须同源**: `_collapse` 原先值取「当前 vintage」、日期取「全部 vintage 的最早」，于是被修订的值继承了前值的发布日。复现复审方确切探针：DGS3MO `20260601` 于 06-02 发布 4.20、06-08 修订为 3.00，旧实现会声称 3.00「06-02 就有了」，让 06-03 的决策用上一个当时不存在的数——**正是我自己注释里写着要防的「穿着合理日期的前视」**。改为两者同绑「读取时点当期那个 vintage」。**顺带改名**：绑定后该字段含义变为「该值何时可得」，`first_published` 会误导下一个读者，改 `available_from`，capture schema 升 1.1.0。
+- **F2 真正的门在生产者这边**: 生效期是按构造固定的规范周（收益就是按 7 天换算的），所以消费方「生效期不得超 21 天」永远不会响——21 天的回溯窗因此能让三周前的利率冒充本周，全链仍绿。修法不是改生效期（复审方建议的 `rate_date .. valuation` 在利率取自估值日当天时区间长度为 0，消费方 `start < end` 会拒，**正常周反而跑不通**），而是**把生产者陈旧上限由 21 天收到 7 天**并配上下双向用例；原注释声称消费方 span 门会挡住，是错的，已删。
+- **F3 一处未照字面办**: `provider_calls_performed` 我没改成「异常时算计数」，而是把**异常路径固定报 `True`**——付费边界上的「不知道」不等于「没有」；异常时根本没走到计数那一步，报 `False` 等于拿「出错了」当「没花钱」的证据。正常路径用真实计数（请求发出**前**记账，失败也抹不掉）。
+- **Verify**: review-evidence:c14ae00f52ef。四模块 91 测绿；**14 个植入 14 红**，零残留。首轮 3 个逃掉全在 F3——一个是我植入写错（只加 `pass` 未真移走校验），两个是真覆盖缺口（现金侧「厂商答了但内容被拒需优雅降级」、编排层「中途失败仍如实报出已发生的 4 次调用」），均补测试后转红。焦点包 `Ran 336 tests in 47.5s PASS` `receipt:7b04c6bf9f2e4cfd9148e425`（328→336）；capstone + 授权一致性 + I/O 清单 + 治理门 `Ran 154 OK`。
+- **Pre-Codex self-review**: matrix=四条 Required 各按 Required 文本枚举整类后逐出口修（F1 单点／F2 单点+删错注释／**F3 四条腿：基准侧校验进 try、现金侧同缺陷复审方未点名、编排层失败保住计数、capstone 不再由状态串推断**／**F4 五处入口：两个 `capture_*` + `fetch_next_week` + 两个 CLI**）；register=四条已翻 resolved 且两处未照字面办的理由入册；handoff=本条即该轮收口，无独立 handoff；focused=`Ran 336 in 47.5s PASS receipt:7b04c6bf9f2e4cfd9148e425`；full-lane=`full_pack_ledger run us_short` `Ran 5560 tests in 526.9s PASS`（零失败，已记账）；door=`tests.test_doc_governance_guard Ran 41 OK` + `tests.test_route_doc_ledger_status_consistency Ran 14 OK`。独立对抗 agent：本轮不另起——判定方本就是并发复审方 + 其独立对抗 agent，我方为被审侧修复，已复现其确切探针（FRED 06-08 修订用例）并自打 14 植入全红。
+- **Next**: 无
+
 ## 2026-08-07 — Claude Code 全量 lane 首次记账绿；并行可行性只读实测已挂账
 
 - **Verdict/Action**: `full_pack_ledger run us_short` → **`Ran 5552 tests in 611.6s / status=PASS`**，绑定当前代码指纹记入 ledger。这是这条 lane 第一次拿到「已提交状态 + 记账」的绿全量，`R-USSHORT-26W-DIAG-NO-GREEN-FULL-LANE-FOR-THE-COMMITTED-STATE` 随之 resolved。

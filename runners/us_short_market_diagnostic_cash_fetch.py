@@ -121,29 +121,32 @@ def _collapse(rows: list[dict[str, Any]], *, realtime_end: str) -> list[dict[str
         value = row.get("value")
         if not isinstance(day, str) or not isinstance(start, str) or not isinstance(value, str):
             raise CashFetchError("FRED observation row is missing date, realtime_start or value")
-        record = by_day.setdefault(day, {"date": day, "value": None, "first_published": None})
-        # First publication is the earliest vintage seen for the day, INCLUDING
-        # the ones that carried "." — a placeholder row is still a publication
-        # event, but it is not a rate, so it never becomes `first_published`.
-        if value != MISSING_VALUE:
-            if record["first_published"] is None or start < record["first_published"]:
-                record["first_published"] = start
+        record = by_day.setdefault(day, {"date": day, "value": None, "available_from": None})
+        # The date reported beside a value has to be the date THAT value was
+        # published, not the earliest date any value for the day was published.
+        # Taking the minimum across every vintage paired a revised number with
+        # its predecessor's publication date: FRED revised DGS3MO for 2026-06-01
+        # from 4.20 to 3.00 on 06-08, and the pairing then claimed 3.00 had been
+        # available since 06-02 — a rate nobody could have seen, wearing a date
+        # that made it look point-in-time. Bind both to the ONE vintage that was
+        # current at the real-time end being read.
         if isinstance(end, str) and start <= realtime_end <= end:
             record["value"] = value
+            record["available_from"] = start if value != MISSING_VALUE else None
     collapsed = []
     for day in sorted(by_day):
         record = by_day[day]
         value = record["value"]
         if value is None or value == MISSING_VALUE:
             collapsed.append(
-                {"date": day.replace("-", ""), "value": MISSING_VALUE, "first_published": None}
+                {"date": day.replace("-", ""), "value": MISSING_VALUE, "available_from": None}
             )
             continue
         collapsed.append(
             {
                 "date": day.replace("-", ""),
                 "value": value,
-                "first_published": record["first_published"],
+                "available_from": record["available_from"],
             }
         )
     return collapsed
@@ -151,6 +154,8 @@ def _collapse(rows: list[dict[str, Any]], *, realtime_end: str) -> list[dict[str
 
 def capture_cash_week(
     *,
+    confirm_user_authorization: bool = False,
+    call_log: list[str] | None = None,
     decision_date: str,
     valuation_date: str,
     calendar_week_index: int,
@@ -163,6 +168,15 @@ def capture_cash_week(
 ) -> dict[str, Any]:
     """Capture one week's vintage and write the cash observation beside it."""
 
+    if not confirm_user_authorization:
+        # The sibling live fetchers' unconditional gate. FRED is a real vendor and
+        # this reaches it, so the direct and CLI paths need the same door the
+        # pipeline path gets from its stage being `gated`.
+        raise CashFetchError(
+            "a live cash capture requires explicit user authorization "
+            "(confirm_user_authorization=True)"
+        )
+    attempts = call_log if call_log is not None else []
     directory = week_directory(decision_date, inputs_root=inputs_root)
     try:
         reject_nonprivate_output_path(directory)
@@ -178,6 +192,8 @@ def capture_cash_week(
     else:
         if dry_run:
             raise CashFetchError("--dry-run cannot capture; it revalidates an already-captured week")
+        # Recorded before the request so a failure cannot erase it.
+        attempts.append(SERIES_ID)
         capture = _build_capture(
             valuation_date=valuation_date,
             as_of=as_of,
@@ -224,6 +240,7 @@ def capture_cash_week(
         "reused_capture": reused,
         "cash_status": observation["status"],
         "weekly_return": observation["weekly_return"],
+        "provider_calls": len(attempts),
     }
 
 
@@ -271,6 +288,10 @@ def _build_capture(
             opener=opener,
         )
         capture["observations"] = _collapse(rows, realtime_end=realtime_end)
+        # Validated inside the try for the same reason its benchmark sibling is:
+        # a vendor that answers with rows this module refuses is a failed fetch,
+        # not an exception that escapes past the honesty fields below.
+        validate_cash_capture(capture, as_of_date=as_of)
     except Exception as exc:  # noqa: BLE001 - the message may contain the key
         capture["fetch_status"] = FETCH_FAILED
         capture["vintage_realtime_date"] = None
@@ -278,7 +299,7 @@ def _build_capture(
         # the message it raises.
         capture["error_kind"] = type(exc).__name__
         capture["observations"] = []
-    validate_cash_capture(capture, as_of_date=as_of)
+        validate_cash_capture(capture, as_of_date=as_of)
     return capture
 
 
@@ -299,6 +320,8 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--calendar-week-index", required=True, type=int)
     parser.add_argument("--as-of-date", help="YYYYMMDD; defaults to today so future vintages fail closed")
     parser.add_argument("--inputs-root", type=Path, default=DEFAULT_INPUTS_ROOT)
+    parser.add_argument("--confirm-user-authorization", action="store_true",
+                        help="required for a live capture; a real vendor is called")
     parser.add_argument("--dry-run", action="store_true")
     args = parser.parse_args(argv)
     try:
@@ -309,6 +332,7 @@ def main(argv: list[str] | None = None) -> int:
             as_of_date=args.as_of_date,
             inputs_root=args.inputs_root,
             dry_run=args.dry_run,
+            confirm_user_authorization=args.confirm_user_authorization,
         )
     except (CashFetchError, CashReturnError) as exc:
         print(f"ERROR: {exc}")
