@@ -4,7 +4,7 @@
 
 ## 当前覆盖
 
-- `analysis_input.schema.json` 的全部 371 个叶子字段，按业务组逐一覆盖且不允许重叠；新增字段、删除字段或移动字段都会使组指纹不匹配。
+- `analysis_input.schema.json` 的全部叶子字段（数量由 schema 动态计算，不写死），按业务组逐一覆盖且不允许重叠；新增字段、删除字段或移动字段都会使组指纹不匹配。
 - A-short 实际决策文件（EGS、Phase 5、weekly pipeline、M6.7 renderer、组合风险模块和本契约模块）的判断分支；新增或改变判断条件必须更新契约并说明落点。
 - 两份运行时 JSON policy 的全部字段：screening 的 13 项，以及 M6.7 的 Phase 5、组合风险、weekly 时间窗；`operation_impact.source_field`、LLM 六类任务枚举、组合因子枚举，以及 weekly/M6.7 输出 schema。
 - `candidate_derived_flags.m4_review_required` 的生产者绑定当前明确为 `A-EGS/egs_main.py::m4_review_required` 恒发 `None`；因此真实周报的该组 ledger 状态是 `not_triggered`，只有未来经独立审查的 M4 生产者或测试夹具提供 `true` 才会记 `applied`。
@@ -32,9 +32,19 @@ Master 的确定性行业趋势 `industry_trend` 已正式接入：它只消费 
 
 旧 Phase 3/4 的 `llm_tasks` 六类任务枚举已被契约登记，因此新增或修改任务类型会被测试拦住；但本次 master 对账没有声称平行的 `run_analysis_report.py` 报告链已桥接到正式周报。该组会诚实显示 `unavailable_manual_review`，直至单独的 LLM bridge 切片落地。
 
+## 未判定余量：`unclassified_pending_audit_baseline`（只减不增）
+
+契约顶层的 `unclassified_pending_audit_baseline` 是**冻结的欠账名单**：2026-08-07 那天所有「没有任何机械规则能分类」的叶（225 条）被一次性快照进去，零举证、零判断。它的作用不是描述历史，而是**把兜底分支关成一张闭合名单**：
+
+- **新叶闸**：今天再有叶落进兜底分支，只要不在名单里就直接 raise 并点名该叶路径，要求在 `leaf_effect_overrides` 里登记一条带 `category` 的条目，或证明它的消费者。新增 computed 字段、生产者从写死 `None` 改成真计算、字段改名/搬家、叶从 `proven_consumer_paths` 掉出——都会走到这里。
+- **棘轮腿**：名单里的每一条必须**当前仍然真判 pending**。叶被接线、被删、或翻成 constant_null 之后还留在名单里，`static_contract_error()` 会报 `may only shrink`，强制把它从名单删掉。
+- **不问的情况**：新叶落在 `intentionally_independent` 组、或生产者写死 `None`，仍然自动分类，不打扰。
+
+**这份名单不判定谁是真悬空**。它只保证「新债为零、旧债可见且只减不增」；收缩靠后续接线刀和删叶刀自然发生，没有清零期限。它属于叶账本而非决策面，因此已列入 `engine/a_short_evidence_epoch_mode.py::_EFFECT_CONTRACT_LEAF_LEDGER_KEYS`——名单收缩不改变契约语义指纹，不会作废任何已积累的对比轨证据。
+
 ## 以后改字段/规则时
 
-1. 先在 effect contract 增加或更新对应组：来源、政策、最终表面、运行时处理器；若刻意独立，补齐三项例外说明。新增 JSON 字段时，还必须登记 runtime policy binding。
+1. 先在 effect contract 增加或更新对应组：来源、政策、最终表面、运行时处理器；若刻意独立，补齐三项例外说明。新增 JSON 字段时，还必须登记 runtime policy binding。若新叶落进未判定余量，必须当场给出 `category`（并按需补 `consumer_ref` / `terminal_surface` / `mutation_evidence`），不得往 `unclassified_pending_audit_baseline` 里加人。
 2. 同步更新契约指纹，并新增一个能改变最终结果或明确进入人工复核的行为测试；不得只改 Python 常量或只改 JSON 而不验证实际结果。
 3. 运行 `tests/test_a_short_effect_contract.py` 和相关 weekly/M6.7 测试。任何一项未登记或不一致都会失败。
 

@@ -2233,3 +2233,64 @@ margin 两模块 56 绿；验收包 682 绿（`receipt:c1de5807ed0db575bfec092e`
 **② 先做也行、并行也行**（它便宜且不依赖 ①），但 **① 是裁阈值的必要条件**。理想顺序：② 产出第二张表 → ① 对两族分别做同一套对账 → 用户拿着「两族 × 各自触发集 × 实际表现」一次裁定用哪一族、哪个阈值、什么系数。
 
 **在 ① 出结果之前，不得给融资过热门通电**——否则就是用确定的成本换未验证的保护。
+
+## 2026-08-07 追加：执行序 11 —— #09 反悬空守卫粒度 group→leaf（增量棘轮版）
+
+**改了什么**
+
+1. 契约 `schemas/a_short_m67_effect_contract.json` 新增顶层键 `unclassified_pending_audit_baseline`：执行时树上 225 条 pending 路径的排序快照（纯机械、零举证）。
+2. `engine/a_short_effect_contract.py::_leaf_effect_map` 的兜底分支不再开放——判 pending 的叶不在基线内即 `raise` 并点名叶路径，要求登记 `leaf_effect_overrides`（沿用既有四键，未建 9 字段证据分类学）。
+3. `static_contract_error()` 加两条基线卫生：棘轮腿（基线每条必须当前仍真判 pending，接线/删除/翻 constant_null 后留在名单里即报 `may only shrink`）+ 排序去重检查（让「只减」在 diff 里可审）。防换血腿在 `tests/test_a_short_effect_contract.py::_PENDING_AUDIT_LANDING_SNAPSHOT`，断言活基线 ⊆ 落地日冻结快照。
+4. `engine/a_short_evidence_epoch_mode.py::_EFFECT_CONTRACT_LEAF_LEDGER_KEYS` 六键 → 七键，新键入排除清单并同步其证明测试。
+5. `docs/a_short_m67_effect_contract.md` 新增「未判定余量」一节并把「以后改字段/规则时」的步骤 1 补上新叶闸；顺带把该文档写死的旧叶数改成「由 schema 动态计算」（序 19 加叶后它已过期）。
+
+**为什么改**
+
+组级 nature 会把单个判断批量扩到整组，而逐叶 `leaf_effect_overrides` 虽已存在却不是闸门；于是新增或改造一个字段不会被强制问「悬不悬空」，只会让 pending 计数静默 +1。那个计数是后面每一把接线刀的工作清单与验收分母，能被无声加长就等于没有分母。2026-08-05 用户裁定不做全量补审：存量冻结、只减不增，新债在引入当场被问一次。
+
+**验证命令与结果**
+
+- focused 验收包（6 模块一次合并）：`.toolsun_unittest_with_repo_pythonpath.cmd --timeout-seconds 900 tests.test_a_short_effect_contract tests.test_a_short_effect_consumer_probe tests.test_a_short_evidence_epoch_mode tests.test_a_short_weekly_pipeline tests.test_a_short_regime_action_comparison tests.test_a_short_final_action_validation` → `Ran 677 tests in 457.6s ... OK`，`receipt:9daf87eb2e0c10a6ad85d19c`，`bundles=a_short_effect_contract`。300s 默认不够（实测跑到约 380 条被截断），按 AGENTS rule 5 抬到 900s。
+- full lane（rule 3(b)：共享 effect 引擎 + 契约 JSON 喂生产周报管道，只跑一次）：`RESULT status=PASS exit=0 tests=2521 elapsed=235.6s deadline=860s mode=parallel`，`COUNT_GATE discovered=2521 ran=2521 equal=True`。2510 + 本刀 11 条新测试 = 2521。
+- 行为不变逐字节正控：同一进程内用 `git show HEAD:` 的引擎源码对同一份磁盘输入重算，`leaf_effects()` 与 `leaf_natures()` 均与改造后逐字节相同；各类计数不变，合计 398。
+- 三个植入对照（中和的都是门本身，非判据来源）：挖掉新叶闸的 `raise` → 两条新叶测试转红；棘轮腿恒空 → 三条 `..._may_not_stay_on_the_baseline` 全红；往活基线追加一条新债 → 防换血腿转红。探针改真文件、跑合规入口、事后按字节还原。
+- 静态门：`py_compile` 4 文件通过，`git diff --check` 干净，契约 JSON 解析通过、无 BOM、无 mojibake，`static_contract_error()` 返回 `None`（`decision_predicate_sha256` 只有 `engine/a_short_effect_contract.py` 一键变动并已重封）。
+
+**失效旧结论**
+
+- **本文件 §「① 序 11（#09）的范围」两段（约 1714-1715 行）已 SUPERSEDED，勿再照它执行**。那版方案要求「把 `leaf_effect_overrides` 升为覆盖全部 leaves 的唯一闸门、删除 `leaf_nature_by_group` 的放行权、收口后不允许 `unclassified_pending_audit` 留在正式 contract」——那是全量补审版。2026-08-05 用户裁定改走增量棘轮版：`leaf_nature_by_group` **原样保留**（新叶闸生效后它对新叶已无放行力，对存量只是描述），`unclassified_pending_audit` **允许**继续留在契约里、以冻结基线的形式存在，**无清零期限**。
+- 桌面 `a_testrun.md` 顺位 3 那节的执行方案已实现完毕，状态位待 merge 后回写。
+
+**下一步注意事项**
+
+- 本刀**不判定**存量 225 条里谁是真悬空。收缩只会由序 13（删叶）、序 14/15（接线）自然发生；每次收缩必须同时从基线数组删除对应条目，否则棘轮腿报红。
+- `market_regime` 那几条叶是机械 `producer_constant_null` 或已在基线名单里，序 16 推后**不需要**为它们做任何登记。
+- 解冻那一刀必须注意：`engine/a_short_regime_action_comparison.py:93` 与 `runners/a_short_final_action_validation_runner.py:119` 把**整份契约 JSON**摊进各自的对比轨指纹，叶账本（含本刀新键）都在里面。今天两条轨都 `pre_freeze_audit_only`、指纹走常量，不作废任何证据；解冻前必须把叶账本键从这两处也排除，否则每次基线收缩都会白白作废对比轨证据。详见 register `R-ASHORT-ANTI-DANGLING-GUARD-IS-GROUP-GRAINED-SO-A-NEW-FIELD-IS-NEVER-ASKED`。
+
+## 2026-08-07 追加：序 11 独立审查 —— PASS（新叶闸 + 冻结基线棘轮）
+
+### 判定
+
+**PASS，已提交并合入 master。** 这刀干的事很小也很对：把 `_leaf_effect_map` 那个「谁都没接住就静默落 pending」的开放兜底，关成一张 225 条的闭合名单。不判定存量谁是真悬空、不建 9 字段分类学、不动 `leaf_nature_by_group`——都与 2026-08-05 用户裁定一致。
+
+### 我实际验了什么（不是转述）
+
+- **行为不变**：现算 398 叶的七类计数与执行方所报逐项相同；冻结基线 **225 == 今日 pending 225**，双向差集皆空；`static_contract_error()` 返回 `None`，这同时证明 `decision_predicate_sha256` 的重封与现算 inventory 精确相等（引擎比的是整份预判据字典，不是文件字节——我一开始拿文件 sha256 去对，那是错的尺子）。
+- **防换血锚**：`_PENDING_AUDIT_LANDING_SNAPSHOT` 实测 225 条、去重后仍 225，与活基线双向差集皆空，且在另一份文件里——契约编辑不会带着它一起漂。
+- **epoch**：整读 `contract_semantic_projection` 的 `_PROJECTION_EFFECT_CONTRACT` 分支，新键确在 `_EFFECT_CONTRACT_LEAF_LEDGER_KEYS` 排除集内，基线收缩不动语义指纹。
+
+### 植入对照（2/2，中和的都是门本身）
+
+① 从源码副本中挖掉兜底分支的 `raise` → 同一条新叶由 raise 变成静默 `unclassified_pending_audit`；② 挖掉 `static_contract_error` 的 `stale_baseline` 整段 → 「已判 `true_dangling` 却仍留名单」的 `may only shrink` 报错消失。两处都等价于「删掉这道门」，不是 patch 判据来源。
+
+### 一条 Optional（不阻塞）
+
+棘轮只做了 `baseline ⊆ pending` 一个方向。给一条**不在基线**的叶显式登记 `{"category": "unclassified_pending_audit"}` 就能绕开新叶闸（override 优先级最高、不走兜底分支）：实测 `universe_summary.after_l0_count` 如此登记后 pending 226 / 基线 225，`static_contract_error()` 仍返回 `None`。测试层的双向相等断言会红，所以今天没有损害；但按 checklist §A.5，自足校验器本身该钉住。加固是一行。正文见 register 同一条目。
+
+### 未覆盖维度与诚实边界
+
+执行方焦点包 6 模块 677 条，我按 rule ⑤ 只重跑覆盖改动符号的 3 模块 118 条，另 3 个消费者模块未由我复跑；全量按 rule 4 引用执行方记账（指纹已核为当前代码态 `d570ae90…`）未重跑；register 里那条「两条对比轨把整份契约摊进指纹」的既有观察我未独立复验。
+
+### 下一步
+
+序 11 收口。队列上仍未开工的是序 7（#02 汇总/账本事务性）、序 8（#10 `price_as_of` 双口径）、序 13/14/15，以及本文件文末那两把小刀（①触发周成绩对账 ②变化率族）——后者是用户 2026-08-06 指定的下一个事项，前置（序 19 批合入 master）已满足。

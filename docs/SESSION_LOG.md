@@ -1,5 +1,20 @@
 # Session Log
 
+## 2026-08-07 — Claude 审查 PASS（a-short 序 11 · #09 新叶闸 + 冻结基线棘轮）
+
+- **Verdict/Action**: PASS，已提交并合入 master。增量棘轮版按用户 2026-08-05 裁定落地，未借刀改任何业务判据。行为不变我独立坐实：现算 398 叶七类计数与所报逐项相同，冻结基线 225 == 今日 pending 225（双向差集皆空），`static_contract_error()` 返回 `None`——同时证明预判据重封与现算 inventory 精确相等。防换血锚点在另一文件，与活基线各 225 条、双向差集皆空。
+- **Required**: 无。本刀记录与我新增的一条 Optional（棘轮只有单向，override 可绕过新叶闸）见 `docs/system_risk_register.md` 的 `R-ASHORT-ANTI-DANGLING-GUARD-IS-GROUP-GRAINED-SO-A-NEW-FIELD-IS-NEVER-ASKED`（单一来源，本处不复述）。
+- **Verify**: review-evidence:4b8cd734b049。自跑焦点超集 `Ran 118 tests in 222.2s ... OK`、`receipt:a457122bb836995de56b6314`（bundle 已带）。全量按 rule 4 引用执行方记账不重跑：ledger `2521 OK` / `count_gate_equal=True` / `parallel 235.6s`，其 fingerprint 与我现算代码态 `d570ae90…` 逐字相同。**植入 2/2，中和的都是门本身**：挖掉新叶闸 `raise` → 新叶由 raise 变静默 pending；挖掉棘轮腿 → 「已接线仍留名单」报错消失。epoch 排除经整读 `contract_semantic_projection` 函数体确认。超时原因:三轮源码级中和探针串行跑 + 三件落盘与合并。
+- **Next**: Codex：执行
+
+## 2026-08-07 — Claude Code 修复（序 11 · #09 反悬空守卫粒度 group→leaf：新叶闸 + 冻结基线棘轮）
+
+- **Verdict/Action**: 做完，未 commit。按 2026-08-05 用户裁定走增量棘轮版、不做全量补审：今天 225 条 pending 一次机械快照进契约新键 `unclassified_pending_audit_baseline`，`_leaf_effect_map` 的兜底分支从此关成闭合名单——不在名单里的叶直接 raise 并点名路径。**明确没做**：不判定存量里谁是真悬空、不建 9 字段证据分类学、不动 `leaf_nature_by_group`/trend guard/legacy registry、不重封冻结包、无清零期限。
+- **Required**: `R-ASHORT-ANTI-DANGLING-GUARD-IS-GROUP-GRAINED-SO-A-NEW-FIELD-IS-NEVER-ASKED` — 缺陷、6 件落地、整类枚举、权威链、Closure 与植入对照、三条未修观察见 `docs/system_risk_register.md`（单一来源，本处不复述）。
+- **Verify**: 行为不变是逐字节的——同进程用 `git show HEAD:` 的旧引擎对同一磁盘输入重算，`leaf_effects()`/`leaf_natures()` 与改后逐字节相同（sha 同为 `a578b1a1e371a280…`），七类计数不变、合计 398。植入 3/3 且中和的都是门本身：挖掉新叶闸 `raise` → 两条新叶测试红；棘轮腿恒空 → 三条 `..._may_not_stay_on_the_baseline` 红；往活基线追加新债 → 防换血腿红；探针改真文件、事后按字节还原。`static_contract_error()` 返回 `None`。
+- **Pre-Codex self-review**: A-F checked。A：兜底入口整类 7 条（register 列全）同走一分支，一处设闸即整类；authority=冻结快照(上界)+当前重算 effect_by_path(下界)。B：全仓 grep 零残留。C：新叶落独立组／写死 None 仍不误伤，另有开门对照。D：n/a。E：旧方案压成 SUPERSEDED，未动 CURRENT。F：py_compile／diff --check／无 BOM 过；handoff CRLF 假 diff 已归一 LF（`33/0`）。matrix=六件全闭；register=new；handoff=序 N 主 handoff 追加；focused=677 OK（`receipt:9daf87eb2e0c10a6ad85d19c`，bundle 已带；rule 5 抬 900s）；full-lane=`PASS 2521 / 235.6s / parallel`；door=55 OK
+- **Next**: Claude Code：审查
+
 ## 2026-08-07 — Claude 审查 PASS（a-short：合并态验证门收口）
 
 - **Verdict/Action**: PASS，已提交并合入 master。上轮那条 Required 闭得比我给的两条方案都好：不解析 `sh`，改用 `git -c alias.gateprobe` 让条件跑在 **git 自己的 shell**（即将来真执行 hook 的那个）里——不依赖 PATH、不硬编码路径、更忠实。我警告的「跳过会让反向腿变空转」被 `assertIn(decision,{FIRED,SKIPPED})` 正面堵住。门本身的 `NOT_VERIFIED` 同时解除。
