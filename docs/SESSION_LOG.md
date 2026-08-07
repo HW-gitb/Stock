@@ -1,5 +1,14 @@
 # Session Log
 
+## 2026-08-07 — Claude Code 并行全量实测：加速只有 10.6%，但计数门抓到一个久未发现的真缺陷
+
+- **Verdict/Action**: 在 `wt/us-short_r28` 实测并行全量。`parallel_lane_runner us_short` 首跑 `status=UNKNOWN exit=125`，因计数门 `discovered=5560 ran=5570 equal=False`。查清并修复后重跑 **`status=PASS`、`5540=5540`、471.3s**，对比串行记账 526.9s，**省 55.6s（10.6%）**。并行结果自此可当合法全量引用。
+- **计数门抓到的是真缺陷，不是记账瑕疵**: `tests/test_us_short_soft_discovery_weekly_report.py` 为复用夹具直接继承兄弟模块的 **TestCase 子类**，unittest 因而在两个模块各发现那 10 个用例一次——**串行也跑两遍，只是从来没人发现**。修法：夹具抽成不是 TestCase 的 `SoftBoostFixture`，两侧各自 `(SoftBoostFixture, unittest.TestCase)`。该门的设计意图（「被漏掉的模块产生 FAIL 而非更小的绿」）反向同样兜得住，**这道门已值回这趟票价**。
+- **我此前挂账的两个核心判断均被实测推翻，已在 register 更正**: ①「11 个确证写真树是唯一真活」——逐个实读发现它们几乎都已用项目自己的隔离 helper（`temporary_provider_directory(ROOT)` / `temporary_us_short_state_directory(ROOT)` / `TemporaryDirectory(prefix=slug)`），`discovery_conformance` 8 处里 6 处更是 **`str.replace()` 被当成 `Path.replace()`**；扫描器标红是因为 helper 要接 `ROOT` 作参数即 fail-closed，该默认正确但**静态清单不能当施工图**。②「预估省 60–75%」——实测 10.6%，原因 runner 自己算出并打印：`WALL_CLOCK_FLOOR 262.9s of 471.3s (55.8%) is one module`，三条变异测试串在同一模块内，加 worker 无效。
+- **不建议继续提速**: 那 262.9s 是「每个守卫都必须有能打死它的测试」的变异矩阵，慢是因为认真；为 10% 墙钟去动一个治理守卫并冒让它变弱的风险，划不来。已记为待议，若该模块将来因自身原因重构再顺带评估。
+- **Verify**: review-evidence:c14ae00f52ef。并行 `RESULT status=PASS tests=5540 elapsed=471.3s`、计数门相等；两改动模块 `Ran 25 OK`；focused `Ran 90 in 23.8s PASS receipt:d6e79acb71681eb5d0547306`；`tests.test_doc_governance_guard Ran 41 OK`。隔离扫描（只读、经 scratchpad 包装器指向本树）逐条复核记入 register。
+- **Next**: 无
+
 ## 2026-08-07 — Claude Code 修复复审方四条 Required（现金腿 PIT / 陈旧上限 / 总适配器 / 授权门）
 
 - **Verdict/Action**: 并发复审方 + 独立对抗 agent 判我当日提交的刀 9/10b `审查 FAIL`，四条 Required 我全部认并同日修完。走 codex-fix-gate §1 **从 Required 文本枚举整类**：F3 实为**四条腿**（基准侧校验进 try、**现金侧同一缺陷复审方未点名**、编排层失败时保住调用计数、capstone 不再由状态字符串推断），F4 实为**五处入口**（两个 `capture_*` + `fetch_next_week` + 两个 CLI 各加 `--confirm-user-authorization`）。
