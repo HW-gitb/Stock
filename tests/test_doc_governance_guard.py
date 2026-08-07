@@ -743,7 +743,16 @@ class DocGovernanceGuard(unittest.TestCase):
     # register's full finding into a single allowed bullet). Full detail belongs ONLY in the register.
     EXPECTED_BASE_LABELS = frozenset({"Verdict/Action", "Required", "Verify", "Next"})
     PROOF_LABELS = frozenset({"Pre-Codex self-review", "Proof-of-use"})
-    REVIEW_HEADER_KEYS = ("审查", "修复")     # Chinese review-cycle verbs (specific enough for a substring match)
+    # Chinese review-cycle verbs (specific enough for a substring match). `已闭` joined after
+    # R-DOCGOV-A-REPAIR-ROUND-ESCAPES-THE-TEMPLATE-GUARD-BY-NOT-SAYING-修复: a repair round
+    # titled "… Optional 已闭（…）" cites an R-ID and is a repair by every other measure, yet
+    # named neither verb, so the four checks below did not run on it at all — a reviewer's two
+    # planted mutations (renamed proof label, `Verify` placeholder) both stayed green.
+    # `收口` is deliberately NOT here: it is the same kind of closeout verb, but 30 pre-existing
+    # compliant-zone entries use it inside otherwise free-form session headers, so adding it
+    # would turn history red rather than police the next entry. `已闭` costs zero historical
+    # offenders (measured against the live zone before the change).
+    REVIEW_HEADER_KEYS = ("审查", "修复", "已闭")
     # English verdict tokens (PASS / Pass / FAIL, incl. PASS-only headers) match ONLY as STANDALONE words
     # (\b…\b). A topic word like "Pass2" (the two-pass scoring's second pass) contains the substring "Pass" but
     # is NOT a PASS verdict — matching it as a substring was a real false-positive that flagged legitimate 执行
@@ -812,7 +821,12 @@ class DocGovernanceGuard(unittest.TestCase):
             if not re.search(r"R-[A-Z0-9][A-Z0-9-]+", block):
                 continue                                  # only entries citing a Required ID
             tag = header[:50]
-            is_fix = "修复" in header
+            # A closeout header IS the repair round it closes, so it owes the same one-line
+            # Proof-of-use — unless it also carries a verdict token, which makes it a
+            # reviewer's PASS/FAIL entry that merely mentions the closure it accepted.
+            is_fix = "修复" in header or (
+                "已闭" in header and not cls._VERDICT_TOKEN_RE.search(header)
+            )
             labels = []
             for ln in lines[1:]:
                 s = ln.strip()
@@ -965,6 +979,29 @@ class DocGovernanceGuard(unittest.TestCase):
         duplicate_label = ("## 2026-06-14 — Codex `审查` FAIL (R-TEST-FOO)\n"
                            "- **Verdict/Action**: FAIL\n- **Required**: R-TEST-FOO — see register\n"
                            "- **Verify**: 22 OK\n- **Verify**: extra copied detail\n- **Next**: 修复\n")
+        # R-DOCGOV-A-REPAIR-ROUND-ESCAPES-THE-TEMPLATE-GUARD-BY-NOT-SAYING-修复: a repair round
+        # whose header says 已闭 instead of 修复 used to leave the domain entirely — the reviewer
+        # planted these exact two mutations on such an entry and BOTH stayed green.
+        closeout_missing_proof = ("## 2026-06-14 — Claude Code Optional 已闭（R-TEST-FOO 收尾）\n"
+                                  "- **Verdict/Action**: closed it\n"
+                                  "- **Required**: R-TEST-FOO — see register\n"
+                                  "- **Verify**: 22 OK\n- **Next**: 审查\n")
+        closeout_renamed_proof_label = ("## 2026-06-14 — Claude Code Optional 已闭（R-TEST-FOO 收尾）\n"
+                                        "- **Verdict/Action**: closed it\n"
+                                        "- **Required**: R-TEST-FOO — see register\n"
+                                        "- **Verify**: 22 OK\n- **NOTE**: matrix= register= \n"
+                                        "- **Next**: 审查\n")
+        closeout_verify_placeholder = ("## 2026-06-14 — Claude Code Optional 已闭（R-TEST-FOO 收尾）\n"
+                                       "- **Verdict/Action**: closed it\n"
+                                       "- **Required**: R-TEST-FOO — see register\n"
+                                       "- **Verify**: tests = N OK\n"
+                                       "- **Pre-Codex self-review**: matrix= register= \n- **Next**: 审查\n")
+        closeout_free_form = ("## 2026-06-14 — Claude Code 刀 9 已闭（R-TEST-FOO）\n"
+                              "- **Verdict/Action**: closed it\n"
+                              "- **Required**: R-TEST-FOO — see register\n"
+                              "风险说明、修复要求、边界、关闭证据全部复制在这里。\n"
+                              "- **Verify**: 22 OK\n"
+                              "- **Pre-Codex self-review**: matrix= register= \n- **Next**: 审查\n")
         for name, sample in (("same_day_no_pointer", same_day_no_pointer),
                              ("chinese_duplicated", chinese_duplicated),
                              ("finding_style_duplicated", finding_style_duplicated),
@@ -974,6 +1011,10 @@ class DocGovernanceGuard(unittest.TestCase):
                              ("crammed_into_one_bullet", crammed_into_one_bullet),
                              ("missing_required_label", missing_required_label),
                              ("duplicate_label", duplicate_label),
+                             ("closeout_missing_proof", closeout_missing_proof),
+                             ("closeout_renamed_proof_label", closeout_renamed_proof_label),
+                             ("closeout_verify_placeholder", closeout_verify_placeholder),
+                             ("closeout_free_form", closeout_free_form),
                              ("header_without_separator", header_without_separator)):
             self.assertTrue(self._review_cycle_offenders(sample),
                             f"structural guard misses planted double-write/incomplete case: {name}")
@@ -984,6 +1025,22 @@ class DocGovernanceGuard(unittest.TestCase):
                      "- **Pre-Codex self-review**: A-F checked — evidence\n- **Next**: 审查\n")
         self.assertEqual(self._review_cycle_offenders(compliant), [],
                          "guard false-positives a compliant minimal entry")
+        # false-positive controls for the closeout key: a compliant closeout repair round passes,
+        # and a REVIEWER's verdict entry that merely says a finding is 已闭 is not a repair round
+        # and owes no proof line (the verdict token is what tells them apart).
+        compliant_closeout = ("## 2026-06-14 — Claude Code Optional 已闭（R-TEST-FOO 收尾）\n"
+                              "- **Verdict/Action**: closed it\n"
+                              "- **Required**: R-TEST-FOO — 详情见 system_risk_register.md(单一来源)\n"
+                              "- **Verify**: 22 OK\n"
+                              "- **Pre-Codex self-review**: matrix= register= handoff= \n- **Next**: 审查\n")
+        self.assertEqual(self._review_cycle_offenders(compliant_closeout), [],
+                         "guard false-positives a compliant closeout repair entry")
+        reviewer_says_closed = ("## 2026-06-14 — Claude 审查 PASS（R-TEST-FOO 已闭）\n"
+                                "- **Verdict/Action**: PASS\n"
+                                "- **Required**: 无。R-TEST-FOO — see register\n"
+                                "- **Verify**: 22 OK\n- **Next**: 无\n")
+        self.assertEqual(self._review_cycle_offenders(reviewer_says_closed), [],
+                         "a reviewer verdict that mentions a closure must not be forced to carry a proof line")
         # robustness control: a hyphen-separated review header (Codex's newer "- Codex `review …`" format)
         # must be isolated as its own block, NOT absorbed into the preceding entry (which would double
         # its labels). If the split regresses to em-dash-only this produces a duplicate-label offender.

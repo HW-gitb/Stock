@@ -1,5 +1,20 @@
 # Session Log
 
+## 2026-08-07 — Claude 审查 PASS（评审循环守卫 header 分类器补 `已闭`）
+
+- **Verdict/Action**: PASS，已提交并合入 master。改动 4 文件、守卫本体 +59/-2，纯治理机器、不碰选股/真钱/PIT，按 rule 8 快档：整读 `_review_cycle_offenders` 分类与 `is_fix` 两处判定全文 + 六条新样本，不起 agent、不跑全量（无代码路径改动，rule 3 未触发）。取②机器侧而非①约定侧我认可：①要求人在 header 里写「修复」，与收尾条的写法直接冲突，靠人记得正是本 finding 描述的失效模式。`收口` 不入表也认可——它是量出来的取舍，不是漏掉。
+- **Required**: 无。新记一条 Optional `R-DOCGOV-CLOSEOUT-HEADER-THAT-MENTIONS-PASS-STILL-SKIPS-THE-PROOF-LINE`（P3，本次修法的同类残留），正文只在 `docs/system_risk_register.md`。
+- **Verify**: review-evidence:f9e85f944cac。验收包 `tests.test_doc_governance_guard` + `tests.test_route_doc_ledger_status_consistency` `Ran 55 in 1.6s PASS receipt:588ec1bb7b3791c88a6b768f`。自写 4 植入 **4 红**、控制组先绿、零残留：删掉 `已闭` 键 / 去掉 verdict carve-out（两条断言同时红，证明它必需）/ 我上轮那两个原始植入现在打在 live 文件上都转红——**缺口确实闭了**。独立复核两项量化声明：live compliant-zone offender 实测 **0**（与其一致）；若连 `收口` 一起收，我实测 **30** 条而非其写的 33，均为早年自由格式 session entry，结论方向一致故不追。另测出 carve-out 的反向逃逸口并入册。
+- **Next**: 无。
+
+## 2026-08-07 — Claude Code 模板守卫缺口已闭（header 不写「修复」就整条跳过）
+
+- **Verdict/Action**: 复现审查方两个植入（把 `- **Pre-Codex self-review**:` 改名 `- **NOTE**:`、往 `Verify` 塞 `N OK`）在 live `SESSION_LOG` 上确认改前两次皆绿，认账。取②机器侧修法：`REVIEW_HEADER_KEYS` 收进 `已闭`，且**不带 verdict token 的 `已闭` header 按修复回合论**（须带证据行），带 `PASS`/`FAIL` 的是审查方 verdict、不欠该行。①约定侧（header 一律写「修复」）不取：它与用户明确要求的「收尾条用已闭/收口」直接冲突，且靠人记得正是本条描述的失效模式。
+- **Required**: `R-DOCGOV-A-REPAIR-ROUND-ESCAPES-THE-TEMPLATE-GUARD-BY-NOT-SAYING-修复` 已翻 resolved——取舍理由、为什么只收 `已闭` 不收 `收口`、复现探针与闭合证据只在 `docs/system_risk_register.md`（单一来源，本处不复述）。
+- **Verify**: 改动前先量历史代价：只加 `已闭` → live compliant-zone **0** 条 offender；连 `收口` 一起加 → **33** 条（多为早年自由格式 session entry 顺手用词），故只收前者。改后 live zone offender **0**；审查方两个探针现分别报 `unexpected-label:NOTE`+`missing-proof-of-use` 与 `verify-placeholder`。`tests.test_doc_governance_guard` + `tests.test_route_doc_ledger_status_consistency` `Ran 55 OK receipt:d2b6ccf0d3ead3d760a6ad58`；`git diff --check` clean。
+- **Pre-Codex self-review**: matrix=按「header 分类器漏掉某种真实回合形态」枚举：收尾动词两个（`已闭`/`收口`）逐个量历史代价后分别处置；`draft` 侧 `DRAFT_HEADER_KEYS`（`起草`/`强化`）同为分类器，本轮未见实例逃逸、不动（item 16d 只焊失败的那一类）；`is_fix` 与分类器是两个判定，一并改否则我自己那三条收尾条会因「多标签」判红。register=同轮 resolved。handoff=不新建也不追加：本条是仓库治理机器、不属任何 lane 刀，AGENTS + register 已是权威。focused=`receipt:d2b6ccf0d3ead3d760a6ad58`。full-lane=无代码路径改动，不触发 rule 3。door=同 focused。独立对抗 pass：不适用（守卫自身已配 4 植入 4 红 + 2 假阳性对照）。
+- **Next**: 交另一工作树审查。
+
 ## 2026-08-07 — Claude 审查 PASS（US-short 10c 收尾：全量载体措辞改成实际载体）
 
 - **Verdict/Action**: PASS，已提交并合入 master。纯文档 3 文件 +13/-3，按 rule 8 走快档：整读三处改动全文，不起 agent、不跑全量。改法取的是我给的第一种，且比要求多做一步——顺手补上 register `Closure` 里此前**根本没记**的全量证据（单一来源却缺一项）。不取第二种（补跑 `full_pack_ledger run`）的理由我认可：实测 803.9s、860s 上限未经批准不得上调、背靠背第二跑正是在该上限 `TIMEOUT`，一次十几分钟换一个可能 UNKNOWN 的结果不划算。
@@ -18026,7 +18041,7 @@
 - **Pre-Codex self-review**: A-F — A 整类:同日/未来/带指针复述三形态各一植入;B 单一来源:offender 逻辑做成 `_review_cycle_offenders` helper,live guard 与 planted 测试共用(本修复自身不双写);C 反向:三植入已验;D:双写检测走"禁 register 专属段"最窄安全侧;E:规则进 AGENTS + 协议 doc 单态。
 - **Next**: `审查`。
 
-<!-- REVIEW-CYCLE-MINIMAL-TEMPLATE-MARKER (adopted 2026-06-13): 新评审循环 entry(审查/修复/PASS)一律 prepend 到本行之上,遵循 AGENTS §Session log discipline → 评审循环 entry 极简模板(最小:Verdict/Action · Required→register 指针 · Verify · Next · 修复加一行 Proof-of-use);完整 finding 详情只进 system_risk_register.md。本行之下为 adoption 前历史,grandfather。勿删勿移。 -->
+<!-- REVIEW-CYCLE-MINIMAL-TEMPLATE-MARKER (adopted 2026-06-13): 新评审循环 entry(审查/修复/已闭/PASS)一律 prepend 到本行之上,遵循 AGENTS §Session log discipline → 评审循环 entry 极简模板(最小:Verdict/Action · Required→register 指针 · Verify · Next · 修复加一行 Proof-of-use);完整 finding 详情只进 system_risk_register.md。本行之下为 adoption 前历史,grandfather。勿删勿移。 -->
 
 ## 2026-06-13 — Codex `审查 FAIL` (协议修订:交接双写消除 + 单一来源原则落地)
 
