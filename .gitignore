@@ -85,6 +85,16 @@ research/results/a_short/m67_validation_*/
 # tracked evidence artifact is the sibling regime_candidate_effect_summary.{json,md}.
 research/results/a_short/candidate_effect_outcome.json
 
+# --- A-short weekly sidecar-health output (local run state, deliberately not tracked) ---
+# User decision 2026-08-07. Unlike its siblings in the same directory, this family has no
+# tracked precedent: only the producer, schema and tests are in the repo, never an artifact.
+# The neighbouring weekly_m67.* and iv_feed_*/ ARE tracked week by week, so this rule is
+# deliberately narrow — a blanket research/results/a_short/ rule would silently break those
+# series, which is the failure this comment exists to prevent.
+research/results/a_short/*/sidecar_health.json
+research/results/a_short/*/sidecar_health.md
+research/results/a_short/*/sidecar_health.receipt.json
+
 # --- A-long value-yield forward-PAPER capture accumulator (research-only paper evidence; holds selected_symbols 选股明细) → private ---
 research/results/a_long/value_yield_forward_paper/
 

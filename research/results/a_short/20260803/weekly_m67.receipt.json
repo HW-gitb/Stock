@@ -1,0 +1,10 @@
+{
+    "schema_name":  "a_short_weekly_publish_receipt",
+    "schema_version":  "1.1.0",
+    "as_of":  "20260803",
+    "stage_status":  "failed",
+    "failure_reason":  "iv_feed_failed",
+    "exit_code":  22,
+    "run_id":  "a-short-20260803-55f72fed0162feef",
+    "candidate_digest":  "55f72fed0162feefe961d9a02b6a9b89a43ecddb6be32d8828754e0ca49f3caf"
+}
