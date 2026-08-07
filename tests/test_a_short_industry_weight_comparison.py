@@ -19,10 +19,11 @@ if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
 from engine.a_short_industry_weight_comparison import (  # noqa: E402
-    ADMISSION_IDS, PROGRAM_ID, IndustryWeightComparisonError, _atomic_write, _boundary, _contract_fingerprint,
+    ADMISSION_IDS, DEFAULT_PRIVATE_ROOT, PROGRAM_ID, IndustryWeightComparisonError,
+    _atomic_write, _boundary, _contract_fingerprint,
     _digest, _epoch_id, _runtime_source_fingerprint,
     _aggregate_terminal_verdict, _p_value_function, _validate_private_record, build_public_progress, cache_consumer_windows,
-    capture_after_published_weekly, load_governance, settle_from_daily_payload,
+    capture_after_published_weekly, load_governance, prepare_public_artifact_set, settle_from_daily_payload,
     validate_public_progress, write_public_progress,
 )
 from engine.a_short_experiment_admission_registry import admission_snapshot  # noqa: E402
@@ -334,19 +335,60 @@ class IndustryWeightComparisonTests(unittest.TestCase):
                 _atomic_write(path, {"nonfinite": float("nan")})
             self.assertFalse(path.exists())
 
-    def test_tracked_public_pair_is_reproducible_from_the_writer_and_altered_field_is_detected(self):
+    def test_tracked_public_pair_is_reproducible_at_the_strongest_available_tier(self):
+        """The tracked pair must be reproducible, at whichever tier this tree allows.
+
+        This guard used to assert equality with `build_public_progress(root=None,
+        as_of="20260727")` -- a frozen date and the no-private-root branch nailed
+        into the test.  That made **any** successful weekly run turn it red, since
+        a real run legitimately advances the pair; the failed-run defect this lane
+        chased was only one way to trip it.
+
+        Two tiers, because the honest anchor is not always reachable:
+
+        * **strong** -- with the private ledger present, rebuild the summary from
+          that ledger at the pair's own declared `as_of` and require equality.
+          The authority is the ledger, not the artifact under test.
+        * **weak** -- without a private ledger (this and every reviewer worktree),
+          only same-source is provable: the Markdown must re-render byte-exactly
+          from this very JSON.  That catches a JSON and Markdown drifting apart;
+          it CANNOT catch the pair being rewritten consistently.  The tier is
+          asserted explicitly so a weak pass is never read as a strong one.
+        """
         tracked_json = ROOT / "research" / "results" / "a_short" / "industry_weight_comparison_summary.json"
         tracked_md = tracked_json.with_suffix(".md")
+        tracked = json.loads(tracked_json.read_text(encoding="utf-8"))
         with patched_epoch_modes("pre_freeze_audit_only", ("p5_industry_weight",)):
-            expected = build_public_progress(root=None, as_of="20260727")
-            self.assertEqual(json.loads(tracked_json.read_text(encoding="utf-8")), expected)
-            with tempfile.TemporaryDirectory() as tmp:
-                generated_json, generated_md = Path(tmp) / "summary.json", Path(tmp) / "summary.md"
-                write_public_progress(expected, json_path=generated_json, markdown_path=generated_md)
-                self.assertEqual(tracked_md.read_text(encoding="utf-8"), generated_md.read_text(encoding="utf-8"))
-            altered = copy.deepcopy(expected)
-            altered["source_hash"] = "0" * 64
-            self.assertNotEqual(json.loads(tracked_json.read_text(encoding="utf-8")), altered)
+            validate_public_progress(tracked)
+            # Compare as text, not bytes: the checkout's line endings are a local
+            # git setting, so byte equality here would be asserting `core.autocrlf`
+            # rather than the artifact's identity.
+            rendered = prepare_public_artifact_set(
+                tracked, json_path=tracked_json, markdown_path=tracked_md)
+            self.assertEqual(json.loads(rendered[tracked_json].decode("utf-8")), tracked)
+            self.assertEqual(rendered[tracked_md].decode("utf-8").splitlines(),
+                             tracked_md.read_text(encoding="utf-8").splitlines())
+
+            tier = "strong" if DEFAULT_PRIVATE_ROOT.exists() else "weak"
+            if tier == "strong":
+                self.assertEqual(
+                    tracked,
+                    build_public_progress(root=DEFAULT_PRIVATE_ROOT, as_of=tracked["as_of"]),
+                    "strong tier: the pair must equal a rebuild from the private ledger")
+            else:
+                self.assertFalse(
+                    DEFAULT_PRIVATE_ROOT.exists(),
+                    "weak tier claimed while the private ledger is right there")
+
+            # Anti-vacuity: the same-source check must actually bite.  `message`
+            # is rendered into the Markdown, so a changed JSON cannot keep the
+            # tracked Markdown.
+            altered = copy.deepcopy(tracked)
+            altered["message"] = tracked["message"] + "（篡改）"
+            self.assertNotEqual(
+                prepare_public_artifact_set(altered, json_path=tracked_json,
+                                            markdown_path=tracked_md)[tracked_md].decode("utf-8").splitlines(),
+                tracked_md.read_text(encoding="utf-8").splitlines())
 
     def test_legacy_boundary_record_remains_readable(self):
         record = {"schema_name": "a_short_industry_weight_comparison_private_record", "schema_version": "1.0.0",
