@@ -2,8 +2,9 @@
 
 This is intentionally not a generic data-flow analyzer.  It proves only that
 three selected leaves have the expected local AST consumers and records the
-source hashes used for that probe.  A missing step fails closed; the remaining
-371-leaf inventory still requires the 12B classification and later repairs.
+source hashes used for that probe.  A missing step fails closed; the rest of the
+leaf inventory (its size comes from the schema, never a written-down number)
+still requires the 12B classification and later repairs.
 """
 from __future__ import annotations
 

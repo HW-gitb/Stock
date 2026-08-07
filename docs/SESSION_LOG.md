@@ -139,6 +139,20 @@
 - **Verify**: review-evidence:e4a95cd5ecca。焦点包 `98 OK`——三条全非测试红。**审查方自证**：授权 store 仅 1 周，另造 26 周伪造史（epoch 改为 `fabricated-never-authorized`）经 `build_market_diagnostic_report` 产出 `26w-1-26 / ahead_diagnostic`，`write_market_diagnostic_report` 落盘两文件。agent 另以 11 种规避形态量化守卫：抓 6 逃 5，逃逸形态之一「调门名但丢弃结果、对另一 root 操作」**正是本仓 aggregator 当前形状**。
 - **Pre-Codex self-review**: 四轮复发根因已定位并写入 register：每轮都在语法层修（让「叫门」的东西出现在正确位置），缺陷始终在语义层（门的实参是否等于被保护制品的来源）。通用修法改为「让错误组合不可表达」而非「可表达再检查」。独立对抗 pass: 已跑（第三次冷打）。
 - **Next**: 按结构性修法重做：产出者只收 root、自行经门取数，不接调用方递来的 records/report。
+## 2026-08-07 — Claude 审查 PASS（a-short 序 11 Optional 收口：反向棘轮腿 + 裸字符串 live 声明）
+
+- **Verdict/Action**: PASS，已提交并合入 master。我上一轮那条 Optional 闭得干净，且执行方顺手把同类的另一半也修了——效果证明循环原先跳过一切非 dict override，于是「唯一装不下证据的写法」恰好也是「唯一被免除提供证据的写法」；这是真口子不是形态整理，判定采纳。行为仍未变：398 叶七类计数与上一轮逐项相同，基线 225 == pending 225，`static_contract_error()` 返回 `None`。
+- **Required**: 无。两条 Optional 的处置、我的植入对照与两条纯排版观察见 `docs/system_risk_register.md` 的 `R-ASHORT-ANTI-DANGLING-GUARD-IS-GROUP-GRAINED-SO-A-NEW-FIELD-IS-NEVER-ASKED`；序 7 开工前那条待裁的守卫判据见同文件 `R-ASHORT-FAILED-WEEKLY-RUN-LEAVES-TRACKED-SUMMARIES-AHEAD-OF-THEIR-LEDGER`（单一来源，本处不复述）。
+- **Verify**: review-evidence:e3450032d2f9。自跑焦点超集 `Ran 76 tests in 179.8s ... OK`、`receipt:cdc8046ab5d1ec337ca2243c`（bundle 已带）；治理门 `Ran 55 tests ... OK`。**植入 2/2，中和的都是门本身**：挖掉反向腿 → 我上一轮的确切探针由报错回到 `None`；把 live-claim 的 `isinstance` 门还原成修前的 `continue` → 裸字符串声明 `m67_main_decision` 立刻放行。反向不误伤：4 条既有裸字符串 override 实测均非 live，诚实契约仍 `None`。`full-lane=not_triggered` 我独立核过——全仓 `static_contract_error`/`validate_static_contract` 零生产调用者，`_leaf_effect_map` 未动。
+- **Next**: Codex：执行
+
+## 2026-08-07 — Claude Code 修复（序 11 审查方 Optional 收口：棘轮补反向腿 + 裸字符串 live 声明；序 7 只做开工前范围核查）
+
+- **Verdict/Action**: 修完，未 commit。审查方那条 Optional **判据成立、已复现、已修**，并按 checklist §A.5 修在自足校验器里而非测试里。我自己记的观察③ **没按原样做**——桌面把它列成「4 条裸字符串统一成 object」的形态整理，实读发现背后是真口子（唯一装不下证据的写法恰好被免除提供证据），故改修整类、既有 4 条原样不动。观察② 已修，观察① 明确不修。**序 7 代码未动**，只做开工前整类枚举，并发现其验收矩阵有一行做不到，需用户先裁一刀。
+- **Required**: 无。三条 Optional 的逐条判据、处置、植入对照见 `docs/system_risk_register.md` 的 `R-ASHORT-ANTI-DANGLING-GUARD-IS-GROUP-GRAINED-SO-A-NEW-FIELD-IS-NEVER-ASKED`；序 7 的范围核查与那条方案缺口见 `R-ASHORT-FAILED-WEEKLY-RUN-LEAVES-TRACKED-SUMMARIES-AHEAD-OF-THEIR-LEDGER`（均为单一来源，本处不复述）。
+- **Verify**: 先复现审查方原探针——显式登记 `{"category": "unclassified_pending_audit"}` 后 pending 226 / 基线 225 而 `static_contract_error()` 返回 `None`，洞属实；修后同一输入报 `baseline does not list ... universe_summary.after_l0_count`。焦点包 `Ran 120 tests in 265.6s ... OK`（`receipt:e77eb544bdb7ac56e42b3755`，bundle 已带；118→120 恰为两条新测试）。植入 2/2 中和的都是门本身：反向腿挖空 → 新债那条单点红；`isinstance` 门挖掉 → 裸字符串 live 那条红。反向不误伤：4 条既有裸字符串 override 与诚实基线仍 `None`。
+- **Pre-Codex self-review**: A-F checked。A：观察③ 按类修（live 三类 × 所有 override 形态）；另枚举 tracked 公共汇总 7 轨 13 文件，确认 publish 之前恰 4 轨 8 个。B：grep 零生产调用者。C：既有 4 条非 live 裸字符串仍合法。D：n/a。E：未动 CURRENT。F：py_compile／diff --check／JSON 过。matrix=反向腿+裸字符串门+docstring+重封；register=updated；handoff=主 handoff 追加；focused=120 OK（`receipt:e77eb544bdb7ac56e42b3755`）；full-lane=not_triggered: AGENTS rule 3; reason=仅改无生产调用者的 `static_contract_error` 与一处 docstring；door=55 OK
+- **Next**: Claude Code：审查
 ## 2026-08-07 — Claude 审查 PASS（a-short 序 11 · #09 新叶闸 + 冻结基线棘轮）
 
 - **Verdict/Action**: PASS，已提交并合入 master。增量棘轮版按用户 2026-08-05 裁定落地，未借刀改任何业务判据。行为不变我独立坐实：现算 398 叶七类计数与所报逐项相同，冻结基线 225 == 今日 pending 225（双向差集皆空），`static_contract_error()` 返回 `None`——同时证明预判据重封与现算 inventory 精确相等。防换血锚点在另一文件，与活基线各 225 条、双向差集皆空。

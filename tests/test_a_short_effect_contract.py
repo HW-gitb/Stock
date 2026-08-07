@@ -1026,6 +1026,27 @@ class LeafEffectPendingAuditTests(unittest.TestCase):
         self.assertIn("effect proof incomplete",
                       static_contract_error(unproven, inventory=self.inventory) or "")
 
+    def test_a_live_claim_may_not_be_written_in_the_evidence_free_form(self):
+        """A bare-string override names a category and can hold no proof.
+
+        The proof check used to skip every non-dict override, so the one form
+        that cannot carry `consumer_ref` / `terminal_surface` /
+        `mutation_evidence` was also the one form exempt from providing them.
+        """
+        bare = {path for path, override in self.contract["leaf_effect_overrides"].items()
+                if not isinstance(override, dict)}
+        self.assertTrue(bare, "fixture assumes at least one bare-string override exists")
+        # every existing bare override names a non-live category, and stays legal
+        for path in bare:
+            self.assertNotIn(self.effects[path], self.live)
+        self.assertIsNone(static_contract_error(self.contract, inventory=self.inventory))
+        for live_category in sorted(self.live - {"upstream_candidate_set_or_rank"}):
+            claimed = copy.deepcopy(self.contract)
+            claimed["leaf_effect_overrides"][sorted(bare)[0]] = live_category
+            self.assertIn("bare string",
+                          static_contract_error(claimed, inventory=self.inventory) or "",
+                          live_category)
+
     def test_every_group_holding_a_live_leaf_cannot_be_true_dangling(self):
         from engine.a_short_effect_contract import _paths_for_prefixes
         checked = 0
@@ -1167,6 +1188,19 @@ class UnclassifiedPendingBaselineGateTests(unittest.TestCase):
         duplicated["unclassified_pending_audit_baseline"] = self.baseline + [self.baseline[0]]
         self.assertIn("sorted and duplicate-free",
                       static_contract_error(duplicated, inventory=self.inventory) or "")
+
+    def test_new_debt_cannot_be_booked_through_an_explicit_override(self):
+        """The fallback gate is not the only door: an override outranks it."""
+        target = next(path for path, category in self.effects.items()
+                      if category != "unclassified_pending_audit"
+                      and path not in self.contract["leaf_effect_overrides"])
+        booked = copy.deepcopy(self.contract)
+        booked["leaf_effect_overrides"][target] = {"category": "unclassified_pending_audit"}
+        error = static_contract_error(booked, inventory=self.inventory) or ""
+        self.assertIn("baseline does not list", error)
+        self.assertIn(target, error)
+        # and the honest direction still passes
+        self.assertIsNone(static_contract_error(self.contract, inventory=self.inventory))
 
     def test_a_missing_baseline_is_refused_rather_than_defaulted(self):
         absent = copy.deepcopy(self.contract)
