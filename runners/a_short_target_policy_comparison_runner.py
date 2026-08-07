@@ -21,6 +21,7 @@ from typing import Any
 import jsonschema
 
 from engine import a_short_evidence_epoch_mode as _epoch_mode
+from engine.a_short_artifact_set_transaction import commit_artifact_set
 
 from engine.a_short_managed_exit import CONTRACT_VERSION as EXIT_CONTRACT_VERSION
 from engine.a_short_managed_exit import evaluate_managed_exit
@@ -33,6 +34,8 @@ ROOT = Path(__file__).resolve().parents[1]
 PRIVATE_LEDGER_DEFAULT = ROOT / "logs" / "a_short_target_policy_comparison.json"
 PUBLIC_SUMMARY_DEFAULT = ROOT / "research" / "results" / "a_short" / "target_policy_comparison_summary.json"
 PUBLIC_MARKDOWN_DEFAULT = ROOT / "research" / "results" / "a_short" / "target_policy_comparison_summary.md"
+#: Gitignored (`state/*/artifact_set_journal/`); rollback journal + old-byte backups only.
+DEFAULT_ARTIFACT_SET_JOURNAL_DIR = ROOT / "state" / "a_short" / "artifact_set_journal" / "target_policy_comparison"
 SUMMARY_SCHEMA_PATH = ROOT / "schemas" / "a_short_target_policy_comparison_summary.schema.json"
 LEDGER_SCHEMA_NAME = "a_short_target_policy_comparison_ledger"
 SCHEMA_VERSION = "1.0.0"
@@ -56,10 +59,15 @@ def _digest(value: Any) -> str:
     return hashlib.sha256(_canonical(value).encode("utf-8")).hexdigest()
 
 
+def _public_json_bytes(payload: Any) -> bytes:
+    """The exact bytes `_atomic_write` would have written, without writing them."""
+    return (json.dumps(payload, ensure_ascii=False, indent=2, allow_nan=False) + "\n").encode("utf-8")
+
+
 def _atomic_write(path: Path, payload: Any) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
     temporary = path.with_name(f".{path.name}.tmp")
-    temporary.write_text(json.dumps(payload, ensure_ascii=False, indent=2, allow_nan=False) + "\n", encoding="utf-8")
+    temporary.write_bytes(_public_json_bytes(payload))
     os.replace(temporary, path)
 
 
@@ -580,23 +588,44 @@ def _assert_public_summary_as_of_monotonic(summary: dict[str, Any], summary_path
         raise TargetPolicyError("existing_public_summary_unreadable") from exc
 
 
-def write_public_summary(summary: dict[str, Any], *, summary_path: str | Path,
-                         markdown_path: str | Path) -> None:
+def prepare_public_artifact_set(summary: dict[str, Any], *, summary_path: str | Path,
+                                markdown_path: str | Path) -> dict[Path, bytes]:
+    """Validate and render the whole public pair, writing nothing."""
     validate_public_summary(summary)
     target_path = Path(summary_path)
     _assert_public_summary_as_of_monotonic(summary, target_path)
-    _atomic_write(target_path, summary)
-    Path(markdown_path).parent.mkdir(parents=True, exist_ok=True)
-    temporary = Path(markdown_path).with_name(f".{Path(markdown_path).name}.tmp")
-    temporary.write_text(_render_summary_markdown(summary), encoding="utf-8")
-    os.replace(temporary, Path(markdown_path))
+    return {
+        target_path: _public_json_bytes(summary),
+        Path(markdown_path): _render_summary_markdown(summary).encode("utf-8"),
+    }
+
+
+def commit_public_artifact_set(files: dict[Path, bytes], *,
+                               journal_dir: str | Path | None = None) -> None:
+    """The one write entry point for the public pair: both files or neither."""
+    commit_artifact_set(journal_dir or DEFAULT_ARTIFACT_SET_JOURNAL_DIR, files)
+
+
+def write_public_summary(summary: dict[str, Any], *, summary_path: str | Path,
+                         markdown_path: str | Path,
+                         journal_dir: str | Path | None = None) -> None:
+    """Compatibility facade for the standalone runner: prepare then commit."""
+    commit_public_artifact_set(
+        prepare_public_artifact_set(summary, summary_path=summary_path, markdown_path=markdown_path),
+        journal_dir=journal_dir)
 
 
 def settle_and_summarize(*, root: str | Path | None, as_of: str,
                           daily_cache_path: str | Path | None = None,
                           summary_path: str | Path | None = None,
-                          markdown_path: str | Path | None = None) -> dict[str, Any]:
-    """Settle only existing captures, then return the current de-identified P2 reminder."""
+                          markdown_path: str | Path | None = None,
+                          write_public: bool = True) -> dict[str, Any]:
+    """Settle only existing captures, then return the current de-identified P2 reminder.
+
+    ``write_public=False`` is the weekly-pipeline path: it needs the summary for
+    the in-report banner before the official bundle exists, and the published
+    pair may only move after that bundle and the private capture have landed.
+    """
     if root is None:
         return _unavailable_summary(as_of, configured=False)
     try:
@@ -610,12 +639,13 @@ def settle_and_summarize(*, root: str | Path | None, as_of: str,
         summary = _summary_from_ledger(ledger, _date(as_of))
         if (summary_path is None) != (markdown_path is None):
             raise TargetPolicyError("public_summary_paths_must_be_paired")
-        if summary_path is not None:
+        if summary_path is not None and write_public:
             write_public_summary(summary, summary_path=summary_path, markdown_path=markdown_path)
         return summary
     except Exception:
         # The weekly seam must never repeat old review_due text if this sidecar
-        # is corrupt or unavailable.  The caller keeps M6.7 authoritative.
+        # is corrupt or unavailable.  The caller keeps M6.7 authoritative, and
+        # the published pair stays at its last checked state.
         return _unavailable_summary(as_of, configured=True)
 
 

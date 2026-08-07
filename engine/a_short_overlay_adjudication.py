@@ -22,6 +22,7 @@ from typing import Any
 import jsonschema
 
 from engine import a_short_evidence_epoch_mode as _epoch_mode
+from engine.a_short_artifact_set_transaction import commit_artifact_set
 from engine import egs_industry_heat as _heat
 
 from engine.a_short_experiment_admission_registry import admission_snapshot, get_admission
@@ -38,6 +39,8 @@ DAILY_CACHE_SCHEMA = ROOT / "schemas" / "a_short_factor_comparison_v2_daily_cach
 DEFAULT_PRIVATE_ROOT = ROOT / "state" / "a_short" / "overlay_adjudication_private" / "v1"
 DEFAULT_PUBLIC_JSON = ROOT / "research" / "results" / "a_short" / "overlay_adjudication_summary.json"
 DEFAULT_PUBLIC_MD = ROOT / "research" / "results" / "a_short" / "overlay_adjudication_summary.md"
+#: Gitignored (`state/*/artifact_set_journal/`); rollback journal + old-byte backups only.
+DEFAULT_ARTIFACT_SET_JOURNAL_DIR = ROOT / "state" / "a_short" / "artifact_set_journal" / "overlay_adjudication"
 HORIZONS = (5, 10, 20)
 BENCHMARKS = ("csi1000", "csi300")
 BENCHMARK_CODES = {"csi1000": "000852.SH", "csi300": "000300.SH"}
@@ -76,10 +79,15 @@ def _load(path: str | Path) -> Any:
     return json.loads(Path(path).read_text(encoding="utf-8"))
 
 
+def _public_json_bytes(value: Any) -> bytes:
+    """The exact bytes `_write` would have written, without writing them."""
+    return (json.dumps(value, ensure_ascii=False, indent=2, allow_nan=False) + "\n").encode("utf-8")
+
+
 def _write(path: str | Path, value: Any) -> None:
     path = Path(path); path.parent.mkdir(parents=True, exist_ok=True)
     temporary = path.with_name(f".{path.name}.tmp")
-    temporary.write_text(json.dumps(value, ensure_ascii=False, indent=2, allow_nan=False) + "\n", encoding="utf-8")
+    temporary.write_bytes(_public_json_bytes(value))
     os.replace(temporary, path)
 
 
@@ -1010,11 +1018,34 @@ def _assert_public_summary_as_of_monotonic(summary: dict, json_path: Path) -> No
         raise OverlayAdjudicationError("public_summary_as_of_regressed")
 
 
-def write_public_summary(summary: dict, *, json_path: str | Path = DEFAULT_PUBLIC_JSON, markdown_path: str | Path = DEFAULT_PUBLIC_MD) -> None:
+def prepare_public_artifact_set(summary: dict, *, json_path: str | Path = DEFAULT_PUBLIC_JSON,
+                                markdown_path: str | Path = DEFAULT_PUBLIC_MD) -> dict[Path, bytes]:
+    """Validate and render the whole public pair, writing nothing."""
     validate_public_summary(summary)
     target_path = Path(json_path)
     _assert_public_summary_as_of_monotonic(summary, target_path)
-    _write(target_path, summary)
+    return {
+        target_path: _public_json_bytes(summary),
+        Path(markdown_path): _public_markdown_text(summary).encode("utf-8"),
+    }
+
+
+def commit_public_artifact_set(files: dict[Path, bytes], *,
+                               journal_dir: str | Path | None = None) -> None:
+    """The one write entry point for the public pair: both files or neither."""
+    commit_artifact_set(journal_dir or DEFAULT_ARTIFACT_SET_JOURNAL_DIR, files)
+
+
+def write_public_summary(summary: dict, *, json_path: str | Path = DEFAULT_PUBLIC_JSON,
+                         markdown_path: str | Path = DEFAULT_PUBLIC_MD,
+                         journal_dir: str | Path | None = None) -> None:
+    """Compatibility facade for the standalone runner: prepare then commit."""
+    commit_public_artifact_set(
+        prepare_public_artifact_set(summary, json_path=json_path, markdown_path=markdown_path),
+        journal_dir=journal_dir)
+
+
+def _public_markdown_text(summary: dict) -> str:
     rows = ["# A-short P4a Stage3 排名源比较", "", summary["message"], "", "| 项目 | 数值 |", "|---|---:|"]
     for key in ("epoch_id", "eligible_policy_weeks", "difference_weeks", "nonoverlap_blocks", "mature_opportunities", "no_count_weeks", "h5_coverage_status", "h20_coverage_status"):
         rows.append(f"| {key} | {summary[key]} |")
@@ -1025,8 +1056,7 @@ def write_public_summary(summary: dict, *, json_path: str | Path = DEFAULT_PUBLI
     rows.append(f"| checkpoint_progress | {progress} |")
     rows.append(f"| failing_risk_or_statistical_gates | {failed} |")
     rows += ["", f"裁决状态：{summary['adjudication']['verdict']}（仅建议，需用户未来生效周回执；不自动写配置）。"]
-    path = Path(markdown_path); path.parent.mkdir(parents=True, exist_ok=True); temporary = path.with_name(f".{path.name}.tmp")
-    temporary.write_text("\n".join(rows) + "\n", encoding="utf-8"); os.replace(temporary, path)
+    return "\n".join(rows) + "\n"
 
 
 def unavailable_public_summary(as_of: str, *, epoch_context: dict | None = None) -> dict:
@@ -1035,7 +1065,10 @@ def unavailable_public_summary(as_of: str, *, epoch_context: dict | None = None)
 
 
 def settle_and_summarize_weekly(*, root: str | Path | None, daily_cache_path: str | Path | None, as_of: str,
-                                public_json_path: str | Path = DEFAULT_PUBLIC_JSON, public_markdown_path: str | Path = DEFAULT_PUBLIC_MD) -> dict:
+                                public_json_path: str | Path = DEFAULT_PUBLIC_JSON, public_markdown_path: str | Path = DEFAULT_PUBLIC_MD,
+                                write_public: bool = True) -> dict:
+    """``write_public=False`` is the weekly-pipeline path: the pair may only move
+    after the official bundle publishes and the private capture lands."""
     epoch_context = None
     try:
         epoch_context = _epoch_context()
@@ -1046,12 +1079,13 @@ def settle_and_summarize_weekly(*, root: str | Path | None, daily_cache_path: st
                 settle_from_daily_payload(root=private_root, daily_payload=_load(cache), as_of=as_of, cache_path=cache,
                                           epoch_context=epoch_context)
             summary = build_public_summary(root=private_root, as_of=as_of, epoch_context=epoch_context)
-        write_public_summary(summary, json_path=public_json_path, markdown_path=public_markdown_path); return summary
-    except Exception:
-        summary = unavailable_public_summary(as_of, epoch_context=epoch_context)
-        try: write_public_summary(summary, json_path=public_json_path, markdown_path=public_markdown_path)
-        except Exception: pass
+        if write_public:
+            write_public_summary(summary, json_path=public_json_path, markdown_path=public_markdown_path)
         return summary
+    except Exception:
+        # An outage must not overwrite last week's checked pair with a fresh
+        # "unavailable" one; the caller records it in the sidecar outcomes.
+        return unavailable_public_summary(as_of, epoch_context=epoch_context)
 
 
 def _refresh_ledger(root: Path) -> None:

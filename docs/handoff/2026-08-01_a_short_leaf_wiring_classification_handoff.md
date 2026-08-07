@@ -2402,3 +2402,117 @@ margin 两模块 56 绿；验收包 682 绿（`receipt:c1de5807ed0db575bfec092e`
 ### 未覆盖维度与诚实边界
 
 本轮零代码，故无 focused、无全量；用户对序 7 选项 (a) 的裁定发生在别的窗口，**我无法独立验证该裁定本身**，只按已记录的裁定复核方案一致性；序 7 的六件方案与事务器实现本轮无代码可审。
+
+## 2026-08-07 追加：执行序 7（#02 汇总/账本事务性）—— 七步落 5 步，第 4/5 步未做
+
+**改了什么**
+
+1. 新建 `engine/a_short_artifact_set_transaction.py`：`commit_artifact_set(journal_dir, files)` 先备份旧字节 + 写 journal 并 fsync，再逐个 `.tmp` + `os.replace`；异常逐个还原后抛。`recover(journal_dir)` 在写前先跑，回滚上次进程猝死留下的 journal。**回滚而非前滚**——旧字节已知自洽，半应用的新集合才是要消灭的状态。**目录 fsync 未做**（Windows 打不开目录句柄），docstring 明写这条耐久性边界。journal 落 gitignored `state/a_short/artifact_set_journal/<track>`，并硬拒 `research/results` 下的 journal 目录。
+2. 四轨（industry_weight / overlay / target_policy / final_action）各拆出 `prepare_public_artifact_set()`（校验 + 渲染两份字节、零写盘）与 `commit_public_artifact_set()`（唯一写入口）；`write_public_*` 降为兼容 facade。各抽 `_public_json_bytes()` 保证事务写出的字节与原 `_atomic_write` 逐字节相同。
+3. `settle_and_summarize*` 加 `write_public` 开关；weekly pipeline 四处 pre-publish 调用一律 `write_public=False`，公共对只在 `publish_weekly_bundle()` 返回**且**该轨 capture 推进账本之后提交。P3 补了 capture 后的重新派生再提交。
+4. 四轨 settle 的 `except` 不再用 `unavailable_*` 覆盖旧汇总；pipeline 里 industry_weight / overlay 两处 post-publish 失败覆盖写一并删除。失败只进 `pipeline_sidecar_outcomes`。
+5. 新增的两个公共入口进 `NONCONSUMER_PUBLIC_PATH_ENTRYPOINTS`，事务器的 journal 写入进 `PUBLIC_WRITER_FUNCTIONS` 并补 `allow_nan=False`。
+
+**为什么改**
+
+汇总写盘原在 M6.7 之前、账本推进在 M6.7 成功之后，中途失败就留下「汇总已新、账本未动」的脏态，任何人在主树跑全量都会红且红点与他的改动无关。
+
+**验证命令与结果**
+
+- focused 验收包 11 模块 → `Ran 721 tests in 297.8s ... OK`，`receipt:6de43da4c6b26410173f9eb0`，`bundles=a_short_effect_contract`（weekly pipeline 属 effect-contract surface，收据门当场拒了第一版缺 bundle 的收据）。
+- full lane 按 rule 3(a) 跑一次 → `RESULT status=PASS exit=0 tests=2534 elapsed=365.3s deadline=860s mode=parallel`，`COUNT_GATE discovered=2534 ran=2534 equal=True`（2523 + 本刀 11 条新测试）。
+- 验收矩阵第 1 行由 `MainWiringTests.test_a_failed_m67_publication_leaves_every_tracked_pair_untouched` 直打真实 tracked 文件证明（`finally` 兜底还原，回归不会弄脏仓库）；第 3、4 行由 `tests.test_a_short_artifact_set_transaction` 9 条直打事务器；第 7 行植入对照 = 把 settle 换回修前函数体，实测该轨两文件重新被移动。
+- `decision_predicate_sha256` 零键变动，`static_contract_error()` 返回 `None`，未重封契约。`py_compile` 6 文件过、`git diff --check` 干净。
+
+**失效旧结论**
+
+- overlay post-publish 失败分支原注释要求「必须用 unavailable 覆盖旧公共摘要」——**该要求已于 2026-08-07 反转**，代码里写明了理由：覆盖会把公共对推到未推进的账本之前，正是本刀要消灭的形态。
+
+**下一步注意事项**
+
+- **第 4 步（三个 `source_*` 字段）与第 5 步（守卫改断内部自洽）未做**，故「成功路径 → tracked reproducibility 守卫绿」这行验收仍不成立：一次成功的真周跑仍会推进那四对文件，而 `tests/test_a_short_industry_weight_comparison.py:337` 仍在比写死的 `build_public_progress(root=None, as_of="20260727")`。当前是「失败跑不留痕」已成立、「成功跑之后 lane 还绿」未成立。
+- 做第 5 步时按已裁的 **(i) 两档**：有私密根对 ledger 投影重算（强档），无私密根只验 JSON↔Markdown 同源（弱档，断言消息里写明是弱档）。不取 (ii)。
+- 植入对照的教训：第一版控制只把 `write_public` 翻回 `True`，而该夹具下 settle 本就抛异常、开关走不到，控制**空转**。还原真实旧函数体才是有效控制。
+
+## 2026-08-07 追加：序 7 独立审查 —— FAIL（新事务器会把轨永久锁死）
+
+### 判定
+
+**FAIL，未提交。** 做对的部分不少：四处 pre-publish 调用一律 `write_public=False`，四轨都只在 publish 返回且 capture 推进账本之后才提交公共对（P2 我实读确认 `_atomic_write(ledger)` 在 `write_public_summary` 之前），失败分支不再用 `unavailable` 覆盖旧汇总，验收第 1 行直打真实 8 个 tracked 文件。挡住的是本刀唯一的新 fail-closed 引擎。
+
+### 挡住的那条
+
+`engine/a_short_artifact_set_transaction.py` 的 `recover()` 一旦自己失败就**没有出路**，而 `commit_artifact_set` 每次开头都调它，于是这条轨**永久**提交不了。两条触发腿：① `_clear()` 先删备份后删 journal，崩在中间留下「journal 在、`.bak` 没」，`_undo` 读不到备份 → 抛 → `_clear` 永远走不到；② journal 是全场唯一**不**用 temp+replace 的文件（`open(..., "wb")` 原地截断），崩在写 journal 途中留下 0 字节 → `read_journal` 抛 → 同一个死结。**两次崩溃发生时状态其实都是一致的**，根本没有需要回滚的东西。异常落在 pipeline 的 `try/except` 里只记一条 `capture_unavailable`，所以这条轨死了也没人知道。正文与 Closure tests 见 register `R-ASHORT-ARTIFACT-SET-JOURNAL-WEDGES-THE-TRACK-FOREVER`。
+
+### 我实际验了什么
+
+- 事务器函数体整读；两条腿各写了自己的崩溃探针并实跑：连续两周 `BLOCKED`、`recover()` 亦 `BLOCKED`、journal 永远在、公共对冻结；0 字节 journal 同样永久 `BLOCKED`。
+- 全仓 grep：`recover()` / `read_journal()` 在 `engine/` + `runners/` 里**零生产调用者**（方案第 1 步要的是「读写前」都跑）。
+- 焦点超集 9 模块 `Ran 710 tests in 329.2s ... OK`（`receipt:30291c2a5805f90e9a7b9fa1`）；全量按 rule 4 引用执行方记账未重跑。
+- 按 §6a 起了 1 个独立对抗 agent（本刀含新建 fail-closed 引擎，属最高危档）；两条腿由它首报，我用自己的探针独立坐实后才写进 register。
+
+### 三条 Optional（不阻断）
+
+`recover()` 无生产调用者（与方案第 1 步有偏差）；事务的原子单位是「公共对」而非方案第 2 条要的「ledger + 公共对一次提交」，边界未在 register 写出；第 4、5 步未做（执行方已如实声明）。
+
+### 未覆盖维度与诚实边界
+
+全量未重跑；Windows 特有面（锁定文件上的 `os.replace`、`.tmp` 残留、journal 目录大小写绕过 `research/results` 守卫）未探；`runners/a_short_industry_weight_comparison.py:52` 独立 runner 的默认路径写盘、并发共用同一 journal 目录未探。
+
+### 下一步
+
+按 register 的 Required repair 三项修（`_clear` 换序、journal 原子写、定义「回滚不了」时的出路），配 Closure tests 四项（含把 `_clear` 顺序改回去必须转红的植入对照）。
+
+## 2026-08-07 追加：序 7 审查 FAIL 修复 —— 事务器不再把轨永久锁死
+
+**改了什么**
+
+1. `_clear()` 先退役 journal、再清备份。孤儿备份无害（下次 `NNN.bak` 覆盖），孤儿 journal 致命——它会让每次 `recover()` 都失败，而 `commit` 第一步就是 `recover()`。
+2. journal 改用 `_replace_durably` 原子写。它是全场唯一被信任的文件，不该是唯一原地截断写的。
+3. `_undo` 加 `strict`：**in-flight 回滚仍严格**（备份刚写、失败即真故障），**recovery 回滚不严格**。`recover()` 现在读不出 journal 也不抛、还不回的条目记 `unrestorable`、**无论如何退役 journal**、并在 stderr 打点名文件的 WARNING。可见性与不锁死两头都要。
+4. Optional ① 已修：`_recover_public_artifact_sets()` 在 pre-publish sidecar 块之前对四轨各跑一次 recovery，即在任何**读**之前（原来只有写前）。
+5. 顺带修三处既有测试的注入点：journal 改原子写后也消耗一次 `os.replace`，按调用序号注入会静默打到 journal 上（两条会变恒真）。改为只统计公共目标的 replace，并用 `fired` 标志断言而非最终计数（回滚会往同一批路径再写一遍）。
+
+**为什么改**
+
+`recover()` 自己失败时没有出路，而它是每次提交的第一步；异常又被 pipeline 的 `except` 吞成一条 `capture_unavailable`。于是这条轨会**永久且静默**地再也提交不了。
+
+**验证命令与结果**
+
+- 审查方两条探针修后实跑：「journal 在、备份已删」连续两周 → `w3 -> COMMITTED` / `w4 -> COMMITTED`、`journal still there: False`；「journal 截 0 字节」→ `COMMITTED`、journal gone。修前分别是 `BLOCKED: rollback could not restore` 与 `BLOCKED: journal is unreadable`。
+- focused 11 模块 `Ran 726 tests in 310.2s ... OK`（`receipt:f360e9c707a80257a78071a1`，bundle 已带）；full lane `RESULT status=PASS exit=0 tests=2539 elapsed=355.2s deadline=860s mode=parallel`，计数门相等（2534 + 5 条新 closure 测试）。
+- 反向控制：真半应用态（备份在、目标已是新字节）仍必须回滚到旧字节——证明放宽「备份缺失」「journal 读不出」两种情形没有把真回滚一起放过。
+
+**失效旧结论**
+
+- 上一节说事务器「异常还原、写前 recover」——**「recover 失败即抛」这一半已作废**；现在 recovery 永不拒绝，只 loud 报告。
+
+**下一步注意事项**
+
+- `runners/a_short_weekly_pipeline.py` 的 `decision_predicate_sha256` 因新增 `_recover_public_artifact_sets` 而重封了一个键；它是被七条测试打红后才发现的，改这个文件的人记得跑 effect-contract bundle。
+- 第 4、5 步（三个 `source_*` 字段 + 守卫两档改判）**仍未做**，序 7 的 register 条目在两步落地前不得关闭。
+
+## 2026-08-07 追加：序 7 复审 —— PASS（事务器死结已闭）
+
+### 判定
+
+**PASS，已提交并合入 master。** 上一轮那条 P2 的三项 Required 全闭，修法与我给的方向一致且更完整。
+
+### 我实际验了什么（四格，全部自写探针）
+
+- ①「journal 在、备份已删」→ `w3 -> COMMITTED ok`、公共对推进、`journal gone after: True`；② journal 截 0 字节 → `COMMITTED ok`。修前这两格分别是 `BLOCKED: rollback could not restore` 与 `BLOCKED: journal is unreadable`。
+- ③ **强制腿反向控制（本轮关键）**：`recover()` 从「拒绝」改成「永不拒绝」是一次放宽，风险是把真回滚也放过。构造真半应用态（journal 在、备份在、目标已被换成新字节）→ recover 后公共对回到旧字节 `b'w1json'/'w1md'`、`unrestorable=[]`。放宽只落在「死进程残骸还不回去」那一格。
+- ④ 植入对照：把 `_clear` 换回「先删备份」并恢复 strict → 同一输入回到 `BLOCKED`，证明顺序承重。
+- 焦点超集 9 模块 `Ran 715 tests in 307.0s ... OK`（`receipt:b850b4ebca31f90a3cc4e80c`）；全量按 rule 4 引用执行方记账并核过 ledger fingerprint 与当前代码态逐字相同（`2539 OK / count_gate_equal=True / serial_tail=[]`）；`static_contract_error()` 返回 `None`，新增 `_recover_public_artifact_sets` 引起的那一个预判据键确已正确重封。
+
+### 三条 Optional 的处置我逐条核过
+
+①**已闭**：`_recover_public_artifact_sets()` 在 pre-publish sidecar 块之前跑，确实在任何读之前，且 recovery 不拒绝所以不会阻断周跑。②**补边界不改实现**，我同意：ledger 与公共对仍两次独立写，崩在中间是「公共落后账本」，方向安全且自愈。③第 4、5 步维持未做，`R-ASHORT-FAILED-WEEKLY-RUN-...` 保持 open。
+
+### 未覆盖维度与诚实边界
+
+全量未重跑（按 rule 4 引用，指纹已核）；§6a 的独立对抗 agent 已在上一轮起过一次，本轮是定点修复，按 rule 8 未重复起；Windows 特有面（锁定文件上的 `os.replace`、`.tmp` 残留、journal 目录大小写绕过 `research/results` 守卫）、并发共用同一 journal 目录、`runners/a_short_industry_weight_comparison.py:52` 独立 runner 默认路径写盘，均仍未探。
+
+### 下一步
+
+序 7 的第 4 步（三个 `source_*` 字段）与第 5 步（守卫改断内部自洽，取两档方案）仍未做，用户选的 (a) 尚未交付完整；在这两步落地前，「成功跑之后 lane 还绿」仍不成立。

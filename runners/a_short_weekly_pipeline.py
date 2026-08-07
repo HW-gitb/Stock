@@ -2957,6 +2957,26 @@ def _sidecar_progress_from_status(status: object) -> str:
     return "unavailable"
 
 
+def _recover_public_artifact_sets() -> list[dict]:
+    """Undo any half-written comparison pair a dead run left, before it is read.
+
+    Recovery never refuses, so this cannot block a weekly run; anything it could
+    not undo is named on stderr by the transaction itself.
+    """
+    from engine.a_short_artifact_set_transaction import recover
+    from engine.a_short_industry_weight_comparison import DEFAULT_ARTIFACT_SET_JOURNAL_DIR as p5_journal
+    from engine.a_short_overlay_adjudication import DEFAULT_ARTIFACT_SET_JOURNAL_DIR as p4_journal
+    from runners.a_short_final_action_validation_runner import DEFAULT_ARTIFACT_SET_JOURNAL_DIR as p3_journal
+    from runners.a_short_target_policy_comparison_runner import DEFAULT_ARTIFACT_SET_JOURNAL_DIR as p2_journal
+
+    reports = []
+    for journal_dir in (p5_journal, p4_journal, p3_journal, p2_journal):
+        report = recover(journal_dir)
+        if report is not None:
+            reports.append(report)
+    return reports
+
+
 def _write_pipeline_sidecar_outcomes(path: str | Path, *, as_of: str, run_id: str | None,
                                      candidate_digest: str | None, expected: list[str],
                                      outcomes: list[dict]) -> None:
@@ -3140,7 +3160,9 @@ NONCONSUMER_PUBLIC_PATH_ENTRYPOINTS = {
     "engine/a_short_industry_weight_comparison.py": (
         "build_public_progress",
         "cache_consumer_windows",
+        "commit_public_artifact_set",
         "load_governance",
+        "prepare_public_artifact_set",
         "settle_and_summarize_weekly",
         "settle_from_daily_payload",
         "unavailable_public_progress",
@@ -3150,6 +3172,8 @@ NONCONSUMER_PUBLIC_PATH_ENTRYPOINTS = {
     "engine/a_short_overlay_adjudication.py": (
         "build_public_summary",
         "cache_consumer_windows",
+        "commit_public_artifact_set",
+        "prepare_public_artifact_set",
         "select_stage3_top5",
         "settle_and_summarize_weekly",
         "settle_from_daily_payload",
@@ -3174,7 +3198,9 @@ NONCONSUMER_PUBLIC_PATH_ENTRYPOINTS = {
         "validate_candidate_effect_summary",
     ),
     "runners/a_short_final_action_validation_runner.py": (
+        "commit_public_artifact_set",
         "main",
+        "prepare_public_artifact_set",
         "settle_and_summarize",
         "unavailable_public_summary",
         "validate_public_summary",
@@ -3206,8 +3232,10 @@ NONCONSUMER_PUBLIC_PATH_ENTRYPOINTS = {
     ),
     "runners/a_short_target_policy_comparison_runner.py": (
         "EXIT_CONTRACT_VERSION",
+        "commit_public_artifact_set",
         "main",
         "phase5_engine",
+        "prepare_public_artifact_set",
         "settle_and_summarize",
         "unavailable_public_summary",
         "validate_public_summary",
@@ -5926,20 +5954,29 @@ def main(argv=None, pro_factory=None, price_provider=None, semantic_provider=Non
     from engine.a_short_factor_comparison_v2_weekly import settle_and_summarize_v2_weekly
     factor_comparison_v2 = settle_and_summarize_v2_weekly(
         root=args.factor_comparison_v2_root, daily_cache_path=args.factor_comparison_v2_daily_cache, as_of=args.as_of)
+    # Roll back a dead run's half-written pair before anything READS it.  The
+    # commit path recovers on its own, but a crash followed by a week of failed
+    # settlements would otherwise leave the half-state visible to readers (the
+    # sidecar health runner reads exactly these summaries) until the next
+    # successful commit.
+    _recover_public_artifact_sets()
     industry_weight_comparison = None
     if args.industry_weight_comparison_root:
         _expect_sidecar("industry_weight_capture")
         _expect_sidecar("industry_weight_settlement")
+        # No public write happens in this pre-publish block: every published pair
+        # moves only after `publish_weekly_bundle` returns and the private capture
+        # has advanced.  A summary built here is for the in-report banner only.
         from engine.a_short_industry_weight_comparison import (settle_and_summarize_weekly,
-                                                               unavailable_public_progress, write_public_progress)
+                                                               unavailable_public_progress)
         if args.industry_weight_comparison_forward and not Path(args.industry_weight_comparison_source).is_file():
             industry_weight_comparison = unavailable_public_progress(args.as_of)
-            write_public_progress(industry_weight_comparison)
         else:
             industry_weight_comparison = settle_and_summarize_weekly(
                 root=args.industry_weight_comparison_root,
                 daily_cache_path=args.industry_weight_comparison_daily_cache,
                 as_of=args.as_of,
+                write_public=False,
             )
     # P2 is another non-blocking, no-provider evidence sidecar.  Missing or
     # malformed execution data produces a fresh unavailable reminder, never a
@@ -5954,7 +5991,8 @@ def main(argv=None, pro_factory=None, price_provider=None, semantic_provider=Non
         )
         target_policy_comparison = settle_target_policy(
             root=args.target_policy_root, as_of=args.as_of, daily_cache_path=args.target_policy_daily_cache,
-            summary_path=args.target_policy_public_summary, markdown_path=args.target_policy_public_markdown)
+            summary_path=args.target_policy_public_summary, markdown_path=args.target_policy_public_markdown,
+            write_public=False)
         try:
             validate_public_summary(target_policy_comparison)
         except Exception:
@@ -5978,7 +6016,8 @@ def main(argv=None, pro_factory=None, price_provider=None, semantic_provider=Non
         final_action_validation = settle_final_action_validation(
             root=args.final_action_validation_root, as_of=args.as_of,
             tracker_path=(args.final_action_validation_tracker or str(ROOT / "logs" / "forward_tracker.csv")),
-            daily_cache_path=args.final_action_validation_daily_cache)
+            daily_cache_path=args.final_action_validation_daily_cache,
+            write_public=False)
         try:
             validate_final_action_summary(final_action_validation)
         except Exception:
@@ -5995,7 +6034,8 @@ def main(argv=None, pro_factory=None, price_provider=None, semantic_provider=Non
         try:
             from engine.a_short_overlay_adjudication import settle_and_summarize_weekly as settle_overlay_adjudication
             overlay_adjudication = settle_overlay_adjudication(root=args.overlay_adjudication_root,
-                daily_cache_path=args.overlay_adjudication_daily_cache, as_of=args.as_of, **overlay_public_paths)
+                daily_cache_path=args.overlay_adjudication_daily_cache, as_of=args.as_of,
+                write_public=False, **overlay_public_paths)
         except Exception:
             # P4a is an optional comparison sidecar.  An import or settlement
             # outage must neither fail the formal weekly run nor retain a stale
@@ -6242,11 +6282,10 @@ def main(argv=None, pro_factory=None, price_provider=None, semantic_provider=Non
             _record_sidecar("industry_weight_settlement", execution_status="succeeded",
                             progress_status="advanced", observed_decision_as_of=args.as_of)
         except Exception:
-            from engine.a_short_industry_weight_comparison import unavailable_public_progress, write_public_progress
-            try:
-                write_public_progress(unavailable_public_progress(args.as_of))
-            except Exception:
-                pass
+            # Deliberately no public write here.  Overwriting the last checked
+            # pair with a fresh "unavailable" one moves it ahead of a ledger that
+            # did not advance -- the same defect this ordering exists to remove,
+            # only pointing the other way.  The outage is recorded below.
             _record_sidecar("industry_weight_capture", execution_status="failed",
                             progress_status="unavailable", error_code="capture_unavailable")
             _record_sidecar("industry_weight_settlement", execution_status="skipped",
@@ -6279,12 +6318,22 @@ def main(argv=None, pro_factory=None, price_provider=None, semantic_provider=Non
                       "M6.7 output remains authoritative and unchanged")
     if args.final_action_validation_root:
         try:
-            from runners.a_short_final_action_validation_runner import capture_after_published_weekly
+            from runners.a_short_final_action_validation_runner import (
+                capture_after_published_weekly,
+                settle_and_summarize as settle_final_action_validation,
+            )
             p3_capture = capture_after_published_weekly(
                 root=args.final_action_validation_root, decision_date=args.as_of, candidates=normalized,
                 source_identity=source_identity, out_path=args.out, receipt_path=receipt_path,
                 forward_eligible=args.final_action_validation_forward,
                 tracker_path=(args.final_action_validation_tracker or str(ROOT / "logs" / "forward_tracker.csv")))
+            # Re-derive from the ledger the capture just advanced, then commit the
+            # public pair.  Deriving before the capture would leave the published
+            # summary one week behind its own ledger.
+            settle_final_action_validation(
+                root=args.final_action_validation_root, as_of=args.as_of,
+                tracker_path=(args.final_action_validation_tracker or str(ROOT / "logs" / "forward_tracker.csv")),
+                daily_cache_path=args.final_action_validation_daily_cache)
             print(f"[final-action-p3] capture={p3_capture['status']} (production unchanged)")
             _record_sidecar("final_action_capture", execution_status="succeeded",
                             progress_status=_sidecar_progress_from_status(p3_capture.get("status")),
@@ -6317,14 +6366,12 @@ def main(argv=None, pro_factory=None, price_provider=None, semantic_provider=Non
             _record_sidecar("overlay_adjudication_settlement", execution_status="succeeded",
                             progress_status="advanced", observed_decision_as_of=args.as_of)
         except Exception:
-            # A failed post-publish capture must replace any prior public P4
-            # promotion/retirement reminder with an explicit unavailable
-            # summary. The signed M6.7 bundle is already immutable here.
-            try:
-                from engine.a_short_overlay_adjudication import unavailable_public_summary, write_public_summary
-                write_public_summary(unavailable_public_summary(args.as_of), **overlay_public_paths)
-            except Exception:
-                pass
+            # Deliberately no public write here (reversed 2026-08-07).  The old
+            # behaviour replaced the prior P4 reminder with an "unavailable"
+            # summary while the private ledger stood still, which is exactly the
+            # public-ahead-of-its-ledger state this ordering removes.  The outage
+            # is recorded in the sidecar outcomes instead, and the last checked
+            # pair stays put.
             _record_sidecar("overlay_adjudication_capture", execution_status="failed",
                             progress_status="unavailable", error_code="capture_unavailable")
             _record_sidecar("overlay_adjudication_settlement", execution_status="skipped",

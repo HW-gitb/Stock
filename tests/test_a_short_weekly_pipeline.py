@@ -1148,8 +1148,93 @@ class MainWiringTests(unittest.TestCase):
             self.assertIn("a_short_evidence_reminders", weekly)
             self.assertIn(summary["message"], out.with_suffix(".md").read_text(encoding="utf-8"))
             self.assertEqual(weekly["a_short_evidence_reminders"]["production_unchanged"], True)
-            settle.assert_called_once()
             capture.assert_called_once()
+            # The published pair may not move before the bundle exists, and it
+            # must reflect the ledger the capture just advanced -- so the summary
+            # is derived twice: once for the in-report banner with the public
+            # write suppressed, and once after the capture to commit the pair.
+            self.assertEqual(settle.call_count, 2)
+            self.assertIs(settle.call_args_list[0].kwargs["write_public"], False)
+            self.assertNotIn("write_public", settle.call_args_list[1].kwargs)
+            self.assertLess(settle.mock_calls.index(settle.call_args_list[0]),
+                            settle.mock_calls.index(settle.call_args_list[1]))
+
+    #: The four comparison tracks publish a JSON + Markdown pair each.  A weekly
+    #: run that dies at M6.7 used to leave these ahead of the private ledgers they
+    #: are derived from, which turned the whole lane red for whoever ran next.
+    TRACKED_PUBLIC_PAIRS = tuple(
+        ROOT / "research" / "results" / "a_short" / f"{stem}_summary{suffix}"
+        for stem in ("final_action_validation", "industry_weight_comparison",
+                     "overlay_adjudication", "target_policy_comparison")
+        for suffix in (".json", ".md")
+    )
+
+    def _run_with_a_failing_publication(self, td, extra_args):
+        """Run a weekly whose M6.7 publication fails, and report the tracked bytes."""
+        before = {path: path.read_bytes() for path in self.TRACKED_PUBLIC_PAIRS
+                  if path.is_file()}
+        self.assertEqual(len(before), len(self.TRACKED_PUBLIC_PAIRS),
+                         "fixture assumes all eight tracked files are present")
+        try:
+            out = Path(td) / "weekly.json"
+            with patch("runners.a_short_weekly_pipeline.publish_weekly_bundle",
+                       side_effect=RuntimeError("injected M6.7 publication failure")):
+                with self.assertRaises(RuntimeError):
+                    main(["--as-of", AS_OF, "--analysis-input", str(Path(td) / "ai.json"),
+                          "--iv-feed", str(Path(td) / "feed.json"),
+                          "--account", str(Path(td) / "acct.json"),
+                          "--out", str(out), "--run-date", AS_OF, *extra_args],
+                         price_provider=lambda code: _series())
+            return before, {path: path.read_bytes() for path in self.TRACKED_PUBLIC_PAIRS
+                            if path.is_file()}
+        finally:
+            # Never let a regression here leave the repository dirty.
+            for path, payload in before.items():
+                if not path.is_file() or path.read_bytes() != payload:
+                    path.write_bytes(payload)
+
+    def test_a_failed_m67_publication_leaves_every_tracked_pair_untouched(self):
+        with tempfile.TemporaryDirectory() as td:
+            self._write_inputs(td)
+            before, after = self._run_with_a_failing_publication(td, [
+                "--industry-weight-comparison-root", str(Path(td) / "p5"),
+                "--target-policy-root", str(Path(td) / "logs" / "p2.json"),
+                "--target-policy-public-summary", str(Path(td) / "p2.json"),
+                "--target-policy-public-markdown", str(Path(td) / "p2.md"),
+                "--final-action-validation-root", str(Path(td) / "logs" / "p3.json"),
+                "--overlay-adjudication-root", str(Path(td) / "p4"),
+            ])
+            self.assertEqual(after, before,
+                             "a failed M6.7 must not move any published comparison pair")
+
+    def test_the_pre_publish_write_is_what_kept_them_untouched(self):
+        """Planted control: restore the pre-M6.7 write and the pair moves again.
+
+        This puts back the exact body the repair removed -- the old settle seam
+        wrote the pair on the way in, and wrote an `unavailable` pair even when
+        settlement failed.  A real weekly run took that path, so the assertion
+        above is load-bearing rather than incidentally true.
+        """
+        import engine.a_short_industry_weight_comparison as p5
+
+        def pre_repair_body(*, root, daily_cache_path, as_of, **_kwargs):
+            try:
+                summary = p5.build_public_progress(root=p5._private_root(root), as_of=as_of)
+            except Exception:
+                summary = p5.unavailable_public_progress(as_of)
+            p5.write_public_progress(summary)
+            return summary
+
+        with tempfile.TemporaryDirectory() as td:
+            self._write_inputs(td)
+            with patch.object(p5, "settle_and_summarize_weekly", side_effect=pre_repair_body):
+                before, after = self._run_with_a_failing_publication(td, [
+                    "--industry-weight-comparison-root", str(Path(td) / "p5"),
+                ])
+        moved = sorted(path.name for path in before if after.get(path) != before[path])
+        self.assertEqual(moved, ["industry_weight_comparison_summary.json",
+                                 "industry_weight_comparison_summary.md"],
+                         "the pre-publish write must be what moves the pair")
 
     def test_p2_target_policy_is_absent_without_its_private_root(self):
         with tempfile.TemporaryDirectory() as td:

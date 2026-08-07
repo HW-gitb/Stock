@@ -1,5 +1,35 @@
 # Session Log
 
+## 2026-08-07 — Claude 审查 PASS（a-short 序 7 · #02：事务器死结已闭，公共写盘全部移到 publish 之后）
+
+- **Verdict/Action**: PASS，已提交并合入 master。三项 Required 全闭；我最看重的是**放宽的方向被反向验住了**——`recover()` 从「拒绝」改成「永不拒绝」是一次放宽，而真半应用态仍然回滚到旧字节、in-flight 侧仍严格抛错。执行方还自查出一条我没点的：journal 改原子写后多消耗一次 `os.replace`，原按序号注入的三条测试会打偏、其中两条变恒真，已改成只数公共目标。
+- **Required**: 无。`R-ASHORT-ARTIFACT-SET-JOURNAL-WEDGES-THE-TRACK-FOREVER` 已 CLOSED；三条 Optional 的处置（①已闭 ②补边界不改实现 ③第 4-5 步维持未做）与我的复核见 `docs/system_risk_register.md`（单一来源，本处不复述）。`R-ASHORT-FAILED-WEEKLY-RUN-...` 在第 4、5 步落地前保持 open。
+- **Verify**: review-evidence:e0cc806ed2a0。**自写探针四格**：①「journal 在、备份已删」→ `COMMITTED ok`、journal 已退役；② 0 字节 journal → `COMMITTED ok`（修前两格分别 `BLOCKED`）；③ 强制腿=真半应用态仍回滚到 `b'w1json'/'w1md'`、`unrestorable=[]`；④ 植入=把 `_clear` 换回「先删备份」+ 恢复 strict → 回到 `BLOCKED`。焦点超集 `Ran 715 tests in 307.0s ... OK`（`receipt:b850b4ebca31f90a3cc4e80c`）。全量按 rule 4 引用不重跑，并核过 ledger fingerprint 与现算代码态 `eb60869cf0028c03…` 逐字相同（`2539 OK`）。`static_contract_error()` = `None`。超时原因:715 条焦点超集串行等待加四格崩溃探针。
+- **Next**: Codex：执行
+
+## 2026-08-07 — Claude Code 修复（序 7 事务器永久锁死：`_clear` 换序 + journal 原子写 + recovery 永不拒绝）
+
+- **Verdict/Action**: 修完，未 commit。**判据完全成立，是我的缺陷**，三项 Required 全做。关键决定在第 ③ 项：`_undo` 分 strict/非 strict——**in-flight 回滚仍严格**（备份是这次刚写的，失败即真故障），**recovery 回滚不严格**（它面对死进程随手留下的任何东西，在那里拒绝正是锁死成因）。`recover()` 现在无论如何退役 journal，还不回的条目记 `unrestorable` 并在 stderr 点名——静默继续会重演「没人知道这条轨死了」，永久抛错会重演本缺陷，两头都要。
+- **Required**: `R-ASHORT-ARTIFACT-SET-JOURNAL-WEDGES-THE-TRACK-FOREVER` → working-tree repaired，closed pending 审查。三项 Required、四项 Closure、Optional ①②③ 逐条处置见 `docs/system_risk_register.md`（单一来源，本处不复述）。
+- **Verify**: **审查方两条探针修后实跑**：「journal 在、备份已删」连续两周 → `w3 -> COMMITTED` / `w4 -> COMMITTED`、`journal still there: False`；「journal 截 0 字节」→ `COMMITTED`、journal gone；修前分别是 `BLOCKED: rollback could not restore` 与 `BLOCKED: journal is unreadable`。植入对照把 `_clear` 换回「先删备份」并在中间抛，重现了那个确切状态而修后仍不锁死。反向控制：真半应用态仍回滚到旧字节，放宽两种情形没把真回滚放过。focused 726 OK（`receipt:f360e9c707a80257a78071a1`，bundle 已带）；full lane `PASS 2539 / 355.2s / parallel`，计数门相等。
+- **Pre-Codex self-review**: A-F checked。A：两条腿同属「recover 自己失败时无路可退」一类，一并修；另自查出第三个同类面——journal 改原子写后多消耗一次 `os.replace`，三处按序号注入的既有测试会静默打到 journal 上（两条变恒真），已改为只统计公共目标并用 `fired` 断言。B：`_undo` 全部调用点已随签名更新，无残留。C：strict 那一侧另有测试守住，不因放宽而两头松。D：n/a。E：未动 CURRENT。F：py_compile／diff --check 干净；新增函数令 weekly pipeline 预判据变动，已重封该一个键（被七条测试打红后才发现）。matrix=换序+原子写+recovery不拒绝+Optional①读前恢复+测试注入点，五项闭；register=updated；handoff=主 handoff 追加；focused=726 OK；full-lane=`PASS 2539 / 355.2s / parallel`；door=55 OK
+- **Next**: Claude Code：审查
+
+## 2026-08-07 — Claude 审查 FAIL（a-short 序 7 · #02 汇总/账本事务性：新事务器会把轨永久锁死）
+
+- **Verdict/Action**: FAIL，未提交。排序与四轨拆分做得对，验收第 1 行（M6.7 失败 → 8 个 tracked 文件逐字节不变）也真打了真实文件。挡住的是新建的事务器本身：`recover()` 一旦自己失败就**没有出路**，而它是每次提交的第一步，于是这条轨**永久**再也提交不了——且异常被 pipeline 的 `except` 吞成一条 `capture_unavailable`，没有任何人会发现。
+- **Required**: `R-ASHORT-ARTIFACT-SET-JOURNAL-WEDGES-THE-TRACK-FOREVER`（P2，含两条腿、Required repair 三项与 Closure tests 四项）。三条 Optional（`recover` 无生产调用者 / 事务原子单位不含 ledger / 第 4-5 步未做）记在 `R-ASHORT-FAILED-WEEKLY-RUN-LEAVES-TRACKED-SUMMARIES-AHEAD-OF-THEIR-LEDGER`。均见 `docs/system_risk_register.md`（单一来源，本处不复述）。
+- **Verify**: review-evidence:5389fecaaa7d。**自写探针复现两条腿**：①「journal 在、备份已删」→ 连续两周 `BLOCKED: rollback could not restore`，`recover()` 同样 BLOCKED、journal 永不清除、公共对冻结；② journal 截 0 字节 → `BLOCKED: journal is unreadable`；③ 全仓 grep：`recover()` 生产侧零调用者。焦点超集 `Ran 710 tests in 329.2s ... OK`（`receipt:30291c2a5805f90e9a7b9fa1`，bundle 已带）；全量按 rule 4 引用 `PASS 2534 / 365.3s / parallel` 未重跑。按 §6a 起 1 个独立对抗 agent（新 fail-closed 引擎档）。超时原因:agent 与 710 条超集串行等待加两轮崩溃探针。
+- **Next**: Codex：修复
+
+## 2026-08-07 — Claude Code 修复（序 7 · #02 汇总/账本事务性：七步落 5 步，第 4/5 步未做）
+
+- **Verdict/Action**: 修完，未 commit。事务器已建（备份+journal+fsync+逐个 replace，异常还原、写前 recover 回滚猝死残留；**目录 fsync 按既定偏差未做**，Windows 不可行，docstring 明写边界）；四轨拆 prepare/commit，公共对只在 publish 返回**且** capture 推进账本之后提交；失败不再用 unavailable 覆盖旧汇总；两处 registry 同刀登记。**第 4 步（三个 `source_*` 字段）与第 5 步（守卫改断内部自洽）明确未做**，故「成功跑之后 lane 还绿」仍不成立。
+- **Required**: 无。七步逐条实现进度、未做的两步、审查方那条守卫权威链 Optional 的裁定（取 (i) 两档、不取 (ii)）见 `docs/system_risk_register.md` 的 `R-ASHORT-FAILED-WEEKLY-RUN-LEAVES-TRACKED-SUMMARIES-AHEAD-OF-THEIR-LEDGER`（单一来源，本处不复述）。
+- **Verify**: 验收第 1 行由 `MainWiringTests.test_a_failed_m67_publication_leaves_every_tracked_pair_untouched` **直打真实 8 个 tracked 文件**证明逐字节不变（`finally` 兜底还原，回归不弄脏仓库）；第 3、4 行由 `tests.test_a_short_artifact_set_transaction` 9 条直打事务器。植入对照：把 settle 换回**修前函数体**，该轨两文件重新被移动——**第一版控制写错过**（只翻 `write_public=True`，该夹具下 settle 本就抛异常、开关走不到，控制空转），已改。focused 11 模块 `Ran 721 ... OK`（`receipt:6de43da4c6b26410173f9eb0`，bundle 已带）；full lane `PASS 2534 / 365.3s / parallel`，计数门相等。
+- **Pre-Codex self-review**: A-F checked。A：公共写盘面整类枚举 7 轨 13 文件，确认 publish 之前恰 4 轨 8 个；四轨**全员**同法改造，非只动被点名的那条。B：`write_public_progress` 在 pipeline 残留引用降为 1（facade 用），overlay 失败覆盖写已删并注明反转。C：反向=植入修前函数体后公共对重新移动；另证 M6.7 失败时私密与公共皆不动。D：n/a。E：未动 CURRENT。F：py_compile 6 文件、diff --check 干净、契约零预判据变动无需重封。matrix=事务器+四轨拆分+排序+失败保留+registry，五项闭、第4/5步明确未做；register=updated；handoff=主 handoff 追加；focused=721 OK（`receipt:6de43da4c6b26410173f9eb0`）；full-lane=`PASS 2534 / 365.3s / parallel`；door=55 OK
+- **Next**: Claude Code：审查
+
 ## 2026-08-07 — Claude 审查 PASS（a-short 纯文档轮：两条排版 Optional 收口 + 序 7 建造顺序入册）
 
 - **Verdict/Action**: PASS，已提交并合入 master。本轮零代码改动。两条排版 Optional 按字节复核都真闭了；「只补一处空行、不碰 marker 之下 59 处 grandfather 历史」这个自律是对的，我核过 SESSION_LOG 本轮 `9/0` 全是新增、零删除。序 7 的七步建造顺序读下来一致，我另给一条开工时才用得上的 Optional（守卫改断内部自洽后的权威链终点）。

@@ -21,6 +21,7 @@ from typing import Any
 import jsonschema
 
 from engine import a_short_evidence_epoch_mode as _epoch_mode
+from engine.a_short_artifact_set_transaction import commit_artifact_set
 from engine.a_short_experiment_admission_registry import admission_snapshot
 from engine.a_short_nullable_bool import require_known_risk_bool
 
@@ -36,6 +37,9 @@ PROFILE_GOVERNANCE_PATH = ROOT / "presets" / "egs_industry_heat_governance_20260
 DEFAULT_PRIVATE_ROOT = ROOT / "state" / "a_short" / "industry_weight_comparison_private" / "v1"
 DEFAULT_PUBLIC_JSON = ROOT / "research" / "results" / "a_short" / "industry_weight_comparison_summary.json"
 DEFAULT_PUBLIC_MD = ROOT / "research" / "results" / "a_short" / "industry_weight_comparison_summary.md"
+#: Gitignored (`state/*/artifact_set_journal/`). Holds the rollback journal and
+#: old-byte backups only while the public pair is being replaced.
+DEFAULT_ARTIFACT_SET_JOURNAL_DIR = ROOT / "state" / "a_short" / "artifact_set_journal" / "industry_weight_comparison"
 HORIZONS = (5, 10, 20)
 PROFILE_IDS = ("legacy", "balanced", "aggressive", "theme_double")
 QUESTION_IDS = ("balanced_vs_legacy", "aggressive_vs_balanced", "theme_double_vs_balanced")
@@ -63,10 +67,15 @@ def _load_json(path: Path) -> Any:
     return json.loads(path.read_text(encoding="utf-8"))
 
 
+def _public_json_bytes(payload: Any) -> bytes:
+    """The exact bytes `_atomic_write` would have written, without writing them."""
+    return (json.dumps(payload, ensure_ascii=False, indent=2, allow_nan=False) + "\n").encode("utf-8")
+
+
 def _atomic_write(path: Path, payload: Any) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
     temporary = path.with_name(f".{path.name}.tmp")
-    temporary.write_text(json.dumps(payload, ensure_ascii=False, indent=2, allow_nan=False) + "\n", encoding="utf-8")
+    temporary.write_bytes(_public_json_bytes(payload))
     os.replace(temporary, path)
 
 
@@ -827,21 +836,48 @@ def validate_public_progress(summary: dict) -> None:
             raise IndustryWeightComparisonError("P5 public progress leaks a private evidence field")
 
 
-def write_public_progress(summary: dict, *, json_path: str | Path = DEFAULT_PUBLIC_JSON,
-                          markdown_path: str | Path = DEFAULT_PUBLIC_MD) -> None:
-    validate_public_progress(summary)
-    _atomic_write(Path(json_path), summary)
+def _public_markdown_text(summary: dict) -> str:
     lines = ["# A-short P5 行业权重比较进度", "", summary["message"], "",
              "| 问题 | 裁决 | 原因 | 检查点 |",
              "|---|---|---|---|"]
     for row in summary["questions"]:
         lines.append("| {question_id} | {verdict} | {reason} | {checkpoint_stage} |".format(**row))
     lines += ["", "P5b 为 comparison-only 裁判；不会自动修改 active_profile、EGS、M6.7 或仓位。"]
-    path = Path(markdown_path)
-    path.parent.mkdir(parents=True, exist_ok=True)
-    temporary = path.with_name(f".{path.name}.tmp")
-    temporary.write_text("\n".join(lines) + "\n", encoding="utf-8")
-    os.replace(temporary, path)
+    return "\n".join(lines) + "\n"
+
+
+def prepare_public_artifact_set(summary: dict, *, json_path: str | Path = DEFAULT_PUBLIC_JSON,
+                                markdown_path: str | Path = DEFAULT_PUBLIC_MD) -> dict[Path, bytes]:
+    """Validate and render the whole public pair, writing nothing.
+
+    Everything that can refuse this summary happens here, before any byte of it
+    reaches tracked space -- so a rejected summary leaves last week's pair
+    exactly as it was.
+    """
+    validate_public_progress(summary)
+    return {
+        Path(json_path): _public_json_bytes(summary),
+        Path(markdown_path): _public_markdown_text(summary).encode("utf-8"),
+    }
+
+
+def commit_public_artifact_set(files: dict[Path, bytes], *,
+                               journal_dir: str | Path | None = None) -> None:
+    """The one write entry point for the public pair: both files or neither."""
+    commit_artifact_set(journal_dir or DEFAULT_ARTIFACT_SET_JOURNAL_DIR, files)
+
+
+def write_public_progress(summary: dict, *, json_path: str | Path = DEFAULT_PUBLIC_JSON,
+                          markdown_path: str | Path = DEFAULT_PUBLIC_MD,
+                          journal_dir: str | Path | None = None) -> None:
+    """Compatibility facade for the standalone runner: prepare then commit.
+
+    The weekly pipeline must NOT use this: it has to hold the prepared bytes
+    until the official bundle has published and the private ledger has advanced.
+    """
+    commit_public_artifact_set(
+        prepare_public_artifact_set(summary, json_path=json_path, markdown_path=markdown_path),
+        journal_dir=journal_dir)
 
 
 def _refresh_private_ledger(root: Path) -> None:
@@ -863,8 +899,15 @@ def _refresh_private_ledger(root: Path) -> None:
 
 def settle_and_summarize_weekly(*, root: str | Path | None, daily_cache_path: str | Path | None,
                                 as_of: str, public_json_path: str | Path = DEFAULT_PUBLIC_JSON,
-                                public_markdown_path: str | Path = DEFAULT_PUBLIC_MD) -> dict:
-    """Non-blocking weekly seam: cache-only settlement then a fresh de-identified summary."""
+                                public_markdown_path: str | Path = DEFAULT_PUBLIC_MD,
+                                write_public: bool = True) -> dict:
+    """Non-blocking weekly seam: cache-only settlement then a fresh de-identified summary.
+
+    ``write_public=False`` is the weekly-pipeline path: it needs the summary for
+    the in-report banner long before the official bundle has published, and the
+    published pair may only move after that bundle and the private capture have
+    both landed.  The standalone runner keeps the historical write-through.
+    """
     try:
         if root is None:
             summary = build_public_progress(root=None, as_of=as_of)
@@ -876,12 +919,13 @@ def settle_and_summarize_weekly(*, root: str | Path | None, daily_cache_path: st
             else:
                 settle_from_daily_payload(root=private_root, daily_payload=_load_json(cache_path), as_of=as_of)
                 summary = build_public_progress(root=private_root, as_of=as_of)
-        write_public_progress(summary, json_path=public_json_path, markdown_path=public_markdown_path)
+        if write_public:
+            write_public_progress(summary, json_path=public_json_path,
+                                  markdown_path=public_markdown_path)
         return summary
     except Exception:
-        summary = unavailable_public_progress(as_of)
-        try:
-            write_public_progress(summary, json_path=public_json_path, markdown_path=public_markdown_path)
-        except Exception:
-            pass
-        return summary
+        # A settlement outage must not overwrite last week's checked pair with a
+        # fresh "unavailable" one: doing so is the same defect this seam exists
+        # to remove, only pointing the other way.  The caller records the outage
+        # in `pipeline_sidecar_outcomes` and leaves the published pair alone.
+        return unavailable_public_progress(as_of)
