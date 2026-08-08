@@ -123,7 +123,9 @@ def _weekly_rows(
         rows.append(
             {
                 "schema_name": "us_short_market_diagnostic_weekly_record",
-                "schema_version": "1.0.0",
+                "schema_version": "1.1.0",
+                "windows_aligned": True,
+                "windows_misaligned_reason": None,
                 "decision_date": decision.strftime("%Y%m%d"),
                 "valuation_date": (decision - timedelta(days=1)).strftime("%Y%m%d"),
                 "calendar_week_index": week,
@@ -319,6 +321,93 @@ class UsShortMarketDiagnosticEngineTest(unittest.TestCase):
         with self.assertRaises(MarketDiagnosticError):
             validate_window(_weekly_rows(), as_of_date="20260101")
 
+    def test_the_window_entry_reads_the_alignment_flag_as_strictly_as_the_record_entry(
+        self,
+    ) -> None:
+        """The flag whose whole job is to say no must never default to yes.
+
+        `validate_window` is public and takes rows from its caller, so it may not
+        lean on those rows having come through `validate_weekly_record` first. It
+        used to: a row could drop the field, or write the STRING "false", and sail
+        through — `bool("false")` is true — while the record entry refused both.
+        """
+
+        accepted = _weekly_rows()
+        validate_window(accepted)   # control: the compliant window still passes
+
+        for label, mutate in (
+            ("field absent", lambda row: row.pop("windows_aligned")),
+            ("string false", lambda row: row.update(windows_aligned="false")),
+            ("string true", lambda row: row.update(windows_aligned="true")),
+            ("integer one", lambda row: row.update(windows_aligned=1)),
+            ("reason absent", lambda row: row.pop("windows_misaligned_reason")),
+            (
+                "misaligned but silent",
+                lambda row: row.update(windows_aligned=False, windows_misaligned_reason=None),
+            ),
+            (
+                "aligned but chatty",
+                lambda row: row.update(windows_misaligned_reason="strategy_return_spans_a_no_count_week"),
+            ),
+        ):
+            with self.subTest(label):
+                rows = _weekly_rows()
+                mutate(rows[3])
+                with self.assertRaises(MarketDiagnosticError):
+                    validate_window(rows)
+
+    def test_no_alignment_knob_carries_a_default_that_means_aligned(self) -> None:
+        """The class, not the one line that was caught.
+
+        Three signatures carry this fact between modules, and a default on any of
+        them is the same fail-open in a different place: a caller that forgets it
+        silently gets "comparable". Asserted structurally because a default nobody
+        currently uses cannot be caught by a behaviour test — the day someone drops
+        the argument is the day it starts mattering.
+        """
+
+        import ast
+
+        expected = {
+            ("engine/us_short_market_diagnostic.py", "_validate_benchmark", "windows_aligned"),
+            ("engine/us_short_market_diagnostic_local_adapter.py", "adapt_benchmark_week",
+             "windows_aligned"),
+            ("engine/us_short_market_diagnostic_local_adapter.py", "build_weekly_record_from_local",
+             "prior_week_was_no_count"),
+        }
+        seen = set()
+        for relative, function, knob in sorted(expected):
+            tree = ast.parse((ROOT / relative).read_text(encoding="utf-8"))
+            for node in ast.walk(tree):
+                if not isinstance(node, ast.FunctionDef) or node.name != function:
+                    continue
+                names = [arg.arg for arg in node.args.kwonlyargs]
+                self.assertIn(knob, names, f"{relative}::{function} lost {knob}")
+                default = node.args.kw_defaults[names.index(knob)]
+                self.assertIsNone(
+                    default,
+                    f"{relative}::{function}.{knob} has a default; the caller must state it",
+                )
+                seen.add((relative, function, knob))
+        self.assertEqual(expected, seen, "an alignment knob moved or vanished")
+
+    def test_the_window_entry_still_refuses_a_misaligned_joint_pair(self) -> None:
+        """The tightening must not knock out the check it was added to serve."""
+
+        rows = _weekly_rows()
+        rows[3]["windows_aligned"] = False
+        rows[3]["windows_misaligned_reason"] = "strategy_return_spans_a_no_count_week"
+        with self.assertRaises(MarketDiagnosticError) as ctx:
+            validate_window(rows)
+        self.assertIn("misaligned comparison windows", str(ctx.exception))
+
+        # ...and with the pairing dropped, the same window is accepted again.
+        for symbol in ("VTI", "IWB", "SPY", "QQQ"):
+            rows[3]["benchmarks"][symbol]["joint_evaluable"] = False
+            rows[3]["benchmarks"][symbol]["raw_excess"] = None
+            rows[3]["benchmarks"][symbol]["relative_wealth"] = None
+        validate_window(rows)
+
     def test_noncanonical_window_anchor_fails_on_the_compute_path(self) -> None:
         shifted = _weekly_rows()
         for row in shifted:
@@ -392,6 +481,51 @@ class UsShortMarketDiagnosticEngineTest(unittest.TestCase):
         row["source_refs"].remove(digest)
         with self.assertRaises(MarketDiagnosticError):
             validate_weekly_record(row)
+
+    def test_a_misaligned_week_cannot_also_claim_a_joint_comparison(self) -> None:
+        """The field only means something if the pair it disqualifies is refused.
+
+        A week whose strategy return spans a no_count week is recorded in full —
+        both sides keep their real numbers — but it may not ALSO be counted as a
+        joint observation, because that is the two-week-over-four-days pairing the
+        field exists to keep out of the 26-week excess.
+        """
+
+        row = _weekly_rows()[0]
+        row["windows_aligned"] = False
+        row["windows_misaligned_reason"] = "strategy_return_spans_a_no_count_week"
+        with self.assertRaises(MarketDiagnosticError) as ctx:
+            validate_weekly_record(row)
+        self.assertIn("misaligned comparison windows", str(ctx.exception))
+
+        # ...and once the pairing is dropped, the same record is accepted: the flag
+        # disqualifies the comparison, not the week.
+        for symbol in ("VTI", "IWB", "SPY", "QQQ"):
+            row["benchmarks"][symbol]["joint_evaluable"] = False
+            row["benchmarks"][symbol]["raw_excess"] = None
+            row["benchmarks"][symbol]["relative_wealth"] = None
+        validate_weekly_record(row)
+
+    def test_a_misalignment_must_say_why_and_an_alignment_must_not(self) -> None:
+        """Both directions, so the reason cannot drift away from the flag."""
+
+        silent = _weekly_rows()[0]
+        silent["windows_aligned"] = False
+        # The joint pairing is dropped first, so the ONLY thing left to object to
+        # is the missing explanation. Without this the record is rejected by the
+        # misaligned-pair check instead and this assertion proves nothing.
+        for symbol in ("VTI", "IWB", "SPY", "QQQ"):
+            silent["benchmarks"][symbol]["joint_evaluable"] = False
+            silent["benchmarks"][symbol]["raw_excess"] = None
+            silent["benchmarks"][symbol]["relative_wealth"] = None
+        with self.assertRaises(MarketDiagnosticError) as ctx:
+            validate_weekly_record(silent)
+        self.assertIn("must say why", str(ctx.exception))
+
+        chatty = _weekly_rows()[0]
+        chatty["windows_misaligned_reason"] = "strategy_return_spans_a_no_count_week"
+        with self.assertRaises(MarketDiagnosticError):
+            validate_weekly_record(chatty)
 
     def test_as_of_date_rejects_future_benchmark_price_evidence(self) -> None:
         row = _weekly_rows()[0]

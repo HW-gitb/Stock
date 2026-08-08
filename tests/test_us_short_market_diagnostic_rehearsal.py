@@ -363,6 +363,33 @@ class SkippedWeekTest(unittest.TestCase):
         self.assertEqual(_diagnostic_record(self.summary, "20260803")["strategy"]["nav"],
                          strategy["nav"])
 
+    def test_the_week_after_it_is_recorded_but_not_compared(self) -> None:
+        """Its strategy move spans two calendar weeks; its benchmarks span one.
+
+        The account settled once across the skipped week, so week three's NAV move
+        covers weeks two AND three while its benchmark window covers only week
+        three. Both numbers are real and both are kept — what must not happen is
+        pairing them, because that puts a two-week numerator over a few-days
+        denominator in whichever direction the skipped week's market moved.
+        """
+
+        recovery = _diagnostic_record(self.summary, "20260817")
+        self.assertFalse(recovery["windows_aligned"])
+        self.assertEqual("strategy_return_spans_a_no_count_week",
+                         recovery["windows_misaligned_reason"])
+        # Both sides are individually fine — that is the whole point of the field.
+        self.assertTrue(recovery["strategy"]["strategy_evaluable"])
+        self.assertIsNotNone(recovery["strategy"]["weekly_return"])
+        for symbol in ("VTI", "IWB", "SPY", "QQQ"):
+            with self.subTest(symbol=symbol):
+                self.assertTrue(recovery["benchmarks"][symbol]["benchmark_evaluable"])
+                self.assertFalse(recovery["benchmarks"][symbol]["joint_evaluable"])
+                self.assertIsNone(recovery["benchmarks"][symbol]["raw_excess"])
+        # ...and the ordinary week after THAT is compared again.
+        following = _diagnostic_record(self.summary, "20260824")
+        self.assertTrue(following["windows_aligned"])
+        self.assertTrue(following["benchmarks"]["VTI"]["joint_evaluable"])
+
     def test_the_unlived_week_keeps_its_slot_and_still_shows_the_market(self) -> None:
         register = _register(self.summary)
         self.assertEqual(4, register["calendar_week_count"])

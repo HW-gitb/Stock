@@ -395,12 +395,38 @@ def _validate_strategy(strategy: Mapping[str, Any]) -> None:
             _fail("strategy.unfilled_order_count must be a non-negative integer or null")
 
 
+
+def _window_alignment(record: Mapping[str, Any]) -> bool:
+    """Read the comparison-window flag, or refuse. Never assume it says "aligned".
+
+    One rule, one implementation, because there are two entries into this module —
+    a single record and a whole window — and this flag exists to EXCLUDE a week
+    from the comparison. A reader that fills in a missing or malformed value with
+    "aligned" turns the one field whose whole job is to say no into a default yes:
+    dropping the field, or writing the string ``"false"``, both used to sail
+    through the window entry while the record entry refused them. The window entry
+    is public and takes rows from its caller, so it may not lean on those rows
+    having come through the record entry first.
+    """
+
+    aligned = _required(record, "windows_aligned", "weekly_record")
+    reason = _required(record, "windows_misaligned_reason", "weekly_record")
+    if not isinstance(aligned, bool):
+        _fail("weekly_record.windows_aligned must be boolean")
+    if aligned and reason is not None:
+        _fail("weekly_record.windows_aligned is true but carries a misalignment reason")
+    if not aligned and (not isinstance(reason, str) or not reason):
+        _fail("weekly_record.windows_aligned is false and must say why")
+    return aligned
+
+
 def _validate_benchmark(
     benchmark: Mapping[str, Any],
     strategy: Mapping[str, Any],
     symbol: str,
     *,
     as_of_date: date | None = None,
+    windows_aligned: bool,
 ) -> None:
     for field in (
         "return_quality",
@@ -468,6 +494,13 @@ def _validate_benchmark(
             _fail(f"benchmarks.{symbol} joint_evaluable bypasses the paper gate")
         if not benchmark["benchmark_evaluable"]:
             _fail(f"benchmarks.{symbol} joint_evaluable requires benchmark_evaluable")
+        if not windows_aligned:
+            # Both sides can be fine and still not be a comparison: after a
+            # no_count week the account settles once across two calendar weeks, so
+            # the strategy's move spans both while the benchmarks span only this
+            # one. Counting that pair would put a two-week numerator over a
+            # few-days denominator in whichever direction the skipped week moved.
+            _fail(f"benchmarks.{symbol} joint_evaluable over misaligned comparison windows")
 
 
 def _validate_rows(
@@ -526,6 +559,7 @@ def _validate_rows(
                 strategy,
                 symbol,
                 as_of_date=as_of,
+                windows_aligned=_window_alignment(row),
             )
         source_refs = row.get("source_refs")
         if not isinstance(source_refs, Sequence) or isinstance(source_refs, (str, bytes)) or not source_refs:
@@ -598,8 +632,9 @@ def validate_weekly_record(
     record = _mapping(row, "weekly_record")
     if record.get("schema_name") != "us_short_market_diagnostic_weekly_record":
         _fail("weekly_record.schema_name is unknown")
-    if record.get("schema_version") != "1.0.0":
+    if record.get("schema_version") != "1.1.0":
         _fail("weekly_record.schema_version is unsupported")
+    aligned = _window_alignment(record)
     week = _week_index(record)
     decision = _date8_value(_required(record, "decision_date", "weekly_record"), "decision_date")
     valuation = _date8_value(_required(record, "valuation_date", "weekly_record"), "valuation_date")
@@ -635,6 +670,7 @@ def validate_weekly_record(
             strategy,
             symbol,
             as_of_date=as_of,
+            windows_aligned=aligned,
         )
 
     source_refs = record.get("source_refs")

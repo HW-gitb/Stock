@@ -265,8 +265,15 @@ def _target_week(
     root: str | Path,
     *,
     as_of_date: str | None,
-) -> tuple[int, str | None]:
-    """Which week this packet is for, and the NAV it must continue from.
+) -> tuple[int, str | None, bool]:
+    """Which week this packet is for, the NAV it continues from, and whether the
+    week before it was a ``no_count``.
+
+    That last fact belongs here because it is a property of the LEDGER, not of the
+    packet or of anything a caller could supply: a no_count week is one the account
+    never settled, so its NAV was carried forward and this week's move spans both
+    calendar weeks. The record has to say so, or the 26-week comparison silently
+    pairs a two-week strategy return with a one-week benchmark return.
 
     Design section 2.2 requires a repeated run to be idempotent. Always producing
     "the next expected week" is not: running the weekly command twice would ask
@@ -293,7 +300,7 @@ def _target_week(
         )
     target = candidates[-1]
     if target == 1:
-        return target, None
+        return target, None, False
     try:
         records = load_settled_weekly_records(root, as_of_date=as_of_date)
     except MarketDiagnosticLifecycleError as exc:
@@ -302,7 +309,7 @@ def _target_week(
         ) from exc
     for record in records:
         if record["calendar_week_index"] == target - 1:
-            return target, record["strategy"]["nav"]
+            return target, record["strategy"]["nav"], bool(record["strategy"]["no_count"])
     raise MarketDiagnosticWeeklyProducerError(
         f"week {target} needs the settled NAV of week {target - 1}, which the store does not hold"
     )
@@ -381,6 +388,9 @@ def build_no_count_record(
             calendar_week_index,
             strategy_evaluable=False,
             strategy_weekly_return=None,
+            # No strategy return, so there is no span to line up; this week leaves
+            # the comparison through `strategy_evaluable`, not through this flag.
+            windows_aligned=True,
             as_of_date=as_of_date,
         )
     except (LocalMarketDiagnosticAdapterError, StopIteration) as exc:
@@ -408,8 +418,13 @@ def build_no_count_record(
     )
     return {
         "schema_name": "us_short_market_diagnostic_weekly_record",
-        "schema_version": "1.0.0",
+        "schema_version": "1.1.0",
         "decision_date": week["decision_date"],
+        # A week with no strategy return has no span to line up against the
+        # benchmarks, so nothing is misaligned here. This week is already out of
+        # the comparison through `strategy_evaluable`; one fact, one field.
+        "windows_aligned": True,
+        "windows_misaligned_reason": None,
         "valuation_date": week["valuation_date"],
         "calendar_week_index": calendar_week_index,
         "window_id": packet["window_id"],
@@ -467,7 +482,9 @@ def build_next_weekly_record(
         raise MarketDiagnosticWeeklyProducerError(
             "the benchmark price packet belongs to a different diagnostic epoch than this clock"
         )
-    target, prior_nav = _target_week(benchmark_packet, inputs, root, as_of_date=as_of_date)
+    target, prior_nav, prior_week_was_no_count = _target_week(
+        benchmark_packet, inputs, root, as_of_date=as_of_date
+    )
     if not model_paper_week_is_settled(model_paper_root, benchmark_packet, target, as_of_date=as_of_date):
         # Design sections 3 and 5: a week the account could not settle is recorded
         # as no_count and STILL occupies its calendar slot. Without this the whole
@@ -493,6 +510,7 @@ def build_next_weekly_record(
             v1_1_reminder=inputs["v1_1_reminder"],
             prior_nav=prior_nav,
             total_return_sidecar=total_return_sidecar,
+            prior_week_was_no_count=prior_week_was_no_count,
             as_of_date=as_of_date,
         )
     except LocalMarketDiagnosticAdapterError as exc:

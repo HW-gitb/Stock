@@ -71,7 +71,9 @@ def _benchmark() -> dict:
 def _weekly() -> dict:
     return {
         "schema_name": "us_short_market_diagnostic_weekly_record",
-        "schema_version": "1.0.0",
+        "schema_version": "1.1.0",
+        "windows_aligned": True,
+        "windows_misaligned_reason": None,
         "decision_date": "20260804",
         "valuation_date": "20260803",
         "calendar_week_index": 1,
