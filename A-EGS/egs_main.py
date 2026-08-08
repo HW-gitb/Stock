@@ -73,6 +73,7 @@ v7.5 新增（周频优化 6 项）：
   ⬜ L1 行业毛利率趋势：固定免检 0.5 分
 """
 import argparse, ast, inspect, os, sys, time, pickle, logging, warnings, shutil, uuid, re, hashlib, textwrap
+import dataclasses
 from dataclasses import dataclass
 from contextlib import contextmanager, nullcontext
 from datetime import datetime, timedelta
@@ -1650,6 +1651,10 @@ class MarginObservation:
 
 
 MONEYFLOW_CACHE_SEMANTICS_VERSION = "moneyflow_v2"
+#: How many sessions the window may fall back when D0 has not been published.
+#: One, and only for that cause -- a post-holiday publication delay is routine,
+#: while reaching further back trades a real reference day for a convenient one.
+MONEYFLOW_MAX_LAG_SESSIONS = 1
 MONEYFLOW_FETCH_SESSIONS = 5
 MONEYFLOW_PROVIDER_FIELDS = (
     "ts_code", "trade_date",
@@ -1682,10 +1687,21 @@ class MoneyflowObservation:
     status: str
     semantics_sha256: str
     frame_sha256: str
+    #: Dual clock.  `reference_date` stays the decision's own D0; these say which
+    #: window the numbers actually came from.  A one-session fallback is allowed
+    #: (post-holiday publication delay is routine) but may never be silent.
+    effective_ref_date: str | None = None
+    lag_sessions: int | None = None
+    fallback_applied: bool = False
+    fallback_reason: str | None = None
 
     def public_dict(self):
         return {
             "reference_date": self.reference_date,
+            "effective_ref_date": self.effective_ref_date,
+            "lag_sessions": self.lag_sessions,
+            "fallback_applied": self.fallback_applied,
+            "fallback_reason": self.fallback_reason,
             "requested_trade_dates": list(self.requested_trade_dates),
             "observed_trade_dates": list(self.observed_trade_dates),
             "row_count": self.row_count,
@@ -1973,6 +1989,32 @@ def build_data_health(df_full, watch_df, tier1_final, analysis_input, latest_td,
                 "moneyflow_coverage_clock_binding",
                 "moneyflow reference date is not bound to price_data_through",
             ))
+        # Dual clock: D0 stays bound to price_data_through above, so this is the
+        # other half -- a moved window must be visibly moved, by exactly one
+        # session, and in the only direction that is not look-ahead.
+        if declared_moneyflow_coverage is not None:
+            effective = moneyflow_coverage.get("effective_ref_date")
+            lag = moneyflow_coverage.get("lag_sessions")
+            moved = bool(moneyflow_coverage.get("fallback_applied"))
+            reference = moneyflow_coverage.get("reference_date")
+            if moved and not (
+                lag == 1
+                and isinstance(effective, str) and isinstance(reference, str)
+                and effective < reference
+                and str(moneyflow_coverage.get("fallback_reason") or "").strip()
+            ):
+                errors.append(_health_issue(
+                    "moneyflow_effective_clock",
+                    "a moneyflow fallback must be one session earlier and give a reason",
+                    effective_ref_date=effective, lag_sessions=lag,
+                    fallback_reason=moneyflow_coverage.get("fallback_reason"),
+                ))
+            elif not moved and not (lag in (0, None) and effective in (reference, None)):
+                errors.append(_health_issue(
+                    "moneyflow_effective_clock",
+                    "moneyflow claims no fallback but its effective clock is not D0",
+                    effective_ref_date=effective, lag_sessions=lag,
+                ))
         expected_data_provider = (
             "mixed" if source.get("l3_provider") == HITHINK_L3_SOURCE_ID else "tushare"
         )
@@ -2343,7 +2385,14 @@ def log_data_health_summary(health_path, health):
     log.info(message)
 
 
-def safe_api(fn, *a, default=None, retries=3, **kw):
+def safe_api(fn, *a, default=None, retries=3, errors=None, **kw):
+    """Bounded provider call.  `errors`, when given a list, distinguishes failure.
+
+    Both an empty response and an exhausted retry return `default`, so a caller
+    that must not confuse "the provider says there is nothing" with "the provider
+    did not answer" cannot tell them apart from the return value alone.  Passing a
+    list makes the second case observable without changing what anyone gets back.
+    """
     for i in range(retries):
         try:
             time.sleep(CONF["request_delay"])
@@ -2352,7 +2401,10 @@ def safe_api(fn, *a, default=None, retries=3, **kw):
             return default
         except Exception as e:
             log.warning(f"API异常 [{fn.__name__ if hasattr(fn,'__name__') else fn}] 第{i+1}次: {e}")
-            if i == retries - 1: return default
+            if i == retries - 1:
+                if errors is not None:
+                    errors.append(e)
+                return default
             time.sleep(2 ** i)
     return default
 
@@ -3700,8 +3752,46 @@ def get_financial_data(ts_codes):
         save_cache(key, observation)
     return df_merged
 
+def _moneyflow_fetch_window(requested_dates):
+    """Fetch one window day by day.  Returns (frames, missing_dates, errored_dates).
+
+    A malformed payload still raises: "keep looking until a day parses" is how a
+    bad window gets laundered into a clean-looking one.  A day that is simply
+    absent is reported as missing; a day the provider failed to answer for is
+    reported separately, because "not published yet" and "the call did not come
+    back" justify very different decisions and `safe_api` returns the same thing
+    for both.
+    """
+    frames, missing, errored = [], [], []
+    for date_str in tqdm(requested_dates, desc="资金流"):
+        call_errors = []
+        frame = safe_api(
+            pro.moneyflow,
+            trade_date=date_str,
+            fields=",".join(MONEYFLOW_PROVIDER_FIELDS),
+            retries=2,
+            errors=call_errors,
+        )
+        if frame is None or frame.empty:
+            if call_errors:
+                log.warning(f"资金流日期 {date_str} provider 调用失败（非「未发布」）")
+                errored.append(date_str)
+            else:
+                log.warning(f"资金流日期 {date_str} 无数据，已跳过")
+            missing.append(date_str)
+            continue
+        try:
+            frames.append(_prepare_moneyflow_frame(frame, expected_date=date_str))
+        except ValueError as exc:
+            raise RuntimeError(
+                f"moneyflow provider payload is invalid for {date_str}: {exc}"
+            ) from exc
+    return frames, missing, errored
+
+
 def get_moneyflow(trade_dates):
     requested_dates = _canonical_moneyflow_dates(trade_dates)
+    all_sessions = tuple(str(value).strip() for value in list(trade_dates))
     try:
         semantics_sha256 = _moneyflow_semantics_fingerprint()
         key = _moneyflow_cache_key(requested_dates, semantics_sha256)
@@ -3716,52 +3806,85 @@ def get_moneyflow(trade_dates):
             cached, requested_dates, semantics_sha256,
         )
         if valid:
-            return MoneyflowObservation(
-                frame=cached.frame.copy(),
-                reference_date=cached.reference_date,
-                requested_trade_dates=cached.requested_trade_dates,
-                observed_trade_dates=cached.observed_trade_dates,
-                row_count=cached.row_count,
-                universe_size=cached.universe_size,
-                coverage_complete=cached.coverage_complete,
-                status=cached.status,
-                semantics_sha256=cached.semantics_sha256,
-                frame_sha256=cached.frame_sha256,
-            )
+            # `replace` copies EVERY field by construction.  The hand-listed
+            # kwargs this replaces silently dropped the four dual-clock fields
+            # the moment they were added, so a cache hit published
+            # `effective_ref_date=null` under `status=complete` -- an
+            # analysis_input that fails its own schema, and a fallback that
+            # disappears.  A field added later cannot go missing here again.
+            return dataclasses.replace(cached, frame=cached.frame.copy())
         log.warning(
             "moneyflow cache observation invalid; discarding and refetching: %s",
             reason,
         )
 
-    frames = []
-    for date_str in tqdm(requested_dates, desc="资金流"):
-        frame = safe_api(
-            pro.moneyflow,
-            trade_date=date_str,
-            fields=",".join(MONEYFLOW_PROVIDER_FIELDS),
-            retries=2,
-        )
-        if frame is None or frame.empty:
-            log.warning(f"资金流日期 {date_str} 无数据，已跳过")
-            continue
+    frames, missing, errored = _moneyflow_fetch_window(requested_dates)
+
+    # One-session fallback, and only for the one cause that justifies it: D0 --
+    # the reference day itself -- has not been published yet (routine after a
+    # holiday).  A partially missing window, or any day that came back malformed,
+    # is NOT a reason to go looking for a cleaner day; that is how a bad window
+    # gets laundered.  A provider that failed to answer is not evidence of
+    # anything either -- calling that "not published" would put a claim in the
+    # artifact that nobody checked.  So the fallback needs D0 absent, D0 not
+    # errored, and every other requested day present.
+    d0_unpublished = missing == [requested_dates[0]] and not errored
+    if d0_unpublished and MONEYFLOW_MAX_LAG_SESSIONS >= 1:
         try:
-            frames.append(_prepare_moneyflow_frame(frame, expected_date=date_str))
-        except ValueError as exc:
-            raise RuntimeError(
-                f"moneyflow provider payload is invalid for {date_str}: {exc}"
-            ) from exc
+            shifted = _canonical_moneyflow_dates(all_sessions[1:])
+        except ValueError:
+            # The calendar does not reach far enough to rebuild a whole window.
+            # Degrade to unavailable rather than let this escape as an exception
+            # or, worse, score off a short window.
+            shifted = None
+        if shifted is None:
+            log.error("D0 未发布且交易日历不足以重建整窗；不给分而不是用残窗")
+            return _moneyflow_unavailable_observation(
+                requested_dates, semantics_sha256 or "unavailable",
+            )
+        # Rebuild the WHOLE window [D1..D5]; D1..D4 are already in hand, so this
+        # costs exactly one more per-day call (5 + 1 <= the 6-call ceiling).
+        extra = tuple(date for date in shifted if date not in requested_dates)
+        extra_frames, extra_missing, _extra_errored = _moneyflow_fetch_window(extra)
+        if extra_missing:
+            log.error("D0 未发布，回退窗仍不完整；不给分")
+            return _moneyflow_unavailable_observation(
+                requested_dates, semantics_sha256 or "unavailable",
+            )
+        frames = frames + extra_frames
+        log.warning(
+            "moneyflow D0 %s 尚未发布；整窗回退一个交易日至 %s（lag=1，已在产物中显式标注）",
+            requested_dates[0], shifted[0],
+        )
+        return _moneyflow_finalize(
+            frames, shifted, semantics_sha256,
+            reference_date=requested_dates[0],
+            fallback_reason="d0_not_published",
+        )
 
     if not frames:
         log.error("近5日资金流全部拉取失败，大单流向加分将缺失")
         return _moneyflow_unavailable_observation(
             requested_dates, semantics_sha256 or "unavailable",
         )
+    return _moneyflow_finalize(frames, requested_dates, semantics_sha256)
 
+
+def _moneyflow_finalize(frames, effective_dates, semantics_sha256,
+                        reference_date=None, fallback_reason=None):
     observation = _moneyflow_observation(
         pd.concat(frames, ignore_index=True),
-        requested_dates,
+        effective_dates,
         semantics_sha256 or "uncacheable",
+        reference_date=reference_date,
+        fallback_reason=fallback_reason,
     )
+    key = None
+    if semantics_sha256 is not None:
+        try:
+            key = _moneyflow_cache_key(effective_dates, semantics_sha256)
+        except (OSError, TypeError, IndentationError, SyntaxError):
+            key = None
     if observation.status != "complete":
         log.warning(
             "moneyflow source window incomplete; moneyflow bonus will be disabled: %s",
@@ -3870,16 +3993,30 @@ def _moneyflow_semantics_fingerprint():
 
 
 def _moneyflow_cache_key(trade_dates, semantics_sha256=None):
+    """Key the EFFECTIVE window, the semantics, and the tolerance.
+
+    `dates` is whichever window was actually used, so a D0 and a D1 window can
+    never read each other's cache.  The lag ceiling is in the key too: widening
+    the tolerance changes what a hit is allowed to mean, so it must rotate keys
+    rather than silently reinterpret the ones already on disk.
+    """
     dates = _canonical_moneyflow_dates(trade_dates)
     window_digest = hashlib.sha256("|".join(dates).encode("utf-8")).hexdigest()[:12]
     semantic_digest = semantics_sha256 or _moneyflow_semantics_fingerprint()
     return (
         f"moneyflow_{dates[0]}_{MONEYFLOW_CACHE_SEMANTICS_VERSION}_"
-        f"{window_digest}_{semantic_digest}"
+        f"lag{MONEYFLOW_MAX_LAG_SESSIONS}_{window_digest}_{semantic_digest}"
     )
 
 
-def _moneyflow_observation(frame, requested_dates, semantics_sha256):
+def _moneyflow_observation(frame, requested_dates, semantics_sha256,
+                           reference_date=None, fallback_reason=None):
+    """Build the observation for the window actually fetched.
+
+    ``requested_dates`` is the EFFECTIVE window.  ``reference_date`` is the
+    decision's own D0; passing a different one records a one-session fallback,
+    so the artifact can always say which clock produced the numbers.
+    """
     requested = _canonical_moneyflow_dates(requested_dates)
     prepared = _prepare_moneyflow_frame(frame)
     frame_dates = set(prepared["trade_date"].tolist())
@@ -3887,9 +4024,15 @@ def _moneyflow_observation(frame, requested_dates, semantics_sha256):
         raise ValueError("moneyflow frame contains dates outside the requested window")
     observed = tuple(date for date in requested if date in frame_dates)
     complete = observed == requested
+    d0 = str(reference_date) if reference_date else requested[0]
+    lag = 0 if d0 == requested[0] else 1
+    if lag and bool(fallback_reason) is False:
+        raise ValueError("a moneyflow fallback window must carry a fallback_reason")
+    if lag and d0 <= requested[0]:
+        raise ValueError("a moneyflow fallback must move the window strictly earlier")
     return MoneyflowObservation(
         frame=prepared,
-        reference_date=requested[0],
+        reference_date=d0,
         requested_trade_dates=requested,
         observed_trade_dates=observed,
         row_count=int(len(prepared)),
@@ -3898,6 +4041,10 @@ def _moneyflow_observation(frame, requested_dates, semantics_sha256):
         status="complete" if complete else "incomplete",
         semantics_sha256=str(semantics_sha256),
         frame_sha256=_moneyflow_frame_digest(prepared),
+        effective_ref_date=requested[0],
+        lag_sessions=lag,
+        fallback_applied=bool(lag),
+        fallback_reason=str(fallback_reason) if lag else None,
     )
 
 
@@ -3927,9 +4074,22 @@ def _validate_moneyflow_observation(observation, requested_dates, semantics_sha2
         return False, "semantics fingerprint mismatch"
     if tuple(observation.requested_trade_dates) != requested:
         return False, "requested trade-date window mismatch"
+    # Checked before the recompute so the log says why: an entry written before
+    # the dual clock existed unpickles with the field defaults, which would
+    # publish `effective_ref_date=null` under `status=complete`.  Unusable, not
+    # merely mismatched -- refetch rather than let a default pass for an
+    # observation.
+    if observation.effective_ref_date is None or observation.lag_sessions is None:
+        return False, "cached observation predates the dual clock"
     try:
+        # Recompute with the entry's OWN clock: a cached fallback window is
+        # legitimate and must verify, while a cached lie about the clock still
+        # will not -- lag/effective/fallback_applied are all derived here from
+        # reference_date against the window, not taken on trust.
         recomputed = _moneyflow_observation(
             observation.frame, requested, semantics_sha256,
+            reference_date=observation.reference_date,
+            fallback_reason=observation.fallback_reason,
         )
     except (TypeError, ValueError) as exc:
         return False, f"frame contract mismatch: {exc}"
@@ -3946,6 +4106,12 @@ def _default_moneyflow_coverage(reference_date, requested_trade_dates=None, stat
     requested = [str(value) for value in (requested_trade_dates or [])]
     return {
         "reference_date": str(reference_date) if reference_date else None,
+        # Nothing was usable, so there is no effective clock to report.  Null is
+        # the honest value here; 0 would read as "D0, lag none" -- a claim.
+        "effective_ref_date": None,
+        "lag_sessions": None,
+        "fallback_applied": False,
+        "fallback_reason": None,
         "requested_trade_dates": requested,
         "observed_trade_dates": [],
         "row_count": 0,
@@ -4004,6 +4170,13 @@ def _moneyflow_usage_receipt(observation, target_codes):
     )
     return {
         "reference_date": observation.reference_date,
+        # Both clocks travel to the artifact.  A fallback window may score
+        # normally, but the report must always be able to say which sessions the
+        # numbers came from and that it is not D0.
+        "effective_ref_date": observation.effective_ref_date,
+        "lag_sessions": observation.lag_sessions,
+        "fallback_applied": bool(observation.fallback_applied),
+        "fallback_reason": observation.fallback_reason,
         "requested_trade_dates": list(requested),
         "observed_trade_dates": list(observation.observed_trade_dates),
         "row_count": int(observation.row_count),

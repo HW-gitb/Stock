@@ -462,6 +462,10 @@
           "additionalProperties": false,
           "required": [
             "reference_date",
+            "effective_ref_date",
+            "lag_sessions",
+            "fallback_applied",
+            "fallback_reason",
             "requested_trade_dates",
             "observed_trade_dates",
             "row_count",
@@ -473,6 +477,19 @@
           ],
           "properties": {
             "reference_date": {"type": ["string", "null"], "pattern": "^[0-9]{8}$"},
+            "effective_ref_date": {
+              "type": ["string", "null"],
+              "pattern": "^[0-9]{8}$",
+              "description": "The session the window actually starts at: D0, or D1 when D0 had not been published yet. Null only when nothing was usable. Required here as well as in analysis_input so a delayed publication cannot look like a normal week on either surface."
+            },
+            "lag_sessions": {
+              "type": ["integer", "null"],
+              "minimum": 0,
+              "maximum": 1,
+              "description": "Sessions between D0 and effective_ref_date; only 0 or 1."
+            },
+            "fallback_applied": {"type": "boolean"},
+            "fallback_reason": {"type": ["string", "null"], "minLength": 1},
             "requested_trade_dates": {
               "type": "array",
               "items": {"type": "string", "pattern": "^[0-9]{8}$"}

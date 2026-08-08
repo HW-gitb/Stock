@@ -14,7 +14,7 @@ from pathlib import Path
 import pandas as pd
 
 from runners.resolve_canonical_asof import main as resolver_main
-from runners.resolve_canonical_asof import resolve_canonical_asof
+from runners.resolve_canonical_asof import resolve_canonical_asof, resolve_price_as_of
 
 # 正常周（无假）：…6/25 Thu, 6/26 Fri, 6/29 Mon, 6/30 Tue, 7/1 Wed…
 NORMAL_WEEK = ["20260624", "20260625", "20260626", "20260629", "20260630", "20260701"]
@@ -102,6 +102,91 @@ class ResolveCanonicalAsofTest(unittest.TestCase):
         self.assertEqual(set(r), {"as_of", "run_date", "last_settled"})
 
 
+class ResolvePriceAsOfTest(unittest.TestCase):
+    """One decision day must yield one price basis, whichever entry point asks."""
+
+    def test_canonical_and_explicit_entries_agree_on_the_same_decision_day(self):
+        """The defect this closes: two entries, two different price dates.
+
+        The old wrapper took `last_settled` when `-AsOf` was omitted and the
+        decision day itself when it was given, so the same decision day priced
+        off two different sessions depending on how it was launched.
+        """
+        canonical = resolve_canonical_asof(datetime(2026, 6, 26, 16, 0), NORMAL_WEEK)
+        explicit = resolve_price_as_of(canonical["as_of"], NORMAL_WEEK)
+        self.assertEqual(explicit["price_as_of"], canonical["last_settled"])
+        # ... and the retired behaviour really was different
+        self.assertNotEqual(explicit["price_as_of"], canonical["as_of"])
+
+    def test_prior_settled_is_the_trading_day_strictly_before_the_decision_day(self):
+        self.assertEqual(
+            resolve_price_as_of("20260629", NORMAL_WEEK)["price_as_of"], "20260626")
+        # across a holiday the calendar decides, not the calendar-day arithmetic
+        self.assertEqual(
+            resolve_price_as_of("20260622", DUANWU_WEEK)["price_as_of"], "20260618")
+
+    def test_a_historical_decision_day_is_not_priced_off_today(self):
+        """`prior_settled` must be relative to the decision day, never to `now`.
+
+        Anchoring on the run's own `last_settled` would feed a months-old replay
+        today's close -- look-ahead, and worse than the behaviour being replaced.
+        """
+        resolved = resolve_price_as_of("20260617", DUANWU_WEEK)
+        self.assertEqual(resolved["price_as_of"], "20260616")
+        self.assertLess(resolved["price_as_of"], "20260617")
+
+    def test_close_is_allowed_only_for_a_true_past_replay(self):
+        """`close` on a LIVE decision day is the retired behaviour with a switch on it.
+
+        The reviewer's probe: `as_of` = today, `now` = 15:30 (settled) used to be
+        ALLOWED and returned that day's own close -- while the wrapper classifies
+        exactly that case as `mode=live`.  Being settled is not enough; the
+        predicate has to be the same `as_of < run_date` the wrapper and the
+        pipeline already use.
+        """
+        replay = resolve_price_as_of("20260626", NORMAL_WEEK, price_basis="close",
+                                     now_dt=datetime(2026, 6, 29, 10, 0))
+        self.assertEqual(replay["price_as_of"], "20260626")
+        for label, now in (("today_after_close", datetime(2026, 6, 26, 15, 30)),
+                           ("today_at_the_bell", datetime(2026, 6, 26, 15, 0)),
+                           ("intraday", datetime(2026, 6, 26, 14, 59, 59)),
+                           ("future", datetime(2026, 6, 24, 16, 0))):
+            with self.subTest(label):
+                with self.assertRaises(ValueError):
+                    resolve_price_as_of("20260626", NORMAL_WEEK, price_basis="close", now_dt=now)
+
+    def test_close_on_a_live_day_would_reproduce_the_retired_same_day_behaviour(self):
+        """Reverse control: what the refusal is protecting is not hypothetical."""
+        as_of, now = "20260626", datetime(2026, 6, 26, 15, 30)
+        with self.assertRaises(ValueError):
+            resolve_price_as_of(as_of, NORMAL_WEEK, price_basis="close", now_dt=now)
+        # the same day under the production basis prices off the PRIOR session
+        self.assertEqual(
+            resolve_price_as_of(as_of, NORMAL_WEEK)["price_as_of"], "20260625")
+
+    def test_close_without_a_clock_is_refused_rather_than_assumed(self):
+        with self.assertRaises(ValueError):
+            resolve_price_as_of("20260626", NORMAL_WEEK, price_basis="close")
+
+    def test_a_non_trading_decision_day_and_an_unknown_basis_fail_closed(self):
+        with self.assertRaises(ValueError):
+            resolve_price_as_of("20260619", DUANWU_WEEK)          # 端午休市
+        with self.assertRaises(ValueError):
+            resolve_price_as_of("20260629", NORMAL_WEEK, price_basis="settled")
+        with self.assertRaises(ValueError):
+            resolve_price_as_of("20260624", NORMAL_WEEK[3:])       # 窗口里没有更早的交易日
+
+    def test_the_basis_travels_with_the_date(self):
+        """The artifact has to be able to say which basis produced it."""
+        for basis, now in (("prior_settled", None),
+                           ("close", datetime(2026, 6, 29, 10, 0))):
+            with self.subTest(basis):
+                resolved = resolve_price_as_of("20260626", NORMAL_WEEK,
+                                               price_basis=basis, now_dt=now)
+                self.assertEqual(resolved["price_basis"], basis)
+                self.assertEqual(resolved["decision_as_of"], "20260626")
+
+
 class ResolverMainWiringTest(unittest.TestCase):
     """main() 接线：注入假 pro(trade_cal) + now → resolve → 写 JSON（不联网）。"""
 
@@ -118,7 +203,34 @@ class ResolverMainWiringTest(unittest.TestCase):
             self.assertEqual(rc, 0)
             payload = json.loads(out.read_text(encoding="utf-8"))
             self.assertEqual(payload, {"as_of": "20260622", "run_date": "20260620",
-                                       "last_settled": "20260618"})
+                                       "last_settled": "20260618",
+                                       "price_basis": "prior_settled",
+                                       "price_as_of": "20260618"})
+            # The identity that makes one basis out of two entry points: canonical's
+            # own `last_settled` is exactly what `prior_settled` resolves for it.
+            self.assertEqual(payload["price_as_of"], payload["last_settled"])
+
+    def test_main_resolves_a_price_basis_for_an_explicit_decision_day(self):
+        with tempfile.TemporaryDirectory() as td:
+            out = Path(td) / "price.json"
+            rc = resolver_main(["--price-as-of-for", "20260623", "--out", str(out)],
+                               pro_factory=lambda: self._FakePro(),
+                               now_dt=datetime(2026, 6, 20, 23, 0))
+            self.assertEqual(rc, 0)
+            payload = json.loads(out.read_text(encoding="utf-8"))
+            self.assertEqual(payload, {"decision_as_of": "20260623",
+                                       "price_basis": "prior_settled",
+                                       "price_as_of": "20260622"})
+
+    def test_main_refuses_close_for_a_live_decision_day(self):
+        with tempfile.TemporaryDirectory() as td:
+            out = Path(td) / "price.json"
+            with self.assertRaises(ValueError):
+                resolver_main(["--price-as-of-for", "20260623", "--price-basis", "close",
+                               "--out", str(out)],
+                              pro_factory=lambda: self._FakePro(),
+                              now_dt=datetime(2026, 6, 20, 23, 0))
+            self.assertFalse(out.exists(), "a refused basis must not leave an artifact")
 
     def test_main_does_not_accept_explicit_asof(self):
         # 解析器刻意不暴露 explicit --as-of 分类路径（防与 wrapper/egs/pipeline 的 as_of<run_date 谓词漂移）。

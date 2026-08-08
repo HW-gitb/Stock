@@ -2644,3 +2644,145 @@ Optional：① 上面那条弱档盲区，读「绿」时要记得；② 弱档�
 ### 下一步
 
 序 7 的第 5 步收口；第 4 步按已记录的用户裁定不做。`R-ASHORT-FAILED-WEEKLY-RUN-...` 可据此评估关闭条件。
+
+## 2026-08-07 追加：执行序 8 前半 —— 价格时钟统一（方案 1、2），后半 moneyflow 未做
+
+**改了什么**
+
+1. `runners/resolve_canonical_asof.py` 新增纯函数 `resolve_price_as_of(decision_as_of, trading_days, *, price_basis, now_dt)`：`prior_settled`（默认/生产）= **严格早于决策日的那个交易日**；`close` = 决策日当日收盘，只给显式历史研究且必须已收盘，未来/盘中/缺 `now_dt` 全 fail-closed；决策日不在日历里也 fail-closed。返回 `{decision_as_of, price_basis, price_as_of}`。`main` 加 `--price-as-of-for` / `--price-basis`。
+2. `runners/weekly_screening.ps1` 删掉 `$PriceAsOf = $AsOf`；加 `-PriceBasis prior_settled|close`；两条入口都走同一解析器（显式分支只解析价格日，**不**做 live/historical 分类——分类仍用 `as_of < run_date` 与 egs/pipeline 同谓词）；两条分支都打印 `price_basis` + `price_as_of`。
+3. `schemas/a_short_weekly_publish_receipt.schema.json` 加 `price_basis` / `price_as_of`（该 schema `additionalProperties:false`，必须显式登记），失败 receipt 也写这两项。
+
+**为什么改**
+
+同一个决策日，省略 `-AsOf` 取 `last_settled`、显式 `-AsOf` 取 `as_of` 本身——两条入口两个价格基准，而脚本用法说明里就写着显式 `-AsOf`。
+
+**口径实现的关键判断（两种朴素读法都是错的）**
+
+把 `prior_settled` 写成「运行时刻的 `last_settled`」会给历史回放喂**今天**的收盘价（look-ahead，比原缺陷更糟）；写成「决策日当日收盘」就是要删的那第二种行为。正确语义是**相对决策日**的前一交易日；对 canonical 而言它与 `last_settled` **恒等**，所以统一之后 canonical 路径行为逐字不变。
+
+**已知代价（明写不藏）**
+
+显式 `-AsOf` 路径从此也要拉一次 `trade_cal`（需网络/TUSHARE_TOKEN）。「上一个已收盘交易日」离开日历算不出来；给它留离线近似就等于把第二种行为装回来。已写进用法说明与失败提示。
+
+**验证命令与结果**
+
+- focused 8 模块 `Ran 702 tests in 240.2s ... OK`（`receipt:c88c00afe69cddc1c1615931`，bundle 已带）。
+- full lane 按 rule 3(a) 跑一次：`RESULT status=PASS exit=0 tests=2540 elapsed=344.3s deadline=860s mode=parallel`，计数门相等；`2539 → 2540` 的 +1 是上一刀合入的守卫拆分，不是本轮新测试（见下条覆盖缺口）。
+- 反向/边界共 25 条在 `tests/test_resolve_canonical_asof.py`：双入口一致性（并断言不等于 `as_of` 本身，非空洞）、跨假期由日历决定、历史回放不被今天定价、`close` 盘中差 1 秒 / 未来日 / 缺时钟三种全 raise、非交易日与未知 basis fail-closed、`close` 被拒时不留产物。
+- 零残留：`git grep 'PriceAsOf = $AsOf'` 代码零命中（只剩解释历史行为的注释）。PowerShell AST 解析通过；`static_contract_error()` = `None`（PS1 与 receipt schema 都不在受钉集合内，无需重封）。
+
+**下一步注意事项**
+
+- **覆盖缺口（已记 register）**：`tests/test_resolve_canonical_asof.py` **不在 a_short lane 的 `test_a_short*.py` 模式内**，即 canonical 解析器的测试从不进全量。修法二选一：改名进模式，或在 lane 选择器显式并入。本轮未动。
+- **序 8 后半（方案 3-6，moneyflow 双时钟 + 退一日容差）未做**：改的是 provider 取数窗口、缓存 key、`analysis_input` schema、weekly lineage 与 effect contract 重封，与前半互不依赖，单独一轮做。
+
+## 2026-08-07 追加：序 8 后半补齐（moneyflow 双时钟 + 退一日容差）—— 整刀收口
+
+**先记一条流程纠正**：用户明确指出「设计好的一刀不许自己拆成几轮执行」。本 session 我把序 7 拆了三轮、序 8 拆了两半，都不是他要求的。以后有完整执行方案就一轮做完；真做不到要**先说理由征得同意**，不能做一半才通知。已落 memory `feedback_execute_whole_knife_no_splitting`。
+
+**改了什么（桌面方案 3-6）**
+
+1. **双时钟**：`MoneyflowObservation` 与 `moneyflow_coverage` 增 `effective_ref_date` / `lag_sessions` / `fallback_applied` / `fallback_reason`；**`reference_date` 仍恒为 D0**，既有的 `reference_date` 绑 `price_data_through` 检查因此继续成立。缓存 key 再绑 `MONEYFLOW_MAX_LAG_SESSIONS`（放宽容差必须轮换 key，不能重新解释旧命中）。
+2. **只有「D0 明确未发布」才回退**（判据 `missing == [D0]`）：部分缺失不回退，畸形 payload 仍直接 raise。回退时重建整窗 [D1..D5]，复用 D1..D4 只加 D5（5+1 ≤ 6 次上限）；日历不足以重建整窗则 unavailable。
+3. **L4 与产物**：D1 完整照常给分；两个时钟同时进 `analysis_input` 与 `data_health`；都不可用时写 **null 而不是 0**（0 会读成「D0、无滞后」，那是个主张）。
+4. **两份 schema 都设 required 并双向锁**（同一对象两个出口）：`fallback_applied=true` → lag=1 + 非空 reason + date8 effective；`false` → reason 必须 null、lag 只能 0/null。
+5. **新增 fail-closed 检查 `moneyflow_effective_clock`**，落 `data_health.errors`，而 `publish_official_egs` 在 error 时拒绝正式发布。
+6. **effect contract**：四条新叶触发了序 11 的新叶闸（正是它该做的），按 live 三键证据登记 `m67_main_decision` 并重封相关 hash。
+
+**验证命令与结果**
+
+- focused 9 模块 `Ran 699 tests in 300.1s ... OK`（`receipt:d6b995f92f8100d9aa4f3124`，bundle 已带）；full lane `RESULT status=PASS exit=0 tests=2551 elapsed=237.9s deadline=860s mode=parallel`，计数门相等（2540 + 11 条新测试）。
+- 验收矩阵逐行有测试（12 → 23 条），含「D0 完整不取 D5」「部分缺失不去找更干净的日子」「D0 畸形仍 raise」「只有 D2 → unavailable」「D0/D1 缓存不互读」「四个字段逐个篡改都被健康检查抓成 error」。
+- 植入对照：把回退判据放宽成 `bool(missing)` → 恰好「不去找更干净的日子」那条单点转红。
+
+**失效旧结论**
+
+- 上一节「后半单独一轮做」已作废——按用户纠正，整刀已在同一轮收口。
+
+**下一步注意事项**
+
+- 连带修了三处既有 `moneyflow_coverage` 夹具（analysis_input contract ×2、suspend guard ×1），都是被两个 schema 当场打红后补的；以后给这个对象加字段，记得它有**两个 schema 出口**。
+- `leaf_effect_overrides` **只许追加、不许重排**：第一版脚本 `sorted()` 了整张表，造成约 100 行无关 churn，已回退重做（最终 28/4）。
+
+## 2026-08-07 追加：序 8 独立审查 —— FAIL（缓存命中丢双时钟；`close` 在 live 够得着）
+
+### 判定
+
+**FAIL，未提交。** 核心那件事做成了：双入口同源。挡住的是两条「新字段没走完自己的每一条路」。
+
+### 做成了的部分（我实测过）
+
+- **双入口同源**：canonical 的 `last_settled` 与显式路径 `prior_settled` 对同一决策日实测相等；`$PriceAsOf = $AsOf` 全文只剩注释里那句「这里以前是」。
+- **`close` 的五格 fail-closed**：未来日、盘中、非交易日、未知 basis、日历里没有更早交易日——全部拒绝。
+- **新叶接线**：四条新的资金流叶全部被序 11 的新叶闸逼着判成 `m67_main_decision`，未判定余量仍是 225（没有新增欠账），`static_contract_error()` 返回 `None`。这是序 11 那把刀第一次在真刀上生效。
+
+### 挡住的两条
+
+1. **缓存命中把双时钟抹成 null**：`A-EGS/egs_main.py:3789-3800` 用 10 个 kwargs 重建 14 字段的 `MoneyflowObservation`，四个双时钟字段落回默认。AST 实测：`MISSING: ['effective_ref_date','lag_sessions','fallback_applied','fallback_reason']`。后果是 `status=complete` 的产物通不过自己的 schema（该分支要求 8 位日期 + 0..1 整数），而 `-CachePolicy enabled` 是默认；若被命中的缓存原本来自回退窗口，回退还会**静默消失**。
+2. **`close` 在 live 够得着**：解析器只问「收盘没有」不问「是不是历史」，ps1 也没把自己算好的 `$IsHistoricalAsOf` 传下去。实测 `as_of=今天 / now=15:30 / close` → 允许，取决策日当日收盘——正是旧缺陷的语义，只是从默认变成了开关。
+
+正文、Required repair 与各自的 Closure tests 见 register `R-ASHORT-MONEYFLOW-CACHE-HIT-DROPS-THE-DUAL-CLOCK-AND-CLOSE-BASIS-IS-LIVE-REACHABLE`。
+
+### 独立对抗 agent 的处置
+
+按 §6a 起了一个（新 fail-closed 解析器 + 真钱边界的价格基准）。它**没能跑成任何探针**就被我叫停收口，故它的五条结论我一条都不采信；其中两条我自己重新验证后坐实（上面两条 Required），另三条原样转录进 register 并明确标注「无执行证据、待修复轮自判」。
+
+### 未覆盖维度与诚实边界
+
+全量按 rule 4 引用执行方记账（指纹已核为当前代码态）未重跑；agent 列的 provider-error 归因、receipt schema 可选字段、shifted 窗口死守卫三条我均未验；`weekly_screening.ps1` 我只做了静态通读与 `$PriceAsOf` 赋值面的全文枚举，没有真跑 PowerShell 端到端。
+
+### 下一步
+
+按 register 两条 Required 修，注意第 ① 条的 Closure ④：旧格式缓存条目必须判不可用并重取，不能用默认值冒充。
+
+## 2026-08-07 追加：序 8 审查 FAIL 修复 —— 缓存命中的双时钟 + `close` 只许真·过去回放
+
+**改了什么**
+
+1. **缓存命中按类修**：`dataclasses.replace(cached, frame=cached.frame.copy())` 取代 10 个手列 kwargs——按构造复制每一个字段，以后加字段也不可能在这里漏掉。手列 kwargs 正是缺陷成因，只把四个字段补齐等于把同一颗地雷重埋。
+2. `_validate_moneyflow_observation` 的重算改用**条目自己的 clock**，使合法回退缓存能验过、对 clock 撒谎的仍验不过；旧格式条目（`effective_ref_date`/`lag_sessions` 为 None）判不可用并重取，检查放在重算之前以给出确切原因。
+3. **`close` 判据合并成 `decision_as_of < run_date`**，与 ps1 的 `$IsHistoricalAsOf`、egs/pipeline 同一条谓词，不另造第二套；「已收盘」不再单独判（过去交易日按定义已收盘）。ps1 用法说明与 FATAL 提示同步。
+4. `safe_api` 增可选 `errors=None` 列表（不传则行为逐字不变），资金流窗口据此把「未发布」与「provider 没答复」分开，**D0 有错即不回退**。
+5. 短日历分支改 `try/except ValueError → unavailable`（原守卫是死代码，且会以 ValueError 逃出）。
+
+**为什么改**
+
+缓存命中会把四个双时钟字段抹回默认值——`status=complete` 配 `effective_ref_date=null`，产出通不过自身 schema 的 analysis_input，且让回退静默消失；`-PriceBasis close` 在「今天、已收盘」这格没被拒，而脚本对该情形的分类恰是 `mode=live`，等于把删掉的第二种价格行为用一个开关装回来。
+
+**三条未验怀疑的判定（逐条实验，两真一假）**
+
+- **(i) 真**：`safe_api` 对「空结果」与「异常耗尽」都 `return default`，调用点不可区分 → provider 故障会被贴 `d0_not_published`。已修。
+- **(iii) 真**：`_canonical_moneyflow_dates` 先 raise，长度守卫是死代码。已修并补测试（原测试是靠 provider 缺 D5 走到的，短日历那条路从没执行过）。
+- **(ii) 假**：实读 `:292-293` 与 `:324-325`，两处解析器失败都是 `exit 1`、**根本不写 receipt**；走 `Write-M67FailureReceipt` 的路径 `$PriceBasis` 恒有值必被写入。字段保持可选是对的——解析器失败时价格基准确实还不存在，设 required 只会逼人编一个。
+
+**验证命令与结果**
+
+- 审查方两条探针修后实跑：AST → `fields:14 / rebuild: dataclasses.replace`；`as_of=20260626, now=15:30, close` → **REFUSED**（修前 ALLOWED 取当日收盘），改成真·过去回放 → ALLOWED。
+- 植入对照 3/3：缓存命中改回手列 kwargs → 两条转红；去掉 `close` 的 historical 腿 → 两条转红；去掉 `and not errored` → provider 故障那条转红。
+- focused 9 模块 `Ran 705 tests in 215.7s ... OK`（`receipt:5f31dd6a0d93bbc3c13124aa`）；full lane `PASS 2556 / 341.2s / parallel`，计数门相等（2551 + 5 条新测试）。
+
+**下一步注意事项**
+
+- `safe_api` 现在多一个可选 `errors` 参数：**不传即旧行为**，所有既有调用者零影响；将来谁需要区分「没数据」和「没答复」，传个 list 即可，别再造第二个 fetch helper。
+
+## 2026-08-08 追加：序 8 复审 —— PASS（缓存命中与 `close` 两条 Required 已闭）
+
+### 判定
+
+**PASS，已提交并合入 master。** 两条 Required 都闭，修法都比「把缺的补上」更结构化。
+
+### 我实际验了什么（各自复跑当初坐实它的那一格）
+
+- **缓存命中**：AST 实测命中分支内已无任何手写 `MoneyflowObservation(` 构造，改用 `dataclasses.replace(cached, frame=...)`（唯一调用点 `:3815`）——以后再加字段也不会在这里丢。验证器另加一腿：clock 为 None 的旧缓存判 `cached observation predates the dual clock` 并重取；实测该腿**独立触发**（clock 齐全时越过它、报的是完全不同的 `frame contract mismatch`），不是一刀切拒绝。
+- **`close` 口径**：`as_of=今天 / now=15:30 / close` 现在被拒（`只能用于真·过去回放`），真历史日仍允许——放松侧没被误伤。
+- **植入对照 1/1**：把 `if decision >= run_date:` 整腿挖成 `if False:` → 同一输入回到 ALLOWED 且取当日收盘，精确复现我上一轮报的那格。中和的是门本身。
+- 焦点超集 `Ran 160 tests in 205.5s ... OK`（`receipt:17a89b4e6d4f4d7058f8d0b2`）；全量按 rule 4 引用 `2556 OK` 并核过指纹绑当前代码态；`static_contract_error()` 返回 `None`。
+
+### 未覆盖维度与诚实边界
+
+我上一轮转录的三条「agent 没跑成探针」的怀疑里，(ii) 发布 receipt 的价格时钟仍是 schema 可选、(iii) shifted 窗口守卫是否死代码——本轮我仍未验证，维持 Optional。`weekly_screening.ps1` 仍只做静态通读与 `$PriceAsOf` 赋值面全文枚举，没有真跑 PowerShell 端到端。§6a 的独立对抗 agent 已在上一轮为本刀起过一次，本轮是定点修复未重复起。
+
+### 下一步
+
+序 8 收口。队列剩序 13（liquidity 删除式不接）、序 14（breadth，部分可做）、序 15（volatility），以及文末两把小刀（①触发周成绩对账 ②变化率族）。

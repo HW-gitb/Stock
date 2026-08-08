@@ -22,6 +22,12 @@
 # Usage:
 #   .\runners\weekly_screening.ps1                                   # 省略 -AsOf = 自动解析 canonical(即将到来/当前未收盘的交易日)
 #   .\runners\weekly_screening.ps1 -AsOf 20260522                    # 显式决策日(前瞻 live 或真·过去 historical)
+#                                                                     # 价格基准与省略 -AsOf 时**完全相同**:恒取严格早于决策日的那个交易日
+#                                                                     # (prior_settled)。显式 -AsOf 不再改变价格基准;因此这条路径现在也要拉
+#                                                                     # 一次 trade_cal(需网络/TUSHARE_TOKEN)——离开日历算不出「上一个已收盘交易日」。
+#   .\runners\weekly_screening.ps1 -AsOf 20260522 -PriceBasis close   # 仅**真·过去回放**(as_of < 运行日)研究用:取决策日当日收盘。
+#                                                                     # live 决策日(含「今天、已收盘」)、未来日、盘中、非交易日一律拒绝启动——
+#                                                                     # 在 live 日取当日收盘正是被删掉的那第二种行为,不许用开关装回来。
 #   .\runners\weekly_screening.ps1 -AsOf 20260522 -CanarySource em
 #   .\runners\weekly_screening.ps1 -PythonExe C:\Users\cnhea\AppData\Local\Programs\Python\Python313\python.exe   # 可省略；传值仅校验固定主 Python
 #   .\runners\weekly_screening.ps1 -SkipCanary                        # 只跑选股
@@ -57,6 +63,12 @@ param(
     [string]$CanarySource = 'sina',
     [ValidateSet('pit', 'today', 'neutralize')]
     [string]$L3Mode = $null,
+    # 价格基准口径。生产恒为 prior_settled（严格早于决策日的那个交易日）；close 只给显式
+    # 历史研究用，且解析器只在该决策日确已收盘时才给，否则 fail-closed。**主路径不再存在
+    # 第二种行为**：以前省略 -AsOf 取 last_settled、显式 -AsOf 取 as_of 本身，同一决策日
+    # 两条入口两个价格。
+    [ValidateSet('prior_settled', 'close')]
+    [string]$PriceBasis = 'prior_settled',
     [ValidateSet('enabled', 'disabled')]
     [string]$CachePolicy = 'enabled',
     [string]$PythonExe = '',
@@ -133,6 +145,14 @@ function Write-M67FailureReceipt {
         stage_status = 'failed'
         failure_reason = $Reason
         exit_code = $ExitCode
+    }
+    # Record the price clock even on a failed run: a receipt that leaves the basis
+    # implicit is exactly what let two entry points disagree unnoticed.
+    if (-not [string]::IsNullOrWhiteSpace($script:PriceBasis)) {
+        $Payload['price_basis'] = [string]$script:PriceBasis
+    }
+    if (-not [string]::IsNullOrWhiteSpace($script:PriceAsOf)) {
+        $Payload['price_as_of'] = [string]$script:PriceAsOf
     }
     if (-not [string]::IsNullOrWhiteSpace($FailureDetailRef)) {
         $Payload['failure_detail_ref'] = $FailureDetailRef
@@ -268,7 +288,7 @@ if ([string]::IsNullOrWhiteSpace($AsOf)) {
     # 避免多次跑用不同 as_of 把 forward_tracker/regime/overlay 灌水。canonical 恒为真交易日且 live。
     $ResolveScript = Join-Path $ProjectRoot 'runners\resolve_canonical_asof.py'
     $ResolveOut = Join-Path $env:TEMP "a_short_canonical_asof_$PID.json"
-    & $PythonExe $ResolveScript '--out' $ResolveOut | Out-Null
+    & $PythonExe $ResolveScript '--price-basis' $PriceBasis '--out' $ResolveOut | Out-Null
     $ResolveExit = $LASTEXITCODE
     if ($ResolveExit -ne 0 -or -not (Test-Path $ResolveOut)) {
         Write-Host "[FATAL] canonical as_of resolution failed (resolve_canonical_asof.py exit $ResolveExit); check network / TUSHARE_TOKEN, or pass -AsOf <trading-day> explicitly." -ForegroundColor Red
@@ -277,7 +297,7 @@ if ([string]::IsNullOrWhiteSpace($AsOf)) {
     $Resolved = Get-Content -Raw -Encoding UTF8 $ResolveOut | ConvertFrom-Json
     Remove-Item -Force $ResolveOut -ErrorAction SilentlyContinue
     $AsOf = [string]$Resolved.as_of
-    $PriceAsOf = [string]$Resolved.last_settled
+    $PriceAsOf = [string]$Resolved.price_as_of
     $IsHistoricalAsOf = $false   # canonical = 即将到来/当前未收盘的交易日,按定义恒 live(as_of>=run_date)
     if ([string]::IsNullOrWhiteSpace($AsOf)) {
         Write-Host "[FATAL] canonical resolver returned an empty as_of." -ForegroundColor Red
@@ -287,13 +307,33 @@ if ([string]::IsNullOrWhiteSpace($AsOf)) {
         Write-Host "[FATAL] canonical resolver returned no officially settled price date." -ForegroundColor Red
         exit 1
     }
-    Write-Host "[CANONICAL] as_of=$AsOf (resolved)  run_date=$RunDate  mode=live  last_settled=$($Resolved.last_settled)" -ForegroundColor Cyan
+    Write-Host "[CANONICAL] as_of=$AsOf (resolved)  run_date=$RunDate  mode=live  price_basis=$PriceBasis  price_as_of=$PriceAsOf" -ForegroundColor Cyan
 } else {
-    # --- 显式 -AsOf → 纯日期比较分类（无需网络）---
+    # --- 显式 -AsOf → live/historical 仍用纯日期比较分类（无需网络）---
     # as_of < 今天 = historical(真·过去回放,须显式 -L3Mode pit/neutralize);as_of >= 今天 = live(今日/前瞻交易日)。
     # as_of 交易日有效性由 egs_main.set_asof 兜底(拒非交易日);与 egs/pipeline 的 as_of>=run_date live 判据一致。
     $IsHistoricalAsOf = ([string]::Compare([string]$AsOf, [string]$RunDate, [System.StringComparison]::Ordinal) -lt 0)
-    $PriceAsOf = $AsOf
+    # --- 但价格基准必须与 canonical 同源：走同一个解析器（需 trade_cal，故需网络）---
+    # 这里以前是 `$PriceAsOf = $AsOf`，即显式入口用「决策日当日收盘」、canonical 入口用
+    # 「上一个已收盘交易日」，同一决策日两个价格。删掉那条分支是本刀的核心；代价是显式
+    # -AsOf 路径从此也需要拉一次 trade_cal——「上一个已收盘交易日」离开日历算不出来，
+    # 给它留一条离线近似就等于把第二种行为装回来。
+    $ResolveScript = Join-Path $ProjectRoot 'runners\resolve_canonical_asof.py'
+    $ResolveOut = Join-Path $env:TEMP "a_short_price_asof_$PID.json"
+    & $PythonExe $ResolveScript '--price-as-of-for' $AsOf '--price-basis' $PriceBasis '--out' $ResolveOut | Out-Null
+    $ResolveExit = $LASTEXITCODE
+    if ($ResolveExit -ne 0 -or -not (Test-Path $ResolveOut)) {
+        Write-Host "[FATAL] price basis resolution failed for -AsOf $AsOf (exit $ResolveExit); check network / TUSHARE_TOKEN. -PriceBasis close is refused unless -AsOf is a true past replay (as_of < run_date); on a live decision day it would re-create the retired same-day-close behaviour." -ForegroundColor Red
+        exit 1
+    }
+    $ResolvedPrice = Get-Content -Raw -Encoding UTF8 $ResolveOut | ConvertFrom-Json
+    Remove-Item -Force $ResolveOut -ErrorAction SilentlyContinue
+    $PriceAsOf = [string]$ResolvedPrice.price_as_of
+    if ([string]::IsNullOrWhiteSpace($PriceAsOf)) {
+        Write-Host "[FATAL] price basis resolver returned no price date for -AsOf $AsOf." -ForegroundColor Red
+        exit 1
+    }
+    Write-Host "[EXPLICIT] as_of=$AsOf  run_date=$RunDate  mode=$(if($IsHistoricalAsOf){'historical'}else{'live'})  price_basis=$PriceBasis  price_as_of=$PriceAsOf" -ForegroundColor Cyan
 }
 $EffectiveL3Mode = $L3Mode
 
