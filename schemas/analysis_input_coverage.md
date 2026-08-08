@@ -30,6 +30,15 @@ Phase 1a 目标：先定义 `analysis_input.json` 的稳定输入合同，再让
 - `result/a_short/YYYYMMDD/candidates.csv` 新增 `run_date` 列
 - `snapshot.json` 继续保持 manifest，不承载 per-stock 明细
 
+### 已退休：市场级 `market_context.liquidity`（2026-08-08，用户 2026-08-05 裁定「删」）
+
+`market_context.liquidity.market_turnover_amount` 与 `market_context.liquidity.median_amount_20d` 是**从未生效的兼容占位**：生产者恒写 `null`，全仓没有任何市场级成交额消费者。当前 schema 版本已把整个市场级 `liquidity` 对象从 `market_context` 的 `required` 与 `properties` 中删除，**不保留运行时 alias、不留占位、不新增任何成交额阈值**。
+
+- **逐票 `candidates[].liquidity` 完全不动**（`avg_amount_5d` / `avg_amount_20d` / `turnover_rate`）——短线真正的流动性风险是个股出不去，那道防线由逐票绝对额门槛承担，与本次删除无关。
+- **为什么不是「留着标注有意不接」**：v14.2 的 regime 触发条件里没有成交额这一项，硬接等于在规格之外发明判据；而永远为 `null` 的公开字段只会制造「以后也许有用」的假契约。三条备选（接进 regime 判据 / 做个股相对基准 / 保留并标注）当时全部否决。
+- **将来要恢复必须另开 schema-first 刀**，触发条件是 forward 账本显示「缩量区间里胜率或盈亏比系统性变差」，并按北向门同一条治理路走（带真实消费者 → 先只记录 → 回看统计 → 用户看过证据拍板 → 通电），同刀定清口径（两市还是含北交所、绝对额还是相对 20 日中位的量比）。
+- 旧版 payload 夹带该对象会被 `additionalProperties:false` 拒绝，这是有意的：当前版不接受它。历史产物按既有 legacy migration 路径读取。
+
 ## 现有 EGS v7.6 已可直接供给的字段
 
 来自 `A-EGS/Result/egs_tier1_YYYYMMDD.csv`：

@@ -2,7 +2,7 @@
   "schema_name": "a_short_m67_effect_contract",
   "schema_version": "1.0.0",
   "legacy_migration_sha256": "b99cbb6895b7b2c2877e172fbbd59ff0b84a5c3b9bbf5de2b8ee2aab0d52cc4e",
-  "analysis_input_all_paths_sha256": "12ca0a5b5f8a09cd8838d20f13421b7fff8c67f463f851a9a6c56aeeb9fdbf78",
+  "analysis_input_all_paths_sha256": "0a8b8b9f5514475f8aec81922c57881fc2e3e30b7a6d2072c2c18127a9d2613a",
   "unclassified_pending_audit_baseline": [
     "account_context.mode",
     "account_context.positions[].current_price",
@@ -340,7 +340,7 @@
       "source_prefixes": [
         "market_context"
       ],
-      "source_paths_sha256": "482e73c69840da0d573b53c03fe49fa70b151e7a33d2c2d3d49c78385a8c8908",
+      "source_paths_sha256": "e7098d89cfc066a618821b3f0e070dde98d5b1a0cd534a24822b64a5af1d8416",
       "policy": "must_affect_result",
       "terminal_surfaces": [
         "weekly.effect_contract_ledger",
@@ -1631,8 +1631,6 @@
     "market_context.breadth.limit_down_count",
     "market_context.breadth.limit_up_count",
     "market_context.breadth.limit_up_index_pct_change",
-    "market_context.liquidity.market_turnover_amount",
-    "market_context.liquidity.median_amount_20d",
     "market_context.margin_coverage.coverage_complete",
     "market_context.margin_coverage.effective_ref_date",
     "market_context.margin_coverage.reference_date",

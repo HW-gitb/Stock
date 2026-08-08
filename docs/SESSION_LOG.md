@@ -259,6 +259,21 @@
 - **Verify**: review-evidence:e4a95cd5ecca。焦点包 `98 OK`——三条全非测试红。**审查方自证**：授权 store 仅 1 周，另造 26 周伪造史（epoch 改为 `fabricated-never-authorized`）经 `build_market_diagnostic_report` 产出 `26w-1-26 / ahead_diagnostic`，`write_market_diagnostic_report` 落盘两文件。agent 另以 11 种规避形态量化守卫：抓 6 逃 5，逃逸形态之一「调门名但丢弃结果、对另一 root 操作」**正是本仓 aggregator 当前形状**。
 - **Pre-Codex self-review**: 四轮复发根因已定位并写入 register：每轮都在语法层修（让「叫门」的东西出现在正确位置），缺陷始终在语义层（门的实参是否等于被保护制品的来源）。通用修法改为「让错误组合不可表达」而非「可表达再检查」。独立对抗 pass: 已跑（第三次冷打）。
 - **Next**: 按结构性修法重做：产出者只收 root、自行经门取数，不接调用方递来的 records/report。
+## 2026-08-08 — Claude 审查 PASS（a-short 序 13 · #08 市场级 liquidity 删除式退休）
+
+- **Verdict/Action**: PASS，已提交并合入 master。按用户 2026-08-05 的「删」执行，删得干净：schema 里整个 `market_context.liquidity` 移除、生产者块删掉并写明理由、不留 alias 不留占位。契约按新 schema 动态结算，没有为保住叶数留假叶。
+- **Required**: 无。本轮审查记录（删除反向控制、逐票 liquidity 未动、残留扫描 7 处全合法、契约结算）见 `docs/system_risk_register.md` 的 `R-ASHORT-SEQ13-MARKET-LEVEL-LIQUIDITY-RETIRED`（单一来源，本处不复述）。
+- **Verify**: review-evidence:2de870e29831。**删除类最该验的反向控制我实测了**：`market_context` 的 `additionalProperties=false`，夹带旧 `liquidity` 的 payload 被拒（`Additional properties are not allowed`），不带则通过。逐票 `candidates[].liquidity` 8 字段俱在、未动。残留扫描 7 处全属历史迁移登记／退休说明／守卫自身，生产消费侧零命中。契约：`static_contract_error()=None`、叶 402→400、`producer_constant_null` 65→63，pending 与基线正确维持 225。焦点超集 253 OK（`receipt:5e7d80535dc91381a53a733d`）。**全量按本轮指示不起**，按 rule 4 引用 `2556 OK` 且指纹与现算相同。
+- **Next**: Codex：执行
+
+## 2026-08-08 — Claude Code 执行（序 13 · #08：市场级 liquidity 删除式退休，逐票 liquidity 不动）
+
+- **Verdict/Action**: 做完，未 commit。按用户 2026-08-05 裁定「删」：`market_context.liquidity` 整个对象从 `required` 与 `properties` 删除，EGS producer / example / 测试夹具同步删，**不留占位、不留 alias、不新增成交额阈值**；`candidates[].liquidity` 逐字未动。coverage 文档新增「已退休」节，写明恢复的触发条件与治理路径。方案 4 件全做。
+- **Required**: 无。缺陷事实、四件落地、契约结算与 5 条静态守卫见 `docs/system_risk_register.md` 的 `R-ASHORT-MARKET-LEVEL-LIQUIDITY-WAS-A-PERMANENTLY-NULL-PUBLIC-CONTRACT`（单一来源，本处不复述）。
+- **Verify**: **契约结算无假叶无新债**——叶总数 402 → 400、`producer_constant_null` 65 → 63（删掉的恰是这两条机械派生恒空叶），它们既不在 `leaf_effect_overrides` 也不在冻结 pending 基线里，故基线仍 225、未判定余量一条没动，也没有任何叶被改写成 `main_decision` 去保住原叶数。守卫 5 条含**旧 payload 夹带即被拒**（并先证同一份不夹带能过，避免空洞）与**六个面 residue sweep 为 0**。focused 781 OK（`receipt:e6fa656ce30d071aa0b86aeb`）；full lane `PASS 2556 / 288.7s / parallel`。
+- **Pre-Codex self-review**: A-F checked。A：整类=该对象的所有出口，实测共 5 个（schema／producer／example／测试夹具／契约 inventory）全删；legacy migration 两处历史记录按设计保留、coverage 说明为有意例外，两者都写进守卫的白名单。B：全仓 grep 两个字段名，代码面零残留。C：反向=逐票 `candidates[].liquidity` 三字段仍在，证明删的是市场级那一个对象而非流动性风控本身。D：n/a。E：未动 CURRENT。F：schema 与 example 过 JSON/Draft7、`diff --check` 干净、`static_contract_error()`=`None`（`egs_main` 预判据无变化，删的是字典字面量、不在抽取面内，故未重封）。matrix=schema+producer+example+夹具+契约+coverage+5守卫；register=new entry；handoff=主 handoff 追加；focused=781 OK；full-lane=`PASS 2556 / 288.7s`；door=55 OK
+- **Next**: Claude Code：审查
+
 ## 2026-08-08 — Claude 审查 PASS（a-short 序 8 · #10：缓存命中不再丢双时钟，`close` 不再够得着 live）
 
 - **Verdict/Action**: PASS，已提交并合入 master。两条 Required 都闭，且修法比我要求的更结构化：缓存命中改用 `dataclasses.replace`（以后加字段也丢不掉），不是这次记得补四个；`close` 现在同时要「已收盘」和「真·过去回放」两条腿。旧格式缓存被判不可用并重取，正是我 Closure ④ 要的方向。

@@ -2786,3 +2786,60 @@ Optional：① 上面那条弱档盲区，读「绿」时要记得；② 弱档�
 ### 下一步
 
 序 8 收口。队列剩序 13（liquidity 删除式不接）、序 14（breadth，部分可做）、序 15（volatility），以及文末两把小刀（①触发周成绩对账 ②变化率族）。
+
+## 2026-08-08 追加：执行序 13 —— 市场级 liquidity 删除式退休
+
+**改了什么**
+
+1. `schemas/analysis_input.schema.json`：从 `market_context` 的 `required` 与 `properties` 删掉整个 `liquidity` 对象（`market_turnover_amount` / `median_amount_20d`）。
+2. `A-EGS/egs_main.py` 不再写该对象，原处留注释写明退休理由与「逐票 `candidates[].liquidity` 不动」。
+3. `schemas/examples/analysis_input.example.json`、`tests/support/analysis_input_payload.py` 同步删除。
+4. `schemas/analysis_input_coverage.md` 新增「已退休」节：这两个字段是从未生效的兼容占位；将来恢复的触发条件（forward 账本显示缩量区间胜率/盈亏比系统性变差）与治理路径（按北向门同一条：带真实消费者 → 先只记录 → 回看统计 → 用户看证据拍板 → 通电，同刀定清两市/含北交所、绝对额/量比口径）。
+5. effect contract 只按新 schema 动态结算（见下）。
+
+**为什么删（不是「留着标注有意不接」）**
+
+v14.2 的 regime 触发条件里没有成交额这一项，硬接等于在规格之外发明判据；全仓也没有任何市场级成交额消费者。永远为 `null` 的公开字段只会制造「以后也许有用」的假契约。
+
+**effect contract 结算：无假叶、无新债**
+
+叶总数 402 → **400**，`producer_constant_null` 65 → **63**——删掉的恰是这两条机械派生的恒空叶。它们**既不在 `leaf_effect_overrides` 也不在冻结的 pending 基线里**，所以基线仍是 225、未判定余量一条没动，也没有任何叶被改写成 `main_decision` 去"保住原叶数"。重封 `market_context` 组 hash 与 `analysis_input_all_paths_sha256`，契约内存的 `analysis_input_paths` 清单 392 → 390。`egs_main` 预判据**无变化**（删的是字典字面量，不在预判据抽取面内）。
+
+**验证命令与结果**
+
+- 静态守卫 5 条（`RetiredMarketLevelLiquidityTest`）：schema 两处都不再暴露；**旧 payload 夹带该对象被拒**（并先证明不夹带的同一份能过，避免断言空洞）；producer 源码零命中；**residue sweep** 覆盖 EGS/Phase5/weekly/render/schema/example 六个面命中数为 0；**逐票 liquidity 三字段仍在**。
+- focused 6 模块 `Ran 781 tests in 350.9s ... OK`（`receipt:e6fa656ce30d071aa0b86aeb`，bundle 已带）；schema 与 example 过 JSON/Draft7；`git diff --check` 干净。
+
+**未动**
+
+`a_short_m67_effect_contract_legacy_migrations.json` 两处历史记录按设计保留（历史产物走既有 legacy 路径）；`runners/a_short_phase5_engine.py` 的逐票 liquidity 风控逐字未改。
+
+**下一步注意事项**
+
+- 将来要恢复市场级成交额，**必须另开 schema-first 刀并同时给出真实消费者**，不许以「先留着攒历史」为由加回占位——日成交额是落定的历史事实、随时可回取，没有 PIT 脆弱性，这条理由不成立。
+
+## 2026-08-08 追加：序 13 独立审查 —— PASS（市场级 liquidity 删除式退休）
+
+### 判定
+
+**PASS，已提交并合入 master。** 按用户 2026-08-05 的裁决「删」执行，删得干净利落。
+
+### 我实际验了什么
+
+- **删除类最该验的那条反向控制**：`market_context` 的 `additionalProperties=false`，所以夹带旧 `liquidity` 的 payload 现在**会被拒**（实测 `Additional properties are not allowed ('liquidity' was unexpected)`），不带它的当前 example 正常通过。删除是真生效，不是只关掉生产者而 schema 仍放行。
+- **逐票 `candidates[].liquidity` 未动**：8 个字段俱在。短线真正的流动性风险在个股出不去，那道防线原样保留。
+- **残留扫描**（排除 SESSION_LOG / register / handoff 三处历史面）：7 处命中全部合法——历史迁移登记 4 处、本刀新增的退休说明 2 处、新增残留守卫自己的 `RETIRED` 元组 1 处；生产者与消费者侧零命中。
+- **契约动态结算，没留假叶**：`static_contract_error()=None`；叶 402 → 400；`producer_constant_null` 65 → 63——这两条叶本来就是 AST 派生的「生产者写死 None」，**不在未判定余量里**，所以 pending 与冻结基线正确地维持 225 未动，序 11 的棘轮也没被误触发。
+- 焦点超集 `Ran 253 tests in 197.5s ... OK`（`receipt:5e7d80535dc91381a53a733d`）。
+
+### 全量的处置
+
+**本轮按用户指示不起全量**，改按 rule 4 引用执行方记账：ledger `2556 OK`、`count_gate_equal=True`、`serial_tail=[]`，且其 fingerprint 与我现算的代码态逐字相同。§6a 未起独立 agent：纯删除、无新增 fail-closed 引擎 / provider / secret 面，按 rule 8 起 agent 属过度审查。
+
+### 未覆盖维度与诚实边界
+
+未真跑 EGS 端到端产一份 analysis_input，删除后的产物形状由 schema 校验与 example/fixture 覆盖推断；`a_short_m67_effect_contract_legacy_migrations.json` 里那 4 处历史登记只确认存在、未逐条核其迁移语义。
+
+### 下一步
+
+序 13 收口。队列剩序 14（breadth，「涨停指数」那一叶永久 unavailable、只能做部分）、序 15（volatility，前置已解方案 A），以及文末两把小刀（①触发周成绩对账 ②变化率族）；顺位 2 的融资过热门通电仍等你拍阈值与现金系数。

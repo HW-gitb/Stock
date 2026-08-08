@@ -1451,10 +1451,13 @@ def export_analysis_input(df_full, watch_df, tier1_final, latest_td, trade_dates
                 "csi300_pct_change_window": csi300_pct_change_window,
                 "csi300_window": _csi300_window_metadata(trade_dates),
             },
-            "liquidity": {
-                "market_turnover_amount": None,
-                "median_amount_20d": None,
-            },
+            # Market-level `liquidity` retired 2026-08-08 (queue item 13): both
+            # fields were permanently null and had no consumer.  v14.2's regime
+            # triggers do not include turnover, so wiring one would have invented
+            # a rule outside the frozen spec.  Per-name
+            # `candidates[].liquidity` is untouched -- that is where the real
+            # short-horizon liquidity risk lives.  No runtime alias, no
+            # placeholder: a permanently-null public field is a false contract.
             "northbound": {
                 "net_flow_5d": northbound_flow,
                 "status": northbound_status,

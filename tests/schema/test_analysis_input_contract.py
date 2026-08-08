@@ -383,5 +383,63 @@ class AnalysisInputContractTest(unittest.TestCase):
             validate_analysis_input_contract(payload)
 
 
+class RetiredMarketLevelLiquidityTest(unittest.TestCase):
+    """Market-level `liquidity` is retired, not hidden behind a placeholder.
+
+    Both of its fields were permanently null with no consumer anywhere. v14.2's
+    regime triggers do not include turnover, so wiring one would have invented a
+    rule outside the frozen spec -- and a permanently-null public field is a
+    false contract that invites exactly that. Per-name `candidates[].liquidity`
+    is a different thing and stays.
+    """
+
+    RETIRED = ("market_turnover_amount", "median_amount_20d")
+
+    def _schema(self):
+        return json.loads((ROOT / "schemas" / "analysis_input.schema.json")
+                          .read_text(encoding="utf-8"))
+
+    def test_the_current_schema_no_longer_exposes_market_level_liquidity(self):
+        market_context = self._schema()["properties"]["market_context"]
+        self.assertNotIn("liquidity", market_context["properties"])
+        self.assertNotIn("liquidity", market_context["required"])
+
+    def test_a_payload_that_still_carries_it_is_refused(self):
+        payload = cloned_minimal_analysis_input_payload()
+        validate_analysis_input_contract(payload)          # the honest one passes
+        payload["market_context"]["liquidity"] = {
+            field: None for field in self.RETIRED}
+        with self.assertRaises(Exception) as caught:
+            validate_analysis_input_contract(payload)
+        self.assertIn("liquidity", str(caught.exception))
+
+    def test_the_producer_no_longer_writes_it(self):
+        source = (ROOT / "A-EGS" / "egs_main.py").read_text(encoding="utf-8")
+        for field in self.RETIRED:
+            self.assertNotIn(f'"{field}"', source, f"{field} is still produced")
+
+    def test_no_consumer_reads_the_retired_market_level_path(self):
+        """Residue sweep over the surfaces that could resurrect it."""
+        offenders = []
+        for relative in ("A-EGS/egs_main.py", "runners/a_short_phase5_engine.py",
+                         "runners/a_short_weekly_pipeline.py",
+                         "runners/a_short_m67_render.py",
+                         "schemas/analysis_input.schema.json",
+                         "schemas/examples/analysis_input.example.json"):
+            text = (ROOT / relative).read_text(encoding="utf-8")
+            for field in self.RETIRED:
+                if field in text:
+                    offenders.append(f"{relative}:{field}")
+        self.assertEqual(offenders, [],
+                         "the retired market-level path may only survive in legacy "
+                         "migration records and the coverage note")
+
+    def test_per_name_liquidity_is_untouched(self):
+        candidate = (self._schema()["$defs"]["candidate"]["properties"]["liquidity"]
+                     ["properties"])
+        for field in ("avg_amount_5d", "avg_amount_20d", "turnover_rate"):
+            self.assertIn(field, candidate)
+
+
 if __name__ == "__main__":
     unittest.main()

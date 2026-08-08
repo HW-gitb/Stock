@@ -75,10 +75,6 @@
       "consecutive_board_height": null,
       "csi300_pct_change_window": null
     },
-    "liquidity": {
-      "market_turnover_amount": null,
-      "median_amount_20d": null
-    },
     "northbound": {
       "net_flow_5d": null,
       "status": "unknown"
