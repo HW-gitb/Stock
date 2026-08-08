@@ -32,7 +32,7 @@ P0V2_CONTRACT_LEGS = (
     "runtime_wiring_contract",
 )
 
-# Every direct ``inspect.getsource`` source-identity seam in the seven tracks.
+# Every direct ``inspect.getsource`` source-identity seam in the registered tracks.
 # A new call fails this scan until its persisted root and pre-freeze gate are
 # named.  This turns the parking requirement into an opt-out review gate rather
 # than another opt-in fingerprint list.
@@ -711,7 +711,7 @@ class PreFreezeEvidenceModeTests(unittest.TestCase):
             self.assertLess(cached.currsize, cached.maxsize)
 
     def test_real_epoch_binding_sources_fit_the_tree_cache(self):
-        """All seven A-short track bindings must fit without tree-cache eviction."""
+        """All registered A-short track bindings must fit without tree-cache eviction."""
         epoch_mode._cached_semantic_source_tree.cache_clear()
         epoch_mode._semantic_module_contract_from_source.cache_clear()
         epoch_mode._semantic_function_contract_from_source.cache_clear()

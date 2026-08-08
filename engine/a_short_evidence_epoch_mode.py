@@ -2,8 +2,8 @@
 
 Why this exists (2026-07-25, user-directed)
 -------------------------------------------
-The seven A-short comparison tracks (P0/v2, P1, P2, P3, P4a, P5, and
-theme_forward_comparison) each bind an
+The eight A-short comparison tracks (P0/v2, P1, P2, P3, P4a, P5,
+theme_forward_comparison, and the margin-overheat cash-control track) each bind an
 "epoch fingerprint" that hashes whole implementation files -- among them
 ``runners/a_short_weekly_pipeline.py``, ``runners/a_short_phase5_engine.py``,
 ``A-EGS/egs_main.py``, weekly schemas and runtime presets.  The intent was
@@ -94,6 +94,7 @@ TRACKS = (
     "p4a_overlay_adjudication",
     "p5_industry_weight",
     "theme_forward_comparison",
+    "a_short_margin_overheat_cash_control",
 )
 
 ROOT = Path(__file__).resolve().parents[1]

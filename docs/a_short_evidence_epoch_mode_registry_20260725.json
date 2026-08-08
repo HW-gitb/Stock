@@ -8,6 +8,7 @@
     "p3_final_action_validation": "pre_freeze_audit_only",
     "p4a_overlay_adjudication": "pre_freeze_audit_only",
     "p5_industry_weight": "pre_freeze_audit_only",
-    "theme_forward_comparison": "pre_freeze_audit_only"
+    "theme_forward_comparison": "pre_freeze_audit_only",
+    "a_short_margin_overheat_cash_control": "pre_freeze_audit_only"
   }
 }

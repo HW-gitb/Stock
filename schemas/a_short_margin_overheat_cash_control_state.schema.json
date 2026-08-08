@@ -1,0 +1,49 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "a_short_margin_overheat_cash_control_state",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_name",
+    "schema_version",
+    "track_id",
+    "stage",
+    "mode",
+    "clock_status",
+    "calendar_effective_weeks",
+    "trigger_effective_weeks",
+    "evidence_status",
+    "comparison_verdict",
+    "production_unchanged",
+    "reason"
+  ],
+  "properties": {
+    "schema_name": {"const": "a_short_margin_overheat_cash_control_state"},
+    "schema_version": {"const": "1.0.0"},
+    "track_id": {"const": "a_short_margin_overheat_cash_control"},
+    "stage": {"enum": ["stage_a", "stage_b"]},
+    "mode": {"enum": ["pre_freeze_audit_only", "frozen_enforced"]},
+    "clock_status": {"enum": ["not_started", "running", "review_due"]},
+    "calendar_effective_weeks": {"type": "integer", "minimum": 0},
+    "trigger_effective_weeks": {"type": "integer", "minimum": 0},
+    "evidence_status": {"enum": ["insufficient_data", "accumulating", "review_due"]},
+    "comparison_verdict": {"enum": ["not_evaluated", "inconclusive", "supported", "not_supported"]},
+    "production_unchanged": {"const": true},
+    "reason": {"type": "string", "minLength": 1}
+  },
+  "allOf": [
+    {
+      "if": {"properties": {"mode": {"const": "pre_freeze_audit_only"}}},
+      "then": {
+        "properties": {
+          "clock_status": {"const": "not_started"},
+          "calendar_effective_weeks": {"const": 0},
+          "trigger_effective_weeks": {"const": 0},
+          "evidence_status": {"const": "insufficient_data"},
+          "comparison_verdict": {"const": "not_evaluated"},
+          "reason": {"const": "pre_freeze_audit_only"}
+        }
+      }
+    }
+  ]
+}

@@ -1,5 +1,49 @@
 # Session Log
 
+## 2026-08-08 — Claude 复审 Pass-with-Required（融资过热刀1：五条腿闭，零周开口留给刀2）
+
+- **Verdict/Action**: Pass-with-Required，已提交并合入 master。五条腿逐条在**真实路径**复验通过（临时 registry 文件真翻 frozen，不 mock 强门）：计数/准入两个入口都要过 `evidence_counts_toward_clock`（抛错也算不通过）、verdict 任何 mode 都拒、pre-freeze `evidence_status` 已钉、越界常量下拒绝产出而不是产出一份说谎的 `production_unchanged=true`、冻结收据必须过共享门。四条 Optional 全闭。合入不代表融资过热可通电或时钟已起。
+- **Required**: `R-ASHORT-MARGIN-OVERHEAT-KNIFE1-VALIDATE-STATE-ZERO-WEEK-FROZEN-CARVE-OUT`（P3，**刀 2 落地任何持久化 state 之前必须闭**）。上一轮那条五腿 R-ID 已 closed；新记两条 Optional。机制、复现与 Closure tests 只在 `docs/system_risk_register.md`。
+- **Verify**: review-evidence:3fdd8dcdbf2c。验收超集 `Ran 85 tests in 16.610s` / `OK`（`receipt:4257446223b2b329b9f7db70`）。九条植入八红一绿：八条各自精确点名对应用例，唯一全绿那条（地板换字面量 4）因契约值本就是 4 而无意义，非守卫缺口。反向控制：pre-freeze 默认路径与 `load_governance`/`stage_arm_ids`/`current_epoch_id` 均未被新门误伤。§6a agent 起 1 个，仅其零周开口一条经我真实 registry 复现后采信。全量不跑（rule 3 不触发）。超时原因:等 §6a agent 报告并复现其唯一有效发现。
+- **Next**: Codex：执行
+
+## 2026-08-08 — Codex executor/fixer：融资过热 comparison-only 刀1 P2 五腿修复（OPEN-NOT_VERIFIED，待独立复审）
+
+- **Verdict/Action**：只在 `D:\cnhea\Codex\worktrees\c2aa\Stock` 修复 `R-ASHORT-MARGIN-OVERHEAT-KNIFE1-CLOCK-AND-FREEZE-GATES-RUN-ON-A-WEAKER-AUTHORITY`；五条 Required 与 O4–O7 已实现，主树和 `ashort_r1` 未触碰，未提交。
+- **Required**：L1 shared `evidence_counts_toward_clock` 接入 build/validate frozen counting；L2 `validate_state` 全 mode 禁止非 `not_evaluated`；L3 pre-freeze `evidence_status` const；L4 三生产常量 helper 接入 build/validate；L5 receipt 前调用 `validate_frozen_transition`。O4 governance trigger floor、O5 JSON numeric-type recursion、O6 `..._by_document`、O7 handoff 节序均已处理。
+- **Verify**：固定 `C:\Users\cnhea\AppData\Local\Programs\Python\Python313\python.exe` / `Python 3.13.8`；聚焦超集 `Ran 140 tests in 17.573s` / `OK`，`RESULT tier=focused status=PASS exit=0 tests=140`，receipt `receipt:3604bec2ce75db54c97024d1`。五条 Required 的点名断言分别在门中和后精确转红，恢复后目标文件 SHA-256 一致；full lane=`NOT_TRIGGERED`（无生产 importer）。
+- **Pre-Codex self-review**：A-F checked；matrix=10-grid；register=updated；handoff=updated；focused=140 OK；full-lane=not_triggered；door=route+doc-governance+README 140 OK；调用链/直接消费者/schema/source-binding/写盘边界已同步 handoff/register；provider/live/weekly/full lane/sub-agent 未运行。
+- **Next**：Claude Code：独立复审本 R-ID；独立复审通过前不提交。
+
+## 2026-08-08 — Claude 复审 FAIL（融资过热刀1：点名的两腿已闭，同类的时钟门/verdict 门/冻结门未闭）
+
+- **Verdict/Action**: FAIL，不提交、不合入。上轮两条 Required 确实按类修在门本身并经我逐条复验闭合，三条 Optional 也闭。拦住的是同一个类的其余出口：这条轨是八条里**唯一**用私有 `_mode()` 字符串给自己授权时钟的（其余七条全门在 `evidence_counts_toward_clock`），它把强门在 `:141` 再导出一次却从不调用；`validate_state` 只在 pre-freeze 分支拦 verdict；`production_unchanged` 是 schema 字面量不是被核的事实；冻结收据不问共享冻结门。
+- **Required**: `R-ASHORT-MARGIN-OVERHEAT-KNIFE1-CLOCK-AND-FREEZE-GATES-RUN-ON-A-WEAKER-AUTHORITY`（P2，五条腿一次封）。上轮两条 R-ID 已 closed，四条 Optional 新记。机制、我的探针复现、Required repair 与逐腿 Closure tests 只在 `docs/system_risk_register.md`（单一来源，本处不复述）。
+- **Verify**: review-evidence:1559f17ad9b0。独立复跑验收超集 `Ran 76 tests in 19.162s` / `OK`（`receipt:f26ef936f7054091bf11e865`）。上轮四条植入四红、控制组先绿、还原逐字节一致。新五腿全部我自跑复现（临时 registry 翻 frozen，不打私有函数）：强门抛错时 `build_state(24,8)` 仍给 24 周 `review_due`；`supported`+0 周被 `validate_state` 接受；pre-freeze `evidence_status=review_due` 被接受；越界常量下产物仍自称 `production_unchanged=true`；冻结收据发出而共享门抛错。§6a agent 已起 1 个，8 条结论逐条复现后才采信。全量不重跑（rule 3 不触发）。超时原因:等 §6a agent 报告并逐条自跑复现。
+- **Next**: Codex：修复
+
+## 2026-08-08 — Codex 修复（序19后续融资过热 comparison-only 刀1）
+- **Verdict/Action**：按用户最新 `修复审查建议。不是流程问题。` 完成当前审查的两条 Required 与三条 Optional；只改审查范围内的状态机、测试和 state schema，工作树待 Claude Code 独立复审。
+- **Required**：`R-ASHORT-MARGIN-OVERHEAT-KNIFE1-STATE-COUNTS-WEEKS-ON-A-CALLER-SUPPLIED-MODE`、`R-ASHORT-MARGIN-OVERHEAT-KNIFE1-TRIGGER-STARVED-CHECKPOINT-SAYS-REVIEW-DUE`；完整修复、边界与 closure 证据见 `docs/system_risk_register.md`（单一来源）。
+- **Verify**：固定 Python 最终聚焦超集 `tests.test_a_short_margin_overheat_cash_control tests.test_a_short_evidence_epoch_mode tests.test_readme_route_row_length tests.test_route_doc_ledger_status_consistency tests.test_doc_governance_guard`：`Ran 131 tests in 19.377s` / `OK`，`RESULT tier=focused status=PASS exit=0 tests=131`，receipt `receipt:e89e408dd305cb7f38166260`；py_compile/diff-check=exit 0；full-lane=NOT_VERIFIED（修复后未重跑）。
+- **Next**：Claude Code：复审序19后续融资过热 comparison-only 刀1
+- **Pre-Codex self-review**：A-F checked / matrix=2 Required + 3 Optional 全部处置；register=updated；handoff=updated；focused=20 OK；full-lane=not_triggered；door=route+doc-governance+README 66 OK，receipt `receipt:e615163e689219e1b04eeb00`。
+
+## 2026-08-08 — Claude 审查 FAIL（融资过热 comparison-only 刀1：pre-freeze 锁住了 verdict，没锁住计数）
+
+- **Verdict/Action**: FAIL，不提交、不合入。契约本身扎实：schema 整段 const 钉死独立 namespace 与两阶段 arm，第二问题·第五 arm·其他 effect surface·production 开关·history backfill·跨 namespace ledger 全部被拒；三条生产常量逐字未改且那道门实测承重；epoch 八轨互不相同、全 pre-freeze。拦住的是两件：状态机的 mode 可由调用方参数越过 registry 计周；触发样本不够的检查点却报 `review_due`。
+- **Required**: `R-ASHORT-MARGIN-OVERHEAT-KNIFE1-STATE-COUNTS-WEEKS-ON-A-CALLER-SUPPLIED-MODE`(P3)、`R-ASHORT-MARGIN-OVERHEAT-KNIFE1-TRIGGER-STARVED-CHECKPOINT-SAYS-REVIEW-DUE`(P3)；三条 Optional 与「复核成立无须返工」同条记录。机制、探针复现、Required repair 与 Closure tests 只在 `docs/system_risk_register.md`（单一来源，本处不复述）。
+- **Verify**: review-evidence:2da5e228c067。独立复跑验收超集 `Ran 72 tests in 16.507s` / `OK`（`receipt:288f6dc416cc8851fe584e5f`，与执行方计数一致）。全量按 rule 4 引用执行方 ledger `status=PASS tests=2615 elapsed=123.4s`、fingerprint `7ce9f4906018`，不重跑。两条 Required 由我自写探针在生产路径坐实。植入两条：A 把生产常量门改成 no-op → 17 条仍全绿（该门无回归守卫，记 O1）；B 把 pre-freeze 归零改成透传 → `FAILED (errors=1)`；两次还原逐字节一致。§6a agent 未起——它是 PASS 前置门，本轮 FAIL；复审转 PASS 前须补起。
+- **Next**: Codex：修复
+
+## 2026-08-08 — Codex executor/fixer：序19后续融资过热 comparison-only 首刀（OPEN-NOT_VERIFIED）
+
+- **Verdict/Action**：按桌面方案直接执行刀1 schema/governance-first；建立独立第八条 epoch 轨和 pre-freeze state machine，未改序19生产常量或生产消费链。
+- **Required**：`R-ASHORT-SEQ19-MARGIN-OVERHEAT-CASH-CONTROL-KNIFE1` 已写入 `docs/system_risk_register.md`；完整问题、根因、调用链、schema/source-binding、写盘边界和负向控制只见 register 与 A-short 主 handoff。
+- **Verify**：固定主 Python `C:\Users\cnhea\AppData\Local\Programs\Python\Python313\python.exe` / `Python 3.13.8`；聚焦 `Ran 72 tests in 17.805s` / `OK`，`RESULT tier=focused status=PASS exit=0 tests=72`，receipt `receipt:fcd694014eaf4a7e70df54bd`；最终 full lane `RESULT status=PASS exit=0 tests=2615 elapsed=123.4s deadline=860s`；door=route+doc-governance 55 OK（Ran 55 tests in 1.116s；receipt `receipt:941c305bc930402892b3e969`）；pre-commit exit=0，guards `Ran 14` + `Ran 41` / `OK`；NOT_VERIFIED=provider/live/真实前向样本/用户冻结批准/独立 review/commit/push/merge/grep-dependent hook branches。
+- **Pre-Codex self-review**：A-F checked；matrix=complete；register=updated；handoff=updated；focused=72 OK；full-lane=2615 OK；freeze/production write path=untouched；provider/live/sub-agent=NOT_RUN。
+- **Next**：`Claude Code：审查序19后续刀1`。
+
 ## 2026-08-08 — Claude 自修自审（CRLF 收据与产出它的写盘口）
 
 - **Verdict/Action**: 按用户令自修自审。不是只把那一份产物归一：根因是 `ConvertTo-Json` 在 Windows 产出 CRLF、调用方再补一个裸 LF，于是 `Write-M67Utf8NoBom` 写出的**每一份**收据/墓碑/清单都是 mixed，谁把它 track 进来谁就破 pin。归一化放进那道唯一的写盘口（三个调用点零改动全覆盖），并把这条不变式钉成断言。

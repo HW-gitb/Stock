@@ -3069,3 +3069,289 @@ Claude Code 独立审查、真实 provider/live/`-Account` weekly、生产效果
 **未覆盖**：全量（用户本轮明令不跑）；`weekly_screening.ps1` 真跑；`-Account`；g8 单门语义守卫。
 
 **下一步**：无（本刀收口，随本轮提交并合入 master）。
+
+## 2026-08-08 追加：序19后续融资过热 comparison-only 首刀（Codex executor/fixer，OPEN-NOT_VERIFIED）
+
+### 本次交接文档作用与追加位置
+
+本条追加在 A-short 主队列交接文档末尾；`docs/handoff/README.md` 将本文件作为 A-short 各 Seq N 刀的主 handoff。该条只记录本刀执行事实和下一步路由；完整风险事实的单一来源是 `docs/system_risk_register.md` 对应 R-ID。
+
+### 改了什么
+
+桌面方案要求先把 `margin_overheat_cash_control` 独立成 comparison-only 子轨。本刀新增 program/state schema、治理 preset、`engine/a_short_margin_overheat_cash_control.py` 及 17 条直接测试；shared epoch `TRACKS`/registry 增加独立轨，`docs/README.md` 增加薄路由。Stage A 固化 baseline `no_margin_discount` 与三个 criterion challenger（level p95、20d ratio-change p90、20d ratio-change p95），所有测量 cash factor 为 0.8；Stage B 固化 baseline 1.0 与 0.9/0.8/0.7 cash-factor challengers。生产三常量仍为 `None` / `None` / `False`。
+
+### 问题与根因
+
+当前树已有序19生产侧融资过热事实和 cash stack，但没有专属 namespace、ledger/batch、multiplicity、两个阶段的 arm、calendar/trigger 双时钟和正交 evidence/verdict 状态。复用 D1/D3、IV、breadth、northbound、theme 或旧序19产物会造成问题混合、历史 backfill 和 evidence double-count；因此本刀止于 schema/governance/pre-freeze，不做历史回填、不起 12/24/36 时钟。
+
+### 调用链、直接消费者、schema/source-binding
+
+调用链为 `preset/schema` → `load_governance`/`validate_governance` → shared epoch registry `TRACKS`/`_mode`/`evidence_counts_toward_clock` → `current_epoch_id`、`validate_source_references`、`build_state`/`validate_state`；直接消费者是新增 engine、两份 schema、治理 preset、README route 和本刀 tests。source-binding 只接受结构化 `analysis_input.market_context.margin_overheat`、同周 official M6.7 selection plan、approved comparison daily cache，且绑定 decision/run/price/source digest/criterion/arm/batch/epoch；拒绝 prose、其他 market_context 和其他 comparison verdict。semantic projection 忽略 annotations/格式，但会因 criterion、arm、trigger gate、cash stack、capital、allocation 或 settlement decision 字段变化而换 epoch。
+
+### 写盘边界、负向控制与自审
+
+本刀只写 tracked schema/preset/engine/test/README/治理 handoff；冻结 admission 只返回 `write_performed=False`，未写 runtime state、batch、provider raw、weekly artifact、production artifact。反向控制覆盖第二问题、第五 arm、其他 effect surface、production/automatic switch、history backfill、跨 namespace、非法 source、trigger>calendar、pre-freeze synthetic 36 周、pre-freeze verdict、Stage B 缺 Stage A receipt、冻结 gate 任一缺失，以及 production 三常量变化。A-F：已枚举 direct consumers；旧 D1/D3/seq19 生产链只读核对且未改；schema/source-binding/negative controls 已有直接断言；JSON 解析、`py_compile`、`git diff --check` 由 final full ledger 完成；没有 sub-agent/provider/live。
+
+### 固定 Python、精确测试命令与原始终态
+
+- 固定解释器：`C:\Users\cnhea\AppData\Local\Programs\Python\Python313\python.exe`，版本 `Python 3.13.8`；启动时 `git status --short --untracked-files=all` 为空。
+- 聚焦命令：`Set-Location -LiteralPath 'D:\cnhea\Codex\worktrees\c2aa\Stock'; & 'C:\Users\cnhea\AppData\Local\Programs\Python\Python313\python.exe' '.tools\bounded_unittest.py' focused 300 -- tests.test_a_short_margin_overheat_cash_control tests.test_a_short_evidence_epoch_mode tests.test_readme_route_row_length`。
+- 聚焦原始终态：`Ran 72 tests in 17.805s` / `OK`；`RESULT tier=focused status=PASS exit=0 tests=72`；receipt `receipt:fcd694014eaf4a7e70df54bd`。
+- final full lane 命令：`Set-Location -LiteralPath 'D:\cnhea\Codex\worktrees\c2aa\Stock'; & 'C:\Users\cnhea\AppData\Local\Programs\Python\Python313\python.exe' '.tools\full_pack_ledger.py' run a_short 'Knife 1 final margin-overheat cash-control contract and shared epoch registration after epoch-call-chain repair' 'receipt:fcd694014eaf4a7e70df54bd' 860 -- discover -s tests -p 'test_a_short*.py'`。
+- full 原始终态：`RESULT status=PASS exit=0 tests=2615 elapsed=123.4s deadline=860s`，fingerprint `7ce9f4906018`；ledger 前置 `STATIC status=PASS diff_check=PASS py_compile=4`。
+
+NOT_VERIFIED：provider/live/真实 weekly/账户、真实前向触发样本、12/24/36 clock、用户 design-final-before-freeze 批准、Claude Code 独立审查、commit/push/merge，以及当前 Git shell 缺少 `grep` 导致的 pre-commit 无暂存文件分支/提醒逻辑。focused/full 自动化 PASS 不等于 review/live/ship PASS；Codex 不提交。交接门禁命令 `tests.test_route_doc_ledger_status_consistency` + `tests.test_doc_governance_guard` 的原始终态为 `Ran 55 tests in 1.116s` / `OK`，`RESULT tier=focused status=PASS exit=0 tests=55`，receipt `receipt:941c305bc930402892b3e969`；当前树 pre-commit exit=0，固定 Python guard 分别 `Ran 14 tests in 0.044s` / `OK` 与 `Ran 41 tests in 1.180s` / `OK`，但 shell 输出两次 `grep: command not found`。下一步命令：`Claude Code：审查序19后续刀1`。
+
+### NOT_VERIFIED、审查/提交边界与下一步命令
+
+
+## 2026-08-08 追加：序19后续融资过热 comparison-only 刀1 独立审查 —— FAIL（两条 P3）
+
+**判定**：FAIL，未提交、未合入。刀 1 的契约层做对了大部分：schema 用整段 `const` 把独立 namespace / 两阶段 arm / boundary 钉死，八条 epoch 轨互不相同且全部 `pre_freeze_audit_only`，三条生产常量逐字未动。拦住它的是同一个不变式的另一半——「pre-freeze 不得计数」这一半的权威链断在调用方参数上，以及触发样本不足时的状态标签与权威件写的不一致。两条 finding 的完整正文只在 `docs/system_risk_register.md`。
+
+**我实际验了什么（区别于执行方转述）**
+- 独立复跑执行方的验收超集（`tests.test_a_short_margin_overheat_cash_control` + `tests.test_a_short_evidence_epoch_mode` + `tests.test_readme_route_row_length`）：`Ran 72 tests in 16.507s` / `OK`，`receipt:288f6dc416cc8851fe584e5f`，计数与执行方一致。
+- 全量按 AGENTS rule 4 **不重跑**，引用执行方 ledger `RESULT status=PASS exit=0 tests=2615 elapsed=123.4s`、fingerprint `7ce9f4906018`（用户本轮亦明令：执行方已跑全量则我不起）。
+- 整读被消费的函数体：`build_state` / `validate_state` / `validate_governance` / `semantic_projection` / `validate_source_references` / `validate_freeze_admission`，以及共享引擎 `engine/a_short_evidence_epoch_mode.py` 的 `_track_modes_from_source` / `_mode` / `_require_track` / `evidence_counts_toward_clock` / `pre_freeze_fingerprint`。
+- 自写探针（不是读代码推断）：registry 实测 pre-freeze 而 `build_state(36, 10, mode=FROZEN)` 产出计周状态且 `validate_state` 接受；`build_state(36, 3, mode=FROZEN)` 给出 `review_due` 而非权威件要求的 `insufficient_data`；三条生产常量各自 monkeypatch 后 `load_governance` 均被拒（正控）；八条轨 pre-freeze 指纹两两不同、全 pre-freeze、`evidence_counts_toward_clock()=False`；`validate_source_references` 对合法子集也拒（精确集合语义）。
+
+**植入对照（C2：patch 的是门本身，不是判据的来源）**
+- A：把 `validate_governance` 里「三常量越界即 raise」的 `if` 改成 `if False:` → `Ran 17 tests / OK`。门是承重的（正控已证），但**没有任何测试钉住它**，删掉不会红 → 记 Optional O1。
+- B：把 pre-freeze 分支的两个 `0` 改成透传实参 → `FAILED (errors=1)`。这一半有网。
+- 控制组（未改动）`Ran 17 tests / OK`；两次还原后 sha256 与改前逐字节一致。
+
+**未覆盖维度与诚实边界**
+- 刀 2/3/4 在本树无任何可审实现，本轮不对其作代码级判断；顺位 2 的前置硬闸 ②（候选频率 source-bound replay）与 ③（专属 semantic freeze manifest）同样尚无实现可核。
+- §6a 独立对抗 agent 未起：本刀命中「新增 ≥50 行 fail-closed validator」档，但 §6a 是 PASS 前置门而本轮为 FAIL；复审要转 PASS 必须先补起一个。
+- 未跑真实 weekly、未做 provider 取数、未验证用户尚未作出的「设计定稿前单轨先行 frozen」裁决——该裁决缺席时本轨只能停在 `pre_freeze_audit_only`，这一点代码与权威件一致。
+
+**下一步**：`Codex：修复`（两条 Required + 三条 Optional，修完再审；转 PASS 前补 §6a agent）。
+
+## 2026-08-08 追加：序19后续融资过热 comparison-only 刀1 复审 —— FAIL（同类未封，一条 P2 五腿）
+
+**判定**：FAIL，未提交。上一轮我点名的两条 P3 是真修好了，而且修在门本身：`build_state` 与 `validate_state` 两个入口都改成以 shared epoch registry 为准（我只点了前者，执行方把同类的第二个入口一起收了），触发地板提到 frozen 分支最前并消掉了那两支等价死代码；三条 Optional 一并闭。拦住的是**同一个类的其余出口**——这条轨给自己授权时钟/裁决/冻结时，用的权威比共享模块弱，或者根本没有。finding 正文只在 `docs/system_risk_register.md`。
+
+**我实际验了什么（区别于执行方与子 agent 的转述）**
+- 独立复跑验收超集：`Ran 76 tests in 19.162s` / `OK`，`receipt:f26ef936f7054091bf11e865`。
+- 上一轮两条 Required 的闭合，我在**真实路径、不打 mock** 下复验（执行方的新用例是靠 `patch.object(epoch_mode, "_mode")` 造 frozen registry 的，所以必须另外确认没有 mock 时结论一样）：显式 frozen mode 被拒、手写 frozen 计周状态被拒、默认路径仍归零、`(36,3)/(24,4)/(12,4)` 三例标签正确。
+- 四条植入对照（patch 的都是门本身）：中和 `build_state` 交叉核对 / `validate_state` 交叉核对 / 触发地板 / 生产常量门 → 各自精确点名对应测试；**生产常量门那条上一轮同一植入是全绿**，正是 O1 补的网现在生效的证据；控制组 `Ran 21 tests / OK`，四次还原 sha256 逐字节一致。
+- 新五腿全部**我自己跑出来**：用临时 registry 文件把本轨翻 `frozen_enforced`（只重定向 `TRACK_MODE_REGISTRY_PATH`，与本仓 `tests/_a_short_epoch_mode_test_utils.py` 同手法，不打私有函数），实测 `evidence_counts_toward_clock()` 抛错而 `build_state(24,8)` 仍给 `review_due` + 24 周；`supported` + 0 周被 `validate_state` 接受；pre-freeze `evidence_status=review_due` 被接受（同批对照里另外四个兄弟字段都被拒）；三常量越界时产物仍自称 `production_unchanged=true` 且被再次接受；`validate_freeze_admission` 发出干净收据而 `epoch_mode.validate_frozen_transition` 抛错。
+- 全仓对照坐实这不是风格问题：其余七条轨的时钟/裁决**全部**门在 `evidence_counts_toward_clock(...)`（六个文件九处），本轨是唯一改用私有 `_mode()` 的，且它在 `:141` 把强门原样再导出却从不调用。
+
+**§6a 独立对抗 agent**
+按 §6a 最高危档起了 1 个（新增 ≥50 行 fail-closed validator），read-only、限制在本工作树、禁改禁联网。它报 8 条：5 条经我自跑复现后写成上面那条 Required 的五条腿，2 条并入 Optional（governance 不钉 JSON 数字类型导致纯格式重写换 epoch；stage B 的门只存在于文档里、其测试名大于它证明的东西），1 条「跨轨 `epoch_id` keyspace 是否会撞」它自己标 NOT_VERIFIED、我也没构造出碰撞，**不入册**。一条都没有直接采信。
+
+**未覆盖维度与诚实边界**
+- 刀 2/3/4 仍无可审实现；顺位 2 前置硬闸 ②（source-bound replay 频率证据）与 ③（专属 semantic freeze manifest）同样无实现可核。
+- 全量本轮未跑：delta 只有新模块 + 其测试 + 其 state schema，全仓 grep 证明零生产 importer，rule 3 四项均不成立；上一轮 ledger `PASS 2615` 绑的是修复前指纹，不能当本轮 full PASS。
+- `p4a_overlay_epoch` 的语义漂移在本树是既有事实（`engine/a_short_overlay_adjudication.py` 未被本刀改动），我没有与干净 checkout 逐一比对冻结包，故其成因记 NOT_VERIFIED——但它正好让 L1/L5 的对比变得可观测。
+- 未跑真实 weekly、未做 provider 取数；用户仍未作出「设计定稿前单轨先行 frozen」的裁决。
+
+**下一步**：`Codex：修复`（一条 P2 五条腿一次封，另四条 Optional 建议一并处理；修完再审）。
+
+## 2026-08-08 Codex executor/fixer：序19后续融资过热 comparison-only 刀1 审查修复（OPEN-NOT_VERIFIED，待独立复审）
+
+### 本次修复与作用
+
+用户最新 `修复审查建议。不是流程问题。` 直接授权本轮只修当前 Claude Code FAIL 的两条 Required 与三条 Optional；没有实现 harness/skill/流程基础设施。修复文件为 `engine/a_short_margin_overheat_cash_control.py`、`tests/test_a_short_margin_overheat_cash_control.py`、`schemas/a_short_margin_overheat_cash_control_state.schema.json`；既有其他 dirty 文件不在本次修复范围，不回滚、不清理。
+
+- R1 `STATE-COUNTS-WEEKS-ON-A-CALLER-SUPPLIED-MODE`：`build_state` 读取 shared epoch registry 后，显式 mode 不一致立即 raise；`validate_state` 交叉核对 state mode 与 registry。这样 registry 为 pre-freeze 时不能伪造 frozen 非零状态。
+- R2 `TRIGGER-STARVED-CHECKPOINT-SAYS-REVIEW-DUE`：frozen 状态先过触发周门槛；36/3 为 `insufficient_data` + `running` + `insufficient_trigger_weeks` + `not_evaluated`，24/4 与 12/4 为 `review_due`。
+- O1 接受：三生产常量逐一 monkeypatch 的 regression gate；O2 接受：删除 frozen 死分支；O3 接受：删除 state schema 无效整数上限。三项均已落地，无推回项。
+
+### 调用链、schema/source-binding、写盘边界
+
+调用链：`preset/schema → load_governance/validate_governance → shared epoch registry → current_mode → build_state/validate_state → state schema`。直接消费者是上述 engine、直接测试、刀 1 program/state schema 与 README route；刀 2/3/4 尚无 writer/consumer，本轮不实现。schema 仍锁定 comparison-only、pre-freeze、独立 namespace/ledger/batch/multiplicity、两阶段 arms、边界和状态枚举；source-binding 仍只接受 margin-overheat structured input、同周 official M6.7 plan、approved comparison daily cache 及其日期/digest/criterion/arm/batch/epoch 绑定。未新增 state、batch、ledger、weekly、production、provider raw、账户或订单写盘；freeze admission 仍 `write_performed=False`。
+
+### 负向控制、自审与验证
+
+负向控制覆盖 registry/mode 交叉错配、trigger-starved 36/3、24/4、12/4、三生产常量越界、schema 非法结构、跨 namespace/history backfill、source 集合、trigger>calendar、pre-freeze verdict、freeze gate 与 Stage B gate。Pre-Codex self-review：A-F checked；matrix=2 Required + 3 Optional 全部处置；register=updated；handoff=updated；focused=20 OK；full-lane=not_triggered（隔离 comparison-only state/schema/test 修复，未改 production runtime/dependency/resolver/consumer）；door=route+doc-governance+README 66 OK，receipt `receipt:e615163e689219e1b04eeb00`。
+
+固定 Python：`C:\Users\cnhea\AppData\Local\Programs\Python\Python313\python.exe`，`Python 3.13.8`。
+
+精确聚焦命令：`Set-Location -LiteralPath 'D:\cnhea\Codex\worktrees\c2aa\Stock'; & '.\.tools\run_unittest_with_repo_pythonpath.cmd' tests.test_a_short_margin_overheat_cash_control`。
+
+原始终态：`Ran 20 tests in 0.057s` / `OK`；`RESULT tier=focused status=PASS exit=0 tests=20`；receipt `receipt:fd8dc35eb7f22f0280661365`。静态命令 `& '.\.tools\codex_main_python.ps1' -m py_compile engine\a_short_margin_overheat_cash_control.py tests\test_a_short_margin_overheat_cash_control.py` 为 `exit=0`；`git -c safe.directory=D:/cnhea/Codex/worktrees/c2aa/Stock diff --check` 为 `exit=0`，仅有换行提示。
+- 最终聚焦超集命令：`Set-Location -LiteralPath 'D:\cnhea\Codex\worktrees\c2aa\Stock'; & '.\.tools\run_unittest_with_repo_pythonpath.cmd' tests.test_a_short_margin_overheat_cash_control tests.test_a_short_evidence_epoch_mode tests.test_readme_route_row_length tests.test_route_doc_ledger_status_consistency tests.test_doc_governance_guard`；原始终态：`Ran 131 tests in 19.377s` / `OK`；`RESULT tier=focused status=PASS exit=0 tests=131`；receipt `receipt:e89e408dd305cb7f38166260`。
+
+### NOT_VERIFIED、审查/提交边界与下一步命令
+
+修复后 Claude Code 独立 focused rerun、§6a 独立对抗 agent、provider/live/真实 weekly、12/24/36 真实前向 clock、用户 design-final-before-freeze 裁决、生产/ship-gate 证据均 `NOT_VERIFIED`。修复后没有重跑 full lane；此前 2615 full ledger fingerprint `7ce9f4906018` 属于修复前代码，不能作为本轮修复后的 full PASS。Codex 只实现/修复，不 stage、commit、push、merge；Claude Code 在独立复审 PASS 后负责提交 reviewed slice。下一步命令：`Claude Code：复审序19后续融资过热 comparison-only 刀1`。
+
+## 2026-08-08 追加：融资过热刀1 —— 给执行方的修复方案（reviewer 定，一次封整类）
+
+**这一节是给执行方的施工单。** finding 正文与逐腿证据在 `docs/system_risk_register.md` 的 `R-ASHORT-MARGIN-OVERHEAT-KNIFE1-CLOCK-AND-FREEZE-GATES-RUN-ON-A-WEAKER-AUTHORITY`（含十格矩阵），本节不复述，只给怎么改、改完怎么证。
+
+### 0. 先按矩阵扫，别按下面的条目扫
+
+register 那条 Required 里有一张十格矩阵（门 × 权威终点 × 状态）。**逐格判定并回填状态，空格写「未查」**。下面 L1–L5 是我这轮已经坐实的五格，不是全集——上一轮就是因为我把类写成「权威链断在调用方参数上」，扫窄了才有这一轮。判定每一格只问一句话：**这道门的权威终点是「冻结常量 / 仓库派生谓词 / 共享强门」，还是「调用方参数 / 字面量 / 无」**。后者就是没门。
+
+### 1. L1 —— 计数只认强门，不认 registry 字符串
+
+- `build_state`：在产出任何 `mode == FROZEN` 的状态之前，先要求 `epoch_mode.evidence_counts_toward_clock(TRACK_ID)` 为真。为假**或抛 `EvidenceEpochModeError`** 都必须 fail-closed（包成 `MarginOverheatCashControlError` 或原样上抛，两者都可以，但两个入口要一致）。
+- `validate_state`：`mode == FROZEN` 且周数非零时，同样要求强门为真。
+- `current_mode()` 保留，但它的职责收窄成「registry 现在说什么」，**不再是「能不能计数」的授权者**。与其余七轨对齐（`a_short_factor_comparison_v2_adjudication.py:519`、`a_short_industry_weight_comparison.py:682`、`a_short_overlay_adjudication.py:889`、`a_short_regime_action_comparison.py:441/704`、`a_short_final_action_validation_runner.py:621`、`a_short_target_policy_comparison_runner.py:360/398/449`）。
+- **必须配的反向控制**：pre-freeze 默认路径**不得**因为新门而失败。强门在 pre-freeze 下本来就返回 `False`（且当前树上 `p4a_overlay_epoch` 语义漂移会让它抛错），所以新门只能挡 frozen 分支，pre-freeze 归零路径要照常返回。这一条不写，本刀会被自己的新门锁死。
+
+### 2. L2 —— verdict 禁令从分支里提出来
+
+- `validate_state` 增加：**任何 mode 下**，刀 1 都不接受 `comparison_verdict != "not_evaluated"`。现在这条只在 pre-freeze 分支里有。
+- 留出口而不是删门：将来刀 4 要发 verdict，请写成「刀 1 的准入门不接受」，并给刀 4 留一个**显式命名、单独审查**的写入口，别把这道门删掉了事。
+
+### 3. L3 —— schema 把 pre-freeze 的最后一个字段钉上
+
+- `schemas/a_short_margin_overheat_cash_control_state.schema.json` 的 pre-freeze `then` 补 `"evidence_status": {"const": "insufficient_data"}`，与已有的 `clock_status` / 两个周数 / `comparison_verdict` / `reason` 五个兄弟对齐。
+- **只补这一格**。不要顺手给 frozen 侧加一堆 `clock_status × evidence_status` 组合约束——那是过度防御（全局 CLAUDE.md §5），本轮不要。
+
+### 4. L4 —— `production_unchanged` 变成被核的事实
+
+- 把 `validate_governance` 里那段三常量检查抽成一个可复用的判定（例如 `_production_constants_unchanged()`），`build_state` 与 `validate_state` 都调一次。
+- **越界时直接拒绝产出/准入**，而不是产出一个自称 `production_unchanged=true` 的状态。schema 的 `const: true` 可以留着——正因为越界时根本不该有状态产出。
+
+### 5. L5 —— 冻结收据必须过共享冻结门
+
+- `validate_freeze_admission` 在八项 `FREEZE_PREREQUISITES` 布尔通过之后，必须调用 `epoch_mode.validate_frozen_transition(TRACK_ID)`；它抛错就不发收据。
+- 收据里带上共享门返回的 packet identity，让刀 4 有东西可绑（`new_epoch_required: True` 现在没有任何东西实现它）。
+
+### 6. 四条 Optional（建议一并做，成本都很低）
+
+- **O4**：从 governance 读 `state_contract.min_trigger_effective_weeks`，删掉代码里的字面量 `4`。
+- **O5**：JSON Schema 分不出 `1` 和 `1.0`，所以只能在代码里挡——加一条递归检查，要求 governance 里每个数字的 Python 类型与 schema `const` 的类型一致（整数字段收整数、浮点字段收浮点）。这条在翻 `frozen_enforced` 之前**必须**闭，否则一次纯格式化重写就会静默换 epoch。
+- **O6**：`test_stage_b_is_not_available_without_stage_a_receipt_by_contract` 改名成 `..._by_document`（推荐），或补一条真门。刀 1 没有阶段切换机制，**补真门属于刀 4 范围**，本轮改名即可。
+- **O7**：把执行方上一轮的修复节移到我 FAIL 节**之后**，恢复 handoff 的 append-only 时序。
+
+### 7. 验证要求（每条腿都要，缺一条我会再打回）
+
+- **点名式断言**：每条腿一条 `assertRaisesRegex`，指名它守的那道门。**不要用泛 `assertRaises`**——序 15 信任根那一轮的教训就是泛匹配会被另一道门的报错顺带绿掉。
+- **每条腿一次植入对照**：中和该门 → 对应用例**精确转红**（红的必须是那一条，不是一片）→ 还原后 sha256 与改前逐字节一致。
+- **正控不许削弱**：现有 21 条用例必须仍全绿；`(36,3)/(24,4)/(12,4)` 三例标签、registry 交叉核对两条、生产常量门三个 subTest 都要保持。
+- **反向控制**：pre-freeze 默认路径 `build_state(36,36)` 仍返回归零状态（见 L1 那条，这是最容易被新门误伤的地方）。
+- **focused pack**：`tests.test_a_short_margin_overheat_cash_control` + `tests.test_a_short_evidence_epoch_mode` + `tests.test_readme_route_row_length`，走 `.tools\run_unittest_with_repo_pythonpath.cmd` 单入口。
+- **full lane**：`not_triggered: AGENTS rule 3; reason=改动面仍限于无生产 importer 的 comparison-only 模块 + 其测试 + 其 state schema`（全仓 grep 已证：除自身与其测试外，只有 `engine/a_short_evidence_epoch_mode.py:97` 的 `TRACKS` 注册项引用它）。
+- **door**：交出前跑 `tests.test_route_doc_ledger_status_consistency` + `tests.test_doc_governance_guard`，把终端结果贴进 Proof-of-use。
+
+### 8. 边界（本轮不许碰）
+
+不动 `MARGIN_OVERHEAT_PERCENTILE_THRESHOLD` / `MARGIN_OVERHEAT_CASH_FACTOR` / `MARGIN_OVERHEAT_PRODUCTION_EFFECT_ENABLED` 三条生产常量；不接 `_allocate_cash`、不碰 EGS/TopN/M6.7/仓位/持仓；不写 state、batch、ledger、weekly 或 production artifact；**不翻 registry 的 mode**（那要用户单独裁决）；不实现刀 2/3/4；不扩 provider 授权、不取数。修完不 commit，交独立复审。
+
+**下一步**：`Codex：修复`
+
+## 2026-08-08 Codex executor/fixer：序19后续融资过热 comparison-only 刀1 P2 Required 修复接收（OPEN-NOT_VERIFIED）
+
+### 本节用途
+本节是 reviewer 新增 P2 finding 的执行接收记录，追加在本 handoff 的真实末尾，保持 append-only 时序。
+完整 finding、materiality、五条腿矩阵和 closure 条件仍以 docs/system_risk_register.md 的 R-ASHORT-MARGIN-OVERHEAT-KNIFE1-CLOCK-AND-FREEZE-GATES-RUN-ON-A-WEAKER-AUTHORITY 为准。
+本轮用户命令只要求修复本 handoff 并在末尾新增本节，不授权把 repair plan 伪写成代码已完成。
+因此下面记录的是下一轮 Codex 修复边界、直接消费者、负向控制和验收条件，不宣称 P2 已闭。
+
+### L1 计数闸
+目标：计数只能由 shared epoch 的强门决定，不能由 registry 字符串或状态机自己的解释决定。
+build_state 在产生任何 frozen 非零 calendar/trigger state 前必须调用 epoch_mode.evidence_counts_toward_clock(TRACK_ID)。
+该强门为 False 或抛出 EvidenceEpochModeError 时必须 fail-closed，两个入口的错误边界保持一致。
+validate_state 对 frozen 非零 state 必须再次检查同一强门，不能只比较 state.mode 与 current_mode。
+registry pre-freeze 的默认 build_state(36,36) 仍必须返回零周数、not_started、insufficient_data、not_evaluated。
+frozen registry 的正向 seam 必须能产生 24/8 review_due，但共享强门异常时必须拒绝该状态。
+负向控制：强门抛错、强门返回 False、仅伪造 registry 字符串、以及 build/validate 任一入口绕过强门都要转红。
+当前状态：NOT_STARTED；本节没有修改 engine、registry、schema 或测试，也没有运行 provider/live/full lane。
+
+### L2 verdict gate
+目标：verdict 禁令必须覆盖所有 mode，而不是只在 pre-freeze 分支中阻止。
+build_state 继续拒绝 comparison_verdict 不等于 not_evaluated 的刀1调用，并保留未来刀4的显式写入口边界。
+validate_state 对任意 mode 都必须拒绝 supported、not_supported、inconclusive 等刀1 verdict。
+frozen 非零 state 也不能借 validate_state 进入 verdict；该入口只接受 not_evaluated。
+pre-freeze 合成 36 周、frozen 24/8 和 zero-week supported 三类样本必须各有点名断言。
+直接测试命令使用固定 Python wrapper，至少覆盖 test_a_short_margin_overheat_cash_control 与 test_a_short_evidence_epoch_mode。
+当前状态：NOT_STARTED；预期 closure 是每个 verdict 绕过 mutation 都使对应点名测试转红。
+
+### L3 schema
+目标：state schema 的 pre-freeze then 必须把 evidence_status 也钉成 insufficient_data。
+schemas/a_short_margin_overheat_cash_control_state.schema.json 需在既有五个 pre-freeze const 旁补 evidence_status const。
+其余 clock_status、两个周数字段、comparison_verdict 和 reason 的现有 const 不得放宽或迁移到代码-only。
+负向测试必须直接用 schema 验证 pre-freeze evidence_status=review_due、accumulating 和其他非法值均被拒绝。
+schema source-binding 仍只允许当前 margin-overheat structured sources，不能借本次修复新增 prose、其他 market_context 或其他 verdict。
+当前状态：NOT_STARTED；schema 修改后的直接测试、坏输入探针和 route/doc 门禁均需重新运行。
+
+### L4 production gate
+目标：production 三常量边界必须是 build/validate 状态链上的真实事实，而不是 production_unchanged=true 字段。
+engine/a_short_margin_overheat.py 的三个生产常量仍必须保持 None、None、False，不能被本次 P2 修复改动。
+build_state 和 validate_state 在任一状态生成或接受前都必须复用同一 production-unchanged 判定。
+monkeypatch percentile、cash factor、production effect 三个常量分别越界时，两个入口都应 fail-closed。
+对应测试必须使用点名 assertRaisesRegex，不得使用会被其他门吞掉的泛化 assertRaises。
+当前状态：NOT_STARTED；production effect、_allocate_cash、EGS、TopN、M6.7、持仓和订单边界保持未触碰。
+
+### L5 freeze gate
+目标：八项 freeze prerequisites 全 True 不能绕过 shared epoch 的 frozen transition 校验。
+validate_freeze_admission 在返回 write_performed=False receipt 前必须调用 epoch_mode.validate_frozen_transition(TRACK_ID)。
+共享 transition 抛错时必须拒绝发出 receipt，不能返回 requested_mode=frozen_enforced 的干净伪收据。
+成功路径的 receipt 仍必须声明 new_epoch_required=True、clock_starts_only_after_durable_user_approval=True 且不写盘。
+对应测试要分别覆盖共享门抛错、缺任一 prerequisite、全门通过不写盘三种结果。
+当前状态：NOT_STARTED；刀2/3/4、provider/live、真实前向 clock 和用户 frozen 裁决仍为 NOT_VERIFIED。
+
+### Optional 与交付边界
+O4：从 governance state_contract.min_trigger_effective_weeks 读取触发地板，消除代码字面量 4 的双重来源。
+O5：校验 governance JSON 数值类型与 schema const 类型一致，避免 1/1.0 重写静默改变 semantic fingerprint。
+O6：决定 stage B 是补真实代码门，还是明确降级为刀4文档契约；本刀不凭测试名宣称已接线。
+O7：本节追加在所有已有 handoff 内容之后，恢复 append-only 时间顺序，不再把执行记录插到旧 FAIL 之前。
+进入代码修复前，先逐项回填 L1-L5 矩阵、对应直接测试、反向控制和 NOT_VERIFIED 边界，不得只修 reviewer 点名的单个调用点。
+边界：固定 Python 为 C:\Users\cnhea\AppData\Local\Programs\Python\Python313\python.exe；下一步命令为 Codex：修复该 P2 Required，完成后再由 Claude Code 独立复审。
+
+## 2026-08-08 Codex executor/fixer：序19后续融资过热 comparison-only 刀1 P2 五腿修复执行收口（OPEN-NOT_VERIFIED，待独立复审）
+
+### 本轮结论与根因
+
+本轮只在 `D:\cnhea\Codex\worktrees\c2aa\Stock` 修复 `R-ASHORT-MARGIN-OVERHEAT-KNIFE1-CLOCK-AND-FREEZE-GATES-RUN-ON-A-WEAKER-AUTHORITY`；主树和 `ashort_r1` 未触碰。根因是本 comparison-only 轨在计时、verdict、production boundary、freeze receipt 四类授权点没有统一落到 shared epoch 强门：部分只读 `_mode()`，部分只在单一 mode 分支检查，部分把 `production_unchanged` 当字面量，冻结收据完全未询问 shared transition。现已按十格矩阵逐格回填，不改变 registry mode、生产常量或刀2/3/4。
+
+### 十格矩阵回填
+
+| 格 | 门 | 本轮状态 |
+|---|---|---|
+| ① | frozen 计数先过 `evidence_counts_toward_clock(TRACK_ID)` | **working-tree fixed**：`build_state` 的 frozen 产出与 `validate_state` 的 frozen 非零准入均 fail-closed；pre-freeze 不调用该门 |
+| ② | state mode 与 registry 交叉核对 | **preserved closed**：未回退上一轮修复 |
+| ③ | 任意 mode 的 verdict 只能是 `not_evaluated` | **working-tree fixed**：`validate_state` 的全 mode 禁令已提到分支外 |
+| ④ | 三生产常量越界 | **working-tree fixed**：同一 `_production_constants_unchanged()` 接入 build/validate，越界不产出/不准入 |
+| ⑤ | pre-freeze `evidence_status` | **working-tree fixed**：state schema then 补 `const: "insufficient_data"`，只补这一格 |
+| ⑥ | freeze receipt | **working-tree fixed**：八项 prerequisite 后、收据前调用 `validate_frozen_transition`，并绑定 packet identity |
+| ⑦ | trigger floor | **working-tree fixed**：读取 governance `state_contract.min_trigger_effective_weeks`，删除代码字面量 `4` |
+| ⑧ | governance 数字类型 | **working-tree fixed**：递归校验 JSON 数字 Python 类型与 schema const 类型一致 |
+| ⑨ | Stage B 门 | **document-only clarified**：测试改名为 `..._by_document`，真实阶段切换门仍留刀4 |
+| ⑩ | source 引用集合 | **preserved established**：未放宽精确结构化 source-binding |
+
+### 改动、调用链、直接消费者与边界
+
+- 改动文件：`engine/a_short_margin_overheat_cash_control.py`、`schemas/a_short_margin_overheat_cash_control_state.schema.json`、`tests/test_a_short_margin_overheat_cash_control.py`；handoff 仅做 O7 节序移动并追加本轮收口；`docs/system_risk_register.md` 与 `docs/SESSION_LOG.md` 同步本轮状态。
+- 调用链：governance preset/program schema → `load_governance`/`validate_governance` → shared epoch registry/`evidence_counts_toward_clock`/`validate_frozen_transition` → `build_state`/`validate_state` → state schema；直接消费者仅本 comparison-only engine、其 state/program schema、治理 preset 和对应测试。全仓无生产 importer，只有 shared epoch `TRACKS` 注册项引用本模块。
+- schema/source-binding：pre-freeze/frozen 枚举、独立 namespace/ledger/batch/multiplicity、两阶段 arm、`comparison_only`、boundary 和精确 structured source 集合保持不变；未新增 source、verdict、state、batch 或 ledger 字段。
+- 写盘边界：仍不写 runtime state、batch、ledger、weekly/production artifact、provider raw、账户或订单；freeze admission 只返回 `write_performed=False`，不翻 registry mode。
+
+### 负向控制、自审与验证
+
+- 五条 Required 均有点名 `assertRaisesRegex`：L1 `evidence_counts_toward_clock`（build/validate 两入口）、L2 `comparison_verdict`、L3 `insufficient_data`、L4 `production margin-overheat constants`（build/validate 两入口）、L5 `validate_frozen_transition`；未用泛化断言作为这五条的唯一证据。
+- 五次植入均精确转红并恢复逐字节一致：L1 中和 shared clock gate → 点名测试 `FAILED (failures=1)`；L2 中和全 mode verdict gate → 点名测试因落到 registry mismatch 而点名断言失败；L3 删除 schema const → `ValidationError not raised`；L4 分别中和 build/validate production gate → 各自点名测试 `MarginOverheatCashControlError not raised`；L5 中和 shared transition → `MarginOverheatCashControlError not raised`。每次恢复后目标文件 SHA-256 与植入前一致。
+- 正控：固定主 Python 聚焦 `tests.test_a_short_margin_overheat_cash_control tests.test_a_short_evidence_epoch_mode tests.test_readme_route_row_length tests.test_route_doc_ledger_status_consistency tests.test_doc_governance_guard` → `Ran 140 tests in 17.573s` / `OK`；`RESULT tier=focused status=PASS exit=0 tests=140`；receipt `receipt:3604bec2ce75db54c97024d1`。其中本模块现有 21 条正控仍包含在全模块 30 条绿测试内；pre-freeze `build_state(36,36)` 仍归零，`(36,3)/(24,4)/(12,4)` 标签、registry 交叉核对和三常量 subTest 均保留。
+- 固定解释器：`C:\Users\cnhea\AppData\Local\Programs\Python\Python313\python.exe`，版本 `Python 3.13.8`。未使用 PATH、`python/python3`、bundled Python 或其他解释器。
+- full lane：`not_triggered`；原因是本轮改动仍限于无生产 importer 的 comparison-only 模块、其测试和 state schema，按 AGENTS rule 3 不启动 full lane。
+
+### NOT_VERIFIED、审查/提交边界与下一步
+
+`NOT_VERIFIED`：Claude Code 独立复审、§6a 新一轮独立对抗 agent、provider/live/真实 weekly、12/24/36 真实前向 clock、用户 design-final-before-freeze 裁决、production/ship-gate 证据。Codex 仅实现/修复；未 stage、commit、push、merge，禁止 `--no-verify`。下一步：`Claude Code：独立复审 R-ASHORT-MARGIN-OVERHEAT-KNIFE1-CLOCK-AND-FREEZE-GATES-RUN-ON-A-WEAKER-AUTHORITY`。
+
+## 2026-08-08 追加：融资过热刀1 第三轮复审 —— Pass-with-Required（已合入 master）
+
+**判定**：Pass-with-Required。上一轮那条 P2 的五条腿全部按类修在门本身并经我逐条复验闭合；残留一个零周开口，登记为 P3 交给刀 2（第一个真会写状态的刀），不阻塞合入。finding 正文只在 `docs/system_risk_register.md`。
+
+**我实际验了什么**
+- 验收超集 `Ran 85 tests in 16.610s` / `OK`，`receipt:4257446223b2b329b9f7db70`。
+- **九条植入对照**（patch 的都是门本身）：L1a/L1b/L2/L4a/L4b/L5/L3-schema/O5 中和后各自**精确点名**对应用例转红；唯一全绿的是把触发地板换成字面量 `4`——因为 program schema 把整个 `state_contract` 钉成 `const`，契约值与代码值结构上无法分歧，所以那不是守卫缺口（实测把契约值改成 5 直接被 schema 拒）。控制组 `Ran 30 tests / OK`，两文件还原 sha256 逐字节一致。
+- **真实路径反向探针**（临时 registry 文件真翻 frozen，**不 mock 强门**；强门在本树因无关的 p4a 漂移真实抛错）：`build_state(24,8)`、`validate_state(frozen 24 周)` 双双被拒；frozen `supported` 被拒；pre-freeze `supported` / `evidence_status=review_due` 被 schema 拒；常量越界时 `build_state` 拒绝产出；`validate_freeze_admission` 被共享门拒。
+- **误伤控制**：pre-freeze 默认路径 `build_state(36,36)` 仍归零并被接受，`load_governance` / `stage_arm_ids` / `current_epoch_id` 全部正常——新门只挡 frozen 侧。
+- **零周开口是我自己复现的**：同一个真实 registry 翻转下，`mode=frozen_enforced` 且周数 0/0 的三种组合（`review_due/review_due`、`running/accumulating`、`running/insufficient_data`）全部被 `validate_state` **ADMITTED**，把周数改成 1 的对照立刻被拒。根因是 `:340-342` 把强门条件挂在「周数非零」上，而 `build_state` 那一半没有这个条件——两个入口不对称。
+
+**§6a 独立对抗 agent（本轨最后一个）**
+delta-only scope，只审五条腿的修复。它报 L2/L3/L4/L5 HELD、L1 半开。**采信门槛这轮收紧**（用户当轮质疑"越审越多没用的洞"）：需要 mock 私有函数才成立、或只有等到不存在的 writer 才伤得到人的，一律不写 Required。据此只有零周开口一条经我真实 registry 复现后升为 Required，其余两条（`dict()` 在 try 之外的错误契约泄漏、两个测试名大于其证明）降 Optional。
+
+**未覆盖维度与诚实边界**
+- 刀 2/3/4 仍无可审实现；前置硬闸 ②（source-bound replay 频率证据）与 ③（专属 semantic freeze manifest）也无实现可核。
+- `epoch_mode.validate_frozen_transition` 今天对任何输入都抛错，根因是与本刀无关的 `p4a_overlay_epoch` 语义漂移，因此 L5 的成功路径只有 mock 能覆盖，记 NOT_VERIFIED。
+- 全量未跑（rule 3 不触发，无生产 importer）；未跑真实 weekly、未做 provider 取数；用户仍未作出「设计定稿前单轨先行 frozen」的裁决，代码停在 `pre_freeze_audit_only`。
+
+**下一步**：`Codex：执行`（刀 2：结构化判据 producer + 唯一 shadow consumer；开工即须闭掉零周开口）。
