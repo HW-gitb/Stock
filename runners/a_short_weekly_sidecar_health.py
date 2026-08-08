@@ -347,6 +347,14 @@ def _normalise_outcome(raw: dict[str, Any], *, as_of: str, project_root: Path) -
         "skip_reason": raw.get("skip_reason"),
         "blocking": False,
     }
+    if "attempted_before_egs" in raw:
+        item["attempted_before_egs"] = bool(raw["attempted_before_egs"])
+    if raw.get("iv_feed_status") is not None:
+        item["iv_feed_status"] = str(raw["iv_feed_status"])
+    if raw.get("feed_ref") is not None:
+        item["feed_ref"] = str(raw["feed_ref"])
+    if raw.get("feed_sha256") is not None:
+        item["feed_sha256"] = str(raw["feed_sha256"])
     if item["error_code"] is not None:
         item["error_code"] = str(item["error_code"])
     if item["skip_reason"] is not None:

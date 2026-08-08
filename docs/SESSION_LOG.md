@@ -1,5 +1,44 @@
 # Session Log
 
+## 2026-08-08 — Claude 修复+自审（序 15 信任根守卫整类）
+
+- **Verdict/Action**: 按用户令自修自审。不是补被点名那一条：把本轮新增的**七道门逐个植入中和**，发现只有 1 道被测试钉住，其余六道（分位反推、series 非有限、awakening 非有限、builder 时钟退出码、ready 必须带路径、非 ready 不得带路径）拆掉后测试全绿。已为其中五道补测试并全部转红验证；第七道（publish 端 ready 检查）因该文件受决策谓词哈希封印，任何字节改动都会整模块红，无法做语义隔离的植入，如实标 NOT_VERIFIED。
+- **Required**: `R-ASHORT-SEQ15-PERCENTILE-TRUST-ROOT-HAS-NO-REGRESSION-GUARD` 已 closed（扩成整类）。七道门逐门结论、五条新测试、被否决的那条 Optional 及理由见 `docs/system_risk_register.md`（单一来源，本处不复述）。
+- **Verify**: review-evidence:598c05968f70；验收超集九模块 `Ran 746 tests` / `OK`（`receipt:8477543242c3627314257756`）；植入对照逐门实测：g1/g2/g3/g4/g5/g6 中和后各自点名转红（`FAILED failures=2/6/3/1/1/1`），还原逐字节一致；`static_contract_error() = None`。按你本轮指令不跑全量，引用执行方 ledger `a_short=2414 OK`（fingerprint 未独立核对，NOT_VERIFIED）。超时原因:七门逐个植入 + 两轮测试收紧。
+- **Pre-Codex self-review**: A-F checked。A：先枚举本轮新增七门再逐门植入，五门补测试、一门（publish 端）因契约封印不可隔离如实记 NOT_VERIFIED；A.6 权威链 `分位 -> rolling_percentile_252()`。B：新断言一律点名式，否则会被旧门的报错顺带绿掉。C 反向：诚实 feed 正控 + 时钟相符仍写盘。D=N-A；E 单态；F diff-check 干净。matrix=7门/5测试/6植入；register=updated；handoff=updated；focused=746 OK；full-lane=not_run(用户明令)，引用执行方 2414 OK；door=55 OK。
+- **Next**: Codex：Pass
+
+## 2026-08-08 — Claude 复审 Pass-with-Required（序 15 · IV 三类收口）
+
+- **Verdict/Action**: 三类都真修好了，我自己的探针逐条复现：四个非 ready 状态各自可表达且错标被 schema 拒；自洽篡改分位现在被读门按 `rolling_percentile_252` 反推拦下；非有限值拒；`planned_unavailable_fields` 那行已删。但我上轮写进 register 的闭合测试③没做到——**摘掉反推门，74 条测试全绿**，这道刚补的信任根没有任何回归守卫。故不提交、不合入。
+- **Required**: `R-ASHORT-SEQ15-PERCENTILE-TRUST-ROOT-HAS-NO-REGRESSION-GUARD`(P3)；上轮三条 `R-ASHORT-SEQ15-IV-CLOCK-MISMATCH-ABORTS-WHOLE-WEEKLY-RUN` / `-IV-BUILD-FAILURE-LABELLED-NOT-REQUESTED` / `-VALIDATED-FEED-LABEL-OVERSTATES-WHAT-IS-VERIFIED` 已 closed。机制与闭合测试见 `docs/system_risk_register.md`（单一来源，本处不复述）。
+- **Verify**: review-evidence:598c05968f70；复跑验收超集（九模块）`Ran 739 tests in 128.2s` / `OK`（`receipt:7f469af3dc893c155cbbb901`）；按你本轮指令**不跑全量**，引用执行方 ledger `a_short=2414 OK`（fingerprint `215c2294a56d`，其绑定我未独立核对，记 NOT_VERIFIED）；植入对照：把分位反推还原成 pre-patch 取存值 → `tests.test_a_short_iv_feed_build`+`tests.test_a_short_iv_egs_wiring` **74 tests OK（无一转红）**，还原逐字节一致。超时原因:三类逐条自建探针复现 + 植入对照两轮。
+- **Next**: Codex：修复
+
+## 2026-08-08 — Codex executor/fixer — seq15 IV 三类收口
+
+- **Verdict/Action**: 三类根因已按类修复并完成 executor 自审；当前为 `OPEN-NOT_VERIFIED`，未 commit/push/merge。
+- **Required**: `R-ASHORT-SEQ15-IV-CLOCK-MISMATCH-ABORTS-WHOLE-WEEKLY-RUN`、`R-ASHORT-SEQ15-IV-BUILD-FAILURE-LABELLED-NOT-REQUESTED`、`R-ASHORT-SEQ15-VALIDATED-FEED-LABEL-OVERSTATES-WHAT-IS-VERIFIED` 均为 working-tree implemented / independent review pending；完整细节见 `docs/system_risk_register.md`。
+- **Verify**: 固定 Python `C:\Users\cnhea\AppData\Local\Programs\Python\Python313\python.exe` / 3.13.8；最终 bounded focused `Ran 766 tests in 138.593s` / `OK`，`receipt:2077ac3e1862265a6d63b154`；静态/JSON/py_compile/diff-check 全绿；唯一最终 full lane `Ran 2414 tests in 381.894s` / `OK (skipped=3)`，`RESULT status=PASS`，ledger fingerprint `215c2294a56d`。自审补齐早退 failure receipt 的 `not_requested` 兜底和静态守卫后，使用最终 receipt 重跑收敛。
+- **Docs-only gate**: `tests.test_doc_governance_guard tests.test_route_doc_ledger_status_consistency tests.test_readme_route_row_length`，`Ran 66 tests in 1.243s` / `OK`。
+- **Pre-Codex self-review**: A-F 已检查；三类矩阵覆盖 producer/status、直接消费者、schema/source-binding、写盘边界、负向控制和七叶清单回扫；provider/live/account/真实 weekly/sub-agent/commit/push/merge 未执行；自动化 PASS 不等于独立 review/live/ship PASS。
+- **Next**: Claude Code：审查序15。
+
+## 2026-08-08 — Claude 审查 FAIL（序 15 · IV feed 先于 EGS）
+
+- **Verdict/Action**: 接线本身成立——只构建一次、同一路径喂 EGS 与 M6.7、写盘前校验、按值+source+字节摘要复核、schema 锁两态，方向全 fail-closed。但三条必须修：① 时钟不合现在会把**整周跑**炸在 Stage 1（canary/forward tracker/sidecar 全不跑，理由码还错），改前只炸 M6.7；② 构建失败那周产物写成「没请求过」；③ 新盖的 `validated_feed` 章比实际验的多。不提交、不合入。
+- **Required**: `R-ASHORT-SEQ15-IV-CLOCK-MISMATCH-ABORTS-WHOLE-WEEKLY-RUN`(P2)、`R-ASHORT-SEQ15-IV-BUILD-FAILURE-LABELLED-NOT-REQUESTED`(P3)、`R-ASHORT-SEQ15-VALIDATED-FEED-LABEL-OVERSTATES-WHAT-IS-VERIFIED`(P3) — 机制、为何 material、修法与闭合测试见 `docs/system_risk_register.md`（单一来源，本处不复述）。
+- **Verify**: review-evidence:7f16425ef9bc；复跑验收超集 `Ran 713 tests in 111.575s` / `OK`（`receipt:7c346461669f5a7277c895ad`）；全量按 rule 4 引用执行方 ledger `a_short=2410 OK`（fingerprint `b4bed17d…` 与当前码态相同，未重跑）；植入对照：1.2.0 绑定门改成立即 return → `test_complete_projection_requires_exact_ai_values_and_feed_bytes` `FAILED`，还原逐字节一致。风险档 §6a(iii) 起 1 个独立对抗 agent，其 6 条我逐条复现后只采信 3 条。超时原因:等独立对抗 agent 回报 + 复现其结论。
+- **Next**: Codex：修复
+
+
+## 2026-08-08 — Codex executor/fixer — 执行顺位 8 · 序 15（独立审查待办）
+
+- **Verdict/Action**: 序15 已按“IV feed 先于 EGS、单生产者、结构化 source/freshness binding、M6.7 复用同一 feed”实现；未 commit/push/merge。
+- **Required**: `R-ASHORT-SEQ15-IV-FEED-BEFORE-EGS` = working-tree implemented / `OPEN-NOT_VERIFIED`；根因、调用链、schema、写盘边界和负控见 `docs/system_risk_register.md` 与同日 handoff。
+- **Verify**: fixed Python 3.13.8；focused 739 OK (receipt:c1288a0fb8366e1ea8a0be58)；static/schema/py_compile/diff-check OK；full 2410 OK (skipped=3)；最终 docs-only 66 OK（launcher receipt 已产生）；A-F 自审、完整路径和 NOT_VERIFIED 边界见 register/handoff，sub-agent 未启动。
+- **Next**: Claude Code：审查序15
+
 ## 2026-08-05 — Claude 修复+自审（收据自毁 P1 + 门状态两文件 Optional）
 
 - **Verdict/Action**: 两条都闭。P1 是**整类修**：全仓 spawn launcher 的测试共 4 处 3 文件，每处都会覆盖收据；加 `STOCK_BOUNDED_UNITTEST_ACTIVE` 嵌套标记（覆盖 launcher→launcher 任意深度、零改调用点）+ 四处显式带标记（hook 用裸 python 跑守卫，仅靠标记覆盖不到——第一版修法即因此失败）+ AST 守卫防新增点漏网。Optional 加 schema-const 与引擎常量的三角断言，单改一边即报「两文件一起翻」。

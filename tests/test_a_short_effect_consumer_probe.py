@@ -33,12 +33,12 @@ from runners.a_short_weekly_pipeline import build_weekly_report
 class AShortNatureLedgerTests(unittest.TestCase):
     def test_all_analysis_input_leaves_have_explicit_nature(self):
         natures = leaf_natures()
-        self.assertEqual(len(natures), 388)
+        self.assertEqual(len(natures), 396)
         self.assertEqual(set(natures.values()), {
             "true_dangling", "partial_consumption", "display_audit",
             "main_decision", "comparison_track", "duplicate_source",
         })
-        self.assertEqual(sum(1 for _ in natures), 388)
+        self.assertEqual(sum(1 for _ in natures), 396)
 
     def test_missing_or_bulk_independent_relabel_fails_closed(self):
         contract = load_contract()
@@ -61,10 +61,10 @@ class AShortNatureLedgerTests(unittest.TestCase):
         error = static_contract_error(contract, inventory=static_inventory())
         self.assertIn("requires runtime_handler", error)
 
-    def test_ledger_records_leaf_natures_and_388_leaf_summary(self):
+    def test_ledger_records_leaf_natures_and_396_leaf_summary(self):
         weekly = {"as_of": "20260727"}
         ledger = build_effect_contract_ledger(weekly)
-        self.assertEqual(sum(ledger["summary"]["nature_counts"].values()), 388)
+        self.assertEqual(sum(ledger["summary"]["nature_counts"].values()), 396)
         group = next(row for row in ledger["records"] if row["id"] == "candidate_event_risk")
         # rule6_checks[].status already reaches Phase5, so the leftover group is
         # partially consumed -- not wholly dangling.
@@ -75,7 +75,7 @@ class AShortNatureLedgerTests(unittest.TestCase):
 
     def test_leaf_effect_categories_are_explicit_and_proof_bound(self):
         effects = leaf_effects()
-        self.assertEqual(len(effects), 388)
+        self.assertEqual(len(effects), 396)
         # true_dangling is now an adjudicated label reachable only through an
         # explicit override; the un-audited remainder is pending, not dangling.
         self.assertLessEqual(set(effects.values()), {
@@ -94,7 +94,7 @@ class AShortNatureLedgerTests(unittest.TestCase):
         self.assertEqual(effects["schema_version"],
                          "intentionally_independent_or_delete")
         ledger = build_effect_contract_ledger({"as_of": "20260801"})
-        self.assertEqual(sum(ledger["summary"]["effect_counts"].values()), 388)
+        self.assertEqual(sum(ledger["summary"]["effect_counts"].values()), 396)
         self.assertIsInstance(ledger["records"][0]["leaf_effects"], dict)
 
     def test_unavailable_manual_review_trend_only_allows_flat_or_lower(self):

@@ -2,7 +2,7 @@
   "schema_name": "a_short_m67_effect_contract",
   "schema_version": "1.0.0",
   "legacy_migration_sha256": "b99cbb6895b7b2c2877e172fbbd59ff0b84a5c3b9bbf5de2b8ee2aab0d52cc4e",
-  "analysis_input_all_paths_sha256": "b149abe9749795bdb1ca918168d1987bf9fee8cb09097ab73b5d079cdb404c9e",
+  "analysis_input_all_paths_sha256": "1c634749136a28592b45e6b295712da0141c1a26cd037728c0d071bcff686e5f",
   "groups": [
     {
       "id": "lineage_metadata",
@@ -113,14 +113,14 @@
       "source_prefixes": [
         "market_context"
       ],
-      "source_paths_sha256": "c6c36ee2a08d0d9728469557e898dc0f70924a355db7c1db8dedc1c537605943",
+      "source_paths_sha256": "efef1425cba3f59f728aeb760006c7b3531124dba32b97b24ed90ba962a5a149",
       "policy": "must_affect_result",
       "terminal_surfaces": [
         "weekly.effect_contract_ledger",
         "weekly Markdown 字段/规则联动台账"
       ],
       "runtime_handler": "unresolved_input_group",
-      "unresolved_reason": "北向 5 日净流与 CSI300 窗口已由结构化 northbound_control 接入新建仓门并落到 operation_impact；其余广度、流动性、日历和波动率叶字段仍未逐叶证明消费者，不能报整组已联动。"
+      "unresolved_reason": "北向 5 日净流与 CSI300 窗口已由结构化 northbound_control 接入新建仓门并落到 operation_impact；IV volatility 叶字段现由 EGS/weekly 的同一 feed source-binding 逐叶校验；其余广度、流动性和日历叶字段仍未逐叶证明消费者，不能报整组已联动。"
     },
     {
       "id": "account_context",
@@ -738,6 +738,96 @@
       "consumer_ref": "runners/a_short_weekly_pipeline.py::_normalise_pre_holiday_control -> _allocate_cash",
       "terminal_surface": "analysis_input.market_context.trade_calendar and weekly.cash_allocation.pre_holiday_control",
       "mutation_evidence": "a positive pre-holiday window is rejected when the source-bound next session is absent, so removing it disables the cash reduction instead of only losing an audit field"
+    },
+    "market_context.volatility.awakening_status": {
+      "category": "m67_main_decision",
+      "consumer_ref": "runners/a_short_weekly_pipeline.py::_validate_analysis_input_m05_binding -> latest_m05_state",
+      "terminal_surface": "weekly M0.5 awakening state and cash/new-entry gate",
+      "mutation_evidence": "a projection that differs from the validated 1.2.0 feed is rejected before M6.7, so a second or stale producer cannot enter the decision"
+    },
+    "market_context.volatility.cash_reclaim_pct": {
+      "category": "m67_main_decision",
+      "consumer_ref": "runners/a_short_weekly_pipeline.py::_validate_analysis_input_m05_binding -> _resolve_m05_state",
+      "terminal_surface": "weekly.cash_allocation M0.5 reclaim and new-exposure capacity",
+      "mutation_evidence": "a projection that differs from the validated feed is rejected before cash allocation; the accepted value is the single feed-bound M0.5 input"
+    },
+    "market_context.volatility.feed_sha256": {
+      "category": "m67_main_decision",
+      "consumer_ref": "runners/a_short_weekly_pipeline.py::_validate_analysis_input_m05_binding",
+      "terminal_surface": "analysis_input-to-iv_feed byte source binding before weekly write",
+      "mutation_evidence": "changing the digest or the feed bytes causes the source-binding gate to reject the run"
+    },
+    "market_context.volatility.freshness_reason": {
+      "category": "m67_main_decision",
+      "consumer_ref": "runners/a_short_weekly_pipeline.py::_validate_analysis_input_m05_binding",
+      "terminal_surface": "analysis_input volatility freshness gate",
+      "mutation_evidence": "a non-validated or non-requested freshness reason cannot be presented as a complete feed projection"
+    },
+    "market_context.volatility.freshness_status": {
+      "category": "m67_main_decision",
+      "consumer_ref": "runners/a_short_weekly_pipeline.py::_validate_analysis_input_m05_binding",
+      "terminal_surface": "analysis_input volatility freshness gate",
+      "mutation_evidence": "an unaligned status is rejected before M6.7, preventing stale or future IV from entering the weekly decision"
+    },
+    "market_context.volatility.iv_change_abs_1d_pctpt": {
+      "category": "m67_main_decision",
+      "consumer_ref": "runners/a_short_weekly_pipeline.py::_validate_analysis_input_m05_binding -> latest_m05_state",
+      "terminal_surface": "weekly M0.5 awakening/Rule3 state and operation decision",
+      "mutation_evidence": "a projection that differs from the validated feed is rejected before M6.7, so the feed remains the sole producer"
+    },
+    "market_context.volatility.iv_feed_status": {
+      "category": "m67_main_decision",
+      "consumer_ref": "A-EGS/egs_main.py::_load_iv_feed_projection -> runners/weekly_screening.ps1 -> runners/a_short_weekly_pipeline.py::_validate_analysis_input_m05_binding",
+      "terminal_surface": "analysis_input IV status, weekly M6.7 receipt, and fail-closed sidecar outcome",
+      "mutation_evidence": "non-ready status renders explicit unknown volatility and blocks M6.7 publication while canary/forward sidecars continue; ready requires the validated feed"
+    },
+    "market_context.volatility.iv_percentile_252d": {
+      "category": "m67_main_decision",
+      "consumer_ref": "runners/a_short_weekly_pipeline.py::_validate_analysis_input_m05_binding -> latest_iv_percentile",
+      "terminal_surface": "weekly Rule3 IV percentile decision input",
+      "mutation_evidence": "a projection that differs from the validated feed is rejected before M6.7, preventing a hidden EGS/IV second producer"
+    },
+    "market_context.volatility.iv_symbol": {
+      "category": "duplicate_or_display_audit",
+      "consumer_ref": "runners/a_short_weekly_pipeline.py::_validate_analysis_input_m05_binding",
+      "terminal_surface": "analysis_input volatility source identity audit",
+      "mutation_evidence": "a symbol mutation is rejected as a source-binding mismatch and cannot silently relabel the consumed feed"
+    },
+    "market_context.volatility.iv_value": {
+      "category": "m67_main_decision",
+      "consumer_ref": "runners/a_short_weekly_pipeline.py::_validate_analysis_input_m05_binding -> latest_iv_hv",
+      "terminal_surface": "weekly IV-HV advisory and source-bound volatility input",
+      "mutation_evidence": "a projection that differs from the validated feed is rejected before M6.7, so the accepted IV value has one producer"
+    },
+    "market_context.volatility.rule3_status": {
+      "category": "m67_main_decision",
+      "consumer_ref": "runners/a_short_weekly_pipeline.py::_validate_analysis_input_m05_binding -> latest_m05_state",
+      "terminal_surface": "weekly Rule3 status and M0.5 operation gate",
+      "mutation_evidence": "a projection that differs from the validated feed is rejected before M6.7, preventing a stale or second Rule3 producer"
+    },
+    "market_context.volatility.source_as_of": {
+      "category": "m67_main_decision",
+      "consumer_ref": "runners/a_short_weekly_pipeline.py::_validate_analysis_input_m05_binding",
+      "terminal_surface": "analysis_input volatility decision-as-of source binding",
+      "mutation_evidence": "a feed/as-of mismatch is rejected before the weekly decision"
+    },
+    "market_context.volatility.source_latest_trade_date": {
+      "category": "m67_main_decision",
+      "consumer_ref": "runners/a_short_weekly_pipeline.py::_validate_analysis_input_m05_binding -> validate_iv_feed_freshness",
+      "terminal_surface": "analysis_input volatility-to-price clock binding",
+      "mutation_evidence": "a latest IV date that differs from price_data_through is rejected before report generation"
+    },
+    "market_context.volatility.source_ref": {
+      "category": "m67_main_decision",
+      "consumer_ref": "runners/a_short_weekly_pipeline.py::_validate_analysis_input_m05_binding",
+      "terminal_surface": "analysis_input-to-iv_feed path source binding",
+      "mutation_evidence": "a path mutation is rejected before M6.7 and cannot redirect the report to another feed"
+    },
+    "market_context.volatility.source_status": {
+      "category": "m67_main_decision",
+      "consumer_ref": "runners/a_short_weekly_pipeline.py::_validate_analysis_input_m05_binding",
+      "terminal_surface": "analysis_input volatility completeness gate",
+      "mutation_evidence": "complete and unavailable shapes are schema-locked; a false complete/unavailable status cannot bypass source validation"
     }
   },
   "leaf_nature_by_group": {
@@ -772,18 +862,18 @@
     "candidate_data_quality": "comparison_track"
   },
   "decision_predicate_sha256": {
-    "A-EGS/egs_main.py": "386ba5e8812662e4526dcc17a1c998e3aeae948ecc02743f39b83d0bee854606",
+    "A-EGS/egs_main.py": "4d84eb94ee55ed418eff1faf7c95a4fcf7fd84983ca353055a576f1e3cbbf078",
     "engine/egs_industry_heat.py": "74932f994ec0658345c41aa932b54b5685c1737c663f5070a193d264f37fced2",
     "engine/a_short_industry_theme.py": "6a10200f80b3c0d301efc8af1561b53ef2578e1cd26eea7976188dd57b7b6b2b",
     "engine/a_short_northbound.py": "e48d20a9c49d06480443815755d97f5674fa98fe1e13284f2d4aaaa19361d71a",
     "runners/a_short_phase5_engine.py": "bd9c17a7032066d7c3c9074a8fedb16e5e11b559d973d95987458fb8eca6dd5e",
-    "runners/a_short_weekly_pipeline.py": "7d4cfda49d2bc4e6b4962a61ad3fbe51f830cc1d137f5d7bc7632a29d2878532",
+    "runners/a_short_weekly_pipeline.py": "ff52b4e86f242f208f30b37b9da751dcdec5facdba5a8aae20beb365dbd8af9b",
     "runners/a_short_m67_render.py": "146e6c47814b0421bb973e2741d96e7d4773c06d9fc1104d54f9100100deac51",
     "engine/a_short_portfolio_risk.py": "02b88ac3b5239e8dd4897bde06afab0769ea5593f8a8a3666e5c8fba24486860",
     "engine/a_short_effect_contract.py": "7f96b57a88313ec5274835727d65530633e27f3bad98c7573eb598bdfdf523f6"
   },
   "runtime_constants_sha256": {
-    "A-EGS/egs_main.py": "fd73d445741e9a1264f436f50ba9fdd462fb768a98779275e85e2a4ca40d0b84",
+    "A-EGS/egs_main.py": "fda33993ec0ecf22a0238d797f432f8e3b368a8f051a479cf5dccccf2b0ab29b",
     "engine/a_short_northbound.py": "07363ce1dbdc2bea07b414e3f626155f3bfb4258e58a19d270c1b8746350ebc4",
     "runners/a_short_phase5_engine.py": "27f947c64df7eaf4e59526b4bc0c150de5baef5a2447187acc98378e4c1f9f00",
     "engine/a_short_portfolio_risk.py": "238ae5ff77e269bc1b9a507014b21561c54e6766169d1854e19119ac5137943e"
@@ -1359,6 +1449,7 @@
     "market_context.volatility.awakening_status",
     "market_context.volatility.cash_reclaim_pct",
     "market_context.volatility.iv_change_abs_1d_pctpt",
+    "market_context.volatility.iv_feed_status",
     "market_context.volatility.iv_percentile_252d",
     "market_context.volatility.iv_symbol",
     "market_context.volatility.iv_value",

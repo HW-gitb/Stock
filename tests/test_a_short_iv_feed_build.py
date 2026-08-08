@@ -541,6 +541,30 @@ class BuildMainRegressionTests(unittest.TestCase):
             feed = json.loads(out.read_text(encoding="utf-8"))
             self.assertIsNotNone(feed["series"][-1]["iv_percentile_252d"])
 
+    def test_price_clock_mismatch_exits_with_its_own_code_and_writes_nothing(self):
+        from runners.a_short_iv_feed_build import CLOCK_MISMATCH_EXIT_CODE, main as build_main
+        beh, last = _fake_market(70)
+        with tempfile.TemporaryDirectory() as d:
+            out = Path(d) / "feed.json"
+            with self.assertRaises(SystemExit) as ctx:
+                build_main(["--as-of", last, "--price-data-through", "20991231",
+                            "--out", str(out), "--confirm-fetch-authorized"],
+                           pro_factory=lambda: _FakePro(beh))
+            # The wrapper maps this exact code to `clock_mismatch`; a generic
+            # failure code would degrade the week as a build failure instead.
+            self.assertEqual(ctx.exception.code, CLOCK_MISMATCH_EXIT_CODE)
+            self.assertFalse(out.exists())
+
+    def test_matching_price_clock_still_writes_the_feed(self):
+        from runners.a_short_iv_feed_build import main as build_main
+        beh, last = _fake_market(70)
+        with tempfile.TemporaryDirectory() as d:
+            out = Path(d) / "feed.json"
+            build_main(["--as-of", last, "--price-data-through", last,
+                        "--out", str(out), "--confirm-fetch-authorized"],
+                       pro_factory=lambda: _FakePro(beh))
+            self.assertTrue(out.exists())
+
     def test_too_few_dates_aborts_without_writing(self):
         from runners.a_short_iv_feed_build import main as build_main
         beh, last = _fake_market(20)        # < MIN_ROLL_OBS → no usable latest percentile

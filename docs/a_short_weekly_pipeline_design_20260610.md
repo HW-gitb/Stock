@@ -8,20 +8,25 @@
 批① 已落:Slice A overlay runner、50ETF IV feed build、Phase 5 引擎(逐票 M6.7)。它们是**纯零件**,各自单测,但**没有一条线把它们串起来产出一周的报告**。批② = 这条线:
 
 ```
-EGS top-N(analysis_input.json)
+canonical AsOf / PriceAsOf
+        │
+        ├── 一次 IV feed build(252d 分位;最新 trade_date 必须等于 price_data_through)
+        │       └── -SkipSemanticRisk 时不构建，EGS 写结构化 unknown
+        ▼
+EGS top-N(analysis_input.json, 同一 IV feed 的 source/freshness/digest binding)
         │  normalize_candidate(逐票字段映射 → 引擎输入)
         ├── Slice A overlay artifact(eligible / crowding_hit)
-        ├── IV feed(252d 分位,市场级:最新 trade_date 必须等于 price_data_through)
         ├── 前复权价序列(执行期抓,PIT ≤ as_of)
         └── 账户状态(available_cash / positions / Rule12 / Rule13;手工维护,不接券商)
         ▼
-   Phase 5 引擎 build_m67_report(逐票)
+   Phase 5 引擎 build_m67_report(逐票;复用同一 IV feed,不重建)
         ▼
    一份周报 a_short_weekly_report(top-N 张 M6.7)←—— 用户只读这个
 ```
 
 ## 2. 关键设计决定
 - **IV 是市场级,且必须与价格同钟。** 50ETF IV 252d 分位对当周所有候选取同一个最新值；`validate_iv_feed_freshness` 强制 IV 最新 `trade_date == price_data_through`，空/陈旧/错钟直接拒绝生成周报。IV-HV 标签仍是 advisory，Rule3 分位闸门不变。
+- **IV 生产者只有一个且先于 EGS。** canonical `AsOf/PriceAsOf` 解析后由 wrapper 只构建一次 feed；成功后同一文件同时绑定 EGS 的 `analysis_input.market_context.volatility` 与 M6.7，按 `source_ref` + `feed_sha256` + `as_of` + 最新交易日校验。构建失败不得读取旧 feed；失败 receipt/sidecar 保留 `attempted_before_egs` 与 feed 身份，M6.7 请求 fail-closed。`-SkipSemanticRisk` 明确是不请求而非成功，所有 IV 数值与状态保持 null/unknown。
 - **normalize 是唯一映射点,且必须用 EGS *真实* 契约键。** `normalize_candidate(...)` 把 EGS analysis_input 候选翻成引擎归一化输入。**硬风险字段按真实契约**(对齐 `A-EGS/egs_main.py` 产出):`derived_flags.is_lock`→引擎 `limit_locked`、`event_risk.suspension.is_suspended`→`suspended`、`derived_flags.hard_veto`→引擎独立硬否决输入(即使分解原因未单独命中也硬杀)、`derived_flags.{overheat_flag,chasing_high,is_breakout,has_crash_veto}` / `event_risk.{holder_reduction.active_plan, delisting.st_flag/delisting_warning}` 照映。字段缺失 → 引擎保守/observe,不抛。**突破入场(#6-ii,v14.2 spec)**:`derived_flags.is_breakout` 现为 EGS 按 v14.2 spec §M3.2 算的突破信号(站稳 MA10 + 当日量>5日均量×1.2);引擎突破入场 = `is_breakout ∧ 引擎本地复查 close≥MA10`。**`derived_flags.vol_confirm` 不再门控突破**(它是 EGS 旧量能旁证 up>dn,仅进 EGS l4_score 评分);旧「is_breakout∧站稳MA10∧vol_confirm」门已废。
 - **四道消费方/边界护栏(写入校验,不只声明):**
   - *IV feed PIT + 新鲜度*：先过 feed 一致性，再强制最新 IV 日与实际价格特征截止日完全一致；未来、陈旧、空 feed 均拒写。

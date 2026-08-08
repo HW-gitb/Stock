@@ -17,7 +17,7 @@
 
 运行时政策不是镜像：`engine/a_short_runtime_config.py` 只接受 `presets/a_short.yaml` 所路由的两份 JSON，并在 EGS、Phase 5 和 weekly 导入时严格校验。effect contract 对每个政策叶字段同时核验“loader 的精确读取点 + 结果模块的精确读取点 + 派生值进入非模块函数结果计算”，并把整张逐字段读取图做指纹；大类的笼统说明或“只赋给未使用常量”都不能代替实际 reader。政策新增字段、删除登记、或把数值重新写回 Python 都会让测试失败。正式 `analysis_input`、`weekly_m67.json` 和 Markdown 均携带同一个配置 fingerprint，因此候选筛选与周报不能混用不同政策版本。
 
-**禁止用“本周有候选”或“写了部分 lineage”当作字段已接通的证据。** 一组字段只要还没有逐叶证明 consumer，就必须使用 `unresolved_input_group`，在周报中显示 `unavailable_manual_review` 和具体原因；不能显示 `applied`。当前批次身份、技术面、催化剂、波动率、分析师、数据质量等整组，以及市场、账户、报价、行业、分数、事件、流动性、组合事实、derived flags 中已接/未接混合的组，都按此规则诚实提示。后续接线时必须先拆成已证明消费者和仍未接通两组，再允许前者显示已联动；直接挂 lineage/Phase5/组合处理器时，契约还要求逐叶 `proven_consumer_paths` 和代码审查依据，防止重新把大组误报为已联动。
+**禁止用“本周有候选”或“写了部分 lineage”当作字段已接通的证据。** 一组字段只要还没有逐叶证明 consumer，就必须使用 `unresolved_input_group`，在周报中显示 `unavailable_manual_review` 和具体原因；不能显示 `applied`。当前批次身份、技术面、催化剂、分析师、数据质量等整组，以及市场、账户、报价、行业、分数、事件、流动性、组合事实、derived flags 中已接/未接混合的组，都按此规则诚实提示。`market_context.volatility` 中 IV/M0.5 七个叶已单独登记并绑定 EGS→weekly/M6.7；该组其余未证明的叶仍不得借用这七叶的证据冒充整组接通。后续接线时必须先拆成已证明消费者和仍未接通两组，再允许前者显示已联动；直接挂 lineage/Phase5/组合处理器时，契约还要求逐叶 `proven_consumer_paths` 和代码审查依据，防止重新把大组误报为已联动。
 
 ## 周报里的提示
 

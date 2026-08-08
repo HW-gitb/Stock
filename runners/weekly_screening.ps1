@@ -121,7 +121,9 @@ function Invalidate-M67Artifact {
     }
 }
 function Write-M67FailureReceipt {
-    param([string]$Directory, [string]$Reason, [int]$ExitCode, [string]$FailureDetailRef = '', [string]$AnalysisInput = $null, [switch]$DeferHealth)
+    param([string]$Directory, [string]$Reason, [int]$ExitCode, [string]$FailureDetailRef = '', [string]$AnalysisInput = $null,
+          [object]$AttemptedBeforeEgs = $null, [string]$FeedRef = '', [string]$FeedSha256 = '',
+          [string]$IvFeedStatus = 'not_requested', [switch]$DeferHealth)
     $ErrorActionPreference = 'Stop'
     New-Item -ItemType Directory -Force -Path $Directory -ErrorAction Stop | Out-Null
     $Receipt = Join-Path $Directory 'weekly_m67.receipt.json'
@@ -133,9 +135,19 @@ function Write-M67FailureReceipt {
         stage_status = 'failed'
         failure_reason = $Reason
         exit_code = $ExitCode
+        iv_feed_status = $IvFeedStatus
     }
     if (-not [string]::IsNullOrWhiteSpace($FailureDetailRef)) {
         $Payload['failure_detail_ref'] = $FailureDetailRef
+    }
+    if ($null -ne $AttemptedBeforeEgs) {
+        $Payload['attempted_before_egs'] = [bool]$AttemptedBeforeEgs
+    }
+    if (-not [string]::IsNullOrWhiteSpace($FeedRef)) {
+        $Payload['feed_ref'] = $FeedRef
+    }
+    if (-not [string]::IsNullOrWhiteSpace($FeedSha256)) {
+        $Payload['feed_sha256'] = $FeedSha256
     }
     if ($AnalysisInput -and (Test-Path -LiteralPath $AnalysisInput -PathType Leaf)) {
         try {
@@ -220,7 +232,9 @@ function Write-M67FailureReceipt {
     }
 }
 function Set-M67Failure {
-    param([string]$Reason, [int]$ExitCode, [string]$FailureDetailRef = '', [string]$AnalysisInput = $null, [string]$Directory)
+    param([string]$Reason, [int]$ExitCode, [string]$FailureDetailRef = '', [string]$AnalysisInput = $null,
+          [object]$AttemptedBeforeEgs = $null, [string]$FeedRef = '', [string]$FeedSha256 = '',
+          [string]$IvFeedStatus = 'not_requested', [string]$Directory)
     if ($script:M67InvocationState -eq 'failed') { return }
     if ([string]::IsNullOrWhiteSpace($Directory)) { throw 'M6.7 failure closeout directory is required' }
     $script:M67InvocationState = 'failed'
@@ -230,18 +244,27 @@ function Set-M67Failure {
         $script:FinalExitCode = $ExitCode
     }
     Write-M67FailureReceipt -Directory $Directory -Reason $Reason -ExitCode $ExitCode `
-        -FailureDetailRef $FailureDetailRef -AnalysisInput $AnalysisInput -DeferHealth
+        -FailureDetailRef $FailureDetailRef -AnalysisInput $AnalysisInput `
+        -AttemptedBeforeEgs $AttemptedBeforeEgs -FeedRef $FeedRef -FeedSha256 $FeedSha256 `
+        -IvFeedStatus $IvFeedStatus -DeferHealth
     Write-Host "[FATAL] M6.7 requested: $Reason (exit $ExitCode); continuing independent closeout" -ForegroundColor Red
 }
 function Write-KnownM67FailureReceipt {
     param([string]$Reason, [int]$ExitCode)
     if ($SkipSemanticRisk -or [string]::IsNullOrWhiteSpace($AsOf)) { return }
+    $KnownIvFeedStatus = [string]$script:IvFeedStatus
+    if ([string]::IsNullOrWhiteSpace($KnownIvFeedStatus)) {
+        $KnownIvFeedStatus = 'not_requested'
+    }
     $Directory = if ($Account) {
         Join-Path $ProjectRoot "state\a_short\weekly_private\$AsOf"
     } else {
         Join-Path $ProjectRoot "research\results\a_short\$AsOf"
     }
-    Write-M67FailureReceipt -Directory $Directory -Reason $Reason -ExitCode $ExitCode
+    Write-M67FailureReceipt -Directory $Directory -Reason $Reason -ExitCode $ExitCode `
+        -AttemptedBeforeEgs $script:IvFeedAttemptedBeforeEgs `
+        -FeedRef $script:IvFeedRef -FeedSha256 $script:IvFeedSha256 `
+        -IvFeedStatus $KnownIvFeedStatus
 }
 # 刀3: dependency preflight runs BEFORE the canonical resolver, provider, or private-state access.
 $PreflightScript = Join-Path $ProjectRoot 'runners\a_short_preflight.py'
@@ -299,6 +322,11 @@ $EffectiveL3Mode = $L3Mode
 
 # P4: de-identified per-run manifests for the post-run health companion.
 $LauncherSidecarOutcomes = @()
+$script:IvFeedAttemptedBeforeEgs = $false
+$script:IvFeedStatus = 'not_requested'
+$script:IvFeedRef = $null
+$script:IvFeedSha256 = $null
+$script:IvFeedFailureDetailRef = ''
 function Add-SidecarOutcome {
     param(
         [string]$Name,
@@ -312,9 +340,13 @@ function Add-SidecarOutcome {
         [string]$SkipReason = $null,
         [string]$ExpectedDataThrough = $null,
         [string]$ObservedDecisionAsOf = $null,
-        [string]$ObservedDataThrough = $null
+        [string]$ObservedDataThrough = $null,
+        [object]$AttemptedBeforeEgs = $null,
+        [string]$FeedRef = $null,
+        [string]$FeedSha256 = $null,
+        [string]$IvFeedStatus = $null
     )
-    $script:LauncherSidecarOutcomes += [ordered]@{
+    $Outcome = [ordered]@{
         name = $Name; expected = $Expected; attempted = $Attempted
         execution_status = $ExecutionStatus; progress_status = $ProgressStatus
         expected_data_through = $ExpectedDataThrough
@@ -322,6 +354,11 @@ function Add-SidecarOutcome {
         observed_data_through = $ObservedDataThrough
         error_code = $ErrorCode; skip_reason = $SkipReason
     }
+    if ($null -ne $AttemptedBeforeEgs) { $Outcome['attempted_before_egs'] = [bool]$AttemptedBeforeEgs }
+    if (-not [string]::IsNullOrWhiteSpace($IvFeedStatus)) { $Outcome['iv_feed_status'] = $IvFeedStatus }
+    if (-not [string]::IsNullOrWhiteSpace($FeedRef)) { $Outcome['feed_ref'] = $FeedRef }
+    if (-not [string]::IsNullOrWhiteSpace($FeedSha256)) { $Outcome['feed_sha256'] = $FeedSha256 }
+    $script:LauncherSidecarOutcomes += $Outcome
 }
 
 if ([string]::IsNullOrWhiteSpace($EffectiveL3Mode)) {
@@ -388,10 +425,69 @@ Write-Host "skip tracker:  $SkipTracker"
 Write-Host "skip semantic: $SkipSemanticRisk"
 Write-Host ""
 
+# --- Stage 1: build the one IV feed, then pass that exact artifact into egs_main ---
+# The canonical resolver has already fixed AsOf/PriceAsOf above.  A failed build
+# never makes EGS read an older file at the same path.
+$script:FinalExitCode = 0
+$script:M67InvocationState = if ($SkipSemanticRisk) { 'skipped' } else { 'requested' }
+$script:M67FailureReason = $null
+$script:M67FailureCode = 0
+$script:IvFeedReady = $false
+$script:IvFeedAttemptedBeforeEgs = $false
+$script:IvFeedStatus = 'not_requested'
+$script:IvFeedSha256 = $null
+$script:IvFeedFailureDetailRef = ''
+$M67Dir = if ($Account) { Join-Path $ProjectRoot "state\a_short\weekly_private\$AsOf" } else { Join-Path $ProjectRoot "research\results\a_short\$AsOf" }
+$SemAnalysisInput = Join-Path $ProjectRoot "result\a_short\$AsOf\analysis_input.json"
+$IvFeed = Join-Path $ProjectRoot "research\results\a_short\iv_feed_$AsOf\iv_feed.json"
+$IvFailureReceipt = Join-Path $M67Dir "iv_feed_failure_$PID.json"
+$IvFailureDetailRef = ''
+$M67Out = Join-Path $M67Dir "weekly_m67.json"
+$OverlayPath = Join-Path $ProjectRoot "result\a_short\$AsOf\overlay.json"
+$script:IvFeedRef = "research/results/a_short/iv_feed_$AsOf/iv_feed.json"
+
+if (-not $SkipSemanticRisk) {
+    $script:IvFeedAttemptedBeforeEgs = $true
+    if (Test-Path -LiteralPath $IvFailureReceipt -PathType Leaf) {
+        Remove-Item -LiteralPath $IvFailureReceipt -Force -ErrorAction Stop
+    }
+    Write-Host "[0/4] Building market IV feed before EGS: runners\a_short_iv_feed_build.py --as-of $AsOf ..." -ForegroundColor Yellow
+    & $PythonExe runners\a_short_iv_feed_build.py --as-of $AsOf --price-data-through $PriceAsOf --out $IvFeed --failure-receipt-out $IvFailureReceipt --confirm-fetch-authorized
+    $IvExitCode = $LASTEXITCODE
+    if ($null -eq $IvExitCode) { $IvExitCode = 1 }
+    if ($IvExitCode -eq 23) {
+        $script:IvFeedStatus = 'clock_mismatch'
+        $script:IvFeedFailureDetailRef = if (Test-Path -LiteralPath $IvFailureReceipt -PathType Leaf) { [System.IO.Path]::GetFileName($IvFailureReceipt) } else { '' }
+        $IvFailureDetailRef = $script:IvFeedFailureDetailRef
+        Write-Host "[WARN] IV feed clock mismatch; EGS will emit explicit unknown volatility and M6.7 will fail closed." -ForegroundColor Yellow
+    } elseif ($IvExitCode -eq 0 -and (Test-Path -LiteralPath $IvFeed -PathType Leaf)) {
+        try {
+            $script:IvFeedSha256 = (Get-FileHash -Algorithm SHA256 -LiteralPath $IvFeed -ErrorAction Stop).Hash.ToLowerInvariant()
+            $script:IvFeedReady = $true
+            $script:IvFeedStatus = 'ready'
+        } catch {
+            $script:IvFeedStatus = 'digest_failed'
+            Write-Host "[WARN] IV feed digest could not be computed; EGS will emit explicit unknown volatility and M6.7 will fail closed." -ForegroundColor Yellow
+        }
+    } else {
+        $script:IvFeedStatus = 'build_failed'
+        $script:IvFeedFailureDetailRef = if (Test-Path -LiteralPath $IvFailureReceipt -PathType Leaf) { [System.IO.Path]::GetFileName($IvFailureReceipt) } else { '' }
+        $IvFailureDetailRef = $script:IvFeedFailureDetailRef
+        Write-Host "[WARN] IV feed build failed or produced no fresh artifact (exit $IvExitCode); EGS will emit explicit unknown volatility and M6.7 will fail closed." -ForegroundColor Yellow
+    }
+} else {
+    $script:IvFeedStatus = 'not_requested'
+    Write-Host "[0/4] -SkipSemanticRisk set, IV feed not requested; EGS volatility will be explicit unknown" -ForegroundColor DarkGray
+}
+
 # --- Stage 1: egs_main (the HiThink L3 graph is fetched and verified in-process) ---
 $EgsArgs = @('A-EGS\egs_main.py', '--as-of', $AsOf, '--price-as-of', $PriceAsOf, '--l3-mode', $EffectiveL3Mode, '--cache-policy', $CachePolicy)
+$EgsArgs += @('--iv-feed-status', $script:IvFeedStatus)
 if ($EffectiveL3Mode -eq 'pit') {
     $EgsArgs += '--l3-pit-strict'
+}
+if ($script:IvFeedReady) {
+    $EgsArgs += @('--iv-feed', $IvFeed)
 }
 
 Write-Host "[1/4] Running $PythonExe $($EgsArgs -join ' ') ..." -ForegroundColor Yellow
@@ -405,14 +501,6 @@ if ($EgsExitCode -ne 0) {
     Write-Host "[SKIP] egs_main exit $EgsExitCode -> skipping canary + tracker + semantic (no fresh candidates)" -ForegroundColor Red
     exit $EgsExitCode
 }
-
-# Post-EGS failures must retain their first formal M6.7 code while still
-# allowing independent Stage 5 and final health closeout to run.
-$script:FinalExitCode = 0
-$script:M67InvocationState = if ($SkipSemanticRisk) { 'skipped' } else { 'requested' }
-$script:M67FailureReason = $null
-$script:M67FailureCode = 0
-$script:IvFeedReady = $false
 
 # --- Stage 2: data_canary ---
 if ($SkipCanary) {
@@ -536,47 +624,29 @@ if ($IsHistoricalAsOf) {
 #     web] rendered inline). semantic 证据本身 advisory-only；但 requested M6.7 失败必须写 failed receipt + 非零退出；落 research 非生产
 #     lane(禁 result/a_short)。真取数:IV options + 前复权价 + cninfo + em 资讯(web 源)+ DeepSeek。web 源 = em(取代失效 sina);run-path 见契约 §web_llm 产出路径。
 if ($SkipSemanticRisk) {
-    Add-SidecarOutcome -Name 'iv_feed' -Expected $false -Attempted $false -ExecutionStatus 'skipped' -ProgressStatus 'not_applicable' -SkipReason 'skip_semantic_risk'
+    Add-SidecarOutcome -Name 'iv_feed' -Expected $false -Attempted $false -ExecutionStatus 'skipped' -ProgressStatus 'not_applicable' -SkipReason 'skip_semantic_risk' -AttemptedBeforeEgs $false -IvFeedStatus $script:IvFeedStatus
     Write-Host ""
     Write-Host "[4/4] -SkipSemanticRisk set, M6.7 operation report not run" -ForegroundColor DarkGray
 } else {
     Write-Host ""
-    $SemAnalysisInput = Join-Path $ProjectRoot "result\a_short\$AsOf\analysis_input.json"
     if (-not (Test-Path $SemAnalysisInput)) {
-        $M67Dir = if ($Account) { Join-Path $ProjectRoot "state\a_short\weekly_private\$AsOf" } else { Join-Path $ProjectRoot "research\results\a_short\$AsOf" }
-        Add-SidecarOutcome -Name 'iv_feed' -Expected $true -Attempted $false -ExecutionStatus 'failed' -ProgressStatus 'unavailable' -ErrorCode 'analysis_input_missing'
-        Set-M67Failure -Reason 'analysis_input_missing' -ExitCode 21 -Directory $M67Dir
+        Add-SidecarOutcome -Name 'iv_feed' -Expected $true -Attempted $true -ExecutionStatus 'failed' -ProgressStatus 'unavailable' -ErrorCode 'analysis_input_missing' -AttemptedBeforeEgs $script:IvFeedAttemptedBeforeEgs -FeedRef $script:IvFeedRef -FeedSha256 $script:IvFeedSha256 -IvFeedStatus $script:IvFeedStatus
+        Set-M67Failure -Reason 'analysis_input_missing' -ExitCode 21 `
+            -AttemptedBeforeEgs $script:IvFeedAttemptedBeforeEgs -FeedRef $script:IvFeedRef -FeedSha256 $script:IvFeedSha256 `
+            -IvFeedStatus $script:IvFeedStatus -Directory $M67Dir
     } else {
         # 持仓恒列入隐私护栏(固化):带 -Account 的周报含真实持仓(代码/成本/止损)→ 落 gitignored 私密目录
         # state\a_short\weekly_private\<as_of>\(.gitignore: state/*/weekly_private/),绝不入 git 追踪的 research lane。
         # 无 -Account(observation-only、无持仓)→ 仍落标准 research\results\a_short\<as_of>\(可留作证据)。
         # pipeline 侧另有同口径硬护栏,直接调用绕过本脚本也拦得住。
-        if ($Account) {
-            $M67Dir = Join-Path $ProjectRoot "state\a_short\weekly_private\$AsOf"
+        if (-not $script:IvFeedReady) {
+            Add-SidecarOutcome -Name 'iv_feed' -Expected $true -Attempted $true -ExecutionStatus 'failed' -ProgressStatus 'unavailable' -ErrorCode 'process_failed' -AttemptedBeforeEgs $script:IvFeedAttemptedBeforeEgs -FeedRef $script:IvFeedRef -FeedSha256 $script:IvFeedSha256 -IvFeedStatus $script:IvFeedStatus
+            Set-M67Failure -Reason 'iv_feed_failed' -ExitCode 22 -FailureDetailRef $IvFailureDetailRef -AnalysisInput $SemAnalysisInput `
+                -AttemptedBeforeEgs $script:IvFeedAttemptedBeforeEgs -FeedRef $script:IvFeedRef -FeedSha256 $script:IvFeedSha256 `
+                -IvFeedStatus $script:IvFeedStatus -Directory $M67Dir
         } else {
-            $M67Dir = Join-Path $ProjectRoot "research\results\a_short\$AsOf"
-        }
-        $IvFeed = Join-Path $ProjectRoot "research\results\a_short\iv_feed_$AsOf\iv_feed.json"
-        # A PID can be recycled. Clear this run's detail path before invoking the
-        # builder; the builder repeats the ownership guard before any fetch.
-        $IvFailureReceipt = Join-Path $M67Dir "iv_feed_failure_$PID.json"
-        if (Test-Path -LiteralPath $IvFailureReceipt -PathType Leaf) {
-            Remove-Item -LiteralPath $IvFailureReceipt -Force -ErrorAction Stop
-        }
-        $M67Out = Join-Path $M67Dir "weekly_m67.json"
-        $OverlayPath = Join-Path $ProjectRoot "result\a_short\$AsOf\overlay.json"
-        Write-Host "[4/4] Building market IV feed: runners\a_short_iv_feed_build.py --as-of $AsOf ..." -ForegroundColor Yellow
-        & $PythonExe runners\a_short_iv_feed_build.py --as-of $AsOf --out $IvFeed --failure-receipt-out $IvFailureReceipt --confirm-fetch-authorized
-        $IvExitCode = $LASTEXITCODE
-        if ($null -eq $IvExitCode) { $IvExitCode = 1 }
-        if ($IvExitCode -ne 0 -or -not (Test-Path $IvFeed)) {
-            Add-SidecarOutcome -Name 'iv_feed' -Expected $true -Attempted $true -ExecutionStatus 'failed' -ProgressStatus 'unavailable' -ErrorCode 'process_failed'
-            $IvFailureDetailRef = if (Test-Path $IvFailureReceipt) { [System.IO.Path]::GetFileName($IvFailureReceipt) } else { '' }
-            Set-M67Failure -Reason 'iv_feed_failed' -ExitCode 22 -FailureDetailRef $IvFailureDetailRef -AnalysisInput $SemAnalysisInput -Directory $M67Dir
-        } else {
-            Add-SidecarOutcome -Name 'iv_feed' -Expected $true -Attempted $true -ExecutionStatus 'succeeded' -ProgressStatus 'advanced' -ObservedDecisionAsOf $AsOf
-            $script:IvFeedReady = $true
-            $M67Args = @('runners\a_short_weekly_pipeline.py', '--as-of', $AsOf, '--price-as-of', $PriceAsOf, '--run-date', $RunDate, '--analysis-input', $SemAnalysisInput, '--iv-feed', $IvFeed, '--out', $M67Out, '--confirm-fetch-authorized')
+            Add-SidecarOutcome -Name 'iv_feed' -Expected $true -Attempted $true -ExecutionStatus 'succeeded' -ProgressStatus 'advanced' -ObservedDecisionAsOf $AsOf -AttemptedBeforeEgs $script:IvFeedAttemptedBeforeEgs -FeedRef $script:IvFeedRef -FeedSha256 $script:IvFeedSha256 -IvFeedStatus $script:IvFeedStatus
+            $M67Args = @('runners\a_short_weekly_pipeline.py', '--as-of', $AsOf, '--price-as-of', $PriceAsOf, '--run-date', $RunDate, '--analysis-input', $SemAnalysisInput, '--iv-feed-status', $script:IvFeedStatus, '--iv-feed', $IvFeed, '--out', $M67Out, '--confirm-fetch-authorized')
             if ($CrashVetoSummaryReady) { $M67Args += @('--crash-veto-summary', $CrashVetoSummary) }
             if (-not $IsHistoricalAsOf) {
                 # live 运行(as_of>=运行日:今日 或 前瞻 canonical 周一):as_of 当日 EOD 盘中/盘前尚未发布 → 显式启用
@@ -662,7 +732,7 @@ if ($SkipSemanticRisk) {
                     # bad -Account path: fail the requested M6.7; never emit a misleading sizing-less artifact.
                     $RunM67 = $false
                     Write-Host "[FATAL] M6.7 requested but -Account path was not found: $Account" -ForegroundColor Red
-                    Set-M67Failure -Reason 'account_path_missing' -ExitCode 23 -AnalysisInput $SemAnalysisInput -Directory $M67Dir
+                    Set-M67Failure -Reason 'account_path_missing' -ExitCode 23 -AnalysisInput $SemAnalysisInput -IvFeedStatus $script:IvFeedStatus -Directory $M67Dir
                 }
             } else {
                 Write-Host "[WARN] M6.7 no -Account: observation-only (no position sizing/holding-state). The weekly_m67 artifact is marked sizing_mode=observation_only_no_account - 建仓 candidates render as 观察 (sizing artifact, NOT a real avoid signal). Pass -Account <a_short_account_bundle JSON generated by a_short_account_state_from_manual_tables.py> for real sizing and holding-state decisions." -ForegroundColor Yellow
@@ -674,7 +744,7 @@ if ($SkipSemanticRisk) {
                 if ($null -eq $M67ExitCode) { $M67ExitCode = 1 }
                 if ($M67ExitCode -ne 0) {
                     # requested M6.7 是本次正式运维产物；失败必须显式传播，不能返回选股成功假象。
-                    Set-M67Failure -Reason 'weekly_pipeline_failed' -ExitCode $M67ExitCode -AnalysisInput $SemAnalysisInput -Directory $M67Dir
+                    Set-M67Failure -Reason 'weekly_pipeline_failed' -ExitCode $M67ExitCode -AnalysisInput $SemAnalysisInput -IvFeedStatus $script:IvFeedStatus -Directory $M67Dir
                 } else {
                     $script:M67InvocationState = 'complete'
                     Write-Host "[OPERATION] authoritative M6.7 weekly report -> $M67Out. Older analysis reports remain research-only inputs." -ForegroundColor Yellow
