@@ -53,6 +53,7 @@ from engine.us_short_market_diagnostic_lifecycle import (
     _record_files,
     build_v1_1_reminder,
     load_lifecycle_register,
+    load_register_and_settled_records,
     load_settled_weekly_records,
     persist_settled_weekly_record,
 )
@@ -202,8 +203,14 @@ def diagnostic_store_state(
     if not counted:
         return {"state": "fresh", "problem": None, "receipt": receipt, "register": None, "records": []}
     try:
-        register = load_lifecycle_register(root, as_of_date=as_of_date)
-        records = load_settled_weekly_records(root, as_of_date=as_of_date)
+        # One load, not two. These two readers are both projections of the same
+        # call -- `load_lifecycle_register` returns its first element and
+        # `load_settled_weekly_records` its second -- so asking for them
+        # separately read and revalidated the entire store twice for one answer.
+        # This is the hottest caller on the track (63% of all store validations
+        # in a rehearsal run come through here), and nothing writes between the
+        # two lines, so there was never a second thing to catch.
+        register, records = load_register_and_settled_records(root, as_of_date=as_of_date)
     except MarketDiagnosticLifecycleError as exc:
         # Deliberately not swallowed into "no records yet". Any store fault used
         # to become "week 1, prior NAV None", and the public builder would then
@@ -222,6 +229,13 @@ def next_week_inputs(
     v1.1 reminder derived from the counts already on disk. Week 1 carries a
     ``None`` prior NAV because the normalized capital is the base; a later week
     that lost its predecessor is a store problem, not something to paper over.
+
+    It also hands back the ``receipt`` and the ``settled_records`` it had to load
+    and revalidate to answer at all. Not a cache -- nothing is kept between calls,
+    and the next call still reads the whole store off disk. It is simply that
+    every caller here went on to ask for one or both of those a second and third
+    time, each ask revalidating the entire store again, which over twenty-six
+    weeks is quadratic in the number of weeks for an answer already in hand.
     """
 
     state = diagnostic_store_state(root, as_of_date=as_of_date)
@@ -240,6 +254,8 @@ def next_week_inputs(
             "prior_nav": None,
             "v1_1_reminder": build_v1_1_reminder(0, consecutive_paper_evaluable_week_count=0),
             "diagnostic_epoch": receipt["diagnostic_epoch"],
+            "receipt": receipt,
+            "settled_records": [],
         }
 
     register = state["register"]
@@ -257,6 +273,8 @@ def next_week_inputs(
             attribution_epoch=attribution["attribution_epoch"],
         ),
         "diagnostic_epoch": register["diagnostic_epoch"],
+        "receipt": receipt,
+        "settled_records": records,
     }
 
 
@@ -302,12 +320,11 @@ def _target_week(
     target = candidates[-1]
     if target == 1:
         return target, None, False
-    try:
-        records = load_settled_weekly_records(root, as_of_date=as_of_date)
-    except MarketDiagnosticLifecycleError as exc:
-        raise MarketDiagnosticWeeklyProducerError(
-            f"the prior settled week cannot be read, so week {target} has no NAV to continue: {exc}"
-        ) from exc
+    # The records `next_week_inputs` validated moments ago, not a fresh load of
+    # the same bytes: this runs inside one call, after that load and before any
+    # write. Reloading here revalidated every settled week a second time for a
+    # single NAV lookup.
+    records = inputs["settled_records"]
     for record in records:
         if record["calendar_week_index"] == target - 1:
             return target, record["strategy"]["nav"], bool(record["strategy"]["no_count"])

@@ -255,17 +255,17 @@ def _paper_week_wrapped_by(
 def _prior_valuation_date(
     index: int,
     *,
-    root: str | Path,
+    settled_records: list[dict[str, Any]],
     model_paper_root: str | Path,
     head: Mapping[str, Any],
     as_of_date: str | None,
 ) -> str:
+    """``settled_records`` is required and comes from the caller's own
+    ``next_week_inputs``: every call site had just loaded and revalidated the
+    whole store, and this reloaded it again for one prior valuation date."""
+
     if index > 1:
-        try:
-            records = load_settled_weekly_records(root, as_of_date=as_of_date)
-        except MarketDiagnosticLifecycleError as exc:
-            raise WeeklyAdvanceError(f"the prior settled week cannot be read: {exc}") from exc
-        prior = [record for record in records if record["calendar_week_index"] == index - 1]
+        prior = [record for record in settled_records if record["calendar_week_index"] == index - 1]
         if not prior:
             raise WeeklyAdvanceError(
                 f"week {index} needs week {index - 1}'s valuation date, which the store does not hold"
@@ -468,7 +468,7 @@ def next_week_identity(
     # `next_week_inputs` above is one of the authorization gates: it refuses a
     # store that is not started or cannot be read, so by here the receipt exists.
     # Re-checking it would be a second door for an input the first already shut.
-    receipt = diagnostic_store_state(root, as_of_date=as_of_date)["receipt"]
+    receipt = inputs["receipt"]
     head = _head(model_paper_root)
     index = inputs["calendar_week_index"]
     return _identity_for(
@@ -478,7 +478,11 @@ def next_week_identity(
         model_paper_root=model_paper_root,
         head=head,
         prior_valuation_date=_prior_valuation_date(
-            index, root=root, model_paper_root=model_paper_root, head=head, as_of_date=as_of_date
+            index,
+            settled_records=inputs["settled_records"],
+            model_paper_root=model_paper_root,
+            head=head,
+            as_of_date=as_of_date,
         ),
         as_of_date=as_of_date,
     )
@@ -508,7 +512,7 @@ def _weeks_now_due(
         inputs = next_week_inputs(root, as_of_date=as_of_date)
     except MarketDiagnosticWeeklyProducerError as exc:
         raise WeeklyAdvanceError(str(exc)) from exc
-    receipt = diagnostic_store_state(root, as_of_date=as_of_date)["receipt"]
+    receipt = inputs["receipt"]
     head = _head(model_paper_root)
     epoch = inputs["diagnostic_epoch"]
     index = inputs["calendar_week_index"]
@@ -522,7 +526,11 @@ def _weeks_now_due(
     first = plan_week(
         index,
         prior_valuation_date=_prior_valuation_date(
-            index, root=root, model_paper_root=model_paper_root, head=head, as_of_date=as_of_date
+            index,
+            settled_records=inputs["settled_records"],
+            model_paper_root=model_paper_root,
+            head=head,
+            as_of_date=as_of_date,
         ),
         **shared,
     )
@@ -654,7 +662,7 @@ def _next_week_plan(
         inputs = next_week_inputs(root, as_of_date=as_of_date)
     except MarketDiagnosticWeeklyProducerError as exc:
         raise WeeklyAdvanceError(str(exc)) from exc
-    receipt = diagnostic_store_state(root, as_of_date=as_of_date)["receipt"]
+    receipt = inputs["receipt"]
     head = _head(model_paper_root)
     index = inputs["calendar_week_index"]
     plan = plan_week(
@@ -664,7 +672,11 @@ def _next_week_plan(
         model_paper_root=model_paper_root,
         head=head,
         prior_valuation_date=_prior_valuation_date(
-            index, root=root, model_paper_root=model_paper_root, head=head, as_of_date=as_of_date
+            index,
+            settled_records=inputs["settled_records"],
+            model_paper_root=model_paper_root,
+            head=head,
+            as_of_date=as_of_date,
         ),
         as_of_date=as_of_date,
     )

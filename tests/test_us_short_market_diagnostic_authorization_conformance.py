@@ -216,6 +216,15 @@ EXEMPT = {
         "reads the model-paper store, not the diagnostic store",
     "runners/us_short_market_diagnostic_weekly_fetch.py::_identity_for":
         "assembles one week from a receipt, a head and a prior date the gated caller supplied",
+    "runners/us_short_market_diagnostic_weekly_fetch.py::_prior_valuation_date":
+        # It used to reach the store itself; it now takes the settled records its
+        # gated caller just loaded, because reloading them revalidated every week
+        # again for one date lookup. Deliberately NOT the KNIFE7 hole: that was
+        # about PUBLIC producers of the published verdict being handed an artifact
+        # to certify. This is private, has three call sites in its own module, is
+        # not on the publish path, and every one of them passes what
+        # `next_week_inputs` -- itself a gate -- returned moments earlier.
+        "derives one date from settled records the gated caller supplied",
     "runners/us_short_market_diagnostic_weekly_fetch.py::_account_has_moved_past":
         "compares two dates from a head in hand",
     "runners/us_short_market_diagnostic_weekly_fetch.py::_unlived_week_identity":

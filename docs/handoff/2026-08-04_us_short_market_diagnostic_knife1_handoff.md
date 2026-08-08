@@ -474,3 +474,38 @@ python -B <scratchpad>\probe_c.py   # C 的四条实跑探针（第五条是静�
 **C KNIFE7 家族五条**：全部给出可复现探针并翻 resolved，且没有一条借探针之名顺手改代码。其中 `HOLLOW-NOTIFICATION-TEST` 那条尤其有意思——原测试三个子例都传 `diagnostic_epoch="e1"`，而 schema 最短 3 字符，所以三例其实全死在 epoch 上、根本没测到通知；**审查方自己第一轮探针也踩了同一个坑**（用 `'e1'` 导致四个锚点用例全报 schema 错），可算独立复现了该 finding 的机制。
 
 **验证边界**：验收超集 `Ran 297 in 83.3s PASS receipt:4ec902273372b1f4f96a5660`。§6a 独立对抗 agent 未起（会话级规则禁用），补偿为上述自写探针；C 的五条只读其条目内的探针记录、未逐条复跑。首轮包跑到一半别窗把 master 从 `0d44a774` 推到 `f8ec16fe`，收据被 runner 以「code state changed during focused run」拒绝（测试本身 297 全绿），故在自己树同步后重跑一次取得绑定收据。
+
+## 2026-08-08 追加：演练台 O(n²) 的真正位置——不在读取链内部，在它的调用方
+
+**改了什么**：三腿，同一缺陷类一次扫净，**不加任何缓存**。
+1. `engine/us_short_market_diagnostic_weekly_producer.py::diagnostic_store_state` 由「先 `load_lifecycle_register` 再 `load_settled_weekly_records`」改为一次 `load_register_and_settled_records`。
+2. 同文件 `next_week_inputs` 把它已经验过的 `receipt` 与 `settled_records` 一并交回；`_target_week` 改用 `inputs["settled_records"]`，不再为查一个前周 NAV 重读整店。
+3. `runners/us_short_market_diagnostic_weekly_fetch.py` 三处 `receipt = diagnostic_store_state(...)["receipt"]` 改取 `inputs["receipt"]`；`_prior_valuation_date` 由 `root` 参数改为必传 `settled_records`（三个调用点各自显式下传）。
+
+**为什么改**：上一刀把两个公开读者合并成 `load_register_and_settled_records`，**却没改最热的调用方**。`load_lifecycle_register` 与 `load_settled_weekly_records` 现在是同一个 tuple 的两半，`diagnostic_store_state` 一次调用因此把整店读校两遍——而它占全部整店读校的 63%。其余两腿同理：调用方刚把整店读校完，紧接着又为一个 receipt、一个前周 NAV 各重读一遍。
+
+**先量后改**（这是本刀最该被复用的做法）：用计数探针裹住 `load_register_and_settled_records`，按 `traceback` 归因到调用链，跑 8 周演练台。没有这一步我会照代码直觉只看到「每周 3 次」，实际是 **22.8 次**。
+
+**验证命令**
+```
+python -B <scratchpad>\count_reads.py 8      # 每周整店读校次数 + 累计记录校验条数
+.tools\run_unittest_with_repo_pythonpath.cmd --timeout-seconds 600 -v tests.test_us_short_market_diagnostic_rehearsal --durations 3
+.tools\run_unittest_with_repo_pythonpath.cmd --timeout-seconds 600 discover -s tests -p "test_us_short_market_diagnostic*.py"
+python .tools\full_pack_ledger.py run us_short "<trigger>" "receipt:<token>" 860 -- discover -s tests -p "test_us_short*.py"
+```
+
+**验证结果**
+- 每周整店读校 **22.8 → 11.2 次**（182→90，−51%）；累计记录校验 **756 → 384 条**（−49%）。
+- 模块墙钟 **176.0s → 109.4s**（−38%）；`test_twenty_six_weeks_reach_the_scorecard` **121.9s → 71.0s**（−42%）；29 测全绿。对照：建成时手记 52s，退化峰值 231.6s。
+- 「校验没被跳过」对照：新增 `StoreStateTest::test_reusing_the_validated_records_did_not_stop_them_being_validated`——干净跑一轮后盘上篡改第 2 周 NAV，`diagnostic_store_state` 必须报 `broken` **且 `records` 为空**、`next_week_inputs` 必须抛。两条植入各精确转红、还原逐字节一致（P1 坏店仍 `running`+records → 4 测红；P2' `settled_records` 装未校验的盘上记录 → 12 测红）。
+- 全量 ledger 一次（改动落在 shared engine + 生产 runner）——结果见 SESSION_LOG 同日 entry。
+
+**失效的旧结论**
+- 「真正的成本在 `load_settled_weekly_records` 每次重跑 `_load_records_for_register`」——**已失效**。那一层上一刀就修完了；剩下的成本全在**调用方重复调用**，不在读取链内部。照旧结论继续往读取链里找会白费一轮。
+- 「方向是给这条读取链一个单次运行内的一致性缓存」——**没有采纳，也不需要**。三腿都是「把手里已经验过的东西传下去」，跨调用零缓存，因此不承担缓存的失效风险，也不需要证明命中率。
+- 「lane 剩余墙钟由 `test_us_short_discovery_conformance_executable`（652s）主导」——已失效。并行 runner 落地后地板换成了本模块（主树实测 `WALL_CLOCK_FLOOR 179.5s of 815.3s`），本刀正是打这个地板。
+
+**下一步注意事项**
+- `next_week_inputs` 的返回**多了两个键**（`receipt`、`settled_records`）。它不进任何制品、无键集合断言，但写新消费者时别假设它只有原来四个键。
+- `_prior_valuation_date` 的 `root` 参数**没了**，改必传 `settled_records`；新调用点必须自己拿到已验记录再传，别退回自己去 load。
+- 首版植入对照 P2 打歪（`list(... or [])` 语义等价 → 全绿）。**对照全绿要当成「打歪了」而不是「覆盖充分」**，这是本会话第四次踩同一个坑。

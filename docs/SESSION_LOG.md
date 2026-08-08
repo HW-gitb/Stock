@@ -1,5 +1,13 @@
 # Session Log
 
+## 2026-08-08 — Claude 修复（US-short 演练台 O(n²)：真正的位置在调用方，已收口）
+
+- **Verdict/Action**: 先量后改。计数探针裹住 `load_register_and_settled_records` 并按调用链归因，跑 8 周演练：**每周 22.8 次整店读校**（照代码直觉只会看到 3 次），`diagnostic_store_state` 独占 63%——它自己每次读两遍，因为上一刀合并了两个公开读者却没改这个最热的调用方。修三腿、不加任何缓存：合并那一次读；`next_week_inputs` 交回它已验的 `receipt`/`settled_records`；`_target_week` 与 `weekly_fetch` 三处改用已验数据。
+- **Required**: 无。正文只在 `docs/system_risk_register.md`，`R-USSHORT-26W-DIAG-REHEARSAL-GOT-4-5X-SLOWER-WHEN-IT-STARTED-USING-THE-REAL-FETCH-ENTRY` 已翻 `resolved`、Closure 三项全达成。**跨调用仍零缓存**，下一次调用照样整店读盘重校。一件如实记：`_prior_valuation_date` 改收数据后被授权一致性守卫点名未接门，已加 `EXEMPT` 并写明它与 KNIFE7「公开产出者被喂制品」形状之别，不是绕开。
+- **Verify**: 每周整店读校 **22.8→11.2 次**（182→90，−51%），累计记录校验 **756→384 条**（−49%）；模块 **176.0→109.4s**（−38%），26 周那条 **121.9→71.0s**（−42%）。验收包 `Ran 416 / 327.7s / OK / receipt:b65e753874f6f96f4e9d2ca9`；全量 ledger 一次 `status=PASS tests=5623 / 835.6s / deadline=860s / mode=parallel`、`COUNT_GATE discovered=ran=5623`。地板已换成 `test_us_short_discovery_conformance_resources`（199.5s），与本轨无关。
+- **Pre-Codex self-review**: A-F checked。A：先量再改，归因到调用链后一次扫净三腿（同一缺陷类），不只修最显眼那条。B：`_prior_valuation_date` 去掉 `root` 后 grep 三个调用点全部显式下传。C 反向：新增 `test_reusing_the_validated_records_did_not_stop_them_being_validated`（篡改盘上 NAV → 必须 `broken` 且 `records` 为空）；两条植入各转红、还原逐字节一致。**首版 P2 打歪（语义等价）导致全绿，按 C2 规则当作打歪重打，未当成覆盖充分**。D：守卫点名后选 EXEMPT+理由而非退回重读。E 单态。F：探针脚本 `python -B`，无残留。matrix=3腿/2植入/1对照；register=updated；handoff=updated；focused=416 OK；full-lane=`PASS 5623 / 835.6s`；door=提交前 guard。
+- **Next**: 全量地板现为 `test_us_short_discovery_conformance_resources`（199.5s / 23.9%），由用户决定是否另起一刀。
+
 ## 2026-08-08 — Claude 审查 PASS（首周门 + 前视门默认 + KNIFE7 家族探针，一刀三段）
 
 - **Verdict/Action**: PASS，`0d44a774` 已在 master。A 的两道门都实：周末检查换成 canonical 决策周（周一），并在**铸造时**要求 `as_of_date`、拒绝未来的 `issued_at`——把这道判在铸造而非校验，理由成立：明年读回一份旧 receipt 时它本就比读者的钟老，放在校验会把每一份曾经合法的 receipt 都判死。B 的六处默认是**删掉**不是改安全值，调用方现在必须显式写 `as_of_date=None`，配 AST 守卫。C 五条各带探针记录，无一条借探针之名顺手改代码。

@@ -25,6 +25,7 @@ from engine.us_short_market_diagnostic_weekly_producer import (
     MarketDiagnosticWeeklyProducerError,
     build_next_weekly_record,
     diagnostic_policy_sha256,
+    diagnostic_store_state,
     next_week_inputs,
     settle_next_week,
     strategy_ruleset_fingerprint,
@@ -664,6 +665,39 @@ class StoreStateTest(unittest.TestCase):
             epoch=self.rows[0]["diagnostic_epoch"],
             first_decision_date=self.rows[0]["decision_date"],
         )
+
+    def test_reusing_the_validated_records_did_not_stop_them_being_validated(self) -> None:
+        """The control for handing `settled_records` down instead of reloading them.
+
+        `diagnostic_store_state` used to read and revalidate the whole store twice
+        per call, and `_target_week` / `_prior_valuation_date` each reloaded it
+        again afterwards -- quadratic over twenty-six weeks for an answer already
+        in hand. The reloads are gone. The checking is not, and it must not be:
+        every one of those callers now consumes the records `next_week_inputs`
+        validated, so if that validation had been weakened, a record tampered with
+        on disk would flow straight through the lot of them.
+
+        Nothing is cached between calls either, which is why this works at all --
+        the tampering happens after a clean call and the very next call sees it.
+        """
+
+        self._open()
+        for row in self.rows[:2]:
+            persist_settled_weekly_record(row, root=self.store)
+        self.assertEqual("running", diagnostic_store_state(self.store)["state"])
+        self.assertEqual(3, next_week_inputs(self.store)["calendar_week_index"])
+
+        path = self.store / "weeks" / self.rows[1]["decision_date"] / "weekly_record.json"
+        record = json.loads(path.read_bytes().decode("utf-8"))
+        record["strategy"]["nav"] = "999999.000000"
+        path.write_bytes(canonical_json_bytes(record))
+
+        state = diagnostic_store_state(self.store)
+        self.assertEqual("broken", state["state"])
+        self.assertEqual([], state["records"], "a broken store must hand nobody records to reuse")
+        with self.assertRaises(MarketDiagnosticWeeklyProducerError) as ctx:
+            next_week_inputs(self.store)
+        self.assertIn("cannot be read", str(ctx.exception))
 
     def test_a_clock_opened_this_week_is_fresh_not_broken(self) -> None:
         """Calling a normal first week "broken" teaches the operator to ignore the word."""
