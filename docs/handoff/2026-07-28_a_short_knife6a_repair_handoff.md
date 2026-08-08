@@ -1065,3 +1065,15 @@ python runners\a_short_account_state_from_manual_tables.py --input-dir state\a_s
 **覆盖损失**：横幅与「1900 非交易日」两条断言无人接手，已在 register 明记为已知缺口。
 
 **下一步**：那条 CRLF 产物归一（连同同批另一周）+ 查写盘口的换行来源，属另一刀。
+
+## 2026-08-08 追加：CRLF 收据的自修自审（用户令）
+
+**做了什么**：把"归一那一份产物"扩成"堵住产出它的口子"。根因是 `ConvertTo-Json` 在 Windows 分行用 CRLF、调用方再补一个裸 LF，所以 `Write-M67Utf8NoBom` 写出的每一份收据/墓碑/清单都是 mixed；那一份只是碰巧被 track 了进来。归一化放进唯一写盘口，三个调用点零改动覆盖，并新增断言把这条不变式钉住。完整正文见 `docs/system_risk_register.md`。
+
+**动手前的安全确认**：这些产物的 raw sha 被账本绑着，所以先查了 `regime_action_comparison_records.json`——记录的 provenance sha 只有 1 条，既不等于该收据的 CRLF 形也不等于 LF 形，且没有"有记录无产物"的悬空。确认没有账本绑这份字节，才动它。
+
+**植入对照**：A 写盘口去掉归一 → 新断言单独转红；B 把产物改回 CRLF → 既有两条守卫点名转红。两次还原均逐字节一致。
+
+**已知不做**：同批落的两份 `iv_feed.json` 也是 CRLF（Python 文本模式所致），但不在任何 pin 内、无提交字节绑定；改 Python 写盘口会改变将来每份 feed 的字节，属独立刀。
+
+**下一步**：无（随本轮提交）。

@@ -1,5 +1,13 @@
 # Session Log
 
+## 2026-08-08 — Claude 自修自审（CRLF 收据与产出它的写盘口）
+
+- **Verdict/Action**: 按用户令自修自审。不是只把那一份产物归一：根因是 `ConvertTo-Json` 在 Windows 产出 CRLF、调用方再补一个裸 LF，于是 `Write-M67Utf8NoBom` 写出的**每一份**收据/墓碑/清单都是 mixed，谁把它 track 进来谁就破 pin。归一化放进那道唯一的写盘口（三个调用点零改动全覆盖），并把这条不变式钉成断言。
+- **Required**: 无。`R-ASHORT-PUBLISHED-RECEIPT-COMMITTED-WITH-CRLF-BREAKS-ITS-OWN-LF-PIN` 已 closed；归一前后 payload 逐字段相同、无账本绑定该 sha、两条植入对照与 full lane 见 `docs/system_risk_register.md`（单一来源，本处不复述）。
+- **Verify**: 归一：`CRLF=9/LF=1 → CRLF=0/LF=10`，`json.loads` 前后相等，`git ls-files --eol` 由 `i/mixed w/mixed` 转 `w/lf`；guard 模块 `Ran 4 tests` / `OK`（新增写盘口断言）。植入对照两条：A 写盘口去掉 `-replace` → 新断言单独转红；B 把已归一的产物改回 CRLF → 既有两条守卫点名转红；两次还原均逐字节一致。focused `Ran 47 tests in 8.131s` / `OK`（`receipt:77d1a2133bfdb53e9ea08a17`）；full lane `status=PASS tests=2598 / 102.4s`。
+- **Pre-Codex self-review**: A-F checked。A：先枚举 12 份 tracked bundle + 另一条 `-text` pin（fixtures 全干净）再定位到唯一写盘口，三个调用点一次覆盖；A.6 权威链 `产物字节 -> Write-M67Utf8NoBom -> .gitattributes -text`。B：`Write-M67Utf8NoBom` 全仓 4 处命中（1 定义 3 调用），无遗漏。C 反向：植入 A/B 双向都转红。D=N-A；E 单态；F diff-check 干净。matrix=1产物/1写盘口/3调用点/2植入；register=updated；handoff=updated；focused=47 OK；full-lane=`status=PASS tests=2598 / 102.4s`；door=route+doc-governance 55 OK。
+- **Next**: Codex：Pass
+
 ## 2026-08-08 — Claude 审查 PASS（守卫测试改回它名字声称的范围）
 
 - **Verdict/Action**: PASS，已提交。上轮点名的第五条腿按修法①收口：删掉错误的 `TUSHARE_TOKEN` skip，删掉够不到的横幅与 1900 非交易日两条断言，留下 `returncode==1` + preflight 行 + `assertNotIn("禁止运行脚本")`。**在我这台有 token 的机器上从红转绿**，无 token 侧执行方亦绿——两个条件都过，不再是「靠跳过换绿」。生产 wrapper 与四条守卫腿逐字未动。

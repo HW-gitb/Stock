@@ -105,8 +105,14 @@ try {
 }
 function Write-M67Utf8NoBom {
     param([string]$LiteralPath, [string]$Text)
+    # Every artifact written through this door is sha-pinned and kept at LF by
+    # .gitattributes, but ConvertTo-Json emits CRLF on Windows.  Callers append
+    # a bare LF terminator, so without this the file lands mixed-ending and
+    # breaks its own pin the moment someone tracks it.  Normalising here covers
+    # all three callers instead of each remembering.
+    $Normalised = $Text -replace "`r`n", "`n"
     $Encoding = [System.Text.UTF8Encoding]::new($false)
-    [System.IO.File]::WriteAllText($LiteralPath, $Text, $Encoding)
+    [System.IO.File]::WriteAllText($LiteralPath, $Normalised, $Encoding)
 }
 function Invalidate-M67Artifact {
     param([string]$LiteralPath)

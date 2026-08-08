@@ -73,5 +73,22 @@ class PublishedBundleEolPinTests(unittest.TestCase):
         self.assertEqual([sha for sha in recorded if sha not in available], [])
 
 
+    def test_the_only_writer_of_these_bundles_normalises_to_lf(self) -> None:
+        """Root cause, not just today's offender.
+
+        `ConvertTo-Json` emits CRLF on Windows and the callers append a bare
+        LF terminator, so the launcher used to write mixed-ending receipts and
+        manifests; the next failed weekly run would re-offend the moment its
+        receipt was tracked.  All three callers go through one write door, so
+        the normalisation belongs there and this assertion pins it.
+        """
+        launcher = (ROOT / "runners" / "weekly_screening.ps1").read_text(encoding="utf-8")
+        door = launcher[launcher.index("function Write-M67Utf8NoBom"):]
+        door = door[:door.index("\nfunction ")]
+        self.assertIn("-replace", door)
+        self.assertIn("WriteAllText($LiteralPath, $Normalised", door)
+        self.assertNotIn("WriteAllText($LiteralPath, $Text", door)
+
+
 if __name__ == "__main__":
     unittest.main()
