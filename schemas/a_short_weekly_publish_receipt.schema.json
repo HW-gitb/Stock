@@ -36,6 +36,16 @@
       "type": "string",
       "pattern": "^[0-9]{8}$"
     },
+    "price_basis": {
+      "type": "string",
+      "enum": ["prior_settled", "close"],
+      "description": "Which price clock produced price_as_of. Production is always prior_settled (the trading day strictly before the decision day); close is explicit historical research only and is refused unless that decision day has already settled. Recorded so a receipt can never leave the basis implicit -- the defect this replaced was two entry points silently choosing different bases for the same decision day."
+    },
+    "price_as_of": {
+      "type": "string",
+      "pattern": "^[0-9]{8}$",
+      "description": "The resolved price basis date for this run, from runners/resolve_canonical_asof.py::resolve_price_as_of."
+    },
     "run_id": {
       "type": "string",
       "minLength": 1

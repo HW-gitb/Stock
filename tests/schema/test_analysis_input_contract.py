@@ -143,6 +143,10 @@ class AnalysisInputContractTest(unittest.TestCase):
         }
         payload["market_context"]["moneyflow_coverage"] = {
             "reference_date": payload["trade_date"],
+            "effective_ref_date": None,
+            "lag_sessions": None,
+            "fallback_applied": False,
+            "fallback_reason": None,
             "requested_trade_dates": ["20260522", "20260521", "20260520", "20260519", "20260518"],
             "observed_trade_dates": [],
             "row_count": 0,
@@ -180,6 +184,10 @@ class AnalysisInputContractTest(unittest.TestCase):
         dates = ["20260522", "20260521", "20260520", "20260519", "20260518"]
         payload["market_context"]["moneyflow_coverage"] = {
             "reference_date": payload["trade_date"],
+            "effective_ref_date": payload["trade_date"],
+            "lag_sessions": 0,
+            "fallback_applied": False,
+            "fallback_reason": None,
             "requested_trade_dates": dates,
             "observed_trade_dates": dates,
             "row_count": 10,

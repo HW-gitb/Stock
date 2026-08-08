@@ -235,6 +235,10 @@ class EgsMainSuspendGuardTest(unittest.TestCase):
                 },
                 "moneyflow_coverage": {
                     "reference_date": "20260529",
+                    "effective_ref_date": None,
+                    "lag_sessions": None,
+                    "fallback_applied": False,
+                    "fallback_reason": None,
                     "requested_trade_dates": [],
                     "observed_trade_dates": [],
                     "row_count": 0,

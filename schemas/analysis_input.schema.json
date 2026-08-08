@@ -715,6 +715,10 @@
           "additionalProperties": false,
           "required": [
             "reference_date",
+            "effective_ref_date",
+            "lag_sessions",
+            "fallback_applied",
+            "fallback_reason",
             "requested_trade_dates",
             "observed_trade_dates",
             "row_count",
@@ -725,7 +729,26 @@
             "status"
           ],
           "properties": {
-            "reference_date": {"$ref": "#/$defs/date8Nullable"},
+            "reference_date": {
+              "$ref": "#/$defs/date8Nullable",
+              "description": "D0: the reference session this decision asked for. Never moves."
+            },
+            "effective_ref_date": {
+              "$ref": "#/$defs/date8Nullable",
+              "description": "The session the window actually starts at: D0, or D1 when D0 had not been published yet. Null only when nothing was usable. Required so a fallback can never be silent -- the old shape reported one clock and a delayed publication looked identical to a normal week."
+            },
+            "lag_sessions": {
+              "type": ["integer", "null"],
+              "minimum": 0,
+              "maximum": 1,
+              "description": "Sessions between D0 and effective_ref_date. Only 0 or 1: one session covers a routine post-holiday publication delay, reaching further would trade a real reference day for a convenient one. Null when there is no usable window."
+            },
+            "fallback_applied": {"type": "boolean"},
+            "fallback_reason": {
+              "type": ["string", "null"],
+              "minLength": 1,
+              "description": "Why the window moved. Only an unpublished D0 qualifies; a malformed or partial D0 must stay incomplete rather than search for a cleaner day."
+            },
             "requested_trade_dates": {
               "type": "array",
               "items": {"$ref": "#/$defs/date8"}
@@ -743,10 +766,26 @@
           },
           "allOf": [
             {
+              "comment": "A fallback and its evidence travel together in both directions: a moved window must name a reason and carry lag 1, and an unmoved one may not claim either.",
+              "if": {"properties": {"fallback_applied": {"const": true}}, "required": ["fallback_applied"]},
+              "then": {
+                "properties": {
+                  "lag_sessions": {"const": 1},
+                  "effective_ref_date": {"type": "string", "pattern": "^[0-9]{8}$"},
+                  "fallback_reason": {"type": "string", "minLength": 1}
+                },
+                "required": ["lag_sessions", "effective_ref_date", "fallback_reason"]
+              },
+              "else": {"properties": {"fallback_reason": {"type": "null"},
+                                      "lag_sessions": {"enum": [0, null]}}}
+            },
+            {
               "if": {"properties": {"status": {"const": "complete"}}},
               "then": {
                 "properties": {
                   "reference_date": {"type": "string", "pattern": "^[0-9]{8}$"},
+                  "effective_ref_date": {"type": "string", "pattern": "^[0-9]{8}$"},
+                  "lag_sessions": {"type": "integer", "minimum": 0, "maximum": 1},
                   "requested_trade_dates": {"minItems": 5},
                   "observed_trade_dates": {"minItems": 5},
                   "row_count": {"minimum": 1},

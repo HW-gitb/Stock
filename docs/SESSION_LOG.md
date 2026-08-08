@@ -259,6 +259,44 @@
 - **Verify**: review-evidence:e4a95cd5ecca。焦点包 `98 OK`——三条全非测试红。**审查方自证**：授权 store 仅 1 周，另造 26 周伪造史（epoch 改为 `fabricated-never-authorized`）经 `build_market_diagnostic_report` 产出 `26w-1-26 / ahead_diagnostic`，`write_market_diagnostic_report` 落盘两文件。agent 另以 11 种规避形态量化守卫：抓 6 逃 5，逃逸形态之一「调门名但丢弃结果、对另一 root 操作」**正是本仓 aggregator 当前形状**。
 - **Pre-Codex self-review**: 四轮复发根因已定位并写入 register：每轮都在语法层修（让「叫门」的东西出现在正确位置），缺陷始终在语义层（门的实参是否等于被保护制品的来源）。通用修法改为「让错误组合不可表达」而非「可表达再检查」。独立对抗 pass: 已跑（第三次冷打）。
 - **Next**: 按结构性修法重做：产出者只收 root、自行经门取数，不接调用方递来的 records/report。
+## 2026-08-08 — Claude 审查 PASS（a-short 序 8 · #10：缓存命中不再丢双时钟，`close` 不再够得着 live）
+
+- **Verdict/Action**: PASS，已提交并合入 master。两条 Required 都闭，且修法比我要求的更结构化：缓存命中改用 `dataclasses.replace`（以后加字段也丢不掉），不是这次记得补四个；`close` 现在同时要「已收盘」和「真·过去回放」两条腿。旧格式缓存被判不可用并重取，正是我 Closure ④ 要的方向。
+- **Required**: 无。`R-ASHORT-MONEYFLOW-CACHE-HIT-DROPS-THE-DUAL-CLOCK-AND-CLOSE-BASIS-IS-LIVE-REACHABLE` 已 CLOSED；两条的复核证据、植入对照与仍未覆盖的三条转录怀疑见 `docs/system_risk_register.md`（单一来源，本处不复述）。
+- **Verify**: review-evidence:9d7a78d79871。**各自复跑我当初坐实它的那格**：① AST——命中分支已无手写构造、只余 `dataclasses.replace`（`:3815`）；验证器新腿实测独立触发（clock=None → `predates the dual clock`；clock 齐全 → 越过该腿报别的原因）。② `as_of=今天 / 15:30 / close` → 现被拒，真历史日仍允许。**植入 1/1**：挖掉 `if decision >= run_date:` → 今天收盘后又被放行。焦点超集 160 OK（`receipt:17a89b4e6d4f4d7058f8d0b2`）；全量按 rule 4 引用 `2556 OK`、指纹与现算相同；`static_contract_error()=None`。超时原因:两轮自写探针加合并前的主树验证。
+- **Next**: Codex：执行
+
+## 2026-08-07 — Claude Code 修复（序 8：缓存命中的双时钟按类修 + `close` 只许真·过去回放 + 三条怀疑逐条验）
+
+- **Verdict/Action**: 修完，未 commit。两条 Required 判据全成立、都是我的缺陷。**① 按类修不按实例修**：审查方的最小修法是「把四个字段补上」，那只修这一次；改用 `dataclasses.replace` 按构造复制每一个字段——手列 kwargs 正是成因，补齐它等于把同一颗地雷重埋。**② 判据合并**：`close` 只问 `decision_as_of < run_date`，与 ps1 的 `$IsHistoricalAsOf`、egs/pipeline 同一条谓词，不另造第二套；「已收盘」不再单独判（过去交易日按定义已收盘）。
+- **Required**: `R-ASHORT-MONEYFLOW-CACHE-HIT-DROPS-THE-DUAL-CLOCK-AND-CLOSE-BASIS-IS-LIVE-REACHABLE` → working-tree repaired，closed pending 审查。两条 Required 的修法、三条未验怀疑的逐条判定与 Closure 见 `docs/system_risk_register.md`（单一来源，本处不复述）。
+- **Verify**: **审查方两条探针修后实跑**：AST 解析真源码 → `fields:14 / rebuild: dataclasses.replace (carries every field)`；`as_of=20260626 / now=15:30 / close` → **REFUSED**（修前 ALLOWED 且取当日收盘），同日改成真·过去回放 → ALLOWED。**植入 3/3 中和的都是门本身**：缓存命中改回手列 kwargs → 两条转红；去掉 `close` 的 historical 腿 → 两条转红；去掉 `and not errored` → provider 故障那条转红。focused 705 OK（`receipt:5f31dd6a0d93bbc3c13124aa`）；full lane `PASS 2556 / 341.2s / parallel`。
+- **Pre-Codex self-review**: A-F checked。A：三条未验怀疑逐条**跑实验**，两真一假——(i) `safe_api` 对「空」与「异常耗尽」都返回 default、调用点不可区分，已加可选 `errors`（不传即旧行为）；(iii) 长度守卫是死代码且会以 ValueError 逃出，已改降级并补测试；(ii) **假**——两处失败都 `exit 1`、不写 receipt。B：无残留。C：`close` 另加反向控制。D：n/a。E：未动 CURRENT。F：预判据重封一键、契约=`None`、diff-check 干净。matrix=replace按类修+validator双向+旧条目重取+close判据合并+errors可区分+死码降级；register=updated；handoff=主 handoff 追加；focused=705 OK；full-lane=`PASS 2556 / 341.2s`；door=55 OK
+- **Next**: Claude Code：审查
+
+## 2026-08-07 — Claude 审查 FAIL（a-short 序 8 · #10 价格时钟与资金流容差：两条口径没走完自己的路）
+
+- **Verdict/Action**: FAIL，未提交。双入口同源这件核心事**确实做成了**（我实测 canonical 的 `last_settled` 与显式路径的 `prior_settled` 对同一决策日相等，`$PriceAsOf = $AsOf` 已删净）。挡住的是两条：资金流**缓存命中**会把四个新的双时钟字段抹回默认值（进而产出通不过自身 schema 的 analysis_input，且让回退静默消失）；`-PriceBasis close` 在「今天、收盘后」这格没被拒，而脚本对该情形的分类正是 `mode=live`。
+- **Required**: `R-ASHORT-MONEYFLOW-CACHE-HIT-DROPS-THE-DUAL-CLOCK-AND-CLOSE-BASIS-IS-LIVE-REACHABLE`（P2，两条同源缺陷、各带 Required repair 与 Closure tests；另转录三条我与 agent 都未验的怀疑）。见 `docs/system_risk_register.md`（单一来源，本处不复述）。
+- **Verify**: review-evidence:b22744ac7eb4。**自写探针坐实两条**：① AST 解析真源码——`MoneyflowObservation` 14 字段、缓存命中只传 10 个，缺的正是四个双时钟字段，而 schema 在 `status==complete` 下要求 8 位 `effective_ref_date` 与 0..1 的 `lag_sessions`；② `as_of=今天 / now=15:30 / close` → 允许且取当日收盘，该情形脚本判 `mode=live`。另验成立的四项（双入口同源、`close` 五格全拒、新叶全接线、契约无误）见 register。焦点超集 154 OK（`receipt:c2aaec940ebd5b11d399cbda`）；全量按 rule 4 引用 `2551 OK`，指纹与现算相同。§6a agent 未跑成探针，结论只转录不采信。超时原因:agent 与超集串行等待加两轮探针。
+- **Next**: Codex：修复
+
+## 2026-08-07 — Claude Code 执行（序 8 整刀收口：价格时钟统一 + moneyflow 双时钟退一日容差）
+
+- **Verdict/Action**: 做完，未 commit。**流程纠正在先**：用户指出「设计好的一刀不许自己拆成几轮」，本 session 我拆了序 7 三轮、序 8 两半均非其所愿，已落 memory 并按整刀收口。后半四件：双时钟（`reference_date` 恒为 D0 不动，故既有 clock-binding 检查继续成立）、只在「D0 明确未发布」时整窗回退且畸形 payload 仍 raise、两份 schema 双向锁死、新增 `moneyflow_effective_clock` fail-closed 检查（落 `data_health.errors` → 拒绝正式发布）。
+- **Required**: 无。前后半的缺陷事实、口径判断、六件落地、验收矩阵逐行与那条 lane 覆盖缺口见 `docs/system_risk_register.md` 的 `R-ASHORT-ONE-DECISION-DAY-TWO-PRICE-BASES-DEPENDING-ON-HOW-YOU-LAUNCHED-IT`（单一来源，本处不复述）。
+- **Verify**: 验收矩阵逐行有测试（该模块 12 → 23 条）：D0 完整**不取 D5**、D0 未发布 + D1 完整 → lag=1 且调用 ≤6、**部分缺失不去找更干净的日子**、**D0 畸形仍 raise**、只有 D2 → unavailable、D0/D1 缓存不互读、四个新字段**逐个篡改都被健康检查抓成 error**（把契约里写的 mutation evidence 真跑一遍）。植入对照：回退判据放宽成 `bool(missing)` → 恰好「不找更干净日子」那条单点红。focused 699 OK（`receipt:d6b995f92f8100d9aa4f3124`）；full lane `PASS 2551 / 237.9s / parallel`。
+- **Pre-Codex self-review**: A-F checked。A：`moneyflow_coverage` 有**两个 schema 出口**（analysis_input + data_health），两处都补 required；连带三处既有夹具同类补齐（被 schema 当场打红后才发现，非靠记得）。B：无旧符号残留；`data_health` 本就 `**coverage` 展开，自动继承新字段。C：反向=不可用时报 null 不报 0；schema 两个方向都锁（声称回退要有证据，没回退不许声称）。D：n/a。E：未动 CURRENT。F：三份 schema 过 Draft7 meta、`py_compile` 过、`diff --check` 干净；四条新叶触发序 11 新叶闸已按 live 三键登记并重封契约；`leaf_effect_overrides` **只追加不重排**（第一版 `sorted()` 造成 ~100 行 churn，已回退重做，最终 28/4）。matrix=双时钟+回退判据+两 schema+健康检查+契约登记+连带夹具；register=updated；handoff=主 handoff 追加；focused=699 OK；full-lane=`PASS 2551 / 237.9s / parallel`；door=55 OK
+- **Next**: Claude Code：审查
+
+## 2026-08-07 — Claude Code 执行（序 8 前半：价格时钟两条入口统一；后半 moneyflow 未做）
+
+- **Verdict/Action**: 做完，未 commit。删掉 `$PriceAsOf = $AsOf`，两条入口都走同一个纯函数 `resolve_price_as_of`。**口径实现有个关键判断：两种朴素读法都是错的**——写成「运行时刻的 `last_settled`」会给历史回放喂今天的收盘价（look-ahead，比原缺陷更糟），写成「决策日当日收盘」就是要删的那第二种行为；正确语义是**相对决策日**的前一交易日，而它对 canonical 与 `last_settled` **恒等**，故 canonical 行为逐字不变。**已知代价明写不藏**：显式 `-AsOf` 从此也要拉一次 `trade_cal`。
+- **Required**: 无。缺陷事实、口径判断、三处改动、Closure 与那条覆盖缺口见 `docs/system_risk_register.md` 的 `R-ASHORT-ONE-DECISION-DAY-TWO-PRICE-BASES-DEPENDING-ON-HOW-YOU-LAUNCHED-IT`（单一来源，本处不复述）。
+- **Verify**: 双入口一致性直打——canonical 的 `last_settled` 必须逐字等于对同一 `as_of` 调新函数的结果，**并断言它不等于 `as_of` 本身**（被退役的行为确实不同，非空洞）。另证历史回放不被今天定价（`20260617 → 20260616`）、跨假期由日历定（`20260622 → 20260618`）、`close` 在盘中差 1 秒/未来日/缺时钟三种全 raise 且被拒时不留产物。零残留：`git grep 'PriceAsOf = $AsOf'` 代码零命中。focused 702 OK（`receipt:c88c00afe69cddc1c1615931`）；full lane `PASS 2540 / 344.3s / parallel`。
+- **Pre-Codex self-review**: A-F checked。A：整类=「同一决策日两条入口两个口径」，两条分支全部改到同一函数，非只动被点名那条；`close` 的三种不合法输入全员覆盖。B：全仓 grep 旧形态零残留；receipt schema `additionalProperties:false` 故新字段必须显式登记，已登记。C：反向=断言新基准不等于 `as_of`，且 `close` 拒绝路径不留产物。D：n/a。E：未动 CURRENT。F：PowerShell AST 解析过、`py_compile` 过、schema JSON 合法、`static_contract_error()` = `None`（PS1 与 receipt schema 不在受钉集合，无需重封）。matrix=纯函数+两入口同源+`-PriceBasis`+receipt 记口径+25 条边界；register=new entry；handoff=主 handoff 追加；focused=702 OK；full-lane=`PASS 2540 / 344.3s / parallel`；door=55 OK
+- **Next**: Claude Code：审查
+
 ## 2026-08-07 — Claude 审查 PASS（a-short 序 7 第 5 步：强档已删，守卫在两种树上判定相同）
 
 - **Verdict/Action**: PASS，已提交并合入 master。取 (b) 而非 (a) 我同意，理由是**构造性否证**不是偏好：`build_public_progress` 的 `"status": "not_configured" if root is None else ...` 决定了传 root 就永远产不出 tracked 那一支去标识化产物，故强档在当前实现下不存在——这正是我在 Required 里留的那个出口。守卫改名并在 docstring 写明只证同源、两条被否决的设计连理由一并留档。

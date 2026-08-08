@@ -89,6 +89,67 @@ def resolve_canonical_asof(now_dt, trading_days, *, session_close=A_SHARE_SESSIO
     return {"as_of": unsettled[0], "run_date": run_date, "last_settled": last_settled}
 
 
+#: The only two price bases the A-short weekly recognises.  `prior_settled` is
+#: the production basis; `close` exists solely so historical research can ask for
+#: the decision day's own close without the main path growing a second behaviour.
+PRICE_BASES = ("prior_settled", "close")
+
+
+def resolve_price_as_of(decision_as_of, trading_days, *, price_basis="prior_settled",
+                        now_dt=None, session_close=A_SHARE_SESSION_CLOSE):
+    """纯函数：把「决策日 + 口径」解析成唯一的价格基准日。
+
+    存在的理由是**同一个决策日过去会得出两个价格基准**：canonical 路径（省略
+    ``-AsOf``）取 ``last_settled``，显式 ``-AsOf`` 路径直接取 ``as_of`` 本身。
+    同一决策日、两条入口、两种价格——而脚本自己的用法说明里就写着显式 ``-AsOf``。
+
+    ``prior_settled``（默认，也是生产口径）= **严格早于决策日的那个交易日**。对
+    canonical 而言它与 ``last_settled`` 恒等：canonical as_of 是最早一个尚未收盘的
+    交易日，紧邻它之前的交易日正是最后一个已收盘的。对显式历史 as_of 而言它是决策
+    日的前一交易日——不会像旧的 ``last_settled`` 那样把**今天**的收盘价喂给一次
+    历史回放（那是 look-ahead），也不再是旧的「取 as_of 当日收盘」那第二种行为。
+
+    ``close`` = 决策日**当日**收盘，**只给真·过去回放**：判据就是 wrapper 与
+    egs/pipeline 共用的那一条 ``as_of < run_date``，不另造第二套谓词。「今天、已收盘」
+    这一格**也拒**——脚本对它的分类恰是 ``mode=live``，而在 live 决策日取当日收盘
+    正是本函数要消灭的那个旧行为（``$PriceAsOf = $AsOf``）；允许它等于把删掉的第二
+    种价格行为用一个开关装回来。未来日、盘中、非交易日同样 fail-closed。判 historical
+    需要 ``now_dt``。
+
+    返回 dict：``{decision_as_of, price_basis, price_as_of}``——口径与日期一起返回，
+    调用方把两者都记进产物，事后能看出这次用的是哪一档。
+    """
+    if price_basis not in PRICE_BASES:
+        raise ValueError(f"未知 price_basis: {price_basis!r}；只接受 {list(PRICE_BASES)}")
+    decision = str(decision_as_of)
+    td = sorted({str(d) for d in trading_days})
+    if decision not in td:
+        raise ValueError(
+            f"决策日 {decision} 不在提供的交易日历里；无法解析价格基准"
+            "（非交易日，或日历窗口没覆盖到它）")
+
+    if price_basis == "prior_settled":
+        earlier = [d for d in td if d < decision]
+        if not earlier:
+            raise ValueError(
+                f"交易日历里没有早于 {decision} 的交易日；无法解析 prior_settled 价格基准"
+                "（请扩大日历窗口 back_days）")
+        return {"decision_as_of": decision, "price_basis": price_basis, "price_as_of": earlier[-1]}
+
+    # close：只允许真·过去回放（as_of < run_date），且必须给出 now_dt 才能判定。
+    if now_dt is None:
+        raise ValueError("price_basis=close 需要 now_dt 才能判断决策日是否为历史回放")
+    if now_dt.tzinfo is not None:
+        now_dt = a_share_market_wall_time(now_dt)
+    run_date = now_dt.strftime("%Y%m%d")
+    if decision >= run_date:
+        raise ValueError(
+            f"price_basis=close 只能用于真·过去回放（as_of < run_date）；{decision} 相对运行日 "
+            f"{run_date} 是 live 决策日——在 live 日取当日收盘正是本刀删掉的第二种价格行为，"
+            "不得用开关装回来")
+    return {"decision_as_of": decision, "price_basis": price_basis, "price_as_of": decision}
+
+
 # ── 薄 main：拉 trade_cal（pinned init，不写 tk.csv）→ resolve → 写 JSON ───────────────
 def _fetch_trading_days(pro, now_dt, *, back_days=20, fwd_days=20):
     """拉 now 前后窗口内的 SSE 交易日（is_open=1）。窗口 ±20 日覆盖最长 A 股长假（春节 ~9 日）+ 周末两侧。"""
@@ -111,10 +172,16 @@ def _write_json_atomic(path, payload):
 
 
 def main(argv=None, pro_factory=None, now_dt=None):
-    # 刻意不提供 --as-of：本解析器只解析 canonical（省略 -AsOf 的路径）；显式 -AsOf 由 weekly_screening.ps1
-    # 用 `as_of < run_date` 纯日期比较自行分类（与 egs/pipeline 同谓词），不经本解析器，避免谓词漂移。
-    p = argparse.ArgumentParser(description="A-short weekly canonical 决策日 (as_of) 解析器（canonical-only）")
+    # 刻意不提供 --as-of 用于**分类**：live/historical 仍由 weekly_screening.ps1 用
+    # `as_of < run_date` 纯日期比较自行判定（与 egs/pipeline 同谓词），不经本解析器，避免谓词漂移。
+    # 但**价格基准**必须两条入口同源，否则就是本刀要消灭的双口径，故显式 as_of 也走
+    # 这里的 `--price-as-of-for`（只解析价格日，不做 live/historical 分类）。
+    p = argparse.ArgumentParser(description="A-short weekly canonical 决策日 (as_of) / 价格基准解析器")
     p.add_argument("--out", help="把解析结果 JSON 写到此路径（weekly_screening.ps1 读取）")
+    p.add_argument("--price-as-of-for", metavar="YYYYMMDD",
+                   help="只解析该决策日的价格基准（显式 -AsOf 路径用），不解析 canonical as_of")
+    p.add_argument("--price-basis", choices=list(PRICE_BASES), default="prior_settled",
+                   help="价格基准口径；生产恒为 prior_settled，close 仅供显式历史研究")
     args = p.parse_args(argv)
 
     now = now_dt or a_share_market_wall_time()
@@ -127,8 +194,22 @@ def main(argv=None, pro_factory=None, now_dt=None):
         from runners.a_short_iv_feed_probe import init_tushare_pro  # pinned endpoint，不写 tk.csv
         pro = init_tushare_pro(token)
 
-    trading_days = _fetch_trading_days(pro, now)
-    result = resolve_canonical_asof(now, trading_days)
+    if args.price_as_of_for:
+        # The explicit-`-AsOf` path.  A historical decision day can sit far outside
+        # the default +-20d window, so anchor the fetch on that day instead of now.
+        anchor = datetime.strptime(args.price_as_of_for, "%Y%m%d")
+        trading_days = _fetch_trading_days(pro, anchor)
+        result = resolve_price_as_of(args.price_as_of_for, trading_days,
+                                     price_basis=args.price_basis, now_dt=now)
+    else:
+        trading_days = _fetch_trading_days(pro, now)
+        result = resolve_canonical_asof(now, trading_days)
+        # Same basis, same function, one source: canonical's `last_settled` must be
+        # exactly what `prior_settled` resolves for its own decision day.
+        result["price_basis"] = args.price_basis
+        result["price_as_of"] = resolve_price_as_of(
+            result["as_of"], trading_days,
+            price_basis=args.price_basis, now_dt=now)["price_as_of"]
 
     if args.out:
         _write_json_atomic(args.out, result)
