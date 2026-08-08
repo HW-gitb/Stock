@@ -1,0 +1,58 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "a_short_margin_overheat_cash_control_shadow",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_name",
+    "schema_version",
+    "track_id",
+    "arm_id",
+    "criterion_id",
+    "status",
+    "predicate_triggered",
+    "shadow_cash_factor",
+    "source_digest",
+    "source_receipt",
+    "cash_factor_stack",
+    "allocation_summary",
+    "comparison_margin_overheat_control",
+    "shadow_reports"
+  ],
+  "properties": {
+    "schema_name": {"const": "a_short_margin_overheat_cash_control_shadow"},
+    "schema_version": {"const": "1.0.0"},
+    "track_id": {"const": "a_short_margin_overheat_cash_control"},
+    "arm_id": {"enum": ["baseline", "level_p95", "change_rate_p90", "change_rate_p95"]},
+    "criterion_id": {"type": "string"},
+    "status": {"enum": ["evaluable", "no_count"]},
+    "predicate_triggered": {"type": ["boolean", "null"]},
+    "shadow_cash_factor": {"type": "number", "exclusiveMinimum": 0, "maximum": 1},
+    "source_digest": {"type": "string", "pattern": "^[a-f0-9]{64}$"},
+    "source_receipt": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["kind", "source_as_of", "source_digest"],
+      "properties": {
+        "kind": {"const": "sequence19_exact_date_ratio_series"},
+        "source_as_of": {"type": "string", "pattern": "^[0-9]{8}$"},
+        "source_digest": {"type": "string", "pattern": "^[a-f0-9]{64}$"}
+      }
+    },
+    "cash_factor_stack": {"type": "object"},
+    "allocation_summary": {"type": "object"},
+    "comparison_margin_overheat_control": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["arm_id", "criterion_id", "predicate_triggered", "cash_factor", "reason"],
+      "properties": {
+        "arm_id": {"enum": ["baseline", "level_p95", "change_rate_p90", "change_rate_p95"]},
+        "criterion_id": {"type": "string"},
+        "predicate_triggered": {"type": ["boolean", "null"]},
+        "cash_factor": {"type": "number", "exclusiveMinimum": 0, "maximum": 1},
+        "reason": {"type": "string"}
+      }
+    },
+    "shadow_reports": {"type": "array", "items": {"type": "object"}}
+  }
+}

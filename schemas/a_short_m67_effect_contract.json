@@ -1266,7 +1266,7 @@
     "engine/a_short_northbound.py": "e48d20a9c49d06480443815755d97f5674fa98fe1e13284f2d4aaaa19361d71a",
     "engine/a_short_margin_overheat.py": "5d727a30ecc215a5546afe8be41dd3d43c99d7cc4abf2a03e1c099ee171d7cbb",
     "runners/a_short_phase5_engine.py": "bd9c17a7032066d7c3c9074a8fedb16e5e11b559d973d95987458fb8eca6dd5e",
-    "runners/a_short_weekly_pipeline.py": "f1ab5ba8b84fcc7f065ea64e94dc20e21bd7d6c6fca931056dbe114b91604f95",
+    "runners/a_short_weekly_pipeline.py": "fe761aa9c0820f19ad4d12d5c40de38e294eeeade743daf97ed4a7dac3124bc5",
     "runners/a_short_m67_render.py": "146e6c47814b0421bb973e2741d96e7d4773c06d9fc1104d54f9100100deac51",
     "engine/a_short_portfolio_risk.py": "02b88ac3b5239e8dd4897bde06afab0769ea5593f8a8a3666e5c8fba24486860",
     "engine/a_short_effect_contract.py": "2f7c1cbc41bd60acdd2ce4886a3beada8ee3ec76dc2a3b2288edffe37418c6a8"
@@ -1499,6 +1499,43 @@
       "consumer_refs": [
         "weekly.data_quality_shadow",
         "weekly Markdown data_quality shadow comparison"
+      ]
+    },
+    {
+      "id": "margin_overheat_cash_control_predicate",
+      "policy": "intentionally_independent",
+      "schema_path": "schemas/a_short_margin_overheat_cash_control_predicate.schema.json",
+      "schema_sha256": "d29fc83235f96df5cb4fff018895750e67cd89b79be6a89bbdf71394e25502d7",
+      "reason": "Knife 2 publishes a source-bound level and 20-session ratio-change predicate for exploratory arm-frequency and shadow-only comparison. It cannot change official M6.7 selection, action, sizing, cash, holdings, exits, or production configuration.",
+      "owner": "engine/a_short_margin_overheat_cash_control.py::build_predicate_facts",
+      "review_ref": "序19后续刀2；forward clock remains separately gated by the dedicated track",
+      "consumer_refs": [
+        "engine/a_short_margin_overheat_cash_control.py::materialize_shadow_cash_control",
+        "engine/a_short_margin_overheat_cash_control.py::build_replay_frequency"
+      ]
+    },
+    {
+      "id": "margin_overheat_cash_control_replay",
+      "policy": "intentionally_independent",
+      "schema_path": "schemas/a_short_margin_overheat_cash_control_replay.schema.json",
+      "schema_sha256": "47b7956fc45e8a080f4de770db0d196eee0d8676f918e7444a49c297525f5b96",
+      "reason": "Knife 2 replay is exploratory, comparison-only and explicitly not forward-eligible; it reports provisional trigger frequency without starting the dedicated evidence clock or modifying production behavior.",
+      "owner": "engine/a_short_margin_overheat_cash_control.py::build_replay_frequency",
+      "review_ref": "序19后续刀2 replay gate；daily seed absence remains NOT_VERIFIED",
+      "consumer_refs": [
+        "engine/a_short_margin_overheat_cash_control.py::build_replay_frequency"
+      ]
+    },
+    {
+      "id": "margin_overheat_cash_control_shadow",
+      "policy": "intentionally_independent",
+      "schema_path": "schemas/a_short_margin_overheat_cash_control_shadow.schema.json",
+      "schema_sha256": "25e4257794b090c0b45bac44f3218e8eb1dee6928b9dc69e9f4918babbe55fb2",
+      "reason": "Knife 2 shadow allocation uses deidentified model cash and the shared production cash-factor stack and allocator on copied reports; only the comparison margin factor can change and the result cannot reach official M6.7 or account state.",
+      "owner": "engine/a_short_margin_overheat_cash_control.py::materialize_shadow_cash_control",
+      "review_ref": "序19后续刀2 shadow consumer; capture/settlement/ledger remain later knives",
+      "consumer_refs": [
+        "engine/a_short_margin_overheat_cash_control.py::materialize_shadow_cash_control"
       ]
     }
   ],

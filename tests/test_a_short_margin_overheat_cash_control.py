@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import copy
 import json
+import math
 import unittest
 from pathlib import Path
 from unittest.mock import patch
@@ -12,6 +13,10 @@ import jsonschema
 from engine import a_short_evidence_epoch_mode as epoch_mode
 from engine import a_short_margin_overheat as production_margin
 from engine import a_short_margin_overheat_cash_control as track
+import runners.a_short_weekly_pipeline as weekly_pipeline
+from runners.a_short_weekly_pipeline import build_weekly_report
+from tests import test_a_short_margin_overheat_wiring as wiring_fixtures
+from tests.test_a_short_weekly_pipeline import AS_OF, GEN, _normalized, _sized_lineage
 
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -395,6 +400,377 @@ class MarginOverheatCashControlFreezeTests(unittest.TestCase):
         self.assertTrue(stage_b["requires_stage_a_supported"])
         self.assertTrue(stage_b["requires_user_accepted_source_receipt"])
         self.assertTrue(stage_b["new_forward_batch_required"])
+
+
+class MarginOverheatCashControlKnife2Tests(unittest.TestCase):
+    """Knife 2 producer, replay gate and the single shared-core shadow consumer."""
+
+    @staticmethod
+    def _sessions():
+        return wiring_fixtures._sessions(800)
+
+    @staticmethod
+    def _inverse_margin_rows(sessions):
+        ordered = sorted(sessions)
+        rows = []
+        bases = (
+            wiring_fixtures.SSE_BALANCE,
+            wiring_fixtures.SZSE_BALANCE,
+            wiring_fixtures.BSE_BALANCE,
+        )
+        for index, trade_date in enumerate(ordered):
+            scale = 2.0 - index / (len(ordered) - 1)
+            for exchange, base in zip(production_margin.MARGIN_OVERHEAT_EXCHANGES, bases):
+                rows.append({
+                    "trade_date": trade_date,
+                    "exchange_id": exchange,
+                    "rzye": base * scale,
+                })
+        return rows
+
+    @classmethod
+    def _predicate(cls, *, rising=True, jump=False):
+        sessions = cls._sessions()
+        rows = wiring_fixtures._margin_rows(sessions) if rising else cls._inverse_margin_rows(sessions)
+        if jump:
+            rows = [
+                dict(row, rzye=float(row["rzye"]) * 2.0)
+                if row["trade_date"] == sessions[0] else row
+                for row in rows
+            ]
+        facts = track.build_predicate_facts(
+            rows,
+            wiring_fixtures._denominator_rows(sessions),
+            requested_dates=sessions,
+            source_as_of=sessions[0],
+        )
+        return sessions, facts
+
+    @staticmethod
+    def _reports():
+        weekly = build_weekly_report(
+            [_normalized()],
+            AS_OF,
+            GEN,
+            run_lineage=_sized_lineage(),
+            available_cash=None,
+        )
+        return weekly["reports"]
+
+    @staticmethod
+    def _margin_control_input(facts, *, production_effect_enabled=False):
+        return {
+            "source_as_of": facts["source_as_of"],
+            "source_path": track.PREDICATE_SOURCE_REFERENCES[0],
+            "percentile": facts["level"]["percentile"],
+            "ratio": facts["level"]["ratio"],
+            "balance_yuan": facts["level"]["balance_yuan"],
+            "denominator_float_mv_yuan": facts["level"]["denominator_float_mv_yuan"],
+            "window_start": facts["window_start"],
+            "window_end": facts["window_end"],
+            "requested_session_count": facts["requested_session_count"],
+            "observed_session_count": facts["observed_session_count"],
+            "coverage_complete": facts["coverage_complete"],
+            "production_effect_enabled": production_effect_enabled,
+        }
+
+    @classmethod
+    def _shadow(cls, facts, arm_id, *, pre_holiday_control=None):
+        return track.materialize_shadow_cash_control(
+            facts,
+            arm_id=arm_id,
+            reports=cls._reports(),
+            available_cash=100_000.0,
+            pre_holiday_control=pre_holiday_control,
+            new_exposure_capacity=200_000.0,
+            as_of=AS_OF,
+            source_receipt=facts["source_receipt"],
+        )
+
+    def test_producer_known_sequence_emits_level_and_twenty_session_change(self):
+        sessions, facts = self._predicate()
+        total = (
+            wiring_fixtures.SSE_BALANCE
+            + wiring_fixtures.SZSE_BALANCE
+            + wiring_fixtures.BSE_BALANCE
+        )
+        current_ratio = total * 2.0 / wiring_fixtures.DENOMINATOR_FLOAT_MV
+        older_scale = 2.0 - 20.0 / (len(sessions) - 1)
+        expected_change = 2.0 / older_scale - 1.0
+        self.assertEqual(facts["status"], "available")
+        self.assertEqual(facts["requested_session_count"], 800)
+        self.assertEqual(facts["observed_session_count"], 800)
+        self.assertEqual(facts["change_rate_20d"]["sample_count"], 780)
+        self.assertAlmostEqual(facts["level"]["ratio"], current_ratio)
+        self.assertAlmostEqual(facts["change_rate_20d"]["value"], expected_change)
+        self.assertAlmostEqual(
+            facts["level"]["ratio"] * facts["level"]["denominator_float_mv_yuan"],
+            facts["level"]["balance_yuan"],
+        )
+        track.validate_predicate_facts(facts)
+
+    def test_producer_missing_nan_inf_and_wrong_clock_are_unavailable(self):
+        sessions = self._sessions()
+        missing = wiring_fixtures._margin_rows(sessions)
+        missing.pop()
+        facts = track.build_predicate_facts(
+            missing,
+            wiring_fixtures._denominator_rows(sessions),
+            requested_dates=sessions,
+            source_as_of=sessions[0],
+        )
+        self.assertEqual(facts["status"], "unavailable")
+        self.assertEqual(facts["unavailable_reason"], "coverage_incomplete")
+
+        nan_rows = wiring_fixtures._margin_rows(sessions)
+        nan_rows[0]["rzye"] = math.nan
+        nan_facts = track.build_predicate_facts(
+            nan_rows,
+            wiring_fixtures._denominator_rows(sessions),
+            requested_dates=sessions,
+            source_as_of=sessions[0],
+        )
+        self.assertEqual(nan_facts["status"], "unavailable")
+        self.assertEqual(nan_facts["unavailable_reason"], "coverage_incomplete")
+
+        inf_rows = wiring_fixtures._margin_rows(sessions)
+        inf_rows[0]["rzye"] = math.inf
+        inf_facts = track.build_predicate_facts(
+            inf_rows,
+            wiring_fixtures._denominator_rows(sessions),
+            requested_dates=sessions,
+            source_as_of=sessions[0],
+        )
+        self.assertEqual(inf_facts["status"], "unavailable")
+        self.assertEqual(inf_facts["unavailable_reason"], "coverage_incomplete")
+
+        wrong_clock = track.build_predicate_facts(
+            wiring_fixtures._margin_rows(sessions),
+            wiring_fixtures._denominator_rows(sessions),
+            requested_dates=sessions,
+            source_as_of=sessions[1],
+        )
+        self.assertEqual(wrong_clock["status"], "unavailable")
+        self.assertEqual(wrong_clock["unavailable_reason"], "source_clock_mismatch")
+
+        tampered = copy.deepcopy(self._predicate()[1])
+        tampered["change_rate_20d"]["value"] = math.inf
+        with self.assertRaisesRegex(
+            track.MarginOverheatCashControlError,
+            "predicate change_rate_20d.value must be finite",
+        ):
+            track.validate_predicate_facts(tampered)
+
+    def test_validate_recomputes_both_percentiles_from_source_ratio_series(self):
+        _, facts = self._predicate(rising=False)
+        for path in ("level", "change_rate_20d"):
+            with self.subTest(path=path):
+                tampered = copy.deepcopy(facts)
+                key = "percentile"
+                actual = tampered[path][key]
+                tampered[path][key] = 0.0 if actual > 0.5 else 1.0
+                with self.assertRaisesRegex(
+                    track.MarginOverheatCashControlError,
+                    rf"predicate {path}\.percentile is not derived from source ratios",
+                ):
+                    track.validate_predicate_facts(
+                        tampered,
+                        expected_source_digest=facts["source_digest"],
+                    )
+
+    def test_replay_is_source_bound_exploratory_and_not_forward(self):
+        # The source window must include the 20-session warm-up outside the
+        # earliest rolling three-year window before any week is evaluable.
+        sessions = wiring_fixtures._sessions(1000)
+        rows = wiring_fixtures._margin_rows(sessions)
+        denominator = wiring_fixtures._denominator_rows(sessions)
+        facts = track.build_predicate_facts(
+            rows, denominator, requested_dates=sessions, source_as_of=sessions[0]
+        )
+        replay = track.build_replay_frequency(
+            rows,
+            denominator,
+            requested_dates=sessions,
+            source_as_of=sessions[0],
+            source_receipt=facts["source_receipt"],
+        )
+        self.assertTrue(replay["comparison_only"])
+        self.assertTrue(replay["exploratory"])
+        self.assertFalse(replay["forward_eligible"])
+        self.assertEqual(len(replay["by_arm"]), 3)
+        self.assertGreater(replay["evaluable_week_count"], 0)
+        self.assertGreater(replay["unavailable_week_count"], 0)
+        self.assertIn(replay["status"], {"PARTIAL", "COMPLETE"})
+
+        missing = track.build_replay_frequency(
+            [],
+            [],
+            requested_dates=sessions,
+            source_as_of=sessions[0],
+        )
+        self.assertEqual(missing["status"], "NOT_VERIFIED")
+        self.assertFalse(missing["forward_eligible"])
+        self.assertIn("no source receipt", " ".join(missing["not_verified"]))
+
+    def test_shadow_non_trigger_is_field_identical_to_baseline(self):
+        _, facts = self._predicate(rising=False)
+        baseline = self._shadow(facts, "baseline")
+        challenger = self._shadow(facts, "level_p95")
+        self.assertFalse(challenger["predicate_triggered"])
+        self.assertEqual(challenger["shadow_cash_factor"], 1.0)
+        self.assertEqual(baseline["shadow_reports"], challenger["shadow_reports"])
+        self.assertEqual(baseline["allocation_summary"], challenger["allocation_summary"])
+        for field in (
+            "available_cash_start",
+            "allocated_cash_total",
+            "remaining_cash",
+            "new_exposure_capacity_start",
+            "remaining_new_exposure_capacity",
+        ):
+            self.assertEqual(
+                baseline["allocation_summary"].get(field),
+                challenger["allocation_summary"].get(field),
+                msg=field,
+            )
+        self.assertEqual(
+            baseline["cash_factor_stack"], challenger["cash_factor_stack"]
+        )
+
+    def test_shadow_preserves_normalized_production_control_and_separates_arm_label(self):
+        _, facts = self._predicate(jump=True)
+        result = self._shadow(facts, "level_p95")
+        expected = weekly_pipeline._normalise_margin_overheat_control(
+            self._margin_control_input(facts),
+            AS_OF,
+        )
+        expected["cash_factor"] = min(expected["cash_factor"], result["shadow_cash_factor"])
+        self.assertEqual(result["allocation_summary"]["margin_overheat_control"], expected)
+        self.assertEqual(
+            result["comparison_margin_overheat_control"],
+            {
+                "arm_id": "level_p95",
+                "criterion_id": "level_percentile_p95",
+                "predicate_triggered": True,
+                "cash_factor": track.load_governance()["stage_a"]["challengers"][0]["margin_cash_factor"],
+                "reason": "comparison_margin_overheat_triggered",
+            },
+        )
+        self.assertIsNot(
+            result["cash_factor_stack"],
+            result["allocation_summary"]["cash_factor_stack"],
+        )
+
+    def test_shadow_trigger_uses_each_criterion_and_shared_harshest_factor(self):
+        _, facts = self._predicate(jump=True)
+        stage_a = track.load_governance()["stage_a"]
+        configured_factors = {
+            arm["arm_id"]: arm["margin_cash_factor"]
+            for arm in stage_a["challengers"]
+        }
+        for arm_id in ("level_p95", "change_rate_p90", "change_rate_p95"):
+            with self.subTest(arm_id=arm_id):
+                result = self._shadow(facts, arm_id)
+                self.assertTrue(result["predicate_triggered"])
+                self.assertEqual(result["shadow_cash_factor"], configured_factors[arm_id])
+                self.assertEqual(
+                    result["cash_factor_stack"]["effective_cash_factor"], 0.8
+                )
+                self.assertEqual(
+                    result["cash_factor_stack"]["control_factors"]["margin_overheat_control"],
+                    0.8,
+                )
+                self.assertEqual(
+                    result["allocation_summary"]["available_cash_start"], 80_000.0
+                )
+
+        pre_holiday = {
+            "source_as_of": AS_OF,
+            "is_pre_holiday_window": True,
+            "holiday_days_ahead": weekly_pipeline.PRE_HOLIDAY_MIN_CLOSED_DAYS,
+            "next_trade_date": "20260610",
+            "regime_status": "defense",
+        }
+        result = self._shadow(facts, "level_p95", pre_holiday_control=pre_holiday)
+        expected = min(0.8, float(weekly_pipeline.PRE_HOLIDAY_CASH_FACTOR))
+        self.assertEqual(result["cash_factor_stack"]["effective_cash_factor"], expected)
+        self.assertNotEqual(result["cash_factor_stack"]["effective_cash_factor"], 0.64)
+        self.assertEqual(
+            result["cash_factor_stack"]["control_factors"]["pre_holiday_control"],
+            expected,
+        )
+
+    def test_shadow_private_factor_takes_minimum_against_production_factor(self):
+        _, facts = self._predicate(jump=True)
+        control = self._margin_control_input(facts, production_effect_enabled=True)
+        with patch.object(production_margin, "MARGIN_OVERHEAT_PERCENTILE_THRESHOLD", 0.0), \
+                patch.object(production_margin, "MARGIN_OVERHEAT_CASH_FACTOR", 0.6), \
+                patch.object(production_margin, "MARGIN_OVERHEAT_PRODUCTION_EFFECT_ENABLED", True):
+            summary = weekly_pipeline._allocate_cash_shadow(
+                self._reports(),
+                100_000.0,
+                200_000.0,
+                pre_holiday_control=None,
+                margin_overheat_control=control,
+                shadow_cash_factor=0.8,
+                as_of=AS_OF,
+            )
+        self.assertEqual(
+            summary["cash_factor_stack"]["control_factors"]["margin_overheat_control"],
+            0.6,
+        )
+        self.assertEqual(summary["cash_factor_stack"]["effective_cash_factor"], 0.6)
+        self.assertEqual(summary["available_cash_start"], 60_000.0)
+
+    def test_shadow_rejects_forged_receipt_and_requires_shared_core(self):
+        _, facts = self._predicate()
+        forged = dict(facts["source_receipt"], source_digest="0" * 64)
+        with self.assertRaisesRegex(
+            track.MarginOverheatCashControlError, "source digest"
+        ):
+            track.materialize_shadow_cash_control(
+                facts,
+                arm_id="baseline",
+                reports=self._reports(),
+                available_cash=100_000.0,
+                new_exposure_capacity=200_000.0,
+                as_of=AS_OF,
+                source_receipt=forged,
+            )
+
+        with patch.object(
+            weekly_pipeline,
+            "_allocate_cash_shadow",
+            return_value={"cash_factor_stack": None},
+        ):
+            with self.assertRaisesRegex(
+                track.MarginOverheatCashControlError, "shared allocation core"
+            ):
+                self._shadow(facts, "baseline")
+
+        with self.assertRaisesRegex(
+            track.MarginOverheatCashControlError, "explicit source receipt"
+        ):
+            track.materialize_shadow_cash_control(
+                facts,
+                arm_id="baseline",
+                reports=self._reports(),
+                available_cash=100_000.0,
+                new_exposure_capacity=200_000.0,
+                as_of=AS_OF,
+            )
+
+        with self.assertRaisesRegex(
+            track.MarginOverheatCashControlError, "governance model cash"
+        ):
+            track.materialize_shadow_cash_control(
+                facts,
+                arm_id="baseline",
+                reports=self._reports(),
+                available_cash=99_999.0,
+                new_exposure_capacity=200_000.0,
+                as_of=AS_OF,
+                source_receipt=facts["source_receipt"],
+            )
 
 
 if __name__ == "__main__":

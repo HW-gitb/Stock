@@ -1,5 +1,34 @@
 # Session Log
 
+## 2026-08-08 — Claude 复审 PASS（刀2：判据分位回到 digest 里，影子缝取最小）
+
+- **Verdict/Action**: PASS，已提交并合入 master。三条 Required 逐条在真实路径复验：篡改 `level.percentile` / `change_rate_20d.percentile` 现在被点名拒绝（上一轮同一条探针能把决策从 1.0/100000 翻成 0.8/80000）；`allocation_summary["margin_overheat_control"]` 回到生产归一化对象、臂标签移到并列新键；影子缝由赋值改成 `min`。三条 Optional 全闭，非触发 parity 现在零字段差异。
+- **Required**: 无。`R-ASHORT-MARGIN-OVERHEAT-KNIFE2-THE-PERCENTILE-THAT-DECIDES-THE-ARM-RIDES-OUTSIDE-THE-DIGEST` 已 closed；新记一条流程 Optional（执行方把 full lane 误判为 not_triggered）。正文只在 `docs/system_risk_register.md`。
+- **Verify**: review-evidence:c5dd9388e93e。验收超集 `Ran 683 tests in 95.213s` / `OK`（`receipt:73e93a60d8a9a7b71dd7c29e`）。全量按 rule 6 升级自跑（执行方误判 not_triggered 而本刀改了生产顶层 runner）：ledger `PASS 2638 tests / 99.6s`、fingerprint `bf1d6c3abf73`、`STATIC PASS`。五条植入四红一绿，红的各自点名对应用例；绿的那条是「治理值换同值字面量」，不可区分、非缺口。自伤记录：我先起后台超集又在其跑动中改源码跑植入，得 `exit=2`（rule 7(c) 违规），还原后重跑才是上面那次。§6a 本轮未另起 agent（同片代码上一轮已起过，本轮为定点收口）。超时原因:rule 6 全量升级 + 一次自伤脏跑重来。
+- **Next**: Codex：执行
+
+## 2026-08-08 — Codex executor/fixer: knife2 Required repair (OPEN-NOT_VERIFIED)
+
+- **Verdict/Action**: Repaired the three Required trust-root defects and Optional O10–O12: source-derived percentile revalidation, preservation of the shared normalized shadow audit, minimum-factor seam, deep-copy isolation, parity, and governed Stage-A factor reads. No production importer or production decision effect was added.
+- **Required**: `R-ASHORT-MARGIN-OVERHEAT-KNIFE2-THE-PERCENTILE-THAT-DECIDES-THE-ARM-RIDES-OUTSIDE-THE-DIGEST` remains open pending independent review; repair details are in `docs/system_risk_register.md`.
+- **Verify**: Fixed Python `C:\Users\cnhea\AppData\Local\Programs\Python\Python313\python.exe` (`Python 3.13.8`): module `Ran 40 tests in 3.089s` / `OK`; acceptance superset `Ran 790 tests in 99.675s` / `OK`; compile, JSON parse, and `git diff --check` exited 0. Three temporary neutralization implants each turned the corresponding closure test red and were restored byte-for-byte.
+- **Pre-Codex self-review**: A-F checked; Required=3 repaired; Optional=O10/O11/O12 addressed; source-series/digest, normalized-control, min-factor, stack-alias, governance-factor, parity, schema, consumer, write-boundary, and negative-control checks covered; register=updated; handoff=updated; full lane=`not_triggered` because no production importer; provider/live/sub-agent=`NOT_RUN`; no stage/commit/push/merge.
+- **Next**: `Claude Code：独立复审 R-ASHORT-MARGIN-OVERHEAT-KNIFE2-THE-PERCENTILE-THAT-DECIDES-THE-ARM-RIDES-OUTSIDE-THE-DIGEST`
+
+## 2026-08-08 — Claude 审查 FAIL（刀2：决定本臂的那个分位不在 digest 里）
+
+- **Verdict/Action**: FAIL，不提交。生产侧是干净的：`_allocate_cash` 不传私有参数时逐字段不变、只有一个生产调用点且不传它、影子深拷贝 reports、走同一条 `min` 现金栈、无账户无写盘、三常量仍关闭。拦住的是信任根：`validate_predicate_facts` 核了 `ratio == balance/denominator`，却**从不重算** `level.percentile` / `change_rate_20d.percentile`，于是 digest 与 receipt 都验得过的 facts 只要改一个派生分位就能翻转本臂决策。
+- **Required**: `R-ASHORT-MARGIN-OVERHEAT-KNIFE2-THE-PERCENTILE-THAT-DECIDES-THE-ARM-RIDES-OUTSIDE-THE-DIGEST`（P2，三条腿）；三条 Optional 同条记录。机制、我的探针复现、Required repair 与逐腿 Closure tests 只在 `docs/system_risk_register.md`（单一来源，本处不复述）。
+- **Verify**: review-evidence:a4427c0639d8。验收超集 `Ran 680 tests in 100.067s` / `OK`（`receipt:ec494d583c5da40b1b048204`）——**包全绿而缺陷真实**。自跑复现：诚实分位 `0.00125` 时 `level_p95` 未触发、factor 1.0、可用 100000；把 `level.percentile` 改成 `0.99` 后校验仍 ACCEPTED，影子翻成 triggered / 0.8 / 80000，`change_rate_20d.percentile` 同法同果。生产不变对照：同输入「不传」与「显式传 None」两次调用，汇总与 reports JSON 逐字段相同。§6a agent 起 1 个，其唯一 BROKEN 项经我复现后才采信。全量按 rule 4 引执行方、不重跑。超时原因:等 §6a agent 报告并逐条自跑复现。
+- **Next**: Codex：修复
+
+## 2026-08-08 — Codex executor/fixer: sequence19 financing-overheat comparison-only knife2 (OPEN-NOT_VERIFIED)
+
+- **Verdict/Action**: Knife2 implemented: source-bound level / 20-session change predicate, three-arm comparison-only replay artifact, and one deidentified shadow consumer through the shared cash stack. No production importer or production decision effect was added.
+- **Required**: `R-ASHORT-MARGIN-OVERHEAT-KNIFE2-PREDICATE-AND-SHADOW-CONSUMER` remains open pending independent review; full details are in `docs/system_risk_register.md`.
+- **Verify**: Fixed Python `C:\Users\cnhea\AppData\Local\Programs\Python\Python313\python.exe` (`Python 3.13.8`): `Ran 264 tests in 67.198s` / `OK`; compile, schema parse, and `git diff --check` exited 0. Actual source-bound replay evidence, production weekly bytes, provider/live, and full lane are `NOT_VERIFIED` / `not_triggered`.
+- **Next**: `Claude Code：独立复审 R-ASHORT-MARGIN-OVERHEAT-KNIFE2-PREDICATE-AND-SHADOW-CONSUMER`
+
 ## 2026-08-08 — Claude 自修自审（零周开口，用户令快速收口）
 
 - **Verdict/Action**: 按用户令自修自审那条 P3。`validate_state` 的共享时钟门条件由「frozen 且周数非零」改成「frozen」，与 `build_state` 那一半对称；一行改动 + 一条自带正控的新用例。生产三常量、schema、governance preset、其余四道门逐字未动。
