@@ -1,0 +1,114 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "a_short_margin_overheat_cash_control_predicate",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_name",
+    "schema_version",
+    "track_id",
+    "source_as_of",
+    "window_start",
+    "window_end",
+    "requested_session_count",
+    "observed_session_count",
+    "coverage_complete",
+    "warmup_session_count",
+    "level",
+    "change_rate_20d",
+    "definition_summary",
+    "source_references",
+    "source_ratio_series",
+    "source_digest",
+    "source_receipt",
+    "status",
+    "unavailable_reason"
+  ],
+  "properties": {
+    "schema_name": {"const": "a_short_margin_overheat_cash_control_predicate"},
+    "schema_version": {"const": "1.0.0"},
+    "track_id": {"const": "a_short_margin_overheat_cash_control"},
+    "source_as_of": {"type": "string", "pattern": "^[0-9]{8}$"},
+    "window_start": {"type": ["string", "null"], "pattern": "^[0-9]{8}$"},
+    "window_end": {"type": ["string", "null"], "pattern": "^[0-9]{8}$"},
+    "requested_session_count": {"type": "integer", "minimum": 0},
+    "observed_session_count": {"type": "integer", "minimum": 0},
+    "coverage_complete": {"type": "boolean"},
+    "warmup_session_count": {"const": 20},
+    "level": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["ratio", "percentile", "balance_yuan", "denominator_float_mv_yuan"],
+      "properties": {
+        "ratio": {"type": ["number", "null"], "exclusiveMinimum": 0},
+        "percentile": {"type": ["number", "null"], "minimum": 0, "maximum": 1},
+        "balance_yuan": {"type": ["number", "null"], "exclusiveMinimum": 0},
+        "denominator_float_mv_yuan": {"type": ["number", "null"], "exclusiveMinimum": 0}
+      }
+    },
+    "change_rate_20d": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["lookback_sessions", "value", "percentile", "sample_count"],
+      "properties": {
+        "lookback_sessions": {"const": 20},
+        "value": {"type": ["number", "null"]},
+        "percentile": {"type": ["number", "null"], "minimum": 0, "maximum": 1},
+        "sample_count": {"type": "integer", "minimum": 0}
+      }
+    },
+    "definition_summary": {
+      "const": {
+        "ratio": "required_exchange_rzye_total_divided_by_shanghai_float_mv",
+        "change_rate_20d": "ratio_t_divided_by_ratio_t_minus_20_sessions_minus_one",
+        "percentile": "fraction_of_same_window_values_at_or_below_current",
+        "window": "rolling_three_calendar_years_exact_date_reconciliation",
+        "warmup": "twenty_prior_sessions_from_the_same_source_series",
+        "comparison_only": true
+      }
+    },
+    "source_references": {
+      "const": [
+        "analysis_input.market_context.margin_overheat",
+        "official_m67.selection_plan",
+        "a_short_factor_comparison_v2.approved_daily_cache"
+      ]
+    },
+    "source_ratio_series": {
+      "type": ["array", "null"],
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["date", "ratio"],
+        "properties": {
+          "date": {"type": "string", "pattern": "^[0-9]{8}$"},
+          "ratio": {"type": "number", "exclusiveMinimum": 0}
+        }
+      }
+    },
+    "source_digest": {"type": "string", "pattern": "^[a-f0-9]{64}$"},
+    "source_receipt": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["kind", "source_as_of", "source_digest"],
+      "properties": {
+        "kind": {"const": "sequence19_exact_date_ratio_series"},
+        "source_as_of": {"type": "string", "pattern": "^[0-9]{8}$"},
+        "source_digest": {"type": "string", "pattern": "^[a-f0-9]{64}$"}
+      }
+    },
+    "status": {"enum": ["available", "unavailable"]},
+    "unavailable_reason": {
+      "type": ["string", "null"],
+      "enum": [
+        null,
+        "source_clock_mismatch",
+        "coverage_incomplete",
+        "rolling_window_below_floor",
+        "twenty_session_warmup_unavailable",
+        "non_finite_or_non_positive_ratio",
+        "percentile_unavailable"
+      ]
+    }
+  }
+}

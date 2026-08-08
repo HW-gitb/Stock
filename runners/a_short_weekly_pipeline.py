@@ -1335,7 +1335,8 @@ def _allocate_cash(reports: list, available_cash, new_exposure_capacity=None,
                    portfolio_context=None, m05_context: dict | None = None,
                    pre_holiday_control: dict | None = None,
                    margin_overheat_control: dict | None = None,
-                   *, as_of: str | None = None) -> dict:
+                   *, as_of: str | None = None,
+                   _comparison_shadow_cash_factor: float | None = None) -> dict:
     """#3 全局现金分配(价格提案 §4 + §11.3/11.4):多只建仓按**区间上沿 entry_high**(最不利价)统一消耗
     available_cash,确定性排序;不足一手/最小金额 → 转观察。**原地改 reports(只动建仓票)**;返回 weekly 现金摘要 | None。
     只 re-rank 建仓,不 rescue hard veto、不把观察/否决变建仓、不碰持仓/Rule12·13。"""
@@ -1356,6 +1357,20 @@ def _allocate_cash(reports: list, available_cash, new_exposure_capacity=None,
     # never carry the un-bound `source_as_of: None` shape the schema rejects.
     pre_holiday_control = _normalise_pre_holiday_control(pre_holiday_control, as_of)
     margin_overheat_control = _normalise_margin_overheat_control(margin_overheat_control, as_of)
+    if _comparison_shadow_cash_factor is not None:
+        if (isinstance(_comparison_shadow_cash_factor, bool)
+                or not isinstance(_comparison_shadow_cash_factor, (int, float))
+                or not math.isfinite(float(_comparison_shadow_cash_factor))
+                or not 0 < float(_comparison_shadow_cash_factor) <= 1):
+            raise ValueError("comparison shadow cash factor must be in (0,1]")
+        # This is an explicitly comparison-only seam.  Production callers do
+        # not pass it; the production constants and analysis_input remain the
+        # sole inputs to the real weekly control above.
+        margin_overheat_control = dict(margin_overheat_control)
+        margin_overheat_control["cash_factor"] = min(
+            float(margin_overheat_control["cash_factor"]),
+            float(_comparison_shadow_cash_factor),
+        )
     cash_factor_stack = _resolve_cash_factor_stack({
         "pre_holiday_control": pre_holiday_control,
         "margin_overheat_control": margin_overheat_control,
@@ -1436,6 +1451,38 @@ def _allocate_cash(reports: list, available_cash, new_exposure_capacity=None,
                     "post_reclaim_new_exposure_capacity"],
             })
     return summary
+
+
+def _allocate_cash_shadow(reports: list, available_cash, new_exposure_capacity=None,
+                          *, pre_holiday_control: dict | None,
+                          margin_overheat_control: dict,
+                          shadow_cash_factor: float,
+                          as_of: str) -> dict:
+    """Run the exact production allocator on a comparison-only report copy.
+
+    The caller owns the shadow boundary: no portfolio/account context is
+    accepted here, and the private factor seam is never used by production
+    weekly callers.  The allocation loop, factor stack and harshest-factor
+    rule remain the production implementation above.
+    """
+    if not isinstance(reports, list):
+        raise ValueError("comparison shadow reports must be a list")
+    if (isinstance(shadow_cash_factor, bool)
+            or not isinstance(shadow_cash_factor, (int, float))
+            or not math.isfinite(float(shadow_cash_factor))
+            or not 0 < float(shadow_cash_factor) <= 1):
+        raise ValueError("comparison shadow cash factor must be in (0,1]")
+    return _allocate_cash(
+        reports,
+        available_cash,
+        new_exposure_capacity,
+        portfolio_context=None,
+        m05_context=None,
+        pre_holiday_control=pre_holiday_control,
+        margin_overheat_control=margin_overheat_control,
+        as_of=as_of,
+        _comparison_shadow_cash_factor=float(shadow_cash_factor),
+    )
 
 
 def _append_portfolio_risk_impact(report: dict, as_of: str, *, is_holding: bool,

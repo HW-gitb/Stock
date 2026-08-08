@@ -1,0 +1,90 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "a_short_margin_overheat_cash_control_replay",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_name",
+    "schema_version",
+    "track_id",
+    "source_as_of",
+    "window_start",
+    "window_end",
+    "source_digest",
+    "source_receipt",
+    "comparison_only",
+    "exploratory",
+    "forward_eligible",
+    "week_count",
+    "evaluable_week_count",
+    "unavailable_week_count",
+    "unavailable_breakdown",
+    "by_arm",
+    "status",
+    "not_verified"
+  ],
+  "properties": {
+    "schema_name": {"const": "a_short_margin_overheat_cash_control_replay"},
+    "schema_version": {"const": "1.0.0"},
+    "track_id": {"const": "a_short_margin_overheat_cash_control"},
+    "source_as_of": {"type": "string", "pattern": "^[0-9]{8}$"},
+    "window_start": {"type": ["string", "null"], "pattern": "^[0-9]{8}$"},
+    "window_end": {"type": ["string", "null"], "pattern": "^[0-9]{8}$"},
+    "source_digest": {"type": "string", "pattern": "^[a-f0-9]{64}$"},
+    "source_receipt": {
+      "type": ["object", "null"],
+      "additionalProperties": false,
+      "required": ["kind", "source_as_of", "source_digest"],
+      "properties": {
+        "kind": {"const": "sequence19_exact_date_ratio_series"},
+        "source_as_of": {"type": "string", "pattern": "^[0-9]{8}$"},
+        "source_digest": {"type": "string", "pattern": "^[a-f0-9]{64}$"}
+      }
+    },
+    "comparison_only": {"const": true},
+    "exploratory": {"const": true},
+    "forward_eligible": {"const": false},
+    "week_count": {"type": "integer", "minimum": 0},
+    "evaluable_week_count": {"type": "integer", "minimum": 0},
+    "unavailable_week_count": {"type": "integer", "minimum": 0},
+    "unavailable_breakdown": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["warm_up", "source_gap"],
+      "properties": {
+        "warm_up": {"type": "integer", "minimum": 0},
+        "source_gap": {"type": "integer", "minimum": 0}
+      }
+    },
+    "by_arm": {
+      "type": "array",
+      "minItems": 3,
+      "maxItems": 3,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "arm_id",
+          "criterion_id",
+          "threshold",
+          "trigger_week_count",
+          "longest_consecutive_trigger_weeks",
+          "trigger_weeks_by_year"
+        ],
+        "properties": {
+          "arm_id": {"enum": ["level_p95", "change_rate_p90", "change_rate_p95"]},
+          "criterion_id": {"type": "string"},
+          "threshold": {"type": "number", "minimum": 0, "maximum": 1},
+          "trigger_week_count": {"type": "integer", "minimum": 0},
+          "longest_consecutive_trigger_weeks": {"type": "integer", "minimum": 0},
+          "trigger_weeks_by_year": {
+            "type": "object",
+            "additionalProperties": {"type": "integer", "minimum": 0}
+          }
+        }
+      }
+    },
+    "status": {"enum": ["NOT_VERIFIED", "PARTIAL", "COMPLETE"]},
+    "not_verified": {"type": "array", "items": {"type": "string"}}
+  }
+}
