@@ -462,3 +462,15 @@ python -B <scratchpad>\probe_c.py   # C 的四条实跑探针（第五条是静�
 - triage 条**仍不关闭**：Required ② 还剩 2 条未探（`KNIFE7B-CAPSTONE-ROOT-HAS-NO-PRODUCER`、`KNIFE6-CASH-LEG-NEVER-BOUND-TO-ITS-OWN-WEEK`），按派工不在本刀。
 - 新增测试后本包墙钟约 390s，已逼近 300s 默认门；下次跑这包记得带 `--timeout-seconds`。
 - 钟仍 `not_started`：本刀不开钟、不签发任何 receipt，A 的两道门在真开钟那天才第一次挡真东西。
+
+## 2026-08-08 追加：首周门 + 前视门默认 + KNIFE7 家族探针 审查 verdict（PASS）
+
+**对象**：`0d44a774`（19 文件），即本 handoff 上一节派工的 A/B/C 三段，一轮做完。
+
+**A 首周门**：周末检查换成 canonical 决策周（`_CANONICAL_DECISION_WEEKDAY = 0`）。这比派工写的更到位——原判据只挡周六日，而时钟是「锚点 + 7×N」推出来的，一个周三锚点会让二十六周**全部**落在这条轨从不决策的那一天。另一半是 `issued_at`：`build_start_receipt` 现在必收 `as_of_date` 并拒绝尚未发生的通知。**把这道判在铸造而不是校验，是对的**：一份明年读回的 receipt 本就比读者的钟老，放在校验侧会把每一份曾经合法的 receipt 都判死。审查方探针：周一接受（控制组）、周二/三/五/六全拒且报 canonical 周那句、周一但早于通知拒「precedes the completion notification」、`issued_at=2099` 铸造时拒。
+
+**B 前视门**：六处 `as_of_date=None` 默认**删除**而非改成安全值，调用方须显式写 `as_of_date=None`——安全默认仍会静默生效，删掉才逼出显式声明；配 AST 守卫钉住不得再长回来。审查方实读 aggregator 的 `publish_completed_market_diagnostic_window` 确认是删默认，并探到 `validate_window()` 漏传即 `TypeError`。顺带修的 fixture 值得记：它原来的锚点是周五，**夹具自己就是 A 要拒的那种非规范锚点**；另有一条既有反向测试硬编码了旧锚点，不改它会从「二十六天不是二十六周」悄悄降级成「日期必须递增」。
+
+**C KNIFE7 家族五条**：全部给出可复现探针并翻 resolved，且没有一条借探针之名顺手改代码。其中 `HOLLOW-NOTIFICATION-TEST` 那条尤其有意思——原测试三个子例都传 `diagnostic_epoch="e1"`，而 schema 最短 3 字符，所以三例其实全死在 epoch 上、根本没测到通知；**审查方自己第一轮探针也踩了同一个坑**（用 `'e1'` 导致四个锚点用例全报 schema 错），可算独立复现了该 finding 的机制。
+
+**验证边界**：验收超集 `Ran 297 in 83.3s PASS receipt:4ec902273372b1f4f96a5660`。§6a 独立对抗 agent 未起（会话级规则禁用），补偿为上述自写探针；C 的五条只读其条目内的探针记录、未逐条复跑。首轮包跑到一半别窗把 master 从 `0d44a774` 推到 `f8ec16fe`，收据被 runner 以「code state changed during focused run」拒绝（测试本身 297 全绿），故在自己树同步后重跑一次取得绑定收据。

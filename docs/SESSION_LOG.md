@@ -1,5 +1,11 @@
 # Session Log
 
+## 2026-08-08 — Claude 审查 PASS（首周门 + 前视门默认 + KNIFE7 家族探针，一刀三段）
+
+- **Verdict/Action**: PASS，`0d44a774` 已在 master。A 的两道门都实：周末检查换成 canonical 决策周（周一），并在**铸造时**要求 `as_of_date`、拒绝未来的 `issued_at`——把这道判在铸造而非校验，理由成立：明年读回一份旧 receipt 时它本就比读者的钟老，放在校验会把每一份曾经合法的 receipt 都判死。B 的六处默认是**删掉**不是改安全值，调用方现在必须显式写 `as_of_date=None`，配 AST 守卫。C 五条各带探针记录，无一条借探针之名顺手改代码。
+- **Required**: 无。`Register: non-material`。
+- **Verify**: review-evidence:1263fb785562。验收超集 `Ran 297 in 83.3s PASS receipt:4ec902273372b1f4f96a5660`。自写探针（控制组先绿）：周一锚点接受，周二/三/五/六全被拒且报的是 canonical 周那句；周一但早于通知 → 拒「precedes the completion notification」；`issued_at=2099` → 铸造时拒；`validate_window()` 不传 as_of → `TypeError: missing 1 required keyword-only argument`。aggregator 实读确认是删默认而非软化。**未做**：§6a 独立对抗 agent（会话规则禁用）；C 的五条我只读了其条目内的探针记录，未逐条复跑。超时原因:首轮包跑到一半别窗把 master 从 0d44a774 推到 f8ec16fe，收据被拒，顺手解堵并入 f21ce487 后在自己树重跑一次。
+- **Next**: Codex：执行
 ## 2026-08-08 — Claude 修复（US-short：首周门 + 前视门放行默认 + KNIFE7 家族五条探针，一刀三部分已收口）
 
 - **Verdict/Action**: 按 `R-USSHORT-26W-DIAG-KNIFE7-FROZEN-FIRST-WEEK-IS-BARELY-CONSTRAINED` 的审查方派工，A/B/C 三部分一轮做完。A 首周门补 canonical 决策周（周一）与「`issued_at` 自身不得在未来」；B 把前视门的 `as_of_date=None` 放行默认从**六**个签名上删除改必传（派工点名四个，另两个按整类扫出）；C 五条定点探针结论全是「已消失」。不开钟、不签发 receipt，钟仍 `not_started`。
