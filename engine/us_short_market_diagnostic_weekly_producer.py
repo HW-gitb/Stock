@@ -52,9 +52,7 @@ from engine.us_short_market_diagnostic_lifecycle import (
     MarketDiagnosticLifecycleError,
     _record_files,
     build_v1_1_reminder,
-    load_lifecycle_register,
     load_register_and_settled_records,
-    load_settled_weekly_records,
     persist_settled_weekly_record,
 )
 from engine.us_short_market_diagnostic_start_receipt import (

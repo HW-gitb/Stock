@@ -1,5 +1,13 @@
 # Session Log
 
+## 2026-08-08 — Claude 修复（triage Required ② 最后两条定点探针 + 上一轮两条 Optional 收口）
+
+- **Verdict/Action**: 用户指派两件。① triage Required ② 剩的 2 条**只探不改**：各写一条可复现定点探针，结论都是「条目描述的机制已不存在」，各自翻 `resolved`；至此 ①8 条 ②7 条 ③2 条全部有终态，triage 本条随之**关闭**。② 上一轮我自己记的 2 条 Optional 各自修掉：删掉读取链去重留下的两行孤儿 import；把 `_target_week` 的豁免理由改写成它现在真正在做的事。无行为改动，钟仍 `not_started`。
+- **Required**: 无。正文只在 `docs/system_risk_register.md`（单一来源，本处不复述）：`KNIFE7B-CAPSTONE-ROOT-HAS-NO-PRODUCER` 与 `KNIFE6-CASH-LEG-NEVER-BOUND-TO-ITS-OWN-WEEK` 各带探针条件与实测输出翻 `resolved`，`OPEN-LIST-TRIAGE-20260807` 关闭，两条 Optional 的 Repair 记在同日审查节内。一件需用户知情：前者的**字面**闭合判据被有意否决（会把约 90 个函数拖进诊断授权论域），改为在 stage adapter 惰性解析默认，理由写在条目里。
+- **Verify**: 验收包 `Ran 77 in 8.490s OK receipt:73e35333cc4b10143c22518f`（conformance + producer，恰覆盖被改两处）。同代码态六模块超集 `Ran 179 in 48.795s OK`，但收据被 `REFUSED - code state changed during focused run`——起因是并发窗口在跑测期间改 `tests/provider/test_us_short_weekly_capstone_soft_discovery.py`（实测 mtime 51s），不是本刀，如实记。植入对照：删掉 `_target_week` 豁免整条 → 守卫精确转红并点名该函数（`Ran 13 FAILED`），还原后 sha256 逐字节一致 `176cd851fa2206ab`。探针 B 控制组先绿。
+- **Pre-Codex self-review**: A-F checked。A：两条 Optional 的同类均**机械枚举**——AST 求「导入名 − 被引用名」得 producer 恰 2 条、`weekly_fetch` 0 条；扫 EXEMPT 全部理由行，失真的只有 `_target_week`。B：删的两名全仓无第二处引用、不在 `__all__`。C 反向：植入对照 + 探针 B 控制组先绿（首版 `weekly_return` 写成字符串致四条全停在更早的检查，判无效重打）。D：改豁免理由而非退回重读店。E 单态。F：`python -B`、无残留。独立对抗 pass：不适用（单轮非边界）。matrix=2 Optional/2 探针/1 植入；register=updated；handoff=updated；focused=77 OK；full-lane=not_triggered（rule 3）；door=提交前 guard。
+- **Next**: 刀 5 后半段：ETF 股息 sidecar 生产器 + 挂进 capstone 已 gated 的 fetch 阶段 + 给 `settle_captured_week` 补 sidecar 绑定参数，三件同刀落。
+
 ## 2026-08-08 — Claude 修复（US-short lane 地板 `conformance_resources`：量完了，没有不付代价的加速）
 
 - **Verdict/Action**: 按用户指派打 199.5s 的地板模块。**只做了三处可证等价的折叠，没有别的代码改动**——不是没找到路，是每条路都要付代价，那是用户的决定不是我的。四条路与各自代价已写进 register ⑦。

@@ -186,7 +186,14 @@ EXEMPT = {
     "engine/us_short_market_diagnostic_weekly_producer.py::has_counted_weeks": "existence probe over the weekly records; reads no content and authorizes nothing",
     "engine/us_short_market_diagnostic_weekly_producer.py::model_paper_week_is_settled": "reads the model-paper store, not the diagnostic store",
     "engine/us_short_market_diagnostic_weekly_producer.py::build_no_count_record": "projects a packet in hand; touches no store",
-    "engine/us_short_market_diagnostic_weekly_producer.py::_target_week": "picks the packet week the gated inputs allow; reads through the gated loader",
+    # It reached the store through the gated loader until the read-chain
+    # de-duplication; it now reads the settled records those same gated inputs
+    # carried, in the one call that had just validated them. Same shape as
+    # `_prior_valuation_date` below, and the reason is worded for what it does
+    # now — an exemption whose stated reason has gone stale is the only audit
+    # trail this door has.
+    "engine/us_short_market_diagnostic_weekly_producer.py::_target_week":
+        "picks the packet week the gated inputs allow, from the settled records those same gated inputs carried; reaches no store itself",
     "engine/us_short_market_diagnostic_weekly_producer.py::diagnostic_policy_sha256": "pure digest of a preset",
     "engine/us_short_market_diagnostic_weekly_producer.py::strategy_ruleset_fingerprint": "pure digest of the declared governed presets",
     # Knife 10c. It is handed one already-rendered report path and a list of lines

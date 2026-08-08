@@ -551,3 +551,19 @@ python -B -c "<cProfile 单测>"                                        # ③ su
 **下一步注意事项**
 - 四条路的代价写在 register ⑦，等用户裁决。执行方推荐 **(D) 另起一刀专打 `test_us_short_weekly_capstone_soft_discovery`**：它在 lane 跑一遍、在 D 轴再跑两遍，**任何提速都是 3 倍杠杆**，且不碰任何 fail-closed 门。
 - **(B)（砍掉 D 轴正序那遍）是真实降强度**，别当成纯提速：会丢掉「正序跑完一遍后仓库根是干净的」这个断言。
+
+## 2026-08-08 追加：triage Required ② 补完最后两条 + 上一轮两条 Optional 收口
+
+**改了什么**：① `engine/us_short_market_diagnostic_weekly_producer.py` 删掉读取链去重那一刀留下的两行孤儿 import（`load_lifecycle_register` / `load_settled_weekly_records`），只留 `load_register_and_settled_records`；② `tests/test_us_short_market_diagnostic_authorization_conformance.py` 把 `_target_week` 的豁免理由从「reads through the gated loader」改写成它现在真正在做的事（读那同一份 gated inputs 携带的已结周记录、自己不碰店），并写明理由本身为什么必须跟着改。两条 triage 探针**只探不改**，未动任何代码。
+
+**为什么改**：豁免理由是这道授权门唯一的审计线索——写错会让下一个人以为 `_target_week` 仍自己经门查授权；孤儿 import 是上一刀的连带残留。两者都非材料性，故上一轮记 Optional 而非 Required。
+
+**验证命令**：焦点超集包 `.tools\run_unittest_with_repo_pythonpath.cmd --timeout-seconds 700` 跑 `weekly_producer` / `authorization_conformance` / `weekly_advance` / `weekly_runner` / `rehearsal` / `lifecycle` 六模块；探针与植入脚本均 `python -B` + `PYTHONDONTWRITEBYTECODE=1`，跑完 `git status` 无残留。
+
+**验证结果**：见 `docs/SESSION_LOG.md` 同日 `修复` 条的 `Verify`（单一来源，此处不复述数字）。植入对照：删掉 `_target_week` 的豁免整条 → 授权一致性守卫精确转红并点名该函数，还原后 sha256 逐字节一致。
+
+**两条探针的结论（正文与实测输出在 register 各自条目）**：`KNIFE7B-CAPSTONE-ROOT-HAS-NO-PRODUCER` 与 `KNIFE6-CASH-LEG-NEVER-BOUND-TO-ITS-OWN-WEEK` 描述的机制**都已不存在**，各自翻 `resolved`。前者的字面闭合判据（把默认根写进 `resolve_capstone_context`）被有意否决且理由成立——在该模块点名私有根会把它约 90 个函数拖进诊断授权论域；改为在 stage adapter 惰性解析默认，功能等价而不扩大授权面。
+
+**失效旧结论**：`R-USSHORT-26W-DIAG-OPEN-LIST-TRIAGE-20260807` 的「本轨还剩 N 条待办」自此不再适用——①8 条、②7 条、③2 条全部有终态，该 triage 条目已关闭。此后再引用剩余条数，须按当时 register 现状重新核，不得沿用 2026-08-07 的清单。
+
+**下一步注意**：本轨近端唯一的实质待建件是刀 5 后半段（ETF 股息 sidecar 生产器 + 挂进 capstone 已 gated 的 fetch 阶段 + 给 `settle_captured_week` 补 sidecar 绑定参数），三件必须同刀落，否则每周一键照跑而 VTI 永远升不到 `total_return_evaluable`。
