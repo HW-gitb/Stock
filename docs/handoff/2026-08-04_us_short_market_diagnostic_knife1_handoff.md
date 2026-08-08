@@ -343,3 +343,15 @@ Knife3 lifecycle 同步改为机器自动激活 v1.1：启用前按连续 `paper
 **同轮的 D 轴模块拆分（本审查一并覆盖）**：`ResourceIsolationMatrix` 在 `tests/test_us_short_discovery_conformance.py` 里已是**普通类而非 TestCase**，由新模块 `tests/test_us_short_discovery_conformance_resources.py` 以 `(base, unittest.TestCase)` 承载——正是 `R-USSHORT-A-SHARED-FIXTURE-DRAGGED-ITS-OWNERS-TESTS-INTO-A-SECOND-MODULE` 立下的正确形状。实测发现数：旧模块 0 条 ResourceIsolation、新模块 1 条，**无双跑**；`docs/us_short_test_io_inventory_20260801.json` 只是 module_count 305→306、class0 +1 与路径摘要更新，**allowlist 未新增任何条目**（没有新的真树写入）。`tests/test_us_short_discovery_conformance_executable.py` 在 status 里显示 modified 但内容 diff 为空，属 CRLF churn，未带入内容改动。新模块原为 untracked，已由审查方纳入本次提交——否则 D 轴覆盖只存在于本机。
 
 **证据强度（本链首次达标）**：验收超集 `Ran 316 in 104.9s PASS receipt:1506d4fa0d7ec4c9f52afce3`，其指纹 `b1a940efb317` 与 ledger 全量 `PASS 5616/5616 829.2s` 同指纹——第一次有一次**绑定当前树态的记账绿全量**，故按 rule 4 未重跑。拆分把 lane 从 TIMEOUT/1147.1s 拉回 829.2s、重新落在 860s 上限内，`...LANE-WALL-CLOCK-FLOOR-...` 因此翻 partially resolved（仍未达用户要的 600s，瓶颈已转移到串行尾巴）。
+
+## 2026-08-08 追加：两轮派工与「本轮无可审对象」的记录
+
+本节补两轮的收口——上一轮只落了 register 与 SESSION_LOG，没有回到本 handoff，属漏写，一并补齐。
+
+**① register 状态回写（已派工，尚未执行）**：`R-USSHORT-26W-DIAG-OPEN-LIST-TRIAGE-20260807` 的 Required ① 被定为独立一轮的**全部**范围——8 条强证据条目翻 `resolved` 并写回证据。硬约束写在该条目里：这是账目回写不是修复轮，**不得改任何代码 / schema / 测试**；且**不得照抄 2026-08-05 的核对结论**，那次之后这条轨又落了七八轮改动，每条必须按今天的代码重新定位、亲眼确认后再翻，并把「现在看到的是什么」写进该条目自己；任一条重新确认后仍成立即 STOP、留 `open`、不自行开修。
+
+**本轮审查：无可审对象**。`git status` 为空，`wt/us-short_r28` 与 master 同在 `1e521dd6`，①尚未执行。按 AGENTS item 16c，没有可审实现时不得冒充 code-level PASS，故本轮不产生代码结论，只做派工落盘（`35a05fd8`）。
+
+**② 下一刀（已派工，前置为 ①）**：三部分一轮做完，写在 `R-USSHORT-26W-DIAG-KNIFE7-FROZEN-FIRST-WEEK-IS-BARELY-CONSTRAINED` 之下。**A 首周门**——`first_decision_date` 补「必须是 canonical 决策周」与「不早于 `issued_at`」，判据取该条目 2026-08-05 已定的闭合判据，无需新决策。**B 前视门的放行默认**——`_validate_rows` 的未来日期检查写成 `if as_of is not None`，而 `validate_window` / `summarize_window` / `publish_completed_market_diagnostic_window` 的 `as_of_date` 默认 `None`，不传即整条门不生效；修法照抄本轨刚确立的形状（**删默认改必传** + AST 守卫钉签名），反向用例是「26 周纯未来日期的窗口必须被拒」。**C KNIFE7 家族 5 条定点探针**——因落在 A/B 要改的同一片代码而并入，每条一个可复现探针，已消失则翻 resolved 并附输出，仍成立则保持 open 且本刀不修。
+
+**为什么 ① 必须在 ② 之前**：两轮改的是同一批 register 条目，并行必冲突；且 ① 做完之后这条轨的 open 清单才可信，② 的排期才不会建立在虚高的数字上。
