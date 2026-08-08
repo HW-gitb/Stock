@@ -13,7 +13,7 @@ Use this file to decide which handoff to open. Do not read every handoff by defa
 
 ## Current Phase Handoff
 
-- `2026-08-04_us_short_market_diagnostic_knife1_handoff.md` — US-short 26 周市场诊断轨 Knife1 纯计算、Knife2 本地只读适配、Knife3 不可变周记录/计数/reminder 契约、Knife10c 报告行接进周报已注册 §12 区块、演练刀（rehearsal harness）规格与实施、断供周写 no_count 自愈（钟不再永久卡死）、代码/测试入口；触及该诊断轨时打开。
+- `2026-08-04_us_short_market_diagnostic_knife1_handoff.md` — US-short 26 周市场诊断轨 Knife1 纯计算、Knife2 本地只读适配、Knife3 不可变周记录/计数/reminder 契约、Knife10c 报告行接进周报已注册 §12 区块、演练刀（rehearsal harness）规格与实施、断供周写 no_count 自愈（钟不再永久卡死）、triage Required ① 的 8 条状态回写（逐条现行代码复核，全数 resolved；KNIFE6 分量残留另属）、代码/测试入口；触及该诊断轨时打开。
 
 - `2026-08-03_review_gate_task_notification_repair_handoff.md` — review-gate P1 repair for real async task-notification row visibility and Stop-hook transcript plumbing; open this when reviewing `R-REVIEWGATE-OUTSTANDING-AGENT-CHECK-CANNOT-SEE-REAL-TASK-NOTIFICATIONS`.
 

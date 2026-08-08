@@ -355,3 +355,41 @@ Knife3 lifecycle 同步改为机器自动激活 v1.1：启用前按连续 `paper
 **② 下一刀（已派工，前置为 ①）**：三部分一轮做完，写在 `R-USSHORT-26W-DIAG-KNIFE7-FROZEN-FIRST-WEEK-IS-BARELY-CONSTRAINED` 之下。**A 首周门**——`first_decision_date` 补「必须是 canonical 决策周」与「不早于 `issued_at`」，判据取该条目 2026-08-05 已定的闭合判据，无需新决策。**B 前视门的放行默认**——`_validate_rows` 的未来日期检查写成 `if as_of is not None`，而 `validate_window` / `summarize_window` / `publish_completed_market_diagnostic_window` 的 `as_of_date` 默认 `None`，不传即整条门不生效；修法照抄本轨刚确立的形状（**删默认改必传** + AST 守卫钉签名），反向用例是「26 周纯未来日期的窗口必须被拒」。**C KNIFE7 家族 5 条定点探针**——因落在 A/B 要改的同一片代码而并入，每条一个可复现探针，已消失则翻 resolved 并附输出，仍成立则保持 open 且本刀不修。
 
 **为什么 ① 必须在 ② 之前**：两轮改的是同一批 register 条目，并行必冲突；且 ① 做完之后这条轨的 open 清单才可信，② 的排期才不会建立在虚高的数字上。
+
+## 2026-08-08 追加：triage Required ① —— 8 条强证据的状态回写（账目轮，零代码改动）
+
+**改了什么**：只改两份 doc。`docs/system_risk_register.md` 里 8 条 header 由 ` — open ` 翻 ` — resolved `，每条正文末尾追加一条 `- **2026-08-08 复核（逐条重新确认）**` 证据行；triage 条 `R-USSHORT-26W-DIAG-OPEN-LIST-TRIAGE-20260807` 追加 Required ① 完成标注。`docs/SESSION_LOG.md` prepend 一条修复 entry。**未动任何代码 / schema / 测试**——这是审查方派工的硬约束，`git diff --name-only` 只有这两份 doc 加本文件。
+
+**为什么改**：triage 条的 Required ① 要求「8 条强证据逐条翻 resolved 并写回证据」，且明令**不得照抄 2026-08-05 的核对结论**——那次是按线索批量核的，这次要求每条重新定位到现行代码、亲眼确认机制确实不存在、把「现在看到的是什么」写进该条目自己的正文。在 ①② 做完前，任何「本轨还剩 N 条」的说法都不可引用；这轮先把 ① 的账做实。
+
+**验证命令**（逐条现证，均在主树 `D:\cnhea\Stock` 执行）：
+```
+grep -n "def _run_market_diagnostic" -A 30 runners/us_short_weekly_capstone.py     # ①
+grep -n "records = \[\]" engine/us_short_market_diagnostic_weekly_producer.py       # ②
+grep -n "diagnostic_store_state" engine/us_short_market_diagnostic_weekly_task.py runners/us_short_market_diagnostic_weekly.py   # ③
+python -c "import json;print(len(json.load(open('presets/us_short_market_diagnostic_strategy_ruleset_v1.json'))['governed_presets']))"  # ④
+sed -n '95,112p;320,330p' tests/test_us_short_market_diagnostic_authorization_conformance.py   # ⑤⑥
+sed -n '165,168p;306,312p' engine/us_short_market_diagnostic_aggregator.py          # ⑦
+sed -n '1199,1225p' engine/us_short_market_diagnostic_attribution.py                # ⑧
+.tools/run_unittest_with_repo_pythonpath.cmd -v tests.test_doc_governance_guard tests.test_route_doc_ledger_status_consistency
+```
+
+**验证结果**：8 条**全部**确认机制已不存在，无一条需按「复核仍成立」留 `open`。
+- ① `_run_market_diagnostic` 在 :490，`try:` 在 :511，`from engine.us_short_market_diagnostic_weekly_task import weekly_diagnostic_step` 在 :519 —— lazy import 已在 `try` 内，import 期 schema 装载失败走 stage 失败返回而非抛穿；另有 `test_a_dormant_clock_costs_nothing_at_all`。
+- ② `records = []` 零命中 —— 把 lifecycle 异常吞成空列表、进而把任何故障读成「第 1 周」的 `except` 已删。
+- ③ `diagnostic_store_state` 四态判定器被 `weekly_task.py:46/:82` 与 `us_short_market_diagnostic_weekly.py:63/:291` 两处真正消费；「没有 store」与「store 坏了」不再共用出口。
+- ④ `governed_presets` 由 9 份扩到 **16 份**，含当初点名漏掉的 `us_short_scoring_profile_governance_20260620.json`；由 `test_every_engine_preset_is_classified_as_governed_or_excluded`（`weekly_producer` 测试 :183）守住「非治即排」。
+- ⑤ 代理判据已被性质本身取代：:101 就地写着「There is deliberately no filter here」并点名旧代理（按参数是否叫 `root` 判定，曾对 aggregator 十二个函数瞎掉十一个）；域改为 `_surface_functions()`（:283）扫出的全集，唯一出口是具名 `EXEMPT`。
+- ⑥ 判据由「函数体内出现 GATES 的名字」改判**形状**：:100 `PUBLISH_PATH_ALLOWED_PARAMS`（允许清单，非屏蔽清单），:324-326 断言发布路径函数不得携带清单外参数 —— 改名绕不过去。
+- ⑦ 结构性消失：`build_market_diagnostic_report(*, lifecycle_root, as_of_date=None)`（:165）的 `records` 已删，`write_market_diagnostic_report(*, lifecycle_root, output_root, as_of_date)`（:306）的 `report` 已删；无法再被喂进与受门 store 无关的伪造史，错误组合**不可表达**。
+- ⑧ schema 已含 `carried_holdings_exposure` / `new_order_exposure`，`validate_attribution_report`（:1206-1224）真重推：两分量各过 `_finite` 与 `[0,1]`，其和与 `requested_exposure` 差超 `_TOLERANCE` 即 `_fail`。
+- 门：`tests.test_doc_governance_guard` + `tests.test_route_doc_ledger_status_consistency` `Ran 55 OK / 1.0s / receipt:ae4a57b00f33180a78c1796e`。回写 diff `+16/−8`（8 header + 8 证据），证明未整文件翻转、未误伤邻条。**未跑全量：零代码改动。**
+
+**失效的旧结论**：
+- 「本轨还有 8 条 KNIFE6/7/7B 强证据 open」——作废，8 条均已 `resolved` 并各带现行代码证据。引用「本轨还剩 N 条」时须重新数。
+- 「`KNIFE6-REQUESTED-EXPOSURE-IS-ASSERTED-NOT-DERIVED` 是 requested_exposure 完全没被校验」——作废，但**别读成完全关闭**：所述机制（schema 缺分量）已闭，两分量本身仍是 producer 自报、本模块按 design 12.7 不得读成交去核，把 0.9 拆成 0.5+0.4 仍能过。门槛已从「写一个数」抬到「写两个能对上的数」，彻底关闭属尚不存在的 target-exposure producer。该残留已在 `attribution.py:1199-1206` 就地写明，不属本条。
+
+**下一步注意事项**：
+- triage 条**不关闭**。Required ②（7 条弱证据的定点探针）与 ③（2 条确认成立的进修复队列）仍 open，由用户裁决是否起刀。
+- `KNIFE7-FROZEN-FIRST-WEEK-IS-BARELY-CONSTRAINED` 的首周门已与「前视门 `as_of_date` 默认 `None` 致整条门可选」并为下一刀，别提前动。
+- 分叉待处理：`wt/us-short_r28` 工作树的 `docs/system_risk_register.md` 另有 6 行未提交（全量测试提速 option 1 的待做记录），主树这份没有；两棵树同名文件现已不同，合并前先对齐。

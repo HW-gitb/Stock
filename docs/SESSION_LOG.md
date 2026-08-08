@@ -1,5 +1,13 @@
 # Session Log
 
+## 2026-08-08 — Claude 修复（US-short triage Required ①：8 条状态回写已收口）
+
+- **Verdict/Action**: 按 `R-USSHORT-26W-DIAG-OPEN-LIST-TRIAGE-20260807` 的审查方派工执行 Required ①，只做账目回写。8 条强证据逐条**重新**定位到现行代码确认（不照抄 2026-08-05 结论），机制均已不存在，8 条全翻 `resolved` 并各自写回「现在看到的是什么」。无一条需按「复核仍成立」留 open。未动任何代码 / schema / 测试。
+- **Required**: 无。正文只在 `docs/system_risk_register.md`。triage 本条 Required ① 已标注完成、**②③ 仍 open、本条不关闭**。唯一需用户知情项：`KNIFE6-REQUESTED-EXPOSURE-IS-ASSERTED-NOT-DERIVED` 所述机制已闭（schema 已含两分量、validator 真重推其和），但两分量本身仍是 producer 自报、无法与成交核对——该残留已在 `attribution.py:1199-1206` 就地写明，归属尚不存在的 target-exposure producer。
+- **Verify**: 逐条现证的文件:行全部写在各条目自己的正文与 handoff 追加节，此处不复述。门：`tests.test_doc_governance_guard` + `tests.test_route_doc_ledger_status_consistency` `Ran 55 OK` / `1.0s` / `receipt:ae4a57b00f33180a78c1796e`。回写 diff `+16/−8`（8 header + 8 证据），证明未整文件翻转、未误伤邻条。**未跑全量：本轮零代码改动。**
+- **Pre-Codex self-review**: A-F checked。A：8 条一次全枚举成 checklist，逐条走「定位现行代码 → 亲眼确认 → 写回证据 → 才翻状态」。B：回写脚本对每条校验 header 必须是 ` — open ` 才改，否则 `sys.exit`，8/8 命中。C 反向：diff `+16/−8` 即未误伤邻条。D：⑧单独深查，机制已闭、残留另属，翻 resolved 并显式点名残留。E 单态。F：脚本 `python -B`，`git status` 无残留。matrix=8条/8确认/0留open；register=updated；handoff=updated；focused=55 OK；full-lane=N/A；door=55 OK。
+- **Next**: 用户裁决是否起 Required ②（7 条弱证据定点探针）与 ③。
+
 ## 2026-08-08 — Claude 审查（US-short：本轮无可审对象，只落下一刀派工）
 
 - **Verdict/Action**: 无可审对象，不提交代码。`git status --short --untracked-files=all` 为空，`wt/us-short_r28` 与 master 同在 `1e521dd6`（上一轮我自己的派工 commit），triage 的 Required ①（8 条状态回写）尚未执行。按 AGENTS item 16c，没有可审实现时不得冒充 code-level PASS，故本轮不产生代码结论；唯一动作是把下一刀的派工写进 register。
