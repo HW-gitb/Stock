@@ -1,5 +1,11 @@
 # Session Log
 
+## 2026-08-08 — Claude 审查 PASS-with-Required（triage Required ①：8 条状态回写）
+
+- **Verdict/Action**: PASS。范围守住了——`9381cc49` 只动 4 个文档，零代码 / 零 schema / 零测试，与派工写的「这是账目回写不是修复轮」一致。8 条**确属重新定位而非照抄 08-05**：每条都带 file:line 或符号名与一句现状。抽验两条属实：`records = []` 在 weekly_producer 里 0 命中；`build_market_diagnostic_report` / `write_market_diagnostic_report` 已是关键字签名。唯一拦下的是第 8 条的一句归因写错。
+- **Required**: `R-USSHORT-26W-DIAG-KNIFE6-REQUESTED-EXPOSURE-IS-ASSERTED-NOT-DERIVED`（P3，doc drift，已在其条目内追记更正与 repair）——回写称残留「属尚不存在的 target-exposure producer」，而该 producer 已建成并于 2026-08-07 审过。正文只在 `docs/system_risk_register.md`。
+- **Verify**: review-evidence:not_available（本轮 hook 未注入 token，故如实标注；结论所依据的均为对话内真实工具输出）。`grep -c "records = \[\]"` = 0；`load_target_exposures` 在 `weekly_fetch.py:863`、两分量取自 `decision_exposure.py:147-148`，据此坐实归因有误。落盘后 `tests.test_doc_governance_guard` + `tests.test_route_doc_ledger_status_consistency` 见下一行提交前的运行结果。
+- **Next**: Codex：执行
 ## 2026-08-08 — Claude 修复（US-short triage Required ①：8 条状态回写已收口）
 
 - **Verdict/Action**: 按 `R-USSHORT-26W-DIAG-OPEN-LIST-TRIAGE-20260807` 的审查方派工执行 Required ①，只做账目回写。8 条强证据逐条**重新**定位到现行代码确认（不照抄 2026-08-05 结论），机制均已不存在，8 条全翻 `resolved` 并各自写回「现在看到的是什么」。无一条需按「复核仍成立」留 open。未动任何代码 / schema / 测试。

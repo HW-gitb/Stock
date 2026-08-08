@@ -393,3 +393,13 @@ sed -n '1199,1225p' engine/us_short_market_diagnostic_attribution.py            
 - triage 条**不关闭**。Required ②（7 条弱证据的定点探针）与 ③（2 条确认成立的进修复队列）仍 open，由用户裁决是否起刀。
 - `KNIFE7-FROZEN-FIRST-WEEK-IS-BARELY-CONSTRAINED` 的首周门已与「前视门 `as_of_date` 默认 `None` 致整条门可选」并为下一刀，别提前动。
 - 分叉待处理：`wt/us-short_r28` 工作树的 `docs/system_risk_register.md` 另有 6 行未提交（全量测试提速 option 1 的待做记录），主树这份没有；两棵树同名文件现已不同，合并前先对齐。
+
+## 2026-08-08 追加：triage Required ① 审查 verdict（PASS-with-Required）
+
+**审查对象**：`9381cc49`（已由执行方直接提交在主树），8 条强证据条目的状态回写。
+
+**范围守住了**：只动 4 个文档，零代码 / 零 schema / 零测试，与派工写的「这是账目回写不是修复轮」一致。8 条**确属按今天的代码重新定位**而非照抄 2026-08-05——每条都带 file:line 或符号名加一句现状（lazy import 已进 `try`、吞成空列表的 `except` 已删、四态判定器有两个真消费点、governed presets 由 9 份增至 16 份、conformance 域改为扫描全集、publish 路径改为允许清单形状门、两个 report producer 的伪造史入口参数已删）。审查方抽验两条属实：`records = []` 在 `weekly_producer` 里零命中；两个 report producer 已是关键字签名。
+
+**拦下的一条（P3，doc drift，不影响翻状态本身）**：`KNIFE6-REQUESTED-EXPOSURE-IS-ASSERTED-NOT-DERIVED` 翻 `resolved` 成立，但回写称残留「属尚不存在的 target-exposure producer」**与事实不符**——该 producer 已建成并于 2026-08-07 审过（`runners/us_short_market_diagnostic_weekly_fetch.py:863 load_target_exposures`，两分量取自 `engine/us_short_decision_exposure.py:147-148` 决策当时落下的只读记录，是推导不是自报）。真实残留比回写说的窄，只剩「经其他路径手工递入两分量」那一支。这句话会误导下一个人去建一个已经存在的东西，故必改；更正与 repair 已就地追记在该条目内。
+
+**清单可信度的变化**：Required ① 完成后，这条轨的 open 清单第一次可以按面值读；Required ② ③ 仍 open，triage 条目不关闭。下一刀（首周门 + 前视门默认 + KNIFE7 家族 5 条探针）的前置因此已满足。
