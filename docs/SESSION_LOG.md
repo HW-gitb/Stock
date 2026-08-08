@@ -1,5 +1,11 @@
 # Session Log
 
+## 2026-08-08 — Claude 审查 PASS（刀 5 捕获段回溯审查：真实 Massive 取数 + tracked 摘要）
+
+- **Verdict/Action**: PASS。对象是 `d4303f61`（2026-08-05 已并入 master，`891a` 工作树落后 125 个提交，故按 master 当前态审；该段文件此后未再改动）。真钱/密钥面三道门都实在：`confirm_user_authorization` 函数级门；raw 与 normalized 路径必须**正向**确认落在 `provider_samples/` 内，否则拒；产物已存在即拒覆盖；分页预算在**发请求之前**判。续页 URL 处理尤其稳——校验厂商 next_url 未改 host/path/symbol/adjusted 模式，剥掉来路 apiKey 再补授权那把。
+- **Required**: 无。`Register: non-material`——未发现材料性问题，不开条目。
+- **Verify**: review-evidence:f8ca9ba1fdac。焦点包 `Ran 18 PASS receipt:f2269ee7de156f21af90de59`（capture + packet schema + total_return）。自写植入 4 条全红、控制组先绿：请求 URL / 裸 `apikey=` / 环境密钥字面量 / `"payload"` 键，喂给 `_scan_summary_safe` 均 `EtfCaptureError`，而干净文本放行——故 `tracked_summary_contains_secrets: false` 是**派生**结论不是自报。tracked 摘要实扫：`https?://` 0 命中，价格/事件字段命中 21 处全是字段名清单不是数据行；`git check-ignore` 确认 `provider_samples/` 命中 `.gitignore:113`。**未做**：§6a 独立对抗 agent（会话规则禁用），且未联网复跑真实取数。
+- **Next**: Codex：执行
 ## 2026-08-08 — Claude 审查 PASS-with-Required（triage Required ①：8 条状态回写）
 
 - **Verdict/Action**: PASS。范围守住了——`9381cc49` 只动 4 个文档，零代码 / 零 schema / 零测试，与派工写的「这是账目回写不是修复轮」一致。8 条**确属重新定位而非照抄 08-05**：每条都带 file:line 或符号名与一句现状。抽验两条属实：`records = []` 在 weekly_producer 里 0 命中；`build_market_diagnostic_report` / `write_market_diagnostic_report` 已是关键字签名。唯一拦下的是第 8 条的一句归因写错。

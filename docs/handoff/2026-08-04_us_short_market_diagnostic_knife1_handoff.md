@@ -403,3 +403,13 @@ sed -n '1199,1225p' engine/us_short_market_diagnostic_attribution.py            
 **拦下的一条（P3，doc drift，不影响翻状态本身）**：`KNIFE6-REQUESTED-EXPOSURE-IS-ASSERTED-NOT-DERIVED` 翻 `resolved` 成立，但回写称残留「属尚不存在的 target-exposure producer」**与事实不符**——该 producer 已建成并于 2026-08-07 审过（`runners/us_short_market_diagnostic_weekly_fetch.py:863 load_target_exposures`，两分量取自 `engine/us_short_decision_exposure.py:147-148` 决策当时落下的只读记录，是推导不是自报）。真实残留比回写说的窄，只剩「经其他路径手工递入两分量」那一支。这句话会误导下一个人去建一个已经存在的东西，故必改；更正与 repair 已就地追记在该条目内。
 
 **清单可信度的变化**：Required ① 完成后，这条轨的 open 清单第一次可以按面值读；Required ② ③ 仍 open，triage 条目不关闭。下一刀（首周门 + 前视门默认 + KNIFE7 家族 5 条探针）的前置因此已满足。
+
+## 2026-08-08 追加：刀 5 捕获段回溯审查 verdict（PASS）
+
+**对象**：`d4303f61`（2026-08-05 已并入 master；`D:\cnhea\Codex\worktrees\891a\Stock` 那棵树落后 125 个提交，故按 master 当前态审，该段文件此后未再被改动）。
+
+**结论 PASS，三道真钱/密钥门实读确认**：`confirm_user_authorization` 是函数级门；raw 与 normalized 路径必须**正向**确认落在 `provider_samples/` 之内（`_is_gitignored_provider_path` 用 `relative_to` 判，不是靠字符串前缀），否则直接拒；三份产物任一已存在即拒覆盖，不会静默重写证据；分页预算在**发出请求之前**判，超限不花调用。续页处理是这段里最稳的一处：校验厂商回的 `next_url` 没有改 host / path / symbol / adjusted 模式，剥掉来路 `apiKey` 再补上授权的那把——厂商无法把密钥引到别处去。
+
+**审查方植入 4 条全红、控制组先绿**：把「请求 URL」「裸 `apikey=`」「环境密钥字面量」「`"payload"` 键」分别喂给 `_scan_summary_safe`，均抛 `EtfCaptureError`，干净文本放行。该扫描跑在**序列化之后、落盘之前**，所以摘要里 `tracked_summary_contains_secrets: false` 是派生结论而非自报断言。tracked 摘要实扫：`https?://` 零命中；21 处价格/事件字段命中全是字段名清单，不是数据行；`git check-ignore` 确认 raw 根命中 `.gitignore:113`。
+
+**未覆盖**：§6a 独立对抗 agent 未起（会话级规则禁用），补偿为上述自写植入；未联网复跑真实取数，故摘要所载的 16 次调用与覆盖结论只按其自洽性与落盘证据审，不是重新观测。
