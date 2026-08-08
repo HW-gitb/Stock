@@ -2955,3 +2955,117 @@ Optional (i) 第一版我把「窗口饱和」折进了 `status`，反向控制�
 ### 下一步
 
 序 14 收口（「涨停指数」那一叶为终态 unavailable，序 14 本就只能是 partial）。队列剩序 15（volatility，前置已解方案 A）与文末两把小刀；序 16 仍被推后，届时把这几条叶提升成仓位判据前，先回头看本条 register 的边界。
+## 2026-08-08 追加：执行顺位 8 · 序 15 — IV feed 先于 EGS 的整类接线
+
+**本节作用**：这是当前 A-short 执行/修复者的同日交接节；记录序15的根因、完整调用链、直接消费者、schema/source-binding、写盘边界、负向控制、自审、固定 Python、原始测试终态、NOT_VERIFIED 和审查/提交边界。详细风险登记同步到 `docs/system_risk_register.md`，本节是执行链路交接载体。
+
+### Finding / root cause
+
+原 `weekly_screening.ps1` 的顺序是先跑 EGS，后构建 IV feed；EGS 的 `analysis_input.market_context.volatility` 因而只能是 null/unknown，后续 M6.7 又可能依赖另一阶段的 feed 读取/重建。机器契约没有把 feed 的 `as_of`、最新交易日、来源路径和字节摘要结构化绑定到 EGS 输出，失败时也没有旧 feed fail-closed 边界。两条腿属于同一类问题：生产者顺序错误，消费端靠非结构化/可漂移状态补接线。
+
+### Repair / invariant
+
+- canonical `AsOf/PriceAsOf` 确定后，wrapper 只构建一次 IV feed，再把同一文件以 `--iv-feed` 交给 EGS；EGS 在写盘前调用既有 `validate_feed_artifact`，强制 `feed.as_of == decision_as_of`、latest series `trade_date == price_data_through`。
+- EGS 将 `iv_symbol`、`iv_value`、`iv_percentile_252d`、`iv_change_abs_1d_pctpt`、`rule3_status`、`awakening_status`、`cash_reclaim_pct` 及 source/freshness/ref/digest 投影到 `analysis_input`；weekly/M6.7 对相同七值和 feed bytes 做精确绑定，不二次 build。
+- `-SkipSemanticRisk` 不请求/不构建 IV，写 `unavailable/not_requested` 与 null/unknown；feed 失败保留 failure receipt/sidecar 的 `attempted_before_egs`、ref/digest，EGS 可写 no-IV unknown，但请求 M6.7 必须失败，不读旧 feed。
+
+### 调用链、直接消费者、schema/source-binding、写盘边界
+
+`weekly_screening.ps1` canonical resolver → one `runners/a_short_iv_feed_build.py` → fresh file/ref/digest check → `A-EGS/egs_main.py::run_egs(--iv-feed)` → `_load_iv_feed_projection` / `validate_feed_artifact` → `analysis_input.market_context.volatility` → `runners/a_short_weekly_pipeline.py::main(--iv-feed)` / `_validate_analysis_input_m05_binding` → Phase5/M6.7 `normalize_candidate` → weekly JSON/Markdown/receipt。
+
+`schemas/analysis_input.schema.json` 锁 complete/unknown 两种结构；weekly source binding 锁七个 leaf、decision/price clock、canonical ref 与 SHA-256；sidecar/health/publish/failure receipt 携带 feed attempt/ref/digest；`schemas/a_short_m67_effect_contract.json` 已按新 producer/consumer predicate 和 volatility leaf inventory 重封。写盘仍限于既有 IV feed failure/success writer、EGS official transaction、weekly atomic publication；没有 production/live/account/order 写盘或 provider raw tracked 写盘。
+
+### 负向控制与自审
+
+已覆盖 stale/future/wrong-as-of/tampered state/tampered bytes、AI leaf/ref/digest mismatch、missing feed、feed failure/no-old-feed、SkipSemanticRisk no-builder/no-provider/explicit unknown、single builder before EGS、legacy 1.1 placeholder-only，以及 effect consumer/schema guards。A-F 自审矩阵完成：producer order、single invocation、consumer exactness、schema、source binding、write boundary、effect contract、receipt/sidecar、legacy compatibility、review boundary；本轮未启动 sub-agent。
+
+### 固定 Python、测试与原始终态
+
+- 固定解释器：`C:\Users\cnhea\AppData\Local\Programs\Python\Python313\python.exe`，版本 `3.13.8`。
+- focused bounded command：`& 'D:\cnhea\Codex\worktrees\29e0\Stock\.tools\run_unittest_with_repo_pythonpath.cmd' tests.test_a_short_iv_egs_wiring tests.test_a_short_iv_feed_build tests.phase6.test_egs_analysis_input_contract tests.test_a_short_weekly_pipeline tests.test_a_short_effect_consumer_probe tests.test_a_short_effect_contract tests.test_a_short_weekly_sidecar_health tests.test_a_short_weekly_screening_m67_failure_closeout tests.schema.test_analysis_input_contract 'tests.phase6.test_weekly_screening_guardrails.WeeklyScreeningGuardrailTest.test_preflight_runs_before_canonical_resolver_and_provider' 'tests.phase6.test_weekly_screening_guardrails.WeeklyScreeningGuardrailTest.test_failure_receipt_invalidates_stale_and_records_identity' 'tests.phase6.test_weekly_screening_guardrails.WeeklyScreeningGuardrailTest.test_iv_feed_failure_receipt_is_wired_without_copying_error_text'`；终态 `Ran 739 tests in 114.623s` / `OK`，`RESULT tier=focused status=PASS exit=0 tests=739`，receipt `receipt:c1288a0fb8366e1ea8a0be58`。
+- static contract `None`；变更 Python `py_compile` exit 0；5 份变更 JSON schema `schema_check=OK files=5`；`git diff --check` exit 0（仅 line-ending warnings）；最终 docs-only `tests.test_doc_governance_guard tests.test_route_doc_ledger_status_consistency tests.test_readme_route_row_length` = `Ran 66 tests ... OK`，launcher receipt 已产生。
+- 唯一一次最终 full command：`& 'C:\Users\cnhea\AppData\Local\Programs\Python\Python313\python.exe' 'D:\cnhea\Codex\worktrees\29e0\Stock\.tools\full_pack_ledger.py' run a_short 'seq15 IV feed before EGS producer/consumer/schema/source-binding/write-boundary' 'receipt:c1288a0fb8366e1ea8a0be58' 860 -- discover -s tests -p 'test_a_short*.py'`；终态 `Ran 2410 tests in 308.536s` / `OK (skipped=3)`，`RESULT status=PASS exit=0 tests=2410 elapsed=310.3s deadline=860s`。
+
+### NOT_VERIFIED、审查/提交边界与下一步
+
+`NOT_VERIFIED`：真实 provider/live、`--confirm-fetch-authorized`、`-Account` 实周跑、生产/私密产物刷新、自动下单、Claude Code 独立审查、commit/push/merge。自动化 focused/full 绿不等于独立 review、live 或 ship PASS。executor/fixer 不 commit；下一步：`Claude Code：审查序15`。
+
+
+## 2026-08-08 追加：序 15（IV feed 先于 EGS）独立审查 = FAIL
+
+**判定**：三条 Required（`R-ASHORT-SEQ15-IV-CLOCK-MISMATCH-ABORTS-WHOLE-WEEKLY-RUN` P2、`R-ASHORT-SEQ15-IV-BUILD-FAILURE-LABELLED-NOT-REQUESTED` P3、`R-ASHORT-SEQ15-VALIDATED-FEED-LABEL-OVERSTATES-WHAT-IS-VERIFIED` P3）+ 四条 Optional。完整正文只在 `docs/system_risk_register.md`，本节不复述。接线主线（一次构建、单路径、写盘前校验、字节绑定、schema 两态）是成立的，坏在失败路径的行为与两处比实际强的说法。
+
+**我实际验了什么**（不是转述执行方，也不是采信 agent）：
+
+1. 整读被消费的函数体：`_load_iv_feed_projection` / `_unknown_iv_projection`（EGS）、重写后的 `_validate_analysis_input_m05_binding`、`latest_m05_state`、`validated_m05_series`、`validate_feed_artifact` 与 `validate_feed_summary_consistency` 的 1.2.0 段（含 `build_m05_state` 逐行重算与 `awakening` 镜像）、`weekly_screening.ps1` 的 Stage 0 新块 / EGS 失败早退 / 四条 iv_feed sidecar 出口 / 四个 Stage 的先后行号。
+2. 复跑验收超集（八模块）`Ran 713 tests in 111.575s` / `OK`，`receipt:7c346461669f5a7277c895ad`；全量按 AGENTS rule 4 不重跑，改为核 ledger `a_short=2410 OK` 且 fingerprint 与当前码态相同。
+3. 自写探针三条：① **第三态可表达性**——unknown 形状换三种诚实 `freshness_reason` 与一种诚实 `freshness_status`，schema 全拒，只有「没请求过」能过；② **分位反推缺失**——真实 producer 造合法 1.2.0 feed，把尾行分位 100.0 改成 3.0 并让状态机跟随，读门/EGS 投影/绑定门三关全过、盖章 `validated_feed`，`rule3_status` 由 `no_trade` 翻 `normal`；③ `source_ref` 两式归一化对拍（含小写盘符）相同。
+
+**植入对照**（C2：patch 的是门本身）：把 `_validate_analysis_input_m05_binding` 的 1.2.0 分支改成立即 `return`（等同删掉这道门），`tests.test_a_short_iv_egs_wiring::test_complete_projection_requires_exact_ai_values_and_feed_bytes` 由绿转 `FAILED`；随后按 sha256 还原，逐字节一致（`6ad5ce1cd028…`）。
+
+**独立对抗 agent**：按 §6a(iii) 起 1 个（worktree 只读、禁改仓、禁联网、禁跑测试包）。它报 6 条，我逐条复现：2 条成立并入册（时钟不合炸整周、分位不反推），1 条与我自己已查出的重复（失败被写成没请求过），2 条 LOW 自称不可达者我未复现故标 NOT_VERIFIED、不入册，1 条（非有限值读门宽于写门）作 Optional 记录。
+
+**未覆盖维度与诚实边界**：没有真跑 `weekly_screening.ps1`（会真连 provider），故 P2 那条是控制流实读而非观测到的运行；没有真实 IV 构建失败周；没跑 `-Account` 私密路径；PS1 的顺序与失败腿只有静态文本断言。另：本树基线仍停在 `7f0413d9`，master 已在 `12a7dd51`，序 7/8/11/13/14/19 都不在本树，故本刀与它们的**合并态从未被任何测试跑过**。
+
+**下一步**：Codex 修三条 Required（P2 优先），Optional 一并处置；修完再审。合并前本树需要先跟上 master 基线。
+
+## 2026-08-08 Codex executor/fixer — seq15 三类收口（OPEN-NOT_VERIFIED）
+
+### 判断与优化后的方案
+
+判断桌面方案正确：七项是三个根，按类收口。执行时收紧为：wrapper 计算唯一 IV 五态，EGS 只渲染；只有 `ready` 携带 feed 并盖 `validated_feed`；读门使用 producer 同一 `rolling_percentile_252()` 反推分位并拒绝所有参与重算的非有限值；类③对七叶做 active 全仓回扫。PS1 不新增进程测试床，静态钉住非 ready 仍调用 canary/forward tracker。
+
+### 根因、调用链与消费者
+
+- 类①根因是 `--iv-feed` 二值信道无法表达失败类型。现为 `not_requested/build_failed/digest_failed/clock_mismatch/ready`；`weekly_screening.ps1` → `a_short_iv_feed_build.py` → `A-EGS/egs_main.py::run_egs/_load_iv_feed_projection` → `analysis_input.market_context.volatility` → canary/forward tracker → M6.7 pipeline/receipt/sidecar。非 ready 不崩、不传旧 feed，EGS 显式 unknown/unavailable，M6.7 fail-closed；后置账户路径/weekly pipeline failure receipt 也带同一 status。
+- 类②根因是读门搬运 shape 却把 producer 自报数值当验证结果。现在读门逐行重算 IV 分位、以重算值构建 M0.5 state，并拒绝 IV、percentile、HV、awakening、cash-reclaim 等 NaN/Inf。
+- 类③已清除运行时 IV `planned_unavailable_fields`，同步 coverage/design/effect-contract；正式 effect inventory/example 中的 leaf 引用保留为契约清单，不再误报为未接线。
+
+### schema、source-binding 与写盘边界
+
+`analysis_input.schema.json` 锁定 complete/unknown 两种结构；sidecar outcomes/health、weekly publish receipt 均带五态枚举；effect contract 的 leaf inventory、source/predicate/runtime hash 和 consumer probe 计数已重封。写盘只走既有 IV failure/success writer、EGS official transaction、weekly atomic publication；未运行 provider/live/真实 weekly，未新增账户、订单、自动下单或 tracked raw payload 写盘。
+
+### 负向控制与自审
+
+已覆盖未请求、三种失败、时钟不一致、ready、路径夹带、stale/future/tampered feed、篡改分位、缺失/非有限数值、source/ref/digest/AI leaf 不一致、非 ready 下 canary/forward tracker 继续执行、receipt/sidecar 状态一致性。旧观察池静态测试的过时精确字面串改为当前调用形状匹配，未改业务逻辑。A-F 自审完成；未起 sub-agent。
+
+### 固定 Python、测试命令与原始终态
+
+- 固定解释器：`C:\Users\cnhea\AppData\Local\Programs\Python\Python313\python.exe`，`Python 3.13.8`。
+- 最终 bounded focused：`& '.tools\run_unittest_with_repo_pythonpath.cmd' tests.test_a_short_iv_egs_wiring tests.test_a_short_iv_feed_build tests.test_a_short_effect_consumer_probe tests.test_a_short_effect_contract tests.test_a_short_weekly_pipeline tests.test_a_short_weekly_sidecar_health tests.test_a_short_weekly_screening_m67_failure_closeout tests.schema.test_a_short_weekly_publish_receipt_schema tests.schema.test_analysis_input_contract tests.phase6.test_egs_analysis_input_contract tests.phase6.test_weekly_screening_guardrails`；`Ran 766 tests in 138.593s` / `OK`，`RESULT tier=focused status=PASS exit=0 tests=766`，receipt `receipt:2077ac3e1862265a6d63b154`。
+- 静态门：固定 Python `py_compile` exit 0；5 个 JSON `JSON_OK 5`；`git diff --check` exit 0（CRLF warnings only）。
+- docs-only 门：`tests.test_doc_governance_guard tests.test_route_doc_ledger_status_consistency tests.test_readme_route_row_length`；`Ran 66 tests in 1.243s` / `OK`。
+- 唯一最终 full lane：固定 Python `.tools\full_pack_ledger.py run a_short ... receipt:2077ac3e1862265a6d63b154 ... -- discover -s tests -p test_a_short*.py`；`Ran 2414 tests in 381.894s` / `OK (skipped=3)`，`RESULT status=PASS exit=0 tests=2414`，fingerprint `215c2294a56d`。
+
+### NOT_VERIFIED、审查与提交边界
+
+Claude Code 独立审查、真实 provider/live/`-Account` weekly、生产效果、commit/push/merge 均 `NOT_VERIFIED`/未执行；自动化 focused/full 不等于独立 review/live/ship PASS。下一步：`Claude Code：审查序15`。
+
+## 2026-08-08 追加：序 15 三类收口的复审 = Pass-with-Required
+
+**判定**：上轮三条 Required 全部 closed（每条都由我自建探针复现，不采信转述）；新增一条 P3 `R-ASHORT-SEQ15-PERCENTILE-TRUST-ROOT-HAS-NO-REGRESSION-GUARD`。正文只在 `docs/system_risk_register.md`。
+
+**我实际验了什么**：
+
+1. 整读修改后的被消费函数体：`validate_feed_summary_consistency` 新增的反推段与非有限拒绝、`_unknown_iv_projection` / `_load_iv_feed_projection` 的五态渲染与「非 ready 不得带路径 / ready 必须带路径」互斥、builder 的 `--price-data-through` + 退出码 23（在 `write_feed` 之前）、wrapper 的 exit-23 → `clock_mismatch` 映射与 EGS 参数拼装、pipeline 的 `--iv-feed-status` 与 `publish_weekly_bundle` 双检。
+2. 复跑验收超集（九模块，含 `tests.phase6.test_weekly_screening_guardrails`）`Ran 739 tests in 128.2s` / `OK`，`receipt:7f469af3dc893c155cbbb901`。按用户本轮指令**不跑全量**，引用执行方 ledger `a_short=2414 OK`（其 fingerprint 绑定未独立核对，记 NOT_VERIFIED）。
+3. 自建探针两组：① 五态可表达性与错标拒绝（四个非 ready 全过 schema；三种错标全拒）；② 自洽篡改分位与非有限值（两次篡改均被读门按反推拒，诚实 feed 仍绿，`hv=inf` 拒）。
+4. 另实读确认 `price_data_through` 就是 wrapper 传的 `$PriceAsOf`，两侧同值——否则「builder 判过、EGS 再判」仍会留一条崩溃路径。
+
+**植入对照（本轮的关键发现）**：把 `recomputed = rolling_percentile_252(...)` 还原成 pre-patch 取存值（等同删掉新门），`tests.test_a_short_iv_feed_build` + `tests.test_a_short_iv_egs_wiring` **74 tests 全绿**。原因是那条名叫 `test_tampered_percentile_is_recomputed_and_rejected` 的测试只改分位、不同步状态，早被旧的 `build_m05_state` 比对拒掉——它为旧门背书，不为新门。还原后逐字节一致。
+
+**未覆盖维度与诚实边界**：本轮未跑全量（用户指令）；未真跑 `weekly_screening.ps1`；无真实 IV 构建失败/时钟不合周；PS1 侧仍只有静态文本断言；本树基线仍停在 `7f0413d9`，与 master `12a7dd51` 的合并态未被任何测试跑过。
+
+**下一步**：Codex 补那条自洽篡改测试（并让同名旧测试能区分两道门），顺手处置那条重复设防 Optional；之后再审。
+
+## 2026-08-08 追加：序 15 信任根守卫整类（Claude 自修自审，用户令）
+
+**做了什么**：把上一轮点名的"新门没有守卫"从**一条**扩成**一类**——枚举本轮新增的七道门，逐门植入中和，看有没有测试会死。结果只有 1 道被钉住，六道全绿。为其中五道补了点名式断言的测试并逐门验证转红；第七道（publish 端）因文件受决策谓词哈希封印而无法语义隔离，如实标 NOT_VERIFIED。完整表格、修法与逐门植入结果见 `docs/system_risk_register.md`。
+
+**关键教训（值得记住的那条）**：这六道门原本都"有测试"，但断言只写 `assertRaises(ValueError)`。同一条坏输入在门被拿掉后仍会被**另一道**门拒——旧的逐行状态比对、awakening 镜像比对、甚至 `os.path.abspath(str(None))` 的 `FileNotFoundError`——于是测试照绿。**断言必须点名它守的是哪道门**，否则它守的是"这里会抛异常"，而不是"这道门在"。
+
+**被否决的 Optional 与理由**：删 pipeline 里那两行不可达代码需要重封真钱决策谓词哈希（实测 `static_contract_error()` 立刻转红），代价与收益不相称，已逐字节还原。
+
+**未覆盖**：全量（用户本轮明令不跑）；`weekly_screening.ps1` 真跑；`-Account`；g8 单门语义守卫。
+
+**下一步**：无（本刀收口，随本轮提交并合入 master）。

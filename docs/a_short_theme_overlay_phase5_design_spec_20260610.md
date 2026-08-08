@@ -73,7 +73,7 @@ overlay_score = esp_score×0.15 + l4_score×0.45 + theme_heat⊥×0.25 + industr
 **V14.2 四层归位(只有第 1 层能终止):**
 1. `hard_veto` — Rule 6 核心否决、ST/退市、监管、减持、闪崩、流动性底线、熔断、T+1/涨跌停不可执行、ship-gate/manual-only 边界。**保留严苛。**
 2. `downgrade_or_weight_adjustment` — 过热/追高/效率替代、行业逆风、盈亏比偏弱(非明显坏结构)、组合暴露过高。
-3. `observe_only` — 数据缺失、分析师目标价不可用、IV 未接入时的占位(可来数据就看)。**盘中/分钟类(Level-2 热插拔、盘口分钟、竞价校准、盘中入场窗口)不归这里,归 §9 `out_of_scope_by_cadence`**——周频系统本就不该依赖它们。
+3. `observe_only` — 数据缺失、分析师目标价不可用、IV feed status 非 `ready` 时的占位(可来数据就看)。**盘中/分钟类(Level-2 热插拔、盘口分钟、竞价校准、盘中入场窗口)不归这里,归 §9 `out_of_scope_by_cadence`**——周频系统本就不该依赖它们。
 4. `llm_enrichment` — 行业景气、政策、媒体负面、隐蔽风险残差(分层见 §10 Tier C)。**只经 `schemas/deterministic_report_enrichment.schema.json` 写 `llm_notes`,不改 deterministic decision。**
 
 **Rule6 完整性闸门**：Rule6 的每个核查项必须明确为 `pass` / `not_applicable`、`fail` 或待人工复核状态；任一 `fail` 为 `hard_veto`。任何 `pending_data`、`pending_llm`、`unknown`、缺项、重复项或清单漂移，在空仓候选上都必须输出“观察、不得建仓”，并标明待人工复核；不得把未决项当作通过。已有持仓仍走持仓管理，未决 Rule6 项不自动加仓。

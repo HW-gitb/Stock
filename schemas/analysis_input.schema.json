@@ -556,6 +556,53 @@
             "cash_reclaim_pct": {
               "$ref": "#/$defs/percentNullable",
               "description": "Unit: percent, 1 means 1%."
+            },
+            "iv_feed_status": {
+              "enum": ["not_requested", "build_failed", "digest_failed", "clock_mismatch", "ready"]
+            },
+            "source_status": {
+              "type": "string",
+              "enum": [
+                "complete",
+                "unavailable"
+              ]
+            },
+            "freshness_status": {
+              "type": "string",
+              "enum": [
+                "aligned",
+                "not_requested",
+                "unavailable"
+              ]
+            },
+            "freshness_reason": {
+              "type": "string",
+              "enum": [
+                "validated_feed",
+                "iv_feed_not_requested",
+                "iv_feed_build_failed",
+                "iv_feed_digest_failed",
+                "iv_feed_clock_mismatch"
+              ]
+            },
+            "source_as_of": {
+              "$ref": "#/$defs/date8Nullable"
+            },
+            "source_latest_trade_date": {
+              "$ref": "#/$defs/date8Nullable"
+            },
+            "source_ref": {
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "feed_sha256": {
+              "type": [
+                "string",
+                "null"
+              ],
+              "pattern": "^([0-9a-f]{64})?$"
             }
           }
         },
@@ -985,6 +1032,150 @@
               "l3_provider",
               "l3_coverage"
             ]
+          }
+        }
+      }
+    },
+    {
+      "description": "A complete volatility projection must carry the validated IV source and aligned clock.",
+      "if": {
+        "required": ["market_context"],
+        "properties": {
+          "market_context": {
+            "required": ["volatility"],
+            "properties": {
+              "volatility": {
+                "required": ["source_status"],
+                "properties": {"source_status": {"const": "complete"}}
+              }
+            }
+          }
+        }
+      },
+      "then": {
+        "properties": {
+          "market_context": {
+            "properties": {
+              "volatility": {
+                "required": [
+                  "source_status",
+                  "iv_feed_status",
+                  "freshness_status",
+                  "freshness_reason",
+                  "source_as_of",
+                  "source_latest_trade_date",
+                  "source_ref",
+                  "feed_sha256"
+                ],
+                "properties": {
+                  "iv_feed_status": {"const": "ready"},
+                  "freshness_status": {"const": "aligned"},
+                  "freshness_reason": {"const": "validated_feed"},
+                  "source_as_of": {"type": "string", "pattern": "^[0-9]{8}$"},
+                  "source_latest_trade_date": {"type": "string", "pattern": "^[0-9]{8}$"},
+                  "source_ref": {"type": "string", "minLength": 1},
+                  "feed_sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"}
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    {
+      "description": "An unavailable volatility projection must be explicit unknown/not-requested and cannot carry stale values.",
+      "if": {
+        "required": ["market_context"],
+        "properties": {
+          "market_context": {
+            "required": ["volatility"],
+            "properties": {
+              "volatility": {
+                "required": ["source_status"],
+                "properties": {"source_status": {"const": "unavailable"}}
+              }
+            }
+          }
+        }
+      },
+      "then": {
+        "properties": {
+          "market_context": {
+            "properties": {
+              "volatility": {
+                "required": [
+                  "source_status",
+                  "freshness_status",
+                  "freshness_reason",
+                  "source_as_of",
+                  "source_latest_trade_date",
+                  "source_ref",
+                  "feed_sha256"
+                ],
+                "properties": {
+                  "source_as_of": {"type": "null"},
+                  "source_latest_trade_date": {"type": "null"},
+                  "source_ref": {"type": "null"},
+                  "feed_sha256": {"type": "null"},
+                  "iv_value": {"type": "null"},
+                  "iv_percentile_252d": {"type": "null"},
+                  "iv_change_abs_1d_pctpt": {"type": "null"},
+                  "rule3_status": {"const": "unknown"},
+                  "awakening_status": {"const": "unknown"},
+                  "cash_reclaim_pct": {"type": "null"}
+                },
+                "allOf": [
+                  {
+                    "if": {"required": ["iv_feed_status"]},
+                    "then": {
+                      "oneOf": [
+                        {
+                          "required": ["iv_feed_status"],
+                          "properties": {
+                            "iv_feed_status": {"const": "not_requested"},
+                            "freshness_status": {"const": "not_requested"},
+                            "freshness_reason": {"const": "iv_feed_not_requested"}
+                          }
+                        },
+                        {
+                          "required": ["iv_feed_status"],
+                          "properties": {
+                            "iv_feed_status": {"const": "build_failed"},
+                            "freshness_status": {"const": "unavailable"},
+                            "freshness_reason": {"const": "iv_feed_build_failed"}
+                          }
+                        },
+                        {
+                          "required": ["iv_feed_status"],
+                          "properties": {
+                            "iv_feed_status": {"const": "digest_failed"},
+                            "freshness_status": {"const": "unavailable"},
+                            "freshness_reason": {"const": "iv_feed_digest_failed"}
+                          }
+                        },
+                        {
+                          "required": ["iv_feed_status"],
+                          "properties": {
+                            "iv_feed_status": {"const": "clock_mismatch"},
+                            "freshness_status": {"const": "unavailable"},
+                            "freshness_reason": {"const": "iv_feed_clock_mismatch"}
+                          }
+                        }
+                      ]
+                    }
+                  },
+                  {
+                    "if": {"not": {"required": ["iv_feed_status"]}},
+                    "then": {
+                      "properties": {
+                        "freshness_status": {"const": "not_requested"},
+                        "freshness_reason": {"const": "iv_feed_not_requested"}
+                      }
+                    }
+                  }
+                ]
+              }
+            }
           }
         }
       }

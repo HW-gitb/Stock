@@ -2,7 +2,7 @@
   "schema_name": "a_short_m67_effect_contract",
   "schema_version": "1.0.0",
   "legacy_migration_sha256": "b99cbb6895b7b2c2877e172fbbd59ff0b84a5c3b9bbf5de2b8ee2aab0d52cc4e",
-  "analysis_input_all_paths_sha256": "b8b76ada440c8fb16d112970b372f82c81ded327caa7e2ac588220f9cb2dc692",
+  "analysis_input_all_paths_sha256": "604eec3e02828285a5e2cc0b8024b871e3a6f728166a487d886800a63451aa95",
   "unclassified_pending_audit_baseline": [
     "account_context.mode",
     "account_context.positions[].current_price",
@@ -176,9 +176,6 @@
     "market_context.trade_calendar.calendar_source",
     "market_context.trade_calendar.latest_trade_date",
     "market_context.trade_calendar.recent_trade_dates[]",
-    "market_context.volatility.awakening_status",
-    "market_context.volatility.iv_symbol",
-    "market_context.volatility.rule3_status",
     "preset",
     "price_data_through",
     "run_date",
@@ -340,14 +337,14 @@
       "source_prefixes": [
         "market_context"
       ],
-      "source_paths_sha256": "f6d871d792083580454afd9c66ec86f28e2c7afc3c2dc818cc38acd23a7be520",
+      "source_paths_sha256": "adb4f37b8bf213b7022b2a770a2cd6405fb262d794f9a9786fc3b3b4cb4c118c",
       "policy": "must_affect_result",
       "terminal_surfaces": [
         "weekly.effect_contract_ledger",
         "weekly Markdown 字段/规则联动台账"
       ],
       "runtime_handler": "unresolved_input_group",
-      "unresolved_reason": "北向 5 日净流与 CSI300 窗口已由结构化 northbound_control 接入新建仓门并落到 operation_impact；其余广度、流动性、日历和波动率叶字段仍未逐叶证明消费者，不能报整组已联动。"
+      "unresolved_reason": "北向 5 日净流与 CSI300 窗口已由结构化 northbound_control 接入新建仓门并落到 operation_impact；IV volatility 叶字段现由 EGS/weekly 的同一 feed source-binding 逐叶校验；其余广度、流动性、日历和波动率叶字段仍未逐叶证明消费者，不能报整组已联动。"
     },
     {
       "id": "account_context",
@@ -854,11 +851,23 @@
     }
   ],
   "leaf_effect_overrides": {
-    "candidates[].scores.final_score": {
-      "category": "upstream_candidate_set_or_rank",
-      "consumer_ref": "A-EGS/egs_main.py::final_score",
-      "terminal_surface": "A-EGS/egs_main.py candidate ranking (sort_values final_score/l4_score/pct_20d_n) and reports[].m67.table.EGS分",
-      "mutation_evidence": "changing final_score changes the EGS rank order that selects candidates; the same value is carried to the M6.7 table EGS分 column via a_short_weekly_pipeline.py:599 -> a_short_phase5_engine.py:1795"
+    "candidates[].catalyst.theme_taxonomy.comparison_metrics.theme_heat_score": {
+      "category": "formal_comparison_verdict",
+      "consumer_ref": "engine/a_short_industry_theme.py::theme comparison",
+      "terminal_surface": "formal theme comparison verdict",
+      "mutation_evidence": "positive mutation changes the formal comparison outcome"
+    },
+    "candidates[].event_risk.rule6_checks[].severity": {
+      "category": "duplicate_or_display_audit",
+      "consumer_ref": "A-EGS/egs_main.py::_rule6_evaluated_check + schemas/analysis_input.schema.json",
+      "terminal_surface": "analysis_input Rule6 audit label; not an M6.7 decision input",
+      "mutation_evidence": "severity-only mutation leaves M6.7 unchanged; Rule6 action is driven by status"
+    },
+    "candidates[].event_risk.rule6_checks[].status": {
+      "category": "m67_main_decision",
+      "consumer_ref": "runners/a_short_phase5_engine.py::rule6_checks",
+      "terminal_surface": "weekly.reports[].machine risk veto/action",
+      "mutation_evidence": "positive mutation changes Rule6 risk action"
     },
     "candidates[].fundamental.profitability.q0_dt_yoy": {
       "category": "m67_main_decision",
@@ -872,35 +881,17 @@
       "terminal_surface": "weekly.portfolio_risk and operation impact",
       "mutation_evidence": "positive mutation changes portfolio-risk facts"
     },
-    "candidates[].catalyst.theme_taxonomy.comparison_metrics.theme_heat_score": {
-      "category": "formal_comparison_verdict",
-      "consumer_ref": "engine/a_short_industry_theme.py::theme comparison",
-      "terminal_surface": "formal theme comparison verdict",
-      "mutation_evidence": "positive mutation changes the formal comparison outcome"
-    },
     "candidates[].liquidity.avg_amount_5d": {
       "category": "m67_main_decision",
       "consumer_ref": "runners/a_short_phase5_engine.py::liquidity_execution",
       "terminal_surface": "weekly.reports[].machine risk family liquidity_execution",
       "mutation_evidence": "positive mutation changes liquidity execution action"
     },
-    "candidates[].event_risk.rule6_checks[].status": {
-      "category": "m67_main_decision",
-      "consumer_ref": "runners/a_short_phase5_engine.py::rule6_checks",
-      "terminal_surface": "weekly.reports[].machine risk veto/action",
-      "mutation_evidence": "positive mutation changes Rule6 risk action"
-    },
-    "candidates[].event_risk.rule6_checks[].severity": {
-      "category": "duplicate_or_display_audit",
-      "consumer_ref": "A-EGS/egs_main.py::_rule6_evaluated_check + schemas/analysis_input.schema.json",
-      "terminal_surface": "analysis_input Rule6 audit label; not an M6.7 decision input",
-      "mutation_evidence": "severity-only mutation leaves M6.7 unchanged; Rule6 action is driven by status"
-    },
-    "market_context.market_regime.status": {
-      "category": "m67_main_decision",
-      "consumer_ref": "runners/a_short_weekly_pipeline.py::_market_regime",
-      "terminal_surface": "weekly market regime and operation impact",
-      "mutation_evidence": "positive mutation changes market-regime action"
+    "candidates[].scores.final_score": {
+      "category": "upstream_candidate_set_or_rank",
+      "consumer_ref": "A-EGS/egs_main.py::final_score",
+      "terminal_surface": "A-EGS/egs_main.py candidate ranking (sort_values final_score/l4_score/pct_20d_n) and reports[].m67.table.EGS分",
+      "mutation_evidence": "changing final_score changes the EGS rank order that selects candidates; the same value is carried to the M6.7 table EGS分 column via a_short_weekly_pipeline.py:599 -> a_short_phase5_engine.py:1795"
     },
     "market_context.breadth.csi300_pct_change_window": {
       "category": "m67_main_decision",
@@ -908,148 +899,10 @@
       "terminal_surface": "weekly.northbound_control and reports[].machine.operation_impact / M6.7 new-entry action",
       "mutation_evidence": "a CSI300 window at or above the unchanged -10% threshold leaves new-entry builds intact; a bound value below it only blocks when the structured northbound flow is outflow"
     },
-    "market_context.breadth.csi300_window.start_date": "duplicate_or_display_audit",
     "market_context.breadth.csi300_window.end_date": "duplicate_or_display_audit",
     "market_context.breadth.csi300_window.length": "duplicate_or_display_audit",
     "market_context.breadth.csi300_window.length_unit": "duplicate_or_display_audit",
-    "market_context.northbound.coverage_complete": {
-      "category": "m67_main_decision",
-      "consumer_ref": "runners/a_short_weekly_pipeline.py::_normalise_northbound_control -> should_block_new_entries",
-      "terminal_surface": "weekly.northbound_control coverage receipt and fail-closed new-entry gate",
-      "mutation_evidence": "partial, duplicate, or out-of-window provider dates force unknown/null and cannot enable the gate"
-    },
-    "market_context.northbound.net_flow_5d": {
-      "category": "m67_main_decision",
-      "consumer_ref": "runners/a_short_weekly_pipeline.py::_northbound_control_from_analysis -> _apply_northbound_market_gate",
-      "terminal_surface": "weekly.northbound_control and reports[].machine.operation_impact / M6.7 new-entry action",
-      "mutation_evidence": "a bound negative CNY five-day flow only blocks new entries with the unchanged CSI300 dual condition; null/unknown never becomes flat or a block"
-    },
-    "market_context.northbound.status": {
-      "category": "m67_main_decision",
-      "consumer_ref": "runners/a_short_weekly_pipeline.py::_normalise_northbound_control -> should_block_new_entries",
-      "terminal_surface": "weekly.northbound_control.status and structured new-entry gate",
-      "mutation_evidence": "status is required to agree with the structured flow sign; unknown fails closed and cannot enable the gate"
-    },
-    "market_context.northbound.observed_session_count": {
-      "category": "m67_main_decision",
-      "consumer_ref": "runners/a_short_weekly_pipeline.py::_normalise_northbound_control -> should_block_new_entries",
-      "terminal_surface": "weekly.northbound_control coverage receipt and fail-closed new-entry gate",
-      "mutation_evidence": "a count below the requested five sessions cannot be relabelled complete or used for a block"
-    },
-    "market_context.northbound.production_effect_enabled": {
-      "category": "m67_main_decision",
-      "consumer_ref": "runners/a_short_weekly_pipeline.py::_normalise_northbound_control -> _apply_northbound_market_gate",
-      "terminal_surface": "weekly.northbound_control.production_effect_enabled and new-entry action",
-      "mutation_evidence": "the reviewed analysis schema pins the live gate true; an explicit false control is the negative control that must preserve new-entry builds"
-    },
-    "market_context.northbound.requested_session_count": {
-      "category": "m67_main_decision",
-      "consumer_ref": "runners/a_short_weekly_pipeline.py::_normalise_northbound_control",
-      "terminal_surface": "weekly.northbound_control coverage receipt",
-      "mutation_evidence": "a requested-session count other than the fixed five-session contract is rejected before the gate"
-    },
-    "market_context.trade_calendar.is_pre_holiday_window": {
-      "category": "m67_main_decision",
-      "consumer_ref": "runners/a_short_weekly_pipeline.py::_pre_holiday_control_from_analysis -> _allocate_cash",
-      "terminal_surface": "weekly.cash_allocation.pre_holiday_control and new-entry cash allocation",
-      "mutation_evidence": "a qualifying pre-holiday mutation changes the cash factor and can demote a build to observe"
-    },
-    "market_context.trade_calendar.holiday_days_ahead": {
-      "category": "m67_main_decision",
-      "consumer_ref": "runners/a_short_weekly_pipeline.py::_normalise_pre_holiday_control",
-      "terminal_surface": "weekly.cash_allocation.pre_holiday_control and pre-holiday eligibility gate",
-      "mutation_evidence": "a closure below the five-day threshold disables the cash reduction; a qualifying gap enables it"
-    },
-    "market_context.trade_calendar.next_trade_date": {
-      "category": "m67_main_decision",
-      "consumer_ref": "runners/a_short_weekly_pipeline.py::_normalise_pre_holiday_control -> _allocate_cash",
-      "terminal_surface": "analysis_input.market_context.trade_calendar and weekly.cash_allocation.pre_holiday_control",
-      "mutation_evidence": "a positive pre-holiday window is rejected when the source-bound next session is absent, so removing it disables the cash reduction instead of only losing an audit field"
-    },
-    "market_context.margin_overheat.percentile": {
-      "category": "m67_main_decision",
-      "consumer_ref": "runners/a_short_weekly_pipeline.py::_normalise_margin_overheat_control -> _resolve_cash_factor_stack -> _allocate_cash",
-      "terminal_surface": "weekly.cash_allocation.margin_overheat_control + cash_factor_stack.effective_cash_factor",
-      "mutation_evidence": "with an adjudicated percentile_threshold and cash_factor injected, a percentile at or above the threshold lowers available_cash_start; null/incomplete never becomes a trigger"
-    },
-    "market_context.margin_overheat.balance_yuan": {
-      "category": "m67_main_decision",
-      "consumer_ref": "runners/a_short_weekly_pipeline.py::_normalise_margin_overheat_control -> _resolve_cash_factor_stack -> _allocate_cash",
-      "terminal_surface": "weekly.cash_allocation.margin_overheat_control + cash_factor_stack.effective_cash_factor",
-      "mutation_evidence": "the three-exchange rzye total is carried into the control in CNY and is asserted against a known-value recomputation, so a 万元 unit slip is caught rather than scaled away"
-    },
-    "market_context.margin_overheat.window_start": {
-      "category": "m67_main_decision",
-      "consumer_ref": "runners/a_short_weekly_pipeline.py::_normalise_margin_overheat_control -> _resolve_cash_factor_stack -> _allocate_cash",
-      "terminal_surface": "weekly.cash_allocation.margin_overheat_control + cash_factor_stack.effective_cash_factor",
-      "mutation_evidence": "a complete control must carry a bound window; a null or reversed window is rejected before any percentile is used"
-    },
-    "market_context.margin_overheat.window_end": {
-      "category": "m67_main_decision",
-      "consumer_ref": "runners/a_short_weekly_pipeline.py::_normalise_margin_overheat_control -> _resolve_cash_factor_stack -> _allocate_cash",
-      "terminal_surface": "weekly.cash_allocation.margin_overheat_control + cash_factor_stack.effective_cash_factor",
-      "mutation_evidence": "a window ending after the weekly as_of is rejected, so a percentile can never be taken over future sessions"
-    },
-    "market_context.margin_overheat.requested_session_count": {
-      "category": "m67_main_decision",
-      "consumer_ref": "runners/a_short_weekly_pipeline.py::_normalise_margin_overheat_control -> _resolve_cash_factor_stack -> _allocate_cash",
-      "terminal_surface": "weekly.cash_allocation.margin_overheat_control + cash_factor_stack.effective_cash_factor",
-      "mutation_evidence": "a complete control shorter than the rolling-window minimum is rejected, so a truncated fetch cannot pass as a three-year window"
-    },
-    "market_context.margin_overheat.observed_session_count": {
-      "category": "m67_main_decision",
-      "consumer_ref": "runners/a_short_weekly_pipeline.py::_normalise_margin_overheat_control -> _resolve_cash_factor_stack -> _allocate_cash",
-      "terminal_surface": "weekly.cash_allocation.margin_overheat_control + cash_factor_stack.effective_cash_factor",
-      "mutation_evidence": "an observed count below the requested count cannot be relabelled complete and therefore cannot produce a percentile"
-    },
-    "market_context.margin_overheat.coverage_complete": {
-      "category": "m67_main_decision",
-      "consumer_ref": "runners/a_short_weekly_pipeline.py::_normalise_margin_overheat_control -> _resolve_cash_factor_stack -> _allocate_cash",
-      "terminal_surface": "weekly.cash_allocation.margin_overheat_control + cash_factor_stack.effective_cash_factor",
-      "mutation_evidence": "a missing, duplicated or out-of-window session on any one exchange forces coverage_complete false, null percentile and cash_factor 1.0"
-    },
-    "market_context.margin_overheat.production_effect_enabled": {
-      "category": "m67_main_decision",
-      "consumer_ref": "runners/a_short_weekly_pipeline.py::_normalise_margin_overheat_control -> _resolve_cash_factor_stack -> _allocate_cash",
-      "terminal_surface": "weekly.cash_allocation.margin_overheat_control + cash_factor_stack.effective_cash_factor",
-      "mutation_evidence": "the reviewed analysis schema pins this false for row 19; with the same overheated facts, true lowers the allocated cash and false leaves every allocation field unchanged"
-    },
-    "market_context.margin_overheat.ratio": {
-      "category": "m67_main_decision",
-      "consumer_ref": "runners/a_short_weekly_pipeline.py::_normalise_margin_overheat_control -> _resolve_cash_factor_stack -> _allocate_cash",
-      "terminal_surface": "weekly.cash_allocation.margin_overheat_control + cash_factor_stack.effective_cash_factor",
-      "mutation_evidence": "the ratio is the de-trended quantity the percentile is taken over; the control asserts ratio * denominator == balance, so a unit slip on either leg is rejected instead of silently scaling the gate"
-    },
-    "market_context.margin_overheat.denominator_float_mv_yuan": {
-      "category": "m67_main_decision",
-      "consumer_ref": "runners/a_short_weekly_pipeline.py::_normalise_margin_overheat_control -> _resolve_cash_factor_stack -> _allocate_cash",
-      "terminal_surface": "weekly.cash_allocation.margin_overheat_control + cash_factor_stack.effective_cash_factor",
-      "mutation_evidence": "the Shanghai Composite float_mv carries into the control in CNY and must satisfy the ratio identity; zero/negative or non-finite denominators are rejected"
-    },
-    "market_context.moneyflow_coverage.effective_ref_date": {
-      "category": "m67_main_decision",
-      "consumer_ref": "A-EGS/egs_main.py::build_data_health::moneyflow_effective_clock",
-      "terminal_surface": "data_health.errors[] -> overall_status=error -> A-EGS/egs_main.py::publish_official_egs refuses the official publish",
-      "mutation_evidence": "flip it away from reference_date while fallback_applied is false -> the clock check errors and the official EGS publish is refused"
-    },
-    "market_context.moneyflow_coverage.lag_sessions": {
-      "category": "m67_main_decision",
-      "consumer_ref": "A-EGS/egs_main.py::build_data_health::moneyflow_effective_clock",
-      "terminal_surface": "data_health.errors[] -> overall_status=error -> A-EGS/egs_main.py::publish_official_egs refuses the official publish",
-      "mutation_evidence": "set it to 0 on a moved window -> the clock check errors and the publish is refused"
-    },
-    "market_context.moneyflow_coverage.fallback_applied": {
-      "category": "m67_main_decision",
-      "consumer_ref": "A-EGS/egs_main.py::build_data_health::moneyflow_effective_clock",
-      "terminal_surface": "data_health.errors[] -> overall_status=error -> A-EGS/egs_main.py::publish_official_egs refuses the official publish",
-      "mutation_evidence": "set it true while the window did not move -> the clock check errors and the publish is refused"
-    },
-    "market_context.moneyflow_coverage.fallback_reason": {
-      "category": "m67_main_decision",
-      "consumer_ref": "A-EGS/egs_main.py::build_data_health::moneyflow_effective_clock",
-      "terminal_surface": "data_health.errors[] -> overall_status=error -> A-EGS/egs_main.py::publish_official_egs refuses the official publish",
-      "mutation_evidence": "blank it on a moved window -> the clock check errors and the publish is refused"
-    },
+    "market_context.breadth.csi300_window.start_date": "duplicate_or_display_audit",
     "market_context.breadth.full_market_consecutive_limit_up_height": {
       "category": "duplicate_or_display_audit",
       "consumer_ref": "runners/a_short_weekly_pipeline.py::_build_market_breadth_audit -> weekly.market_breadth_audit",
@@ -1067,6 +920,66 @@
       "consumer_ref": "runners/a_short_weekly_pipeline.py::_build_market_breadth_audit -> weekly.market_breadth_audit",
       "terminal_surface": "weekly.market_breadth_audit (display only; production_effect_enabled=false)",
       "mutation_evidence": "changing it changes only the weekly audit block; no sizing, veto or M6.7 price reads it. Item 16 promotes these to a decision input when the regime state machine lands."
+    },
+    "market_context.margin_overheat.balance_yuan": {
+      "category": "m67_main_decision",
+      "consumer_ref": "runners/a_short_weekly_pipeline.py::_normalise_margin_overheat_control -> _resolve_cash_factor_stack -> _allocate_cash",
+      "terminal_surface": "weekly.cash_allocation.margin_overheat_control + cash_factor_stack.effective_cash_factor",
+      "mutation_evidence": "the three-exchange rzye total is carried into the control in CNY and is asserted against a known-value recomputation, so a 万元 unit slip is caught rather than scaled away"
+    },
+    "market_context.margin_overheat.coverage_complete": {
+      "category": "m67_main_decision",
+      "consumer_ref": "runners/a_short_weekly_pipeline.py::_normalise_margin_overheat_control -> _resolve_cash_factor_stack -> _allocate_cash",
+      "terminal_surface": "weekly.cash_allocation.margin_overheat_control + cash_factor_stack.effective_cash_factor",
+      "mutation_evidence": "a missing, duplicated or out-of-window session on any one exchange forces coverage_complete false, null percentile and cash_factor 1.0"
+    },
+    "market_context.margin_overheat.denominator_float_mv_yuan": {
+      "category": "m67_main_decision",
+      "consumer_ref": "runners/a_short_weekly_pipeline.py::_normalise_margin_overheat_control -> _resolve_cash_factor_stack -> _allocate_cash",
+      "terminal_surface": "weekly.cash_allocation.margin_overheat_control + cash_factor_stack.effective_cash_factor",
+      "mutation_evidence": "the Shanghai Composite float_mv carries into the control in CNY and must satisfy the ratio identity; zero/negative or non-finite denominators are rejected"
+    },
+    "market_context.margin_overheat.observed_session_count": {
+      "category": "m67_main_decision",
+      "consumer_ref": "runners/a_short_weekly_pipeline.py::_normalise_margin_overheat_control -> _resolve_cash_factor_stack -> _allocate_cash",
+      "terminal_surface": "weekly.cash_allocation.margin_overheat_control + cash_factor_stack.effective_cash_factor",
+      "mutation_evidence": "an observed count below the requested count cannot be relabelled complete and therefore cannot produce a percentile"
+    },
+    "market_context.margin_overheat.percentile": {
+      "category": "m67_main_decision",
+      "consumer_ref": "runners/a_short_weekly_pipeline.py::_normalise_margin_overheat_control -> _resolve_cash_factor_stack -> _allocate_cash",
+      "terminal_surface": "weekly.cash_allocation.margin_overheat_control + cash_factor_stack.effective_cash_factor",
+      "mutation_evidence": "with an adjudicated percentile_threshold and cash_factor injected, a percentile at or above the threshold lowers available_cash_start; null/incomplete never becomes a trigger"
+    },
+    "market_context.margin_overheat.production_effect_enabled": {
+      "category": "m67_main_decision",
+      "consumer_ref": "runners/a_short_weekly_pipeline.py::_normalise_margin_overheat_control -> _resolve_cash_factor_stack -> _allocate_cash",
+      "terminal_surface": "weekly.cash_allocation.margin_overheat_control + cash_factor_stack.effective_cash_factor",
+      "mutation_evidence": "the reviewed analysis schema pins this false for row 19; with the same overheated facts, true lowers the allocated cash and false leaves every allocation field unchanged"
+    },
+    "market_context.margin_overheat.ratio": {
+      "category": "m67_main_decision",
+      "consumer_ref": "runners/a_short_weekly_pipeline.py::_normalise_margin_overheat_control -> _resolve_cash_factor_stack -> _allocate_cash",
+      "terminal_surface": "weekly.cash_allocation.margin_overheat_control + cash_factor_stack.effective_cash_factor",
+      "mutation_evidence": "the ratio is the de-trended quantity the percentile is taken over; the control asserts ratio * denominator == balance, so a unit slip on either leg is rejected instead of silently scaling the gate"
+    },
+    "market_context.margin_overheat.requested_session_count": {
+      "category": "m67_main_decision",
+      "consumer_ref": "runners/a_short_weekly_pipeline.py::_normalise_margin_overheat_control -> _resolve_cash_factor_stack -> _allocate_cash",
+      "terminal_surface": "weekly.cash_allocation.margin_overheat_control + cash_factor_stack.effective_cash_factor",
+      "mutation_evidence": "a complete control shorter than the rolling-window minimum is rejected, so a truncated fetch cannot pass as a three-year window"
+    },
+    "market_context.margin_overheat.window_end": {
+      "category": "m67_main_decision",
+      "consumer_ref": "runners/a_short_weekly_pipeline.py::_normalise_margin_overheat_control -> _resolve_cash_factor_stack -> _allocate_cash",
+      "terminal_surface": "weekly.cash_allocation.margin_overheat_control + cash_factor_stack.effective_cash_factor",
+      "mutation_evidence": "a window ending after the weekly as_of is rejected, so a percentile can never be taken over future sessions"
+    },
+    "market_context.margin_overheat.window_start": {
+      "category": "m67_main_decision",
+      "consumer_ref": "runners/a_short_weekly_pipeline.py::_normalise_margin_overheat_control -> _resolve_cash_factor_stack -> _allocate_cash",
+      "terminal_surface": "weekly.cash_allocation.margin_overheat_control + cash_factor_stack.effective_cash_factor",
+      "mutation_evidence": "a complete control must carry a bound window; a null or reversed window is rejected before any percentile is used"
     },
     "market_context.market_breadth_source.daily_source": {
       "category": "duplicate_or_display_audit",
@@ -1139,6 +1052,180 @@
       "consumer_ref": "runners/a_short_weekly_pipeline.py::_build_market_breadth_audit -> weekly.market_breadth_audit",
       "terminal_surface": "weekly.market_breadth_audit (display only; production_effect_enabled=false)",
       "mutation_evidence": "changing it changes only the weekly audit block; no sizing, veto or M6.7 price reads it. Item 16 promotes these to a decision input when the regime state machine lands."
+    },
+    "market_context.market_regime.status": {
+      "category": "m67_main_decision",
+      "consumer_ref": "runners/a_short_weekly_pipeline.py::_market_regime",
+      "terminal_surface": "weekly market regime and operation impact",
+      "mutation_evidence": "positive mutation changes market-regime action"
+    },
+    "market_context.moneyflow_coverage.effective_ref_date": {
+      "category": "m67_main_decision",
+      "consumer_ref": "A-EGS/egs_main.py::build_data_health::moneyflow_effective_clock",
+      "terminal_surface": "data_health.errors[] -> overall_status=error -> A-EGS/egs_main.py::publish_official_egs refuses the official publish",
+      "mutation_evidence": "flip it away from reference_date while fallback_applied is false -> the clock check errors and the official EGS publish is refused"
+    },
+    "market_context.moneyflow_coverage.fallback_applied": {
+      "category": "m67_main_decision",
+      "consumer_ref": "A-EGS/egs_main.py::build_data_health::moneyflow_effective_clock",
+      "terminal_surface": "data_health.errors[] -> overall_status=error -> A-EGS/egs_main.py::publish_official_egs refuses the official publish",
+      "mutation_evidence": "set it true while the window did not move -> the clock check errors and the publish is refused"
+    },
+    "market_context.moneyflow_coverage.fallback_reason": {
+      "category": "m67_main_decision",
+      "consumer_ref": "A-EGS/egs_main.py::build_data_health::moneyflow_effective_clock",
+      "terminal_surface": "data_health.errors[] -> overall_status=error -> A-EGS/egs_main.py::publish_official_egs refuses the official publish",
+      "mutation_evidence": "blank it on a moved window -> the clock check errors and the publish is refused"
+    },
+    "market_context.moneyflow_coverage.lag_sessions": {
+      "category": "m67_main_decision",
+      "consumer_ref": "A-EGS/egs_main.py::build_data_health::moneyflow_effective_clock",
+      "terminal_surface": "data_health.errors[] -> overall_status=error -> A-EGS/egs_main.py::publish_official_egs refuses the official publish",
+      "mutation_evidence": "set it to 0 on a moved window -> the clock check errors and the publish is refused"
+    },
+    "market_context.northbound.coverage_complete": {
+      "category": "m67_main_decision",
+      "consumer_ref": "runners/a_short_weekly_pipeline.py::_normalise_northbound_control -> should_block_new_entries",
+      "terminal_surface": "weekly.northbound_control coverage receipt and fail-closed new-entry gate",
+      "mutation_evidence": "partial, duplicate, or out-of-window provider dates force unknown/null and cannot enable the gate"
+    },
+    "market_context.northbound.net_flow_5d": {
+      "category": "m67_main_decision",
+      "consumer_ref": "runners/a_short_weekly_pipeline.py::_northbound_control_from_analysis -> _apply_northbound_market_gate",
+      "terminal_surface": "weekly.northbound_control and reports[].machine.operation_impact / M6.7 new-entry action",
+      "mutation_evidence": "a bound negative CNY five-day flow only blocks new entries with the unchanged CSI300 dual condition; null/unknown never becomes flat or a block"
+    },
+    "market_context.northbound.observed_session_count": {
+      "category": "m67_main_decision",
+      "consumer_ref": "runners/a_short_weekly_pipeline.py::_normalise_northbound_control -> should_block_new_entries",
+      "terminal_surface": "weekly.northbound_control coverage receipt and fail-closed new-entry gate",
+      "mutation_evidence": "a count below the requested five sessions cannot be relabelled complete or used for a block"
+    },
+    "market_context.northbound.production_effect_enabled": {
+      "category": "m67_main_decision",
+      "consumer_ref": "runners/a_short_weekly_pipeline.py::_normalise_northbound_control -> _apply_northbound_market_gate",
+      "terminal_surface": "weekly.northbound_control.production_effect_enabled and new-entry action",
+      "mutation_evidence": "the reviewed analysis schema pins the live gate true; an explicit false control is the negative control that must preserve new-entry builds"
+    },
+    "market_context.northbound.requested_session_count": {
+      "category": "m67_main_decision",
+      "consumer_ref": "runners/a_short_weekly_pipeline.py::_normalise_northbound_control",
+      "terminal_surface": "weekly.northbound_control coverage receipt",
+      "mutation_evidence": "a requested-session count other than the fixed five-session contract is rejected before the gate"
+    },
+    "market_context.northbound.status": {
+      "category": "m67_main_decision",
+      "consumer_ref": "runners/a_short_weekly_pipeline.py::_normalise_northbound_control -> should_block_new_entries",
+      "terminal_surface": "weekly.northbound_control.status and structured new-entry gate",
+      "mutation_evidence": "status is required to agree with the structured flow sign; unknown fails closed and cannot enable the gate"
+    },
+    "market_context.trade_calendar.holiday_days_ahead": {
+      "category": "m67_main_decision",
+      "consumer_ref": "runners/a_short_weekly_pipeline.py::_normalise_pre_holiday_control",
+      "terminal_surface": "weekly.cash_allocation.pre_holiday_control and pre-holiday eligibility gate",
+      "mutation_evidence": "a closure below the five-day threshold disables the cash reduction; a qualifying gap enables it"
+    },
+    "market_context.trade_calendar.is_pre_holiday_window": {
+      "category": "m67_main_decision",
+      "consumer_ref": "runners/a_short_weekly_pipeline.py::_pre_holiday_control_from_analysis -> _allocate_cash",
+      "terminal_surface": "weekly.cash_allocation.pre_holiday_control and new-entry cash allocation",
+      "mutation_evidence": "a qualifying pre-holiday mutation changes the cash factor and can demote a build to observe"
+    },
+    "market_context.trade_calendar.next_trade_date": {
+      "category": "m67_main_decision",
+      "consumer_ref": "runners/a_short_weekly_pipeline.py::_normalise_pre_holiday_control -> _allocate_cash",
+      "terminal_surface": "analysis_input.market_context.trade_calendar and weekly.cash_allocation.pre_holiday_control",
+      "mutation_evidence": "a positive pre-holiday window is rejected when the source-bound next session is absent, so removing it disables the cash reduction instead of only losing an audit field"
+    },
+    "market_context.volatility.awakening_status": {
+      "category": "m67_main_decision",
+      "consumer_ref": "runners/a_short_weekly_pipeline.py::_validate_analysis_input_m05_binding -> latest_m05_state",
+      "terminal_surface": "weekly M0.5 awakening state and cash/new-entry gate",
+      "mutation_evidence": "a projection that differs from the validated 1.2.0 feed is rejected before M6.7, so a second or stale producer cannot enter the decision"
+    },
+    "market_context.volatility.cash_reclaim_pct": {
+      "category": "m67_main_decision",
+      "consumer_ref": "runners/a_short_weekly_pipeline.py::_validate_analysis_input_m05_binding -> _resolve_m05_state",
+      "terminal_surface": "weekly.cash_allocation M0.5 reclaim and new-exposure capacity",
+      "mutation_evidence": "a projection that differs from the validated feed is rejected before cash allocation; the accepted value is the single feed-bound M0.5 input"
+    },
+    "market_context.volatility.feed_sha256": {
+      "category": "m67_main_decision",
+      "consumer_ref": "runners/a_short_weekly_pipeline.py::_validate_analysis_input_m05_binding",
+      "terminal_surface": "analysis_input-to-iv_feed byte source binding before weekly write",
+      "mutation_evidence": "changing the digest or the feed bytes causes the source-binding gate to reject the run"
+    },
+    "market_context.volatility.freshness_reason": {
+      "category": "m67_main_decision",
+      "consumer_ref": "runners/a_short_weekly_pipeline.py::_validate_analysis_input_m05_binding",
+      "terminal_surface": "analysis_input volatility freshness gate",
+      "mutation_evidence": "a non-validated or non-requested freshness reason cannot be presented as a complete feed projection"
+    },
+    "market_context.volatility.freshness_status": {
+      "category": "m67_main_decision",
+      "consumer_ref": "runners/a_short_weekly_pipeline.py::_validate_analysis_input_m05_binding",
+      "terminal_surface": "analysis_input volatility freshness gate",
+      "mutation_evidence": "an unaligned status is rejected before M6.7, preventing stale or future IV from entering the weekly decision"
+    },
+    "market_context.volatility.iv_change_abs_1d_pctpt": {
+      "category": "m67_main_decision",
+      "consumer_ref": "runners/a_short_weekly_pipeline.py::_validate_analysis_input_m05_binding -> latest_m05_state",
+      "terminal_surface": "weekly M0.5 awakening/Rule3 state and operation decision",
+      "mutation_evidence": "a projection that differs from the validated feed is rejected before M6.7, so the feed remains the sole producer"
+    },
+    "market_context.volatility.iv_feed_status": {
+      "category": "m67_main_decision",
+      "consumer_ref": "A-EGS/egs_main.py::_load_iv_feed_projection -> runners/weekly_screening.ps1 -> runners/a_short_weekly_pipeline.py::_validate_analysis_input_m05_binding",
+      "terminal_surface": "analysis_input IV status, weekly M6.7 receipt, and fail-closed sidecar outcome",
+      "mutation_evidence": "non-ready status renders explicit unknown volatility and blocks M6.7 publication while canary/forward sidecars continue; ready requires the validated feed"
+    },
+    "market_context.volatility.iv_percentile_252d": {
+      "category": "m67_main_decision",
+      "consumer_ref": "runners/a_short_weekly_pipeline.py::_validate_analysis_input_m05_binding -> latest_iv_percentile",
+      "terminal_surface": "weekly Rule3 IV percentile decision input",
+      "mutation_evidence": "a projection that differs from the validated feed is rejected before M6.7, preventing a hidden EGS/IV second producer"
+    },
+    "market_context.volatility.iv_symbol": {
+      "category": "duplicate_or_display_audit",
+      "consumer_ref": "runners/a_short_weekly_pipeline.py::_validate_analysis_input_m05_binding",
+      "terminal_surface": "analysis_input volatility source identity audit",
+      "mutation_evidence": "a symbol mutation is rejected as a source-binding mismatch and cannot silently relabel the consumed feed"
+    },
+    "market_context.volatility.iv_value": {
+      "category": "m67_main_decision",
+      "consumer_ref": "runners/a_short_weekly_pipeline.py::_validate_analysis_input_m05_binding -> latest_iv_hv",
+      "terminal_surface": "weekly IV-HV advisory and source-bound volatility input",
+      "mutation_evidence": "a projection that differs from the validated feed is rejected before M6.7, so the accepted IV value has one producer"
+    },
+    "market_context.volatility.rule3_status": {
+      "category": "m67_main_decision",
+      "consumer_ref": "runners/a_short_weekly_pipeline.py::_validate_analysis_input_m05_binding -> latest_m05_state",
+      "terminal_surface": "weekly Rule3 status and M0.5 operation gate",
+      "mutation_evidence": "a projection that differs from the validated feed is rejected before M6.7, preventing a stale or second Rule3 producer"
+    },
+    "market_context.volatility.source_as_of": {
+      "category": "m67_main_decision",
+      "consumer_ref": "runners/a_short_weekly_pipeline.py::_validate_analysis_input_m05_binding",
+      "terminal_surface": "analysis_input volatility decision-as-of source binding",
+      "mutation_evidence": "a feed/as-of mismatch is rejected before the weekly decision"
+    },
+    "market_context.volatility.source_latest_trade_date": {
+      "category": "m67_main_decision",
+      "consumer_ref": "runners/a_short_weekly_pipeline.py::_validate_analysis_input_m05_binding -> validate_iv_feed_freshness",
+      "terminal_surface": "analysis_input volatility-to-price clock binding",
+      "mutation_evidence": "a latest IV date that differs from price_data_through is rejected before report generation"
+    },
+    "market_context.volatility.source_ref": {
+      "category": "m67_main_decision",
+      "consumer_ref": "runners/a_short_weekly_pipeline.py::_validate_analysis_input_m05_binding",
+      "terminal_surface": "analysis_input-to-iv_feed path source binding",
+      "mutation_evidence": "a path mutation is rejected before M6.7 and cannot redirect the report to another feed"
+    },
+    "market_context.volatility.source_status": {
+      "category": "m67_main_decision",
+      "consumer_ref": "runners/a_short_weekly_pipeline.py::_validate_analysis_input_m05_binding",
+      "terminal_surface": "analysis_input volatility completeness gate",
+      "mutation_evidence": "complete and unavailable shapes are schema-locked; a false complete/unavailable status cannot bypass source validation"
     }
   },
   "leaf_nature_by_group": {
@@ -1173,19 +1260,19 @@
     "candidate_data_quality": "comparison_track"
   },
   "decision_predicate_sha256": {
-    "A-EGS/egs_main.py": "ce7770ef7221fff291ceecb672ed77644086553c1f1afe57bf942f9c06db0152",
+    "A-EGS/egs_main.py": "75bec2f1c5bbdf41704bf0d83d870bd4d374f62eee9f8ab66fa2092173c507f9",
     "engine/egs_industry_heat.py": "74932f994ec0658345c41aa932b54b5685c1737c663f5070a193d264f37fced2",
     "engine/a_short_industry_theme.py": "6a10200f80b3c0d301efc8af1561b53ef2578e1cd26eea7976188dd57b7b6b2b",
     "engine/a_short_northbound.py": "e48d20a9c49d06480443815755d97f5674fa98fe1e13284f2d4aaaa19361d71a",
     "engine/a_short_margin_overheat.py": "5d727a30ecc215a5546afe8be41dd3d43c99d7cc4abf2a03e1c099ee171d7cbb",
     "runners/a_short_phase5_engine.py": "bd9c17a7032066d7c3c9074a8fedb16e5e11b559d973d95987458fb8eca6dd5e",
-    "runners/a_short_weekly_pipeline.py": "a7a625fef3cae13040cfd15410c78c90db0711417a1cc55cb5e45446661ae662",
+    "runners/a_short_weekly_pipeline.py": "f1ab5ba8b84fcc7f065ea64e94dc20e21bd7d6c6fca931056dbe114b91604f95",
     "runners/a_short_m67_render.py": "146e6c47814b0421bb973e2741d96e7d4773c06d9fc1104d54f9100100deac51",
     "engine/a_short_portfolio_risk.py": "02b88ac3b5239e8dd4897bde06afab0769ea5593f8a8a3666e5c8fba24486860",
     "engine/a_short_effect_contract.py": "2f7c1cbc41bd60acdd2ce4886a3beada8ee3ec76dc2a3b2288edffe37418c6a8"
   },
   "runtime_constants_sha256": {
-    "A-EGS/egs_main.py": "2758f314b9f8edddd14a84551f7416dd7293939e41c610253af5cebecb8db0ad",
+    "A-EGS/egs_main.py": "388a1ebc8cff4d393fb304d860ff8c554ef6fdc41ec3cfeb647873b46f6b9b95",
     "engine/a_short_northbound.py": "07363ce1dbdc2bea07b414e3f626155f3bfb4258e58a19d270c1b8746350ebc4",
     "engine/a_short_margin_overheat.py": "5b77a55af1d08d82062b7224d676514f55856ea140fa7ec8d2b7f4a785978867",
     "runners/a_short_phase5_engine.py": "27f947c64df7eaf4e59526b4bc0c150de5baef5a2447187acc98378e4c1f9f00",
@@ -1709,6 +1796,7 @@
     "candidates[].volatility.hv_252d",
     "candidates[].volatility.iv_hv_position_cut_pct",
     "candidates[].volatility.iv_hv_ratio",
+    "decision_as_of",
     "generated_at",
     "horizon",
     "market",
@@ -1717,6 +1805,9 @@
     "market_context.breadth.csi300_window.length",
     "market_context.breadth.csi300_window.length_unit",
     "market_context.breadth.csi300_window.start_date",
+    "market_context.breadth.full_market_consecutive_limit_up_height",
+    "market_context.breadth.full_market_limit_down_count",
+    "market_context.breadth.full_market_limit_up_count",
     "market_context.breadth.limit_up_index_pct_change",
     "market_context.margin_coverage.coverage_complete",
     "market_context.margin_coverage.effective_ref_date",
@@ -1734,6 +1825,18 @@
     "market_context.margin_overheat.requested_session_count",
     "market_context.margin_overheat.window_end",
     "market_context.margin_overheat.window_start",
+    "market_context.market_breadth_source.daily_source",
+    "market_context.market_breadth_source.effective_date",
+    "market_context.market_breadth_source.eligible_stock_count",
+    "market_context.market_breadth_source.limit_source",
+    "market_context.market_breadth_source.limit_up_index_unavailable_reason",
+    "market_context.market_breadth_source.observed_trade_dates[]",
+    "market_context.market_breadth_source.price_basis",
+    "market_context.market_breadth_source.requested_trade_dates[]",
+    "market_context.market_breadth_source.status",
+    "market_context.market_breadth_source.unavailable_reason",
+    "market_context.market_breadth_source.universe_name",
+    "market_context.market_breadth_source.usable_stock_count",
     "market_context.market_regime.confidence",
     "market_context.market_regime.min_reward_risk",
     "market_context.market_regime.position_cap_single_pct",
@@ -1744,6 +1847,10 @@
     "market_context.market_regime.triggers[].threshold",
     "market_context.market_regime.triggers[].value",
     "market_context.moneyflow_coverage.coverage_complete",
+    "market_context.moneyflow_coverage.effective_ref_date",
+    "market_context.moneyflow_coverage.fallback_applied",
+    "market_context.moneyflow_coverage.fallback_reason",
+    "market_context.moneyflow_coverage.lag_sessions",
     "market_context.moneyflow_coverage.observed_trade_dates[]",
     "market_context.moneyflow_coverage.reference_date",
     "market_context.moneyflow_coverage.requested_trade_dates[]",
@@ -1766,14 +1873,27 @@
     "market_context.trade_calendar.recent_trade_dates[]",
     "market_context.volatility.awakening_status",
     "market_context.volatility.cash_reclaim_pct",
+    "market_context.volatility.feed_sha256",
+    "market_context.volatility.freshness_reason",
+    "market_context.volatility.freshness_status",
     "market_context.volatility.iv_change_abs_1d_pctpt",
+    "market_context.volatility.iv_feed_status",
     "market_context.volatility.iv_percentile_252d",
     "market_context.volatility.iv_symbol",
     "market_context.volatility.iv_value",
     "market_context.volatility.rule3_status",
+    "market_context.volatility.source_as_of",
+    "market_context.volatility.source_latest_trade_date",
+    "market_context.volatility.source_ref",
+    "market_context.volatility.source_status",
     "preset",
+    "price_data_through",
+    "run_date",
     "schema_name",
     "schema_version",
+    "source.clocks.decision_as_of",
+    "source.clocks.price_data_through",
+    "source.clocks.run_date",
     "source.data_provider",
     "source.hard_veto_source_health.holder_reduction.observed_at",
     "source.hard_veto_source_health.holder_reduction.status",

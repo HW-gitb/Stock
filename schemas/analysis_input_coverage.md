@@ -130,9 +130,9 @@ Phase 1a 目标：先定义 `analysis_input.json` 的稳定输入合同，再让
 | M0 板块权限排除 | `candidates[].board`, `event_risk.rule6_checks` | 已覆盖；EGS 当前已排除 300/688 等 |
 | M0 Hard Veto 冷静期 | `state_refs.veto_log`, `event_risk.rule6_checks`, `derived_flags.hard_veto` | 已覆盖；状态文件 Phase 3 建 |
 | M0 跨市场联动 | `llm_tasks.cross_market_linkage`, `event_risk.rule6_checks`, `market_context` | 已覆盖；数据源/LLM 后续补 |
-| M0.5 波动率觉醒 | `market_context.volatility` | 已覆盖；50ETF IV 数据源待接 |
+| M0.5 波动率觉醒 | `market_context.volatility` | 已覆盖；IV feed 由 wrapper 显式五态传递，非 ready 时 EGS/M6.7 fail-closed |
 | M1 市场环境 | `market_context.market_regime`, `market_context.breadth`, `market_context.northbound` | 已覆盖；规则计算 Phase 3 |
-| Rule 3 IV 过滤 | `market_context.volatility.rule3_status`, `iv_percentile_252d` | 已覆盖；数据源待接 |
+| Rule 3 IV 过滤 | `market_context.volatility.rule3_status`, `iv_percentile_252d` | 已覆盖；ready feed 由 producer 计算并由读门重算校验，非 ready 不执行 IV 闸门 |
 | M2.0 前置否决 | `event_risk.rule6_checks`, `capital_flow`, `fundamental.quality` | 已覆盖；部分字段 Phase 1b/Skill 补 |
 | M2.7 粗筛盈亏比 | `technical.support`, `technical.resistance`, `technical.coarse_reward_risk`, `market_context.market_regime.min_reward_risk` | 已覆盖；计算 Phase 3 |
 | M2.1-M2.5 生态系统 | `industry`, `catalyst`, `llm_tasks`, `event_risk.regulatory` | 已覆盖；LLM 判断模板 Phase 4 |

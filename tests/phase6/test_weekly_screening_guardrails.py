@@ -3,6 +3,7 @@ import subprocess
 import sys
 import unittest
 import os
+import re
 from pathlib import Path
 
 
@@ -56,7 +57,12 @@ class WeeklyScreeningGuardrailTest(unittest.TestCase):
         stage3_pos = source.index(
             "tier1_final, cninfo_checked, cninfo_health = stage3_ai_clearing"
         )
-        watch_pos = source.index("watch_df  = select_profile_watch_pool(df_full, top_n=watch_n)")
+        watch_match = re.search(
+            r"(?m)^\s*watch_df\s*=\s*select_profile_watch_pool\([^\n]+\)",
+            source,
+        )
+        self.assertIsNotNone(watch_match)
+        watch_pos = watch_match.start()
         self.assertIn("_ov_pool = watch_df[[", source)
         overlay_pos = source.index("_ov_pool = watch_df[[")
 

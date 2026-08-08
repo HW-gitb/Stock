@@ -3036,10 +3036,13 @@ def _write_pipeline_sidecar_outcomes(path: str | Path, *, as_of: str, run_id: st
 
 def publish_weekly_bundle(weekly: dict, iv_feed_summary: dict, out_path: str, md_path: str,
                           *, allow_nonprivate_account_out: bool = False,
-                          ratchet_publish: tuple[str, dict, str, str] | None = None) -> str:
+                          ratchet_publish: tuple[str, dict, str, str] | None = None,
+                          iv_feed_status: str = "ready") -> str:
     """Validate all final surfaces, then publish JSON/Markdown/ratchet/receipt together."""
     from runners.a_short_m67_render import render_weekly_markdown, _weekly_has_account_data
 
+    if iv_feed_status != "ready":
+        raise ValueError("M6.7 publish requires iv_feed_status=ready")
     _reject_production_output_path(out_path)
     previous_ledger = _bind_effect_contract_trend_guard(weekly, out_path)
     if _weekly_has_account_data(weekly):
@@ -3067,6 +3070,7 @@ def publish_weekly_bundle(weekly: dict, iv_feed_summary: dict, out_path: str, md
         "candidate_digest": lineage["candidate_digest"],
         "published_at": datetime.now().astimezone().isoformat(timespec="seconds"),
         "account_snapshot": lineage.get("account_snapshot"),
+        "iv_feed_status": iv_feed_status,
         "stage_status": "complete",
         "outputs": list(output_bytes),
         "outputs_digest": {
@@ -3447,37 +3451,80 @@ def latest_m05_state(iv_feed_summary: dict) -> dict:
 
 
 def _validate_analysis_input_m05_binding(analysis_input: dict, iv_feed_summary: dict,
-                                         m05_state: dict) -> None:
-    """Reject a second/stale M0.5 value hidden in the EGS input artifact.
+                                         m05_state: dict, iv_feed_path: str | None = None) -> None:
+    """Require the EGS volatility projection to equal the one validated IV feed.
 
-    The IV feed is the sole producer authority for M0.5. EGS historically
-    emitted these fields as ``None``/``unknown`` because it runs before the
-    separately-built IV feed. Those placeholders are permitted; any
-    populated value must match the validated feed exactly, otherwise the
-    batch fails closed instead of silently ignoring an input leaf.
+    Schema 1.1.0 remains readable for legacy non-M0.5 fixtures.  A 1.2.0 feed
+    is different: every volatility value and every source/freshness binding is
+    required, so a second producer or a placeholder cannot enter M6.7.
     """
     volatility = ((analysis_input or {}).get("market_context") or {}).get("volatility") or {}
-    bindings = {
-        "iv_change_abs_1d_pctpt": volatility.get("iv_change_abs_1d_pctpt"),
-        "awakening_status": volatility.get("awakening_status"),
-        "cash_reclaim_pct": volatility.get("cash_reclaim_pct"),
-        "rule3_status": volatility.get("rule3_status"),
-    }
     feed_version = str((iv_feed_summary or {}).get("schema_version") or "")
-    for field, supplied in bindings.items():
-        placeholder = supplied is None or (field in {"awakening_status", "rule3_status"}
-                                             and supplied == "unknown")
-        if placeholder:
-            continue
-        if feed_version != "1.2.0":
-            raise ValueError(f"analysis_input M0.5 {field} 已填值但 IV feed 未提供 1.2.0 状态")
-        expected = m05_state.get(field)
-        if isinstance(expected, (int, float)) and isinstance(supplied, (int, float)):
-            if (isinstance(expected, bool) or isinstance(supplied, bool)
-                    or abs(float(expected) - float(supplied)) > 1e-6):
-                raise ValueError(f"analysis_input M0.5 {field} 与 IV feed 不一致")
-        elif supplied != expected:
-            raise ValueError(f"analysis_input M0.5 {field} 与 IV feed 不一致")
+    if feed_version != "1.2.0":
+        bindings = {
+            "iv_change_abs_1d_pctpt": volatility.get("iv_change_abs_1d_pctpt"),
+            "awakening_status": volatility.get("awakening_status"),
+            "cash_reclaim_pct": volatility.get("cash_reclaim_pct"),
+            "rule3_status": volatility.get("rule3_status"),
+        }
+        for field, supplied in bindings.items():
+            placeholder = supplied is None or (field in {"awakening_status", "rule3_status"}
+                                                 and supplied == "unknown")
+            if not placeholder:
+                raise ValueError(f"analysis_input M0.5 {field} 已填值但 IV feed 未提供 1.2.0 状态")
+        return
+
+    series = list((iv_feed_summary or {}).get("series") or [])
+    if not series:
+        raise ValueError("IV feed 1.2.0 has no series row")
+    latest = series[-1]
+    expected = {
+        "iv_symbol": "50ETF",
+        "iv_value": latest.get("iv_value"),
+        "iv_percentile_252d": latest.get("iv_percentile_252d"),
+        "iv_change_abs_1d_pctpt": latest.get("iv_change_abs_1d_pctpt"),
+        "rule3_status": m05_state.get("rule3_status"),
+        "awakening_status": m05_state.get("awakening_status"),
+        "cash_reclaim_pct": m05_state.get("cash_reclaim_pct"),
+    }
+
+    def _equal(left, right):
+        if isinstance(left, (int, float)) and not isinstance(left, bool) \
+                and isinstance(right, (int, float)) and not isinstance(right, bool):
+            return abs(float(left) - float(right)) <= 1e-6
+        return left == right
+
+    for field, expected_value in expected.items():
+        if field not in volatility or not _equal(volatility.get(field), expected_value):
+            raise ValueError(f"analysis_input volatility {field} 与 IV feed 不一致")
+
+    source_expected = {
+        "iv_feed_status": "ready",
+        "source_status": "complete",
+        "freshness_status": "aligned",
+        "freshness_reason": "validated_feed",
+        "source_as_of": str(iv_feed_summary.get("as_of") or ""),
+        "source_latest_trade_date": str(latest.get("trade_date") or ""),
+    }
+    for field, expected_value in source_expected.items():
+        if field not in volatility or volatility.get(field) != expected_value:
+            raise ValueError(f"analysis_input volatility {field} source binding mismatch")
+    analysis_decision_as_of = str((analysis_input or {}).get("decision_as_of") or "")
+    if analysis_decision_as_of and analysis_decision_as_of != source_expected["source_as_of"]:
+        raise ValueError("analysis_input decision_as_of is not bound to IV feed as_of")
+    analysis_price_through = str((analysis_input or {}).get("price_data_through") or "")
+    if analysis_price_through and analysis_price_through != source_expected["source_latest_trade_date"]:
+        raise ValueError("analysis_input price_data_through is not bound to IV feed latest trade date")
+
+    if iv_feed_path:
+        feed_path = Path(iv_feed_path).resolve()
+        expected_ref = os.path.relpath(str(feed_path), str(ROOT)).replace("\\", "/")
+        with feed_path.open("rb") as handle:
+            expected_digest = hashlib.sha256(handle.read()).hexdigest()
+        if volatility.get("source_ref") != expected_ref:
+            raise ValueError("analysis_input volatility source_ref is not bound to --iv-feed")
+        if volatility.get("feed_sha256") != expected_digest:
+            raise ValueError("analysis_input volatility feed_sha256 is not bound to --iv-feed bytes")
 
 
 def validate_iv_feed_freshness(iv_feed_summary: dict, price_data_through: str) -> dict:
@@ -5355,6 +5402,8 @@ def main(argv=None, pro_factory=None, price_provider=None, semantic_provider=Non
     p.add_argument("--as-of", required=True, help="YYYYMMDD")
     p.add_argument("--analysis-input", required=True, help="EGS analysis_input.json (top-N 候选)")
     p.add_argument("--iv-feed", required=True, help="a_short_iv_feed.json")
+    p.add_argument("--iv-feed-status", choices=("ready",), default="ready",
+                   help="Explicit wrapper status; the M6.7 consumer accepts only ready feeds")
     p.add_argument("--crash-veto-summary", help="闪崩否决 5/10 日 comparison-only 摘要(可选；只进周报、不改决策)")
     p.add_argument("--overlay", help="overlay artifact(可选)")
     p.add_argument(
@@ -5607,10 +5656,16 @@ def main(argv=None, pro_factory=None, price_provider=None, semantic_provider=Non
         raise SystemExit(f"[FATAL] invalid/stale --iv-feed: {type(exc).__name__}") from exc
     from runners.a_short_iv_feed_build import validate_feed_artifact
     validate_feed_artifact(feed)
+    if args.iv_feed_status != "ready":
+        raise SystemExit("[FATAL] M6.7 requires --iv-feed-status ready")
+    if str(feed.get("as_of") or "") != str(args.as_of):
+        raise SystemExit(
+            f"[FATAL] IV feed as_of {feed.get('as_of')} != weekly as_of {args.as_of}; stale/future feed rejected"
+        )
     iv_pct = latest_iv_percentile(feed)        # 市场级 IV 分位(None → 引擎按 missing 处理)
     iv_value, hv_value = latest_iv_hv(feed)    # #6 IV-HV advisory:市场级 IV/HV 原始值(引擎算标签)
     m05_state = latest_m05_state(feed)
-    _validate_analysis_input_m05_binding(ai, feed, m05_state)
+    _validate_analysis_input_m05_binding(ai, feed, m05_state, iv_feed_path=args.iv_feed)
     overlay = _load_validated_overlay(args.overlay, args.as_of) if args.overlay else {}
     weekly_candidates = [c.get("ts_code") for c in ai.get("candidates", [])]
     # overlay 血缘门(#R-ASHORT-WEEKLY-AUX-ARTIFACT-CANDIDATE-SET-MISMATCH):overlay 必须**恰好覆盖**
@@ -6211,6 +6266,7 @@ def main(argv=None, pro_factory=None, price_provider=None, semantic_provider=Non
         weekly, feed, args.out, md_path,
         allow_nonprivate_account_out=args.allow_nonprivate_account_out,
         ratchet_publish=_pending_ratchet,
+        iv_feed_status=args.iv_feed_status,
     )
     actions = {}
     for r in weekly["reports"]:

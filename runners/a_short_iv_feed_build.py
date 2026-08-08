@@ -35,6 +35,7 @@ import pandas as pd  # noqa: E402
 
 SCHEMA_NAME = "a_short_iv_feed"
 SCHEMA_VERSION = "1.2.0"          # 1.2.0:M0.5——PIT-safe IV delta/觉醒状态/Rule3 state producer
+CLOCK_MISMATCH_EXIT_CODE = 23
 UNDERLYING = "510050.SH"
 SCHEMA_PATH = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
                            "schemas", "a_short_iv_feed.schema.json")
@@ -401,6 +402,20 @@ def _finite_optional(value):
     return value if math.isfinite(value) else None
 
 
+def _require_finite_optional(value, field):
+    """Reject non-finite numeric payloads instead of silently relabelling them unknown."""
+    if value is None:
+        return
+    if isinstance(value, bool):
+        raise ValueError(f"{field} must be a finite number or null")
+    try:
+        numeric = float(value)
+    except (TypeError, ValueError) as exc:
+        raise ValueError(f"{field} must be a finite number or null") from exc
+    if not math.isfinite(numeric):
+        raise ValueError(f"{field} must be finite")
+
+
 def rule3_status_from_percentile(iv_percentile):
     """Derive the v14.2 Rule 3 market state from one IV percentile.
 
@@ -658,6 +673,11 @@ def validate_feed_summary_consistency(summary: dict, *, trade_calendar=None,
         if prev is not None and pt["trade_date"] <= prev:
             raise ValueError("series trade_date 非严格升序/有重复")
         prev = pt["trade_date"]
+        for field in (
+            "iv_value", "iv_percentile_252d", "hv_value",
+            "iv_change_abs_1d_pctpt", "cash_reclaim_pct", "awakening_baseline_iv",
+        ):
+            _require_finite_optional(pt.get(field), f"series.{field}")
         if pt["iv_value"] is None or pt["iv_value"] <= 0:
             raise ValueError("iv_value 必须 > 0")
         p = pt["iv_percentile_252d"]
@@ -796,11 +816,31 @@ def validate_feed_summary_consistency(summary: dict, *, trade_calendar=None,
         trusted_calendar = None
     else:
         raise ValueError("trade calendar status 非法")
+    recomputed = rolling_percentile_252(pd.DataFrame([
+        {"trade_date": pt["trade_date"], "iv_value": pt["iv_value"]}
+        for pt in summary["series"]
+    ]))
+
+    def _values_equal(expected_value, actual_value):
+        if expected_value is None or actual_value is None:
+            return expected_value is None and actual_value is None
+        if (isinstance(expected_value, (int, float)) and not isinstance(expected_value, bool)
+                and isinstance(actual_value, (int, float)) and not isinstance(actual_value, bool)):
+            return math.isclose(float(expected_value), float(actual_value), rel_tol=0.0, abs_tol=1e-6)
+        return expected_value == actual_value
+
+    for index, recomputed_row in recomputed.iterrows():
+        actual_pct = summary["series"][index].get("iv_percentile_252d")
+        expected_pct = recomputed_row["iv_percentile_252d"]
+        expected_pct = None if pd.isna(expected_pct) else float(expected_pct)
+        if not _values_equal(expected_pct, actual_pct):
+            raise ValueError("iv_percentile_252d does not match rolling_percentile_252 producer output")
+
     expected = build_m05_state(pd.DataFrame([
         {"trade_date": pt["trade_date"],
          "iv_value": pt["iv_value"],
-         "iv_percentile_252d": pt["iv_percentile_252d"]}
-        for pt in summary["series"]
+         "iv_percentile_252d": recomputed.loc[index, "iv_percentile_252d"]}
+        for index, pt in enumerate(summary["series"])
     ]), trade_calendar=trusted_calendar)
     state_fields = (
         "iv_change_abs_1d_pctpt", "rule3_status", "awakening_status",
@@ -841,6 +881,8 @@ def validate_feed_summary_consistency(summary: dict, *, trade_calendar=None,
     awakening = summary.get("awakening")
     if not isinstance(awakening, dict):
         raise ValueError("schema 1.2.0 缺少 M0.5 awakening state")
+    for field in ("iv_change_abs_1d_pctpt", "cash_reclaim_pct", "baseline_iv"):
+        _require_finite_optional(awakening.get(field), f"awakening.{field}")
     mapping = {
         "trade_date": "trade_date",
         "iv_change_abs_1d_pctpt": "iv_change_abs_1d_pctpt",
@@ -909,6 +951,8 @@ def main(argv=None, pro_factory=None):
     )
     p = argparse.ArgumentParser(description="A-short 50ETF IV feed build (BS ATM constant-maturity → 252d pct)")
     p.add_argument("--as-of", required=True, help="YYYYMMDD")
+    p.add_argument("--price-data-through", default=None,
+                   help="Settled price clock expected by the wrapper; mismatch exits with the IV clock status")
     p.add_argument("--out", required=True)
     p.add_argument("--failure-receipt-out", default=None,
                    help="optional sanitized failure receipt; cleared at startup and written only when a provider call fails")
@@ -959,6 +1003,12 @@ def main(argv=None, pro_factory=None):
     if latest_pct is None:
         raise SystemExit(f"[FATAL] built feed 无可用最新 252d 分位(n_days={summary['n_days']} < MIN_ROLL_OBS={MIN_ROLL_OBS});"
                          "不写盘 — 需取更多历史交易日。Slice B 收不到能驱动 Rule3/M0.5/M1 的 feed。")
+    if args.price_data_through and str(summary["series"][-1]["trade_date"]) != str(args.price_data_through):
+        print(
+            f"[FATAL] IV latest_trade_date {summary['series'][-1]['trade_date']} "
+            f"!= price_data_through {args.price_data_through}; clock mismatch"
+        )
+        raise SystemExit(CLOCK_MISMATCH_EXIT_CODE)
     write_feed(summary, args.out,
                trade_calendar=report.get("trade_calendar"),
                trade_dates_probed=report.get("trade_dates_probed_dates"),

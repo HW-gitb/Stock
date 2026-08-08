@@ -64,6 +64,9 @@
         "null"
       ]
     },
+    "iv_feed_status": {
+      "enum": ["not_requested", "build_failed", "digest_failed", "clock_mismatch", "ready"]
+    },
     "stage_status": {
       "enum": [
         "complete",
@@ -98,6 +101,17 @@
     "failure_detail_ref": {
       "type": "string",
       "minLength": 1
+    },
+    "attempted_before_egs": {
+      "type": "boolean"
+    },
+    "feed_ref": {
+      "type": "string",
+      "minLength": 1
+    },
+    "feed_sha256": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{64}$"
     }
   },
   "allOf": [

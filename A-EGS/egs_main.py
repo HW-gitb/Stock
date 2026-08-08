@@ -72,7 +72,7 @@ v7.5 新增（周频优化 6 项）：
   ⬜ 调研次数扣分：无可用数据源
   ⬜ L1 行业毛利率趋势：固定免检 0.5 分
 """
-import argparse, ast, inspect, os, sys, time, pickle, logging, warnings, shutil, uuid, re, hashlib, textwrap
+import argparse, ast, inspect, json, os, sys, time, pickle, logging, warnings, shutil, uuid, re, hashlib, textwrap
 import dataclasses
 from dataclasses import dataclass
 from contextlib import contextmanager, nullcontext
@@ -205,6 +205,13 @@ log = logging.getLogger("EGS")
 EGS_VERSION = "v7.13"
 ANALYSIS_INPUT_SCHEMA_VERSION = "1.4.0"
 SUSPEND_DAILY_COVERAGE_LOG_SCHEMA_VERSION = "1.0.0"
+IV_FEED_STATUSES = (
+    "not_requested",
+    "build_failed",
+    "digest_failed",
+    "clock_mismatch",
+    "ready",
+)
 _LAST_SUSPEND_DAILY_COVERAGE_OBSERVATION = None
 _LAST_HARD_VETO_SOURCE_HEALTH = {
     "suspension": {"status": "unknown", "observed_at": None},
@@ -785,7 +792,6 @@ def _candidate_from_row(row, rank, final_codes, latest_td, unlock_set, suspended
     ]
     actual_missing_fields = [name for name, value in core_quality_fields if _is_missing(value)]
     planned_unavailable_fields = [
-        "market_context.volatility.iv_percentile_252d",
         "technical.atr.atr_14",
         "technical.moving_averages",
         "technical.rsi_14",
@@ -1226,6 +1232,86 @@ def _rank_stage_excluded_count(rank_reconciliation, stage_name):
     return 0
 
 
+def _unknown_iv_projection(iv_feed_status="not_requested"):
+    if iv_feed_status not in IV_FEED_STATUSES:
+        raise ValueError(f"invalid IV feed status: {iv_feed_status}")
+    freshness_status = "not_requested" if iv_feed_status == "not_requested" else "unavailable"
+    return {
+        "iv_symbol": "50ETF",
+        "iv_value": None,
+        "iv_percentile_252d": None,
+        "iv_change_abs_1d_pctpt": None,
+        "rule3_status": "unknown",
+        "awakening_status": "unknown",
+        "cash_reclaim_pct": None,
+        "iv_feed_status": iv_feed_status,
+        "source_status": "unavailable",
+        "freshness_status": freshness_status,
+        "freshness_reason": f"iv_feed_{iv_feed_status}",
+        "source_as_of": None,
+        "source_latest_trade_date": None,
+        "source_ref": None,
+        "feed_sha256": None,
+    }
+
+
+def _load_iv_feed_projection(iv_feed_path, decision_as_of, price_data_through,
+                             iv_feed_status="not_requested"):
+    """Render the wrapper's explicit IV status; validate only a ready artifact."""
+    if iv_feed_status not in IV_FEED_STATUSES:
+        raise ValueError(f"invalid IV feed status: {iv_feed_status}")
+    if iv_feed_status != "ready":
+        if iv_feed_path:
+            raise ValueError("non-ready IV feed status must not carry --iv-feed")
+        return _unknown_iv_projection(iv_feed_status)
+    if not iv_feed_path:
+        raise ValueError("ready IV feed status requires --iv-feed")
+    path = os.path.abspath(str(iv_feed_path))
+    try:
+        with open(path, "r", encoding="utf-8") as handle:
+            feed = json.load(handle)
+    except (OSError, UnicodeDecodeError, json.JSONDecodeError) as exc:
+        raise ValueError(f"invalid --iv-feed: {type(exc).__name__}") from exc
+    from runners.a_short_iv_feed_build import validate_feed_artifact
+
+    validate_feed_artifact(feed)
+    if str(feed.get("schema_version") or "") != "1.2.0":
+        raise ValueError("--iv-feed must be schema 1.2.0 for EGS M0.5 projection")
+    if str(feed.get("as_of") or "") != str(decision_as_of):
+        raise ValueError(
+            f"IV feed as_of {feed.get('as_of')} != decision_as_of {decision_as_of}"
+        )
+    series = list(feed.get("series") or [])
+    if not series:
+        raise ValueError("--iv-feed has no validated series rows")
+    latest = series[-1]
+    latest_trade_date = str(latest.get("trade_date") or "")
+    if latest_trade_date != str(price_data_through):
+        raise ValueError(
+            "IV feed latest_trade_date "
+            f"{latest_trade_date} != price_data_through {price_data_through}"
+        )
+    with open(path, "rb") as handle:
+        feed_sha256 = hashlib.sha256(handle.read()).hexdigest()
+    return {
+        "iv_symbol": "50ETF",
+        "iv_value": latest.get("iv_value"),
+        "iv_percentile_252d": latest.get("iv_percentile_252d"),
+        "iv_change_abs_1d_pctpt": latest.get("iv_change_abs_1d_pctpt"),
+        "rule3_status": latest.get("rule3_status"),
+        "awakening_status": latest.get("awakening_status"),
+        "cash_reclaim_pct": latest.get("cash_reclaim_pct"),
+        "iv_feed_status": "ready",
+        "source_status": "complete",
+        "freshness_status": "aligned",
+        "freshness_reason": "validated_feed",
+        "source_as_of": str(feed["as_of"]),
+        "source_latest_trade_date": latest_trade_date,
+        "source_ref": os.path.relpath(path, PROJECT_ROOT).replace("\\", "/"),
+        "feed_sha256": feed_sha256,
+    }
+
+
 def export_analysis_input(df_full, watch_df, tier1_final, latest_td, trade_dates,
                           unlock_set, suspended_set, relisted_set, red_dict,
                           tier1_csv_path, full_csv_path, output_root=None,
@@ -1233,7 +1319,7 @@ def export_analysis_input(df_full, watch_df, tier1_final, latest_td, trade_dates
                           price_data_through=None, run_date=None, margin_observation=None,
                           moneyflow_coverage=None,
                           l0_excluded_counts=None, trade_calendar_context=None,
-                          market_context_facts=None):
+                          market_context_facts=None, iv_projection=None):
     import json as _json
 
     project_root = os.path.dirname(SCRIPT_DIR)
@@ -1436,15 +1522,7 @@ def export_analysis_input(df_full, watch_df, tier1_final, latest_td, trade_dates
                 "min_reward_risk": None,
                 "triggers": [],
             },
-            "volatility": {
-                "iv_symbol": "50ETF",
-                "iv_value": None,
-                "iv_percentile_252d": None,
-                "iv_change_abs_1d_pctpt": None,
-                "rule3_status": "unknown",
-                "awakening_status": "unknown",
-                "cash_reclaim_pct": None,
-            },
+            "volatility": dict(iv_projection or _unknown_iv_projection()),
             "breadth": {
                 **market_breadth_facts,
                 # Permanently unavailable and this is terminal, not a to-do: no
@@ -6520,7 +6598,8 @@ def market_environment(trade_dates, stats_df, *, return_facts=False):
 # ═══════════════════════════════════════════════════
 # §9 主引擎
 # ═══════════════════════════════════════════════════
-def run_egs(backtest_mode=False, output_root=None, price_as_of=None):
+def run_egs(backtest_mode=False, output_root=None, price_as_of=None, iv_feed_path=None,
+            iv_feed_status="not_requested"):
     if output_root:
         CONF["output_root"] = output_root
         # Isolate intermediate egs_tier1/egs_full CSV+XLSX artifacts to the backtest
@@ -6540,12 +6619,16 @@ def run_egs(backtest_mode=False, output_root=None, price_as_of=None):
         raise RuntimeError(
             f"price_data_through {price_data_through} is after decision_as_of {TODAY}"
         )
+    decision_as_of = TODAY
+    iv_projection = _load_iv_feed_projection(
+        iv_feed_path, decision_as_of=decision_as_of, price_data_through=price_data_through,
+        iv_feed_status=iv_feed_status,
+    )
     trade_dates = get_trade_dates(
         DAILY_ALL_QFQ_WINDOW_TRADING_DAYS,
         price_as_of=price_data_through,
     )
     latest_td   = trade_dates[0]
-    decision_as_of = TODAY
     run_date = a_share_market_date()
     trade_calendar_context = get_trade_calendar_context(decision_as_of)
 
@@ -7041,6 +7124,7 @@ def run_egs(backtest_mode=False, output_root=None, price_as_of=None):
             l0_excluded_counts=l0_excluded_counts,
             trade_calendar_context=trade_calendar_context,
             market_context_facts=market_context_facts,
+            iv_projection=iv_projection,
         )
         log.info(f"[OK] analysis_input saved to {analysis_path}")
         log.info(f"[OK] snapshot saved to {snapshot_path}")
@@ -7249,6 +7333,11 @@ if __name__ == "__main__":
     parser.add_argument("--output-root", dest="output_root", default=None,
                         help="Override base output directory for analysis_input/snapshot/candidates "
                              "(default: <project_root>/result/a_short). Used by backtest to isolate generated artifacts.")
+    parser.add_argument("--iv-feed", dest="iv_feed_path", default=None,
+                        help="Validated schema 1.2.0 IV feed to project into analysis_input before EGS output")
+    parser.add_argument("--iv-feed-status", dest="iv_feed_status", choices=IV_FEED_STATUSES,
+                        default="not_requested",
+                        help="Wrapper-computed IV feed state; EGS renders it and does not infer failures")
     args = parser.parse_args()
 
     CONF["cache_policy"] = args.cache_policy
@@ -7284,4 +7373,5 @@ if __name__ == "__main__":
         CONF["cache_ttl"] = REALTIME_CACHE_TTL
 
     run_egs(backtest_mode=args.backtest_mode, output_root=args.output_root,
-            price_as_of=args.price_as_of)
+            price_as_of=args.price_as_of, iv_feed_path=args.iv_feed_path,
+            iv_feed_status=args.iv_feed_status)
