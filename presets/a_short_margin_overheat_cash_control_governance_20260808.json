@@ -1,0 +1,91 @@
+{
+  "schema_name": "a_short_margin_overheat_cash_control_program",
+  "schema_version": "1.0.0",
+  "program_id": "margin_overheat_cash_control",
+  "track_id": "a_short_margin_overheat_cash_control",
+  "lane": "a_short",
+  "comparison_only": true,
+  "mode": "pre_freeze_audit_only",
+  "namespace": {
+    "private_root": "state/a_short/margin_overheat_cash_control",
+    "ledger_namespace": "a_short.margin_overheat_cash_control",
+    "batch_registry": "margin_overheat_cash_control_batches.json",
+    "question_id": "margin_overheat_cash_control",
+    "multiplicity_family_id": "margin_overheat_cash_control_stage_a_family",
+    "experiment_batch_id": "batch_20260808_margin_overheat_stage_a",
+    "track_id": "a_short_margin_overheat_cash_control",
+    "history_import": "forbidden",
+    "historical_backfill_forbidden": true
+  },
+  "source_binding": {
+    "allowed_structured_sources": [
+      "analysis_input.market_context.margin_overheat",
+      "official_m67.selection_plan",
+      "a_short_factor_comparison_v2.approved_daily_cache"
+    ],
+    "prohibited_sources": ["rendered_text", "other_market_context", "other_comparison_verdicts"],
+    "same_week_official_m67_required": true,
+    "approved_daily_cache_receipt_required": true,
+    "source_bound_fields": ["decision_date", "run_date", "price_data_through", "official_m67_digest", "margin_fact_digest", "daily_cache_digest", "criterion_id", "arm_id", "experiment_batch_id", "epoch_id"],
+    "historical_artifact_counts_as_forward": false,
+    "history_import": "forbidden"
+  },
+  "stage_a": {
+    "baseline": {"arm_id": "baseline", "kind": "baseline", "criterion_id": "no_margin_discount", "margin_cash_factor": 1.0, "effect_surface": "none", "one_change_only": true},
+    "challengers": [
+      {"arm_id": "level_p95", "kind": "challenger", "criterion_id": "level_percentile_p95", "margin_cash_factor": 0.8, "effect_surface": "margin_overheat_trigger", "one_change_only": true},
+      {"arm_id": "change_rate_p90", "kind": "challenger", "criterion_id": "change_rate_20d_percentile_p90", "margin_cash_factor": 0.8, "effect_surface": "margin_overheat_trigger", "one_change_only": true},
+      {"arm_id": "change_rate_p95", "kind": "challenger", "criterion_id": "change_rate_20d_percentile_p95", "margin_cash_factor": 0.8, "effect_surface": "margin_overheat_trigger", "one_change_only": true}
+    ],
+    "measurement_cash_factor": 0.8,
+    "max_challengers": 3,
+    "forward_gate": "source_bound_replay_required",
+    "provisional_until_replay": true
+  },
+  "stage_b": {
+    "baseline": {"arm_id": "baseline", "kind": "baseline", "criterion_id": "stage_a_supported_criterion", "margin_cash_factor": 1.0, "effect_surface": "none", "one_change_only": true},
+    "challengers": [
+      {"arm_id": "cash_factor_0_9", "kind": "challenger", "criterion_id": "stage_a_supported_criterion", "margin_cash_factor": 0.9, "effect_surface": "margin_cash_factor", "one_change_only": true},
+      {"arm_id": "cash_factor_0_8", "kind": "challenger", "criterion_id": "stage_a_supported_criterion", "margin_cash_factor": 0.8, "effect_surface": "margin_cash_factor", "one_change_only": true},
+      {"arm_id": "cash_factor_0_7", "kind": "challenger", "criterion_id": "stage_a_supported_criterion", "margin_cash_factor": 0.7, "effect_surface": "margin_cash_factor", "one_change_only": true}
+    ],
+    "requires_stage_a_supported": true,
+    "requires_user_accepted_source_receipt": true,
+    "new_forward_batch_required": true
+  },
+  "state_contract": {
+    "calendar_checkpoints": [12, 24, 36],
+    "min_trigger_effective_weeks": 4,
+    "evidence_statuses": ["insufficient_data", "accumulating", "review_due"],
+    "comparison_verdicts": ["not_evaluated", "inconclusive", "supported", "not_supported"],
+    "pre_freeze_clock_status": "not_started",
+    "pre_freeze_verdict": "not_evaluated",
+    "stage_a_formal_requires": "source_bound_trigger_effective_weeks",
+    "supported_requires_user_receipt": true
+  },
+  "capture_contract": {
+    "required_bindings": ["decision_date", "run_date", "price_data_through", "official_m67_digest", "margin_fact_digest", "daily_cache_digest", "criterion_id", "arm_id", "experiment_batch_id", "epoch_id"],
+    "settlement_horizons": [5, 10, 20],
+    "settlement_price_basis": "same_approved_daily_cache_qfq",
+    "write_namespace": "state/a_short/margin_overheat_cash_control",
+    "public_projection": "deidentified_status_stage_receipt_count_only"
+  },
+  "outcome_contract": {
+    "model_cash_cny": 100000.0,
+    "cost_pct": 0.16,
+    "nav_basis": "source_bound_shadow_shares_cash",
+    "cash_stack": "shared_resolve_cash_factor_stack_and_allocate_cash",
+    "baseline_margin_factor": 1.0,
+    "non_trigger_parity": true,
+    "no_equal_slot_approximation": true
+  },
+  "boundary": {
+    "production": false,
+    "production_effect_enabled": false,
+    "automatic_policy_switch": false,
+    "historical_replay_counts_as_forward": false,
+    "historical_backfill_forbidden": true,
+    "provider_calls_during_settlement": false,
+    "direct_activation_requires_user_authorization": true
+  }
+}
