@@ -3335,9 +3335,9 @@ O7：本节追加在所有已有 handoff 内容之后，恢复 append-only 时�
 
 `NOT_VERIFIED`：Claude Code 独立复审、§6a 新一轮独立对抗 agent、provider/live/真实 weekly、12/24/36 真实前向 clock、用户 design-final-before-freeze 裁决、production/ship-gate 证据。Codex 仅实现/修复；未 stage、commit、push、merge，禁止 `--no-verify`。下一步：`Claude Code：独立复审 R-ASHORT-MARGIN-OVERHEAT-KNIFE1-CLOCK-AND-FREEZE-GATES-RUN-ON-A-WEAKER-AUTHORITY`。
 
-## 2026-08-08 追加：融资过热刀1 第三轮复审 —— Pass-with-Required（已合入 master）
+## 2026-08-08 追加：融资过热刀1 第三轮复审 —— Pass-with-Required（已提交 c2aa `e0c5b1cd`，合入 master 待并发窗口收口）
 
-**判定**：Pass-with-Required。上一轮那条 P2 的五条腿全部按类修在门本身并经我逐条复验闭合；残留一个零周开口，登记为 P3 交给刀 2（第一个真会写状态的刀），不阻塞合入。finding 正文只在 `docs/system_risk_register.md`。
+**判定**：Pass-with-Required，已提交 c2aa `e0c5b1cd`；**合入 master 未完成**——主树被另一窗口的未提交 US-short 改动占着（重叠文件 `docs/system_risk_register.md`），merge 会覆盖它，按收口门 9 记阻塞、不 stash 不代提交，待那边收口后补合。上一轮那条 P2 的五条腿全部按类修在门本身并经我逐条复验闭合；残留一个零周开口，登记为 P3 交给刀 2（第一个真会写状态的刀），不阻塞合入。finding 正文只在 `docs/system_risk_register.md`。
 
 **我实际验了什么**
 - 验收超集 `Ran 85 tests in 16.610s` / `OK`，`receipt:4257446223b2b329b9f7db70`。
