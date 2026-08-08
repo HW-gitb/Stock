@@ -43,7 +43,7 @@
 
 - **Verdict/Action**: PASS，已提交并合入 master。`_window_alignment` 成为该字段唯一读取器（两字段必填、必须真 `bool`、理由双向一致），两个入口都只经它；三处放行默认值**删除改必传**而非改安全默认——安全默认仍会静默生效，删掉才当场 `TypeError`，另配 AST 守卫钉三个签名无默认值。同轮把 D 轴 resource-isolation 拆成独立模块，基类是普通类而非 TestCase，实测不重复发现；全量因此从 TIMEOUT/1147s 回到上限内。
 - **Required**: 无。`Register: already covered by R-USSHORT-26W-DIAG-THE-NEW-ALIGNMENT-GATE-DEFAULTS-TO-ALIGNED-WHEN-THE-FIELD-IS-ABSENT-OR-NOT-A-BOOLEAN`（resolved）与 `...LANE-WALL-CLOCK-FLOOR-...`（partially resolved），两条正文只在 `docs/system_risk_register.md`。新模块 `tests/test_us_short_discovery_conformance_resources.py` 原为 untracked，已由我纳入本次提交范围——否则 D 轴覆盖只存在于本机。
-- **Verify**: review-evidence:b59bade990e2。验收超集 `Ran 316 in 104.9s PASS receipt:1506d4fa0d7ec4c9f52afce3`，其指纹 `b1a940efb317` 与 ledger 全量 `PASS 5616/5616 829.2s` **同指纹**（本链首次拿到覆盖当前树态的记账绿全量，故按 rule 4 不重跑）。重跑上轮探针：缺字段→`is required`、`"false"`/整数 0→`must be boolean`，正控仍过；另补防「严读掩盖」一条：**合规的不对齐周**保留 joint 仍被拒 `joint_evaluable over misaligned comparison windows`，摘掉 joint 即恢复接受。拆分实测发现数旧模块 0 / 新模块 1，无双跑；io 清单 allowlist 未新增条目。
+- **Verify**: review-evidence:b59bade990e2。验收超集 `Ran 316 in 104.9s PASS receipt:1506d4fa0d7ec4c9f52afce3`，指纹 `b1a940efb317` 与 ledger 全量 `PASS 5616/5616 829.2s` 同指纹（首次覆盖当前树态，rule 4 不重跑）。探针：缺字段→`is required`、`"false"` 与整数 0→`must be boolean`，正控仍过；合规的不对齐周保留 joint 仍被拒。拆分实测旧模块 0 / 新模块 1，无双跑。合并后组合态 `Ran 274 PASS receipt:a49e87b256e9c725861db906`（含 effect-contract bundle）；**组合态 lane 全量未跑**，按钩子 advisory 记为缺口。超时原因:register 与别窗冲突需手工保两侧 + 合并侧 bundle 补跑。
 - **Next**: Codex：执行
 
 ## 2026-08-08 — Claude Code 窗口对齐门的放行默认已闭（一个字段一份判据）
