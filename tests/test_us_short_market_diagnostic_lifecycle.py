@@ -17,6 +17,7 @@ from engine.us_short_market_diagnostic_lifecycle import (
     MarketDiagnosticLifecycleError,
     build_v1_1_reminder,
     load_lifecycle_register,
+    load_settled_weekly_records,
     persist_settled_weekly_record,
     render_weekly_report_reminder,
 )
@@ -291,6 +292,30 @@ class OrphanRecoveryTest(unittest.TestCase):
         with self.assertRaises(MarketDiagnosticLifecycleError) as ctx:
             persist_settled_weekly_record(self.rows[0], root=self.store)
         self.assertIn("refuse silent reconstruction", str(ctx.exception))
+
+    def test_dropping_the_repeated_pass_did_not_drop_the_checking(self) -> None:
+        """The control for removing the whole-store revalidation from the read path.
+
+        `load_lifecycle_register` used to validate every record twice per call and
+        `load_settled_weekly_records` three times, which is the O(N²) that took the
+        26-week rehearsal from 52 to 232 seconds. The repetition is gone; the
+        checking is not. Both readers must still refuse a record that was changed
+        under them — on every call, because nothing is cached between calls.
+        """
+
+        for row in self.rows[:2]:
+            persist_settled_weekly_record(row, root=self.store)
+        self.assertEqual(2, len(load_settled_weekly_records(self.store)))
+
+        path = self.store / lifecycle._record_relative_path(self.rows[1])
+        record = json.loads(path.read_bytes().decode("utf-8"))
+        record["strategy"]["nav"] = "999999.000000"
+        path.write_bytes(canonical_json_bytes(record))
+
+        for reader in (load_lifecycle_register, load_settled_weekly_records):
+            with self.subTest(reader=reader.__name__):
+                with self.assertRaises(MarketDiagnosticLifecycleError):
+                    reader(self.store)
 
     def test_a_tampered_orphan_cannot_be_adopted_by_its_own_retry(self) -> None:
         self._orphan(self.rows[0])

@@ -328,6 +328,11 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--diagnostic-epoch", required=True)
     parser.add_argument("--as-of-date", help="YYYYMMDD; defaults to today so future bars fail closed")
     parser.add_argument("--inputs-root", type=Path, default=DEFAULT_INPUTS_ROOT)
+    # The flag `main` has always read and this parser never declared, so every CLI
+    # invocation died of AttributeError before it could reach the gate it was
+    # meant to open. Same shape and wording as the cash sibling's.
+    parser.add_argument("--confirm-user-authorization", action="store_true",
+                        help="required for a live capture; a real vendor is called")
     parser.add_argument(
         "--dry-run",
         action="store_true",

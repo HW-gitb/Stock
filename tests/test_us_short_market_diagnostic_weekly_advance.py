@@ -12,7 +12,14 @@ from runners import us_short_market_diagnostic_weekly_fetch as advance
 from tests.test_us_short_market_diagnostic_benchmark_packet import _FakeVendor
 from tests.test_us_short_market_diagnostic_local_adapter import _packet, _start_local_paper_store
 
-AS_OF = "20260806"
+# The week's OWN canonical decision date, which is what the capstone passes every
+# week. The previous value ran ten days late, and under the repaired clock a run
+# that late is itself the missed-week condition — so it was quietly testing the
+# recovery path in every case that meant to test the ordinary one.
+AS_OF = "20260727"
+# Same week, run six days late (still live) and seven days late (over).
+LATE_IN_THE_WEEK = "20260802"
+NEXT_DECISION_DAY = "20260803"
 
 
 def _fred_rows(*days: str) -> list[dict]:
@@ -30,8 +37,13 @@ def _fred_rows(*days: str) -> list[dict]:
     return rows
 
 
-class WeeklyAdvanceTest(unittest.TestCase):
-    """Knife 10b: the clock finally moves without anybody typing a command."""
+class _WeeklyAdvanceFixture:
+    """The sandbox and the four calls both classes below drive it with.
+
+    Deliberately NOT a ``TestCase``: subclassing one to reuse a fixture makes
+    unittest discover the owner's tests a second time under the borrower's module
+    (`R-USSHORT-A-SHARED-FIXTURE-DRAGGED-ITS-OWNERS-TESTS-INTO-A-SECOND-MODULE`).
+    """
 
     def setUp(self) -> None:
         holder = tempfile.TemporaryDirectory()
@@ -85,6 +97,10 @@ class WeeklyAdvanceTest(unittest.TestCase):
         )
         kwargs.update(overrides)
         return advance.settle_captured_week(**kwargs)
+
+
+class WeeklyAdvanceTest(_WeeklyAdvanceFixture, unittest.TestCase):
+    """Knife 10b: the clock finally moves without anybody typing a command."""
 
     def test_a_dormant_clock_costs_nothing_at_all(self) -> None:
         """Not merely 'no error': no request, and no byte.
@@ -242,20 +258,91 @@ class WeeklyAdvanceTest(unittest.TestCase):
         """
 
         self._open_clock()
-        for label, head in (
-            (
-                "valued before the paper week decided",
-                self._fake_head(settlement_decision="20260724", valuation="20260722"),
-            ),
-            (
-                "valued after this week's decision",
-                self._fake_head(settlement_decision="20260720", valuation="20260730"),
-            ),
-        ):
-            with self.subTest(label):
-                with self.assertRaises(advance.WeeklyAdvanceError) as ctx:
-                    self._identity_with(head)
-                self.assertIn("does not line up", str(ctx.exception))
+        with self.assertRaises(advance.WeeklyAdvanceError) as ctx:
+            self._identity_with(
+                self._fake_head(settlement_decision="20260724", valuation="20260722")
+            )
+        self.assertIn("does not line up", str(ctx.exception))
+
+    def test_an_account_past_this_week_is_placed_against_the_week_it_wraps(self) -> None:
+        """The jam, and the only thing that ends it.
+
+        The head has moved on to a valuation AFTER this diagnostic week's decision
+        date, which is what one absent price packet does to a clock whose account
+        keeps settling weekly. Read off the head alone the ordering rule can never
+        hold again; walking back to the paper week this week actually wraps is
+        what makes the stuck week describable, and therefore recoverable.
+        """
+
+        self._open_clock()
+        identity = self._identity_with(
+            self._fake_head(settlement_decision="20260720", valuation="20260730")
+        )
+        self.assertEqual(1, identity["calendar_week_index"])
+        self.assertEqual("20260720", identity["settlement_decision_date"])
+        self.assertEqual("20260724", identity["valuation_date"])
+        self.assertLessEqual(identity["valuation_date"], identity["decision_date"])
+
+    def test_a_corrupted_settled_week_is_refused_rather_than_stepped_over(self) -> None:
+        """The walk-back is a search, and a search must not route around damage.
+
+        Skipping an unreadable week to reach an older one that happens to fit would
+        bind this diagnostic week to the WRONG paper week, silently. Asserted on
+        the reason rather than on any refusal: turn the raise into a `continue` and
+        the search still ends in an error, just a different one about finding
+        nothing — which says nothing about the damaged week.
+        """
+
+        self._open_clock()
+        settlement = self.paper / "weeks" / "20260720" / "settlement.json"
+        settlement.write_text("{ not canonical json", encoding="utf-8")
+        with self.assertRaises(advance.WeeklyAdvanceError) as ctx:
+            self._identity_with(
+                self._fake_head(settlement_decision="20260720", valuation="20260730")
+            )
+        self.assertIn("cannot be read", str(ctx.exception))
+        self.assertIn("20260720", str(ctx.exception))
+
+    def test_the_benchmark_cli_declares_the_flag_its_gate_reads(self) -> None:
+        """It read `args.confirm_user_authorization` and never declared it.
+
+        Every CLI invocation died of AttributeError before reaching the gate, so
+        the door was unreachable rather than shut. Fail-closed by accident is still
+        a broken entry point.
+        """
+
+        import io
+        from contextlib import redirect_stdout
+
+        from runners import us_short_market_diagnostic_benchmark_fetch as fetch_cli
+
+        printed = io.StringIO()
+        with redirect_stdout(printed):
+            exit_code = fetch_cli.main([
+                "--decision-date", "20260727", "--valuation-date", "20260724",
+                "--prior-valuation-date", "20260717", "--settlement-decision-date", "20260720",
+                "--calendar-week-index", "1", "--diagnostic-epoch", "e",
+                "--inputs-root", str(self.inputs), "--as-of-date", AS_OF,
+            ])
+        # Reached the gate and was refused BY it — not killed on the way there.
+        self.assertEqual(1, exit_code)
+        self.assertIn("requires explicit user authorization", printed.getvalue())
+
+    def test_an_account_with_no_week_this_one_could_wrap_is_still_refused(self) -> None:
+        """The walk-back is a search, not a licence to settle against anything.
+
+        Same shape as above, except the head names a last settlement older than
+        every week on disk, so nothing qualifies. Inventing a paper week here — or
+        falling back to the head that does not fit — is what the search must not
+        do.
+        """
+
+        self._open_clock()
+        with self.assertRaises(advance.WeeklyAdvanceError) as ctx:
+            self._identity_with(
+                self._fake_head(settlement_decision="20260713", valuation="20260730")
+            )
+        self.assertIn("no settled week valued on or before", str(ctx.exception))
 
     def test_the_target_exposure_leg_reaches_the_attribution_gate(self) -> None:
         """Knife 10a end to end: the note the decision took becomes g*.
@@ -405,6 +492,276 @@ class WeeklyAdvanceTest(unittest.TestCase):
         )
 
 
+class MissedWeekTest(_WeeklyAdvanceFixture, unittest.TestCase):
+    """When a week ends without inputs, and what must NOT happen before it does.
+
+    Design section 3 and section 12.8 duty 3: the week is written off as
+    ``no_count``, keeps its calendar slot, and the 26-week boundary does not move.
+    The kill moment is the next week's decision day, so everything up to it is the
+    reverse control — inputs that arrive late are still this week's inputs.
+    """
+
+    def _record(self, decision_date: str = "20260727") -> dict:
+        return json.loads(
+            (self.store / "weeks" / decision_date / "weekly_record.json").read_text(
+                encoding="utf-8"
+            )
+        )
+
+    def test_inputs_that_arrive_late_in_the_same_week_still_settle_as_an_ordinary_week(
+        self,
+    ) -> None:
+        """Six days late is late, not missed. Nothing is written off."""
+
+        self._open_clock()
+        self._fetch(as_of_date=LATE_IN_THE_WEEK)
+        settled = self._settle(as_of_date=LATE_IN_THE_WEEK)
+        self.assertIn(settled["status"], {"settled", "published", "recorded"})
+        self.assertEqual([], settled["no_count_weeks"], "a live week was written off")
+        strategy = self._record()["strategy"]
+        self.assertFalse(strategy["no_count"])
+        self.assertIsNotNone(strategy["weekly_return"], "the week settled with no return")
+        register = load_lifecycle_register(self.store, as_of_date=LATE_IN_THE_WEEK)
+        self.assertEqual(1, register["calendar_week_count"])
+
+    def test_a_week_whose_inputs_arrived_after_it_ended_is_settled_not_written_off(self) -> None:
+        """Design section 3 keeps no_count for weeks that CANNOT be evaluated.
+
+        This one can: the account settled it and the prices are on disk. Spending a
+        calendar slot on it would destroy real evidence behind an immutable record
+        and stamp it with a reason — "the inputs were missing" — that is not true.
+        """
+
+        self._open_clock()
+        self._fetch(as_of_date=NEXT_DECISION_DAY)
+        settled = self._settle(as_of_date=NEXT_DECISION_DAY)
+        self.assertEqual([], settled["no_count_weeks"], "an evaluable week was written off")
+        self.assertEqual([1], settled["settled_weeks"])
+        strategy = self._record()["strategy"]
+        self.assertFalse(strategy["no_count"])
+        self.assertIsNotNone(strategy["weekly_return"])
+        register = load_lifecycle_register(self.store, as_of_date=NEXT_DECISION_DAY)
+        self.assertEqual(1, register["calendar_week_count"])
+        self.assertEqual("26w-1-26", register["current_window_id"], "the window was extended")
+
+    def test_a_future_as_of_cannot_spend_a_week_the_account_has_not_lived_through(self) -> None:
+        """The kill rule needs the ACCOUNT's agreement, not just the caller's date.
+
+        `as_of_date` is caller-supplied; on its own it would let one mistyped date
+        burn a run of live weeks into immutable no_count records. The account
+        cannot have moved past a week that has not happened, so it is the half of
+        the rule nobody can fake.
+        """
+
+        far_future = "20261231"
+        self._open_clock()
+        self._fetch(as_of_date=far_future)
+        settled = self._settle(as_of_date=far_future)
+        self.assertEqual([], settled["no_count_weeks"], "a live week was burned by a future date")
+        self.assertEqual([1], settled["settled_weeks"])
+        self.assertFalse(self._record()["strategy"]["no_count"])
+
+    def test_settling_twice_in_the_same_week_does_not_spend_two_calendar_weeks(self) -> None:
+        """Idempotence, on the path that WRITES rather than the one that reads."""
+
+        self._open_clock()
+        self._fetch(as_of_date=NEXT_DECISION_DAY)
+        self._settle(as_of_date=NEXT_DECISION_DAY)
+        self._fetch(as_of_date=NEXT_DECISION_DAY)
+        again = self._settle(as_of_date=NEXT_DECISION_DAY)
+        self.assertEqual([], again["no_count_weeks"], "the same week was written off twice")
+        self.assertEqual([], again["settled_weeks"], "the same week was settled twice")
+        self.assertEqual(
+            1,
+            load_lifecycle_register(self.store, as_of_date=NEXT_DECISION_DAY)[
+                "calendar_week_count"
+            ],
+        )
+
+    def _jam_the_account_past_week_one(self):
+        """Head says the account has moved past week one, so the week is 'over'."""
+
+        return {
+            "last_settlement": {"decision_date": "20260720"},
+            "current_state": {"as_of": "20260730"},
+            "seed_state": {"relative_path": "seed/portfolio_state.json"},
+        }
+
+    def test_a_corrupted_account_week_is_reported_as_a_fault_not_spent_as_a_week(self) -> None:
+        """A fault must never be laundered into an immutable `no_count` record.
+
+        Design section 3 keeps `no_count` for weeks that CANNOT be evaluated. An
+        artifact that will not parse is a week that cannot be read *today* — repair
+        the file and it evaluates fine — so spending a calendar slot on it burns
+        one of the 26 irreversibly and stamps it with a reason that is false.
+        """
+
+        import unittest.mock as mock
+
+        self._open_clock()
+        self._fetch(as_of_date=AS_OF)
+        (self.paper / "weeks" / "20260720" / "settlement.json").write_text(
+            "{ broken", encoding="utf-8"
+        )
+        with mock.patch.object(advance, "load_head", return_value=self._jam_the_account_past_week_one()):
+            with self.assertRaises(advance.WeeklyAdvanceError) as ctx:
+                self._settle(as_of_date=NEXT_DECISION_DAY)
+        self.assertIn("cannot be read", str(ctx.exception))
+        self.assertFalse((self.store / "weeks" / "20260727" / "weekly_record.json").is_file())
+        self.assertFalse((self.store / "lifecycle_register.json").exists())
+
+    def test_a_week_whose_dates_contradict_each_other_is_also_not_spent(self) -> None:
+        """The same `except` swallowed this leg too, so it is closed as a class.
+
+        Injected at the seam that really raises it rather than by neutering a
+        guard: `_identity_for` refuses a week whose three dates do not line up, and
+        what is under test is whether the classifier above it turns that refusal
+        into a spent calendar week.
+        """
+
+        import unittest.mock as mock
+
+        self._open_clock()
+        self._fetch(as_of_date=AS_OF)
+        misaligned = advance.WeeklyAdvanceError(
+            "week 1 does not line up: the paper week decided 20260724 and was "
+            "valued 20260722, but this diagnostic week decides 20260727"
+        )
+        with mock.patch.object(advance, "load_head", return_value=self._jam_the_account_past_week_one()), \
+                mock.patch.object(advance, "_identity_for", side_effect=misaligned):
+            with self.assertRaises(advance.WeeklyAdvanceError) as ctx:
+                self._settle(as_of_date=NEXT_DECISION_DAY)
+        self.assertIn("does not line up", str(ctx.exception))
+        self.assertFalse((self.store / "lifecycle_register.json").exists())
+
+    def test_a_genuine_absence_is_still_written_off(self) -> None:
+        """The positive control the tightening must not break.
+
+        `WeeklyAdvanceNoPaperWeek` says the account settled no week this one could
+        ever wrap — an absence, not a fault — and it must still become `no_count`.
+        """
+
+        import unittest.mock as mock
+
+        self._open_clock()
+        self._fetch(as_of_date=AS_OF)
+        refusals = [
+            advance.WeeklyAdvanceNoPaperWeek(
+                "the account has no settled week valued on or before 20260727, so the "
+                "diagnostic week deciding that day has no paper week to wrap"
+            ),
+            # Week two: the account has simply not produced it, which ends the run.
+            advance.WeeklyAdvanceNotReady("the model-paper account has not settled a week yet"),
+        ]
+        with mock.patch.object(advance, "load_head", return_value=self._jam_the_account_past_week_one()), \
+                mock.patch.object(advance, "_identity_for", side_effect=refusals):
+            settled = self._settle(as_of_date=NEXT_DECISION_DAY)
+        self.assertEqual([1], settled["no_count_weeks"])
+        self.assertTrue(self._record()["strategy"]["no_count"])
+
+    def test_a_scorecard_emitted_mid_catch_up_is_still_announced(self) -> None:
+        """The only artifact this track produces must not be silently dropped.
+
+        A run that catches up past a window boundary settles week 26 — which emits
+        the scorecard — and then week 27, whose own publication is a `not_ready`.
+        Reporting the last settlement's publication would leave the scorecard on
+        disk and unmentioned in the week it was made. Asserted on the helper
+        because the end-to-end costs a 27-week rehearsal (measured 315s) for an
+        Optional; the loop hands it the value this pins.
+        """
+
+        published = {"status": "published", "window_id": "26w-1-26"}
+        outcome = advance._settle_outcome(
+            "settled", {"status": "published", "calendar_week_index": 27,
+                        "publication": {"status": "not_ready"}},
+            [26, 27], [], publication=published,
+        )
+        self.assertEqual(published, outcome["publication"])
+        # ...and the clock's position is the last week settled, not whatever the
+        # last `settle_week` happened to echo back.
+        self.assertEqual(27, outcome["calendar_week_index"])
+        self.assertEqual([26, 27], outcome["settled_weeks"])
+
+    def test_a_stopped_clock_does_not_report_the_same_thing_as_a_healthy_one(self) -> None:
+        """The label, which is what an operator actually reads.
+
+        Waiting on a week still in progress and waiting on a week that ended weeks
+        ago are the same sentence to the code and opposite news to a reader. They
+        used to be the same status, so a dead clock was indistinguishable from the
+        ordinary state every healthy week ends in.
+        """
+
+        self._open_clock()
+        live = self._settle(as_of_date=AS_OF)
+        self.assertEqual("waiting_for_inputs", live["status"])
+        stopped = self._settle(as_of_date=NEXT_DECISION_DAY)
+        self.assertEqual("stalled_on_a_finished_week", stopped["status"])
+        # Neither invents a week: with no packet there is nothing to project a
+        # no_count week's benchmarks from, and section 5 requires them.
+        self.assertEqual([], stopped["no_count_weeks"])
+        self.assertFalse((self.store / "lifecycle_register.json").exists())
+
+    def test_without_an_as_of_date_no_week_is_ever_written_off(self) -> None:
+        """A caller that did not say when it is may not spend calendar weeks."""
+
+        self._open_clock()
+        self._fetch(as_of_date=None)
+        settled = self._settle(as_of_date=None)
+        self.assertIn(settled["status"], {"settled", "published", "recorded"})
+        self.assertEqual([], settled["no_count_weeks"])
+        self.assertFalse(self._record()["strategy"]["no_count"])
+
+    def test_a_packet_for_another_week_cannot_be_written_off_as_this_one(self) -> None:
+        """Which week is spent comes from the store, never from the packet handed in.
+
+        A caller that could choose the index could burn a calendar week that the
+        clock is not waiting for — the same shape `build_next_weekly_record` had
+        its own parameters removed for.
+        """
+
+        from engine.us_short_market_diagnostic_weekly_producer import (
+            MarketDiagnosticWeeklyProducerError, settle_missed_week)
+
+        self._open_clock()
+        self._fetch(as_of_date=NEXT_DECISION_DAY)
+        packet_path = (
+            advance.benchmark_week_directory("20260727", inputs_root=self.inputs)
+            / advance.PACKET_FILENAME
+        )
+        elsewhere = json.loads(packet_path.read_text(encoding="utf-8"))
+        elsewhere["weeks"][0]["calendar_week_index"] = 2
+        with self.assertRaises(MarketDiagnosticWeeklyProducerError) as ctx:
+            settle_missed_week(
+                benchmark_packet=elsewhere,
+                root=self.store,
+                reason="planted",
+                as_of_date=NEXT_DECISION_DAY,
+            )
+        # Refused because the packet does not describe the week the STORE is
+        # waiting for. Asserted on that reason rather than on any refusal: read
+        # the index off the packet instead and a week-2 record is built happily,
+        # then bounced one layer down by the append rule — a different door, and
+        # one that says nothing about which week this packet is for.
+        self.assertIn("cannot be projected", str(ctx.exception))
+        self.assertFalse((self.store / "lifecycle_register.json").exists())
+
+    def test_the_current_week_is_captured_in_the_same_run_as_the_one_it_writes_off(self) -> None:
+        """Otherwise the clock heals one week per week and never catches up.
+
+        Two diagnostic weeks are due at once here, and the fetch step has to land
+        both: the older one so it can be written off with its benchmarks
+        projected, the current one so it can settle in this very run.
+        """
+
+        self._open_clock()
+        fetched = self._fetch(as_of_date=NEXT_DECISION_DAY)
+        self.assertEqual("captured", fetched["status"])
+        # Week two is not reachable in this fixture (the account has not settled
+        # another week), so exactly one week is due and nothing was back-filled.
+        self.assertEqual(0, fetched["backfilled_week_count"])
+        self.assertEqual(1, fetched["calendar_week_index"])
+
+
 class CapstoneStageTest(unittest.TestCase):
     """The stages exist, are ordered, and the fetch one is declared gated."""
 
@@ -496,6 +853,69 @@ class CapstoneStageTest(unittest.TestCase):
             result = capstone._run_market_diagnostic_fetch(_Ctx())
         self.assertEqual("capture_failed", result["fetch_status"])
         self.assertTrue(result["provider_calls_performed"], "three real requests were reported as none")
+
+    def test_a_written_off_week_is_reported_to_the_operator(self) -> None:
+        """A spent calendar week that nobody is told about is a silently shorter window.
+
+        Section 12.8 duty 3 keeps a no_count week in the 26-week denominator, so a
+        reader who never sees it cannot tell a 26-week verdict from a 24-week one.
+        """
+
+        import unittest.mock as mock
+
+        from runners import us_short_weekly_capstone as capstone
+        from runners import us_short_market_diagnostic_weekly_fetch as fetch_module
+
+        class _Ctx:
+            decision_date = "20260727"
+            market_diagnostic_root = None
+
+        with mock.patch.object(
+            fetch_module,
+            "settle_captured_week",
+            return_value={"status": "published", "calendar_week_index": 4,
+                          "no_count_weeks": [2, 3], "report_lines": []},
+        ):
+            result = capstone._run_market_diagnostic_settle(_Ctx())
+        self.assertEqual([2, 3], result["no_count_weeks"])
+        line = "".join(result["report_lines"])
+        self.assertIn("no_count", line)
+        self.assertIn("第 2、3 周", line)
+        # ...and a healthy week says nothing new, so the report stays quiet.
+        with mock.patch.object(
+            fetch_module,
+            "settle_captured_week",
+            return_value={"status": "published", "calendar_week_index": 4,
+                          "no_count_weeks": [], "report_lines": []},
+        ):
+            healthy = capstone._run_market_diagnostic_settle(_Ctx())
+        self.assertEqual([], healthy["report_lines"])
+
+    def test_a_stopped_clock_reads_differently_from_a_week_in_progress(self) -> None:
+        """Two waits, opposite news. The report has to say which one it is."""
+
+        import unittest.mock as mock
+
+        from runners import us_short_weekly_capstone as capstone
+        from runners import us_short_market_diagnostic_weekly_fetch as fetch_module
+
+        class _Ctx:
+            decision_date = "20260727"
+            market_diagnostic_root = None
+
+        lines = {}
+        for status in ("waiting_for_inputs", "stalled_on_a_finished_week"):
+            with mock.patch.object(
+                fetch_module, "settle_captured_week",
+                return_value={"status": status, "calendar_week_index": 2,
+                              "no_count_weeks": [], "report_lines": []},
+            ):
+                lines[status] = "".join(
+                    capstone._run_market_diagnostic_settle(_Ctx())["report_lines"]
+                )
+        self.assertTrue(all(lines.values()), "a stalled clock said nothing at all")
+        self.assertNotEqual(lines["waiting_for_inputs"], lines["stalled_on_a_finished_week"])
+        self.assertIn("已经过去", lines["stalled_on_a_finished_week"])
 
     def test_the_reader_is_handed_both_legs_that_were_captured(self) -> None:
         """Otherwise v1.1 reports `unavailable` beside files holding the answer.

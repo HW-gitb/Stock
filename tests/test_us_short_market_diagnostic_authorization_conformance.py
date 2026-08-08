@@ -113,6 +113,9 @@ GATES = frozenset(
         # Delegating to a gated public entry counts: the check still happens.
         "load_lifecycle_register",
         "load_settled_weekly_records",
+        # The one that actually re-checks the anchor; the two public readers
+        # above are thin projections of it.
+        "load_register_and_settled_records",
         "persist_settled_weekly_record",
         "publish_completed_market_diagnostic_window",
         "_authorized_records",
@@ -200,6 +203,27 @@ EXEMPT = {
     # every path it is ever handed is under the weekly INPUTS root, not the ledger.
     "runners/us_short_market_diagnostic_weekly_fetch.py::_read_json": "reads one named inputs file the gated caller resolved",
     "runners/us_short_market_diagnostic_weekly_fetch.py::_date8": "parses a date",
+    # The missed-week self-heal. None of these five reaches the diagnostic store:
+    # three read the MODEL-PAPER store (same class as `model_paper_week_is_settled`
+    # above), one compares two dates, and the assembler is handed everything it
+    # needs by a caller that has already been through `next_week_inputs`.
+    "runners/us_short_market_diagnostic_weekly_fetch.py::_week_is_over": "compares two dates",
+    "runners/us_short_market_diagnostic_weekly_fetch.py::_head":
+        "reads the model-paper store, not the diagnostic store",
+    "runners/us_short_market_diagnostic_weekly_fetch.py::_settled_paper_week_dates":
+        "lists the model-paper store's own week directories; no diagnostic store read",
+    "runners/us_short_market_diagnostic_weekly_fetch.py::_paper_week_wrapped_by":
+        "reads the model-paper store, not the diagnostic store",
+    "runners/us_short_market_diagnostic_weekly_fetch.py::_identity_for":
+        "assembles one week from a receipt, a head and a prior date the gated caller supplied",
+    "runners/us_short_market_diagnostic_weekly_fetch.py::_account_has_moved_past":
+        "compares two dates from a head in hand",
+    "runners/us_short_market_diagnostic_weekly_fetch.py::_unlived_week_identity":
+        "reads the model-paper store, not the diagnostic store",
+    "runners/us_short_market_diagnostic_weekly_fetch.py::plan_week":
+        "classifies one week from a receipt and a head the gated caller supplied",
+    "runners/us_short_market_diagnostic_weekly_fetch.py::_settle_outcome":
+        "shapes a result the gated caller already produced",
     "runners/us_short_market_diagnostic_weekly.py::_read_notification": "reads one named file the caller resolved",
     "runners/us_short_market_diagnostic_weekly.py::main": "dispatches to gated or exempt subcommands",
     "runners/us_short_market_diagnostic_weekly.py::open_clock": "is the operator act of authorizing",

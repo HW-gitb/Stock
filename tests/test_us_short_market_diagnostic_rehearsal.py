@@ -89,7 +89,10 @@ class GateTest(unittest.TestCase):
             with self.assertRaises(RehearsalError):
                 run_rehearsal(root=sandbox, first_decision_date=FIRST_MONDAY, weeks=0)
             with self.assertRaises(RehearsalError):
-                run_rehearsal(root=sandbox, first_decision_date=FIRST_MONDAY, weeks=2, no_count_weeks=(9,))
+                run_rehearsal(root=sandbox, first_decision_date=FIRST_MONDAY, weeks=2, starved_weeks=(9,))
+            with self.assertRaises(RehearsalError):
+                run_rehearsal(root=sandbox, first_decision_date=FIRST_MONDAY, weeks=2,
+                              starved_weeks=(2,), skipped_weeks=(2,))
             self.assertFalse(sandbox.exists(), "a refused rehearsal created its sandbox anyway")
 
 
@@ -120,7 +123,7 @@ class RehearsalChainTest(unittest.TestCase):
             root=Path(cls._temp.name) / "run",
             first_decision_date=FIRST_MONDAY,
             weeks=6,
-            no_count_weeks=(6,),
+            starved_weeks=(6,),
         )
 
     @classmethod
@@ -154,8 +157,11 @@ class RehearsalChainTest(unittest.TestCase):
 
     def test_a_starved_week_is_visible_and_still_occupies_its_slot(self) -> None:
         starved = self.summary["weeks"][5]
-        self.assertTrue(starved["no_count"])
+        self.assertTrue(starved["starved"])
+        # Starved in its OWN week, which is not yet over: the honest answer is to
+        # wait, because inputs that arrive on Wednesday are still this week's.
         self.assertEqual("waiting_for_inputs", starved["settle_status"])
+        self.assertEqual([], starved["no_count_weeks"], "a week was written off while it was still live")
         # The window denominator is the calendar, not the weeks that happened to
         # have inputs: the reminder still reports the clock rather than going quiet.
         self.assertIn("日历周=5", self._section_12(starved))
@@ -177,19 +183,29 @@ class RehearsalChainTest(unittest.TestCase):
                 self.assertEqual(before[relative], _files_under(relative))
 
 
+def _diagnostic_record(summary: dict, decision_date: str) -> dict:
+    path = Path(summary["root"]) / "diag" / "weeks" / decision_date / "weekly_record.json"
+    return json.loads(path.read_text(encoding="utf-8"))
+
+
+def _register(summary: dict) -> dict:
+    path = Path(summary["root"]) / "diag" / "lifecycle_register.json"
+    return json.loads(path.read_text(encoding="utf-8"))
+
+
+def _section_12_of(week: dict) -> str:
+    report = Path(week["report_path"]).read_text(encoding="utf-8")
+    return report.split("## 12.")[1].split("## 13.")[0]
+
+
 class StarvedMiddleWeekTest(unittest.TestCase):
-    """Starving a week that has a week after it — the case the other two never reach.
+    """Inputs missing while the account carries on: the week is settled LATE, not lost.
 
-    Both existing starve cases starve the LAST week, and the failure lands on the
-    week AFTER the starved one, so there was nothing after it to fail. The blind
-    spot and the behaviour shared an assumption.
-
-    What this pins is deliberately the CURRENT picture, not the intended one:
-    `R-USSHORT-26W-DIAG-A-MISSED-WEEK-JAMS-THE-CLOCK-FOREVER-AND-NOTHING-WRITES-NO-COUNT`
-    is a design decision that has not been taken. Until it is, the honest thing
-    for the rehearsal to show is what the one-click path really does — every later
-    week failed, the clock frozen on the last week that settled — rather than a
-    traceback that shows nothing at all.
+    Design section 3 keeps `no_count` for weeks that *cannot* be evaluated. This
+    one can — the account settled it, and its prices can still be fetched — so
+    writing it off would destroy real evidence behind an immutable record. What
+    the repair has to show instead is that the clock catches the calendar up in a
+    single run rather than trailing it for ever.
     """
 
     @classmethod
@@ -199,7 +215,7 @@ class StarvedMiddleWeekTest(unittest.TestCase):
             root=Path(cls._temp.name) / "run",
             first_decision_date=FIRST_MONDAY,
             weeks=4,
-            no_count_weeks=(2,),
+            starved_weeks=(2,),
         )
 
     @classmethod
@@ -210,23 +226,190 @@ class StarvedMiddleWeekTest(unittest.TestCase):
         self.assertEqual(4, len(self.summary["weeks"]))
         for week in self.summary["weeks"]:
             with self.subTest(week=week["calendar_week_index"]):
-                self.assertTrue(week["report_lines_delivered"], "a failed week stopped reporting")
+                self.assertTrue(week["report_lines_delivered"], "a week stopped reporting")
+                self.assertIsNone(week["problem"], "a week failed instead of recovering")
 
-    def test_the_weeks_after_the_gap_report_the_jam_instead_of_hiding_it(self) -> None:
+    def test_the_gap_settles_late_and_the_clock_catches_up_in_one_run(self) -> None:
         statuses = [week["settle_status"] for week in self.summary["weeks"]]
-        self.assertEqual(["published", "waiting_for_inputs", "failed", "failed"], statuses)
-        for week in self.summary["weeks"][2:]:
-            with self.subTest(week=week["calendar_week_index"]):
-                self.assertIn("does not line up", week["problem"] or "")
+        self.assertEqual(["published", "waiting_for_inputs", "published", "published"], statuses)
+        # Week three's run settles BOTH weeks. One per run would leave the clock
+        # permanently a week behind the calendar, which is the 26-week boundary
+        # being pushed out by exactly what section 12.8 duty 3 forbids.
+        self.assertEqual([[1], [], [2, 3], [4]],
+                         [week["settled_weeks"] for week in self.summary["weeks"]])
+        self.assertEqual([[], [], [], []],
+                         [week["no_count_weeks"] for week in self.summary["weeks"]],
+                         "a week that could be evaluated was written off instead")
 
-    def test_the_clock_is_frozen_on_the_last_week_that_settled(self) -> None:
-        """The registered reminder is where an operator would actually notice."""
+    def test_no_week_is_lost_and_none_is_written_off(self) -> None:
+        for decision_date in ("20260803", "20260810", "20260817", "20260824"):
+            with self.subTest(week=decision_date):
+                strategy = _diagnostic_record(self.summary, decision_date)["strategy"]
+                self.assertFalse(strategy["no_count"])
+                self.assertTrue(strategy["strategy_evaluable"])
+        register = _register(self.summary)
+        self.assertEqual(4, register["calendar_week_count"])
+        self.assertEqual(4, register["evaluable_week_count"])
+        self.assertEqual("26w-1-26", register["current_window_id"], "the window was extended")
 
-        for week in self.summary["weeks"]:
-            report = Path(week["report_path"]).read_text(encoding="utf-8")
-            section = report.split("## 12.")[1].split("## 13.")[0]
-            with self.subTest(week=week["calendar_week_index"]):
-                self.assertIn("日历周=1", section)
+    def test_the_recovered_week_compares_one_week_against_one_week(self) -> None:
+        """The number the whole NAV finding was about, read off the artifact.
+
+        Writing the outage week off with the prior NAV erased its real move and
+        handed week three a TWO-week strategy return to compare against a one-week
+        benchmark. Settling it instead keeps the NAV chain continuous, so every
+        week's return spans its own week.
+        """
+
+        navs = [
+            _diagnostic_record(self.summary, date)["strategy"]
+            for date in ("20260803", "20260810", "20260817", "20260824")
+        ]
+        self.assertEqual(["100004.000000", "99984.000000", "100009.000000", "99989.000000"],
+                         [row["nav"] for row in navs], "the account's real path was not recorded")
+        for previous, current in zip(navs, navs[1:]):
+            with self.subTest(nav=current["nav"]):
+                self.assertEqual(previous["nav"], current["prior_nav"], "the NAV chain has a hole")
+                self.assertAlmostEqual(
+                    float(current["nav"]) / float(previous["nav"]) - 1.0,
+                    current["weekly_return"], places=12,
+                )
+
+    def test_the_late_week_still_shows_its_own_market_window(self) -> None:
+        packet = json.loads(
+            (Path(self.summary["root"]) / "inputs" / "benchmark" / "20260810"
+             / "benchmark_price_packet.json").read_text(encoding="utf-8")
+        )["weeks"][0]
+        # The paper week this diagnostic week wraps, found by walking back through
+        # the account rather than reading a head that has long since moved on.
+        self.assertEqual("20260803", packet["settlement_decision_date"])
+        self.assertEqual("20260807", packet["valuation_date"])
+        for symbol in ("VTI", "IWB", "SPY", "QQQ"):
+            with self.subTest(symbol=symbol):
+                # Its OWN week's window, back-captured, not a neighbour's copy.
+                self.assertEqual("20260731", packet["benchmarks"][symbol]["prior_price_date"])
+
+
+class StarvedFirstAndConsecutiveWeeksTest(unittest.TestCase):
+    """The two edges of the same outage: it starts at week one, and it lasts."""
+
+    def test_the_very_first_week_can_be_the_starved_one(self) -> None:
+        with tempfile.TemporaryDirectory(prefix="rehearsal_first_") as temp:
+            summary = run_rehearsal(
+                root=Path(temp) / "run", first_decision_date=FIRST_MONDAY,
+                weeks=2, starved_weeks=(1,),
+            )
+            self.assertEqual(["waiting_for_inputs", "published"],
+                             [w["settle_status"] for w in summary["weeks"]])
+            self.assertEqual([1, 2], summary["weeks"][1]["settled_weeks"])
+            self.assertEqual([], summary["weeks"][1]["no_count_weeks"])
+            self.assertEqual(2, _register(summary)["evaluable_week_count"])
+
+    def test_a_two_week_outage_is_caught_up_in_one_run(self) -> None:
+        with tempfile.TemporaryDirectory(prefix="rehearsal_run_") as temp:
+            summary = run_rehearsal(
+                root=Path(temp) / "run", first_decision_date=FIRST_MONDAY,
+                weeks=4, starved_weeks=(2, 3),
+            )
+            self.assertEqual([2, 3, 4], summary["weeks"][3]["settled_weeks"])
+            self.assertEqual([], summary["weeks"][3]["no_count_weeks"])
+            register = _register(summary)
+            self.assertEqual(4, register["calendar_week_count"])
+            self.assertEqual(4, register["evaluable_week_count"])
+
+
+class SkippedWeekTest(unittest.TestCase):
+    """Nobody ran the weekly act at all — the outage that actually produces no_count.
+
+    The common one in practice (holiday, machine off), and the one the harness
+    could not produce until the account loop learned to skip too. Here the account
+    has no week for it and never will, so nothing can ever make it evaluable:
+    design section 3 says it is recorded as `no_count`, keeps its calendar slot,
+    and the 26-week boundary does not move.
+    """
+
+    @classmethod
+    def setUpClass(cls) -> None:
+        cls._temp = tempfile.TemporaryDirectory(prefix="rehearsal_skip_")
+        cls.summary = run_rehearsal(
+            root=Path(cls._temp.name) / "run",
+            first_decision_date=FIRST_MONDAY,
+            weeks=4,
+            skipped_weeks=(2,),
+        )
+
+    @classmethod
+    def tearDownClass(cls) -> None:
+        cls._temp.cleanup()
+
+    def test_the_clock_is_not_stuck_and_the_week_is_written_off(self) -> None:
+        self.assertEqual(["published", "not_run", "published", "published"],
+                         [w["settle_status"] for w in self.summary["weeks"]])
+        self.assertEqual([2], self.summary["weeks"][2]["no_count_weeks"])
+        self.assertEqual([3], self.summary["weeks"][2]["settled_weeks"])
+
+    def test_the_unlived_week_says_why_and_cannot_pass_as_evaluable(self) -> None:
+        strategy = _diagnostic_record(self.summary, "20260810")["strategy"]
+        self.assertTrue(strategy["no_count"])
+        self.assertFalse(strategy["strategy_evaluable"])
+        self.assertFalse(strategy["paper_evaluable"])
+        self.assertIsNone(strategy["weekly_return"])
+        # Derived from what was actually missing, not a constant: the account
+        # settled no week this one could wrap.
+        self.assertEqual("no_settled_account_week_for_this_calendar_week",
+                         strategy["no_count_reason"])
+        # NAV is the prior one, and here that is the truth: the account really did
+        # not move, because it never settled anything that week.
+        self.assertEqual(_diagnostic_record(self.summary, "20260803")["strategy"]["nav"],
+                         strategy["nav"])
+
+    def test_the_unlived_week_keeps_its_slot_and_still_shows_the_market(self) -> None:
+        register = _register(self.summary)
+        self.assertEqual(4, register["calendar_week_count"])
+        self.assertEqual(3, register["evaluable_week_count"])
+        self.assertEqual("26w-1-26", register["current_window_id"], "the window was extended")
+        record = _diagnostic_record(self.summary, "20260810")
+        # Its valuation date is its own decision day: the account never valued it,
+        # and the previous week's valuation is already taken.
+        self.assertEqual("20260810", record["valuation_date"])
+        for symbol in ("VTI", "IWB", "SPY", "QQQ"):
+            with self.subTest(symbol=symbol):
+                self.assertTrue(record["benchmarks"][symbol]["benchmark_evaluable"])
+        self.assertIn("日历周=4", _section_12_of(self.summary["weeks"][-1]))
+        self.assertIn("累计可评估周=3", _section_12_of(self.summary["weeks"][-1]))
+
+
+class SkippedFirstAndConsecutiveWeeksTest(unittest.TestCase):
+    """Week one skipped used to fail hard every week; two in a row exercise the loop."""
+
+    def test_skipping_week_one_still_builds_a_register(self) -> None:
+        with tempfile.TemporaryDirectory(prefix="rehearsal_skip1_") as temp:
+            summary = run_rehearsal(
+                root=Path(temp) / "run", first_decision_date=FIRST_MONDAY,
+                weeks=3, skipped_weeks=(1,),
+            )
+            self.assertEqual([1], summary["weeks"][1]["no_count_weeks"])
+            for week in summary["weeks"][1:]:
+                with self.subTest(week=week["calendar_week_index"]):
+                    self.assertIsNone(week["problem"], "the run failed instead of writing it off")
+            strategy = _diagnostic_record(summary, FIRST_MONDAY)["strategy"]
+            self.assertTrue(strategy["no_count"])
+            self.assertIsNone(strategy["prior_nav"], "week one has no prior week to continue from")
+            # The frozen normalized capital, not a number invented for the gap.
+            self.assertEqual(strategy["initial_capital"], strategy["nav"])
+            self.assertEqual(3, _register(summary)["calendar_week_count"])
+
+    def test_two_unlived_weeks_are_written_off_in_the_same_run(self) -> None:
+        with tempfile.TemporaryDirectory(prefix="rehearsal_skip2_") as temp:
+            summary = run_rehearsal(
+                root=Path(temp) / "run", first_decision_date=FIRST_MONDAY,
+                weeks=4, skipped_weeks=(2, 3),
+            )
+            self.assertEqual([2, 3], summary["weeks"][3]["no_count_weeks"])
+            register = _register(summary)
+            self.assertEqual(4, register["calendar_week_count"])
+            self.assertEqual(2, register["evaluable_week_count"])
+            self.assertEqual("26w-1-26", register["current_window_id"])
 
 
 class TotalReturnSidecarTest(unittest.TestCase):
@@ -297,7 +480,7 @@ class TotalReturnSidecarTest(unittest.TestCase):
                 root=Path(temp) / "run",
                 first_decision_date=FIRST_MONDAY,
                 weeks=3,
-                no_count_weeks=(3,),
+                starved_weeks=(3,),
                 with_total_return_sidecar=True,
             )
         self.assertEqual("waiting_for_inputs", summary["weeks"][2]["settle_status"])

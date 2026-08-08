@@ -410,6 +410,7 @@ def _record_files(root: Path) -> set[str]:
 def _register_from_records(
     records: list[dict[str, Any]], *, as_of_date: str | None = None,
     start_receipt_digest: str | None = None,
+    records_already_validated: bool = False,
 ) -> dict[str, Any]:
     if not records:
         raise MarketDiagnosticLifecycleError("cannot build an empty diagnostic lifecycle register")
@@ -425,7 +426,14 @@ def _register_from_records(
         as_of = _as_of(as_of_date) if as_of_date is not None else None
         _not_future(record_date, "weekly_record.decision_date", as_of)
         _not_future(record_valuation, "weekly_record.valuation_date", as_of)
-        identity = _validate_weekly_record_for_store(record, as_of_date=as_of_date)
+        # Skipped only when the caller just produced these records through the
+        # validating loader; the record's own index is then read straight off it,
+        # which every check below still constrains.
+        identity = (
+            {"calendar_week_index": record["calendar_week_index"]}
+            if records_already_validated
+            else _validate_weekly_record_for_store(record, as_of_date=as_of_date)
+        )
         if identity["calendar_week_index"] != expected_week:
             raise MarketDiagnosticLifecycleError("diagnostic calendar weeks must start at 1 and be consecutive")
         if record["diagnostic_epoch"] != epoch:
@@ -534,10 +542,26 @@ def _load_records_for_register(
     return records
 
 
-def load_lifecycle_register(
+def load_register_and_settled_records(
     root: str | Path = DEFAULT_ROOT, *, as_of_date: str | None = None
-) -> dict[str, Any]:
-    """Load the private register and re-derive every count/ref before returning it."""
+) -> tuple[dict[str, Any], list[dict[str, Any]]]:
+    """Load the private register and re-derive every count/ref before returning it.
+
+    The two public readers below are both this, because they always wanted the same
+    work: the register cannot be trusted without loading and validating every
+    record it references, and the records cannot be trusted without the register
+    that binds them. Splitting them meant ``load_settled_weekly_records`` loaded and
+    fully revalidated the whole store THREE times per call — once inside
+    ``load_lifecycle_register``, once more when that function re-derived the
+    expected register, and once again on its own return path. On a store with N
+    weeks, read N times in a run, that is the O(N²) that took the 26-week rehearsal
+    from 52 to 232 seconds and pushed the lane past its ceiling.
+
+    Nothing is cached and nothing is skipped ACROSS calls: every call still reads
+    every record off disk and validates it, so a record corrupted between two calls
+    is still refused by the second one. What is gone is only the repetition inside
+    a single call.
+    """
 
     store_root = _private_root(root)
     if as_of_date is not None:
@@ -551,11 +575,25 @@ def load_lifecycle_register(
     # own claim: feeding a value back in and comparing it to itself verifies nothing.
     anchor = _require_unchanged_anchor(register, store_root)
     expected = _register_from_records(
-        records, as_of_date=as_of_date, start_receipt_digest=start_receipt_sha256(anchor)
+        records,
+        as_of_date=as_of_date,
+        start_receipt_digest=start_receipt_sha256(anchor),
+        # These exact records were validated a few lines above, by the loader that
+        # produced them. Validating them a second time re-runs the schema over the
+        # whole store and can only ever agree with itself.
+        records_already_validated=True,
     )
     if expected != register:
         raise MarketDiagnosticLifecycleError("diagnostic lifecycle register is not derived from weekly records")
-    return register
+    return register, records
+
+
+def load_lifecycle_register(
+    root: str | Path = DEFAULT_ROOT, *, as_of_date: str | None = None
+) -> dict[str, Any]:
+    """Load the private register and re-derive every count/ref before returning it."""
+
+    return load_register_and_settled_records(root, as_of_date=as_of_date)[0]
 
 
 def load_settled_weekly_records(
@@ -563,9 +601,7 @@ def load_settled_weekly_records(
 ) -> list[dict[str, Any]]:
     """Load every settled diagnostic week after revalidating the private register and records."""
 
-    store_root = _private_root(root)
-    register = load_lifecycle_register(store_root, as_of_date=as_of_date)
-    return _load_records_for_register(store_root, register, as_of_date=as_of_date)
+    return load_register_and_settled_records(root, as_of_date=as_of_date)[1]
 
 
 def _load_existing_records(

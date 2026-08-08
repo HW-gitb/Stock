@@ -420,11 +420,25 @@ _DIAGNOSTIC_SETTLE_LINES = {
         "26 周诊断轨：本周的基准与现金输入没有捕获到，诊断周未推进。"
         "不影响选股与操作建议。"
     ),
+    # Deliberately NOT worded like the line above. That one is a week still in
+    # progress; this one is a clock that has stopped and will stay stopped until
+    # the inputs for a week that is already over can be captured. The two used to
+    # read the same, so a reader could not tell a dead clock from a healthy one.
+    "stalled_on_a_finished_week": (
+        "26 周诊断轨：诊断周已停在一个**已经过去**的周上——它的基准输入至今抓不到，"
+        "在补到之前钟不会前进。不影响选股与操作建议。"
+    ),
     "failed": (
         "26 周诊断轨：本周结算失败，诊断周未推进；原因见本次运行摘要。"
         "不影响选股与操作建议。"
     ),
 }
+# The one line that reports a calendar week having been spent without a strategy
+# result. Only week numbers are interpolated; everything else is fixed.
+_DIAGNOSTIC_NO_COUNT_LINE = (
+    "26 周诊断轨：第 {weeks} 周整周没有跑过一键、账户也没有结算，已按设计记为 no_count，"
+    "仍占用该日历周、不顺延 26 周边界。不影响选股与操作建议。"
+)
 
 
 # Stages that touch THIS run's still-unpublished official artifacts, and so must be
@@ -628,13 +642,25 @@ def _run_market_diagnostic_settle(ctx: CapstoneContext) -> dict[str, Any]:
     else:
         status = outcome["status"]
         stalled = _DIAGNOSTIC_SETTLE_LINES.get(status)
+        lines = [stalled] if stalled is not None else []
+        no_count_weeks = outcome.get("no_count_weeks") or []
+        if no_count_weeks:
+            # A calendar week was spent without a strategy result. Section 12.8
+            # duty 3 keeps it in the 26-week denominator, so a reader who is never
+            # told cannot tell a 26-week verdict apart from a 24-week one. Week
+            # numbers only — the reason is a fixed string for the same privacy
+            # rule as the lines above.
+            lines.append(_DIAGNOSTIC_NO_COUNT_LINE.format(
+                weeks="、".join(str(week) for week in no_count_weeks)
+            ))
         result = {
             "settle_status": status,
             "calendar_week_index": outcome.get("calendar_week_index"),
             "publication": outcome.get("publication"),
+            "no_count_weeks": no_count_weeks,
             # A week that did not advance says so; a week that settled is already
             # described by the reader stage's registered reminder line.
-            "report_lines": [stalled] if stalled is not None else [],
+            "report_lines": lines,
             "provider_calls_performed": False,
         }
     return _deliver_diagnostic_report_lines(ctx, result)

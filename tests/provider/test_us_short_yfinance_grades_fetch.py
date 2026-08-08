@@ -92,6 +92,20 @@ class _NoisyFailingYFinanceClient:
         return _NoisyFailingTicker()
 
 
+# What the provider actually prints, matched as the phrases it prints them in.
+# `"404"` on its own used to stand in for the third one, and a bare three-digit
+# substring is not a provider message: this suite names its artifacts
+# `yf_grades_<pid>_<random 5 digits>` and writes those paths into the tracked
+# summary, so roughly one run in three hundred drew a number containing 404 and
+# turned this red for its own directory name. That is the arbitrary-substring
+# trap the very next test in this file exists to warn about.
+PROVIDER_NOISE_TOKENS = ("ITIC", "quoteSummary", "HTTP Error 404")
+
+
+def _leaked_provider_noise(summary_text: str) -> list[str]:
+    return [token for token in PROVIDER_NOISE_TOKENS if token in summary_text]
+
+
 class UsShortYFinanceGradesFetchTest(unittest.TestCase):
     def setUp(self):
         self._state_root_context = temporary_us_short_state_directory(ROOT)
@@ -312,8 +326,27 @@ class UsShortYFinanceGradesFetchTest(unittest.TestCase):
         self.assertEqual(summary["scope"]["status"], "completed_with_fetch_errors")
         self.assertEqual(summary["execution"]["fetch_error_count"], 3)
         summary_text = self.paths["summary"].read_text(encoding="utf-8")
-        for forbidden in ("ITIC", "quoteSummary", "404"):
-            self.assertNotIn(forbidden, summary_text)
+        self.assertEqual([], _leaked_provider_noise(summary_text))
+
+    def test_the_noise_guard_reads_provider_messages_not_digits_in_a_path(self):
+        """The reverse control: it must catch the leak and ignore its own filenames.
+
+        Both halves matter. Without the first the guard could be satisfied by
+        matching nothing; without the second it is red whenever this suite happens
+        to name a directory `yf_grades_14740_20404`, which is what it did.
+        """
+
+        leaked = (
+            '{"note": "HTTP Error 404: {\\"quoteSummary\\":{\\"error\\": '
+            '\\"No fundamentals data found for symbol: ITIC\\"}}"}'
+        )
+        self.assertEqual(["ITIC", "quoteSummary", "HTTP Error 404"], _leaked_provider_noise(leaked))
+        for slug in ("yf_grades_14740_20404", "yf_grades_404_40404"):
+            with self.subTest(slug=slug):
+                self.assertEqual(
+                    [],
+                    _leaked_provider_noise(f'{{"resolved_actions_path": "state/us_short/{slug}.json"}}'),
+                )
 
     def test_summary_guard_matches_ticker_tokens_not_arbitrary_substrings(self):
         summary = self._run(
