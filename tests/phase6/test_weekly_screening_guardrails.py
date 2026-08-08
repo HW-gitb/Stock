@@ -41,8 +41,6 @@ class WeeklyScreeningGuardrailTest(unittest.TestCase):
         self.assertEqual(result.returncode, 1, result.stdout + result.stderr)
         output = result.stdout + result.stderr
         self.assertIn("[OK] A-short preflight passed", output)
-        self.assertIn("=== Weekly screening pipeline ===", output)
-        self.assertIn("--as-of 19000101 is not an A-share trading day", output)
         self.assertNotIn("禁止运行脚本", output)
 
     def test_cmd_launcher_uses_process_scoped_bypass_only(self) -> None:
@@ -95,22 +93,35 @@ class WeeklyScreeningGuardrailTest(unittest.TestCase):
             errors="replace",
         )
 
+    def assert_historical_guard_output(
+        self, result: subprocess.CompletedProcess[str], *expected: str
+    ) -> None:
+        output = result.stdout + result.stderr
+        self.assertEqual(result.returncode, 1, output)
+        for text in expected:
+            self.assertIn(text, output)
+        # Reverse control: a price-clock failure must not masquerade as a
+        # historical parameter guard failure.
+        self.assertNotIn("[FATAL] price basis resolution failed", output)
+
     def test_historical_asof_requires_explicit_l3_mode(self) -> None:
         result = self.run_script("-AsOf", "19000101")
 
-        self.assertEqual(result.returncode, 1, result.stdout + result.stderr)
-        output = result.stdout + result.stderr
-        self.assertIn("Historical -AsOf 19000101", output)
-        self.assertIn("-L3Mode pit or -L3Mode neutralize", output)
+        self.assert_historical_guard_output(
+            result,
+            "Historical -AsOf 19000101",
+            "-L3Mode pit or -L3Mode neutralize",
+        )
 
     def test_historical_asof_rejects_today_l3_mode(self) -> None:
         result = self.run_script("-AsOf", "19000101", "-L3Mode", "today")
 
-        self.assertEqual(result.returncode, 1, result.stdout + result.stderr)
-        output = result.stdout + result.stderr
-        self.assertIn("cannot run with -L3Mode today", output)
-        self.assertIn("-L3Mode pit", output)
-        self.assertIn("-L3Mode neutralize", output)
+        self.assert_historical_guard_output(
+            result,
+            "cannot run with -L3Mode today",
+            "-L3Mode pit",
+            "-L3Mode neutralize",
+        )
 
     def test_historical_asof_refuses_existing_official_output(self) -> None:
         as_of = "19000103"
@@ -123,10 +134,11 @@ class WeeklyScreeningGuardrailTest(unittest.TestCase):
         finally:
             target.rmdir()
 
-        self.assertEqual(result.returncode, 1, result.stdout + result.stderr)
-        output = result.stdout + result.stderr
-        self.assertIn("would overwrite existing official output", output)
-        self.assertIn(str(target), output)
+        self.assert_historical_guard_output(
+            result,
+            "would overwrite existing official output",
+            str(target),
+        )
 
     def test_historical_asof_refuses_existing_default_xlsx_output(self) -> None:
         as_of = "19000104"
@@ -139,10 +151,11 @@ class WeeklyScreeningGuardrailTest(unittest.TestCase):
         finally:
             target.unlink()
 
-        self.assertEqual(result.returncode, 1, result.stdout + result.stderr)
-        output = result.stdout + result.stderr
-        self.assertIn("would overwrite existing official output", output)
-        self.assertIn(str(target), output)
+        self.assert_historical_guard_output(
+            result,
+            "would overwrite existing official output",
+            str(target),
+        )
 
     def test_pit_mode_uses_strict_snapshot_guard(self) -> None:
         text = SCRIPT.read_text(encoding="utf-8")
@@ -251,6 +264,27 @@ class WeeklyScreeningGuardrailTest(unittest.TestCase):
         self.assertLess(preflight, resolver)
         self.assertLess(preflight, egs)
         self.assertIn("$null -eq $PreflightExit", text)
+
+    def test_historical_parameter_guards_precede_explicit_price_clock(self) -> None:
+        text = SCRIPT.read_text(encoding="utf-8")
+        helper_start = text.index("function Invoke-HistoricalInputGuards")
+        helper_end = text.index("$PreflightScript", helper_start)
+        helper = text[helper_start:helper_end]
+        for reason in (
+            "historical_l3_mode_missing",
+            "historical_l3_mode_invalid",
+            "historical_overwrite_blocked",
+        ):
+            self.assertIn(reason, helper)
+
+        explicit_marker = text.index(
+            "# Historical -AsOf parameter guards must run before explicit price-basis resolution."
+        )
+        guard_call = text.index(
+            "Invoke-HistoricalInputGuards -RequestedL3Mode $L3Mode", explicit_marker
+        )
+        price_clock = text.index("'--price-as-of-for'", explicit_marker)
+        self.assertLess(guard_call, price_clock)
 
     def test_failure_receipt_invalidates_stale_and_records_identity(self) -> None:
         # 刀2/10: every known-date failure uses one finalizer. It cuts receipt/health

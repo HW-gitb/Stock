@@ -286,6 +286,66 @@ function Write-KnownM67FailureReceipt {
         -FeedRef $script:IvFeedRef -FeedSha256 $script:IvFeedSha256 `
         -IvFeedStatus $KnownIvFeedStatus
 }
+function Invoke-HistoricalInputGuards {
+    param([string]$RequestedL3Mode)
+
+    # These guards only inspect parameters and official output paths.  The
+    # explicit -AsOf caller invokes them before price-basis resolution so a
+    # missing provider credential cannot mask the intended guardrail result.
+    $EffectiveL3Mode = $RequestedL3Mode
+    if ([string]::IsNullOrWhiteSpace($EffectiveL3Mode)) {
+        if ($IsHistoricalAsOf) {
+            Write-KnownM67FailureReceipt -Reason 'historical_l3_mode_missing' -ExitCode 1
+            Write-Host "[FATAL] Historical -AsOf $AsOf is not the current run date $RunDate." -ForegroundColor Red
+            Write-Host "        Pass -L3Mode pit or -L3Mode neutralize explicitly; default --l3-mode=today is blocked for historical official-output runs." -ForegroundColor Red
+            exit 1
+        }
+        $EffectiveL3Mode = 'today'
+    }
+
+    if ($IsHistoricalAsOf -and $EffectiveL3Mode -eq 'today') {
+        Write-KnownM67FailureReceipt -Reason 'historical_l3_mode_invalid' -ExitCode 1
+        Write-Host "[FATAL] Historical -AsOf $AsOf cannot run with -L3Mode today." -ForegroundColor Red
+        Write-Host "        Use -L3Mode pit for a strict PIT snapshot, or -L3Mode neutralize for an L3-neutral replay." -ForegroundColor Red
+        exit 1
+    }
+
+    $ExistingOfficialOutputs = @()
+    $OfficialResultDir = Join-Path $ProjectRoot "result\a_short\$AsOf"
+    if (Test-Path $OfficialResultDir) {
+        $ExistingOfficialOutputs += $OfficialResultDir
+    }
+    $EgsRootDir = Join-Path $ProjectRoot 'A-EGS'
+    $EgsResultDir = Join-Path $EgsRootDir 'Result'
+    @(
+        (Join-Path $EgsResultDir "egs_tier1_$AsOf.csv"),
+        (Join-Path $EgsResultDir "egs_full_$AsOf.csv"),
+        # egs_main.py defaults xlsx output to A-EGS\ unless CONF["xlsx_dir"] is set.
+        (Join-Path $EgsRootDir "egs_tier1_$AsOf.xlsx"),
+        (Join-Path $EgsResultDir "egs_tier1_$AsOf.xlsx")
+    ) | ForEach-Object {
+        $Path = $_
+        if (Test-Path $Path) {
+            $ExistingOfficialOutputs += $Path
+        }
+    }
+
+    if ($IsHistoricalAsOf -and $ExistingOfficialOutputs.Count -gt 0 -and -not $AllowHistoricalOverwrite) {
+        Write-KnownM67FailureReceipt -Reason 'historical_overwrite_blocked' -ExitCode 1
+        Write-Host "[FATAL] Historical -AsOf $AsOf would overwrite existing official output(s):" -ForegroundColor Red
+        foreach ($Path in $ExistingOfficialOutputs) {
+            Write-Host "        $Path" -ForegroundColor Red
+        }
+        Write-Host "        Re-run only after reviewing those outputs, and pass -AllowHistoricalOverwrite if the overwrite is intentional." -ForegroundColor Red
+        exit 1
+    }
+
+    if ($IsHistoricalAsOf -and $AllowHistoricalOverwrite) {
+        Write-Host "[WARN] Historical official-output overwrite explicitly allowed for $AsOf." -ForegroundColor Yellow
+    }
+
+    return $EffectiveL3Mode
+}
 # 刀3: dependency preflight runs BEFORE the canonical resolver, provider, or private-state access.
 $PreflightScript = Join-Path $ProjectRoot 'runners\a_short_preflight.py'
 & $PythonExe $PreflightScript
@@ -331,11 +391,14 @@ if ([string]::IsNullOrWhiteSpace($AsOf)) {
         exit 1
     }
     Write-Host "[CANONICAL] as_of=$AsOf (resolved)  run_date=$RunDate  mode=live  price_basis=$PriceBasis  price_as_of=$PriceAsOf" -ForegroundColor Cyan
+    $EffectiveL3Mode = Invoke-HistoricalInputGuards -RequestedL3Mode $L3Mode
 } else {
     # --- 显式 -AsOf → live/historical 仍用纯日期比较分类（无需网络）---
     # as_of < 今天 = historical(真·过去回放,须显式 -L3Mode pit/neutralize);as_of >= 今天 = live(今日/前瞻交易日)。
     # as_of 交易日有效性由 egs_main.set_asof 兜底(拒非交易日);与 egs/pipeline 的 as_of>=run_date live 判据一致。
     $IsHistoricalAsOf = ([string]::Compare([string]$AsOf, [string]$RunDate, [System.StringComparison]::Ordinal) -lt 0)
+    # Historical -AsOf parameter guards must run before explicit price-basis resolution.
+    $EffectiveL3Mode = Invoke-HistoricalInputGuards -RequestedL3Mode $L3Mode
     # --- 但价格基准必须与 canonical 同源：走同一个解析器（需 trade_cal，故需网络）---
     # 这里以前是 `$PriceAsOf = $AsOf`，即显式入口用「决策日当日收盘」、canonical 入口用
     # 「上一个已收盘交易日」，同一决策日两个价格。删掉那条分支是本刀的核心；代价是显式
@@ -358,8 +421,6 @@ if ([string]::IsNullOrWhiteSpace($AsOf)) {
     }
     Write-Host "[EXPLICIT] as_of=$AsOf  run_date=$RunDate  mode=$(if($IsHistoricalAsOf){'historical'}else{'live'})  price_basis=$PriceBasis  price_as_of=$PriceAsOf" -ForegroundColor Cyan
 }
-$EffectiveL3Mode = $L3Mode
-
 # P4: de-identified per-run manifests for the post-run health companion.
 $LauncherSidecarOutcomes = @()
 $script:IvFeedAttemptedBeforeEgs = $false
@@ -399,57 +460,6 @@ function Add-SidecarOutcome {
     if (-not [string]::IsNullOrWhiteSpace($FeedRef)) { $Outcome['feed_ref'] = $FeedRef }
     if (-not [string]::IsNullOrWhiteSpace($FeedSha256)) { $Outcome['feed_sha256'] = $FeedSha256 }
     $script:LauncherSidecarOutcomes += $Outcome
-}
-
-if ([string]::IsNullOrWhiteSpace($EffectiveL3Mode)) {
-    if ($IsHistoricalAsOf) {
-        Write-KnownM67FailureReceipt -Reason 'historical_l3_mode_missing' -ExitCode 1
-        Write-Host "[FATAL] Historical -AsOf $AsOf is not the current run date $RunDate." -ForegroundColor Red
-        Write-Host "        Pass -L3Mode pit or -L3Mode neutralize explicitly; default --l3-mode=today is blocked for historical official-output runs." -ForegroundColor Red
-        exit 1
-    }
-    $EffectiveL3Mode = 'today'
-}
-
-if ($IsHistoricalAsOf -and $EffectiveL3Mode -eq 'today') {
-    Write-KnownM67FailureReceipt -Reason 'historical_l3_mode_invalid' -ExitCode 1
-    Write-Host "[FATAL] Historical -AsOf $AsOf cannot run with -L3Mode today." -ForegroundColor Red
-    Write-Host "        Use -L3Mode pit for a strict PIT snapshot, or -L3Mode neutralize for an L3-neutral replay." -ForegroundColor Red
-    exit 1
-}
-
-$ExistingOfficialOutputs = @()
-$OfficialResultDir = Join-Path $ProjectRoot "result\a_short\$AsOf"
-if (Test-Path $OfficialResultDir) {
-    $ExistingOfficialOutputs += $OfficialResultDir
-}
-$EgsRootDir = Join-Path $ProjectRoot 'A-EGS'
-$EgsResultDir = Join-Path $EgsRootDir 'Result'
-@(
-    (Join-Path $EgsResultDir "egs_tier1_$AsOf.csv"),
-    (Join-Path $EgsResultDir "egs_full_$AsOf.csv"),
-    # egs_main.py defaults xlsx output to A-EGS\ unless CONF["xlsx_dir"] is set.
-    (Join-Path $EgsRootDir "egs_tier1_$AsOf.xlsx"),
-    (Join-Path $EgsResultDir "egs_tier1_$AsOf.xlsx")
-) | ForEach-Object {
-    $Path = $_
-    if (Test-Path $Path) {
-        $ExistingOfficialOutputs += $Path
-    }
-}
-
-if ($IsHistoricalAsOf -and $ExistingOfficialOutputs.Count -gt 0 -and -not $AllowHistoricalOverwrite) {
-    Write-KnownM67FailureReceipt -Reason 'historical_overwrite_blocked' -ExitCode 1
-    Write-Host "[FATAL] Historical -AsOf $AsOf would overwrite existing official output(s):" -ForegroundColor Red
-    foreach ($Path in $ExistingOfficialOutputs) {
-        Write-Host "        $Path" -ForegroundColor Red
-    }
-    Write-Host "        Re-run only after reviewing those outputs, and pass -AllowHistoricalOverwrite if the overwrite is intentional." -ForegroundColor Red
-    exit 1
-}
-
-if ($IsHistoricalAsOf -and $AllowHistoricalOverwrite) {
-    Write-Host "[WARN] Historical official-output overwrite explicitly allowed for $AsOf." -ForegroundColor Yellow
 }
 
 Set-Location $ProjectRoot

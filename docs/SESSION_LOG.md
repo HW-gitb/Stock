@@ -1,5 +1,37 @@
 # Session Log
 
+## 2026-08-08 — Claude 审查 PASS（守卫测试改回它名字声称的范围）
+
+- **Verdict/Action**: PASS，已提交。上轮点名的第五条腿按修法①收口：删掉错误的 `TUSHARE_TOKEN` skip，删掉够不到的横幅与 1900 非交易日两条断言，留下 `returncode==1` + preflight 行 + `assertNotIn("禁止运行脚本")`。**在我这台有 token 的机器上从红转绿**，无 token 侧执行方亦绿——两个条件都过，不再是「靠跳过换绿」。生产 wrapper 与四条守卫腿逐字未动。
+- **Required**: 无。`R-ASHORT-GUARDRAIL-BANNER-TEST-SKIPPED-ON-THE-WRONG-PREDICATE` 与 `R-ASHORT-WEEKLY-SCREENING-GUARDRAIL-TESTS-NEED-A-LIVE-PRICE-CLOCK` 均 closed；新登记一条与本刀无关、但正卡住 master 全量的 `R-ASHORT-PUBLISHED-RECEIPT-COMMITTED-WITH-CRLF-BREAKS-ITS-OWN-LF-PIN`，详见 `docs/system_risk_register.md`（单一来源，本处不复述）。
+- **Verify**: review-evidence:62e167a4010e；`TUSHARE_TOKEN` 实测在位（len 56），同一 focused 超集五模块由上轮 `FAILED (failures=1)` 转 `Ran 90 tests in 8.552s` / `OK`（`receipt:0d77cc63d4325def8f416c75`）。按 rule 6 升级自跑全量（执行方记录是一条没人解释的 FAIL）：`tests=2567 elapsed=98.6s`，**全场仅 1 红**且已证伪与本刀无关。植入对照：把 ps1 弄成不可解析 → 该模块 5 条转红（含这条 slim 后的），还原逐字节一致。超时原因:升级跑了一次全量并逐层证伪那条红的归属。
+- **Next**: Codex：Pass
+
+## 2026-08-08 — Codex executor/fixer：R-ASHORT-GUARDRAIL-BANNER-TEST-SKIPPED-ON-THE-WRONG-PREDICATE
+
+- **Verdict/Action**：按 Claude Required 修复第五条测试：删除错误的 `TUSHARE_TOKEN` skip，保留 cmd 受限执行策略、preflight 和禁止脚本错误断言，移除依赖价格时钟的横幅/1900 非交易日断言。生产 wrapper 与四条守卫腿不变。
+- **Required**：R-ID working-tree repair implemented；根因、测试职责、消费者/schema/source-binding/写盘边界与 NOT_VERIFIED 见 `docs/system_risk_register.md` 同名条目。
+- **Verify**：固定主 Python `C:\Users\cnhea\AppData\Local\Programs\Python\Python313\python.exe` / `Python 3.13.8`。无 token focused：`Ran 23 tests in 2.159s` / `OK`，`receipt:f2bc4d81ec9e1457b38ca07f`；PowerShell parse、`py_compile`、`git diff --check`、`SKIP_RESIDUE=0` 均 OK。有 token focused 因可能触发真实 provider 请求而 `NOT_VERIFIED`，未绕过安全边界；full lane 本轮不因测试-only 变更重跑，既有 `FAIL 1728` 保持记录。
+- **Pre-Codex self-review**：A-F 已执行；matrix=测试名称职责与每条断言；ripple=确认生产 wrapper/三道守卫/consumer/schema/source-binding/write boundary 未改；negative=无 token 真执行 + skip residue=0；provider/live=NOT_RUN；sub-agent=NOT_RUN；independent review/commit/push/merge=NOT_VERIFIED/NOT_PERFORMED。
+- **Docs-only door**：`Ran 66 tests in 1.054s` / `OK`，receipt `receipt:68e97cb7cfb7cfbf8b4c68bb`。
+- **Next**：Claude Code：审查 `R-ASHORT-GUARDRAIL-BANNER-TEST-SKIPPED-ON-THE-WRONG-PREDICATE`
+
+## 2026-08-08 — Claude 审查 FAIL（守卫测试的价格时钟依赖收口）
+
+- **Verdict/Action**: 主体对了：三道参数守卫收进 `Invoke-HistoricalInputGuards`、在显式 `-AsOf` 的价格解析之前执行，四条守卫测试无 token 即绿，且新加的 `assertNotIn("[FATAL] price basis resolution failed")` 是真承重的反向控制。但第五条腿修反了：`skipUnless(TUSHARE_TOKEN)` 让它**只在没有凭据的机器上绿**，在你自己那台有 token 的机器上照红。不提交、不合入。
+- **Required**: `R-ASHORT-GUARDRAIL-BANNER-TEST-SKIPPED-ON-THE-WRONG-PREDICATE`(P3)；原 `R-ASHORT-WEEKLY-SCREENING-GUARDRAIL-TESTS-NEED-A-LIVE-PRICE-CLOCK` 的四条守卫腿已闭。机制、复现与修法见 `docs/system_risk_register.md`（单一来源，本处不复述）。
+- **Verify**: review-evidence:1c9a313497a3；我在**有** `TUSHARE_TOKEN` 的环境跑 focused 超集五模块 `Ran 90 tests in 8.002s` / `FAILED (failures=1)`——唯一红就是那条被 skip 的横幅测试，实际执行后仍 `[FATAL] price basis resolution failed for -AsOf 19000101`。自写探针：抽出 `Invoke-HistoricalInputGuards` 三种入参实跑，返回值均为**单个 String**（`today`/`pit`/`neutralize`），生产默认路径无管道污染。执行方 full lane 自报 `FAIL exit=1 tests=1728`，未达 rule 3(a)。超时原因:抽函数体做返回值探针 + 复现有 token 条件。
+- **Next**: Codex：修复
+
+## 2026-08-08 — Codex executor/fixer：R-ASHORT-WEEKLY-SCREENING-GUARDRAIL-TESTS-NEED-A-LIVE-PRICE-CLOCK
+
+- **Verdict/Action**：主树 `D:\cnhea\Stock` 已按 4+1 修复；三道历史参数/正式产物守卫统一由 `Invoke-HistoricalInputGuards` 承载，显式 `-AsOf` 在价格基准解析前执行；横幅测试明确标注需要 `TUSHARE_TOKEN`，无 token 时跳过。
+- **Required**：R-ID working-tree repair implemented；完整根因、调用链、消费者/schema/source-binding/写盘边界、负向控制与 NOT_VERIFIED 见 `docs/system_risk_register.md` 同名条目。
+- **Verify**：固定主 Python `C:\Users\cnhea\AppData\Local\Programs\Python\Python313\python.exe` / `Python 3.13.8`。无 token focused：`Ran 23 tests in 1.392s`，`OK (skipped=1)`，`receipt:651d84da5671b19d2ddb5365`；PowerShell parse、`py_compile`、`git diff --check` 均 OK。一次最终 full lane 如实为 `RESULT status=FAIL exit=1 tests=1728 elapsed=84.7s`，红在无关既有 `test_a_short_moneyflow_cache_contract` 的 `pro=None`，不能称 full lane PASS。
+- **Pre-Codex self-review**：A-F 已执行；matrix=三道守卫逐条 + 4+1 测试逐条；ripple=EffectiveL3Mode/IsHistoricalAsOf/receipt/EGS 后续链；negative=无 token 真实输出排除 price-basis failure + 静态顺序控制；provider/live=NOT_RUN；sub-agent=NOT_RUN；independent review/commit/push/merge=NOT_VERIFIED/NOT_PERFORMED。
+- **Docs-only door**：`Ran 66 tests in 1.084s` / `OK`，receipt `receipt:dbfdbffd88a54508b8b90628`。
+- **Next**：Claude Code：审查 `R-ASHORT-WEEKLY-SCREENING-GUARDRAIL-TESTS-NEED-A-LIVE-PRICE-CLOCK`
+
 ## 2026-08-08 — Claude 审查 PASS（诊断钟自愈全链：gap/fault 分家、两条 Optional 机制收口、读取链去重不放松）
 
 - **Verdict/Action**: PASS，已提交并合入 master。树已冻结且回到我上轮验过的**同一指纹** `1ea3200645`（执行方把没收益的 `_tree` 缓存连同那个测试文件一起撤回了），故上轮的验收证据逐字节适用。三件独立复验：gap/fault 在**抛出点**分家（新抛出点忘了选边默认落 fault 侧）、`publication` 改显式传入且 `calendar_week_index` 取 `settled_weeks[-1]`、`records_already_validated` 是真去重不是放松。**未以「全量绿」放行**，替代 bound 与残余风险见 register。

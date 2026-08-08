@@ -970,3 +970,98 @@ python runners\a_short_account_state_from_manual_tables.py --input-dir state\a_s
 ### 交接给下一位
 
 - Claude Code 独立复核真实 calendar lag 过滤、D0 未发布 A/B 回归、参考日/complete 三腿、`partial_margin_codes` 消费门、缓存语义指纹和 fail-closed 反向控制；PASS 前不得提交或合入。
+
+## 2026-08-08 追加：R-ASHORT-WEEKLY-SCREENING-GUARDRAIL-TESTS-NEED-A-LIVE-PRICE-CLOCK（Codex executor/fixer，主树）
+
+### 问题、根因与修复
+
+- 主树 `D:\cnhea\Stock` 的 `tests.phase6.test_weekly_screening_guardrails` 在无 token 环境下有 5 条红：显式 `-AsOf` 先进入 `resolve_canonical_asof.py --price-as-of-for`，价格时钟失败后，历史 `-L3Mode` 缺失/非法和既有正式产物三道守卫没有机会输出；横幅测试还要求继续进入流水线，因此不能与参数守卫混在同一无 token 断言里。
+- `runners/weekly_screening.ps1` 现在以 `Invoke-HistoricalInputGuards` 集中三道守卫：`historical_l3_mode_missing`、`historical_l3_mode_invalid`、`historical_overwrite_blocked`。显式 `-AsOf` 在 `--price-as-of-for` 前调用；canonical 入口在 canonical `AsOf/PriceAsOf` 已解析后调用。helper 返回 `$EffectiveL3Mode`，后续 EGS、canary、forward tracker、M6.7 和既有 receipt/write 边界不变。
+- `tests/phase6/test_weekly_screening_guardrails.py` 将横幅测试加 `TUSHARE_TOKEN` 条件 skip 并写明价格时钟原因；四条历史守卫测试共用反向控制，要求输出不得是 `[FATAL] price basis resolution failed`；新增静态顺序控制锁住 helper 三个 reason 和显式调用先于 `--price-as-of-for`。
+
+### 调用链 / 消费者 / schema / source-binding / 写盘边界
+
+- 调用链：preflight → `RunDate` → canonical 解析或显式日期分类 →（显式入口先）`Invoke-HistoricalInputGuards` → 显式价格基准解析 → sidecar 初始化 → EGS → canary/tracker/weekly stages。历史守卫文案、条件、退出码保持原值。
+- 直接消费者仍为 `A-EGS/egs_main.py` 及后续既有 stages；本刀未改 schema、analysis input、source binding、生产筛选、M6.7 语义或正常产物写盘。守卫失败继续通过既有 `Write-KnownM67FailureReceipt` fail-closed；测试 fixture 只在测试中创建后清理。
+
+### 负向控制、自审与测试证据
+
+- 固定解释器：`C:\Users\cnhea\AppData\Local\Programs\Python\Python313\python.exe`；版本：`Python 3.13.8`。
+- 无 token focused 命令：
+
+  ```powershell
+  & '.tools\run_unittest_with_repo_pythonpath.cmd' tests.phase6.test_weekly_screening_guardrails
+  ```
+
+  原始终态：`Ran 23 tests in 1.392s`；`OK (skipped=1)`；`[bounded-unittest] RESULT tier=focused status=PASS exit=0 tests=23`；`FOCUSED_RECEIPT token=receipt:651d84da5671b19d2ddb5365`。
+- 静态/语法：PowerShell parser=`PS_PARSE=OK`；fixed-Python `py_compile`=`OK`；`git diff --check`=`OK`。
+- 生产入口变更按规则只执行一次 full lane，命令为：
+
+  ```powershell
+  & 'C:\Users\cnhea\AppData\Local\Programs\Python\Python313\python.exe' .tools\full_pack_ledger.py run a_short 'R-ASHORT-WEEKLY-SCREENING-GUARDRAIL-TESTS-NEED-A-LIVE-PRICE-CLOCK historical guards before price basis; fifth banner test credential-gated' 'receipt:651d84da5671b19d2ddb5365' 860 -- discover -s tests -p 'test_a_short*.py'
+  ```
+
+  原始终态：`[full-pack-ledger] RESULT status=FAIL exit=1 tests=1728 elapsed=84.7s deadline=860s mode=parallel`。唯一已运行红模块为与本刀无关的既有 `test_a_short_moneyflow_cache_contract`，错误是 `A-EGS/egs_main.py` 中 `pro=None` 后访问 `pro.moneyflow`；本刀 phase6 focused 仍绿，不能称 full lane PASS。
+- 自审 A-F：已核对 register/当前 phase handoff/AI review/self-review 路由；三道守卫逐条矩阵；回扫 `$EffectiveL3Mode`、`$IsHistoricalAsOf`、receipt、EGS 与后续 stage；无 token 反向输出控制 + 静态顺序控制；未起 sub-agent；register 与 SESSION_LOG 已同步。本轮无 provider/live、无 commit/push/merge。
+
+### 状态、NOT_VERIFIED、审查边界与下一步
+
+- 本条仍为 **working-tree repair implemented / open pending independent review**；不得把 full lane 的无关红解释成 PASS，也不得把 focused PASS 扩大为 live/生产验证。
+- docs-only 门：固定主 Python 跑 `tests.test_route_doc_ledger_status_consistency tests.test_doc_governance_guard tests.test_readme_route_row_length`，最终 `Ran 66 tests in 1.084s` / `OK`，receipt `receipt:dbfdbffd88a54508b8b90628`。
+- **NOT_VERIFIED**：有 token 的横幅测试、真实周跑、provider/live 行为、独立 Claude Code 审查及 commit/push/merge。
+- 下一步：Claude Code 只按审查协议独立审查该 R-ID；默认复跑 focused acceptance，除非发现证据不一致或新的 material risk，不因 docs-only 追加而重跑 full lane。
+
+## 2026-08-08 追加：R-ASHORT-GUARDRAIL-BANNER-TEST-SKIPPED-ON-THE-WRONG-PREDICATE（Codex executor/fixer）
+
+### 审查 Required 与最小修复
+
+- Claude 审查确认前一刀四条历史守卫腿正确，但第五条 `test_cmd_launcher_runs_under_restricted_default_policy` 的 `skipUnless(TUSHARE_TOKEN)` 错把“有没有 token”当成“19000101 价格时钟能否解析”。有 token 时仍会执行并在价格解析失败，故该测试在用户机器上照红。
+- 按推荐方案把测试收窄回名字所承诺的范围：删除 skip；保留 cmd launcher 的 returncode、`[OK] A-short preflight passed` 和无“禁止运行脚本”断言；移除需进入流水线/EGS 后才能成立的横幅与 1900 非交易日断言。生产代码、历史三守卫、`assert_historical_guard_output` 反向控制、consumer/schema/source-binding/write path 均未改。
+
+### 流程、自审与验证边界
+
+- 固定解释器：`C:\Users\cnhea\AppData\Local\Programs\Python\Python313\python.exe`；版本 `Python 3.13.8`。
+- 无 token focused 命令：
+
+  ```powershell
+  & '.tools\run_unittest_with_repo_pythonpath.cmd' tests.phase6.test_weekly_screening_guardrails
+  ```
+
+  原始终态：`Ran 23 tests in 2.159s` / `OK`；`RESULT tier=focused status=PASS exit=0 tests=23`；`FOCUSED_RECEIPT token=receipt:f2bc4d81ec9e1457b38ca07f`。
+- PowerShell parser=`OK`；fixed-Python `py_compile`=`OK`；`SKIP_RESIDUE=0`；`git diff --check`=`OK`。
+- 有 token focused **NOT_VERIFIED**：执行会触发真实价格时钟/provider 请求，安全边界拒绝该子进程；未绕过、未展示 token。provider/live、真实周跑和独立 review/commit/push/merge 未执行。本轮是 test-only 变更，不按生产入口规则重复此前已记录的 full lane；此前 full lane `FAIL exit=1 tests=1728` 仍是无关 `test_a_short_moneyflow_cache_contract` 红。
+- 自审 A-F：按最新 reviewer entry 路由；每条测试断言与测试名称对照；回扫生产 wrapper、三道守卫、EGS/weekly consumer、schema、source binding、write boundary 无改动；无 token 真执行与 skip residue 反向控制；未起 sub-agent；register 与 SESSION_LOG 已同步。
+
+### 状态与下一步
+
+- 本条 **working-tree repair implemented / open pending independent review**。`OK` 只覆盖无 token focused，不覆盖有 token/provider/live/full lane。
+- docs-only 门：固定主 Python 跑 `tests.test_route_doc_ledger_status_consistency tests.test_doc_governance_guard tests.test_readme_route_row_length`，`Ran 66 tests in 1.054s` / `OK`，receipt `receipt:68e97cb7cfb7cfbf8b4c68bb`。
+- 下一步：Claude Code 独立审查该 R-ID；如需有 token closure，先由用户明确授权 provider 请求。
+
+## 2026-08-08 追加：守卫测试价格时钟依赖修复的独立审查 = FAIL
+
+**判定**：一条 P3 Required（`R-ASHORT-GUARDRAIL-BANNER-TEST-SKIPPED-ON-THE-WRONG-PREDICATE`）；原 finding 的四条守卫腿已闭。正文只在 `docs/system_risk_register.md`。
+
+**我实际验了什么**：整读 `Invoke-HistoricalInputGuards` 函数体与两处调用点、被删旧块的逐条对照（消息/退出码/receipt reason 未改）、测试侧的 `assert_historical_guard_output` 与 skip 装饰器；在**有** `TUSHARE_TOKEN` 的环境跑 focused 超集五模块 `Ran 90 tests in 8.002s` / `FAILED (failures=1)`。
+
+**自写探针（补一处无人覆盖的面）**：`$EffectiveL3Mode` 现在由函数返回值供给，而唯一会走到这条产线路径的测试恰好被 skip 了。我把函数体抽出来注入三组入参实跑，返回值均为单个 String（`today`/`pit`/`neutralize`），确认 PowerShell 输出流没有被污染成数组。
+
+**关键判断**：`skipUnless(TUSHARE_TOKEN)` 与失败成因不是同一件事——`-AsOf 19000101` 在任何凭据下都解析不出价格时钟，所以这条测试变成"只在没凭据的机器上绿"，在操作机上照红，方向与修复目标相反。
+
+**未覆盖**：full lane（执行方自报 FAIL，红点自述在无关模块，我未独立复核）；未真跑 provider/`-Account`。
+
+**下一步**：按 register 的修法①把该测试收窄到它名字声称的范围并去掉 skip；full lane 需要一次真 PASS 或把那条红定性。
+
+## 2026-08-08 追加：守卫测试收口的复审 = PASS（已提交）
+
+**判定**：两条 R-ID 全部 closed；另立一条与本刀无关的 P2（`R-ASHORT-PUBLISHED-RECEIPT-COMMITTED-WITH-CRLF-BREAKS-ITS-OWN-LF-PIN`）。正文只在 `docs/system_risk_register.md`。
+
+**决定性验证**：缺陷本来只在「有 token」的机器上现形，所以我就在那个条件下验收——本机 `TUSHARE_TOKEN` 实测在位（len 56），同一 focused 超集由上轮 `FAILED (failures=1)` 转 `Ran 90 tests in 8.552s` / `OK`。
+
+**植入对照**：把 `weekly_screening.ps1` 弄成不可解析 → 该模块 5 条转红（含 slim 之后的那条），证明它没被修成空壳；还原逐字节一致。
+
+**全量**：按 rule 6 升级自跑（执行方的记录是一条没人解释的 FAIL）。`tests=2567 / 98.6s`，全场仅 1 红，且逐层证伪与本刀无关：blob 字节本身是 CRLF、引入提交是别窗的 `0fffbba1`、在 seq15 合并前的 master 内容树里那个文件根本不存在（同测试 `Ran 3 tests ... OK`）。**master 目前跑不出绿全量**这件事本身已单独立册，因为它会向后每一刀收税。
+
+**覆盖损失**：横幅与「1900 非交易日」两条断言无人接手，已在 register 明记为已知缺口。
+
+**下一步**：那条 CRLF 产物归一（连同同批另一周）+ 查写盘口的换行来源，属另一刀。
