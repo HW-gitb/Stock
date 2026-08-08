@@ -107,6 +107,7 @@ class UsShortMarketDiagnosticLocalAdapterTest(unittest.TestCase):
             1,
             strategy_evaluable=True,
             strategy_weekly_return=0.01,
+            windows_aligned=True,
         )["VTI"]
         self.assertEqual("unavailable", benchmark["return_quality"])
         self.assertFalse(benchmark["benchmark_evaluable"])
@@ -135,6 +136,7 @@ class UsShortMarketDiagnosticLocalAdapterTest(unittest.TestCase):
                     "text": "v1.1 remains a later attribution explanation step.",
                 },
                 prior_nav=None,
+                prior_week_was_no_count=False,
             )
             after = {path: path.read_bytes() for path in root.rglob("*.json")}
 
@@ -169,6 +171,7 @@ class UsShortMarketDiagnosticLocalAdapterTest(unittest.TestCase):
             strategy_evaluable=True,
             strategy_weekly_return=0.03,
             total_return_sidecar=sidecar,
+            windows_aligned=True,
         )
         self.assertEqual(set(BENCHMARKS), set(direct))
         for benchmark in direct.values():
@@ -193,6 +196,7 @@ class UsShortMarketDiagnosticLocalAdapterTest(unittest.TestCase):
                 },
                 prior_nav=None,
                 total_return_sidecar=sidecar,
+                prior_week_was_no_count=False,
             )
             after = {path: path.read_bytes() for path in root.rglob("*.json")}
 
@@ -223,6 +227,7 @@ class UsShortMarketDiagnosticLocalAdapterTest(unittest.TestCase):
                 strategy_evaluable=True,
                 strategy_weekly_return=0.03,
                 total_return_sidecar=sidecar,
+                windows_aligned=True,
             )
 
     def test_sidecar_price_interval_must_bind_to_local_price_packet(self) -> None:
@@ -234,6 +239,7 @@ class UsShortMarketDiagnosticLocalAdapterTest(unittest.TestCase):
                 strategy_evaluable=True,
                 strategy_weekly_return=0.03,
                 total_return_sidecar=sidecar,
+                windows_aligned=True,
             )
 
     def test_model_paper_week_tamper_is_rejected_before_projection(self) -> None:

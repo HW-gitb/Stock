@@ -374,6 +374,7 @@ def adapt_benchmark_week(
     strategy_evaluable: bool,
     strategy_weekly_return: float | None,
     total_return_sidecar: Mapping[str, Any] | None = None,
+    windows_aligned: bool,
     as_of_date: str | None = None,
 ) -> dict[str, dict[str, Any]]:
     """Project one local price week into the diagnostic weekly benchmark shape.
@@ -442,7 +443,9 @@ def adapt_benchmark_week(
             benchmark_evaluable = False
             return_quality = "unavailable"
             reasons = ["price_missing" if close is None else "prior_price_missing"]
-        joint_evaluable = bool(strategy_evaluable and benchmark_evaluable)
+        # Both sides evaluable is necessary but not sufficient: they also have to
+        # cover the same span, which they do not in the week after a no_count one.
+        joint_evaluable = bool(strategy_evaluable and benchmark_evaluable and windows_aligned)
         raw_excess = (
             strategy_weekly_return - weekly_return
             if joint_evaluable and strategy_weekly_return is not None and weekly_return is not None
@@ -488,6 +491,7 @@ def build_weekly_record_from_local(
     v1_1_reminder: Mapping[str, Any],
     prior_nav: str | None,
     total_return_sidecar: Mapping[str, Any] | None = None,
+    prior_week_was_no_count: bool,
     as_of_date: str | None = None,
 ) -> dict[str, Any]:
     """Build one schema-shaped weekly record from already-settled local inputs.
@@ -541,6 +545,12 @@ def build_weekly_record_from_local(
     if not isinstance(reminder.get("text"), str) or not reminder["text"]:
         _fail("v1_1_reminder.text must be non-empty")
 
+    # After a no_count week the account settled once across more than one calendar
+    # week — the pending decision simply matured late — so this week's NAV move
+    # spans that week too while the benchmarks span only this one. Both numbers are
+    # real; the PAIR is not like-for-like, so it is recorded and excluded rather
+    # than quietly averaged into the 26-week excess.
+    windows_aligned = not prior_week_was_no_count
     nav = paper_week["nav"]
     strategy_weekly_return = construct_weekly_return(prior_nav, nav["nav"])
     initial = Decimal("100000.000000")
@@ -552,6 +562,7 @@ def build_weekly_record_from_local(
         strategy_evaluable=strategy_evaluable,
         strategy_weekly_return=strategy_weekly_return,
         total_return_sidecar=validated_total_return_sidecar,
+        windows_aligned=windows_aligned,
         as_of_date=as_of_date,
     )
     source_refs = _dedupe_sha256(
@@ -566,9 +577,13 @@ def build_weekly_record_from_local(
         _fail("weekly record would exceed the 32-source digest limit")
     return {
         "schema_name": "us_short_market_diagnostic_weekly_record",
-        "schema_version": "1.0.0",
+        "schema_version": "1.1.0",
         "decision_date": decision_date,
         "valuation_date": paper_week["valuation_date"],
+        "windows_aligned": windows_aligned,
+        "windows_misaligned_reason": (
+            None if windows_aligned else "strategy_return_spans_a_no_count_week"
+        ),
         "calendar_week_index": calendar_week_index,
         "window_id": packet["window_id"],
         "diagnostic_epoch": packet["diagnostic_epoch"],

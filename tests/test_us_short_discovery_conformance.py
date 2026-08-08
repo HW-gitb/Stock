@@ -1597,6 +1597,23 @@ class ExecutableClosureMatrix:
                     return __mutant(*args, **kwargs)
                 return __original(*args, **kwargs)
 
+            # The verdict for this coordinate is `hit and (died or redundant_sibling)`,
+            # and the sibling half is pure data — coverage and candidates, both
+            # already in hand. So when a sibling exists the outcome is decided the
+            # moment `hit` turns true, and every further candidate run can only
+            # confirm something the verdict does not consult. Computing it BEFORE
+            # the sweep instead of after is what turns 859 candidate executions
+            # into roughly one per coordinate; the set of coordinates reported in
+            # `missing` is unchanged, coordinate by coordinate.
+            redundant_sibling = any(
+                other != (
+                    consumer_name, caller, patch_owner, bound_name, origin_term,
+                    lineno, end_lineno, frozen_raw_branch,
+                )
+                and other[4] == origin_term
+                and set(coverage[other]) & set(candidates)
+                for other in coordinates
+            )
             died = False
             with mock.patch.object(owner_module, bound_name, targeted):
                 for test_path in candidates:
@@ -1604,20 +1621,13 @@ class ExecutableClosureMatrix:
                     if hit and resolved and run == 1 and red > 0:
                         died = True
                         break
+                    if hit and redundant_sibling:
+                        # Reached, and the fallback already carries this one.
+                        break
             if not hit:
                 missing.append(f"{coordinate}: no registered behavior test reaches callsite")
             elif not died:
-                siblings = [
-                    other
-                    for other in coordinates
-                    if other != (
-                        consumer_name, caller, patch_owner, bound_name, origin_term,
-                        lineno, end_lineno, frozen_raw_branch,
-                    )
-                    and other[4] == origin_term
-                    and set(coverage[other]) & set(candidates)
-                ]
-                if not siblings:
+                if not redundant_sibling:
                     missing.append(
                         f"{coordinate}: bypass stayed green without a reached redundant sibling"
                     )
@@ -1629,205 +1639,6 @@ class ExecutableClosureMatrix:
         )
         self.assertEqual(missing, [], f"unmapped or non-load-bearing C coordinates: {missing}")
 
-    def test_d_repo_shared_resource_tests_inject_state_and_lock_roots(self):
-        from tests.provider.us_short_private_test_root import (
-            temporary_provider_directory,
-        )
-
-        with tempfile.TemporaryDirectory() as clean_root:
-            clean_repo = Path(clean_root)
-            private_parent = clean_repo / "provider_samples"
-            self.assertFalse(private_parent.exists())
-            first = temporary_provider_directory(clean_repo)
-            first_path = Path(first.__enter__())
-            second = temporary_provider_directory(clean_repo)
-            second_path = Path(second.__enter__())
-            self.assertTrue(first_path.is_dir())
-            self.assertTrue(second_path.is_dir())
-            self.assertEqual((first_path / ".gitignore").read_text(encoding="utf-8"), "*\n")
-            self.assertEqual((second_path / ".gitignore").read_text(encoding="utf-8"), "*\n")
-            first.__exit__(None, None, None)
-            self.assertTrue(
-                private_parent.exists(),
-                "one overlapping test removed another test's private parent",
-            )
-            second.__exit__(None, None, None)
-            self.assertFalse(
-                private_parent.exists(),
-                "overlapping clean-checkout helpers left an ignored parent behind",
-            )
-            errors: list[BaseException] = []
-            first_entered = threading.Event()
-            allow_first_exit = threading.Event()
-            second_attempting = threading.Event()
-            second_entered = threading.Event()
-
-            def first_worker():
-                try:
-                    with temporary_provider_directory(clean_repo):
-                        first_entered.set()
-                        allow_first_exit.wait(timeout=5)
-                except BaseException as exc:
-                    errors.append(exc)
-
-            def second_worker():
-                try:
-                    second_attempting.set()
-                    with temporary_provider_directory(clean_repo):
-                        second_entered.set()
-                except BaseException as exc:
-                    errors.append(exc)
-
-            threads = [
-                threading.Thread(target=first_worker),
-                threading.Thread(target=second_worker),
-            ]
-            threads[0].start()
-            self.assertTrue(first_entered.wait(timeout=5))
-            threads[1].start()
-            self.assertTrue(second_attempting.wait(timeout=5))
-            self.assertFalse(
-                second_entered.wait(timeout=0.1),
-                "same-root test helpers were not serialized",
-            )
-            allow_first_exit.set()
-            for thread in threads:
-                thread.join(timeout=10)
-            self.assertFalse(any(thread.is_alive() for thread in threads))
-            self.assertTrue(second_entered.is_set())
-            self.assertEqual(errors, [])
-            self.assertFalse(
-                private_parent.exists(),
-                "serialized helper exits left an ignored parent behind",
-            )
-
-        def snapshot(root: Path) -> dict[str, bytes]:
-            if not root.exists():
-                return {}
-            return {
-                path.relative_to(root).as_posix(): path.read_bytes()
-                for path in root.rglob("*") if path.is_file()
-            }
-
-        def test_ids(module: str) -> list[str]:
-            suite = unittest.defaultTestLoader.loadTestsFromName(module)
-            found: list[str] = []
-
-            def collect(node):
-                if isinstance(node, unittest.TestSuite):
-                    for child in node:
-                        collect(child)
-                else:
-                    found.append(node.id())
-
-            collect(suite)
-            return found
-
-        state_modules: set[str] = set()
-        lock_modules: set[str] = set()
-        for path in (ROOT / "tests").rglob("test_*.py"):
-            if path.resolve() == Path(__file__).resolve():
-                continue
-            text = path.read_text(encoding="utf-8")
-            tree = ast.parse(text)
-            module = path.relative_to(ROOT).with_suffix("").as_posix().replace("/", ".")
-            if any(
-                (
-                    isinstance(node, ast.Name) and node.id == "STATE_US_SHORT_DIR"
-                ) or (
-                    isinstance(node, ast.Attribute) and node.attr == "STATE_US_SHORT_DIR"
-                ) or (
-                    isinstance(node, ast.Constant) and node.value == "STATE_US_SHORT_DIR"
-                )
-                for node in ast.walk(tree)
-            ):
-                state_modules.add(module)
-            if any(
-                isinstance(node, ast.Call)
-                and _called_name(node.func) in {"run_weekly_capstone", "_acquire_decision_lock"}
-                for node in ast.walk(tree)
-            ):
-                lock_modules.add(module)
-        self.assertTrue(state_modules, "no D state-root injection coordinate was derived")
-        self.assertTrue(lock_modules, "no D lock-root injection coordinate was derived")
-        resource_modules = state_modules | lock_modules
-        selected_by_module = {module: test_ids(module) for module in sorted(resource_modules)}
-        mapped_modules = {module for module, tests in selected_by_module.items() if tests}
-        self.assertEqual(
-            resource_modules - mapped_modules,
-            set(),
-            "D resource module has no isolated executable behavior coordinate",
-        )
-        selected = [
-            test for module in sorted(selected_by_module) for test in selected_by_module[module]
-        ]
-        state_root = ROOT / "state" / "us_short"
-        legacy_lock_root = (
-            ROOT / "provider_samples" / "us_short_weekly_capstone" / "_transaction_locks"
-        )
-        state_before = snapshot(state_root)
-        legacy_locks_before = snapshot(legacy_lock_root)
-        capstone = importlib.import_module("runners.us_short_weekly_capstone")
-        lock_binding_test = (
-            "tests.provider.test_us_short_weekly_capstone.CapstoneFakeChainTest"
-            ".test_decision_lock_is_bound_to_the_injected_state_root_and_reacquirable"
-        )
-        with mock.patch.object(
-            capstone,
-            "_decision_lock_path",
-            lambda ctx: (legacy_lock_root / f"{ctx.decision_date}.lock").resolve(),
-        ):
-            planted_run, planted_red, planted_resolved = (
-                LaneGuardRegistryConformance._run(lock_binding_test)
-            )
-        self.assertTrue(planted_resolved)
-        self.assertEqual(planted_run, 1)
-        self.assertGreater(
-            planted_red, 0,
-            "D planted repository-global lock root did not kill its binding test",
-        )
-
-        original_acquire = capstone._acquire_decision_lock
-        original_release = capstone._release_decision_lock
-        lock_contexts: dict[Path, Any] = {}
-        probing = False
-
-        def recording_acquire(ctx):
-            lock = original_acquire(ctx)
-            lock_contexts[lock.path] = ctx
-            return lock
-
-        def proving_release(lock):
-            nonlocal probing
-            original_release(lock)
-            if probing:
-                return
-            probing = True
-            try:
-                probe = original_acquire(lock_contexts[lock.path])
-                original_release(probe)
-            finally:
-                probing = False
-
-        with mock.patch.object(capstone, "_acquire_decision_lock", recording_acquire), \
-             mock.patch.object(capstone, "_release_decision_lock", proving_release):
-            for order in (selected, list(reversed(selected))):
-                for test_path in order:
-                    run, red, resolved = LaneGuardRegistryConformance._run(test_path)
-                    with self.subTest(resource_test=test_path):
-                        self.assertTrue(resolved)
-                        self.assertEqual((run, red), (1, 0))
-                self.assertEqual(
-                    snapshot(state_root), state_before,
-                    "a resource test changed repository state/us_short",
-                )
-                self.assertEqual(
-                    snapshot(legacy_lock_root), legacy_locks_before,
-                    "a resource test changed the legacy repository lock root",
-                )
-        self.assertEqual(set(self.NAMED_NON_CELLS), {
-            "wrong_requirement", "offline_document_corroboration",
-        })
 
 
 class LaneGuardRegistryConformance(unittest.TestCase):
@@ -2308,3 +2119,217 @@ class ConformanceTierPairingConformance(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class ResourceIsolationMatrix:
+    """The D axis: repository-shared state and lock roots must be injected, not borrowed.
+
+    Split out of ``ExecutableClosureMatrix`` as its own class so the lane's
+    module-per-worker parallelism can run it beside the mutation matrix instead of
+    behind it. Not one assertion changed: it still runs every derived resource test
+    in BOTH orders, because the reverse pass is what catches a test that only
+    passes because another test ran first, and it still snapshots the repository
+    roots after each order.
+    """
+
+    NAMED_NON_CELLS = ExecutableClosureMatrix.NAMED_NON_CELLS
+
+    def test_d_repo_shared_resource_tests_inject_state_and_lock_roots(self):
+        from tests.provider.us_short_private_test_root import (
+            temporary_provider_directory,
+        )
+
+        with tempfile.TemporaryDirectory() as clean_root:
+            clean_repo = Path(clean_root)
+            private_parent = clean_repo / "provider_samples"
+            self.assertFalse(private_parent.exists())
+            first = temporary_provider_directory(clean_repo)
+            first_path = Path(first.__enter__())
+            second = temporary_provider_directory(clean_repo)
+            second_path = Path(second.__enter__())
+            self.assertTrue(first_path.is_dir())
+            self.assertTrue(second_path.is_dir())
+            self.assertEqual((first_path / ".gitignore").read_text(encoding="utf-8"), "*\n")
+            self.assertEqual((second_path / ".gitignore").read_text(encoding="utf-8"), "*\n")
+            first.__exit__(None, None, None)
+            self.assertTrue(
+                private_parent.exists(),
+                "one overlapping test removed another test's private parent",
+            )
+            second.__exit__(None, None, None)
+            self.assertFalse(
+                private_parent.exists(),
+                "overlapping clean-checkout helpers left an ignored parent behind",
+            )
+            errors: list[BaseException] = []
+            first_entered = threading.Event()
+            allow_first_exit = threading.Event()
+            second_attempting = threading.Event()
+            second_entered = threading.Event()
+
+            def first_worker():
+                try:
+                    with temporary_provider_directory(clean_repo):
+                        first_entered.set()
+                        allow_first_exit.wait(timeout=5)
+                except BaseException as exc:
+                    errors.append(exc)
+
+            def second_worker():
+                try:
+                    second_attempting.set()
+                    with temporary_provider_directory(clean_repo):
+                        second_entered.set()
+                except BaseException as exc:
+                    errors.append(exc)
+
+            threads = [
+                threading.Thread(target=first_worker),
+                threading.Thread(target=second_worker),
+            ]
+            threads[0].start()
+            self.assertTrue(first_entered.wait(timeout=5))
+            threads[1].start()
+            self.assertTrue(second_attempting.wait(timeout=5))
+            self.assertFalse(
+                second_entered.wait(timeout=0.1),
+                "same-root test helpers were not serialized",
+            )
+            allow_first_exit.set()
+            for thread in threads:
+                thread.join(timeout=10)
+            self.assertFalse(any(thread.is_alive() for thread in threads))
+            self.assertTrue(second_entered.is_set())
+            self.assertEqual(errors, [])
+            self.assertFalse(
+                private_parent.exists(),
+                "serialized helper exits left an ignored parent behind",
+            )
+
+        def snapshot(root: Path) -> dict[str, bytes]:
+            if not root.exists():
+                return {}
+            return {
+                path.relative_to(root).as_posix(): path.read_bytes()
+                for path in root.rglob("*") if path.is_file()
+            }
+
+        def test_ids(module: str) -> list[str]:
+            suite = unittest.defaultTestLoader.loadTestsFromName(module)
+            found: list[str] = []
+
+            def collect(node):
+                if isinstance(node, unittest.TestSuite):
+                    for child in node:
+                        collect(child)
+                else:
+                    found.append(node.id())
+
+            collect(suite)
+            return found
+
+        state_modules: set[str] = set()
+        lock_modules: set[str] = set()
+        for path in (ROOT / "tests").rglob("test_*.py"):
+            if path.resolve() == Path(__file__).resolve():
+                continue
+            text = path.read_text(encoding="utf-8")
+            tree = ast.parse(text)
+            module = path.relative_to(ROOT).with_suffix("").as_posix().replace("/", ".")
+            if any(
+                (
+                    isinstance(node, ast.Name) and node.id == "STATE_US_SHORT_DIR"
+                ) or (
+                    isinstance(node, ast.Attribute) and node.attr == "STATE_US_SHORT_DIR"
+                ) or (
+                    isinstance(node, ast.Constant) and node.value == "STATE_US_SHORT_DIR"
+                )
+                for node in ast.walk(tree)
+            ):
+                state_modules.add(module)
+            if any(
+                isinstance(node, ast.Call)
+                and _called_name(node.func) in {"run_weekly_capstone", "_acquire_decision_lock"}
+                for node in ast.walk(tree)
+            ):
+                lock_modules.add(module)
+        self.assertTrue(state_modules, "no D state-root injection coordinate was derived")
+        self.assertTrue(lock_modules, "no D lock-root injection coordinate was derived")
+        resource_modules = state_modules | lock_modules
+        selected_by_module = {module: test_ids(module) for module in sorted(resource_modules)}
+        mapped_modules = {module for module, tests in selected_by_module.items() if tests}
+        self.assertEqual(
+            resource_modules - mapped_modules,
+            set(),
+            "D resource module has no isolated executable behavior coordinate",
+        )
+        selected = [
+            test for module in sorted(selected_by_module) for test in selected_by_module[module]
+        ]
+        state_root = ROOT / "state" / "us_short"
+        legacy_lock_root = (
+            ROOT / "provider_samples" / "us_short_weekly_capstone" / "_transaction_locks"
+        )
+        state_before = snapshot(state_root)
+        legacy_locks_before = snapshot(legacy_lock_root)
+        capstone = importlib.import_module("runners.us_short_weekly_capstone")
+        lock_binding_test = (
+            "tests.provider.test_us_short_weekly_capstone.CapstoneFakeChainTest"
+            ".test_decision_lock_is_bound_to_the_injected_state_root_and_reacquirable"
+        )
+        with mock.patch.object(
+            capstone,
+            "_decision_lock_path",
+            lambda ctx: (legacy_lock_root / f"{ctx.decision_date}.lock").resolve(),
+        ):
+            planted_run, planted_red, planted_resolved = (
+                LaneGuardRegistryConformance._run(lock_binding_test)
+            )
+        self.assertTrue(planted_resolved)
+        self.assertEqual(planted_run, 1)
+        self.assertGreater(
+            planted_red, 0,
+            "D planted repository-global lock root did not kill its binding test",
+        )
+
+        original_acquire = capstone._acquire_decision_lock
+        original_release = capstone._release_decision_lock
+        lock_contexts: dict[Path, Any] = {}
+        probing = False
+
+        def recording_acquire(ctx):
+            lock = original_acquire(ctx)
+            lock_contexts[lock.path] = ctx
+            return lock
+
+        def proving_release(lock):
+            nonlocal probing
+            original_release(lock)
+            if probing:
+                return
+            probing = True
+            try:
+                probe = original_acquire(lock_contexts[lock.path])
+                original_release(probe)
+            finally:
+                probing = False
+
+        with mock.patch.object(capstone, "_acquire_decision_lock", recording_acquire), \
+             mock.patch.object(capstone, "_release_decision_lock", proving_release):
+            for order in (selected, list(reversed(selected))):
+                for test_path in order:
+                    run, red, resolved = LaneGuardRegistryConformance._run(test_path)
+                    with self.subTest(resource_test=test_path):
+                        self.assertTrue(resolved)
+                        self.assertEqual((run, red), (1, 0))
+                self.assertEqual(
+                    snapshot(state_root), state_before,
+                    "a resource test changed repository state/us_short",
+                )
+                self.assertEqual(
+                    snapshot(legacy_lock_root), legacy_locks_before,
+                    "a resource test changed the legacy repository lock root",
+                )
+        self.assertEqual(set(self.NAMED_NON_CELLS), {
+            "wrong_requirement", "offline_document_corroboration",
+        })

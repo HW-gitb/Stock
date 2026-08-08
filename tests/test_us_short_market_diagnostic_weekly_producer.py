@@ -943,17 +943,19 @@ class WeeklyHostStageTest(unittest.TestCase):
         inputs = prod.next_week_inputs(self.store)
         self.assertEqual(4, inputs["calendar_week_index"])
 
-        target, prior = prod._target_week(
+        target, prior, prior_no_count = prod._target_week(
             {"weeks": [{"calendar_week_index": 3}]}, inputs, self.store, as_of_date=None
         )
         self.assertEqual(3, target)
         self.assertEqual(self.rows[1]["strategy"]["nav"], prior)
+        self.assertFalse(prior_no_count, "an ordinary predecessor is not a no_count week")
         self.assertNotEqual(self.rows[0]["strategy"]["nav"], prior)
 
-        target, prior = prod._target_week(
+        target, prior, prior_no_count = prod._target_week(
             {"weeks": [{"calendar_week_index": 1}]}, inputs, self.store, as_of_date=None
         )
-        self.assertEqual((1, None), (target, prior), "week 1 starts from the normalized capital")
+        self.assertEqual((1, None, False), (target, prior, prior_no_count),
+                         "week 1 starts from the normalized capital")
 
     def test_a_packet_ahead_of_the_clock_cannot_skip_a_gap(self) -> None:
         import engine.us_short_market_diagnostic_weekly_producer as prod

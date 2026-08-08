@@ -281,3 +281,65 @@ Knife3 lifecycle 同步改为机器自动激活 v1.1：启用前按连续 `paper
 **为什么在没有绿全量的情况下仍放行**：rule 3(a) 确实触发，但该门当前**结构性不可满足**——单模块 `test_us_short_discovery_conformance_executable` 实测 766.8s，逼近 860s 全量上限，而抬上限须用户明确批准。审查方因此不以「全量绿」放行，改用可枚举 bound：`grep` 出全部消费者后确认只有 `runners/us_short_market_diagnostic_weekly.py` 与 `engine/us_short_market_diagnostic_aggregator.py` 真正 import 诊断 lifecycle；`engine/us_short_weekend_lifecycle_stage.py` 与 `engine/us_short_lifecycle_store.py` 是**同名不同物**（soft-boost 生命周期），**生产选股路径未被触及**。替代 bound、残余风险与「本条修好后须补跑绑定指纹的绿全量」已追记进 `docs/system_risk_register.md::R-USSHORT-LANE-WALL-CLOCK-FLOOR-IS-ONE-UNRELATED-MODULE-AND-IT-DRIFTED-TO-652s`。
 
 **这一刀的最终状态**：刀 8—刀 10 的喂料与推进层加上本轮自愈全链已闭；诊断轨仍 `not_started`、无 receipt、无真实第 1 周，接线完成不等于启动。下一件与本轨无关的独立刀是 lane 墙钟地板。
+
+## 2026-08-08 追加：跳周后的窗口不对称——周记录加字段（schema 1.1.0），恢复周记录但不参与比较
+
+**改了什么**：`schemas/us_short_market_diagnostic_weekly_record.schema.json` 升 `1.0.0 → 1.1.0`，新增两个必填顶层字段 `windows_aligned` / `windows_misaligned_reason`；`engine/us_short_market_diagnostic.py` 钉新版本、校验两字段的双向不变式、并新增「窗口不对齐时任何基准不得 `joint_evaluable`」；`engine/us_short_market_diagnostic_local_adapter.py` 的 `adapt_benchmark_week` 把 `joint_evaluable` 收紧为「两边可评估**且**窗口对齐」，`build_weekly_record_from_local` 接收并落盘该事实；`engine/us_short_market_diagnostic_weekly_producer.py` 的 `_target_week` 连带回报「前一条已存记录是不是 `no_count`」，`build_no_count_record` 补写两字段。夹具与契约测试同步。
+
+**为什么改**：`R-USSHORT-26W-DIAG-THE-WEEK-AFTER-AN-UNLIVED-WEEK-COMPARES-TWO-WEEKS-OF-STRATEGY-WITH-DAYS-OF-BENCHMARK`，用户裁决取①。整周没人跑时账户不结算、挂起决策拖到下一周成熟，那一次结算覆盖两个日历周；于是恢复周的策略收益跨两周、基准只跨几天。三个候选口径的取舍与为什么②③被排除，只在 `docs/system_risk_register.md` 该条。
+
+**验证命令**：`.tools\run_unittest_with_repo_pythonpath.cmd`（10 模块焦点包 + 演练模块各一次）；全量 `.tools\full_pack_ledger.py run us_short`。
+
+**验证结果**：焦点包 `Ran 282 in 194.3s PASS`，演练模块 `Ran 29 in 182.6s PASS`。演练台 `--skipped-weeks` 端到端读出：恢复周 `windows_aligned=false`、四只基准 `benchmark_evaluable=true` 而 `joint_evaluable=false`、`raw_excess=null`，策略侧 `strategy_evaluable=true` 且 `weekly_return` 非空——**两边数字都留着，只是不配对**；再下一周恢复对齐并重新参与比较。5 植入 5 红、控制组先全绿；其中一条第一次跑成绿（被另一道检查先拦下），把 joint 先摘掉后才真正打在那道门上。
+
+**失效的旧结论**：register 里「① 需要一个字段而现有 schema 只有两个开关，所以只能由用户裁」——用户已裁，字段已加，该条已 resolved。另：周记录 `schema_version` 不再是 `1.0.0`，任何硬编码该版本的地方都要跟着走（本轮已扫：两个生产者、契约校验器、三处夹具）。
+
+**下一步注意事项**：①判据是「**前一条已存记录是不是 no_count**」而不是「这一周是不是恢复周」——这是类级的，两个 no_count 生产者都覆盖，连着两个 no_count 就跨三周也自动成立；改动这条判据前先想清楚它要覆盖的是哪一类。②代价是一次整周没人跑会让「可联合评估周数」少两周（26 周分母不变），设计 §5 的 20 周门因此更慢达成——方向是更保守。
+
+## 2026-08-08 追加：窗口对齐门审查 verdict（FAIL）
+
+**审查对象**：本工作树未提交态 11 文件，实施用户对 `R-USSHORT-26W-DIAG-THE-WEEK-AFTER-AN-UNLIVED-WEEK-...` 的裁决①（周记录加字段），周记录 schema 升 `1.0.0 → 1.1.0`，新增必填 `windows_aligned` / `windows_misaligned_reason`，`joint_evaluable` 由「两边可评估」收紧为「两边可评估且窗口对齐」。
+
+**成立的部分（已实读确认）**：判据是**账本派生**而非调用方断言——`_target_week` 顺带回报「前一条已存记录是不是 no_count」，两个 no_count 生产者与连续两个 no_count 的情形都覆盖；`joint_evaluable` 是聚合器实际读的字段，所以 §5 的 20 周门与逐周超额自动排除该周，不必改聚合器；no_count 周自己写 `aligned=true` 的取舍成立（它没有跨度可对齐，出局靠 `strategy_evaluable=false`，一个事实一个字段）；已知代价（一次整周没人跑使可联合评估周少两周、26 周分母仍为 26）与设计 §5「no_count 周保留在窗口分母」一致且已入册。
+
+**拦住的一条**：同一个字段两套强度不一的验证器。逐条记录那侧 `validate_weekly_record` 要求真布尔并强制与 reason 双向一致；窗口那侧 `_validate_rows` 只写 `bool(row.get("windows_aligned", True))`，既不 `_required` 也不查类型，`_validate_benchmark` 与 `adapt_benchmark_week` 的形参默认值同样是 `True`——三处默认都朝放行，而这道门的唯一用途是**排除**。探针在 `validate_window` 公开入口上实测：控制组（`aligned=False` 且 joint 为真）正确拒；删掉字段放行；写成字符串 `"false"` 放行；写成整数 `0` 才拒。今天不致命是因为聚合器喂进来的记录都过了逐条验证器，但 `validate_window` / `summarize_window` 是接受调用方自带 rows 的公开入口，防线不该建立在「调用方恰好来自另一条已校验的路」上。完整机制、Closure tests 与一条 Optional（schema 整文件重排版把两字段的新增淹在约 250 行格式噪声里）见 `docs/system_risk_register.md::R-USSHORT-26W-DIAG-THE-NEW-ALIGNMENT-GATE-DEFAULTS-TO-ALIGNED-WHEN-THE-FIELD-IS-ABSENT-OR-NOT-A-BOOLEAN`。
+
+**验证边界**：验收超集 `Ran 363 in 81.1s PASS receipt:df67c880f3460731658a1fbe`（13 模块）——包全绿而缺陷真实，说明这道门缺的正是「缺字段/错类型」这一类反向用例。全量按用户本轮指示未起，引用执行方 `parallel_lane_runner PASS 5613/5613 1147.1s`（超 860s 系用户单次授权、未进 ledger）。§6a 独立对抗 agent 未起（会话级规则禁用），补偿为审查方自写探针。
+
+## 2026-08-08 追加：全量墙钟 1147s → 837s（地板降 72%），瓶颈转移到串行尾巴
+
+**改了什么**：`tests/test_us_short_discovery_conformance.py`——`test_c` 把「有无冗余兄弟坐标」的判断从扫完全部候选之后**提到扫描之前**，扫描中 `hit` 一到即停；并抽出 `ResourceIsolationMatrix`（`test_d` 原样搬入）。新增 `tests/test_us_short_discovery_conformance_resources.py` 承载它。`docs/us_short_test_io_inventory_20260801.json` 按实重生成（新模块使 `module_count` 305→306）。**两处都没有改动任何断言**。
+
+**为什么改**：`R-USSHORT-LANE-WALL-CLOCK-FLOOR-IS-ONE-UNRELATED-MODULE-AND-IT-DRIFTED-TO-652s`，用户要求全量压回 600s 内。逐坐标的结论是 `hit ∧ (死掉 ∨ 有兄弟)`，兄弟只依赖已在手的数据；`test_d` 的「正序+逆序各跑一遍」里逆序是抓顺序依赖泄漏的，不能删，只能改打包。
+
+**验证命令**：`.tools\run_unittest_with_repo_pythonpath.cmd --timeout-seconds 700 <五模块验收包>`；`.tools\full_pack_ledger.py run us_short`。定位用 `--durations 25`（焦点跑必须显式传，全量记账路径才自动加）。
+
+**验证结果**：`test_c` 445.2s→114.4s；地板模块 675s→**183.8s**（占比 58.8%→22.0%）；验收包 `Ran 67 in 530.8s PASS`；全量 **`PASS 5613/5613`、计数门相等、837.0s**、已记账（此前连续三次 860s TIMEOUT）。**未达 600s。**
+
+**失效的旧结论**：①「这个模块慢多半是重复编译/解析」——实测否掉（加 AST 缓存 747→767s，已撤回）；②「按耗时重排候选能省」——实测否掉（445→450s，因为 break 几乎总在第一条候选就发生，已撤回）；③「地板是全量的瓶颈」——现在不是了，见下。
+
+**下一步注意事项**：瓶颈已转移到**串行尾巴**。所有模块耗时合计 **1306.3s**、墙钟 837s，并行效率仅 **1.56×**；前四名 `conformance_executable 183.8 + conformance_resources 178.4 + market_diagnostic_rehearsal 164.9 + market_diagnostic_aggregator 107.5 = 634.6s` 基本就是那条队。`serial_tail_modules` 把「源码或传递导入命中跨进程锁」的模块排成一队，**加 worker 无用**。方向：让这四个自身更快（其中 rehearsal 与 aggregator 属本诊断轨，是我方可动的面），或证明某些模块并不真的需要那把锁——**后者须极谨慎**，串行尾巴存在的理由正是防止并发把锁竞争读成假红。另注：新模块首次进 lane 时没有历史耗时记录，会被排到最后而撞上限；`.tools/state/parallel_module_durations.json` 记下之后即恢复正常。
+
+## 2026-08-08 追加：窗口对齐门的放行默认已收口（一个字段一份判据，三处默认值删净）
+
+**改了什么**：`engine/us_short_market_diagnostic.py` 新增 `_window_alignment(record)` 作为 `windows_aligned` / `windows_misaligned_reason` 的**唯一**读取器（两字段 `_required`、必须真 `bool`、理由双向一致），`validate_weekly_record` 与 `_validate_rows` 都只经它取值；`_validate_benchmark(windows_aligned)`、`adapt_benchmark_week(windows_aligned)`、`build_weekly_record_from_local(prior_week_was_no_count)` 三处默认值**删除改为必传**；`build_no_count_record` 显式写 `windows_aligned=True` 并注明理由。schema 文件按 HEAD 原文重新落最小增量（恢复紧凑单行风格）。
+
+**为什么改**：`R-USSHORT-26W-DIAG-THE-NEW-ALIGNMENT-GATE-DEFAULTS-TO-ALIGNED-WHEN-THE-FIELD-IS-ABSENT-OR-NOT-A-BOOLEAN`。同一个字段有强弱两套判据：记录侧要求真布尔并双向校验，窗口侧却是 `bool(row.get("windows_aligned", True))`——删掉字段、或写成字符串 `"false"`（`bool("false")` 为真），都能从公开入口 `validate_window` 走过去。这道门存在的唯一目的就是把一周排除出比较，它却在拿不到判据时选择放行。
+
+**验证命令**：`.tools\run_unittest_with_repo_pythonpath.cmd --timeout-seconds 400 <10 模块验收包>`；全量 `.tools\full_pack_ledger.py run us_short`。
+
+**验证结果**：验收包 `Ran 285 in 198.0s PASS receipt:dea5370b152e6c9e0f6abe53`。**5 植入 5 红、控制组先全绿**：窗口侧退回宽松读取 / 共用读取器不再 `_required` 字段 / 不再 `_required` 理由 / 某签名重新长出默认值 / 收紧把原有的「不对齐不得 joint」打歪。schema diff 由 +330/−65 收回到 **+5/−1**。
+
+**失效的旧结论**：上一节说「`joint_evaluable` 收紧后聚合器自动排除该周」仍成立，但那只在字段可信时成立——现在字段本身在两个入口都被强制校验，这句才真的闭合。
+
+**下一步注意事项**：**取「必传关键字」而不是「安全侧默认」是有意的**——安全侧默认仍会静默生效，忘了传的调用点不会有任何声响；删掉默认则当场 `TypeError`（本轮因此逼出 6 个测试调用点显式声明）。另配了结构守卫 `test_no_alignment_knob_carries_a_default_that_means_aligned`（AST 扫那三个签名），因为这类默认值在没人漏传时行为测试抓不到。
+
+## 2026-08-08 追加：窗口对齐门收口审查 verdict（PASS，已合入 master）
+
+**已闭的 Required**：`windows_aligned` 现在只有一个读取器 `engine/us_short_market_diagnostic.py::_window_alignment`——两个字段都走 `_required`、`windows_aligned` 必须是真 `bool`、`windows_misaligned_reason` 与它双向一致，记录入口与窗口入口都只经它。三处朝放行的形参默认值（`_validate_benchmark`、`adapt_benchmark_week`、`build_weekly_record_from_local`）**删除改为必传**，理由比「默认取安全侧」更强：安全默认仍会静默生效，删掉才会在漏传时当场 `TypeError`；另有 AST 守卫钉住这三个签名不得再长出默认值。Optional 也已闭——schema diff 由 +330/−65 收回 +5/−1。
+
+**审查方独立复验**：重跑上一轮的探针，三种坏形状全部转拒（缺字段 `is required`、字符串 `"false"` 与整数 `0` 同报 `must be boolean`——后者不再靠 `bool()` 的真假巧合），正控（合规 26 行窗口）仍 `ACCEPTED`。另补一条**防「严读掩盖」**的探针：更严的读取器现在会先因缺理由报错，可能掩盖 joint 门本身是否还活；给它一个**格式完全合规的不对齐周**并保留 `joint_evaluable=true`，仍被拒 `benchmarks.VTI joint_evaluable over misaligned comparison windows`，摘掉 joint 声明后重新被接受——两道门各自独立可证。
+
+**同轮的 D 轴模块拆分（本审查一并覆盖）**：`ResourceIsolationMatrix` 在 `tests/test_us_short_discovery_conformance.py` 里已是**普通类而非 TestCase**，由新模块 `tests/test_us_short_discovery_conformance_resources.py` 以 `(base, unittest.TestCase)` 承载——正是 `R-USSHORT-A-SHARED-FIXTURE-DRAGGED-ITS-OWNERS-TESTS-INTO-A-SECOND-MODULE` 立下的正确形状。实测发现数：旧模块 0 条 ResourceIsolation、新模块 1 条，**无双跑**；`docs/us_short_test_io_inventory_20260801.json` 只是 module_count 305→306、class0 +1 与路径摘要更新，**allowlist 未新增任何条目**（没有新的真树写入）。`tests/test_us_short_discovery_conformance_executable.py` 在 status 里显示 modified 但内容 diff 为空，属 CRLF churn，未带入内容改动。新模块原为 untracked，已由审查方纳入本次提交——否则 D 轴覆盖只存在于本机。
+
+**证据强度（本链首次达标）**：验收超集 `Ran 316 in 104.9s PASS receipt:1506d4fa0d7ec4c9f52afce3`，其指纹 `b1a940efb317` 与 ledger 全量 `PASS 5616/5616 829.2s` 同指纹——第一次有一次**绑定当前树态的记账绿全量**，故按 rule 4 未重跑。拆分把 lane 从 TIMEOUT/1147.1s 拉回 829.2s、重新落在 860s 上限内，`...LANE-WALL-CLOCK-FLOOR-...` 因此翻 partially resolved（仍未达用户要的 600s，瓶颈已转移到串行尾巴）。

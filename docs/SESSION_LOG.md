@@ -39,6 +39,43 @@
 - **Pre-Codex self-review**：A-F 已执行；matrix=三道守卫逐条 + 4+1 测试逐条；ripple=EffectiveL3Mode/IsHistoricalAsOf/receipt/EGS 后续链；negative=无 token 真实输出排除 price-basis failure + 静态顺序控制；provider/live=NOT_RUN；sub-agent=NOT_RUN；independent review/commit/push/merge=NOT_VERIFIED/NOT_PERFORMED。
 - **Docs-only door**：`Ran 66 tests in 1.084s` / `OK`，receipt `receipt:dbfdbffd88a54508b8b90628`。
 - **Next**：Claude Code：审查 `R-ASHORT-WEEKLY-SCREENING-GUARDRAIL-TESTS-NEED-A-LIVE-PRICE-CLOCK`
+## 2026-08-08 — Claude 审查 PASS（窗口对齐门收口 + D 轴拆模块把全量拉回上限内）
+
+- **Verdict/Action**: PASS，已提交并合入 master。`_window_alignment` 成为该字段唯一读取器（两字段必填、必须真 `bool`、理由双向一致），两个入口都只经它；三处放行默认值**删除改必传**而非改安全默认——安全默认仍会静默生效，删掉才当场 `TypeError`，另配 AST 守卫钉三个签名无默认值。同轮把 D 轴 resource-isolation 拆成独立模块，基类是普通类而非 TestCase，实测不重复发现；全量因此从 TIMEOUT/1147s 回到上限内。
+- **Required**: 无。`Register: already covered by R-USSHORT-26W-DIAG-THE-NEW-ALIGNMENT-GATE-DEFAULTS-TO-ALIGNED-WHEN-THE-FIELD-IS-ABSENT-OR-NOT-A-BOOLEAN`（resolved）与 `...LANE-WALL-CLOCK-FLOOR-...`（partially resolved），两条正文只在 `docs/system_risk_register.md`。新模块 `tests/test_us_short_discovery_conformance_resources.py` 原为 untracked，已由我纳入本次提交范围——否则 D 轴覆盖只存在于本机。
+- **Verify**: review-evidence:b59bade990e2。验收超集 `Ran 316 in 104.9s PASS receipt:1506d4fa0d7ec4c9f52afce3`，其指纹 `b1a940efb317` 与 ledger 全量 `PASS 5616/5616 829.2s` **同指纹**（本链首次拿到覆盖当前树态的记账绿全量，故按 rule 4 不重跑）。重跑上轮探针：缺字段→`is required`、`"false"`/整数 0→`must be boolean`，正控仍过；另补防「严读掩盖」一条：**合规的不对齐周**保留 joint 仍被拒 `joint_evaluable over misaligned comparison windows`，摘掉 joint 即恢复接受。拆分实测发现数旧模块 0 / 新模块 1，无双跑；io 清单 allowlist 未新增条目。
+- **Next**: Codex：执行
+
+## 2026-08-08 — Claude Code 窗口对齐门的放行默认已闭（一个字段一份判据）
+
+- **Verdict/Action**: 审查方点的是我新加那道门自己的方向，属实。同一字段有强弱两套判据：记录侧要求真布尔并双向校验，窗口侧只写 `bool(row.get(..., True))`——删掉字段、或写成字符串 `"false"`（`bool("false")` 为真）都能从公开入口 `validate_window` 走过去。新增 `_window_alignment` 作为**唯一**读取器（两字段必填、必须真 `bool`、理由双向一致），两个入口都只经它。三处放行默认值**删除改为必传**而非「默认取安全侧」——安全侧默认仍会静默生效，删掉才会当场 `TypeError`（本轮因此逼出 6 个调用点显式声明）。
+- **Required**: `R-USSHORT-26W-DIAG-THE-NEW-ALIGNMENT-GATE-DEFAULTS-TO-ALIGNED-WHEN-THE-FIELD-IS-ABSENT-OR-NOT-A-BOOLEAN` 连同那条 Optional 翻 resolved。机制、逐条 Closure 与取舍只在 `docs/system_risk_register.md`。
+- **Verify**: 七种坏形状各配 subTest 从 `validate_window` 转拒（字段缺失 / `"false"` / `"true"` / 整数 1 / 理由缺失 / 不对齐却无理由 / 对齐却带理由）；正控两条（合规窗口仍过、不对齐仍不得 joint、摘掉 joint 后重新被接受）。另加 AST 结构守卫钉那三个签名无默认值。**5 植入 5 红、控制组先全绿**。Optional：schema diff 由 +330/−65 收回 **+5/−1**。验收包 `Ran 285 in 198.0s PASS receipt:dea5370b152e6c9e0f6abe53`；全量 ledger `PASS 5616/5616 829.2s` 指纹 `b1a940efb317`。
+- **Pre-Codex self-review**: matrix=按 Required「不要只补那一行」枚举该字段的**全部**读取点与形参默认值：两个验证入口 + 三处 `= True`/`= False` 形参，逐个收口；连带扫 producer 侧 `build_no_count_record` 也显式声明。**选项 1（全量提速）本轮判为无诚实实现并未做**：`test_d` 是 223 测 × 正逆两遍，那 223 条正因「碰共享 state/lock 根」而入选，按定义全都可能有顺序依赖，唯一能砍的正序遍是在锁探针 patch 之下跑的、lane 自然顺序无此层——删即丢覆盖。register=一条 resolved。handoff=第九节。focused=见 Verify。full-lane=已记账 PASS。door=两守卫同跑。独立对抗 pass：不适用。
+- **Next**: 交另一工作树审查。
+
+## 2026-08-08 — Claude Code 全量墙钟 1147s → 837s，地板降 72%；未达用户要求的 600s
+
+- **Verdict/Action**: 用户指派把全量压到 600s 内。**没做到，如实说：837.0s**。做到的是把地板模块 675s → **183.8s**（占比 58.8%→22.0%），全量从连续三次 860s TIMEOUT 恢复成 **`PASS 5613/5613`、计数门相等、已记账**。两处改动**都不动任何断言**：①`test_c` 每坐标短路——它的结论是 `hit ∧ (死掉 ∨ 有兄弟坐标)`，而兄弟只依赖已在手的数据、不用跑测试，原实现却总把全部候选扫完（859 槽位/77 坐标）才兜底；②`test_d` 原样搬进独立模块，让它与变异矩阵分居两个 worker——它那 225s 来自「正序+逆序各跑一遍」，逆序是抓顺序依赖泄漏的，一行没删。
+- **Required**: `R-USSHORT-LANE-WALL-CLOCK-FLOOR-IS-ONE-UNRELATED-MODULE-AND-IT-DRIFTED-TO-652s` 翻 **partially resolved**：前两项 Closure 达成，第三项（600s）未达。**瓶颈已转移**，新事实写进该条。正文只在 `docs/system_risk_register.md`。
+- **Verify**: 该模块 675s→183.8s；全量 ledger `PASS 5613/5613 837.0s` 指纹 `70bb609b3758`。验收包 5 模块 `Ran 67 in 530.8s PASS receipt:e58296f05eda4c90e2d72d7a`。新增模块触发静态 I/O 清单红（305→306），按实重生成快照——唯一变动是 `module_path_sha256`，`classification_counts` 仅 class0 +1，`unallowlisted_write_findings` 仍空；没有绕过该守卫。
+- **Pre-Codex self-review**: matrix=先量后改，`--durations` 定位到 `test_c` 445s + `test_d` 210s = 85%，再逐个判「能不能在不动断言的前提下砍」。**两条猜测被实测否掉并已撤回**：AST 缓存（747→767s）、按耗时/曾杀死重排候选（445→450s，因为 break 几乎总在第一条候选）。剩余瓶颈量化写回：所有模块合计 1306.3s / 墙钟 837s = 并行效率 1.56×，即**串行尾巴**主导，前四名合计 634.6s；加 worker 无用。register=一条 partially resolved。handoff=第八节。focused=见 Verify。full-lane=已记账 PASS。door=两守卫同跑。独立对抗 pass：不适用。
+- **Next**: 交另一工作树审查。
+
+## 2026-08-08 — Claude 审查 FAIL（窗口对齐门：新门自己的默认方向朝放行）
+
+- **Verdict/Action**: FAIL，未提交。裁决①的实施本身对：判据由账本派生（`_target_week` 连带回报前一条记录是不是 no_count），不是调用方递进来的；`joint_evaluable` 收紧后聚合器自动排除该周、无需改聚合器；no_count 周自己写 `aligned=true` 的取舍成立（它没有跨度可对齐，出局靠 `strategy_evaluable=false`）；两个 no_count 生产者与连续两周的情形都覆盖到了。拦住的是这道新门在**窗口级验证器**上的默认方向：拿不到判据时放行。
+- **Required**: `R-USSHORT-26W-DIAG-THE-NEW-ALIGNMENT-GATE-DEFAULTS-TO-ALIGNED-WHEN-THE-FIELD-IS-ABSENT-OR-NOT-A-BOOLEAN`（P2）；一条 Optional（schema 整文件重排版淹没真实增量）同条记录。机制、探针、Required repair 与 Closure tests 只在 `docs/system_risk_register.md`。
+- **Verify**: review-evidence:816b5f0a36f1。验收超集 `Ran 363 in 81.1s PASS receipt:df67c880f3460731658a1fbe`（13 模块：诊断引擎 / 适配器 / 生产者 / 演练台 / 聚合器 / lifecycle / weekly advance·runner / 归因 / 总回报 / 26w schema / 两道门）——包全绿而缺陷真实。探针打 `validate_window` 公开入口，控制组先立：`aligned=False` 且 joint 为真 → 正确拒；随后**删掉该字段 → 放行**、写成字符串 `"false"` → 放行（`bool()` 强转）、写成整数 `0` → 拒。全量按用户本轮指示不起，引用执行方 `parallel_lane_runner PASS 5613/5613 1147.1s`（超 860s 系用户单次授权，未进 ledger）。
+- **Next**: Codex：修复
+
+## 2026-08-08 — Claude Code 跳周后窗口不对称已闭（周记录加字段，schema 1.1.0）
+
+- **Verdict/Action**: 用户裁决取①「给周记录加字段」，同轮实施。周记录 schema 升 `1.0.0 → 1.1.0`，加两个必填字段 `windows_aligned` / `windows_misaligned_reason`；`joint_evaluable` 由「两边可评估」收紧为「两边可评估**且**窗口对齐」，聚合器读的就是它，所以 §5 的 20 周门与逐周超额自动排除该周、无需改聚合器。判据**由账本派生**：`_target_week` 连带回报「前一条已存记录是不是 no_count」。**两件刻意没做**：no_count 周自己写 `aligned=true`（它没有跨度可对齐，出局靠 `strategy_evaluable=false`）；不推翻既有 `joint_evaluable` 语义，只新增「不对齐时不得有 joint」。
+- **Required**: `R-USSHORT-26W-DIAG-THE-WEEK-AFTER-AN-UNLIVED-WEEK-COMPARES-TWO-WEEKS-OF-STRATEGY-WITH-DAYS-OF-BENCHMARK` 翻 resolved。裁决、为什么②会让基准 26 周累计双算、③越出本轨，以及已知代价（一次整周没人跑使可联合评估周少两周、26 周分母不变）只在 `docs/system_risk_register.md`。
+- **Verify**: 演练台 `--skipped-weeks` 端到端：恢复周 `windows_aligned=false`、理由 `strategy_return_spans_a_no_count_week`、四基准 `benchmark_evaluable=true` 而 `joint_evaluable=false`、`raw_excess=null`，策略侧 `strategy_evaluable=true` 且 `weekly_return` 非空——两边数字都留着只是不配对；再下一周恢复对齐。契约侧另加双向断言。**5 植入 5 红、控制组先全绿**；一条首跑成绿（被另一道检查先拦），摘掉 joint 才真正打在那道门上。焦点包 10 模块 `Ran 282 in 192.5s PASS receipt:d1d37c64505fd1ef72f11cf4`，演练模块 `Ran 29 in 182.6s PASS`。
+- **Pre-Codex self-review**: matrix=判据定为「前一条已存记录是不是 no_count」而非「这一周是不是恢复周」——前者类级，两个 no_count 生产者都覆盖、连着两个也成立。连带扫 `schema_version` 全部硬编码出口（两生产者、契约校验器、三夹具）逐个改；批量替换误伤 summary 夹具与一处 `_target_week` 解包，已各自修正。register=一条 resolved。handoff=第七节。focused=见 Verify。**full-lane=用户明确授权本次突破 860s 上限跑到完**；ledger 硬编码 1..860 拒执行，故走 register 已有先例的载体 `parallel_lane_runner us_short 2400` → `PASS tests=5613 elapsed=1147.1s`、计数门 `5613=5613`；该次不进 ledger PASS 记录。door=两守卫同跑。独立对抗 pass：不适用（已配 5 植入）。
+- **Next**: 交另一工作树审查。
 
 ## 2026-08-08 — Claude 审查 PASS（诊断钟自愈全链：gap/fault 分家、两条 Optional 机制收口、读取链去重不放松）
 
