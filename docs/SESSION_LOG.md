@@ -2,7 +2,7 @@
 
 ## 2026-08-08 — Claude 复审 Pass-with-Required（融资过热刀1：五条腿闭，零周开口留给刀2）
 
-- **Verdict/Action**: Pass-with-Required，已提交并合入 master。五条腿逐条在**真实路径**复验通过（临时 registry 文件真翻 frozen，不 mock 强门）：计数/准入两个入口都要过 `evidence_counts_toward_clock`（抛错也算不通过）、verdict 任何 mode 都拒、pre-freeze `evidence_status` 已钉、越界常量下拒绝产出而不是产出一份说谎的 `production_unchanged=true`、冻结收据必须过共享门。四条 Optional 全闭。合入不代表融资过热可通电或时钟已起。
+- **Verdict/Action**: Pass-with-Required，已提交（c2aa `e0c5b1cd`）；**合入 master 未完成**——主树有另一窗口正在改的未提交 `docs/system_risk_register.md`，merge 会覆盖它，按 AGENTS 收口门 9 记阻塞而不 sweep。五条腿逐条在**真实路径**复验通过（临时 registry 文件真翻 frozen，不 mock 强门）：计数/准入两个入口都要过 `evidence_counts_toward_clock`（抛错也算不通过）、verdict 任何 mode 都拒、pre-freeze `evidence_status` 已钉、越界常量下拒绝产出而不是产出一份说谎的 `production_unchanged=true`、冻结收据必须过共享门。四条 Optional 全闭。合入不代表融资过热可通电或时钟已起。
 - **Required**: `R-ASHORT-MARGIN-OVERHEAT-KNIFE1-VALIDATE-STATE-ZERO-WEEK-FROZEN-CARVE-OUT`（P3，**刀 2 落地任何持久化 state 之前必须闭**）。上一轮那条五腿 R-ID 已 closed；新记两条 Optional。机制、复现与 Closure tests 只在 `docs/system_risk_register.md`。
 - **Verify**: review-evidence:3fdd8dcdbf2c。验收超集 `Ran 85 tests in 16.610s` / `OK`（`receipt:4257446223b2b329b9f7db70`）。九条植入八红一绿：八条各自精确点名对应用例，唯一全绿那条（地板换字面量 4）因契约值本就是 4 而无意义，非守卫缺口。反向控制：pre-freeze 默认路径与 `load_governance`/`stage_arm_ids`/`current_epoch_id` 均未被新门误伤。§6a agent 起 1 个，仅其零周开口一条经我真实 registry 复现后采信。全量不跑（rule 3 不触发）。超时原因:等 §6a agent 报告并复现其唯一有效发现。
 - **Next**: Codex：执行
