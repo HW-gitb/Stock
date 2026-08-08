@@ -567,3 +567,33 @@ python -B -c "<cProfile 单测>"                                        # ③ su
 **失效旧结论**：`R-USSHORT-26W-DIAG-OPEN-LIST-TRIAGE-20260807` 的「本轨还剩 N 条待办」自此不再适用——①8 条、②7 条、③2 条全部有终态，该 triage 条目已关闭。此后再引用剩余条数，须按当时 register 现状重新核，不得沿用 2026-08-07 的清单。
 
 **下一步注意**：本轨近端唯一的实质待建件是刀 5 后半段（ETF 股息 sidecar 生产器 + 挂进 capstone 已 gated 的 fetch 阶段 + 给 `settle_captured_week` 补 sidecar 绑定参数），三件必须同刀落，否则每周一键照跑而 VTI 永远升不到 `total_return_evaluable`。
+
+## 2026-08-08 追加：打 `test_us_short_weekly_capstone_soft_discovery`（用户选 (D)，3 倍杠杆兑现）
+
+**改了什么**：一处，测试侧。把这个类**自己早就写好、却只在一个方法里用**的 seam `_owned_private_root_git_check` 从 `with` 提到 `setUp`（用 `self.enterContext`），并把原来那处 `with` 去掉（已被 setUp 覆盖，同轮把块 dedent 回去）。另加一条钉住 seam 契约的对照测试。
+
+**为什么改**：整模块 cProfile（59.3s）按仓库函数归因，第一名是 `us_short_llm_theme_discovery_fetch_web.py:548 _gitignored`——**635 次调用、14.23s、占整模块 24%**，每次都 spawn 一个 `git check-ignore`（单次 17.6ms）。
+
+**为什么这样改是安全的（关键，别读成「为了快而放宽」）**：seam 在入口用**真 git** 证明 `self.temp_root` 确实被忽略，之后只为**该已证明根内部**的路径回答；根外一律委派回真实实现。**git 语义下被排除目录的整棵子树都被排除**，所以已证明被忽略的根内不可能存在「未被忽略」的路径——对根内答 True 是**真答案**。生产侧的 containment / 后缀 / 精确 slot 检查一条没动。真 git 探针由 635 次降到每测 1 次。
+
+**验证命令**
+```
+.tools\run_unittest_with_repo_pythonpath.cmd -v tests.provider.test_us_short_weekly_capstone_soft_discovery --durations 3
+.tools\run_unittest_with_repo_pythonpath.cmd --timeout-seconds 600 -v tests.test_us_short_discovery_conformance_resources
+python .tools\full_pack_ledger.py run us_short "<trigger>" "receipt:<token>" 860 -- discover -s tests -p "test_us_short*.py"
+```
+
+**验证结果**
+- 模块 **62.7s → 25.0s（−60%）**，且是在多了一条对照测试（51→52 测）之后；最慢一条 **16.0s → 2.9s**。
+- 地板模块 `test_us_short_discovery_conformance_resources` **199.5s → 130.0s（−35%）**——杠杆如预期（D 轴跑两遍 + lane 跑一遍）。
+- 对照：新增 `test_the_owned_root_seam_answers_only_for_the_root_it_proved`，自己重做真 git 证明、断言 owned root 内答 True 而**根外 `docs/`、`runners/` 仍答 False**。两条植入各转红、还原逐字节一致：P1 让 seam 对任何路径答 True → 该对照红；P2' 把 owned root 指向 tracked 的 `docs/` → **52 条全红**（证明那道真 git 证明承重）。
+- 全量 ledger 一次——结果见 SESSION_LOG 同日 entry。
+
+**失效的旧结论**
+- 「`_gitignored` 只占约 4%、免费折叠后收益在噪声内」——**已失效**。那是从**单条测试**的 cProfile 估的；整模块归因是 **24%**。教训：单测 profile 不能外推到模块，模块级归因才是决策依据。
+- 「这条只能在 fail-closed 门上做取舍」——**已失效**。取舍是假的：类里本来就有一个既安全又快的 seam，只是没被用起来。**先找这个类自己有没有现成答案，再去动共享代码**。
+
+**下一步注意事项**
+- 这个 seam 现在对**整个类**生效。往这个类里加测试时，若要断言「某路径不被忽略」，**路径必须在 `self.temp_root` 之外**（根内 seam 会答 True，且那是真答案）。
+- `test_the_owned_root_seam_answers_only_for_the_root_it_proved` 是这条边界的守卫，别删。
+- 首版 P2 植入又打歪一次（放宽一个本来就成立的断言 → 全绿）。**对照全绿=打歪，不是覆盖充分**——本会话第五次。

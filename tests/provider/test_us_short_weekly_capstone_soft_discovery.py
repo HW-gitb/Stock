@@ -121,6 +121,15 @@ class WeeklyCapstoneSoftDiscoveryStageTest(unittest.TestCase):
         ]
         for patcher in self.patches:
             patcher.start()
+        # Every test in this class publishes into `self.temp_root`, and each one
+        # was paying `git check-ignore` per publish-path check: 635 process spawns
+        # across the class, 24% of its wall clock. The seam below answers those
+        # from the owned root instead, after proving with real Git -- once -- that
+        # the root itself is ignored. That proof is what makes the answer TRUE and
+        # not merely convenient: Git excludes the whole subtree under an excluded
+        # directory, so nothing inside an ignored root can be un-ignored. Paths
+        # outside the owned root still go to the real implementation.
+        self.enterContext(self._owned_private_root_git_check())
 
     def tearDown(self) -> None:
         for patcher in reversed(self.patches):
@@ -674,40 +683,70 @@ class WeeklyCapstoneSoftDiscoveryStageTest(unittest.TestCase):
         )
         return ctx
 
-    def _assert_same_day_status_transition_reaches_terminal(self, initial: str, final: str) -> None:
-        with self._owned_private_root_git_check():
-            ctx = self._assert_conflict_transition(initial, final)
+    def test_the_owned_root_seam_answers_only_for_the_root_it_proved(self) -> None:
+        """The control for hoisting the git-check seam to the whole class.
 
-            pipeline = [
-                capstone.Stage(
-                    "soft_discovery", False, lambda _ctx: [],
-                    lambda run_ctx: [run_ctx.soft_discovery_receipt_path],
-                    stages.run_soft_discovery,
-                    failure_policy="zero_effect", output_policy="optional",
-                    checkpoint_policy="optional_result_only",
-                    failure_handler=capstone._degrade_soft_discovery_boundary,
-                ),
-                self._bridge_stage(),
-            ]
-            summary = capstone.run_weekly_capstone(
-                now_et=datetime(2026, 6, 15, 7, 0, 0),
-                private_root=self.state_dir / "private",
-                batch4_template_path=self.state_dir / "template.json",
-                account_state_path=self.state_dir / "account.json",
-                dry_run=False,
-                confirm_user_authorization=True,
-                stages=pipeline,
-                state_dir=self.state_dir,
-                sample_root=ROOT,
-                soft_discovery_enabled=True,
-            )
-            self.assertTrue(summary["emitted"])
-            result = next(
-                row["result"] for row in summary["stages"]
-                if row["name"] == "soft_discovery"
-            )
-            self.assertEqual(result["reason_code"], "SOFT_DISCOVERY_IMMUTABLE_CONFLICT")
-            self.assertEqual(result["boostable_ticker_count"], 0)
+        The seam is only allowed to answer for paths inside a root it proved
+        ignored with real Git, and answering True there is the TRUE answer, not a
+        convenient one: Git excludes the whole subtree under an excluded
+        directory. Everything else must still reach the real implementation, or
+        the class would have stopped testing the guard it exists to test.
+        """
+
+        import subprocess as _subprocess
+
+        # The proof the seam makes on entry, made again here in its own right.
+        probe = _subprocess.run(
+            ["git", "check-ignore", "-q", "--", str(self.temp_root)],
+            cwd=ROOT, stdout=_subprocess.PIPE, stderr=_subprocess.PIPE, check=False,
+        )
+        self.assertEqual(0, probe.returncode, "the owned root must really be gitignored")
+
+        self.assertTrue(web._gitignored(self.temp_root / "raw" / "probe.json"))
+        self.assertTrue(publish_policy._gitignored(self.state_dir / "probe.json", root=ROOT))
+
+        # Outside the owned root the seam must not answer at all. These two are
+        # tracked directories, so the real command says "not ignored" -- and if
+        # the seam had started answering everything, both would flip to True.
+        for outside in (ROOT / "docs" / "probe_not_ignored.json",
+                        ROOT / "runners" / "probe_not_ignored.json"):
+            with self.subTest(outside=outside.name):
+                self.assertFalse(web._gitignored(outside))
+                self.assertFalse(publish_policy._gitignored(outside, root=ROOT))
+
+    def _assert_same_day_status_transition_reaches_terminal(self, initial: str, final: str) -> None:
+        ctx = self._assert_conflict_transition(initial, final)
+
+        pipeline = [
+            capstone.Stage(
+                "soft_discovery", False, lambda _ctx: [],
+                lambda run_ctx: [run_ctx.soft_discovery_receipt_path],
+                stages.run_soft_discovery,
+                failure_policy="zero_effect", output_policy="optional",
+                checkpoint_policy="optional_result_only",
+                failure_handler=capstone._degrade_soft_discovery_boundary,
+            ),
+            self._bridge_stage(),
+        ]
+        summary = capstone.run_weekly_capstone(
+            now_et=datetime(2026, 6, 15, 7, 0, 0),
+            private_root=self.state_dir / "private",
+            batch4_template_path=self.state_dir / "template.json",
+            account_state_path=self.state_dir / "account.json",
+            dry_run=False,
+            confirm_user_authorization=True,
+            stages=pipeline,
+            state_dir=self.state_dir,
+            sample_root=ROOT,
+            soft_discovery_enabled=True,
+        )
+        self.assertTrue(summary["emitted"])
+        result = next(
+            row["result"] for row in summary["stages"]
+            if row["name"] == "soft_discovery"
+        )
+        self.assertEqual(result["reason_code"], "SOFT_DISCOVERY_IMMUTABLE_CONFLICT")
+        self.assertEqual(result["boostable_ticker_count"], 0)
 
     def test_same_day_unavailable_to_valid_reaches_terminal_with_bound_conflict_receipt(self):
         self._assert_same_day_status_transition_reaches_terminal("unavailable", "valid")
