@@ -421,7 +421,6 @@
         "market_regime",
         "volatility",
         "breadth",
-        "liquidity",
         "northbound"
       ],
       "properties": {
@@ -596,20 +595,6 @@
                   "enum": ["trading_sessions", "calendar_days", null]
                 }
               }
-            }
-          }
-        },
-        "liquidity": {
-          "type": "object",
-          "additionalProperties": false,
-          "properties": {
-            "market_turnover_amount": {
-              "$ref": "#/$defs/numberNullable",
-              "description": "Unit: CNY for A-shares."
-            },
-            "median_amount_20d": {
-              "$ref": "#/$defs/numberNullable",
-              "description": "Unit: CNY for A-shares."
             }
           }
         },

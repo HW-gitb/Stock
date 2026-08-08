@@ -63,10 +63,6 @@ def load_minimal_analysis_input_payload() -> dict[str, Any]:
             "consecutive_board_height": None,
             "csi300_pct_change_window": None,
         },
-        "liquidity": {
-            "market_turnover_amount": None,
-            "median_amount_20d": None,
-        },
         "northbound": {
             "net_flow_5d": None,
             "status": "unknown",
