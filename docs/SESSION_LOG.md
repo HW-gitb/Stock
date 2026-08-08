@@ -1,5 +1,35 @@
 # Session Log
 
+## 2026-08-08 — Claude 审查 PASS（a-short 序 14 breadth：完整性口径改按「应有什么」判）
+
+- **Verdict/Action**: PASS，已提交并合入 master。四条 Required 全闭，且第 ① 条没有做成硬 unavailable 我同意——停牌票本就没 bar，硬门会把每个真实交易日都判死，而做硬门就得发明「缺多少算异常」的阈值；改为报出 `universe_size`/`absent_stock_count` 并把 `status` 降为 `partial`，正是我 Required 里给的另一条路。执行方还自抓一处设计错（把窗口饱和折进 `status`，被自己的反向控制打红后改成独立布尔位）。
+- **Required**: 无。`R-ASHORT-BREADTH-UNIVERSE-IS-WHAT-ARRIVED-NOT-WHAT-EXISTS` 已 CLOSED；四条复核、强制腿与植入对照的形态说明见 `docs/system_risk_register.md`（单一来源，本处不复述）。
+- **Verify**: review-evidence:a203d33f7bcf。**用当初坐实的同一探针脚本重跑，四条全翻绿**：① `partial` + `universe_size=5`（修前 complete 无分母）；② height=`None`、reason=`contender_bar_missing_in_window`（修前报 2/真值 5）；③ B 股形态不再进 universe；④ `list_status=D` + 空 `delist_date` → universe 空。**强制腿**：完整输入仍 `complete`、计数与高度逐字段不变。焦点超集 74 OK（`receipt:a6d7e27a2fe369126346b7bd`；tracked numstat 与上轮逐字节相同，改动全在未跟踪引擎，故上轮 696 条对 schema/契约面的绿仍成立）。**全量按本轮指示不起**，按 rule 4 引用 `2580 OK` 且指纹与现算相同。
+- **Next**: Codex：执行
+
+## 2026-08-08 — Claude Code 修复（序 14 breadth：完整性口径改按「宇宙里应该有什么」判，四条 Required + 三条 Optional）
+
+- **Verdict/Action**: 修完，未 commit。四条 Required 判据全成立、全是我的缺陷。① `coverage` 增 `universe_size`/`absent_stock_count`，有票没到货就不再是 `complete`——**刻意不做成硬 unavailable**：停牌票本就没 bar，那样每个真实交易日都判死，而做硬门就得发明「缺多少算异常」的阈值，本刀不发明数字。② 高度改为要求**能决定最大值的那批票**窗口内每天都有行。③ B 股加 inclusion 式代码形态兜底。④ 真读 `list_status`，与 `delist_date` 双判据。三条 Optional 一并修。
+- **Required**: `R-ASHORT-BREADTH-UNIVERSE-IS-WHAT-ARRIVED-NOT-WHAT-EXISTS` → working-tree repaired，closed pending 审查。四条修法、Optional 处置与 Closure 见 `docs/system_risk_register.md`（单一来源，本处不复述）。
+- **Verify**: **审查方四条探针修后实跑**：① universe 5 / daily 2 → `partial`、`universe_size=5/eligible=2/absent=3`（修前 `complete` 且无分母）；② 候选票缺中间一根 bar → **height=None**（修前报 2、真值 5、complete）；③ 三行全标「主板」→ universe 只剩 `600000.SH`；④ `list_status=D` + 空 `delist_date` → universe 为空。**Closure 第五条反向控制**：正常完整输入仍 `complete`、reason=None、absent=0、计数与高度逐字段不变。focused 689 OK（`receipt:76306de64a2099297017ab19`）；full lane `PASS 2580 / 93.1s / parallel`。
+- **Pre-Codex self-review**: A-F checked。A：四条同属「口径取『来了什么』而非『应有什么』」一类，一并修；宇宙判据补成 board 字符串 + 代码形态 + `list_status` + `delist_date` 四道独立门，任一有洞由其余补。B：无旧形态残留。C：反向控制证明没为 fail-closed 把好日子判死。D：n/a。E：未动 CURRENT。F：契约=`None`（新字段只在引擎内部）、diff-check 干净。**自抓一处设计错**：Optional (i) 第一版把窗口饱和折进 `status`，反向控制当场打红，改成独立布尔位。matrix=宇宙分母+候选票完整性+B股形态+list_status+三Optional；register=updated；handoff=主 handoff 追加；focused=689 OK；full-lane=`PASS 2580 / 93.1s`；door=55 OK
+- **Next**: Claude Code：审查
+
+## 2026-08-08 — Claude 审查 FAIL（a-short 序 14 · #08 breadth：缺席的票在 fail-closed 里是隐形的）
+
+- **Verdict/Action**: FAIL，未提交。做对的不少：无硬编码涨跌幅、重复行 raise、契约侧 15 条新叶全判 `duplicate_or_display_audit`（没提前改仓位）、parity 改成 V14.3 反向 import 这台引擎（结构性而非靠测试记得）。挡住的是引擎自己 docstring 的头号保证被证伪：`eligible` 数的是「到货的行」而不是「宇宙里应有的票」，于是残缺的一天照样盖章 `complete`。
+- **Required**: `R-ASHORT-BREADTH-UNIVERSE-IS-WHAT-ARRIVED-NOT-WHAT-EXISTS`（P3，四条同类缺陷 + 四项 Required repair + 五项 Closure tests + 三条 Optional）。见 `docs/system_risk_register.md`（单一来源，本处不复述）。
+- **Verify**: review-evidence:10b6e708a46a。**四条我用自己的探针逐条复现**：① universe 5 只 / `daily` 只带 2 只 → 仍输出计数与 height 5、`status=complete`、coverage 无 universe 分母；② 某票窗口中间缺一根 bar → **height 报 2（真值 5）、complete、reason=None**；③ `900001.SH`/`200002.SZ` 标 `主板` 即进 universe；④ `list_status=D` + 空 `delist_date` 仍在 universe。焦点超集 696 OK（`receipt:ac22dfcac735334c64c9f50f`）；全量按 rule 4 引用 `2573 OK`、指纹与现算相同。§6a 起 1 个独立对抗 agent，其结论我独立坐实后才采信。超时原因:agent 与超集串行等待加一轮复现探针。
+- **Next**: Codex：修复
+
+## 2026-08-08 — Claude Code 执行（序 14 · #08 全市场 breadth 接线；涨停指数叶终态 unavailable）
+
+- **Verdict/Action**: 做完，未 commit。方案 7 件全做：抽纯函数 `engine/a_short_market_breadth.py`、全市场 PIT universe、字段一次性改名不并存双名、连板口径定死且缺数据一律 unavailable 不算 0、新增 required 的 `market_breadth_source`、涨停指数叶写死 `None` 并 `const` 钉死原因、即时消费者只做 display-only 的 `weekly.market_breadth_audit` 标 `duplicate_or_display_audit`（不提前改仓位）。
+- **Required**: 无。缺陷事实、已定口径、7 件落地、验收矩阵逐行与两条植入对照见 `docs/system_risk_register.md` 的 `R-ASHORT-MARKET-BREADTH-WAS-NULL-AT-THE-MARKET-LEVEL-WHILE-PER-NAME-LIMITS-EXISTED`（单一来源，本处不复述）。
+- **Verify**: **parity 做成结构性的而不是靠测试记得**——逐票涨跌停口径搬进新模块、V14.3 反过来 import 它，一个容差一个 streak 实现，V14.3 侧 `Ran 64 tests ... OK` 即证据。新模块 17 条覆盖验收每一行，含「20cm 票 +11% 不算涨停、5% 的 ST 票到 10.5 算涨停」证明按各票自己的 `stk_limit`。**植入 2/2**：universe 改回只含主板 → 两条转红；换成硬编码涨幅 → 连板长度转红。focused 682 OK（`receipt:d7dd485caed9a4661d5009e1`）；full lane `PASS 2573 / 101.5s / parallel`，计数门相等（2556 + 17 条新测试）。
+- **Pre-Codex self-review**: A-F checked。A：旧三名的所有出口（schema／producer／example／共享夹具／契约 inventory）全改，全仓 grep 无残留；新叶 15 条**全部**登记而非只登记被闸拦到的那一条。B：`market_context` 新 required 键连带补两处夹具。C：反向=缺一条 limit 行时三项 unavailable 而非 0、中间交易日缺失时不跨缺口拼连板。D：n/a。E：未动 CURRENT。F：两 schema 过 Draft7、example 通过校验、`py_compile` 过、契约 `static_contract_error()`=`None`（重封组 hash／全叶 hash／两预判据／runtime／output schema）。matrix=纯函数+universe+改名+连板口径+source_binding+指数终态+审计块+契约登记；register=new entry；handoff=主 handoff 追加；focused=682 OK；full-lane=`PASS 2573 / 101.5s / parallel`；door=55 OK
+- **Next**: Claude Code：审查
+
 ## 2026-08-08 — Claude 审查 PASS（a-short 序 13 · #08 市场级 liquidity 删除式退休）
 
 - **Verdict/Action**: PASS，已提交并合入 master。按用户 2026-08-05 的「删」执行，删得干净：schema 里整个 `market_context.liquidity` 移除、生产者块删掉并写明理由、不留 alias 不留占位。契约按新 schema 动态结算，没有为保住叶数留假叶。

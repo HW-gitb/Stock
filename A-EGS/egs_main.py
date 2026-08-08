@@ -1316,6 +1316,8 @@ def export_analysis_input(df_full, watch_df, tier1_final, latest_td, trade_dates
         csi300_pct_change_window = None
     else:
         csi300_pct_change_window = float(csi300_pct_change_window)
+    market_breadth_facts, market_breadth_source = _market_breadth_leaves(
+        market_context_facts.get("full_market_breadth"), price_data_through)
     moneyflow_coverage = dict(
         moneyflow_coverage
         or _default_moneyflow_coverage(
@@ -1444,13 +1446,15 @@ def export_analysis_input(df_full, watch_df, tier1_final, latest_td, trade_dates
                 "cash_reclaim_pct": None,
             },
             "breadth": {
-                "limit_up_count": None,
-                "limit_down_count": None,
+                **market_breadth_facts,
+                # Permanently unavailable and this is terminal, not a to-do: no
+                # published limit-up index is reachable on either channel.  Never
+                # substitute CSI300, the limit-up count, or a home-made basket.
                 "limit_up_index_pct_change": None,
-                "consecutive_board_height": None,
                 "csi300_pct_change_window": csi300_pct_change_window,
                 "csi300_window": _csi300_window_metadata(trade_dates),
             },
+            "market_breadth_source": market_breadth_source,
             # Market-level `liquidity` retired 2026-08-08 (queue item 13): both
             # fields were permanently null and had no consumer.  v14.2's regime
             # triggers do not include turnover, so wiring one would have invented
@@ -4103,6 +4107,73 @@ def _validate_moneyflow_observation(observation, requested_dates, semantics_sha2
     if observation.status != "complete" or observation.coverage_complete is not True:
         return False, "cached observation is not complete"
     return True, ""
+
+
+#: Terminal, not a to-do.  Both reachable channels were probed and neither can
+#: deliver a published limit-up index (Tushare: 0 hits across 7 publisher
+#: partitions / 10,506 indices; the in-house HiThink channel: 0 of 390 boards, and
+#: it exposes no quote endpoint at all, so buying access would not help).
+LIMIT_UP_INDEX_UNAVAILABLE_REASON = "no_reachable_published_index"
+
+_BREADTH_FACT_KEYS = ("full_market_limit_up_count", "full_market_limit_down_count",
+                      "full_market_consecutive_limit_up_height")
+
+
+def _market_breadth_leaves(breadth, price_data_through):
+    """Split a breadth observation into its published facts and its source binding.
+
+    Absent or malformed input yields nulls plus an `unavailable` binding -- the one
+    thing this must never do is publish a partial count as if it were the total.
+    """
+    def _unavailable(reason):
+        return ({key: None for key in _BREADTH_FACT_KEYS}, {
+            "status": "unavailable",
+            "universe_name": _breadth_universe_name(),
+            "requested_trade_dates": [],
+            "observed_trade_dates": [],
+            "eligible_stock_count": 0,
+            "usable_stock_count": 0,
+            "daily_source": "tushare.daily",
+            "limit_source": "tushare.stk_limit",
+            "price_basis": "unadjusted",
+            "effective_date": None,
+            "unavailable_reason": reason,
+            "limit_up_index_unavailable_reason": LIMIT_UP_INDEX_UNAVAILABLE_REASON,
+        })
+
+    if not isinstance(breadth, dict):
+        return _unavailable("breadth_producer_not_wired")
+    coverage = breadth.get("coverage")
+    if not isinstance(coverage, dict) or coverage.get("status") not in {"complete", "partial", "unavailable"}:
+        return _unavailable("breadth_observation_malformed")
+    facts = {key: breadth.get(key) for key in _BREADTH_FACT_KEYS}
+    for key, value in facts.items():
+        if value is not None and (isinstance(value, bool) or not isinstance(value, int) or value < 0):
+            return _unavailable("breadth_observation_malformed")
+    status = str(coverage["status"])
+    binding = {
+        "status": status,
+        "universe_name": str(coverage.get("universe_name") or _breadth_universe_name()),
+        "requested_trade_dates": [str(d) for d in (coverage.get("requested_trade_dates") or [])],
+        "observed_trade_dates": [str(d) for d in (coverage.get("observed_trade_dates") or [])],
+        "eligible_stock_count": int(coverage.get("eligible_stock_count") or 0),
+        "usable_stock_count": int(coverage.get("usable_stock_count") or 0),
+        "daily_source": "tushare.daily",
+        "limit_source": "tushare.stk_limit",
+        "price_basis": "unadjusted",
+        "effective_date": str(price_data_through) if status == "complete" and price_data_through else None,
+        "unavailable_reason": (None if status == "complete"
+                               else str(coverage.get("unavailable_reason") or "breadth_observation_incomplete")),
+        "limit_up_index_unavailable_reason": LIMIT_UP_INDEX_UNAVAILABLE_REASON,
+    }
+    if status == "unavailable":
+        facts = {key: None for key in _BREADTH_FACT_KEYS}
+    return facts, binding
+
+
+def _breadth_universe_name():
+    from engine.a_short_market_breadth import UNIVERSE_NAME
+    return UNIVERSE_NAME
 
 
 def _default_moneyflow_coverage(reference_date, requested_trade_dates=None, status="unavailable"):

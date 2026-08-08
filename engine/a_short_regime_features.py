@@ -35,7 +35,12 @@ import pandas as pd
 
 from engine.a_short_regime_ledger import is_canonical_date, daily_row_semantic_errors
 
-LIMIT_TOL = 0.999                 # close >= up_limit*0.999 counts as limit-up (caliber tolerance)
+# The per-stock limit caliber and the streak walk now live in
+# `engine/a_short_market_breadth.py` so the production producer can use the same
+# rule without importing this comparison-only module.  Importing them back here
+# rather than keeping a second copy is what makes parity structural: there is one
+# tolerance and one streak implementation, not two that must be kept equal.
+from engine.a_short_market_breadth import LIMIT_TOL, max_limit_streak as _shared_limit_streak
 MA_WINDOW = 20                    # pct_above_ma20 / csi1000_below_ma20 window
 MIN_PROMOTION_DENOM = 5           # promotion_rate denom floor; below → null + insufficient_sample
                                   # (governance says "denom too small → insufficient_sample, never
@@ -168,28 +173,12 @@ def _limit_events(daily: pd.DataFrame, sl: pd.DataFrame, dstr: pd.Series | None,
 
 
 def _max_limit_streak(up_by_date: dict, dates: list[str]) -> int:
-    """Max over stocks of consecutive limit-up days ending at the last date."""
-    if not dates:
-        return 0
-    streak_by_code: dict[str, int] = {}
-    best = 0
-    # walk dates backward from the end; a stock's streak is unbroken consecutive membership
-    alive = set(up_by_date.get(dates[-1], set()))
-    for code in alive:
-        streak_by_code[code] = 0
-    for d in reversed(dates):
-        ups = up_by_date.get(d, set())
-        still = set()
-        for code in alive:
-            if code in ups:
-                streak_by_code[code] += 1
-                still.add(code)
-        alive = still
-        if not alive:
-            break
-    if streak_by_code:
-        best = max(streak_by_code.values())
-    return int(best)
+    """Max over stocks of consecutive limit-up days ending at the last date.
+
+    Thin alias over the shared implementation; kept as a module-local name because
+    this module's own tests and readers refer to it.
+    """
+    return _shared_limit_streak(up_by_date, dates)
 
 
 def _pct_above_ma20(daily: pd.DataFrame, dstr: pd.Series, dates: list[str]) -> tuple:

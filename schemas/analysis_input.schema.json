@@ -421,6 +421,7 @@
         "market_regime",
         "volatility",
         "breadth",
+        "market_breadth_source",
         "northbound"
       ],
       "properties": {
@@ -562,21 +563,21 @@
           "type": "object",
           "additionalProperties": false,
           "properties": {
-            "limit_up_count": {
+            "full_market_limit_up_count": {
               "$ref": "#/$defs/nonNegativeIntegerNullable",
-              "description": "Unit: stocks."
+              "description": "Unit: stocks. FULL-MARKET caliber (main board + ChiNext + STAR + BSE A-shares), deliberately not the tradable main-board subset: this feeds a market-mood read, and v14.2's thresholds are calibrated to full-market magnitudes, so counting only the main board would make the same thresholds systematically loose. Null means the day could not be stated -- never zero."
             },
-            "limit_down_count": {
+            "full_market_limit_down_count": {
               "$ref": "#/$defs/nonNegativeIntegerNullable",
-              "description": "Unit: stocks."
+              "description": "Unit: stocks. Full-market caliber; see full_market_limit_up_count."
             },
             "limit_up_index_pct_change": {
               "$ref": "#/$defs/numberNullable",
-              "description": "Unit: percent, 1 means 1%."
+              "description": "Unit: percent, 1 means 1%. PERMANENTLY UNAVAILABLE and terminal: probes found no reachable published index on either channel (Tushare's 7 publisher partitions, 10,506 published indices: 0 hits; the in-house HiThink channel: 0 of 390 boards, and it exposes only catalogue and constituent endpoints, no quote endpoint, so paid access would not help). Must never be substituted with CSI300, the limit-up count, or a home-made equal-weight basket. Reason travels in market_breadth_source.limit_up_index_unavailable_reason."
             },
-            "consecutive_board_height": {
+            "full_market_consecutive_limit_up_height": {
               "$ref": "#/$defs/nonNegativeIntegerNullable",
-              "description": "Unit: boards."
+              "description": "Unit: boards. Longest run of consecutive closing limit-ups ending on price_data_through, over the full market. Null when the walk-back window is incomplete: a short window understates the run, and a quiet understatement is worse than an honest gap."
             },
             "csi300_pct_change_window": {
               "$ref": "#/$defs/numberNullable",
@@ -597,6 +598,60 @@
               }
             }
           }
+        },
+        "market_breadth_source": {
+          "type": "object",
+          "additionalProperties": false,
+          "description": "Where the full-market breadth facts came from and whether they may be believed. Kept beside `breadth` rather than inside it so a reader can tell 'nothing hit the limit today' from 'we could not tell'.",
+          "required": [
+            "status",
+            "universe_name",
+            "requested_trade_dates",
+            "observed_trade_dates",
+            "eligible_stock_count",
+            "usable_stock_count",
+            "daily_source",
+            "limit_source",
+            "price_basis",
+            "effective_date",
+            "unavailable_reason",
+            "limit_up_index_unavailable_reason"
+          ],
+          "properties": {
+            "status": {"enum": ["complete", "partial", "unavailable"]},
+            "universe_name": {"type": "string", "minLength": 1},
+            "requested_trade_dates": {"type": "array", "items": {"$ref": "#/$defs/date8"}},
+            "observed_trade_dates": {"type": "array", "items": {"$ref": "#/$defs/date8"}},
+            "eligible_stock_count": {"type": "integer", "minimum": 0},
+            "usable_stock_count": {"type": "integer", "minimum": 0},
+            "daily_source": {"type": "string", "minLength": 1},
+            "limit_source": {"type": "string", "minLength": 1},
+            "price_basis": {
+              "type": "string",
+              "enum": ["unadjusted"],
+              "description": "Limit prices only mean anything against unadjusted closes; an adjusted close would quietly stop matching up_limit."
+            },
+            "effective_date": {"$ref": "#/$defs/date8Nullable"},
+            "unavailable_reason": {"type": ["string", "null"], "minLength": 1},
+            "limit_up_index_unavailable_reason": {
+              "type": "string",
+              "const": "no_reachable_published_index",
+              "description": "Terminal, not a to-do. Pinned as a const so no future run can quietly claim the index became reachable without a reviewed slice changing this contract."
+            }
+          },
+          "allOf": [
+            {
+              "comment": "Only a complete read may claim an effective date and no reason; anything less must say why, so a partial count can never be read as the total.",
+              "if": {"properties": {"status": {"const": "complete"}}, "required": ["status"]},
+              "then": {
+                "properties": {
+                  "effective_date": {"type": "string", "pattern": "^[0-9]{8}$"},
+                  "unavailable_reason": {"type": "null"}
+                }
+              },
+              "else": {"properties": {"unavailable_reason": {"type": "string", "minLength": 1}}}
+            }
+          ]
         },
         "northbound": {
           "type": "object",

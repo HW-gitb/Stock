@@ -2732,6 +2732,40 @@
         }
       }
     },
+    "market_breadth_audit": {
+      "type": "object",
+      "description": "Item 14 full-market breadth, display only. It shows the limit-up/limit-down counts and the consecutive-board height with the caliber they were measured at; it cannot change Phase5 action, shares, cash allocation, veto, or production policy. Item 16 decides whether these numbers may move anything -- publishing them as a decision input now would be a fake production consumer hiding a dangling leaf.",
+      "additionalProperties": false,
+      "required": [
+        "status",
+        "universe_name",
+        "effective_date",
+        "full_market_limit_up_count",
+        "full_market_limit_down_count",
+        "full_market_consecutive_limit_up_height",
+        "limit_up_index_pct_change",
+        "limit_up_index_unavailable_reason",
+        "unavailable_reason",
+        "production_effect_enabled",
+        "comparison_only"
+      ],
+      "properties": {
+        "status": {"enum": ["complete", "partial", "unavailable"]},
+        "universe_name": {"type": "string", "minLength": 1},
+        "effective_date": {"type": ["string", "null"], "pattern": "^[0-9]{8}$"},
+        "full_market_limit_up_count": {"type": ["integer", "null"], "minimum": 0},
+        "full_market_limit_down_count": {"type": ["integer", "null"], "minimum": 0},
+        "full_market_consecutive_limit_up_height": {"type": ["integer", "null"], "minimum": 0},
+        "limit_up_index_pct_change": {
+          "type": "null",
+          "description": "Pinned null: no published limit-up index is reachable on either channel, and a substitute (CSI300, the limit-up count, a home-made basket) would be a fabricated series."
+        },
+        "limit_up_index_unavailable_reason": {"const": "no_reachable_published_index"},
+        "unavailable_reason": {"type": ["string", "null"], "minLength": 1},
+        "production_effect_enabled": {"const": false},
+        "comparison_only": {"const": true}
+      }
+    },
     "data_quality_shadow": {
       "type": "object",
       "description": "12A shadow-only data-quality comparison. It is a formal weekly comparison consumer but cannot change Phase5 action, shares, cash allocation, veto, or production policy.",

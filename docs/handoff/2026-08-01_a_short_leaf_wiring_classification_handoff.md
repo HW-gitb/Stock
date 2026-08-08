@@ -2843,3 +2843,115 @@ v14.2 的 regime 触发条件里没有成交额这一项，硬接等于在规格
 ### 下一步
 
 序 13 收口。队列剩序 14（breadth，「涨停指数」那一叶永久 unavailable、只能做部分）、序 15（volatility，前置已解方案 A），以及文末两把小刀（①触发周成绩对账 ②变化率族）；顺位 2 的融资过热门通电仍等你拍阈值与现金系数。
+
+## 2026-08-08 追加：执行序 14 —— 全市场 breadth 接线（涨停指数那一叶终态 unavailable）
+
+**改了什么（方案 7 件）**
+
+1. 新建纯函数模块 `engine/a_short_market_breadth.py`（零抓取零写盘）。逐票涨跌停价口径原本长在标 comparison-only 的 `a_short_regime_features.py` 里，production 不得 import 它、抄一份又必然漂移；故把 `LIMIT_TOL` 与 streak 走法搬进新模块，**V14.3 反过来 import 它**——一个容差、一个 streak 实现，**parity 是结构性的**而不是靠测试记得。V14.3 侧 64 条全绿即 parity 证据。
+2. `full_market_universe()` 从 PIT `stock_basic` 取四个 A 股板块，B 股与认不出板块的代码排除；**刻意不复用 `is_a_short_main_board()` 类的主板判定**——那回答的是「能不能买」，与「算不算我要量的这个市场」是两个问题。
+3. 字段一次性改名为 `full_market_limit_up_count` / `full_market_limit_down_count` / `full_market_consecutive_limit_up_height`，旧三名同刀删除、不并存。
+4. 连板口径：`close >= up_limit * 0.999` 才算封板（provider 四舍五入到两位，精确等值会漏真封板），按交易日回溯遇断即止，取当日最大。**当日任一实际交易票缺可用价或 `stk_limit` → 三项全 unavailable，绝不算 0**；历史窗口不完整 → 只有连板高度 unavailable，当日两项计数仍如实给出。
+5. 新增 required 的 `market_context.market_breadth_source`：requested/observed dates、eligible/usable 计数、universe 名、来源、`price_basis=unadjusted`（涨停价只在未复权价上有意义）、effective date；条件约束只有 `complete` 才允许有 effective date 且 reason 为 null。
+6. 涨停指数叶 producer 写死 `None`，理由 `no_reachable_published_index` 进 source binding，并在两处 schema 用 `const` 钉死。
+7. 即时消费者只做 `weekly.market_breadth_audit`（display-only，`production_effect_enabled=false` / `comparison_only=true`），新叶在 effect contract 登记 **`duplicate_or_display_audit`**——不提前改仓位，也不用假「生产消费」掩盖悬空；序 16 接状态机时再提升。
+
+**验证命令与结果**
+
+- focused 6 模块 `Ran 682 tests in 73.4s ... OK`（`receipt:d7dd485caed9a4661d5009e1`，bundle 已带）；V14.3 parity `Ran 64 tests ... OK`；两份 schema 过 Draft7、example 通过校验。
+- 新模块 17 条测试覆盖验收矩阵每一行；**植入对照 2/2**：universe 改回只含主板 → 两条转红；把逐票 `up_limit` 换成硬编码涨幅 → 连板长度那条转红。
+- effect contract：新增 15 条叶全部登记，删除旧三名，重封组 hash / 全叶 hash / 两个预判据 / runtime 常量 / output schema，`static_contract_error()`=`None`。**序 11 的新叶闸在真实新叶上第一次生效，如期拦下后登记放行。**
+
+**下一步注意事项**
+
+- **涨停指数不要再探**：两条通道都探尽了，自有通道连行情端点都没有，买权限也没用。终态 unavailable，别拿 CSI300、涨停家数或自造篮子冒充。
+- **真实 `stk_limit` 抓取未接**，需单独明确授权；本刀只做纯函数 + 接线 + 审计块。
+- 序 16 接状态机时，把这几条叶从 `duplicate_or_display_audit` 提升为 `m67_main_decision` 并补 mutation 证据。
+- 过程教训（本轮又踩一次）：**植入探针会覆盖 focused 收据**，跑完必须重建收据再起全量；另外改整份 schema JSON 不要用 `json.dump` 回写（会全文件 churn），要用编辑器做最小文本插入。
+
+## 2026-08-08 追加：序 14 独立审查 —— FAIL（缺席的票在 fail-closed 里是隐形的）
+
+### 判定
+
+**FAIL，未提交。** 引擎写得相当讲究，但它自己 docstring 的头号保证——「missing input may never be counted as zero」——被真实探针证伪。
+
+### 做对的部分（我验过）
+
+无硬编码 5/10/20/30%，全部走各票自己的 `up_limit`/`down_limit`，容差上下对称；重复 `(trade_date, ts_code)` 行 raise；NaN / 缺 `stk_limit` 行判不可用进而当日 unavailable；契约 `static_contract_error()=None`、叶 400 → 412、新增 15 条叶**全部**判 `duplicate_or_display_audit`（没提前改仓位）、未判定余量仍 225；「涨停指数」叶落 `producer_constant_null` 且原因以 `const` 钉死。parity 做成 V14.3 反向 import 这台引擎，是结构性的，比一条 parity 测试更可靠。
+
+### 挡住的四条（同一个类：宇宙与完整性按「到货的」算，不按「应有的」算）
+
+① `eligible` = 到货的行数，`usable != eligible` 只抓「来了但坏了」——universe 5 只、`daily` 只带 2 只时仍输出计数与 height 并盖章 `complete`，且 coverage 里没有 universe 分母可对照。② 窗口中间某票缺一根 bar（同日别票仍有行）时完整性检查不响，height 由 5 被截成 2 且仍 `complete`。③ B 股只靠 provider 的 `market` 字符串挡，代码形态没兜底，而本仓 `a_share_board_scope.py:27` 自己就写着这形态会漏。④ `list_status` 是 required 却从不读、`delist_date` 又可选，于是标着 `D`、`delist_date` 为空的名字仍在分母里。
+
+四条的 Required repair、Closure tests 与三条 Optional 见 register `R-ASHORT-BREADTH-UNIVERSE-IS-WHAT-ARRIVED-NOT-WHAT-EXISTS`。
+
+### 为什么定 P3 而不是 P2
+
+消费者是 display-only 审计块，生产者侧真实取数也还没接（register 已声明需单独授权），所以**今天没有任何产物受影响**。但序 16 会把这几条叶提升成仓位判据，那时同一缺陷直接落到仓位上——两个偏差还都同向：让过热的市场看起来更冷静。
+
+### 独立对抗 agent 的处置
+
+按 §6a 起了一个（新建 fail-closed 引擎）。这次它真跑了探针，报了三条；我用自己的探针把四条（含它没单列的 ④）逐条复现后才写进 register，没有直接采信。
+
+### 未覆盖维度与诚实边界
+
+真实 provider 下 Tushare 给 B 股的 `market` 取值未证实（无网络），故 ③ 的触发条件仍 NOT_VERIFIED、但「没有任何防线」已证实；`tests/test_a_short_market_breadth.py` 只读结构未逐条复核；停牌票带陈旧 bar 的情形未探（模块不读 `vol`/`amount`）；全量按 rule 4 引用执行方记账未重跑。
+
+## 2026-08-08 追加：序 14 审查 FAIL 修复 —— 完整性口径改按「应该有什么」判
+
+**改了什么（四条 Required + 三条 Optional）**
+
+1. **缺席不再隐形**：`coverage` 增 `universe_size` / `absent_stock_count`；宇宙里有票没到货 → status 不再是 `complete`（记 `universe_rows_absent`），计数与高度照发。**刻意不做成硬 unavailable**：停牌票本来就没 bar，那样每个真实交易日都会被判死；要做硬门就得发明「缺多少算异常」的阈值，本刀不发明数字。语义变成：**`complete` = 我看见了我以为该看见的每一只**。
+2. **候选票缺 bar → 高度 unavailable**：日级检查抓不到这种洞（那天对别的票仍完整），改为只要求**能决定最大值的那批票**（as_of 当日封板的）在窗口每天都有行。范围收窄到候选票，避免被无关停牌拖成永远 unavailable。
+3. **B 股加代码形态兜底，且是 inclusion 不是 exclusion**：新增 `is_a_share_code()`，按交易所白名单前缀 + 6 位纯数字收。`900*.SH` / `200*.SZ` 与畸形代码一律不进。口径不同故不复用 `is_a_share_main_board()`，但把它文件里已写明的那条 B 股教训接了过来。
+4. **真读 `list_status`**：`D` 出局，与 `delist_date` **两条独立判据同时要求「还在」**（退市行可能不带日期／状态可能没更新，各补对方的洞）。`P`（停牌）留在宇宙里，它的缺口由第 1 条如实报出。
+5. Optional 三条：连板填满窗口时置 `height_window_saturated=true` 明说是下界；晚于 `as_of` 的行显式 PIT 截断；`breadth_observation_absent` 改名 `breadth_producer_not_wired`。
+
+**为什么改**
+
+引擎自己 docstring 的头号保证「缺数据绝不算 0」被证伪：`eligible` 数的是「到货的行」而不是「宇宙里应有的票」，于是一次分页截断能同时把涨停数和连板高度做小、还盖章 complete——两个偏差同向，让过热的市场看起来更冷静。
+
+**验证命令与结果**
+
+- 审查方四条探针修后实跑：① `partial` + `universe_size=5/eligible=2/absent=3`（修前 complete 且无分母）；② height=None + `contender_bar_missing_in_window`（修前报 2、真值 5）；③ 三行全标主板 → universe 只剩 `600000.SH`；④ `status=D` 空日期 → universe 为空。
+- Closure 五条全做，第五条是**反向控制**：正常完整输入仍 `complete`、reason=None、absent=0、计数与高度逐字段不变——没为了 fail-closed 把好日子判死。
+- focused 6 模块 `Ran 689 tests in 70.6s ... OK`（`receipt:76306de64a2099297017ab19`）。
+
+**一处自己抓到的设计错误**
+
+Optional (i) 第一版我把「窗口饱和」折进了 `status`，反向控制当场打红——那会让「看不够远」和「面板短了」变成同一个词，读者两头都学不到。改成独立布尔位 `height_window_saturated`，`status` 保持干净。
+
+**下一步注意事项**
+
+- `complete` 的含义已收紧，序 16 消费这些叶时按新语义读：`partial` + `absent_stock_count>0` 表示面板不全，不是市场平静。
+- B 股在真实 provider 下的 `market` 取值仍未证实（无网络），但「没有任何防线」这条已闭——现在有代码形态这道独立门。
+
+## 2026-08-08 追加：序 14 复审 —— PASS（完整性口径改按「宇宙里应该有什么」判）
+
+### 判定
+
+**PASS，已提交并合入 master。** 四条 Required 全闭，我用当初坐实它们的**同一个探针脚本**重跑，四格全翻绿。
+
+### 四条的复核结果
+
+① universe 5 / `daily` 只带 2 → `status=partial`、`universe_size=5` 报了出来（修前 `complete` 且根本没有分母）；② 候选票窗口中间缺一根 bar → `height=None`、reason=`contender_bar_missing_in_window`（修前报 2、真值 5、还标 complete）；③ 三行全标「主板」时 B 股形态不再进 universe；④ `list_status='D'` + 空 `delist_date` → universe 为空。
+
+### 第 ① 条没做成硬 unavailable，我同意
+
+停牌票本来就没有 bar，做成硬门等于每个真实交易日都判死；而要做硬门就得发明「缺多少算异常」的阈值，那是本刀明确不该发明的数字。我在 Required 里给的正是「纳入 fail-closed 判据**或至少显式报出**」，选后者并把 `status` 降为 `partial`，消费者按 `status == "complete"` 判即可正确拒绝。
+
+### 强制腿与植入对照
+
+**强制腿**（我要的 Closure 第五条）：完整输入仍 `complete`、`reason=None`、`universe=eligible=usable=5`、计数与高度逐字段不变——没有为了 fail-closed 把好日子一起判死。**植入对照**：把 `universe_size = len(universe)` 改成等于到货数，被截断的那格立刻从 `partial` 回到 `complete`；形态上这是中和判据的分母而非挖掉分支，比标准「挖门」弱一档，我如实记在 register。
+
+### 验证范围与全量处置
+
+焦点超集 74 OK。本轮 tracked 文件的 numstat 与上一轮**逐字节相同**，改动全部落在未跟踪的引擎与其测试上，所以上一轮 696 条超集对 schema/契约面的绿仍然成立，没有重复付全模块税。**全量按本轮指示不起**，按 rule 4 引用执行方记账 `2580 OK` 且指纹与现算的代码态逐字相同；`static_contract_error()` 返回 `None`。
+
+### 未覆盖维度与诚实边界
+
+真实 provider 下 Tushare 给 B 股的 `market` 取值仍未证实（无网络），但现在即使该字段说谎，代码形态那道门也会拦住——四道独立门任一有洞由其余补。生产者侧真实取数仍未接（register 已声明需单独授权），故这三条叶在真周跑里目前仍是 `unavailable`。
+
+### 下一步
+
+序 14 收口（「涨停指数」那一叶为终态 unavailable，序 14 本就只能是 partial）。队列剩序 15（volatility，前置已解方案 A）与文末两把小刀；序 16 仍被推后，届时把这几条叶提升成仓位判据前，先回头看本条 register 的边界。
