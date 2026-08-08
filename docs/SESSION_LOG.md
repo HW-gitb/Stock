@@ -1,5 +1,11 @@
 # Session Log
 
+## 2026-08-08 — Claude 审查（US-short：本轮无可审对象，只落下一刀派工）
+
+- **Verdict/Action**: 无可审对象，不提交代码。`git status --short --untracked-files=all` 为空，`wt/us-short_r28` 与 master 同在 `1e521dd6`（上一轮我自己的派工 commit），triage 的 Required ①（8 条状态回写）尚未执行。按 AGENTS item 16c，没有可审实现时不得冒充 code-level PASS，故本轮不产生代码结论；唯一动作是把下一刀的派工写进 register。
+- **Required**: 无。`Register: already covered by R-USSHORT-26W-DIAG-OPEN-LIST-TRIAGE-20260807`（①待执行）与 `R-USSHORT-26W-DIAG-KNIFE7-FROZEN-FIRST-WEEK-IS-BARELY-CONSTRAINED`（本轮在其下追加 A 首周门 / B 前视门放行默认 / C KNIFE7 家族 5 条定点探针的三部分派工，含前置顺序与验收），正文只在 `docs/system_risk_register.md`。
+- **Verify**: review-evidence:77f36829fa38。冻结 scope 三条命令均为空输出（status / diff --name-only / diff --stat），两棵树 log 首条同为 `1e521dd6`，故**本轮代码面 NOT_VERIFIED——因为没有代码面**。落盘后 `tests.test_doc_governance_guard` + `tests.test_route_doc_ledger_status_consistency` `Ran 55 OK receipt:5043987f8dbf6a055c783e47`。
+- **Next**: Codex：执行
 ## 2026-08-08 — Claude 自修自审（CRLF 收据与产出它的写盘口）
 
 - **Verdict/Action**: 按用户令自修自审。不是只把那一份产物归一：根因是 `ConvertTo-Json` 在 Windows 产出 CRLF、调用方再补一个裸 LF，于是 `Write-M67Utf8NoBom` 写出的**每一份**收据/墓碑/清单都是 mixed，谁把它 track 进来谁就破 pin。归一化放进那道唯一的写盘口（三个调用点零改动全覆盖），并把这条不变式钉成断言。
