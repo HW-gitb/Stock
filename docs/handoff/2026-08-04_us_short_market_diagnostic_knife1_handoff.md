@@ -413,3 +413,52 @@ sed -n '1199,1225p' engine/us_short_market_diagnostic_attribution.py            
 **审查方植入 4 条全红、控制组先绿**：把「请求 URL」「裸 `apikey=`」「环境密钥字面量」「`"payload"` 键」分别喂给 `_scan_summary_safe`，均抛 `EtfCaptureError`，干净文本放行。该扫描跑在**序列化之后、落盘之前**，所以摘要里 `tracked_summary_contains_secrets: false` 是派生结论而非自报断言。tracked 摘要实扫：`https?://` 零命中；21 处价格/事件字段命中全是字段名清单，不是数据行；`git check-ignore` 确认 raw 根命中 `.gitignore:113`。
 
 **未覆盖**：§6a 独立对抗 agent 未起（会话级规则禁用），补偿为上述自写植入；未联网复跑真实取数，故摘要所载的 16 次调用与覆盖结论只按其自洽性与落盘证据审，不是重新观测。
+
+## 2026-08-08 追加：首周门 + 前视门放行默认 + KNIFE7 家族五条探针（一刀三部分）
+
+**改了什么**
+
+A（首周门）：`engine/us_short_market_diagnostic_start_receipt.py` 把 `frozen.weekday() >= 5` 改判 `!= _CANONICAL_DECISION_WEEKDAY`（新常量=0，周一），并给 `build_start_receipt` / `issue_start_receipt` 加**必传** `as_of_date`，`issued.date() > as_of` 即拒；`runners/us_short_market_diagnostic_weekly.py::open_clock` 解析今天并显式下传。
+
+B（前视门）：`as_of_date` 的 `= None` 默认从**六**个函数上删除改必传——`us_short_market_diagnostic.py` 的 `_validate_rows` / `validate_window` / `summarize_window` / `summarize_since_inception`，`_aggregator.py::publish_completed_market_diagnostic_window`，`_lifecycle.py::_register_from_records`。后两个是按整类扫出来的，派工没点名。
+
+C（探针）：零代码改动，只在 register 各条目里落探针记录。
+
+连带：fixture 锚点 `date(2026, 1, 2)`（周五）→ `date(2026, 1, 5)`（周一），因为旧 fixture 自己就是 A 要挡的非 canonical 锚点；随之更正四处随锚点走的字面量。测试侧共 ~30 处调用点显式声明 `as_of_date`。
+
+**为什么改**
+
+A：只挡周末从来不够。锚点决定全部 26 周的星期几（钟靠 +7 天推进），放一个周三进来，二十六周就全落在本轨从不决策的那天。`issued_at` 那道更要紧——这道门的**其余检查全部以 `issued_at` 为原点**（锚点不得早于它、不得远离它），所以一个 2099 的 `issued_at` 会把整条地平线一起搬走，重新合法化它们本要禁的回填；而这是本轨唯一不可逆的写。放在铸造时刻而非 `validate_start_receipt`：一份明年读回的 receipt 本就该比读者的钟旧，那时再判会把每一份能用的 receipt 都拒掉。
+
+B：下游写的是 `if as_of is not None`，所以 `= None` 默认**不是安全默认，是把门关掉**——对每一个没想到要传的调用方静默关掉，26 周纯未来日期就是这么发布出去的。改必传之后，真没有 as-of 的调用方必须把 `as_of_date=None` 说出口，读者和 grep 都看得见。
+
+**验证命令**
+
+```
+.tools\run_unittest_with_repo_pythonpath.cmd --timeout-seconds 700 discover -s tests -p "test_us_short_market_diagnostic*.py"
+python .tools\full_pack_ledger.py run us_short "<trigger>" "receipt:cc1779ba7f3d53507f8481f9" 860 -- discover -s tests -p "test_us_short*.py"
+python -B <scratchpad>\plant.py     # A1/A2/B1 三条植入对照，跑完逐字节还原
+python -B <scratchpad>\probe_c.py   # C 的四条实跑探针（第五条是静态）
+```
+
+**验证结果**
+
+- 验收包 `Ran 415 tests in 390.0s` / `OK` / `receipt:cc1779ba7f3d53507f8481f9`。焦点截止时间由 300s 提到 700s，理由是实测：同包改动前两次为 199.9s / 213.5s，本刀加了约 10 条测试且并发跑别的活，300s 处 `TIMEOUT`。
+- 植入三条各**精确**转红、还原逐字节一致：A1 首周门退回 `>= 5` → 首周门测试红；A2 短路 `issued_at` 前视门 → 通知测试红；B1 让 `validate_window` 的 `= None` 长回来 → AST 守卫与必传测试**双双**红。
+- C 五条探针全部「已消失」，各带基线对照（例：删 receipt 前 `calendar_week_count=10` 正常返回，删后三个入口全部拒绝，故拒绝来自门不是来自 store 坏了）。
+- 全量 ledger 一次（rule 3(a)：B 动了生产 runner 的调用点）——结果见 SESSION_LOG 同日 entry。
+
+**失效的旧结论**
+
+- 「`first_decision_date` 无 canonical 决策周校验、无 as_of、与 `issued_at` 无先后关系」——**部分早已失效**：不早于 `issued_at`（:281）与一年上限（:286）本刀开工前就在，本刀补的是 canonical 周与 `issued_at` 自身在未来两道。引用原文时别照抄「三道全无」。
+- 「26 连续日可发布为 26w-1-26」——已失效，`_require_weekly_cadence`（`lifecycle.py:376`）早已在，`gap != 7` 即拒。但它的反向用例**曾硬编码旧锚点**，fixture 一移就悄悄退化成「日期须递增」测试，本刀已改为从 fixture 推导。
+- 「KNIFE7 家族那 5 条还 open」——已失效，全部 resolved 并各带探针。
+- 「`build_start_receipt(diagnostic_epoch=..., completion_notification=..., first_decision_date=...)` 三参数即可」——已失效，第四个 `as_of_date` 必传。
+
+**下一步注意事项**
+
+- **`load_lifecycle_register` / `persist_settled_weekly_record` 的同名 `as_of_date=None` 默认本刀故意未动**：它们是公开读写口、runner 已各自解析今天下传，改必传要波及约 50 处测试调用点。这是权衡后划在范围外的，不是漏掉；真要收口须单独一刀。
+- **探针1 的闭合判据还剩可见性半条未做**：公开 report schema 无 `start_receipt_sha256` 与首/末决策日，拿到成绩单的审计者无从独立复核锚点。已在其条目内如实记着，等用户决定是否另起。
+- triage 条**仍不关闭**：Required ② 还剩 2 条未探（`KNIFE7B-CAPSTONE-ROOT-HAS-NO-PRODUCER`、`KNIFE6-CASH-LEG-NEVER-BOUND-TO-ITS-OWN-WEEK`），按派工不在本刀。
+- 新增测试后本包墙钟约 390s，已逼近 300s 默认门；下次跑这包记得带 `--timeout-seconds`。
+- 钟仍 `not_started`：本刀不开钟、不签发任何 receipt，A 的两道门在真开钟那天才第一次挡真东西。

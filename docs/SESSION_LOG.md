@@ -1,5 +1,13 @@
 # Session Log
 
+## 2026-08-08 — Claude 修复（US-short：首周门 + 前视门放行默认 + KNIFE7 家族五条探针，一刀三部分已收口）
+
+- **Verdict/Action**: 按 `R-USSHORT-26W-DIAG-KNIFE7-FROZEN-FIRST-WEEK-IS-BARELY-CONSTRAINED` 的审查方派工，A/B/C 三部分一轮做完。A 首周门补 canonical 决策周（周一）与「`issued_at` 自身不得在未来」；B 把前视门的 `as_of_date=None` 放行默认从**六**个签名上删除改必传（派工点名四个，另两个按整类扫出）；C 五条定点探针结论全是「已消失」。不开钟、不签发 receipt，钟仍 `not_started`。
+- **Required**: 无。正文只在 `docs/system_risk_register.md`（本条已翻 `resolved`，五条探针条目各自 resolved）。triage 条 Required ② 尚剩 2 条未探、**仍不关闭**。两件需用户知情：①`load_lifecycle_register` / `persist_settled_weekly_record` 的同名默认**故意未动**（公开读写口、runner 已下传今天、改必传波及约 50 处），是权衡不是漏；②探针1 闭合判据还剩「公开 report schema 增锚点与首末决策日」可见性半条未做。
+- **Verify**: 验收包 `Ran 415 / 390.0s / OK / receipt:cc1779ba7f3d53507f8481f9`；截止时间 300→700s，理由实测（同包改动前 199.9s / 213.5s，本刀加约 10 测且并发，300s 处 TIMEOUT）。全量 ledger 一次（rule 3(a)：B 动了生产 runner 调用点）`status=PASS tests=5622 / 815.3s / deadline=860s / mode=parallel`，`COUNT_GATE discovered=ran=5622`。植入三条各精确转红且还原逐字节一致：A1 首周门退回 `>=5`、A2 短路 `issued_at` 门、B1 让 `validate_window` 的 `=None` 长回来（AST 守卫与必传测试双双红）。
+- **Pre-Codex self-review**: A-F checked。A：先枚举整个缺陷类再动手——B 不只改派工点名的四个，grep 出同类共六个签名一次封净。B：连带面全查（26 处测试调用点、fixture 锚点由周五改周一、四处随锚点走的字面量）。C 反向：三条植入对照均转红；另抓到一条**已有**反向用例硬编码旧锚点、fixture 一移就退化成「日期须递增」测试，已改为从 fixture 推导。D：`issued_at` 门放在铸造而非校验时刻，理由写进 docstring。E 单态。F：探针/植入脚本 `python -B`，`git status` 无 untracked 残留。matrix=A2门/B6签名/C5探针/3植入；register=updated；handoff=updated；focused=415 OK；full-lane=`PASS 5622 / 815.3s`；door=见下条提交前 guard。
+- **Next**: 用户裁决 Required ② 剩余 2 条（`KNIFE7B-CAPSTONE-ROOT-HAS-NO-PRODUCER`、`KNIFE6-CASH-LEG-NEVER-BOUND-TO-ITS-OWN-WEEK`）是否另起。
+
 ## 2026-08-08 — Claude 审查 PASS（刀 5 捕获段回溯审查：真实 Massive 取数 + tracked 摘要）
 
 - **Verdict/Action**: PASS。对象是 `d4303f61`（2026-08-05 已并入 master，`891a` 工作树落后 125 个提交，故按 master 当前态审；该段文件此后未再改动）。真钱/密钥面三道门都实在：`confirm_user_authorization` 函数级门；raw 与 normalized 路径必须**正向**确认落在 `provider_samples/` 内，否则拒；产物已存在即拒覆盖；分页预算在**发请求之前**判。续页 URL 处理尤其稳——校验厂商 next_url 未改 host/path/symbol/adjusted 模式，剥掉来路 apiKey 再补授权那把。

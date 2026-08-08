@@ -131,6 +131,7 @@ def _authorized_store(testcase, rows):
         },
         first_decision_date=rows[0]["decision_date"],
         root=root,
+        as_of_date="20260731",
     )
     for row in rows:
         persist_settled_weekly_record(row, root=root)
@@ -147,6 +148,7 @@ class UsShortMarketDiagnosticAggregatorTest(unittest.TestCase):
                 publish_completed_market_diagnostic_window(
                     lifecycle_root=lifecycle_root,
                     output_root=output_root,
+                    as_of_date="20260731",
                 ),
             )
             self.assertFalse(output_root.exists())
@@ -175,7 +177,7 @@ class UsShortMarketDiagnosticAggregatorTest(unittest.TestCase):
         markdown = render_market_diagnostic_markdown(report)
         self.assertIn("当前 26 周区块", markdown)
         self.assertIn("Since-inception 表现", markdown)
-        self.assertNotIn("20260102", markdown)
+        self.assertNotIn("20260105", markdown)
         self.assertNotIn("100000.000000", markdown)
 
     def test_the_public_projection_refuses_free_text_and_unsafe_identifiers(self) -> None:
@@ -268,6 +270,7 @@ class UsShortMarketDiagnosticAggregatorTest(unittest.TestCase):
                 },
                 first_decision_date=rows[0]["decision_date"],
                 root=lifecycle_root,
+                as_of_date="20260731",
             )
             output_root = Path(td) / "market_diagnostic_26w"
             for row in _weekly_rows()[:25]:
@@ -277,12 +280,14 @@ class UsShortMarketDiagnosticAggregatorTest(unittest.TestCase):
                 publish_completed_market_diagnostic_window(
                     lifecycle_root=lifecycle_root,
                     output_root=output_root,
+                    as_of_date="20260731",
                 ),
             )
             persist_settled_weekly_record(_weekly_rows()[25], root=lifecycle_root)
             result = publish_completed_market_diagnostic_window(
                 lifecycle_root=lifecycle_root,
                 output_root=output_root,
+                as_of_date="20260731",
             )
             self.assertEqual("published", result["status"])
             self.assertEqual("26w-1-26", result["window_id"])
@@ -293,6 +298,7 @@ class UsShortMarketDiagnosticAggregatorTest(unittest.TestCase):
                 publish_completed_market_diagnostic_window(
                     lifecycle_root=lifecycle_root,
                     output_root=output_root,
+                    as_of_date="20260731",
                 )["status"],
             )
 

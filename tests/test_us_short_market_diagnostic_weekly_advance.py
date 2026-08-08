@@ -71,6 +71,7 @@ class _WeeklyAdvanceFixture:
             },
             first_decision_date=self.packet["weeks"][0]["decision_date"],
             root=self.store,
+            as_of_date="20260731",
         )
 
     def _fetch(self, vendor=None, **overrides):

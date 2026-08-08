@@ -506,7 +506,7 @@ def _validate_benchmark(
 def _validate_rows(
     rows: Sequence[Mapping[str, Any]],
     *,
-    as_of_date: str | None = None,
+    as_of_date: str | None,
     expected_weeks: int | None = WINDOW_WEEKS,
     require_canonical_window: bool = True,
 ) -> dict[str, Any]:
@@ -708,8 +708,16 @@ def validate_weekly_record(
     }
 
 
-def validate_window(rows: Sequence[Mapping[str, Any]], *, as_of_date: str | None = None) -> dict[str, Any]:
-    """Validate and return the canonical identity of one 26-week window."""
+def validate_window(rows: Sequence[Mapping[str, Any]], *, as_of_date: str | None) -> dict[str, Any]:
+    """Validate and return the canonical identity of one 26-week window.
+
+    ``as_of_date`` has no default on purpose. The look-ahead check below reads
+    ``if as_of is not None``, so a default of ``None`` never made the gate safe --
+    it switched the gate off, silently, for every caller that did not think to
+    pass one, and twenty-six weeks of pure future dates published cleanly that
+    way. A caller that genuinely has no as-of must now say ``as_of_date=None``
+    out loud, where a reader and a grep can both see it.
+    """
 
     result = _validate_rows(rows, as_of_date=as_of_date)
     return {key: result[key] for key in ("window_id", "start_week", "end_week", "diagnostic_epoch")}
@@ -1033,7 +1041,7 @@ def _performance_metrics(
 
 
 def summarize_window(
-    rows: Sequence[Mapping[str, Any]], *, as_of_date: str | None = None
+    rows: Sequence[Mapping[str, Any]], *, as_of_date: str | None
 ) -> dict[str, Any]:
     """Build a schema-shaped 26-week summary from already supplied weekly records."""
 
@@ -1073,7 +1081,7 @@ def summarize_window(
 
 
 def summarize_since_inception(
-    rows: Sequence[Mapping[str, Any]], *, as_of_date: str | None = None
+    rows: Sequence[Mapping[str, Any]], *, as_of_date: str | None
 ) -> dict[str, Any]:
     """Build de-identified performance metrics from week 1 through the latest supplied week.
 

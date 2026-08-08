@@ -111,6 +111,7 @@ def open_clock(
     first_decision_date: str,
     root: Path = DEFAULT_ROOT,
     dry_run: bool = False,
+    as_of_date: str | None = None,
 ) -> dict[str, Any]:
     """Record the design-completion decision that opens the 26-week clock.
 
@@ -118,8 +119,13 @@ def open_clock(
     because the write is exclusive and irreversible: one mistyped date otherwise
     anchors the clock on the wrong week forever. A dry run that only echoed its
     inputs back would accept the exact typo it exists to catch.
+
+    Resolving today's date is the runner's job; the engine below takes it as a
+    required argument so the check cannot be switched off by omission.
     """
 
+    if as_of_date is None:
+        as_of_date = _date.today().strftime("%Y%m%d")
     if dry_run:
         text = _read_notification(notification_path)
         try:
@@ -132,6 +138,7 @@ def open_clock(
                     "notification_text": text,
                 },
                 first_decision_date=first_decision_date,
+                as_of_date=as_of_date,
             )
         except DiagnosticStartReceiptError as exc:
             raise MarketDiagnosticWeeklyRunnerError(str(exc)) from exc
@@ -157,6 +164,7 @@ def open_clock(
                 "notification_text": text,
             },
             first_decision_date=first_decision_date,
+            as_of_date=as_of_date,
             root=root,
         )
     except DiagnosticStartReceiptError as exc:

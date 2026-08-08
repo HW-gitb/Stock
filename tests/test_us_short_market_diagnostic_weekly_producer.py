@@ -117,6 +117,7 @@ def _open_clock(root: Path, *, epoch: str, first_decision_date: str) -> None:
         },
         first_decision_date=first_decision_date,
         root=root,
+        as_of_date="20260731",
     )
 
 

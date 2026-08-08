@@ -408,7 +408,7 @@ def _record_files(root: Path) -> set[str]:
 
 
 def _register_from_records(
-    records: list[dict[str, Any]], *, as_of_date: str | None = None,
+    records: list[dict[str, Any]], *, as_of_date: str | None,
     start_receipt_digest: str | None = None,
     records_already_validated: bool = False,
 ) -> dict[str, Any]:

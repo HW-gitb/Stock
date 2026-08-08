@@ -51,6 +51,7 @@ def _open_clock(root, row):
         },
         first_decision_date=row["decision_date"],
         root=root,
+        as_of_date="20260731",
     )
 
 
@@ -91,7 +92,7 @@ class UsShortMarketDiagnosticLifecycleTest(unittest.TestCase):
             outputs = [persist_settled_weekly_record(row, root=root) for row in rows[:8]]
             register = load_lifecycle_register(root)
             register_bytes = (root / "lifecycle_register.json").read_bytes()
-            weekly_bytes = (root / "weeks" / "20260102" / "weekly_record.json").read_bytes()
+            weekly_bytes = (root / "weeks" / "20260105" / "weekly_record.json").read_bytes()
 
             self.assertEqual("pending", outputs[0]["v1_1_reminder"]["status"])
             self.assertEqual("active", outputs[3]["v1_1_reminder"]["status"])
@@ -110,7 +111,7 @@ class UsShortMarketDiagnosticLifecycleTest(unittest.TestCase):
             self.assertIn("连续可评估周=8", render_weekly_report_reminder(register))
             self.assertIn("v1.1 归因", outputs[-1]["weekly_report_reminder"]["text"])
             self.assertEqual(register_bytes, (root / "lifecycle_register.json").read_bytes())
-            self.assertEqual(weekly_bytes, (root / "weeks" / "20260102" / "weekly_record.json").read_bytes())
+            self.assertEqual(weekly_bytes, (root / "weeks" / "20260105" / "weekly_record.json").read_bytes())
 
     def test_lifecycle_and_week_validation_delegate_to_single_window_source(self) -> None:
         row = copy.deepcopy(_weekly_rows()[0])
@@ -120,7 +121,7 @@ class UsShortMarketDiagnosticLifecycleTest(unittest.TestCase):
             canonical = window_containing_week(1)
             row["window_id"] = canonical["window_id"]
             identity = validate_weekly_record(row)
-            register = lifecycle._register_from_records([row])
+            register = lifecycle._register_from_records([row], as_of_date="20260731")
 
             self.assertEqual(canonical, window_for_week(13))
             self.assertEqual(canonical["window_id"], identity["window_id"])
@@ -216,10 +217,10 @@ class UsShortMarketDiagnosticLifecycleTest(unittest.TestCase):
             _open_clock(root, row)
             with self.assertRaises(MarketDiagnosticLifecycleError):
                 persist_settled_weekly_record(row, root=root, as_of_date="20260101")
-            persist_settled_weekly_record(row, root=root, as_of_date="20260102")
+            persist_settled_weekly_record(row, root=root, as_of_date="20260105")
             with self.assertRaises(MarketDiagnosticLifecycleError):
                 load_lifecycle_register(root, as_of_date="20260101")
-            self.assertEqual(1, load_lifecycle_register(root, as_of_date="20260102")["calendar_week_count"])
+            self.assertEqual(1, load_lifecycle_register(root, as_of_date="20260105")["calendar_week_count"])
 
 
 class OrphanRecoveryTest(unittest.TestCase):

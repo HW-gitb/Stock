@@ -135,7 +135,7 @@ class UsShortMarketDiagnosticAttributionTest(unittest.TestCase):
     def test_target_exposure_uses_rule_constraints_not_actual_nav(self) -> None:
         target = {
             "status": "evaluable",
-            "as_of_date": "20260102",
+            "as_of_date": "20260105",
             "carried_holdings_exposure": 0.7,
             "new_order_exposure": 0.6,
             "cash_capacity_exposure": 0.9,
@@ -154,7 +154,7 @@ class UsShortMarketDiagnosticAttributionTest(unittest.TestCase):
     def test_cash_observation_after_decision_date_is_rejected(self) -> None:
         rows = _weekly_rows()[:2]
         cash = self._cash(rows)
-        cash[1]["available_at"] = "2026-01-03T08:00:00Z"
+        cash[1]["available_at"] = "2026-01-06T08:00:00Z"
 
         with self.assertRaises(AttributionError):
             build_attribution_input(

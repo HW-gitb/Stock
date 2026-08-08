@@ -88,6 +88,11 @@ _DATE8 = re.compile(r"^[0-9]{8}\Z")
 _SHA256 = re.compile(r"^[0-9a-f]{64}\Z")
 # A frozen week must follow the decision and stay within a horizon somebody can act on.
 _MAX_DAYS_AHEAD = 366
+# This track's decision week is a Monday, and the whole 26-week clock is derived
+# from the anchor by adding seven days -- so the anchor's weekday IS the clock's.
+# Refusing only Saturday and Sunday let a Wednesday through, which anchors every
+# one of the twenty-six weeks on a day this track never decides on.
+_CANONICAL_DECISION_WEEKDAY = 0
 
 
 class DiagnosticStartReceiptError(ValueError):
@@ -201,18 +206,36 @@ def build_start_receipt(
     diagnostic_epoch: str,
     completion_notification: Mapping[str, Any],
     first_decision_date: str,
+    as_of_date: str,
 ) -> dict[str, Any]:
-    """Assemble one receipt. The caller supplies the decision; the digests are earned."""
+    """Assemble one receipt. The caller supplies the decision; the digests are earned.
+
+    ``as_of_date`` is required, and required here rather than in
+    ``validate_start_receipt``: minting is the moment a decision is claimed to
+    have been made, so that is the only moment at which "the notification has not
+    happened yet" is answerable. A receipt read back next year is legitimately
+    older than the reader's clock, and re-judging it then would refuse every
+    receipt that ever worked.
+    """
 
     notification = _mapping(completion_notification, "completion_notification")
     for field in ("issued_at", "issuer", "notification_text"):
         if field not in notification:
             _fail(f"completion_notification.{field} is required")
-    _aware_instant(notification["issued_at"], "completion_notification.issued_at")
+    issued = _aware_instant(notification["issued_at"], "completion_notification.issued_at")
     text = notification["notification_text"]
     if not isinstance(text, str) or len(text) < 16:
         _fail("completion_notification.notification_text must be the notification itself")
     _date8(first_decision_date, "first_decision_date")
+    # A notification dated in the future has not been issued. Every other check
+    # here reasons FROM issued_at -- the anchor may not precede it, and may not
+    # run away from it -- so a future issued_at moves the whole horizon with it
+    # and re-legalizes exactly the back-fill those checks exist to refuse.
+    if issued.date() > _date8(as_of_date, "as_of_date"):
+        _fail(
+            "completion_notification.issued_at is in the future; a decision that has not been "
+            "made yet cannot authorize a clock"
+        )
 
     window = window_containing_week(1)
     receipt = {
@@ -285,8 +308,11 @@ def validate_start_receipt(
         )
     if (frozen - issued).days > _MAX_DAYS_AHEAD:
         _fail("first_calendar_week.decision_date is too far after the completion notification")
-    if frozen.weekday() >= 5:
-        _fail("first_calendar_week.decision_date falls on a weekend; a decision week is a trading week")
+    if frozen.weekday() != _CANONICAL_DECISION_WEEKDAY:
+        _fail(
+            "first_calendar_week.decision_date is not a canonical decision week for this track; "
+            "the anchor sets the weekday of all twenty-six weeks and this track decides on Mondays"
+        )
     expected_window = window_containing_week(first["calendar_week_index"])["window_id"]
     if first["window_id"] != expected_window:
         _fail("start receipt window_id does not match the canonical 26-week clock")
@@ -352,6 +378,7 @@ def issue_start_receipt(
     diagnostic_epoch: str,
     completion_notification: Mapping[str, Any],
     first_decision_date: str,
+    as_of_date: str,
     root: str | Path = DEFAULT_ROOT,
 ) -> dict[str, Any]:
     """Open the clock once, on a real notification, and never silently re-anchor it."""
@@ -360,6 +387,7 @@ def issue_start_receipt(
         diagnostic_epoch=diagnostic_epoch,
         completion_notification=completion_notification,
         first_decision_date=first_decision_date,
+        as_of_date=as_of_date,
     )
     store_root = _private_root(root)
     path = _receipt_path(store_root)

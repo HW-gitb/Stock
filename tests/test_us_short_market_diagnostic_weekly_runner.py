@@ -82,7 +82,8 @@ class DryRunTest(_StoreCase):
 
     def test_a_dry_run_refuses_the_mistakes_the_real_run_refuses(self) -> None:
         bad = [
-            ({"first_decision_date": "20260104"}, "weekend"),
+            ({"first_decision_date": "20260104"}, "canonical decision week"),   # a Sunday
+            ({"first_decision_date": "20260107"}, "canonical decision week"),   # a Wednesday
             ({"first_decision_date": "20260230"}, "real calendar date"),
             ({"first_decision_date": "2026-01-02"}, "eight-digit"),
             ({"issued_at": "2025-12-29T00:00:00"}, "timezone"),
@@ -167,7 +168,7 @@ class OperatorMistakeTest(_StoreCase):
         self.assertEqual("issued", self._open()["status"])
         self.assertEqual("idempotent", self._open()["status"])
         with self.assertRaises(MarketDiagnosticWeeklyRunnerError) as ctx:
-            self._open(first_decision_date="20260109")
+            self._open(first_decision_date="20260112")
         self.assertIn("already anchors", str(ctx.exception))
 
     def test_recording_the_same_week_twice_is_idempotent(self) -> None:

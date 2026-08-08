@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import copy
+from datetime import datetime
 import json
 from pathlib import Path
 import tempfile
@@ -32,6 +33,8 @@ NOTIFICATION = {
     "notification_text": "US-short 26-week diagnostic design is complete.",
 }
 LEGAL_EPOCH = "us-short-26w-alt"
+# After the notification and after the frozen week: minting is legal from here.
+AS_OF = "20260731"
 
 
 def _issue(root, row, **overrides):
@@ -39,6 +42,7 @@ def _issue(root, row, **overrides):
         "diagnostic_epoch": row["diagnostic_epoch"],
         "completion_notification": dict(NOTIFICATION),
         "first_decision_date": row["decision_date"],
+        "as_of_date": AS_OF,
         "root": root,
     }
     kwargs.update(overrides)
@@ -50,6 +54,7 @@ def _receipt(row, **overrides):
         "diagnostic_epoch": row["diagnostic_epoch"],
         "completion_notification": dict(NOTIFICATION),
         "first_decision_date": row["decision_date"],
+        "as_of_date": AS_OF,
     }
     kwargs.update(overrides)
     return build_start_receipt(**kwargs)
@@ -104,6 +109,55 @@ class StartReceiptTest(unittest.TestCase):
             with self.assertRaises(MarketDiagnosticLifecycleError) as ctx:
                 persist_settled_weekly_record(self.row, root=root)
             self.assertIn("decision date", str(ctx.exception))
+
+    def test_the_frozen_week_must_be_a_week_this_track_actually_decides_on(self) -> None:
+        """The anchor sets the weekday of all twenty-six weeks, so it is the clock.
+
+        Refusing only Saturday and Sunday let a Wednesday -- and a Friday -- anchor
+        a track that decides on Mondays. Every week after it inherits the wrong day
+        by construction, because the clock advances by adding seven.
+        """
+
+        monday = self.row["decision_date"]
+        self.assertEqual(0, datetime.strptime(monday, "%Y%m%d").weekday())
+        self.assertIsNotNone(_receipt(self.row))          # control: the Monday mints
+
+        for wrong, weekday in (("20260107", "Wednesday"), ("20260109", "Friday"),
+                               ("20260110", "Saturday")):
+            with self.subTest(weekday):
+                with self.assertRaises(DiagnosticStartReceiptError) as ctx:
+                    _receipt(self.row, first_decision_date=wrong)
+                self.assertIn("canonical decision week", str(ctx.exception))
+
+    def test_a_notification_that_has_not_happened_yet_authorizes_nothing(self) -> None:
+        """Every other date check reasons FROM issued_at, so a future one moves them all.
+
+        The anchor may not precede the notification and may not run away from it.
+        Both bounds travel with a notification dated 2099, which re-legalizes the
+        back-fill they exist to refuse -- and this is the one irreversible write on
+        the track.
+        """
+
+        future = {**NOTIFICATION, "issued_at": "2099-01-05T00:00:00+00:00"}
+        with self.assertRaises(DiagnosticStartReceiptError) as ctx:
+            _receipt(self.row, completion_notification=future,
+                     first_decision_date="20990112")
+        self.assertIn("in the future", str(ctx.exception))
+
+        # ... and the same receipt is legal once the as-of has caught up with it.
+        self.assertIsNotNone(
+            _receipt(self.row, completion_notification=future,
+                     first_decision_date="20990112", as_of_date="20990105")
+        )
+
+    def test_the_frozen_week_cannot_sit_years_either_side_of_the_notification(self) -> None:
+        """Back-fill on one side, an anchor nobody can act on the other."""
+
+        for wrong, expected in (("20200106", "back-fill"), ("20960102", "too far after")):
+            with self.subTest(wrong):
+                with self.assertRaises(DiagnosticStartReceiptError) as ctx:
+                    _receipt(self.row, first_decision_date=wrong)
+                self.assertIn(expected, str(ctx.exception))
 
     def test_a_receipt_from_another_epoch_does_not_authorize_this_one(self) -> None:
         with tempfile.TemporaryDirectory() as td:
@@ -172,6 +226,7 @@ class StartReceiptTest(unittest.TestCase):
             build_start_receipt(
                 diagnostic_epoch=LEGAL_EPOCH,
                 first_decision_date=self.row["decision_date"],
+                as_of_date=AS_OF,
             )
         for broken in (
             {**NOTIFICATION, "issued_at": "2026-08-05 00:00:00"},   # no timezone
@@ -184,6 +239,7 @@ class StartReceiptTest(unittest.TestCase):
                     diagnostic_epoch=LEGAL_EPOCH,
                     completion_notification=broken,
                     first_decision_date=self.row["decision_date"],
+                    as_of_date=AS_OF,
                 )
 
     # ---- authorization has to survive the moment it is granted -----------------

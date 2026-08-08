@@ -391,6 +391,7 @@ class SourceDriftTest(unittest.TestCase):
             completion_notification=dict(self.notification),
             first_decision_date=self.rows[0]["decision_date"],
             root=root,
+            as_of_date="20260731",
         )
 
     def test_removing_the_anchor_is_noticed_by_every_public_reader(self) -> None:
@@ -449,10 +450,11 @@ class SourceDriftTest(unittest.TestCase):
             moved = receipts.issue_start_receipt(
                 diagnostic_epoch=self.rows[0]["diagnostic_epoch"],
                 completion_notification=dict(self.notification),
-                first_decision_date="20260109",
+                first_decision_date="20260112",
                 root=root,
+                as_of_date="20260731",
             )
-            self.assertNotEqual(self.rows[0]["decision_date"], "20260109")
+            self.assertNotEqual(self.rows[0]["decision_date"], "20260112")
 
             path = root / "lifecycle_register.json"
             register = json.loads(path.read_bytes().decode("utf-8"))
@@ -481,6 +483,7 @@ class SourceDriftTest(unittest.TestCase):
                 completion_notification=dict(self.notification),
                 first_decision_date=self.rows[0]["decision_date"],
                 root=root,
+                as_of_date="20260731",
             )
             path = root / "lifecycle_register.json"
             register = json.loads(path.read_bytes().decode("utf-8"))
@@ -587,7 +590,13 @@ class SourceDriftTest(unittest.TestCase):
             persist_settled_weekly_record(self.rows[0], root=root)
 
             daily = copy.deepcopy(self.rows[1])
-            start = datetime.date(2026, 1, 2) + datetime.timedelta(days=1)
+            # Derived from the fixture, not typed again: a hardcoded anchor here
+            # silently turned this into a "dates must increase" test the day the
+            # fixture moved to a canonical decision week.
+            anchor = datetime.datetime.strptime(
+                self.rows[0]["decision_date"], "%Y%m%d"
+            ).date()
+            start = anchor + datetime.timedelta(days=1)
             daily["decision_date"] = start.strftime("%Y%m%d")
             daily["valuation_date"] = daily["decision_date"]
             with self.assertRaises(MarketDiagnosticLifecycleError) as ctx:

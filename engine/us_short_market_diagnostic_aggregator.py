@@ -351,9 +351,14 @@ def publish_completed_market_diagnostic_window(
     *,
     lifecycle_root: str | Path = DEFAULT_LIFECYCLE_ROOT,
     output_root: str | Path = DEFAULT_PUBLIC_ROOT,
-    as_of_date: str | None = None,
+    as_of_date: str | None,
 ) -> dict[str, Any]:
-    """Load the private lifecycle and publish only when its last week closes a window."""
+    """Load the private lifecycle and publish only when its last week closes a window.
+
+    ``as_of_date`` is required for the reason given on ``validate_window``: a
+    default of ``None`` disabled the look-ahead gate for the one entry that
+    actually publishes.
+    """
 
     lifecycle_path = Path(lifecycle_root)
     if lifecycle_path.is_absolute() and not lifecycle_path.exists():

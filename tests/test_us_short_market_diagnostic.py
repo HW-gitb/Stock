@@ -48,6 +48,11 @@ def _money(value: Decimal) -> str:
     return f"{value:.6f}"
 
 
+# The fixture window closes 20260629; this as-of is after it, so every call
+# below runs with the look-ahead gate ON rather than disabled by omission.
+_AS_OF = "20260731"
+
+
 def _weekly_rows(
     *,
     price_only: bool = False,
@@ -58,7 +63,7 @@ def _weekly_rows(
     paper_false_weeks = set() if paper_false_weeks is None else set(paper_false_weeks)
     rows: list[dict] = []
     previous_nav = Decimal("100000.000000")
-    decision_start = date(2026, 1, 2)
+    decision_start = date(2026, 1, 5)
     cumulative_cost = Decimal("0.000000")
     consecutive_paper_evaluable = 0
     v1_1_active = False
@@ -188,7 +193,7 @@ class UsShortMarketDiagnosticEngineTest(unittest.TestCase):
 
     def test_26_week_summary_calculates_metrics_and_validates_schema(self) -> None:
         rows = _weekly_rows()
-        summary = summarize_window(rows)
+        summary = summarize_window(rows, as_of_date=_AS_OF)
         self.assertEqual(summary["window_id"], "26w-1-26")
         self.assertEqual(summary["calendar_weeks"], 26)
         self.assertEqual(summary["overall_status"], "ahead_diagnostic")
@@ -211,7 +216,7 @@ class UsShortMarketDiagnosticEngineTest(unittest.TestCase):
             _assert_schema_valid(self, "us_short_market_diagnostic_weekly_record.schema.json", row)
 
     def test_price_only_data_is_degraded_and_not_relabelled_total_return(self) -> None:
-        summary = summarize_window(_weekly_rows(price_only=True))
+        summary = summarize_window(_weekly_rows(price_only=True), as_of_date=_AS_OF)
         self.assertEqual(summary["overall_status"], "data_degraded")
         for symbol in BENCHMARKS:
             benchmark = summary["benchmarks"][symbol]
@@ -222,7 +227,7 @@ class UsShortMarketDiagnosticEngineTest(unittest.TestCase):
 
     def test_less_than_20_joint_weeks_cannot_claim_direction(self) -> None:
         rows = _weekly_rows(paper_false_weeks=set(range(1, 8)))
-        summary = summarize_window(rows)
+        summary = summarize_window(rows, as_of_date=_AS_OF)
         self.assertEqual(summary["overall_status"], "data_insufficient")
         self.assertEqual(summary["strategy"]["status"], "diagnostic_data_degraded")
         self.assertEqual(summary["strategy"]["paper_degraded_weeks"], 7)
@@ -233,7 +238,7 @@ class UsShortMarketDiagnosticEngineTest(unittest.TestCase):
 
     def test_no_count_remains_in_denominator_and_missing_return_stays_null(self) -> None:
         rows = _weekly_rows(no_count_week=5)
-        summary = summarize_window(rows)
+        summary = summarize_window(rows, as_of_date=_AS_OF)
         self.assertEqual(summary["calendar_weeks"], 26)
         self.assertEqual(summary["strategy"]["no_count_weeks"], 1)
         self.assertEqual(summary["strategy"]["strategy_evaluable_weeks"], 25)
@@ -246,7 +251,7 @@ class UsShortMarketDiagnosticEngineTest(unittest.TestCase):
         for row in without_execution_metrics:
             row["strategy"].pop("turnover")
             row["strategy"].pop("unfilled_order_count")
-        summary_without_execution_metrics = summarize_window(without_execution_metrics)
+        summary_without_execution_metrics = summarize_window(without_execution_metrics, as_of_date=_AS_OF)
         self.assertIsNone(summary_without_execution_metrics["strategy"]["turnover"])
         self.assertIsNone(summary_without_execution_metrics["strategy"]["unfilled_order_count"])
         _assert_schema_valid(self, "us_short_market_diagnostic_summary.schema.json", summary_without_execution_metrics)
@@ -254,14 +259,14 @@ class UsShortMarketDiagnosticEngineTest(unittest.TestCase):
         bad = _weekly_rows(no_count_week=5)
         bad[4]["strategy"]["weekly_return"] = 0.0
         with self.assertRaises(MarketDiagnosticError):
-            summarize_window(bad)
+            summarize_window(bad, as_of_date=_AS_OF)
 
     def test_ruleset_segments_epoch_gate_and_mixed_window_flag(self) -> None:
         rows = _weekly_rows(ruleset_cut=10)
         segments = segment_epoch_and_ruleset(rows)
         self.assertEqual(len(segments), 2)
         self.assertEqual([segment["calendar_weeks"] for segment in segments], [10, 16])
-        summary = summarize_window(rows)
+        summary = summarize_window(rows, as_of_date=_AS_OF)
         self.assertTrue(summary["mixed_ruleset_window"])
         self.assertEqual(summary["ruleset_fingerprints"], ["a" * 64, "b" * 64])
 
@@ -272,7 +277,7 @@ class UsShortMarketDiagnosticEngineTest(unittest.TestCase):
             {"us_short_market_diagnostic_26w_v1", "us_short_market_diagnostic_26w_v2"},
         )
         with self.assertRaises(MarketDiagnosticError):
-            summarize_window(mixed_epoch)
+            summarize_window(mixed_epoch, as_of_date=_AS_OF)
 
     def test_window_boundaries_are_non_overlapping_and_idempotent(self) -> None:
         self.assertFalse(evaluate_window_trigger(25)["trigger"])
@@ -311,12 +316,12 @@ class UsShortMarketDiagnosticEngineTest(unittest.TestCase):
         bad_clock = _weekly_rows()
         bad_clock[0]["window_id"] = "26w-2-27"
         with self.assertRaises(MarketDiagnosticError):
-            validate_window(bad_clock)
+            validate_window(bad_clock, as_of_date=_AS_OF)
 
         bad_date = _weekly_rows()
         bad_date[3]["decision_date"] = "20260230"
         with self.assertRaises(MarketDiagnosticError):
-            validate_window(bad_date)
+            validate_window(bad_date, as_of_date=_AS_OF)
 
         with self.assertRaises(MarketDiagnosticError):
             validate_window(_weekly_rows(), as_of_date="20260101")
@@ -333,7 +338,7 @@ class UsShortMarketDiagnosticEngineTest(unittest.TestCase):
         """
 
         accepted = _weekly_rows()
-        validate_window(accepted)   # control: the compliant window still passes
+        validate_window(accepted, as_of_date=_AS_OF)   # control: the compliant window still passes
 
         for label, mutate in (
             ("field absent", lambda row: row.pop("windows_aligned")),
@@ -354,7 +359,70 @@ class UsShortMarketDiagnosticEngineTest(unittest.TestCase):
                 rows = _weekly_rows()
                 mutate(rows[3])
                 with self.assertRaises(MarketDiagnosticError):
-                    validate_window(rows)
+                    validate_window(rows, as_of_date=_AS_OF)
+
+    def test_no_look_ahead_knob_carries_a_default_that_switches_the_gate_off(self) -> None:
+        """The same fail-open as the alignment knob, one gate over.
+
+        The check downstream reads ``if as_of is not None``, so a default of
+        ``None`` does not make the gate safe -- it turns the gate off for anyone
+        who forgets, and twenty-six weeks of pure future dates went out that way.
+        Structural because a default nobody currently uses cannot be caught by a
+        behaviour test: the day someone drops the argument is the day it matters.
+        """
+
+        import ast
+
+        expected = {
+            ("engine/us_short_market_diagnostic.py", "_validate_rows"),
+            ("engine/us_short_market_diagnostic.py", "validate_window"),
+            ("engine/us_short_market_diagnostic.py", "summarize_window"),
+            ("engine/us_short_market_diagnostic.py", "summarize_since_inception"),
+            ("engine/us_short_market_diagnostic_aggregator.py",
+             "publish_completed_market_diagnostic_window"),
+            ("engine/us_short_market_diagnostic_lifecycle.py", "_register_from_records"),
+        }
+        seen = set()
+        for relative, function in sorted(expected):
+            tree = ast.parse((ROOT / relative).read_text(encoding="utf-8"))
+            for node in ast.walk(tree):
+                if not isinstance(node, ast.FunctionDef) or node.name != function:
+                    continue
+                names = [arg.arg for arg in node.args.kwonlyargs]
+                self.assertIn("as_of_date", names, f"{relative}::{function} lost as_of_date")
+                self.assertIsNone(
+                    node.args.kw_defaults[names.index("as_of_date")],
+                    f"{relative}::{function}.as_of_date has a default; the caller must state it",
+                )
+                seen.add((relative, function))
+        self.assertEqual(expected, seen, "a look-ahead knob moved or vanished")
+
+    def test_the_gate_cannot_be_switched_off_by_forgetting_the_argument(self) -> None:
+        """Required means required: omitting it is a TypeError, not a silent pass."""
+
+        rows = _weekly_rows()
+        for call in (
+            lambda: validate_window(rows),
+            lambda: summarize_window(rows),
+        ):
+            with self.assertRaises(TypeError):
+                call()
+
+    def test_a_window_lying_entirely_in_the_future_is_refused(self) -> None:
+        """What the switched-off gate published: a whole clock nobody has lived.
+
+        Twenty-six weeks dated after the as-of are twenty-six weeks that have not
+        happened. With the argument required, this is what every caller now gets
+        instead of a clean ``26w-1-26``.
+        """
+
+        rows = _weekly_rows()
+        before_everything = "20260101"
+        for entry in (validate_window, summarize_window):
+            with self.subTest(entry.__name__):
+                with self.assertRaises(MarketDiagnosticError) as ctx:
+                    entry(rows, as_of_date=before_everything)
+                self.assertIn("future", str(ctx.exception))
 
     def test_no_alignment_knob_carries_a_default_that_means_aligned(self) -> None:
         """The class, not the one line that was caught.
@@ -398,7 +466,7 @@ class UsShortMarketDiagnosticEngineTest(unittest.TestCase):
         rows[3]["windows_aligned"] = False
         rows[3]["windows_misaligned_reason"] = "strategy_return_spans_a_no_count_week"
         with self.assertRaises(MarketDiagnosticError) as ctx:
-            validate_window(rows)
+            validate_window(rows, as_of_date=_AS_OF)
         self.assertIn("misaligned comparison windows", str(ctx.exception))
 
         # ...and with the pairing dropped, the same window is accepted again.
@@ -406,7 +474,7 @@ class UsShortMarketDiagnosticEngineTest(unittest.TestCase):
             rows[3]["benchmarks"][symbol]["joint_evaluable"] = False
             rows[3]["benchmarks"][symbol]["raw_excess"] = None
             rows[3]["benchmarks"][symbol]["relative_wealth"] = None
-        validate_window(rows)
+        validate_window(rows, as_of_date=_AS_OF)
 
     def test_noncanonical_window_anchor_fails_on_the_compute_path(self) -> None:
         shifted = _weekly_rows()
@@ -414,25 +482,25 @@ class UsShortMarketDiagnosticEngineTest(unittest.TestCase):
             row["calendar_week_index"] += 4
             row["window_id"] = "26w-5-30"
         with self.assertRaises(MarketDiagnosticError):
-            validate_window(shifted)
+            validate_window(shifted, as_of_date=_AS_OF)
         with self.assertRaises(MarketDiagnosticError):
-            summarize_window(shifted)
+            summarize_window(shifted, as_of_date=_AS_OF)
 
     def test_second_canonical_window_is_accepted_on_the_compute_path(self) -> None:
         second_window = _weekly_rows()
         for row in second_window:
             row["calendar_week_index"] += 26
             row["window_id"] = "26w-27-52"
-        identity = validate_window(second_window)
+        identity = validate_window(second_window, as_of_date=_AS_OF)
         self.assertEqual(identity["window_id"], "26w-27-52")
-        self.assertEqual(summarize_window(second_window)["window_end_week"], 52)
+        self.assertEqual(summarize_window(second_window, as_of_date=_AS_OF)["window_end_week"], 52)
 
     def test_reverse_direction_is_not_hardcoded_to_ahead(self) -> None:
         rows = _weekly_rows()
         for row in rows:
             for symbol in BENCHMARKS:
                 row["benchmarks"][symbol]["weekly_return"] = 0.01
-        summary = summarize_window(rows)
+        summary = summarize_window(rows, as_of_date=_AS_OF)
         self.assertEqual(summary["overall_status"], "behind_diagnostic")
         self.assertLess(summary["benchmarks"]["VTI"]["raw_excess"], 0)
 
@@ -440,7 +508,7 @@ class UsShortMarketDiagnosticEngineTest(unittest.TestCase):
         rows = _weekly_rows()
         for row in rows:
             row["benchmarks"]["VTI"]["weekly_return"] = row["strategy"]["weekly_return"]
-        summary = summarize_window(rows)
+        summary = summarize_window(rows, as_of_date=_AS_OF)
         self.assertEqual(summary["benchmarks"]["VTI"]["status"], "flat_diagnostic")
         self.assertAlmostEqual(summary["benchmarks"]["VTI"]["raw_excess"], 0.0)
         self.assertAlmostEqual(summary["benchmarks"]["VTI"]["relative_wealth"], 0.0)
@@ -452,7 +520,7 @@ class UsShortMarketDiagnosticEngineTest(unittest.TestCase):
         for row in rows:
             for symbol in BENCHMARKS:
                 row["benchmarks"][symbol]["weekly_return"] = row["strategy"]["weekly_return"]
-        summary = summarize_window(rows)
+        summary = summarize_window(rows, as_of_date=_AS_OF)
         self.assertEqual(summary["overall_status"], "mixed_across_benchmarks")
         self.assertEqual(summary["status_reason"], "all_four_benchmarks_show_flat_diagnostic_excess")
         for symbol in BENCHMARKS:
@@ -469,7 +537,7 @@ class UsShortMarketDiagnosticEngineTest(unittest.TestCase):
             benchmark["weekly_return"] = None
             benchmark["dividend_sidecar_sha256"] = None
             benchmark["data_quality_reasons"] = ["price_packet_missing"]
-        summary = summarize_window(rows)
+        summary = summarize_window(rows, as_of_date=_AS_OF)
         self.assertEqual(summary["overall_status"], "unavailable")
         self.assertEqual(summary["benchmarks"]["VTI"]["status"], "unavailable")
         self.assertIsNone(summary["benchmarks"]["VTI"]["cumulative_return"])
@@ -529,9 +597,9 @@ class UsShortMarketDiagnosticEngineTest(unittest.TestCase):
 
     def test_as_of_date_rejects_future_benchmark_price_evidence(self) -> None:
         row = _weekly_rows()[0]
-        row["benchmarks"]["VTI"]["price_date"] = "20260103"
+        row["benchmarks"]["VTI"]["price_date"] = "20260106"
         with self.assertRaises(MarketDiagnosticError):
-            validate_weekly_record(row, as_of_date="20260102")
+            validate_weekly_record(row, as_of_date="20260105")
 
     def test_module_has_no_external_or_io_imports(self) -> None:
         source = (ROOT / "engine" / "us_short_market_diagnostic.py").read_text(encoding="utf-8")

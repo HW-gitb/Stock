@@ -465,6 +465,7 @@ class BenchmarkPacketEndToEndTest(unittest.TestCase):
                 },
                 first_decision_date=DECISION,
                 root=store,
+                as_of_date="20260731",
             )
             packet = _build()
             result = settle_next_week(
