@@ -1,5 +1,12 @@
 # Session Log
 
+## 2026-08-08 — Claude 审查 PASS（US-short 诊断轨读取链去重，`adab3216`）
+
+- **Verdict/Action**: PASS。三处替换是**取值等价**而不是省掉检查：两个公开读者本就是 `load_register_and_settled_records` 的 `[0]`/`[1]`（`lifecycle.py:591-604`），交回的 `receipt`/`settled_records` 就是同一次门内已验的那份。「跨调用零缓存」属实，读取链无记忆化。测试只增不删，无既有断言被改弱；钟仍 `not_started`，无 provider 调用。
+- **Required**: 无。`Register: non-material`。两条 Optional（本刀造出的两个孤儿 import；`_target_week` 的 EXEMPT 理由已随本刀失真）正文只在 `docs/system_risk_register.md`，本处不复述。
+- **Verify**: review-evidence:f9aa9b8cf0be。焦点超集包 `Ran 179 in 46.780s OK receipt:7a76f3fd80e257e086218b22`（六模块，覆盖被改函数全部生产调用点）。全量按 rule 4 不重跑，引执行方 ledger：`.tools/state/full_pack_ledger.json` 实含 `tests=5623 / 835.6s / receipt:b65e753874f6f96f4e9d2ca9`。自写探针、控制组先绿：干净店 `next_week_identity` 过门后死在假 head；盘上篡改第 2 周 NAV 后同一调用死在门上（`weekly record digest mismatch`）；`_prior_valuation_date(2, settled_records=[])` 报 store does not hold。**未做**：§6a 独立 agent（rule 8 低危档）。
+- **Next**: Codex：执行
+
 ## 2026-08-08 — Claude 修复（US-short 演练台 O(n²)：真正的位置在调用方，已收口）
 
 - **Verdict/Action**: 先量后改。计数探针裹住 `load_register_and_settled_records` 并按调用链归因，跑 8 周演练：**每周 22.8 次整店读校**（照代码直觉只会看到 3 次），`diagnostic_store_state` 独占 63%——它自己每次读两遍，因为上一刀合并了两个公开读者却没改这个最热的调用方。修三腿、不加任何缓存：合并那一次读；`next_week_inputs` 交回它已验的 `receipt`/`settled_records`；`_target_week` 与 `weekly_fetch` 三处改用已验数据。

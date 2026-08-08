@@ -509,3 +509,17 @@ python .tools\full_pack_ledger.py run us_short "<trigger>" "receipt:<token>" 860
 - `next_week_inputs` 的返回**多了两个键**（`receipt`、`settled_records`）。它不进任何制品、无键集合断言，但写新消费者时别假设它只有原来四个键。
 - `_prior_valuation_date` 的 `root` 参数**没了**，改必传 `settled_records`；新调用点必须自己拿到已验记录再传，别退回自己去 load。
 - 首版植入对照 P2 打歪（`list(... or [])` 语义等价 → 全绿）。**对照全绿要当成「打歪了」而不是「覆盖充分」**，这是本会话第四次踩同一个坑。
+
+## 2026-08-08 追加：诊断轨读取链去重的审查结论（`adab3216`，PASS）
+
+**审查对象**：`adab3216`，工作树 `D:\cnhea\Stock-wt\us-short_r28`（当时领先 master 一个提交，工作区干净、无 untracked）。改动面 = `engine/us_short_market_diagnostic_weekly_producer.py`、`runners/us_short_market_diagnostic_weekly_fetch.py` 两个生产模块 + 两个测试文件（纯新增）+ 四份文档。
+
+**成立的部分**：① `diagnostic_store_state` 由两次读店改一次，是取值等价——`load_lifecycle_register` / `load_settled_weekly_records` 本就是 `load_register_and_settled_records` 的两半（`lifecycle.py:591-604`）；② `next_week_inputs` 交回它已验的 `receipt` / `settled_records`，`_target_week` 与 `weekly_fetch` 三处改用之，实测三项取值与旧读法逐项相等；③「跨调用零缓存」属实，读取链无记忆化，下一次调用仍整店读盘重校；④ runner 层仍 fail-closed（reviewer 自写探针，控制组先绿）：盘上篡改第 2 周 NAV 后 `next_week_identity` 死在门上而非拿旧数据继续；⑤ `_prior_valuation_date` 的 EXEMPT 理由属实——私有、三个调用点都在本模块、都传门刚返回的东西、不在发布路径。
+
+**拦下的一条**：无。两条 Optional 记在 `docs/system_risk_register.md`（本刀造出的两个孤儿 import；`_target_week` 的 EXEMPT 理由「reads through the gated loader」已随本刀失真）。
+
+**验证命令与结果**：焦点超集包 `.tools\run_unittest_with_repo_pythonpath.cmd --timeout-seconds 700` 跑 `tests.test_us_short_market_diagnostic_` 的 `weekly_producer` / `authorization_conformance` / `weekly_advance` / `weekly_runner` / `rehearsal` / `lifecycle` 六模块 → `Ran 179 in 46.780s OK`、`receipt:7a76f3fd80e257e086218b22`（覆盖被改函数的全部生产调用点；47s 本身也旁证了去重生效）。全量按 AGENTS rule 4 不由 reviewer 重跑，引执行方 ledger 记录（`.tools/state/full_pack_ledger.json` 实含 `tests=5623 / 835.6s / receipt:b65e753874f6f96f4e9d2ca9`）。
+
+**验证边界**：未起 §6a 独立对抗 agent——rule 8 低危档（dormant comparison-only 诊断轨，不触及选股 / core_score / veto / sizing / PIT-进选股 / 真钱 / secret / live provider）；未联网、未真跑取数；性能数字（22.8→11.2、176.0→109.4s）为执行方实测，reviewer 未复跑计数探针，只独立确认了「等价 + 不省检查」这两件决定正确性的事。
+
+**失效旧结论**：`R-USSHORT-26W-DIAG-REHEARSAL-GOT-4-5X-SLOWER-WHEN-IT-STARTED-USING-THE-REAL-FETCH-ENTRY` 原「方向是给读取链一个单次运行内的一致性缓存」已被推翻——真正的 O(n²) 在调用方重复提问，不在读取链内部，最终修法未引入任何缓存。
