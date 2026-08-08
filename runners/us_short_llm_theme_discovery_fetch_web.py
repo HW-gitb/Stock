@@ -943,9 +943,12 @@ def _normalize_search_results(
         if raw_root is not None:
             raw_path = _raw_receipt_path(raw_root, source_id, expected_decision_date)
             if persist_raw:
-                if not _gitignored(raw_path):
-                    raise WebThemeDiscoveryError("raw receipt path must be gitignored before writing")
+                # Asked once, not twice: the second call could only ever return
+                # True, because a False first call has already raised. Each ask
+                # spawns `git check-ignore` (~18ms on this machine).
                 raw_gitignored = _gitignored(raw_path)
+                if not raw_gitignored:
+                    raise WebThemeDiscoveryError("raw receipt path must be gitignored before writing")
                 try:
                     raw_ref = _repo_relative(raw_path)
                 except WebThemeDiscoveryError:
