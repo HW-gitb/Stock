@@ -69,11 +69,25 @@
       "cash_reclaim_pct": null
     },
     "breadth": {
-      "limit_up_count": null,
-      "limit_down_count": null,
+      "full_market_limit_up_count": null,
+      "full_market_limit_down_count": null,
       "limit_up_index_pct_change": null,
-      "consecutive_board_height": null,
+      "full_market_consecutive_limit_up_height": null,
       "csi300_pct_change_window": null
+    },
+    "market_breadth_source": {
+      "status": "unavailable",
+      "universe_name": "a_share_full_market",
+      "requested_trade_dates": [],
+      "observed_trade_dates": [],
+      "eligible_stock_count": 0,
+      "usable_stock_count": 0,
+      "daily_source": "tushare.daily",
+      "limit_source": "tushare.stk_limit",
+      "price_basis": "unadjusted",
+      "effective_date": null,
+      "unavailable_reason": "breadth_producer_not_wired",
+      "limit_up_index_unavailable_reason": "no_reachable_published_index"
     },
     "northbound": {
       "net_flow_5d": null,

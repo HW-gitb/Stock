@@ -2,7 +2,7 @@
   "schema_name": "a_short_m67_effect_contract",
   "schema_version": "1.0.0",
   "legacy_migration_sha256": "b99cbb6895b7b2c2877e172fbbd59ff0b84a5c3b9bbf5de2b8ee2aab0d52cc4e",
-  "analysis_input_all_paths_sha256": "0a8b8b9f5514475f8aec81922c57881fc2e3e30b7a6d2072c2c18127a9d2613a",
+  "analysis_input_all_paths_sha256": "b8b76ada440c8fb16d112970b372f82c81ded327caa7e2ac588220f9cb2dc692",
   "unclassified_pending_audit_baseline": [
     "account_context.mode",
     "account_context.positions[].current_price",
@@ -340,7 +340,7 @@
       "source_prefixes": [
         "market_context"
       ],
-      "source_paths_sha256": "e7098d89cfc066a618821b3f0e070dde98d5b1a0cd534a24822b64a5af1d8416",
+      "source_paths_sha256": "f6d871d792083580454afd9c66ec86f28e2c7afc3c2dc818cc38acd23a7be520",
       "policy": "must_affect_result",
       "terminal_surfaces": [
         "weekly.effect_contract_ledger",
@@ -1049,6 +1049,96 @@
       "consumer_ref": "A-EGS/egs_main.py::build_data_health::moneyflow_effective_clock",
       "terminal_surface": "data_health.errors[] -> overall_status=error -> A-EGS/egs_main.py::publish_official_egs refuses the official publish",
       "mutation_evidence": "blank it on a moved window -> the clock check errors and the publish is refused"
+    },
+    "market_context.breadth.full_market_consecutive_limit_up_height": {
+      "category": "duplicate_or_display_audit",
+      "consumer_ref": "runners/a_short_weekly_pipeline.py::_build_market_breadth_audit -> weekly.market_breadth_audit",
+      "terminal_surface": "weekly.market_breadth_audit (display only; production_effect_enabled=false)",
+      "mutation_evidence": "changing it changes only the weekly audit block; no sizing, veto or M6.7 price reads it. Item 16 promotes these to a decision input when the regime state machine lands."
+    },
+    "market_context.breadth.full_market_limit_down_count": {
+      "category": "duplicate_or_display_audit",
+      "consumer_ref": "runners/a_short_weekly_pipeline.py::_build_market_breadth_audit -> weekly.market_breadth_audit",
+      "terminal_surface": "weekly.market_breadth_audit (display only; production_effect_enabled=false)",
+      "mutation_evidence": "changing it changes only the weekly audit block; no sizing, veto or M6.7 price reads it. Item 16 promotes these to a decision input when the regime state machine lands."
+    },
+    "market_context.breadth.full_market_limit_up_count": {
+      "category": "duplicate_or_display_audit",
+      "consumer_ref": "runners/a_short_weekly_pipeline.py::_build_market_breadth_audit -> weekly.market_breadth_audit",
+      "terminal_surface": "weekly.market_breadth_audit (display only; production_effect_enabled=false)",
+      "mutation_evidence": "changing it changes only the weekly audit block; no sizing, veto or M6.7 price reads it. Item 16 promotes these to a decision input when the regime state machine lands."
+    },
+    "market_context.market_breadth_source.daily_source": {
+      "category": "duplicate_or_display_audit",
+      "consumer_ref": "runners/a_short_weekly_pipeline.py::_build_market_breadth_audit -> weekly.market_breadth_audit",
+      "terminal_surface": "weekly.market_breadth_audit (display only; production_effect_enabled=false)",
+      "mutation_evidence": "changing it changes only the weekly audit block; no sizing, veto or M6.7 price reads it. Item 16 promotes these to a decision input when the regime state machine lands."
+    },
+    "market_context.market_breadth_source.effective_date": {
+      "category": "duplicate_or_display_audit",
+      "consumer_ref": "runners/a_short_weekly_pipeline.py::_build_market_breadth_audit -> weekly.market_breadth_audit",
+      "terminal_surface": "weekly.market_breadth_audit (display only; production_effect_enabled=false)",
+      "mutation_evidence": "changing it changes only the weekly audit block; no sizing, veto or M6.7 price reads it. Item 16 promotes these to a decision input when the regime state machine lands."
+    },
+    "market_context.market_breadth_source.eligible_stock_count": {
+      "category": "duplicate_or_display_audit",
+      "consumer_ref": "runners/a_short_weekly_pipeline.py::_build_market_breadth_audit -> weekly.market_breadth_audit",
+      "terminal_surface": "weekly.market_breadth_audit (display only; production_effect_enabled=false)",
+      "mutation_evidence": "changing it changes only the weekly audit block; no sizing, veto or M6.7 price reads it. Item 16 promotes these to a decision input when the regime state machine lands."
+    },
+    "market_context.market_breadth_source.limit_source": {
+      "category": "duplicate_or_display_audit",
+      "consumer_ref": "runners/a_short_weekly_pipeline.py::_build_market_breadth_audit -> weekly.market_breadth_audit",
+      "terminal_surface": "weekly.market_breadth_audit (display only; production_effect_enabled=false)",
+      "mutation_evidence": "changing it changes only the weekly audit block; no sizing, veto or M6.7 price reads it. Item 16 promotes these to a decision input when the regime state machine lands."
+    },
+    "market_context.market_breadth_source.limit_up_index_unavailable_reason": {
+      "category": "duplicate_or_display_audit",
+      "consumer_ref": "runners/a_short_weekly_pipeline.py::_build_market_breadth_audit -> weekly.market_breadth_audit",
+      "terminal_surface": "weekly.market_breadth_audit (display only; production_effect_enabled=false)",
+      "mutation_evidence": "changing it changes only the weekly audit block; no sizing, veto or M6.7 price reads it. Item 16 promotes these to a decision input when the regime state machine lands."
+    },
+    "market_context.market_breadth_source.observed_trade_dates[]": {
+      "category": "duplicate_or_display_audit",
+      "consumer_ref": "runners/a_short_weekly_pipeline.py::_build_market_breadth_audit -> weekly.market_breadth_audit",
+      "terminal_surface": "weekly.market_breadth_audit (display only; production_effect_enabled=false)",
+      "mutation_evidence": "changing it changes only the weekly audit block; no sizing, veto or M6.7 price reads it. Item 16 promotes these to a decision input when the regime state machine lands."
+    },
+    "market_context.market_breadth_source.price_basis": {
+      "category": "duplicate_or_display_audit",
+      "consumer_ref": "runners/a_short_weekly_pipeline.py::_build_market_breadth_audit -> weekly.market_breadth_audit",
+      "terminal_surface": "weekly.market_breadth_audit (display only; production_effect_enabled=false)",
+      "mutation_evidence": "changing it changes only the weekly audit block; no sizing, veto or M6.7 price reads it. Item 16 promotes these to a decision input when the regime state machine lands."
+    },
+    "market_context.market_breadth_source.requested_trade_dates[]": {
+      "category": "duplicate_or_display_audit",
+      "consumer_ref": "runners/a_short_weekly_pipeline.py::_build_market_breadth_audit -> weekly.market_breadth_audit",
+      "terminal_surface": "weekly.market_breadth_audit (display only; production_effect_enabled=false)",
+      "mutation_evidence": "changing it changes only the weekly audit block; no sizing, veto or M6.7 price reads it. Item 16 promotes these to a decision input when the regime state machine lands."
+    },
+    "market_context.market_breadth_source.status": {
+      "category": "duplicate_or_display_audit",
+      "consumer_ref": "runners/a_short_weekly_pipeline.py::_build_market_breadth_audit -> weekly.market_breadth_audit",
+      "terminal_surface": "weekly.market_breadth_audit (display only; production_effect_enabled=false)",
+      "mutation_evidence": "changing it changes only the weekly audit block; no sizing, veto or M6.7 price reads it. Item 16 promotes these to a decision input when the regime state machine lands."
+    },
+    "market_context.market_breadth_source.unavailable_reason": {
+      "category": "duplicate_or_display_audit",
+      "consumer_ref": "runners/a_short_weekly_pipeline.py::_build_market_breadth_audit -> weekly.market_breadth_audit",
+      "terminal_surface": "weekly.market_breadth_audit (display only; production_effect_enabled=false)",
+      "mutation_evidence": "changing it changes only the weekly audit block; no sizing, veto or M6.7 price reads it. Item 16 promotes these to a decision input when the regime state machine lands."
+    },
+    "market_context.market_breadth_source.universe_name": {
+      "category": "duplicate_or_display_audit",
+      "consumer_ref": "runners/a_short_weekly_pipeline.py::_build_market_breadth_audit -> weekly.market_breadth_audit",
+      "terminal_surface": "weekly.market_breadth_audit (display only; production_effect_enabled=false)",
+      "mutation_evidence": "changing it changes only the weekly audit block; no sizing, veto or M6.7 price reads it. Item 16 promotes these to a decision input when the regime state machine lands."
+    },
+    "market_context.market_breadth_source.usable_stock_count": {
+      "category": "duplicate_or_display_audit",
+      "consumer_ref": "runners/a_short_weekly_pipeline.py::_build_market_breadth_audit -> weekly.market_breadth_audit",
+      "terminal_surface": "weekly.market_breadth_audit (display only; production_effect_enabled=false)",
+      "mutation_evidence": "changing it changes only the weekly audit block; no sizing, veto or M6.7 price reads it. Item 16 promotes these to a decision input when the regime state machine lands."
     }
   },
   "leaf_nature_by_group": {
@@ -1083,19 +1173,19 @@
     "candidate_data_quality": "comparison_track"
   },
   "decision_predicate_sha256": {
-    "A-EGS/egs_main.py": "a9e2ccaedacd7554a3b69b57a100f53865b908f75f7f286ee268f09b1a430d58",
+    "A-EGS/egs_main.py": "ce7770ef7221fff291ceecb672ed77644086553c1f1afe57bf942f9c06db0152",
     "engine/egs_industry_heat.py": "74932f994ec0658345c41aa932b54b5685c1737c663f5070a193d264f37fced2",
     "engine/a_short_industry_theme.py": "6a10200f80b3c0d301efc8af1561b53ef2578e1cd26eea7976188dd57b7b6b2b",
     "engine/a_short_northbound.py": "e48d20a9c49d06480443815755d97f5674fa98fe1e13284f2d4aaaa19361d71a",
     "engine/a_short_margin_overheat.py": "5d727a30ecc215a5546afe8be41dd3d43c99d7cc4abf2a03e1c099ee171d7cbb",
     "runners/a_short_phase5_engine.py": "bd9c17a7032066d7c3c9074a8fedb16e5e11b559d973d95987458fb8eca6dd5e",
-    "runners/a_short_weekly_pipeline.py": "64ddd6dc4e65c5d16d9037e1fc0426bd816d2bf1089145ae6d91efdff5f0aa54",
+    "runners/a_short_weekly_pipeline.py": "a7a625fef3cae13040cfd15410c78c90db0711417a1cc55cb5e45446661ae662",
     "runners/a_short_m67_render.py": "146e6c47814b0421bb973e2741d96e7d4773c06d9fc1104d54f9100100deac51",
     "engine/a_short_portfolio_risk.py": "02b88ac3b5239e8dd4897bde06afab0769ea5593f8a8a3666e5c8fba24486860",
     "engine/a_short_effect_contract.py": "2f7c1cbc41bd60acdd2ce4886a3beada8ee3ec76dc2a3b2288edffe37418c6a8"
   },
   "runtime_constants_sha256": {
-    "A-EGS/egs_main.py": "c1fb2b49b2a9701f7af2eadc54999374eeab2206138553b1f1790a74c2f84a5e",
+    "A-EGS/egs_main.py": "2758f314b9f8edddd14a84551f7416dd7293939e41c610253af5cebecb8db0ad",
     "engine/a_short_northbound.py": "07363ce1dbdc2bea07b414e3f626155f3bfb4258e58a19d270c1b8746350ebc4",
     "engine/a_short_margin_overheat.py": "5b77a55af1d08d82062b7224d676514f55856ea140fa7ec8d2b7f4a785978867",
     "runners/a_short_phase5_engine.py": "27f947c64df7eaf4e59526b4bc0c150de5baef5a2447187acc98378e4c1f9f00",
@@ -1350,7 +1440,7 @@
     "small_float_mv_pct"
   ],
   "output_schema_sha256": {
-    "schemas/a_short_weekly_report.schema.json": "7f75362a262ef77897d32477e8607235b8d2df3735fb92ec7c92716577386b46",
+    "schemas/a_short_weekly_report.schema.json": "c8c35e14709f40459b6b06de6b2af6aafc6b6f1b0661e7743cfe3648dc0f75a6",
     "schemas/a_short_m67_report.schema.json": "cdf7c83a3947e42702f7efe90edec4911c33bec7ca8b25c882dd706dc680a2be"
   },
   "analysis_input_paths": [
@@ -1622,14 +1712,11 @@
     "generated_at",
     "horizon",
     "market",
-    "market_context.breadth.consecutive_board_height",
     "market_context.breadth.csi300_pct_change_window",
     "market_context.breadth.csi300_window.end_date",
     "market_context.breadth.csi300_window.length",
     "market_context.breadth.csi300_window.length_unit",
     "market_context.breadth.csi300_window.start_date",
-    "market_context.breadth.limit_down_count",
-    "market_context.breadth.limit_up_count",
     "market_context.breadth.limit_up_index_pct_change",
     "market_context.margin_coverage.coverage_complete",
     "market_context.margin_coverage.effective_ref_date",

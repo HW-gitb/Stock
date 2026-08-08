@@ -1717,6 +1717,39 @@ def _resolve_m05_state(normalized_list: list[dict]) -> dict:
     return first
 
 
+#: Terminal, carried through so the weekly audit can say WHY the index column is
+#: blank instead of leaving a reader to assume it is a to-do.
+_LIMIT_UP_INDEX_UNAVAILABLE_REASON = "no_reachable_published_index"
+
+
+def _build_market_breadth_audit(source: dict | None) -> dict:
+    """Display-only market breadth block for the weekly report.
+
+    Deliberately audit-only: item 14 wires the numbers and shows them, item 16
+    decides whether they may move anything.  Publishing them as a decision input
+    now would be the "fake production consumer" that hides a dangling leaf --
+    the counts are registered as `duplicate_or_display_audit` for exactly that
+    reason, and no sizing, veto or price on any M6.7 row reads this block.
+    """
+    facts = dict((source or {}).get("breadth") or {})
+    binding = dict((source or {}).get("market_breadth_source") or {})
+    status = str(binding.get("status") or "unavailable")
+    return {
+        "status": status if status in {"complete", "partial", "unavailable"} else "unavailable",
+        "universe_name": str(binding.get("universe_name") or "a_share_full_market"),
+        "effective_date": binding.get("effective_date"),
+        "full_market_limit_up_count": facts.get("full_market_limit_up_count"),
+        "full_market_limit_down_count": facts.get("full_market_limit_down_count"),
+        "full_market_consecutive_limit_up_height": facts.get(
+            "full_market_consecutive_limit_up_height"),
+        "limit_up_index_pct_change": None,
+        "limit_up_index_unavailable_reason": _LIMIT_UP_INDEX_UNAVAILABLE_REASON,
+        "unavailable_reason": binding.get("unavailable_reason"),
+        "production_effect_enabled": False,
+        "comparison_only": True,
+    }
+
+
 def build_weekly_report(normalized_list: list, as_of: str, generated_at: str,
                         iv_feed_ref: str = "", run_lineage: dict = None, available_cash=None,
                         new_exposure_capacity=None, crash_veto_tracking: dict | None = None,
@@ -1729,7 +1762,8 @@ def build_weekly_report(normalized_list: list, as_of: str, generated_at: str,
                         portfolio_fact_fetch_status: str = "not_requested",
                         pre_holiday_control: dict | None = None,
                         northbound_control: dict | None = None,
-                        margin_overheat_control: dict | None = None) -> dict:
+                        margin_overheat_control: dict | None = None,
+                        market_breadth_audit_source: dict | None = None) -> dict:
     from runners.a_short_phase5_engine import build_m67_report, build_holding_report
     incoming_lineage = dict(run_lineage or {})
     incoming_price_freshness = incoming_lineage.get("price_freshness") or {}
@@ -1927,6 +1961,7 @@ def build_weekly_report(normalized_list: list, as_of: str, generated_at: str,
     weekly["margin_coverage"] = margin_coverage
     from engine.a_short_data_quality_shadow import build_data_quality_shadow
     weekly["data_quality_shadow"] = build_data_quality_shadow(bound_normalized_list, as_of)
+    weekly["market_breadth_audit"] = _build_market_breadth_audit(market_breadth_audit_source)
     if candidate_exclusions:
         weekly["candidate_exclusions"] = list(candidate_exclusions)
     from engine.a_short_effect_contract import build_effect_contract_ledger
