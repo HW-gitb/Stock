@@ -1,5 +1,11 @@
 # Session Log
 
+## 2026-08-08 — 用户裁决与授权（刀 5 后半段：每周 ETF 股息 sidecar）
+
+- **裁决**：现在就建 B（只升基准侧的总回报口径），不等真实周；C 暂不做，等 X 量出来再评估。
+- **授权（常设）**：每周对四只基准 ETF 发真实 Massive 取数，并入既有每周一键的 gated fetch 阶段。用户明确要求「每周只跑一次一键程序，除此之外不参与任何事，实盘期不要打扰」，故实现上不得新增人工确认入口，任何缺失一律降级不阻塞、不询问。
+- **边界与硬约束**：调用数代码硬顶、预算发请求前判、dormant 零网络不变、密钥卫生沿用取证段那套、同周重跑幂等——逐条写在 `docs/system_risk_register.md::R-USSHORT-26W-DIAG-BOTH-SIDES-IGNORE-DIVIDENDS-AND-THAT-IS-NOT-NEUTRAL`。
+- **仍需用户一次动作**：开钟（设计完成通知 + receipt），与每周运行无关。
 ## 2026-08-08 — Claude 审查 PASS（刀 5 捕获段回溯审查：真实 Massive 取数 + tracked 摘要）
 
 - **Verdict/Action**: PASS。对象是 `d4303f61`（2026-08-05 已并入 master，`891a` 工作树落后 125 个提交，故按 master 当前态审；该段文件此后未再改动）。真钱/密钥面三道门都实在：`confirm_user_authorization` 函数级门；raw 与 normalized 路径必须**正向**确认落在 `provider_samples/` 内，否则拒；产物已存在即拒覆盖；分页预算在**发请求之前**判。续页 URL 处理尤其稳——校验厂商 next_url 未改 host/path/symbol/adjusted 模式，剥掉来路 apiKey 再补授权那把。
