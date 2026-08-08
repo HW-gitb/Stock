@@ -15,18 +15,30 @@ cited. The one gate below keeps it out of the repository entirely, which is the
 same thing said in a way a reader cannot forget to honour.
 
 Every step goes through the public entry the real weekly path uses — the store's
-own freeze/commit, the real benchmark and cash capture functions with their
-vendor seams injected, the real exposure writer, `settle_captured_week`,
-`weekly_diagnostic_step`, the real report renderer and the real splice. Nothing
-is reimplemented here; the point is to exercise the seams, and a private copy of
-a seam proves nothing about it. No provider module is imported: the vendor is a
-deterministic local fake handed in through the parameter the fetchers already
-accept for it, so a rehearsal performs zero network calls.
+own freeze/commit, the real exposure writer, `fetch_next_week`,
+`settle_captured_week`, `weekly_diagnostic_step`, the real report renderer and
+the real splice. Nothing is reimplemented here; the point is to exercise the
+seams, and a private copy of a seam proves nothing about it. No provider module
+is imported: the vendor is a deterministic local fake handed in through the
+parameter the fetchers already accept for it, so a rehearsal performs zero
+network calls.
+
+Two ways a week can go missing, and they are NOT the same shape — the harness
+models both because a fix for one is silent about the other:
+
+* `--starved-weeks` — the weekly act ran and the account settled, but the inputs
+  never landed. The next run back-captures that week and settles it late, so it
+  ends up an ordinary evaluable week and the clock catches the calendar up.
+* `--skipped-weeks` — nobody ran the weekly act at all (holiday, machine off), so
+  the ACCOUNT has no week for it either and nothing ever can make it evaluable.
+  That is the week that becomes `no_count`, and it is the common outage in
+  practice. The harness could not produce it at all until the account loop learned
+  to skip too.
 """
 from __future__ import annotations
 
 import argparse
-from datetime import date, datetime, timedelta, timezone
+from datetime import date, datetime, timedelta
 import hashlib
 import json
 from pathlib import Path
@@ -59,14 +71,14 @@ from engine.us_short_model_paper_store import (  # noqa: E402
 )
 from engine.us_short_private_paths import ROOT as REPO_ROOT  # noqa: E402
 from engine.us_short_weekly_report_renderer import render_weekly_report  # noqa: E402
+from engine.us_short_market_diagnostic_weekly_producer import next_week_inputs  # noqa: E402
 from runners.us_short_market_diagnostic_benchmark_fetch import (  # noqa: E402
     PACKET_FILENAME,
-    capture_week,
     week_directory as benchmark_week_directory,
 )
-from runners.us_short_market_diagnostic_cash_fetch import capture_cash_week  # noqa: E402
 from runners.us_short_market_diagnostic_weekly import open_clock, settle_week  # noqa: E402
 from runners.us_short_market_diagnostic_weekly_fetch import (  # noqa: E402
+    fetch_next_week,
     load_cash_returns,
     load_target_exposures,
     settle_captured_week,
@@ -418,12 +430,18 @@ def _settle_one_week(
 ) -> dict[str, Any]:
     """Settle this week through whichever entry the flag selects."""
 
-    if with_total_return_sidecar and packet_path.is_file():
+    if (
+        with_total_return_sidecar
+        and packet_path.is_file()
+        and next_week_inputs(diag, as_of_date=week["decision_date"])["calendar_week_index"] == index
+    ):
         # The manual entry, because the one-click entry takes no sidecar argument
         # — that wiring gap is recorded, and default-off is how the rehearsal
         # shows what the one-click path really produces. A starved week has no
         # packet to reconcile against, so it falls through to the one-click entry
-        # and gets that entry's honest waiting status instead.
+        # and gets that entry's honest waiting status instead. So does a run where
+        # the clock is behind: only the one-click entry writes off the weeks that
+        # ended without inputs, and the manual entry would refuse the gap.
         sidecar_path = packet_path.parent / "total_return_sidecar.json"
         if not sidecar_path.exists():
             sidecar_path.write_text(
@@ -458,7 +476,8 @@ def run_rehearsal(
     root: str | Path,
     first_decision_date: str,
     weeks: int = 26,
-    no_count_weeks: tuple[int, ...] = (),
+    starved_weeks: tuple[int, ...] = (),
+    skipped_weeks: tuple[int, ...] = (),
     with_total_return_sidecar: bool = False,
     epoch_suffix: int = 1,
 ) -> dict[str, Any]:
@@ -468,9 +487,13 @@ def run_rehearsal(
         raise RehearsalError("--weeks must be a positive integer")
     sandbox = rehearsal_root(root)
     calendar = _weekly_dates(first_decision_date, weeks)
-    skipped = set(no_count_weeks)
-    if skipped - set(range(1, weeks + 1)):
-        raise RehearsalError("--no-count-weeks names a week outside the run")
+    starved = set(starved_weeks)
+    skipped = set(skipped_weeks)
+    inside = set(range(1, weeks + 1))
+    if (starved | skipped) - inside:
+        raise RehearsalError("--starved-weeks/--skipped-weeks names a week outside the run")
+    if starved & skipped:
+        raise RehearsalError("a week cannot be both starved and skipped; they are different outages")
 
     diag = sandbox / "diag"
     inputs = sandbox / "inputs"
@@ -514,12 +537,44 @@ def run_rehearsal(
     freeze_decision_bundle(paper, bundle)
 
     provider_calls: list[str] = []
+    provider_call_count = 0
     outcomes: list[dict[str, Any]] = []
     for index, week in enumerate(calendar, start=1):
-        packet = _price_packet(week["paper_decision_date"], week["valuation_date"], _strategy_close(index))
+        if index in skipped:
+            # Nobody ran the weekly act at all. The account does not settle either,
+            # nothing is captured, and no weekly report is produced — the frozen
+            # decision simply stays pending and matures a week later, which is what
+            # a skipped week really does. Settling the account here anyway is why
+            # this harness could not show the outage at all before.
+            outcomes.append({
+                "calendar_week_index": index,
+                "decision_date": week["decision_date"],
+                "fetch_status": "not_run",
+                "settle_status": "not_run",
+                "clock_status": None,
+                "v1_1_status": None,
+                "publication": None,
+                "problem": None,
+                "report_path": None,
+                "report_lines_delivered": False,
+                "starved": False,
+                "skipped": True,
+                "no_count_weeks": [],
+            })
+            continue
+        # Off the PENDING bundle, not off this week's calendar slot: after a skipped
+        # week the decision that is still pending is the older one, and it matures
+        # now. The store requires the packet's first bar to be that bundle's own
+        # decision date, which is also what makes the account visibly one decision
+        # staler after an outage — exactly what a skipped week does in reality.
+        packet = _price_packet(bundle["decision_date"], week["valuation_date"], _strategy_close(index))
         settlement, next_state, next_nav = settle_decision_bundle(
             state, bundle, packet, week["valuation_date"]
         )
+        # The next decision belongs to the NEXT calendar slot, not to the stale
+        # bundle plus seven days: a skipped week's decision day simply never
+        # happened, and the store refuses a decision dated before its own price
+        # basis anyway.
         following = _decision_bundle(
             next_state,
             _shift(week["paper_decision_date"], 7),
@@ -528,32 +583,23 @@ def run_rehearsal(
         commit_settlement_and_freeze_next(paper, bundle, settlement, next_state, next_nav, following)
         state, bundle = next_state, following
 
-        if index not in skipped:
-            capture_week(
+        fetched: dict[str, Any] = {"status": "starved"}
+        if index not in starved:
+            # Through `fetch_next_week`, not around it: the one-click path derives
+            # every date from the two stores, and it is the step that back-captures
+            # a week whose prices never landed. Starving a week here is simply not
+            # running that step, while the account carries on as usual.
+            fetched = fetch_next_week(
                 confirm_user_authorization=True,
-                call_log=provider_calls,
-                decision_date=week["decision_date"],
-                valuation_date=week["valuation_date"],
-                prior_valuation_date=(calendar[index - 2]["valuation_date"] if index > 1 else seed_as_of),
-                settlement_decision_date=week["paper_decision_date"],
-                calendar_week_index=index,
-                diagnostic_epoch=epoch,
-                as_of_date=week["decision_date"],
+                root=diag,
+                model_paper_root=paper,
                 inputs_root=inputs,
-                module=_Vendor(),
-            )
-            capture_cash_week(
-                confirm_user_authorization=True,
-                call_log=provider_calls,
-                decision_date=week["decision_date"],
-                valuation_date=week["valuation_date"],
-                calendar_week_index=index,
                 as_of_date=week["decision_date"],
-                inputs_root=inputs,
-                opener=_cash_opener(provider_calls),
-                api_key="rehearsal-not-a-real-key",
-                now=lambda: datetime(2026, 1, 1, tzinfo=timezone.utc),
+                benchmark_module=_Vendor(),
+                cash_opener=_cash_opener(provider_calls),
+                cash_api_key="rehearsal-not-a-real-key",
             )
+            provider_call_count += int(fetched.get("provider_calls") or 0)
 
         write_decision_exposure(
             build_decision_exposure_record(
@@ -615,6 +661,7 @@ def run_rehearsal(
         outcomes.append({
             "calendar_week_index": index,
             "decision_date": week["decision_date"],
+            "fetch_status": fetched["status"],
             "settle_status": settled["status"],
             "clock_status": step["status"],
             "v1_1_status": step.get("v1_1_status"),
@@ -622,14 +669,19 @@ def run_rehearsal(
             "problem": problem,
             "report_path": str(report_path),
             "report_lines_delivered": delivered,
-            "no_count": index in skipped,
+            "starved": index in starved,
+            "skipped": False,
+            "settled_weeks": settled.get("settled_weeks") or [],
+            # Which earlier weeks this run wrote off because they ended without
+            # their inputs. Empty in every week of a healthy run.
+            "no_count_weeks": settled.get("no_count_weeks") or [],
         })
 
     return {
         "root": str(sandbox),
         "diagnostic_epoch": epoch,
         "weeks": outcomes,
-        "provider_calls": len(provider_calls),
+        "provider_calls": provider_call_count,
         "boundary": {
             "rehearsal_only": True,
             "counts_ship_gate": False,
@@ -643,18 +695,25 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--root", required=True, help="absolute sandbox path OUTSIDE the repository")
     parser.add_argument("--first-decision-date", required=True, help="YYYYMMDD, a Monday")
     parser.add_argument("--weeks", type=int, default=26)
-    parser.add_argument("--no-count-weeks", default="", help="comma-separated week numbers to starve")
+    parser.add_argument("--starved-weeks", default="",
+                        help="comma-separated weeks whose INPUTS never landed (account still settles)")
+    parser.add_argument("--skipped-weeks", default="",
+                        help="comma-separated weeks nobody ran at all (account does not settle either)")
     parser.add_argument("--with-total-return-sidecar", action="store_true",
                         help="settle through the manual entry with a synthesized Knife 5 sidecar, so v1.1 "
                              "prints raw_excess = exposure_effect + active_system_effect")
     args = parser.parse_args(argv)
-    skipped = tuple(int(part) for part in args.no_count_weeks.split(",") if part.strip())
+
+    def _weeks(text: str) -> tuple[int, ...]:
+        return tuple(int(part) for part in text.split(",") if part.strip())
+
     try:
         summary = run_rehearsal(
             root=args.root,
             first_decision_date=args.first_decision_date,
             weeks=args.weeks,
-            no_count_weeks=skipped,
+            starved_weeks=_weeks(args.starved_weeks),
+            skipped_weeks=_weeks(args.skipped_weeks),
             with_total_return_sidecar=args.with_total_return_sidecar,
         )
     except RehearsalError as exc:

@@ -161,3 +161,123 @@ Knife3 lifecycle 同步改为机器自动激活 v1.1：启用前按连续 `paper
 **验证**：`tests.test_us_short_market_diagnostic_rehearsal` 12 例（门四拒 / 零网络 / 六周链含一个饿死周 / 26 周成绩单）；焦点包 7 模块 `Ran 123 tests in 79.9s PASS`（含授权论域守卫、IO 清单、类守卫、weekly advance/runner、现金腿）。无生产改动，不触发 rule 3。
 
 **边界**：演练产物永远不是诊断证据——沙箱必须是仓外绝对路径且为空（门实测四拒），epoch 前缀 `rehearsal-`，每份周报第 1 节带「REHEARSAL — 非诊断证据」横幅，且有一条测试在真跑之后核对仓库受保护根零增长。真钟仍未开：没有签发过任何真 receipt。
+
+## 2026-08-08 追加：断供一周后诊断钟不再永久卡死——缺失周写 no_count 并自愈
+
+**改了什么**：`runners/us_short_market_diagnostic_weekly_fetch.py`（周次身份拆出 `_identity_for` + `_paper_week_wrapped_by` 回溯、fetch 侧 `_weeks_now_due` 一次抓齐所有到期周、settle 侧写掉已结束的未记录周再结算当前周、判死规则 `_week_is_over`）、`engine/us_short_market_diagnostic_weekly_producer.py`（新 `settle_missed_week`；顺手修 `build_no_count_record` 的 `source_refs` 只滤股息腿 `None` 的真缺陷，改用 settled 周同一个 `_dedupe_sha256`）、`runners/us_short_weekly_capstone.py`（settle stage 新增一条固定串报告行点名被写掉的周号）、`runners/us_short_market_diagnostic_rehearsal.py`（每周改走 `fetch_next_week` 而非自带日期直调 `capture_week`/`capture_cash_week`；`--with-total-return-sidecar` 只在钟正停在本周时才走手动入口）、三个测试模块与授权论域豁免表。
+
+**为什么改**：`R-USSHORT-26W-DIAG-A-MISSED-WEEK-JAMS-THE-CLOCK-FOREVER-AND-NOTHING-WRITES-NO-COUNT`（与 `...KNIFE7B-NO-COUNT-WEEK-CANNOT-BE-PRODUCED` 是同一缺陷两种说法）。缺一周价格包后，账户仍每周结算，head 的估值日永远越过诊断 store 还在等的那一周，`settlement <= valuation <= decision` 此后恒不成立——周任务每周报 `failed`、日历周数永久冻结，既不是设计允许的 no_count 也不是任何人批准过的行为。用户裁决取 candidate ①（settle 路径自补），判死时点用「下一周的决策日到了，那周才算真的过去」。机制、逐条修法、刻意与裁决文字不同的一处（补抓落在已 gated 的 fetch、写掉仍在 settle）与取舍全文只在 `docs/system_risk_register.md` 该条，本节不复述。
+
+**验证命令**：焦点超集 `.tools\run_unittest_with_repo_pythonpath.cmd tests.test_us_short_market_diagnostic_weekly_advance tests.test_us_short_market_diagnostic_weekly_producer tests.test_us_short_market_diagnostic_rehearsal tests.test_us_short_market_diagnostic_authorization_conformance tests.test_us_short_market_diagnostic_weekly_runner tests.test_us_short_market_diagnostic_local_adapter tests.test_us_short_market_diagnostic_lifecycle tests.test_us_short_market_diagnostic tests.test_us_short_market_diagnostic_aggregator tests.test_us_short_market_diagnostic_cash_return tests.test_us_short_market_diagnostic_benchmark_packet tests.test_us_short_discovery_conformance tests.schema.test_us_short_market_diagnostic_26w_schemas`；全量按 rule 3(a)（改动含生产顶层 runner `runners/us_short_weekly_capstone.py`）走 `.tools\full_pack_ledger.py run us_short`。植入对照脚本走 `python -B` + `PYTHONDONTWRITEBYTECODE=1`，跑完 `git status` 已核零残留。
+
+**验证结果**：焦点超集与全量结果、7 个植入 7 红的逐条清单、以及演练刀「饿中间周 / 饿首周 / 连饿两周」三条整链用例读出的逐周图景，全部记在 register 该条的 `Closure` 与 `docs/SESSION_LOG.md` 顶条。一句话：`weeks=4, no_count=(2,)` 现在跑出 `published / waiting_for_inputs / published / published`，第 2 周以 `no_count` 留在 26 周分母里，`current_window_id` 未变。
+
+**失效的旧结论**：① 上一节写的「演练刀逐周直调 `capture_week` / `capture_cash_week`」已不成立——那样绕开了卡死发生的入口，现在每周走 `fetch_next_week`，饿一周＝那一周不跑 fetch。② 上一节「饿中间周用例断言现状（每周 failed、钟冻在第 1 周）」已被推翻，该用例现断言恢复后的行为；`no_count` 这个 outcome 字段已改名为 `starved`（它标的是「这周被饿了」，而真正的 no_count 记录现在是产物里的东西）。③ register triage 条里「`build_no_count_record` 全仓零调用方」的旧说法此前已更正为「inputs 侧无生产者」，本轮把 inputs 侧也补上了。
+
+**下一步注意事项**：① `KNIFE7-FROZEN-FIRST-WEEK-IS-BARELY-CONSTRAINED` 仍 open，且本轮给了它一个新后果——首周若被设成过去的日期，那些已过去的周会在开钟后第一次运行里被直接写成 `no_count`（以前是卡住）；开真钟前应先补「首周不早于 `issued_at`」的约束。② `as_of_date` 是判死的唯一时钟：capstone 传的是 canonical decision date，直调 runner 的人若传一个远期日期，会让中间所有周被写掉——缺省 `None` 时任何周都不算结束，这是有意的 fail-closed 缺省。③ 供应商长期不可用时，缺失周没有包可投影，钟按设计停在 `waiting_for_inputs` 而不是盲写 no_count；这是数据可得性的限制，不是卡死，恢复后会自己追上。
+
+## 2026-08-08 追加：自愈只覆盖了「被测的那种漏周」——补齐「整周没人跑」，并把「能结算就先结算」放到写掉之前
+
+**改了什么**：`runners/us_short_market_diagnostic_weekly_fetch.py`（新 `plan_week` 三态分类器 = fetch 与 settle 共用的唯一判定处；判死拆成 `_week_is_over` + `_account_has_moved_past` 两半；新 `_unlived_week_identity` 让账户从未结过的周也能被描述和补抓；settle 循环改成「能结算就结算、结算完继续下一周」，只写掉 `unlived` 周；新增 `stalled_on_a_finished_week` 状态）、`runners/us_short_weekly_capstone.py`（停钟专属报告行 + no_count 行改措辞）、`engine/us_short_market_diagnostic_weekly_producer.py`（`build_no_count_record` docstring 按两个调用方分别写清，并明写「账户结过的周绝不能走到这里」）、`runners/us_short_market_diagnostic_benchmark_fetch.py`（补上 `--confirm-user-authorization`，该 CLI 此前必 AttributeError）、`runners/us_short_market_diagnostic_rehearsal.py`（`--no-count-weeks` 拆成 `--starved-weeks` 与 `--skipped-weeks` 两种断供，account 循环学会跳过）、三个测试模块。
+
+**为什么改**：`R-USSHORT-26W-DIAG-SELF-HEAL-ONLY-COVERS-THE-OUTAGE-IT-WAS-TESTED-FOR`（F1 整周没人跑即永久卡死且标签与健康态同形 / F2 漏首周每周硬失败 / F3 把本可评估的周写成 no_count 且理由为假 / F4 未来 as_of 烧活周）+ `...A-MISSED-WEEK-JAMS...` 内的 NAV 窗口条。上一轮只修了「输入断供但账户照常结周」这一种漏法，而现实里最常见的是整周没人跑——那时账户也没结，写掉那条腿永远够不着。机制、逐条修法、为什么 NAV 那条是被 F3 化解而不是单独改，全文只在 `docs/system_risk_register.md`，本节不复述。
+
+**验证命令**：焦点超集 13 模块经 `.tools\run_unittest_with_repo_pythonpath.cmd`；全量按 rule 3(a) 经 `.tools\full_pack_ledger.py run us_short`；植入对照脚本 `python -B` + `PYTHONDONTWRITEBYTECODE=1`，跑完核 `git status` 零残留。
+
+**验证结果**：焦点超集 `Ran 304 in 140.1s PASS receipt:6209b299ab4a94fac444d82f`；全量 `PASS 5604/5604 573.9s`、计数门相等、指纹 `e00fe0735a68`。7 个植入 7 红、控制组先全绿。两种断供的逐周图景与读出的数字在 register 的两条 Closure 里。
+
+**失效的旧结论**：① 上一节写的「饿一周 → 该周以 no_count 出现」**不再成立**——输入断供而账户照常结周的周现在**正常结算**（它能被评估），no_count 只留给账户从未结过的周；`StarvedMiddleWeekTest` 已按此重写。② `--no-count-weeks` 这个旗标已删除，换成 `--starved-weeks` / `--skipped-weeks`；两者不可同时点名同一周。③ 上一节说「no_count 周的 NAV 写 prior 是对的」只在新的唯一调用场景下成立，理由已写进 `build_no_count_record` 的 docstring。
+
+**下一步注意事项**：① 新开一条 `R-USSHORT-26W-DIAG-THE-WEEK-AFTER-AN-UNLIVED-WEEK-COMPARES-TWO-WEEKS-OF-STRATEGY-WITH-DAYS-OF-BENCHMARK`——跳过整周后，恢复周的策略窗口跨两周而基准窗口只有几天，三个候选口径都是设计决策，**须用户裁一个**，开钟前定。② 判死的第二半是「账户自己走过去了」而不是本机时钟，这是有意的：演练台整条日历都在未来，用挂钟做护栏会把演练台一起打死。③ `KNIFE7-FROZEN-FIRST-WEEK-IS-BARELY-CONSTRAINED` 仍 open，开真钟前该补。
+
+## 2026-08-08 追加：那条随机命名导致的假红已闭；跳周后的窗口不对称仍待用户裁
+
+**改了什么**：只改了一个测试文件 `tests/provider/test_us_short_yfinance_grades_fetch.py`——provider 噪声判据由裸子串 `"404"` 换成 provider 真正打印的 `"HTTP Error 404"`，与另两个 token 一起抽成模块级 `PROVIDER_NOISE_TOKENS` + `_leaked_provider_noise()`，并补一条两头都断言的反向用例。无生产代码改动。
+
+**为什么改**：`R-USSHORT-YFINANCE-GRADES-HYGIENE-TEST-FAILS-WHEN-ITS-OWN-RANDOM-SLUG-CONTAINS-404`。该套件把自己的运行 id（`yf_grades_<pid>_<随机5位>`）写进 tracked summary 的路径字段，随机数含 `404` 时那条断言就红——本修复链的一次全量正好抽到 `yf_grades_14740_20404`，赔掉一次 11 分钟的全量。机制、为什么不同时改 slug 的随机派生，只在 `docs/system_risk_register.md` 该条。
+
+**验证命令**：`.tools\run_unittest_with_repo_pythonpath.cmd tests.provider.test_us_short_yfinance_grades_fetch`（本模块）+ 焦点超集 14 模块 + 全量按 rule 3(a) 经 `.tools\full_pack_ledger.py run us_short`（本轮虽只改测试，但未提交树整体仍带前两轮的生产改动，指纹已变，故重绑一次）。
+
+**验证结果**：本模块 `Ran 17 OK`；2 个植入 2 红、控制组先绿（判据退回裸 `"404"` → 目录名那半红；判据恒空 → provider 真消息那半红）。焦点超集与全量结果记在 `docs/SESSION_LOG.md` 顶条。
+
+**失效的旧结论**：上一节里「那条 flake 与本刀无关、只诊断入册不修」已被本轮取代——它已修并配了反向用例。
+
+**下一步注意事项**：`R-USSHORT-26W-DIAG-THE-WEEK-AFTER-AN-UNLIVED-WEEK-COMPARES-TWO-WEEKS-OF-STRATEGY-WITH-DAYS-OF-BENCHMARK` 仍 open 且**本轮刻意没动**：本轮把三个候选口径逐个验过，② 会让基准自己的 26 周累计把同一段市场算两遍、③ 要改 model-paper 记账（越出本轨），只剩 ① 自洽；而 ① 需要周记录里有一个「两边数字都对但窗口不可比」的字段，现有 schema 只有 `strategy_evaluable` / `benchmark_evaluable` 两个开关，硬挑一个置 false 是拿假标签换真问题。所以它需要的是一次 schema 决定，开钟前定。
+
+## 2026-08-08 追加：诊断钟自愈第二轮审查 verdict（FAIL）
+
+**审查对象**：本工作树未提交态中的自愈修复轮，针对 `R-USSHORT-26W-DIAG-SELF-HEAL-ONLY-COVERS-THE-OUTAGE-IT-WAS-TESTED-FOR` 的 F1–F4。改动面：`plan_week` / `_weeks_now_due` / `settle_captured_week` 三段自愈逻辑（`runners/us_short_market_diagnostic_weekly_fetch.py`）、`settle_missed_week`（`engine/us_short_market_diagnostic_weekly_producer.py`）、capstone 的 no_count 报告行与停钟状态、基准 fetch CLI 补 `--confirm-user-authorization`。
+
+**verdict**：`审查 FAIL`。四条 Required 的修法形态逐条实读确认正确——可评估周即使已过去也照常结算（`no_count` 保留给不能评估的周）、判死由「`as_of` 说下一周决策日已到」与「账户估值已越过」两半共同成立、到期周一次抓齐、补抓仍在已 gated 的 fetch、停钟另给 `stalled_on_a_finished_week` 状态与专属报告行。
+
+**拦住的一条**：`plan_week` 的 `except WeeklyAdvanceError` 把 `_identity_for` 抛出的**任何**故障（包括「已被 head 采纳的已结算周读不出」与「三日期不对齐」）在「本周已过 + 账户已越过」时一律洗成 `unlived`，写成一条理由为假、不可撤销的 `no_count` 周。护栏本身存在且有反向测试，但那条测试打在 `next_week_identity` 层，生产周任务走的是 `settle_captured_week → _next_week_plan → plan_week`，护栏在这条路上被自己的 `except` 吃掉。完整机制、探针复现步骤、Required repair 与 Closure tests 见 `docs/system_risk_register.md::R-USSHORT-26W-DIAG-A-FAULT-IN-THE-PAPER-WEEK-IS-LAUNDERED-INTO-A-NO-COUNT-WEEK`（含两条不阻塞 Optional：一轮结算多周时边界周的 `publication` 会被后一周覆盖）。
+
+**验证边界**：验收超集 `Ran 268 in 125.0s PASS receipt:5d99e65ae100c8cfcbffff73`（包全绿而缺陷真实）；全量按 rule 4 不重跑，引用执行方 ledger `5604 OK / 573.9s`、指纹 `e00fe0735a68`（trigger rule 3(a) 成立）；§6a 独立对抗 agent 本轮未起（会话级规则禁用），补偿为审查方自写探针与上一轮同面 agent 覆盖；真实 vendor 行为仍未联网验证。本 verdict 只覆盖诊断轨的五个源文件与三个诊断测试模块，其后新增的 `tests/test_us_short_yfinance_grades_fetch.py` 改动不在本轮验收包内。
+
+**落盘约定变更（2026-08-08 用户定）**：此后所有交接文档（register / SESSION_LOG / handoff）一律写入本工作树 `D:\cnhea\Stock-wt\us-short_r28`；`wt/usshort_r1` 只负责审查、提交与 merge，不再承载审查记录。
+
+## 2026-08-08 追加：故障不再被洗成 no_count 周（gap 与 fault 在抛出点分家）
+
+**改了什么**：`runners/us_short_market_diagnostic_weekly_fetch.py`——新增 `WeeklyAdvanceGap(WeeklyAdvanceError)` 标记「账户这里没有这一周」，`WeeklyAdvanceNotReady` 改继承它，新增 `WeeklyAdvanceNoPaperWeek(WeeklyAdvanceGap)` 用于「没有可包裹的已结算周」那个抛出点；`plan_week` 的 `except` 由 `WeeklyAdvanceError` 收窄为 `WeeklyAdvanceGap`。同轮收口两条 Optional：结算多周时保留真正发生过的那次 `publication`、`calendar_week_index` 取 `settled_weeks[-1]`；并把「结算完一周后是否继续下一轮」加了「该周已过去才继续」的界。测试侧加三条 Closure 用例 + 一条正控 + 一条 O1 单元断言。
+
+**为什么改**：`R-USSHORT-26W-DIAG-A-FAULT-IN-THE-PAPER-WEEK-IS-LAUNDERED-INTO-A-NO-COUNT-WEEK`。上一轮我用 `except WeeklyAdvanceError` 包住整个 `_identity_for`，于是「已结算周读不出」「三日期不对齐」两种**故障**也被归类成 `unlived`，写下一条理由为假且不可撤销的 no_count 周——把一个可修复的损坏件烧成了 26 周分母里的一格。机制、复现步骤与逐条 Closure 只在 `docs/system_risk_register.md`。
+
+**验证命令**：`.tools\run_unittest_with_repo_pythonpath.cmd --timeout-seconds 400 tests.test_us_short_market_diagnostic_weekly_advance tests.test_us_short_market_diagnostic_rehearsal tests.test_us_short_market_diagnostic_authorization_conformance`（该三模块实测 332.7s，超 300s 默认上限，原因见下条）；植入脚本 `python -B` + `PYTHONDONTWRITEBYTECODE=1`。
+
+**验证结果**：三模块 `Ran 78 in 332.7s PASS`；审查方探针在生产路径复现为**抛错且零残留**（无周记录、无 register）；5 植入 5 红、控制组先全绿。**其中两个植入第一次跑成绿**——它们瞄准的用例把 `_identity_for` mock 掉了、走不到被改的抛出点，改瞄「跳过第 1 周」那条真穿过该点的端到端后才转红。
+
+**失效的旧结论**：上一节「判死拆成两半」的描述仍成立，但**不完整**——两半只回答「该不该判死」，不回答「这个拒绝是不是一次故障」。现在 gap 与 fault 由异常类在抛出点分开，新增抛出点必须自己选边，忘了选就默认是 fault（安全侧）。
+
+**下一步注意事项**：新开 `R-USSHORT-26W-DIAG-REHEARSAL-GOT-4-5X-SLOWER-WHEN-IT-STARTED-USING-THE-REAL-FETCH-ENTRY`——演练台改走真 `fetch_next_week` 之后，26 周整链由 52s 变 **231.6s**（每周多出数次全账本校验，随周数是 O(n²)），焦点包因此撞 300s/600s 上限。方向是给读取链一个单次运行内的一致性缓存，不得弱化校验；在它修好之前，这条轨的焦点包要显式带 `--timeout-seconds`。
+
+## 2026-08-08 追加：演练台的 O(n²) 消除（读取链一次调用只读校一遍）
+
+**改了什么**：`engine/us_short_market_diagnostic_lifecycle.py`——`load_lifecycle_register` 与 `load_settled_weekly_records` 合并为同一个 `load_register_and_settled_records`（两个公开读取方成为它的投影），`_register_from_records` 新增 `records_already_validated`，只在「这批记录几行之前刚由验证型装载器产出」时置真。授权论域表同步注册 `load_register_and_settled_records`（它才是真正复核锚点的那个）。加一条「校验没被跳掉」的对照用例。
+
+**为什么改**：`R-USSHORT-26W-DIAG-REHEARSAL-GOT-4-5X-SLOWER-WHEN-IT-STARTED-USING-THE-REAL-FETCH-ENTRY`（用户直接指派）。一次 `load_settled_weekly_records` 原先把全店读校三遍，一次运行里被调多次，随周数是 O(n²)。**不加缓存**是刻意的：跨调用零缓存，每次仍完整读校磁盘，两次调用之间被改坏的记录照样被拒。
+
+**验证命令**：`.tools\run_unittest_with_repo_pythonpath.cmd tests.test_us_short_market_diagnostic_rehearsal`（默认 300s 上限）；焦点包 8 模块同入口；全量 `.tools\full_pack_ledger.py run us_short`。
+
+**验证结果**：演练模块 `Ran 28 in 173.9s PASS`，**跑在默认 300s 上限内**（修前 600s 都跑不完）；焦点包 `Ran 184 in 187.5s PASS receipt:f49349f07a19db76a02f95a9`；篡改一条已存周记录后两个读取方都仍拒。全量仍 TIMEOUT，但地板已定位到别处，见下。
+
+**失效的旧结论**：上一节把「焦点包要显式带 `--timeout-seconds`」写成常态——已不成立，演练模块回到默认上限内。上一节把 lane 超时全部归因于我拖慢的演练模块，也不完整：见下。
+
+**下一步注意事项**：新开 `R-USSHORT-LANE-WALL-CLOCK-FLOOR-IS-ONE-UNRELATED-MODULE-AND-IT-DRIFTED-TO-652s`——runner 这次打印出 `WALL_CLOCK_FLOOR 652.4s of 859.4s (75.9%) is one module: test_us_short_discovery_conformance_executable`，该模块打的是 theme-discovery 与 `weekly_capstone_soft_discovery`、与本轨无关，且同一天在 277s→652s 之间漂（同期全量两次 PASS：573.9s / 742.9s）；已核零残留 worker 进程。**加 worker 无用，只有那个模块自己变快才有用**，那是下一刀。
+
+## 2026-08-08 追加：诊断钟自愈第三轮审查 verdict（未完全验证）
+
+**审查对象**：本工作树未提交态，针对 `R-USSHORT-26W-DIAG-A-FAULT-IN-THE-PAPER-WEEK-IS-LAUNDERED-INTO-A-NO-COUNT-WEEK`（含 O1/O2）的修复轮，外加同期落入审查面的 `engine/us_short_market_diagnostic_lifecycle.py` 读取链去重。
+
+**已闭合并经审查方独立复验**：
+
+- **gap 与 fault 在抛出点分家**。新增 `WeeklyAdvanceGap` 基类，`WeeklyAdvanceNotReady` 与新增 `WeeklyAdvanceNoPaperWeek` 继承它，`plan_week` 的 `except` 由 `WeeklyAdvanceError` 收窄为 `WeeklyAdvanceGap`。形态正确的关键在于**默认方向**：新增抛出点若忘了选边，落在 fault 一侧（不被吞、不消费日历周），而不是落在会写掉一周的一侧。审查方重跑上一轮那条腐坏周探针（损坏已结算周 `20260720` + 本周已过 + 账户已越过），生产路径 `settle_captured_week` 现与控制组 `next_week_identity` 一样拒绝 `cannot be read`，`no_count_weeks` 为空。三日期 `does not line up` 仍是 plain `WeeklyAdvanceError`，按同一收窄自动落在 fault 侧。
+- **O1/O2 由机制收口**。`_settle_outcome` 的 `publication` 改为**显式传入**而非读最后一次 `settle_week` 的返回，`calendar_week_index` 取 `settled_weeks[-1]`；跨窗口边界补齐（第 26 周发成绩单后同轮再结第 27 周）不再把成绩单丢掉不报。
+- **校验去重是真去重，不是放松**。`load_register_and_settled_records` 把两个公开读取方合成一次读校，`_register_from_records(records_already_validated=True)` 只在同一函数内、`_load_records_for_register` 刚以**同一个 `as_of_date`** 验过这批记录的四行之后传入；全仓仅此一处传 True，另外四个调用点走全校验。审查方植入验证：把周记录 `weekly_return` 改成 schema 合法的数值并**同时修好 register 里的摘要**（使摘要门无法成为拒绝理由），读取方仍拒 `weekly record calculation contract violation: strategy.weekly_return disagrees with NAV construction`；不修摘要的控制组先被摘要门拒，证明植入确实打到了目标层。
+
+**为什么不是 PASS**：与代码无关，是状态问题。①验收超集 `Ran 283 in 88.1s PASS receipt:11cd0d02b0074461527e7fc4` 跑完之后，树上又出现 `tests/test_us_short_discovery_conformance.py`(+45)，scope 已不冻结；②rule 3(a) 早已触发（`runners/us_short_weekly_capstone.py` 是生产顶层入口），而当前指纹**没有任何一次绿的全量**：执行方两轮分别记 TIMEOUT，审查方按 rule 6 升级自跑亦被 ledger 以 `focused acceptance receipt does not match the current code state` 拒绝（正是因为树在动）。lane 墙钟地板已由执行方登记为 `R-USSHORT-LANE-WALL-CLOCK-FLOOR-IS-ONE-UNRELATED-MODULE-AND-IT-DRIFTED-TO-652s`（Required/P2）并正在修。
+
+**下一次交审前需要满足**：树冻结（不再有并发编辑）→ 焦点包重跑出与终稿指纹绑定的 receipt → `full_pack_ledger run us_short` 拿到一次绿并记账。三者齐了这一刀即可直接收 PASS，本轮已复验的三项无需重查。
+
+## 2026-08-08 追加：lane 墙钟地板已量到构成（未压到 570s，未留改动）
+
+**改了什么**：本节**没有代码改动**。唯一尝试过的一处（给 `tests/test_us_short_discovery_conformance.py` 的 `_tree` 加 `lru_cache` 并把 14 处 `ast.parse(_source(...))` 路由过去）实测无收益，已 `git checkout` 撤回。
+
+**为什么**：用户指派把 us_short 全量压回 570s 内。`R-USSHORT-LANE-WALL-CLOCK-FLOOR-IS-ONE-UNRELATED-MODULE-AND-IT-DRIFTED-TO-652s` 的 Required repair 第一项就是「先量清楚」，本轮完成了这一项。
+
+**验证命令**：`.tools\run_unittest_with_repo_pythonpath.cmd --timeout-seconds 800 --durations 25 tests.test_us_short_discovery_conformance_executable`。**注意**：`--durations` 只有全量记账路径会自动加，焦点跑必须显式传——我为此白跑了两次 12 分钟，这是本节最值钱的操作教训。
+
+**验证结果**：`Ran 11 tests in 766.8s`。`test_c_every_repo_derived_guard_callsite_has_a_real_dying_mutation` **445.2s**、`test_d_repo_shared_resource_tests_inject_state_and_lock_roots` **210.2s**、`test_a_matrix_is_independent_derived_and_mutation_load_bearing` 87.6s，其余 8 条合计 <24s。三条猜测已实测排除：非本修复链造成（该模块论域 20 个 theme-discovery 文件，本链改的 6 个文件一个不在内）、非残留 worker（`Get-Process python` 空）、非重复 AST 解析（`_source` 本就 `lru_cache(maxsize=None)`；加 `_tree` 缓存后 747s→767s）。
+
+**失效的旧结论**：上一节推测这个模块「多半是重复编译/解析」——**已被实测否掉**。真实成本是 `test_c` 对每个守卫调用点在 patch 掉守卫后**逐条真跑候选行为测试**直到一条转红才 break（短路已存在，省不出来），成本 = 坐标数 × 命中前跑过的候选真实耗时。
+
+**下一步注意事项**：三条候选方向都不是顺手一行，且**与 26 周诊断轨零耦合**——①候选排序（唯一不改语义的加速，收益取决于候选耗时分布，需再一次约 13 分钟测量才能定值不值）②把 `test_c`/`test_d` 移出 lane 全量单独记账（改变「全量」的含义，属流程决策，需用户定）③深挖 `test_d` 的 210s（内部构成未量）。**应作为独立一刀独立审查，不要再挂在诊断轨的修复链上**。
+
+## 2026-08-08 追加：诊断钟自愈全链审查 verdict（PASS，已合入 master）
+
+**接上一节（未完全验证）**：当时卡住的两件——树未冻结、当前指纹无绿全量——第一件已解除：执行方把没有实测收益的 `_tree` 缓存连同 `tests/test_us_short_discovery_conformance.py` 一并撤回，树回到 **`1ea3200645`**，正是审查方上一节验收包 `receipt:11cd0d02b0074461527e7fc4`（`Ran 283 PASS`）绑定的那个指纹，故该证据逐字节适用，无需重跑。
+
+**本轮补齐的覆盖**：按改动符号（而非改动文件）枚举消费者并全部实跑——`Ran 62 PASS receipt:2004929aa5a09a9a0b3c9093`（`lifecycle_store` / `start_receipt` / capstone 两模块）、`Ran 17 PASS receipt:a09be5c5b5caeb812ea8396b`（yfinance grades 抖动修复，本轮唯一此前未覆盖的模块）。
+
+**为什么在没有绿全量的情况下仍放行**：rule 3(a) 确实触发，但该门当前**结构性不可满足**——单模块 `test_us_short_discovery_conformance_executable` 实测 766.8s，逼近 860s 全量上限，而抬上限须用户明确批准。审查方因此不以「全量绿」放行，改用可枚举 bound：`grep` 出全部消费者后确认只有 `runners/us_short_market_diagnostic_weekly.py` 与 `engine/us_short_market_diagnostic_aggregator.py` 真正 import 诊断 lifecycle；`engine/us_short_weekend_lifecycle_stage.py` 与 `engine/us_short_lifecycle_store.py` 是**同名不同物**（soft-boost 生命周期），**生产选股路径未被触及**。替代 bound、残余风险与「本条修好后须补跑绑定指纹的绿全量」已追记进 `docs/system_risk_register.md::R-USSHORT-LANE-WALL-CLOCK-FLOOR-IS-ONE-UNRELATED-MODULE-AND-IT-DRIFTED-TO-652s`。
+
+**这一刀的最终状态**：刀 8—刀 10 的喂料与推进层加上本轮自愈全链已闭；诊断轨仍 `not_started`、无 receipt、无真实第 1 周，接线完成不等于启动。下一件与本轨无关的独立刀是 lane 墙钟地板。

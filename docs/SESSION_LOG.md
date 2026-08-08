@@ -1,5 +1,81 @@
 # Session Log
 
+## 2026-08-08 — Claude 审查 PASS（诊断钟自愈全链：gap/fault 分家、两条 Optional 机制收口、读取链去重不放松）
+
+- **Verdict/Action**: PASS，已提交并合入 master。树已冻结且回到我上轮验过的**同一指纹** `1ea3200645`（执行方把没收益的 `_tree` 缓存连同那个测试文件一起撤回了），故上轮的验收证据逐字节适用。三件独立复验：gap/fault 在**抛出点**分家（新抛出点忘了选边默认落 fault 侧）、`publication` 改显式传入且 `calendar_week_index` 取 `settled_weeks[-1]`、`records_already_validated` 是真去重不是放松。**未以「全量绿」放行**，替代 bound 与残余风险见 register。
+- **Required**: 无。`Register: already covered by R-USSHORT-LANE-WALL-CLOCK-FLOOR-IS-ONE-UNRELATED-MODULE-AND-IT-DRIFTED-TO-652s`（Required/P2，我在该条追记了本轮的替代 bound 与补跑条件）。
+- **Verify**: review-evidence:e8a5a046a9e5。同指纹证据：验收超集 `Ran 283 PASS receipt:11cd0d02b0074461527e7fc4`；本轮补齐消费面 `Ran 62 PASS receipt:2004929aa5a09a9a0b3c9093`（lifecycle_store / start_receipt / capstone×2）与 `Ran 17 PASS receipt:a09be5c5b5caeb812ea8396b`（yfinance grades）。两探针：腐坏周探针现报 `guard HOLDS`；放松面植入（改 `weekly_return` 为合法数值且同步修好 register 摘要）仍被拒 `calculation contract violation`，控制组先被摘要门拒。消费者 grep 证明生产选股路径未被触及。全量 `NOT_VERIFIED`——860s 上限对单模块 766.8s 结构性不可满足。
+- **Next**: Codex：执行
+
+## 2026-08-08 — Claude Code lane 墙钟地板已量到构成；三条猜测全部实测排除，未达 570s
+
+- **Verdict/Action**: 用户指派把全量压回 570s 内。**没做到，如实说**。做到的是把它从「猜」变成「有数」：单模块隔离 `Ran 11 in 766.8s`，`test_c` **445.2s** + `test_d` **210.2s** 吃掉 85%。三条猜测各以实测排除：不是本修复链（该模块论域是 20 个 theme-discovery 文件，本链改的 6 个一个都不在内）、不是残留 worker（`Get-Process python` 空）、**不是重复 AST 解析**——我给 `_tree` 加缓存并路由 14 处调用点后 747s→767s（噪声内、无收益），已按「缓存必须拿出命中收益」把它撤回，不留未经证明的改动。
+- **Required**: `R-USSHORT-LANE-WALL-CLOCK-FLOOR-IS-ONE-UNRELATED-MODULE-AND-IT-DRIFTED-TO-652s` 仍 open，但其 Required repair 的第一项（先量清楚）已完成并写回。正文只在 `docs/system_risk_register.md`。
+- **Verify**: `--durations 25` 单模块实测（上列数字）。成本的真实形状：`test_c` 对每个守卫调用点，在 patch 掉守卫后逐条**真跑**候选行为测试直到一条转红才 break——短路已存在，省不出来；成本 = 坐标数 × 命中前跑过的候选真实耗时。本轮无代码改动留下（唯一一处已撤回），故无新验证包；诊断轨那三条修复的证据仍是上一条 entry 的 `receipt:f49349f07a19db76a02f95a9` 与演练模块 `Ran 28 in 173.9s PASS`。
+- **Pre-Codex self-review**: matrix=按该条 Required repair 的三个候选方向逐个判：①候选排序（唯一不改语义的加速，但收益取决于候选耗时分布，需再一次 ~13 分钟测量才能确定值不值）；②把这两条移出 lane 全量单独记账（改变「全量」的含义，属流程决策）；③深挖 `test_d` 的 210s（未量到内部构成）。三条都不是「顺手改一行」，且**与 26 周诊断轨零耦合**，应作为独立一刀独立审查，不再挂在诊断轨修复链上。register=测量与排除结论已写回，方向保留 open。handoff=第六节。focused=本轮无代码改动。full-lane=未跑（无改动可验，且地板未动）。door=两守卫同跑。独立对抗 pass：不适用（本轮只做测量与撤回）。
+- **Next**: 交另一工作树审查。
+
+## 2026-08-08 — Claude 审查 未完全验证（gap/fault 分家与校验去重都对，但树未冻结、当前指纹无绿全量）
+
+- **Verdict/Action**: 未完全验证，不提交。查过的面是干净的：上一轮 Required 已**按类**闭合——`WeeklyAdvanceGap` 在**抛出点**分家、`except` 收窄到它、新增抛出点忘了选边即默认 fault（安全侧），我重跑上一轮那条腐坏周探针，生产路径现在与控制组一样拒绝。两条 Optional 由机制收口而非打补丁：`publication` 改为显式传入、`calendar_week_index` 取 `settled_weeks[-1]`。拦住 PASS 的不是代码，是状态：验收包跑完之后树又被并发改动，且当前指纹没有任何一次绿的全量。
+- **Required**: 无新增。`Register: already covered by R-USSHORT-LANE-WALL-CLOCK-FLOOR-IS-ONE-UNRELATED-MODULE-AND-IT-DRIFTED-TO-652s`（Required/P2，执行方本轮自开并正在修）。
+- **Verify**: review-evidence:87323e0eb1e8。验收超集 `Ran 283 in 88.1s PASS receipt:11cd0d02b0074461527e7fc4`（11 模块，含新入面 lifecycle）。两探针：①腐坏周探针现报 `guard HOLDS`；②放松面植入——周记录 `weekly_return` 改成合法数值且 register 摘要一并修好，仍被拒 `calculation contract violation`；不修摘要的控制组先被摘要门拒，证明打到目标层。`records_already_validated` 全仓仅一处传 True。rule 6 全量升级被 ledger 拒 `receipt does not match the current code state`——树在验收后新增 `test_us_short_discovery_conformance.py`。超时原因:全量两次被拒且树被并发改动。
+- **Next**: Codex：执行
+
+## 2026-08-08 — Claude Code 演练台 O(n²) 已消除；lane 剩余墙钟定位到一个与本轨无关的模块
+
+- **Verdict/Action**: 用户直接指派修 `...REHEARSAL-GOT-4-5X-SLOWER...`。**不加缓存，消掉一次调用内的重复**：`load_lifecycle_register` 与 `load_settled_weekly_records` 合并成同一个 `load_register_and_settled_records`，并给 `_register_from_records` 加 `records_already_validated`，只在「这批记录几行前刚由验证型装载器产出」时置真。原先一次 `load_settled_weekly_records` 把全店读校三遍，现在一遍。**跨调用零缓存**——每次调用仍完整读校磁盘，两次之间被改坏的记录照样被拒。
+- **Required**: `...REHEARSAL-GOT-4-5X-SLOWER...` 翻 **partially resolved**（我造成的那部分已消除并实测）。同轮新开 `R-USSHORT-LANE-WALL-CLOCK-FLOOR-IS-ONE-UNRELATED-MODULE-AND-IT-DRIFTED-TO-652s`（Required/P2）。机制与判据只在 `docs/system_risk_register.md`。
+- **Verify**: 演练模块由「600s 上限都跑不完」变成 `Ran 28 in 173.9s PASS`、**跑在 300s 默认上限内**（Closure 前两项达成）。跳过的那一遍是严格冗余：`identity["calendar_week_index"]` 就是记录自己的字段过一次类型检查，而该检查第一遍已跑。配「校验没被跳掉」对照：篡改一条已存周记录后两个读取方**都仍拒**。焦点包 8 模块 `Ran 184 in 187.5s PASS receipt:f49349f07a19db76a02f95a9`。全量仍 TIMEOUT，但 runner 首次打印出地板：`652.4s of 859.4s (75.9%) is test_us_short_discovery_conformance_executable`。
+- **Pre-Codex self-review**: matrix=按 Required 方向枚举这条读取链上**每一处**重复读校（装载器一遍、派生器一遍、返回路径一遍）逐个消，而不是只快一处；`records_already_validated` 只给能证明「同一调用内刚验过」的那一个调用点，`persist_settled_weekly_record` 追加新记录的路径**不给**。授权论域同步注册新的 `load_register_and_settled_records`（它才是真正复核锚点的那个）。**已核零残留 worker 进程**（`Get-Process python` 空），故 652s 不是我掐断的那两次跑留下的。register=一条 partially resolved、一条新开。handoff=第五节。focused=见 Verify。full-lane=TIMEOUT，地板在别人身上，按 rule 5 不复等。door=两守卫同跑。独立对抗 pass：不适用（去重复，无新判定面，已配不弱化对照）。
+- **Next**: 交另一工作树审查。
+
+## 2026-08-08 — Claude Code 故障被洗成 no_count 周已闭（gap 与 fault 在抛出点分家）
+
+- **Verdict/Action**: 审查方点的是我上一轮自己造的洞，属实。`plan_week` 用 `except WeeklyAdvanceError` 包住整个 `_identity_for`，于是「已结算周读不出」「三日期不对齐」两种**故障**也被归成 `unlived`，把一个可修复的损坏件烧成 26 周分母里不可撤销的一格、理由还是假的。修法按类分在**抛出点**而不是在调用点读消息：新增 `WeeklyAdvanceGap` 标记「账户这里没有这一周」，`NotReady` 与新的 `NoPaperWeek` 继承它，`except` 收窄到它——新增抛出点必须自己选边，忘了选就默认是 fault（安全侧）。两条 Optional 同轮收口。
+- **Required**: `R-USSHORT-26W-DIAG-A-FAULT-IN-THE-PAPER-WEEK-IS-LAUNDERED-INTO-A-NO-COUNT-WEEK` 连同 O1/O2 翻 resolved。同轮**自曝并新开** `R-USSHORT-26W-DIAG-REHEARSAL-GOT-4-5X-SLOWER-WHEN-IT-STARTED-USING-THE-REAL-FETCH-ENTRY`（本轮实测后升为 Required/P2：它已把 lane 全量堵死）。机制、复现步骤、逐条 Closure 只在 `docs/system_risk_register.md`。
+- **Verify**: 审查方探针在生产路径原样复现：现在**抛** `the settled paper week 20260720 cannot be read`，周记录与 register **均未生成**，零残留。三条 Closure 各配用例 + 正控；O1 端到端要 27 周演练（实测 315s）对一条 Optional 不值，按 rule 8 取单元断言。**5 植入 5 红、控制组先全绿**；其中 2 个第一次跑成**绿**——瞄准的用例把 `_identity_for` mock 掉了、走不到被改的抛出点，改瞄真穿过该点的端到端后才红。焦点包 5 模块 `Ran 160 in 393.9s PASS receipt:7c709406ff0f10ea27727b8e`。全量**跑不到绿**：两次 `full_pack_ledger run us_short` 都在 860s 上限 TIMEOUT、两次都恰停在 `4451/5609`，根因即上述被我拖慢的演练模块，已随之把该条从 P3 升为 Required/P2。
+- **Pre-Codex self-review**: matrix=按 Required「类级收口」枚举该 `except` 能捕到的**全部四个**抛出点逐个判 gap/fault（NotReady、NoPaperWeek=gap；读不出、不对齐=fault），两条 fault 腿各配独立用例、gap 腿配正控。**自曝**：焦点包与全量双双超时，量出根因是我第一轮把演练台改走真 `fetch_next_week` 带来的 O(n²) 全账本校验（26 周整链 52s→231.6s），已入册。register=一 resolved、一新开。handoff=第四节。focused=见 Verify（带 `--timeout-seconds 400`）。full-lane=两次 TIMEOUT（860s 上限，`4451/5609`），按 rule 5 不复等；上限未经批准不得上调，故本轮无指纹相符的全量证据。door=两守卫同跑。独立对抗 pass：未跑（会话规则禁用 agent），补偿为 5 植入。
+- **Next**: 交另一工作树审查。
+
+## 2026-08-08 — Claude 审查 FAIL（诊断钟自愈第二轮：故障被洗成 no_count 周）
+
+- **Verdict/Action**: FAIL，未提交。修好的部分先认并逐条实读确认形态正确：可评估周即使已过去也正常结算而非写掉、判死要求 `as_of` 与账户估值两半同时成立（第二半无人可伪造）、`_weeks_now_due` 一次抓齐到期周不让钟每周只追一周、补抓留在已 gated 的 fetch 而非无门的 settle、停钟另给状态与专属报告行。拦住的是同一缺陷类的第三条腿：`plan_week` 的 `except WeeklyAdvanceError` 把**任何**故障都洗成 `unlived`，写下一条理由为假且不可撤销的 no_count 周。
+- **Required**: `R-USSHORT-26W-DIAG-A-FAULT-IN-THE-PAPER-WEEK-IS-LAUNDERED-INTO-A-NO-COUNT-WEEK`（P2）；两条 Optional 同条记录。完整机制、探针复现步骤、Required repair 与 Closure tests 只在 `docs/system_risk_register.md`。
+- **Verify**: review-evidence:8ccc4ba07527（承 b077d2d8f3b7 同轮证据）。验收超集 `Ran 268 in 125.0s PASS receipt:5d99e65ae100c8cfcbffff73`——包全绿而缺陷真实。自写探针在生产路径复现：损坏已结算周 `20260720` → `settle_captured_week` 出 `no_count_weeks:[1]`、理由为假；控制组 `next_week_identity` 同输入正确拒「cannot be read」。零残留。全量按 rule 4 不重跑，引用 ledger `5604 OK / 573.9s`、指纹 `e00fe0735a68`。§6a agent 未起（会话规则禁用）。覆盖边界：只覆盖诊断轨五源文件与三诊断测试模块，其后新增的 yfinance grades 测试不在本包内。超时原因:审查记录按新规则从 usshort_r1 迁来本树重写。
+- **Next**: Codex：修复
+
+## 2026-08-08 — Claude Code 随机目录名导致的假红已闭；跳周后窗口不对称那条刻意未动
+
+- **Verdict/Action**: 本轮 `修复` 落在我自己欠的两条上（本树无新审查 verdict，顶条仍是我上一轮收口）。修了 flake：provider 噪声判据由裸子串 `"404"` 换成它真正打印的 `"HTTP Error 404"`，三个 token 抽成模块级常量 + `_leaked_provider_noise()`。**没有**同时改随机 slug——`os.getpid()` 已负责并行隔离，判据不再撞数字之后随机是无害的，改成确定值反而会把「恰好含 404 的那个测试名」从偶发变成永久红。另一条**刻意没动**，理由见下。
+- **Required**: `R-USSHORT-YFINANCE-GRADES-HYGIENE-TEST-FAILS-WHEN-ITS-OWN-RANDOM-SLUG-CONTAINS-404` 翻 resolved。`R-USSHORT-26W-DIAG-THE-WEEK-AFTER-AN-UNLIVED-WEEK-COMPARES-TWO-WEEKS-OF-STRATEGY-WITH-DAYS-OF-BENCHMARK` 仍 open：本轮把三个候选逐个验过并把结论写进该条——② 会让基准自己的 26 周累计把同一段市场算两遍、③ 要改 model-paper 记账（越出本轨），只剩 ① 自洽；而 ① 需要一个「两边数字都对但窗口不可比」的字段，现有 schema 只有两个开关，硬挑一个置 false 是拿假标签换真问题。它要的是一次 schema 决定。正文只在 `docs/system_risk_register.md`。
+- **Verify**: 本模块 `Ran 17 OK receipt:cc3ccbc12c71e06b82c263b1`。**2 植入 2 红、控制组先绿**，两半互相盯着：判据退回裸 `"404"` → 目录名那半红；判据恒返回空 → provider 真消息那半红。焦点超集本轮**未成包**：把该 provider 模块并进原 13 模块超集后 `TIMEOUT exit=124 elapsed=300.2s`（原 13 模块实测 140s），按 rule 5 记为 UNKNOWN 不复等，改由本模块自身受限包 + 全量覆盖。全量**本轮未跑到绿**：本轮只改测试、rule 3 未由本轮改动触发，重绑一次是我为指纹保守，结果撞 860s 上限记 `TIMEOUT 4451/5605`（同一棵树两轮前实测 574s，属机器墙钟不是红），按 rule 5 不复等。生产内容的全量证据仍是两轮前那次 `PASS 5604/5604`、指纹 `e00fe0735a68`，本轮 delta 只有这一个测试模块。
+- **Pre-Codex self-review**: matrix=该条 Required repair 写的是二选一，逐个判：取②（换判据），①（把 slug 挡在 tracked summary 外）需改产物字段、影响面比缺陷大，不取。连带 grep：`"404"` 在本套件仅此一处判据用法，其余为真实 HTTP 语义。反向：新用例两头都断言，避免「判据恒空也绿」。register=一条 resolved、一条补完分析仍 open。handoff=新增第三节。focused=`receipt:cc3ccbc12c71e06b82c263b1`。full-lane=rule 3(a) 由未提交树整体带入（本轮只改测试，但树内含前两轮生产改动且指纹已变），本轮重绑撞 860s 上限记 TIMEOUT、按 rule 5 未复等；生产内容引两轮前 `PASS 5604/5604`（指纹 e00fe0735a68），本轮 delta 仅一个测试模块且自身受限包已绿。door=两守卫同跑。独立对抗 pass：不适用（单文件测试判据，已配 2 植入）。
+- **Next**: 交另一工作树审查。
+
+## 2026-08-08 — Claude Code 自愈补齐「整周没人跑」那种漏周已闭（F1–F4 + NAV 窗口）
+
+- **Verdict/Action**: 四条 Required 我逐条复核后全部认可并已修。核心两处：**判死拆成两半**——`as_of` 说「下一周决策日到了」，账户说「我自己已经把估值推过去了」，两个都成立才算死；第二半谁也伪造不了，它同时是 F1（账户明明走过去了却杀不掉）与 F4（未来 as_of 烧活周）的公共答案，且刻意不用本机时钟（演练台整条日历在未来，挂钟护栏会把它一起打死）。**能结算就先结算**——`evaluable` 周即使已过去也走正常结算，只有账户从未结过的 `unlived` 周才写掉，理由由实际缺什么推出。停钟另给状态与专属报告行，不再与健康等待同形。
+- **Required**: `R-USSHORT-26W-DIAG-SELF-HEAL-ONLY-COVERS-THE-OUTAGE-IT-WAS-TESTED-FOR` 与 `...A-MISSED-WEEK-JAMS...` 均翻 resolved；同轮新开 `R-USSHORT-26W-DIAG-THE-WEEK-AFTER-AN-UNLIVED-WEEK-COMPARES-TWO-WEEKS-OF-STRATEGY-WITH-DAYS-OF-BENCHMARK`（跳周后恢复周两侧窗口不等长，三个候选口径都属设计决策，须用户裁）。正文只在 `docs/system_risk_register.md`。
+- **Verify**: NAV 那条不是照建议改 NAV，而是被 F3 化解——账户结过的周现在正常结算，`settle_missed_week` 只剩「账户从未结过」一个场景，那时 `prior_nav` 本就是对的。同参实测 NAV 链 `100004→99984→100009→99989` 与账户真值逐字一致，第 3 周 `weekly_return=+2.5004e-04`（审查方算出的真单周值），旧的 `+4.9998e-05` 消失。新 `--skipped-weeks` 模式 `weeks=4, skipped=(2,)` → `published / not_run / published / published`，第 2 周 no_count，register `4 日历周 / 3 可评估`。**7 植入 7 红、控制组先全绿**。焦点超集 `Ran 304 in 140.1s PASS receipt:6209b299ab4a94fac444d82f`。
+- **Pre-Codex self-review**: matrix=从两条 finding 的 Required+Closure 全文枚举七项（判死脱离 identity / 两种等待不同形 / 先结算后写掉且理由派生 / 未来 as_of 护栏 / 演练台补「整周没人跑」/ 损坏周反向用例 / 读不存在 flag 的 CLI）各配反向用例；量词化后发现「等待」标签在 fetch 与 settle 两处都返回，两处都改。register=两条 resolved + 一条新开。handoff=新增第二节。focused=见 Verify。full-lane=rule 3(a)，ledger `PASS 5604/5604 573.9s` 绑定终稿指纹 `e00fe0735a68`。door=两守卫同跑。独立对抗 pass：未跑（会话规则禁用 agent），补偿为 7 植入。**超时原因**：上一轮我在全量跑动中改了两处 docstring 致 ledger REFUSED、重跑又撞无关 flake，白赔约 24 分钟。
+- **Next**: 交另一工作树审查。
+
+## 2026-08-08 — Claude 审查 FAIL（诊断钟自愈：只覆盖被测的那种漏周，且恢复周的数字不对）
+
+- **Verdict/Action**: FAIL，未提交。成立的部分先认：**inputs 断供而账户照常结周**这一模式确实修好了——写掉/进分母/窗口不延/幂等/鉴权边界/记账诚实/写掉后不可伪造，我与独立对抗 agent 分别判 HELD；`_weeks_now_due` 一次抓齐到期周、把补抓留在已 gated 的 fetch 而非无门的 settle，两处判断都比裁决文字更对。拦住的是两件：①**本刀的头号声称对最常见的漏周不成立**——那一周整个一键没跑（人休假/机器没开）时账户也没结周，写掉那条腿永远够不着，钟仍永久卡死，且报的是与健康稳态同形的 `waiting_for_paper_week`；②我自己探针实测：恢复周拿两周策略收益去比一周基准，断供周账户真实涨跌被抹平。
+- **Required**: `R-USSHORT-26W-DIAG-SELF-HEAL-ONLY-COVERS-THE-OUTAGE-IT-WAS-TESTED-FOR`（F1 整周没人跑即永久卡死且标签同形 / F2 漏首周直接硬失败 / F3 fetch 跑了 settle 没跑则把可评估周写成 no_count 且理由为假 / F4 未来 as_of 烧活周）与 `...A-MISSED-WEEK-JAMS-THE-CLOCK-FOREVER...` 内新增的 NAV 窗口不对称条。正文只在 `docs/system_risk_register.md`。
+- **Verify**: review-evidence:edf53fc3aabb。验收超集 `Ran 265 in 376.6s PASS receipt:88381c7c37db726869d04cff`——包全绿而缺陷真实。自跑演练台 `weeks=4, no_count=(2,)` 读沙箱产物坐实 NAV 缺陷（数字见 register）。自写 2 植入：head 封顶被拿掉→红；「已结算周读不出必须拒」→**绿=覆盖缺口**（记 Optional）。独立对抗 agent 覆盖 16 条自推不变量、4 条可复现 bypass，其机制我按行号复核成立、未重跑其探针。超时原因:等对抗 agent 报告 22 分钟。
+- **Next**: Codex：修复
+
+## 2026-08-08 — Claude Code 断供一周后诊断钟永久卡死已闭（缺失周写 no_count 并自愈）
+
+- **Verdict/Action**: 按用户裁决取 candidate ① 实施，两条同义 finding 一并闭。自愈缺一件都追不上日历，故做齐三件：取数日期能指向卡住那周（`_paper_week_wrapped_by` 回溯账户已结算周，head 命中即快路径、健康态零行为变化）；fetch 一次抓齐「store 下一周…当前周」；settle 把已结束仍未记录的周写成 `no_count` 再推进。**刻意与裁决文字不同一处**：裁决写「settle 先补抓」，但 settle stage 非 gated、按设计不发 provider 请求，实抓塞进去等于把付费调用挪进没有授权门的 stage——抓在已 gated 的 fetch、写仍在 settle，行为相同而边界不动。判死用「下一周决策日已到」，`as_of` 缺省即任何周都不算结束。
+- **Required**: `R-USSHORT-26W-DIAG-A-MISSED-WEEK-JAMS-THE-CLOCK-FOREVER-AND-NOTHING-WRITES-NO-COUNT` 与 `R-USSHORT-26W-DIAG-KNIFE7B-NO-COUNT-WEEK-CANNOT-BE-PRODUCED` 均翻 resolved——机制、逐条修法、那处刻意的偏离与其理由、顺带修掉的 `source_refs` 真缺陷、以及仍 open 的首周约束残留，只在 `docs/system_risk_register.md`（单一来源，本处不复述）。
+- **Verify**: 演练刀改断言修复后行为：`weeks=4, no_count=(2,)` → `published / waiting_for_inputs / published / published`，第 3 周报 `no_count_weeks=[2]`；第 2 周记录 `no_count=true` 且基准取自它自己那周的窗口，register `4 日历周 / 3 可评估 / 26w-1-26`。另加饿首周、连饿两周整链用例与七条焦点单测。**7 植入 7 红、控制组先全绿**；「由包而非 store 选周」那条首跑成绿，改成断言拒的理由后才转红。焦点超集 13 模块 `Ran 295 tests in 175.0s PASS receipt:0ae481bb61c39ea0cd4595bc`。全量经 ledger 记账 `PASS 5595/5595 743.6s`、计数门相等；前两跑为何不算数（我中途改 docstring / 一条与本刀无关的随机命名 flake，已入册）见 register。
+- **Pre-Codex self-review**: matrix=按 codex-fix-gate §1 从 Required/Closure 全文枚举九腿（补抓→写→推进 / 后续周恢复 / 不可伪造 evaluable / 占日历周不延边界 / 不回填价格 / 幂等 / 晚到不误杀 / 连续多周 / 首周即缺失）各配反向用例；量词化后发现「只抓卡住那周」会让钟每周只追一周、永远追不上，故 fetch 改抓齐全部到期周。register=两条翻 resolved 并写回证据。handoff=主 handoff 新增追加节，README 索引行同步。focused=`receipt:0ae481bb61c39ea0cd4595bc`。full-lane=rule 3(a) 触发，ledger `PASS 5595/5595` 绑定终稿指纹。door=route-doc ledger + doc-governance 同跑 55 OK。独立对抗 pass：未跑（本会话规则禁用 agent），补偿为 7 植入对照。
+- **Next**: 交另一工作树审查。
+
 ## 2026-08-07 — Claude 审查 PASS（演练刀第二轮：崩溃改为如实展示卡死图景）
 
 - **Verdict/Action**: PASS，已提交并合入 master。整读修法：捕获抽成 `_settle_one_week` 外包一层 total（try 内仅此一调用，静态确认），语义对齐真 capstone 那两个本就 total 的 stage；**刻意不包 model-paper 链**的理由成立且值得保——六次夹具错误靠它崩出来。`StarvedMiddleWeekTest` 用的正是我的探针参数，且 docstring 明说钉的是「当前图景非意图图景」、留了 A 裁决后的改断言钩子。A 条不修是正确的 judge-before-execute：其 Required 文本自己要求用户裁决——本轮期间用户已在并行窗口裁决 candidate ①（settle 自补），实施属下一刀，见 register。

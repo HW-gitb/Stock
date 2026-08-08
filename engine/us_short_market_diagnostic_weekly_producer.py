@@ -40,6 +40,7 @@ from typing import Any, Mapping
 from engine.us_short_market_diagnostic import BOUNDARY
 from engine.us_short_market_diagnostic_local_adapter import (
     LocalMarketDiagnosticAdapterError,
+    _dedupe_sha256,
     adapt_benchmark_week,
     build_weekly_record_from_local,
     load_model_paper_week,
@@ -354,10 +355,18 @@ def build_no_count_record(
 
     The benchmarks are still projected — the market did happen, and section 5 wants
     those weeks visible — while the strategy block carries nulls, ``no_count`` and
-    an explicit reason. NAV is the prior settled NAV because an unsettled week did
-    not move the account; for week 1 it is the frozen normalized capital. The
-    strategy digest is the benchmark packet's, since the packet is the only
-    evidence this week existed at all.
+    an explicit reason. The strategy digest is the benchmark packet's, since the
+    packet is the only evidence this week existed at all.
+
+    NAV is the prior settled NAV, and that is only honest because BOTH callers hand
+    over a week the account never settled: ``build_next_weekly_record`` when the
+    paper week is absent, and ``settle_missed_week`` when the account never ran
+    that week at all. An unsettled week did not move the account, so its NAV is the
+    one before it and the next evaluable week still measures a single week. A week
+    the account DID settle must never come here — carrying the prior NAV would
+    silently erase that week's real gain or loss and hand the next week a two-week
+    return to compare against a one-week benchmark. For week 1 the prior NAV is the
+    frozen normalized capital.
     """
 
     if not isinstance(reason, str) or not reason:
@@ -384,19 +393,18 @@ def build_no_count_record(
     # Same binding rule as a settled week: every benchmark's own price and dividend
     # digests must appear in source_refs, so a no_count week is as source-bound as
     # any other. It is a week with no strategy result, not a week with no evidence.
-    source_refs = list(
-        dict.fromkeys(
-            [
-                packet_digest,
-                *packet["source_refs"],
-                *(benchmark["price_packet_sha256"] for benchmark in benchmarks.values()),
-                *(
-                    benchmark["dividend_sidecar_sha256"]
-                    for benchmark in benchmarks.values()
-                    if benchmark["dividend_sidecar_sha256"] is not None
-                ),
-            ]
-        )
+    # Through the settled week's own helper, because a benchmark can be
+    # `unavailable` on EITHER leg and carry a null digest there — a second, local
+    # copy of the rule filtered nulls out of the dividend leg only, and the first
+    # unavailable benchmark then put a `None` into `source_refs` and failed the
+    # schema. One rule, one implementation.
+    source_refs = _dedupe_sha256(
+        [
+            packet_digest,
+            *packet["source_refs"],
+            *(benchmark["price_packet_sha256"] for benchmark in benchmarks.values()),
+            *(benchmark["dividend_sidecar_sha256"] for benchmark in benchmarks.values()),
+        ]
     )
     return {
         "schema_name": "us_short_market_diagnostic_weekly_record",
@@ -493,6 +501,50 @@ def build_next_weekly_record(
         ) from exc
 
 
+def settle_missed_week(
+    *,
+    benchmark_packet: Mapping[str, Any],
+    root: str | Path = DEFAULT_ROOT,
+    reason: str,
+    as_of_date: str | None = None,
+) -> dict[str, Any]:
+    """Record the week the store is still waiting for as ``no_count`` and move on.
+
+    Design sections 3 and 12.8 duty 3: a week that could not be evaluated still
+    occupies its calendar slot and the 26-week boundary is never pushed out to
+    wait for it. Until this existed ``build_no_count_record`` had exactly one
+    caller — the branch where the model-paper account had not settled — so the
+    far more likely outage, the week whose benchmark inputs never arrived, had no
+    producer at all and the clock stopped for good on the first one.
+
+    Which week is written off is NOT a parameter: it is whatever the authorized
+    store says is next, so a caller cannot write off a week the clock is not
+    waiting for. The packet must be that same week's, which
+    ``build_no_count_record`` enforces by having to find that index inside it.
+    """
+
+    inputs = next_week_inputs(root, as_of_date=as_of_date)
+    packet_epoch = (
+        benchmark_packet.get("diagnostic_epoch") if isinstance(benchmark_packet, Mapping) else None
+    )
+    if packet_epoch != inputs["diagnostic_epoch"]:
+        raise MarketDiagnosticWeeklyProducerError(
+            "the benchmark price packet belongs to a different diagnostic epoch than this clock"
+        )
+    record = build_no_count_record(
+        benchmark_packet=benchmark_packet,
+        calendar_week_index=inputs["calendar_week_index"],
+        prior_nav=inputs["prior_nav"],
+        v1_1_reminder=inputs["v1_1_reminder"],
+        reason=reason,
+        as_of_date=as_of_date,
+    )
+    try:
+        return persist_settled_weekly_record(record, root=root, as_of_date=as_of_date)
+    except MarketDiagnosticLifecycleError as exc:
+        raise MarketDiagnosticWeeklyProducerError(str(exc)) from exc
+
+
 def settle_next_week(
     *,
     model_paper_root: str | Path,
@@ -527,6 +579,7 @@ __all__ = [
     "has_counted_weeks",
     "model_paper_week_is_settled",
     "next_week_inputs",
+    "settle_missed_week",
     "settle_next_week",
     "strategy_ruleset_fingerprint",
 ]
