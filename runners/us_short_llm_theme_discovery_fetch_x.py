@@ -183,9 +183,10 @@ def _normalize_results(
                     raw_ref = web._repo_relative(raw_path)
                 except web.WebThemeDiscoveryError:
                     raw_ref = None
-                if not web._gitignored(raw_path):
-                    raise XThemeDiscoveryError("raw receipt path must be gitignored before writing")
+                # Asked once, not twice; see the sibling in the web fetcher.
                 raw_gitignored = web._gitignored(raw_path)
+                if not raw_gitignored:
+                    raise XThemeDiscoveryError("raw receipt path must be gitignored before writing")
                 try:
                     raw_payload, source_fetched_at = web._raw_payload_with_frozen_fetch_clock(
                         raw_evidence_payload, raw_path, fetched_at,
@@ -590,7 +591,10 @@ def _provider_response_refs(
         raw_path = web._raw_provider_response_path(
             raw_root, "xai", response_sha256, expected_decision_date,
         )
-        if not web._gitignored(raw_path):
+        # Asked once and carried to the ref below, which used to ask again: a
+        # second ask could only ever return True, since a False one `continue`s.
+        raw_is_gitignored = web._gitignored(raw_path)
+        if not raw_is_gitignored:
             drops.append({
                 "stage": "search_result", "reason": "provider_response_path_not_gitignored",
                 "detail": f"provider_response[{index}]", "provider_response_index": index,
@@ -612,7 +616,7 @@ def _provider_response_refs(
             "response_sha256": response_sha256,
             "fetched_at": frozen_fetched_at.isoformat(),
             "raw_receipt_ref": web._repo_relative(raw_path),
-            "raw_receipt_gitignored": web._gitignored(raw_path),
+            "raw_receipt_gitignored": raw_is_gitignored,
         })
     return refs
 

@@ -1,5 +1,13 @@
 # Session Log
 
+## 2026-08-08 — Claude 修复（US-short lane 地板 `conformance_resources`：量完了，没有不付代价的加速）
+
+- **Verdict/Action**: 按用户指派打 199.5s 的地板模块。**只做了三处可证等价的折叠，没有别的代码改动**——不是没找到路，是每条路都要付代价，那是用户的决定不是我的。四条路与各自代价已写进 register ⑦。
+- **Required**: 无。正文只在 `docs/system_risk_register.md`（`R-USSHORT-LANE-WALL-CLOCK-FLOOR-...` 追记 ①–⑦，仍 `partially resolved`、不关闭）。**关键否决**：给 `_gitignored` 加缓存不安全——该模块 `setUp:102` 在仓库内真造 `.gitignore`，同一路径的 ignored 性进程内确实会变，而它是防 provider 原始数据落进 tracked 位置的 fail-closed 隐私门。
+- **Verify**: 四条实测：①`serial_tail_modules` 实算确认该模块在**串行尾巴**（尾巴逐个跑）→ **拆模块是死路**，两半都排队；②成本 = 2×78.9s（223 测正逆序）+ 约 42s 自身开销，**62% 是单模块** `weekly_capstone_soft_discovery`（48.8s/遍）；③cProfile：最慢一条 230 次 `subprocess.run`，`_gitignored` 占 130 次/2.67s，单次 spawn 17.6ms，50 个不同路径（重复率 62%）；④已排除 `snapshot()`（`state/us_short` 0 文件）与 `setUpClass` 重复。折叠后 `Ran 217 / 74.0s / OK`，**收益在噪声内（13.4→13.7s），如实记**。
+- **Pre-Codex self-review**: A-F checked。A：先量后改，四个维度各自实测，不靠读代码推断。B：三处折叠 grep 全命中，第二次调用只可能返回 True（False 早已 raise/continue），行为可证等价。C 反向：217 条相关测试全绿。D：缓存那条按 §5 主动否决并写明失效场景，未为了交差而降门。E 单态。F：探针 `python -B`，无残留。**未跑全量**：本轮无行为变化且收益在噪声内，起全量拿不到新信息。matrix=3折叠/4实测/1否决；register=updated；handoff=updated；focused=217 OK；full-lane=N/A；door=提交前 guard。
+- **Next**: 用户在 register ⑦ 的四条路里裁决。执行方推荐 (D)：另起一刀打 `test_us_short_weekly_capstone_soft_discovery` 本身（lane 跑一遍 + D 轴两遍 = **3 倍杠杆**，且不碰 fail-closed 门）。
+
 ## 2026-08-08 — Claude 审查 PASS（US-short 诊断轨读取链去重，`adab3216`）
 
 - **Verdict/Action**: PASS。三处替换是**取值等价**而不是省掉检查：两个公开读者本就是 `load_register_and_settled_records` 的 `[0]`/`[1]`（`lifecycle.py:591-604`），交回的 `receipt`/`settled_records` 就是同一次门内已验的那份。「跨调用零缓存」属实，读取链无记忆化。测试只增不删，无既有断言被改弱；钟仍 `not_started`，无 provider 调用。

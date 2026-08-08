@@ -523,3 +523,31 @@ python .tools\full_pack_ledger.py run us_short "<trigger>" "receipt:<token>" 860
 **验证边界**：未起 §6a 独立对抗 agent——rule 8 低危档（dormant comparison-only 诊断轨，不触及选股 / core_score / veto / sizing / PIT-进选股 / 真钱 / secret / live provider）；未联网、未真跑取数；性能数字（22.8→11.2、176.0→109.4s）为执行方实测，reviewer 未复跑计数探针，只独立确认了「等价 + 不省检查」这两件决定正确性的事。
 
 **失效旧结论**：`R-USSHORT-26W-DIAG-REHEARSAL-GOT-4-5X-SLOWER-WHEN-IT-STARTED-USING-THE-REAL-FETCH-ENTRY` 原「方向是给读取链一个单次运行内的一致性缓存」已被推翻——真正的 O(n²) 在调用方重复提问，不在读取链内部，最终修法未引入任何缓存。
+
+## 2026-08-08 追加：打 `test_us_short_discovery_conformance_resources`（199.5s 地板）——量完了，没有不付代价的加速
+
+**改了什么**：只有三处可证等价的折叠（`fetch_web.py:946/948`、`fetch_x.py:186/188`、`fetch_x.py:594/615`：同一路径连问两遍 `_gitignored`，第二次只可能返回 True）。**没有别的代码改动**——因为再往下走每条路都要付代价，那是用户的决定不是我的。
+
+**为什么没有更多**：见 register 该条目 ①–⑦。四个关键实测：
+1. 该模块**在串行尾巴里**（`serial_tail_modules` 实算命中；尾巴在波次后逐个跑），所以它的 199.5s 1:1 加进墙钟，**而且拆成两个模块是死路**——两半都会排队。
+2. 成本 = 2 × 78.9s（223 条真测试正逆序各一遍）+ 约 42s 自身开销；**62% 集中在 `test_us_short_weekly_capstone_soft_discovery` 一个模块**。
+3. 那个模块的热点是 `_gitignored` 每次 spawn `git check-ignore`（17.6ms × 130 次/测），重复率 62%。
+4. **缓存它不安全**：该模块 `setUp:102` 用 `temporary_provider_directory(ROOT)` 在仓库内真造 `.gitignore`，同一路径的 ignored 性在进程内确实会变；而它是防 provider 原始数据落进 tracked 位置的 fail-closed 隐私门。
+
+**验证命令**
+```
+cd .tools && python -c "import parallel_lane_runner as m; print(m.serial_tail_modules([...], [<repo>]))"   # ① 尾巴归属
+python -B <scratchpad>\probe_d.py                                    # ② selected 条数 + 单遍耗时 + 按模块归因
+python -B -c "<cProfile 单测>"                                        # ③ subprocess 次数与 _gitignored 占比
+.tools\run_unittest_with_repo_pythonpath.cmd tests.provider.test_us_short_llm_theme_discovery_fetch_web tests.provider.test_us_short_llm_theme_discovery_fetch_x_merge tests.provider.test_us_short_llm_theme_discovery tests.provider.test_us_short_weekly_capstone_soft_discovery
+```
+
+**验证结果**：折叠后 `Ran 217 tests / 74.0s / OK`。**收益在噪声内**（最慢那条 13.4s → 13.7s）——如实记，别人别再重量一遍。另外两条猜测也已实测排除：`snapshot()` 不是成本（`state/us_short` 现有 0 个文件）；逐条跑不会重复付 `setUpClass`（该模块只有 `setUp`）。
+
+**失效的旧结论**
+- 「照上一刀的办法把它拆成独立模块就能并行」——**已失效**。上一刀那次有效是因为拆出来的两半分别落在波次里；这次两半都在串行尾巴里，排队总时间不变。
+- 「地板只是最长模块，加 worker 无用但结构上可并行」——**已失效**，它是尾巴成员，本来就不参与波次。
+
+**下一步注意事项**
+- 四条路的代价写在 register ⑦，等用户裁决。执行方推荐 **(D) 另起一刀专打 `test_us_short_weekly_capstone_soft_discovery`**：它在 lane 跑一遍、在 D 轴再跑两遍，**任何提速都是 3 倍杠杆**，且不碰任何 fail-closed 门。
+- **(B)（砍掉 D 轴正序那遍）是真实降强度**，别当成纯提速：会丢掉「正序跑完一遍后仓库根是干净的」这个断言。
