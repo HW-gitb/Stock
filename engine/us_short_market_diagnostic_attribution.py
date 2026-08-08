@@ -1202,8 +1202,13 @@ def validate_attribution_report(
             # design 12.7 forbids this module from reading fills to try. Splitting
             # a filled 0.9 into carried 0.5 + new 0.4 still passes and still
             # shrinks the published exposure effect fivefold. This raises the bar
-            # from "write one number" to "write two that sum to it"; closing it
-            # belongs to the target-exposure producer, which does not exist yet.
+            # from "write one number" to "write two that sum to it". The producer
+            # that closes it is built: `us_short_market_diagnostic_weekly_fetch.
+            # load_target_exposures` reads both components off the note the
+            # decision took while it still had them, and carries that note's
+            # digest. What survives is only that THIS module cannot tell that
+            # path from a caller who typed the two numbers in, which is why the
+            # schema keeps its producer-asserted disclosure.
             components = {
                 name: _finite(
                     constraint_exposures.get(name),

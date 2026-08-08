@@ -22,9 +22,10 @@ What this module supplies, and where each piece honestly comes from:
   permanently true, which is the opposite of useful.
 
 The benchmark price packet is an INPUT, not something this module builds. Its
-producer does not exist yet anywhere in the repo and its design-named upstream
-(the grouped market window) is unimplemented; inventing prices here would be the
-one thing this whole track exists to prevent.
+producer is knife 8 (`runners/us_short_market_diagnostic_benchmark_fetch.py` ->
+`engine/us_short_market_diagnostic_benchmark_packet.py`), not the design-named
+upstream (the grouped market window), which is still unimplemented; inventing
+prices here would be the one thing this whole track exists to prevent.
 
 Nothing here calls a provider, writes the model-paper account, or changes
 selection, action, sizing or NAV. Everything written goes through the Knife 7
