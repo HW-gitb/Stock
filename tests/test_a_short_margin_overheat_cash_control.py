@@ -202,6 +202,42 @@ class MarginOverheatCashControlStateTests(unittest.TestCase):
             ):
                 track.validate_state(state)
 
+    def test_l1_validate_state_rejects_zero_week_frozen_state_without_shared_clock_gate(self):
+        """A frozen state with no weeks still claims a clock; it must pass the gate too."""
+        for clock_status, evidence_status in (
+            ("review_due", "review_due"),
+            ("running", "accumulating"),
+            ("running", "insufficient_data"),
+        ):
+            with self.subTest(clock_status=clock_status, evidence_status=evidence_status):
+                state = {
+                    "schema_name": "a_short_margin_overheat_cash_control_state",
+                    "schema_version": "1.0.0",
+                    "track_id": track.TRACK_ID,
+                    "stage": track.STAGE_A,
+                    "mode": track.FROZEN,
+                    "clock_status": clock_status,
+                    "calendar_effective_weeks": 0,
+                    "trigger_effective_weeks": 0,
+                    "evidence_status": evidence_status,
+                    "comparison_verdict": "not_evaluated",
+                    "production_unchanged": True,
+                    "reason": evidence_status,
+                }
+                with patch.object(epoch_mode, "_mode", return_value=track.FROZEN), \
+                        patch.object(
+                            epoch_mode,
+                            "evidence_counts_toward_clock",
+                            side_effect=epoch_mode.EvidenceEpochModeError("injected shared gate failure"),
+                        ):
+                    with self.assertRaisesRegex(
+                        track.MarginOverheatCashControlError, "evidence_counts_toward_clock"
+                    ):
+                        track.validate_state(state)
+                with patch.object(epoch_mode, "_mode", return_value=track.FROZEN), \
+                        patch.object(epoch_mode, "evidence_counts_toward_clock", return_value=True):
+                    track.validate_state(state)
+
     def test_l2_validate_state_rejects_verdict_in_any_mode(self):
         state = {
             "schema_name": "a_short_margin_overheat_cash_control_state",

@@ -1,5 +1,13 @@
 # Session Log
 
+## 2026-08-08 — Claude 自修自审（零周开口，用户令快速收口）
+
+- **Verdict/Action**: 按用户令自修自审那条 P3。`validate_state` 的共享时钟门条件由「frozen 且周数非零」改成「frozen」，与 `build_state` 那一半对称；一行改动 + 一条自带正控的新用例。生产三常量、schema、governance preset、其余四道门逐字未动。
+- **Required**: 无。`R-ASHORT-MARGIN-OVERHEAT-KNIFE1-VALIDATE-STATE-ZERO-WEEK-FROZEN-CARVE-OUT` 已 closed；修法、植入对照与边界见 `docs/system_risk_register.md`（单一来源，本处不复述）。
+- **Verify**: 本模块 `Ran 31 tests in 0.091s` / `OK`（`receipt:764e50492b4b2035ac48b833`）。植入对照：把零周开口原样放回 → 新用例三个 subTest 精确转红、其余 28 条不动，控制组先绿，还原后 sha256 逐字节一致。正控在同一用例内：强门放行时三种零周状态必须被接受，避免把修复做成一刀切过严。
+- **Pre-Codex self-review**: A-F checked。A：该类只有 `build_state` / `validate_state` 两个入口，现条件一致，全仓 `_require_shared_clock_gate` 3 处（1 定义 2 调用）无第三处。C 反向：植入与正控双向都验。B/D/E=N-A（无符号改名、无歧义分类、无 route-doc 状态变化）；F `git diff --check` 干净。matrix=1 条件 × 2 入口 × 3 零周组合 + 1 植入；register=updated；handoff=不另写（同一 finding 收口，正文在 register）；focused=31 OK；full-lane=not_triggered: AGENTS rule 3; reason=无生产 importer 的 comparison-only 模块单行改动；door=route + doc-governance（见本次 pre-commit 输出）。
+- **Next**: Codex：执行
+
 ## 2026-08-08 — Claude 复审 Pass-with-Required（融资过热刀1：五条腿闭，零周开口留给刀2）
 
 - **Verdict/Action**: Pass-with-Required，已提交（c2aa `e0c5b1cd`）；**合入 master 未完成**——主树有另一窗口正在改的未提交 `docs/system_risk_register.md`，merge 会覆盖它，按 AGENTS 收口门 9 记阻塞而不 sweep。五条腿逐条在**真实路径**复验通过（临时 registry 文件真翻 frozen，不 mock 强门）：计数/准入两个入口都要过 `evidence_counts_toward_clock`（抛错也算不通过）、verdict 任何 mode 都拒、pre-freeze `evidence_status` 已钉、越界常量下拒绝产出而不是产出一份说谎的 `production_unchanged=true`、冻结收据必须过共享门。四条 Optional 全闭。合入不代表融资过热可通电或时钟已起。

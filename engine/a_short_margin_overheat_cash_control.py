@@ -337,8 +337,7 @@ def validate_state(state: Mapping[str, Any]) -> None:
     if state["mode"] == PRE_FREEZE and (state["calendar_effective_weeks"] != 0 or
                                          state["trigger_effective_weeks"] != 0):
         raise MarginOverheatCashControlError("pre-freeze state cannot count weeks or emit a verdict")
-    if state["mode"] == FROZEN and (
-            state["calendar_effective_weeks"] != 0 or state["trigger_effective_weeks"] != 0):
+    if state["mode"] == FROZEN:
         _require_shared_clock_gate()
 
 
