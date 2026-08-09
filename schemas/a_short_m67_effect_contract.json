@@ -1266,8 +1266,8 @@
     "engine/a_short_northbound.py": "e48d20a9c49d06480443815755d97f5674fa98fe1e13284f2d4aaaa19361d71a",
     "engine/a_short_margin_overheat.py": "5d727a30ecc215a5546afe8be41dd3d43c99d7cc4abf2a03e1c099ee171d7cbb",
     "runners/a_short_phase5_engine.py": "bd9c17a7032066d7c3c9074a8fedb16e5e11b559d973d95987458fb8eca6dd5e",
-    "runners/a_short_weekly_pipeline.py": "fe761aa9c0820f19ad4d12d5c40de38e294eeeade743daf97ed4a7dac3124bc5",
-    "runners/a_short_m67_render.py": "146e6c47814b0421bb973e2741d96e7d4773c06d9fc1104d54f9100100deac51",
+    "runners/a_short_weekly_pipeline.py": "0a7bdf19606e897a3246a67b83a8d3a385053a94b856234251833a11b753a1cc",
+    "runners/a_short_m67_render.py": "ad68c7533ae055ce30e126c083ae7bbf576bc64657904e3bec0c780f887eb448",
     "engine/a_short_portfolio_risk.py": "02b88ac3b5239e8dd4897bde06afab0769ea5593f8a8a3666e5c8fba24486860",
     "engine/a_short_effect_contract.py": "2f7c1cbc41bd60acdd2ce4886a3beada8ee3ec76dc2a3b2288edffe37418c6a8"
   },
@@ -1564,7 +1564,7 @@
     "small_float_mv_pct"
   ],
   "output_schema_sha256": {
-    "schemas/a_short_weekly_report.schema.json": "c8c35e14709f40459b6b06de6b2af6aafc6b6f1b0661e7743cfe3648dc0f75a6",
+    "schemas/a_short_weekly_report.schema.json": "7ff3546ca5a879e28bd494d3469c7d4ccf1c2a904f62bba5cf3a74f15e6c522e",
     "schemas/a_short_m67_report.schema.json": "cdf7c83a3947e42702f7efe90edec4911c33bec7ca8b25c882dd706dc680a2be"
   },
   "analysis_input_paths": [

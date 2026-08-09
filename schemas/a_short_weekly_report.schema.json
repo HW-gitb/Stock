@@ -842,6 +842,33 @@
         }
       }
     },
+    "margin_overheat_cash_control": {
+      "description": "Knife 3 de-identified margin-overheat comparison summary. It exposes status, stage, evidence status, and receipt count only; it never exposes ticker, arm return, account, private path, or hash and never changes M6.7.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "schema_name",
+        "schema_version",
+        "track_id",
+        "status",
+        "evidence_status",
+        "current_stage",
+        "pending_user_receipt_count",
+        "message",
+        "production_unchanged"
+      ],
+      "properties": {
+        "schema_name": {"const": "a_short_margin_overheat_cash_control_public_summary"},
+        "schema_version": {"const": "1.0.0"},
+        "track_id": {"const": "a_short_margin_overheat_cash_control"},
+        "status": {"enum": ["not_configured", "evidence_current", "evidence_unavailable_or_inconclusive"]},
+        "evidence_status": {"enum": ["insufficient_data", "accumulating", "review_due"]},
+        "current_stage": {"enum": ["stage_a", "stage_b"]},
+        "pending_user_receipt_count": {"type": "integer", "minimum": 0},
+        "message": {"type": "string", "minLength": 1},
+        "production_unchanged": {"const": true}
+      }
+    },
     "industry_weight_comparison": {
       "description": "P5b de-identified industry-weight adjudication. It is cache-only/comparison-only and never changes EGS, M6.7, selection, sizing, account state, or active_profile.",
       "type": "object",

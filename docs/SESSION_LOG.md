@@ -1,5 +1,35 @@
 # Session Log
 
+## 2026-08-09 — Claude 复审 PASS（刀3：旁路故障不再能打断官方周跑）
+
+- **Verdict/Action**: PASS，已提交并合入 master。两条腿逐条验完：捕获段的 import 单独成 try、风险动作移进 `else`，handler 不再引用未绑定名；结算段加 `if args....root:` 前置判断并整段包 try，兜底换成不读盘的 runner 本地常量摘要。两条 Optional（drift 改谓词、结算腿登记 sidecar 期望）一并闭。
+- **Required**: 无。`R-ASHORT-MARGIN-OVERHEAT-KNIFE3-THE-SIDECAR-CAN-ABORT-THE-OFFICIAL-WEEKLY-RUN` 已 closed；新记一条 Optional（降级横幅无回归守卫）。正文只在 `docs/system_risk_register.md`。
+- **Verify**: review-evidence:33deacf57bd0。AST 实读：`try@6484 body=['ImportFrom']`、handler 不读 drift 名、风险动作在 `else`；同形复现「首句抛错」→ `capture_unavailable`（上一轮同探针是 `UnboundLocalError`）。schema 缺失时 runner 本地兜底仍返回 unavailable 且不碰引擎 schema。植入对照：把兜底换成 `None` → `Ran 527 tests / OK`（无守卫，记 O16）；控制组 527 OK；还原逐字节一致。**自伤如实记**：首次植入脚本因 GBK 解码崩在还原前，把 runner 留在植入态，已立即还原并核 sha。全量按用户明令不跑，记 NOT_VERIFIED。
+- **Next**: Codex：执行
+
+## 2026-08-09 — Codex executor/fixer：刀3 fail-soft 修复（OPEN-NOT_VERIFIED）
+
+- **Verdict/Action**: 已实现 `R-ASHORT-MARGIN-OVERHEAT-KNIFE3-THE-SIDECAR-CAN-ABORT-THE-OFFICIAL-WEEKLY-RUN` 的 L1/L2 与 O14/O15：bundle/import fault 不再中止官方周跑；未配置的轨不读 private contract；配置但 schema/settlement fault 仅降级为 unavailable；包装 replay drift 保持 stalled；settlement 有 expected/recorded outcome。
+- **Required**: finding 仍为 open P2，必须由 Claude Code 按 `AI_REVIEW_PROTOCOL` 独立复审；十格矩阵、调用链、source-binding、写盘边界、植入和完整命令只在 `docs/system_risk_register.md` 与 A-short handoff。
+- **Verify**: 固定 `C:\Users\cnhea\AppData\Local\Programs\Python\Python313\python.exe` / `Python 3.13.8`；直接闭环 `Ran 6 tests in 5.601s` / `OK`；focused `Ran 680 tests in 109.959s` / `OK`，`RESULT tier=focused status=PASS exit=0 tests=680`，receipt `receipt:248254d52ca18a1dcc0c8075`；full lane `RESULT status=PASS exit=0 tests=2652`、count gate `2652/2652`、static/diff/compile `PASS`，fingerprint `757d128a2af7`。这些只是离线执行证据。
+- **Pre-Codex self-review**: matrix=L1/L2/O14/O15 + 其余六格回扫；register=updated；handoff=updated；focused=680 OK；full-lane=2652 PASS；door=固定 Python + focused receipt + full ledger + post-write doc guards；四个植入均转红后逐字节还原；provider/live/sub-agent=NOT_RUN；review/commit/push/merge=NOT_VERIFIED/NOT_PERFORMED。
+- **Next**: `Claude Code：独立复审 R-ASHORT-MARGIN-OVERHEAT-KNIFE3-THE-SIDECAR-CAN-ABORT-THE-OFFICIAL-WEEKLY-RUN`
+
+## 2026-08-09 — Claude 审查 FAIL（刀3：只该降级的旁路能把官方周跑打断）
+
+- **Verdict/Action**: FAIL，不提交。做对的部分先认：捕获在官方三件套校验之后、结算在发布之前、同日重放先比对再拒且不写、`price_data_through` 未来即拒、结算入口取 `base_index+1` 无前视、写盘走事务、公开摘要九键封闭且额外键一律被拒。拦住的是两条逃逸，都在生产顶层 runner 里，都违反本刀自己写的「任何故障只降级、不得阻断官方 M6.7」。
+- **Required**: `R-ASHORT-MARGIN-OVERHEAT-KNIFE3-THE-SIDECAR-CAN-ABORT-THE-OFFICIAL-WEEKLY-RUN`（P2，两条腿）；两条 Optional 同条记录。机制、我的复现、Required repair 与 Closure tests 只在 `docs/system_risk_register.md`（单一来源，本处不复述）。
+- **Verify**: review-evidence:b1a84a182a64。验收超集 `Ran 674 tests in 244.786s` / `OK`（`receipt:457686e7ed2d13c6bf02a838`）——包全绿而缺陷真实。自跑复现：①AST 实读证明 `try:6433` 首句 `:6437` 早于 `:6438` 的 drift 名绑定，同形结构进程内复现 `UnboundLocalError`；②把公开摘要 schema 指到缺失文件（今天七份 schema 确为 untracked），对比轨**关着**时 `settle_and_summarize(root=None)` 仍抛进官方路径。全量按用户明令不由我跑，引执行方 `PASS 2646/2646`、fingerprint `834753a06b22e`。§6a agent 起 1 个，其 BROKEN 两腿我复现后才采信。
+- **Next**: Codex：修复
+
+## 2026-08-09 — Codex executor/fixer：刀3 weekly capture / settlement / private ledger / public status（OPEN-NOT_VERIFIED）
+
+- **Verdict/Action**: 已完成刀3 comparison-only 接线：官方 M6.7 publication 后再 capture，既有 QFQ cache settlement，private ledger/adjudication/reminder 原子写盘，以及脱敏 public summary；保持 `pre_freeze_audit_only`，不改生产决策。
+- **Required**: `R-ASHORT-MARGIN-OVERHEAT-KNIFE3-WEEKLY-CAPTURE-SETTLEMENT-PUBLIC-SEAM` 仍 open，等待 Claude Code 独立复审；完整十格矩阵、调用链、schema/source-binding、写盘边界、负向控制和 NOT_VERIFIED 见 `docs/system_risk_register.md` 与 handoff。
+- **Verify**: 固定 `C:\Users\cnhea\AppData\Local\Programs\Python\Python313\python.exe` / `Python 3.13.8`；模块 `Ran 48 tests in 9.258s` / `OK`；focused `Ran 124 tests in 100.042s` / `OK`（`receipt:4e7cdf96ee2504a31bd1c55e`）；full lane `RESULT status=PASS exit=0 tests=2646`、count gate `2646/2646`、static/diff/compile `PASS`，fingerprint `834753a06b22e...`。PASS 仅是离线测试证据，不是独立审查或 live/ship closure。
+- **Pre-Codex self-review**: A-F 已执行；matrix/ripple 覆盖 publication order、official receipt、date/digest、batch/epoch/arm、PIT cache/evidence、atomic private set、public privacy、production no-effect、schema、consumer 与 negative controls；provider/live/sub-agent=`NOT_RUN`；independent review/commit/push/merge=`NOT_VERIFIED/NOT_PERFORMED`；未使用 `--no-verify`。
+- **Next**: `Claude Code：独立复审 R-ASHORT-MARGIN-OVERHEAT-KNIFE3-WEEKLY-CAPTURE-SETTLEMENT-PUBLIC-SEAM`
+
 ## 2026-08-08 — Claude 复审 PASS（刀2：判据分位回到 digest 里，影子缝取最小）
 
 - **Verdict/Action**: PASS，已提交并合入 master。三条 Required 逐条在真实路径复验：篡改 `level.percentile` / `change_rate_20d.percentile` 现在被点名拒绝（上一轮同一条探针能把决策从 1.0/100000 翻成 0.8/80000）；`allocation_summary["margin_overheat_control"]` 回到生产归一化对象、臂标签移到并列新键；影子缝由赋值改成 `min`。三条 Optional 全闭，非触发 parity 现在零字段差异。

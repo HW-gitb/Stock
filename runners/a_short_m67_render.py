@@ -548,6 +548,10 @@ def render_weekly_markdown(weekly: dict) -> str:
     comparison_v2 = weekly.get("factor_comparison_v2")
     if comparison_v2:
         out.append("**Comparison v2**: " + str(comparison_v2.get("message", "")))
+    margin_overheat_cash_control = weekly.get("margin_overheat_cash_control")
+    if margin_overheat_cash_control:
+        out.append("**Margin-overheat cash control**: " +
+                   str(margin_overheat_cash_control.get("message", "")))
     industry_weight = weekly.get("industry_weight_comparison")
     if industry_weight:
         out.append("**P5 行业权重**: " + str(industry_weight.get("message", "")))

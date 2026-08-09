@@ -1,0 +1,95 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "a_short_margin_overheat_cash_control_capture",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_name", "schema_version", "track_id", "comparison_only", "payload", "payload_sha256", "boundary"],
+  "properties": {
+    "schema_name": {"const": "a_short_margin_overheat_cash_control_capture"},
+    "schema_version": {"const": "1.0.0"},
+    "track_id": {"const": "a_short_margin_overheat_cash_control"},
+    "comparison_only": {"const": true},
+    "payload_sha256": {"type": "string", "pattern": "^[a-f0-9]{64}$"},
+    "payload": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "decision_date", "run_date", "price_data_through", "official_m67_digest",
+        "margin_fact_digest", "margin_facts_digest", "daily_cache_digest", "candidate_digest",
+        "candidate_snapshot_digest", "experiment_batch_id", "epoch_id", "forward_eligible",
+        "predicate_facts", "candidate_universe", "official_selection_plan", "arm_definitions",
+        "arms", "source_references"
+      ],
+      "properties": {
+        "decision_date": {"type": "string", "pattern": "^[0-9]{8}$"},
+        "run_date": {"type": "string", "pattern": "^[0-9]{8}$"},
+        "price_data_through": {"type": "string", "pattern": "^[0-9]{8}$"},
+        "official_m67_digest": {"type": "string", "pattern": "^[a-f0-9]{64}$"},
+        "margin_fact_digest": {"type": "string", "pattern": "^[a-f0-9]{64}$"},
+        "margin_facts_digest": {"type": "string", "pattern": "^[a-f0-9]{64}$"},
+        "daily_cache_digest": {"type": "string", "pattern": "^[a-f0-9]{64}$"},
+        "candidate_digest": {"type": "string", "pattern": "^[a-f0-9]{64}$"},
+        "candidate_snapshot_digest": {"type": "string", "pattern": "^[a-f0-9]{64}$"},
+        "experiment_batch_id": {"type": "string", "minLength": 1},
+        "epoch_id": {"type": "string", "minLength": 1},
+        "forward_eligible": {"type": "boolean"},
+        "predicate_facts": {"type": ["object", "null"]},
+        "candidate_universe": {
+          "type": "array",
+          "items": {
+            "type": "object", "additionalProperties": false,
+            "required": ["ts_code", "name", "close"],
+            "properties": {
+              "ts_code": {"type": "string", "minLength": 1},
+              "name": {"type": "string"},
+              "close": {"type": "number", "exclusiveMinimum": 0}
+            }
+          }
+        },
+        "official_selection_plan": {"type": "array", "items": {"type": "object"}},
+        "arm_definitions": {"type": "array", "minItems": 4, "maxItems": 4, "items": {"type": "object"}},
+        "arms": {
+          "type": "array", "minItems": 4, "maxItems": 4,
+          "items": {
+            "type": "object", "additionalProperties": false,
+            "required": ["arm_id", "criterion_id", "status", "predicate_triggered", "shadow_cash_factor", "allocation_summary", "positions"],
+            "properties": {
+              "arm_id": {"type": "string"},
+              "criterion_id": {"type": "string"},
+              "status": {"enum": ["evaluable", "no_count"]},
+              "predicate_triggered": {"type": ["boolean", "null"]},
+              "shadow_cash_factor": {"type": "number", "exclusiveMinimum": 0, "maximum": 1},
+              "allocation_summary": {"type": "object"},
+              "positions": {
+                "type": "array",
+                "items": {
+                  "type": "object", "additionalProperties": false,
+                  "required": ["ts_code", "shares", "capital_used"],
+                  "properties": {
+                    "ts_code": {"type": "string", "minLength": 1},
+                    "shares": {"type": "integer", "minimum": 1},
+                    "capital_used": {"type": "number", "exclusiveMinimum": 0}
+                  }
+                }
+              }
+            }
+          }
+        },
+        "source_references": {"type": "array", "items": {"type": "string"}}
+      }
+    },
+    "boundary": {
+      "type": "object", "additionalProperties": false,
+      "required": ["production", "production_effect_enabled", "automatic_policy_switch", "historical_replay_counts_as_forward", "historical_backfill_forbidden", "provider_calls_during_settlement", "direct_activation_requires_user_authorization"],
+      "properties": {
+        "production": {"const": false},
+        "production_effect_enabled": {"const": false},
+        "automatic_policy_switch": {"const": false},
+        "historical_replay_counts_as_forward": {"const": false},
+        "historical_backfill_forbidden": {"const": true},
+        "provider_calls_during_settlement": {"const": false},
+        "direct_activation_requires_user_authorization": {"const": true}
+      }
+    }
+  }
+}

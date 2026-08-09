@@ -2235,6 +2235,8 @@ def validate_weekly_report(weekly: dict, iv_feed_summary: dict,
     if weekly.get("factor_comparison_v2") is not None:
         from engine.a_short_factor_comparison_v2_weekly import validate_v2_public_summary
         validate_v2_public_summary(weekly["factor_comparison_v2"])
+    if weekly.get("margin_overheat_cash_control") is not None:
+        _validate_margin_overheat_public_summary_shape(weekly["margin_overheat_cash_control"])
     if weekly.get("industry_weight_comparison") is not None:
         from engine.a_short_industry_weight_comparison import validate_public_progress
         validate_public_progress(weekly["industry_weight_comparison"])
@@ -3037,6 +3039,38 @@ def _sidecar_progress_from_status(status: object) -> str:
     if value in {"not_due", "no_count", "pending", "accumulating"}:
         return "not_applicable"
     return "unavailable"
+
+
+def _margin_overheat_unavailable_public_summary() -> dict:
+    """Self-contained public fallback when the optional sidecar cannot load its contract."""
+    return {
+        "schema_name": "a_short_margin_overheat_cash_control_public_summary",
+        "schema_version": "1.0.0",
+        "track_id": "a_short_margin_overheat_cash_control",
+        "status": "evidence_unavailable_or_inconclusive",
+        "evidence_status": "insufficient_data",
+        "current_stage": "stage_a",
+        "pending_user_receipt_count": 0,
+        "message": (
+            "Margin-overheat comparison evidence is unavailable; stale reminders are suppressed "
+            "and official M6.7 is unchanged."
+        ),
+        "production_unchanged": True,
+    }
+
+
+def _validate_margin_overheat_public_summary_shape(summary: object) -> None:
+    """Validate against the official weekly schema, not the optional sidecar file."""
+    try:
+        weekly_schema = json.loads(Path(SCHEMA_PATH).read_text(encoding="utf-8"))
+        summary_schema = weekly_schema["properties"]["margin_overheat_cash_control"]
+        jsonschema.validate(summary, summary_schema)
+    except (OSError, UnicodeDecodeError, json.JSONDecodeError, KeyError,
+            jsonschema.ValidationError, jsonschema.SchemaError) as exc:
+        raise ValueError("margin-overheat public summary shape is invalid") from exc
+    if (summary["status"] != "evidence_current"
+            and summary["pending_user_receipt_count"] != 0):
+        raise ValueError("unavailable margin-overheat summary carries stale reminders")
 
 
 def _recover_public_artifact_sets() -> list[dict]:
@@ -5493,6 +5527,12 @@ def main(argv=None, pro_factory=None, price_provider=None, semantic_provider=Non
                    help="existing v2 daily_cache.json under the private v2 root; never fetches data")
     p.add_argument("--factor-comparison-v2-forward", action="store_true",
                    help="mark this current v2 snapshot as a live forward observation; historical replay stays non-counting")
+    p.add_argument("--margin-overheat-cash-control-root", default=None,
+                   help="private margin-overheat comparison root; capture/settlement never writes official M6.7")
+    p.add_argument("--margin-overheat-cash-control-daily-cache", default=None,
+                   help="existing approved v2 daily cache for margin-overheat settlement; never fetches data")
+    p.add_argument("--margin-overheat-cash-control-forward", action="store_true",
+                   help="mark a source-bound current margin-overheat capture as forward-eligible; no production activation")
     p.add_argument("--industry-weight-comparison-root", default=None,
                    help="private P5 root ending state/a_short/industry_weight_comparison_private/v1")
     p.add_argument("--industry-weight-comparison-daily-cache", default=None,
@@ -5568,6 +5608,12 @@ def main(argv=None, pro_factory=None, price_provider=None, semantic_provider=Non
         raise SystemExit("[FATAL] factor-comparison v2 capture requires --run-date for source-bound date identity")
     if args.factor_comparison_v2_forward and not args.factor_comparison_v2_root:
         raise SystemExit("[FATAL] --factor-comparison-v2-forward requires --factor-comparison-v2-root")
+    if args.margin_overheat_cash_control_root and not args.run_date:
+        raise SystemExit("[FATAL] margin-overheat cash-control capture requires --run-date for source-bound identity")
+    if args.margin_overheat_cash_control_forward and not args.margin_overheat_cash_control_root:
+        raise SystemExit("[FATAL] --margin-overheat-cash-control-forward requires --margin-overheat-cash-control-root")
+    if args.margin_overheat_cash_control_root and not args.margin_overheat_cash_control_daily_cache:
+        raise SystemExit("[FATAL] margin-overheat cash-control capture requires --margin-overheat-cash-control-daily-cache")
     if args.industry_weight_comparison_root and not args.run_date:
         raise SystemExit("[FATAL] P5 industry-weight capture requires --run-date for source-bound identity")
     if args.industry_weight_comparison_forward and (not args.industry_weight_comparison_root or
@@ -6091,6 +6137,37 @@ def main(argv=None, pro_factory=None, price_provider=None, semantic_provider=Non
     from engine.a_short_factor_comparison_v2_weekly import settle_and_summarize_v2_weekly
     factor_comparison_v2 = settle_and_summarize_v2_weekly(
         root=args.factor_comparison_v2_root, daily_cache_path=args.factor_comparison_v2_daily_cache, as_of=args.as_of)
+    # Knife 3 margin-overheat order: settle only historical private captures from
+    # the existing approved cache, recompute its private ledger/adjudication/
+    # reminder, and expose only the de-identified banner below.  Any cache,
+    # private-state, import, or contract fault degrades this optional sidecar;
+    # it must not block official M6.7.
+    margin_overheat_cash_control = None
+    if args.margin_overheat_cash_control_root:
+        _expect_sidecar("margin_overheat_cash_control_settlement")
+        try:
+            from engine.a_short_margin_overheat_cash_control import (
+                settle_and_summarize_margin_overheat_weekly,
+            )
+            margin_overheat_cash_control = settle_and_summarize_margin_overheat_weekly(
+                root=args.margin_overheat_cash_control_root,
+                daily_cache_path=args.margin_overheat_cash_control_daily_cache,
+                as_of=args.as_of,
+            )
+            _validate_margin_overheat_public_summary_shape(margin_overheat_cash_control)
+        except Exception:
+            margin_overheat_cash_control = _margin_overheat_unavailable_public_summary()
+            _record_sidecar("margin_overheat_cash_control_settlement", execution_status="failed",
+                            progress_status="unavailable", error_code="settlement_unavailable",
+                            observed_decision_as_of=args.as_of)
+        else:
+            if margin_overheat_cash_control["status"] == "evidence_current":
+                _record_sidecar("margin_overheat_cash_control_settlement", execution_status="succeeded",
+                                progress_status="advanced", observed_decision_as_of=args.as_of)
+            else:
+                _record_sidecar("margin_overheat_cash_control_settlement", execution_status="failed",
+                                progress_status="unavailable", error_code="settlement_unavailable",
+                                observed_decision_as_of=args.as_of)
     # Roll back a dead run's half-written pair before anything READS it.  The
     # commit path recovers on its own, but a crash followed by a week of failed
     # settlements would otherwise leave the half-state visible to readers (the
@@ -6201,6 +6278,8 @@ def main(argv=None, pro_factory=None, price_provider=None, semantic_provider=Non
     weekly["run_date"] = str(args.run_date) if args.run_date else None
     weekly["price_data_through"] = price_data_through
     weekly["factor_comparison_v2"] = factor_comparison_v2
+    if margin_overheat_cash_control is not None:
+        weekly["margin_overheat_cash_control"] = margin_overheat_cash_control
     if industry_weight_comparison is not None:
         weekly["industry_weight_comparison"] = industry_weight_comparison
     if target_policy_comparison is not None:
@@ -6400,6 +6479,50 @@ def main(argv=None, pro_factory=None, price_provider=None, semantic_provider=Non
                 print(f"[factor-comparison-v2] current-week capture unavailable "
                       f"(error_code={capture_error_code(exc)}); "
                       "M6.7 output remains authoritative and unchanged")
+    if args.margin_overheat_cash_control_root:
+        _expect_sidecar("margin_overheat_cash_control_capture")
+        try:
+            from engine.a_short_margin_overheat_cash_control import (
+                capture_margin_overheat_after_published_weekly,
+                is_capture_replay_drift as is_margin_capture_replay_drift,
+            )
+        except Exception:
+            _record_sidecar("margin_overheat_cash_control_capture", execution_status="failed",
+                            progress_status="unavailable", error_code="capture_unavailable")
+            print("[margin-overheat-cash-control] current-week capture unavailable; "
+                  "M6.7 output remains authoritative and unchanged")
+        else:
+            try:
+                # Re-read the exact official triplet once at this boundary.  The
+                # margin module receives the validated byte snapshot, so it cannot
+                # capture from a pre-publish or path-only pseudo-bundle.
+                official_margin_bundle = validate_published_weekly_bundle(args.out, receipt_path)
+                margin_capture = capture_margin_overheat_after_published_weekly(
+                    root=args.margin_overheat_cash_control_root,
+                    decision_date=args.as_of,
+                    candidates=normalized,
+                    reports=official_margin_bundle.weekly["reports"],
+                    source_identity=source_identity,
+                    official_bundle=official_margin_bundle,
+                    daily_cache_path=args.margin_overheat_cash_control_daily_cache,
+                    margin_facts=((ai.get("market_context") or {}).get("margin_overheat") or {}),
+                    forward_eligible=args.margin_overheat_cash_control_forward,
+                )
+                print(f"[margin-overheat-cash-control] capture={margin_capture['status']} (production unchanged)")
+                _record_sidecar("margin_overheat_cash_control_capture", execution_status="succeeded",
+                                progress_status=_sidecar_progress_from_status(margin_capture.get("status")),
+                                observed_decision_as_of=args.as_of)
+            except Exception as exc:
+                if is_margin_capture_replay_drift(exc):
+                    _record_sidecar("margin_overheat_cash_control_capture", execution_status="failed",
+                                    progress_status="stalled", error_code="replay_drift")
+                    print("[margin-overheat-cash-control] changed replay was not written; "
+                          "M6.7 remains authoritative")
+                else:
+                    _record_sidecar("margin_overheat_cash_control_capture", execution_status="failed",
+                                    progress_status="unavailable", error_code="capture_unavailable")
+                    print("[margin-overheat-cash-control] current-week capture unavailable; "
+                          "M6.7 output remains authoritative and unchanged")
     if args.industry_weight_comparison_root:
         try:
             from engine.a_short_industry_weight_comparison import capture_after_published_weekly, settle_and_summarize_weekly

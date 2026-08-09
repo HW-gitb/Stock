@@ -3464,3 +3464,158 @@ Next: `Claude Code：独立复审 R-ASHORT-MARGIN-OVERHEAT-KNIFE2-THE-PERCENTILE
 - 未跑真实 weekly、未做 provider 取数；轨仍 `pre_freeze_audit_only`，生产三常量未动。
 
 **下一步**：`Codex：执行`（刀 3：weekly capture、结算、独立写盘与公开提醒接线）。
+
+## 2026-08-09 Codex executor/fixer：刀3 weekly capture / settlement / private ledger / public status（OPEN-NOT_VERIFIED；等待独立复审）
+
+### 目标、根因与边界
+
+本刀修复 `R-ASHORT-MARGIN-OVERHEAT-KNIFE3-WEEKLY-CAPTURE-SETTLEMENT-PUBLIC-SEAM`。根因是 comparison-only 轨此前没有一条可验证的 weekly capture → existing-cache settlement → private ledger/adjudication/reminder → deidentified public status 接线；若直接用调用方传入的弱身份或不问来源，轨道就会在开始计时、认裁决、发冻结收据之前获得比共享模块更弱的授权。本刀把授权钉在已验证的官方 M6.7 三件套、margin facts、PIT 候选/报告和既有 daily cache 上，仍保持 `pre_freeze_audit_only`，不启动 forward clock、不改 registry mode、不接生产现金分配、不实现刀4。
+
+边界保持为 comparison-only：不动三条生产常量，不改变官方 selection / sizing / action / holding，不接 provider/live/account/order/portfolio，不写 `result/` 或 `research/`，不 commit。
+
+### 改动文件与调用链
+
+- `engine/a_short_margin_overheat_cash_control.py`：新增 source-bound capture、existing-cache settlement、private artifact set、adjudication/reminder，以及只含脱敏状态的 public projection；复用 `materialize_shadow_cash_control` → `_allocate_cash_shadow` → shared `_allocate_cash` / factor stack。
+- `runners/a_short_weekly_pipeline.py`：M6.7 settled 前先从既有 cache 结算；`publish_weekly_bundle` 成功且重新 `validate_published_weekly_bundle` 后，才调用 `capture_margin_overheat_after_published_weekly`。capture 失败不改变 M6.7，replay drift fail-closed。
+- `runners/a_short_m67_render.py`：只渲染 public summary message；`schemas/a_short_weekly_report.schema.json` 只允许相同的 public 字段。
+- 新增并逐一收紧 `schemas/a_short_margin_overheat_cash_control_{capture,source_receipt,outcome,ledger,adjudication,reminder,public_summary}.schema.json`；`schemas/a_short_m67_effect_contract.json` 已按生产 wrapper / runner / render / output schema 的当前 hash 重封。
+- `tests/test_a_short_margin_overheat_cash_control.py`：正控、同日 replay、跨 batch/epoch、伪 receipt、部分写入、cache evidence、D1/D3/subtrack 污染和 stale reminder 清理的点名式负向控制。
+- `docs/README.md`：route row 更新为刀3薄指针；本交接文档继续按 `docs/handoff/README.md` 的 reverse-chronological 追加格式维护。
+
+调用链是：`weekly_pipeline` 读取并验证官方 weekly JSON/Markdown/receipt → 先完成 `publish_weekly_bundle` → 再 `validate_published_weekly_bundle` → `capture_margin_overheat_after_published_weekly` → `capture_margin_overheat_week`；capture 以 `materialize_shadow_cash_control` 产出冻结 shares/capital/remaining cash；随后仅从已存在的 QFQ daily cache 读取 T+1 open/H5/H10/H20 close 和 adjustment evidence → settlement → ledger/adjudication/reminder；weekly report / renderer 只消费 `_public_margin_summary`。pre-M6.7 的 settlement 只使用已有 cache，不凭空 capture 当前周。
+
+### 直接消费者、schema、source-binding 与写盘边界
+
+直接消费者为 `runners/a_short_weekly_pipeline.py`（唯一 production wrapper 接线）、`runners/a_short_m67_render.py`、`validate_weekly_report` 和上述七份专属 schema；shadow 的共享消费者仍是既有 `_allocate_cash`，comparison-only 结果不回写生产 `allocation_summary`。没有 D1、D3、其他 subtrack、账户、provider 或 order consumer。
+
+Capture source-binding 同时锁定：`analysis_input.market_context.margin_overheat`、官方 `m67.selection_plan`、`a_short_factor_comparison_v2.approved_daily_cache`；`run_id`、run/as-of/price dates、candidate source digest/snapshot、margin facts digest、official weekly bytes digest、official receipt identity、batch/epoch、criterion/arm definitions、predicate source references 和 daily-cache digest。官方 bundle 必须是已经通过 JSON/Markdown/receipt 三件套验证的 `PublishedWeeklyBundle`，同日 exact replay 任何字节 drift 都拒绝；D1/D3/subtrack source refs 不是该专属契约时拒绝。
+
+所有 program/capture/source receipt/settlement outcome/ledger/adjudication/reminder 文件使用 artifact-set transaction 原子写入 private root；root 必须在 repo 外或由 git ignore 证明为 private，包含 `result` / `research` 的路径拒绝。公共投影只允许 `evidence_status`、current stage、pending receipt count、message、production_unchanged 等脱敏字段；不含 ticker、arm return、account/private path/hash。私有文件缺失、损坏、过期或 evidence 不足时，公共状态为 unavailable，并清理 stale reminder；缺失证据按 question-week `no_count`，不填零、不发布冻结裁决。
+
+### 按验收条目与负向控制闭合
+
+- weekly order：测试确保 publish/validated official bundle 发生在 capture 之前；未验证 bundle 或 publish failure 不写 capture。
+- identity/drift：同日 capture replay、跨 batch、跨 epoch、官方 receipt 不匹配、伪 receipt、部分写入均按点名 regex 拒绝；恢复前的 source bytes / test bytes 做逐字节还原。
+- evidence：缺 adjustment/QFQ source、corporate-action verification、T+1/H5/H10/H20 任一必需 evidence 时不计数；冻结 shares/capital/remaining cash 绑定，禁止 equal slots。
+- contamination/privacy：D1、D3、subtrack source references 和 ledger track_id 植入均转红；public projection 断言无 ticker、baseline、private payload/path/hash。
+- pre-freeze safety：capture/settlement 不改 registry mode、三条生产常量或官方 M6.7；knife4 仍未触发。
+
+### Pre-Codex self-review
+
+A-F 已逐项执行：matrix=weekly order、official bundle identity、cache/PIT/evidence、artifact atomicity、schema/source-binding、public privacy、production no-effect、negative controls；ripple=检查 weekly runner、M67 renderer、weekly report schema、effect contract、共享 shadow allocator 及直接消费者；negative=48 个模块测试覆盖正控与点名负控，移除每道门都会使对应断言转红，未发现 skip residue；provider/live=NOT_RUN；sub-agent=NOT_RUN；独立 review/commit/push/merge=NOT_VERIFIED/NOT_PERFORMED。
+
+### 固定 Python、精确验证命令与原始终态
+
+固定解释器：`C:\Users\cnhea\AppData\Local\Programs\Python\Python313\python.exe`，版本 `Python 3.13.8`。本轮使用的原始结果：
+
+- `C:\Users\cnhea\AppData\Local\Programs\Python\Python313\python.exe -m unittest discover -s D:\cnhea\Codex\worktrees\c2aa\Stock\tests -t D:\cnhea\Codex\worktrees\c2aa\Stock -p test_a_short_margin_overheat_cash_control.py` → `Ran 48 tests in 9.258s` / `OK`。
+- 固定 Python bounded focused bundle（`tests.test_a_short_margin_overheat_cash_control tests.test_a_short_effect_contract tests.test_a_short_effect_consumer_probe`）→ `Ran 124 tests in 100.042s` / `OK`；`RESULT tier=focused status=PASS exit=0 tests=124`；receipt `receipt:4e7cdf96ee2504a31bd1c55e`，bundle=`a_short_effect_contract`。
+- `C:\Users\cnhea\AppData\Local\Programs\Python\Python313\python.exe D:\cnhea\Codex\worktrees\c2aa\Stock\.tools\full_pack_ledger.py run a_short 'Knife 3 changed the production weekly runner: weekly capture after validated publication, existing-cache settlement, private ledger/adjudication/reminder, and deidentified public projection' receipt:4e7cdf96ee2504a31bd1c55e 860 -- discover -s tests -p 'test_a_short*.py'` → `RESULT status=PASS exit=0 tests=2646`；`COUNT_GATE discovered=2646 ran=2646 equal=True`；`STATIC status=PASS diff_check=PASS py_compile=4`；fingerprint `834753a06b22ea6801be8415a00c74fd624dceaca65a35df23bad6817dc052ee`。
+- 固定 Python `py_compile`（engine/runner/render/test 相关文件）exit `0`；相关 JSON schema parse/check exit `0`；本段写入后需再次执行文档治理、route/ledger consistency、`git diff --check`，以新终态为准。
+
+### NOT_VERIFIED、审查/提交边界与下一步
+
+`NOT_VERIFIED`：Claude Code 独立复审、真实 source-bound weekly capture、真实 forward clock、provider/live/account/ship-gate evidence、用户 freeze 决策。全量测试的 `PASS` 不是独立 review、live 或 ship closure。Codex executor/fixer 不 stage、不 commit、不 push、不 merge，不使用 `--no-verify`；本轮工作树仍留给 reviewer/committer 按 `AI_REVIEW_PROTOCOL` 独立复核。
+
+下一步：`Claude Code：独立复审 R-ASHORT-MARGIN-OVERHEAT-KNIFE3-WEEKLY-CAPTURE-SETTLEMENT-PUBLIC-SEAM`。
+
+## 2026-08-09 追加：融资过热刀 3 独立审查 —— FAIL（一条 P2 两腿）
+
+**判定**：FAIL，未提交。刀 3 的主干顺序、不可变性与脱敏做得扎实（细节见下"复核成立"），拦住的是两条**逃逸**：本该只把自己降级的旁路，能把官方周跑整个打断。两条都在 `runners/a_short_weekly_pipeline.py`。finding 正文只在 `docs/system_risk_register.md`。
+
+**我实际验了什么**
+- 验收超集（margin + weekly pipeline + effect contract + consumer probe + m67 render）`Ran 674 tests in 244.786s` / `OK`，`receipt:457686e7ed2d13c6bf02a838`。
+- **逃逸 A 我用 AST 实读 + 同形复现**：`try` 起 `:6433`，首句 `:6437` 是 `validate_published_weekly_bundle(...)`，而处理器要用的 drift 名在 `:6438` 才由 import 绑定；同形结构进程内跑出 `UnboundLocalError`。它炸的时机正是「官方三件套没验过」——而其后四个捕获与 sidecar-outcomes 健康产物会一起没了。
+- **逃逸 B 我用缺失 schema 复现**：把 `PUBLIC_SUMMARY_SCHEMA_PATH` 指到不存在的文件（本刀七份 schema 今天确实全是 untracked `??`），对比轨**关着**（`root=None`）时 `settle_and_summarize_margin_overheat_weekly` 仍抛进官方路径；`except` 兜底又调用同一个会炸的构造器，所以已配置那条也逃。
+- 我自己先跑过的 fail-soft 与脱敏探针：root 缺失/缓存缺失/缓存损坏四种都正常降级；公开摘要只九个键，额外塞 ticker/private_root/source_digest/arm_return 全被拒；渲染器只输出 `message`。
+
+**全量**：本轮用户明令我不跑。执行方已跑并记录 `RESULT status=PASS exit=0 tests=2646`、`2646/2646`、fingerprint `834753a06b22e…`，按 rule 4 引用不重跑。
+
+**§6a 独立对抗 agent**
+起 1 个（生产顶层 runner + 新增写盘引擎）。报 5 条承诺 4 HELD / 1 BROKEN；BROKEN 的两条腿我都自跑复现后才升 Required，另两条（drift 用字符串相等而非谓词、结算腿没登记 sidecar 期望）降 Optional。它未读本刀测试文件、未评估 `engine/a_short_artifact_set_transaction.py` 的原子性与 `.tmp` 残留——promise 5 只在该共享件成立的前提下成立，这两条 NOT_VERIFIED 原样保留。
+
+**下一步**：`Codex：修复`（两条腿 + 两条 Optional 一次封；注意七份新 schema 必须与引擎同一次提交，否则 L2 会立刻变成每周必死）。
+
+## 2026-08-09 追加：融资过热刀 3 P2 fail-soft 修复（OPEN-NOT_VERIFIED，等待独立复审）
+
+### 收口范围与根因
+
+本节只收口 `R-ASHORT-MARGIN-OVERHEAT-KNIFE3-THE-SIDECAR-CAN-ABORT-THE-OFFICIAL-WEEKLY-RUN` 的两条 Required 与 O14/O15。审查的根因不是 capture/settlement 的正常业务判断，而是故障降级路径自身会中止生产顶层 weekly runner：L1 的 exception handler 会读取尚未绑定的局部 import 名；L2 在 comparison track 未配置时仍进行 sidecar schema I/O，fallback 又重走同一个可抛异常的 builder。
+
+边界不变：只在 `D:\cnhea\Codex\worktrees\c2aa\Stock` 修改；不动三条生产常量、registry mode、official selection/sizing/action/holding、生产 `_allocate_cash` 调用、provider/account/order；不实现刀 4；未 stage/commit/push/merge，未使用 `--no-verify`。
+
+### 改动、调用链与直接消费者
+
+- `engine/a_short_margin_overheat_cash_control.py`：新增链式异常谓词 `is_capture_replay_drift(exc)`；把 settlement 的 root-none / schema-fault fallback 放入 fail-soft 范围；用不读盘的 `unavailable_margin_public_summary(as_of=...)` 产生固定九键 unavailable projection。外部 direct validator 仍严格读取其契约；只在故障 fallback 绕开可缺失的 private sidecar schema。
+- `runners/a_short_weekly_pipeline.py`：pre-M6.7 仅在 `args.margin_overheat_cash_control_root` 存在时尝试 settlement。enabled settlement/import/schema fault 生成 unavailable summary 并登记 `margin_overheat_cash_control_settlement` outcome；disabled 时不导入、不读 private contract、不添加 margin field。post-publish capture 先完成独立 import guard，再在独立 `try` 内校验 official bundle 并 capture；任何 fault 记录 capture outcome，后续 P5/P2/P3/P4 与 `_write_pipeline_sidecar_outcomes` 继续。
+- `schemas/a_short_m67_effect_contract.json`：只重封当前 weekly runner decision-predicate SHA-256：`0a7bdf19606e897a3246a67b83a8d3a385053a94b856234251833a11b753a1cc`。
+- `tests/test_a_short_margin_overheat_cash_control.py` / `tests/test_a_short_weekly_pipeline.py`：加入两条 Required 和两条 Optional 的点名闭环测试。
+
+正常调用链保持：configured root → existing-cache settlement → deidentified public projection → official weekly schema / renderer；published M6.7 JSON/Markdown/receipt → `validate_published_weekly_bundle` → capture → private artifact set。故障调用链为：optional sidecar fault → fixed unavailable public projection + pipeline sidecar outcome；不进入 private capture/ledger/adjudication/reminder 写盘。直接消费者仍仅 weekly pipeline、weekly report validation 和 M6.7 renderer；无新 provider、account、order 或 production allocation consumer。
+
+### source-binding、schema 与写盘边界
+
+成功 capture 的 source-binding 未改：official published bundle/receipt、margin facts、candidate snapshot/digest、daily-cache digest、run/as-of/price dates、batch/epoch、criterion/arm 与 predicate refs 仍进 immutable identity。O14 仅改善已知 replay drift 的分类，不放宽 source binding；包装链上的 drift 仍 fail-closed，记录 `stalled` / `replay_drift`。
+
+public unavailable fallback 固定为既有九键脱敏形状，publication 时由 required `schemas/a_short_weekly_report.schema.json` 校验；它不读 optional `PUBLIC_SUMMARY_SCHEMA_PATH`，因此该 optional contract 缺失不会终止官方 M6.7。non-current summary 不得声称 receipt count。未改 `commit_artifact_set(...)`；error fallback 不写任何 private artifact。O15 使 settlement 在 enabled 情况下也进入 expected/recorded sidecar ledger，成功为 `succeeded/advanced`，降级为 `failed/unavailable/settlement_unavailable`。
+
+### 逐腿闭环与植入对照
+
+- **L1**：`test_margin_capture_bundle_failure_is_nonblocking_and_reaches_following_sidecars` 令 `validate_published_weekly_bundle` 抛错，断言 official weekly 仍存在、margin 为 unavailable、capture outcome 已写，且后四个 P5/P2/P3/P4 capture 也全部到达。植入将 predicate import 移回 validator 之后，测试精确转红为 `UnboundLocalError: cannot access local variable 'is_margin_capture_replay_drift' ...`；还原。
+- **L2**：`test_settlement_schema_fault_returns_unavailable_without_retrying_contract_io` 直接证明 strict builder 在缺失 contract 时点名抛错，而 settlement fallback 返回九键 unavailable；`test_margin_disabled_ignores_missing_private_public_schema_and_publishes_m67` 确认 disabled root 完全不读该 schema；`test_margin_missing_schema_degrades_to_unavailable_and_records_settlement` 确认 enabled root 仅降级并记 outcome。植入把 fallback 改回 `_public_margin_summary(...)` 后，测试精确转红为 `cannot read contract` 逃逸；还原。
+- **O14**：`test_wrapped_same_week_replay_drift_keeps_its_immutable_identity` 与 `test_margin_wrapped_replay_drift_is_stalled_not_an_unavailable_capture` 覆盖 cause-chain drift。植入谓词 `return False` 后，后者精确转红：期望 `stalled`、实际 `unavailable`；还原。
+- **O15**：enabled missing-schema test 断言 settlement 名称同时出现在 expected/recorded sidecar outcomes。植入删除 `_expect_sidecar("margin_overheat_cash_control_settlement")` 后，断言精确转红为 expected list 缺该名称；还原。
+
+四次植入前、还原后分别计算 engine、runner、engine test、weekly test SHA-256，四个文件均逐字节一致。期间没有并行运行测试或修改源码。
+
+### 固定 Python、命令与原始终态
+
+固定解释器是 `C:\Users\cnhea\AppData\Local\Programs\Python\Python313\python.exe`（`Python 3.13.8`），所有本次命令均显式使用它：
+
+```powershell
+& 'C:\Users\cnhea\AppData\Local\Programs\Python\Python313\python.exe' -m unittest tests.test_a_short_margin_overheat_cash_control.MarginOverheatCashControlKnife3Tests.test_settlement_schema_fault_returns_unavailable_without_retrying_contract_io tests.test_a_short_margin_overheat_cash_control.MarginOverheatCashControlKnife3Tests.test_wrapped_same_week_replay_drift_keeps_its_immutable_identity tests.test_a_short_weekly_pipeline.MainWiringTests.test_margin_capture_bundle_failure_is_nonblocking_and_reaches_following_sidecars tests.test_a_short_weekly_pipeline.MainWiringTests.test_margin_disabled_ignores_missing_private_public_schema_and_publishes_m67 tests.test_a_short_weekly_pipeline.MainWiringTests.test_margin_missing_schema_degrades_to_unavailable_and_records_settlement tests.test_a_short_weekly_pipeline.MainWiringTests.test_margin_wrapped_replay_drift_is_stalled_not_an_unavailable_capture
+# Ran 6 tests in 5.601s
+# OK
+
+& 'C:\Users\cnhea\AppData\Local\Programs\Python\Python313\python.exe' 'D:\cnhea\Codex\worktrees\c2aa\Stock\.tools\bounded_unittest.py' focused 300 -- tests.test_a_short_margin_overheat_cash_control tests.test_a_short_weekly_pipeline tests.test_a_short_effect_contract tests.test_a_short_effect_consumer_probe tests.test_a_short_m67_render
+# Ran 680 tests in 109.959s
+# OK
+# [bounded-unittest] RESULT tier=focused status=PASS exit=0 tests=680 elapsed=111.5s deadline=300s
+# [bounded-unittest] FOCUSED_RECEIPT token=receipt:248254d52ca18a1dcc0c8075 tests=680 bundles=a_short_effect_contract
+
+& 'C:\Users\cnhea\AppData\Local\Programs\Python\Python313\python.exe' 'D:\cnhea\Codex\worktrees\c2aa\Stock\.tools\full_pack_ledger.py' run a_short 'Knife 3 FAIL repair: margin-overheat sidecar capture and settlement failures now degrade without aborting official M6.7; settlement is recorded and wrapped replay drift stays stalled' receipt:248254d52ca18a1dcc0c8075 860 -- discover -s tests -p 'test_a_short*.py'
+# [full-pack-ledger] STATIC status=PASS diff_check=PASS py_compile=5
+# [full-pack-ledger] RESULT status=PASS exit=0 tests=2652 elapsed=109.6s deadline=860s mode=parallel
+# [parallel-lane] COUNT_GATE discovered=2652 ran=2652 equal=True
+# fingerprint=757d128a2af7
+```
+
+### Pre-Codex self-review、NOT_VERIFIED 与下一步
+
+`matrix=L1/L2/O14/O15 + authority/date/digest/batch/PIT/atomicity/public/consumer/production-no-effect`；`register=updated`；`handoff=updated`；`focused=680 OK`；`full-lane=2652 PASS`；`door=fixed Python + focused receipt + full ledger + post-write doc guards`。负向控制包含四次精确植入；no-provider/no-live/no-sub-agent。
+
+`NOT_VERIFIED`：Claude Code 独立 review；真实 production weekly、source-bound cache replay、provider/live/account、forward clock/freeze、shared artifact transaction 的独立原子性审计、commit/push/merge。PASS 仅代表实跑的离线测试，不代表 review、live 或 ship closure。
+
+下一步：`Claude Code：独立复审 R-ASHORT-MARGIN-OVERHEAT-KNIFE3-THE-SIDECAR-CAN-ABORT-THE-OFFICIAL-WEEKLY-RUN`。
+
+## 2026-08-09 追加：融资过热刀 3 复审 —— PASS（已合入 master）
+
+**判定**：PASS。上一轮那条 P2 的两条腿都修在结构上，不是加补丁：捕获段把 import 单独隔成一个 try（body 只有一条 `ImportFrom`），风险动作全部移进 `else`，于是处理器不可能再读到未绑定的名字；结算段加了与其余 sidecar 一致的 `if args.margin_overheat_cash_control_root:` 前置判断，并把兜底换成一个**不读盘**的 runner 本地常量摘要。两条 Optional 一并闭。finding 正文只在 `docs/system_risk_register.md`。
+
+**我实际验了什么**
+- AST 实读：`try@6484 body=['ImportFrom']`；`binds` 显示两个名字都在 `:6485` 绑定；`handler reads drift name: False`；`has else-branch: True`。
+- 同形结构进程内复现：「第一条风险语句抛错」现在返回 `capture_unavailable`；**上一轮同一条探针在旧结构上抛的是 `UnboundLocalError`**——这就是这条腿的前后对照。
+- 把引擎 `PUBLIC_SUMMARY_SCHEMA_PATH` 指到不存在的文件：runner 本地兜底 `_margin_overheat_unavailable_public_summary()` + 形状校验照常返回 `evidence_unavailable_or_inconclusive`，完全不碰引擎 schema。
+- 静态核对：`if args....root:` 在 settle 调用之前；`_expect_sidecar("margin_overheat_cash_control_settlement")` 已登记；全文已无 `str(exc) == ...` 的 drift 判法。
+- 植入对照：把 `except` 兜底换成 `None` → `tests.test_a_short_weekly_pipeline` 仍 `Ran 527 tests / OK`，控制组同样 527 OK ⇒ **这条降级横幅没有守卫**，记 Optional O16（与刀 1 的 O1 同类）。
+
+**一次自伤（如实记，供以后别再犯）**
+第一次跑植入脚本时 `subprocess` 用了平台默认编码，撞上周报的中文输出抛 `UnicodeDecodeError`，脚本在 `finally` 之外崩掉，**把生产 runner 留在被植入的状态**。下一次调用第一件事就是检测并还原，`sha256` 与改前逐字节一致（`8ca5d5d9e178…`）。两条教训：植入脚本的还原必须写在 `finally` 里；`subprocess` 一律显式 `encoding="utf-8", errors="replace"`。
+
+**未覆盖维度与诚实边界**
+- 全量按用户本轮明令不由我跑（rule 3(a) 本会因生产顶层 runner 改动触发），记 `NOT_VERIFIED`。
+- §6a 本轮未另起 agent：上一轮已在同一片代码上跑完五条承诺，本轮是其唯一 BROKEN 项的定点收口，两条腿我都亲验。
+- `engine/a_short_artifact_set_transaction.py` 的原子性与 `.tmp` 残留仍未验（上一轮 agent 的 NOT_VERIFIED 原样保留）；本刀测试文件未逐条审。
+- 未跑真实 weekly、未做 provider 取数；轨仍 `pre_freeze_audit_only`，生产三常量未动。
+
+**下一步**：`Codex：执行`（刀 4：本部件独立自动裁决、阶段切换闸与 freeze 收口）。

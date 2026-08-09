@@ -1,0 +1,49 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "a_short_margin_overheat_cash_control_source_receipt",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_name", "schema_version", "track_id", "record_type", "decision_date", "payload", "boundary"],
+  "properties": {
+    "schema_name": {"const": "a_short_margin_overheat_cash_control_source_receipt"},
+    "schema_version": {"const": "1.0.0"},
+    "track_id": {"const": "a_short_margin_overheat_cash_control"},
+    "record_type": {"const": "source_receipt"},
+    "decision_date": {"type": "string", "pattern": "^[0-9]{8}$"},
+    "payload": {
+      "type": "object", "additionalProperties": false,
+      "required": ["capture_sha256", "decision_date", "run_date", "price_data_through", "official_m67_digest", "margin_fact_digest", "daily_cache_digest", "candidate_digest", "experiment_batch_id", "epoch_id", "settlement"],
+      "properties": {
+        "capture_sha256": {"type": "string", "pattern": "^[a-f0-9]{64}$"},
+        "decision_date": {"type": "string", "pattern": "^[0-9]{8}$"},
+        "run_date": {"type": "string", "pattern": "^[0-9]{8}$"},
+        "price_data_through": {"type": "string", "pattern": "^[0-9]{8}$"},
+        "official_m67_digest": {"type": "string", "pattern": "^[a-f0-9]{64}$"},
+        "margin_fact_digest": {"type": "string", "pattern": "^[a-f0-9]{64}$"},
+        "daily_cache_digest": {"type": "string", "pattern": "^[a-f0-9]{64}$"},
+        "candidate_digest": {"type": "string", "pattern": "^[a-f0-9]{64}$"},
+        "experiment_batch_id": {"type": "string", "minLength": 1},
+        "epoch_id": {"type": "string", "minLength": 1},
+        "settlement": {
+          "type": ["object", "null"], "additionalProperties": false,
+          "required": ["outcome_sha256", "status", "daily_cache_digest"],
+          "properties": {
+            "outcome_sha256": {"type": "string", "pattern": "^[a-f0-9]{64}$"},
+            "status": {"enum": ["pending", "no_count", "settled"]},
+            "daily_cache_digest": {"type": "string", "pattern": "^[a-f0-9]{64}$"}
+          }
+        }
+      }
+    },
+    "boundary": {
+      "type": "object", "additionalProperties": false,
+      "required": ["production", "production_effect_enabled", "automatic_policy_switch", "historical_replay_counts_as_forward", "historical_backfill_forbidden", "provider_calls_during_settlement", "direct_activation_requires_user_authorization"],
+      "properties": {
+        "production": {"const": false}, "production_effect_enabled": {"const": false},
+        "automatic_policy_switch": {"const": false}, "historical_replay_counts_as_forward": {"const": false},
+        "historical_backfill_forbidden": {"const": true}, "provider_calls_during_settlement": {"const": false},
+        "direct_activation_requires_user_authorization": {"const": true}
+      }
+    }
+  }
+}

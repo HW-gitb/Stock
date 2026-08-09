@@ -1391,6 +1391,128 @@ class MainWiringTests(unittest.TestCase):
         self.assertNotIn("RuntimeError", output)
         self.assertNotIn("traceback", output.lower())
 
+    def test_margin_capture_bundle_failure_is_nonblocking_and_reaches_following_sidecars(self):
+        with tempfile.TemporaryDirectory() as td:
+            self._write_inputs(td)
+            out = Path(td) / AS_OF / "weekly_m67.json"
+            margin_root = Path(td) / "margin-private"
+            common = [
+                "--as-of", AS_OF, "--analysis-input", str(Path(td) / "ai.json"),
+                "--iv-feed", str(Path(td) / "feed.json"), "--account", str(Path(td) / "acct.json"),
+                "--out", str(out), "--run-date", AS_OF,
+                "--margin-overheat-cash-control-root", str(margin_root),
+                "--margin-overheat-cash-control-daily-cache", str(Path(td) / "missing-margin-cache.json"),
+                "--industry-weight-comparison-root", str(Path(td) / "p5-private"),
+                "--target-policy-root", str(Path(td) / "p2-private"),
+                "--final-action-validation-root", str(Path(td) / "p3-private"),
+                "--overlay-adjudication-root", str(Path(td) / "p4-private"),
+            ]
+            with patch("runners.a_short_weekly_pipeline.validate_published_weekly_bundle",
+                       side_effect=ValueError("injected official bundle failure")):
+                main(common, price_provider=lambda code: _series())
+            weekly = json.loads(out.read_text(encoding="utf-8"))
+            outcomes = json.loads(
+                out.with_name(f"{out.stem}.pipeline_sidecar_outcomes.json").read_text(encoding="utf-8")
+            )
+        self.assertEqual(
+            weekly["margin_overheat_cash_control"]["status"],
+            "evidence_unavailable_or_inconclusive",
+        )
+        names = {row["name"] for row in outcomes["sidecars"]}
+        self.assertTrue({
+            "margin_overheat_cash_control_capture", "industry_weight_capture",
+            "target_policy_capture", "final_action_capture", "overlay_adjudication_capture",
+        }.issubset(names))
+        margin_capture = next(
+            row for row in outcomes["sidecars"]
+            if row["name"] == "margin_overheat_cash_control_capture"
+        )
+        self.assertEqual(margin_capture["execution_status"], "failed")
+        self.assertEqual(margin_capture["error_code"], "capture_unavailable")
+
+    def test_margin_disabled_ignores_missing_private_public_schema_and_publishes_m67(self):
+        from engine import a_short_margin_overheat_cash_control as margin_track
+
+        with tempfile.TemporaryDirectory() as td:
+            self._write_inputs(td)
+            out = Path(td) / AS_OF / "weekly_m67.json"
+            with patch.object(margin_track, "PUBLIC_SUMMARY_SCHEMA_PATH",
+                              Path(td) / "missing-public-summary.schema.json"):
+                main(["--as-of", AS_OF, "--analysis-input", str(Path(td) / "ai.json"),
+                      "--iv-feed", str(Path(td) / "feed.json"), "--account", str(Path(td) / "acct.json"),
+                      "--out", str(out)], price_provider=lambda code: _series())
+            weekly = json.loads(out.read_text(encoding="utf-8"))
+        self.assertNotIn("margin_overheat_cash_control", weekly)
+
+    def test_margin_missing_schema_degrades_to_unavailable_and_records_settlement(self):
+        from engine import a_short_margin_overheat_cash_control as margin_track
+
+        with tempfile.TemporaryDirectory() as td:
+            self._write_inputs(td)
+            out = Path(td) / "weekly.json"
+            root = Path(td) / "margin-private"
+            with patch.object(margin_track, "PUBLIC_SUMMARY_SCHEMA_PATH",
+                              Path(td) / "missing-public-summary.schema.json"):
+                main(["--as-of", AS_OF, "--analysis-input", str(Path(td) / "ai.json"),
+                      "--iv-feed", str(Path(td) / "feed.json"), "--account", str(Path(td) / "acct.json"),
+                      "--out", str(out), "--run-date", AS_OF,
+                      "--margin-overheat-cash-control-root", str(root),
+                      "--margin-overheat-cash-control-daily-cache", str(Path(td) / "missing-cache.json")],
+                     price_provider=lambda code: _series())
+            weekly = json.loads(out.read_text(encoding="utf-8"))
+            outcomes = json.loads(
+                out.with_name(f"{out.stem}.pipeline_sidecar_outcomes.json").read_text(encoding="utf-8")
+            )
+        self.assertEqual(
+            weekly["margin_overheat_cash_control"]["status"],
+            "evidence_unavailable_or_inconclusive",
+        )
+        self.assertIn("margin_overheat_cash_control_settlement", outcomes["expected_sidecars"])
+        settlement = next(
+            row for row in outcomes["sidecars"]
+            if row["name"] == "margin_overheat_cash_control_settlement"
+        )
+        self.assertEqual(settlement["execution_status"], "failed")
+        self.assertEqual(settlement["progress_status"], "unavailable")
+        self.assertEqual(settlement["error_code"], "settlement_unavailable")
+
+    def test_margin_wrapped_replay_drift_is_stalled_not_an_unavailable_capture(self):
+        from engine import a_short_margin_overheat_cash_control as margin_track
+
+        def wrapped_replay_drift(**_kwargs):
+            try:
+                raise margin_track.MarginOverheatCashControlError(
+                    margin_track.CAPTURE_REPLAY_DRIFT_MESSAGE
+                )
+            except margin_track.MarginOverheatCashControlError as cause:
+                raise RuntimeError("capture wrapper") from cause
+
+        with tempfile.TemporaryDirectory() as td:
+            self._write_inputs(td)
+            out = Path(td) / AS_OF / "weekly_m67.json"
+            with patch("engine.a_short_margin_overheat_cash_control.capture_margin_overheat_after_published_weekly",
+                       side_effect=wrapped_replay_drift) as capture_after, \
+                    patch("engine.a_short_margin_overheat_cash_control.is_capture_replay_drift",
+                          wraps=margin_track.is_capture_replay_drift) as is_replay_drift:
+                main(["--as-of", AS_OF, "--analysis-input", str(Path(td) / "ai.json"),
+                      "--iv-feed", str(Path(td) / "feed.json"), "--account", str(Path(td) / "acct.json"),
+                      "--out", str(out), "--run-date", AS_OF,
+                      "--margin-overheat-cash-control-root", str(Path(td) / "margin-private"),
+                      "--margin-overheat-cash-control-daily-cache", str(Path(td) / "missing-cache.json")],
+                     price_provider=lambda code: _series())
+            outcomes = json.loads(
+                out.with_name(f"{out.stem}.pipeline_sidecar_outcomes.json").read_text(encoding="utf-8")
+            )
+        capture_after.assert_called_once()
+        is_replay_drift.assert_called_once()
+        capture = next(
+            row for row in outcomes["sidecars"]
+            if row["name"] == "margin_overheat_cash_control_capture"
+        )
+        self.assertEqual(capture["execution_status"], "failed")
+        self.assertEqual(capture["progress_status"], "stalled")
+        self.assertEqual(capture["error_code"], "replay_drift")
+
     def test_v2_capture_is_not_reached_when_official_publish_fails(self):
         with tempfile.TemporaryDirectory() as td:
             self._write_inputs(td)
