@@ -4511,3 +4511,57 @@ undeclared_track_dependency track=p1_regime_candidate_effect path=schemas/plante
 - full lane 按 rule 4 归执行方（判 `not_triggered`），我未重跑也未走 rule 6 escalation；§6a 未起 agent（无 live 取数 / secret 落盘 / 新增大改 fail-closed 门）。
 
 **下一步**：`Codex：执行`（桌面 `a_runtest2_cc.md` 下一顺位；未来审查工作树与交接文档改在 `D:\cnhea\Codex\worktrees\40d9\Stock`）
+## 2026-08-09 追加：D-2/D-5 executor/fixer 修复（OPEN-NOT_VERIFIED）
+
+### 范围与结论
+
+- D-2 根因：6 行融资融券数据已取到，但 required numeric 字段无效且位于 effective reference date 之外；既有 fail-closed 规则正确地不让它们改变干净参考日的完整性，缺口只影响 source-quality/postmortem 可见性。
+- D-5 根因：PIT fallback 行为正确，旧标签 `historical_as_of_requires_pit_history` 把未来/非墙上决策日也称为 historical，属于持久化记录标签不准确，不是回退逻辑缺陷。
+
+### 最小改动与调用链
+
+- D-2：`MarginObservation` 新增可选 `invalid_numeric_row_count`（旧 pickle 用 `getattr(..., 0)` 兼容），由 `_margin_observation()` 统计并经 `public_dict()` 进入 `analysis_input.market_context.margin_coverage` 与 `data_health.metrics.margin_coverage`；weekly/report 三份 schema 接受该可选字段。该字段只观察，不参与 `coverage_complete`、Rule6、排序或交易决策。
+- effect-contract：新 analysis-input leaf 登记到 `market_context` group，并按固定 Python 重算 `analysis_input_all_paths_sha256`、group path hash 与 weekly schema hash；`static_contract_error()` 返回 `None`。
+- D-5：`get_sw_industry_map()` 仅把标签改为 `decision_as_of_requires_pit_history`；current-only fast path、L2 PIT history、source binding、status 和 provider 调用均未改变。
+
+### 精确验证命令与原始终态
+
+- 固定解释器：`C:\Users\cnhea\AppData\Local\Programs\Python\Python313\python.exe`（Python 3.13.8）。
+- `& 'C:\Users\cnhea\AppData\Local\Programs\Python\Python313\python.exe' -m unittest discover -s tests\phase6 -p 'test_egs_margin_coverage.py' -v` → `Ran 29 tests ... OK`。
+- `& 'C:\Users\cnhea\AppData\Local\Programs\Python\Python313\python.exe' -m unittest discover -s tests\phase6 -p 'test_egs_sw_industry_and_watch_pool_health.py' -v` → `Ran 9 tests ... OK`。
+- `& 'C:\Users\cnhea\AppData\Local\Programs\Python\Python313\python.exe' -c "from engine.a_short_effect_contract import static_contract_error; print(static_contract_error())"` → `None`。
+- Pytest 探尝试失败：固定解释器未安装 `pytest`（`No module named pytest`），未切换解释器，随后改用同一解释器的 unittest。
+
+### 自审、负向控制与边界
+
+- 正控：D-2 坏数值行计数为 1 且参考日仍 `complete`；D-5 historical-run 测试断言精确新标签。
+- 负向控制：D-2 既有空/不完整/坏日期/坏代码/无效数值 fail-closed 测试仍通过；D-5 historical run 仍跳过 current-only fast path 并走 L2 PIT。
+- 未运行 provider/live、full lane、runner、account/order、commit/push/merge；未写主树或其他工作树。独立 reviewer/committer 尚未执行，本轮结论保持 `OPEN-NOT_VERIFIED`。
+
+### 下一步
+
+Claude Code：独立审查本轮 D-2 schema/effect-contract/source-binding 及 D-5 标签变更；通过后由 reviewer/committer 按项目流程收口。
+
+## 2026-08-09 追加：桌面 `a_runtest2_cc.md` D-2 / D-5 独立审查 —— PASS（已合入 master）
+
+**判定**：PASS，无 Required，三条 Optional（正文只在 `docs/system_risk_register.md` 同日 PASS 节）。本节只写过程与边界。
+
+**我自己实际验了什么（区别于执行方的转述）**
+
+- **计数的位置**：逐行读 `_margin_observation` 全体，确认计数在四个早退之前算好；七个 `MarginObservation(...)` 构造点全部列出并逐个判定两处未传参的默认 0 是否成立。
+- **到达最终产物**：确认 analysis_input 与 data_health 的 `margin_coverage` 是同一个 `public_dict()`，三份 schema 只加属性不加 required（历史产物不被判死）；固定主 Python 独立调 `static_contract_error()` 得 `None`，覆盖本轮三处 sha 重封。
+- **不改判**：读 `complete` 的三项判据与非参考日契约测试，确认新字段不进任何判定。
+- **旧缓存**：读 `get_margin` 的 `cached.public_dict() != recomputed.public_dict()` 比对，确认形状变化只导致弃用重取；验收包日志里正好出现该 warning。
+- **D-5 ripple**：全仓扫旧串 0 命中、新串恰两处；确认 `message` 不是 enum，所以改名不会撞 schema。
+
+**植入对照（我自写，两个生产者各一次）**
+
+- 中和 `invalid_numeric_row_count` 计数器 → 点名用例红在 `0 != 1`；把 `fallback_reason` 退回旧串 → 点名用例红在两串不等。两次还原后 `A-EGS/egs_main.py` sha256 逐字节回到 `a535fb78…`。
+
+**未覆盖维度与诚实边界**
+
+- 未跑真实周跑：本周实盘产物仍是旧形状/旧措辞，新字段与新原因串要下周真跑才出现。
+- rule 3(a) 因改到 `A-EGS/egs_main.py` 字面触发，但按 rule 4 全量归执行方；我未重跑也未走 rule 6 escalation，本代码态 a_short full lane 记 `NOT_VERIFIED`。
+- §6a 未起 agent（无 live 取数 / secret 落盘 / 新增大改 fail-closed 门）。
+
+**下一步**：`Codex：执行`（桌面 `a_runtest2_cc.md` 下一顺位）

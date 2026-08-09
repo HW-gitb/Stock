@@ -1728,6 +1728,7 @@ class MarginObservation:
     universe_size: int
     coverage_complete: bool
     status: str
+    invalid_numeric_row_count: int = 0
 
     def public_dict(self):
         return {
@@ -1737,6 +1738,7 @@ class MarginObservation:
             "universe_size": self.universe_size,
             "coverage_complete": self.coverage_complete,
             "status": self.status,
+            "invalid_numeric_row_count": int(getattr(self, "invalid_numeric_row_count", 0)),
         }
 
 
@@ -3177,7 +3179,7 @@ def get_sw_industry_map():
             else:
                 fallback_reason = f"coverage_below_min:{fast_count}<{SW_INDUSTRY_MIN_ACTIVE}"
     elif TODAY != wall_date:
-        fallback_reason = "historical_as_of_requires_pit_history"
+        fallback_reason = "decision_as_of_requires_pit_history"
     else:
         fallback_reason = "index_member_all_unavailable"
 
@@ -4486,18 +4488,19 @@ def _margin_observation(frame, trade_dates):
     numeric = work[list(MARGIN_NUMERIC_COLUMNS)].apply(pd.to_numeric, errors="coerce")
     numeric_valid = numeric.notna().all(axis=1)
     numeric_valid &= np.isfinite(numeric.to_numpy()).all(axis=1)
+    invalid_numeric_row_count = int((~numeric_valid).sum())
     work[list(MARGIN_NUMERIC_COLUMNS)] = numeric
     dates = work["trade_date"].astype(str)
     valid_dates = dates.str.fullmatch(r"[0-9]{8}")
     valid_codes = work["ts_code"].map(_canonical_ashare_ts_code)
     if not valid_dates.all() or valid_codes.isna().any():
-        return MarginObservation(work, reference_date, None, int(len(work)), 0, False, "invalid")
+        return MarginObservation(work, reference_date, None, int(len(work)), 0, False, "invalid", invalid_numeric_row_count)
     if not set(dates).issubset(set(calendar_dates)):
-        return MarginObservation(work, reference_date, None, int(len(work)), 0, False, "invalid")
+        return MarginObservation(work, reference_date, None, int(len(work)), 0, False, "invalid", invalid_numeric_row_count)
     observed_dates = set(dates)
     eligible_dates = [date for date in calendar_dates if date in observed_dates]
     if not eligible_dates:
-        return MarginObservation(work, reference_date, None, int(len(work)), 0, False, "unavailable")
+        return MarginObservation(work, reference_date, None, int(len(work)), 0, False, "unavailable", invalid_numeric_row_count)
     # A missing numeric field is a row-level coverage defect, not a reason to
     # erase every otherwise observable reference-date code.  Keep the NaN in
     # ``work`` so candidate-level Rule6 lookups become ``unknown``; any such
@@ -4526,7 +4529,7 @@ def _margin_observation(frame, trade_dates):
         else next((date for date in eligible_dates if date in valid_value_dates), None)
     )
     if effective_ref_date is None:
-        return MarginObservation(work, reference_date, None, int(len(work)), 0, False, "invalid")
+        return MarginObservation(work, reference_date, None, int(len(work)), 0, False, "invalid", invalid_numeric_row_count)
     reference_day_mask = dates == effective_ref_date
     ref_valid_mask = reference_day_mask & numeric_valid
     ref_codes = set(valid_codes[ref_valid_mask])
@@ -4549,7 +4552,7 @@ def _margin_observation(frame, trade_dates):
     )
     return MarginObservation(
         work, reference_date, effective_ref_date, int(len(work)), len(ref_codes), complete,
-        "complete" if complete else "incomplete",
+        "complete" if complete else "incomplete", invalid_numeric_row_count,
     )
 
 

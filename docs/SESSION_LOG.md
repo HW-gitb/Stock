@@ -17,6 +17,19 @@
 - **Pre-Codex self-review**: A-F checked；A=固定输入/7成员/source矩阵；B=Serenity字段与所有当前树 `*.py/*.md/tests` 消费面 grep，确认无新接线且文档只声明 shadow；C=effect flags/active macro/score/Top15/operation/lifecycle 反向控制；D=unsupported claim 降级为 lead/context/unverified；E=SESSION_LOG 与 handoff 为当前态，CURRENT 未改；F=UTF-8/no BOM/no mojibake、固定 Python assertions PASS、`git diff --check` clean；independent-self-review=NOT_USED:user-forbids independent review；provider/network/account=NOT_USED；commit=NOT_PERFORMED。
 - **Handoff**: 已新增 `docs/handoff/2026-08-09_us_serenity_annotation_blade0_handoff.md` 并加入 `docs/handoff/README.md` 路由；该交接只承载 Blade 0 结果、边界、自审/测试要求与下一刀前置，不混入既有 X live-shape handoff。
 - **Next**: Claude Code：审查本刀 Blade 0 研究产物；未审查前不进入 Blade 1 或任何工程刀。
+## 2026-08-09 — Claude 审查 PASS（40d9：D-2 两融坏行计数 + D-5 SW fallback 措辞）
+
+- **Verdict/Action**: PASS。D-2 计数算在所有早退之前，七个构造点逐个判过（两处未传参的默认 0 各自成立），经同一个 `public_dict()` 到达 analysis_input/data_health/weekly 三面，且不参与 `complete` 判定；旧缓存靠既有语义比对自动弃用。D-5 改名后全仓旧串 0 命中、`message` 无 enum、测试由 `assertIn` 收紧为 `assertEqual`。三条 Optional 均为展示层。
+- **Required**: 无。三条 Optional（`getattr` 无效防御、fallback 键集分家、schema 描述对「行」不成立）与复核成立项、边界见 `docs/system_risk_register.md` 顶部同日 PASS 节（单一来源，本处不复述）。
+- **Verify**: review-evidence:608daea185cd。验收超集 `Ran 114 in 196.285s OK receipt:0d64a7bf2f65662158d0529f bundles=a_short_effect_contract`；固定主 Python 独立调 `static_contract_error()` 得 `None`。植入：中和计数器 → 点名用例红在 `0 != 1`；退回旧原因串 → 点名用例红在两串不等；还原后 sha 回 `a535fb78…`。全量按 rule 4 归执行方，未重跑；§6a 未起 agent。超时原因:验收超集 196s 与两轮植入按 rule 7(c) 串行，且本轮读了缓存/一致性两条消费链的函数体。
+- **Next**: Codex：执行
+
+## 2026-08-09 — Codex executor/fixer：D-2/D-5（OPEN-NOT_VERIFIED）
+
+- **Verdict/Action**: D-2/D-5 已做最小修复，未提交。
+- **Required**: Claude Code 独立审查 D-2 observability/schema/effect-contract/source-binding 与 D-5 标签边界；material 细节见 `docs/system_risk_register.md`，完整 handoff 见 `docs/handoff/2026-08-01_a_short_leaf_wiring_classification_handoff.md`。
+- **Verify**: 固定 Python 3.13.8；`test_egs_margin_coverage.py` `Ran 29 ... OK`；`test_egs_sw_industry_and_watch_pool_health.py` `Ran 9 ... OK`；`static_contract_error()`=`None`。pytest 在固定解释器中不可用（`No module named pytest`），未换解释器。
+- **Next**: Claude Code：审查
 
 ## 2026-08-09 — Claude 审查 PASS（开钟门两条 Optional 收口）
 

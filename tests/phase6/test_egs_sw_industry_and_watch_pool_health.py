@@ -182,7 +182,7 @@ class SwIndustrySourceTest(unittest.TestCase):
         self.assertEqual(observation["source"], "index_member_l2_history")
         self.assertFalse(observation["fast_path_used"])
         self.assertTrue(observation["fallback_used"])
-        self.assertIn("historical_as_of", observation["message"])
+        self.assertEqual(observation["message"], "decision_as_of_requires_pit_history")
 
 
 class WatchPoolHealthTest(unittest.TestCase):

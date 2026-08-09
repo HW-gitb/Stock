@@ -93,6 +93,8 @@ class MarginCoverageTests(unittest.TestCase):
         self.assertEqual(observed.effective_ref_date, dates[0])
         self.assertEqual(observed.row_count, 5)
         self.assertEqual(observed.universe_size, 2)
+        self.assertEqual(observed.invalid_numeric_row_count, 1)
+        self.assertEqual(observed.public_dict()["invalid_numeric_row_count"], 1)
         self.assertEqual(observed.status, "complete")
         self.assertTrue(observed.coverage_complete)
 
@@ -350,6 +352,24 @@ class MarginCoverageTests(unittest.TestCase):
         health_margin_schema = json.loads(DATA_HEALTH_SCHEMA.read_text(encoding="utf-8"))["properties"]["metrics"]["properties"]["margin_coverage"]
         with self.assertRaises(jsonschema.ValidationError):
             jsonschema.validate(invalid, health_margin_schema)
+
+    def test_invalid_numeric_count_is_accepted_on_all_margin_surfaces(self):
+        valid = {
+            "reference_date": "20260714", "effective_ref_date": "20260714",
+            "row_count": 1000, "universe_size": 1000,
+            "coverage_complete": True, "status": "complete",
+            "invalid_numeric_row_count": 1,
+        }
+        analysis = json.loads(ANALYSIS_INPUT_EXAMPLE.read_text(encoding="utf-8"))
+        analysis["schema_version"] = "1.3.0"
+        analysis["market_context"]["margin_coverage"] = copy.deepcopy(valid)
+        jsonschema.validate(analysis, json.loads(ANALYSIS_INPUT_SCHEMA.read_text(encoding="utf-8")))
+
+        weekly_schema = json.loads(WEEKLY_SCHEMA.read_text(encoding="utf-8"))
+        jsonschema.validate(valid, weekly_schema["properties"]["margin_coverage"])
+
+        health_margin_schema = json.loads(DATA_HEALTH_SCHEMA.read_text(encoding="utf-8"))["properties"]["metrics"]["properties"]["margin_coverage"]
+        jsonschema.validate(valid, health_margin_schema)
 
     def test_weekly_source_binding_rejects_future_complete_reference_date(self):
         future_complete = {
