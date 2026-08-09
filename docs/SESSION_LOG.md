@@ -19,7 +19,7 @@
 
 - **Verdict/Action**: PASS。R1 已真闭：守卫改双向 `expected_names <= state_names`，另加禁止 A4 前 per-vendor 账本名的反向断言；运行单省略写法展开为全名，是新门逼出的必要改动、不算越界。O1 的 `_runbook_path` 已按 packet decision_date 派生。
 - **Required**: 无。新记一条 Optional，正文只在 `docs/system_risk_register.md`（本处不复述）：`test_runbook_path_tracks_packet_decision_date` 是恒真式，显式传参绕开了它声称保护的默认分支；只判 Optional 是因为该退化会被兄弟测试在下一个槽以 `missing=` 六项的形式兜住。
-- **Verify**: review-evidence:c13d1c8818ae。reviewer 自跑三条植入：①重放上轮原样植入（错 vendor 全名）→ 本轮 `FAILED`，上轮为绿，证 R1 真闭；②退回 `..._` 省略写法 → `FAILED` 且精确报 `missing=[...x_20260809_receipt.json]`；③把 `_runbook_path` 默认分支写死 20260809 → 该专测**仍绿**，坐实 Optional。三次还原 sha256 均逐字节一致。超集 `Ran 442 / 151.3s / OK`、`receipt:5591a1fc2be53f93add88d21`，零残留。未起 §6a agent（rule 8：tests-only、零生产改动、零选股影响）。
+- **Verify**: review-evidence:c13d1c8818ae。reviewer 自跑三条植入：①重放上轮原样植入（错 vendor 全名）→ 本轮 `FAILED`，上轮为绿，证 R1 真闭；②退回 `..._` 省略写法 → `FAILED` 且精确报 `missing=[...x_20260809_receipt.json]`；③把 `_runbook_path` 默认分支写死 20260809 → 该专测**仍绿**，坐实 Optional。三次还原 sha256 均逐字节一致。超集 `Ran 442 / 151.3s / OK`、`receipt:5591a1fc2be53f93add88d21`，零残留。未起 §6a agent（rule 8：tests-only、零生产改动、零选股影响）。**同轮自纠**：我今天四次把 conformance 那条红记成「既有 flake、非本刀」，合并时读到隔壁窗口实测才知它是软发现 lane 自己的隔离缺陷（该测试不与真实 state 根隔离），且我今天写进 master 真实 state 根的 20260809 产物是强嫌疑触发源（未做对照，不下结论）；「非本刀」作废，正文见 register。超时原因:合并时撞上隔壁窗口的 register 冲突与全量红条目，需读懂归属并自纠后才能收口。
 - **Next**: 提交并合入 master；Optional 交由后续处置。
 
 ## 2026-08-09 — Codex 修复：R1 Required + O1 Optional 运行单守卫收口（OPEN-NOT_VERIFIED）
