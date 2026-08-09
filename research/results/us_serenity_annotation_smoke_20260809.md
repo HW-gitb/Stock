@@ -3,6 +3,7 @@
 - **Run date**: `20260809`
 - **Lane**: research-only, advisory-only, zero-cost
 - **Decision**: `GO_FOR_RUBRIC_FILLABILITY_ONLY`
+- **Blade handoff**: `rubric_draft_id=serenity_structural_theme_annotation_rubric_blade0_20260809`; `input_artifact_locator=state/us_short/us_short_llm_theme_discovery_x_20260801.json`; `decision_date=20260801`; `smoke_verdict=Go`
 - **Scope boundary**: this result tests whether the rubric can be filled on one frozen theme. It does not test effectiveness, discrimination, trading relevance, market confirmation, scoring, Top15 selection, sizing, operation advice, lifecycle, or ship-gate evidence.
 - **Execution boundary**: no provider call, no network call, no installation, no production-code change, no schema/consumer wiring, no account/state write, no broker/order action.
 

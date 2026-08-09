@@ -5,6 +5,8 @@
 - **Lane**: research-only, advisory-only, zero-cost
 - **Prerequisite**: Blade 0 reviewer PASS; the two non-blocking Blade 0 rubric gaps are repaired here
 - **Decision**: `GO_FOR_CALIBRATION_ONLY`
+- **Blade handoff**: `upstream_smoke_artifact=research/results/us_serenity_annotation_smoke_20260809.md`; `rubric_candidate_version=serenity_structural_theme_annotation_rubric_blade1_candidate_20260809`; `calibration_verdict=Go`
+- **Contrast handoff**: `contrast_class_by_theme={physical_infrastructure_bottlenecks:strong_physical_constraint, mega_data_center_investment:weak_narrative_low_evidence, ai_data_center_power_demand:long_term_short_horizon_misaligned}`; `source_artifact_locators=§1`; `negative_perturbation_result=PASS (§5)`
 - **Scope boundary**: this artifact tests whether the rubric distinguishes three deliberately different evidence classes. It does not prove rubric effectiveness outside this frozen set, market confirmation, alpha, trading relevance, scoring, Top15 selection, sizing, lifecycle, operation advice, schema readiness or ship-gate evidence.
 - **Execution boundary**: no provider call, no network call, no installation, no production-code/schema/consumer change, no account/state write, no broker/order action.
 
