@@ -2351,3 +2351,7 @@ A4 把付费收敛成一次可对账的事务、P5 把入口绑到计划——�
 **同日第二道门（已修）**：`主题 observed_at` 被拿去和来源 `fetched_at` 比，而生产方按 K3-R115 把它派生成 `max(来源 observed_at)`，同一函数又强制 `observed <= fetched`——结构上不可能通过，该门对任何真实运行判别力为零。已对齐到生产方的钟，新增行为对照 `test_theme_clock_is_the_publication_clock_not_the_fetch_clock`（植入回退只打红这一条）。**用户约定：再冒出第三道门就停手，不连环打补丁。**
 
 **留给下一刀的类**：同类今天响三次（运行单账本名 / 账本 scope 方言 / 主题时刻），根因是裁决器四个输入全为手搓 dict，缝两端同源自洽、与生产不一致（与 K3-R49/R50/R79 同族）。交付物应是「让裁决器测试消费生产方真造出来的产物」，本轮未做。
+
+**同日第三刀：付费搜索未约束到接受窗口（已修）**。20260809 web lane 只差 ratio；读盘定因是 33/40 条结果为窗口外旧闻——钱付了本地扔掉。**regroup 无错、改措辞也无用**（模板已写排除宏观评论，搜索 API 不听否定指令；没绑上票的 4 条来自智库/Facebook/NGO/地产行研）。修法：新增单一定义 `paid_gateway.DECISION_WEEK_LOOKBACK_DAYS`，Tavily 请求体与 `fetch_web._decision_week_start` 同源。**只落在 web lane 的调用参数，不碰共享模板、不碰 X**——所以「四条模板两 lane 共享」那个死结在本刀不适用。本地窗口一行未改，Tavily 若忽略 `days` 行为与今天相同。**离线证不了 `days` 被采纳**，下一枪看 `published_at_outside_decision_week` 是否从 33 掉下来。
+
+**仍待办**：裁决器手搓 fixture 那一类（本轮仍未做）；模板措辞按诊断结论**暂不改**。

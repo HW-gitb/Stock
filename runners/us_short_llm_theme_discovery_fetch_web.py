@@ -501,7 +501,10 @@ def _cutoff(decision_date: str) -> datetime:
 
 
 def _decision_week_start(decision_date: str) -> datetime:
-    return _cutoff(decision_date) - timedelta(days=7)
+    # Same number the paid Tavily request is constrained by, read from one place so the
+    # two cannot drift apart.  This side stays authoritative: anything the provider still
+    # returns from outside this window is dropped here exactly as before.
+    return _cutoff(decision_date) - timedelta(days=paid_gateway.DECISION_WEEK_LOOKBACK_DAYS)
 
 
 def _guard_generated_before_open(generated: datetime, expected_decision_date: str) -> None:

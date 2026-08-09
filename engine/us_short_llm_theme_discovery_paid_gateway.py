@@ -20,6 +20,15 @@ DEEPSEEK_BASE_URL = "https://api.deepseek.com"
 DEEPSEEK_MODEL = "deepseek-chat"
 XAI_BASE_URL = "https://api.x.ai/v1"
 GROK_MODEL = "grok-4.3"
+
+# How far back the decision week reaches.  ONE definition, deliberately: the web fetcher
+# builds its local acceptance window from this (`_decision_week_start`) and the Tavily
+# request below constrains the paid search with the same number.  Writing the two
+# separately is how the 20260809 probe came to pay for 33 of 40 results it was structurally
+# certain to discard -- and it is the same shape as the ledger-dialect and theme-clock
+# defects: two sides that must agree, authored apart.  The local window stays authoritative;
+# this only stops us buying material it will throw away.
+DECISION_WEEK_LOOKBACK_DAYS = 7
 PROVIDER_CREDENTIAL_BODY_RE = re.compile(r"[A-Za-z0-9_-]{16,256}")
 
 
@@ -124,6 +133,7 @@ class TavilyClient:
             "max_results": 10,
             "search_depth": "advanced",
             "topic": "news",
+            "days": DECISION_WEEK_LOOKBACK_DAYS,
         }).encode()
         request = urllib.request.Request(
             TAVILY_ENDPOINT,
