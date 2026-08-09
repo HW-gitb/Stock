@@ -16,7 +16,8 @@
       "required": [
         "decision_date", "run_date", "price_data_through", "official_m67_digest",
         "margin_fact_digest", "margin_facts_digest", "daily_cache_digest", "candidate_digest",
-        "candidate_snapshot_digest", "experiment_batch_id", "epoch_id", "forward_eligible",
+        "candidate_snapshot_digest", "experiment_batch_id", "epoch_id", "stage",
+        "stage_b_admission_sha256", "stage_b_supported_arm_id", "freeze_manifest_sha256", "freeze_manifest", "forward_eligible",
         "predicate_facts", "candidate_universe", "official_selection_plan", "arm_definitions",
         "arms", "source_references"
       ],
@@ -32,6 +33,11 @@
         "candidate_snapshot_digest": {"type": "string", "pattern": "^[a-f0-9]{64}$"},
         "experiment_batch_id": {"type": "string", "minLength": 1},
         "epoch_id": {"type": "string", "minLength": 1},
+        "stage": {"enum": ["stage_a", "stage_b"]},
+        "stage_b_admission_sha256": {"type": ["string", "null"], "pattern": "^[a-f0-9]{64}$"},
+        "stage_b_supported_arm_id": {"type": ["string", "null"]},
+        "freeze_manifest_sha256": {"type": ["string", "null"], "pattern": "^[a-f0-9]{64}$"},
+        "freeze_manifest": {"type": ["object", "null"]},
         "forward_eligible": {"type": "boolean"},
         "predicate_facts": {"type": ["object", "null"]},
         "candidate_universe": {

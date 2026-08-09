@@ -26,12 +26,30 @@
           "type": "array", "minItems": 4, "maxItems": 4,
           "items": {
             "type": "object", "additionalProperties": false,
-            "required": ["arm_id", "predicate_triggered", "status", "reason", "horizons"],
+            "required": ["arm_id", "predicate_triggered", "status", "reason", "horizons", "risk_evidence"],
             "properties": {
               "arm_id": {"type": "string"}, "predicate_triggered": {"type": ["boolean", "null"]},
               "status": {"enum": ["pending", "no_count", "settled"]},
               "reason": {"type": ["string", "null"]},
               "position_count": {"type": "integer", "minimum": 0},
+              "risk_evidence": {
+                "type": "object", "additionalProperties": false,
+                "required": ["max_drawdown_pct", "bad_name_rate", "tail_loss_pct", "loss_distribution_count", "cash_drag_pct", "unfilled_rate", "fill_rate", "turnover_pct", "total_cost_pct", "max_name_weight_pct", "adjustment_coverage_pct", "loss_distribution_basis"],
+                "properties": {
+                  "max_drawdown_pct": {"type": ["number", "null"]},
+                  "bad_name_rate": {"type": ["number", "null"]},
+                  "tail_loss_pct": {"type": ["number", "null"]},
+                  "loss_distribution_count": {"type": ["integer", "null"], "minimum": 0},
+                  "cash_drag_pct": {"type": ["number", "null"]},
+                  "unfilled_rate": {"type": ["number", "null"]},
+                  "fill_rate": {"type": ["number", "null"]},
+                  "turnover_pct": {"type": ["number", "null"]},
+                  "total_cost_pct": {"type": ["number", "null"]},
+                  "max_name_weight_pct": {"type": ["number", "null"]},
+                  "adjustment_coverage_pct": {"type": ["number", "null"]},
+                  "loss_distribution_basis": {"enum": ["filled_positions_only", null]}
+                }
+              },
               "horizons": {
                 "type": "array", "items": {
                   "type": "object", "additionalProperties": false,

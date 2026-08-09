@@ -3619,3 +3619,151 @@ public unavailable fallback 固定为既有九键脱敏形状，publication 时�
 - 未跑真实 weekly、未做 provider 取数；轨仍 `pre_freeze_audit_only`，生产三常量未动。
 
 **下一步**：`Codex：执行`（刀 4：本部件独立自动裁决、阶段切换闸与 freeze 收口）。
+
+## 2026-08-09 追加：融资过热 comparison-only 刀4 + O16 修复（OPEN-NOT_VERIFIED，等待 Claude Code 独立复审）
+
+### 范围、根因与不变边界
+
+本节执行桌面 `a_testrun.md` 序19刀4：为本轨补齐 source-bound formal adjudication、freeze manifest、跨 epoch estimand 界、Stage A→Stage B receipt 和新前向 batch；并关闭刀3 reviewer Optional O16（结算异常时的 unavailable 横幅回归守卫）。根因是刀3虽已有 source-bound capture/settlement/private ledger，却没有足够强的正式裁决资格和阶段跃迁授权，可能让比较轨以弱于共享 epoch 的凭据开始计时、认裁决或给自己发下一阶段许可。
+
+只在 `D:\\cnhea\\Codex\\worktrees\\c2aa\\Stock` 修改：`engine/a_short_margin_overheat_cash_control.py`、专属 governance/schema/effect contract、两份测试和本轮文档。未触碰主树或 `ashort_r1`；未改 `runners/a_short_weekly_pipeline.py`、三条生产常量、registry mode、官方 M6.7 selection/sizing/action/holding、production `_allocate_cash` 调用、provider/account/order；未实现刀2/3/4之外的后续授权，未 stage/commit/push/merge，未用 `--no-verify`。
+
+### 五腿实现与调用链
+
+1. **L1 — 同权时钟与 source-bound eligibility。** `build_margin_overheat_freeze_manifest()` 对本轨治理、schema validation projection、关键 Python 语义函数和共享 cash semantics 取 digest；capture/ledger/outcome/receipt 每个链环均重验。正式 evidence 只接收本轨 current batch、`forward_eligible=true`、完整同周 source-bound 记录；pre-freeze/pending/no_count 不进 formal statistics。`outcome.capture_sha256` 必须等于 capture payload digest。
+2. **L2 — 12/24/36 与 trigger floor。** 12 周是 preliminary review，24/36 才 formal；至少 4 个 trigger 周，低于地板返回 `insufficient_trigger_weeks/not_evaluated`。non-trigger arm 的 paired delta 必须为零；原始 ledger diagnostics 仍保留，正式风险/裁决分母只在 forward/frozen/source gates 后计数。
+3. **L3 — formal verdict。** 以 H10 non-overlap paired effect 运作，采用 bootstrap CI、sign-flip p、Holm、多 finalist simultaneous bound、temporal/state coverage、风险门与跨 epoch random-effects；support/inconclusive/reliable harm 分开，36 周不会自动 retire。非当前 frozen epoch 仅在 `estimand_sha256` 相同才可贡献；不同即精确拒绝并要求新 batch。
+4. **L4 — Stage A / Stage B。** Stage A `supported` 仅创建 source-bound、待人工接受且可过期的 transition receipt；`accept_stage_a_transition_receipt` 后才可 `register_stage_b_from_accepted_receipt` 原子写 `stage_b/<new_batch>/`。每个 Stage-B capture/settlement/adjudication 重新绑定 acceptance receipt digest、supported arm 和新 batch；decision date 早于 acceptance 精确拒绝，不能拿 Stage-A 历史回填。
+5. **L5 — freeze 与生产边界。** `validate_freeze_admission` 继续先过共享 `epoch_mode.validate_frozen_transition(TRACK_ID)`，再出 manifest，且永不写 registry。三生产常量仍 `None/None/False`；actual mode 未翻、真实 clock 未起，comparison formal verdict 只写私有审计 artifacts，不回写 official M6.7/production allocation。
+
+正常链为：validated official bundle → capture（private Stage-A/Stage-B batch）→ same-digest existing-cache settlement → outcome/source receipt/ledger → formal adjudication → Stage-A receipt（如 supported）→ explicit acceptance → isolated Stage-B batch。直接消费者仍只有 weekly sidecar/public projection、weekly schema validator 和 M6.7 renderer；没有生产 importer、provider/account/order consumer。错误或未授权路径 fail-closed；private writes 仅经 `commit_artifact_set`，Stage B 与 Stage A artifacts 分根隔离。
+
+### schema、effect contract 与写盘边界
+
+新增 `schemas/a_short_margin_overheat_cash_control_freeze_manifest.schema.json` 与 `schemas/a_short_margin_overheat_cash_control_stage_transition_receipt.schema.json`；program/capture/outcome/ledger/adjudication/reminder/shadow schema 均补 stage、formal/manifest/receipt 约束。`schemas/a_short_m67_effect_contract.json` 重封这些专属 contracts；JSON parse 与 effect-contract suite 均在最终 focused 包中通过。
+
+freeze manifest 是 comment-insensitive semantic identity：它绑定治理语义、schema contract、formal/Stage-B 函数与共享 cash stack；当前 frozen epoch 必须 exact-manifest match，旧 epoch 只能 estimand hash 相同。所有 capture/outcome/receipt/ledger/adjudication/reminder 仅写 gitignored private root；public summary 仍是脱敏 fixed shape，保持 `production_unchanged=true`，不泄露 arm return、ticker、private path 或 hash。
+
+### O16、点名测试与植入对照
+
+- **O16**：新增 `MainWiringTests.test_margin_settlement_exception_keeps_unavailable_banner_in_weekly_and_markdown`，将 settlement 直接置为抛错，断言 weekly JSON 的 `margin_overheat_cash_control.status` 为 `evidence_unavailable_or_inconclusive`，并断言 Markdown 含固定 unavailable 消息。控制组 `Ran 1 test ... OK`；临时把 runner except fallback 改为 `None` 后精确 `KeyError: 'margin_overheat_cash_control'`；`apply_patch` 还原，runner SHA-256 恢复 `8ca5d5d9e1783303ec4f72d9ae3728e45aefbf1feb74307e0fcaf8f066bc2e2f`，同一测试再次 `OK`。
+- **刀4点名正控**：`MarginOverheatCashControlKnife4Tests` 覆盖合成 11/12/24/36 边界、support/inconclusive/reliable-harm 区分、跨 epoch 同 estimand random-effects、manifest annotation-insensitive/decision-sensitive、source/outcome/receipt tamper、Stage-B receipt/new batch、Stage-B capture+settlement 私有绑定、pre-acceptance backfill 拒绝。
+- **五次植入**：①中和 trigger floor，24/36 被错误推进为 formal inconclusive；②中和 forward gate，正式 calendar 从 0 错计为 1；③中和 estimand gate，预期拒绝消失；④中和 Stage-B backfill gate，错误越过点名 backfill 拒绝；⑤绕开 shared `validate_frozen_transition`，预期 admission 拒绝消失。五者均令各自点名 assertion 转红，均经 `apply_patch` 还原；最终 engine SHA-256=`60bd865dca6d2eeb39e995c3d0fa9e2f073fe33e797f278d248faa308dc2ab94`。
+
+一次如实自修：首次 790-test final pack 发现我把 pre-freeze 原始 `no_count` 诊断计数也清为零（该用例期望 1，得到 0）。修复只恢复诊断层，不让它重入正式 risk/adjudication 分母；随后最终聚焦包重新全绿。
+
+### 固定 Python、精确命令与原始终态
+
+唯一解释器是 `C:\\Users\\cnhea\\AppData\\Local\\Programs\\Python\\Python313\\python.exe`，现场复核版本为 `Python 3.13.8`。没有使用 PATH `python/python3`、bundled Python、provider/live runner 或其他解释器。
+
+```powershell
+& 'C:\\Users\\cnhea\\AppData\\Local\\Programs\\Python\\Python313\\python.exe' -m py_compile engine\\a_short_margin_overheat_cash_control.py tests\\test_a_short_margin_overheat_cash_control.py tests\\test_a_short_weekly_pipeline.py
+& 'C:\\Users\\cnhea\\AppData\\Local\\Programs\\Python\\Python313\\python.exe' -c "import json, pathlib; [json.loads(path.read_text(encoding='utf-8')) for path in pathlib.Path('schemas').glob('a_short_margin_overheat_cash_control*.json')]; json.loads(pathlib.Path('schemas/a_short_m67_effect_contract.json').read_text(encoding='utf-8')); json.loads(pathlib.Path('presets/a_short_margin_overheat_cash_control_governance_20260808.json').read_text(encoding='utf-8'))"
+& 'D:\\cnhea\\Codex\\worktrees\\c2aa\\Stock\\.tools\\run_unittest_with_repo_pythonpath.cmd' --timeout-seconds 600 tests.test_a_short_margin_overheat_cash_control tests.test_a_short_margin_overheat_wiring tests.test_a_short_margin_overheat_percentile_runner tests.test_a_short_weekly_pipeline tests.test_a_short_effect_contract tests.test_a_short_effect_consumer_probe tests.test_a_short_evidence_epoch_mode tests.test_a_short_m67_render
+# Ran 790 tests in 140.009s
+# OK
+# [bounded-unittest] RESULT tier=focused status=PASS exit=0 tests=790 elapsed=141.3s deadline=600s
+# [bounded-unittest] FOCUSED_RECEIPT token=receipt:9dc1f23b4f14a49853422e70 tests=790 bundles=a_short_effect_contract python=C:\\Users\\cnhea\\AppData\\Local\\Programs\\Python\\Python313\\python.exe
+
+& 'C:\\Users\\cnhea\\AppData\\Local\\Programs\\Python\\Python313\\python.exe' 'D:\\cnhea\\Codex\\worktrees\\c2aa\\Stock\\.tools\\full_pack_ledger.py' run a_short 'Knife4 source-bound formal adjudication, Stage-B receipt isolation, freeze manifest and A-short effect-contract changes' 'receipt:9dc1f23b4f14a49853422e70' 860 -- discover -s tests -p 'test_a_short*.py'
+# [full-pack-ledger] STATIC status=PASS diff_check=PASS py_compile=3
+# [parallel-lane] COUNT_GATE discovered=2661 ran=2661 equal=True
+# Ran 2661 tests in 122.984s
+# [full-pack-ledger] RESULT status=PASS exit=0 tests=2661 elapsed=123.0s deadline=860s mode=parallel
+# fingerprint=5fa86d9a9034
+```
+
+### Pre-Codex self-review、NOT_VERIFIED 与下一步
+
+`matrix=L1-L5 + authority/freeze/source/clock/statistics/Stage-B/schema/writes/consumers/production/O16`；`register=updated`；`handoff=updated`；`focused=790 OK`；`full-lane=2661 PASS`；`door=README/route/doc guards 66 OK (receipt:7c287f872d9227dcd87e418d) + actual pre-commit 14+41 OK + README 11 OK + git diff --check PASS`。检查了新 schema 都进 effect seal、无 production runner diff、三常量 guard 仍在、`_allocate_cash` 生产调用未加新参数；没有跳过门、没有 `--no-verify`。
+
+`NOT_VERIFIED`：真实 source-bound forward 周与统计结论、真实 freeze/registry flip、provider/live/account/ship-gate、跨进程/中断下共享 artifact-set 原子性、Claude Code 独立 review、commit/push/merge。离线 PASS 不是独立审查或生产/ship closure。下一步：`Claude Code：独立复审 R-ASHORT-MARGIN-OVERHEAT-KNIFE4-SOURCE-BOUND-FORMAL-ADJUDICATION-AND-STAGE-B-GATE`。
+
+## 2026-08-09 追加：融资过热刀 4 独立审查 —— FAIL（一条 P2 两腿）
+
+**判定**：FAIL，未提交。刀 4 把一整套裁决阈值搬进了 governance（`adjudication_contract`：12 周预备、24/36 正式、触发地板 4、非重叠块与 epoch 块下限、经济优势与胜率下限、Holm、同时置信界、随机效应、alpha spending、十二条风险上限），verdict 写入口的形状也对。拦住的是两件，正文只在 `docs/system_risk_register.md`。
+
+**我实际验了什么**
+- **四条植入全绿**：`_build_adjudicated_state` / `_validate_adjudicated_state` 里决定 verdict 的四道门（触发机会地板、24 周正式检查点、frozen 模式要求、读回复核）逐个改成 `if False:`，`tests.test_a_short_margin_overheat_cash_control` 每次 `Ran 58 tests / OK`；控制组同样 58 OK；四次还原 sha256 逐字节一致。
+- **覆盖面实读**：测试模块里 `_validate_adjudicated_state` 0 次、`adjudicate_margin_overheat_cash_control` 0 次、`_build_adjudicated_state` 1 次。
+- **门是承重的**（问题在没人钉）：真实路径三种入参分别被 `requires the shared frozen epoch mode` / `evidence_counts_toward_clock shared epoch gate rejected...` / `requires a formal comparison verdict` 点名拒。
+- **L2 我逐行读了 `_load_stage_b_admission`（`:2096-2117`）**：校验 schema、status、source/next stage、supported_arm_id、frozen 模式、共享时钟门——**没有任何 `expires_on` 比对**；全模块 `expires_on` 的出现行号里没有一个落在这个函数内。而它正是每一次 stage-B capture / settle / adjudicate 走的那条路。
+
+**我自己造成的一次污染（如实记，结论已作废）**
+我在 §6a agent 读代码期间跑了植入对照（改文件又还原）。agent 恰好读到 `_validate_adjudicated_state` 被我临时改成 `if False:` 的那一瞬，据此报了一条「读回校验门是死代码」的 P1。**那是我的植入**——随后实读 `:601-603`，真实代码是完整的 `if state.get("calendar_effective_weeks", 0) < 24 or ...: raise`。该条作废、不入册。教训与本会话上一次同源：**植入对照绝不能与任何并发读者或跑者重叠**（rule 7(c)）。
+
+**§6a agent 的其余结论**
+promise 2（跨轨隔离）与 promise 5（不触及生产）报 HELD，我未另行复现，按其结构性证据采信并标注来源。promise 4（stage-B 过期）我自行实读坐实 → 写成 L2。它另报的「`not_supported` 可由少数臂决定」我未复现，记 Optional 并标 NOT_VERIFIED。
+
+**未覆盖维度与诚实边界**
+- 24/36 周完整统计流水线（`_arm_statistics` / `_cross_epoch_random_effects` / `_simultaneous_winner` / `_risk_gate`）只读未跑；`_require_shared_clock_gate` 今天对任何输入都抛错（无关的 `p4a_overlay_epoch` 语义漂移），更深的门无法在真实路径上驱动。
+- 全量按用户本轮明令不跑，记 `NOT_VERIFIED`。
+- 七份改动 schema 与 effect contract 的逐字段 diff 未审。
+
+**下一步**：`Codex：修复`（两条腿一次封；四道门各配点名式用例 + 植入对照，stage-B 入口补过期与 supported 复查）。
+
+## 2026-08-09 — 刀4 Required 修复：verdict 四门守卫与 Stage-B 运行时复查（OPEN-NOT_VERIFIED）
+
+### 问题、根因与范围
+
+本轮只修 `R-ASHORT-MARGIN-OVERHEAT-KNIFE4-THE-VERDICT-GATES-HAVE-NO-GUARD-AND-STAGE-B-NEVER-RECHECKS-EXPIRY` 的两条 Required。根因是四个决定性 verdict gate 虽存在于 `_build_adjudicated_state` / `_validate_adjudicated_state`，测试却没有直接钉住；Stage-B admission receipt 只在注册时校验过期，后续 capture / settle / adjudicate 没有按操作日期重查，也没有重查当前 Stage-A 是否仍是同一份 `supported` 裁决。O17/O18 保持 Optional，未处理。
+
+### 改动与调用链
+
+- `engine/a_short_margin_overheat_cash_control.py`：`_load_stage_b_admission(..., as_of=...)` 新增操作日期规范化、`expires_on` fail-closed 检查，以及当前 Stage-A `adjudication.json` 的 schema、payload digest、Stage-A、formal verdict、comparison verdict 与 supported-arm 复核；`_stage_storage_root`、capture、settle、adjudicate 将各自的操作日期传入该门。
+- `tests/test_a_short_margin_overheat_cash_control.py`：四道 verdict 门各一条点名式 `assertRaisesRegex`，直接覆盖 `_validate_adjudicated_state` 与 `adjudicate_margin_overheat_cash_control`；另有过期 receipt 的 capture / settle / adjudicate 三入口测试、当前 Stage-A 不再 supported 的三入口测试和未过期/current-supported 正控。
+- 调用链为 `capture_margin_overheat_week → _stage_storage_root(as_of=decision_date) → _load_stage_b_admission`；settle 与 adjudicate 同样进入 `_load_stage_b_admission`，并以各自 `as_of` 判断 receipt 时效。当前 Stage-A 的 `payload_sha256` 必须等于 receipt 的 `source_adjudication_sha256`。
+
+### schema、source-binding 与写盘边界
+
+本轮没有修改 schema 或 effect contract；既有 receipt / adjudication schema 继续约束字段和状态。Stage-B 只允许读取 private root 内的 admission receipt 与 current Stage-A adjudication，source digest 不匹配、过期、阶段/裁决不支持或共享 frozen clock 不满足时均拒绝；private capture / outcome / ledger / adjudication 继续写 private root，public summary 仍为脱敏固定形状。未接 `_allocate_cash`，未改生产常量、registry mode、production importer 或刀2/3/4之外的生产路径。
+
+### 负向控制、自审与验证
+
+- 四个 verdict gate 分别中和为 `if False` 后，`formal calendar checkpoint`、`trigger opportunity floor`、`frozen epoch mode`、`bypassed the formal calendar or trigger gate` 用例均精确转红；Stage-B expiry 比较中和一次、current Stage-A supported 比较中和一次，capture / settle / adjudicate 对应三项均精确转红。六次均立即还原，最终源码/测试 SHA-256 为 `BA0A7B98A445950D289E0298D436364EFAE8202193274775C53DBD433A907829` / `B64E44068B763685A3A9DC9912CD0BAE99FC7E71F136BE32AAF3D92606D30B4D`。
+- 唯一解释器：`C:\Users\cnhea\AppData\Local\Programs\Python\Python313\python.exe`，版本 `Python 3.13.8`。最终 focused 命令：
+
+```powershell
+& 'D:\cnhea\Codex\worktrees\c2aa\Stock\.tools\run_unittest_with_repo_pythonpath.cmd' --timeout-seconds 600 tests.test_a_short_margin_overheat_cash_control tests.test_a_short_margin_overheat_wiring tests.test_a_short_margin_overheat_percentile_runner tests.test_a_short_weekly_pipeline tests.test_a_short_effect_contract tests.test_a_short_effect_consumer_probe tests.test_a_short_evidence_epoch_mode tests.test_a_short_m67_render
+# Ran 793 tests in 108.558s
+# OK
+# [bounded-unittest] RESULT tier=focused status=PASS exit=0 tests=793 elapsed=109.9s deadline=600s
+# [bounded-unittest] FOCUSED_RECEIPT token=receipt:a89bbccd89889587147335cd tests=793 bundles=a_short_effect_contract python=C:\Users\cnhea\AppData\Local\Programs\Python\Python313\python.exe
+```
+
+- full lane 精确命令与原始终态：
+
+```powershell
+& 'C:\Users\cnhea\AppData\Local\Programs\Python\Python313\python.exe' 'D:\cnhea\Codex\worktrees\c2aa\Stock\.tools\full_pack_ledger.py' run a_short 'Knife4 Required repair: point-named verdict gate guards and Stage-B receipt expiry/current-Stage-A reauthorization' 'receipt:a89bbccd89889587147335cd' 860 -- discover -s tests -p 'test_a_short*.py'
+# [full-pack-ledger] RESULT status=PASS exit=0 tests=2664 elapsed=105.1s deadline=860s mode=parallel
+# [parallel-lane] COUNT_GATE discovered=2664 ran=2664 equal=True
+# fingerprint=c4fc1a1bd8bc994ccb112395ad12d7771e8e341585790fe74955c01b99c5b3e1
+```
+
+无生产 importer，full lane 仅是离线测试证据。
+
+### 交接边界与下一步
+
+`NOT_VERIFIED`：Claude Code 独立复审、真实 source-bound forward/freeze、provider/live/account、production importer 与 ship-gate；未 stage、未 commit、未 push/merge、未使用 `--no-verify`。本轮 O17/O18 未处理。下一步：`Claude Code：独立复审 R-ASHORT-MARGIN-OVERHEAT-KNIFE4-THE-VERDICT-GATES-HAVE-NO-GUARD-AND-STAGE-B-NEVER-RECHECKS-EXPIRY`。
+
+## 2026-08-09 追加：融资过热刀 4 复审 —— PASS（已合入 master）
+
+**判定**：PASS。两条腿都收在门本身：四道 verdict 门各配了一条点名式 `assertRaisesRegex`，其中一条**直接驱动 `_validate_adjudicated_state`**（上一轮该函数在测试模块里 0 引用，正是我判 FAIL 的核心证据）；stage-B 的准入收据从「只在注册时查一次过期」改成「每次装载都查过期 + 回查当前 Stage-A 裁决仍为 supported」。finding 正文只在 `docs/system_risk_register.md`。
+
+**我实际验了什么**
+- 逐行实读五道门的函数体：`_build_adjudicated_state` 的三道（`insufficient_data` 即拒 / `< 24` 即拒 / 非 FROZEN 即拒）、`_validate_adjudicated_state` 的读回复核、`_load_stage_b_admission` 的 `operation_as_of > expires_on` 与「当前 supported 裁决」两道。
+- 逐条实读新增用例（`:1206-1251`）确认它们是点名式、且驱动的就是被守护的那个函数；stage-B 侧 `:1547` / `:1623` 断言过期即拒、`:1662` 断言缺当前 supported 裁决即拒。
+- 一次合并验收跑（结果见本轮 SESSION_LOG 的 Verify）。
+
+**本轮的证据降级（必须说清）**
+用户本轮两次明令不起重复的模块跑，因此**没有做植入对照**——没有「把某道门中和掉 → 对应用例精确转红」的实测。前四刀我都做了这一步，这一轮没有。结论建立在实读 + 用例形态 + 一次全绿之上，强度低于前几轮，已写进 register 的「本轮边界」。
+
+**一次被中断的植入留下的源码残留（我发现并还原）**
+上一次植入脚本跑到第 5 条（stage-B 过期门）时被中断，`finally` 没执行，把 `_load_stage_b_admission` 的过期判断留成了 `if False:`。我在本轮实读时发现它与本轮首次 grep 的结果不一致，立即按原文还原，并逐条核对五道门全部在位、模块内 `if False:` 残留计数为 0。教训：植入脚本必须能在**被中断后自恢复**（下次开跑先扫残留再植入），只靠 `finally` 不够。
+
+**仍开的两条 Optional**
+O17：`build_state:517` 的 12 周门槛仍是字面量，而 `_formal_decision:3200` 已读治理的 `preliminary_calendar_effective_weeks`——同一个数字两个来源。O18：`:3248/:3251` 把未达触发门槛的臂从 `mature` 滤掉而非阻断，`not_supported` 可能由少数臂决定（来自 §6a agent，我未复现）。
+
+**未覆盖维度**：24/36 周完整统计流水线只读未跑；七份改动 schema 与 effect contract 的逐字段 diff 未审；全量按用户明令不跑。
+
+**下一步**：`Codex：执行`（顺位 2 四刀工程侧到此为止；开 forward clock 前仍欠前置硬闸 ②的 source-bound replay 频率证据与 ③的专属 freeze manifest 确认，以及用户对「设计定稿前单轨先行 frozen」的裁决）。

@@ -1,5 +1,28 @@
 # Session Log
 
+## 2026-08-09 — Claude 复审 PASS（刀4：四道 verdict 门有了点名守卫，stage-B 每次用都复查过期）
+
+- **Verdict/Action**: PASS，已提交并合入 master。L1：新增 `test_adjudicated_state_formal_gates_have_point_named_guards`，四段 `assertRaisesRegex` 分别钉 24 周检查点、触发地板、frozen 要求、读回复核，其中最后一段**直接驱动 `_validate_adjudicated_state`**（上一轮它 0 引用）。L2：`_load_stage_b_admission` 取 `as_of` 后先比对 `expires_on` 即拒，再要求存在当前 supported 的 Stage-A 裁决。
+- **Required**: 无。`R-ASHORT-MARGIN-OVERHEAT-KNIFE4-THE-VERDICT-GATES-HAVE-NO-GUARD-AND-STAGE-B-NEVER-RECHECKS-EXPIRY` 已 closed；O17（12 周门槛两个来源）与 O18（少数臂可定 not_supported，未复现）仍开。正文只在 `docs/system_risk_register.md`。
+- **Verify**: review-evidence:b022d283b903。合并验收 `Ran 731 tests in 367.057s` / `OK`（`receipt:91386a0b2c37073315ea5c7f`）；同一包在 300s 默认上限下先 `TIMEOUT exit=124`，按 rule 5 以实测理由显式申请 600s 重跑一次。逐行实读五道门函数体 + 逐条实读新增点名式用例（含直接驱动 `_validate_adjudicated_state` 那条）。**植入对照按用户明令未跑**，属已知覆盖降级，写在 register。**残留处置**：上一轮被中断的植入把 stage-B 过期判断留成 `if False:`，实读发现后按原文还原，五道门全在位、`if False:` 残留为 0。全量按用户明令不跑。超时原因:先撞 300s 上限再按实测申请 600s 重跑。
+- **Next**: Codex：执行
+
+## 2026-08-09 — Codex executor/fixer：刀4 Required 修复（OPEN-NOT_VERIFIED）
+
+- **Verdict/Action**: 已修复 `R-ASHORT-MARGIN-OVERHEAT-KNIFE4-THE-VERDICT-GATES-HAVE-NO-GUARD-AND-STAGE-B-NEVER-RECHECKS-EXPIRY` 的两条 Required；不提交，等待 Claude Code 独立复审。
+- **Required**: 四道 verdict 门现在各有点名式回归用例；Stage-B 每次 capture / settle / adjudicate 都按操作日期复查 `expires_on`，并复查当前 Stage-A digest 与 `supported` verdict。O17/O18 保持 Optional，未处理。
+- **Verify**: 六次临时中和均精确转红并还原；固定 Python `C:\Users\cnhea\AppData\Local\Programs\Python\Python313\python.exe` / `Python 3.13.8`；focused `Ran 793 tests ... OK`，`RESULT tier=focused status=PASS exit=0 tests=793`，receipt `receipt:a89bbccd89889587147335cd`；full lane `RESULT status=PASS exit=0 tests=2664`，count gate `2664/2664`，fingerprint `c4fc1a1bd8bc`；最终文档门 `Ran 66 tests ... OK`，receipt `receipt:76ab93087106662963c6f751`。
+- **Proof-of-use**: 负向控制直接驱动 `_validate_adjudicated_state`、`adjudicate_margin_overheat_cash_control` 及 Stage-B 三入口；无生产 importer、provider/live/account 或真实 forward/freeze 证据。
+- **Pre-Codex self-review**: matrix=L1/L2 Required + O17/O18 disposition; register=updated; handoff=updated; focused=793 OK; full-lane=2664 PASS; door=route-doc 66 OK + actual pre-commit route 14 OK + doc-governance 41 OK; source-binding/current Stage-A digest/expiry/frozen/shared-clock/schema/effect-contract/private write boundary/negative controls rechecked; 未 stage、未 commit、未 push/merge、未使用 `--no-verify`。
+- **Next**: `Claude Code：独立复审 R-ASHORT-MARGIN-OVERHEAT-KNIFE4-THE-VERDICT-GATES-HAVE-NO-GUARD-AND-STAGE-B-NEVER-RECHECKS-EXPIRY`
+
+## 2026-08-09 — Claude 审查 FAIL（刀4：最贵的那道门没人钉，stage-B 过期收据永不复查）
+
+- **Verdict/Action**: FAIL，不提交。做对的先认：阈值本轮搬进 governance 的 `adjudication_contract`；verdict 写入口形状正确（拒 `not_evaluated`、要 frozen、要共享时钟门、要 ≥24 周、复用 `build_state` 让触发地板生效）。拦住的是两件：这四道门**一条守卫都没有**；stage-B 的准入收据只在注册时校验过期，之后每次使用都不再复查。
+- **Required**: `R-ASHORT-MARGIN-OVERHEAT-KNIFE4-THE-VERDICT-GATES-HAVE-NO-GUARD-AND-STAGE-B-NEVER-RECHECKS-EXPIRY`（P2，两条腿）；两条 Optional 同条记录。机制、我的复现与逐腿 Closure tests 只在 `docs/system_risk_register.md`。
+- **Verify**: review-evidence:d091401f1146。植入对照四条**全绿**：把触发地板／24 周检查点／frozen 要求／读回复核逐个改成 `if False:`，每次 `Ran 58 tests / OK`（控制组同样 58 OK，四次还原逐字节一致）；测试模块里 `_validate_adjudicated_state` 与 `adjudicate_margin_overheat_cash_control` 各出现 0 次。门本身承重（真实路径三种入参各自被点名拒）。L2 由我实读 `_load_stage_b_admission:2096-2117` 坐实：整段无 `expires_on` 比对。全量按用户明令不跑。**自伤**：植入与 §6a agent 并发，agent 读到我临时的 `if False:` 报了一条 P1，已实读 `:601-603` 证伪并作废。超时原因:等 agent 报告 + 复核并作废其受我污染的那条结论。
+- **Next**: Codex：修复
+
 ## 2026-08-09 — Claude 复审 PASS（刀3：旁路故障不再能打断官方周跑）
 
 - **Verdict/Action**: PASS，已提交并合入 master。两条腿逐条验完：捕获段的 import 单独成 try、风险动作移进 `else`，handler 不再引用未绑定名；结算段加 `if args....root:` 前置判断并整段包 try，兜底换成不读盘的 runner 本地常量摘要。两条 Optional（drift 改谓词、结算腿登记 sidecar 期望）一并闭。
@@ -18567,6 +18590,15 @@
 - **Verify**: 三植入(同日缺指针 / 带指针仍复述 / 合规极简)分别 FAIL·FAIL·PASS;`python -m unittest tests.test_doc_governance_guard tests.test_route_doc_ledger_status_consistency` = 23 OK;`git diff --check` clean;BOM/FFFD=0。
 - **Pre-Codex self-review**: A-F — A 整类:同日/未来/带指针复述三形态各一植入;B 单一来源:offender 逻辑做成 `_review_cycle_offenders` helper,live guard 与 planted 测试共用(本修复自身不双写);C 反向:三植入已验;D:双写检测走"禁 register 专属段"最窄安全侧;E:规则进 AGENTS + 协议 doc 单态。
 - **Next**: `审查`。
+
+## 2026-08-09 — Codex executor/fixer：融资过热刀4 + O16（OPEN-NOT_VERIFIED）
+
+- **Verdict/Action**: 已实现 `R-ASHORT-MARGIN-OVERHEAT-KNIFE4-SOURCE-BOUND-FORMAL-ADJUDICATION-AND-STAGE-B-GATE` 及 O16；formal adjudication/Stage-B receipt 只在 comparison-only 私有链中运行，registry 仍 `pre_freeze_audit_only`，production 常量/官方 M6.7 未变。
+- **Required**: 新 R-ID 仍 open P2，必须由 Claude Code 按 `AI_REVIEW_PROTOCOL` 独立复审；O16 已 closed。十格矩阵、调用链、source-binding、私有写盘与负控原始细节见 `docs/system_risk_register.md` 与 A-short handoff。
+- **Verify**: 固定 `C:\\Users\\cnhea\\AppData\\Local\\Programs\\Python\\Python313\\python.exe` / `Python 3.13.8`；focused `Ran 790 tests in 140.009s` / `OK`，`RESULT tier=focused status=PASS`，receipt `receipt:9dc1f23b4f14a49853422e70`；full lane `RESULT status=PASS exit=0 tests=2661`、count gate `2661/2661`、static PASS，fingerprint `5fa86d9a9034`。
+- **Proof-of-use**: O16 的真实 weekly main 异常测试同时验证 JSON 与 Markdown unavailable 横幅；把 fallback 临时中和后精准转红，恢复后 runner SHA-256 不变。
+- **Pre-Codex self-review**: matrix=10-grid/L1-L5/O16；register=updated；handoff=updated；focused=790 OK；full-lane=2661 PASS；door=README/route/doc guards 66 OK (`receipt:7c287f872d9227dcd87e418d`)，actual pre-commit 14+41 OK，README 11 OK，diff-check PASS；五道门+O16植入均转红后还原；provider/live/sub-agent=NOT_RUN；review/commit/push/merge=NOT_VERIFIED/NOT_PERFORMED。
+- **Next**: `Claude Code：独立复审 R-ASHORT-MARGIN-OVERHEAT-KNIFE4-SOURCE-BOUND-FORMAL-ADJUDICATION-AND-STAGE-B-GATE`
 
 <!-- REVIEW-CYCLE-MINIMAL-TEMPLATE-MARKER (adopted 2026-06-13): 新评审循环 entry(审查/修复/已闭/PASS)一律 prepend 到本行之上,遵循 AGENTS §Session log discipline → 评审循环 entry 极简模板(最小:Verdict/Action · Required→register 指针 · Verify · Next · 修复加一行 Proof-of-use);完整 finding 详情只进 system_risk_register.md。本行之下为 adoption 前历史,grandfather。勿删勿移。 -->
 
