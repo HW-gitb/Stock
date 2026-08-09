@@ -110,6 +110,25 @@ class MarginOverheatCashControlContractTests(unittest.TestCase):
         self.assertIn('governance["state_contract"]["min_trigger_effective_weeks"]', text)
         self.assertNotIn("trigger_effective_weeks < 4", text)
 
+    def test_preliminary_calendar_gate_is_read_from_adjudication_contract(self):
+        source = track.__file__
+        text = Path(source).read_text(encoding="utf-8")
+        self.assertIn('contract["preliminary_calendar_effective_weeks"]', text)
+        self.assertNotIn("calendar_effective_weeks < 12", text)
+        mutated = copy.deepcopy(self.governance)
+        mutated["adjudication_contract"]["preliminary_calendar_effective_weeks"] = 13
+        with patch.object(track, "_adjudication_contract",
+                          return_value=mutated["adjudication_contract"]), \
+                patch.object(epoch_mode, "_mode", return_value=track.FROZEN), \
+                patch.object(epoch_mode, "evidence_counts_toward_clock", return_value=True):
+            state = track.build_state(
+                calendar_effective_weeks=12,
+                trigger_effective_weeks=4,
+                mode=track.FROZEN,
+            )
+        self.assertEqual((state["evidence_status"], state["clock_status"]),
+                         ("accumulating", "running"))
+
     def test_source_binding_rejects_prose_other_context_and_other_verdicts(self):
         allowed = self.governance["source_binding"]["allowed_structured_sources"]
         track.validate_source_references(allowed)
@@ -1104,10 +1123,16 @@ class MarginOverheatCashControlKnife4Tests(unittest.TestCase):
         }
 
     def _synthetic_evidence(self, *, calendar_weeks, trigger_weeks, primary_effect,
-                            primary_cash_drag_pct=10.0):
+                            primary_cash_drag_pct=10.0, trigger_weeks_by_arm=None,
+                            effects_by_arm=None):
         self.assertLessEqual(trigger_weeks, calendar_weeks)
         start = datetime(2026, 1, 5)
         challengers = track.stage_arm_ids(track.STAGE_A)[1:]
+        trigger_weeks_by_arm = trigger_weeks_by_arm or {
+            arm_id: trigger_weeks if arm_id == "level_p95" else 0
+            for arm_id in challengers
+        }
+        effects_by_arm = effects_by_arm or {"level_p95": primary_effect}
         rows_by_arm = {arm_id: [] for arm_id in challengers}
         by_arm = {
             "baseline": {
@@ -1123,17 +1148,17 @@ class MarginOverheatCashControlKnife4Tests(unittest.TestCase):
                 "settled_week_count": calendar_weeks,
                 "pending_week_count": 0,
                 "no_count_week_count": 0,
-                "trigger_effective_week_count": trigger_weeks if arm_id == "level_p95" else 0,
+                "trigger_effective_week_count": trigger_weeks_by_arm[arm_id],
                 "source_bound_effective_week_count": calendar_weeks,
             }
         source_rows = []
         for index in range(calendar_weeks):
             decision = start + timedelta(days=14 * index)
             decision_date = decision.strftime("%Y%m%d")
-            triggered = index < trigger_weeks
             source_row = {"decision_date": decision_date, "arms": {}}
             for arm_id in challengers:
-                effect = primary_effect if arm_id == "level_p95" and triggered else 0.0
+                triggered = index < trigger_weeks_by_arm[arm_id]
+                effect = effects_by_arm.get(arm_id, 0.0) if triggered else 0.0
                 risk = self._risk_evidence(
                     cash_drag_pct=(primary_cash_drag_pct if arm_id == "level_p95" else 10.0)
                 )
@@ -1269,11 +1294,23 @@ class MarginOverheatCashControlKnife4Tests(unittest.TestCase):
             )
             harm = track._formal_decision(self._synthetic_evidence(
                 calendar_weeks=36, trigger_weeks=12, primary_effect=-2.0,
+                trigger_weeks_by_arm={arm_id: 12 for arm_id in track.stage_arm_ids(track.STAGE_A)[1:]},
+                effects_by_arm={arm_id: -2.0 for arm_id in track.stage_arm_ids(track.STAGE_A)[1:]},
             ))
             self.assertEqual(
                 (harm["status"], harm["verdict"], harm["winner"]),
                 ("formal_not_supported", "not_supported", None),
             )
+
+    def test_formal_not_supported_requires_all_challenger_arms_to_pass_trigger_floor(self):
+        with self._frozen_clock():
+            partial = track._formal_decision(self._synthetic_evidence(
+                calendar_weeks=36, trigger_weeks=12, primary_effect=-2.0,
+            ))
+        self.assertEqual(
+            (partial["status"], partial["verdict"], partial["winner"]),
+            ("formal_inconclusive", "inconclusive", None),
+        )
 
     def test_cross_epoch_random_effects_requires_qualified_epoch_blocks(self):
         contract = track._adjudication_contract()

@@ -1,5 +1,21 @@
 # Session Log
 
+## 2026-08-09 — Claude 审查 PASS（O17/O18 收口：12 周门槛回到治理，判负必须全臂达标）
+
+- **Verdict/Action**: PASS，已提交并合入 master。O17：新增 `_preliminary_calendar_effective_weeks()` 从治理的 `adjudication_contract` 读，`build_state` 不再用字面量 12，与 `_formal_decision` 同源。O18：`not_supported` 增加 `all_arms_mature` 前置，并把 `reliable_harm` 的全称量词从 `mature` 子集换成 `arm_statistics` 全体——未达触发地板的臂从「被滤掉」变成「阻断判负」。
+- **Required**: 无。O17、O18 均 closed；无新开项。正文只在 `docs/system_risk_register.md`。
+- **Verify**: review-evidence:6338a6465bb7。植入对照：把 `not_supported` 判据改回旧写法 → `Ran 63 tests` / `FAILED (failures=1)`，点名 `test_formal_not_supported_requires_all_challenger_arms_to_pass_trigger_floor`；还原逐字节一致。O17 侧其守卫把治理值改成 13 并断言门槛移动；该项不做植入（换回同值字面量不可区分，必然全绿无信息量）。改动面仅两个判据 + 测试，无生产 runner/schema/provider/写盘，按 rule 8 走快档、未起 agent。全量按用户明令不跑。
+- **Next**: Codex：执行
+
+## 2026-08-09 — Codex executor/fixer：刀4 Optional O17/O18 修复（OPEN-NOT_VERIFIED）
+
+- **Verdict/Action**: 已修复同一 R-ID 下的 O17/O18；Required 已由前一轮独立复审收口，本轮不提交，等待 Claude Code 复审 Optional。
+- **Required**: 无；O17 改为读取治理 `adjudication_contract.preliminary_calendar_effective_weeks`，O18 要求全部 challenger arms 通过 trigger floor 后才可发 track 级 `not_supported`，详情见 `docs/system_risk_register.md`。
+- **Verify**: 固定 Python `C:\Users\cnhea\AppData\Local\Programs\Python\Python313\python.exe` / `Python 3.13.8`；专属模块 `Ran 63 tests ... OK`；focused `Ran 795 tests ... OK`，`RESULT tier=focused status=PASS exit=0 tests=795`，receipt `receipt:75f224a59ed84eaca2946f80`；full lane `RESULT status=PASS exit=0 tests=2666`，count gate `2666/2666`，fingerprint `c9858cd8b302`；最终文档门 `Ran 66 tests ... OK`，receipt `receipt:ff39b344a8b40a6234425ff0`。
+- **Proof-of-use**: O17 临时恢复 `< 12` 使治理变体点名测试精确失败；O18 临时移除全臂成熟门使少数臂错误发出 `not_supported`，两次均立即还原。无 schema/effect-contract、生产常量、`_allocate_cash` 或 production importer 改动。
+- **Pre-Codex self-review**: matrix=O17/O18; register=updated; handoff=updated; focused=795 OK; full-lane=2666 PASS; door=route-doc 66 OK + actual pre-commit route 14 OK + doc-governance 41 OK; source-binding/private-write/production-boundary/negative-controls rechecked; 未 stage、未 commit、未 push/merge、未使用 `--no-verify`。
+- **Next**: `Claude Code：独立复审刀4 O17/O18（同一 R-ID）`
+
 ## 2026-08-09 — Claude 复审 PASS（刀4：四道 verdict 门有了点名守卫，stage-B 每次用都复查过期）
 
 - **Verdict/Action**: PASS，已提交并合入 master。L1：新增 `test_adjudicated_state_formal_gates_have_point_named_guards`，四段 `assertRaisesRegex` 分别钉 24 周检查点、触发地板、frozen 要求、读回复核，其中最后一段**直接驱动 `_validate_adjudicated_state`**（上一轮它 0 引用）。L2：`_load_stage_b_admission` 取 `as_of` 后先比对 `expires_on` 即拒，再要求存在当前 supported 的 Stage-A 裁决。
