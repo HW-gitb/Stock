@@ -3807,7 +3807,7 @@ O17 调用链为 `build_state → _preliminary_calendar_effective_weeks → _adj
 
 `NOT_VERIFIED`：Claude Code 对 O17/O18 的独立复审、provider/live/account、真实 source-bound forward/freeze、production importer 与 ship-gate；full lane 仅为离线证据。未 stage、未 commit、未 push/merge、未使用 `--no-verify`。下一步：`Claude Code：独立复审刀4 O17/O18（同一 R-ID）`。
 
-## 2026-08-09 追加：融资过热 O17/O18 收口审查 —— PASS（已合入 master）
+## 2026-08-09 追加：融资过热 O17/O18 收口审查 —— PASS（已提交 c2aa `01eb673a`，合入 master 待并发窗口收完它自己的 merge）
 
 **判定**：PASS。两条 Optional 都修在判据本身。O17：`build_state` 里那个 12 不再是字面量，改由新的 `_preliminary_calendar_effective_weeks()` 从治理的 `adjudication_contract` 读，缺键即点名报错——状态机与 `_formal_decision` 从此同源。O18：`not_supported` 现在要求 `all_arms_mature`（每个臂都过触发地板），且 `reliable_harm` 的全称量词从 `mature` 子集换成 `arm_statistics` 全体，未达标的臂由"被滤掉"变成"阻断判负"。
 

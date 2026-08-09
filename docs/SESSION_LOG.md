@@ -2,7 +2,7 @@
 
 ## 2026-08-09 — Claude 审查 PASS（O17/O18 收口：12 周门槛回到治理，判负必须全臂达标）
 
-- **Verdict/Action**: PASS，已提交并合入 master。O17：新增 `_preliminary_calendar_effective_weeks()` 从治理的 `adjudication_contract` 读，`build_state` 不再用字面量 12，与 `_formal_decision` 同源。O18：`not_supported` 增加 `all_arms_mature` 前置，并把 `reliable_harm` 的全称量词从 `mature` 子集换成 `arm_statistics` 全体——未达触发地板的臂从「被滤掉」变成「阻断判负」。
+- **Verdict/Action**: PASS，已提交（c2aa `01eb673a`）；**合入 master 未完成**——主树正处在另一窗口的未完成 merge 中（`MERGE_HEAD` 在、`docs/system_risk_register.md` 为 `UU`），按收口门 9 记阻塞、不代为解冲突。O17：新增 `_preliminary_calendar_effective_weeks()` 从治理的 `adjudication_contract` 读，`build_state` 不再用字面量 12，与 `_formal_decision` 同源。O18：`not_supported` 增加 `all_arms_mature` 前置，并把 `reliable_harm` 的全称量词从 `mature` 子集换成 `arm_statistics` 全体——未达触发地板的臂从「被滤掉」变成「阻断判负」。
 - **Required**: 无。O17、O18 均 closed；无新开项。正文只在 `docs/system_risk_register.md`。
 - **Verify**: review-evidence:6338a6465bb7。植入对照：把 `not_supported` 判据改回旧写法 → `Ran 63 tests` / `FAILED (failures=1)`，点名 `test_formal_not_supported_requires_all_challenger_arms_to_pass_trigger_floor`；还原逐字节一致。O17 侧其守卫把治理值改成 13 并断言门槛移动；该项不做植入（换回同值字面量不可区分，必然全绿无信息量）。改动面仅两个判据 + 测试，无生产 runner/schema/provider/写盘，按 rule 8 走快档、未起 agent。全量按用户明令不跑。
 - **Next**: Codex：执行
