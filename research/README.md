@@ -29,6 +29,8 @@ Current preregistration status:
 
 Current result / ledger status:
 
+- `research/results/us_serenity_annotation_smoke_20260809.md` + `research/results/us_serenity_annotation_calibration_20260802.md` - Serenity structural-theme research-only artifacts. Blade 0 is a single-theme rubric-fillability smoke; Blade 1 is a three-class contrast calibration with provenance and mechanism gates. Both remain advisory-only with `unverified_lead` / `GO_FOR_CALIBRATION_ONLY`, no active/effect/scoring/Top15/operation path, and no production promotion; see the artifacts and `docs/SESSION_LOG.md` for current evidence.
+
 > Route-doc convention (v2 / AGENTS.md): each row below is a STABLE POINTER — name the artifact + its terminal identity/verdict and delegate the live spend count / metrics to the ledger file + `docs/CURRENT.md` §0 + `docs/SESSION_LOG.md` + the `execution_summary.json`. Do NOT restate a mutable spend count or pending/spent state that drifts when a line later executes. `tests/test_route_doc_ledger_status_consistency.py` mechanically enforces that no already-spent singleton line is described here as unspent/pending through its ledger, preregistration, result, runner, schema, or packet aliases; run it after editing any route-doc row.
 
 - `research/results/a_share_minimal_data_burst_corrected_basis_20260531/preflight_zero_signal_events_20260531.json` - research-only preflight result for the corrected-basis artifact. It fails the preregistered event-count / power gate before outcome returns are informative.

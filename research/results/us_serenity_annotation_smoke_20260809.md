@@ -45,15 +45,15 @@ The abbreviated refs in the table are display aliases only; the full `source_id`
 
 ### 1.2 Source authority ledger
 
-All five frozen refs are X posts. They are discovery leads, not issuer filings, regulator records, engineering studies, or independently audited forecasts. Repetition across posts is recorded as corroboration, not upgraded authority.
+All five frozen refs are X posts. They are discovery leads, not issuer filings, regulator records, engineering studies, or independently audited forecasts. The raw X payloads each carry `evidence_attestation=model_transcribed`; the merge artifact's `source_refs` do not repeat that field, so this provenance fact is carried explicitly here. Repetition across posts is recorded as corroboration, not upgraded authority.
 
-| Source ref | Observed at | `source_authority` | Frozen evidence role |
-|---|---:|---|---|
-| `x:00b0f4a0672a4b8cdbf3cb874ffa2917f03f34075353979fc03a6ea5bc3e9768` | `2026-07-26T12:00:34+00:00` | `lead` | lists 253%/2035 demand framing and named generation/equipment/transmission/cooling members |
-| `x:4bed663825cd390af8731081fa1fa96ea9a50f50920759c8a93cd25c21ff2760` | `2026-07-29T01:13:15+00:00` | `lead` | names transmission, substations, electrification, distribution, cooling and generation roles |
-| `x:6568562e8eec0437eb4397f6918115d4727fc023739833dbd99a72e55b4e6393` | `2026-07-25T23:38:19+00:00` | `lead` | states the electricity-bottleneck framing, 194 GW/2035 framing and generation/equipment/utility groups |
-| `x:99528c938398bfb2c8120fd1f7b5d29f798a355876e79c193433e88c3f69661f` | `2026-07-26T05:25:50+00:00` | `lead` | repeats the 194 GW/2035 framing and names NEE/VST/CEG |
-| `x:bffc712daa6ee59859a12194a3fb04739390f1a6fd6824919bcda0eeea6b8646` | `2026-07-27T21:39:03+00:00` | `lead` | repeats the 253%/194 GW/2035 framing |
+| Source ref | Observed at | `source_authority` | `provenance_mode` | `evidence_attestation` | Frozen evidence role |
+|---|---:|---|---|---|---|
+| `x:00b0f4a0672a4b8cdbf3cb874ffa2917f03f34075353979fc03a6ea5bc3e9768` | `2026-07-26T12:00:34+00:00` | `lead` | `model_transcribed` | `model_transcribed` | lists 253%/2035 demand framing and named generation/equipment/transmission/cooling members |
+| `x:4bed663825cd390af8731081fa1fa96ea9a50f50920759c8a93cd25c21ff2760` | `2026-07-29T01:13:15+00:00` | `lead` | `model_transcribed` | `model_transcribed` | names transmission, substations, electrification, distribution, cooling and generation roles |
+| `x:6568562e8eec0437eb4397f6918115d4727fc023739833dbd99a72e55b4e6393` | `2026-07-25T23:38:19+00:00` | `lead` | `model_transcribed` | `model_transcribed` | states the electricity-bottleneck framing, 194 GW/2035 framing and generation/equipment/utility groups |
+| `x:99528c938398bfb2c8120fd1f7b5d29f798a355876e79c193433e88c3f69661f` | `2026-07-26T05:25:50+00:00` | `lead` | `model_transcribed` | `model_transcribed` | repeats the 194 GW/2035 framing and names NEE/VST/CEG |
+| `x:bffc712daa6ee59859a12194a3fb04739390f1a6fd6824919bcda0eeea6b8646` | `2026-07-27T21:39:03+00:00` | `lead` | `model_transcribed` | `model_transcribed` | repeats the 253%/194 GW/2035 framing |
 
 ## 2. Structural annotation
 
@@ -82,7 +82,7 @@ AI data-center load growth is being framed as a power-system buildout problem: r
 
 ### 2.4 `chain_role_by_ticker`
 
-The role category is a **candidate structural role**, not a claim that the ticker controls a bottleneck. `供应卡点` means the source names a supply-side layer; it does not prove scarcity or pricing power.
+The role category is a **candidate structural role**, not a claim that the ticker controls a bottleneck. The original Blade0 labels are retained as a historical fillability record. Under the repaired rubric, source naming alone is insufficient: a `供应卡点` assignment requires both a direct layer match and source-bound evidence of a scarcity mechanism (lead time, allocation, capacity, backlog, price or equivalent). The five historical `供应卡点` labels below therefore remain `candidate_unverified`, not qualified findings.
 
 | Ticker | Five-category role | Role basis | `source_ref_ids` | Support / caveat |
 |---|---|---|---|---|
@@ -95,6 +95,8 @@ The role category is a **candidate structural role**, not a claim that the ticke
 | `VRT` | `普通受益` candidate | data-center power/cooling | `x:00b0…e9768`, `x:4bed…2760` | `direct` for named product area; no evidence that cooling is the scarce layer |
 
 No ticker is classified as `控制卡点`, `弱定价权` or `只有故事` from this single frozen lead set. Those categories remain available for a contrast calibration and must not be filled by speculation.
+
+**Provenance repair**: `provenance_mode` is now a separate axis from `source_authority` and `claim_support`. A model-transcribed source may support a source-bound research lead, but it cannot silently look like a platform-observed record or upgrade a claim to `evidence_backed`.
 
 ### 2.5 `common_constraint_id` / `system_change_id`
 
