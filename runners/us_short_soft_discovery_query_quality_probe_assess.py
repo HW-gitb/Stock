@@ -248,16 +248,25 @@ def _causal_order_and_floor(
                 theme["observed_at"],
                 label=f"{lane}_discovery.themes[{index}].observed_at",
             )
-            bound_source_fetched = [
+            # The theme clock is on the PUBLICATION clock, not the fetch clock: the producer
+            # derives it as max(bound source observed_at) (`fetch_web._max_bound_source_observed_at`,
+            # K3-R115).  Comparing it against fetched_at made this door unsatisfiable by
+            # construction -- the same function enforces observed_at <= fetched_at just above,
+            # so max(observed) <= max(fetched) always, while this demanded the reverse.  It
+            # therefore refused every real run and had exactly zero discriminating power; the
+            # hand-built fixture hid that by setting fetched_at equal to the theme instant.
+            # Compared on the producer's clock it does real work again: a theme dated before
+            # its own evidence was published is still refused.
+            bound_source_observed = [
                 _parse_instant(
-                    receipt_sources[source_id][1]["fetched_at"],
-                    label=f"{lane} bound source {source_id} fetched_at",
+                    receipt_sources[source_id][1]["observed_at"],
+                    label=f"{lane} bound source {source_id} observed_at",
                 )
                 for source_id in theme["source_ref_ids"]
             ]
-            if bound_source_fetched and observed < max(bound_source_fetched):
+            if bound_source_observed and observed < max(bound_source_observed):
                 raise QueryQualityProbeAssessmentError(
-                    f"{lane} theme observed_at cannot be earlier than its bound source fetches"
+                    f"{lane} theme observed_at cannot be earlier than its bound sources"
                 )
             if observed > discovery_generated:
                 raise QueryQualityProbeAssessmentError(
