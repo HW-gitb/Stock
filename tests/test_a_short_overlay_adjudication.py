@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import json
 import hashlib
+import copy
 import sys
 import tempfile
 import unittest
@@ -16,13 +17,13 @@ if str(ROOT) not in sys.path:
 from engine.a_short_overlay_adjudication import (  # noqa: E402
     OverlayAdjudicationError, build_public_summary, capture_after_published_weekly,
     _active_profile_binding, _adjudicate, _contract_fingerprint, _epoch_context, _monthly_cluster_t,
-    _screening_runtime_recipe_binding, select_stage3_top5,
+    _screening_runtime_recipe_binding, _stage3_payload, select_stage3_top5,
     settle_and_summarize_weekly, settle_from_daily_payload, validate_public_summary, write_public_summary,
 )
 from engine import a_short_experiment_admission_registry as _admission_registry  # noqa: E402
 from runners.a_short_factor_comparison_v2_cache_build import CONSUMER_PRIORITY  # noqa: E402
 from engine import a_short_evidence_epoch_mode as _epoch_mode
-from tests._a_short_epoch_mode_test_utils import enter_patched_epoch_modes
+from tests._a_short_epoch_mode_test_utils import enter_patched_epoch_modes, patched_epoch_modes
 from tests._a_short_weekly_publish_test_utils import write_content_bound_bundle
 
 DECISION, RUN = "20260710", "20260710"
@@ -303,6 +304,58 @@ class OverlayAdjudicationTests(unittest.TestCase):
                     capture_after_published_weekly(root=root, decision_date=DECISION, run_date=RUN,
                         stage3_snapshot_path=stage3, overlay_path=overlay, out_path=weekly, receipt_path=receipt,
                         egs_publish_marker_path=marker, source_identity=identity, forward_eligible=True)
+
+    def test_pre_freeze_allows_stage3_governance_digest_only_drift(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = _root(tmp); stage3, overlay, weekly, receipt, marker, identity = _sources(tmp)
+            snapshot = json.loads(stage3.read_text(encoding="utf-8"))
+            expected = snapshot["active_industry_weight_profile"]["governance_sha256"]
+            snapshot["active_industry_weight_profile"]["governance_sha256"] = "0" * 64
+            self.assertNotEqual(expected, snapshot["active_industry_weight_profile"]["governance_sha256"])
+            stage3.write_text(json.dumps(snapshot), encoding="utf-8")
+            marker_payload = json.loads(marker.read_text(encoding="utf-8"))
+            marker_payload["files"]["p4_stage3_selection_snapshot"]["sha256"] = hashlib.sha256(stage3.read_bytes()).hexdigest()
+            marker.write_text(json.dumps(marker_payload), encoding="utf-8")
+            with patched_epoch_modes("pre_freeze_audit_only", ("p4a_overlay_adjudication",)), \
+                    mock.patch("engine.a_short_overlay_adjudication._today", return_value=RUN):
+                result = capture_after_published_weekly(root=root, decision_date=DECISION, run_date=RUN,
+                    stage3_snapshot_path=stage3, overlay_path=overlay, out_path=weekly, receipt_path=receipt,
+                    egs_publish_marker_path=marker, source_identity=identity, forward_eligible=True)
+                self.assertFalse(_epoch_mode.evidence_counts_toward_clock("p4a_overlay_adjudication"))
+            self.assertEqual(result["status"], "captured_live_canonical")
+
+    def test_stage3_profile_and_weights_drift_is_rejected_in_both_modes(self) -> None:
+        for mode in ("pre_freeze_audit_only", "frozen_enforced"):
+            with self.subTest(mode=mode), tempfile.TemporaryDirectory() as tmp:
+                stage3, overlay, _weekly, _receipt, _marker, identity = _sources(tmp)
+                baseline_snapshot = json.loads(stage3.read_text(encoding="utf-8"))
+                overlay_payload = json.loads(overlay.read_text(encoding="utf-8"))
+                recipe = _screening_runtime_recipe_binding()
+                with patched_epoch_modes(mode, ("p4a_overlay_adjudication",)):
+                    context = _epoch_context()
+                    for field in ("active_profile", "weights"):
+                        snapshot = copy.deepcopy(baseline_snapshot)
+                        if field == "active_profile":
+                            snapshot["active_industry_weight_profile"][field] = "other_profile"
+                        else:
+                            weights = snapshot["active_industry_weight_profile"][field]
+                            key = next(iter(weights))
+                            weights[key] = float(weights[key]) + 1.0
+                        with self.assertRaisesRegex(OverlayAdjudicationError, "active-profile binding drifted"):
+                            _stage3_payload(snapshot, overlay_payload, DECISION, identity,
+                                            context["active_profile_binding"], recipe)
+
+    def test_frozen_stage3_governance_digest_drift_is_rejected(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp, patched_epoch_modes(
+                "frozen_enforced", ("p4a_overlay_adjudication",)):
+            stage3, overlay, _weekly, _receipt, _marker, identity = _sources(tmp)
+            snapshot = json.loads(stage3.read_text(encoding="utf-8"))
+            snapshot["active_industry_weight_profile"]["governance_sha256"] = "0" * 64
+            overlay_payload = json.loads(overlay.read_text(encoding="utf-8"))
+            context = _epoch_context()
+            with self.assertRaisesRegex(OverlayAdjudicationError, "active-profile binding drifted"):
+                _stage3_payload(snapshot, overlay_payload, DECISION, identity,
+                                context["active_profile_binding"], context["screening_runtime_recipe"])
 
     def test_settlement_rejects_replay_or_noncanonical_shared_cache(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:

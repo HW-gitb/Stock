@@ -120,6 +120,7 @@ from engine.data.a_share_board_scope import is_a_share_main_board
 from engine.egs_industry_heat import (
     compute_industry_heat_score, get_active_weights, final_score_and_tier,
     select_profile_watch_pool, write_weight_comparison, load_governance,
+    canonical_governance_digest,
 )
 from engine.a_short_nullable_bool import fail_closed_risk_bool, require_known_risk_bool
 from engine.a_short_industry_theme import (
@@ -1680,15 +1681,13 @@ def export_stage3_selection_snapshot(top50, tier1_final, latest_td, run_identity
     top50_rows = _rows(top50, "top50")
     veto_10d = set((red_dict or {}).get("veto_10d", set()))
     eligible_rows = [row for row in top50_rows if row["ts_code"] not in veto_10d and row["ts_code"] not in set(unlock_set or set())]
-    import hashlib
     governance_path = os.path.join(project_root, "presets", "egs_industry_heat_governance_20260611.json")
     governance = load_governance()
     active_profile = str(governance.get("active_profile") or "")
     active_weights = (governance.get("profiles") or {}).get(active_profile)
     if not active_profile or not isinstance(active_weights, dict) or not active_weights:
         raise ValueError("P4a Stage3 snapshot requires a valid active industry profile")
-    with open(governance_path, "rb") as _governance_handle:
-        governance_sha256 = hashlib.sha256(_governance_handle.read()).hexdigest()
+    governance_sha256 = canonical_governance_digest(governance_path)
     runtime_lineage = runtime_configuration_lineage(_RUNTIME_CONFIGURATION)
     screening_policies = [policy for policy in runtime_lineage.get("policies", [])
                           if policy.get("schema_name") == "a_short_screening_runtime_policy"]

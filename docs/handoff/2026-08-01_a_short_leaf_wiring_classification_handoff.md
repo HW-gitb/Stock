@@ -4621,3 +4621,62 @@ effect contract 已用固定 Python 重新登记 A-EGS decision-predicate hash �
 - 未跑真实周跑；新键与新描述下周真跑才进实盘产物。
 
 **下一步**：`Codex：执行`（桌面 `a_runtest2_cc.md` 下一顺位）
+## 2026-08-09 append: Codex executor/fixer - desktop P1-3/P1-4 repair + Optional O4 (OPEN-NOT_VERIFIED)
+
+### Scope and decision
+
+- This entry records the user-authorized follow-up after the D-2/D-5 Optional round. It implements the desktop `a_runtest2_cc.md` P1-3 factor-comparison v2 and P1-4 P4a overlay plan, and closes the prior O4 by removing one redundant weekly fallback literal; no provider/live/full lane or unrelated selector repair was started.
+- P1-3: `_ensure_program()` now reads the existing `p0_factor_comparison_v2` registry enforcement. Before freeze, the whole manifest shape and identity/semantic fields stay exact and all four digest fields must be valid lowercase SHA-256 strings, but legacy raw-byte versus current canonical digest mismatch is audit-only. Frozen mode restores full exact-match enforcement. Missing manifests still write current canonical digests; existing pre-freeze manifests are never rewritten, old weeks are not migrated, and the evidence clock remains parked.
+- P1-4: `A-EGS/egs_main.py::export_stage3_selection_snapshot()` now calls the existing `canonical_governance_digest`. `_stage3_payload()` keeps `active_profile` and `weights` exact in every mode; only `governance_sha256` equality is mode-gated. Pre-freeze digest-only mismatch can be captured for audit, frozen mismatch rejects, and P4a remains outside the clock. Selection/overlay scoring/Top5/M6.7/forward/private-public behavior is unchanged.
+- Optional O4: `build_weekly_report()` no longer repeats `invalid_numeric_row_count` in the `margin_coverage=None` fallback. The surviving `setdefault("invalid_numeric_row_count", 0)` is the sole normalizer and is now what `test_weekly_missing_margin_fallback_keeps_observation_key_set` exercises.
+
+### Call chain and boundary
+
+- P1-3 chain: `capture_v2_week()` / `settle_v2_from_daily_payload()` -> `_ensure_program()` -> existing private `program_manifest.json`, `ledger.json`, `epochs.json`, and `experiment_batches.json` surfaces; existing schema files remain the digest sources. No new schema/config/switch or write boundary.
+- P1-4 chain: EGS Stage3 producer -> Stage3 snapshot/official marker -> `capture_after_published_weekly()` -> `_stage3_payload()` -> existing P4a private capture/settlement consumers. Test-only marker edits were temporary; no historical capture was rewritten.
+- Fixed interpreter only: `C:\Users\cnhea\AppData\Local\Programs\Python\Python313\python.exe` / Python 3.13.8. Provider/live/account/order/runner/full lane were not used. Independent review and commit remain reviewer/committer work.
+
+### Self-review and negative controls
+
+- P1-3: raw-byte legacy manifest accepted without rewrite and `capture_v2_week()` proceeded; `program_id` and `boundary` mutations rejected pre-freeze; one frozen digest mutation rejected; pre-freeze `evidence_counts_toward_clock("p0_factor_comparison_v2")` stayed false.
+- P1-4: pre-freeze digest-only Stage3 mismatch captured; profile and weight mutations rejected in both modes; frozen digest-only mismatch rejected; pre-freeze `evidence_counts_toward_clock("p4a_overlay_adjudication")` stayed false.
+- O4: after deleting the redundant fallback literal, the missing-margin fallback still produces the seven-key shape through the remaining `setdefault` leg; deleting that normalizer would make the existing point test fail.
+- **Pre-Codex self-review**: A-F checked; matrix=manifest/digest/profile/weights/mode/clock/O4 normalizer; register/session/handoff updated; association+O4 `163 OK`; doc-governance `66 OK`; full-lane/reviewer/commit/provider/account remain `NOT_VERIFIED`/`NOT_PERFORMED`.
+- `py_compile` on six changed files passed; `static_contract_error()` returned `None`.
+
+### Exact verification and original terminal state
+
+- `-m unittest tests.test_a_short_factor_comparison_v2 -v` -> `Ran 30` / `OK`.
+- `-m unittest tests.test_a_short_overlay_adjudication -v` -> `Ran 31` / `OK`.
+- `-m unittest tests.phase6.test_egs_margin_coverage -q` -> `Ran 30` / `OK` after deleting the redundant fallback literal; the existing point test now depends on the surviving `setdefault` normalizer.
+- Association pack `tests.test_a_short_factor_comparison_v2 tests.test_a_short_overlay_adjudication tests.test_a_short_evidence_epoch_mode tests.test_a_short_factor_comparison_v2_weekly tests.test_a_short_factor_comparison_v2_adjudication tests.test_a_short_fourth_knife_p4` -> `Ran 133 tests in 48.500s` / `OK`.
+- Combined association + O4 pack (same six modules plus `tests.phase6.test_egs_margin_coverage`) -> `Ran 163 tests in 39.764s` / `OK` after the fallback deletion.
+- A broader 163-test probe had one known pre-existing static-string failure in `tests.test_egs_industry_heat.ProfileWatchPoolTests.test_egs_uses_the_same_selector_for_top_pool_and_production_watch`; the current baseline source already wraps the selector in `watch_pool_eligible_frame`. The relevant `ProfileGovernanceDigestTests` probe -> `Ran 1` / `OK`; the broader failure is not counted as a green result.
+- Status: `OPEN-NOT_VERIFIED`; no stage/commit/push/merge, no real production artifact refresh, and no independent reviewer verdict yet.
+
+### Next
+
+`Claude Code：独立审查本轮 P1-3/P1-4 + Optional O4；通过后由 reviewer/committer 按流程提交。`
+
+## 2026-08-09 追加：桌面 P1-3 / P1-4 两道指纹门独立审查 —— PASS（已合入 master）
+
+**判定**：PASS，无 Required，一条 Optional（O5，正文只在 `docs/system_risk_register.md` 同日 PASS 节）。本刀是本批唯一的放松类改动，故重点放在强制腿的反向控制。
+
+**我自己实际验了什么**
+
+- 顺着 `enforcement_enabled → validated_frozen_packet_identity → _mode → _require_track` 整读到底，确认未注册轨名是 raise 而非 False（写错轨名不会静默关掉门），且 registry 每次重读、翻 mode 立即生效。
+- 逐个比对两道门被 park 的字段与仍然全严的语义字段；读了四条新用例的**用例体**，确认 pre-freeze / frozen 两条极性都被钉住，且 P1-3 正控还断言不重写盘上 manifest。
+- 实测同一份治理文件的两种口径：canonical `c08bbfb22077…`（= 消费者值）vs raw bytes `8e6abc93a73c…`；并指出 raw 口径随 checkout 变（桌面主树记的是 `8bbbf474…`），所以迁到 canonical 是对的方向而不只是权宜。
+- 固定主 Python 独立调 `static_contract_error()` 得 `None`；验收超集带出 `a_short_effect_contract` bundle。
+
+**植入对照（我自写）**
+
+- 把两个引擎的 `_is_sha256` 同时中和成 `return True` —— park 之后它是唯一还拦着 digest 的东西 —— 两个模块仍 `Ran 61 tests OK`，无人喊。还原后两文件 sha256 各自逐字节回原值。这就是 O5 的来源。
+
+**未覆盖维度与诚实边界**
+
+- 本刀不改任何轨的 mode、不重签盘上已有 manifest / snapshot；P4a 的 20260727 快照仍是 raw 口径，将来解冻前必须随冻结包重签。
+- 两条轨是否真的恢复捕获，要下周实盘才见分晓。
+- 全量按 rule 4 归执行方（用户本轮明示执行方起过则我不再起）；§6a 未起 agent。
+
+**下一步**：`Codex：执行`（桌面 `a_runtest2_cc.md` 下一顺位）

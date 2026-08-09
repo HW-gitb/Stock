@@ -108,6 +108,12 @@ def _finite(value: object) -> bool:
     return isinstance(value, (int, float)) and not isinstance(value, bool) and math.isfinite(float(value))
 
 
+def _is_sha256(value: object) -> bool:
+    return isinstance(value, str) and len(value) == 64 and all(
+        character in "0123456789abcdef" for character in value
+    )
+
+
 def _root(root: str | Path) -> Path:
     value = Path(root).resolve()
     suffix = ("state", "a_short", "overlay_adjudication_private", "v1")
@@ -437,7 +443,16 @@ def _stage3_payload(stage3_snapshot: dict, overlay: dict, decision_date: str, so
             stage3_snapshot.get("run_id") != source_identity.get("run_id") or \
             stage3_snapshot.get("candidate_digest") != source_identity.get("candidate_digest"):
         raise OverlayAdjudicationError("P4a Stage3 snapshot run identity mismatch")
-    if stage3_snapshot.get("active_industry_weight_profile") != active_profile_binding:
+    stored_profile_binding = stage3_snapshot.get("active_industry_weight_profile")
+    if not isinstance(stored_profile_binding, dict) or not isinstance(active_profile_binding, dict) or \
+            set(stored_profile_binding) != set(active_profile_binding) or \
+            any(stored_profile_binding.get(key) != active_profile_binding.get(key)
+                for key in ("active_profile", "weights")):
+        raise OverlayAdjudicationError("P4a Stage3 snapshot active-profile binding drifted")
+    stored_digest = stored_profile_binding.get("governance_sha256")
+    expected_digest = active_profile_binding.get("governance_sha256")
+    if not _is_sha256(stored_digest) or not _is_sha256(expected_digest) or \
+            (_epoch_mode.enforcement_enabled("p4a_overlay_adjudication") and stored_digest != expected_digest):
         raise OverlayAdjudicationError("P4a Stage3 snapshot active-profile binding drifted")
     if stage3_snapshot.get("screening_runtime_recipe") != screening_runtime_recipe:
         raise OverlayAdjudicationError("P4a Stage3 snapshot screening-runtime recipe binding drifted")
