@@ -793,6 +793,7 @@
             "effective_ref_date": {"$ref": "#/$defs/date8Nullable"},
             "row_count": {"type": "integer", "minimum": 0},
             "universe_size": {"type": "integer", "minimum": 0},
+            "invalid_numeric_row_count": {"type": "integer", "minimum": 0, "description": "Rows with invalid required numeric margin fields; observational only and does not decide reference-date completeness."},
             "coverage_complete": {"type": "boolean"},
             "status": {"enum": ["complete", "incomplete", "unavailable", "invalid"]}
           },

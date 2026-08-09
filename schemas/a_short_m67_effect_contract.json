@@ -2,7 +2,7 @@
   "schema_name": "a_short_m67_effect_contract",
   "schema_version": "1.0.0",
   "legacy_migration_sha256": "b99cbb6895b7b2c2877e172fbbd59ff0b84a5c3b9bbf5de2b8ee2aab0d52cc4e",
-  "analysis_input_all_paths_sha256": "571b86d7f68d6ef4878b738c9adac4dc9d5297c0492e69f5b87df187d31797af",
+  "analysis_input_all_paths_sha256": "3d9514b984c6ba46776aa55a9b81a53dab761aff5225104310cb65836851de6e",
   "unclassified_pending_audit_baseline": [
     "account_context.mode",
     "account_context.positions[].current_price",
@@ -337,7 +337,7 @@
       "source_prefixes": [
         "market_context"
       ],
-      "source_paths_sha256": "51975b07975a0729976e6e86daef8776c979d3ffafc288d4b1fdcae4e1c701f9",
+      "source_paths_sha256": "23ee5ec1178529f51d5afeb95bf072f3430f7f5b974ab22b26e98a3473fab410",
       "policy": "must_affect_result",
       "terminal_surfaces": [
         "weekly.effect_contract_ledger",
@@ -903,6 +903,12 @@
     "market_context.breadth.csi300_window.length": "duplicate_or_display_audit",
     "market_context.breadth.csi300_window.length_unit": "duplicate_or_display_audit",
     "market_context.breadth.csi300_window.start_date": "duplicate_or_display_audit",
+    "market_context.margin_coverage.invalid_numeric_row_count": {
+      "category": "duplicate_or_display_audit",
+      "consumer_ref": "A-EGS/egs_main.py::MarginObservation.public_dict -> analysis_input/data_health/weekly margin_coverage",
+      "terminal_surface": "margin_coverage source-quality observation",
+      "mutation_evidence": "changing the count changes only the persisted observation; coverage, Rule6 and M6.7 decisions remain unchanged"
+    },
     "market_context.breadth.full_market_consecutive_limit_up_height": {
       "category": "duplicate_or_display_audit",
       "consumer_ref": "runners/a_short_weekly_pipeline.py::_build_market_breadth_audit -> weekly.market_breadth_audit",
@@ -1686,7 +1692,7 @@
     "small_float_mv_pct"
   ],
   "output_schema_sha256": {
-    "schemas/a_short_weekly_report.schema.json": "7ff3546ca5a879e28bd494d3469c7d4ccf1c2a904f62bba5cf3a74f15e6c522e",
+    "schemas/a_short_weekly_report.schema.json": "d73a6de61253b25b78a919085019748377533c041842b8a7c41dc83a6c54d816",
     "schemas/a_short_m67_report.schema.json": "cdf7c83a3947e42702f7efe90edec4911c33bec7ca8b25c882dd706dc680a2be"
   },
   "analysis_input_paths": [
@@ -1970,6 +1976,7 @@
     "market_context.breadth.limit_up_index_pct_change",
     "market_context.margin_coverage.coverage_complete",
     "market_context.margin_coverage.effective_ref_date",
+    "market_context.margin_coverage.invalid_numeric_row_count",
     "market_context.margin_coverage.reference_date",
     "market_context.margin_coverage.row_count",
     "market_context.margin_coverage.status",

@@ -1,5 +1,19 @@
 # Session Log
 
+## 2026-08-09 — Claude 审查 PASS（40d9：D-2 两融坏行计数 + D-5 SW fallback 措辞）
+
+- **Verdict/Action**: PASS。D-2 计数算在所有早退之前，七个构造点逐个判过（两处未传参的默认 0 各自成立），经同一个 `public_dict()` 到达 analysis_input/data_health/weekly 三面，且不参与 `complete` 判定；旧缓存靠既有语义比对自动弃用。D-5 改名后全仓旧串 0 命中、`message` 无 enum、测试由 `assertIn` 收紧为 `assertEqual`。三条 Optional 均为展示层。
+- **Required**: 无。三条 Optional（`getattr` 无效防御、fallback 键集分家、schema 描述对「行」不成立）与复核成立项、边界见 `docs/system_risk_register.md` 顶部同日 PASS 节（单一来源，本处不复述）。
+- **Verify**: review-evidence:608daea185cd。验收超集 `Ran 114 in 196.285s OK receipt:0d64a7bf2f65662158d0529f bundles=a_short_effect_contract`；固定主 Python 独立调 `static_contract_error()` 得 `None`。植入：中和计数器 → 点名用例红在 `0 != 1`；退回旧原因串 → 点名用例红在两串不等；还原后 sha 回 `a535fb78…`。全量按 rule 4 归执行方，未重跑；§6a 未起 agent。超时原因:验收超集 196s 与两轮植入按 rule 7(c) 串行，且本轮读了缓存/一致性两条消费链的函数体。
+- **Next**: Codex：执行
+
+## 2026-08-09 — Codex executor/fixer：D-2/D-5（OPEN-NOT_VERIFIED）
+
+- **Verdict/Action**: D-2/D-5 已做最小修复，未提交。
+- **Required**: Claude Code 独立审查 D-2 observability/schema/effect-contract/source-binding 与 D-5 标签边界；material 细节见 `docs/system_risk_register.md`，完整 handoff 见 `docs/handoff/2026-08-01_a_short_leaf_wiring_classification_handoff.md`。
+- **Verify**: 固定 Python 3.13.8；`test_egs_margin_coverage.py` `Ran 29 ... OK`；`test_egs_sw_industry_and_watch_pool_health.py` `Ran 9 ... OK`；`static_contract_error()`=`None`。pytest 在固定解释器中不可用（`No module named pytest`），未换解释器。
+- **Next**: Claude Code：审查
+
 ## 2026-08-09 — Claude 审查 PASS（开钟门两条 Optional 收口）
 
 - **Verdict/Action**: PASS。O1 中断恢复：签发顺序改为先写 pending intent、再写通知、最后 O_EXCL 写 receipt，恢复时比对整份候选 receipt 而不只比通知字节。O2：`notification_sha256` 从 receipt schema 整个删除（1.1.0→1.2.0），因通知 schema 闭世界且三字段为 const，该摘要完全由已被逐字段比较的两项决定。两条修法都比 Optional 本身重（删授权制品字段 / 新增持久化件），故各配控制组验过。
