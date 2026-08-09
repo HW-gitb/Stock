@@ -6,7 +6,9 @@ import json
 from pathlib import Path
 import tempfile
 import unittest
+from unittest import mock
 
+import engine.us_short_market_diagnostic_lifecycle as lifecycle
 import engine.us_short_market_diagnostic_start_receipt as receipts
 from engine.us_short_market_diagnostic_lifecycle import (
     MarketDiagnosticLifecycleError,
@@ -84,11 +86,19 @@ class StartReceiptTest(unittest.TestCase):
             root = Path(td) / "market_diagnostic_private"
             orphan = root / "weeks" / self.row["decision_date"] / "weekly_record.json"
             orphan.parent.mkdir(parents=True, exist_ok=True)
-            orphan.write_bytes(canonical_json_bytes(self.row))
-            with self.assertRaises(MarketDiagnosticLifecycleError) as ctx:
-                persist_settled_weekly_record(self.row, root=root)
+            orphan_bytes = canonical_json_bytes(self.row)
+            orphan.write_bytes(orphan_bytes)
+            with mock.patch.object(
+                lifecycle,
+                "_require_start_receipt",
+                wraps=lifecycle._require_start_receipt,
+            ) as gate:
+                with self.assertRaises(MarketDiagnosticLifecycleError) as ctx:
+                    persist_settled_weekly_record(self.row, root=root)
+            gate.assert_called_once()
             self.assertIn("start receipt", str(ctx.exception))
             self.assertFalse((root / "lifecycle_register.json").exists())
+            self.assertEqual(orphan_bytes, orphan.read_bytes())
 
     def test_a_receipt_opens_the_clock_and_its_digest_is_recorded(self) -> None:
         with tempfile.TemporaryDirectory() as td:
@@ -150,14 +160,15 @@ class StartReceiptTest(unittest.TestCase):
                      first_decision_date="20990112", as_of_date="20990105")
         )
 
-    def test_the_frozen_week_cannot_sit_years_either_side_of_the_notification(self) -> None:
-        """Back-fill on one side, an anchor nobody can act on the other."""
+    def test_the_frozen_week_cannot_back_fill_before_the_notification(self) -> None:
+        with self.assertRaises(DiagnosticStartReceiptError) as ctx:
+            _receipt(self.row, first_decision_date="20200106")
+        self.assertIn("back-fill", str(ctx.exception))
 
-        for wrong, expected in (("20200106", "back-fill"), ("20960102", "too far after")):
-            with self.subTest(wrong):
-                with self.assertRaises(DiagnosticStartReceiptError) as ctx:
-                    _receipt(self.row, first_decision_date=wrong)
-                self.assertIn(expected, str(ctx.exception))
+    def test_the_frozen_week_cannot_escape_the_notification_horizon(self) -> None:
+        with self.assertRaises(DiagnosticStartReceiptError) as ctx:
+            _receipt(self.row, first_decision_date="20960102")
+        self.assertIn("too far after", str(ctx.exception))
 
     def test_a_receipt_from_another_epoch_does_not_authorize_this_one(self) -> None:
         with tempfile.TemporaryDirectory() as td:
@@ -167,26 +178,29 @@ class StartReceiptTest(unittest.TestCase):
                 persist_settled_weekly_record(self.row, root=root)
             self.assertIn("epoch", str(ctx.exception))
 
-    def test_the_gates_own_assertions_each_have_a_case(self) -> None:
-        """The week/window checks inside the gate, driven directly.
-
-        Through the store these are shadowed by the record validator, so without
-        this they would be free to rot: deleting either check keeps every other
-        test green.
-        """
-
+    def _assert_first_week_field_is_bound(self, field, value, expected) -> None:
         with tempfile.TemporaryDirectory() as td:
             root = Path(td) / "market_diagnostic_private"
             _issue(root, self.row)
-            for field, value, expected in (
-                ("calendar_week_index", 2, "calendar week"),
-                ("window_id", "26w-27-52", "window"),
-            ):
-                mutated = copy.deepcopy(self.row)
-                mutated[field] = value
-                with self.assertRaises(DiagnosticStartReceiptError) as ctx:
-                    receipts.assert_first_week_is_authorized(mutated, root=root)
-                self.assertIn(expected, str(ctx.exception))
+            mutated = copy.deepcopy(self.row)
+            mutated[field] = value
+            with self.assertRaises(DiagnosticStartReceiptError) as ctx:
+                receipts.assert_first_week_is_authorized(mutated, root=root)
+            self.assertIn(expected, str(ctx.exception))
+
+    def test_first_week_gate_binds_calendar_week_index(self) -> None:
+        self._assert_first_week_field_is_bound("calendar_week_index", 2, "calendar week")
+
+    def test_first_week_gate_binds_decision_date(self) -> None:
+        self._assert_first_week_field_is_bound(
+            "decision_date", self.rows[1]["decision_date"], "decision date"
+        )
+
+    def test_first_week_gate_binds_window_id(self) -> None:
+        self._assert_first_week_field_is_bound("window_id", "26w-27-52", "window")
+
+    def test_first_week_gate_binds_diagnostic_epoch(self) -> None:
+        self._assert_first_week_field_is_bound("diagnostic_epoch", LEGAL_EPOCH, "epoch")
 
     # ---- the digests must be earned, not asserted ------------------------------
 
@@ -259,7 +273,13 @@ class StartReceiptTest(unittest.TestCase):
             root = Path(td) / "market_diagnostic_private"
             _issue(root, self.row)
             persist_settled_weekly_record(self.rows[0], root=root)
-            replacement = _receipt(self.row, diagnostic_epoch=LEGAL_EPOCH)
+            replacement = _receipt(
+                self.row,
+                completion_notification={
+                    **NOTIFICATION,
+                    "notification_text": "US-short 26-week diagnostic design is independently complete.",
+                },
+            )
             (root / RECEIPT_FILENAME).write_bytes(canonical_json_bytes(replacement))
             with self.assertRaises(MarketDiagnosticLifecycleError) as ctx:
                 persist_settled_weekly_record(self.rows[1], root=root)
@@ -292,6 +312,33 @@ class StartReceiptTest(unittest.TestCase):
             with self.assertRaises(DiagnosticStartReceiptError) as ctx:
                 _issue(root, self.row, first_decision_date=self.rows[5]["decision_date"])
             self.assertIn("already anchors", str(ctx.exception))
+
+    def test_exclusive_create_rechecks_the_race_winner(self) -> None:
+        """The preflight absence check is not ownership; O_EXCL decides the winner."""
+
+        cases = (
+            ("same", _receipt(self.row), "idempotent"),
+            ("different", _receipt(self.row, diagnostic_epoch=LEGAL_EPOCH), "conflict"),
+        )
+        for label, winner, expected in cases:
+            with self.subTest(label), tempfile.TemporaryDirectory() as td:
+                root = Path(td) / "market_diagnostic_private"
+
+                def collide(path, flags, _mode=0o777):
+                    self.assertTrue(flags & receipts.os.O_EXCL, "receipt create lost O_EXCL")
+                    Path(path).write_bytes(canonical_json_bytes(winner))
+                    raise FileExistsError
+
+                with mock.patch.object(receipts.os, "open", side_effect=collide):
+                    if expected == "idempotent":
+                        self.assertEqual(expected, _issue(root, self.row)["status"])
+                    else:
+                        with self.assertRaises(DiagnosticStartReceiptError) as ctx:
+                            _issue(root, self.row)
+                        self.assertIn("already anchors", str(ctx.exception))
+                self.assertEqual(
+                    canonical_json_bytes(winner), (root / RECEIPT_FILENAME).read_bytes()
+                )
 
     def test_a_tampered_or_reflowed_stored_receipt_is_refused_on_load(self) -> None:
         with tempfile.TemporaryDirectory() as td:
@@ -365,6 +412,18 @@ class StartReceiptTest(unittest.TestCase):
                 receipts.assert_clock_authorization_still_holds("f" * 64, root=root)
             with self.assertRaises(DiagnosticStartReceiptError):
                 receipts.assert_clock_authorization_still_holds(None, root=root)
+
+    def test_ongoing_gate_rejects_a_malformed_digest_before_comparison(self) -> None:
+        with tempfile.TemporaryDirectory() as td:
+            root = Path(td) / "market_diagnostic_private"
+            _issue(root, self.row)
+            for malformed in (None, "f" * 63, "g" * 64):
+                with self.subTest(malformed=malformed):
+                    with self.assertRaises(DiagnosticStartReceiptError) as ctx:
+                        receipts.assert_clock_authorization_still_holds(malformed, root=root)
+                    self.assertIn(
+                        "does not record a start receipt digest", str(ctx.exception)
+                    )
 
 
 if __name__ == "__main__":

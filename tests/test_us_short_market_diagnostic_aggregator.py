@@ -250,8 +250,11 @@ class UsShortMarketDiagnosticAggregatorTest(unittest.TestCase):
             for row in other_rows:
                 row["diagnostic_epoch"] = "us-short-26w-other"
             other_store = _authorized_store(self, other_rows)
-            with self.assertRaises(MarketDiagnosticAggregationError):
+            with self.assertRaises(MarketDiagnosticAggregationError) as ctx:
                 write_market_diagnostic_report(lifecycle_root=other_store, output_root=output_root)
+            self.assertIn("conflicts with an existing immutable window", str(ctx.exception))
+            self.assertEqual(json_bytes, json_path.read_bytes())
+            self.assertEqual(markdown_bytes, markdown_path.read_bytes())
 
             markdown_path.unlink()
             with self.assertRaises(MarketDiagnosticAggregationError):
