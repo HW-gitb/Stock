@@ -1,0 +1,149 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://stock.local/schemas/us_short_llm_theme_discovery_query_policy_v0.3.0.schema.json",
+  "title": "US-short offline v0.3.0 versioned theme-discovery query policy",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_name",
+    "schema_version",
+    "policy_version",
+    "activation_status",
+    "production_query_policy_activated",
+    "policy_content_sha256",
+    "policy_core",
+    "effect_boundary"
+  ],
+  "properties": {
+    "schema_name": {"const": "us_short_llm_theme_discovery_query_policy"},
+    "schema_version": {"const": "1.0.0"},
+    "policy_version": {"const": "soft_discovery_query_policy_v0.3.0"},
+    "activation_status": {"const": "candidate_offline"},
+    "production_query_policy_activated": {"const": false},
+    "policy_content_sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+    "policy_core": {"$ref": "#/$defs/policy_core"},
+    "effect_boundary": {"$ref": "#/$defs/effect_boundary"}
+  },
+  "$defs": {
+    "stage1_template": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["query_id", "text", "angles"],
+      "properties": {
+        "query_id": {"type": "string", "pattern": "^[a-z0-9][a-z0-9_-]{1,127}$"},
+        "text": {"type": "string", "minLength": 1, "maxLength": 4000},
+        "angles": {
+          "type": "array",
+          "minItems": 1,
+          "maxItems": 8,
+          "uniqueItems": true,
+          "items": {"type": "string", "pattern": "^[a-z0-9][a-z0-9_-]{1,63}$"}
+        }
+      }
+    },
+    "normalization": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["unicode_normalization", "whitespace", "text_case", "ticker_case"],
+      "properties": {
+        "unicode_normalization": {"const": "NFC"},
+        "whitespace": {"const": "trim_and_collapse"},
+        "text_case": {"const": "casefold"},
+        "ticker_case": {"const": "ASCII_UPPER"}
+      }
+    },
+    "stage2_policy": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "generation_mode",
+        "source_binding_required",
+        "allowed_term_types",
+        "max_terms_total",
+        "max_terms_by_type",
+        "normalization",
+        "ordering",
+        "term_type_rank",
+        "query_text_template"
+      ],
+      "properties": {
+        "generation_mode": {"const": "deterministic_templates_from_frozen_stage1_focus_terms"},
+        "source_binding_required": {"const": true},
+        "allowed_term_types": {"const": ["ticker", "company", "industry", "concept"]},
+        "max_terms_total": {"type": "integer", "minimum": 1, "maximum": 256},
+        "max_terms_by_type": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["ticker", "company", "industry", "concept"],
+          "properties": {
+            "ticker": {"type": "integer", "minimum": 1, "maximum": 256},
+            "company": {"type": "integer", "minimum": 1, "maximum": 256},
+            "industry": {"type": "integer", "minimum": 1, "maximum": 256},
+            "concept": {"type": "integer", "minimum": 1, "maximum": 256}
+          }
+        },
+        "normalization": {"$ref": "#/$defs/normalization"},
+        "ordering": {"const": "term_type_rank_then_normalized_term_then_source_ref_ids"},
+        "term_type_rank": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["ticker", "company", "industry", "concept"],
+          "properties": {
+            "ticker": {"type": "integer", "minimum": 0, "maximum": 3},
+            "company": {"type": "integer", "minimum": 0, "maximum": 3},
+            "industry": {"type": "integer", "minimum": 0, "maximum": 3},
+            "concept": {"type": "integer", "minimum": 0, "maximum": 3}
+          }
+        },
+        "query_text_template": {"type": "string", "minLength": 1, "maxLength": 2000}
+      }
+    },
+    "policy_core": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "discovery_window",
+        "optimization_priority",
+        "future_stage1_budget_share",
+        "weekly_user_knob_selection_required",
+        "stage1_templates",
+        "stage2"
+      ],
+      "properties": {
+        "discovery_window": {"const": "newly_emerging_only"},
+        "optimization_priority": {"const": "coverage_first_fail_closed_downstream"},
+        "future_stage1_budget_share": {"const": "majority"},
+        "weekly_user_knob_selection_required": {"const": false},
+        "stage1_templates": {
+          "type": "array",
+          "minItems": 4,
+          "maxItems": 4,
+          "items": {"$ref": "#/$defs/stage1_template"}
+        },
+        "stage2": {"$ref": "#/$defs/stage2_policy"}
+      }
+    },
+    "effect_boundary": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "scoring_eligible",
+        "top15_effect_enabled",
+        "operation_advice_effect_enabled",
+        "dynamic_seats_enabled",
+        "theme_probe_enabled",
+        "lifecycle_actions_enabled",
+        "theme_confirmation_enabled"
+      ],
+      "properties": {
+        "scoring_eligible": {"const": false},
+        "top15_effect_enabled": {"const": false},
+        "operation_advice_effect_enabled": {"const": false},
+        "dynamic_seats_enabled": {"const": false},
+        "theme_probe_enabled": {"const": false},
+        "lifecycle_actions_enabled": {"const": false},
+        "theme_confirmation_enabled": {"const": false}
+      }
+    }
+  }
+}

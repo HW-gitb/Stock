@@ -7,6 +7,35 @@
 - **Verify**: review-evidence:not_available（本轮未下 `审查` 命令、hook 未发 token，全部证据为真实工具结果）。`git diff` 显示 3 insertions / 0 deletions，即「正文未改」的机器证明；`contrast_class_by_theme` 三项与 §1 表逐项相同；§5 恰 3 处 `**Pass**`；刀0 正文仍 `GO_FOR_RUBRIC_FILLABILITY_ONLY`。提交前先查门要什么包得 `required bundles: ()`，故只跑文档门。改动面恰为两个 md，未夹带另一窗口的 a-short 脏改动。
 - **Next**: Codex：Pass
 
+## 2026-08-10 — Claude 审查 PASS（刀2 Stage-1 v0.3.0 + 版本化 decision routing）
+
+- **Verdict/Action**: PASS。G0→刀2 触发门按真实裁决产物核实成立；四个 Stage-1 模板只动了 supply/regulation 那一个，其余三个与 stage2 逐字节未变，新增五个物理约束层与桌面 §刀2 一一对应且无自由文本占位符。放松的那道门（不再钉死单一 policy 版本）经五条反向控制且控制组先绿。v0.3.0 为 `candidate_offline` / `provider_execution_allowed=false`，`render_stage1_queries()` 默认仍是 v0.2.0，付费路径行为零变化。
+- **Required**: 无。一条 Optional `R-USSHORT-SERENITY-BLADE2-VALIDATE-QUERY-POLICY-TAKES-A-PARAMETER-IT-NEVER-READS`，正文、实测与闭合判据只在 `docs/system_risk_register.md`。
+- **Verify**: review-evidence:043c9e6feeb8。反向控制：控制组 v0.2.0 计划 ACCEPTED；v0.3.0 计划、身份自洽的未注册版本、两种身份/摘要错配全部 REJECTED 且报本轨 typed 错误；decision id 对 `generated_at` 稳定、换 policy 即变、`AUTO_UPGRADE` 与 effect 篡改被拒。超集 `Ran 459 / 228.7s / failures=1`，唯一红是既有 `..._20260809_runbook.md` 冻结期望（`301ed0a5…`）与 HEAD blob（`b9637395…`）及工作树（`145a5d90…`）三者互不相等，本刀零 diff，归既有 R-ID。未起 §6a agent（无真实 provider 执行、无 secret、v0.3.0 offline-only）。**超时原因**:我把后台超集命令 `| tail -8` 截掉了失败清单，为不凭单条复现下结论重跑了一次 229s 超集。
+- **Next**: Codex：Pass
+
+## 2026-08-10 — Codex 继续执行刀2：四字段 Stage-1 connection（OPEN-NOT_VERIFIED）
+- **Verdict/Action**: 按桌面更新方案补入稳定 `decision_result_id` 与四字段离线 locator：`upstream_input_packet_id / upstream_decision_result_id / upstream_policy_version / upstream_decision_date`；不进入刀3 annotation schema，不消费 `policy_disposition`。
+- **Required**: `R-USSHORT-SERENITY-BLADE2-REVIEWED-POLICY-CHANGE-NEEDS-A-NEW-PACKET-SLOT` 保持 `OPEN-NOT_VERIFIED`，等待 Claude Code 独立审查；不改历史 packet、provider/network/live/effect 或提交。
+- **Verify**: 固定 Python focused `67/67 OK` receipt=`acd37b459bcd772c5662fee0`；完整 lane `5686` 仅剩既有 0809 runbook SHA mismatch（实际 `145a5d90...`、测试期望 `301ed0a5...`）；inventory 无未授权写入且分类回到 `238/1/4/5/61`；四字段 locator 错 policy/result ID fail-closed；旧冻结 packet/schema/assessment/runbook 无 diff。
+- **Pre-Codex self-review**: A-F checked；A=decision result identity 与 Stage-1 connection 条款；B=四字段共同定位且不回退 latest；C=v0.2/v0.3 仍可并存、policy disposition 不进入 upstream identity；D=provider/network/effect 全断；E=schema/engine/test/inventory/docs ripple；F=固定 Python、完整 lane 与冻结文件证据；connection-self-review=PASS（decision_result_id stability + exact four fields + no disposition routing + frozen bytes）；independent-self-review=NOT_USED；provider/network/paid/live/effect/commit=NOT_USED；matrix=G0→v0.3 policy→decision_result_id→four-field locator；register=updated；handoff=updated；focused=67 OK receipt:acd37b459bcd772c5662fee0；full-lane=5686/1 known historical SHA failure；door=docs/route 66 OK final fixed-Python run。
+- **Next**: Claude Code：独立审查刀2连接代码；此前不进入刀3、planner/provider/live/effect 或提交。
+
+## 2026-08-10 — Codex 执行刀2：更新方案 v0.3.0 policy + offline decision routing（OPEN-NOT_VERIFIED）
+- **Verdict/Action**: 按更新桌面方案新增独立 `soft_discovery_query_policy_v0.3.0` 与离线 versioned policy-decision result；只改供应链 Stage-1 结构约束，不改 v0.2、0809/0815 packet、旧 runbook 或 provider 槽。
+- **Required**: `R-USSHORT-SERENITY-BLADE2-REVIEWED-POLICY-CHANGE-NEEDS-A-NEW-PACKET-SLOT` 保持 `OPEN-NOT_VERIFIED`，等待 Claude Code 独立审查；v0.3 仍是 candidate/offline-only，不进入 planner/provider/effect/生产或提交。
+- **Verify**: 固定 Python focused `66/66 OK` receipt=`f2b15b4cb5a572f7cfaa388a`；完整 lane `5685` 仅剩既有 0809 runbook SHA mismatch（实际 `145a5d90...`、测试期望 `301ed0a5...`）；冻结 packet/schema/assessment 字节未变；inventory 已更新到 309 modules；离线自审 PASS；文档/route gate `66/66 OK` receipt=`55aefc3156ec656ce60b07e8`。
+- **Pre-Codex self-review**: A-F checked；A=G0 裁决与新 supply constraint wording；B=v0.2/0809/0815 freeze + v0.3 independent policy；C=同 packet 跨 policy 共存、同 policy 稳定、三态显式且无 auto-upgrade；D=provider/network/effect 全断；E=policy/decision schema + route/inventory/test ripple；F=固定 Python 与旧字节证据；independent-self-review=NOT_USED；provider/network/paid/live/effect/commit=NOT_USED；matrix=G0→v0.3 policy→decision result；register=updated；handoff=updated；focused=66 OK receipt:f2b15b4cb5a572f7cfaa388a；full-lane=5685/1 known historical SHA failure；door=docs/route 66 OK receipt:55aefc3156ec656ce60b07e8。
+- **Next**: Claude Code：独立审查刀2；此前不进入刀3、planner/provider/live/effect 或提交。
+
+## 2026-08-09 — Codex 执行刀2 STOP：v0.2 reviewed policy 已冻结（OPEN-NOT_VERIFIED）
+
+- **Verdict/Action**: G0 触发条件成立（`revise_stage1_templates_before_planner` + Web `member_bound_source_ratio=0.428571...` / `member_bound_source_ratio_below_threshold` + 已落盘「Web wording needs change」）；但当前 v0.2 policy 同时绑定冻结的 0809 executed packet 与 0815 current slot。原地改 policy 或改 0815 packet 都会破坏历史/重槽不变式，刀2在未指定新 v0.3.0 packet/decision slot 前 STOP。
+- **Required**: `R-USSHORT-SERENITY-BLADE2-REVIEWED-POLICY-CHANGE-NEEDS-A-NEW-PACKET-SLOT` 保持 `OPEN-NOT_VERIFIED`。不改冻结 packet/schema、旧 runbook SHA、planner、provider、effect 或生产接线；详细机制、候选约束文本与关闭条件只写 `docs/system_risk_register.md`。
+- **Verify**: 候选文本的临时 policy/0815 同步曾通过离线受影响超集 `264/264 OK`，但完整 US-short lane `5677` 因临时重槽触发 3 条冻结失败 + 1 条既有 state-root error；临时 packet/schema 已回退。回退基线 policy/policy-schema `10/10 OK`，receipt=`d53de739b6f37fa2e8e83b9a`；文档/路由门连续 `66/66 OK`，receipts=`10db8bf1c45511755d98918e`、`2b7a0aa8ef2d04c88b2d34d8`；均为固定 Python。0809 runbook 既有 SHA mismatch 未改。
+- **Pre-Codex self-review**: A-F checked；A=G0 verdict/reason/ratio；B=0809/0815 freeze and new-slot rule；C=trial red then full rollback；D=no Serenity wording entered any committed policy；E=register/handoff/session aligned；F=HEAD blob equality + fixed-Python 10 OK；independent-self-review=NOT_USED；provider/network/paid=NOT_USED；commit=NOT_PERFORMED。matrix=G0→policy→packet freeze；register=updated；handoff=updated；focused=10 OK receipt:d53de739b6f37fa2e8e83b9a；full-lane=NOT_ACCEPTED (trial 5677:3F/1E)；door=rollback+fixed-Python PASS。
+- **Next**: 用户：明确 v0.3.0 新 packet/decision slot 与新契约授权后，再让 Codex 执行刀2；此前不进入 planner/刀3。
+
 ## 2026-08-09 — Claude 复审 PASS（Serenity 刀1 C 类 status 漂移已闭）
 
 - **Verdict/Action**: PASS。按 closure criterion (a) 收口，且「一致」与「显式互指」都做了：§3.3 退回 `unverified_lead` 并直接指向刀0 §2.9 说明零新增机制证据故不可升级；§4 改为 B/C 共享 floor、靠 horizon 与零短期机制区分。无过度修正：A 类保住 `plausible`，`GLW/MU` 仍是仅有的两个 `供应卡点`，C 类 7 名仍全 `普通受益`，effect 三旗未动。另自纠一处我未点名的过度主张：§5 C 类扰动不再宣称 status 降级。已在 `b511` 提交 `34a3f9f5`；合入 master 被主树 `.git/index.lock`（另一窗口在飞，5 分钟未释放）阻塞，未强删该锁，待其释放后由 reviewer 合入。

@@ -1,0 +1,87 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://stock.local/schemas/us_short_llm_theme_discovery_policy_decision_result.schema.json",
+  "title": "US-short offline versioned policy decision result",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_name",
+    "schema_version",
+    "schema_ref",
+    "generated_at",
+    "decision_result_id",
+    "canonical_decision",
+    "effect_boundary"
+  ],
+  "properties": {
+    "schema_name": {"const": "us_short_llm_theme_discovery_policy_decision_result"},
+    "schema_version": {"const": "1.0.0"},
+    "schema_ref": {"const": "schemas/us_short_llm_theme_discovery_policy_decision_result.schema.json"},
+    "generated_at": {"type": "string", "format": "date-time"},
+    "decision_result_id": {"$ref": "#/$defs/sha256"},
+    "canonical_decision": {"$ref": "#/$defs/canonical_decision"},
+    "effect_boundary": {"$ref": "#/$defs/effect_boundary"}
+  },
+  "$defs": {
+    "sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+    "canonical_decision": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "input_packet_id",
+        "input_packet_ref",
+        "input_packet_sha256",
+        "decision_date",
+        "policy_version",
+        "policy_content_sha256",
+        "query_scope_sha256",
+        "policy_disposition",
+        "provider_calls_performed",
+        "network_access_performed"
+      ],
+      "properties": {
+        "input_packet_id": {
+          "type": "string",
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9_.:-]{1,127}$"
+        },
+        "input_packet_ref": {
+          "type": "string",
+          "pattern": "^docs/[^\\s]+\\.json$"
+        },
+        "input_packet_sha256": {"$ref": "#/$defs/sha256"},
+        "decision_date": {"type": "string", "pattern": "^[0-9]{8}$"},
+        "policy_version": {
+          "type": "string",
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9_.:/-]{1,127}$"
+        },
+        "policy_content_sha256": {"$ref": "#/$defs/sha256"},
+        "query_scope_sha256": {"$ref": "#/$defs/sha256"},
+        "policy_disposition": {"enum": ["KEEP", "REVIEW", "BLOCKED"]},
+        "provider_calls_performed": {"const": false},
+        "network_access_performed": {"const": false}
+      }
+    },
+    "effect_boundary": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "scoring_eligible",
+        "top15_effect_enabled",
+        "operation_advice_effect_enabled",
+        "dynamic_seats_enabled",
+        "theme_probe_enabled",
+        "lifecycle_actions_enabled",
+        "theme_confirmation_enabled"
+      ],
+      "properties": {
+        "scoring_eligible": {"const": false},
+        "top15_effect_enabled": {"const": false},
+        "operation_advice_effect_enabled": {"const": false},
+        "dynamic_seats_enabled": {"const": false},
+        "theme_probe_enabled": {"const": false},
+        "lifecycle_actions_enabled": {"const": false},
+        "theme_confirmation_enabled": {"const": false}
+      }
+    }
+  }
+}
