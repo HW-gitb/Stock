@@ -14,8 +14,8 @@ overstates itself is worse than one that does not exist:
   machine-bound contract block, not the living prose around it — see
   ``design_contract_block`` for why hashing the whole file was the wrong guard.
 * The completion notification is a separate canonical JSON source artifact. The
-  receipt is derived from that artifact, records its digest, and re-reads the
-  immutable private copy whenever the receipt is used. The public API accepts a
+  receipt is derived from that artifact and re-reads the immutable private copy
+  whenever the receipt is used. The public API accepts a
   path, never a caller-assembled notification mapping, so contradictory receipt
   and source values are not expressible through the minting path.
 * Nothing here is tamper-PROOF. There is no secret, so anyone who can write the
@@ -31,6 +31,9 @@ receipt and leave a clock nobody can account for.
 
 The receipt is immutable and idempotent, and it is created exclusively — a second
 issuer racing the first loses visibly instead of silently overwriting the anchor.
+Before either source or receipt is written, a non-authorizing pending intent freezes
+the complete candidate receipt so interrupted issuance cannot be retried with a
+different epoch or first week merely because the notification bytes are unchanged.
 It lives beside the lifecycle store under the private root, is never published,
 and this module never calls a provider, touches the model-paper account, or
 changes selection, action, sizing or NAV.
@@ -59,6 +62,7 @@ from engine.us_short_private_paths import PrivatePathError, reject_nonprivate_ou
 ROOT = Path(__file__).resolve().parent.parent
 DEFAULT_ROOT = ROOT / "state" / "us_short" / "market_diagnostic_private"
 RECEIPT_FILENAME = "diagnostic_start_receipt.json"
+PENDING_RECEIPT_FILENAME = "diagnostic_start_receipt.pending.json"
 NOTIFICATION_FILENAME = "design_completion_notification.json"
 RECEIPT_SCHEMA_PATH = ROOT / "schemas" / "us_short_market_diagnostic_start_receipt.schema.json"
 NOTIFICATION_SCHEMA_PATH = (
@@ -271,12 +275,7 @@ def write_completion_notification_template(
     return {
         "status": "written",
         "path": str(path),
-        "notification_sha256": _notification_digest(notification),
     }
-
-
-def _notification_digest(notification: Mapping[str, Any]) -> str:
-    return artifact_sha256(dict(notification))
 
 
 def design_contract_block() -> dict[str, Any]:
@@ -373,7 +372,7 @@ def _build_start_receipt_from_notification(
     window = window_containing_week(1)
     receipt = {
         "schema_name": "us_short_market_diagnostic_start_receipt",
-        "schema_version": "1.1.0",
+        "schema_version": "1.2.0",
         "diagnostic_epoch": diagnostic_epoch,
         "design_authority": {
             "document_path": DESIGN_AUTHORITY_RELATIVE_PATH,
@@ -385,7 +384,6 @@ def _build_start_receipt_from_notification(
             "issued_at": notification["issued_at"],
             "issuer": notification["issuer"],
             "notification_text": text,
-            "notification_sha256": _notification_digest(notification),
         },
         "first_calendar_week": {
             "calendar_week_index": 1,
@@ -427,7 +425,6 @@ def _validate_start_receipt_against_source(
         "issued_at": notification_source["issued_at"],
         "issuer": notification_source["issuer"],
         "notification_text": notification_source["notification_text"],
-        "notification_sha256": _notification_digest(notification_source),
     }
     if dict(notification) != expected_notification:
         _fail(
@@ -507,6 +504,21 @@ def _receipt_path(root: Path) -> Path:
     return candidate
 
 
+def _pending_receipt_path(root: Path) -> Path:
+    candidate = (root / PENDING_RECEIPT_FILENAME).resolve()
+    try:
+        candidate.relative_to(root)
+    except ValueError as exc:
+        raise DiagnosticStartReceiptError("pending start receipt intent escapes its private root") from exc
+    try:
+        reject_nonprivate_output_path(candidate)
+    except PrivatePathError as exc:
+        raise DiagnosticStartReceiptError(
+            f"pending start receipt intent is not private: {candidate}"
+        ) from exc
+    return candidate
+
+
 def _notification_path(root: Path) -> Path:
     candidate = (root / NOTIFICATION_FILENAME).resolve()
     try:
@@ -520,6 +532,72 @@ def _notification_path(root: Path) -> Path:
             f"completion notification is not private: {candidate}"
         ) from exc
     return candidate
+
+
+def _read_receipt_artifact(path: Path, label: str) -> dict[str, Any]:
+    try:
+        payload = path.read_bytes()
+    except OSError as exc:
+        raise DiagnosticStartReceiptError(f"cannot read {label}: {path}") from exc
+    try:
+        value = json.loads(payload.decode("utf-8"))
+    except (UnicodeDecodeError, json.JSONDecodeError) as exc:
+        raise DiagnosticStartReceiptError(f"{label} is not UTF-8 JSON") from exc
+    if not isinstance(value, dict):
+        _fail(f"{label} must be an object")
+    if _canonical_payload(value, label) != payload:
+        _fail(f"{label} is not canonical JSON")
+    errors = sorted(_validator().iter_errors(value), key=lambda error: list(error.absolute_path))
+    if errors:
+        location = ".".join(str(part) for part in errors[0].absolute_path) or "<root>"
+        _fail(f"{label} schema violation at {location}: {errors[0].message}")
+    return value
+
+
+def _persist_pending_receipt_intent(root: Path, receipt: Mapping[str, Any]) -> None:
+    path = _pending_receipt_path(root)
+    payload = _canonical_payload(dict(receipt), "pending start receipt intent")
+    path.parent.mkdir(parents=True, exist_ok=True)
+    try:
+        handle = os.open(path, os.O_CREAT | os.O_EXCL | os.O_WRONLY)
+    except FileExistsError:
+        existing = _read_receipt_artifact(path, "pending start receipt intent")
+        if _canonical_payload(existing, "pending start receipt intent") == payload:
+            return
+        _fail("a different pending start receipt intent already anchors interrupted issuance")
+        raise AssertionError("unreachable")
+    except OSError as exc:
+        raise DiagnosticStartReceiptError(
+            f"cannot write the pending start receipt intent: {path}"
+        ) from exc
+    try:
+        with os.fdopen(handle, "wb") as stream:
+            stream.write(payload)
+            stream.flush()
+            os.fsync(stream.fileno())
+    except OSError as exc:
+        try:
+            path.unlink()
+        except OSError:
+            pass
+        raise DiagnosticStartReceiptError(
+            f"cannot write the pending start receipt intent: {path}"
+        ) from exc
+
+
+def _discard_pending_receipt_intent(root: Path, receipt: Mapping[str, Any]) -> None:
+    path = _pending_receipt_path(root)
+    if not path.exists():
+        return
+    existing = _read_receipt_artifact(path, "pending start receipt intent")
+    if start_receipt_sha256(existing) != start_receipt_sha256(receipt):
+        _fail("pending start receipt intent conflicts with the issued receipt")
+    try:
+        path.unlink()
+    except OSError:
+        # The final receipt already exists and is authoritative. A later identical
+        # retry re-checks this journal before attempting cleanup again.
+        pass
 
 
 def _persist_completion_notification(root: Path, notification: Mapping[str, Any]) -> None:
@@ -561,26 +639,27 @@ def load_start_receipt(
     store_root = _private_root(root)
     path = _receipt_path(store_root)
     if not path.exists():
+        pending_path = _pending_receipt_path(store_root)
         notification_path = _notification_path(store_root)
+        if pending_path.exists():
+            pending = _read_receipt_artifact(pending_path, "pending start receipt intent")
+            if notification_path.exists():
+                notification = _read_completion_notification(notification_path)
+                _validate_start_receipt_against_source(
+                    pending, notification, verify_design_against_disk=True
+                )
+            _fail(
+                "the start receipt is missing while a bound pending receipt intent remains; "
+                "issuance was interrupted"
+            )
         if notification_path.exists():
             _read_completion_notification(notification_path)
             _fail(
-                "the start receipt is missing while the completion notification remains; "
-                "issuance was interrupted or the receipt was removed"
+                "the start receipt is missing while an unbound completion notification remains; "
+                "source-only interruption cannot be recovered without a pending receipt intent"
             )
         return None
-    try:
-        payload = path.read_bytes()
-    except OSError as exc:
-        raise DiagnosticStartReceiptError(f"cannot read the start receipt: {path}") from exc
-    try:
-        value = json.loads(payload.decode("utf-8"))
-    except (UnicodeDecodeError, json.JSONDecodeError) as exc:
-        raise DiagnosticStartReceiptError("the start receipt is not UTF-8 JSON") from exc
-    if not isinstance(value, dict):
-        _fail("the start receipt must be an object")
-    if _canonical_payload(value, "start receipt") != payload:
-        _fail("the start receipt is not canonical JSON")
+    value = _read_receipt_artifact(path, "the start receipt")
     return validate_start_receipt(
         value,
         root=root,
@@ -613,20 +692,16 @@ def issue_start_receipt(
     )
     store_root = _private_root(root)
     path = _receipt_path(store_root)
+    pending_path = _pending_receipt_path(store_root)
+    notification_store_path = _notification_path(store_root)
 
     if path.exists():
         existing = load_start_receipt(store_root)
     else:
         existing = None
-        notification_store_path = _notification_path(store_root)
-        if notification_store_path.exists():
-            interrupted_source = _read_completion_notification(notification_store_path)
-            if _canonical_payload(
-                interrupted_source, "stored completion notification"
-            ) != _canonical_payload(notification, "completion notification"):
-                _fail("a different completion notification already anchors this diagnostic clock")
     if existing is not None:
         if start_receipt_sha256(existing) == start_receipt_sha256(receipt):
+            _discard_pending_receipt_intent(store_root, existing)
             return {
                 "status": "idempotent",
                 "receipt": existing,
@@ -634,6 +709,19 @@ def issue_start_receipt(
             }
         _fail("a different start receipt already anchors this diagnostic clock")
 
+    if notification_store_path.exists() and not pending_path.exists():
+        _read_completion_notification(notification_store_path)
+        _fail(
+            "an unbound completion notification already exists without a pending receipt intent; "
+            "source-only interruption cannot be recovered"
+        )
+    _persist_pending_receipt_intent(store_root, receipt)
+    pending = _read_receipt_artifact(pending_path, "pending start receipt intent")
+    _validate_start_receipt_against_source(
+        pending, notification, verify_design_against_disk=True
+    )
+    if start_receipt_sha256(pending) != start_receipt_sha256(receipt):
+        _fail("pending start receipt intent does not match the requested receipt")
     _persist_completion_notification(store_root, notification)
     validate_start_receipt(receipt, root=store_root)
     payload = _canonical_payload(receipt, "start receipt")
@@ -645,6 +733,7 @@ def issue_start_receipt(
     except FileExistsError:
         existing = load_start_receipt(store_root)
         if existing is not None and start_receipt_sha256(existing) == start_receipt_sha256(receipt):
+            _discard_pending_receipt_intent(store_root, existing)
             return {
                 "status": "idempotent",
                 "receipt": existing,
@@ -665,6 +754,7 @@ def issue_start_receipt(
         except OSError:
             pass
         raise DiagnosticStartReceiptError(f"cannot write the start receipt: {path}") from exc
+    _discard_pending_receipt_intent(store_root, receipt)
     return {"status": "issued", "receipt": receipt, "receipt_sha256": start_receipt_sha256(receipt)}
 
 
@@ -741,6 +831,7 @@ __all__ = [
     "DESIGN_CONTRACT_ANCHOR",
     "DiagnosticStartReceiptError",
     "NOTIFICATION_FILENAME",
+    "PENDING_RECEIPT_FILENAME",
     "RECEIPT_BOUNDARY",
     "RECEIPT_FILENAME",
     "assert_clock_authorization_still_holds",

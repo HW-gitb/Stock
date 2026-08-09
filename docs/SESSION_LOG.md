@@ -1,5 +1,20 @@
 # Session Log
 
+## 2026-08-09 — Claude 审查 PASS（开钟门两条 Optional 收口）
+
+- **Verdict/Action**: PASS。O1 中断恢复：签发顺序改为先写 pending intent、再写通知、最后 O_EXCL 写 receipt，恢复时比对整份候选 receipt 而不只比通知字节。O2：`notification_sha256` 从 receipt schema 整个删除（1.1.0→1.2.0），因通知 schema 闭世界且三字段为 const，该摘要完全由已被逐字段比较的两项决定。两条修法都比 Optional 本身重（删授权制品字段 / 新增持久化件），故各配控制组验过。
+- **Required**: 无。两条 Optional 已在 `docs/system_risk_register.md` 各自标 closed，正文与实测只在那里。
+- **Verify**: review-evidence:f3c64963be9b。按 §6a Optional-only carve-out 走快档：先一次 scope grep（`notification_sha256` 生产侧零命中，仅两处测试引用），再跑覆盖改动路径的最小目标一次 `Ran 71 in 26.8s OK receipt:a89ef82b42e5b84bd3f56de2`；未起 agent、未跑全量。探针：忠实复现中断后，**控制组**用原参数恢复成功且 pending 件被清；换 week1 / 换 epoch / 两者皆换三种重锚全被拒；干净开钟无 pending 残留；删掉的字段塞回伪造 receipt 被 schema 闭世界拒。第一版探针把中断模拟错（未留 intent），按控制组不绿即判无效重做。
+- **Next**: Codex：执行
+
+## 2026-08-09 — Codex 收口：Knife7 两条 Optional（OPEN-NOT_VERIFIED）
+
+- **Verdict/Action**: 中断恢复现以先落盘的完整 pending receipt intent 绑定 epoch/首周/全部 receipt 参数；source-only 旧中断态拒绝重锚。receipt schema 升至 1.2.0 并删除零增益 `notification_sha256`，仍逐字段回读独立通知源；未签真实 receipt、未开钟、未联网、未提交。
+- **Required**: 两条实现已落地，待 Claude Code 独立复审；R-ID=`...INTERRUPTED-ISSUANCE-WAS-ONLY-SOURCE-BOUND`、`...NOTIFICATION-SHA256-HAD-ZERO-INDEPENDENT-VALIDATION`，正文只见 register。
+- **Verify**: 两项 mutation 各精确转红并还原；clean `2/2 OK receipt:838a6dbf382a364cb0b33202`；affected `282/282 OK receipt:03a7335cb113af0ec914c2e5`；door `55/55 OK`。full 前置仍红在非本刀 soft-discovery frozen runbook hash（expected `301ed…`/checkout `145a…`），故未重复启动必败 full。
+- **Pre-Codex self-review**: A-F checked；matrix=pending/source/final × same/different epoch+week + legacy SHA rejection/direct source drift；register=updated；handoff=updated；focused=282 OK；full-lane=blocked_preflight；door=55 OK；review=NOT_VERIFIED；provider/account=NOT_USED。
+- **Next**: Claude Code：审查本刀两条 Optional；不得跨刀改 soft-discovery 冻结证据追绿。
+
 ## 2026-08-09 — Claude 复审 PASS（开钟门三条 Required 全闭）
 
 - **Verdict/Action**: PASS。三条各用原始条件复现且控制组全绿：空白通知在 schema 层被拒（两种空白都拒，正常文本照常开钟，且只判一处未双重设门）；dry-run 对同一输入改抛本轨 typed 错误、不再 `IndexError`，预览与真开钟方向一致；非有限数在 `load_start_receipt` / `load_lifecycle_register` 均为本轨 typed，且 `clock_status` 返回 `broken` 而**非**洗成 `not_started`（空 store 对照仍 `not_started`）；新增的模板子命令产出无末尾换行的字节并能真开钟。

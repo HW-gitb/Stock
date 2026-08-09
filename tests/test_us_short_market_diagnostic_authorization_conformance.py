@@ -173,7 +173,6 @@ EXEMPT = {
     "engine/us_short_market_diagnostic_start_receipt.py::_path_like": "type guard",
     "engine/us_short_market_diagnostic_start_receipt.py::_private_root": "resolves and privacy-checks a path; no store read",
     "engine/us_short_market_diagnostic_start_receipt.py::_receipt_path": "resolves and privacy-checks a path; no store read",
-    "engine/us_short_market_diagnostic_start_receipt.py::_notification_digest": "pure digest",
     "engine/us_short_market_diagnostic_start_receipt.py::_notification_path": "resolves and privacy-checks the pinned notification source path",
     "engine/us_short_market_diagnostic_start_receipt.py::_notification_validator": "loads the notification schema",
     "engine/us_short_market_diagnostic_start_receipt.py::_persist_completion_notification": "immutable source writer used only while creating authorization",
@@ -184,6 +183,10 @@ EXEMPT = {
     "engine/us_short_market_diagnostic_start_receipt.py::assert_first_week_is_authorized": "is the gate",
     "engine/us_short_market_diagnostic_start_receipt.py::_build_start_receipt_from_notification": "assembles one receipt from a single already-validated source read",
     "engine/us_short_market_diagnostic_start_receipt.py::_canonical_payload": "canonicalizes a mapping in hand and touches no store",
+    "engine/us_short_market_diagnostic_start_receipt.py::_discard_pending_receipt_intent": "cleans only the non-authorizing issuance journal after matching it to the issued receipt",
+    "engine/us_short_market_diagnostic_start_receipt.py::_pending_receipt_path": "resolves the fixed private path of the non-authorizing issuance journal",
+    "engine/us_short_market_diagnostic_start_receipt.py::_persist_pending_receipt_intent": "freezes the candidate authorization before either source or receipt exists; it does not open the clock",
+    "engine/us_short_market_diagnostic_start_receipt.py::_read_receipt_artifact": "reads and schema-checks a receipt-shaped transaction artifact; authorization is checked by its caller",
     "engine/us_short_market_diagnostic_start_receipt.py::_validate_completion_notification": "validates a notification mapping in hand and touches no store",
     "engine/us_short_market_diagnostic_start_receipt.py::build_start_receipt": "assembles the authorization before one exists",
     "engine/us_short_market_diagnostic_start_receipt.py::design_authority_sha256": "pure digest of the frozen contract block",
@@ -500,13 +503,17 @@ class SourceDriftTest(unittest.TestCase):
                 persist_settled_weekly_record(row, root=root)
 
             (root / receipts.RECEIPT_FILENAME).unlink()
-            moved = receipts.issue_start_receipt(
+            moved_receipt = receipts.build_start_receipt(
                 diagnostic_epoch=self.rows[0]["diagnostic_epoch"],
                 notification_path=root.parent / "notification-source.json",
                 first_decision_date="20260112",
-                root=root,
                 as_of_date="20260731",
             )
+            (root / receipts.RECEIPT_FILENAME).write_bytes(canonical_json_bytes(moved_receipt))
+            moved = {
+                "receipt": moved_receipt,
+                "receipt_sha256": receipts.start_receipt_sha256(moved_receipt),
+            }
             self.assertNotEqual(self.rows[0]["decision_date"], "20260112")
 
             path = root / "lifecycle_register.json"
@@ -531,13 +538,17 @@ class SourceDriftTest(unittest.TestCase):
             persist_settled_weekly_record(self.rows[0], root=root)
 
             (root / receipts.RECEIPT_FILENAME).unlink()
-            moved = receipts.issue_start_receipt(
+            moved_receipt = receipts.build_start_receipt(
                 diagnostic_epoch="us-short-26w-relabelled",
                 notification_path=root.parent / "notification-source.json",
                 first_decision_date=self.rows[0]["decision_date"],
-                root=root,
                 as_of_date="20260731",
             )
+            (root / receipts.RECEIPT_FILENAME).write_bytes(canonical_json_bytes(moved_receipt))
+            moved = {
+                "receipt": moved_receipt,
+                "receipt_sha256": receipts.start_receipt_sha256(moved_receipt),
+            }
             path = root / "lifecycle_register.json"
             register = json.loads(path.read_bytes().decode("utf-8"))
             register["start_receipt_sha256"] = moved["receipt_sha256"]

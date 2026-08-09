@@ -194,15 +194,17 @@ class ClockStatusTest(_StoreCase):
     def test_status_reports_a_clock_that_has_not_been_opened(self) -> None:
         self.assertEqual("not_started", clock_status(root=self.store)["clock_status"])
 
-    def test_source_only_interrupted_issuance_is_broken_but_identical_retry_recovers(self) -> None:
+    def test_source_only_interrupted_issuance_is_broken_and_cannot_reanchor(self) -> None:
         self.store.mkdir(parents=True)
         (self.store / NOTIFICATION_FILENAME).write_bytes(canonical_json_bytes(NOTIFICATION))
         status = clock_status(root=self.store)
         self.assertEqual("broken", status["clock_status"])
-        self.assertIn("issuance was interrupted", status["problem"])
+        self.assertIn("source-only interruption cannot be recovered", status["problem"])
 
-        self.assertEqual("issued", self._open()["status"])
-        self.assertEqual("fresh", clock_status(root=self.store)["clock_status"])
+        with self.assertRaises(MarketDiagnosticWeeklyRunnerError) as ctx:
+            self._open()
+        self.assertIn("source-only interruption cannot be recovered", str(ctx.exception))
+        self.assertEqual("broken", clock_status(root=self.store)["clock_status"])
 
     def test_status_reports_a_running_clock_with_its_weeks(self) -> None:
         self._open()

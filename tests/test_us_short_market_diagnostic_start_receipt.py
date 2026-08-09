@@ -18,6 +18,7 @@ from engine.us_short_market_diagnostic_lifecycle import (
 from engine.us_short_market_diagnostic_start_receipt import (
     DiagnosticStartReceiptError,
     NOTIFICATION_FILENAME,
+    PENDING_RECEIPT_FILENAME,
     RECEIPT_FILENAME,
     build_start_receipt,
     design_authority_sha256,
@@ -26,7 +27,7 @@ from engine.us_short_market_diagnostic_start_receipt import (
     start_receipt_sha256,
     validate_start_receipt,
 )
-from engine.us_short_model_paper_portfolio import artifact_sha256, canonical_json_bytes
+from engine.us_short_model_paper_portfolio import canonical_json_bytes
 from tests.test_us_short_market_diagnostic import _weekly_rows
 
 
@@ -243,14 +244,11 @@ class StartReceiptTest(unittest.TestCase):
             self.assertIn("contract on disk", str(ctx.exception))
             self.assertFalse((root / "lifecycle_register.json").exists())
 
-    def test_notification_digest_is_verified_against_the_independent_source(self) -> None:
+    def test_notification_fields_are_verified_against_the_independent_source(self) -> None:
         root = self.scratch
         receipt = _receipt(root, self.row)
         _persisted_notification(root)
-        self.assertEqual(
-            artifact_sha256(NOTIFICATION),
-            receipt["completion_notification"]["notification_sha256"],
-        )
+        self.assertNotIn("notification_sha256", receipt["completion_notification"])
         drifted = {
             **NOTIFICATION,
             "notification_text": "A different notification now occupies the source artifact.",
@@ -260,8 +258,8 @@ class StartReceiptTest(unittest.TestCase):
             validate_start_receipt(receipt, root=root)
         self.assertIn("independent notification source", str(ctx.exception))
 
-    def test_a_notification_digest_must_match_its_own_text(self) -> None:
-        """Keep the historical M18 guard while the stronger source test owns closure."""
+    def test_a_legacy_notification_digest_is_rejected_instead_of_reverified(self) -> None:
+        """The redundant digest is gone; closed-world schema rejects resurrecting it."""
 
         root = self.scratch
         forged = _receipt(root, self.row)
@@ -384,25 +382,47 @@ class StartReceiptTest(unittest.TestCase):
                 _issue(root, self.row, first_decision_date=self.rows[5]["decision_date"])
             self.assertIn("already anchors", str(ctx.exception))
 
-    def test_an_orphaned_notification_source_is_recoverable_only_with_identical_bytes(self) -> None:
+    def test_source_only_interruption_is_not_recoverable_without_bound_receipt_intent(self) -> None:
         with tempfile.TemporaryDirectory() as td:
             root = Path(td) / "market_diagnostic_private"
             original = _persisted_notification(root).read_bytes()
-            self.assertEqual("issued", _issue(root, self.row)["status"])
-            self.assertEqual(original, (root / NOTIFICATION_FILENAME).read_bytes())
-
-        with tempfile.TemporaryDirectory() as td:
-            root = Path(td) / "market_diagnostic_private"
-            conflicting = {
-                **NOTIFICATION,
-                "notification_text": "A conflicting completion notification was independently issued.",
-            }
-            conflicting_bytes = _persisted_notification(root, conflicting).read_bytes()
             with self.assertRaises(DiagnosticStartReceiptError) as ctx:
                 _issue(root, self.row)
-            self.assertIn("different completion notification", str(ctx.exception))
-            self.assertEqual(conflicting_bytes, (root / NOTIFICATION_FILENAME).read_bytes())
+            self.assertIn("source-only interruption cannot be recovered", str(ctx.exception))
+            self.assertEqual(original, (root / NOTIFICATION_FILENAME).read_bytes())
+            self.assertFalse((root / PENDING_RECEIPT_FILENAME).exists())
             self.assertFalse((root / RECEIPT_FILENAME).exists())
+
+    def test_interrupted_issuance_recovers_only_with_the_complete_pending_receipt(self) -> None:
+        with tempfile.TemporaryDirectory() as td:
+            root = Path(td) / "market_diagnostic_private"
+            real_open = receipts.os.open
+
+            def interrupt_final(path, flags, mode=0o777):
+                if Path(path).name == RECEIPT_FILENAME:
+                    raise OSError("simulated final receipt interruption")
+                return real_open(path, flags, mode)
+
+            with mock.patch.object(receipts.os, "open", side_effect=interrupt_final):
+                with self.assertRaises(DiagnosticStartReceiptError):
+                    _issue(root, self.row)
+            self.assertTrue((root / PENDING_RECEIPT_FILENAME).is_file())
+            self.assertTrue((root / NOTIFICATION_FILENAME).is_file())
+            self.assertFalse((root / RECEIPT_FILENAME).exists())
+
+            with self.assertRaises(DiagnosticStartReceiptError) as ctx:
+                _issue(root, self.row, first_decision_date=self.rows[5]["decision_date"])
+            self.assertFalse((root / RECEIPT_FILENAME).exists())
+            self.assertIn("different pending start receipt intent", str(ctx.exception))
+
+            with self.assertRaises(DiagnosticStartReceiptError) as ctx:
+                _issue(root, self.row, diagnostic_epoch=LEGAL_EPOCH)
+            self.assertFalse((root / RECEIPT_FILENAME).exists())
+            self.assertIn("different pending start receipt intent", str(ctx.exception))
+
+            self.assertEqual("issued", _issue(root, self.row)["status"])
+            self.assertFalse((root / PENDING_RECEIPT_FILENAME).exists())
+            self.assertIsNotNone(load_start_receipt(root))
 
     def test_exclusive_create_rechecks_the_race_winner(self) -> None:
         """The preflight absence check is not ownership; O_EXCL decides the winner."""
@@ -414,12 +434,15 @@ class StartReceiptTest(unittest.TestCase):
         for label, winner, expected in cases:
             with self.subTest(label), tempfile.TemporaryDirectory() as td:
                 root = Path(td) / "market_diagnostic_private"
+                candidate = _receipt(root, self.row)
+                root.mkdir(parents=True)
+                (root / PENDING_RECEIPT_FILENAME).write_bytes(canonical_json_bytes(candidate))
                 _persisted_notification(root)
                 real_open = receipts.os.open
 
                 def collide(path, flags, _mode=0o777):
                     self.assertTrue(flags & receipts.os.O_EXCL, "source/receipt create lost O_EXCL")
-                    if Path(path).name == NOTIFICATION_FILENAME:
+                    if Path(path).name != RECEIPT_FILENAME:
                         return real_open(path, flags, _mode)
                     Path(path).write_bytes(canonical_json_bytes(winner))
                     raise FileExistsError
@@ -461,7 +484,7 @@ class StartReceiptTest(unittest.TestCase):
         for path in (
             ("diagnostic_epoch",),
             ("design_authority", "contract_sha256"),
-            ("completion_notification", "notification_sha256"),
+            ("completion_notification", "issued_at"),
             ("first_calendar_week", "decision_date"),
         ):
             mutated = copy.deepcopy(base)

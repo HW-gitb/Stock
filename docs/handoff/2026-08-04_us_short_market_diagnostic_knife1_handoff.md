@@ -891,3 +891,53 @@ cmd /c .tools\run_unittest_with_repo_pythonpath.cmd tests.test_route_doc_ledger_
 **验证命令与结果**：焦点超集 `Ran 456 in 344.0s OK`；按用户指定不起全量。三条的原始条件复现、控制组与植入对照见 SESSION_LOG 同日 `Verify` 与 register。
 
 **验证边界**：未起第三个独立对抗 agent（rule 8：同一道门、收紧类小 delta，上一轮已由 agent 全面攻过；误伤面由正常文本/空 store/正常 dry-run 三处控制组覆盖）。未覆盖：真实并发下的 `O_EXCL` 竞争、符号链接与 ACL 面、`verify_design_against_disk=False` 的长期风险量化——这三条与上一轮相同，仍未量化。
+
+## 2026-08-09 追加：Knife7 两条 Optional 收口（OPEN-NOT_VERIFIED）
+
+### 改了什么
+
+- `engine/us_short_market_diagnostic_start_receipt.py` 新增非授权的 `diagnostic_start_receipt.pending.json`：先于通知源和最终 receipt 以 `O_EXCL` 冻结完整候选 receipt；只有全参数相同的中断重试可继续，source-only 旧中断态不可恢复。
+- `schemas/us_short_market_diagnostic_start_receipt.schema.json` 升至 `1.2.0` 并删除 `completion_notification.notification_sha256`；builder、source validator、模板返回值及测试同步更新，不增加替代摘要或确认入口。
+
+### 为什么改
+
+- 旧恢复只比较通知源字节，同一通知在最终 receipt 尚未落盘的窗口可换 `first_decision_date` / `diagnostic_epoch` 重锚；pending intent 把“恢复”收紧为完成同一次签发。
+- 通知 schema 闭世界，receipt 已逐字段比较所有可变通知字段；再存一枚由同字段计算的 SHA 没有独立验证力，保留只会让来源绑定看起来比实际多一层。
+
+### 验证命令
+
+```text
+cmd /c .tools\run_unittest_with_repo_pythonpath.cmd --timeout-seconds 120 tests.test_us_short_market_diagnostic_start_receipt.StartReceiptTest.test_interrupted_issuance_recovers_only_with_the_complete_pending_receipt tests.test_us_short_market_diagnostic_start_receipt.StartReceiptTest.test_notification_fields_are_verified_against_the_independent_source
+cmd /c .tools\run_unittest_with_repo_pythonpath.cmd --timeout-seconds 300 tests.test_us_short_market_diagnostic_start_receipt tests.test_us_short_market_diagnostic_weekly_runner tests.test_us_short_market_diagnostic_authorization_conformance tests.test_us_short_market_diagnostic_lifecycle tests.test_us_short_market_diagnostic_aggregator tests.test_us_short_market_diagnostic_benchmark_packet tests.test_us_short_market_diagnostic_weekly_producer tests.test_us_short_market_diagnostic_weekly_advance tests.schema.test_us_short_market_diagnostic_26w_schemas tests.test_us_short_market_diagnostic_rehearsal tests.test_us_short_test_io_inventory
+cmd /c .tools\run_unittest_with_repo_pythonpath.cmd --timeout-seconds 120 tests.schema.test_us_short_soft_discovery_query_quality_probe_packet_20260809_schema.UsShortSoftDiscoveryQueryQualityProbePacket20260815SchemaTest.test_executed_20260809_artifacts_remain_byte_immutable
+cmd /c .tools\run_unittest_with_repo_pythonpath.cmd tests.test_route_doc_ledger_status_consistency tests.test_doc_governance_guard
+```
+
+### 验证结果
+
+- 中断绑定 mutation 同时中和“既有 pending 必须逐字一致”和“pending 必须匹配请求”后，点名测试精确红在错误参数已写出最终 receipt；恢复后转绿。SHA mutation 把字段完整加回 schema、builder、validator 后，点名测试精确红在字段复活；恢复后两项 clean control `2/2 OK`，receipt `838a6dbf382a364cb0b33202`。
+- affected 11 模块 `282/282 OK`，receipt `03a7335cb113af0ec914c2e5`；tracked I/O inventory 同包通过，未改 snapshot/allowlist。full 前置点名仍红在既有 soft-discovery frozen runbook hash（expected `301ed0a5…`、checkout `145a5d90…`），故未启动必败全量，也未跨部件追绿。
+- 未联网、未调用 provider、未生成真实通知/pending/receipt、未开钟、未写 lifecycle/model-paper/account；工作树 `D:\cnhea\Codex\worktrees\cb59\Stock` 未提交。
+
+### 失效的旧结论
+
+- “source-only 中断可凭相同通知字节安全恢复”失效；没有预先绑定完整候选 receipt 的 source-only 状态无法证明原签发参数，只能保持 broken。
+- “`notification_sha256` 是外部通知源的必要身份层”失效；它完全由已逐字段比较的同一自由字段派生，删除后来源核验强度不变。
+- “O1/O2 仍挂着未动”只属于上一轮审查快照；本轮实现已落地，但在 Claude Code 独立复审前仍为 `OPEN-NOT_VERIFIED`。
+
+### 下一步注意事项
+
+- Claude Code 在 `D:\cnhea\Codex\worktrees\cb59\Stock` 独立审查两条 R-ID，重点确认 pending intent 不授权开钟、差异重试在最终 receipt 写入前拒绝、legacy source-only 不能重锚，以及 schema 1.2.0 没有残留 `notification_sha256` 消费者。
+- soft-discovery 冻结 runbook hash 是本刀外部 full-lane blocker；不要在本工作树顺手改 expected hash 或冻结制品。真实通知、receipt 签发与开钟仍须未来独立授权动作。
+
+## 2026-08-09 追加：开钟门两条 Optional 的审查结论（PASS）
+
+**审查对象**：`D:\cnhea\Codex\worktrees\cb59\Stock` 的未提交 Optional 修复轮（10 文件）。
+
+**成立的部分**：O1 把签发改成「先写 pending intent → 通知 → O_EXCL 写 receipt → 成功后丢弃 intent」，恢复时比对整份候选 receipt；忠实复现中断后，原参数恢复仍成功、三种重锚全拒、成功路径不留残留。O2 把验证力为零的 `notification_sha256` 从 schema 整个删掉（1.1.0→1.2.0），剩余四字段仍闭世界，塞回该字段即被拒，生产侧无悬空消费者。
+
+**拦下的**：无。
+
+**验证命令与结果**：按 §6a Optional-only 快档——一次 scope grep + 最小覆盖目标一次 `Ran 71 in 26.8s OK`；未起 agent、未跑全量。探针与控制组见 SESSION_LOG 同日 `Verify`。
+
+**一条自我更正**：我第一版探针把「中断」模拟成「删掉 receipt」，忘了真实中断会先留下 pending intent，于是控制组红了。代码报的 `without a pending receipt intent` 正好点破——那条路径（有人手工摆一份通知）本就该拒。按控制组不绿即判探针无效的规矩重做后结论才成立。教训：**模拟失败态之前先读清楚成功路径的写入顺序**。

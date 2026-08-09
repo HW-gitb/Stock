@@ -2,7 +2,7 @@
   "$schema": "http://json-schema.org/draft-07/schema#",
   "$id": "https://stock.local/schemas/us_short_market_diagnostic_start_receipt.schema.json",
   "title": "US-short 26-week market diagnostic start receipt",
-  "description": "The single artifact that may open the 26-week diagnostic clock. Both the design digest and notification digest are checkable against independent source artifacts on disk. A date, a component completion, an account seeding, or a historical commit is never a substitute. Patterns end with \\Z rather than $, because Python's $ also matches before a trailing newline and a newline is a rendering-injection vector.",
+  "description": "The single artifact that may open the 26-week diagnostic clock. The design digest is checked against the frozen contract, while notification fields are compared directly with the independent canonical source artifact on disk. A date, a component completion, an account seeding, or a historical commit is never a substitute. Patterns end with \\Z rather than $, because Python's $ also matches before a trailing newline and a newline is a rendering-injection vector.",
   "type": "object",
   "additionalProperties": false,
   "required": [
@@ -16,7 +16,7 @@
   ],
   "properties": {
     "schema_name": {"const": "us_short_market_diagnostic_start_receipt"},
-    "schema_version": {"const": "1.1.0"},
+    "schema_version": {"const": "1.2.0"},
     "diagnostic_epoch": {
       "type": "string",
       "pattern": "^[a-z0-9][a-z0-9._-]{2,63}\\Z",
@@ -49,7 +49,7 @@
     "completion_notification": {
       "type": "object",
       "additionalProperties": false,
-      "required": ["source_path", "issued_at", "issuer", "notification_text", "notification_sha256"],
+      "required": ["source_path", "issued_at", "issuer", "notification_text"],
       "properties": {
         "source_path": {
           "const": "design_completion_notification.json",
@@ -65,11 +65,7 @@
           "type": "string",
           "minLength": 16,
           "maxLength": 4096,
-          "description": "The notification itself, kept so its digest is verifiable rather than merely asserted."
-        },
-        "notification_sha256": {
-          "$ref": "#/definitions/sha256",
-          "description": "SHA-256 of the complete canonical completion-notification source artifact, re-verified from disk whenever the receipt is consumed."
+          "description": "The notification itself, compared directly with the independent canonical source artifact whenever the receipt is consumed."
         }
       }
     },
