@@ -18,7 +18,7 @@
         "margin_fact_digest", "margin_facts_digest", "daily_cache_digest", "candidate_digest",
         "candidate_snapshot_digest", "experiment_batch_id", "epoch_id", "stage",
         "stage_b_admission_sha256", "stage_b_supported_arm_id", "freeze_manifest_sha256", "freeze_manifest", "forward_eligible",
-        "predicate_facts", "candidate_universe", "official_selection_plan", "arm_definitions",
+        "predicate_facts", "predicate_unavailable_reason", "candidate_universe", "official_selection_plan", "arm_definitions",
         "arms", "source_references"
       ],
       "properties": {
@@ -40,6 +40,7 @@
         "freeze_manifest": {"type": ["object", "null"]},
         "forward_eligible": {"type": "boolean"},
         "predicate_facts": {"type": ["object", "null"]},
+        "predicate_unavailable_reason": {"type": ["string", "null"]},
         "candidate_universe": {
           "type": "array",
           "items": {
@@ -53,9 +54,9 @@
           }
         },
         "official_selection_plan": {"type": "array", "items": {"type": "object"}},
-        "arm_definitions": {"type": "array", "minItems": 4, "maxItems": 4, "items": {"type": "object"}},
+        "arm_definitions": {"type": "array", "minItems": 3, "maxItems": 4, "items": {"type": "object"}},
         "arms": {
-          "type": "array", "minItems": 4, "maxItems": 4,
+          "type": "array", "minItems": 3, "maxItems": 4,
           "items": {
             "type": "object", "additionalProperties": false,
             "required": ["arm_id", "criterion_id", "status", "predicate_triggered", "shadow_cash_factor", "allocation_summary", "positions"],

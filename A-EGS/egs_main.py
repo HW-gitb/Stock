@@ -6505,6 +6505,10 @@ def _margin_overheat_provider_bundle(window_end):
         except Exception:
             # The official row-19 leaves remain authoritative; the optional
             # comparison predicate is allowed to degrade to no-count.
+            print(
+                "[margin-overheat-cash-control] predicate unavailable "
+                "(reason=predicate_derivation_error)"
+            )
             predicate_facts = None
         return leaves, predicate_facts
     except Exception:

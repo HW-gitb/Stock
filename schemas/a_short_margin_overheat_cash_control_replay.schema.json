@@ -58,8 +58,8 @@
     },
     "by_arm": {
       "type": "array",
-      "minItems": 3,
-      "maxItems": 3,
+      "minItems": 2,
+      "maxItems": 2,
       "items": {
         "type": "object",
         "additionalProperties": false,
@@ -72,7 +72,7 @@
           "trigger_weeks_by_year"
         ],
         "properties": {
-          "arm_id": {"enum": ["level_p95", "change_rate_p90", "change_rate_p95"]},
+          "arm_id": {"enum": ["change_rate_p90", "change_rate_p95"]},
           "criterion_id": {"type": "string"},
           "threshold": {"type": "number", "minimum": 0, "maximum": 1},
           "trigger_week_count": {"type": "integer", "minimum": 0},

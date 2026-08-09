@@ -33,7 +33,6 @@
   "stage_a": {
     "baseline": {"arm_id": "baseline", "kind": "baseline", "criterion_id": "no_margin_discount", "margin_cash_factor": 1.0, "effect_surface": "none", "one_change_only": true},
     "challengers": [
-      {"arm_id": "level_p95", "kind": "challenger", "criterion_id": "level_percentile_p95", "margin_cash_factor": 0.8, "effect_surface": "margin_overheat_trigger", "one_change_only": true},
       {"arm_id": "change_rate_p90", "kind": "challenger", "criterion_id": "change_rate_20d_percentile_p90", "margin_cash_factor": 0.8, "effect_surface": "margin_overheat_trigger", "one_change_only": true},
       {"arm_id": "change_rate_p95", "kind": "challenger", "criterion_id": "change_rate_20d_percentile_p95", "margin_cash_factor": 0.8, "effect_surface": "margin_overheat_trigger", "one_change_only": true}
     ],

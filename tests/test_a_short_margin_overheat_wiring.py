@@ -801,6 +801,35 @@ class MarginOverheatProducerTests(unittest.TestCase):
         self.assertIn("比率", self.egs._margin_overheat_environment_line(facts))
         self.assertIn("仅记录", self.egs._margin_overheat_environment_line(facts))
 
+    def test_normal_publication_lag_keeps_public_leaves_and_names_predicate_reason(self):
+        sessions = _sessions(WINDOW_SESSIONS)
+        rows = [row for row in _margin_rows(sessions) if row["trade_date"] != sessions[0]]
+        api_patch, pro_patch = self._patched(sessions, rows)
+        with api_patch, pro_patch:
+            facts, predicate_facts = self.egs._margin_overheat_provider_bundle(sessions[0])
+        self.assertFalse(facts["production_effect_enabled"])
+        self.assertEqual(
+            (predicate_facts["status"], predicate_facts["unavailable_reason"]),
+            ("unavailable", "coverage_incomplete"),
+        )
+
+    def test_predicate_derivation_error_emits_a_stable_degradation_reason(self):
+        sessions = _sessions(WINDOW_SESSIONS)
+        rows = _margin_rows(sessions)
+        api_patch, pro_patch = self._patched(sessions, rows)
+        with api_patch, pro_patch, patch.object(
+            margin_cash_control,
+            "build_predicate_facts",
+            side_effect=RuntimeError("planted implementation fault"),
+        ), patch("builtins.print") as emitted:
+            facts, predicate_facts = self.egs._margin_overheat_provider_bundle(sessions[0])
+        self.assertTrue(facts["coverage_complete"])
+        self.assertIsNone(predicate_facts)
+        emitted.assert_called_once_with(
+            "[margin-overheat-cash-control] predicate unavailable "
+            "(reason=predicate_derivation_error)"
+        )
+
     def test_producer_fails_closed_when_the_denominator_leg_is_empty(self):
         sessions = _sessions(WINDOW_SESSIONS)
         rows = _margin_rows(sessions)
