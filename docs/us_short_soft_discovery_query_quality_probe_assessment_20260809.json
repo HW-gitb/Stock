@@ -1,0 +1,345 @@
+{
+  "schema_name": "us_short_soft_discovery_query_quality_probe_assessment",
+  "schema_version": "1.4.0",
+  "schema_ref": "schemas/us_short_soft_discovery_query_quality_probe_assessment.schema.json",
+  "generated_at": "2026-08-09T04:03:40+00:00",
+  "causal_floor": {
+    "instant": "2026-08-09T03:00:44.961218Z",
+    "components": [
+      {
+        "component": "packet.generated_at",
+        "instant": "2026-08-09T01:00:00Z"
+      },
+      {
+        "component": "web_discovery.generated_at",
+        "instant": "2026-08-09T02:39:58.910710Z"
+      },
+      {
+        "component": "web_receipt.generated_at",
+        "instant": "2026-08-09T02:39:58.910710Z"
+      },
+      {
+        "component": "x_discovery.generated_at",
+        "instant": "2026-08-09T03:00:44.961218Z"
+      },
+      {
+        "component": "x_receipt.generated_at",
+        "instant": "2026-08-09T03:00:44.961218Z"
+      },
+      {
+        "component": "web_discovery.source_refs[0].observed_at",
+        "instant": "2026-08-06T02:00:00Z"
+      },
+      {
+        "component": "web_receipt.source_refs[0].observed_at",
+        "instant": "2026-08-06T02:00:00Z"
+      },
+      {
+        "component": "web_discovery.source_refs[1].observed_at",
+        "instant": "2026-08-03T02:00:00Z"
+      },
+      {
+        "component": "web_receipt.source_refs[1].observed_at",
+        "instant": "2026-08-03T02:00:00Z"
+      },
+      {
+        "component": "web_discovery.source_refs[2].observed_at",
+        "instant": "2026-08-05T02:00:00Z"
+      },
+      {
+        "component": "web_receipt.source_refs[2].observed_at",
+        "instant": "2026-08-05T02:00:00Z"
+      },
+      {
+        "component": "web_discovery.source_refs[3].observed_at",
+        "instant": "2026-08-05T02:00:00Z"
+      },
+      {
+        "component": "web_receipt.source_refs[3].observed_at",
+        "instant": "2026-08-05T02:00:00Z"
+      },
+      {
+        "component": "web_discovery.source_refs[4].observed_at",
+        "instant": "2026-08-06T08:07:00Z"
+      },
+      {
+        "component": "web_receipt.source_refs[4].observed_at",
+        "instant": "2026-08-06T08:07:00Z"
+      },
+      {
+        "component": "web_discovery.source_refs[5].observed_at",
+        "instant": "2026-08-06T02:00:00Z"
+      },
+      {
+        "component": "web_receipt.source_refs[5].observed_at",
+        "instant": "2026-08-06T02:00:00Z"
+      },
+      {
+        "component": "web_discovery.source_refs[6].observed_at",
+        "instant": "2026-08-03T08:55:00Z"
+      },
+      {
+        "component": "web_receipt.source_refs[6].observed_at",
+        "instant": "2026-08-03T08:55:00Z"
+      },
+      {
+        "component": "web_discovery.themes[0].observed_at",
+        "instant": "2026-08-06T08:07:00Z"
+      },
+      {
+        "component": "web_discovery.themes[1].observed_at",
+        "instant": "2026-08-06T02:00:00Z"
+      },
+      {
+        "component": "web_discovery.themes[2].observed_at",
+        "instant": "2026-08-03T02:00:00Z"
+      },
+      {
+        "component": "web_receipt.source_refs[0].fetched_at",
+        "instant": "2026-08-09T02:39:58.883918Z"
+      },
+      {
+        "component": "web_receipt.source_refs[1].fetched_at",
+        "instant": "2026-08-09T02:39:46.461305Z"
+      },
+      {
+        "component": "web_receipt.source_refs[2].fetched_at",
+        "instant": "2026-08-09T02:39:51.589873Z"
+      },
+      {
+        "component": "web_receipt.source_refs[3].fetched_at",
+        "instant": "2026-08-09T02:39:51.589873Z"
+      },
+      {
+        "component": "web_receipt.source_refs[4].fetched_at",
+        "instant": "2026-08-09T02:39:39.633192Z"
+      },
+      {
+        "component": "web_receipt.source_refs[5].fetched_at",
+        "instant": "2026-08-09T02:39:46.461305Z"
+      },
+      {
+        "component": "web_receipt.source_refs[6].fetched_at",
+        "instant": "2026-08-09T02:39:39.633192Z"
+      },
+      {
+        "component": "x_discovery.source_refs[0].observed_at",
+        "instant": "2026-08-08T11:50:09Z"
+      },
+      {
+        "component": "x_receipt.source_refs[0].observed_at",
+        "instant": "2026-08-08T11:50:09Z"
+      },
+      {
+        "component": "x_discovery.source_refs[1].observed_at",
+        "instant": "2026-08-06T20:57:17Z"
+      },
+      {
+        "component": "x_receipt.source_refs[1].observed_at",
+        "instant": "2026-08-06T20:57:17Z"
+      },
+      {
+        "component": "x_discovery.source_refs[2].observed_at",
+        "instant": "2026-08-07T07:05:11Z"
+      },
+      {
+        "component": "x_receipt.source_refs[2].observed_at",
+        "instant": "2026-08-07T07:05:11Z"
+      },
+      {
+        "component": "x_discovery.source_refs[3].observed_at",
+        "instant": "2026-08-08T15:29:44Z"
+      },
+      {
+        "component": "x_receipt.source_refs[3].observed_at",
+        "instant": "2026-08-08T15:29:44Z"
+      },
+      {
+        "component": "x_discovery.source_refs[4].observed_at",
+        "instant": "2026-08-05T04:57:53Z"
+      },
+      {
+        "component": "x_receipt.source_refs[4].observed_at",
+        "instant": "2026-08-05T04:57:53Z"
+      },
+      {
+        "component": "x_discovery.source_refs[5].observed_at",
+        "instant": "2026-08-08T17:34:35Z"
+      },
+      {
+        "component": "x_receipt.source_refs[5].observed_at",
+        "instant": "2026-08-08T17:34:35Z"
+      },
+      {
+        "component": "x_discovery.source_refs[6].observed_at",
+        "instant": "2026-08-08T14:26:29Z"
+      },
+      {
+        "component": "x_receipt.source_refs[6].observed_at",
+        "instant": "2026-08-08T14:26:29Z"
+      },
+      {
+        "component": "x_discovery.themes[0].observed_at",
+        "instant": "2026-08-05T04:57:53Z"
+      },
+      {
+        "component": "x_discovery.themes[1].observed_at",
+        "instant": "2026-08-08T17:34:35Z"
+      },
+      {
+        "component": "x_receipt.source_refs[0].fetched_at",
+        "instant": "2026-08-09T03:00:44.961218Z"
+      },
+      {
+        "component": "x_receipt.source_refs[1].fetched_at",
+        "instant": "2026-08-09T03:00:44.961218Z"
+      },
+      {
+        "component": "x_receipt.source_refs[2].fetched_at",
+        "instant": "2026-08-09T03:00:44.961218Z"
+      },
+      {
+        "component": "x_receipt.source_refs[3].fetched_at",
+        "instant": "2026-08-09T03:00:44.961218Z"
+      },
+      {
+        "component": "x_receipt.source_refs[4].fetched_at",
+        "instant": "2026-08-09T03:00:44.961218Z"
+      },
+      {
+        "component": "x_receipt.source_refs[5].fetched_at",
+        "instant": "2026-08-09T03:00:44.961218Z"
+      },
+      {
+        "component": "x_receipt.source_refs[6].fetched_at",
+        "instant": "2026-08-09T03:00:44.961218Z"
+      },
+      {
+        "component": "x_receipt.provider_response_refs[0].fetched_at",
+        "instant": "2026-08-09T02:59:47.547652Z"
+      },
+      {
+        "component": "x_receipt.provider_response_refs[1].fetched_at",
+        "instant": "2026-08-09T03:00:09.141071Z"
+      },
+      {
+        "component": "x_receipt.provider_response_refs[2].fetched_at",
+        "instant": "2026-08-09T03:00:20.440072Z"
+      },
+      {
+        "component": "x_receipt.provider_response_refs[3].fetched_at",
+        "instant": "2026-08-09T03:00:44.936906Z"
+      },
+      {
+        "component": "web_ledger.first_reserved_at",
+        "instant": "2026-08-09T02:39:31.322612Z"
+      },
+      {
+        "component": "web_ledger.last_reserved_at",
+        "instant": "2026-08-09T02:39:31.322612Z"
+      },
+      {
+        "component": "xai_ledger.first_reserved_at",
+        "instant": "2026-08-09T02:59:29.528381Z"
+      },
+      {
+        "component": "xai_ledger.last_reserved_at",
+        "instant": "2026-08-09T02:59:29.528381Z"
+      }
+    ]
+  },
+  "probe_identity": {
+    "expected_decision_date": "20260809",
+    "policy_version": "soft_discovery_query_policy_v0.2.0",
+    "packet_ref": "docs/us_short_soft_discovery_query_quality_probe_packet_20260809.json",
+    "packet_sha256": "ccbba88dd2fb37ff27b80c2e44f4edb1f9e2e8ead1f2df26fab084a92850f526",
+    "query_scope_sha256": "544edd0d63b4bbb728335b9a4786229f939d27e43f6920a7e497c5769058a1e9"
+  },
+  "input_bindings": {
+    "web_discovery": {
+      "path": "state/us_short/us_short_llm_theme_discovery_web_20260809.json",
+      "sha256": "ca3044ee3fec8659790d22a39b82424343ec35e50c664d223dcfcbd1813ba3d2"
+    },
+    "web_receipt": {
+      "path": "state/us_short/us_short_llm_theme_discovery_web_20260809_receipt.json",
+      "sha256": "d1682706d55c88438558c4d7bac2b4376302615152bcaf6fef079e495b895a3f"
+    },
+    "x_discovery": {
+      "path": "state/us_short/us_short_llm_theme_discovery_x_20260809.json",
+      "sha256": "b5d2284f63f8d1ff81932df292dfd371aeb38789fb39d173b1a1fe172bd6d6e3"
+    },
+    "x_receipt": {
+      "path": "state/us_short/us_short_llm_theme_discovery_x_20260809_receipt.json",
+      "sha256": "9f5e680eff99694eb41229bf95d3ab23e5f45e6c194b8af278bb211c3b7dee00"
+    },
+    "web": {
+      "path": "state/us_short/us_short_llm_theme_discovery_plan_web_20260809_budget.json",
+      "sha256": "7566ecdcfe0bd341a667bf38a1d5b12051c286332d392072758f7fc318f504b2"
+    },
+    "xai": {
+      "path": "state/us_short/us_short_llm_theme_discovery_plan_xai_20260809_budget.json",
+      "sha256": "03c0868bb0da5368b560666db7bd467fb67e9ecb0c84db1d2c3469edd31e9f16"
+    }
+  },
+  "execution_evidence": {
+    "actual_provider_call_counts": {
+      "tavily": 4,
+      "deepseek": 1,
+      "xai": 4
+    },
+    "actual_provider_call_count": 9,
+    "budget_reservation_attempt_counts": {
+      "web": 1,
+      "xai": 1
+    },
+    "web_regroup_chunk_counts": {
+      "attempted": 1,
+      "successful": 1,
+      "failed": 0,
+      "failed_indexes": []
+    },
+    "all_exact_slots_bound": true,
+    "all_budget_scopes_bound": true,
+    "inconclusive_reasons": []
+  },
+  "lane_assessments": {
+    "web": {
+      "validated_theme_count": 3,
+      "source_bound_member_count": 10,
+      "accepted_source_count": 7,
+      "member_bound_source_count": 3,
+      "member_bound_source_ratio": 0.42857142857142855,
+      "quality_thresholds_met": false,
+      "quality_failure_reasons": [
+        "member_bound_source_ratio_below_threshold"
+      ]
+    },
+    "x": {
+      "validated_theme_count": 2,
+      "source_bound_member_count": 9,
+      "accepted_source_count": 7,
+      "member_bound_source_count": 6,
+      "member_bound_source_ratio": 0.8571428571428571,
+      "quality_thresholds_met": true,
+      "quality_failure_reasons": []
+    }
+  },
+  "combined_diagnostic": {
+    "distinct_candidate_theme_ids": 5,
+    "distinct_candidate_theme_ids_diagnostic_target": 2,
+    "breadth_diagnostic_is_pass_gate": false
+  },
+  "verdict": "revise_stage1_templates_before_planner",
+  "prohibited_effects": {
+    "theme_confirmation": false,
+    "theme_soft_boost_enablement": false,
+    "top15_or_scoring_effect": false,
+    "seat_or_probe_allocation": false,
+    "lifecycle_transition": false,
+    "operation_advice": false,
+    "forward_clock_start": false,
+    "ship_gate_evidence": false,
+    "broker_or_order_execution": false,
+    "a_share_crossing": false
+  }
+}

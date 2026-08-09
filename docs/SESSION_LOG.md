@@ -1,5 +1,13 @@
 # Session Log
 
+## 2026-08-09 — 20260809 查询质量探针裁决落定：`revise_stage1_templates_before_planner`
+
+- **裁决**：机器判 `revise_stage1_templates_before_planner`，产物 `docs/us_short_soft_discovery_query_quality_probe_assessment_20260809.json`（不可变，已提交）。`inconclusive_reasons` 为空——这是一次**可判**的运行，不是 20260802 那种废槽。
+- **两条 lane**：web `themes=3 / members=10 / accepted_sources=7 / member_bound_sources=3 / ratio=0.4286` → **仅 ratio 一项未达 0.5**；x `themes=2 / members=9 / accepted=7 / bound=6 / ratio=0.8571` → **三条门全过**。合计 5 个不同 theme id（诊断项，非门）。机器数与收口时手算逐项一致。
+- **执行证据**：实际调用 `tavily=4 / deepseek=1 / xai=4`，合计 **9 次 / 上限 12**；两条 lane 各 1 次预留尝试、零重试；web regroup 1/1 成功；`all_exact_slots_bound=true`、`all_budget_scopes_bound=true`。
+- **含义（大白话）**：**X 侧问法可以用，web 侧问法要改**——web 捞回来的 7 条来源里只有 3 条真绑到了个股，其余是没落到公司身上的材料。下一步按 packet 预登记路径走「改 stage1 模板再打一枪」，槽在下一个非交易日；**本次不确认任何主题、不加分、不动 Top15/席位/生命周期、不起 12 周钟**。
+
+
 ## 2026-08-09 — Claude 修复（裁决器第二道门：主题时刻被拿去比抓取时刻，结构上不可能通过，已修）
 
 - **Verdict/Action**: 修完账本方言后预检卡在 `theme observed_at cannot be earlier than its bound source fetches`。生产方按 K3-R115 把主题时刻派生成 `max(来源 observed_at)`，同一函数又强制 `observed_at <= fetched_at`，这里却要求 `>= max(fetched_at)`——**结构上不可能成立**，该门判别力为零、拒绝一切真实运行。已把比较对齐到生产方的钟。
