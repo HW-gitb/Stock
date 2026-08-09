@@ -755,7 +755,7 @@ C:\Users\cnhea\AppData\Local\Programs\Python\Python313\python.exe .tools\full_pa
 
 **给下一轮的教训（承接上一条追加）**：上一轮我把类边界说成「按 family 分档」，方向对但默许了一个 family 一套特例，于是第一次修复只动了被点名的 dividends。这一轮改成「先找现成的判别器」，判别器一捡回来，四条腿一次全好、且不需要为每个 family 写例外。**下次给类边界时，先问「这个区分是不是已经在代码里算过了」，再谈分档。**
 
-## 2026-08-09 追加：Knife7 tests-only 18 项回归清账（OPEN-NOT_VERIFIED）
+## 2026-08-09 追加：Knife7 tests-only 18 项回归清账（resolved）
 
 ### 改了什么
 
@@ -775,7 +775,7 @@ C:\Users\cnhea\AppData\Local\Programs\Python\Python313\python.exe .tools\full_pa
 
 ### 验证结果
 
-- 干净态 18/18 OK；同批中和 18 个对应产品约束后 `Ran 18 / FAILED (failures=23)`，即 18 个 test case 全红。三份产品文件随后按 mutation 前 SHA-256 逐字节恢复；同步最新 master 后最终三模块 `47/47 OK`，receipt `24f08fac528a8122414df9e7`。tests-only 依 rule 3/8 不触发 full lane；未联网、未用 provider、未开钟、未写账户。
+- 干净态 18/18 OK；同批中和 18 个对应产品约束后 `Ran 18 / FAILED (failures=23)`，即 18 个 test case 全红。三份产品文件随后按 mutation 前 SHA-256 逐字节恢复；同步最新 master 后最终三模块 `47/47 OK`，receipt `24f08fac528a8122414df9e7`。用户已豁免独立审查，本 R-ID 已 resolved；未联网、未用 provider、未开钟、未写账户。
 
 ### 失效的旧结论
 
@@ -783,4 +783,4 @@ C:\Users\cnhea\AppData\Local\Programs\Python\Python313\python.exe .tools\full_pa
 
 ### 下一步注意事项
 
-- Claude Code 复审时复跑最终三模块 focused pack，并从 M07 malformed digest、M08 `O_EXCL` race、M09 immutable report conflict 中至少抽一项独立植入；确认矩阵没有把内部 notification 自洽误写成来源绑定后，再由 reviewer/committer 翻 resolved。本工作树不 commit。
+- 用户已明确本条不需要独立审查；后续若处理 `RECEIPT-DIGESTS`，仍须另立 R-ID 范围，不得把真实通知来源绑定混入本条。本轮已提交并合并，工作树不再有未提交改动。

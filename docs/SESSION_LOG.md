@@ -1,12 +1,12 @@
 # Session Log
 
-## 2026-08-09 — Codex 已闭：Knife7 tests-only 18 项回归清账（OPEN-NOT_VERIFIED）
+## 2026-08-09 — Codex 已闭：Knife7 tests-only 18 项回归清账（resolved）
 
-- **Verdict/Action**: tests-only 清账已落，不改产品逻辑；把 `R-USSHORT-26W-DIAG-KNIFE7-HALF-THE-PLANTED-REGRESSIONS-ARE-INVISIBLE` 归一化为 18 个独立安全坐标并补齐精确测试。executor 证据完成，但在 Claude Code 独立复审前仍为 OPEN-NOT_VERIFIED。
+- **Verdict/Action**: tests-only 清账已落，不改产品逻辑；把 `R-USSHORT-26W-DIAG-KNIFE7-HALF-THE-PLANTED-REGRESSIONS-ARE-INVISIBLE` 归一化为 18 个独立安全坐标并补齐精确测试。用户已明确豁免独立审查，本 R-ID 已 resolved。
 - **Required**: 本 R-ID 无已知 tests-only 实现残项，完整 18 项矩阵、反向证据与关闭判据只见 `docs/system_risk_register.md`。独立 `RECEIPT-DIGESTS-ARE-NEVER-RE-VERIFIED` 的真实通知来源绑定仍 open，未纳入本轮关闭。
 - **Verify**: 干净态矩阵 `18 OK`；临时中和 18 个产品约束后同 18 个 test case 全红（`failures=23`，含 subtests）；三份产品文件按原 SHA-256 逐字节恢复。同步 master 后最终三模块 `47 OK`，receipt `24f08fac528a8122414df9e7`；两名只读 agent 均完成，零联网/provider/付费/开钟/账户写入。
 - **Pre-Codex self-review**: A-F checked；matrix=18/18 red + controls；register=updated；handoff=updated；focused=47 OK；full-lane=not_triggered（tests-only，rule 3/8）；door=route-doc 14 OK + doc-governance 41 OK；review=NOT_VERIFIED；commit=NOT_PERFORMED。
-- **Next**: Claude Code：独立复审本 R-ID；通过后由 reviewer/committer 翻 resolved。
+- **Next**: 用户已豁免独立复审；本 R-ID 已提交并合并到 master。
 
 ## 2026-08-09 — Claude 已闭：软发现 lane 四条定点探针（三条关、一条只关一半）
 
