@@ -4,15 +4,20 @@ import copy
 import hashlib
 import json
 import os
+import re
 import subprocess
 import sys
 import tempfile
 import unittest
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
+from types import SimpleNamespace
 from unittest import mock
 
 from engine import us_short_llm_theme_discovery_plan_budget as plan_budget
+from engine import us_short_llm_theme_discovery_query_plan as query_plan
 from engine import us_short_soft_discovery_query_quality_probe_paths as probe_paths
+from runners import us_short_llm_theme_discovery_build_parent_plan as parent_plan_builder
 from runners import us_short_llm_theme_discovery_fetch_web as web
 from runners import us_short_llm_theme_discovery_fetch_x as xfetch
 from runners import us_short_soft_discovery_query_quality_probe_assess as assess
@@ -20,7 +25,36 @@ from runners import us_short_soft_discovery_query_quality_probe_assess as assess
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 SOURCE_PACKET = REPO_ROOT / "docs" / "us_short_soft_discovery_query_quality_probe_packet_20260730.json"
+NEW_SOURCE_PACKET = REPO_ROOT / "docs" / "us_short_soft_discovery_query_quality_probe_packet_20260809.json"
 GENERATED_AT = "2026-08-01T20:00:00+00:00"
+
+# These are producer contracts, not a subset check.  A legitimate producer-side top-level
+# addition must make the seam red until the assessor either reads it or records an intentional
+# ignore decision; silently accepting a third unread evidence field would recreate this risk.
+PRODUCTION_DISCOVERY_KEYS = frozenset({
+    "schema_name", "schema_version", "generated_at", "input_sha256", "decision_clock",
+    "discovery_contract", "source_refs", "themes",
+})
+PRODUCTION_WEB_RECEIPT_KEYS = frozenset({
+    "schema_name", "schema_version", "generated_at", "decision_clock", "fetch_contract",
+    "queries", "plan_binding", "source_refs", "discovery_artifact_sha256", "drop_ledger",
+    "summary",
+})
+PRODUCTION_X_RECEIPT_KEYS = frozenset({
+    "schema_name", "schema_version", "generated_at", "decision_clock", "fetch_contract",
+    "queries", "plan_binding", "source_refs", "provider_response_refs", "provider_annotation_urls",
+    "discovery_artifact_sha256", "drop_ledger", "summary",
+})
+PRODUCTION_LEDGER_KEYS = frozenset({
+    "schema_name", "schema_version", "budget_mode", "lane", "provider", "decision_date",
+    "parent_plan_identity", "provider_envelope", "planned_provider_call_count",
+    "reservation_attempt_count", "first_reserved_at", "last_reserved_at", "query_reservations",
+    "dispatches", "dispatch_counts", "vendor_dispatch_counts", "recovery_events",
+})
+OFFLINE_INCONCLUSIVE_REASONS = frozenset({
+    "execution_mode_not_live_authorized", "provider_calls_not_proven",
+    "tavily_query_call_count_not_proven", "xai_query_call_count_not_proven",
+})
 
 
 def _write_json(path: Path, payload) -> Path:
@@ -1617,6 +1651,502 @@ class QueryQualityProbeAssessmentTest(unittest.TestCase):
                 check=False,
             )
         self.assertEqual(completed.returncode, 0, completed.stdout + completed.stderr)
+
+
+class ProductionQueryQualityProbeSeamTest(unittest.TestCase):
+    """Exercise the assessor with producer-shaped, plan-bound offline artifacts.
+
+    This seam intentionally locks contract relationships, not incidental values: a legitimate
+    future change to a registered packet/slot, its date-derived runbook filename, the complete
+    runbook state-slot names, reviewed query bytes, producer top-level shape, plan-binding
+    evidence, drop normalization, clock semantics, or the offline evidence contract should turn
+    it red and force an explicit review.  Do not weaken these checks by hand-editing producer
+    output; update the contract and its independent consumer decision first.
+    """
+
+    def setUp(self):
+        self._temp = tempfile.TemporaryDirectory(prefix="us_short_query_quality_producer_seam_")
+        self.addCleanup(self._temp.cleanup)
+        self.root = Path(self._temp.name).resolve()
+        self.docs = self.root / "docs"
+        self.state = self.root / "state" / "us_short"
+        self.raw_web = self.root / "provider_samples" / "us_short_llm_theme_discovery_fetch_web"
+        self.raw_x = self.root / "provider_samples" / "us_short_llm_theme_discovery_fetch_x"
+        self.packet_path = self.docs / NEW_SOURCE_PACKET.name
+        self.assessment_path = self.docs / (
+            "us_short_soft_discovery_query_quality_probe_assessment_20260809.json"
+        )
+        _write_json(
+            self.packet_path,
+            json.loads(NEW_SOURCE_PACKET.read_text(encoding="utf-8")),
+        )
+        self.packet = json.loads(self.packet_path.read_text(encoding="utf-8"))
+        self.decision_date = self.packet["probe_boundary"]["expected_decision_date"]
+        self.patches = [
+            mock.patch.object(assess, "ROOT", self.root),
+            # Both registry constants are patched so the new-slot registration remains explicit;
+            # NEW_PACKET_PATH is the load-bearing branch for the 20260809 schema.
+            mock.patch.object(assess, "DEFAULT_PACKET_PATH", self.packet_path),
+            mock.patch.object(assess, "NEW_PACKET_PATH", self.packet_path),
+            mock.patch.object(probe_paths, "ROOT", self.root),
+            mock.patch.object(probe_paths, "DOCS_DIR", self.docs),
+            mock.patch.object(web, "ROOT", self.root),
+            mock.patch.object(web, "STATE_DIR", self.state),
+            mock.patch.object(web, "DEFAULT_RAW_ROOT", self.raw_web),
+            mock.patch.object(web, "_gitignored", return_value=True),
+            mock.patch.object(xfetch, "ROOT", self.root),
+            mock.patch.object(xfetch, "STATE_DIR", self.state),
+            mock.patch.object(xfetch, "DEFAULT_RAW_ROOT", self.raw_x),
+        ]
+        for patcher in self.patches:
+            patcher.start()
+            self.addCleanup(patcher.stop)
+
+    @staticmethod
+    def _instant(value: str) -> datetime:
+        return datetime.fromisoformat(value.replace("Z", "+00:00")).astimezone(timezone.utc)
+
+    def _derived_clocks(self) -> dict[str, datetime]:
+        t0 = self._instant(self.packet["generated_at"])
+        # No absolute fixture timestamps: every producer input and assertion derives from T0.
+        delta_reserved = timedelta(minutes=1)
+        delta_observed = timedelta(minutes=2)
+        delta_fetched = timedelta(minutes=3)
+        delta_assessment = timedelta(minutes=4)
+        clocks = {
+            "packet": t0,
+            "plan": t0,
+            "reserved": t0 + delta_reserved,
+            "observed": t0 + delta_observed,
+            "fetched": t0 + delta_fetched,
+            "assessment": t0 + delta_fetched + delta_assessment,
+        }
+        self.assertLess(clocks["packet"], clocks["reserved"])
+        self.assertLess(clocks["reserved"], clocks["observed"])
+        self.assertLess(clocks["observed"], clocks["fetched"])
+        self.assertLess(clocks["fetched"], web._cutoff(self.decision_date))
+        self.assertLess(clocks["assessment"], web._cutoff(self.decision_date))
+        return clocks
+
+    @staticmethod
+    def _web_rows(observed_at: datetime) -> list[dict[str, str]]:
+        stamp = observed_at.isoformat()
+        return [
+            {
+                "url": "https://seam.example/web/one",
+                "title": "Power demand one",
+                "content": "AAPL CEG VST power demand evidence.",
+                "published_date": stamp,
+            },
+            {
+                "url": "https://seam.example/web/two",
+                "title": "Power demand two",
+                "content": "Utility and data-center buildout evidence.",
+                "published_date": stamp,
+            },
+            {
+                "url": "https://seam.example/web/three",
+                "title": "Power demand three",
+                "content": "Grid equipment demand evidence.",
+                "published_date": stamp,
+            },
+            {
+                "url": "not-a-url",
+                "title": "Producer drop",
+                "content": "This row must be dropped by web normalization.",
+                "published_date": stamp,
+            },
+        ]
+
+    @staticmethod
+    def _x_rows(observed_at: datetime) -> list[dict[str, str]]:
+        stamp = observed_at.isoformat()
+        return [
+            {
+                "url": "https://x.example/status/1",
+                "title": "Power post one",
+                "text": "AAPL CEG power demand.",
+                "created_at": stamp,
+                "_evidence_attestation": "provider_attested",
+            },
+            {
+                "url": "https://x.example/status/2",
+                "title": "Power post two",
+                "text": "Utility buildout evidence.",
+                "created_at": stamp,
+                "_evidence_attestation": "provider_attested",
+            },
+            {
+                "url": "https://x.example/status/3",
+                "title": "Power post three",
+                "text": "Grid equipment evidence.",
+                "created_at": stamp,
+                "_evidence_attestation": "provider_attested",
+            },
+            {
+                "url": "https://x.example/status/4",
+                "title": "Producer drop",
+                "text": "An untrusted row must be dropped by X normalization.",
+                "created_at": stamp,
+                "_evidence_attestation": "unverified",
+            },
+        ]
+
+    class _SearchClient:
+        def __init__(self, rows):
+            self.rows = rows
+            self.calls: list[str] = []
+
+        def search(self, query):
+            self.calls.append(query)
+            return copy.deepcopy(self.rows)
+
+    class _DeepSeekClient:
+        def __init__(self, text):
+            self.text = text
+            self.calls: list[dict[str, object]] = []
+
+        def _create(self, **kwargs):
+            self.calls.append(kwargs)
+            return SimpleNamespace(
+                choices=[SimpleNamespace(message=SimpleNamespace(content=self.text))],
+            )
+
+        @property
+        def chat(self):
+            return SimpleNamespace(completions=SimpleNamespace(create=self._create))
+
+    class _XClient:
+        def __init__(self, rows, response):
+            self.results = copy.deepcopy(rows)
+            self.response = response
+            self.calls: list[tuple[str, str]] = []
+
+        def search(self, query, expected_decision_date):
+            self.calls.append((query, expected_decision_date))
+            return self.response
+
+    @staticmethod
+    def _noop_persist(_request, _value):
+        return None
+
+    def _web_llm_response(self, observed_at: datetime) -> str:
+        source_id = web._source_id("https://seam.example/web/one")
+        stamp = observed_at.isoformat()
+        return json.dumps({
+            "themes": [{
+                "theme_id": "seam_web_single_source",
+                "display_name": "Power demand",
+                "summary": "Three members deliberately share one source.",
+                "observed_at": stamp,
+                "source_ref_ids": [source_id],
+                "members": [
+                    {"ticker": "AAPL", "source_ref_ids": [source_id]},
+                    {"ticker": "CEG", "source_ref_ids": [source_id]},
+                    {"ticker": "VST", "source_ref_ids": [source_id]},
+                ],
+            }],
+        })
+
+    def _x_response(self, observed_at: datetime) -> str:
+        source_url = "https://x.example/status/1"
+        stamp = observed_at.isoformat()
+        return json.dumps({
+            "themes": [{
+                "theme_id": "seam_x_single_source",
+                "display_name": "Power demand",
+                "summary": "Three members deliberately share one source.",
+                "observed_at": stamp,
+                "source_urls": [source_url],
+                "members": [
+                    {"ticker": "AAPL", "source_urls": [source_url]},
+                    {"ticker": "CEG", "source_urls": [source_url]},
+                    {"ticker": "VST", "source_urls": [source_url]},
+                ],
+            }],
+        })
+
+    def _assert_producer_shape(self, lane, discovery, receipt, plan_document):
+        self.assertEqual(set(discovery), PRODUCTION_DISCOVERY_KEYS)
+        expected_receipt_keys = (
+            PRODUCTION_WEB_RECEIPT_KEYS if lane == "web" else PRODUCTION_X_RECEIPT_KEYS
+        )
+        self.assertEqual(set(receipt), expected_receipt_keys)
+        self.assertRegex(discovery["input_sha256"], r"^[0-9a-f]{64}$")
+        provider = "web" if lane == "web" else "xai"
+        expected_binding = query_plan.build_stage1_plan_binding(
+            plan_document, provider=provider,
+        )
+        self.assertEqual(receipt["plan_binding"], expected_binding)
+        self.assertTrue(receipt["drop_ledger"])
+        self.assertTrue(discovery["themes"])
+        for theme in discovery["themes"]:
+            self.assertEqual(len(theme["source_ref_ids"]), 1)
+            self.assertEqual(
+                len({source_id for member in theme["members"] for source_id in member["source_ref_ids"]}),
+                1,
+            )
+        self.assertEqual(receipt["summary"]["dropped_result_count"], len(receipt["drop_ledger"]))
+
+    def test_real_parent_plan_budget_fetch_publish_and_assessment_chain(self):
+        clocks = self._derived_clocks()
+        plan_payload = parent_plan_builder.build_parent_plan_from_reviewed_policy(
+            decision_date=self.decision_date,
+            generated_at=clocks["plan"].isoformat(),
+        )
+        plan_path = query_plan.default_parent_plan_path(
+            self.decision_date, plan_payload["plan_identity"], state_dir=self.state,
+        )
+        query_plan.write_parent_plan(
+            plan_payload,
+            plan_path,
+            state_dir=self.state,
+            root=self.root,
+            gitignored=lambda _path: True,
+        )
+        plan_document, plan_sha256, plan_relative_path = query_plan.read_parent_plan(
+            plan_path,
+            root=self.root,
+            state_dir=self.state,
+            require_reviewed_policy=True,
+        )
+        self.assertIsInstance(plan_document, query_plan.ParentPlanDocument)
+        self.assertEqual(plan_document.artifact_sha256, plan_sha256)
+        self.assertEqual(plan_document.artifact_path, plan_relative_path)
+        self.assertEqual(plan_document["generated_at"], clocks["plan"].isoformat())
+
+        web_queries, web_records, _web_binding = query_plan.resolve_stage1_plan_binding(
+            plan_document, provider="web",
+        )
+        x_queries, x_records, _x_binding = query_plan.resolve_stage1_plan_binding(
+            plan_document, provider="xai",
+        )
+        self.assertEqual(web_queries, x_queries)
+        self.assertEqual(web_records, x_records)
+
+        web_rows = self._web_rows(clocks["observed"])
+        x_rows = self._x_rows(clocks["observed"])
+        gateway_web_search = self._SearchClient(web_rows)
+        gateway_web_regroup = self._DeepSeekClient(
+            self._web_llm_response(clocks["observed"]),
+        )
+        gateway_x = self._XClient(x_rows, self._x_response(clocks["observed"]))
+        stage2_chunks = [(index, [{"chunk": index}]) for index in range(4)]
+        with (
+            mock.patch.object(plan_budget, "_stamp", return_value=clocks["reserved"].isoformat()),
+            # O2: a synchronous seam should leave no in-flight row.  If a legitimate future
+            # lifecycle starts consulting owner liveness here, this red test requires an explicit
+            # injected clock/contract decision; it must not silently accept stale frozen heartbeats.
+            mock.patch.object(
+                plan_budget, "_owner_is_alive", wraps=plan_budget._owner_is_alive,
+            ) as owner_alive,
+        ):
+            web_budget = plan_budget.reserve_plan_budget(
+                plan_document,
+                state_dir=self.state,
+                root=self.root,
+                gitignored=lambda _path: True,
+                expected_decision_date=self.decision_date,
+                providers=("web",),
+            )
+            x_budget = plan_budget.reserve_plan_budget(
+                plan_document,
+                state_dir=self.state,
+                root=self.root,
+                gitignored=lambda _path: True,
+                expected_decision_date=self.decision_date,
+                providers=("xai",),
+            )
+            web_gateway = web.paid_gateway.PaidDispatchGateway(
+                web_budget, parent_plan=plan_document,
+            )
+            x_gateway = xfetch.paid_gateway.PaidDispatchGateway(
+                x_budget, parent_plan=plan_document,
+            )
+            web_stage1 = web_gateway.dispatch_web_search_all(
+                gateway_web_search,
+                web_records,
+                persist_response=self._noop_persist,
+            )
+            web_stage2 = web_gateway.dispatch_web_regroup_all(
+                gateway_web_regroup,
+                expected_decision_date=self.decision_date,
+                chunks=stage2_chunks,
+                prompt_builder=lambda _date, _rows: "offline seam regroup",
+                persist_response=self._noop_persist,
+            )
+            x_stage1 = x_gateway.dispatch_x_search_all(
+                gateway_x,
+                x_records,
+                expected_decision_date=self.decision_date,
+                persist_response=self._noop_persist,
+            )
+        self.assertIsNone(web_stage1.stop_error)
+        self.assertIsNone(web_stage2.stop_error)
+        self.assertIsNone(x_stage1.stop_error)
+        self.assertEqual(len(web_stage1.items), 4)
+        self.assertEqual(len(web_stage2.items), 4)
+        self.assertEqual(len(x_stage1.items), 4)
+        # With all gateway calls completing synchronously, the stale-owner branch is not part of
+        # this chain.  This is the explicit O2 confirmation, not an assumption about the code.
+        self.assertEqual(owner_alive.call_count, 0)
+
+        web_discovery, web_receipt, _web_summary = web.run_web_fetch(
+            queries=None,
+            parent_plan=plan_document,
+            expected_decision_date=self.decision_date,
+            generated_at=clocks["fetched"].isoformat(),
+            search_client=self._SearchClient(web_rows),
+            deepseek_client=self._DeepSeekClient(self._web_llm_response(clocks["observed"])),
+            raw_root=self.raw_web,
+        )
+        x_discovery, x_receipt, _x_summary = xfetch.run_x_fetch(
+            queries=None,
+            parent_plan=plan_document,
+            expected_decision_date=self.decision_date,
+            generated_at=clocks["fetched"].isoformat(),
+            x_client=self._XClient(x_rows, self._x_response(clocks["observed"])),
+            raw_root=self.raw_x,
+        )
+        self._assert_producer_shape("web", web_discovery, web_receipt, plan_document)
+        self._assert_producer_shape("x", x_discovery, x_receipt, plan_document)
+        for receipt, discovery in ((web_receipt, web_discovery), (x_receipt, x_discovery)):
+            source_times = {
+                row["source_id"]: self._instant(row["observed_at"])
+                for row in receipt["source_refs"]
+            }
+            fetched_times = [self._instant(row["fetched_at"]) for row in receipt["source_refs"]]
+            self.assertTrue(fetched_times)
+            self.assertTrue(any(observed < fetched_times[0] for observed in source_times.values()))
+            for theme in discovery["themes"]:
+                bound = [source_times[source_id] for source_id in theme["source_ref_ids"]]
+                self.assertEqual(self._instant(theme["observed_at"]), max(bound))
+                self.assertTrue(all(
+                    source_times[source_id] <= fetched_times[0]
+                    for source_id in theme["source_ref_ids"]
+                ))
+
+        web.publish_decision_pair(
+            web_discovery,
+            web.default_discovery_path(self.decision_date),
+            web.default_discovery_path(self.decision_date),
+            web_receipt,
+            web.default_receipt_path(self.decision_date),
+            web.default_receipt_path(self.decision_date),
+        )
+        web.publish_decision_pair(
+            x_discovery,
+            xfetch.default_discovery_path(self.decision_date),
+            xfetch.default_discovery_path(self.decision_date),
+            x_receipt,
+            xfetch.default_receipt_path(self.decision_date),
+            xfetch.default_receipt_path(self.decision_date),
+        )
+
+        summary = assess.run_assessment(
+            packet_path=self.packet_path,
+            assessment_path=self.assessment_path,
+            generated_at=clocks["assessment"].isoformat(),
+        )
+        self.assertEqual(summary["status"], "assessment_written_or_reused")
+        assessment = json.loads(self.assessment_path.read_text(encoding="utf-8"))
+        self.assertEqual(
+            assessment["verdict"],
+            self.packet["preregistered_evaluation"]["inconclusive_verdict"],
+        )
+        # O4 is an intentional coverage boundary: the offline contract necessarily makes this
+        # verdict inconclusive, so pass/revise mapping is not claimed by this seam.
+        self.assertEqual(
+            set(assessment["execution_evidence"]["inconclusive_reasons"]),
+            OFFLINE_INCONCLUSIVE_REASONS,
+        )
+        self.assertEqual(
+            set(assessment["input_bindings"]),
+            {"web_discovery", "web_receipt", "x_discovery", "x_receipt", "web", "xai"},
+        )
+        threshold = self.packet["preregistered_evaluation"]["per_lane_quality_thresholds"][
+            "minimum_member_bound_source_ratio"
+        ]
+        for lane in ("web", "x"):
+            metrics = assessment["lane_assessments"][lane]
+            self.assertLess(metrics["member_bound_source_ratio"], threshold)
+            self.assertIn("member_bound_source_ratio_below_threshold", metrics["quality_failure_reasons"])
+
+        for provider, receipt, discovery in (
+            ("web", web_receipt, web_discovery),
+            ("xai", x_receipt, x_discovery),
+        ):
+            ledger_path = plan_budget.default_plan_budget_path(
+                provider, self.decision_date, state_dir=self.state,
+            )
+            ledger = json.loads(ledger_path.read_text(encoding="utf-8"))
+            self.assertEqual(set(ledger), PRODUCTION_LEDGER_KEYS)
+            self.assertTrue(all(row["status"] == "complete" for row in ledger["dispatches"]))
+            self.assertFalse(ledger["recovery_events"])
+            reserved = self._instant(ledger["first_reserved_at"])
+            self.assertLessEqual(clocks["packet"], reserved)
+            for source in receipt["source_refs"]:
+                fetched = self._instant(source["fetched_at"])
+                self.assertLessEqual(reserved, fetched)
+                self.assertLessEqual(self._instant(source["observed_at"]), fetched)
+                self.assertLessEqual(fetched, self._instant(discovery["generated_at"]))
+            self.assertLess(self._instant(receipt["generated_at"]), web._cutoff(self.decision_date))
+        self.assertLess(self._instant(assessment["generated_at"]), web._cutoff(self.decision_date))
+
+    def test_runbook_state_filenames_are_derived_from_producer_slots(self):
+        """O3: every producer state slot must appear in the runbook under its full name."""
+        runbook_path = self._runbook_path()
+        self.assertTrue(runbook_path.is_file(), f"registered runbook is missing: {runbook_path}")
+        runbook = runbook_path.read_text(encoding="utf-8").replace("\\", "/")
+        expected_names = {
+            web.default_discovery_path(self.decision_date).name,
+            web.default_receipt_path(self.decision_date).name,
+            xfetch.default_discovery_path(self.decision_date).name,
+            xfetch.default_receipt_path(self.decision_date).name,
+            plan_budget.default_plan_budget_path(
+                "web", self.decision_date, state_dir=self.state,
+            ).name,
+            plan_budget.default_plan_budget_path(
+                "xai", self.decision_date, state_dir=self.state,
+            ).name,
+        }
+        state_names = {
+            raw.rstrip(".,`)")
+            for raw in re.findall(r"state/us_short/([^\s`|)]+\.json)", runbook)
+        }
+        parent_prefix = f"us_short_llm_theme_discovery_query_plan_parent_{self.decision_date}_"
+        for name in state_names:
+            if name.startswith(parent_prefix):
+                self.assertRegex(name, rf"^{re.escape(parent_prefix)}<[^>]+>\.json$")
+            else:
+                self.assertIn(name, expected_names)
+        self.assertTrue(state_names, "runbook must contain at least one explicit state filename")
+        # Required R1: this is deliberately bidirectional.  A runbook that only mentions a web
+        # slot, or abbreviates an X/plan slot with `...`, must fail instead of silently leaving a
+        # producer output undocumented.  The full-name requirement also makes a wrong-vendor
+        # mutation red without teaching the parser to guess what an ellipsis meant.
+        self.assertTrue(
+            expected_names <= state_names,
+            f"runbook must list every producer slot by full filename; missing={sorted(expected_names - state_names)}",
+        )
+        self.assertNotRegex(
+            runbook,
+            rf"us_short_llm_theme_discovery_(?:tavily|deepseek|xai)_{re.escape(self.decision_date)}_budget\.json",
+        )
+
+    def _runbook_path(self, decision_date=None):
+        """Keep the runbook leg on the same decision-date slot as the packet under test."""
+        slot = self.decision_date if decision_date is None else decision_date
+        return REPO_ROOT / "docs" / f"us_short_soft_discovery_probe_{slot}_runbook.md"
+
+    def test_runbook_path_tracks_packet_decision_date(self):
+        """Optional O1: a future packet slot must not keep reading the 20260809 runbook."""
+        current = datetime.strptime(self.decision_date, "%Y%m%d").date()
+        alternate = (current + timedelta(days=1)).strftime("%Y%m%d")
+        self.assertEqual(
+            self._runbook_path(alternate).name,
+            f"us_short_soft_discovery_probe_{alternate}_runbook.md",
+        )
 
 
 if __name__ == "__main__":

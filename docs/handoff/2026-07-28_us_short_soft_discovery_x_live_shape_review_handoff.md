@@ -2355,3 +2355,125 @@ A4 把付费收敛成一次可对账的事务、P5 把入口绑到计划——�
 **同日第三刀：付费搜索未约束到接受窗口（已修）**。20260809 web lane 只差 ratio；读盘定因是 33/40 条结果为窗口外旧闻——钱付了本地扔掉。**regroup 无错、改措辞也无用**（模板已写排除宏观评论，搜索 API 不听否定指令；没绑上票的 4 条来自智库/Facebook/NGO/地产行研）。修法：新增单一定义 `paid_gateway.DECISION_WEEK_LOOKBACK_DAYS`，Tavily 请求体与 `fetch_web._decision_week_start` 同源。**只落在 web lane 的调用参数，不碰共享模板、不碰 X**——所以「四条模板两 lane 共享」那个死结在本刀不适用。本地窗口一行未改，Tavily 若忽略 `days` 行为与今天相同。**离线证不了 `days` 被采纳**，下一枪看 `published_at_outside_decision_week` 是否从 33 掉下来。
 
 **仍待办**：裁决器手搓 fixture 那一类（本轮仍未做）；模板措辞按诊断结论**暂不改**。
+
+## 2026-08-09 追加：裁决器 production-seam 测试具体执行方案（仅方案，未写代码）
+
+**目标**：关闭 `R-USSHORT-QUERY-QUALITY-ASSESSOR-HANDCRAFTED-SEAM-FIXTURES`。后续实现最终只改 `tests/provider/test_us_short_soft_discovery_query_quality_probe_assess.py`，让裁决器在临时根中读取 reviewed builder、真实 plan budget/gateway、真实 Web/X offline runner 与正式 pair 写门产出的五类输入；不改 production/schema/packet/阈值/metric，不联网、不用 key、不写 20260809 正式槽。完整理由与覆盖矩阵见 register 同名条目。
+
+### 一刀落地顺序
+
+1. 保留现有 legacy `20260730` 手写 fixture 与全部 tamper/clock/path/immutability case；新增独立 production-seam class/test，不替换、不删除、不放宽旧断言。
+2. 复制 tracked 20260809 packet 到 `TemporaryDirectory`；照抄既有 `assess/probe_paths/web/xfetch` 的 ROOT/STATE_DIR/DEFAULT_RAW_ROOT patch 清单，并补 `assess.NEW_PACKET_PATH`。writer 全部显式接 temp root/state/raw，禁止触碰真实 `state/us_short` / `provider_samples`。
+3. 调 `build_parent_plan_from_reviewed_policy(decision_date=packet slot, generated_at=T0)`；经 `query_plan.write_parent_plan(... gitignored=lambda _: True)` 与 `read_parent_plan(require_reviewed_policy=True)` 得到真实 artifact-bound plan document，不手搓 artifact SHA/path。
+4. 同一 plan 分别 direct `reserve_plan_budget`；Web 用 `PaidDispatchGateway(...).dispatch_web_search_all` 加既有 `dispatch_web_regroup_all` 形成 4+4 完整 ledger，X 用 `dispatch_x_search_all` 形成 4 条 ledger。全部喂本地 fake callable + 显式 no-op persistence sink；不得创建 provider client、网络请求或真实扣账。
+5. 调 `run_web_fetch` / `run_x_fetch` 的 offline fake-client 分支，均传 `queries=None + parent_plan=document`。fake rows 由 producer 自己产生至少一条 drop；fake LLM/X JSON 让主题只绑定一个由生产 helper 派生的 source id、三个成员共用该源，从而复现真实 `member_bound_source_ratio` fail 形状。禁止手填 `drop_ledger`、`themes`、`source_refs`。
+6. 先断言 producer shape：两条 discovery 都有 schema-valid `input_sha256`；两条 receipt 都有与同一 plan artifact/ordered query records 完全一致的 `plan_binding`；drop ledger 非空；至少一个主题恰好一条 source；每个主题钟等于其 bound source 的最大 `observed_at`，且至少一条 source `observed_at < fetched_at`。
+7. 两条 `(discovery, receipt)` 都经 `publish_decision_pair` 落到 temp exact slots；assessor 再走正常 build/write 到 temp assessment。断言五类 input SHA 全绑定、single-source ratio 确实 fail、verdict 为 preregistered inconclusive、无额外结构错误。
+
+### 时钟只有一个来源
+
+不写任何 ISO 时间字面量。解析 packet `generated_at` 为 `T0`，只用派生增量得到 `T_reserved`、`T_source_observed`、`T_source_fetched`、`T_discovery/receipt`、`T_assessment`；patch `plan_budget._stamp=T_reserved`，fake row publication/creation time=`T_source_observed`，runner generated/fetched time=`T_source_fetched`。调用前同时断言：
+
+`packet.generated_at <= ledger.first_reserved_at <= source.fetched_at <= discovery/receipt.generated_at < 09:30 ET decision open`，`source.observed_at <= source.fetched_at`，`theme.observed_at = max(bound source.observed_at)`，且 assessment 也早于 open。合法未来 packet 换槽时只靠 packet/cutoff 派生，不改时刻字面量。
+
+### 两个字段的明确选择
+
+- `plan_binding`：**assessor 有意不读**。它比 `receipt["queries"]` 多证明 plan artifact identity 与 query-id↔text-hash 映射，但当前 packet text 门 + ledger query-id 门已分别承重；强加 assessor 校验会重复挡同一路径并破坏 legacy 20260730。seam 直接验证 producer 生成的 binding 与真实 temp plan 一致，不谎称 assessor 已消费。
+- `input_sha256`：**assessor 有意不读**。五类输入不含可独立复算它的 raw producer input；只验格式重复 schema，拿 discovery 自证是恒真式。seam 只证明真实 runner 会生成并通过 schema。
+
+### 防脆注释与植入对照
+
+测试注释必须列明合法红灯：注册 packet/slot、reviewed query bytes/order、provider envelope、producer schema、plan-binding、offline evidence reason、默认路径、scope 方言、主题钟、drop normalization 或 single-source fixture 形状经正式变更时，seam 都可能合法变红；先审 contract，再同步测试，禁止手改 producer output 追绿。断言关系/集合，不锁 temp path、UUID、pid、完整 identity/source-id 或精确 drop 数。
+
+实施轮串行做两次临时 source mutation并逐字节恢复：
+
+- gateway stage-1 scope `query_id or query_text → query_text`：新增 seam 必须精确红在 `sha256(query_id)` scope / `plan budget ledger query scope is not exact`。
+- assessor bound-source clock `observed_at → fetched_at`：因 seam 保证严格 `observed_at < fetched_at`，必须精确红在 `theme observed_at cannot be earlier than its bound source fetches`。
+
+每次只植入一处，记录前后 SHA，恢复后 SHA 一致并转绿；最终 production diff 必须为零。
+
+### 诚实边界与验收
+
+`run_web_fetch` / `run_x_fetch` 的 offline contract 会同时写 `execution_mode!=live_authorized`、provider/network=false、transport counts=0。因此不可能在不手改 receipt 的前提下让 inconclusive 只剩 `execution_mode_not_live_authorized`。本刀不得伪造该单一理由；应精确接受四项 production-offline 集合：`execution_mode_not_live_authorized`、`provider_calls_not_proven`、`tavily_query_call_count_not_proven`、`xai_query_call_count_not_proven`，并要求除此之外无其他 reason。若必须只剩一项，STOP，需另行授权 production execution-evidence contract 变更。
+
+固定 Python 单跑新增 seam → assessor 全文件（旧 tamper 表全保留）→ builder/plan-budget/Web/X focused → 最后串行 discovery 超集。超集若只随机红在 conformance spawn 的 `tests/provider/test_us_short_weekly_capstone_soft_discovery` route case，同时新增 seam、assessor 全文件及该 case 单跑均绿且红点漂移，记既有 flake；新增/assessor/producer focused 的确定红或可稳定复现的同一红点均是真红。前后 `state/us_short` / `provider_samples` path/bytes/mtime/SHA 必须零变化，`git diff --check` 通过。
+
+## 2026-08-09 追加：reviewer 对上节方案的判断与三条优化（未改方案本体，供实施轮合并）
+
+**判断：方案成立，可照此实施。** 我逐条核了它的承重机制，不是看措辞：`plan_budget._stamp`（`:148`）确实存在且可 patch；四个 inconclusive 理由串在 assessor 里各命中一次；`dispatch_web_search_all` / `dispatch_web_regroup_all` / `dispatch_x_search_all` 三个方法齐全；两条 runner 的 `queries` 类型确为 `... | None`，且 `parent_plan` 非空时由 `resolve_stage1_plan_binding` 派生、第 31–32 行才对 None 报错——**「`queries=None + parent_plan=document` 迫使 query bytes 走真实派生」这一步成立**。
+
+两处值得记名的判断质量：① 它**驳回了 reviewer 原建议**的「唯一 inconclusive 理由 = `execution_mode_not_live_authorized`」，指出 offline contract 必然同时写 provider/network=false 与零 transport counts，硬凑单一理由等于重建本条要关掉的手搓缝——这个反驳是对的，且它选择停下要授权而不是自行改 production；② `plan_binding` 不进 assessor 的裁决，与 reviewer 当日实测结论一致（把 assessor 绑到单槽 builder 会打死 legacy `20260730`，实测 113 errors）。这两处说明是真分析过，不是看起来合理的文字。
+
+### O1（主要优化）：加一条「键集闭合」断言，否则只挡住了半个类
+
+本类不只是「约定漂移」，还有**「生产方造了证据、没人读、也没人知道它存在」**——`plan_binding` 与 `input_sha256` 正是这一半，它们躺在真产物里数月无人察觉，而现有方案是靠 reviewer 手工 diff 才发现的。方案对这两个字段各自给了裁决，但**没有任何机制拦住第三个这样的字段**：下次 producer 再加一个字段，仍然没人知道。
+
+建议在 seam 里补一条廉价谓词：对 producer 造出的 discovery / receipt / ledger，断言其**顶层键集等于一个记录在案的期望集合**（等值，不是包含）。新增字段会让 seam 红，逼实施者做一次显式选择——读它、或写明「有意不读」并登记——而不是静默累积。这正是能在第一天就把 `plan_binding` 顶出来的机制，也符合本仓「同类第二次出现就交谓词」的规矩。键集是 contract 的一部分、不是易变值，不会造成脆。
+
+### O2：冻结 `_stamp` 与 `_owner_is_alive` 的墙钟冲突（大概率休眠，但必须确认而非假设）
+
+方案要把 `_stamp` 冻到 packet 派生的过去时刻——**这是必须的**，不能让账本走真实 now：assessor 要求 `last_reserved_at <= source.fetched_at`，而 `_validate_fetch_clock` 又禁止 `fetched_at` 晚于真实 now，两条一起会把 `fetched_at` 逼成「等于此刻」的不可安排状态。
+
+但 `_owner_is_alive`（`plan_budget.py:529`）的 `current = now or datetime.now(timezone.utc)` 用的是**真实墙钟**：心跳一旦是过去的冻结值，age 必然远超 `OWNER_HEARTBEAT_TTL_SECONDS=30`，owner 恒判为死。
+
+实测它只在 **in-flight 行**上被调用（`:639` 预留路径、`:893` stale 回收），而 seam 的每次 dispatch 同步收口、不留 in-flight 行，故**正常路径大概率不触发**。实施轮请显式确认一次，别假设；若确实触发，症状是预留/派发把上一条自己的行当成死 owner 回收。可选解法按代价排序：给该判定注入 `now`（签名已支持 `now=`）→ 让 patch 的 stamp 随调用递增而非恒定 → 最后才考虑改 production（须先停下要授权）。
+
+### O3：运行单那条腿不在覆盖面内，请显式表态
+
+本类 2026-08-09 响的三次里，第三次（运行单指向 A4 前的 per-vendor 账本名）住在**文档**里，不在测试 seam 的射程内。它同样是「两边必须一致却各写一份」，而且它会在**花钱的中场检查点**上撞出 file-not-found。方案通篇未提。
+
+两条路二选一，别留空白：(a) 在覆盖矩阵里明确写「文档侧漂移不在本刀范围」；(b) 顺手加一道廉价机器核对——运行单里写全的每个 state 文件名，必须能由 producer 的 `default_*_path` 派生出来（reviewer 当日是手工跑的，脚本化约十行）。(b) 更划算，因为每次改期都会重新生成运行单，漂移会复发。
+
+### O4（记账）：覆盖矩阵缺一条限制
+
+四项 offline 理由使 verdict 恒为 `inconclusive`，因此本 seam **永远验证不到 verdict 映射**（pass / revise / inconclusive 三选一的判定逻辑）。指标值可断言，映射不行。矩阵目前只列了 live-CLI 侧的缺口，建议把这条也写进「明确覆盖不到」，避免日后误以为裁决逻辑已被 seam 守住。
+
+## 2026-08-09 Codex executor/fixer：优化方案已实施（OPEN-NOT_VERIFIED）
+
+### 实施范围
+
+- 只修改 `tests/provider/test_us_short_soft_discovery_query_quality_probe_assess.py`；旧 `QueryQualityProbeAssessmentTest`、20260730 手写 fixture、细粒度 tamper/clock/path/immutable/schema 断言全部保留。未改 production、schema、packet、阈值或 metric const；未联网、未读 key、未调用 provider、未写真实 `state/us_short` / `provider_samples`。
+- 新增 `ProductionQueryQualityProbeSeamTest`：从 tracked 20260809 packet 复制到 TemporaryDirectory，调用 `build_parent_plan_from_reviewed_policy` → `query_plan.write_parent_plan/read_parent_plan`，再由 `reserve_plan_budget` + `PaidDispatchGateway` 生成 Web 4+4 与 X 4 个真实 plan ledger，随后以 `queries=None + parent_plan=document` 调 `run_web_fetch` / `run_x_fetch`，经同一道 `publish_decision_pair` 写 temp exact slots，最后走 assessor 正常 write door。
+
+### O1/O2/O3/O4 落点
+
+- O1 以等值键集锁定 producer contract：discovery 8 键、Web receipt 11 键、X receipt 13 键、plan ledger 17 键；新字段会红，不是 subset 检查。`input_sha256` 只作 producer/schema 形状证据；`plan_binding` 由 seam 比对真实 plan identity、ordered query hashes、artifact path/SHA，assessor 仍有意不读，避免重复挡 receipt query text/order 与 ledger query-id scope、也不绑死 legacy 20260730。
+- O2 只从 packet `generated_at` 派生所有时刻，断言 `packet.generated_at <= ledger.first_reserved_at <= source.fetched_at <= discovery/receipt.generated_at < decision open`、`source.observed_at <= fetched_at`、主题时刻等于 bound source `max(observed_at)`，并强制一条 `observed_at < fetched_at`。`_stamp` 冻结到派生 reserve 时刻；同步 dispatch 后 owner spy `call_count=0`、无 in-flight/recovery。若未来合法路径留下 in-flight 行，测试会红并要求注入 wall-clock，不能用 stale frozen heartbeat 追绿。
+- O3 取 (b)：机器检查 runbook 中**实际出现的** `state/us_short/*.json` 文件名均能由 Web/X/plan-budget `default_*_path` 派生，且拒绝旧 per-vendor ledger 名；当前 runbook 没有显式写 X 输出文件名，因此不宣称覆盖未写出的文档腿。
+- O4 明确不覆盖 pass/revise/inconclusive 映射：offline producer 必然给出且 seam 精确锁定四理由 `execution_mode_not_live_authorized`、`provider_calls_not_proven`、`tavily_query_call_count_not_proven`、`xai_query_call_count_not_proven`；不手改 receipt 伪造单理由。
+
+### 反向植入结果
+
+1. A4：将 gateway stage-1 scope 临时从 `query_id or query_text` 改为 `query_text`，新增 seam 精确红 `web plan budget ledger query scope is not exact`；恢复后 `engine/us_short_llm_theme_discovery_paid_gateway.py` SHA=`7F2E8E200649925B20477B8997592BBFC5C2EF368680FFA120ADDDB2E68C8AA7`。
+2. K3-R115：将 assessor bound-source 比较临时从 `observed_at` 改为 `fetched_at`，新增 seam 精确红 `web theme observed_at cannot be earlier than its bound sources`；恢复后 `runners/us_short_soft_discovery_query_quality_probe_assess.py` SHA=`FEACC0C64BE268824F0688E0F99EE1BC3A7B5A39873F8EC91BE91E4993326484`。
+
+### 验收与未覆盖面
+
+- 固定 Python：`C:\Users\cnhea\AppData\Local\Programs\Python\Python313\python.exe`。每条 launcher 命令先读取 `AGENTS.md` 和 `docs/pre_codex_self_review_checklist.md`。新增 seam `2 OK`（receipt `41f42c50d58a852d6346ff7e`）；assessor 全文件 `44 OK`（receipt `9b747a5782d0a4ccae6939ca`）；builder/plan-budget/Web/X focused `203 OK`（receipt `a87d88431604b34d3344c9dd`）。
+- discovery 超集 `441 tests / 173.385s` 唯一红为既有 conformance spawn route `tests/provider/test_us_short_weekly_capstone_soft_discovery...test_budget_preview_entry_degrades_any_soft_stage_exception_and_continues`；该 case 单跑 `1 OK`（receipt `c1eeb02680679d61132f7c15`），新增 seam、assessor 全文件与 producer focused 均绿，按既有 flake 处理，不归本刀。
+- 前后真实 worktree `state/us_short`、`provider_samples` 文件数均为 0，无 `20260809` 文件或 assessment；最终 production diff 为零。live CLI 的 credential/slot-absence 顺序、真实 Tavily/DeepSeek/xAI transport、raw provider capture、真实 `live_authorized` evidence，以及 pass/revise verdict branch 仍明确覆盖不到。
+
+### 自审与交接结论
+
+- matrix=producer builder/read + Web/X fetch/publish + Web 4+4/X 4 ledger + O1 keysets + O2 clock/owner + O3 runbook + O4 reason boundary + A4/K3-R115 mutations；register=updated；handoff=updated；focused=2+44+203 OK；full-lane=`441 tests / one known conformance spawn flake, route single-run 1 OK`；door=route-doc 14 tests + doc-governance 41 tests passed；review=NOT_VERIFIED（待 Claude Code 独立复审）；commit=NOT_PERFORMED；provider/network/paid=NOT_USED。
+- 结论：本刀已把 assessor 的离线测试从“手搓五类输入”切到真实生产方入口，且两次已修缺陷均能在不花钱的 seam 上精确转红；不把离线 inconclusive 误报成可判 verdict，也不把已知 conformance flake 误报为本刀真红。
+
+## 2026-08-09 Codex executor/fixer：Claude Required R1 + Optional O1 修复（OPEN-NOT_VERIFIED）
+
+### 修复范围
+
+- R1：运行单守卫改为完整文件名双向闭合。producer 的六个 Web/X discovery、receipt、plan-web/plan-xai budget 槽名必须全部在 runbook 中出现；runbook 中出现的非 parent-plan 名必须属于这六个槽。省略号不再被当成 X 侧文件名的替身。
+- O1：runbook 路径从 packet 派生的 `self.decision_date` 拼出，不再硬编码 `20260809`；新增替代日期正向测试，证明未来换槽仍会指向对应 runbook 名。
+- 为满足 R1，`docs/us_short_soft_discovery_probe_20260809_runbook.md` 补齐 X discovery、X receipt、plan-xai budget 的完整文件名；未改 production、schema、packet、阈值或 metric const。
+
+### 反向植入与验收
+
+- `plan_xai` 改为 `plan_WRONGVENDOR`：定点测试精确红在 expected-name membership。
+- 删除 X discovery 的完整文件名：定点测试精确红在 `expected_names <= state_names` 的缺失集合。
+- 将 runbook helper 改回固定 `20260809`：替代日期测试精确红；三次植入均串行恢复，runbook SHA=`301ED0A5CD0DA429488E3A1F5F91F441FB0A4CE95AA1450D02F10EAF9399DFA4`，测试 SHA=`1447544497185E3DA367A584D0947EFCD0CB0556ABC5FB128C25B11A24195CBA`。
+- 固定 Python 且每条命令先读 `AGENTS.md` 与 `docs/pre_codex_self_review_checklist.md`：seam `3 tests`（receipt `18bd5b317f461443653011e3`）、assessor `45 tests`（receipt `d94edb8b3f7ba2769c9bbb13`）、discovery 超集 `442 tests / 156.404s`（receipt `a6177a7a9159e7dbb72c9bf8`）通过；`state/us_short` / `provider_samples` 仍为 0 文件。
+
+### 自审与交接结论
+
+- matrix=R1 full-name parser + bidirectional slot closure + wrong-vendor/deletion mutations + O1 date-derived runbook path + hardcoded-date mutation；register=updated；handoff=updated；focused=3+45 OK；full-lane=`442 tests / 156.404s / OK`；door=route-doc 14 tests + doc-governance 41 tests passed；review=NOT_VERIFIED（待 Claude Code 独立复审）；commit=NOT_PERFORMED；provider/network/paid=NOT_USED。
+- 结论：R1 Required 与 O1 Optional 已按 reviewer 指定形状修复并有反向证据；在 Claude Code 独立复审前不关闭条目、不提交、不合入主树。
