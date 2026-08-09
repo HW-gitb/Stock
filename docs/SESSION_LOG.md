@@ -1,5 +1,19 @@
 # Session Log
 
+## 2026-08-09 — Claude 审查 PASS（000e capstone 测试隔离；lane 全量仍红，根因归我上轮放行的刀）
+
+- **Verdict/Action**: PASS。28 行删除不是移除隐私门——真 git 证明与 containment 被从一个 owned root 泛化成两个；探针由「查目录」改「查目录内文件」是必要的，因为 `state/us_short` 目录本身不被忽略、而 helper 在临时根内写了 `.gitignore: *`，只有文件形式对两个根都成立。新增守卫把五个 `STATE_DIR` 与 decision lock 钉在注入根上。
+- **Required**: 无（本刀）。正文只在 `docs/system_risk_register.md`。一件需知情：lane 全量仍 `FAIL 5220/5629`，停在 IO inventory，已由执行方另立 finding；**根因是我上一轮放行的 production-seam 刀**（新 seam 写了新路径未同步 inventory），而我两轮用的超集 pattern 结构上匹配不到那个守卫，所以绿灯放行。判据已写进 register：新增会写盘路径的测试，超集必须含 IO inventory 或直接走 full lane ledger。
+- **Verify**: review-evidence:b95026d24389。reviewer 自跑：discovery 超集 `Ran 443 / 183.7s / OK`、`receipt:b9a590c09e4610e0369c6dbd`，连续四轮的 conformance 矩阵红已消失、零残留；植入把 `state_dir` 退回 lane 真实根 → `Ran 53 / FAILED (errors=53)`，还原 sha256 逐字节一致；独立复现执行方自报的新红 `tests.test_us_short_test_io_inventory` → `Ran 18 / FAILED (failures=2)`。未起 §6a agent（rule 8：tests-only、零生产改动）。超时原因:读 gitignore 语义时 helper 的进程锁被在跑的超集占住，改走静态取证多花了一轮。
+- **Next**: 合入本刀；IO inventory 那条按其自身 finding 另刀处理，修完 lane 全量才能恢复。
+
+## 2026-08-09 — Codex 修复：capstone 测试隔离已落地；全量转停独立 IO-inventory 红（OPEN-NOT_VERIFIED）
+- **Verdict/Action**: capstone soft-discovery 测试已改用 lane state helper 与独立 provider raw helper；全部 state/lock owner 注入，六个 exception case 独占输出。未改生产、未提交；因果边界与完整证据见 register 的 capstone R-ID。
+- **Required**: capstone 两项 Required 已实施，Optional=无，待独立复审。full lane 的独立 inventory 首红另记 `R-USSHORT-QUERY-QUALITY-SEAM-ASSESSMENT-PATH-IO-INVENTORY-DESYNC`，故验证通道仍未全绿。
+- **Verify**: 固定主 Python；topology 与 reset 两类植入均精确转红。capstone `53 OK`；最终 resource matrix `1 OK / receipt:6886be00787db21e8121710f`；唯一 full `FAIL 5220/5629 / 173.3s`，其中 capstone `53 PASS`；inventory 单跑稳定同红；残留为零。
+- **Pre-Codex self-review**: A-F checked；matrix=2 Required done / Optional none / inventory separate；register=updated；handoff=updated；focused=resource matrix 1 OK + 2 planted red；full-lane=official FAIL 5220/5629 at inventory, capstone 53 PASS, no rerun；door=route 14 OK + doc-governance 41 OK；independent-self-review=not_used: unrequested test-infra slice, main-thread fallback。
+- **Next**: Claude Code：审查 capstone tests-only 隔离修复；inventory 阻断按 register 另刀处理。
+
 ## 2026-08-09 — Claude 审查 PASS（000e production-seam 第二轮：R1 已闭）
 
 - **Verdict/Action**: PASS。R1 已真闭：守卫改双向 `expected_names <= state_names`，另加禁止 A4 前 per-vendor 账本名的反向断言；运行单省略写法展开为全名，是新门逼出的必要改动、不算越界。O1 的 `_runbook_path` 已按 packet decision_date 派生。

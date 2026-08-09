@@ -2477,3 +2477,44 @@ A4 把付费收敛成一次可对账的事务、P5 把入口绑到计划——�
 
 - matrix=R1 full-name parser + bidirectional slot closure + wrong-vendor/deletion mutations + O1 date-derived runbook path + hardcoded-date mutation；register=updated；handoff=updated；focused=3+45 OK；full-lane=`442 tests / 156.404s / OK`；door=route-doc 14 tests + doc-governance 41 tests passed；review=NOT_VERIFIED（待 Claude Code 独立复审）；commit=NOT_PERFORMED；provider/network/paid=NOT_USED。
 - 结论：R1 Required 与 O1 Optional 已按 reviewer 指定形状修复并有反向证据；在 Claude Code 独立复审前不关闭条目、不提交、不合入主树。
+
+## 2026-08-09 Codex executor/fixer：capstone 测试隔离已修；全量转停独立 IO-inventory 红（OPEN-NOT_VERIFIED）
+
+### 本轮部件与边界
+
+- 本轮只修 `tests/provider/test_us_short_weekly_capstone_soft_discovery.py` 的测试资源隔离，不改 `runners/us_short_weekly_capstone.py`、soft-discovery producer、assessor、schema、packet、阈值或真实 state。
+- 所有命令在 `D:\cnhea\Codex\worktrees\000e\Stock` 执行；每条测试命令先整读 `AGENTS.md` 与 `docs/pre_codex_self_review_checklist.md`，再走固定主 Python launcher/ledger。未联网、未调用 provider、未读取 key、未写主树或 20260809 真实槽。
+- 因果结论保持克制：真实 20260809 产物暴露了隔离缺陷；未做移走文件的反事实，故不称其为已证唯一根因。旧 full 的 `4470/5646` 是 fail-fast，不是 1176 个失败。
+
+### Required / Optional 矩阵
+
+| 项 | 结论 |
+|---|---|
+| Required：state / lock owner 用 lane 专用临时根 | 已实施：`temporary_us_short_state_directory(ROOT)` owned container → `case_state/`；Web/X/ingest/validate/candidate-list/decision-lock 全注入。 |
+| Required：同一测试六个 soft-stage exception case 不共享同名输出 | 已实施：每 case 重建两类 owned root；`seen_preflight_paths` 把唯一性变成确定性守卫。 |
+| Optional | 无；因果措辞边界已明确，不作为代码 Optional。 |
+
+### 红绿与植入证据
+
+- 修复前新增 topology guard 精确红：state 私有根实际在 provider temp subtree，未落在 lane state root。
+- 最终 capstone 模块：`53 OK / receipt:e10936d969960ac4103699ec`。
+- 最终 resource matrix：`1 OK / receipt:6886be00787db21e8121710f`；矩阵自身执行正反顺序。
+- 禁用 per-case reset 的植入对照：同一精确测试产生 5 个 failure，全部点名 `each failure case must own a fresh preflight output path`；逐字恢复后 `1 OK / receipt:6f0f53e9ef6392af42cc2ab8`。
+- 合法未来变红条件已写入测试注释：state root 合法迁移、新增 state owner、或 freshness 契约改为支持同路径同字节幂等复用。发生这些状态时先复核契约，再更新完整 owner/守卫，禁止回指 repo-wide state。
+
+### 唯一 full-lane 结果与新阻断
+
+- official 命令按用户明确的“恢复全量验证通道”要求运行一次，选择器仍为 `discover -s tests -p test_us_short*.py`；结果 `FAIL / 5220 ran / 5629 discovered / 173.3s`，不是 409 个测试失败。
+- 同轮 `provider.test_us_short_weekly_capstone_soft_discovery` 明确 `53 PASS`，说明 capstone 修复在全量并发环境承重。
+- 唯一首红为 `tests.test_us_short_test_io_inventory...test_b0_inventory_is_reproducible_and_allowlist_is_exact`：query-quality seam 的 `kwarg:assessment_path` 是新的未登记 `class4_unresolved_write`。该用例单跑稳定复现，故不是既有 conformance spawn flake，也不能归因于 capstone。
+- 当前刀到此停止，不越权顺手改第二个部件；新 Required 已写入 risk register 的 `R-USSHORT-QUERY-QUALITY-SEAM-ASSESSMENT-PATH-IO-INVENTORY-DESYNC`。下一刀先 tests/docs-only 收该 inventory key，再用新最终 diff 跑一次 official full lane；本轮不得重复慢跑掩盖首红。
+
+### 自审与交接
+
+- A：隔离类覆盖两类根、五个 state owner、decision lock 与六个 subtest 输出；authority 为共享 test-root helper 的 ownership marker + real `git check-ignore` proof。
+- B：全仓核对旧测试名/owner/temporary helper 消费面，无 production 调用点变化；新首红另立条目，不混写成 capstone 失败。
+- C：既有 zero-hidden-file、freshness、fail-closed 与 private-path 断言均保留；两条 planted red 均在目标守卫转红，未 patch 判据来源。
+- D：不适用；没有自然语言分类器或关键词门。
+- E：`CURRENT` 未写 pending gate；当前状态只在 register、SESSION_LOG 顶部与本 handoff。
+- F：最终 diff、BOM/U+FFFD、残留、door 结果见同轮 SESSION_LOG；独立自审未使用（未获请求且规则禁止主动起 agent），走 main-thread checklist fallback。
+- 交接结论：capstone tests-only 修复 ready for Claude Code 独立审查；整条 full lane 仍 FAIL，reviewer 不得把 capstone focused PASS 扩写成验证通道已恢复。

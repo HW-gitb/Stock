@@ -29,7 +29,10 @@ from tests.provider.test_us_short_batch5_full_universe_momentum_producer import 
     _candidate_artifact,
 )
 from tests.provider.test_us_short_batch5_full_universe_theme_producer import _classification_packet
-from tests.provider.us_short_private_test_root import temporary_provider_directory
+from tests.provider.us_short_private_test_root import (
+    temporary_provider_directory,
+    temporary_us_short_state_directory,
+)
 
 
 ROOT = Path(__file__).resolve().parents[2]
@@ -99,10 +102,12 @@ def _source_packets(
 
 class WeeklyCapstoneSoftDiscoveryStageTest(unittest.TestCase):
     def setUp(self) -> None:
+        self.state_root_context = temporary_us_short_state_directory(ROOT)
+        self.state_private_root = Path(self.state_root_context.__enter__())
+        self.state_dir = self.state_private_root / "case_state"
+        self.state_dir.mkdir()
         self.tempdir = temporary_provider_directory(ROOT)
         self.temp_root = Path(self.tempdir.__enter__())
-        self.state_dir = self.temp_root / "state" / "us_short"
-        self.state_dir.mkdir(parents=True)
         self.patches = [
             mock.patch.object(web, "STATE_DIR", self.state_dir),
             mock.patch.object(xfetch, "STATE_DIR", self.state_dir),
@@ -121,7 +126,7 @@ class WeeklyCapstoneSoftDiscoveryStageTest(unittest.TestCase):
         ]
         for patcher in self.patches:
             patcher.start()
-        # Every test in this class publishes into `self.temp_root`, and each one
+        # Every test in this class publishes into one of the two owned roots, and each one
         # was paying `git check-ignore` per publish-path check: 635 process spawns
         # across the class, 24% of its wall clock. The seam below answers those
         # from the owned root instead, after proving with real Git -- once -- that
@@ -135,6 +140,7 @@ class WeeklyCapstoneSoftDiscoveryStageTest(unittest.TestCase):
         for patcher in reversed(self.patches):
             patcher.stop()
         self.tempdir.__exit__(None, None, None)
+        self.state_root_context.__exit__(None, None, None)
 
     def _ctx(self, *, enabled: bool):
         ctx = capstone.resolve_capstone_context(
@@ -271,31 +277,38 @@ class WeeklyCapstoneSoftDiscoveryStageTest(unittest.TestCase):
     def _owned_private_root_git_check(self):
         """Keep the repeated conflict matrix off the process-spawn hot path.
 
-        ``temporary_provider_directory`` creates a fresh child of the repository's
-        gitignored ``provider_samples`` root.  Prove that fact with real Git once per
-        transition, then answer only the two local gitignore adapters for paths inside
-        that exact owned root.  The production containment, suffix, and exact-slot
+        The shared helpers create fresh children of the repository's gitignored
+        ``provider_samples`` and ``state/us_short`` roots.  Prove both facts with real
+        Git once per transition, then answer only the local gitignore adapters for paths
+        inside those exact owned roots.  The production containment, suffix, and exact-slot
         checks still run; an unexpected path is delegated to its real implementation.
         Direct private-path policy tests keep exercising the actual Git command for
         tracked and non-private paths.
         """
         original_run = subprocess.run
-        probe = original_run(
-            ["git", "check-ignore", "-q", "--", str(self.temp_root)],
-            cwd=ROOT,
-            stdout=subprocess.PIPE,
-            stderr=subprocess.PIPE,
-            check=False,
+        owned_roots = tuple(
+            path.resolve() for path in (self.temp_root, self.state_private_root)
         )
-        self.assertEqual(probe.returncode, 0, "test-private root must be gitignored")
+        for owned_root in owned_roots:
+            probe_path = owned_root / "__gitignore_probe__.json"
+            probe = original_run(
+                ["git", "check-ignore", "-q", "--", str(probe_path)],
+                cwd=ROOT,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.PIPE,
+                check=False,
+            )
+            self.assertEqual(probe.returncode, 0, "test-private root must be gitignored")
 
         def owned_root_check(path: Path) -> bool:
             checked_path = Path(path).resolve()
-            try:
-                checked_path.relative_to(self.temp_root.resolve())
-            except ValueError:
-                return False
-            return True
+            for owned_root in owned_roots:
+                try:
+                    checked_path.relative_to(owned_root)
+                except ValueError:
+                    continue
+                return True
+            return False
 
         original_web_gitignored = web._gitignored
         original_policy_gitignored = publish_policy._gitignored
@@ -321,6 +334,40 @@ class WeeklyCapstoneSoftDiscoveryStageTest(unittest.TestCase):
                  capstone, "reject_nonprivate_output_path", side_effect=test_root_private_path_check,
              ):
             yield
+
+    def test_state_and_lock_roots_are_injected_below_the_lane_state_root(self):
+        """Keep this class independent from whatever artifacts operators publish.
+
+        A legitimate future move to a system-temporary state root, or a new producer
+        that owns another state coordinate, will make this guard red.  Review that
+        contract first, then update the complete owner list instead of pointing a
+        missed owner back at the repository-wide state root.
+        """
+        lane_state_root = (ROOT / "state" / "us_short").resolve()
+        self.assertEqual(self.state_private_root.parent.resolve(), lane_state_root)
+        self.assertEqual(self.state_dir.parent.resolve(), self.state_private_root.resolve())
+        self.assertNotEqual(self.state_dir.resolve(), lane_state_root)
+        self.assertEqual(
+            {
+                "web": web.STATE_DIR.resolve(),
+                "x": xfetch.STATE_DIR.resolve(),
+                "ingest": ingest.STATE_US_SHORT_DIR.resolve(),
+                "validate": validate.STATE_DIR.resolve(),
+                "universe": universe.CANDIDATE_LIST_DIR.resolve(),
+            },
+            {name: self.state_dir.resolve() for name in (
+                "web", "x", "ingest", "validate", "universe",
+            )},
+        )
+        ctx = self._ctx(enabled=True)
+        self.assertEqual(
+            capstone._decision_lock_path(ctx),
+            (
+                self.state_dir
+                / "_transaction_locks"
+                / f"{ctx.decision_date}.lock"
+            ).resolve(),
+        )
 
     def test_disabled_is_inert_and_default_one_click_pipeline_includes_soft_discovery(self):
         ctx = self._ctx(enabled=False)
@@ -686,7 +733,7 @@ class WeeklyCapstoneSoftDiscoveryStageTest(unittest.TestCase):
     def test_the_owned_root_seam_answers_only_for_the_root_it_proved(self) -> None:
         """The control for hoisting the git-check seam to the whole class.
 
-        The seam is only allowed to answer for paths inside a root it proved
+        The seam is only allowed to answer for paths inside roots it proved
         ignored with real Git, and answering True there is the TRUE answer, not a
         convenient one: Git excludes the whole subtree under an excluded
         directory. Everything else must still reach the real implementation, or
@@ -695,12 +742,14 @@ class WeeklyCapstoneSoftDiscoveryStageTest(unittest.TestCase):
 
         import subprocess as _subprocess
 
-        # The proof the seam makes on entry, made again here in its own right.
-        probe = _subprocess.run(
-            ["git", "check-ignore", "-q", "--", str(self.temp_root)],
-            cwd=ROOT, stdout=_subprocess.PIPE, stderr=_subprocess.PIPE, check=False,
-        )
-        self.assertEqual(0, probe.returncode, "the owned root must really be gitignored")
+        # The proofs the seam makes on entry, made again here in their own right.
+        for owned_root in (self.temp_root, self.state_private_root):
+            probe_path = owned_root / "__gitignore_probe__.json"
+            probe = _subprocess.run(
+                ["git", "check-ignore", "-q", "--", str(probe_path)],
+                cwd=ROOT, stdout=_subprocess.PIPE, stderr=_subprocess.PIPE, check=False,
+            )
+            self.assertEqual(0, probe.returncode, "the owned root must really be gitignored")
 
         self.assertTrue(web._gitignored(self.temp_root / "raw" / "probe.json"))
         self.assertTrue(publish_policy._gitignored(self.state_dir / "probe.json", root=ROOT))
@@ -1716,8 +1765,24 @@ class WeeklyCapstoneSoftDiscoveryStageTest(unittest.TestCase):
                 lambda _ctx: {"status": "invalid_evidence", "effects": {}},
             ),
         }
-        for name, soft_stage in cases.items():
+        seen_preflight_paths: set[Path] = set()
+        for index, (name, soft_stage) in enumerate(cases.items()):
             with self.subTest(failure=name):
+                # Each case must start without the previous case's preflight output.
+                # A legitimate future idempotent-output contract may make reuse safe;
+                # until then, sharing the same bytes can collide at filesystem mtime
+                # resolution and turn this resource test order-dependent.
+                if index:
+                    self.tearDown()
+                    self.setUp()
+                    ctx = self._ctx(enabled=True)
+                    preflight_path = self.state_dir / "preflight_exception.json"
+                self.assertNotIn(
+                    preflight_path,
+                    seen_preflight_paths,
+                    "each failure case must own a fresh preflight output path",
+                )
+                seen_preflight_paths.add(preflight_path)
                 soft_stage.failure_policy = "zero_effect"
                 soft_stage.output_policy = "optional"
                 soft_stage.checkpoint_policy = "optional_result_only"
