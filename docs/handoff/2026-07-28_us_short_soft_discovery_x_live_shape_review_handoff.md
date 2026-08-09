@@ -2478,6 +2478,35 @@ A4 把付费收敛成一次可对账的事务、P5 把入口绑到计划——�
 - matrix=R1 full-name parser + bidirectional slot closure + wrong-vendor/deletion mutations + O1 date-derived runbook path + hardcoded-date mutation；register=updated；handoff=updated；focused=3+45 OK；full-lane=`442 tests / 156.404s / OK`；door=route-doc 14 tests + doc-governance 41 tests passed；review=NOT_VERIFIED（待 Claude Code 独立复审）；commit=NOT_PERFORMED；provider/network/paid=NOT_USED。
 - 结论：R1 Required 与 O1 Optional 已按 reviewer 指定形状修复并有反向证据；在 Claude Code 独立复审前不关闭条目、不提交、不合入主树。
 
+## 2026-08-09 Codex executor/fixer：新建 20260815 非交易探针槽（OPEN-NOT_VERIFIED）
+
+### 执行结论
+
+- 0815 是新的非交易 query-quality probe 槽；0809 已烧，四份执行 artifact 保持冻结。没有复用、改名、删除或覆盖 0809，也没有依赖向其写盘。
+- 新增 `docs/us_short_soft_discovery_query_quality_probe_packet_20260815.json`、对应 schema 与运行单；builder 当前默认槽改为 0815，assessor 注册表保留 legacy 20260730 + frozen 0809 并新增 current 0815。测试日期与来源钟从 packet/decision date 派生。
+- query policy 与 0809 完全相同：四条 query bytes/order、Web 4+4、X 4、零重试、threshold/metric const、verdict 与全部 prohibited effects 未变。创建本槽不构成 provider 授权；真跑前仍须用户对 0815 明确授权 Tavily/DeepSeek 与 xAI 两步。
+
+### 审查者应逐项核对
+
+1. 0809 packet/schema/runbook/assessment 的四个 SHA 是否仍等于 schema test 中冻结值；尤其 runbook 必须为 `301ed0a5cd0da429488e3a1f5f91f441fb0a4ce95aa1450d02f10eaf9399dfa4`。
+2. 0815 packet 相对 0809 是否只变化槽位日期、日期派生路径、生成/审批元数据与 burned-date 集；`scope/policy_draft/query_templates/provider_budget/pre_execution_gates/preregistered_evaluation/storage_and_secret_boundary/prohibited_effects` 必须逐字段全等。
+3. builder 是否拒绝 0802/0808/0809 且只接受 current 0815；assessor 是否同时读懂 20260730、0809、0815，而不是把历史槽替换掉。
+4. 0815 运行单是否列出 Web/X discovery、receipt、plan-web/plan-xai budget 六个完整文件名，明确硬截止 `2026-08-15T13:30:00Z`、不授权 provider、以及 PASS 后仍需独立审查再拆 4d-iii。
+5. 测试是否说明合法 future-red：正式换槽、policy/envelope/schema/budget/threshold/metric/effect/registry/slot-name 任一经审变更都可能使守卫红；正确动作是新建并冻结下一槽，不是放宽既有断言。
+
+### 植入对照与边界
+
+- current builder 临时倒回 0809，0815 parent-plan 用例精确红在 decision-date binding；0809 runbook 临时变一字节，冻结哈希守卫点名该文件；0815 ratio threshold 临时 `0.5→0.4`，schema const 守卫转红。三处均串行还原，未留下 production mutation。
+- 所有测试命令必须先读取 `AGENTS.md` 与 `docs/pre_codex_self_review_checklist.md`，使用固定主 Python。验收还须包含 focused receipt、official US-short full lane 的 `discovered==ran && PASS`、真实 `state/us_short` / `provider_samples` manifest 零变化，以及 route-doc + doc-governance door。
+- 本轮不 commit、不 merge、不写主树；只交 Claude Code 在 `D:\cnhea\Codex\worktrees\000e\Stock` 独立复审。provider/live/paid、20260815 真运行、裁决结果与 4d-iii 接入全部 `NOT_VERIFIED`。
+
+### 最终执行证据
+
+- packet/schema + builder + plan-budget + assessor production seam + IO inventory 的最终 focused：`130/130 OK`，机器收据 `receipt:bcc9ade34e1519cf8a3dacc2`。
+- 唯一 official US-short full lane：`PASS 5663/5663`、`COUNT_GATE discovered=5663 ran=5663 equal=True`、331.9 秒；conformance resource matrix 本轮通过，不存在需要与真红区分的 flake。
+- 交付前 door `55/55 OK`；真实 `state/us_short` / `provider_samples` 前后均 0 文件，manifest 同为 `4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945`。full 后的 door 覆盖了单例 focused receipt，所以随后 `full_pack_ledger check` 不再认原 `receipt:bcc9…`；ledger 本体仍保存同一 current code fingerprint 的 `5663 OK` 与 `count_gate_equal=true`。不要据此重跑第二次 full，也不要手改 ledger。
+- 以上只证明当前离线代码态与测试隔离闭合；不证明 provider 采纳 `days=7`，也不证明 0815 会 pass。真实效果只能在另行授权的 0815 付费运行后按冻结 packet 裁决。
+
 ## 2026-08-09 Codex executor/fixer：capstone 测试隔离已修；全量转停独立 IO-inventory 红（OPEN-NOT_VERIFIED）
 
 ### 本轮部件与边界

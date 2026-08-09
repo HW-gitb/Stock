@@ -36,8 +36,10 @@ from runners.us_short_discovery_publish_policy import (  # noqa: E402
 
 DEFAULT_PACKET_PATH = ROOT / "docs" / "us_short_soft_discovery_query_quality_probe_packet_20260730.json"
 PACKET_SCHEMA_PATH = ROOT / "schemas" / "us_short_soft_discovery_query_quality_probe_packet.schema.json"
-NEW_PACKET_PATH = ROOT / "docs" / "us_short_soft_discovery_query_quality_probe_packet_20260809.json"
-NEW_PACKET_SCHEMA_PATH = ROOT / "schemas" / "us_short_soft_discovery_query_quality_probe_packet_20260809.schema.json"
+FROZEN_20260809_PACKET_PATH = ROOT / "docs" / "us_short_soft_discovery_query_quality_probe_packet_20260809.json"
+FROZEN_20260809_PACKET_SCHEMA_PATH = ROOT / "schemas" / "us_short_soft_discovery_query_quality_probe_packet_20260809.schema.json"
+NEW_PACKET_PATH = ROOT / "docs" / "us_short_soft_discovery_query_quality_probe_packet_20260815.json"
+NEW_PACKET_SCHEMA_PATH = ROOT / "schemas" / "us_short_soft_discovery_query_quality_probe_packet_20260815.schema.json"
 PLAN_BUDGET_SCHEMA_PATH = ROOT / "schemas" / "us_short_llm_theme_discovery_plan_budget.schema.json"
 ASSESSMENT_SCHEMA_PATH = ROOT / "schemas" / "us_short_soft_discovery_query_quality_probe_assessment.schema.json"
 DISCOVERY_SCHEMA_PATH = ROOT / "schemas" / "us_short_llm_theme_discovery.schema.json"
@@ -455,6 +457,7 @@ def _packet_spec(packet_path: Path) -> tuple[Path, Path]:
     # the existing test isolation seam that patches that constant remains valid.
     registered = {
         DEFAULT_PACKET_PATH.absolute(): PACKET_SCHEMA_PATH,
+        FROZEN_20260809_PACKET_PATH.absolute(): FROZEN_20260809_PACKET_SCHEMA_PATH,
         NEW_PACKET_PATH.absolute(): NEW_PACKET_SCHEMA_PATH,
     }
     try:
