@@ -4,7 +4,7 @@
 
 - **Verdict/Action**: PASS，已提交并合入 master。删臂逐处复验：`REPLAY_ARM_SPECS`、`_shadow_trigger_percentile`、preset、program 整段 const、shadow/replay enum 全同步，代码·schema·preset 侧 `level_p95` 残留为 0，`facts["level"]` 与 Stage B 四臂原样，未知臂 `raise` 出口保留。O19 输出稳定原因码；O20 的原因只从闭合 enum 派生、进 capture payload SHA 并贯穿 outcome。epoch 按轨分绑一节仍是 PLAN-ONLY 文档。
 - **Required**: 无。新记三条 Optional（O21 公开摘要断言被搬进延迟周用例、O22 放松后的臂集强制腿无点名守卫、O23 执行方 focused 未走 bounded launcher）。正文只在 `docs/system_risk_register.md`。
-- **Verify**: review-evidence:32836e25b8ac。验收超集 `Ran 777 tests in 470.183s`、`RESULT status=PASS exit=0 tests=777`（`receipt:913efddb207da81e85e3cd25`，显式 600s，理由=实测 475.9s 超默认）。自写探针：新双臂 replay 与旧产物两条保留臂逐字段相同、顶层字段全等，旧产物 git 未改；`static_contract_error()` 独立重算为 `None`；两树均无私密 capture 根。植入：同时中和 `_validate_margin_capture` 两道臂集门 → `Ran 69 tests / OK`（无守卫，记 O22），还原后 sha 逐字节回到 `8b51f403…`。全量按 rule 4 由执行方跑、我未起。超时原因:验收超集 475.9s，植入对照不得与其并行、只能串行再跑 45s。
+- **Verify**: review-evidence:32836e25b8ac。验收超集 `Ran 777 tests in 470.183s`、`RESULT status=PASS exit=0 tests=777`（`receipt:913efddb207da81e85e3cd25`，显式 600s，理由=实测 475.9s 超默认）。自写探针：新双臂 replay 与旧产物两条保留臂逐字段相同、顶层字段全等，旧产物 git 未改；`static_contract_error()` 独立重算为 `None`；两树均无私密 capture 根。植入：同时中和 `_validate_margin_capture` 两道臂集门 → `Ran 69 tests / OK`（无守卫，记 O22），还原后 sha 逐字节回到 `8b51f403…`。全量：执行方记 `not_triggered`，我按 rule 6 在 PASS 门自跑，ledger `REFUSED`（提交后 receipt 不再绑代码态），按 rule 8 不为一行 print 再走一轮，记 `NOT_VERIFIED`（详见 register）。超时原因:验收超集 475.9s，植入对照不得与其并行、只能串行再跑 45s。
 - **Next**: Codex：执行
 
 ## 2026-08-09 — Codex executor/fixer：O19/O20 + 删除 `level_p95`（OPEN-NOT_VERIFIED）
