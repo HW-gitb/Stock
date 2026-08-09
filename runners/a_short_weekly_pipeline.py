@@ -1855,6 +1855,7 @@ def build_weekly_report(normalized_list: list, as_of: str, generated_at: str,
             "reference_date": price_data_through, "effective_ref_date": None,
             "row_count": 0, "universe_size": 0,
             "coverage_complete": False, "status": "unavailable",
+            "invalid_numeric_row_count": 0,
         }
     margin_coverage = dict(margin_coverage)
     status = margin_coverage.get("status")
@@ -1878,6 +1879,7 @@ def build_weekly_report(normalized_list: list, as_of: str, generated_at: str,
             raise ValueError("non-complete margin coverage cannot claim complete")
     else:
         raise ValueError("margin coverage has an invalid status")
+    margin_coverage.setdefault("invalid_numeric_row_count", 0)
     for value, label in ((available_cash, "available_cash"),
                          (new_exposure_capacity, "new_exposure_capacity")):
         if (value is not None
@@ -6004,7 +6006,10 @@ def main(argv=None, pro_factory=None, price_provider=None, semantic_provider=Non
     margin_coverage = ((ai.get("market_context") or {}).get("margin_coverage") or {
         "reference_date": price_data_through, "effective_ref_date": None, "row_count": 0,
         "universe_size": 0, "coverage_complete": False, "status": "unavailable",
+        "invalid_numeric_row_count": 0,
     })
+    margin_coverage = dict(margin_coverage)
+    margin_coverage.setdefault("invalid_numeric_row_count", 0)
     run_lineage = {"run_id": source_identity["run_id"],
                    "candidate_digest": source_identity["candidate_digest"],
                    "stage_status": "complete",

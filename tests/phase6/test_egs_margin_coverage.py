@@ -17,6 +17,7 @@ from engine.data.analysis_input_contract import AnalysisInputContractError, vali
 from runners.a_short_m67_render import render_weekly_markdown
 from runners.a_short_phase5_engine import _margin_source_is_unavailable
 from runners.a_short_weekly_pipeline import build_weekly_report, validate_weekly_report
+import runners.a_short_weekly_pipeline as weekly_pipeline
 from tests.test_a_short_weekly_pipeline import AS_OF, GEN, _feed, _normalized, _weekly
 
 
@@ -370,6 +371,19 @@ class MarginCoverageTests(unittest.TestCase):
 
         health_margin_schema = json.loads(DATA_HEALTH_SCHEMA.read_text(encoding="utf-8"))["properties"]["metrics"]["properties"]["margin_coverage"]
         jsonschema.validate(valid, health_margin_schema)
+
+    def test_weekly_missing_margin_fallback_keeps_observation_key_set(self):
+        weekly = weekly_pipeline.build_weekly_report(
+            [_normalized()], AS_OF, GEN, margin_coverage=None,
+        )
+        self.assertEqual(
+            set(weekly["margin_coverage"]),
+            {
+                "reference_date", "effective_ref_date", "row_count", "universe_size",
+                "coverage_complete", "status", "invalid_numeric_row_count",
+            },
+        )
+        self.assertEqual(weekly["margin_coverage"]["invalid_numeric_row_count"], 0)
 
     def test_weekly_source_binding_rejects_future_complete_reference_date(self):
         future_complete = {

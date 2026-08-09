@@ -1569,7 +1569,8 @@ def export_analysis_input(df_full, watch_df, tier1_final, latest_td, trade_dates
                 margin_observation.public_dict()
                 if isinstance(margin_observation, MarginObservation)
                 else {"reference_date": price_data_through, "effective_ref_date": None, "row_count": 0,
-                      "universe_size": 0, "coverage_complete": False, "status": "unavailable"}
+                      "universe_size": 0, "coverage_complete": False, "status": "unavailable",
+                      "invalid_numeric_row_count": 0}
             ),
             "moneyflow_coverage": moneyflow_coverage,
         },
@@ -1738,7 +1739,7 @@ class MarginObservation:
             "universe_size": self.universe_size,
             "coverage_complete": self.coverage_complete,
             "status": self.status,
-            "invalid_numeric_row_count": int(getattr(self, "invalid_numeric_row_count", 0)),
+            "invalid_numeric_row_count": int(self.invalid_numeric_row_count),
         }
 
 
@@ -2012,8 +2013,11 @@ def build_data_health(df_full, watch_df, tier1_final, analysis_input, latest_td,
         margin_observation.public_dict()
         if isinstance(margin_observation, MarginObservation)
         else {"reference_date": str((analysis_input or {}).get("price_data_through") or latest_td), "effective_ref_date": None, "row_count": 0,
-              "universe_size": 0, "coverage_complete": False, "status": "unavailable"}
+              "universe_size": 0, "coverage_complete": False, "status": "unavailable",
+              "invalid_numeric_row_count": 0}
     )
+    margin_coverage = dict(margin_coverage)
+    margin_coverage.setdefault("invalid_numeric_row_count", 0)
     if margin_coverage["status"] != "complete":
         warnings_.append(_health_issue(
             "margin_coverage", "margin source is not a complete reference universe",
@@ -2058,6 +2062,9 @@ def build_data_health(df_full, watch_df, tier1_final, analysis_input, latest_td,
                 actual=source.get("screening_engine_version"),
             ))
         analysis_margin_coverage = (analysis_input.get("market_context") or {}).get("margin_coverage")
+        if isinstance(analysis_margin_coverage, dict):
+            analysis_margin_coverage = dict(analysis_margin_coverage)
+            analysis_margin_coverage.setdefault("invalid_numeric_row_count", 0)
         if analysis_margin_coverage != margin_coverage:
             errors.append(_health_issue(
                 "margin_coverage_consistency",

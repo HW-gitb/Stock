@@ -449,7 +449,7 @@
             "effective_ref_date": {"type": ["string", "null"], "pattern": "^[0-9]{8}$"},
             "row_count": {"type": "integer", "minimum": 0},
             "universe_size": {"type": "integer", "minimum": 0},
-            "invalid_numeric_row_count": {"type": "integer", "minimum": 0, "description": "Rows with invalid required numeric margin fields; observational only and does not decide reference-date completeness."},
+            "invalid_numeric_row_count": {"type": "integer", "minimum": 0, "description": "Count of all rows with invalid required numeric margin fields, including rows on the reference date; only the reference-date subset can contribute to coverage_complete being false."},
             "coverage_complete": {"type": "boolean"},
             "status": {"enum": ["complete", "incomplete", "unavailable", "invalid"]}
           },
