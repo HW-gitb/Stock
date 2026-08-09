@@ -141,6 +141,7 @@ class UsShortMarketDiagnosticTotalReturnTest(unittest.TestCase):
             price_observation=_price_observation(),
             strategy_evaluable=True,
             strategy_weekly_return=0.03,
+            windows_aligned=True,
         )
         self.assertEqual("total_return_evaluable", benchmark["return_quality"])
         self.assertAlmostEqual(0.02, benchmark["weekly_return"])
@@ -156,6 +157,7 @@ class UsShortMarketDiagnosticTotalReturnTest(unittest.TestCase):
             price_observation=_price_observation(),
             strategy_evaluable=True,
             strategy_weekly_return=0.03,
+            windows_aligned=True,
         )
         self.assertEqual("price_return_diagnostic", benchmark["return_quality"])
         self.assertAlmostEqual(0.01, benchmark["weekly_return"])
@@ -191,6 +193,7 @@ class UsShortMarketDiagnosticTotalReturnTest(unittest.TestCase):
                 price_observation=_price_observation(),
                 strategy_evaluable=True,
                 strategy_weekly_return=0.03,
+                windows_aligned=True,
             )
 
     def test_complete_sidecar_with_wrong_price_date_downgrades_only_this_week(self) -> None:
@@ -200,6 +203,7 @@ class UsShortMarketDiagnosticTotalReturnTest(unittest.TestCase):
             price_observation=_price_observation(),
             strategy_evaluable=True,
             strategy_weekly_return=0.03,
+            windows_aligned=True,
         )
         self.assertEqual("price_return_diagnostic", benchmark["return_quality"])
         self.assertAlmostEqual(0.01, benchmark["weekly_return"])
@@ -214,6 +218,7 @@ class UsShortMarketDiagnosticTotalReturnTest(unittest.TestCase):
             price_observation=missing_price,
             strategy_evaluable=True,
             strategy_weekly_return=0.03,
+            windows_aligned=True,
         )
         self.assertEqual("unavailable", benchmark["return_quality"])
         self.assertIsNone(benchmark["dividend_sidecar_sha256"])
@@ -231,7 +236,20 @@ class UsShortMarketDiagnosticTotalReturnTest(unittest.TestCase):
                 price_observation=price,
                 strategy_evaluable=True,
                 strategy_weekly_return=0.03,
+                windows_aligned=True,
             )
+
+    def test_public_builder_requires_a_real_windows_aligned_value(self) -> None:
+        kwargs = {
+            "sidecar_observation": _sidecar()["weeks"][0]["benchmarks"]["VTI"],
+            "price_observation": _price_observation(),
+            "strategy_evaluable": True,
+            "strategy_weekly_return": 0.03,
+        }
+        with self.assertRaises(TypeError):
+            build_total_return_benchmark_observation(**kwargs)
+        with self.assertRaises(TotalReturnSidecarError):
+            build_total_return_benchmark_observation(**kwargs, windows_aligned="false")
 
 
 if __name__ == "__main__":

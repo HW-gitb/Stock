@@ -597,3 +597,160 @@ python .tools\full_pack_ledger.py run us_short "<trigger>" "receipt:<token>" 860
 - 这个 seam 现在对**整个类**生效。往这个类里加测试时，若要断言「某路径不被忽略」，**路径必须在 `self.temp_root` 之外**（根内 seam 会答 True，且那是真答案）。
 - `test_the_owned_root_seam_answers_only_for_the_root_it_proved` 是这条边界的守卫，别删。
 - 首版 P2 植入又打歪一次（放宽一个本来就成立的断言 → 全绿）。**对照全绿=打歪，不是覆盖充分**——本会话第五次。
+
+## 2026-08-09 追加：Knife5 后半段收口（OPEN-NOT_VERIFIED）
+
+### 改了什么
+
+- 新增 `D:\cnhea\Codex\worktrees\cb59\Stock\engine\us_short_market_diagnostic_etf_sidecar.py`：纯 builder，固定 VTI/IWB/SPY/QQQ 与 `dividends`、`splits`、`daily_adjusted`、`daily_unadjusted` 四类 source binding；按 ETF 局部输出 coverage/reason，不把缺失伪装成 total return。
+- 新增 `D:\cnhea\Codex\worktrees\cb59\Stock\runners\us_short_market_diagnostic_etf_sidecar_fetch.py`：复用现有 Massive capture helper、现有 per-execution 授权语义；标准化 sidecar 路径、请求前 logical/physical budget、raw gitignored、落盘前安全扫描、O_EXCL 幂等。
+- `D:\cnhea\Codex\worktrees\cb59\Stock\runners\us_short_market_diagnostic_weekly_fetch.py` 在既有 fetch 后生产同周 sidecar，并给 `settle_captured_week(total_return_sidecar_path=...)` 自动绑定同周路径；`D:\cnhea\Codex\worktrees\cb59\Stock\runners\us_short_weekly_capstone.py` 仍只使用 gated `market_diagnostic_fetch`。
+- `D:\cnhea\Codex\worktrees\cb59\Stock\engine\us_short_market_diagnostic_total_return.py` / `us_short_market_diagnostic_local_adapter.py` 保留 misaligned/no-sidecar 的 price-only 语义；测试与 inventory 快照同步。
+
+### 为什么改
+
+- `D:\cnhea\Codex\worktrees\cb59\Stock\docs\system_risk_register.md` 的 2026-08-08 裁决选 B：先升基准侧 ETF total return，不做 C（模型持仓股息）。若只造 sidecar 不接 weekly fetch/settle，用户每周一键仍不会得到 `total_return_evaluable`，所以三件必须同刀落。
+- 实现遵守六条硬约束：只挂既有 gated stage；预算发请求前判；not_started 零网络零字节；缺 key/厂商失败/分页或对账问题只局部降级；异常只留类名、raw 仅 gitignored `provider_samples/`；同周重跑不重抓不覆盖。
+
+### 验证命令
+
+```text
+C:\Users\cnhea\AppData\Local\Programs\Python\Python313\python.exe -m py_compile engine/us_short_market_diagnostic_benchmark_packet.py engine/us_short_market_diagnostic_etf_sidecar.py engine/us_short_market_diagnostic_local_adapter.py engine/us_short_market_diagnostic_total_return.py runners/us_short_market_diagnostic_etf_sidecar_fetch.py runners/us_short_market_diagnostic_rehearsal.py runners/us_short_market_diagnostic_weekly.py runners/us_short_market_diagnostic_weekly_fetch.py runners/us_short_weekly_capstone.py tests/test_us_short_market_diagnostic_etf_sidecar.py tests/test_us_short_market_diagnostic_local_adapter.py tests/test_us_short_market_diagnostic_rehearsal.py tests/test_us_short_market_diagnostic_weekly_advance.py
+cmd /c .tools\run_unittest_with_repo_pythonpath.cmd --timeout-seconds 900 tests.test_us_short_market_diagnostic_etf_sidecar tests.test_us_short_market_diagnostic tests.test_us_short_market_diagnostic_benchmark_packet tests.test_us_short_market_diagnostic_total_return tests.test_us_short_market_diagnostic_local_adapter tests.test_us_short_market_diagnostic_rehearsal tests.test_us_short_market_diagnostic_weekly_runner tests.test_us_short_market_diagnostic_weekly_advance tests.test_us_short_model_paper_capstone_wiring tests.test_us_short_market_diagnostic_authorization_conformance tests.test_us_short_capstone_checkpoint tests.schema.test_us_short_market_diagnostic_26w_schemas tests.provider.test_us_short_market_diagnostic_etf_capture tests.provider.test_us_short_weekly_capstone tests.test_us_short_test_io_inventory
+C:\Users\cnhea\AppData\Local\Programs\Python\Python313\python.exe .tools\full_pack_ledger.py run us_short "Knife5 ETF sidecar producer + gated fetch + settle binding" "receipt:659666f25a0aad1ff58cd333" 860 -- discover -s tests -p "test_us_short*.py"
+```
+
+### 验证结果
+
+- 固定主 Python 编译通过；最终 focused `303/303 OK`，receipt `receipt:659666f25a0aad1ff58cd333`；最终 full lane `PASS 5630/5630`，`COUNT_GATE discovered=5630 ran=5630`，442.3s/860s；ledger static `diff_check=PASS`、`py_compile=13`。
+- A–F 自审完成。反向红测三项均按预期转红并还原：预算门挖空→首请求测试红；窗口对齐门挖空→4 个 ETF joint-evaluable 断言红；settle 绑定挖空→sidecar path 断言红。inventory `22/22 OK`，新增测试 raw 已隔离到临时 gitignored provider root，未增 allowlist 项。
+- 首轮 full 曾因新增测试模块使 inventory `306→307` 而 fail-fast；已用仓库生成器同步 `D:\cnhea\Codex\worktrees\cb59\Stock\docs\us_short_test_io_inventory_20260801.json`，并重打最终 full。未执行真实 Massive provider、真实 model-paper、开钟、账户写入或 Ship gate。
+
+### 失效的旧结论
+
+- 「总回报 sidecar 全仓无 producer」：对本刀前的历史基线成立，已被上述 producer 改写；「每周一键没有 sidecar 绑定参数」也已由 `settle_captured_week` 参数与同周自动路径改写。
+- 「桌面 §9.1 的状态行仍是捕获段建成之前」：仍只作索引，未作为本轮审查对象，也未修改 `C:\Users\cnhea\Desktop\usshort-compare.md`；本轮验收以 register 2026-08-08 裁决和桌面 §3.5 五项清单为准。
+- 「只升基准必须等真实周」：用户 2026-08-08 已裁决现在做 B；真实周仍是后续测 X 的证据，不是本刀实现前置。
+
+### 下一步注意事项
+
+- 当前 Required `R-USSHORT-26W-DIAG-BOTH-SIDES-IGNORE-DIVIDENDS-AND-THAT-IS-NOT-NEUTRAL` 仍为 `OPEN-NOT_VERIFIED`，交给 Claude Code 独立复审；本工作树不 commit。独立审查 PASS 后由 reviewer/committer 按项目规则处理提交。
+- 以后每周只跑 capstone 一键：sidecar 复用既有 `market_diagnostic_fetch` 授权；缺 key/失败只落 degraded sidecar、周任务继续，不能新增确认或手工补参数。sidecar 合格后才可让消费器给出 `total_return_evaluable`，不合格仍是 price-only。
+- 本刀不启动 26 周计时、不产生真实成绩、不升级 C、不改变选股/操作建议/NAV/账户/Ship gate；开钟仍是独立的 `设计完成` 通知 + `diagnostic_start_receipt` 一次性动作。
+
+## 2026-08-09 追加：Knife5 后半段 ETF 股息 sidecar 的审查结论（FAIL）
+
+**审查对象**：`D:\cnhea\Codex\worktrees\cb59\Stock` 的未提交工作（17 改 + 3 新增；新增 = `engine/us_short_market_diagnostic_etf_sidecar.py` 507 行、`runners/us_short_market_diagnostic_etf_sidecar_fetch.py` 420 行、其测试 170 行）。该树当时落后 master 2 个提交且不干净，故未同步、按现状审。
+
+**成立的部分**：不碰选股/操作建议/仓位/NAV/Ship gate；密钥与 raw 卫生（两个写入根都 gitignored，写前正向确认，异常只留类名，落盘前派生扫描）；不新增授权门；dormant 零网络；预算在发请求之前判；总回报是从 source-bound 事件真复算而非照抄厂商数；`unavailable` 不导出 dividend sidecar SHA；窗口/epoch/周号/估值日四道独立绑定；sidecar JSON 幂等。`windows_aligned` 那处修复方向正确且其测试有牙（植入对照四 ETF 全红）。
+
+**拦下的**：四条 Required（两 P1 两 P2）+ 四条 Optional，正文全部在 `docs/system_risk_register.md` 同日节内。两条 P1 一句话：**读不到股息被当成没有股息，还升级成总回报**；**一次中断让那周永久取不回，且把现金腿一起卡死**。
+
+**验证命令与结果**：焦点超集 `discover -s tests -p "test_us_short_market_diagnostic*.py"`（`--timeout-seconds 900`）→ `Ran 422 in 342.779s OK`、`receipt:0fb32a4a99b6598dd1b44716`。全量按 AGENTS rule 4 不由 reviewer 重跑，引执行方 ledger 记录（`tests=5630 / 442.3s`）。reviewer 自写探针与植入对照见 SESSION_LOG 同日条的 `Verify`。
+
+**验证边界**：§6a 独立对抗 agent 已跑（read-only、离线、未改仓库）；其结论我不照单全收——F1/F3/F2 逐条回源码复核后才写进 register，其余按其自陈的覆盖缺口处理。未联网、未真跑 provider。`fetch_next_week` / `settle_captured_week` 未在真实 lifecycle + model-paper store 上端到端跑过（私有店夹具与并发测试抢跨进程锁），多周 `due` 循环、`no_count` 路径与 O3 的实际表现是源码推理而非实跑——这是本轮**明确未覆盖**的维度。
+
+**失效旧结论**：register `R-...-BOTH-SIDES-IGNORE-DIVIDENDS-AND-THAT-IS-NOT-NEUTRAL` 里 2026-08-09 那条「缺失局部降级、写一次幂等均由代码钉住」**不成立**，已被上述两条 P1 推翻；该条继续 `OPEN-NOT_VERIFIED`，不得据此翻 resolved。
+
+## 2026-08-09 追加：Knife5 后半段审查 Required + Optional 收口（OPEN-NOT_VERIFIED）
+
+### 改了什么
+
+- `D:\cnhea\Codex\worktrees\cb59\Stock\engine\us_short_market_diagnostic_etf_sidecar.py` 将不可读/空股息拒绝为 price-only、把 Decimal 行异常局部降级、并把局部价格区间收敛为不升级的 sidecar；`D:\cnhea\Codex\worktrees\cb59\Stock\engine\us_short_market_diagnostic_total_return.py` 令 `windows_aligned` 必传且只接受真 `bool`。
+- `D:\cnhea\Codex\worktrees\cb59\Stock\runners\us_short_market_diagnostic_etf_capture.py` 用 canonical raw 身份去除 run-scoped `observed_at`；`D:\cnhea\Codex\worktrees\cb59\Stock\runners\us_short_market_diagnostic_etf_sidecar_fetch.py` 预拒绝 stale `as_of_date`、隔离 raw 冲突；`D:\cnhea\Codex\worktrees\cb59\Stock\runners\us_short_market_diagnostic_weekly_fetch.py` 只在匹配周绑定成功后消耗显式 sidecar。
+- 在既有测试模块增补四条 Required、O1–O4 和 interval 回归；官方 inventory 生成器同步 `D:\cnhea\Codex\worktrees\cb59\Stock\docs\us_short_test_io_inventory_20260801.json`，没有扩张 allowlist。
+
+### 为什么改
+
+- Claude 审查指出：不可读股息会被伪装为零、一次中断会毒化该周 raw、裸 `DecimalException` 会中止四 ETF，公开 builder 还保留默认放行。四项都会违背每周一键只局部降级、不得虚报 `total_return_evaluable` 的约束；详细 Required 正文和状态只在 `D:\cnhea\Codex\worktrees\cb59\Stock\docs\system_risk_register.md`。
+
+### 验证命令
+
+```text
+cmd /c .tools\run_unittest_with_repo_pythonpath.cmd --timeout-seconds 900 tests.test_us_short_market_diagnostic_etf_sidecar tests.test_us_short_market_diagnostic tests.test_us_short_market_diagnostic_benchmark_packet tests.test_us_short_market_diagnostic_total_return tests.test_us_short_market_diagnostic_local_adapter tests.test_us_short_market_diagnostic_rehearsal tests.test_us_short_market_diagnostic_weekly_runner tests.test_us_short_market_diagnostic_weekly_advance tests.test_us_short_model_paper_capstone_wiring tests.test_us_short_market_diagnostic_authorization_conformance tests.test_us_short_capstone_checkpoint tests.schema.test_us_short_market_diagnostic_26w_schemas tests.provider.test_us_short_market_diagnostic_etf_capture tests.provider.test_us_short_weekly_capstone tests.test_us_short_test_io_inventory
+C:\Users\cnhea\AppData\Local\Programs\Python\Python313\python.exe .tools\full_pack_ledger.py run us_short knife5_post_review_sidecar_required_repair receipt:035dccced54a511e77f9d55a 860 -- discover -s tests -p test_us_short*.py
+```
+
+### 验证结果
+
+- fixed Python 反向验证四项均按预期转红后逐字还原；focused `312/312 OK`（`receipt:035dccced54a511e77f9d55a`）。
+- full lane `5639/5639 PASS`、373.2s/860s，`COUNT_GATE discovered=5639 ran=5639`，ledger static diff/py_compile PASS。未执行真实 provider、真实 lifecycle/model-paper store、开钟、账户写入或 Ship gate。
+
+### 失效的旧结论
+
+- 「`empty` dividend family 足以代表零股息并可升格」与「raw 页带 run-scoped `observed_at` 仍能天然幂等」均失效；前者会虚报 total return，后者会使中断周无法重跑。
+- 「`windows_aligned` 留默认不会造成后续调用点放行」也失效；公开入口的放行门必须强制调用方显式作决定。
+
+### 下一步注意事项
+
+- 四条 Required 和既有 `R-USSHORT-26W-DIAG-BOTH-SIDES-IGNORE-DIVIDENDS-AND-THAT-IS-NOT-NEUTRAL` 均为 `OPEN-NOT_VERIFIED`，交 Claude Code 独立审查；本工作树不 commit。
+- 后续不得用实际 provider/lifecycle 结果替代上述审查，也不得新增确认入口、回填零股息或绕开同周/epoch/window/valuation-date 绑定；桌面 `C:\Users\cnhea\Desktop\usshort-compare.md` 仍只作索引，未修改。
+
+## 2026-08-09 追加：Knife5 后半段修复轮的复审结论（FAIL，同类兄弟腿）
+
+**审查对象**：`D:\cnhea\Codex\worktrees\cb59\Stock` 的未提交修复轮（19 改 + 3 新增）。
+
+**成立的部分**：上一轮四条 Required 全部按类修完且**没有过度修正**——dividends 收紧到必须 `covered`，而 splits 真正为空时仍然评估通过（这是我上一轮点名的陷阱，没踩）；敌意 Decimal 只降所属 ETF；raw 包裹层去掉 run-scoped 时间戳后同页二次写入不再冲突，冲突也改成局部降级；对齐门改必传并加类型硬拒。O1–O4 一并实现，新测试模块 4→11 条。
+
+**拦下的**：四条新 Required，**三条是已修类的兄弟腿**——修了被点名那条，相邻那条没动。正文在 `docs/system_risk_register.md` 同日节。
+
+**整类修法（写在这里是因为它决定下一轮怎么做）**：`capture._result_rows` 返回 `(key, rows)`，真空返回 `key='results'`、读不懂返回 `key=None`；`_page_result:332` 用 `_, page_rows = ...` 把这个判据丢了。捡回来即可**一次盖住四个 family**，既不放过 splits 也不误伤正常无拆股周——不需要给每个 family 各写特例。
+
+**验证命令与结果**：焦点超集 `discover -s tests -p "test_us_short_market_diagnostic*.py"`（`--timeout-seconds 900`）→ `Ran 431 in 359.211s OK`。全量按 rule 4 引执行方 ledger（`tests=5639 / 373.2s`）。探针与植入对照见 SESSION_LOG 同日 `Verify`。
+
+**验证边界**：§6a 独立对抗 agent 已跑（read-only、离线）。其「真实 provider body 自带 per-request id、故 payload 漂移仍会永久冻住降级态」的主张，本树无 `provider_samples/` 可查证，记 **NOT_VERIFIED**；要定它只需一份真实 raw 页。其「sidecar 排在 cash 之前故失败连坐现金腿」「`mkdir` 在 try 之外故 OSError 逃逸」两条我读源码认可但未自跑复现，留执行方复核。`settle_captured_week` / capstone 端到端仍未在真实 lifecycle + model-paper store 上跑过。
+
+**给下一轮的教训（本轮最值钱的一条）**：上一轮我给出的类边界是「按 family 分档」，方向对但**不够彻底**——它默许了「一个 family 一套特例」，于是修复方只改了被点名的 dividends。正确的类边界是「读不懂 ≠ 没有」这个**判据本身**，而那个判据仓库里早就算好了、只是被丢掉。**下次给类边界时，先找现成的判别器，再谈分档。**
+
+## 2026-08-09 追加：Knife5 兄弟腿 Required 收口（OPEN-NOT_VERIFIED）
+
+### 改了什么
+
+- `D:\cnhea\Codex\worktrees\cb59\Stock\runners\us_short_market_diagnostic_etf_capture.py` 保留 `_result_rows` 的 key，把真实空结果与 `unreadable_body` 分开；四个 family 的不可读 body 均 fail-closed，`splits` 真空正向控制仍放行。
+- `D:\cnhea\Codex\worktrees\cb59\Stock\engine\us_short_market_diagnostic_etf_sidecar.py` 对精确重复股息去重、同日冲突标 invalid；split ratio 加 Decimal finite + float representable 双门；无拆股窗口实际比较 adjusted/unadjusted close。schema、capture/sidecar 测试同步。
+
+### 为什么改
+
+- Claude Code 新一轮指出四个兄弟腿仍可把不可读当真空、重复股息重复计数、Decimal 在 float 出口变成 `inf/0.0`、以及只比日期不比价格。四项都会让 sidecar 错贴 `total_return_evaluable` 或污染总回报，违反本 register 的 08-08 裁决与六条硬约束。
+
+### 验证命令
+
+```text
+C:\Users\cnhea\AppData\Local\Programs\Python\Python313\python.exe -m py_compile engine/us_short_market_diagnostic_etf_sidecar.py runners/us_short_market_diagnostic_etf_capture.py tests/test_us_short_market_diagnostic_etf_sidecar.py tests/provider/test_us_short_market_diagnostic_etf_capture.py
+cmd /c .tools\run_unittest_with_repo_pythonpath.cmd --timeout-seconds 900 tests.test_us_short_market_diagnostic_etf_sidecar tests.provider.test_us_short_market_diagnostic_etf_capture
+cmd /c .tools\run_unittest_with_repo_pythonpath.cmd --timeout-seconds 900 tests.test_us_short_market_diagnostic_etf_sidecar tests.test_us_short_market_diagnostic tests.test_us_short_market_diagnostic_benchmark_packet tests.test_us_short_market_diagnostic_total_return tests.test_us_short_market_diagnostic_local_adapter tests.test_us_short_market_diagnostic_rehearsal tests.test_us_short_market_diagnostic_weekly_runner tests.test_us_short_market_diagnostic_weekly_advance tests.test_us_short_model_paper_capstone_wiring tests.test_us_short_market_diagnostic_authorization_conformance tests.test_us_short_capstone_checkpoint tests.schema.test_us_short_market_diagnostic_26w_schemas tests.provider.test_us_short_market_diagnostic_etf_capture tests.provider.test_us_short_weekly_capstone tests.test_us_short_test_io_inventory
+C:\Users\cnhea\AppData\Local\Programs\Python\Python313\python.exe .tools\full_pack_ledger.py run us_short "Knife5 ETF sidecar sibling-leg Required closure" "receipt:f07a38a14cc7f1b1ca72af8b" 860 -- discover -s tests -p "test_us_short*.py"
+```
+
+### 验证结果
+
+- 固定主 Python 编译通过；四个 mutation controls 均按预期转红后还原。最新 focused `318/318 OK`，receipt=`receipt:ecfba8fbba10da8ff3a29e0b`。
+- full lane 两次均在并行矩阵的 `tests.test_us_short_discovery_conformance_resources` 失败，`discovered=5645`、`ran=4469`；该模块单跑 `1/1 OK`。因此本轮 full-lane 是 `NOT_VERIFIED`，没有把单跑绿灯写成全量 PASS；失败与本刀改动无代码交集。
+- 未执行真实 Massive/provider、真实 lifecycle/model-paper、开钟、账户写入或 Ship gate；无 commit。inventory 已用官方生成器同步，文档门待最终重跑后记录。
+
+### 失效的旧结论
+
+- 「四个 family 的无 rows 都可按 `empty` 处理」失效：现在必须区分真实真空与不可读 body。
+- 「事件逐行 append 不会污染总回报」失效：精确重复必须去重，同日冲突必须 invalid；「Decimal finite 就足够安全」也失效，float 出口仍需 representable 门。
+- 「日期集合相同即可标记 `adjusted_unadjusted_reconciled`」失效：无拆股窗口还必须比较 close 数值。旧 handoff 中 prior receipt 的 full PASS 只属于旧代码状态，不是本轮 full-lane 证据。
+
+### 下一步注意事项
+
+- 四条新 Required（`R-USSHORT-26W-DIAG-KNIFE5-THE-SPLITS-LEG-STILL-LAUNDERS-AN-UNREADABLE-BODY`、`R-USSHORT-26W-DIAG-KNIFE5-A-DUPLICATED-DIVIDEND-IS-COUNTED-TWICE`、`R-USSHORT-26W-DIAG-KNIFE5-A-NON-FINITE-SPLIT-RATIO-IS-EMITTED-WITH-NO-REASON`、`R-USSHORT-26W-DIAG-KNIFE5-THE-RECONCILED-FLAG-NEVER-COMPARES-ANY-PRICE`）仍为 `OPEN-NOT_VERIFIED`，交 Claude Code 独立审查；本工作树不 commit。
+- 后续保持既有 gated 授权、同周/epoch/window/valuation-date 绑定和局部降级；不得用真实 provider/lifecycle 结果替代本轮审查，不得修改桌面 `C:\Users\cnhea\Desktop\usshort-compare.md`。
+
+## 2026-08-09 追加：Knife5 兄弟腿四条 Required 的复审结论（PASS，用户指定起全量）
+
+**审查对象**：`D:\cnhea\Codex\worktrees\cb59\Stock` 的未提交修复轮（21 改 + 3 新增）。
+
+**成立的部分**：四条兄弟腿 Required 全闭，且这一轮的类修**落在共享层而不是四条腿上各打补丁**——`capture._page_result` 捡回 `_result_rows` 早就返回却被 `_, page_rows = ...` 丢掉的 key，把「读不懂」升格成独立 status `unreadable_body` 并排在 `empty` 之前；`_family_complete` 因此一行未改就对四个 family 同时生效，而 `empty` 从此只表示「真的没有」。另三条：`_daily_prices_reconciled` 用 Decimal 真比价（拆股周正确跳过）、分红事件去重、非有限比值不落地。
+
+**拦下的**：无。
+
+**验证命令与结果**：全量由 reviewer 自起（用户本轮指定）`full_pack_ledger run us_short ... -- discover -s tests -p "test_us_short*.py"` → `PASS 5645 / 628.9s / deadline=860s`、`COUNT_GATE discovered=ran=5645`；焦点 `43 OK`。探针、控制组与植入对照见 SESSION_LOG 同日 `Verify` 与 register。
+
+**这一轮解决的一个证据缺口**：执行方本轮把 full-lane 记为 `NOT_VERIFIED`（`discovered=5645 / ran=4469`，并行资源测试失败）。同一代码态由我重跑，计数门相等、零失败，故该 flake 未复现——本刀现在有一份计数门相等的全量证据。
+
+**验证边界**：未起第三个独立对抗 agent（rule 8：delta 约 110 行、方向全是收紧；前两轮已各跑过一个 agent，第三个会重走同一片代码）。收紧类改动的真实风险是误伤，已由每条的控制组覆盖（真空 splits 仍通过、无拆股周价格相等不得误伤）。payload-drift 残留（真实 provider body 若带 per-request id）本树无 `provider_samples/` 可查证，继续 NOT_VERIFIED。
+
+**给下一轮的教训（承接上一条追加）**：上一轮我把类边界说成「按 family 分档」，方向对但默许了一个 family 一套特例，于是第一次修复只动了被点名的 dividends。这一轮改成「先找现成的判别器」，判别器一捡回来，四条腿一次全好、且不需要为每个 family 写例外。**下次给类边界时，先问「这个区分是不是已经在代码里算过了」，再谈分档。**

@@ -326,7 +326,16 @@ def validate_etf_total_return_sidecar(
                     f"weeks[{index}].benchmarks.{symbol}.price_date",
                     allow_none=True,
                 )
-                if (observed_prior, observed_price) != (expected_prior, expected_price):
+                # A local packet may honestly have only one leg of a price
+                # pair.  Such a pair can never support total return, so the
+                # producer records the sidecar interval as unavailable
+                # (null/null) while preserving the local packet itself.
+                expected_interval = (
+                    (None, None)
+                    if (expected_prior is None) != (expected_price is None)
+                    else (expected_prior, expected_price)
+                )
+                if (observed_prior, observed_price) != expected_interval:
                     _fail(
                         f"weeks[{index}].benchmarks.{symbol} price interval does not match the local price packet"
                     )
@@ -379,12 +388,15 @@ def build_total_return_benchmark_observation(
     price_observation: Mapping[str, Any],
     strategy_evaluable: bool,
     strategy_weekly_return: float | None,
+    windows_aligned: bool,
     as_of_date: str | None = None,
 ) -> dict[str, Any]:
     """Build the existing weekly benchmark shape from one sidecar and one price observation."""
 
     sidecar = _mapping(sidecar_observation, "sidecar_observation")
     price = _mapping(price_observation, "price_observation")
+    if type(windows_aligned) is not bool:
+        _fail("windows_aligned must be a bool")
     as_of = _as_of(as_of_date) if as_of_date is not None else None
     try:
         _validate_benchmark_sidecar(sidecar, "sidecar_observation", as_of_date=as_of)
@@ -453,7 +465,7 @@ def build_total_return_benchmark_observation(
             _append_reason(reasons, "sidecar_price_date_mismatch")
 
     benchmark_evaluable = price_evaluable
-    joint_evaluable = bool(strategy_evaluable and benchmark_evaluable)
+    joint_evaluable = bool(strategy_evaluable and benchmark_evaluable and windows_aligned)
     raw_excess = (
         strategy_weekly_return - weekly_return
         if joint_evaluable and strategy_weekly_return is not None and weekly_return is not None

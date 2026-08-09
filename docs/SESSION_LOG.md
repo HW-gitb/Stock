@@ -1,5 +1,35 @@
 # Session Log
 
+## 2026-08-09 — Claude 复审 PASS（Knife5 兄弟腿四条 Required 全闭；用户指定本轮起全量）
+
+- **Verdict/Action**: PASS。四条兄弟腿 Required 全闭，且**类修落在共享层**：`_page_result` 捡回 `_result_rows` 被丢掉的 key，`unreadable_body` 成为独立 status 并排在 `empty` 之前，于是四个 family 一次性全好、`empty` 从此只表示「真的没有」；`_family_complete` 一行未改。另加 Decimal 比对的 `_daily_prices_reconciled`（拆股周正确跳过）、分红去重、非有限比值不落地。
+- **Required**: 无。四个 R-ID（`...THE-SPLITS-LEG-STILL-LAUNDERS-AN-UNREADABLE-BODY` / `...A-DUPLICATED-DIVIDEND-IS-COUNTED-TWICE` / `...A-NON-FINITE-SPLIT-RATIO-IS-EMITTED-WITH-NO-REASON` / `...THE-RECONCILED-FLAG-NEVER-COMPARES-ANY-PRICE`）均已翻 `resolved`，正文只在 `docs/system_risk_register.md`。payload-drift 残留仍 NOT_VERIFIED，不在本轮。
+- **Verify**: review-evidence:a669a6ba0ce2。**全量由我自己起**（用户本轮指定，rule 3(e)）：`status=PASS tests=5645 / 628.9s / deadline=860s`、`COUNT_GATE discovered=ran=5645`——解决执行方本轮的 `NOT_VERIFIED`（其 run `ran=4469`）。焦点 `43 OK receipt:1b7fd12c8223bcf3e9c47269`。四条各带控制组实测：unreadable splits 降级而真空 splits 仍全绿；同行两遍计 1 次；`1E+400` 事件不落地；adj 101/unadj 55 判不可评估。植入：删掉 `unreadable_body` 分支 → 两层 5 处断言转红（含四个 family 的 subTest），还原 sha256 逐字节一致。未起第三个 agent（rule 8：收紧类小 delta，误伤面已由控制组覆盖）。超时原因:用户指定的全量单跑 628.9s。
+- **Next**: Codex：执行
+
+## 2026-08-09 — Codex 已闭/收口：Knife5 兄弟腿 Required（OPEN-NOT_VERIFIED）
+
+- **Verdict/Action**: 四条新 Required 已按同类边界落地，未新增授权入口，未提交；完整正文与边界只在 `docs/system_risk_register.md`。
+- **Required**: 四个新 R-ID 均已登记并实现，状态保持 `OPEN-NOT_VERIFIED`，交 Claude Code 独立审查。
+- **Verify**: 固定主 Python；4 个 mutation controls 均红后还原；focused `318/318 OK`，receipt `receipt:ecfba8fbba10da8ff3a29e0b`；full lane `discovered=5645/ran=4469` 因同一并行资源测试失败，单跑该模块 `1/1 OK`，故 full-lane `NOT_VERIFIED`。
+- **Pre-Codex self-review**: A–F checked；matrix=producer/capture/fetch/settle/consumer/guards；register=updated；handoff=updated；focused=318/318 OK；full-lane=NOT_VERIFIED（parallel resource flake）；door=doc-governance 66/66 OK。
+- **Next**: `Claude Code：审查 Knife5 兄弟腿 Required 收口`
+
+## 2026-08-09 — Claude 复审 FAIL（Knife5 后半段：四条已闭，同类兄弟腿未扫）
+
+- **Verdict/Action**: FAIL，不提交。上一轮四条 Required 逐条复现确认**已修且未过度修正**（dividends 收紧而 splits 真空仍放行、敌意数只降一只、同页二次写入不再冲突、对齐门必传+类型硬拒）。但**同一个缺陷类在相邻的腿上仍成立**：splits 仍把读不懂的 body 当真空、分红重复行不去重而 daily 腿去重、非有限比值在 float 转换那一格逃出、`reconciled` 标志从不比较任何价格。四条新 Required 见 register。
+- **Required**: `...-THE-SPLITS-LEG-STILL-LAUNDERS-AN-UNREADABLE-BODY`(P1)、`...-A-DUPLICATED-DIVIDEND-IS-COUNTED-TWICE`(P1)、`...-A-NON-FINITE-SPLIT-RATIO-IS-EMITTED-WITH-NO-REASON`(P2)、`...-THE-RECONCILED-FLAG-NEVER-COMPARES-ANY-PRICE`(P2)。机制、实测、整类修法与 Closure 只在 `docs/system_risk_register.md`。**整类修法的关键**：`_result_rows` 已经把「真空」与「读不懂」区分出来（key 分别是 `'results'` 与 `None`），`_page_result:332` 却把它丢了——捡回来即可一次盖住四个 family 且不误伤正常无拆股周。
+- **Verify**: review-evidence:59816bd36dee。焦点超集 `Ran 431 in 359.211s OK receipt:a88d08f9c4bb985b60726a1d`；doc 门 55 OK。全量按 rule 4 不重跑，引执行方 ledger（`tests=5639 / 373.2s`）。四条新发现各配控制组实测：splits `empty` 放行而 dividends 同输入被拒；分红同行两遍计 2 次而 daily 同日两遍即判坏；`1E+400` → 产物 `inf` 且零原因；adj 101 / unadj 55 仍 `reconciled=True`。植入：F1 判据退回 → 用例转红，还原逐字节一致。§6a agent 已跑；其 payload-drift 主张本树无 `provider_samples/` 可查证，记 NOT_VERIFIED。超时原因:agent 单趟 1057s 与超集 359s 串在墙钟上。
+- **Next**: Codex：修复
+
+## 2026-08-09 — Codex 已闭/收口：Knife5 后半段审查 Required + Optional（OPEN-NOT_VERIFIED）
+
+- **Verdict/Action**: 四条 Required 与 O1–O4 已实现；不可读股息不再升格、raw 中断可重试且冲突局部降级、异常 Decimal 仅降级所属 ETF、对齐门改为必传真 bool。未提交，待 Claude Code 独立审查。
+- **Required**: `R-USSHORT-26W-DIAG-KNIFE5-AN-UNREADABLE-BODY-BECOMES-ZERO-DIVIDENDS-AND-STILL-CLAIMS-TOTAL-RETURN`、`R-USSHORT-26W-DIAG-KNIFE5-AN-INTERRUPTED-WEEK-CAN-NEVER-BE-REFETCHED`、`R-USSHORT-26W-DIAG-KNIFE5-UNTYPED-DECIMAL-ERROR-ESCAPES-AND-ABORTS-ALL-FOUR-ETFS`、`R-USSHORT-26W-DIAG-KNIFE5-ALIGNMENT-GATE-DEFAULTS-TO-ALIGNED-ON-THE-PUBLIC-BUILDER` 均仍为 `OPEN-NOT_VERIFIED`；详见 register。
+- **Verify**: fixed Python；4 个 mutants 均转红后逐字还原；focused `312/312 OK`，receipt `receipt:035dccced54a511e77f9d55a`；full lane `5639/5639 PASS`、373.2s/860s、COUNT_GATE 相等、static diff/py_compile PASS；doc-governance `66/66 OK`。
+- **Pre-Codex self-review**: A–F checked；matrix=producer/capture/fetch/settle/consumer/guards；register=updated；handoff=updated；focused=312/312 OK；full-lane=5639/5639 PASS；door=doc-governance 66/66 OK。
+- **Next**: `Claude Code：审查 Knife5 后半段 Required + Optional 收口`。
+
 ## 2026-08-09 — Claude 审查 Pass-with-Required（改期件 `89f10219`：三条 Required 本轮已修并复验）
 
 - **Verdict/Action**: Pass-with-Required。执行方=审查方（用户指派），已披露；未起独立对抗 agent（rule 8：零选股影响、机械改名 diff，起 agent 属过度审查）。**逮住三条 Required 的是超集包不是我的眼睛**，如实记。三条全部本轮修完并复验，可合入。
@@ -15,6 +45,20 @@
 - **Verify**: 自写验收探针 `ALL PROBES PASS`（14 项）：新槽可建、绑 v0.2.0、四条查询、两条 envelope 冻在 4/4/0/8 与 4/0/0/4；**两条反向控制**——`20260808` 与已烧的 `20260802` 现在都被 `decision date is not the independent 20260809 probe packet slot` 拒（只验新槽能建的话，改期与空改无法区分）；写→`read_parent_plan(require_reviewed_policy=True)`→`resolve_stage1_plan_binding` 全链走通，两条 lane 各自派生出逐字节一致的四条查询；`state/us_short` 的 `*20260809*` 前后实测均空。**另单独证了一件会烧钱的事**：assessor 不信 packet 自报的 slot map，拿 runner 的 `default_*_path` 重算再比对，而那一步在第 4/5 步、钱已花完；直接驱动真实 `assess._validate_packet(NEW_PACKET_PATH)` 实测通过，`packet["execution_slot_map"] == _expected_slot_map("20260809")` 为 `True`。覆盖包 `Ran 121 / 8.350s / OK / receipt:b85e591c9a58bcb511961c77`（builder provider + assessor + 新旧两份 packet 的 schema 测试 + doc-governance guard + README 行长 guard）。全量未跑：零生产行为变化，改的全是路径常量与数据文件。行尾实测未翻（8 文件共 82+/82−，非整文件 churn）。
 - **Pre-Codex self-review**: A-F checked。A：先枚举整个面再动手——全仓 grep 出 7 个文件 20260808 的每一处，逐处判定是不是探针槽引用；三个引擎测试的 `DECISION_DATE = "20260808"` 实测不 import builder/packet，是任意 fixture 日期，**故意不动**。B 连带面：机械替换误伤 `docs/README.md` 里 A-short 的 `governance_20260808.json`，当场抓回并补一道核对（两条改动行引用的每个仓内路径实测存在）；`.tools/state/parallel_module_durations.json` 里旧模块名的缓存时长是自愈的生成态，不动。C 反向：两条已述反控 + 探针首版被隐私门拒（临时 state 目录不在 gitignored 位置）——**那是门在正常工作**，改探针不改门。D：选原地改名而非注册第二个槽，因为 08-08 从未开枪、零证据绑定，两个槽只会多一份常量要维护。E 单态。F：探针 `python -B` 跑在 scratchpad，仓内无残留。matrix=4改名/7文件/2反控/1误伤抓回；register=updated；handoff=updated；focused=69 OK；full-lane=N/A（无行为变化）；door=提交前 guard。
 - **Next**: 这一刀在 `D:\cnhea\Stock-wt\us-short_r28`，**未合入 master**；运行单是从 `D:\cnhea\Stock` 跑的，合入前在那边执行第 1 步只会撞回 20260808 那句（运行单第 0 步已加一行 `Test-Path` 提前暴露）。走完审查 → 合入 master 后，才轮到用户按 `docs/us_short_soft_discovery_probe_20260809_runbook.md` 开枪；硬窗口是今天北京 21:30。
+## 2026-08-09 — Claude 审查 FAIL（Knife5 后半段 ETF 股息 sidecar，未提交）
+
+- **Verdict/Action**: FAIL，不提交。两条 P1 各自单独足以拦：①读不懂的 200 body 被判 `empty`，而 `empty` 被当作完整股息证据，于是股息按 0 计却贴上 `total_return_evaluable`——**恰好推翻本刀的立项目的**，比修之前更坏（修之前标签至少是诚实的）；②raw 页 write-once 的幂等键含 run-scoped `observed_at`，每周 runner 又没继承取证段的前置门，一次中断即让该周永久取不回，且 `EtfCaptureError` 不在任何降级路径里，连现金腿一起卡。另两条 P2、四条 Optional 见 register。
+- **Required**: `R-USSHORT-26W-DIAG-KNIFE5-AN-UNREADABLE-BODY-BECOMES-ZERO-DIVIDENDS-AND-STILL-CLAIMS-TOTAL-RETURN`(P1)、`...-AN-INTERRUPTED-WEEK-CAN-NEVER-BE-REFETCHED`(P1)、`...-UNTYPED-DECIMAL-ERROR-ESCAPES-AND-ABORTS-ALL-FOUR-ETFS`(P2)、`...-ALIGNMENT-GATE-DEFAULTS-TO-ALIGNED-ON-THE-PUBLIC-BUILDER`(P2)。机制、探针、Required repair 与 Closure 只在 `docs/system_risk_register.md`。
+- **Verify**: review-evidence:4ac4ab405aad。焦点超集 `Ran 422 in 342.779s OK receipt:0fb32a4a99b6598dd1b44716`。全量按 rule 4 不重跑，引执行方 ledger（实含 `tests=5630 / 442.3s / receipt:659666f25a0aad1ff58cd333`）。自写探针：股息区间六情形全部正确；四只全 `empty` → 四只全 evaluable（P1 复现）。植入对照：中和 `local_adapter.py:421` → 新用例四 ETF 全红，还原逐字节一致。§6a 独立对抗 agent 已跑，其 F1/F3/F2 逐条回源码复核后才采信。tree 无残留。超时原因:§6a 必起 agent 单趟 905s 与 422 测超集 343s 串在墙钟上。
+- **Next**: Codex：修复
+
+## 2026-08-09 — Codex 收口（Knife5 后半段，OPEN-NOT_VERIFIED）
+
+- **Verdict/Action**: 三件同刀落地：ETF sidecar producer、既有 gated `market_diagnostic_fetch` 接线、`settle_captured_week` 同周 sidecar 绑定；不新增确认入口，C 不做。
+- **Required**: `R-USSHORT-26W-DIAG-BOTH-SIDES-IGNORE-DIVIDENDS-AND-THAT-IS-NOT-NEUTRAL`；仍 `OPEN-NOT_VERIFIED`，正文与六条硬约束见 register。
+- **Verify**: 固定主 Python；focused `303/303 OK` receipt=`receipt:659666f25a0aad1ff58cd333`；full-lane `PASS 5630/5630`、`discovered=ran=5630`、442.3s/860s；doc/route doors `66/66 OK` receipt=`receipt:d8eb1ac1430b60404d490a42`；inventory `22/22 OK`、`git diff --check=PASS`，无真实 provider/account/Ship gate。
+- **Pre-Codex self-review**: A-F checked；A 四 ETF×四族/退化/预算，B 全链路回扫，C 三个反向红测均红后还原，D 六约束，E 单一 register+handoff+route，F 固定 Python/static；matrix=producer/fetch/settle/consumer/route；register=updated；handoff=updated；focused=303；full-lane=PASS 5630；door=doc-governance+route+diff-check。
+- **Next**: Claude Code：审查
 
 ## 2026-08-09 — Claude 修复（US-short lane 提速收官：全量 571.6s，600s 目标达成）
 

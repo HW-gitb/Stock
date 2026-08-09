@@ -111,6 +111,7 @@
             "covered",
             "provider_error",
             "empty",
+            "unreadable_body",
             "missing_required_fields",
             "rows_do_not_match_symbol",
             "pagination_incomplete"
