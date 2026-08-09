@@ -16,8 +16,10 @@ import json
 import math
 import numbers
 import re
+import random
 import subprocess
-from datetime import datetime
+import sys
+from datetime import datetime, timedelta
 from pathlib import Path
 from typing import Any, Mapping, Sequence
 
@@ -42,6 +44,12 @@ OUTCOME_SCHEMA_PATH = ROOT / "schemas" / "a_short_margin_overheat_cash_control_o
 LEDGER_SCHEMA_PATH = ROOT / "schemas" / "a_short_margin_overheat_cash_control_ledger.schema.json"
 ADJUDICATION_SCHEMA_PATH = ROOT / "schemas" / "a_short_margin_overheat_cash_control_adjudication.schema.json"
 REMINDER_SCHEMA_PATH = ROOT / "schemas" / "a_short_margin_overheat_cash_control_reminder.schema.json"
+STAGE_TRANSITION_RECEIPT_SCHEMA_PATH = (
+    ROOT / "schemas" / "a_short_margin_overheat_cash_control_stage_transition_receipt.schema.json"
+)
+FREEZE_MANIFEST_SCHEMA_PATH = (
+    ROOT / "schemas" / "a_short_margin_overheat_cash_control_freeze_manifest.schema.json"
+)
 PUBLIC_SUMMARY_SCHEMA_PATH = ROOT / "schemas" / "a_short_margin_overheat_cash_control_public_summary.schema.json"
 DAILY_CACHE_SCHEMA_PATH = ROOT / "schemas" / "a_short_factor_comparison_v2_daily_cache.schema.json"
 GOVERNANCE_PATH = ROOT / "presets" / "a_short_margin_overheat_cash_control_governance_20260808.json"
@@ -88,6 +96,23 @@ FREEZE_PREREQUISITES = (
     "negative_controls_complete",
     "user_approved_design_final_before_freeze",
 )
+_FREEZE_SCHEMA_CONTRACTS = {
+    "program": PROGRAM_SCHEMA_PATH,
+    "state": STATE_SCHEMA_PATH,
+    "predicate": PREDICATE_SCHEMA_PATH,
+    "shadow": ROOT / "schemas" / "a_short_margin_overheat_cash_control_shadow.schema.json",
+    "capture": CAPTURE_SCHEMA_PATH,
+    "source_receipt": RECEIPT_SCHEMA_PATH,
+    "outcome": OUTCOME_SCHEMA_PATH,
+    "ledger": LEDGER_SCHEMA_PATH,
+    "adjudication": ADJUDICATION_SCHEMA_PATH,
+    "reminder": REMINDER_SCHEMA_PATH,
+    "stage_transition_receipt": STAGE_TRANSITION_RECEIPT_SCHEMA_PATH,
+    "freeze_manifest": FREEZE_MANIFEST_SCHEMA_PATH,
+}
+_SCHEMA_ANNOTATION_KEYS = frozenset({
+    "title", "description", "$comment", "examples", "deprecated", "readOnly", "writeOnly",
+})
 
 
 class MarginOverheatCashControlError(ValueError):
@@ -251,8 +276,8 @@ def validate_governance(governance: Mapping[str, Any]) -> None:
     _validate_governance_numeric_types(governance)
     if TRACK_ID not in epoch_mode.TRACKS:
         raise MarginOverheatCashControlError("margin-overheat track is not registered in shared epoch mode")
-    if epoch_mode._mode(TRACK_ID) != PRE_FREEZE:
-        raise MarginOverheatCashControlError("margin-overheat knife 1 must remain pre-freeze")
+    if epoch_mode._mode(TRACK_ID) not in (PRE_FREEZE, FROZEN):
+        raise MarginOverheatCashControlError("margin-overheat shared epoch registry mode is invalid")
     _production_constants_unchanged()
 
 
@@ -273,7 +298,7 @@ def semantic_projection(governance: Mapping[str, Any] | None = None) -> dict:
     keys = (
         "schema_name", "schema_version", "program_id", "track_id", "lane",
         "comparison_only", "mode", "namespace", "source_binding", "stage_a",
-        "stage_b", "state_contract", "capture_contract", "outcome_contract",
+        "stage_b", "state_contract", "adjudication_contract", "capture_contract", "outcome_contract",
         "boundary",
     )
     try:
@@ -291,9 +316,115 @@ def current_mode() -> str:
     return epoch_mode._mode(TRACK_ID)
 
 
+def _schema_validation_projection(value: Any) -> Any:
+    if isinstance(value, dict):
+        return {
+            key: _schema_validation_projection(item)
+            for key, item in value.items()
+            if key not in _SCHEMA_ANNOTATION_KEYS
+        }
+    if isinstance(value, list):
+        return [_schema_validation_projection(item) for item in value]
+    return value
+
+
+def _freeze_schema_contracts() -> dict[str, dict[str, str]]:
+    contracts: dict[str, dict[str, str]] = {}
+    for name, path in _FREEZE_SCHEMA_CONTRACTS.items():
+        document = _load_json(path)
+        if not isinstance(document, dict):
+            raise MarginOverheatCashControlError(f"freeze schema contract {name} must be an object")
+        contracts[name] = {
+            "path": str(path.relative_to(ROOT)).replace("\\", "/"),
+            "projection": "json_schema_validation",
+            "semantic_sha256": _digest(_schema_validation_projection(document)),
+        }
+    return contracts
+
+
+def build_margin_overheat_freeze_manifest() -> dict[str, Any]:
+    """Return the dedicated, comment-insensitive identity required before one-track freeze."""
+    _production_constants_unchanged()
+    from runners import a_short_weekly_pipeline as weekly_pipeline
+
+    this_module = sys.modules[__name__]
+    semantic_governance_sha256 = semantic_fingerprint()
+    payload = {
+        "semantic_governance_sha256": semantic_governance_sha256,
+        "estimand_sha256": _digest({
+            "track_id": TRACK_ID,
+            "question_id": QUESTION_ID,
+            "semantic_governance_sha256": semantic_governance_sha256,
+        }),
+        "schema_contracts": _freeze_schema_contracts(),
+        "python_contracts": {
+            "margin_overheat_track": epoch_mode.semantic_function_contract(
+                this_module,
+                (
+                    "build_predicate_facts", "validate_predicate_facts", "_shadow_arm_spec",
+                    "_shadow_trigger_percentile", "_governed_shadow_cash_factor",
+                    "materialize_shadow_cash_control", "_arm_definitions", "_arm_capture_snapshot",
+                    "_validate_margin_capture", "_validate_stage_b_capture_admission",
+                    "capture_margin_overheat_week", "_settlement_risk_evidence", "_settle_arm",
+                    "_settle_capture", "_collect_source_bound_evidence", "_formal_decision",
+                    "_risk_gate", "_cross_epoch_random_effects", "_simultaneous_winner",
+                    "_adjudication_documents", "validate_stage_transition_receipt",
+                    "build_stage_a_transition_receipt", "accept_stage_a_transition_receipt",
+                    "register_stage_b_from_accepted_receipt", "_load_stage_b_admission",
+                    "_stage_storage_root", "adjudicate_margin_overheat_cash_control",
+                    "settle_margin_overheat_from_daily_cache",
+                ),
+            ),
+            "weekly_cash_semantics": epoch_mode.semantic_function_contract(
+                weekly_pipeline,
+                (
+                    "_normalise_margin_overheat_control", "_resolve_cash_factor_stack",
+                    "_allocate_cash", "_allocate_cash_shadow",
+                ),
+            ),
+        },
+        "shared_track_id": TRACK_ID,
+        "production_constants": {
+            "percentile_threshold": production_margin.MARGIN_OVERHEAT_PERCENTILE_THRESHOLD,
+            "cash_factor": production_margin.MARGIN_OVERHEAT_CASH_FACTOR,
+            "production_effect_enabled": production_margin.MARGIN_OVERHEAT_PRODUCTION_EFFECT_ENABLED,
+        },
+        "boundary": {
+            "comparison_only": True,
+            "automatic_policy_switch": False,
+            "direct_activation_requires_user_authorization": True,
+        },
+    }
+    manifest = {
+        "schema_name": "a_short_margin_overheat_cash_control_freeze_manifest",
+        "schema_version": SCHEMA_VERSION,
+        "track_id": TRACK_ID,
+        "payload": payload,
+        "payload_sha256": _digest(payload),
+        "production_unchanged": True,
+    }
+    _schema_validate(manifest, FREEZE_MANIFEST_SCHEMA_PATH)
+    return manifest
+
+
+def validate_margin_overheat_freeze_manifest(manifest: Mapping[str, Any]) -> None:
+    if not isinstance(manifest, dict):
+        raise MarginOverheatCashControlError("margin-overheat freeze manifest must be an object")
+    _schema_validate(dict(manifest), FREEZE_MANIFEST_SCHEMA_PATH)
+    if _digest(manifest.get("payload")) != manifest.get("payload_sha256"):
+        raise MarginOverheatCashControlError("margin-overheat freeze manifest payload digest does not match")
+    _production_constants_unchanged()
+
+
+def _freeze_component_fingerprint() -> str:
+    return str(build_margin_overheat_freeze_manifest()["payload_sha256"])
+
+
 def current_epoch_id() -> str:
-    """Return the dedicated epoch identity without starting a clock."""
-    return "epoch-" + semantic_fingerprint()[:12]
+    """Return a stable audit identity pre-freeze and a bound semantic identity after freeze."""
+    return "epoch-" + epoch_mode.fingerprint_or_pre_freeze(
+        TRACK_ID, _freeze_component_fingerprint
+    )[:12]
 
 
 def evidence_counts_toward_clock() -> bool:
@@ -328,12 +459,15 @@ def validate_freeze_admission(prerequisites: Mapping[str, object]) -> dict[str, 
         raise MarginOverheatCashControlError(
             "validate_frozen_transition shared freeze gate rejected admission"
         ) from exc
+    manifest = build_margin_overheat_freeze_manifest()
+    validate_margin_overheat_freeze_manifest(manifest)
     return {
         "track_id": TRACK_ID,
         "requested_mode": FROZEN,
         "new_epoch_required": True,
         "clock_starts_only_after_durable_user_approval": True,
         "freeze_packet_identity": dict(freeze_packet_identity),
+        "margin_overheat_freeze_manifest": manifest,
         "write_performed": False,
     }
 
@@ -425,6 +559,51 @@ def validate_state(state: Mapping[str, Any]) -> None:
         raise MarginOverheatCashControlError("pre-freeze state cannot count weeks or emit a verdict")
     if state["mode"] == FROZEN:
         _require_shared_clock_gate()
+
+
+def _build_adjudicated_state(*, calendar_effective_weeks: int, trigger_effective_weeks: int,
+                             stage: str, comparison_verdict: str, reason: str) -> dict[str, Any]:
+    """Knife4's only verdict-bearing state writer; Knife1's general entrypoint stays closed."""
+    if comparison_verdict not in COMPARISON_VERDICTS or comparison_verdict == "not_evaluated":
+        raise MarginOverheatCashControlError("adjudicated state requires a formal comparison verdict")
+    if current_mode() != FROZEN:
+        raise MarginOverheatCashControlError("adjudicated state requires the shared frozen epoch mode")
+    _require_shared_clock_gate()
+    if calendar_effective_weeks < 24:
+        raise MarginOverheatCashControlError("adjudicated state requires a formal calendar checkpoint")
+    base = build_state(
+        calendar_effective_weeks=calendar_effective_weeks,
+        trigger_effective_weeks=trigger_effective_weeks,
+        stage=stage,
+        mode=FROZEN,
+    )
+    if base["evidence_status"] == "insufficient_data":
+        raise MarginOverheatCashControlError("adjudicated state requires the trigger opportunity floor")
+    state = dict(base)
+    state["comparison_verdict"] = comparison_verdict
+    state["reason"] = reason
+    _schema_validate(state, STATE_SCHEMA_PATH)
+    return state
+
+
+def _validate_adjudicated_state(state: Mapping[str, Any], payload: Mapping[str, Any]) -> None:
+    if not isinstance(state, dict):
+        raise MarginOverheatCashControlError("adjudicated state must be an object")
+    _schema_validate(dict(state), STATE_SCHEMA_PATH)
+    _production_constants_unchanged()
+    if state.get("mode") != FROZEN or current_mode() != FROZEN:
+        raise MarginOverheatCashControlError("adjudicated state requires the shared frozen epoch mode")
+    _require_shared_clock_gate()
+    if state.get("stage") != payload.get("stage") or \
+            state.get("calendar_effective_weeks") != payload.get("calendar_effective_weeks") or \
+            state.get("trigger_effective_weeks") != payload.get("trigger_effective_weeks"):
+        raise MarginOverheatCashControlError("adjudicated state does not match source-bound evidence counts")
+    if state.get("calendar_effective_weeks", 0) < 24 or \
+            state.get("trigger_effective_weeks", 0) < _minimum_trigger_effective_weeks():
+        raise MarginOverheatCashControlError("adjudicated state bypassed the formal calendar or trigger gate")
+    if state.get("comparison_verdict") != payload.get("formal_verdict") or \
+            state.get("comparison_verdict") == "not_evaluated":
+        raise MarginOverheatCashControlError("adjudicated state comparison_verdict is not source-bound")
 
 
 def stage_arm_ids(stage: str, governance: Mapping[str, Any] | None = None) -> tuple[str, ...]:
@@ -1017,16 +1196,50 @@ def build_replay_frequency(
     return base
 
 
-def _shadow_arm_spec(arm_id: str) -> tuple[str, str | None, str | None, float | None]:
+def _shadow_arm_spec(
+        arm_id: str, *, stage: str = STAGE_A,
+        stage_b_supported_arm_id: str | None = None,
+) -> tuple[str, str | None, str | None, float | None]:
+    """Return the governed trigger specification for one staged shadow arm."""
+    if stage == STAGE_A:
+        if arm_id == "baseline":
+            return "no_margin_discount", None, None, None
+        for candidate, criterion_id, field, threshold in REPLAY_ARM_SPECS:
+            if candidate == arm_id:
+                return criterion_id, field, field, threshold
+        raise MarginOverheatCashControlError("unknown stage-A shadow arm")
+    if stage != STAGE_B:
+        raise MarginOverheatCashControlError("unknown shadow comparison stage")
+    if arm_id not in stage_arm_ids(STAGE_B):
+        raise MarginOverheatCashControlError("unknown stage-B shadow arm")
     if arm_id == "baseline":
-        return "no_margin_discount", None, None, None
-    for candidate, criterion_id, field, threshold in REPLAY_ARM_SPECS:
-        if candidate == arm_id:
-            return criterion_id, field, field, threshold
-    raise MarginOverheatCashControlError("unknown stage-A shadow arm")
+        return "stage_a_supported_criterion", None, None, None
+    if stage_b_supported_arm_id not in stage_arm_ids(STAGE_A)[1:]:
+        raise MarginOverheatCashControlError(
+            "stage-B shadow arm lacks its accepted Stage-A criterion"
+        )
+    _criterion_id, field, _unused, threshold = _shadow_arm_spec(
+        stage_b_supported_arm_id, stage=STAGE_A
+    )
+    return "stage_a_supported_criterion", field, field, threshold
 
 
-def _shadow_trigger_percentile(facts: Mapping[str, Any], arm_id: str) -> float:
+def _shadow_trigger_percentile(
+        facts: Mapping[str, Any], arm_id: str, *, stage: str = STAGE_A,
+        stage_b_supported_arm_id: str | None = None,
+) -> float:
+    if stage == STAGE_B:
+        if arm_id not in stage_arm_ids(STAGE_B)[1:]:
+            raise MarginOverheatCashControlError("unknown stage-B shadow arm")
+        if stage_b_supported_arm_id not in stage_arm_ids(STAGE_A)[1:]:
+            raise MarginOverheatCashControlError(
+                "stage-B shadow arm lacks its accepted Stage-A criterion"
+            )
+        return _shadow_trigger_percentile(
+            facts, stage_b_supported_arm_id, stage=STAGE_A
+        )
+    if stage != STAGE_A:
+        raise MarginOverheatCashControlError("unknown shadow comparison stage")
     if arm_id == "level_p95":
         value = facts["level"]["percentile"]
     elif arm_id in {"change_rate_p90", "change_rate_p95"}:
@@ -1040,38 +1253,54 @@ def _shadow_trigger_percentile(facts: Mapping[str, Any], arm_id: str) -> float:
     return float(value)
 
 
-def _governed_shadow_cash_factor(arm_id: str, triggered: bool | None) -> float:
-    """Read the Stage-A measurement factor from the governed arm contract."""
+def _governed_shadow_cash_factor(
+        arm_id: str, triggered: bool | None, *, stage: str = STAGE_A,
+) -> float:
+    """Read one staged, comparison-only factor from the governed arm contract."""
     governance = load_governance()
     try:
-        stage_a = governance[STAGE_A]
-        baseline_factor = stage_a["baseline"]["margin_cash_factor"]
-        measurement_factor = stage_a["measurement_cash_factor"]
+        section = governance[stage]
+        baseline_factor = section["baseline"]["margin_cash_factor"]
     except (KeyError, TypeError) as exc:
         raise MarginOverheatCashControlError(
-            "governance is missing Stage-A shadow cash factors"
+            "governance is missing staged shadow cash factors"
         ) from exc
-    if (not _finite_number(baseline_factor) or not 0 < float(baseline_factor) <= 1
-            or not _finite_number(measurement_factor)
-            or not 0 < float(measurement_factor) <= 1):
+    if not _finite_number(baseline_factor) or not 0 < float(baseline_factor) <= 1:
         raise MarginOverheatCashControlError(
-            "governance Stage-A shadow cash factors are invalid"
+            "governance staged baseline shadow cash factor is invalid"
         )
+    if stage == STAGE_A:
+        try:
+            measurement_factor = section["measurement_cash_factor"]
+        except (KeyError, TypeError) as exc:
+            raise MarginOverheatCashControlError(
+                "governance is missing the Stage-A measurement factor"
+            ) from exc
+        if not _finite_number(measurement_factor) or not 0 < float(measurement_factor) <= 1:
+            raise MarginOverheatCashControlError(
+                "governance Stage-A measurement factor is invalid"
+            )
+    elif stage != STAGE_B:
+        raise MarginOverheatCashControlError("unknown shadow comparison stage")
     if triggered is not True:
         return float(baseline_factor)
     try:
-        challengers = stage_a["challengers"]
+        challengers = section["challengers"]
         configured = next(
             arm["margin_cash_factor"] for arm in challengers
             if arm.get("arm_id") == arm_id
         )
     except (KeyError, StopIteration, TypeError) as exc:
         raise MarginOverheatCashControlError(
-            "governance is missing the triggered Stage-A arm cash factor"
+            "governance is missing the triggered staged arm cash factor"
         ) from exc
-    if (not _finite_number(configured) or not 0 < float(configured) <= 1
-            or not math.isclose(float(configured), float(measurement_factor),
-                                rel_tol=0.0, abs_tol=1e-12)):
+    if not _finite_number(configured) or not 0 < float(configured) <= 1:
+        raise MarginOverheatCashControlError(
+            "governance triggered staged arm cash factor is invalid"
+        )
+    if stage == STAGE_A and not math.isclose(
+            float(configured), float(measurement_factor), rel_tol=0.0, abs_tol=1e-12
+    ):
         raise MarginOverheatCashControlError(
             "triggered Stage-A arm cash factor disagrees with measurement factor"
         )
@@ -1082,6 +1311,8 @@ def materialize_shadow_cash_control(
     predicate_facts: Mapping[str, Any],
     *,
     arm_id: str,
+    stage: str = STAGE_A,
+    stage_b_supported_arm_id: str | None = None,
     reports: list,
     available_cash: Any,
     pre_holiday_control: Mapping[str, Any] | None = None,
@@ -1089,7 +1320,7 @@ def materialize_shadow_cash_control(
     as_of: str,
     source_receipt: Mapping[str, Any] | None = None,
 ) -> dict[str, Any]:
-    """Apply one stage-A arm to a copied pre-margin allocation seam.
+    """Apply one staged arm to a copied pre-margin allocation seam.
 
     This is the only knife-2 consumer.  It calls the production cash stack and
     allocator, carries no account context, and returns an in-memory shadow
@@ -1098,6 +1329,14 @@ def materialize_shadow_cash_control(
     if not isinstance(source_receipt, Mapping):
         raise MarginOverheatCashControlError(
             "shadow consumer requires an explicit source receipt"
+        )
+    if stage not in (STAGE_A, STAGE_B):
+        raise MarginOverheatCashControlError("shadow consumer comparison stage is invalid")
+    if arm_id not in stage_arm_ids(stage):
+        raise MarginOverheatCashControlError("shadow consumer arm is not governed for its stage")
+    if stage == STAGE_B and stage_b_supported_arm_id not in stage_arm_ids(STAGE_A)[1:]:
+        raise MarginOverheatCashControlError(
+            "stage-B shadow consumer lacks its accepted Stage-A criterion"
         )
     facts = dict(predicate_facts)
     validate_predicate_facts(
@@ -1122,15 +1361,19 @@ def materialize_shadow_cash_control(
         source_digest=facts["source_digest"],
     )
     validate_source_references(facts["source_references"])
-    criterion_id, _field, _unused, threshold = _shadow_arm_spec(arm_id)
+    criterion_id, _field, _unused, threshold = _shadow_arm_spec(
+        arm_id, stage=stage, stage_b_supported_arm_id=stage_b_supported_arm_id
+    )
     triggered: bool | None
     if arm_id == "baseline":
         triggered = False
     elif facts["status"] != "available":
         triggered = None
     else:
-        triggered = _shadow_trigger_percentile(facts, arm_id) >= float(threshold)
-    shadow_factor = _governed_shadow_cash_factor(arm_id, triggered)
+        triggered = _shadow_trigger_percentile(
+            facts, arm_id, stage=stage, stage_b_supported_arm_id=stage_b_supported_arm_id
+        ) >= float(threshold)
+    shadow_factor = _governed_shadow_cash_factor(arm_id, triggered, stage=stage)
     margin_control = {
         "source_as_of": facts["source_as_of"],
         "source_path": PREDICATE_SOURCE_REFERENCES[0],
@@ -1500,13 +1743,21 @@ def _official_bundle_parts(official_bundle: Any, *, decision_date: str,
     return weekly, receipt, hashlib.sha256(bytes(weekly_bytes)).hexdigest()
 
 
-def _margin_capture_program(governance: Mapping[str, Any]) -> dict[str, Any]:
+def _margin_capture_program(governance: Mapping[str, Any], *, comparison_stage: str = STAGE_A,
+                            experiment_batch_id: str | None = None,
+                            stage_b_admission_sha256: str | None = None) -> dict[str, Any]:
+    if comparison_stage not in (STAGE_A, STAGE_B):
+        raise MarginOverheatCashControlError("margin-overheat program comparison stage is unknown")
+    batch_id = experiment_batch_id or governance["namespace"]["experiment_batch_id"]
     return {
         "schema_name": "a_short_margin_overheat_cash_control_program_manifest",
         "schema_version": CAPTURE_SCHEMA_VERSION,
         "program_id": PROGRAM_ID,
         "track_id": TRACK_ID,
         "stage": "knife_3_weekly_capture_settlement",
+        "comparison_stage": comparison_stage,
+        "experiment_batch_id": batch_id,
+        "stage_b_admission_sha256": stage_b_admission_sha256,
         "private_root_layout": governance["capture_contract"]["write_namespace"],
         "governance_sha256": _digest(governance),
         "schema_sha256": {
@@ -1516,30 +1767,38 @@ def _margin_capture_program(governance: Mapping[str, Any]) -> dict[str, Any]:
             "ledger": hashlib.sha256(LEDGER_SCHEMA_PATH.read_bytes()).hexdigest(),
             "adjudication": hashlib.sha256(ADJUDICATION_SCHEMA_PATH.read_bytes()).hexdigest(),
             "reminder": hashlib.sha256(REMINDER_SCHEMA_PATH.read_bytes()).hexdigest(),
+            "stage_transition_receipt": hashlib.sha256(
+                STAGE_TRANSITION_RECEIPT_SCHEMA_PATH.read_bytes()).hexdigest(),
+            "freeze_manifest": hashlib.sha256(FREEZE_MANIFEST_SCHEMA_PATH.read_bytes()).hexdigest(),
         },
         "boundary": _knife3_boundary(governance),
     }
 
 
-def _empty_margin_ledger(governance: Mapping[str, Any]) -> dict[str, Any]:
+def _empty_margin_ledger(governance: Mapping[str, Any], *, comparison_stage: str = STAGE_A,
+                         experiment_batch_id: str | None = None) -> dict[str, Any]:
+    if comparison_stage not in (STAGE_A, STAGE_B):
+        raise MarginOverheatCashControlError("margin-overheat ledger comparison stage is unknown")
     return {
         "schema_name": "a_short_margin_overheat_cash_control_ledger",
         "schema_version": CAPTURE_SCHEMA_VERSION,
         "track_id": TRACK_ID,
         "program_id": PROGRAM_ID,
         "question_id": QUESTION_ID,
-        "experiment_batch_id": governance["namespace"]["experiment_batch_id"],
+        "experiment_batch_id": experiment_batch_id or governance["namespace"]["experiment_batch_id"],
         "epoch_id": current_epoch_id(),
+        "stage": comparison_stage,
         "entries": [],
         "boundary": _knife3_boundary(governance),
     }
 
 
-def validate_margin_source_receipt(receipt: Mapping[str, Any], capture: Mapping[str, Any]) -> None:
+def validate_margin_source_receipt(receipt: Mapping[str, Any], capture: Mapping[str, Any],
+                                   *, require_current_epoch: bool = True) -> None:
     if not isinstance(receipt, dict) or not isinstance(capture, dict):
         raise MarginOverheatCashControlError("margin-overheat source receipt and capture must be objects")
     _schema_validate(dict(receipt), RECEIPT_SCHEMA_PATH)
-    _validate_margin_capture(dict(capture))
+    _validate_margin_capture(dict(capture), require_current_epoch=require_current_epoch)
     payload = receipt.get("payload")
     capture_payload = capture.get("payload")
     if not isinstance(payload, Mapping) or not isinstance(capture_payload, Mapping):
@@ -1557,7 +1816,7 @@ def validate_margin_source_receipt(receipt: Mapping[str, Any], capture: Mapping[
         )
 
 
-def _validate_margin_capture(capture: Mapping[str, Any]) -> None:
+def _validate_margin_capture(capture: Mapping[str, Any], *, require_current_epoch: bool = True) -> None:
     if not isinstance(capture, dict):
         raise MarginOverheatCashControlError("margin-overheat capture must be an object")
     _schema_validate(dict(capture), CAPTURE_SCHEMA_PATH)
@@ -1579,18 +1838,52 @@ def _validate_margin_capture(capture: Mapping[str, Any]) -> None:
                 raise MarginOverheatCashControlError(f"margin-overheat capture {key} is empty")
         else:
             _require_sha(payload.get(key), key)
-    if payload["experiment_batch_id"] != governance["namespace"]["experiment_batch_id"]:
-        raise MarginOverheatCashControlError("margin-overheat capture crosses experiment batch")
-    if payload["epoch_id"] != current_epoch_id():
+    stage = payload.get("stage")
+    if stage not in (STAGE_A, STAGE_B):
+        raise MarginOverheatCashControlError("margin-overheat capture comparison stage is invalid")
+    if stage == STAGE_A:
+        if payload["experiment_batch_id"] != governance["namespace"]["experiment_batch_id"]:
+            raise MarginOverheatCashControlError("margin-overheat capture crosses experiment batch")
+        if payload.get("stage_b_admission_sha256") is not None or \
+                payload.get("stage_b_supported_arm_id") is not None:
+            raise MarginOverheatCashControlError("stage-A capture carries a stage-B admission")
+    else:
+        _require_sha(payload.get("stage_b_admission_sha256"), "stage_b_admission_sha256")
+        if payload.get("stage_b_supported_arm_id") not in stage_arm_ids(STAGE_A)[1:]:
+            raise MarginOverheatCashControlError("stage-B capture lacks a supported Stage-A arm")
+        if payload["experiment_batch_id"] == governance["namespace"]["experiment_batch_id"]:
+            raise MarginOverheatCashControlError("stage-B capture did not open a new experiment batch")
+    manifest_sha = payload.get("freeze_manifest_sha256")
+    manifest = payload.get("freeze_manifest")
+    if manifest_sha is not None:
+        _require_sha(manifest_sha, "freeze_manifest_sha256")
+        if not isinstance(manifest, Mapping):
+            raise MarginOverheatCashControlError(
+                "frozen capture lacks its dedicated freeze manifest"
+            )
+        validate_margin_overheat_freeze_manifest(manifest)
+        if manifest.get("payload_sha256") != manifest_sha:
+            raise MarginOverheatCashControlError(
+                "frozen capture freeze manifest digest does not match payload"
+            )
+    elif manifest is not None:
+        raise MarginOverheatCashControlError(
+            "pre-freeze capture carries an unbound freeze manifest"
+        )
+    if require_current_epoch and current_mode() == FROZEN:
+        current_manifest = build_margin_overheat_freeze_manifest()
+        if manifest_sha != current_manifest["payload_sha256"] or manifest != current_manifest:
+            raise MarginOverheatCashControlError("frozen capture freeze manifest does not match current semantic identity")
+    if require_current_epoch and payload["epoch_id"] != current_epoch_id():
         raise MarginOverheatCashControlError("margin-overheat capture crosses independent epoch")
     snapshots = payload.get("candidate_universe")
     if not isinstance(snapshots, list) or _digest(snapshots) != payload["candidate_snapshot_digest"]:
         raise MarginOverheatCashControlError("margin-overheat capture candidate snapshot digest does not match")
     _assert_finite_json(payload, "capture.payload")
-    if tuple(row.get("arm_id") for row in payload.get("arm_definitions") or []) != stage_arm_ids(STAGE_A):
+    if tuple(row.get("arm_id") for row in payload.get("arm_definitions") or []) != stage_arm_ids(stage):
         raise MarginOverheatCashControlError("margin-overheat capture arm definitions drifted")
     arms = payload.get("arms")
-    if not isinstance(arms, list) or tuple(row.get("arm_id") for row in arms) != stage_arm_ids(STAGE_A):
+    if not isinstance(arms, list) or tuple(row.get("arm_id") for row in arms) != stage_arm_ids(stage):
         raise MarginOverheatCashControlError("margin-overheat capture arm snapshots drifted")
     predicate = payload.get("predicate_facts")
     if predicate is not None:
@@ -1626,20 +1919,265 @@ def validate_margin_ledger(ledger: Mapping[str, Any]) -> None:
     if len(keys) != len(set(keys)):
         raise MarginOverheatCashControlError("margin-overheat ledger has duplicate decision-date entries")
     batch = ledger.get("experiment_batch_id")
-    epoch = ledger.get("epoch_id")
-    if any(row["experiment_batch_id"] != batch or row["epoch_id"] != epoch
+    stage = ledger.get("stage")
+    if stage not in (STAGE_A, STAGE_B):
+        raise MarginOverheatCashControlError("margin-overheat ledger comparison stage is invalid")
+    if any(row["experiment_batch_id"] != batch or row.get("stage") != stage
            for row in ledger.get("entries", [])):
-        raise MarginOverheatCashControlError("margin-overheat ledger entry crosses batch or epoch")
+        raise MarginOverheatCashControlError("margin-overheat ledger entry crosses batch or stage")
 
 
 def validate_margin_adjudication(adjudication: Mapping[str, Any]) -> None:
     if not isinstance(adjudication, dict):
         raise MarginOverheatCashControlError("margin-overheat adjudication must be an object")
     _schema_validate(dict(adjudication), ADJUDICATION_SCHEMA_PATH)
-    if _digest(adjudication.get("payload")) != adjudication.get("payload_sha256"):
+    payload = adjudication.get("payload")
+    if _digest(payload) != adjudication.get("payload_sha256"):
         raise MarginOverheatCashControlError("margin-overheat adjudication payload digest does not match")
-    if adjudication.get("state", {}).get("comparison_verdict") != "not_evaluated":
-        raise MarginOverheatCashControlError("margin-overheat adjudication emitted a verdict")
+    state = adjudication.get("state")
+    if not isinstance(payload, Mapping) or not isinstance(state, Mapping):
+        raise MarginOverheatCashControlError("margin-overheat adjudication payload or state is malformed")
+    if state.get("comparison_verdict") != payload.get("formal_verdict"):
+        raise MarginOverheatCashControlError("margin-overheat adjudication state verdict is not payload-bound")
+    if state.get("comparison_verdict") == "not_evaluated":
+        validate_state(state)
+    else:
+        _validate_adjudicated_state(state, payload)
+
+
+def validate_stage_transition_receipt(receipt: Mapping[str, Any]) -> None:
+    if not isinstance(receipt, dict):
+        raise MarginOverheatCashControlError("stage-transition receipt must be an object")
+    _schema_validate(dict(receipt), STAGE_TRANSITION_RECEIPT_SCHEMA_PATH)
+    payload = receipt.get("payload")
+    if _digest(payload) != receipt.get("payload_sha256"):
+        raise MarginOverheatCashControlError("stage-transition receipt payload digest does not match")
+    if receipt.get("track_id") != TRACK_ID or receipt.get("production_unchanged") is not True:
+        raise MarginOverheatCashControlError("stage-transition receipt crossed the production boundary")
+    issued_on = _require_date8(payload.get("issued_on"), "stage-transition issued_on")
+    expires_on = _require_date8(payload.get("expires_on"), "stage-transition expires_on")
+    if expires_on < issued_on:
+        raise MarginOverheatCashControlError("stage-transition receipt expires before it is issued")
+    accepted_on = payload.get("accepted_on")
+    if payload.get("status") == "awaiting_user_acceptance":
+        if accepted_on is not None:
+            raise MarginOverheatCashControlError("unaccepted stage-transition receipt carries accepted_on")
+    elif payload.get("status") == "accepted":
+        accepted_date = _require_date8(accepted_on, "stage-transition accepted_on")
+        if accepted_date > expires_on:
+            raise MarginOverheatCashControlError("stage-transition receipt was accepted after expiry")
+    else:  # schema is closed; retained as a point-name fail-closed boundary.
+        raise MarginOverheatCashControlError("stage-transition receipt status is invalid")
+    if payload.get("next_experiment_batch_id") == payload.get("source_experiment_batch_id"):
+        raise MarginOverheatCashControlError("stage-transition receipt did not create a new forward batch")
+
+
+def build_stage_a_transition_receipt(*, adjudication: Mapping[str, Any], issued_on: str,
+                                    expires_on: str) -> dict[str, Any]:
+    """Create a source-bound proposal; only a later explicit user acceptance can open stage B."""
+    validate_margin_adjudication(adjudication)
+    payload = adjudication["payload"]
+    state = adjudication["state"]
+    issued_on = _require_date8(issued_on, "stage-transition issued_on")
+    expires_on = _require_date8(expires_on, "stage-transition expires_on")
+    if expires_on < issued_on:
+        raise MarginOverheatCashControlError("stage-transition receipt expires before it is issued")
+    if state.get("stage") != STAGE_A or state.get("comparison_verdict") != "supported" or \
+            payload.get("winning_arm_id") not in stage_arm_ids(STAGE_A)[1:]:
+        raise MarginOverheatCashControlError("only a supported Stage-A adjudication can request Stage B")
+    next_batch = "batch_stage_b_" + _digest({
+        "source_adjudication_sha256": adjudication["payload_sha256"],
+        "supported_arm_id": payload["winning_arm_id"],
+        "source_epoch_id": payload["epoch_id"],
+    })[:20]
+    receipt_payload = {
+        "status": "awaiting_user_acceptance",
+        "source_stage": STAGE_A,
+        "next_stage": STAGE_B,
+        "source_adjudication_sha256": adjudication["payload_sha256"],
+        "source_evidence_sha256": payload["evidence_sha256"],
+        "source_experiment_batch_id": payload["experiment_batch_id"],
+        "source_epoch_id": payload["epoch_id"],
+        "supported_arm_id": payload["winning_arm_id"],
+        "issued_on": issued_on,
+        "accepted_on": None,
+        "expires_on": expires_on,
+        "next_experiment_batch_id": next_batch,
+    }
+    receipt = {
+        "schema_name": "a_short_margin_overheat_cash_control_stage_transition_receipt",
+        "schema_version": SCHEMA_VERSION,
+        "track_id": TRACK_ID,
+        "record_type": "stage_transition_receipt",
+        "payload": receipt_payload,
+        "payload_sha256": _digest(receipt_payload),
+        "production_unchanged": True,
+        "boundary": _knife3_boundary(),
+    }
+    validate_stage_transition_receipt(receipt)
+    return receipt
+
+
+def accept_stage_a_transition_receipt(receipt: Mapping[str, Any], *, accepted_on: str) -> dict[str, Any]:
+    """Record the user's explicit acceptance without changing production or the shared registry."""
+    validate_stage_transition_receipt(receipt)
+    proposed = copy.deepcopy(dict(receipt))
+    if proposed["payload"]["status"] != "awaiting_user_acceptance":
+        raise MarginOverheatCashControlError("stage-transition receipt is not awaiting user acceptance")
+    accepted_on = _require_date8(accepted_on, "stage-transition accepted_on")
+    if accepted_on > proposed["payload"]["expires_on"]:
+        raise MarginOverheatCashControlError("stage-transition receipt is expired")
+    proposed["payload"]["status"] = "accepted"
+    proposed["payload"]["accepted_on"] = accepted_on
+    proposed["payload_sha256"] = _digest(proposed["payload"])
+    validate_stage_transition_receipt(proposed)
+    return proposed
+
+
+def register_stage_b_from_accepted_receipt(*, root: str | Path, receipt: Mapping[str, Any],
+                                           as_of: str) -> dict[str, Any]:
+    """Atomically register a new Stage-B private batch after a current accepted receipt."""
+    validate_stage_transition_receipt(receipt)
+    if receipt["payload"]["status"] != "accepted":
+        raise MarginOverheatCashControlError("stage-B registration requires an accepted user receipt")
+    as_of = _require_date8(as_of, "stage-B registration as_of")
+    if as_of > receipt["payload"]["expires_on"]:
+        raise MarginOverheatCashControlError("stage-B registration receipt is expired")
+    if current_mode() != FROZEN:
+        raise MarginOverheatCashControlError("stage-B registration requires the shared frozen epoch mode")
+    _require_shared_clock_gate()
+    private_root = _private_root(root)
+    _recover_private_artifact_set(private_root)
+    adjudication_path = private_root / "adjudication.json"
+    if not adjudication_path.is_file():
+        raise MarginOverheatCashControlError("stage-B registration requires the current Stage-A adjudication")
+    adjudication = _load_private_json(adjudication_path, "Stage-A adjudication")
+    validate_margin_adjudication(adjudication)
+    source = receipt["payload"]
+    payload = adjudication["payload"]
+    if adjudication["state"].get("stage") != STAGE_A or \
+            adjudication["state"].get("comparison_verdict") != "supported" or \
+            any(source[key] != payload[value] for key, value in (
+                ("source_evidence_sha256", "evidence_sha256"),
+                ("source_experiment_batch_id", "experiment_batch_id"),
+                ("source_epoch_id", "epoch_id"),
+                ("supported_arm_id", "winning_arm_id"),
+            )) or source["source_adjudication_sha256"] != adjudication["payload_sha256"]:
+        raise MarginOverheatCashControlError("stage-B receipt is not bound to the current supported Stage-A evidence")
+    governance = load_governance()
+    batch_id = source["next_experiment_batch_id"]
+    stage_root = private_root / "stage_b" / batch_id
+    admission_path = private_root / "stage_b_admission.json"
+    if admission_path.exists():
+        existing = _load_private_json(admission_path, "stage-B admission")
+        validate_stage_transition_receipt(existing)
+        if existing != receipt:
+            raise MarginOverheatCashControlError("stage-B admission replay drifted")
+    elif stage_root.exists() and any(stage_root.iterdir()):
+        raise MarginOverheatCashControlError("stage-B batch directory exists without its admission receipt")
+    program = _margin_capture_program(
+        governance, comparison_stage=STAGE_B, experiment_batch_id=batch_id,
+        stage_b_admission_sha256=receipt["payload_sha256"],
+    )
+    ledger = _empty_margin_ledger(
+        governance, comparison_stage=STAGE_B, experiment_batch_id=batch_id,
+    )
+    validate_margin_ledger(ledger)
+    from engine.a_short_artifact_set_transaction import commit_artifact_set
+    commit_artifact_set(_private_journal_dir(private_root), {
+        admission_path: _json_bytes(dict(receipt)),
+        stage_root / "program.json": _json_bytes(program),
+        stage_root / "ledger.json": _json_bytes(ledger),
+    })
+    return {"status": "stage_b_registered", "experiment_batch_id": batch_id,
+            "stage": STAGE_B, "production_unchanged": True}
+
+
+def _stage_admission_as_of(as_of: str | None) -> str:
+    """Use an explicit operation date, or today's date for an unqualified private read."""
+    return _require_date8(
+        as_of or datetime.now().strftime("%Y%m%d"),
+        "stage-B admission as_of",
+    )
+
+
+def _load_stage_b_admission(private_root: Path, *, as_of: str | None = None) -> dict[str, Any]:
+    """Load and re-authorize the accepted receipt on every Stage-B private operation."""
+    admission_path = private_root / "stage_b_admission.json"
+    if not admission_path.is_file():
+        raise MarginOverheatCashControlError(
+            "stage-B capture requires an accepted registered Stage-A receipt"
+        )
+    receipt = _load_private_json(admission_path, "stage-B admission")
+    validate_stage_transition_receipt(receipt)
+    payload = receipt["payload"]
+    operation_as_of = _stage_admission_as_of(as_of)
+    if operation_as_of > payload["expires_on"]:
+        raise MarginOverheatCashControlError("stage-B admission receipt is expired")
+    if payload["status"] != "accepted" or payload["source_stage"] != STAGE_A or \
+            payload["next_stage"] != STAGE_B or \
+            payload["supported_arm_id"] not in stage_arm_ids(STAGE_A)[1:]:
+        raise MarginOverheatCashControlError(
+            "stage-B admission is not an accepted supported Stage-A receipt"
+        )
+    if current_mode() != FROZEN:
+        raise MarginOverheatCashControlError(
+            "stage-B admission requires the shared frozen epoch mode"
+        )
+    _require_shared_clock_gate()
+    stage_a_adjudication_path = private_root / "adjudication.json"
+    if not stage_a_adjudication_path.is_file():
+        raise MarginOverheatCashControlError(
+            "stage-B admission requires a current supported Stage-A adjudication"
+        )
+    stage_a_adjudication = _load_private_json(
+        stage_a_adjudication_path, "current Stage-A adjudication"
+    )
+    validate_margin_adjudication(stage_a_adjudication)
+    if stage_a_adjudication["payload_sha256"] != payload["source_adjudication_sha256"] or \
+            stage_a_adjudication["state"].get("stage") != STAGE_A or \
+            stage_a_adjudication["state"].get("comparison_verdict") != "supported" or \
+            stage_a_adjudication["payload"].get("formal_verdict") != "supported":
+        raise MarginOverheatCashControlError(
+            "stage-B admission requires a current supported Stage-A adjudication"
+        )
+    return receipt
+
+
+def _stage_storage_root(private_root: Path, *, stage: str, as_of: str | None = None
+                        ) -> tuple[Path, dict[str, Any] | None]:
+    """Resolve the isolated private artifact root for one currently governed stage."""
+    if stage == STAGE_A:
+        return private_root, None
+    if stage != STAGE_B:
+        raise MarginOverheatCashControlError("margin-overheat comparison stage is invalid")
+    receipt = _load_stage_b_admission(private_root, as_of=as_of)
+    stage_root = private_root / "stage_b" / receipt["payload"]["next_experiment_batch_id"]
+    if not stage_root.is_dir():
+        raise MarginOverheatCashControlError(
+            "stage-B admission has no registered private batch root"
+        )
+    return stage_root, receipt
+
+
+def _validate_stage_b_capture_admission(
+        capture: Mapping[str, Any], admission: Mapping[str, Any] | None,
+) -> None:
+    """Bind each Stage-B capture to the one accepted receipt that opened its batch."""
+    payload = capture.get("payload") if isinstance(capture, Mapping) else None
+    if not isinstance(payload, Mapping) or payload.get("stage") != STAGE_B:
+        raise MarginOverheatCashControlError("stage-B admission received a non-Stage-B capture")
+    if not isinstance(admission, Mapping):
+        raise MarginOverheatCashControlError("stage-B capture lacks its accepted admission receipt")
+    validate_stage_transition_receipt(admission)
+    source = admission["payload"]
+    if source["status"] != "accepted" or \
+            payload.get("experiment_batch_id") != source["next_experiment_batch_id"] or \
+            payload.get("stage_b_admission_sha256") != admission.get("payload_sha256") or \
+            payload.get("stage_b_supported_arm_id") != source["supported_arm_id"]:
+        raise MarginOverheatCashControlError(
+            "stage-B capture is not source-bound to its accepted admission receipt"
+        )
 
 
 def validate_margin_public_summary(summary: Mapping[str, Any]) -> None:
@@ -1715,14 +2253,17 @@ def _capture_source_receipt(payload: Mapping[str, Any]) -> dict[str, Any]:
 
 def _arm_capture_snapshot(*, facts: Mapping[str, Any] | None, arm_id: str,
                           reports: Sequence[Mapping[str, Any]], decision_date: str,
-                          source_receipt: Mapping[str, Any] | None) -> dict[str, Any]:
-    criterion_id = next(row["criterion_id"] for row in _arm_definitions()
+                          source_receipt: Mapping[str, Any] | None,
+                          stage: str = STAGE_A,
+                          stage_b_supported_arm_id: str | None = None) -> dict[str, Any]:
+    criterion_id = next(row["criterion_id"] for row in _arm_definitions(stage)
                         if row["arm_id"] == arm_id)
     if isinstance(facts, Mapping) and facts.get("status") == "available":
         shadow = materialize_shadow_cash_control(
             facts, arm_id=arm_id, reports=list(reports), available_cash=_model_cash_cny(),
             new_exposure_capacity=_model_cash_cny(), as_of=decision_date,
-            source_receipt=source_receipt,
+            source_receipt=source_receipt, stage=stage,
+            stage_b_supported_arm_id=stage_b_supported_arm_id,
         )
         positions = _frozen_positions_from_reports(shadow["shadow_reports"])
         return {
@@ -1760,11 +2301,24 @@ def capture_margin_overheat_week(
     daily_cache_document: Mapping[str, Any], candidates: Sequence[Mapping[str, Any]],
     reports: Sequence[Mapping[str, Any]], predicate_facts: Mapping[str, Any] | None = None,
     forward_eligible: bool = False,
+    stage: str = STAGE_A,
 ) -> dict[str, Any]:
     """Capture one canonical week after the caller proves the official bundle exists."""
     private_root = _private_root(root)
     _recover_private_artifact_set(private_root)
     decision_date = _require_date8(decision_date, "decision_date")
+    if stage not in (STAGE_A, STAGE_B):
+        raise MarginOverheatCashControlError("margin-overheat capture comparison stage is invalid")
+    stage_root, stage_b_admission = _stage_storage_root(
+        private_root, stage=stage, as_of=decision_date,
+    )
+    if stage == STAGE_B:
+        accepted_on = str(stage_b_admission["payload"]["accepted_on"])
+        if decision_date < accepted_on:
+            raise MarginOverheatCashControlError(
+                "stage-B capture cannot backfill before its user acceptance"
+            )
+    _recover_private_artifact_set(stage_root)
     if not isinstance(run_identity, Mapping):
         raise MarginOverheatCashControlError("margin-overheat source identity is required")
     weekly, _receipt, official_digest = _official_bundle_parts(
@@ -1794,9 +2348,24 @@ def capture_margin_overheat_week(
     governance = load_governance()
     selection_plan = _selection_plan_snapshot(reports)
     source_receipt = facts.get("source_receipt") if isinstance(facts, Mapping) else None
+    experiment_batch_id = (
+        governance["namespace"]["experiment_batch_id"] if stage == STAGE_A
+        else str(stage_b_admission["payload"]["next_experiment_batch_id"])
+    )
+    stage_b_admission_sha256 = (
+        None if stage == STAGE_A else str(stage_b_admission["payload_sha256"])
+    )
+    stage_b_supported_arm_id = (
+        None if stage == STAGE_A else str(stage_b_admission["payload"]["supported_arm_id"])
+    )
+    freeze_manifest = (
+        build_margin_overheat_freeze_manifest() if current_mode() == FROZEN else None
+    )
     arms = [_arm_capture_snapshot(facts=facts, arm_id=arm["arm_id"], reports=reports,
-                                  decision_date=decision_date, source_receipt=source_receipt)
-            for arm in _arm_definitions()]
+                                  decision_date=decision_date, source_receipt=source_receipt,
+                                  stage=stage,
+                                  stage_b_supported_arm_id=stage_b_supported_arm_id)
+            for arm in _arm_definitions(stage)]
     payload = {
         "decision_date": decision_date,
         "run_date": run_date,
@@ -1807,13 +2376,20 @@ def capture_margin_overheat_week(
         "daily_cache_digest": _digest(document),
         "candidate_digest": _require_sha(run_identity.get("candidate_digest"), "candidate_digest"),
         "candidate_snapshot_digest": candidate_snapshot_digest,
-        "experiment_batch_id": governance["namespace"]["experiment_batch_id"],
+        "experiment_batch_id": experiment_batch_id,
         "epoch_id": current_epoch_id(),
+        "stage": stage,
+        "stage_b_admission_sha256": stage_b_admission_sha256,
+        "stage_b_supported_arm_id": stage_b_supported_arm_id,
+        "freeze_manifest_sha256": (
+            freeze_manifest["payload_sha256"] if freeze_manifest is not None else None
+        ),
+        "freeze_manifest": freeze_manifest,
         "forward_eligible": bool(forward_eligible),
         "predicate_facts": facts,
         "candidate_universe": candidates_snapshot,
         "official_selection_plan": selection_plan,
-        "arm_definitions": _arm_definitions(),
+        "arm_definitions": _arm_definitions(stage),
         "arms": arms,
         "source_references": list(PREDICATE_SOURCE_REFERENCES),
     }
@@ -1829,7 +2405,7 @@ def capture_margin_overheat_week(
     _validate_margin_capture(capture)
     receipt = _capture_source_receipt(payload)
     validate_margin_source_receipt(receipt, capture)
-    week_dir = private_root / "weeks" / decision_date
+    week_dir = stage_root / "weeks" / decision_date
     capture_path, receipt_path = week_dir / "capture.json", week_dir / "source_receipt.json"
     if capture_path.exists() or receipt_path.exists():
         if not capture_path.is_file() or not receipt_path.is_file():
@@ -1847,22 +2423,28 @@ def capture_margin_overheat_week(
         raise MarginOverheatCashControlError(
             f"{decision_date}: partial margin-overheat capture directory"
         )
-    ledger_path = private_root / "ledger.json"
-    program_path = private_root / "program.json"
+    ledger_path = stage_root / "ledger.json"
+    program_path = stage_root / "program.json"
+    expected_program = _margin_capture_program(
+        governance, comparison_stage=stage, experiment_batch_id=experiment_batch_id,
+        stage_b_admission_sha256=stage_b_admission_sha256,
+    )
     if program_path.exists():
         program = _load_private_json(program_path, "program manifest")
-        if program != _margin_capture_program(governance):
+        if program != expected_program:
             raise MarginOverheatCashControlError("margin-overheat program manifest drifted")
     else:
-        program = _margin_capture_program(governance)
+        program = expected_program
     if ledger_path.exists():
         ledger = _load_private_json(ledger_path, "ledger")
         validate_margin_ledger(ledger)
     else:
-        ledger = _empty_margin_ledger(governance)
+        ledger = _empty_margin_ledger(
+            governance, comparison_stage=stage, experiment_batch_id=experiment_batch_id,
+        )
         validate_margin_ledger(ledger)
     from engine.a_short_artifact_set_transaction import commit_artifact_set
-    commit_artifact_set(_private_journal_dir(private_root), {
+    commit_artifact_set(_private_journal_dir(stage_root), {
         program_path: _json_bytes(program),
         ledger_path: _json_bytes(ledger),
         capture_path: _json_bytes(capture),
@@ -1871,35 +2453,93 @@ def capture_margin_overheat_week(
     return {"status": "captured", "decision_date": decision_date, "capture": capture}
 
 
+def _unavailable_risk_evidence() -> dict[str, Any]:
+    return {
+        "max_drawdown_pct": None,
+        "bad_name_rate": None,
+        "tail_loss_pct": None,
+        "loss_distribution_count": None,
+        "cash_drag_pct": None,
+        "unfilled_rate": None,
+        "fill_rate": None,
+        "turnover_pct": None,
+        "total_cost_pct": None,
+        "max_name_weight_pct": None,
+        "adjustment_coverage_pct": None,
+        "loss_distribution_basis": None,
+    }
+
+
+def _settlement_risk_evidence(*, model_cash: float, retained_cash: float, remaining_cash: float,
+                              horizon_rows: Sequence[Mapping[str, Any]],
+                              h10_position_returns: Sequence[float],
+                              capital_used: Sequence[float]) -> dict[str, Any]:
+    navs = [model_cash] + [float(row["nav"]) for row in horizon_rows]
+    peak = model_cash
+    max_drawdown = 0.0
+    for nav in navs:
+        peak = max(peak, nav)
+        if peak > 0:
+            max_drawdown = max(max_drawdown, (peak - nav) / peak * 100.0)
+    h10_cost = next((float(row["cost"]) for row in horizon_rows if row["horizon"] == 10), None)
+    position_count = len(h10_position_returns)
+    total_capital = sum(capital_used)
+    return {
+        "max_drawdown_pct": round(max_drawdown, 8),
+        "bad_name_rate": round(
+            sum(value < 0.0 for value in h10_position_returns) / position_count
+            if position_count else 0.0,
+            8,
+        ),
+        "tail_loss_pct": round(min(h10_position_returns), 8) if position_count else 0.0,
+        "loss_distribution_count": position_count,
+        "cash_drag_pct": round((retained_cash + remaining_cash) / model_cash * 100.0, 8),
+        "unfilled_rate": 0.0,
+        "fill_rate": 1.0,
+        "turnover_pct": round(total_capital / model_cash * 100.0, 8),
+        "total_cost_pct": round((h10_cost or 0.0) / model_cash * 100.0, 8),
+        "max_name_weight_pct": round(max(capital_used) / model_cash * 100.0, 8) if capital_used else 0.0,
+        "adjustment_coverage_pct": 100.0,
+        "loss_distribution_basis": "filled_positions_only",
+    }
+
+
 def _settle_arm(*, arm: Mapping[str, Any], candidate_by_code: Mapping[str, Mapping[str, Any]],
                 decision_date: str, price_data_through: str, dates: Sequence[str],
                 lookup: Mapping[tuple[str, str], Mapping[str, Any]]) -> tuple[dict[str, Any], str | None]:
     positions = arm.get("positions")
     if not isinstance(positions, list):
         return {"arm_id": arm.get("arm_id"), "status": "no_count", "reason": "positions_missing",
-                "horizons": []}, "positions_missing"
+                "horizons": [], "risk_evidence": _unavailable_risk_evidence()}, "positions_missing"
     if decision_date not in dates:
         return {"arm_id": arm.get("arm_id"), "status": "pending", "reason": "decision_date_not_matured",
-                "horizons": []}, None
+                "horizons": [], "risk_evidence": _unavailable_risk_evidence()}, None
     base_index = list(dates).index(decision_date)
     if base_index + max(HORIZONS) >= len(dates):
         return {"arm_id": arm.get("arm_id"), "status": "pending", "reason": "h20_not_mature",
-                "horizons": []}, None
+                "horizons": [], "risk_evidence": _unavailable_risk_evidence()}, None
     selected = [str(row.get("ts_code") or "") for row in positions]
     for code in selected:
         if code not in candidate_by_code:
             return {"arm_id": arm.get("arm_id"), "status": "no_count",
-                    "reason": "candidate_snapshot_missing", "horizons": []}, "candidate_snapshot_missing"
+                    "reason": "candidate_snapshot_missing", "horizons": [],
+                    "risk_evidence": _unavailable_risk_evidence()}, "candidate_snapshot_missing"
         base = lookup.get((code, price_data_through))
         if not _valid_qfq_row(base):
             return {"arm_id": arm.get("arm_id"), "status": "no_count",
-                    "reason": "price_data_through_unavailable", "horizons": []}, "price_data_through_unavailable"
+                    "reason": "price_data_through_unavailable", "horizons": [],
+                    "risk_evidence": _unavailable_risk_evidence()}, "price_data_through_unavailable"
         if not math.isclose(float(base["close"]), float(candidate_by_code[code]["close"]),
                             rel_tol=0.0, abs_tol=1e-8):
             return {"arm_id": arm.get("arm_id"), "status": "no_count",
-                    "reason": "candidate_close_drift", "horizons": []}, "candidate_close_drift"
+                    "reason": "candidate_close_drift", "horizons": [],
+                    "risk_evidence": _unavailable_risk_evidence()}, "candidate_close_drift"
     horizon_rows: list[dict[str, Any]] = []
     cost_pct = float(load_governance()["outcome_contract"]["cost_pct"])
+    h10_position_returns: list[float] = []
+    capital_used: list[float] = []
+    retained_cash = 0.0
+    remaining_cash = 0.0
     for horizon in HORIZONS:
         entry_date, exit_date = dates[base_index + 1], dates[base_index + horizon]
         nav_positions = 0.0
@@ -1912,22 +2552,32 @@ def _settle_arm(*, arm: Mapping[str, Any], candidate_by_code: Mapping[str, Mappi
                     or not _finite_number(position.get("capital_used"))
                     or float(position["capital_used"]) <= 0):
                 return {"arm_id": arm.get("arm_id"), "status": "no_count",
-                        "reason": "frozen_position_invalid", "horizons": []}, "frozen_position_invalid"
+                        "reason": "frozen_position_invalid", "horizons": [],
+                        "risk_evidence": _unavailable_risk_evidence()}, "frozen_position_invalid"
             entry, exit_row = lookup.get((code, entry_date)), lookup.get((code, exit_date))
             if not _valid_qfq_row(entry) or not _valid_qfq_row(exit_row):
                 return {"arm_id": arm.get("arm_id"), "status": "no_count",
-                        "reason": "price_or_adjustment_evidence_missing", "horizons": []}, \
+                        "reason": "price_or_adjustment_evidence_missing", "horizons": [],
+                        "risk_evidence": _unavailable_risk_evidence()}, \
                     "price_or_adjustment_evidence_missing"
             entry_adj = float(entry["open"]) * float(entry["adj_factor"])
             exit_adj = float(exit_row["close"]) * float(exit_row["adj_factor"])
             nav_positions += int(position["shares"]) * exit_adj
-            total_cost += float(position["capital_used"]) * cost_pct / 100.0
+            position_cost = float(position["capital_used"]) * cost_pct / 100.0
+            total_cost += position_cost
+            if horizon == 10:
+                capital = float(position["capital_used"])
+                capital_used.append(capital)
+                h10_position_returns.append(
+                    ((int(position["shares"]) * exit_adj - capital - position_cost) / capital) * 100.0
+                )
         allocation = arm.get("allocation_summary") or {}
         available_start = allocation.get("available_cash_start", _model_cash_cny())
         remaining_cash = allocation.get("remaining_cash", _model_cash_cny())
         if not _finite_number(available_start) or not _finite_number(remaining_cash):
             return {"arm_id": arm.get("arm_id"), "status": "no_count",
-                    "reason": "frozen_cash_invalid", "horizons": []}, "frozen_cash_invalid"
+                    "reason": "frozen_cash_invalid", "horizons": [],
+                    "risk_evidence": _unavailable_risk_evidence()}, "frozen_cash_invalid"
         retained_cash = _model_cash_cny() - float(available_start)
         nav = retained_cash + float(remaining_cash) + nav_positions - total_cost
         horizon_rows.append({
@@ -1938,8 +2588,18 @@ def _settle_arm(*, arm: Mapping[str, Any], candidate_by_code: Mapping[str, Mappi
             "return_pct": round((nav / _model_cash_cny() - 1.0) * 100.0, 8),
             "cost": round(total_cost, 8),
         })
-    return {"arm_id": arm.get("arm_id"), "status": "settled", "reason": None,
-            "horizons": horizon_rows, "position_count": len(positions)}, None
+    return {
+        "arm_id": arm.get("arm_id"),
+        "status": "settled",
+        "reason": None,
+        "horizons": horizon_rows,
+        "position_count": len(positions),
+        "risk_evidence": _settlement_risk_evidence(
+            model_cash=_model_cash_cny(), retained_cash=retained_cash,
+            remaining_cash=float(remaining_cash), horizon_rows=horizon_rows,
+            h10_position_returns=h10_position_returns, capital_used=capital_used,
+        ),
+    }, None
 
 
 def _settle_capture(capture: Mapping[str, Any], document: Mapping[str, Any]) -> dict[str, Any]:
@@ -1952,7 +2612,8 @@ def _settle_capture(capture: Mapping[str, Any], document: Mapping[str, Any]) -> 
     if not isinstance(facts, Mapping) or facts.get("status") != "available":
         arms = [{"arm_id": row["arm_id"], "status": "no_count",
                  "predicate_triggered": row.get("predicate_triggered"),
-                 "reason": "margin_predicate_unavailable", "horizons": []}
+                 "reason": "margin_predicate_unavailable", "horizons": [],
+                 "risk_evidence": _unavailable_risk_evidence()}
                 for row in payload["arms"]]
         result_payload = {
             "question_id": QUESTION_ID, "decision_date": payload["decision_date"],
@@ -1995,42 +2656,665 @@ def _settle_capture(capture: Mapping[str, Any], document: Mapping[str, Any]) -> 
     return outcome
 
 
-def _adjudication_documents(ledger: Mapping[str, Any], outcomes: Mapping[str, Mapping[str, Any]]) -> tuple[dict, dict]:
-    entries = list(ledger.get("entries") or [])
-    statuses = [str(outcomes[row["decision_date"]]["payload"]["status"]) for row in entries]
-    reminders = [
-        {"question_id": QUESTION_ID, "decision_date": row["decision_date"],
-         "status": outcomes[row["decision_date"]]["payload"]["status"],
-         "reason": outcomes[row["decision_date"]]["payload"].get("reason"),
-         "receipt_required": True}
-        for row in entries if outcomes[row["decision_date"]]["payload"]["status"] in {"pending", "no_count"}
-    ]
-    state = build_state(calendar_effective_weeks=0, trigger_effective_weeks=0, stage=STAGE_A)
+def _adjudication_contract() -> dict[str, Any]:
+    governance = load_governance()
+    contract = copy.deepcopy(governance["adjudication_contract"])
+    if contract["min_trigger_effective_weeks"] != _minimum_trigger_effective_weeks():
+        raise MarginOverheatCashControlError(
+            "adjudication and state trigger floors disagree"
+        )
+    return contract
+
+
+def _mean(values: Sequence[float]) -> float | None:
+    return sum(values) / len(values) if values else None
+
+
+def _sample_variance(values: Sequence[float]) -> float | None:
+    if len(values) < 2:
+        return None
+    mean = _mean(values)
+    assert mean is not None
+    return sum((value - mean) ** 2 for value in values) / (len(values) - 1)
+
+
+def _paired_bootstrap_mean_ci(values: Sequence[float], *, draws: int, confidence: float,
+                              label: str) -> tuple[float | None, float | None]:
+    if not values:
+        return None, None
+    if len(values) == 1:
+        return values[0], values[0]
+    seed = int(_digest({"kind": "margin_overheat_bootstrap", "label": label,
+                        "values": list(values), "draws": draws, "confidence": confidence})[:16], 16)
+    rng = random.Random(seed)
+    count = len(values)
+    samples = sorted(
+        sum(values[rng.randrange(count)] for _ in range(count)) / count
+        for _ in range(draws)
+    )
+    tail = (1.0 - confidence) / 2.0
+    lower_index = max(0, min(len(samples) - 1, math.floor(tail * len(samples))))
+    upper_index = max(0, min(len(samples) - 1, math.ceil((1.0 - tail) * len(samples)) - 1))
+    return samples[lower_index], samples[upper_index]
+
+
+def _paired_sign_flip_two_sided_pvalue(values: Sequence[float], *, draws: int) -> float | None:
+    if not values:
+        return None
+    observed = abs(sum(values) / len(values))
+    if observed <= 1e-12:
+        return 1.0
+    count = len(values)
+    if count <= 16:
+        total, extreme = 1 << count, 0
+        for mask in range(total):
+            signed = sum(
+                value if (mask >> index) & 1 else -value
+                for index, value in enumerate(values)
+            ) / count
+            if abs(signed) >= observed - 1e-12:
+                extreme += 1
+        return extreme / total
+    seed = int(_digest({"kind": "margin_overheat_sign_flip", "values": list(values),
+                        "draws": draws})[:16], 16)
+    rng = random.Random(seed)
+    extreme = 0
+    for _ in range(draws):
+        signed = sum(value if rng.getrandbits(1) else -value for value in values) / count
+        if abs(signed) >= observed - 1e-12:
+            extreme += 1
+    return (extreme + 1) / (draws + 1)
+
+
+def _holm_bonferroni(pvalues: Mapping[str, float | None]) -> dict[str, float | None]:
+    ordered = sorted((1.0 if value is None else float(value), arm_id)
+                     for arm_id, value in pvalues.items())
+    adjusted = {arm_id: None for arm_id in pvalues}
+    running = 0.0
+    for index, (pvalue, arm_id) in enumerate(ordered):
+        current = min(1.0, pvalue * (len(ordered) - index))
+        running = max(running, current)
+        if pvalues[arm_id] is not None:
+            adjusted[arm_id] = running
+    return adjusted
+
+
+def _nonoverlap_h10_blocks(rows: Sequence[Mapping[str, Any]]) -> list[dict[str, Any]]:
+    chosen: list[dict[str, Any]] = []
+    prior_exit: str | None = None
+    for row in sorted(rows, key=lambda item: str(item["decision_date"])):
+        exit_date = row.get("evaluation_exit_date")
+        if not isinstance(exit_date, str) or not exit_date:
+            continue
+        if prior_exit is None or str(row["decision_date"]) > prior_exit:
+            chosen.append(dict(row))
+            prior_exit = exit_date
+    return chosen
+
+
+def _t_critical_975(degrees_of_freedom: int) -> float:
+    table = {1: 12.706, 2: 4.303, 3: 3.182, 4: 2.776, 5: 2.571, 6: 2.447,
+             7: 2.365, 8: 2.306, 9: 2.262, 10: 2.228, 11: 2.201, 12: 2.179,
+             13: 2.160, 14: 2.145, 15: 2.131, 16: 2.120, 17: 2.110, 18: 2.101,
+             19: 2.093, 20: 2.086, 25: 2.060, 30: 2.042}
+    if degrees_of_freedom <= 1:
+        return table[1]
+    if degrees_of_freedom in table:
+        return table[degrees_of_freedom]
+    if degrees_of_freedom < 25:
+        return table[20]
+    if degrees_of_freedom < 30:
+        return table[25]
+    return table[30]
+
+
+def _reml_tau_squared(means: Sequence[float], variances: Sequence[float]) -> float:
+    if len(means) < 2:
+        return 0.0
+    upper = max(1e-12, max(variances) + max((left - right) ** 2
+                                             for left in means for right in means))
+
+    def objective(tau_squared: float) -> float:
+        weights = [1.0 / max(1e-12, variance + tau_squared) for variance in variances]
+        weighted_mean = sum(weight * value for weight, value in zip(weights, means)) / sum(weights)
+        return 0.5 * (
+            sum(math.log(variance + tau_squared) for variance in variances)
+            + math.log(sum(weights))
+            + sum(weight * (value - weighted_mean) ** 2 for weight, value in zip(weights, means))
+        )
+
+    left, right = 0.0, upper
+    for _ in range(72):
+        one = left + (right - left) / 3.0
+        two = right - (right - left) / 3.0
+        if objective(one) <= objective(two):
+            right = two
+        else:
+            left = one
+    return max(0.0, (left + right) / 2.0)
+
+
+def _cross_epoch_random_effects(blocks: Sequence[Mapping[str, Any]], *, current_epoch_id: str,
+                                contract: Mapping[str, Any]) -> dict[str, Any]:
+    grouped: dict[str, list[dict[str, Any]]] = {}
+    for block in blocks:
+        grouped.setdefault(str(block["epoch_id"]), []).append(dict(block))
+    summaries: dict[str, dict[str, Any]] = {}
+    for epoch_id, epoch_blocks in sorted(grouped.items()):
+        values = [float(row["effect_pct"]) for row in epoch_blocks]
+        variance = _sample_variance(values)
+        summaries[epoch_id] = {
+            "block_count": len(values),
+            "mean_effect_pct": _mean(values),
+            "sampling_variance": variance / len(values) if variance is not None and values else None,
+            "qualified_for_cross_epoch": len(values) >= int(contract["min_epoch_blocks"]),
+        }
+    eligible = [(epoch_id, summary) for epoch_id, summary in summaries.items()
+                if summary["qualified_for_cross_epoch"]]
+    current = summaries.get(current_epoch_id)
+    current_qualified = bool(current and current["qualified_for_cross_epoch"])
+    current_mean = current.get("mean_effect_pct") if current else None
+    current_harm = bool(current_qualified and current_mean is not None and
+                        current_mean < -float(contract["min_economic_advantage_pct"]))
+    current_positive = bool(current_qualified and current_mean is not None and current_mean > 0.0)
+    if not eligible:
+        return {"method": "insufficient_epoch_blocks", "epochs": summaries,
+                "mean_effect_pct": None, "ci_lower_pct": None, "ci_upper_pct": None,
+                "tau_squared": None, "heterogeneity_i2_pct": None, "direction_conflict": False,
+                "current_epoch_qualified": current_qualified,
+                "current_epoch_direction_consistent": current_positive,
+                "current_epoch_harm": current_harm}
+    if len(eligible) == 1:
+        epoch_id, summary = eligible[0]
+        values = [float(row["effect_pct"]) for row in grouped[epoch_id]]
+        lower, upper = _paired_bootstrap_mean_ci(
+            values, draws=int(contract["bootstrap_draws"]),
+            confidence=float(contract["confidence_level"]), label=f"epoch:{epoch_id}")
+        return {"method": "single_epoch_blocks", "epochs": summaries,
+                "mean_effect_pct": summary["mean_effect_pct"], "ci_lower_pct": lower,
+                "ci_upper_pct": upper, "tau_squared": 0.0, "heterogeneity_i2_pct": 0.0,
+                "direction_conflict": False, "current_epoch_qualified": current_qualified,
+                "current_epoch_direction_consistent": current_positive,
+                "current_epoch_harm": current_harm}
+    means = [float(summary["mean_effect_pct"]) for _, summary in eligible]
+    variances = [max(1e-12, float(summary["sampling_variance"] or 0.0))
+                 for _, summary in eligible]
+    tau_squared = _reml_tau_squared(means, variances)
+    weights = [1.0 / (variance + tau_squared) for variance in variances]
+    pooled = sum(weight * mean for weight, mean in zip(weights, means)) / sum(weights)
+    degrees = len(eligible) - 1
+    q = sum(weight * (mean - pooled) ** 2 for weight, mean in zip(weights, means))
+    standard_error = math.sqrt(max(0.0, (q / degrees if degrees else 1.0) / sum(weights)))
+    directions = {1 if mean > 1e-12 else -1 if mean < -1e-12 else 0 for mean in means}
+    return {"method": "random_effects_reml_hartung_knapp", "epochs": summaries,
+            "mean_effect_pct": pooled,
+            "ci_lower_pct": pooled - _t_critical_975(degrees) * standard_error,
+            "ci_upper_pct": pooled + _t_critical_975(degrees) * standard_error,
+            "tau_squared": tau_squared,
+            "heterogeneity_i2_pct": max(0.0, (q - degrees) / q * 100.0) if q > 0 else 0.0,
+            "direction_conflict": 1 in directions and -1 in directions,
+            "current_epoch_qualified": current_qualified,
+            "current_epoch_direction_consistent": current_positive,
+            "current_epoch_harm": current_harm}
+
+
+def _risk_gate(rows: Sequence[Mapping[str, Any]], *, no_count_rate: float | None,
+               contract: Mapping[str, Any]) -> dict[str, Any]:
+    results: dict[str, dict[str, Any]] = {}
+    for field, limit in contract["risk_limits"].items():
+        values = [no_count_rate] if field == "no_count_rate" and no_count_rate is not None else \
+            [row["risk_evidence"].get(field) for row in rows]
+        if not values or any(not _finite_number(value) for value in values):
+            results[field] = {"value": None, "limit": limit, "passed": False}
+            continue
+        value = max(float(item) for item in values) if "maximum" in limit else min(float(item) for item in values)
+        results[field] = {
+            "value": value,
+            "limit": limit,
+            "passed": value <= float(limit["maximum"]) if "maximum" in limit
+            else value >= float(limit["minimum"]),
+        }
+    basis_ok = all(row["risk_evidence"].get("loss_distribution_basis") == "filled_positions_only"
+                   for row in rows)
+    results["loss_distribution_basis"] = {
+        "value": "filled_positions_only" if basis_ok else None, "passed": basis_ok,
+    }
+    return {"passed": all(item["passed"] for item in results.values()), "metrics": results}
+
+
+def _risk_worsened(rows: Sequence[Mapping[str, Any]], *, contract: Mapping[str, Any]) -> bool:
+    for field, limit in contract["risk_limits"].items():
+        if field == "no_count_rate":
+            continue
+        candidate = [row["risk_evidence"].get(field) for row in rows]
+        baseline = [row["baseline_risk_evidence"].get(field) for row in rows]
+        if not candidate or any(not _finite_number(value) for value in candidate + baseline):
+            return True
+        if "maximum" in limit and max(candidate) > max(baseline) + 1e-12:
+            return True
+        if "minimum" in limit and min(candidate) < min(baseline) - 1e-12:
+            return True
+    return False
+
+
+def _arm_statistics(rows: Sequence[Mapping[str, Any]], *, checkpoint: int,
+                    current_epoch_id: str, contract: Mapping[str, Any],
+                    adjusted_pvalue: float | None, no_count_rate: float | None) -> dict[str, Any]:
+    analysis_rows = [dict(row) for row in sorted(rows, key=lambda row: str(row["decision_date"]))[:checkpoint]]
+    blocks = _nonoverlap_h10_blocks(analysis_rows)
+    block_values = [float(row["effect_pct"]) for row in blocks]
+    state_counts: dict[str, int] = {}
+    state_effects: dict[str, list[float]] = {}
+    for row in analysis_rows:
+        state = str(row["state"])
+        state_counts[state] = state_counts.get(state, 0) + 1
+        state_effects.setdefault(state, []).append(float(row["effect_pct"]))
+    state_means = {state: _mean(values) for state, values in state_effects.items()}
+    state_conflict = any(float(value or 0.0) > 1e-12 for value in state_means.values()) and \
+        any(float(value or 0.0) < -1e-12 for value in state_means.values())
+    half = len(block_values) // 2
+    first_half = _mean(block_values[:half]) if half else None
+    second_half = _mean(block_values[half:]) if half else None
+    temporal_conflict = bool(first_half is not None and second_half is not None and first_half * second_half < 0.0)
+    lower, upper = _paired_bootstrap_mean_ci(
+        block_values, draws=int(contract["bootstrap_draws"]),
+        confidence=float(contract["confidence_level"]), label="margin_overheat_arm")
+    cross_epoch = _cross_epoch_random_effects(blocks, current_epoch_id=current_epoch_id, contract=contract)
+    risk = _risk_gate(analysis_rows, no_count_rate=no_count_rate, contract=contract)
+    state_coverage = len([state for state, count in state_counts.items()
+                          if count >= int(contract["min_state_effective_weeks"])]) >= \
+        int(contract["min_distinct_states"])
+    block_mean = _mean(block_values)
+    statistical_pass = (
+        len(analysis_rows) >= checkpoint
+        and len(block_values) >= int(contract["min_nonoverlap_blocks"])
+        and block_mean is not None
+        and block_mean >= float(contract["min_economic_advantage_pct"])
+        and sum(value > 0.0 for value in block_values) / len(block_values) >= float(contract["min_block_win_rate"])
+        and lower is not None and lower >= float(contract["min_economic_advantage_pct"])
+        and adjusted_pvalue is not None and adjusted_pvalue <= float(contract["alpha_spending"][str(checkpoint)])
+        and cross_epoch["mean_effect_pct"] is not None and cross_epoch["ci_lower_pct"] is not None
+        and float(cross_epoch["ci_lower_pct"]) > 0.0
+        and float(cross_epoch["heterogeneity_i2_pct"] or 0.0) <= float(contract["max_heterogeneity_i2_pct"])
+        and not cross_epoch["direction_conflict"] and cross_epoch["current_epoch_qualified"]
+        and cross_epoch["current_epoch_direction_consistent"] and not cross_epoch["current_epoch_harm"]
+        and state_coverage and not state_conflict and not temporal_conflict and risk["passed"]
+    )
+    reliable_harm = (
+        checkpoint >= 36 and len(block_values) >= int(contract["min_nonoverlap_blocks"])
+        and block_mean is not None and block_mean <= -float(contract["min_economic_advantage_pct"])
+        and upper is not None and upper < 0.0
+        and adjusted_pvalue is not None and adjusted_pvalue <= float(contract["alpha_spending"][str(checkpoint)])
+        and risk["passed"] and not temporal_conflict and not state_conflict
+    )
+    return {
+        "effective_difference_weeks": len(rows),
+        "analysis_effective_weeks": len(analysis_rows),
+        "nonoverlap_blocks": len(block_values),
+        "mean_paired_net_excess_pct": _mean([float(row["effect_pct"]) for row in analysis_rows]),
+        "nonoverlap_mean_paired_net_excess_pct": block_mean,
+        "nonoverlap_block_win_rate": (
+            sum(value > 0.0 for value in block_values) / len(block_values) if block_values else None
+        ),
+        "paired_bootstrap_ci": {"confidence_level": contract["confidence_level"],
+                                  "lower_pct": lower, "upper_pct": upper},
+        "paired_sign_flip_two_sided_pvalue": _paired_sign_flip_two_sided_pvalue(
+            block_values, draws=int(contract["permutation_draws"])),
+        "holm_bonferroni_adjusted_pvalue": adjusted_pvalue,
+        "state_effective_weeks": state_counts,
+        "state_mean_effect_pct": state_means,
+        "state_coverage_passed": state_coverage,
+        "temporal_direction_conflict": temporal_conflict,
+        "state_direction_conflict": state_conflict,
+        "cross_epoch": cross_epoch,
+        "risk_gate": risk,
+        "eligible_for_adopt": statistical_pass,
+        "reliable_harm": reliable_harm,
+        "blocks": blocks,
+    }
+
+
+def _simultaneous_winner(eligible: Sequence[str], rows_by_arm: Mapping[str, Sequence[Mapping[str, Any]]],
+                         *, checkpoint: int, contract: Mapping[str, Any]) -> tuple[str | None, dict[str, Any]]:
+    if len(eligible) <= 1:
+        return (eligible[0] if eligible else None), {}
+    confidence = 1.0 - (1.0 - float(contract["simultaneous_confidence_level"])) / (len(eligible) - 1)
+    details: dict[str, Any] = {}
+    winners: list[str] = []
+    for contender in eligible:
+        contender_rows = {row["decision_date"]: row for row in rows_by_arm[contender][:checkpoint]}
+        passes = True
+        comparisons: dict[str, Any] = {}
+        for opponent in eligible:
+            if opponent == contender:
+                continue
+            opponent_rows = {row["decision_date"]: row for row in rows_by_arm[opponent][:checkpoint]}
+            common = [
+                {"decision_date": date,
+                 "evaluation_exit_date": max(str(contender_rows[date]["evaluation_exit_date"]),
+                                             str(opponent_rows[date]["evaluation_exit_date"])),
+                 "effect_pct": float(contender_rows[date]["effect_pct"]) -
+                               float(opponent_rows[date]["effect_pct"])}
+                for date in sorted(set(contender_rows) & set(opponent_rows))
+            ]
+            values = [float(row["effect_pct"]) for row in _nonoverlap_h10_blocks(common)]
+            lower, upper = _paired_bootstrap_mean_ci(
+                values, draws=int(contract["bootstrap_draws"]), confidence=confidence,
+                label=f"margin_finalist:{contender}:{opponent}")
+            passed = len(values) >= int(contract["min_nonoverlap_blocks"]) and \
+                lower is not None and lower >= float(contract["min_economic_advantage_pct"])
+            comparisons[opponent] = {
+                "common_nonoverlap_blocks": len(values), "mean_difference_pct": _mean(values),
+                "simultaneous_confidence_level": confidence, "lower_pct": lower,
+                "upper_pct": upper, "passed": passed,
+            }
+            passes = passes and passed
+        details[contender] = comparisons
+        if passes:
+            winners.append(contender)
+    return (winners[0] if len(winners) == 1 else None), details
+
+
+def _horizon_for_arm(arm: Mapping[str, Any], horizon: int) -> Mapping[str, Any]:
+    matches = [row for row in arm.get("horizons") or [] if row.get("horizon") == horizon]
+    if len(matches) != 1:
+        raise MarginOverheatCashControlError(f"settled arm lacks exactly one H{horizon} outcome")
+    return matches[0]
+
+
+def _validate_settlement_binding(receipt: Mapping[str, Any], capture: Mapping[str, Any],
+                                 outcome: Mapping[str, Any]) -> None:
+    validate_margin_source_receipt(receipt, capture, require_current_epoch=False)
+    if outcome.get("capture_sha256") != capture.get("payload_sha256"):
+        raise MarginOverheatCashControlError(
+            "margin-overheat outcome is not bound to its capture"
+        )
+    settlement = receipt.get("payload", {}).get("settlement")
+    if not isinstance(settlement, Mapping) or settlement.get("outcome_sha256") != outcome.get("payload_sha256") or \
+            settlement.get("status") != outcome.get("payload", {}).get("status") or \
+            settlement.get("daily_cache_digest") != capture.get("payload", {}).get("daily_cache_digest"):
+        raise MarginOverheatCashControlError("margin-overheat settlement receipt does not bind outcome and cache")
+
+
+def _collect_source_bound_evidence(ledger: Mapping[str, Any], captures: Mapping[str, Mapping[str, Any]],
+                                   outcomes: Mapping[str, Mapping[str, Any]],
+                                   receipts: Mapping[str, Mapping[str, Any]]) -> dict[str, Any]:
+    validate_margin_ledger(ledger)
+    stage = ledger["stage"]
+    arm_ids = stage_arm_ids(stage)
+    challengers = arm_ids[1:]
+    rows_by_arm: dict[str, list[dict[str, Any]]] = {arm_id: [] for arm_id in challengers}
     by_arm = {arm_id: {"settled_week_count": 0, "pending_week_count": 0,
-                       "no_count_week_count": 0, "trigger_effective_week_count": 0}
-              for arm_id in stage_arm_ids(STAGE_A)}
-    for row in entries:
-        outcome = outcomes[row["decision_date"]]["payload"]
-        for arm in outcome.get("arms") or []:
-            counts = by_arm[arm["arm_id"]]
-            if arm["status"] == "settled":
-                counts["settled_week_count"] += 1
-            elif arm["status"] == "pending":
-                counts["pending_week_count"] += 1
+                       "no_count_week_count": 0, "trigger_effective_week_count": 0,
+                       "source_bound_effective_week_count": 0}
+              for arm_id in arm_ids}
+    statuses: list[str] = []
+    source_rows: list[dict[str, Any]] = []
+    current_epoch = current_epoch_id()
+    frozen = current_mode() == FROZEN and evidence_counts_toward_clock()
+    current_manifest = build_margin_overheat_freeze_manifest() if frozen else None
+    current_manifest_sha = current_manifest["payload_sha256"] if current_manifest else None
+    current_estimand_sha = (
+        current_manifest["payload"]["estimand_sha256"] if current_manifest else None
+    )
+    for entry in sorted(ledger["entries"], key=lambda row: row["decision_date"]):
+        date = entry["decision_date"]
+        try:
+            capture, outcome, receipt = captures[date], outcomes[date], receipts[date]
+        except KeyError as exc:
+            raise MarginOverheatCashControlError(
+                f"{date}: ledger points to incomplete margin-overheat evidence"
+            ) from exc
+        _validate_margin_capture(capture, require_current_epoch=False)
+        validate_margin_outcome(outcome)
+        _validate_settlement_binding(receipt, capture, outcome)
+        payload = capture["payload"]
+        outcome_payload = outcome["payload"]
+        if entry["capture_sha256"] != capture["payload_sha256"] or \
+                entry["outcome_sha256"] != outcome["payload_sha256"] or \
+                entry["source_receipt_sha256"] != _digest(receipt):
+            raise MarginOverheatCashControlError(f"{date}: ledger source hash drift")
+        if any(entry[key] != payload[key] for key in ("experiment_batch_id", "epoch_id", "stage")):
+            raise MarginOverheatCashControlError(f"{date}: ledger does not match capture batch, epoch or stage")
+        if entry["status"] != outcome_payload["status"]:
+            raise MarginOverheatCashControlError(f"{date}: ledger status does not match outcome")
+        capture_arms = {row["arm_id"]: row for row in payload["arms"]}
+        outcome_arms = {row["arm_id"]: row for row in outcome_payload["arms"]}
+        if tuple(capture_arms) != arm_ids or tuple(outcome_arms) != arm_ids:
+            raise MarginOverheatCashControlError(f"{date}: source-bound arm identity drifted")
+        # These are descriptive private-ledger counts, retained for outage
+        # diagnosis.  Formal statistics below use only the eligible by_arm
+        # counters populated after all forward/frozen/source gates.
+        statuses.append(str(outcome_payload["status"]))
+        if not entry["forward_eligible"]:
+            continue
+        if payload["forward_eligible"] is not True:
+            raise MarginOverheatCashControlError(f"{date}: ledger forward eligibility is not capture-bound")
+        if not frozen:
+            continue
+        capture_manifest = payload.get("freeze_manifest")
+        if capture_manifest is None:
+            # A valid pre-freeze record is audit-only forever.  It is retained
+            # for source integrity but cannot enter any formal-risk denominator.
+            continue
+        if not isinstance(capture_manifest, Mapping):
+            raise MarginOverheatCashControlError(f"{date}: frozen capture lacks its manifest")
+        if payload["epoch_id"] == current_epoch:
+            if payload.get("freeze_manifest_sha256") != current_manifest_sha or \
+                    capture_manifest != current_manifest:
+                raise MarginOverheatCashControlError(
+                    f"{date}: frozen capture manifest identity drifted"
+                )
+        elif capture_manifest["payload"].get("estimand_sha256") != current_estimand_sha:
+            raise MarginOverheatCashControlError(
+                f"{date}: frozen epoch estimand changed and requires a new experiment batch"
+            )
+        for arm_id in arm_ids:
+            arm_status = outcome_arms[arm_id]["status"]
+            if arm_status == "settled":
+                by_arm[arm_id]["settled_week_count"] += 1
+            elif arm_status == "pending":
+                by_arm[arm_id]["pending_week_count"] += 1
             else:
-                counts["no_count_week_count"] += 1
-            if arm.get("predicate_triggered") is True and arm["status"] == "settled":
-                counts["trigger_effective_week_count"] += 1
-    payload = {
-        "question_id": QUESTION_ID,
-        "experiment_batch_id": ledger["experiment_batch_id"],
-        "epoch_id": ledger["epoch_id"],
-        "capture_count": len(entries),
+                by_arm[arm_id]["no_count_week_count"] += 1
+        if outcome_payload["status"] != "settled" or any(
+                outcome_arms[arm_id]["status"] != "settled" for arm_id in arm_ids):
+            continue
+        baseline_h10 = _horizon_for_arm(outcome_arms["baseline"], 10)
+        source_row = {
+            "decision_date": date,
+            "epoch_id": entry["epoch_id"],
+            "capture_sha256": entry["capture_sha256"],
+            "outcome_sha256": entry["outcome_sha256"],
+            "source_receipt_sha256": entry["source_receipt_sha256"],
+            "arms": {},
+        }
+        for arm_id in challengers:
+            arm = outcome_arms[arm_id]
+            h10 = _horizon_for_arm(arm, 10)
+            triggered = capture_arms[arm_id].get("predicate_triggered")
+            if not isinstance(triggered, bool):
+                raise MarginOverheatCashControlError(f"{date}: settled challenger lacks predicate trigger state")
+            effect = float(h10["return_pct"]) - float(baseline_h10["return_pct"])
+            if not triggered and not math.isclose(effect, 0.0, rel_tol=0.0, abs_tol=1e-12):
+                raise MarginOverheatCashControlError(f"{date}: non-trigger challenger is not zero-delta paired")
+            row = {
+                "decision_date": date,
+                "evaluation_exit_date": max(str(h10["exit_date"]), str(baseline_h10["exit_date"])),
+                "epoch_id": entry["epoch_id"],
+                "state": "triggered" if triggered else "non_triggered",
+                "effect_pct": effect,
+                "risk_evidence": copy.deepcopy(arm["risk_evidence"]),
+                "baseline_risk_evidence": copy.deepcopy(outcome_arms["baseline"]["risk_evidence"]),
+            }
+            rows_by_arm[arm_id].append(row)
+            by_arm[arm_id]["source_bound_effective_week_count"] += 1
+            if triggered:
+                by_arm[arm_id]["trigger_effective_week_count"] += 1
+            source_row["arms"][arm_id] = {
+                "triggered": triggered, "h10_return_pct": h10["return_pct"],
+                "baseline_h10_return_pct": baseline_h10["return_pct"],
+                "risk_evidence": arm["risk_evidence"],
+            }
+        by_arm["baseline"]["source_bound_effective_week_count"] += 1
+        source_rows.append(source_row)
+    no_count_rates = {
+        arm_id: (
+            by_arm[arm_id]["no_count_week_count"] /
+            (by_arm[arm_id]["settled_week_count"] + by_arm[arm_id]["no_count_week_count"])
+            if by_arm[arm_id]["settled_week_count"] + by_arm[arm_id]["no_count_week_count"] else None
+        )
+        for arm_id in challengers
+    }
+    return {
+        "stage": stage,
+        "capture_count": len(ledger["entries"]),
         "settled_week_count": statuses.count("settled"),
         "pending_week_count": statuses.count("pending"),
         "no_count_week_count": statuses.count("no_count"),
+        "rows_by_arm": rows_by_arm,
         "by_arm": by_arm,
+        "no_count_rates": no_count_rates,
+        "source_rows": source_rows,
+        "calendar_effective_weeks": len(source_rows),
+        "trigger_effective_weeks": max(
+            (by_arm[arm_id]["trigger_effective_week_count"] for arm_id in challengers), default=0
+        ),
+        "current_epoch_id": current_epoch,
     }
+
+
+def _formal_checkpoint(calendar_effective_weeks: int, contract: Mapping[str, Any]) -> int | None:
+    checkpoints = [int(value) for value in contract["formal_calendar_checkpoints"]]
+    return max((checkpoint for checkpoint in checkpoints if calendar_effective_weeks >= checkpoint), default=None)
+
+
+def _formal_decision(evidence: Mapping[str, Any]) -> dict[str, Any]:
+    contract = _adjudication_contract()
+    calendar_weeks = int(evidence["calendar_effective_weeks"])
+    trigger_weeks = int(evidence["trigger_effective_weeks"])
+    if not (current_mode() == FROZEN and evidence_counts_toward_clock()):
+        return {"status": "pre_freeze_audit_only", "checkpoint": None,
+                "verdict": "not_evaluated", "winner": None, "arm_statistics": [],
+                "finalist_comparisons": {}}
+    if calendar_weeks < int(contract["preliminary_calendar_effective_weeks"]):
+        return {"status": "accumulating", "checkpoint": None,
+                "verdict": "not_evaluated", "winner": None, "arm_statistics": [],
+                "finalist_comparisons": {}}
+    checkpoint = _formal_checkpoint(calendar_weeks, contract)
+    if checkpoint is None:
+        return {"status": "preliminary_review_due", "checkpoint": None,
+                "verdict": "not_evaluated", "winner": None, "arm_statistics": [],
+                "finalist_comparisons": {}}
+    if trigger_weeks < int(contract["min_trigger_effective_weeks"]):
+        return {"status": "insufficient_trigger_weeks", "checkpoint": checkpoint,
+                "verdict": "not_evaluated", "winner": None, "arm_statistics": [],
+                "finalist_comparisons": {}}
+    rows_by_arm = {
+        arm_id: sorted(rows, key=lambda row: str(row["decision_date"]))
+        for arm_id, rows in evidence["rows_by_arm"].items()
+    }
+    raw_pvalues = {
+        arm_id: _paired_sign_flip_two_sided_pvalue(
+            [float(row["effect_pct"]) for row in _nonoverlap_h10_blocks(rows[:checkpoint])],
+            draws=int(contract["permutation_draws"]),
+        )
+        for arm_id, rows in rows_by_arm.items()
+    }
+    adjusted = _holm_bonferroni(raw_pvalues)
+    arm_statistics: list[dict[str, Any]] = []
+    minimum_trigger = int(contract["min_trigger_effective_weeks"])
+    for arm_id, rows in rows_by_arm.items():
+        stats = _arm_statistics(
+            rows, checkpoint=checkpoint, current_epoch_id=str(evidence["current_epoch_id"]),
+            contract=contract, adjusted_pvalue=adjusted[arm_id],
+            no_count_rate=evidence["no_count_rates"][arm_id],
+        )
+        stats["arm_id"] = arm_id
+        stats["trigger_effective_weeks"] = evidence["by_arm"][arm_id]["trigger_effective_week_count"]
+        stats["trigger_floor_passed"] = stats["trigger_effective_weeks"] >= minimum_trigger
+        stats["eligible_for_adopt"] = bool(stats["eligible_for_adopt"] and stats["trigger_floor_passed"])
+        stats["reliable_harm"] = bool(stats["reliable_harm"] and stats["trigger_floor_passed"])
+        arm_statistics.append(stats)
+    eligible = [row["arm_id"] for row in arm_statistics if row["eligible_for_adopt"]]
+    winner, finalists = _simultaneous_winner(eligible, rows_by_arm, checkpoint=checkpoint, contract=contract)
+    conflicts = any(
+        row["temporal_direction_conflict"] or row["state_direction_conflict"] or
+        row["cross_epoch"]["direction_conflict"] or
+        (row["cross_epoch"]["heterogeneity_i2_pct"] is not None and
+         row["cross_epoch"]["heterogeneity_i2_pct"] > float(contract["max_heterogeneity_i2_pct"]))
+        for row in arm_statistics
+    )
+    mature = [row for row in arm_statistics if row["trigger_floor_passed"]]
+    if winner:
+        status, verdict = "formal_supported", "supported"
+    elif checkpoint >= 36 and mature and all(row["reliable_harm"] for row in mature):
+        status, verdict = "formal_not_supported", "not_supported"
+    else:
+        status, verdict = "formal_inconclusive", "inconclusive"
+    if conflicts and verdict != "not_evaluated":
+        status, verdict, winner = "formal_inconclusive", "inconclusive", None
+    return {"status": status, "checkpoint": checkpoint, "verdict": verdict,
+            "winner": winner, "arm_statistics": arm_statistics,
+            "finalist_comparisons": finalists}
+
+
+def _adjudication_documents(ledger: Mapping[str, Any], outcomes: Mapping[str, Mapping[str, Any]],
+                            captures: Mapping[str, Mapping[str, Any]],
+                            receipts: Mapping[str, Mapping[str, Any]]) -> tuple[dict[str, Any], dict[str, Any]]:
+    evidence = _collect_source_bound_evidence(ledger, captures, outcomes, receipts)
+    formal = _formal_decision(evidence)
+    calendar_weeks = int(evidence["calendar_effective_weeks"])
+    trigger_weeks = int(evidence["trigger_effective_weeks"])
+    if formal["verdict"] == "not_evaluated":
+        state = build_state(
+            calendar_effective_weeks=calendar_weeks,
+            trigger_effective_weeks=trigger_weeks,
+            stage=evidence["stage"],
+        )
+    else:
+        state = _build_adjudicated_state(
+            calendar_effective_weeks=calendar_weeks,
+            trigger_effective_weeks=trigger_weeks,
+            stage=evidence["stage"], comparison_verdict=formal["verdict"],
+            reason=formal["status"],
+        )
+    payload = {
+        "question_id": QUESTION_ID,
+        "experiment_batch_id": ledger["experiment_batch_id"],
+        "epoch_id": evidence["current_epoch_id"],
+        "stage": evidence["stage"],
+        "capture_count": evidence["capture_count"],
+        "settled_week_count": evidence["settled_week_count"],
+        "pending_week_count": evidence["pending_week_count"],
+        "no_count_week_count": evidence["no_count_week_count"],
+        "calendar_effective_weeks": calendar_weeks,
+        "trigger_effective_weeks": trigger_weeks,
+        "current_epoch_id": evidence["current_epoch_id"],
+        "source_bound_record_count": len(evidence["source_rows"]),
+        "evidence_sha256": _digest(evidence["source_rows"]),
+        "formal_checkpoint": formal["checkpoint"],
+        "formal_status": formal["status"],
+        "formal_verdict": formal["verdict"],
+        "winning_arm_id": formal["winner"],
+        "by_arm": evidence["by_arm"],
+        "arm_statistics": [
+            {key: value for key, value in row.items() if key != "blocks"}
+            for row in formal["arm_statistics"]
+        ],
+        "finalist_comparisons": formal["finalist_comparisons"],
+    }
+    reminders: list[dict[str, Any]] = []
+    if state["stage"] == STAGE_A and state["comparison_verdict"] == "supported":
+        source_dates = [row["decision_date"] for row in evidence["source_rows"]]
+        reminders.append({
+            "question_id": QUESTION_ID,
+            "decision_date": max(source_dates),
+            "status": "supported",
+            "reason": "stage_a_supported_receipt_required",
+            "receipt_required": True,
+            "stage": STAGE_A,
+        })
     adjudication = {
         "schema_name": "a_short_margin_overheat_cash_control_adjudication",
         "schema_version": CAPTURE_SCHEMA_VERSION,
@@ -2049,7 +3333,7 @@ def _adjudication_documents(ledger: Mapping[str, Any], outcomes: Mapping[str, Ma
         "track_id": TRACK_ID,
         "question_id": QUESTION_ID,
         "experiment_batch_id": ledger["experiment_batch_id"],
-        "epoch_id": ledger["epoch_id"],
+        "epoch_id": evidence["current_epoch_id"],
         "reminders": reminders,
         "production_unchanged": True,
         "boundary": _knife3_boundary(),
@@ -2088,44 +3372,88 @@ def _clear_private_margin_reminder(private_root: Path) -> None:
     })
 
 
-def adjudicate_margin_overheat_cash_control(*, root: str | Path) -> dict[str, Any]:
+def adjudicate_margin_overheat_cash_control(
+        *, root: str | Path, stage: str = STAGE_A, as_of: str | None = None,
+) -> dict[str, Any]:
     private_root = _private_root(root)
     _recover_private_artifact_set(private_root)
-    ledger = _load_private_json(private_root / "ledger.json", "ledger")
+    operation_as_of = _stage_admission_as_of(as_of)
+    stage_root, stage_b_admission = _stage_storage_root(
+        private_root, stage=stage, as_of=operation_as_of,
+    )
+    _recover_private_artifact_set(stage_root)
+    ledger = _load_private_json(stage_root / "ledger.json", "ledger")
     validate_margin_ledger(ledger)
+    if ledger["stage"] != stage:
+        raise MarginOverheatCashControlError("margin-overheat adjudication stage root drifted")
+    if stage_b_admission is not None and ledger["experiment_batch_id"] != \
+            stage_b_admission["payload"]["next_experiment_batch_id"]:
+        raise MarginOverheatCashControlError("stage-B adjudication batch is not admission-bound")
+    captures: dict[str, dict] = {}
     outcomes: dict[str, dict] = {}
+    receipts: dict[str, dict] = {}
     for entry in ledger["entries"]:
-        path = private_root / "weeks" / entry["decision_date"] / "outcome.json"
-        if not path.is_file():
-            raise MarginOverheatCashControlError("margin-overheat ledger points to a missing outcome")
-        outcome = _load_private_json(path, "outcome")
+        week_root = stage_root / "weeks" / entry["decision_date"]
+        capture_path, outcome_path, receipt_path = (
+            week_root / "capture.json", week_root / "outcome.json", week_root / "source_receipt.json"
+        )
+        if not capture_path.is_file() or not outcome_path.is_file() or not receipt_path.is_file():
+            raise MarginOverheatCashControlError("margin-overheat ledger points to incomplete source-bound evidence")
+        capture = _load_private_json(capture_path, "capture")
+        outcome = _load_private_json(outcome_path, "outcome")
+        receipt = _load_private_json(receipt_path, "source receipt")
+        _validate_margin_capture(capture, require_current_epoch=False)
+        if stage == STAGE_B:
+            _validate_stage_b_capture_admission(capture, stage_b_admission)
         validate_margin_outcome(outcome)
+        _validate_settlement_binding(receipt, capture, outcome)
         if outcome["capture_sha256"] != entry["capture_sha256"] or \
-                outcome["payload_sha256"] != entry["outcome_sha256"]:
+                outcome["payload_sha256"] != entry["outcome_sha256"] or \
+                _digest(receipt) != entry["source_receipt_sha256"]:
             raise MarginOverheatCashControlError("margin-overheat ledger outcome digest does not match")
+        captures[entry["decision_date"]] = capture
         outcomes[entry["decision_date"]] = outcome
-    adjudication, reminder = _adjudication_documents(ledger, outcomes)
+        receipts[entry["decision_date"]] = receipt
+    adjudication, reminder = _adjudication_documents(ledger, outcomes, captures, receipts)
     from engine.a_short_artifact_set_transaction import commit_artifact_set
-    commit_artifact_set(_private_journal_dir(private_root), {
-        private_root / "adjudication.json": _json_bytes(adjudication),
-        private_root / "reminder.json": _json_bytes(reminder),
+    commit_artifact_set(_private_journal_dir(stage_root), {
+        stage_root / "adjudication.json": _json_bytes(adjudication),
+        stage_root / "reminder.json": _json_bytes(reminder),
     })
     return {"status": "adjudicated_margin_overheat_cash_control",
             "adjudication": adjudication, "reminder": reminder}
 
 
-def settle_margin_overheat_from_daily_cache(*, root: str | Path,
-                                            daily_cache_document: Mapping[str, Any]) -> dict[str, Any]:
+def settle_margin_overheat_from_daily_cache(
+        *, root: str | Path, daily_cache_document: Mapping[str, Any],
+        stage: str = STAGE_A, as_of: str | None = None,
+) -> dict[str, Any]:
     """Recompute all private captures from one existing cache, then commit one artifact set."""
     private_root = _private_root(root)
     _recover_private_artifact_set(private_root)
+    operation_as_of = _stage_admission_as_of(as_of)
+    stage_root, stage_b_admission = _stage_storage_root(
+        private_root, stage=stage, as_of=operation_as_of,
+    )
+    _recover_private_artifact_set(stage_root)
     document = _cache_document(daily_cache_document)
-    program = _load_private_json(private_root / "program.json", "program manifest")
-    if program != _margin_capture_program(load_governance()):
+    governance = load_governance()
+    expected_program = _margin_capture_program(
+        governance, comparison_stage=stage,
+        experiment_batch_id=(governance["namespace"]["experiment_batch_id"]
+                             if stage == STAGE_A
+                             else stage_b_admission["payload"]["next_experiment_batch_id"]),
+        stage_b_admission_sha256=(None if stage == STAGE_A
+                                  else stage_b_admission["payload_sha256"]),
+    )
+    program = _load_private_json(stage_root / "program.json", "program manifest")
+    if program != expected_program:
         raise MarginOverheatCashControlError("margin-overheat program manifest drifted")
-    ledger = _load_private_json(private_root / "ledger.json", "ledger")
+    ledger = _load_private_json(stage_root / "ledger.json", "ledger")
     validate_margin_ledger(ledger)
-    weeks_root = private_root / "weeks"
+    if ledger["stage"] != stage:
+        raise MarginOverheatCashControlError("margin-overheat settlement stage root drifted")
+    weeks_root = stage_root / "weeks"
     capture_files = [] if not weeks_root.exists() else sorted(
         path for path in weeks_root.iterdir() if path.is_dir()
     )
@@ -2140,8 +3468,10 @@ def settle_margin_overheat_from_daily_cache(*, root: str | Path,
             )
         capture = _load_private_json(capture_path, "capture")
         receipt = _load_private_json(receipt_path, "source receipt")
-        _validate_margin_capture(capture)
-        validate_margin_source_receipt(receipt, capture)
+        _validate_margin_capture(capture, require_current_epoch=False)
+        if stage == STAGE_B:
+            _validate_stage_b_capture_admission(capture, stage_b_admission)
+        validate_margin_source_receipt(receipt, capture, require_current_epoch=False)
         if capture["payload"]["daily_cache_digest"] != _digest(document):
             raise MarginOverheatCashControlError(
                 "margin-overheat daily cache digest does not match capture"
@@ -2150,6 +3480,16 @@ def settle_margin_overheat_from_daily_cache(*, root: str | Path,
         receipts[week_dir.name] = receipt
         outcome = _settle_capture(capture, document)
         outcomes[week_dir.name] = outcome
+    settled_receipts: dict[str, dict] = {}
+    for date, outcome in outcomes.items():
+        receipt = copy.deepcopy(receipts[date])
+        receipt["payload"]["settlement"] = {
+            "outcome_sha256": outcome["payload_sha256"],
+            "status": outcome["payload"]["status"],
+            "daily_cache_digest": _digest(document),
+        }
+        _schema_validate(receipt, RECEIPT_SCHEMA_PATH)
+        settled_receipts[date] = receipt
     new_entries = []
     for date in sorted(captures):
         capture = captures[date]
@@ -2161,32 +3501,30 @@ def settle_margin_overheat_from_daily_cache(*, root: str | Path,
             "question_id": QUESTION_ID,
             "experiment_batch_id": capture["payload"]["experiment_batch_id"],
             "epoch_id": capture["payload"]["epoch_id"],
+            "stage": capture["payload"]["stage"],
             "capture_sha256": capture["payload_sha256"],
             "outcome_sha256": outcome["payload_sha256"],
+            "source_receipt_sha256": _digest(settled_receipts[date]),
             "status": outcome["payload"]["status"],
             "forward_eligible": bool(capture["payload"]["forward_eligible"]),
         })
     new_ledger = dict(ledger)
     new_ledger["entries"] = new_entries
     validate_margin_ledger(new_ledger)
-    adjudication, reminder = _adjudication_documents(new_ledger, outcomes)
+    adjudication, reminder = _adjudication_documents(
+        new_ledger, outcomes, captures, settled_receipts
+    )
     writes: dict[Path, bytes] = {
-        private_root / "ledger.json": _json_bytes(new_ledger),
-        private_root / "adjudication.json": _json_bytes(adjudication),
-        private_root / "reminder.json": _json_bytes(reminder),
+        stage_root / "ledger.json": _json_bytes(new_ledger),
+        stage_root / "adjudication.json": _json_bytes(adjudication),
+        stage_root / "reminder.json": _json_bytes(reminder),
     }
     for date, outcome in outcomes.items():
-        receipt = copy.deepcopy(receipts[date])
-        receipt["payload"]["settlement"] = {
-            "outcome_sha256": outcome["payload_sha256"],
-            "status": outcome["payload"]["status"],
-            "daily_cache_digest": _digest(document),
-        }
-        _schema_validate(receipt, RECEIPT_SCHEMA_PATH)
-        writes[private_root / "weeks" / date / "outcome.json"] = _json_bytes(outcome)
-        writes[private_root / "weeks" / date / "source_receipt.json"] = _json_bytes(receipt)
+        receipt = settled_receipts[date]
+        writes[stage_root / "weeks" / date / "outcome.json"] = _json_bytes(outcome)
+        writes[stage_root / "weeks" / date / "source_receipt.json"] = _json_bytes(receipt)
     from engine.a_short_artifact_set_transaction import commit_artifact_set
-    commit_artifact_set(_private_journal_dir(private_root), writes)
+    commit_artifact_set(_private_journal_dir(stage_root), writes)
     return {"status": "settled_from_existing_cache", "ledger": new_ledger,
             "adjudication": adjudication, "reminder": reminder}
 
@@ -2207,7 +3545,7 @@ def settle_and_summarize_margin_overheat_weekly(*, root: str | Path | None,
             return _public_margin_summary(PUBLIC_STATUS_UNAVAILABLE, as_of=as_of)
         document = load_margin_overheat_daily_cache(daily_cache_path)
         result = settle_margin_overheat_from_daily_cache(
-            root=private_root, daily_cache_document=document
+            root=private_root, daily_cache_document=document, as_of=as_of,
         )
         reminder = result["reminder"]
         validate_margin_reminder(reminder)

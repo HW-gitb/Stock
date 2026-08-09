@@ -16,6 +16,7 @@
     "stage_a",
     "stage_b",
     "state_contract",
+    "adjudication_contract",
     "capture_contract",
     "outcome_contract",
     "boundary"
@@ -164,6 +165,43 @@
         "pre_freeze_verdict": "not_evaluated",
         "stage_a_formal_requires": "source_bound_trigger_effective_weeks",
         "supported_requires_user_receipt": true
+      }
+    },
+    "adjudication_contract": {
+      "const": {
+        "primary_horizon_days": 10,
+        "preliminary_calendar_effective_weeks": 12,
+        "formal_calendar_checkpoints": [24, 36],
+        "min_trigger_effective_weeks": 4,
+        "min_nonoverlap_blocks": 12,
+        "min_epoch_blocks": 4,
+        "min_distinct_states": 2,
+        "min_state_effective_weeks": 4,
+        "min_economic_advantage_pct": 0.25,
+        "min_block_win_rate": 0.55,
+        "bootstrap_draws": 5000,
+        "permutation_draws": 20000,
+        "confidence_level": 0.95,
+        "simultaneous_confidence_level": 0.95,
+        "alpha_spending": {"24": 0.025, "36": 0.025},
+        "max_heterogeneity_i2_pct": 50.0,
+        "within_question_family": "holm_bonferroni",
+        "finalist_method": "pre_registered_simultaneous_confidence_bounds",
+        "cross_epoch_method": "random_effects_reml_hartung_knapp",
+        "risk_limits": {
+          "max_drawdown_pct": {"maximum": 15.0},
+          "bad_name_rate": {"maximum": 0.35},
+          "tail_loss_pct": {"minimum": -10.0},
+          "loss_distribution_count": {"minimum": 1},
+          "cash_drag_pct": {"maximum": 50.0},
+          "unfilled_rate": {"maximum": 0.5},
+          "fill_rate": {"minimum": 0.5},
+          "turnover_pct": {"maximum": 100.0},
+          "total_cost_pct": {"maximum": 0.16},
+          "max_name_weight_pct": {"maximum": 50.0},
+          "adjustment_coverage_pct": {"minimum": 100.0},
+          "no_count_rate": {"maximum": 0.2}
+        }
       }
     },
     "capture_contract": {

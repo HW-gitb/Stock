@@ -1,0 +1,28 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "a_short_margin_overheat_cash_control_freeze_manifest",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_name", "schema_version", "track_id", "payload", "payload_sha256", "production_unchanged"],
+  "properties": {
+    "schema_name": {"const": "a_short_margin_overheat_cash_control_freeze_manifest"},
+    "schema_version": {"const": "1.0.0"},
+    "track_id": {"const": "a_short_margin_overheat_cash_control"},
+    "payload_sha256": {"type": "string", "pattern": "^[a-f0-9]{64}$"},
+    "payload": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["semantic_governance_sha256", "estimand_sha256", "schema_contracts", "python_contracts", "shared_track_id", "production_constants", "boundary"],
+      "properties": {
+        "semantic_governance_sha256": {"type": "string", "pattern": "^[a-f0-9]{64}$"},
+        "estimand_sha256": {"type": "string", "pattern": "^[a-f0-9]{64}$"},
+        "schema_contracts": {"type": "object", "minProperties": 1},
+        "python_contracts": {"type": "object", "minProperties": 2},
+        "shared_track_id": {"const": "a_short_margin_overheat_cash_control"},
+        "production_constants": {"const": {"percentile_threshold": null, "cash_factor": null, "production_effect_enabled": false}},
+        "boundary": {"const": {"comparison_only": true, "automatic_policy_switch": false, "direct_activation_requires_user_authorization": true}}
+      }
+    },
+    "production_unchanged": {"const": true}
+  }
+}

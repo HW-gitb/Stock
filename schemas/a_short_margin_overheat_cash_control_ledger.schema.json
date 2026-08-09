@@ -3,21 +3,21 @@
   "title": "a_short_margin_overheat_cash_control_ledger",
   "type": "object",
   "additionalProperties": false,
-  "required": ["schema_name", "schema_version", "track_id", "program_id", "question_id", "experiment_batch_id", "epoch_id", "entries", "boundary"],
+  "required": ["schema_name", "schema_version", "track_id", "program_id", "question_id", "experiment_batch_id", "epoch_id", "stage", "entries", "boundary"],
   "properties": {
     "schema_name": {"const": "a_short_margin_overheat_cash_control_ledger"},
     "schema_version": {"const": "1.0.0"}, "track_id": {"const": "a_short_margin_overheat_cash_control"},
     "program_id": {"const": "margin_overheat_cash_control"}, "question_id": {"const": "margin_overheat_cash_control"},
-    "experiment_batch_id": {"type": "string", "minLength": 1}, "epoch_id": {"type": "string", "minLength": 1},
+    "experiment_batch_id": {"type": "string", "minLength": 1}, "epoch_id": {"type": "string", "minLength": 1}, "stage": {"enum": ["stage_a", "stage_b"]},
     "entries": {
       "type": "array", "items": {
         "type": "object", "additionalProperties": false,
-        "required": ["decision_date", "run_date", "price_data_through", "question_id", "experiment_batch_id", "epoch_id", "capture_sha256", "outcome_sha256", "status", "forward_eligible"],
+        "required": ["decision_date", "run_date", "price_data_through", "question_id", "experiment_batch_id", "epoch_id", "stage", "capture_sha256", "outcome_sha256", "source_receipt_sha256", "status", "forward_eligible"],
         "properties": {
           "decision_date": {"type": "string", "pattern": "^[0-9]{8}$"}, "run_date": {"type": "string", "pattern": "^[0-9]{8}$"},
           "price_data_through": {"type": "string", "pattern": "^[0-9]{8}$"}, "question_id": {"const": "margin_overheat_cash_control"},
-          "experiment_batch_id": {"type": "string", "minLength": 1}, "epoch_id": {"type": "string", "minLength": 1},
-          "capture_sha256": {"type": "string", "pattern": "^[a-f0-9]{64}$"}, "outcome_sha256": {"type": "string", "pattern": "^[a-f0-9]{64}$"},
+          "experiment_batch_id": {"type": "string", "minLength": 1}, "epoch_id": {"type": "string", "minLength": 1}, "stage": {"enum": ["stage_a", "stage_b"]},
+          "capture_sha256": {"type": "string", "pattern": "^[a-f0-9]{64}$"}, "outcome_sha256": {"type": "string", "pattern": "^[a-f0-9]{64}$"}, "source_receipt_sha256": {"type": "string", "pattern": "^[a-f0-9]{64}$"},
           "status": {"enum": ["pending", "no_count", "settled"]}, "forward_eligible": {"type": "boolean"}
         }
       }

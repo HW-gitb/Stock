@@ -1476,6 +1476,32 @@ class MainWiringTests(unittest.TestCase):
         self.assertEqual(settlement["progress_status"], "unavailable")
         self.assertEqual(settlement["error_code"], "settlement_unavailable")
 
+    def test_margin_settlement_exception_keeps_unavailable_banner_in_weekly_and_markdown(self):
+        with tempfile.TemporaryDirectory() as td:
+            self._write_inputs(td)
+            out = Path(td) / "weekly.json"
+            root = Path(td) / "margin-private"
+            with patch(
+                "engine.a_short_margin_overheat_cash_control."
+                "settle_and_summarize_margin_overheat_weekly",
+                side_effect=RuntimeError("forced margin settlement failure"),
+            ):
+                main(["--as-of", AS_OF, "--analysis-input", str(Path(td) / "ai.json"),
+                      "--iv-feed", str(Path(td) / "feed.json"), "--account", str(Path(td) / "acct.json"),
+                      "--out", str(out), "--run-date", AS_OF,
+                      "--margin-overheat-cash-control-root", str(root),
+                      "--margin-overheat-cash-control-daily-cache", str(Path(td) / "missing-cache.json")],
+                     price_provider=lambda code: _series())
+            weekly = json.loads(out.read_text(encoding="utf-8"))
+            markdown = out.with_suffix(".md").read_text(encoding="utf-8")
+        summary = weekly["margin_overheat_cash_control"]
+        self.assertEqual(summary["status"], "evidence_unavailable_or_inconclusive")
+        self.assertEqual(
+            summary["message"],
+            "Margin-overheat comparison evidence is unavailable; stale reminders are suppressed and official M6.7 is unchanged.",
+        )
+        self.assertIn("**Margin-overheat cash control**: " + summary["message"], markdown)
+
     def test_margin_wrapped_replay_drift_is_stalled_not_an_unavailable_capture(self):
         from engine import a_short_margin_overheat_cash_control as margin_track
 

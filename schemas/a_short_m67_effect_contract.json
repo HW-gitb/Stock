@@ -1530,12 +1530,128 @@
       "id": "margin_overheat_cash_control_shadow",
       "policy": "intentionally_independent",
       "schema_path": "schemas/a_short_margin_overheat_cash_control_shadow.schema.json",
-      "schema_sha256": "25e4257794b090c0b45bac44f3218e8eb1dee6928b9dc69e9f4918babbe55fb2",
+      "schema_sha256": "29cd9ef373632d3e85a4bc223b539e8e36abac9b32e8b8b0f9308b67c829db39",
       "reason": "Knife 2 shadow allocation uses deidentified model cash and the shared production cash-factor stack and allocator on copied reports; only the comparison margin factor can change and the result cannot reach official M6.7 or account state.",
       "owner": "engine/a_short_margin_overheat_cash_control.py::materialize_shadow_cash_control",
-      "review_ref": "序19后续刀2 shadow consumer; capture/settlement/ledger remain later knives",
+      "review_ref": "序19后续刀2 shadow consumer; Knife4 adds the receipt-bound Stage-B factor arms without production activation",
       "consumer_refs": [
         "engine/a_short_margin_overheat_cash_control.py::materialize_shadow_cash_control"
+      ]
+    },
+    {
+      "id": "margin_overheat_cash_control_program",
+      "policy": "intentionally_independent",
+      "schema_path": "schemas/a_short_margin_overheat_cash_control_program.schema.json",
+      "schema_sha256": "f74691183bc0c84fa1dffa7e62ba7cc43f1954258a49d5b56168680aace8b1c4",
+      "reason": "The dedicated two-stage comparison program fixes its independent batch, trigger, formal-adjudication and comparison-only boundary. It has no route to official M6.7 or production settings.",
+      "owner": "engine/a_short_margin_overheat_cash_control.py::load_governance",
+      "review_ref": "序19后续刀4 formal adjudication and Stage-B admission contract",
+      "consumer_refs": [
+        "engine/a_short_margin_overheat_cash_control.py::_adjudication_contract",
+        "engine/a_short_margin_overheat_cash_control.py::_margin_capture_program"
+      ]
+    },
+    {
+      "id": "margin_overheat_cash_control_state",
+      "policy": "intentionally_independent",
+      "schema_path": "schemas/a_short_margin_overheat_cash_control_state.schema.json",
+      "schema_sha256": "3db9b2c49b6b4f8a7f3ac3556a06017679cbc751854d5be7c1539ff1c2083471",
+      "reason": "The dedicated state expresses only evidence status and an advisory comparison verdict; shared frozen-mode gating and production-unchanged invariants prevent it from changing live policy.",
+      "owner": "engine/a_short_margin_overheat_cash_control.py::build_state",
+      "review_ref": "序19后续刀4 11/12/24/36 clock boundary",
+      "consumer_refs": [
+        "engine/a_short_margin_overheat_cash_control.py::build_state",
+        "engine/a_short_margin_overheat_cash_control.py::validate_margin_adjudication"
+      ]
+    },
+    {
+      "id": "margin_overheat_cash_control_capture",
+      "policy": "intentionally_independent",
+      "schema_path": "schemas/a_short_margin_overheat_cash_control_capture.schema.json",
+      "schema_sha256": "689b8bfc8903e2d3183047c6fd4bef1ff167423b96846cf535e89cb4708e650d",
+      "reason": "Private captures bind each comparison-only week to its source, stage, batch, epoch and, when frozen, dedicated manifest; they never write official selection or allocation output.",
+      "owner": "engine/a_short_margin_overheat_cash_control.py::capture_margin_overheat_week",
+      "review_ref": "序19后续刀4 source-bound current-batch evidence",
+      "consumer_refs": [
+        "engine/a_short_margin_overheat_cash_control.py::_validate_margin_capture",
+        "engine/a_short_margin_overheat_cash_control.py::settle_margin_overheat_from_daily_cache"
+      ]
+    },
+    {
+      "id": "margin_overheat_cash_control_outcome",
+      "policy": "intentionally_independent",
+      "schema_path": "schemas/a_short_margin_overheat_cash_control_outcome.schema.json",
+      "schema_sha256": "aad5405137d59e7cf0069ce7d46b42769a80978ab0525602832b36c5ef49df48",
+      "reason": "Private H5/H10/H20 outcomes and their risk evidence are input to comparison adjudication only; the values cannot alter the official weekly M6.7 report.",
+      "owner": "engine/a_short_margin_overheat_cash_control.py::_settle_capture",
+      "review_ref": "序19后续刀4 paired formal-risk gate",
+      "consumer_refs": [
+        "engine/a_short_margin_overheat_cash_control.py::_collect_source_bound_evidence",
+        "engine/a_short_margin_overheat_cash_control.py::adjudicate_margin_overheat_cash_control"
+      ]
+    },
+    {
+      "id": "margin_overheat_cash_control_ledger",
+      "policy": "intentionally_independent",
+      "schema_path": "schemas/a_short_margin_overheat_cash_control_ledger.schema.json",
+      "schema_sha256": "a118cd91f8f7815ad482a2e1181c6a892bea67be88d40ace72d71a0cde29a925",
+      "reason": "The isolated ledger admits only its own source-hashed stage and batch records, so other comparison questions cannot affect this formal verdict.",
+      "owner": "engine/a_short_margin_overheat_cash_control.py::validate_margin_ledger",
+      "review_ref": "序19后续刀4 current-batch isolation",
+      "consumer_refs": [
+        "engine/a_short_margin_overheat_cash_control.py::_collect_source_bound_evidence",
+        "engine/a_short_margin_overheat_cash_control.py::settle_margin_overheat_from_daily_cache"
+      ]
+    },
+    {
+      "id": "margin_overheat_cash_control_adjudication",
+      "policy": "intentionally_independent",
+      "schema_path": "schemas/a_short_margin_overheat_cash_control_adjudication.schema.json",
+      "schema_sha256": "1c4bb2bc713cce8a12a123178b68f9a74139e051101bdda3639fa3bb6ca64573",
+      "reason": "Formal paired statistics may emit an advisory comparison verdict after dedicated source-bound evidence gates; no verdict can activate a production threshold, cash factor or policy switch.",
+      "owner": "engine/a_short_margin_overheat_cash_control.py::_adjudication_documents",
+      "review_ref": "序19后续刀4 automatic comparison-only verdict",
+      "consumer_refs": [
+        "engine/a_short_margin_overheat_cash_control.py::adjudicate_margin_overheat_cash_control",
+        "engine/a_short_margin_overheat_cash_control.py::build_stage_a_transition_receipt"
+      ]
+    },
+    {
+      "id": "margin_overheat_cash_control_reminder",
+      "policy": "intentionally_independent",
+      "schema_path": "schemas/a_short_margin_overheat_cash_control_reminder.schema.json",
+      "schema_sha256": "5ce87ea46532a3a6b974fa7f98feb9ed7d012e8610ae43105dd23287053600db",
+      "reason": "The public de-identified reminder can ask for a user receipt but cannot itself accept a receipt, move a stage or alter official M6.7 output.",
+      "owner": "engine/a_short_margin_overheat_cash_control.py::_adjudication_documents",
+      "review_ref": "序19后续刀4 human-gated Stage-B boundary",
+      "consumer_refs": [
+        "engine/a_short_margin_overheat_cash_control.py::settle_and_summarize_margin_overheat_weekly"
+      ]
+    },
+    {
+      "id": "margin_overheat_cash_control_stage_transition_receipt",
+      "policy": "intentionally_independent",
+      "schema_path": "schemas/a_short_margin_overheat_cash_control_stage_transition_receipt.schema.json",
+      "schema_sha256": "8c41a2b565b063ab954ab48e43f8ec0dc5f264e2c916726e7212504065969fd9",
+      "reason": "An accepted, unexpired, source-bound Stage-A receipt may register only a new private Stage-B comparison batch; it cannot update production configuration.",
+      "owner": "engine/a_short_margin_overheat_cash_control.py::register_stage_b_from_accepted_receipt",
+      "review_ref": "序19后续刀4 Stage-A to Stage-B admission gate",
+      "consumer_refs": [
+        "engine/a_short_margin_overheat_cash_control.py::validate_stage_transition_receipt",
+        "engine/a_short_margin_overheat_cash_control.py::_load_stage_b_admission"
+      ]
+    },
+    {
+      "id": "margin_overheat_cash_control_freeze_manifest",
+      "policy": "intentionally_independent",
+      "schema_path": "schemas/a_short_margin_overheat_cash_control_freeze_manifest.schema.json",
+      "schema_sha256": "724c844f69c38293dd0d7404fddb5c2ab2485e9f7c588b305450d03a202de933",
+      "reason": "The dedicated semantic freeze manifest binds only this comparison track's governed decision surface and shared cash semantics; it neither flips the registry nor authorizes production activation.",
+      "owner": "engine/a_short_margin_overheat_cash_control.py::build_margin_overheat_freeze_manifest",
+      "review_ref": "序19后续刀4 semantic freeze identity",
+      "consumer_refs": [
+        "engine/a_short_margin_overheat_cash_control.py::current_epoch_id",
+        "engine/a_short_margin_overheat_cash_control.py::validate_freeze_admission"
       ]
     }
   ],

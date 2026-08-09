@@ -5,27 +5,52 @@
   "additionalProperties": false,
   "required": ["schema_name", "schema_version", "track_id", "comparison_only", "payload", "payload_sha256", "state", "reminder_count", "boundary"],
   "properties": {
-    "schema_name": {"const": "a_short_margin_overheat_cash_control_adjudication"}, "schema_version": {"const": "1.0.0"},
-    "track_id": {"const": "a_short_margin_overheat_cash_control"}, "comparison_only": {"const": true},
+    "schema_name": {"const": "a_short_margin_overheat_cash_control_adjudication"},
+    "schema_version": {"const": "1.0.0"},
+    "track_id": {"const": "a_short_margin_overheat_cash_control"},
+    "comparison_only": {"const": true},
     "payload_sha256": {"type": "string", "pattern": "^[a-f0-9]{64}$"},
     "payload": {
-      "type": "object", "additionalProperties": false,
-      "required": ["question_id", "experiment_batch_id", "epoch_id", "capture_count", "settled_week_count", "pending_week_count", "no_count_week_count", "by_arm"],
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["question_id", "experiment_batch_id", "epoch_id", "stage", "capture_count", "settled_week_count", "pending_week_count", "no_count_week_count", "calendar_effective_weeks", "trigger_effective_weeks", "current_epoch_id", "source_bound_record_count", "evidence_sha256", "formal_checkpoint", "formal_status", "formal_verdict", "winning_arm_id", "by_arm", "arm_statistics", "finalist_comparisons"],
       "properties": {
-        "question_id": {"const": "margin_overheat_cash_control"}, "experiment_batch_id": {"type": "string"}, "epoch_id": {"type": "string"},
-        "capture_count": {"type": "integer", "minimum": 0}, "settled_week_count": {"type": "integer", "minimum": 0},
-        "pending_week_count": {"type": "integer", "minimum": 0}, "no_count_week_count": {"type": "integer", "minimum": 0},
-        "by_arm": {"type": "object", "additionalProperties": {"type": "object"}}
+        "question_id": {"const": "margin_overheat_cash_control"},
+        "experiment_batch_id": {"type": "string", "minLength": 1},
+        "epoch_id": {"type": "string", "minLength": 1},
+        "stage": {"enum": ["stage_a", "stage_b"]},
+        "capture_count": {"type": "integer", "minimum": 0},
+        "settled_week_count": {"type": "integer", "minimum": 0},
+        "pending_week_count": {"type": "integer", "minimum": 0},
+        "no_count_week_count": {"type": "integer", "minimum": 0},
+        "calendar_effective_weeks": {"type": "integer", "minimum": 0},
+        "trigger_effective_weeks": {"type": "integer", "minimum": 0},
+        "current_epoch_id": {"type": "string", "minLength": 1},
+        "source_bound_record_count": {"type": "integer", "minimum": 0},
+        "evidence_sha256": {"type": "string", "pattern": "^[a-f0-9]{64}$"},
+        "formal_checkpoint": {"type": ["integer", "null"], "enum": [24, 36, null]},
+        "formal_status": {"enum": ["pre_freeze_audit_only", "accumulating", "preliminary_review_due", "insufficient_trigger_weeks", "formal_supported", "formal_not_supported", "formal_inconclusive"]},
+        "formal_verdict": {"enum": ["not_evaluated", "inconclusive", "supported", "not_supported"]},
+        "winning_arm_id": {"type": ["string", "null"]},
+        "by_arm": {"type": "object", "additionalProperties": {"type": "object"}},
+        "arm_statistics": {"type": "array", "items": {"type": "object"}},
+        "finalist_comparisons": {"type": "object"}
       }
     },
-    "state": {"type": "object"}, "reminder_count": {"type": "integer", "minimum": 0},
+    "state": {"type": "object"},
+    "reminder_count": {"type": "integer", "minimum": 0},
     "boundary": {
-      "type": "object", "additionalProperties": false,
+      "type": "object",
+      "additionalProperties": false,
       "required": ["production", "production_effect_enabled", "automatic_policy_switch", "historical_replay_counts_as_forward", "historical_backfill_forbidden", "provider_calls_during_settlement", "direct_activation_requires_user_authorization"],
       "properties": {
-        "production": {"const": false}, "production_effect_enabled": {"const": false}, "automatic_policy_switch": {"const": false},
-        "historical_replay_counts_as_forward": {"const": false}, "historical_backfill_forbidden": {"const": true},
-        "provider_calls_during_settlement": {"const": false}, "direct_activation_requires_user_authorization": {"const": true}
+        "production": {"const": false},
+        "production_effect_enabled": {"const": false},
+        "automatic_policy_switch": {"const": false},
+        "historical_replay_counts_as_forward": {"const": false},
+        "historical_backfill_forbidden": {"const": true},
+        "provider_calls_during_settlement": {"const": false},
+        "direct_activation_requires_user_authorization": {"const": true}
       }
     }
   }

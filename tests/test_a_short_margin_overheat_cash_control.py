@@ -6,6 +6,7 @@ import json
 import math
 import tempfile
 import unittest
+from contextlib import contextmanager
 from datetime import datetime, timedelta
 from pathlib import Path
 from types import SimpleNamespace
@@ -144,7 +145,10 @@ class MarginOverheatCashControlContractTests(unittest.TestCase):
                 self.assertNotEqual(baseline, track.semantic_fingerprint(candidate))
 
     def test_current_epoch_id_is_bound_to_this_track_semantics(self):
-        self.assertEqual(track.current_epoch_id(), "epoch-" + track.semantic_fingerprint()[:12])
+        self.assertEqual(
+            track.current_epoch_id(),
+            "epoch-" + epoch_mode.pre_freeze_fingerprint(track.TRACK_ID)[:12],
+        )
         self.assertEqual(len(track.current_epoch_id()), 18)
 
 
@@ -1070,6 +1074,645 @@ class MarginOverheatCashControlKnife3Tests(unittest.TestCase):
                 raise RuntimeError("sidecar wrapper") from cause
         except RuntimeError as wrapped:
             self.assertTrue(track.is_capture_replay_drift(wrapped))
+
+
+class MarginOverheatCashControlKnife4Tests(unittest.TestCase):
+    """Knife 4: source-bound formal decisions, Stage-B admission, and freeze identity."""
+
+    @contextmanager
+    def _frozen_clock(self):
+        with patch.object(epoch_mode, "_mode", return_value=track.FROZEN), \
+                patch.object(epoch_mode, "evidence_counts_toward_clock", return_value=True), \
+                patch.object(epoch_mode, "fingerprint_or_pre_freeze", return_value="f" * 64):
+            yield
+
+    @staticmethod
+    def _risk_evidence(*, cash_drag_pct=10.0):
+        return {
+            "max_drawdown_pct": 5.0,
+            "bad_name_rate": 0.20,
+            "tail_loss_pct": -2.0,
+            "loss_distribution_count": 2,
+            "cash_drag_pct": cash_drag_pct,
+            "unfilled_rate": 0.0,
+            "fill_rate": 1.0,
+            "turnover_pct": 25.0,
+            "total_cost_pct": 0.08,
+            "max_name_weight_pct": 25.0,
+            "adjustment_coverage_pct": 100.0,
+            "loss_distribution_basis": "filled_positions_only",
+        }
+
+    def _synthetic_evidence(self, *, calendar_weeks, trigger_weeks, primary_effect,
+                            primary_cash_drag_pct=10.0):
+        self.assertLessEqual(trigger_weeks, calendar_weeks)
+        start = datetime(2026, 1, 5)
+        challengers = track.stage_arm_ids(track.STAGE_A)[1:]
+        rows_by_arm = {arm_id: [] for arm_id in challengers}
+        by_arm = {
+            "baseline": {
+                "settled_week_count": calendar_weeks,
+                "pending_week_count": 0,
+                "no_count_week_count": 0,
+                "trigger_effective_week_count": 0,
+                "source_bound_effective_week_count": calendar_weeks,
+            },
+        }
+        for arm_id in challengers:
+            by_arm[arm_id] = {
+                "settled_week_count": calendar_weeks,
+                "pending_week_count": 0,
+                "no_count_week_count": 0,
+                "trigger_effective_week_count": trigger_weeks if arm_id == "level_p95" else 0,
+                "source_bound_effective_week_count": calendar_weeks,
+            }
+        source_rows = []
+        for index in range(calendar_weeks):
+            decision = start + timedelta(days=14 * index)
+            decision_date = decision.strftime("%Y%m%d")
+            triggered = index < trigger_weeks
+            source_row = {"decision_date": decision_date, "arms": {}}
+            for arm_id in challengers:
+                effect = primary_effect if arm_id == "level_p95" and triggered else 0.0
+                risk = self._risk_evidence(
+                    cash_drag_pct=(primary_cash_drag_pct if arm_id == "level_p95" else 10.0)
+                )
+                row = {
+                    "decision_date": decision_date,
+                    "evaluation_exit_date": (decision + timedelta(days=10)).strftime("%Y%m%d"),
+                    "epoch_id": "epoch-current",
+                    "state": "triggered" if triggered and arm_id == "level_p95" else "non_triggered",
+                    "effect_pct": effect,
+                    "risk_evidence": risk,
+                    "baseline_risk_evidence": self._risk_evidence(),
+                }
+                rows_by_arm[arm_id].append(row)
+                source_row["arms"][arm_id] = {"triggered": row["state"] == "triggered"}
+            source_rows.append(source_row)
+        return {
+            "stage": track.STAGE_A,
+            "capture_count": calendar_weeks,
+            "settled_week_count": calendar_weeks,
+            "pending_week_count": 0,
+            "no_count_week_count": 0,
+            "rows_by_arm": rows_by_arm,
+            "by_arm": by_arm,
+            "no_count_rates": {arm_id: 0.0 for arm_id in challengers},
+            "source_rows": source_rows,
+            "calendar_effective_weeks": calendar_weeks,
+            "trigger_effective_weeks": trigger_weeks,
+            "current_epoch_id": "epoch-current",
+        }
+
+    def test_synthetic_11_12_24_36_clock_and_verdict_boundaries(self):
+        with self._frozen_clock():
+            eleven = track.build_state(
+                calendar_effective_weeks=11, trigger_effective_weeks=4, mode=track.FROZEN,
+            )
+            self.assertEqual((eleven["evidence_status"], eleven["comparison_verdict"]),
+                             ("accumulating", "not_evaluated"))
+            twelve = track.build_state(
+                calendar_effective_weeks=12, trigger_effective_weeks=4, mode=track.FROZEN,
+            )
+            self.assertEqual((twelve["evidence_status"], twelve["comparison_verdict"]),
+                             ("review_due", "not_evaluated"))
+            self.assertEqual(
+                track._formal_decision(self._synthetic_evidence(
+                    calendar_weeks=11, trigger_weeks=4, primary_effect=2.0,
+                ))["status"],
+                "accumulating",
+            )
+            self.assertEqual(
+                track._formal_decision(self._synthetic_evidence(
+                    calendar_weeks=12, trigger_weeks=4, primary_effect=2.0,
+                ))["status"],
+                "preliminary_review_due",
+            )
+            for calendar_weeks in (24, 36):
+                with self.subTest(calendar_weeks=calendar_weeks):
+                    state = track.build_state(
+                        calendar_effective_weeks=calendar_weeks,
+                        trigger_effective_weeks=3,
+                        mode=track.FROZEN,
+                    )
+                    formal = track._formal_decision(self._synthetic_evidence(
+                        calendar_weeks=calendar_weeks, trigger_weeks=3, primary_effect=2.0,
+                    ))
+                    self.assertEqual((state["evidence_status"], state["comparison_verdict"]),
+                                     ("insufficient_data", "not_evaluated"))
+                    self.assertEqual((formal["status"], formal["verdict"]),
+                                     ("insufficient_trigger_weeks", "not_evaluated"))
+
+    def test_adjudicated_state_formal_gates_have_point_named_guards(self):
+        with self._frozen_clock():
+            with self.assertRaisesRegex(
+                track.MarginOverheatCashControlError, "formal calendar checkpoint",
+            ):
+                track._build_adjudicated_state(
+                    calendar_effective_weeks=23,
+                    trigger_effective_weeks=4,
+                    stage=track.STAGE_A,
+                    comparison_verdict="supported",
+                    reason="formal_supported",
+                )
+            with self.assertRaisesRegex(
+                track.MarginOverheatCashControlError, "trigger opportunity floor",
+            ):
+                track._build_adjudicated_state(
+                    calendar_effective_weeks=24,
+                    trigger_effective_weeks=3,
+                    stage=track.STAGE_A,
+                    comparison_verdict="supported",
+                    reason="formal_supported",
+                )
+
+        with patch.object(epoch_mode, "_mode", return_value=track.PRE_FREEZE):
+            with self.assertRaisesRegex(
+                track.MarginOverheatCashControlError, "frozen epoch mode",
+            ):
+                track._build_adjudicated_state(
+                    calendar_effective_weeks=24,
+                    trigger_effective_weeks=4,
+                    stage=track.STAGE_A,
+                    comparison_verdict="supported",
+                    reason="formal_supported",
+                )
+
+        with self._frozen_clock():
+            adjudication = self._supported_stage_a_adjudication()
+            state = copy.deepcopy(adjudication["state"])
+            payload = copy.deepcopy(adjudication["payload"])
+            state["calendar_effective_weeks"] = 23
+            payload["calendar_effective_weeks"] = 23
+            with self.assertRaisesRegex(
+                track.MarginOverheatCashControlError,
+                "bypassed the formal calendar or trigger gate",
+            ):
+                track._validate_adjudicated_state(state, payload)
+
+    def test_formal_support_inconclusive_and_reliable_harm_are_distinct(self):
+        with self._frozen_clock():
+            supported = track._formal_decision(self._synthetic_evidence(
+                calendar_weeks=24, trigger_weeks=14, primary_effect=2.0,
+            ))
+            self.assertEqual(
+                (supported["status"], supported["verdict"], supported["winner"]),
+                ("formal_supported", "supported", "level_p95"),
+            )
+            inconclusive = track._formal_decision(self._synthetic_evidence(
+                calendar_weeks=24, trigger_weeks=14, primary_effect=2.0,
+                primary_cash_drag_pct=99.0,
+            ))
+            self.assertEqual(
+                (inconclusive["status"], inconclusive["verdict"]),
+                ("formal_inconclusive", "inconclusive"),
+            )
+            harm = track._formal_decision(self._synthetic_evidence(
+                calendar_weeks=36, trigger_weeks=12, primary_effect=-2.0,
+            ))
+            self.assertEqual(
+                (harm["status"], harm["verdict"], harm["winner"]),
+                ("formal_not_supported", "not_supported", None),
+            )
+
+    def test_cross_epoch_random_effects_requires_qualified_epoch_blocks(self):
+        contract = track._adjudication_contract()
+        blocks = []
+        for epoch_id, effect in (("epoch-old", 1.0), ("epoch-current", 1.5)):
+            for index in range(4):
+                blocks.append({
+                    "epoch_id": epoch_id,
+                    "effect_pct": effect,
+                    "decision_date": f"20260{1 if epoch_id == 'epoch-old' else 2}{index + 1:02d}",
+                    "evaluation_exit_date": f"20260{1 if epoch_id == 'epoch-old' else 2}{index + 2:02d}",
+                })
+        result = track._cross_epoch_random_effects(
+            blocks, current_epoch_id="epoch-current", contract=contract,
+        )
+        self.assertEqual(result["method"], "random_effects_reml_hartung_knapp")
+        self.assertTrue(result["epochs"]["epoch-current"]["qualified_for_cross_epoch"])
+
+    def test_freeze_manifest_is_annotation_insensitive_and_decision_sensitive(self):
+        capture_schema = json.loads(track.CAPTURE_SCHEMA_PATH.read_text(encoding="utf-8"))
+        cosmetic = copy.deepcopy(capture_schema)
+        cosmetic["description"] = "formatting-only annotation"
+        self.assertEqual(
+            track._schema_validation_projection(capture_schema),
+            track._schema_validation_projection(cosmetic),
+        )
+        decision = copy.deepcopy(capture_schema)
+        decision["properties"]["payload"]["properties"]["stage"]["enum"].append("forbidden")
+        self.assertNotEqual(
+            track._schema_validation_projection(capture_schema),
+            track._schema_validation_projection(decision),
+        )
+        manifest = track.build_margin_overheat_freeze_manifest()
+        track.validate_margin_overheat_freeze_manifest(manifest)
+        self.assertIn("capture", manifest["payload"]["schema_contracts"])
+        self.assertIn("margin_overheat_track", manifest["payload"]["python_contracts"])
+
+    def _supported_stage_a_adjudication(self):
+        payload = {
+            "question_id": track.QUESTION_ID,
+            "experiment_batch_id": track.load_governance()["namespace"]["experiment_batch_id"],
+            "epoch_id": "epoch-stage-a",
+            "stage": track.STAGE_A,
+            "capture_count": 24,
+            "settled_week_count": 24,
+            "pending_week_count": 0,
+            "no_count_week_count": 0,
+            "calendar_effective_weeks": 24,
+            "trigger_effective_weeks": 12,
+            "current_epoch_id": "epoch-stage-a",
+            "source_bound_record_count": 24,
+            "evidence_sha256": "a" * 64,
+            "formal_checkpoint": 24,
+            "formal_status": "formal_supported",
+            "formal_verdict": "supported",
+            "winning_arm_id": "level_p95",
+            "by_arm": {},
+            "arm_statistics": [],
+            "finalist_comparisons": {},
+        }
+        state = track._build_adjudicated_state(
+            calendar_effective_weeks=24,
+            trigger_effective_weeks=12,
+            stage=track.STAGE_A,
+            comparison_verdict="supported",
+            reason="formal_supported",
+        )
+        adjudication = {
+            "schema_name": "a_short_margin_overheat_cash_control_adjudication",
+            "schema_version": track.CAPTURE_SCHEMA_VERSION,
+            "track_id": track.TRACK_ID,
+            "comparison_only": True,
+            "payload": payload,
+            "payload_sha256": track._digest(payload),
+            "state": state,
+            "reminder_count": 1,
+            "boundary": track._knife3_boundary(),
+        }
+        track.validate_margin_adjudication(adjudication)
+        return adjudication
+
+    @staticmethod
+    def _weekly_capture_fixture():
+        _sessions, predicate_facts = MarginOverheatCashControlKnife2Tests._predicate()
+        candidate = _normalized()
+        reports = MarginOverheatCashControlKnife3Tests._reports_with_one_frozen_build()
+        identity = {
+            "run_id": f"a-short-{AS_OF}-{'1' * 16}",
+            "candidate_digest": "b" * 64,
+            "run_date": "20260610",
+            "price_data_through": AS_OF,
+        }
+        cache_owner = SimpleNamespace(candidate=candidate)
+        cache = MarginOverheatCashControlKnife3Tests._daily_cache(cache_owner)
+        bundle_owner = SimpleNamespace(identity=identity, reports=reports)
+        official_bundle = MarginOverheatCashControlKnife3Tests._official_bundle(bundle_owner)
+        return {
+            "decision_date": AS_OF,
+            "run_identity": identity,
+            "official_bundle": official_bundle,
+            "margin_facts": MarginOverheatCashControlKnife2Tests._margin_control_input(
+                predicate_facts
+            ),
+            "daily_cache_document": cache,
+            "candidates": [candidate],
+            "reports": reports,
+            "predicate_facts": predicate_facts,
+            "forward_eligible": True,
+        }
+
+    def _register_stage_b_fixture(self, root, *, expires_on):
+        root.mkdir(parents=True)
+        adjudication = self._supported_stage_a_adjudication()
+        (root / "adjudication.json").write_text(
+            json.dumps(adjudication, ensure_ascii=False, sort_keys=True), encoding="utf-8",
+        )
+        accepted = track.accept_stage_a_transition_receipt(
+            track.build_stage_a_transition_receipt(
+                adjudication=adjudication, issued_on="20260601", expires_on=expires_on,
+            ),
+            accepted_on="20260602",
+        )
+        registration = track.register_stage_b_from_accepted_receipt(
+            root=root, receipt=accepted, as_of="20260603",
+        )
+        return adjudication, accepted, registration
+
+    def test_source_bound_collector_rejects_tampering_and_ignores_other_question_payload(self):
+        with tempfile.TemporaryDirectory() as temp_root, self._frozen_clock():
+            root = Path(temp_root) / "margin_overheat_private"
+            args = self._weekly_capture_fixture()
+            track.capture_margin_overheat_week(root=root, **args)
+            track.settle_margin_overheat_from_daily_cache(
+                root=root, daily_cache_document=args["daily_cache_document"],
+            )
+            ledger = json.loads((root / "ledger.json").read_text(encoding="utf-8"))
+            capture = json.loads((root / f"weeks/{AS_OF}/capture.json").read_text(encoding="utf-8"))
+            outcome = json.loads((root / f"weeks/{AS_OF}/outcome.json").read_text(encoding="utf-8"))
+            receipt = json.loads((root / f"weeks/{AS_OF}/source_receipt.json").read_text(encoding="utf-8"))
+            evidence = track._collect_source_bound_evidence(
+                ledger, {AS_OF: capture}, {AS_OF: outcome}, {AS_OF: receipt},
+            )
+            self.assertEqual((evidence["calendar_effective_weeks"], len(evidence["source_rows"])), (1, 1))
+            self.assertIsInstance(capture["payload"]["freeze_manifest"], dict)
+            ineligible_ledger = copy.deepcopy(ledger)
+            ineligible_ledger["entries"][0]["forward_eligible"] = False
+            ineligible = track._collect_source_bound_evidence(
+                ineligible_ledger, {AS_OF: capture}, {AS_OF: outcome}, {AS_OF: receipt},
+            )
+            self.assertEqual(
+                (ineligible["capture_count"], ineligible["calendar_effective_weeks"],
+                 ineligible["no_count_week_count"]),
+                (1, 0, 0),
+            )
+
+            pre_freeze_capture = copy.deepcopy(capture)
+            pre_freeze_capture["payload"]["epoch_id"] = "epoch-pre-freeze"
+            pre_freeze_capture["payload"]["freeze_manifest_sha256"] = None
+            pre_freeze_capture["payload"]["freeze_manifest"] = None
+            pre_freeze_capture["payload_sha256"] = track._digest(pre_freeze_capture["payload"])
+            pre_freeze_outcome = copy.deepcopy(outcome)
+            pre_freeze_outcome["capture_sha256"] = pre_freeze_capture["payload_sha256"]
+            pre_freeze_receipt = copy.deepcopy(receipt)
+            pre_freeze_receipt["payload"]["capture_sha256"] = pre_freeze_capture["payload_sha256"]
+            pre_freeze_receipt["payload"]["epoch_id"] = "epoch-pre-freeze"
+            pre_freeze_ledger = copy.deepcopy(ledger)
+            pre_freeze_ledger["entries"][0]["epoch_id"] = "epoch-pre-freeze"
+            pre_freeze_ledger["entries"][0]["capture_sha256"] = pre_freeze_capture["payload_sha256"]
+            pre_freeze_ledger["entries"][0]["source_receipt_sha256"] = track._digest(pre_freeze_receipt)
+            pre_freeze = track._collect_source_bound_evidence(
+                pre_freeze_ledger,
+                {AS_OF: pre_freeze_capture},
+                {AS_OF: pre_freeze_outcome},
+                {AS_OF: pre_freeze_receipt},
+            )
+            self.assertEqual(
+                (pre_freeze["capture_count"], pre_freeze["calendar_effective_weeks"],
+                 pre_freeze["no_count_week_count"]),
+                (1, 0, 0),
+            )
+
+            prior_capture = copy.deepcopy(capture)
+            prior_capture["payload"]["epoch_id"] = "epoch-prior"
+            prior_manifest = prior_capture["payload"]["freeze_manifest"]
+            prior_manifest["payload"]["python_contracts"]["margin_overheat_track"]["semantic_ast_sha256"] = "d" * 64
+            prior_manifest["payload_sha256"] = track._digest(prior_manifest["payload"])
+            prior_capture["payload"]["freeze_manifest_sha256"] = prior_manifest["payload_sha256"]
+            prior_capture["payload_sha256"] = track._digest(prior_capture["payload"])
+            prior_outcome = copy.deepcopy(outcome)
+            prior_outcome["capture_sha256"] = prior_capture["payload_sha256"]
+            prior_receipt = copy.deepcopy(receipt)
+            prior_receipt["payload"]["capture_sha256"] = prior_capture["payload_sha256"]
+            prior_receipt["payload"]["epoch_id"] = "epoch-prior"
+            prior_ledger = copy.deepcopy(ledger)
+            prior_ledger["entries"][0]["epoch_id"] = "epoch-prior"
+            prior_ledger["entries"][0]["capture_sha256"] = prior_capture["payload_sha256"]
+            prior_ledger["entries"][0]["source_receipt_sha256"] = track._digest(prior_receipt)
+            prior_evidence = track._collect_source_bound_evidence(
+                prior_ledger, {AS_OF: prior_capture}, {AS_OF: prior_outcome}, {AS_OF: prior_receipt},
+            )
+            self.assertEqual(prior_evidence["source_rows"][0]["epoch_id"], "epoch-prior")
+            changed_estimand_capture = copy.deepcopy(prior_capture)
+            changed_estimand_manifest = changed_estimand_capture["payload"]["freeze_manifest"]
+            changed_estimand_manifest["payload"]["estimand_sha256"] = "e" * 64
+            changed_estimand_manifest["payload_sha256"] = track._digest(changed_estimand_manifest["payload"])
+            changed_estimand_capture["payload"]["freeze_manifest_sha256"] = changed_estimand_manifest["payload_sha256"]
+            changed_estimand_capture["payload_sha256"] = track._digest(changed_estimand_capture["payload"])
+            changed_estimand_outcome = copy.deepcopy(prior_outcome)
+            changed_estimand_outcome["capture_sha256"] = changed_estimand_capture["payload_sha256"]
+            changed_estimand_receipt = copy.deepcopy(prior_receipt)
+            changed_estimand_receipt["payload"]["capture_sha256"] = changed_estimand_capture["payload_sha256"]
+            changed_estimand_ledger = copy.deepcopy(prior_ledger)
+            changed_estimand_ledger["entries"][0]["capture_sha256"] = changed_estimand_capture["payload_sha256"]
+            changed_estimand_ledger["entries"][0]["source_receipt_sha256"] = track._digest(changed_estimand_receipt)
+            with self.assertRaisesRegex(
+                track.MarginOverheatCashControlError,
+                "estimand changed and requires a new experiment batch",
+            ):
+                track._collect_source_bound_evidence(
+                    changed_estimand_ledger,
+                    {AS_OF: changed_estimand_capture},
+                    {AS_OF: changed_estimand_outcome},
+                    {AS_OF: changed_estimand_receipt},
+                )
+
+            positive = self._synthetic_evidence(
+                calendar_weeks=24, trigger_weeks=14, primary_effect=2.0,
+            )
+            baseline_formal = track._formal_decision(positive)
+            contaminated = copy.deepcopy(positive)
+            contaminated["other_comparison_ledger"] = {
+                "question_id": "d1_entry_anchor",
+                "extreme_return_pct": 999999.0,
+                "verdict": "supported",
+            }
+            self.assertEqual(track._formal_decision(contaminated), baseline_formal)
+
+            outcome_tamper = copy.deepcopy(outcome)
+            outcome_tamper["payload"]["status"] = "pending"
+            outcome_tamper["payload_sha256"] = track._digest(outcome_tamper["payload"])
+            with self.assertRaisesRegex(track.MarginOverheatCashControlError, "settlement receipt"):
+                track._collect_source_bound_evidence(
+                    ledger, {AS_OF: capture}, {AS_OF: outcome_tamper}, {AS_OF: receipt},
+                )
+
+            ledger_tamper = copy.deepcopy(ledger)
+            ledger_tamper["entries"][0]["outcome_sha256"] = "0" * 64
+            with self.assertRaisesRegex(track.MarginOverheatCashControlError, "ledger source hash drift"):
+                track._collect_source_bound_evidence(
+                    ledger_tamper, {AS_OF: capture}, {AS_OF: outcome}, {AS_OF: receipt},
+                )
+
+            receipt_tamper = copy.deepcopy(receipt)
+            receipt_tamper["payload"]["settlement"]["status"] = "pending"
+            with self.assertRaisesRegex(track.MarginOverheatCashControlError, "settlement receipt"):
+                track._collect_source_bound_evidence(
+                    ledger, {AS_OF: capture}, {AS_OF: outcome}, {AS_OF: receipt_tamper},
+                )
+
+    def test_stage_b_requires_current_accepted_receipt_and_new_private_batch(self):
+        with tempfile.TemporaryDirectory() as temp_root, self._frozen_clock():
+            root = Path(temp_root) / "margin_overheat_private"
+            root.mkdir()
+            adjudication = self._supported_stage_a_adjudication()
+            (root / "adjudication.json").write_text(
+                json.dumps(adjudication, ensure_ascii=False, sort_keys=True), encoding="utf-8",
+            )
+            proposal = track.build_stage_a_transition_receipt(
+                adjudication=adjudication, issued_on="20260601", expires_on="20260630",
+            )
+            with self.assertRaisesRegex(track.MarginOverheatCashControlError, "expired"):
+                track.accept_stage_a_transition_receipt(proposal, accepted_on="20260701")
+            accepted = track.accept_stage_a_transition_receipt(proposal, accepted_on="20260602")
+            registration = track.register_stage_b_from_accepted_receipt(
+                root=root, receipt=accepted, as_of="20260603",
+            )
+            self.assertEqual(registration["stage"], track.STAGE_B)
+            self.assertTrue(registration["production_unchanged"])
+            stage_root = root / "stage_b" / registration["experiment_batch_id"]
+            self.assertTrue((stage_root / "program.json").is_file())
+            ledger = json.loads((stage_root / "ledger.json").read_text(encoding="utf-8"))
+            self.assertEqual((ledger["stage"], ledger["experiment_batch_id"]),
+                             (track.STAGE_B, registration["experiment_batch_id"]))
+            self.assertIsNone(production_margin.MARGIN_OVERHEAT_PERCENTILE_THRESHOLD)
+            self.assertIsNone(production_margin.MARGIN_OVERHEAT_CASH_FACTOR)
+            self.assertFalse(production_margin.MARGIN_OVERHEAT_PRODUCTION_EFFECT_ENABLED)
+
+    def test_stage_b_capture_and_settlement_are_receipt_bound_and_private(self):
+        with tempfile.TemporaryDirectory() as temp_root, self._frozen_clock():
+            root = Path(temp_root) / "margin_overheat_private"
+            root.mkdir()
+            adjudication = self._supported_stage_a_adjudication()
+            (root / "adjudication.json").write_text(
+                json.dumps(adjudication, ensure_ascii=False, sort_keys=True), encoding="utf-8",
+            )
+            accepted = track.accept_stage_a_transition_receipt(
+                track.build_stage_a_transition_receipt(
+                    adjudication=adjudication, issued_on="20260601", expires_on="20261231",
+                ),
+                accepted_on="20260602",
+            )
+            registration = track.register_stage_b_from_accepted_receipt(
+                root=root, receipt=accepted, as_of="20260603",
+            )
+            args = self._weekly_capture_fixture()
+            official_before = copy.deepcopy(args["reports"])
+            captured = track.capture_margin_overheat_week(
+                root=root, stage=track.STAGE_B, **args,
+            )
+            payload = captured["capture"]["payload"]
+            self.assertEqual(payload["stage"], track.STAGE_B)
+            self.assertEqual(payload["experiment_batch_id"], registration["experiment_batch_id"])
+            self.assertEqual(payload["stage_b_admission_sha256"], accepted["payload_sha256"])
+            self.assertEqual(payload["stage_b_supported_arm_id"], "level_p95")
+            self.assertEqual(tuple(row["arm_id"] for row in payload["arms"]), track.stage_arm_ids(track.STAGE_B))
+            self.assertEqual(args["reports"], official_before)
+            stage_root = root / "stage_b" / registration["experiment_batch_id"]
+            settled = track.settle_margin_overheat_from_daily_cache(
+                root=root, stage=track.STAGE_B, daily_cache_document=args["daily_cache_document"],
+                as_of="20260610",
+            )
+            self.assertEqual(settled["ledger"]["stage"], track.STAGE_B)
+            self.assertTrue((stage_root / f"weeks/{AS_OF}/outcome.json").is_file())
+            adjudicated = track.adjudicate_margin_overheat_cash_control(
+                root=root, stage=track.STAGE_B, as_of="20260610",
+            )
+            self.assertEqual(
+                adjudicated["status"], "adjudicated_margin_overheat_cash_control",
+            )
+            tampered_capture = copy.deepcopy(captured["capture"])
+            tampered_capture["payload"]["stage_b_admission_sha256"] = "0" * 64
+            tampered_capture["payload_sha256"] = track._digest(tampered_capture["payload"])
+            with self.assertRaisesRegex(
+                track.MarginOverheatCashControlError,
+                "not source-bound to its accepted admission receipt",
+            ):
+                track._validate_stage_b_capture_admission(tampered_capture, accepted)
+
+    def test_stage_b_rechecks_expiry_for_capture_settle_and_adjudicate(self):
+        with tempfile.TemporaryDirectory() as temp_root, self._frozen_clock():
+            root = Path(temp_root) / "margin_overheat_private"
+            self._register_stage_b_fixture(root, expires_on="20260605")
+            args = self._weekly_capture_fixture()
+            for operation in ("capture", "settle", "adjudicate"):
+                with self.subTest(operation=operation), self.assertRaisesRegex(
+                    track.MarginOverheatCashControlError,
+                    "stage-B admission receipt is expired",
+                ):
+                    if operation == "capture":
+                        track.capture_margin_overheat_week(
+                            root=root, stage=track.STAGE_B, **args,
+                        )
+                    elif operation == "settle":
+                        track.settle_margin_overheat_from_daily_cache(
+                            root=root,
+                            stage=track.STAGE_B,
+                            daily_cache_document=args["daily_cache_document"],
+                            as_of="20260609",
+                        )
+                    else:
+                        track.adjudicate_margin_overheat_cash_control(
+                            root=root, stage=track.STAGE_B, as_of="20260609",
+                        )
+
+    def test_stage_b_rechecks_current_stage_a_supported_verdict_for_all_entries(self):
+        with tempfile.TemporaryDirectory() as temp_root, self._frozen_clock():
+            root = Path(temp_root) / "margin_overheat_private"
+            adjudication, _accepted, _registration = self._register_stage_b_fixture(
+                root, expires_on="20261231",
+            )
+            unsupported = copy.deepcopy(adjudication)
+            unsupported["payload"]["formal_status"] = "formal_not_supported"
+            unsupported["payload"]["formal_verdict"] = "not_supported"
+            unsupported["payload"]["winning_arm_id"] = None
+            unsupported["state"]["comparison_verdict"] = "not_supported"
+            unsupported["state"]["reason"] = "formal_not_supported"
+            unsupported["payload_sha256"] = track._digest(unsupported["payload"])
+            track.validate_margin_adjudication(unsupported)
+            (root / "adjudication.json").write_text(
+                json.dumps(unsupported, ensure_ascii=False, sort_keys=True), encoding="utf-8",
+            )
+            args = self._weekly_capture_fixture()
+            for operation in ("capture", "settle", "adjudicate"):
+                with self.subTest(operation=operation), self.assertRaisesRegex(
+                    track.MarginOverheatCashControlError,
+                    "current supported Stage-A adjudication",
+                ):
+                    if operation == "capture":
+                        track.capture_margin_overheat_week(
+                            root=root, stage=track.STAGE_B, **args,
+                        )
+                    elif operation == "settle":
+                        track.settle_margin_overheat_from_daily_cache(
+                            root=root,
+                            stage=track.STAGE_B,
+                            daily_cache_document=args["daily_cache_document"],
+                            as_of="20260610",
+                        )
+                    else:
+                        track.adjudicate_margin_overheat_cash_control(
+                            root=root, stage=track.STAGE_B, as_of="20260610",
+                        )
+
+    def test_stage_b_capture_rejects_pre_acceptance_backfill(self):
+        with tempfile.TemporaryDirectory() as temp_root, self._frozen_clock():
+            root = Path(temp_root) / "margin_overheat_private"
+            root.mkdir()
+            adjudication = self._supported_stage_a_adjudication()
+            (root / "adjudication.json").write_text(
+                json.dumps(adjudication, ensure_ascii=False, sort_keys=True), encoding="utf-8",
+            )
+            accepted = track.accept_stage_a_transition_receipt(
+                track.build_stage_a_transition_receipt(
+                    adjudication=adjudication, issued_on="20260601", expires_on="20260630",
+                ),
+                accepted_on="20260611",
+            )
+            track.register_stage_b_from_accepted_receipt(
+                root=root, receipt=accepted, as_of="20260611",
+            )
+            with self.assertRaisesRegex(
+                track.MarginOverheatCashControlError, "cannot backfill before its user acceptance",
+            ):
+                track.capture_margin_overheat_week(
+                    root=root,
+                    decision_date="20260610",
+                    run_identity={
+                        "run_id": "a-short-20260610-1111111111111111",
+                        "candidate_digest": "b" * 64,
+                        "run_date": "20260610",
+                        "price_data_through": "20260610",
+                    },
+                    official_bundle=None,
+                    margin_facts={},
+                    daily_cache_document={},
+                    candidates=[],
+                    reports=[],
+                    stage=track.STAGE_B,
+                )
 
 
 if __name__ == "__main__":

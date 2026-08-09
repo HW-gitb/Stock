@@ -1,0 +1,48 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "a_short_margin_overheat_cash_control_stage_transition_receipt",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_name", "schema_version", "track_id", "record_type", "payload", "payload_sha256", "production_unchanged", "boundary"],
+  "properties": {
+    "schema_name": {"const": "a_short_margin_overheat_cash_control_stage_transition_receipt"},
+    "schema_version": {"const": "1.0.0"},
+    "track_id": {"const": "a_short_margin_overheat_cash_control"},
+    "record_type": {"const": "stage_transition_receipt"},
+    "payload_sha256": {"type": "string", "pattern": "^[a-f0-9]{64}$"},
+    "payload": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["status", "source_stage", "next_stage", "source_adjudication_sha256", "source_evidence_sha256", "source_experiment_batch_id", "source_epoch_id", "supported_arm_id", "issued_on", "accepted_on", "expires_on", "next_experiment_batch_id"],
+      "properties": {
+        "status": {"enum": ["awaiting_user_acceptance", "accepted"]},
+        "source_stage": {"const": "stage_a"},
+        "next_stage": {"const": "stage_b"},
+        "source_adjudication_sha256": {"type": "string", "pattern": "^[a-f0-9]{64}$"},
+        "source_evidence_sha256": {"type": "string", "pattern": "^[a-f0-9]{64}$"},
+        "source_experiment_batch_id": {"type": "string", "minLength": 1},
+        "source_epoch_id": {"type": "string", "minLength": 1},
+        "supported_arm_id": {"type": "string", "minLength": 1},
+        "issued_on": {"type": "string", "pattern": "^[0-9]{8}$"},
+        "accepted_on": {"type": ["string", "null"], "pattern": "^[0-9]{8}$"},
+        "expires_on": {"type": "string", "pattern": "^[0-9]{8}$"},
+        "next_experiment_batch_id": {"type": "string", "minLength": 1}
+      }
+    },
+    "production_unchanged": {"const": true},
+    "boundary": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["production", "production_effect_enabled", "automatic_policy_switch", "historical_replay_counts_as_forward", "historical_backfill_forbidden", "provider_calls_during_settlement", "direct_activation_requires_user_authorization"],
+      "properties": {
+        "production": {"const": false},
+        "production_effect_enabled": {"const": false},
+        "automatic_policy_switch": {"const": false},
+        "historical_replay_counts_as_forward": {"const": false},
+        "historical_backfill_forbidden": {"const": true},
+        "provider_calls_during_settlement": {"const": false},
+        "direct_activation_requires_user_authorization": {"const": true}
+      }
+    }
+  }
+}

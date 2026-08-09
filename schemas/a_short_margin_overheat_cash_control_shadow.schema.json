@@ -23,7 +23,7 @@
     "schema_name": {"const": "a_short_margin_overheat_cash_control_shadow"},
     "schema_version": {"const": "1.0.0"},
     "track_id": {"const": "a_short_margin_overheat_cash_control"},
-    "arm_id": {"enum": ["baseline", "level_p95", "change_rate_p90", "change_rate_p95"]},
+    "arm_id": {"enum": ["baseline", "level_p95", "change_rate_p90", "change_rate_p95", "cash_factor_0_9", "cash_factor_0_8", "cash_factor_0_7"]},
     "criterion_id": {"type": "string"},
     "status": {"enum": ["evaluable", "no_count"]},
     "predicate_triggered": {"type": ["boolean", "null"]},
@@ -46,7 +46,7 @@
       "additionalProperties": false,
       "required": ["arm_id", "criterion_id", "predicate_triggered", "cash_factor", "reason"],
       "properties": {
-        "arm_id": {"enum": ["baseline", "level_p95", "change_rate_p90", "change_rate_p95"]},
+        "arm_id": {"enum": ["baseline", "level_p95", "change_rate_p90", "change_rate_p95", "cash_factor_0_9", "cash_factor_0_8", "cash_factor_0_7"]},
         "criterion_id": {"type": "string"},
         "predicate_triggered": {"type": ["boolean", "null"]},
         "cash_factor": {"type": "number", "exclusiveMinimum": 0, "maximum": 1},
