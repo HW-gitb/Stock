@@ -298,7 +298,7 @@
     "tests/provider/test_us_short_provisional_theme_validate.py:helper:_write:provider_samples,state/us_short:class4_unresolved_write": 3,
     "tests/provider/test_us_short_provisional_theme_validate.py:mkdir:provider_samples,state/us_short:class4_unresolved_write": 1,
     "tests/provider/test_us_short_provisional_theme_validate.py:write_text:provider_samples,state/us_short:class4_unresolved_write": 1,
-    "tests/provider/test_us_short_soft_discovery_query_quality_probe_assess.py:helper:_write_json:provider_samples,state/us_short:class4_unresolved_write": 29,
+    "tests/provider/test_us_short_soft_discovery_query_quality_probe_assess.py:helper:_write_json:provider_samples,state/us_short:class4_unresolved_write": 31,
     "tests/provider/test_us_short_soft_discovery_query_quality_probe_assess.py:mkdir:provider_samples,state/us_short:class4_unresolved_write": 1,
     "tests/provider/test_us_short_soft_discovery_query_quality_probe_assess.py:write_bytes:provider_samples,state/us_short:class4_unresolved_write": 2,
     "tests/provider/test_us_short_soft_discovery_query_quality_probe_assess.py:write_text:provider_samples,state/us_short:class4_unresolved_write": 1,
@@ -795,7 +795,7 @@
         "state/us_short"
       ],
       "read_count": 0,
-      "write_count": 33
+      "write_count": 35
     },
     {
       "module": "tests/provider/test_us_short_universe_fetch.py",

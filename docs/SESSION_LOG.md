@@ -7,6 +7,34 @@
 - **Verify**: 干净态矩阵 `18 OK`；临时中和 18 个产品约束后同 18 个 test case 全红（`failures=23`，含 subtests）；三份产品文件按原 SHA-256 逐字节恢复。同步 master 后最终三模块 `47 OK`，receipt `24f08fac528a8122414df9e7`；两名只读 agent 均完成，零联网/provider/付费/开钟/账户写入。
 - **Pre-Codex self-review**: A-F checked；matrix=18/18 red + controls；register=updated；handoff=updated；focused=47 OK；full-lane=not_triggered（tests-only，rule 3/8）；door=route-doc 14 OK + doc-governance 41 OK；review=NOT_VERIFIED；commit=NOT_PERFORMED。
 - **Next**: 用户已豁免独立复审；本 R-ID 已提交并合并到 master。
+## 2026-08-09 — Claude 审查（IO inventory 失步）：切片 PASS，闭合判据 NOT_VERIFIED
+
+- **Verdict/Action**: 切片 PASS。担心的「刷快照变绿」没发生：`kwarg:assessment_path` 判为扫描器假阳性——inventory 的 alias 解析是文件级的，把两个函数里同名的 `alternate` 串成一条写盘；改的是成因（路径变量改名），不是加白名单。`29→31`／`33→35` 是既有已授权 helper 的真实新增。附带把快照比对从 88k 截断 diff 改成点名漂移模块。
+- **Required**: 一条，提交范围硬约束，正文只在 `docs/system_risk_register.md`。000e 索引里已装着约 35 个与本刀无关的文件（a-short 融资过热、ETF sidecar 582 行新件、`egs_main.py` 等），不带路径清单的 `commit` 会把它们打包；且 `b49c151b` 仍未进 master、000e 又落后 master。只许 add 本刀六个文件，合并前先同步 master。
+- **Verify**: review-evidence:bda8b64319b3。reviewer 自跑两条对照：①变量名改回通用 `alternate` → `Ran 18 / FAILED (failures=2)` 且精确点名该模块；②快照计数植回 `29/33` → `FAILED (failures=1)` 同样点名；两次还原 sha256 逐字节一致。切片包 `Ran 116 / 26.9s / OK / receipt:55a404f09eacc53bfb165a24`。**闭合证据已验（更正）**：用户点破后查 `.tools/state/full_pack_ledger.json`——机器记录 `5650 OK / count_gate_equal:true / 307 模块全跑 / 424.3s`，且 `fingerprint` 与我现算的代码指纹三者同为 `222a66db3090…`，对当前代码有效，**本条翻 `resolved`**。我先前写 NOT_VERIFIED 是没去看账本，属我的错。reviewer 不复跑全量无隐患（checklist §0.2 本就规定 reviewer 只复跑 focused；账本按指纹绑定，重跑不产新信息）；欠的只有合并后的组合态，属 merge 自己的门。未起 §6a agent（rule 8：tests/docs-only）。
+- **Next**: 按六文件清单提交；补一次全量取得闭合证据后再翻 `resolved`；capstone `b49c151b` 与本刀一并合入前需先同步 master。
+
+## 2026-08-09 — Codex 修复：IO inventory / seam 路径失步已收口（OPEN-NOT_VERIFIED）
+
+- **Verdict/Action**: tests/docs-only 修复完成。根因是 inventory 的 file-wide alias table 把两个函数中同名 `alternate` 串线，不是新增 assessment 写盘；路径变量已改为 `alternate_assessment_path`，快照只校正两次已证临时 fixture 写入计数。未加 allowlist、未重生成快照、未改生产或 capstone、未提交或完成 merge。
+- **Required**: 两项均已实施、待 Claude Code 独立复审：路径 alias 必须保持 temp lineage；snapshot 只接受已证明的 helper `29→31` 与模块 `33→35`。Optional=无；完整归因、差异与合法未来红条件只见 `docs/system_risk_register.md` 的 `R-USSHORT-QUERY-QUALITY-SEAM-ASSESSMENT-PATH-IO-INVENTORY-DESYNC`。
+- **Verify**: 两条反向植入分别精确点名 assessor 模块/assessment key 与模块/count keys，恢复后 SHA-256 逐字节一致；focused `63 OK`，merge-aware `139 OK / receipt:cac412b29a27bec2be8f8969`；`b49c151b+9baaf05d` 唯一 official full `PASS 5650/5650 / equal=True / 424.3s`；受保护根前后均 0 文件且 hash 相同。此后 master 持续外部推进，未纳入本证据。
+- **Pre-Codex self-review**: A-F checked；matrix=1 false-positive alias + 2 legitimate helper writes + capstone no delta；register=updated；handoff=updated；focused=63+139 OK；full-lane=5650/5650 PASS；door=route-doc 14 OK + doc-governance 41 OK；review=NOT_VERIFIED；commit=NOT_PERFORMED；provider/network/key=NOT_USED。
+- **Next**: Claude Code：以审查时 master 指针为准先集成，再独立复审完整 diff/两条植入，并重取 merge-aware focused/full/count gate 与 protected-root manifest；通过后由 reviewer/committer 提交并完成合并。
+
+## 2026-08-09 — Claude 审查 PASS（000e capstone 测试隔离；lane 全量仍红，根因归我上轮放行的刀）
+
+- **Verdict/Action**: PASS。28 行删除不是移除隐私门——真 git 证明与 containment 被从一个 owned root 泛化成两个；探针由「查目录」改「查目录内文件」是必要的，因为 `state/us_short` 目录本身不被忽略、而 helper 在临时根内写了 `.gitignore: *`，只有文件形式对两个根都成立。新增守卫把五个 `STATE_DIR` 与 decision lock 钉在注入根上。
+- **Required**: 无（本刀）。正文只在 `docs/system_risk_register.md`。一件需知情：lane 全量仍 `FAIL 5220/5629`，停在 IO inventory，已由执行方另立 finding；**根因是我上一轮放行的 production-seam 刀**（新 seam 写了新路径未同步 inventory），而我两轮用的超集 pattern 结构上匹配不到那个守卫，所以绿灯放行。判据已写进 register：新增会写盘路径的测试，超集必须含 IO inventory 或直接走 full lane ledger。
+- **Verify**: review-evidence:b95026d24389。reviewer 自跑：discovery 超集 `Ran 443 / 183.7s / OK`、`receipt:b9a590c09e4610e0369c6dbd`，连续四轮的 conformance 矩阵红已消失、零残留；植入把 `state_dir` 退回 lane 真实根 → `Ran 53 / FAILED (errors=53)`，还原 sha256 逐字节一致；独立复现执行方自报的新红 `tests.test_us_short_test_io_inventory` → `Ran 18 / FAILED (failures=2)`。未起 §6a agent（rule 8：tests-only、零生产改动）。超时原因:读 gitignore 语义时 helper 的进程锁被在跑的超集占住，改走静态取证多花了一轮。
+- **Next**: 合入本刀；IO inventory 那条按其自身 finding 另刀处理，修完 lane 全量才能恢复。
+
+## 2026-08-09 — Codex 修复：capstone 测试隔离已落地；全量转停独立 IO-inventory 红（OPEN-NOT_VERIFIED）
+- **Verdict/Action**: capstone soft-discovery 测试已改用 lane state helper 与独立 provider raw helper；全部 state/lock owner 注入，六个 exception case 独占输出。未改生产、未提交；因果边界与完整证据见 register 的 capstone R-ID。
+- **Required**: capstone 两项 Required 已实施，Optional=无，待独立复审。full lane 的独立 inventory 首红另记 `R-USSHORT-QUERY-QUALITY-SEAM-ASSESSMENT-PATH-IO-INVENTORY-DESYNC`，故验证通道仍未全绿。
+- **Verify**: 固定主 Python；topology 与 reset 两类植入均精确转红。capstone `53 OK`；最终 resource matrix `1 OK / receipt:6886be00787db21e8121710f`；唯一 full `FAIL 5220/5629 / 173.3s`，其中 capstone `53 PASS`；inventory 单跑稳定同红；残留为零。
+- **Pre-Codex self-review**: A-F checked；matrix=2 Required done / Optional none / inventory separate；register=updated；handoff=updated；focused=resource matrix 1 OK + 2 planted red；full-lane=official FAIL 5220/5629 at inventory, capstone 53 PASS, no rerun；door=route 14 OK + doc-governance 41 OK；independent-self-review=not_used: unrequested test-infra slice, main-thread fallback。
+- **Next**: Claude Code：审查 capstone tests-only 隔离修复；inventory 阻断按 register 另刀处理。
 
 ## 2026-08-09 — Claude 已闭：软发现 lane 四条定点探针（三条关、一条只关一半）
 
