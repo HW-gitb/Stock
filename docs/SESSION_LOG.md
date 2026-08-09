@@ -1,5 +1,23 @@
 # Session Log
 
+## 2026-08-09 — Claude 审查 PASS（Serenity 刀0 单主题 feasibility smoke）
+
+- **Verdict/Action**: PASS。刀0 四条 Go 判据全部达成：每条重要 claim 绑定冻结 `source_id`、五分类角色未塌成单档、falsifier 六字段 typed 且与 `contrary_evidence` 分开、horizon 判定带 `horizon_basis_source_ref_ids`。产物落 repo 而非桌面、撤销 digest capture 两项偏离桌面方案，按 §16c「最新用户指令 > 桌面权威件」不判偏差。零接线、零 provider call、六个 effect flag 全 false。
+- **Required**: 无。两条不阻塞的 rubric 缺口已记入 `docs/system_risk_register.md`：`R-USSHORT-SERENITY-BLADE0-THE-SOURCE-LEDGER-OMITS-THE-MODEL-TRANSCRIBED-ATTESTATION`、`R-USSHORT-SERENITY-BLADE0-SUPPLY-CHOKEPOINT-IS-REDEFINED-INTO-A-FREE-LABEL`，正文、实测与闭合判据只在那里。
+- **Verify**: review-evidence:27ff6db9d040。独立重算：7 成员 `source_ref_ids` 计数与 5 个 `source_id`/`observed_at` 逐条等同冻结产物；反向控制对全部 20 组 (ticker, cited source) 回查 raw 正文得 `UNNAMED PAIRS=[]`，raw 里 `BE/EQT/META/MSFT/NVDA` 未被写进注解。文档门超集 `Ran 66 in 1.2s OK receipt:b6a6d850c2200c24954d52d5`（含执行方那 55 项）。接线 grep 全仓 0 命中；新文件 UTF-8 无 BOM/CRLF/尾空白。full-lane 按 rule 3 未触发（docs-only、无生产 runner/共享引擎/schema/consumer 改动）；未起 §6a agent（rule 8）。
+- **Next**: Codex：执行
+
+## 2026-08-09 — Codex 执行：Serenity `structural_theme_annotation` Blade 0 feasibility smoke（OPEN-NOT_VERIFIED）
+
+- **Verdict/Action**: 仅完成研究刀0并落盘 `research/results/us_serenity_annotation_smoke_20260809.md`；按最新用户边界写入当前工作树，桌面方案与主树冻结输入均只读。固定输入为主树 `D:\cnhea\Stock\state\us_short\us_short_llm_theme_discovery_x_20260801.json`，decision date=`20260801`，主题=`ai_data_center_power_demand`，成员=`CEG/VST/NEE/ETN/GEV/PWR/VRT`。结果=`GO_FOR_RUBRIC_FILLABILITY_ONLY`，`structural_status=unverified_lead`；不是有效性、区分力、交易性或生产晋级结论。按用户最新指令撤销 digest capture，保留 source path、decision date 与 source IDs。
+- **Required**: 无实现 Required。Blade 1/2/3/4/5/6/7、provider/network、effect flag、active `macro_cluster`、score/Top15/operation/lifecycle、安装、账户/订单与提交均未执行。
+- **Evidence**: 只读解析冻结产物得到 5 个 `x:` source ref；五个来源均保持 `source_authority=lead`，claim support 按 `direct/context` 分轴记录；冻结产物自身声明 `membership_status=provisional_unvalidated`、`market_confirmation_status=not_run`、全部 effect flag=false。原始 source root 仅只读检查，未复制 raw payload。
+- **Verify**: fixed Python 文档断言 `PASS: post-edit UTF8/rubric/source/member/effect/digest-removal checks`；`git diff --check` clean（仅 Git 的 LF→CRLF warning）；route/doc-governance focused `Ran 55 tests in 1.435s OK`，receipt=`fdbc805ee1a458ceefa605fc`；ripple grep=`NO_NEW_SERENITY_CONSUMER_SYMBOLS`；code/schema diff=`NONE`，CURRENT diff=`NONE`；full-lane=NOT_TRIGGERED（docs-only research artifact，无生产 runner/shared engine/schema/consumer 变更）。
+- **Commands**: `C:\Users\cnhea\AppData\Local\Programs\Python\Python313\python.exe -c <offline Blade0 document assertions>`；`git -C "D:\cnhea\Codex\worktrees\b511\Stock" diff --check`；`cmd.exe /d /c call "D:\cnhea\Codex\worktrees\b511\Stock\.tools\run_unittest_with_repo_pythonpath.cmd" tests.test_route_doc_ledger_status_consistency tests.test_doc_governance_guard`；`rg -n --hidden -g '*.py' -g '*.json' 'structural_theme_annotation|structural_constraint_cluster_shadow|system_change_id|chain_role_by_ticker|horizon_basis_source_ref_ids' engine runners presets schemas tests`。
+- **Pre-Codex self-review**: A-F checked；A=固定输入/7成员/source矩阵；B=Serenity字段与所有当前树 `*.py/*.md/tests` 消费面 grep，确认无新接线且文档只声明 shadow；C=effect flags/active macro/score/Top15/operation/lifecycle 反向控制；D=unsupported claim 降级为 lead/context/unverified；E=SESSION_LOG 与 handoff 为当前态，CURRENT 未改；F=UTF-8/no BOM/no mojibake、固定 Python assertions PASS、`git diff --check` clean；independent-self-review=NOT_USED:user-forbids independent review；provider/network/account=NOT_USED；commit=NOT_PERFORMED。
+- **Handoff**: 已新增 `docs/handoff/2026-08-09_us_serenity_annotation_blade0_handoff.md` 并加入 `docs/handoff/README.md` 路由；该交接只承载 Blade 0 结果、边界、自审/测试要求与下一刀前置，不混入既有 X live-shape handoff。
+- **Next**: Claude Code：审查本刀 Blade 0 研究产物；未审查前不进入 Blade 1 或任何工程刀。
+
 ## 2026-08-09 — Claude 审查 PASS（开钟门两条 Optional 收口）
 
 - **Verdict/Action**: PASS。O1 中断恢复：签发顺序改为先写 pending intent、再写通知、最后 O_EXCL 写 receipt，恢复时比对整份候选 receipt 而不只比通知字节。O2：`notification_sha256` 从 receipt schema 整个删除（1.1.0→1.2.0），因通知 schema 闭世界且三字段为 const，该摘要完全由已被逐字段比较的两项决定。两条修法都比 Optional 本身重（删授权制品字段 / 新增持久化件），故各配控制组验过。
