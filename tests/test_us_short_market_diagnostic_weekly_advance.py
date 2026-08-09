@@ -8,6 +8,7 @@ import unittest
 
 from engine.us_short_market_diagnostic_lifecycle import load_lifecycle_register
 from engine.us_short_market_diagnostic_start_receipt import issue_start_receipt
+from engine.us_short_model_paper_portfolio import canonical_json_bytes
 from runners import us_short_market_diagnostic_weekly_fetch as advance
 from tests.test_us_short_market_diagnostic_benchmark_packet import _FakeVendor
 from tests.test_us_short_market_diagnostic_local_adapter import _packet, _start_local_paper_store
@@ -62,13 +63,21 @@ class _WeeklyAdvanceFixture:
 
     def _open_clock(self) -> None:
         _start_local_paper_store(self.paper)
+        notification_path = self.base / "notification-source.json"
+        notification_path.write_bytes(
+            canonical_json_bytes(
+                {
+                    "schema_name": "us_short_market_diagnostic_completion_notification",
+                    "schema_version": "1.0.0",
+                    "issued_at": "2026-07-24T00:00:00+00:00",
+                    "issuer": "codex",
+                    "notification_text": "US-short 26-week diagnostic design is complete; open the clock.",
+                }
+            )
+        )
         issue_start_receipt(
             diagnostic_epoch=self.packet["diagnostic_epoch"],
-            completion_notification={
-                "issued_at": "2026-07-24T00:00:00+00:00",
-                "issuer": "codex",
-                "notification_text": "US-short 26-week diagnostic design is complete; open the clock.",
-            },
+            notification_path=notification_path,
             first_decision_date=self.packet["weeks"][0]["decision_date"],
             root=self.store,
             as_of_date="20260731",

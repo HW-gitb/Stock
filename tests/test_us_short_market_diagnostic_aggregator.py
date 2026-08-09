@@ -21,10 +21,27 @@ from engine.us_short_market_diagnostic_aggregator import (
 )
 from engine.us_short_market_diagnostic_lifecycle import persist_settled_weekly_record
 from engine.us_short_market_diagnostic_start_receipt import issue_start_receipt
+from engine.us_short_model_paper_portfolio import canonical_json_bytes
 from tests.test_us_short_market_diagnostic import _weekly_rows
 
 
 ROOT = Path(__file__).resolve().parents[1]
+
+
+def _notification_source(root: Path) -> Path:
+    path = root.parent / "notification-source.json"
+    path.write_bytes(
+        canonical_json_bytes(
+            {
+                "schema_name": "us_short_market_diagnostic_completion_notification",
+                "schema_version": "1.0.0",
+                "issued_at": "2025-12-29T00:00:00+00:00",
+                "issuer": "codex",
+                "notification_text": "US-short 26-week diagnostic design is complete.",
+            }
+        )
+    )
+    return path
 
 
 def _money(value: Decimal) -> str:
@@ -124,11 +141,7 @@ def _authorized_store(testcase, rows):
     root = Path(holder.name) / "market_diagnostic_private"
     issue_start_receipt(
         diagnostic_epoch=rows[0]["diagnostic_epoch"],
-        completion_notification={
-            "issued_at": "2025-12-29T00:00:00+00:00",
-            "issuer": "codex",
-            "notification_text": "US-short 26-week diagnostic design is complete.",
-        },
+        notification_path=_notification_source(root),
         first_decision_date=rows[0]["decision_date"],
         root=root,
         as_of_date="20260731",
@@ -266,11 +279,7 @@ class UsShortMarketDiagnosticAggregatorTest(unittest.TestCase):
             rows = _weekly_rows()
             issue_start_receipt(
                 diagnostic_epoch=rows[0]["diagnostic_epoch"],
-                completion_notification={
-                    "issued_at": "2025-12-29T00:00:00+00:00",
-                    "issuer": "codex",
-                    "notification_text": "US-short 26-week diagnostic design is complete.",
-                },
+                notification_path=_notification_source(lifecycle_root),
                 first_decision_date=rows[0]["decision_date"],
                 root=lifecycle_root,
                 as_of_date="20260731",

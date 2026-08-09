@@ -1,0 +1,26 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://stock.local/schemas/us_short_market_diagnostic_completion_notification.schema.json",
+  "title": "US-short 26-week market diagnostic design-completion notification",
+  "description": "The independent source artifact from which a diagnostic start receipt is derived. It is copied immutably into the private diagnostic store before the receipt is issued; the receipt digest is always verified against this artifact rather than against another receipt field.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_name", "schema_version", "issued_at", "issuer", "notification_text"],
+  "properties": {
+    "schema_name": {"const": "us_short_market_diagnostic_completion_notification"},
+    "schema_version": {"const": "1.0.0"},
+    "issued_at": {
+      "type": "string",
+      "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}(\\.[0-9]+)?(Z|[+-][0-9]{2}:[0-9]{2})\\Z",
+      "description": "Timezone-aware instant at which Codex issued the independent design-completion notification."
+    },
+    "issuer": {"const": "codex"},
+    "notification_text": {
+      "type": "string",
+      "minLength": 16,
+      "pattern": "\\S",
+      "maxLength": 4096,
+      "description": "The independently issued design-completion notification."
+    }
+  }
+}

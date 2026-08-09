@@ -61,6 +61,7 @@ from engine.us_short_model_paper_portfolio import (  # noqa: E402
     DECISION_BOUNDARY,
     artifact_sha256,
     build_nav_snapshot,
+    canonical_json_bytes,
     seed_portfolio_state,
     settle_decision_bundle,
 )
@@ -512,14 +513,23 @@ def run_rehearsal(
     # above already says. The receipt schema pins the issuer to the one role that
     # may open a real clock, so the rehearsal says what it is in the text and
     # relies on the epoch and the sandbox gate to keep the two apart.
-    notification = sandbox / "rehearsal_notification.txt"
-    notification.write_text(
-        "REHEARSAL sandbox clock; this is not a design-completion notice.", encoding="utf-8"
+    notification = sandbox / "rehearsal_completion_notification.json"
+    notification.write_bytes(
+        canonical_json_bytes(
+            {
+                "schema_name": "us_short_market_diagnostic_completion_notification",
+                "schema_version": "1.0.0",
+                "issued_at": f"{_iso(_shift(first_decision_date, -3))}T00:00:00+00:00",
+                "issuer": "codex",
+                "notification_text": (
+                    "REHEARSAL sandbox clock; this is not a design-completion notice."
+                ),
+            }
+        )
     )
     open_clock(
         confirm_design_complete=True,
         notification_path=notification,
-        issued_at=f"{_iso(_shift(first_decision_date, -3))}T00:00:00+00:00",
         diagnostic_epoch=epoch,
         first_decision_date=first_decision_date,
         root=diag,

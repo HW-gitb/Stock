@@ -13,10 +13,11 @@ overstates itself is worse than one that does not exist:
   receipt bound to a contract that is not there is caught. It covers the frozen
   machine-bound contract block, not the living prose around it — see
   ``design_contract_block`` for why hashing the whole file was the wrong guard.
-* The notification digest is re-computed from the notification text the receipt
-  carries. That makes the pair self-consistent — a zeroed digest is caught — but
-  it does NOT prove a notification was ever issued, because both halves live
-  inside the receipt.
+* The completion notification is a separate canonical JSON source artifact. The
+  receipt is derived from that artifact, records its digest, and re-reads the
+  immutable private copy whenever the receipt is used. The public API accepts a
+  path, never a caller-assembled notification mapping, so contradictory receipt
+  and source values are not expressible through the minting path.
 * Nothing here is tamper-PROOF. There is no secret, so anyone who can write the
   private root can hand-author a receipt that validates. What the receipt buys is
   tamper-EVIDENCE against the realistic failure: a clock opened by accident, by a
@@ -35,8 +36,8 @@ and this module never calls a provider, touches the model-paper account, or
 changes selection, action, sizing or NAV.
 
 Building this door does not open it. ``issue_start_receipt`` requires a caller to
-supply a real notification; there is no default that would let the clock start by
-omission.
+supply a real source artifact; there is no default that would let the clock start
+by omission.
 """
 from __future__ import annotations
 
@@ -58,7 +59,11 @@ from engine.us_short_private_paths import PrivatePathError, reject_nonprivate_ou
 ROOT = Path(__file__).resolve().parent.parent
 DEFAULT_ROOT = ROOT / "state" / "us_short" / "market_diagnostic_private"
 RECEIPT_FILENAME = "diagnostic_start_receipt.json"
+NOTIFICATION_FILENAME = "design_completion_notification.json"
 RECEIPT_SCHEMA_PATH = ROOT / "schemas" / "us_short_market_diagnostic_start_receipt.schema.json"
+NOTIFICATION_SCHEMA_PATH = (
+    ROOT / "schemas" / "us_short_market_diagnostic_completion_notification.schema.json"
+)
 DESIGN_AUTHORITY_RELATIVE_PATH = "docs/us_short_market_diagnostic_26w_design.md"
 DESIGN_CONTRACT_ANCHOR = "12.1 Machine-bound v1 summary and status contract"
 _DESIGN_CONTRACT_BLOCK = re.compile(
@@ -84,6 +89,7 @@ RECEIPT_BOUNDARY = {
 _DESIGN_AUTHORITY_ROOT = ROOT
 
 _SCHEMA: dict[str, Any] | None = None
+_NOTIFICATION_SCHEMA: dict[str, Any] | None = None
 _DATE8 = re.compile(r"^[0-9]{8}\Z")
 _SHA256 = re.compile(r"^[0-9a-f]{64}\Z")
 # A frozen week must follow the decision and stay within a horizon somebody can act on.
@@ -103,6 +109,15 @@ def _fail(message: str) -> None:
     raise DiagnosticStartReceiptError(message)
 
 
+def _canonical_payload(value: Mapping[str, Any], label: str) -> bytes:
+    """Keep the portfolio serializer's errors inside this track's public contract."""
+
+    try:
+        return canonical_json_bytes(value)
+    except (ValueError, TypeError, OverflowError) as exc:
+        raise DiagnosticStartReceiptError(f"{label} cannot be canonicalized") from exc
+
+
 def _validator() -> jsonschema.Draft7Validator:
     global _SCHEMA
     if _SCHEMA is None:
@@ -111,6 +126,18 @@ def _validator() -> jsonschema.Draft7Validator:
         except (OSError, json.JSONDecodeError) as exc:
             raise DiagnosticStartReceiptError("start receipt schema is unreadable") from exc
     return jsonschema.Draft7Validator(_SCHEMA)
+
+
+def _notification_validator() -> jsonschema.Draft7Validator:
+    global _NOTIFICATION_SCHEMA
+    if _NOTIFICATION_SCHEMA is None:
+        try:
+            _NOTIFICATION_SCHEMA = json.loads(NOTIFICATION_SCHEMA_PATH.read_text(encoding="utf-8"))
+        except (OSError, json.JSONDecodeError) as exc:
+            raise DiagnosticStartReceiptError(
+                "completion notification schema is unreadable"
+            ) from exc
+    return jsonschema.Draft7Validator(_NOTIFICATION_SCHEMA)
 
 
 def _mapping(value: object, field: str) -> Mapping[str, Any]:
@@ -156,8 +183,100 @@ def _aware_instant(value: object, field: str) -> datetime:
     return parsed
 
 
-def _text_digest(text: str) -> str:
-    return hashlib.sha256(text.encode("utf-8")).hexdigest()
+def _read_completion_notification(path: object) -> dict[str, Any]:
+    source_path = _path_like(path, "completion notification source")
+    if not source_path.is_absolute():
+        _fail("completion notification source must be an absolute path")
+    source_path = source_path.resolve()
+    try:
+        payload = source_path.read_bytes()
+    except OSError as exc:
+        raise DiagnosticStartReceiptError(
+            f"completion notification source is unreadable: {source_path}"
+        ) from exc
+    try:
+        value = json.loads(payload.decode("utf-8"))
+    except (UnicodeDecodeError, json.JSONDecodeError) as exc:
+        raise DiagnosticStartReceiptError(
+            f"completion notification source is not UTF-8 JSON: {source_path}"
+        ) from exc
+    if not isinstance(value, dict):
+        _fail("completion notification source must be an object")
+    if _canonical_payload(value, "completion notification source") != payload:
+        _fail("completion notification source is not canonical JSON")
+    return _validate_completion_notification(value)
+
+
+def _validate_completion_notification(value: Mapping[str, Any]) -> dict[str, Any]:
+    errors = sorted(
+        _notification_validator().iter_errors(value),
+        key=lambda error: list(error.absolute_path),
+    )
+    if errors:
+        location = ".".join(str(part) for part in errors[0].absolute_path) or "<root>"
+        _fail(f"completion notification schema violation at {location}: {errors[0].message}")
+    _aware_instant(value["issued_at"], "completion_notification.issued_at")
+    return dict(value)
+
+
+def write_completion_notification_template(
+    *, output_path: str | Path, issued_at: str, notification_text: str
+) -> dict[str, Any]:
+    """Write one accepted canonical source without authorizing or opening the clock."""
+
+    path = _path_like(output_path, "completion notification output")
+    if not path.is_absolute():
+        _fail("completion notification output must be an absolute path")
+    path = path.resolve()
+    notification = _validate_completion_notification(
+        {
+            "schema_name": "us_short_market_diagnostic_completion_notification",
+            "schema_version": "1.0.0",
+            "issued_at": issued_at,
+            "issuer": "codex",
+            "notification_text": notification_text,
+        }
+    )
+    payload = _canonical_payload(notification, "completion notification")
+    try:
+        path.parent.mkdir(parents=True, exist_ok=True)
+    except OSError as exc:
+        raise DiagnosticStartReceiptError(
+            f"cannot create completion notification output directory: {path.parent}"
+        ) from exc
+    try:
+        handle = os.open(path, os.O_CREAT | os.O_EXCL | os.O_WRONLY)
+    except FileExistsError as exc:
+        raise DiagnosticStartReceiptError(
+            f"completion notification output already exists; refusing overwrite: {path}"
+        ) from exc
+    except OSError as exc:
+        raise DiagnosticStartReceiptError(
+            f"cannot create completion notification output: {path}"
+        ) from exc
+    try:
+        with os.fdopen(handle, "wb") as stream:
+            stream.write(payload)
+            stream.flush()
+            os.fsync(stream.fileno())
+    except OSError as exc:
+        try:
+            path.unlink()
+        except OSError:
+            pass
+        raise DiagnosticStartReceiptError(
+            f"cannot write completion notification output: {path}"
+        ) from exc
+    _read_completion_notification(path)
+    return {
+        "status": "written",
+        "path": str(path),
+        "notification_sha256": _notification_digest(notification),
+    }
+
+
+def _notification_digest(notification: Mapping[str, Any]) -> str:
+    return artifact_sha256(dict(notification))
 
 
 def design_contract_block() -> dict[str, Any]:
@@ -198,17 +317,19 @@ def design_contract_block() -> dict[str, Any]:
 def design_authority_sha256() -> str:
     """Digest of the frozen contract block, canonicalized so formatting is not identity."""
 
-    return hashlib.sha256(canonical_json_bytes(design_contract_block())).hexdigest()
+    return hashlib.sha256(
+        _canonical_payload(design_contract_block(), "machine-bound design contract")
+    ).hexdigest()
 
 
 def build_start_receipt(
     *,
     diagnostic_epoch: str,
-    completion_notification: Mapping[str, Any],
+    notification_path: str | Path,
     first_decision_date: str,
     as_of_date: str,
 ) -> dict[str, Any]:
-    """Assemble one receipt. The caller supplies the decision; the digests are earned.
+    """Assemble one receipt from a separate notification source artifact.
 
     ``as_of_date`` is required, and required here rather than in
     ``validate_start_receipt``: minting is the moment a decision is claimed to
@@ -218,14 +339,26 @@ def build_start_receipt(
     receipt that ever worked.
     """
 
-    notification = _mapping(completion_notification, "completion_notification")
-    for field in ("issued_at", "issuer", "notification_text"):
-        if field not in notification:
-            _fail(f"completion_notification.{field} is required")
+    notification = _read_completion_notification(notification_path)
+    return _build_start_receipt_from_notification(
+        diagnostic_epoch=diagnostic_epoch,
+        notification=notification,
+        first_decision_date=first_decision_date,
+        as_of_date=as_of_date,
+    )
+
+
+def _build_start_receipt_from_notification(
+    *,
+    diagnostic_epoch: str,
+    notification: Mapping[str, Any],
+    first_decision_date: str,
+    as_of_date: str,
+) -> dict[str, Any]:
+    """Build from one already-validated source read, so identity cannot race itself."""
+
     issued = _aware_instant(notification["issued_at"], "completion_notification.issued_at")
     text = notification["notification_text"]
-    if not isinstance(text, str) or len(text) < 16:
-        _fail("completion_notification.notification_text must be the notification itself")
     _date8(first_decision_date, "first_decision_date")
     # A notification dated in the future has not been issued. Every other check
     # here reasons FROM issued_at -- the anchor may not precede it, and may not
@@ -240,7 +373,7 @@ def build_start_receipt(
     window = window_containing_week(1)
     receipt = {
         "schema_name": "us_short_market_diagnostic_start_receipt",
-        "schema_version": "1.0.0",
+        "schema_version": "1.1.0",
         "diagnostic_epoch": diagnostic_epoch,
         "design_authority": {
             "document_path": DESIGN_AUTHORITY_RELATIVE_PATH,
@@ -248,10 +381,11 @@ def build_start_receipt(
             "contract_sha256": design_authority_sha256(),
         },
         "completion_notification": {
+            "source_path": NOTIFICATION_FILENAME,
             "issued_at": notification["issued_at"],
             "issuer": notification["issuer"],
             "notification_text": text,
-            "notification_sha256": _text_digest(text),
+            "notification_sha256": _notification_digest(notification),
         },
         "first_calendar_week": {
             "calendar_week_index": 1,
@@ -260,12 +394,15 @@ def build_start_receipt(
         },
         "boundary": dict(RECEIPT_BOUNDARY),
     }
-    validate_start_receipt(receipt)
+    _validate_start_receipt_against_source(receipt, notification, verify_design_against_disk=True)
     return receipt
 
 
-def validate_start_receipt(
-    receipt: Mapping[str, Any], *, verify_design_against_disk: bool = True
+def _validate_start_receipt_against_source(
+    receipt: Mapping[str, Any],
+    notification_source: Mapping[str, Any],
+    *,
+    verify_design_against_disk: bool,
 ) -> dict[str, Any]:
     """Closed-world re-check.
 
@@ -285,9 +422,18 @@ def validate_start_receipt(
         _fail("start receipt crosses the diagnostic boundary")
 
     notification = candidate["completion_notification"]
+    expected_notification = {
+        "source_path": NOTIFICATION_FILENAME,
+        "issued_at": notification_source["issued_at"],
+        "issuer": notification_source["issuer"],
+        "notification_text": notification_source["notification_text"],
+        "notification_sha256": _notification_digest(notification_source),
+    }
+    if dict(notification) != expected_notification:
+        _fail(
+            "completion_notification does not match the independent notification source artifact"
+        )
     _aware_instant(notification["issued_at"], "completion_notification.issued_at")
-    if _text_digest(notification["notification_text"]) != notification["notification_sha256"]:
-        _fail("completion_notification.notification_sha256 does not match its own notification text")
 
     if verify_design_against_disk and candidate["design_authority"]["contract_sha256"] != design_authority_sha256():
         _fail(
@@ -319,6 +465,23 @@ def validate_start_receipt(
     return dict(candidate)
 
 
+def validate_start_receipt(
+    receipt: Mapping[str, Any],
+    *,
+    root: str | Path,
+    verify_design_against_disk: bool = True,
+) -> dict[str, Any]:
+    """Closed-world re-check against the independent source artifact on disk."""
+
+    store_root = _private_root(root)
+    notification = _read_completion_notification(_notification_path(store_root))
+    return _validate_start_receipt_against_source(
+        receipt,
+        notification,
+        verify_design_against_disk=verify_design_against_disk,
+    )
+
+
 def _private_root(root: str | Path) -> Path:
     path = _path_like(root, "diagnostic private root")
     if not path.is_absolute():
@@ -344,13 +507,67 @@ def _receipt_path(root: Path) -> Path:
     return candidate
 
 
+def _notification_path(root: Path) -> Path:
+    candidate = (root / NOTIFICATION_FILENAME).resolve()
+    try:
+        candidate.relative_to(root)
+    except ValueError as exc:
+        raise DiagnosticStartReceiptError("completion notification escapes its private root") from exc
+    try:
+        reject_nonprivate_output_path(candidate)
+    except PrivatePathError as exc:
+        raise DiagnosticStartReceiptError(
+            f"completion notification is not private: {candidate}"
+        ) from exc
+    return candidate
+
+
+def _persist_completion_notification(root: Path, notification: Mapping[str, Any]) -> None:
+    path = _notification_path(root)
+    payload = _canonical_payload(dict(notification), "completion notification")
+    path.parent.mkdir(parents=True, exist_ok=True)
+    try:
+        handle = os.open(path, os.O_CREAT | os.O_EXCL | os.O_WRONLY)
+    except FileExistsError:
+        existing = _read_completion_notification(path)
+        if _canonical_payload(existing, "stored completion notification") == payload:
+            return
+        _fail("a different completion notification already anchors this diagnostic clock")
+        raise AssertionError("unreachable")
+    except OSError as exc:
+        raise DiagnosticStartReceiptError(
+            f"cannot write the completion notification source: {path}"
+        ) from exc
+    try:
+        with os.fdopen(handle, "wb") as stream:
+            stream.write(payload)
+            stream.flush()
+            os.fsync(stream.fileno())
+    except OSError as exc:
+        try:
+            path.unlink()
+        except OSError:
+            pass
+        raise DiagnosticStartReceiptError(
+            f"cannot write the completion notification source: {path}"
+        ) from exc
+
+
 def load_start_receipt(
     root: str | Path = DEFAULT_ROOT, *, verify_design_against_disk: bool = True
 ) -> dict[str, Any] | None:
     """Return the stored receipt, or ``None`` when the clock has never been opened."""
 
-    path = _receipt_path(_private_root(root))
+    store_root = _private_root(root)
+    path = _receipt_path(store_root)
     if not path.exists():
+        notification_path = _notification_path(store_root)
+        if notification_path.exists():
+            _read_completion_notification(notification_path)
+            _fail(
+                "the start receipt is missing while the completion notification remains; "
+                "issuance was interrupted or the receipt was removed"
+            )
         return None
     try:
         payload = path.read_bytes()
@@ -362,9 +579,13 @@ def load_start_receipt(
         raise DiagnosticStartReceiptError("the start receipt is not UTF-8 JSON") from exc
     if not isinstance(value, dict):
         _fail("the start receipt must be an object")
-    if canonical_json_bytes(value) != payload:
+    if _canonical_payload(value, "start receipt") != payload:
         _fail("the start receipt is not canonical JSON")
-    return validate_start_receipt(value, verify_design_against_disk=verify_design_against_disk)
+    return validate_start_receipt(
+        value,
+        root=root,
+        verify_design_against_disk=verify_design_against_disk,
+    )
 
 
 def start_receipt_sha256(receipt: Mapping[str, Any]) -> str:
@@ -376,23 +597,34 @@ def start_receipt_sha256(receipt: Mapping[str, Any]) -> str:
 def issue_start_receipt(
     *,
     diagnostic_epoch: str,
-    completion_notification: Mapping[str, Any],
+    notification_path: str | Path,
     first_decision_date: str,
     as_of_date: str,
     root: str | Path = DEFAULT_ROOT,
 ) -> dict[str, Any]:
     """Open the clock once, on a real notification, and never silently re-anchor it."""
 
-    receipt = build_start_receipt(
+    notification = _read_completion_notification(notification_path)
+    receipt = _build_start_receipt_from_notification(
         diagnostic_epoch=diagnostic_epoch,
-        completion_notification=completion_notification,
+        notification=notification,
         first_decision_date=first_decision_date,
         as_of_date=as_of_date,
     )
     store_root = _private_root(root)
     path = _receipt_path(store_root)
 
-    existing = load_start_receipt(store_root)
+    if path.exists():
+        existing = load_start_receipt(store_root)
+    else:
+        existing = None
+        notification_store_path = _notification_path(store_root)
+        if notification_store_path.exists():
+            interrupted_source = _read_completion_notification(notification_store_path)
+            if _canonical_payload(
+                interrupted_source, "stored completion notification"
+            ) != _canonical_payload(notification, "completion notification"):
+                _fail("a different completion notification already anchors this diagnostic clock")
     if existing is not None:
         if start_receipt_sha256(existing) == start_receipt_sha256(receipt):
             return {
@@ -402,7 +634,9 @@ def issue_start_receipt(
             }
         _fail("a different start receipt already anchors this diagnostic clock")
 
-    payload = canonical_json_bytes(receipt)
+    _persist_completion_notification(store_root, notification)
+    validate_start_receipt(receipt, root=store_root)
+    payload = _canonical_payload(receipt, "start receipt")
     path.parent.mkdir(parents=True, exist_ok=True)
     # Exclusive create rather than check-then-replace: two issuers racing must not
     # both be told they won while only one anchor survives.
@@ -506,6 +740,7 @@ __all__ = [
     "DESIGN_AUTHORITY_RELATIVE_PATH",
     "DESIGN_CONTRACT_ANCHOR",
     "DiagnosticStartReceiptError",
+    "NOTIFICATION_FILENAME",
     "RECEIPT_BOUNDARY",
     "RECEIPT_FILENAME",
     "assert_clock_authorization_still_holds",
@@ -517,4 +752,5 @@ __all__ = [
     "load_start_receipt",
     "start_receipt_sha256",
     "validate_start_receipt",
+    "write_completion_notification_template",
 ]

@@ -160,7 +160,12 @@ def _atomic_write(path: Path, value: Mapping[str, Any]) -> None:
     except PrivatePathError as exc:
         raise MarketDiagnosticLifecycleError(f"diagnostic artifact is not private: {path}") from exc
     path.parent.mkdir(parents=True, exist_ok=True)
-    payload = canonical_json_bytes(value)
+    try:
+        payload = canonical_json_bytes(value)
+    except (ValueError, TypeError, OverflowError) as exc:
+        raise MarketDiagnosticLifecycleError(
+            f"diagnostic artifact cannot be canonicalized: {path}"
+        ) from exc
     temporary = path.with_name(f".{path.name}.tmp-{uuid.uuid4().hex}")
     try:
         reject_nonprivate_output_path(temporary)

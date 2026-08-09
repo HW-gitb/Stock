@@ -325,7 +325,12 @@ def write_market_diagnostic_report(
     _validate_report(report)
     window_id = report["window_summary"]["window_id"]
     json_path, markdown_path = _report_output_paths(window_id, output_root)
-    json_payload = canonical_json_bytes(report)
+    try:
+        json_payload = canonical_json_bytes(report)
+    except (ValueError, TypeError, OverflowError) as exc:
+        raise MarketDiagnosticAggregationError(
+            "diagnostic report cannot be canonicalized"
+        ) from exc
     markdown_payload = render_market_diagnostic_markdown(report).encode("utf-8")
     existing_json = json_path.read_bytes() if json_path.is_file() else None
     existing_markdown = markdown_path.read_bytes() if markdown_path.is_file() else None

@@ -331,12 +331,12 @@ Knife 6 只解释“为什么和 VTI 的差距会这样”，不重新选股、�
 
 Knife7 是最后一刀，共负责四件事：
 
-1. 增加 `diagnostic_start_receipt` schema 和不可变私有落盘；receipt 只能由未来 Codex 的独立 `设计完成` 通知触发，且必须绑定设计权威摘要、通知摘要、通知时间、首个 canonical decision week 与 `diagnostic_epoch`；
+1. 增加 `diagnostic_start_receipt` schema 和不可变私有落盘；receipt 只能由未来 Codex 的独立 `设计完成` 通知触发，且必须绑定设计权威摘要、通知摘要、通知时间、首个 canonical decision week 与 `diagnostic_epoch`。独立通知自身必须是 canonical `us_short_market_diagnostic_completion_notification` JSON 源制品，正文必须含至少一个非空白字符；开钟 API 只接受源路径，不接受调用方拼出的通知 mapping，并以 O_EXCL 把同一源制品复制到私有 store。首次授权及后续每次读写/发布都必须回读该磁盘源并复核 receipt 绑定；
 2. lifecycle 没有合格 receipt 时拒绝写第 1 周；不得从 `2026-06-20`、文件日期、部件日期或账户日期推断起点；
 3. 启动后按日历周推进；部件或数据缺失周写 `no_count` / `unavailable`，不延后 26 周边界；
 4. 正式 weekly task 每周自动读取 lifecycle 的 `v1_1_attribution`：pending 时只提醒；active 时自动调用 Knife6。缺 VTI total return、PIT 现金收益或 `g*` 时产出 `unavailable`，不要求用户手动操作。
 
-Knife7 的启动门已实现（`engine/us_short_market_diagnostic_start_receipt.py` + `runners/us_short_market_diagnostic_weekly.py`）；门建成不等于门打开。本文件写下的仍是冻结设计，不是启动通知：至今没有签发过 receipt，也仍无真实第 1 周、真实 10 万美元 model-paper 账户、真实 ETF sidecar 或 PIT 现金归因结果。上文第 4 条（正式 weekly task 自动读取 `v1_1_attribution`）**已接线**（2026-08-09 复核）：`engine/us_short_market_diagnostic_weekly_task.py` 读 `register["v1_1_attribution"]` 并在 active 时调用刀 6 的 `build_attribution_input` / `build_attribution_report`。接线不等于有结果——缺 VTI total return、PIT 现金收益或 `g*` 时仍产出 `unavailable`。
+Knife7 的启动门已实现（`engine/us_short_market_diagnostic_start_receipt.py` + `runners/us_short_market_diagnostic_weekly.py`）；门建成不等于门打开。操作员用 `emit-notification-template` 仅生成 schema-valid、无末尾换行的 canonical 通知文件，命令本身不确认设计完成、不签发 receipt、不打开时钟；输出路径采用 `O_EXCL`，拒绝覆盖已有文件。通知或 receipt 含非有限数等不可 canonicalize 的内容时，公开入口必须转换为本轨 typed error，store status 归 `broken`，不得泄漏外部模块异常。本文件写下的仍是冻结设计，不是启动通知：至今没有签发过 receipt，也仍无真实第 1 周、真实 10 万美元 model-paper 账户、真实 ETF sidecar 或 PIT 现金归因结果。通知源绑定实现同样不等于已经发出通知。上文第 4 条（正式 weekly task 自动读取 `v1_1_attribution`）**已接线**（2026-08-09 复核）：`engine/us_short_market_diagnostic_weekly_task.py` 读 `register["v1_1_attribution"]` 并在 active 时调用刀 6 的 `build_attribution_input` / `build_attribution_report`。接线不等于有结果——缺 VTI total return、PIT 现金收益或 `g*` 时仍产出 `unavailable`。
 
 ## 13. Knife 0 验收
 

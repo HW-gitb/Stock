@@ -119,8 +119,9 @@ class RehearsalChainTest(unittest.TestCase):
     @classmethod
     def setUpClass(cls) -> None:
         cls._temp = tempfile.TemporaryDirectory(prefix="rehearsal_chain_")
+        cls.root = Path(cls._temp.name) / "run"
         cls.summary = run_rehearsal(
-            root=Path(cls._temp.name) / "run",
+            root=cls.root,
             first_decision_date=FIRST_MONDAY,
             weeks=6,
             starved_weeks=(6,),
@@ -145,6 +146,14 @@ class RehearsalChainTest(unittest.TestCase):
             with self.subTest(week=week["calendar_week_index"]):
                 self.assertIn(REHEARSAL_BANNER, Path(week["report_path"]).read_text(encoding="utf-8"))
         self.assertTrue(self.summary["diagnostic_epoch"].startswith("rehearsal-"))
+
+    def test_the_rehearsal_clock_is_bound_to_its_canonical_notification_source(self) -> None:
+        source = self.root / "rehearsal_completion_notification.json"
+        private_copy = self.root / "diag" / "design_completion_notification.json"
+        self.assertEqual(source.read_bytes(), private_copy.read_bytes())
+        notification = json.loads(source.read_text(encoding="utf-8"))
+        self.assertEqual("codex", notification["issuer"])
+        self.assertIn("REHEARSAL sandbox clock", notification["notification_text"])
 
     def test_the_v1_1_counter_climbs_and_then_activates_on_its_own(self) -> None:
         """Design section 5.2, read off the artifact instead of off the code."""

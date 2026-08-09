@@ -784,3 +784,110 @@ C:\Users\cnhea\AppData\Local\Programs\Python\Python313\python.exe .tools\full_pa
 ### 下一步注意事项
 
 - 用户已明确本条不需要独立审查；后续若处理 `RECEIPT-DIGESTS`，仍须另立 R-ID 范围，不得把真实通知来源绑定混入本条。本轮已提交并合并，工作树不再有未提交改动。
+
+## 2026-08-09 追加：Knife7 RECEIPT-DIGESTS 通知半收口（OPEN-NOT_VERIFIED）
+
+### 改了什么
+
+- 在 `D:\cnhea\Codex\worktrees\cb59\Stock\schemas\us_short_market_diagnostic_completion_notification.schema.json` 增加 closed-world canonical 通知源契约；`schemas\us_short_market_diagnostic_start_receipt.schema.json` 升至 `1.1.0`，固定私有源名 `design_completion_notification.json`，保留唯一一枚对完整 canonical 源计算的 `notification_sha256`。
+- `D:\cnhea\Codex\worktrees\cb59\Stock\engine\us_short_market_diagnostic_start_receipt.py` 的 build/issue API 改为只收绝对 `notification_path`；签发用两次 `O_EXCL` 固化源与 receipt，所有 receipt 消费都回读源复核。source-only 中断态报 broken，同源可恢复、异源拒绝；源写失败清理部分文件。
+- `D:\cnhea\Codex\worktrees\cb59\Stock\runners\us_short_market_diagnostic_weekly.py` 删除独立 `--issued-at`，时间/issuer/正文全由 JSON 源提供；`runners\us_short_market_diagnostic_rehearsal.py` 同步生成明确标注的 sandbox canonical 源。schema、CLI、reader/writer/publish/recovery/rehearsal 与 inventory 测试同步。
+
+### 为什么改
+
+- 旧实现拿 receipt 内的通知正文与同一 receipt 内的摘要互比，是循环自证；即使二者一致，也不能证明存在外部通知来源。修法让摘要真正绑定一份独立磁盘制品，并让每个授权消费点都重新核它。
+- SHA 只保留一枚，用作 canonical 外部源的紧凑稳定身份；没有叠加第二哈希、签名、证书或确认入口。全字段比较负责语义一致，SHA 不被夸成无密钥防伪。
+
+### 验证命令
+
+```text
+cmd /c .tools\run_unittest_with_repo_pythonpath.cmd --timeout-seconds 900 tests.test_us_short_market_diagnostic_start_receipt.StartReceiptTest.test_notification_digest_is_verified_against_the_independent_source
+cmd /c .tools\run_unittest_with_repo_pythonpath.cmd --timeout-seconds 900 tests.test_us_short_market_diagnostic_start_receipt tests.test_us_short_market_diagnostic_weekly_runner tests.test_us_short_market_diagnostic_authorization_conformance tests.test_us_short_market_diagnostic_lifecycle tests.test_us_short_market_diagnostic_aggregator tests.test_us_short_market_diagnostic_benchmark_packet tests.test_us_short_market_diagnostic_weekly_producer tests.test_us_short_market_diagnostic_weekly_advance tests.schema.test_us_short_market_diagnostic_26w_schemas tests.test_us_short_market_diagnostic_rehearsal tests.test_us_short_test_io_inventory
+C:\Users\cnhea\AppData\Local\Programs\Python\Python313\python.exe .tools\full_pack_ledger.py run us_short rule3:c_notification_source+schema+open-clock+rehearsal_entrypoints receipt:7e83f706097323c0dc3731fd 860 -- discover -s tests -p "test_us_short*.py"
+cmd /c .tools\run_unittest_with_repo_pythonpath.cmd tests.test_route_doc_ledger_status_consistency tests.test_doc_governance_guard
+```
+
+### 验证结果
+
+- 临时中和 source comparison 后，源漂移用例精确转红；还原后产品文件 SHA-256 回到 `0ef0039764cd2f5fc50dfe3743d8ed304c81aaf58a006f441ea7575348db7283`。首轮 full lane 又抓到 rehearsal 仍传旧 `issued_at`；修正后 rehearsal `30/30 OK`，说明全量红灯补到了真实组装遗漏而非被旧绿覆盖。
+- 开工后 master 前进 10 个提交，按规则 fast-forward/autostash 同步到 `d7d7e8a3` 的已审 inventory 收口；没有手工改 snapshot/allowlist，只把本轮通用 `source` 改成路径语义名。inventory 定点及 full-lane 组合均 `18/18 OK`。
+- 最终 focused `277/277 OK`，receipt=`7e83f706097323c0dc3731fd`；当前 fingerprint full lane `5665/5665 PASS`、307/307 modules、`COUNT_GATE discovered=ran=5665`、365.9s/860s。未联网、未调用真实 provider、未生成真实完成通知/receipt、未开钟、未写 model-paper/account、未改变选股/操作/NAV/Ship gate；未 commit。
+
+### 失效的旧结论
+
+- 「M18 证明通知来源绑定」仍是错的；M18 只证明旧 receipt 内部自洽。本轮新增的磁盘源回读与 source-drift 反向用例才覆盖来源绑定。
+- 「通知摘要全仓没有消费点」对本工作树已失效；`validate_start_receipt(receipt, root=...)` 已是统一消费点，所有后续授权路径经它回读固定源。
+- 「rehearsal 已天然兼容新版 open-clock」与「开工时 inventory 状态仍是当前 master」也失效；前者被首轮 full lane 转红，后者由用户提醒后查出 master 已前进并已审收口，均已按真实组合态修正/同步。
+
+### 下一步注意事项
+
+- Required `R-USSHORT-26W-DIAG-KNIFE7-RECEIPT-DIGESTS-ARE-NEVER-RE-VERIFIED` 实现完成但保持 `OPEN-NOT_VERIFIED`；交 Claude Code 独立审查 source drift、source-only recovery、reader/writer/publish 全消费点和无真实开钟边界。本工作树不 commit。
+- 不要把单枚 SHA 扩成签名/证书体系，也不要恢复 caller-built mapping 或独立 `--issued-at`；真实 `设计完成` 通知、receipt 签发与 26 周开钟仍是未来独立动作，不由本轮实现自动触发。
+
+## 2026-08-09 追加：开钟门通知源绑定的审查结论（FAIL）
+
+**审查对象**：`D:\cnhea\Codex\worktrees\cb59\Stock` 的未提交工作（19 改 + 1 新增 schema），闭 `RECEIPT-DIGESTS` 的通知半。
+
+**成立的部分**：这条 finding 的立项目的**确实达成了**——通知不再是「拿收据里的哈希比收据里的原文」，而是一份独立的 canonical JSON 源制品，`O_EXCL` 复制进私有 store，其后每次读/写/发布都回读磁盘制品重算。四类伪造（摘要归零、自洽无源、源删除、**盘上源被换**）在每个消费点 fail-closed，我与独立 agent 各自复现。API 只收路径、幂等、设计文档同步更新。
+
+**拦下的三条**：①一份 20 个空格的通知能开钟，而 dry-run 预览恰在同一输入上抛 `IndexError`——**不可逆的写成功、防手误的预览崩掉**；②非有限数让 `ModelPaperPortfolioError` 穿透本轨错误契约，坏掉的钟报不出 `broken`；③全仓没有任何工具能产出被接受的 canonical 通知字节（编辑器默认的末尾换行即被拒），这道门一生只被真人用一次，而那一次注定先失败几轮。正文在 `docs/system_risk_register.md` 同日节。
+
+**验证命令与结果**：焦点超集 `Ran 452 in 337.9s OK`；按用户指定本轮不起全量。探针、控制组与植入对照见 SESSION_LOG 同日 `Verify`。
+
+**验证边界与一条过程缺陷**：§6a 独立对抗 agent 已跑（read-only、离线）。**我在它审同一文件期间跑了植入对照，导致它三轮探针失效**；它自行快照、只还原那一行、在快照上重跑，并事后核对 live 文件 sha256 与快照一致，故结论未受污染——但这是我的调度失误：`rule 7(c)` 讲的是不要并发跑重包，同一条原则也适用于「agent 在读某文件时不要去改它」。下次起 agent 后，植入类操作要等它回报。未覆盖：真实并发下的 `O_EXCL` 竞争、符号链接/ACL 面、`verify_design_against_disk=False` 的长期风险量化。
+
+## 2026-08-09 追加：开钟门通知源三条审查 Required 收口（OPEN-NOT_VERIFIED）
+
+### 改了什么
+
+- `schemas/us_short_market_diagnostic_completion_notification.schema.json` 要求 `notification_text` 至少含一个非空白字符；weekly dry-run 不再对可能为空的 `splitlines()` 结果无守卫取 `[0]`。
+- `engine/us_short_market_diagnostic_start_receipt.py` 新增统一 `_canonical_payload` typed-error 边界与 `write_completion_notification_template`；weekly CLI 新增 `emit-notification-template --output-path --issued-at --notification-text`，只写 canonical source，不确认设计、不签 receipt、不打开时钟，已有文件以 `O_EXCL` 拒绝覆盖。
+- `aggregator` 报告写出与 `lifecycle._atomic_write` 补齐本轨 typed-error 转换；authorization conformance 为两个纯内存 helper 和只写 operator-named source 的 producer 增加理由化豁免，未改 tracked I/O inventory snapshot/allowlist。
+
+### 为什么改
+
+- reviewer 证明原实现允许 20 个空格通过不可逆开钟，而 dry-run 在同一输入上抛 `IndexError`；修复后预览与真开钟同向拒绝且未写 store。
+- `canonical_json_bytes` 对 `NaN`/`Infinity` 抛外部 `ModelPaperPortfolioError`；14 个调用点中，`start_receipt` 七处现统一转换，`aggregator` 与 lifecycle writer 补齐，lifecycle reader/attribution/local adapter/total return 原已收口，weekly producer 的 payload 仅含已检查字符串与 SHA，非有限数不可达。
+- 人工编辑器默认末尾换行会让正确内容变成 non-canonical；新 producer 直接写出引擎接受的 exact bytes，消除“只能读源码手工拼字节”的操作死角，但不增加开钟授权。
+
+### 验证命令
+
+```text
+cmd /c .tools\run_unittest_with_repo_pythonpath.cmd --timeout-seconds 60 tests.test_us_short_market_diagnostic_weekly_runner.DryRunTest.test_blank_notification_is_rejected_before_both_preview_and_real_open
+cmd /c .tools\run_unittest_with_repo_pythonpath.cmd --timeout-seconds 60 tests.test_us_short_market_diagnostic_weekly_runner.ClockStatusTest.test_non_finite_notification_source_stays_inside_the_track_error_contract
+cmd /c .tools\run_unittest_with_repo_pythonpath.cmd --timeout-seconds 60 tests.test_us_short_market_diagnostic_weekly_runner.NotificationTemplateTest.test_cli_emits_exact_canonical_bytes_that_preview_and_real_open_accept
+cmd /c .tools\run_unittest_with_repo_pythonpath.cmd --timeout-seconds 600 tests.test_us_short_market_diagnostic_start_receipt tests.test_us_short_market_diagnostic_weekly_runner tests.test_us_short_market_diagnostic_authorization_conformance tests.test_us_short_market_diagnostic_lifecycle tests.test_us_short_market_diagnostic_aggregator tests.test_us_short_market_diagnostic_benchmark_packet tests.test_us_short_market_diagnostic_weekly_producer tests.test_us_short_market_diagnostic_weekly_advance tests.schema.test_us_short_market_diagnostic_26w_schemas tests.test_us_short_market_diagnostic_rehearsal tests.test_us_short_market_diagnostic_attribution tests.test_us_short_market_diagnostic_local_adapter tests.test_us_short_market_diagnostic_total_return tests.test_us_short_test_io_inventory
+C:\Users\cnhea\AppData\Local\Programs\Python\Python313\python.exe .tools\full_pack_ledger.py run us_short "rule3:c receipt notification schema+producer+typed-error closure" "receipt:209cdc1e26aa6651a82e740e" 860 -- discover -s tests -p "test_us_short*.py"
+cmd /c .tools\run_unittest_with_repo_pythonpath.cmd tests.test_route_doc_ledger_status_consistency tests.test_doc_governance_guard
+```
+
+### 验证结果
+
+- 三条点名植入分别把 schema pattern 放宽为 `.*`、把 serializer wrapper 改为只 catch `KeyError`、给模板输出追加末尾换行；对应测试均精确转红，随后逐项恢复。最终 affected `389/389 OK`、receipt `209cdc1e26aa6651a82e740e`；canonical 调用点模块与 tracked I/O inventory 包 `214/214 OK`。
+- affected 首轮由 authorization conformance 精确抓到三个新 helper 未声明边界；理由化豁免后单项与全包转绿。该红灯证明组合守卫承重，不是靠改 inventory snapshot 追绿。
+- 本代码态唯一 full-lane 为 `FAIL 1886/5676`：同步 master 后新加入的 0815 soft-discovery 冻结守卫期望 0809 runbook SHA `301ed0a5…`，但当前 HEAD blob 为 `b9637395…`、CRLF checkout 为 `145a5d90…`，且该文件 git-clean、本刀未触碰。按范围边界不改冻结付费证据、不重跑，故 full-lane=`NOT_VERIFIED`。未联网、未用 provider、未生成真实通知/receipt、未开钟或写账户。
+
+### 失效的旧结论
+
+- “`minLength: 16` 足以证明通知有内容”失效；纯空白必须在 schema 门拒绝。
+- “canonical serializer 的外来错误自然会被本轨入口接住”失效；只有明确转换或证明不可达才成立。
+- “仓库已有 source reader，所以操作员能自然产出 canonical source”失效；现在由专用 producer 写 exact bytes。
+- “同步后的 master full-lane 可直接作为本刀绿色底座”失效；0815 新冻结守卫与其 HEAD 制品不一致，必须另刀处理。
+
+### 下一步注意事项
+
+- 三条 Knife7 Required 保持 `OPEN-NOT_VERIFIED`，交 Claude Code 独立审查；O1/O2 仍为 Optional，未纳入本修复轮。
+- `R-USSHORT-SOFT-DISCOVERY-20260809-FROZEN-RUNBOOK-HASH-DOES-NOT-MATCH-HEAD` 属 soft-discovery 外部 blocker；不得在本刀改 expected hash、改冻结 runbook 或重复跑 full 追绿。
+- 工作树绝对路径为 `D:\cnhea\Codex\worktrees\cb59\Stock`；不 commit，不触碰 `D:\cnhea\Stock` 工作区内容或桌面文档。
+
+## 2026-08-09 追加：开钟门三条 Required 的复审结论（PASS）
+
+**审查对象**：`D:\cnhea\Codex\worktrees\cb59\Stock` 的未提交修复轮（21 改 + 1 新增 schema）。注：记忆里当轮审查树写的是 `000e`，但该树干净、其刀已提交合入，未提交对象在 cb59。
+
+**成立的部分**：三条 Required 全闭，且都按类边界修的——空白门只加在 schema 一处（未双重设门）；`[0]` 那条只改了真正会崩的 `weekly.py`，其余 6 处按 reviewer 枚举保持不动；非有限数的类扫伸到了我点名之外的 `aggregator` 与 `lifecycle`。最值得记的一条是我额外追出来的：`clock_status` 从「抛外来异常」变成「返回 `broken` 并给出原因」，而不是被洗成 `not_started`——空 store 对照仍报 `not_started`，说明没有把一切判成坏。
+
+**拦下的**：无。
+
+**验证命令与结果**：焦点超集 `Ran 456 in 344.0s OK`；按用户指定不起全量。三条的原始条件复现、控制组与植入对照见 SESSION_LOG 同日 `Verify` 与 register。
+
+**验证边界**：未起第三个独立对抗 agent（rule 8：同一道门、收紧类小 delta，上一轮已由 agent 全面攻过；误伤面由正常文本/空 store/正常 dry-run 三处控制组覆盖）。未覆盖：真实并发下的 `O_EXCL` 竞争、符号链接与 ACL 面、`verify_design_against_disk=False` 的长期风险量化——这三条与上一轮相同，仍未量化。

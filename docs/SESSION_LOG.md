@@ -1,5 +1,19 @@
 # Session Log
 
+## 2026-08-09 — Claude 复审 PASS（开钟门三条 Required 全闭）
+
+- **Verdict/Action**: PASS。三条各用原始条件复现且控制组全绿：空白通知在 schema 层被拒（两种空白都拒，正常文本照常开钟，且只判一处未双重设门）；dry-run 对同一输入改抛本轨 typed 错误、不再 `IndexError`，预览与真开钟方向一致；非有限数在 `load_start_receipt` / `load_lifecycle_register` 均为本轨 typed，且 `clock_status` 返回 `broken` 而**非**洗成 `not_started`（空 store 对照仍 `not_started`）；新增的模板子命令产出无末尾换行的字节并能真开钟。
+- **Required**: 无。三个 R-ID 均已翻 `resolved`，正文与实测只在 `docs/system_risk_register.md`。两条 Optional（中断恢复只核通知源、`notification_sha256` 验证力为零）仍挂着未动。钟仍 `not_started`，门修好不等于门打开。
+- **Verify**: review-evidence:6b56fa0e4b37。焦点超集 `Ran 456 in 344.0s OK`；按用户指定不起全量。植入：把通知 schema 的 `pattern: \S` 换成 `^.*$` → `DryRunTest::test_blank_notification_is_rejected_before_both_preview_and_real_open` 精确转红，还原 sha256 `ee017e83cac876e5` 逐字节一致。未起第三个 agent（rule 8：同一道门的收紧类小 delta，误伤面已由三处控制组覆盖）。**审查树说明**：记忆里范围写的是 `000e`，但该树干净无可审对象（其刀已提交合入），未提交的 22 项在 `cb59`，故审 cb59。超时原因:超集 344s + 植入重跑 349s 串在墙钟上。
+- **Next**: Codex：执行
+
+## 2026-08-09 — Codex 收口：开钟门通知源三条 Required（OPEN-NOT_VERIFIED）
+- **Verdict/Action**: 空白通知门、canonical serializer typed-error 整类、operator canonical producer 三条均已实施；未新增确认/授权入口，未生成真实通知/receipt、未开钟或联网。工作树 `D:\cnhea\Codex\worktrees\cb59\Stock`，未提交。
+- **Required**: 三条 Knife7 R-ID 实现侧已闭、待 Claude 独立复审；master 新带入的 `R-USSHORT-SOFT-DISCOVERY-20260809-FROZEN-RUNBOOK-HASH-DOES-NOT-MATCH-HEAD` 阻断 full-lane，正文与边界只见 register，未跨刀改冻结证据。
+- **Verify**: 三项点名 mutation 均精确转红后还原；最终 affected `389/389 OK`、receipt `209cdc1e26aa6651a82e740e`，canonical+inventory `214/214 OK`。唯一 full `FAIL 1886/5676`：0815 新守卫 expected `301ed…`，当前 HEAD blob `b963…`/CRLF `145a…`，非本刀文件且 git-clean，未重跑。
+- **Pre-Codex self-review**: A-F checked；matrix=blank/dry-run/live+14 canonical points+template/O_EXCL+authorization/inventory；register=updated；handoff=updated；focused=389 OK；full-lane=NOT_VERIFIED upstream frozen-hash red；door=route-doc+doc-governance PASS；review=NOT_VERIFIED；provider/account=NOT_USED。
+- **Next**: Claude Code：审查本刀三条 Required；soft-discovery frozen-hash blocker 另刀处理。
+
 ## 2026-08-09 — Claude 审查 PASS（000e：探针槽改期到 20260815）
 
 - **Verdict/Action**: PASS。做法与我 08-08→08-09 那刀不同且更对：20260809 已有真实付费证据与已落定裁决，不能原地改名，故**新增第二个槽并冻结已烧的那个**——assessor 注册三个槽（legacy / `FROZEN_20260809_*` / 新 20260815），builder 整体改指新槽，已烧槽的裁决仍可复算。
@@ -14,6 +28,20 @@
 - **Verify**: 三项植入分别精确红在 old-slot binding、0809 frozen hash、0815 threshold const，均还原；focused `130/130 OK / receipt:bcc9ade34e1519cf8a3dacc2`；official full `PASS 5663/5663 / COUNT_GATE equal=True / 331.9s`；door `55/55 OK`；protected roots 前后 0 文件且 manifest=`4f53cda1…`。post-full door 覆盖单例 focused receipt，故随后 ledger `check` 不命中 cached green；ledger 本体的 current fingerprint、`5663 OK`、count gate 记录均在，未重跑第二次 full。
 - **Pre-Codex self-review**: A-F checked；matrix=current 0815 + frozen 0809 + legacy 20260730 / builder+assessor+budget+runbook+inventory / 3 planted controls；register=updated；handoff=updated；focused=130 OK；full-lane=5663/5663 PASS；review=NOT_VERIFIED；commit=NOT_PERFORMED；provider/network/key/state-slot=NOT_USED。
 - **Next**: Claude Code：在 `D:\cnhea\Codex\worktrees\000e\Stock` 独立复审 20260815 非交易探针槽；通过后再决定提交，真跑另行向用户逐次请权。
+## 2026-08-09 — Claude 审查 FAIL（开钟门的通知源绑定，未提交）
+
+- **Verdict/Action**: FAIL，不提交。**立项目的达成**：循环自证确已消除，四类源伪造在每个消费点 fail-closed（含「盘上通知被换」这条双向核对），API 只收路径、`O_EXCL` 不可变、同参幂等、设计文档同步。**但拦下三条**：一份 20 个空格的通知能把 26 周钟永久开启，而唯一的预览（dry-run）恰在同一输入上抛 `IndexError`——不可逆的写成功、防手误的预览崩掉，方向反了。
+- **Required**: `...A-BLANK-NOTIFICATION-OPENS-THE-CLOCK-AND-THE-PREVIEW-CRASHES-ON-IT`(P1)、`...A-NON-FINITE-NUMBER-ESCAPES-THE-TRACK-ERROR-CONTRACT`(P2)、`...NOTHING-IN-THE-REPO-CAN-PRODUCE-THE-CANONICAL-NOTIFICATION`(P2，过度修正)。机制、实测、闭合判据与两条 Optional 只在 `docs/system_risk_register.md`。
+- **Verify**: review-evidence:00b3b20d2d61。焦点超集 `Ran 452 in 337.9s OK receipt:7343e2c0149032f1e4fbb444`；按用户指定不起全量。探针控制组先绿（正常文本照常开钟）：20 空格通知 → `issued` 且冻结 week1；同输入 dry-run → `IndexError`、非本轨 typed 错误；store 内通知改含 NaN → `load_start_receipt` 与 `clock_status` 双双抛 `ModelPaperPortfolioError`；多一个换行 → 拒为 non-canonical，而全仓 `--emit` 零命中。植入：中和源比对那行 → 两条点名测试转红，还原逐字节一致。§6a agent 已跑，三条发现均回源码+探针复核后才采信。**过程缺陷如实记**：我在 agent 审同一文件期间跑植入，害它三轮探针失效（它自行快照核 sha 后重跑，结论未污染）。超时原因:超集 338s + agent 958s + 植入 347s 串在墙钟上。
+- **Next**: Codex：修复
+
+## 2026-08-09 — Codex 收口：Knife7 RECEIPT-DIGESTS 通知半（OPEN-NOT_VERIFIED）
+
+- **Verdict/Action**: 通知半已改为独立 canonical JSON source-bound：receipt/API/CLI/rehearsal 统一由源路径派生并在每次读写发布时回读复核；只保留一枚源身份 SHA，无新授权入口、无真实通知/receipt/开钟/账户或 provider 行为。工作树=`D:\cnhea\Codex\worktrees\cb59\Stock`，未提交。
+- **Required**: `R-USSHORT-26W-DIAG-KNIFE7-RECEIPT-DIGESTS-ARE-NEVER-RE-VERIFIED` 实现侧无已知 material 残项，仍为 `OPEN-NOT_VERIFIED`；完整机制、证据与关闭边界只见 register，待 Claude 独立审查后翻 CLOSED。
+- **Verify**: source-compare mutant 精确转红并按 SHA 还原；full lane 首轮抓出 rehearsal 旧 API 后补齐；开工后 master 前进，已 fast-forward 到已审 inventory 收口且未加 allowlist，inventory 18/18。最终 focused `277/277 OK`、receipt `7e83f706097323c0dc3731fd`；full `5665/5665 PASS`、307/307、COUNT_GATE 相等、365.9s/860s。
+- **Pre-Codex self-review**: A–F checked；matrix=source/schema/API/CLI/read/write/publish/recovery/rehearsal/inventory；register=updated；handoff=updated；focused=277/277 OK；full-lane=5665/5665 PASS；door=route-doc+doc-governance PASS；self-review=首个 agent 超时后仅重启一次，迟到 P2 已修，第二个独立静态审查 PASS。
+- **Next**: `Claude Code：审查 RECEIPT-DIGESTS 通知源绑定收口`
 
 ## 2026-08-09 — Codex 已闭：Knife7 tests-only 18 项回归清账（resolved）
 

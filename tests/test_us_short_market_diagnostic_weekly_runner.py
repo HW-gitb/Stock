@@ -15,6 +15,11 @@ import unittest
 
 from engine.us_short_model_paper_portfolio import canonical_json_bytes
 from engine.us_short_market_diagnostic_lifecycle import persist_settled_weekly_record
+from engine.us_short_market_diagnostic_start_receipt import (
+    DiagnosticStartReceiptError,
+    NOTIFICATION_FILENAME,
+    load_start_receipt,
+)
 from runners.us_short_market_diagnostic_weekly import (
     MarketDiagnosticWeeklyRunnerError,
     clock_status,
@@ -26,8 +31,13 @@ from runners.us_short_market_diagnostic_weekly import (
 from tests.test_us_short_market_diagnostic import _weekly_rows
 
 
-NOTIFICATION = "US-short 26-week diagnostic design is complete; open the clock.\n"
-ISSUED_AT = "2025-12-29T00:00:00+00:00"
+NOTIFICATION = {
+    "schema_name": "us_short_market_diagnostic_completion_notification",
+    "schema_version": "1.0.0",
+    "issued_at": "2025-12-29T00:00:00+00:00",
+    "issuer": "codex",
+    "notification_text": "US-short 26-week diagnostic design is complete; open the clock.\n",
+}
 
 
 class _StoreCase(unittest.TestCase):
@@ -46,8 +56,8 @@ class _StoreCase(unittest.TestCase):
         self.addCleanup(holder.cleanup)
         self.rows = _weekly_rows()
         self.store = Path(holder.name) / "market_diagnostic_private"
-        self.notify = Path(holder.name) / "notification.txt"
-        self.notify.write_text(NOTIFICATION, encoding="utf-8")
+        self.notify = Path(holder.name) / "notification.json"
+        self._write_notification()
         self.inbox = Path(holder.name) / "records"
         self.inbox.mkdir()
 
@@ -63,13 +73,15 @@ class _StoreCase(unittest.TestCase):
         kwargs = {
             "confirm_design_complete": True,
             "notification_path": self.notify,
-            "issued_at": ISSUED_AT,
             "diagnostic_epoch": self.epoch,
             "first_decision_date": self.week1,
             "root": self.store,
         }
         kwargs.update(overrides)
         return open_clock(**kwargs)
+
+    def _write_notification(self, **overrides) -> None:
+        self.notify.write_bytes(canonical_json_bytes({**NOTIFICATION, **overrides}))
 
     def _record(self, index: int, *, as_of_date: str = "20260801"):
         path = self.inbox / f"week{index + 1}.json"
@@ -86,8 +98,6 @@ class DryRunTest(_StoreCase):
             ({"first_decision_date": "20260107"}, "canonical decision week"),   # a Wednesday
             ({"first_decision_date": "20260230"}, "real calendar date"),
             ({"first_decision_date": "2026-01-02"}, "eight-digit"),
-            ({"issued_at": "2025-12-29T00:00:00"}, "timezone"),
-            ({"issued_at": "whenever"}, "valid timestamp"),
             ({"diagnostic_epoch": "!!! not an identifier !!!"}, "schema violation"),
             ({"first_decision_date": "20200103"}, "back-fill"),
             ({"first_decision_date": "20301230"}, "too far after"),
@@ -97,6 +107,17 @@ class DryRunTest(_StoreCase):
                 with self.assertRaises(MarketDiagnosticWeeklyRunnerError) as ctx:
                     self._open(dry_run=True, confirm_design_complete=False, **overrides)
                 self.assertIn(expected, str(ctx.exception))
+
+        for issued_at, expected in (
+            ("2025-12-29T00:00:00", "schema violation"),
+            ("whenever", "schema violation"),
+        ):
+            with self.subTest(issued_at=issued_at):
+                self._write_notification(issued_at=issued_at)
+                with self.assertRaises(MarketDiagnosticWeeklyRunnerError) as ctx:
+                    self._open(dry_run=True, confirm_design_complete=False)
+                self.assertIn(expected, str(ctx.exception))
+        self._write_notification()
 
     def test_a_dry_run_refuses_a_root_the_real_run_would_refuse(self) -> None:
         with self.assertRaises(MarketDiagnosticWeeklyRunnerError) as ctx:
@@ -113,12 +134,75 @@ class DryRunTest(_StoreCase):
             clock_status(root=self.store),
         )
 
+    def test_blank_notification_is_rejected_before_both_preview_and_real_open(self) -> None:
+        self._write_notification(notification_text=" " * 20)
+        for dry_run in (True, False):
+            with self.subTest(dry_run=dry_run):
+                with self.assertRaises(MarketDiagnosticWeeklyRunnerError) as ctx:
+                    self._open(dry_run=dry_run)
+                self.assertIn("notification_text", str(ctx.exception))
+                self.assertFalse(self.store.exists())
+
+
+class NotificationTemplateTest(_StoreCase):
+    def test_cli_emits_exact_canonical_bytes_that_preview_and_real_open_accept(self) -> None:
+        output = self.notify.with_name("emitted-notification.json")
+        self.assertEqual(
+            0,
+            main(
+                [
+                    "emit-notification-template",
+                    "--output-path",
+                    str(output),
+                    "--issued-at",
+                    NOTIFICATION["issued_at"],
+                    "--notification-text",
+                    NOTIFICATION["notification_text"],
+                ]
+            ),
+        )
+        self.assertEqual(canonical_json_bytes(NOTIFICATION), output.read_bytes())
+        self.assertFalse(self.store.exists(), "template generation opened the clock")
+        self.assertEqual(
+            "dry_run", self._open(notification_path=output, dry_run=True)["status"]
+        )
+        self.assertEqual("issued", self._open(notification_path=output)["status"])
+
+    def test_cli_refuses_to_overwrite_an_existing_notification(self) -> None:
+        output = self.notify.with_name("existing-notification.json")
+        output.write_bytes(b"keep me")
+        self.assertEqual(
+            2,
+            main(
+                [
+                    "emit-notification-template",
+                    "--output-path",
+                    str(output),
+                    "--issued-at",
+                    NOTIFICATION["issued_at"],
+                    "--notification-text",
+                    NOTIFICATION["notification_text"],
+                ]
+            ),
+        )
+        self.assertEqual(b"keep me", output.read_bytes())
+
 
 class ClockStatusTest(_StoreCase):
     """"Started with no weeks" and "eighteen weeks unreadable" must not look the same."""
 
     def test_status_reports_a_clock_that_has_not_been_opened(self) -> None:
         self.assertEqual("not_started", clock_status(root=self.store)["clock_status"])
+
+    def test_source_only_interrupted_issuance_is_broken_but_identical_retry_recovers(self) -> None:
+        self.store.mkdir(parents=True)
+        (self.store / NOTIFICATION_FILENAME).write_bytes(canonical_json_bytes(NOTIFICATION))
+        status = clock_status(root=self.store)
+        self.assertEqual("broken", status["clock_status"])
+        self.assertIn("issuance was interrupted", status["problem"])
+
+        self.assertEqual("issued", self._open()["status"])
+        self.assertEqual("fresh", clock_status(root=self.store)["clock_status"])
 
     def test_status_reports_a_running_clock_with_its_weeks(self) -> None:
         self._open()
@@ -155,6 +239,23 @@ class ClockStatusTest(_StoreCase):
         status = clock_status(root=self.store)
         self.assertEqual("broken", status["clock_status"])
         self.assertNotEqual("not_started", status["clock_status"])
+
+    def test_non_finite_notification_source_stays_inside_the_track_error_contract(self) -> None:
+        self._open()
+        source = self.store / NOTIFICATION_FILENAME
+        source.write_bytes(
+            json.dumps(
+                {**NOTIFICATION, "unexpected_number": float("nan")},
+                ensure_ascii=False,
+                sort_keys=True,
+                separators=(",", ":"),
+            ).encode("utf-8")
+        )
+        with self.assertRaises(DiagnosticStartReceiptError):
+            load_start_receipt(self.store)
+        status = clock_status(root=self.store)
+        self.assertEqual("broken", status["clock_status"])
+        self.assertIn("cannot be canonicalized", status["problem"])
 
 
 class OperatorMistakeTest(_StoreCase):
@@ -207,7 +308,7 @@ class OperatorMistakeTest(_StoreCase):
         self.assertIn("must be a JSON object", str(ctx.exception))
 
     def test_a_short_notification_is_not_a_notification(self) -> None:
-        self.notify.write_text("done\n", encoding="utf-8")
+        self._write_notification(notification_text="done\n")
         with self.assertRaises(MarketDiagnosticWeeklyRunnerError) as ctx:
             self._open(dry_run=True, confirm_design_complete=False)
         self.assertIn("too short", str(ctx.exception))
@@ -221,13 +322,29 @@ class OperatorMistakeTest(_StoreCase):
                     "open-clock",
                     "--dry-run",
                     "--notification-path", str(self.notify),
-                    "--issued-at", ISSUED_AT,
                     "--diagnostic-epoch", self.epoch,
                     "--first-decision-date", "20260104",
                 ]
             ),
         )
         self.assertFalse(self.store.exists())
+
+    def test_main_open_clock_consumes_the_canonical_notification_source(self) -> None:
+        self.assertEqual(
+            0,
+            main(
+                [
+                    "--root", str(self.store),
+                    "open-clock",
+                    "--confirm-design-complete",
+                    "--notification-path", str(self.notify),
+                    "--diagnostic-epoch", self.epoch,
+                    "--first-decision-date", self.week1,
+                ]
+            ),
+        )
+        self.assertTrue((self.store / "diagnostic_start_receipt.json").exists())
+        self.assertTrue((self.store / NOTIFICATION_FILENAME).exists())
 
 
 class ScorecardTriggerTest(_StoreCase):

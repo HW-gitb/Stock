@@ -42,13 +42,21 @@ def _open_clock(root, row):
     tests/test_us_short_market_diagnostic_start_receipt.py.
     """
 
+    notification_path = root.parent / "notification-source.json"
+    notification_path.write_bytes(
+        canonical_json_bytes(
+            {
+                "schema_name": "us_short_market_diagnostic_completion_notification",
+                "schema_version": "1.0.0",
+                "issued_at": "2025-12-29T00:00:00+00:00",
+                "issuer": "codex",
+                "notification_text": "US-short 26-week diagnostic design is complete.",
+            }
+        )
+    )
     return issue_start_receipt(
         diagnostic_epoch=row["diagnostic_epoch"],
-        completion_notification={
-            "issued_at": "2025-12-29T00:00:00+00:00",
-            "issuer": "codex",
-            "notification_text": "US-short 26-week diagnostic design is complete.",
-        },
+        notification_path=notification_path,
         first_decision_date=row["decision_date"],
         root=root,
         as_of_date="20260731",

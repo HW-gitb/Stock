@@ -17,6 +17,7 @@ from engine.us_short_market_diagnostic_benchmark_packet import (
     validate_benchmark_capture,
 )
 from engine.us_short_market_diagnostic_local_adapter import validate_local_price_packet
+from engine.us_short_model_paper_portfolio import canonical_json_bytes
 from runners import us_short_market_diagnostic_benchmark_fetch as fetch
 
 EPOCH = "us_short_market_diagnostic_26w_v1"
@@ -456,13 +457,21 @@ class BenchmarkPacketEndToEndTest(unittest.TestCase):
             store = base / "market_diagnostic_private"
             paper = base / "model_paper_private"
             _start_local_paper_store(paper)
+            notification_path = base / "notification-source.json"
+            notification_path.write_bytes(
+                canonical_json_bytes(
+                    {
+                        "schema_name": "us_short_market_diagnostic_completion_notification",
+                        "schema_version": "1.0.0",
+                        "issued_at": "2026-07-24T00:00:00+00:00",
+                        "issuer": "codex",
+                        "notification_text": "US-short 26-week diagnostic design is complete; open the clock.",
+                    }
+                )
+            )
             issue_start_receipt(
                 diagnostic_epoch=EPOCH,
-                completion_notification={
-                    "issued_at": "2026-07-24T00:00:00+00:00",
-                    "issuer": "codex",
-                    "notification_text": "US-short 26-week diagnostic design is complete; open the clock.",
-                },
+                notification_path=notification_path,
                 first_decision_date=DECISION,
                 root=store,
                 as_of_date="20260731",

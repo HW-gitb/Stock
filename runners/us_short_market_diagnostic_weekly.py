@@ -4,10 +4,14 @@ Until this runner existed the Knife 7 start gate was real but unreachable: nothi
 in ``runners/`` ever called the store, so the door stood in a field. This is the
 one path an operator uses, and it can only do what the gate allows.
 
-Two subcommands, deliberately separate because they are different kinds of act:
+The subcommands are deliberately separate because they are different kinds of act:
+
+``emit-notification-template`` writes a complete canonical notification source
+without authorizing or opening the clock. It is the operator-safe alternative to
+hand-formatting bytes that must have no editor-added trailing newline.
 
 ``open-clock`` records a design-completion decision. It is not a routine step and
-it happens once: it needs the notification text on disk, an explicit confirmation
+it happens once: it needs the canonical notification source artifact on disk, an explicit confirmation
 flag, and the calendar week being frozen as week 1. Re-running it with the same
 inputs is a no-op; re-running it with different ones is refused rather than
 allowed to re-anchor a clock other artifacts have already been counted against.
@@ -69,6 +73,7 @@ from engine.us_short_market_diagnostic_start_receipt import (  # noqa: E402
     build_start_receipt,
     issue_start_receipt,
     load_start_receipt,
+    write_completion_notification_template,
 )
 
 
@@ -90,23 +95,10 @@ def _read_json(path: Path, label: str) -> dict[str, Any]:
     return value
 
 
-def _read_notification(path: Path) -> str:
-    try:
-        text = path.read_text(encoding="utf-8")
-    except OSError as exc:
-        raise MarketDiagnosticWeeklyRunnerError(f"cannot read the notification: {path}") from exc
-    if len(text.strip()) < 16:
-        raise MarketDiagnosticWeeklyRunnerError(
-            "the completion notification is too short to be a notification"
-        )
-    return text
-
-
 def open_clock(
     *,
     confirm_design_complete: bool,
     notification_path: Path,
-    issued_at: str,
     diagnostic_epoch: str,
     first_decision_date: str,
     root: Path = DEFAULT_ROOT,
@@ -127,42 +119,33 @@ def open_clock(
     if as_of_date is None:
         as_of_date = _date.today().strftime("%Y%m%d")
     if dry_run:
-        text = _read_notification(notification_path)
         try:
             _private_root(root)
             receipt = build_start_receipt(
                 diagnostic_epoch=diagnostic_epoch,
-                completion_notification={
-                    "issued_at": issued_at,
-                    "issuer": "codex",
-                    "notification_text": text,
-                },
+                notification_path=notification_path,
                 first_decision_date=first_decision_date,
                 as_of_date=as_of_date,
             )
         except DiagnosticStartReceiptError as exc:
             raise MarketDiagnosticWeeklyRunnerError(str(exc)) from exc
+        lines = receipt["completion_notification"]["notification_text"].strip().splitlines()
         return {
             "status": "dry_run",
             "diagnostic_epoch": receipt["diagnostic_epoch"],
             "first_decision_date": receipt["first_calendar_week"]["decision_date"],
             "issued_at": receipt["completion_notification"]["issued_at"],
-            "notification_first_line": text.strip().splitlines()[0][:120],
+            "notification_first_line": lines[0][:120] if lines else "",
         }
     if not confirm_design_complete:
         raise MarketDiagnosticWeeklyRunnerError(
             "opening the diagnostic clock requires --confirm-design-complete; a date, a "
             "component completion, an account seeding, or a commit is not a decision"
         )
-    text = _read_notification(notification_path)
     try:
         return issue_start_receipt(
             diagnostic_epoch=diagnostic_epoch,
-            completion_notification={
-                "issued_at": issued_at,
-                "issuer": "codex",
-                "notification_text": text,
-            },
+            notification_path=notification_path,
             first_decision_date=first_decision_date,
             as_of_date=as_of_date,
             root=root,
@@ -326,10 +309,29 @@ def _parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     opener = sub.add_parser("open-clock", help="record the design-completion decision (once)")
     opener.add_argument("--confirm-design-complete", action="store_true")
     opener.add_argument("--dry-run", action="store_true", help="resolve and echo; write nothing")
-    opener.add_argument("--notification-path", type=Path, required=True)
-    opener.add_argument("--issued-at", required=True, help="timezone-aware ISO-8601 instant")
+    opener.add_argument(
+        "--notification-path",
+        type=Path,
+        required=True,
+        help="absolute path to canonical us_short_market_diagnostic_completion_notification JSON",
+    )
     opener.add_argument("--diagnostic-epoch", required=True)
     opener.add_argument("--first-decision-date", required=True, help="YYYYMMDD of week 1")
+
+    template = sub.add_parser(
+        "emit-notification-template",
+        help="write canonical notification JSON only; does not authorize or open the clock",
+    )
+    template.add_argument(
+        "--output-path",
+        type=Path,
+        required=True,
+        help="absolute output path; an existing file is never overwritten",
+    )
+    template.add_argument("--issued-at", required=True, help="timezone-aware ISO-8601 timestamp")
+    template.add_argument(
+        "--notification-text", required=True, help="design-completion text; must not be blank"
+    )
 
     settle = sub.add_parser("settle-week", help="compute this week from local inputs and store it")
     settle.add_argument("--model-paper-root", type=Path, required=True)
@@ -358,11 +360,17 @@ def _parse_args(argv: list[str] | None = None) -> argparse.Namespace:
 def main(argv: list[str] | None = None) -> int:
     args = _parse_args(argv)
     try:
-        if args.command == "open-clock":
+        if args.command == "emit-notification-template":
+            result = write_completion_notification_template(
+                output_path=args.output_path,
+                issued_at=args.issued_at,
+                notification_text=args.notification_text,
+            )
+            print(f"completion notification {result['status']}: {result['path']}")
+        elif args.command == "open-clock":
             result = open_clock(
                 confirm_design_complete=args.confirm_design_complete,
                 notification_path=args.notification_path,
-                issued_at=args.issued_at,
                 diagnostic_epoch=args.diagnostic_epoch,
                 first_decision_date=args.first_decision_date,
                 root=args.root,
@@ -421,7 +429,7 @@ def main(argv: list[str] | None = None) -> int:
                 print(f"clock: broken - {result['problem']}")
                 return 2
             print(f"clock: {result['clock_status']} weeks={result['calendar_week_count']}")
-    except MarketDiagnosticWeeklyRunnerError as exc:
+    except (MarketDiagnosticWeeklyRunnerError, DiagnosticStartReceiptError) as exc:
         print(f"ERROR: {exc}")
         return 2
     return 0

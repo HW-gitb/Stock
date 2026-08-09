@@ -21,6 +21,7 @@ SCHEMA_NAMES = [
     "us_short_market_diagnostic_etf_total_return_sidecar.schema.json",
     "us_short_market_diagnostic_attribution_input.schema.json",
     "us_short_market_diagnostic_attribution_report.schema.json",
+    "us_short_market_diagnostic_completion_notification.schema.json",
 ]
 
 
@@ -281,6 +282,18 @@ class UsShortMarketDiagnosticSchemaTest(unittest.TestCase):
             if definition.get("type") == "object":
                 with self.subTest(definition=name):
                     self.assertFalse(definition["additionalProperties"])
+
+    def test_start_receipt_notification_schemas_are_closed_world(self) -> None:
+        for schema_name in (
+            "us_short_market_diagnostic_start_receipt.schema.json",
+            "us_short_market_diagnostic_completion_notification.schema.json",
+        ):
+            schema = _schema(schema_name)
+            with self.subTest(schema=schema_name):
+                self.assertFalse(schema["additionalProperties"])
+                for name, definition in schema.get("definitions", {}).items():
+                    if definition.get("type") == "object":
+                        self.assertFalse(definition["additionalProperties"], name)
 
     def test_attribution_schemas_are_closed_world_for_all_object_definitions(self) -> None:
         def assert_closed_world(node: object, path: str) -> None:

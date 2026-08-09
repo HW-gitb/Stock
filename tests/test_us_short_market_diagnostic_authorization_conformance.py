@@ -25,9 +25,11 @@ import tempfile
 import unittest
 
 import engine.us_short_market_diagnostic_start_receipt as receipts
+from engine.us_short_model_paper_portfolio import canonical_json_bytes
 from engine.us_short_market_diagnostic_aggregator import (
     MarketDiagnosticAggregationError,
     build_market_diagnostic_report,
+    publish_completed_market_diagnostic_window,
     write_market_diagnostic_report,
 )
 from engine.us_short_market_diagnostic_lifecycle import (
@@ -171,10 +173,18 @@ EXEMPT = {
     "engine/us_short_market_diagnostic_start_receipt.py::_path_like": "type guard",
     "engine/us_short_market_diagnostic_start_receipt.py::_private_root": "resolves and privacy-checks a path; no store read",
     "engine/us_short_market_diagnostic_start_receipt.py::_receipt_path": "resolves and privacy-checks a path; no store read",
-    "engine/us_short_market_diagnostic_start_receipt.py::_text_digest": "pure digest",
+    "engine/us_short_market_diagnostic_start_receipt.py::_notification_digest": "pure digest",
+    "engine/us_short_market_diagnostic_start_receipt.py::_notification_path": "resolves and privacy-checks the pinned notification source path",
+    "engine/us_short_market_diagnostic_start_receipt.py::_notification_validator": "loads the notification schema",
+    "engine/us_short_market_diagnostic_start_receipt.py::_persist_completion_notification": "immutable source writer used only while creating authorization",
+    "engine/us_short_market_diagnostic_start_receipt.py::_read_completion_notification": "reads and validates one named notification source",
+    "engine/us_short_market_diagnostic_start_receipt.py::_validate_start_receipt_against_source": "validates an authorization against a source already read",
     "engine/us_short_market_diagnostic_start_receipt.py::_validator": "loads a schema",
     "engine/us_short_market_diagnostic_start_receipt.py::assert_clock_authorization_still_holds": "is the gate",
     "engine/us_short_market_diagnostic_start_receipt.py::assert_first_week_is_authorized": "is the gate",
+    "engine/us_short_market_diagnostic_start_receipt.py::_build_start_receipt_from_notification": "assembles one receipt from a single already-validated source read",
+    "engine/us_short_market_diagnostic_start_receipt.py::_canonical_payload": "canonicalizes a mapping in hand and touches no store",
+    "engine/us_short_market_diagnostic_start_receipt.py::_validate_completion_notification": "validates a notification mapping in hand and touches no store",
     "engine/us_short_market_diagnostic_start_receipt.py::build_start_receipt": "assembles the authorization before one exists",
     "engine/us_short_market_diagnostic_start_receipt.py::design_authority_sha256": "pure digest of the frozen contract block",
     "engine/us_short_market_diagnostic_start_receipt.py::design_contract_block": "reads the design document, not the store",
@@ -182,6 +192,7 @@ EXEMPT = {
     "engine/us_short_market_diagnostic_start_receipt.py::load_start_receipt": "reads the authorization itself",
     "engine/us_short_market_diagnostic_start_receipt.py::start_receipt_sha256": "pure digest of a receipt already in hand",
     "engine/us_short_market_diagnostic_start_receipt.py::validate_start_receipt": "validates the authorization itself",
+    "engine/us_short_market_diagnostic_start_receipt.py::write_completion_notification_template": "writes only the operator-named source file before authorization exists; it cannot read or write the diagnostic store",
     "engine/us_short_market_diagnostic_weekly_producer.py::_load_preset": "reads a named preset file; no store",
     "engine/us_short_market_diagnostic_weekly_producer.py::has_counted_weeks": "existence probe over the weekly records; reads no content and authorizes nothing",
     "engine/us_short_market_diagnostic_weekly_producer.py::model_paper_week_is_settled": "reads the model-paper store, not the diagnostic store",
@@ -240,7 +251,6 @@ EXEMPT = {
         "classifies one week from a receipt and a head the gated caller supplied",
     "runners/us_short_market_diagnostic_weekly_fetch.py::_settle_outcome":
         "shapes a result the gated caller already produced",
-    "runners/us_short_market_diagnostic_weekly.py::_read_notification": "reads one named file the caller resolved",
     "runners/us_short_market_diagnostic_weekly.py::main": "dispatches to gated or exempt subcommands",
     "runners/us_short_market_diagnostic_weekly.py::open_clock": "is the operator act of authorizing",
 }
@@ -396,15 +406,19 @@ class SourceDriftTest(unittest.TestCase):
     def setUp(self) -> None:
         self.rows = _weekly_rows()
         self.notification = {
+            "schema_name": "us_short_market_diagnostic_completion_notification",
+            "schema_version": "1.0.0",
             "issued_at": "2025-12-29T00:00:00+00:00",
             "issuer": "codex",
             "notification_text": "US-short 26-week diagnostic design is complete.",
         }
 
     def _open(self, root):
+        completion_notification_source_path = root.parent / "notification-source.json"
+        completion_notification_source_path.write_bytes(canonical_json_bytes(self.notification))
         return receipts.issue_start_receipt(
             diagnostic_epoch=self.rows[0]["diagnostic_epoch"],
-            completion_notification=dict(self.notification),
+            notification_path=completion_notification_source_path,
             first_decision_date=self.rows[0]["decision_date"],
             root=root,
             as_of_date="20260731",
@@ -421,6 +435,29 @@ class SourceDriftTest(unittest.TestCase):
             for reader in (load_lifecycle_register, load_settled_weekly_records):
                 with self.assertRaises(MarketDiagnosticLifecycleError, msg=reader.__name__):
                     reader(root)
+
+    def test_removing_the_notification_source_is_noticed_by_readers_and_publishers(self) -> None:
+        with tempfile.TemporaryDirectory() as td:
+            root = Path(td) / "market_diagnostic_private"
+            output_root = Path(td) / "public"
+            self._open(root)
+            for row in self.rows[:3]:
+                persist_settled_weekly_record(row, root=root)
+            (root / receipts.NOTIFICATION_FILENAME).unlink()
+
+            for reader in (load_lifecycle_register, load_settled_weekly_records):
+                with self.subTest(reader=reader.__name__):
+                    with self.assertRaises(MarketDiagnosticLifecycleError):
+                        reader(root)
+            with self.assertRaises(MarketDiagnosticAggregationError):
+                build_market_diagnostic_report(lifecycle_root=root)
+            with self.assertRaises(MarketDiagnosticAggregationError):
+                publish_completed_market_diagnostic_window(
+                    lifecycle_root=root, output_root=output_root, as_of_date="20260801"
+                )
+            with self.assertRaises(MarketDiagnosticAggregationError):
+                write_market_diagnostic_report(lifecycle_root=root, output_root=output_root)
+            self.assertFalse(output_root.exists(), "a source-unbound store left public bytes behind")
 
     def test_an_unauthorized_store_cannot_publish_anything(self) -> None:
         """The behaviour the shape rule exists to produce, asserted end to end.
@@ -465,7 +502,7 @@ class SourceDriftTest(unittest.TestCase):
             (root / receipts.RECEIPT_FILENAME).unlink()
             moved = receipts.issue_start_receipt(
                 diagnostic_epoch=self.rows[0]["diagnostic_epoch"],
-                completion_notification=dict(self.notification),
+                notification_path=root.parent / "notification-source.json",
                 first_decision_date="20260112",
                 root=root,
                 as_of_date="20260731",
@@ -496,7 +533,7 @@ class SourceDriftTest(unittest.TestCase):
             (root / receipts.RECEIPT_FILENAME).unlink()
             moved = receipts.issue_start_receipt(
                 diagnostic_epoch="us-short-26w-relabelled",
-                completion_notification=dict(self.notification),
+                notification_path=root.parent / "notification-source.json",
                 first_decision_date=self.rows[0]["decision_date"],
                 root=root,
                 as_of_date="20260731",

@@ -109,13 +109,21 @@ def _open_clock(root: Path, *, epoch: str, first_decision_date: str) -> None:
         int(first_decision_date[0:4]), int(first_decision_date[4:6]), int(first_decision_date[6:8])
     )
     issued = (frozen - timedelta(days=3)).strftime("%Y-%m-%dT00:00:00+00:00")
+    notification_path = root.parent / "notification-source.json"
+    notification_path.write_bytes(
+        canonical_json_bytes(
+            {
+                "schema_name": "us_short_market_diagnostic_completion_notification",
+                "schema_version": "1.0.0",
+                "issued_at": issued,
+                "issuer": "codex",
+                "notification_text": "US-short 26-week diagnostic design is complete; open the clock.",
+            }
+        )
+    )
     issue_start_receipt(
         diagnostic_epoch=epoch,
-        completion_notification={
-            "issued_at": issued,
-            "issuer": "codex",
-            "notification_text": "US-short 26-week diagnostic design is complete; open the clock.",
-        },
+        notification_path=notification_path,
         first_decision_date=first_decision_date,
         root=root,
         as_of_date="20260731",

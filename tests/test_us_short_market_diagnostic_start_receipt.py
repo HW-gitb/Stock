@@ -17,6 +17,7 @@ from engine.us_short_market_diagnostic_lifecycle import (
 )
 from engine.us_short_market_diagnostic_start_receipt import (
     DiagnosticStartReceiptError,
+    NOTIFICATION_FILENAME,
     RECEIPT_FILENAME,
     build_start_receipt,
     design_authority_sha256,
@@ -25,11 +26,13 @@ from engine.us_short_market_diagnostic_start_receipt import (
     start_receipt_sha256,
     validate_start_receipt,
 )
-from engine.us_short_model_paper_portfolio import canonical_json_bytes
+from engine.us_short_model_paper_portfolio import artifact_sha256, canonical_json_bytes
 from tests.test_us_short_market_diagnostic import _weekly_rows
 
 
 NOTIFICATION = {
+    "schema_name": "us_short_market_diagnostic_completion_notification",
+    "schema_version": "1.0.0",
     "issued_at": "2025-12-29T00:00:00+00:00",
     "issuer": "codex",
     "notification_text": "US-short 26-week diagnostic design is complete.",
@@ -39,10 +42,25 @@ LEGAL_EPOCH = "us-short-26w-alt"
 AS_OF = "20260731"
 
 
+def _write_notification(path: Path, notification=None) -> Path:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    value = NOTIFICATION if notification is None else notification
+    path.write_bytes(canonical_json_bytes(dict(value)))
+    return path
+
+
+def _persisted_notification(root: Path, notification=None) -> Path:
+    return _write_notification(root / NOTIFICATION_FILENAME, notification)
+
+
 def _issue(root, row, **overrides):
+    notification = overrides.pop("completion_notification", dict(NOTIFICATION))
+    notification_path = overrides.pop("notification_path", None)
+    if notification_path is None:
+        notification_path = _write_notification(root.parent / "notification-source.json", notification)
     kwargs = {
         "diagnostic_epoch": row["diagnostic_epoch"],
-        "completion_notification": dict(NOTIFICATION),
+        "notification_path": notification_path,
         "first_decision_date": row["decision_date"],
         "as_of_date": AS_OF,
         "root": root,
@@ -51,10 +69,14 @@ def _issue(root, row, **overrides):
     return issue_start_receipt(**kwargs)
 
 
-def _receipt(row, **overrides):
+def _receipt(root, row, **overrides):
+    notification = overrides.pop("completion_notification", dict(NOTIFICATION))
+    notification_path = overrides.pop("notification_path", None)
+    if notification_path is None:
+        notification_path = _write_notification(root.parent / "notification-source.json", notification)
     kwargs = {
         "diagnostic_epoch": row["diagnostic_epoch"],
-        "completion_notification": dict(NOTIFICATION),
+        "notification_path": notification_path,
         "first_decision_date": row["decision_date"],
         "as_of_date": AS_OF,
     }
@@ -66,6 +88,9 @@ class StartReceiptTest(unittest.TestCase):
     """The clock has one door; these tests are about who may open it."""
 
     def setUp(self) -> None:
+        holder = tempfile.TemporaryDirectory()
+        self.addCleanup(holder.cleanup)
+        self.scratch = Path(holder.name) / "market_diagnostic_private"
         self.rows = _weekly_rows()
         self.row = self.rows[0]
 
@@ -130,13 +155,13 @@ class StartReceiptTest(unittest.TestCase):
 
         monday = self.row["decision_date"]
         self.assertEqual(0, datetime.strptime(monday, "%Y%m%d").weekday())
-        self.assertIsNotNone(_receipt(self.row))          # control: the Monday mints
+        self.assertIsNotNone(_receipt(self.scratch, self.row))  # control: the Monday mints
 
         for wrong, weekday in (("20260107", "Wednesday"), ("20260109", "Friday"),
                                ("20260110", "Saturday")):
             with self.subTest(weekday):
                 with self.assertRaises(DiagnosticStartReceiptError) as ctx:
-                    _receipt(self.row, first_decision_date=wrong)
+                    _receipt(self.scratch, self.row, first_decision_date=wrong)
                 self.assertIn("canonical decision week", str(ctx.exception))
 
     def test_a_notification_that_has_not_happened_yet_authorizes_nothing(self) -> None:
@@ -150,24 +175,24 @@ class StartReceiptTest(unittest.TestCase):
 
         future = {**NOTIFICATION, "issued_at": "2099-01-05T00:00:00+00:00"}
         with self.assertRaises(DiagnosticStartReceiptError) as ctx:
-            _receipt(self.row, completion_notification=future,
+            _receipt(self.scratch, self.row, completion_notification=future,
                      first_decision_date="20990112")
         self.assertIn("in the future", str(ctx.exception))
 
         # ... and the same receipt is legal once the as-of has caught up with it.
         self.assertIsNotNone(
-            _receipt(self.row, completion_notification=future,
+            _receipt(self.scratch, self.row, completion_notification=future,
                      first_decision_date="20990112", as_of_date="20990105")
         )
 
     def test_the_frozen_week_cannot_back_fill_before_the_notification(self) -> None:
         with self.assertRaises(DiagnosticStartReceiptError) as ctx:
-            _receipt(self.row, first_decision_date="20200106")
+            _receipt(self.scratch, self.row, first_decision_date="20200106")
         self.assertIn("back-fill", str(ctx.exception))
 
     def test_the_frozen_week_cannot_escape_the_notification_horizon(self) -> None:
         with self.assertRaises(DiagnosticStartReceiptError) as ctx:
-            _receipt(self.row, first_decision_date="20960102")
+            _receipt(self.scratch, self.row, first_decision_date="20960102")
         self.assertIn("too far after", str(ctx.exception))
 
     def test_a_receipt_from_another_epoch_does_not_authorize_this_one(self) -> None:
@@ -209,8 +234,8 @@ class StartReceiptTest(unittest.TestCase):
 
         with tempfile.TemporaryDirectory() as td:
             root = Path(td) / "market_diagnostic_private"
-            root.mkdir(parents=True)
-            forged = _receipt(self.row)
+            forged = _receipt(root, self.row)
+            _persisted_notification(root)
             forged["design_authority"]["contract_sha256"] = "0" * 64
             (root / RECEIPT_FILENAME).write_bytes(canonical_json_bytes(forged))
             with self.assertRaises(MarketDiagnosticLifecycleError) as ctx:
@@ -218,12 +243,43 @@ class StartReceiptTest(unittest.TestCase):
             self.assertIn("contract on disk", str(ctx.exception))
             self.assertFalse((root / "lifecycle_register.json").exists())
 
-    def test_a_notification_digest_must_match_its_own_text(self) -> None:
-        forged = _receipt(self.row)
-        forged["completion_notification"]["notification_sha256"] = "0" * 64
+    def test_notification_digest_is_verified_against_the_independent_source(self) -> None:
+        root = self.scratch
+        receipt = _receipt(root, self.row)
+        _persisted_notification(root)
+        self.assertEqual(
+            artifact_sha256(NOTIFICATION),
+            receipt["completion_notification"]["notification_sha256"],
+        )
+        drifted = {
+            **NOTIFICATION,
+            "notification_text": "A different notification now occupies the source artifact.",
+        }
+        _persisted_notification(root, drifted)
         with self.assertRaises(DiagnosticStartReceiptError) as ctx:
-            validate_start_receipt(forged)
-        self.assertIn("notification text", str(ctx.exception))
+            validate_start_receipt(receipt, root=root)
+        self.assertIn("independent notification source", str(ctx.exception))
+
+    def test_a_notification_digest_must_match_its_own_text(self) -> None:
+        """Keep the historical M18 guard while the stronger source test owns closure."""
+
+        root = self.scratch
+        forged = _receipt(root, self.row)
+        _persisted_notification(root)
+        forged["completion_notification"]["notification_sha256"] = "0" * 64
+        with self.assertRaises(DiagnosticStartReceiptError):
+            validate_start_receipt(forged, root=root)
+
+    def test_a_handwritten_receipt_without_its_notification_source_opens_nothing(self) -> None:
+        with tempfile.TemporaryDirectory() as td:
+            root = Path(td) / "market_diagnostic_private"
+            root.mkdir(parents=True)
+            forged = _receipt(root, self.row)
+            (root / RECEIPT_FILENAME).write_bytes(canonical_json_bytes(forged))
+            with self.assertRaises(MarketDiagnosticLifecycleError) as ctx:
+                persist_settled_weekly_record(self.row, root=root)
+            self.assertIn("notification source", str(ctx.exception))
+            self.assertFalse((root / "lifecycle_register.json").exists())
 
     def test_the_notification_is_the_only_variable_that_can_block_minting(self) -> None:
         """No default notification exists: the clock cannot start by omission.
@@ -234,11 +290,18 @@ class StartReceiptTest(unittest.TestCase):
         nothing.
         """
 
-        self.assertIsNotNone(_receipt(self.row, diagnostic_epoch=LEGAL_EPOCH))
+        self.assertIsNotNone(_receipt(self.scratch, self.row, diagnostic_epoch=LEGAL_EPOCH))
 
         with self.assertRaises(TypeError):
             build_start_receipt(
                 diagnostic_epoch=LEGAL_EPOCH,
+                first_decision_date=self.row["decision_date"],
+                as_of_date=AS_OF,
+            )
+        with self.assertRaises(TypeError):
+            build_start_receipt(
+                diagnostic_epoch=LEGAL_EPOCH,
+                completion_notification=dict(NOTIFICATION),
                 first_decision_date=self.row["decision_date"],
                 as_of_date=AS_OF,
             )
@@ -248,10 +311,11 @@ class StartReceiptTest(unittest.TestCase):
             {k: v for k, v in NOTIFICATION.items() if k != "notification_text"},
             {},
         ):
+            source = _write_notification(self.scratch.parent / "broken-notification.json", broken)
             with self.assertRaises(DiagnosticStartReceiptError):
                 build_start_receipt(
                     diagnostic_epoch=LEGAL_EPOCH,
-                    completion_notification=broken,
+                    notification_path=source,
                     first_decision_date=self.row["decision_date"],
                     as_of_date=AS_OF,
                 )
@@ -268,18 +332,25 @@ class StartReceiptTest(unittest.TestCase):
                 persist_settled_weekly_record(self.rows[1], root=root)
             self.assertIn("missing", str(ctx.exception))
 
+    def test_deleting_the_notification_source_stops_the_clock_it_opened(self) -> None:
+        with tempfile.TemporaryDirectory() as td:
+            root = Path(td) / "market_diagnostic_private"
+            _issue(root, self.row)
+            persist_settled_weekly_record(self.rows[0], root=root)
+            (root / NOTIFICATION_FILENAME).unlink()
+            with self.assertRaises(MarketDiagnosticLifecycleError) as ctx:
+                persist_settled_weekly_record(self.rows[1], root=root)
+            self.assertIn("notification source", str(ctx.exception))
+            self.assertFalse(
+                (root / "weeks" / self.rows[1]["decision_date"] / "weekly_record.json").exists()
+            )
+
     def test_swapping_the_receipt_stops_the_clock_it_opened(self) -> None:
         with tempfile.TemporaryDirectory() as td:
             root = Path(td) / "market_diagnostic_private"
             _issue(root, self.row)
             persist_settled_weekly_record(self.rows[0], root=root)
-            replacement = _receipt(
-                self.row,
-                completion_notification={
-                    **NOTIFICATION,
-                    "notification_text": "US-short 26-week diagnostic design is independently complete.",
-                },
-            )
+            replacement = _receipt(root, self.row, diagnostic_epoch=LEGAL_EPOCH)
             (root / RECEIPT_FILENAME).write_bytes(canonical_json_bytes(replacement))
             with self.assertRaises(MarketDiagnosticLifecycleError) as ctx:
                 persist_settled_weekly_record(self.rows[1], root=root)
@@ -313,19 +384,43 @@ class StartReceiptTest(unittest.TestCase):
                 _issue(root, self.row, first_decision_date=self.rows[5]["decision_date"])
             self.assertIn("already anchors", str(ctx.exception))
 
+    def test_an_orphaned_notification_source_is_recoverable_only_with_identical_bytes(self) -> None:
+        with tempfile.TemporaryDirectory() as td:
+            root = Path(td) / "market_diagnostic_private"
+            original = _persisted_notification(root).read_bytes()
+            self.assertEqual("issued", _issue(root, self.row)["status"])
+            self.assertEqual(original, (root / NOTIFICATION_FILENAME).read_bytes())
+
+        with tempfile.TemporaryDirectory() as td:
+            root = Path(td) / "market_diagnostic_private"
+            conflicting = {
+                **NOTIFICATION,
+                "notification_text": "A conflicting completion notification was independently issued.",
+            }
+            conflicting_bytes = _persisted_notification(root, conflicting).read_bytes()
+            with self.assertRaises(DiagnosticStartReceiptError) as ctx:
+                _issue(root, self.row)
+            self.assertIn("different completion notification", str(ctx.exception))
+            self.assertEqual(conflicting_bytes, (root / NOTIFICATION_FILENAME).read_bytes())
+            self.assertFalse((root / RECEIPT_FILENAME).exists())
+
     def test_exclusive_create_rechecks_the_race_winner(self) -> None:
         """The preflight absence check is not ownership; O_EXCL decides the winner."""
 
         cases = (
-            ("same", _receipt(self.row), "idempotent"),
-            ("different", _receipt(self.row, diagnostic_epoch=LEGAL_EPOCH), "conflict"),
+            ("same", _receipt(self.scratch, self.row), "idempotent"),
+            ("different", _receipt(self.scratch, self.row, diagnostic_epoch=LEGAL_EPOCH), "conflict"),
         )
         for label, winner, expected in cases:
             with self.subTest(label), tempfile.TemporaryDirectory() as td:
                 root = Path(td) / "market_diagnostic_private"
+                _persisted_notification(root)
+                real_open = receipts.os.open
 
                 def collide(path, flags, _mode=0o777):
-                    self.assertTrue(flags & receipts.os.O_EXCL, "receipt create lost O_EXCL")
+                    self.assertTrue(flags & receipts.os.O_EXCL, "source/receipt create lost O_EXCL")
+                    if Path(path).name == NOTIFICATION_FILENAME:
+                        return real_open(path, flags, _mode)
                     Path(path).write_bytes(canonical_json_bytes(winner))
                     raise FileExistsError
 
@@ -352,7 +447,7 @@ class StartReceiptTest(unittest.TestCase):
             with self.assertRaises(DiagnosticStartReceiptError):
                 load_start_receipt(root)
 
-            path.write_text(json.dumps(_receipt(self.row), indent=2), encoding="utf-8")
+            path.write_text(json.dumps(_receipt(root, self.row), indent=2), encoding="utf-8")
             with self.assertRaises(DiagnosticStartReceiptError) as ctx:
                 load_start_receipt(root)
             self.assertIn("canonical", str(ctx.exception))
@@ -360,7 +455,9 @@ class StartReceiptTest(unittest.TestCase):
     def test_a_trailing_newline_cannot_ride_through_any_pattern(self) -> None:
         """Python's ``$`` also matches before a trailing newline; ``\\Z`` does not."""
 
-        base = _receipt(self.row)
+        root = self.scratch
+        base = _receipt(root, self.row)
+        _persisted_notification(root)
         for path in (
             ("diagnostic_epoch",),
             ("design_authority", "contract_sha256"),
@@ -373,12 +470,14 @@ class StartReceiptTest(unittest.TestCase):
                 target = target[key]
             target[path[-1]] = f"{target[path[-1]]}\n"
             with self.assertRaises(DiagnosticStartReceiptError, msg=f"{path} accepted a newline"):
-                validate_start_receipt(mutated)
+                validate_start_receipt(mutated, root=root)
 
     def test_nothing_but_a_decision_can_produce_a_receipt(self) -> None:
         """The design's named bypasses are all shut by construction."""
 
-        receipt = _receipt(self.row)
+        root = self.scratch
+        receipt = _receipt(root, self.row)
+        _persisted_notification(root)
         self.assertIs(False, receipt["boundary"]["issued_by_automatic_inference"])
         self.assertEqual(1, receipt["first_calendar_week"]["calendar_week_index"])
         self.assertEqual("26w-1-26", receipt["first_calendar_week"]["window_id"])
@@ -387,12 +486,12 @@ class StartReceiptTest(unittest.TestCase):
         flipped = copy.deepcopy(receipt)
         flipped["boundary"]["issued_by_automatic_inference"] = True
         with self.assertRaises(DiagnosticStartReceiptError):
-            validate_start_receipt(flipped)
+            validate_start_receipt(flipped, root=root)
 
         swapped = copy.deepcopy(receipt)
         swapped["design_authority"]["document_path"] = "docs/CURRENT.md"
         with self.assertRaises(DiagnosticStartReceiptError):
-            validate_start_receipt(swapped)
+            validate_start_receipt(swapped, root=root)
 
     def test_public_entries_raise_the_modules_own_error_for_junk_input(self) -> None:
         for bad in (None, 0, 10 ** 400, float("nan"), [], {}, b"x", set(), object()):
