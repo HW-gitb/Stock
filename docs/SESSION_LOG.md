@@ -5,7 +5,7 @@
 - **Verdict/Action**: PASS。刀0 四条 Go 判据全部达成：每条重要 claim 绑定冻结 `source_id`、五分类角色未塌成单档、falsifier 六字段 typed 且与 `contrary_evidence` 分开、horizon 判定带 `horizon_basis_source_ref_ids`。产物落 repo 而非桌面、撤销 digest capture 两项偏离桌面方案，按 §16c「最新用户指令 > 桌面权威件」不判偏差。零接线、零 provider call、六个 effect flag 全 false。
 - **Required**: 无。两条不阻塞的 rubric 缺口已记入 `docs/system_risk_register.md`：`R-USSHORT-SERENITY-BLADE0-THE-SOURCE-LEDGER-OMITS-THE-MODEL-TRANSCRIBED-ATTESTATION`、`R-USSHORT-SERENITY-BLADE0-SUPPLY-CHOKEPOINT-IS-REDEFINED-INTO-A-FREE-LABEL`，正文、实测与闭合判据只在那里。
 - **Verify**: review-evidence:27ff6db9d040。独立重算：7 成员 `source_ref_ids` 计数与 5 个 `source_id`/`observed_at` 逐条等同冻结产物；反向控制对全部 20 组 (ticker, cited source) 回查 raw 正文得 `UNNAMED PAIRS=[]`，raw 里 `BE/EQT/META/MSFT/NVDA` 未被写进注解。文档门超集 `Ran 66 in 1.2s OK receipt:b6a6d850c2200c24954d52d5`（含执行方那 55 项）。接线 grep 全仓 0 命中；新文件 UTF-8 无 BOM/CRLF/尾空白。full-lane 按 rule 3 未触发（docs-only、无生产 runner/共享引擎/schema/consumer 改动）；未起 §6a agent（rule 8）。
-- **Next**: Codex：执行
+- **Next**: Codex：Pass（刀1 是研究刀，须用户明确指令 + 至少三类对照主题，Codex 不得据本条自行开工）
 
 ## 2026-08-09 — Codex 执行：Serenity `structural_theme_annotation` Blade 0 feasibility smoke（OPEN-NOT_VERIFIED）
 
