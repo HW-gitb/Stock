@@ -1,10 +1,12 @@
-"""Knife 1 contract plus knife 2 predicate/shadow seam for the margin-overheat track.
+"""Knife 1 contract plus knife 2 predicate/shadow and knife 3 settlement seams.
 
 It registers one independent comparison question, describes both measurement
 stages, and prevents pre-freeze audit evidence from becoming a forward verdict.
-Knife 2 adds only the source-bound structured predicate producer and the one
-comparison-only shadow allocation consumer.  Capture, settlement, ledger,
-adjudication, reminder and freeze wiring remain later knives.
+Knife 2 adds the source-bound structured predicate producer and the one
+comparison-only shadow allocation consumer.  Knife 3 adds source-bound weekly
+capture, existing-cache settlement, private ledger/adjudication/reminder
+rewrites, and a de-identified public projection; it does not freeze or alter
+production behavior.
 """
 from __future__ import annotations
 
@@ -13,6 +15,8 @@ import hashlib
 import json
 import math
 import numbers
+import re
+import subprocess
 from datetime import datetime
 from pathlib import Path
 from typing import Any, Mapping, Sequence
@@ -32,6 +36,14 @@ PROGRAM_SCHEMA_PATH = ROOT / "schemas" / "a_short_margin_overheat_cash_control_p
 STATE_SCHEMA_PATH = ROOT / "schemas" / "a_short_margin_overheat_cash_control_state.schema.json"
 PREDICATE_SCHEMA_PATH = ROOT / "schemas" / "a_short_margin_overheat_cash_control_predicate.schema.json"
 REPLAY_SCHEMA_PATH = ROOT / "schemas" / "a_short_margin_overheat_cash_control_replay.schema.json"
+CAPTURE_SCHEMA_PATH = ROOT / "schemas" / "a_short_margin_overheat_cash_control_capture.schema.json"
+RECEIPT_SCHEMA_PATH = ROOT / "schemas" / "a_short_margin_overheat_cash_control_source_receipt.schema.json"
+OUTCOME_SCHEMA_PATH = ROOT / "schemas" / "a_short_margin_overheat_cash_control_outcome.schema.json"
+LEDGER_SCHEMA_PATH = ROOT / "schemas" / "a_short_margin_overheat_cash_control_ledger.schema.json"
+ADJUDICATION_SCHEMA_PATH = ROOT / "schemas" / "a_short_margin_overheat_cash_control_adjudication.schema.json"
+REMINDER_SCHEMA_PATH = ROOT / "schemas" / "a_short_margin_overheat_cash_control_reminder.schema.json"
+PUBLIC_SUMMARY_SCHEMA_PATH = ROOT / "schemas" / "a_short_margin_overheat_cash_control_public_summary.schema.json"
+DAILY_CACHE_SCHEMA_PATH = ROOT / "schemas" / "a_short_factor_comparison_v2_daily_cache.schema.json"
 GOVERNANCE_PATH = ROOT / "presets" / "a_short_margin_overheat_cash_control_governance_20260808.json"
 STAGE_A = "stage_a"
 STAGE_B = "stage_b"
@@ -40,6 +52,13 @@ COMPARISON_VERDICTS = ("not_evaluated", "inconclusive", "supported", "not_suppor
 PREDICATE_SCHEMA_NAME = "a_short_margin_overheat_cash_control_predicate"
 REPLAY_SCHEMA_NAME = "a_short_margin_overheat_cash_control_replay"
 PREDICATE_SCHEMA_VERSION = "1.0.0"
+CAPTURE_SCHEMA_VERSION = "1.0.0"
+HORIZONS = (5, 10, 20)
+PUBLIC_STATUS_NOT_CONFIGURED = "not_configured"
+PUBLIC_STATUS_CURRENT = "evidence_current"
+PUBLIC_STATUS_UNAVAILABLE = "evidence_unavailable_or_inconclusive"
+CAPTURE_REPLAY_DRIFT_MESSAGE = "margin-overheat capture replay input drifted"
+QUESTION_ID = "margin_overheat_cash_control"
 CHANGE_RATE_LOOKBACK_SESSIONS = 20
 PREDICATE_SOURCE_REFERENCES = (
     "analysis_input.market_context.margin_overheat",
@@ -73,6 +92,31 @@ FREEZE_PREREQUISITES = (
 
 class MarginOverheatCashControlError(ValueError):
     """Raised when the dedicated comparison contract cannot be proven."""
+
+
+def _safe_exception_text(exc: BaseException) -> str:
+    try:
+        return str(exc)
+    except Exception:
+        return ""
+
+
+def is_capture_replay_drift(exc: BaseException) -> bool:
+    """Identify a direct or wrapped immutable same-week replay rejection."""
+    seen: set[int] = set()
+    current: BaseException | None = exc
+    while isinstance(current, BaseException) and id(current) not in seen:
+        seen.add(id(current))
+        if isinstance(current, ValueError):
+            message = _safe_exception_text(current)
+            if (message == CAPTURE_REPLAY_DRIFT_MESSAGE
+                    or message.endswith(": " + CAPTURE_REPLAY_DRIFT_MESSAGE)):
+                return True
+        cause = current.__cause__
+        current = cause if isinstance(cause, BaseException) else (
+            None if getattr(current, "__suppress_context__", False) else current.__context__
+        )
+    return False
 
 
 def _load_json(path: Path) -> Any:
@@ -1162,3 +1206,1045 @@ def materialize_shadow_cash_control(
     }
     _schema_validate(result, ROOT / "schemas" / "a_short_margin_overheat_cash_control_shadow.schema.json")
     return result
+
+
+# ---------------------------------------------------------------------------
+# Knife 3: weekly capture, settlement, and the private-to-public seam.
+#
+# The functions below deliberately keep all ticker/arm/NAV material in the
+# dedicated private root.  The weekly runner supplies an already validated
+# PublishedWeeklyBundle; this module therefore never turns an arbitrary path
+# into an official M6.7 source.  Settlement accepts only an existing JSON
+# daily cache and has no provider fallback.
+
+
+def _knife3_boundary(governance: Mapping[str, Any] | None = None) -> dict[str, Any]:
+    document = dict(governance or load_governance())
+    validate_governance(document)
+    return copy.deepcopy(document["boundary"])
+
+
+def _private_root(root: str | Path) -> Path:
+    if root is None:
+        raise MarginOverheatCashControlError("margin-overheat private root is required")
+    path = Path(root).resolve()
+    if path == ROOT or any(part.lower() in {"result", "research"} for part in path.parts):
+        raise MarginOverheatCashControlError(
+            "margin-overheat private root may not be a published result or research path"
+        )
+    try:
+        relative = path.relative_to(ROOT)
+    except ValueError:
+        return path
+    try:
+        result = subprocess.run(
+            ["git", "-C", str(ROOT), "check-ignore", "-q", "--", str(relative)],
+            capture_output=True, check=False,
+        )
+    except OSError as exc:
+        raise MarginOverheatCashControlError(
+            "cannot prove margin-overheat private root is gitignored"
+        ) from exc
+    if result.returncode != 0:
+        raise MarginOverheatCashControlError(
+            "margin-overheat private root is not a provably private path"
+        )
+    return path
+
+
+def _private_journal_dir(root: Path) -> Path:
+    return root / ".artifact_set_journal"
+
+
+def _recover_private_artifact_set(root: Path) -> None:
+    from engine.a_short_artifact_set_transaction import recover
+
+    try:
+        recover(_private_journal_dir(root))
+    except Exception as exc:
+        raise MarginOverheatCashControlError(
+            "margin-overheat private artifact set recovery failed"
+        ) from exc
+
+
+def _json_bytes(value: Any) -> bytes:
+    try:
+        return (json.dumps(value, ensure_ascii=False, sort_keys=True,
+                           indent=2, allow_nan=False) + "\n").encode("utf-8")
+    except (TypeError, ValueError) as exc:
+        raise MarginOverheatCashControlError(
+            "margin-overheat private artifact contains non-JSON data"
+        ) from exc
+
+
+def _load_private_json(path: Path, label: str) -> Any:
+    try:
+        return json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, UnicodeDecodeError, json.JSONDecodeError) as exc:
+        raise MarginOverheatCashControlError(
+            f"margin-overheat {label} is unreadable"
+        ) from exc
+
+
+def _sha256(value: Any) -> str:
+    return _digest(value)
+
+
+def _require_sha(value: Any, label: str) -> str:
+    text = str(value or "")
+    if not re.fullmatch(r"[0-9a-f]{64}", text):
+        raise MarginOverheatCashControlError(f"margin-overheat {label} must be a lowercase sha256")
+    return text
+
+
+def _require_date8(value: Any, label: str) -> str:
+    text = str(value or "")
+    if not _valid_date8(text):
+        raise MarginOverheatCashControlError(f"margin-overheat {label} must be a canonical date")
+    return text
+
+
+def _assert_finite_json(value: Any, path: str = "artifact") -> None:
+    if isinstance(value, float) and not math.isfinite(value):
+        raise MarginOverheatCashControlError(f"{path} contains a non-finite number")
+    if isinstance(value, Mapping):
+        for key, child in value.items():
+            _assert_finite_json(child, f"{path}.{key}")
+    elif isinstance(value, (list, tuple)):
+        for index, child in enumerate(value):
+            _assert_finite_json(child, f"{path}[{index}]")
+
+
+def _cache_document(value: Mapping[str, Any]) -> dict[str, Any]:
+    if not isinstance(value, Mapping):
+        raise MarginOverheatCashControlError("approved daily cache must be an object")
+    document = copy.deepcopy(dict(value))
+    _assert_finite_json(document, "daily_cache")
+    _schema_validate(document, DAILY_CACHE_SCHEMA_PATH)
+    return document
+
+
+def load_margin_overheat_daily_cache(path: str | Path) -> dict[str, Any]:
+    """Read the already approved daily cache; this function never calls a provider."""
+    cache_path = Path(path).resolve()
+    if not cache_path.is_file():
+        raise MarginOverheatCashControlError("approved daily cache is unavailable")
+    try:
+        document = json.loads(cache_path.read_text(encoding="utf-8"))
+    except (OSError, UnicodeDecodeError, json.JSONDecodeError) as exc:
+        raise MarginOverheatCashControlError("approved daily cache is unreadable") from exc
+    return _cache_document(document)
+
+
+def _cache_rows(document: Mapping[str, Any]) -> tuple[list[str], dict[tuple[str, str], dict[str, Any]]]:
+    rows = document.get("stocks")
+    if not isinstance(rows, list):
+        raise MarginOverheatCashControlError("approved daily cache stocks are malformed")
+    lookup: dict[tuple[str, str], dict[str, Any]] = {}
+    for raw in rows:
+        if not isinstance(raw, Mapping):
+            raise MarginOverheatCashControlError("approved daily cache contains a non-object stock row")
+        code = str(raw.get("ts_code") or "")
+        date = _require_date8(raw.get("trade_date"), "daily cache trade_date")
+        if not code:
+            raise MarginOverheatCashControlError("approved daily cache stock row lacks ts_code")
+        clean = {
+            "open": raw.get("open"),
+            "close": raw.get("close"),
+            "adj_factor": raw.get("adj_factor"),
+            "adj_factor_observed": raw.get("adj_factor_observed"),
+            "adj_factor_source": raw.get("adj_factor_source"),
+            "corporate_action_verified": raw.get("corporate_action_verified"),
+        }
+        key = (code, date)
+        if key in lookup and lookup[key] != clean:
+            raise MarginOverheatCashControlError(
+                "approved daily cache has conflicting duplicate stock rows"
+            )
+        lookup[key] = clean
+    return sorted({date for _code, date in lookup}), lookup
+
+
+def _valid_qfq_row(row: Mapping[str, Any] | None) -> bool:
+    if not isinstance(row, Mapping):
+        return False
+    if any(not _finite_number(row.get(key)) or float(row[key]) <= 0
+           for key in ("open", "close", "adj_factor")):
+        return False
+    if row.get("adj_factor_observed") is not True:
+        return False
+    if not str(row.get("adj_factor_source") or ""):
+        return False
+    return True
+
+
+def _candidate_snapshots(candidates: Sequence[Mapping[str, Any]]) -> tuple[list[dict[str, Any]], str]:
+    if not isinstance(candidates, Sequence) or isinstance(candidates, (str, bytes)):
+        raise MarginOverheatCashControlError("margin-overheat candidates must be a list")
+    snapshots: list[dict[str, Any]] = []
+    seen: set[str] = set()
+    for candidate in candidates:
+        if not isinstance(candidate, Mapping):
+            raise MarginOverheatCashControlError("margin-overheat candidate is not an object")
+        code = str(candidate.get("ts_code") or "")
+        if not code or code in seen:
+            raise MarginOverheatCashControlError("margin-overheat candidate set has a duplicate or empty ts_code")
+        if not _finite_number(candidate.get("close")) or float(candidate["close"]) <= 0:
+            raise MarginOverheatCashControlError("margin-overheat candidate close must be finite and positive")
+        seen.add(code)
+        snapshots.append({
+            "ts_code": code,
+            "name": str(candidate.get("name") or ""),
+            "close": float(candidate["close"]),
+        })
+    snapshots.sort(key=lambda row: row["ts_code"])
+    return snapshots, _digest(snapshots)
+
+
+def _selection_plan_snapshot(reports: Sequence[Mapping[str, Any]]) -> list[dict[str, Any]]:
+    if not isinstance(reports, Sequence) or isinstance(reports, (str, bytes)):
+        raise MarginOverheatCashControlError("official M6.7 reports must be a list")
+    result = []
+    seen: set[str] = set()
+    for report in reports:
+        if not isinstance(report, Mapping):
+            raise MarginOverheatCashControlError("official M6.7 report is not an object")
+        code = str(report.get("ts_code") or "")
+        if not code or code in seen:
+            raise MarginOverheatCashControlError("official M6.7 selection plan has a duplicate or empty ts_code")
+        seen.add(code)
+        table = report.get("m67", {}).get("table", {}) if isinstance(report.get("m67"), Mapping) else {}
+        plan = (((report.get("machine") or {}).get("entry_exit_size_star") or {}).get("plan")
+                if isinstance(report.get("machine"), Mapping) else None)
+        result.append({
+            "ts_code": code,
+            "operation": str(table.get("操作") or table.get("operation") or ""),
+            "shares": (plan or {}).get("shares", table.get("股数")),
+            "cash_budget_used": (plan or {}).get("cash_budget_used"),
+        })
+    return result
+
+
+def _frozen_positions_from_reports(reports: Sequence[Mapping[str, Any]]) -> list[dict[str, Any]]:
+    positions: list[dict[str, Any]] = []
+    seen: set[str] = set()
+    for report in reports:
+        if not isinstance(report, Mapping):
+            continue
+        code = str(report.get("ts_code") or "")
+        table = report.get("m67", {}).get("table", {}) if isinstance(report.get("m67"), Mapping) else {}
+        operation = str(table.get("操作") or table.get("operation") or "")
+        plan = (((report.get("machine") or {}).get("entry_exit_size_star") or {}).get("plan")
+                if isinstance(report.get("machine"), Mapping) else None)
+        if operation not in {"建仓", "build", "open", "entry"} or not isinstance(plan, Mapping):
+            continue
+        if code in seen:
+            raise MarginOverheatCashControlError("official M6.7 selection plan repeats a build symbol")
+        shares = plan.get("allocated_shares", plan.get("shares", table.get("股数")))
+        capital = plan.get("cash_budget_used")
+        entry_high = plan.get("entry_high")
+        if (isinstance(shares, bool) or not isinstance(shares, int) or shares <= 0
+                or not _finite_number(capital) or float(capital) <= 0):
+            if _finite_number(entry_high) and isinstance(shares, int) and shares > 0:
+                capital = float(shares) * float(entry_high)
+            else:
+                raise MarginOverheatCashControlError(
+                    "official M6.7 build lacks frozen shares and capital"
+                )
+        seen.add(code)
+        positions.append({
+            "ts_code": code,
+            "shares": int(shares),
+            "capital_used": round(float(capital), 8),
+        })
+    positions.sort(key=lambda row: row["ts_code"])
+    return positions
+
+
+def _arm_definitions(stage: str = STAGE_A) -> list[dict[str, Any]]:
+    governance = load_governance()
+    section = governance[stage]
+    rows = [section["baseline"], *section["challengers"]]
+    return [copy.deepcopy(row) for row in rows]
+
+
+def _official_bundle_parts(official_bundle: Any, *, decision_date: str,
+                           source_identity: Mapping[str, Any]) -> tuple[dict, dict, str]:
+    if official_bundle is None:
+        raise MarginOverheatCashControlError(
+            "margin-overheat capture requires a validated official M6.7 bundle"
+        )
+    weekly = getattr(official_bundle, "weekly", None)
+    receipt = getattr(official_bundle, "receipt", None)
+    weekly_bytes = getattr(official_bundle, "weekly_bytes", None)
+    if isinstance(official_bundle, Mapping):
+        weekly = official_bundle.get("weekly", weekly)
+        receipt = official_bundle.get("receipt", receipt)
+        weekly_bytes = official_bundle.get("weekly_bytes", weekly_bytes)
+    if not isinstance(weekly, dict) or not isinstance(receipt, dict):
+        raise MarginOverheatCashControlError("official M6.7 bundle snapshot is incomplete")
+    lineage = weekly.get("run_lineage")
+    if not isinstance(lineage, Mapping) or str(weekly.get("as_of")) != str(decision_date):
+        raise MarginOverheatCashControlError("official M6.7 bundle is not bound to decision_date")
+    run_id = str(source_identity.get("run_id") or "")
+    candidate_digest = str(source_identity.get("candidate_digest") or "")
+    if lineage.get("run_id") != run_id or lineage.get("candidate_digest") != candidate_digest:
+        raise MarginOverheatCashControlError("official M6.7 bundle receipt does not match source identity")
+    if receipt.get("run_id") != lineage.get("run_id") or \
+            receipt.get("candidate_digest") != lineage.get("candidate_digest"):
+        raise MarginOverheatCashControlError("official M6.7 receipt identity drifted")
+    if not isinstance(weekly_bytes, (bytes, bytearray)):
+        raise MarginOverheatCashControlError(
+            "validated official M6.7 bundle lacks the JSON byte binding"
+        )
+    return weekly, receipt, hashlib.sha256(bytes(weekly_bytes)).hexdigest()
+
+
+def _margin_capture_program(governance: Mapping[str, Any]) -> dict[str, Any]:
+    return {
+        "schema_name": "a_short_margin_overheat_cash_control_program_manifest",
+        "schema_version": CAPTURE_SCHEMA_VERSION,
+        "program_id": PROGRAM_ID,
+        "track_id": TRACK_ID,
+        "stage": "knife_3_weekly_capture_settlement",
+        "private_root_layout": governance["capture_contract"]["write_namespace"],
+        "governance_sha256": _digest(governance),
+        "schema_sha256": {
+            "capture": hashlib.sha256(CAPTURE_SCHEMA_PATH.read_bytes()).hexdigest(),
+            "source_receipt": hashlib.sha256(RECEIPT_SCHEMA_PATH.read_bytes()).hexdigest(),
+            "outcome": hashlib.sha256(OUTCOME_SCHEMA_PATH.read_bytes()).hexdigest(),
+            "ledger": hashlib.sha256(LEDGER_SCHEMA_PATH.read_bytes()).hexdigest(),
+            "adjudication": hashlib.sha256(ADJUDICATION_SCHEMA_PATH.read_bytes()).hexdigest(),
+            "reminder": hashlib.sha256(REMINDER_SCHEMA_PATH.read_bytes()).hexdigest(),
+        },
+        "boundary": _knife3_boundary(governance),
+    }
+
+
+def _empty_margin_ledger(governance: Mapping[str, Any]) -> dict[str, Any]:
+    return {
+        "schema_name": "a_short_margin_overheat_cash_control_ledger",
+        "schema_version": CAPTURE_SCHEMA_VERSION,
+        "track_id": TRACK_ID,
+        "program_id": PROGRAM_ID,
+        "question_id": QUESTION_ID,
+        "experiment_batch_id": governance["namespace"]["experiment_batch_id"],
+        "epoch_id": current_epoch_id(),
+        "entries": [],
+        "boundary": _knife3_boundary(governance),
+    }
+
+
+def validate_margin_source_receipt(receipt: Mapping[str, Any], capture: Mapping[str, Any]) -> None:
+    if not isinstance(receipt, dict) or not isinstance(capture, dict):
+        raise MarginOverheatCashControlError("margin-overheat source receipt and capture must be objects")
+    _schema_validate(dict(receipt), RECEIPT_SCHEMA_PATH)
+    _validate_margin_capture(dict(capture))
+    payload = receipt.get("payload")
+    capture_payload = capture.get("payload")
+    if not isinstance(payload, Mapping) or not isinstance(capture_payload, Mapping):
+        raise MarginOverheatCashControlError("margin-overheat source receipt payload is malformed")
+    for key in ("decision_date", "run_date", "price_data_through", "official_m67_digest",
+                "margin_fact_digest", "daily_cache_digest", "candidate_digest",
+                "experiment_batch_id", "epoch_id"):
+        if payload.get(key) != capture_payload.get(key):
+            raise MarginOverheatCashControlError(
+                f"margin-overheat source receipt {key} does not match capture"
+            )
+    if payload.get("capture_sha256") != capture.get("payload_sha256"):
+        raise MarginOverheatCashControlError(
+            "margin-overheat source receipt capture_sha256 does not match capture"
+        )
+
+
+def _validate_margin_capture(capture: Mapping[str, Any]) -> None:
+    if not isinstance(capture, dict):
+        raise MarginOverheatCashControlError("margin-overheat capture must be an object")
+    _schema_validate(dict(capture), CAPTURE_SCHEMA_PATH)
+    payload = capture.get("payload")
+    if _digest(payload) != capture.get("payload_sha256"):
+        raise MarginOverheatCashControlError("margin-overheat capture payload digest does not match")
+    governance = load_governance()
+    if capture.get("track_id") != TRACK_ID or capture.get("comparison_only") is not True:
+        raise MarginOverheatCashControlError("margin-overheat capture crossed the comparison boundary")
+    for key in ("decision_date", "run_date", "price_data_through"):
+        _require_date8(payload.get(key), key)
+    if payload["price_data_through"] > payload["decision_date"] or \
+            payload["price_data_through"] > payload["run_date"]:
+        raise MarginOverheatCashControlError("margin-overheat capture price clock is after its source dates")
+    for key in ("official_m67_digest", "margin_fact_digest", "daily_cache_digest",
+                "candidate_digest", "candidate_snapshot_digest", "experiment_batch_id", "epoch_id"):
+        if key in {"experiment_batch_id", "epoch_id"}:
+            if not str(payload.get(key) or ""):
+                raise MarginOverheatCashControlError(f"margin-overheat capture {key} is empty")
+        else:
+            _require_sha(payload.get(key), key)
+    if payload["experiment_batch_id"] != governance["namespace"]["experiment_batch_id"]:
+        raise MarginOverheatCashControlError("margin-overheat capture crosses experiment batch")
+    if payload["epoch_id"] != current_epoch_id():
+        raise MarginOverheatCashControlError("margin-overheat capture crosses independent epoch")
+    snapshots = payload.get("candidate_universe")
+    if not isinstance(snapshots, list) or _digest(snapshots) != payload["candidate_snapshot_digest"]:
+        raise MarginOverheatCashControlError("margin-overheat capture candidate snapshot digest does not match")
+    _assert_finite_json(payload, "capture.payload")
+    if tuple(row.get("arm_id") for row in payload.get("arm_definitions") or []) != stage_arm_ids(STAGE_A):
+        raise MarginOverheatCashControlError("margin-overheat capture arm definitions drifted")
+    arms = payload.get("arms")
+    if not isinstance(arms, list) or tuple(row.get("arm_id") for row in arms) != stage_arm_ids(STAGE_A):
+        raise MarginOverheatCashControlError("margin-overheat capture arm snapshots drifted")
+    predicate = payload.get("predicate_facts")
+    if predicate is not None:
+        validate_predicate_facts(predicate)
+        if predicate.get("source_as_of") != payload["decision_date"]:
+            raise MarginOverheatCashControlError("margin-overheat capture predicate source clock drifted")
+    if payload.get("margin_facts_digest") != payload["margin_fact_digest"]:
+        raise MarginOverheatCashControlError("margin-overheat capture margin fact digest alias drifted")
+    if tuple(payload.get("source_references") or []) != PREDICATE_SOURCE_REFERENCES:
+        raise MarginOverheatCashControlError(
+            "margin-overheat capture source references are outside the dedicated contract"
+        )
+
+
+def validate_margin_outcome(outcome: Mapping[str, Any]) -> None:
+    if not isinstance(outcome, dict):
+        raise MarginOverheatCashControlError("margin-overheat outcome must be an object")
+    _schema_validate(dict(outcome), OUTCOME_SCHEMA_PATH)
+    payload = outcome.get("payload")
+    if _digest(payload) != outcome.get("payload_sha256"):
+        raise MarginOverheatCashControlError("margin-overheat outcome payload digest does not match")
+    if outcome.get("track_id") != TRACK_ID or outcome.get("comparison_only") is not True:
+        raise MarginOverheatCashControlError("margin-overheat outcome crossed the comparison boundary")
+
+
+def validate_margin_ledger(ledger: Mapping[str, Any]) -> None:
+    if not isinstance(ledger, dict):
+        raise MarginOverheatCashControlError("margin-overheat ledger must be an object")
+    _schema_validate(dict(ledger), LEDGER_SCHEMA_PATH)
+    if ledger.get("track_id") != TRACK_ID or ledger.get("question_id") != QUESTION_ID:
+        raise MarginOverheatCashControlError("margin-overheat ledger namespace drifted")
+    keys = [(row["decision_date"], row["question_id"]) for row in ledger.get("entries", [])]
+    if len(keys) != len(set(keys)):
+        raise MarginOverheatCashControlError("margin-overheat ledger has duplicate decision-date entries")
+    batch = ledger.get("experiment_batch_id")
+    epoch = ledger.get("epoch_id")
+    if any(row["experiment_batch_id"] != batch or row["epoch_id"] != epoch
+           for row in ledger.get("entries", [])):
+        raise MarginOverheatCashControlError("margin-overheat ledger entry crosses batch or epoch")
+
+
+def validate_margin_adjudication(adjudication: Mapping[str, Any]) -> None:
+    if not isinstance(adjudication, dict):
+        raise MarginOverheatCashControlError("margin-overheat adjudication must be an object")
+    _schema_validate(dict(adjudication), ADJUDICATION_SCHEMA_PATH)
+    if _digest(adjudication.get("payload")) != adjudication.get("payload_sha256"):
+        raise MarginOverheatCashControlError("margin-overheat adjudication payload digest does not match")
+    if adjudication.get("state", {}).get("comparison_verdict") != "not_evaluated":
+        raise MarginOverheatCashControlError("margin-overheat adjudication emitted a verdict")
+
+
+def validate_margin_public_summary(summary: Mapping[str, Any]) -> None:
+    if not isinstance(summary, dict):
+        raise MarginOverheatCashControlError("margin-overheat public summary must be an object")
+    _schema_validate(dict(summary), PUBLIC_SUMMARY_SCHEMA_PATH)
+    if summary.get("track_id") != TRACK_ID or summary.get("production_unchanged") is not True:
+        raise MarginOverheatCashControlError("margin-overheat public summary crossed the production boundary")
+    if summary.get("status") != PUBLIC_STATUS_CURRENT and summary.get("pending_user_receipt_count") != 0:
+        raise MarginOverheatCashControlError("unavailable margin-overheat summary carries stale reminders")
+
+
+def _public_margin_summary_payload(status: str, *, as_of: str, evidence_status: str = "insufficient_data",
+                                   stage: str = STAGE_A, pending_user_receipt_count: int = 0) -> dict[str, Any]:
+    """Build the fixed de-identified shape without touching the schema filesystem."""
+    if status not in {PUBLIC_STATUS_NOT_CONFIGURED, PUBLIC_STATUS_CURRENT, PUBLIC_STATUS_UNAVAILABLE}:
+        raise MarginOverheatCashControlError("margin-overheat public summary status is unknown")
+    count = _strict_nonnegative_int(pending_user_receipt_count, "pending_user_receipt_count")
+    return {
+        "schema_name": "a_short_margin_overheat_cash_control_public_summary",
+        "schema_version": CAPTURE_SCHEMA_VERSION,
+        "track_id": TRACK_ID,
+        "status": status,
+        "evidence_status": evidence_status,
+        "current_stage": stage,
+        "pending_user_receipt_count": count if status == PUBLIC_STATUS_CURRENT else 0,
+        "message": (
+            "Margin-overheat comparison is not configured; official M6.7 is unchanged."
+            if status == PUBLIC_STATUS_NOT_CONFIGURED else
+            f"Margin-overheat comparison evidence is current; pending user receipts={count}; official M6.7 is unchanged."
+            if status == PUBLIC_STATUS_CURRENT else
+            "Margin-overheat comparison evidence is unavailable; stale reminders are suppressed and official M6.7 is unchanged."
+        ),
+        "production_unchanged": True,
+    }
+
+
+def _public_margin_summary(status: str, *, as_of: str, evidence_status: str = "insufficient_data",
+                           stage: str = STAGE_A, pending_user_receipt_count: int = 0) -> dict[str, Any]:
+    summary = _public_margin_summary_payload(
+        status, as_of=as_of, evidence_status=evidence_status, stage=stage,
+        pending_user_receipt_count=pending_user_receipt_count,
+    )
+    _schema_validate(summary, PUBLIC_SUMMARY_SCHEMA_PATH)
+    return summary
+
+
+def unavailable_margin_public_summary(*, as_of: str) -> dict[str, Any]:
+    """Return the schema-shaped fail-soft banner without external contract I/O."""
+    return _public_margin_summary_payload(PUBLIC_STATUS_UNAVAILABLE, as_of=as_of)
+
+
+def _capture_source_receipt(payload: Mapping[str, Any]) -> dict[str, Any]:
+    receipt = {
+        "schema_name": "a_short_margin_overheat_cash_control_source_receipt",
+        "schema_version": CAPTURE_SCHEMA_VERSION,
+        "track_id": TRACK_ID,
+        "record_type": "source_receipt",
+        "decision_date": payload["decision_date"],
+        "payload": {
+            "capture_sha256": _digest(payload),
+            **{key: payload[key] for key in (
+                "decision_date", "run_date", "price_data_through", "official_m67_digest",
+                "margin_fact_digest", "daily_cache_digest", "candidate_digest",
+                "experiment_batch_id", "epoch_id")},
+            "settlement": None,
+        },
+        "boundary": _knife3_boundary(),
+    }
+    _schema_validate(receipt, RECEIPT_SCHEMA_PATH)
+    return receipt
+
+
+def _arm_capture_snapshot(*, facts: Mapping[str, Any] | None, arm_id: str,
+                          reports: Sequence[Mapping[str, Any]], decision_date: str,
+                          source_receipt: Mapping[str, Any] | None) -> dict[str, Any]:
+    criterion_id = next(row["criterion_id"] for row in _arm_definitions()
+                        if row["arm_id"] == arm_id)
+    if isinstance(facts, Mapping) and facts.get("status") == "available":
+        shadow = materialize_shadow_cash_control(
+            facts, arm_id=arm_id, reports=list(reports), available_cash=_model_cash_cny(),
+            new_exposure_capacity=_model_cash_cny(), as_of=decision_date,
+            source_receipt=source_receipt,
+        )
+        positions = _frozen_positions_from_reports(shadow["shadow_reports"])
+        return {
+            "arm_id": arm_id,
+            "criterion_id": criterion_id,
+            "status": shadow["status"],
+            "predicate_triggered": shadow["predicate_triggered"],
+            "shadow_cash_factor": shadow["shadow_cash_factor"],
+            "allocation_summary": copy.deepcopy(shadow["allocation_summary"]),
+            "positions": positions,
+        }
+    baseline_positions = _frozen_positions_from_reports(reports)
+    allocated = sum(float(row["capital_used"]) for row in baseline_positions)
+    remaining = round(max(0.0, _model_cash_cny() - allocated), 8)
+    return {
+        "arm_id": arm_id,
+        "criterion_id": criterion_id,
+        "status": "no_count",
+        "predicate_triggered": None,
+        "shadow_cash_factor": 1.0,
+        "allocation_summary": {
+            "available_cash_start": _model_cash_cny(),
+            "allocated_cash_total": round(allocated, 8),
+            "remaining_cash": remaining,
+            "new_exposure_capacity_start": _model_cash_cny(),
+            "remaining_new_exposure_capacity": round(max(0.0, _model_cash_cny() - allocated), 8),
+        },
+        "positions": baseline_positions,
+    }
+
+
+def capture_margin_overheat_week(
+    *, root: str | Path, decision_date: str, run_identity: Mapping[str, Any],
+    official_bundle: Any, margin_facts: Mapping[str, Any],
+    daily_cache_document: Mapping[str, Any], candidates: Sequence[Mapping[str, Any]],
+    reports: Sequence[Mapping[str, Any]], predicate_facts: Mapping[str, Any] | None = None,
+    forward_eligible: bool = False,
+) -> dict[str, Any]:
+    """Capture one canonical week after the caller proves the official bundle exists."""
+    private_root = _private_root(root)
+    _recover_private_artifact_set(private_root)
+    decision_date = _require_date8(decision_date, "decision_date")
+    if not isinstance(run_identity, Mapping):
+        raise MarginOverheatCashControlError("margin-overheat source identity is required")
+    weekly, _receipt, official_digest = _official_bundle_parts(
+        official_bundle, decision_date=decision_date, source_identity=run_identity)
+    lineage = weekly.get("run_lineage") or {}
+    freshness = lineage.get("price_freshness") or {}
+    run_date = _require_date8(freshness.get("run_date") or lineage.get("run_date") or
+                              run_identity.get("run_date"), "run_date")
+    price_data_through = _require_date8(
+        freshness.get("price_data_through") or lineage.get("price_data_through") or
+        weekly.get("price_data_through") or run_identity.get("price_data_through"),
+        "price_data_through",
+    )
+    if price_data_through > decision_date or price_data_through > run_date:
+        raise MarginOverheatCashControlError("margin-overheat capture price_data_through is in the future")
+    document = _cache_document(daily_cache_document)
+    candidates_snapshot, candidate_snapshot_digest = _candidate_snapshots(candidates)
+    if not isinstance(margin_facts, Mapping):
+        raise MarginOverheatCashControlError("margin-overheat margin facts are required")
+    facts_snapshot = copy.deepcopy(dict(margin_facts))
+    _assert_finite_json(facts_snapshot, "margin_facts")
+    facts = None if predicate_facts is None else copy.deepcopy(dict(predicate_facts))
+    if facts is not None:
+        validate_predicate_facts(facts)
+        if facts.get("source_as_of") != decision_date:
+            raise MarginOverheatCashControlError("margin-overheat predicate source_as_of is not decision_date")
+    governance = load_governance()
+    selection_plan = _selection_plan_snapshot(reports)
+    source_receipt = facts.get("source_receipt") if isinstance(facts, Mapping) else None
+    arms = [_arm_capture_snapshot(facts=facts, arm_id=arm["arm_id"], reports=reports,
+                                  decision_date=decision_date, source_receipt=source_receipt)
+            for arm in _arm_definitions()]
+    payload = {
+        "decision_date": decision_date,
+        "run_date": run_date,
+        "price_data_through": price_data_through,
+        "official_m67_digest": official_digest,
+        "margin_fact_digest": _digest(facts_snapshot),
+        "margin_facts_digest": _digest(facts_snapshot),
+        "daily_cache_digest": _digest(document),
+        "candidate_digest": _require_sha(run_identity.get("candidate_digest"), "candidate_digest"),
+        "candidate_snapshot_digest": candidate_snapshot_digest,
+        "experiment_batch_id": governance["namespace"]["experiment_batch_id"],
+        "epoch_id": current_epoch_id(),
+        "forward_eligible": bool(forward_eligible),
+        "predicate_facts": facts,
+        "candidate_universe": candidates_snapshot,
+        "official_selection_plan": selection_plan,
+        "arm_definitions": _arm_definitions(),
+        "arms": arms,
+        "source_references": list(PREDICATE_SOURCE_REFERENCES),
+    }
+    capture = {
+        "schema_name": "a_short_margin_overheat_cash_control_capture",
+        "schema_version": CAPTURE_SCHEMA_VERSION,
+        "track_id": TRACK_ID,
+        "comparison_only": True,
+        "payload": payload,
+        "payload_sha256": _digest(payload),
+        "boundary": _knife3_boundary(governance),
+    }
+    _validate_margin_capture(capture)
+    receipt = _capture_source_receipt(payload)
+    validate_margin_source_receipt(receipt, capture)
+    week_dir = private_root / "weeks" / decision_date
+    capture_path, receipt_path = week_dir / "capture.json", week_dir / "source_receipt.json"
+    if capture_path.exists() or receipt_path.exists():
+        if not capture_path.is_file() or not receipt_path.is_file():
+            raise MarginOverheatCashControlError(
+                f"{decision_date}: partial margin-overheat capture artifact set"
+            )
+        existing_capture = _load_private_json(capture_path, "capture")
+        existing_receipt = _load_private_json(receipt_path, "source receipt")
+        validate_margin_source_receipt(existing_receipt, existing_capture)
+        if existing_capture != capture:
+            raise MarginOverheatCashControlError(CAPTURE_REPLAY_DRIFT_MESSAGE)
+        return {"status": "already_captured", "decision_date": decision_date,
+                "capture": existing_capture}
+    if week_dir.exists() and any(week_dir.iterdir()):
+        raise MarginOverheatCashControlError(
+            f"{decision_date}: partial margin-overheat capture directory"
+        )
+    ledger_path = private_root / "ledger.json"
+    program_path = private_root / "program.json"
+    if program_path.exists():
+        program = _load_private_json(program_path, "program manifest")
+        if program != _margin_capture_program(governance):
+            raise MarginOverheatCashControlError("margin-overheat program manifest drifted")
+    else:
+        program = _margin_capture_program(governance)
+    if ledger_path.exists():
+        ledger = _load_private_json(ledger_path, "ledger")
+        validate_margin_ledger(ledger)
+    else:
+        ledger = _empty_margin_ledger(governance)
+        validate_margin_ledger(ledger)
+    from engine.a_short_artifact_set_transaction import commit_artifact_set
+    commit_artifact_set(_private_journal_dir(private_root), {
+        program_path: _json_bytes(program),
+        ledger_path: _json_bytes(ledger),
+        capture_path: _json_bytes(capture),
+        receipt_path: _json_bytes(receipt),
+    })
+    return {"status": "captured", "decision_date": decision_date, "capture": capture}
+
+
+def _settle_arm(*, arm: Mapping[str, Any], candidate_by_code: Mapping[str, Mapping[str, Any]],
+                decision_date: str, price_data_through: str, dates: Sequence[str],
+                lookup: Mapping[tuple[str, str], Mapping[str, Any]]) -> tuple[dict[str, Any], str | None]:
+    positions = arm.get("positions")
+    if not isinstance(positions, list):
+        return {"arm_id": arm.get("arm_id"), "status": "no_count", "reason": "positions_missing",
+                "horizons": []}, "positions_missing"
+    if decision_date not in dates:
+        return {"arm_id": arm.get("arm_id"), "status": "pending", "reason": "decision_date_not_matured",
+                "horizons": []}, None
+    base_index = list(dates).index(decision_date)
+    if base_index + max(HORIZONS) >= len(dates):
+        return {"arm_id": arm.get("arm_id"), "status": "pending", "reason": "h20_not_mature",
+                "horizons": []}, None
+    selected = [str(row.get("ts_code") or "") for row in positions]
+    for code in selected:
+        if code not in candidate_by_code:
+            return {"arm_id": arm.get("arm_id"), "status": "no_count",
+                    "reason": "candidate_snapshot_missing", "horizons": []}, "candidate_snapshot_missing"
+        base = lookup.get((code, price_data_through))
+        if not _valid_qfq_row(base):
+            return {"arm_id": arm.get("arm_id"), "status": "no_count",
+                    "reason": "price_data_through_unavailable", "horizons": []}, "price_data_through_unavailable"
+        if not math.isclose(float(base["close"]), float(candidate_by_code[code]["close"]),
+                            rel_tol=0.0, abs_tol=1e-8):
+            return {"arm_id": arm.get("arm_id"), "status": "no_count",
+                    "reason": "candidate_close_drift", "horizons": []}, "candidate_close_drift"
+    horizon_rows: list[dict[str, Any]] = []
+    cost_pct = float(load_governance()["outcome_contract"]["cost_pct"])
+    for horizon in HORIZONS:
+        entry_date, exit_date = dates[base_index + 1], dates[base_index + horizon]
+        nav_positions = 0.0
+        total_cost = 0.0
+        for position in positions:
+            code = str(position.get("ts_code") or "")
+            if (isinstance(position.get("shares"), bool)
+                    or not isinstance(position.get("shares"), int)
+                    or position["shares"] <= 0
+                    or not _finite_number(position.get("capital_used"))
+                    or float(position["capital_used"]) <= 0):
+                return {"arm_id": arm.get("arm_id"), "status": "no_count",
+                        "reason": "frozen_position_invalid", "horizons": []}, "frozen_position_invalid"
+            entry, exit_row = lookup.get((code, entry_date)), lookup.get((code, exit_date))
+            if not _valid_qfq_row(entry) or not _valid_qfq_row(exit_row):
+                return {"arm_id": arm.get("arm_id"), "status": "no_count",
+                        "reason": "price_or_adjustment_evidence_missing", "horizons": []}, \
+                    "price_or_adjustment_evidence_missing"
+            entry_adj = float(entry["open"]) * float(entry["adj_factor"])
+            exit_adj = float(exit_row["close"]) * float(exit_row["adj_factor"])
+            nav_positions += int(position["shares"]) * exit_adj
+            total_cost += float(position["capital_used"]) * cost_pct / 100.0
+        allocation = arm.get("allocation_summary") or {}
+        available_start = allocation.get("available_cash_start", _model_cash_cny())
+        remaining_cash = allocation.get("remaining_cash", _model_cash_cny())
+        if not _finite_number(available_start) or not _finite_number(remaining_cash):
+            return {"arm_id": arm.get("arm_id"), "status": "no_count",
+                    "reason": "frozen_cash_invalid", "horizons": []}, "frozen_cash_invalid"
+        retained_cash = _model_cash_cny() - float(available_start)
+        nav = retained_cash + float(remaining_cash) + nav_positions - total_cost
+        horizon_rows.append({
+            "horizon": horizon,
+            "entry_date": entry_date,
+            "exit_date": exit_date,
+            "nav": round(nav, 8),
+            "return_pct": round((nav / _model_cash_cny() - 1.0) * 100.0, 8),
+            "cost": round(total_cost, 8),
+        })
+    return {"arm_id": arm.get("arm_id"), "status": "settled", "reason": None,
+            "horizons": horizon_rows, "position_count": len(positions)}, None
+
+
+def _settle_capture(capture: Mapping[str, Any], document: Mapping[str, Any]) -> dict[str, Any]:
+    payload = capture["payload"]
+    if payload["daily_cache_digest"] != _digest(document):
+        raise MarginOverheatCashControlError("margin-overheat daily cache digest does not match capture")
+    dates, lookup = _cache_rows(document)
+    candidate_by_code = {str(row["ts_code"]): row for row in payload["candidate_universe"]}
+    facts = payload.get("predicate_facts")
+    if not isinstance(facts, Mapping) or facts.get("status") != "available":
+        arms = [{"arm_id": row["arm_id"], "status": "no_count",
+                 "predicate_triggered": row.get("predicate_triggered"),
+                 "reason": "margin_predicate_unavailable", "horizons": []}
+                for row in payload["arms"]]
+        result_payload = {
+            "question_id": QUESTION_ID, "decision_date": payload["decision_date"],
+            "run_date": payload["run_date"], "price_data_through": payload["price_data_through"],
+            "daily_cache_digest": payload["daily_cache_digest"], "status": "no_count",
+            "reason": "margin_predicate_unavailable", "arms": arms,
+        }
+    else:
+        arm_results = []
+        reasons: list[str] = []
+        for arm in payload["arms"]:
+            outcome, reason = _settle_arm(
+                arm=arm, candidate_by_code=candidate_by_code,
+                decision_date=payload["decision_date"],
+                price_data_through=payload["price_data_through"], dates=dates, lookup=lookup,
+            )
+            outcome["predicate_triggered"] = arm.get("predicate_triggered")
+            arm_results.append(outcome)
+            if reason:
+                reasons.append(reason)
+        status = "no_count" if any(row["status"] == "no_count" for row in arm_results) else \
+            "pending" if any(row["status"] == "pending" for row in arm_results) else "settled"
+        result_payload = {
+            "question_id": QUESTION_ID, "decision_date": payload["decision_date"],
+            "run_date": payload["run_date"], "price_data_through": payload["price_data_through"],
+            "daily_cache_digest": payload["daily_cache_digest"], "status": status,
+            "reason": sorted(set(reasons))[0] if reasons else None, "arms": arm_results,
+        }
+    outcome = {
+        "schema_name": "a_short_margin_overheat_cash_control_outcome",
+        "schema_version": CAPTURE_SCHEMA_VERSION,
+        "track_id": TRACK_ID,
+        "comparison_only": True,
+        "capture_sha256": capture["payload_sha256"],
+        "payload": result_payload,
+        "payload_sha256": _digest(result_payload),
+        "boundary": _knife3_boundary(),
+    }
+    validate_margin_outcome(outcome)
+    return outcome
+
+
+def _adjudication_documents(ledger: Mapping[str, Any], outcomes: Mapping[str, Mapping[str, Any]]) -> tuple[dict, dict]:
+    entries = list(ledger.get("entries") or [])
+    statuses = [str(outcomes[row["decision_date"]]["payload"]["status"]) for row in entries]
+    reminders = [
+        {"question_id": QUESTION_ID, "decision_date": row["decision_date"],
+         "status": outcomes[row["decision_date"]]["payload"]["status"],
+         "reason": outcomes[row["decision_date"]]["payload"].get("reason"),
+         "receipt_required": True}
+        for row in entries if outcomes[row["decision_date"]]["payload"]["status"] in {"pending", "no_count"}
+    ]
+    state = build_state(calendar_effective_weeks=0, trigger_effective_weeks=0, stage=STAGE_A)
+    by_arm = {arm_id: {"settled_week_count": 0, "pending_week_count": 0,
+                       "no_count_week_count": 0, "trigger_effective_week_count": 0}
+              for arm_id in stage_arm_ids(STAGE_A)}
+    for row in entries:
+        outcome = outcomes[row["decision_date"]]["payload"]
+        for arm in outcome.get("arms") or []:
+            counts = by_arm[arm["arm_id"]]
+            if arm["status"] == "settled":
+                counts["settled_week_count"] += 1
+            elif arm["status"] == "pending":
+                counts["pending_week_count"] += 1
+            else:
+                counts["no_count_week_count"] += 1
+            if arm.get("predicate_triggered") is True and arm["status"] == "settled":
+                counts["trigger_effective_week_count"] += 1
+    payload = {
+        "question_id": QUESTION_ID,
+        "experiment_batch_id": ledger["experiment_batch_id"],
+        "epoch_id": ledger["epoch_id"],
+        "capture_count": len(entries),
+        "settled_week_count": statuses.count("settled"),
+        "pending_week_count": statuses.count("pending"),
+        "no_count_week_count": statuses.count("no_count"),
+        "by_arm": by_arm,
+    }
+    adjudication = {
+        "schema_name": "a_short_margin_overheat_cash_control_adjudication",
+        "schema_version": CAPTURE_SCHEMA_VERSION,
+        "track_id": TRACK_ID,
+        "comparison_only": True,
+        "payload": payload,
+        "payload_sha256": _digest(payload),
+        "state": state,
+        "reminder_count": len(reminders),
+        "boundary": _knife3_boundary(),
+    }
+    validate_margin_adjudication(adjudication)
+    reminder = {
+        "schema_name": "a_short_margin_overheat_cash_control_reminder",
+        "schema_version": CAPTURE_SCHEMA_VERSION,
+        "track_id": TRACK_ID,
+        "question_id": QUESTION_ID,
+        "experiment_batch_id": ledger["experiment_batch_id"],
+        "epoch_id": ledger["epoch_id"],
+        "reminders": reminders,
+        "production_unchanged": True,
+        "boundary": _knife3_boundary(),
+    }
+    _schema_validate(reminder, REMINDER_SCHEMA_PATH)
+    return adjudication, reminder
+
+
+def validate_margin_reminder(reminder: Mapping[str, Any]) -> None:
+    if not isinstance(reminder, dict):
+        raise MarginOverheatCashControlError("margin-overheat reminder must be an object")
+    _schema_validate(dict(reminder), REMINDER_SCHEMA_PATH)
+    if reminder.get("track_id") != TRACK_ID or reminder.get("production_unchanged") is not True:
+        raise MarginOverheatCashControlError("margin-overheat reminder crossed the production boundary")
+
+
+def _clear_private_margin_reminder(private_root: Path) -> None:
+    """Clear stale private reminders after any settlement/read fault."""
+    if not private_root.exists():
+        return
+    reminder = {
+        "schema_name": "a_short_margin_overheat_cash_control_reminder",
+        "schema_version": CAPTURE_SCHEMA_VERSION,
+        "track_id": TRACK_ID,
+        "question_id": QUESTION_ID,
+        "experiment_batch_id": load_governance()["namespace"]["experiment_batch_id"],
+        "epoch_id": current_epoch_id(),
+        "reminders": [],
+        "production_unchanged": True,
+        "boundary": _knife3_boundary(),
+    }
+    validate_margin_reminder(reminder)
+    from engine.a_short_artifact_set_transaction import commit_artifact_set
+    commit_artifact_set(_private_journal_dir(private_root), {
+        private_root / "reminder.json": _json_bytes(reminder),
+    })
+
+
+def adjudicate_margin_overheat_cash_control(*, root: str | Path) -> dict[str, Any]:
+    private_root = _private_root(root)
+    _recover_private_artifact_set(private_root)
+    ledger = _load_private_json(private_root / "ledger.json", "ledger")
+    validate_margin_ledger(ledger)
+    outcomes: dict[str, dict] = {}
+    for entry in ledger["entries"]:
+        path = private_root / "weeks" / entry["decision_date"] / "outcome.json"
+        if not path.is_file():
+            raise MarginOverheatCashControlError("margin-overheat ledger points to a missing outcome")
+        outcome = _load_private_json(path, "outcome")
+        validate_margin_outcome(outcome)
+        if outcome["capture_sha256"] != entry["capture_sha256"] or \
+                outcome["payload_sha256"] != entry["outcome_sha256"]:
+            raise MarginOverheatCashControlError("margin-overheat ledger outcome digest does not match")
+        outcomes[entry["decision_date"]] = outcome
+    adjudication, reminder = _adjudication_documents(ledger, outcomes)
+    from engine.a_short_artifact_set_transaction import commit_artifact_set
+    commit_artifact_set(_private_journal_dir(private_root), {
+        private_root / "adjudication.json": _json_bytes(adjudication),
+        private_root / "reminder.json": _json_bytes(reminder),
+    })
+    return {"status": "adjudicated_margin_overheat_cash_control",
+            "adjudication": adjudication, "reminder": reminder}
+
+
+def settle_margin_overheat_from_daily_cache(*, root: str | Path,
+                                            daily_cache_document: Mapping[str, Any]) -> dict[str, Any]:
+    """Recompute all private captures from one existing cache, then commit one artifact set."""
+    private_root = _private_root(root)
+    _recover_private_artifact_set(private_root)
+    document = _cache_document(daily_cache_document)
+    program = _load_private_json(private_root / "program.json", "program manifest")
+    if program != _margin_capture_program(load_governance()):
+        raise MarginOverheatCashControlError("margin-overheat program manifest drifted")
+    ledger = _load_private_json(private_root / "ledger.json", "ledger")
+    validate_margin_ledger(ledger)
+    weeks_root = private_root / "weeks"
+    capture_files = [] if not weeks_root.exists() else sorted(
+        path for path in weeks_root.iterdir() if path.is_dir()
+    )
+    captures: dict[str, dict] = {}
+    outcomes: dict[str, dict] = {}
+    receipts: dict[str, dict] = {}
+    for week_dir in capture_files:
+        capture_path, receipt_path = week_dir / "capture.json", week_dir / "source_receipt.json"
+        if not capture_path.is_file() or not receipt_path.is_file():
+            raise MarginOverheatCashControlError(
+                f"{week_dir.name}: partial margin-overheat capture artifact set"
+            )
+        capture = _load_private_json(capture_path, "capture")
+        receipt = _load_private_json(receipt_path, "source receipt")
+        _validate_margin_capture(capture)
+        validate_margin_source_receipt(receipt, capture)
+        if capture["payload"]["daily_cache_digest"] != _digest(document):
+            raise MarginOverheatCashControlError(
+                "margin-overheat daily cache digest does not match capture"
+            )
+        captures[week_dir.name] = capture
+        receipts[week_dir.name] = receipt
+        outcome = _settle_capture(capture, document)
+        outcomes[week_dir.name] = outcome
+    new_entries = []
+    for date in sorted(captures):
+        capture = captures[date]
+        outcome = outcomes[date]
+        new_entries.append({
+            "decision_date": date,
+            "run_date": capture["payload"]["run_date"],
+            "price_data_through": capture["payload"]["price_data_through"],
+            "question_id": QUESTION_ID,
+            "experiment_batch_id": capture["payload"]["experiment_batch_id"],
+            "epoch_id": capture["payload"]["epoch_id"],
+            "capture_sha256": capture["payload_sha256"],
+            "outcome_sha256": outcome["payload_sha256"],
+            "status": outcome["payload"]["status"],
+            "forward_eligible": bool(capture["payload"]["forward_eligible"]),
+        })
+    new_ledger = dict(ledger)
+    new_ledger["entries"] = new_entries
+    validate_margin_ledger(new_ledger)
+    adjudication, reminder = _adjudication_documents(new_ledger, outcomes)
+    writes: dict[Path, bytes] = {
+        private_root / "ledger.json": _json_bytes(new_ledger),
+        private_root / "adjudication.json": _json_bytes(adjudication),
+        private_root / "reminder.json": _json_bytes(reminder),
+    }
+    for date, outcome in outcomes.items():
+        receipt = copy.deepcopy(receipts[date])
+        receipt["payload"]["settlement"] = {
+            "outcome_sha256": outcome["payload_sha256"],
+            "status": outcome["payload"]["status"],
+            "daily_cache_digest": _digest(document),
+        }
+        _schema_validate(receipt, RECEIPT_SCHEMA_PATH)
+        writes[private_root / "weeks" / date / "outcome.json"] = _json_bytes(outcome)
+        writes[private_root / "weeks" / date / "source_receipt.json"] = _json_bytes(receipt)
+    from engine.a_short_artifact_set_transaction import commit_artifact_set
+    commit_artifact_set(_private_journal_dir(private_root), writes)
+    return {"status": "settled_from_existing_cache", "ledger": new_ledger,
+            "adjudication": adjudication, "reminder": reminder}
+
+
+def settle_and_summarize_margin_overheat_weekly(*, root: str | Path | None,
+                                                daily_cache_path: str | Path | None,
+                                                as_of: str) -> dict[str, Any]:
+    """Settle/adjudicate before M6.7 and suppress stale reminders on any fault."""
+    private_root = None
+    try:
+        if root is None:
+            return _public_margin_summary(PUBLIC_STATUS_NOT_CONFIGURED, as_of=as_of)
+        private_root = _private_root(root)
+        if not private_root.exists():
+            return _public_margin_summary(PUBLIC_STATUS_UNAVAILABLE, as_of=as_of)
+        if daily_cache_path is None:
+            _clear_private_margin_reminder(private_root)
+            return _public_margin_summary(PUBLIC_STATUS_UNAVAILABLE, as_of=as_of)
+        document = load_margin_overheat_daily_cache(daily_cache_path)
+        result = settle_margin_overheat_from_daily_cache(
+            root=private_root, daily_cache_document=document
+        )
+        reminder = result["reminder"]
+        validate_margin_reminder(reminder)
+        adjudication = result["adjudication"]
+        validate_margin_adjudication(adjudication)
+        state = adjudication["state"]
+        summary = _public_margin_summary(
+            PUBLIC_STATUS_CURRENT, as_of=as_of,
+            evidence_status=state["evidence_status"],
+            stage=state["stage"],
+            pending_user_receipt_count=len(reminder["reminders"]),
+        )
+        validate_margin_public_summary(summary)
+        return summary
+    except Exception:
+        if private_root is not None:
+            try:
+                _clear_private_margin_reminder(private_root)
+            except Exception:
+                pass
+        return unavailable_margin_public_summary(as_of=as_of)
+
+
+def capture_margin_overheat_after_published_weekly(
+    *, root: str | Path, decision_date: str, candidates: Sequence[Mapping[str, Any]],
+    reports: Sequence[Mapping[str, Any]], source_identity: Mapping[str, Any],
+    official_bundle: Any, daily_cache_path: str | Path | None,
+    margin_facts: Mapping[str, Any], predicate_facts: Mapping[str, Any] | None = None,
+    forward_eligible: bool = False,
+) -> dict[str, Any]:
+    """Capture only after the weekly runner has validated JSON/Markdown/receipt."""
+    if daily_cache_path is None:
+        raise MarginOverheatCashControlError("margin-overheat capture requires an approved daily cache path")
+    document = load_margin_overheat_daily_cache(daily_cache_path)
+    return capture_margin_overheat_week(
+        root=root, decision_date=decision_date, run_identity=source_identity,
+        official_bundle=official_bundle, margin_facts=margin_facts,
+        daily_cache_document=document, candidates=candidates, reports=reports,
+        predicate_facts=predicate_facts, forward_eligible=forward_eligible,
+    )

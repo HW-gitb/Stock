@@ -4,8 +4,11 @@ from __future__ import annotations
 import copy
 import json
 import math
+import tempfile
 import unittest
+from datetime import datetime, timedelta
 from pathlib import Path
+from types import SimpleNamespace
 from unittest.mock import patch
 
 import jsonschema
@@ -771,6 +774,302 @@ class MarginOverheatCashControlKnife2Tests(unittest.TestCase):
                 as_of=AS_OF,
                 source_receipt=facts["source_receipt"],
             )
+
+
+class MarginOverheatCashControlKnife3Tests(unittest.TestCase):
+    """Knife 3 capture, existing-cache settlement, and private/public gates."""
+
+    def setUp(self):
+        self.temp = tempfile.TemporaryDirectory()
+        self.addCleanup(self.temp.cleanup)
+        self.root = Path(self.temp.name) / "margin_overheat_private"
+        self.sessions, self.predicate_facts = MarginOverheatCashControlKnife2Tests._predicate()
+        self.candidate = _normalized()
+        self.candidates = [copy.deepcopy(self.candidate)]
+        self.reports = self._reports_with_one_frozen_build()
+        self.identity = {
+            "run_id": f"a-short-{AS_OF}-{'1' * 16}",
+            "candidate_digest": "b" * 64,
+            "run_date": "20260610",
+            "price_data_through": AS_OF,
+        }
+        self.margin_facts = MarginOverheatCashControlKnife2Tests._margin_control_input(
+            self.predicate_facts
+        )
+        self.cache = self._daily_cache()
+        self.cache_path = Path(self.temp.name) / "approved_daily_cache.json"
+        self.cache_path.write_text(
+            json.dumps(self.cache, ensure_ascii=False, sort_keys=True), encoding="utf-8"
+        )
+
+    @staticmethod
+    def _reports_with_one_frozen_build():
+        reports = copy.deepcopy(MarginOverheatCashControlKnife2Tests._reports())
+        report = reports[0]
+        table = report["m67"]["table"]
+        table["操作"] = "建仓"
+        table["股数"] = 5000
+        layer = report["machine"]["entry_exit_size_star"]
+        layer["cash_allocation_star"] = 3
+        layer["plan"] = {
+            "entry_high": 2.90,
+            "shares": 5000,
+            "rr_at_entry_high": 2.0,
+            "avg_amount_5d": 1_000_000.0,
+        }
+        return reports
+
+    def _official_bundle(self, reports=None):
+        weekly = {
+            "as_of": AS_OF,
+            "run_lineage": {
+                "run_id": self.identity["run_id"],
+                "candidate_digest": self.identity["candidate_digest"],
+                "price_freshness": {
+                    "run_date": self.identity["run_date"],
+                    "price_data_through": AS_OF,
+                },
+            },
+            "reports": copy.deepcopy(reports if reports is not None else self.reports),
+        }
+        receipt = {
+            "run_id": self.identity["run_id"],
+            "candidate_digest": self.identity["candidate_digest"],
+        }
+        weekly_bytes = json.dumps(
+            weekly, ensure_ascii=False, sort_keys=True, separators=(",", ":")
+        ).encode("utf-8")
+        return SimpleNamespace(
+            weekly=weekly,
+            receipt=receipt,
+            weekly_bytes=weekly_bytes,
+            markdown_bytes=b"validated markdown",
+            receipt_bytes=b"validated receipt",
+        )
+
+    def _daily_cache(self):
+        base = datetime.strptime(AS_OF, "%Y%m%d")
+        dates = []
+        cursor = base
+        while len(dates) < 26:
+            if cursor.weekday() < 5:
+                dates.append(cursor.strftime("%Y%m%d"))
+            cursor += timedelta(days=1)
+        close0 = float(self.candidate["close"])
+        stocks = []
+        for index, trade_date in enumerate(dates):
+            stocks.append({
+                "ts_code": self.candidate["ts_code"],
+                "trade_date": trade_date,
+                "open": round(close0 + index * 0.01, 8),
+                "close": round(close0 + index * 0.02, 8),
+                "adj_factor": 1.0,
+                "adj_factor_observed": True,
+                "adj_factor_source": "fixed_test_cache",
+                "corporate_action_verified": True,
+            })
+        return {
+            "schema_name": "a_short_factor_comparison_v2_daily_cache",
+            "schema_version": "1.0.0",
+            "stocks": stocks,
+            "limits": [],
+            "meta": {"cache_kind": "knife3_test", "source": "fixed_test_cache"},
+        }
+
+    def _capture(self, **overrides):
+        args = {
+            "root": self.root,
+            "decision_date": AS_OF,
+            "run_identity": self.identity,
+            "official_bundle": self._official_bundle(),
+            "margin_facts": self.margin_facts,
+            "daily_cache_document": self.cache,
+            "candidates": self.candidates,
+            "reports": self.reports,
+            "predicate_facts": self.predicate_facts,
+        }
+        args.update(overrides)
+        return track.capture_margin_overheat_week(**args)
+
+    def _stored(self, name):
+        return json.loads((self.root / name).read_text(encoding="utf-8"))
+
+    def test_capture_settle_ledger_and_public_summary_are_private_and_complete(self):
+        official_before = copy.deepcopy(self.reports)
+        captured = self._capture()
+        self.assertEqual(captured["status"], "captured")
+        self.assertEqual(self.reports, official_before)
+
+        settled = track.settle_margin_overheat_from_daily_cache(
+            root=self.root, daily_cache_document=self.cache
+        )
+        self.assertEqual(settled["status"], "settled_from_existing_cache")
+        ledger = self._stored("ledger.json")
+        outcome = self._stored(f"weeks/{AS_OF}/outcome.json")
+        adjudication = self._stored("adjudication.json")
+        reminder = self._stored("reminder.json")
+        track.validate_margin_ledger(ledger)
+        track.validate_margin_outcome(outcome)
+        track.validate_margin_adjudication(adjudication)
+        track.validate_margin_reminder(reminder)
+        self.assertEqual(ledger["entries"][0]["status"], "settled")
+        self.assertEqual(outcome["payload"]["status"], "settled")
+        self.assertEqual(len(outcome["payload"]["arms"]), 4)
+        self.assertEqual(
+            {row["horizon"] for row in outcome["payload"]["arms"][0]["horizons"]},
+            {5, 10, 20},
+        )
+
+        public = track.settle_and_summarize_margin_overheat_weekly(
+            root=self.root, daily_cache_path=self.cache_path, as_of=AS_OF
+        )
+        track.validate_margin_public_summary(public)
+        self.assertEqual(public["status"], track.PUBLIC_STATUS_CURRENT)
+        self.assertEqual(public["pending_user_receipt_count"], 0)
+        self.assertEqual(set(public), {
+            "schema_name", "schema_version", "track_id", "status", "evidence_status",
+            "current_stage", "pending_user_receipt_count", "message", "production_unchanged",
+        })
+        public_text = json.dumps(public, ensure_ascii=False)
+        for private_value in (self.candidate["ts_code"], "baseline", "payload_sha256", "private"):
+            self.assertNotIn(private_value, public_text)
+
+    def test_publish_gate_rejects_missing_validated_bundle_without_capture(self):
+        with self.assertRaisesRegex(
+            track.MarginOverheatCashControlError, "validated official M6.7 bundle"
+        ):
+            self._capture(official_bundle=None)
+        self.assertFalse(self.root.exists())
+
+    def test_weekly_order_and_missing_cache_are_nonblocking_and_clear_stale_reminder(self):
+        source = Path(weekly_pipeline.__file__).read_text(encoding="utf-8")
+        capture_marker = "if args.margin_overheat_cash_control_root:\n        _expect_sidecar(\"margin_overheat_cash_control_capture\")"
+        self.assertLess(source.rfind("publish_weekly_bundle("), source.index(capture_marker))
+        self._capture()
+        settled = track.settle_margin_overheat_from_daily_cache(
+            root=self.root, daily_cache_document=self.cache
+        )
+        reminder = settled["reminder"]
+        reminder["reminders"] = [{
+            "question_id": track.QUESTION_ID, "decision_date": AS_OF,
+            "status": "no_count", "reason": "stale implant", "receipt_required": True,
+        }]
+        track.validate_margin_reminder(reminder)
+        (self.root / "reminder.json").write_text(
+            json.dumps(reminder, ensure_ascii=False, sort_keys=True), encoding="utf-8"
+        )
+        public = track.settle_and_summarize_margin_overheat_weekly(
+            root=self.root,
+            daily_cache_path=self.root / "missing-cache.json",
+            as_of=AS_OF,
+        )
+        self.assertEqual(public["status"], track.PUBLIC_STATUS_UNAVAILABLE)
+        self.assertEqual(self._stored("reminder.json")["reminders"], [])
+
+    def test_same_day_drift_is_rejected_by_exact_replay_gate(self):
+        self._capture()
+        changed_facts = dict(self.margin_facts)
+        changed_facts["ratio"] = float(changed_facts["ratio"]) + 0.001
+        with self.assertRaisesRegex(
+            track.MarginOverheatCashControlError,
+            "margin-overheat capture replay input drifted",
+        ):
+            self._capture(margin_facts=changed_facts)
+
+    def test_cross_batch_and_cross_epoch_artifact_tampering_are_rejected(self):
+        self._capture()
+        capture = self._stored(f"weeks/{AS_OF}/capture.json")
+        capture["payload"]["experiment_batch_id"] = "foreign_batch"
+        capture["payload_sha256"] = track._digest(capture["payload"])
+        with self.assertRaisesRegex(
+            track.MarginOverheatCashControlError, "crosses experiment batch"
+        ):
+            track._validate_margin_capture(capture)
+
+        capture = self._stored(f"weeks/{AS_OF}/capture.json")
+        capture["payload"]["epoch_id"] = "foreign_epoch"
+        capture["payload_sha256"] = track._digest(capture["payload"])
+        with self.assertRaisesRegex(
+            track.MarginOverheatCashControlError, "crosses independent epoch"
+        ):
+            track._validate_margin_capture(capture)
+
+    def test_forged_receipt_and_partial_write_are_rejected(self):
+        self._capture()
+        capture = self._stored(f"weeks/{AS_OF}/capture.json")
+        receipt = self._stored(f"weeks/{AS_OF}/source_receipt.json")
+        receipt["payload"]["capture_sha256"] = "0" * 64
+        with self.assertRaisesRegex(
+            track.MarginOverheatCashControlError, "capture_sha256 does not match capture"
+        ):
+            track.validate_margin_source_receipt(receipt, capture)
+
+        (self.root / f"weeks/{AS_OF}/source_receipt.json").unlink()
+        with self.assertRaisesRegex(
+            track.MarginOverheatCashControlError, "partial margin-overheat capture artifact set"
+        ):
+            self._capture()
+
+    def test_d1_d3_and_other_subtrack_namespace_contamination_turns_red(self):
+        self._capture()
+        capture = self._stored(f"weeks/{AS_OF}/capture.json")
+        capture["payload"]["source_references"][-1] = "a_short.factor_comparison_v2"
+        capture["payload_sha256"] = track._digest(capture["payload"])
+        with self.assertRaisesRegex(
+            track.MarginOverheatCashControlError,
+            "source references are outside the dedicated contract",
+        ):
+            track._validate_margin_capture(capture)
+
+        ledger = self._stored("ledger.json")
+        ledger["track_id"] = "a_short.factor_comparison_v2"
+        with self.assertRaisesRegex(
+            track.MarginOverheatCashControlError, "invalid margin-overheat contract"
+        ):
+            track.validate_margin_ledger(ledger)
+
+    def test_missing_adjustment_evidence_produces_question_week_no_count(self):
+        bad_cache = copy.deepcopy(self.cache)
+        bad_cache["stocks"][1]["adj_factor_observed"] = False
+        self.cache = bad_cache
+        self.root = Path(self.temp.name) / "missing_adjustment_private"
+        captured = self._capture()
+        self.assertEqual(captured["status"], "captured")
+        settled = track.settle_margin_overheat_from_daily_cache(
+            root=self.root, daily_cache_document=self.cache
+        )
+        self.assertEqual(
+            settled["adjudication"]["payload"]["no_count_week_count"], 1
+        )
+        self.assertEqual(
+            self._stored(f"weeks/{AS_OF}/outcome.json")["payload"]["status"], "no_count"
+        )
+
+    def test_settlement_schema_fault_returns_unavailable_without_retrying_contract_io(self):
+        missing_schema = Path(self.temp.name) / "missing-public-summary.schema.json"
+        with patch.object(track, "PUBLIC_SUMMARY_SCHEMA_PATH", missing_schema):
+            with self.assertRaisesRegex(
+                track.MarginOverheatCashControlError, "cannot read contract"
+            ):
+                track._public_margin_summary(track.PUBLIC_STATUS_UNAVAILABLE, as_of=AS_OF)
+            public = track.settle_and_summarize_margin_overheat_weekly(
+                root=self.root, daily_cache_path=self.cache_path, as_of=AS_OF
+            )
+        self.assertEqual(public["status"], track.PUBLIC_STATUS_UNAVAILABLE)
+        self.assertEqual(public["pending_user_receipt_count"], 0)
+        self.assertEqual(set(public), {
+            "schema_name", "schema_version", "track_id", "status", "evidence_status",
+            "current_stage", "pending_user_receipt_count", "message", "production_unchanged",
+        })
+
+    def test_wrapped_same_week_replay_drift_keeps_its_immutable_identity(self):
+        try:
+            try:
+                raise track.MarginOverheatCashControlError(track.CAPTURE_REPLAY_DRIFT_MESSAGE)
+            except track.MarginOverheatCashControlError as cause:
+                raise RuntimeError("sidecar wrapper") from cause
+        except RuntimeError as wrapped:
+            self.assertTrue(track.is_capture_replay_drift(wrapped))
 
 
 if __name__ == "__main__":

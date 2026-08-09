@@ -1,0 +1,35 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "a_short_margin_overheat_cash_control_ledger",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_name", "schema_version", "track_id", "program_id", "question_id", "experiment_batch_id", "epoch_id", "entries", "boundary"],
+  "properties": {
+    "schema_name": {"const": "a_short_margin_overheat_cash_control_ledger"},
+    "schema_version": {"const": "1.0.0"}, "track_id": {"const": "a_short_margin_overheat_cash_control"},
+    "program_id": {"const": "margin_overheat_cash_control"}, "question_id": {"const": "margin_overheat_cash_control"},
+    "experiment_batch_id": {"type": "string", "minLength": 1}, "epoch_id": {"type": "string", "minLength": 1},
+    "entries": {
+      "type": "array", "items": {
+        "type": "object", "additionalProperties": false,
+        "required": ["decision_date", "run_date", "price_data_through", "question_id", "experiment_batch_id", "epoch_id", "capture_sha256", "outcome_sha256", "status", "forward_eligible"],
+        "properties": {
+          "decision_date": {"type": "string", "pattern": "^[0-9]{8}$"}, "run_date": {"type": "string", "pattern": "^[0-9]{8}$"},
+          "price_data_through": {"type": "string", "pattern": "^[0-9]{8}$"}, "question_id": {"const": "margin_overheat_cash_control"},
+          "experiment_batch_id": {"type": "string", "minLength": 1}, "epoch_id": {"type": "string", "minLength": 1},
+          "capture_sha256": {"type": "string", "pattern": "^[a-f0-9]{64}$"}, "outcome_sha256": {"type": "string", "pattern": "^[a-f0-9]{64}$"},
+          "status": {"enum": ["pending", "no_count", "settled"]}, "forward_eligible": {"type": "boolean"}
+        }
+      }
+    },
+    "boundary": {
+      "type": "object", "additionalProperties": false,
+      "required": ["production", "production_effect_enabled", "automatic_policy_switch", "historical_replay_counts_as_forward", "historical_backfill_forbidden", "provider_calls_during_settlement", "direct_activation_requires_user_authorization"],
+      "properties": {
+        "production": {"const": false}, "production_effect_enabled": {"const": false}, "automatic_policy_switch": {"const": false},
+        "historical_replay_counts_as_forward": {"const": false}, "historical_backfill_forbidden": {"const": true},
+        "provider_calls_during_settlement": {"const": false}, "direct_activation_requires_user_authorization": {"const": true}
+      }
+    }
+  }
+}
