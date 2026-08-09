@@ -338,6 +338,26 @@ Knife7 是最后一刀，共负责四件事：
 
 Knife7 的启动门已实现（`engine/us_short_market_diagnostic_start_receipt.py` + `runners/us_short_market_diagnostic_weekly.py`）；门建成不等于门打开。操作员用 `emit-notification-template` 仅生成 schema-valid、无末尾换行的 canonical 通知文件，命令本身不确认设计完成、不签发 receipt、不打开时钟；输出路径采用 `O_EXCL`，拒绝覆盖已有文件。通知或 receipt 含非有限数等不可 canonicalize 的内容时，公开入口必须转换为本轨 typed error，store status 归 `broken`，不得泄漏外部模块异常。本文件写下的仍是冻结设计，不是启动通知：至今没有签发过 receipt，也仍无真实第 1 周、真实 10 万美元 model-paper 账户、真实 ETF sidecar 或 PIT 现金归因结果。通知源绑定实现同样不等于已经发出通知。上文第 4 条（正式 weekly task 自动读取 `v1_1_attribution`）**已接线**（2026-08-09 复核）：`engine/us_short_market_diagnostic_weekly_task.py` 读 `register["v1_1_attribution"]` 并在 active 时调用刀 6 的 `build_attribution_input` / `build_attribution_report`。接线不等于有结果——缺 VTI total return、PIT 现金收益或 `g*` 时仍产出 `unavailable`。
 
+## 12.9 剩余必做与各自的开始条件
+
+**本节是指针，不是第二份正文。**每条只写「是什么 / 权威在哪 / 何时开始」；**状态、进度、条数一律以指向处为准**，本节不复述——复述就会漂。加新条目时沿用同一形状。
+
+1. **真实周的 ETF 总回报闭环**（让基准侧真正按总回报计，而不是长期停在价格收益降级）
+   - 权威：`docs/system_risk_register.md::R-USSHORT-26W-DIAG-BOTH-SIDES-IGNORE-DIVIDENDS-AND-THAT-IS-NOT-NEUTRAL`
+   - 何时开始：随时钟启动后的第一批真实周一并完成。若要在启动前先证明可行，需另起一刀——取证用的 capture runner 只抓取存证，本身不产 week-aligned sidecar、也不算总回报。
+
+2. **启动 26 周时钟**（本文 §3 的唯一启动门）
+   - 权威：本文 §3 与 §12.8
+   - 何时开始：硬前置是 **US-short 设计本身定稿**（见 `docs/us_short_system_design.md` 顶部 status 行）。定稿后才轮到「设计审计 → 独立 `设计完成` 通知 → 同一操作签发 `diagnostic_start_receipt`」。三者缺一，lifecycle 写入必须 fail-closed。
+
+3. **播种归一化 10 万美元 model-paper 账户**
+   - 权威：本文 §3
+   - 何时开始：**无需单独动手**——播种由正式 model-paper 路径在第一次真实运行时一次性完成，与启动同批发生；诊断轨不得自行创建账户。私有 store 为空只说明尚未真实运行过。
+
+4. **目标暴露的契约绑定**（让 `g*` 的两个分量不只是被声明）
+   - 权威：`docs/system_risk_register.md::R-USSHORT-26W-DIAG-TARGET-EXPOSURE-PRODUCER-MUST-DERIVE-NOT-ASSERT`
+   - 何时开始：该条目内已写死三个触发条件（归因首次将产出非 `unavailable` 的报告 / 出现第二个生产侧调用方 / 归因数字要用于对外结论），**任一命中即开工**，未命中前不开工。开工范围亦以该条目为准。
+
 ## 13. Knife 0 验收
 
 刀0完成必须证明：
