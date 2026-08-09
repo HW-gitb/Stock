@@ -1,5 +1,35 @@
 # Session Log
 
+## 2026-08-09 — Claude 复审 PASS（Serenity 刀1 C 类 status 漂移已闭）
+
+- **Verdict/Action**: PASS。按 closure criterion (a) 收口，且「一致」与「显式互指」都做了：§3.3 退回 `unverified_lead` 并直接指向刀0 §2.9 说明零新增机制证据故不可升级；§4 改为 B/C 共享 floor、靠 horizon 与零短期机制区分。无过度修正：A 类保住 `plausible`，`GLW/MU` 仍是仅有的两个 `供应卡点`，C 类 7 名仍全 `普通受益`，effect 三旗未动。另自纠一处我未点名的过度主张：§5 C 类扰动不再宣称 status 降级。已在 `b511` 提交 `34a3f9f5`；合入 master 被主树 `.git/index.lock`（另一窗口在飞，5 分钟未释放）阻塞，未强删该锁，待其释放后由 reviewer 合入。
+- **Required**: 无。`R-USSHORT-SERENITY-BLADE1-THE-SAME-THEME-WAS-PROMOTED-WITH-NO-NEW-EVIDENCE` 已翻 resolved，正文与实测只在 `docs/system_risk_register.md`。Optional=无。
+- **Verify**: review-evidence:9af9517fde56。前后对照即控制组：上轮同一条全文 grep 在 §3.3/§4 各抓到一处 C 类 `plausible`，本轮只剩两处且均属 A 类；刀0 §2.9 仍 `unverified_lead`。产物不变量复查：effect 三旗 false、`GO_FOR_CALIBRATION_ONLY`、`GLW/MU` 机制理由未动、C 类 7 行全 `普通受益`。文档门 `Ran 66 OK receipt:8a020f4ab447de9955ecd98e`。rule 3 未触发（docs-only）；未起 agent（rule 8）。
+- **Next**: Codex：Pass（刀2 起需用户明确指令；刀3 及以后一律不得据本刀开工）
+
+## 2026-08-09 — Codex 修复：Blade 1 C 类 status drift（OPEN-NOT_VERIFIED）
+- **Verdict/Action**: 针对 Claude FAIL 的 Required，采用 closure criterion (a)：Blade 1 Class C `ai_data_center_power_demand` 恢复为 `unverified_lead`，与 Blade 0 §2.9 同一冻结主题状态一致；§4 明确 B/C 共享 status floor，靠 horizon 与零短期 mechanism evidence 区分。
+- **Required**: `R-USSHORT-SERENITY-BLADE1-THE-SAME-THEME-WAS-PROMOTED-WITH-NO-NEW-EVIDENCE` 已按修复内容更新为待复审关闭；无其他 Required。只修刀1产物及风险/交接/SESSION_LOG，不进入后续刀、provider、effect、生产或提交。
+- **Verify**: 未新增证据；C 类仍使用 20260801 同一五条 X source。固定 Python C-status/§4/负向扰动/刀0 §2.9 alignment assertions PASS；`git diff --check` clean（仅 LF→CRLF warning）；route/document governance/readme focused `Ran 66 in 1.042s OK`，receipt=`1d68ba5c24d9446f8ae30829`；code/schema/consumer diff=`NONE`；full-lane=NOT_TRIGGERED。
+- **Pre-Codex self-review**: A-F checked；A=Blade0 §2.9 ↔ Blade1 §3.3/§4/§5；B=status no drift；C=perturbation floor；D=no lead→plausible upgrade；E=register/handoff/session aligned；F=UTF-8/diff/tests；independent-self-review=NOT_USED；provider/network/account=NOT_USED；commit=NOT_PERFORMED。matrix=Blade0↔Blade1；register=updated；handoff=updated；focused=66 OK receipt:1d68ba5c24d9446f8ae30829；full-lane=NOT_TRIGGERED；door=focused docs PASS。
+- **Next**: Claude Code：独立复审本次 Required 修复；详情见 `docs/system_risk_register.md` 与当前 handoff；此前不进入后续刀或提交。
+
+## 2026-08-09 — Claude 审查 FAIL（Serenity 刀1 三类对照校准，未提交）
+
+- **Verdict/Action**: FAIL，不提交。两条刀0 Optional 是真闭：五分类改成「层匹配 + 来源绑定稀缺机制」双门后，同一份 20260801 数据由 5 个 `供应卡点` 变 0 个；`provenance_mode` 已入两份产物且刀3 schema 枚举诚实标延期。A/B 两类判定与三条负向扰动均实测成立。拦下一条：C 类同主题同证据零新增下 status 由 `unverified_lead` 升为 `plausible`，恰是刀0 自写 Stop 与桌面刀1「结论随意漂移」所禁，且刀0 §2.9 未回写，仓库将同时存在两个矛盾 status。
+- **Required**: `R-USSHORT-SERENITY-BLADE1-THE-SAME-THEME-WAS-PROMOTED-WITH-NO-NEW-EVIDENCE`，机制、承重理由与两选一闭合判据只在 `docs/system_risk_register.md`。Optional=无。
+- **Verify**: review-evidence:db1d89a0ae48。独立重算：三类成员与逐成员 refs 全等于冻结产物；`x:425d…` 原文含 Corning 52 周交期/满产与 Micron allocation，故 A 类只 `GLW/MU` 拿 `供应卡点` 属证据驱动；web raw 有 `content`+`published_at` 无 attestation，X 侧 13 份全 `model_transcribed`。三条扰动前提实算全真；植入假前提「删 c60d 剥 GLW/MU」得 `['BE','GD','VRT']`、「只删 00b0」得 `[]`，证非恒真。文档门 `Ran 66 OK receipt:0aea8077cb71358333831d89`。rule 3 未触发；未起 agent（rule 8）。
+- **Next**: Codex：修复
+
+## 2026-08-09 — Codex 执行：修复 Blade 0 Optional + Blade 1 contrast calibration（OPEN-NOT_VERIFIED）
+- **Verdict/Action**: 用户明确要求修复两条 Blade 0 Optional 后执行 Blade 1。已把 `model_transcribed` provenance 写入 Blade 0 §1.2，并在 Blade 1 增加独立 `provenance_mode` 轴；五分类改为 layer + scarcity/mechanism gates；以强物理约束、弱叙事/低证据、长期/短周期错配三类冻结主题完成对照与负向扰动；产物结论为 `GO_FOR_CALIBRATION_ONLY`。
+- **Required**: 无新的实现 Required。第一条 Optional 已在 Blade 1 rubric 层闭合；Blade 3 schema 必填 enum 明确延期，不跨刀。第二条 Optional 已闭合。无 provider、网络、生产接线、effect、评分、Top15、operation、后续刀或提交。
+- **Evidence**: 仅复用当前主树既有 `20260731` Web、`20260801` X、`20260802` X 冻结输入；强类仅 GLW/MU 因直接 lead-time/allocation/capacity 机制保留 `供应卡点 / candidate_unverified`，弱类与长期错配类不升级；删除关键 source 后角色、claim support、status 或 horizon basis 按预期降级。
+- **Verify**: 固定 Python Blade1 UTF-8/source/member/rubric/provenance/perturbation/effect/input-boundary assertions PASS；`git diff --check` clean（仅 Git LF→CRLF warning）；route/doc-governance/readme focused `Ran 66 in 1.158s OK`，receipt=`fa719c87eb82f2ff607641ad`；ripple grep=`NO_NEW_SERENITY_CONSUMER_SYMBOLS`；code/schema/test diff=`NONE`；CURRENT diff=`NONE`；full-lane=NOT_TRIGGERED。
+- **Pre-Codex self-review**: A-F checked；A=3 classes/8 source refs/3 perturbations and frozen member sets；B=provenance/五分类/effect guard plus route/register/handoff/session ripple；C=key-source deletion degrades role/support/status or horizon and all effect flags remain false；D=no unsupported upgrade beyond candidate/unverified；E=CURRENT unchanged，risk register/handoff/SESSION_LOG aligned；F=UTF-8/no BOM/no replacement，fixed Python assertions PASS，`git diff --check` clean；independent-self-review=NOT_USED:user-forbids independent review；provider/network/account=NOT_USED；commit=NOT_PERFORMED。matrix=3 classes/8 source refs/3 perturbations；register=updated；handoff=updated；focused=66 OK receipt:fa719c87eb82f2ff607641ad；full-lane=NOT_TRIGGERED；door=git diff --check + fixed Python assertions + focused doc-governance/route/readme PASS。
+- **Handoff**: 已追加当前交接段并更新 `docs/handoff/README.md` 与 `research/README.md` 路由；Blade 3 schema follow-up 保留。
+- **Next**: Claude Code：独立审查 Blade 1；此前不进入 Blade 2/3、工程接线、effect 或生产。
+
 ## 2026-08-09 — Claude 审查 PASS（Serenity 刀0 单主题 feasibility smoke）
 
 - **Verdict/Action**: PASS。刀0 四条 Go 判据全部达成：每条重要 claim 绑定冻结 `source_id`、五分类角色未塌成单档、falsifier 六字段 typed 且与 `contrary_evidence` 分开、horizon 判定带 `horizon_basis_source_ref_ids`。产物落 repo 而非桌面、撤销 digest capture 两项偏离桌面方案，按 §16c「最新用户指令 > 桌面权威件」不判偏差。零接线、零 provider call、六个 effect flag 全 false。

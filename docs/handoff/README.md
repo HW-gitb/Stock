@@ -13,7 +13,7 @@ Use this file to decide which handoff to open. Do not read every handoff by defa
 
 ## Current Phase Handoff
 
-- `2026-08-09_us_serenity_annotation_blade0_handoff.md` — Serenity `structural_theme_annotation` Blade 0 single-theme feasibility smoke；仅证明 rubric 可填写，保持 `unverified_lead` 与全 effect flags false；触及 Serenity 研究刀时打开。
+- `2026-08-09_us_serenity_annotation_blade0_handoff.md` — Serenity `structural_theme_annotation` Blade 0 feasibility smoke + Blade 1 contrast calibration；仅限 research/advisory，保持 `unverified_lead`/`GO_FOR_CALIBRATION_ONLY` 与全 effect flags false；触及 Serenity 研究刀时打开。
 
 - `2026-08-04_us_short_market_diagnostic_knife1_handoff.md` — US-short 26 周市场诊断轨 Knife1 纯计算、Knife2 本地只读适配、Knife3 不可变周记录/计数/reminder 契约、Knife10c 报告行接进周报已注册 §12 区块、演练刀（rehearsal harness）规格与实施、断供周写 no_count 自愈（钟不再永久卡死）、triage Required ① 的 8 条状态回写（逐条现行代码复核，全数 resolved）、首周门（canonical 决策周 + `issued_at` 不得在未来）、前视门放行默认删除改必传（六个签名 + AST 守卫）、KNIFE7 家族五条定点探针、演练台 O(n²) 的真正位置（在调用方不在读取链，每周整店读校 22.8→11.2 次、模块 176→109.4s）及其审查结论（PASS，两条 Optional）、lane 地板两刀（owned-root git-check seam 提到 setUp：soft-discovery 62.7→25.0s、地板 199.5→130.0s）、刀 5 后半段 ETF sidecar producer/gated fetch/settle binding、四条兄弟腿 Required 收口、Knife7 tests-only 18 项回归清账、RECEIPT-DIGESTS 通知源 canonical JSON/O_EXCL/全消费点复核与 rehearsal 接线、空白/typed-error/operator producer 三条审查 Required 收口、中断恢复完整 pending receipt 绑定与零增益 `notification_sha256` 删除及 focused/full-lane 边界、代码/测试入口；触及该诊断轨时打开。
 
