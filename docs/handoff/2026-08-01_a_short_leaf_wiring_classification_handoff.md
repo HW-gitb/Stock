@@ -3874,3 +3874,148 @@ O17 调用链为 `build_state → _preliminary_calendar_effective_weeks → _adj
 依据是用户 2026-07-25 固化的那条：**设计未定稿前，任何部件都别产生「改别处就要作废已积累证据」的问题**。
 
 **下一步**：`Codex：执行`（先甲后乙；乙的 seed 路线要先拿到用户点头）
+
+## 2026-08-09 追加：甲接线 + 乙授权 seed/replay（Codex executor/fixer，OPEN-NOT_VERIFIED）
+
+### 问题、根因与本轮结论
+
+本轮执行桌面序19后续方案，顺序为先甲后乙。根因是融资过热 comparison-only 子轨已有 producer、shadow consumer、weekly capture/settle/ledger/adjudication 机器，但 `runners/weekly_screening.ps1` 没有给 weekly M6.7 入口传私密 root；同时 EGS 已读取的 `pro.margin` 与 denominator 行没有产出结构化 `predicate_facts`，`capture_margin_overheat_after_published_weekly` 因此只能收到 `margin_facts`，四条臂全部 `no_count`。
+
+甲已完成最小接线；乙按用户明确授权完成一次 bounded seed 并生成三臂 replay。当前仍是 comparison-only / pre-freeze；本轮不翻 registry mode，不起 forward clock，不生成 freeze manifest，不接 `_allocate_cash`，不实现刀 2/3/4 后续语义，不 commit。
+
+### 改动文件与最小改动
+
+- `A-EGS/egs_main.py`：把既有 margin/denominator provider rows 的读取合并为一次 bundle，保留 public row-19 facts，并新增 `predicate_facts = build_predicate_facts(...)`。predicate 生成失败只返回 `None`，不伪造事实，不改变 EGS scoring、TopN 或 M6.7。
+- `schemas/analysis_input.schema.json`：在 `market_context.margin_overheat` 增加可空 `predicate_facts` carrier；专属 predicate/replay schema 仍由直接消费者验证，未把 external `$ref` 引入 bare Draft7 contract path。
+- `schemas/a_short_m67_effect_contract.json`：登记新 leaf `market_context.margin_overheat.predicate_facts`、更新 all-path/group digest 和两个 decision predicate digest；分类为 `intentionally_independent_or_delete`，terminal surface 明确为 private comparison capture，不是官方 M6.7/production allocation effect。
+- `runners/a_short_weekly_pipeline.py`：从 `analysis_input.market_context.margin_overheat.predicate_facts` 取值，传给 `capture_margin_overheat_after_published_weekly(..., predicate_facts=predicate_facts)`；缺失继续走既有 fail-soft/no-count。
+- `runners/weekly_screening.ps1`：新增融资过热 private root，并给 `$M67Args` 传该 root 与既有 `$FactorComparisonV2Cache`；没有加入 `--margin-overheat-cash-control-forward`。
+- `tests/test_a_short_margin_overheat_wiring.py`、`tests/test_a_short_weekly_pipeline.py`、`tests/test_a_short_margin_overheat_cash_control.py`：新增 producer source-bound 正控、pipeline consumer 传参正控、launcher root/cache/no-forward 守卫。
+- 乙执行更新 `research/results/a_short/margin_overheat_percentile_threshold_evidence.json`；新增 `research/results/a_short/margin_overheat_cash_control_replay_frequency.json`。raw 不纳入 tracked 文件；新 replay 当前为未 stage 的工作树产物。
+
+### 调用链、直接消费者、schema、source-binding、写盘边界
+
+甲调用链：
+
+```text
+既有 pro.margin.rzye + index_dailybasic.float_mv rows
+  -> A-EGS _margin_overheat_provider_bundle
+  -> engine.a_short_margin_overheat_cash_control.build_predicate_facts
+  -> analysis_input.market_context.margin_overheat.predicate_facts
+  -> runners/a_short_weekly_pipeline.py
+  -> capture_margin_overheat_after_published_weekly(..., predicate_facts=...)
+  -> private comparison-only capture/settle/ledger/public projection
+```
+
+直接消费者是 `capture_margin_overheat_after_published_weekly` 及其私有 comparison-only sidecar；官方 M6.7 报告、生产 `_allocate_cash`、三条生产常量和 registry mode 不消费该字段。`analysis_input` 只作 carrier，predicate facts 在 capture 直接消费者边界按专属 schema、exact-date ratio、digest/receipt 校验。
+
+EGS 使用同一决策日 exact-date window；若 publication lag 使当天无法闭合，不把前一日事实错误绑定到当天，predicate carrier 保持 unavailable/`None`。乙 replay 使用同一 raw seed 的 published window，`source_as_of` 与 `source_receipt.source_digest` 由 `build_replay_frequency` 重新校验。
+
+写盘边界：
+
+- provider raw 只写 `D:\cnhea\Codex\worktrees\c2aa\Stock\provider_samples\a_short_margin_overheat_20260806\`，由 `.gitignore:113 provider_samples/` 忽略；不向回复、tracked summary 或 replay artifact 写 raw rows、request URL、token/secret。
+- tracked threshold summary 只保留调用计数、窗口/覆盖、分位和脱敏 storage flags；当前 `execution.calls_made=11`、`successful_calls=11`、`failed_or_skipped_calls=0`、`within_budget=true`，`pro.margin` 五段，未超过用户授权的六段上限。
+- replay artifact 只保留 schema 允许的 source digest/receipt、频率汇总、不可用 breakdown 与 `not_verified`；不写 raw rows。当前没有执行真实 weekly root，所以本轮没有新的 private weekly ledger/capture 写盘。
+
+### 甲验证与负向控制
+
+定点三测试的精确命令与原始终态：
+
+```powershell
+& 'D:\cnhea\Codex\worktrees\c2aa\Stock\.tools\run_unittest_with_repo_pythonpath.cmd' --timeout-seconds 300 tests.test_a_short_margin_overheat_wiring.MarginOverheatProducerTests.test_producer_emits_the_percentile_from_a_complete_window tests.test_a_short_weekly_pipeline.MainWiringTests.test_margin_capture_receives_source_bound_predicate_facts_positive_control tests.test_a_short_margin_overheat_cash_control.MarginOverheatCashControlContractTests.test_weekly_launcher_wires_margin_root_and_shared_cache_without_forward
+# Ran 3 tests in 2.584s
+# OK
+# [bounded-unittest] RESULT tier=focused status=PASS exit=0 tests=3 elapsed=3.4s deadline=300s
+# [bounded-unittest] FOCUSED_RECEIPT token=receipt:54bb0293fb76b01da5c132d3 tests=3 bundles=none python=C:\Users\cnhea\AppData\Local\Programs\Python\Python313\python.exe
+```
+
+该正控构造完整 synthetic predicate facts 并断言 pipeline 收到逐对象相同的 `predicate_facts`；删除传参关键字会精确使断言失败。launcher 守卫检查 private root、共享 daily cache 与 forward flag 缺失。完整 focused/full lane 还覆盖了 no-root preservation、cache degrade、schema/effect contract 和既有 sidecar fail-soft；**真实带 root 的生产周跑正控尚未执行**，因此不把它写成已完成的 closure test。
+
+### 乙 seed 与三臂 replay
+
+seed 是用户本轮明确授权的 Route B 一次 bounded provider fetch，使用既有 row-19 runner：
+
+```powershell
+& 'C:\Users\cnhea\AppData\Local\Programs\Python\Python313\python.exe' 'D:\cnhea\Codex\worktrees\c2aa\Stock\runners\a_short_margin_overheat_percentile.py' --as-of 20260806 --raw-root 'D:\cnhea\Codex\worktrees\c2aa\Stock\provider_samples\a_short_margin_overheat_20260806' --out 'D:\cnhea\Codex\worktrees\c2aa\Stock\research\results\a_short\margin_overheat_percentile_threshold_evidence.json'
+# [a-short margin overheat] completed calls=11/12 sessions=727/727 percentile=0.9092159559834938 weeks=181
+```
+
+raw shapes 为 `trade_cal=1455`、`margin_window=3756`、`denominator_window=1455`；margin 5 段、denominator 5 段，均未截断。threshold summary 的 `status=PARTIAL` 是 warm-up/coverage 边界，不是调用失败：11 次调用均成功。
+
+随后用固定主 Python 从该 raw root 读取 rows，先生成 `facts["source_receipt"]`，再调用：
+
+```text
+build_replay_frequency(
+    margin_rows,
+    denominator_rows,
+    requested_dates=requested,
+    source_as_of=requested[0],
+    source_receipt=facts["source_receipt"],
+)
+```
+
+输出 `research/results/a_short/margin_overheat_cash_control_replay_frequency.json`，schema 校验通过：
+
+- `source_as_of=20260806`，窗口 `20200806..20260806`，`week_count=308`。
+- `evaluable_week_count=150`；`unavailable_week_count=158`，其中 `warm_up=127`、`source_gap=31`；不可用周被排除，没有缩短 rolling window。
+- `level_p95`：触发 40 周，最长连续 12 周，年度分布 `2025:17, 2026:23`。
+- `change_rate_p90`：触发 24 周，最长连续 6 周，年度分布 `2023:5, 2024:8, 2025:7, 2026:4`。
+- `change_rate_p95`：触发 13 周，最长连续 5 周，年度分布 `2023:3, 2024:6, 2025:4`。
+- 顶层明确 `status=PARTIAL`、`exploratory=true`、`comparison_only=true`、`forward_eligible=false`；`not_verified` 为 warm-up/source-gap 排除说明。coverage 不完整，三臂结果只是 pre-freeze 设计输入，不能作为 freeze/forward PASS。
+
+### 固定 Python、完整测试、自审与交接边界
+
+唯一允许解释器：`C:\Users\cnhea\AppData\Local\Programs\Python\Python313\python.exe`，版本 `Python 3.13.8`。本轮所有测试、compile、artifact parse/schema validation 与 runner 均显式使用它。
+
+甲 focused 精确命令：
+
+```powershell
+& 'D:\cnhea\Codex\worktrees\c2aa\Stock\.tools\run_unittest_with_repo_pythonpath.cmd' --timeout-seconds 600 tests.test_a_short_margin_overheat_cash_control tests.test_a_short_margin_overheat_wiring tests.test_a_short_margin_overheat_percentile_runner tests.test_a_short_weekly_pipeline tests.test_a_short_egs_market_environment tests.test_a_short_effect_contract tests.test_a_short_effect_consumer_probe tests.test_a_short_evidence_epoch_mode tests.test_a_short_m67_render tests.phase6.test_weekly_screening_guardrails
+# Ran 828 tests in 113.395s / OK
+# [bounded-unittest] RESULT tier=focused status=PASS exit=0 tests=828 elapsed=114.7s deadline=600s
+# [bounded-unittest] FOCUSED_RECEIPT token=receipt:52f1b672902252751f4f86d8 tests=828 bundles=a_short_effect_contract python=C:\Users\cnhea\AppData\Local\Programs\Python\Python313\python.exe
+```
+
+甲 full lane 精确命令及原始终态：
+
+```powershell
+& 'C:\Users\cnhea\AppData\Local\Programs\Python\Python313\python.exe' 'D:\cnhea\Codex\worktrees\c2aa\Stock\.tools\full_pack_ledger.py' run a_short '甲：EGS predicate facts to weekly comparison-only capture and launcher wiring' 'receipt:52f1b672902252751f4f86d8' 860 -- discover -s tests -p 'test_a_short*.py'
+# [full-pack-ledger] FOCUSED_RECEIPT status=PASS tests=828 bundles=a_short_effect_contract
+# [full-pack-ledger] STATIC status=PASS diff_check=PASS py_compile=5
+# [parallel-lane] COUNT_GATE discovered=2668 ran=2668 equal=True
+# Ran 2668 tests in 109.067s
+# [full-pack-ledger] RESULT status=PASS exit=0 tests=2668 elapsed=109.1s deadline=860s mode=parallel
+# fingerprint=960af59b7650
+```
+
+最终文档写入后的收尾门也已执行：`tests.test_readme_route_row_length tests.test_route_doc_ledger_status_consistency tests.test_doc_governance_guard` 为 `Ran 66 tests` / `OK`；当前工作树 `.githooks/pre-commit` 为 `Ran 14 tests` / `OK` 与 `Ran 41 tests` / `OK`；`git diff --check` exit 0；固定 Python JSON parse 为 `JSON_PARSE_OK 4`；`git diff --cached --name-only` 为空。
+
+Pre-Codex self-review 已复核：R-ID 十格矩阵、EGS/pipeline/launcher 调用链、直接 consumer、analysis-input/effect-contract leaf registration、exact-date source binding、receipt/digest、private/tracked 写盘边界、缺 root/cache fail-soft、predicate 传参负向控制、三条生产常量、registry mode、`_allocate_cash` 与 production importer 隔离。首次 focused 正控发现新 schema leaf 未登记 effect contract，原始终态为 `ValueError: effect contract market_context analysis_input paths changed without contract update`；已补登记后同一 3-test command `Ran 3 tests ... OK`，这是本轮真实修复记录，不隐藏。
+
+`NOT_VERIFIED`：真实带 root weekly production run、正式 M6.7/私密周记录字节级正控、forward clock、freeze manifest、设计最终 arm adjudication、provider/live/account/production importer/ship-gate、Claude Code 独立审查。review/commit 边界：Codex 仅 executor/fixer；未 stage、未 commit、未 push、未 merge、未使用 `--no-verify`。下一步：`Claude Code：独立复审 R-ASHORT-MARGIN-OVERHEAT-TRACK-IS-MERGED-BUT-NO-PRODUCTION-ENTRY-EVER-TURNS-IT-ON`。
+
+## 2026-08-09 追加：甲接线 + 乙 replay 独立审查 —— PASS（已合入 master）
+
+**判定**：PASS。施工单两段都按写的做了，而且做在了对的位置。
+
+**甲（接线）我实际验了什么**
+- G1：`weekly_screening.ps1` 新增私密 root 变量并往 `$M67Args` 追加 root + `$FactorComparisonV2Cache`；**没有加 `--...-forward`**——这正是施工单里加粗要求的那条。
+- G2：`A-EGS/egs_main.py` 把 `_margin_overheat_provider_facts` 改造成 `_margin_overheat_provider_bundle`，返回 `(leaves, predicate_facts)`，旧名保留为兼容访问器。**最关键的一点我用静态读坐实：函数体内 `safe_api(` 仍是 2 次**，predicate 由**同一批 `rows`/`denominator_rows`** 派生——没有第二次取数、也没有第二个数据源。
+- 反向控制：新叶在 `analysis_input.schema.json` 里是松形状 `["object","null"]`，我担心它变成绕过口，实测证明不是——篡改 `level.percentile` / `change_rate_20d.percentile` 到 `0.99`、以及三种垃圾对象，全部在 `validate_predicate_facts` 被**点名拒**。松 schema 传进来的东西无法变成一次 capture。
+- 契约：新叶已登记（`intentionally_independent_or_delete`，terminal_surface 明写不触及官方 M6.7 与生产 allocation），四处 sha 重算，只增不删。
+- 验收超集 `Ran 710 tests in 399.463s` / `OK`（`receipt:9fb91a2951dbd882bf507f8c`）。
+
+**乙（replay）——数字本身就是结论，需用户裁**
+产物 `research/results/a_short/margin_overheat_cash_control_replay_frequency.json`：308 周、150 可评估、158 不可用（warm_up 127 + source_gap 31），`status=PARTIAL`，标签齐（`comparison_only` / `exploratory` / `forward_eligible=false`），raw 已 gitignored、tracked 无 URL/token/raw 行。
+
+| arm | 触发周 | 占可评估周 | 最长连续 | 年度分布 |
+|---|---|---|---|---|
+| level_p95 | 40 | 26.7% | **12** | **2023=0 / 2024=0 / 2025=17 / 2026=23** |
+| change_rate_p90 | 24 | 16.0% | 6 | 5 / 8 / 7 / 4 |
+| change_rate_p95 | 13 | 8.7% | 5 | 3 / 6 / 4 / 0 |
+
+两条变化率臂形态健康。**`level_p95` 有退化迹象**——两年零触发、后两年高度集中、最长连续 12 周，符合「滚动分位加在趋势性水平序列上」的已知失效模式。桌面写死：过密/过疏/coverage 不全**必须在 pre-freeze 换 arm 并重审**。所以这不是工程缺陷，是必须由用户拍板的 arm 选择；`status=PARTIAL` + 31 个 source_gap 周同理。
+
+**边界**：全量按用户明令不跑；§6a 未起 agent（接线 + 产物，无新增 fail-closed 判定面，rule 8 快档）；执行方包另含五个模块（其记录 `Ran 828 / OK`），我未复跑，只引用。取数授权来自用户对执行方的直接指令，我未参与，按既有约定不判越界。
+
+**下一步**：`Codex：执行`（等用户对 arm 与 coverage 的裁决后再动；在此之前不得翻 mode、不得加 forward）。

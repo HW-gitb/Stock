@@ -1444,6 +1444,52 @@ class MainWiringTests(unittest.TestCase):
             weekly = json.loads(out.read_text(encoding="utf-8"))
         self.assertNotIn("margin_overheat_cash_control", weekly)
 
+    def test_margin_capture_receives_source_bound_predicate_facts_positive_control(self):
+        from engine import a_short_margin_overheat_cash_control as margin_track
+        from tests.test_a_short_margin_overheat_wiring import (
+            _denominator_rows, _margin_rows, _sessions,
+        )
+
+        sessions = _sessions(margin_track.production_margin.MARGIN_OVERHEAT_MIN_WINDOW_SESSIONS)
+        predicate_facts = margin_track.build_predicate_facts(
+            _margin_rows(sessions),
+            _denominator_rows(sessions),
+            requested_dates=sessions,
+            source_as_of=AS_OF,
+        )
+        ai = _analysis_input()
+        ai.setdefault("market_context", {}).setdefault("margin_overheat", {})[
+            "predicate_facts"
+        ] = predicate_facts
+        captured = []
+
+        def _capture(**kwargs):
+            captured.append(kwargs)
+            return {"status": "captured"}
+
+        with tempfile.TemporaryDirectory() as td:
+            self._write_inputs(td, ai=ai)
+            out = Path(td) / AS_OF / "weekly_m67.json"
+            with patch(
+                "engine.a_short_margin_overheat_cash_control.capture_margin_overheat_after_published_weekly",
+                side_effect=_capture,
+            ):
+                main([
+                    "--as-of", AS_OF,
+                    "--analysis-input", str(Path(td) / "ai.json"),
+                    "--iv-feed", str(Path(td) / "feed.json"),
+                    "--account", str(Path(td) / "acct.json"),
+                    "--out", str(out),
+                    "--run-date", AS_OF,
+                    "--margin-overheat-cash-control-root", str(Path(td) / "margin-private"),
+                    "--margin-overheat-cash-control-daily-cache", str(Path(td) / "missing-cache.json"),
+                ], price_provider=lambda code: _series())
+
+        self.assertEqual(len(captured), 1)
+        self.assertIsInstance(captured[0]["predicate_facts"], dict)
+        self.assertEqual(captured[0]["predicate_facts"], predicate_facts)
+        self.assertEqual(captured[0]["predicate_facts"]["source_as_of"], AS_OF)
+
     def test_margin_missing_schema_degrades_to_unavailable_and_records_settlement(self):
         from engine import a_short_margin_overheat_cash_control as margin_track
 

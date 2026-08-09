@@ -110,6 +110,22 @@ class MarginOverheatCashControlContractTests(unittest.TestCase):
         self.assertIn('governance["state_contract"]["min_trigger_effective_weeks"]', text)
         self.assertNotIn("trigger_effective_weeks < 4", text)
 
+    def test_weekly_launcher_wires_margin_root_and_shared_cache_without_forward(self):
+        launcher = (ROOT / "runners" / "weekly_screening.ps1").read_text(encoding="utf-8")
+        self.assertIn(
+            "$MarginOverheatCashControlRoot = Join-Path $ProjectRoot 'state\\a_short\\margin_overheat_cash_control_private\\v1'",
+            launcher,
+        )
+        self.assertIn(
+            "'--margin-overheat-cash-control-root', $MarginOverheatCashControlRoot",
+            launcher,
+        )
+        self.assertIn(
+            "'--margin-overheat-cash-control-daily-cache', $FactorComparisonV2Cache",
+            launcher,
+        )
+        self.assertNotIn("--margin-overheat-cash-control-forward", launcher)
+
     def test_preliminary_calendar_gate_is_read_from_adjudication_contract(self):
         source = track.__file__
         text = Path(source).read_text(encoding="utf-8")
