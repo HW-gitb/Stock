@@ -25,7 +25,7 @@ from runners import us_short_soft_discovery_query_quality_probe_assess as assess
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 SOURCE_PACKET = REPO_ROOT / "docs" / "us_short_soft_discovery_query_quality_probe_packet_20260730.json"
-NEW_SOURCE_PACKET = REPO_ROOT / "docs" / "us_short_soft_discovery_query_quality_probe_packet_20260809.json"
+NEW_SOURCE_PACKET = REPO_ROOT / "docs" / "us_short_soft_discovery_query_quality_probe_packet_20260815.json"
 GENERATED_AT = "2026-08-01T20:00:00+00:00"
 
 # These are producer contracts, not a subset check.  A legitimate producer-side top-level
@@ -1677,19 +1677,21 @@ class ProductionQueryQualityProbeSeamTest(unittest.TestCase):
         self.raw_web = self.root / "provider_samples" / "us_short_llm_theme_discovery_fetch_web"
         self.raw_x = self.root / "provider_samples" / "us_short_llm_theme_discovery_fetch_x"
         self.packet_path = self.docs / NEW_SOURCE_PACKET.name
+        packet_payload = json.loads(NEW_SOURCE_PACKET.read_text(encoding="utf-8"))
+        decision_date = packet_payload["probe_boundary"]["expected_decision_date"]
         self.assessment_path = self.docs / (
-            "us_short_soft_discovery_query_quality_probe_assessment_20260809.json"
+            f"us_short_soft_discovery_query_quality_probe_assessment_{decision_date}.json"
         )
         _write_json(
             self.packet_path,
-            json.loads(NEW_SOURCE_PACKET.read_text(encoding="utf-8")),
+            packet_payload,
         )
         self.packet = json.loads(self.packet_path.read_text(encoding="utf-8"))
         self.decision_date = self.packet["probe_boundary"]["expected_decision_date"]
         self.patches = [
             mock.patch.object(assess, "ROOT", self.root),
             # Both registry constants are patched so the new-slot registration remains explicit;
-            # NEW_PACKET_PATH is the load-bearing branch for the 20260809 schema.
+            # NEW_PACKET_PATH is the load-bearing branch for the current 20260815 schema.
             mock.patch.object(assess, "DEFAULT_PACKET_PATH", self.packet_path),
             mock.patch.object(assess, "NEW_PACKET_PATH", self.packet_path),
             mock.patch.object(probe_paths, "ROOT", self.root),
@@ -2144,7 +2146,7 @@ class ProductionQueryQualityProbeSeamTest(unittest.TestCase):
         return REPO_ROOT / "docs" / f"us_short_soft_discovery_probe_{slot}_runbook.md"
 
     def test_runbook_path_tracks_packet_decision_date(self):
-        """Optional O1: a future packet slot must not keep reading the 20260809 runbook."""
+        """Optional O1: a future packet slot must not keep reading the 20260815 runbook."""
         current = datetime.strptime(self.decision_date, "%Y%m%d").date()
         alternate = (current + timedelta(days=1)).strftime("%Y%m%d")
         self.assertEqual(

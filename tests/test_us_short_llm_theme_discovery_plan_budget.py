@@ -19,13 +19,22 @@ from tests.provider.us_short_private_test_root import temporary_us_short_state_d
 
 
 ROOT = plan_budget.ROOT
-DECISION_DATE = "20260809"
+DECISION_DATE = "20260815"
 # A decision date that is deliberately NOT the plan's, used to prove the run-date binding
 # is checked before reservation.  Derived rather than written down: it was a literal, and
 # moving the probe slot onto that literal silently turned the assertion into a no-op.
 OTHER_DECISION_DATE = (
     datetime.strptime(DECISION_DATE, "%Y%m%d") + timedelta(days=1)
 ).strftime("%Y%m%d")
+DECISION_DAY_UTC = datetime.strptime(DECISION_DATE, "%Y%m%d").replace(tzinfo=timezone.utc)
+# Keep every live-shape fixture inside the current packet's accepted week.  A future reslot may
+# legally move DECISION_DATE; it must turn red if any source clock is left on the retired slot.
+STAMP = (DECISION_DAY_UTC - timedelta(days=1) + timedelta(hours=12)).isoformat().replace(
+    "+00:00", "Z"
+)
+CURRENT_WEEK_PUBLISHED_AT = (
+    DECISION_DAY_UTC - timedelta(days=1) + timedelta(hours=10)
+).isoformat().replace("+00:00", "Z")
 
 
 def _reviewed_parent_plan() -> dict:
@@ -42,7 +51,6 @@ def _reviewed_parent_plan() -> dict:
         payload, artifact_sha256="c" * 64,
         artifact_path="state/us_short/test-parent-plan.json",
     )
-STAMP = "2026-08-02T12:00:00Z"
 
 
 def _noop_persist(_request, _value):
@@ -609,7 +617,7 @@ class PlanBudgetAcceptanceTests(unittest.TestCase):
             def search(self, query):
                 return [{
                     "url": f"https://example.com/{query}", "title": query,
-                    "content": "AAPL demand evidence", "published_date": "2026-08-07T10:00:00Z",
+                    "content": "AAPL demand evidence", "published_date": CURRENT_WEEK_PUBLISHED_AT,
                 }]
 
         web_outcome = web.execute_live_web_orchestration(
@@ -753,7 +761,7 @@ class PlanBudgetAcceptanceTests(unittest.TestCase):
             def search(self, query):
                 return [{
                     "url": f"https://example.com/{query}", "title": query,
-                    "content": "AAPL demand evidence", "published_date": "2026-08-07T10:00:00Z",
+                    "content": "AAPL demand evidence", "published_date": CURRENT_WEEK_PUBLISHED_AT,
                 }]
 
         web_outcome = web.execute_live_web_orchestration(
@@ -865,7 +873,7 @@ class PlanBudgetAcceptanceTests(unittest.TestCase):
             "url": "https://example.com/paid",
             "title": "paid",
             "content": "AAPL evidence",
-            "published_date": "2026-08-07T10:00:00Z",
+            "published_date": CURRENT_WEEK_PUBLISHED_AT,
         }
         cases = [
             (
@@ -1428,7 +1436,7 @@ class _RecordingTavily:
     def search(self, query):
         self.paid.append(query)
         return [{"url": f"https://example.com/{len(self.paid)}", "title": query,
-                 "content": "AAPL demand evidence", "published_date": "2026-08-07T10:00:00Z"}]
+                 "content": "AAPL demand evidence", "published_date": CURRENT_WEEK_PUBLISHED_AT}]
 
 
 class _RecordingDeepSeek:

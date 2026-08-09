@@ -1,5 +1,20 @@
 # Session Log
 
+## 2026-08-09 — Claude 审查 PASS（000e：探针槽改期到 20260815）
+
+- **Verdict/Action**: PASS。做法与我 08-08→08-09 那刀不同且更对：20260809 已有真实付费证据与已落定裁决，不能原地改名，故**新增第二个槽并冻结已烧的那个**——assessor 注册三个槽（legacy / `FROZEN_20260809_*` / 新 20260815），builder 整体改指新槽，已烧槽的裁决仍可复算。
+- **Required**: 无。两处只记录不构成 finding，正文在 `docs/system_risk_register.md`：`forbidden_reused` 把从未开枪的 20260808 也列入（措辞不准、方向安全）；`approval_ref` 称本轮授权建槽，但建包不等于授权开枪（packet 两个布尔位仍要求逐次授权）。
+- **Verify**: review-evidence:ad45dec32659。reviewer 自跑：2026-08-15 实测周六、非交易槽属实；两份 packet 均过真实 assessor 门且 `execution_slot_map == _expected_slot_map(dd)`；builder 探针 20260815 可建、20260809/20260808/20260802 全拒；新运行单窗口正确；超集 `Ran 450 / 164.9s / OK`；残留恰 13 个本刀文件、无夹带。植入：新 packet 的 xai 账本路径改错名 → 被 schema `const` 直接拒，还原 sha256 逐字节一致。另证实上轮 Optional（运行单路径按 packet 日期派生）本次首次生效，双向守卫自动跟到新运行单。
+- **Next**: 提交并合入 master；开枪仍需你在 08-15 逐次授权。
+
+## 2026-08-09 — Codex 建立 20260815 非交易探针槽（OPEN-NOT_VERIFIED）
+
+- **Verdict/Action**: 0815 current offline slot 已建立；0809 executed artifacts 冻结保留。builder/assessor/tests/runbook 已迁到 current 0815，query/budget/metric/threshold/effect 未变；不提交、不合入主树、不授权 provider。
+- **Required**: 实施面已完成，待 Claude Code 独立复审；Optional=无。完整槽位边界、植入对照、合法 future-red 与 4d-iii 前置条件只见 `docs/system_risk_register.md` 的 `R-USSHORT-SOFT-DISCOVERY-20260815-NONTRADING-PROBE-SLOT`。
+- **Verify**: 三项植入分别精确红在 old-slot binding、0809 frozen hash、0815 threshold const，均还原；focused `130/130 OK / receipt:bcc9ade34e1519cf8a3dacc2`；official full `PASS 5663/5663 / COUNT_GATE equal=True / 331.9s`；door `55/55 OK`；protected roots 前后 0 文件且 manifest=`4f53cda1…`。post-full door 覆盖单例 focused receipt，故随后 ledger `check` 不命中 cached green；ledger 本体的 current fingerprint、`5663 OK`、count gate 记录均在，未重跑第二次 full。
+- **Pre-Codex self-review**: A-F checked；matrix=current 0815 + frozen 0809 + legacy 20260730 / builder+assessor+budget+runbook+inventory / 3 planted controls；register=updated；handoff=updated；focused=130 OK；full-lane=5663/5663 PASS；review=NOT_VERIFIED；commit=NOT_PERFORMED；provider/network/key/state-slot=NOT_USED。
+- **Next**: Claude Code：在 `D:\cnhea\Codex\worktrees\000e\Stock` 独立复审 20260815 非交易探针槽；通过后再决定提交，真跑另行向用户逐次请权。
+
 ## 2026-08-09 — Codex 已闭：Knife7 tests-only 18 项回归清账（resolved）
 
 - **Verdict/Action**: tests-only 清账已落，不改产品逻辑；把 `R-USSHORT-26W-DIAG-KNIFE7-HALF-THE-PLANTED-REGRESSIONS-ARE-INVISIBLE` 归一化为 18 个独立安全坐标并补齐精确测试。用户已明确豁免独立审查，本 R-ID 已 resolved。
