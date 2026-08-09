@@ -15,6 +15,35 @@
 - **Verify**: 两条探针均带控制组。P1：`as_of` 实测出现 35 次（条目称 0）、CLI 三个子命令各有 `--as-of-date`；**省略 `as_of_date`（正是 CLI 的方式）** 时普通周被收下 `week=1`，改成 2099 年的周被拒 `future diagnostic data is not allowed`。P2：schema `target_exposure` 必填九项中**绑定决策产物的字段为 NONE**；手填 `carried=0.9` + 形状合法的 `source_refs` 被原样接受。探针脚本 `python -B`，`git status` 无残留，未改任何产品代码。
 - **Pre-Codex self-review**: A-F checked。A：两条都按「先证明机制在不在，再谈状态」走，不照抄旧结论。B：P1 除计数外补了真实行为复现（计数只能证明条目描述陈旧，不能证明门有效）。C 反向：两条各自的控制组先绿——P1 普通周必须仍被收下，P2 若连合法输入都拒就说明探针无效。D：P2 发现「标题错但结论对」时按最窄处理——只更正标题、不翻状态。E 单态。F：无残留、零代码改动。matrix=2 条目/2 控制组；register=updated；handoff=不另写（账目回写，正文在 register）；focused=N/A（零代码改动）；full-lane=not_triggered（rule 3：无代码改动）；door=提交前 guard。
 - **Next**: 用户裁决 `TARGET-EXPOSURE` 的绑定是否另起一刀（需改 schema + 生产者 + 反向用例）。
+## 2026-08-09 — Claude 审查 PASS（000e production-seam 第二轮：R1 已闭）
+
+- **Verdict/Action**: PASS。R1 已真闭：守卫改双向 `expected_names <= state_names`，另加禁止 A4 前 per-vendor 账本名的反向断言；运行单省略写法展开为全名，是新门逼出的必要改动、不算越界。O1 的 `_runbook_path` 已按 packet decision_date 派生。
+- **Required**: 无。新记一条 Optional，正文只在 `docs/system_risk_register.md`（本处不复述）：`test_runbook_path_tracks_packet_decision_date` 是恒真式，显式传参绕开了它声称保护的默认分支；只判 Optional 是因为该退化会被兄弟测试在下一个槽以 `missing=` 六项的形式兜住。
+- **Verify**: review-evidence:c13d1c8818ae。reviewer 自跑三条植入：①重放上轮原样植入（错 vendor 全名）→ 本轮 `FAILED`，上轮为绿，证 R1 真闭；②退回 `..._` 省略写法 → `FAILED` 且精确报 `missing=[...x_20260809_receipt.json]`；③把 `_runbook_path` 默认分支写死 20260809 → 该专测**仍绿**，坐实 Optional。三次还原 sha256 均逐字节一致。超集 `Ran 442 / 151.3s / OK`、`receipt:5591a1fc2be53f93add88d21`，零残留。未起 §6a agent（rule 8：tests-only、零生产改动、零选股影响）。
+- **Next**: 提交并合入 master；Optional 交由后续处置。
+
+## 2026-08-09 — Codex 修复：R1 Required + O1 Optional 运行单守卫收口（OPEN-NOT_VERIFIED）
+
+- **Verdict/Action**: 按 Claude 复审意见修复当前 `R-USSHORT-QUERY-QUALITY-ASSESSOR-HANDCRAFTED-SEAM-FIXTURES`；R1 双向完整槽名与 O1 日期派生路径已落地，不提交、不合入。
+- **Required**: R1 仍 OPEN-NOT_VERIFIED，完整证据只在 `docs/system_risk_register.md`；待 Claude Code 独立复审，不把本轮 executor 绿灯写成关闭。
+- **Verify**: 错供应商名、删除 X 槽名、固定日期三种植入均精确转红并恢复；seam `3 tests`、assessor `45 tests`、discovery 超集 `442 tests` 通过；真实 state/provider residue 为 0。
+- **Pre-Codex self-review**: A-F checked；matrix=R1 full-name/bidirectional + O1 date-derived path + 3 mutations；register=updated；handoff=updated；focused=3+45 OK；full-lane=442 tests / 156.404s / OK；door=route-doc 14 tests + doc-governance 41 tests passed；review=NOT_VERIFIED；commit=NOT_PERFORMED；provider/network/paid=NOT_USED。
+- **Next**: Claude Code：独立复审 R1 Required + O1 Optional；通过后由 reviewer/committer 决定收口。
+
+## 2026-08-09 — Claude 审查 Pass-with-Required（000e 查询质量探针 production-seam，未提交）
+
+- **Verdict/Action**: Pass-with-Required。只动测试、507 增 0 删，四类产物确由真生产方产出（plan builder → write/read plan → `reserve_plan_budget`×2 → 三个 gateway dispatch → 两条 runner `queries=None + parent_plan=` → `publish_decision_pair`）。O1 键集闭合按等值落地，O3 取 (b)，O4 写成覆盖边界。断言非空转。`plan_binding` 与 `build_stage1_plan_binding` 派生值比对，权威链终点是仓库派生谓词。O2 时钟陷阱实测未触发。
+- **Required**: 一条 R1 + 一条 Optional，正文只在 `docs/system_risk_register.md`（本处不复述）。R1 = 新增的运行单守卫对 `..._` 省略写法完全瞎且是单向的，实测只抓 4 个名字、X 侧两个逃出；植入错名后守卫仍绿。判 Required 的理由：本刀交付物正是「守卫要真能抓漂移」，而它在漂移存在时保持绿灯，与要关闭的失败形态同形。修法一行级：改双向断言。
+- **Verify**: review-evidence:05732a36e4f5。reviewer 自跑：discovery 超集 `Ran 441 / 146.9s`，唯一红是已记的 conformance spawn flake（第 5/7 次）；跑测后 `git status --untracked-files=all` 仍恰为 4 个改动文件、零残留。植入①运行单 X 侧账本名改错 → 守卫仍绿（`Ran 1 test OK`），证 R1；植入②assessor 主题钟退回 `fetched_at` → seam 精确转红并报生产原句；两次还原 sha256 均逐字节一致。**未做**：未独立复现 gateway scope 方言那条对照（采信执行方记录）；未起 §6a agent（rule 8：tests-only、零生产改动、零选股影响）。
+- **Next**: 执行方修 R1（双向断言）后交回复审；Optional 可一并修。本轮未提交、未合并。
+
+## 2026-08-09 — Codex 修复/执行：查询质量探针生产形状 seam 已落地（OPEN-NOT_VERIFIED）
+
+- **Verdict/Action**: 已按 handoff 优化方案完成 tests-only seam；保留 legacy fixture/tamper 对照，不改 production/schema/packet/阈值，不提交。
+- **Required**: `R-USSHORT-QUERY-QUALITY-ASSESSOR-HANDCRAFTED-SEAM-FIXTURES` 仍 OPEN-NOT_VERIFIED，待 Claude Code 独立复审；正文与完整边界只在 `docs/system_risk_register.md`。
+- **Verify**: seam `2 tests`、assessor `44 tests`、相关 producer `203 tests` 均通过；discovery superpack `441 tests` 仅有 handoff 已知 conformance spawn flake，单跑该 route `1 test` 通过；两条生产约定回退均精确转红并已恢复。
+- **Pre-Codex self-review**: O1-O4、时钟/owner/路径/离线理由、plan_binding/input_sha256 意图已逐项自审；matrix=O1-O4/2 mutations/legacy retained；register=updated；handoff=updated；focused=2+44+203 tests OK；full-lane=441 tests one known flake + route single-run green；door=route-doc 14 tests + doc-governance 41 tests passed；review=NOT_VERIFIED；commit=NOT_PERFORMED；provider/network/paid=NOT_USED。
+- **Next**: Claude Code：独立复审 `R-USSHORT-QUERY-QUALITY-ASSESSOR-HANDCRAFTED-SEAM-FIXTURES`。
 
 ## 2026-08-09 — Claude 修复（付费搜索未约束到接受窗口：20260809 有 79% 的钱买回注定被丢的结果）
 

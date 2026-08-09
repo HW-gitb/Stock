@@ -97,6 +97,8 @@ Get-Content state\us_short\us_short_llm_theme_discovery_plan_web_20260809_budget
   --confirm-user-authorization
 ```
 
+跑完后产物为 `state\us_short\us_short_llm_theme_discovery_x_20260809.json`；对应 receipt 与 plan 级账本的完整文件名见文末「跑完之后」，不要用省略号代替文件名。
+
 ---
 
 ## 4. 预检裁决（不花钱、不写盘）
@@ -146,8 +148,8 @@ Get-Content state\us_short\us_short_llm_theme_discovery_plan_web_20260809_budget
 把这三样贴回对话，我来收口（写 register / SESSION_LOG / handoff）：
 
 1. 第 4 步或第 5 步打印的那行 JSON（含 `verdict`）
-2. `state\us_short\us_short_llm_theme_discovery_web_20260809_receipt.json` 和 `..._x_20260809_receipt.json` 的内容
-3. **两个**账本：`state\us_short\us_short_llm_theme_discovery_plan_web_20260809_budget.json` 和 `..._plan_xai_20260809_budget.json`（A4 之后账本是 plan 级、按 `web`/`xai` 两个 provider 分，**不再是** 20260731～0802 那种 tavily/deepseek/xai 三个 per-vendor 账本）
+2. `state\us_short\us_short_llm_theme_discovery_web_20260809_receipt.json` 和 `state\us_short\us_short_llm_theme_discovery_x_20260809_receipt.json` 的内容
+3. **两个**账本：`state\us_short\us_short_llm_theme_discovery_plan_web_20260809_budget.json` 和 `state\us_short\us_short_llm_theme_discovery_plan_xai_20260809_budget.json`（A4 之后账本是 plan 级、按 `web`/`xai` 两个 provider 分，**不再是** 20260731～0802 那种 tavily/deepseek/xai 三个 per-vendor 账本）
 
 **不要**把原始响应贴进来——它们在 `provider_samples/us_short_llm_theme_discovery_fetch_web|_x` 下，是 gitignored 的付费原文，留在盘上即可。
 
