@@ -4397,3 +4397,62 @@ undeclared_track_dependency track=p1_regime_candidate_effect path=schemas/plante
 - 「epoch 按轨分绑」一节我只核了它**引用的当前事实**是否属实（八轨、八项共享契约、`_freeze_packet_identity` 确含全局 `record_sha256`、13 个入口函数全部存在），**没有**验证它的 owner 矩阵推导、过宽投影判断或迁移零证据结论 —— 那些要等真正实现时连同 generator 一起审。
 
 **下一步**：`Codex：执行`（O21/O22 建议随下一刀顺手收；按轨分绑仍等设计定稿与用户授权，不得翻 mode、不得加 forward）
+
+## 2026-08-09 追加：Codex executor/fixer —— O21/O22/O23 三条 Optional 收口（OPEN-NOT_VERIFIED）
+
+**问题与根因**
+
+- O21：O20 延迟周测试插入 settled 测试中间，导致公开摘要九键闭合集与全仓唯一隐私泄漏扫描被搬进 no-count 方法体；settled 用例名称与实际覆盖不符。
+- O22：capture/outcome schema 为容纳 Stage A 三臂与 Stage B 四臂放松为 3..4 后，真正保证逐 stage 精确臂集的 `_validate_margin_capture` 两道 exact-tuple 门没有点名反控；门被同时中和时原 69 条模块测试仍全绿。
+- O23：上一轮执行方 focused 使用裸 `python -m unittest`，没有由 bounded launcher 生成绑定代码态的 accepted receipt。
+
+**最小改动与调用链**
+
+1. 仅改 `tests/test_a_short_margin_overheat_cash_control.py`：
+   - 把 `settle_and_summarize_margin_overheat_weekly` → `validate_margin_public_summary` → 九键 exact set → 隐私字符串扫描整块移回 `test_capture_settle_ledger_and_public_summary_are_private_and_complete`；`test_publication_lag_reason_is_bound_to_capture_and_settlement` 只保留 O20 no-count reason 贯穿与篡改拒绝。
+   - 新增 `test_capture_validator_rejects_arm_definition_and_snapshot_drift`。第一腿交换 `capture.payload.arm_definitions` 前两项、重算 `payload_sha256`，点名拒绝 `arm definitions drifted`；第二腿从原始 capture 重新读取，交换 `capture.payload.arms` 前两项、重算 SHA，点名拒绝 `arm snapshots drifted`。
+2. 未修改 `engine/a_short_margin_overheat_cash_control.py` 的永久内容；两道运行时 exact-tuple 门、schema 3..4 容纳面、治理 stage exact tuple 与所有生产边界保持原样。
+3. O23 不增加新 harness：复用项目既有 `.tools/run_unittest_with_repo_pythonpath.cmd`，显式 300 秒上限并由其解析固定主 Python、写 focused receipt。
+
+**负向控制与恢复**
+
+- 植入前生产模块 SHA-256：`8b51f403859785e417d6774f98e060d2e0f3514f5cf6b828f7c725bb1df0a1b8`。
+- 临时同时把 `arm_definitions` 与 `arms` 两道 exact-tuple 条件中和为 `if False`，运行新点名测试；原始终态 `Ran 1 test in 2.241s` / `FAILED (failures=1)`，精确失败为第一腿 `MarginOverheatCashControlError not raised`。
+- 立即还原后 SHA-256 逐字节回到上述值；恢复后 bounded focused 再次全绿。植入未留下生产 diff。
+
+**固定 Python、精确命令与终态**
+
+```powershell
+& 'D:\cnhea\Codex\worktrees\c2aa\Stock\.tools\run_unittest_with_repo_pythonpath.cmd' --timeout-seconds 300 tests.test_a_short_margin_overheat_cash_control
+```
+
+原始终态：`Ran 70 tests in 12.453s` / `OK`；`[bounded-unittest] RESULT tier=focused status=PASS exit=0 tests=70 elapsed=13.5s deadline=300s`；`FOCUSED_RECEIPT token=receipt:06e5982f3b561e0198ccf785 tests=70 bundles=none python=C:\Users\cnhea\AppData\Local\Programs\Python\Python313\python.exe`。
+
+文档治理命令使用固定主 Python：`-m unittest tests.test_readme_route_row_length tests.test_route_doc_ledger_status_consistency tests.test_doc_governance_guard`，原始终态 `Ran 66 tests in 1.000s` / `OK`。实际 `.githooks/pre-commit`（不 stage、不 commit）原始终态：route-doc `Ran 14 tests in 0.043s` / `OK`，doc-governance `Ran 41 tests in 0.972s` / `OK`。
+
+**自审、边界与 NOT_VERIFIED**
+
+- 已复核测试方法边界：settled 的 public/privacy 断言属于 settled 方法；延迟周 O20 断言独立；原 cross-batch 与 cross-epoch 两段仍同属其原测试；O22 两腿使用两份重新读取的原始 capture，不互相遮蔽。
+- 仅测试与文档变化；无生产代码、schema、治理、runner、现金分配、写盘路径或产物变化。未运行 provider/live/account/forward/freeze/clock/ship-gate，未 stage/commit/push/merge，未使用 `--no-verify`。
+- full lane=`not_triggered`（无生产代码/schema 改动）；独立审查与提交均 `NOT_VERIFIED`。
+
+**下一步**：`Claude Code：审查`
+
+## 2026-08-09 追加：O21/O22/O23 复审 —— PASS（已合入 master）
+
+**判定**：PASS，无 Required、无新 Optional。三条都按上一轮写的做了，且做在对的位置。
+
+**我自己实际验了什么**
+
+- O21 我按 diff 对照两段 13 行，确认是**逐字符搬回**而非重写；延迟周用例只剩 O20 的断言，两个用例的职责分开了。
+- O22 关键不在"加了个测试"，而在两腿都**重算了外层 payload SHA**——不重算就会先被 digest 门拦下，测的就不是臂集门了。这点我读了 `_validate_margin_capture` 的门序确认。
+- **区分性植入（本轮唯一，我自写）**：执行方的植入把两道门一起中和，用例 fail-fast 停在第一腿，`arms` 那道门其实没被证明。我只中和 `arms` 一道，用例改在 `:1146` 第二腿失败、点名 `arm snapshots drifted` not raised；还原后 sha 逐字节回到 `8b51f403…`。两道门至此各自承重。
+- 范围：`git diff` 仅四个文件，生产目录零改动，故上一轮已审的生产语义不重审。
+
+**未覆盖维度与诚实边界**
+
+- 全量按你本轮明令不跑，记 `NOT_VERIFIED`；本轮无生产代码/schema 改动，rule 3 未触发。
+- §6a 未起 agent（Optional-only carve-out + rule 8）。
+- 真实周跑、forward/freeze/clock、provider/live/account/ship-gate 仍全部 `NOT_VERIFIED`，与上一轮相同。
+
+**下一步**：`Codex：执行`（按轨分绑仍等设计定稿与用户授权，不得翻 mode、不得加 forward）

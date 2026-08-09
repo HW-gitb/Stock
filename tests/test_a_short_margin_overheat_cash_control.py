@@ -1017,6 +1017,19 @@ class MarginOverheatCashControlKnife3Tests(unittest.TestCase):
             {row["horizon"] for row in outcome["payload"]["arms"][0]["horizons"]},
             {5, 10, 20},
         )
+        public = track.settle_and_summarize_margin_overheat_weekly(
+            root=self.root, daily_cache_path=self.cache_path, as_of=AS_OF
+        )
+        track.validate_margin_public_summary(public)
+        self.assertEqual(public["status"], track.PUBLIC_STATUS_CURRENT)
+        self.assertEqual(public["pending_user_receipt_count"], 0)
+        self.assertEqual(set(public), {
+            "schema_name", "schema_version", "track_id", "status", "evidence_status",
+            "current_stage", "pending_user_receipt_count", "message", "production_unchanged",
+        })
+        public_text = json.dumps(public, ensure_ascii=False)
+        for private_value in (self.candidate["ts_code"], "baseline", "payload_sha256", "private"):
+            self.assertNotIn(private_value, public_text)
 
     def test_publication_lag_reason_is_bound_to_capture_and_settlement(self):
         lagged_margin_rows = [
@@ -1054,20 +1067,6 @@ class MarginOverheatCashControlKnife3Tests(unittest.TestCase):
             "predicate unavailable reason drifted",
         ):
             track._validate_margin_capture(tampered)
-
-        public = track.settle_and_summarize_margin_overheat_weekly(
-            root=self.root, daily_cache_path=self.cache_path, as_of=AS_OF
-        )
-        track.validate_margin_public_summary(public)
-        self.assertEqual(public["status"], track.PUBLIC_STATUS_CURRENT)
-        self.assertEqual(public["pending_user_receipt_count"], 0)
-        self.assertEqual(set(public), {
-            "schema_name", "schema_version", "track_id", "status", "evidence_status",
-            "current_stage", "pending_user_receipt_count", "message", "production_unchanged",
-        })
-        public_text = json.dumps(public, ensure_ascii=False)
-        for private_value in (self.candidate["ts_code"], "baseline", "payload_sha256", "private"):
-            self.assertNotIn(private_value, public_text)
 
     def test_publish_gate_rejects_missing_validated_bundle_without_capture(self):
         with self.assertRaisesRegex(
@@ -1126,6 +1125,26 @@ class MarginOverheatCashControlKnife3Tests(unittest.TestCase):
         capture["payload_sha256"] = track._digest(capture["payload"])
         with self.assertRaisesRegex(
             track.MarginOverheatCashControlError, "crosses independent epoch"
+        ):
+            track._validate_margin_capture(capture)
+
+    def test_capture_validator_rejects_arm_definition_and_snapshot_drift(self):
+        self._capture()
+        capture = self._stored(f"weeks/{AS_OF}/capture.json")
+        definitions = capture["payload"]["arm_definitions"]
+        definitions[0], definitions[1] = definitions[1], definitions[0]
+        capture["payload_sha256"] = track._digest(capture["payload"])
+        with self.assertRaisesRegex(
+            track.MarginOverheatCashControlError, "arm definitions drifted"
+        ):
+            track._validate_margin_capture(capture)
+
+        capture = self._stored(f"weeks/{AS_OF}/capture.json")
+        snapshots = capture["payload"]["arms"]
+        snapshots[0], snapshots[1] = snapshots[1], snapshots[0]
+        capture["payload_sha256"] = track._digest(capture["payload"])
+        with self.assertRaisesRegex(
+            track.MarginOverheatCashControlError, "arm snapshots drifted"
         ):
             track._validate_margin_capture(capture)
 
