@@ -1,5 +1,13 @@
 # Session Log
 
+## 2026-08-09 — Claude 已闭：两条陈旧条目的定点探针（一条关、一条更正标题后仍 open）
+
+- **Verdict/Action**: 按用户指派对两条只跑定点探针、不改任何产品代码。`KNIFE7-RUNNER-NEVER-PASSES-AS-OF-DATE` 机制已不存在且正是按其自身闭合判据修的，翻 `resolved`。`TARGET-EXPOSURE-PRODUCER-MUST-DERIVE-NOT-ASSERT` **标题「生产者未建」已陈旧**（生产者在、且从决策时点 note 派生），但闭合判据未达成，**仍 open**，只更正标题与正文。
+- **Required**: 无新增。两条正文与实测输出只在 `docs/system_risk_register.md`。需用户知情：后者的反向用例仍穿得过——手工把成交仓位当 `carried_holdings_exposure` 递进去，`calculate_target_exposure` 照收并给出 `g*=0.9`；契约里没有任何字段把两个分量绑到决策产物。
+- **Verify**: 两条探针均带控制组。P1：`as_of` 实测出现 35 次（条目称 0）、CLI 三个子命令各有 `--as-of-date`；**省略 `as_of_date`（正是 CLI 的方式）** 时普通周被收下 `week=1`，改成 2099 年的周被拒 `future diagnostic data is not allowed`。P2：schema `target_exposure` 必填九项中**绑定决策产物的字段为 NONE**；手填 `carried=0.9` + 形状合法的 `source_refs` 被原样接受。探针脚本 `python -B`，`git status` 无残留，未改任何产品代码。
+- **Pre-Codex self-review**: A-F checked。A：两条都按「先证明机制在不在，再谈状态」走，不照抄旧结论。B：P1 除计数外补了真实行为复现（计数只能证明条目描述陈旧，不能证明门有效）。C 反向：两条各自的控制组先绿——P1 普通周必须仍被收下，P2 若连合法输入都拒就说明探针无效。D：P2 发现「标题错但结论对」时按最窄处理——只更正标题、不翻状态。E 单态。F：无残留、零代码改动。matrix=2 条目/2 控制组；register=updated；handoff=不另写（账目回写，正文在 register）；focused=N/A（零代码改动）；full-lane=not_triggered（rule 3：无代码改动）；door=提交前 guard。
+- **Next**: 用户裁决 `TARGET-EXPOSURE` 的绑定是否另起一刀（需改 schema + 生产者 + 反向用例）。
+
 ## 2026-08-09 — Claude 修复（付费搜索未约束到接受窗口：20260809 有 79% 的钱买回注定被丢的结果）
 
 - **Verdict/Action**: 先判因再动手。web lane 只差 ratio 一项，读盘定因：35 条丢弃里 **33 条是窗口外旧闻**——4 次 Tavily 各要 10 条、回来 40 条、扔 33 条。**regroup 无错**（它拒绝从 brookings/facebook/NGO/地产行研里编票，还诚实产出两个无成员主题被丢）；**改措辞也无用**（模板已写「Exclude broad macro commentary」，搜索 API 不听否定指令）。修法落在 Tavily 调用参数，**不碰共享模板、不碰 X**，故「改 web 就得改 X」的死结本刀不适用。
