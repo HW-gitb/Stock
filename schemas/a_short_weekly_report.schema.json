@@ -177,7 +177,7 @@
         "invalid_numeric_row_count": {
           "type": "integer",
           "minimum": 0,
-          "description": "Rows with invalid required numeric margin fields; observational only and does not decide reference-date completeness."
+          "description": "Count of all rows with invalid required numeric margin fields, including rows on the reference date; only the reference-date subset can contribute to coverage_complete being false."
         },
         "coverage_complete": {
           "type": "boolean"
@@ -2236,7 +2236,7 @@
             "invalid_numeric_row_count": {
               "type": "integer",
               "minimum": 0,
-              "description": "Rows with invalid required numeric margin fields; observational only and does not decide reference-date completeness."
+              "description": "Count of all rows with invalid required numeric margin fields, including rows on the reference date; only the reference-date subset can contribute to coverage_complete being false."
             },
             "coverage_complete": {
               "type": "boolean"

@@ -1,5 +1,19 @@
 # Session Log
 
+## 2026-08-09 — Claude 复审 PASS（40d9：D-2/D-5 三条 Optional 收口）
+
+- **Verdict/Action**: PASS。O1 无效 `getattr` 已删；O2 四个 fallback 补键 + 三处比对前归一化，`setdefault` 只填缺键、不掩盖值漂移；O3 三份 schema 描述改成对「行」也成立。契约两处重封我独立复算 `static_contract_error()` 得 `None`。新增一条 Optional：新用例断的是两条腿的并集，分不清谁承重。
+- **Required**: 无。三条闭合细节、两次植入结果与新 Optional（O4）见 `docs/system_risk_register.md` 顶部同日 PASS 节（单一来源，本处不复述）。
+- **Verify**: review-evidence:67476f5d0bd0。最小覆盖包 `Ran 106 in 192.3s OK receipt:98db6a998df7cff8d881646c bundles=a_short_effect_contract`。植入：删归一化三行 → 同模块 7 个用例 ERROR（腿承重、守卫充分）；删 fallback 补的那个键 → `Ran 35 OK` 全绿（新用例不承重，故记 O4）。两次还原 sha 各自逐字节回原值。未起 agent、未跑全量（§6a Optional carve-out + rule 8）。
+- **Next**: Codex：执行
+
+## 2026-08-09 — Codex executor/fixer：D-2/D-5 三条 Optional（OPEN-NOT_VERIFIED）
+
+- **Verdict/Action**：三条展示层 Optional 已修复：`public_dict()` 直接字段访问；四处 margin fallback 与旧六键输入统一归一化为七键（缺失计数默认为 0）；三份 schema 的坏行/参考日完整性描述已纠正。未提交。
+- **Required**：无新增 Required。请 Claude Code 独立复审 O1/O2/O3、effect-contract 重封与旧六键兼容边界；完整问题、根因、调用链、source-binding、写盘边界见 `docs/system_risk_register.md` 顶部同日条目，过程见对应 handoff。
+- **Verify**：固定 Python 3.13.8；margin focus `Ran 30 ... OK`；SW/PIT focus `Ran 9 ... OK`；`static_contract_error()`=`None`；最终目标超集 `Ran 166 tests in 43.402s` / `OK`。初次 D-5 focus 因旧六键 fixture 与七键 fallback 不一致而红，补归一化后原始终态转绿；pytest 在固定解释器中不可用，未换解释器。
+- **Next**：Claude Code：审查
+
 ## 2026-08-09 — Claude 审查 PASS（40d9：D-2 两融坏行计数 + D-5 SW fallback 措辞）
 
 - **Verdict/Action**: PASS。D-2 计数算在所有早退之前，七个构造点逐个判过（两处未传参的默认 0 各自成立），经同一个 `public_dict()` 到达 analysis_input/data_health/weekly 三面，且不参与 `complete` 判定；旧缓存靠既有语义比对自动弃用。D-5 改名后全仓旧串 0 命中、`message` 无 enum、测试由 `assertIn` 收紧为 `assertEqual`。三条 Optional 均为展示层。

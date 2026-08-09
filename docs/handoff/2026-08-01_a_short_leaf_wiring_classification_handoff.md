@@ -4511,3 +4511,59 @@ Claude Code：独立审查本轮 D-2 schema/effect-contract/source-binding 及 D
 - §6a 未起 agent（无 live 取数 / secret 落盘 / 新增大改 fail-closed 门）。
 
 **下一步**：`Codex：执行`（桌面 `a_runtest2_cc.md` 下一顺位）
+
+## 2026-08-09 追加：Codex executor/fixer —— D-2/D-5 三条 Optional 修复（OPEN-NOT_VERIFIED）
+
+### 问题、根因与最小改动
+
+- **O1 `getattr` 无效防御**：`MarginObservation` 为无 `slots` 的 frozen dataclass，字段类级默认值已覆盖旧 pickle 缺失实例属性的情况；`public_dict()` 改为直接访问 `self.invalid_numeric_row_count`。
+- **O2 fallback 键集分家**：在 `A-EGS/egs_main.py` 的 analysis-input/data-health fallback、`runners/a_short_weekly_pipeline.py` 的 builder fallback 和 weekly `main` run-lineage fallback 全部补七键中的 `invalid_numeric_row_count: 0`。为兼容历史六键 analysis_input，再在 data-health 与 weekly 入口对缺失键显式补 0；这样不放宽任何完整性门，也不因旧 payload 产生假 `margin_coverage_consistency` error。
+- **O3 schema 描述不准确**：`analysis_input.schema.json`、`data_health.schema.json`、`a_short_weekly_report.schema.json`（顶层/嵌套两处）统一说明计数包含参考日坏行，只有参考日子集会使 `coverage_complete=false`。
+
+### 调用链 / 消费者 / schema / source-binding / 写盘边界
+
+`get_margin()` → `_margin_observation()` → `MarginObservation.public_dict()` → `export_analysis_input()` / `build_data_health()` → weekly builder/renderer。修复只作用于既有 display/report surfaces 与旧 payload 归一化：不改 `_margin_observation()` 计数、Rule6、排序、M6.7、sizing、PIT/source binding 或 provider/fallback 调用；不新增 raw/cache/provider/account/order 写盘。
+
+effect contract 已用固定 Python 重新登记 A-EGS decision-predicate hash 与 weekly schema hash，`static_contract_error()` 为 `None`；schema 字段仍 optional/non-required。
+
+### 负向控制、自审与问题闭合
+
+- 直接补七键后第一次 D-5 focus 真实暴露旧六键 fixture 被整字典比较判为 `overall_status=error`；这是兼容归一化缺口，不是测试误报。补 `setdefault(..., 0)` 后 D-5 原始 9 条全绿。
+- D-2 非参考日坏值正控仍为计数 1 + 参考日 `complete`；空/partial/坏日期/坏代码/无效值仍 fail-closed。新增 weekly 缺失 margin fallback 回归精确锁定七键和零计数。
+- 自审覆盖：四处 fallback、旧六键输入、三份 schema 五个 margin block、effect-contract 静态守卫、D-2/D-5 消费者与写盘边界；未改任何交易/仓位判定。
+
+### 固定 Python、精确测试命令与原始终态
+
+- 固定解释器：`C:\Users\cnhea\AppData\Local\Programs\Python\Python313\python.exe`（`Python 3.13.8`）。
+- 固定解释器离线 unittest discovery（`tests/phase6`, `test_egs_margin_coverage.py`）→ `Ran 30 tests in 2.493s` / `OK`。
+- 固定解释器离线 unittest discovery（`tests/phase6`, `test_egs_sw_industry_and_watch_pool_health.py`）→ `Ran 9 tests in 0.433s` / `OK`。
+- 固定解释器 `from engine.a_short_effect_contract import static_contract_error; print(static_contract_error())` → `None`。
+- 最终目标超集（两项 focus + effect-contract + 三项文档守卫）→ `Ran 166 tests in 43.402s` / `OK`。
+- pytest 在固定解释器中仍不可用（`No module named pytest`），未切换解释器。未跑 provider/live/真实 weekly/full lane/runner/account/order；没有真实产物刷新。
+
+### 审查/提交边界与下一步
+
+本轮仍未 stage、commit、push/merge，未使用 `--no-verify`；独立 reviewer/committer、provider/live、forward/freeze/clock、ship-gate 全部 `NOT_VERIFIED`。下一步：`Claude Code：审查`。
+
+## 2026-08-09 追加：D-2/D-5 三条 Optional 收口复审 —— PASS（已合入 master）
+
+**判定**：PASS，无 Required，新增一条 Optional（O4，正文只在 `docs/system_risk_register.md` 同日 PASS 节）。
+
+**我自己实际验了什么**
+
+- 全仓扫 fallback 字面量，确认生产侧四处都补了键、余下三处缺键的都在测试夹具里（它们正好是归一化那条腿的真实输入）。
+- 读 `build_data_health` 比对段：`setdefault` 只在缺键时填 0，值不同照旧判不一致，因此不会掩盖真实漂移；旧版 analysis_input 另有 `engine_version` 检查先拦。
+- 固定主 Python 独立调 `static_contract_error()` 得 `None`，覆盖本轮 `decision_predicate_sha256` 与 weekly `output_schema_sha256` 两处重封。
+
+**植入对照（我自写，两条新腿各一次）**
+
+- 删掉 analysis_input 侧归一化三行 → 同模块 **7 个用例 ERROR**：这条腿承重且守卫充分。
+- 删掉 weekly fallback 里刚补的键 → `Ran 35 OK` **全绿**，连新增的键集用例也绿：该用例断的是两条腿并集，分不清谁承重（→ O4）。
+- 两次 try/finally 自恢复，还原后两个文件 sha256 各自逐字节回原值。
+
+**未覆盖维度与诚实边界**
+
+- Optional-only 轮：未起 agent、未跑全量；本代码态 a_short full lane 仍 `NOT_VERIFIED`。
+- 未跑真实周跑；新键与新描述下周真跑才进实盘产物。
+
+**下一步**：`Codex：执行`（桌面 `a_runtest2_cc.md` 下一顺位）
