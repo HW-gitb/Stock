@@ -1,8 +1,8 @@
-"""Build the reviewed, policy-bound parent plan for the 20260808 probe.
+"""Build the reviewed, policy-bound parent plan for the 20260809 probe.
 
 This runner is deliberately offline and has no free-text query input.  It renders
 Stage-1 only from the reviewed v0.2.0 policy, compares those bytes with the
-independent 20260808 probe packet, freezes the provider envelope, and publishes
+independent 20260809 probe packet, freezes the provider envelope, and publishes
 the canonical parent-plan slot consumed by both live runners.  It never reserves
 a budget, creates a provider client, or performs a network call.
 """
@@ -18,8 +18,8 @@ from typing import Any, Mapping
 ROOT = Path(__file__).resolve().parents[1]
 STATE_DIR = ROOT / "state" / "us_short"
 DEFAULT_POLICY_PATH = ROOT / "presets" / "us_short_llm_theme_discovery_query_policy_v0.2.0.json"
-DEFAULT_PROBE_PACKET_PATH = ROOT / "docs" / "us_short_soft_discovery_query_quality_probe_packet_20260808.json"
-PROBE_PACKET_SCHEMA_PATH = ROOT / "schemas" / "us_short_soft_discovery_query_quality_probe_packet_20260808.schema.json"
+DEFAULT_PROBE_PACKET_PATH = ROOT / "docs" / "us_short_soft_discovery_query_quality_probe_packet_20260809.json"
+PROBE_PACKET_SCHEMA_PATH = ROOT / "schemas" / "us_short_soft_discovery_query_quality_probe_packet_20260809.schema.json"
 
 if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
@@ -53,9 +53,9 @@ def _load_probe_packet(
         packet = json.loads(path.read_text(encoding="utf-8"))
         schema = json.loads(schema_path.read_text(encoding="utf-8"))
     except (OSError, UnicodeDecodeError, json.JSONDecodeError, ValueError) as exc:
-        raise ParentPlanBuilderError("20260808 probe packet or schema is unreadable") from exc
+        raise ParentPlanBuilderError("20260809 probe packet or schema is unreadable") from exc
     if type(packet) is not dict or type(schema) is not dict:
-        raise ParentPlanBuilderError("20260808 probe packet and schema must be objects")
+        raise ParentPlanBuilderError("20260809 probe packet and schema must be objects")
     try:
         from jsonschema import Draft7Validator
         errors = sorted(
@@ -63,9 +63,9 @@ def _load_probe_packet(
             key=lambda error: list(error.path),
         )
     except ImportError as exc:  # pragma: no cover - project dependency guard
-        raise ParentPlanBuilderError("jsonschema is required for the 20260808 probe packet") from exc
+        raise ParentPlanBuilderError("jsonschema is required for the 20260809 probe packet") from exc
     if errors:
-        raise ParentPlanBuilderError(f"20260808 probe packet schema rejected: {errors[0].message}")
+        raise ParentPlanBuilderError(f"20260809 probe packet schema rejected: {errors[0].message}")
     return packet
 
 
@@ -169,7 +169,7 @@ def build_parent_plan_from_reviewed_policy(
     forbidden_dates = set(boundary["forbidden_reused_decision_dates"])
     if decision_date != expected_date or decision_date in forbidden_dates:
         raise ParentPlanBuilderError(
-            "decision date is not the independent 20260808 probe packet slot"
+            "decision date is not the independent 20260809 probe packet slot"
         )
     try:
         policy = query_policy.load_query_policy(reviewed_path, root=ROOT)
@@ -208,7 +208,7 @@ def publish_parent_plan(
 
 def build_argument_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
-        description="Build the offline, policy-bound US-short 20260808 parent plan."
+        description="Build the offline, policy-bound US-short 20260809 parent plan."
     )
     parser.add_argument("--policy-path", type=Path, default=DEFAULT_POLICY_PATH)
     parser.add_argument("--decision-date", required=True)
