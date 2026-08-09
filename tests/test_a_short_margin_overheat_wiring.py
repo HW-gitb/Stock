@@ -24,6 +24,7 @@ if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
 import engine.a_short_margin_overheat as margin_overheat  # noqa: E402
+import engine.a_short_margin_overheat_cash_control as margin_cash_control  # noqa: E402
 import runners.a_short_weekly_pipeline as weekly_pipeline  # noqa: E402
 from runners.a_short_weekly_pipeline import (  # noqa: E402
     _allocate_cash,
@@ -784,7 +785,7 @@ class MarginOverheatProducerTests(unittest.TestCase):
         rows = _margin_rows(sessions)
         api_patch, pro_patch = self._patched(sessions, rows)
         with api_patch, pro_patch:
-            facts = self.egs._margin_overheat_provider_facts(sessions[0])
+            facts, predicate_facts = self.egs._margin_overheat_provider_bundle(sessions[0])
         self.assertTrue(facts["coverage_complete"])
         self.assertEqual(facts["percentile"], 1.0)
         self.assertAlmostEqual(
@@ -792,6 +793,10 @@ class MarginOverheatProducerTests(unittest.TestCase):
             facts["balance_yuan"] / facts["denominator_float_mv_yuan"],
         )
         self.assertFalse(facts["production_effect_enabled"])
+        self.assertIsInstance(predicate_facts, dict)
+        self.assertEqual(predicate_facts["source_as_of"], sessions[0])
+        self.assertTrue(predicate_facts["coverage_complete"])
+        margin_cash_control.validate_predicate_facts(predicate_facts)
         self.assertIn("近3年分位 100.0%", self.egs._margin_overheat_environment_line(facts))
         self.assertIn("比率", self.egs._margin_overheat_environment_line(facts))
         self.assertIn("仅记录", self.egs._margin_overheat_environment_line(facts))

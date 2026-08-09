@@ -2,7 +2,7 @@
   "schema_name": "a_short_m67_effect_contract",
   "schema_version": "1.0.0",
   "legacy_migration_sha256": "b99cbb6895b7b2c2877e172fbbd59ff0b84a5c3b9bbf5de2b8ee2aab0d52cc4e",
-  "analysis_input_all_paths_sha256": "604eec3e02828285a5e2cc0b8024b871e3a6f728166a487d886800a63451aa95",
+  "analysis_input_all_paths_sha256": "571b86d7f68d6ef4878b738c9adac4dc9d5297c0492e69f5b87df187d31797af",
   "unclassified_pending_audit_baseline": [
     "account_context.mode",
     "account_context.positions[].current_price",
@@ -337,7 +337,7 @@
       "source_prefixes": [
         "market_context"
       ],
-      "source_paths_sha256": "adb4f37b8bf213b7022b2a770a2cd6405fb262d794f9a9786fc3b3b4cb4c118c",
+      "source_paths_sha256": "51975b07975a0729976e6e86daef8776c979d3ffafc288d4b1fdcae4e1c701f9",
       "policy": "must_affect_result",
       "terminal_surfaces": [
         "weekly.effect_contract_ledger",
@@ -951,6 +951,12 @@
       "terminal_surface": "weekly.cash_allocation.margin_overheat_control + cash_factor_stack.effective_cash_factor",
       "mutation_evidence": "with an adjudicated percentile_threshold and cash_factor injected, a percentile at or above the threshold lowers available_cash_start; null/incomplete never becomes a trigger"
     },
+    "market_context.margin_overheat.predicate_facts": {
+      "category": "intentionally_independent_or_delete",
+      "consumer_ref": "runners/a_short_weekly_pipeline.py::capture_margin_overheat_after_published_weekly",
+      "terminal_surface": "private margin-overheat comparison capture only; no official M6.7 or production allocation surface",
+      "mutation_evidence": "the dedicated predicate schema, source receipt and capture clock bind this object to comparison-only arms; removing or invalidating it degrades the sidecar to no-count while official M6.7 remains unchanged"
+    },
     "market_context.margin_overheat.production_effect_enabled": {
       "category": "m67_main_decision",
       "consumer_ref": "runners/a_short_weekly_pipeline.py::_normalise_margin_overheat_control -> _resolve_cash_factor_stack -> _allocate_cash",
@@ -1260,13 +1266,13 @@
     "candidate_data_quality": "comparison_track"
   },
   "decision_predicate_sha256": {
-    "A-EGS/egs_main.py": "75bec2f1c5bbdf41704bf0d83d870bd4d374f62eee9f8ab66fa2092173c507f9",
+    "A-EGS/egs_main.py": "c9e8580e0914bae00224e02b100f9a4997e13f47a66d56623eab4468ae53030b",
     "engine/egs_industry_heat.py": "74932f994ec0658345c41aa932b54b5685c1737c663f5070a193d264f37fced2",
     "engine/a_short_industry_theme.py": "6a10200f80b3c0d301efc8af1561b53ef2578e1cd26eea7976188dd57b7b6b2b",
     "engine/a_short_northbound.py": "e48d20a9c49d06480443815755d97f5674fa98fe1e13284f2d4aaaa19361d71a",
     "engine/a_short_margin_overheat.py": "5d727a30ecc215a5546afe8be41dd3d43c99d7cc4abf2a03e1c099ee171d7cbb",
     "runners/a_short_phase5_engine.py": "bd9c17a7032066d7c3c9074a8fedb16e5e11b559d973d95987458fb8eca6dd5e",
-    "runners/a_short_weekly_pipeline.py": "0a7bdf19606e897a3246a67b83a8d3a385053a94b856234251833a11b753a1cc",
+    "runners/a_short_weekly_pipeline.py": "cfcc4dca6eaa13fc98fe24742f515b8962f3c2697190e78c43f7be1bd2dae464",
     "runners/a_short_m67_render.py": "ad68c7533ae055ce30e126c083ae7bbf576bc64657904e3bec0c780f887eb448",
     "engine/a_short_portfolio_risk.py": "02b88ac3b5239e8dd4897bde06afab0769ea5593f8a8a3666e5c8fba24486860",
     "engine/a_short_effect_contract.py": "2f7c1cbc41bd60acdd2ce4886a3beada8ee3ec76dc2a3b2288edffe37418c6a8"
@@ -1973,6 +1979,7 @@
     "market_context.margin_overheat.denominator_float_mv_yuan",
     "market_context.margin_overheat.observed_session_count",
     "market_context.margin_overheat.percentile",
+    "market_context.margin_overheat.predicate_facts",
     "market_context.margin_overheat.production_effect_enabled",
     "market_context.margin_overheat.ratio",
     "market_context.margin_overheat.requested_session_count",

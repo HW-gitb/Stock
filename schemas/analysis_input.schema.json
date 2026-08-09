@@ -777,6 +777,10 @@
             "production_effect_enabled": {
               "const": false,
               "description": "Row 19 publishes the percentile and its trigger-frequency evidence only; the percentile threshold and cash factor remain user adjudications, so this control changes no allocation."
+            },
+            "predicate_facts": {
+              "type": ["object", "null"],
+              "description": "Optional source-bound comparison predicate produced from the same pro.margin and index_dailybasic rows; the direct comparison consumer applies its dedicated predicate schema before capture."
             }
           }
         },

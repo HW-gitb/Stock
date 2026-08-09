@@ -221,6 +221,39 @@
 - **Required**: 无。`Register: already covered by R-USSHORT-26W-DIAG-OPEN-LIST-TRIAGE-20260807`（①待执行）与 `R-USSHORT-26W-DIAG-KNIFE7-FROZEN-FIRST-WEEK-IS-BARELY-CONSTRAINED`（本轮在其下追加 A 首周门 / B 前视门放行默认 / C KNIFE7 家族 5 条定点探针的三部分派工，含前置顺序与验收），正文只在 `docs/system_risk_register.md`。
 - **Verify**: review-evidence:77f36829fa38。冻结 scope 三条命令均为空输出（status / diff --name-only / diff --stat），两棵树 log 首条同为 `1e521dd6`，故**本轮代码面 NOT_VERIFIED——因为没有代码面**。落盘后 `tests.test_doc_governance_guard` + `tests.test_route_doc_ledger_status_consistency` `Ran 55 OK receipt:5043987f8dbf6a055c783e47`。
 - **Next**: Codex：执行
+## 2026-08-09 — Claude 审查 PASS（甲接线两处 + 乙 replay 频率证据）
+
+- **Verdict/Action**: PASS，已提交并合入 master。G1 launcher 传 root + 复用同一份已批准 cache 且**未加 forward**；G2 EGS 用**同一批已取的 rows** 派生 `predicate_facts` 写进 analysis_input，weekly 读出后传给 capture。契约新叶已登记、四处 sha 重算、方向只增不删。乙的 replay 产物已出（comparison_only / exploratory / not_forward / PARTIAL），三臂频率见 register——**`level_p95` 有退化迹象，需你裁 arm**。
+- **Required**: 无。`R-ASHORT-MARGIN-OVERHEAT-TRACK-IS-MERGED-BUT-NO-PRODUCTION-ENTRY-EVER-TURNS-IT-ON` 已 closed；新记两条 Optional（EGS 裸 except 吞错、两条腿时钟不同导致延迟周系统性 no-count）。正文只在 `docs/system_risk_register.md`。
+- **Verify**: review-evidence:46a2c03bc43d。验收超集 `Ran 710 tests in 399.463s` / `OK`（`receipt:9fb91a2951dbd882bf507f8c`，显式 600s，理由=实测约 400 秒超默认）。自写探针：`_margin_overheat_provider_bundle` 内 `safe_api(` 仍为 **2 次**（无第二次取数）；宽松 `["object","null"]` 新叶不是洞——篡改两个分位与三种垃圾对象在 `validate_predicate_facts` 全被点名拒。raw 已 gitignored、tracked 产物无 URL/token/raw 行。覆盖差异：执行方包另含五个模块（其记录 `Ran 828 / OK`），我未复跑。全量按用户明令不跑。
+- **Next**: Codex：执行
+
+## 2026-08-09 — Codex executor/fixer：甲接线 + 乙授权 seed/replay（OPEN-NOT_VERIFIED）
+
+- **Verdict/Action**：按桌面序19后续方案先甲后乙完成本轮。甲把 EGS 结构化 `predicate_facts` 接入 comparison-only weekly capture，并让 `weekly_screening.ps1` 传入融资过热私密 root 与既有共享 daily cache；未加入 `--margin-overheat-cash-control-forward`。乙按用户明确授权完成一次受限 seed（现有序19 runner），并生成三臂 replay artifact；未翻 mode、未起 forward clock、未生成 freeze manifest、未接生产 allocation。
+- **Required**：`R-ASHORT-MARGIN-OVERHEAT-TRACK-IS-MERGED-BUT-NO-PRODUCTION-ENTRY-EVER-TURNS-IT-ON` 的实现缺口已修复但仍 OPEN，等待 Claude Code 独立复审；十格矩阵、调用链、source-binding、写盘边界和逐项 NOT_VERIFIED 已同步到 `docs/system_risk_register.md` 与 A-short handoff。
+- **Verify**：唯一解释器 `C:\Users\cnhea\AppData\Local\Programs\Python\Python313\python.exe`，版本 `Python 3.13.8`。甲 focused 精确命令：
+
+  ```powershell
+  & 'D:\cnhea\Codex\worktrees\c2aa\Stock\.tools\run_unittest_with_repo_pythonpath.cmd' --timeout-seconds 600 tests.test_a_short_margin_overheat_cash_control tests.test_a_short_margin_overheat_wiring tests.test_a_short_margin_overheat_percentile_runner tests.test_a_short_weekly_pipeline tests.test_a_short_egs_market_environment tests.test_a_short_effect_contract tests.test_a_short_effect_consumer_probe tests.test_a_short_evidence_epoch_mode tests.test_a_short_m67_render tests.phase6.test_weekly_screening_guardrails
+  # Ran 828 tests in 113.395s / OK
+  # [bounded-unittest] RESULT tier=focused status=PASS exit=0 tests=828 elapsed=114.7s deadline=600s
+  # [bounded-unittest] FOCUSED_RECEIPT token=receipt:52f1b672902252751f4f86d8 tests=828 bundles=a_short_effect_contract python=C:\Users\cnhea\AppData\Local\Programs\Python\Python313\python.exe
+  ```
+
+  甲 full lane：`full_pack_ledger.py run a_short ... receipt:52f1b672902252751f4f86d8 860 -- discover -s tests -p 'test_a_short*.py'`；原始终态 `COUNT_GATE discovered=2668 ran=2668 equal=True`、`Ran 2668 tests in 109.067s`、`[full-pack-ledger] RESULT status=PASS exit=0 tests=2668`、fingerprint `960af59b7650`。乙 seed 精确命令：
+
+  ```powershell
+  & 'C:\Users\cnhea\AppData\Local\Programs\Python\Python313\python.exe' 'D:\cnhea\Codex\worktrees\c2aa\Stock\runners\a_short_margin_overheat_percentile.py' --as-of 20260806 --raw-root 'D:\cnhea\Codex\worktrees\c2aa\Stock\provider_samples\a_short_margin_overheat_20260806' --out 'D:\cnhea\Codex\worktrees\c2aa\Stock\research\results\a_short\margin_overheat_percentile_threshold_evidence.json'
+  # [a-short margin overheat] completed calls=11/12 sessions=727/727 percentile=0.9092159559834938 weeks=181
+  ```
+
+  seed 的 11 次调用均成功、`pro.margin` 五段未超过授权的六段上限；raw 仅在 gitignored `provider_samples/`，tracked summary 无 raw rows/request URLs/secret。replay 产物为 `research/results/a_short/margin_overheat_cash_control_replay_frequency.json`：`source_as_of=20260806`，`308` 周、`150` 可评估、`158` unavailable（`warm_up=127`、`source_gap=31`），三臂分别触发 `40/24/13` 周，最长连续 `12/6/5` 周；artifact `status=PARTIAL`、`exploratory=true`、`comparison_only=true`、`forward_eligible=false`，直接消费者 schema 已校验。
+- **Closeout gates**：最终文档写入后的 route/doc governance command `tests.test_readme_route_row_length tests.test_route_doc_ledger_status_consistency tests.test_doc_governance_guard` 原始终态 `Ran 66 tests / OK`；当前工作树实际 `.githooks/pre-commit` 原始终态 `Ran 14 tests / OK` + `Ran 41 tests / OK`；`git diff --check` exit 0；固定 Python JSON parse `JSON_PARSE_OK 4`；`git diff --cached --name-only` 为空。
+- **Pre-Codex self-review**：已逐项复核 EGS → `analysis_input.market_context.margin_overheat.predicate_facts` → `a_short_weekly_pipeline.py` capture 的调用链；`schemas/analysis_input.schema.json` 新叶已登记到 `schemas/a_short_m67_effect_contract.json`，并保持 private comparison-only terminal surface。已检查 positive wiring、缺 root/cache 降级边界、移除 predicate 传参的负向控制、固定 Python、raw/tracked 写盘边界；未 stage、未 commit、未 push/merge、未使用 `--no-verify`。
+- **NOT_VERIFIED**：真实带 root 的生产周跑/正式 M6.7 与私密周记录正控、独立 Claude Code 复审、forward clock/frozen receipt、设计最终裁决、provider/live/account/ship-gate、生产 importer。频率 coverage 存在 warm-up/source-gap，不能据此称 PASS 或进入 freeze。
+- **Next**：`Claude Code：独立复审 R-ASHORT-MARGIN-OVERHEAT-TRACK-IS-MERGED-BUT-NO-PRODUCTION-ENTRY-EVER-TURNS-IT-ON`。
+
 ## 2026-08-09 — Claude 审查 PASS（O17/O18 收口：12 周门槛回到治理，判负必须全臂达标）
 
 - **Verdict/Action**: PASS，已提交（c2aa `01eb673a`）；**合入 master 未完成**——主树正处在另一窗口的未完成 merge 中（`MERGE_HEAD` 在、`docs/system_risk_register.md` 为 `UU`），按收口门 9 记阻塞、不代为解冲突。O17：新增 `_preliminary_calendar_effective_weeks()` 从治理的 `adjudication_contract` 读，`build_state` 不再用字面量 12，与 `_formal_decision` 同源。O18：`not_supported` 增加 `all_arms_mature` 前置，并把 `reliable_harm` 的全称量词从 `mature` 子集换成 `arm_statistics` 全体——未达触发地板的臂从「被滤掉」变成「阻断判负」。

@@ -3,25 +3,25 @@
   "schema_version": "2.0.0",
   "as_of": "20260806",
   "window_start": "20230807",
-  "window_end": "20260805",
-  "requested_session_count": 726,
-  "observed_session_count": 726,
+  "window_end": "20260806",
+  "requested_session_count": 727,
+  "observed_session_count": 727,
   "coverage_complete": true,
   "evidence_window": {
     "start": "20200806",
-    "end": "20260805",
-    "session_count": 1454
+    "end": "20260806",
+    "session_count": 1455
   },
   "exchange_observed_session_count": {
-    "SSE": 1454,
-    "SZSE": 1454,
-    "BSE": 845
+    "SSE": 1455,
+    "SZSE": 1455,
+    "BSE": 846
   },
   "bse_effective_from": "20230213",
-  "current_percentile": 0.9118457300275482,
-  "current_ratio": 0.043573551741746416,
-  "current_balance_yuan": 2604537143099.0,
-  "current_denominator_float_mv_yuan": 59773349635019.01,
+  "current_percentile": 0.9092159559834938,
+  "current_ratio": 0.043528049425786745,
+  "current_balance_yuan": 2615566375058.0,
+  "current_denominator_float_mv_yuan": 60089216253933.37,
   "status": "PARTIAL",
   "comparison_only": true,
   "production_effect_enabled": false,
@@ -2240,9 +2240,9 @@
         "unavailable_reason": null
       },
       {
-        "week_end": "20260805",
-        "trailing_session_count": 726,
-        "percentile": 0.9118457300275482,
+        "week_end": "20260806",
+        "trailing_session_count": 727,
+        "percentile": 0.9092159559834938,
         "verdict": "evaluable",
         "unavailable_reason": null
       }
@@ -2251,8 +2251,7 @@
   "not_verified": [
     "no percentile threshold or cash factor is proposed here; both remain user adjudications",
     "the pre-BSE portion of the ratio sums two exchanges by the date-effective rule; BSE is about 0.3% of the total, an accepted step at its first published session",
-    "weeks whose rolling three-year window reaches before the fetched history are reported as warm-up, not scored",
-    "this artifact was rebuilt from persisted raw payloads without any new provider call; the raw files are gitignored and mutable, so their lineage is only as strong as the raw root"
+    "weeks whose rolling three-year window reaches before the fetched history are reported as warm-up, not scored"
   ],
   "margin_fetch": {
     "row_cap": 2000,
@@ -2264,12 +2263,12 @@
   },
   "execution": {
     "call_budget": 12,
-    "calls_made": 0,
+    "calls_made": 11,
     "within_budget": true,
-    "successful_calls": 0,
+    "successful_calls": 11,
     "failed_or_skipped_calls": 0,
-    "status": "completed_with_errors",
-    "tushare_version": "replayed_without_new_call"
+    "status": "completed",
+    "tushare_version": "1.4.29"
   },
   "storage": {
     "raw_payload_root": "provider_samples/a_short_margin_overheat_20260806",
