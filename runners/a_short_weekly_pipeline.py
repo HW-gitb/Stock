@@ -1855,7 +1855,6 @@ def build_weekly_report(normalized_list: list, as_of: str, generated_at: str,
             "reference_date": price_data_through, "effective_ref_date": None,
             "row_count": 0, "universe_size": 0,
             "coverage_complete": False, "status": "unavailable",
-            "invalid_numeric_row_count": 0,
         }
     margin_coverage = dict(margin_coverage)
     status = margin_coverage.get("status")

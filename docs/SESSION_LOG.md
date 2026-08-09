@@ -1,5 +1,19 @@
 # Session Log
 
+## 2026-08-09 — Claude 审查 PASS（40d9：P1-3 / P1-4 两道未收编指纹门）
+
+- **Verdict/Action**: PASS。放松确实绑在 registry mode 上：`enforcement_enabled` 走 `_require_track`，写错轨名是 raise 不是 False；语义腿（键集/`program_id`/`boundary`/`active_profile`/`weights`）仍全严，只 park 4+1 个 digest；两条极性各有点名用例，含「解冻后重新武装」。P1-4 根因在源头修掉：EGS 生产者改用 `canonical_governance_digest`，与消费者同一 helper。
+- **Required**: 无。一条 Optional（park 后唯一常开的 `_is_sha256` 形状腿无点名反控）与复核成立项、边界见 `docs/system_risk_register.md` 顶部同日 PASS 节（单一来源，本处不复述）。
+- **Verify**: review-evidence:697c71b424d7。验收超集 `Ran 137 in 239.1s OK receipt:0be259269783db8392035426 bundles=a_short_effect_contract`；独立复算 `static_contract_error()=None`，并实测同一份治理文件 canonical=`c08bbfb2…` 与消费者一致、raw=`8e6abc93…` 随 checkout 变。植入：两处 `_is_sha256` 同时中和 → `Ran 61 OK` 全绿（故记 Optional），还原 sha 各自逐字节回原值。全量按 rule 4 归执行方、本轮未起；§6a 未起 agent。超时原因:验收超集 239s 与植入 53s 按 rule 7(c) 串行，且读了 epoch-mode 三层解析链的函数体。
+- **Next**: Codex：执行
+
+## 2026-08-09 - Codex executor/fixer: desktop P1-3/P1-4 repair + Optional O4 (OPEN-NOT_VERIFIED)
+- **Verdict/Action**: Implemented the desktop `a_runtest2_cc.md` P1-3 and P1-4 plan together with minimal fail-closed changes. P1-3 now calls the registry-owned `enforcement_enabled("p0_factor_comparison_v2")`: pre-freeze keeps exact manifest identity/semantic fields and SHA-256 shape while permitting legacy raw-byte schema digests without rewriting the old manifest; frozen mode requires exact current canonical digests. P1-4 now makes the EGS producer use `canonical_governance_digest`; Stage3 `active_profile` and `weights` remain exact in every mode, while only `governance_sha256` equality is parked pre-freeze and enforced frozen. The existing D-2/D-5 Optional O4 is also closed by removing the redundant weekly fallback literal; the remaining `setdefault` normalizer is now the sole leg behind `test_weekly_missing_margin_fallback_keeps_observation_key_set`.
+- **Required**: None newly identified. Independent Claude Code review remains required before commit; reviewer/committer owns commit and merge.
+- **Verify**: Fixed interpreter only: `C:\Users\cnhea\AppData\Local\Programs\Python\Python313\python.exe` (Python 3.13.8). `-m unittest tests.test_a_short_factor_comparison_v2 tests.test_a_short_overlay_adjudication tests.test_a_short_evidence_epoch_mode tests.test_a_short_factor_comparison_v2_weekly tests.test_a_short_factor_comparison_v2_adjudication tests.test_a_short_fourth_knife_p4 -q` -> `Ran 133 tests in 48.500s` / `OK`; focused P1-3 -> `Ran 30` / `OK`; focused P1-4 -> `Ran 31` / `OK`; Optional O4 `-m unittest tests.phase6.test_egs_margin_coverage -q` -> `Ran 30` / `OK`; combined association + O4 pack -> `Ran 163 tests in 39.764s` / `OK`; `py_compile` on six changed files -> exit 0; `static_contract_error()` -> `None`. The separate broader 163-test probe including `tests.test_egs_industry_heat` had one pre-existing unrelated static-string failure in `tests.test_egs_industry_heat.ProfileWatchPoolTests.test_egs_uses_the_same_selector_for_top_pool_and_production_watch` because the current baseline source already wraps the selector in `watch_pool_eligible_frame`; it is not counted as P1-3/P1-4/O4 evidence. The relevant `ProfileGovernanceDigestTests` probe -> `Ran 1` / `OK`.
+- **Pre-Codex self-review**: A-F checked; matrix=manifest/digest/profile/weights/mode/clock/O4 normalizer; register=updated; handoff=updated; focused=133 OK + O4 margin=30 OK; full-lane=NOT_VERIFIED; reviewer=NOT_VERIFIED; provider/account=NOT_USED.
+- **Next**: `Claude Code：审查本轮 P1-3/P1-4 + Optional O4`
+
 ## 2026-08-09 — Claude 复审 PASS（40d9：D-2/D-5 三条 Optional 收口）
 
 - **Verdict/Action**: PASS。O1 无效 `getattr` 已删；O2 四个 fallback 补键 + 三处比对前归一化，`setdefault` 只填缺键、不掩盖值漂移；O3 三份 schema 描述改成对「行」也成立。契约两处重封我独立复算 `static_contract_error()` 得 `None`。新增一条 Optional：新用例断的是两条腿的并集，分不清谁承重。

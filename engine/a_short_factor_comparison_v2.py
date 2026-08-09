@@ -341,12 +341,41 @@ def _program_manifest(governance: dict) -> dict:
     }
 
 
+_PROGRAM_MANIFEST_SEMANTIC_FIELDS = (
+    "schema_name", "schema_version", "program_id", "lane", "private_root_layout",
+    "boundary", "legacy_v1", "stage",
+)
+_PROGRAM_MANIFEST_DIGEST_FIELDS = (
+    "governance_schema_sha256", "weekly_schema_sha256", "ledger_schema_sha256",
+    "decision_receipt_schema_sha256",
+)
+
+
+def _is_sha256(value: object) -> bool:
+    return isinstance(value, str) and len(value) == 64 and all(
+        character in "0123456789abcdef" for character in value
+    )
+
+
+def _validate_program_manifest(existing: object, expected: dict, *, enforce_digests: bool) -> None:
+    """Keep the manifest shape/identity strict while parking digest drift pre-freeze."""
+    if not isinstance(existing, dict) or set(existing) != set(expected):
+        raise ComparisonV2Error("v2 program manifest drifted")
+    for field in _PROGRAM_MANIFEST_SEMANTIC_FIELDS:
+        if existing.get(field) != expected.get(field):
+            raise ComparisonV2Error("v2 program manifest drifted")
+    for field in _PROGRAM_MANIFEST_DIGEST_FIELDS:
+        value = existing.get(field)
+        if not _is_sha256(value) or (enforce_digests and value != expected.get(field)):
+            raise ComparisonV2Error("v2 program manifest drifted")
+
+
 def _ensure_program(root: Path, governance: dict) -> None:
     manifest = _program_manifest(governance)
     path = root / "program_manifest.json"
+    enforce_digests = _epoch_mode.enforcement_enabled("p0_factor_comparison_v2")
     if path.exists():
-        if _load_json(path) != manifest:
-            raise ComparisonV2Error("v2 program manifest drifted")
+        _validate_program_manifest(_load_json(path), manifest, enforce_digests=enforce_digests)
     else:
         _atomic_write(path, manifest)
     ledger_path = root / "ledger.json"

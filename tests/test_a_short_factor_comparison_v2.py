@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import copy
+import hashlib
 import json
 import sys
 import tempfile
@@ -17,12 +18,15 @@ if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
 from engine import a_short_factor_comparison as v1  # noqa: E402
+from engine import a_short_evidence_epoch_mode as _epoch_mode  # noqa: E402
+from engine import a_short_factor_comparison_v2 as _p0  # noqa: E402
 from engine.a_short_factor_comparison_v2 import (  # noqa: E402
-    ComparisonV2Error, _immutable_common_pool, _materialize_question, _maximum_drawdown, _position_outcomes, _resolve_epoch,
+    ComparisonV2Error, _ensure_program, _immutable_common_pool, _materialize_question, _maximum_drawdown, _position_outcomes, _resolve_epoch,
     build_v2_public_progress, capture_v2_week, is_current_governed_capture, load_v2_governance,
     settle_v2_from_daily_payload, validate_v2_decision_receipt, validate_v2_governance,
 )
 from engine.a_short_factor_comparison_v2_adjudication import adjudicate_v2_from_private_ledger  # noqa: E402
+from tests._a_short_epoch_mode_test_utils import patched_epoch_modes  # noqa: E402
 
 
 def _root(tmp: str) -> Path:
@@ -340,6 +344,62 @@ class GovernanceAndCaptureTests(unittest.TestCase):
             (day / "orphan.json").write_text("{}", encoding="utf-8")
             with self.assertRaises(ComparisonV2Error):
                 _capture(root)
+
+
+class ProgramManifestTests(unittest.TestCase):
+    def test_pre_freeze_accepts_legacy_raw_schema_digests_without_rewriting_manifest(self):
+        with tempfile.TemporaryDirectory() as tmp, patched_epoch_modes(
+                "pre_freeze_audit_only", ("p0_factor_comparison_v2",)):
+            root = _root(tmp)
+            governance = load_v2_governance()
+            _ensure_program(root, governance)
+            path = root / "program_manifest.json"
+            manifest = json.loads(path.read_text(encoding="utf-8"))
+            schema_paths = {
+                "governance_schema_sha256": _p0.PROGRAM_SCHEMA_PATH,
+                "weekly_schema_sha256": _p0.WEEKLY_SCHEMA_PATH,
+                "ledger_schema_sha256": _p0.LEDGER_SCHEMA_PATH,
+                "decision_receipt_schema_sha256": _p0.RECEIPT_SCHEMA_PATH,
+            }
+            raw_digests = {
+                field: hashlib.sha256(schema_path.read_bytes()).hexdigest()
+                for field, schema_path in schema_paths.items()
+            }
+            self.assertTrue(any(manifest[field] != value for field, value in raw_digests.items()))
+            manifest.update(raw_digests)
+            path.write_text(json.dumps(manifest, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
+            before = path.read_bytes()
+            _ensure_program(root, governance)
+            self.assertEqual(path.read_bytes(), before)
+            self.assertEqual(_capture(root, governance=governance)["status"], "captured")
+            self.assertFalse(_epoch_mode.evidence_counts_toward_clock("p0_factor_comparison_v2"))
+
+    def test_pre_freeze_still_rejects_program_identity_and_boundary_drift(self):
+        for field, value in (("program_id", "other_program"), ("boundary", {"production": True})):
+            with self.subTest(field=field), tempfile.TemporaryDirectory() as tmp, patched_epoch_modes(
+                    "pre_freeze_audit_only", ("p0_factor_comparison_v2",)):
+                root = _root(tmp)
+                governance = load_v2_governance()
+                _ensure_program(root, governance)
+                path = root / "program_manifest.json"
+                manifest = json.loads(path.read_text(encoding="utf-8"))
+                manifest[field] = value
+                path.write_text(json.dumps(manifest), encoding="utf-8")
+                with self.assertRaisesRegex(ComparisonV2Error, "v2 program manifest drifted"):
+                    _ensure_program(root, governance)
+
+    def test_frozen_manifest_digest_drift_is_rejected(self):
+        with tempfile.TemporaryDirectory() as tmp, patched_epoch_modes(
+                "frozen_enforced", ("p0_factor_comparison_v2",)):
+            root = _root(tmp)
+            governance = load_v2_governance()
+            _ensure_program(root, governance)
+            path = root / "program_manifest.json"
+            manifest = json.loads(path.read_text(encoding="utf-8"))
+            manifest["weekly_schema_sha256"] = "0" * 64
+            path.write_text(json.dumps(manifest), encoding="utf-8")
+            with self.assertRaisesRegex(ComparisonV2Error, "v2 program manifest drifted"):
+                _ensure_program(root, governance)
 
 
 class EpochTests(unittest.TestCase):
