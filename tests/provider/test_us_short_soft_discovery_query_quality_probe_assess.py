@@ -431,6 +431,53 @@ class QueryQualityProbeAssessmentTest(unittest.TestCase):
         _write_json(discovery_path, discovery)
         _write_json(receipt_path, receipt)
 
+    def test_theme_clock_is_the_publication_clock_not_the_fetch_clock(self):
+        """A real run publishes themes EARLIER than the fetch that collected them.
+
+        The producer derives the theme instant as max(bound source observed_at), and every
+        source is fetched after it was published, so on a genuine artifact the theme instant
+        is strictly before the fetch.  The default fixture happens to set fetched_at equal to
+        the theme instant, which is the one arrangement under which a fetch-clock comparison
+        also passes -- that coincidence hid a door that refused every real run.  This pins the
+        realistic shape: adjudication must survive it.
+        """
+        for lane in ("web", "x"):
+            self._set_lane_execution_clocks(
+                lane,
+                reserved_at="2026-08-01T11:00:00+00:00",
+                fetched_at="2026-08-01T12:20:00+00:00",
+                discovery_generated_at="2026-08-01T12:30:00+00:00",
+                receipt_generated_at="2026-08-01T13:00:00+00:00",
+            )
+            discovery_path = (
+                web.default_discovery_path("20260802")
+                if lane == "web"
+                else xfetch.default_discovery_path("20260802")
+            )
+            receipt_path = (
+                web.default_receipt_path("20260802")
+                if lane == "web"
+                else xfetch.default_receipt_path("20260802")
+            )
+            discovery = json.loads(discovery_path.read_text(encoding="utf-8"))
+            receipt = json.loads(receipt_path.read_text(encoding="utf-8"))
+            # Put the theme back on the publication clock the producer actually uses.
+            for theme in discovery["themes"]:
+                theme["observed_at"] = max(
+                    row["observed_at"]
+                    for row in receipt["source_refs"]
+                    if row["source_id"] in theme["source_ref_ids"]
+                )
+            receipt["discovery_artifact_sha256"] = web._discovery_evidence_hash(discovery)
+            _write_json(discovery_path, discovery)
+            _write_json(receipt_path, receipt)
+        summary = assess.run_assessment(
+            packet_path=self.packet_path,
+            generated_at=GENERATED_AT,
+            preflight_only=True,
+        )
+        self.assertEqual(summary["status"], "preflight_passed_no_write")
+
     def test_preflight_consumes_every_registered_input_without_writing(self):
         summary = assess.run_assessment(
             packet_path=self.packet_path,

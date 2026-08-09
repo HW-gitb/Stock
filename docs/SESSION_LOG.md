@@ -1,5 +1,13 @@
 # Session Log
 
+## 2026-08-09 — Claude 修复（裁决器第二道门：主题时刻被拿去比抓取时刻，结构上不可能通过，已修）
+
+- **Verdict/Action**: 修完账本方言后预检卡在 `theme observed_at cannot be earlier than its bound source fetches`。生产方按 K3-R115 把主题时刻派生成 `max(来源 observed_at)`，同一函数又强制 `observed_at <= fetched_at`，这里却要求 `>= max(fetched_at)`——**结构上不可能成立**，该门判别力为零、拒绝一切真实运行。已把比较对齐到生产方的钟。
+- **Required**: 无开放项。正文只在 `docs/system_risk_register.md`。两件需知情：① 本条**不是零自由度**（要选主题时刻算哪个钟），用户知情下选 A 并约定「再冒第三道门就停手」；② **同类今天第三次**（运行单账本名 / 账本方言 / 主题时刻），机制都是裁决器四个输入全为手搓 dict、缝两端同源自洽，按复发规则交付物应是「让裁决器测试吃生产方真产物」的谓词，**本轮未做、单独成刀**。
+- **Verify**: 新增行为对照 `test_theme_clock_is_the_publication_clock_not_the_fetch_clock`（造真实形状：`fetched` 严格晚于主题时刻，裁决必须仍能进行）。**植入回退只打红这一条**、报的正是生产那句，其余 41 条全绿——坐实原有测试对该缺陷全瞎；还原后 sha256 逐字节一致 `feacc0c64be26882`。既有反向用例（主题设成 `11:59:59` < 来源最大 `12:00:00`）改后仍红，门未被放宽。覆盖包 `Ran 115 / 6.6s / OK / receipt:4c51cd23ae9ed46fd744bdbe`。
+- **Pre-Codex self-review**: A-F checked。A：先读生产方派生逻辑再改，未照报错猜。B：改的是唯一比较点；fixture 的 `fetched==theme` 巧合已被新对照绕开（未改 helper，避免波及既有用例）。C 反向：植入回退精确转红 + 既有反向用例仍红。D：上界 `主题 <= discovery generated_at` 未动，只改下界的钟。E 单态。F：探针 `python -B`，无残留。matrix=1比较点/1新对照/1植入；register=updated；handoff=updated；focused=`115 OK receipt:4c51cd23ae9ed46fd744bdbe`；full-lane=未跑（离线裁决器读法、无选股/生产行为变化）；door=提交前 guard。
+- **Next**: 合入 master 后重跑第 4 步预检；若出现第三道门则按约定停手回报，不再连环打补丁。
+
 ## 2026-08-09 — Claude 修复（20260809 探针真跑：两条 lane 已打完，裁决器读不了 A4 账本，已修）
 
 - **Verdict/Action**: 20260809 探针 Web+X 两条 lane 全部跑完，**9 次付费调用（上限 12）全部 `complete`、零重试、零 recovery**，两条 lane 的 discovery/receipt/账本与付费原文完整落盘。随后第 4 步预检抛 `web plan budget ledger query scope is not exact`——钱花完才发现裁决器读不了自己这套账本。根因：它拿 `sha256(查询原文)` 比账本，而付费网关的 dispatch scope 是 `query_id or query_text`（`paid_gateway.py:670/:724`），计划绑定路径记的永远是 `sha256(query_id)`；bare 路径自 P5 起已不可达。**与今晨审查抓到的运行单账本名失效同族**：A4 把账本改成 plan 级时运行单和裁决器都没跟上。

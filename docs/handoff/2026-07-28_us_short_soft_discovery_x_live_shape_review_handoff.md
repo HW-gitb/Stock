@@ -2347,3 +2347,7 @@ A4 把付费收敛成一次可对账的事务、P5 把入口绑到计划——�
 **卡点与修复**：第 4 步预检报 `web plan budget ledger query scope is not exact`——裁决器拿 `sha256(查询原文)` 比账本，而付费网关的 dispatch scope 是 `query_id or query_text`（`paid_gateway.py:670/:724`），计划绑定路径记的是 `sha256(query_id)`。已按生产方约定改正；未加第二道文本比对（原文已在 `:521` 对两条 lane 各比过）。细节、植入对照与完整性披露见 `docs/system_risk_register.md` 同日节。
 
 **下一轮接手要知道的**：① 这个包（`discover -p test_us_short*discovery*`）目前**不能当可信绿灯**——五轮三红、每轮换一个 case、全部单跑绿，落在 conformance 矩阵 spawn capstone soft-discovery 子进程那一片，与探针无关；② 裁决产物 `docs/us_short_soft_discovery_query_quality_probe_assessment_20260809.json` 是 tracked，落定后要提交；③ 探针形状 `retry_or_rerun_count: 0`，这个槽不能重跑。
+
+**同日第二道门（已修）**：`主题 observed_at` 被拿去和来源 `fetched_at` 比，而生产方按 K3-R115 把它派生成 `max(来源 observed_at)`，同一函数又强制 `observed <= fetched`——结构上不可能通过，该门对任何真实运行判别力为零。已对齐到生产方的钟，新增行为对照 `test_theme_clock_is_the_publication_clock_not_the_fetch_clock`（植入回退只打红这一条）。**用户约定：再冒出第三道门就停手，不连环打补丁。**
+
+**留给下一刀的类**：同类今天响三次（运行单账本名 / 账本 scope 方言 / 主题时刻），根因是裁决器四个输入全为手搓 dict，缝两端同源自洽、与生产不一致（与 K3-R49/R50/R79 同族）。交付物应是「让裁决器测试消费生产方真造出来的产物」，本轮未做。
