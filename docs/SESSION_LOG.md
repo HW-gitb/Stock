@@ -229,6 +229,20 @@
 - **Required**: 无。`Register: already covered by R-USSHORT-26W-DIAG-OPEN-LIST-TRIAGE-20260807`（①待执行）与 `R-USSHORT-26W-DIAG-KNIFE7-FROZEN-FIRST-WEEK-IS-BARELY-CONSTRAINED`（本轮在其下追加 A 首周门 / B 前视门放行默认 / C KNIFE7 家族 5 条定点探针的三部分派工，含前置顺序与验收），正文只在 `docs/system_risk_register.md`。
 - **Verify**: review-evidence:77f36829fa38。冻结 scope 三条命令均为空输出（status / diff --name-only / diff --stat），两棵树 log 首条同为 `1e521dd6`，故**本轮代码面 NOT_VERIFIED——因为没有代码面**。落盘后 `tests.test_doc_governance_guard` + `tests.test_route_doc_ledger_status_consistency` `Ran 55 OK receipt:5043987f8dbf6a055c783e47`。
 - **Next**: Codex：执行
+## 2026-08-09 — Claude 复审 PASS（O21/O22/O23 三条 Optional 全闭）
+
+- **Verdict/Action**: PASS，已提交并合入 master。O21：公开摘要九键 + 全仓唯一那处隐私扫描已逐行搬回 settled 用例，延迟周用例只留 O20 断言。O22：新增 `test_capture_validator_rejects_arm_definition_and_snapshot_drift`，两腿各自重算 payload SHA 后点名拒 `arm definitions drifted` / `arm snapshots drifted`。O23：focused 已改走 bounded launcher。仅改测试与文档，生产代码逐字节未动。
+- **Required**: 无；无新开 Optional。上一轮三条 Optional 的正文与本轮闭合证据见 `docs/system_risk_register.md`。
+- **Verify**: review-evidence:244adab0b8dc。验收包 `Ran 70 tests in 46.837s` / `OK`（`receipt:8d94892437d4dc3fc3bc39a3`，默认 300s 内）。我自写的**区分性植入**（执行方那次两门同时中和、失败停在第一腿，证不了第二腿）：只中和 `arms` 那道门 → 同一用例在 `:1146` 第二腿 `FAILED (failures=1)`、`MarginOverheatCashControlError not raised`，还原后 sha 逐字节回到 `8b51f403…`。全量按用户本轮明令不跑，记 `NOT_VERIFIED`。
+- **Next**: Codex：执行
+
+## 2026-08-09 — Codex executor/fixer：O21/O22/O23 三条 Optional（OPEN-NOT_VERIFIED）
+
+- **Verdict/Action**：O21 已把 settled 公开摘要九键与隐私扫描还回原测试；O22 已给 `arm_definitions` / `arms` 两道 exact-tuple 门补点名 `assertRaisesRegex`；O23 本轮 focused 已改走 bounded launcher。仅改测试与交接文档，不提交，等待独立复审。
+- **Required**：无。完整问题、根因、调用链、负向植入、固定 Python、receipt 与边界见 `docs/system_risk_register.md` 顶部及 A-short 主 handoff 末节。
+- **Verify**：固定 Python 3.13.8；最终 bounded focused `Ran 70 tests in 12.453s` / `OK`，`RESULT tier=focused status=PASS exit=0 tests=70`，receipt `receipt:06e5982f3b561e0198ccf785`；中和两门时点名测试 `Ran 1 test` / `FAILED (failures=1)`，还原后生产模块 SHA-256 与植入前一致；文档门 `Ran 66 tests` / `OK`，实际 pre-commit 为 `Ran 14 tests` / `OK` + `Ran 41 tests` / `OK`。full lane=`not_triggered`；review/commit=`NOT_VERIFIED`。
+- **Next**：Claude Code：审查
+
 ## 2026-08-09 — Claude 审查 PASS（删 `level_p95` + O19/O20 + 按轨分绑方案）
 
 - **Verdict/Action**: PASS，已提交并合入 master。删臂逐处复验：`REPLAY_ARM_SPECS`、`_shadow_trigger_percentile`、preset、program 整段 const、shadow/replay enum 全同步，代码·schema·preset 侧 `level_p95` 残留为 0，`facts["level"]` 与 Stage B 四臂原样，未知臂 `raise` 出口保留。O19 输出稳定原因码；O20 的原因只从闭合 enum 派生、进 capture payload SHA 并贯穿 outcome。epoch 按轨分绑一节仍是 PLAN-ONLY 文档。
