@@ -3821,3 +3821,56 @@ O17 调用链为 `build_state → _preliminary_calendar_effective_weeks → _adj
 **顺位 2 的收尾状态**：四刀工程侧全部合入，两条遗留 Optional 到此清零。**仍不等于可通电**——开 forward clock 前欠前置硬闸 ②（三个 provisional arm 的 source-bound replay 频率证据）与 ③（专属 semantic freeze manifest 确认），以及用户对「设计定稿前单轨先行 frozen」的裁决；生产三常量仍 `None/None/False`，轨仍 `pre_freeze_audit_only`。
 
 **下一步**：`Codex：执行`
+
+## 2026-08-09 追加：接线 + 频率证据 —— 给执行方的方案（reviewer 定）
+
+**这一节是施工单。** finding 正文见 `docs/system_risk_register.md` 的 `R-ASHORT-MARGIN-OVERHEAT-TRACK-IS-MERGED-BUT-NO-PRODUCTION-ENTRY-EVER-TURNS-IT-ON`，本节只写怎么做、怎么证、以及**明确不做什么**。
+
+### 甲 · 接线两处（离线可验，先做）
+
+**G1 让周跑入口打开它。** `runners/weekly_screening.ps1` 里按五条兄弟轨的同形写法，往 `$M67Args` 追加：
+
+- `--margin-overheat-cash-control-root <私密根>`：变量与目录位置比照 `$FactorComparisonV2Root` / `$IndustryWeightP5Root` 的定义方式，落 gitignored 私密根。
+- `--margin-overheat-cash-control-daily-cache $FactorComparisonV2Cache`：复用**同一份已批准的 v2 日线 cache**——桌面刀 2/刀 3 的口径就是「同一份已批准 comparison daily cache」，不新建第二份、不取数。
+- **不要加 `--margin-overheat-cash-control-forward`**。forward 是 freeze 之后的事，现在加等于给自己埋一堆无效 forward 周。
+
+注意 pipeline 已有的三条启动守卫：给了 root 就必须有 `--run-date` 和 daily-cache，否则 `SystemExit`。launcher 里这两个变量本来就有。
+
+**G2 让捕获拿到结构化判据。** `runners/a_short_weekly_pipeline.py:6503-6509` 现在只传 `margin_facts`。改成在捕获前构造 `predicate_facts` 并传入：用 `engine/a_short_margin_overheat_cash_control.py::build_predicate_facts(margin_rows, denominator_rows, requested_dates=..., source_as_of=decision_date)` 由三年 `rzye` 与分母序列产出，再连同它自带的 `source_receipt` 一起交给 `capture_margin_overheat_after_published_weekly(..., predicate_facts=facts)`。
+
+- **拿不到就传 None**：现有 `_arm_capture_snapshot` 的 else 分支已经是 fail-soft（四臂 `no_count`），保持它，**不得伪造 facts**。
+- 实现方裁量项：facts 是在 pipeline 侧现算，还是让 EGS 把结构化事实直接写进 `analysis_input.market_context.margin_overheat`（后者更接近「source-bound」，但改的是 EGS 产物形状，成本更大）。选哪条自己判，在 SESSION_LOG 写明理由。
+
+**甲的验收矩阵**
+
+| # | 类型 | 断言 |
+|---|---|---|
+| ① | 正控 | 带 root 跑一周后，私密周记录四臂 status **不再全 `no_count`**；baseline 与未触发 challenger 的 `allocation_summary` 与 `shadow_reports` 逐字段相同 |
+| ② | 反控·关闭 | 不给 root 时，正式周报 JSON/Markdown **逐字节不变**，无横幅，`margin_overheat_cash_control` 为 None |
+| ③ | 反控·降级 | daily cache 缺失/损坏时只出 unavailable 横幅，正式 M6.7 照常发布（刀 3 已有此行为，本刀不得削弱） |
+| ④ | 植入 | 撤掉 `predicate_facts` 传参 → ① 转红 |
+
+**甲的边界**：不加 `--...-forward`；不翻 registry mode；不动 `MARGIN_OVERHEAT_PERCENTILE_THRESHOLD` / `_CASH_FACTOR` / `_PRODUCTION_EFFECT_ENABLED`；不改选股/EGS 打分/TopN/M6.7 操作判定/仓位；正式周报字节不变。
+
+### 乙 · 频率证据（桌面前置硬闸 ②，甲之后做）
+
+**先解决 seed。** 盘上没有 source-bound daily seed（`provider_samples/` 零命中，与桌面 2026-08-08 只读核对一致）。桌面禁止：预称现有六年 raw 可零调用重放、借其他工作树 raw、用周分位变化冒充余额比率变化。两条路二选一，**都要用户点头**：
+
+- **路 A（零调用）**：等一次正常数据运行时顺带把私密 seed 冻下来。
+- **路 B（有界重取）**：用户单独授权一次 `pro.margin` 三年窗口 ≤6 次调用（序 19 原批预算），raw 落 gitignored `provider_samples/`，tracked summary 只记计数/覆盖/分位，**不得含 raw 行、请求 URL、密钥**。
+
+**seed 到手后跑频率。** 调 `build_replay_frequency(margin_rows, denominator_rows, requested_dates=..., source_as_of=..., source_receipt=...)`，为三个 provisional arm（水平 p95、20 日变化率 p90、20 日变化率 p95）各发布：**触发周数 / 最长连续触发周 / 年度分布 / 不可用周数 / source receipt**。artifact 必须明标 `exploratory` / `comparison_only` / `not_forward`。
+
+**判据（这才是这一步的目的）**：三个 arm 里若出现**过密**（常年常开）、**过疏**（三年只响个位数）或 **coverage 不完整**，**必须在 pre-freeze 阶段换 arm 并重审**，不得带着不合格的 arm 进 freeze。桌面原文如此，这一步的产出可能反过来推翻 arm 选择——所以它是设计输入，不是设计产物。
+
+**乙的边界**：不起 forward clock；不生成 freeze manifest 实例；不翻 mode；不因为频率好看就顺手加 `--...-forward`。
+
+### 明确不做（等 A-short 设计定稿，尤其序 16）
+
+1. 生成 freeze manifest 实例 —— 其语义投影第 (e) 条绑「资本上限、其他现金控制及 **market-regime sizing** 语义」，而序 16 干的正是把三个仓位上限与最小盈亏比接进 regime 状态机；今天冻，序 16 落地即作废重冻。
+2. 修 `p4a_overlay_epoch` 语义漂移 —— 那是另一条轨的冻结包，不该由本轨进度驱动；且它当前**不挡任何事**（audit-only 路径不走共享时钟门，实测 pre-freeze 下 `build_state` / 结算 / 捕获均正常），只在真要 freeze 那一刻才拦人。
+3. 用户对「设计定稿前单轨先行 `frozen_enforced`」的裁决 —— 翻了就开始计时，序 16 一动全废。等甲乙都有产物、序 16 也定了，用真实频率数据做依据再裁决。
+
+依据是用户 2026-07-25 固化的那条：**设计未定稿前，任何部件都别产生「改别处就要作废已积累证据」的问题**。
+
+**下一步**：`Codex：执行`（先甲后乙；乙的 seed 路线要先拿到用户点头）
