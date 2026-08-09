@@ -2337,3 +2337,13 @@ A4 把付费收敛成一次可对账的事务、P5 把入口绑到计划——�
 2. 硬窗口是北京时间 **08-09 21:30**（= `2026-08-09T13:30:00+00:00`）。过了这个点这个槽同样废掉，下一个非交易槽是 08-15（六）/ 08-16（日），届时**要再走一遍本刀**——用户 2026-08-09 已裁定运行日期限制与预算分账口径都不动，这份重复成本是已接受的代价，不是待修项。
 
 **顺序**：`… → 08-08 前置两件 ✅ → 08-08 槽过窗（未开枪）→ 改期到 20260809 ✅（本节，待审查 + 合入）→ bounded 探针（要花钱、需用户逐次授权、窗口今天 21:30 止）`。
+
+## 2026-08-09 追加：20260809 探针已开枪 + 裁决器 A4 方言修复
+
+**执行方 / 树**：Claude Code；探针在主树 `D:\cnhea\Stock` 由用户逐步授权执行，代码修复在 `D:\cnhea\Stock-wt\us-short_r28`。
+
+**已花的钱与产物**：Web lane 5 次（Tavily 4 + DeepSeek 1）、X lane 4 次（xAI 4），合计 **9 次 / 上限 12**，全部 `complete`、零重试、零 recovery。两条 lane 的 discovery + receipt + plan 级账本、以及付费原文（gitignored）全部落盘。`plan_identity=4164c01f5dc8`，与审查时在两棵树各跑一遍的结果逐字节相同。
+
+**卡点与修复**：第 4 步预检报 `web plan budget ledger query scope is not exact`——裁决器拿 `sha256(查询原文)` 比账本，而付费网关的 dispatch scope 是 `query_id or query_text`（`paid_gateway.py:670/:724`），计划绑定路径记的是 `sha256(query_id)`。已按生产方约定改正；未加第二道文本比对（原文已在 `:521` 对两条 lane 各比过）。细节、植入对照与完整性披露见 `docs/system_risk_register.md` 同日节。
+
+**下一轮接手要知道的**：① 这个包（`discover -p test_us_short*discovery*`）目前**不能当可信绿灯**——五轮三红、每轮换一个 case、全部单跑绿，落在 conformance 矩阵 spawn capstone soft-discovery 子进程那一片，与探针无关；② 裁决产物 `docs/us_short_soft_discovery_query_quality_probe_assessment_20260809.json` 是 tracked，落定后要提交；③ 探针形状 `retry_or_rerun_count: 0`，这个槽不能重跑。

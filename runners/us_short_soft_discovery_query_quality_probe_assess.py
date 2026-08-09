@@ -698,7 +698,7 @@ def _validate_discovery_and_receipt(
 
 def _validate_budget_ledger(
     ledger: dict[str, Any], *, provider: str, decision_date: str,
-    queries: list[str], expected_call_count: int,
+    query_ids: list[str], expected_call_count: int,
 ) -> int:
     label = f"{provider} plan budget ledger"
     _validate_schema(ledger, PLAN_BUDGET_SCHEMA_PATH, label=label)
@@ -739,9 +739,15 @@ def _validate_budget_ledger(
     if len(reservation_keys) != len(reservations) or len(set(reservation_keys)) != len(reservation_keys):
         raise QueryQualityProbeAssessmentError(f"{label} query scope is not exact")
     expected_stage1_vendor = "tavily" if provider == "web" else "xai"
+    # The ledger's per-row key is sha256 of the DISPATCH SCOPE, and the paid gateway
+    # builds that scope as `query_id or query_text` (paid_gateway `dispatch_web_search_all`
+    # / `dispatch_x_search_all`).  Every plan-bound run therefore records sha256(query_id);
+    # only the bare, plan-less path -- unreachable since `--parent-plan` became mandatory on
+    # both live CLIs -- would record sha256(query_text).  Hashing the text here was the
+    # pre-A4 convention and made this door unopenable on a real plan-bound run.
     expected_stage1 = {
-        (_sha256_bytes(query.encode("utf-8")), "stage1", expected_stage1_vendor)
-        for query in queries
+        (_sha256_bytes(query_id.encode("utf-8")), "stage1", expected_stage1_vendor)
+        for query_id in query_ids
     }
     actual_stage1 = set(reservation_keys) & {
         (key[0], key[1], key[2]) for key in reservation_keys
@@ -884,10 +890,15 @@ def _build_assessment_with_snapshots(
     input_snapshots.update(ledger_snapshots)
     ledgers = {key: snapshot.payload for key, snapshot in ledger_snapshots.items()}
     budget_reservation_attempt_counts: dict[str, int] = {}
+    # The query TEXTS are already pinned byte for byte against each lane receipt above
+    # (`receipt["queries"] != queries`).  This door proves a different thing -- which query
+    # ids the money was reserved and dispatched against -- so it takes ids, and no second
+    # text comparison is added here.
+    query_ids = [row["query_id"] for row in packet["query_templates"]]
     for key, ledger in ledgers.items():
         attempt_count = _validate_budget_ledger(
             ledger,
-            provider=key, decision_date=decision_date, queries=queries,
+            provider=key, decision_date=decision_date, query_ids=query_ids,
             expected_call_count=expected_calls[key],
         )
         budget_reservation_attempt_counts[key] = attempt_count
