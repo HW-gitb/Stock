@@ -84,14 +84,6 @@
         },
         "challengers": [
           {
-            "arm_id": "level_p95",
-            "kind": "challenger",
-            "criterion_id": "level_percentile_p95",
-            "margin_cash_factor": 0.8,
-            "effect_surface": "margin_overheat_trigger",
-            "one_change_only": true
-          },
-          {
             "arm_id": "change_rate_p90",
             "kind": "challenger",
             "criterion_id": "change_rate_20d_percentile_p90",

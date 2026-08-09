@@ -23,7 +23,7 @@
         "status": {"enum": ["pending", "no_count", "settled"]},
         "reason": {"type": ["string", "null"]},
         "arms": {
-          "type": "array", "minItems": 4, "maxItems": 4,
+          "type": "array", "minItems": 3, "maxItems": 4,
           "items": {
             "type": "object", "additionalProperties": false,
             "required": ["arm_id", "predicate_triggered", "status", "reason", "horizons", "risk_evidence"],

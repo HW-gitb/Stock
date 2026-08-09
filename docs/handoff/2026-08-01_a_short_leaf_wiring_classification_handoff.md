@@ -4068,3 +4068,332 @@ Pre-Codex self-review 已复核：R-ID 十格矩阵、EGS/pipeline/launcher 调�
 `build_replay_frequency`（`:1206-1209`）里 `status` 只有三态：无 receipt → `NOT_VERIFIED`；`not_verified` 非空 → `PARTIAL`；否则 `COMPLETE`。而 `not_verified` 只要 `unavailable_week_count > 0` 就会加一条「warm-up 或 source-gap 周是被排除而不是被缩短」——20 个交易日的 warm-up 是结构性的，**滚动三年窗口的 replay 永远达不到 `COMPLETE`**。因此 `PARTIAL` 这个词**没有鉴别力**，**不得再作为裁决项摆给用户**。真正需要判断的只有 `unavailable_breakdown.source_gap`（当前 31 周）。
 
 **下一步**：`Codex：执行`
+
+## 2026-08-09 追加：A-short 对比轨 epoch「按轨分绑」执行方案（PLAN-ONLY，待审查）
+
+### 0. 本节性质、工作树与硬边界
+
+本节只给执行方案，不是实现。按用户命令先从主树执行只读 `git -C D:\cnhea\Stock worktree list`，确认本任务唯一工作树为 `D:\cnhea\Codex\worktrees\c2aa\Stock`（读取时 HEAD `680f7e1053c0e4e295b4dd8aac81a310d7e103fb`，detached）；后续源码、文档、探针和本次落盘均只在该工作树。写前 `git status --short --untracked-files=all` 无条目。本节不改 `engine/`、`schemas/`、冻结包、registry 或任何生产路径；不重封指纹、不翻 mode、不起 12/24/36 周时钟，不跑测试/full lane/provider/live/runner，不 commit。
+
+本方案接受 register 已实测事实，不重新推断：八轨均为 `pre_freeze_audit_only`；现行 v1 包把八份契约平铺在同一 `frozen_contracts`，`require_contract_hashes=True` 时按固定顺序遇首个漂移即退出；2026-08-09 已知 `p4a_overlay_epoch`、`m67_effect_contract`、`weekly_report_schema` 三项漂移。方案目标是去掉共享授权面的跨轨污染，不是现在重封或冻结。
+
+### 1. 判定方法：机器生成文件清单，不手写八份文件表
+
+#### 1.1 两类清单必须分开
+
+1. **轨内语义闭包**：某轨自身 component fingerprint / freeze manifest 已经绑定的 Python 函数、模块、治理 JSON、schema 和 route。它决定“本轨语义有没有变”。
+2. **第五刀共享目录 owner 集**：现行 `_FIFTH_KNIFE_FROZEN_CONTRACTS` 八项里，哪些确实被某轨的判定链读取或作为 semantic source 投影。只有这一集合进入本次“按轨分绑”。不能把整个轨内闭包再复制进第五刀包，否则会形成两份契约权威。
+
+执行时新增一个只读 AST manifest generator；它只保存**入口函数注册表**，绝不保存人工文件清单。每轨入口由“fingerprint 入口 + capture/settle/adjudicate/validate 的直接判定入口”组成。generator 从入口做以下确定性闭包：
+
+- 解析项目内普通调用、局部/顶层 `import`、`from ... import ...`、`__import__(...)`、`sys.modules[__name__]`、默认参数、模块别名、有限 tuple/dict/for 展开；
+- 把 `Path.read_text/read_bytes`、`open`、JSON loader、schema loader 识别为“内容读取边”，只在真实 read call 的数据流上记路径；仅出现字符串或 `schema_ref` 字面量不算读取；
+- 识别 `semantic_module_contract`、`semantic_function_contract` 和 theme 的 `_semantic_file_contract_digest`：前两者记录被投影的 repo `.py` 文件/函数，后者记录传入的 `.py` 路径；
+- 解析 `presets/a_short.yaml` 的 `artifact_ref` route；例如 `runtime_configuration_lineage()` 实际会经 `load_runtime_configuration()` 读取 screening 与 M6.7 两份 policy，不能只记 YAML 或只记 screening；
+- `engine.a_short_evidence_epoch_mode` 是待重构的授权边界，扫描到其 API 即停止，**不得**沿现行 shared packet/registry 反向把八项全塞回每轨；
+- 任何动态路径、无法解析的 callable/module、工作树外路径、网络/provider 入口都 fail closed；正式生成 manifest 的验收条件是 `unresolved_count == 0`；
+- 生成 `observed_reads`、`semantic_sources`、`route_reads` 三组 repo-relative 路径，并与该轨 packet 的 `declared_dependencies` 做**双向 exact-set** 比较：漏项报 `undeclared_track_dependency`，多绑报 `overbound_track_dependency`。多绑也必须红，否则跨轨污染只是换了写法。
+
+入口注册表允许人工维护，因为函数入口是稳定的行为边界；文件清单不允许人工维护。新增/改名判定入口时，改动者必须在同一变更更新入口注册；AST guard 还要从直接消费者/公开 dispatch 表反查入口覆盖，发现公开判定入口未注册即红。这样维护的是少量“从哪里开始扫”，不是八份会腐烂的路径列表。
+
+#### 1.2 本次真实只读探针与当前闭包
+
+本次以固定主 Python `C:\Users\cnhea\AppData\Local\Programs\Python\Python313\python.exe` 运行只读 AST probe；不导入业务模块、不写文件、不跑测试。最终闭包探针 `exit 0`，八轨 `unresolved=[]`。另用静态路径调用检查补齐两类第一版 collector 不应漏的边：P1 `validate_action_record -> SCHEMA_PATH`，以及 theme `_semantic_file_contract_digest` 读取的三份 `.py`。探针入口如下（实施时原样固化为机器注册表，文件输出则每次重算）：
+
+| track | 入口 |
+|---|---|
+| `p0_factor_comparison_v2` | `load_v2_governance`, `_real_canonical_contracts` |
+| `p1_regime_candidate_effect` | `_real_candidate_effect_policy_fingerprint` + `validate_action_record` |
+| `p2_target_policy` | `_real_contract_fingerprint`（展开 `_semantic_dependency_closure`） |
+| `p3_final_action_validation` | `_real_contract_fingerprint` |
+| `p4a_overlay_adjudication` | `_epoch_context` |
+| `p5_industry_weight` | `load_governance`, `_real_contract_fingerprint` |
+| `theme_forward_comparison` | `load_governance`, `load_taxonomy_registry`, `comparison_contract_fingerprint`, `build_frozen_epoch`, `_epoch_context` |
+| `a_short_margin_overheat_cash_control` | `build_margin_overheat_freeze_manifest` |
+
+六条旧轨共同经过 admission closure；为避免八次重复，记为 `ADM`：
+
+```text
+engine/a_short_experiment_admission_registry.py
+engine/a_short_experiment_governance.py
+engine/egs_industry_heat.py
+presets/a_short_factor_comparison_governance_20260714.json
+presets/a_short_factor_comparison_v2_governance_20260718.json
+presets/a_short_industry_weight_comparison_governance_20260722.json
+presets/a_short_regime_action_comparison_governance_20260714.json
+presets/egs_industry_heat_governance_20260611.json
+schemas/a_short_experiment_admission.schema.json
+```
+
+本次机器闭包的轨内增量（`p0`—`p5` 均再加 `ADM`）如下。这是当前代码的真实候选 manifest，实施 guard 后必须由同一 generator 重新产生并做到 zero-unresolved/exact-set；不得从本节复制成运行时常量。
+
+- `p0_factor_comparison_v2`：`engine/a_short_factor_comparison.py`、`engine/a_short_factor_comparison_v2.py`、`engine/a_short_factor_comparison_v2_adjudication.py`、`engine/a_short_factor_comparison_v2_weekly.py`、`runners/a_short_factor_comparison_v2_cache_build.py`、`runners/a_short_phase5_engine.py`、`schemas/a_short_factor_comparison_governance.schema.json`、`schemas/a_short_factor_comparison_v2_daily_cache.schema.json`、`schemas/a_short_factor_comparison_v2_program.schema.json`、`schemas/a_short_factor_comparison_v2_weekly.schema.json`。
+- `p1_regime_candidate_effect`：`engine/a_short_regime_action_comparison.py`、`engine/a_short_regime_classifier.py`、`engine/a_short_regime_ledger.py`、`runners/a_short_regime_comparison_runner.py`、`runners/forward_tracker.py`、`presets/a_short_m67_runtime_policy_20260715.json`、`schemas/a_short_m67_effect_contract.json`、`schemas/a_short_regime_action_comparison_governance.schema.json`、`schemas/a_short_regime_action_comparison_weekly.schema.json`、`schemas/a_short_regime_candidate_effect_summary.schema.json`、`schemas/a_short_weekly_report.schema.json`。其中 weekly capture schema 是实际 `validate_action_record` 的 read；它不在当前 `_real_candidate_effect_policy_fingerprint` 的 JSON 集中，正是新 guard 必须显式揭露并闭合的漏绑。
+- `p2_target_policy`：`runners/a_short_target_policy_comparison_runner.py` 的 `_semantic_dependency_closure` 当前会展开到 `engine/a_short_managed_exit.py`、P0 v2/cache/phase5、P4a overlay、P5 industry、runtime config/Rule6/official-operation 辅助面及其现有 schema/preset。该闭包明显偏宽，但这是当前机器结果，不得凭直觉删除；实施第一阶段先生成 exact manifest，随后单独审查哪些是 P2 真正调用、哪些是 whole-module/closure 过绑。只有改成更窄的 function projection 并配等价性测试后才可缩；不能在“分绑”补丁里无证据顺手删。
+- `p3_final_action_validation`：`engine/a_short_managed_exit.py`、`runners/a_short_final_action_validation_runner.py`、`runners/forward_tracker.py`、`presets/a_short_m67_runtime_policy_20260715.json`、`schemas/a_short_final_action_validation_summary.schema.json`、`schemas/a_short_m67_effect_contract.json`、`schemas/a_short_weekly_report.schema.json`。
+- `p4a_overlay_adjudication`：`engine/a_short_overlay_adjudication.py`、`engine/a_short_runtime_config.py`、`presets/a_short.yaml`、两份 routed runtime policy、`schemas/a_short_factor_comparison_v2_daily_cache.schema.json`、`schemas/a_short_overlay_adjudication_private_record.schema.json`、`schemas/a_short_overlay_adjudication_summary.schema.json`；active profile/governance 与 admission 项在 `ADM`。注意 YAML 中的 schema_ref 只是字符串，不应误算成 schema 内容读取。
+- `p5_industry_weight`：`engine/a_short_industry_weight_adjudication.py`、`engine/a_short_industry_weight_comparison.py`、`engine/a_short_overlay_adjudication.py`、`runners/a_short_factor_comparison_v2_cache_build.py`、`schemas/a_short_industry_weight_comparison_ledger.schema.json`、`schemas/a_short_industry_weight_comparison_private_record.schema.json`、`schemas/a_short_industry_weight_comparison_program.schema.json`。P5 当前把整个 P4a module 作 semantic source，因此 P4a 源码漂移确实应影响 P5；后续若只需要 `_signflip_p`，必须另刀改为 function projection 并证明其余 P4a 代码不是消费者。
+- `theme_forward_comparison`：`engine/a_short_theme_forward_comparison.py`、`runners/a_short_theme_forward_comparison.py`、`runners/backtest_rank.py`、`runners/forward_tracker.py`、`presets/a_short_theme_forward_comparison_governance_20260725.json`、`presets/a_short_theme_taxonomy.json`、`docs/a_short_theme_forward_comparison_epoch_20260725.json`、三份对应 governance/taxonomy/epoch schema。
+- `a_short_margin_overheat_cash_control`：`engine/a_short_margin_overheat_cash_control.py`、`engine/a_short_margin_overheat.py`、`engine/a_short_market_history.py`、`engine/a_short_portfolio_risk.py`、`engine/a_short_artifact_set_transaction.py`、`runners/a_short_weekly_pipeline.py`、`presets/a_short_margin_overheat_cash_control_governance_20260808.json`、`schemas/a_short_factor_comparison_v2_daily_cache.schema.json` 与 `_FREEZE_SCHEMA_CONTRACTS` 的 12 份专属 schema。它不读取现行共享目录八项中的任何一项。
+
+#### 1.3 现行 `_FIFTH_KNIFE_FROZEN_CONTRACTS` 八项的当前 owner 矩阵
+
+这里的 `✓` 只表示“该项应进入该轨的第五刀 packet”；轨内其他依赖继续由上面的 component manifest 管，不复制进此表。P2/P4 的 M6.7 policy 来自 `a_short.yaml -> runtime_configuration_lineage` route 展开；P1 weekly capture schema 来自实际 validator read；P5/P2 的 P4a 来自当前 semantic source/closure，而非名字相似。
+
+| track | screening policy | M6.7 policy | v14.3 gov | v14.3 gov schema | v14.3 weekly schema | P4a source | M6.7 effect | weekly report schema |
+|---|---:|---:|---:|---:|---:|---:|---:|---:|
+| `p0_factor_comparison_v2` | — | — | ✓ | — | — | — | — | — |
+| `p1_regime_candidate_effect` | — | ✓ | ✓ | ✓ | ✓ | — | ✓ | ✓ |
+| `p2_target_policy` | ✓ | ✓ | ✓ | — | — | ✓ | — | — |
+| `p3_final_action_validation` | — | ✓ | ✓ | — | — | — | ✓ | ✓ |
+| `p4a_overlay_adjudication` | ✓ | ✓ | ✓ | — | — | ✓ | — | — |
+| `p5_industry_weight` | — | — | ✓ | — | — | ✓ | — | — |
+| `theme_forward_comparison` | — | — | — | — | — | — | — | — |
+| `a_short_margin_overheat_cash_control` | — | — | — | — | — | — | — | — |
+
+因此已知三项漂移的合法影响域应为：P4a source → P2/P4a/P5；M6.7 effect → P1/P3；weekly report schema → P1/P3。融资过热轨 owner 集为空，三者均不得阻断它。该矩阵是本次只读静态结果；实施阶段 generator 若给出不同结果，必须以“可定位到具体入口→调用边→read/projection 边”的机器报告解释差异并先经审查，不能直接改表迎合预期。
+
+### 2. 数据结构：一轨一份物理 packet，杜绝顶层 hash 复发
+
+不建议把八个 `track_bindings` 仍塞进一个权威 JSON，再保留覆盖整文件的 `record_sha256`；即使内容按轨分组，校验全局 record 仍会让无关轨一起失效。最小且真正隔离的形状是**八份物理 packet**：
+
+```text
+docs/a_short_fifth_knife_forward_evidence_freeze/
+  p0_factor_comparison_v2.json
+  ...
+  a_short_margin_overheat_cash_control.json
+```
+
+每份 v2 packet 只含一轨：
+
+```json
+{
+  "schema_name": "a_short_fifth_knife_track_freeze",
+  "schema_version": "2.0.0",
+  "freeze_id": "...",
+  "track_id": "...",
+  "dependency_manifest": {
+    "entrypoints": ["module:function"],
+    "observed_reads": ["repo/relative/path"],
+    "semantic_sources": [{"path": "...", "projection": "..."}],
+    "shared_contract_keys": ["..."]
+  },
+  "frozen_contracts": {
+    "contract_key": {
+      "path": "...",
+      "projection": "canonical_json|json_schema_validation|python_ast_module|python_ast_functions",
+      "semantic_sha256": "..."
+    }
+  },
+  "dependency_manifest_sha256": "...",
+  "track_record_sha256": "..."
+}
+```
+
+`_FIFTH_KNIFE_FROZEN_CONTRACTS` 退役为两层：
+
+- `_FIFTH_KNIFE_CONTRACT_CATALOG`：只定义可复用 contract key、repo path 与允许的三类投影 primitive；不表达 owner。
+- 机器生成的 per-track manifest：owner 由入口闭包推导，测试 exact-set 钉住；运行时 packet 复制本轨所需 key 与当时指纹。
+
+projection 必须允许**同一文件按轨不同粒度**：例如 P4a 可绑定自身完整决策 surface，P5 若未来经审查只消费 `_signflip_p`，应使用另一个 projection id，而不是共享一个“文件级 P4a”key。保持 primitive 只有 canonical JSON、schema validation projection、Python AST module/functions 三类，不造插件框架或 DSL。
+
+`_freeze_packet_identity(track)` / `validated_frozen_packet_identity(track)` 只返回并绑定 `{freeze_id, schema_version, track_id, dependency_manifest_sha256, track_record_sha256}`；**不得再含 v1 的全局 `record_sha256`、其他轨 packet hash 或非权威 index hash**。可有一个仅供发现的 index，但运行时不得读取/校验它，index 漂移不能影响任何轨。
+
+这是不兼容的授权语义，schema 必须 major bump 到 `2.0.0`。现行 `docs/a_short_fifth_knife_forward_evidence_freeze_20260724.json` 保持逐字节不变并降级为 v1 历史审计包：pre-freeze 可读其 provenance，但它不能授权任何 v2 `frozen_enforced` transition；禁止自动迁移、禁止把旧八个 hash 原样拆抄成八份“新包”。新包只在设计最终完成后从最终代码重新生成。
+
+### 3. 运行时守卫与 planted-failure
+
+`validate_frozen_transition(track)` 的顺序应改为：
+
+1. registry 必须点名该轨准备从 pre-freeze 进入 frozen；
+2. 只解析该轨 v2 packet，校验 schema、`track_id`、本轨 `track_record_sha256`；
+3. AST generator 对当前工作树重算本轨 manifest；`unresolved_count != 0`、漏项或多绑均拒绝；
+4. 只重算 packet 中本轨 frozen contracts；任一 projection/hash 不匹配点名 `{track_id, contract_key, path}`；
+5. 调用本轨既有 component fingerprint/freeze-manifest 校验；
+6. 全部通过后才允许 `evidence_counts_toward_clock(track) == True`，并由直接消费者发本轨 source-bound receipt。
+
+必须新增三类机器守卫：
+
+- **source-read guard**：入口闭包出现未声明 read/projection path 就报红；动态路径不是跳过，而是 `unresolved_dependency`。
+- **owner isolation guard**：改动一个 packet/contract 只影响 owner 轨；读取其他七份 packet 或全局 index 直接报红。
+- **entrypoint coverage guard**：直接消费者/dispatch 中新增 capture/settle/adjudicate/validate 入口但未进入 root registry，报 `unregistered_track_decision_entrypoint`。
+
+点名 planted-failure 不用泛 `assertRaises`：在临时 fixture/worktree-copy 中给 P1 已登记判定入口植入一条对 `schemas/planted_unregistered_epoch_contract.json` 的读取，但不改 manifest；执行 guard 必须精确得到：
+
+```text
+undeclared_track_dependency track=p1_regime_candidate_effect path=schemas/planted_unregistered_epoch_contract.json
+```
+
+同一用例先跑控制组绿，再植入转红，最后还原并验证目标源码 SHA-256/bytes 与植入前一致。另做 owner 植入：临时改变 P4a source projection，P2/P4a/P5 应点名红，融资过热与 theme 必须仍绿；若融资过热红，说明仍存在共享 record/index 污染。
+
+### 4. 迁移与“不会作废证据”的论证
+
+这次可以迁移授权结构而不作废证据，理由不是“改动看起来小”，而是当前八轨都没有可计时证据：registry 全为 `pre_freeze_audit_only`，共享函数对八轨均返回 `evidence_counts_toward_clock=False`；因此现存 sidecar/audit artifact 从未取得 frozen/source-bound clock eligibility，不能被 v1→v2 迁移“作废”。它们继续作为不可回填的 audit-only 历史保留，不改写、不删除、不冒充 week 0/1。
+
+实施时用以下机器检查证明迁移前后边界一致：
+
+- `set(registry.tracks) == set(TRACKS)`，八轨 mode 前后逐字段均为 `pre_freeze_audit_only`；registry 文件 SHA-256 不变；
+- 每轨 `validated_frozen_packet_identity(track) is None`、`evidence_counts_toward_clock(track) is False`；
+- 扫描现存私有/公开 comparison artifacts，按各轨 schema 统计 `forward_eligible && frozen/source-bound/clock-eligible` 行数，八轨均为 0；无法访问的 gitignored 私有根明确记 `NOT_VERIFIED`，不能用“没看到”代替 0；
+- v1 packet bytes/SHA-256 前后相同；不存在新 v2 packet、freeze receipt、registry flip 或 clock-start receipt；
+- pre-freeze 正控的 fingerprint/epoch constant 与公开 unavailable/progress 行为前后相同。
+
+若上述任一项不是 0/不变，立即停止，不能继续用“当前无证据”作为迁移依据。
+
+### 5. 分阶段执行
+
+**阶段 A：现在即可做，不依赖设计定稿。**
+
+1. 落 AST manifest generator、入口 coverage/source-read/exact-set 守卫及 focused tests；先让当前八轨 report 达到 zero-unresolved。
+2. 将 flat catalog 拆成“projection catalog + generated owner manifest”；审查 P1 weekly schema 漏绑、P2 宽 closure、P5 whole-P4a source 等现状，分绑补丁只记录事实，不顺手改业务语义。
+3. 新增 v2 per-track packet schema 和只读 loader/validator；冻结路径只接受 v2，一旦有人误翻 mode 而 packet 不存在即 fail closed。
+4. 把 v1 包标为历史 audit-only；保留 bytes，不生成任何 v2 实例，不重封任何 fingerprint。
+5. 保持 registry、所有 clock/receipt、生产常量、provider/runner/EGS/TopN/M6.7/仓位不变；做完整负向控制和 reviewer 审查。
+
+**阶段 B：必须等 A-short 全部设计最终完成且用户另行授权。**
+
+1. 在最终代码上重跑 generator；要求八轨 zero-unresolved、owner diff 经独立审查，所有过宽 projection 有明确 disposition。
+2. 一次性从最终 source 生成八份 v2 packet；逐轨 schema、track record、component manifest、shared contract projection 全闭合；不得复用 v1 hash。
+3. 独立 reviewer 审查 packet 与 planted-failure/isolation 证据；用户按 register“三步前置”第②步明确批准相应轨 registry flip。
+4. 每次只翻获批轨；发该轨 source-bound freeze/start receipt，验证其余七轨 identity/mode/clock 字节级不变；从首个合格 official forward cohort 才开始计 12 周及 ≥8 个有效分歧样本。代码落地日、packet 生成日、账户 seed 日都不是 week 0。
+
+### 6. 验收矩阵
+
+| 类别 | 验收项 |
+|---|---|
+| 正控 | 八轨 pre-freeze 在无 v2 packet 时原行为不变，均不计时；generator 八轨 `unresolved=0`；每轨 packet schema/record/manifest/contract 重算一致；owner 矩阵八行逐项一致。 |
+| 正控 | 只改 P4a semantic source 时仅 P2/P4a/P5 失败；只改 effect 或 weekly report 时仅 P1/P3 失败；融资过热与 theme 均通过 isolation check。 |
+| 正控 | 每轨单独合法 v2 packet + mode 授权时，只该轨 `validated_frozen_packet_identity` 非空；其他轨仍 None，identity 不变。 |
+| 反控 | v1 shared packet、缺 packet、错误 track_id、错误 schema major、错误 track record、缺/多 dependency、未知 projection、动态未解析 path 均点名拒绝。 |
+| 反控 | 修改其他轨 packet、非权威 index 或无关 contract，不改变当前轨 identity；若改变即判跨轨污染复发。 |
+| 反控 | pre-freeze 默认路径不因新增 guard 误伤，不发 freeze/start receipt，不产生 clock-eligible 行；历史 audit artifacts 不回填。 |
+| 植入 | P1 新增未声明 schema read → `undeclared_track_dependency` 精确红；还原逐字节一致。 |
+| 植入 | 临时删掉 P1 weekly schema owner → P1 exact-set 红；临时把它多绑到 margin → margin `overbound_track_dependency` 红。 |
+| 植入 | 临时恢复全局 `record_sha256` 进 track identity → “改其他轨 packet、本轨 identity 不变”测试精确红。 |
+
+实施测试均必须用固定主 Python，点名 `assertRaisesRegex`；控制组先绿、植入精确红、还原后同命令再绿并核 bytes。阶段 A 改到授权/fingerprint 核心模块，focused 至少覆盖 epoch mode、八轨专属 contract/consumer 与新 guard；是否触发 full lane 按当时 `AGENTS.md` rule 判定并记录真实终态，不能预写 PASS。本方案轮不跑测试，因此所有实现验证均为 `NOT_RUN/NOT_VERIFIED`。
+
+### 7. 边界、维护责任与代价
+
+- 不做运行时通用依赖注入框架，不做 YAML DSL，不把 Python AST scanner放进每周生产热路径；它只在 test/pre-commit/freeze packet 生成与 transition 校验时运行。
+- 人工维护的只有每轨入口函数及极少数明确 resolver（route、semantic helper、有限动态 import）；生成的文件集合不可手改。实现者在新增/改名判定入口的同一变更维护 root registry，reviewer 检查 generated manifest diff 与 direct-consumer coverage。
+- 漏维护入口：entrypoint coverage guard 阻断；入口内读了新文件：source-read exact-set guard 阻断；使用无法静态解析的动态路径：freeze 阻断，必须改成可解析常量或新增有点名测试的 resolver，禁止 allowlist 一跳了之。
+- 多绑也有成本：会把本轨重新变成“无关编辑即丢证据”。因此 extra dependency 与 missing dependency 同级报错；P2 当前宽 closure、P5 whole-P4a source 必须显式审查，但不在本刀顺手重构。
+- 八份小 packet 比一个共享文件多七个文件，但换来独立 record hash、独立审查 diff 和可证明的故障域；这是本问题的最低充分隔离，不再增加 index 权威或签名层。
+- 仍不触及生产选股/EGS/TopN/M6.7/仓位、三条融资过热生产常量、`_allocate_cash`、provider/account/order；不重封、不冻结、不起钟。
+
+### 8. 本轮自审、NOT_VERIFIED 与下一步
+
+本轮仅修改本 handoff 与 `docs/SESSION_LOG.md` 极简指针；现行代码、schema、v1 freeze packet、registry、artifact 均未改。只读 AST probe 使用固定主 Python并成功退出；没有运行 unittest/pre-commit/full lane/provider/live/runner。两次探针草稿曾分别因 sandbox 拒绝固定 Python及静态路径求值递归失败，均在写文件前终止、无残留；最终探针在批准的只读边界内 `exit 0`。当前 owner 矩阵、v2 schema/loader/guard、planted-failure、迁移零证据扫描、独立审查和未来 packet 生成均为 `NOT_VERIFIED`，不得称 PASS。
+
+**下一步**：`Claude Code：审查`
+
+## 2026-08-09 追加：Codex executor/fixer —— O19/O20 + 删除 `level_p95`（OPEN-NOT_VERIFIED）
+
+### 1. 问题、根因与本轮结论
+
+- **用户裁决**：删除 Stage A 的 `level_p95`，只保留两条变化率臂；不新增去趋势/差分统计量。根因不是代码故障，而是旧 replay 已显示水平臂两年零触发、随后集中且最长连续 12 周，属于 pre-freeze 必须裁掉的退化 arm。
+- **O19 根因**：EGS 派生 optional predicate 的裸 `except Exception` 虽正确保护官方叶，却没有任何可观测原因，真正的编程错误与正常降级在日志上不可区分。
+- **O20 根因**：官方叶与 comparison predicate 刻意使用不同发布时钟；严格 predicate 在正常延迟周 fail closed 是正确语义，但周 capture/outcome 把所有 unavailable 泛化成 `margin_predicate_unavailable`，丢失了源 predicate 已给出的具体原因。
+- **执行状态**：实现和执行者自验完成；未提交、未独立审查，故本节为 `OPEN-NOT_VERIFIED`，不是 reviewer PASS。
+
+### 2. 改动、调用链与直接消费者
+
+1. `engine/a_short_margin_overheat_cash_control.py`
+   - `REPLAY_ARM_SPECS` 删除 `level_p95`；`_shadow_trigger_percentile` 删除水平分位分支，保留未知 Stage-A arm 的 fail-closed 出口；`materialize_shadow_cash_control(..., arm_id="level_p95")` 点名报 `unknown stage-A shadow arm`。
+   - `facts["level"]`、三条生产常量、Stage B 四臂、cash factor 数值、`_allocate_cash` 全部不动。
+   - 新增 `_predicate_unavailable_reason`：available → `None`；schema-valid unavailable predicate → 原样取其 `unavailable_reason`；整份 predicate 缺失 → `predicate_facts_missing`。
+   - capture 调用链：weekly `analysis_input.market_context.margin_overheat.predicate_facts` → `capture_margin_overheat_after_published_weekly` → `capture_margin_overheat_week` → `validate_predicate_facts` → `_predicate_unavailable_reason` → `capture.payload.predicate_unavailable_reason` → payload SHA-256。`_validate_margin_capture` 读回后重新推导并逐值比对；`_settle_capture` 只从该已绑定字段给 question outcome 和每个 arm 写 no-count reason。
+2. `A-EGS/egs_main.py`
+   - `_margin_overheat_provider_bundle` 的 optional predicate 派生异常仍返回 `predicate_facts=None`，官方 leaves 不变；新增唯一稳定日志 `reason=predicate_derivation_error`，不输出异常正文或数据。
+3. `presets/a_short_margin_overheat_cash_control_governance_20260808.json`
+   - Stage A challengers 3→2；`max_challengers` 保持 3。Stage B 与 production boundary 不动。
+4. schema 与 effect contract
+   - program const、shadow 两处 arm enum、replay arm enum/数量删除 `level_p95`。
+   - Stage A 从 4 总臂变 3 总臂，Stage B 仍 4，因此 capture/outcome 的 schema 数量容纳改为 3..4；运行时 validator 继续按 `stage_arm_ids(stage)` exact tuple 校验，不允许第三种形状。
+   - capture schema 新增必填 `predicate_unavailable_reason: string|null`。program/shadow/replay/capture/outcome 五份 schema SHA-256 已同步到 `schemas/a_short_m67_effect_contract.json`；`static_contract_error(...)` 实测 `None`。
+5. tests
+   - 原 14 处以 `level_p95` 充当触发正控的用例全部改挂 `change_rate_p90`，仍点名验证触发 → factor `0.8` → `available_cash_start=80000.0`；Stage B 仍四臂。
+   - 新增治理拒绝退休臂、public materialize 拒绝退休臂、内部未知臂出口、双臂 replay 等价、O19 稳定原因、O20 capture/settlement 原因绑定及篡改拒绝用例，均使用点名 `assertRaisesRegex` 或精确值断言。
+
+### 3. schema、source-binding 与写盘边界
+
+- O20 原因不是新的授权凭据：它只能解释 no-count，不能让 unavailable 变 available、不能让 evidence 计时。事实对象先经 predicate schema/语义校验，原因进入 capture payload SHA；篡改原因并重算外层 payload SHA 仍被 `_validate_margin_capture` 的重新推导门拒绝。
+- O19 只增加标准输出的一行稳定原因码；不把 exception text、provider payload、URL、token 或 raw row 写入 tracked 文件。
+- 私有周写盘仍只经过既有 `commit_artifact_set`，新增字段位于既有 `capture.json` payload；outcome 仍写既有私有路径。没有新增生产 writer、official M6.7 字段、账户/订单/provider 写盘。
+- 新双臂 replay：`research/results/a_short/margin_overheat_cash_control_replay_frequency_two_arm_20260809.json`，由 `provider_samples/a_short_margin_overheat_20260806` 的既有 gitignored seed 离线重放；没有 provider call。旧三臂历史产物逐字节不改，SHA-256 为 `0a4c267f38a14b83186e977d7ff84f0eadd359381540fb303dcf09d771baed1a`；新产物 SHA-256 为 `93280a5462f8b7080fbff324bce1a830e1b9c995572196a4ca592baf6773e3b4`。
+
+### 4. 验收矩阵实结论
+
+| 项 | 实结论 |
+|---|---|
+| Stage A/Stage B exact set | `baseline/change_rate_p90/change_rate_p95`；Stage B 四臂原样。 |
+| 退休臂反控 | `materialize_shadow_cash_control(... level_p95 ...)` 点名报 `unknown stage-A shadow arm`。 |
+| governance/schema mismatch | 临时插回旧 challenger，`validate_governance` 点名报 `invalid margin-overheat contract`。 |
+| 触发正控 | `change_rate_p90` jump 输入仍触发，factor `0.8`，可用现金 `100000→80000`。 |
+| replay 等价 | 新产物两条 `by_arm` 与旧产物对应对象逐字段相同；其余顶层字段也逐字段相同，仍 `PARTIAL`。 |
+| O19 | 派生函数植入 `RuntimeError` 时官方 leaves 保留、predicate 为 `None`，并精确打印 `reason=predicate_derivation_error`。 |
+| O20 | 正常发布延迟模拟产出 predicate `coverage_incomplete`；capture、question outcome、所有 arm outcome 均保留该原因；改成不匹配原因时报 `predicate unavailable reason drifted`。 |
+
+### 5. 负向植入与逐字节恢复
+
+1. 临时恢复 `_shadow_trigger_percentile` 的 `level_p95` 分支，点名命令：
+   `& 'C:\Users\cnhea\AppData\Local\Programs\Python\Python313\python.exe' -m unittest tests.test_a_short_margin_overheat_cash_control.MarginOverheatCashControlKnife2Tests.test_removed_level_trigger_branch_reaches_the_unknown_arm_gate`
+   → `Ran 1 test in 0.039s` / `FAILED (failures=1)`，原因 `MarginOverheatCashControlError not raised`。
+2. 临时把 O19 日志原因改成 `predicate_unavailable`，点名命令：
+   `& 'C:\Users\cnhea\AppData\Local\Programs\Python\Python313\python.exe' -m unittest tests.test_a_short_margin_overheat_wiring.MarginOverheatProducerTests.test_predicate_derivation_error_emits_a_stable_degradation_reason`
+   → `Ran 1 test in 0.343s` / `FAILED (failures=1)`，actual/expected 原因码精确不同。
+3. 临时把 O20 settlement 退回 `margin_predicate_unavailable`，点名命令：
+   `& 'C:\Users\cnhea\AppData\Local\Programs\Python\Python313\python.exe' -m unittest tests.test_a_short_margin_overheat_cash_control.MarginOverheatCashControlKnife3Tests.test_publication_lag_reason_is_bound_to_capture_and_settlement`
+   → `Ran 1 test in 2.140s` / `FAILED (failures=1)`，actual `margin_predicate_unavailable`、expected `coverage_incomplete`。
+4. 三次均立即还原。最终 SHA-256 与植入前一致：`engine/a_short_margin_overheat_cash_control.py=8b51f403859785e417d6774f98e060d2e0f3514f5cf6b828f7c725bb1df0a1b8`；`A-EGS/egs_main.py=79c6ca2a2ccd6292b9a4ffdae1563ab59d8457b27d9d2dc47c309300af27ba10`。
+
+### 6. 固定 Python、精确验证与原始终态
+
+- 唯一解释器：`C:\Users\cnhea\AppData\Local\Programs\Python\Python313\python.exe`，版本 `Python 3.13.8`。所有本轮 Python/replay/test 命令均显式使用该路径；未使用 PATH、`python`、`python3`、bundled Python。
+- 首轮点名：
+  `& 'C:\Users\cnhea\AppData\Local\Programs\Python\Python313\python.exe' -m unittest tests.test_a_short_margin_overheat_cash_control tests.test_a_short_margin_overheat_wiring`
+  → 首次 `Ran 112 tests in 16.847s` / `FAILED (failures=1, errors=1)`，暴露两个测试夹具/读取错误；修正测试后同命令 `Ran 112 tests in 15.695s` / `OK`。
+- 最终聚焦包：
+  `& 'C:\Users\cnhea\AppData\Local\Programs\Python\Python313\python.exe' -m unittest tests.test_a_short_margin_overheat_cash_control tests.test_a_short_margin_overheat_wiring tests.test_a_short_effect_contract tests.test_a_short_effect_consumer_probe tests.test_a_short_weekly_pipeline`
+  → `Ran 717 tests in 91.577s` / `OK`。
+- 文档收口门：
+  `& 'C:\Users\cnhea\AppData\Local\Programs\Python\Python313\python.exe' -m unittest tests.test_readme_route_row_length tests.test_route_doc_ledger_status_consistency tests.test_doc_governance_guard`
+  → `Ran 66 tests in 1.199s` / `OK`。
+- 实际 pre-commit（不 stage、不 commit）：
+  `& 'C:\Program Files\Git\bin\sh.exe' 'D:\cnhea\Codex\worktrees\c2aa\Stock\.githooks\pre-commit'`
+  → route-doc `Ran 14 tests in 0.042s` / `OK`；doc-governance `Ran 41 tests in 0.998s` / `OK`。
+- replay 离线生成命令使用固定 Python `-c`，读取 `trade_cal.json` / `margin_window.json` / `denominator_window.json` 与旧 artifact 的 source receipt，调用 `build_replay_frequency` 后打印 canonical JSON；命令 `exit 0`，无网络/无 provider 调用。旧 artifact `git diff --exit-code` 为 0。
+
+### 7. 执行者自审、边界与 NOT_VERIFIED
+
+- 已逐项复核：Stage A/Stage B exact sets；治理/schema/effect-contract；生产三常量；`facts["level"]` 保留；cash stack/allocator 直接消费者；capture payload SHA 与读回重算；private write boundary；旧 replay 不改；新 replay 同 seed 等价；O19 不泄露异常正文；O20 只解释 no-count；三次植入还原；`git diff --check`。
+- 未改 registry mode、v1 freeze packet、frozen transition、clock、forward eligibility、生产选股/TopN/M6.7/仓位、provider、account/order；未 stage、未 commit、未 push/merge、未用 `--no-verify`。
+- full lane=`not_triggered`：本改动没有新增生产 importer；未运行 full lane。provider/live、真实供应商延迟周的正式 weekly+私有 capture 写盘、真实 forward cohort、freeze/start receipt、12/24/36 周结论、ship gate、独立 reviewer 均为 `NOT_VERIFIED`。新 replay 自身仍 `status=PARTIAL`，不能据此称整轨 PASS。
+
+**下一步**：`Claude Code：审查`
+
+## 2026-08-09 追加：删 `level_p95` + O19/O20 独立审查 —— PASS（已合入 master）
+
+**判定**：PASS，无 Required，三条 Optional（O21/O22/O23，正文只在 `docs/system_risk_register.md`）。本节只写过程与边界。
+
+**我自己实际验了什么（区别于执行方转述）**
+
+- 删臂：逐行读 `_shadow_trigger_percentile`、`materialize_shadow_cash_control`、`stage_arm_ids`、`_arm_definitions`、`_validate_margin_capture` 的函数体，确认未知臂 `raise` 出口仍在、exact-tuple 校验仍以治理为唯一权威；自跑残留扫描对 `level_p95` 在 `*.py`/`*.json`/`*.yaml`（排除 docs/tests/历史产物）**零命中**。
+- replay 等价：我自己读两份产物做对象级比对（不是引用执行方的等价声明），两条保留臂逐字段相同、非 `by_arm` 顶层字段全等；旧产物 git 无 diff；新产物无 URL/token/raw。
+- 契约：固定主 Python 独立调 `static_contract_error()` 得 `None`。**一次口径失误如实记**：我先写的 sha 探针按原始字节比对，报了六处未触及 schema 的「不一致」；查 `engine/a_short_effect_contract.py` 后确认契约用 `read_text`（LF 归一化），而 Codex worktree 是 CRLF checkout —— 探针口径错，结论作废，未写成 finding。
+- 历史包袱：实测主树与 c2aa 均无 `state/a_short/margin_overheat_cash_control_private`，故新必填字段不会撞上任何已存在的 capture。
+- fail-soft 未回退：读 `runners/a_short_weekly_pipeline.py:6482-6529`，capture 整段仍在 try/except 内，新 raise 最坏只降级为 sidecar unavailable。
+
+**植入对照（我自写，唯一一次）**
+
+按 C2 判据 patch 的是**门本身**：把 `_validate_margin_capture` 的两道臂集 exact-tuple 门同时中和成 `if False:`（脚本先扫残留再植入，可被中断后自恢复），跑 `tests.test_a_short_margin_overheat_cash_control` 得 `Ran 69 tests / OK` —— 门被删掉也没人喊，坐实 O22；还原后 sha 回到 `8b51f403859785e417d6774f98e060d2e0f3514f5cf6b828f7c725bb1df0a1b8`，与执行方记录的植入前 sha 一致（顺带旁证其三次植入确实还原了）。因验收超集在跑，植入按 rule 7(c) 串行等它结束才做，这也是本轮超 30 分钟墙钟的原因。
+
+**未覆盖维度与诚实边界**
+
+- 真实带 root 的生产周跑、真实延迟周的私密 capture/outcome 落盘、forward/freeze/clock、provider/live/account/ship-gate 全部 `NOT_VERIFIED`；本轮所有证据都是离线的。
+- 全量按 rule 4 归执行方；其本轮判 `not_triggered`，我未重跑也未走 rule 6 escalation。
+- §6a 未起 agent（无 live 取数、无 secret 落盘、无新增或大改的 fail-closed 授权门；同片代码前两轮已各起过一次）。
+- 「epoch 按轨分绑」一节我只核了它**引用的当前事实**是否属实（八轨、八项共享契约、`_freeze_packet_identity` 确含全局 `record_sha256`、13 个入口函数全部存在），**没有**验证它的 owner 矩阵推导、过宽投影判断或迁移零证据结论 —— 那些要等真正实现时连同 generator 一起审。
+
+**下一步**：`Codex：执行`（O21/O22 建议随下一刀顺手收；按轨分绑仍等设计定稿与用户授权，不得翻 mode、不得加 forward）

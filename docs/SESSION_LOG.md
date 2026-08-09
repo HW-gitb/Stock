@@ -1,5 +1,27 @@
 # Session Log
 
+## 2026-08-09 — Claude 审查 PASS（删 `level_p95` + O19/O20 + 按轨分绑方案）
+
+- **Verdict/Action**: PASS，已提交并合入 master。删臂逐处复验：`REPLAY_ARM_SPECS`、`_shadow_trigger_percentile`、preset、program 整段 const、shadow/replay enum 全同步，代码·schema·preset 侧 `level_p95` 残留为 0，`facts["level"]` 与 Stage B 四臂原样，未知臂 `raise` 出口保留。O19 输出稳定原因码；O20 的原因只从闭合 enum 派生、进 capture payload SHA 并贯穿 outcome。epoch 按轨分绑一节仍是 PLAN-ONLY 文档。
+- **Required**: 无。新记三条 Optional（O21 公开摘要断言被搬进延迟周用例、O22 放松后的臂集强制腿无点名守卫、O23 执行方 focused 未走 bounded launcher）。正文只在 `docs/system_risk_register.md`。
+- **Verify**: review-evidence:32836e25b8ac。验收超集 `Ran 777 tests in 470.183s`、`RESULT status=PASS exit=0 tests=777`（`receipt:913efddb207da81e85e3cd25`，显式 600s，理由=实测 475.9s 超默认）。自写探针：新双臂 replay 与旧产物两条保留臂逐字段相同、顶层字段全等，旧产物 git 未改；`static_contract_error()` 独立重算为 `None`；两树均无私密 capture 根。植入：同时中和 `_validate_margin_capture` 两道臂集门 → `Ran 69 tests / OK`（无守卫，记 O22），还原后 sha 逐字节回到 `8b51f403…`。全量按 rule 4 由执行方跑、我未起。超时原因:验收超集 475.9s，植入对照不得与其并行、只能串行再跑 45s。
+- **Next**: Codex：执行
+
+## 2026-08-09 — Codex executor/fixer：O19/O20 + 删除 `level_p95`（OPEN-NOT_VERIFIED）
+
+- **Verdict/Action**：按用户裁决将 Stage A 收窄为 `baseline/change_rate_p90/change_rate_p95`，Stage B 不变；O19 增加稳定 `predicate_derivation_error` 可观测原因，O20 将已验证 predicate 的具体 unavailable reason 绑定进周 capture SHA 并贯穿 outcome。旧三臂 replay 未改，新双臂 replay 用同一 seed 离线生成、零新增 provider 调用；不提交，等待独立审查。
+- **Required**：无新增 Required；O19/O20 与删臂实现细节、schema/source-binding/写盘边界、植入对照和精确命令见 `docs/system_risk_register.md` 顶部及 A-short 主 handoff 末节。本轮结论仍 `OPEN-NOT_VERIFIED`，reviewer 未审前不得称整轨 PASS。
+- **Verify**：固定 Python 3.13.8；聚焦包 `Ran 717 tests in 91.577s` / `OK`；文档门 `Ran 66 tests in 1.199s` / `OK`；实际 pre-commit 路由 `Ran 14 tests` / `OK` + doc-governance `Ran 41 tests` / `OK`。full lane=`not_triggered`；provider/live/真实延迟周写盘/forward/freeze/clock/ship-gate=`NOT_VERIFIED`。
+- **Proof-of-use**：退休臂、O19 原因码、O20 结算原因三次点名植入均 `Ran 1 test ... FAILED (failures=1)`，随后源文件 SHA-256 恢复一致；新双臂 replay 与旧产物保留臂逐字段相同，旧产物无 diff。
+- **Next**：Claude Code：审查
+
+## 2026-08-09 — Codex 方案：A-short 对比轨 epoch 按轨分绑（PLAN-ONLY）
+
+- **Verdict/Action**：已在 `D:\cnhea\Codex\worktrees\c2aa\Stock` 只读扫描并起草按轨分绑方案；建议一轨一份 v2 物理 packet、独立 `track_record_sha256`，由入口注册 + AST exact-set guard 机器生成 owner，禁止全局 record/index 重新共绑。未改代码/schema/v1 packet/registry/mode/clock。
+- **Required**：完整的八轨当前清单、现行八项 owner 矩阵、P1 weekly schema 漏绑、P2/P5 过宽投影 disposition、v1 退役、迁移、守卫、planted-failure、验收矩阵与阶段边界见 `docs/handoff/2026-08-01_a_short_leaf_wiring_classification_handoff.md` 末节「A-short 对比轨 epoch『按轨分绑』执行方案」。
+- **Verify**：`git -C D:\cnhea\Stock worktree list` 确认唯一目标为 c2aa；固定主 Python只读 AST 闭包最终 `exit 0`、八轨 `unresolved=[]`。本轮未跑测试/full lane/provider/live/runner；实现、迁移零证据检查、独立审查均 `NOT_VERIFIED`。
+- **Next**：Claude Code：审查
+
 ## 2026-08-09 — Claude 审查 PASS（甲接线两处 + 乙 replay 频率证据）
 
 - **Verdict/Action**: PASS，已提交并合入 master。G1 launcher 传 root + 复用同一份已批准 cache 且**未加 forward**；G2 EGS 用**同一批已取的 rows** 派生 `predicate_facts` 写进 analysis_input，weekly 读出后传给 capture。契约新叶已登记、四处 sha 重算、方向只增不删。乙的 replay 产物已出（comparison_only / exploratory / not_forward / PARTIAL），三臂频率见 register——**`level_p95` 有退化迹象，需你裁 arm**。

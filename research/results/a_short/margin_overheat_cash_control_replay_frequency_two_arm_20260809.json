@@ -1,0 +1,55 @@
+{
+  "schema_name": "a_short_margin_overheat_cash_control_replay",
+  "schema_version": "1.0.0",
+  "track_id": "a_short_margin_overheat_cash_control",
+  "source_as_of": "20260806",
+  "window_start": "20200806",
+  "window_end": "20260806",
+  "source_digest": "9ba65176c37ebceca26ace78116fbca05cb831ce67e260ad01f451dd1728fe55",
+  "source_receipt": {
+    "kind": "sequence19_exact_date_ratio_series",
+    "source_as_of": "20260806",
+    "source_digest": "9ba65176c37ebceca26ace78116fbca05cb831ce67e260ad01f451dd1728fe55"
+  },
+  "comparison_only": true,
+  "exploratory": true,
+  "forward_eligible": false,
+  "week_count": 308,
+  "evaluable_week_count": 150,
+  "unavailable_week_count": 158,
+  "unavailable_breakdown": {
+    "warm_up": 127,
+    "source_gap": 31
+  },
+  "by_arm": [
+    {
+      "arm_id": "change_rate_p90",
+      "criterion_id": "change_rate_20d_percentile_p90",
+      "threshold": 0.9,
+      "trigger_week_count": 24,
+      "longest_consecutive_trigger_weeks": 6,
+      "trigger_weeks_by_year": {
+        "2023": 5,
+        "2024": 8,
+        "2025": 7,
+        "2026": 4
+      }
+    },
+    {
+      "arm_id": "change_rate_p95",
+      "criterion_id": "change_rate_20d_percentile_p95",
+      "threshold": 0.95,
+      "trigger_week_count": 13,
+      "longest_consecutive_trigger_weeks": 5,
+      "trigger_weeks_by_year": {
+        "2023": 3,
+        "2024": 6,
+        "2025": 4
+      }
+    }
+  ],
+  "status": "PARTIAL",
+  "not_verified": [
+    "warm-up or source-gap weeks were excluded rather than shortened"
+  ]
+}

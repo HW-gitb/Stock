@@ -82,7 +82,6 @@ DEFINITION_SUMMARY = {
     "comparison_only": True,
 }
 REPLAY_ARM_SPECS = (
-    ("level_p95", "level_percentile_p95", "level_percentile", 0.95),
     ("change_rate_p90", "change_rate_20d_percentile_p90", "change_rate_percentile", 0.90),
     ("change_rate_p95", "change_rate_20d_percentile_p95", "change_rate_percentile", 0.95),
 )
@@ -378,6 +377,7 @@ def build_margin_overheat_freeze_manifest() -> dict[str, Any]:
                     "build_predicate_facts", "validate_predicate_facts", "_shadow_arm_spec",
                     "_shadow_trigger_percentile", "_governed_shadow_cash_factor",
                     "materialize_shadow_cash_control", "_arm_definitions", "_arm_capture_snapshot",
+                    "_predicate_unavailable_reason",
                     "_validate_margin_capture", "_validate_stage_b_capture_admission",
                     "capture_margin_overheat_week", "_settlement_risk_evidence", "_settle_arm",
                     "_settle_capture", "_collect_source_bound_evidence", "_formal_decision",
@@ -1255,9 +1255,7 @@ def _shadow_trigger_percentile(
         )
     if stage != STAGE_A:
         raise MarginOverheatCashControlError("unknown shadow comparison stage")
-    if arm_id == "level_p95":
-        value = facts["level"]["percentile"]
-    elif arm_id in {"change_rate_p90", "change_rate_p95"}:
+    if arm_id in {"change_rate_p90", "change_rate_p95"}:
         value = facts["change_rate_20d"]["percentile"]
     else:
         raise MarginOverheatCashControlError("unknown stage-A shadow arm")
@@ -1348,6 +1346,8 @@ def materialize_shadow_cash_control(
     if stage not in (STAGE_A, STAGE_B):
         raise MarginOverheatCashControlError("shadow consumer comparison stage is invalid")
     if arm_id not in stage_arm_ids(stage):
+        if stage == STAGE_A:
+            raise MarginOverheatCashControlError("unknown stage-A shadow arm")
         raise MarginOverheatCashControlError("shadow consumer arm is not governed for its stage")
     if stage == STAGE_B and stage_b_supported_arm_id not in stage_arm_ids(STAGE_A)[1:]:
         raise MarginOverheatCashControlError(
@@ -1905,6 +1905,10 @@ def _validate_margin_capture(capture: Mapping[str, Any], *, require_current_epoc
         validate_predicate_facts(predicate)
         if predicate.get("source_as_of") != payload["decision_date"]:
             raise MarginOverheatCashControlError("margin-overheat capture predicate source clock drifted")
+    if payload.get("predicate_unavailable_reason") != _predicate_unavailable_reason(predicate):
+        raise MarginOverheatCashControlError(
+            "margin-overheat capture predicate unavailable reason drifted"
+        )
     if payload.get("margin_facts_digest") != payload["margin_fact_digest"]:
         raise MarginOverheatCashControlError("margin-overheat capture margin fact digest alias drifted")
     if tuple(payload.get("source_references") or []) != PREDICATE_SOURCE_REFERENCES:
@@ -2310,6 +2314,20 @@ def _arm_capture_snapshot(*, facts: Mapping[str, Any] | None, arm_id: str,
     }
 
 
+def _predicate_unavailable_reason(facts: Mapping[str, Any] | None) -> str | None:
+    """Return the source-bound no-count reason carried by a weekly capture."""
+    if not isinstance(facts, Mapping):
+        return "predicate_facts_missing"
+    if facts.get("status") == "available":
+        return None
+    reason = facts.get("unavailable_reason")
+    if not isinstance(reason, str) or not reason:
+        raise MarginOverheatCashControlError(
+            "unavailable predicate facts lack a capture reason"
+        )
+    return reason
+
+
 def capture_margin_overheat_week(
     *, root: str | Path, decision_date: str, run_identity: Mapping[str, Any],
     official_bundle: Any, margin_facts: Mapping[str, Any],
@@ -2360,6 +2378,7 @@ def capture_margin_overheat_week(
         validate_predicate_facts(facts)
         if facts.get("source_as_of") != decision_date:
             raise MarginOverheatCashControlError("margin-overheat predicate source_as_of is not decision_date")
+    predicate_unavailable_reason = _predicate_unavailable_reason(facts)
     governance = load_governance()
     selection_plan = _selection_plan_snapshot(reports)
     source_receipt = facts.get("source_receipt") if isinstance(facts, Mapping) else None
@@ -2402,6 +2421,7 @@ def capture_margin_overheat_week(
         "freeze_manifest": freeze_manifest,
         "forward_eligible": bool(forward_eligible),
         "predicate_facts": facts,
+        "predicate_unavailable_reason": predicate_unavailable_reason,
         "candidate_universe": candidates_snapshot,
         "official_selection_plan": selection_plan,
         "arm_definitions": _arm_definitions(stage),
@@ -2625,16 +2645,17 @@ def _settle_capture(capture: Mapping[str, Any], document: Mapping[str, Any]) -> 
     candidate_by_code = {str(row["ts_code"]): row for row in payload["candidate_universe"]}
     facts = payload.get("predicate_facts")
     if not isinstance(facts, Mapping) or facts.get("status") != "available":
+        unavailable_reason = payload["predicate_unavailable_reason"]
         arms = [{"arm_id": row["arm_id"], "status": "no_count",
                  "predicate_triggered": row.get("predicate_triggered"),
-                 "reason": "margin_predicate_unavailable", "horizons": [],
+                 "reason": unavailable_reason, "horizons": [],
                  "risk_evidence": _unavailable_risk_evidence()}
                 for row in payload["arms"]]
         result_payload = {
             "question_id": QUESTION_ID, "decision_date": payload["decision_date"],
             "run_date": payload["run_date"], "price_data_through": payload["price_data_through"],
             "daily_cache_digest": payload["daily_cache_digest"], "status": "no_count",
-            "reason": "margin_predicate_unavailable", "arms": arms,
+            "reason": unavailable_reason, "arms": arms,
         }
     else:
         arm_results = []

@@ -35,9 +35,25 @@ class MarginOverheatCashControlContractTests(unittest.TestCase):
     def test_governance_is_schema_valid_and_has_exact_two_stage_arm_sets(self):
         jsonschema.validate(self.governance, self.schema)
         self.assertEqual(track.stage_arm_ids(track.STAGE_A),
-                         ("baseline", "level_p95", "change_rate_p90", "change_rate_p95"))
+                         ("baseline", "change_rate_p90", "change_rate_p95"))
         self.assertEqual(track.stage_arm_ids(track.STAGE_B),
                          ("baseline", "cash_factor_0_9", "cash_factor_0_8", "cash_factor_0_7"))
+
+    def test_governance_rejects_the_retired_level_arm(self):
+        mutated = copy.deepcopy(self.governance)
+        mutated["stage_a"]["challengers"].insert(0, {
+            "arm_id": "level_p95",
+            "kind": "challenger",
+            "criterion_id": "level_percentile_p95",
+            "margin_cash_factor": 0.8,
+            "effect_surface": "margin_overheat_trigger",
+            "one_change_only": True,
+        })
+        with self.assertRaisesRegex(
+            track.MarginOverheatCashControlError,
+            "invalid margin-overheat contract",
+        ):
+            track.validate_governance(mutated)
 
     def _reject(self, mutated):
         with self.assertRaises((jsonschema.ValidationError, track.MarginOverheatCashControlError)):
@@ -639,7 +655,11 @@ class MarginOverheatCashControlKnife2Tests(unittest.TestCase):
         self.assertTrue(replay["comparison_only"])
         self.assertTrue(replay["exploratory"])
         self.assertFalse(replay["forward_eligible"])
-        self.assertEqual(len(replay["by_arm"]), 3)
+        self.assertEqual(len(replay["by_arm"]), 2)
+        self.assertEqual(
+            tuple(row["arm_id"] for row in replay["by_arm"]),
+            ("change_rate_p90", "change_rate_p95"),
+        )
         self.assertGreater(replay["evaluable_week_count"], 0)
         self.assertGreater(replay["unavailable_week_count"], 0)
         self.assertIn(replay["status"], {"PARTIAL", "COMPLETE"})
@@ -654,10 +674,49 @@ class MarginOverheatCashControlKnife2Tests(unittest.TestCase):
         self.assertFalse(missing["forward_eligible"])
         self.assertIn("no source receipt", " ".join(missing["not_verified"]))
 
+    def test_two_arm_replay_preserves_the_remaining_arm_statistics(self):
+        old = json.loads((
+            ROOT / "research" / "results" / "a_short"
+            / "margin_overheat_cash_control_replay_frequency.json"
+        ).read_text(encoding="utf-8"))
+        new = json.loads((
+            ROOT / "research" / "results" / "a_short"
+            / "margin_overheat_cash_control_replay_frequency_two_arm_20260809.json"
+        ).read_text(encoding="utf-8"))
+        jsonschema.validate(
+            new,
+            json.loads(track.REPLAY_SCHEMA_PATH.read_text(encoding="utf-8")),
+        )
+        old_by_arm = {row["arm_id"]: row for row in old["by_arm"]}
+        self.assertEqual(
+            new["by_arm"],
+            [old_by_arm["change_rate_p90"], old_by_arm["change_rate_p95"]],
+        )
+        self.assertEqual(
+            {key: value for key, value in new.items() if key != "by_arm"},
+            {key: value for key, value in old.items() if key != "by_arm"},
+        )
+
+    def test_removed_level_arm_materialization_fails_closed(self):
+        _, facts = self._predicate(jump=True)
+        with self.assertRaisesRegex(
+            track.MarginOverheatCashControlError,
+            "unknown stage-A shadow arm",
+        ):
+            self._shadow(facts, "level_p95")
+
+    def test_removed_level_trigger_branch_reaches_the_unknown_arm_gate(self):
+        _, facts = self._predicate(jump=True)
+        with self.assertRaisesRegex(
+            track.MarginOverheatCashControlError,
+            "unknown stage-A shadow arm",
+        ):
+            track._shadow_trigger_percentile(facts, "level_p95")
+
     def test_shadow_non_trigger_is_field_identical_to_baseline(self):
         _, facts = self._predicate(rising=False)
         baseline = self._shadow(facts, "baseline")
-        challenger = self._shadow(facts, "level_p95")
+        challenger = self._shadow(facts, "change_rate_p90")
         self.assertFalse(challenger["predicate_triggered"])
         self.assertEqual(challenger["shadow_cash_factor"], 1.0)
         self.assertEqual(baseline["shadow_reports"], challenger["shadow_reports"])
@@ -680,7 +739,7 @@ class MarginOverheatCashControlKnife2Tests(unittest.TestCase):
 
     def test_shadow_preserves_normalized_production_control_and_separates_arm_label(self):
         _, facts = self._predicate(jump=True)
-        result = self._shadow(facts, "level_p95")
+        result = self._shadow(facts, "change_rate_p90")
         expected = weekly_pipeline._normalise_margin_overheat_control(
             self._margin_control_input(facts),
             AS_OF,
@@ -690,8 +749,8 @@ class MarginOverheatCashControlKnife2Tests(unittest.TestCase):
         self.assertEqual(
             result["comparison_margin_overheat_control"],
             {
-                "arm_id": "level_p95",
-                "criterion_id": "level_percentile_p95",
+                "arm_id": "change_rate_p90",
+                "criterion_id": "change_rate_20d_percentile_p90",
                 "predicate_triggered": True,
                 "cash_factor": track.load_governance()["stage_a"]["challengers"][0]["margin_cash_factor"],
                 "reason": "comparison_margin_overheat_triggered",
@@ -709,7 +768,7 @@ class MarginOverheatCashControlKnife2Tests(unittest.TestCase):
             arm["arm_id"]: arm["margin_cash_factor"]
             for arm in stage_a["challengers"]
         }
-        for arm_id in ("level_p95", "change_rate_p90", "change_rate_p95"):
+        for arm_id in ("change_rate_p90", "change_rate_p95"):
             with self.subTest(arm_id=arm_id):
                 result = self._shadow(facts, arm_id)
                 self.assertTrue(result["predicate_triggered"])
@@ -732,7 +791,7 @@ class MarginOverheatCashControlKnife2Tests(unittest.TestCase):
             "next_trade_date": "20260610",
             "regime_status": "defense",
         }
-        result = self._shadow(facts, "level_p95", pre_holiday_control=pre_holiday)
+        result = self._shadow(facts, "change_rate_p90", pre_holiday_control=pre_holiday)
         expected = min(0.8, float(weekly_pipeline.PRE_HOLIDAY_CASH_FACTOR))
         self.assertEqual(result["cash_factor_stack"]["effective_cash_factor"], expected)
         self.assertNotEqual(result["cash_factor_stack"]["effective_cash_factor"], 0.64)
@@ -953,11 +1012,48 @@ class MarginOverheatCashControlKnife3Tests(unittest.TestCase):
         track.validate_margin_reminder(reminder)
         self.assertEqual(ledger["entries"][0]["status"], "settled")
         self.assertEqual(outcome["payload"]["status"], "settled")
-        self.assertEqual(len(outcome["payload"]["arms"]), 4)
+        self.assertEqual(len(outcome["payload"]["arms"]), 3)
         self.assertEqual(
             {row["horizon"] for row in outcome["payload"]["arms"][0]["horizons"]},
             {5, 10, 20},
         )
+
+    def test_publication_lag_reason_is_bound_to_capture_and_settlement(self):
+        lagged_margin_rows = [
+            row for row in wiring_fixtures._margin_rows(self.sessions)
+            if row["trade_date"] != self.sessions[0]
+        ]
+        lagged = track.build_predicate_facts(
+            lagged_margin_rows,
+            wiring_fixtures._denominator_rows(self.sessions),
+            requested_dates=self.sessions,
+            source_as_of=self.sessions[0],
+        )
+        self.assertEqual(
+            (lagged["status"], lagged["unavailable_reason"]),
+            ("unavailable", "coverage_incomplete"),
+        )
+        captured = self._capture(predicate_facts=lagged)
+        payload = captured["capture"]["payload"]
+        self.assertEqual(payload["predicate_unavailable_reason"], "coverage_incomplete")
+        settled = track.settle_margin_overheat_from_daily_cache(
+            root=self.root, daily_cache_document=self.cache
+        )
+        outcome = self._stored(f"weeks/{AS_OF}/outcome.json")["payload"]
+        self.assertEqual(outcome["reason"], "coverage_incomplete")
+        self.assertEqual(
+            {arm["reason"] for arm in outcome["arms"]},
+            {"coverage_incomplete"},
+        )
+
+        tampered = copy.deepcopy(captured["capture"])
+        tampered["payload"]["predicate_unavailable_reason"] = "predicate_facts_missing"
+        tampered["payload_sha256"] = track._digest(tampered["payload"])
+        with self.assertRaisesRegex(
+            track.MarginOverheatCashControlError,
+            "predicate unavailable reason drifted",
+        ):
+            track._validate_margin_capture(tampered)
 
         public = track.settle_and_summarize_margin_overheat_weekly(
             root=self.root, daily_cache_path=self.cache_path, as_of=AS_OF
@@ -1145,10 +1241,10 @@ class MarginOverheatCashControlKnife4Tests(unittest.TestCase):
         start = datetime(2026, 1, 5)
         challengers = track.stage_arm_ids(track.STAGE_A)[1:]
         trigger_weeks_by_arm = trigger_weeks_by_arm or {
-            arm_id: trigger_weeks if arm_id == "level_p95" else 0
+            arm_id: trigger_weeks if arm_id == "change_rate_p90" else 0
             for arm_id in challengers
         }
-        effects_by_arm = effects_by_arm or {"level_p95": primary_effect}
+        effects_by_arm = effects_by_arm or {"change_rate_p90": primary_effect}
         rows_by_arm = {arm_id: [] for arm_id in challengers}
         by_arm = {
             "baseline": {
@@ -1176,13 +1272,13 @@ class MarginOverheatCashControlKnife4Tests(unittest.TestCase):
                 triggered = index < trigger_weeks_by_arm[arm_id]
                 effect = effects_by_arm.get(arm_id, 0.0) if triggered else 0.0
                 risk = self._risk_evidence(
-                    cash_drag_pct=(primary_cash_drag_pct if arm_id == "level_p95" else 10.0)
+                    cash_drag_pct=(primary_cash_drag_pct if arm_id == "change_rate_p90" else 10.0)
                 )
                 row = {
                     "decision_date": decision_date,
                     "evaluation_exit_date": (decision + timedelta(days=10)).strftime("%Y%m%d"),
                     "epoch_id": "epoch-current",
-                    "state": "triggered" if triggered and arm_id == "level_p95" else "non_triggered",
+                    "state": "triggered" if triggered and arm_id == "change_rate_p90" else "non_triggered",
                     "effect_pct": effect,
                     "risk_evidence": risk,
                     "baseline_risk_evidence": self._risk_evidence(),
@@ -1298,7 +1394,7 @@ class MarginOverheatCashControlKnife4Tests(unittest.TestCase):
             ))
             self.assertEqual(
                 (supported["status"], supported["verdict"], supported["winner"]),
-                ("formal_supported", "supported", "level_p95"),
+                ("formal_supported", "supported", "change_rate_p90"),
             )
             inconclusive = track._formal_decision(self._synthetic_evidence(
                 calendar_weeks=24, trigger_weeks=14, primary_effect=2.0,
@@ -1382,7 +1478,7 @@ class MarginOverheatCashControlKnife4Tests(unittest.TestCase):
             "formal_checkpoint": 24,
             "formal_status": "formal_supported",
             "formal_verdict": "supported",
-            "winning_arm_id": "level_p95",
+            "winning_arm_id": "change_rate_p90",
             "by_arm": {},
             "arm_statistics": [],
             "finalist_comparisons": {},
@@ -1640,7 +1736,7 @@ class MarginOverheatCashControlKnife4Tests(unittest.TestCase):
             self.assertEqual(payload["stage"], track.STAGE_B)
             self.assertEqual(payload["experiment_batch_id"], registration["experiment_batch_id"])
             self.assertEqual(payload["stage_b_admission_sha256"], accepted["payload_sha256"])
-            self.assertEqual(payload["stage_b_supported_arm_id"], "level_p95")
+            self.assertEqual(payload["stage_b_supported_arm_id"], "change_rate_p90")
             self.assertEqual(tuple(row["arm_id"] for row in payload["arms"]), track.stage_arm_ids(track.STAGE_B))
             self.assertEqual(args["reports"], official_before)
             stage_root = root / "stage_b" / registration["experiment_batch_id"]
