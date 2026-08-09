@@ -4019,3 +4019,52 @@ Pre-Codex self-review 已复核：R-ID 十格矩阵、EGS/pipeline/launcher 调�
 **边界**：全量按用户明令不跑；§6a 未起 agent（接线 + 产物，无新增 fail-closed 判定面，rule 8 快档）；执行方包另含五个模块（其记录 `Ran 828 / OK`），我未复跑，只引用。取数授权来自用户对执行方的直接指令，我未参与，按既有约定不判越界。
 
 **下一步**：`Codex：执行`（等用户对 arm 与 coverage 的裁决后再动；在此之前不得翻 mode、不得加 forward）。
+
+## 2026-08-09 追加：用户裁决 —— 删掉 `level_p95`，stage A 只留两条变化率臂
+
+**裁决（2026-08-09 用户）**：按硬闸 ② 的 replay 结果，**直接删除 `level_p95` 这条 challenger**，stage A 只保留 `change_rate_p90` 与 `change_rate_p95`。**不新增去趋势/差分统计量**——等两条变化率臂真跑出前向证据、确实需要一条"水平"维度时，再用那时的真实数据决定口径。
+
+**裁决依据（replay 实测，非推断）**：`research/results/a_short/margin_overheat_cash_control_replay_frequency.json`，308 周 / 150 可评估。
+
+| arm | 触发周 | 占可评估周 | 最长连续 | 年度分布 |
+|---|---|---|---|---|
+| level_p95 | 40 | 26.7% | **12 周** | **2023=0 / 2024=0 / 2025=17 / 2026=23** |
+| change_rate_p90 | 24 | 16.0% | 6 周 | 5 / 8 / 7 / 4 |
+| change_rate_p95 | 13 | 8.7% | 5 周 | 3 / 6 / 4 / 0 |
+
+`level_p95` 前两年零触发、后两年高度集中、最长连着 12 周——滚动分位加在趋势性水平序列上的典型退化：水平进新区间后长期贴着自己窗口的顶。桌面口径写死「过密、过疏或 coverage 不完整必须在 pre-freeze 阶段换 arm 并重审」，本裁决即依此执行。两条变化率臂形态健康，保留。
+
+### 执行方案（触点已实测枚举，勿凭印象）
+
+全仓 `level_p95` / `level_percentile_p95` 命中分布：`engine` 2、`program.schema` 2、`replay.schema` 1、`shadow.schema` 2、`preset` 1、`tests` 14、已发布的 replay 产物 2。逐处处置：
+
+1. **`engine/a_short_margin_overheat_cash_control.py`**
+   - `:85` 从 `REPLAY_ARM_SPECS` 删掉 `("level_p95", "level_percentile_p95", "level_percentile", 0.95)` 那一行。
+   - `:1258` `_shadow_trigger_percentile` 里的 `if arm_id == "level_p95": value = facts["level"]["percentile"]` 分支删除；保留 `change_rate_20d` 分支与末尾的 `raise ... "unknown stage-A shadow arm"`（**这条 raise 必须留着**，它是未知 arm 的 fail-closed 出口）。
+   - **`facts["level"]` 本身不要删**：它仍是 row-19 的公开事实与 `level.ratio` 恒等式校验的输入，只是不再有 arm 消费它的分位。
+2. **`presets/a_short_margin_overheat_cash_control_governance_20260808.json`**：`stage_a.challengers` 由 3 条减为 2 条。`max_challengers` 保持 `3`（它是上限不是实数）——若改成 2 需同步改 schema const，且将来加臂又得改回，**建议不动**。
+3. **`schemas/a_short_margin_overheat_cash_control_program.schema.json`**：`stage_a` 是**整段 const**，必须与 preset 同步改成同一份两臂文档，否则 admission 立刻红。
+4. **`schemas/..._shadow.schema.json`**（2 处）与 **`..._replay.schema.json`**（1 处）：arm_id 枚举去掉 `level_p95`。stage B 的 `cash_factor_0_9/0_8/0_7` 不动。
+5. **`tests/test_a_short_margin_overheat_cash_control.py`**（14 处）：逐处改。**不要整段删测试**——`level_p95` 目前被当作"会触发的那条臂"用于多处正控（如 `... if arm == "level_p95" else 10.0`），删臂后必须把这些正控改挂到 `change_rate_p90` 上，否则会静默失去"触发路径"的覆盖。
+6. **已发布的 replay 产物不要改**：`research/results/a_short/margin_overheat_cash_control_replay_frequency.json` 是带 source receipt 的历史记录，含 `level_p95` 是当时的事实。**重跑一份两臂的新 replay**（同一 seed、零新增调用），与旧的并存或按日期命名，别就地覆盖。
+
+### 验收矩阵
+
+| # | 类型 | 断言 |
+|---|---|---|
+| ① | 正控 | `stage_arm_ids("stage_a")` == `("baseline", "change_rate_p90", "change_rate_p95")`；stage B 四臂不变 |
+| ② | 反控·未知臂 | `materialize_shadow_cash_control(..., arm_id="level_p95")` 必须报 `unknown stage-A shadow arm` |
+| ③ | 反控·契约同步 | 只改 preset 不改 program schema const（或反之）→ `validate_governance` 必须红 |
+| ④ | 触发覆盖不丢 | 原先挂在 `level_p95` 上的触发正控已改挂 `change_rate_p90` 且仍验到"触发 → 0.8 → 可用现金下降" |
+| ⑤ | 新 replay | 两臂新产物的触发周数/最长连续/年度分布与旧产物中这两臂的数字**逐字段相同**（删臂不应改变其余臂的统计） |
+| ⑥ | 植入 | 恢复 `_shadow_trigger_percentile` 的 level 分支 → ② 转红 |
+
+### 边界
+
+不新增统计量、不改判据阈值（`p90` / `p95` 原值保留）、不动生产三常量、不翻 mode、不加 `--...-forward`、不起时钟、不生成 freeze manifest、不重封 20260724 冻结包。effect contract 若因 arm 枚举变化需重封，按既有流程重算并只增不减。
+
+### 附：`status=PARTIAL` 不是裁决项（同日用户明确）
+
+`build_replay_frequency`（`:1206-1209`）里 `status` 只有三态：无 receipt → `NOT_VERIFIED`；`not_verified` 非空 → `PARTIAL`；否则 `COMPLETE`。而 `not_verified` 只要 `unavailable_week_count > 0` 就会加一条「warm-up 或 source-gap 周是被排除而不是被缩短」——20 个交易日的 warm-up 是结构性的，**滚动三年窗口的 replay 永远达不到 `COMPLETE`**。因此 `PARTIAL` 这个词**没有鉴别力**，**不得再作为裁决项摆给用户**。真正需要判断的只有 `unavailable_breakdown.source_gap`（当前 31 周）。
+
+**下一步**：`Codex：执行`
