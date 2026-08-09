@@ -79,7 +79,7 @@ state/us_short/us_short_llm_theme_discovery_query_plan_parent_20260809_<64位哈
 ```powershell
 Get-Content state\us_short\us_short_llm_theme_discovery_web_20260809.json | ConvertFrom-Json |
   Select-Object -ExpandProperty themes | Measure-Object | Select-Object Count
-Get-Content state\us_short\us_short_llm_theme_discovery_web_tavily_20260809_budget.json
+Get-Content state\us_short\us_short_llm_theme_discovery_plan_web_20260809_budget.json
 ```
 
 **这是你唯一的中场休息**。如果 web 侧捞回来的全是宏观评论、没有具体公司，那第 3 步的钱可以不花——直接跳到「中止」一节。
@@ -147,7 +147,7 @@ Get-Content state\us_short\us_short_llm_theme_discovery_web_tavily_20260809_budg
 
 1. 第 4 步或第 5 步打印的那行 JSON（含 `verdict`）
 2. `state\us_short\us_short_llm_theme_discovery_web_20260809_receipt.json` 和 `..._x_20260809_receipt.json` 的内容
-3. 三个 `*_20260809_budget.json` 账本
+3. **两个**账本：`state\us_short\us_short_llm_theme_discovery_plan_web_20260809_budget.json` 和 `..._plan_xai_20260809_budget.json`（A4 之后账本是 plan 级、按 `web`/`xai` 两个 provider 分，**不再是** 20260731～0802 那种 tavily/deepseek/xai 三个 per-vendor 账本）
 
 **不要**把原始响应贴进来——它们在 `provider_samples/us_short_llm_theme_discovery_fetch_web|_x` 下，是 gitignored 的付费原文，留在盘上即可。
 

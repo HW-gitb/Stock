@@ -1,5 +1,12 @@
 # Session Log
 
+## 2026-08-09 — Claude 审查 Pass-with-Required（改期件 `89f10219`：三条 Required 本轮已修并复验）
+
+- **Verdict/Action**: Pass-with-Required。执行方=审查方（用户指派），已披露；未起独立对抗 agent（rule 8：零选股影响、机械改名 diff，起 agent 属过度审查）。**逮住三条 Required 的是超集包不是我的眼睛**，如实记。三条全部本轮修完并复验，可合入。
+- **Required**: 三条，正文只在 `docs/system_risk_register.md`（本处不复述）。① 改期漏了第三个调真 builder 的测试（`plan_budget` 整模块 ERROR）——**根因是我执行轮用带 `head -8` 的 grep 截断了证据、却据此下了「整类已扫净」的结论**，判据已写进条目：要下整类结论的枚举命令不得带 `head`；② 修完①才暴露的第二条更值钱——`:543` 那个 `"20260809"` 是当年挑的「故意不同的日期」字面量，改期后与 `DECISION_DATE` 相撞，把一条反向断言变成空转；已改成派生值，构造上不可能再撞；③ 运行单在「唯一的中场休息」那个决定要不要花第二笔钱的地方指了一个 A4 之前的 per-vendor 账本名，**这条是 08-04 那份运行单就带的，08-08 那一枪打了也会撞**。另记一条非本刀的既有 flake（capstone soft-discovery 某 route 测试被矩阵 spawn 时会红），三条证据判非回归。
+- **Verify**: review-evidence:f2c9dc47d7d5。超集三轮：`438 FAIL(1F+1E)` → 修① → `438 FAIL(2F)` → 修② → **`Ran 438 / 147.0s / OK / receipt:53a1e090e24111231bb24adc`**；跑后 `state/us_short` 回基线 3 项、`git status` 只剩预期改动。②的植入对照：`timedelta(days=1)`→`days=0` 精确复现同一条 `AssertionError: PlanBudgetError not raised`，还原后 sha256 逐字节一致（`96bc94b818c8ccb9`）。③ 机器核对：运行单里写全的 state 文件名逐个比对 `assess._expected_slot_map("20260809")` 派生集合全部命中；账本唯一写入口 `plan_budget.default_plan_budget_path` 全仓无第二个。三个判断题逐条复核成立（`approval_ref` 加宽有仓内两份同期记录佐证——**边界：无 08-03 聊天原文，依据是二手记录**；`generated_at` 在过去故因果检查更紧；`20260808` 不进 forbidden 属实且冗余）。附带核实 `2026-08-09` 实测周日、`presets/` 零改动。全量未跑（rule 4，生产侧只改两个路径常量）。
+- **Next**: 合入 master 后用户按 `docs/us_short_soft_discovery_probe_20260809_runbook.md` 开枪，硬窗口今天北京 21:30。
+
 ## 2026-08-09 — Claude 修复（软发现查询质量探针改期：20260808 槽已过窗 → 20260809，离线、未开枪）
 
 - **Verdict/Action**: 08-08 那个槽的时间窗昨晚北京 21:30 就关了，且**不可能补跑**——`generated_at` 必须早于决策日开盘、`fetched_at` 又不得晚于 `generated_at`，今天的抓取时刻夹不进去；回填时间戳是伪造 PIT 证据，不做。运行单原写的「换日期重走第 1 步」在代码上不成立（builder 把决策日硬绑 packet 的 `expected_decision_date`，assessor 另有已注册槽白名单），所以顺延必须是一刀。本刀把槽整体挪到 `20260809`：四个 `git mv` + 逐处日期替换 + 两个 runner 的路径常量 + README 两条路由行。**查询字节、四条模板、12 次调用上限、零重试、预登记阈值、禁止效果表逐字节未动**，只动决策日。
