@@ -1,5 +1,20 @@
 # Session Log
 
+## 2026-08-09 — Claude 审查 PASS（c2aa：P1-1 D2 收据身份日期源）
+
+- **Verdict/Action**: PASS。在真实 20260810 产物上独立重算这道门：旧源（settled 20260807）必 raise、精确复现 P1-1，新源（decision 20260810）放行，`run_id`/`candidate_digest` 两腿本就相等。整类逐点判过，只此一腿错。修复首次解锁的 candidate-effect 在真实 tracker 上也走得通（20260810 cohort 存在、digest/run_id 与周报相等），不是把 raise 挪后一格。
+- **Required**: 无。复核成立项、分腿植入、边界与 NOT_VERIFIED 见 `docs/system_risk_register.md` 顶部同日 PASS 节（单一来源，本处不复述）。
+- **Verify**: review-evidence:97e8e319596f。超集 `Ran 45 in 90.657s OK receipt:963ba73da8e59f1e73b0bf64`，终态复跑同包重绑代码态 `Ran 45 in 85.2s OK receipt:7e18ef80e4d000b6694d77e8`。分腿植入：门退回 pre-patch 原体 → 正控精确红在生产同句；只中和该腿 → 反控红在 `ValueError not raised`；两次还原 sha 均回 `2727162d…`。全量按 rule 4 归执行方（判 not_triggered），未重跑；§6a 未起 agent。超时原因:超集 90s + 两次分腿植入 + 终态重绑 85s 按 rule 7(c) 串行排队。
+- **Next**: Codex：执行
+
+## 2026-08-09 — Codex 修复（R-ASHORT-REGIME-D2-RECEIPT-DECISION-DATE-COMPARED-TO-SETTLED-DATE）
+
+- **Verdict/Action**: 用户授权的 P1-1 已修：D2 收据 `as_of` 改与 `action_decision_as_of` 核对，不再误拿周五 settled regime 日核对周一决策；旧历史夹具同步纠正。未改 schema、canonical、生产选股或 M6.7。
+- **Required**: R-ASHORT-REGIME-D2-RECEIPT-DECISION-DATE-COMPARED-TO-SETTLED-DATE — 完整根因、调用链、source-binding、写盘边界、closure 与 NOT_VERIFIED 见 `docs/system_risk_register.md` 顶部。
+- **Verify**: 固定 Python 3.13.8；bounded direct pack `Ran 73 tests in 29.662s` / `OK`，receipt `receipt:bf798d088d0867ea0f6d868c`；preflight `[OK]`；`py_compile`/diff-check exit 0；门中和植入 `Ran 1 test` / `FAILED (errors=1)` 后恢复；实际 pre-commit `Ran 14` + `Ran 41` / `OK`。
+- **Pre-Codex self-review**: matrix=周一决策/周五 settled 正控 + 另一决策日反控 + historical no-count；register=updated；handoff=updated；focused=73 OK；full-lane=not_triggered: comparison-only 单字段身份纠正；door=pre-commit route 14 OK + doc-governance 41 OK。
+- **Next**: Claude Code：审查
+
 ## 2026-08-09 — Claude 复审 PASS（O21/O22/O23 三条 Optional 全闭）
 
 - **Verdict/Action**: PASS，已提交并合入 master。O21：公开摘要九键 + 全仓唯一那处隐私扫描已逐行搬回 settled 用例，延迟周用例只留 O20 断言。O22：新增 `test_capture_validator_rejects_arm_definition_and_snapshot_drift`，两腿各自重算 payload SHA 后点名拒 `arm definitions drifted` / `arm snapshots drifted`。O23：focused 已改走 bounded launcher。仅改测试与文档，生产代码逐字节未动。

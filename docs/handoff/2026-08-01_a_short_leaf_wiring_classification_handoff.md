@@ -4456,3 +4456,58 @@ undeclared_track_dependency track=p1_regime_candidate_effect path=schemas/plante
 - 真实周跑、forward/freeze/clock、provider/live/account/ship-gate 仍全部 `NOT_VERIFIED`，与上一轮相同。
 
 **下一步**：`Codex：执行`（按轨分绑仍等设计定稿与用户授权，不得翻 mode、不得加 forward）
+
+## 2026-08-09 追加：P1-1 D2 决策收据误拿已结算 regime 日核对（OPEN-NOT_VERIFIED）
+
+### 问题、根因与改动
+
+- canonical 周跑的 `decision_as_of` 是结果服务的交易日，正常可为周一；`as_of` 在 regime runner 内是当时最新已结算行情日，正常为上周五。二者本来允许相差不超过七天。
+- `run_regime_step` 却用 `receipt.as_of == as_of` 判 M6.7 来源完整，导致 `20260810` 决策收据被拿去和 `20260807` regime 日比较并硬报 `D2 M6.7 receipt identity is incomplete`。
+- 最小修复只把该腿改为 `receipt.as_of == decision_as_of`。`run_id`、`candidate_digest`、价格 freshness、七天陈旧门、canonical resolver 与 settled-day 算法均未改。
+
+### 调用链、消费者、schema/source-binding/写盘
+
+- 调用链：`weekly_screening.ps1` → regime runner `main()` → `_latest_settled_as_of` → `run_regime_step` → `validate_published_weekly_bundle` → receipt identity → action record/summary → candidate-effect。
+- 直接消费者：`forward_origin.source_receipt_complete`、`forward_eligible`、action records/summary、candidate-effect。官方选股与 M6.7 不消费这些 comparison-only 结果。
+- 无 schema 变化。共享 publication validator 仍先把 receipt 的 `as_of/decision_as_of/run_id/candidate_digest` 与周报逐项绑定；本地门只把收据决策身份对到 `action_decision_as_of`。regime 日继续只服务日线账本/状态。
+- 写盘仍限于既有 comparison ledger/records/panel；没有写正式周报、生产结果、provider raw、账户或订单。本轮没有运行真实 runner/live/provider。
+
+### 正反控、植入、自审与验证
+
+- 新正控：周日运行、周一决策、周五 settled regime/price，精确断言三个日期/身份字段各归其位并成功产 action。
+- 新反控：完整但属于另一决策日的收据，`assertRaisesRegex` 点名拒 `D2 M6.7 receipt identity is incomplete`。旧 historical 测试夹具同步纠正 receipt/weekly/decision 三者同日，仍断言不计 forward。
+- 修前红测：`Ran 1 test in 2.954s` / `FAILED (errors=1)`；修后点名两测：`Ran 2 tests in 3.622s` / `OK`。把门临时退回旧比较后再次 `Ran 1 test in 2.861s` / `FAILED (errors=1)`，随后恢复，runner SHA-256 回到 `2727162d8ab514ea61d24acdbb552b937a6b6271fe33f7a131aee9a9557769e0`。
+- 固定主 Python `C:\Users\cnhea\AppData\Local\Programs\Python\Python313\python.exe` / `Python 3.13.8`。最终 bounded direct pack：`Ran 73 tests in 29.662s` / `OK`，`RESULT tier=focused status=PASS exit=0 tests=73`，receipt `receipt:bf798d088d0867ea0f6d868c`；A-short preflight `[OK]`；`py_compile` 与 `git diff --check` exit 0；最终文档门 `Ran 55 tests in 0.990s` / `OK`，实际 pre-commit 为 `Ran 14 tests` / `OK` + `Ran 41 tests` / `OK`。
+- A-F：同类扫描确认本 runner 只有这一处 receipt/settled-date 交叉绑定；权威链与写盘边界如上；正控、另一决策日反控、历史不计数与门中和植入均已覆盖。改动小且 direct pack 可界定，不起 sub-agent，不跑 full lane。
+
+### NOT_VERIFIED 与提交边界
+
+- full lane=`not_triggered: AGENTS rule 3; reason=comparison-only runner 单字段身份纠正，未改生产顶层 weekly pipeline/EGS、共享 engine/schema/provider/account`。
+- provider/live、真实周跑、真实 comparison 写盘、forward/freeze/clock、ship gate 均未运行；独立 reviewer、commit、push、merge 为 `NOT_VERIFIED/NOT_PERFORMED`。未使用 `--no-verify`。
+- 本节是 executor/fixer 交接，不是 reviewer PASS。
+
+**下一步**：`Claude Code：审查`
+
+## 2026-08-09 追加：桌面 `a_runtest2_cc.md` P1-1 独立审查 —— PASS（已合入 master）
+
+**判定**：PASS，无 Required、无 Optional。改动 = 生产 1 行 + 测试 + 三份文档。finding 正文只在 `docs/system_risk_register.md` 同日 PASS 节，本节只写过程与边界。
+
+**我自己实际验了什么（区别于执行方与子 agent 的转述）**
+
+- **真实产物重算**：直接读主树 `state/a_short/weekly_private/20260810/` 的已发布 bundle，把 `run_regime_step:831-835` 的布尔式以旧源 / 新源各代入一次 —— 旧源 `False`（必 raise，精确复现本次实盘的 `[5/5] exit 1`）、新源 `True`。这条证据不依赖任何测试夹具。
+- **权威链**：`weekly["decision_as_of"] = str(args.as_of)`（`a_short_weekly_pipeline.py:6277`）+ `validate_published_weekly_bundle:3410-3435` 的六字段逐项回绑，说明改后这腿不是重复设防：run_id/digest 两腿自洽复核在上游已做，as_of 这腿是唯一的「调用方声明 vs 已验证 bundle」跨源绑定。
+- **整类扫点**：`:784-790`（≤7 天容忍）/ `:820`（记录键用 settled 是对的）/ `:838-844`（价格腿本就用决策日）/ `m67_provenance_from_bundle:137` / `engine/a_short_regime_action_comparison.py:336` / `a_short_weekly_sidecar_health.py:139,173` 逐个判定，确认只有 `:832` 一处错。
+- **下游解锁**：修后首次可达的 `run_candidate_effect_sidecar` 里 `_tracker_rows_for_week` 缺 cohort 是 raise —— 实测真实 `logs/forward_tracker.csv` 的 `20260810` cohort 存在（15 行、digest/run_id 与周报 lineage 相等、本周建仓候选 0），故不会把崩溃挪后一格。
+- **旧夹具改写**：确认原组合在新语义下已非法、必须改，改后仍守住 `forward_eligible=False` 与 `total_forward_weeks=0`，`_dates(N+1)` 是为保住 252 天 bootstrap 下限。
+
+**植入对照（我自写，分腿两次）**
+
+- A 把门退回 pre-patch 原体 → 正控精确红在生产同一句 `D2 M6.7 receipt identity is incomplete`；B 只中和该腿 → 反控精确红在 `ValueError not raised`。**必须分开**：反控在 A 下仍绿，单靠它证不出修复方向（执行方只做了 A）。两次还原后 runner sha256 逐字节回到 `2727162d…`。
+
+**未覆盖维度与诚实边界**
+
+- 只闭 P1-1 的崩溃半；「一次退出把三条 sidecar 统一记 failed / 日线其实已写盘」属退出码派生状态，归桌面 P2-1 / P2-4，本刀未动。
+- 未跑真实周跑；action 记录仍只有 20260717 一条，下周真跑才新增。forward/freeze/clock、provider/live/account/ship-gate 全 `NOT_VERIFIED`。
+- full lane 按 rule 4 归执行方（判 `not_triggered`），我未重跑也未走 rule 6 escalation；§6a 未起 agent（无 live 取数 / secret 落盘 / 新增大改 fail-closed 门）。
+
+**下一步**：`Codex：执行`（桌面 `a_runtest2_cc.md` 下一顺位；未来审查工作树与交接文档改在 `D:\cnhea\Codex\worktrees\40d9\Stock`）
