@@ -16,7 +16,7 @@ from runners import us_short_llm_theme_discovery_fetch_x as xfetch
 
 
 class UsShortBuildParentPlanTests(unittest.TestCase):
-    def _payload(self, *, decision_date: str = "20260808") -> dict:
+    def _payload(self, *, decision_date: str = "20260809") -> dict:
         return builder.build_parent_plan_from_reviewed_policy(
             decision_date=decision_date,
             generated_at="2026-08-03T12:00:00+00:00",
@@ -26,7 +26,7 @@ class UsShortBuildParentPlanTests(unittest.TestCase):
         payload = self._payload()
         query_plan.validate_parent_plan(payload)
         core = payload["canonical_plan_core"]
-        self.assertEqual(core["decision_date"], "20260808")
+        self.assertEqual(core["decision_date"], "20260809")
         self.assertEqual(core["policy_version"], "soft_discovery_query_policy_v0.2.0")
         self.assertEqual([row["query_id"] for row in core["stage1_queries"]], [
             "stage1_new_cross_industry_demand",
@@ -111,7 +111,7 @@ class UsShortBuildParentPlanTests(unittest.TestCase):
             honest_budget = plan_budget.reserve_plan_budget(
                 honest, lane=plan_budget.PLAN_LANE, state_dir=honest_state,
                 root=builder.ROOT, gitignored=lambda _path: True,
-                expected_decision_date="20260808", providers=("web",),
+                expected_decision_date="20260809", providers=("web",),
             )
             self.assertEqual(honest_budget.providers, ("web",))
             self.assertTrue(list(honest_state.glob("*.json")))
@@ -119,7 +119,7 @@ class UsShortBuildParentPlanTests(unittest.TestCase):
                 plan_budget.reserve_plan_budget(
                     forged, lane=plan_budget.PLAN_LANE, state_dir=forged_state,
                     root=builder.ROOT, gitignored=lambda _path: True,
-                    expected_decision_date="20260808", providers=("web",),
+                    expected_decision_date="20260809", providers=("web",),
                 )
             self.assertFalse(forged_state.exists() and list(forged_state.rglob("*.json")))
             # A forged plan must not be able to switch the authority check off by simply
@@ -136,7 +136,7 @@ class UsShortBuildParentPlanTests(unittest.TestCase):
                 plan_budget.reserve_plan_budget(
                     drifted, lane=plan_budget.PLAN_LANE, state_dir=drifted_state,
                     root=builder.ROOT, gitignored=lambda _path: True,
-                    expected_decision_date="20260808", providers=("web",),
+                    expected_decision_date="20260809", providers=("web",),
                 )
             self.assertFalse(drifted_state.exists() and list(drifted_state.rglob("*.json")))
             # Pin each gate independently: the end-to-end reservation above is satisfied by
@@ -145,7 +145,7 @@ class UsShortBuildParentPlanTests(unittest.TestCase):
             with self.assertRaisesRegex(plan_budget.PlanBudgetError, "reviewed policy version"):
                 plan_budget._provider_envelopes(drifted)  # type: ignore[attr-defined]
             with self.assertRaisesRegex(plan_budget.PlanBudgetError, "reviewed policy version"):
-                plan_budget.validate_run_decision_date(drifted, "20260808")
+                plan_budget.validate_run_decision_date(drifted, "20260809")
             self.assertEqual(sorted(plan_budget._provider_envelopes(honest)), ["web", "xai"])  # type: ignore[attr-defined]
 
     def test_current_repository_reader_rejects_forged_plan_before_consumption(self) -> None:
@@ -157,7 +157,7 @@ class UsShortBuildParentPlanTests(unittest.TestCase):
         with tempfile.TemporaryDirectory(prefix="us_short_reader_authority_", dir=str(builder.ROOT)) as raw:
             state = Path(raw) / "state" / "us_short"
             path = query_plan.default_parent_plan_path(
-                "20260808", forged["plan_identity"], state_dir=state,
+                "20260809", forged["plan_identity"], state_dir=state,
             )
             query_plan.write_parent_plan(
                 forged, path, state_dir=state, root=builder.ROOT,
@@ -169,7 +169,7 @@ class UsShortBuildParentPlanTests(unittest.TestCase):
                 )
 
     def test_published_plan_round_trips_through_the_live_read_door(self) -> None:
-        """The 08-08 opening sequence, forward leg: build -> publish -> read back -> derive.
+        """The 08-09 opening sequence, forward leg: build -> publish -> read back -> derive.
 
         The sibling test above only proves a forged plan is refused.  A refusal-only pair
         would still pass if the door rejected everything, so this asserts the honest plan
@@ -180,7 +180,7 @@ class UsShortBuildParentPlanTests(unittest.TestCase):
         with tempfile.TemporaryDirectory(prefix="us_short_plan_round_trip_", dir=str(builder.ROOT)) as raw:
             state = Path(raw) / "state" / "us_short"
             path = query_plan.default_parent_plan_path(
-                "20260808", payload["plan_identity"], state_dir=state,
+                "20260809", payload["plan_identity"], state_dir=state,
             )
             query_plan.write_parent_plan(
                 payload, path, state_dir=state, root=builder.ROOT,
@@ -206,7 +206,7 @@ class UsShortBuildParentPlanTests(unittest.TestCase):
         bad[0]["max_dispatch_count"] = 9
         with self.assertRaisesRegex(builder.ParentPlanBuilderError, "four-query"):
             builder.build_parent_plan_from_reviewed_policy(
-                decision_date="20260808",
+                decision_date="20260809",
                 generated_at="2026-08-03T12:00:00+00:00",
                 provider_envelopes=bad,
             )
@@ -216,7 +216,7 @@ class UsShortBuildParentPlanTests(unittest.TestCase):
         with mock.patch.object(builder.query_plan, "write_parent_plan") as write:
             path = builder.publish_parent_plan(payload)
         expected = builder.query_plan.default_parent_plan_path(
-            "20260808", payload["plan_identity"], state_dir=builder.STATE_DIR,
+            "20260809", payload["plan_identity"], state_dir=builder.STATE_DIR,
         ).resolve()
         self.assertEqual(path, expected)
         write.assert_called_once()

@@ -1,9 +1,9 @@
 {
   "schema_name": "us_short_soft_discovery_query_quality_probe_packet",
   "schema_version": "1.1.0",
-  "schema_ref": "schemas/us_short_soft_discovery_query_quality_probe_packet_20260808.schema.json",
-  "generated_at": "2026-08-03T12:00:00+00:00",
-  "approval_ref": "user_chat_20260803_08_08_probe_shape_and_offline_prerequisites",
+  "schema_ref": "schemas/us_short_soft_discovery_query_quality_probe_packet_20260809.schema.json",
+  "generated_at": "2026-08-09T01:00:00+00:00",
+  "approval_ref": "user_chat_20260803_08_08_or_08_09_probe_shape_and_offline_prerequisites",
   "scope": {
     "market": "US",
     "route": "US-short",
@@ -27,7 +27,7 @@
     "weekly_user_knob_selection_required": false
   },
   "probe_boundary": {
-    "expected_decision_date": "20260808",
+    "expected_decision_date": "20260809",
     "decision_date_is_non_trading_test_slot": true,
     "forbidden_reused_decision_dates": [
       "20260730",
@@ -125,22 +125,22 @@
     "no_retry_or_rerun_without_new_authorization": true
   },
   "execution_slot_map": {
-    "expected_decision_date": "20260808",
+    "expected_decision_date": "20260809",
     "decision_outputs": {
-      "web_discovery": "state/us_short/us_short_llm_theme_discovery_web_20260808.json",
-      "web_receipt": "state/us_short/us_short_llm_theme_discovery_web_20260808_receipt.json",
-      "x_discovery": "state/us_short/us_short_llm_theme_discovery_x_20260808.json",
-      "x_receipt": "state/us_short/us_short_llm_theme_discovery_x_20260808_receipt.json"
+      "web_discovery": "state/us_short/us_short_llm_theme_discovery_web_20260809.json",
+      "web_receipt": "state/us_short/us_short_llm_theme_discovery_web_20260809_receipt.json",
+      "x_discovery": "state/us_short/us_short_llm_theme_discovery_x_20260809.json",
+      "x_receipt": "state/us_short/us_short_llm_theme_discovery_x_20260809_receipt.json"
     },
     "budget_ledgers": {
-      "web": "state/us_short/us_short_llm_theme_discovery_plan_web_20260808_budget.json",
-      "xai": "state/us_short/us_short_llm_theme_discovery_plan_xai_20260808_budget.json"
+      "web": "state/us_short/us_short_llm_theme_discovery_plan_web_20260809_budget.json",
+      "xai": "state/us_short/us_short_llm_theme_discovery_plan_xai_20260809_budget.json"
     },
     "raw_roots": {
       "web": "provider_samples/us_short_llm_theme_discovery_fetch_web",
       "x": "provider_samples/us_short_llm_theme_discovery_fetch_x"
     },
-    "assessment_path": "docs/us_short_soft_discovery_query_quality_probe_assessment_20260808.json",
+    "assessment_path": "docs/us_short_soft_discovery_query_quality_probe_assessment_20260809.json",
     "output_or_receipt_overrides_allowed": false,
     "raw_root_overrides_allowed": false,
     "unregistered_slots_allowed": false
@@ -197,7 +197,7 @@
   },
   "next_steps": [
     "Independently review this packet, its exact v0.2.0 query bytes, budget arithmetic, preregistered thresholds, and no-effect boundary before any provider execution.",
-    "After review PASS, ask the user for a fresh explicit authorization for this exact 20260808 Web+X probe; do not infer authorization from creation of this packet or the offline preflight.",
+    "After review PASS, ask the user for a fresh explicit authorization for this exact 20260809 Web+X probe; do not infer authorization from creation of this packet or the offline preflight.",
     "If the probe passes, implement the separate versioned query-plan schema, deterministic stage2 planner, one-click plan consumer, and plan-level provider budget envelope.",
     "If the probe fails quality thresholds, revise and re-review only the stage1 templates before implementing the planner; if execution is inconclusive, do not grade the templates."
   ]

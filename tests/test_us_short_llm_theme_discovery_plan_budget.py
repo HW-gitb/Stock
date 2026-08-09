@@ -19,7 +19,13 @@ from tests.provider.us_short_private_test_root import temporary_us_short_state_d
 
 
 ROOT = plan_budget.ROOT
-DECISION_DATE = "20260808"
+DECISION_DATE = "20260809"
+# A decision date that is deliberately NOT the plan's, used to prove the run-date binding
+# is checked before reservation.  Derived rather than written down: it was a literal, and
+# moving the probe slot onto that literal silently turned the assertion into a no-op.
+OTHER_DECISION_DATE = (
+    datetime.strptime(DECISION_DATE, "%Y%m%d") + timedelta(days=1)
+).strftime("%Y%m%d")
 
 
 def _reviewed_parent_plan() -> dict:
@@ -540,7 +546,7 @@ class PlanBudgetAcceptanceTests(unittest.TestCase):
         with temporary_us_short_state_directory(ROOT) as raw:
             with self.assertRaisesRegex(plan_budget.PlanBudgetError, "decision_date"):
                 plan_budget.reserve_plan_budget(
-                    parent, expected_decision_date="20260809", state_dir=Path(raw),
+                    parent, expected_decision_date=OTHER_DECISION_DATE, state_dir=Path(raw),
                     root=ROOT, gitignored=lambda _path: True,
                     # synthetic plan fixture: the CALLER declares the opt-out, never the plan itself.
                     require_reviewed_policy=False,

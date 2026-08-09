@@ -11,11 +11,11 @@ from runners import us_short_llm_theme_discovery_build_parent_plan as builder
 
 
 ROOT = Path(__file__).resolve().parents[2]
-SCHEMA_PATH = ROOT / "schemas" / "us_short_soft_discovery_query_quality_probe_packet_20260808.schema.json"
-ARTIFACT_PATH = ROOT / "docs" / "us_short_soft_discovery_query_quality_probe_packet_20260808.json"
+SCHEMA_PATH = ROOT / "schemas" / "us_short_soft_discovery_query_quality_probe_packet_20260809.schema.json"
+ARTIFACT_PATH = ROOT / "docs" / "us_short_soft_discovery_query_quality_probe_packet_20260809.json"
 
 
-class UsShortSoftDiscoveryQueryQualityProbePacket20260808SchemaTest(unittest.TestCase):
+class UsShortSoftDiscoveryQueryQualityProbePacket20260809SchemaTest(unittest.TestCase):
     def setUp(self) -> None:
         self.schema = json.loads(SCHEMA_PATH.read_text(encoding="utf-8"))
         self.packet = json.loads(ARTIFACT_PATH.read_text(encoding="utf-8"))
@@ -45,7 +45,7 @@ class UsShortSoftDiscoveryQueryQualityProbePacket20260808SchemaTest(unittest.Tes
         ]
         self.assertEqual(self.packet["query_templates"], expected_packet_templates)
         parent_plan = builder.build_parent_plan_from_reviewed_policy(
-            decision_date="20260808",
+            decision_date="20260809",
             generated_at="2026-08-03T12:00:00+00:00",
         )
         self.assertEqual(
@@ -56,13 +56,13 @@ class UsShortSoftDiscoveryQueryQualityProbePacket20260808SchemaTest(unittest.Tes
     def test_new_slot_and_budget_arithmetic_are_not_the_burned_slot(self) -> None:
         boundary = self.packet["probe_boundary"]
         budget = self.packet["provider_budget"]
-        self.assertEqual(boundary["expected_decision_date"], "20260808")
-        self.assertNotIn("20260808", boundary["forbidden_reused_decision_dates"])
+        self.assertEqual(boundary["expected_decision_date"], "20260809")
+        self.assertNotIn("20260809", boundary["forbidden_reused_decision_dates"])
         self.assertEqual(budget["max_actual_provider_calls"], 4 + 4 + 4)
         self.assertEqual(budget["current_ledger_reservation_units"], 12)
-        self.assertTrue(all("20260808" in value for value in self.packet["execution_slot_map"]["decision_outputs"].values()))
-        self.assertTrue(all("20260808" in value for value in self.packet["execution_slot_map"]["budget_ledgers"].values()))
-        self.assertIn("20260808", self.packet["execution_slot_map"]["assessment_path"])
+        self.assertTrue(all("20260809" in value for value in self.packet["execution_slot_map"]["decision_outputs"].values()))
+        self.assertTrue(all("20260809" in value for value in self.packet["execution_slot_map"]["budget_ledgers"].values()))
+        self.assertIn("20260809", self.packet["execution_slot_map"]["assessment_path"])
 
     def test_schema_rejects_query_or_gate_mutations(self) -> None:
         for path in (
