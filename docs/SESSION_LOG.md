@@ -1,5 +1,13 @@
 # Session Log
 
+## 2026-08-09 — Claude 修复（20260809 探针真跑：两条 lane 已打完，裁决器读不了 A4 账本，已修）
+
+- **Verdict/Action**: 20260809 探针 Web+X 两条 lane 全部跑完，**9 次付费调用（上限 12）全部 `complete`、零重试、零 recovery**，两条 lane 的 discovery/receipt/账本与付费原文完整落盘。随后第 4 步预检抛 `web plan budget ledger query scope is not exact`——钱花完才发现裁决器读不了自己这套账本。根因：它拿 `sha256(查询原文)` 比账本，而付费网关的 dispatch scope 是 `query_id or query_text`（`paid_gateway.py:670/:724`），计划绑定路径记的永远是 `sha256(query_id)`；bare 路径自 P5 起已不可达。**与今晨审查抓到的运行单账本名失效同族**：A4 把账本改成 plan 级时运行单和裁决器都没跟上。
+- **Required**: 无开放项。正文只在 `docs/system_risk_register.md`。三件需知情：① 修法只改账本读法，**没加**第二道文本比对——原文已在 `:521` `receipt["queries"] != queries` 上对两条 lane 各比过；② 我第一版加了「账本↔已审计划 identity」绑定，自己否决回退（冗余，且把裁决器绑死到单槽 builder、打掉 legacy 20260730 槽，实测 113 errors）；③ **完整性披露**：本修复发生在我已按产物算出粗指标（web 比率≈0.43 / X≈0.86）之后，用户在「修裁决器 / 判 INCONCLUSIVE 下周重打」中选了前者；三条阈值与四个 metric 定义是 packet schema `const`，未触。
+- **Verify**: 手工核对两个账本共 8 条 stage1 行逐条命中四个已审 `query_id`（性质为真，只是工具看不见）。已有篡改对照（`query_sha256`→`0`*64 必须拒）改后仍绿；补一条指名本次方言的用例（按旧文本哈希记账必须被拒）。**植入原缺陷**（调用点 `query_id` 换回 `text`）精确复现生产报错 `27F/31E`，还原后 sha256 逐字节一致 `aaaae8f0dc1e59bf`。改动符号覆盖包 `Ran 114 / 6.9s / OK / receipt:453ab11c8ab8b7d20bce45a9`。广包唯一的红是既有 flake（五轮三红、每轮换一个 case、全部单跑绿、与本轮改动无依赖），已单列记录，**该包目前不能当可信绿灯用**。
+- **Pre-Codex self-review**: A-F checked。A：先定位生产方约定（`paid_gateway` 的 scope 构造）再改，不照着失败信息猜。B 连带面：全仓 grep `_validate_budget_ledger` 仅 1 个调用点；fixture 的 `_ledger` 同步改成 producer 方言（含两处 stage 计数）。C 反向：已有篡改对照仍绿 + 新增方言用例 + 植入原缺陷复现 `27F/31E`、还原逐字节一致。D：自否第一版的 identity 绑定（冗余 + 打掉 legacy 槽）。E 单态。F：无残留。matrix=1改动符号/1新用例/1植入/1自否；register=updated；handoff=updated；focused=`114 OK receipt:453ab11c8ab8b7d20bce45a9`；full-lane=未跑（离线裁决器读法、无选股/生产行为变化；广包 438 唯一红为既有 flake）；door=提交前 guard。
+- **Next**: 合入 master 后重跑第 4 步预检取真裁决；两条 lane 的粗指标见 register，web 侧 `member_bound_source_ratio` 是唯一未达标项。
+
 ## 2026-08-09 — Claude 审查 Pass-with-Required（改期件 `89f10219`：三条 Required 本轮已修并复验）
 
 - **Verdict/Action**: Pass-with-Required。执行方=审查方（用户指派），已披露；未起独立对抗 agent（rule 8：零选股影响、机械改名 diff，起 agent 属过度审查）。**逮住三条 Required 的是超集包不是我的眼睛**，如实记。三条全部本轮修完并复验，可合入。

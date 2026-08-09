@@ -195,7 +195,7 @@ def _receipt(lane: str, discovery: dict, queries: list[str]) -> dict:
     }
 
 
-def _ledger(provider: str, queries: list[str], call_count: int) -> dict:
+def _ledger(provider: str, query_ids: list[str], call_count: int) -> dict:
     if provider == "web":
         envelope = {
             "provider": "web",
@@ -205,10 +205,10 @@ def _ledger(provider: str, queries: list[str], call_count: int) -> dict:
             "max_dispatch_count": 8,
         }
         scopes = [
-            (query, "stage1", "tavily") for query in queries
+            (query_id, "stage1", "tavily") for query_id in query_ids
         ] + [
             (f"chunk:{index}", "stage2", "deepseek")
-            for index in range(len(queries))
+            for index in range(len(query_ids))
         ]
     else:
         envelope = {
@@ -218,7 +218,7 @@ def _ledger(provider: str, queries: list[str], call_count: int) -> dict:
             "retry_max_dispatch_count": 0,
             "max_dispatch_count": 4,
         }
-        scopes = [(query, "stage1", "xai") for query in queries]
+        scopes = [(query_id, "stage1", "xai") for query_id in query_ids]
     reservations = [
         {
             "query_sha256": hashlib.sha256(scope.encode("utf-8")).hexdigest(),
@@ -248,8 +248,8 @@ def _ledger(provider: str, queries: list[str], call_count: int) -> dict:
         }
         for index, row in enumerate(reservations, start=1)
     ]
-    stage1_count = len(queries)
-    stage2_count = len(queries) if provider == "web" else 0
+    stage1_count = len(query_ids)
+    stage2_count = len(query_ids) if provider == "web" else 0
     return {
         "schema_name": "us_short_llm_theme_discovery_plan_budget",
         "schema_version": "1.0.0",
@@ -293,6 +293,9 @@ class QueryQualityProbeAssessmentTest(unittest.TestCase):
         packet = json.loads(SOURCE_PACKET.read_text(encoding="utf-8"))
         _write_json(self.packet_path, packet)
         self.queries = [row["text"] for row in packet["query_templates"]]
+        # The paid gateway dispatches under `query_id or query_text`, so a plan-bound
+        # ledger keys its rows on the id.  Fixtures must speak the producer's dialect.
+        self.query_ids = [row["query_id"] for row in packet["query_templates"]]
 
         self.patches = [
             mock.patch.object(assess, "ROOT", self.root),
@@ -329,9 +332,9 @@ class QueryQualityProbeAssessmentTest(unittest.TestCase):
             xfetch.default_discovery_path("20260802"): x_discovery,
             xfetch.default_receipt_path("20260802"): _receipt("x", x_discovery, self.queries),
             self._plan_budget_path("web"):
-                _ledger("web", self.queries, 8),
+                _ledger("web", self.query_ids, 8),
             self._plan_budget_path("xai"):
-                _ledger("xai", self.queries, 4),
+                _ledger("xai", self.query_ids, 4),
         }
         for path, payload in payloads.items():
             _write_json(path, payload)
@@ -708,6 +711,18 @@ class QueryQualityProbeAssessmentTest(unittest.TestCase):
                     dict(payload["query_reservations"][0])
                 ),
                 "scope is not exact",
+            ),
+            (
+                # The exact shape that made this door unopenable on the first real
+                # plan-bound run: a ledger keyed on the query TEXT, which is what the
+                # bare, plan-less dispatch path records.  A plan-bound ledger keys on
+                # the query id, so the text dialect must be refused, not tolerated.
+                "pre_plan_query_text_scope_dialect",
+                lambda payload, s=self: payload["query_reservations"][0].__setitem__(
+                    "query_sha256",
+                    hashlib.sha256(s.queries[0].encode("utf-8")).hexdigest(),
+                ),
+                "query scope is not exact",
             ),
             (
                 "conflicting_query_reservation",
