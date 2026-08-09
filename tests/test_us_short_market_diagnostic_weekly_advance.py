@@ -141,6 +141,109 @@ class WeeklyAdvanceTest(_WeeklyAdvanceFixture, unittest.TestCase):
         register = load_lifecycle_register(self.store, as_of_date=AS_OF)
         self.assertEqual(1, register["calendar_week_count"])
 
+    def test_settle_binds_the_same_week_etf_sidecar_path(self) -> None:
+        """The weekly settle seam must hand the captured sidecar to the consumer."""
+
+        import unittest.mock as mock
+
+        self._open_clock()
+        fetched = self._fetch()
+        self.assertEqual("captured", fetched["status"])
+        sidecar_path = (
+            self.inputs
+            / "etf_total_return_sidecar"
+            / "20260727"
+            / "total_return_sidecar.json"
+        )
+        self.assertTrue(sidecar_path.is_file())
+        with mock.patch.object(
+            advance,
+            "settle_week",
+            return_value={"status": "settled", "publication": {"status": "none"}},
+        ) as settle:
+            result = self._settle()
+        self.assertEqual("settled", result["status"])
+        self.assertEqual(sidecar_path, settle.call_args.kwargs["total_return_sidecar_path"])
+
+    def test_explicit_sidecar_waits_for_its_matching_catchup_week(self) -> None:
+        """A rejected first binding must not consume the later week's override."""
+
+        import unittest.mock as mock
+
+        from engine import us_short_market_diagnostic_total_return as total_return
+        from engine.us_short_market_diagnostic_total_return import TotalReturnSidecarError
+        from runners import us_short_market_diagnostic_etf_sidecar_fetch as sidecar_fetch
+
+        explicit = self.base / "explicit-total-return-sidecar.json"
+        explicit.write_text("{}", encoding="utf-8")
+        derived = self.base / "derived-total-return-sidecar.json"
+        identities = [
+            {"calendar_week_index": 1, "decision_date": "20260727"},
+            {"calendar_week_index": 2, "decision_date": "20260803"},
+        ]
+        packets = {
+            index: {
+                "weeks": [
+                    {
+                        "calendar_week_index": index,
+                        "benchmarks": {
+                            symbol: {
+                                "prior_price_date": "20260723",
+                                "price_date": "20260724",
+                            }
+                            for symbol in ("VTI", "IWB", "SPY", "QQQ")
+                        },
+                    }
+                ]
+            }
+            for index in (1, 2)
+        }
+
+        def packet_directory(decision_date, *, inputs_root):
+            index = next(
+                identity["calendar_week_index"]
+                for identity in identities
+                if identity["decision_date"] == decision_date
+            )
+            path = self.base / f"packet-{index}"
+            path.mkdir(exist_ok=True)
+            (path / advance.PACKET_FILENAME).write_text("{}", encoding="utf-8")
+            return path
+
+        def read_json(path, label):
+            if label == "benchmark price packet":
+                index = int(Path(path).parent.name.rsplit("-", 1)[1])
+                return packets[index]
+            self.assertEqual("ETF total-return sidecar", label)
+            return {"explicit": True}
+
+        def validate_sidecar(_sidecar, *, expected_price_intervals, **_kwargs):
+            index = next(iter(expected_price_intervals))[0]
+            if index == 1:
+                raise TotalReturnSidecarError("this sidecar belongs to the later week")
+            return _sidecar
+
+        plans = [{"kind": "ready", "identity": identity} for identity in identities]
+        with (
+            mock.patch.object(advance, "diagnostic_store_state", return_value={"state": "active"}),
+            mock.patch.object(advance, "_next_week_plan", side_effect=plans),
+            mock.patch.object(advance, "benchmark_week_directory", side_effect=packet_directory),
+            mock.patch.object(sidecar_fetch, "sidecar_path", return_value=derived),
+            mock.patch.object(advance, "_read_json", side_effect=read_json),
+            mock.patch.object(total_return, "validate_etf_total_return_sidecar", side_effect=validate_sidecar),
+            mock.patch.object(advance, "_week_is_over", side_effect=(True, False)),
+            mock.patch.object(
+                advance,
+                "settle_week",
+                return_value={"status": "settled", "publication": {"status": "none"}},
+            ) as settle,
+        ):
+            result = self._settle(total_return_sidecar_path=explicit)
+
+        self.assertEqual("settled", result["status"])
+        self.assertIsNone(settle.call_args_list[0].kwargs["total_return_sidecar_path"])
+        self.assertEqual(explicit, settle.call_args_list[1].kwargs["total_return_sidecar_path"])
+
     def test_settling_before_the_inputs_exist_waits_rather_than_inventing_them(self) -> None:
         """Saying 'waiting' beats settling a week from inputs nobody captured."""
 

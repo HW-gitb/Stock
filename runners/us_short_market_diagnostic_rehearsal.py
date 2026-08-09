@@ -435,9 +435,9 @@ def _settle_one_week(
         and packet_path.is_file()
         and next_week_inputs(diag, as_of_date=week["decision_date"])["calendar_week_index"] == index
     ):
-        # The manual entry, because the one-click entry takes no sidecar argument
-        # — that wiring gap is recorded, and default-off is how the rehearsal
-        # shows what the one-click path really produces. A starved week has no
+        # The manual entry selects a complete synthetic sidecar; the one-click
+        # entry now auto-binds the producer's same-week sidecar; default-off
+        # keeps its missing-key, price-only result visible. A starved week has no
         # packet to reconcile against, so it falls through to the one-click entry
         # and gets that entry's honest waiting status instead. So does a run where
         # the clock is behind: only the one-click entry writes off the weeks that

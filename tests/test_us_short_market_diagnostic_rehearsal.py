@@ -487,7 +487,9 @@ class TotalReturnSidecarTest(unittest.TestCase):
         self.assertNotIn("raw_excess=", line)
 
     def test_the_sidecar_is_built_from_the_packet_it_reconciles_against(self) -> None:
-        sidecars = sorted(Path(self.on["root"]).rglob("total_return_sidecar.json"))
+        sidecars = sorted(
+            (Path(self.on["root"]) / "inputs" / "benchmark").rglob("total_return_sidecar.json")
+        )
         self.assertEqual(5, len(sidecars), "one sidecar per settled week")
         for path in sidecars:
             with self.subTest(week=path.parent.name):

@@ -216,6 +216,21 @@ class UsShortMarketDiagnosticLocalAdapterTest(unittest.TestCase):
             self.assertAlmostEqual(0.02, record["benchmarks"][symbol]["weekly_return"])
             self.assertIn(record["benchmarks"][symbol]["dividend_sidecar_sha256"], record["source_refs"])
 
+    def test_incomplete_sidecar_keeps_misaligned_windows_out_of_joint_evidence(self) -> None:
+        benchmarks = adapt_benchmark_week(
+            _packet(),
+            1,
+            strategy_evaluable=True,
+            strategy_weekly_return=0.03,
+            total_return_sidecar=_sidecar(complete=False),
+            windows_aligned=False,
+        )
+        for symbol in BENCHMARKS:
+            with self.subTest(symbol=symbol):
+                self.assertEqual("price_return_diagnostic", benchmarks[symbol]["return_quality"])
+                self.assertFalse(benchmarks[symbol]["joint_evaluable"])
+                self.assertIsNone(benchmarks[symbol]["raw_excess"])
+
     def test_sidecar_window_mismatch_is_rejected_before_projection(self) -> None:
         packet = _packet()
         sidecar = _sidecar()

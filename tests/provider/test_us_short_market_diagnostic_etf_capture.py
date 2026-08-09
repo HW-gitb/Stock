@@ -15,13 +15,16 @@ _FAKE_KEY = "FAKE-MASSIVE-KEY-capture-test"
 
 class _FakeClient:
     def __init__(self, *, continuation: bool = True, wrong_continuation: bool = False,
-                 unbounded: bool = False):
+                 unbounded: bool = False, unreadable_family: str | None = None,
+                 price_mismatch: bool = False):
         self.urls: list[str] = []
         self.continuation = continuation
         self.wrong_continuation = wrong_continuation
         # unbounded=True models a real symbol whose history does not fit the page cap:
         # every page keeps offering another one, so the cap is what stops the walk.
         self.unbounded = unbounded
+        self.unreadable_family = unreadable_family
+        self.price_mismatch = price_mismatch
 
     def get_json(self, url, headers=None, timeout_seconds=30):
         self.urls.append(url)
@@ -29,6 +32,7 @@ class _FakeClient:
         parsed = __import__("urllib.parse", fromlist=["urlsplit"]).urlsplit(url)
         query = dict(__import__("urllib.parse", fromlist=["parse_qsl"]).parse_qsl(parsed.query))
         page = int(query.get("cursor", "page1").removeprefix("page"))
+        symbol = query.get("ticker", "SPY")
         if "/dividends" in parsed.path:
             payload = {
                 "status": "OK",
@@ -61,6 +65,15 @@ class _FakeClient:
                 "adjusted": query.get("adjusted") == "true",
                 "results": [{"t": 1577836800000 + page, "c": 100.0 + page}],
             }
+            if self.price_mismatch and symbol == "VTI" and not query.get("adjusted") == "true":
+                payload["results"][0]["c"] = 55.0
+        family = "dividends" if "/dividends" in parsed.path else (
+            "splits" if "/splits" in parsed.path else (
+                "daily_adjusted" if query.get("adjusted") == "true" else "daily_unadjusted"
+            )
+        )
+        if self.unreadable_family == family and symbol == "VTI":
+            payload = {}
         if self.continuation and (self.unbounded or page == 1):
             if self.wrong_continuation:
                 payload["next_url"] = "https://example.invalid/not-authorized"
@@ -147,6 +160,44 @@ class EtfCaptureRunnerTest(unittest.TestCase):
         self.assertFalse(first["pagination_complete"])
         self.assertEqual(len(client.urls), 16)
         self.assertTrue(all("example.invalid" not in url for url in client.urls))
+
+    def test_unreadable_body_is_not_reported_as_true_empty(self):
+        client = _FakeClient(unreadable_family="splits")
+        summary = capture.run_capture(
+            confirm_user_authorization=True,
+            client=client,
+            sleep_func=lambda _: None,
+            now_func=lambda: "2026-08-05T00:00:00+00:00",
+        )
+        vti_split = next(
+            item for item in summary["family_results"]
+            if item["symbol"] == "VTI" and item["endpoint_family"] == "splits"
+        )
+        self.assertEqual("unreadable_body", vti_split["status"])
+        self.assertEqual(
+            "covered",
+            next(
+                item for item in summary["family_results"]
+                if item["symbol"] == "SPY" and item["endpoint_family"] == "splits"
+            )["status"],
+        )
+
+    def test_numeric_price_mismatch_is_not_session_coverage_match(self):
+        client = _FakeClient(price_mismatch=True)
+        summary = capture.run_capture(
+            confirm_user_authorization=True,
+            client=client,
+            sleep_func=lambda _: None,
+            now_func=lambda: "2026-08-05T00:00:00+00:00",
+        )
+        self.assertEqual(
+            "session_coverage_mismatch",
+            next(item for item in summary["daily_reconciliation"] if item["symbol"] == "VTI")["status"],
+        )
+        self.assertEqual(
+            "session_coverage_match",
+            next(item for item in summary["daily_reconciliation"] if item["symbol"] == "SPY")["status"],
+        )
 
     def test_page_cap_truncation_is_reported_as_incomplete_not_covered(self):
         """A symbol whose history outruns the page cap must degrade honestly.

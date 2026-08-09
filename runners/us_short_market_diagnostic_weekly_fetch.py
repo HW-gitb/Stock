@@ -53,7 +53,7 @@ from datetime import datetime, timedelta
 import json
 from pathlib import Path
 import sys
-from typing import Any, Mapping
+from typing import Any, Callable, Mapping
 
 ROOT = Path(__file__).resolve().parents[1]
 if str(ROOT) not in sys.path:
@@ -564,6 +564,9 @@ def fetch_next_week(
     benchmark_module: Any | None = None,
     cash_opener: Any | None = None,
     cash_api_key: str | None = None,
+    sidecar_client: Any | None = None,
+    sidecar_api_key: str | None = None,
+    sidecar_now: Callable[[], str] | None = None,
 ) -> dict[str, Any]:
     """Capture every due week's benchmark prices and cash rate. Dormant means silent.
 
@@ -586,6 +589,11 @@ def fetch_next_week(
         )
     except WeeklyAdvanceNotReady as exc:
         return {"status": "waiting_for_paper_week", "reason": str(exc), "report_lines": []}
+    from runners.us_short_market_diagnostic_etf_sidecar_fetch import (
+        EtfSidecarFetchError,
+        capture_sidecar_week,
+    )
+
     # One log across every capture. A failure part-way through must still report
     # the requests that already went out: reporting "no provider call" after real
     # ones is a false statement about a paid boundary, which is why the count is
@@ -593,6 +601,7 @@ def fetch_next_week(
     attempts: list[str] = []
     benchmark: dict[str, Any] = {}
     cash: dict[str, Any] = {}
+    sidecar: dict[str, Any] = {}
     for plan in due:
         identity = plan["identity"]
         try:
@@ -609,6 +618,35 @@ def fetch_next_week(
                 inputs_root=inputs_root,
                 module=benchmark_module,
             )
+            benchmark_packet = _read_json(
+                Path(benchmark["packet_path"]), "benchmark price packet"
+            )
+            effective_sidecar_key = sidecar_api_key
+            effective_sidecar_now = sidecar_now
+            # Injected benchmark modules are the offline fixture seam used by
+            # rehearsals/tests.  Do not let a process-level live key turn that
+            # seam into an accidental second provider fetch.
+            if (
+                effective_sidecar_key is None
+                and benchmark_module is not None
+                and sidecar_client is None
+            ):
+                effective_sidecar_key = ""
+                if effective_sidecar_now is None and as_of_date is not None:
+                    effective_sidecar_now = lambda as_of=as_of_date: (
+                        f"{as_of[:4]}-{as_of[4:6]}-{as_of[6:]}T00:00:00Z"
+                    )
+            sidecar = capture_sidecar_week(
+                confirm_user_authorization=confirm_user_authorization,
+                benchmark_packet=benchmark_packet,
+                decision_date=identity["decision_date"],
+                as_of_date=as_of_date,
+                inputs_root=inputs_root,
+                client=sidecar_client,
+                api_key=effective_sidecar_key,
+                now=effective_sidecar_now,
+                call_log=attempts,
+            )
             cash = capture_cash_week(
                 confirm_user_authorization=confirm_user_authorization,
                 call_log=attempts,
@@ -620,7 +658,7 @@ def fetch_next_week(
                 opener=cash_opener,
                 api_key=cash_api_key,
             )
-        except (BenchmarkFetchError, CashFetchError) as exc:
+        except (BenchmarkFetchError, CashFetchError, EtfSidecarFetchError) as exc:
             return {
                 "status": "capture_failed",
                 "problem": str(exc),
@@ -637,6 +675,8 @@ def fetch_next_week(
         "unlived_week_count": sum(1 for plan in due if plan["kind"] == "unlived"),
         "benchmark_status": benchmark["status"],
         "evaluable_symbols": benchmark["evaluable_symbols"],
+        "total_return_status": sidecar["status"],
+        "total_return_evaluable_symbols": sidecar["evaluable_symbols"],
         "cash_status": cash["cash_status"],
         "provider_calls": len(attempts),
         "report_lines": [],
@@ -731,6 +771,7 @@ def settle_captured_week(
     model_paper_root: str | Path = DEFAULT_MODEL_PAPER_ROOT,
     inputs_root: Path = DEFAULT_INPUTS_ROOT,
     output_root: Path = DEFAULT_PUBLIC_ROOT,
+    total_return_sidecar_path: Path | None = None,
     as_of_date: str | None = None,
 ) -> dict[str, Any]:
     """Settle every week that is now due, and publish if a window closed.
@@ -752,8 +793,18 @@ def settle_captured_week(
     if state["state"] == "broken":
         return {"status": "broken", "problem": state["problem"], "report_lines": []}
 
+    from engine.us_short_market_diagnostic_total_return import (
+        TotalReturnSidecarError,
+        validate_etf_total_return_sidecar,
+    )
+    from runners.us_short_market_diagnostic_etf_sidecar_fetch import sidecar_path
+
     no_count_weeks: list[int] = []
     settled_weeks: list[int] = []
+    explicit_sidecar_path = (
+        Path(total_return_sidecar_path) if total_return_sidecar_path is not None else None
+    )
+    explicit_sidecar_used = False
     result: dict[str, Any] = {}
     # The publication that actually happened, kept across the loop rather than
     # taken from the last settlement (see `_settle_outcome`).
@@ -811,10 +862,60 @@ def settle_captured_week(
             # boundary-week publish, its idempotence, and the refusal to emit on a
             # non-boundary week. A second copy of that policy here would be a
             # second place for it to drift.
+            using_explicit_sidecar = (
+                explicit_sidecar_path is not None and not explicit_sidecar_used
+            )
+            if using_explicit_sidecar:
+                bound_sidecar_path: Path | None = explicit_sidecar_path
+            else:
+                bound_sidecar_path = sidecar_path(
+                    identity["decision_date"], inputs_root=inputs_root
+                )
+            if bound_sidecar_path.is_file():
+                try:
+                    packet = _read_json(packet_path, "benchmark price packet")
+                    packet_week = next(
+                        week
+                        for week in packet.get("weeks", [])
+                        if isinstance(week, Mapping)
+                        and week.get("calendar_week_index") == index
+                    )
+                    expected_intervals = {
+                        (index, symbol): (
+                            packet_week["benchmarks"][symbol]["prior_price_date"],
+                            packet_week["benchmarks"][symbol]["price_date"],
+                        )
+                        for symbol in packet_week["benchmarks"]
+                    }
+                    validate_etf_total_return_sidecar(
+                        _read_json(bound_sidecar_path, "ETF total-return sidecar"),
+                        expected_price_intervals=expected_intervals,
+                        as_of_date=as_of_date,
+                    )
+                except (
+                    KeyError,
+                    StopIteration,
+                    TotalReturnSidecarError,
+                    TypeError,
+                    WeeklyAdvanceError,
+                ):
+                    # A missing, stale, or malformed sidecar must not block the
+                    # weekly record. settle_week receives no sidecar and keeps
+                    # this ETF week price-only with its existing reason.
+                    bound_sidecar_path = None
+                else:
+                    # A catch-up run may inspect an explicit sidecar before it
+                    # reaches that sidecar's own week.  Consume the one-shot
+                    # override only after its source/date binding succeeds.
+                    if using_explicit_sidecar:
+                        explicit_sidecar_used = True
+            else:
+                bound_sidecar_path = None
             result = settle_week(
                 model_paper_root=Path(model_paper_root),
                 benchmark_packet_path=packet_path,
                 root=Path(root),
+                total_return_sidecar_path=bound_sidecar_path,
                 as_of_date=as_of_date,
                 output_root=output_root,
             )

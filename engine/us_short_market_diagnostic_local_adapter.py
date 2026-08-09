@@ -418,6 +418,7 @@ def adapt_benchmark_week(
                     price_observation=observation,
                     strategy_evaluable=strategy_evaluable,
                     strategy_weekly_return=strategy_weekly_return,
+                    windows_aligned=windows_aligned,
                     as_of_date=as_of_date,
                 )
             except TotalReturnSidecarError as exc:

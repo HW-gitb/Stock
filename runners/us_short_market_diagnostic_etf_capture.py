@@ -134,7 +134,11 @@ def _write_json_once(path: Path, value: Any, label: str) -> None:
         if existing != serialized:
             raise EtfCaptureError(f"refusing to overwrite drifted {label}")
         return
-    sample_validation.write_json_atomic(value, path)
+    # ``write_json_atomic`` preserves mapping insertion order.  Feed it the
+    # canonical representation we compare above so the first write and every
+    # retry use the same bytes, rather than making a stable page look drifted
+    # because the writer and comparator disagree about key ordering.
+    sample_validation.write_json_atomic(json.loads(serialized), path)
 
 
 def _iso_now() -> str:
@@ -283,13 +287,16 @@ def _capture_page(
     headers: dict[str, str],
 ) -> dict[str, Any]:
     payload, status, ok, error_type = client.get_json(url, headers=headers)
+    # Raw pages are write-once by request identity.  The run-local observation
+    # timestamp belongs in the normalized result, not this immutable wrapper:
+    # otherwise an interrupted weekly retry conflicts solely because it ran at a
+    # different second.
     wrapper = {
         "provider_id": "massive",
         "endpoint_family": family,
         "symbol": symbol,
         "page_index": page_index,
         "attempt_index": attempt_index,
-        "observed_at": observed_at,
         "http_status": status,
         "ok": ok,
         "error_type": error_type,
@@ -318,11 +325,14 @@ def _page_result(
     rows: list[Any] = []
     field_names: set[str] = set()
     error_types: set[str] = set()
+    unreadable_body_pages = 0
     success_pages = 0
     for page in pages:
         if page["ok"]:
             success_pages += 1
-            _, page_rows = _result_rows(page["payload"])
+            result_key, page_rows = _result_rows(page["payload"])
+            if result_key is None:
+                unreadable_body_pages += 1
             rows.extend(page_rows)
             field_names.update(_row_field_names(page_rows))
         if page["error_type"]:
@@ -335,6 +345,8 @@ def _page_result(
         status = "pagination_incomplete"
     elif not pages or success_pages == 0:
         status = "provider_error"
+    elif unreadable_body_pages:
+        status = "unreadable_body"
     elif not rows:
         status = "empty"
     elif matched != len(rows):
@@ -372,6 +384,7 @@ def _daily_reconciliation(
     adjusted_rows: list[Any],
     unadjusted_result: dict[str, Any],
     unadjusted_rows: list[Any],
+    split_rows: list[Any],
     observed_at: str,
 ) -> dict[str, Any]:
     def session_map(rows: list[Any], family: str) -> dict[str, Any]:
@@ -386,17 +399,36 @@ def _daily_reconciliation(
     adjusted = session_map(adjusted_rows, "daily_adjusted")
     unadjusted = session_map(unadjusted_rows, "daily_unadjusted")
     overlap = set(adjusted).intersection(unadjusted)
+    split_dates = {
+        split_date
+        for row in split_rows
+        if (split_date := _row_date(row, "splits")) is not None
+    }
+    split_in_window = bool(
+        overlap
+        and any(min(overlap) <= split_date <= max(overlap) for split_date in split_dates)
+    )
     numeric_pairs = 0
-    for date in overlap:
-        left = adjusted[date].get("c") if isinstance(adjusted[date], dict) else None
-        right = unadjusted[date].get("c") if isinstance(unadjusted[date], dict) else None
-        try:
-            if not isinstance(left, bool) and not isinstance(right, bool) and math.isfinite(float(left)) and math.isfinite(float(right)):
-                numeric_pairs += 1
-        except (TypeError, ValueError, OverflowError):
-            continue
+    numeric_mismatch = False
+    if not split_in_window:
+        for date in overlap:
+            left = adjusted[date].get("c") if isinstance(adjusted[date], dict) else None
+            right = unadjusted[date].get("c") if isinstance(unadjusted[date], dict) else None
+            try:
+                left_number = float(left) if not isinstance(left, bool) else float("nan")
+                right_number = float(right) if not isinstance(right, bool) else float("nan")
+                if math.isfinite(left_number) and math.isfinite(right_number):
+                    numeric_pairs += 1
+                    if not math.isclose(left_number, right_number, rel_tol=0.0, abs_tol=1e-6):
+                        numeric_mismatch = True
+                else:
+                    numeric_mismatch = True
+            except (TypeError, ValueError, OverflowError):
+                numeric_mismatch = True
     both_covered = adjusted_result["status"] == "covered" and unadjusted_result["status"] == "covered"
-    status = "session_coverage_match" if both_covered and set(adjusted) == set(unadjusted) else (
+    status = "session_coverage_match" if (
+        both_covered and set(adjusted) == set(unadjusted) and not numeric_mismatch
+    ) else (
         "session_coverage_mismatch" if both_covered else "not_evaluable"
     )
     return {
@@ -564,6 +596,7 @@ def run_capture(
                 adjusted_rows=family_rows[(symbol, "daily_adjusted")],
                 unadjusted_result=records[(symbol, "daily_unadjusted")],
                 unadjusted_rows=family_rows[(symbol, "daily_unadjusted")],
+                split_rows=family_rows[(symbol, "splits")],
                 observed_at=observed_at,
             )
         )

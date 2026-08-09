@@ -577,7 +577,7 @@ def _diagnostic_overrides(ctx: CapstoneContext) -> dict[str, Any]:
 
 
 def _run_market_diagnostic_fetch(ctx: CapstoneContext) -> dict[str, Any]:
-    """Knife 10b: capture this week's benchmark prices and cash rate, or do nothing.
+    """Knife 10b: capture benchmark prices, ETF total return, and cash, or do nothing.
 
     The first of the two steps that finally make the clock ADVANCE rather than
     only be read. Dormant is free in the strongest sense: with no clock opened
@@ -615,6 +615,8 @@ def _run_market_diagnostic_fetch(ctx: CapstoneContext) -> dict[str, Any]:
             "calendar_week_index": outcome.get("calendar_week_index"),
             "cash_status": outcome.get("cash_status"),
             "evaluable_symbols": outcome.get("evaluable_symbols"),
+            "total_return_status": outcome.get("total_return_status"),
+            "total_return_evaluable_symbols": outcome.get("total_return_evaluable_symbols"),
             "problem": outcome.get("problem"),
             "report_lines": (
                 [_DIAGNOSTIC_FETCH_FAILED_LINE] if outcome["status"] == "capture_failed" else []

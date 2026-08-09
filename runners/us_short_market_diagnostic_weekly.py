@@ -214,16 +214,11 @@ def settle_week(
 ) -> dict[str, Any]:
     """Compute this week from local inputs, store it, and publish if a window closed.
 
-    This is the subcommand the track was missing. ``record-week`` carries a record
-    somebody else produced; nobody produced one, so the clock could be opened and
-    then immediately fail to advance. Here the week is computed from the local
-    model-paper artifacts and the local benchmark packet, at the index the store
-    itself says is next.
-
-    The benchmark packet is a file the caller names because nothing in the repo
-    produces one yet. That is a real remaining gap, recorded as such, and it is
-    still better than the alternative: a producer that invents prices when its
-    upstream is absent is exactly the failure this whole track exists to detect.
+    This is the consumer boundary for one week. ``record-week`` carries a record
+    somebody else produced; the weekly diagnostic fetch now produces and binds
+    the benchmark packet and optional ETF total-return sidecar before calling
+    this function. Direct callers still name those immutable local inputs, so a
+    missing upstream remains price-only or waiting rather than invented.
     """
 
     if as_of_date is None:
