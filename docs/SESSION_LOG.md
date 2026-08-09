@@ -1,5 +1,13 @@
 # Session Log
 
+## 2026-08-09 — Claude 已闭：软发现 lane 四条定点探针（三条关、一条只关一半）
+
+- **Verdict/Action**: 按用户指派只跑定点探针、零代码改动（该 lane 属另一窗口在飞，我不碰其代码）。`P5-PLAN-GUARD-BRICKS-THE-STAGE2-REGROUP`、`A4-CTRL-C-NO-LONGER-STOPS-THE-PAID-LOOP`、`A4-PAID-RAW-LOST-WHEN-A-BUILDER-VALIDATOR-RAISES` 三条机制均已不存在，翻 `resolved`。`A4-PAID-EVIDENCE-STILL-LOST-BETWEEN-PAYMENT-AND-FLUSH` **只闭了「无守卫」那半**，其真正论点（入队→flush 区间的抛点）我未探，**仍 open**。
+- **Required**: 无新增。四条正文与实测输出只在 `docs/system_risk_register.md`。需用户知情：软发现 lane 原记 6 条，实测后**只剩 2.5 条**——一条 P1 的一半（入队区间未探）、一条 P3（live CLI 测试仍读真实 `ROOT/provider_samples`）、一条 P2（我今日记的隔离缺陷，master 全量因它红）。
+- **Verify**: 三条各带控制组。A：`stage2+valid+bare` → `allow`（条目的失败场景），而 `stage1+valid+bare` 仍 `deny_missing_record`、未知 stage → `deny_unknown_stage`。B：`is_control_error` 对 KeyboardInterrupt/SystemExit True、对 ValueError/PlanBudgetError False；控制信号走 `raise control_error` 不入 outcome；`coerce_budget_error(KeyboardInterrupt)=None`。C：把 x 腿 flush 挪回校验之后（register 记的变异 M6，当初 221 全绿）→ 现在 `test_A4_raw_flush_precedes_receipt_validation` 转红（`Ran 264 / errors=1`），还原逐字节一致。
+- **Pre-Codex self-review**: A-F checked。A：四条各自按「先证明机制在不在」走，不照抄标题。B：C 条特意分清「顺序被钉住」与「入队区间已闭」是两件事。C 反向：A/B 两条都验了控制组（修复没一刀切放宽）；C 条用真变异而非静态排序。**D 最关键**：`PAID-EVIDENCE-STILL-LOST` 条目自己记载「用顺序比对代替入队区间」是上一版判错的原因，故我明确拒绝据顺序翻它的状态，只记未探。E 单态。F：脚本 `python -B`，被变异文件已逐字节还原，`git status` 无残留，零产品代码改动。matrix=4 探针/3 控制组/1 变异；register=updated；handoff=不另写（账目回写）；focused=264（变异态，用于证明守卫存在）；full-lane=not_triggered（无代码改动）；door=提交前 guard。
+- **Next**: 用户裁决入队→flush 区间是否另起一刀探（属另一窗口 lane）。
+
 ## 2026-08-09 — Claude 已闭：两条陈旧条目的定点探针（一条关、一条更正标题后仍 open）
 
 - **Verdict/Action**: 按用户指派对两条只跑定点探针、不改任何产品代码。`KNIFE7-RUNNER-NEVER-PASSES-AS-OF-DATE` 机制已不存在且正是按其自身闭合判据修的，翻 `resolved`。`TARGET-EXPOSURE-PRODUCER-MUST-DERIVE-NOT-ASSERT` **标题「生产者未建」已陈旧**（生产者在、且从决策时点 note 派生），但闭合判据未达成，**仍 open**，只更正标题与正文。
