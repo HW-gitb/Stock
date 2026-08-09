@@ -1,5 +1,13 @@
 # Session Log
 
+## 2026-08-09 — Claude 修复（US-short lane 提速收官：全量 571.6s，600s 目标达成）
+
+- **Verdict/Action**: 用户在四条路里选 (D)。整模块 cProfile 归因出第一名是 `_gitignored` —— **635 次调用、14.23s、占整模块 24%**，每次 spawn 一个 `git check-ignore`。修法不是碰那道 fail-closed 门，而是把**这个类自己早就写好、却只在一个方法里用**的 seam `_owned_private_root_git_check` 提到 `setUp`：入口用真 git 证明 owned root 被忽略，之后只答该根内路径，根外一律委派回真实实现。
+- **Required**: 无。`R-USSHORT-LANE-WALL-CLOCK-FLOOR-...` 已 `resolved`、本条关闭。**为什么这是真答案不是放宽**：git 语义下被排除目录的整棵子树都被排除，已证明被忽略的根内不可能存在「未被忽略」的路径；生产侧 containment / 后缀 / 精确 slot 检查一条没动。真 git 探针由 635 次降到每测 1 次。
+- **Verify**: 模块 **62.7s → 25.0s（−60%，且多了一条对照测试）**，最慢一条 **16.0s → 2.9s**；地板模块 **199.5s → 130.0s**。验收包 `Ran 263 / 247.6s / OK / receipt:b385176a2692f665f4727dc3`；全量 `status=PASS tests=5624 / 571.6s / deadline=860s`、`COUNT_GATE discovered=ran=5624`。全程账目 **TIMEOUT×3 → 837.0 → 835.6 → 571.6s**，地板 **652.4 → 199.5 → 125.2s**（现为 aggregator，与本条无关）。
+- **Pre-Codex self-review**: A-F checked。A：模块级归因而非单测外推——上一刀正因单测 profile 外推把 `_gitignored` 估成 4%（实际 24%），已写进失效结论。B：grep 确认无人自行 patch 这三个符号、原 `with` 处已 dedent。C 反向：新增 seam 契约对照；植入 P1（seam 对任何路径答 True）→ 该对照红，P2'（owned root 指向 tracked `docs/`）→ 52 条全红。D：先找类内现成答案再动共享代码。E 单态。F：无残留。matrix=1提升/1对照/2植入；register=updated；handoff=updated；focused=263 OK；full-lane=`PASS 5624 / 571.6s`；door=提交前 guard。
+- **Next**: 无。若还要更快，下一个地板是 `test_us_short_market_diagnostic_aggregator`（125.2s / 21.9%），但 600s 目标已达成，建议到此为止。
+
 ## 2026-08-08 — Claude 修复（triage Required ② 最后两条定点探针 + 上一轮两条 Optional 收口）
 
 - **Verdict/Action**: 用户指派两件。① triage Required ② 剩的 2 条**只探不改**：各写一条可复现定点探针，结论都是「条目描述的机制已不存在」，各自翻 `resolved`；至此 ①8 条 ②7 条 ③2 条全部有终态，triage 本条随之**关闭**。② 上一轮我自己记的 2 条 Optional 各自修掉：删掉读取链去重留下的两行孤儿 import；把 `_target_week` 的豁免理由改写成它现在真正在做的事。无行为改动，钟仍 `not_started`。
