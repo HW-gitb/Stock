@@ -35,7 +35,7 @@
 
 - **Verdict/Action**: PASS。四条兄弟腿 Required 全闭，且**类修落在共享层**：`_page_result` 捡回 `_result_rows` 被丢掉的 key，`unreadable_body` 成为独立 status 并排在 `empty` 之前，于是四个 family 一次性全好、`empty` 从此只表示「真的没有」；`_family_complete` 一行未改。另加 Decimal 比对的 `_daily_prices_reconciled`（拆股周正确跳过）、分红去重、非有限比值不落地。
 - **Required**: 无。四个 R-ID（`...THE-SPLITS-LEG-STILL-LAUNDERS-AN-UNREADABLE-BODY` / `...A-DUPLICATED-DIVIDEND-IS-COUNTED-TWICE` / `...A-NON-FINITE-SPLIT-RATIO-IS-EMITTED-WITH-NO-REASON` / `...THE-RECONCILED-FLAG-NEVER-COMPARES-ANY-PRICE`）均已翻 `resolved`，正文只在 `docs/system_risk_register.md`。payload-drift 残留仍 NOT_VERIFIED，不在本轮。
-- **Verify**: review-evidence:a669a6ba0ce2。**全量由我自己起**（用户本轮指定，rule 3(e)）：`status=PASS tests=5645 / 628.9s / deadline=860s`、`COUNT_GATE discovered=ran=5645`——解决执行方本轮的 `NOT_VERIFIED`（其 run `ran=4469`）。焦点 `43 OK receipt:1b7fd12c8223bcf3e9c47269`。四条各带控制组实测：unreadable splits 降级而真空 splits 仍全绿；同行两遍计 1 次；`1E+400` 事件不落地；adj 101/unadj 55 判不可评估。植入：删掉 `unreadable_body` 分支 → 两层 5 处断言转红（含四个 family 的 subTest），还原 sha256 逐字节一致。未起第三个 agent（rule 8：收紧类小 delta，误伤面已由控制组覆盖）。超时原因:用户指定的全量单跑 628.9s。
+- **Verify**: review-evidence:a669a6ba0ce2。**全量由我自己起两次**：合并前 cb59 `PASS 5645 / 628.9s`、`COUNT_GATE discovered=ran=5645`（解决执行方的 NOT_VERIFIED）；**合并后 master 组合态 FAIL** `discovered=5646 ran=4470 equal=False`——红的是资源隔离矩阵对 `..._weekly_capstone_soft_discovery...soft_failure_writer` 的注入根子例，该测试单跑 `1 OK`，故属隔离缺陷、归软发现 lane，不在本刀 24 个文件内，已另立 register 条目。焦点 `82 OK receipt:a7fa607bf28b9882e3f1e7e7`。四条各带控制组实测；植入删 `unreadable_body` 分支 → 两层 5 处转红，还原逐字节一致。超时原因:两次全量各 628.9s / 188.0s。
 - **Next**: Codex：执行
 
 ## 2026-08-09 — Codex 已闭/收口：Knife5 兄弟腿 Required（OPEN-NOT_VERIFIED）
