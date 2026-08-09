@@ -126,7 +126,25 @@ class USShortTestIOInventoryTests(unittest.TestCase):
         snapshot = json.loads(
             (ROOT / "docs" / "us_short_test_io_inventory_20260801.json").read_text(encoding="utf-8")
         )
-        self.assertEqual(snapshot, expected)
+        snapshot_modules = {row["module"]: row for row in snapshot.get("modules", [])}
+        expected_modules = {row["module"]: row for row in expected.get("modules", [])}
+        module_diffs = sorted(
+            name
+            for name in set(snapshot_modules) | set(expected_modules)
+            if snapshot_modules.get(name) != expected_modules.get(name)
+        )
+        top_level_diffs = sorted(
+            key for key in set(snapshot) | set(expected)
+            if snapshot.get(key) != expected.get(key)
+        )
+        # A legitimate future compact-snapshot shape may replace the module table; if so, update
+        # this diagnostic with that schema.  Until then, a stale count must name its owner rather
+        # than hiding behind unittest's truncated whole-document diff.
+        self.assertEqual(
+            snapshot,
+            expected,
+            f"inventory snapshot drift modules={module_diffs} top_level={top_level_diffs}",
+        )
 
     def test_planted_protected_write_is_not_silently_safe(self):
         source = '''

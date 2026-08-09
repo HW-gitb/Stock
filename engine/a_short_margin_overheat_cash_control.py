@@ -229,6 +229,20 @@ def _minimum_trigger_effective_weeks() -> int:
     return _strict_nonnegative_int(floor, "state_contract.min_trigger_effective_weeks")
 
 
+def _preliminary_calendar_effective_weeks() -> int:
+    """Read the preliminary calendar gate from the governed adjudication contract."""
+    contract = _adjudication_contract()
+    try:
+        threshold = contract["preliminary_calendar_effective_weeks"]
+    except (KeyError, TypeError) as exc:
+        raise MarginOverheatCashControlError(
+            "governance is missing adjudication_contract.preliminary_calendar_effective_weeks"
+        ) from exc
+    return _strict_nonnegative_int(
+        threshold, "adjudication_contract.preliminary_calendar_effective_weeks"
+    )
+
+
 def _production_constants_unchanged() -> None:
     if production_margin.MARGIN_OVERHEAT_PERCENTILE_THRESHOLD is not None or \
             production_margin.MARGIN_OVERHEAT_CASH_FACTOR is not None or \
@@ -512,9 +526,10 @@ def build_state(*, calendar_effective_weeks: int, trigger_effective_weeks: int,
     else:
         _require_shared_clock_gate()
         minimum_trigger_effective_weeks = _minimum_trigger_effective_weeks()
+        preliminary_calendar_effective_weeks = _preliminary_calendar_effective_weeks()
         if trigger_effective_weeks < minimum_trigger_effective_weeks:
             evidence_status, clock_status = "insufficient_data", "running"
-        elif calendar_effective_weeks < 12:
+        elif calendar_effective_weeks < preliminary_calendar_effective_weeks:
             evidence_status, clock_status = "accumulating", "running"
         else:
             evidence_status, clock_status = "review_due", "review_due"
@@ -3246,9 +3261,10 @@ def _formal_decision(evidence: Mapping[str, Any]) -> dict[str, Any]:
         for row in arm_statistics
     )
     mature = [row for row in arm_statistics if row["trigger_floor_passed"]]
+    all_arms_mature = bool(arm_statistics) and len(mature) == len(arm_statistics)
     if winner:
         status, verdict = "formal_supported", "supported"
-    elif checkpoint >= 36 and mature and all(row["reliable_harm"] for row in mature):
+    elif checkpoint >= 36 and all_arms_mature and all(row["reliable_harm"] for row in arm_statistics):
         status, verdict = "formal_not_supported", "not_supported"
     else:
         status, verdict = "formal_inconclusive", "inconclusive"

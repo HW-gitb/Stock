@@ -6497,6 +6497,12 @@ def main(argv=None, pro_factory=None, price_provider=None, semantic_provider=Non
                 # margin module receives the validated byte snapshot, so it cannot
                 # capture from a pre-publish or path-only pseudo-bundle.
                 official_margin_bundle = validate_published_weekly_bundle(args.out, receipt_path)
+                margin_context = (ai.get("market_context") or {}).get("margin_overheat") or {}
+                predicate_facts = (
+                    margin_context.get("predicate_facts")
+                    if isinstance(margin_context, dict)
+                    else None
+                )
                 margin_capture = capture_margin_overheat_after_published_weekly(
                     root=args.margin_overheat_cash_control_root,
                     decision_date=args.as_of,
@@ -6506,6 +6512,7 @@ def main(argv=None, pro_factory=None, price_provider=None, semantic_provider=Non
                     official_bundle=official_margin_bundle,
                     daily_cache_path=args.margin_overheat_cash_control_daily_cache,
                     margin_facts=((ai.get("market_context") or {}).get("margin_overheat") or {}),
+                    predicate_facts=predicate_facts,
                     forward_eligible=args.margin_overheat_cash_control_forward,
                 )
                 print(f"[margin-overheat-cash-control] capture={margin_capture['status']} (production unchanged)")

@@ -1390,11 +1390,15 @@ def export_analysis_input(df_full, watch_df, tier1_final, latest_td, trade_dates
     # a shape default for a caller that supplies no facts -- not a third gate.
     margin_overheat_leaves = margin_overheat.margin_overheat_facts(None, requested_dates=())
     supplied_overheat = market_context_facts.get("margin_overheat")
+    margin_overheat_predicate_facts = None
     if isinstance(supplied_overheat, dict):
         margin_overheat_leaves = {
             key: supplied_overheat.get(key, margin_overheat_leaves[key])
             for key in margin_overheat_leaves
         }
+        supplied_predicate = supplied_overheat.get("predicate_facts")
+        if isinstance(supplied_predicate, dict):
+            margin_overheat_predicate_facts = supplied_predicate
     csi300_pct_change_window = market_context_facts.get("csi300_pct_change_window")
     if (isinstance(csi300_pct_change_window, bool)
             or not isinstance(csi300_pct_change_window, (int, float))
@@ -1559,6 +1563,7 @@ def export_analysis_input(df_full, watch_df, tier1_final, latest_td, trade_dates
                 "observed_session_count": margin_overheat_leaves["observed_session_count"],
                 "coverage_complete": margin_overheat_leaves["coverage_complete"],
                 "production_effect_enabled": margin_overheat.MARGIN_OVERHEAT_PRODUCTION_EFFECT_ENABLED,
+                "predicate_facts": margin_overheat_predicate_facts,
             },
             "margin_coverage": (
                 margin_observation.public_dict()
@@ -6446,25 +6451,27 @@ def _margin_overheat_segment_leg(sessions, fetcher):
     return rows
 
 
-def _margin_overheat_provider_facts(window_end):
-    """Fetch the rolling three-year margin + denominator windows into leaves.
+def _margin_overheat_provider_bundle(window_end):
+    """Fetch the rolling window once and return public leaves plus predicate facts.
 
     The overheat quantity is the ratio of the required-exchange ``rzye`` total
     to the Shanghai Composite free-float market value (adjudicated 2026-08-06);
-    both legs reconcile exactly or the facts stay unavailable.
+    both legs reconcile exactly or the facts stay unavailable.  The structured
+    comparison predicate is derived from these same provider rows so the later
+    weekly capture cannot silently use a second source or a reconstituted ratio.
     """
     unavailable = margin_overheat.margin_overheat_facts(None, requested_dates=())
     try:
         sessions = _margin_overheat_window_sessions(window_end)
         if len(sessions) < margin_overheat.MARGIN_OVERHEAT_MIN_WINDOW_SESSIONS:
-            return unavailable
+            return unavailable, None
         rows = _margin_overheat_segment_leg(
             sessions,
             lambda segment: safe_api(pro.margin, start_date=segment[-1], end_date=segment[0],
                                      fields="trade_date,exchange_id,rzye"),
         )
         if rows is None:
-            return margin_overheat.margin_overheat_facts(None, requested_dates=sessions)
+            return margin_overheat.margin_overheat_facts(None, requested_dates=sessions), None
         denominator_rows = _margin_overheat_segment_leg(
             sessions,
             lambda segment: safe_api(
@@ -6475,16 +6482,38 @@ def _margin_overheat_provider_facts(window_end):
             ),
         )
         if denominator_rows is None:
-            return margin_overheat.margin_overheat_facts(None, requested_dates=sessions)
+            return margin_overheat.margin_overheat_facts(None, requested_dates=sessions), None
         # The vendor publishes the market balance one session late, so the window
         # closes at the newest fully published session rather than at the decision
         # date; a longer silence returns an empty window and fails closed.
         published = margin_overheat.resolve_published_window(rows, calendar_dates=sessions)
-        return margin_overheat.margin_overheat_facts(
+        leaves = margin_overheat.margin_overheat_facts(
             rows, denominator_rows, requested_dates=published or sessions
         )
+        predicate_facts = None
+        try:
+            # Keep the exact decision-date clock for the comparison consumer.
+            # A normal publication lag therefore produces an unavailable
+            # predicate rather than rebinding yesterday's data to today's week.
+            from engine.a_short_margin_overheat_cash_control import build_predicate_facts
+            predicate_facts = build_predicate_facts(
+                rows,
+                denominator_rows,
+                requested_dates=sessions,
+                source_as_of=str(window_end),
+            )
+        except Exception:
+            # The official row-19 leaves remain authoritative; the optional
+            # comparison predicate is allowed to degrade to no-count.
+            predicate_facts = None
+        return leaves, predicate_facts
     except Exception:
-        return unavailable
+        return unavailable, None
+
+
+def _margin_overheat_provider_facts(window_end):
+    """Compatibility accessor for callers that only need the public leaves."""
+    return _margin_overheat_provider_bundle(window_end)[0]
 
 
 def _margin_overheat_environment_line(facts):
@@ -6573,9 +6602,11 @@ def market_environment(trade_dates, stats_df, *, return_facts=False):
     else:
         env.append("动量因子有效性：数据不足，无法判断")
 
-    margin_overheat_facts = _margin_overheat_provider_facts(
+    margin_overheat_facts, margin_overheat_predicate_facts = _margin_overheat_provider_bundle(
         (tuple(trade_dates) or ("",))[0]
     )
+    margin_overheat_facts = dict(margin_overheat_facts)
+    margin_overheat_facts["predicate_facts"] = margin_overheat_predicate_facts
     env.append(_margin_overheat_environment_line(margin_overheat_facts))
     env.append("全市场风险提示：请结合当日政策新闻判断")
     facts_csi300_ret = (

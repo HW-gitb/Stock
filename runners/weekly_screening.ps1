@@ -714,6 +714,7 @@ if ($SkipSemanticRisk) {
                 # Any failure leaves only comparison evidence unavailable; M6.7 remains authoritative.
                 $FactorComparisonV2Root = Join-Path $ProjectRoot 'state\a_short\factor_comparison_private\v2'
                 $FactorComparisonV2Cache = Join-Path $FactorComparisonV2Root 'daily_cache.json'
+                $MarginOverheatCashControlRoot = Join-Path $ProjectRoot 'state\a_short\margin_overheat_cash_control_private\v1'
                 $OverlayAdjudicationRoot = Join-Path $ProjectRoot 'state\a_short\overlay_adjudication_private\v1'
                 $OverlayAdjudicationStage3 = Join-Path $ProjectRoot "result\a_short\$AsOf\stage3_selection_snapshot.json"
                 $OverlayAdjudicationSource = Join-Path $ProjectRoot "result\a_short\$AsOf\stage3_overlay_score.json"
@@ -739,6 +740,10 @@ if ($SkipSemanticRisk) {
                 $M67Args += @('--factor-comparison-v2-root', $FactorComparisonV2Root,
                               '--factor-comparison-v2-daily-cache', $FactorComparisonV2Cache,
                               '--factor-comparison-v2-forward')
+                # Margin-overheat is comparison-only at this stage: reuse the
+                # same approved cache, but do not mark the capture forward-eligible.
+                $M67Args += @('--margin-overheat-cash-control-root', $MarginOverheatCashControlRoot,
+                              '--margin-overheat-cash-control-daily-cache', $FactorComparisonV2Cache)
                 # P5a reuses the same cache but has an independent private ledger and public
                 # de-identified progress summary.  Its failure is a sidecar outage only.
                 $M67Args += @('--industry-weight-comparison-root', $IndustryWeightP5Root,

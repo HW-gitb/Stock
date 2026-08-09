@@ -23,7 +23,8 @@ What this module deliberately does NOT refuse:
   split is handled by the stated basis rather than a defect against it;
 * a capital-gains distribution — this packet publishes PRICE return, which a
   distribution does not make wrong.  It makes a TOTAL-return claim wrong, and
-  total return arrives through the Knife 5 sidecar, which reads the same capture.
+  total return arrives through the Knife 5 sidecar, which is captured in the
+  same gated weekly step and bound to this packet before settlement.
 
 Both are captured, digest-bound and discoverable rather than silently dropped.
 The one thing that IS refused is a capture taken with dividend adjustment on:

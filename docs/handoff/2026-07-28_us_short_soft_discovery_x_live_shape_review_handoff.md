@@ -2518,3 +2518,26 @@ A4 把付费收敛成一次可对账的事务、P5 把入口绑到计划——�
 - E：`CURRENT` 未写 pending gate；当前状态只在 register、SESSION_LOG 顶部与本 handoff。
 - F：最终 diff、BOM/U+FFFD、残留、door 结果见同轮 SESSION_LOG；独立自审未使用（未获请求且规则禁止主动起 agent），走 main-thread checklist fallback。
 - 交接结论：capstone tests-only 修复 ready for Claude Code 独立审查；整条 full lane 仍 FAIL，reviewer 不得把 capstone focused PASS 扩写成验证通道已恢复。
+
+## 2026-08-09 Codex executor/fixer：IO inventory 与 seam 路径失步已修（OPEN-NOT_VERIFIED）
+
+### 判定与最小修复
+
+- 任务启动时先 fetch，并把当时本地最新 `master=9baaf05d` 合入工作树组合态；保留未提交 merge 供 merge-aware receipt 与 Claude Code 独立复审，未创建 merge commit。`origin/master=f700b96f` 当时比本地 master 旧，故没有用远端指针覆盖本地态。
+- 修复前完整未登记项只有 assessor 测试的 `line=558 / kwarg:assessment_path / roots=provider_samples,state/us_short / class4_unresolved_write / source=alternate / unresolved=true / allowlisted=false`。它不是新写盘：旧 temp 路径局部变量 `alternate` 被 seam 新增的另一个非路径 `alternate` 通过 file-wide alias table 污染。
+- 将旧路径变量改为 `alternate_assessment_path`；没有把 assessment key 加入 allowlist，也没有重跑生成器洗快照。快照只校正两次已证实写入临时 `self.state` 的既有 `_write_json` fixture 计数：helper `29→31`、该模块 `write_count 33→35`。capstone 隔离模块无 inventory delta。
+- snapshot equality 的判据未变，只补充失败诊断，使未来计数漂移直接点名 module/top-level keys。合法未来若 alias table 变成函数作用域感知，路径命名约束可删除；若 snapshot shape 删除逐模块表，诊断需跟随 shape 更新。
+
+### 对照、全量与零残留
+
+- 反向把路径名改回 `alternate`，exact allowlist guard 精确红并点名 assessor 模块、`kwarg:assessment_path` 与两个 roots；还原后测试文件 SHA-256 为 `b7d6977f2f71d086b65d1828af9c042d6b265c07e193d9f001ecba67a58f5c7d`。
+- 反向把快照 `31/35` 改回 `29/33`，snapshot guard 精确红并点名该模块与 `modules`/`unresolved_write_finding_counts`；还原后快照 SHA-256 为 `b820f7ab4f056e066e0899f30845bf6581afe03b130f56ea33639ef56aae6585`。
+- focused inventory + assessor `63 OK`；merge-aware focused（另含 receipt 所需 A-short effect bundle）`139 OK / receipt:cac412b29a27bec2be8f8969`。
+- 唯一 official US-short full lane：`status=PASS / discovered=5650 / ran=5650 / equal=True / 424.3s`。此前因 focused receipt 不含 merge-side A-short bundle 的 ledger `REFUSED` 发生在 START 前、没有启动测试，不是第二次 full。
+- 测试前后 `state/us_short` 与 `provider_samples` 都是 0 文件；path/bytes/mtime manifest SHA-256 同为 `4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945`。未联网、未调用 provider、未读取 key，未触碰 capstone 修复、生产代码、packet/schema/阈值/metric const。
+- 证据生成后，外部 `master` 从 `9baaf05d` 至少推进到 `8e105d`（已观察到 3 个提交，其中 `91e3402c` 改两份 US-short 测试），并在收尾期间继续移动；当前未提交 merge 仍精确绑定 `MERGE_HEAD=9baaf05d`，因此 5650 全绿不得冒充覆盖后续 master。没有在进行中的 merge 上追并或重跑第二次 full；reviewer 须以审查时 master 指针为准，重新生成 merge-aware focused receipt，并以新组合态 full/count gate 作最终提交证据。
+
+### 交接结论
+
+- `R-USSHORT-QUERY-QUALITY-SEAM-ASSESSMENT-PATH-IO-INVENTORY-DESYNC` 的执行证据已满足关闭判据，但仍为 `OPEN-NOT_VERIFIED`，交 Claude Code 独立复审后决定 `resolved`。
+- 当前工作树保留未提交 merge 与本刀未提交改动；不得由 executor 提交或完成合并。审查时先读 `AGENTS.md` 与 `docs/pre_codex_self_review_checklist.md`，先集成审查时的 master 最新指针，再复核 complete diff、两条植入证据、重新取得的 merge-aware focused/full ledger、count gate 与 protected-root manifest，最后按 reviewer/committer 流程落盘结论。

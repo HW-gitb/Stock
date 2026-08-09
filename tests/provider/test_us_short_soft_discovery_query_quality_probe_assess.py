@@ -550,17 +550,21 @@ class QueryQualityProbeAssessmentTest(unittest.TestCase):
         self.assertNotIn("AAPL", serialized)
 
     def test_alternate_tracked_output_fails_before_any_partial_write(self):
-        alternate = self.docs / "alternate_assessment.json"
+        # The inventory currently resolves aliases file-wide, so this path-specific name keeps
+        # the proven TemporaryDirectory lineage separate from non-path ``alternate`` locals in
+        # other tests.  A future scope-aware alias table would make the naming constraint
+        # unnecessary; until then, reusing the generic name must turn the inventory guard red.
+        alternate_assessment_path = self.docs / "alternate_assessment.json"
         with self.assertRaisesRegex(
             assess.QueryQualityProbeAssessmentError,
             "exact decision-date slot",
         ):
             assess.run_assessment(
                 packet_path=self.packet_path,
-                assessment_path=alternate,
+                assessment_path=alternate_assessment_path,
                 generated_at=GENERATED_AT,
             )
-        self.assertFalse(alternate.exists())
+        self.assertFalse(alternate_assessment_path.exists())
         self.assertFalse(self.assessment_path.exists())
 
     def test_exact_relative_assessment_path_is_accepted(self):
