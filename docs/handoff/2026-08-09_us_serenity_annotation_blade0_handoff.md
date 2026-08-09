@@ -111,3 +111,73 @@ Claude Code 独立审查本刀；在审查通过前不进入 Blade 2/3、schema 
 **失效旧结论**：刀1 §3.3/§4 早先的 C 类 `plausible` 及 §5「C 类扰动使 status 降级」均已作废，不得再被引用。刀0 §2.4 的五个 `供应卡点` 仍只是历史 fillability 记录。
 
 **下一步注意事项**：刀2 是条件工程刀，触发条件是 G0 裁决 = `revise_stage1_templates_before_planner` **且**原因指向结构性约束召回不足；刀3 及以后需用户明确 `执行`。任何后续刀都不得把本刀的 `GO_FOR_CALIBRATION_ONLY` 当作有效性证据。
+
+## 2026-08-09 追加：Codex 执行 Blade 2 STOP（OPEN-NOT_VERIFIED）
+
+### 触发与候选修法
+
+- G0 已满足刀2条件：裁决为 `revise_stage1_templates_before_planner`，Web lane 的 `member_bound_source_ratio=0.428571...` 未过门，failure reason 为 `member_bound_source_ratio_below_threshold`；当前 SESSION_LOG 已把结论解释为「Web wording needs change / 改 Stage-1 模板再打一枪」。
+- 候选供应链角度只增加结构性约束链位召回：询问 capacity / certification / purity / equipment / delivery lead time 中哪一层最紧、哪些 US-listed companies 卡在该层、哪些公司在认证队列；要求每条 company-to-layer 关系 source-bound，排除宏观评论、泛受益名单与未被来源点名的公司。未加入 Serenity 词或自由文本占位符。
+
+### 为什么本轮停止
+
+- 当前 v0.2.0 reviewed policy 同时被 20260809 已执行冻结 packet 与 20260815 当前离线槽逐字绑定。改 v0.2.0 会让已执行 packet 的 exact-byte/immutability 守卫失效；改 0815 packet/schema 会让 reslot 全等守卫失效。
+- 项目 risk register 已规定：改变 reviewed query policy 必须先建立新 decision slot / 新契约并冻结 0815。桌面刀2没有指定新槽日期或新 packet 授权，所以本轮不原地改旧 policy、不创建新槽、不进入 planner。
+
+### 自审与测试边界
+
+- 临时候选文本 + 临时 0815 同步曾得到离线受影响超集 `264/264 OK`，但完整 US-short `5677` 暴露 3 条冻结重槽失败与 1 条既有 state-root error；临时 packet/schema 已回退，当前 v0.2 preset、engine 常量与两份 packet/schema blob 均回到 HEAD。
+- 回退后 policy/policy-schema focused `10/10 OK`，receipt=`d53de739b6f37fa2e8e83b9a`；文档/路由门连续 `66/66 OK`，receipts=`10db8bf1c45511755d98918e`、`2b7a0aa8ef2d04c88b2d34d8`，均使用固定 Python。0809 runbook 的既有 SHA mismatch（实际 `145a5d90...`、测试期望 `301ed0a5...`）未触碰。无 provider/network/paid/live、无 effect/生产/账户/订单、无提交。
+- 细节与 Required `R-USSHORT-SERENITY-BLADE2-REVIEWED-POLICY-CHANGE-NEEDS-A-NEW-PACKET-SLOT` 只记录在 `docs/system_risk_register.md`；未获新槽/新契约明确授权前，不进入 planner 或 Blade 3。
+
+## 2026-08-10 追加：Codex 执行刀2（更新方案，OPEN-NOT_VERIFIED）
+
+### 本轮范围与实现
+
+- 桌面方案已更新为“策略独立于冻结输入 packet”：0809/0815 packet 只作为输入证据，决策结果显式绑定 `input_packet_id + decision_date + policy_version`；不改旧 packet、schema、assessment、runbook，不新开 provider 槽。
+- 新增 v0.3.0 candidate/offline-only policy 与 closed schema。唯一业务模板变化是 supply-chain 结构约束：物理 constraint layer（capacity / certification / purity / equipment / delivery lead time）、卡住的 US-listed companies、认证队列，并要求 company-to-layer source-bound evidence；全部 effect flag 仍为 false。
+- 新增离线 decision-result engine/schema：policy registry、content/query-scope digest、packet byte binding、稳定 `decision_result_id`、显式 `KEEP | REVIEW | BLOCKED` 三态；v0.3 parent plan 结构可生成但 reviewed-policy gate 拒绝 provider dispatch。docs README route 与 test IO inventory 已同步。
+
+### 自审与测试
+
+- 固定 Python focused `66/66 OK`，receipt=`f2b15b4cb5a572f7cfaa388a`；固定 Python 离线自审通过冻结旧 packet/schema/assessment 字节、v0.2/v0.3 共存、稳定 identity、三态与 no-effect/provider bounds；文档/route gate `66/66 OK`，receipt=`55aefc3156ec656ce60b07e8`。
+- 完整 US-short lane `5685` 仅有既有 0809 runbook SHA mismatch：实际 `145a5d90...`，测试期望 `301ed0a5...`；本轮未触碰该历史文件或测试期望。其余新增 conformance/inventory 回归已清除；未执行 provider/network/paid/live/effect/生产/账户/订单，未提交。
+- 当前 risk ID 仍是 `OPEN-NOT_VERIFIED`；本交接记录的是实现候选，不是独立审查或 PASS。旧 STOP 段落保留为历史上下文。
+
+### 下一步
+
+Claude Code：独立审查刀2新增 policy registry、decision-result identity/disposition 三态、v0.2/冻结 packet 不变性、provider 断路与文档/测试证据；审查前不进入刀3、planner/provider/live/effect 或提交。
+
+## 2026-08-10 追加：Codex 继续刀2——四字段 Stage-1 connection（OPEN-NOT_VERIFIED）
+
+### 连接实现
+
+- decision result 顶层身份已按桌面方案命名为稳定 `decision_result_id`；新增 `UPSTREAM_IDENTITY_FIELDS`、`upstream_identity_for_policy_decision_result` 与 `locate_policy_decision_result`。
+- locator 只用 `upstream_input_packet_id / upstream_decision_result_id / upstream_policy_version / upstream_decision_date` 四项共同定位固定 result path，并重新校验 packet bytes、policy content/query scope、result ID 与全部 no-effect/provider const；不使用“最新”或 `policy_disposition`。
+- 只实现刀2到既有 Stage-1 的身份连接，未实现刀3 annotation schema/validator/canonicalizer，也未改历史 packet。
+
+### 自审与测试
+
+- 固定 Python focused `67/67 OK`，receipt=`acd37b459bcd772c5662fee0`；完整 lane `5686` 仅有既有 0809 runbook SHA mismatch（实际 `145a5d90...`、测试期望 `301ed0a5...`）。inventory 无未授权写入；旧冻结 packet/schema/assessment/runbook 无 diff。
+- 连接测试覆盖同一 v0.3 result 定位、同日错误 policy 不串读、错误 result ID fail-closed、四字段不含 `policy_disposition`；固定 Python 连接自审 PASS（`decision_result_id` 稳定、四字段精确、冻结字节不变）；无真实 provider/network/paid/live/effect，未提交。
+
+### 下一步
+
+Claude Code：独立审查刀2四字段连接代码及 `decision_result_id` schema/测试；审查前不进入刀3、planner/provider/live/effect 或提交。
+
+## 2026-08-10 追加：Claude 审查 PASS（刀2 收口并合入）
+
+**改了什么**：审查方未改产物，只补 `docs/system_risk_register.md` 一节审查结论 + 一条 Optional、`docs/SESSION_LOG.md` 一条极简 verdict，然后提交刀2 全部文件并合入 master。
+
+**为什么**：G0→刀2 的触发门必须按真实裁决产物核、不能采信转述；本刀又含一处**放松类**改动（parent plan 不再钉死单一 policy 版本），必须做强制腿反向控制。两项都实测通过。
+
+**验证命令**：
+- `.tools\run_unittest_with_repo_pythonpath.cmd --timeout-seconds 600 discover -s tests -p "*discovery*.py"`
+- reviewer 自写探针（scratchpad，未入库）：用 `build_parent_plan` 造身份自洽的计划，对放松门跑 5 条正/反用例；对 decision-result 跑 id 稳定性、跨 policy 并存、`AUTO_UPGRADE`、effect 篡改、签发后翻 disposition 五条。
+- `git show HEAD:<runbook> | sha256sum` 与工作树散列对比，判定 lane 红的归属。
+
+**验证结果**：超集 `Ran 459 / 228.7s / FAILED (failures=1)`，唯一红为既有 20260809 冻结 runbook 期望（`301ed0a5…`）与 HEAD blob（`b9637395…`）、工作树（`145a5d90…`）三者互不相等，本刀零 diff，归 `R-USSHORT-SOFT-DISCOVERY-20260809-FROZEN-RUNBOOK-HASH-DOES-NOT-MATCH-HEAD`。反向控制控制组先绿（v0.2.0 计划 ACCEPTED），四条攻击全被本轨 typed 错误拒。模板比对：四个 Stage-1 只动一个，其余三个与 stage2 逐字节相同。
+
+**失效旧结论**：register 里 2026-08-09 的刀2 STOP（「缺 v0.3 新槽/新契约，故不可安全落地」）已被独立 `policy_version` 路由取代，不再作为当前方案解释；桌面 §刀2 已更新为 9 刀版并含版本化 decision result 与四字段 upstream identity。
+
+**下一步注意事项**：v0.3.0 与 `policy_decision` 目前零生产消费点，是**有意延后**（门在 planner / 刀3 / 显式授权）；`render_stage1_queries()` 默认仍解析 v0.2.0——别误以为下一枪会自动用新问法，要用必须另行授权并显式路由。Optional（未用形参 `policy_path`）可在下一刀顺手清掉。

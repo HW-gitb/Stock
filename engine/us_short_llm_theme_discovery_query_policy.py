@@ -8,6 +8,7 @@ probe, lifecycle, or operation effects.
 """
 from __future__ import annotations
 
+from dataclasses import dataclass
 from pathlib import Path
 import hashlib
 import json
@@ -22,6 +23,9 @@ POLICY_PATH = ROOT / "presets" / "us_short_llm_theme_discovery_query_policy_v0.2
 POLICY_SCHEMA_PATH = ROOT / "schemas" / "us_short_llm_theme_discovery_query_policy.schema.json"
 EXPECTED_SOURCE_PACKET_PATH = ROOT / "docs" / "us_short_soft_discovery_query_quality_probe_packet_20260730.json"
 EXPECTED_POLICY_VERSION = "soft_discovery_query_policy_v0.2.0"
+V0_3_POLICY_PATH = ROOT / "presets" / "us_short_llm_theme_discovery_query_policy_v0.3.0.json"
+V0_3_POLICY_SCHEMA_PATH = ROOT / "schemas" / "us_short_llm_theme_discovery_query_policy_v0.3.0.schema.json"
+V0_3_POLICY_VERSION = "soft_discovery_query_policy_v0.3.0"
 EXPECTED_STAGE1_TEMPLATE_IDS = (
     "stage1_new_cross_industry_demand",
     "stage1_capex_orders_capacity",
@@ -30,6 +34,38 @@ EXPECTED_STAGE1_TEMPLATE_IDS = (
 )
 EXPECTED_POLICY_CONTENT_SHA256 = "4b2d282155f34c70d881cda44bb5d6b267ce49cb8d46131d60831f1928c176cd"
 EXPECTED_SOURCE_PACKET_SHA256 = "0c200961d178556e1e86d696e54bcaecd04e7f4cdae9426ee1fb5c1278dd949a"
+
+
+@dataclass(frozen=True)
+class PolicySpec:
+    """Tracked policy authority and its execution boundary."""
+
+    policy_version: str
+    policy_path: Path
+    policy_schema_path: Path
+    expected_policy_content_sha256: str
+    source_packet_required: bool
+    provider_execution_allowed: bool
+
+
+_POLICY_SPECS = {
+    EXPECTED_POLICY_VERSION: PolicySpec(
+        policy_version=EXPECTED_POLICY_VERSION,
+        policy_path=POLICY_PATH,
+        policy_schema_path=POLICY_SCHEMA_PATH,
+        expected_policy_content_sha256=EXPECTED_POLICY_CONTENT_SHA256,
+        source_packet_required=True,
+        provider_execution_allowed=True,
+    ),
+    V0_3_POLICY_VERSION: PolicySpec(
+        policy_version=V0_3_POLICY_VERSION,
+        policy_path=V0_3_POLICY_PATH,
+        policy_schema_path=V0_3_POLICY_SCHEMA_PATH,
+        expected_policy_content_sha256="9e113e256ae507f46ca3939d3d471bb02d29041b7cecf41b2ce386b7c63c0ccc",
+        source_packet_required=False,
+        provider_execution_allowed=False,
+    ),
+}
 
 
 class QueryPolicyError(ValueError):
@@ -57,14 +93,14 @@ def _read_json(path: Path) -> dict[str, Any]:
     return value
 
 
-def _validate_schema(policy: Mapping[str, Any]) -> None:
+def _validate_schema(policy: Mapping[str, Any], schema_path: Path) -> None:
     try:
         from jsonschema import Draft7Validator
     except ImportError as exc:  # pragma: no cover - project dependency guard
         raise QueryPolicyError("jsonschema is required for the query policy contract") from exc
     errors = sorted(
         Draft7Validator(
-            _read_json(POLICY_SCHEMA_PATH),
+            _read_json(schema_path),
             format_checker=FORMAT_CHECKER,
         ).iter_errors(policy),
         key=lambda error: list(error.path),
@@ -82,13 +118,25 @@ def _validate_query_template(template: str) -> None:
         raise QueryPolicyError("Stage-2 query template must contain exactly term_type and term placeholders")
 
 
-def validate_query_policy(policy: Mapping[str, Any], *, root: Path = ROOT) -> bool:
-    """Validate the versioned container and its pinned source/content fingerprints."""
+def get_policy_spec(policy_version: str) -> PolicySpec:
+    """Return the explicitly registered policy authority for one version."""
+    try:
+        return _POLICY_SPECS[policy_version]
+    except (KeyError, TypeError) as exc:
+        raise QueryPolicyError("query policy version is not registered") from exc
+
+
+def validate_query_policy(
+    policy: Mapping[str, Any], *, root: Path = ROOT, policy_path: Path | str | None = None,
+) -> bool:
+    """Validate one registered policy without binding it to a weekly input packet."""
     if not isinstance(policy, Mapping):
         raise QueryPolicyError("query policy must be an object")
-    _validate_schema(policy)
-    if policy["policy_version"] != EXPECTED_POLICY_VERSION:
-        raise QueryPolicyError("query policy version is not the reviewed v0.2.0 policy")
+    try:
+        spec = get_policy_spec(policy["policy_version"])
+    except (KeyError, QueryPolicyError) as exc:
+        raise QueryPolicyError("query policy version is not a registered policy") from exc
+    _validate_schema(policy, spec.policy_schema_path)
     if policy["activation_status"] != "candidate_offline" or policy["production_query_policy_activated"]:
         raise QueryPolicyError("query policy is not offline-only candidate state")
     core = policy["policy_core"]
@@ -96,8 +144,8 @@ def validate_query_policy(policy: Mapping[str, Any], *, root: Path = ROOT) -> bo
         raise QueryPolicyError("Stage-1 templates may not contain free-text placeholders")
     if policy["policy_content_sha256"] != _digest(core):
         raise QueryPolicyError("query policy content digest does not match policy_core")
-    if policy["policy_content_sha256"] != EXPECTED_POLICY_CONTENT_SHA256:
-        raise QueryPolicyError("query policy content is not the reviewed v0.2.0 content")
+    if policy["policy_content_sha256"] != spec.expected_policy_content_sha256:
+        raise QueryPolicyError(f"query policy content is not the reviewed {spec.policy_version} content")
     template_ids = tuple(row["query_id"] for row in core["stage1_templates"])
     if template_ids != EXPECTED_STAGE1_TEMPLATE_IDS:
         raise QueryPolicyError("Stage-1 template ids/order drifted from the reviewed container")
@@ -107,24 +155,37 @@ def validate_query_policy(policy: Mapping[str, Any], *, root: Path = ROOT) -> bo
         raise QueryPolicyError("Stage-2 total limit cannot exceed its per-type capacity")
     _validate_query_template(core["stage2"]["query_text_template"])
 
-    root = Path(root).resolve()
-    source_path = Path(root) / policy["source_packet"]["path"]
-    if source_path.is_symlink():
-        raise QueryPolicyError("query-policy source packet may not be a symlink")
-    try:
-        source_sha = _digest(_read_json(source_path))
-    except QueryPolicyError as exc:
-        raise QueryPolicyError("query-policy source packet is unreadable") from exc
-    if source_sha != policy["source_packet"]["sha256"] or source_sha != EXPECTED_SOURCE_PACKET_SHA256:
-        raise QueryPolicyError("query-policy source packet digest is not the reviewed packet")
+    if spec.source_packet_required:
+        root = Path(root).resolve()
+        source_packet = policy.get("source_packet")
+        if not isinstance(source_packet, Mapping):
+            raise QueryPolicyError("reviewed v0.2.0 policy must declare its legacy source packet")
+        source_path = Path(root) / source_packet["path"]
+        if source_path.is_symlink():
+            raise QueryPolicyError("query-policy source packet may not be a symlink")
+        try:
+            source_sha = _digest(_read_json(source_path))
+        except QueryPolicyError as exc:
+            raise QueryPolicyError("query-policy source packet is unreadable") from exc
+        if source_sha != source_packet["sha256"] or source_sha != EXPECTED_SOURCE_PACKET_SHA256:
+            raise QueryPolicyError("query-policy source packet digest is not the reviewed packet")
     return True
 
 
 def load_query_policy(path: Path | str = POLICY_PATH, *, root: Path = ROOT) -> dict[str, Any]:
-    """Load and validate the tracked candidate-offline policy container."""
-    payload = _read_json(Path(path))
-    validate_query_policy(payload, root=root)
+    """Load and validate one registered candidate-offline policy container."""
+    policy_path = Path(path)
+    payload = _read_json(policy_path)
+    validate_query_policy(payload, root=root, policy_path=policy_path)
     return payload
+
+
+def load_query_policy_for_version(
+    policy_version: str, *, root: Path = ROOT,
+) -> dict[str, Any]:
+    """Load the immutable policy for an explicit version, never the latest by date."""
+    spec = get_policy_spec(policy_version)
+    return load_query_policy(spec.policy_path, root=root)
 
 
 def render_stage1_queries(policy: Mapping[str, Any] | None = None) -> list[dict[str, str]]:
@@ -147,10 +208,16 @@ __all__ = [
     "EXPECTED_POLICY_CONTENT_SHA256",
     "EXPECTED_POLICY_VERSION",
     "EXPECTED_SOURCE_PACKET_SHA256",
+    "PolicySpec",
     "POLICY_PATH",
     "POLICY_SCHEMA_PATH",
     "QueryPolicyError",
+    "V0_3_POLICY_PATH",
+    "V0_3_POLICY_SCHEMA_PATH",
+    "V0_3_POLICY_VERSION",
+    "get_policy_spec",
     "load_query_policy",
+    "load_query_policy_for_version",
     "render_stage1_queries",
     "stage2_rule_sha256",
     "validate_query_policy",
