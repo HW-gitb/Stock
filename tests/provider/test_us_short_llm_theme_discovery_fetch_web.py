@@ -313,9 +313,17 @@ class WebFetchTests(unittest.TestCase):
             )
             self.assertEqual(len(batch.items), 1)
             rows = batch.items[0].outcome.value
+        # `days` is expected as the width of the window this lane will ACCEPT, measured
+        # from the acceptance functions themselves rather than from the constant the
+        # request is built from -- comparing the request against its own source would
+        # be a tautology.  The 20260809 probe paid for forty results and discarded
+        # thirty-three as out-of-window because the request carried no recency at all.
+        accept_window_days = (
+            fetch._cutoff("20260809") - fetch._decision_week_start("20260809")
+        ).days
         self.assertEqual(captured_request["body"], {
             "api_key": TAVILY_TEST_KEY, "query": "power demand", "max_results": 10,
-            "search_depth": "advanced", "topic": "news",
+            "search_depth": "advanced", "topic": "news", "days": accept_window_days,
         })
         self.assertEqual(transport._snapshot(), {"tavily": 1, "deepseek": 0})
         _, receipt, _ = fetch.build_web_fetch_packet(
