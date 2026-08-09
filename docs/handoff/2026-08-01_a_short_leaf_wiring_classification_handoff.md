@@ -3767,3 +3767,57 @@ O17：`build_state:517` 的 12 周门槛仍是字面量，而 `_formal_decision:
 **未覆盖维度**：24/36 周完整统计流水线只读未跑；七份改动 schema 与 effect contract 的逐字段 diff 未审；全量按用户明令不跑。
 
 **下一步**：`Codex：执行`（顺位 2 四刀工程侧到此为止；开 forward clock 前仍欠前置硬闸 ②的 source-bound replay 频率证据与 ③的专属 freeze manifest 确认，以及用户对「设计定稿前单轨先行 frozen」的裁决）。
+
+## 2026-08-09 — 刀4 Optional O17/O18 修复：治理日历门与全臂 not-supported 门（OPEN-NOT_VERIFIED）
+
+### 问题、根因与最小改动
+
+本轮修复同一 R-ID 下的 O17/O18。O17 根因是 `build_state` 的 preliminary calendar gate 仍写死 `12`，而 `_formal_decision` 已消费治理的 `adjudication_contract.preliminary_calendar_effective_weeks`，治理变化会让状态机与裁决器静默分叉。O18 根因是 `_formal_decision` 只保留已经过 trigger floor 的 `mature` 子集，36 周时可能用少数成熟臂的 `reliable_harm` 产生整轨 `not_supported`。
+
+- `engine/a_short_margin_overheat_cash_control.py` 新增 `_preliminary_calendar_effective_weeks()`，从治理 adjudication contract 读取并校验非负整数；`build_state` 用该值替代字面量。`_formal_decision` 现在要求 `all_arms_mature` 且全部 challenger arm `reliable_harm` 才能发 `formal_not_supported/not_supported`，否则保持 `formal_inconclusive/inconclusive`。
+- `tests/test_a_short_margin_overheat_cash_control.py` 新增治理阈值变体测试、少数臂成熟 fail-closed 测试，并扩展 synthetic fixture 支持逐臂 trigger/effect；全臂成熟的可靠伤害正控仍保留。
+
+### 调用链、schema、source-binding 与写盘边界
+
+O17 调用链为 `build_state → _preliminary_calendar_effective_weeks → _adjudication_contract → load_governance → PROGRAM_SCHEMA`；pre-freeze 默认分支不经过新门。O18 调用链为 `_formal_decision → _arm_statistics → trigger_floor_passed/reliable_harm → all_arms_mature`，只改变 comparison-only formal verdict 判据。未改 schema 或 effect contract；未改 source-bound evidence 收集、receipt/digest 绑定、private artifact 写盘、public projection、生产常量、registry mode、`_allocate_cash` 或 production importer。
+
+### 负向控制与固定 Python
+
+- O17 植入把治理读取临时改回 `calendar_effective_weeks < 12`；点名测试精确失败，原始终态为 `Ran 1 test ... FAILED`，断言报 `calendar_effective_weeks < 12 unexpectedly found`。立即还原。
+- O18 植入把全臂门临时改回旧 `mature` 条件；点名测试精确失败，原始终态为 `Ran 1 test ... FAILED`，实际变成 `('formal_not_supported', 'not_supported', None)`，而预期为 `formal_inconclusive`。立即还原。
+- 最终 engine/test SHA-256：`E07240B1C8FFA05164466D647537E7B881561A6BB7CF010F4C794BC1EC06693A` / `9BE5F0F6B9916916DC61961A70B7414B2C7F0069B08115FE47D584ED1954EBFD`。唯一解释器：`C:\Users\cnhea\AppData\Local\Programs\Python\Python313\python.exe`，`Python 3.13.8`。
+
+### 精确验证命令与原始终态
+
+```powershell
+& 'D:\cnhea\Codex\worktrees\c2aa\Stock\.tools\run_unittest_with_repo_pythonpath.cmd' --timeout-seconds 600 tests.test_a_short_margin_overheat_cash_control tests.test_a_short_margin_overheat_wiring tests.test_a_short_margin_overheat_percentile_runner tests.test_a_short_weekly_pipeline tests.test_a_short_effect_contract tests.test_a_short_effect_consumer_probe tests.test_a_short_evidence_epoch_mode tests.test_a_short_m67_render
+# Ran 795 tests in 118.354s
+# OK
+# [bounded-unittest] RESULT tier=focused status=PASS exit=0 tests=795 elapsed=119.9s deadline=600s
+# [bounded-unittest] FOCUSED_RECEIPT token=receipt:75f224a59ed84eaca2946f80 tests=795 bundles=a_short_effect_contract python=C:\Users\cnhea\AppData\Local\Programs\Python\Python313\python.exe
+
+& 'C:\Users\cnhea\AppData\Local\Programs\Python\Python313\python.exe' 'D:\cnhea\Codex\worktrees\c2aa\Stock\.tools\full_pack_ledger.py' run a_short 'Knife4 Optional repair: governed preliminary calendar gate and all-challenger formal not-supported gate' 'receipt:75f224a59ed84eaca2946f80' 860 -- discover -s tests -p 'test_a_short*.py'
+# [full-pack-ledger] STATIC status=PASS diff_check=PASS py_compile=2
+# [full-pack-ledger] RESULT status=PASS exit=0 tests=2666 elapsed=124.6s deadline=860s mode=parallel
+# [parallel-lane] COUNT_GATE discovered=2666 ran=2666 equal=True
+# fingerprint=c9858cd8b30256f1aeeb8149692ecc0a2dbc036f8da5cbbd4b6aa6ebdd91de72
+```
+
+### 交接边界与下一步
+
+`NOT_VERIFIED`：Claude Code 对 O17/O18 的独立复审、provider/live/account、真实 source-bound forward/freeze、production importer 与 ship-gate；full lane 仅为离线证据。未 stage、未 commit、未 push/merge、未使用 `--no-verify`。下一步：`Claude Code：独立复审刀4 O17/O18（同一 R-ID）`。
+
+## 2026-08-09 追加：融资过热 O17/O18 收口审查 —— PASS（已提交 c2aa `01eb673a`，合入 master 待并发窗口收完它自己的 merge）
+
+**判定**：PASS。两条 Optional 都修在判据本身。O17：`build_state` 里那个 12 不再是字面量，改由新的 `_preliminary_calendar_effective_weeks()` 从治理的 `adjudication_contract` 读，缺键即点名报错——状态机与 `_formal_decision` 从此同源。O18：`not_supported` 现在要求 `all_arms_mature`（每个臂都过触发地板），且 `reliable_harm` 的全称量词从 `mature` 子集换成 `arm_statistics` 全体，未达标的臂由"被滤掉"变成"阻断判负"。
+
+**我实际验了什么**
+- 整读这 20 行 diff：两个新判据、一个新读取函数、两处调用点，没有夹带。
+- 植入对照：把 `not_supported` 那行改回 `mature and all(... for row in mature)` → `Ran 63 tests` / `FAILED (failures=1)`，红的正是 `test_formal_not_supported_requires_all_challenger_arms_to_pass_trigger_floor`；还原后 sha256 逐字节一致。
+- O17 的守卫我实读：`test_preliminary_calendar_gate_is_read_from_adjudication_contract` 把治理值改成 13 并断言门槛随之移动（行为侧真守），另有一句源码文本断言属较脆的一半。**该项不做植入**——换回同值字面量 12 与治理值不可区分，植入必然全绿、没有信息量（与刀 1 O4、刀 2 O12 同一条理由）。
+
+**分级判断**：改动面是两个判据 + 其测试，无生产 runner、无 schema、无 provider、无写盘变化，按 AGENTS rule 8 走快档（整读 + 一条植入 + 验收包 + 极简 entry），**未起 §6a agent**、全量按用户明令不跑。
+
+**顺位 2 的收尾状态**：四刀工程侧全部合入，两条遗留 Optional 到此清零。**仍不等于可通电**——开 forward clock 前欠前置硬闸 ②（三个 provisional arm 的 source-bound replay 频率证据）与 ③（专属 semantic freeze manifest 确认），以及用户对「设计定稿前单轨先行 frozen」的裁决；生产三常量仍 `None/None/False`，轨仍 `pre_freeze_audit_only`。
+
+**下一步**：`Codex：执行`
