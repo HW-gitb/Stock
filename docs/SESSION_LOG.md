@@ -230,7 +230,7 @@
 
 - **Verdict/Action**: PASS，提交并合入 master。两个座位改用 `_sidecar_result_fields`，producer 原因随行落盘；health 原因契约由 `raise` 改为写合成 `reason_contract_violation` 后继续出三件套；逐名守卫是从生产文件 AST 派生的。同轮把已移居 782a 的指纹裁决节从本树删除，避免双写。
 - **Required**: 无。`R-ASHORT-TARGET-POLICY-AND-FINAL-ACTION-SEATS-SKIP-THE-REASON-HELPER-AND-KILL-HEALTH` 已 resolved；一条新 Optional（O23）与全部实测证据见 `docs/system_risk_register.md`（单一来源）。
-- **Verify**: review-evidence:11e3acb8c870。验收超集 `PASS tests=660 elapsed=365.6s receipt:2566d8834717726f82446bd8 bundles=a_short_effect_contract`。上轮判死的探针原样重跑：两格由 RAISED 变为正常出三件套。植入：座位改回旧 helper → AST 守卫精确转红，还原后 sha 逐字节回 `698b11a9…`。full lane 归执行方，NOT_VERIFIED。
+- **Verify**: review-evidence:11e3acb8c870。验收超集 `PASS tests=660 elapsed=365.6s receipt:2566d8834717726f82446bd8 bundles=a_short_effect_contract`。上轮判死的探针原样重跑：两格由 RAISED 变为正常出三件套。植入：座位改回旧 helper → AST 守卫精确转红，还原后 sha 逐字节回 `698b11a9…`。full lane 归执行方，NOT_VERIFIED。超时原因:唯一慢超集 365.6s 与提交门组合 188.4s 串行，另植入锚点两次未命中需重做。
 - **Next**: Codex：执行
 
 ## 2026-08-10 — Codex executor/fixer：V3-A Required 两个座位与 health durable fallback 修复（OPEN-NOT_VERIFIED）
