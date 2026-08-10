@@ -10,6 +10,7 @@ import csv
 import hashlib
 import json
 import os
+import sys
 import tempfile
 from datetime import datetime, timezone
 from pathlib import Path
@@ -19,6 +20,12 @@ import jsonschema
 
 
 ROOT = Path(__file__).resolve().parents[1]
+# The weekly PowerShell launcher invokes this file directly.  Keep the same
+# project-root bootstrap as the other runner entry points so ``runners.*``
+# imports do not depend on the caller's ``PYTHONPATH`` or working directory.
+if str(ROOT) not in sys.path:
+    sys.path.insert(0, str(ROOT))
+
 HEALTH_SCHEMA = ROOT / "schemas" / "a_short_weekly_sidecar_health.schema.json"
 OUTCOME_SCHEMA = ROOT / "schemas" / "a_short_weekly_sidecar_outcomes.schema.json"
 WEEKLY_RECEIPT_SCHEMA = ROOT / "schemas" / "a_short_weekly_publish_receipt.schema.json"

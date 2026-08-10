@@ -1,5 +1,68 @@
 # A-short 371 叶重新分层交接
 
+## 2026-08-10 Codex executor/fixer: P1-5 blocker repairs (OPEN-NOT_VERIFIED)
+
+### Verdict / Action
+
+Implemented the two minimal repairs required by the latest P1-5 read-only review in the current worktree. No provider/live rerun or new token was used. The durable post-repair closure remains NOT_VERIFIED.
+
+### Problems / root causes / changes
+
+1. The margin-overheat private-root guard correctly failed closed because state/a_short/margin_overheat_cash_control_private/v1 was not matched by .gitignore, unlike the sibling factor-comparison and weekly private roots. Added state/*/margin_overheat_cash_control_private/ only.
+2. The PowerShell launcher executes runners/a_short_weekly_sidecar_health.py directly. That module imported runners.* without first making the repository root importable, so the real run ended with ModuleNotFoundError: No module named 'runners'. Added the guarded ROOT/sys.path bootstrap before those imports, matching existing direct runner entrypoints.
+
+### Call chain / consumers / schema / source-binding / write boundary
+
+Margin: weekly_screening.ps1 -> a_short_weekly_pipeline.py -> margin capture -> _private_root() -> git check-ignore -> private capture/source receipt -> pipeline outcome -> health. Health: weekly_screening.ps1 -> direct health file -> build_health() -> existing JSON/Markdown/receipt trio. The privacy rule is the source-binding proof; health and margin schemas, consumers, output names, and production M6.7 boundaries are unchanged.
+
+### Negative controls / self-review
+
+- No manual private directory, capture, receipt, digest, cache, provider call, or live run was used.
+- git check-ignore for the margin private root now returns rc=0.
+- The direct-file regression uses fixed Python with -I, no PYTHONPATH, and a temporary directory under this worktree; it passes without ModuleNotFoundError.
+- Fixed-Python repair tests: Ran 116 tests / OK. P1-5 five-module focused pack: Ran 698 tests / OK. py_compile exit 0.
+- P1-5 remains OPEN-NOT_VERIFIED: the post-repair real weekly has not yet produced durable margin capture/source receipt, pipeline success, or the three health leaves.
+
+### Exact commands / review boundary / next
+
+Interpreter: C:\Users\cnhea\AppData\Local\Programs\Python\Python313\python.exe (Python 3.13.8). Test commands were the fixed-Python unittest commands recorded in docs/system_risk_register.md. No stage/commit/push/merge was performed. Claude Code reviewer/committer must independently review; after explicit real-run authorization, run one normal weekly/cache-build round and re-check the desktop P1-5 closure matrix.
+
+## 2026-08-10 Codex executor/fixer: P1-5 real two-round normal weekly/cache-build (OPEN-NOT_VERIFIED)
+
+### Verdict / Action
+
+The user-authorized desktop P1-5 execution was completed serially in `D:\cnhea\Codex\worktrees\40d9\Stock`: two normal `weekly_screening.ps1` rounds, both `-AsOf 20260810`, both explicitly using `C:\Users\cnhea\AppData\Local\Programs\Python\Python313\python.exe`. The existing provider seam was used; no provider or token was added.
+
+### Problems / root causes / changes
+
+1. Round 1 was the expected bootstrap pass: the builder returned `no_frozen_consumer_captures` with zero provider calls and did not write an empty cache. The same normal run then wrote the current-governed v2 capture and source receipt. Pipeline `factor_v2_capture` succeeded; margin capture remained unavailable.
+2. Round 2 consumed that capture through the existing shared builder and wrote the existing shared `daily_cache.json`. Receipt status was `cache_updated`, `provider_calls=63`, `production_unchanged=true`; the existing cache schema validated, with 40 rows, and the v2 capture remained current-governed.
+3. The margin leg stopped at the existing source-binding guard: `MarginOverheatCashControlError: margin-overheat private root is not a provably private path`. `git check-ignore` for `state/a_short/margin_overheat_cash_control_private/v1` returned exit 1. The worktree has sibling private-root ignore rules but not this margin root. No manual ignore rule, directory, capture, receipt, fake digest, or cacheless path was created; this is why the requested durable margin evidence is still missing.
+4. Normal launcher health also ended `UNAVAILABLE` with `ModuleNotFoundError: No module named 'runners'`; no manual health invocation was added. Existing second-round replay/source conflicts were recorded (`factor_v2 replay_drift`, `official_operation_capture_source_conflict`) and not widened into another repair.
+
+### Call chain / consumers / schema / source-binding / write boundary
+
+`weekly_screening.ps1` -> shared `a_short_factor_comparison_v2_cache_build.py`/existing provider seam -> `state/a_short/factor_comparison_private/v2/daily_cache.json` -> `a_short_weekly_pipeline.py` margin capture -> `_private_root()` gitignore proof -> margin private capture/source receipt -> existing pipeline/health sidecar. Round 2 proved the shared cache writer and its existing outcome schema; the margin private write boundary intentionally failed closed before any margin artifact was created. No new schema, consumer, provider, token, forward clock, or production output path was introduced.
+
+### Negative controls / self-review
+
+- Bootstrap negative control held: no frozen consumer means zero provider calls and no empty `daily_cache.json`.
+- Real seam positive evidence held: round 2 receipt recorded 63 provider calls and the daily cache passed its existing schema.
+- Closure negative control held: current-governed v2 capture + shared cache were present, but margin private capture/receipt and `margin_overheat_cash_control_capture=succeeded` were absent. No manual bypass was attempted.
+- Pre-Codex self-review: `matrix=P1-5 two-round bootstrap/cache update/private-root guard/health`; `rounds=2 fixed-Python normal weekly exit0`; `schema/source=CACHE_SCHEMA=OK, V2_CURRENT_GOVERNED=True`; `NOT_VERIFIED=margin closure/full lane/ship gate`; `review boundary=Claude Code reviewer/committer`.
+
+### Exact commands / terminal results
+
+- Round 1: `& '.\\runners\\weekly_screening.ps1' -AsOf 20260810 -PythonExe 'C:\\Users\\cnhea\\AppData\\Local\\Programs\\Python\\Python313\\python.exe'` -> `P1_5_ROUND_1_EXIT=0`; receipt `no_frozen_consumer_captures/provider_calls=0`; v2 capture/source receipt present; margin `failed/capture_unavailable`.
+- Round 2: same exact command -> `P1_5_ROUND_2_EXIT=0`; receipt `cache_updated/provider_calls=63`; `daily_cache.json` present and schema-valid; margin error was the private-root guard; health trio absent.
+- Fixed-Python check: `Python 3.13.8`; `CACHE_SCHEMA=OK`, `CACHE_STATUS=cache_updated`, `CACHE_PROVIDER_CALLS=63`, `CACHE_ROWS=40`, `V2_CURRENT_GOVERNED=True`; `git check-ignore ...margin_overheat_cash_control_private/v1` -> exit 1.
+- Desktop five-module focused command (fixed Python) -> `Ran 696 tests in 57.721s / OK`; the existing ResourceWarning output did not change exit 0. Documentation/route gate -> `Ran 66 tests / OK`; `git diff --check` -> exit 0.
+- Final worktree state contains generated tracked research-summary modifications and untracked 20260810 weekly artifacts from the authorized run, plus the pre-existing O12 tracked changes. No stage/commit/push/merge was performed.
+
+### Boundary / Next
+
+Status remains `OPEN-NOT_VERIFIED`. The desktop P1-5 closure condition is not met, so this handoff must not say P1-5 is complete. Claude Code reviewer/committer must independently review the existing private-path and health invocation boundaries and owns any later stage/commit. Next command: `Claude Code: review P1-5 two-round evidence and private-root/health boundary; do not close until closure is met.`
+
 ## 2026-08-10 — Codex executor/fixer：Optional O12（OPEN-NOT_VERIFIED）
 
 ### Verdict / Action
@@ -5049,3 +5112,44 @@ effect contract 已用固定 Python 重新登记 A-EGS decision-predicate hash �
 - 全量归执行方；§6a 未起 agent；forward/freeze/clock、provider/live/account/ship-gate 仍全部 `NOT_VERIFIED`。
 
 **下一步**：`Codex：执行`
+
+## 2026-08-10 追加：P1-5 两轮真实产物只读审计 —— OPEN-NOT_VERIFIED
+
+**判定**：链断在第 3 环与第 5 环，按用户判据整体 `OPEN-NOT_VERIFIED`，不给关闭建议。两条 Required 正文只在 `docs/system_risk_register.md` 同日节。
+
+**我自己实际验了什么（全部只读）**
+
+- 逐环点名核对：v2 `weeks/20260810/` 三件齐、capture 与 source receipt 的 `run_identity` 逐字段同源（run_id / candidate_digest / price_data_through=20260807）、`decision_date=20260810`；`daily_cache.json` 在盘且 writer 正确；P2-1 收据记 `cache_updated / provider_calls=63 / run_date=20260810`，launcher 记 `succeeded/advanced`。
+- 第 3 环：全树扫 `*margin_overheat*` 只有 preset 与 research 侧 replay/threshold，**私有根不存在**；真实 outcomes 里该项 `failed`，`error_detail` 指向 `provably private path` 检查。
+- 顺着那句 detail 读到 `engine/a_short_margin_overheat_cash_control.py:1497-1509` 的 `git check-ignore` 门，然后在本树直接跑 check-ignore：margin 私有根 rc=1、兄弟轨 rc=0，`.gitignore` 第 71-73 行确实独缺该行。**这是唯一可执行根因**。
+- 第 5 环：全树扫 `*sidecar_health*` 零产物；确认 launcher `:1113-1138` 确实会调它并校验三件齐全，但只读拿不到该步退出码，故只记 NOT_VERIFIED、不臆断原因。
+- 边界：`git status` 无任何私有根文件；untracked 仅 research 侧本周发布产物。
+
+**未覆盖维度与诚实边界**
+
+- 未起 provider/live、未跑 cacheless capture、未用 fixture 或手工补件替代任何一环、未改代码、未提交、未访问主树或其他工作树；本轮未跑测试包（无代码改动）。
+- margin 轨的 `forward_eligible=false` 无法取证（capture 不存在）；只能先记「launcher 全文不传 `--margin-overheat-cash-control-forward`」这一静态事实。
+
+**下一步**：`Codex：修复`（补 `.gitignore` 一行 → 重跑一轮已授权 normal weekly → 五环重新取证）
+
+## 2026-08-10 追加：P1-5 两条 Required 修复轮 —— 本刀 PASS，链仍 OPEN-NOT_VERIFIED
+
+**判定**：本刀 PASS（两处修改正确），一条 Optional（O15）。**P1-5 本身没有关闭**：缺一轮授权周跑。
+
+**我自己实际验了什么**
+
+- `.gitignore`：直接跑 `git check-ignore` 对 margin 私有根得 rc=0（上一轮 rc=1），即那道 `provably private path` 门的判据本身已翻绿。
+- health runner：核实该文件对 `runners.*`/`engine.*` 的三处 import 全是**函数体内的延迟 import**（`:120`/`:127`/`:181`），所以直接按路径调用时不会在启动即失败，而是跑到一半才 `ModuleNotFoundError`——与「三件套一件没产出」现象吻合，bootstrap 补得对。
+- 链条现状复查：`state/a_short/margin_overheat_cash_control_private/` 仍不存在；`research/results/a_short/20260810/` 六个文件时间戳仍是 15:13–15:15，与我上一轮记录逐项一致；pipeline outcome 里该项仍 `failed`。**没有新的周跑发生。**
+
+**植入对照（我自写）**
+
+- 删 `.gitignore` 那一行 → 点名用例精确转红；把 bootstrap 整行改成 `pass` → 该模块 44 个用例全绿、无人喊（→ O15：那条用例走 `--help`，argparse 先退出，永远碰不到延迟 import）。
+- **一次探针失误如实记**：第一版 bootstrap 植入是「删行」，留下空的 `if` 体导致 IndentationError，bounded runner 报 `tests=UNKNOWN`；按 rule ⑥ 重做成语义中和（改 `pass`）后才取到有效结论。
+
+**未覆盖维度与诚实边界**
+
+- 未起 provider、未跑真实周跑、未手工创建私有根或补任何产物；P1-5 的第 3/4/5 环仍无证据。
+- 全量归执行方；§6a 未起 agent。
+
+**下一步**：`Codex：执行`（跑一轮已授权 normal weekly，然后我再按五环重新取证）

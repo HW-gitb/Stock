@@ -4,6 +4,7 @@ from __future__ import annotations
 import copy
 import json
 import math
+import subprocess
 import tempfile
 import unittest
 from contextlib import contextmanager
@@ -145,6 +146,25 @@ class MarginOverheatCashControlContractTests(unittest.TestCase):
             launcher,
         )
         self.assertNotIn("--margin-overheat-cash-control-forward", launcher)
+
+    def test_margin_private_root_is_gitignored(self):
+        result = subprocess.run(
+            [
+                "git",
+                "-C",
+                str(ROOT),
+                "check-ignore",
+                "-q",
+                "--",
+                "state/a_short/margin_overheat_cash_control_private/v1",
+            ],
+            capture_output=True,
+            text=True,
+            encoding="utf-8",
+            errors="replace",
+            check=False,
+        )
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
 
     def test_preliminary_calendar_gate_is_read_from_adjudication_contract(self):
         source = track.__file__
