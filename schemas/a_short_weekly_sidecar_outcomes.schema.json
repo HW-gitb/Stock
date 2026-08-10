@@ -36,6 +36,7 @@
           "observed_decision_as_of": {"type": ["string", "null"], "pattern": "^([0-9]{8})?$"},
           "observed_data_through": {"type": ["string", "null"], "pattern": "^([0-9]{8})?$"},
           "error_code": {"type": ["string", "null"], "pattern": "^([a-z0-9_]+)?$"},
+          "error_detail": {"type": ["string", "null"], "maxLength": 512, "pattern": "^[^\\r\\n]*$"},
           "skip_reason": {"type": ["string", "null"], "pattern": "^([a-z0-9_]+)?$"}
         }
       }

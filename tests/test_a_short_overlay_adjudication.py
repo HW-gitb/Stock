@@ -324,6 +324,44 @@ class OverlayAdjudicationTests(unittest.TestCase):
                 self.assertFalse(_epoch_mode.evidence_counts_toward_clock("p4a_overlay_adjudication"))
             self.assertEqual(result["status"], "captured_live_canonical")
 
+    def test_pre_freeze_rejects_malformed_stage3_governance_digest_shape(self) -> None:
+        for value in (None, "not-a-digest", "0" * 63, "g" * 64):
+            with self.subTest(value=value):
+                eligible = [_member(index) for index in range(1, 8)]
+                snapshot = {
+                    "schema_name": "a_short_p4_stage3_selection_snapshot",
+                    "schema_version": "1.0.0",
+                    "as_of": DECISION,
+                    "run_id": "a-short-20260710-0123456789abcdef",
+                    "candidate_digest": "a" * 64,
+                    "active_industry_weight_profile": _active_profile_binding(),
+                    "top50": eligible,
+                    "stage3_eligible_pool": eligible,
+                    "screening_runtime_recipe": _screening_runtime_recipe_binding(),
+                    "official_tier1_final": select_stage3_top5(eligible, "final_score"),
+                    "boundary": {"comparison_only": True},
+                }
+                snapshot["active_industry_weight_profile"]["governance_sha256"] = value
+                overlay = {
+                    "schema_name": "a_short_theme_overlay_comparison",
+                    "schema_version": "1.0.0",
+                    "as_of": DECISION,
+                    "track": "comparison_non_production",
+                    "boundary": {"production": False, "automatic_promotion": False},
+                    "candidates": [
+                        {"ts_code": row["ts_code"], "overlay_score": float(index)}
+                        for index, row in enumerate(eligible, start=1)
+                    ],
+                }
+                identity = {"run_id": snapshot["run_id"], "candidate_digest": "a" * 64}
+                context = _epoch_context()
+                with patched_epoch_modes("pre_freeze_audit_only", ("p4a_overlay_adjudication",)):
+                    with self.assertRaisesRegex(OverlayAdjudicationError, "active-profile binding drifted"):
+                        _stage3_payload(
+                            snapshot, overlay, DECISION, identity,
+                            context["active_profile_binding"], context["screening_runtime_recipe"],
+                        )
+
     def test_stage3_profile_and_weights_drift_is_rejected_in_both_modes(self) -> None:
         for mode in ("pre_freeze_audit_only", "frozen_enforced"):
             with self.subTest(mode=mode), tempfile.TemporaryDirectory() as tmp:

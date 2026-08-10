@@ -471,6 +471,34 @@ class AShortSidecarHealthTests(unittest.TestCase):
         self.assertEqual(result["overall"], "degraded")
         self.assertEqual(result["sidecars"][0]["progress_status"], "stalled")
 
+    def test_margin_sidecars_are_advisory_clockless_and_preserve_error_detail(self):
+        detail = "settlement: RuntimeError: [REDACTED_PATH]"
+        manifest = _manifest([
+            _row("margin_overheat_cash_control_capture", progress="advanced"),
+            _row(
+                "margin_overheat_cash_control_settlement",
+                execution="failed",
+                progress="unavailable",
+                error_code="settlement_unavailable",
+                error_detail=detail,
+            ),
+        ])
+        result = build_health(as_of="20260727", launcher_manifest=manifest, project_root=Path("."))
+        by_name = {row["name"]: row for row in result["sidecars"]}
+        self.assertEqual(SIDECAR_SPECS["margin_overheat_cash_control_capture"], "advisory")
+        self.assertEqual(SIDECAR_SPECS["margin_overheat_cash_control_settlement"], "advisory")
+        self.assertEqual(by_name["margin_overheat_cash_control_capture"]["progress_status"], "advanced")
+        self.assertEqual(by_name["margin_overheat_cash_control_settlement"]["error_detail"], detail)
+
+        with tempfile.TemporaryDirectory() as tmp:
+            json_path, markdown_path, _receipt_path = write_health_bundle(result, Path(tmp))
+            persisted = json.loads(json_path.read_text(encoding="utf-8"))
+            self.assertEqual(
+                next(row for row in persisted["sidecars"] if row["name"] == "margin_overheat_cash_control_settlement")["error_detail"],
+                detail,
+            )
+            self.assertNotIn(detail, markdown_path.read_text(encoding="utf-8"))
+
     def test_artifact_probe_overrides_launcher_current_week_self_report(self):
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)

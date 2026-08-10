@@ -83,6 +83,38 @@
 - **Pre-Codex self-review**: A-F checked；A=固定输入/7成员/source矩阵；B=Serenity字段与所有当前树 `*.py/*.md/tests` 消费面 grep，确认无新接线且文档只声明 shadow；C=effect flags/active macro/score/Top15/operation/lifecycle 反向控制；D=unsupported claim 降级为 lead/context/unverified；E=SESSION_LOG 与 handoff 为当前态，CURRENT 未改；F=UTF-8/no BOM/no mojibake、固定 Python assertions PASS、`git diff --check` clean；independent-self-review=NOT_USED:user-forbids independent review；provider/network/account=NOT_USED；commit=NOT_PERFORMED。
 - **Handoff**: 已新增 `docs/handoff/2026-08-09_us_serenity_annotation_blade0_handoff.md` 并加入 `docs/handoff/README.md` 路由；该交接只承载 Blade 0 结果、边界、自审/测试要求与下一刀前置，不混入既有 X live-shape handoff。
 - **Next**: Claude Code：审查本刀 Blade 0 研究产物；未审查前不进入 Blade 1 或任何工程刀。
+## 2026-08-10 — Claude 复审 PASS（40d9：四刀同树，契约封口已闭）
+
+- **Verdict/Action**: PASS。重封只动 `decision_predicate_sha256["runners/a_short_weekly_pipeline.py"]` 一行，其余文件与上轮逐字节相同；我用模块自身 `static_inventory()` 复算三处零漂移、`static_contract_error()=None`，封回值与我上轮独立算出的一致。上轮欠的四条植入本轮补齐：O5 两条形状腿各四子例转红、P1-2 缺名大面积转红。
+- **Required**: 无。`R-ASHORT-EFFECT-CONTRACT-PREDICATE-SEAL-NOT-UPDATED-AFTER-SIDECAR-FAILURE-RESTRUCTURE` 已翻 resolved；T-2 的结论更正与两条仍开 Optional 见 `docs/system_risk_register.md`。
+- **Verify**: review-evidence:6ffd9e8cb1af。闭合超集 `Ran 780 / status=PASS / 429.8s / receipt:416cc52c3674a10abf99d6b5 / bundles=a_short_effect_contract`（上轮同包 errors=299）。植入三处还原 sha 逐字节回基线。T-2 退回原取值 `Ran 62 OK` 零断言移动，追源确认两字段恒等、非缺陷。文档为纯追加、不改代码指纹，故未重跑验收包。超时原因:我误并发三份同包致两次后台输出为空、墙钟被拖长，最终以前台单跑取证。
+- **Next**: Codex：执行
+
+## 2026-08-10 — Codex executor/fixer：修复 effect-contract predicate seal（OPEN-NOT_VERIFIED）
+
+- **Verdict/Action**：按 Claude Required 修复 `R-ASHORT-EFFECT-CONTRACT-PREDICATE-SEAL-NOT-UPDATED-AFTER-SIDECAR-FAILURE-RESTRUCTURE`。只更新 `schemas/a_short_m67_effect_contract.json` 中 `decision_predicate_sha256["runners/a_short_weekly_pipeline.py"]`：`cfcc4dca…` → 当前 AST 指纹 `9b5477cf9bd788b92d23e27b43a2533350ea544b822c624dbb1fe81389c33a99`；未改其他契约字段、生产逻辑、schema output/runtime constants、selection、provider 或写盘边界。审查列出的 O6/O7 保持 Optional，未扩大本轮范围。
+- **Required**：本轮 Required 实现完毕，待独立 Claude Code reviewer/committer 复审；不 stage、不 commit、不 push/merge。
+- **Verify**：唯一解释器 `C:\Users\cnhea\AppData\Local\Programs\Python\Python313\python.exe`，`Python 3.13.8`；`JSON_PARSE_OK`；`static_contract_error()=None`；审查指定八模块 closure 超集 `Ran 780 tests in 167.886s` / `OK`。无 provider/live/full lane/真实 runner/account/order。
+- **Pre-Codex self-review**：只改一条 decision-predicate seal；调用链恢复为 `build_weekly_report → build_effect_contract_ledger → validate_static_contract` 可通过；O6/O7 未伪装成已修复；`git diff --check` exit 0。修复前 15 个修改文件，加入契约后当前为 16 个修改文件，既有 HEAD `a8afdb0c` 未回滚。matrix=predicate-seal/closure；register=updated；handoff=updated；focused=780 OK + static_contract_error=None；full-lane=NOT_VERIFIED（未运行）；door=route-doc+doc-governance+readme 66 OK。
+- **Next**：`Claude Code：复审 effect-contract seal 修复及本轮 O5 + P1-2 + P2-3 + T-2；通过后由 reviewer/committer 收口`。
+
+## 2026-08-09 — Claude 审查 FAIL（40d9：P1-2 / P2-3 / T-2 + 上轮 Optional，未提交）
+
+- **Verdict/Action**: FAIL，不提交。四刀同树，红在同一根因：P2-3 重排 `main` 旁路异常结构后 `decision_predicate_sha256` 未重封，`build_weekly_report` 每次都在 `build_effect_contract_ledger` 抛错。逐刀分层：T-2 已验证；P1-2 逻辑与跨侧 subset 守卫成立（另做 AST 静态复核，11 个 `_expect_sidecar` 名全在 registry）；O5 的 v2 半已验、P4a 半被挡。
+- **Required**: `R-ASHORT-EFFECT-CONTRACT-PREDICATE-SEAL-NOT-UPDATED-AFTER-SIDECAR-FAILURE-RESTRUCTURE`(P1) — 机制、精确归属、closure tests 与两条 Optional 只见 `docs/system_risk_register.md`。
+- **Verify**: review-evidence:f53dc011818f。超集 `Ran 780 in 207.3s FAILED (failures=8, errors=299)`（显式 900s，因含本 lane 最大模块）。红集中在 weekly_pipeline 255 / overlay 21 / sidecar_health 9 / consumer_probe 9 / effect_contract 8+5；observability、account_state、factor_v2 零失败。用模块自身 `static_inventory()` 复算，漂移恰一项 `runners/a_short_weekly_pipeline.py`。我第一版整文件 sha 探针口径错、已作废。树红故未做植入。超时原因:超集 207s + 归属探针两轮纠错串在墙钟上。
+- **Next**: Codex：修复
+
+## 2026-08-10 — Codex executor/fixer：桌面 O5 + P1-2 + P2-3 + T-2（OPEN-NOT_VERIFIED）
+
+- **Verdict/Action**：按桌面 `a_runtest2_cc.md` 的既定方案完成最小 fail-closed 修复。O5 为两处 `_is_sha256` 形状腿补齐 pre-freeze 非 hex/非 64 位负向反控；P1-2 将 `margin_overheat_cash_control_capture` / `margin_overheat_cash_control_settlement` 注册为 `advisory`、best-effort、clockless，并把 pipeline outcome 接到 sidecar health；P2-3 在七类旁路 catch 的 `import/capture/settlement` 阶段写入受限 `error_detail`，沿 outcome schema → health JSON 透传，Markdown 仍只显示稳定 `error_code`；T-2 仅把 CLI 摘要的两个“决策日”引用改为 `lineage.decision_as_of`，未改 bundle/schema/日期计算/写盘。
+- **Required**：无新增功能性 Required；四项均待独立 Claude Code reviewer/committer 复核。当前不 stage、不 commit、不 push/merge；executor/fixer 不代替 reviewer/committer。
+- **Verify**：唯一解释器 `C:\Users\cnhea\AppData\Local\Programs\Python\Python313\python.exe`，原始版本输出 `Python 3.13.8`。`py_compile`（本轮 10 个 Python 修改文件）exit 0；最小 O5/T-2/P1-2/P2-3 包 `Ran 9 tests ... OK`；observability 脱敏包 `Ran 5 tests ... OK`；账户转换器全包 `Ran 62 tests ... OK`；pipeline outcome 关键包在测试进程内只 mock 既有 `engine.a_short_effect_contract.validate_static_contract` 基线阻断后分别 `Ran 4 tests ... OK`、`Ran 2 tests ... OK`。未 mock 的六包命令 `Ran 701 tests ... FAILED (errors=287)`，共同首个独立基线错误为 `engine/a_short_effect_contract.py:1286 decision predicate changed without effect contract update`；未将该错误归因于本刀。未执行 provider/live/full lane/runner/account/order。
+- **Exact commands**：固定 Python 的 `-m py_compile` 修改文件命令、`-c "import os,unittest; os.chdir(r'D:\\cnhea\\Codex\\worktrees\\40d9\\Stock'); unittest.main(module=None)"` 的 9-test/observability/account/六包命令，以及只在测试进程内 `patch('engine.a_short_effect_contract.validate_static_contract', return_value=None)` 的两个 pipeline 负向命令，完整逐字命令与原始终态见本轮 handoff 的 `### Exact commands used`。
+- **桌面精确四包终态**：未 mock 的 `tests.test_a_short_observability tests.test_a_short_account_state_from_manual_tables tests.test_a_short_weekly_sidecar_health tests.test_a_short_weekly_pipeline` 为 `Ran 641 tests in 17.040s FAILED (errors=264)`；共同首个错误仍是既有 `engine/a_short_effect_contract.py:1286 decision predicate changed without effect contract update`，因此保持 `NOT_VERIFIED`。
+- **Pre-Codex self-review**：A-F=scope、consumer/schema/source-binding/write-boundary、negative controls、redaction、exception `__str__` fail-closed、success/replay/mature/settlement 分支、T-2 equal/stale dates、O5 shape guard；`git diff --check` exit 0；当前 Git 只含本轮 15 个修改文件（12 个代码/测试文件 + 3 个交接/风险日志文件），既有 HEAD `a8afdb0c` 未回滚。
+- **Next**：`Claude Code：审查本轮 O5 + P1-2 + P2-3 + T-2；通过后由 reviewer/committer 按项目流程收口`。
+
 ## 2026-08-09 — Claude 审查 PASS（40d9：P1-3 / P1-4 两道未收编指纹门）
 
 - **Verdict/Action**: PASS。放松确实绑在 registry mode 上：`enforcement_enabled` 走 `_require_track`，写错轨名是 raise 不是 False；语义腿（键集/`program_id`/`boundary`/`active_profile`/`weights`）仍全严，只 park 4+1 个 digest；两条极性各有点名用例，含「解冻后重新武装」。P1-4 根因在源头修掉：EGS 生产者改用 `canonical_governance_digest`，与消费者同一 helper。

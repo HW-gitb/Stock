@@ -12,6 +12,8 @@ import json
 import sys
 import tempfile
 import unittest
+from contextlib import redirect_stdout
+from io import StringIO
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -410,6 +412,27 @@ class AccountGateTests(unittest.TestCase):
         acc, ln = _build_account_state(t, AS_OF)
         self.assertEqual(ln["facts_staleness"], "stale_warning")
         self.assertEqual(acc["as_of"], AS_OF)
+
+    def test_plain_summary_uses_decision_date_when_facts_are_current(self):
+        acc, lineage = _build_account_state(_tables(), AS_OF)
+        output = StringIO()
+        with redirect_stdout(output):
+            conv._print_plain_summary(acc, lineage)
+        text = output.getvalue()
+        self.assertIn(f"[4.3] 决策日 {AS_OF}；事实截止 {AS_OF}", text)
+        self.assertNotIn("[WARN]", text)
+
+    def test_plain_summary_distinguishes_stale_facts_date_from_decision_date(self):
+        tables = _tables()
+        tables["account"][0]["as_of"] = "20260612"
+        acc, lineage = _build_account_state(tables, AS_OF)
+        output = StringIO()
+        with redirect_stdout(output):
+            conv._print_plain_summary(acc, lineage)
+        text = output.getvalue()
+        self.assertIn(f"[4.3] 决策日 {AS_OF}；事实截止 20260612", text)
+        self.assertIn("事实截止日 20260612 早于决策日 20260615", text)
+        self.assertNotIn("20260612 早于决策日 20260612", text)
 
 
 class ParsingAntiCoercionTests(unittest.TestCase):

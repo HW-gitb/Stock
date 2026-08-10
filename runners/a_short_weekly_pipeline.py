@@ -5589,7 +5589,8 @@ def main(argv=None, pro_factory=None, price_provider=None, semantic_provider=Non
 
     def _record_sidecar(name: str, *, execution_status: str, progress_status: str,
                         error_code: str | None = None, observed_decision_as_of: str | None = None,
-                        observed_data_through: str | None = None) -> None:
+                        observed_data_through: str | None = None,
+                        error_detail: str | None = None) -> None:
         pipeline_sidecar_outcomes.append({
             "name": name,
             "expected": True,
@@ -5600,8 +5601,23 @@ def main(argv=None, pro_factory=None, price_provider=None, semantic_provider=Non
             "observed_decision_as_of": observed_decision_as_of,
             "observed_data_through": observed_data_through,
             "error_code": error_code,
+            "error_detail": error_detail,
             "skip_reason": None,
         })
+
+    def _record_sidecar_failure(name: str, *, stage: str, exc: BaseException,
+                                error_code: str, progress_status: str = "unavailable",
+                                observed_decision_as_of: str | None = None) -> None:
+        """Record a bounded, redacted diagnostic without changing sidecar semantics."""
+        detail = f"{stage}: {safe_exception_summary(exc)}"[:512]
+        _record_sidecar(
+            name,
+            execution_status="failed",
+            progress_status=progress_status,
+            error_code=error_code,
+            observed_decision_as_of=observed_decision_as_of,
+            error_detail=detail,
+        )
     if args.factor_comparison_root or args.factor_comparison_forward:
         raise SystemExit("[FATAL] legacy factor-comparison v1 is read-only; v1 capture flags are retired. "
                          "Use the v2 private-root flags; v1/v2 dual writes are prohibited.")
@@ -6159,11 +6175,12 @@ def main(argv=None, pro_factory=None, price_provider=None, semantic_provider=Non
                 as_of=args.as_of,
             )
             _validate_margin_overheat_public_summary_shape(margin_overheat_cash_control)
-        except Exception:
+        except Exception as exc:
             margin_overheat_cash_control = _margin_overheat_unavailable_public_summary()
-            _record_sidecar("margin_overheat_cash_control_settlement", execution_status="failed",
-                            progress_status="unavailable", error_code="settlement_unavailable",
-                            observed_decision_as_of=args.as_of)
+            _record_sidecar_failure(
+                "margin_overheat_cash_control_settlement", stage="settlement", exc=exc,
+                error_code="settlement_unavailable", observed_decision_as_of=args.as_of,
+            )
         else:
             if margin_overheat_cash_control["status"] == "evidence_current":
                 _record_sidecar("margin_overheat_cash_control_settlement", execution_status="succeeded",
@@ -6421,81 +6438,113 @@ def main(argv=None, pro_factory=None, price_provider=None, semantic_provider=Non
     if args.official_operation_evidence_root:
         _expect_sidecar("official_operation_capture")
         _expect_sidecar("official_operation_settlement")
+        stage = "import"
         try:
             from runners.a_short_official_operation_evidence import (
                 capture_after_published_weekly,
                 settle_and_summarize as settle_official_operation_evidence,
             )
-            capture = capture_after_published_weekly(
-                root=args.official_operation_evidence_root,
-                out_path=args.out,
-                receipt_path=receipt_path,
-            )
-            print(f"[official-operation-evidence] capture={capture['status']} (M6.7 unchanged)")
-            _record_sidecar("official_operation_capture", execution_status="succeeded",
-                            progress_status=_sidecar_progress_from_status(capture.get("status")),
-                            observed_decision_as_of=args.as_of)
-            settlement = settle_official_operation_evidence(
-                root=args.official_operation_evidence_root,
-                as_of=args.as_of,
-                daily_cache_path=args.official_operation_evidence_daily_cache,
-            )
-            print(f"[official-operation-evidence] settlement={settlement['status']} "
-                   "(shared cache only; no portfolio state)")
-            _record_sidecar("official_operation_settlement", execution_status="succeeded",
-                            progress_status=_sidecar_progress_from_status(settlement.get("status")),
-                            observed_decision_as_of=args.as_of)
-        except Exception:
-            _record_sidecar("official_operation_capture", execution_status="failed",
-                            progress_status="unavailable", error_code="capture_unavailable")
+        except Exception as exc:
+            _record_sidecar_failure("official_operation_capture", stage=stage, exc=exc,
+                                    error_code="capture_unavailable")
             _record_sidecar("official_operation_settlement", execution_status="skipped",
                             progress_status="not_applicable", error_code="capture_unavailable")
             print("[official-operation-evidence] current-week capture unavailable; "
                   "M6.7 output remains authoritative and unchanged")
+        else:
+            stage = "capture"
+            try:
+                capture = capture_after_published_weekly(
+                    root=args.official_operation_evidence_root,
+                    out_path=args.out,
+                    receipt_path=receipt_path,
+                )
+            except Exception as exc:
+                _record_sidecar_failure("official_operation_capture", stage=stage, exc=exc,
+                                        error_code="capture_unavailable")
+                _record_sidecar("official_operation_settlement", execution_status="skipped",
+                                progress_status="not_applicable", error_code="capture_unavailable")
+                print("[official-operation-evidence] current-week capture unavailable; "
+                      "M6.7 output remains authoritative and unchanged")
+            else:
+                print(f"[official-operation-evidence] capture={capture['status']} (M6.7 unchanged)")
+                _record_sidecar("official_operation_capture", execution_status="succeeded",
+                                progress_status=_sidecar_progress_from_status(capture.get("status")),
+                                observed_decision_as_of=args.as_of)
+                stage = "settlement"
+                try:
+                    settlement = settle_official_operation_evidence(
+                        root=args.official_operation_evidence_root,
+                        as_of=args.as_of,
+                        daily_cache_path=args.official_operation_evidence_daily_cache,
+                    )
+                except Exception as exc:
+                    _record_sidecar_failure("official_operation_settlement", stage=stage, exc=exc,
+                                            error_code="capture_unavailable")
+                    print("[official-operation-evidence] current-week capture unavailable; "
+                          "M6.7 output remains authoritative and unchanged")
+                else:
+                    print(f"[official-operation-evidence] settlement={settlement['status']} "
+                          "(shared cache only; no portfolio state)")
+                    _record_sidecar("official_operation_settlement", execution_status="succeeded",
+                                    progress_status=_sidecar_progress_from_status(settlement.get("status")),
+                                    observed_decision_as_of=args.as_of)
     if args.factor_comparison_v2_root:
         _expect_sidecar("factor_v2_capture")
+        stage = "import"
         try:
             from engine.a_short_factor_comparison_v2_weekly import (
                 capture_v2_after_published_weekly,
                 capture_error_code,
                 is_capture_replay_drift,
             )
-            comparison = capture_v2_after_published_weekly(
-                root=args.factor_comparison_v2_root, decision_date=args.as_of, candidates=normalized,
-                source_identity=source_identity, out_path=args.out, receipt_path=receipt_path,
-                forward_eligible=args.factor_comparison_v2_forward)
-            print(f"[factor-comparison-v2] capture={comparison['status']} (production unchanged)")
-            _record_sidecar("factor_v2_capture", execution_status="succeeded",
-                            progress_status=_sidecar_progress_from_status(comparison.get("status")),
-                            observed_decision_as_of=args.as_of)
         except Exception as exc:
-            # A changed same-canonical-week replay must leave the first source-bound capture immutable.
-            # Do not surface private candidate details; the fixed operator message is enough to distinguish
-            # the intentional freeze from an ordinary comparison-sidecar outage.
-            if is_capture_replay_drift(exc):
-                _record_sidecar("factor_v2_capture", execution_status="failed",
-                                progress_status="stalled", error_code="replay_drift")
-                print(f"[factor-comparison-v2] decision {args.as_of} evidence is already frozen; "
-                      "the changed replay was not written and M6.7 remains authoritative")
+            _record_sidecar_failure("factor_v2_capture", stage=stage, exc=exc,
+                                    error_code="capture_unavailable")
+            print("[factor-comparison-v2] current-week capture unavailable "
+                  "(error_code=capture_unavailable); M6.7 output remains authoritative and unchanged")
+        else:
+            stage = "capture"
+            try:
+                comparison = capture_v2_after_published_weekly(
+                    root=args.factor_comparison_v2_root, decision_date=args.as_of, candidates=normalized,
+                    source_identity=source_identity, out_path=args.out, receipt_path=receipt_path,
+                    forward_eligible=args.factor_comparison_v2_forward)
+            except Exception as exc:
+                # A changed same-canonical-week replay must leave the first source-bound capture immutable.
+                # Do not surface private candidate details; the fixed operator message is enough to distinguish
+                # the intentional freeze from an ordinary comparison-sidecar outage.
+                if is_capture_replay_drift(exc):
+                    _record_sidecar_failure("factor_v2_capture", stage=stage, exc=exc,
+                                            progress_status="stalled", error_code="replay_drift")
+                    print(f"[factor-comparison-v2] decision {args.as_of} evidence is already frozen; "
+                          "the changed replay was not written and M6.7 remains authoritative")
+                else:
+                    code = capture_error_code(exc)
+                    _record_sidecar_failure("factor_v2_capture", stage=stage, exc=exc,
+                                            error_code=code)
+                    print(f"[factor-comparison-v2] current-week capture unavailable "
+                          f"(error_code={code}); M6.7 output remains authoritative and unchanged")
             else:
-                _record_sidecar("factor_v2_capture", execution_status="failed",
-                                progress_status="unavailable", error_code=capture_error_code(exc))
-                print(f"[factor-comparison-v2] current-week capture unavailable "
-                      f"(error_code={capture_error_code(exc)}); "
-                      "M6.7 output remains authoritative and unchanged")
+                print(f"[factor-comparison-v2] capture={comparison['status']} (production unchanged)")
+                _record_sidecar("factor_v2_capture", execution_status="succeeded",
+                                progress_status=_sidecar_progress_from_status(comparison.get("status")),
+                                observed_decision_as_of=args.as_of)
     if args.margin_overheat_cash_control_root:
         _expect_sidecar("margin_overheat_cash_control_capture")
+        stage = "import"
         try:
             from engine.a_short_margin_overheat_cash_control import (
                 capture_margin_overheat_after_published_weekly,
                 is_capture_replay_drift as is_margin_capture_replay_drift,
             )
-        except Exception:
-            _record_sidecar("margin_overheat_cash_control_capture", execution_status="failed",
-                            progress_status="unavailable", error_code="capture_unavailable")
+        except Exception as exc:
+            _record_sidecar_failure("margin_overheat_cash_control_capture", stage=stage, exc=exc,
+                                    error_code="capture_unavailable")
             print("[margin-overheat-cash-control] current-week capture unavailable; "
                   "M6.7 output remains authoritative and unchanged")
         else:
+            stage = "capture"
             try:
                 # Re-read the exact official triplet once at this boundary.  The
                 # margin module receives the validated byte snapshot, so it cannot
@@ -6525,131 +6574,193 @@ def main(argv=None, pro_factory=None, price_provider=None, semantic_provider=Non
                                 observed_decision_as_of=args.as_of)
             except Exception as exc:
                 if is_margin_capture_replay_drift(exc):
-                    _record_sidecar("margin_overheat_cash_control_capture", execution_status="failed",
-                                    progress_status="stalled", error_code="replay_drift")
+                    _record_sidecar_failure("margin_overheat_cash_control_capture", stage=stage, exc=exc,
+                                            progress_status="stalled", error_code="replay_drift")
                     print("[margin-overheat-cash-control] changed replay was not written; "
                           "M6.7 remains authoritative")
                 else:
-                    _record_sidecar("margin_overheat_cash_control_capture", execution_status="failed",
-                                    progress_status="unavailable", error_code="capture_unavailable")
+                    _record_sidecar_failure("margin_overheat_cash_control_capture", stage=stage, exc=exc,
+                                            error_code="capture_unavailable")
                     print("[margin-overheat-cash-control] current-week capture unavailable; "
                           "M6.7 output remains authoritative and unchanged")
     if args.industry_weight_comparison_root:
+        stage = "import"
         try:
             from engine.a_short_industry_weight_comparison import capture_after_published_weekly, settle_and_summarize_weekly
-            p5_capture = capture_after_published_weekly(
-                root=args.industry_weight_comparison_root, decision_date=args.as_of, run_date=args.run_date,
-                analysis_input_path=args.analysis_input, weight_comparison_path=args.industry_weight_comparison_source,
-                source_identity=source_identity, out_path=args.out, receipt_path=receipt_path,
-                forward_eligible=args.industry_weight_comparison_forward)
-            # The signed weekly JSON remains immutable after publication.  Refresh the separate
-            # de-identified P5 progress artifact immediately so the first capture is never lost.
-            settle_and_summarize_weekly(root=args.industry_weight_comparison_root,
-                                        daily_cache_path=args.industry_weight_comparison_daily_cache,
-                                        as_of=args.as_of)
-            print(f"[industry-weight-p5] capture={p5_capture['status']} (production unchanged)")
-            _record_sidecar("industry_weight_capture", execution_status="succeeded",
-                            progress_status=_sidecar_progress_from_status(p5_capture.get("status")),
-                            observed_decision_as_of=args.as_of)
-            _record_sidecar("industry_weight_settlement", execution_status="succeeded",
-                            progress_status="advanced", observed_decision_as_of=args.as_of)
-        except Exception:
-            # Deliberately no public write here.  Overwriting the last checked
-            # pair with a fresh "unavailable" one moves it ahead of a ledger that
-            # did not advance -- the same defect this ordering exists to remove,
-            # only pointing the other way.  The outage is recorded below.
-            _record_sidecar("industry_weight_capture", execution_status="failed",
-                            progress_status="unavailable", error_code="capture_unavailable")
+        except Exception as exc:
+            _record_sidecar_failure("industry_weight_capture", stage=stage, exc=exc,
+                                    error_code="capture_unavailable")
             _record_sidecar("industry_weight_settlement", execution_status="skipped",
                             progress_status="not_applicable", error_code="capture_unavailable")
             print("[industry-weight-p5] current-week capture unavailable; M6.7 output remains authoritative and unchanged")
+        else:
+            stage = "capture"
+            try:
+                p5_capture = capture_after_published_weekly(
+                    root=args.industry_weight_comparison_root, decision_date=args.as_of, run_date=args.run_date,
+                    analysis_input_path=args.analysis_input, weight_comparison_path=args.industry_weight_comparison_source,
+                    source_identity=source_identity, out_path=args.out, receipt_path=receipt_path,
+                    forward_eligible=args.industry_weight_comparison_forward)
+            except Exception as exc:
+                _record_sidecar_failure("industry_weight_capture", stage=stage, exc=exc,
+                                        error_code="capture_unavailable")
+                _record_sidecar("industry_weight_settlement", execution_status="skipped",
+                                progress_status="not_applicable", error_code="capture_unavailable")
+                print("[industry-weight-p5] current-week capture unavailable; M6.7 output remains authoritative and unchanged")
+            else:
+                # The signed weekly JSON remains immutable after publication.  Refresh the separate
+                # de-identified P5 progress artifact immediately so the first capture is never lost.
+                stage = "settlement"
+                try:
+                    settle_and_summarize_weekly(root=args.industry_weight_comparison_root,
+                                                daily_cache_path=args.industry_weight_comparison_daily_cache,
+                                                as_of=args.as_of)
+                except Exception as exc:
+                    _record_sidecar("industry_weight_capture", execution_status="succeeded",
+                                    progress_status=_sidecar_progress_from_status(p5_capture.get("status")),
+                                    observed_decision_as_of=args.as_of)
+                    _record_sidecar_failure("industry_weight_settlement", stage=stage, exc=exc,
+                                            error_code="capture_unavailable")
+                    print("[industry-weight-p5] current-week capture unavailable; M6.7 output remains authoritative and unchanged")
+                else:
+                    print(f"[industry-weight-p5] capture={p5_capture['status']} (production unchanged)")
+                    _record_sidecar("industry_weight_capture", execution_status="succeeded",
+                                    progress_status=_sidecar_progress_from_status(p5_capture.get("status")),
+                                    observed_decision_as_of=args.as_of)
+                    _record_sidecar("industry_weight_settlement", execution_status="succeeded",
+                                    progress_status="advanced", observed_decision_as_of=args.as_of)
     if args.target_policy_root:
+        stage = "import"
         try:
             from runners.a_short_target_policy_comparison_runner import capture_after_published_weekly
-            p2_candidates = _p2_shadow_candidates(
-                normalized, target_policy_price_provider, args.as_of, price_data_through)
-            target_capture = capture_after_published_weekly(
-                root=args.target_policy_root, decision_date=args.as_of, candidates=p2_candidates,
-                source_identity=source_identity, out_path=args.out, receipt_path=receipt_path,
-                forward_eligible=args.target_policy_forward, summary_path=args.target_policy_public_summary,
-                markdown_path=args.target_policy_public_markdown)
-            print(f"[target-policy-p2] capture={target_capture['status']} (production unchanged)")
-            _record_sidecar("target_policy_capture", execution_status="succeeded",
-                            progress_status=_sidecar_progress_from_status(target_capture.get("status")),
-                            observed_decision_as_of=args.as_of)
         except Exception as exc:
-            if "p2_capture_replay_input_drifted" in str(exc):
-                _record_sidecar("target_policy_capture", execution_status="failed",
-                                progress_status="stalled", error_code="replay_drift")
-                print(f"[target-policy-p2] decision {args.as_of} evidence is already frozen; "
-                      "the changed replay was not written and M6.7 remains authoritative")
+            _record_sidecar_failure("target_policy_capture", stage=stage, exc=exc,
+                                    error_code="capture_unavailable")
+            print("[target-policy-p2] current-week capture unavailable; "
+                  "M6.7 output remains authoritative and unchanged")
+        else:
+            stage = "capture"
+            try:
+                p2_candidates = _p2_shadow_candidates(
+                    normalized, target_policy_price_provider, args.as_of, price_data_through)
+                target_capture = capture_after_published_weekly(
+                    root=args.target_policy_root, decision_date=args.as_of, candidates=p2_candidates,
+                    source_identity=source_identity, out_path=args.out, receipt_path=receipt_path,
+                    forward_eligible=args.target_policy_forward, summary_path=args.target_policy_public_summary,
+                    markdown_path=args.target_policy_public_markdown)
+            except Exception as exc:
+                if "p2_capture_replay_input_drifted" in safe_exception_summary(exc):
+                    _record_sidecar_failure("target_policy_capture", stage=stage, exc=exc,
+                                            progress_status="stalled", error_code="replay_drift")
+                    print(f"[target-policy-p2] decision {args.as_of} evidence is already frozen; "
+                          "the changed replay was not written and M6.7 remains authoritative")
+                else:
+                    _record_sidecar_failure("target_policy_capture", stage=stage, exc=exc,
+                                            error_code="capture_unavailable")
+                    print("[target-policy-p2] current-week capture unavailable; "
+                          "M6.7 output remains authoritative and unchanged")
             else:
-                _record_sidecar("target_policy_capture", execution_status="failed",
-                                progress_status="unavailable", error_code="capture_unavailable")
-                print("[target-policy-p2] current-week capture unavailable; "
-                      "M6.7 output remains authoritative and unchanged")
+                print(f"[target-policy-p2] capture={target_capture['status']} (production unchanged)")
+                _record_sidecar("target_policy_capture", execution_status="succeeded",
+                                progress_status=_sidecar_progress_from_status(target_capture.get("status")),
+                                observed_decision_as_of=args.as_of)
     if args.final_action_validation_root:
+        stage = "import"
         try:
             from runners.a_short_final_action_validation_runner import (
                 capture_after_published_weekly,
                 settle_and_summarize as settle_final_action_validation,
             )
-            p3_capture = capture_after_published_weekly(
-                root=args.final_action_validation_root, decision_date=args.as_of, candidates=normalized,
-                source_identity=source_identity, out_path=args.out, receipt_path=receipt_path,
-                forward_eligible=args.final_action_validation_forward,
-                tracker_path=(args.final_action_validation_tracker or str(ROOT / "logs" / "forward_tracker.csv")))
-            # Re-derive from the ledger the capture just advanced, then commit the
-            # public pair.  Deriving before the capture would leave the published
-            # summary one week behind its own ledger.
-            settle_final_action_validation(
-                root=args.final_action_validation_root, as_of=args.as_of,
-                tracker_path=(args.final_action_validation_tracker or str(ROOT / "logs" / "forward_tracker.csv")),
-                daily_cache_path=args.final_action_validation_daily_cache)
-            print(f"[final-action-p3] capture={p3_capture['status']} (production unchanged)")
-            _record_sidecar("final_action_capture", execution_status="succeeded",
-                            progress_status=_sidecar_progress_from_status(p3_capture.get("status")),
-                            observed_decision_as_of=args.as_of)
         except Exception as exc:
-            if "mature_source_identity_changed" in str(exc):
-                _record_sidecar("final_action_capture", execution_status="failed",
-                                progress_status="stalled", error_code="mature_identity_conflict")
-                print(f"[final-action-p3] decision {args.as_of} has an immutable mature identity conflict; "
-                      "the observation is not counted and M6.7 remains authoritative")
+            _record_sidecar_failure("final_action_capture", stage=stage, exc=exc,
+                                    error_code="capture_unavailable")
+            print("[final-action-p3] current-week capture unavailable; "
+                  "M6.7 output remains authoritative and unchanged")
+        else:
+            stage = "capture"
+            try:
+                p3_capture = capture_after_published_weekly(
+                    root=args.final_action_validation_root, decision_date=args.as_of, candidates=normalized,
+                    source_identity=source_identity, out_path=args.out, receipt_path=receipt_path,
+                    forward_eligible=args.final_action_validation_forward,
+                    tracker_path=(args.final_action_validation_tracker or str(ROOT / "logs" / "forward_tracker.csv")))
+            except Exception as exc:
+                if "mature_source_identity_changed" in safe_exception_summary(exc):
+                    _record_sidecar_failure("final_action_capture", stage=stage, exc=exc,
+                                            progress_status="stalled", error_code="mature_identity_conflict")
+                    print(f"[final-action-p3] decision {args.as_of} has an immutable mature identity conflict; "
+                          "the observation is not counted and M6.7 remains authoritative")
+                else:
+                    _record_sidecar_failure("final_action_capture", stage=stage, exc=exc,
+                                            error_code="capture_unavailable")
+                    print("[final-action-p3] current-week capture unavailable; "
+                          "M6.7 output remains authoritative and unchanged")
             else:
-                _record_sidecar("final_action_capture", execution_status="failed",
-                                progress_status="unavailable", error_code="capture_unavailable")
-                print("[final-action-p3] current-week capture unavailable; "
-                      "M6.7 output remains authoritative and unchanged")
+                # Re-derive from the ledger the capture just advanced, then commit the
+                # public pair.  Deriving before the capture would leave the published
+                # summary one week behind its own ledger.
+                stage = "settlement"
+                try:
+                    settle_final_action_validation(
+                        root=args.final_action_validation_root, as_of=args.as_of,
+                        tracker_path=(args.final_action_validation_tracker or str(ROOT / "logs" / "forward_tracker.csv")),
+                        daily_cache_path=args.final_action_validation_daily_cache)
+                except Exception as exc:
+                    _record_sidecar_failure("final_action_capture", stage=stage, exc=exc,
+                                            error_code="capture_unavailable")
+                    print("[final-action-p3] current-week capture unavailable; "
+                          "M6.7 output remains authoritative and unchanged")
+                else:
+                    print(f"[final-action-p3] capture={p3_capture['status']} (production unchanged)")
+                    _record_sidecar("final_action_capture", execution_status="succeeded",
+                                    progress_status=_sidecar_progress_from_status(p3_capture.get("status")),
+                                    observed_decision_as_of=args.as_of)
     if args.overlay_adjudication_root:
+        stage = "import"
         try:
             from engine.a_short_overlay_adjudication import capture_after_published_weekly, settle_and_summarize_weekly
-            p4_capture = capture_after_published_weekly(root=args.overlay_adjudication_root, decision_date=args.as_of,
-                run_date=args.run_date, stage3_snapshot_path=args.overlay_adjudication_stage3_snapshot,
-                overlay_path=args.overlay_adjudication_overlay_source, out_path=args.out, receipt_path=receipt_path,
-                egs_publish_marker_path=args.overlay_adjudication_egs_publish_marker,
-                source_identity=source_identity, forward_eligible=args.overlay_adjudication_forward)
-            settle_and_summarize_weekly(root=args.overlay_adjudication_root,
-                daily_cache_path=args.overlay_adjudication_daily_cache, as_of=args.as_of, **overlay_public_paths)
-            print(f"[overlay-adjudication-p4a] capture={p4_capture['status']} (M6.7 unchanged)")
-            _record_sidecar("overlay_adjudication_capture", execution_status="succeeded",
-                            progress_status=_sidecar_progress_from_status(p4_capture.get("status")),
-                            observed_decision_as_of=args.as_of)
-            _record_sidecar("overlay_adjudication_settlement", execution_status="succeeded",
-                            progress_status="advanced", observed_decision_as_of=args.as_of)
-        except Exception:
-            # Deliberately no public write here (reversed 2026-08-07).  The old
-            # behaviour replaced the prior P4 reminder with an "unavailable"
-            # summary while the private ledger stood still, which is exactly the
-            # public-ahead-of-its-ledger state this ordering removes.  The outage
-            # is recorded in the sidecar outcomes instead, and the last checked
-            # pair stays put.
-            _record_sidecar("overlay_adjudication_capture", execution_status="failed",
-                            progress_status="unavailable", error_code="capture_unavailable")
+        except Exception as exc:
+            _record_sidecar_failure("overlay_adjudication_capture", stage=stage, exc=exc,
+                                    error_code="capture_unavailable")
             _record_sidecar("overlay_adjudication_settlement", execution_status="skipped",
                             progress_status="not_applicable", error_code="capture_unavailable")
             print("[overlay-adjudication-p4a] current-week capture unavailable; "
                   "P4 summary is unavailable and M6.7 output remains authoritative and unchanged")
+        else:
+            stage = "capture"
+            try:
+                p4_capture = capture_after_published_weekly(root=args.overlay_adjudication_root, decision_date=args.as_of,
+                    run_date=args.run_date, stage3_snapshot_path=args.overlay_adjudication_stage3_snapshot,
+                    overlay_path=args.overlay_adjudication_overlay_source, out_path=args.out, receipt_path=receipt_path,
+                    egs_publish_marker_path=args.overlay_adjudication_egs_publish_marker,
+                    source_identity=source_identity, forward_eligible=args.overlay_adjudication_forward)
+            except Exception as exc:
+                _record_sidecar_failure("overlay_adjudication_capture", stage=stage, exc=exc,
+                                        error_code="capture_unavailable")
+                _record_sidecar("overlay_adjudication_settlement", execution_status="skipped",
+                                progress_status="not_applicable", error_code="capture_unavailable")
+                print("[overlay-adjudication-p4a] current-week capture unavailable; "
+                      "P4 summary is unavailable and M6.7 output remains authoritative and unchanged")
+            else:
+                stage = "settlement"
+                try:
+                    settle_and_summarize_weekly(root=args.overlay_adjudication_root,
+                        daily_cache_path=args.overlay_adjudication_daily_cache, as_of=args.as_of, **overlay_public_paths)
+                except Exception as exc:
+                    _record_sidecar("overlay_adjudication_capture", execution_status="succeeded",
+                                    progress_status=_sidecar_progress_from_status(p4_capture.get("status")),
+                                    observed_decision_as_of=args.as_of)
+                    _record_sidecar_failure("overlay_adjudication_settlement", stage=stage, exc=exc,
+                                            error_code="capture_unavailable")
+                    print("[overlay-adjudication-p4a] current-week capture unavailable; "
+                          "P4 summary is unavailable and M6.7 output remains authoritative and unchanged")
+                else:
+                    print(f"[overlay-adjudication-p4a] capture={p4_capture['status']} (M6.7 unchanged)")
+                    _record_sidecar("overlay_adjudication_capture", execution_status="succeeded",
+                                    progress_status=_sidecar_progress_from_status(p4_capture.get("status")),
+                                    observed_decision_as_of=args.as_of)
+                    _record_sidecar("overlay_adjudication_settlement", execution_status="succeeded",
+                                    progress_status="advanced", observed_decision_as_of=args.as_of)
     if pipeline_sidecar_expected:
         _write_pipeline_sidecar_outcomes(
             Path(args.out).with_name(f"{Path(args.out).stem}.pipeline_sidecar_outcomes.json"),

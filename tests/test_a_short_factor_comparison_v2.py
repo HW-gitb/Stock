@@ -388,6 +388,20 @@ class ProgramManifestTests(unittest.TestCase):
                 with self.assertRaisesRegex(ComparisonV2Error, "v2 program manifest drifted"):
                     _ensure_program(root, governance)
 
+    def test_pre_freeze_rejects_malformed_digest_shape(self):
+        for value in (None, "not-a-digest", "0" * 63, "g" * 64):
+            with self.subTest(value=value), tempfile.TemporaryDirectory() as tmp, patched_epoch_modes(
+                    "pre_freeze_audit_only", ("p0_factor_comparison_v2",)):
+                root = _root(tmp)
+                governance = load_v2_governance()
+                _ensure_program(root, governance)
+                path = root / "program_manifest.json"
+                manifest = json.loads(path.read_text(encoding="utf-8"))
+                manifest["weekly_schema_sha256"] = value
+                path.write_text(json.dumps(manifest), encoding="utf-8")
+                with self.assertRaisesRegex(ComparisonV2Error, "v2 program manifest drifted"):
+                    _ensure_program(root, governance)
+
     def test_frozen_manifest_digest_drift_is_rejected(self):
         with tempfile.TemporaryDirectory() as tmp, patched_epoch_modes(
                 "frozen_enforced", ("p0_factor_comparison_v2",)):
