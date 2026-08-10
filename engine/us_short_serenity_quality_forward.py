@@ -848,7 +848,21 @@ def settle_pending_review(
     ledger_file = Path(ledger_path)
     if not ledger_file.is_file():
         return {"stage": "serenity_quality_settlement", "status": "no_pending", "pending_count": 0, "effects": dict(EFFECT_BOUNDARY)}
-    ledger = _load_ledger(ledger_file, policy)
+    try:
+        ledger = _load_ledger(ledger_file, policy)
+    except SerenityQualityForwardError as exc:
+        # A pre-Blade5 ledger is not evidence for the current producer/reviewer contract.  Keep the old
+        # bytes untouched, make the settlement a local no-count, and let the ordinary weekly task continue.
+        return {
+            "stage": "serenity_quality_settlement",
+            "status": "no_count",
+            "evidence_status": "invalid_evidence",
+            "pending_count": 0,
+            "reason_code": "SERENITY_QUALITY_LEDGER_REJECTED",
+            "error": _safe_error("SERENITY_QUALITY_LEDGER_REJECTED", exc),
+            "main_task_should_abort": False,
+            "effects": dict(EFFECT_BOUNDARY),
+        }
     pending_rows = ledger["pending_annotations"]
     if not pending_rows:
         return {"stage": "serenity_quality_settlement", "status": "no_pending", "pending_count": 0, "effects": dict(EFFECT_BOUNDARY)}
@@ -980,7 +994,44 @@ def run_quality_forward(
         "g1_blade6_preflight": g1_preflight_path,
     }
     policy = load_quality_policy(policy_path)
-    existing_ledger = _load_ledger(Path(ledger_path), policy)
+    try:
+        existing_ledger = _load_ledger(Path(ledger_path), policy)
+    except SerenityQualityForwardError as exc:
+        # Do not let a legacy/corrupt ledger abort the weekly task.  The invalid ledger remains on disk for
+        # diagnosis; this run uses an empty in-memory ledger, so no legacy row can enter the current formal gate.
+        error = _safe_error("SERENITY_QUALITY_LEDGER_REJECTED", exc)
+        existing_ledger = _empty_ledger()
+        shadow = shadow_consumer.consume_serenity_annotation(None)
+        observation = _observation(
+            decision_date=decision_date,
+            observed_at=observed_at,
+            status="invalid_evidence",
+            identity=None,
+            metrics=_empty_metric_rows(reason="quality ledger was unreadable or not in the current format"),
+            annotation_present=Path(annotation_path).is_file(),
+            review_present=Path(review_path).is_file(),
+            shadow_status="sleeping",
+            error=error,
+        )
+        gate = _gate_for(existing_ledger, cohort_id=None, observed_at=observed_at, policy=policy)
+        _write_json(Path(observation_path), observation)
+        # Keep the rejected ledger untouched; only the diagnostic observation and fail-closed preflight are new.
+        preflight = _persist_gate_and_preflight(
+            gate=gate, gate_path=Path(gate_path), g1_decision_path=g1_decision_path,
+            g1_preflight_path=g1_preflight_path, decision_date=decision_date, observed_at=observed_at,
+        )
+        return _result(
+            decision_date=decision_date,
+            observed_at=observed_at,
+            status="invalid_evidence",
+            observation=observation,
+            ledger=existing_ledger,
+            gate=gate,
+            shadow=shadow,
+            artifacts=artifacts,
+            g1_preflight=preflight,
+            error=error,
+        )
     try:
         annotation_value = _read_object(Path(annotation_path), label="annotation")
         review_value = _read_object(Path(review_path), label="quality review")

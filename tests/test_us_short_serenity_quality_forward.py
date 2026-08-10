@@ -73,6 +73,17 @@ class SerenityQualityForwardTest(unittest.TestCase):
         annotation["identity_envelope"]["model_identity"] = "serenity-producer-v0.1.0"
         return annotation
 
+    def _legacy_ledger(self):
+        # Shape written before the two-action Blade5 fields were added; it deliberately has no pending arrays.
+        return {
+            "schema_name": quality.SCHEMA_NAME,
+            "schema_version": quality.SCHEMA_VERSION,
+            "quality_policy_version": quality.QUALITY_POLICY_VERSION,
+            "cross_cohort_aggregation_allowed": False,
+            "cohorts": [],
+            "effects": dict(quality.EFFECT_BOUNDARY),
+        }
+
     def _run(self, root, decision_date, *, annotation=None, review=None, ledger=None,
              annotation_name="annotation.json", review_name="review.json"):
         state = root / "state" / "us_short"
@@ -156,6 +167,36 @@ class SerenityQualityForwardTest(unittest.TestCase):
             self.assertEqual(result["quality_gate"]["window"]["eligible_week_count"], 0)
             self.assertEqual(len(result["ledger"]["pending_annotations"]), 1)
             self.assertEqual(result["observation"]["settlement_status"], "pending_review")
+
+    def test_legacy_ledger_is_no_count_and_does_not_abort_or_get_rewritten(self):
+        with tempfile.TemporaryDirectory() as raw:
+            root = Path(raw)
+            state = root / "state" / "us_short"
+            state.mkdir(parents=True, exist_ok=True)
+            ledger = state / "ledger.json"
+            legacy_bytes = (json.dumps(self._legacy_ledger(), ensure_ascii=False, indent=2) + "\n").encode("utf-8")
+            ledger.write_bytes(legacy_bytes)
+
+            result = self._run(root, "20260810", ledger=ledger)
+            self.assertEqual(result["status"], "invalid_evidence")
+            self.assertEqual(result["error"]["code"], "SERENITY_QUALITY_LEDGER_REJECTED")
+            self.assertFalse(result["main_task_should_abort"])
+            self.assertEqual(result["quality_gate"]["window"]["eligible_week_count"], 0)
+            self.assertEqual(ledger.read_bytes(), legacy_bytes)
+
+            settlement = quality.settle_pending_review(
+                ledger_path=ledger,
+                current_decision_date="20260817",
+                observed_at="2026-08-17T08:00:00+00:00",
+                state_dir=state,
+                root=root,
+                now=datetime(2026, 8, 17, 8, tzinfo=timezone.utc),
+            )
+            self.assertEqual(settlement["status"], "no_count")
+            self.assertEqual(settlement["evidence_status"], "invalid_evidence")
+            self.assertEqual(settlement["reason_code"], "SERENITY_QUALITY_LEDGER_REJECTED")
+            self.assertFalse(settlement["main_task_should_abort"])
+            self.assertEqual(ledger.read_bytes(), legacy_bytes)
 
     def test_pending_target_requires_exactly_one_and_review_write_is_idempotent(self):
         with tempfile.TemporaryDirectory() as raw:
