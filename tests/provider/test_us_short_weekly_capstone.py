@@ -26,7 +26,7 @@ from runners.us_short_weekly_capstone import (  # noqa: E402
 
 _STAGE_NAMES = [
     "universe_fetch", "momentum_fetch", "overextension_producer", "momentum_producer", "sic_fetch",
-    "soft_discovery", "theme_producer",
+    "soft_discovery", "serenity_quality_forward", "theme_producer",
     "projection_inputs", "pass2_preflight", "yfinance_grades_fetch", "pass2_fetch", "vix_regime", "forward_policy_shadow",
     "forward_policy_corporate_actions", "forward_policy_maturity", "soft_boost_comparison_maturity", "soft_boost_comparison_capture", "weekly_bridge",
     # Post-bridge, no artifact. Knife 10b added the two that ADVANCE the 26-week
@@ -43,7 +43,7 @@ _PRE_BRIDGE_STAGE_NAMES = [
 _PRE_BRIDGE_THROUGH_BRIDGE = _PRE_BRIDGE_STAGE_NAMES + ["weekly_bridge"]
 _RECEIPT_STAGE_NAMES = tuple(
     name for name in _STAGE_NAMES if name not in {
-        "soft_discovery", "forward_policy_shadow", "forward_policy_corporate_actions",
+        "soft_discovery", "serenity_quality_forward", "forward_policy_shadow", "forward_policy_corporate_actions",
         "forward_policy_maturity", "soft_boost_comparison_maturity", "soft_boost_comparison_capture", "weekly_bridge",
         "market_diagnostic", "market_diagnostic_fetch", "market_diagnostic_settle",
     }
@@ -252,6 +252,11 @@ class CapstoneFakeChainTest(unittest.TestCase):
                 "momentum_producer": lambda c: [c.momentum_projection_path],
                 "sic_fetch": lambda c: [c.classification_packet_path],
                 "soft_discovery": lambda c: [c.soft_discovery_receipt_path],
+                "serenity_quality_forward": lambda c: [
+                    c.serenity_quality_observation_path,
+                    c.serenity_quality_ledger_path,
+                    c.serenity_quality_gate_path,
+                ],
                 "theme_producer": lambda c: [c.theme_projection_path],
                 "projection_inputs": lambda c: [c.merged_momentum_path, c.merged_theme_path],
                 "pass2_preflight": lambda c: [c.preflight_summary_path],

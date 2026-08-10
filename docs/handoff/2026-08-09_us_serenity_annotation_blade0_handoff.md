@@ -1,5 +1,51 @@
 # US-short Serenity annotation — Blade 0 handoff
 
+## 2026-08-10 Codex — Blade5 quality forward weekly wiring (OPEN-NOT_VERIFIED)
+
+### Scope and boundaries
+
+- User explicitly requested execution of desktop Blade5 in this worktree. Blade4 is already in `HEAD` (`7a0eb955`) after independent PASS/merge; the desktop plan and other worktrees remained read-only.
+- Added only offline/local quality-forward wiring. No provider/network/paid/live call, installation, account/order action, active consumer, independent review, or commit was performed.
+- The quality stage is optional and `zero_effect`. Missing, malformed, unreadable, mismatched, or conflicting annotation/review evidence is recorded locally and cannot abort the ordinary weekly task. A report overlay is attempted only after the weekly bridge has completed and only into the existing Blade4 registered advisory sections.
+
+### Blade5 products
+
+- Added `presets/us_short_serenity_quality_forward_policy_v0.1.0.json` and closed schemas for policy, review packet, observation, cohort ledger, and quality gate result.
+- Added `engine/us_short_serenity_quality_forward.py` with frozen five-metric judgment policy: claim-binding integrity, review consistency, falsifier observability, horizon judgment, and weak/contradicted-theme discrimination. Thresholds are frozen before counting: 4 eligible weeks, evaluable rate `0.75`, pass rate `0.8`.
+- Every eligible observation binds `annotation_id`, `schema_version`, `rubric_version`, `consumer_version`, `upstream_decision_result_id`, and `upstream_policy_version`; semantic version changes open a new cohort, preserve old records, and do not cross-aggregate or backfill.
+- Extended `runners/us_short_weekly_capstone.py` and `runners/us_short_weekly_capstone_stages.py` with an optional local stage after soft discovery and a post-bridge advisory delivery step. Quality output preserves the legacy zero-effect shape (`validated_theme_count=0`, `boostable_ticker_count=0`, all effect flags false).
+- Added focused and schema tests in `tests/test_us_short_serenity_quality_forward.py` and `tests/schema/test_us_short_serenity_quality_forward_schema.py`, including valid identity binding, dormant/missing review, malformed/unreadable input, same-date conflict, cohort separation, four-week pass gate, below-threshold fail, and real weekly report overlay behavior.
+
+### Self-review and test boundary
+
+- Fixed-Python focused/capstone/schema/regression command: `.tools\run_unittest_with_repo_pythonpath.cmd tests.test_us_short_serenity_quality_forward tests.schema.test_us_short_serenity_quality_forward_schema tests.test_us_short_serenity_shadow_consumers tests.schema.test_us_short_serenity_shadow_consumption_schema tests.test_us_short_serenity_structural_theme_annotation tests.schema.test_us_short_serenity_structural_theme_annotation_schema tests.provider.test_us_short_weekly_capstone_soft_discovery tests.test_us_short_soft_discovery_weekly_report tests.provider.test_us_short_weekly_capstone tests.test_us_short_discovery_conformance tests.test_us_short_test_io_inventory`.
+- Result: `Ran 241 tests in 46.838s OK`, receipt=`receipt:5986b89a3a819de8835c68e8`; interpreter=`C:\Users\cnhea\AppData\Local\Programs\Python\Python313\python.exe`.
+- Fixed-Python `py_compile` passed for the new engine, capstone stages, capstone runner, and new tests. The I/O inventory was regenerated from the existing allowlist/unresolved allowlist, with `module_count=315` and the two new Blade5 modules classified class-0.
+- Final fixed-Python document closeout gates: `Ran 66 tests in 2.459s OK`, receipt=`receipt:bef69701bead43c653322cd5`; `git diff --check` passed.
+- Pre-Codex self-review A-F: A=Blade4 merged prerequisite plus Blade5 scope; B=five frozen judgment metrics, thresholds and identity/cohort fields; C=missing/malformed/unreadable/conflict/below-threshold/false-effect controls; D=engine/schema/capstone/report/inventory/route ripple; E=SESSION_LOG/risk/handoff alignment; F=fixed-Python focused tests, compile, diff check and docs gates. `independent-self-review=NOT_USED` by role boundary.
+- Full US-short lane was not triggered: this slice adds no provider, production fetch, active scoring, selection, action, or shared portfolio seam. The pre-existing frozen 20260809 runbook issue remains outside this slice.
+
+### Handoff
+
+Claude Code should independently review Blade5 against the updated desktop plan, especially frozen metric/threshold semantics, exact identity and cohort ledger binding, the real weekly capstone seam, malformed/unreadable evidence handling, report-overlay timing, and all false effect flags. Until PASS, keep the quality gate advisory-only and do not use it for scoring, Top15, seats, action, position, `macro_cluster`, `us_long`, provider/live execution, or commit. Final docs closeout gates are PASS (`receipt:bef69701bead43c653322cd5`).
+
+## 2026-08-10 追加：Claude 审查 PASS（刀5 收口并合入）
+
+**改了什么**：审查方未改产物，只补 `docs/system_risk_register.md` 一节审查结论 + 一条 Optional、`docs/SESSION_LOG.md` 一条极简 verdict，然后提交刀5 全部文件并合入 master。
+
+**为什么**：本刀第一次真的改了生产顶层 runner 并新增了唯一一处写生产周报的路径，所以两件事必须自己动手：一是 rule 3(a) 的全量（执行方判「未触发」，判错了——rule 3(a) 看的是入口有没有改，不是有没有 provider）；二是验收包的覆盖是否真覆盖到被改符号的全部消费方。
+
+**验证命令**：
+- `.tools\run_unittest_with_repo_pythonpath.cmd`（11 模块验收超集）
+- `.tools\full_pack_ledger.py run us_short "<rule 6 escalation>" receipt:ded6a267edc199c5a0cb9171 860 -- discover -s tests -p "test_us_short*.py"`
+- `.tools\run_unittest_with_repo_pythonpath.cmd --timeout-seconds 600`（8 个 grep 出来、引用 `default_pipeline`/`_provider_execution_receipt`/`run_weekly_capstone` 但不在验收包内的消费模块）
+
+**验证结果**：验收超集 `Ran 241 / 59.7s / OK receipt:ded6a267edc199c5a0cb9171`；漏覆盖的 8 个消费模块 `Ran 153 / 20.1s / OK receipt:e2f3b8b2e1217e0c9b1f14d3`；全量 `FAIL discovered=5730 ran=3925`，唯一 FAIL 模块是既有 20260809 冻结 runbook 摘要，其余 1805 个用例为 `-f` failfast 连坐未跑。私有根包含检查经核实非恒真（`private_root` 是必填字段，`official_output_root` 与既有 `:726`/`:1020` 同一写法）。
+
+**失效旧结论**：无。刀4 的边界不变；刀4「消费者自己不开文件」现已在真实 runner 上补足为「休眠周整条路径直接 return，不打开报告文件」。
+
+**下一步注意事项**：① `R-USSHORT-SOFT-DISCOVERY-20260809-FROZEN-RUNBOOK-HASH-DOES-NOT-MATCH-HEAD` 现在的实际后果是**任何 us_short 刀都拿不到干净的 rule-3 全量绿**，冻结期望与 LF blob、CRLF 工作树三者互不相等，主树同样红——建议在下一刀之前单独收掉。② 刀6 起进入 gated 实验刀，须 G1 用户决定开效果实验并选定**唯一**映射；本刀的质量门只是进入 G1 讨论的前提，不是效果证据。
+
 ## 2026-08-10 Codex — Blade4 shadow consumer wiring (OPEN-NOT_VERIFIED)
 
 ### Scope and boundaries
