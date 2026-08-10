@@ -519,6 +519,48 @@ class ForwardTrackerCacheGuardTests(unittest.TestCase):
         self.assertEqual(rc, 0)
         self.assertNotIn("FORWARD-TRACKER CACHE STALE", buf.getvalue())
 
+    def test_prior_capture_clock_covers_holiday_weekday_without_same_day_capture(self) -> None:
+        # A backfill can run on a holiday weekday before that week's capture row
+        # lands.  Reuse the latest source-bound prior capture rather than treating
+        # the weekday wall date as an unsettled session (O12).
+        import io
+        from contextlib import redirect_stdout
+
+        as_of = "20260102"
+        today = "20260209"
+        prior_run = "20260206"
+        settled = "20260206"
+        holiday_dates = {"20260112", "20260113", "20260114", "20260115", "20260116", "20260119"}
+        stock_dates = [
+            date
+            for date in pd.bdate_range(as_of, settled).strftime("%Y%m%d").tolist()
+            if date not in holiday_dates
+        ]
+
+        with tempfile.TemporaryDirectory() as tmp:
+            cache_path = Path(tmp) / "forward_daily.pkl"
+            tracker_path = Path(tmp) / "forward_tracker.csv"
+            with cache_path.open("wb") as handle:
+                pickle.dump(_settlement_cache_payload(stock_dates, meta_end_date=settled), handle)
+            with patch.object(forward_tracker, "TRACKER_CSV", tracker_path):
+                forward_tracker._write_tracker(pd.DataFrame([_tracker_row(
+                    as_of,
+                    "000001.SZ",
+                    run_date=prior_run,
+                    price_data_through=settled,
+                )]))
+            buf = io.StringIO()
+            with (
+                patch.object(forward_tracker, "FORWARD_DAILY_CACHE", cache_path),
+                patch.object(forward_tracker, "TRACKER_CSV", tracker_path),
+                patch.object(forward_tracker, "_today_yyyymmdd", return_value=today),
+                redirect_stdout(buf),
+            ):
+                rc = forward_tracker.backfill([20])
+
+        self.assertEqual(rc, 0)
+        self.assertNotIn("FORWARD-TRACKER CACHE STALE", buf.getvalue())
+
     def test_fully_covered_fresh_cache_settles_without_stale_exit(self) -> None:
         stock_dates = pd.bdate_range("20260706", periods=25).strftime("%Y%m%d").tolist()
         with tempfile.TemporaryDirectory() as tmp:

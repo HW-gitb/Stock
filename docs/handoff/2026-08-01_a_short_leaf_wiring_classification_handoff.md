@@ -1,5 +1,42 @@
 # A-short 371 叶重新分层交接
 
+## 2026-08-10 — Codex executor/fixer：Optional O12（OPEN-NOT_VERIFIED）
+
+### Verdict / Action
+
+按当前风险登记的 O12 方案做最小修复，未提交。长假工作日没有 `run_date == today` 的 capture 行时，settled resolver 现在复用所有不晚于 today 的历史 source-bound `price_data_through`，不再把工作日墙上日期当作最新交易日。
+
+### Problems / root cause / changes
+
+- 原 `_latest_settled_market_date()` 只筛 `run_date == today`；backfill 先于当周 capture 落盘时，长假工作日会走 weekday fallback，cache 末日是前一已结算 session 却被 exit 3/stale 横幅拦截。
+- `runners/forward_tracker.py` 现在筛 canonical `run_date` 且 `run_date <= today` 的 tracker 行，再取不晚于 today 的最新 `price_data_through`；没有任何 source-bound clock 时才回退最近工作日。未来日期不参与，cache-only 边界不变。
+- 新增 `test_prior_capture_clock_covers_holiday_weekday_without_same_day_capture`；既有 O11 Sunday、current capture prior-settled、真 stale 与 O10/P2-2 矩阵保持。
+
+### Call chain / consumers / schema / source-binding / write boundary
+
+`backfill()` → `_latest_settled_market_date()` → `_cache_is_behind_market_date()` → `attach_forward_returns()` → 原子 `logs/forward_tracker.csv` 写回 → stale banner/`EXIT_LEDGER_STALLED=3` → `weekly_screening.ps1` `forward_daily_cache_stale` → 既有 sidecar health JSON/Markdown/receipt。只复用 tracker `run_date/price_data_through` 与 pickle `stocks.trade_date`；无新 schema/status/cache/provider/refresh/live 或写盘边界。
+
+### Negative controls / self-review
+
+- O12 source 查询临时恢复为仅 `run_date == today`，点名测试 `Ran 1` / `FAILED`（`rc=3`）；随后恢复源码。
+- 固定 Python 聚焦超集 `Ran 90 tests in 11.221s` / `OK`；O11/O10/P2-2 stale/immature 方向保留。
+- **Pre-Codex self-review**：`matrix=O12 prior-capture settled clock + O11 + P2-2 stale-lag`; `register=updated`; `handoff=updated`; `focused=90 OK + O12 mutation red`; `full-lane=NOT_VERIFIED`; `door=doc-governance+route-status+readme`。
+
+### Exact verification / NOT_VERIFIED
+
+- 唯一解释器 `C:\Users\cnhea\AppData\Local\Programs\Python\Python313\python.exe` → `Python 3.13.8`。
+- `& 'C:\Users\cnhea\AppData\Local\Programs\Python\Python313\python.exe' -m unittest tests.phase6.test_forward_tracker_cache_guard tests.phase6.test_weekly_screening_guardrails tests.test_a_short_weekly_sidecar_health` → `Ran 90 tests in 11.221s` / `OK`。
+- `& 'C:\Users\cnhea\AppData\Local\Programs\Python\Python313\python.exe' -m py_compile runners/forward_tracker.py tests/phase6/test_forward_tracker_cache_guard.py` → exit 0；文档门禁 `Ran 66` / `OK`；`git diff --check` → exit 0；provider/live/真实 weekly/full lane/forward/freeze/clock/account/order/ship-gate 均 `NOT_VERIFIED`。
+- `git status --short --untracked-files=all` → exactly five tracked `M` paths (SESSION_LOG, this handoff, system risk register, `runners/forward_tracker.py`, and `tests/phase6/test_forward_tracker_cache_guard.py`), no untracked files; HEAD `5f435241`; no stage/commit/push/merge。
+
+### Review / commit boundary
+
+状态保持 `OPEN-NOT_VERIFIED`。Claude Code reviewer/committer 负责独立复审、stage、commit；Codex executor/fixer 不代提交、不 push/merge。
+
+### Next
+
+Claude Code：审查 Optional O12 与 `forward_tracker→exit3→health` 链；通过后按项目规则提交。
+
 ## 2026-08-10 — Codex executor/fixer：R-ASHORT-FORWARD-TRACKER-HOLIDAY-SUPPRESSION-COMPARES-WALL-DATE-NOT-LAST-SESSION（OPEN-NOT_VERIFIED）
 
 ### Verdict / Action
@@ -4988,6 +5025,27 @@ effect contract 已用固定 Python 重新登记 A-EGS decision-predicate hash �
 **未覆盖维度与诚实边界**
 
 - 全为离线夹具与探针；真实长假场景要等下一个长假后的周跑。
+- 全量归执行方；§6a 未起 agent；forward/freeze/clock、provider/live/account/ship-gate 仍全部 `NOT_VERIFIED`。
+
+**下一步**：`Codex：执行`
+
+## 2026-08-10 追加：O12 收口复审 —— PASS（已合入 master）
+
+**判定**：PASS，无 Required、无新 Optional。
+
+**我自己实际验了什么**
+
+- 把我上一轮量出的残余格原样重跑：长假中的工作日、tracker 只有更早运行日的捕获行 → 现在 `settled=20260206`、rc=0、无横幅（上一轮 rc=3 + 横幅）。
+- 自写真陈旧对照，确认没修过头：缓存止于 20260731、记录时钟 20260807、today 20260809 → rc=3、横幅照打。
+- 读放宽后的取值链：只改「拿哪个已结算日当基准」，`price_data_through <= today` 与 `max(...)` 未动，坏输入仍按落后处理。
+
+**植入对照（我自写）**
+
+- 把源绑定腿窄回 `run_date == today` → 新增用例精确转红；还原后 sha 逐字节回原值。
+
+**未覆盖维度与诚实边界**
+
+- 全为离线夹具与探针；真实长假后的周跑仍未发生。
 - 全量归执行方；§6a 未起 agent；forward/freeze/clock、provider/live/account/ship-gate 仍全部 `NOT_VERIFIED`。
 
 **下一步**：`Codex：执行`

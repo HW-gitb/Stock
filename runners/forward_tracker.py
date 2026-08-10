@@ -781,10 +781,14 @@ def _latest_settled_market_date(df: pd.DataFrame, today: str) -> str | None:
     if isinstance(df, pd.DataFrame) and not df.empty and {
         "run_date", "price_data_through"
     }.issubset(df.columns):
-        same_run = df[df["run_date"].astype(str) == today_text]
+        run_dates = df["run_date"].astype(str)
+        eligible = df[
+            run_dates.str.fullmatch(r"\d{8}")
+            & (run_dates <= today_text)
+        ]
         settled = [
             str(value)
-            for value in same_run["price_data_through"].dropna().astype(str)
+            for value in eligible["price_data_through"].dropna().astype(str)
             if len(str(value)) == 8 and str(value).isdigit() and str(value) <= today_text
         ]
         if settled:
