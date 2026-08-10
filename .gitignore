@@ -69,6 +69,7 @@ state/*/market_diagnostic_inputs_private
 state/*/lifecycle/
 state/*/shadow_compare_private/
 state/*/factor_comparison_private/
+state/*/margin_overheat_cash_control_private/
 state/*/industry_weight_comparison_private/
 state/*/overlay_adjudication_private/
 # Discovery packets, receipts, and per-decision call reservations are local state,

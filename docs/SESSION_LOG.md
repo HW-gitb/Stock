@@ -169,6 +169,36 @@
 - **Pre-Codex self-review**: A-F checked；A=固定输入/7成员/source矩阵；B=Serenity字段与所有当前树 `*.py/*.md/tests` 消费面 grep，确认无新接线且文档只声明 shadow；C=effect flags/active macro/score/Top15/operation/lifecycle 反向控制；D=unsupported claim 降级为 lead/context/unverified；E=SESSION_LOG 与 handoff 为当前态，CURRENT 未改；F=UTF-8/no BOM/no mojibake、固定 Python assertions PASS、`git diff --check` clean；independent-self-review=NOT_USED:user-forbids independent review；provider/network/account=NOT_USED；commit=NOT_PERFORMED。
 - **Handoff**: 已新增 `docs/handoff/2026-08-09_us_serenity_annotation_blade0_handoff.md` 并加入 `docs/handoff/README.md` 路由；该交接只承载 Blade 0 结果、边界、自审/测试要求与下一刀前置，不混入既有 X live-shape handoff。
 - **Next**: Claude Code：审查本刀 Blade 0 研究产物；未审查前不进入 Blade 1 或任何工程刀。
+## 2026-08-10 — Claude 审查 PASS（40d9：P1-5 两条 Required 已修；链仍 OPEN-NOT_VERIFIED）
+
+- **Verdict/Action**: PASS（仅限本刀两处修改）。`.gitignore` 补的那行经我独立 `git check-ignore` 复验 rc=0（上轮 rc=1）；health runner 的 `sys.path` bootstrap 机制成立——该文件对 `runners.*`/`engine.*` 的三处 import 都是延迟的，直接按路径调用时会在跑到一半才炸，与「三件套一件没出」吻合。**但本轮没有新的周跑**：私有根仍不存在、20260810 产物时间戳未变、pipeline outcome 仍 `failed`，故 P1-5 链条整体仍 `OPEN-NOT_VERIFIED`。
+- **Required**: 无（两条已 resolved/implemented，状态与闭合判据见 `docs/system_risk_register.md`）。
+- **Verify**: review-evidence:4c5a92aac517。验收超集 `Ran 116 in 66.1s OK receipt:a39ab74c61e488207c72d305`。植入：删 `.gitignore` 那行 → 点名用例精确转红（`Ran 72 / failures=1`）；把 bootstrap 改成 `pass` → `Ran 44 OK` 无人喊（记 O15）。两次还原 sha 逐字节回原值。未起 provider、未跑真实周跑、未手工补任何产物。超时原因:第一版 bootstrap 植入删行造成 IndentationError 取回 tests=UNKNOWN，按 rule ⑥ 重做为语义中和。
+- **Next**: Codex：执行
+
+## 2026-08-10 - Codex executor/fixer: P1-5 blocker repairs (OPEN-NOT_VERIFIED)
+
+- **Verdict/Action**: Implemented the two minimal repairs identified by the Claude read-only review. No provider/live rerun, new token, cache, runner, or production behavior was added.
+- **Required**: P1-5 remains OPEN-NOT_VERIFIED until one post-repair normal weekly/cache-build run produces the durable margin capture/source receipt and the sidecar-health JSON/Markdown/receipt trio.
+- **Verify**: Added .gitignore rule state/*/margin_overheat_cash_control_private/; fixed Python a_short_weekly_sidecar_health.py direct-file root bootstrap before runners.* imports. git check-ignore now returns rc=0. New repair regressions: Ran 116 tests / OK; fixed-Python P1-5 focused pack: Ran 698 tests / OK; py_compile exit 0. Existing ResourceWarnings remain non-fatal. No provider/live execution was run after the repair.
+- **Pre-Codex self-review**: matrix=margin private-root source-binding + direct health launcher import; call-chain=weekly_screening -> margin _private_root -> capture/source receipt; weekly_screening -> health direct entry -> health trio; schema=unchanged; write-boundary=private margin root remains gitignored, health writes only its existing three leaves; negative-control=no manual root/capture/receipt/cache; NOT_VERIFIED=post-repair durable third round/P1-5/full lane/ship gate; review boundary=Claude Code reviewer/committer.
+- **Next**: Claude Code: review the two repairs; after explicit real-run authorization, execute one fixed-Python normal weekly/cache-build round and verify the P1-5 closure matrix.
+
+## 2026-08-10 — Claude 只读审查 OPEN-NOT_VERIFIED（40d9：P1-5 两轮真实产物链）
+
+- **Verdict/Action**: OPEN-NOT_VERIFIED，不给关闭建议。链上第 1 环（v2 capture+source receipt，同源 run_identity）与第 2 环（`daily_cache.json` + `cache_updated/63 calls` 收据、launcher 记 succeeded/advanced）成立，桌面 P1-5 的缓存死锁确已解开；但第 3 环 margin 私有 capture/receipt 与第 5 环 sidecar health 三件套**不存在**，第 4 环因此为 `failed` 而非 `succeeded`。
+- **Required**: `R-ASHORT-MARGIN-OVERHEAT-PRIVATE-ROOT-IS-NOT-GITIGNORED`(P1)、`R-ASHORT-WEEKLY-SIDECAR-HEALTH-TRIPLE-ABSENT-AFTER-REAL-RUN`(P2，NOT_VERIFIED) —— 机制、实测与闭合判据只见 `docs/system_risk_register.md`。
+- **Verify**: review-evidence:617815a60f91。只读取证：`git check-ignore` 对 margin 私有根 rc=1、对 v2/weekly_private rc=0，`.gitignore` 兄弟轨三行齐而独缺该行；真实运行 outcomes 里 capture 的 `error_detail` 正指该检查；全树扫 `*sidecar_health*` 零产物、`*margin_overheat*` 无私有件。未起 provider、未跑测试包、未改代码、未提交、未访问主树。超时原因:五环逐项取证 + 两次口径下钻（capture 字段嵌在 payload 内）串在墙钟上。
+- **Next**: Codex：修复
+
+## 2026-08-10 - Codex executor/fixer: P1-5 real two-round normal weekly/cache-build (OPEN-NOT_VERIFIED)
+
+- **Verdict/Action**: Executed the desktop P1-5 two-round sequence at `as_of=20260810` with the normal `runners/weekly_screening.ps1` entry point and the existing provider seam. No new provider, token, cache, or runner was introduced.
+- **Required**: No new Required; P1-5 remains open because the durable margin capture/receipt and health observation required by the desktop closure condition were not produced.
+- **Verify**: Fixed Python `C:\Users\cnhea\AppData\Local\Programs\Python\Python313\python.exe` -> `Python 3.13.8`. Round 1 exact command exited `0`: shared-cache receipt `no_frozen_consumer_captures/provider_calls=0`, current-governed v2 capture and source receipt written, pipeline `factor_v2_capture=succeeded`, margin `failed/capture_unavailable`. Round 2 exact command exited `0`: shared-cache receipt `cache_updated/provider_calls=63`, schema validation `OK`, 40 cache rows, v2 `CURRENT_GOVERNED=True`; pipeline margin `failed` with `margin-overheat private root is not a provably private path`, no margin private root/capture/receipt. `git check-ignore` for that root exited `1`. Desktop five-module focused command -> `Ran 696 tests in 57.721s / OK`. Health companion was `UNAVAILABLE` with `ModuleNotFoundError: No module named 'runners'`; no manual workaround was run. Provider/live result is limited to these two authorized rounds; full lane/ship gate `NOT_VERIFIED`.
+- **Pre-Codex self-review**: `matrix=P1-5 bootstrap no-op -> current-governed v2 -> shared cache update -> margin private-root guard -> health consumer`; `register=updated`; `handoff=updated`; `rounds=2 fixed-Python exit0 with raw outcomes captured`; `closure=NOT_VERIFIED`; `negative-control=no manual cache/receipt/private-root bypass`; `door=doc-governance+route-status+readme`.
+- **Next**: Claude Code: independently review the two-round P1-5 evidence and the existing private-path/health invocation boundaries; do not close or commit P1-5 until the desktop closure condition is met.
+
 ## 2026-08-10 — Claude 复审 PASS（40d9：O12 源绑定时钟放宽到既往捕获）
 
 - **Verdict/Action**: PASS。源绑定腿由 `run_date == today` 放宽为 `run_date <= today`（加 8 位形状过滤），比较基准变成「系统记录过的最新已结算时段」，天然认节假日；`_calendar_age_mature`、状态集合、写回与退出码结构均未动，坏输入仍全部按落后处理。

@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import ast
 import json
+import os
 import subprocess
 import sys
 import tempfile
@@ -116,6 +117,28 @@ def _write_valid_weekly_bundle(root: Path) -> Path:
 
 
 class AShortSidecarHealthTests(unittest.TestCase):
+    def test_direct_script_entrypoint_bootstraps_project_root(self):
+        """The weekly PowerShell entry invokes this file directly, not as -m."""
+        root = Path(__file__).resolve().parents[1]
+        script = root / "runners" / "a_short_weekly_sidecar_health.py"
+        env = os.environ.copy()
+        env.pop("PYTHONPATH", None)
+        with tempfile.TemporaryDirectory(dir=root) as cwd:
+            completed = subprocess.run(
+                [sys.executable, "-I", str(script), "--help"],
+                cwd=cwd,
+                env=env,
+                capture_output=True,
+                text=True,
+                encoding="utf-8",
+                errors="replace",
+                timeout=30,
+                check=False,
+            )
+        output = completed.stdout + completed.stderr
+        self.assertEqual(completed.returncode, 0, output)
+        self.assertNotIn("ModuleNotFoundError", output)
+
     def test_complete_m67_identity_comes_only_from_validated_snapshot(self):
         with tempfile.TemporaryDirectory() as tmp:
             out_dir = _write_valid_weekly_bundle(Path(tmp))
