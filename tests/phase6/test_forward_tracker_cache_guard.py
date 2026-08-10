@@ -78,11 +78,19 @@ def _settlement_cache_payload(
     }
 
 
-def _tracker_row(as_of: str, ts_code: str) -> dict:
+def _tracker_row(
+    as_of: str,
+    ts_code: str,
+    *,
+    run_date: str | None = None,
+    price_data_through: str | None = None,
+) -> dict:
     row = {col: pd.NA for col in forward_tracker.SCHEMA_COLUMNS}
     row.update({
         "as_of": as_of,
         "captured_at": "2026-06-01T00:00:00+00:00",
+        "run_date": run_date,
+        "price_data_through": price_data_through,
         "ts_code": ts_code,
         "name": ts_code,
         "tier": "Tier1",
@@ -389,6 +397,127 @@ class ForwardTrackerCacheGuardTests(unittest.TestCase):
         self.assertEqual(written.loc["20260720", "ret_5d_status"], "ok")
         self.assertEqual(written.loc["20260720", "ret_10d_status"], "pending_immature_asof")
         self.assertEqual(written.loc["20260727", "ret_5d_status"], "pending_immature_asof")
+
+    def test_in_cache_immature_window_does_not_emit_stale_after_attach(self) -> None:
+        # The cohort is present in cache and attach_forward_returns is reached;
+        # only its +20d window is still younger than the calendar approximation.
+        # This is the O10 guard against over-reporting after the post-attach
+        # stale classification.
+        import io
+        from contextlib import redirect_stdout
+
+        as_of = "20260713"
+        stock_dates = pd.bdate_range(as_of, "20260731").strftime("%Y%m%d").tolist()
+
+        with tempfile.TemporaryDirectory() as tmp:
+            cache_path = Path(tmp) / "forward_daily.pkl"
+            tracker_path = Path(tmp) / "forward_tracker.csv"
+            with cache_path.open("wb") as handle:
+                pickle.dump(
+                    _settlement_cache_payload(stock_dates, meta_end_date="20260803"),
+                    handle,
+                )
+            with patch.object(forward_tracker, "TRACKER_CSV", tracker_path):
+                forward_tracker._write_tracker(pd.DataFrame([_tracker_row(as_of, "000001.SZ")]))
+            buf = io.StringIO()
+            with (
+                patch.object(forward_tracker, "FORWARD_DAILY_CACHE", cache_path),
+                patch.object(forward_tracker, "TRACKER_CSV", tracker_path),
+                patch.object(forward_tracker, "_today_yyyymmdd", return_value="20260809"),
+                redirect_stdout(buf),
+            ):
+                rc = forward_tracker.backfill([5, 10, 20])
+            written = pd.read_csv(tracker_path, dtype={"as_of": str}).set_index("as_of")
+
+        self.assertEqual(rc, 0)
+        self.assertEqual(written.loc[as_of, "ret_5d_status"], "ok")
+        self.assertEqual(written.loc[as_of, "ret_10d_status"], "ok")
+        self.assertEqual(written.loc[as_of, "ret_20d_status"], "pending_immature_asof")
+        self.assertNotIn("FORWARD-TRACKER CACHE STALE", buf.getvalue())
+
+    def test_current_cache_does_not_call_holiday_stretch_stale(self) -> None:
+        # Twenty available exchange sessions can span more than the calendar
+        # approximation when a long holiday sits inside the interval.  Both a
+        # Friday run and the following Sunday run must compare against the
+        # same latest settled session, not the Sunday wall date (P2).
+        import io
+        from contextlib import redirect_stdout
+
+        as_of = "20260102"
+        holiday_dates = {"20260112", "20260113", "20260114", "20260115", "20260116", "20260119"}
+        stock_dates = [
+            date
+            for date in pd.bdate_range(as_of, "20260206").strftime("%Y%m%d").tolist()
+            if date not in holiday_dates
+        ]
+        self.assertEqual(len(stock_dates), 20)
+        self.assertEqual(stock_dates[-1], "20260206")
+
+        for today in ("20260206", "20260208"):
+            with self.subTest(today=today), tempfile.TemporaryDirectory() as tmp:
+                cache_path = Path(tmp) / "forward_daily.pkl"
+                tracker_path = Path(tmp) / "forward_tracker.csv"
+                with cache_path.open("wb") as handle:
+                    pickle.dump(
+                        _settlement_cache_payload(stock_dates, meta_end_date="20260206"),
+                        handle,
+                    )
+                with patch.object(forward_tracker, "TRACKER_CSV", tracker_path):
+                    forward_tracker._write_tracker(pd.DataFrame([_tracker_row(as_of, "000001.SZ")]))
+                buf = io.StringIO()
+                with (
+                    patch.object(forward_tracker, "FORWARD_DAILY_CACHE", cache_path),
+                    patch.object(forward_tracker, "TRACKER_CSV", tracker_path),
+                    patch.object(forward_tracker, "_today_yyyymmdd", return_value=today),
+                    redirect_stdout(buf),
+                ):
+                    rc = forward_tracker.backfill([20])
+                written = pd.read_csv(tracker_path, dtype={"as_of": str}).set_index("as_of")
+
+                self.assertEqual(rc, 0)
+                self.assertEqual(written.loc[as_of, "ret_20d_status"], "pending_immature_asof")
+                self.assertNotIn("FORWARD-TRACKER CACHE STALE", buf.getvalue())
+
+    def test_current_capture_uses_prior_settled_clock_before_next_session(self) -> None:
+        # A current weekly capture can run on a Monday/holiday wall date while
+        # its accepted price clock is Friday.  That source-bound hint must win
+        # over the weekday fallback or a current cache is falsely stale.
+        import io
+        from contextlib import redirect_stdout
+
+        as_of = "20260102"
+        today = "20260209"
+        settled = "20260206"
+        holiday_dates = {"20260112", "20260113", "20260114", "20260115", "20260116", "20260119"}
+        stock_dates = [
+            date
+            for date in pd.bdate_range(as_of, settled).strftime("%Y%m%d").tolist()
+            if date not in holiday_dates
+        ]
+
+        with tempfile.TemporaryDirectory() as tmp:
+            cache_path = Path(tmp) / "forward_daily.pkl"
+            tracker_path = Path(tmp) / "forward_tracker.csv"
+            with cache_path.open("wb") as handle:
+                pickle.dump(_settlement_cache_payload(stock_dates, meta_end_date=settled), handle)
+            with patch.object(forward_tracker, "TRACKER_CSV", tracker_path):
+                forward_tracker._write_tracker(pd.DataFrame([_tracker_row(
+                    as_of,
+                    "000001.SZ",
+                    run_date=today,
+                    price_data_through=settled,
+                )]))
+            buf = io.StringIO()
+            with (
+                patch.object(forward_tracker, "FORWARD_DAILY_CACHE", cache_path),
+                patch.object(forward_tracker, "TRACKER_CSV", tracker_path),
+                patch.object(forward_tracker, "_today_yyyymmdd", return_value=today),
+                redirect_stdout(buf),
+            ):
+                rc = forward_tracker.backfill([20])
+
+        self.assertEqual(rc, 0)
+        self.assertNotIn("FORWARD-TRACKER CACHE STALE", buf.getvalue())
 
     def test_fully_covered_fresh_cache_settles_without_stale_exit(self) -> None:
         stock_dates = pd.bdate_range("20260706", periods=25).strftime("%Y%m%d").tolist()
