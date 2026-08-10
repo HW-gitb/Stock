@@ -1,0 +1,118 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "US-short Serenity quality-forward policy",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_name",
+    "schema_version",
+    "quality_policy_version",
+    "activation_status",
+    "metrics",
+    "frozen_window",
+    "cohort_dimensions",
+    "cross_cohort_aggregation_allowed",
+    "effect_boundary"
+  ],
+  "properties": {
+    "schema_name": {"const": "us_short_serenity_quality_forward_policy"},
+    "schema_version": {"const": "1.0.0"},
+    "quality_policy_version": {"const": "serenity_quality_policy_v0.1.0"},
+    "activation_status": {"const": "candidate_offline"},
+    "metrics": {
+      "type": "array",
+      "minItems": 5,
+      "maxItems": 5,
+      "items": [
+        {"$ref": "#/$defs/claim_binding_integrity"},
+        {"$ref": "#/$defs/review_consistency"},
+        {"$ref": "#/$defs/falsifier_observability"},
+        {"$ref": "#/$defs/horizon_judgment"},
+        {"$ref": "#/$defs/weak_or_contradicted_discrimination"}
+      ],
+      "additionalItems": false
+    },
+    "frozen_window": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["minimum_eligible_weeks", "minimum_evaluable_rate", "minimum_pass_rate"],
+      "properties": {
+        "minimum_eligible_weeks": {"const": 4},
+        "minimum_evaluable_rate": {"const": 0.75},
+        "minimum_pass_rate": {"const": 0.8}
+      }
+    },
+    "cohort_dimensions": {
+      "const": [
+        "annotation_schema_version",
+        "rubric_version",
+        "consumer_version",
+        "upstream_policy_version"
+      ]
+    },
+    "cross_cohort_aggregation_allowed": {"const": false},
+    "effect_boundary": {"$ref": "#/$defs/effect_boundary"}
+  },
+  "$defs": {
+    "metric": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["metric_id", "what", "why"],
+      "properties": {
+        "metric_id": {"type": "string"},
+        "what": {"type": "string", "minLength": 1, "maxLength": 1000},
+        "why": {"type": "string", "minLength": 1, "maxLength": 1000}
+      }
+    },
+    "claim_binding_integrity": {
+      "allOf": [
+        {"$ref": "#/$defs/metric"},
+        {"properties": {"metric_id": {"const": "claim_binding_integrity"}}}
+      ]
+    },
+    "review_consistency": {
+      "allOf": [
+        {"$ref": "#/$defs/metric"},
+        {"properties": {"metric_id": {"const": "review_consistency"}}}
+      ]
+    },
+    "falsifier_observability": {
+      "allOf": [
+        {"$ref": "#/$defs/metric"},
+        {"properties": {"metric_id": {"const": "falsifier_observability"}}}
+      ]
+    },
+    "horizon_judgment": {
+      "allOf": [
+        {"$ref": "#/$defs/metric"},
+        {"properties": {"metric_id": {"const": "horizon_judgment"}}}
+      ]
+    },
+    "weak_or_contradicted_discrimination": {
+      "allOf": [
+        {"$ref": "#/$defs/metric"},
+        {"properties": {"metric_id": {"const": "weak_or_contradicted_discrimination"}}}
+      ]
+    },
+    "effect_boundary": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "scoring_eligible",
+        "top15_effect_enabled",
+        "operation_advice_effect_enabled",
+        "provider_calls_performed",
+        "network_access_performed",
+        "main_task_should_abort"
+      ],
+      "properties": {
+        "scoring_eligible": {"const": false},
+        "top15_effect_enabled": {"const": false},
+        "operation_advice_effect_enabled": {"const": false},
+        "provider_calls_performed": {"const": false},
+        "network_access_performed": {"const": false},
+        "main_task_should_abort": {"const": false}
+      }
+    }
+  }
+}

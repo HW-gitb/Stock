@@ -1,5 +1,20 @@
 # Session Log
 
+## 2026-08-10 — Claude 审查 PASS（刀5 注解质量 forward 周度接入）
+
+- **Verdict/Action**: PASS。新 stage 可选、zero_effect、自带 typed 降级并排出 provider receipt 必需集；唯一写生产周报处只在 shadow active 时进入（休眠周不开文件）、先做私有根包含检查再 temp+replace 原子替换，且 `private_root`/`official_output_root` 实为真实字段、包含检查非恒真。五指标判断形、阈值计数前冻结在 preset、cohort 四维且禁跨聚合。
+- **Required**: 无。一条 Optional `R-USSHORT-SERENITY-BLADE5-A-FAILED-REPORT-OVERLAY-LEAVES-NO-TRACE-ANYWHERE`，正文与闭合判据只在 `docs/system_risk_register.md`。
+- **Verify**: review-evidence:ec95ab3bb395。rule 3(a) 因生产顶层 runner 变更触发、执行方判未触发有误，按 rule 6 升级自跑全量：`FAIL discovered=5730 ran=3925`，**唯一 FAIL 模块**为既有 20260809 冻结 runbook 摘要，其余缺口是 `-f` failfast 连坐未跑。改动面覆盖改由定点补全：验收超集 `Ran 241 OK receipt:ded6a267edc199c5a0cb9171`，另 grep 出 8 个引用 `default_pipeline`/`_provider_execution_receipt`/`run_weekly_capstone` 却不在验收包内的消费模块，单跑 `Ran 153 OK receipt:e2f3b8b2e1217e0c9b1f14d3` 全绿。该既有 blocker 已使任何 us_short 刀都拿不到干净全量绿。**超时原因**:全量升级跑 + 失败归因 + 补跑 8 个漏覆盖消费模块三段串在墙钟上。
+- **Next**: Codex：Pass
+
+## 2026-08-10 — Codex 执行刀5（OPEN-NOT_VERIFIED）
+
+- **Verdict/Action**：刀5 quality-forward 周度接入已实现：固定五项判断指标、阈值、identity/cohort ledger、quality gate result、异常本地落账与常规周可选零效果接线；不提供行为效果证据。
+- **Required**：`R-USSHORT-SERENITY-BLADE5-QUALITY-FORWARD-NOT-INDEPENDENTLY-REVIEWED` — see `docs/system_risk_register.md`。
+- **Verify**：fixed-Python focused/capstone/schema/regression `Ran 241 tests in 46.838s OK`，receipt=`receipt:5986b89a3a819de8835c68e8`；`py_compile` 通过；inventory=`315` modules；最终 docs gates `Ran 66 tests in 2.459s OK`，receipt=`receipt:bef69701bead43c653322cd5`；`git diff --check` 通过。
+- **Pre-Codex self-review**：matrix=五指标/冻结阈值/版本 cohort/identity binding/真实常规周桥接/缺失与损坏输入/四周 gate 与 below-threshold 反向控制；register=updated；handoff=updated；focused=241/241 OK；full-lane=not triggered（无 provider/active selection/action/score seam）；independent-self-review=NOT_USED；door=docs/route gates PASS。
+- **Next**：Claude Code：独立审查刀5
+
 ## 2026-08-10 — Claude 审查 PASS（刀4 shadow 消费接线）
 
 - **Verdict/Action**: PASS。桌面 §刀4 的 Stop 条件（碰 `action_confidence`/仓位/席位即 FAIL）**结构性成立**：模块全部 import 只有 `json`/`pathlib`/`typing` 与刀3 契约，全文无评分/仓位/席位/`macro_cluster`/provider/网络/写文件入口（`macro_cluster` 仅出现在 docstring 否定句）。报告落点纯文本进出、只往已注册的两节插 bullet，不开文件也不造 H2。trace 里那几个 `*_changed=false` 是记录字段而非闸门，真正保证来自够不着。

@@ -17,7 +17,7 @@ import hashlib
 import json
 import math
 from pathlib import Path
-from typing import Any
+from typing import Any, Mapping
 
 import jsonschema
 from engine.us_short_eligibility_gate import load_eligibility_governance
@@ -284,6 +284,25 @@ def run_soft_discovery(ctx) -> dict[str, Any]:
     from runners.us_short_weekly_capstone_soft_discovery import run_offline_stage
 
     return run_offline_stage(ctx)
+
+
+def run_serenity_quality_forward(ctx) -> dict[str, Any]:
+    """Observe the optional Serenity annotation/review pair without provider or active-effect access."""
+    from datetime import datetime
+
+    from engine.us_short_serenity_quality_forward import run_quality_forward
+
+    return run_quality_forward(
+        annotation_path=ctx.serenity_annotation_path,
+        review_path=ctx.serenity_quality_review_path,
+        observation_path=ctx.serenity_quality_observation_path,
+        ledger_path=ctx.serenity_quality_ledger_path,
+        gate_path=ctx.serenity_quality_gate_path,
+        decision_date=ctx.decision_date,
+        observed_at=ctx.generated_at,
+        root=ctx.sample_root,
+        now=datetime.fromisoformat(ctx.generated_at),
+    )
 
 
 def run_momentum_producer(ctx) -> dict[str, Any]:
@@ -822,7 +841,7 @@ def run_weekly_bridge(ctx) -> dict[str, Any]:
             "adjudication_receipt_path": (str(ctx.soft_boost_adjudication_receipt_path)
                                            if ctx.soft_boost_adjudication_receipt_path.is_file() else None),
         }
-    return _bridge.run_e2e(
+    summary = _bridge.run_e2e(
         source_packet_path=ctx.source_packet_path,
         batch4_template_path=ctx.batch4_template_path,
         account_state_path=ctx.account_state_path,
@@ -842,6 +861,44 @@ def run_weekly_bridge(ctx) -> dict[str, Any]:
         soft_discovery_receipt_paths=soft_paths,
         projection_binding_expectations=_bridge.FULL_CANDIDATE_LIVE_PROJECTION_BINDING,
     )
+    _deliver_serenity_shadow_to_official_report(ctx, summary)
+    return summary
+
+
+def _deliver_serenity_shadow_to_official_report(ctx, summary: Mapping[str, Any]) -> None:
+    """Best-effort report delivery after the bridge has emitted its ordinary report.
+
+    The Blade4 consumer remains a pure text overlay.  This caller is the one
+    weekly integration seam allowed to read/write the already-created private
+    report.  Any optional delivery failure leaves the ordinary report intact.
+    """
+    shadow = getattr(ctx, "serenity_shadow_result", None)
+    if not isinstance(shadow, Mapping) or shadow.get("status") != "active":
+        return
+    batch4 = summary.get("batch4_run") if isinstance(summary, Mapping) else None
+    output_paths = batch4.get("output_paths") if isinstance(batch4, Mapping) else None
+    report_value = output_paths.get("weekly_report_path") if isinstance(output_paths, Mapping) else None
+    if not isinstance(report_value, str) or not report_value:
+        return
+    report_path = Path(report_value).resolve()
+    private_root = Path(getattr(ctx, "official_output_root", None) or getattr(ctx, "private_root", report_path.parent)).resolve()
+    try:
+        report_path.relative_to(private_root)
+        report_text = report_path.read_text(encoding="utf-8")
+        from engine.us_short_serenity_shadow_consumers import deliver_serenity_shadow_to_report
+
+        delivered = deliver_serenity_shadow_to_report(report_text, shadow)
+        if not delivered.get("report_block_delivered"):
+            return
+        temporary = report_path.with_name(report_path.name + ".serenity.tmp")
+        temporary.write_text(delivered["report_text"], encoding="utf-8")
+        temporary.replace(report_path)
+    except Exception:
+        try:
+            temporary.unlink(missing_ok=True)
+        except (UnboundLocalError, OSError):
+            pass
+        return
 
 
 # --- honest provider_health derivation from the real Pass2 summary ---
