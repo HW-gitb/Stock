@@ -475,16 +475,24 @@ def refresh_prices_for_mature_cohorts(state: dict, price_path: Path = PRICE_CACH
         daily = pro.daily(trade_date=day, fields="ts_code,trade_date,open,high,low,close")
         adj = pro.adj_factor(trade_date=day, fields="ts_code,trade_date,adj_factor")
         limits = pro.stk_limit(trade_date=day, fields="ts_code,trade_date,up_limit")
-        if daily is None or daily.empty or adj is None or adj.empty:
+        if daily is None or adj is None:
             raise RuntimeError(f"Tushare daily/adj_factor unavailable for {day}")
+        if daily.empty or adj.empty:
+            continue
         merged = daily.merge(adj, on=["ts_code", "trade_date"], how="left")
         if limits is not None and not limits.empty:
             merged = merged.merge(limits, on=["ts_code", "trade_date"], how="left")
         else:
             merged["up_limit"] = np.nan
         merged["ts_code"] = merged["ts_code"].astype(str)
-        frames.append(merged[merged["ts_code"].isin(missing)].copy())
-        coverage.setdefault(day, set()).update(missing)
+        candidate_rows = merged[merged["ts_code"].isin(missing)].copy()
+        required = ("open", "high", "low", "close", "adj_factor")
+        valid = candidate_rows[
+            candidate_rows[list(required)].notna().all(axis=1)
+        ] if not candidate_rows.empty and all(field in candidate_rows.columns for field in required) else pd.DataFrame()
+        if not valid.empty:
+            frames.append(valid)
+            coverage.setdefault(day, set()).update(valid["ts_code"].astype(str))
     stocks = pd.concat(frames, ignore_index=True) if frames else pd.DataFrame()
     if not stocks.empty:
         stocks["trade_date"] = stocks["trade_date"].astype(str)

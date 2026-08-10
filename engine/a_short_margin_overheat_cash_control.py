@@ -1612,6 +1612,9 @@ def _cache_rows(document: Mapping[str, Any]) -> tuple[list[str], dict[tuple[str,
         clean = {
             "open": raw.get("open"),
             "close": raw.get("close"),
+            "raw_provider_observed": raw.get("raw_provider_observed")
+                if isinstance(raw.get("raw_provider_observed"), bool)
+                else _finite_number(raw.get("open")) and _finite_number(raw.get("close")),
             "adj_factor": raw.get("adj_factor"),
             "adj_factor_observed": raw.get("adj_factor_observed"),
             "adj_factor_source": raw.get("adj_factor_source"),
@@ -1626,13 +1629,36 @@ def _cache_rows(document: Mapping[str, Any]) -> tuple[list[str], dict[tuple[str,
     return sorted({date for _code, date in lookup}), lookup
 
 
+def _margin_cache_slice_digest(document: Mapping[str, Any], payload: Mapping[str, Any]) -> str:
+    """Digest only the symbol/date/fields consumed by this margin capture."""
+    dates, lookup = _cache_rows(document)
+    decision_date = _require_date8(payload.get("decision_date"), "margin cache slice decision_date")
+    price_data_through = _require_date8(payload.get("price_data_through"), "margin cache slice price_data_through")
+    if decision_date not in dates:
+        window_dates = [day for day in dates if day >= price_data_through]
+    else:
+        start = max(0, dates.index(price_data_through)) if price_data_through in dates else 0
+        end = min(len(dates), dates.index(decision_date) + max(HORIZONS) + 1)
+        window_dates = dates[start:end]
+    codes = sorted({str(position.get("ts_code") or "")
+                    for arm in payload.get("arms") or []
+                    for position in (arm.get("positions") or []) if str(position.get("ts_code") or "")})
+    fields = ("open", "close", "raw_provider_observed", "adj_factor", "adj_factor_observed",
+              "adj_factor_source", "corporate_action_verified")
+    rows = {
+        f"{code}|{day}": {field: (lookup.get((code, day)) or {}).get(field) for field in fields}
+        for code in codes for day in window_dates
+    }
+    return _digest({"codes": codes, "dates": window_dates, "fields": fields, "rows": rows})
+
+
 def _valid_qfq_row(row: Mapping[str, Any] | None) -> bool:
     if not isinstance(row, Mapping):
         return False
     if any(not _finite_number(row.get(key)) or float(row[key]) <= 0
            for key in ("open", "close", "adj_factor")):
         return False
-    if row.get("adj_factor_observed") is not True:
+    if row.get("raw_provider_observed") is not True or row.get("adj_factor_observed") is not True:
         return False
     if not str(row.get("adj_factor_source") or ""):
         return False
@@ -2409,6 +2435,8 @@ def capture_margin_overheat_week(
                                   stage=stage,
                                   stage_b_supported_arm_id=stage_b_supported_arm_id)
             for arm in _arm_definitions(stage)]
+    cache_slice_payload = {"decision_date": decision_date, "price_data_through": price_data_through,
+                           "arms": arms}
     payload = {
         "decision_date": decision_date,
         "run_date": run_date,
@@ -2416,7 +2444,7 @@ def capture_margin_overheat_week(
         "official_m67_digest": official_digest,
         "margin_fact_digest": _digest(facts_snapshot),
         "margin_facts_digest": _digest(facts_snapshot),
-        "daily_cache_digest": _digest(document),
+        "daily_cache_digest": _margin_cache_slice_digest(document, cache_slice_payload),
         "candidate_digest": _require_sha(run_identity.get("candidate_digest"), "candidate_digest"),
         "candidate_snapshot_digest": candidate_snapshot_digest,
         "experiment_batch_id": experiment_batch_id,
@@ -2570,7 +2598,7 @@ def _settle_arm(*, arm: Mapping[str, Any], candidate_by_code: Mapping[str, Mappi
                     "risk_evidence": _unavailable_risk_evidence()}, "candidate_snapshot_missing"
         base = lookup.get((code, price_data_through))
         if not _valid_qfq_row(base):
-            return {"arm_id": arm.get("arm_id"), "status": "no_count",
+            return {"arm_id": arm.get("arm_id"), "status": "pending",
                     "reason": "price_data_through_unavailable", "horizons": [],
                     "risk_evidence": _unavailable_risk_evidence()}, "price_data_through_unavailable"
         if not math.isclose(float(base["close"]), float(candidate_by_code[code]["close"]),
@@ -2600,7 +2628,7 @@ def _settle_arm(*, arm: Mapping[str, Any], candidate_by_code: Mapping[str, Mappi
                         "risk_evidence": _unavailable_risk_evidence()}, "frozen_position_invalid"
             entry, exit_row = lookup.get((code, entry_date)), lookup.get((code, exit_date))
             if not _valid_qfq_row(entry) or not _valid_qfq_row(exit_row):
-                return {"arm_id": arm.get("arm_id"), "status": "no_count",
+                return {"arm_id": arm.get("arm_id"), "status": "pending",
                         "reason": "price_or_adjustment_evidence_missing", "horizons": [],
                         "risk_evidence": _unavailable_risk_evidence()}, \
                     "price_or_adjustment_evidence_missing"
@@ -2648,8 +2676,6 @@ def _settle_arm(*, arm: Mapping[str, Any], candidate_by_code: Mapping[str, Mappi
 
 def _settle_capture(capture: Mapping[str, Any], document: Mapping[str, Any]) -> dict[str, Any]:
     payload = capture["payload"]
-    if payload["daily_cache_digest"] != _digest(document):
-        raise MarginOverheatCashControlError("margin-overheat daily cache digest does not match capture")
     dates, lookup = _cache_rows(document)
     candidate_by_code = {str(row["ts_code"]): row for row in payload["candidate_universe"]}
     facts = payload.get("predicate_facts")
@@ -3518,21 +3544,30 @@ def settle_margin_overheat_from_daily_cache(
         if stage == STAGE_B:
             _validate_stage_b_capture_admission(capture, stage_b_admission)
         validate_margin_source_receipt(receipt, capture, require_current_epoch=False)
-        if capture["payload"]["daily_cache_digest"] != _digest(document):
-            raise MarginOverheatCashControlError(
-                "margin-overheat daily cache digest does not match capture"
-            )
+        current_slice_digest = _margin_cache_slice_digest(document, capture["payload"])
+        if capture["payload"]["daily_cache_digest"] != current_slice_digest:
+            existing_outcome_path = week_dir / "outcome.json"
+            if existing_outcome_path.is_file():
+                existing_outcome = _load_private_json(existing_outcome_path, "outcome")
+                validate_margin_outcome(existing_outcome)
+                if existing_outcome.get("payload", {}).get("status") in {"settled", "no_count"}:
+                    raise MarginOverheatCashControlError(
+                        "margin-overheat consumed cache slice changed after publication"
+                    )
+            # A pending capture may consume a later in-place cache upgrade;
+            # unrelated rows never enter current_slice_digest.
         captures[week_dir.name] = capture
         receipts[week_dir.name] = receipt
         outcome = _settle_capture(capture, document)
         outcomes[week_dir.name] = outcome
     settled_receipts: dict[str, dict] = {}
     for date, outcome in outcomes.items():
+        capture = captures[date]
         receipt = copy.deepcopy(receipts[date])
         receipt["payload"]["settlement"] = {
             "outcome_sha256": outcome["payload_sha256"],
             "status": outcome["payload"]["status"],
-            "daily_cache_digest": _digest(document),
+            "daily_cache_digest": capture["payload"]["daily_cache_digest"],
         }
         _schema_validate(receipt, RECEIPT_SCHEMA_PATH)
         settled_receipts[date] = receipt

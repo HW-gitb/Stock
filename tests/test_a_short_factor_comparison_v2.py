@@ -93,9 +93,14 @@ def _daily_payload(*, count: int = 24, observed: bool = True, source: str = "pro
                 "adj_factor_observed": observed, "adj_factor_source": source,
                 "corporate_action_verified": False,
             })
+    limits = [
+        {"ts_code": row["ts_code"], "trade_date": row["trade_date"],
+         "up_limit": 11.0, "down_limit": 9.0, "provider_observed": True}
+        for row in rows
+    ]
     return {
         "stocks": pd.DataFrame(rows),
-        "limits": pd.DataFrame(columns=["ts_code", "trade_date", "up_limit"]),
+        "limits": pd.DataFrame(limits),
         "meta": {"cache_kind": "fixture_only"},
     }
 
@@ -513,18 +518,18 @@ class CacheOutcomeTests(unittest.TestCase):
             ledger = json.loads((root / "ledger.json").read_text(encoding="utf-8"))
             self.assertTrue(all(row["outcome_status"] == "pending" for row in ledger["entries"]))
 
-    def test_ffill_default_or_missing_adjustment_provenance_is_question_no_count_and_per_arm_recorded(self):
+    def test_ffill_default_or_missing_adjustment_provenance_keeps_question_pending_and_records_each_arm(self):
         with tempfile.TemporaryDirectory() as tmp:
             root = _root(tmp)
             _capture(root)
             settle_v2_from_daily_payload(root=root, daily_payload=_daily_payload(observed=False, source="provider_ffill"))
             outcome = json.loads((root / "weeks" / "20260202" / "outcome.json").read_text(encoding="utf-8"))
             question = outcome["payload"]["questions"][0]
-            self.assertEqual(question["status"], "no_count")
+            self.assertEqual(question["status"], "pending")
             self.assertEqual(question["reason"], "adj_factor_not_observed")
-            self.assertTrue(all(row["no_count_count"] == 1 for row in question["arms"]))
+            self.assertTrue(all(row["pending_count"] == 1 for row in question["arms"]))
 
-    def test_unverified_adjustment_or_qfq_price_jump_is_no_count(self):
+    def test_unverified_adjustment_or_qfq_price_jump_keeps_question_pending(self):
         for payload in (_daily_payload(adjustment_jump=True), _daily_payload(qfq_gap=True)):
             with self.subTest(payload=payload):
                 with tempfile.TemporaryDirectory() as tmp:
@@ -532,9 +537,9 @@ class CacheOutcomeTests(unittest.TestCase):
                     _capture(root)
                     settle_v2_from_daily_payload(root=root, daily_payload=payload)
                     outcome = json.loads((root / "weeks" / "20260202" / "outcome.json").read_text(encoding="utf-8"))
-                    self.assertEqual(outcome["payload"]["questions"][0]["status"], "no_count")
+                    self.assertEqual(outcome["payload"]["questions"][0]["status"], "pending")
 
-    def test_d3_measured_iv_gate_uses_the_same_adjustment_no_count_rule_when_it_selects(self):
+    def test_d3_measured_iv_gate_uses_the_same_adjustment_pending_rule_when_it_selects(self):
         with tempfile.TemporaryDirectory() as tmp:
             root = _root(tmp)
             candidates = _candidates()
@@ -549,7 +554,7 @@ class CacheOutcomeTests(unittest.TestCase):
             settle_v2_from_daily_payload(root=root, daily_payload=_daily_payload(observed=False, source="provider_ffill"))
             outcome = json.loads((root / "weeks" / "20260202" / "outcome.json").read_text(encoding="utf-8"))
             d3 = outcome["payload"]["questions"][1]
-            self.assertEqual(d3["status"], "no_count")
+            self.assertEqual(d3["status"], "pending")
             self.assertTrue(any(row["selected_symbols"] for row in d3["arms"]))
 
     def test_terminal_source_drift_is_rejected(self):
@@ -611,6 +616,9 @@ class RiskEvidenceTests(unittest.TestCase):
                 "open": 100.0,
                 "close": close_path[index],
                 "adj_factor": 1.0,
+                "raw_provider_observed": True,
+                "adj_factor_observed": True,
+                "adj_factor_source": "provider_observed",
             }
             for index, trade_date in enumerate(dates)
         }
@@ -630,8 +638,9 @@ class RiskEvidenceTests(unittest.TestCase):
         arm, candidates, date_pos, lookup, dates, governance = self._single_position_inputs(
             close_path=[100.0, 130.0, 110.0] + [130.0] * 18,
         )
+        limits = {("600000.SH", day): 110.0 for day in dates}
         outcome, _ = _position_outcomes(arm=arm, candidates=candidates, price_data_through=dates[0], date_pos=date_pos, dates=dates,
-                                        lookup=lookup, limits={}, governance=governance)
+                                        lookup=lookup, limits=limits, governance=governance)
         self.assertAlmostEqual(outcome["risk_evidence"]["max_drawdown_pct"], 15.3846153846, places=8)
 
     def test_settlement_requires_frozen_decision_close(self):
@@ -640,8 +649,9 @@ class RiskEvidenceTests(unittest.TestCase):
         )
         candidates["600000.SH"]["close"] = 99.0
         with self.assertRaisesRegex(ComparisonV2Error, "price_data_through close drifts"):
+            limits = {("600000.SH", day): 110.0 for day in dates}
             _position_outcomes(arm=arm, candidates=candidates, price_data_through=dates[0], date_pos=date_pos, dates=dates,
-                               lookup=lookup, limits={}, governance=governance)
+                               lookup=lookup, limits=limits, governance=governance)
 
     def test_loss_distribution_is_filled_only_and_records_its_basis(self):
         dates = _dates(21)
@@ -652,9 +662,12 @@ class RiskEvidenceTests(unittest.TestCase):
         for code in codes:
             for index, trade_date in enumerate(dates):
                 lookup[(code, trade_date)] = {
-                    "open": 100.0,
-                    "close": 100.0 if index == 0 else 90.0,
-                    "adj_factor": 1.0,
+                "open": 100.0,
+                "close": 100.0 if index == 0 else 90.0,
+                "adj_factor": 1.0,
+                "raw_provider_observed": True,
+                "adj_factor_observed": True,
+                "adj_factor_source": "provider_observed",
                 }
         arm = {
             "decision_date": dates[0], "slots": 6, "selected_symbols": codes,
@@ -673,7 +686,9 @@ class RiskEvidenceTests(unittest.TestCase):
             arm=arm, candidates={code: {"close": 100.0} for code in codes},
             price_data_through=dates[0],
             date_pos={day: index for index, day in enumerate(dates)}, dates=dates,
-            lookup=lookup, limits={}, governance=governance,
+            lookup=lookup,
+            limits={(code, day): 110.0 for code in codes for day in dates},
+            governance=governance,
         )
         risk = outcome["risk_evidence"]
         self.assertEqual(counts, {"selected_count": 6, "filled_count": 1})

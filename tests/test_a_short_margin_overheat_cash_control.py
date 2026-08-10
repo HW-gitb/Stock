@@ -1369,7 +1369,7 @@ class MarginOverheatCashControlKnife3Tests(unittest.TestCase):
         ):
             track.validate_margin_ledger(ledger)
 
-    def test_missing_adjustment_evidence_produces_question_week_no_count(self):
+    def test_missing_adjustment_evidence_keeps_question_week_pending(self):
         bad_cache = copy.deepcopy(self.cache)
         bad_cache["stocks"][1]["adj_factor_observed"] = False
         self.cache = bad_cache
@@ -1380,10 +1380,10 @@ class MarginOverheatCashControlKnife3Tests(unittest.TestCase):
             root=self.root, daily_cache_document=self.cache
         )
         self.assertEqual(
-            settled["adjudication"]["payload"]["no_count_week_count"], 1
+            settled["adjudication"]["payload"]["no_count_week_count"], 0
         )
         self.assertEqual(
-            self._stored(f"weeks/{AS_OF}/outcome.json")["payload"]["status"], "no_count"
+            self._stored(f"weeks/{AS_OF}/outcome.json")["payload"]["status"], "pending"
         )
 
     def test_settlement_schema_fault_returns_unavailable_without_retrying_contract_io(self):

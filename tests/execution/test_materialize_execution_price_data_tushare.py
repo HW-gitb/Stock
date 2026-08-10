@@ -166,7 +166,7 @@ class TushareExecutionPriceDataTest(unittest.TestCase):
         self.assertEqual(first_row["source_flags"], ["daily", "adj_factor", "stk_limit"])
         no_limit_row = [row for row in payload["rows"] if row["ts_code"] == "600001.SH"][0]
         self.assertIsNone(no_limit_row["up_limit"])
-        self.assertEqual(no_limit_row["source_flags"], ["daily", "adj_factor", "stk_limit"])
+        self.assertEqual(no_limit_row["source_flags"], ["daily", "adj_factor"])
 
     def test_missing_as_of_row_raises(self) -> None:
         with self.assertRaisesRegex(ValueError, "--as-of price row"):
@@ -259,7 +259,7 @@ class TushareExecutionPriceDataTest(unittest.TestCase):
     def test_cli_reuses_cache_without_fetch(self) -> None:
         payload = build_payload_from_tushare(
             FakeTusharePro(),
-            symbols=["600000.SH", "600001.SH"],
+            symbols=["600000.SH"],
             as_of="20260522",
             start_date="20260522",
             end_date="20260525",
@@ -270,7 +270,7 @@ class TushareExecutionPriceDataTest(unittest.TestCase):
             out_path = Path(tmpdir) / "out.json"
             cache_path = cache_path_for_request(
                 cache_dir,
-                ["600000.SH", "600001.SH"],
+                ["600000.SH"],
                 "20260522",
                 "20260525",
             )
@@ -282,6 +282,8 @@ class TushareExecutionPriceDataTest(unittest.TestCase):
                     "20260522",
                     "--analysis-input",
                     str(self.analysis_input_path),
+                    "--symbols",
+                    "600000.SH",
                     "--end-date",
                     "20260525",
                     "--cache-dir",

@@ -333,6 +333,55 @@ def _benchmark_frame_has_same_anchor_fields(frame):
     return isinstance(frame, pd.DataFrame) and {"trade_date", "open", "close"}.issubset(frame.columns)
 
 
+def _forward_cache_has_coverage(cached, asof_dates, max_window, start, end):
+    stocks = cached.get("stocks") if isinstance(cached, dict) else None
+    limits = cached.get("limits") if isinstance(cached, dict) else None
+    benches = cached.get("benchmarks", {}) if isinstance(cached, dict) else {}
+    if not isinstance(stocks, pd.DataFrame) or not isinstance(limits, pd.DataFrame) or stocks.empty:
+        return False
+    required_stock = {
+        "ts_code", "trade_date", "open", "close", "adj_factor", "adj_factor_observed",
+        "raw_provider_observed",
+    }
+    required_limit = {"ts_code", "trade_date", "up_limit", "down_limit", "provider_observed"}
+    if not required_stock.issubset(stocks.columns) or not required_limit.issubset(limits.columns):
+        return False
+    dates = sorted(stocks["trade_date"].dropna().astype(str).unique().tolist())
+    positions = {day: index for index, day in enumerate(dates)}
+    required_dates = set()
+    for asof in sorted(set(str(value) for value in asof_dates)):
+        if asof not in positions:
+            return False
+        required_dates.update(dates[positions[asof]:min(len(dates), positions[asof] + int(max_window) + 1)])
+    stock_dates = set(stocks["trade_date"].astype(str))
+    if not required_dates.issubset(stock_dates):
+        return False
+    scoped = stocks[stocks["trade_date"].astype(str).isin(required_dates)]
+    if (not scoped["adj_factor_observed"].eq(True).all()
+            or scoped["adj_factor"].isna().any()
+            or not scoped["raw_provider_observed"].eq(True).all()):
+        return False
+    complete_limits = limits[
+        limits["provider_observed"].eq(True)
+        & limits[["up_limit", "down_limit"]].notna().all(axis=1)
+    ]
+    limit_dates = set(complete_limits["trade_date"].astype(str))
+    if not required_dates.issubset(limit_dates):
+        return False
+    for name in BENCHMARKS:
+        frame = benches.get(name)
+        if not _benchmark_frame_has_same_anchor_fields(frame):
+            return False
+        frame = frame.copy()
+        frame["trade_date"] = frame["trade_date"].astype(str)
+        frame["open"] = pd.to_numeric(frame["open"], errors="coerce")
+        frame["close"] = pd.to_numeric(frame["close"], errors="coerce")
+        observed_dates = set(frame.dropna(subset=["open", "close"])["trade_date"])
+        if not required_dates.issubset(observed_dates):
+            return False
+    return True
+
+
 def _normalize_benchmark_daily_frame(frame, name, ts_code):
     if frame is None or frame.empty:
         print(f"[WARN] benchmark {name} ({ts_code}) returned no rows")
@@ -420,9 +469,7 @@ def fetch_forward_daily(asof_dates, max_window, buffer_days=5, refresh=False):
             sig_ok = (meta.get("start_date", "") <= start and meta.get("end_date", "") >= end
                       and meta.get("adj") == cache_signature["adj"]
                       and set(benches.keys()) >= set(BENCHMARKS.keys())
-                      and isinstance(stocks, pd.DataFrame) and not stocks.empty
-                      and isinstance(limits, pd.DataFrame) and not limits.empty
-                      and all(_benchmark_frame_has_same_anchor_fields(benches.get(name)) for name in BENCHMARKS))
+                      and _forward_cache_has_coverage(cached, asof_sorted, max_window, start, end))
             if sig_ok:
                 print(f"[CACHE] forward_daily reused: {meta.get('start_date')}..{meta.get('end_date')} "
                       f"rows={len(stocks)} benchmarks={list(benches.keys())}")
@@ -460,12 +507,13 @@ def fetch_forward_daily(asof_dates, max_window, buffer_days=5, refresh=False):
         adj_all["trade_date"] = adj_all["trade_date"].astype(str)
         stocks = stocks.merge(adj_all, on=["ts_code", "trade_date"], how="left")
     else:
-        stocks["adj_factor"] = 1.0
+        stocks["adj_factor"] = np.nan
     stocks = stocks.drop_duplicates(subset=["ts_code", "trade_date"], keep="last")
     stocks = stocks.sort_values(["ts_code", "trade_date"]).reset_index(drop=True)
-    # ffill within each ts_code, then fall back to 1.0 if a code has no adj_factor at all.
-    stocks["adj_factor"] = stocks.groupby("ts_code")["adj_factor"].ffill()
-    stocks["adj_factor"] = stocks["adj_factor"].fillna(1.0)
+    stocks["adj_factor"] = pd.to_numeric(stocks["adj_factor"], errors="coerce")
+    stocks["adj_factor_observed"] = stocks["adj_factor"].notna() & (stocks["adj_factor"] > 0)
+    stocks["adj_factor_source"] = np.where(stocks["adj_factor_observed"], "provider_observed", "provider_missing")
+    stocks["raw_provider_observed"] = True
 
     limits = pd.concat(limit_frames, ignore_index=True) if limit_frames else \
         pd.DataFrame(columns=["ts_code", "trade_date", "up_limit", "down_limit"])
@@ -473,6 +521,10 @@ def fetch_forward_daily(asof_dates, max_window, buffer_days=5, refresh=False):
         limits["trade_date"] = limits["trade_date"].astype(str)
         limits = limits.drop_duplicates(subset=["ts_code", "trade_date"], keep="last")
         limits = limits.sort_values(["ts_code", "trade_date"]).reset_index(drop=True)
+    if not limits.empty:
+        limits["provider_observed"] = limits[["up_limit", "down_limit"]].notna().any(axis=1)
+    else:
+        limits["provider_observed"] = pd.Series(dtype=bool)
 
     benches = {}
     for name, ts_code in BENCHMARKS.items():
@@ -486,7 +538,8 @@ def fetch_forward_daily(asof_dates, max_window, buffer_days=5, refresh=False):
             "fetched_at": datetime.now().isoformat(timespec="seconds"),
             "stock_rows": int(len(stocks)),
             "stock_codes": int(stocks["ts_code"].nunique()),
-            "limit_rows": int(len(limits))}
+            "limit_rows": int(len(limits)),
+            "coverage_dates": len(trade_dates)}
 
     _write_forward_daily_cache({"meta": meta, "stocks": stocks, "limits": limits, "benchmarks": benches})
     print(f"[FETCH] forward_daily saved stocks={len(stocks)} codes={meta['stock_codes']} "
@@ -563,18 +616,27 @@ def attach_forward_returns(samples, windows, daily_payload, cost_pct=DEFAULT_COS
     benches = daily_payload.get("benchmarks", {})
     if samples.empty or stocks.empty:
         return samples
+    stocks = stocks.copy()
+    if "adj_factor_observed" not in stocks.columns:
+        stocks["adj_factor_observed"] = stocks["adj_factor"].notna() & (pd.to_numeric(stocks["adj_factor"], errors="coerce") > 0)
+    if "raw_provider_observed" not in stocks.columns:
+        stocks["raw_provider_observed"] = stocks[["open", "close"]].notna().all(axis=1)
 
     trade_dates = sorted(stocks["trade_date"].dropna().astype(str).unique().tolist())
     date_pos = {date: idx for idx, date in enumerate(trade_dates)}
 
-    cols = ["ts_code", "trade_date", "open", "close", "adj_factor"]
+    cols = ["ts_code", "trade_date", "open", "close", "adj_factor", "adj_factor_observed", "raw_provider_observed"]
+    if not set(cols).issubset(stocks.columns):
+        return samples
     lookup = {}
     for row in stocks[cols].itertuples(index=False):
-        lookup[(row.ts_code, row.trade_date)] = (row.open, row.close, row.adj_factor)
+        lookup[(row.ts_code, row.trade_date)] = (row.open, row.close, row.adj_factor,
+                                                 row.adj_factor_observed, row.raw_provider_observed)
     limit_lookup = {}
-    if isinstance(limits, pd.DataFrame) and not limits.empty:
-        for row in limits[["ts_code", "trade_date", "up_limit"]].itertuples(index=False):
-            limit_lookup[(row.ts_code, str(row.trade_date))] = row.up_limit
+    if isinstance(limits, pd.DataFrame) and not limits.empty and {"ts_code", "trade_date", "up_limit", "provider_observed"}.issubset(limits.columns):
+        for row in limits[["ts_code", "trade_date", "up_limit", "provider_observed"]].itertuples(index=False):
+            if row.provider_observed is True:
+                limit_lookup[(row.ts_code, str(row.trade_date))] = row.up_limit
 
     for idx, row in samples.iterrows():
         trade_date = str(row["trade_date"])
@@ -592,11 +654,12 @@ def attach_forward_returns(samples, windows, daily_payload, cost_pct=DEFAULT_COS
             continue
         entry_date = trade_dates[base_idx + 1]
         entry_row = lookup.get((ts_code, entry_date))
-        if entry_row is None or pd.isna(entry_row[0]) or pd.isna(entry_row[2]) or float(entry_row[0]) == 0:
+        if entry_row is None or pd.isna(entry_row[0]) or pd.isna(entry_row[2]) or \
+                entry_row[3] is not True or entry_row[4] is not True or float(entry_row[0]) == 0:
             for window in windows:
                 samples.at[idx, f"ret_{window}d_status"] = "pending_no_entry_price"
             continue
-        entry_open, _entry_close, entry_adj = entry_row
+        entry_open, _entry_close, entry_adj, _entry_adj_observed, _entry_raw_observed = entry_row
         samples.at[idx, "entry_date"] = entry_date
         # The evidence interval is part of the settled outcome even when the
         # T+1 order is blocked and the slot remains cash.
@@ -607,7 +670,7 @@ def attach_forward_returns(samples, windows, daily_payload, cost_pct=DEFAULT_COS
         # base close (for close-to-close reference)
         base_row = lookup.get((ts_code, trade_date))
         base_close = base_row[1] if base_row else None
-        base_adj = base_row[2] if base_row else None
+        base_adj = base_row[2] if base_row and base_row[3] is True and base_row[4] is True else None
         base_close_for_limit = base_close
         if base_close_for_limit is None or pd.isna(base_close_for_limit) or float(base_close_for_limit) == 0:
             base_close_for_limit = row.get("close")
@@ -637,10 +700,11 @@ def attach_forward_returns(samples, windows, daily_payload, cost_pct=DEFAULT_COS
             exit_date = trade_dates[exit_idx]
             samples.at[idx, f"ret_{window}d_exit_date"] = exit_date
             exit_row = lookup.get((ts_code, exit_date))
-            if exit_row is None or pd.isna(exit_row[1]) or pd.isna(exit_row[2]):
+            if exit_row is None or pd.isna(exit_row[1]) or pd.isna(exit_row[2]) or \
+                    exit_row[3] is not True or exit_row[4] is not True:
                 samples.at[idx, f"ret_{window}d_status"] = "pending_missing_future_close"
                 continue
-            _exit_open, exit_close, exit_adj = exit_row
+            _exit_open, exit_close, exit_adj, _exit_adj_observed, _exit_raw_observed = exit_row
 
             t1_return_failed = False
             # qfq-adjusted close-to-close

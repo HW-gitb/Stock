@@ -44,7 +44,8 @@ DAILY_CACHE_NAME = "daily_cache.json"
 DAILY_CACHE_SCHEMA_PATH = ROOT / "schemas" / "a_short_factor_comparison_v2_daily_cache.schema.json"
 CACHE_BUILD_OUTCOME_SCHEMA_PATH = ROOT / "schemas" / "a_short_shared_cache_build_outcome.schema.json"
 CACHE_BUILD_OUTCOME_SCHEMA_NAME = "a_short_shared_cache_build_outcome"
-CACHE_BUILD_OUTCOME_SCHEMA_VERSION = "1.0.0"
+CACHE_BUILD_OUTCOME_SCHEMA_VERSION = "1.1.0"
+DAILY_CACHE_SCHEMA_VERSION = "1.2.0"
 CACHE_BUILD_STATUSES = (
     "no_frozen_v2_captures",
     "no_frozen_consumer_captures",
@@ -153,7 +154,7 @@ def write_cache_build_outcome_receipt(*, path: str | Path, run_date: str, result
 def _empty_cache() -> dict:
     return {
         "schema_name": "a_short_factor_comparison_v2_daily_cache",
-        "schema_version": "1.1.0",
+        "schema_version": DAILY_CACHE_SCHEMA_VERSION,
         "stocks": [],
         "limits": [],
         "benchmarks": [],
@@ -175,13 +176,79 @@ def _load_existing_cache(root: Path) -> dict:
         jsonschema.validate(document, schema)
     except (OSError, UnicodeDecodeError, json.JSONDecodeError, jsonschema.ValidationError) as exc:
         raise ComparisonV2Error("v2 existing daily cache violates its frozen contract") from exc
-    if document["schema_version"] == "1.0.0":
-        # Version 1.0.0 lacks the execution columns required by 1.1.0.  Do
-        # not mix those rows into a 1.1.0 payload: rebuild only the currently
-        # frozen consumer windows and leave the on-disk cache untouched until
-        # the replacement has passed validation and is atomically written.
-        return _empty_cache()
-    return document
+    return _upgrade_cache_document(document)
+
+
+def _upgrade_cache_document(document: dict) -> dict:
+    """Derive the current cache shape in memory; never rewrite legacy bytes."""
+    upgraded = {
+        "schema_name": "a_short_factor_comparison_v2_daily_cache",
+        "schema_version": DAILY_CACHE_SCHEMA_VERSION,
+        "stocks": [], "limits": [], "benchmarks": [], "rows": [],
+        "meta": dict(document.get("meta") or {}),
+    }
+    meta = upgraded["meta"]
+    meta.setdefault("cache_kind", "a_short_shared_incremental")
+    meta.setdefault("source", "tushare:daily+adj_factor+stk_limit")
+    meta.setdefault("writer", "runners/a_short_factor_comparison_v2_cache_build.py")
+    meta.setdefault("last_run_date", _today())
+    meta.setdefault("consumers", [])
+    meta.setdefault("provider_call_ceiling", DEFAULT_MAX_PROVIDER_CALLS)
+    meta.setdefault("deferred_due_to_budget", {})
+    raw_fields = ("open", "high", "low", "close", "vol")
+    for raw in document.get("stocks") or []:
+        row = dict(raw)
+        # Legacy 1.0 rows did not carry the execution-only raw fields.  Keep
+        # the old bytes untouched, but make the in-memory upgrade explicit
+        # and pending rather than letting the 1.2 closed-world schema reject
+        # the row before the provider seam can enrich it.
+        for field in ("high", "low", "vol"):
+            row.setdefault(field, None)
+        raw_observed = row.get("raw_provider_observed")
+        if not isinstance(raw_observed, bool):
+            raw_observed = any(_finite(row.get(field)) for field in raw_fields)
+        row["raw_provider_observed"] = raw_observed
+        if "suspended" not in row or (not raw_observed and not any(_finite(row.get(field)) for field in raw_fields)):
+            volume = _optional_number(row.get("vol"))
+            row["suspended"] = bool(volume <= 0.0) if raw_observed and volume is not None else None
+        adj_observed = row.get("adj_factor_observed")
+        if not isinstance(adj_observed, bool):
+            adj_observed = _finite(row.get("adj_factor")) and float(row.get("adj_factor")) > 0.0
+        row["adj_factor_observed"] = bool(adj_observed)
+        if adj_observed:
+            row["adj_factor_source"] = "provider_observed"
+        else:
+            row["adj_factor_source"] = "provider_missing"
+            row["adj_factor"] = None
+        row.setdefault("corporate_action_verified", False)
+        upgraded["stocks"].append(row)
+    for raw in document.get("limits") or []:
+        row = dict(raw)
+        observed = row.get("provider_observed")
+        if not isinstance(observed, bool):
+            observed = any(_finite(row.get(field)) for field in ("up_limit", "down_limit"))
+        row["provider_observed"] = observed
+        row.setdefault("down_limit", None)
+        upgraded["limits"].append(row)
+    for raw in document.get("benchmarks") or []:
+        row = dict(raw)
+        observed = row.get("provider_observed")
+        row["provider_observed"] = observed if isinstance(observed, bool) else any(
+            _finite(row.get(field)) for field in ("open", "close")
+        )
+        upgraded["benchmarks"].append(row)
+    stocks = _dedupe_rows(upgraded["stocks"], key_names=("ts_code", "trade_date"), label="upgraded stocks")
+    limits = _dedupe_rows(upgraded["limits"], key_names=("ts_code", "trade_date"), label="upgraded limits")
+    upgraded["stocks"] = [stocks[key] for key in sorted(stocks)]
+    upgraded["limits"] = [limits[key] for key in sorted(limits)]
+    benchmarks = _dedupe_rows(upgraded["benchmarks"], key_names=("ts_code", "trade_date"), label="upgraded benchmarks")
+    upgraded["benchmarks"] = [benchmarks[key] for key in sorted(benchmarks)]
+    upgraded["rows"] = _execution_projection(stocks, limits)
+    try:
+        jsonschema.validate(upgraded, _load_json(DAILY_CACHE_SCHEMA_PATH))
+    except jsonschema.ValidationError as exc:
+        raise ComparisonV2Error("v2 upgraded daily cache violates its frozen contract") from exc
+    return upgraded
 
 
 def _finite(value: object) -> bool:
@@ -561,6 +628,9 @@ def _provider_rows_for_symbol(*, symbol: str, wanted_dates: set[str], daily: pd.
         adjustment = adj_by_key.get((symbol, trade_date), {}).get("adj_factor")
         observed = _finite(adjustment) and float(adjustment) > 0.0
         volume = _optional_number(raw.get("vol")) if raw is not None else None
+        raw_provider_observed = raw is not None
+        suspended = bool(volume <= 0.0) if raw_provider_observed and volume is not None else None
+        limit = limit_by_key.get((symbol, trade_date), {})
         stocks.append({
             "ts_code": symbol,
             "trade_date": trade_date,
@@ -569,7 +639,8 @@ def _provider_rows_for_symbol(*, symbol: str, wanted_dates: set[str], daily: pd.
             "low": _optional_number(raw.get("low")) if raw is not None else None,
             "close": _optional_number(raw.get("close")) if raw is not None else None,
             "vol": volume,
-            "suspended": raw is None or volume is None or volume <= 0.0,
+            "suspended": suspended,
+            "raw_provider_observed": raw_provider_observed,
             "adj_factor": float(adjustment) if observed else None,
             "adj_factor_observed": observed,
             "adj_factor_source": "provider_observed" if observed else "provider_missing",
@@ -578,8 +649,9 @@ def _provider_rows_for_symbol(*, symbol: str, wanted_dates: set[str], daily: pd.
         limit_rows.append({
             "ts_code": symbol,
             "trade_date": trade_date,
-            "up_limit": _optional_number(limit_by_key.get((symbol, trade_date), {}).get("up_limit")),
-            "down_limit": _optional_number(limit_by_key.get((symbol, trade_date), {}).get("down_limit")),
+            "up_limit": _optional_number(limit.get("up_limit")),
+            "down_limit": _optional_number(limit.get("down_limit")),
+            "provider_observed": (symbol, trade_date) in limit_by_key,
         })
     return stocks, limit_rows
 
@@ -595,37 +667,193 @@ def _p5_frozen_windows(industry_weight_root: str | Path | None, run_date: str) -
     )
 
 
+def _normalise_merge_row(label: str, raw: dict) -> dict:
+    row = dict(raw)
+    if label == "stocks":
+        for field in ("high", "low", "vol", "suspended"):
+            row.setdefault(field, None)
+        if not isinstance(row.get("raw_provider_observed"), bool):
+            row["raw_provider_observed"] = any(_finite(row.get(field)) for field in ("open", "high", "low", "close", "vol"))
+        if not row["raw_provider_observed"]:
+            row["suspended"] = None
+        elif row.get("suspended") is None and _finite(row.get("vol")):
+            row["suspended"] = bool(float(row["vol"]) <= 0.0)
+        row.setdefault("adj_factor", None)
+        adj_observed = row.get("adj_factor_observed")
+        if not isinstance(adj_observed, bool):
+            adj_observed = _finite(row.get("adj_factor")) and float(row.get("adj_factor")) > 0.0
+        row["adj_factor_observed"] = bool(adj_observed)
+        if adj_observed:
+            row["adj_factor_source"] = "provider_observed"
+        else:
+            row["adj_factor"] = None
+            row["adj_factor_source"] = "provider_missing"
+        row.setdefault("corporate_action_verified", False)
+    elif label == "limits":
+        row.setdefault("down_limit", None)
+        if not isinstance(row.get("provider_observed"), bool):
+            row["provider_observed"] = any(_finite(row.get(field)) for field in ("up_limit", "down_limit"))
+    elif label == "benchmarks":
+        if not isinstance(row.get("provider_observed"), bool):
+            row["provider_observed"] = any(_finite(row.get(field)) for field in ("open", "close"))
+    return row
+
+
+def _validate_cache_row_state(label: str, row: dict) -> None:
+    if label == "stocks":
+        raw_observed = row.get("raw_provider_observed")
+        if not isinstance(raw_observed, bool):
+            raise ComparisonV2Error("invalid_cache_row_state")
+        raw_fields = ("open", "high", "low", "close", "vol")
+        if not raw_observed and any(_finite(row.get(field)) for field in raw_fields):
+            raise ComparisonV2Error("invalid_cache_row_state")
+        if raw_observed and not any(_finite(row.get(field)) for field in raw_fields):
+            raise ComparisonV2Error("invalid_cache_row_state")
+        if row.get("suspended") is not None and not isinstance(row.get("suspended"), bool):
+            raise ComparisonV2Error("invalid_cache_row_state")
+        if not raw_observed and row.get("suspended") is not None:
+            raise ComparisonV2Error("invalid_cache_row_state")
+        adj_observed = row.get("adj_factor_observed")
+        source = row.get("adj_factor_source")
+        factor = row.get("adj_factor")
+        if adj_observed is True and (not _finite(factor) or float(factor) <= 0.0 or source != "provider_observed"):
+            raise ComparisonV2Error("invalid_cache_row_state")
+        if adj_observed is not True and (factor is not None or source not in {"provider_missing", "provider_empty"}):
+            raise ComparisonV2Error("invalid_cache_row_state")
+        if row.get("corporate_action_verified") is not None and not isinstance(row.get("corporate_action_verified"), bool):
+            raise ComparisonV2Error("invalid_cache_row_state")
+        return
+    if label in {"limits", "benchmarks"}:
+        observed = row.get("provider_observed")
+        if not isinstance(observed, bool):
+            raise ComparisonV2Error("invalid_cache_row_state")
+        fields = ("up_limit", "down_limit") if label == "limits" else ("open", "close")
+        if not observed and any(_finite(row.get(field)) for field in fields):
+            raise ComparisonV2Error("invalid_cache_row_state")
+        if observed and not any(_finite(row.get(field)) for field in fields):
+            raise ComparisonV2Error("invalid_cache_row_state")
+
+
+def _merge_values(previous: dict, incoming: dict, fields: tuple[str, ...], label: str, key: tuple[str, str]) -> None:
+    for field in fields:
+        old_value, new_value = previous.get(field), incoming.get(field)
+        if old_value is not None and new_value is not None and old_value != new_value:
+            raise ComparisonV2Error(f"shared {label} has conflicting_duplicate_key {key[0]} {key[1]}")
+
+
+def _row_family_complete(label: str, row: dict) -> bool:
+    if label == "stocks":
+        return row.get("raw_provider_observed") is True and _row_has_fields(
+            row, {"open", "high", "low", "close", "vol", "suspended"}
+        )
+    if label == "limits":
+        return row.get("provider_observed") is True and _row_has_fields(
+            row, {"up_limit", "down_limit"}
+        )
+    if label == "benchmarks":
+        return row.get("provider_observed") is True and _row_has_fields(
+            row, {"open", "close"}
+        )
+    raise ComparisonV2Error(f"unsupported shared cache label {label}")
+
+
 def _merge_partial_rows(existing: dict[tuple[str, str], dict], new_rows: list[dict], *, label: str) -> dict[tuple[str, str], dict]:
-    merged = {key: dict(value) for key, value in existing.items()}
-    incoming = _dedupe_rows(new_rows, key_names=("ts_code", "trade_date"), label=f"new {label}")
+    merged = {key: _normalise_merge_row(label, value) for key, value in existing.items()}
+    for value in merged.values():
+        _validate_cache_row_state(label, value)
+    incoming = {
+        key: _normalise_merge_row(label, value)
+        for key, value in _dedupe_rows(new_rows, key_names=("ts_code", "trade_date"), label=f"new {label}").items()
+    }
+    fields = {
+        "stocks": ("open", "high", "low", "close", "vol", "suspended", "adj_factor", "adj_factor_observed", "adj_factor_source", "corporate_action_verified"),
+        "limits": ("up_limit", "down_limit", "provider_observed"),
+        "benchmarks": ("open", "close", "provider_observed"),
+    }[label]
+    raw_fields = ("open", "high", "low", "close", "vol", "suspended")
     for key, row in incoming.items():
+        _validate_cache_row_state(label, row)
         previous = merged.get(key)
         if previous is None:
             merged[key] = row
             continue
         upgraded = dict(previous)
-        raw_was_missing = label == "stocks" and previous.get("close") is None
-        adj_was_missing = label == "stocks" and previous.get("adj_factor") is None
-        for field, value in row.items():
-            old_value = previous.get(field)
-            if field not in previous or old_value is None:
-                upgraded[field] = value
-            elif value is None or old_value == value:
-                continue
-            elif raw_was_missing and field in {"open", "high", "low", "close", "vol", "suspended"}:
-                upgraded[field] = value
-            elif adj_was_missing and field in {"adj_factor", "adj_factor_observed", "adj_factor_source"}:
-                upgraded[field] = value
-            else:
-                raise ComparisonV2Error(
-                    f"shared {label} has conflicting duplicate key {key[0]} {key[1]}"
-                )
+        if label == "stocks":
+            if not (_row_family_complete(label, previous) and not _row_family_complete(label, row)):
+                _merge_values(previous, row, raw_fields, label, key)
+                for field in raw_fields:
+                    if upgraded.get(field) is None and row.get(field) is not None:
+                        upgraded[field] = row[field]
+                upgraded["raw_provider_observed"] = previous["raw_provider_observed"] or row["raw_provider_observed"]
+            previous_adj_complete = previous.get("adj_factor_observed") is True
+            incoming_adj_complete = row.get("adj_factor_observed") is True
+            if not (previous_adj_complete and not incoming_adj_complete):
+                _merge_values(previous, row, ("adj_factor",), label, key)
+                if previous.get("adj_factor") is None and row.get("adj_factor") is not None:
+                    for field in ("adj_factor", "adj_factor_observed", "adj_factor_source"):
+                        upgraded[field] = row[field]
+                elif previous_adj_complete and incoming_adj_complete and (
+                    previous.get("adj_factor_observed") != row.get("adj_factor_observed") or
+                    previous.get("adj_factor_source") != row.get("adj_factor_source")
+                ):
+                    raise ComparisonV2Error(f"shared {label} has conflicting_duplicate_key {key[0]} {key[1]}")
+            # Verification is monotonic metadata: a later confirmed flag may
+            # upgrade an unverified row, but a weaker observation cannot
+            # downgrade an already verified row.
+            upgraded["corporate_action_verified"] = bool(
+                previous.get("corporate_action_verified") or row.get("corporate_action_verified")
+            )
+        else:
+            value_fields = fields[:-1]
+            if not (_row_family_complete(label, previous) and not _row_family_complete(label, row)):
+                _merge_values(previous, row, value_fields, label, key)
+                for field in value_fields:
+                    if upgraded.get(field) is None and row.get(field) is not None:
+                        upgraded[field] = row[field]
+                upgraded["provider_observed"] = previous["provider_observed"] or row["provider_observed"]
+        _validate_cache_row_state(label, upgraded)
         merged[key] = upgraded
     return merged
 
 
 def _row_has_fields(row: dict | None, fields: set[str]) -> bool:
-    return isinstance(row, dict) and fields.issubset(row)
+    if not isinstance(row, dict) or not fields.issubset(row):
+        return False
+    return all(row.get(field) is not None for field in fields)
+
+
+def _confirmed_empty(label: str, row: dict | None) -> bool:
+    # Shared daily-cache empty rows are deliberately retryable.  The V1
+    # contract only permits stable empty results for endpoints whose business
+    # contract explicitly says that an empty response is a complete result;
+    # raw prices, limits, and benchmark endpoints do not have that contract.
+    return False
+
+
+def _raw_fetch_required(row: dict | None, fields: set[str]) -> bool:
+    return not _confirmed_empty("stocks", row) and not (
+        isinstance(row, dict) and row.get("raw_provider_observed") is True and _row_has_fields(row, fields)
+    )
+
+
+def _adj_fetch_required(row: dict | None) -> bool:
+    if not isinstance(row, dict):
+        return True
+    return not (row.get("adj_factor_observed") is True and _finite(row.get("adj_factor")) and
+                float(row["adj_factor"]) > 0.0 and row.get("adj_factor_source") == "provider_observed")
+
+
+def _limit_fetch_required(row: dict | None, fields: set[str]) -> bool:
+    return not _confirmed_empty("limits", row) and not (
+        isinstance(row, dict) and row.get("provider_observed") is True and _row_has_fields(row, fields)
+    )
+
+
+def _benchmark_fetch_required(row: dict | None) -> bool:
+    return not _confirmed_empty("benchmarks", row) and not (
+        isinstance(row, dict) and row.get("provider_observed") is True and
+        _row_has_fields(row, {"open", "close"})
+    )
 
 
 def _missing_symbols(
@@ -642,8 +870,10 @@ def _missing_symbols(
         if execution_required:
             stock_fields.update({"high", "low", "vol", "suspended"})
             limit_fields.add("down_limit")
-        if any(not _row_has_fields(stocks.get((symbol, day)), stock_fields) or
-               not _row_has_fields(limits.get((symbol, day)), limit_fields) for day in dates):
+        if any(_raw_fetch_required(stocks.get((symbol, day)), {"open", "close"} | (
+                    {"high", "low", "vol", "suspended"} if execution_required else set()
+                )) or _adj_fetch_required(stocks.get((symbol, day))) or
+               _limit_fetch_required(limits.get((symbol, day)), limit_fields) for day in dates):
             missing.add(symbol)
     return missing
 
@@ -681,7 +911,7 @@ def _execution_projection(
             "low": _adjusted(stock.get("low"), execution_adjustment),
             "close": _adjusted(stock.get("close"), execution_adjustment),
             "volume": volume,
-            "suspended": bool(stock.get("suspended", volume is None or volume <= 0.0)),
+            "suspended": stock.get("suspended"),
             "up_limit": _adjusted(limit.get("up_limit"), execution_adjustment),
             "down_limit": _adjusted(limit.get("down_limit"), execution_adjustment),
             "raw_close": _optional_number(stock.get("close")),
@@ -819,7 +1049,7 @@ def materialize_incremental_cache(
     p4_stock_deferred = bool(p4_symbols & set(deferred))
     benchmark_codes = ("000852.SH", "000300.SH")
     benchmark_missing = [code for code in benchmark_codes if any(
-        (code, day) not in existing_benchmarks or existing_benchmarks[(code, day)].get("provider_observed") is not True
+        _benchmark_fetch_required(existing_benchmarks.get((code, day)))
         for day in p4_needed_dates
     )]
     benchmark_calls = 0
@@ -838,7 +1068,7 @@ def materialize_incremental_cache(
     merged_benchmarks = _merge_partial_rows(existing_benchmarks, new_benchmarks, label="benchmarks")
     payload = {
         "schema_name": "a_short_factor_comparison_v2_daily_cache",
-        "schema_version": "1.1.0",
+        "schema_version": DAILY_CACHE_SCHEMA_VERSION,
         "stocks": [merged_stocks[key] for key in sorted(merged_stocks)],
         "limits": [merged_limits[key] for key in sorted(merged_limits)],
         "benchmarks": [merged_benchmarks[key] for key in sorted(merged_benchmarks)],

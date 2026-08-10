@@ -42,6 +42,19 @@ class EgsRule6ComputableWiringTests(unittest.TestCase):
     def setUpClass(cls):
         cls.egs = _load_egs_module()
 
+    def _margin_observation(self, frame, dates, *, status=None):
+        frame = frame.copy()
+        status = status or ("complete" if not frame.empty else "unavailable")
+        effective = dates[0] if not frame.empty else None
+        universe = (
+            int(frame["ts_code"].dropna().astype(str).nunique())
+            if "ts_code" in frame.columns else 0
+        )
+        return self.egs.MarginObservation(
+            frame, dates[0] if dates else None, effective, int(len(frame)),
+            universe, status == "complete", status,
+        )
+
     def test_api_inventory_and_full_source_bundle_emit_every_computable_check(self):
         em = self.egs
         self.assertTrue({"balancesheet", "block_trade"}.issubset(em.EGS_API_FAMILIES))
@@ -80,7 +93,8 @@ class EgsRule6ComputableWiringTests(unittest.TestCase):
         with patch.object(em, "get_rule6_balancesheets", return_value={code: balances}), \
              patch.object(em, "get_rule6_block_trades", return_value={date: [] for date in dates}):
             evaluations = em._collect_rule6_evaluations(
-                watch, daily, margin, dates, {"rule6_holder_events": []}, financial,
+                watch, daily, self._margin_observation(margin, dates), dates,
+                {"rule6_holder_events": []}, financial,
             )[code]
 
         self.assertEqual(set(evaluations), COMPUTABLE_IDS)
@@ -122,7 +136,8 @@ class EgsRule6ComputableWiringTests(unittest.TestCase):
              patch.object(em, "get_rule6_balancesheets", return_value={code: []}), \
              patch.object(em, "get_rule6_block_trades", return_value={d: [] for d in dates}):
             ev = em._collect_rule6_evaluations(
-                watch, daily, margin, dates, {"rule6_holder_events": []}, pd.DataFrame())[code]
+                watch, daily, self._margin_observation(margin, dates), dates,
+                {"rule6_holder_events": []}, pd.DataFrame())[code]
         self.assertEqual(ev["rule6_margin_extreme_accumulation"]["status"], "not_applicable")
         self.assertEqual(ev["rule6_short_selling_surge"]["status"], "not_applicable")
 
@@ -149,7 +164,8 @@ class EgsRule6ComputableWiringTests(unittest.TestCase):
                  patch.object(em, "get_rule6_balancesheets", return_value={code: []}), \
                  patch.object(em, "get_rule6_block_trades", return_value={d: [] for d in dates}):
                 ev = em._collect_rule6_evaluations(
-                    watch, daily, margin, dates, {"rule6_holder_events": []}, pd.DataFrame())[code]
+                    watch, daily, self._margin_observation(margin, dates, status="incomplete"), dates,
+                    {"rule6_holder_events": []}, pd.DataFrame())[code]
             self.assertEqual(ev["rule6_margin_extreme_accumulation"]["status"], "unknown")
             self.assertEqual(ev["rule6_short_selling_surge"]["status"], "unknown")
 
@@ -167,7 +183,8 @@ class EgsRule6ComputableWiringTests(unittest.TestCase):
         with patch.object(em, "get_rule6_balancesheets", return_value={code: []}), \
              patch.object(em, "get_rule6_block_trades", return_value={d: [] for d in dates}):
             ev = em._collect_rule6_evaluations(
-                watch, daily, pd.DataFrame(), dates, {"rule6_holder_events": []}, pd.DataFrame())[code]
+                watch, daily, self._margin_observation(pd.DataFrame(), dates), dates,
+                {"rule6_holder_events": []}, pd.DataFrame())[code]
         self.assertEqual(ev["rule6_margin_extreme_accumulation"]["status"], "unknown")
         self.assertEqual(ev["rule6_short_selling_surge"]["status"], "unknown")
 
@@ -195,7 +212,8 @@ class EgsRule6ComputableWiringTests(unittest.TestCase):
                  patch.object(em, "get_rule6_balancesheets", return_value={code: []}), \
                  patch.object(em, "get_rule6_block_trades", return_value={d: [] for d in dates}):
                 ev = em._collect_rule6_evaluations(
-                    watch, daily, margin, dates, {"rule6_holder_events": []}, pd.DataFrame())[code]
+                    watch, daily, self._margin_observation(margin, dates, status="incomplete"), dates,
+                    {"rule6_holder_events": []}, pd.DataFrame())[code]
             self.assertEqual(ev["rule6_margin_extreme_accumulation"]["status"], "unknown")
             self.assertEqual(ev["rule6_short_selling_surge"]["status"], "unknown")
 
@@ -222,7 +240,8 @@ class EgsRule6ComputableWiringTests(unittest.TestCase):
                  patch.object(em, "get_rule6_balancesheets", return_value={code: []}), \
                  patch.object(em, "get_rule6_block_trades", return_value={d: [] for d in dates}):
                 ev = em._collect_rule6_evaluations(
-                    watch, daily, margin, dates, {"rule6_holder_events": []}, pd.DataFrame())[code]
+                    watch, daily, self._margin_observation(margin, dates, status="incomplete"), dates,
+                    {"rule6_holder_events": []}, pd.DataFrame())[code]
             self.assertEqual(ev["rule6_margin_extreme_accumulation"]["status"], "unknown")
             self.assertEqual(ev["rule6_short_selling_surge"]["status"], "unknown")
 

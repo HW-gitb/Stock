@@ -5409,3 +5409,58 @@ effect contract 已用固定 Python 重新登记 A-EGS decision-predicate hash �
 - §6a 未起 agent；真实周跑与 provider/live/account/ship-gate 仍全部 `NOT_VERIFIED`。
 
 **下一步**：`Codex：执行`
+
+## 2026-08-10 追加：桌面 V1 optional 共享缓存与 EGS 同类入口修复 —— OPEN-NOT_VERIFIED
+
+**判定**：按 `C:\Users\cnhea\Desktop\2a_testrun0810.md` 的 V1 方案完成当前工作树最小代码修复与离线回归；不是 reviewer PASS，也不是生产/发布关闭。未改主树、未手工改真实 state、未启动 provider/live/full lane、未提交。
+
+**问题与根因**
+
+- 共享 `daily_cache.json` 以键存在、非空总表或请求动作当作完成，导致全空占位、部分字段、旧日期回退和 `None` 被永久命中；未观测股票还可能把 `suspended` 写成 `true`。真实数据到达后不能升级，factor/overlay/margin 等消费者还会把可补缺口冻结为 `no_count`。
+- EGS 的 calendar、L/D/P、SW 目标板、CSI300、daily_basic、suspend、financial、moneyflow、Rule6、unlock、holder 入口存在同类“部分响应/失败/合法空结果”混淆。
+
+**代码改动与五段链**
+
+- 共享事实层：`runners/a_short_factor_comparison_v2_cache_build.py` 按 stocks raw、adj、limits、benchmarks 分别判断完整性；加入必要观测标志、1.2.0 最小 schema 升级、旧版内存兼容、占位→真实升级、完整→更少保留、完整冲突/标志矛盾 fail-closed。`rows` 仍由 stocks/limits 派生，不新增缓存状态机、SHA 或迁移脚本。
+- 直接消费者：factor v2/overlay 对 raw/adj/limits/benchmark 缺口保持 `pending`；margin digest 仅覆盖实际 candidate/date/field slice；crash 只计真实 daily/adj 覆盖；forward 要求日期、adj、limits、benchmark 且不再用 `adj=1.0`；execution cache 只有 provider success 且 adj/limits 齐全才复用，`source_flags` 不声明未观察族。
+- EGS 主链保持 `A-EGS/egs_main.py::main → get_* → market/filter/score/data-health → analysis_input.json/snapshot.json/candidates.csv`；各点名函数沿用原 cache shape，只改变完整性判断、重试与写盘前校验。P2/P3/P5/official/overlay 通过 shared builder 的同一路径读取，不建立旁路缓存。
+- Schema/source-binding/write boundary：daily cache schema 1.2.0；共享 outcome 1.1.0 接线保持；run/date/candidate/实际消费切片 source binding 保持；现有原子写盘边界保持，冲突/部分/失败不覆盖完整旧文件。既有研究产物 dirty 状态未由本刀改动。
+
+**测试与原始终态（固定 Python）**
+
+- `C:\Users\cnhea\AppData\Local\Programs\Python\Python313\python.exe` 存在，版本 Python 3.13.8。
+- 桌面 V1 点名命令（fake provider、临时目录、offline）原始终态：`V1_FOCUSED testsRun=287 failures=0 errors=0 skipped=0`，`Ran 287 tests ... OK`。
+- optional/health/effect 精确命令原始终态：`OPTIONAL_FOCUSED testsRun=112 failures=0 errors=0 skipped=0`，`Ran 112 tests ... OK`。
+- 9 个生产文件的精确固定-Python 命令：`Set-Location -LiteralPath 'D:\cnhea\Codex\worktrees\40d9\Stock'; & 'C:\Users\cnhea\AppData\Local\Programs\Python\Python313\python.exe' -m py_compile A-EGS/egs_main.py engine/a_short_factor_comparison_v2.py engine/a_short_margin_overheat_cash_control.py engine/a_short_overlay_adjudication.py runners/a_short_crash_veto_tracker.py runners/a_short_factor_comparison_v2_cache_build.py runners/a_short_weekly_sidecar_health.py runners/backtest_rank.py runners/materialize_execution_price_data_tushare.py`；原始终态：`PY_COMPILE_9 OK`。共享缓存负向矩阵（升级、不降级、幂等、冲突、状态矛盾）、`static_contract_error=None`、`git diff --check` exit 0。测试没有访问真实 provider，也没有写真实 state。
+
+**负向控制、自审与边界**
+
+- 空/部分返回仍进入缺失集合；完整数据不会被空值冲掉；不同完整值不选任意一条；未观测 `suspended` 保持 `null`；合法成功空结果（Rule6 block trades、unlock、holder）不被改成无限重试。
+- 检查了 V1 点名的 direct consumer、schema、source-binding、原子写盘和同一 shared-cache P2/P3/P5/official/overlay 读取；没有用手工“修好缓存”绕过 builder。
+- `NOT_VERIFIED`：真实 provider/normal weekly/full lane、durable 两轮、forward/freeze/clock、account、ship-gate。当前 Git 仍 dirty，Codex executor/fixer 不 stage/commit；待 Claude Code 独立复审后才进入 reviewer/committer 边界。
+
+**下一步**：`Claude Code：按桌面 V1 五段链独立复审；PASS 后提交`
+
+## 2026-08-10 追加：桌面 V1（共享缓存占位升级）独立审查 —— PASS（已合入 master）
+
+**判定**：PASS，无 Required。
+
+**我自己实际验了什么**
+
+- **用桌面那条真实键取证**：`000852.SH / 20260810` 的 benchmark 占位行 + 真实行情 → 现在合并成功，桌面报的 `conflicting duplicate key` 不再发生。
+- **反向三格防修过头**：两份都已观测且不同仍抛冲突；后来的占位行不会抹掉已有真值；同样三格在更宽的 `stocks` 族重做一遍，结论一致。
+- **追了我最担心的那条链**：`suspended` 从布尔改成三态后，`managed_exit` 那边 `bool(x, False)` 会把 None 当「未停牌」。实测发现真实链路走不到——未观测行的 OHLC 全是 None，消费者先在 `_finite_price` 抛 `non_finite_price`。fail-closed 保持。
+- **schema 双版本的连带面逐个核**：daily cache 升 1.2.0 且 overlay 消费者已放宽；outcome 升 1.1.0 且 launcher 的 pin 同刀改。
+- **独立重算 effect contract**：`static_contract_error=None`。
+
+**植入对照（我自写）**
+
+- 中和 `_merge_values` 的冲突 `raise` → 点名用例精确转红（`ComparisonV2Error not raised`）；还原后源文件 sha256 逐字节回原值。打的是门本身。
+
+**未覆盖维度与诚实边界**
+
+- 首轮超集漏了 `backtest_rank` 与 `crash_veto_tracker` 的点名模块（两者本刀都有改动），已在提交门那次补跑。
+- 真实 provider 数据上的占位→升级仍未发生，等下一轮已授权 weekly。
+- `A-EGS/egs_main.py` 的 +153/-32 只读了 diff + 跑既有 rule6 接线用例，未对选股面做独立重算。
+
+**下一步**：`Codex：执行`

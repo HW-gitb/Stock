@@ -8,7 +8,7 @@
   "required": ["schema_name", "schema_version", "stocks", "limits", "meta"],
   "properties": {
     "schema_name": {"const": "a_short_factor_comparison_v2_daily_cache"},
-    "schema_version": {"enum": ["1.0.0", "1.1.0"]},
+    "schema_version": {"enum": ["1.0.0", "1.1.0", "1.2.0"]},
     "stocks": {
       "type": "array",
       "items": {
@@ -23,7 +23,8 @@
           "low": {"type": ["number", "null"]},
           "close": {"type": ["number", "null"]},
           "vol": {"type": ["number", "null"]},
-          "suspended": {"type": "boolean"},
+          "suspended": {"type": ["boolean", "null"]},
+          "raw_provider_observed": {"type": "boolean"},
           "adj_factor": {"type": ["number", "null"]},
           "adj_factor_observed": {"type": ["boolean", "null"]},
           "adj_factor_source": {"type": ["string", "null"]},
@@ -41,7 +42,8 @@
           "ts_code": {"type": "string", "minLength": 1},
           "trade_date": {"type": "string", "pattern": "^[0-9]{8}$"},
           "up_limit": {"type": ["number", "null"]},
-          "down_limit": {"type": ["number", "null"]}
+          "down_limit": {"type": ["number", "null"]},
+          "provider_observed": {"type": "boolean"}
         }
       }
     },
@@ -65,7 +67,7 @@
           "low": {"type": ["number", "null"]},
           "close": {"type": ["number", "null"]},
           "volume": {"type": ["number", "null"]},
-          "suspended": {"type": "boolean"},
+          "suspended": {"type": ["boolean", "null"]},
           "up_limit": {"type": ["number", "null"]},
           "down_limit": {"type": ["number", "null"]},
           "raw_close": {"type": ["number", "null"]},
@@ -104,6 +106,17 @@
         "properties": {
           "stocks": {"items": {"required": ["high", "low", "vol", "suspended"]}},
           "limits": {"items": {"required": ["down_limit"]}},
+          "meta": {"required": ["writer", "last_run_date", "consumers", "provider_call_ceiling", "deferred_due_to_budget"]}
+        }
+      }
+    },
+    {
+      "if": {"properties": {"schema_version": {"const": "1.2.0"}}},
+      "then": {
+        "required": ["rows"],
+        "properties": {
+          "stocks": {"items": {"required": ["high", "low", "vol", "suspended", "raw_provider_observed"]}},
+          "limits": {"items": {"required": ["down_limit", "provider_observed"]}},
           "meta": {"required": ["writer", "last_run_date", "consumers", "provider_call_ceiling", "deferred_due_to_budget"]}
         }
       }

@@ -567,7 +567,7 @@ def _validate_shared_daily_cache(payload: dict, as_of: str) -> None:
     except jsonschema.ValidationError as exc:
         raise OverlayAdjudicationError("P4a shared daily cache violates its frozen schema") from exc
     meta = payload.get("meta") or {}
-    if payload.get("schema_version") != "1.1.0" or meta.get("cache_kind") != "a_short_shared_incremental" or \
+    if payload.get("schema_version") not in {"1.1.0", "1.2.0"} or meta.get("cache_kind") != "a_short_shared_incremental" or \
             meta.get("writer") != "runners/a_short_factor_comparison_v2_cache_build.py" or \
             meta.get("last_run_date") != as_of or "p4_overlay_adjudication" not in (meta.get("consumers") or []) or \
             not isinstance(meta.get("provider_call_ceiling"), int) or meta["provider_call_ceiling"] > 91:
@@ -593,7 +593,16 @@ def _cache_frames(payload: dict) -> tuple[dict, dict, dict, list[str]]:
             key = (str(row["ts_code"]), _date(row["trade_date"], "cache trade_date"))
             if key in out and out[key] != row:
                 raise OverlayAdjudicationError(f"P4a cache {label} has conflicting row")
-            out[key] = row
+            clean = dict(row)
+            if label == "stocks" and "raw_provider_observed" not in clean:
+                clean["raw_provider_observed"] = all(
+                    _finite(clean.get(field)) for field in ("open", "close")
+                )
+            if label == "limits" and "provider_observed" not in clean:
+                clean["provider_observed"] = any(
+                    _finite(clean.get(field)) for field in ("up_limit", "down_limit")
+                )
+            out[key] = clean
         return out
     stocks = index(payload["stocks"], ("ts_code", "trade_date"), "stocks")
     limits = index(payload["limits"], ("ts_code", "trade_date"), "limits")
@@ -602,7 +611,7 @@ def _cache_frames(payload: dict) -> tuple[dict, dict, dict, list[str]]:
 
 
 def _qfq(row: dict, field: str) -> float | None:
-    if row.get("adj_factor_observed") is not True or row.get("adj_factor_source") != "provider_observed" or not _finite(row.get("adj_factor")) or float(row["adj_factor"]) <= 0 or not _finite(row.get(field)):
+    if row.get("raw_provider_observed") is not True or row.get("adj_factor_observed") is not True or row.get("adj_factor_source") != "provider_observed" or not _finite(row.get("adj_factor")) or float(row["adj_factor"]) <= 0 or not _finite(row.get(field)):
         return None
     return float(row[field]) * float(row["adj_factor"])
 
@@ -615,10 +624,12 @@ def _arm_return(selected: list[dict], decision_date: str, horizon: int, dates: l
     for member in selected:
         code = member["ts_code"]; entry = stocks.get((code, entry_date)); exit_row = stocks.get((code, exit_date)); limit = limits.get((code, entry_date))
         if entry is None or exit_row is None or limit is None:
-            return {"status": "no_count", "reason": "missing_required_cache_row"}
+            return {"status": "pending", "reason": "missing_required_cache_row"}
         entry_qfq, exit_qfq = _qfq(entry, "open"), _qfq(exit_row, "close")
         if entry_qfq is None or exit_qfq is None or not _finite(limit.get("up_limit")):
-            return {"status": "no_count", "reason": "qfq_adjustment_or_limit_unverified"}
+            return {"status": "pending", "reason": "qfq_adjustment_or_limit_unverified"}
+        if entry.get("suspended") is None:
+            return {"status": "pending", "reason": "suspension_state_unobserved"}
         unfilled = bool(entry.get("suspended")) or float(entry["open"]) >= float(limit["up_limit"]) * 0.999
         net = 0.0 if unfilled else (exit_qfq / entry_qfq - 1.0) * 100.0 - ROUND_TRIP_COST_PCT
         positions.append({"ts_code": code, "entry_status": "cash" if unfilled else "filled", "net_return_pct": net})
@@ -634,7 +645,7 @@ def _arm_return(selected: list[dict], decision_date: str, horizon: int, dates: l
             row = stocks.get((member["ts_code"], date)); close = _qfq(row, "close") if row else None
             entry = _qfq(stocks[(member["ts_code"], entry_date)], "open")
             if close is None or entry is None:
-                return {"status": "no_count", "reason": "missing_daily_nav_price"}
+                return {"status": "pending", "reason": "missing_daily_nav_price"}
             value += (close / entry - 1.0) * 100.0 / TOP_K
         daily_nav.append(value)
     peak = 0.0; drawdown = 0.0
@@ -650,8 +661,10 @@ def _benchmark_return(code: str, decision_date: str, horizon: int, dates: list[s
         return {"status": "pending"}
     entry_date, exit_date = dates[date_pos[decision_date] + 1], dates[date_pos[decision_date] + horizon]
     entry, exit_row = benchmarks.get((code, entry_date)), benchmarks.get((code, exit_date))
-    if entry is None or exit_row is None or entry.get("provider_observed") is not True or exit_row.get("provider_observed") is not True or not _finite(entry.get("open")) or not _finite(exit_row.get("close")) or float(entry["open"]) <= 0:
-        return {"status": "no_count", "reason": "benchmark_provider_observed_price_missing"}
+    if entry is None or exit_row is None or entry.get("provider_observed") is not True or exit_row.get("provider_observed") is not True:
+        return {"status": "pending", "reason": "benchmark_provider_observed_price_missing"}
+    if not _finite(entry.get("open")) or not _finite(exit_row.get("close")) or float(entry["open"]) <= 0:
+        return {"status": "no_count", "reason": "benchmark_confirmed_empty"}
     return {"status": "settled", "net_return_pct": (float(exit_row["close"]) / float(entry["open"]) - 1.0) * 100.0}
 
 

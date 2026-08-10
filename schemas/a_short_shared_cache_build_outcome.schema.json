@@ -17,7 +17,7 @@
       "const": "a_short_shared_cache_build_outcome"
     },
     "schema_version": {
-      "const": "1.0.0"
+      "const": "1.1.0"
     },
     "run_date": {
       "type": "string",

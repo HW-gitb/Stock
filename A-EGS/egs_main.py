@@ -2786,6 +2786,16 @@ def _normalise_trade_calendar_rows(raw, *, decision_as_of: str, end_date: str) -
                 raise RuntimeError(f"official forward trade calendar has invalid is_open for {text}")
         normalized.append({"cal_date": text, "is_open": open_flag})
     normalized.sort(key=lambda row: row["cal_date"])
+    expected_dates = {
+        (anchor_dt + timedelta(days=offset)).strftime("%Y%m%d")
+        for offset in range((end_dt - anchor_dt).days + 1)
+    }
+    if set(seen) != expected_dates:
+        missing = sorted(expected_dates - set(seen))
+        raise RuntimeError(
+            "official forward trade calendar coverage incomplete; "
+            f"missing {missing[:5]}" + ("..." if len(missing) > 5 else "")
+        )
     if not normalized or not any(
         row["cal_date"] == str(decision_as_of) and row["is_open"] == 1
         for row in normalized
@@ -2936,13 +2946,28 @@ def get_stock_list():
     log.info("拉取股票基础信息(L+D+P,按as_of过滤)...")
     fields = "ts_code,symbol,name,list_date,delist_date,market,list_status"
     frames = []
+    failed_statuses = []
+    successful_statuses = []
     for status in ("L", "D", "P"):
-        part = safe_api(pro.stock_basic, exchange="", list_status=status, fields=fields)
+        call_errors = []
+        part = safe_api(
+            pro.stock_basic, exchange="", list_status=status, fields=fields,
+            errors=call_errors,
+        )
+        if call_errors:
+            failed_statuses.append(status)
+            continue
+        successful_statuses.append(status)
         if part is not None and not part.empty:
             frames.append(part)
-    if not frames:
-        raise RuntimeError("股票总表获取失败")
-    df = pd.concat(frames, ignore_index=True)
+    if failed_statuses:
+        raise RuntimeError(
+            "stock_basic coverage incomplete; failed list_status calls: "
+            + ",".join(failed_statuses)
+        )
+    if len(successful_statuses) != 3:
+        raise RuntimeError("stock_basic coverage incomplete")
+    df = pd.concat(frames, ignore_index=True) if frames else pd.DataFrame(columns=fields.split(","))
     required_columns = {"ts_code", "name", "list_date", "delist_date", "list_status"}
     missing_columns = sorted(required_columns - set(df.columns))
     if missing_columns:
@@ -3079,9 +3104,19 @@ def get_sw_industry_map():
     # parent mapping because Tushare L2 parent_code points to L1 industry_code,
     # not index_code. v6 invalidates both broken cache generations.
     key = f"sw_industry_map_v6_{TODAY}"
+    target_codes = None
+    if callable(getattr(pro, "stock_basic", None)):
+        target_frame = get_stock_list()
+        if not isinstance(target_frame, pd.DataFrame) or "ts_code" not in target_frame.columns:
+            raise RuntimeError("SW industry target-board universe is unavailable")
+        target_codes = {
+            str(code) for code in target_frame["ts_code"].dropna().astype(str)
+            if is_a_share_main_board(code)
+        }
     cached = load_cache(key)
     if cached is not None:
-        if _sw_mapping_is_usable(cached):
+        missing_target = sorted(target_codes - set(cached)) if target_codes is not None else []
+        if _sw_mapping_is_usable(cached) and not missing_target:
             _record_sw_industry_source_observation(
                 status="pass",
                 source="cache",
@@ -3253,6 +3288,22 @@ def get_sw_industry_map():
             "l2_name": l2_row["industry_name"], "l2_code": l2_code,
             "l1_name": l1_name, "l1_code": raw_parent,
         }
+    missing_target = sorted(target_codes - set(mapping)) if target_codes is not None else []
+    if missing_target:
+        _record_sw_industry_source_observation(
+            status="fail",
+            source=member_source,
+            as_of=TODAY,
+            active_count=int(len(mapping)),
+            request_group_count=request_group_count,
+            fast_path_used=member_source == "index_member_all_l1_current",
+            fallback_used=member_source == "index_member_l2_history",
+            message=f"target_board_missing:{missing_target[:10]}",
+        )
+        raise RuntimeError(
+            "SW industry map target-board coverage incomplete: "
+            + ",".join(missing_target[:10])
+        )
     if not _sw_mapping_is_usable(mapping):
         raise RuntimeError(
             f"SW industry map coverage too low after mapping: {len(mapping)} stocks; aborting to avoid invalid Tier1 output"
@@ -3273,16 +3324,35 @@ def get_sw_industry_map():
     return mapping
 
 def get_csi300_return(trade_dates):
-    key = f"csi300_{trade_dates[0]}"
-    if (cached := load_cache(key)) is not None: return cached
-    start = trade_dates[-1] if len(trade_dates) >= 20 else dstr(35)
-    df = safe_api(pro.index_daily, ts_code="000300.SH", start_date=start, end_date=trade_dates[0],
-                  fields="trade_date,close")
-    if df is None or len(df) < 2:
+    dates = [str(value) for value in list(trade_dates)]
+    if len(dates) < 2 or any(not re.fullmatch(r"\d{8}", value) for value in dates):
+        return None
+    end_date = dates[0]
+    start_date = dates[19] if len(dates) >= 20 else dates[-1]
+    if start_date > end_date:
+        start_date, end_date = end_date, start_date
+    key = f"csi300_000300.SH_{start_date}_{end_date}_v2"
+    cached = load_cache(key)
+    if isinstance(cached, (int, float, np.number)) and not isinstance(cached, bool) and np.isfinite(float(cached)):
+        return float(cached)
+    df = safe_api(
+        pro.index_daily, ts_code="000300.SH", start_date=start_date,
+        end_date=end_date, fields="ts_code,trade_date,open,close",
+    )
+    if df is None or len(df) < 2 or not {"trade_date", "close"}.issubset(df.columns):
         log.warning("沪深300获取失败，L1基准将使用市场中位数")
         return None
-    df  = df.sort_values("trade_date", ascending=False).reset_index(drop=True)
-    ret = (float(df.iloc[0]["close"]) / float(df.iloc[-1]["close"]) - 1) * 100
+    df = df.copy()
+    df["trade_date"] = df["trade_date"].astype(str)
+    df["close"] = pd.to_numeric(df["close"], errors="coerce")
+    df = df[df["trade_date"].isin({start_date, end_date})].dropna(subset=["close"])
+    if set(df["trade_date"]) != {start_date, end_date}:
+        log.warning("娌繁300 endpoint omitted one of the requested anchor dates")
+        return None
+    closes = df.drop_duplicates("trade_date").set_index("trade_date")["close"]
+    if any(float(closes[date]) <= 0 for date in (start_date, end_date)):
+        return None
+    ret = (float(closes[end_date]) / float(closes[start_date]) - 1) * 100
     save_cache(key, ret)
     return ret
 
@@ -3541,10 +3611,17 @@ def get_daily_basic(trade_date, fallback_dates=None):
     """
     requested_trade_date = trade_date
     key = f"daily_basic_{trade_date}_source_v2"
+    target_codes = None
+    if callable(getattr(pro, "stock_basic", None)):
+        target_frame = get_stock_list()
+        if isinstance(target_frame, pd.DataFrame) and "ts_code" in target_frame.columns:
+            target_codes = set(target_frame["ts_code"].dropna().astype(str))
     if (cached := load_cache(key)) is not None:
         if "source_trade_date" not in cached.columns:
             raise RuntimeError("daily_basic cache lacks source_trade_date provenance")
-        return cached
+        cached_codes = set(cached["ts_code"].dropna().astype(str)) if "ts_code" in cached.columns else set()
+        if target_codes is None or target_codes.issubset(cached_codes):
+            return cached
 
     df = safe_api(pro.daily_basic, trade_date=trade_date,
                   fields="ts_code,close,pe,pe_ttm,pb,roe,turnover_rate,total_mv,circ_mv")
@@ -3559,7 +3636,7 @@ def get_daily_basic(trade_date, fallback_dates=None):
                 key = f"daily_basic_{trade_date}_source_v2"
                 break
 
-    if df is None or len(df) == 0:
+    if df is None or len(df) == 0 or "ts_code" not in df.columns:
         raise RuntimeError(
             f"daily_basic source unavailable for {requested_trade_date}; "
             "refusing quote/unlock inference without an observed market date"
@@ -3568,6 +3645,14 @@ def get_daily_basic(trade_date, fallback_dates=None):
     for col in ["close","pe","pe_ttm","pb","roe","turnover_rate","total_mv","circ_mv"]:
         if col in df.columns: df[col] = pd.to_numeric(df[col], errors="coerce")
     df = df.copy()
+    if target_codes is not None:
+        observed_codes = set(df["ts_code"].dropna().astype(str))
+        missing_target = sorted(target_codes - observed_codes)
+        if missing_target:
+            raise RuntimeError(
+                f"daily_basic target coverage incomplete for {requested_trade_date}: "
+                + ",".join(missing_target[:10])
+            )
     df["source_trade_date"] = trade_date
     save_cache(key, df)
     return df
@@ -3630,13 +3715,32 @@ def get_suspend_info(trade_dates):
         if not isinstance(cached, dict) or cached.get("status") not in {"known_clear", "known_hit"}:
             raise RuntimeError("suspend cache lacks tri-state provenance")
         members = set(cached.get("members") or [])
+        observed_at = str(cached.get("observed_at") or "")
+        target_date = str(trade_dates[0])
+        if observed_at != target_date:
+            all_codes = set(get_stock_list()["ts_code"].dropna().astype(str))
+            target_daily = safe_api(pro.daily, trade_date=target_date, fields="ts_code")
+            try:
+                target_traded = _validated_suspend_traded_codes(
+                    target_daily, all_codes, target_date, as_of=target_date,
+                    attempted_trade_dates=[target_date],
+                )
+            except RuntimeError as exc:
+                log.warning("suspend target refresh rejected; preserving prior observed cache: %s", exc)
+                target_traded = None
+            if target_traded is not None:
+                members = all_codes - target_traded
+                status = "known_hit" if members else "known_clear"
+                cached = {"status": status, "observed_at": target_date, "members": sorted(members)}
+                save_cache(key, cached)
+                observed_at = target_date
         _record_hard_veto_source(
-            "suspension", cached["status"], cached.get("observed_at"),
+            "suspension", cached["status"], observed_at,
             source="local_cache", hit_count=len(members),
         )
         _record_suspend_daily_coverage_observation(
             as_of=trade_dates[0],
-            trade_date=cached.get("observed_at"),
+            trade_date=observed_at,
             status="cache_hit_coverage_not_observed",
             suspended_count=len(members),
             attempted_trade_dates=trade_dates[:3],
@@ -3759,6 +3863,14 @@ def get_financial_data(ts_codes):
             retries=2,
         )
         if fi is not None:
+            if "ts_code" not in fi.columns:
+                return None
+            observed = set(fi["ts_code"].dropna().astype(str))
+            missing_codes = [code for code in chunk if code not in observed]
+            if missing_codes and set(missing_codes) != set(chunk):
+                retry = _fetch_fina_indicator(missing_codes, q)
+                if retry is not None and not retry.empty:
+                    return pd.concat([fi, retry], ignore_index=True)
             return fi
         min_chunk = int(CONF.get("financial_min_chunk", 10))
         if len(chunk) <= min_chunk:
@@ -4439,6 +4551,8 @@ def _validate_financial_observation(observation, as_of, codes, quarters, semanti
         return False, "frame code contract mismatch"
     if set(frame_codes) - set(requested_codes):
         return False, "frame contains foreign codes"
+    if set(frame_codes) != set(requested_codes):
+        return False, "frame coverage incomplete"
     if set(FINANCIAL_CACHE_REQUIRED_COLUMNS) - set(observation.frame.columns):
         return False, "frame output columns mismatch"
     if observation.frame_code_count != len(frame_codes):
@@ -4630,12 +4744,13 @@ def get_rule6_balancesheets(ts_codes):
     if not codes:
         return {}
     key = f"rule6_balancesheet_{TODAY}_{_rule6_cache_suffix(codes)}"
-    if (cached := load_cache(key)) is not None:
-        return cached
+    cached = load_cache(key)
     fields = "ts_code,ann_date,end_date,money_cap,st_borr,total_assets,accounts_receiv,contract_liab"
-    result = {}
+    result = dict(cached) if isinstance(cached, dict) else {}
     endpoint = getattr(pro, "balancesheet", None)
     for code in tqdm(codes, desc="Rule6资产负债表"):
+        if result.get(code) is not None:
+            continue
         df = _rule6_fetch_dataframe(endpoint, ts_code=code, report_type="1", fields=fields)
         required = {"ts_code", "ann_date", "end_date", "money_cap", "st_borr", "total_assets",
                     "accounts_receiv", "contract_liab"}
@@ -4679,12 +4794,13 @@ def get_rule6_block_trades(trade_dates):
     if len(window) != 10:
         return {day: None for day in window}
     key = f"rule6_block_trade_{window[0]}_{window[-1]}"
-    if (cached := load_cache(key)) is not None:
-        return cached
+    cached = load_cache(key)
     endpoint = getattr(pro, "block_trade", None)
-    result = {}
+    result = dict(cached) if isinstance(cached, dict) else {}
     required = {"ts_code", "trade_date", "price", "vol"}
     for trade_date in tqdm(window, desc="Rule6大宗交易"):
+        if result.get(trade_date) is not None:
+            continue
         df = _rule6_fetch_dataframe(endpoint, trade_date=trade_date,
                                     fields="trade_date,ts_code,price,vol,amount")
         if df is None or not required.issubset(set(df.columns)):
@@ -5024,11 +5140,13 @@ def get_unlock_future(stock_list, daily_basic_df):
     _LAST_UNLOCK_DETAILS = details
     source_status = "known_hit" if blocked else "known_clear"
     payload = {"status": source_status, "observed_at": TODAY, "members": sorted(blocked), "details": details}
+    effective_source_status = "unknown" if unknown_denominator else source_status
     _record_hard_veto_source(
-        "unlock", source_status, TODAY, source="tushare.share_float",
+        "unlock", effective_source_status, TODAY, source="tushare.share_float",
         hit_count=len(large), unknown_denominator_count=len(unknown_denominator),
     )
-    save_cache(key, payload)
+    if not unknown_denominator:
+        save_cache(key, payload)
     return blocked
 # ─────────────────────────────────────────────────────────────────────────────
 
@@ -5078,7 +5196,8 @@ def get_holder_reductions():
     # 已被上面第一段(as_of-30 ≤ ann_date ≤ as_of)纳入 v10,故移除后**实盘行为不变、仅消除历史污染**。
     # 已公告且执行在未来的减持计划由第一段按 ann_date 捕获(ann_date≤as_of);未来才公告的不属 PIT 可知。
     rule6_events = None
-    if "after_ratio" in df.columns:
+    after_ratio_complete = "after_ratio" in df.columns and not df["after_ratio"].isna().any()
+    if after_ratio_complete:
         rule6_events = [
             {"ts_code": str(row["ts_code"]), "ann_date": str(row["ann_date"]),
              "in_de": str(row["in_de"]), "after_ratio": _json_float(row["after_ratio"])}
@@ -5086,15 +5205,17 @@ def get_holder_reductions():
         ]
     result = {"veto_10d": v10, "deduct_30d": v30, "rule6_holder_events": rule6_events}
     source_status = "known_hit" if (v10 or v30) else "known_clear"
+    effective_source_status = source_status if after_ratio_complete else "unknown"
     _record_hard_veto_source(
-        "holder_reduction", source_status, TODAY, source="tushare.stk_holdertrade",
+        "holder_reduction", effective_source_status, TODAY, source="tushare.stk_holdertrade",
         hit_count=len(v10 | v30),
     )
-    save_cache(key, {
-        "source_status": source_status, "observed_at": TODAY,
-        "veto_10d": sorted(v10), "deduct_30d": sorted(v30),
-        "rule6_holder_events": rule6_events,
-    })
+    if after_ratio_complete:
+        save_cache(key, {
+            "source_status": source_status, "observed_at": TODAY,
+            "veto_10d": sorted(v10), "deduct_30d": sorted(v30),
+            "rule6_holder_events": rule6_events,
+        })
     return result
 
 

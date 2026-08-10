@@ -281,7 +281,10 @@ def build_rows_for_symbol(
                 "up_limit": adjusted_optional_price(row.up_limit, adj_factor),
                 "down_limit": adjusted_optional_price(row.down_limit, adj_factor),
                 "volume": numeric_or_none(getattr(row, "vol", None)),
-                "source_flags": ["daily", "adj_factor", "stk_limit"],
+                "source_flags": ["daily", "adj_factor"] + (
+                    ["stk_limit"] if numeric_or_none(row.up_limit) is not None and
+                    numeric_or_none(row.down_limit) is not None else []
+                ),
             }
         )
     if missing_adj_dates:
@@ -391,6 +394,17 @@ def validate_payload_matches_request(
         raise ValueError(
             "cached execution_price_data rows must include each selected symbol "
             f"on --as-of {as_of}: " + ", ".join(missing_as_of)
+        )
+    incomplete = sorted({
+        f"{row.get('ts_code')}@{row.get('trade_date')}"
+        for row in rows
+        if isinstance(row, dict)
+        and not {"daily", "adj_factor", "stk_limit"}.issubset(set(row.get("source_flags") or []))
+    })
+    if incomplete:
+        raise ValueError(
+            "cached execution_price_data rows lack a complete provider family set on "
+            f"--as-of {as_of}: " + ", ".join(incomplete)
         )
 
 

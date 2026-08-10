@@ -447,7 +447,7 @@ class OverlayAdjudicationTests(unittest.TestCase):
             self.assertEqual(summary["eligible_policy_weeks"], 0)
             self.assertEqual(summary["no_count_weeks"], 1)
 
-    def test_missing_adjustment_is_no_count_and_p4_is_lowest_cache_priority(self) -> None:
+    def test_missing_adjustment_stays_pending_and_p4_is_lowest_cache_priority(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             root = self._capture(tmp)
             capture = json.loads((root / "weeks" / DECISION / "capture.json").read_text(encoding="utf-8"))
@@ -455,7 +455,7 @@ class OverlayAdjudicationTests(unittest.TestCase):
             with mock.patch("engine.a_short_overlay_adjudication._today", return_value="20260730"):
                 settle_from_daily_payload(root=root, daily_payload=_daily(codes, missing_adjustment=True), as_of="20260730")
             summary = build_public_summary(root=root, as_of="20260730")
-            self.assertEqual(summary["eligible_policy_weeks"], 0); self.assertEqual(summary["no_count_weeks"], 1)
+            self.assertEqual(summary["eligible_policy_weeks"], 0); self.assertEqual(summary["no_count_weeks"], 0)
             self.assertGreater(CONSUMER_PRIORITY["p4_overlay_adjudication"], CONSUMER_PRIORITY["official_operation_evidence"])
             self.assertGreater(CONSUMER_PRIORITY["p4_overlay_adjudication"], CONSUMER_PRIORITY["p5_industry_weight"])
 
