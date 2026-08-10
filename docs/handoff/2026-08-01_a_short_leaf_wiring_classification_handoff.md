@@ -1,5 +1,31 @@
 # A-short 371 叶重新分层交接
 
+## 2026-08-10 — Codex executor/fixer：桌面 V3-A + O18/O19 修复（OPEN-NOT_VERIFIED）
+
+### Purpose / problem / repair
+
+本轮按桌面 `2a_testrun0810.md` V3-A 执行，覆盖 7 个已确认 registered-sidecar 原因丢失点和 `SIDECAR_SPECS` 当前 21 项矩阵；V3-B（native/PowerShell stderr 与外层失败）、V3-C（未注册 advisory）和 V4 不在本刀。Claude 推荐的 Option 1 保持：删除 pipeline 重复 weekday 滞后门，生产者真实交易日历是唯一发布滞后权威。
+
+- O18：删除 `runners/a_short_weekly_pipeline.py` 孤儿模块级 `timedelta` 导入，函数内局部导入和行为不变。
+- O19：O17 前置校验仍位于任何授权价格 provider 之前；显式声明时钟走严格校验，legacy/manual 未声明时钟先校验结构，候选 bars 形成后用最终 observed `price_data_through` 严格重绑。
+- V3-A1：shared-cache builder 业务异常写既有 `status=failed/error_code/error_detail` receipt 并非零退出；launcher 先失效旧 receipt，区分 missing/invalid JSON/schema/wrong date/unknown status/producer failed，仅透传结构化字段；pipeline 闭世界映射 success/idempotent/pending/unavailable/conflict/unknown，industry/overlay conflict + settlement reason 不再丢失或伪造 advanced，dependent settlement 带 `blocked_by`，margin strict 入口保持 standalone fail-soft。
+- V3-A2：health 原样保留 upstream error fields；candidate-effect/IV authoritative validator 返回脱敏三元原因；当前 theme rejected cohort → `theme_cohort_rejected`；candidate 无 observed evidence → `candidate_effect_no_observed_evidence`；degraded/stalled/unavailable contract guard 要求稳定 code，合法 skip/pending 不受影响，不读 industry/overlay private root。
+
+### Call chain / consumers / schema / source-binding / write boundary
+
+`producer/receipt → a_short_weekly_pipeline.py 或 weekly_screening.ps1 outcome manifest → a_short_weekly_sidecar_health.py::_normalise_outcome/build_health → sidecar_health JSON/Markdown/receipt`。Shared cache 为 `builder → shared_cache_build.outcome.json → Read-SharedCacheBuildOutcome → Add-SidecarOutcome → health`；industry/overlay 为 `capture/settlement → sidecar_result.reason_codes → pipeline outcome → health`。仅 shared-cache 专属 schema 增加 failed 分支；pipeline/health/public M6.7 schema 版本不变。reason 绑定当前 `run_date/as_of`、最终 `price_data_through` 和当前 artifact/receipt，旧成功 receipt、其他周 rejected cohort、private payload 不可解释当前周；EGS/Top5/M6.7/账户/现金/provider/cache/order boundary 不变。
+
+### Negative controls / self-review / verification
+
+- 失败 receipt 写不出时只落 `process_failed/cache_outcome_*`，不继承旧成功；unknown status → `failed/unavailable + unexpected_sidecar_status`；detail 仅 `safe_exception_summary`、单行、≤512，状态不读 detail。
+- capture/settlement 分行，settlement 不覆盖 capture；dependent settlement 是 `skipped/not_applicable` + `capture_unavailable` + `blocked_by`；pending/not_due/not_configured 不误报 failed；health 不覆盖更具体 upstream reason。
+- Fixed Python `C:\Users\cnhea\AppData\Local\Programs\Python\Python313\python.exe`（3.13.8）。精确 V3-A pack → `Ran 740 tests in 64.773s / OK`；新增点名回归 → `Ran 8 tests in 4.104s / OK`；`static_contract_error()` → `None`；py_compile、PowerShell `Parser.ParseFile`、route/doc gates `Ran 66 tests / OK`、`git diff --check` 均 PASS。
+- `NOT_VERIFIED`：未 provider/live、真实 normal weekly、full lane、durable 两轮、ship-gate；未 stage/commit/push/merge；V3-B/V3-C/V4 未实现，当前等待 Claude Code 独立 review/committer。
+
+### Required / Optional / next
+
+O18/O19 已完成代码修复；V3-A 代码与离线契约完成但保持 `OPEN-NOT_VERIFIED`，没有新增 Required。Claude Code 是 reviewer/committer，Codex executor/fixer 不提交。下一步：`Claude Code：独立复审桌面 V3-A + O18/O19（7 缺口、21 项矩阵、health durable 链）`。
+
 ## 2026-08-10 - Codex executor/fixer: V2 Required + O16/O17 repair (OPEN-NOT_VERIFIED)
 
 ### Purpose / problem / repair
@@ -5346,3 +5372,27 @@ effect contract 已用固定 Python 重新登记 A-EGS decision-predicate hash �
 - `research/results/a_short/*` 的既往周跑产物不在本次提交范围。
 
 **下一步**：`Codex：执行`
+
+## 2026-08-10 追加：失败原因 durable 化 + sidecar 状态封闭世界 独立审查 —— PASS（已合入 master）
+
+**判定**：PASS，无 Required，三条 Optional（O20/O21/O22，正文只在 `docs/system_risk_register.md` 同日节）。
+
+**我自己实际验了什么**
+
+- **封闭世界映射的真实覆盖**：写探针用 AST 从五个真正被消费的产出函数里抽出实际返回的 status 字面量，逐个过 `_sidecar_result_fields`，`unexpected_sidecar_status` 命中数为 0。这比读 allow-list 有没有漏词可靠。
+- **放松腿的反向控制**：`enforce_price_clock` 默认为 True，且只有预检一处按 `clock_explicit` 传 False；我把三种坏时钟形状在严格模式与默认模式下各跑一遍，全部照旧 raise。
+- **`strict=True` 没有把非阻断沿革改硬**：三处调用整读，全部包在 try/except 并回落 unavailable；strict 只是把异常交回调用方以便记因。
+- **落盘边界**：两份既有 schema 都已声明 `error_detail` 的 512/无换行约束，与代码截断和脱敏器的空白折叠一致；共享缓存收据 schema 是闭世界且新字段双向受约束。
+- **独立重算 effect contract**：`static_contract_error=None`，10 个 predicate digest 零 mismatch。
+
+**植入对照（我自写）**
+
+- 把封闭世界回退改成 `("advanced", None, None)` → 点名用例精确转红；还原后 sha256 逐字节回原值。打的是门本身，不是判据来源。
+
+**未覆盖维度与诚实边界**
+
+- `weekly_screening.ps1` 的改动只有静态证据，没有 PowerShell 级单测；真实 launcher 行为要等下一轮真实周跑。
+- a_short full lane 连续第二刀没有本代码态的 ledger 绿；按 rule 4 归执行方，我不重跑，已在 register 记 `NOT_VERIFIED`。
+- §6a 未起 agent；真实周跑与 forward/freeze/clock、provider/live/account/ship-gate 仍全部 `NOT_VERIFIED`。
+
+**下一步**：`Codex：执行`（补一次 a_short 全量并记账；O20 建议改成记合成 code 继续出报告并补植入测试）

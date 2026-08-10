@@ -457,7 +457,8 @@ def capture_after_published_weekly(*, root: str | Path, decision_date: str, run_
                         "replay_sha256": _digest(record)}, "boundary": _boundary(),
         }
         _atomic_write(private_root / "conflicts" / f"{decision_date}.json", conflict)
-        return {"status": "conflict_recorded_no_count", "production_unchanged": True}
+        return {"status": "conflict_recorded_no_count", "reason_code": "immutable_capture_conflict",
+                "production_unchanged": True}
     _atomic_write(capture_path, record)
     _refresh_private_ledger(private_root)
     return {"status": "captured_live_canonical", "production_unchanged": True}
@@ -897,10 +898,39 @@ def _refresh_private_ledger(root: Path) -> None:
     _atomic_write(root / "ledger.json", ledger)
 
 
+def _settlement_reason_codes(*, root: str | Path | None, as_of: str) -> list[str]:
+    """Return only stable, de-identified reasons from the current settlement."""
+    if root is None:
+        return []
+    private_root = _private_root(root)
+    if not private_root.exists():
+        return []
+    cutoff = _date(as_of, "as_of")
+    codes: set[str] = set()
+    for capture in _current_admission_capture_records(private_root):
+        decision_date = capture["decision_date"]
+        if decision_date != cutoff:
+            continue
+        if (private_root / "conflicts" / f"{decision_date}.json").exists():
+            codes.add("immutable_capture_conflict")
+        _, outcome_path = _weekly_paths(private_root, decision_date)
+        if not outcome_path.exists():
+            continue
+        outcome = _load_json(outcome_path)
+        _validate_private_record(outcome)
+        for question in outcome["payload"].get("questions", []):
+            for horizon in (question.get("horizons") or {}).values():
+                if isinstance(horizon, dict) and horizon.get("status") == "no_count":
+                    reason = str(horizon.get("reason") or "no_count")
+                    codes.add("immutable_capture_conflict" if reason == "immutable_capture_conflict" else "no_count")
+    return sorted(codes)
+
+
 def settle_and_summarize_weekly(*, root: str | Path | None, daily_cache_path: str | Path | None,
                                 as_of: str, public_json_path: str | Path = DEFAULT_PUBLIC_JSON,
                                 public_markdown_path: str | Path = DEFAULT_PUBLIC_MD,
-                                write_public: bool = True) -> dict:
+                                write_public: bool = True, strict: bool = False,
+                                sidecar_result: dict | None = None) -> dict:
     """Non-blocking weekly seam: cache-only settlement then a fresh de-identified summary.
 
     ``write_public=False`` is the weekly-pipeline path: it needs the summary for
@@ -922,10 +952,14 @@ def settle_and_summarize_weekly(*, root: str | Path | None, daily_cache_path: st
         if write_public:
             write_public_progress(summary, json_path=public_json_path,
                                   markdown_path=public_markdown_path)
+        if sidecar_result is not None:
+            sidecar_result["reason_codes"] = _settlement_reason_codes(root=root, as_of=as_of)
         return summary
     except Exception:
         # A settlement outage must not overwrite last week's checked pair with a
         # fresh "unavailable" one: doing so is the same defect this seam exists
         # to remove, only pointing the other way.  The caller records the outage
         # in `pipeline_sidecar_outcomes` and leaves the published pair alone.
+        if strict:
+            raise
         return unavailable_public_progress(as_of)

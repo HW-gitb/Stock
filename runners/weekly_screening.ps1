@@ -444,6 +444,7 @@ function Add-SidecarOutcome {
         [ValidateSet('advanced','already_current','stalled','not_applicable','unavailable')]
         [string]$ProgressStatus,
         [string]$ErrorCode = $null,
+        [string]$ErrorDetail = $null,
         [string]$SkipReason = $null,
         [string]$ExpectedDataThrough = $null,
         [string]$ObservedDecisionAsOf = $null,
@@ -459,7 +460,7 @@ function Add-SidecarOutcome {
         expected_data_through = $ExpectedDataThrough
         observed_decision_as_of = $ObservedDecisionAsOf
         observed_data_through = $ObservedDataThrough
-        error_code = $ErrorCode; skip_reason = $SkipReason
+        error_code = $ErrorCode; error_detail = $ErrorDetail; skip_reason = $SkipReason
     }
     if ($null -ne $AttemptedBeforeEgs) { $Outcome['attempted_before_egs'] = [bool]$AttemptedBeforeEgs }
     if (-not [string]::IsNullOrWhiteSpace($IvFeedStatus)) { $Outcome['iv_feed_status'] = $IvFeedStatus }
@@ -483,51 +484,63 @@ function Read-SharedCacheBuildOutcome {
     try {
         $Outcome = Get-Content -Raw -Encoding UTF8 -LiteralPath $Path -ErrorAction Stop | ConvertFrom-Json -ErrorAction Stop
     } catch {
-        return New-SharedCacheOutcomeReadResult -Valid $false -ErrorCode 'cache_outcome_invalid'
+        return New-SharedCacheOutcomeReadResult -Valid $false -ErrorCode 'cache_outcome_invalid_json'
     }
     if ($null -eq $Outcome -or $Outcome -is [System.Array]) {
-        return New-SharedCacheOutcomeReadResult -Valid $false -ErrorCode 'cache_outcome_invalid'
+        return New-SharedCacheOutcomeReadResult -Valid $false -ErrorCode 'cache_outcome_invalid_json'
     }
-    $Allowed = @(
+    $Required = @(
         'schema_name', 'schema_version', 'run_date', 'status', 'provider_calls',
         'deferred_symbols_by_consumer', 'production_unchanged'
     )
-    foreach ($Required in $Allowed) {
-        if ($null -eq $Outcome.PSObject.Properties[$Required]) {
-            return New-SharedCacheOutcomeReadResult -Valid $false -ErrorCode 'cache_outcome_invalid'
+    $Allowed = @($Required + @('error_code', 'error_detail'))
+    foreach ($RequiredName in $Required) {
+        if ($null -eq $Outcome.PSObject.Properties[$RequiredName]) {
+            return New-SharedCacheOutcomeReadResult -Valid $false -ErrorCode 'cache_outcome_schema_invalid'
         }
     }
     foreach ($Property in $Outcome.PSObject.Properties) {
         if ($Allowed -notcontains [string]$Property.Name) {
-            return New-SharedCacheOutcomeReadResult -Valid $false -ErrorCode 'cache_outcome_invalid'
+            return New-SharedCacheOutcomeReadResult -Valid $false -ErrorCode 'cache_outcome_schema_invalid'
         }
     }
     if ([string]$Outcome.schema_name -ne 'a_short_shared_cache_build_outcome' -or
         [string]$Outcome.schema_version -ne '1.0.0' -or
-        [string]$Outcome.run_date -ne [string]$ExpectedRunDate -or
         [string]$Outcome.run_date -notmatch '^\d{8}$' -or
         $Outcome.production_unchanged -ne $true) {
-        return New-SharedCacheOutcomeReadResult -Valid $false -ErrorCode 'cache_outcome_invalid'
+        return New-SharedCacheOutcomeReadResult -Valid $false -ErrorCode 'cache_outcome_schema_invalid'
+    }
+    if ([string]$Outcome.run_date -ne [string]$ExpectedRunDate) {
+        return New-SharedCacheOutcomeReadResult -Valid $false -ErrorCode 'cache_outcome_wrong_run_date'
     }
     $Statuses = @(
         'no_frozen_v2_captures', 'no_frozen_consumer_captures', 'cache_current',
-        'deferred_due_to_budget', 'cache_updated', 'cache_updated_with_deferrals'
+        'deferred_due_to_budget', 'cache_updated', 'cache_updated_with_deferrals', 'failed'
     )
     $Status = [string]$Outcome.status
     if ($Statuses -notcontains $Status) {
-        return New-SharedCacheOutcomeReadResult -Valid $false -ErrorCode 'cache_outcome_invalid'
+        return New-SharedCacheOutcomeReadResult -Valid $false -ErrorCode 'cache_outcome_unknown_status'
+    }
+    if ($Status -eq 'failed') {
+        $FailureCode = [string]$Outcome.error_code
+        $FailureDetail = [string]$Outcome.error_detail
+        if ([string]::IsNullOrWhiteSpace($FailureCode) -or $FailureCode -notmatch '^[a-z0-9_]+$' -or
+            $FailureCode.Length -gt 128 -or [string]::IsNullOrWhiteSpace($FailureDetail) -or
+            $FailureDetail.Length -gt 512 -or $FailureDetail -match '[\r\n]') {
+            return New-SharedCacheOutcomeReadResult -Valid $false -ErrorCode 'cache_outcome_schema_invalid'
+        }
     }
     if ($null -eq $Outcome.provider_calls -or $Outcome.provider_calls -is [string]) {
-        return New-SharedCacheOutcomeReadResult -Valid $false -ErrorCode 'cache_outcome_invalid'
+        return New-SharedCacheOutcomeReadResult -Valid $false -ErrorCode 'cache_outcome_schema_invalid'
     }
     $ProviderCalls = 0.0
     try { $ProviderCalls = [double]$Outcome.provider_calls } catch {
-        return New-SharedCacheOutcomeReadResult -Valid $false -ErrorCode 'cache_outcome_invalid'
+        return New-SharedCacheOutcomeReadResult -Valid $false -ErrorCode 'cache_outcome_schema_invalid'
     }
     if ($Outcome.provider_calls -is [bool] -or [double]::IsNaN($ProviderCalls) -or
         [double]::IsInfinity($ProviderCalls) -or $ProviderCalls -lt 0 -or
         [math]::Truncate($ProviderCalls) -ne $ProviderCalls) {
-        return New-SharedCacheOutcomeReadResult -Valid $false -ErrorCode 'cache_outcome_invalid'
+        return New-SharedCacheOutcomeReadResult -Valid $false -ErrorCode 'cache_outcome_schema_invalid'
     }
     $Deferred = $Outcome.deferred_symbols_by_consumer
     if ($null -eq $Deferred -or $Deferred -is [System.Array] -or $Deferred -is [string] -or
@@ -537,11 +550,11 @@ function Read-SharedCacheBuildOutcome {
     $DeferredTotal = 0.0
     foreach ($Property in $Deferred.PSObject.Properties) {
         if ($null -eq $Property.Value -or $Property.Value -is [string]) {
-            return New-SharedCacheOutcomeReadResult -Valid $false -ErrorCode 'cache_outcome_invalid'
+            return New-SharedCacheOutcomeReadResult -Valid $false -ErrorCode 'cache_outcome_schema_invalid'
         }
         $Count = 0.0
         try { $Count = [double]$Property.Value } catch {
-            return New-SharedCacheOutcomeReadResult -Valid $false -ErrorCode 'cache_outcome_invalid'
+            return New-SharedCacheOutcomeReadResult -Valid $false -ErrorCode 'cache_outcome_schema_invalid'
         }
         if ($Property.Value -is [bool] -or [double]::IsNaN($Count) -or
             [double]::IsInfinity($Count) -or $Count -lt 0 -or
@@ -551,10 +564,10 @@ function Read-SharedCacheBuildOutcome {
         $DeferredTotal += $Count
     }
     if (($Status -like 'no_frozen_*' -and ($ProviderCalls -ne 0 -or $DeferredTotal -ne 0)) -or
-        ($Status -notlike 'no_frozen_*' -and $ProviderCalls -lt 1) -or
+        ($Status -notlike 'no_frozen_*' -and $Status -ne 'failed' -and $ProviderCalls -lt 1) -or
         ($Status -in @('cache_current', 'cache_updated') -and $DeferredTotal -ne 0) -or
         ($Status -in @('deferred_due_to_budget', 'cache_updated_with_deferrals') -and $DeferredTotal -le 0)) {
-        return New-SharedCacheOutcomeReadResult -Valid $false -ErrorCode 'cache_outcome_invalid'
+        return New-SharedCacheOutcomeReadResult -Valid $false -ErrorCode 'cache_outcome_schema_invalid'
     }
     return New-SharedCacheOutcomeReadResult -Valid $true -Outcome $Outcome
 }
@@ -836,8 +849,9 @@ if ($SkipSemanticRisk) {
                 $SharedCacheExecutionStatus = 'failed'
                 $SharedCacheProgressStatus = 'unavailable'
                 $SharedCacheErrorCode = 'process_failed'
+                $SharedCacheErrorDetail = $null
+                $SharedCacheRead = Read-SharedCacheBuildOutcome -Path $SharedCacheOutcomePath -ExpectedRunDate $RunDate
                 if ($FactorComparisonCacheExitCode -eq 0) {
-                    $SharedCacheRead = Read-SharedCacheBuildOutcome -Path $SharedCacheOutcomePath -ExpectedRunDate $RunDate
                     if ($SharedCacheRead.valid) {
                         switch ([string]$SharedCacheRead.outcome.status) {
                             { $_ -like 'no_frozen_*' } {
@@ -865,15 +879,22 @@ if ($SkipSemanticRisk) {
                                 $SharedCacheProgressStatus = 'stalled'
                                 $SharedCacheErrorCode = 'cache_deferred_due_to_budget'
                             }
+                            'failed' {
+                                $SharedCacheErrorCode = [string]$SharedCacheRead.outcome.error_code
+                                $SharedCacheErrorDetail = [string]$SharedCacheRead.outcome.error_detail
+                            }
                         }
                     } else {
                         $SharedCacheErrorCode = [string]$SharedCacheRead.error_code
                     }
+                } elseif ($SharedCacheRead.valid -and [string]$SharedCacheRead.outcome.status -eq 'failed') {
+                    $SharedCacheErrorCode = [string]$SharedCacheRead.outcome.error_code
+                    $SharedCacheErrorDetail = [string]$SharedCacheRead.outcome.error_detail
                 }
                 if ($SharedCacheExecutionStatus -eq 'failed') {
                     Write-Host "[WARN] A-short shared comparison cache unavailable ($SharedCacheErrorCode; exit $FactorComparisonCacheExitCode); M6.7/V14.3/overlay continue unchanged." -ForegroundColor Yellow
                 }
-                Add-SidecarOutcome -Name 'shared_cache_build' -Expected $true -Attempted $true -ExecutionStatus $SharedCacheExecutionStatus -ProgressStatus $SharedCacheProgressStatus -ErrorCode $SharedCacheErrorCode
+                Add-SidecarOutcome -Name 'shared_cache_build' -Expected $true -Attempted $true -ExecutionStatus $SharedCacheExecutionStatus -ProgressStatus $SharedCacheProgressStatus -ErrorCode $SharedCacheErrorCode -ErrorDetail $SharedCacheErrorDetail
                 # Freeze the normalized live decision only after M6.7 publishes its matching bundle.
                 $M67Args += @('--factor-comparison-v2-root', $FactorComparisonV2Root,
                               '--factor-comparison-v2-daily-cache', $FactorComparisonV2Cache,

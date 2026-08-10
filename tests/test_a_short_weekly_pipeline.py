@@ -44,6 +44,7 @@ from runners.a_short_weekly_pipeline import (  # noqa: E402
     _forecast_red_flags, _income_red_flags, _balancesheet_red_flags, _industry_fundamentals, _FIN_STATEMENT_MARKER,
     _attach_holding_disposition, _factor_comparison_realized_regime, _build_evidence_reminders,
     _resolve_m05_state, _validate_analysis_input_m05_binding,
+    _sidecar_result_fields,
 )
 from engine.data.analysis_input_contract import (  # noqa: E402
     build_a_short_run_identity,
@@ -781,6 +782,21 @@ class IVMissingTests(unittest.TestCase):
 
 
 class MainWiringTests(unittest.TestCase):
+    def test_registered_sidecar_result_mapping_is_closed_world_and_structured(self):
+        self.assertEqual(_sidecar_result_fields({"status": "captured"}), ("advanced", None, None))
+        self.assertEqual(_sidecar_result_fields({"status": "already_current"}), ("already_current", None, None))
+        self.assertEqual(_sidecar_result_fields({"status": "pending"}), ("not_applicable", None, None))
+        progress, code, detail = _sidecar_result_fields({
+            "status": "conflict_recorded_no_count",
+            "reason_code": "immutable_capture_conflict",
+        })
+        self.assertEqual((progress, code), ("stalled", "immutable_capture_conflict"))
+        self.assertTrue(detail.startswith("reason=ValueError: immutable_capture_conflict"))
+        self.assertEqual(
+            _sidecar_result_fields({"status": "future_status"}),
+            ("unavailable", "unexpected_sidecar_status", "status=future_status"),
+        )
+
     def _write_inputs(self, td, feed=None, ai=None):
         ai = ai if ai is not None else _analysis_input(
             candidates=[_ai_candidate("600000.SH"), _ai_candidate("000001.SZ")])
@@ -1465,6 +1481,12 @@ class MainWiringTests(unittest.TestCase):
         self.assertNotIn("https://", capture["error_detail"])
         self.assertNotIn("binding drifted", terminal.getvalue())
         self.assertIn("reports", weekly)
+        settlement = next(row for row in outcomes["sidecars"]
+                          if row["name"] == "overlay_adjudication_settlement")
+        self.assertEqual(settlement["execution_status"], "skipped")
+        self.assertEqual(settlement["progress_status"], "not_applicable")
+        self.assertEqual(settlement["error_code"], "capture_unavailable")
+        self.assertTrue(settlement["error_detail"].startswith("blocked_by=overlay_adjudication_capture;"))
 
     def test_overlay_settlement_failure_keeps_capture_success_without_duplicate_outcomes(self):
         from engine.a_short_overlay_adjudication import unavailable_public_summary

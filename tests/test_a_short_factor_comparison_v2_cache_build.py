@@ -257,6 +257,29 @@ class ComparisonV2CacheBuildTests(unittest.TestCase):
                 "provider_calls", "deferred_symbols_by_consumer", "production_unchanged",
             })
 
+    def test_cli_writes_redacted_failed_receipt_when_builder_raises(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            receipt_path = Path(tmp) / "weekly" / "shared_cache_build.outcome.json"
+            receipt_path.parent.mkdir(parents=True)
+            receipt_path.write_text(json.dumps({"status": "cache_updated"}), encoding="utf-8")
+            with mock.patch(
+                "runners.a_short_factor_comparison_v2_cache_build.materialize_incremental_cache",
+                side_effect=RuntimeError(
+                    "https://provider.example.test/x Bearer secret-token C:\\private\\token.txt\nraw row"
+                ),
+            ):
+                self.assertEqual(cache_build_main([
+                    "--root", str(Path(tmp) / "state"), "--run-date", RUN_DATE,
+                    "--outcome-json", str(receipt_path),
+                ]), 1)
+            receipt = json.loads(receipt_path.read_text(encoding="utf-8"))
+        self.assertEqual(receipt["status"], "failed")
+        self.assertEqual(receipt["error_code"], "cache_build_failed")
+        self.assertTrue(receipt["error_detail"].startswith("build: "))
+        self.assertNotIn("https://", receipt["error_detail"])
+        self.assertNotIn("secret-token", receipt["error_detail"])
+        self.assertNotIn("token.txt", receipt["error_detail"])
+
     def test_outcome_projection_rejects_degraded_status_without_deferred_count(self):
         with self.assertRaisesRegex(ComparisonV2Error, "positive deferred count"):
             _cache_build_outcome_payload(

@@ -250,6 +250,7 @@ class IndustryWeightComparisonTests(unittest.TestCase):
                     analysis_input_path=analysis, weight_comparison_path=comparison_path, source_identity=identity,
                     out_path=out, receipt_path=out.with_name("weekly_m67.receipt.json"), forward_eligible=True)
             self.assertEqual(result["status"], "conflict_recorded_no_count")
+            self.assertEqual(result["reason_code"], "immutable_capture_conflict")
             self.assertTrue((root / "conflicts" / f"{DECISION}.json").is_file())
 
     def test_same_list_week_is_eligible_zero_effect_with_fixed_slots_qfq_and_cost(self):
