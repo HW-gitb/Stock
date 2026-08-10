@@ -794,7 +794,7 @@ class AShortSidecarHealthTests(unittest.TestCase):
             by_name["target_policy_capture"]["error_detail"],
             "health_reason_contract=missing_or_invalid_error_code",
         )
-        self.assertEqual(by_name["final_action_capture"]["error_code"], "reason_contract_violation")
+        self.assertEqual(by_name["final_action_capture"]["error_code"], "capture_unavailable")
         self.assertEqual(
             by_name["final_action_capture"]["error_detail"],
             "health_reason_contract=error_detail_unbounded",

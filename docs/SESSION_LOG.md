@@ -270,6 +270,21 @@
 - **Pre-Codex self-review**: A-F checked；A=固定输入/7成员/source矩阵；B=Serenity字段与所有当前树 `*.py/*.md/tests` 消费面 grep，确认无新接线且文档只声明 shadow；C=effect flags/active macro/score/Top15/operation/lifecycle 反向控制；D=unsupported claim 降级为 lead/context/unverified；E=SESSION_LOG 与 handoff 为当前态，CURRENT 未改；F=UTF-8/no BOM/no mojibake、固定 Python assertions PASS、`git diff --check` clean；independent-self-review=NOT_USED:user-forbids independent review；provider/network/account=NOT_USED；commit=NOT_PERFORMED。
 - **Handoff**: 已新增 `docs/handoff/2026-08-09_us_serenity_annotation_blade0_handoff.md` 并加入 `docs/handoff/README.md` 路由；该交接只承载 Blade 0 结果、边界、自审/测试要求与下一刀前置，不混入既有 X live-shape handoff。
 - **Next**: Claude Code：审查本刀 Blade 0 研究产物；未审查前不进入 Blade 1 或任何工程刀。
+## 2026-08-10 — Claude 审查 PASS（40d9：桌面 V1 共享缓存占位可升级）
+
+- **Verdict/Action**: PASS，提交并合入 master。缓存行改为按数据族记观测状态，合并规则变成「未完整才可被补齐，两侧都有值且不同才算冲突」；legacy 1.0 缓存改为内存内升级而非丢弃。schema 双版本连带面齐（daily cache 1.2.0 + 消费者放宽、outcome 1.1.0 + launcher pin 同改），顺带闭掉我早先记的 O21。
+- **Required**: 无。桌面 V1 已 resolved；实测、反向三格与植入证据见 `docs/system_risk_register.md`（单一来源，本处不复述）。
+- **Verify**: review-evidence:5b1794d93588。验收超集 9 模块 `PASS exit=0 tests=301 elapsed=241.2s receipt:dbda906005edb530af3b65f0 bundles=a_short_effect_contract`；提交门另补跑 backtest_rank/crash_veto 两模块。自写探针（桌面真实键 `000852.SH/20260810`）：占位→真实行情**合并成功**；反向：两份已观测冲突仍 RAISED、占位不抹真值、stocks 族同样成立；未观测行进执行侧被 `non_finite_price` 挡下（三态未开 fail-open）。植入：中和 `_merge_values` 冲突 raise → 点名用例转红（`ComparisonV2Error not raised`），还原后 sha 回 `607df651…`。独立重算 `static_contract_error=None`。超时原因:两棵树连审，40d9 的超集 241.2s 与提交门组合串行。
+- **Next**: Codex：执行
+
+## 2026-08-10 — Codex executor/fixer：桌面 V1 optional 共享缓存与 EGS 同类缺陷修复（OPEN-NOT_VERIFIED）
+
+- **Verdict/Action**：按 `C:\Users\cnhea\Desktop\2a_testrun0810.md` V1 方案完成当前工作树最小代码接线：共享行情缓存按数据族判断待补/部分/完整/冲突，factor v2、overlay、margin、crash、forward、execution 及点名 EGS 缓存接入可重试/fail-closed 语义；未改主树、未手工改真实缓存、未启动 provider/live/full lane，未 stage/commit/push/merge。
+- **Required**：无新增 Required；本轮代码需 Claude Code 独立复审后才可提交。真实 provider、真实 normal weekly、durable 两轮、account/ship-gate 继续 `NOT_VERIFIED`。
+- **Verify**：固定解释器 `C:\Users\cnhea\AppData\Local\Programs\Python\Python313\python.exe`（3.13.8）。桌面 V1 点名包 `testsRun=287, failures=0, errors=0, skipped=0`；optional/health/effect 包 `testsRun=112, failures=0, errors=0, skipped=0`；9 个生产文件 `py_compile` 通过；共享缓存负向矩阵、`static_contract_error=None`、`git diff --check` 均通过。精确命令与边界见同日 handoff/register。
+- **Pre-Codex self-review**：matrix=V1 stocks raw/adj/limits/benchmarks + EGS/cache consumers；register=updated；handoff=updated；focused=287+112 OK；full-lane=NOT_VERIFIED；door=fixed-Python py_compile PASS + doc-governance 66 OK + route consistency OK + readme length OK.
+- **Next**：Claude Code：按桌面 V1 的五段真实链独立复审；PASS 后由 reviewer/committer stage/commit，Codex 不提交。
+
 ## 2026-08-10 — Claude 复审 PASS（40d9：V3-A 两座位接线 + health 降级不再消失）
 
 - **Verdict/Action**: PASS，提交并合入 master。两个座位改用 `_sidecar_result_fields`，producer 原因随行落盘；health 原因契约由 `raise` 改为写合成 `reason_contract_violation` 后继续出三件套；逐名守卫是从生产文件 AST 派生的。同轮把已移居 782a 的指纹裁决节从本树删除，避免双写。

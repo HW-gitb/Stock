@@ -1010,6 +1010,9 @@ def _normalise_prices(daily_payload: dict) -> tuple[list[str], dict[tuple[str, s
         key = (code, trade_date)
         clean = {
             "open": row.get("open"), "close": row.get("close"), "adj_factor": row.get("adj_factor"),
+            "raw_provider_observed": row.get("raw_provider_observed")
+                if isinstance(row.get("raw_provider_observed"), bool)
+                else all(_finite(row.get(field)) for field in ("open", "close")),
             "adj_factor_observed": row.get("adj_factor_observed"),
             "adj_factor_source": row.get("adj_factor_source"),
             "corporate_action_verified": row.get("corporate_action_verified"),
@@ -1044,7 +1047,8 @@ def _adjustment_quality(*, selected_union: list[str], dates: list[str], lookup: 
         for trade_date in dates:
             row = lookup.get((code, trade_date))
             reason = None
-            if row is None or not (_finite(row.get("open")) and _finite(row.get("close"))):
+            if row is None or row.get("raw_provider_observed") is not True or \
+                    not (_finite(row.get("open")) and _finite(row.get("close"))):
                 reason = "price_missing"
             elif not _finite(row.get("adj_factor")) or float(row["adj_factor"]) <= 0:
                 reason = "adj_factor_missing"
@@ -1127,7 +1131,9 @@ def _position_outcomes(*, arm: dict, candidates: dict[str, dict], price_data_thr
                               "horizons": {f"h{h}": {"status": "unfilled_entry_range", "net_return_pct": 0.0} for h in HORIZONS}})
             continue
         up_limit = limits.get((code, entry_date))
-        limit_price = up_limit if up_limit is not None else float(frozen_close) * 1.10
+        if up_limit is None:
+            raise ComparisonV2Error("v2 settlement up-limit cache is incomplete")
+        limit_price = up_limit
         if float(entry["open"]) >= limit_price * 0.999:
             positions.append({"ts_code": code, "entry_status": "unfilled_limit_up", "entry_model_price": entry_model,
                               "horizons": {f"h{h}": {"status": "unfilled_limit_up", "net_return_pct": 0.0} for h in HORIZONS}})
@@ -1210,14 +1216,30 @@ def _settle_question(question: dict, capture: dict, *, dates: list[str], lookup:
         raise ComparisonV2Error("v2 selected union is missing its frozen candidate snapshot")
     if coverage["status"] != "valid":
         reason = str(coverage["reason"])
+        # Missing/partial provider evidence is retryable.  It is deliberately
+        # not terminal no_count: a later shared-cache upgrade may settle the
+        # same frozen capture without minting a new revision.
         return {
-            "question_id": question["question_id"], "status": "no_count", "reason": reason,
+            "question_id": question["question_id"], "status": "pending", "reason": reason,
             "adjustment_coverage": coverage,
             "arms": [
-                {"arm_id": arm["arm_definition"]["arm_id"], "no_count_reason": _arm_no_count_reason(arm, by_code, reason),
-                 "no_count_count": 1, "selected_symbols": arm["selected_symbols"]}
+                {"arm_id": arm["arm_definition"]["arm_id"], "pending_reason": _arm_no_count_reason(arm, by_code, reason),
+                 "pending_count": 1, "selected_symbols": arm["selected_symbols"]}
                 for arm in question["arms"]
             ],
+        }
+    entry_date = dates[date_pos[decision_date] + 1]
+    missing_limit = any(
+        limits.get((code, entry_date)) is None
+        for code in selected_union
+    )
+    if missing_limit:
+        return {
+            "question_id": question["question_id"], "status": "pending",
+            "reason": "up_limit_missing", "adjustment_coverage": coverage,
+            "arms": [{"arm_id": arm["arm_definition"]["arm_id"],
+                      "pending_reason": "up_limit_missing", "pending_count": 1,
+                      "selected_symbols": arm["selected_symbols"]} for arm in question["arms"]],
         }
     arms = []
     for arm in question["arms"]:

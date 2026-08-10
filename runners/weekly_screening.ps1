@@ -505,7 +505,7 @@ function Read-SharedCacheBuildOutcome {
         }
     }
     if ([string]$Outcome.schema_name -ne 'a_short_shared_cache_build_outcome' -or
-        [string]$Outcome.schema_version -ne '1.0.0' -or
+        [string]$Outcome.schema_version -ne '1.1.0' -or
         [string]$Outcome.run_date -notmatch '^\d{8}$' -or
         $Outcome.production_unchanged -ne $true) {
         return New-SharedCacheOutcomeReadResult -Valid $false -ErrorCode 'cache_outcome_schema_invalid'

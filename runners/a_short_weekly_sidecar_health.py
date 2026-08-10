@@ -351,18 +351,16 @@ def _normalise_outcome(raw: dict[str, Any], *, as_of: str, project_root: Path) -
     artifact_valid = None
     artifact_code = None
     artifact_detail = None
-    if expected and execution == "succeeded" and required_artifact is not None \
-            and not (artifact_valid := _artifact_validation(name, required_artifact))[0]:
-        artifact_valid, artifact_code, artifact_detail = artifact_valid
-        execution = "failed"
-        progress = "unavailable"
-        observed_decision = None
-        observed_data = None
-        raw = dict(raw)
-        raw["error_code"] = raw.get("error_code") or artifact_code
-        raw["error_detail"] = raw.get("error_detail") or artifact_detail
-    elif required_artifact is not None:
+    if required_artifact is not None:
         artifact_valid, artifact_code, artifact_detail = _artifact_validation(name, required_artifact)
+        if expected and execution == "succeeded" and not artifact_valid:
+            execution = "failed"
+            progress = "unavailable"
+            observed_decision = None
+            observed_data = None
+            raw = dict(raw)
+            raw["error_code"] = raw.get("error_code") or artifact_code
+            raw["error_detail"] = raw.get("error_detail") or artifact_detail
     probed_decision, probed_data = _probe(project_root, name, as_of)
     if name in AUTHORITATIVE_ARTIFACT_SIDECARS or probed_decision is not None:
         observed_decision = probed_decision
@@ -485,7 +483,10 @@ def _validate_health_reason_contract(entries: list[dict[str, Any]]) -> None:
             ):
                 issues.append("error_detail_unbounded")
             if issues:
-                item["error_code"] = "reason_contract_violation"
+                # Preserve a valid upstream code when only detail is malformed;
+                # otherwise diagnostics lose the producer's actionable reason.
+                if "missing_or_invalid_error_code" in issues:
+                    item["error_code"] = "reason_contract_violation"
                 item["error_detail"] = "health_reason_contract=" + ";".join(issues)
 
 

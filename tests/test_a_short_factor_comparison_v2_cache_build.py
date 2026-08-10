@@ -245,7 +245,7 @@ class ComparisonV2CacheBuildTests(unittest.TestCase):
             receipt = json.loads(receipt_path.read_text(encoding="utf-8"))
             self.assertEqual(receipt, {
                 "schema_name": "a_short_shared_cache_build_outcome",
-                "schema_version": "1.0.0",
+                "schema_version": "1.1.0",
                 "run_date": RUN_DATE,
                 "status": "no_frozen_v2_captures",
                 "provider_calls": 0,
@@ -616,7 +616,7 @@ class ComparisonV2CacheBuildTests(unittest.TestCase):
                                                   target_policy_root=p2, pro=provider)
             self.assertEqual(provider.calls, [])
 
-    def test_legacy_1_0_cache_is_discarded_and_rebuilt_as_1_1(self):
+    def test_legacy_1_0_cache_is_read_in_memory_and_conflicting_rows_fail_closed(self):
         with tempfile.TemporaryDirectory() as tmp:
             root = _root(tmp)
             _capture(root)
@@ -624,13 +624,11 @@ class ComparisonV2CacheBuildTests(unittest.TestCase):
             path = root / "daily_cache.json"
             path.write_text(json.dumps(_legacy_cache()), encoding="utf-8")
             provider = FakeTushare()
+            original = path.read_text(encoding="utf-8")
             with mock.patch("runners.a_short_factor_comparison_v2_cache_build._today", return_value=RUN_DATE):
-                result = materialize_incremental_cache(root=root, run_date=RUN_DATE, pro=provider)
-            rebuilt = json.loads(path.read_text(encoding="utf-8"))
-            self.assertEqual(result["status"], "cache_updated")
-            self.assertEqual(rebuilt["schema_version"], "1.1.0")
-            self.assertTrue(rebuilt["rows"])
-            self.assertTrue(all(row["open"] != 99.0 for row in rebuilt["stocks"]))
+                with self.assertRaisesRegex(ComparisonV2Error, "conflicting_duplicate_key"):
+                    materialize_incremental_cache(root=root, run_date=RUN_DATE, pro=provider)
+            self.assertEqual(path.read_text(encoding="utf-8"), original)
 
     def test_legacy_1_0_cache_is_unchanged_when_rebuild_fails(self):
         with tempfile.TemporaryDirectory() as tmp:
