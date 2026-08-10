@@ -1099,6 +1099,29 @@ class MainWiringTests(unittest.TestCase):
             settle.assert_called_once()
             capture.assert_called_once()
 
+    def test_p2_capture_unavailable_reason_reaches_pipeline_outcome(self):
+        from runners.a_short_target_policy_comparison_runner import unavailable_public_summary
+
+        with tempfile.TemporaryDirectory() as td:
+            self._write_inputs(td)
+            out = Path(td) / "weekly.json"
+            with patch("runners.a_short_target_policy_comparison_runner.settle_and_summarize",
+                       return_value=unavailable_public_summary(AS_OF)), \
+                    patch("runners.a_short_target_policy_comparison_runner.capture_after_published_weekly",
+                          return_value={"status": "unavailable"}):
+                main(["--as-of", AS_OF, "--analysis-input", str(Path(td) / "ai.json"),
+                      "--iv-feed", str(Path(td) / "feed.json"), "--account", str(Path(td) / "acct.json"),
+                      "--out", str(out), "--run-date", AS_OF,
+                      "--target-policy-root", str(Path(td) / "p2-private")],
+                     price_provider=lambda code: _series())
+            outcomes = json.loads(
+                out.with_name(f"{out.stem}.pipeline_sidecar_outcomes.json").read_text(encoding="utf-8")
+            )
+        row = next(item for item in outcomes["sidecars"] if item["name"] == "target_policy_capture")
+        self.assertEqual(row["progress_status"], "unavailable")
+        self.assertEqual(row["error_code"], "sidecar_unavailable")
+        self.assertIsNone(row["error_detail"])
+
     def test_p4b_manual_promotion_reminder_is_advisory_and_fail_closed(self):
         candidate = {"status": "manual_promotion_candidate", "adjudication": {
             "verdict": "candidate_for_manual_promotion", "automatic_policy_switch": False}}
@@ -1174,6 +1197,29 @@ class MainWiringTests(unittest.TestCase):
             self.assertNotIn("write_public", settle.call_args_list[1].kwargs)
             self.assertLess(settle.mock_calls.index(settle.call_args_list[0]),
                             settle.mock_calls.index(settle.call_args_list[1]))
+
+    def test_p3_capture_conflict_reason_reaches_pipeline_outcome(self):
+        from runners.a_short_final_action_validation_runner import unavailable_public_summary
+
+        with tempfile.TemporaryDirectory() as td:
+            self._write_inputs(td)
+            out = Path(td) / "weekly.json"
+            with patch("runners.a_short_final_action_validation_runner.settle_and_summarize",
+                       return_value=unavailable_public_summary(AS_OF)), \
+                    patch("runners.a_short_final_action_validation_runner.capture_after_published_weekly",
+                          return_value={"status": "conflict"}):
+                main(["--as-of", AS_OF, "--analysis-input", str(Path(td) / "ai.json"),
+                      "--iv-feed", str(Path(td) / "feed.json"), "--account", str(Path(td) / "acct.json"),
+                      "--out", str(out), "--run-date", AS_OF,
+                      "--final-action-validation-root", str(Path(td) / "p3-private")],
+                     price_provider=lambda code: _series())
+            outcomes = json.loads(
+                out.with_name(f"{out.stem}.pipeline_sidecar_outcomes.json").read_text(encoding="utf-8")
+            )
+        row = next(item for item in outcomes["sidecars"] if item["name"] == "final_action_capture")
+        self.assertEqual(row["progress_status"], "stalled")
+        self.assertEqual(row["error_code"], "immutable_capture_conflict")
+        self.assertIsNone(row["error_detail"])
 
     #: The four comparison tracks publish a JSON + Markdown pair each.  A weekly
     #: run that dies at M6.7 used to leave these ahead of the private ledgers they
@@ -6929,6 +6975,22 @@ def capture_after_published_weekly(out_path):
         inventory.pop("runners/a_short_weekly_sidecar_health.py")
         discovered = set(self.ENTRYPOINTS)
         self.assertNotEqual(discovered, set(inventory))
+
+
+class SidecarOutcomeWiringTests(unittest.TestCase):
+    def test_status_driven_sidecar_records_do_not_use_legacy_progress_only_helper(self):
+        pipeline_path = Path(__file__).resolve().parents[1] / "runners" / "a_short_weekly_pipeline.py"
+        tree = ast.parse(pipeline_path.read_text(encoding="utf-8"), filename=str(pipeline_path))
+        legacy_calls = []
+        for node in ast.walk(tree):
+            if not (isinstance(node, ast.Call) and isinstance(node.func, ast.Name)
+                    and node.func.id == "_record_sidecar"):
+                continue
+            if any(isinstance(child, ast.Call) and isinstance(child.func, ast.Name)
+                   and child.func.id == "_sidecar_progress_from_status"
+                   for child in ast.walk(node)):
+                legacy_calls.append(ast.unparse(node))
+        self.assertEqual(legacy_calls, [], "all producer status records must carry structured reasons")
 
 
 class M05WiringTests(unittest.TestCase):

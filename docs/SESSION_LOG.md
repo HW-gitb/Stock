@@ -226,6 +226,47 @@
 - **Pre-Codex self-review**: A-F checked；A=固定输入/7成员/source矩阵；B=Serenity字段与所有当前树 `*.py/*.md/tests` 消费面 grep，确认无新接线且文档只声明 shadow；C=effect flags/active macro/score/Top15/operation/lifecycle 反向控制；D=unsupported claim 降级为 lead/context/unverified；E=SESSION_LOG 与 handoff 为当前态，CURRENT 未改；F=UTF-8/no BOM/no mojibake、固定 Python assertions PASS、`git diff --check` clean；independent-self-review=NOT_USED:user-forbids independent review；provider/network/account=NOT_USED；commit=NOT_PERFORMED。
 - **Handoff**: 已新增 `docs/handoff/2026-08-09_us_serenity_annotation_blade0_handoff.md` 并加入 `docs/handoff/README.md` 路由；该交接只承载 Blade 0 结果、边界、自审/测试要求与下一刀前置，不混入既有 X live-shape handoff。
 - **Next**: Claude Code：审查本刀 Blade 0 研究产物；未审查前不进入 Blade 1 或任何工程刀。
+## 2026-08-10 — Claude 复审 PASS（40d9：V3-A 两座位接线 + health 降级不再消失）
+
+- **Verdict/Action**: PASS，提交并合入 master。两个座位改用 `_sidecar_result_fields`，producer 原因随行落盘；health 原因契约由 `raise` 改为写合成 `reason_contract_violation` 后继续出三件套；逐名守卫是从生产文件 AST 派生的。同轮把已移居 782a 的指纹裁决节从本树删除，避免双写。
+- **Required**: 无。`R-ASHORT-TARGET-POLICY-AND-FINAL-ACTION-SEATS-SKIP-THE-REASON-HELPER-AND-KILL-HEALTH` 已 resolved；一条新 Optional（O23）与全部实测证据见 `docs/system_risk_register.md`（单一来源）。
+- **Verify**: review-evidence:11e3acb8c870。验收超集 `PASS tests=660 elapsed=365.6s receipt:2566d8834717726f82446bd8 bundles=a_short_effect_contract`。上轮判死的探针原样重跑：两格由 RAISED 变为正常出三件套。植入：座位改回旧 helper → AST 守卫精确转红，还原后 sha 逐字节回 `698b11a9…`。full lane 归执行方，NOT_VERIFIED。
+- **Next**: Codex：执行
+
+## 2026-08-10 — Codex executor/fixer：V3-A Required 两个座位与 health durable fallback 修复（OPEN-NOT_VERIFIED）
+
+### Verdict / Action
+
+按 Claude Code 最新 FAIL 的 Required 修复当前工作树：target_policy_capture 与 final_action_capture 改用 _sidecar_result_fields(...) 保留 producer 的结构化状态/原因；_validate_health_reason_contract 不再以未捕获的 ValueError 终止 health，而是写入合成 reason_contract_violation 和有界 detail，继续生成 JSON/Markdown/receipt 三件套。未运行 provider/live/真实 weekly/full lane，未 stage/commit/push/merge；O21/O22 未纳入本刀。
+
+### Problems / root causes / changes
+
+- Required 根因：两个 V3-A1 点名座位仍使用旧的 _sidecar_progress_from_status，会丢掉 unavailable / conflict 对应的 sidecar_unavailable / immutable_capture_conflict；它们同时带 observed_decision_as_of，触发 health 原因契约后原先会抛异常，导致三件套不产出。
+- pipeline 修复：两个座位现在统一接收 (progress, error_code, error_detail)，producer status 进入 outcome manifest；新增静态 AST 守卫，禁止任何 _record_sidecar 再使用旧 progress-only helper。
+- health 修复：对 failed/missing/stalled/unavailable 的缺码或越界 detail 记录 reason_contract_violation，detail 只写 health_reason_contract=... 的安全分类，不读取原始敏感内容，随后继续 schema 校验与 durable 写盘。
+
+### Call chain / consumers / schema / source-binding / write boundary
+
+target/final producer capture → _sidecar_result_fields → pipeline_sidecar_outcomes.json → _normalise_outcome/build_health → sidecar_health.json/.md/.receipt.json。既有 outcome/health schema 与版本未变；仅 outcome row 的既有 nullable reason 字段承载结构化值。source binding 仍是当前 as_of/observed_decision_as_of，不读取 private root 解释原因；写盘边界仍限于 pipeline outcome 与 health 三件套，不改 EGS、Top5、M6.7、账户、provider、缓存或下单边界。
+
+### Negative controls / self-review / verification
+
+- target_policy_capture={"status":"unavailable"} → progress=unavailable,error_code=sidecar_unavailable；final_action_capture={"status":"conflict"} → progress=stalled,error_code=immutable_capture_conflict。
+- health 缺 code 或 detail 超过 512 字节仍生成三件套，合成码为 reason_contract_violation；合法 pending/not_due/not_configured 不受影响；AST 守卫确认没有旧 helper 调用。
+- 固定解释器 C:/Users/cnhea/AppData/Local/Programs/Python/Python313/python.exe（Python 3.13.8）。点名回归：Ran 4 tests in 3.091s / OK；V3-A 聚焦包：Ran 744 tests in 71.162s / OK。既有 ResourceWarning 仍为测试夹具未关闭文件，非失败。
+- **Pre-Codex self-review**：matrix=21 registered sidecars + target_policy/final_action seat guard + health fallback；register=updated；handoff=updated；focused=744 OK；full-lane=NOT_VERIFIED；door=fixed-Python py_compile PASS + PowerShell ParseFile PASS + route/doc 66 OK + git diff --check exit 0。
+
+### Boundary / Required / next
+
+Required 代码腿已完成，但本轮保持 OPEN-NOT_VERIFIED，等待 Claude Code 独立复审；Claude Code 是 reviewer/committer，只有其 PASS 后 stage/commit，Codex executor/fixer 不提交。NOT_VERIFIED：provider/live、真实 normal weekly、full lane、durable 两轮和 ship-gate。下一步：Claude Code：独立复审 V3-A Required 两座位 + health durable fallback，并按 21 项矩阵给出结论。
+
+## 2026-08-10 — Claude 记录用户裁决（退役重封型冻结指纹：做 A+B，不做 C）
+
+- **Verdict/Action**: 记录用户 2026-08-10 裁决——退役「改了别处就要人工重封」的冻结指纹。A=effect contract 的 9 个冻结指纹键整族处置（4 个代码派生直接退役、4 个结构派生改可读清单、1 个查证后决定），B=放宽 bounded runner 收据指纹使纯文档改动不再作废收据。C（不可变证据身份指纹）明确不做，废之等于允许同日重跑覆盖首版证据。reviewer 未改任何代码。
+- **Required**: `R-ASHORT-FROZEN-DIGEST-RESEAL-TAX-RETIRE-CODE-FINGERPRINTS`(P2) —— 完整枚举、分类处置、Closure tests 与「不得用派生-vs-派生冒充守卫」的约束只见 `docs/system_risk_register.md`（单一来源，本处不复述）。实施顺序：先修同日 P1 两个 sidecar 座位，再做本项。
+- **Verify**: review-evidence:not_available（本轮为裁决落盘，非审查轮，hook 未注入新 token）。依据均为已有真实证据：同一指纹当日重封 3 次（`9b5477cf→048785b1→c24f215a→1793f1d3`）、主树 495.1s/830 用例被判 `REFUSED - code state changed during focused run`（起因是同树合入纯文档提交）、effect contract 内 9 个冻结指纹键的行号已逐个点名。未跑测试包，未改代码。
+- **Next**: Codex：执行
+
 ## 2026-08-10 — Claude 审查 FAIL（更正同日 PASS；40d9：两个 sidecar 座位漏改）
 
 - **Verdict/Action**: FAIL，更正同日上一条 PASS。补做桌面 V3-A1 的逐名覆盖矩阵后发现：`target_policy_capture` 与 `final_action_capture` 两个座位仍走旧的只取 progress 的映射，而本刀新增的 health 原因契约对无 code 的 degraded 行直接 `raise`，`main()` 无人接 → 三件套整份不产出。代码已按上一条 PASS 提交 `c6fc912c` 并合入 master `d942473f`，Required 现在在 master 上。

@@ -463,16 +463,30 @@ def _normalise_outcome(raw: dict[str, Any], *, as_of: str, project_root: Path) -
 
 
 def _validate_health_reason_contract(entries: list[dict[str, Any]]) -> None:
-    """Require a stable reason for every registered failed/degraded outcome."""
+    """Keep health durable even when an upstream sidecar violates its reason contract.
+
+    Health is the diagnostic boundary.  A malformed upstream outcome must be
+    visible as a bounded synthetic reason, not allowed to erase the JSON,
+    Markdown, and receipt bundle that explains the failure.
+    """
     for item in entries:
         if item["execution_status"] in {"failed", "missing_outcome"} or \
                 item["progress_status"] in {"stalled", "unavailable"}:
             code = item.get("error_code")
+            issues: list[str] = []
             if not isinstance(code, str) or not code or not code.replace("_", "").isalnum():
-                raise ValueError(f"sidecar {item.get('name')} degraded outcome lacks stable error_code")
+                issues.append("missing_or_invalid_error_code")
             detail = item.get("error_detail")
-            if detail is not None and ("\n" in str(detail) or "\r" in str(detail) or len(str(detail)) > 512):
-                raise ValueError(f"sidecar {item.get('name')} error_detail is not bounded")
+            if detail is not None and (
+                    not isinstance(detail, str)
+                    or "\n" in detail
+                    or "\r" in detail
+                    or len(detail) > 512
+            ):
+                issues.append("error_detail_unbounded")
+            if issues:
+                item["error_code"] = "reason_contract_violation"
+                item["error_detail"] = "health_reason_contract=" + ";".join(issues)
 
 
 def build_health(
