@@ -12,6 +12,7 @@ from engine.us_short_model_paper_store import load_head
 import runners.us_short_weekly_capstone as capstone
 from runners.us_short_weekly_capstone import Stage, _run_model_paper_adapter, _run_model_paper_weekly, default_pipeline, run_weekly_capstone
 from tests.provider.test_us_short_batch5_data_context import _candidate_artifact
+from tests.provider.us_short_private_test_root import temporary_us_short_state_directory
 
 
 def _packet(decision: str, basis: str, points: list[dict]) -> dict:
@@ -40,6 +41,32 @@ def _record(decision: str, action: str) -> dict:
 
 
 class ModelPaperCapstoneWiringTest(unittest.TestCase):
+    def test_absent_in_repo_model_paper_root_reaches_first_week_seed_preview(self) -> None:
+        with temporary_us_short_state_directory(capstone.ROOT) as state_root_text:
+            state_root = Path(state_root_text)
+            store = state_root / "model_paper_private"
+            self.assertFalse(store.exists(), f"fresh test model-paper root unexpectedly exists: {store}")
+            with tempfile.TemporaryDirectory() as td:
+                root = Path(td)
+                account = root / "paper_account_state.adapter.json"
+                packet = root / "ohlcv.json"
+                packet.write_text(json.dumps(_packet("20260720", "20260717", [])), encoding="utf-8")
+                ctx = SimpleNamespace(
+                    model_paper_store_root=store,
+                    model_paper_run_account_mode="paper_only",
+                    decision_date="20260720",
+                    price_basis_date="20260717",
+                    generated_at="2026-07-20T08:00:00Z",
+                    ohlcv_series_packet_path=packet,
+                    account_state_path=account,
+                    official_output_root=state_root,
+                    private_root=state_root,
+                )
+                preview = _run_model_paper_adapter(ctx)
+                self.assertTrue(preview["seed_required"])
+                self.assertTrue(account.is_file())
+            self.assertFalse(store.exists(), "adapter preview must not create the model-paper store root")
+
     def test_default_pipeline_matures_then_adapts_before_bridge_and_freezes_after(self) -> None:
         names = [stage.name for stage in default_pipeline(include_model_paper=True)]
         self.assertLess(names.index("momentum_fetch"), names.index("model_paper_adapter"))

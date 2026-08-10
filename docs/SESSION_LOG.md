@@ -1,5 +1,35 @@
 # Session Log
 
+## 2026-08-10 — Claude 复审 PASS（问题2 carrier-root / leaf-preflight / model-paper 首周 seed）
+
+- **Verdict/Action**: PASS，已提交并合入 master。两条同类腿都改用 lane 既有的注入式隔离根 `temporary_us_short_state_directory`，正向控制仍跑完整事务且新增「三份 official 产物确实落在注入根内」的断言，比原版更强；真实 `state/us_short` 的 20260709 与 `_superseded` 残留已清空。生产面三个文件本轮未动。
+- **Required**: 无。`R-USSHORT-NEW-CAPSTONE-TEST-WRITES-INTO-THE-REAL-REPO-PRIVATE-ROOT` 与 `R-USSHORT-CARRIER-ROOT-LEAF-PREFLIGHT-AND-MODEL-PAPER-FIRST-SEED` 双双翻 `resolved`；上轮 5 条 Optional 仍 open、仍 non-blocking。独立复算与判据只在 `docs/system_risk_register.md`。
+- **Verify**: review-evidence:e68e2583047b。焦点超集亲跑（含上轮转红的资源隔离模块）`Ran 169 / 142.1s / OK receipt:a1634177c8bfc727d82dfa94`。植入：`_preflight_private_output_paths` 中和成 no-op → 点名测试精确转红，还原后 sha 前后同为 `2e01b679…`；红的原因是更深处 writer 的原生 `PrivatePathError`，说明纵深仍在。full lane 按 rule 4 引用执行方账本（`5735/5735 equal=True`、`316/316`），其 fingerprint 与我独立重算的一致。**超时原因**:一次 142s 焦点超集 + 一次被 PowerShell 引号吃掉、需改写脚本重做的植入探针串在墙钟上。
+- **Next**: Codex：Pass
+
+## 2026-08-10 — Codex 修复 Required：capstone/model-paper 测试改用注入式私密临时根（OPEN-NOT_VERIFIED）
+
+- **Verdict/Action**：`R-USSHORT-NEW-CAPSTONE-TEST-WRITES-INTO-THE-REAL-REPO-PRIVATE-ROOT` 已修复；weekly capstone 正向控制和 model-paper 首周 seed 预览均不再写/依赖真实 `state/us_short`，五条 Optional 保持未处理；Codex 未提交。
+- **Required**：同一 R-ID；待 Claude Code 独立审查后决定关闭或继续修复。
+- **Verify**：固定主 Python；资源隔离点名 `1 OK` receipt=`receipt:27466ca9e5aeeddac40d8b51`；affected focused `146 OK` receipt=`receipt:e7a0edc450540a89f16cd5e3`；inventory `18 OK` receipt=`receipt:7e34a2a9cf7656c50dbe5f6d`；full lane ledger `discovered=5735 ran=5735 equal=True / PASS / 592.724s`，fingerprint=`430062b2a96e4`；`py_compile=8`、`git diff --check` PASS；`20260709`、`_superseded`、`model_paper_private` 盘面扫描为空。
+- **Pre-Codex self-review**：`matrix=real-root negative + injected canonical full transaction + model-paper seed preview + resource snapshot + inventory`; `register=updated`; `handoff=updated`; `focused=146+18+1 PASS`; `full-lane=5735/5735 equal PASS`; `door=55 PASS receipt:545765f5d3b817c60a23a610`；`git diff --check=PASS`; `provider/network/live/account/clock/commit=NOT_USED`。
+- **Next**：Claude Code：独立审查并决定 Pass 或 Required
+
+## 2026-08-10 — Claude 审查 FAIL（问题2 carrier-root / leaf-preflight / model-paper 首周 seed）
+
+- **Verdict/Action**: FAIL，未提交。生产三处改动本身站得住：载体根 vs 叶子二分与桌面权威件 §问题2 方案逐项一致，未放宽 `reject_nonprivate_output_path`、未改 `.gitignore`、dry-run 语义不变；但新增回归测试拿真实仓库 `state/us_short` 当私密根跑真实事务，撞红既有资源隔离守卫，full lane 无法通过。
+- **Required**: `R-USSHORT-NEW-CAPSTONE-TEST-WRITES-INTO-THE-REAL-REPO-PRIVATE-ROOT`（阻断）；另记 5 条 Optional（preflight 只证 head 叶子 / serenity 结算块写入不在名单 / capstone 私密 writer 无纵深 / state_dir AST 守卫实测只覆盖 1 个 child / 相对 private-root 行为变更）。完整正文与实测只在 `docs/system_risk_register.md`。
+- **Verify**: review-evidence:7c7a14233519。焦点超集亲跑 `Ran 197 OK receipt:9cf2d8d1d47637bb4878e4e9`。reviewer 自起全量（rule 6：执行方那次全量在其后的 inventory 改动下已失效；rule 3(a) 生产顶层 runner 改动）：`discovered=5735 ran=5734 FAIL`，唯一红 `test_d_repo_shared_resource_tests_inject_state_and_lock_roots`。放松腿反向控制（`_store_root` 放宽属实但 `_week_paths` 仍 fail-closed）与 §6a 独立 agent 的收敛结论见 register。**超时原因**:401s 全量与 21 分钟独立 agent 串在墙钟上，二者均为强制项。
+- **Next**: Codex：修复
+
+## 2026-08-10 — Codex 修复问题1 Optional与桌面问题2（OPEN-NOT_VERIFIED）
+
+- **Verdict/Action**：问题1 Optional recurrence guard 与问题2 carrier-root/leaf-preflight/model-paper 首周 seed 已在本工作树修复；Codex 未提交。未放宽 private-path guard、未忽略整根、未改 schema/CLI/provider/live。
+- **Required**：`R-USSHORT-CARRIER-ROOT-LEAF-PREFLIGHT-AND-MODEL-PAPER-FIRST-SEED` 保持 `OPEN-NOT_VERIFIED`；问题1 Optional `R-USSHORT-NEW-PRIVATE-STATE-SUBDIR-HAS-NO-RECURRENCE-GUARD` 已修复但待独立审查。详情只在 register/handoff。
+- **Verify**：固定主 Python。三条承重回归 `3/3 PASS` receipt=`receipt:6ee0485a5f5e70b6691ab3c7`；focused `146/146 PASS` receipt=`receipt:beb25a11ea3b1625b55af028`；IO inventory `18/18 PASS` receipt=`receipt:d7ee5d51a1a2c9807ee0d682`；full-lane 唯一执行 `FAIL discovered=5735 ran=5274`，旧 inventory 基线失败，未重跑；`py_compile`/`git diff --check` 通过；door `55/55 PASS` receipt=`receipt:971fdcf25e64d9d407333f05`。
+- **Pre-Codex self-review**：`matrix=carrier-root positive + early negative preflight + missing model-paper seed + optional AST/planted`；`register=updated`；`handoff=updated`；`focused=3 red→green + 146 PASS`；`full-lane=FAIL 5735/5274, no retry`；`door=55 PASS receipt:971fdcf25e64d9d407333f05`；`provider/network/live/account/clock/commit=NOT_USED`。
+- **Next**：Claude Code：独立审查 Optional 与问题2，确认 full-lane FAIL 边界后决定 Pass 或 Required
+
 ## 2026-08-10 — Claude 审查 PASS（问题1 canonical transaction lock tracked ignore）
 
 - **Verdict/Action**: PASS，已提交并合入 master。本刀零生产 `.py` 改动：tracked `.gitignore` 加 1 条精确规则、一键真实坐标接线测试、深层负向控制、三份文档。与桌面权威件 §问题1「修复执行方案」的纳入/不纳入逐项一致（不建注册表/扫描器、不动 `.git/info/exclude`、不扩忽略面）。风险档=低（无 live provider、无 secret 落盘、无 fail-closed 引擎改动），故 §6a 不起独立 agent、rule 3 不起全量。
