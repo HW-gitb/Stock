@@ -1,5 +1,50 @@
 # US-short Serenity annotation — Blade 0 handoff
 
+## 2026-08-10 Codex — Blade3 structural annotation implementation (OPEN-NOT_VERIFIED)
+
+### Scope and Optional repair
+
+- User explicitly requested the latest Optional repair and execution of desktop Blade3. Work stayed in this worktree; the desktop plan and other worktrees remained read-only.
+- Removed the unused `policy_path` parameter from `validate_query_policy` and stopped passing it from `load_query_policy`. No redundant policy-path check or policy behavior change was introduced.
+- No provider/network/paid/live call, installation, active consumer, scoring/effect path, account/order action, independent review, or commit was performed.
+
+### Blade3 products
+
+- Added the candidate-offline versioned rubric: `presets/us_short_serenity_annotation_rubric_v0.1.0.json` plus its closed schema.
+- Added `schemas/us_short_serenity_structural_theme_annotation.schema.json` with explicit accepted upstream policy versions, required four-field upstream identity, source/validity fields, claim/source/falsifier structure, and `const:false` effect boundary.
+- Added `engine/us_short_serenity_structural_theme_annotation.py` with exact-result locator binding, packet-byte digest recheck, rubric/schema validation, expiry checks, deterministic annotation ID/digest checks, stable canonical bytes, and no `policy_disposition` consumption.
+- Added the offline fixture `tests/fixtures/us_short_serenity_structural_theme_annotation_v0_1.json` and focused/schema tests, including v0.2/v0.3 coexistence, cross-read rejection, unknown/missing/mismatched identity, legacy packet immutability, disposition-independence of canonical annotation content, expired validity, rubric mismatch, missing source, and planted effect-negative controls.
+- Updated the docs route and regenerated `docs/us_short_test_io_inventory_20260801.json` from the repository inventory generator; the snapshot is now 311 modules with no new unallowlisted write finding.
+
+### Self-review and test boundary
+
+- Fixed-Python focused command: `.tools\\run_unittest_with_repo_pythonpath.cmd tests.test_us_short_llm_theme_discovery_query_policy tests.test_us_short_llm_theme_discovery_policy_decision tests.schema.test_us_short_llm_theme_discovery_query_policy_v0_3_schema tests.test_us_short_serenity_structural_theme_annotation tests.schema.test_us_short_serenity_structural_theme_annotation_schema tests.test_us_short_discovery_conformance tests.test_us_short_test_io_inventory tests.provider.test_us_short_llm_theme_discovery_build_parent_plan`.
+- Result: `Ran 86 tests in 16.942s OK`, receipt `receipt:b25eb3b9c21f2e713ef740f1`, interpreter `C:\Users\cnhea\AppData\Local\Programs\Python\Python313\python.exe`.
+- Inventory sub-gate: `Ran 18 tests ... OK`, receipt `receipt:5bda7485aa461d1188fbe54c`, with `module_count=311`, classifications `240/1/4/5/61`, and no unallowlisted write findings.
+- Docs closeout gate: fixed-Python `Ran 66 tests in 1.179s OK`, receipt `receipt:7fb01c84b3e1f4e6dffc62c4`, covering document governance, route/ledger consistency, and README route length.
+- Pre-Codex self-review A-F: A scope/prerequisites and four-field identity; B exact-result locator and explicit v0.2/v0.3 allowlist; C negative controls for cross-read, expired/missing/mismatched identity, missing source and enabled effects; D schema/validator/canonicalizer/static route ripple; E handoff/risk/SESSION_LOG/README alignment; F fixed-Python tests, fixture, inventory and frozen-artifact boundary. `independent-self-review=NOT_USED` by the current role boundary.
+- Full US-short lane was not triggered because Blade3 is schema-only and has no production runner/shared consumer/provider seam; the known historical 0809 runbook SHA mismatch remains unchanged.
+
+### Handoff
+
+Claude Code should independently review Blade3 and the Optional closure. Until that review, keep the annotation candidate-offline and effect-free; do not wire it to macro cluster, scoring, Top15, seats, action, position, us_long, planner, provider/live execution, or commit.
+
+## 2026-08-10 追加：Claude 审查 PASS（刀3 收口并合入）
+
+**改了什么**：审查方未改产物，只补 `docs/system_risk_register.md` 一节审查结论、`docs/SESSION_LOG.md` 一条极简 verdict，并把刀2 那条 Optional 翻 `resolved`，然后提交刀3 全部文件并合入 master。
+
+**为什么**：刀3 的交付物就是「fail-closed 清单能不能真拦住」，所以必须由审查方自写攻击矩阵实测，不能只看执行方测试绿。
+
+**验证命令**：
+- `.tools\run_unittest_with_repo_pythonpath.cmd`（14 个模块的覆盖包，含 serenity 注解、query policy/plan/decision、conformance、IO inventory 与三道文档门）
+- reviewer 自写探针（scratchpad，未入库）：临时根内用真实 builder 造上游 decision result 与注解 → 1 条控制组 + 15 条 fail-closed 攻击 + canonicalizer 键序稳定 + disposition 独立性；到期腿另用注入时钟单独隔离。
+
+**验证结果**：覆盖包 `Ran 174 / 16.2s / failures=1`，唯一红为既有 20260809 冻结 runbook 摘要不符（本刀零 diff）。控制组 ACCEPTED；15 条攻击全部本轨 typed 拒；键序打乱后 canonical 字节相同；上游 disposition 一改 result id 即变、注解随即定位不到。到期门：同一注解 `now=2029` ACCEPTED、`now=2031` `valid_through has expired`。
+
+**失效旧结论**：刀2 的 Optional（`validate_query_policy` 未用形参）已闭，不再挂账。
+
+**下一步注意事项**：注解件目前零生产消费点，接线是刀4 的事，且刀4 的落点必须走**已注册区块机制**、不得开自由文本 H2。另留给刀5 一条：schema 只要求 `valid_through` 晚于 `source_cutoff_at` 与 `generated_at`，**没有上界**——「每周冻结」的窗口长度由刀5 定，本刀有意不预设常量。
+
 ## Scope
 
 Codex executed only the research-only Blade 0 feasibility smoke in the current worktree. The desktop方案 was read-only; the main tree frozen input was read-only. No provider/network call, installation, production-code/schema change, account/state write, broker/order action, independent review, or commit was performed.

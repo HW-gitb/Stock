@@ -1,0 +1,75 @@
+{
+  "annotation_id": "3b3c189e8294e2eb1ece631946cbb064cb131927c3e17e98689f8dff5891d9aa",
+  "canonical_annotation": {
+    "annotation_version": "structural_theme_annotation_v0.1.0",
+    "chain_role_by_ticker": {
+      "AAPL": {
+        "claim_support": "context",
+        "role": "ordinary_beneficiary",
+        "source_authority": "credible_secondary",
+        "source_ref_ids": ["fixture:source-1"]
+      },
+      "MSFT": {
+        "claim_support": "corroborating",
+        "role": "supply_chokepoint",
+        "source_authority": "lead",
+        "source_ref_ids": ["fixture:source-2"]
+      }
+    },
+    "claims": [
+      {
+        "claim_id": "claim:fixture-1",
+        "claim_support": "direct",
+        "source_authority": "credible_secondary",
+        "source_ref_ids": ["fixture:source-1"],
+        "statement": "The fixture records a structural hypothesis without activating any selection effect."
+      }
+    ],
+    "common_constraint_id": "constraint:fixture-supply",
+    "constraint_mechanism": "delivery_lead_time",
+    "falsifiers": [
+      {
+        "expected_window": "3_to_12_months",
+        "observable_metric": "reported delivery lead time",
+        "source_ref_ids": ["fixture:source-1"],
+        "statement": "Delivery lead time does not remain elevated in the stated horizon.",
+        "status": "open",
+        "type": "metric"
+      }
+    ],
+    "horizon_alignment": "3_to_12_months",
+    "horizon_basis_source_ref_ids": ["fixture:source-1"],
+    "near_term_observable": "The next disclosed order or capacity update should show whether the constraint persists.",
+    "scarce_layer": "equipment",
+    "structural_fit_candidate": false,
+    "structural_status": "unverified_lead",
+    "system_change": "A constrained supply condition may alter the value chain for the named companies.",
+    "system_change_id": "system:fixture-change",
+    "value_chain_layers": ["system", "equipment", "material"]
+  },
+  "effect_boundary": {
+    "operation_advice_effect_enabled": false,
+    "scoring_eligible": false,
+    "top15_effect_enabled": false
+  },
+  "generated_at": "2026-08-10T00:00:00+00:00",
+  "identity_envelope": {
+    "annotation_author_kind": "human",
+    "annotation_sha256": "fdf7673d69b225103060244620d0718f76c590619fe4589be3c0b488e38c62e6",
+    "generated_at": "2026-08-10T00:00:00+00:00",
+    "input_artifact_sha256": "ccbba88dd2fb37ff27b80c2e44f4edb1f9e2e8ead1f2df26fab084a92850f526",
+    "model_identity": null,
+    "prompt_or_protocol_id": "serenity_blade3_rubric_v0.1.0",
+    "review_status": "candidate_offline",
+    "rubric_version": "serenity_annotation_rubric_v0.1.0",
+    "source_cutoff_at": "2026-08-09T23:59:00+00:00",
+    "upstream_decision_date": "20260809",
+    "upstream_decision_result_id": "7350c8d099cb9af4e394b359313578369b8710222b89bb48b0bdd6e1b5ef1f6d",
+    "upstream_input_packet_id": "packet_20260809_blade3_fixture",
+    "upstream_policy_version": "soft_discovery_query_policy_v0.3.0",
+    "valid_through": "2030-01-01T00:00:00+00:00"
+  },
+  "schema_name": "us_short_serenity_structural_theme_annotation",
+  "schema_ref": "schemas/us_short_serenity_structural_theme_annotation.schema.json",
+  "schema_version": "1.0.0"
+}
