@@ -530,3 +530,30 @@ Claude Code：独立审查刀2四字段连接代码及 `decision_result_id` sche
 **失效旧结论**：「两动作闭环尚未经独立审查」已闭；此后可把它当已审实现引用，但**质量门仍不是生产证据**（无真实 formal 周）。
 
 **下一步注意事项**：① `_merge_pending` 里的第二道回填检查是冗余层（中和后测试仍绿），按 §5 留着无后果，若将来重构可一并收敛。② 刀6 仍需你在 G1 选定唯一映射并给出真实 `quality_gate_result_id`。③ count gate 实跑数比发现数多 10 仍未定位。
+
+## 2026-08-10 追加：full-lane 资源隔离 residual 验证收口（OPEN-NOT_VERIFIED）
+
+**修复现状**：当前 HEAD 已有 `.tools/parallel_lane_runner.py::serial_tail_modules`，按跨进程锁依赖图把相关模块移到并行波次之后逐个运行；本轮没有再改生产代码或测试承载代码，而是用真实 full lane 验证该修复确实承重。
+
+**验证结果**：固定 Python313 资源隔离 + parallel runner 反控 `Ran 18 / 92.626s / OK`；真实 `us_short` 并行 full lane `modules=316, discovered=5729, ran=5729, equal=True, Ran 5729, status=PASS, 396.649s`；资源隔离模块在 serial tail `Ran 1 / 65.4s / PASS`。此前的锁竞争与 count mismatch 未复现。
+
+**边界**：无 provider/live/API/secret、效果、刀6/7或自动下单；当前只验证测试承载层。Claude Code 需独立复核后正式关闭该 R-ID；原 risk register 下方历史 OPEN 条目不再代表当前状态。
+
+**Claude Code 命令**：`Claude Code：独立复核 R-USSHORT-FULL-LANE-RESOURCE-ISOLATION-PARALLEL-RESIDUAL；确认 serial_tail_modules 的锁依赖隔离、资源模块正反顺序控制、discovered=5729 与 ran=5729 的真实 full lane PASS；按 AGENTS.md/AI_REVIEW_PROTOCOL.md 决定 Pass 或 Required，不进入刀6/7。`
+
+## 2026-08-10 追加：Claude 独立复核 PASS（full-lane 资源隔离 residual，收口并合入）
+
+**改了什么**：审查方未改产物，只把 `R-USSHORT-FULL-LANE-RESOURCE-ISOLATION-PARALLEL-RESIDUAL` 翻 `resolved` 并补一节逐条核实与一处过程边界、`docs/SESSION_LOG.md` 一条极简 verdict。
+
+**为什么**：本轮 diff 是纯文档、却把该 residual 标成已解决，所以必须核「凭什么」。`serial_tail_modules` 早由 `55d0333e` 进入 HEAD，复核对象是既有实现；而结论里的 full-lane 数字必须能被引用，不能只是写在文里。
+
+**验证命令**：
+- `.tools\run_unittest_with_repo_pythonpath.cmd --timeout-seconds 900 tests.test_us_short_discovery_conformance_resources tests.test_parallel_lane_runner`
+- 植入：把 `serial_tail_modules` 返回置空 → 跑 `tests.test_parallel_lane_runner` → 按原字节还原
+- `.tools\full_pack_ledger.py check us_short`；随后 rule 6 升级 `.tools\full_pack_ledger.py run us_short ... 860 -- discover -s tests -p "test_us_short*.py"`
+
+**验证结果**：资源隔离+反控 `Ran 18 / 82.7s / OK receipt:c9cbfd96737d57056850222f`。植入使三条用例精确转红（锁可达推导 / 与各真实 lane 匹配 / 尾巴在波次后跑且计入同一 gate），还原 sha `5ce352f9c5b35fe1`、零残留。reviewer 自起全量 `discovered=5729 ran=5729 equal=True / Ran 5729 in 365.5s / PASS`，已按当前指纹入账。
+
+**失效旧结论**：我此前多轮挂着的「us_short 全量实跑数比发现数多 10、rule-3 证据通道拿不到绿」**已作废**——那出自更早代码态，现在 count gate 相等且账本有可引用的 PASS。
+
+**下一步注意事项**：官方全量必须走 `full_pack_ledger run` 单一入口——本轮 register 里引用的 5729 当时并未记账，`check` 报无缓存绿，害得复核方重跑一次 365s。下次先记账再引用。刀6/7 未进入。

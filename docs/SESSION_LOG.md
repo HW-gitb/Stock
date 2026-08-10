@@ -1,5 +1,20 @@
 # Session Log
 
+## 2026-08-10 — Claude 独立复核 PASS（full-lane 资源隔离 residual）
+
+- **Verdict/Action**: PASS。三项声明逐条核实：串行尾巴由源码+import 依赖图推导而非手工清单、文件读不动即判触达锁（fail-closed）；资源模块反控成立；真实 full lane 在当前代码态 `5729/5729 equal=True PASS`。本轮 diff 为纯文档，`serial_tail_modules` 早由 `55d0333e` 进入 HEAD，故复核对象是既有实现而非新代码。顺带关掉我此前挂着的「实跑数多 10」那笔——那出自更早代码态。
+- **Required**: 无。`R-USSHORT-FULL-LANE-RESOURCE-ISOLATION-PARALLEL-RESIDUAL` 翻 resolved；一处过程边界（register 引用的 5729 当时未经 `full_pack_ledger run` 记账、不可引用）只记在 `docs/system_risk_register.md`。Optional=无。
+- **Verify**: review-evidence:not_available（本轮未注入 token）。资源隔离+runner 反控 `Ran 18 / 82.7s / OK receipt:c9cbfd96737d57056850222f`。植入：`serial_tail_modules` 返回置空 → `test_parallel_lane_runner` 三条精确转红（推导/各 lane 匹配/尾巴计入同一 gate），还原 sha `5ce352f9c5b35fe1`、零残留。**reviewer 自起全量**（rule 6：`check us_short` 报当前态无缓存绿、账本仅 `5726 OK@830ec675`、无 5729 记录）：`discovered=5729 ran=5729 equal=True / Ran 5729 in 365.5s / PASS`，已入账。**超时原因**:先核账本发现 5729 不可引用，遂按 rule 6 自起 365s 全量，再加植入控制串在墙钟上。
+- **Next**: Codex：Pass
+
+## 2026-08-10 — Codex 修复并验证 full-lane 资源隔离 residual（OPEN-NOT_VERIFIED）
+
+- **Verdict/Action**: 当前 HEAD 已用 `serial_tail_modules` 按跨进程锁依赖把相关模块移到并行波次之后逐个运行；本轮复现并确认 `R-USSHORT-FULL-LANE-RESOURCE-ISOLATION-PARALLEL-RESIDUAL` 不再发生。未改生产路径、provider/live/API/secret、效果或刀6/7。
+- **Required**: `R-USSHORT-FULL-LANE-RESOURCE-ISOLATION-PARALLEL-RESIDUAL` 技术条件已在当前树满足；待 Claude Code 独立复核后再正式关闭。完整细节只写 `docs/system_risk_register.md`。
+- **Verify**: 固定 Python313 资源隔离 + parallel runner 反控 `Ran 18 / 92.626s / OK`；真实 `us_short` 并行 full lane `modules=316, discovered=5729, ran=5729, equal=True, Ran 5729, status=PASS, 396.649s`；资源隔离模块 `Ran 1 / 65.4s / PASS`。无 provider/live/API/secret/effect/刀6/7。
+- **Pre-Codex self-review**: matrix=parallel lock/dependency serial-tail + discovery/count-gate + resource-module standalone; register=updated `docs/system_risk_register.md`; handoff=updated `docs/handoff/2026-08-09_us_serenity_annotation_blade0_handoff.md`; focused=18 OK; full-lane=5729 PASS equal; door=doc-governance + route-doc 66 OK; independent-review=NOT_USED。
+- **Next**: Claude Code：独立复核 full-lane resource isolation residual 并决定 Pass 或 Required
+
 ## 2026-08-10 — Claude 审查 PASS（刀5 两动作闭环独立收口）
 
 - **Verdict/Action**: PASS。**基线更正**：命令给的 `01553180` 其后又落了三个提交（含改到本轮那条缝的构造器收敛），故按主树当前 tip `4c683bec` 收口。四项判据均成立：第 1 次动作先结算唯一 pending 再产 annotation 且 producer 不合成语义；第 2 次动作只认唯一 pending 目标、`os.replace` 原子写、同内容幂等异内容拒覆盖；identity 八维绑定且 self-review 双门；质量门与 G1/刀6 preflight 恒 zero-effect、fail-closed、零 preregistration。
