@@ -1,5 +1,51 @@
 # US-short Serenity annotation — Blade 0 handoff
 
+## 2026-08-10 Codex — Blade4 shadow consumer wiring (OPEN-NOT_VERIFIED)
+
+### Scope and boundaries
+
+- User explicitly requested execution of desktop Blade4 in the current worktree. Blade3 is present in HEAD; the desktop plan and other worktrees remained read-only.
+- Added a pure offline shadow consumer. It has no provider/network/paid/live call, installation, account/order action, production schedule, regular weekly producer mutation, independent review, or commit.
+- The consumer is deliberately optional: `None` is a dormant week, malformed or undeclared-version input becomes a local `invalid_annotation`, and an overlay failure leaves the ordinary report text unchanged with `main_task_should_abort=false`.
+
+### Blade4 products
+
+- Added `engine/us_short_serenity_shadow_consumers.py` and `schemas/us_short_serenity_shadow_consumption.schema.json`.
+- The consumer emits `structural_constraint_cluster_shadow`, `us_short_relevance_hint`, `us_long_research_candidate`, a registered report block, and a decision trace. Every active surface repeats the six-field Blade3 identity chain: `annotation_id`, `schema_version`, `rubric_version`, `upstream_decision_result_id`, `upstream_policy_version`, and `upstream_decision_date`.
+- The report overlay is pure Markdown-to-Markdown composition. It inserts one registered banner bullet under the existing `## 诚实横幅` and appendix bullets under the existing `## 12. ` section; it does not open a report file, create a free-text H2, or alter the regular weekly producer.
+- Added focused and schema tests in `tests/test_us_short_serenity_shadow_consumers.py` and `tests/schema/test_us_short_serenity_shadow_consumption_schema.py`, including real Blade3 validator routing through a materialized offline root, dormant week, invalid version, missing/duplicate registered sections, tampered effect flags, identity replication, no-new-H2, and local no-abort behavior.
+- Regenerated `docs/us_short_test_io_inventory_20260801.json` while preserving the existing allowlist/dispositions: `module_count=313`, `class0_no_direct_protected_io=242`, and no new protected-root write finding for the two new modules.
+
+### Self-review and test boundary
+
+- Fixed-Python focused command: `.tools\run_unittest_with_repo_pythonpath.cmd tests.test_us_short_llm_theme_discovery_query_policy tests.test_us_short_llm_theme_discovery_policy_decision tests.schema.test_us_short_llm_theme_discovery_query_policy_v0_3_schema tests.test_us_short_serenity_structural_theme_annotation tests.schema.test_us_short_serenity_structural_theme_annotation_schema tests.test_us_short_serenity_shadow_consumers tests.schema.test_us_short_serenity_shadow_consumption_schema tests.test_us_short_discovery_conformance tests.test_us_short_test_io_inventory tests.provider.test_us_short_llm_theme_discovery_build_parent_plan`.
+- Result: `Ran 96 tests in 14.811s OK`, receipt `receipt:4302aa65f2274405accc8fd3`, interpreter `C:\Users\cnhea\AppData\Local\Programs\Python\Python313\python.exe`.
+- Final docs closeout gate: `.tools\run_unittest_with_repo_pythonpath.cmd tests.test_doc_governance_guard tests.test_route_doc_ledger_status_consistency tests.test_readme_route_row_length`; `Ran 66 tests in 0.998s OK`, receipt `receipt:55f36170169fc080d39879e9`.
+- Inventory sub-gate after the final source shape: fixed-Python inventory generator, `313` modules, class-0 increment only for the new shadow consumer/test modules; the checked-in legacy unresolved dispositions remain unchanged.
+- Inventory command used to preserve the existing reviewed dispositions while regenerating the snapshot: `cmd.exe /d /c call "C:\Users\cnhea\AppData\Local\Programs\Python\Python313\python.exe" -c "import json,subprocess;from pathlib import Path;from tests.provider.us_short_test_io_inventory import write_inventory;repo=Path('D:/cnhea/Codex/worktrees/b511/Stock');old=json.loads(subprocess.check_output(['git','-C',str(repo),'show','HEAD:docs/us_short_test_io_inventory_20260801.json'],text=True));write_inventory(repo,repo/'docs/us_short_test_io_inventory_20260801.json',allowlist=old['allowlist'],unresolved_allowlist=old['unresolved_allowlist'])"`.
+- Pre-Codex self-review A-F: A=Blade3 prerequisite and desktop Blade4 scope; B=identity repeated across all three advisory surfaces, report block, and trace; C=dormant/invalid/mismatch/duplicate/missing-section/tamper/no-new-H2 negative controls; D=module/schema/test/inventory/route ripple; E=SESSION_LOG/risk/handoff alignment; F=fixed-Python tests, diff check and docs gates. `independent-self-review=NOT_USED` by role boundary; provider/network/paid/live/effect/commit=NOT_USED.
+- Full US-short lane was not triggered: Blade4 remains a pure optional shadow consumer with no provider, production runner, active scoring, or shared selection seam; the pre-existing 20260809 frozen runbook SHA mismatch remains unchanged.
+
+### Handoff
+
+Claude Code should independently review Blade4 against the updated desktop plan, especially the registered block mechanism, exact identity-chain replication, no-abort exception behavior, and all false effect flags. Until that review, keep all three outputs advisory-only; do not wire them into `macro_cluster`, scoring, Top15, seats, action, position, `us_long`, planner, provider/live execution, or commit.
+
+## 2026-08-10 追加：Claude 审查 PASS（刀4 收口并合入）
+
+**改了什么**：审查方未改产物，只补 `docs/system_risk_register.md` 一节审查结论与 `docs/SESSION_LOG.md` 一条极简 verdict，然后提交刀4 四个文件并合入 master。
+
+**为什么**：刀4 的 Stop 条件是「任何落点若能影响 `action_confidence`/仓位/席位即 FAIL」，这种条件不能靠产物里的 `*_changed=false` 字段自证，必须看模块**够不够得着**那些东西，并实测休眠周/异常周的真实行为。
+
+**验证命令**：
+- `.tools\run_unittest_with_repo_pythonpath.cmd`（10 个模块的覆盖包：shadow 消费者、其 schema、刀3 契约与 schema、policy decision、conformance、IO inventory 与三道文档门）
+- reviewer 自写探针（scratchpad，未入库）：临时根内造真实上游 decision result 与真实刀3 注解 → 1 条控制组 + 休眠周 + 三种坏注解 + 三种坏报告 + 一条 Markdown 注入 + import/符号面静态扫描。
+
+**验证结果**：覆盖包 `Ran 141 / 16.2s / OK`、`receipt:fc0c36ae231590069db03253`。控制组投递成功且 `## ` 标题集合 4→4 不变、注册标记恰 1 处、六字段身份在 5 个面逐字段一致；休眠周与三种坏注解、三种坏报告均不 abort 且报告文本逐字节不变；注入的换行+`## ` 在刀3 schema 层即被拒。静态面：模块 import 只有 `json`/`pathlib`/`typing` 与刀3 契约，`macro_cluster` 全文仅出现在 docstring 否定句。
+
+**失效旧结论**：无。刀3 的结论与边界不变。
+
+**下一步注意事项**：**刀4 仍然没有调用方**——周报生产者一行未改，消费者是等着被接的纯函数。所以「无注解周不打开报告文件」这条目前只证明到「消费者自己不开文件」，接进真实 runner 后要在刀5 重验一次。刀5 另需定 `valid_through` 的窗口长度（schema 至今无上界）。
+
 ## 2026-08-10 Codex — Blade3 structural annotation implementation (OPEN-NOT_VERIFIED)
 
 ### Scope and Optional repair
