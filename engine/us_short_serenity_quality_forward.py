@@ -376,6 +376,8 @@ def _observation(
     review_present: bool,
     shadow_status: str,
     error: dict[str, str] | None,
+    report_block_delivered: bool | None = None,
+    report_block_problem: str | None = None,
 ) -> dict[str, Any]:
     value = {
         "schema_name": SCHEMA_NAME,
@@ -392,6 +394,8 @@ def _observation(
         "eligible": status == "eligible",
         "shadow_consumption_status": shadow_status,
         "report_overlay_available": shadow_status == "active",
+        "report_block_delivered": report_block_delivered,
+        "report_block_problem": report_block_problem,
         "effects": dict(EFFECT_BOUNDARY),
         "error": error,
     }

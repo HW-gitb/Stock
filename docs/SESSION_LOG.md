@@ -1,5 +1,20 @@
 # Session Log
 
+## 2026-08-10 — Claude 审查 PASS（刀5 Optional 收口 + 20260809 runbook SHA 守卫退役）
+
+- **Verdict/Action**: PASS。删守卫只删了「操作说明书」一条，packet/schema/assessment 三条执行证据仍钉死且实测为活；Optional 两字段进了 observation schema 的 required、每条投递路径都返回结果并原子回写磁盘，且不与 ledger 失步（record 不含 observation 内容或摘要）。刀6 的 STOP 判断正确：无真实 `quality_gate_result_id`、无用户选定的唯一映射。
+- **Required**: 无。全量 count gate 对不上一事已记入 `docs/system_risk_register.md`，归属未定、不阻塞本刀。Optional=无。
+- **Verify**: review-evidence:3fe5ba7e72a3。三条留存 pin 实算与钉死值逐条 MATCH；植入 assessment 期望末两位 → 精确转红并点名该文件，还原后同模块 11 项全绿；全仓 grep `301ed0a5`/`probe_20260809_runbook` 零命中。验收超集 `Ran 239 / 48.9s / OK receipt:fbb4a52dda2d9d35856e2dee`。全量（rule 3(a)+rule 6 升级）`discovered=5730 ran=5740 equal=False / Ran 5740 in 345.6s / UNKNOWN`，**parallel-lane 零 FAIL 模块**——无红测试，卡在 count gate 多出 10 且跨运行非确定（执行方 5739、我 5740）。**过程缺陷**:我用 `sed -i` 植入把该测试文件工作树行尾归一成 LF（git diff 仍 4+/5−、内容未变）并遗留陈旧 `.pyc` 致一轮假红，清 `__pycache__` 后复绿。**超时原因**:植入还原后的假红定位 + 重取 receipt + 345s 全量三段串在墙钟上。
+- **Next**: Codex：Pass
+
+## 2026-08-10 — Codex 修复刀5 Optional + 20260809 runbook guard（OPEN-NOT_VERIFIED）
+
+- **Verdict/Action**：刀5 Optional 已修复：报告 overlay 的 `report_block_delivered` / `report_block_problem` 写回 quality observation；20260809 runbook 的过时单文件 SHA256 pin 已按用户指令移除，保留 packet/schema/assessment 冻结校验；并补齐 optional-stage conformance 白名单。
+- **Required**：`R-USSHORT-SERENITY-BLADE6-G1-DECISION-MISSING` — 刀6停在文档前置，不创建 preregistration 或 effect 路径；并行 full-lane residual 见 `docs/system_risk_register.md`。
+- **Verify**：fixed-Python repair/conformance pack `Ran 200 tests in 74.535s OK`，receipt=`receipt:ce9886b1e91cd2889f646eec`；`py_compile` 通过；首次 full-lane `FAIL 5730/5520` 的确定红为 optional-stage 白名单，已修；第二次 full-lane `FAIL discovered=5730 ran=5739` 的唯一失败模块为 `test_us_short_discovery_conformance_resources`，单独 fixed-Python `Ran 1 test in 63.095s OK`，receipt=`receipt:30383f939bfe02c5f70e04fc`；最终文档治理门 `Ran 66 tests in 1.160s OK`，receipt=`receipt:0c8cb174e5426b44199e1b7e`；`git diff --check` 通过。
+- **Pre-Codex self-review**：matrix=Optional success/failure/missing-report trace、observation schema null→bool/string、overlay no-abort、runbook SHA-only guard removal、packet/schema/assessment retained guard、optional conformance registry、G1 exact preconditions；register=updated；handoff=updated；focused=200/200 OK；full-lane=NOT_VERIFIED（parallel resource-isolation residual）；independent-self-review=NOT_USED；provider/network/paid/live/effect/commit=NOT_USED；door=docs/route gates PASS。
+- **Next**：用户：选择唯一刀6效果映射
+
 ## 2026-08-10 — Claude 审查 PASS（刀5 注解质量 forward 周度接入）
 
 - **Verdict/Action**: PASS。新 stage 可选、zero_effect、自带 typed 降级并排出 provider receipt 必需集；唯一写生产周报处只在 shadow active 时进入（休眠周不开文件）、先做私有根包含检查再 temp+replace 原子替换，且 `private_root`/`official_output_root` 实为真实字段、包含检查非恒真。五指标判断形、阈值计数前冻结在 preset、cohort 四维且禁跨聚合。

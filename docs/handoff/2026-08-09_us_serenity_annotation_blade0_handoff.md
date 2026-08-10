@@ -1,5 +1,44 @@
 # US-short Serenity annotation — Blade 0 handoff
 
+## 2026-08-10 Codex — Blade5 Optional repair + 20260809 runbook guard disposition（OPEN-NOT_VERIFIED）
+
+### Repair scope and boundaries
+
+- Repaired the reviewed Blade5 Optional: the report bridge now keeps `report_block_delivered` and `report_block_problem` in the quality observation after the optional overlay attempt, including malformed/missing registered sections and replacement failures. The existing no-abort and advisory-only boundaries remain unchanged.
+- Per the user's latest instruction, removed only the obsolete single-file SHA256 pin for `docs/us_short_soft_discovery_probe_20260809_runbook.md`; did not restore the old runbook, edit provider/raw/paid artifacts, or rewrite other frozen packet/schema/assessment checks. The optional-stage conformance matrix now includes `serenity_quality_forward`.
+- No provider/network/paid/live call, account/order action, active effect, independent review, or commit was performed.
+
+### Evidence
+
+- Fixed-Python repair/conformance pack: `Ran 200 tests in 74.535s OK`, receipt=`receipt:ce9886b1e91cd2889f646eec`; fixed-Python `py_compile` passed; final docs governance gate `Ran 66 tests in 1.160s OK`, receipt=`receipt:0c8cb174e5426b44199e1b7e`; `git diff --check` passed.
+- First official full-lane after the SHA guard change: `FAIL discovered=5730 ran=5520`; the only deterministic failure was the stale optional-stage conformance expectation, now repaired.
+- Second official full-lane: `FAIL discovered=5730 ran=5739`; `test_us_short_discovery_conformance_resources` failed only under the parallel lane. Standalone fixed-Python reproduction passed `Ran 1 test in 63.095s OK`, receipt=`receipt:30383f939bfe02c5f70e04fc`. Do not call the full lane green; this residual is separately registered.
+
+### Blade6 stop
+
+Desktop Blade6 cannot be implemented yet. The current repo has no real settled `quality_gate_result_id` and no user-selected `g1_decision_id`/unique effect mapping. Codex therefore created no preregistration, changed no effect flag, and did not wire either `theme_fit_score → selected_tickers` or `bounded soft boost → operation_advice`. User must choose exactly one mapping before the Blade6 slice can start.
+
+### Handoff
+
+Claude Code should independently review the Optional trace repair, the SHA-only guard removal, retained frozen data checks, and the optional-stage conformance update. Keep Blade6 stopped until the user selects one mapping and the documented quality-gate precondition is real; do not use test-fixture gate IDs as production evidence.
+
+## 2026-08-10 追加：Claude 审查 PASS（Optional 收口 + 守卫退役，收口并合入）
+
+**改了什么**：审查方未改产物，只补 `docs/system_risk_register.md` 一节审查结论、`docs/SESSION_LOG.md` 一条极简 verdict，然后提交本轮全部文件并合入 master。
+
+**为什么**：本轮含一处**删冻结守卫**的放松类改动，必须做强制腿反向控制——既要证明「删对了那一条」，也要证明「剩下的还活着」。
+
+**验证命令**：
+- `.tools\run_unittest_with_repo_pythonpath.cmd --timeout-seconds 900`（9 模块验收超集）
+- 植入：把 assessment 的钉死期望末两位改掉 → 跑该 schema 模块 → 还原
+- `.tools\full_pack_ledger.py run us_short "<rule 3(a)+rule 6>" receipt:fbb4a52dda2d9d35856e2dee 860 -- discover -s tests -p "test_us_short*.py"`
+
+**验证结果**：三条留存 pin 实算与钉死值逐条 MATCH；植入精确转红并点名 assessment，还原后同模块 11 项全绿；`301ed0a5`/`probe_20260809_runbook` 全仓零命中。验收超集 `Ran 239 / 48.9s / OK receipt:fbb4a52dda2d9d35856e2dee`。全量 `discovered=5730 ran=5740 equal=False / Ran 5740 in 345.6s / UNKNOWN`，**零 FAIL 模块**。
+
+**失效旧结论**：`R-USSHORT-SOFT-DISCOVERY-20260809-FROZEN-RUNBOOK-HASH-DOES-NOT-MATCH-HEAD` 所描述的那条红已随 pin 退役消失；但「us_short 拿不到可记账的全量绿」这个**后果没有消失**，只是原因从冻结 SHA 换成了 count gate 的实跑数比发现数多 10（且非确定）。
+
+**下一步注意事项**：① count gate 那 10 个的来源要单独定位（怀疑运行期用例数超过 selector 发现数，如 subTest / 动态 `load_tests`），归属是否本刀未定，下一刀前应查清，否则 rule-3 证据通道一直是 UNKNOWN。② 刀6 需要你在 G1 选定**唯一**映射（继续 advisory-only / 有限映射进 `theme_fit_score` / 有限 soft boost）并给出真实 `quality_gate_result_id`，测试 fixture 的 gate ID 不能当生产证据。③ 用 `sed -i` 在 Codex worktree 里做植入会翻行尾并留陈旧 `.pyc`，下次改用 Python 按字节改写并清 `__pycache__`。
+
 ## 2026-08-10 Codex — Blade5 quality forward weekly wiring (OPEN-NOT_VERIFIED)
 
 ### Scope and boundaries

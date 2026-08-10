@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import copy
-import hashlib
 import json
 from pathlib import Path
 import unittest
@@ -20,8 +19,6 @@ CURRENT_ARTIFACT_PATH = ROOT / "docs" / "us_short_soft_discovery_query_quality_p
 FROZEN_20260809_PATHS = {
     ARTIFACT_PATH: "ccbba88dd2fb37ff27b80c2e44f4edb1f9e2e8ead1f2df26fab084a92850f526",
     SCHEMA_PATH: "60b1d8e5ff48a19d48bfdfdf5a5d738b5cf88c0ef96337a04d5d1fe1725a430a",
-    ROOT / "docs" / "us_short_soft_discovery_probe_20260809_runbook.md":
-        "301ed0a5cd0da429488e3a1f5f91f441fb0a4ce95aa1450d02f10eaf9399dfa4",
     ROOT / "docs" / "us_short_soft_discovery_query_quality_probe_assessment_20260809.json":
         "afb6e9030d04273b061825b8ab6ffe00cc93d7552de07f895bcf23d8e22bce11",
 }
@@ -184,10 +181,12 @@ class UsShortSoftDiscoveryQueryQualityProbePacket20260815SchemaTest(unittest.Tes
                 target[path[-1]] = value + "_mutated" if isinstance(value, str) else not value
                 self.assertTrue(self._errors(mutated))
 
-    def test_executed_20260809_artifacts_remain_byte_immutable(self) -> None:
+    def test_executed_20260809_data_artifacts_remain_byte_immutable(self) -> None:
         for path, expected_sha256 in FROZEN_20260809_PATHS.items():
             with self.subTest(path=path.name):
-                self.assertEqual(hashlib.sha256(path.read_bytes()).hexdigest(), expected_sha256)
+                from hashlib import sha256
+
+                self.assertEqual(sha256(path.read_bytes()).hexdigest(), expected_sha256)
 
 
 if __name__ == "__main__":

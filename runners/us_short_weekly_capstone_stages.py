@@ -861,11 +861,14 @@ def run_weekly_bridge(ctx) -> dict[str, Any]:
         soft_discovery_receipt_paths=soft_paths,
         projection_binding_expectations=_bridge.FULL_CANDIDATE_LIVE_PROJECTION_BINDING,
     )
-    _deliver_serenity_shadow_to_official_report(ctx, summary)
+    delivery = _deliver_serenity_shadow_to_official_report(ctx, summary)
+    _record_serenity_report_delivery(ctx, delivery)
     return summary
 
 
-def _deliver_serenity_shadow_to_official_report(ctx, summary: Mapping[str, Any]) -> None:
+def _deliver_serenity_shadow_to_official_report(
+    ctx, summary: Mapping[str, Any]
+) -> dict[str, Any] | None:
     """Best-effort report delivery after the bridge has emitted its ordinary report.
 
     The Blade4 consumer remains a pure text overlay.  This caller is the one
@@ -874,14 +877,19 @@ def _deliver_serenity_shadow_to_official_report(ctx, summary: Mapping[str, Any])
     """
     shadow = getattr(ctx, "serenity_shadow_result", None)
     if not isinstance(shadow, Mapping) or shadow.get("status") != "active":
-        return
+        return None
     batch4 = summary.get("batch4_run") if isinstance(summary, Mapping) else None
     output_paths = batch4.get("output_paths") if isinstance(batch4, Mapping) else None
     report_value = output_paths.get("weekly_report_path") if isinstance(output_paths, Mapping) else None
     if not isinstance(report_value, str) or not report_value:
-        return
+        return {
+            "report_block_delivered": False,
+            "report_block_problem": "weekly report path is missing",
+            "main_task_should_abort": False,
+        }
     report_path = Path(report_value).resolve()
     private_root = Path(getattr(ctx, "official_output_root", None) or getattr(ctx, "private_root", report_path.parent)).resolve()
+    temporary = None
     try:
         report_path.relative_to(private_root)
         report_text = report_path.read_text(encoding="utf-8")
@@ -889,15 +897,57 @@ def _deliver_serenity_shadow_to_official_report(ctx, summary: Mapping[str, Any])
 
         delivered = deliver_serenity_shadow_to_report(report_text, shadow)
         if not delivered.get("report_block_delivered"):
-            return
+            return delivered
         temporary = report_path.with_name(report_path.name + ".serenity.tmp")
         temporary.write_text(delivered["report_text"], encoding="utf-8")
         temporary.replace(report_path)
-    except Exception:
+        return delivered
+    except Exception as exc:
         try:
-            temporary.unlink(missing_ok=True)
-        except (UnboundLocalError, OSError):
+            if temporary is not None:
+                temporary.unlink(missing_ok=True)
+        except OSError:
             pass
+        return {
+            "report_block_delivered": False,
+            "report_block_problem": f"{type(exc).__name__}: {str(exc).replace(chr(10), ' ')[:260]}",
+            "main_task_should_abort": False,
+        }
+
+
+def _record_serenity_report_delivery(ctx, delivery: Mapping[str, Any] | None) -> None:
+    """Persist the optional overlay outcome without making report delivery fatal."""
+    if not isinstance(delivery, Mapping) or type(delivery.get("report_block_delivered")) is not bool:
+        return
+    delivered = delivery["report_block_delivered"]
+    problem = delivery.get("report_block_problem")
+    if problem is not None:
+        problem = " ".join(str(problem).replace("\r", " ").replace("\n", " ").split())[:300]
+
+    quality_result = getattr(ctx, "serenity_quality_run_result", None)
+    if isinstance(quality_result, dict):
+        quality_result["report_block_delivered"] = delivered
+        quality_result["report_block_problem"] = problem
+        observation = quality_result.get("observation")
+        if isinstance(observation, dict):
+            observation["report_block_delivered"] = delivered
+            observation["report_block_problem"] = problem
+
+    observation_path = getattr(ctx, "serenity_quality_observation_path", None)
+    if not isinstance(observation_path, (str, Path)):
+        return
+    try:
+        path = Path(observation_path)
+        payload = json.loads(path.read_text(encoding="utf-8"))
+        if not isinstance(payload, dict) or payload.get("schema_name") != "us_short_serenity_quality_forward_observation":
+            return
+        payload["report_block_delivered"] = delivered
+        payload["report_block_problem"] = problem
+        path.parent.mkdir(parents=True, exist_ok=True)
+        temporary = path.with_name(path.name + ".tmp")
+        temporary.write_text(json.dumps(payload, ensure_ascii=False, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+        temporary.replace(path)
+    except (OSError, UnicodeDecodeError, json.JSONDecodeError, TypeError, ValueError):
         return
 
 
