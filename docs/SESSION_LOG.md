@@ -1,5 +1,12 @@
 # Session Log
 
+## 2026-08-10 — Claude 自修 + 自审 PASS（刀3 夹具原始字节摘要）
+
+- **Verdict/Action**: PASS。按用户指示由我修这条 Optional。先证明它承重（夹具经 `validate_annotation` 与运行时 `read_bytes()` 摘要比对），并发现受影响的是**三个**值而非我原先点名的一个（`input_artifact_sha256` → `upstream_decision_result_id` → `annotation_id` 层层含摘要）。修法：临时根复制受追踪文本按 LF 归一，夹具用真实 builder 从归一字节重生成；正文与 effect 边界逐字节未变。
+- **Required**: 无。`R-USSHORT-SERENITY-BLADE3-FIXTURE-BAKES-A-RAW-BYTE-DIGEST` 翻 resolved，正文与实测只在 `docs/system_risk_register.md`。Optional=无。
+- **Verify**: review-evidence:f9232d4bb5d4。反向控制①把仓库 packet 翻成 LF（主树形态）→ 刀3 两模块 `11 OK`，还原后 sha 回 `ccbba88d…`；②非恒真对照：旧夹具配归一字节 → 精确转红。两棵树各验：b511 `Ran 39 OK receipt:13f24f1f95316fe267c3bf38`；主树组合态 `Ran 115 / 46.8s / OK receipt:a5aa81d822535296bf476ac8`（含 a_short 捆绑、零冲突）。自审：我的改动使 `import shutil` 成孤儿已删；`git status` 恰两个意图文件、无探针残留。**超时原因**:两条反向控制 + 重取 receipt + 主树组合态四段串在墙钟上。
+- **Next**: Codex：Pass
+
 ## 2026-08-10 — Claude 复审 PASS（冻结 pin 行尾依赖已闭）
 
 - **Verdict/Action**: PASS。整块删除字节 pin 与其测试、清掉无用 `PACKET_SHA256`、把测试名改回与实际校验一致，落在闭合判据第三条并与项目 §5 一致。保护未随之消失：packet 有内容绑定、schema 有形状校验、20260815 重槽有等值守卫，三者都基于解析后内容、与行尾无关。assessment 现无测试守护，属 §5 的有意姿态。

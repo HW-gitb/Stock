@@ -408,3 +408,20 @@ Claude Code：独立审查刀2四字段连接代码及 `decision_result_id` sche
 **失效旧结论**：同日「冻结 pin = FAIL、不可合入」已闭；「us_short 全量在主树被冻结 SHA 挡红」这条原因消失。仍未消失的是 count gate 实跑数比发现数多 10（非确定，归属未定），rule-3 记账仍拿不到绿。
 
 **下一步注意事项**：① Optional：刀3 fixture 里 `input_artifact_sha256` 仍写死 packet 的原始字节哈希，是同机制的休眠实例，修时同样两棵树各验。② count gate 那 10 个仍待定位。③ 刀6 需你在 G1 选定唯一映射并给出真实 `quality_gate_result_id`。
+
+## 2026-08-10 追加：Claude 自修 + 自审 PASS（刀3 夹具原始字节摘要，收口并合入）
+
+**改了什么**：按用户指示由审查方直接修这条 Optional。`tests/test_us_short_serenity_structural_theme_annotation.py` 新增 `_copy_newline_normalized`，临时根复制受追踪文本产物时按 LF 归一；夹具 `us_short_serenity_structural_theme_annotation_v0_1.json` 用真实 builder 从归一后的字节重生成；顺手删掉因此失去用途的 `import shutil`。
+
+**为什么**：先证明它承重再动手——夹具会被 `validate_annotation` 拿去和运行时 `read_bytes()` 摘要比。查下来受影响的是**三个**值而不是我原先点名的一个：`input_artifact_sha256` 进了 `upstream_decision_result_id` 的摘要，两者又都进了 `annotation_id`。
+
+**验证命令**：
+- `.tools\run_unittest_with_repo_pythonpath.cmd`（b511 覆盖包 5 模块 / 主树组合态 7 模块含 a_short 捆绑）
+- 反向控制①：Python 按字节把仓库 packet 翻成 LF → 跑刀3 两模块 → 按原字节还原
+- 反向控制②：`git show HEAD:<fixture>` 取旧夹具放回、配归一字节 → 跑刀3 模块 → 还原
+
+**验证结果**：b511 `Ran 39 / OK receipt:13f24f1f95316fe267c3bf38`；主树组合态 `Ran 115 / 46.8s / OK receipt:a5aa81d822535296bf476ac8`，零冲突。控制①在 LF 形态下 `11 OK`、还原后 sha 回 `ccbba88d…`；控制②旧夹具立刻转红，证明该值确实承重、原先绑死 CRLF。正文与 effect 边界逐字节未变，只动三个字节派生的 identity 值。
+
+**失效旧结论**：`R-USSHORT-SERENITY-BLADE3-FIXTURE-BAKES-A-RAW-BYTE-DIGEST` 已闭；「同类还剩一枚休眠实例」这句作废。
+
+**下一步注意事项**：`tests/fixtures/a_short_experiment_governance_admission.json` 里也有摘要，但属 A-short 治理夹具、不在本条论域，未触——若那条 lane 将来出现同样的跨树红，按同一手法处理。仍未解决的是 count gate 实跑数比发现数多 10（非确定、归属未定），rule-3 记账仍拿不到绿。
