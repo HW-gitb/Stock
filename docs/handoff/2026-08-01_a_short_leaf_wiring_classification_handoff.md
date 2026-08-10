@@ -4300,6 +4300,12 @@ O17 调用链为 `build_state → _preliminary_calendar_effective_weeks → _adj
 
 **下一步**：`Codex：执行`
 
+## 2026-08-10 追加：Optional O26 修复交接（782a）
+
+- O26 已修：`test_receipt_is_bound_to_code_state_and_token` 显式屏蔽真实 `MERGE_HEAD` 的 bundle widening；merge 两侧 widening 仍由 `MergeCombinedStateTests` 独立覆盖。
+- 固定 Python 收据包 `11 OK`，receipt=`receipt:13e6e521f867332c22bbccec`。本轮只改测试隔离，未改生产收据逻辑，未提交/合并。
+- 当前 handoff 没有比 O26 更具体的新实现刀；O25 只是根目录 `*.md` 的既有边界观察，已由现行 `is_code_path()` 行为覆盖且不建议扩大代码边界。待 Claude Code 独立审查。
+
 ## 2026-08-09 追加：接线 + 频率证据 —— 给执行方的方案（reviewer 定）
 
 **这一节是施工单。** finding 正文见 `docs/system_risk_register.md` 的 `R-ASHORT-MARGIN-OVERHEAT-TRACK-IS-MERGED-BUT-NO-PRODUCTION-ENTRY-EVER-TURNS-IT-ON`，本节只写怎么做、怎么证、以及**明确不做什么**。
@@ -5533,5 +5539,25 @@ effect contract 已用固定 Python 重新登记 A-EGS decision-predicate hash �
 
 - 没有真去复现两个进程同时跑的竞态，只证明了「文档提交不再作废封印」这条因果链。
 - 记下一个边界：根目录 `*.md`（含 `AGENTS.md`）也在代码边界之外，改它不再作废收据；实际影响接近零，因为两个文档守卫由 pre-commit 每次现跑。
+
+**下一步**：`Codex：执行`
+
+## 2026-08-10 追加：O26（收据绑定单测 vs merge 状态）复审 —— PASS（已合入 master）
+
+**判定**：PASS，无 Required。
+
+**我自己实际验了什么**
+
+- 读了被短接掉的那条链：该用例主题是收据/令牌绑定，`validate_focused_evidence` 却经 `required_bundles_now` → `merge_side_paths()` 去读真实仓库的 `MERGE_HEAD`，所以「冲突解完先跑一遍」必然见红。
+- 确认覆盖没丢：`MergeCombinedStateTests` 用临时仓真造一次纯文档 merge 来钉 widening，并有 `--merge --abort` 的反向孪生。
+- 强制今天那组致红条件重跑该用例 → 绿。
+
+**植入对照（我自写）**
+
+- 把隔离层换回读真实状态 → 同样条件下该用例 FAILED；还原后测试文件 sha256 逐字节回原值。
+
+**未覆盖维度与诚实边界**
+
+- 纯测试隔离，未触碰 `.tools/verification_receipt.py` 的生产逻辑。
 
 **下一步**：`Codex：执行`

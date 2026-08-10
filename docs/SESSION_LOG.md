@@ -1,5 +1,20 @@
 # Session Log
 
+## 2026-08-10 — Codex 修复 Optional O26：merge 状态隔离（782a）
+
+- **Verdict/Action**：已修复 O26；receipt/token 绑定单测不再读取真实未提交 merge 的 bundle 扩展，merge widening 仍由独立测试覆盖。
+- **Required**：无；O26 已闭合，细节见 `docs/system_risk_register.md` 顶部。
+- **Verify**：固定 Python `tests.test_verification_receipt` = `11 OK`，receipt=`receipt:13e6e521f867332c22bbccec`。
+- **Pre-Codex self-review**：matrix=receipt/token binding 显式屏蔽 merge-side expansion + MergeCombinedStateTests 保留 widening 对照；register=updated；handoff=updated；focused=11 OK；full-lane=NOT_TRIGGERED（仅测试隔离）；door=route-doc + doc-governance 55 OK；independent-review=NOT_USED。
+- **Next**：Claude Code：独立审查
+
+## 2026-08-10 — Claude 复审 PASS（782a：O26 收据绑定单测与 merge 状态解耦）
+
+- **Verdict/Action**: PASS，提交并合入 master。该用例改为在断言前把 `merge_side_paths` 短接成空集，不再读真实仓库的未提交 merge；merge widening 仍由 `MergeCombinedStateTests` 用临时仓真造 merge 覆盖（含反向孪生）。纯测试隔离，未动生产逻辑。
+- **Required**: 无。O26 已 resolved；实测与植入证据见 `docs/system_risk_register.md`（单一来源）。
+- **Verify**: review-evidence:5b1794d93588。强制 `merge_in_progress()=True` 且 side paths 含 effect-contract 面（今天让它变红的那组条件）→ 该用例 `errors=0 failures=0`。植入：把隔离换回读真实状态 → 同条件 `FAILED (failures=1)`，还原后 sha 逐字节回 `3dcd0f9d…`。验收模块结果见同日 register 边界节。超时原因:本轮连审两棵树，40d9 的超集与提交门串行占去大部分墙钟。
+- **Next**: Codex：执行
+
 ## 2026-08-10 — Claude 自修复并自审 PASS（O24：植入对照不再写真实仓库产物）
 
 - **Verdict/Action**: PASS。用户指示由我一人完成修复与审查。植入体改写到 tmp 对，并新增「默认路径∈tracked 对」的静态断言与「植入运行也不许碰 tracked 对」的断言，把原来靠写真实文件才成立的那条链改成靠断言成立。生产代码零改动。
