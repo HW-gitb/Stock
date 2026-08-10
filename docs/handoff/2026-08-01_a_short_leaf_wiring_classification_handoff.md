@@ -5342,3 +5342,26 @@ effect contract 已用固定 Python 重新登记 A-EGS decision-predicate hash �
 - §6a 未起 agent；真实周跑与 forward/freeze/clock、provider/live/account/ship-gate 仍全部 `NOT_VERIFIED`。
 
 **下一步**：`Codex：执行`（补一次 a_short 全量并记账；O20 建议改成记合成 code 继续出报告并补植入测试）
+
+## 2026-08-10 追加：V3-A1 逐名覆盖矩阵复核 —— FAIL（更正同日 PASS；代码已在 master）
+
+**判定**：FAIL，一条 P1 Required（正文只在 `docs/system_risk_register.md` 同日节）。本节更正同日上一条「PASS」。
+
+**我自己实际验了什么**
+
+- 按桌面 V3-A1 的「覆盖矩阵」逐名核 `SIDECAR_SPECS`，而不是只看本刀 diff 改了哪几处：pipeline 侧七个由 producer status 驱动的座位里，`target_policy_capture` 与 `final_action_capture` **没有**换成新 helper，仍只取 progress。
+- 追这两个产出方真实会返回的状态（`unavailable` / `conflict`），确认新 helper 本可以给出 code，是座位处把它丢了。
+- 自写探针把这两个座位真实会写出的行喂进 `build_health`：双双抛 `ValueError`，而 `main()` 没有接——即三件套整份不产出，与 P1-5 的现象同形。
+- 反向对照：同样的行若不带 `observed_decision_as_of`，health 的兜底会补码、不抛。这正是我上一条把它误判成「不可达」的原因，如实记下来。
+
+**过程缺陷（本轮最该改的地方）**
+
+- 我把「对照权威工件做逐名覆盖矩阵」放在了提交与合并之后。慢包、探针、植入都做了，唯独这一步的**顺序**错了，于是给出了一个需要当场更正的 PASS，且 Required 已经随 `d942473f` 进了 master。下一轮：先按授权工件的覆盖矩阵逐名核完，再决定 verdict。
+
+**未覆盖维度与诚实边界**
+
+- 本轮新增取证只有探针，没有新的测试包；Required 不依赖包结果。
+- 未回退 master：本刀其余部分是真实修复，回退代价大于收益；改为立即路由修复，并在 register 里写明 Required 当前在 master 上。
+- a_short full lane 连续第二刀 `NOT_VERIFIED`；真实周跑与 provider/live/account/ship-gate 仍全部 `NOT_VERIFIED`。
+
+**下一步**：`Codex：修复`（两条腿：两个座位换 helper；health 契约由 raise 改降级并补植入测试 + 21 项逐名守卫）
