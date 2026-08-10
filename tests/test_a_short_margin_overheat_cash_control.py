@@ -566,6 +566,7 @@ class MarginOverheatCashControlKnife2Tests(unittest.TestCase):
             pre_holiday_control=pre_holiday_control,
             new_exposure_capacity=200_000.0,
             as_of=AS_OF,
+            price_data_through=facts["source_as_of"],
             source_receipt=facts["source_receipt"],
         )
 
@@ -642,6 +643,37 @@ class MarginOverheatCashControlKnife2Tests(unittest.TestCase):
             "predicate change_rate_20d.value must be finite",
         ):
             track.validate_predicate_facts(tampered)
+
+    def test_shadow_binds_predicate_to_price_data_through_not_decision_date(self):
+        _, facts = self._predicate(jump=True)
+        result = track.materialize_shadow_cash_control(
+            facts,
+            arm_id="change_rate_p90",
+            reports=self._reports(),
+            available_cash=100_000.0,
+            new_exposure_capacity=200_000.0,
+            as_of="20260610",
+            price_data_through=facts["source_as_of"],
+            source_receipt=facts["source_receipt"],
+        )
+        self.assertTrue(result["predicate_triggered"])
+
+    def test_shadow_rejects_predicate_from_a_different_price_session(self):
+        _, facts = self._predicate()
+        with self.assertRaisesRegex(
+            track.MarginOverheatCashControlError,
+            "price_data_through is not bound",
+        ):
+            track.materialize_shadow_cash_control(
+                facts,
+                arm_id="baseline",
+                reports=self._reports(),
+                available_cash=100_000.0,
+                new_exposure_capacity=200_000.0,
+                as_of="20260610",
+                price_data_through="20260608",
+                source_receipt=facts["source_receipt"],
+            )
 
     def test_validate_recomputes_both_percentiles_from_source_ratio_series(self):
         _, facts = self._predicate(rising=False)
@@ -859,6 +891,7 @@ class MarginOverheatCashControlKnife2Tests(unittest.TestCase):
                 available_cash=100_000.0,
                 new_exposure_capacity=200_000.0,
                 as_of=AS_OF,
+                price_data_through=facts["source_as_of"],
                 source_receipt=forged,
             )
 
@@ -882,6 +915,7 @@ class MarginOverheatCashControlKnife2Tests(unittest.TestCase):
                 available_cash=100_000.0,
                 new_exposure_capacity=200_000.0,
                 as_of=AS_OF,
+                price_data_through=facts["source_as_of"],
             )
 
         with self.assertRaisesRegex(
@@ -894,6 +928,7 @@ class MarginOverheatCashControlKnife2Tests(unittest.TestCase):
                 available_cash=99_999.0,
                 new_exposure_capacity=200_000.0,
                 as_of=AS_OF,
+                price_data_through=facts["source_as_of"],
                 source_receipt=facts["source_receipt"],
             )
 
@@ -1129,6 +1164,59 @@ class MarginOverheatCashControlKnife3Tests(unittest.TestCase):
             root=self.root, daily_cache_document=shared_cache,
         )
         self.assertEqual(settled["status"], "settled_from_existing_cache")
+
+    def test_capture_accepts_decision_after_the_predicate_price_clock(self):
+        lagged_sessions = tuple(
+            (datetime.strptime(date, "%Y%m%d") - timedelta(days=1)).strftime("%Y%m%d")
+            for date in self.sessions
+        )
+        predicate = track.build_predicate_facts(
+            wiring_fixtures._margin_rows(lagged_sessions),
+            wiring_fixtures._denominator_rows(lagged_sessions),
+            requested_dates=lagged_sessions,
+            source_as_of=lagged_sessions[0],
+        )
+        official = self._official_bundle()
+        price_data_through = lagged_sessions[0]
+        official.weekly["run_lineage"]["price_freshness"]["price_data_through"] = price_data_through
+        official.weekly["price_data_through"] = price_data_through
+        official.weekly_bytes = json.dumps(
+            official.weekly, ensure_ascii=False, sort_keys=True, separators=(",", ":")
+        ).encode("utf-8")
+        identity = dict(self.identity, price_data_through=price_data_through, run_date="20260610")
+        captured = track.capture_margin_overheat_week(
+            root=self.root,
+            decision_date=AS_OF,
+            run_identity=identity,
+            official_bundle=official,
+            margin_facts=MarginOverheatCashControlKnife2Tests._margin_control_input(predicate),
+            daily_cache_document=self.cache,
+            candidates=self.candidates,
+            reports=self.reports,
+            predicate_facts=predicate,
+        )
+        self.assertEqual(captured["status"], "captured")
+        self.assertEqual(
+            captured["capture"]["payload"]["predicate_facts"]["source_as_of"],
+            price_data_through,
+        )
+
+    def test_capture_rejects_predicate_from_an_earlier_price_session(self):
+        lagged_sessions = tuple(
+            (datetime.strptime(date, "%Y%m%d") - timedelta(days=1)).strftime("%Y%m%d")
+            for date in self.sessions
+        )
+        predicate = track.build_predicate_facts(
+            wiring_fixtures._margin_rows(lagged_sessions),
+            wiring_fixtures._denominator_rows(lagged_sessions),
+            requested_dates=lagged_sessions,
+            source_as_of=lagged_sessions[0],
+        )
+        with self.assertRaisesRegex(
+            track.MarginOverheatCashControlError,
+            "source_as_of is not price_data_through",
+        ):
+            self._capture(predicate_facts=predicate)
 
     def test_publication_lag_reason_is_bound_to_capture_and_settlement(self):
         lagged_margin_rows = [

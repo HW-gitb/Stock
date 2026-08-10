@@ -433,10 +433,16 @@ def build_overlay_summary_from_panels(pool_df: pd.DataFrame, all_daily: pd.DataF
 
     assembled = assemble_overlay(pool_df, theme_heat, industry_heat_by_l2, breadth,
                                  persistence, fit, sw_l2_by_code)
+    try:
+        taxonomy_run_date = datetime.fromisoformat(
+            str(generated_at).replace("Z", "+00:00")
+        ).strftime("%Y%m%d")
+    except (TypeError, ValueError):
+        taxonomy_run_date = None
     taxonomy = taxonomy_by_code(assembled, stock_concepts=stock_concepts,
                                 concept_members=concept_members, concepts_df=concepts_df, as_of=as_of,
                                 l3_provider=l3_provider, l3_snapshot_date=l3_snapshot_date,
-                                l3_coverage=l3_coverage)
+                                l3_coverage=l3_coverage, run_date=taxonomy_run_date)
     assembled["theme_taxonomy"] = assembled["ts_code"].astype(str).map(taxonomy)
     return build_summary(assembled, as_of,
                          pit_source or {"concept_membership": "pit", "sw_mapping": "forward"},

@@ -1608,6 +1608,60 @@ class MainWiringTests(unittest.TestCase):
         self.assertEqual(captured[0]["predicate_facts"], predicate_facts)
         self.assertEqual(captured[0]["predicate_facts"]["source_as_of"], AS_OF)
 
+    def test_margin_capture_receives_price_clock_when_decision_is_later(self):
+        from engine import a_short_margin_overheat_cash_control as margin_track
+        from tests.test_a_short_margin_overheat_wiring import (
+            _denominator_rows, _margin_rows, _sessions,
+        )
+
+        price_data_through = "20260608"
+        sessions = _sessions(margin_track.production_margin.MARGIN_OVERHEAT_MIN_WINDOW_SESSIONS)
+        sessions = tuple(
+            (pd.to_datetime(date) - pd.Timedelta(days=1)).strftime("%Y%m%d")
+            for date in sessions
+        )
+        predicate_facts = margin_track.build_predicate_facts(
+            _margin_rows(sessions),
+            _denominator_rows(sessions),
+            requested_dates=sessions,
+            source_as_of=price_data_through,
+        )
+        ai = _analysis_input()
+        ai["price_data_through"] = price_data_through
+        ai.setdefault("market_context", {}).setdefault("margin_overheat", {})[
+            "predicate_facts"
+        ] = predicate_facts
+        feed = _feed()
+        feed["series"][-1]["trade_date"] = price_data_through
+        captured = []
+
+        def _capture(**kwargs):
+            captured.append(kwargs)
+            return {"status": "captured"}
+
+        with tempfile.TemporaryDirectory() as td:
+            self._write_inputs(td, ai=ai, feed=feed)
+            out = Path(td) / AS_OF / "weekly_m67.json"
+            with patch(
+                "engine.a_short_margin_overheat_cash_control.capture_margin_overheat_after_published_weekly",
+                side_effect=_capture,
+            ):
+                main([
+                    "--as-of", AS_OF,
+                    "--analysis-input", str(Path(td) / "ai.json"),
+                    "--iv-feed", str(Path(td) / "feed.json"),
+                    "--account", str(Path(td) / "acct.json"),
+                    "--out", str(out),
+                    "--run-date", AS_OF,
+                    "--margin-overheat-cash-control-root", str(Path(td) / "margin-private"),
+                    "--margin-overheat-cash-control-daily-cache", str(Path(td) / "missing-cache.json"),
+                ], price_provider=lambda code: (_series(), price_data_through))
+
+        self.assertEqual(len(captured), 1)
+        self.assertEqual(
+            captured[0]["predicate_facts"]["source_as_of"], price_data_through
+        )
+
     def test_margin_missing_schema_degrades_to_unavailable_and_records_settlement(self):
         from engine import a_short_margin_overheat_cash_control as margin_track
 
@@ -2335,6 +2389,30 @@ class MainWiringTests(unittest.TestCase):
                       "--iv-feed", str(Path(td) / "feed.json"), "--account", str(Path(td) / "acct.json"),
                       "--out", str(out)], price_provider=lambda code: _series())
             self.assertFalse(out.exists())
+
+    def test_main_preflights_source_bound_controls_before_price_provider(self):
+        provider_calls = []
+
+        def _provider(code):
+            provider_calls.append(code)
+            return _series()
+
+        with tempfile.TemporaryDirectory() as td:
+            self._write_inputs(td)
+            with patch.object(
+                _weekly_pipeline_module,
+                "_margin_overheat_control_from_analysis",
+                side_effect=ValueError("preflight margin control"),
+            ):
+                with self.assertRaisesRegex(ValueError, "preflight margin control"):
+                    main([
+                        "--as-of", AS_OF,
+                        "--analysis-input", str(Path(td) / "ai.json"),
+                        "--iv-feed", str(Path(td) / "feed.json"),
+                        "--account", str(Path(td) / "acct.json"),
+                        "--out", str(Path(td) / "weekly.json"),
+                    ], price_provider=_provider)
+        self.assertEqual(provider_calls, [])
 
     def test_main_regime_from_analysis_input_takes_precedence(self):
         # market_regime sourced from analysis_input.market_context (EGS); account state is cash/position only.

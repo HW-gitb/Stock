@@ -306,6 +306,23 @@ class BuildFromPanelsTests(unittest.TestCase):
             loaded = json.loads(p.read_text(encoding="utf-8"))
         self.assertEqual(loaded["candidate_count"], 3)
 
+    def test_overlay_taxonomy_keeps_the_l3_snapshot_clock(self):
+        all_daily, sc, cm, sw = _panels()
+        summary = build_overlay_summary_from_panels(
+            _pool(), all_daily, sc, cm, sw, as_of="20260612",
+            generated_at="2026-06-12T00:00:00+08:00",
+            l3_provider="hithink_finance", l3_snapshot_date="20260611",
+            l3_coverage={
+                "catalog_digest": "a" * 64,
+                "complete": True,
+                "scoring_universe": "a_share_main_board",
+            },
+        )
+        self.assertEqual(
+            {candidate["theme_taxonomy"]["source_as_of"] for candidate in summary["candidates"]},
+            {"20260611"},
+        )
+
 
 if __name__ == "__main__":
     unittest.main()

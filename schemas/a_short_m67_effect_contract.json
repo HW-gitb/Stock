@@ -1274,11 +1274,11 @@
   "decision_predicate_sha256": {
     "A-EGS/egs_main.py": "1e29af524e34358f01503a3ca32f56643756268f8ea86b70bc511fd7cd98fd1e",
     "engine/egs_industry_heat.py": "74932f994ec0658345c41aa932b54b5685c1737c663f5070a193d264f37fced2",
-    "engine/a_short_industry_theme.py": "6a10200f80b3c0d301efc8af1561b53ef2578e1cd26eea7976188dd57b7b6b2b",
+    "engine/a_short_industry_theme.py": "516191a042a3e9c5b16d0bb3bd56bd959f81fc64dfe7fe93f85c170b3bba53f4",
     "engine/a_short_northbound.py": "e48d20a9c49d06480443815755d97f5674fa98fe1e13284f2d4aaaa19361d71a",
     "engine/a_short_margin_overheat.py": "5d727a30ecc215a5546afe8be41dd3d43c99d7cc4abf2a03e1c099ee171d7cbb",
     "runners/a_short_phase5_engine.py": "bd9c17a7032066d7c3c9074a8fedb16e5e11b559d973d95987458fb8eca6dd5e",
-    "runners/a_short_weekly_pipeline.py": "9b5477cf9bd788b92d23e27b43a2533350ea544b822c624dbb1fe81389c33a99",
+    "runners/a_short_weekly_pipeline.py": "c24f215aaa360d382dcaf1e51f31f9fdb15143884ea7991a7959ddc543e7e7f8",
     "runners/a_short_m67_render.py": "ad68c7533ae055ce30e126c083ae7bbf576bc64657904e3bec0c780f887eb448",
     "engine/a_short_portfolio_risk.py": "02b88ac3b5239e8dd4897bde06afab0769ea5593f8a8a3666e5c8fba24486860",
     "engine/a_short_effect_contract.py": "2f7c1cbc41bd60acdd2ce4886a3beada8ee3ec76dc2a3b2288edffe37418c6a8"

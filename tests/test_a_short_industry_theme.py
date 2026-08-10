@@ -236,9 +236,39 @@ class ThemeTaxonomyTests(unittest.TestCase):
         self.assertEqual(result["l3_provenance"]["validation_status"], "legacy_snapshot")
         self.assertEqual(result["l3_provenance"]["raw_membership_source"],
                          "legacy_snapshot_concept_members")
+        self.assertEqual(result["source_as_of"], "20260714")
         self.assertEqual(result["raw_concepts"][0]["source_as_of"], "20260714")
         self.assertEqual(result["raw_concepts"][0]["source_snapshot_date"], "20260714")
         self.assertFalse(result["production_effect_enabled"])
+
+    def test_available_taxonomy_source_clock_uses_l3_snapshot_not_decision_date(self):
+        result = classify_theme_taxonomy(
+            ts_code="000001.SZ", stock_concepts={"000001.SZ": ["c1"]}, concept_members={},
+            concepts_df=pd.DataFrame([{"code": "c1", "name": "concept-1"}]),
+            as_of="20260715", taxonomy=self.taxonomy,
+            l3_provider="hithink_finance", l3_snapshot_date="20260714",
+            l3_coverage=self.l3_coverage,
+        )
+        self.assertEqual(result["source_as_of"], "20260714")
+        self.assertEqual(result["l3_provenance"]["snapshot_date"], "20260714")
+
+    def test_business_evidence_after_physical_run_is_unavailable(self):
+        result = classify_theme_taxonomy(
+            ts_code="000001.SZ", stock_concepts={"000001.SZ": ["c1"]}, concept_members={},
+            concepts_df=pd.DataFrame([{"code": "c1", "name": "concept-1"}]),
+            as_of="20260715", run_date="20260714", taxonomy=self.taxonomy,
+            l3_provider="hithink_finance", l3_snapshot_date="20260714",
+            l3_coverage=self.l3_coverage,
+            business_evidence=[{
+                "ts_code": "000001.SZ", "role": "core", "source_id": "local_structured",
+                "observed_at": "20260715", "checked_at": "20260715", "finding_id": "future",
+            }],
+        )
+        self.assertEqual(result["canonical_themes"][0]["role"], "unknown")
+        self.assertEqual(
+            result["canonical_themes"][0]["unknown_reason"],
+            "structured_business_evidence_invalid_or_unavailable",
+        )
 
 
 if __name__ == "__main__":

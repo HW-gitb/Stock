@@ -267,10 +267,20 @@ def _concept_names(concepts_df: Any) -> dict[str, str]:
     }
 
 
-def _validated_role_evidence(records: Any, code: str, as_of: str) -> tuple[str, str, list[dict], str | None]:
+def _validated_role_evidence(records: Any, code: str, as_of: str,
+                             run_date: Any = None) -> tuple[str, str, list[dict], str | None]:
     """Accept only structured, clocked evidence; never infer a role from prose."""
     if not records:
         return "unknown", "unknown", [], "structured_business_evidence_unavailable"
+    decision_date = str(as_of)
+    if not _date8(decision_date):
+        return "unknown", "unknown", [], "structured_business_evidence_invalid_or_unavailable"
+    evidence_cutoff = decision_date
+    if run_date not in (None, ""):
+        run_date = str(run_date)
+        if not _date8(run_date):
+            return "unknown", "unknown", [], "structured_business_evidence_invalid_or_unavailable"
+        evidence_cutoff = min(decision_date, run_date)
     valid = []
     for item in records:
         if not isinstance(item, dict) or str(item.get("ts_code")) != str(code):
@@ -280,7 +290,7 @@ def _validated_role_evidence(records: Any, code: str, as_of: str) -> tuple[str, 
             continue
         if not _date8(item["observed_at"]) or not _date8(item["checked_at"]):
             continue
-        if item["observed_at"] > as_of or item["checked_at"] > as_of:
+        if item["observed_at"] > evidence_cutoff or item["checked_at"] > evidence_cutoff:
             continue
         valid.append({key: item[key] for key in ("role", "source_id", "observed_at", "checked_at", "finding_id")})
     if not valid:
@@ -303,7 +313,7 @@ def classify_theme_taxonomy(*, ts_code: str, stock_concepts: dict | None,
                             as_of: str, taxonomy: dict | None = None,
                             business_evidence: list[dict] | None = None,
                             l3_provider: Any = None, l3_snapshot_date: Any = None,
-                            l3_coverage: Any = None) -> dict:
+                            l3_coverage: Any = None, run_date: Any = None) -> dict:
     """Classify raw provider concepts into zero or more governed canonical themes."""
     taxonomy = taxonomy or load_theme_taxonomy()
     validate_theme_taxonomy(taxonomy)
@@ -359,7 +369,9 @@ def classify_theme_taxonomy(*, ts_code: str, stock_concepts: dict | None,
             if sub_matched:
                 subthemes.append({"subtheme_id": subtheme["subtheme_id"], "name": subtheme["name"],
                                   "matched_raw_concept_ids": [item["concept_id"] for item in sub_matched]})
-        role, confidence, evidence, unavailable = _validated_role_evidence(business_evidence, str(ts_code), as_of)
+        role, confidence, evidence, unavailable = _validated_role_evidence(
+            business_evidence, str(ts_code), as_of, run_date=run_date,
+        )
         themes.append({
             "theme_id": theme["theme_id"],
             "name_cn": theme["name_cn"],
@@ -382,7 +394,9 @@ def classify_theme_taxonomy(*, ts_code: str, stock_concepts: dict | None,
         "taxonomy_schema_name": taxonomy["schema_name"],
         "taxonomy_schema_version": taxonomy["schema_version"],
         "taxonomy_configuration_fingerprint": configuration_fingerprint(taxonomy),
-        "source_as_of": as_of,
+        # The taxonomy is a non-price source.  Its source clock is the actual
+        # L3 receipt date, not the decision/cohort label supplied by the caller.
+        "source_as_of": provenance["snapshot_date"],
         "l3_provenance": provenance,
         "raw_concepts": raw,
         "canonical_themes": themes,
@@ -397,7 +411,7 @@ def taxonomy_by_code(pool_df: pd.DataFrame, *, stock_concepts: dict | None,
                      taxonomy: dict | None = None,
                      business_evidence_by_code: dict[str, list[dict]] | None = None,
                      l3_provider: Any = None, l3_snapshot_date: Any = None,
-                     l3_coverage: Any = None) -> dict[str, dict]:
+                     l3_coverage: Any = None, run_date: Any = None) -> dict[str, dict]:
     taxonomy = taxonomy or load_theme_taxonomy()
     return {
         str(code): classify_theme_taxonomy(
@@ -407,6 +421,7 @@ def taxonomy_by_code(pool_df: pd.DataFrame, *, stock_concepts: dict | None,
             l3_provider=l3_provider,
             l3_snapshot_date=l3_snapshot_date,
             l3_coverage=l3_coverage,
+            run_date=run_date,
         )
         for code in pool_df.get("ts_code", pd.Series(dtype=str)).astype(str).tolist()
     }

@@ -394,6 +394,7 @@ class ThemeForwardComparisonTests(unittest.TestCase):
             row["price_data_through"] = "20260724"
             row["captured_at"] = "2026-07-24T15:00:00+08:00"
             row["industry_trend_source_as_of"] = "20260724"
+            row["theme_taxonomy_source_as_of"] = "20260724"
             row["theme_taxonomy_l3_snapshot_date"] = "20260724"
         with mock.patch.object(comparison, "_today_date", return_value=pd.Timestamp("2026-07-26").date()):
             live = comparison.validate_tracker_lineage(pd.DataFrame(rows))
@@ -408,6 +409,7 @@ class ThemeForwardComparisonTests(unittest.TestCase):
             row["price_data_through"] = "20260724"
             row["captured_at"] = "2026-07-24T15:00:00+08:00"
             row["industry_trend_source_as_of"] = "20260724"
+            row["theme_taxonomy_source_as_of"] = "20260724"
             row["theme_taxonomy_l3_snapshot_date"] = "20260724"
             row["ret_10d_status"] = "pending_capture"
             row["ret_10d_t1_net"] = pd.NA
@@ -435,6 +437,71 @@ class ThemeForwardComparisonTests(unittest.TestCase):
             )
         self.assertEqual(packet["adjudication_mode"], "frozen_counting")
         self.assertEqual(packet["epoch_clock_weeks"], 0)
+
+    def test_0810_theme_snapshot_is_not_bound_to_friday_price_clock(self):
+        rows = _week("20260810")
+        for row in rows:
+            row["run_date"] = "20260810"
+            row["price_data_through"] = "20260807"
+            row["industry_trend_source_as_of"] = "20260807"
+            row["theme_taxonomy_source_as_of"] = "20260810"
+            row["theme_taxonomy_l3_snapshot_date"] = "20260810"
+        with mock.patch.object(
+            comparison, "_today_date", return_value=pd.Timestamp("2026-08-11").date()
+        ):
+            live = comparison.validate_tracker_lineage(pd.DataFrame(rows))
+            eligible, rejected = comparison.eligible_formal_cohorts(live, 5)
+        self.assertEqual(set(eligible["as_of"]), {"20260810"})
+        self.assertEqual(rejected, {})
+
+    def test_theme_source_must_match_snapshot_and_snapshot_must_not_exceed_run(self):
+        rows = _week("20260810")
+        for row in rows:
+            row["run_date"] = "20260807"
+            row["price_data_through"] = "20260807"
+            row["captured_at"] = "2026-08-07T15:00:00+08:00"
+            row["industry_trend_source_as_of"] = "20260807"
+            row["theme_taxonomy_source_as_of"] = "20260810"
+            row["theme_taxonomy_l3_snapshot_date"] = "20260810"
+        with mock.patch.object(
+            comparison, "_today_date", return_value=pd.Timestamp("2026-08-11").date()
+        ):
+            live = comparison.validate_tracker_lineage(pd.DataFrame(rows))
+            eligible, rejected = comparison.eligible_formal_cohorts(live, 5)
+        self.assertTrue(eligible.empty)
+        self.assertIn("invalid taxonomy L3 snapshot date", rejected["20260810"])
+
+        rows = _week("20260810")
+        for row in rows:
+            row["run_date"] = "20260810"
+            row["price_data_through"] = "20260807"
+            row["industry_trend_source_as_of"] = "20260807"
+            row["theme_taxonomy_source_as_of"] = "20260810"
+            row["theme_taxonomy_l3_snapshot_date"] = "20260807"
+        with mock.patch.object(
+            comparison, "_today_date", return_value=pd.Timestamp("2026-08-11").date()
+        ):
+            live = comparison.validate_tracker_lineage(pd.DataFrame(rows))
+            eligible, rejected = comparison.eligible_formal_cohorts(live, 5)
+        self.assertTrue(eligible.empty)
+        self.assertEqual(rejected["20260810"], "theme_taxonomy_source_clock_mismatch")
+
+    def test_weekend_theme_snapshot_is_admissible_only_after_monday_effective(self):
+        rows = _week("20260727")
+        for row in rows:
+            row["run_date"] = "20260726"
+            row["price_data_through"] = "20260724"
+            row["captured_at"] = "2026-07-26T15:00:00+08:00"
+            row["industry_trend_source_as_of"] = "20260724"
+            row["theme_taxonomy_source_as_of"] = "20260726"
+            row["theme_taxonomy_l3_snapshot_date"] = "20260726"
+        with mock.patch.object(
+            comparison, "_today_date", return_value=pd.Timestamp("2026-07-27").date()
+        ):
+            live = comparison.validate_tracker_lineage(pd.DataFrame(rows))
+            eligible, rejected = comparison.eligible_formal_cohorts(live, 5)
+        self.assertEqual(set(eligible["as_of"]), {"20260727"})
+        self.assertEqual(rejected, {})
 
     def test_pending_tracker_cannot_be_first_admitted_after_bounded_recovery_window(self):
         tracker = pd.DataFrame(_week("20260102"))

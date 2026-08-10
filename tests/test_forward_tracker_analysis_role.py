@@ -35,6 +35,29 @@ class ForwardTrackerAnalysisRoleTests(unittest.TestCase):
         )
         self.assertEqual(row["runtime_configuration_fingerprint"], "b" * 64)
 
+    def test_capture_projects_theme_source_and_l3_snapshot_without_rewriting_clocks(self):
+        taxonomy = {
+            "source_as_of": "20260810",
+            "l3_provenance": {
+                "provider": "hithink_finance",
+                "snapshot_date": "20260810",
+                "coverage_digest": "c" * 64,
+                "coverage_complete": True,
+                "scoring_universe": "a_share_main_board",
+                "validation_status": "verified_complete",
+            },
+        }
+        row = _candidate_row(
+            "20260810", "2026-08-10T15:00:00+08:00", "run", "a" * 64,
+            {"ts_code": "000001.SZ", "analysis_role": "final",
+             "catalyst": {"theme_taxonomy": taxonomy}},
+            l3_mode="today", decision_as_of="20260810", run_date="20260810",
+            price_data_through="20260807",
+        )
+        self.assertEqual(row["theme_taxonomy_source_as_of"], "20260810")
+        self.assertEqual(row["theme_taxonomy_l3_snapshot_date"], "20260810")
+        self.assertEqual(row["price_data_through"], "20260807")
+
     def test_same_identity_with_runtime_or_strategy_drift_is_not_identical(self):
         row = _candidate_row(
             "20260725", "2026-07-25T10:00:00+08:00", "run", "a" * 64,

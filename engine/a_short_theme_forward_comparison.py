@@ -259,7 +259,9 @@ def _validate_industry_trend_row(row: pd.Series, as_of: str, expected_source_as_
         raise ThemeForwardComparisonError(f"forward-live cohort {as_of} has industry_trend classification mismatch")
 
 
-def _validate_theme_l3_row(row: pd.Series, as_of: str, price_data_through: str) -> None:
+def _validate_theme_l3_row(
+    row: pd.Series, as_of: str, *, run_date: str, decision_date: str
+) -> None:
     if _as_text(row.get("theme_taxonomy_l3_provider")) != "hithink_finance":
         raise ThemeForwardComparisonError(f"forward-live cohort {as_of} lacks a HiThink taxonomy provider receipt")
     if not _as_bool(row.get("theme_taxonomy_l3_coverage_complete")):
@@ -272,7 +274,15 @@ def _validate_theme_l3_row(row: pd.Series, as_of: str, price_data_through: str) 
     if len(digest) != 64 or any(char not in "0123456789abcdef" for char in digest):
         raise ThemeForwardComparisonError(f"forward-live cohort {as_of} has invalid taxonomy L3 coverage digest")
     snapshot_date = _as_text(row.get("theme_taxonomy_l3_snapshot_date")).removesuffix(".0")
-    if len(snapshot_date) != 8 or not snapshot_date.isascii() or not snapshot_date.isdigit() or snapshot_date > price_data_through:
+    try:
+        snapshot = _yyyymmdd(snapshot_date, "theme_taxonomy_l3_snapshot_date")
+        run = _yyyymmdd(run_date, RUN_DATE_COLUMN)
+        decision = _yyyymmdd(decision_date, DECISION_AS_OF_COLUMN)
+    except ThemeForwardComparisonError:
+        raise ThemeForwardComparisonError(
+            f"forward-live cohort {as_of} has invalid taxonomy L3 snapshot date"
+        ) from None
+    if snapshot > run or snapshot > decision:
         raise ThemeForwardComparisonError(f"forward-live cohort {as_of} has invalid taxonomy L3 snapshot date")
 
 
@@ -420,12 +430,16 @@ def _cohort_formal_error(
         values = {_as_text(value).removesuffix(".0") for value in cohort[column]}
         if len(values) != 1 or not next(iter(values)):
             return f"ambiguous_or_missing_{column}"
-    if _as_text(cohort.iloc[0]["theme_taxonomy_source_as_of"]).removesuffix(".0") != as_of:
+    if _as_text(cohort.iloc[0]["theme_taxonomy_source_as_of"]).removesuffix(".0") != \
+            _as_text(cohort.iloc[0]["theme_taxonomy_l3_snapshot_date"]).removesuffix(".0"):
         return "theme_taxonomy_source_clock_mismatch"
     try:
         for row in cohort_rows:
             _validate_industry_trend_row(row, as_of, price_date.strftime("%Y%m%d"))
-            _validate_theme_l3_row(row, as_of, price_date.strftime("%Y%m%d"))
+            _validate_theme_l3_row(
+                row, as_of, run_date=run_date.strftime("%Y%m%d"),
+                decision_date=decision_date.strftime("%Y%m%d"),
+            )
     except ThemeForwardComparisonError as exc:
         return str(exc)
     return None
