@@ -7,16 +7,16 @@
       "state/us_short"
     ]
   },
-  "module_count": 315,
+  "module_count": 316,
   "classification_counts": {
     "class0_no_direct_protected_io": 244,
     "class1_read_real_root": 1,
     "class2_write_real_root": 4,
     "class3_global_sentinel": 5,
-    "class4_unresolved_write": 61
+    "class4_unresolved_write": 62
   },
   "class0_modules_omitted": true,
-  "module_path_sha256": "db82263ca1e9e587b9b75aecebebed68055c874bc64016ef6a3507d2470e04e5",
+  "module_path_sha256": "47778cc36040e6d601d7330a768beb2649ff5619edf7faaa6bebf4477a9ade50",
   "allowlist": [
     "tests/provider/test_us_short_batch5_bankruptcy_8k_source_packet.py:kwarg:packet_ref:state/us_short",
     "tests/provider/test_us_short_batch5_bankruptcy_8k_source_packet.py:kwarg:screen_path:state/us_short",
@@ -183,6 +183,8 @@
     "tests/test_us_short_paper_ledger.py:unlink:provider_samples,state/us_short:class4_unresolved_write",
     "tests/test_us_short_paper_ledger.py:write_text:provider_samples,state/us_short:class4_unresolved_write",
     "tests/test_us_short_paper_one_click.py:write_text:provider_samples,state/us_short:class4_unresolved_write",
+    "tests/test_us_short_serenity_structural_theme_annotation.py:replace:provider_samples,state/us_short:class4_unresolved_write",
+    "tests/test_us_short_serenity_structural_theme_annotation.py:write_bytes:provider_samples,state/us_short:class4_unresolved_write",
     "tests/test_us_short_shadow_compare_store.py:unlink:provider_samples,state/us_short:class4_unresolved_write",
     "tests/test_us_short_shadow_compare_store.py:write_text:provider_samples,state/us_short:class4_unresolved_write",
     "tests/test_us_short_soft_boost_consumption.py:mkdir:provider_samples,state/us_short:class4_unresolved_write",
@@ -365,6 +367,8 @@
     "tests/test_us_short_paper_ledger.py:unlink:provider_samples,state/us_short:class4_unresolved_write": 4,
     "tests/test_us_short_paper_ledger.py:write_text:provider_samples,state/us_short:class4_unresolved_write": 1,
     "tests/test_us_short_paper_one_click.py:write_text:provider_samples,state/us_short:class4_unresolved_write": 1,
+    "tests/test_us_short_serenity_structural_theme_annotation.py:replace:provider_samples,state/us_short:class4_unresolved_write": 1,
+    "tests/test_us_short_serenity_structural_theme_annotation.py:write_bytes:provider_samples,state/us_short:class4_unresolved_write": 1,
     "tests/test_us_short_shadow_compare_store.py:unlink:provider_samples,state/us_short:class4_unresolved_write": 3,
     "tests/test_us_short_shadow_compare_store.py:write_text:provider_samples,state/us_short:class4_unresolved_write": 5,
     "tests/test_us_short_soft_boost_consumption.py:mkdir:provider_samples,state/us_short:class4_unresolved_write": 1,
@@ -1044,6 +1048,16 @@
       ],
       "read_count": 0,
       "write_count": 1
+    },
+    {
+      "module": "tests/test_us_short_serenity_structural_theme_annotation.py",
+      "classification": "class4_unresolved_write",
+      "protected_roots": [
+        "provider_samples",
+        "state/us_short"
+      ],
+      "read_count": 0,
+      "write_count": 2
     },
     {
       "module": "tests/test_us_short_shadow_compare_store.py",

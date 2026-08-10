@@ -1,0 +1,83 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "US-short Serenity G1/Blade6 readiness preflight",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_name",
+    "schema_version",
+    "generated_at",
+    "decision_date",
+    "status",
+    "quality_gate_result_id",
+    "g1_decision_id",
+    "selected_route",
+    "blocking_reasons",
+    "effects"
+  ],
+  "properties": {
+    "schema_name": {"const": "us_short_serenity_g1_blade6_preflight"},
+    "schema_version": {"const": "1.0.0"},
+    "generated_at": {"type": "string", "format": "date-time"},
+    "decision_date": {"type": "string", "pattern": "^[0-9]{8}$"},
+    "status": {"enum": ["blocked", "ready_for_blade6_preregistration"]},
+    "quality_gate_result_id": {
+      "anyOf": [
+        {"type": "string", "pattern": "^serenity_quality_gate:[A-Za-z0-9_.:-]{3,500}$"},
+        {"type": "null"}
+      ]
+    },
+    "g1_decision_id": {
+      "anyOf": [
+        {"type": "string", "pattern": "^serenity_g1_decision:[A-Za-z0-9_.:-]{3,500}$"},
+        {"type": "null"}
+      ]
+    },
+    "selected_route": {
+      "anyOf": [
+        {"const": "theme_fit_score_to_selected_tickers"},
+        {"type": "null"}
+      ]
+    },
+    "blocking_reasons": {
+      "type": "array",
+      "uniqueItems": true,
+      "items": {"type": "string", "pattern": "^[a-z0-9_:-]{2,120}$"}
+    },
+    "effects": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "scoring_eligible",
+        "top15_effect_enabled",
+        "operation_advice_effect_enabled",
+        "provider_calls_performed",
+        "network_access_performed",
+        "preregistration_created",
+        "blade6_entered"
+      ],
+      "properties": {
+        "scoring_eligible": {"const": false},
+        "top15_effect_enabled": {"const": false},
+        "operation_advice_effect_enabled": {"const": false},
+        "provider_calls_performed": {"const": false},
+        "network_access_performed": {"const": false},
+        "preregistration_created": {"const": false},
+        "blade6_entered": {"const": false}
+      }
+    }
+  },
+  "allOf": [
+    {
+      "if": {"properties": {"status": {"const": "ready_for_blade6_preregistration"}}},
+      "then": {
+        "properties": {
+          "quality_gate_result_id": {"type": "string"},
+          "g1_decision_id": {"type": "string"},
+          "selected_route": {"const": "theme_fit_score_to_selected_tickers"},
+          "blocking_reasons": {"maxItems": 0}
+        }
+      }
+    }
+  ]
+}

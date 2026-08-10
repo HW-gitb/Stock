@@ -256,6 +256,7 @@ class CapstoneFakeChainTest(unittest.TestCase):
                     c.serenity_quality_observation_path,
                     c.serenity_quality_ledger_path,
                     c.serenity_quality_gate_path,
+                    c.serenity_g1_blade6_preflight_path,
                 ],
                 "theme_producer": lambda c: [c.theme_projection_path],
                 "projection_inputs": lambda c: [c.merged_momentum_path, c.merged_theme_path],

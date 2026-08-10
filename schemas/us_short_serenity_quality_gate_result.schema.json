@@ -12,6 +12,8 @@
     "cohort_dimensions",
     "verdict",
     "quality_gate_result_id",
+    "formal_count_ready",
+    "formal_blockers",
     "window",
     "metric_assessments",
     "thresholds",
@@ -26,6 +28,12 @@
     "cohort_dimensions": {"anyOf": [{"$ref": "#/$defs/dimensions"}, {"type": "null"}]},
     "verdict": {"enum": ["continue_accumulating", "quality_below_threshold", "quality_gate_pass"]},
     "quality_gate_result_id": {"anyOf": [{"type": "string", "pattern": "^serenity_quality_gate:[A-Za-z0-9_.:-]{3,500}$"}, {"type": "null"}]},
+    "formal_count_ready": {"type": "boolean"},
+    "formal_blockers": {
+      "type": "array",
+      "uniqueItems": true,
+      "items": {"type": "string", "pattern": "^[a-z0-9_:-]{2,120}$"}
+    },
     "window": {
       "type": "object",
       "additionalProperties": false,
@@ -66,12 +74,16 @@
     "dimensions": {
       "type": "object",
       "additionalProperties": false,
-      "required": ["annotation_schema_version", "rubric_version", "consumer_version", "upstream_policy_version"],
+      "required": ["annotation_schema_version", "rubric_version", "consumer_version", "upstream_policy_version", "producer_identity_version", "annotation_prompt_version", "reviewer_identity_version", "review_prompt_version"],
       "properties": {
         "annotation_schema_version": {"const": "1.0.0"},
         "rubric_version": {"const": "serenity_annotation_rubric_v0.1.0"},
         "consumer_version": {"const": "serenity_shadow_consumer_v0.1.0"},
-        "upstream_policy_version": {"enum": ["soft_discovery_query_policy_v0.2.0", "soft_discovery_query_policy_v0.3.0"]}
+        "upstream_policy_version": {"enum": ["soft_discovery_query_policy_v0.2.0", "soft_discovery_query_policy_v0.3.0"]},
+        "producer_identity_version": {"const": "serenity_annotation_producer_v0.1.0"},
+        "annotation_prompt_version": {"type": "string", "minLength": 1, "maxLength": 128},
+        "reviewer_identity_version": {"const": "serenity_quality_reviewer_v0.1.0"},
+        "review_prompt_version": {"const": "serenity_quality_reviewer_prompt_v0.1.0"}
       }
     },
     "assessment": {

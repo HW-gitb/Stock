@@ -46,7 +46,26 @@
         "frozen_holding_tickers": {
           "type": "array", "uniqueItems": true, "items": { "type": "string", "pattern": "^[A-Z][A-Z0-9.-]{0,15}$" }
         },
-        "theme_soft_boost_enabled": { "type": "boolean" }
+        "theme_soft_boost_enabled": { "type": "boolean" },
+        "serenity_annotation_payload_identity": {
+          "anyOf": [
+            {"type": "null"},
+            {
+              "type": "object", "additionalProperties": false,
+              "properties": {
+                "upstream_input_packet_id": {"type": ["string", "null"]},
+                "upstream_decision_result_id": {"type": ["string", "null"]},
+                "upstream_policy_version": {"type": ["string", "null"]},
+                "upstream_decision_date": {"type": ["string", "null"]},
+                "rubric_version": {"type": ["string", "null"]},
+                "annotation_author_kind": {"type": ["string", "null"]},
+                "prompt_or_protocol_id": {"type": ["string", "null"]},
+                "model_identity": {"type": ["string", "null"]},
+                "generated_at": {"type": ["string", "null"]}
+              }
+            }
+          ]
+        }
       }
     },
     "stage_contract": {
