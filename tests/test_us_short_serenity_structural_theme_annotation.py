@@ -6,7 +6,6 @@ from datetime import datetime, timezone
 import hashlib
 import json
 from pathlib import Path
-import shutil
 import unittest
 
 from engine import us_short_llm_theme_discovery_policy_decision as decision
@@ -30,17 +29,28 @@ def _reverse_mappings(value):
     return value
 
 
+def _copy_newline_normalized(source: Path, target: Path) -> None:
+    """Copy a tracked text artifact with LF newlines.
+
+    The fixture's ``input_artifact_sha256`` and the decision id derived from it
+    are digests of these bytes.  Copying the checkout verbatim would make both
+    depend on how the working tree happens to render newlines, which is green in
+    one worktree and red in another for identical content.
+    """
+    target.write_bytes(source.read_bytes().replace(b"\r\n", b"\n"))
+
+
 @contextmanager
 def _materialized_root(*, policy_version: str, disposition: str = "KEEP"):
     with temporary_us_short_directory(ROOT, Path("state") / "us_short") as temp_dir:
         root = Path(temp_dir)
         packet_path = root / PACKET_REF
         packet_path.parent.mkdir(parents=True, exist_ok=True)
-        shutil.copyfile(ROOT / PACKET_REF, packet_path)
+        _copy_newline_normalized(ROOT / PACKET_REF, packet_path)
         if policy_version == "soft_discovery_query_policy_v0.2.0":
             legacy_path = root / LEGACY_SOURCE_PACKET_REF
             legacy_path.parent.mkdir(parents=True, exist_ok=True)
-            shutil.copyfile(ROOT / LEGACY_SOURCE_PACKET_REF, legacy_path)
+            _copy_newline_normalized(ROOT / LEGACY_SOURCE_PACKET_REF, legacy_path)
         result = decision.build_policy_decision_result(
             input_packet_id=PACKET_ID,
             input_packet_ref=PACKET_REF,
