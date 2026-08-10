@@ -39,7 +39,7 @@ import json
 import os
 import sys
 import tempfile
-from datetime import datetime
+from datetime import datetime, timedelta
 from pathlib import Path
 
 import numpy as np
@@ -519,6 +519,8 @@ def backfill(windows: list[int]) -> int:
     # fetch here. attach_forward_returns expects samples with a trade_date
     # column; rename our as_of -> trade_date in a slim view.
     payload = cached
+    settled_date = _latest_settled_market_date(df, today)
+    cache_is_behind_market_date = _cache_is_behind_market_date(payload, settled_date)
     work_mask = df["as_of"].astype(str).isin(ready) & _pending_backfill_mask(df, windows)
     work = df[work_mask].copy()
     if work.empty:
@@ -542,6 +544,11 @@ def backfill(windows: list[int]) -> int:
             if status_column not in cohort.columns:
                 continue
             if not _calendar_age_mature(as_of, today, window):
+                continue
+            # A long holiday can satisfy the calendar approximation before N
+            # exchange sessions have elapsed.  Do not call that stale when
+            # the actual stock cache already reaches the latest settled session.
+            if not cache_is_behind_market_date:
                 continue
             if any(
                 pending_before_attach.get((str(row.as_of), str(row.ts_code), window))
@@ -753,6 +760,55 @@ def _cached_stock_trade_dates(cached: dict) -> list[str]:
     dates = stocks["trade_date"].dropna().astype(str)
     dates = dates[dates.str.fullmatch(r"\d{8}")]
     return sorted(dates.unique().tolist())
+
+
+def _latest_settled_market_date(df: pd.DataFrame, today: str) -> str | None:
+    """Resolve the latest settled session without a provider call.
+
+    A current capture already records the accepted prior-settled price clock;
+    use that source-bound date when its run is for this wall date.  Offline or
+    legacy tracker rows fall back to the latest weekday on or before ``today``
+    so a weekend run is compared with Friday rather than the Sunday wall date.
+    """
+    today_text = str(today)
+    if len(today_text) != 8 or not today_text.isdigit():
+        return None
+    try:
+        today_dt = datetime.strptime(today_text, "%Y%m%d")
+    except ValueError:
+        return None
+
+    if isinstance(df, pd.DataFrame) and not df.empty and {
+        "run_date", "price_data_through"
+    }.issubset(df.columns):
+        same_run = df[df["run_date"].astype(str) == today_text]
+        settled = [
+            str(value)
+            for value in same_run["price_data_through"].dropna().astype(str)
+            if len(str(value)) == 8 and str(value).isdigit() and str(value) <= today_text
+        ]
+        if settled:
+            return max(settled)
+
+    while today_dt.weekday() >= 5:
+        today_dt -= timedelta(days=1)
+    return today_dt.strftime("%Y%m%d")
+
+
+def _cache_is_behind_market_date(cached: dict, settled_date: str | None) -> bool:
+    """Return whether actual stock rows lag the latest settled session.
+
+    The caller supplies a settled-date hint rather than a Shanghai wall date.
+    Missing/malformed hints or cache coverage remain fail-closed and are
+    treated as lagging.
+    """
+    if not isinstance(cached, dict):
+        return True
+    settled_text = str(settled_date or "")
+    if len(settled_text) != 8 or not settled_text.isdigit():
+        return True
+    trade_dates = _cached_stock_trade_dates(cached)
+    return not trade_dates or trade_dates[-1] < settled_text
 
 
 def _cache_coverage_description(cached: dict) -> str:

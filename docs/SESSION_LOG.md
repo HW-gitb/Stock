@@ -1,5 +1,68 @@
 # Session Log
 
+## 2026-08-10 — Claude 复审 PASS（40d9：O11 抑制门改比已结算交易日）
+
+- **Verdict/Action**: PASS。比较对象从墙上日期换成 `_latest_settled_market_date`：优先取 tracker 中 `run_date == today` 行的 `max(price_data_through)`（源绑定），否则回退到最近工作日；坏输入仍全部按落后处理。上一轮我判 FAIL 的那条探针本轮原样复跑，周跑那一档已安静通过，而桌面原案例仍照判 stale（没修过头）。
+- **Required**: 无。`R-ASHORT-FORWARD-TRACKER-HOLIDAY-SUPPRESSION-COMPARES-WALL-DATE-NOT-LAST-SESSION` 已翻 resolved；一条新 Optional（长假中的工作日且无同日捕获行仍误报）见 `docs/system_risk_register.md`。
+- **Verify**: review-evidence:94c127389b94。验收包 `Ran 21 in 1.8s OK receipt:08acbad278174c6df2efc35e`。复验探针：同缓存 `today=20260206`→rc=0、`today=20260208`→**rc=0 无横幅**（上轮为 rc=3+横幅）；残余格实测 `today=20260209` 无同日捕获行→rc=3，补上 `run_date/price_data_through` 后→rc=0。植入：中和工作日回退 → 点名用例精确红在 `today='20260208'` subTest，还原 sha 逐字节回原值。
+- **Next**: Codex：执行
+
+## 2026-08-10 — Codex executor/fixer：修复 R-ASHORT-FORWARD-TRACKER-HOLIDAY-SUPPRESSION-COMPARES-WALL-DATE-NOT-LAST-SESSION（OPEN-NOT_VERIFIED）
+
+- **Verdict/Action**：实现 P2 settled-clock 修复，未提交；真实 weekly 产物仍未验证。
+- **Required**：`R-ASHORT-FORWARD-TRACKER-HOLIDAY-SUPPRESSION-COMPARES-WALL-DATE-NOT-LAST-SESSION`（P2），详情与 closure matrix 见 `docs/system_risk_register.md`（单一来源）。
+- **Verify**：固定 Python 3.13.8；聚焦 `Ran 89 tests in 14.564s` / `OK`；`py_compile=exit 0`；文档门禁 `Ran 66` / `OK`；`git diff --check=exit 0`；wall-date mutation 的 Sunday 用例 `Ran 1` / `FAILED`（`rc=3`），源码已恢复；真实 weekly/provider/live/full lane `NOT_VERIFIED`。
+- **Pre-Codex self-review**：`matrix=R-... settled-clock + O10 + P2-2`; `register=updated`; `handoff=updated`; `focused=89 OK + wall-date mutation red`; `full-lane=NOT_VERIFIED`; `door=doc-governance+route-status+readme`。
+- **Next**：Claude Code：审查该 P2 与 `forward_tracker→exit3→health` 链；通过后提交。
+
+## 2026-08-10 — Claude 审查 FAIL（40d9：O11 长假抑制门比错时钟，未提交）
+
+- **Verdict/Action**: FAIL，不提交。O10 已实闭；O11 新增的 `_cache_is_behind_market_date` 拿 `a_share_market_date()` 的**墙上日历日**做比较，而缓存最新 stock 行最早只能是上一个已收盘交易日，故周跑（非交易日/盘前，本批即 run_date 20260809 周日 / price_basis 20260807）下该抑制门恒不生效，O11 的假 stale 原样保留；其新用例构造的是周跑产不出的那一天。
+- **Required**: `R-ASHORT-FORWARD-TRACKER-HOLIDAY-SUPPRESSION-COMPARES-WALL-DATE-NOT-LAST-SESSION`(P2) — 机制、实测、修复判据与闭合条件只见 `docs/system_risk_register.md`。
+- **Verify**: review-evidence:d4de5e89c0df。验收包 `Ran 20 in 0.9s OK receipt:05f9307ee98a1476780dd09f`。自写探针（同一份 20 交易日+长假缓存，仅挪 today）：`today=20260206` → `rc=0`、无横幅、`cache_behind=False`；`today=20260208`（周跑节奏）→ `rc=3`、**stale 横幅照打**、`cache_behind=True`。坏输入仍 fail-closed（非 dict / 非 8 位 / 无覆盖均按落后处理），O10 那格由 `_calendar_age_mature` 直接短路、不受影响。
+- **Next**: Codex：修复
+
+## 2026-08-10 — Codex executor/fixer：Optional O10/O11（OPEN-NOT_VERIFIED）
+
+### Verdict / Action
+
+按当前工作树 `docs/system_risk_register.md` 顶部 Optional 方案继续修复 O10/O11，保持 P2-2 的既有 cache-only、逐窗口与 exit 3/health 链边界。O10 补上「as_of 已在缓存、attach 已执行但某窗口仍未到日历成熟」的反向守卫；O11 将 stale 升级再收紧为「日历年龄已成熟、且真实 stock trade_date 覆盖确实落后当前市场日期」，不引入交易日历依赖、schema、状态码、缓存字段、provider 或 live 调用。当前工作树为 `D:\cnhea\Codex\worktrees\40d9\Stock`，基线 HEAD=`fa4b9f69`；本轮未提交。
+
+### Problems / root cause / changes
+
+- **O10 根因**：原有 `test_truly_young_cohort_does_not_emit_stale_banner` 的 cohort 根本不在缓存，`backfill()` 在 attach 前就返回，无法承重 attach 后的 `_calendar_age_mature` 分支。新增 in-cache cohort 用例，真实结算 5d/10d、保留 20d `pending_immature_asof`，断言 rc=0 且无 stale banner。
+- **O11 根因**：`int(window*1.4)+3` 是保守的自然日近似；长假可使 20 个交易日跨过 31 个自然日，当前缓存已到当天仍会被误报 stale。`runners/forward_tracker.py` 新增纯函数 `_cache_is_behind_market_date()`，只读既有 `stocks.trade_date` 最后实际日期与 `_today_yyyymmdd()` 比较；真实覆盖到达/超过当前日期时，已日历成熟但仍为 stale-cache pending 的窗口保持正常 immature。
+
+### Call chain / consumers
+
+`forward_tracker._mature_as_ofs` → `_partition_asof_coverage` → `attach_forward_returns` → `backfill()` 的逐窗口日历年龄 + 实际 cache-date 判定 → 真实短窗口写回 `logs/forward_tracker.csv` → `_print_cache_stale_banner` / `EXIT_LEDGER_STALLED=3` → `weekly_screening.ps1` 既有 `forward_daily_cache_stale` → sidecar health JSON/Markdown/receipt。O10/O11 只加固该既有消费者链，不新增孤立字段或仅测试产物。
+
+### Schema / source-binding / write boundary
+
+继续绑定既有 pickle `stocks.trade_date`、benchmark same-anchor 与真实股票行；`meta.start_date/end_date` 仍只用于 request-range 日志，不参与成熟度/覆盖判定。pickle、tracker CSV 原子写盘、sidecar/receipt schema、status 集合、收益/benchmark/selection/M6.7/forward-gate 均不变。`backfill` 仍不调 provider、不自动 refresh、不启动 live 或真实 weekly。
+
+### Negative controls / self-review
+
+- O10 定向植入：把 attach 后 `if not _calendar_age_mature(...)` 改成恒不跳过；点名测试输出 `Ran 1` / `FAILED`（rc 由 0 变 3）。
+- O11 定向植入：把 `if not cache_is_behind_market_date` 改成恒不跳过；长假且当前缓存用例输出 `Ran 1` / `FAILED`（rc 由 0 变 3）。两次植入随后均还原。
+- 既有 P2-2/O8/O9 负向矩阵保留；未运行真实 weekly/provider/live/full lane/forward/freeze/clock/account/order/ship-gate。
+- **Pre-Codex self-review**：matrix=O10 in-cache immature + O11 holiday/current-cache + P2-2 stale-lag preservation；register=updated；handoff=updated；focused=88 OK + 2 mutation FAIL；full-lane=NOT_VERIFIED；door=doc-governance+route-status+readme。
+
+### Exact verification and original terminal state
+
+- 唯一解释器 `C:\Users\cnhea\AppData\Local\Programs\Python\Python313\python.exe --version` → `Python 3.13.8`。
+- 精确聚焦命令：`& 'C:\Users\cnhea\AppData\Local\Programs\Python\Python313\python.exe' -m unittest tests.phase6.test_forward_tracker_cache_guard tests.phase6.test_weekly_screening_guardrails tests.test_a_short_weekly_sidecar_health` → `Ran 88 tests in 10.933s` / `OK`。
+- 两个 mutation 命令均用同一固定解释器和当前工作树，目标用例各 `Ran 1` / `FAILED`（预期反控），随后恢复源码；本轮未执行 provider/live/真实 runner。
+- 本轮开始前 `git status --short --untracked-files=all` 为空、HEAD=`fa4b9f69`；当前仅有本轮 5 个 tracked 文件待提交。固定 Python `py_compile runners/forward_tracker.py tests/phase6/test_forward_tracker_cache_guard.py` → exit 0；文档门禁 `-m unittest tests.test_doc_governance_guard tests.test_route_doc_ledger_status_consistency tests.test_readme_route_row_length` → `Ran 66 tests` / `OK`；`git diff --check` → exit 0。真实 durable weekly/health/receipt 仍 `NOT_VERIFIED`。
+
+### Required / review boundary
+
+本轮没有新增 Required；状态保持 `OPEN-NOT_VERIFIED`。Claude Code reviewer/committer 负责独立复审、stage、commit；executor/fixer 不代提交、不 push/merge。审查应确认 O10/O11 不削弱 20260706/20260720/20260727 的真实 stale 方向，并检查既有 P2-2→health 链未漂移。
+
+### Next
+
+Claude Code：审查 Optional O10/O11 与 P2-2 forward_tracker→exit3→health 链；通过后由 reviewer/committer 收口
+
 ## 2026-08-10 — Claude 审查 PASS（40d9：P2-2 成熟度改按日历判 + O8/O9 实闭）
 
 - **Verdict/Action**: PASS。成熟度不再拿缓存长度当日历：`_partition_asof_coverage` 的 `+max_window >= len(trade_dates)` 分支已删，改由按窗口的 `_calendar_age_mature` 判定，attach 之后再用同一把尺子把「日历已成熟却仍欠账」的窗口记成 stale 并返回 `EXIT_LEDGER_STALLED`。附带关掉「meta 覆盖声明比真实覆盖多两天」（告警文案现在并列打印两个区间），写回也不再覆盖终态。
