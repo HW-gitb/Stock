@@ -23,7 +23,7 @@ class SerenityQualityForwardTest(unittest.TestCase):
     def setUpClass(cls):
         cls.fixture = json.loads(FIXTURE_PATH.read_text(encoding="utf-8"))
 
-    def _review(self, annotation, decision_date, *, verdict="pass"):
+    def _review(self, annotation, decision_date, *, verdict="pass", reviewer_model="claude-code-reviewer-v0.1.0"):
         identity = {
             "annotation_id": annotation["annotation_id"],
             "schema_version": annotation["schema_version"],
@@ -31,6 +31,9 @@ class SerenityQualityForwardTest(unittest.TestCase):
             "upstream_decision_result_id": annotation["identity_envelope"]["upstream_decision_result_id"],
             "upstream_policy_version": annotation["identity_envelope"]["upstream_policy_version"],
             "upstream_decision_date": annotation["identity_envelope"]["upstream_decision_date"],
+            "annotation_author_kind": annotation["identity_envelope"]["annotation_author_kind"],
+            "annotation_prompt_version": annotation["identity_envelope"]["prompt_or_protocol_id"],
+            "producer_model_identity": annotation["identity_envelope"]["model_identity"],
         }
         return {
             "schema_name": "us_short_serenity_quality_review",
@@ -40,6 +43,18 @@ class SerenityQualityForwardTest(unittest.TestCase):
             "consumer_version": quality.CONSUMER_VERSION,
             "reviewer_kind": "human",
             "reviewed_at": "2026-08-10T08:00:00+00:00",
+            "reviewer_identity": {
+                "identity_version": quality.REVIEWER_IDENTITY_VERSION,
+                "reviewer_id": "claude_code_quality_reviewer",
+                "model_identity": reviewer_model,
+                "prompt_version": quality.REVIEW_PROMPT_VERSION,
+            },
+            "review_scope": {
+                "source_bound_only": True,
+                "future_returns_viewed": False,
+                "selection_results_viewed": False,
+                "operation_advice_viewed": False,
+            },
             "annotation_identity": identity,
             "metrics": [
                 {
@@ -52,11 +67,29 @@ class SerenityQualityForwardTest(unittest.TestCase):
             ],
         }
 
-    def _run(self, root, decision_date, *, annotation=None, review=None, ledger=None):
+    def _formal_fixture(self):
+        annotation = copy.deepcopy(self.fixture)
+        annotation["identity_envelope"]["annotation_author_kind"] = "llm"
+        annotation["identity_envelope"]["model_identity"] = "serenity-producer-v0.1.0"
+        return annotation
+
+    def _legacy_ledger(self):
+        # Shape written before the two-action Blade5 fields were added; it deliberately has no pending arrays.
+        return {
+            "schema_name": quality.SCHEMA_NAME,
+            "schema_version": quality.SCHEMA_VERSION,
+            "quality_policy_version": quality.QUALITY_POLICY_VERSION,
+            "cross_cohort_aggregation_allowed": False,
+            "cohorts": [],
+            "effects": dict(quality.EFFECT_BOUNDARY),
+        }
+
+    def _run(self, root, decision_date, *, annotation=None, review=None, ledger=None,
+             annotation_name="annotation.json", review_name="review.json"):
         state = root / "state" / "us_short"
         state.mkdir(parents=True, exist_ok=True)
-        annotation_path = state / "annotation.json"
-        review_path = state / "review.json"
+        annotation_path = state / annotation_name
+        review_path = state / review_name
         observation_path = state / f"observation_{decision_date}.json"
         ledger_path = ledger or state / "ledger.json"
         gate_path = state / f"gate_{decision_date}.json"
@@ -104,6 +137,9 @@ class SerenityQualityForwardTest(unittest.TestCase):
                 "upstream_decision_result_id": self.fixture["identity_envelope"]["upstream_decision_result_id"],
                 "upstream_policy_version": "soft_discovery_query_policy_v0.3.0",
                 "upstream_decision_date": "20260809",
+                "annotation_author_kind": "human",
+                "annotation_prompt_version": "serenity_blade3_rubric_v0.1.0",
+                "producer_model_identity": None,
             }
             self.assertEqual(result["observation"]["annotation_identity"], expected)
             self.assertEqual(result["ledger"]["cohorts"][0]["records"][0]["annotation_identity"], expected)
@@ -129,6 +165,179 @@ class SerenityQualityForwardTest(unittest.TestCase):
             self.assertEqual(result["status"], "not_evaluable")
             self.assertEqual(result["shadow_consumption"]["status"], "active")
             self.assertEqual(result["quality_gate"]["window"]["eligible_week_count"], 0)
+            self.assertEqual(len(result["ledger"]["pending_annotations"]), 1)
+            self.assertEqual(result["observation"]["settlement_status"], "pending_review")
+
+    def test_legacy_ledger_is_no_count_and_does_not_abort_or_get_rewritten(self):
+        with tempfile.TemporaryDirectory() as raw:
+            root = Path(raw)
+            state = root / "state" / "us_short"
+            state.mkdir(parents=True, exist_ok=True)
+            ledger = state / "ledger.json"
+            legacy_bytes = (json.dumps(self._legacy_ledger(), ensure_ascii=False, indent=2) + "\n").encode("utf-8")
+            ledger.write_bytes(legacy_bytes)
+
+            result = self._run(root, "20260810", ledger=ledger)
+            self.assertEqual(result["status"], "invalid_evidence")
+            self.assertEqual(result["error"]["code"], "SERENITY_QUALITY_LEDGER_REJECTED")
+            self.assertFalse(result["main_task_should_abort"])
+            self.assertEqual(result["quality_gate"]["window"]["eligible_week_count"], 0)
+            self.assertEqual(ledger.read_bytes(), legacy_bytes)
+
+            settlement = quality.settle_pending_review(
+                ledger_path=ledger,
+                current_decision_date="20260817",
+                observed_at="2026-08-17T08:00:00+00:00",
+                state_dir=state,
+                root=root,
+                now=datetime(2026, 8, 17, 8, tzinfo=timezone.utc),
+            )
+            self.assertEqual(settlement["status"], "no_count")
+            self.assertEqual(settlement["evidence_status"], "invalid_evidence")
+            self.assertEqual(settlement["reason_code"], "SERENITY_QUALITY_LEDGER_REJECTED")
+            self.assertFalse(settlement["main_task_should_abort"])
+            self.assertEqual(ledger.read_bytes(), legacy_bytes)
+
+    def test_pending_target_requires_exactly_one_and_review_write_is_idempotent(self):
+        with tempfile.TemporaryDirectory() as raw:
+            root = Path(raw)
+            state = root / "state" / "us_short"
+            annotation = self._formal_fixture()
+            with patch.object(annotation_contract, "validate_annotation", return_value=True):
+                self._run(
+                    root, "20260810", annotation=annotation,
+                    annotation_name="annotation_20260810.json", review_name="review_20260810.json",
+                )
+            ledger = state / "ledger.json"
+            target = quality.load_pending_review_target(ledger_path=ledger, state_dir=state)
+            self.assertEqual(target["review_path"], state / "review_20260810.json")
+            review = self._review(annotation, "20260810")
+            first = quality.write_independent_quality_review(
+                ledger_path=ledger, state_dir=state, review=review,
+                now=datetime(2026, 8, 10, 9, tzinfo=timezone.utc),
+            )
+            second = quality.write_independent_quality_review(
+                ledger_path=ledger, state_dir=state, review=review,
+                now=datetime(2026, 8, 10, 9, tzinfo=timezone.utc),
+            )
+            self.assertEqual(first["status"], "written")
+            self.assertEqual(second["status"], "idempotent")
+            different = copy.deepcopy(review)
+            different["metrics"][0]["verdict"] = "fail"
+            with self.assertRaises(quality.SerenityQualityForwardError):
+                quality.write_independent_quality_review(
+                    ledger_path=ledger, state_dir=state, review=different,
+                    now=datetime(2026, 8, 10, 9, tzinfo=timezone.utc),
+                )
+            saved = json.loads(ledger.read_text(encoding="utf-8"))
+            saved["pending_annotations"].append(copy.deepcopy(saved["pending_annotations"][0]))
+            ledger.write_text(json.dumps(saved), encoding="utf-8")
+            with self.assertRaisesRegex(quality.SerenityQualityForwardError, "exactly one"):
+                quality.load_pending_review_target(ledger_path=ledger, state_dir=state)
+
+    def test_two_week_settlement_closes_previous_review_before_new_pending(self):
+        with tempfile.TemporaryDirectory() as raw:
+            root = Path(raw)
+            state = root / "state" / "us_short"
+            ledger = state / "ledger.json"
+            annotation = self._formal_fixture()
+            with patch.object(annotation_contract, "validate_annotation", return_value=True):
+                self._run(
+                    root, "20260810", annotation=annotation, ledger=ledger,
+                    annotation_name="annotation_20260810.json", review_name="review_20260810.json",
+                )
+                quality.write_independent_quality_review(
+                    ledger_path=ledger, state_dir=state,
+                    review=self._review(annotation, "20260810"),
+                    now=datetime(2026, 8, 10, 9, tzinfo=timezone.utc),
+                )
+                settled = quality.settle_pending_review(
+                    ledger_path=ledger, current_decision_date="20260817",
+                    observed_at="2026-08-17T08:00:00+00:00", state_dir=state, root=root,
+                    now=datetime(2026, 8, 17, 8, tzinfo=timezone.utc),
+                )
+                self.assertEqual(settled["status"], "settled")
+                after_settlement = json.loads(ledger.read_text(encoding="utf-8"))
+                self.assertEqual(after_settlement["pending_annotations"], [])
+                self.assertEqual(after_settlement["closed_pending_annotations"][0]["settlement_status"], "eligible")
+                self.assertEqual(len(after_settlement["cohorts"][0]["records"]), 1)
+                self.assertTrue(after_settlement["cohorts"][0]["records"][0]["formal_count_eligible"])
+                current = self._run(
+                    root, "20260817", annotation=annotation, ledger=ledger,
+                    annotation_name="annotation_20260817.json", review_name="review_20260817.json",
+                )
+            self.assertEqual(current["status"], "not_evaluable")
+            self.assertEqual(len(current["ledger"]["pending_annotations"]), 1)
+            self.assertEqual(
+                quality.settle_pending_review(
+                    ledger_path=ledger, current_decision_date="20260817",
+                    observed_at="2026-08-17T08:00:00+00:00", state_dir=state, root=root,
+                    now=datetime(2026, 8, 17, 8, tzinfo=timezone.utc),
+                )["status"],
+                "not_due",
+            )
+
+    def test_late_review_is_no_count_and_cannot_be_backfilled(self):
+        with tempfile.TemporaryDirectory() as raw:
+            root = Path(raw)
+            state = root / "state" / "us_short"
+            ledger = state / "ledger.json"
+            annotation = self._formal_fixture()
+            with patch.object(annotation_contract, "validate_annotation", return_value=True):
+                self._run(
+                    root, "20260810", annotation=annotation, ledger=ledger,
+                    annotation_name="annotation_20260810.json", review_name="review_20260810.json",
+                )
+                settled = quality.settle_pending_review(
+                    ledger_path=ledger, current_decision_date="20260817",
+                    observed_at="2026-08-17T08:00:00+00:00", state_dir=state, root=root,
+                    now=datetime(2026, 8, 17, 8, tzinfo=timezone.utc),
+                )
+            self.assertEqual(settled["status"], "no_count")
+            closed = json.loads(ledger.read_text(encoding="utf-8"))["closed_pending_annotations"]
+            self.assertEqual(closed[0]["settlement_status"], "no_count")
+            late_review = self._review(annotation, "20260810")
+            (state / "review_20260810.json").write_text(json.dumps(late_review), encoding="utf-8")
+            with patch.object(annotation_contract, "validate_annotation", return_value=True):
+                result = self._run(
+                    root, "20260810", annotation=annotation, review=late_review, ledger=ledger,
+                    annotation_name="annotation_20260810.json", review_name="review_20260810.json",
+                )
+            self.assertEqual(result["status"], "invalid_evidence")
+            saved = json.loads(ledger.read_text(encoding="utf-8"))
+            self.assertEqual(len(saved["cohorts"]), 0)
+            self.assertEqual(saved["closed_pending_annotations"][0]["settlement_status"], "no_count")
+
+    def test_producer_rejects_wrong_upstream_date_and_never_synthesizes_payload(self):
+        with tempfile.TemporaryDirectory() as raw:
+            root = Path(raw)
+            path = root / "state" / "us_short" / "annotation.json"
+            annotation = self._formal_fixture()
+            with patch.object(annotation_contract, "validate_annotation", return_value=True):
+                produced = quality.produce_annotation_for_week(
+                    annotation_path=path, decision_date="20260810",
+                    soft_discovery_result={"status": "valid_nonempty"}, annotation_payload=annotation,
+                    root=root, now=datetime(2026, 8, 10, tzinfo=timezone.utc),
+                )
+            self.assertEqual(produced["status"], "invalid_evidence")
+            self.assertFalse(path.exists())
+            pending = quality.produce_annotation_for_week(
+                annotation_path=path, decision_date="20260810",
+                soft_discovery_result={"status": "valid_nonempty"}, root=root,
+            )
+            self.assertEqual(pending["status"], "pending")
+
+    def test_reviewer_cannot_use_the_producer_model_identity(self):
+        with tempfile.TemporaryDirectory() as raw:
+            root = Path(raw)
+            annotation = self._formal_fixture()
+            with patch.object(annotation_contract, "validate_annotation", return_value=True):
+                result = self._run(
+                    root, "20260810", annotation=annotation,
+                    review=self._review(annotation, "20260810", reviewer_model="serenity-producer-v0.1.0"),
+                )
+            self.assertEqual(result["status"], "invalid_evidence")
+            self.assertIn("producer identity", result["error"]["message"])
             self.assertTrue(result["observation"]["report_overlay_available"])
 
     def test_review_identity_or_version_mismatch_is_local_invalid_evidence(self):
@@ -162,13 +371,14 @@ class SerenityQualityForwardTest(unittest.TestCase):
             root = Path(raw)
             ledger = root / "state" / "us_short" / "ledger.json"
             result = None
+            annotation = self._formal_fixture()
             with patch.object(annotation_contract, "validate_annotation", return_value=True):
                 for decision_date in ("20260810", "20260817", "20260824", "20260831"):
                     result = self._run(
                         root,
                         decision_date,
-                        annotation=self.fixture,
-                        review=self._review(self.fixture, decision_date),
+                        annotation=annotation,
+                        review=self._review(annotation, decision_date),
                         ledger=ledger,
                     )
             assert result is not None
@@ -186,13 +396,14 @@ class SerenityQualityForwardTest(unittest.TestCase):
             root = Path(raw)
             ledger = root / "state" / "us_short" / "ledger.json"
             result = None
+            annotation = self._formal_fixture()
             with patch.object(annotation_contract, "validate_annotation", return_value=True):
                 for decision_date in ("20260810", "20260817", "20260824", "20260831"):
                     result = self._run(
                         root,
                         decision_date,
-                        annotation=self.fixture,
-                        review=self._review(self.fixture, decision_date, verdict="fail"),
+                        annotation=annotation,
+                        review=self._review(annotation, decision_date, verdict="fail"),
                         ledger=ledger,
                     )
             assert result is not None
@@ -203,16 +414,17 @@ class SerenityQualityForwardTest(unittest.TestCase):
         with tempfile.TemporaryDirectory() as raw:
             root = Path(raw)
             ledger = root / "state" / "us_short" / "ledger.json"
-            changed = copy.deepcopy(self.fixture)
-            changed["identity_envelope"]["upstream_policy_version"] = "soft_discovery_query_policy_v0.2.0"
+            formal = self._formal_fixture()
+            changed_formal = copy.deepcopy(formal)
+            changed_formal["identity_envelope"]["upstream_policy_version"] = "soft_discovery_query_policy_v0.2.0"
             with patch.object(annotation_contract, "validate_annotation", return_value=True):
                 first = self._run(
-                    root, "20260810", annotation=self.fixture,
-                    review=self._review(self.fixture, "20260810"), ledger=ledger,
+                    root, "20260810", annotation=formal,
+                    review=self._review(formal, "20260810"), ledger=ledger,
                 )
                 second = self._run(
-                    root, "20260817", annotation=changed,
-                    review=self._review(changed, "20260817"), ledger=ledger,
+                    root, "20260817", annotation=changed_formal,
+                    review=self._review(changed_formal, "20260817"), ledger=ledger,
                 )
             self.assertEqual(len(second["ledger"]["cohorts"]), 2)
             self.assertNotEqual(

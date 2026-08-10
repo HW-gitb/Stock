@@ -39,7 +39,11 @@
     "annotation_schema_version",
     "rubric_version",
     "consumer_version",
-    "upstream_policy_version"
+    "upstream_policy_version",
+    "producer_identity_version",
+    "annotation_prompt_version",
+    "reviewer_identity_version",
+    "review_prompt_version"
   ],
   "cross_cohort_aggregation_allowed": false,
   "effect_boundary": {

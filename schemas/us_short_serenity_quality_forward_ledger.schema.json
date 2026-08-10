@@ -9,6 +9,8 @@
     "quality_policy_version",
     "cross_cohort_aggregation_allowed",
     "cohorts",
+    "pending_annotations",
+    "closed_pending_annotations",
     "effects"
   ],
   "properties": {
@@ -19,6 +21,14 @@
     "cohorts": {
       "type": "array",
       "items": {"$ref": "#/$defs/cohort"}
+    },
+    "pending_annotations": {
+      "type": "array",
+      "items": {"$ref": "#/$defs/pending_annotation"}
+    },
+    "closed_pending_annotations": {
+      "type": "array",
+      "items": {"$ref": "#/$defs/closed_pending_annotation"}
     },
     "effects": {"$ref": "#/$defs/effect_boundary"}
   },
@@ -32,7 +42,10 @@
         "rubric_version",
         "upstream_decision_result_id",
         "upstream_policy_version",
-        "upstream_decision_date"
+        "upstream_decision_date",
+        "annotation_author_kind",
+        "annotation_prompt_version",
+        "producer_model_identity"
       ],
       "properties": {
         "annotation_id": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
@@ -40,18 +53,47 @@
         "rubric_version": {"const": "serenity_annotation_rubric_v0.1.0"},
         "upstream_decision_result_id": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
         "upstream_policy_version": {"enum": ["soft_discovery_query_policy_v0.2.0", "soft_discovery_query_policy_v0.3.0"]},
-        "upstream_decision_date": {"type": "string", "pattern": "^[0-9]{8}$"}
+        "upstream_decision_date": {"type": "string", "pattern": "^[0-9]{8}$"},
+        "annotation_author_kind": {"enum": ["human", "llm", "hybrid"]},
+        "annotation_prompt_version": {"type": "string", "minLength": 1, "maxLength": 128},
+        "producer_model_identity": {"anyOf": [{"type": "string", "minLength": 1, "maxLength": 200}, {"type": "null"}]}
       }
     },
     "dimensions": {
       "type": "object",
       "additionalProperties": false,
-      "required": ["annotation_schema_version", "rubric_version", "consumer_version", "upstream_policy_version"],
+      "required": ["annotation_schema_version", "rubric_version", "consumer_version", "upstream_policy_version", "producer_identity_version", "annotation_prompt_version", "reviewer_identity_version", "review_prompt_version"],
       "properties": {
         "annotation_schema_version": {"const": "1.0.0"},
         "rubric_version": {"const": "serenity_annotation_rubric_v0.1.0"},
         "consumer_version": {"const": "serenity_shadow_consumer_v0.1.0"},
-        "upstream_policy_version": {"enum": ["soft_discovery_query_policy_v0.2.0", "soft_discovery_query_policy_v0.3.0"]}
+        "upstream_policy_version": {"enum": ["soft_discovery_query_policy_v0.2.0", "soft_discovery_query_policy_v0.3.0"]},
+        "producer_identity_version": {"const": "serenity_annotation_producer_v0.1.0"},
+        "annotation_prompt_version": {"type": "string", "minLength": 1, "maxLength": 128},
+        "reviewer_identity_version": {"const": "serenity_quality_reviewer_v0.1.0"},
+        "review_prompt_version": {"const": "serenity_quality_reviewer_prompt_v0.1.0"}
+      }
+    },
+    "producer_identity": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["identity_version", "author_kind", "prompt_version", "model_identity"],
+      "properties": {
+        "identity_version": {"const": "serenity_annotation_producer_v0.1.0"},
+        "author_kind": {"enum": ["human", "llm", "hybrid"]},
+        "prompt_version": {"type": "string", "minLength": 1, "maxLength": 128},
+        "model_identity": {"anyOf": [{"type": "string", "minLength": 1, "maxLength": 200}, {"type": "null"}]}
+      }
+    },
+    "reviewer_identity": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["identity_version", "reviewer_id", "model_identity", "prompt_version"],
+      "properties": {
+        "identity_version": {"const": "serenity_quality_reviewer_v0.1.0"},
+        "reviewer_id": {"type": "string", "pattern": "^[A-Za-z0-9][A-Za-z0-9_.:-]{1,127}$"},
+        "model_identity": {"type": "string", "minLength": 1, "maxLength": 200},
+        "prompt_version": {"const": "serenity_quality_reviewer_prompt_v0.1.0"}
       }
     },
     "metric": {
@@ -87,7 +129,10 @@
         "reviewer_kind",
         "reviewed_at",
         "metrics",
-        "eligible"
+        "eligible",
+        "producer_identity",
+        "reviewer_identity",
+        "formal_count_eligible"
       ],
       "properties": {
         "record_id": {"type": "string", "pattern": "^serenity_quality_record:[A-Za-z0-9_.:-]{3,500}$"},
@@ -97,6 +142,8 @@
         "dimensions": {"$ref": "#/$defs/dimensions"},
         "reviewer_kind": {"enum": ["human", "llm"]},
         "reviewed_at": {"type": "string", "format": "date-time"},
+        "producer_identity": {"$ref": "#/$defs/producer_identity"},
+        "reviewer_identity": {"$ref": "#/$defs/reviewer_identity"},
         "metrics": {
           "type": "array",
           "minItems": 5,
@@ -110,7 +157,8 @@
           ],
           "additionalItems": false
         },
-        "eligible": {"const": true}
+        "eligible": {"const": true},
+        "formal_count_eligible": {"type": "boolean"}
       }
     },
     "cohort": {
@@ -124,6 +172,34 @@
         "quality_gate_result_id": {
           "anyOf": [{"type": "string", "pattern": "^serenity_quality_gate:[A-Za-z0-9_.:-]{3,500}$"}, {"type": "null"}]
         }
+      }
+    },
+    "pending_annotation": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["decision_date", "annotation_file_name", "review_file_name", "annotation_identity", "producer_identity", "created_at", "status"],
+      "properties": {
+        "decision_date": {"type": "string", "pattern": "^[0-9]{8}$"},
+        "annotation_file_name": {"type": "string", "pattern": "^[A-Za-z0-9_.:-]{1,255}$"},
+        "review_file_name": {"type": "string", "pattern": "^[A-Za-z0-9_.:-]{1,255}$"},
+        "annotation_identity": {"$ref": "#/$defs/identity"},
+        "producer_identity": {"$ref": "#/$defs/producer_identity"},
+        "created_at": {"type": "string", "format": "date-time"},
+        "status": {"const": "awaiting_review"}
+      }
+    },
+    "closed_pending_annotation": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["decision_date", "annotation_identity", "producer_identity", "settlement_status", "settled_at", "reason_code", "reviewer_identity"],
+      "properties": {
+        "decision_date": {"type": "string", "pattern": "^[0-9]{8}$"},
+        "annotation_identity": {"$ref": "#/$defs/identity"},
+        "producer_identity": {"$ref": "#/$defs/producer_identity"},
+        "settlement_status": {"enum": ["eligible", "no_count"]},
+        "settled_at": {"type": "string", "format": "date-time"},
+        "reason_code": {"type": "string", "pattern": "^[A-Z0-9_:-]{2,120}$"},
+        "reviewer_identity": {"anyOf": [{"$ref": "#/$defs/reviewer_identity"}, {"type": "null"}]}
       }
     },
     "effect_boundary": {

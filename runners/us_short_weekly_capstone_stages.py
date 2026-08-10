@@ -287,12 +287,20 @@ def run_soft_discovery(ctx) -> dict[str, Any]:
 
 
 def run_serenity_quality_forward(ctx) -> dict[str, Any]:
-    """Observe the optional Serenity annotation/review pair without provider or active-effect access."""
+    """Produce/observe the optional Serenity pair and expose the downstream preflight."""
     from datetime import datetime
 
-    from engine.us_short_serenity_quality_forward import run_quality_forward
+    from engine.us_short_serenity_quality_forward import produce_annotation_for_week, run_quality_forward
 
-    return run_quality_forward(
+    producer = produce_annotation_for_week(
+        annotation_path=ctx.serenity_annotation_path,
+        annotation_payload=getattr(ctx, "serenity_annotation_payload", None),
+        soft_discovery_result=ctx.soft_discovery_run_result,
+        decision_date=ctx.decision_date,
+        root=ctx.sample_root,
+        now=datetime.fromisoformat(ctx.generated_at),
+    )
+    result = run_quality_forward(
         annotation_path=ctx.serenity_annotation_path,
         review_path=ctx.serenity_quality_review_path,
         observation_path=ctx.serenity_quality_observation_path,
@@ -302,7 +310,12 @@ def run_serenity_quality_forward(ctx) -> dict[str, Any]:
         observed_at=ctx.generated_at,
         root=ctx.sample_root,
         now=datetime.fromisoformat(ctx.generated_at),
+        g1_decision_path=ctx.serenity_g1_decision_path,
+        g1_preflight_path=ctx.serenity_g1_blade6_preflight_path,
     )
+    result["annotation_producer"] = producer
+    result["previous_review_settlement"] = getattr(ctx, "serenity_settlement_result", None)
+    return result
 
 
 def run_momentum_producer(ctx) -> dict[str, Any]:
