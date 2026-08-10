@@ -9,6 +9,7 @@ import tempfile
 import unittest
 from datetime import datetime
 from pathlib import Path
+from unittest import mock
 
 
 ROOT = Path(__file__).resolve().parents[2]
@@ -298,6 +299,40 @@ class Batch5ToBatch4E2ETest(unittest.TestCase):
             action_csv = (private_root / "weekly_private" / _DECISION_DATE / "action_table.csv").read_text(encoding="utf-8")
             self.assertIn("coverage_status", action_csv.splitlines()[0])
             self.assertIn("partial", action_csv.splitlines()[1])
+
+    def test_canonical_private_and_official_roots_are_carriers_not_leaf_outputs(self) -> None:
+        """The canonical state root is a namespace; only its private child leaves need the guard."""
+        canonical_root = e2e.STATE_US_SHORT_DIR.resolve()
+        with tempfile.TemporaryDirectory() as input_dir:
+            inputs = Path(input_dir)
+            account = _write_json(inputs / "account_state.json", _empty_account())
+            health = _write_json(inputs / "provider_health.json", {"fmp": "ok", "sec_edgar": "ok"})
+            template = _no_build_template(inputs / "batch4_template.json")
+            context_out = self.state_dir / f"{self.slug}_carrier_context_packet.json"
+            final_writer_calls: list[Path] = []
+
+            def stub_final_batch4(packet_path: Path, **_kwargs):
+                final_writer_calls.append(packet_path)
+                return {"emitted": True, "decision_date": _DECISION_DATE, "row_count": 1}
+
+            with mock.patch.object(e2e, "_safe_batch4_run", side_effect=stub_final_batch4):
+                summary = e2e.run_e2e(
+                    source_packet_path=self.paths["packet"],
+                    batch4_template_path=template,
+                    account_state_path=account,
+                    provider_health_path=health,
+                    private_root=canonical_root,
+                    official_output_root=canonical_root,
+                    now_et=datetime(2026, 6, 15, 9, 0, 0),
+                    context_components_path=self.paths["components"],
+                    context_packet_path=context_out,
+                    bootstrap_lifecycle=True,
+                    generated_at="2026-06-15T13:01:00Z",
+                )
+
+        self.assertEqual(summary["scope"]["status"], "batch5_source_packet_to_batch4_outputs_completed")
+        self.assertEqual(summary["batch4_run"]["emitted"], True)
+        self.assertEqual(final_writer_calls, [context_out.resolve()])
 
     def test_local_ohlcv_packet_is_the_only_executable_price_input(self) -> None:
         points = [

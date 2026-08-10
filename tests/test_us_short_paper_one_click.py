@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import ast
 import json
 import os
 import shutil
@@ -12,6 +13,7 @@ from pathlib import Path
 from types import SimpleNamespace
 from unittest import mock
 
+from engine.us_short_private_paths import PrivatePathError, reject_nonprivate_output_path
 from runners import us_short_paper_one_click as one_click
 from runners.us_short_paper_one_click import (
     DEFAULT_STATE_DIR,
@@ -20,6 +22,50 @@ from runners.us_short_paper_one_click import (
     _prepare_paper_inputs,
     run_one_click,
 )
+from runners.us_short_weekly_capstone import _decision_lock_path, resolve_capstone_context
+
+
+def _production_state_dir_literal_children() -> list[tuple[Path, str]]:
+    """Enumerate production ``ctx.state_dir / "child"`` paths without a runtime registry."""
+    children: list[tuple[Path, str]] = []
+    for source_root in (one_click.ROOT / "runners", one_click.ROOT / "engine"):
+        for source_path in sorted(source_root.glob("*.py")):
+            tree = ast.parse(source_path.read_text(encoding="utf-8"), filename=str(source_path))
+            for node in ast.walk(tree):
+                if not (
+                    isinstance(node, ast.BinOp)
+                    and isinstance(node.op, ast.Div)
+                    and isinstance(node.left, ast.Attribute)
+                    and isinstance(node.left.value, ast.Name)
+                    and node.left.value.id == "ctx"
+                    and node.left.attr == "state_dir"
+                    and isinstance(node.right, ast.Constant)
+                    and type(node.right.value) is str
+                ):
+                    continue
+                children.append((source_path, node.right.value))
+    return sorted(set(children), key=lambda item: (str(item[0]), item[1]))
+
+
+def _assert_state_dir_literal_children_are_gitignored(
+    children: list[tuple[Path, str]],
+) -> None:
+    for source_path, child in children:
+        probe = one_click.ROOT / "state" / "us_short" / child / "private_probe.json"
+        result = subprocess.run(
+            ["git", "check-ignore", "-v", "--no-index", "--", str(probe)],
+            cwd=str(one_click.ROOT),
+            stdin=subprocess.DEVNULL,
+            capture_output=True,
+            text=True,
+            check=False,
+        )
+        source = result.stdout.strip().split("\t", 1)[0].split(":", 2)[0].replace("\\", "/").lower()
+        if result.returncode != 0 or not (source == ".gitignore" or source.endswith("/.gitignore")):
+            raise AssertionError(
+                f"{source_path}:{child} is not covered by tracked .gitignore: "
+                f"rc={result.returncode}, stdout={result.stdout!r}, stderr={result.stderr!r}"
+            )
 
 
 class USShortPaperOneClickTest(unittest.TestCase):
@@ -55,6 +101,73 @@ class USShortPaperOneClickTest(unittest.TestCase):
 
     def test_accepts_the_active_checkout_canonical_source_state(self) -> None:
         self.assertEqual(DEFAULT_STATE_DIR.resolve(), _canonical_source_state_dir(DEFAULT_STATE_DIR))
+
+    def test_canonical_decision_lock_is_ignored_by_tracked_gitignore(self) -> None:
+        ctx = resolve_capstone_context(
+            now_et=datetime(2026, 7, 23, 8, 0, 0),
+            private_root=Path(tempfile.gettempdir()) / "us_short_problem1_private",
+            batch4_template_path=Path("template.json"),
+            account_state_path=Path("account.json"),
+            state_dir=DEFAULT_STATE_DIR,
+        )
+        lock_path = _decision_lock_path(ctx)
+        self.assertEqual(lock_path.parent, (DEFAULT_STATE_DIR / "_transaction_locks").resolve())
+
+        # This is the exact consumer used immediately before the production lock is created.
+        reject_nonprivate_output_path(lock_path)
+
+        result = subprocess.run(
+            ["git", "check-ignore", "-v", "--no-index", "--", str(lock_path)],
+            cwd=str(one_click.ROOT),
+            stdin=subprocess.DEVNULL,
+            capture_output=True,
+            text=True,
+            check=False,
+        )
+        self.assertEqual(result.returncode, 0, result.stderr)
+        source = result.stdout.strip().split("\t", 1)[0].split(":", 2)[0].replace("\\", "/").lower()
+        self.assertTrue(source == ".gitignore" or source.endswith("/.gitignore"), result.stdout)
+        self.assertNotIn(".git/info/exclude", source)
+
+    def test_unregistered_deep_state_path_remains_nonprivate(self) -> None:
+        path = one_click.ROOT / "state" / "us_short" / "anything" / "deep" / "x.json"
+        with self.assertRaises(PrivatePathError):
+            reject_nonprivate_output_path(path)
+
+        result = subprocess.run(
+            ["git", "check-ignore", "-v", "--no-index", "--", str(path)],
+            cwd=str(one_click.ROOT),
+            stdin=subprocess.DEVNULL,
+            capture_output=True,
+            text=True,
+            check=False,
+        )
+        self.assertEqual(result.returncode, 1, result.stdout)
+
+    def test_every_production_state_dir_literal_child_is_gitignored_with_planted_failure(self) -> None:
+        children = _production_state_dir_literal_children()
+        self.assertTrue(children)
+        _assert_state_dir_literal_children_are_gitignored(children)
+
+        planted = ast.parse(
+            'def planted(ctx):\n    return ctx.state_dir / "_unregistered_state_child"\n'
+        )
+        planted_children = [
+            (Path("planted_production.py"), node.right.value)
+            for node in ast.walk(planted)
+            if (
+                isinstance(node, ast.BinOp)
+                and isinstance(node.op, ast.Div)
+                and isinstance(node.left, ast.Attribute)
+                and isinstance(node.left.value, ast.Name)
+                and node.left.value.id == "ctx"
+                and node.left.attr == "state_dir"
+                and isinstance(node.right, ast.Constant)
+                and type(node.right.value) is str
+            )
+        ]
+        with self.assertRaises(AssertionError):
+            _assert_state_dir_literal_children_are_gitignored(planted_children)
 
     @mock.patch("runners.us_short_paper_one_click.run_weekly_capstone", return_value={})
     @mock.patch(

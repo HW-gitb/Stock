@@ -614,10 +614,10 @@ def run_e2e(
             raise Batch5ToBatch4E2EError(
                 "provider-backed provider health does not match the receipt-bound provider outcome"
             ) from exc
-    private_root_path = _private_path(private_root, label="private_root")
+    # These are namespace/carrier roots.  The writer guards the actual private leaves below them.
+    private_root_path = Path(private_root).resolve()
     official_output_root_path = (
-        _private_path(official_output_root, label="official_output_root")
-        if official_output_root is not None else private_root_path
+        Path(official_output_root).resolve() if official_output_root is not None else private_root_path
     )
     calendar = _resolve_existing_path(calendar_path, label="calendar_path")
     governance = _resolve_existing_path(governance_path, label="governance_path")

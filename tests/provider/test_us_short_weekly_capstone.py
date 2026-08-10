@@ -23,6 +23,7 @@ from runners.us_short_weekly_capstone import (  # noqa: E402
     WeeklyCapstoneError,
     run_weekly_capstone,
 )
+from tests.provider.us_short_private_test_root import temporary_us_short_state_directory  # noqa: E402
 
 _STAGE_NAMES = [
     "universe_fetch", "momentum_fetch", "overextension_producer", "momentum_producer", "sic_fetch",
@@ -334,7 +335,7 @@ class CapstoneFakeChainTest(unittest.TestCase):
         return stages
 
     def _run(self, order_sink, **kw):
-        account_state_path = kw.pop("account_state_path", Path("account.json"))
+        account_state_path = kw.pop("account_state_path", self.private_root / "account.json")
         return run_weekly_capstone(
             now_et=datetime(2026, 7, 9, 8, 0, 0),
             private_root=self.private_root,
@@ -346,6 +347,69 @@ class CapstoneFakeChainTest(unittest.TestCase):
             sample_root=self.state_dir,   # keep the preflight provider_samples sidecar inside the tempdir (isolation)
             **kw,
         )
+
+    def test_unregistered_in_repo_root_fails_before_first_stage(self):
+        from runners import us_short_weekly_capstone as cap
+
+        order: list[str] = []
+        bad_root = ROOT / "state" / "us_short" / "unregistered_capstone_root"
+        with self.assertRaisesRegex(WeeklyCapstoneError, "private output preflight"):
+            run_weekly_capstone(
+                now_et=datetime(2026, 7, 9, 8, 0, 0),
+                private_root=bad_root,
+                batch4_template_path=bad_root / "batch4_template.json",
+                account_state_path=bad_root / "account_state.json",
+                dry_run=False,
+                confirm_user_authorization=True,
+                state_dir=self.state_dir,
+                sample_root=self.state_dir,
+                stages=self._fake_stages(order),
+            )
+        self.assertEqual(order, [])
+
+        with temporary_us_short_state_directory(ROOT) as canonical_root_text:
+            canonical_root = Path(canonical_root_text)
+
+            def bridge_outputs(ctx):
+                return cap._official_output_paths(ctx)
+
+            def bridge_run(ctx):
+                outputs = bridge_outputs(ctx)
+                for path in outputs:
+                    path.parent.mkdir(parents=True, exist_ok=True)
+                    path.write_text("{}", encoding="utf-8")
+                return {
+                    "batch4_run": {
+                        "emitted": True,
+                        "output_paths": {
+                            "weekly_report_path": str(outputs[0]),
+                            "action_table_path": str(outputs[1]),
+                            "machine_record_path": str(outputs[2]),
+                        },
+                    }
+                }
+
+            summary = run_weekly_capstone(
+                now_et=datetime(2026, 7, 9, 8, 0, 0),
+                private_root=canonical_root,
+                batch4_template_path=self.private_root / "batch4_template.json",
+                account_state_path=canonical_root / "canonical_preflight_account.json",
+                dry_run=False,
+                confirm_user_authorization=True,
+                state_dir=self.state_dir,
+                sample_root=self.state_dir,
+                stages=[Stage("weekly_bridge", False, lambda _ctx: [], bridge_outputs, bridge_run)],
+            )
+            self.assertEqual(summary["execution_mode"], "injected_pipeline")
+            self.assertTrue(
+                (canonical_root / "weekly_private" / "20260709" / "weekly_report.md").is_file()
+            )
+            self.assertTrue(
+                (canonical_root / "weekly_private" / "20260709" / "action_table.csv").is_file()
+            )
+            self.assertTrue(
+                (canonical_root / "runs_private" / "20260709" / "machine_record.json").is_file()
+            )
 
     def test_full_chain_runs_in_order_and_emits(self):
         order: list[str] = []
@@ -800,11 +864,16 @@ class CapstoneFakeChainTest(unittest.TestCase):
         from runners import us_short_weekly_capstone as cap
         self._seed_prior_official_outputs()
         order: list[str] = []
-        with mock.patch.object(cap, "reject_nonprivate_output_path", side_effect=PrivatePathError("nonprivate")):
-            with self.assertRaises(PrivatePathError):
+        def reject_superseded_path(path):
+            if "_superseded" in str(path):
+                raise PrivatePathError("nonprivate")
+
+        with mock.patch.object(cap, "reject_nonprivate_output_path", side_effect=reject_superseded_path):
+            with self.assertRaises(WeeklyCapstoneError) as cm:
                 self._run(order, stages=self._fake_stages(
                     order, skip_output_stage="weekly_bridge",
                     bridge_batch4={"emitted": False, "no_emit_reason": "x"}))
+        self.assertIsInstance(cm.exception.__cause__, PrivatePathError)
 
     def test_pre_run_archive_failure_restores_prior_before_any_stage(self):
         # C3: prior outputs are archived BEFORE provider execution. A second-move fault rolls back while the prior run

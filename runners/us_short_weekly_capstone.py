@@ -52,7 +52,7 @@ if str(ROOT) not in sys.path:
 from engine.us_short_canonical_asof import OutOfWindowError, resolve_canonical_asof  # noqa: E402
 from engine import us_short_capstone_checkpoint as checkpoint_store  # noqa: E402
 from engine.us_short_market_calendar import load_market_calendar, sessions_for_window  # noqa: E402
-from engine.us_short_private_paths import reject_nonprivate_output_path  # noqa: E402
+from engine.us_short_private_paths import PrivatePathError, reject_nonprivate_output_path  # noqa: E402
 from engine.us_short_run_origin import _issue_capstone_research_live_receipt  # noqa: E402
 from runners import us_short_batch5_data_context_source_packet as source_packet_runner  # noqa: E402
 
@@ -386,6 +386,10 @@ class CapstoneContext:
     @property
     def context_components_path(self) -> Path:
         return self._s(f"us_short_batch5_capstone_{self.decision_date}_context_components.json")
+
+    @property
+    def context_packet_path(self) -> Path:
+        return self.private_root / "batch5_to_batch4_context_packet.json"
 
     @property
     def data_context_path(self) -> Path:
@@ -1034,6 +1038,31 @@ def _official_output_paths(ctx: CapstoneContext) -> list[Path]:
         root / "weekly_private" / ctx.decision_date / "action_table.csv",
         root / "runs_private" / ctx.decision_date / "machine_record.json",
     ]
+
+
+def _preflight_private_output_paths(ctx: CapstoneContext) -> None:
+    """Prove every private leaf before live settlement, checkpoints, or provider stages begin."""
+    paths: list[tuple[Path, str]] = [
+        (ctx.account_state_path, "account_state_path"),
+        (ctx.context_packet_path, "context_packet_path"),
+        (ctx.private_root / "lifecycle" / "lifecycle_register.json", "lifecycle_register_path"),
+    ]
+    paths.extend(
+        (path, label)
+        for path, label in zip(
+            _official_output_paths(ctx),
+            ("weekly_report_path", "action_table_path", "machine_record_path"),
+        )
+    )
+    if _model_paper_enabled(ctx):
+        paths.append((ctx.model_paper_store_root / "head_manifest.json", "model_paper_head_manifest_path"))
+    for path, label in paths:
+        try:
+            reject_nonprivate_output_path(path)
+        except PrivatePathError as exc:
+            raise WeeklyCapstoneError(
+                f"private output preflight rejected {label}: {Path(path).resolve()}"
+            ) from exc
 
 
 def _plan(ctx: CapstoneContext, stages: list[Stage], *, resume_from: Path | None = None) -> dict[str, Any]:
@@ -2119,29 +2148,9 @@ def run_weekly_capstone(
             "explicit per-execution authorization (confirm_user_authorization=True); re-run with --dry-run to review "
             "the plan first"
         )
-
     production_run = (stages is None) and (ctx.confirm_user_authorization is True) and not prepare_pass2_budget
     auto_budget_run = auto_authorize_pass2_budget and production_run
     budget_preview_run = (stages is None) and (ctx.confirm_user_authorization is True) and prepare_pass2_budget
-    if not prepare_pass2_budget and any(stage.name == "serenity_quality_forward" for stage in pipeline):
-        from engine import us_short_serenity_quality_forward as serenity_quality
-
-        try:
-            settlement = serenity_quality.settle_pending_review(
-                ledger_path=ctx.serenity_quality_ledger_path,
-                current_decision_date=ctx.decision_date,
-                observed_at=ctx.observed_at,
-                state_dir=ctx.state_dir,
-                root=ctx.sample_root,
-                now=datetime.fromisoformat(ctx.observed_at),
-                g1_decision_path=ctx.serenity_g1_decision_path,
-                g1_preflight_path=ctx.serenity_g1_blade6_preflight_path,
-            )
-        except serenity_quality.SerenityQualityForwardError as exc:
-            # This pre-stage settlement is outside the normal optional-stage boundary.  A stale/legacy local
-            # ledger is invalid quality evidence, never a reason to abort the ordinary zero-effect weekly task.
-            settlement = serenity_quality.ledger_rejected_settlement(exc)
-        ctx = replace(ctx, serenity_settlement_result=dict(settlement))
     if resume_from is not None and not production_run:
         raise WeeklyCapstoneError("--resume is available only on the real default capstone pipeline")
     k_is_valid = (
@@ -2165,6 +2174,28 @@ def run_weekly_capstone(
             "--prepare-pass2-budget requires momentum_top_k (1..250) and no Pass2 call budget; "
             "it derives the exact execution budget"
         )
+    # Prove every private leaf after operator/budget validation, but before any pre-stage settlement,
+    # checkpoint, transaction, or provider stage.
+    _preflight_private_output_paths(ctx)
+    if not prepare_pass2_budget and any(stage.name == "serenity_quality_forward" for stage in pipeline):
+        from engine import us_short_serenity_quality_forward as serenity_quality
+
+        try:
+            settlement = serenity_quality.settle_pending_review(
+                ledger_path=ctx.serenity_quality_ledger_path,
+                current_decision_date=ctx.decision_date,
+                observed_at=ctx.observed_at,
+                state_dir=ctx.state_dir,
+                root=ctx.sample_root,
+                now=datetime.fromisoformat(ctx.observed_at),
+                g1_decision_path=ctx.serenity_g1_decision_path,
+                g1_preflight_path=ctx.serenity_g1_blade6_preflight_path,
+            )
+        except serenity_quality.SerenityQualityForwardError as exc:
+            # This pre-stage settlement is outside the normal optional-stage boundary.  A stale/legacy local
+            # ledger is invalid quality evidence, never a reason to abort the ordinary zero-effect weekly task.
+            settlement = serenity_quality.ledger_rejected_settlement(exc)
+        ctx = replace(ctx, serenity_settlement_result=dict(settlement))
     if (production_run or budget_preview_run) and not _model_paper_enabled(ctx):
         from runners.us_short_account_state_from_manual_tables import validate_account_state
 
