@@ -514,3 +514,19 @@ Claude Code：独立审查刀2四字段连接代码及 `decision_result_id` sche
 **失效旧结论**：该 Optional 已闭。
 
 **下一步注意事项**：刀6 仍需你在 G1 选定唯一映射并给出真实 `quality_gate_result_id`；count gate 实跑数比发现数多 10 仍未定位，rule-3 记账仍拿不到绿。
+
+## 2026-08-10 追加：Claude 独立收口 PASS（刀5 两动作闭环，收口并合入）
+
+**改了什么**：审查方未改产物，只把 `R-USSHORT-SERENITY-BLADE5-TWO-ACTION-CLOSEOUT-NOT-INDEPENDENTLY-REVIEWED` 翻 `resolved` 并补一节逐条判据、`docs/SESSION_LOG.md` 一条极简 verdict。
+
+**为什么**：该 R-ID 的闭合条件写的就是「Claude 独立复核两动作契约与 zero-effect/G1 停止点后作出判断」。**基线更正**：指令给的 `01553180` 之后 master 又落了 `708b86ae`/`5cd3a433`/`4c683bec`，最后一笔正是把结算降级产物收敛成单一构造器、动在本轮要收口的那条缝上，故按主树当前 tip 收口。
+
+**验证命令**：
+- `.tools\run_unittest_with_repo_pythonpath.cmd --timeout-seconds 900`（主树 tip 上的闭环包 8 模块）
+- 定点植入：中和 `run_quality_forward` 的 `closed_pending_annotations` 回填检查 → 跑该模块 → 按原字节还原
+
+**验证结果**：闭环包 `Ran 161 / 11.3s / OK receipt:fb7a414596ab77a24f390f90`。植入使 `test_late_review_is_no_count_and_cannot_be_backfilled` 精确转红，还原后 sha `7cd091ae933e7fbf` 逐字节一致。未跑 provider/live/API/真实周跑，未进刀6/7，未新增 SHA256 保护。
+
+**失效旧结论**：「两动作闭环尚未经独立审查」已闭；此后可把它当已审实现引用，但**质量门仍不是生产证据**（无真实 formal 周）。
+
+**下一步注意事项**：① `_merge_pending` 里的第二道回填检查是冗余层（中和后测试仍绿），按 §5 留着无后果，若将来重构可一并收敛。② 刀6 仍需你在 G1 选定唯一映射并给出真实 `quality_gate_result_id`。③ count gate 实跑数比发现数多 10 仍未定位。
