@@ -264,6 +264,15 @@ class ComparisonV2CacheBuildTests(unittest.TestCase):
                 run_date=RUN_DATE,
             )
 
+    def test_outcome_projection_rejects_provider_calls_for_no_frozen_status(self):
+        # Pointed negative control for the producer-side closed-world invariant:
+        # a no-frozen receipt must never claim that the provider was called.
+        with self.assertRaisesRegex(ComparisonV2Error, "zero provider calls"):
+            _cache_build_outcome_payload(
+                result={"status": "no_frozen_v2_captures", "provider_calls": 1},
+                run_date=RUN_DATE,
+            )
+
     def test_p4_is_last_and_gets_provider_observed_benchmarks_only_when_budget_remains(self):
         with tempfile.TemporaryDirectory() as tmp:
             root = _root(tmp); provider = FakeTushare()

@@ -161,6 +161,15 @@ TERMINAL_FORWARD_STATUSES = {
     "pending_missing_future_close",
     "pending_return_conversion_failed",
 }
+# These statuses mean the shared cache did not provide the next real trading
+# row.  They are only a stale-cache signal once the corresponding calendar-age
+# window is mature; other pending statuses (for example a missing symbol row)
+# remain an honest data-quality outcome and are not relabelled here.
+STALE_CACHE_PENDING_STATUSES = frozenset({
+    "pending_immature_asof",
+    "pending_no_t_plus_one",
+    "pending_asof_not_in_future_cache",
+})
 DECISION_TIME_COLUMNS = tuple(
     column for column in SCHEMA_COLUMNS[:SCHEMA_COLUMNS.index("entry_date")]
     if column != "captured_at"
@@ -417,31 +426,44 @@ def _today_yyyymmdd() -> str:
     return a_share_market_date()
 
 
+def _calendar_age_mature(as_of: str, today: str, window: int) -> bool:
+    """Return whether ``window`` calendar age has elapsed for an as_of.
+
+    This is deliberately the same existing approximation used by the tracker
+    (trading days * 1.4 plus the close-publication buffer).  It is only a
+    stale-cache classification guard; actual settlement still requires real
+    stock rows from the shared cache.
+    """
+    as_of_dt = pd.to_datetime(str(as_of), format="%Y%m%d")
+    today_dt = pd.to_datetime(str(today), format="%Y%m%d")
+    threshold_calendar_days = int(window * 1.4) + MATURE_BUFFER_CALENDAR_DAYS
+    return (today_dt - as_of_dt).days >= threshold_calendar_days
+
+
 def _mature_as_ofs(df: pd.DataFrame, today: str, windows: list[int]) -> list[str]:
     """Pick distinct as_of values where at least one pending window is mature.
 
-    Uses the smallest window as the maturity threshold so a 5d row can be
-    backfilled even if its 10d/20d siblings are still pending. The per-row
-    status from attach_forward_returns will honestly report which
-    sub-windows are still pending_immature_asof.
+    A cohort is selected when at least one of its pending windows has reached
+    the calendar-age threshold, so a 5d row can be backfilled even if its
+    10d/20d siblings are still pending. Each window is then classified again
+    after attach_forward_returns against the same threshold.
 
     Calendar-day approximation: 1 trading day ~ 1.4 calendar days; the
     +MATURE_BUFFER_CALENDAR_DAYS pad accounts for weekends/holidays.
     """
-    min_window = min(windows)
-    today_dt = pd.to_datetime(today, format="%Y%m%d")
-    # 5 trading days span ~7 calendar days; add a calendar-day buffer so we
-    # don't poke the cache before today's close is published.
-    threshold_calendar_days = int(min_window * 1.4) + MATURE_BUFFER_CALENDAR_DAYS
     pending_mask = _pending_backfill_mask(df, windows)
     if not pending_mask.any():
         return []
     pending_as_of = df.loc[pending_mask, "as_of"].astype(str).unique().tolist()
     out = []
     for as_of in sorted(pending_as_of):
-        as_of_dt = pd.to_datetime(str(as_of), format="%Y%m%d")
-        gap_days = (today_dt - as_of_dt).days
-        if gap_days >= threshold_calendar_days:
+        cohort = df.loc[df["as_of"].astype(str) == str(as_of)]
+        if any(
+            f"ret_{window}d_status" in cohort.columns
+            and (~cohort[f"ret_{window}d_status"].astype(str).isin(TERMINAL_FORWARD_STATUSES)).any()
+            and _calendar_age_mature(as_of, today, window)
+            for window in windows
+        ):
             out.append(str(as_of))
     return out
 
@@ -483,14 +505,14 @@ def backfill(windows: list[int]) -> int:
             print(line)
         _print_cache_stale_banner(mature_as_ofs, block_msg)
         return EXIT_LEDGER_STALLED
-    if immature:
-        print(f"[INFO] {len(immature)} calendar-age eligible cohort(s) lack +{max_window} "
-              f"trading-day cache coverage; deferred: {immature}")
-    if needs_refresh:
-        _print_cache_stale_banner(needs_refresh, "shared cache does not reach these matured cohorts")
     if not ready:
-        print(f"[INFO] no calendar-age eligible cohort has +{max_window} trading-day cache coverage; "
+        print("[INFO] no calendar-age eligible cohort has an as_of row in the shared cache; "
               "nothing to settle this run")
+        if needs_refresh:
+            _print_cache_stale_banner(
+                needs_refresh,
+                "matured as_of is absent from stock rows; " + _cache_coverage_description(cached),
+            )
         return EXIT_LEDGER_STALLED if needs_refresh else 0
 
     # Strictly cache-only: settle from the already-read cache payload; never
@@ -500,13 +522,34 @@ def backfill(windows: list[int]) -> int:
     work_mask = df["as_of"].astype(str).isin(ready) & _pending_backfill_mask(df, windows)
     work = df[work_mask].copy()
     if work.empty:
-        return 0
+        return EXIT_LEDGER_STALLED if needs_refresh else 0
+    pending_before_attach = {
+        (str(row.as_of), str(row.ts_code), window): str(getattr(row, f"ret_{window}d_status"))
+        for row in work.itertuples(index=False)
+        for window in windows
+    }
     work["trade_date"] = work["as_of"].astype(str)
     # name, board not in tracker schema; attach_forward_returns reads them
     # only for limit-up sourcing. board can be derived from ts_code.
     work["board"] = work["ts_code"].apply(_board_from_code)
     work["close"] = work["base_close"]  # fallback used inside attach_forward_returns
     work = attach_forward_returns(work, windows, payload)
+
+    stale_windows = []
+    for as_of, cohort in work.groupby(work["as_of"].astype(str), sort=True):
+        for window in windows:
+            status_column = f"ret_{window}d_status"
+            if status_column not in cohort.columns:
+                continue
+            if not _calendar_age_mature(as_of, today, window):
+                continue
+            if any(
+                pending_before_attach.get((str(row.as_of), str(row.ts_code), window))
+                not in TERMINAL_FORWARD_STATUSES
+                and str(getattr(row, status_column)) in STALE_CACHE_PENDING_STATUSES
+                for row in cohort.itertuples(index=False)
+            ):
+                stale_windows.append(f"{as_of}:+{window}d")
 
     # Write the resulting returns back into df by (as_of, ts_code).
     work_idx = work.set_index(["as_of", "ts_code"])
@@ -536,12 +579,13 @@ def backfill(windows: list[int]) -> int:
             # Only overwrite if attach produced a useful update — keep prior
             # 'ok' entries (shouldn't happen since we filtered) and avoid
             # clobbering a real value with NaN.
-            if pd.notna(new_status):
+            if str(cur_status[w]) not in TERMINAL_FORWARD_STATUSES and pd.notna(new_status):
                 df_idx.at[key, f"ret_{w}d_status"] = new_status
-            if pd.notna(new_val):
+            if str(cur_status[w]) not in TERMINAL_FORWARD_STATUSES and pd.notna(new_val):
                 df_idx.at[key, f"ret_{w}d_t1_net"] = new_val
             exit_col = f"ret_{w}d_exit_date"
-            if exit_col in df_idx.columns and pd.notna(row.get(exit_col)):
+            if (str(cur_status[w]) not in TERMINAL_FORWARD_STATUSES
+                    and exit_col in df_idx.columns and pd.notna(row.get(exit_col))):
                 df_idx.at[key, exit_col] = str(row.get(exit_col))
             for benchmark in BENCHMARKS:
                 excess_col = f"ret_{w}d_excess_{benchmark}"
@@ -553,12 +597,20 @@ def backfill(windows: list[int]) -> int:
 
     df_out = df_idx.reset_index()[SCHEMA_COLUMNS]
     _write_tracker(df_out)
-    deferred = len(needs_refresh) + len(immature)
+    stale_cohorts = sorted(set(needs_refresh + [item.split(":", 1)[0] for item in stale_windows]))
+    if stale_cohorts:
+        details = []
+        if needs_refresh:
+            details.append("missing as_of=" + ",".join(needs_refresh))
+        if stale_windows:
+            details.append("matured pending windows=" + ",".join(stale_windows))
+        _print_cache_stale_banner(stale_cohorts, "; ".join(details + [_cache_coverage_description(cached)]))
+    deferred = len(stale_cohorts)
     print(f"[OK] backfilled {len(updated_keys)} rows across {len(ready)} as_of date(s)"
           + (f"; deferred {deferred} cohort(s)" if deferred else ""))
     # Some cohorts settled, but a matured one still could not: the ledger is only
     # partly advanced, so report stalled rather than a clean success.
-    return EXIT_LEDGER_STALLED if needs_refresh else 0
+    return EXIT_LEDGER_STALLED if stale_cohorts else 0
 
 
 def refresh(windows: list[int]) -> int:
@@ -589,15 +641,13 @@ def refresh(windows: list[int]) -> int:
               "check TUSHARE_TOKEN / network and rerun.")
         return 2
     meta = payload.get("meta", {}) if isinstance(payload, dict) else {}
-    print(f"[OK] forward_daily cache refreshed: {meta.get('start_date')}..{meta.get('end_date')} "
+    print(f"[OK] forward_daily cache refreshed: {_cache_coverage_description(payload)} "
           f"stock_rows={meta.get('stock_rows')} codes={meta.get('stock_codes')}")
     ready, needs_refresh, immature, _cached, block = _partition_asof_coverage(mature_as_ofs, max_window)
     if block:
         print(f"[WARN] post-refresh coverage check: {block}")
     if ready:
-        print(f"[OK] {len(ready)} cohort(s) now covered; run the weekly (or `backfill`) to settle: {ready}")
-    if immature:
-        print(f"[INFO] {len(immature)} cohort(s) not yet +{max_window} trading days old; settle later: {immature}")
+        print(f"[OK] {len(ready)} cohort(s) now present in cache; run the weekly (or `backfill`) to settle: {ready}")
     if needs_refresh:
         print(f"[WARN] {len(needs_refresh)} cohort(s) still not in cache after refresh (unexpected): {needs_refresh}")
     return 0
@@ -677,7 +727,7 @@ def _check_cache_coverage(as_ofs: list[str], max_window: int) -> tuple[bool, str
     if missing_asofs:
         return False, (
             f"forward_daily cache missing as_of trading dates: {', '.join(missing_asofs)} "
-            f"(cache stock trade_date range {trade_dates[0]}..{trade_dates[-1]})"
+            f"({_cache_coverage_description(cached)})"
         )
 
     insufficient = []
@@ -688,13 +738,10 @@ def _check_cache_coverage(as_ofs: list[str], max_window: int) -> tuple[bool, str
                 f"{as_of} needs +{max_window} trading days but cache ends at {trade_dates[-1]}"
             )
     if insufficient:
-        meta = cached.get("meta", {})
-        cache_start = str(meta.get("start_date", ""))
-        cache_end = str(meta.get("end_date", ""))
         return False, (
             "forward_daily cache trading-date coverage insufficient ("
             + "; ".join(insufficient)
-            + f"; meta range {cache_start}..{cache_end})"
+            + f"; {_cache_coverage_description(cached)})"
         )
     return True, "ok"
 
@@ -708,15 +755,29 @@ def _cached_stock_trade_dates(cached: dict) -> list[str]:
     return sorted(dates.unique().tolist())
 
 
+def _cache_coverage_description(cached: dict) -> str:
+    """Describe actual stock coverage separately from the metadata request range."""
+    trade_dates = _cached_stock_trade_dates(cached)
+    if trade_dates:
+        stock_range = f"stock trade_date range {trade_dates[0]}..{trade_dates[-1]}"
+    else:
+        stock_range = "stock trade_date range unavailable"
+    meta = cached.get("meta") if isinstance(cached, dict) else {}
+    meta = meta if isinstance(meta, dict) else {}
+    meta_start = str(meta.get("start_date") or "unknown")
+    meta_end = str(meta.get("end_date") or "unknown")
+    return f"{stock_range}; meta request range {meta_start}..{meta_end}"
+
+
 def _partition_asof_coverage(as_ofs: list[str], max_window: int):
     """Split matured pending as_ofs by shared-cache coverage (reads cache only).
 
     Returns (ready, needs_refresh, immature, cached, block_msg):
-      ready         -> present with +max_window trading-day room; settle now.
+      ready         -> as_of exists in stock rows; settle each pending window now.
       needs_refresh -> not in the cache at all (cache is stale for it); a refresh
                        would add it, so the caller nudges the operator.
-      immature      -> present but +max_window trading days are not yet in the
-                       cache; the cohort simply has not matured, settle later.
+      immature      -> retained as an empty compatibility slot; per-window
+                       maturity is classified after attach_forward_returns.
       cached        -> loaded cache payload (usable directly as an
                        attach_forward_returns payload) when block_msg is None.
       block_msg     -> non-None when a global problem (missing/unreadable cache,
@@ -733,15 +794,13 @@ def _partition_asof_coverage(as_ofs: list[str], max_window: int):
     if not trade_dates:
         return [], [], [], None, "forward_daily cache missing stock trade_date coverage"
     date_pos = {date: pos for pos, date in enumerate(trade_dates)}
-    ready, needs_refresh, immature = [], [], []
+    ready, needs_refresh = [], []
     for as_of in sorted({str(a) for a in as_ofs if str(a).strip()}):
         if as_of not in date_pos:
             needs_refresh.append(as_of)
-        elif date_pos[as_of] + max_window >= len(trade_dates):
-            immature.append(as_of)
         else:
             ready.append(as_of)
-    return ready, needs_refresh, immature, cached, None
+    return ready, needs_refresh, [], cached, None
 
 
 def _print_cache_stale_banner(cohorts: list[str], reason: str) -> None:

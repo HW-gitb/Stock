@@ -191,6 +191,24 @@ class WeeklyScreeningGuardrailTest(unittest.TestCase):
         self.assertIn("cache_updated_with_deferrals", text)
         self.assertNotIn("$FactorComparisonCacheExitCode -eq 0){'succeeded'", text)
 
+    def test_shared_cache_status_switch_has_a_distinct_branch_for_each_status(self) -> None:
+        """Do not let a whitelist token substitute for the consumer mapping."""
+        text = SCRIPT.read_text(encoding="utf-8")
+        start = text.index("switch ([string]$SharedCacheRead.outcome.status)")
+        end = text.index("\n                        }\n                    } else", start)
+        mapping = text[start:end]
+        expected = {
+            "'cache_current'": "already_current",
+            "'cache_updated'": "advanced",
+            "'cache_updated_with_deferrals'": "cache_partial_due_to_budget",
+            "'deferred_due_to_budget'": "cache_deferred_due_to_budget",
+        }
+        for status, mapped_value in expected.items():
+            self.assertIn(f"{status} {{", mapping)
+            self.assertIn(mapped_value, mapping)
+        self.assertIn("{ $_ -like 'no_frozen_*' }", mapping)
+        self.assertIn("not_applicable", mapping)
+
     def test_stale_forward_cache_is_recorded_as_stalled_not_succeeded(self) -> None:
         # The stale-cache banner only lives in the console. The machine-readable sidecar
         # outcome used to say `succeeded`, so a frozen candidate-effect ledger looked
