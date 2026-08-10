@@ -6847,8 +6847,10 @@ def main(argv=None, pro_factory=None, price_provider=None, semantic_provider=Non
                           "M6.7 output remains authoritative and unchanged")
             else:
                 print(f"[target-policy-p2] capture={target_capture['status']} (production unchanged)")
+                capture_progress, capture_code, capture_detail = _sidecar_result_fields(target_capture)
                 _record_sidecar("target_policy_capture", execution_status="succeeded",
-                                progress_status=_sidecar_progress_from_status(target_capture.get("status")),
+                                progress_status=capture_progress, error_code=capture_code,
+                                error_detail=capture_detail,
                                 observed_decision_as_of=args.as_of)
     if args.final_action_validation_root:
         stage = "import"
@@ -6898,8 +6900,10 @@ def main(argv=None, pro_factory=None, price_provider=None, semantic_provider=Non
                           "M6.7 output remains authoritative and unchanged")
                 else:
                     print(f"[final-action-p3] capture={p3_capture['status']} (production unchanged)")
+                    capture_progress, capture_code, capture_detail = _sidecar_result_fields(p3_capture)
                     _record_sidecar("final_action_capture", execution_status="succeeded",
-                                    progress_status=_sidecar_progress_from_status(p3_capture.get("status")),
+                                    progress_status=capture_progress, error_code=capture_code,
+                                    error_detail=capture_detail,
                                     observed_decision_as_of=args.as_of)
     if args.overlay_adjudication_root:
         stage = "import"

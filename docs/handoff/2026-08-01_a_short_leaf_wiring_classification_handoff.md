@@ -1,5 +1,25 @@
 # A-short 371 叶重新分层交接
 
+## 2026-08-10 — Codex executor/fixer：V3-A Required 两个座位与 health durable fallback 修复（OPEN-NOT_VERIFIED）
+
+### Purpose / problem / repair
+
+本条承接 Claude 最新 FAIL：target_policy_capture 与 final_action_capture 仍走旧的 progress-only 映射，丢失 producer 原因；health 原因契约缺码时 raise，导致三件套不产出。两个座位现在统一使用 _sidecar_result_fields(...)；health 缺码或 detail 越界时写合成 reason_contract_violation 和安全分类 detail 后继续 durable 写盘。新增 AST 守卫禁止 _record_sidecar 再使用旧 helper；O21/O22 不在本刀。
+
+### Call chain / consumers / schema / source-binding / write boundary
+
+target/final producer capture → _sidecar_result_fields → pipeline_sidecar_outcomes.json → _normalise_outcome/build_health → sidecar_health.json/.md/.receipt.json。既有 outcome/health schema 与版本不变，复用已有 nullable error fields；当前 as_of/observed_decision_as_of 仍是日期绑定；只写 pipeline outcome 与 health 三件套，不改 EGS/Top5/M6.7/账户/provider/cache/order 边界。
+
+### Negative controls / verification
+
+- status unavailable → progress unavailable + sidecar_unavailable；status conflict → progress stalled + immutable_capture_conflict。
+- health 缺 code、detail 超过 512 或含换行仍出三件套，code=reason_contract_violation；合法 pending/not_due/not_configured 不变；AST 守卫无旧 progress-only helper 调用。
+- 固定解释器 C:/Users/cnhea/AppData/Local/Programs/Python/Python313/python.exe（3.13.8）。点名回归 Ran 4 tests in 3.091s / OK；V3-A 聚焦包 Ran 744 tests in 71.162s / OK。
+
+### Review / commit boundary / next
+
+OPEN-NOT_VERIFIED：未运行 provider/live、真实 normal weekly、full lane、durable 两轮或 ship-gate。Claude Code reviewer/committer 负责独立复审，PASS 后才 stage/commit；Codex executor/fixer 不提交。下一步：Claude Code 复审 V3-A Required 两座位、health fallback 与 21 项矩阵。
+
 ## 2026-08-10 — Codex executor/fixer：桌面 V3-A + O18/O19 修复（OPEN-NOT_VERIFIED）
 
 ### Purpose / problem / repair
@@ -5365,3 +5385,27 @@ effect contract 已用固定 Python 重新登记 A-EGS decision-predicate hash �
 - a_short full lane 连续第二刀 `NOT_VERIFIED`；真实周跑与 provider/live/account/ship-gate 仍全部 `NOT_VERIFIED`。
 
 **下一步**：`Codex：修复`（两条腿：两个座位换 helper；health 契约由 raise 改降级并补植入测试 + 21 项逐名守卫）
+
+## 2026-08-10 追加：V3-A 两个座位 + health durable fallback 复审 —— PASS（已合入 master）
+
+**判定**：PASS，无 Required，一条新 Optional（O23，正文只在 `docs/system_risk_register.md` 同日节）。
+
+**我自己实际验了什么**
+
+- **用上一轮把它判死的那条探针原样复跑**：两个座位真实会写出的 degraded 行（带 `observed_decision_as_of`）喂进 `build_health`，由 `RAISED ValueError` 变成正常返回三件套并带合成码。
+- **座位侧单独量了一遍**：`unavailable` / `conflict` 现在分别带出 `sidecar_unavailable` / `immutable_capture_conflict`，即 producer 的原因确实随行，不是补了个通用码。
+- **反向控制**：600 字符的 detail 被**修正**成 45 字符的分类串，不是只贴标签放行，schema 的 512/无换行约束仍成立。
+- **逐名守卫读了实现**：它 AST 遍历生产文件里每一个 `_record_sidecar` 调用，发现嵌套旧 helper 即红——是派生谓词不是手写清单，新座位漏改会自动被抓。旧 helper 因此故意保留，不是孤儿。
+- **独立重算 effect contract**：`static_contract_error=None`、10 个 predicate digest 零 mismatch，本刀未落在决策谓词集合里，所以契约 JSON 没动是对的。
+
+**植入对照（我自写）**
+
+- 把 `target_policy_capture` 座位改回旧的 progress-only helper → 新增的逐名 AST 守卫**精确转红**，失败信息直接把那个 `_record_sidecar` 调用打印出来；还原后 `runners/a_short_weekly_pipeline.py` sha256 逐字节回 `698b11a9…`、`git diff --stat` 仍是本刀自己的 6/2。打的是守卫的**主体**（生产调用点），不是守卫自己的源码。
+
+**未覆盖维度与诚实边界**
+
+- 同轮把已移居 782a 的指纹裁决节从本树删除（40d9 历史里那次提交无法 reset：当时执行方有在飞的未提交修复），以免合并回 master 后与 782a 双写。
+- a_short full lane 连续第三刀 `NOT_VERIFIED`，按 rule 4 归执行方。
+- §6a 未起 agent；真实周跑与 provider/live/account/ship-gate 仍全部 `NOT_VERIFIED`。
+
+**下一步**：`Codex：执行`

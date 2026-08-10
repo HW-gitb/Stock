@@ -765,6 +765,40 @@ class AShortSidecarHealthTests(unittest.TestCase):
         self.assertEqual(item["error_code"], "theme_cohort_rejected")
         self.assertIn("invalid taxonomy L3 snapshot date", item["error_detail"])
 
+    def test_reason_contract_violation_keeps_health_bundle_durable(self):
+        manifest = _manifest([
+            _row(
+                "target_policy_capture",
+                progress="unavailable",
+                observed_decision_as_of="20260727",
+            ),
+            _row(
+                "final_action_capture",
+                progress="stalled",
+                observed_decision_as_of="20260727",
+                error_code="capture_unavailable",
+                error_detail="x" * 513,
+            ),
+        ])
+        with tempfile.TemporaryDirectory() as tmp:
+            result = build_health(
+                as_of="20260727", launcher_manifest=manifest, project_root=Path(tmp)
+            )
+            by_name = {row["name"]: row for row in result["sidecars"]}
+            paths = write_health_bundle(result, Path(tmp) / "health")
+            persisted = json.loads(paths[0].read_text(encoding="utf-8"))
+            jsonschema.validate(persisted, json.loads(HEALTH_SCHEMA.read_text(encoding="utf-8")))
+            self.assertTrue(all(path.is_file() for path in paths))
+        self.assertEqual(by_name["target_policy_capture"]["error_code"], "reason_contract_violation")
+        self.assertEqual(
+            by_name["target_policy_capture"]["error_detail"],
+            "health_reason_contract=missing_or_invalid_error_code",
+        )
+        self.assertEqual(by_name["final_action_capture"]["error_code"], "reason_contract_violation")
+        self.assertEqual(
+            by_name["final_action_capture"]["error_detail"],
+            "health_reason_contract=error_detail_unbounded",
+        )
     def test_bundle_is_schema_valid_and_deidentified(self):
         manifest = _manifest([_row("data_canary")])
         result = build_health(as_of="20260727", launcher_manifest=manifest, project_root=Path("."))
