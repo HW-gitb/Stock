@@ -498,3 +498,19 @@ Claude Code：独立审查刀2四字段连接代码及 `decision_result_id` sche
 **失效旧结论**：「周度闭环在留有旧账本的树上会崩」已闭；现在它记一笔 `no_count` 然后继续。
 
 **下一步注意事项**：① Optional：降级产物在引擎与 runner 各手写一份、且 runner 跨模块用了私有 `_safe_error`，建议收敛成引擎侧公开构造器。② 刀6 仍需你在 G1 选定唯一映射并给出真实 `quality_gate_result_id`；测试 fixture 的 gate id 不能当生产证据。③ count gate 实跑数比发现数多 10 仍未定位，rule-3 记账仍拿不到绿。
+
+## 2026-08-10 追加：Claude 自修 + 自审 PASS（降级产物单一构造器，收口并合入）
+
+**改了什么**：引擎新增公开 `ledger_rejected_settlement(exc)` 与常量 `LEDGER_REJECTED_REASON_CODE`（均进 `__all__`）；引擎 except 分支与 `runners/us_short_weekly_capstone.py` 调用点都改调它，runner 不再引用私有 `_safe_error`；引擎内同一 reason code 的字面量一并改成常量。
+
+**为什么**：一份契约写两遍，任一侧加字段就会悄悄不一致；跨模块引用私有名则改名即断。整类先枚举再动手——跨模块私有引用全仓仅此一处，八处 settlement 产物里只有 ledger-rejected 是重复，其余语义不同、按外科原则不动。
+
+**验证命令**：
+- `.tools\run_unittest_with_repo_pythonpath.cmd`（b511 覆盖 5 模块 / 主树组合态 6 模块含 a_short 捆绑）
+- reviewer 自写探针：`settle_pending_review` 四态（缺失 / 当前格式 / 旧格式 / 非 JSON 损坏）+ 两条降级产物逐字段比对
+
+**验证结果**：b511 `Ran 116 / OK receipt:a9c0c4e94f8d00df3bf301ab`；主树组合态 `Ran 181 / 45.5s / OK receipt:decc1aa1e7e5fd02f5cd7c76`。行为不变：缺失/当前格式仍 `no_pending`（控制组），旧格式与损坏仍 `no_count`+`invalid_evidence`+不 abort；两条降级产物唯一差异字段是 `error`（诊断消息本就该不同），其余七键相同。全仓 `"SERENITY_QUALITY_LEDGER_REJECTED"` 只剩常量定义一处。
+
+**失效旧结论**：该 Optional 已闭。
+
+**下一步注意事项**：刀6 仍需你在 G1 选定唯一映射并给出真实 `quality_gate_result_id`；count gate 实跑数比发现数多 10 仍未定位，rule-3 记账仍拿不到绿。
