@@ -5,6 +5,13 @@
 - **Verdict/Action**: PASS，已提交。主树两份 Serenity 研究产物各加交接元数据行（刀0 一行、刀1 两行），共 3 行新增、零删除，正文未动。新增的是结论型字段，故逐条回查正文：三类主题↔对照类映射、`negative_perturbation_result=PASS (§5)`、上游产物路径、`decision_date` 全部与正文一致，无一处比正文更强。
 - **Required**: 无。Optional=无。
 - **Verify**: review-evidence:not_available（本轮未下 `审查` 命令、hook 未发 token，全部证据为真实工具结果）。`git diff` 显示 3 insertions / 0 deletions，即「正文未改」的机器证明；`contrast_class_by_theme` 三项与 §1 表逐项相同；§5 恰 3 处 `**Pass**`；刀0 正文仍 `GO_FOR_RUBRIC_FILLABILITY_ONLY`。提交前先查门要什么包得 `required bundles: ()`，故只跑文档门。改动面恰为两个 md，未夹带另一窗口的 a-short 脏改动。
+## 2026-08-10 — Claude 审查 PASS（刀5 两动作闭环独立收口）
+
+- **Verdict/Action**: PASS。**基线更正**：命令给的 `01553180` 其后又落了三个提交（含改到本轮那条缝的构造器收敛），故按主树当前 tip `4c683bec` 收口。四项判据均成立：第 1 次动作先结算唯一 pending 再产 annotation 且 producer 不合成语义；第 2 次动作只认唯一 pending 目标、`os.replace` 原子写、同内容幂等异内容拒覆盖；identity 八维绑定且 self-review 双门；质量门与 G1/刀6 preflight 恒 zero-effect、fail-closed、零 preregistration。
+- **Required**: 无。`R-USSHORT-SERENITY-BLADE5-TWO-ACTION-CLOSEOUT-NOT-INDEPENDENTLY-REVIEWED` 翻 resolved，逐条判据与本轮新增实测只在 `docs/system_risk_register.md`。Optional=无。
+- **Verify**: review-evidence:not_available（本轮 UserPromptSubmit 只注入了 codex-fix-gate、未发 review-evidence token，故不挪用上一轮的）。主树 tip 闭环包 `Ran 161 / 11.3s / OK receipt:fb7a414596ab77a24f390f90`（8 模块）。承重腿定点植入：中和 `run_quality_forward` 的 `closed_pending_annotations` 回填检查 → `test_late_review_is_no_count_and_cannot_be_backfilled` 精确转红，还原后 sha `7cd091ae933e7fbf` 逐字节一致。另记一处观察：`_merge_pending` 的同名检查为第二层，中和后测试仍绿，按 §5 不要求删。未跑 provider/live/API/真实周跑。**超时原因**:先核指令三个前提（基线是否当前、R-ID 是否存在）+ 两轮定点植入（第一处植入未红、需另找承重腿）串在墙钟上。
+- **Next**: Codex：Pass
+
 ## 2026-08-10 — Claude 自修 + 自审 PASS（降级产物单一构造器）
 
 - **Verdict/Action**: PASS。按用户指示由我修这条 Optional，走 Optional 快档。整类先枚举：跨模块私有引用全仓仅一处，`serenity_quality_settlement` 八处产物里只有 ledger-rejected 是重复，其余语义不同不动。修法=引擎新增公开 `ledger_rejected_settlement()` + `LEDGER_REJECTED_REASON_CODE` 并进 `__all__`，引擎与 runner 都改调它；扫尾另把引擎内同一 reason code 的字面量改成常量，现全仓只剩常量定义一处。
