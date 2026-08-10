@@ -231,12 +231,22 @@ class SerenityQualityForwardTest(unittest.TestCase):
             report_path.write_text(report, encoding="utf-8")
             with patch.object(annotation_contract, "validate_annotation", return_value=True):
                 active = shadow.consume_serenity_annotation(self.fixture)
+                quality_result = self._run(
+                    root,
+                    "20260810",
+                    annotation=self.fixture,
+                    review=self._review(self.fixture, "20260810"),
+                    ledger=root / "state" / "us_short" / "quality_ledger.json",
+                )
+            observation_path = root / "state" / "us_short" / "observation_20260810.json"
             ctx = SimpleNamespace(
                 theme_soft_boost_enabled=False,
                 soft_discovery_run_result=None,
                 forward_policy_comparison_ledger_path=root / "state" / "us_short" / "shadow_compare_private" / "forward_policy_comparison_ledger.json",
                 vix_regime_summary_path=root / "vix.json",
                 serenity_shadow_result=active,
+                serenity_quality_run_result=quality_result,
+                serenity_quality_observation_path=observation_path,
                 official_output_root=root,
                 private_root=root,
                 source_packet_path=root / "source.json",
@@ -257,12 +267,18 @@ class SerenityQualityForwardTest(unittest.TestCase):
             rendered = report_path.read_text(encoding="utf-8")
             self.assertEqual(rendered.count("## "), report.count("## "))
             self.assertIn("us_short_serenity_structural_annotation_shadow", rendered)
+            observed = json.loads(observation_path.read_text(encoding="utf-8"))
+            self.assertTrue(observed["report_block_delivered"])
+            self.assertIsNone(observed["report_block_problem"])
 
             report_path.write_text("# malformed\n", encoding="utf-8")
             with patch("runners.us_short_weekly_capstone_stages._write_provider_health"), \
                  patch("runners.us_short_weekly_capstone_stages._bridge.run_e2e", return_value=bridge_summary):
                 run_weekly_bridge(ctx)
             self.assertEqual(report_path.read_text(encoding="utf-8"), "# malformed\n")
+            observed = json.loads(observation_path.read_text(encoding="utf-8"))
+            self.assertFalse(observed["report_block_delivered"])
+            self.assertIn("honest-banner", observed["report_block_problem"])
 
 
 if __name__ == "__main__":

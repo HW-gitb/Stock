@@ -17,6 +17,8 @@
     "review_present",
     "eligible",
     "shadow_consumption_status",
+    "report_block_delivered",
+    "report_block_problem",
     "effects",
     "error"
   ],
@@ -49,6 +51,8 @@
     "eligible": {"type": "boolean"},
     "shadow_consumption_status": {"enum": ["sleeping", "active", "invalid_annotation", "null"]},
     "report_overlay_available": {"type": "boolean"},
+    "report_block_delivered": {"anyOf": [{"type": "boolean"}, {"type": "null"}]},
+    "report_block_problem": {"anyOf": [{"type": "string", "minLength": 1, "maxLength": 300}, {"type": "null"}]},
     "effects": {"$ref": "#/$defs/effect_boundary"},
     "error": {
       "anyOf": [

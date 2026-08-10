@@ -7,6 +7,43 @@
 - **Verify**: review-evidence:not_available（本轮未下 `审查` 命令、hook 未发 token，全部证据为真实工具结果）。`git diff` 显示 3 insertions / 0 deletions，即「正文未改」的机器证明；`contrast_class_by_theme` 三项与 §1 表逐项相同；§5 恰 3 处 `**Pass**`；刀0 正文仍 `GO_FOR_RUBRIC_FILLABILITY_ONLY`。提交前先查门要什么包得 `required bundles: ()`，故只跑文档门。改动面恰为两个 md，未夹带另一窗口的 a-short 脏改动。
 - **Next**: Codex：Pass
 
+## 2026-08-10 — Claude 复审 PASS（冻结 pin 行尾依赖已闭）
+
+- **Verdict/Action**: PASS。整块删除字节 pin 与其测试、清掉无用 `PACKET_SHA256`、把测试名改回与实际校验一致，落在闭合判据第三条并与项目 §5 一致。保护未随之消失：packet 有内容绑定、schema 有形状校验、20260815 重槽有等值守卫，三者都基于解析后内容、与行尾无关。assessment 现无测试守护，属 §5 的有意姿态。
+- **Required**: 无。`R-USSHORT-SOFT-DISCOVERY-FROZEN-PINS-ARE-LINE-ENDING-DEPENDENT` 翻 resolved；新记一条 Optional `R-USSHORT-SERENITY-BLADE3-FIXTURE-BAKES-A-RAW-BYTE-DIGEST`（休眠实例）。正文只在 `docs/system_risk_register.md`。
+- **Verify**: review-evidence:f9232d4bb5d4。**两棵树各验一次**（Required 硬性要求）：b511 `Ran 228 OK receipt:6accd3f036e3aeaebfc961e6`；主树组合态 `Ran 299 OK receipt:5d02486a69bd472b828afc67`（含 a_short 捆绑），先前主树转红的正是该模块。反向控制：packet 改一个词 → 内容绑定/schema/重槽等值**三条同时转红**，还原后 sha 回 `ccbba88d…`、零残留。孤儿引用为 0；同类全仓仅此一处，`EXPECTED_SOURCE_PACKET_SHA256` 比 canonical JSON 本就免疫。
+- **Next**: Codex：Pass
+
+## 2026-08-10 — Codex 修复冻结 pin 行尾依赖（OPEN-NOT_VERIFIED）
+
+- **Verdict/Action**：`R-USSHORT-SOFT-DISCOVERY-FROZEN-PINS-ARE-LINE-ENDING-DEPENDENT` 已在当前工作树修复。删除 `FROZEN_20260809_PATHS` 三份 tracked JSON 的 `sha256(read_bytes())` 硬编码 pin 及对应字节不变测试；保留 schema、packet 内容与 reviewed policy、20260809/20260815 槽位、预算、阈值、assessor 注册、reslot 不变与 no-effect 语义校验。未改历史 packet/schema/assessment、provider、网络或生产路径。
+- **Required**：无新增 Required；该 R-ID 的技术根因已消除，独立审查与提交仍待 Claude Code。
+- **Verify**：固定 Python affected pack `Ran 70 tests in 6.825s OK`，receipt=`receipt:604ce80be2d0d2f2424707e2`；文档治理/route/README pack `Ran 66 tests in 1.065s OK`，receipt=`receipt:b1da3826794ea1e3cc704951`；`git diff --check` 通过；full-lane=not_triggered（仅 schema/test guard 与 docs，未触及生产入口/共享 runtime，用户未要求全量）。
+- **Pre-Codex self-review**：matrix=20260809 packet/schema/assessment raw pin 全部移除、runbook 旧 SHA 已退役、semantic packet/policy/slot/budget/threshold/assessor/no-effect guards 保留、刀2/刀3 identity digest 边界未误删；register=updated；handoff=updated；focused=70/70 OK；full-lane=not_triggered；independent-self-review=NOT_USED；provider/network/paid/live/effect/commit=NOT_USED；door=docs/route gates PASS。
+- **Next**：Claude Code：审查当前 R-ID 修复
+
+## 2026-08-10 — Claude 审查 FAIL（历史记录；已由上方 current entry supersede；冻结 pin 依赖行尾）
+
+- **Verdict/Action**: FAIL，已 `git merge --abort`，未合入。同日先前那条 PASS 只在 `b511` 单树内成立，**作废**：合并前跑组合态包时坐实同一守卫在 master 当场转红。Optional 收口本身与 runbook 退役的判断不变（三条留存 pin 在 b511 实测为活、植入可红、无孤儿引用），但立项目的「让 us_short 拿回可记账全量绿」在主树未达成。`b511` 侧提交 `9493c5d4` 保留，修复叠其上。
+- **Required**: `R-USSHORT-SOFT-DISCOVERY-FROZEN-PINS-ARE-LINE-ENDING-DEPENDENT`，机制、两棵树实测值与闭合判据只在 `docs/system_risk_register.md`。Optional=无。
+- **Verify**: review-evidence:3fe5ba7e72a3。b511 验收超集 `Ran 239 OK receipt:fbb4a52dda2d9d35856e2dee`，植入精确转红并还原。合并组合态 `Ran 274 FAILED(1)`：实算 `0f5a1844…` ≠ 钉死 `afb6e903…`。逐树取证 b511 三份全 CRLF 全 MATCH；master 的 packet/schema CRLF MATCH、assessment 为 LF 故 MISMATCH（该文件干净、blob 即 LF）。全量 `5730/5740 UNKNOWN` 零 FAIL 模块。**过程缺陷**:`sed -i` 植入翻了行尾并留陈旧 `.pyc` 致一轮假红。**超时原因**:假红定位+重取 receipt+345s 全量+逐树取证四段串在墙钟上。
+- **Next**: Codex：修复
+
+## 2026-08-10 — Claude 审查 PASS（刀5 Optional 收口 + 20260809 runbook SHA 守卫退役）
+
+- **Verdict/Action**: PASS。删守卫只删了「操作说明书」一条，packet/schema/assessment 三条执行证据仍钉死且实测为活；Optional 两字段进了 observation schema 的 required、每条投递路径都返回结果并原子回写磁盘，且不与 ledger 失步（record 不含 observation 内容或摘要）。刀6 的 STOP 判断正确：无真实 `quality_gate_result_id`、无用户选定的唯一映射。
+- **Required**: 无。全量 count gate 对不上一事已记入 `docs/system_risk_register.md`，归属未定、不阻塞本刀。Optional=无。
+- **Verify**: review-evidence:3fe5ba7e72a3。三条留存 pin 实算与钉死值逐条 MATCH；植入 assessment 期望末两位 → 精确转红并点名该文件，还原后同模块 11 项全绿；全仓 grep `301ed0a5`/`probe_20260809_runbook` 零命中。验收超集 `Ran 239 / 48.9s / OK receipt:fbb4a52dda2d9d35856e2dee`。全量（rule 3(a)+rule 6 升级）`discovered=5730 ran=5740 equal=False / Ran 5740 in 345.6s / UNKNOWN`，**parallel-lane 零 FAIL 模块**——无红测试，卡在 count gate 多出 10 且跨运行非确定（执行方 5739、我 5740）。**过程缺陷**:我用 `sed -i` 植入把该测试文件工作树行尾归一成 LF（git diff 仍 4+/5−、内容未变）并遗留陈旧 `.pyc` 致一轮假红，清 `__pycache__` 后复绿。**超时原因**:植入还原后的假红定位 + 重取 receipt + 345s 全量三段串在墙钟上。
+- **Next**: Codex：Pass
+
+## 2026-08-10 — Codex 修复刀5 Optional + 20260809 runbook guard（OPEN-NOT_VERIFIED）
+
+- **Verdict/Action**：刀5 Optional 已修复：报告 overlay 的 `report_block_delivered` / `report_block_problem` 写回 quality observation；20260809 runbook 的过时单文件 SHA256 pin 已按用户指令移除，保留 packet/schema/assessment 冻结校验；并补齐 optional-stage conformance 白名单。
+- **Required**：`R-USSHORT-SERENITY-BLADE6-G1-DECISION-MISSING` — 刀6停在文档前置，不创建 preregistration 或 effect 路径；并行 full-lane residual 见 `docs/system_risk_register.md`。
+- **Verify**：fixed-Python repair/conformance pack `Ran 200 tests in 74.535s OK`，receipt=`receipt:ce9886b1e91cd2889f646eec`；`py_compile` 通过；首次 full-lane `FAIL 5730/5520` 的确定红为 optional-stage 白名单，已修；第二次 full-lane `FAIL discovered=5730 ran=5739` 的唯一失败模块为 `test_us_short_discovery_conformance_resources`，单独 fixed-Python `Ran 1 test in 63.095s OK`，receipt=`receipt:30383f939bfe02c5f70e04fc`；最终文档治理门 `Ran 66 tests in 1.160s OK`，receipt=`receipt:0c8cb174e5426b44199e1b7e`；`git diff --check` 通过。
+- **Pre-Codex self-review**：matrix=Optional success/failure/missing-report trace、observation schema null→bool/string、overlay no-abort、runbook SHA-only guard removal、packet/schema/assessment retained guard、optional conformance registry、G1 exact preconditions；register=updated；handoff=updated；focused=200/200 OK；full-lane=NOT_VERIFIED（parallel resource-isolation residual）；independent-self-review=NOT_USED；provider/network/paid/live/effect/commit=NOT_USED；door=docs/route gates PASS。
+- **Next**：用户：选择唯一刀6效果映射
+
 ## 2026-08-10 — Claude 审查 PASS（刀5 注解质量 forward 周度接入）
 
 - **Verdict/Action**: PASS。新 stage 可选、zero_effect、自带 typed 降级并排出 provider receipt 必需集；唯一写生产周报处只在 shadow active 时进入（休眠周不开文件）、先做私有根包含检查再 temp+replace 原子替换，且 `private_root`/`official_output_root` 实为真实字段、包含检查非恒真。五指标判断形、阈值计数前冻结在 preset、cohort 四维且禁跨聚合。

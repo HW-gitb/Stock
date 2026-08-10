@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import copy
-import hashlib
 import json
 from pathlib import Path
 import unittest
@@ -17,14 +16,6 @@ SCHEMA_PATH = ROOT / "schemas" / "us_short_soft_discovery_query_quality_probe_pa
 ARTIFACT_PATH = ROOT / "docs" / "us_short_soft_discovery_query_quality_probe_packet_20260809.json"
 CURRENT_SCHEMA_PATH = ROOT / "schemas" / "us_short_soft_discovery_query_quality_probe_packet_20260815.schema.json"
 CURRENT_ARTIFACT_PATH = ROOT / "docs" / "us_short_soft_discovery_query_quality_probe_packet_20260815.json"
-FROZEN_20260809_PATHS = {
-    ARTIFACT_PATH: "ccbba88dd2fb37ff27b80c2e44f4edb1f9e2e8ead1f2df26fab084a92850f526",
-    SCHEMA_PATH: "60b1d8e5ff48a19d48bfdfdf5a5d738b5cf88c0ef96337a04d5d1fe1725a430a",
-    ROOT / "docs" / "us_short_soft_discovery_probe_20260809_runbook.md":
-        "301ed0a5cd0da429488e3a1f5f91f441fb0a4ce95aa1450d02f10eaf9399dfa4",
-    ROOT / "docs" / "us_short_soft_discovery_query_quality_probe_assessment_20260809.json":
-        "afb6e9030d04273b061825b8ab6ffe00cc93d7552de07f895bcf23d8e22bce11",
-}
 
 
 class UsShortSoftDiscoveryQueryQualityProbePacket20260809SchemaTest(unittest.TestCase):
@@ -45,7 +36,7 @@ class UsShortSoftDiscoveryQueryQualityProbePacket20260809SchemaTest(unittest.Tes
         Draft7Validator.check_schema(self.schema)
         self.assertEqual(self._errors(self.packet), [])
 
-    def test_exact_bytes_keep_the_executed_packet_bound_to_the_reviewed_policy(self) -> None:
+    def test_packet_content_remains_bound_to_the_reviewed_policy(self) -> None:
         policy = query_policy.load_query_policy()
         expected_packet_templates = [
             {
@@ -183,12 +174,6 @@ class UsShortSoftDiscoveryQueryQualityProbePacket20260815SchemaTest(unittest.Tes
                 value = target[path[-1]]
                 target[path[-1]] = value + "_mutated" if isinstance(value, str) else not value
                 self.assertTrue(self._errors(mutated))
-
-    def test_executed_20260809_artifacts_remain_byte_immutable(self) -> None:
-        for path, expected_sha256 in FROZEN_20260809_PATHS.items():
-            with self.subTest(path=path.name):
-                self.assertEqual(hashlib.sha256(path.read_bytes()).hexdigest(), expected_sha256)
-
 
 if __name__ == "__main__":
     unittest.main()

@@ -19,7 +19,6 @@ FIXTURE_PATH = ROOT / "tests" / "fixtures" / "us_short_serenity_structural_theme
 PACKET_REF = "docs/us_short_soft_discovery_query_quality_probe_packet_20260809.json"
 LEGACY_SOURCE_PACKET_REF = "docs/us_short_soft_discovery_query_quality_probe_packet_20260730.json"
 PACKET_ID = "packet_20260809_blade3_fixture"
-PACKET_SHA256 = "ccbba88dd2fb37ff27b80c2e44f4edb1f9e2e8ead1f2df26fab084a92850f526"
 FIXED_NOW = datetime(2026, 8, 10, tzinfo=timezone.utc)
 
 
