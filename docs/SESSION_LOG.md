@@ -226,6 +226,13 @@
 - **Pre-Codex self-review**: A-F checked；A=固定输入/7成员/source矩阵；B=Serenity字段与所有当前树 `*.py/*.md/tests` 消费面 grep，确认无新接线且文档只声明 shadow；C=effect flags/active macro/score/Top15/operation/lifecycle 反向控制；D=unsupported claim 降级为 lead/context/unverified；E=SESSION_LOG 与 handoff 为当前态，CURRENT 未改；F=UTF-8/no BOM/no mojibake、固定 Python assertions PASS、`git diff --check` clean；independent-self-review=NOT_USED:user-forbids independent review；provider/network/account=NOT_USED；commit=NOT_PERFORMED。
 - **Handoff**: 已新增 `docs/handoff/2026-08-09_us_serenity_annotation_blade0_handoff.md` 并加入 `docs/handoff/README.md` 路由；该交接只承载 Blade 0 结果、边界、自审/测试要求与下一刀前置，不混入既有 X live-shape handoff。
 - **Next**: Claude Code：审查本刀 Blade 0 研究产物；未审查前不进入 Blade 1 或任何工程刀。
+## 2026-08-10 — Claude 审查 FAIL（更正同日 PASS；40d9：两个 sidecar 座位漏改）
+
+- **Verdict/Action**: FAIL，更正同日上一条 PASS。补做桌面 V3-A1 的逐名覆盖矩阵后发现：`target_policy_capture` 与 `final_action_capture` 两个座位仍走旧的只取 progress 的映射，而本刀新增的 health 原因契约对无 code 的 degraded 行直接 `raise`，`main()` 无人接 → 三件套整份不产出。代码已按上一条 PASS 提交 `c6fc912c` 并合入 master `d942473f`，Required 现在在 master 上。
+- **Required**: `R-ASHORT-TARGET-POLICY-AND-FINAL-ACTION-SEATS-SKIP-THE-REASON-HELPER-AND-KILL-HEALTH`(P1) —— 机制、实测、两条修复腿与闭合判据只见 `docs/system_risk_register.md`（单一来源，本处不复述）。
+- **Verify**: review-evidence:cae62b23d2c6。自写探针：两个座位真实会写出的行（degraded + 带 `observed_decision_as_of`）喂 `build_health` → 双双 `RAISED ValueError: ... lacks stable error_code`；同样行去掉 observed 日期则被 health 兜底补码（这正是我上一条误判可达性的原因）。先前 PASS 的其余证据（830 项验收超集 `receipt:57fbbda8187b6d43315a2bd5`、封闭世界植入精确转红、`static_contract_error=None`）仍成立。全量归执行方，仍 NOT_VERIFIED。超时原因:逐名覆盖矩阵是在慢包与提交之后补做的，本轮墙钟被拉长。
+- **Next**: Codex：修复
+
 ## 2026-08-10 — Claude 审查 PASS（40d9：失败原因落盘 + 状态映射封闭世界）
 
 - **Verdict/Action**: PASS，提交并合入 master。共享缓存失败落脱敏收据、三处 settlement 由吞异常改 `strict` 再由调用方记因、每条 degraded sidecar 行必带 code+有界 detail。两处最可疑的都实测过：封闭世界映射对五个真实产出函数的全部状态 `unexpected` 命中数=0；`enforce_price_clock` 只在预检按 `clock_explicit` 放宽，默认与最终绑定仍严格。
