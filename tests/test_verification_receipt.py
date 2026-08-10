@@ -188,11 +188,20 @@ class VerificationReceiptTests(unittest.TestCase):
             path = Path(tmp) / "receipt.json"
             receipt = self._receipt(state, path, ["tests.test_example"])
             token = receipts.receipt_token(receipt)
-            loaded, reason = receipts.validate_focused_evidence(token, state=state, path=path)
-            self.assertEqual(reason, "OK")
-            self.assertEqual(loaded, receipt)
-            _, changed_reason = receipts.validate_focused_evidence(token, state=changed, path=path)
-            self.assertIn("current code state", changed_reason)
+            # This test isolates receipt/token binding.  Merge-side bundle
+            # widening is covered by MergeCombinedStateTests above; patching
+            # it here keeps the assertion deterministic when the real repo has
+            # an unresolved, uncommitted merge.
+            with patch.object(receipts, "merge_side_paths", return_value=frozenset()):
+                loaded, reason = receipts.validate_focused_evidence(
+                    token, state=state, path=path
+                )
+                self.assertEqual(reason, "OK")
+                self.assertEqual(loaded, receipt)
+                _, changed_reason = receipts.validate_focused_evidence(
+                    token, state=changed, path=path
+                )
+                self.assertIn("current code state", changed_reason)
 
     def test_docs_only_mutation_keeps_receipt_valid_and_code_mutation_is_rejected(self):
         with tempfile.TemporaryDirectory() as tmp:
