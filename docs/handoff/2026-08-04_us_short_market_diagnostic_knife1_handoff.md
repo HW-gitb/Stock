@@ -941,3 +941,77 @@ cmd /c .tools\run_unittest_with_repo_pythonpath.cmd tests.test_route_doc_ledger_
 **验证命令与结果**：按 §6a Optional-only 快档——一次 scope grep + 最小覆盖目标一次 `Ran 71 in 26.8s OK`；未起 agent、未跑全量。探针与控制组见 SESSION_LOG 同日 `Verify`。
 
 **一条自我更正**：我第一版探针把「中断」模拟成「删掉 receipt」，忘了真实中断会先留下 pending intent，于是控制组红了。代码报的 `without a pending receipt intent` 正好点破——那条路径（有人手工摆一份通知）本就该拒。按控制组不绿即判探针无效的规矩重做后结论才成立。教训：**模拟失败态之前先读清楚成功路径的写入顺序**。
+
+## 2026-08-10 追加：桌面 us_testrun1 问题1 —— canonical transaction lock 私密路径修复（OPEN-NOT_VERIFIED）
+
+### 改了什么
+
+- 根 `.gitignore` 新增精确规则 `state/*/_transaction_locks/`，覆盖一键入口真实生成的 `state/us_short/_transaction_locks/<decision_date>.lock`。
+- `tests/test_us_short_paper_one_click.py` 新增 canonical 接线测试：使用 `DEFAULT_STATE_DIR`、真实 `resolve_capstone_context()` 和 `_decision_lock_path()`，再由真实 `reject_nonprivate_output_path()` 消费；同时保留 `state/us_short/anything/deep/x.json` 的负向控制。
+- 生产代码仍只有 `runners/us_short_weekly_capstone.py::_decision_lock_path()` 一个锁目录生产点；conformance 测试中的 `provider_samples/.../_transaction_locks` 是故意植入坐标，未改。
+
+### 为什么改
+
+问题1的实际死点发生在任何 stage 之前：canonical transaction lock 被私密守卫拒绝。原有锁测试只注入仓外/临时 state root，无法证明一键真实坐标可用；本刀同时验证 tracked `.gitignore` 来源，避免本机 `.git/info/exclude` 造成假绿。
+
+### 验证命令
+
+```text
+固定解释器：C:\Users\cnhea\AppData\Local\Programs\Python\Python313\python.exe（3.13.8）
+.tools\run_unittest_with_repo_pythonpath.cmd tests.test_us_short_paper_one_click.USShortPaperOneClickTest.test_canonical_decision_lock_is_ignored_by_tracked_gitignore
+.tools\run_unittest_with_repo_pythonpath.cmd tests.test_us_short_paper_one_click tests.test_us_short_private_paths tests.provider.test_us_short_weekly_capstone.CapstoneFakeChainTest.test_decision_lock_is_bound_to_the_injected_state_root_and_reacquirable
+.tools\run_unittest_with_repo_pythonpath.cmd tests.test_route_doc_ledger_status_consistency tests.test_doc_governance_guard
+```
+
+### 验证结果
+
+- 修复前点名测试 `Ran 1 / FAILED`，失败来源为本机 `D:/cnhea/Stock/.git/info/exclude:7`，不是 tracked `.gitignore`；修复后点名测试 `Ran 1 / OK`，receipt=`receipt:3f736ec63694dc9b3abf1f80`。
+- 聚焦包 `Ran 21 / OK`，receipt=`receipt:e068e3e4e61b77a35749ae9b`；canonical `git check-ignore -v` 命中 `.gitignore:47`，深层未登记路径返回未忽略且守卫拒绝。
+- 两道 door `Ran 55 / OK`，receipt=`receipt:619d73c2ec80fa334fac94d6`；`py_compile` 与 `git diff --check` 通过（仅既有 LF/CRLF 警告）。
+- 未运行 provider、网络、真实一键周跑或 full US-short lane；本轮不打开诊断时钟，不触及问题2。
+
+### 失效的旧结论
+
+- “现有临时 state-root 锁测试足以覆盖一键锁路径”已失效；真实 canonical `state/us_short` 坐标此前没有接线覆盖。
+- “`git check-ignore` 返回 0 即证明 tracked 私密规则已生效”已失效；本轮红灯证明本机 `.git/info/exclude` 可以制造假绿，必须核对命中来源。
+
+### 下一步注意事项
+
+- 当前 R-ID `R-USSHORT-CANONICAL-TRANSACTION-LOCK-NOT-GITIGNORED` 保持 `OPEN-NOT_VERIFIED`，等待 Claude Code 独立审查后再决定关闭/提交。
+- 问题2 `private_root` / `official_output_root` 默认根冲突仍未处理；不得把本刀的 tracked ignore 修复解释为一键全流程已通过。
+
+## 2026-08-10 追加：问题1 独立审查 PASS（Claude Code reviewer/committer）
+
+### 改了什么
+
+- 只做审查与收口，未改上一节交付的任何代码或测试；本节新增的只有 verdict 与独立证据落位：`R-USSHORT-CANONICAL-TRANSACTION-LOCK-NOT-GITIGNORED` 翻 `resolved`，并新记一条 Optional `R-USSHORT-NEW-PRIVATE-STATE-SUBDIR-HAS-NO-RECURRENCE-GUARD`。
+
+### 为什么改
+
+- 上一节的 verdict 位停在 `OPEN-NOT_VERIFIED`，等的就是独立复算；复算全部成立，故按 reviewer/committer 流程关闭并提交。同时把「一个实例已关、产生它的机制仍无守卫」这条残留从桌面权威件搬进仓库状态，避免它只活在桌面文档里。
+
+### 验证命令
+
+```text
+固定解释器：C:\Users\cnhea\AppData\Local\Programs\Python\Python313\python.exe（3.13.8）
+.tools\run_unittest_with_repo_pythonpath.cmd tests.test_us_short_paper_one_click tests.test_doc_governance_guard
+（植入探针）按字节删除 .gitignore 第 47 行 → 跑 tests.test_us_short_paper_one_click.USShortPaperOneClickTest.test_canonical_decision_lock_is_ignored_by_tracked_gitignore → 按字节还原并核对 sha256
+git check-ignore -v --no-index -- <9 条私密坐标 + state/us_short/anything/deep/x.json>
+```
+
+### 验证结果
+
+- rule-1 焦点超集（reviewer 亲跑）：`Ran 51 in 4.4s OK`，`receipt:8b2c35c706519566f86e4d90`。
+- 承重腿植入：点名测试精确转红，失败正文正是 `D:/cnhea/Stock/.git/info/exclude:7`；还原后 `.gitignore` sha256 前后同为 `de129b6ed07e3bdbfb1f4cbf331093cd9242cd617af147e47f5544ad50808758`。同一植入态下 `reject_nonprivate_output_path(lock_path)` 仍 ACCEPT —— 生产守卫本身测不出这个缺口，所以那条「来源必须是 tracked `.gitignore`」的断言是承重的，不是装饰。
+- 同类扫描独立重跑：私密家族 9 条坐标全部命中 tracked `.gitignore`；`state/us_short/anything/deep/x.json` 仍 NOT-IGNORED，忽略面未扩大。
+- 掩盖源穷举：repo `.git/info/exclude` 只有 `state/*/_transaction_locks/` 一条真实模式，`core.excludesFile` 未配置（rc=1），故本仓没有第二处「靠未跟踪 exclude 撑起私密证明」的同类实例。
+- 分级：无 live provider、无 secret 落盘、无 fail-closed 引擎改动，按 §6a 不起独立 agent；rule 3 五个触发条件均不成立，`full-lane=not_triggered`。
+
+### 失效的旧结论
+
+- 上一节「等待 Claude Code 独立审查后再决定关闭/提交」已失效——审查已完成，R-ID 已关闭并提交。
+
+### 下一步注意事项
+
+- 机制级复发仍未上守卫（Optional R-ID 已登记）。若将来采纳，只允许一条窄的静态一致性测试 + planted-failure；桌面权威件 §问题1 修复方案 §0 已把注册表 / schema / 指纹 / 运行时目录扫描器 / 新抽象层列入不纳入，不得借此扩建。
+- 问题2 `private_root` / `official_output_root` 默认根冲突仍未处理；本刀 PASS 只代表锁这一步不再拦路，不代表一键全流程可跑通。

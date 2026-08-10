@@ -1,5 +1,20 @@
 # Session Log
 
+## 2026-08-10 — Claude 审查 PASS（问题1 canonical transaction lock tracked ignore）
+
+- **Verdict/Action**: PASS，已提交并合入 master。本刀零生产 `.py` 改动：tracked `.gitignore` 加 1 条精确规则、一键真实坐标接线测试、深层负向控制、三份文档。与桌面权威件 §问题1「修复执行方案」的纳入/不纳入逐项一致（不建注册表/扫描器、不动 `.git/info/exclude`、不扩忽略面）。风险档=低（无 live provider、无 secret 落盘、无 fail-closed 引擎改动），故 §6a 不起独立 agent、rule 3 不起全量。
+- **Required**: 无。`R-USSHORT-CANONICAL-TRANSACTION-LOCK-NOT-GITIGNORED` 翻 `resolved`；新记一条 Optional `R-USSHORT-NEW-PRIVATE-STATE-SUBDIR-HAS-NO-RECURRENCE-GUARD`。完整正文、独立复算与闭合判据只在 `docs/system_risk_register.md`。
+- **Verify**: review-evidence:7925af3608e0。rule-1 焦点超集亲跑 `tests.test_us_short_paper_one_click tests.test_doc_governance_guard` = `Ran 51 in 4.4s OK receipt:8b2c35c706519566f86e4d90`。承重腿植入：按字节抹掉 `.gitignore:47` → 点名测试精确转红且正文暴露 `.git/info/exclude:7`，还原后 sha256 前后同为 `de129b6e…`；同一植入态下生产守卫仍 ACCEPT，证明断言必须锚在命中来源。独立扫 9 条坐标：私密家族全命中 tracked `.gitignore`，`anything/deep/x.json` 仍 NOT-IGNORED；`.git/info/exclude` 仅 1 条真实模式、`core.excludesFile` 未配置，无第二处同类掩盖。rule 3 五触发均不成立，`full-lane=not_triggered`。
+- **Next**: Codex：Pass
+
+## 2026-08-10 — Codex 修复桌面 us_testrun1 问题1（OPEN-NOT_VERIFIED）
+
+- **Verdict/Action**：问题1已在本工作树完成最小修复：tracked `.gitignore` 新增 `state/*/_transaction_locks/`；一键 canonical 接线测试使用真实 `DEFAULT_STATE_DIR` → `resolve_capstone_context()` → `_decision_lock_path()` → `reject_nonprivate_output_path()`；新增未登记深层目录负向控制。未改 runner/engine/provider/live/诊断时钟/问题2；Codex 未提交。
+- **Required**：`R-USSHORT-CANONICAL-TRANSACTION-LOCK-NOT-GITIGNORED` 已登记，技术修复成立，待 Claude Code 独立审查后再关闭。详细 finding、闭合判据和边界只在 `docs/system_risk_register.md`。
+- **Verify**：固定主 Python 3.13.8；点名测试修复前 `1 FAILED`、修复后 `1 OK`，聚焦包 `21 OK`；canonical 来源 `.gitignore:47`，深层控制 `DEEP_EXIT=1`；`py_compile`/`git diff --check` 通过；两道 door `55 OK`。详细 receipt 与红绿证据见 register。`full-lane=not_triggered`。
+- **Pre-Codex self-review**：`matrix=canonical lock chain + deep negative + injected-root reacquire`；`register=updated`；`handoff=updated`；`focused=1 red→1 OK + 21 OK`；`full-lane=not_triggered`；`door=55 OK`；`independent-review=NOT_USED`；`provider/network/live/account/commit=NOT_USED`。
+- **Next**：Claude Code：独立审查问题1并决定 Pass 或 Required
+
 ## 2026-08-10 — Claude 快速审查 PASS（刀0/刀1 产物头部交接元数据）
 
 - **Verdict/Action**: PASS，已提交。主树两份 Serenity 研究产物各加交接元数据行（刀0 一行、刀1 两行），共 3 行新增、零删除，正文未动。新增的是结论型字段，故逐条回查正文：三类主题↔对照类映射、`negative_perturbation_result=PASS (§5)`、上游产物路径、`decision_date` 全部与正文一致，无一处比正文更强。
