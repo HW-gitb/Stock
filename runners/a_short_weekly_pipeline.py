@@ -25,7 +25,7 @@ import re
 import sys
 import tempfile
 import time
-from datetime import datetime
+from datetime import datetime, timedelta
 from functools import lru_cache
 from pathlib import Path
 
@@ -965,12 +965,21 @@ def _normalise_csi300_window(window: dict | None) -> dict:
     }
 
 
-def _normalise_northbound_control(context: dict | None, as_of: str) -> dict:
+def _normalise_northbound_control(
+    context: dict | None,
+    as_of: str,
+    *,
+    price_data_through: str | None = None,
+) -> dict:
     """Validate the structured EGS facts consumed by the new-entry market gate."""
     supplied = dict(context or {})
-    source_as_of = str(supplied.get("source_as_of") or as_of)
-    if not _is_valid_date(source_as_of) or source_as_of != str(as_of):
-        raise ValueError("northbound control is not bound to weekly as_of")
+    source_as_of = str(supplied.get("source_as_of") or price_data_through or as_of)
+    price_data_through = str(price_data_through or source_as_of or as_of)
+    if (not _is_valid_date(source_as_of)
+            or not _is_valid_date(price_data_through)
+            or source_as_of != price_data_through
+            or price_data_through > str(as_of)):
+        raise ValueError("northbound control is not bound to price_data_through")
     expected_paths = {
         "northbound": _NORTHBOUND_SOURCE_PATH,
         "csi300": _CSI300_SOURCE_PATH,
@@ -1005,6 +1014,8 @@ def _normalise_northbound_control(context: dict | None, as_of: str) -> dict:
     if coverage_complete and observed_session_count != requested_session_count:
         raise ValueError("complete northbound control must observe every requested session")
     csi300_window = _normalise_csi300_window(supplied.get("csi300_window"))
+    if csi300_window["end_date"] != source_as_of:
+        raise ValueError("northbound csi300 window end_date is not bound to price_data_through")
     production_effect_enabled = supplied.get("production_effect_enabled")
     if not isinstance(production_effect_enabled, bool):
         raise ValueError("northbound control production_effect_enabled must be boolean")
@@ -1065,7 +1076,12 @@ def _normalise_northbound_control(context: dict | None, as_of: str) -> dict:
     }
 
 
-def _northbound_control_from_analysis(ai: dict, as_of: str) -> dict:
+def _northbound_control_from_analysis(
+    ai: dict,
+    as_of: str,
+    *,
+    price_data_through: str | None = None,
+) -> dict:
     """Bind the gate to validated analysis_input facts, never to market text."""
     market_context = (ai or {}).get("market_context") or {}
     northbound = market_context.get("northbound") or {}
@@ -1078,14 +1094,20 @@ def _northbound_control_from_analysis(ai: dict, as_of: str) -> dict:
     )
     if decision_as_of != str(as_of):
         raise ValueError("analysis_input decision_as_of is not bound to weekly as_of")
+    price_data_through = str(
+        price_data_through
+        or (ai or {}).get("price_data_through")
+        or ((ai or {}).get("source") or {}).get("clocks", {}).get("price_data_through")
+        or decision_as_of
+    )
     csi300_window = breadth.get("csi300_window") or {
-        "start_date": decision_as_of,
-        "end_date": decision_as_of,
+        "start_date": price_data_through,
+        "end_date": price_data_through,
         "length": 1,
         "length_unit": "trading_sessions",
     }
     return _normalise_northbound_control({
-        "source_as_of": decision_as_of,
+        "source_as_of": price_data_through,
         "source_paths": {
             "northbound": _NORTHBOUND_SOURCE_PATH,
             "csi300": _CSI300_SOURCE_PATH,
@@ -1101,10 +1123,15 @@ def _northbound_control_from_analysis(ai: dict, as_of: str) -> dict:
             "production_effect_enabled",
             NORTHBOUND_MARKET_GATE_PRODUCTION_EFFECT_ENABLED,
         ),
-    }, as_of)
+    }, as_of, price_data_through=price_data_through)
 
 
-def _normalise_margin_overheat_control(context: dict | None, as_of: str) -> dict:
+def _normalise_margin_overheat_control(
+    context: dict | None,
+    as_of: str,
+    *,
+    price_data_through: str | None = None,
+) -> dict:
     """Validate the structured EGS facts consumed by the margin-overheat cash control.
 
     The percentile and its coverage receipt come from ``analysis_input``; the
@@ -1113,9 +1140,20 @@ def _normalise_margin_overheat_control(context: dict | None, as_of: str) -> dict
     read from the governance constants in :mod:`engine.a_short_margin_overheat`.
     """
     supplied = dict(context or {})
-    source_as_of = str(supplied.get("source_as_of") or as_of)
-    if not _is_valid_date(source_as_of) or source_as_of != str(as_of):
-        raise ValueError("margin overheat control is not bound to weekly as_of")
+    window_end = supplied.get("window_end")
+    price_data_through = str(
+        price_data_through
+        or supplied.get("price_data_through")
+        or supplied.get("source_as_of")
+        or window_end
+        or as_of
+    )
+    source_as_of = str(supplied.get("source_as_of") or window_end or price_data_through)
+    if (not _is_valid_date(source_as_of)
+            or not _is_valid_date(price_data_through)
+            or price_data_through > str(as_of)
+            or source_as_of > price_data_through):
+        raise ValueError("margin overheat control is not bound to price_data_through")
     source_path = supplied.get("source_path")
     if source_path is None:
         source_path = _MARGIN_OVERHEAT_SOURCE_PATH
@@ -1153,6 +1191,15 @@ def _normalise_margin_overheat_control(context: dict | None, as_of: str) -> dict
             raise ValueError("margin overheat control window dates are invalid")
     window_start = None if window_start is None else str(window_start)
     window_end = None if window_end is None else str(window_end)
+    if window_end is not None:
+        if source_as_of != window_end:
+            raise ValueError("margin overheat control source_as_of must equal window_end")
+        if window_end > price_data_through:
+            raise ValueError("margin overheat control window_end is after price_data_through")
+        # Publication lag is resolved by the producer's real trading calendar in
+        # ``resolve_published_window``.  The pipeline only enforces the source
+        # and price-clock binding; a second weekday approximation would reject
+        # valid one-session gaps across exchange holidays.
     percentile = supplied.get("percentile")
     ratio = supplied.get("ratio")
     balance_yuan = supplied.get("balance_yuan")
@@ -1164,7 +1211,7 @@ def _normalise_margin_overheat_control(context: dict | None, as_of: str) -> dict
         ratio = None
         denominator_float_mv_yuan = None
     else:
-        if window_start is None or window_end is None or window_start > window_end or window_end > str(as_of):
+        if window_start is None or window_end is None or window_start > window_end:
             raise ValueError("complete margin overheat control needs a bound window ending by as_of")
         if not _is_finite_market_number(percentile) or not 0.0 <= float(percentile) <= 1.0:
             raise ValueError("complete margin overheat control needs a percentile in [0,1]")
@@ -1236,7 +1283,12 @@ def _normalise_margin_overheat_control(context: dict | None, as_of: str) -> dict
     }
 
 
-def _margin_overheat_control_from_analysis(ai: dict, as_of: str) -> dict:
+def _margin_overheat_control_from_analysis(
+    ai: dict,
+    as_of: str,
+    *,
+    price_data_through: str | None = None,
+) -> dict:
     """Bind the cash control to validated analysis_input facts, never to text."""
     market_context = (ai or {}).get("market_context") or {}
     overheat = market_context.get("margin_overheat") or {}
@@ -1248,8 +1300,15 @@ def _margin_overheat_control_from_analysis(ai: dict, as_of: str) -> dict:
     )
     if decision_as_of != str(as_of):
         raise ValueError("analysis_input decision_as_of is not bound to weekly as_of")
+    price_data_through = str(
+        price_data_through
+        or (ai or {}).get("price_data_through")
+        or ((ai or {}).get("source") or {}).get("clocks", {}).get("price_data_through")
+        or decision_as_of
+    )
+    window_end = overheat.get("window_end")
     return _normalise_margin_overheat_control({
-        "source_as_of": decision_as_of,
+        "source_as_of": window_end or price_data_through,
         "source_path": _MARGIN_OVERHEAT_SOURCE_PATH,
         "percentile": overheat.get("percentile"),
         "ratio": overheat.get("ratio"),
@@ -1264,7 +1323,7 @@ def _margin_overheat_control_from_analysis(ai: dict, as_of: str) -> dict:
             "production_effect_enabled",
             margin_overheat.MARGIN_OVERHEAT_PRODUCTION_EFFECT_ENABLED,
         ),
-    }, as_of)
+    }, as_of, price_data_through=price_data_through)
 
 
 def _append_northbound_market_impact(report: dict, control: dict, reason: str) -> None:
@@ -1336,6 +1395,7 @@ def _allocate_cash(reports: list, available_cash, new_exposure_capacity=None,
                    pre_holiday_control: dict | None = None,
                    margin_overheat_control: dict | None = None,
                    *, as_of: str | None = None,
+                   price_data_through: str | None = None,
                    _comparison_shadow_cash_factor: float | None = None) -> dict:
     """#3 全局现金分配(价格提案 §4 + §11.3/11.4):多只建仓按**区间上沿 entry_high**(最不利价)统一消耗
     available_cash,确定性排序;不足一手/最小金额 → 转观察。**原地改 reports(只动建仓票)**;返回 weekly 现金摘要 | None。
@@ -1356,7 +1416,9 @@ def _allocate_cash(reports: list, available_cash, new_exposure_capacity=None,
     # A missing control is still normalised, so the emitted audit object can
     # never carry the un-bound `source_as_of: None` shape the schema rejects.
     pre_holiday_control = _normalise_pre_holiday_control(pre_holiday_control, as_of)
-    margin_overheat_control = _normalise_margin_overheat_control(margin_overheat_control, as_of)
+    margin_overheat_control = _normalise_margin_overheat_control(
+        margin_overheat_control, as_of, price_data_through=price_data_through
+    )
     if _comparison_shadow_cash_factor is not None:
         if (isinstance(_comparison_shadow_cash_factor, bool)
                 or not isinstance(_comparison_shadow_cash_factor, (int, float))
@@ -1457,7 +1519,8 @@ def _allocate_cash_shadow(reports: list, available_cash, new_exposure_capacity=N
                           *, pre_holiday_control: dict | None,
                           margin_overheat_control: dict,
                           shadow_cash_factor: float,
-                          as_of: str) -> dict:
+                          as_of: str,
+                          price_data_through: str | None = None) -> dict:
     """Run the exact production allocator on a comparison-only report copy.
 
     The caller owns the shadow boundary: no portfolio/account context is
@@ -1481,6 +1544,7 @@ def _allocate_cash_shadow(reports: list, available_cash, new_exposure_capacity=N
         pre_holiday_control=pre_holiday_control,
         margin_overheat_control=margin_overheat_control,
         as_of=as_of,
+        price_data_through=price_data_through,
         _comparison_shadow_cash_factor=float(shadow_cash_factor),
     )
 
@@ -1829,7 +1893,7 @@ def build_weekly_report(normalized_list: list, as_of: str, generated_at: str,
     pre_holiday_control = _normalise_pre_holiday_control(pre_holiday_control, as_of)
     if northbound_control is None:
         northbound_control = {
-            "source_as_of": str(as_of),
+            "source_as_of": price_data_through,
             "source_paths": {
                 "northbound": _NORTHBOUND_SOURCE_PATH,
                 "csi300": _CSI300_SOURCE_PATH,
@@ -1838,8 +1902,8 @@ def build_weekly_report(normalized_list: list, as_of: str, generated_at: str,
             "status": "unknown",
             "csi300_pct_change_window": None,
             "csi300_window": {
-                "start_date": str(as_of),
-                "end_date": str(as_of),
+                "start_date": price_data_through,
+                "end_date": price_data_through,
                 "length": 1,
                 "length_unit": "trading_sessions",
             },
@@ -1848,8 +1912,12 @@ def build_weekly_report(normalized_list: list, as_of: str, generated_at: str,
             "coverage_complete": False,
             "production_effect_enabled": False,
         }
-    northbound_control = _normalise_northbound_control(northbound_control, as_of)
-    margin_overheat_control = _normalise_margin_overheat_control(margin_overheat_control, as_of)
+    northbound_control = _normalise_northbound_control(
+        northbound_control, as_of, price_data_through=price_data_through
+    )
+    margin_overheat_control = _normalise_margin_overheat_control(
+        margin_overheat_control, as_of, price_data_through=price_data_through
+    )
     if margin_coverage is None:
         margin_coverage = {
             "reference_date": price_data_through, "effective_ref_date": None,
@@ -1963,7 +2031,8 @@ def build_weekly_report(normalized_list: list, as_of: str, generated_at: str,
                                   m05_context=m05_cash_context,
                                   pre_holiday_control=pre_holiday_control,
                                   margin_overheat_control=margin_overheat_control,
-                                  as_of=as_of)
+                                  as_of=as_of,
+                                  price_data_through=price_data_through)
     portfolio_risk = _apply_portfolio_risk_results(
         reports, portfolio_context, as_of, portfolio_fact_as_of, portfolio_fact_fetch_status)
     _attach_breakout_source_disagreement_notices(reports)
@@ -2344,11 +2413,13 @@ def validate_weekly_report(weekly: dict, iv_feed_summary: dict,
         if not isinstance(supplied_margin_overheat, dict):
             raise ValueError("cash_allocation 缺少 margin_overheat_control")
         if supplied_margin_overheat != _normalise_margin_overheat_control(
-                supplied_margin_overheat, weekly["as_of"]):
+                supplied_margin_overheat, weekly["as_of"],
+                price_data_through=price_data_through):
             raise ValueError("cash_allocation.margin_overheat_control 未按 source control 归一化")
         if expected_margin_overheat_control is not None:
             source_margin = _normalise_margin_overheat_control(
-                expected_margin_overheat_control, weekly["as_of"]
+                expected_margin_overheat_control, weekly["as_of"],
+                price_data_through=price_data_through,
             )
             if supplied_margin_overheat != source_margin:
                 raise ValueError(
@@ -2364,11 +2435,13 @@ def validate_weekly_report(weekly: dict, iv_feed_summary: dict,
     if not isinstance(northbound_control, dict):
         raise ValueError("weekly 缺少 northbound_control")
     if northbound_control != _normalise_northbound_control(
-            northbound_control, weekly["as_of"]):
+            northbound_control, weekly["as_of"],
+            price_data_through=price_data_through):
         raise ValueError("weekly.northbound_control 未按 source facts 归一化")
     if expected_northbound_control is not None:
         source_northbound = _normalise_northbound_control(
-            expected_northbound_control, weekly["as_of"]
+            expected_northbound_control, weekly["as_of"],
+            price_data_through=price_data_through,
         )
         if northbound_control != source_northbound:
             raise ValueError(
@@ -5812,8 +5885,8 @@ def main(argv=None, pro_factory=None, price_provider=None, semantic_provider=Non
     # 按 2026-06-14 用户决策:unknown → 震荡期 + 降级 + 保守减半 + M6.7 明确提示。
     regime, regime_fallback = resolve_market_regime(ai)
     pre_holiday_control = _pre_holiday_control_from_analysis(ai, args.as_of)
-    northbound_control = _northbound_control_from_analysis(ai, args.as_of)
-    margin_overheat_control = _margin_overheat_control_from_analysis(ai, args.as_of)
+    northbound_control = None
+    margin_overheat_control = None
     # available_cash 是用户必填输入。零现金仍须管理已有持仓,但不得建立新仓;
     # 未提供 --account → observation-only(sizing_mode 标进 run_lineage,读者不会把 sizing 假象的「观察」当真 avoid 信号)。
     available_cash = acct.get("available_cash")
@@ -5842,6 +5915,15 @@ def main(argv=None, pro_factory=None, price_provider=None, semantic_provider=Non
                "positions_count": len(acct.get("positions") or [])}
     # 价格序列:注入(测试)或执行期抓取(需授权)
     prior_settled = None     # 实际接受的前一交易日(仅 intraday_prior_settled 模式;记进 lineage)
+    # Validate source-bound auxiliary controls before opening any authorized
+    # price provider.  The final calls below remain necessary because an
+    # injected/real provider may settle a different batch price clock.
+    _northbound_control_from_analysis(
+        ai, args.as_of, price_data_through=price_data_through
+    )
+    _margin_overheat_control_from_analysis(
+        ai, args.as_of, price_data_through=price_data_through
+    )
     pro = None
     if price_provider is None:
         if not args.confirm_fetch_authorized:
@@ -6001,6 +6083,15 @@ def main(argv=None, pro_factory=None, price_provider=None, semantic_provider=Non
         )
     if not clock_explicit:
         price_data_through = price_clock_date
+    # The injected/test seam and the real fetcher may establish the final
+    # batch price clock only after candidate bars are observed.  Rebind these
+    # two source-bound controls to that settled clock before building M6.7.
+    northbound_control = _northbound_control_from_analysis(
+        ai, args.as_of, price_data_through=price_data_through
+    )
+    margin_overheat_control = _margin_overheat_control_from_analysis(
+        ai, args.as_of, price_data_through=price_data_through
+    )
     # The list window is a price-derived fact.  It must be computed only after
     # the candidate bars settle the one batch price clock, not from the earlier
     # decision-date placeholder used to request those bars.

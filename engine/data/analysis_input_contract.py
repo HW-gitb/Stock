@@ -124,6 +124,13 @@ def _validate_pit_invariants(payload: dict[str, Any], label: str, official_input
             raise AnalysisInputContractError(f"{label} source clock binding is inconsistent")
         if payload.get("run_date") not in (None, clock_run) or payload.get("price_data_through") not in (None, clock_price):
             raise AnalysisInputContractError(f"{label} top-level clocks do not match source.clocks")
+    declared_run_date = payload.get("run_date")
+    if declared_run_date in (None, "") and clocks:
+        declared_run_date = clocks.get("run_date")
+    run_date = (
+        _parse_date8(declared_run_date, "run_date", label)
+        if declared_run_date not in (None, "") else None
+    )
     declared_price_data_through = (
         payload.get("price_data_through") or clocks.get("price_data_through")
     )
@@ -137,6 +144,27 @@ def _validate_pit_invariants(payload: dict[str, Any], label: str, official_input
     )
     if price_data_through > trade_date:
         raise AnalysisInputContractError(f"{label} price_data_through is after trade_date")
+    margin_context = (payload.get("market_context") or {}).get("margin_overheat")
+    predicate_facts = (
+        margin_context.get("predicate_facts")
+        if isinstance(margin_context, dict) else None
+    )
+    if predicate_facts is not None:
+        # The optional comparison predicate is still a source-bound carrier.
+        # Validate its existing dedicated contract here, before any weekly
+        # consumer can mistake a decision-date label for the price clock.
+        from engine.a_short_margin_overheat_cash_control import validate_predicate_facts
+
+        try:
+            validate_predicate_facts(predicate_facts)
+        except Exception as exc:
+            raise AnalysisInputContractError(
+                f"{label} margin_overheat predicate_facts are invalid"
+            ) from exc
+        if predicate_facts.get("source_as_of") != price_data_through:
+            raise AnalysisInputContractError(
+                f"{label} margin_overheat predicate source_as_of must equal price_data_through"
+            )
     hard_sources = source.get("hard_veto_source_health")
     if hard_sources is not None:
         for name in ("suspension", "unlock", "holder_reduction"):
@@ -283,6 +311,11 @@ def _validate_pit_invariants(payload: dict[str, Any], label: str, official_input
                 f"{label} PIT validation failed: source.l3_snapshot_date "
                 f"{l3_snapshot_date} is after trade_date {trade_date}"
             )
+        if run_date is not None and snapshot_date > run_date:
+            raise AnalysisInputContractError(
+                f"{label} PIT validation failed: source.l3_snapshot_date "
+                f"{l3_snapshot_date} is after run_date {run_date}"
+            )
     if l3_coverage is not None:
         if l3_provider != "hithink_finance":
             raise AnalysisInputContractError(
@@ -333,6 +366,11 @@ def _validate_pit_invariants(payload: dict[str, Any], label: str, official_input
                 raise AnalysisInputContractError(
                     f"{label} current live L3 snapshot date {l3_snapshot_date} "
                     f"is after trade_date {trade_date}"
+                )
+            if run_date is not None and snapshot_date > run_date:
+                raise AnalysisInputContractError(
+                    f"{label} current live L3 snapshot date {l3_snapshot_date} "
+                    f"is after run_date {run_date}"
                 )
             if l3_provider != "hithink_finance" or l3_coverage is None:
                 raise AnalysisInputContractError(
@@ -506,10 +544,6 @@ def _validate_pit_invariants(payload: dict[str, Any], label: str, official_input
                 trade_date,
                 label,
             )
-            if taxonomy.get("source_as_of") != trade_date:
-                raise AnalysisInputContractError(
-                    f"{label} candidates[{index}] theme taxonomy source_as_of must equal trade_date"
-                )
             provenance = taxonomy.get("l3_provenance") or {}
             coverage = l3_coverage if isinstance(l3_coverage, dict) else {}
             expected_snapshot_date = l3_snapshot_date if l3_snapshot_date not in (None, "") else None
@@ -541,6 +575,27 @@ def _validate_pit_invariants(payload: dict[str, Any], label: str, official_input
                 raise AnalysisInputContractError(
                     f"{label} candidates[{index}] theme taxonomy L3 provenance does not match source receipt"
                 )
+            if expected_status == "unavailable" and (
+                    taxonomy.get("comparison_status") != "unknown_or_unavailable"
+                    or not taxonomy.get("unavailable_reason")
+            ):
+                raise AnalysisInputContractError(
+                    f"{label} candidates[{index}] unavailable theme taxonomy must remain unavailable"
+                )
+            if expected_status in {"verified_complete", "legacy_snapshot"}:
+                taxonomy_source_date = _parse_date8(
+                    taxonomy.get("source_as_of"),
+                    f"candidates[{index}].catalyst.theme_taxonomy.source_as_of",
+                    label,
+                )
+                if taxonomy_source_date != expected_snapshot_date:
+                    raise AnalysisInputContractError(
+                        f"{label} candidates[{index}] theme taxonomy source_as_of must equal L3 snapshot_date"
+                    )
+                if run_date is not None and taxonomy_source_date > run_date:
+                    raise AnalysisInputContractError(
+                        f"{label} candidates[{index}] theme taxonomy source_as_of is after run_date"
+                    )
             expected_source_id = (
                 f"{l3_provider}.concept_graph"
                 if expected_status in {"verified_complete", "legacy_snapshot"}

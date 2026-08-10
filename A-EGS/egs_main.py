@@ -6501,9 +6501,10 @@ def _margin_overheat_provider_bundle(window_end):
         )
         predicate_facts = None
         try:
-            # Keep the exact decision-date clock for the comparison consumer.
-            # A normal publication lag therefore produces an unavailable
-            # predicate rather than rebinding yesterday's data to today's week.
+            # Keep the comparison predicate on the exact price-data clock
+            # (``window_end`` is the caller's ``price_data_through``).  A
+            # missing exact-date row therefore produces an unavailable
+            # predicate rather than substituting a different session.
             from engine.a_short_margin_overheat_cash_control import build_predicate_facts
             predicate_facts = build_predicate_facts(
                 rows,
@@ -6999,6 +7000,7 @@ def run_egs(backtest_mode=False, output_root=None, price_as_of=None, iv_feed_pat
                 watch_df, stock_concepts=_l3[1], concept_members=_l3[2],
                 concepts_df=_l3[0], as_of=TODAY,
                 l3_provider=_l3[4], l3_snapshot_date=_l3[3], l3_coverage=_l3[5],
+                run_date=TODAY,
             )
             watch_df["theme_taxonomy"] = watch_df["ts_code"].astype(str).map(_taxonomy_by_code)
             _ov_pool = watch_df[["ts_code", "esp_score", "l4_score", "overheat_flag", "chasing_high"]].copy()

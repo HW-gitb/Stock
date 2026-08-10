@@ -40,6 +40,10 @@ from tests.test_a_short_weekly_pipeline import (  # noqa: E402
     _normalized,
     _sized_lineage,
 )
+from engine.data.analysis_input_contract import (  # noqa: E402
+    AnalysisInputContractError,
+    validate_analysis_input_contract,
+)
 from runners.a_short_phase5_engine import MIN_AMOUNT  # noqa: E402
 
 
@@ -205,6 +209,25 @@ class MarginOverheatEngineTests(unittest.TestCase):
         )
         self.assertFalse(
             margin_overheat.margin_overheat_facts(rows, requested_dates=())["coverage_complete"]
+        )
+
+    def test_holiday_calendar_keeps_a_one_session_publication_lag(self):
+        for window_end, price_data_through in (
+            ("20260206", "20260223"),
+            ("20260930", "20261009"),
+        ):
+            prior_session = "20260205" if window_end == "20260206" else "20260929"
+            calendar = (price_data_through, window_end, prior_session)
+            rows = _margin_rows((window_end,), ramp=False)
+            window = margin_overheat.resolve_published_window(rows, calendar_dates=calendar)
+            self.assertEqual(window[0], window_end)
+            self.assertEqual(calendar[0], price_data_through)
+
+    def test_two_trading_session_supply_gap_still_fails_closed(self):
+        calendar = ("20260609", "20260608", "20260605", "20260604")
+        rows = _margin_rows(("20260605",), ramp=False)
+        self.assertEqual(
+            margin_overheat.resolve_published_window(rows, calendar_dates=calendar), ()
         )
 
     def test_a_partially_published_newest_session_is_not_a_reference_date(self):
@@ -620,6 +643,26 @@ class MarginOverheatCashControlTests(unittest.TestCase):
              "binding_controls": ["margin_overheat_control", "pre_holiday_control"]},
         )
 
+    def test_allocator_forwards_the_settled_price_clock_to_margin_normalizer(self):
+        observed = []
+        real_normalizer = weekly_pipeline._normalise_margin_overheat_control
+
+        def _capture(context, as_of, *, price_data_through=None):
+            observed.append(price_data_through)
+            return real_normalizer(
+                context, as_of, price_data_through=price_data_through
+            )
+
+        with patch.object(
+            weekly_pipeline,
+            "_normalise_margin_overheat_control",
+            side_effect=_capture,
+        ):
+            _allocate_cash(
+                [], 100_000.0, as_of=AS_OF, price_data_through="20260608"
+            )
+        self.assertEqual(observed, ["20260608"])
+
     def test_cell8_planted_neutralising_the_consumption_seam_breaks_cell1(self):
         sessions = _sessions(WINDOW_SESSIONS)
         cash = self._affordable_cash()
@@ -659,6 +702,51 @@ class MarginOverheatControlBindingTests(unittest.TestCase):
         self.assertFalse(control["production_effect_enabled"])
         self.assertEqual(control["reason"], "coverage_incomplete")
         self.assertEqual(control["cash_factor"], 1.0)
+
+    def test_formal_margin_source_is_window_end_without_duplicate_calendar_lag_gate(self):
+        sessions = _sessions(WINDOW_SESSIONS)
+        for window_end, price_data_through, decision_as_of in (
+            ("20260206", "20260223", AS_OF),
+            ("20260930", "20261009", "20261009"),
+        ):
+            payload = _control(sessions)
+            payload["source_as_of"] = window_end
+            payload["window_end"] = window_end
+            control = weekly_pipeline._normalise_margin_overheat_control(
+                payload, decision_as_of, price_data_through=price_data_through
+            )
+            self.assertEqual(control["source_as_of"], window_end)
+        payload = _control(sessions)
+        payload["source_as_of"] = AS_OF
+        payload["window_end"] = "20260608"
+        with self.assertRaisesRegex(ValueError, "source_as_of must equal window_end"):
+            weekly_pipeline._normalise_margin_overheat_control(
+                payload, AS_OF, price_data_through=AS_OF
+            )
+
+    def test_analysis_input_carrier_binds_private_predicate_to_price_clock(self):
+        example = json.loads(
+            (ROOT / "schemas" / "examples" / "analysis_input.example.json")
+            .read_text(encoding="utf-8")
+        )
+        example["trade_date"] = AS_OF
+        example["price_data_through"] = AS_OF
+        sessions = _sessions(WINDOW_SESSIONS)
+        facts = margin_cash_control.build_predicate_facts(
+            _margin_rows(sessions), _denominator_rows(sessions),
+            requested_dates=sessions, source_as_of=AS_OF,
+        )
+        example["market_context"]["margin_overheat"] = {
+            "production_effect_enabled": False,
+            "predicate_facts": facts,
+        }
+        validate_analysis_input_contract(example)
+        example["price_data_through"] = "20260608"
+        with self.assertRaisesRegex(
+            AnalysisInputContractError,
+            "predicate source_as_of must equal price_data_through",
+        ):
+            validate_analysis_input_contract(example)
 
     def test_analysis_schema_and_engine_constant_are_one_switch(self):
         schema = json.loads(

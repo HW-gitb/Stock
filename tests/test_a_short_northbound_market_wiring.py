@@ -22,9 +22,11 @@ from tests.test_a_short_weekly_pipeline import (
 
 
 def _control(*, flow, status, csi300, requested=5, observed=5,
-             coverage_complete=True, production_effect_enabled=True):
+             coverage_complete=True, production_effect_enabled=True,
+             source_as_of=AS_OF, csi300_end_date=None):
+    csi300_end_date = csi300_end_date or source_as_of
     return {
-        "source_as_of": AS_OF,
+        "source_as_of": source_as_of,
         "source_paths": {
             "northbound": "analysis_input.market_context.northbound",
             "csi300": "analysis_input.market_context.breadth.csi300_pct_change_window",
@@ -34,7 +36,7 @@ def _control(*, flow, status, csi300, requested=5, observed=5,
         "csi300_pct_change_window": csi300,
         "csi300_window": {
             "start_date": "20260501",
-            "end_date": AS_OF,
+            "end_date": csi300_end_date,
             "length": 20,
             "length_unit": "trading_sessions",
         },
@@ -125,6 +127,40 @@ class NorthboundMarketGateTests(unittest.TestCase):
         )
         self.assertTrue(control["production_effect_enabled"])
         self.assertTrue(control["new_entry_blocked"])
+
+    def test_analysis_binds_northbound_and_csi300_to_price_data_through(self):
+        analysis_input = {
+            "decision_as_of": AS_OF,
+            "price_data_through": "20260608",
+            "market_context": {
+                "northbound": {
+                    "net_flow_5d": -123.0,
+                    "status": "outflow",
+                    "requested_session_count": 5,
+                    "observed_session_count": 5,
+                    "coverage_complete": True,
+                },
+                "breadth": {
+                    "csi300_pct_change_window": -12.0,
+                    "csi300_window": {
+                        "start_date": "20260501",
+                        "end_date": "20260608",
+                        "length": 20,
+                        "length_unit": "trading_sessions",
+                    },
+                },
+            },
+        }
+        control = weekly_pipeline._northbound_control_from_analysis(
+            analysis_input, AS_OF
+        )
+        self.assertEqual(control["source_as_of"], "20260608")
+        self.assertEqual(control["csi300_window"]["end_date"], "20260608")
+        analysis_input["market_context"]["breadth"]["csi300_window"]["end_date"] = AS_OF
+        with self.assertRaisesRegex(ValueError, "end_date is not bound"):
+            weekly_pipeline._northbound_control_from_analysis(
+                analysis_input, AS_OF
+            )
 
     def test_single_condition_does_not_block(self):
         cases = (

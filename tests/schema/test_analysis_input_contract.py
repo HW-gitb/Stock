@@ -252,6 +252,44 @@ class AnalysisInputContractTest(unittest.TestCase):
         with self.assertRaisesRegex(AnalysisInputContractError, "raw theme concept 0 does not match L3 receipt"):
             validate_analysis_input_contract(payload)
 
+    def test_theme_taxonomy_may_use_an_earlier_l3_snapshot_when_receipt_is_bound(self) -> None:
+        payload = current_hithink_analysis_input_payload()
+        payload["run_date"] = payload["trade_date"]
+        payload["source"]["l3_snapshot_date"] = "20260521"
+        payload["candidates"][0]["catalyst"]["theme_taxonomy"] = classify_theme_taxonomy(
+            ts_code=payload["candidates"][0]["ts_code"],
+            stock_concepts={payload["candidates"][0]["ts_code"]: ["c1"]},
+            concept_members={},
+            concepts_df=pd.DataFrame([{"code": "c1", "name": "concept-1"}]),
+            as_of=payload["trade_date"],
+            l3_provider=payload["source"]["l3_provider"],
+            l3_snapshot_date=payload["source"]["l3_snapshot_date"],
+            l3_coverage=payload["source"]["l3_coverage"],
+        )
+        validate_analysis_input_contract(payload)
+
+        payload["candidates"][0]["catalyst"]["theme_taxonomy"]["source_as_of"] = payload["trade_date"]
+        with self.assertRaisesRegex(AnalysisInputContractError, "must equal L3 snapshot_date"):
+            validate_analysis_input_contract(payload)
+
+    def test_theme_l3_snapshot_after_physical_run_is_rejected(self) -> None:
+        payload = current_hithink_analysis_input_payload()
+        payload["run_date"] = "20260521"
+        payload["source"]["l3_snapshot_date"] = payload["trade_date"]
+        with self.assertRaisesRegex(AnalysisInputContractError, "after run_date"):
+            validate_analysis_input_contract(payload)
+
+    def test_unavailable_theme_taxonomy_cannot_be_relabelled_as_available(self) -> None:
+        payload = cloned_minimal_analysis_input_payload()
+        taxonomy = unavailable_theme_taxonomy(
+            payload["trade_date"], "synthetic_unavailable",
+            l3_snapshot_date=payload["source"].get("l3_snapshot_date"),
+        )
+        taxonomy.pop("comparison_status")
+        payload["candidates"][0]["catalyst"]["theme_taxonomy"] = taxonomy
+        with self.assertRaisesRegex(AnalysisInputContractError, "must remain unavailable"):
+            validate_analysis_input_contract(payload)
+
     def test_future_earnings_report_date_is_rejected(self) -> None:
         payload = cloned_minimal_analysis_input_payload()
         payload["candidates"][0]["fundamental"]["expectation"]["earnings_report_date"] = "20260523"

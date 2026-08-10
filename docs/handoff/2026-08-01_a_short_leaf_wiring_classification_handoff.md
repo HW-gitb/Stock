@@ -1,5 +1,100 @@
 # A-short 371 叶重新分层交接
 
+## 2026-08-10 - Codex executor/fixer: V2 Required + O16/O17 repair (OPEN-NOT_VERIFIED)
+
+### Purpose / problem / repair
+
+This handoff is the current executor record for the V2 margin publication-lag Required and the two related optionals. It supersedes the immediately prior FAIL only for the repaired code state; it does not claim real provider/live/durable closure.
+
+- The pipeline's new `_weekday_session_lag()` gate counted weekdays, not trading sessions. It was deleted because `engine.a_short_margin_overheat.resolve_published_window()` already owns the real-calendar publication-lag decision. The remaining normalizer checks are `source_as_of == window_end` and `window_end <= price_data_through`.
+- `_allocate_cash()` and `_allocate_cash_shadow()` now carry the settled `price_data_through`; the weekly builder forwards it to the margin normalizer (O16).
+- `main()` preflights northbound and margin controls before provider creation/fetch and rebinds them after candidate prices settle the final clock (O17).
+- Existing schemas/receipts/output boundaries remain unchanged. Only the runner effect-contract predicate digest changed, to `c24f215aaa360d382dcaf1e51f31f9fdb15143884ea7991a7959ddc543e7e7f8`.
+
+### Call chain / consumers / schema / source-binding / write boundary
+
+`margin rows -> resolve_published_window(real calendar) -> analysis_input -> weekly preflight/final rebind -> M6.7 allocator/private capture`; northbound uses the same analysis-input -> price-clock normalizer -> new-entry gate path. No provider, cache, live, production, historical, or additional sidecar write boundary was added.
+
+### Negative controls / self-review
+
+- Holiday one-session pairs `20260206/20260223` and `20260930/20261009` pass; exact producer-level two-session supply gap `20260605` with `20260609,20260608,20260605` fails closed.
+- `source_as_of != window_end`, window after price clock, forged source path, and source-clock mismatch remain rejected. O17 preflight proves the injected provider call count stays zero; O16 proves allocator-to-normalizer clock propagation.
+- **Pre-Codex self-review**: matrix=producer -> carrier -> preflight/final rebind -> allocator/private/northbound consumers; schema=existing contracts plus digest; write boundary=unchanged; NOT_VERIFIED=natural provider path and durable weekly closure; reviewer=Claude Code.
+
+### Fixed Python / exact verification / terminal state
+
+- `C:\Users\cnhea\AppData\Local\Programs\Python\Python313\python.exe` -> `Python 3.13.8`.
+- Exact focused command: `& 'C:\Users\cnhea\AppData\Local\Programs\Python\Python313\python.exe' -m unittest tests.test_a_short_margin_overheat_wiring tests.test_a_short_margin_overheat_cash_control tests.test_a_short_northbound_market_wiring tests.test_a_short_weekly_pipeline` -> `Ran 671 tests in 45.888s / OK`.
+- Exact targeted closure command -> `Ran 27 tests in 2.850s / OK`; O16 isolated command -> `Ran 1 test in 0.002s / OK`; effect-contract/consumer command -> `Ran 76 tests in 42.840s / OK`; shared theme/tracker command -> `Ran 174 tests in 49.960s / OK`; documentation command -> `Ran 66 tests / OK`.
+- Exact syntax/check command: fixed-Python `py_compile` exit `0`; `git diff --check` exit `0` with only existing LF/CRLF warnings. No provider/live/full lane/real weekly run; existing dirty research and untracked `20260810` artifacts remain untouched; no commit.
+
+### Review / commit boundary / next
+
+Code is `OPEN-NOT_VERIFIED` pending independent Claude Code review. Claude Code reviews and, only after PASS, stages/commits. Codex executor/fixer does not stage/commit/push/merge. Next: Claude Code review V2 Required + O16/O17.
+
+## 2026-08-10 - Codex executor/fixer: desktop 2a V2 theme-forward snapshot-clock repair (OPEN-NOT_VERIFIED)
+
+### Purpose / problem / repair
+
+This handoff records the V2 theme-forward date-contract repair from desktop `2a_testrun0810.md`. It is for the producer/carrier/tracker/forward-comparison boundary, not for the already-repaired private margin exact-date or formal M6.7 publication-lag paths. The 0810 artifact shape was `decision/run/theme source/L3 snapshot=20260810` with `price_data_through=20260807`; the old producer used the decision label for theme `source_as_of`, and the validator incorrectly limited the non-price L3 snapshot by Friday's price clock, excluding the 15-row cohort.
+
+- `engine/a_short_industry_theme.py` now sets available taxonomy `source_as_of` to the L3 receipt `snapshot_date`; raw concept receipt dates stay unchanged. `run_date` is passed by A-EGS and derived from overlay `generated_at`; business evidence after the earlier run/decision cutoff is unavailable.
+- `engine/data/analysis_input_contract.py` removes the theme `source_as_of == trade_date` equality. Usable taxonomy must bind `source_as_of == l3_provenance.snapshot_date == source.l3_snapshot_date` and cannot be after available run/decision. Unavailable/neutralized taxonomy remains unavailable.
+- `engine/a_short_theme_forward_comparison.py` removes the theme source-to-cohort-date and L3-to-price-date equalities. Theme source must equal L3 snapshot and the snapshot must not be after run/decision. Industry trend continues to bind to `price_data_through`; `decision_not_effective_yet` remains the weekend/Monday gate.
+- `runners/forward_tracker.py` already projects both theme clocks without rewriting; a regression pins that behavior. No schema/version, score, selection, H10, epoch, V5, provider, live, or historical artifact boundary changed.
+- The V2 producer added predicate branches, so the existing M6.7 effect-contract fingerprint was updated only for `engine/a_short_industry_theme.py` (`516191a042a3e9c5b16d0bb3bd56bd959f81fc64dfe7fe93f85c170b3bba53f4`). This is the code/design binding repair; no contract shape/version or consumer path changed. The fixed-Python weekly regression then returned `Ran 533 tests in 34.004s / OK`.
+
+### Call chain / consumers / schema / source-binding / write boundary
+
+`A-EGS::run_egs` -> taxonomy producer -> analysis-input candidate taxonomy -> analysis-input contract -> `forward_tracker::_candidate_row` -> `validate_tracker_lineage` -> `_cohort_formal_error`/theme-forward comparison. Overlay uses the same producer from `build_overlay_summary_from_panels`. Theme source/L3 snapshot are non-price receipt clocks; industry trend alone remains price-clock-bound. Existing schemas and comparison-only output paths are reused; no new durable writer or historical rewrite was performed.
+
+### Negative controls / self-review
+
+- 0810 shape: theme snapshot `20260810` passes with price/industry `20260807`.
+- Forged source date, source/L3 mismatch, snapshot later than run/decision, future structured business evidence, and raw receipt drift fail closed/unavailable. Weekend snapshot passes only after Monday effective; before that the existing `decision_not_effective_yet` result remains.
+- **Pre-Codex self-review**: matrix=producer -> carrier -> tracker projection -> industry/price and theme/L3 validator -> cohort gate; schema=existing contracts only; source-binding=receipt snapshot/run/decision versus price clock explicit; write-boundary=none widened; NOT_VERIFIED=real weekly/provider/durable closure; review=Claude Code reviewer/committer.
+
+### Fixed Python / exact verification / terminal state
+
+- `C:\Users\cnhea\AppData\Local\Programs\Python\Python313\python.exe` -> `Python 3.13.8`.
+- Final fixed-Python focused command: `tests.test_a_short_industry_theme tests.schema.test_analysis_input_contract tests.test_a_short_theme_forward_comparison tests.test_a_short_theme_forward_comparison_runner tests.test_a_short_theme_overlay_comparison tests.test_forward_tracker_analysis_role` -> `Ran 174 tests in 46.251s / OK`.
+- Fixed-Python epoch/schema command: `tests.test_a_short_evidence_epoch_mode tests.schema.test_a_short_theme_forward_comparison_governance_schema` -> `Ran 49 tests in 18.290s / OK`; fixed-Python `py_compile` -> exit `0`; `git diff --check` -> exit `0`.
+- Fixed-Python effect-contract/consumer probe after the predicate-fingerprint sync -> `Ran 76 tests in 43.648s / OK`.
+- Documentation/route gate -> `Ran 66 tests / OK`.
+- Fixed-Python weekly pipeline regression after the effect-contract sync -> `Ran 533 tests in 34.004s / OK`.
+- No provider/live/full lane/real weekly rerun was made, and existing dirty research summaries/untracked 20260810 artifacts remain untouched. V2 is `OPEN-NOT_VERIFIED`; no stage/commit/push/merge.
+
+### Review / commit boundary / next
+
+Claude Code is the independent reviewer/committer and owns later stage/commit only after PASS. Codex executor/fixer does not commit. Next: Claude Code review the V2 theme source-clock chain and confirm the real 0810 durable artifact closure separately.
+
+## 2026-08-10 - Codex executor/fixer: desktop 2a V2 price-clock carrier repair (OPEN-NOT_VERIFIED)
+
+### Verdict / Action
+
+Applied the V2 detailed plan in the current worktree with minimal changes. Private margin exact-date facts now use `price_data_through`; formal M6.7 margin keeps its existing one-session publication lag; northbound uses the same price clock. No provider/live/full lane, new token, schema shape/version, namespace, migration, stage, commit, push, or merge was used.
+
+### Problems / root cause / changes
+
+The producer already emitted complete Friday-bound facts for a Monday decision, but consumers treated `decision_as_of` as the data date. The carrier now validates the existing predicate contract and binds its source to `analysis_input.price_data_through`. Private shadow/capture receive and compare an explicit `price_data_through`; formal M6.7 normalizes `source_as_of` from `window_end` and rejects a lag beyond the existing one trading session. Northbound source and `csi300_window.end_date` are bound to the final weekly price clock. The weekly runner recomputes these controls after the candidate seam settles that clock. The existing effect-contract predicate hash was updated only for the changed decision predicate; no schema shape changed.
+
+### Call chain / consumers / schema / source-binding / write boundary
+
+EGS margin bundle -> `analysis_input.market_context.margin_overheat.predicate_facts` -> carrier validator -> weekly margin control -> M6.7 allocation/private capture; analysis northbound/breadth -> weekly northbound control -> new-entry gate. Existing predicate, capture, weekly, and source-receipt schemas remain in use. Private writes remain comparison-only; official M6.7 remains authoritative; no other factor/theme/IV/regime/forward/account/news chain was changed.
+
+### Negative controls / self-review
+
+- Predicate source mismatch, future/earlier price clock, missing exact-date row, source/window mismatch, or lag beyond one session fails closed/no-count.
+- Northbound source/csi window mismatch fails closed.
+- Self-review matrix=producer/carrier/private shadow+capture/formal M6.7/northbound; register=updated; schema=unchanged plus existing hash registration; write boundary=existing private root only; provider/live/full-lane=NOT_VERIFIED; reviewer=Claude Code.
+
+### Exact verification / terminal state / next
+
+- Interpreter `C:\Users\cnhea\AppData\Local\Programs\Python\Python313\python.exe` -> `Python 3.13.8`.
+- Focused fixed-Python command for `tests.test_a_short_margin_overheat_cash_control tests.test_a_short_margin_overheat_wiring tests.test_a_short_northbound_market_wiring tests.test_a_short_weekly_pipeline` -> `Ran 667 tests in 49.377s / OK`; weekly-only -> `Ran 533 tests in 34.614s / OK`; py_compile -> exit `0`.
+- No real provider/weekly closure evidence was generated; V2 is `OPEN-NOT_VERIFIED`. Existing user artifacts remain untouched; no commit was made.
+- Next: Claude Code independently review this V2 handoff and the matching risk-register entry.
+
 ## 2026-08-10 Codex executor/fixer: P1-5 blocker repairs (OPEN-NOT_VERIFIED)
 
 ### Verdict / Action
@@ -5207,3 +5302,47 @@ effect contract 已用固定 Python 重新登记 A-EGS decision-predicate hash �
 - 全量归执行方；§6a 未起 agent。
 
 **下一步**：`Codex：执行`（跑一轮已授权 normal weekly，然后我再按五环重新取证）
+
+## 2026-08-10 追加：桌面 V2（margin 日期契约双时钟）独立审查 —— FAIL（未提交）
+
+**判定**：FAIL，一条 P2 Required、两条 Optional（O16/O17），正文只在 `docs/system_risk_register.md` 同日节。
+
+**我自己实际验了什么**
+
+- 整读三端函数体，确认双时钟真的是「两个日期」而不是换个名字：producer 一直绑 `window_end`（本轮只动注释），carrier 新增 predicate 校验并锚到 `price_data_through`，capture 三处判据由 `as_of`/`decision_date` 改判 `price_data_through`，而 `as_of` 仍在 shadow 消费者里交给分配器。
+- 追 `main()` 的重排：两个 control 置 `None` 与真正绑定之间，全文件带行号检索确认只有 build / validate 两处消费且都在绑定之后，不靠读感。
+- 独立重算 effect contract 静态清单：`static_contract_error` 返回 `None`，10 个 decision predicate digest 逐键比对全一致，故 `A-EGS/egs_main.py` 未重封是对的而不是漏封。
+- 自写探针把新加的发布滞后门单独拎出来量：工作日连续那格通过，春节与国庆两格（同样只滞后 1 个交易 session）双双抛错——这是本刀系列第三次「工作日≠交易日」。
+
+**未覆盖维度与诚实边界**
+
+- 本轮**未做植入对照**：本次 Required 是「门过严」，由真实合法输入直接坐实，中和门证明不了什么；放松腿的反向控制由我亲跑的 898 项验收包覆盖。植入留到修复轮与复跑一并做。
+- 验收超集我亲跑一次全绿（898 项 / 623.7s），但它绿的前提下 Required 照样存在——这一格提醒下一个人：这个包不覆盖跨假日日历。
+- 跨假日那一格在当前周末跑节奏下能否自然发生没有证到，只证到 prior-settled / 历史重放这类价格时钟落在假期后第一根 session 的路径。
+- 全量归执行方；§6a 未起 agent；真实周跑与 forward/freeze/clock、provider/live/account/ship-gate 仍全部 `NOT_VERIFIED`。
+
+**下一步**：`Codex：修复`（滞后要么改到真实交易日历上量，要么直接删掉这层与 `resolve_published_window` 重复的门；并补跨假日的点名用例，使其修复前必红）
+
+## 2026-08-10 追加：V2 Required（重复滞后门）+ O16/O17 收口复审 —— PASS（已合入 master）
+
+**判定**：PASS，无 Required，两条新 Optional（O18/O19，正文只在 `docs/system_risk_register.md` 同日节）。
+
+**我自己实际验了什么**
+
+- **用上一轮把它判死的那条探针原样复跑**：同一份 payload 只改日期，春节与国庆两格由 `RAISED ValueError ... exceeds publication lag` 变成 OK，正常周那格没回归。
+- **护栏搬家而不是消失**：同组日历直接喂 `resolve_published_window`——春节 / 国庆各返回真实窗口，两个交易 session 的断供返回 `()`。所以删掉管线那道门之后，「断供照挡」仍然成立。
+- **整读改动函数体**：管线只剩 `source_as_of == window_end` 与 `window_end <= price_data_through` 两条绑定，我另写正反两格确认它们仍会 raise；`_allocate_cash`/`_allocate_cash_shadow` 的时钟透传与 `main()` 前置校验的落点（在 provider 构造之前）逐行核过。
+- **独立重算 effect contract**：`static_contract_error` 返回 `None`，10 个 decision predicate digest 零 mismatch，执行方这轮重封的 `c24f215a…` 是对的。
+- **缺陷类横扫**：全仓 `weekday()` 检索，A-short 生产代码已无第二处工作日近似。
+
+**植入对照（我自写）**
+
+- 中和 `resolve_published_window` 里的 `if lag > int(max_lag_sessions):` → 点名用例精确转红，断言差异正是 `- ('20260605','20260604')` vs `+ ()`；还原后 sha256 逐字节回原值、`git status` 该文件无改动。这条打的是门本身，不是判据的来源——正因为它承重，删掉管线那道重复门才安全。
+
+**未覆盖维度与诚实边界**
+
+- 管线侧从此不再持有任何陈旧上限，滞后判定完全依赖生产者；这是选项 ① 的既定代价，与本刀之前的姿态一致。
+- 全量归执行方；§6a 未起 agent；真实周跑与 forward/freeze/clock、provider/live/account/ship-gate 仍全部 `NOT_VERIFIED`。
+- `research/results/a_short/*` 的既往周跑产物不在本次提交范围。
+
+**下一步**：`Codex：执行`

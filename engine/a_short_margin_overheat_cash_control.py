@@ -1331,6 +1331,7 @@ def materialize_shadow_cash_control(
     pre_holiday_control: Mapping[str, Any] | None = None,
     new_exposure_capacity: Any | None = None,
     as_of: str,
+    price_data_through: str,
     source_receipt: Mapping[str, Any] | None = None,
 ) -> dict[str, Any]:
     """Apply one staged arm to a copied pre-margin allocation seam.
@@ -1361,8 +1362,10 @@ def materialize_shadow_cash_control(
             if isinstance(source_receipt, Mapping) else None
         ),
     )
-    if str(as_of) != facts["source_as_of"]:
-        raise MarginOverheatCashControlError("shadow consumer as_of is not bound to predicate source_as_of")
+    if str(price_data_through) != facts["source_as_of"]:
+        raise MarginOverheatCashControlError(
+            "shadow consumer price_data_through is not bound to predicate source_as_of"
+        )
     model_cash_cny = _model_cash_cny()
     if (not _finite_number(available_cash)
             or abs(float(available_cash) - model_cash_cny) > 1e-9):
@@ -1903,7 +1906,7 @@ def _validate_margin_capture(capture: Mapping[str, Any], *, require_current_epoc
     predicate = payload.get("predicate_facts")
     if predicate is not None:
         validate_predicate_facts(predicate)
-        if predicate.get("source_as_of") != payload["decision_date"]:
+        if predicate.get("source_as_of") != payload["price_data_through"]:
             raise MarginOverheatCashControlError("margin-overheat capture predicate source clock drifted")
     if payload.get("predicate_unavailable_reason") != _predicate_unavailable_reason(predicate):
         raise MarginOverheatCashControlError(
@@ -2272,6 +2275,7 @@ def _capture_source_receipt(payload: Mapping[str, Any]) -> dict[str, Any]:
 
 def _arm_capture_snapshot(*, facts: Mapping[str, Any] | None, arm_id: str,
                           reports: Sequence[Mapping[str, Any]], decision_date: str,
+                          price_data_through: str,
                           source_receipt: Mapping[str, Any] | None,
                           stage: str = STAGE_A,
                           stage_b_supported_arm_id: str | None = None) -> dict[str, Any]:
@@ -2281,6 +2285,7 @@ def _arm_capture_snapshot(*, facts: Mapping[str, Any] | None, arm_id: str,
         shadow = materialize_shadow_cash_control(
             facts, arm_id=arm_id, reports=list(reports), available_cash=_model_cash_cny(),
             new_exposure_capacity=_model_cash_cny(), as_of=decision_date,
+            price_data_through=price_data_through,
             source_receipt=source_receipt, stage=stage,
             stage_b_supported_arm_id=stage_b_supported_arm_id,
         )
@@ -2376,8 +2381,10 @@ def capture_margin_overheat_week(
     facts = None if predicate_facts is None else copy.deepcopy(dict(predicate_facts))
     if facts is not None:
         validate_predicate_facts(facts)
-        if facts.get("source_as_of") != decision_date:
-            raise MarginOverheatCashControlError("margin-overheat predicate source_as_of is not decision_date")
+        if facts.get("source_as_of") != price_data_through:
+            raise MarginOverheatCashControlError(
+                "margin-overheat predicate source_as_of is not price_data_through"
+            )
     predicate_unavailable_reason = _predicate_unavailable_reason(facts)
     governance = load_governance()
     selection_plan = _selection_plan_snapshot(reports)
@@ -2396,7 +2403,9 @@ def capture_margin_overheat_week(
         build_margin_overheat_freeze_manifest() if current_mode() == FROZEN else None
     )
     arms = [_arm_capture_snapshot(facts=facts, arm_id=arm["arm_id"], reports=reports,
-                                  decision_date=decision_date, source_receipt=source_receipt,
+                                  decision_date=decision_date,
+                                  price_data_through=price_data_through,
+                                  source_receipt=source_receipt,
                                   stage=stage,
                                   stage_b_supported_arm_id=stage_b_supported_arm_id)
             for arm in _arm_definitions(stage)]
