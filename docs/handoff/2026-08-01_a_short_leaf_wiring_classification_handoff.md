@@ -5419,3 +5419,29 @@ effect contract 已用固定 Python 重新登记 A-EGS decision-predicate hash �
 - a_short full lane 连续第二刀 `NOT_VERIFIED`；真实周跑与 provider/live/account/ship-gate 仍全部 `NOT_VERIFIED`。
 
 **下一步**：`Codex：修复`（两条腿：两个座位换 helper；health 契约由 raise 改降级并补植入测试 + 21 项逐名守卫）
+
+## 2026-08-10 Codex — frozen digest reseal-tax retirement (782a)
+
+- Scope: `R-ASHORT-FROZEN-DIGEST-RESEAL-TAX-RETIRE-CODE-FINGERPRINTS`; no 40d9 sidecar mixing, no provider/live/account/order work.
+- A1 retired the four code-derived fingerprint keys and their constructors/guards. A2 keeps explicit sorted `analysis_input_paths` / `runtime_policy_paths` and adds explicit sorted schema path maps for runtime-policy schemas and output schemas. A3 was checked as still consumed by the legacy loader, so the migration hash became sorted `legacy_migration_entries` rather than being deleted.
+- No derived-vs-derived self-comparison was introduced. A2 planted additions fail at the list guard and reorder-only controls pass. B controls prove docs-only receipt validity, code mutation invalidation, and the pre-commit code gate; C comparison-track identity fingerprints were untouched.
+- Fixed-Python final focused pack: `186 OK`, `receipt:ba7ba51068e79f18276fea8e`, including route-doc and doc-governance doors. A-short full lane: `2725/2725 PASS`, count gate equal, `STATIC diff_check=PASS py_compile=6`, ledger fingerprint `9bdb97b75736`.
+- Boundary: Codex executor/fixer only; independent review and commit remain outside this turn. The risk-register entry is the detailed source of truth.
+
+## 2026-08-10 追加：指纹退役刀（782a）独立审查 —— FAIL（未提交）
+
+**判定**：FAIL，一条 P2 Required（B 腿未实现，正文只在 `docs/system_risk_register.md` 同日节）。A 腿复核成立。
+
+**我自己实际验了什么**
+
+- **A 整族核了一遍**，不是只看被点名的两个键：9 个冻结指纹键逐个对上处置方式，`static_contract_error` 里对应的比对分支全部改成「契约冻结清单 vs 当前派生清单」，不是派生自比对那种空壳。
+- **零残留自查**：删掉的三个 helper 在 engine·runners·tests·.tools 内 0 命中；退役键只剩在历史迁移归档里（应该留）。`A-EGS/egs_main.py` 里的同名 `_canonical_ast` 是另一处既有实现，别误判成漏删。
+- **B 用探针坐实没做**：`.tools/verification_receipt.py` 一个字节没改。我在临时 git 仓里复现了真实事故——改文档**文件**指纹不变（新用例测的就是这格，改前就成立），把同一改动**提交**后指纹立刻变，收据作废；再改代码仍会变（反向控制在）。根子是 `collect_code_state()` 把裸 `@HEAD` 折进了指纹。
+
+**未覆盖维度与诚实边界**
+
+- 未做植入对照：Required 是「要求未实现」，没有门可中和；A 侧植入由执行方那两条清单用例承担，我核了判据形状。
+- 记下一处既定取舍：退役 `runtime_policy_sha256` 后，policy JSON 的**数值**变化不再被契约察觉，只剩字段集变化会被抓——这正是用户要去掉的那条税。
+- §6a 未起 agent；未提交、未合并。
+
+**下一步**：`Codex：修复`（只补 B：让纯文档**提交**不再作废收据，并保留代码提交必作废的反向控制）
