@@ -1,5 +1,20 @@
 # Session Log
 
+## 2026-08-10 — Claude 审查 PASS（刀4 shadow 消费接线）
+
+- **Verdict/Action**: PASS。桌面 §刀4 的 Stop 条件（碰 `action_confidence`/仓位/席位即 FAIL）**结构性成立**：模块全部 import 只有 `json`/`pathlib`/`typing` 与刀3 契约，全文无评分/仓位/席位/`macro_cluster`/provider/网络/写文件入口（`macro_cluster` 仅出现在 docstring 否定句）。报告落点纯文本进出、只往已注册的两节插 bullet，不开文件也不造 H2。trace 里那几个 `*_changed=false` 是记录字段而非闸门，真正保证来自够不着。
+- **Required**: 无。Optional=无。本轮实测与边界只在 `docs/system_risk_register.md`。
+- **Verify**: review-evidence:ad8dc88e6fd2。控制组先绿：真实上游结果+真实注解 → 投递成功且 `## ` 标题集合 4→4 不变、注册标记恰 1 处、六字段身份在 5 个面逐字段一致。休眠周 `None` 文本逐字节不变；三种坏注解（改摘要/翻 effect flag/删 canonical）全落 `invalid_annotation` 且不 abort、文本不变；三种坏报告（缺横幅节/12 节重复/区块已存在）均 `delivered=false` 不 abort 不改文本；`scarce_layer` 注入换行+`## ` 在刀3 schema 层即被拒、H2 数不变。覆盖包 `Ran 141 / 16.2s / OK receipt:fc0c36ae231590069db03253`。rule 3 未触发；未起 agent（rule 8）。
+- **Next**: Codex：Pass
+
+## 2026-08-10 — Codex 执行刀4（OPEN-NOT_VERIFIED）
+
+- **Verdict/Action**: Blade4 offline shadow consumers implemented: three advisory surfaces, registered report overlay, version-bound identity trace, dormant/exception local no-abort behavior; no active effect or provider path.
+- **Required**: `R-USSHORT-SERENITY-BLADE4-SHADOW-CONSUMER-NOT-INDEPENDENTLY-REVIEWED` — see `docs/system_risk_register.md`.
+- **Verify**: fixed-Python focused `Ran 96 tests in 14.811s OK`, receipt=`receipt:4302aa65f2274405accc8fd3`; final docs gates `Ran 66 tests in 0.998s OK`, receipt=`receipt:55f36170169fc080d39879e9`; inventory `313` modules with the new consumer/test modules class-0; interpreter=`C:\Users\cnhea\AppData\Local\Programs\Python\Python313\python.exe`.
+- **Pre-Codex self-review**: matrix=Blade4 registered block + three surfaces + identity chain + dormant/invalid/tamper negatives; register=updated; handoff=updated; active scoring/action/seat/position/us_long/provider/network/commit=NOT_USED; full-lane=not triggered; independent-self-review=NOT_USED; door=docs/route and fixed-Python closeout.
+- **Next**: Claude Code：独立审查刀4
+
 ## 2026-08-10 — Claude 审查 PASS（刀3 注解契约与校验 + 刀2 Optional 收口）
 
 - **Verdict/Action**: PASS。桌面 §刀3 的关键不变式逐条实测成立：三枚 effect flag 与 `structural_fit_candidate` 由 schema `const:false` 钉死，identity_envelope 14 项与 canonical_annotation 15 项均 closed 且与桌面字段表逐项对应，canonical 字节对键序稳定，注解只绑「哪一份上游结果」而全文不读 `policy_disposition`。Stop 边界成立：新模块零生产消费点、无 macro/评分/席位/action/仓位/us_long/provider 任何一处。刀2 Optional 已删未用形参且未引入替代校验。
