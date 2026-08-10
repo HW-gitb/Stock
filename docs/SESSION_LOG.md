@@ -2,7 +2,7 @@
 
 ## 2026-08-10 — Claude 复审 PASS（问题2 carrier-root / leaf-preflight / model-paper 首周 seed）
 
-- **Verdict/Action**: PASS，已提交并合入 master。两条同类腿都改用 lane 既有的注入式隔离根 `temporary_us_short_state_directory`，正向控制仍跑完整事务且新增「三份 official 产物确实落在注入根内」的断言，比原版更强；真实 `state/us_short` 的 20260709 与 `_superseded` 残留已清空。生产面三个文件本轮未动。
+- **Verdict/Action**: PASS，已在 238a 提交 `c44d9c80`；**合入 master 被阻塞、尚未合入**——主树当时正处在另一并发窗口未完成的 a-short merge 中（`UU` 冲突 + 已 staged 改动），按并发纪律不碰他人在飞的 merge，`git merge` 直接被 git 拒绝且未改动主树。两条同类腿都改用 lane 既有注入式隔离根，正向控制仍跑完整事务且新增三份 official 产物落位断言；真实 `state/us_short` 残留已清空；生产面三个文件本轮未动。
 - **Required**: 无。`R-USSHORT-NEW-CAPSTONE-TEST-WRITES-INTO-THE-REAL-REPO-PRIVATE-ROOT` 与 `R-USSHORT-CARRIER-ROOT-LEAF-PREFLIGHT-AND-MODEL-PAPER-FIRST-SEED` 双双翻 `resolved`；上轮 5 条 Optional 仍 open、仍 non-blocking。独立复算与判据只在 `docs/system_risk_register.md`。
 - **Verify**: review-evidence:e68e2583047b。焦点超集亲跑（含上轮转红的资源隔离模块）`Ran 169 / 142.1s / OK receipt:a1634177c8bfc727d82dfa94`。植入：`_preflight_private_output_paths` 中和成 no-op → 点名测试精确转红，还原后 sha 前后同为 `2e01b679…`；红的原因是更深处 writer 的原生 `PrivatePathError`，说明纵深仍在。full lane 按 rule 4 引用执行方账本（`5735/5735 equal=True`、`316/316`），其 fingerprint 与我独立重算的一致。**超时原因**:一次 142s 焦点超集 + 一次被 PowerShell 引号吃掉、需改写脚本重做的植入探针串在墙钟上。
 - **Next**: Codex：Pass
