@@ -127,6 +127,21 @@
 - **Pre-Codex self-review**: A-F checked；A=固定输入/7成员/source矩阵；B=Serenity字段与所有当前树 `*.py/*.md/tests` 消费面 grep，确认无新接线且文档只声明 shadow；C=effect flags/active macro/score/Top15/operation/lifecycle 反向控制；D=unsupported claim 降级为 lead/context/unverified；E=SESSION_LOG 与 handoff 为当前态，CURRENT 未改；F=UTF-8/no BOM/no mojibake、固定 Python assertions PASS、`git diff --check` clean；independent-self-review=NOT_USED:user-forbids independent review；provider/network/account=NOT_USED；commit=NOT_PERFORMED。
 - **Handoff**: 已新增 `docs/handoff/2026-08-09_us_serenity_annotation_blade0_handoff.md` 并加入 `docs/handoff/README.md` 路由；该交接只承载 Blade 0 结果、边界、自审/测试要求与下一刀前置，不混入既有 X live-shape handoff。
 - **Next**: Claude Code：审查本刀 Blade 0 研究产物；未审查前不进入 Blade 1 或任何工程刀。
+## 2026-08-10 — Claude 复审 PASS（40d9：O12 源绑定时钟放宽到既往捕获）
+
+- **Verdict/Action**: PASS。源绑定腿由 `run_date == today` 放宽为 `run_date <= today`（加 8 位形状过滤），比较基准变成「系统记录过的最新已结算时段」，天然认节假日；`_calendar_age_mature`、状态集合、写回与退出码结构均未动，坏输入仍全部按落后处理。
+- **Required**: 无。O12 已翻 closed，实测与植入见 `docs/system_risk_register.md` 顶部同日节。
+- **Verify**: review-evidence:730fe4374e4f。验收包 `Ran 22 in 1.0s OK receipt:c5c12b8167ab21831323f381`。复验：长假工作日 + 仅有更早运行日的捕获行 → `settled=20260206`、rc=0、无横幅（上轮 rc=3+横幅）；真陈旧对照（缓存止 20260731、记录时钟 20260807）→ rc=3、横幅照打。植入：把该腿窄回 `== today` → 点名用例精确转红，还原 sha 逐字节回原值。
+- **Next**: Codex：执行
+
+## 2026-08-10 — Codex executor/fixer：修复 Optional O12（OPEN-NOT_VERIFIED）
+
+- **Verdict/Action**：按 `R-ASHORT-FORWARD-TRACKER-HOLIDAY-SUPPRESSION-COMPARES-WALL-DATE-NOT-LAST-SESSION` 的 Optional O12 方案修复，未提交。
+- **Required**：无新增 Required；O12 详情、source-binding 规则与 closure matrix 见 `docs/system_risk_register.md`（单一来源）。
+- **Verify**：固定 Python 3.13.8；聚焦 `Ran 90 tests in 11.221s` / `OK`；`py_compile=exit 0`；文档门禁 `Ran 66` / `OK`；`git diff --check=exit 0`；O12 反控 `Ran 1` / `FAILED`（`rc=3`），源码已恢复；真实 weekly/provider/live/full lane `NOT_VERIFIED`。
+- **Pre-Codex self-review**：`matrix=O12 prior-capture settled clock + O11 + P2-2 stale-lag`; `register=updated`; `handoff=updated`; `focused=90 OK + O12 mutation red`; `full-lane=NOT_VERIFIED`; `door=doc-governance+route-status+readme`。
+- **Next**：Claude Code：审查 Optional O12 与 `forward_tracker→exit3→health` 链；通过后提交。
+
 ## 2026-08-10 — Claude 复审 PASS（40d9：O11 抑制门改比已结算交易日）
 
 - **Verdict/Action**: PASS。比较对象从墙上日期换成 `_latest_settled_market_date`：优先取 tracker 中 `run_date == today` 行的 `max(price_data_through)`（源绑定），否则回退到最近工作日；坏输入仍全部按落后处理。上一轮我判 FAIL 的那条探针本轮原样复跑，周跑那一档已安静通过，而桌面原案例仍照判 stale（没修过头）。
