@@ -1,5 +1,11 @@
 # Session Log
 
+## 2026-08-10 — Claude 记录用户裁决并改在 782a 落盘（退役重封型冻结指纹：做 A+B）
+
+- **Verdict/Action**: 按用户指示，本裁决改在工作树 `782a` 落盘并独立成刀。A=effect contract 的 9 个冻结指纹键整族处置（4 个代码派生退役、4 个结构派生改可读清单、1 个查证后决定），B=放宽 bounded runner 收据指纹使纯文档改动不再作废收据；C（不可变证据身份指纹）不做。reviewer 未改任何代码。
+- **Required**: `R-ASHORT-FROZEN-DIGEST-RESEAL-TAX-RETIRE-CODE-FINGERPRINTS`(P2) —— 完整枚举、分类处置、Closure tests 与「不得用派生-vs-派生冒充守卫」的约束只见 `docs/system_risk_register.md`（单一来源，本处不复述）。
+- **Verify**: review-evidence:not_available（本轮为裁决落盘，非审查轮）。先前写进 40d9/master 的同名节已回滚：master 已 `reset --keep` 回 `e2e9fcdd`、register 命中数 0，主树 13 个未提交 research 产物完好未动。**40d9 未回滚**：该树有另一窗口进行中的未提交修复（两个 runner + 两个测试 + 三份文档），其 `cb90cc62` 在其历史里，回滚会毁掉在飞的活；该副本须在 P1 修复合并时去重。
+- **Next**: Codex：执行
 ## 2026-08-10 — Claude 快速审查 PASS（刀0/刀1 产物头部交接元数据）
 
 - **Verdict/Action**: PASS，已提交。主树两份 Serenity 研究产物各加交接元数据行（刀0 一行、刀1 两行），共 3 行新增、零删除，正文未动。新增的是结论型字段，故逐条回查正文：三类主题↔对照类映射、`negative_perturbation_result=PASS (§5)`、上游产物路径、`decision_date` 全部与正文一致，无一处比正文更强。
