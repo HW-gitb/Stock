@@ -5,6 +5,13 @@
 - **Verdict/Action**: PASS，已提交。主树两份 Serenity 研究产物各加交接元数据行（刀0 一行、刀1 两行），共 3 行新增、零删除，正文未动。新增的是结论型字段，故逐条回查正文：三类主题↔对照类映射、`negative_perturbation_result=PASS (§5)`、上游产物路径、`decision_date` 全部与正文一致，无一处比正文更强。
 - **Required**: 无。Optional=无。
 - **Verify**: review-evidence:not_available（本轮未下 `审查` 命令、hook 未发 token，全部证据为真实工具结果）。`git diff` 显示 3 insertions / 0 deletions，即「正文未改」的机器证明；`contrast_class_by_theme` 三项与 §1 表逐项相同；§5 恰 3 处 `**Pass**`；刀0 正文仍 `GO_FOR_RUBRIC_FILLABILITY_ONLY`。提交前先查门要什么包得 `required bundles: ()`，故只跑文档门。改动面恰为两个 md，未夹带另一窗口的 a-short 脏改动。
+## 2026-08-10 — Claude 自修 + 自审 PASS（降级产物单一构造器）
+
+- **Verdict/Action**: PASS。按用户指示由我修这条 Optional，走 Optional 快档。整类先枚举：跨模块私有引用全仓仅一处，`serenity_quality_settlement` 八处产物里只有 ledger-rejected 是重复，其余语义不同不动。修法=引擎新增公开 `ledger_rejected_settlement()` + `LEDGER_REJECTED_REASON_CODE` 并进 `__all__`，引擎与 runner 都改调它；扫尾另把引擎内同一 reason code 的字面量改成常量，现全仓只剩常量定义一处。
+- **Required**: 无。`R-USSHORT-SERENITY-WEEKLY-DEGRADE-PAYLOAD-IS-BUILT-IN-TWO-PLACES` 翻 resolved，正文与实测只在 `docs/system_risk_register.md`。Optional=无。
+- **Verify**: review-evidence:50cafee8c590。行为不变且控制组先绿：账本缺失/当前格式仍 `no_pending`，旧格式与非 JSON 损坏仍 `no_count`+`invalid_evidence`+不 abort；两条降级产物**唯一差异字段是 `error`**（诊断消息应不同），其余七键逐字段相同，`reason_code` 取自公开常量。两棵树各验：b511 `Ran 116 OK receipt:a9c0c4e94f8d00df3bf301ab`；主树组合态 `Ran 181 / 45.5s / OK receipt:decc1aa1e7e5fd02f5cd7c76`（含 a_short 捆绑、零冲突）。
+- **Next**: Codex：Pass
+
 ## 2026-08-10 — Claude 复审 PASS（旧格式账本不再掀翻周任务）
 
 - **Verdict/Action**: PASS。两条闭合判据都做了：结算调用点包 typed 降级（`no_count`/`invalid_evidence`/不 abort），账本读不动时按损坏证据走同一路径、旧字节留盘诊断、本次改用空内存账本故旧行不进 formal 门。新增两条回归（注入 typed 错误 / 真写旧格式账本跑链）。
