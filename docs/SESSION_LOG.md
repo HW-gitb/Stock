@@ -1,5 +1,33 @@
 # Session Log
 
+## 2026-08-10 — Claude 复审 PASS（旧格式账本不再掀翻周任务）
+
+- **Verdict/Action**: PASS。两条闭合判据都做了：结算调用点包 typed 降级（`no_count`/`invalid_evidence`/不 abort），账本读不动时按损坏证据走同一路径、旧字节留盘诊断、本次改用空内存账本故旧行不进 formal 门。新增两条回归（注入 typed 错误 / 真写旧格式账本跑链）。
+- **Required**: 无。`R-USSHORT-SERENITY-WEEKLY-A-LEGACY-LEDGER-ABORTS-THE-WHOLE-WEEK` 翻 resolved；新记一条 Optional `R-USSHORT-SERENITY-WEEKLY-DEGRADE-PAYLOAD-IS-BUILT-IN-TWO-PLACES`。正文只在 `docs/system_risk_register.md`。
+- **Verify**: review-evidence:50cafee8c590。四态实测且控制组先绿：缺失/当前格式空账本 `no_pending`（证探针非恒真），旧格式与非 JSON 损坏均 `no_count/invalid_evidence`、不 abort、effects 无非 false 项。`run_quality_forward` 遇旧账本：`invalid_evidence`、gate id 为 None、preflight `blocked`、旧账本 sha 前后一致、内存账本 `cohorts==[]`。两棵树各验：b511 `Ran 282 OK receipt:9afeae306d5d84f53162cf19`；主树组合态 `Ran 239 / 61.5s / OK receipt:91df93ae8dceb7ba1191a20d`（含 a_short 捆绑），上轮报红的 capstone 模块现已绿。
+- **Next**: Codex：Pass
+
+## 2026-08-10 — Codex 修复旧格式账本 fail-soft（OPEN-NOT_VERIFIED）
+
+- **Verdict/Action**: 仅在当前 b511 工作树修复 `R-USSHORT-SERENITY-WEEKLY-A-LEGACY-LEDGER-ABORTS-THE-WHOLE-WEEK`：旧格式或不可读 ledger 在结算边界降级为 `no_count` / `invalid_evidence`，周任务继续，原账本不改写；没有 provider/live/API/secret、效果、刀6/7 或提交。
+- **Required**: 结算调用点已补 typed `SerenityQualityForwardError` fail-soft；旧账本按损坏证据处理，不进入 formal gate。该风险仍开放，待 Claude Code 独立审查；主树验证因当前工作树边界未执行。
+- **Verify**: 固定 Python313：核心 `Ran 105 / OK`；conformance/route `Ran 65 / OK`；IO+conformance `Ran 58 / OK`；旧账本 capstone/settlement 独立目标 `Ran 1 / OK`；`py_compile` 与 `git diff --check` 通过（仅既有 CRLF 警告）。并行 full lane 因 `Resource deadlock avoided` 锁竞争早红；串行 full lane `Ran 2568` 后一个顺序相关 resource-isolation 子项红，但该子项及资源模块独立运行均绿；全量未宣称通过。
+- **Pre-Codex self-review**: matrix=typed ledger rejection + old-ledger capstone continuation; register=updated `docs/system_risk_register.md`; handoff=updated `docs/handoff/2026-08-09_us_serenity_annotation_blade0_handoff.md`; focused=105 core + 65 conformance/route + 58 IO/conformance + 1 old-ledger target OK; full-lane=NOT_VERIFIED（parallel lock contention，serial order-sensitive resource child）；door=doc-governance + route-doc `66 OK`；independent-review=NOT_USED。
+- **Next**: Claude Code：独立审查旧账本组合态并决定 Pass 或 Required 修复
+
+## 2026-08-10 — Claude 审查 FAIL（两次用户动作的周度闭环，未提交未合并）
+
+- **Verdict/Action**: FAIL，已 `git merge --abort`，master 未带红。立项目的大部分达成且实测成立：exact-one pending、同内容幂等、异内容拒覆盖、结算后永久禁回填、pending 文件名不可穿越、self-review 不计入 `formal_count_eligible`、质量门只数 formal 记录、G1/刀6 preflight 三种输入恒 blocked 且零 preregistration、producer 不自行合成语义。拦下一条：旧格式账本会让整周任务崩在最开头。
+- **Required**: `R-USSHORT-SERENITY-WEEKLY-A-LEGACY-LEDGER-ABORTS-THE-WHOLE-WEEK`，机制、控制组与两条闭合判据只在 `docs/system_risk_register.md`。Optional=无。
+- **Verify**: review-evidence:1ac32d0bb89f。b511 验收超集 `Ran 295 / 33.8s / OK receipt:cbbeea05530db40e0aa2b2fe`；六组对抗探针全 OK（pending 七态、路径穿越四态、formal 四态、门三态、preflight 三态）。**主树组合态** `Ran 236 / FAILED(errors=1)`：`settle_pending_review` 读旧格式账本抛 `'pending_annotations' is a required property`，经 `us_short_weekly_capstone.py:2129` 无保护地穿出 `run_weekly_capstone`。控制组：账本缺失时不抛，故非恒真。**超时原因**:六组探针 + 组合态失败的逐层定位（schema→调用点→是否被兜住）串在墙钟上。
+- **Next**: Codex：修复
+
+## 2026-08-10 - Codex Blade5 closeout: two-user-action producer/reviewer/ledger loop (OPEN-NOT_VERIFIED)
+- **Verdict/Action**: Blade5 closeout implemented in the current worktree only. Weekly action 1 settles exactly one prior pending annotation before the current task, then produces the current source-bound annotation and stops at the recoverable checkpoint; weekly action 2 is the independent Claude review writer. Missing, malformed, late, conflicting, or identity-drifting review closes as `no_count`/`invalid_evidence` without historical backfill. No third user action, provider/live/API/secret access, active effect, Blade6/7 entry, independent review, or commit was used.
+- **Required**: `R-USSHORT-SERENITY-BLADE5-TWO-ACTION-CLOSEOUT-NOT-INDEPENDENTLY-REVIEWED` remains open until Claude Code independently reviews and decides the worktree.
+- **Verify**: fixed-Python focused `51 OK` receipt=`receipt:62c1578e8d651099ec3b3afb`; final isolation/G1/schema `20 OK` receipt=`receipt:3bf25fe3bee46435946d5eb6`; final us_short full lane `PASS discovered=5726 ran=5726`, fingerprint=`830ec6750464`, static `diff_check=PASS py_compile=8`; docs/route/README gate `66 OK` receipt=`receipt:7a116a5c41338302d015048d`; no new SHA256 pin was added.
+- **Next**: Claude Code：审查刀5收尾补刀
+
 ## 2026-08-10 — Claude 自修 + 自审 PASS（刀3 夹具原始字节摘要）
 
 - **Verdict/Action**: PASS。按用户指示由我修这条 Optional。先证明它承重（夹具经 `validate_annotation` 与运行时 `read_bytes()` 摘要比对），并发现受影响的是**三个**值而非我原先点名的一个（`input_artifact_sha256` → `upstream_decision_result_id` → `annotation_id` 层层含摘要）。修法：临时根复制受追踪文本按 LF 归一，夹具用真实 builder 从归一字节重生成；正文与 effect 边界逐字节未变。

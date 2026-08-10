@@ -1,5 +1,32 @@
 # US-short Serenity annotation — Blade 0 handoff
 
+## 2026-08-10 Codex — Blade5 closeout补刀: two-user-action producer/reviewer/ledger loop (OPEN-NOT_VERIFIED)
+
+### Scope and boundaries
+
+- Executed only the latest desktop Blade5 closeout in the current worktree. Existing soft-discovery, Blade3, Blade4, and prior Blade5 seams are connected to the producer/reviewer/ledger closeout; the downstream G1/Blade6 preflight is wired only as an offline fail-closed checkpoint.
+- The ordinary week has exactly two user actions: (1) Codex settles the sole prior pending review, runs the current producer, and stops at the recoverable checkpoint; (2) Claude Code reads exactly one unique unreviewed annotation and atomically writes the exact `us_short_serenity_quality_review_<decision_date>.json`. There is no third action. Missing, malformed, unreadable, late, duplicate, conflicting, or identity/version-drifting review is `no_count`/`invalid_evidence` and is never historically backfilled.
+- Producer output is source-bound to the valid soft-discovery result and decision date; it does not synthesize annotation semantics. Reviewer identity, producer identity/model, reviewer prompt, annotation prompt/rubric, upstream decision identity, and cohort dimensions are frozen in the packet/ledger. Same review content is idempotent; different content cannot overwrite the frozen path.
+- All quality/G1 effects remain false. No provider/network/paid/live/API/secret access, account/order action, active scoring/selection/operation, Blade6/7 entry, preregistration, independent review, or commit was performed. No new SHA256 checkout/frozen pin was introduced.
+
+### Products and code details
+
+- `engine/us_short_serenity_quality_forward.py`: producer, exact-one pending target, atomic independent review writer, prior-week settlement, no-count closure, formal reviewer/cohort gate, and zero-effect observation/ledger output.
+- `engine/us_short_serenity_g1_blade6_preflight.py` plus `schemas/us_short_serenity_g1_blade6_preflight.schema.json`: validates the quality gate and optional exact G1 decision binding; missing/invalid/drifted G1 stays blocked and never creates Blade6 preregistration.
+- `runners/us_short_weekly_capstone.py` / `runners/us_short_weekly_capstone_stages.py`: binds settlement before the real quality-bearing weekly pipeline, producer output at the quality stage, checkpoint identity, and the four-artifact quality/G1 output set. Injected pipelines without the quality stage do not perform settlement side effects.
+- Updated policy/review/observation/ledger/gate/checkpoint schemas and fixed the test I/O inventory snapshot for the pre-existing structural annotation module. The G1 and schema tests use local fixtures and do not cross-import another test module, so full-lane discovery is not duplicated.
+
+### Evidence and self-review
+
+- Fixed-Python focused quality/settlement run: `Ran 51 tests ... OK`, receipt=`receipt:62c1578e8d651099ec3b3afb`.
+- Final fixed-Python isolated G1/schema/quality run: `Ran 20 tests ... OK`, receipt=`receipt:3bf25fe3bee46435946d5eb6`.
+- Final fixed-Python us_short full lane: `PASS`, `modules=316`, `discovered=5726`, `ran=5726`, fingerprint=`830ec6750464`, sidecar=`.tools/state/runs/20260810T163246_us_short_parallel.jsonl`; static `diff_check=PASS`, `py_compile=8`; docs/route/README gate `66 OK`, receipt=`receipt:7a116a5c41338302d015048d`.
+- Self-review A–F: A upstream/downstream routing and Blade6 stop; B two-action/identity/cohort binding; C missing/late/malformed/conflict/self-review/no-backfill controls; D engine/schema/runner/stage/checkpoint/inventory/full-lane ripple; E risk/SESSION_LOG/handoff alignment; F fixed-Python tests, full lane, compile, and diff check. `independent-self-review=NOT_USED` by executor role.
+
+### Handoff to Claude Code
+
+Independently review the two-user-action contract, exact pending target and atomic/idempotent writer, prior-week settlement/no-backfill behavior, producer source/date binding, identity/cohort/version binding, zero-effect flags, G1/Blade6 fail-closed preflight, and the final full-lane count gate. Keep Blade6/7 stopped and do not use test-fixture gate IDs as production evidence. After review, update only the required risk/SESSION_LOG closeout and decide pass or repair; do not ask Codex to commit.
+
 ## 2026-08-10 Codex — Remove line-ending-dependent frozen SHA pins（OPEN-NOT_VERIFIED）
 
 ### Scope and decision
@@ -425,3 +452,49 @@ Claude Code：独立审查刀2四字段连接代码及 `decision_result_id` sche
 **失效旧结论**：`R-USSHORT-SERENITY-BLADE3-FIXTURE-BAKES-A-RAW-BYTE-DIGEST` 已闭；「同类还剩一枚休眠实例」这句作废。
 
 **下一步注意事项**：`tests/fixtures/a_short_experiment_governance_admission.json` 里也有摘要，但属 A-short 治理夹具、不在本条论域，未触——若那条 lane 将来出现同样的跨树红，按同一手法处理。仍未解决的是 count gate 实跑数比发现数多 10（非确定、归属未定），rule-3 记账仍拿不到绿。
+
+## 2026-08-10 追加：Claude 审查 FAIL（周度闭环，未提交未合并）
+
+**改了什么**：审查方未改产物，只补 `docs/system_risk_register.md` 一节结论 + 一条 Required、`docs/SESSION_LOG.md` 一条极简 verdict。b511 侧 `e7f3e69a` 已提交（本刀代码），但**未合入 master**，修复叠其上。
+
+**为什么**：这一刀的承诺是「缺失/损坏/迟到/冲突都走 no_count 或 invalid_evidence，绝不中断周任务」。实测下来「损坏」这一格没兑现：账本 schema 新增两个必填数组却没升 `schema_version`、也没有兼容读法，于是**上一版自己写出的账本**被拒；而结算调用点在 stage 机制之外、外层无 try/except，异常直接掀翻整个 `run_weekly_capstone`。
+
+**验证命令**：
+- `.tools\run_unittest_with_repo_pythonpath.cmd --timeout-seconds 900`（b511 验收超集 13 模块）
+- 主树 `git merge --no-ff --no-commit` 后跑组合态包（9 模块含 a_short 捆绑）
+- reviewer 自写探针：pending 七态 / 路径穿越四态 / `formal_count_eligible` 四态 / 质量门三态 / G1 preflight 三态 / 账本「缺失 vs 旧格式」对照
+
+**验证结果**：b511 `Ran 295 / 33.8s / OK receipt:cbbeea05530db40e0aa2b2fe`，六组探针全 OK。主树组合态 `Ran 236 / FAILED(errors=1)`，根因 `quality ledger schema rejected: 'pending_annotations' is a required property`，经 `us_short_weekly_capstone.py:2129` 穿出。控制组：账本缺失时不抛。
+
+**失效旧结论**：不能说「周度闭环已可用」——在留有旧账本的树上，第 1 次用户动作会直接崩。
+
+**下一步注意事项**：按 register 的 `R-USSHORT-SERENITY-WEEKLY-A-LEGACY-LEDGER-ABORTS-THE-WHOLE-WEEK` 两条闭合判据修（结算点 typed 降级 + 旧账本迁移或按损坏降级），修完**两棵树各验一次**，主树那次要能复现「先放一份旧格式账本」。刀6 仍不得进入：需你在 G1 选定唯一映射并给出真实 `quality_gate_result_id`。
+
+## 2026-08-10 追加：Codex 修复旧格式账本（OPEN-NOT_VERIFIED）
+
+**修复**：旧格式或不可读 ledger 现在按损坏证据本地降级为 `no_count` / `invalid_evidence`；周任务继续，磁盘上的旧账本保持原字节，不进入 formal gate，也不做历史回填。刀6/7、provider/live/API/secret 与任何 active effect 均未进入。
+
+**代码**：`engine/us_short_serenity_quality_forward.py` 在 settlement 与 producer 入口捕获 typed ledger rejection；`runners/us_short_weekly_capstone.py` 在 stage 外 settlement 调用补同一 fail-soft 边界；新增旧格式 ledger、typed settlement error、capstone continuation 回归覆盖于 `tests/test_us_short_serenity_quality_forward.py` 与 `tests/provider/test_us_short_weekly_capstone.py`。
+
+**验证**：固定 Python313 核心 `Ran 105 / OK`；conformance/route `Ran 65 / OK`；IO+conformance `Ran 58 / OK`；旧账本 capstone/settlement 独立目标 `Ran 1 / OK`；`py_compile` 与 `git diff --check` 通过。并行 full lane 因 `Resource deadlock avoided` 锁竞争失败；串行 full lane `Ran 2568` 后一个顺序相关资源隔离子项失败，但该子项和资源模块独立运行通过，因此全量保持 `NOT_VERIFIED`。
+
+**边界**：只写当前 b511 工作树；主树未执行，未提交；未使用 provider/live/API/secret，未进入刀6/7。该修复仍待 Claude Code 独立审查，尤其要在组合态先放入旧格式 ledger，确认 settlement 返回 `no_count`、weekly task 继续、旧账本未改写且不计入 formal gate。
+
+**Claude Code 命令**：`Claude Code：独立审查刀5旧账本 fail-soft；在当前审查树/组合态先写入旧格式 ledger，验证 settlement=no_count/invalid_evidence、run_weekly_capstone 继续、旧账本未被改写且不计入 formal gate，再按 AGENTS.md/AI_REVIEW_PROTOCOL.md 决定 Pass 或 Required 修复；不得进入刀6/7或提交未审查内容。`
+
+## 2026-08-10 追加：Claude 复审 PASS（旧账本降级，收口并合入）
+
+**改了什么**：审查方未改产物，只把 register 的 Required 翻 `resolved` 并新记一条 Optional、`docs/SESSION_LOG.md` 一条极简 verdict，然后提交并合入。
+
+**为什么**：上一轮拦下的是「留有旧格式账本时第 1 次用户动作直接崩」。这类修复必须验两件事——降级真的发生（不是把异常吞了当没事），以及**在报红的那棵树上**复现场景后转绿。
+
+**验证命令**：
+- `.tools\run_unittest_with_repo_pythonpath.cmd --timeout-seconds 900`（b511 验收超集 11 模块）
+- 主树 `git merge --no-ff --no-commit` 后跑组合态包（9 模块含 a_short effect-contract 捆绑）
+- reviewer 自写探针：`settle_pending_review` 四态（缺失 / 当前格式 / 旧格式 / 非 JSON 损坏）+ `run_quality_forward` 遇旧账本的五项断言
+
+**验证结果**：b511 `Ran 282 / 37.0s / OK receipt:9afeae306d5d84f53162cf19`；主树组合态 `Ran 239 / 61.5s / OK receipt:91df93ae8dceb7ba1191a20d`，上轮报红的 `tests.provider.test_us_short_weekly_capstone` 现已绿。四态中缺失与当前格式仍是 `no_pending`（控制组，证探针非恒真），旧格式与损坏均 `no_count/invalid_evidence`、不 abort、effects 无非 false 项；旧账本 sha 前后一致，旧行未进入内存账本，gate 无 id、preflight `blocked`。
+
+**失效旧结论**：「周度闭环在留有旧账本的树上会崩」已闭；现在它记一笔 `no_count` 然后继续。
+
+**下一步注意事项**：① Optional：降级产物在引擎与 runner 各手写一份、且 runner 跨模块用了私有 `_safe_error`，建议收敛成引擎侧公开构造器。② 刀6 仍需你在 G1 选定唯一映射并给出真实 `quality_gate_result_id`；测试 fixture 的 gate id 不能当生产证据。③ count gate 实跑数比发现数多 10 仍未定位，rule-3 记账仍拿不到绿。
