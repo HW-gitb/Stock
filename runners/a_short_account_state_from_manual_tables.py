@@ -705,11 +705,11 @@ def _load_preset_config(preset_path: Path | str | None = None) -> dict:
 
 def _print_plain_summary(account_state: dict, lineage: dict) -> None:
     """大白话解释：这次表格里哪些事实导致了什么状态（满足 4.3 §11 大白话要求）。"""
-    print(f"[4.3] 决策日 {account_state['as_of']}；事实截止 {lineage['facts_as_of']}"
+    print(f"[4.3] 决策日 {lineage['decision_as_of']}；事实截止 {lineage['facts_as_of']}"
           f"（{lineage['facts_staleness']}）。持仓 {len(account_state['positions'])} 只，"
           f"Rule12={account_state['rule12']['status']}，Rule13 冷静 {len(account_state['rule13_cooldowns'])} 只。")
     if lineage["facts_staleness"] == "stale_warning":
-        print(f"[WARN] 事实截止日 {lineage['facts_as_of']} 早于决策日 {account_state['as_of']}："
+        print(f"[WARN] 事实截止日 {lineage['facts_as_of']} 早于决策日 {lineage['decision_as_of']}："
               "可能漏了之后的成交/持仓变化，请确认表格已更新。")
     if lineage["rule12"]["progressed"]:
         pr = lineage["rule12"]["progressed"]

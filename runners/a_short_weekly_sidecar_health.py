@@ -43,6 +43,8 @@ SIDECAR_SPECS: dict[str, str] = {
     "official_operation_capture": "forward_evidence",
     "official_operation_settlement": "forward_evidence",
     "factor_v2_capture": "forward_evidence",
+    "margin_overheat_cash_control_capture": "advisory",
+    "margin_overheat_cash_control_settlement": "advisory",
     "industry_weight_capture": "forward_evidence",
     "industry_weight_settlement": "forward_evidence",
     "target_policy_capture": "forward_evidence",
@@ -65,6 +67,8 @@ BEST_EFFORT_SELF_REPORT_SIDECARS = frozenset({
     "official_operation_capture",
     "official_operation_settlement",
     "factor_v2_capture",
+    "margin_overheat_cash_control_capture",
+    "margin_overheat_cash_control_settlement",
     "industry_weight_capture",
     "industry_weight_settlement",
     "target_policy_capture",
@@ -344,6 +348,7 @@ def _normalise_outcome(raw: dict[str, Any], *, as_of: str, project_root: Path) -
         "observed_decision_as_of": observed_decision,
         "observed_data_through": observed_data,
         "error_code": raw.get("error_code"),
+        "error_detail": raw.get("error_detail"),
         "skip_reason": raw.get("skip_reason"),
         "blocking": False,
     }
@@ -357,6 +362,8 @@ def _normalise_outcome(raw: dict[str, Any], *, as_of: str, project_root: Path) -
         item["feed_sha256"] = str(raw["feed_sha256"])
     if item["error_code"] is not None:
         item["error_code"] = str(item["error_code"])
+    if item["error_detail"] is not None:
+        item["error_detail"] = str(item["error_detail"])
     if item["skip_reason"] is not None:
         item["skip_reason"] = str(item["skip_reason"])
     # A zero exit code is not enough: a successful process that left its
@@ -365,7 +372,8 @@ def _normalise_outcome(raw: dict[str, Any], *, as_of: str, project_root: Path) -
     clockless = {
         "shared_cache_build", "forward_tracker_backfill",
         "official_operation_settlement", "industry_weight_settlement",
-        "overlay_adjudication_settlement",
+        "overlay_adjudication_settlement", "margin_overheat_cash_control_capture",
+        "margin_overheat_cash_control_settlement",
     }
     if item["execution_status"] == "succeeded" and name not in clockless:
         expected_decision = item["expected_decision_as_of"]

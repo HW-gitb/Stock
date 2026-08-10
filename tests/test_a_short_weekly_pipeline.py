@@ -1384,12 +1384,128 @@ class MainWiringTests(unittest.TestCase):
                      price_provider=lambda code: _series())
             p2_capture.assert_called_once()
             output = terminal.getvalue()
+            outcomes = json.loads(
+                out.with_name(f"{out.stem}.pipeline_sidecar_outcomes.json").read_text(encoding="utf-8")
+            )
         self.assertIn("error_code=unknown", output)
         self.assertIn("M6.7 output remains authoritative and unchanged", output)
         self.assertNotIn("600598.SH", output)
         self.assertNotIn("token.txt", output)
         self.assertNotIn("RuntimeError", output)
         self.assertNotIn("traceback", output.lower())
+        v2 = next(row for row in outcomes["sidecars"] if row["name"] == "factor_v2_capture")
+        self.assertTrue(v2["error_detail"].startswith("capture: RuntimeError:"))
+        self.assertNotIn("token.txt", v2["error_detail"])
+
+    def test_v2_capture_diagnostic_str_failure_does_not_block_weekly(self):
+        class BrokenStringError(RuntimeError):
+            def __str__(self):
+                raise RuntimeError("diagnostic recursion")
+
+        with tempfile.TemporaryDirectory() as td:
+            self._write_inputs(td)
+            out = Path(td) / "weekly.json"
+            with patch(
+                "engine.a_short_factor_comparison_v2_weekly.capture_v2_after_published_weekly",
+                side_effect=BrokenStringError(),
+            ):
+                main([
+                    "--as-of", AS_OF,
+                    "--analysis-input", str(Path(td) / "ai.json"),
+                    "--iv-feed", str(Path(td) / "feed.json"),
+                    "--account", str(Path(td) / "acct.json"),
+                    "--out", str(out),
+                    "--run-date", AS_OF,
+                    "--factor-comparison-v2-root", str(
+                        Path(td) / "state" / "a_short" / "factor_comparison_private" / "v2"
+                    ),
+                ], price_provider=lambda code: _series())
+            outcomes = json.loads(
+                out.with_name(f"{out.stem}.pipeline_sidecar_outcomes.json").read_text(encoding="utf-8")
+            )
+            weekly_exists = out.is_file()
+        v2 = next(row for row in outcomes["sidecars"] if row["name"] == "factor_v2_capture")
+        self.assertTrue(weekly_exists)
+        self.assertEqual(v2["error_detail"], "capture: BrokenStringError")
+
+    def test_overlay_capture_failure_records_redacted_detail_without_changing_m67(self):
+        from engine.a_short_overlay_adjudication import OverlayAdjudicationError
+
+        with tempfile.TemporaryDirectory() as td:
+            self._write_inputs(td)
+            out = Path(td) / "weekly.json"
+            message = (
+                "P4a Stage3 snapshot active-profile binding drifted; "
+                "C:\\private\\token.txt https://api.example.test/p4a"
+            )
+            terminal = StringIO()
+            with patch(
+                "engine.a_short_overlay_adjudication.capture_after_published_weekly",
+                side_effect=OverlayAdjudicationError(message),
+            ), redirect_stdout(terminal):
+                main([
+                    "--as-of", AS_OF,
+                    "--analysis-input", str(Path(td) / "ai.json"),
+                    "--iv-feed", str(Path(td) / "feed.json"),
+                    "--account", str(Path(td) / "acct.json"),
+                    "--out", str(out),
+                    "--run-date", AS_OF,
+                    "--overlay-adjudication-root", str(Path(td) / "p4-private"),
+                    "--overlay-adjudication-daily-cache", str(Path(td) / "missing-cache.json"),
+                ], price_provider=lambda code: _series())
+            outcomes = json.loads(
+                out.with_name(f"{out.stem}.pipeline_sidecar_outcomes.json").read_text(encoding="utf-8")
+            )
+            weekly = json.loads(out.read_text(encoding="utf-8"))
+        capture = next(row for row in outcomes["sidecars"] if row["name"] == "overlay_adjudication_capture")
+        self.assertEqual(capture["execution_status"], "failed")
+        self.assertTrue(capture["error_detail"].startswith("capture: OverlayAdjudicationError:"))
+        self.assertIn("active-profile binding drifted", capture["error_detail"])
+        self.assertNotIn("token.txt", capture["error_detail"])
+        self.assertNotIn("https://", capture["error_detail"])
+        self.assertNotIn("binding drifted", terminal.getvalue())
+        self.assertIn("reports", weekly)
+
+    def test_overlay_settlement_failure_keeps_capture_success_without_duplicate_outcomes(self):
+        from engine.a_short_overlay_adjudication import unavailable_public_summary
+
+        with tempfile.TemporaryDirectory() as td:
+            self._write_inputs(td)
+            out = Path(td) / "weekly.json"
+            pre_publish_summary = unavailable_public_summary(AS_OF)
+
+            def settle(**kwargs):
+                if kwargs.get("write_public") is False:
+                    return pre_publish_summary
+                raise RuntimeError("settlement sidecar failed after capture")
+
+            with patch(
+                "engine.a_short_overlay_adjudication.capture_after_published_weekly",
+                return_value={"status": "captured"},
+            ), patch(
+                "engine.a_short_overlay_adjudication.settle_and_summarize_weekly",
+                side_effect=settle,
+            ):
+                main([
+                    "--as-of", AS_OF,
+                    "--analysis-input", str(Path(td) / "ai.json"),
+                    "--iv-feed", str(Path(td) / "feed.json"),
+                    "--account", str(Path(td) / "acct.json"),
+                    "--out", str(out),
+                    "--run-date", AS_OF,
+                    "--overlay-adjudication-root", str(Path(td) / "p4-private"),
+                    "--overlay-adjudication-daily-cache", str(Path(td) / "missing-cache.json"),
+                ], price_provider=lambda code: _series())
+            outcomes = json.loads(
+                out.with_name(f"{out.stem}.pipeline_sidecar_outcomes.json").read_text(encoding="utf-8")
+            )
+        names = [row["name"] for row in outcomes["sidecars"]]
+        self.assertEqual(len(names), len(set(names)))
+        by_name = {row["name"]: row for row in outcomes["sidecars"]}
+        self.assertEqual(by_name["overlay_adjudication_capture"]["execution_status"], "succeeded")
+        self.assertIsNone(by_name["overlay_adjudication_capture"]["error_detail"])
+        self.assertEqual(by_name["overlay_adjudication_settlement"]["execution_status"], "failed")
+        self.assertTrue(by_name["overlay_adjudication_settlement"]["error_detail"].startswith("settlement: RuntimeError:"))
 
     def test_margin_capture_bundle_failure_is_nonblocking_and_reaches_following_sidecars(self):
         with tempfile.TemporaryDirectory() as td:
@@ -1429,6 +1545,8 @@ class MainWiringTests(unittest.TestCase):
         )
         self.assertEqual(margin_capture["execution_status"], "failed")
         self.assertEqual(margin_capture["error_code"], "capture_unavailable")
+        from runners.a_short_weekly_sidecar_health import SIDECAR_SPECS
+        self.assertTrue(set(outcomes["expected_sidecars"]).issubset(set(SIDECAR_SPECS)))
 
     def test_margin_disabled_ignores_missing_private_public_schema_and_publishes_m67(self):
         from engine import a_short_margin_overheat_cash_control as margin_track

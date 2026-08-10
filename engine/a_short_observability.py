@@ -11,6 +11,18 @@ _SECRET_VALUE_RE = re.compile(
     r"(?:bearer\s+)?(?:[\"']?[^\s,;\"'}\]]+)"
 )
 _BEARER_RE = re.compile(r"(?i)\bbearer\s+[A-Za-z0-9._~+\-/=]+")
+_WINDOWS_ABS_PATH_RE = re.compile(
+    r"(?i)(?<![A-Za-z0-9])(?:[A-Za-z]:[\\/](?:[^\\/\s'\"<>]+[\\/])*[^\\/\s'\"<>]+)"
+)
+_WINDOWS_UNC_PATH_RE = re.compile(
+    r"(?i)(?<![A-Za-z0-9])\\\\(?:[^\\/\s'\"<>]+[\\/])+[^\\/\s'\"<>]+"
+)
+_POSIX_ABS_PATH_RE = re.compile(
+    r"(?<![A-Za-z0-9])/(?:[^/\s'\"<>]+/)+[^/\s'\"<>]+"
+)
+_SECRET_ENV_NAME_RE = re.compile(
+    r"(?i)(?:token|api[_-]?key|secret|password|authorization|credential|private[_-]?key)"
+)
 _ENV_SECRET_NAMES = ("TUSHARE_TOKEN", "FMP_API_KEY", "MASSIVE_API_KEY")
 
 
@@ -25,7 +37,13 @@ def safe_exception_summary(exc: BaseException, *, limit: int = 240) -> str:
         value = os.environ.get(name)
         if value:
             message = message.replace(value, "[REDACTED]")
+    for name, value in os.environ.items():
+        if value and _SECRET_ENV_NAME_RE.search(name):
+            message = message.replace(value, "[REDACTED]")
     message = _URL_RE.sub("[REDACTED_URL]", message)
+    message = _WINDOWS_ABS_PATH_RE.sub("[REDACTED_PATH]", message)
+    message = _WINDOWS_UNC_PATH_RE.sub("[REDACTED_PATH]", message)
+    message = _POSIX_ABS_PATH_RE.sub("[REDACTED_PATH]", message)
     message = _SECRET_VALUE_RE.sub(r"\1[REDACTED]", message)
     message = _BEARER_RE.sub("Bearer [REDACTED]", message)
     message = message[:limit]
