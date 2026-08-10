@@ -275,8 +275,6 @@ class EffectContractMemoTests(unittest.TestCase):
         effect_contract_module._default_static_inventory_from_snapshot.cache_clear()
         effect_contract_module._contract_from_source.cache_clear()
         effect_contract_module._source_tree.cache_clear()
-        effect_contract_module._predicate_hashes_for_source.cache_clear()
-        effect_contract_module._constant_inventory_items.cache_clear()
         effect_contract_module._governed_python_literal_names_for_source.cache_clear()
         effect_contract_module._runtime_portfolio_policy_literal_violations_for_sources.cache_clear()
         effect_contract_module._string_assignment_items.cache_clear()
@@ -287,10 +285,11 @@ class EffectContractMemoTests(unittest.TestCase):
         with patch.object(effect_contract_module, "_build_static_inventory",
                           wraps=effect_contract_module._build_static_inventory) as build:
             first = static_inventory()
-            first["decision_predicate_sha256"]["A-EGS/egs_main.py"] = "mutated"
+            first["analysis_input_paths"][0] = "mutated"
             second = static_inventory()
         self.assertEqual(build.call_count, 1)
-        self.assertNotEqual(second["decision_predicate_sha256"]["A-EGS/egs_main.py"], "mutated")
+        self.assertNotEqual(second["analysis_input_paths"][0], "mutated")
+        self.assertFalse(any(key.endswith("_sha256") for key in second))
 
     def test_inventory_memo_key_changes_with_source_bytes_and_overrides_stay_uncached(self):
         baseline = effect_contract_module._read_default_static_snapshot()
@@ -336,23 +335,6 @@ class EffectContractMemoTests(unittest.TestCase):
         self.assertGreater(same_override.hits, baseline.hits)
         self.assertEqual(changed_override.misses, same_override.misses + 1)
 
-    def test_override_reuses_unchanged_derived_analysis_but_recomputes_changed_source(self):
-        portfolio_rel = "engine/a_short_portfolio_risk.py"
-        portfolio = (ROOT / portfolio_rel).read_text(encoding="utf-8")
-        changed = portfolio + "\n# derived-analysis-cache-probe\n"
-
-        static_inventory(source_overrides={portfolio_rel: portfolio})
-        baseline = effect_contract_module._predicate_hashes_for_source.cache_info()
-        static_inventory(source_overrides={portfolio_rel: portfolio})
-        same_override = effect_contract_module._predicate_hashes_for_source.cache_info()
-        static_inventory(source_overrides={portfolio_rel: changed})
-        changed_override = effect_contract_module._predicate_hashes_for_source.cache_info()
-
-        self.assertEqual(same_override.misses, baseline.misses)
-        self.assertGreater(same_override.hits, baseline.hits)
-        self.assertEqual(changed_override.misses, same_override.misses + 1)
-
-
 class EffectContractStaticTests(unittest.TestCase):
     def setUp(self):
         self.contract = load_contract()
@@ -360,9 +342,9 @@ class EffectContractStaticTests(unittest.TestCase):
     def test_current_schema_fields_rules_thresholds_and_output_are_registered(self):
         self.assertIsNone(static_contract_error(self.contract))
 
-    def test_legacy_migration_registry_is_static_hash_bound(self):
+    def test_legacy_migration_registry_is_static_list_bound(self):
         tampered = copy.deepcopy(self.contract)
-        tampered["legacy_migration_sha256"] = "0" * 64
+        tampered["legacy_migration_entries"][0]["source_commit"] = "0" * 40
         self.assertEqual(
             static_contract_error(tampered),
             "legacy effect-contract migration registry changed without effect-contract update",
@@ -377,13 +359,13 @@ class EffectContractStaticTests(unittest.TestCase):
             self.assertIsInstance(snapshot, dict)
             self.assertEqual(effect_contract_module.contract_fingerprint(snapshot), fp)
 
-    def test_ast_fingerprints_do_not_depend_on_cpython_dump_format(self):
+    def test_inventory_has_no_retired_derived_fingerprints(self):
         baseline = static_inventory()
         effect_contract_module._default_static_inventory_from_snapshot.cache_clear()
-        with patch("engine.a_short_effect_contract.ast.dump", side_effect=AssertionError("must not use ast.dump")):
-            portable = static_inventory()
-        self.assertEqual(portable["decision_predicate_sha256"], baseline["decision_predicate_sha256"])
-        self.assertEqual(portable["runtime_constants_sha256"], baseline["runtime_constants_sha256"])
+        portable = static_inventory()
+        self.assertEqual(portable["analysis_input_paths"], baseline["analysis_input_paths"])
+        self.assertEqual(portable["runtime_policy_schema_paths"], baseline["runtime_policy_schema_paths"])
+        self.assertFalse(any(key.endswith("_sha256") for key in portable))
 
     def test_new_analysis_input_field_cannot_escape_registration(self):
         schema = json.loads((ROOT / "schemas" / "analysis_input.schema.json").read_text(encoding="utf-8"))
@@ -392,13 +374,13 @@ class EffectContractStaticTests(unittest.TestCase):
         self.assertIsNotNone(error)
         self.assertIn("coverage", error)
 
-    def test_new_or_changed_decision_predicate_cannot_escape_registration(self):
+    def test_new_or_changed_decision_predicate_does_not_require_reseal(self):
         rel = "engine/a_short_portfolio_risk.py"
         source = (ROOT / rel).read_text(encoding="utf-8") + "\nif False:\n    pass\n"
         error = static_contract_error(self.contract, inventory=static_inventory(source_overrides={rel: source}))
-        self.assertEqual(error, "decision predicate changed without effect contract update")
+        self.assertIsNone(error)
 
-    def test_watch_pool_selector_predicate_cannot_escape_registration(self):
+    def test_watch_pool_selector_predicate_does_not_require_reseal(self):
         rel = "engine/egs_industry_heat.py"
         source = (ROOT / rel).read_text(encoding="utf-8").replace(
             "if l2 in overflow and count >= 15:",
@@ -406,15 +388,15 @@ class EffectContractStaticTests(unittest.TestCase):
             1,
         )
         error = static_contract_error(self.contract, inventory=static_inventory(source_overrides={rel: source}))
-        self.assertEqual(error, "decision predicate changed without effect contract update")
+        self.assertIsNone(error)
 
-    def test_changed_runtime_threshold_cannot_escape_registration(self):
+    def test_changed_runtime_policy_value_does_not_require_reseal(self):
         rel = "presets/a_short_m67_runtime_policy_20260715.json"
         policy = (ROOT / rel).read_text(encoding="utf-8").replace(
             '"same_sw_l2_threshold_pct": 40.0', '"same_sw_l2_threshold_pct": 41.0', 1)
         error = static_contract_error(
             self.contract, inventory=static_inventory(runtime_policy_overrides={rel: policy}))
-        self.assertEqual(error, "runtime policy value changed without effect contract update")
+        self.assertIsNone(error)
 
     def test_governed_threshold_literal_cannot_return_to_python(self):
         rel = "engine/a_short_portfolio_risk.py"
@@ -449,11 +431,6 @@ class EffectContractStaticTests(unittest.TestCase):
         inventory = static_inventory()
         contract = copy.deepcopy(self.contract)
         rel = "presets/a_short_m67_runtime_policy_20260715.json"
-        contract["runtime_policy_paths_sha256"] = inventory["runtime_policy_paths_sha256"]
-        contract["runtime_policy_leaf_readers_sha256"] = hashlib.sha256(
-            json.dumps(inventory["runtime_policy_leaf_readers"], ensure_ascii=False,
-                       sort_keys=True, separators=(",", ":")).encode("utf-8")
-        ).hexdigest()
         contract["runtime_policy_paths"][rel].append("portfolio_risk.retired_probe")
         contract["runtime_policy_leaf_readers"][rel]["portfolio_risk.retired_probe"] = [
             "stale reader"
@@ -465,10 +442,6 @@ class EffectContractStaticTests(unittest.TestCase):
         """The per-leaf reader body has its own reverse guard, not just the paths body."""
         inventory = static_inventory()
         contract = copy.deepcopy(self.contract)
-        contract["runtime_policy_leaf_readers_sha256"] = hashlib.sha256(
-            json.dumps(inventory["runtime_policy_leaf_readers"], ensure_ascii=False,
-                       sort_keys=True, separators=(",", ":")).encode("utf-8")
-        ).hexdigest()
         rel = "presets/a_short_m67_runtime_policy_20260715.json"
         path = next(iter(contract["runtime_policy_leaf_readers"][rel]))
         contract["runtime_policy_leaf_readers"][rel][path] = ["stale reader"]
@@ -491,8 +464,7 @@ class EffectContractStaticTests(unittest.TestCase):
             '"impact_cost_frac": 0.005', '"impact_cost_frac": 0.005, "future_threshold": 1', 1)
         inventory = static_inventory(runtime_policy_overrides={rel: policy})
         contract = copy.deepcopy(self.contract)
-        contract["runtime_policy_paths_sha256"] = inventory["runtime_policy_paths_sha256"]
-        contract["runtime_policy_sha256"] = inventory["runtime_policy_sha256"]
+        contract["runtime_policy_paths"] = inventory["runtime_policy_paths"]
         binding = next(row for row in contract["runtime_policy_bindings"] if row["id"] == "phase5_thresholds")
         matched = [path for path in inventory["runtime_policy_paths"][rel]
                    if path == "phase5" or path.startswith("phase5.")]
@@ -524,8 +496,7 @@ class EffectContractStaticTests(unittest.TestCase):
             source_overrides={config_rel: loader, phase5_rel: phase5},
         )
         contract = copy.deepcopy(self.contract)
-        contract["runtime_policy_paths_sha256"] = inventory["runtime_policy_paths_sha256"]
-        contract["runtime_policy_sha256"] = inventory["runtime_policy_sha256"]
+        contract["runtime_policy_paths"] = inventory["runtime_policy_paths"]
         binding = next(row for row in contract["runtime_policy_bindings"] if row["id"] == "phase5_thresholds")
         matched = [path for path in inventory["runtime_policy_paths"][rel]
                    if path == "phase5" or path.startswith("phase5.")]
@@ -549,9 +520,55 @@ class EffectContractStaticTests(unittest.TestCase):
 
     def test_new_weekly_output_schema_field_cannot_escape_registration(self):
         rel = "schemas/a_short_weekly_report.schema.json"
-        text = (ROOT / rel).read_text(encoding="utf-8") + "\n"
+        schema = json.loads((ROOT / rel).read_text(encoding="utf-8"))
+        schema.setdefault("properties", {})["future_effect_probe"] = {"type": "string"}
+        text = json.dumps(schema, ensure_ascii=False, indent=2)
         error = static_contract_error(self.contract, inventory=static_inventory(output_schema_overrides={rel: text}))
         self.assertEqual(error, "weekly/M6.7 output schema changed without effect contract update")
+
+    def test_readable_structure_lists_reject_planted_additions(self):
+        cases = (
+            (
+                "analysis_input_paths",
+                lambda contract: contract["analysis_input_paths"].append("candidates[].planted"),
+                "analysis_input schema changed without effect contract update",
+            ),
+            (
+                "runtime_policy_paths",
+                lambda contract: contract["runtime_policy_paths"][
+                    "presets/a_short_m67_runtime_policy_20260715.json"
+                ].append("phase5.planted"),
+                "runtime policy field inventory body changed without effect contract update",
+            ),
+            (
+                "runtime_policy_schema_paths",
+                lambda contract: contract["runtime_policy_schema_paths"][
+                    "schemas/a_short_m67_runtime_policy.schema.json"
+                ].append("phase5.planted"),
+                "runtime policy schema changed without effect contract update",
+            ),
+            (
+                "output_schema_paths",
+                lambda contract: contract["output_schema_paths"][
+                    "schemas/a_short_m67_report.schema.json"
+                ].append("machine.planted"),
+                "weekly/M6.7 output schema changed without effect contract update",
+            ),
+        )
+        for key, plant, expected in cases:
+            with self.subTest(key=key):
+                contract = copy.deepcopy(self.contract)
+                plant(contract)
+                self.assertEqual(static_contract_error(contract), expected)
+
+    def test_readable_structure_lists_ignore_reordering(self):
+        contract = copy.deepcopy(self.contract)
+        contract["analysis_input_paths"].reverse()
+        for key in ("runtime_policy_paths", "runtime_policy_schema_paths", "output_schema_paths"):
+            for paths in contract[key].values():
+                paths.reverse()
+        contract["legacy_migration_entries"].reverse()
+        self.assertIsNone(static_contract_error(contract))
 
     def test_report_presence_cannot_be_declared_a_field_consumer(self):
         contract = copy.deepcopy(self.contract)

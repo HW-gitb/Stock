@@ -1030,8 +1030,11 @@ class SemanticProjectionTests(unittest.TestCase):
             document["leaf_nature_by_group"] = {"market_context": "true_dangling"}
             document["groups"] = []
             document["analysis_input_paths"] = ["candidates[].invented"]
-            document["analysis_input_all_paths_sha256"] = "f" * 64
-            document["legacy_migration_sha256"] = "e" * 64
+            document["legacy_migration_entries"] = [{
+                "contract_fingerprint": "e" * 64,
+                "source_commit": "f" * 40,
+                "ledger_schema_version": "1.0.0",
+            }]
             # Wiring or deleting a leaf shrinks this list every time; that shrink
             # decides nothing, so it must not invalidate accumulated evidence.
             document["unclassified_pending_audit_baseline"] = ["candidates[].invented"]
@@ -1049,8 +1052,8 @@ class SemanticProjectionTests(unittest.TestCase):
             root, "m67_effect_contract",
             lambda path: self._rewrite_json(
                 path,
-                lambda document: document["decision_predicate_sha256"].update(
-                    {"A-EGS/egs_main.py": "0" * 64}
+                lambda document: document["runtime_policy_bindings"][0].update(
+                    {"policy": "intentionally_independent"}
                 ),
             ),
         )

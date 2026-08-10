@@ -1,5 +1,13 @@
 # Session Log
 
+## 2026-08-10 — Codex 修复：B 收据代码树锚点（782a）
+
+- **Verdict/Action**：已修复 `R-ASHORT-FROZEN-DIGEST-RESEAL-TAX-RETIRE-CODE-FINGERPRINTS` 的 B 脚；裸 `@HEAD` 已移除，收据改绑 filtered tracked code tree，并保留未提交代码文件绑定。
+- **Required**：B 的实现细节、文档工作区/文档提交/代码提交三态闭合判据见 `docs/system_risk_register.md` 顶部同名条目。
+- **Verify**：固定 Python 最终聚焦 `143 OK`，receipt=`receipt:8e7ee27a7839b577d94f9cf6`；包含 effect-contract 绑定、收据三态控制、route-doc 和 doc-governance 门禁，并覆盖 Unicode `.md` 路径。
+- **Pre-Codex self-review**：matrix=B 文档工作区保持 + 文档提交保持 + 代码提交失效；register=updated；handoff=updated；focused=143 OK；full-lane=NOT_TRIGGERED（仅收据/提交工具链）；door=route-doc + doc-governance included in final focused pack；independent-review=NOT_USED。
+- **Next**：Claude Code：独立审查
+
 ## 2026-08-10 — Codex 修复: frozen digest reseal tax retirement (782a)
 
 - **Verdict/Action**: 已执行 `R-ASHORT-FROZEN-DIGEST-RESEAL-TAX-RETIRE-CODE-FINGERPRINTS`；A1/A2/A3 与 B 已落地，C 未触碰。
@@ -7,6 +15,13 @@
 - **Verify**: 固定主 Python final focused `186 OK`，receipt=`receipt:ba7ba51068e79f18276fea8e`；A-short full lane `2725/2725 PASS`，count gate equal，ledger fingerprint=`9bdb97b75736`。
 - **Pre-Codex self-review**: matrix=A1 four retired + A2 four readable lists + A3 active registry + B docs/code receipt controls + C untouched; register=updated; handoff=updated `2026-08-01_a_short_leaf_wiring_classification_handoff.md`; focused=186 OK; full-lane=2725/2725 PASS; door=route-doc + doc-governance 55 OK; independent-review=NOT_USED。
 - **Next**: Claude Code：独立审查
+
+## 2026-08-10 — Claude 复审 PASS（782a：收据封印改绑代码树，A+B 两腿全闭）
+
+- **Verdict/Action**: PASS，提交并合入 master。`collect_code_state` 不再折入裸 `@HEAD`，改绑 `@CODE_TREE`（`ls-tree` 代码路径条目的 sha256），文档提交不再作废收据；bundle 哨兵判断连带改为 `not startswith("@")`。A 腿字节未变，沿用上轮复核结论。
+- **Required**: 无。`R-ASHORT-FROZEN-DIGEST-RESEAL-TAX-RETIRE-CODE-FINGERPRINTS` 已翻 resolved；一条新 Optional（O25 根目录 `*.md` 在代码边界外）与全部实测、植入证据见 `docs/system_risk_register.md`（单一来源）。
+- **Verify**: review-evidence:ee37b4731539。验收：`tests.test_verification_receipt` 单跑 `Ran 11 in 2.5s OK`；提交门组合（文档三守卫 + effect-contract 对）结果见同日 register 边界节。上轮判死的探针原样重跑：文档**提交**后指纹保持 `e0adcec5…`（上轮此处作废）。反向三格：代码改/代码提交/删代码文件分别变为 `c67b866a…`/`879832d1…`/`807df164…`。植入：中和 `is_code_path` 过滤 → 点名用例精确转红，还原后 sha 逐字节回 `23162e6a…`。超时原因:探针与植入串行，且提交门组合含 189s 的 effect-contract 对。
+- **Next**: Codex：执行
 
 ## 2026-08-10 — Claude 审查 FAIL（782a：指纹退役 A 已闭、B 未实现）
 

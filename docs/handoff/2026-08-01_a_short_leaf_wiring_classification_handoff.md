@@ -5428,6 +5428,12 @@ effect contract 已用固定 Python 重新登记 A-EGS decision-predicate hash �
 - Fixed-Python final focused pack: `186 OK`, `receipt:ba7ba51068e79f18276fea8e`, including route-doc and doc-governance doors. A-short full lane: `2725/2725 PASS`, count gate equal, `STATIC diff_check=PASS py_compile=6`, ledger fingerprint `9bdb97b75736`.
 - Boundary: Codex executor/fixer only; independent review and commit remain outside this turn. The risk-register entry is the detailed source of truth.
 
+## 2026-08-10 Codex follow-up：B 收据代码树锚点（782a）
+
+- B 修复已落地：收据不再把裸 `@HEAD` 纳入指纹，改为 filtered tracked code-tree SHA256 + 未提交非文档文件内容；`.githooks/pre-commit` 复用同一入口。
+- 三态闭合：文档工作区改动保持 receipt；文档-only commit 保持 receipt；代码 commit 改变 fingerprint 并拒绝 receipt。固定 Python 最终聚焦 `143 OK`，token=`receipt:8e7ee27a7839b577d94f9cf6`，包含 route-doc、doc-governance 和 Unicode `.md` 路径门禁。
+- Boundary：本轮仅 B 工具链；A/C 不回退；不做 provider/live/account/order；未提交/合并，待 Claude Code 独立审查。
+
 ## 2026-08-10 追加：指纹退役刀（782a）独立审查 —— FAIL（未提交）
 
 **判定**：FAIL，一条 P2 Required（B 腿未实现，正文只在 `docs/system_risk_register.md` 同日节）。A 腿复核成立。
@@ -5445,3 +5451,25 @@ effect contract 已用固定 Python 重新登记 A-EGS decision-predicate hash �
 - §6a 未起 agent；未提交、未合并。
 
 **下一步**：`Codex：修复`（只补 B：让纯文档**提交**不再作废收据，并保留代码提交必作废的反向控制）
+
+## 2026-08-10 追加：收据封印（B 腿）复审 —— PASS（已合入 master）
+
+**判定**：PASS，无 Required，一条新 Optional（O25，正文只在 `docs/system_risk_register.md` 同日节）。至此指纹退役刀 A、B 两腿全闭。
+
+**我自己实际验了什么**
+
+- **用上一轮把它判死的那条探针原样复跑**：纯文档**提交**后指纹不再变（上一轮正是在这一格作废的）。
+- **反向三格自写**：代码工作副本改、代码提交、`git rm` 删代码文件——三种形态都仍然作废收据，没有放宽过头。
+- **读了封印的实现**：`@CODE_TREE` 取的是 `ls-tree` 的 blob 条目而不是工作副本字节，因此对 CRLF/autocrlf 天然免疫；`core.quotePath=false` + utf-8 解码避免非 ASCII 路径让封印随环境漂移。
+- **A 腿字节未变**，沿用上一轮的整族复核结论，未重复劳动。
+
+**植入对照（我自写）**
+
+- 把 `_tracked_code_tree_sha256` 的 `if is_code_path(rel):` 中和成 `if True:` → 点名闭合用例精确转红；还原后该文件 sha256 逐字节回原值、`git diff --numstat` 仍是本刀自己的 33/7。
+
+**未覆盖维度与诚实边界**
+
+- 没有真去复现两个进程同时跑的竞态，只证明了「文档提交不再作废封印」这条因果链。
+- 记下一个边界：根目录 `*.md`（含 `AGENTS.md`）也在代码边界之外，改它不再作废收据；实际影响接近零，因为两个文档守卫由 pre-commit 每次现跑。
+
+**下一步**：`Codex：执行`
