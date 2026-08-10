@@ -38,7 +38,12 @@ def safe_exception_summary(exc: BaseException, *, limit: int = 240) -> str:
         if value:
             message = message.replace(value, "[REDACTED]")
     for name, value in os.environ.items():
-        if value and _SECRET_ENV_NAME_RE.search(name):
+        # Very short values (for example ``SECRET=1`` or ``CREDENTIAL_DIR=D:``)
+        # are commonly harmless path/diagnostic fragments.  Replacing them
+        # everywhere makes the failure summary harder to locate while adding
+        # no meaningful secret protection; explicit known secret names above
+        # retain their unconditional redaction boundary.
+        if value and len(value) >= 8 and _SECRET_ENV_NAME_RE.search(name):
             message = message.replace(value, "[REDACTED]")
     message = _URL_RE.sub("[REDACTED_URL]", message)
     message = _WINDOWS_ABS_PATH_RE.sub("[REDACTED_PATH]", message)

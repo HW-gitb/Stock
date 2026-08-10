@@ -1,5 +1,39 @@
 # A-short 371 叶重新分层交接
 
+## 2026-08-10 — Codex executor/fixer：Optional O6/O7 + P2-1 + P1-5（OPEN-NOT_VERIFIED）
+
+### Verdict / Action
+
+按桌面 `C:\Users\cnhea\Desktop\a_runtest2_cc.md` 处理本批三项，保持 P2-1 代码接线与 P1-5 两轮启动/落盘确认的边界分离。O6 修复 secret-named env 值的最小长度门；O7 增加不依赖 fixture 的 AST subset 守卫。P2-1 新增 shared-cache outcome schema、builder `--outcome-json` 原子回执与 launcher 失效/校验/映射；P1-5 只增加离线 FakeTushare 两轮控制，未宣称真实闭环完成。
+
+### Problems / root causes / changes
+
+- O6：通用 `safe_exception_summary` 环境变量遮蔽会把短值诊断片段洗掉；仅通用循环要求 `len(value) >= 8`，显式已知 token 名继续强制遮蔽。
+- O7：原 pipeline→registry subset 断言挂在启用 sidecar 的 fixture 上；静态 AST 读取全部 `_expect_sidecar("...")` 字面量并断言其集合属于 `SIDECAR_SPECS`。
+- P2-1：原 builder status 只在 stdout，`main()` 恒返 0；launcher 无法区分 no-op/current/advanced/deferred，且可读旧回执。新增 `schemas/a_short_shared_cache_build_outcome.schema.json`、builder `--outcome-json`，回执仅包含 schema/version/run_date/六值 status/provider_calls/deferred counts/production_unchanged；launcher 每轮先删同路径旧回执，退出 0 后只读当前回执，缺失/坏 JSON/日期版本漂移/未知 status/计数矛盾 fail-closed 到既有 sidecar error code。
+- P1-5：第一轮无 frozen capture 保持 `no_frozen_v2_captures`、零 provider、无空 cache；P1-3 current-governed v2 capture 写入后，第二轮 FakeTushare 走现有 builder 更新 shared `daily_cache.json`，再用既有 margin capture/settlement 写私有 capture/source receipt，`forward_eligible=false`。没有新 margin algorithm/cache/provider/budget/receipt，未启动真实周跑。
+
+### Call chain / consumers / schema / source-binding / write boundary
+
+- P2-1：`materialize_incremental_cache` → `write_cache_build_outcome_receipt` → `weekly_screening.ps1::Read-SharedCacheBuildOutcome` → `Add-SidecarOutcome(shared_cache_build)` → existing sidecar health JSON/receipt/Markdown。六种 builder status 到既有 outcome 映射：no_frozen→succeeded/not_applicable；current→succeeded/already_current；updated→succeeded/advanced；updated_with_deferrals→succeeded/stalled/`cache_partial_due_to_budget`；deferred→succeeded/stalled/`cache_deferred_due_to_budget`；process/missing/invalid→failed/unavailable/稳定错误码。下游仍只读 `daily_cache.json`，不使用 receipt 控制 consumers。
+- P1-5：`P1-3 current-governed v2 capture + source_receipt` → existing shared builder/provider seam → one shared daily cache → existing margin private capture/source receipt → existing margin settlement/health sidecar。source identity、cache digest、private receipt 和 `forward_eligible=false` 均沿既有 schema；官方 M6.7、selection、account、clock、provider/live 写盘边界不变。
+- P2-1 receipt schema 是闭世界，deferred 只写非负整数计数，禁止 symbols/raw rows/token/URL/traceback/path；builder cache 原子写盘和 91-call budget 不变；launcher 启动前删除旧 receipt，异常不保留成功表面。
+
+### Negative controls / self-review
+
+- O6 长 env 值仍遮蔽、短值可定位；O7 全字面量 AST subset 不依赖任何开关 fixture。P2-1 no-frozen 零 provider/无空 cache，degraded 无正 deferred count 拒绝，launcher 不回退 stdout。P1-5 首次测试因 weekly fixture 没有 `price_series.trade_date` 被 PIT 校验拒绝，随后只修测试输入为带日期的现有 v2 candidate，未放松生产校验；最终 capture/source receipt/settlement 通过且 `forward_eligible=false`。
+- 本轮只使用临时目录与 FakeTushare；未运行 provider/live/full lane/真实 runner/account/order，未 stage/commit/push/merge。当前 HEAD=`74a39e94`，工作树在 `D:\cnhea\Codex\worktrees\40d9\Stock`。
+
+### Verify（原始终态）
+
+- 固定解释器：`C:\Users\cnhea\AppData\Local\Programs\Python\Python313\python.exe` → `Python 3.13.8`；本轮修改 Python `py_compile` exit 0；`git diff --check` exit 0。
+- `-m unittest tests.test_a_short_observability tests.test_a_short_weekly_sidecar_health tests.test_a_short_factor_comparison_v2_cache_build tests.phase6.test_weekly_screening_guardrails` → `Ran 91 tests in 10.037s` / `OK`；PowerShell AST parse=`POWERSHELL_PARSE_OK`，schema parse=`CACHE_OUTCOME_SCHEMA_PARSE_OK`，`static_contract_error()=None`。
+- 桌面 P1-5 精确五模块命令 → `Ran 695 tests in 51.395s` / `OK`；新增两轮点名单测最终 `Ran 1` / `OK`；文档门禁 `-m unittest tests.test_doc_governance_guard tests.test_route_doc_ledger_status_consistency tests.test_readme_route_row_length` → `Ran 66 tests / OK`。未 mock 的真实 full lane、provider/live 与 durable worktree 产物为 `NOT_VERIFIED`。
+
+### Boundary / Next
+
+状态保持 `OPEN-NOT_VERIFIED`；独立 reviewer/committer 仍需复审，reviewer 负责 stage/commit。下一步：`Claude Code：审查 O6/O7、P2-1 outcome 接线和 P1-5 两轮离线确认；真实授权两轮产物齐全前不要关闭 P1-5`。
+
 ## 2026-08-10 Codex executor/fixer：修复 effect-contract predicate seal（OPEN-NOT_VERIFIED）
 
 ### Verdict / Action
@@ -4763,3 +4797,28 @@ effect contract 已用固定 Python 重新登记 A-EGS decision-predicate hash �
 - 全量归执行方；§6a 未起 agent；真实周跑与 forward/freeze/clock/provider/account/ship-gate 仍全部 `NOT_VERIFIED`。
 
 **下一步**：`Codex：执行`（O6/O7 建议随下一刀顺手收）
+
+## 2026-08-10 追加：桌面 P2-1（共享缓存结构化收据）+ O6 独立审查 —— PASS（已合入 master）
+
+**判定**：PASS，无 Required，两条 Optional（O8/O9，正文只在 `docs/system_risk_register.md` 同日节）。
+
+**我自己实际验了什么**
+
+- 三段各自取证：生产者 `_cache_build_outcome_payload` 的未知状态拒绝 + 四条跨字段不变式 + schema 校验；收据 schema 的闭世界与三个 `const`；launcher `Read-SharedCacheBuildOutcome` 独立重做同一套并把 `run_date` 绑到自己的 `$RunDate`。
+- 六状态映射逐条对照 sidecar 两份 schema 的 progress enum，五个值全在册；旧的退出码表达式已删且有 `assertNotIn` 钉住。
+- 全仓核 `--outcome-json` 新必填参数的影响面：只有 `weekly_screening.ps1` 以脚本方式调用，其余三处都是 import 模块函数、不经 `parse_args`。
+- 旧收据先失效、失效不了就拒绝启动写入器——这条是我进来最担心的（上周产物里就有同路径旧件）。
+
+**植入对照（我自写）**
+
+- 按行删掉 `'cache_current'` 映射分支 → 周跑守卫仍 24 OK（守卫的 `assertIn` 被校验器白名单里的同名字符串满足）→ O8。
+- 删掉生产者 `no_frozen_* ⇒ 零调用零延迟` 的 raise → cache_build 仍 18 OK → O9。
+- **一次探针口径失误如实记**：第一版把整个 ps1 做了 CRLF→LF 归一化，连带打红 5 个无关用例，结论作废；重做时改为按行替换、其余字节不动。
+
+**未覆盖维度与诚实边界**
+
+- launcher 那半只有静态证据（无 PowerShell 级单测），真实收据要等下周实盘才第一次生成。
+- 生产者四条不变式我只验了其中一条是否承重。
+- 全量归执行方；§6a 未起 agent；真实周跑与 forward/freeze/clock/provider/account/ship-gate 仍全部 `NOT_VERIFIED`。
+
+**下一步**：`Codex：执行`

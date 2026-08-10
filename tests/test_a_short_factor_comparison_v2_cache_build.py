@@ -24,7 +24,11 @@ from runners.a_short_final_action_validation_runner import (  # noqa: E402
     _initial_ledger as new_p3_ledger,
     _load_execution_cache as load_p3_cache,
 )
-from runners.a_short_factor_comparison_v2_cache_build import materialize_incremental_cache  # noqa: E402
+from runners.a_short_factor_comparison_v2_cache_build import (  # noqa: E402
+    _cache_build_outcome_payload,
+    main as cache_build_main,
+    materialize_incremental_cache,
+)
 from runners.a_short_official_operation_evidence import _boundary, _digest  # noqa: E402
 from runners.a_short_target_policy_comparison_runner import (  # noqa: E402
     TRACK_ADMISSIONS,
@@ -229,6 +233,37 @@ def _write_p3_ledger(path: Path, record: dict) -> None:
 
 
 class ComparisonV2CacheBuildTests(unittest.TestCase):
+    def test_cli_writes_contract_bound_outcome_receipt_for_no_frozen_run(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = _root(tmp)
+            receipt_path = Path(tmp) / "weekly" / "shared_cache_build.outcome.json"
+            with mock.patch("runners.a_short_factor_comparison_v2_cache_build._today", return_value=RUN_DATE):
+                self.assertEqual(cache_build_main([
+                    "--root", str(root), "--run-date", RUN_DATE,
+                    "--outcome-json", str(receipt_path),
+                ]), 0)
+            receipt = json.loads(receipt_path.read_text(encoding="utf-8"))
+            self.assertEqual(receipt, {
+                "schema_name": "a_short_shared_cache_build_outcome",
+                "schema_version": "1.0.0",
+                "run_date": RUN_DATE,
+                "status": "no_frozen_v2_captures",
+                "provider_calls": 0,
+                "deferred_symbols_by_consumer": {},
+                "production_unchanged": True,
+            })
+            self.assertEqual(set(receipt), {
+                "schema_name", "schema_version", "run_date", "status",
+                "provider_calls", "deferred_symbols_by_consumer", "production_unchanged",
+            })
+
+    def test_outcome_projection_rejects_degraded_status_without_deferred_count(self):
+        with self.assertRaisesRegex(ComparisonV2Error, "positive deferred count"):
+            _cache_build_outcome_payload(
+                result={"status": "cache_updated_with_deferrals", "provider_calls": 1},
+                run_date=RUN_DATE,
+            )
+
     def test_p4_is_last_and_gets_provider_observed_benchmarks_only_when_budget_remains(self):
         with tempfile.TemporaryDirectory() as tmp:
             root = _root(tmp); provider = FakeTushare()

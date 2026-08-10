@@ -467,6 +467,97 @@ function Add-SidecarOutcome {
     if (-not [string]::IsNullOrWhiteSpace($FeedSha256)) { $Outcome['feed_sha256'] = $FeedSha256 }
     $script:LauncherSidecarOutcomes += $Outcome
 }
+function New-SharedCacheOutcomeReadResult {
+    param([bool]$Valid, [string]$ErrorCode = $null, [object]$Outcome = $null)
+    return [pscustomobject]@{
+        valid = $Valid
+        error_code = $ErrorCode
+        outcome = $Outcome
+    }
+}
+function Read-SharedCacheBuildOutcome {
+    param([string]$Path, [string]$ExpectedRunDate)
+    if (-not (Test-Path -LiteralPath $Path -PathType Leaf)) {
+        return New-SharedCacheOutcomeReadResult -Valid $false -ErrorCode 'cache_outcome_missing'
+    }
+    try {
+        $Outcome = Get-Content -Raw -Encoding UTF8 -LiteralPath $Path -ErrorAction Stop | ConvertFrom-Json -ErrorAction Stop
+    } catch {
+        return New-SharedCacheOutcomeReadResult -Valid $false -ErrorCode 'cache_outcome_invalid'
+    }
+    if ($null -eq $Outcome -or $Outcome -is [System.Array]) {
+        return New-SharedCacheOutcomeReadResult -Valid $false -ErrorCode 'cache_outcome_invalid'
+    }
+    $Allowed = @(
+        'schema_name', 'schema_version', 'run_date', 'status', 'provider_calls',
+        'deferred_symbols_by_consumer', 'production_unchanged'
+    )
+    foreach ($Required in $Allowed) {
+        if ($null -eq $Outcome.PSObject.Properties[$Required]) {
+            return New-SharedCacheOutcomeReadResult -Valid $false -ErrorCode 'cache_outcome_invalid'
+        }
+    }
+    foreach ($Property in $Outcome.PSObject.Properties) {
+        if ($Allowed -notcontains [string]$Property.Name) {
+            return New-SharedCacheOutcomeReadResult -Valid $false -ErrorCode 'cache_outcome_invalid'
+        }
+    }
+    if ([string]$Outcome.schema_name -ne 'a_short_shared_cache_build_outcome' -or
+        [string]$Outcome.schema_version -ne '1.0.0' -or
+        [string]$Outcome.run_date -ne [string]$ExpectedRunDate -or
+        [string]$Outcome.run_date -notmatch '^\d{8}$' -or
+        $Outcome.production_unchanged -ne $true) {
+        return New-SharedCacheOutcomeReadResult -Valid $false -ErrorCode 'cache_outcome_invalid'
+    }
+    $Statuses = @(
+        'no_frozen_v2_captures', 'no_frozen_consumer_captures', 'cache_current',
+        'deferred_due_to_budget', 'cache_updated', 'cache_updated_with_deferrals'
+    )
+    $Status = [string]$Outcome.status
+    if ($Statuses -notcontains $Status) {
+        return New-SharedCacheOutcomeReadResult -Valid $false -ErrorCode 'cache_outcome_invalid'
+    }
+    if ($null -eq $Outcome.provider_calls -or $Outcome.provider_calls -is [string]) {
+        return New-SharedCacheOutcomeReadResult -Valid $false -ErrorCode 'cache_outcome_invalid'
+    }
+    $ProviderCalls = 0.0
+    try { $ProviderCalls = [double]$Outcome.provider_calls } catch {
+        return New-SharedCacheOutcomeReadResult -Valid $false -ErrorCode 'cache_outcome_invalid'
+    }
+    if ($Outcome.provider_calls -is [bool] -or [double]::IsNaN($ProviderCalls) -or
+        [double]::IsInfinity($ProviderCalls) -or $ProviderCalls -lt 0 -or
+        [math]::Truncate($ProviderCalls) -ne $ProviderCalls) {
+        return New-SharedCacheOutcomeReadResult -Valid $false -ErrorCode 'cache_outcome_invalid'
+    }
+    $Deferred = $Outcome.deferred_symbols_by_consumer
+    if ($null -eq $Deferred -or $Deferred -is [System.Array] -or $Deferred -is [string] -or
+        $Deferred -is [ValueType]) {
+        return New-SharedCacheOutcomeReadResult -Valid $false -ErrorCode 'cache_outcome_invalid'
+    }
+    $DeferredTotal = 0.0
+    foreach ($Property in $Deferred.PSObject.Properties) {
+        if ($null -eq $Property.Value -or $Property.Value -is [string]) {
+            return New-SharedCacheOutcomeReadResult -Valid $false -ErrorCode 'cache_outcome_invalid'
+        }
+        $Count = 0.0
+        try { $Count = [double]$Property.Value } catch {
+            return New-SharedCacheOutcomeReadResult -Valid $false -ErrorCode 'cache_outcome_invalid'
+        }
+        if ($Property.Value -is [bool] -or [double]::IsNaN($Count) -or
+            [double]::IsInfinity($Count) -or $Count -lt 0 -or
+            [math]::Truncate($Count) -ne $Count) {
+            return New-SharedCacheOutcomeReadResult -Valid $false -ErrorCode 'cache_outcome_invalid'
+        }
+        $DeferredTotal += $Count
+    }
+    if (($Status -like 'no_frozen_*' -and ($ProviderCalls -ne 0 -or $DeferredTotal -ne 0)) -or
+        ($Status -notlike 'no_frozen_*' -and $ProviderCalls -lt 1) -or
+        ($Status -in @('cache_current', 'cache_updated') -and $DeferredTotal -ne 0) -or
+        ($Status -in @('deferred_due_to_budget', 'cache_updated_with_deferrals') -and $DeferredTotal -le 0)) {
+        return New-SharedCacheOutcomeReadResult -Valid $false -ErrorCode 'cache_outcome_invalid'
+    }
+    return New-SharedCacheOutcomeReadResult -Valid $true -Outcome $Outcome
+}
 
 Set-Location $ProjectRoot
 
@@ -714,6 +805,7 @@ if ($SkipSemanticRisk) {
                 # Any failure leaves only comparison evidence unavailable; M6.7 remains authoritative.
                 $FactorComparisonV2Root = Join-Path $ProjectRoot 'state\a_short\factor_comparison_private\v2'
                 $FactorComparisonV2Cache = Join-Path $FactorComparisonV2Root 'daily_cache.json'
+                $SharedCacheOutcomePath = Join-Path $M67Dir 'shared_cache_build.outcome.json'
                 $MarginOverheatCashControlRoot = Join-Path $ProjectRoot 'state\a_short\margin_overheat_cash_control_private\v1'
                 $OverlayAdjudicationRoot = Join-Path $ProjectRoot 'state\a_short\overlay_adjudication_private\v1'
                 $OverlayAdjudicationStage3 = Join-Path $ProjectRoot "result\a_short\$AsOf\stage3_selection_snapshot.json"
@@ -729,13 +821,59 @@ if ($SkipSemanticRisk) {
                 $FinalActionLedger = Join-Path $ProjectRoot 'logs\a_short_final_action_validation.json'
                 $OfficialOperationEvidenceRoot = Join-Path $ProjectRoot 'state\a_short\operation_evidence_private\v1'
                 Write-Host "[ADVISORY] Updating bounded A-short shared private cache ..." -ForegroundColor Yellow
-                & $PythonExe runners\a_short_factor_comparison_v2_cache_build.py --root $FactorComparisonV2Root --run-date $RunDate --industry-weight-root $IndustryWeightP5Root --target-policy-root $TargetPolicyLedger --final-action-validation-root $FinalActionLedger --official-operation-evidence-root $OfficialOperationEvidenceRoot --overlay-adjudication-root $OverlayAdjudicationRoot
-                $FactorComparisonCacheExitCode = $LASTEXITCODE
-                if ($null -eq $FactorComparisonCacheExitCode) { $FactorComparisonCacheExitCode = 1 }
-                if ($FactorComparisonCacheExitCode -ne 0) {
-                    Write-Host "[WARN] A-short shared comparison cache unavailable (exit $FactorComparisonCacheExitCode); M6.7/V14.3/overlay continue unchanged." -ForegroundColor Yellow
+                # A same-path old receipt can describe a prior successful run.  Remove it
+                # before invoking the writer; a failed process must never inherit that
+                # success-looking status through the sidecar health chain.
+                $SharedCacheInvalidated = Invalidate-M67Artifact -LiteralPath $SharedCacheOutcomePath
+                if (-not $SharedCacheInvalidated) {
+                    Write-Host "[WARN] A-short shared cache outcome receipt could not be invalidated; refusing to start the writer." -ForegroundColor Yellow
+                    $FactorComparisonCacheExitCode = 1
+                } else {
+                    & $PythonExe runners\a_short_factor_comparison_v2_cache_build.py --root $FactorComparisonV2Root --run-date $RunDate --outcome-json $SharedCacheOutcomePath --industry-weight-root $IndustryWeightP5Root --target-policy-root $TargetPolicyLedger --final-action-validation-root $FinalActionLedger --official-operation-evidence-root $OfficialOperationEvidenceRoot --overlay-adjudication-root $OverlayAdjudicationRoot
+                    $FactorComparisonCacheExitCode = $LASTEXITCODE
                 }
-                Add-SidecarOutcome -Name 'shared_cache_build' -Expected $true -Attempted $true -ExecutionStatus $(if($FactorComparisonCacheExitCode -eq 0){'succeeded'}else{'failed'}) -ProgressStatus $(if($FactorComparisonCacheExitCode -eq 0){'not_applicable'}else{'unavailable'}) -ErrorCode $(if($FactorComparisonCacheExitCode -eq 0){$null}else{'process_failed'})
+                if ($null -eq $FactorComparisonCacheExitCode) { $FactorComparisonCacheExitCode = 1 }
+                $SharedCacheExecutionStatus = 'failed'
+                $SharedCacheProgressStatus = 'unavailable'
+                $SharedCacheErrorCode = 'process_failed'
+                if ($FactorComparisonCacheExitCode -eq 0) {
+                    $SharedCacheRead = Read-SharedCacheBuildOutcome -Path $SharedCacheOutcomePath -ExpectedRunDate $RunDate
+                    if ($SharedCacheRead.valid) {
+                        switch ([string]$SharedCacheRead.outcome.status) {
+                            { $_ -like 'no_frozen_*' } {
+                                $SharedCacheExecutionStatus = 'succeeded'
+                                $SharedCacheProgressStatus = 'not_applicable'
+                                $SharedCacheErrorCode = $null
+                            }
+                            'cache_current' {
+                                $SharedCacheExecutionStatus = 'succeeded'
+                                $SharedCacheProgressStatus = 'already_current'
+                                $SharedCacheErrorCode = $null
+                            }
+                            'cache_updated' {
+                                $SharedCacheExecutionStatus = 'succeeded'
+                                $SharedCacheProgressStatus = 'advanced'
+                                $SharedCacheErrorCode = $null
+                            }
+                            'cache_updated_with_deferrals' {
+                                $SharedCacheExecutionStatus = 'succeeded'
+                                $SharedCacheProgressStatus = 'stalled'
+                                $SharedCacheErrorCode = 'cache_partial_due_to_budget'
+                            }
+                            'deferred_due_to_budget' {
+                                $SharedCacheExecutionStatus = 'succeeded'
+                                $SharedCacheProgressStatus = 'stalled'
+                                $SharedCacheErrorCode = 'cache_deferred_due_to_budget'
+                            }
+                        }
+                    } else {
+                        $SharedCacheErrorCode = [string]$SharedCacheRead.error_code
+                    }
+                }
+                if ($SharedCacheExecutionStatus -eq 'failed') {
+                    Write-Host "[WARN] A-short shared comparison cache unavailable ($SharedCacheErrorCode; exit $FactorComparisonCacheExitCode); M6.7/V14.3/overlay continue unchanged." -ForegroundColor Yellow
+                }
+                Add-SidecarOutcome -Name 'shared_cache_build' -Expected $true -Attempted $true -ExecutionStatus $SharedCacheExecutionStatus -ProgressStatus $SharedCacheProgressStatus -ErrorCode $SharedCacheErrorCode
                 # Freeze the normalized live decision only after M6.7 publishes its matching bundle.
                 $M67Args += @('--factor-comparison-v2-root', $FactorComparisonV2Root,
                               '--factor-comparison-v2-daily-cache', $FactorComparisonV2Cache,

@@ -172,6 +172,25 @@ class WeeklyScreeningGuardrailTest(unittest.TestCase):
             text,
         )
 
+    def test_shared_cache_receipt_is_invalidated_validated_and_mapped_fail_closed(self) -> None:
+        text = SCRIPT.read_text(encoding="utf-8")
+        self.assertIn("$SharedCacheOutcomePath = Join-Path $M67Dir 'shared_cache_build.outcome.json'", text)
+        self.assertIn("$SharedCacheInvalidated = Invalidate-M67Artifact -LiteralPath $SharedCacheOutcomePath", text)
+        self.assertIn("refusing to start the writer", text)
+        self.assertIn("--outcome-json $SharedCacheOutcomePath", text)
+        self.assertIn("function Read-SharedCacheBuildOutcome", text)
+        for code in (
+            "cache_outcome_missing", "cache_outcome_invalid", "process_failed",
+            "cache_partial_due_to_budget", "cache_deferred_due_to_budget",
+        ):
+            self.assertIn(code, text)
+        self.assertIn("no_frozen_v2_captures", text)
+        self.assertIn("no_frozen_consumer_captures", text)
+        self.assertIn("cache_current", text)
+        self.assertIn("cache_updated", text)
+        self.assertIn("cache_updated_with_deferrals", text)
+        self.assertNotIn("$FactorComparisonCacheExitCode -eq 0){'succeeded'", text)
+
     def test_stale_forward_cache_is_recorded_as_stalled_not_succeeded(self) -> None:
         # The stale-cache banner only lives in the console. The machine-readable sidecar
         # outcome used to say `succeeded`, so a frozen candidate-effect ledger looked

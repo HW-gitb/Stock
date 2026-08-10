@@ -47,3 +47,9 @@ class SafeExceptionSummaryTests(unittest.TestCase):
             summary = safe_exception_summary(RuntimeError("provider rejected env-secret-value"))
 
         self.assertNotIn("env-secret-value", summary)
+
+    def test_keeps_short_secret_named_environment_fragment_locatable(self):
+        with patch.dict(os.environ, {"CUSTOM_SIDECARE_SECRET": "tiny"}, clear=False):
+            summary = safe_exception_summary(RuntimeError("provider rejected tiny"))
+
+        self.assertIn("tiny", summary)

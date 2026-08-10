@@ -1,0 +1,51 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "A-short shared cache build outcome",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_name",
+    "schema_version",
+    "run_date",
+    "status",
+    "provider_calls",
+    "deferred_symbols_by_consumer",
+    "production_unchanged"
+  ],
+  "properties": {
+    "schema_name": {
+      "const": "a_short_shared_cache_build_outcome"
+    },
+    "schema_version": {
+      "const": "1.0.0"
+    },
+    "run_date": {
+      "type": "string",
+      "pattern": "^[0-9]{8}$"
+    },
+    "status": {
+      "enum": [
+        "no_frozen_v2_captures",
+        "no_frozen_consumer_captures",
+        "cache_current",
+        "deferred_due_to_budget",
+        "cache_updated",
+        "cache_updated_with_deferrals"
+      ]
+    },
+    "provider_calls": {
+      "type": "integer",
+      "minimum": 0
+    },
+    "deferred_symbols_by_consumer": {
+      "type": "object",
+      "additionalProperties": {
+        "type": "integer",
+        "minimum": 0
+      }
+    },
+    "production_unchanged": {
+      "const": true
+    }
+  }
+}

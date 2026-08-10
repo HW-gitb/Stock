@@ -41,6 +41,17 @@ from runners.materialize_execution_price_data_tushare import ts_call  # noqa: E4
 
 DAILY_CACHE_NAME = "daily_cache.json"
 DAILY_CACHE_SCHEMA_PATH = ROOT / "schemas" / "a_short_factor_comparison_v2_daily_cache.schema.json"
+CACHE_BUILD_OUTCOME_SCHEMA_PATH = ROOT / "schemas" / "a_short_shared_cache_build_outcome.schema.json"
+CACHE_BUILD_OUTCOME_SCHEMA_NAME = "a_short_shared_cache_build_outcome"
+CACHE_BUILD_OUTCOME_SCHEMA_VERSION = "1.0.0"
+CACHE_BUILD_STATUSES = (
+    "no_frozen_v2_captures",
+    "no_frozen_consumer_captures",
+    "cache_current",
+    "deferred_due_to_budget",
+    "cache_updated",
+    "cache_updated_with_deferrals",
+)
 DEFAULT_MAX_PROVIDER_CALLS = 91
 EXECUTION_PRE_HISTORY_DAYS = 20
 EXECUTION_HORIZON_DAYS = 20
@@ -63,6 +74,55 @@ def _atomic_write(path: Path, payload: dict) -> None:
     temporary = path.with_name(f".{path.name}.tmp")
     temporary.write_text(json.dumps(payload, ensure_ascii=False, indent=2, allow_nan=False) + "\n", encoding="utf-8")
     os.replace(temporary, path)
+
+
+def _cache_build_outcome_payload(*, result: dict, run_date: str) -> dict:
+    """Project an internal builder result into the launcher-only receipt contract."""
+    status = result.get("status")
+    if status not in CACHE_BUILD_STATUSES:
+        raise ComparisonV2Error("shared cache builder returned an unknown outcome status")
+    provider_calls = result.get("provider_calls", 0)
+    if not isinstance(provider_calls, int) or isinstance(provider_calls, bool) or provider_calls < 0:
+        raise ComparisonV2Error("shared cache builder outcome provider_calls is invalid")
+    raw_deferred = result.get("deferred_symbols_by_consumer") or {}
+    if not isinstance(raw_deferred, dict):
+        raise ComparisonV2Error("shared cache builder outcome deferred counts are invalid")
+    deferred: dict[str, int] = {}
+    for consumer, count in raw_deferred.items():
+        if not isinstance(consumer, str) or not consumer or \
+                not isinstance(count, int) or isinstance(count, bool) or count < 0:
+            raise ComparisonV2Error("shared cache builder outcome deferred counts are invalid")
+        deferred[consumer] = count
+    deferred_total = sum(deferred.values())
+    if status.startswith("no_frozen_") and (provider_calls != 0 or deferred_total != 0):
+        raise ComparisonV2Error("no-frozen cache outcome must have zero provider calls and deferrals")
+    if not status.startswith("no_frozen_") and provider_calls < 1:
+        raise ComparisonV2Error("cache outcome with frozen work must record a provider call")
+    if status in {"cache_current", "cache_updated"} and deferred_total != 0:
+        raise ComparisonV2Error("current/updated cache outcome cannot carry deferred counts")
+    if status in {"deferred_due_to_budget", "cache_updated_with_deferrals"} and deferred_total <= 0:
+        raise ComparisonV2Error("degraded cache outcome must carry a positive deferred count")
+    payload = {
+        "schema_name": CACHE_BUILD_OUTCOME_SCHEMA_NAME,
+        "schema_version": CACHE_BUILD_OUTCOME_SCHEMA_VERSION,
+        "run_date": _string_date(run_date, "outcome run_date"),
+        "status": status,
+        "provider_calls": provider_calls,
+        "deferred_symbols_by_consumer": dict(sorted(deferred.items())),
+        "production_unchanged": True,
+    }
+    try:
+        jsonschema.validate(payload, _load_json(CACHE_BUILD_OUTCOME_SCHEMA_PATH))
+    except jsonschema.ValidationError as exc:
+        raise ComparisonV2Error("shared cache builder outcome violates its contract") from exc
+    return payload
+
+
+def write_cache_build_outcome_receipt(*, path: str | Path, run_date: str, result: dict) -> dict:
+    """Atomically write the de-identified builder result consumed by the launcher."""
+    payload = _cache_build_outcome_payload(result=result, run_date=run_date)
+    _atomic_write(Path(path), payload)
+    return payload
 
 
 def _empty_cache() -> dict:
@@ -788,6 +848,8 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     parser = argparse.ArgumentParser(description="Materialize frozen private A-short v2/P5/P2/P3/official windows into one cache.")
     parser.add_argument("--root", required=True, help="gitignored state/a_short/factor_comparison_private/v2 root")
     parser.add_argument("--run-date", required=True, help="actual local run date YYYYMMDD")
+    parser.add_argument("--outcome-json", required=True,
+                        help="launcher-only atomic status receipt path")
     parser.add_argument("--max-provider-calls", type=int, default=DEFAULT_MAX_PROVIDER_CALLS)
     parser.add_argument("--industry-weight-root", default=None,
                         help="optional gitignored P5 state/a_short/industry_weight_comparison_private/v1 root")
@@ -809,6 +871,7 @@ def main(argv: list[str] | None = None) -> int:
                                            final_action_validation_root=args.final_action_validation_root,
                                            official_operation_evidence_root=args.official_operation_evidence_root,
                                            overlay_adjudication_root=args.overlay_adjudication_root)
+    write_cache_build_outcome_receipt(path=args.outcome_json, run_date=args.run_date, result=result)
     print(f"[a-short-shared-daily-cache] {result['status']} (production unchanged)")
     return 0
 
