@@ -38,6 +38,7 @@ REVIEW_SCHEMA_NAME = "us_short_serenity_quality_review"
 REVIEW_SCHEMA_VERSION = "1.0.0"
 CONSUMER_VERSION = shadow_consumer.CONSUMER_VERSION
 PRODUCER_IDENTITY_VERSION = "serenity_annotation_producer_v0.1.0"
+LEDGER_REJECTED_REASON_CODE = "SERENITY_QUALITY_LEDGER_REJECTED"
 REVIEWER_IDENTITY_VERSION = "serenity_quality_reviewer_v0.1.0"
 REVIEW_PROMPT_VERSION = "serenity_quality_reviewer_prompt_v0.1.0"
 METRIC_IDS = (
@@ -825,6 +826,24 @@ def write_independent_quality_review(
     return {"status": "written", "review_path": str(expected_path), "reviewer_identity": reviewer_identity}
 
 
+def ledger_rejected_settlement(exc: Exception) -> dict[str, Any]:
+    """The single settlement shape for a ledger the current contract cannot read.
+
+    Both this engine and the weekly runner's pre-stage seam return it, so the two
+    callers cannot drift apart and the runner needs no private helper of ours.
+    """
+    return {
+        "stage": "serenity_quality_settlement",
+        "status": "no_count",
+        "evidence_status": "invalid_evidence",
+        "pending_count": 0,
+        "reason_code": LEDGER_REJECTED_REASON_CODE,
+        "error": _safe_error(LEDGER_REJECTED_REASON_CODE, exc),
+        "main_task_should_abort": False,
+        "effects": dict(EFFECT_BOUNDARY),
+    }
+
+
 def settle_pending_review(
     *,
     ledger_path: Path,
@@ -853,16 +872,7 @@ def settle_pending_review(
     except SerenityQualityForwardError as exc:
         # A pre-Blade5 ledger is not evidence for the current producer/reviewer contract.  Keep the old
         # bytes untouched, make the settlement a local no-count, and let the ordinary weekly task continue.
-        return {
-            "stage": "serenity_quality_settlement",
-            "status": "no_count",
-            "evidence_status": "invalid_evidence",
-            "pending_count": 0,
-            "reason_code": "SERENITY_QUALITY_LEDGER_REJECTED",
-            "error": _safe_error("SERENITY_QUALITY_LEDGER_REJECTED", exc),
-            "main_task_should_abort": False,
-            "effects": dict(EFFECT_BOUNDARY),
-        }
+        return ledger_rejected_settlement(exc)
     pending_rows = ledger["pending_annotations"]
     if not pending_rows:
         return {"stage": "serenity_quality_settlement", "status": "no_pending", "pending_count": 0, "effects": dict(EFFECT_BOUNDARY)}
@@ -999,7 +1009,7 @@ def run_quality_forward(
     except SerenityQualityForwardError as exc:
         # Do not let a legacy/corrupt ledger abort the weekly task.  The invalid ledger remains on disk for
         # diagnosis; this run uses an empty in-memory ledger, so no legacy row can enter the current formal gate.
-        error = _safe_error("SERENITY_QUALITY_LEDGER_REJECTED", exc)
+        error = _safe_error(LEDGER_REJECTED_REASON_CODE, exc)
         existing_ledger = _empty_ledger()
         shadow = shadow_consumer.consume_serenity_annotation(None)
         observation = _observation(
@@ -1269,6 +1279,7 @@ __all__ = [
     "EFFECT_BOUNDARY",
     "GATE_SCHEMA_PATH",
     "G1_PREFLIGHT_SCHEMA_PATH",
+    "LEDGER_REJECTED_REASON_CODE",
     "LEDGER_SCHEMA_PATH",
     "METRIC_IDS",
     "OBSERVATION_SCHEMA_PATH",
@@ -1280,6 +1291,7 @@ __all__ = [
     "REVIEWER_IDENTITY_VERSION",
     "REVIEW_PROMPT_VERSION",
     "SerenityQualityForwardError",
+    "ledger_rejected_settlement",
     "load_quality_policy",
     "load_pending_review_target",
     "produce_annotation_for_week",

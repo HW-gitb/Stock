@@ -2140,16 +2140,7 @@ def run_weekly_capstone(
         except serenity_quality.SerenityQualityForwardError as exc:
             # This pre-stage settlement is outside the normal optional-stage boundary.  A stale/legacy local
             # ledger is invalid quality evidence, never a reason to abort the ordinary zero-effect weekly task.
-            settlement = {
-                "stage": "serenity_quality_settlement",
-                "status": "no_count",
-                "evidence_status": "invalid_evidence",
-                "pending_count": 0,
-                "reason_code": "SERENITY_QUALITY_LEDGER_REJECTED",
-                "error": serenity_quality._safe_error("SERENITY_QUALITY_LEDGER_REJECTED", exc),
-                "main_task_should_abort": False,
-                "effects": dict(serenity_quality.EFFECT_BOUNDARY),
-            }
+            settlement = serenity_quality.ledger_rejected_settlement(exc)
         ctx = replace(ctx, serenity_settlement_result=dict(settlement))
     if resume_from is not None and not production_run:
         raise WeeklyCapstoneError("--resume is available only on the real default capstone pipeline")
