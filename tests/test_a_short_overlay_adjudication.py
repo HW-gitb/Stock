@@ -195,9 +195,11 @@ class OverlayAdjudicationTests(unittest.TestCase):
                 official = json.loads(marker.read_text(encoding="utf-8"))
                 official["files"]["p4_stage3_overlay_score"]["sha256"] = hashlib.sha256(overlay.read_bytes()).hexdigest()
                 marker.write_text(json.dumps(official), encoding="utf-8")
-                self.assertEqual(capture_after_published_weekly(root=root, decision_date=DECISION, run_date=RUN,
+                conflict = capture_after_published_weekly(root=root, decision_date=DECISION, run_date=RUN,
                     stage3_snapshot_path=stage3, overlay_path=overlay, out_path=weekly, receipt_path=receipt,
-                    egs_publish_marker_path=marker, source_identity=identity, forward_eligible=True)["status"], "conflict_recorded_no_count")
+                    egs_publish_marker_path=marker, source_identity=identity, forward_eligible=True)
+                self.assertEqual(conflict["status"], "conflict_recorded_no_count")
+                self.assertEqual(conflict["reason_code"], "immutable_capture_conflict")
             self.assertTrue((root / "conflicts" / f"{DECISION}.json").is_file())
 
     def test_unbound_egs_sidecar_is_rejected_before_capture(self) -> None:

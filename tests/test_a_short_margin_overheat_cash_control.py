@@ -1402,6 +1402,11 @@ class MarginOverheatCashControlKnife3Tests(unittest.TestCase):
             "schema_name", "schema_version", "track_id", "status", "evidence_status",
             "current_stage", "pending_user_receipt_count", "message", "production_unchanged",
         })
+        with patch.object(track, "PUBLIC_SUMMARY_SCHEMA_PATH", missing_schema):
+            with self.assertRaises(track.MarginOverheatCashControlError):
+                track.settle_and_summarize_margin_overheat_weekly(
+                    root=self.root, daily_cache_path=self.cache_path, as_of=AS_OF, strict=True
+                )
 
     def test_wrapped_same_week_replay_drift_keeps_its_immutable_identity(self):
         try:

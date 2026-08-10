@@ -26,6 +26,8 @@ ROOT = Path(__file__).resolve().parents[1]
 if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
+from engine.a_short_observability import safe_exception_summary  # noqa: E402
+
 HEALTH_SCHEMA = ROOT / "schemas" / "a_short_weekly_sidecar_health.schema.json"
 OUTCOME_SCHEMA = ROOT / "schemas" / "a_short_weekly_sidecar_outcomes.schema.json"
 WEEKLY_RECEIPT_SCHEMA = ROOT / "schemas" / "a_short_weekly_publish_receipt.schema.json"
@@ -110,11 +112,23 @@ def _load_json(path: Path) -> dict[str, Any] | None:
     return value if isinstance(value, dict) else None
 
 
-def _artifact_matches_schema(name: str, path: Path) -> bool:
-    payload = _load_json(path)
+def _artifact_validation(name: str, path: Path) -> tuple[bool, str | None, str | None]:
+    """Validate one authoritative artifact and return ``(ok, code, detail)``.
+
+    The detail is deliberately a short, de-identified classification.  It
+    never contains the path or raw JSON, so health can safely persist it.
+    """
+    if not path.is_file():
+        return False, f"{name}_artifact_missing", "artifact=missing"
+    try:
+        payload = json.loads(path.read_text(encoding="utf-8-sig"))
+    except (OSError, UnicodeDecodeError, ValueError, TypeError):
+        return False, f"{name}_artifact_invalid_json", "artifact=invalid_json"
+    if not isinstance(payload, dict):
+        return False, f"{name}_artifact_schema_invalid", "artifact=not_object"
     schema_path = REQUIRED_ARTIFACT_SCHEMAS.get(name)
-    if payload is None or schema_path is None:
-        return False
+    if schema_path is None:
+        return False, f"{name}_artifact_schema_invalid", "artifact=schema_unregistered"
     try:
         if name == "iv_feed":
             from runners.a_short_iv_feed_build import validate_feed_artifact
@@ -127,9 +141,18 @@ def _artifact_matches_schema(name: str, path: Path) -> bool:
                 from engine.a_short_regime_action_comparison import validate_candidate_effect_summary
 
                 validate_candidate_effect_summary(payload)
-    except (OSError, ValueError, TypeError, jsonschema.ValidationError, jsonschema.SchemaError):
-        return False
-    return True
+    except jsonschema.ValidationError:
+        return False, f"{name}_artifact_schema_invalid", "artifact=schema_invalid"
+    except jsonschema.SchemaError:
+        return False, f"{name}_artifact_schema_invalid", "artifact=schema_unreadable"
+    except (OSError, ValueError, TypeError):
+        return False, f"{name}_artifact_identity_mismatch", "artifact=identity_or_content_mismatch"
+    return True, None, None
+
+
+def _artifact_matches_schema(name: str, path: Path) -> bool:
+    """Boolean compatibility wrapper for existing callers and tests."""
+    return _artifact_validation(name, path)[0]
 
 
 def _authoritative_artifact_path(project_root: Path, name: str, as_of: str) -> Path:
@@ -325,14 +348,21 @@ def _normalise_outcome(raw: dict[str, Any], *, as_of: str, project_root: Path) -
         _authoritative_artifact_path(project_root, name, as_of)
         if name in AUTHORITATIVE_ARTIFACT_SIDECARS else None
     )
+    artifact_valid = None
+    artifact_code = None
+    artifact_detail = None
     if expected and execution == "succeeded" and required_artifact is not None \
-            and not _artifact_matches_schema(name, required_artifact):
+            and not (artifact_valid := _artifact_validation(name, required_artifact))[0]:
+        artifact_valid, artifact_code, artifact_detail = artifact_valid
         execution = "failed"
         progress = "unavailable"
         observed_decision = None
         observed_data = None
         raw = dict(raw)
-        raw["error_code"] = f"{name}_artifact_missing_or_invalid"
+        raw["error_code"] = raw.get("error_code") or artifact_code
+        raw["error_detail"] = raw.get("error_detail") or artifact_detail
+    elif required_artifact is not None:
+        artifact_valid, artifact_code, artifact_detail = _artifact_validation(name, required_artifact)
     probed_decision, probed_data = _probe(project_root, name, as_of)
     if name in AUTHORITATIVE_ARTIFACT_SIDECARS or probed_decision is not None:
         observed_decision = probed_decision
@@ -388,22 +418,61 @@ def _normalise_outcome(raw: dict[str, Any], *, as_of: str, project_root: Path) -
         if expected_decision:
             if observed_decision is None:
                 item["progress_status"] = "unavailable"
+                item["error_code"] = item["error_code"] or (
+                    "candidate_effect_no_observed_evidence"
+                    if name == "candidate_effect" else f"{name}_observed_evidence_missing"
+                )
+                item["error_detail"] = item["error_detail"] or (
+                    "authoritative_summary_observed_as_of=missing"
+                    if name == "candidate_effect" else "observed_decision_as_of=missing"
+                )
             elif observed_decision < expected_decision:
                 item["progress_status"] = "stalled"
+                item["error_code"] = item["error_code"] or f"{name}_evidence_stale"
+                item["error_detail"] = item["error_detail"] or "observed_decision_as_of=stale"
         if expected_data:
             if observed_data is None:
                 item["progress_status"] = "unavailable"
+                item["error_code"] = item["error_code"] or f"{name}_observed_data_missing"
+                item["error_detail"] = item["error_detail"] or "observed_data_through=missing"
             elif observed_data < expected_data:
                 item["progress_status"] = "stalled"
+                item["error_code"] = item["error_code"] or f"{name}_data_stale"
+                item["error_detail"] = item["error_detail"] or "observed_data_through=stale"
     if name == "theme_forward_comparison" and item["execution_status"] == "succeeded":
         packet = _load_json(
             project_root / "research/results/a_short_theme_forward_comparison.json"
         )
+        rejected = (packet or {}).get("rejected_atomic_cohorts") if isinstance(packet, dict) else None
+        if isinstance(rejected, dict) and rejected.get(str(as_of)):
+            item["progress_status"] = "unavailable"
+            item["error_code"] = item["error_code"] or "theme_cohort_rejected"
+            item["error_detail"] = item["error_detail"] or safe_exception_summary(
+                ValueError(str(rejected[str(as_of)])), limit=480
+            )
         mode = str((packet or {}).get("adjudication_mode") or "")
         if mode.startswith("epoch_"):
             item["progress_status"] = "stalled"
             item["error_code"] = item["error_code"] or f"evidence_clock_blocked_{mode}"
+    if name == "candidate_effect" and expected and item["execution_status"] == "succeeded" \
+            and item["observed_decision_as_of"] is None and artifact_valid is not False:
+        item["progress_status"] = "unavailable"
+        item["error_code"] = item["error_code"] or "candidate_effect_no_observed_evidence"
+        item["error_detail"] = item["error_detail"] or "authoritative_summary_observed_as_of=missing"
     return item
+
+
+def _validate_health_reason_contract(entries: list[dict[str, Any]]) -> None:
+    """Require a stable reason for every registered failed/degraded outcome."""
+    for item in entries:
+        if item["execution_status"] in {"failed", "missing_outcome"} or \
+                item["progress_status"] in {"stalled", "unavailable"}:
+            code = item.get("error_code")
+            if not isinstance(code, str) or not code or not code.replace("_", "").isalnum():
+                raise ValueError(f"sidecar {item.get('name')} degraded outcome lacks stable error_code")
+            detail = item.get("error_detail")
+            if detail is not None and ("\n" in str(detail) or "\r" in str(detail) or len(str(detail)) > 512):
+                raise ValueError(f"sidecar {item.get('name')} error_detail is not bounded")
 
 
 def build_health(
@@ -482,6 +551,7 @@ def build_health(
                 "error_code": "missing_outcome",
             }
         entries.append(_normalise_outcome(raw, as_of=as_of, project_root=project_root))
+    _validate_health_reason_contract(entries)
     failed = sum(1 for item in entries if item["execution_status"] in {"failed", "missing_outcome"} or
                  (item["expected"] and item["progress_status"] in {"stalled", "unavailable"}))
     stalled = sum(1 for item in entries if item["progress_status"] == "stalled")

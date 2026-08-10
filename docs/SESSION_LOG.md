@@ -1,5 +1,49 @@
 # Session Log
 
+## 2026-08-10 — Claude 审查 PASS（40d9：失败原因落盘 + 状态映射封闭世界）
+
+- **Verdict/Action**: PASS，提交并合入 master。共享缓存失败落脱敏收据、三处 settlement 由吞异常改 `strict` 再由调用方记因、每条 degraded sidecar 行必带 code+有界 detail。两处最可疑的都实测过：封闭世界映射对五个真实产出函数的全部状态 `unexpected` 命中数=0；`enforce_price_clock` 只在预检按 `clock_explicit` 放宽，默认与最终绑定仍严格。
+- **Required**: 无。三条 Optional（O20 health 契约用 raise 收场且无守卫测试 / O21 schema 未升版 / O22 重复校验）与实测、植入证据见 `docs/system_risk_register.md`（单一来源，本处不复述）。
+- **Verify**: review-evidence:cae62b23d2c6。验收超集 `PASS exit=0 tests=830 elapsed=501.2s bundles=a_short_effect_contract`（显式 1200s：实测 501.2s>300s 默认）。植入：中和封闭世界回退 → 点名用例精确转红（`- ('advanced',None,None)` vs `+ ('unavailable','unexpected_sidecar_status',...)`），还原后 sha256 逐字节回 `55c67cfe…`。独立重算 `static_contract_error=None`、10 个 predicate digest 全对。full lane 归执行方，仍 NOT_VERIFIED。超时原因:唯一慢超集跑 501.2s，其间只能做静态取证与轻探针。
+- **Next**: Codex：执行
+
+## 2026-08-10 — Codex executor/fixer：桌面 V3-A + O18/O19 修复（OPEN-NOT_VERIFIED）
+
+### Verdict / Action
+
+按桌面 `2a_testrun0810.md` V3-A 方案完成 O18、O19 与 V3-A1/V3-A2 最小代码接线；保留 Claude 推荐的 Option 1（删除管线重复 weekday 滞后门，生产者交易日历为唯一权威）。本轮不运行 provider/live/真实 weekly/full lane，不新增 token，不 stage/commit/push/merge。V3-B、V3-C、V4 不在本刀范围。
+
+### Problems / root causes / changes
+
+- O18：`runners/a_short_weekly_pipeline.py` 的模块级 `timedelta` 已成为孤儿，删除导入；函数内仍按既有局部导入使用，行为不变。
+- O19：O17 前置校验现在保留在任何授权价格 provider 之前；若 `args/analysis_input` 已声明价格时钟，继续严格校验；若是 legacy/manual 未声明时钟，只先校验结构，随后在候选价格 bars 形成后以最终 `price_data_through` 做严格重绑。这样保留快速失败，又不把暂定时钟误当最终时钟。
+- V3-A1：shared-cache builder 在参数解析后捕获业务异常，以 `safe_exception_summary` 原子写 `status=failed/error_code/error_detail` receipt 并返回非零；launcher 先失效旧 receipt，区分 missing/invalid JSON/schema/wrong date/unknown status/producer failed，并只透传结构化字段。
+- V3-A1：pipeline 用闭世界 `_sidecar_result_fields` 统一映射 21 个注册 sidecar 的 success/idempotent/pending/unavailable/conflict/unknown status；industry/overlay conflict 写 `immutable_capture_conflict`，settlement 通过 strict + current-round `reason_codes` 不再伪造 `advanced`；依赖 settlement 使用 `blocked_by=<capture>` 关联脱敏根因；margin settlement 保留 standalone fail-soft、pipeline strict 原因入口。
+- V3-A2：health 原样保留 upstream `error_code/error_detail/skip_reason`，authoritative candidate-effect/IV validator 返回 missing/invalid-json/schema/identity 三元原因；当前 theme rejection 写 `theme_cohort_rejected`，candidate authoritative summary 无 observed evidence 写 `candidate_effect_no_observed_evidence`；degraded/stalled/unavailable contract guard 在 durable write 前阻断无 reason 的注册项。未读取 industry/overlay private root。
+- shared-cache schema 仅新增 `failed` 分支和失败字段；non-failed receipt 禁止残留任一错误字段；`schemas/a_short_m67_effect_contract.json` 只同步 pipeline predicate digest `1793f1d3d02bc848ce7950af8ccff196d72643a1146009f561429cfd609ff51a`。
+
+### Call chain / consumers / schema / source-binding / write boundary
+
+`producer/authoritative receipt → runners/a_short_weekly_pipeline.py 或 runners/weekly_screening.ps1 outcome manifest → runners/a_short_weekly_sidecar_health.py::_normalise_outcome/build_health → sidecar_health.json/.md/.receipt.json`。Shared cache 为 `builder → shared_cache_build.outcome.json → Read-SharedCacheBuildOutcome → Add-SidecarOutcome → health`；industry/overlay 为 `capture/settlement → sidecar_result.reason_codes → pipeline outcome → health`。既有 pipeline/health outcome schema 与 public M6.7 schema 未扩展版本；仅 shared-cache 专属 schema 加 `failed`。日期绑定仍是本轮 `run_date/as_of`、最终 observed `price_data_through`、当前 artifact/receipt，旧成功 receipt、其他周 rejected cohort、private payload 均不能解释当前周。没有改 EGS 排名、Top5、M6.7 正式结论、账户/现金、provider、缓存内容或下单边界。
+
+### Negative controls / pre-Codex self-review
+
+- 失败 receipt 写不出时 launcher 仍为 `process_failed/cache_outcome_*`，不继承旧成功；unknown status → `failed/unavailable + unexpected_sidecar_status`；`error_detail` 只走脱敏、单行、≤512，状态分支不读取 detail。
+- conflict capture 与 settlement 分行保存；settlement no-count/unavailable 不覆盖 capture；capture 失败的 dependent settlement 仍是 `skipped/not_applicable` 并带 `blocked_by`；合法 pending/not_due/not_configured 不被误报为 failed。
+- matrix=21 个 registered sidecars；source-binding=producer receipt/current `as_of`/final price clock；schema=既有 outcome/health + shared-cache failed branch；write-boundary=comparison/private/health durable only；V3-A/V4 交叉职责保持，V3-B/V3-C/V4 未实现。
+- 新增/收紧回归：cache failed receipt 脱敏、pipeline status polarity/unknown/blocked-by、industry/overlay reason code、margin strict fail-soft 双路径、health upstream detail/theme current reject/candidate missing evidence/artifact classifications。未把测试夹具当真实周跑证据。
+- **Pre-Codex self-review**: matrix=21 registered sidecars + O18/O19; register=updated; handoff=updated; focused=740 OK; full-lane=NOT_VERIFIED; door=route/doc 66 OK + fixed-Python compile/PowerShell ParseFile/diff-check PASS。
+
+### Exact verification / boundary / next
+
+- 固定解释器：`C:\Users\cnhea\AppData\Local\Programs\Python\Python313\python.exe`，版本 `Python 3.13.8`。
+- 精确桌面 V3-A 聚焦命令：`C:\Users\cnhea\AppData\Local\Programs\Python\Python313\python.exe -m unittest tests.test_a_short_observability tests.test_a_short_factor_comparison_v2_cache_build tests.test_a_short_margin_overheat_cash_control tests.test_a_short_industry_weight_comparison tests.test_a_short_overlay_adjudication tests.test_a_short_weekly_pipeline tests.test_a_short_weekly_sidecar_health tests.test_a_short_weekly_screening_m67_failure_closeout -q` → `Ran 740 tests in 64.773s` / `OK`（既有 ResourceWarning 非失败）。新增 V3 点名回归 → `Ran 8 tests in 4.104s` / `OK`；静态 contract → `None`；fixed-Python `py_compile` → `PASS`；PowerShell `Parser.ParseFile` → `PASS`；route/doc gates → `Ran 66 tests` / `OK`；`git diff --check` → exit `0`（仅既有 LF/CRLF warnings）。
+- `NOT_VERIFIED`：未运行 provider/live、真实 normal weekly、full lane、durable 两轮或 ship-gate；V3-B/V3-C/V4 未修；当前结果等待 Claude Code 独立 review/committer，不得称整项 PASS 或提交。
+
+### Required / Optional / review boundary
+
+O18/O19 已完成代码修复；V3-A 代码与离线契约完成但本轮 `OPEN-NOT_VERIFIED`，没有新增 Required。Claude Code 是独立 reviewer/committer，只有其 PASS 后负责 stage/commit；Codex executor/fixer 不提交。下一步：`Claude Code：独立复审桌面 V3-A + O18/O19，按 V3-A 7 缺口/21 项矩阵/health durable 链给出结论`。
+
 ## 2026-08-10 — Claude 复审 PASS（40d9：V2 双时钟 + 重复滞后门已删）
 
 - **Verdict/Action**: PASS，提交并合入 master。上一轮把它判死的探针原样复跑：春节 `20260206/20260223`、国庆 `20260930/20261009` 两格由 RAISED 变 OK，正常周未回归；真断供改由生产者 `resolve_published_window` 挡住（返回 `()`）。O16/O17 亦实闭；effect contract digest 我独立重算零 mismatch。

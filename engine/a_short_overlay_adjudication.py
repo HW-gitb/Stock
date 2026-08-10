@@ -539,7 +539,8 @@ def capture_after_published_weekly(*, root: str | Path, decision_date: str, run_
                     "epoch_id": existing.get("epoch_id", epoch), "contract_fingerprint": existing.get("contract_fingerprint", fingerprint),
                     "payload": {"reason": "same_canonical_week_content_drift_no_overwrite"}, "boundary": _boundary()})
         _write(private_root / "conflicts" / f"{decision_date}.json", conflict)
-        return {"status": "conflict_recorded_no_count", "production_unchanged": True}
+        return {"status": "conflict_recorded_no_count", "reason_code": "immutable_capture_conflict",
+                "production_unchanged": True}
     _write(capture_path, record); _refresh_ledger(private_root)
     return {"status": "captured_live_canonical", "production_unchanged": True}
 
@@ -1081,7 +1082,8 @@ def unavailable_public_summary(as_of: str, *, epoch_context: dict | None = None)
 
 def settle_and_summarize_weekly(*, root: str | Path | None, daily_cache_path: str | Path | None, as_of: str,
                                 public_json_path: str | Path = DEFAULT_PUBLIC_JSON, public_markdown_path: str | Path = DEFAULT_PUBLIC_MD,
-                                write_public: bool = True) -> dict:
+                                write_public: bool = True, strict: bool = False,
+                                sidecar_result: dict | None = None) -> dict:
     """``write_public=False`` is the weekly-pipeline path: the pair may only move
     after the official bundle publishes and the private capture lands."""
     epoch_context = None
@@ -1096,10 +1098,15 @@ def settle_and_summarize_weekly(*, root: str | Path | None, daily_cache_path: st
             summary = build_public_summary(root=private_root, as_of=as_of, epoch_context=epoch_context)
         if write_public:
             write_public_summary(summary, json_path=public_json_path, markdown_path=public_markdown_path)
+        if sidecar_result is not None:
+            sidecar_result["reason_codes"] = _settlement_reason_codes(
+                root=root, as_of=as_of, epoch_context=epoch_context)
         return summary
     except Exception:
         # An outage must not overwrite last week's checked pair with a fresh
         # "unavailable" one; the caller records it in the sidecar outcomes.
+        if strict:
+            raise
         return unavailable_public_summary(as_of, epoch_context=epoch_context)
 
 
@@ -1108,3 +1115,32 @@ def _refresh_ledger(root: Path) -> None:
     for capture in _records(root): groups[capture["epoch_id"]] = groups.get(capture["epoch_id"], 0) + 1
     _write(root / "ledger.json", {"schema_name": "a_short_overlay_adjudication_ledger", "schema_version": "1.0.0", "program_id": PROGRAM_ID,
                                     "epochs": [{"epoch_id": key, "capture_count": groups[key]} for key in sorted(groups)], "boundary": _boundary()})
+
+
+def _settlement_reason_codes(*, root: str | Path | None, as_of: str,
+                             epoch_context: dict | None = None) -> list[str]:
+    """Return only stable, de-identified reasons from the current settlement."""
+    if root is None:
+        return []
+    private_root = _root(root)
+    if not private_root.exists():
+        return []
+    cutoff = _date(as_of, "as_of")
+    context = epoch_context or _epoch_context()
+    codes: set[str] = set()
+    for capture in _current_records(private_root, context):
+        decision_date = capture["decision_date"]
+        if decision_date != cutoff:
+            continue
+        if (private_root / "conflicts" / f"{decision_date}.json").exists():
+            codes.add("immutable_capture_conflict")
+        _, outcome_path = _week_paths(private_root, decision_date)
+        if not outcome_path.exists():
+            continue
+        outcome = _load(outcome_path)
+        _validate_record(outcome)
+        for horizon in (outcome["payload"].get("horizons") or {}).values():
+            if isinstance(horizon, dict) and horizon.get("status") == "no_count":
+                reason = str(horizon.get("reason") or "no_count")
+                codes.add("immutable_capture_conflict" if reason == "immutable_capture_conflict" else "no_count")
+    return sorted(codes)

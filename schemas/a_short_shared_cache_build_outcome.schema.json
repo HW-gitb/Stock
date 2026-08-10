@@ -30,7 +30,8 @@
         "cache_current",
         "deferred_due_to_budget",
         "cache_updated",
-        "cache_updated_with_deferrals"
+        "cache_updated_with_deferrals",
+        "failed"
       ]
     },
     "provider_calls": {
@@ -46,6 +47,38 @@
     },
     "production_unchanged": {
       "const": true
+    },
+    "error_code": {
+      "type": "string",
+      "pattern": "^[a-z0-9_]+$",
+      "minLength": 1,
+      "maxLength": 128
+    },
+    "error_detail": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 512,
+      "pattern": "^[^\\r\\n]*$"
     }
-  }
+  },
+  "allOf": [
+    {
+      "if": {"properties": {"status": {"const": "failed"}}, "required": ["status"]},
+      "then": {"required": ["error_code", "error_detail"]}
+    },
+    {
+      "if": {"properties": {"status": {"enum": [
+        "no_frozen_v2_captures", "no_frozen_consumer_captures", "cache_current",
+        "deferred_due_to_budget", "cache_updated", "cache_updated_with_deferrals"
+      ]}}, "required": ["status"]},
+      "then": {
+        "not": {
+          "anyOf": [
+            {"required": ["error_code"]},
+            {"required": ["error_detail"]}
+          ]
+        }
+      }
+    }
+  ]
 }

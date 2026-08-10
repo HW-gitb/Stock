@@ -3576,8 +3576,8 @@ def settle_margin_overheat_from_daily_cache(
 
 
 def settle_and_summarize_margin_overheat_weekly(*, root: str | Path | None,
-                                                daily_cache_path: str | Path | None,
-                                                as_of: str) -> dict[str, Any]:
+                                                 daily_cache_path: str | Path | None,
+                                                 as_of: str, strict: bool = False) -> dict[str, Any]:
     """Settle/adjudicate before M6.7 and suppress stale reminders on any fault."""
     private_root = None
     try:
@@ -3607,6 +3607,8 @@ def settle_and_summarize_margin_overheat_weekly(*, root: str | Path | None,
         validate_margin_public_summary(summary)
         return summary
     except Exception:
+        if strict:
+            raise
         if private_root is not None:
             try:
                 _clear_private_margin_reminder(private_root)

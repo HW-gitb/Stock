@@ -34,6 +34,7 @@ from engine.a_short_factor_comparison_v2 import (  # noqa: E402
     is_current_governed_capture,
     validate_v2_weekly_record,
 )
+from engine.a_short_observability import safe_exception_summary  # noqa: E402
 from engine.a_short_tushare_client import init_tushare_pro  # noqa: E402
 from engine.data.a_share_board_scope import is_a_share_main_board  # noqa: E402
 from runners.materialize_execution_price_data_tushare import ts_call  # noqa: E402
@@ -51,6 +52,7 @@ CACHE_BUILD_STATUSES = (
     "deferred_due_to_budget",
     "cache_updated",
     "cache_updated_with_deferrals",
+    "failed",
 )
 DEFAULT_MAX_PROVIDER_CALLS = 91
 EXECUTION_PRE_HISTORY_DAYS = 20
@@ -94,6 +96,29 @@ def _cache_build_outcome_payload(*, result: dict, run_date: str) -> dict:
             raise ComparisonV2Error("shared cache builder outcome deferred counts are invalid")
         deferred[consumer] = count
     deferred_total = sum(deferred.values())
+    if status == "failed":
+        error_code = str(result.get("error_code") or "")
+        error_detail = str(result.get("error_detail") or "")
+        if not error_code or not error_code.replace("_", "").isalnum() or len(error_code) > 128:
+            raise ComparisonV2Error("failed cache outcome error_code is invalid")
+        if not error_detail or "\n" in error_detail or "\r" in error_detail or len(error_detail) > 512:
+            raise ComparisonV2Error("failed cache outcome error_detail is invalid")
+        payload = {
+            "schema_name": CACHE_BUILD_OUTCOME_SCHEMA_NAME,
+            "schema_version": CACHE_BUILD_OUTCOME_SCHEMA_VERSION,
+            "run_date": _string_date(run_date, "outcome run_date"),
+            "status": status,
+            "provider_calls": provider_calls,
+            "deferred_symbols_by_consumer": dict(sorted(deferred.items())),
+            "production_unchanged": True,
+            "error_code": error_code,
+            "error_detail": error_detail,
+        }
+        try:
+            jsonschema.validate(payload, _load_json(CACHE_BUILD_OUTCOME_SCHEMA_PATH))
+        except jsonschema.ValidationError as exc:
+            raise ComparisonV2Error("shared cache builder failed outcome violates its contract") from exc
+        return payload
     if status.startswith("no_frozen_") and (provider_calls != 0 or deferred_total != 0):
         raise ComparisonV2Error("no-frozen cache outcome must have zero provider calls and deferrals")
     if not status.startswith("no_frozen_") and provider_calls < 1:
@@ -864,14 +889,35 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
 
 def main(argv: list[str] | None = None) -> int:
     args = parse_args(argv)
-    result = materialize_incremental_cache(root=args.root, run_date=args.run_date,
-                                           max_provider_calls=args.max_provider_calls,
-                                           industry_weight_root=args.industry_weight_root,
-                                           target_policy_root=args.target_policy_root,
-                                           final_action_validation_root=args.final_action_validation_root,
-                                           official_operation_evidence_root=args.official_operation_evidence_root,
-                                           overlay_adjudication_root=args.overlay_adjudication_root)
-    write_cache_build_outcome_receipt(path=args.outcome_json, run_date=args.run_date, result=result)
+    try:
+        result = materialize_incremental_cache(root=args.root, run_date=args.run_date,
+                                               max_provider_calls=args.max_provider_calls,
+                                               industry_weight_root=args.industry_weight_root,
+                                               target_policy_root=args.target_policy_root,
+                                               final_action_validation_root=args.final_action_validation_root,
+                                               official_operation_evidence_root=args.official_operation_evidence_root,
+                                               overlay_adjudication_root=args.overlay_adjudication_root)
+        write_cache_build_outcome_receipt(path=args.outcome_json, run_date=args.run_date, result=result)
+    except KeyboardInterrupt:
+        raise
+    except Exception as exc:  # noqa: BLE001 - the receipt is the bounded failure surface
+        failure = {
+            "status": "failed",
+            "provider_calls": 0,
+            "deferred_symbols_by_consumer": {},
+            "error_code": "cache_build_failed",
+            "error_detail": f"build: {safe_exception_summary(exc, limit=480)}"[:512],
+            "production_unchanged": True,
+        }
+        try:
+            write_cache_build_outcome_receipt(path=args.outcome_json, run_date=args.run_date, result=failure)
+        except Exception:
+            # The launcher invalidates the old receipt before invocation.  If a
+            # new failure receipt cannot be written, it must observe that
+            # absence and retain ``cache_outcome_missing``/process_failed.
+            pass
+        print("[a-short-shared-daily-cache] failed (production unchanged)", file=sys.stderr)
+        return 1
     print(f"[a-short-shared-daily-cache] {result['status']} (production unchanged)")
     return 0
 

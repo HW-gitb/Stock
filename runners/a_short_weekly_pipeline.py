@@ -25,7 +25,7 @@ import re
 import sys
 import tempfile
 import time
-from datetime import datetime, timedelta
+from datetime import datetime
 from functools import lru_cache
 from pathlib import Path
 
@@ -970,6 +970,7 @@ def _normalise_northbound_control(
     as_of: str,
     *,
     price_data_through: str | None = None,
+    enforce_price_clock: bool = True,
 ) -> dict:
     """Validate the structured EGS facts consumed by the new-entry market gate."""
     supplied = dict(context or {})
@@ -977,8 +978,8 @@ def _normalise_northbound_control(
     price_data_through = str(price_data_through or source_as_of or as_of)
     if (not _is_valid_date(source_as_of)
             or not _is_valid_date(price_data_through)
-            or source_as_of != price_data_through
-            or price_data_through > str(as_of)):
+            or (enforce_price_clock and source_as_of != price_data_through)
+            or (enforce_price_clock and price_data_through > str(as_of))):
         raise ValueError("northbound control is not bound to price_data_through")
     expected_paths = {
         "northbound": _NORTHBOUND_SOURCE_PATH,
@@ -1014,7 +1015,7 @@ def _normalise_northbound_control(
     if coverage_complete and observed_session_count != requested_session_count:
         raise ValueError("complete northbound control must observe every requested session")
     csi300_window = _normalise_csi300_window(supplied.get("csi300_window"))
-    if csi300_window["end_date"] != source_as_of:
+    if enforce_price_clock and csi300_window["end_date"] != source_as_of:
         raise ValueError("northbound csi300 window end_date is not bound to price_data_through")
     production_effect_enabled = supplied.get("production_effect_enabled")
     if not isinstance(production_effect_enabled, bool):
@@ -1081,6 +1082,7 @@ def _northbound_control_from_analysis(
     as_of: str,
     *,
     price_data_through: str | None = None,
+    enforce_price_clock: bool = True,
 ) -> dict:
     """Bind the gate to validated analysis_input facts, never to market text."""
     market_context = (ai or {}).get("market_context") or {}
@@ -1123,7 +1125,8 @@ def _northbound_control_from_analysis(
             "production_effect_enabled",
             NORTHBOUND_MARKET_GATE_PRODUCTION_EFFECT_ENABLED,
         ),
-    }, as_of, price_data_through=price_data_through)
+    }, as_of, price_data_through=price_data_through,
+       enforce_price_clock=enforce_price_clock)
 
 
 def _normalise_margin_overheat_control(
@@ -1131,6 +1134,7 @@ def _normalise_margin_overheat_control(
     as_of: str,
     *,
     price_data_through: str | None = None,
+    enforce_price_clock: bool = True,
 ) -> dict:
     """Validate the structured EGS facts consumed by the margin-overheat cash control.
 
@@ -1151,8 +1155,8 @@ def _normalise_margin_overheat_control(
     source_as_of = str(supplied.get("source_as_of") or window_end or price_data_through)
     if (not _is_valid_date(source_as_of)
             or not _is_valid_date(price_data_through)
-            or price_data_through > str(as_of)
-            or source_as_of > price_data_through):
+            or (enforce_price_clock and price_data_through > str(as_of))
+            or (enforce_price_clock and source_as_of > price_data_through)):
         raise ValueError("margin overheat control is not bound to price_data_through")
     source_path = supplied.get("source_path")
     if source_path is None:
@@ -1194,7 +1198,7 @@ def _normalise_margin_overheat_control(
     if window_end is not None:
         if source_as_of != window_end:
             raise ValueError("margin overheat control source_as_of must equal window_end")
-        if window_end > price_data_through:
+        if enforce_price_clock and window_end > price_data_through:
             raise ValueError("margin overheat control window_end is after price_data_through")
         # Publication lag is resolved by the producer's real trading calendar in
         # ``resolve_published_window``.  The pipeline only enforces the source
@@ -1288,6 +1292,7 @@ def _margin_overheat_control_from_analysis(
     as_of: str,
     *,
     price_data_through: str | None = None,
+    enforce_price_clock: bool = True,
 ) -> dict:
     """Bind the cash control to validated analysis_input facts, never to text."""
     market_context = (ai or {}).get("market_context") or {}
@@ -1323,7 +1328,8 @@ def _margin_overheat_control_from_analysis(
             "production_effect_enabled",
             margin_overheat.MARGIN_OVERHEAT_PRODUCTION_EFFECT_ENABLED,
         ),
-    }, as_of, price_data_through=price_data_through)
+    }, as_of, price_data_through=price_data_through,
+       enforce_price_clock=enforce_price_clock)
 
 
 def _append_northbound_market_impact(report: dict, control: dict, reason: str) -> None:
@@ -3103,16 +3109,57 @@ def _replace_many_with_rollback(payloads: dict[str, bytes]) -> None:
                 pass
 
 
+def _sidecar_result_fields(result: object) -> tuple[str, str | None, str | None]:
+    """Project a structured producer result into the registered outcome contract.
+
+    The mapping is deliberately an allow-list.  A new producer status must not
+    silently look healthy; it becomes a bounded ``unexpected_sidecar_status``
+    failure until the status is reviewed and added here.
+    """
+    if not isinstance(result, dict):
+        return "unavailable", "unexpected_sidecar_status", "status=result_not_object"
+    value = str(result.get("status") or "").lower()
+    reason = result.get("reason_code") or result.get("reason")
+    if not reason and isinstance(result.get("reason_codes"), (list, tuple)):
+        codes = sorted({str(item) for item in result["reason_codes"] if item})
+        reason = codes[0] if codes else None
+    code = str(reason) if reason else None
+    detail = None
+    if reason:
+        detail = f"reason={safe_exception_summary(ValueError(str(reason)))}"[:512]
+    if value in {"already_captured", "already_current", "already_frozen", "frozen",
+                 "idempotent_existing_capture", "idempotent"}:
+        return "already_current", None, None
+    if value in {"captured", "captured_live_canonical", "captured_live_canonical_no_capture",
+                 "advanced", "updated", "written", "settled", "complete",
+                 "settled_from_existing_cache", "settled_from_existing_shared_cache",
+                 "adjudicated_margin_overheat_cash_control"}:
+        # ``not_live_canonical_no_capture`` is a legal historical/no-op result,
+        # not a process failure.  It is kept separate from successful advances.
+        if value == "captured_live_canonical_no_capture":
+            return "not_applicable", code, detail
+        return "advanced", None, None
+    if value in {"not_due", "no_count", "pending", "accumulating",
+                 "not_live_canonical_no_capture", "not_configured"}:
+        return "not_applicable", code, detail
+    if value in {"unavailable", "evidence_unavailable_or_inconclusive"}:
+        return "unavailable", code or "sidecar_unavailable", detail
+    if value in {"conflict", "conflict_recorded_no_count", "immutable_capture_conflict"}:
+        return "stalled", code or "immutable_capture_conflict", detail
+    return "unavailable", "unexpected_sidecar_status", f"status={value or 'missing'}"
+
+
 def _sidecar_progress_from_status(status: object) -> str:
-    """Map a sidecar's de-identified capture status to the health contract."""
-    value = str(status or "").lower()
-    if value in {"already_captured", "already_current", "already_frozen", "frozen"}:
-        return "already_current"
-    if value in {"captured", "advanced", "updated", "written", "settled", "complete"}:
-        return "advanced"
-    if value in {"not_due", "no_count", "pending", "accumulating"}:
-        return "not_applicable"
-    return "unavailable"
+    """Backward-compatible status-only projection used by older callers/tests."""
+    if isinstance(status, dict):
+        return _sidecar_result_fields(status)[0]
+    return _sidecar_result_fields({"status": status})[0]
+
+
+def _sidecar_reason_fields(result: object) -> tuple[str | None, str | None]:
+    """Return only the structured reason portion of a producer result."""
+    _progress, code, detail = _sidecar_result_fields(result)
+    return code, detail
 
 
 def _margin_overheat_unavailable_public_summary() -> dict:
@@ -5664,6 +5711,8 @@ def main(argv=None, pro_factory=None, price_provider=None, semantic_provider=Non
                         error_code: str | None = None, observed_decision_as_of: str | None = None,
                         observed_data_through: str | None = None,
                         error_detail: str | None = None) -> None:
+        if error_code == "unexpected_sidecar_status":
+            execution_status, progress_status = "failed", "unavailable"
         pipeline_sidecar_outcomes.append({
             "name": name,
             "expected": True,
@@ -5680,7 +5729,7 @@ def main(argv=None, pro_factory=None, price_provider=None, semantic_provider=Non
 
     def _record_sidecar_failure(name: str, *, stage: str, exc: BaseException,
                                 error_code: str, progress_status: str = "unavailable",
-                                observed_decision_as_of: str | None = None) -> None:
+                                observed_decision_as_of: str | None = None) -> str:
         """Record a bounded, redacted diagnostic without changing sidecar semantics."""
         detail = f"{stage}: {safe_exception_summary(exc)}"[:512]
         _record_sidecar(
@@ -5691,6 +5740,7 @@ def main(argv=None, pro_factory=None, price_provider=None, semantic_provider=Non
             observed_decision_as_of=observed_decision_as_of,
             error_detail=detail,
         )
+        return detail
     if args.factor_comparison_root or args.factor_comparison_forward:
         raise SystemExit("[FATAL] legacy factor-comparison v1 is read-only; v1 capture flags are retired. "
                          "Use the v2 private-root flags; v1/v2 dual writes are prohibited.")
@@ -5916,13 +5966,17 @@ def main(argv=None, pro_factory=None, price_provider=None, semantic_provider=Non
     # 价格序列:注入(测试)或执行期抓取(需授权)
     prior_settled = None     # 实际接受的前一交易日(仅 intraday_prior_settled 模式;记进 lineage)
     # Validate source-bound auxiliary controls before opening any authorized
-    # price provider.  The final calls below remain necessary because an
-    # injected/real provider may settle a different batch price clock.
+    # price provider.  When the input omits a declared price clock, this first
+    # pass validates the source shape but defers only the clock-equality checks;
+    # the strict pass below rebinds both controls to the observed candidate-bar
+    # clock.  Production EGS inputs keep the original strict fast-fail path.
     _northbound_control_from_analysis(
-        ai, args.as_of, price_data_through=price_data_through
+        ai, args.as_of, price_data_through=price_data_through,
+        enforce_price_clock=clock_explicit
     )
     _margin_overheat_control_from_analysis(
-        ai, args.as_of, price_data_through=price_data_through
+        ai, args.as_of, price_data_through=price_data_through,
+        enforce_price_clock=clock_explicit
     )
     pro = None
     if price_provider is None:
@@ -6264,6 +6318,7 @@ def main(argv=None, pro_factory=None, price_provider=None, semantic_provider=Non
                 root=args.margin_overheat_cash_control_root,
                 daily_cache_path=args.margin_overheat_cash_control_daily_cache,
                 as_of=args.as_of,
+                strict=True,
             )
             _validate_margin_overheat_public_summary_shape(margin_overheat_cash_control)
         except Exception as exc:
@@ -6279,6 +6334,7 @@ def main(argv=None, pro_factory=None, price_provider=None, semantic_provider=Non
             else:
                 _record_sidecar("margin_overheat_cash_control_settlement", execution_status="failed",
                                 progress_status="unavailable", error_code="settlement_unavailable",
+                                error_detail=(f"summary_status={margin_overheat_cash_control.get('status')}"[:512]),
                                 observed_decision_as_of=args.as_of)
     # Roll back a dead run's half-written pair before anything READS it.  The
     # commit path recovers on its own, but a crash followed by a week of failed
@@ -6298,12 +6354,16 @@ def main(argv=None, pro_factory=None, price_provider=None, semantic_provider=Non
         if args.industry_weight_comparison_forward and not Path(args.industry_weight_comparison_source).is_file():
             industry_weight_comparison = unavailable_public_progress(args.as_of)
         else:
-            industry_weight_comparison = settle_and_summarize_weekly(
-                root=args.industry_weight_comparison_root,
-                daily_cache_path=args.industry_weight_comparison_daily_cache,
-                as_of=args.as_of,
-                write_public=False,
-            )
+            try:
+                industry_weight_comparison = settle_and_summarize_weekly(
+                    root=args.industry_weight_comparison_root,
+                    daily_cache_path=args.industry_weight_comparison_daily_cache,
+                    as_of=args.as_of,
+                    write_public=False,
+                    strict=True,
+                )
+            except Exception:
+                industry_weight_comparison = unavailable_public_progress(args.as_of)
     # P2 is another non-blocking, no-provider evidence sidecar.  Missing or
     # malformed execution data produces a fresh unavailable reminder, never a
     # stale review_due message and never a changed M6.7 decision.
@@ -6361,7 +6421,7 @@ def main(argv=None, pro_factory=None, price_provider=None, semantic_provider=Non
             from engine.a_short_overlay_adjudication import settle_and_summarize_weekly as settle_overlay_adjudication
             overlay_adjudication = settle_overlay_adjudication(root=args.overlay_adjudication_root,
                 daily_cache_path=args.overlay_adjudication_daily_cache, as_of=args.as_of,
-                write_public=False, **overlay_public_paths)
+                write_public=False, strict=True, **overlay_public_paths)
         except Exception:
             # P4a is an optional comparison sidecar.  An import or settlement
             # outage must neither fail the formal weekly run nor retain a stale
@@ -6536,10 +6596,11 @@ def main(argv=None, pro_factory=None, price_provider=None, semantic_provider=Non
                 settle_and_summarize as settle_official_operation_evidence,
             )
         except Exception as exc:
-            _record_sidecar_failure("official_operation_capture", stage=stage, exc=exc,
-                                    error_code="capture_unavailable")
+            capture_detail = _record_sidecar_failure("official_operation_capture", stage=stage, exc=exc,
+                                                     error_code="capture_unavailable")
             _record_sidecar("official_operation_settlement", execution_status="skipped",
-                            progress_status="not_applicable", error_code="capture_unavailable")
+                            progress_status="not_applicable", error_code="capture_unavailable",
+                            error_detail=f"blocked_by=official_operation_capture; {capture_detail}"[:512])
             print("[official-operation-evidence] current-week capture unavailable; "
                   "M6.7 output remains authoritative and unchanged")
         else:
@@ -6551,16 +6612,19 @@ def main(argv=None, pro_factory=None, price_provider=None, semantic_provider=Non
                     receipt_path=receipt_path,
                 )
             except Exception as exc:
-                _record_sidecar_failure("official_operation_capture", stage=stage, exc=exc,
-                                        error_code="capture_unavailable")
+                capture_detail = _record_sidecar_failure("official_operation_capture", stage=stage, exc=exc,
+                                                         error_code="capture_unavailable")
                 _record_sidecar("official_operation_settlement", execution_status="skipped",
-                                progress_status="not_applicable", error_code="capture_unavailable")
+                                progress_status="not_applicable", error_code="capture_unavailable",
+                                error_detail=f"blocked_by=official_operation_capture; {capture_detail}"[:512])
                 print("[official-operation-evidence] current-week capture unavailable; "
                       "M6.7 output remains authoritative and unchanged")
             else:
                 print(f"[official-operation-evidence] capture={capture['status']} (M6.7 unchanged)")
+                capture_progress, capture_code, capture_detail = _sidecar_result_fields(capture)
                 _record_sidecar("official_operation_capture", execution_status="succeeded",
-                                progress_status=_sidecar_progress_from_status(capture.get("status")),
+                                progress_status=capture_progress, error_code=capture_code,
+                                error_detail=capture_detail,
                                 observed_decision_as_of=args.as_of)
                 stage = "settlement"
                 try:
@@ -6577,8 +6641,10 @@ def main(argv=None, pro_factory=None, price_provider=None, semantic_provider=Non
                 else:
                     print(f"[official-operation-evidence] settlement={settlement['status']} "
                           "(shared cache only; no portfolio state)")
+                    settlement_progress, settlement_code, settlement_detail = _sidecar_result_fields(settlement)
                     _record_sidecar("official_operation_settlement", execution_status="succeeded",
-                                    progress_status=_sidecar_progress_from_status(settlement.get("status")),
+                                    progress_status=settlement_progress, error_code=settlement_code,
+                                    error_detail=settlement_detail,
                                     observed_decision_as_of=args.as_of)
     if args.factor_comparison_v2_root:
         _expect_sidecar("factor_v2_capture")
@@ -6618,8 +6684,10 @@ def main(argv=None, pro_factory=None, price_provider=None, semantic_provider=Non
                           f"(error_code={code}); M6.7 output remains authoritative and unchanged")
             else:
                 print(f"[factor-comparison-v2] capture={comparison['status']} (production unchanged)")
+                comparison_progress, comparison_code, comparison_detail = _sidecar_result_fields(comparison)
                 _record_sidecar("factor_v2_capture", execution_status="succeeded",
-                                progress_status=_sidecar_progress_from_status(comparison.get("status")),
+                                progress_status=comparison_progress, error_code=comparison_code,
+                                error_detail=comparison_detail,
                                 observed_decision_as_of=args.as_of)
     if args.margin_overheat_cash_control_root:
         _expect_sidecar("margin_overheat_cash_control_capture")
@@ -6660,8 +6728,10 @@ def main(argv=None, pro_factory=None, price_provider=None, semantic_provider=Non
                     forward_eligible=args.margin_overheat_cash_control_forward,
                 )
                 print(f"[margin-overheat-cash-control] capture={margin_capture['status']} (production unchanged)")
+                margin_progress, margin_code, margin_detail = _sidecar_result_fields(margin_capture)
                 _record_sidecar("margin_overheat_cash_control_capture", execution_status="succeeded",
-                                progress_status=_sidecar_progress_from_status(margin_capture.get("status")),
+                                progress_status=margin_progress, error_code=margin_code,
+                                error_detail=margin_detail,
                                 observed_decision_as_of=args.as_of)
             except Exception as exc:
                 if is_margin_capture_replay_drift(exc):
@@ -6679,10 +6749,11 @@ def main(argv=None, pro_factory=None, price_provider=None, semantic_provider=Non
         try:
             from engine.a_short_industry_weight_comparison import capture_after_published_weekly, settle_and_summarize_weekly
         except Exception as exc:
-            _record_sidecar_failure("industry_weight_capture", stage=stage, exc=exc,
-                                    error_code="capture_unavailable")
+            capture_detail = _record_sidecar_failure("industry_weight_capture", stage=stage, exc=exc,
+                                                     error_code="capture_unavailable")
             _record_sidecar("industry_weight_settlement", execution_status="skipped",
-                            progress_status="not_applicable", error_code="capture_unavailable")
+                            progress_status="not_applicable", error_code="capture_unavailable",
+                            error_detail=f"blocked_by=industry_weight_capture; {capture_detail}"[:512])
             print("[industry-weight-p5] current-week capture unavailable; M6.7 output remains authoritative and unchanged")
         else:
             stage = "capture"
@@ -6693,33 +6764,57 @@ def main(argv=None, pro_factory=None, price_provider=None, semantic_provider=Non
                     source_identity=source_identity, out_path=args.out, receipt_path=receipt_path,
                     forward_eligible=args.industry_weight_comparison_forward)
             except Exception as exc:
-                _record_sidecar_failure("industry_weight_capture", stage=stage, exc=exc,
-                                        error_code="capture_unavailable")
+                capture_detail = _record_sidecar_failure("industry_weight_capture", stage=stage, exc=exc,
+                                                         error_code="capture_unavailable")
                 _record_sidecar("industry_weight_settlement", execution_status="skipped",
-                                progress_status="not_applicable", error_code="capture_unavailable")
+                                progress_status="not_applicable", error_code="capture_unavailable",
+                                error_detail=f"blocked_by=industry_weight_capture; {capture_detail}"[:512])
                 print("[industry-weight-p5] current-week capture unavailable; M6.7 output remains authoritative and unchanged")
             else:
                 # The signed weekly JSON remains immutable after publication.  Refresh the separate
                 # de-identified P5 progress artifact immediately so the first capture is never lost.
                 stage = "settlement"
                 try:
-                    settle_and_summarize_weekly(root=args.industry_weight_comparison_root,
-                                                daily_cache_path=args.industry_weight_comparison_daily_cache,
-                                                as_of=args.as_of)
+                    p5_settlement_result = {}
+                    p5_settlement = settle_and_summarize_weekly(
+                        root=args.industry_weight_comparison_root,
+                        daily_cache_path=args.industry_weight_comparison_daily_cache,
+                        as_of=args.as_of, strict=True,
+                        sidecar_result=p5_settlement_result)
                 except Exception as exc:
+                    capture_progress, capture_code, capture_detail = _sidecar_result_fields(p5_capture)
                     _record_sidecar("industry_weight_capture", execution_status="succeeded",
-                                    progress_status=_sidecar_progress_from_status(p5_capture.get("status")),
+                                    progress_status=capture_progress, error_code=capture_code,
+                                    error_detail=capture_detail,
                                     observed_decision_as_of=args.as_of)
                     _record_sidecar_failure("industry_weight_settlement", stage=stage, exc=exc,
                                             error_code="capture_unavailable")
                     print("[industry-weight-p5] current-week capture unavailable; M6.7 output remains authoritative and unchanged")
                 else:
                     print(f"[industry-weight-p5] capture={p5_capture['status']} (production unchanged)")
+                    capture_progress, capture_code, capture_detail = _sidecar_result_fields(p5_capture)
                     _record_sidecar("industry_weight_capture", execution_status="succeeded",
-                                    progress_status=_sidecar_progress_from_status(p5_capture.get("status")),
+                                    progress_status=capture_progress, error_code=capture_code,
+                                    error_detail=capture_detail,
                                     observed_decision_as_of=args.as_of)
-                    _record_sidecar("industry_weight_settlement", execution_status="succeeded",
-                                    progress_status="advanced", observed_decision_as_of=args.as_of)
+                    settlement_codes = p5_settlement_result.get("reason_codes") or []
+                    if settlement_codes:
+                        settlement_code = str(settlement_codes[0])
+                        _record_sidecar(
+                            "industry_weight_settlement", execution_status="succeeded",
+                            progress_status="stalled", error_code=settlement_code,
+                            error_detail=f"reason={settlement_code}"[:512],
+                            observed_decision_as_of=args.as_of)
+                    elif str((p5_settlement or {}).get("status")) in {
+                            "evidence_unavailable_or_inconclusive", "not_configured"}:
+                        _record_sidecar(
+                            "industry_weight_settlement", execution_status="failed",
+                            progress_status="unavailable", error_code="settlement_unavailable",
+                            error_detail=f"summary_status={p5_settlement.get('status')}"[:512],
+                            observed_decision_as_of=args.as_of)
+                    else:
+                        _record_sidecar("industry_weight_settlement", execution_status="succeeded",
+                                        progress_status="advanced", observed_decision_as_of=args.as_of)
     if args.target_policy_root:
         stage = "import"
         try:
@@ -6811,10 +6906,11 @@ def main(argv=None, pro_factory=None, price_provider=None, semantic_provider=Non
         try:
             from engine.a_short_overlay_adjudication import capture_after_published_weekly, settle_and_summarize_weekly
         except Exception as exc:
-            _record_sidecar_failure("overlay_adjudication_capture", stage=stage, exc=exc,
-                                    error_code="capture_unavailable")
+            capture_detail = _record_sidecar_failure("overlay_adjudication_capture", stage=stage, exc=exc,
+                                                     error_code="capture_unavailable")
             _record_sidecar("overlay_adjudication_settlement", execution_status="skipped",
-                            progress_status="not_applicable", error_code="capture_unavailable")
+                            progress_status="not_applicable", error_code="capture_unavailable",
+                            error_detail=f"blocked_by=overlay_adjudication_capture; {capture_detail}"[:512])
             print("[overlay-adjudication-p4a] current-week capture unavailable; "
                   "P4 summary is unavailable and M6.7 output remains authoritative and unchanged")
         else:
@@ -6826,20 +6922,27 @@ def main(argv=None, pro_factory=None, price_provider=None, semantic_provider=Non
                     egs_publish_marker_path=args.overlay_adjudication_egs_publish_marker,
                     source_identity=source_identity, forward_eligible=args.overlay_adjudication_forward)
             except Exception as exc:
-                _record_sidecar_failure("overlay_adjudication_capture", stage=stage, exc=exc,
-                                        error_code="capture_unavailable")
+                capture_detail = _record_sidecar_failure("overlay_adjudication_capture", stage=stage, exc=exc,
+                                                         error_code="capture_unavailable")
                 _record_sidecar("overlay_adjudication_settlement", execution_status="skipped",
-                                progress_status="not_applicable", error_code="capture_unavailable")
+                                progress_status="not_applicable", error_code="capture_unavailable",
+                                error_detail=f"blocked_by=overlay_adjudication_capture; {capture_detail}"[:512])
                 print("[overlay-adjudication-p4a] current-week capture unavailable; "
                       "P4 summary is unavailable and M6.7 output remains authoritative and unchanged")
             else:
                 stage = "settlement"
                 try:
-                    settle_and_summarize_weekly(root=args.overlay_adjudication_root,
-                        daily_cache_path=args.overlay_adjudication_daily_cache, as_of=args.as_of, **overlay_public_paths)
+                    p4_settlement_result = {}
+                    p4_settlement = settle_and_summarize_weekly(
+                        root=args.overlay_adjudication_root,
+                        daily_cache_path=args.overlay_adjudication_daily_cache,
+                        as_of=args.as_of, strict=True, sidecar_result=p4_settlement_result,
+                        **overlay_public_paths)
                 except Exception as exc:
+                    capture_progress, capture_code, capture_detail = _sidecar_result_fields(p4_capture)
                     _record_sidecar("overlay_adjudication_capture", execution_status="succeeded",
-                                    progress_status=_sidecar_progress_from_status(p4_capture.get("status")),
+                                    progress_status=capture_progress, error_code=capture_code,
+                                    error_detail=capture_detail,
                                     observed_decision_as_of=args.as_of)
                     _record_sidecar_failure("overlay_adjudication_settlement", stage=stage, exc=exc,
                                             error_code="capture_unavailable")
@@ -6847,11 +6950,29 @@ def main(argv=None, pro_factory=None, price_provider=None, semantic_provider=Non
                           "P4 summary is unavailable and M6.7 output remains authoritative and unchanged")
                 else:
                     print(f"[overlay-adjudication-p4a] capture={p4_capture['status']} (M6.7 unchanged)")
+                    capture_progress, capture_code, capture_detail = _sidecar_result_fields(p4_capture)
                     _record_sidecar("overlay_adjudication_capture", execution_status="succeeded",
-                                    progress_status=_sidecar_progress_from_status(p4_capture.get("status")),
+                                    progress_status=capture_progress, error_code=capture_code,
+                                    error_detail=capture_detail,
                                     observed_decision_as_of=args.as_of)
-                    _record_sidecar("overlay_adjudication_settlement", execution_status="succeeded",
-                                    progress_status="advanced", observed_decision_as_of=args.as_of)
+                    settlement_codes = p4_settlement_result.get("reason_codes") or []
+                    if settlement_codes:
+                        settlement_code = str(settlement_codes[0])
+                        _record_sidecar(
+                            "overlay_adjudication_settlement", execution_status="succeeded",
+                            progress_status="stalled", error_code=settlement_code,
+                            error_detail=f"reason={settlement_code}"[:512],
+                            observed_decision_as_of=args.as_of)
+                    elif str((p4_settlement or {}).get("status")) in {
+                            "evidence_unavailable_or_inconclusive", "not_configured"}:
+                        _record_sidecar(
+                            "overlay_adjudication_settlement", execution_status="failed",
+                            progress_status="unavailable", error_code="settlement_unavailable",
+                            error_detail=f"summary_status={p4_settlement.get('status')}"[:512],
+                            observed_decision_as_of=args.as_of)
+                    else:
+                        _record_sidecar("overlay_adjudication_settlement", execution_status="succeeded",
+                                        progress_status="advanced", observed_decision_as_of=args.as_of)
     if pipeline_sidecar_expected:
         _write_pipeline_sidecar_outcomes(
             Path(args.out).with_name(f"{Path(args.out).stem}.pipeline_sidecar_outcomes.json"),

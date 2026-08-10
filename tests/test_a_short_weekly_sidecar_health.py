@@ -579,6 +579,11 @@ class AShortSidecarHealthTests(unittest.TestCase):
         self.assertEqual(result["sidecars"][0]["execution_status"], "succeeded")
         self.assertIsNone(result["sidecars"][0]["observed_decision_as_of"])
         self.assertEqual(result["sidecars"][0]["progress_status"], "unavailable")
+        self.assertEqual(result["sidecars"][0]["error_code"], "candidate_effect_no_observed_evidence")
+        self.assertEqual(
+            result["sidecars"][0]["error_detail"],
+            "authoritative_summary_observed_as_of=missing",
+        )
 
     def test_iv_feed_probe_uses_artifact_as_of(self):
         with tempfile.TemporaryDirectory() as tmp:
@@ -619,6 +624,7 @@ class AShortSidecarHealthTests(unittest.TestCase):
         self.assertEqual(result["overall"], "degraded")
         self.assertEqual(result["sidecars"][0]["execution_status"], "failed")
         self.assertEqual(result["sidecars"][0]["progress_status"], "unavailable")
+        self.assertEqual(result["sidecars"][0]["error_code"], "candidate_effect_artifact_schema_invalid")
 
     def test_candidate_summary_with_stale_policy_binding_fails_closed(self):
         with tempfile.TemporaryDirectory() as tmp:
@@ -642,6 +648,7 @@ class AShortSidecarHealthTests(unittest.TestCase):
             result = build_health(as_of="20260727", launcher_manifest=manifest, project_root=root)
         self.assertEqual(result["overall"], "degraded")
         self.assertEqual(result["sidecars"][0]["execution_status"], "failed")
+        self.assertEqual(result["sidecars"][0]["error_code"], "iv_feed_artifact_identity_mismatch")
 
     def test_missing_candidate_effect_outcome_is_unavailable_and_failed(self):
         manifest = _manifest([], expected=["candidate_effect"])
@@ -652,6 +659,7 @@ class AShortSidecarHealthTests(unittest.TestCase):
         self.assertEqual(result["overall"], "degraded")
         self.assertEqual(result["failed_count"], 1)
         self.assertEqual(result["sidecars"][0]["progress_status"], "unavailable")
+        self.assertEqual(result["sidecars"][0]["error_code"], "missing_outcome")
 
     def test_candidate_self_report_cannot_mask_missing_summary(self):
         manifest = _manifest([_row(
@@ -736,6 +744,26 @@ class AShortSidecarHealthTests(unittest.TestCase):
         self.assertEqual(result["overall"], "degraded")
         self.assertEqual(result["sidecars"][0]["progress_status"], "stalled")
         self.assertIn("epoch_contract_mismatch", result["sidecars"][0]["error_code"])
+
+    def test_theme_comparison_current_rejection_preserves_structured_reason(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            packet = root / "research" / "results" / "a_short_theme_forward_comparison.json"
+            packet.parent.mkdir(parents=True)
+            packet.write_text(json.dumps({
+                "latest_evidence_as_of": "20260727",
+                "rejected_atomic_cohorts": {"20260727": "invalid taxonomy L3 snapshot date"},
+            }), encoding="utf-8")
+            manifest = _manifest([_row(
+                "theme_forward_comparison",
+                progress="not_applicable",
+                observed_decision_as_of=None,
+            )])
+            result = build_health(as_of="20260727", launcher_manifest=manifest, project_root=root)
+        item = result["sidecars"][0]
+        self.assertEqual(item["progress_status"], "unavailable")
+        self.assertEqual(item["error_code"], "theme_cohort_rejected")
+        self.assertIn("invalid taxonomy L3 snapshot date", item["error_detail"])
 
     def test_bundle_is_schema_valid_and_deidentified(self):
         manifest = _manifest([_row("data_canary")])
