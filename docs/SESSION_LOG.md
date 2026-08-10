@@ -1,5 +1,12 @@
 # Session Log
 
+## 2026-08-10 — Claude 记录用户裁决（退役重封型冻结指纹：做 A+B，不做 C）
+
+- **Verdict/Action**: 记录用户 2026-08-10 裁决——退役「改了别处就要人工重封」的冻结指纹。A=effect contract 的 9 个冻结指纹键整族处置（4 个代码派生直接退役、4 个结构派生改可读清单、1 个查证后决定），B=放宽 bounded runner 收据指纹使纯文档改动不再作废收据。C（不可变证据身份指纹）明确不做，废之等于允许同日重跑覆盖首版证据。reviewer 未改任何代码。
+- **Required**: `R-ASHORT-FROZEN-DIGEST-RESEAL-TAX-RETIRE-CODE-FINGERPRINTS`(P2) —— 完整枚举、分类处置、Closure tests 与「不得用派生-vs-派生冒充守卫」的约束只见 `docs/system_risk_register.md`（单一来源，本处不复述）。实施顺序：先修同日 P1 两个 sidecar 座位，再做本项。
+- **Verify**: review-evidence:not_available（本轮为裁决落盘，非审查轮，hook 未注入新 token）。依据均为已有真实证据：同一指纹当日重封 3 次（`9b5477cf→048785b1→c24f215a→1793f1d3`）、主树 495.1s/830 用例被判 `REFUSED - code state changed during focused run`（起因是同树合入纯文档提交）、effect contract 内 9 个冻结指纹键的行号已逐个点名。未跑测试包，未改代码。
+- **Next**: Codex：执行
+
 ## 2026-08-10 — Claude 审查 FAIL（更正同日 PASS；40d9：两个 sidecar 座位漏改）
 
 - **Verdict/Action**: FAIL，更正同日上一条 PASS。补做桌面 V3-A1 的逐名覆盖矩阵后发现：`target_policy_capture` 与 `final_action_capture` 两个座位仍走旧的只取 progress 的映射，而本刀新增的 health 原因契约对无 code 的 degraded 行直接 `raise`，`main()` 无人接 → 三件套整份不产出。代码已按上一条 PASS 提交 `c6fc912c` 并合入 master `d942473f`，Required 现在在 master 上。
