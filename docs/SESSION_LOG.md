@@ -1,5 +1,13 @@
 # Session Log
 
+## 2026-08-10 — Claude 自修复并自审 PASS（O24：植入对照不再写真实仓库产物）
+
+- **Verdict/Action**: PASS。用户指示由我一人完成修复与审查。植入体改写到 tmp 对，并新增「默认路径∈tracked 对」的静态断言与「植入运行也不许碰 tracked 对」的断言，把原来靠写真实文件才成立的那条链改成靠断言成立。生产代码零改动。
+- **Required**: 无。O24 已翻 resolved；缺陷类枚举（18 个调用点、仅 1 处依赖默认路径）、实测与植入证据见 `docs/system_risk_register.md`（单一来源，本处不复述）。
+- **Verify**: review-evidence:not_available（本轮无 `审查` 命令，hook 未注入 token）。两条用例 `Ran 2 in 9.9s / OK`；运行前后 8 个 tracked 公开产物 sha256 逐字节一致。植入：写盘改回生产默认路径 → 精确转红在新断言，还原后测试文件 sha 回 `468cf2a8…`、8 个产物全还原。
+- **Pre-Codex self-review**: matrix=测试里三个公开写函数共 18 个调用点全枚举，仅植入体 1 处依赖生产默认路径，已改 tmp；register=updated；handoff=updated；focused=点名两条 2 OK + 8 个 tracked 产物运行前后 sha 逐字节一致；full-lane=not_triggered: AGENTS rule 3，reason=纯测试隔离，未触生产入口/共享引擎/schema；door=doc-governance+route+readme 66 OK。
+- **Next**: Codex：执行
+
 ## 2026-08-10 — Claude 快速审查 PASS（刀0/刀1 产物头部交接元数据）
 
 - **Verdict/Action**: PASS，已提交。主树两份 Serenity 研究产物各加交接元数据行（刀0 一行、刀1 两行），共 3 行新增、零删除，正文未动。新增的是结论型字段，故逐条回查正文：三类主题↔对照类映射、`negative_perturbation_result=PASS (§5)`、上游产物路径、`decision_date` 全部与正文一致，无一处比正文更强。
