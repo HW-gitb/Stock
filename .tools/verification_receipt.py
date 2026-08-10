@@ -2,8 +2,9 @@
 """Machine evidence shared by the bounded focused runner and full-pack ledger.
 
 The receipt is local state under ``.tools/state``.  It is deliberately bound to
-the exact non-document code state and to the pinned project interpreter, so a
-human sentence such as ``focused=12 OK`` cannot authorize a full-pack run.
+the exact tracked non-document code tree, any uncommitted non-document files,
+and the pinned project interpreter, so a human sentence such as
+``focused=12 OK`` cannot authorize a full-pack run.
 """
 from __future__ import annotations
 
@@ -63,15 +64,36 @@ def is_code_path(rel_path: str) -> bool:
 
 def _git(*args: str) -> str:
     return subprocess.run(
-        ["git", "-C", str(ROOT), *args],
+        ["git", "-C", str(ROOT), "-c", "core.quotePath=false", *args],
         capture_output=True,
         text=True,
+        encoding="utf-8",
+        errors="replace",
         check=False,
     ).stdout
 
 
+def _tracked_code_tree_sha256() -> str:
+    """Hash tracked tree entries whose paths are inside the code boundary.
+
+    A commit hash is intentionally not part of the seal: a documentation-only
+    commit must not invalidate a receipt.  The filtered tree still changes for
+    any tracked code-path commit, including adding, deleting, or rewriting a
+    code file.
+    """
+    entries: list[str] = []
+    for line in _git("ls-tree", "-r", "--full-tree", "HEAD").splitlines():
+        if "\t" not in line:
+            continue
+        rel = line.split("\t", 1)[1]
+        if is_code_path(rel):
+            entries.append(line)
+    canonical = "\n".join(sorted(entries))
+    return hashlib.sha256(canonical.encode("utf-8")).hexdigest()
+
+
 def collect_code_state() -> dict[str, str]:
-    """Hash every changed/untracked non-document file plus the current HEAD."""
+    """Hash the tracked code tree plus changed/untracked code files."""
     changed = [line for line in _git("diff", "HEAD", "--name-only").splitlines() if line]
     untracked = [
         line
@@ -86,7 +108,7 @@ def collect_code_state() -> dict[str, str]:
         state[_normalise(rel)] = (
             hashlib.sha256(path.read_bytes()).hexdigest() if path.is_file() else "ABSENT"
         )
-    state["@HEAD"] = _git("rev-parse", "HEAD").strip()
+    state["@CODE_TREE"] = _tracked_code_tree_sha256()
     return state
 
 
@@ -102,7 +124,9 @@ def _bundles_for_paths(paths: Iterable[str]) -> tuple[str, ...]:
 
 
 def required_bundles_for_state(state: dict[str, str]) -> tuple[str, ...]:
-    return _bundles_for_paths(_normalise(path) for path in state if path != "@HEAD")
+    return _bundles_for_paths(
+        _normalise(path) for path in state if not path.startswith("@")
+    )
 
 
 def merge_in_progress() -> bool:
@@ -133,7 +157,9 @@ def merge_side_paths() -> frozenset[str]:
 
 def required_bundles_now(state: dict[str, str]) -> tuple[str, ...]:
     """What this commit must show, widened across both sides when merging."""
-    changed = {_normalise(path) for path in state if path != "@HEAD"}
+    changed = {
+        _normalise(path) for path in state if not path.startswith("@")
+    }
     return _bundles_for_paths(changed | set(merge_side_paths()))
 
 

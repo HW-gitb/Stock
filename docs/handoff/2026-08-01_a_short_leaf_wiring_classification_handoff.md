@@ -5482,5 +5482,56 @@ effect contract 已用固定 Python 重新登记 A-EGS decision-predicate hash �
 
 - 没有真去复现两个进程同时跑的竞态（那需要并发进程），只证明了本测试不再写真实产物、碰撞面已移除。
 - 纯测试隔离改动，未碰生产代码、schema 或决策逻辑。
+## 2026-08-10 Codex — frozen digest reseal-tax retirement (782a)
+
+- Scope: `R-ASHORT-FROZEN-DIGEST-RESEAL-TAX-RETIRE-CODE-FINGERPRINTS`; no 40d9 sidecar mixing, no provider/live/account/order work.
+- A1 retired the four code-derived fingerprint keys and their constructors/guards. A2 keeps explicit sorted `analysis_input_paths` / `runtime_policy_paths` and adds explicit sorted schema path maps for runtime-policy schemas and output schemas. A3 was checked as still consumed by the legacy loader, so the migration hash became sorted `legacy_migration_entries` rather than being deleted.
+- No derived-vs-derived self-comparison was introduced. A2 planted additions fail at the list guard and reorder-only controls pass. B controls prove docs-only receipt validity, code mutation invalidation, and the pre-commit code gate; C comparison-track identity fingerprints were untouched.
+- Fixed-Python final focused pack: `186 OK`, `receipt:ba7ba51068e79f18276fea8e`, including route-doc and doc-governance doors. A-short full lane: `2725/2725 PASS`, count gate equal, `STATIC diff_check=PASS py_compile=6`, ledger fingerprint `9bdb97b75736`.
+- Boundary: Codex executor/fixer only; independent review and commit remain outside this turn. The risk-register entry is the detailed source of truth.
+
+## 2026-08-10 Codex follow-up：B 收据代码树锚点（782a）
+
+- B 修复已落地：收据不再把裸 `@HEAD` 纳入指纹，改为 filtered tracked code-tree SHA256 + 未提交非文档文件内容；`.githooks/pre-commit` 复用同一入口。
+- 三态闭合：文档工作区改动保持 receipt；文档-only commit 保持 receipt；代码 commit 改变 fingerprint 并拒绝 receipt。固定 Python 最终聚焦 `143 OK`，token=`receipt:8e7ee27a7839b577d94f9cf6`，包含 route-doc、doc-governance 和 Unicode `.md` 路径门禁。
+- Boundary：本轮仅 B 工具链；A/C 不回退；不做 provider/live/account/order；未提交/合并，待 Claude Code 独立审查。
+
+## 2026-08-10 追加：指纹退役刀（782a）独立审查 —— FAIL（未提交）
+
+**判定**：FAIL，一条 P2 Required（B 腿未实现，正文只在 `docs/system_risk_register.md` 同日节）。A 腿复核成立。
+
+**我自己实际验了什么**
+
+- **A 整族核了一遍**，不是只看被点名的两个键：9 个冻结指纹键逐个对上处置方式，`static_contract_error` 里对应的比对分支全部改成「契约冻结清单 vs 当前派生清单」，不是派生自比对那种空壳。
+- **零残留自查**：删掉的三个 helper 在 engine·runners·tests·.tools 内 0 命中；退役键只剩在历史迁移归档里（应该留）。`A-EGS/egs_main.py` 里的同名 `_canonical_ast` 是另一处既有实现，别误判成漏删。
+- **B 用探针坐实没做**：`.tools/verification_receipt.py` 一个字节没改。我在临时 git 仓里复现了真实事故——改文档**文件**指纹不变（新用例测的就是这格，改前就成立），把同一改动**提交**后指纹立刻变，收据作废；再改代码仍会变（反向控制在）。根子是 `collect_code_state()` 把裸 `@HEAD` 折进了指纹。
+
+**未覆盖维度与诚实边界**
+
+- 未做植入对照：Required 是「要求未实现」，没有门可中和；A 侧植入由执行方那两条清单用例承担，我核了判据形状。
+- 记下一处既定取舍：退役 `runtime_policy_sha256` 后，policy JSON 的**数值**变化不再被契约察觉，只剩字段集变化会被抓——这正是用户要去掉的那条税。
+- §6a 未起 agent；未提交、未合并。
+
+**下一步**：`Codex：修复`（只补 B：让纯文档**提交**不再作废收据，并保留代码提交必作废的反向控制）
+
+## 2026-08-10 追加：收据封印（B 腿）复审 —— PASS（已合入 master）
+
+**判定**：PASS，无 Required，一条新 Optional（O25，正文只在 `docs/system_risk_register.md` 同日节）。至此指纹退役刀 A、B 两腿全闭。
+
+**我自己实际验了什么**
+
+- **用上一轮把它判死的那条探针原样复跑**：纯文档**提交**后指纹不再变（上一轮正是在这一格作废的）。
+- **反向三格自写**：代码工作副本改、代码提交、`git rm` 删代码文件——三种形态都仍然作废收据，没有放宽过头。
+- **读了封印的实现**：`@CODE_TREE` 取的是 `ls-tree` 的 blob 条目而不是工作副本字节，因此对 CRLF/autocrlf 天然免疫；`core.quotePath=false` + utf-8 解码避免非 ASCII 路径让封印随环境漂移。
+- **A 腿字节未变**，沿用上一轮的整族复核结论，未重复劳动。
+
+**植入对照（我自写）**
+
+- 把 `_tracked_code_tree_sha256` 的 `if is_code_path(rel):` 中和成 `if True:` → 点名闭合用例精确转红；还原后该文件 sha256 逐字节回原值、`git diff --numstat` 仍是本刀自己的 33/7。
+
+**未覆盖维度与诚实边界**
+
+- 没有真去复现两个进程同时跑的竞态，只证明了「文档提交不再作废封印」这条因果链。
+- 记下一个边界：根目录 `*.md`（含 `AGENTS.md`）也在代码边界之外，改它不再作废收据；实际影响接近零，因为两个文档守卫由 pre-commit 每次现跑。
 
 **下一步**：`Codex：执行`

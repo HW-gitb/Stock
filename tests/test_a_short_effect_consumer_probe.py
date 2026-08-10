@@ -34,7 +34,7 @@ from runners.a_short_weekly_pipeline import build_weekly_report
 #: Derived from the schema, never hardcoded.  A hardcoded leaf count rots on
 #: every wiring slice, and it guards nothing the effect contract does not
 #: already guard: any change to the leaf set moves
-#: ``analysis_input_all_paths_sha256`` and the owning group's
+#: ``analysis_input_paths`` and the owning group's
 #: ``source_paths_sha256``, so an unregistered new leaf is already red.
 LEAF_COUNT = len(analysis_input_paths())
 
