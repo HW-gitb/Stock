@@ -15,11 +15,15 @@ from unittest.mock import patch
 import jsonschema
 
 from engine import a_short_evidence_epoch_mode as epoch_mode
+from engine import a_short_factor_comparison as v1
+from engine.a_short_factor_comparison_v2 import capture_v2_week
 from engine import a_short_margin_overheat as production_margin
 from engine import a_short_margin_overheat_cash_control as track
+from runners.a_short_factor_comparison_v2_cache_build import materialize_incremental_cache
 import runners.a_short_weekly_pipeline as weekly_pipeline
 from runners.a_short_weekly_pipeline import build_weekly_report
 from tests import test_a_short_margin_overheat_wiring as wiring_fixtures
+from tests.test_a_short_factor_comparison_v2_cache_build import FakeTushare, _candidate as _v2_candidate
 from tests.test_a_short_weekly_pipeline import AS_OF, GEN, _normalized, _sized_lineage
 
 
@@ -1030,6 +1034,81 @@ class MarginOverheatCashControlKnife3Tests(unittest.TestCase):
         public_text = json.dumps(public, ensure_ascii=False)
         for private_value in (self.candidate["ts_code"], "baseline", "payload_sha256", "private"):
             self.assertNotIn(private_value, public_text)
+
+    def test_p1_5_two_round_v2_cache_bootstrap_then_margin_capture(self):
+        """Model P1-3's first capture and the next shared-cache consumer pass offline."""
+        v2_root = Path(self.temp.name) / "state" / "a_short" / "factor_comparison_private" / "v2"
+        run_date = self.identity["run_date"]
+        v2_candidate = _v2_candidate(0)
+        cursor = datetime.strptime(AS_OF, "%Y%m%d")
+        v2_dates = []
+        while len(v2_dates) < 20:
+            if cursor.weekday() < 5:
+                v2_dates.append(cursor.strftime("%Y%m%d"))
+            cursor -= timedelta(days=1)
+        original_series = list(v2_candidate["price_series"])
+        v2_candidate["price_series"] = [
+            {**row, "trade_date": date}
+            for date, row in zip(reversed(v2_dates), original_series[-len(v2_dates):])
+        ]
+        sanitized = v1._safe_candidate(v2_candidate)
+        v2_identity = {
+            "run_id": "p1-5-v2-bootstrap",
+            "run_date": run_date,
+            "source_as_of": AS_OF,
+            "price_data_through": AS_OF,
+            "candidate_digest": v1._digest([sanitized]),
+            "official_m67_digest": "c" * 64,
+        }
+        with patch(
+            "runners.a_short_factor_comparison_v2_cache_build._today",
+            return_value=run_date,
+        ):
+            first = materialize_incremental_cache(
+                root=v2_root, run_date=run_date, pro=FakeTushare()
+            )
+        self.assertEqual(first["status"], "no_frozen_v2_captures")
+        self.assertFalse((v2_root / "daily_cache.json").exists())
+
+        capture_v2_week(
+            root=v2_root,
+            decision_date=AS_OF,
+            candidates=[v2_candidate],
+            run_identity=v2_identity,
+            forward_eligible=False,
+        )
+        provider = FakeTushare()
+        with patch(
+            "runners.a_short_factor_comparison_v2_cache_build._today",
+            return_value=run_date,
+        ):
+            second = materialize_incremental_cache(
+                root=v2_root, run_date=run_date, pro=provider
+            )
+        self.assertEqual(second["status"], "cache_updated")
+        self.assertTrue(provider.calls)
+        shared_cache = json.loads((v2_root / "daily_cache.json").read_text(encoding="utf-8"))
+
+        captured = track.capture_margin_overheat_week(
+            root=self.root,
+            decision_date=AS_OF,
+            run_identity=self.identity,
+            official_bundle=self._official_bundle(),
+            margin_facts=self.margin_facts,
+            daily_cache_document=shared_cache,
+            candidates=self.candidates,
+            reports=self.reports,
+            predicate_facts=self.predicate_facts,
+            forward_eligible=False,
+        )
+        self.assertEqual(captured["status"], "captured")
+        self.assertFalse(captured["capture"]["payload"]["forward_eligible"])
+        self.assertTrue((self.root / f"weeks/{AS_OF}/capture.json").is_file())
+        self.assertTrue((self.root / f"weeks/{AS_OF}/source_receipt.json").is_file())
+        settled = track.settle_margin_overheat_from_daily_cache(
+            root=self.root, daily_cache_document=shared_cache,
+        )
+        self.assertEqual(settled["status"], "settled_from_existing_cache")
 
     def test_publication_lag_reason_is_bound_to_capture_and_settlement(self):
         lagged_margin_rows = [

@@ -1,6 +1,7 @@
 """Focused tests for the A-short P4 health companion."""
 from __future__ import annotations
 
+import ast
 import json
 import subprocess
 import sys
@@ -1155,6 +1156,23 @@ class AShortSidecarOutcomeSchemaTests(unittest.TestCase):
         self.assertLess(text.index("receipt_path = publish_weekly_bundle("), text.rindex("_write_pipeline_sidecar_outcomes("))
         self.assertIn("official_operation_capture", text)
         self.assertIn("shared comparison cache", (Path(__file__).resolve().parents[1] / "runners" / "weekly_screening.ps1").read_text(encoding="utf-8"))
+
+    def test_pipeline_expected_sidecars_are_registered_by_static_ast_scan(self):
+        pipeline_path = Path(__file__).resolve().parents[1] / "runners" / "a_short_weekly_pipeline.py"
+        tree = ast.parse(pipeline_path.read_text(encoding="utf-8"), filename=str(pipeline_path))
+        expected = {
+            node.args[0].value
+            for node in ast.walk(tree)
+            if isinstance(node, ast.Call)
+            and isinstance(node.func, ast.Name)
+            and node.func.id == "_expect_sidecar"
+            and node.args
+            and isinstance(node.args[0], ast.Constant)
+            and isinstance(node.args[0].value, str)
+        }
+
+        self.assertTrue(expected)
+        self.assertTrue(expected <= set(SIDECAR_SPECS), sorted(expected - set(SIDECAR_SPECS)))
 
 
 if __name__ == "__main__":
