@@ -1,5 +1,21 @@
 # US-short Serenity annotation — Blade 0 handoff
 
+## 2026-08-10 Codex — Remove line-ending-dependent frozen SHA pins（OPEN-NOT_VERIFIED）
+
+### Scope and decision
+
+`R-USSHORT-SOFT-DISCOVERY-FROZEN-PINS-ARE-LINE-ENDING-DEPENDENT` 的根因是测试把三份 tracked JSON 的 checkout 原始字节 SHA 当作冻结真相。按用户要求，本轮彻底删除 `FROZEN_20260809_PATHS` 及其 byte-immutability assertion；LF/CRLF 不再能让这条守卫转红。没有改历史 packet/schema/assessment，没有 provider/network/paid/live/生产动作，也没有提交。
+
+### Preserved semantic coverage
+
+保留并通过 schema、packet 内容与 reviewed policy 绑定、20260809/20260815 decision slot、预算、阈值、assessor 注册、reslot 不变、effect/no-effect 边界测试。刀2/刀3 identity envelope 的 digest 字段仍保留，这是桌面方案要求的输入可追溯，不是本条 checkout frozen pin。
+
+### Evidence and handoff
+
+- Fixed-Python affected pack: `Ran 70 tests in 6.825s OK`, receipt=`receipt:604ce80be2d0d2f2424707e`; docs governance/route/README pack: `Ran 66 tests in 1.065s OK`, receipt=`receipt:b1da3826794ea1e3cc704951`; `git diff --check` passed.
+- Full lane was not triggered: only a schema/test guard was removed; no production entrypoint/shared runtime/provider seam changed and the user did not request full regression.
+- Claude Code should independently review that the raw frozen pin is gone and the semantic guards remain load-bearing. The current executor did not independently review or commit.
+
 ## 2026-08-10 Codex — Blade5 Optional repair + 20260809 runbook guard disposition（OPEN-NOT_VERIFIED）
 
 ### Repair scope and boundaries
@@ -357,3 +373,38 @@ Claude Code：独立审查刀2四字段连接代码及 `decision_result_id` sche
 **失效旧结论**：register 里 2026-08-09 的刀2 STOP（「缺 v0.3 新槽/新契约，故不可安全落地」）已被独立 `policy_version` 路由取代，不再作为当前方案解释；桌面 §刀2 已更新为 9 刀版并含版本化 decision result 与四字段 upstream identity。
 
 **下一步注意事项**：v0.3.0 与 `policy_decision` 目前零生产消费点，是**有意延后**（门在 planner / 刀3 / 显式授权）；`render_stage1_queries()` 默认仍解析 v0.2.0——别误以为下一枪会自动用新问法，要用必须另行授权并显式路由。Optional（未用形参 `policy_path`）可在下一刀顺手清掉。
+
+## 2026-08-10 追加：Claude 审查 FAIL（冻结 pin 依赖行尾，未合入；更正同日 PASS）
+
+> 历史记录：本节的 FAIL 与“两棵树各验”的旧闭合路径已由本文件顶部 Codex 修复条目 supersede；当前不再有三份 tracked JSON 的 raw SHA frozen pin。
+
+**改了什么**：审查方未改产物。同日先前写的 PASS 节被更正为 FAIL（`docs/system_risk_register.md` 与 `docs/SESSION_LOG.md` 各已回写），并新记一条 Required。`git merge --abort` 已执行，master 未被带红。
+
+**为什么**：单树验证不够。三条留存 pin 在 `b511` 全部 MATCH，但合并前跑组合态包时，`..._assessment_20260809.json` 在 master 实算 `0f5a1844…` ≠ 钉死的 `afb6e903…` —— 因为 pin 钉的是**工作树原始字节**，而这份文件在 master 签出为 LF、在 Codex worktree 是 CRLF。同目录的 packet 与 packet-schema 在两棵树都是 CRLF，所以只有这一份露馅。
+
+**验证命令**：
+- `.tools\run_unittest_with_repo_pythonpath.cmd --timeout-seconds 600`（主树合并组合态包，含 a_short effect-contract 捆绑）
+- 逐树 `sha256(read_bytes())` + CRLF/LF 计数 + `git show HEAD:<file>` blob 比对
+
+**验证结果**：组合态 `Ran 274 / 63.3s / FAILED(1)`。b511：三份全 CRLF、三条全 MATCH。master：packet/schema CRLF 且 MATCH，assessment LF 故 MISMATCH，`git status` 干净、blob 本身即 LF。b511 侧验收超集 `Ran 239 OK receipt:fbb4a52dda2d9d35856e2dee`；全量 `discovered=5730 ran=5740 / UNKNOWN`、零 FAIL 模块。
+
+**失效旧结论**：同日「刀5 Optional 收口 + runbook 守卫退役 = PASS」作废；Optional 收口与 runbook 退役这两件事本身的判断仍成立，作废的是「据此可以合入」。
+
+**下一步注意事项**：按 register 的 `R-USSHORT-SOFT-DISCOVERY-FROZEN-PINS-ARE-LINE-ENDING-DEPENDENT` 收口——把比较改成与行尾无关（归一换行后再 hash，或用 `git hash-object` 比 blob），**必须在 `b511` 与 `master` 两棵树各验一次**再交回复审。`b511` 侧提交 `9493c5d4` 保留，修复叠在其上。count-gate 多出 10 个那条仍未定位，与本条无关但同样挡着 rule-3 证据。
+
+## 2026-08-10 追加：Claude 复审 PASS（冻结 pin 行尾依赖已闭，收口并合入）
+
+**改了什么**：审查方未改产物，只把 register 的 Required 翻 `resolved` 并新记一条 Optional、`docs/SESSION_LOG.md` 一条极简 verdict，然后提交并合入。
+
+**为什么**：上一轮我把结论先写进三份文档再去合并，结果在主树组合态才发现红、三份全部返工——违反 AGENTS「the closeout is written once, after the full pack, the reviewer's own probes … has reported」。本轮把主树组合态验证提到下结论**之前**：先只提交执行方的两个文件、做试合并跑组合包，拿到证据后才动笔。
+
+**验证命令**：
+- `.tools\run_unittest_with_repo_pythonpath.cmd --timeout-seconds 900`（b511 验收包，9 模块）
+- 主树 `git merge --no-ff --no-commit` 后跑组合态包（11 模块，含 a_short effect-contract 捆绑）
+- 反向控制：Python 按字节把 packet 里 `macro`→`MACRO` → 跑该 schema 模块 → 按原字节还原
+
+**验证结果**：b511 `Ran 228 / 19.7s / OK receipt:6accd3f036e3aeaebfc961e6`；主树组合态 `Ran 299 / 62.1s / OK receipt:5d02486a69bd472b828afc67`。植入使内容绑定、schema 校验、20260815 重槽等值**三条同时转红**，还原后 sha 回 `ccbba88d…`、`git status` 零残留。孤儿引用 0；同类全仓仅此一处。
+
+**失效旧结论**：同日「冻结 pin = FAIL、不可合入」已闭；「us_short 全量在主树被冻结 SHA 挡红」这条原因消失。仍未消失的是 count gate 实跑数比发现数多 10（非确定，归属未定），rule-3 记账仍拿不到绿。
+
+**下一步注意事项**：① Optional：刀3 fixture 里 `input_artifact_sha256` 仍写死 packet 的原始字节哈希，是同机制的休眠实例，修时同样两棵树各验。② count gate 那 10 个仍待定位。③ 刀6 需你在 G1 选定唯一映射并给出真实 `quality_gate_result_id`。
