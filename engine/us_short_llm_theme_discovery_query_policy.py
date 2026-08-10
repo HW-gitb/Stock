@@ -127,7 +127,7 @@ def get_policy_spec(policy_version: str) -> PolicySpec:
 
 
 def validate_query_policy(
-    policy: Mapping[str, Any], *, root: Path = ROOT, policy_path: Path | str | None = None,
+    policy: Mapping[str, Any], *, root: Path = ROOT,
 ) -> bool:
     """Validate one registered policy without binding it to a weekly input packet."""
     if not isinstance(policy, Mapping):
@@ -174,9 +174,8 @@ def validate_query_policy(
 
 def load_query_policy(path: Path | str = POLICY_PATH, *, root: Path = ROOT) -> dict[str, Any]:
     """Load and validate one registered candidate-offline policy container."""
-    policy_path = Path(path)
-    payload = _read_json(policy_path)
-    validate_query_policy(payload, root=root, policy_path=policy_path)
+    payload = _read_json(Path(path))
+    validate_query_policy(payload, root=root)
     return payload
 
 

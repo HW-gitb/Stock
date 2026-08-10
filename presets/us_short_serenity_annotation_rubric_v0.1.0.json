@@ -1,0 +1,97 @@
+{
+  "schema_name": "us_short_serenity_annotation_rubric",
+  "schema_version": "1.0.0",
+  "rubric_version": "serenity_annotation_rubric_v0.1.0",
+  "activation_status": "candidate_offline",
+  "production_annotation_activated": false,
+  "accepted_upstream_policy_versions": [
+    "soft_discovery_query_policy_v0.2.0",
+    "soft_discovery_query_policy_v0.3.0"
+  ],
+  "rubric_core": {
+    "canonical_fields": [
+      "annotation_version",
+      "system_change",
+      "value_chain_layers",
+      "scarce_layer",
+      "constraint_mechanism",
+      "chain_role_by_ticker",
+      "common_constraint_id",
+      "system_change_id",
+      "falsifiers",
+      "horizon_alignment",
+      "near_term_observable",
+      "horizon_basis_source_ref_ids",
+      "claims",
+      "structural_status",
+      "structural_fit_candidate"
+    ],
+    "value_chain_layers": [
+      "demand",
+      "system",
+      "module",
+      "device",
+      "process",
+      "equipment",
+      "material",
+      "infrastructure"
+    ],
+    "constraint_mechanisms": [
+      "capacity",
+      "certification_cycle",
+      "purity",
+      "equipment",
+      "yield",
+      "permit",
+      "delivery_lead_time",
+      "customer_lock_in"
+    ],
+    "chain_roles": [
+      "control_chokepoint",
+      "supply_chokepoint",
+      "ordinary_beneficiary",
+      "weak_pricing_power",
+      "story_only"
+    ],
+    "horizon_alignments": [
+      "days_to_weeks",
+      "3_to_12_months",
+      "long_term"
+    ],
+    "source_authorities": [
+      "primary",
+      "credible_secondary",
+      "lead"
+    ],
+    "claim_support_values": [
+      "direct",
+      "corroborating",
+      "context",
+      "contradictory"
+    ],
+    "structural_statuses": [
+      "unverified_lead",
+      "plausible",
+      "evidence_backed",
+      "contradicted",
+      "stale"
+    ],
+    "falsifier_types": [
+      "metric",
+      "event",
+      "timing",
+      "source"
+    ],
+    "falsifier_statuses": [
+      "open",
+      "observed",
+      "not_observed",
+      "contradicted"
+    ]
+  },
+  "effect_boundary": {
+    "scoring_eligible": false,
+    "top15_effect_enabled": false,
+    "operation_advice_effect_enabled": false
+  }
+}

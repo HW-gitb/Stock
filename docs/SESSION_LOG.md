@@ -1,5 +1,19 @@
 # Session Log
 
+## 2026-08-10 — Claude 审查 PASS（刀3 注解契约与校验 + 刀2 Optional 收口）
+
+- **Verdict/Action**: PASS。桌面 §刀3 的关键不变式逐条实测成立：三枚 effect flag 与 `structural_fit_candidate` 由 schema `const:false` 钉死，identity_envelope 14 项与 canonical_annotation 15 项均 closed 且与桌面字段表逐项对应，canonical 字节对键序稳定，注解只绑「哪一份上游结果」而全文不读 `policy_disposition`。Stop 边界成立：新模块零生产消费点、无 macro/评分/席位/action/仓位/us_long/provider 任何一处。刀2 Optional 已删未用形参且未引入替代校验。
+- **Required**: 无。`R-USSHORT-SERENITY-BLADE2-VALIDATE-QUERY-POLICY-TAKES-A-PARAMETER-IT-NEVER-READS` 翻 resolved，正文与实测只在 `docs/system_risk_register.md`。Optional=无。
+- **Verify**: review-evidence:59fdcf1fcaf5。控制组先绿（真实上游结果 + 真实 builder 造的注解 ACCEPTED），15 条 fail-closed 攻击全部本轨 typed 拒。**到期腿单独隔离**：第一版探针被 `annotation_id` 摘要抢先拦下，改用注入时钟同一份注解 `now=2029` ACCEPTED / `now=2031` `valid_through has expired`。覆盖包 `Ran 174 / 16.2s / failures=1`，唯一红是既有 20260809 冻结 runbook 摘要，本刀零 diff。rule 3 未触发（schema-only）；未起 agent（rule 8）。**超时原因**:两条腿被摘要挡下未隔离，补了两轮定点探针才拿到到期门的直接证据。
+- **Next**: Codex：Pass
+
+## 2026-08-10 — Codex 修复 Optional + 执行 Blade3（OPEN-NOT_VERIFIED）
+- **Verdict/Action**: Blade3 candidate-offline artifacts implemented; Optional dead parameter removed.
+- **Required**: `R-USSHORT-SERENITY-BLADE3-STRUCTURAL-ANNOTATION-NOT-INDEPENDENTLY-REVIEWED` — see `docs/system_risk_register.md`.
+- **Verify**: fixed Python `86/86 OK`, `receipt:b25eb3b9c21f2e713ef740f1`; inventory `18/18 OK`, `receipt:5bda7485aa461d1188fbe54c`; details in handoff.
+- **Pre-Codex self-review**: matrix=Blade3 schema/validator/effect negatives; register=updated; handoff=updated; focused=86/86 OK; full-lane=not triggered; door=docs/route 66/66 OK.
+- **Next**: Claude Code: review Blade3 and Optional closure
+
 ## 2026-08-10 — Claude 审查 PASS（刀2 Stage-1 v0.3.0 + 版本化 decision routing）
 
 - **Verdict/Action**: PASS。G0→刀2 触发门按真实裁决产物核实成立；四个 Stage-1 模板只动了 supply/regulation 那一个，其余三个与 stage2 逐字节未变，新增五个物理约束层与桌面 §刀2 一一对应且无自由文本占位符。放松的那道门（不再钉死单一 policy 版本）经五条反向控制且控制组先绿。v0.3.0 为 `candidate_offline` / `provider_execution_allowed=false`，`render_stage1_queries()` 默认仍是 v0.2.0，付费路径行为零变化。
