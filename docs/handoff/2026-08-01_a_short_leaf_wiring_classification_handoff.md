@@ -1,5 +1,39 @@
 # A-short 371 叶重新分层交接
 
+## 2026-08-10 — Codex executor/fixer：Optional O8/O9 + P2-2（OPEN-NOT_VERIFIED）
+
+### Verdict / Action
+
+按桌面 C:\Users\cnhea\Desktop\a_runtest2_cc.md 的 P2-2 具体方案修复上一轮 Optional。O8 增加 launcher switch 块的逐状态映射守卫，O9 增加 producer no-frozen 零 provider-call 反控；P2-2 改为 cache-only 的逐窗口回填，成熟缺 cache 时进入既有 exit 3/health 链。当前工作树 D:\cnhea\Codex\worktrees\40d9\Stock，未提交。
+
+### Problems / root causes / changes
+
+- O8 原测试只命中 $Statuses 白名单中的 cache_current，删除真实映射分支仍全绿；新测试截取 switch ([string]$SharedCacheRead.outcome.status)，逐一锁定四个 exact status branch 与目标 progress/error，并保留 no-frozen pattern branch。
+- O9 原 no_frozen_* 零调用不变式无点名反控；新测试把 provider_calls=1 注入 no-frozen receipt projection，必须抛 ComparisonV2Error。
+- P2-2 原 partition 用 cache 的末尾长度替代真实日历成熟度；现在 _calendar_age_mature 只复用既有近似，_mature_as_ofs 按 pending window 选择，cache 中存在的 as_of 全部进入 attach_forward_returns。attach 后只把日历已成熟且仍为 pending_immature_asof/pending_no_t_plus_one/pending_asof_not_in_future_cache 的窗口标 stale；先用真实 rows 原子写回 logs/forward_tracker.csv，再复用 stale banner 并返回 exit 3。meta.end_date 只进 request-range 日志，不进成熟度/coverage 判定。
+
+### Call chain / consumers / schema / source-binding / write boundary
+
+forward_tracker._mature_as_ofs → _partition_asof_coverage → attach_forward_returns → _write_tracker(logs/forward_tracker.csv) → _print_cache_stale_banner + EXIT_LEDGER_STALLED=3 → weekly_screening.ps1 forward_daily_cache_stale → existing sidecar health JSON/Markdown/receipt。O8 链为 shared-cache receipt → launcher switch → shared_cache_build health；O9 链为 producer projection → receipt schema。无新 schema/status/cache 字段、无 provider/refresh/live、无 selection/M6.7/returns/cost/benchmark/forward-gate 变更。
+
+### Negative controls / self-review
+
+- P2-2 矩阵：cache 20260622..20260731/meta request end 20260803、today 20260809 时，20260706 的 5d/10d 写回而 20d stale，20260713 的 20d 保持 immature，20260720 的 10d 与 20260727 的 5d stale；fresh fully-covered rc0；young cohort 无 stale；缺失/损坏/same-anchor cache 仍 rc3；launcher rc3 仍映射 forward_daily_cache_stale。
+- O8 switch block direct assertion；O9 no-frozen provider-call negative control。未运行真实 weekly/provider/live/full lane/forward/freeze/clock/account/order/ship-gate，未 stage/commit/push/merge。
+- **Pre-Codex self-review**：matrix=O8 switch mapping/O9 no-frozen invariant/P2-2 per-window maturity+partial write+exit3；register=updated；handoff=updated；focused=86+19 OK；full-lane=NOT_VERIFIED；door=doc-governance+route-status+readme。
+
+### Exact verification and original terminal state
+
+- C:\Users\cnhea\AppData\Local\Programs\Python\Python313\python.exe --version → Python 3.13.8。
+- & 'C:\Users\cnhea\AppData\Local\Programs\Python\Python313\python.exe' -m unittest tests.phase6.test_forward_tracker_cache_guard tests.phase6.test_weekly_screening_guardrails tests.test_a_short_weekly_sidecar_health → Ran 86 tests in 9.559s / OK。
+- & 'C:\Users\cnhea\AppData\Local\Programs\Python\Python313\python.exe' -m unittest tests.test_a_short_factor_comparison_v2_cache_build → Ran 19 tests in 1.189s / OK。
+- 文档门禁 & 'C:\Users\cnhea\AppData\Local\Programs\Python\Python313\python.exe' -m unittest tests.test_doc_governance_guard tests.test_route_doc_ledger_status_consistency tests.test_readme_route_row_length → Ran 66 tests / OK。本轮四个 Python 文件以同一固定解释器执行 py_compile → exit 0；git diff --check → exit 0。固定解释器首次直接执行被 sandbox 拒绝，未执行测试；随后同一固定解释器重跑成功。
+- 当前状态 OPEN-NOT_VERIFIED；真实 weekly 产物/health/receipt 仍未验证。审查与提交由 Claude Code reviewer/committer 负责。
+
+### Next
+
+Claude Code：审查 Optional O8/O9 与 P2-2 forward_tracker→exit3→health 链；通过后由 reviewer/committer 收口
+
 ## 2026-08-10 — Codex executor/fixer：Optional O6/O7 + P2-1 + P1-5（OPEN-NOT_VERIFIED）
 
 ### Verdict / Action
@@ -4874,5 +4908,28 @@ effect contract 已用固定 Python 重新登记 A-EGS decision-predicate hash �
 - launcher 那半只有静态证据（无 PowerShell 级单测），真实收据要等下周实盘才第一次生成。
 - 生产者四条不变式我只验了其中一条是否承重。
 - 全量归执行方；§6a 未起 agent；真实周跑与 forward/freeze/clock/provider/account/ship-gate 仍全部 `NOT_VERIFIED`。
+
+**下一步**：`Codex：执行`
+
+## 2026-08-10 追加：桌面 P2-2（成熟度判据）独立审查 —— PASS（已合入 master）
+
+**判定**：PASS，无 Required，两条 Optional（O10/O11，正文只在 `docs/system_risk_register.md` 同日节）。上一轮 O8/O9 已实闭。
+
+**我自己实际验了什么**
+
+- 整读 `_mature_as_ofs` / `_calendar_age_mature` / `_partition_asof_coverage` / `backfill` 的新函数体：immature 分支确实删除、判据改按窗口日历年龄、stale 只认三种「缓存没给出下一根真实交易日行」的状态、且只对 attach 前仍非终态的行判定。
+- 退出码与横幅的一致性：`stale_cohorts` 同时含缺 as_of 与已成熟仍欠账的窗口，`work.empty` 分支也不再无条件返回 0。
+- 附带确认桌面记的「meta 比真实覆盖多两天」已被 `_cache_coverage_description` 的并列打印关掉；写回新增终态保护。
+
+**植入对照（我自写，双向）**
+
+- 永不判 stale → `test_backfill_classifies_stale_windows_by_calendar_age_after_partial_write` 精确转红；恒判 stale（忽略日历年龄）→ 18 个用例全绿、无人喊（→ O10）。还原后 sha 逐字节回原值。
+- 上轮两条 Optional 用同一个植入复验：launcher 映射分支删除 → 新守卫精确转红；生产者不变式删除 → 新用例精确转红。两条都是真闭。
+
+**未覆盖维度与诚实边界**
+
+- 全为离线夹具证据；真实周跑里 20260706 那个 cohort 是否转 stale 并结算，要等下周实盘。
+- 长假场景（日历已过阈值但第 N 个交易日尚未发生）本轮未构造真实日历用例，只作 O11 记录。
+- 全量归执行方；§6a 未起 agent。
 
 **下一步**：`Codex：执行`
