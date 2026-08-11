@@ -77,7 +77,7 @@ class PublishedBundleEolPinTests(unittest.TestCase):
         if not epoch_mode.durable_evidence_writes_enabled(REGIME_TRACK):
             # Pre-freeze rows remain available for audit, but they must not turn
             # an untracked audit artifact into a failed frozen-bundle assertion.
-            return
+            self.skipTest("pre-freeze: recorded SHA membership is audit-only")
         self.assertTrue(recorded, "no recorded provenance sha; this guard would be vacuous")
         available = {hashlib.sha256((ROOT / row["path"]).read_bytes()).hexdigest() for row in self.bundles}
         self.assertEqual([sha for sha in recorded if sha not in available], [])

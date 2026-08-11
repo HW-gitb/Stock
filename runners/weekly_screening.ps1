@@ -145,6 +145,22 @@ function Invalidate-M67Artifact {
         }
     }
 }
+
+function Get-DesignCompletionAuthorized {
+    # The Python epoch module is the single authority for this gate.  Keep the
+    # PowerShell wrapper as a fail-closed transport only; it must not duplicate
+    # the registry's status/directive interpretation.
+    $Probe = "from engine.a_short_evidence_epoch_mode import design_completion_authorized; print('1' if design_completion_authorized() else '0')"
+    try {
+        $ProbeOutput = & $PythonExe -c $Probe 2>$null
+        $ProbeExitCode = $LASTEXITCODE
+        if ($ProbeExitCode -ne 0) { return $false }
+        return (($ProbeOutput | Select-Object -Last 1).ToString().Trim() -eq '1')
+    } catch {
+        return $false
+    }
+}
+
 function Write-M67FailureReceipt {
     param([string]$Directory, [string]$Reason, [int]$ExitCode, [string]$FailureDetailRef = '', [string]$AnalysisInput = $null,
           [object]$AttemptedBeforeEgs = $null, [string]$FeedRef = '', [string]$FeedSha256 = '',
@@ -1040,19 +1056,7 @@ if ($SkipRegime) {
     # additionally bind the raw analysis-input regime and published weekly bundle.
     $EffectiveV142Regime = 'shock'
     $RawV142Regime = 'unknown'
-    $DesignCompletionAuthorized = $false
-    $EpochModeRegistry = Join-Path $ProjectRoot 'docs\a_short_evidence_epoch_mode_registry_20260725.json'
-    if (Test-Path -LiteralPath $EpochModeRegistry -PathType Leaf) {
-        try {
-            $EpochModeAuthorization = Get-Content -Raw -Encoding UTF8 $EpochModeRegistry | ConvertFrom-Json
-            $DesignCompletionAuthorized = (
-                [string]$EpochModeAuthorization.design_completion_authorization.status -eq 'authorized' -and
-                -not [string]::IsNullOrWhiteSpace([string]$EpochModeAuthorization.design_completion_authorization.directive)
-            )
-        } catch {
-            $DesignCompletionAuthorized = $false
-        }
-    }
+    $DesignCompletionAuthorized = Get-DesignCompletionAuthorized
     $RegimeArgs = @('runners\a_short_regime_comparison_runner.py', '--as-of', $AsOf,
                     '--v14_2-regime', $EffectiveV142Regime)
     if ($M67InvocationState -eq 'complete' -and $DesignCompletionAuthorized) {

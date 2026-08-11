@@ -1,5 +1,30 @@
 # A-short 371 叶重新分层交接
 
+## 2026-08-11 Codex executor/fixer - Optional O32/O33（OPEN-NOT_VERIFIED，40d9）
+
+### 本轮范围与判断
+
+当前 risk register 最新 Optional 为 O32/O33，属于 EOL/证据治理层，不与桌面第14/15刀业务诊断混合：O32 是 weekly launcher 授权判据重复实现，O33 是 pre-freeze EOL SHA 测试的静默早退。
+
+### 最小修复与接线
+
+- `runners/weekly_screening.ps1::Get-DesignCompletionAuthorized` 只通过固定 `$PythonExe -c` 调用 `engine.a_short_evidence_epoch_mode::design_completion_authorized()`；Python 非零/异常/空输出 fail-closed，Stage 5 不再复制 registry status/directive 判据。
+- `tests/test_a_short_published_bundle_eol_pin.py` 的 pre-freeze audit-only 分支改为显式 `skipTest`；冻结授权后原 SHA、LF、`-text`、CRLF 和 writer 约束不变。
+
+### 边界与验证
+
+调用链为 `weekly_screening.ps1 → Python epoch authorization → Stage-5 D2/candidate-effect branch`，以及 `epoch durable-evidence gate → EOL test`。没有 schema、provider、token、M6.7、production output、历史行、SHA 或研究产物改写。
+
+固定 Python 3.13.8；聚焦 `Ran 82 tests ... OK (skipped=1)`，receipt=`receipt:297641f95a9b288dfd415a94`；因 launcher runtime 接线变更执行一次 A-short full lane，`discovered=2765`、`ran=2765`、`equal=True`、`PASS exit=0`、`120.1s`、fingerprint=`44d7cc5f9f72703a60a0e385c91e3d4c3e85752b17ea8033bab4ff430871fda8`；文档门禁 `Ran 66 tests ... OK`，receipt=`receipt:017ffc51a1e57ea2e00c077b`；Parser/diff-check 通过。未 provider/live/真实周跑/冻结，未起 sub-agent，未提交。
+
+精确固定-Python 命令与原始终态已完整记录在 `docs/system_risk_register.md` 本轮 O32/O33 条目；当前 registry 授权探针输出 `0`，未启动冻结。
+
+### 自审与交接
+
+`matrix=O32 single Python authority + fail-closed transport / O33 explicit pre-freeze visibility + frozen strictness; register=updated; handoff=updated; focused=82 OK/1 skipped; full-lane=2765/2765 PASS; door=fixed Python + Parser.ParseFile + diff-check; review-agent=not started per optional rule`。
+
+下一步：`Claude Code：独立审查 Optional O32/O33；不提交、不 merge`
+
 ## 2026-08-11 Codex executor/fixer - EOL-pin pre-freeze boundary and full-lane closeout (OPEN-NOT_VERIFIED, 40d9)
 
 ### User decision and repair boundary
@@ -6322,5 +6347,23 @@ effect contract 已用固定 Python 重新登记 A-EGS decision-predicate hash �
 - 关闭的是**接线工作**：这 88 片不再列为工程欠账。
 - 没关闭的是**契约表述**：机器仍会把它们报成未举证。要让机器也说「有意独立」，得逐叶补 `intentionally_independent_or_delete` 加三个举证字段，那是另一把刀，本轮明确不做。
 - 也没解开任何闸：生产激活、冻结重封、durable SHA 累计仍被 `not_authorized` 与六轨 `pre_freeze_audit_only` 挡着。
+
+**下一步**：`Codex：执行`
+
+## 2026-08-11 追加：O32/O33 收口独立审查 —— PASS（已提交并合入 master）
+
+**判定**：PASS，两条 Optional 都按我要的方向闭了，没有走形。
+
+**我实际验了什么**
+
+- O32 的关键不是「改成调用 Python」这句话，而是这个 wrapper 到底会不会说 True。我直接跑它的函数体四腿：真解释器 + 仓库根 → False（与当前 not_authorized 一致）；解释器不存在 → False；`$PythonExe` 指向 `cmd.exe` → False；再把注册表指到临时的 authorized + 真 directive 副本 → 输出 `'1'`、exit 0。有最后这条正向腿，才排除得掉「它只是个永远说 False 的空壳」。
+- 另外确认了 cwd 敏感性：从非仓库根跑探针会 import 失败，wrapper 得 False；launcher 在 625 行 `Set-Location $ProjectRoot`，调用点在 1056 行之后，所以生产路径没问题，且即便次序被打乱，失败方向也是不授权。
+- 零残留是有守卫的：新用例既断言新 wrapper 在，也用两条 `assertNotIn` 断言旧的重复判据表达式不在了。
+- O33 的闭合证据就是验收包终态 `OK (skipped=1)`——这条守卫从静默通过变成了显式报 skip。
+
+**未覆盖维度与诚实边界**
+
+- 我跑的是同形函数体，不是真实 launcher 的那一次调用；真实 weekly 仍 `NOT_VERIFIED`。
+- Optional-only 修复，按 §6a carve-out 与 rule 8 未起 agent、未跑全量。
 
 **下一步**：`Codex：执行`

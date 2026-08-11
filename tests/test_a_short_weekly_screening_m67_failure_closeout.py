@@ -68,6 +68,23 @@ class AShortWeeklyM67FailureCloseoutTests(unittest.TestCase):
         self.assertNotIn("$SemAnalysisInput", failed_block)
         self.assertNotIn("$M67Out", failed_block)
 
+    def test_design_completion_gate_comes_from_python_authority(self) -> None:
+        self.assertIn("function Get-DesignCompletionAuthorized", self.text)
+        self.assertIn(
+            "from engine.a_short_evidence_epoch_mode import design_completion_authorized",
+            self.text,
+        )
+        self.assertIn("$DesignCompletionAuthorized = Get-DesignCompletionAuthorized", self.stage5)
+        self.assertIn("$ProbeExitCode -ne 0", self.text)
+        self.assertNotIn(
+            "[string]$EpochModeAuthorization.design_completion_authorization.status -eq 'authorized'",
+            self.text,
+        )
+        self.assertNotIn(
+            "IsNullOrWhiteSpace([string]$EpochModeAuthorization.design_completion_authorization.directive)",
+            self.text,
+        )
+
     def test_skip_and_history_state_matrix_remains_explicit(self) -> None:
         self.assertIn("-SkipReason 'skip_regime'", self.stage5)
         self.assertIn("-SkipReason 'historical_replay'", self.stage5)
