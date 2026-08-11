@@ -1,5 +1,95 @@
 # A-short 371 叶重新分层交接
 
+## 2026-08-11 Codex executor/fixer - EOL-pin pre-freeze boundary and full-lane closeout (OPEN-NOT_VERIFIED, 40d9)
+
+### User decision and repair boundary
+
+The user confirmed that A-short freezing begins only after an explicit user declaration that the system design is complete. The existing 20260810 action row and weekly artifacts are preserved. They are audit-only while the shared registry remains `design_completion_authorization.status=not_authorized`; they are not silently deleted or rewritten.
+
+### EOL-pin repair
+
+- `tests/test_a_short_published_bundle_eol_pin.py` now reuses `engine.a_short_evidence_epoch_mode.durable_evidence_writes_enabled("p1_regime_candidate_effect")` before enforcing the action-record source SHA -> tracked LF bundle membership assertion.
+- Tracked bundle `-text` pinning, LF checkout, CRLF absence, and the single `Write-M67Utf8NoBom` normalization door remain unconditional. Once the track is authorized and frozen, the old SHA binding assertion remains unchanged and strict.
+- `tests/test_a_short_weekly_screening_m67_failure_closeout.py` now models the new Stage-5 branch: authorized complete passes D2 source args; complete but not authorized records `design_not_complete`; M6.7 failed remains source-free and marks dependencies failed/unavailable.
+
+### Consumers / schema / write boundary
+
+The boundary is `registry authorization -> shared durable-evidence gate -> EOL source-binding assertion`; the production weekly boundary remains `weekly_screening.ps1 -> a_short_regime_comparison_runner.main -> D2/candidate-effect paths`. No schema, source SHA, historical row, or research artifact was deleted or rewritten. Frozen packet identity, receipt, lineage, candidate digest, and raw-byte LF binding remain required after authorization.
+
+### Verification / review handoff
+
+- Fixed interpreter: `C:\Users\cnhea\AppData\Local\Programs\Python\Python313\python.exe` / Python 3.13.8.
+- Focused: `Ran 102 tests ... OK`, receipt `receipt:d632b6e276573e5aaccb22e1`.
+- A-short full lane: static `diff_check=PASS`, `py_compile=13`; `discovered=2764`, `ran=2764`, `equal=True`; `Ran 2764 tests in 107.724s`; `RESULT status=PASS exit=0`; fingerprint `a3f2d9fb5fd5`.
+- First full-lane attempt (`ran=2650`) exposed only the stale launcher static-test seam and was not counted as green; the corrected second run is the sole accepted full-lane evidence.
+- No provider/live/network/real weekly run. Codex did not stage, commit, merge, or push. Independent review is explicitly delegated to Claude; status remains `OPEN-NOT_VERIFIED` until that review.
+
+### Next command
+
+`Claude Code：独立审查 EOL-pin pre-freeze boundary、Stage-5 three-way launcher guard、focused receipt 和 A-short full-lane PASS；不提交、不 merge`
+
+## 2026-08-11 Codex executor/fixer - explicit design-completion gate before any A-short freeze (OPEN-NOT_VERIFIED, 40d9)
+
+### User decision and purpose
+
+用户本轮明确裁决：**冻结从用户明确宣布“A-short 系统设计完成”之后才开始**。系统设计未完成时，未来周运行不得把数据积攒为 SHA 绑定的冻结对比证据；可以做 audit-only 计算，但不能留下会被后续时钟/冻结消费者误认的 durable D2/candidate-effect 周记录。该规则覆盖当前所有 comparison track 的冻结入口，不等同于删除历史文件。
+
+### Observed issue and root cause
+
+当前 registry 八条 track 均为 `pre_freeze_audit_only`，但真实 V14.3 周入口仍把完整 M6.7 周报传给 D2 writer：
+
+`weekly_screening.ps1` → `a_short_regime_comparison_runner.main()` → `run_regime_step()` → `validate_published_weekly_bundle()` / `m67_provenance_from_bundle()` → `save_action_records()` 与 candidate-effect writers。
+
+这条路径在 pre-freeze 时仍把 `m67_provenance.source_sha256` 写入 `research/results/a_short/regime_action_comparison_records.json`，所以 20260810 留下了一个 forward-eligible 行和对应未跟踪 `weekly_m67.json`。`test_a_short_published_bundle_eol_pin` 看到该 SHA 不在 tracked bundle inventory 中而失败。根因不是 SHA 算法坏，而是“时钟不计数”与“写盘不发生”没有共用同一冻结门。
+
+### Code / registry repair
+
+- `docs/a_short_evidence_epoch_mode_registry_20260725.json` 新增 `design_completion_authorization: {status: not_authorized, directive: null}`；当前不授权冻结。
+- `engine/a_short_evidence_epoch_mode.py` 新增 registry authorization parsing、`design_completion_authorized()`、`require_design_completion_authorization()` 和 `durable_evidence_writes_enabled(track)`。冻结 mode 没有非空用户 directive 时 fail-closed；`validate_frozen_transition()` 也先过授权门。pre-freeze 仍使用稳定常量 fingerprint，但不再被解释为可写入的冻结积攒许可。
+- `runners/a_short_theme_forward_comparison.py::_start_or_reset_epoch()` 在任何 admission/archive/active epoch/registry 写盘前要求显式设计完成授权。仅传 `--start-epoch` 不能自行制造授权。
+- `runners/a_short_regime_comparison_runner.py::main()` 在 D2 track 未获授权时，不向 `run_regime_step()` 传 `raw_v14_2_regime`、`m67_report_path` 或 action/candidate-effect paths；因此该周只可推进独立 audit ledger，不写 SHA 绑定 D2/candidate-effect 证据，并明确打印 `pre_freeze_audit_only`。
+- `runners/weekly_screening.ps1` 同步读取授权状态：M6.7 完成但设计未完成时，把 `regime_action` 与 `candidate_effect` 记为 `design_not_complete` skip，避免 health bundle 把未启动的 comparison 误报 succeeded/failed。
+
+### Schema / source-binding / consumers / write boundary
+
+没有放宽既有 schema、M6.7 receipt、run lineage、candidate digest、source SHA 或 LF bundle pin。冻结后仍由第五刀 packet identity + semantic contract hashes 绑定。新增授权对象只决定何时允许进入冻结写盘；它不替代既有 source-binding。当前受控写盘边界是 D2 action records/summary 与 candidate-effect private ledger、public summary/markdown、de-identified outcome；weekly sidecar health 只记录 skip 状态。既有 20260810 记录、raw weekly bundle 与 dirty research outputs 均未删除、未改写，待用户单独决定历史处置。
+
+### Tests, self-review and exact commands
+
+- 固定解释器核对：`C:\Users\cnhea\AppData\Local\Programs\Python\Python313\python.exe` = Python 3.13.8。
+- `& 'C:\Users\cnhea\AppData\Local\Programs\Python\Python313\python.exe' -c "import sys,unittest; sys.path.insert(0,r'D:\cnhea\Codex\worktrees\40d9\Stock'); s=unittest.defaultTestLoader.loadTestsFromNames(['tests.test_a_short_evidence_epoch_mode','tests.test_a_short_theme_forward_comparison','tests.test_a_short_theme_forward_comparison_runner']); r=unittest.TextTestRunner(verbosity=1).run(s); raise SystemExit(not r.wasSuccessful())"` → `Ran 138 tests in 83.933s / OK`。
+- `& 'C:\Users\cnhea\AppData\Local\Programs\Python\Python313\python.exe' -c "import sys,unittest; sys.path.insert(0,r'D:\cnhea\Codex\worktrees\40d9\Stock'); s=unittest.defaultTestLoader.loadTestsFromNames(['tests.test_a_short_evidence_epoch_mode','tests.test_a_short_regime_comparison_runner']); r=unittest.TextTestRunner(verbosity=1).run(s); raise SystemExit(not r.wasSuccessful())"` → `Ran 92 tests in 44.765s / OK`。
+- `& 'C:\Users\cnhea\AppData\Local\Programs\Python\Python313\python.exe' -m py_compile 'D:\cnhea\Codex\worktrees\40d9\Stock\engine\a_short_evidence_epoch_mode.py' 'D:\cnhea\Codex\worktrees\40d9\Stock\runners\a_short_regime_comparison_runner.py' 'D:\cnhea\Codex\worktrees\40d9\Stock\runners\a_short_theme_forward_comparison.py'` → exit 0。
+- weekly launcher/pipeline guard pack `tests.phase6.test_weekly_screening_guardrails tests.test_a_short_weekly_pipeline` → `Ran 565 tests in 42.494s / OK`；route/doc governance pack `tests.test_route_doc_ledger_status_consistency tests.test_doc_governance_guard tests.test_readme_route_row_length` → `Ran 66 tests in 1.385s / OK`；`git diff --check` exit 0 (only existing LF→CRLF warnings)。
+- 负向控制：默认 registry 授权为 false；frozen + `not_authorized` 临时 registry 在 packet 校验前抛显式授权错误；pre-freeze CLI fake call 的 `raw_v14_2_regime`/`m67_report_path` 为 `None` 且无 action path；authorized test fixture 才允许 frozen transition。无 provider/live/real weekly/full lane，未 stage/commit/merge。
+
+### Status / handoff / next step
+
+本轮为 **OPEN-NOT_VERIFIED**。旧 A-short full lane 的 `test_a_short_published_bundle_eol_pin` 仍因保留的 20260810 pre-design dirty record/source SHA 而未闭；本轮不删除该行、不清空 SHA、不借测试绿声称 full lane 已过。当前唯一正确下一步是等待用户明确说“系统设计完成”；在此之前保持 registry `not_authorized`、所有 tracks pre-freeze、禁止启动冻结或真实 durable normal-weekly accumulation。用户明确授权后，再单独更新授权记录、执行 freeze-start，并按独立 review/commit 边界收口。
+
+## 2026-08-11 Codex executor/fixer - A-short full lane FAIL after P5 seam repair (OPEN-NOT_VERIFIED, 40d9)
+
+### 本轮动作与终态
+
+按用户指令修复 evidence-epoch P5 测试接线：`tests/test_a_short_evidence_epoch_mode.py` 的 `_weekly_paths` monkeypatch 从二参数改为接受可选 `_run_revision_id=None`，保持原 fixture 路径与 P5 pre-freeze/frozen 断言不变。固定 Python focused 回归通过 190 tests，receipt 为 `receipt:670ef90a78a88d80c146ca00`。
+
+随后按当前代码指纹只执行一轮 A-short full lane。静态准入通过；111 个模块发现 2,761 cases，运行 2,549 cases，在 fail-fast 下同时暴露两个独立失败，终态为 `Ran 2549 tests in 109.560s` / `RESULT status=FAIL exit=1 tests=2549 elapsed=109.6s deadline=860s mode=parallel`。P5 模块本身已通过（full-lane ran=44）。未 provider/live/network，未 stage/commit/merge。
+
+### 新增 Required
+
+1. `R-ASHORT-PUBLIC-JSON-WRITER-REGISTRY-STALE`：AST writer guard 发现 `engine/a_short_run_revision.py:write_revision_manifest` 与 `runners/a_short_target_policy_comparison_runner.py:capture_after_published_weekly` 未登记在 `PUBLIC_WRITER_FUNCTIONS`；两处 serializer 已有 `allow_nan=False`，先修 registry/对应负向覆盖，不得削弱 finite-only guard。
+2. `R-ASHORT-PRE-HOLIDAY-CALENDAR-FIXTURE-UNDER-COVERS-60D-HORIZON`：`test_four_closed_days_does_not_trigger` fixture 只到 `20261005`，而 `A-EGS/egs_main.py` 的 `TRADE_CALENDAR_FORWARD_DAYS=60` 要求覆盖至 60 日终点，故 fail-closed 报缺 `20261006` 起日期；扩展 fixture 到契约 horizon，保留覆盖缺失即阻断的生产行为。
+
+两项完整根因、调用链、consumer、schema/source-binding/写盘边界、负向控制和精确命令已写入 `docs/system_risk_register.md` 同日条目。当前 full lane 仍 `NOT_VERIFIED`；未经用户下一条命令，不继续修复或重跑 full lane。
+
+## 2026-08-11 Codex executor/fixer - A-short full lane FAIL: evidence-epoch P5 test seam (OPEN-NOT_VERIFIED, 40d9)
+
+按用户指令在已审查的 `437fc26d` 代码态执行 A-short full lane。固定 Python 准入、`git diff --check` 与 `py_compile` 均通过；lane 发现 2,761 个测试，实际运行 2,021 个后在 `tests.test_a_short_evidence_epoch_mode::PreFreezeVerdictGateTests.test_p5_threshold_evidence_gates_pre_freeze_then_re_arms` 处 1 error 停止，原始终态为 `Ran 2021 tests in 88.924s` / `RESULT status=FAIL exit=1 tests=2021 elapsed=88.9s deadline=860s mode=parallel`。其余尚未派发的模块按 fail-fast skipped，不得记作通过。
+
+根因是测试在 `tests/test_a_short_evidence_epoch_mode.py:966` 将 `p5._weekly_paths` 替换为只接收 `(root, date)` 的 lambda；当前 V5 revision-aware 生产函数 `engine/a_short_industry_weight_comparison.py::_weekly_paths(root, decision_date, run_revision_id=None)` 由 `_question_progress` 传入第三个 `run_revision_id`，故测试 double 抛 `TypeError`。这是测试接线与当前生产签名漂移，不是 provider 或生产数据问题。本轮不直接修复、不重跑 full lane；下一步先修 test seam，重新生成固定 Python focused receipt，再按 rule 4 只跑一次替代 full lane。
+
+精确命令、调用链、负向控制、schema/source-binding/写盘边界和 `NOT_VERIFIED` 见 `docs/system_risk_register.md` 本轮条目。Codex 未运行 provider/live，未 stage/commit/merge；既有 research 产物保留。
+
 ## 2026-08-11 Codex executor/fixer - V3-A/V4 three-way cross-validation (OPEN-NOT_VERIFIED, 40d9)
 
 ### Purpose / problem / repair
@@ -6192,5 +6282,27 @@ effect contract 已用固定 Python 重新登记 A-EGS decision-predicate hash �
 - V3 总项没关：V3-B（native stderr / 外层失败）与 V3-C（未注册 advisory 的降级原因）按桌面本就不在本刀，仍待各自设计。
 - 真实 provider/weekly 下的同一条链仍 `NOT_VERIFIED`；a_short 全量归执行方。
 - §6a 按 rule 8 未起 agent（8 行、只影响运维 health）。
+
+**下一步**：`Codex：执行`
+
+## 2026-08-11 追加：EOL-pin 预冻结边界 + 设计完成授权门独立审查 —— PASS（已提交并合入 master）
+
+**判定**：PASS，两条 Optional。这是一刀放松类改动——把一条守卫改成「只有该轨显式冻结后才校验」——所以我审的重点全在反方向。
+
+**我实际验了什么**（区别于执行方转述）
+
+- 放松的范围：只有 `test_recorded_source_sha_still_matches_a_tracked_bundle` 里加了一处早退，同文件的 LF 字节、`-text` 属性、无 CRLF 三条断言一行没动。放松的是「冻结集合成员资格」，不是 EOL pin 本身。
+- **授权门四格反向控制（我自写）**：把注册表指到临时文件——仓库现状是门休眠；`authorized` + 真 directive 门重新生效；`authorized` 缺 directive 抛错；`not_authorized` 却带 directive 也抛错。也就是说改一个字段撬不开，必须把用户指令一起写进去。
+- **全量 lane 我没重跑，按 rule 4 引用执行方 ledger**：`a_short 2764 OK`、`fingerprint a3f2d9fb5fd5966c…`、`prepared_fingerprint` 相等。我另核了被审源码的 mtime 全部早于 ledger 的 `recorded_at`，所以那次绿绑的确实是我审的这个代码态——这一步不做的话，引用一条陈旧记录跟没跑一样。
+
+**两条 Optional**
+
+- launcher 在 PowerShell 里把同一条授权判据又实现了一遍；方向是安全的（矛盾组合落 `$false`），但 Python 侧将来加规则它不会跟。
+- 预冻结期用裸 `return` 早退，测试输出里看不出这条守卫正在休眠；`skipTest` 会让它可见。这是本项目反复吃亏的「静默」类。
+
+**未覆盖维度与诚实边界**
+
+- 冻结后（`authorized`）的真实行为只由我的注册表探针证明，没有真的冻结任何一轨去跑；六条轨现仍全是 `pre_freeze_audit_only`。
+- 真实 provider / live / 真实 normal weekly 仍 `NOT_VERIFIED`；§6a 按 rule 8 未起 agent。
 
 **下一步**：`Codex：执行`

@@ -1040,9 +1040,22 @@ if ($SkipRegime) {
     # additionally bind the raw analysis-input regime and published weekly bundle.
     $EffectiveV142Regime = 'shock'
     $RawV142Regime = 'unknown'
+    $DesignCompletionAuthorized = $false
+    $EpochModeRegistry = Join-Path $ProjectRoot 'docs\a_short_evidence_epoch_mode_registry_20260725.json'
+    if (Test-Path -LiteralPath $EpochModeRegistry -PathType Leaf) {
+        try {
+            $EpochModeAuthorization = Get-Content -Raw -Encoding UTF8 $EpochModeRegistry | ConvertFrom-Json
+            $DesignCompletionAuthorized = (
+                [string]$EpochModeAuthorization.design_completion_authorization.status -eq 'authorized' -and
+                -not [string]::IsNullOrWhiteSpace([string]$EpochModeAuthorization.design_completion_authorization.directive)
+            )
+        } catch {
+            $DesignCompletionAuthorized = $false
+        }
+    }
     $RegimeArgs = @('runners\a_short_regime_comparison_runner.py', '--as-of', $AsOf,
                     '--v14_2-regime', $EffectiveV142Regime)
-    if ($M67InvocationState -eq 'complete') {
+    if ($M67InvocationState -eq 'complete' -and $DesignCompletionAuthorized) {
         try {
             $RawV142Regime = (Get-Content -Raw -Encoding UTF8 $SemAnalysisInput | ConvertFrom-Json).market_context.market_regime.status
             if ($RawV142Regime -in @('attack', 'shock', 'defense', 'contraction')) {
@@ -1054,6 +1067,8 @@ if ($SkipRegime) {
         }
         # D2 and candidate-effect are source-bound to this same complete bundle.
         $RegimeArgs += @('--v14_2-raw-regime', $RawV142Regime, '--m67-report', $M67Out)
+    } elseif ($M67InvocationState -eq 'complete') {
+        Write-Host "[regime] design completion is not authorized; running daily-only audit and not freezing D2/candidate-effect evidence" -ForegroundColor DarkGray
     } elseif ($M67InvocationState -eq 'failed') {
         Write-Host "[regime] M6.7 failed; running daily-only regime evidence without raw regime or M6.7 report binding" -ForegroundColor Yellow
     } else {
@@ -1083,7 +1098,13 @@ if ($SkipRegime) {
     $RegimeProgress = if($RegimeExitCode -eq 0){'advanced'}else{'unavailable'}
     $RegimeError = if($RegimeExitCode -eq 0){$null}else{'process_failed'}
     Add-SidecarOutcome -Name 'regime_daily' -Expected $true -Attempted $true -ExecutionStatus $RegimeStatus -ProgressStatus $RegimeProgress -ErrorCode $RegimeError -ExpectedDataThrough $PriceAsOf -ObservedDataThrough $(if($RegimeExitCode -eq 0){$PriceAsOf}else{$null})
-    if ($M67InvocationState -eq 'failed') {
+    if ($M67InvocationState -eq 'complete' -and -not $DesignCompletionAuthorized) {
+        # The M6.7 bundle is complete, but the user has not yet declared the
+        # A-short design complete. D2 and candidate-effect remain unstarted,
+        # rather than looking like a failed or countable weekly observation.
+        Add-SidecarOutcome -Name 'regime_action' -Expected $false -Attempted $false -ExecutionStatus 'skipped' -ProgressStatus 'not_applicable' -SkipReason 'design_not_complete'
+        Add-SidecarOutcome -Name 'candidate_effect' -Expected $false -Attempted $false -ExecutionStatus 'skipped' -ProgressStatus 'not_applicable' -SkipReason 'design_not_complete'
+    } elseif ($M67InvocationState -eq 'failed') {
         # The daily-only invocation cannot produce a D2 action or candidate-effect
         # record. Keep both expectations visible as failed, unattempted dependencies.
         Add-SidecarOutcome -Name 'regime_action' -Expected $true -Attempted $false -ExecutionStatus 'failed' -ProgressStatus 'unavailable' -ErrorCode 'm67_failed'

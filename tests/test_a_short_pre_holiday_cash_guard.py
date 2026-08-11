@@ -58,20 +58,28 @@ def _calendar_frame(start: str, end: str, open_dates: set[str]) -> pd.DataFrame:
     return pd.DataFrame(rows)
 
 
+def _forward_end(egs_module, decision_as_of: str) -> str:
+    return (
+        datetime.strptime(decision_as_of, "%Y%m%d")
+        + timedelta(days=egs_module.TRADE_CALENDAR_FORWARD_DAYS)
+    ).strftime("%Y%m%d")
+
+
 class PreHolidayCalendarProducerTests(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
         cls.egs = _load_egs_module()
 
     def test_last_weekly_run_before_long_closure_is_source_bound(self):
+        decision_as_of = "20260928"
         frame = _calendar_frame(
-            "20260928", "20261008",
+            decision_as_of, _forward_end(self.egs, decision_as_of),
             {"20260928", "20260929", "20260930", "20261008"},
         )
         with patch.object(self.egs, "load_cache", return_value=None), \
              patch.object(self.egs, "save_cache"), \
              patch.object(self.egs, "safe_api", return_value=frame) as fetch:
-            context = self.egs.get_trade_calendar_context("20260928")
+            context = self.egs.get_trade_calendar_context(decision_as_of)
         self.assertEqual(fetch.call_args.kwargs["fields"], "cal_date,is_open")
         self.assertEqual(context["decision_as_of"], "20260928")
         self.assertEqual(context["next_trade_date"], "20260929")
@@ -79,27 +87,29 @@ class PreHolidayCalendarProducerTests(unittest.TestCase):
         self.assertEqual(context["holiday_days_ahead"], 7)
 
     def test_two_weeks_before_same_holiday_does_not_trigger(self):
+        decision_as_of = "20260921"
         frame = _calendar_frame(
-            "20260921", "20261008",
+            decision_as_of, _forward_end(self.egs, decision_as_of),
             {"20260921", "20260922", "20260923", "20260924", "20260925",
              "20260928", "20260929", "20260930", "20261008"},
         )
         with patch.object(self.egs, "load_cache", return_value=None), \
              patch.object(self.egs, "save_cache"), \
              patch.object(self.egs, "safe_api", return_value=frame):
-            context = self.egs.get_trade_calendar_context("20260921")
+            context = self.egs.get_trade_calendar_context(decision_as_of)
         self.assertFalse(context["is_pre_holiday_window"])
         self.assertEqual(context["holiday_days_ahead"], 0)
 
     def test_four_closed_days_does_not_trigger(self):
+        decision_as_of = "20260928"
         frame = _calendar_frame(
-            "20260928", "20261005",
+            decision_as_of, _forward_end(self.egs, decision_as_of),
             {"20260928", "20260929", "20260930", "20261005"},
         )
         with patch.object(self.egs, "load_cache", return_value=None), \
              patch.object(self.egs, "save_cache"), \
              patch.object(self.egs, "safe_api", return_value=frame):
-            context = self.egs.get_trade_calendar_context("20260928")
+            context = self.egs.get_trade_calendar_context(decision_as_of)
         self.assertFalse(context["is_pre_holiday_window"])
         self.assertEqual(context["holiday_days_ahead"], 0)
 

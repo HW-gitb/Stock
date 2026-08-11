@@ -363,6 +363,13 @@ def _start_or_reset_epoch(
             registry.get("schema_version") != "1.0.0" or \
             set((registry.get("track_modes") or {})) != set(epoch_mode.TRACKS):
         raise SystemExit("[FATAL] invalid epoch mode registry")
+    # A CLI request to start an epoch is not itself the design-completion
+    # decision. The user must first record that explicit directive in the
+    # shared registry; otherwise no durable frozen epoch may be published.
+    try:
+        epoch_mode.require_design_completion_authorization()
+    except epoch_mode.EvidenceEpochModeError as exc:
+        raise SystemExit(f"[FATAL] {exc}") from exc
     registry_mode = registry["track_modes"][TRACK_ID]
     epoch_is_frozen = epoch["mode"] == "frozen_enforced"
     if epoch_is_frozen != (registry_mode == "frozen_enforced"):

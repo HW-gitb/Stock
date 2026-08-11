@@ -48,8 +48,11 @@ class AShortWeeklyM67FailureCloseoutTests(unittest.TestCase):
         failed_end = self.stage5.index("} else {", failed_start)
         complete_block = self.stage5[complete_start:failed_start]
         failed_block = self.stage5[failed_start:failed_end]
-        self.assertIn("--v14_2-raw-regime", complete_block)
-        self.assertIn("--m67-report", complete_block)
+        self.assertIn("if ($M67InvocationState -eq 'complete' -and $DesignCompletionAuthorized)", self.stage5)
+        self.assertIn("--v14_2-raw-regime", self.stage5)
+        self.assertIn("--m67-report", self.stage5)
+        self.assertIn("design completion is not authorized", complete_block)
+        self.assertIn("design_not_complete", self.stage5)
         self.assertNotIn("--v14_2-raw-regime", failed_block)
         self.assertNotIn("--m67-report", failed_block)
         self.assertIn(

@@ -75,6 +75,10 @@ class ThemeForwardComparisonRunnerTests(unittest.TestCase):
         path.write_text(json.dumps({
             "schema_name": "a_short_evidence_epoch_mode_registry",
             "schema_version": "1.0.0",
+            "design_completion_authorization": {
+                "status": "authorized",
+                "directive": "test-only explicit design completion",
+            },
             "track_modes": modes,
         }), encoding="utf-8")
 
@@ -394,7 +398,12 @@ class ThemeForwardComparisonRunnerTests(unittest.TestCase):
             root = Path(temp)
             registry_path = root / "registry.json"
             registry_path.write_text(json.dumps({"schema_name": "a_short_evidence_epoch_mode_registry",
-                                                  "schema_version": "1.0.0", "track_modes": modes}), encoding="utf-8")
+                                                  "schema_version": "1.0.0",
+                                                  "design_completion_authorization": {
+                                                      "status": "authorized",
+                                                      "directive": "test-only explicit design completion",
+                                                  },
+                                                  "track_modes": modes}), encoding="utf-8")
             freeze_packet_path = root / "freeze_packet.json"
             _resealed_freeze_packet(freeze_packet_path)
             active_path = root / "epoch.json"
@@ -485,7 +494,12 @@ class ThemeForwardComparisonRunnerTests(unittest.TestCase):
             root = Path(temp)
             registry_path = root / "registry.json"
             registry_path.write_text(json.dumps({"schema_name": "a_short_evidence_epoch_mode_registry",
-                "schema_version": "1.0.0", "track_modes": modes}), encoding="utf-8")
+                "schema_version": "1.0.0",
+                "design_completion_authorization": {
+                    "status": "authorized",
+                    "directive": "test-only explicit design completion",
+                },
+                "track_modes": modes}), encoding="utf-8")
             freeze_packet_path = root / "freeze_packet.json"
             _resealed_freeze_packet(freeze_packet_path)
             active_path = root / "epoch.json"

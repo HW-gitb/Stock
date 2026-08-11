@@ -860,7 +860,7 @@ def capture_after_published_weekly(*, root: str | Path, decision_date: str, cand
     records: dict[str, dict[str, Any]] = {}
     idempotent = True
     for track, admission_id in TRACK_ADMISSIONS.items():
-        record = json.loads(json.dumps(record_base))
+        record = json.loads(json.dumps(record_base, allow_nan=False))
         if track == "target_exit":
             record["target_entries"] = entries
             record["target_difference"] = any(entry["changed"] for entry in entries)

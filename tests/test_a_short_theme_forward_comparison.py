@@ -137,7 +137,12 @@ class ThemeForwardComparisonTests(unittest.TestCase):
         modes = {track: "pre_freeze_audit_only" for track in epoch_mode.TRACKS}
         modes[comparison.TRACK_ID] = "frozen_enforced"
         path.write_text(json.dumps({"schema_name": "a_short_evidence_epoch_mode_registry",
-                                    "schema_version": "1.0.0", "track_modes": modes}), encoding="utf-8")
+                                    "schema_version": "1.0.0",
+                                    "design_completion_authorization": {
+                                        "status": "authorized",
+                                        "directive": "test-only explicit design completion",
+                                    },
+                                    "track_modes": modes}), encoding="utf-8")
         return temp, path
 
     @contextlib.contextmanager
