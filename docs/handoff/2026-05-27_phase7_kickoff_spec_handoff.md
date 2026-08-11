@@ -4259,3 +4259,12 @@ git diff --check
 - **本轮做了什么**：只把两份样例的家族键改名并把 register 旧口径标为 superseded；reviewer 走 rule 8 快档（整读消费链 + 反向控制 + 验收超集 378 OK，含上一轮转红的模块），未起 agent、未起全量（用户指示；执行方账本指纹与当前代码态逐字相同）。
 - **失效旧结论**：register 中「健康家族为 `fmp_grades`」「yfinance 不进 global health」的表述已作废，现行契约是 `analyst_grades` + yfinance 驱动；`docs/us_short_system_design.md:9` 已同步，只改 provider-health 半句、保留 "never gate emit"。
 - **下一步注意事项**：`clean` 仍不可达，因为 `universe_market_cap` 与 `sec_sic` 在真实产物上长期 `degraded`——这是问题7 的数据缺口，按桌面 §问题6 §3.A.2 属预期，不要当回归查。剩余 `O-P6R-2`~`O-P6R-6`、`O-P3-1` 为非阻断 Optional。
+
+## 2026-08-11 追加：provider-health Optional O-P6R-2~6 自修自审收口
+
+- **结论**：PASS，已提交并合入 master。五条 Optional 转 `resolved`；`O-P3-1` 按用户指示保持 `open`。
+- **改了什么**：`runners/us_short_weekly_capstone_stages.py` —— `_pass2_rows` 类型检查前置到 `set()` 之前、`_massive_events_health` 加 symbol 类型守卫、`_vix_health` 安全 float 转换、离线 seam 的 pass2 校验失败改为降级（receipt 分支仍 raise）、`_universe_health` 从 `per_source` 重算失败列表以拒收空洞证据。测试侧补了敌意输入类、空洞证据类，以及**第一条真正跑通生产 receipt 分支**的测试（含三 stage 篡改反控）。
+- **为什么**：这些投影器的契约是返回状态词，抛异常等于让一行坏数据打断整份健康图；而 emit-critical 家族靠空洞证据判 `ok` 是反方向的洞。
+- **验证**：焦点超集 `288 OK`（`receipt:e9fd04f4cdda1f469a54aea2`）；植入把守卫顺序改回原样 → 精确复现 `TypeError`，还原后 sha 一致；三份真实 universe summary 在收紧后仍 `ok`（正向控制）。
+- **失效旧结论**：register 里「这五条只在离线 seam 可达、暂不处理」的表述作废——已修完。
+- **下一步注意事项**：本刀按用户指示**未跑全量**，改的是共享 fail-closed 投影器，跨 lane 回归是已声明的证据边界；下次有全量机会时顺带确认一次。

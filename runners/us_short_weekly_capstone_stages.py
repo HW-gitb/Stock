@@ -1012,12 +1012,26 @@ def _universe_health(summary: Mapping[str, Any]) -> tuple[str, str]:
     critical_failed = outcome["critical_failed"]
     if any(not isinstance(value, str) or not value for value in (*failed_sources, *critical_failed)):
         return "universe_status", "missing"
+    # An emit-critical family may not rest on vacuous evidence: recompute the failure lists from `per_source`
+    # exactly as the canonical producer does, so "no sources at all" or "every source down but nothing failed"
+    # can no longer read as healthy.
+    from engine.us_short_status_source import CRITICAL_STATUS_SOURCES, STATUS_SOURCES, _SOURCE_FAIL, _SOURCE_STATES
+
+    per_source = outcome.get("per_source")
+    if not isinstance(per_source, Mapping) or set(per_source) != set(STATUS_SOURCES) \
+            or any(per_source[src] not in _SOURCE_STATES for src in STATUS_SOURCES):
+        return "universe_status", "missing"
+    expected_failed = sorted(src for src in STATUS_SOURCES if per_source[src] in _SOURCE_FAIL)
+    expected_critical_failed = sorted(src for src in CRITICAL_STATUS_SOURCES if per_source[src] in _SOURCE_FAIL)
     if (
         failed_sources != sorted(set(failed_sources))
         or critical_failed != sorted(set(critical_failed))
+        or failed_sources != expected_failed
+        or critical_failed != expected_critical_failed
         or outcome["failed_count"] != len(failed_sources)
+        or outcome["total_sources"] != len(STATUS_SOURCES)
         or outcome["total_sources"] < outcome["failed_count"]
-        or (outcome["critical_all_failed"] and not critical_failed)
+        or outcome["critical_all_failed"] is not (set(expected_critical_failed) == set(CRITICAL_STATUS_SOURCES))
         or outcome["block_or_no_emit"] is not outcome["critical_all_failed"]
     ):
         return "universe_status", "missing"
@@ -1110,9 +1124,11 @@ def _pass2_rows(summary: Mapping[str, Any]) -> tuple[list[Mapping[str, Any]], li
                if isinstance(summary.get("pass2_target_universe"), Mapping) else None)
     target_count = ((summary.get("pass2_target_universe") or {}).get("target_count")
                     if isinstance(summary.get("pass2_target_universe"), Mapping) else None)
+    # The per-symbol type check MUST precede set()/hashing: an unhashable target (dict/list) would otherwise
+    # raise TypeError out of a projector whose whole contract is to fail closed, never to crash.
     if type(targets) is not list or not targets or type(target_count) is not int \
-            or target_count != len(targets) or len(set(targets)) != len(targets) \
-            or any(type(symbol) is not str or not symbol for symbol in targets):
+            or any(type(symbol) is not str or not symbol for symbol in targets) \
+            or target_count != len(targets) or len(set(targets)) != len(targets):
         return None
     rows = summary["endpoint_results"]
     if any(not isinstance(row, Mapping) or row.get("status") not in {"success", "error"}
@@ -1270,7 +1286,11 @@ def _massive_events_health(summary: Mapping[str, Any]) -> tuple[str, str]:
     for row in rows:
         if row.get("provider_id") != "massive" or row.get("endpoint_family") not in _EVENT_FAMILIES:
             continue
-        key = (row.get("endpoint_family"), row.get("symbol"))
+        symbol = row.get("symbol")
+        if type(symbol) is not str:            # same guard as _sec_offering_health: never hash an unchecked value
+            malformed = True
+            continue
+        key = (row.get("endpoint_family"), symbol)
         if key not in expected or key in seen:
             malformed = True
             continue
@@ -1296,8 +1316,13 @@ def _vix_health(summary: Mapping[str, Any]) -> tuple[str, str]:
     unknown = summary.get("vix_regime_is_unknown")
     if type(status) is not int or type(unknown) is not bool:
         return "fmp_vix", "missing"
-    if status != 200 or type(value) not in (int, float) or isinstance(value, bool) \
-            or not math.isfinite(float(value)):
+    if status != 200 or type(value) not in (int, float) or isinstance(value, bool):
+        return "fmp_vix", "down"
+    try:
+        numeric = float(value)                 # a 400-digit JSON int overflows float(); that is data, not a crash
+    except (OverflowError, ValueError):
+        return "fmp_vix", "down"
+    if not math.isfinite(numeric):
         return "fmp_vix", "down"
     if regime not in (*REGIMES, UNKNOWN) or unknown is not (regime == UNKNOWN):
         return "fmp_vix", "degraded"
@@ -1383,8 +1408,13 @@ def _write_provider_health(ctx) -> None:
         pass2_summary = _read_json_or_empty(producer_paths["pass2_fetch"])
         if pass2_summary.get("schema_name") == "us_short_batch5_full_candidate_live_source_packet_summary":
             # A persisted full Pass2 summary is a real consumer boundary: re-run its schema + analyst-source
-            # semantic validator before allowing any health family to consume it.
-            _pass2._validate_summary_against_schema(pass2_summary)
+            # semantic validator before allowing any health family to consume it.  On this seam a rejected
+            # summary must DEGRADE (the pass2 families go missing/down and the map is still written), not abort
+            # the stage — aborting leaves no provider_health.json at all.  The receipt branch above still raises.
+            try:
+                _pass2._validate_summary_against_schema(pass2_summary)
+            except _pass2.FullCandidateLiveSourcePacketError:
+                pass2_summary = {}
         health_inputs = {
             "universe_fetch": _read_json_or_empty(producer_paths["universe_fetch"]),
             "momentum_fetch": _read_json_or_empty(producer_paths["momentum_fetch"]),

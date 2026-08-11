@@ -271,3 +271,77 @@ class CapstoneProviderHealthMatrix(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class HostileInputFailsClosedInsteadOfCrashing(unittest.TestCase):
+    """Every family projector must DEGRADE on hostile input; a raise out of these is the defect (O-P6R-2/3/4).
+
+    The three inputs below each used to escape as TypeError / OverflowError from a function whose entire contract
+    is to hand back a state word, so a single malformed row could abort the health write rather than fail closed.
+    """
+
+    def test_unhashable_target_symbol_degrades_every_pass2_family(self):
+        summary = {
+            "endpoint_results": [],
+            "pass2_target_universe": {"target_count": 2, "target_symbols": [{"a": 1}, {"b": 2}]},
+        }
+        self.assertEqual(stages._sec_offering_health(summary), ("sec_offering_audit", "down"))
+        self.assertEqual(stages._massive_events_health(summary), ("massive_events", "missing"))
+        self.assertEqual(stages._fmp_analyst_grades_health(summary), ("analyst_grades", "missing"))
+
+    def test_unhashable_row_symbol_degrades_massive_events(self):
+        summary = {
+            "endpoint_results": [
+                {"provider_id": "massive", "endpoint_family": "dividends", "symbol": {"x": 1}, "status": "success"},
+            ],
+            "pass2_target_universe": {"target_count": 1, "target_symbols": ["AAPL"]},
+        }
+        self.assertEqual(stages._massive_events_health(summary), ("massive_events", "down"))
+
+    def test_huge_vix_integer_degrades_instead_of_overflowing(self):
+        summary = {
+            "http_status": 200, "vix_value": 10 ** 400,
+            "vix_regime": "进攻", "vix_regime_is_unknown": False,
+        }
+        self.assertEqual(stages._vix_health(summary), ("fmp_vix", "down"))
+        # a finite value on the same shape still reads healthy, so the guard is not blanket-rejecting
+        self.assertEqual(stages._vix_health({**summary, "vix_value": 18.0}), ("fmp_vix", "ok"))
+
+
+class UniverseStatusRefusesVacuousEvidence(unittest.TestCase):
+    """universe_status is emit-critical, so absent or self-contradictory status evidence must not read ok (O-P6R-6)."""
+
+    @staticmethod
+    def _summary(outcome: dict) -> dict:
+        return {
+            "scope": {"status": "ok"},
+            "pass1_result": {},
+            "provider_health": {"status_sources": {"state": "clean", "outcome": outcome}},
+        }
+
+    def test_zero_declared_status_sources_is_not_healthy(self):
+        outcome = {
+            "per_source": {}, "failed_sources": [], "critical_failed": [], "failed_count": 0,
+            "total_sources": 0, "critical_all_failed": False, "block_or_no_emit": False,
+        }
+        self.assertEqual(stages._universe_health(self._summary(outcome)), ("universe_status", "missing"))
+
+    def test_every_source_down_while_nothing_is_declared_failed_is_not_healthy(self):
+        outcome = {
+            "per_source": {"ticker_reference": "down", "exchange_halt_feed": "down", "sec_8k_item_103": "down"},
+            "failed_sources": [], "critical_failed": [], "failed_count": 0,
+            "total_sources": 3, "critical_all_failed": False, "block_or_no_emit": False,
+        }
+        self.assertEqual(stages._universe_health(self._summary(outcome)), ("universe_status", "missing"))
+
+    def test_the_real_committed_summaries_still_read_ok(self):
+        """Positive control: the tightening must not reject the artifacts the producer really writes."""
+        seen = 0
+        for path in sorted((ROOT / "docs").glob("us_short_universe_fetch_summary_*.json")):
+            summary = json.loads(path.read_text(encoding="utf-8"))
+            outcome = ((summary.get("provider_health") or {}).get("status_sources") or {}).get("outcome")
+            if not isinstance(outcome, dict):
+                continue          # pre-1.2.0 shape carries no status block at all; it is covered as `missing` above
+            seen += 1
+            self.assertEqual(stages._universe_health(summary), ("universe_status", "ok"), path.name)
+        self.assertGreaterEqual(seen, 3)

@@ -1857,6 +1857,70 @@ class CapstoneProviderHealthDerivationTest(unittest.TestCase):
     def _row(provider, family, ok):
         return {"provider_id": provider, "endpoint_family": family, "status": "success" if ok else "error"}
 
+    def _receipt_branch_ctx(self, tmp):
+        """Lay every producer summary on disk where _write_provider_health looks for it (O-P6R-6).
+
+        The pre-existing receipt test wrote only the pass2 summary, so the loop raised on the FIRST stage
+        (universe_fetch) and nothing downstream of it — including the receipt-bound facts themselves — was ever
+        exercised. This builds the whole set so the production branch actually runs to completion.
+        """
+        from types import SimpleNamespace
+
+        from runners import us_short_weekly_capstone_stages as st
+
+        ctx = SimpleNamespace(
+            sample_root=tmp,
+            decision_date="20260709",
+            provider_health_path=tmp / "provider_health.json",
+            universe_summary_path=tmp / "universe_summary.json",
+            vix_regime_summary_path=tmp / "vix_summary.json",
+            research_live_capability=None,
+        )
+        targets = st._stage_summary_targets(ctx)
+        paths = {
+            "universe_fetch": ctx.universe_summary_path,
+            "momentum_fetch": targets["momentum_fetch"],
+            "sic_fetch": targets["sic_classification"],
+            "pass2_fetch": targets["pass2"],
+            "yfinance_grades_fetch": targets["yfinance_grades_fetch"],
+            "vix_regime": ctx.vix_regime_summary_path,
+        }
+        summaries = {stage: {"stage": stage} for stage in paths}
+        receipt = _research_receipt(provider_summaries=summaries)
+        for stage, path in paths.items():
+            path.parent.mkdir(parents=True, exist_ok=True)
+            path.write_text(json.dumps(summaries[stage], ensure_ascii=False), encoding="utf-8")
+        ctx.research_live_capability = receipt
+        return ctx, paths, receipt
+
+    def test_receipt_branch_writes_exactly_the_receipt_bound_eight_family_facts(self):
+        from runners import us_short_weekly_capstone_stages as st
+
+        tmp = Path(tempfile.mkdtemp(prefix="cap_health_receipt_full_"))
+        self.addCleanup(shutil.rmtree, tmp, ignore_errors=True)
+        ctx, _paths, receipt = self._receipt_branch_ctx(tmp)
+
+        st._write_provider_health(ctx)
+
+        written = json.loads(ctx.provider_health_path.read_text(encoding="utf-8"))
+        self.assertEqual(written, dict(receipt.provider_health_facts))
+        self.assertEqual(tuple(written), tuple(k for k, _ in receipt.provider_health_facts))
+
+    def test_receipt_branch_rejects_any_producer_summary_edited_after_the_receipt(self):
+        from engine.us_short_run_origin import RunOriginError
+        from runners import us_short_weekly_capstone_stages as st
+
+        for tampered_stage in ("universe_fetch", "pass2_fetch", "vix_regime"):
+            with self.subTest(stage=tampered_stage):
+                tmp = Path(tempfile.mkdtemp(prefix="cap_health_receipt_tamper_"))
+                self.addCleanup(shutil.rmtree, tmp, ignore_errors=True)
+                ctx, paths, _receipt = self._receipt_branch_ctx(tmp)
+                paths[tampered_stage].write_text(
+                    json.dumps({"stage": tampered_stage, "edited": True}, ensure_ascii=False), encoding="utf-8")
+                with self.assertRaises(RunOriginError):
+                    st._write_provider_health(ctx)
+                self.assertFalse(ctx.provider_health_path.exists())
+
     def test_provider_health_rejects_summary_changed_after_receipt(self):
         from types import SimpleNamespace
 
