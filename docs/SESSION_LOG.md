@@ -1,5 +1,21 @@
 # Session Log
 
+## 2026-08-11 — Claude 复审 PASS（40d9：O23 health 原因保留已实闭）
+
+- **Verdict/Action**: PASS，提交并合入 master。本轮执行方零源码改动、只补治理记录，其核心断言「合法上游 code 在 detail 越界时被保留」我自己复现了四格确认成立，并读到实现里的分支与守卫用例的两腿。本刀不推进桌面 V4/V5，故不回写桌面状态位。
+- **Required**: 无。Optional `O23` 已 resolved；四格实测、守卫覆盖与植入证据见 `docs/system_risk_register.md`（单一来源，本处不复述）。
+- **Verify**: review-evidence:94692e1303c3。验收 `PASS exit=0 tests=112 elapsed=8.7s receipt:99308c3885e007ad6dc63829`（文档三守卫 + health 模块）。自写探针：合法码 + 600 字符/含换行 detail → 码保留、detail 压成有界分类；缺码/非法码 → 合成 `reason_contract_violation`。植入：把保留分支中和成 `if True:` → 点名用例精确转红，还原后 sha 回 `4fc8fcfb…`。
+- **Next**: Codex：执行
+
+## 2026-08-11 - Codex executor/fixer: Optional O23 health reason detail closure (OPEN-NOT_VERIFIED)
+
+- **Verdict/Action**: 当前最新 Optional O23 的生产修复已存在于 HEAD `8cf2c214`：detail 越界时保留合法上游 `error_code`，只把 `error_detail` 替换为有界 `health_reason_contract=...`；本轮不重复改生产代码，仅补齐固定-Python 证据与风险/交接路由。
+- **Problem / root cause / change**: 旧逻辑对 detail 越界也无条件写 `reason_contract_violation`，会丢失 `capture_unavailable` 等 producer 原因。当前 `_validate_health_reason_contract` 仅在 code 缺失/非法时合成通用码；合法 code + 越界 detail 保留原码。既有 durable-bundle 回归已点名两种分支。
+- **Call chain / consumers / schema / source-binding / write boundary**: `pipeline/launcher outcome -> _normalise_outcome -> _validate_health_reason_contract -> build_health -> sidecar_health.json/.md/.receipt.json`；schema、as_of/observed-date binding 和三件套写盘边界不变，无 provider/token/cache/private payload 读取。
+- **Verify**: 固定解释器 `C:\Users\cnhea\AppData\Local\Programs\Python\Python313\python.exe`（Python 3.13.8）。点名用例 `Ran 1 / OK`；health 模块 `Ran 46 / OK`。未运行 provider/live、真实 weekly、full lane、ship-gate，均 `NOT_VERIFIED`；既有 research dirty/untracked 产物未触碰。
+- **Pre-Codex self-review**: `matrix=O23 valid-code preservation + missing-code fallback + health durable bundle`; `register=updated`; `handoff=updated`; `focused=1+46 OK`; `full-lane=NOT_VERIFIED`; `door=fixed-Python 3.13.8 + no-provider/live + review-boundary`。
+- **Next**: Claude Code：复审 Optional O23 health reason detail closure；通过后按流程 stage/commit，Codex 不提交。
+
 ## 2026-08-10 — Claude 审查 PASS（40d9：桌面 V1 共享缓存占位可升级）
 
 - **Verdict/Action**: PASS，提交并合入 master。缓存行改为按数据族记观测状态，合并规则变成「未完整才可被补齐，两侧都有值且不同才算冲突」；legacy 1.0 缓存改为内存内升级而非丢弃。schema 双版本连带面齐（daily cache 1.2.0 + 消费者放宽、outcome 1.1.0 + launcher pin 同改），顺带闭掉我早先记的 O21。
