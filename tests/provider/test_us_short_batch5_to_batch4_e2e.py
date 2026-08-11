@@ -18,6 +18,7 @@ if str(ROOT) not in sys.path:
 
 from engine.us_short_fmp_analyst_grades import resolve_analyst_grade_actions  # noqa: E402
 from engine.us_short_massive_news import resolve_news_events  # noqa: E402
+from engine.us_short_provider_health import REQUIRED_HEALTH_KEYS  # noqa: E402
 from engine.us_short_projection_binding import build_projection_binding  # noqa: E402
 from engine.us_short_result_source_linkage import validate_result_source_fact  # noqa: E402
 from engine.us_short_sec_offering_audit import resolve_offering_audit  # noqa: E402
@@ -67,6 +68,12 @@ def _empty_account() -> dict:
         "manual_order_only": True,
         "broker_connection_allowed": False,
     }
+
+
+def _provider_health(**overrides) -> dict[str, str]:
+    values = {key: "ok" for key in REQUIRED_HEALTH_KEYS}
+    values.update(overrides)
+    return values
 
 
 def _no_build_template(path: Path) -> Path:
@@ -214,7 +221,7 @@ class Batch5ToBatch4E2ETest(unittest.TestCase):
         packet = e2e._assemble_batch4_packet(
             components=components,
             template=template,
-            provider_health={"fmp": "ok", "sec_edgar": "ok"},
+            provider_health=_provider_health(),
             account_state_path=Path("account.json"),
             calendar_path=Path("calendar.json"),
             governance_path=Path("governance.json"),
@@ -254,7 +261,7 @@ class Batch5ToBatch4E2ETest(unittest.TestCase):
         with tempfile.TemporaryDirectory() as private_dir:
             private_root = Path(private_dir)
             account = _write_json(private_root / "account_state.json", _empty_account())
-            health = _write_json(private_root / "provider_health.json", {"fmp": "ok", "sec_edgar": "ok"})
+            health = _write_json(private_root / "provider_health.json", _provider_health())
             template = _no_build_template(private_root / "batch4_template.json")
             context_out = private_root / "context_packet.json"
 
@@ -335,7 +342,7 @@ class Batch5ToBatch4E2ETest(unittest.TestCase):
             )
             _write_json(self.paths["theme"], theme_projection)
             account = _write_json(private_root / "account_state.json", _empty_account())
-            health = _write_json(private_root / "provider_health.json", {"fmp": "ok", "sec_edgar": "ok"})
+            health = _write_json(private_root / "provider_health.json", _provider_health())
             template = _no_build_template(private_root / "batch4_template.json")
             context_out = private_root / "context_packet.json"
 
@@ -395,7 +402,7 @@ class Batch5ToBatch4E2ETest(unittest.TestCase):
         with tempfile.TemporaryDirectory() as input_dir:
             inputs = Path(input_dir)
             account = _write_json(inputs / "account_state.json", _empty_account())
-            health = _write_json(inputs / "provider_health.json", {"fmp": "ok", "sec_edgar": "ok"})
+            health = _write_json(inputs / "provider_health.json", _provider_health())
             template = _no_build_template(inputs / "batch4_template.json")
             context_out = self.state_dir / f"{self.slug}_carrier_context_packet.json"
             final_writer_calls: list[Path] = []
@@ -461,7 +468,7 @@ class Batch5ToBatch4E2ETest(unittest.TestCase):
         with tempfile.TemporaryDirectory() as private_dir:
             private_root = Path(private_dir)
             account = _write_json(private_root / "account_state.json", _empty_account())
-            health = _write_json(private_root / "provider_health.json", {"fmp": "ok", "sec_edgar": "ok"})
+            health = _write_json(private_root / "provider_health.json", _provider_health())
             template = _no_build_template(private_root / "batch4_template.json")
             context_out = private_root / "context_packet.json"
             e2e.run_e2e(
@@ -507,7 +514,7 @@ class Batch5ToBatch4E2ETest(unittest.TestCase):
         with tempfile.TemporaryDirectory() as private_dir:
             private_root = Path(private_dir)
             account = _write_json(private_root / "account_state.json", _empty_account())
-            health = _write_json(private_root / "provider_health.json", {"fmp": "ok", "sec_edgar": "ok"})
+            health = _write_json(private_root / "provider_health.json", _provider_health())
             template = _no_build_template(private_root / "batch4_template.json")
             with self.assertRaisesRegex(e2e.Batch5ToBatch4E2EError, "source packet runner failed"):
                 e2e.run_e2e(
@@ -548,7 +555,7 @@ class Batch5ToBatch4E2ETest(unittest.TestCase):
         with tempfile.TemporaryDirectory() as private_dir:
             private_root = Path(private_dir)
             account = _write_json(private_root / "account_state.json", _empty_account())
-            health = _write_json(private_root / "provider_health.json", {"fmp": "ok", "sec_edgar": "ok"})
+            health = _write_json(private_root / "provider_health.json", _provider_health())
             template = _no_build_template(private_root / "batch4_template.json")
 
             result = subprocess.run(
@@ -598,7 +605,7 @@ class Batch5ToBatch4E2ETest(unittest.TestCase):
         with tempfile.TemporaryDirectory() as private_dir:
             private_root = Path(private_dir)
             account = _write_json(private_root / "account_state.json", _empty_account())
-            health = _write_json(private_root / "provider_health.json", {"fmp": "ok", "sec_edgar": "ok"})
+            health = _write_json(private_root / "provider_health.json", _provider_health())
             bad_template_payload = json.loads(TEMPLATE.read_text(encoding="utf-8"))
             bad_template_payload["market_axis_regimes"] = "bad"
             bad_template = _write_json(private_root / "bad_template.json", bad_template_payload)

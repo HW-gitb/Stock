@@ -24,6 +24,7 @@ if str(ROOT) not in sys.path:
 import engine.us_short_weekend_orchestrator as orch  # noqa: E402
 from engine.us_short_eligibility_gate import load_eligibility_governance  # noqa: E402
 from engine.us_short_private_paths import PrivatePathError  # noqa: E402
+from engine.us_short_provider_health import REQUIRED_HEALTH_KEYS  # noqa: E402
 from engine.us_short_run_provenance import RunProvenanceError  # noqa: E402
 
 _DD = "20260615"          # canonical decision_date for a Sat run (upcoming Mon); sessions derived from _cal()
@@ -31,6 +32,12 @@ _PRICE_BASIS = "20260612"  # prior Fri
 _PRESET = ROOT / "presets" / "us_short_eligibility_governance_20260624.json"
 _CAL = json.loads((ROOT / "presets" / "us_short_lifecycle_calibration_governance_20260620.json").read_text(encoding="utf-8"))
 _GOV_TITLE = {g["number"]: g["title"] for g in _CAL["calibration_items"]}
+
+
+def _provider_health(**overrides):
+    values = {key: "ok" for key in REQUIRED_HEALTH_KEYS}
+    values.update(overrides)
+    return values
 
 
 def _now(date, hh, mm):
@@ -160,7 +167,7 @@ def _pipeline_context(reg_path, runs_root, weekly_root, *, universe=None, pass2=
         "eligibility_governance": load_eligibility_governance(_PRESET),
         "per_ticker_analysis": pta,
         "run_provenance": _run_provenance(counts) if run_provenance is None else run_provenance,
-        "provider_health": {"fmp": "ok", "sec_edgar": "ok"} if provider_health is None else provider_health,
+        "provider_health": _provider_health() if provider_health is None else provider_health,
         "calendar": _cal() if calendar is None else calendar,
         "market_axis_regimes": {"vix": "进攻", "market_trend": "进攻", "breadth": "进攻"},
         "prior_regime": None, "prior_upgrade_count": 0,
@@ -532,15 +539,15 @@ class RunGateHealthAndMode(unittest.TestCase):
 
     def test_down_advisory_fmp_health_emits_with_fallback(self):
         with tempfile.TemporaryDirectory() as d, tempfile.TemporaryDirectory() as rr, tempfile.TemporaryDirectory() as wr:
-            pc = self._ctx(d, rr, wr, provider_health={"fmp": "down", "sec_edgar": "ok"})
+            pc = self._ctx(d, rr, wr, provider_health=_provider_health(analyst_grades="down"))
             out = orch.run_weekend_pipeline(_now("20260613", 10, 0), pc)
             self.assertTrue(out["emitted"])
             self.assertEqual(out["provider_health"]["overall_run_state"], "usable_with_fallback")
-            self.assertEqual(out["provider_health"]["sources"]["fmp"], "usable_with_fallback")
+            self.assertEqual(out["provider_health"]["sources"]["analyst_grades"], "usable_with_fallback")
 
     def test_degraded_critical_sec_health_no_emit(self):
         with tempfile.TemporaryDirectory() as d, tempfile.TemporaryDirectory() as rr, tempfile.TemporaryDirectory() as wr:
-            pc = self._ctx(d, rr, wr, provider_health={"fmp": "ok", "sec_edgar": "degraded"})
+            pc = self._ctx(d, rr, wr, provider_health=_provider_health(sec_offering_audit="degraded"))
             out = orch.run_weekend_pipeline(_now("20260613", 10, 0), pc)
             self.assertFalse(out["emitted"])
             self.assertEqual(out["no_emit_reason"], "provider_health_restricted")
@@ -549,7 +556,7 @@ class RunGateHealthAndMode(unittest.TestCase):
 
     def test_down_critical_health_no_emit(self):
         with tempfile.TemporaryDirectory() as d, tempfile.TemporaryDirectory() as rr, tempfile.TemporaryDirectory() as wr:
-            pc = self._ctx(d, rr, wr, provider_health={"fmp": "ok", "sec_edgar": "down"})
+            pc = self._ctx(d, rr, wr, provider_health=_provider_health(sec_offering_audit="down"))
             out = orch.run_weekend_pipeline(_now("20260613", 10, 0), pc)
             self.assertFalse(out["emitted"])
             self.assertEqual(out["no_emit_reason"], "provider_health_blocked")
@@ -557,14 +564,14 @@ class RunGateHealthAndMode(unittest.TestCase):
 
     def test_missing_critical_source_no_emit(self):   # a critical source absent → missing → blocked → no-emit
         with tempfile.TemporaryDirectory() as d, tempfile.TemporaryDirectory() as rr, tempfile.TemporaryDirectory() as wr:
-            pc = self._ctx(d, rr, wr, provider_health={"fmp": "ok"})   # sec_edgar missing
+            pc = self._ctx(d, rr, wr, provider_health={"universe_status": "ok"})   # critical SEC family missing
             out = orch.run_weekend_pipeline(_now("20260613", 10, 0), pc)
             self.assertFalse(out["emitted"])
             self.assertEqual(out["no_emit_reason"], "provider_health_blocked")
 
     def test_unauthorized_source_structurally_rejected(self):
         with tempfile.TemporaryDirectory() as d, tempfile.TemporaryDirectory() as rr, tempfile.TemporaryDirectory() as wr:
-            pc = self._ctx(d, rr, wr, provider_health={"fmp": "ok", "sec_edgar": "ok", "yfinance": "ok"})
+            pc = self._ctx(d, rr, wr, provider_health={**_provider_health(), "yfinance": "ok"})
             with self.assertRaises(Exception):   # classifier refuses an unauthorized source (§18.1 #3)
                 orch.run_weekend_pipeline(_now("20260613", 10, 0), pc)
 

@@ -26,7 +26,9 @@ from engine.us_short_run_origin import (  # noqa: E402
     OFFLINE_DISCLOSURE_SENTINEL, OFFLINE_PROVIDER_DISCLAIMER, OFFLINE_TEST_RUN_ORIGIN,
     OFFLINE_LIMITATION_LINE, build_run_status, canonical_section_1, canonical_offline_sections,
 )
-from engine.us_short_provider_health import classify_provider_health  # noqa: E402
+from engine.us_short_provider_health import (  # noqa: E402
+    REQUIRED_HEALTH_KEYS, classify_provider_health, provider_health_detail_line,
+)
 from engine.us_short_weekly_report_renderer import render_weekly_report  # noqa: E402
 from engine.us_short_action_rank import action_group as _ag  # noqa: E402
 from engine.us_short_private_paths import PrivatePathError  # noqa: E402
@@ -43,6 +45,12 @@ _BUILD_AF = {
     "risk_reward_ratio": 2.0, "min_rr_gate_status": "pass", "post_round_rr_status": "ok",
     "price_engine_used": "support_atr_engine", "price_sub_mode": "pullback",
 }
+
+
+def _provider_health(**overrides):
+    values = {key: "ok" for key in REQUIRED_HEALTH_KEYS}
+    values.update(overrides)
+    return values
 # a structured report_data that satisfies the offline invariants (§1 sentinel, §11 offline disclaimer / not
 # operationally authoritative, §13 not “无不 clean”) and renders a full §11.2 surface. The private-write boundary
 # now consumes report_data (not a markdown substring), so the tests carry BOTH the md and its report_data.
@@ -66,7 +74,7 @@ def _report_data(as_of=_AS_OF, *, sections_override=None, readiness=None):
     run_status = build_run_status(as_of, 1, 0, 0, 1, due)
     sections = {str(i): ["content %d" % i] for i in range(1, 14)}
     sections["1"] = canonical_section_1(OFFLINE_TEST_RUN_ORIGIN, run_status)   # §1 = canonical disclosure + status
-    sections["11"] = list(_OK_S11)
+    sections["11"] = list(_OK_S11) + [provider_health_detail_line(classify_provider_health(_provider_health()))]
     sections["12"] = canonical_lifecycle_section(readiness)                    # §12 = canonical lifecycle detail
     sections["13"] = list(_OK_S13)
     if sections_override:
@@ -94,7 +102,7 @@ _REPORT_MD = render_weekly_report(_REPORT_DATA)
 # the RUN-LEVEL sources the persistence boundary rebinds to (provider health the run used; holding coverage
 # inputs). _machine_record() has 0 holdings, so coverage_inputs is empty; provider health is a real clean classify
 # result whose overall_run_state == offline_honesty.provider_health_state.
-_PROVIDER_HEALTH = classify_provider_health({"fmp": "ok", "sec_edgar": "ok"})   # overall_run_state == "clean"
+_PROVIDER_HEALTH = classify_provider_health(_provider_health())   # overall_run_state == "clean"
 _COVERAGE_INPUTS = []
 
 
@@ -550,6 +558,15 @@ class SourceFactReconciliation(unittest.TestCase):
         # a caller-supplied provider_health that is NOT an internally-consistent classify result is rejected.
         self._assert_rejected_no_write(report_data=_REPORT_DATA, weekly_report_md=_REPORT_MD,
                                        provider_health={"overall_run_state": "clean"})
+
+    def test_forged_report_health_detail_rejected_against_run_level_source(self):
+        # A report may carry a structurally valid alternate eight-family detail, but private-write must bind it to
+        # the classifier result actually used by this run before any private artifact is created.
+        rd = json.loads(json.dumps(_REPORT_DATA))
+        forged = classify_provider_health(_provider_health(analyst_grades="down"))
+        rd["sections"]["11"][-1] = provider_health_detail_line(forged)
+        rd["sections"]["13"].append("\u2462 provider health non-clean: analyst_grades=usable_with_fallback")
+        self._assert_rejected_no_write(report_data=rd, weekly_report_md=render_weekly_report(rd))
 
     def test_consistent_run_writes(self):
         # positive control: report_data run_status/honesty consistent with the machine record + run-level sources.

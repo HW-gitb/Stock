@@ -6,7 +6,7 @@
 > **系统只有 v1 线**：不另起架构 v2/v3，延后项一律走 `candidate_active` / lifecycle 候选，不开 v1.1 版本线。
 > **三道写 repo 硬闸（gate ①②③）落地状态**：① 旧 `us_short_spec.md` 已降级归档指针；② §18.0 的 7 道 P0 已登记进 `docs/system_risk_register.md`（`R-USSHORT-V1-P0-IMPLEMENTATION-GATES`，open / binding）作**硬规则**、非普通 TODO；③ `.gitignore` 覆盖 US-short 全部 ticker-bearing private 目录（含 checkpoint bundle），所有 persister 复用 `reject_nonprivate_output_path` 的真实 `git check-ignore` fail-closed 守卫并有生产路径回归测试（§11.6 / §18.1 #1）。
 
-> **2026-07-10 update**: `runners/us_short_yfinance_grades_fetch.py` + `engine/us_short_yfinance_analyst_grades.py` implement the formerly probe-only yfinance analyst-grades sub-signal as a low-trust / non-official / ToS-gray, default-dry-run, per-execution-authorized optional source. Missing/down yfinance grades are neutral non-critical inputs and never gate emit, provider health, DataHub, production, or ship-gate.
+> **2026-07-10 update**: `runners/us_short_yfinance_grades_fetch.py` + `engine/us_short_yfinance_analyst_grades.py` implement the formerly probe-only yfinance analyst-grades sub-signal as a low-trust / non-official / ToS-gray, default-dry-run, per-execution-authorized optional source. The active analyst-grades source is represented by the non-critical `analyst_grades` health family; the capstone validates the yfinance stage summary, while an explicit FMP fallback remains supported. Missing/down analyst grades are neutral non-critical inputs and never gate emit, DataHub, production, or ship-gate.
 ---
 
 ## 0. 定位与总原则

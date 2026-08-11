@@ -25,6 +25,7 @@ from runners import us_short_batch5_to_batch4_weekend_e2e as e2e  # noqa: E402
 from runners import us_short_yfinance_grades_fetch as yfinance_fetch  # noqa: E402
 from runners.us_short_weekly_capstone import Pass2BudgetApproval  # noqa: E402
 from engine.us_short_yfinance_analyst_grades import resolve_yfinance_grade_actions  # noqa: E402
+from engine.us_short_provider_health import REQUIRED_HEALTH_KEYS  # noqa: E402
 from tests.provider.test_us_short_batch5_data_context import (  # noqa: E402
     _DECISION_DATE,
     _OFFERING_OBSERVED_AT,
@@ -52,6 +53,12 @@ def _write_json(path: Path, payload) -> Path:
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text(json.dumps(payload, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
     return path
+
+
+def _provider_health(**overrides) -> dict[str, str]:
+    values = {key: "ok" for key in REQUIRED_HEALTH_KEYS}
+    values.update(overrides)
+    return values
 
 
 class _EmptyYFinanceTicker:
@@ -258,7 +265,7 @@ class CapstoneOfflineE2ETest(unittest.TestCase):
         with tempfile.TemporaryDirectory() as private_dir:
             private_root = Path(private_dir)
             account = _write_json(private_root / "account_state.json", _empty_account())
-            health = _write_json(private_root / "provider_health.json", {"fmp": "ok", "sec_edgar": "ok"})
+            health = _write_json(private_root / "provider_health.json", _provider_health())
             template = _no_build_template(private_root / "batch4_template.json")
 
             summary = e2e.run_e2e(
@@ -330,7 +337,7 @@ class CapstoneOfflineE2ETest(unittest.TestCase):
         with tempfile.TemporaryDirectory() as private_dir:
             private_root = Path(private_dir)
             account = _write_json(private_root / "account_state.json", _empty_account())
-            health = _write_json(private_root / "provider_health.json", {"fmp": "ok", "sec_edgar": "ok"})
+            health = _write_json(private_root / "provider_health.json", _provider_health())
             template = _no_build_template(private_root / "batch4_template.json")
             summary = e2e.run_e2e(
                 source_packet_path=source_packet_path,
@@ -414,7 +421,7 @@ class CapstoneOfflineE2ETest(unittest.TestCase):
         with tempfile.TemporaryDirectory() as private_dir:
             private_root = Path(private_dir)
             account = _write_json(private_root / "account_state.json", _empty_account())
-            health = _write_json(private_root / "provider_health.json", {"fmp": "ok", "sec_edgar": "ok"})
+            health = _write_json(private_root / "provider_health.json", _provider_health())
             template = _no_build_template(private_root / "batch4_template.json")
             summary = e2e.run_e2e(
                 source_packet_path=source_packet_path,
@@ -460,7 +467,7 @@ class CapstoneOfflineE2ETest(unittest.TestCase):
             self.assertIn("AAPL", action_rows)
             self.assertEqual(machine_rows["AAPL"]["risk_downgrade"]["components"]["analyst"], 8.0)
 
-    def test_yfinance_resolver_rejection_and_fmp_grades_down_still_emit_with_neutral_grades(self) -> None:
+    def test_yfinance_resolver_rejection_and_analyst_grades_down_still_emit_with_neutral_grades(self) -> None:
         yfinance_summary = yfinance_fetch.run_yfinance_grades_fetch(
             preflight_summary_path=self.paths["preflight"],
             budget_approval=self.budget_approval,
@@ -502,7 +509,7 @@ class CapstoneOfflineE2ETest(unittest.TestCase):
         with tempfile.TemporaryDirectory() as private_dir:
             private_root = Path(private_dir)
             account = _write_json(private_root / "account_state.json", _empty_account())
-            health = _write_json(private_root / "provider_health.json", {"fmp": "down", "sec_edgar": "ok"})
+            health = _write_json(private_root / "provider_health.json", _provider_health(analyst_grades="down"))
             template = _no_build_template(private_root / "batch4_template.json")
             summary = e2e.run_e2e(
                 source_packet_path=source_packet_path,
@@ -560,14 +567,15 @@ class CapstoneOfflineE2ETest(unittest.TestCase):
         provider_summary_digests = tuple(
             (stage, hashlib.sha256(json.dumps({"stage": stage}, sort_keys=True,
                                                separators=(",", ":")).encode("utf-8")).hexdigest())
-            for stage in ("universe_fetch", "momentum_fetch", "sic_fetch", "pass2_fetch", "vix_regime")
+            for stage in ("universe_fetch", "momentum_fetch", "sic_fetch", "pass2_fetch", "yfinance_grades_fetch", "vix_regime")
         )
         with tempfile.TemporaryDirectory() as private_dir:
             private_root = Path(private_dir)
             account = _write_json(private_root / "account_state.json", _empty_account())
-            health = _write_json(private_root / "provider_health.json", {"fmp": "ok", "sec_edgar": "ok"})
+            health = _write_json(private_root / "provider_health.json", _provider_health())
             mismatched_health = _write_json(
-                private_root / "provider_health_mismatch.json", {"fmp": "down", "sec_edgar": "down"}
+                private_root / "provider_health_mismatch.json",
+                _provider_health(analyst_grades="down", sec_offering_audit="down"),
             )
             template = _no_build_template(private_root / "batch4_template.json")
             template_digest = hashlib.sha256(template.read_bytes()).hexdigest()
@@ -586,7 +594,7 @@ class CapstoneOfflineE2ETest(unittest.TestCase):
                 provider_call_counts=(("universe_fetch", 1), ("momentum_fetch", 1), ("sic_fetch", 1),
                                       ("pass2_fetch", 16)),
                 provider_summary_digests=provider_summary_digests,
-                provider_health_facts=(("fmp", "ok"), ("sec_edgar", "ok")),
+                provider_health_facts=tuple(_provider_health().items()),
                 provider_evidence_sha256=evidence_digest,
             )
 
@@ -670,12 +678,12 @@ class CapstoneOfflineE2ETest(unittest.TestCase):
         provider_summary_digests = tuple(
             (stage, hashlib.sha256(json.dumps({"stage": stage}, sort_keys=True,
                                                separators=(",", ":")).encode("utf-8")).hexdigest())
-            for stage in ("universe_fetch", "momentum_fetch", "sic_fetch", "pass2_fetch", "vix_regime")
+            for stage in ("universe_fetch", "momentum_fetch", "sic_fetch", "pass2_fetch", "yfinance_grades_fetch", "vix_regime")
         )
         with tempfile.TemporaryDirectory() as private_dir:
             private_root = Path(private_dir)
             account = _write_json(private_root / "account_state.json", _empty_account())
-            health = _write_json(private_root / "provider_health.json", {"fmp": "ok", "sec_edgar": "ok"})
+            health = _write_json(private_root / "provider_health.json", _provider_health())
             template = _no_build_template(private_root / "batch4_template.json")
             template_digest = hashlib.sha256(template.read_bytes()).hexdigest()
             receipt = _issue_capstone_research_live_receipt(
@@ -691,7 +699,7 @@ class CapstoneOfflineE2ETest(unittest.TestCase):
                 provider_call_counts=(("universe_fetch", 1), ("momentum_fetch", 1), ("sic_fetch", 1),
                                       ("pass2_fetch", 16)),
                 provider_summary_digests=provider_summary_digests,
-                provider_health_facts=(("fmp", "ok"), ("sec_edgar", "ok")),
+                provider_health_facts=tuple(_provider_health().items()),
                 provider_evidence_sha256=evidence_digest,
             )
             packet = json.loads(source_packet_path.read_text(encoding="utf-8"))
@@ -722,7 +730,7 @@ class CapstoneOfflineE2ETest(unittest.TestCase):
         with tempfile.TemporaryDirectory() as private_dir:
             private_root = Path(private_dir)
             account = _write_json(private_root / "account_state.json", _empty_account())
-            health = _write_json(private_root / "provider_health.json", {"fmp": "ok", "sec_edgar": "ok"})
+            health = _write_json(private_root / "provider_health.json", _provider_health())
             template = _no_build_template(private_root / "batch4_template.json")
             fixture_packet = _write_json(private_root / "fixture_source_packet.json", {"note": "local fixture"})
 

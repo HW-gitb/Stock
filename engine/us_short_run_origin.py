@@ -22,7 +22,10 @@ import json
 import os
 from pathlib import Path
 
-from engine.us_short_provider_health import CRITICAL_SOURCES, RUN_STATES
+from engine.us_short_provider_health import (
+    CRITICAL_SOURCES, REQUIRED_HEALTH_KEYS, RUN_STATES, parse_provider_health_detail_line,
+    provider_health_non_clean_line,
+)
 
 # the immutable batch4 execution / data-origin fact. run_mode=offline_test (live gated → batch5);
 # data_origin=caller_supplied_fixture (no provider call produced any market/provider fact);
@@ -74,8 +77,8 @@ _REQUIRED_PRE_BRIDGE_STAGES = (
     "projection_inputs", "pass2_preflight", "yfinance_grades_fetch", "pass2_fetch", "vix_regime",
 )
 _REQUIRED_PROVIDER_STAGES = ("universe_fetch", "momentum_fetch", "sic_fetch", "pass2_fetch")
-_REQUIRED_PROVIDER_SUMMARY_STAGES = (*_REQUIRED_PROVIDER_STAGES, "vix_regime")
-_REQUIRED_PROVIDER_HEALTH_KEYS = ("fmp", "sec_edgar")
+_REQUIRED_PROVIDER_SUMMARY_STAGES = (*_REQUIRED_PROVIDER_STAGES, "yfinance_grades_fetch", "vix_regime")
+_REQUIRED_PROVIDER_HEALTH_KEYS = REQUIRED_HEALTH_KEYS
 _RECEIPT_V2_SCHEMA_PATH = Path(__file__).resolve().parents[1] / "schemas" / "us_short_weekly_capstone_receipt_v2.schema.json"
 
 
@@ -145,8 +148,13 @@ def _valid_provider_calls(value) -> bool:
     if not isinstance(value, tuple):
         return False
     try:
-        return tuple(stage for stage, _ in value) == _REQUIRED_PROVIDER_STAGES \
-            and all(type(count) is int and count > 0 for _, count in value)
+        return (
+            tuple(stage for stage, _ in value) == _REQUIRED_PROVIDER_STAGES
+            and all(
+                type(count) is int and count >= (0 if stage == "sic_fetch" else 1)
+                for stage, count in value
+            )
+        )
     except (TypeError, ValueError):
         return False
 
@@ -156,7 +164,7 @@ def _valid_provider_health_facts(value) -> bool:
         return False
     try:
         return tuple(key for key, _ in value) == _REQUIRED_PROVIDER_HEALTH_KEYS \
-            and all(state in {"ok", "down"} for _, state in value)
+            and all(state in {"ok", "degraded", "down", "missing"} for _, state in value)
     except (TypeError, ValueError):
         return False
 
@@ -632,9 +640,16 @@ def assert_offline_report_invariants(report_data, origin):
     expected_s11, expected_s13 = canonical_offline_sections(report_data.get("offline_honesty"), origin)
     actual_s11 = sections.get(11, sections.get("11"))
     actual_s13 = sections.get(13, sections.get("13"))
-    if actual_s11 != expected_s11:
+    health_facts = parse_provider_health_detail_line(actual_s11[-1]) if isinstance(actual_s11, list) and actual_s11 else None
+    if (not isinstance(actual_s11, list) or actual_s11[:len(expected_s11)] != expected_s11
+            or len(actual_s11) != len(expected_s11) + 1 or health_facts is None):
         raise RunOriginError("§11 必须完全由 offline_honesty canonical 渲染（禁额外/同义权威声明）")
-    if actual_s13 != expected_s13:
+    expected_health_s13 = [
+        provider_health_non_clean_line(key, health_facts[key])
+        for key in REQUIRED_HEALTH_KEYS
+        if health_facts[key] != "clean"
+    ]
+    if actual_s13 != [*expected_s13, *expected_health_s13]:
         raise RunOriginError("§13 必须完全由 offline_honesty canonical 渲染（禁同义运营 clean 声明）")
     # the report's own structured-authority marks must not reappear in the editorial caller sections (§4/§10),
     # so an offline report cannot undercut its §1/§11/§13 disclosure with copied “结构化、权威” / “本周无不 clean” prose.

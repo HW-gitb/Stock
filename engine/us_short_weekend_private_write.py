@@ -37,7 +37,11 @@ from engine.us_short_action_table_renderer import write_action_table
 from engine.us_short_holding_action import STATE_FILENAME as HOLDING_ACTION_STATE_FILENAME, validate_holding_action_state
 from engine.us_short_lifecycle_readiness import _assert_readiness
 from engine.us_short_private_paths import reject_nonprivate_output_path
-from engine.us_short_provider_health import validate_provider_health_result
+from engine.us_short_provider_health import (
+    provider_health_detail_line,
+    provider_health_non_clean_lines,
+    validate_provider_health_result,
+)
 from engine.us_short_run_origin import (
     OFFLINE_TEST_RUN_ORIGIN,
     assert_offline_report_invariants,
@@ -181,6 +185,22 @@ def _reconcile_official_source_facts(flat, report_data, decision_date, *, provid
     if offline_honesty.get("provider_health_state") != provider_health["overall_run_state"]:
         raise WeekendPrivateWriteError(
             "offline_honesty.provider_health_state 与运行级 provider 健康源不符（疑伪造，拒写，无落盘）")
+    s11 = sections.get(11, sections.get("11")) if isinstance(sections, dict) else None
+    if not isinstance(s11, list) or s11[-1:] != [provider_health_detail_line(provider_health)]:
+        raise WeekendPrivateWriteError(
+            "report §11 provider-health 明细与运行级八键分类不符（疑删除/篡改，拒写，无落盘）")
+    s13 = sections.get(13, sections.get("13")) if isinstance(sections, dict) else None
+    expected_health_lines = provider_health_non_clean_lines(provider_health)
+    health_lines_match = isinstance(s13, list)
+    if health_lines_match and expected_health_lines:
+        health_lines_match = s13[-len(expected_health_lines):] == expected_health_lines
+    elif health_lines_match:
+        health_lines_match = not any(
+            isinstance(line, str) and line.startswith("③ provider health non-clean:") for line in s13
+        )
+    if not health_lines_match:
+        raise WeekendPrivateWriteError(
+            "report §13 provider-health 非 clean 明细与运行级八键分类不符（疑删除/篡改，拒写，无落盘）")
     # (4) coverage_non_full_count bound to validated holding coverage (coverage_inputs reconciled 1:1 to the
     # machine holding rows via the report's single-source helper, independent of report_data).
     try:

@@ -21,7 +21,10 @@ if str(ROOT) not in sys.path:
 import engine.us_short_weekend_report as wr  # noqa: E402
 import engine.us_short_weekend_machine_record as mr  # noqa: E402
 from engine.us_short_action_rank import action_group as _ag  # noqa: E402
-from engine.us_short_provider_health import UNAUTHORIZED_SOURCES, classify_provider_health  # noqa: E402
+from engine.us_short_provider_health import (  # noqa: E402
+    REQUIRED_HEALTH_KEYS, UNAUTHORIZED_SOURCES, classify_provider_health, parse_provider_health_detail_line,
+    provider_health_detail_line,
+)
 
 _AS_OF = "20260112"
 # a valid executable support_atr build action_fields (carries every m1 _BUILD_REQUIRED field with valid values)
@@ -39,6 +42,12 @@ _HOLDING_AF = {
     "risk_reward_ratio": 1.8, "post_round_rr_status": "ok",
     "price_engine_used": "holding_exit_engine", "price_sub_mode": None,
 }
+
+
+def _provider_health(**overrides):
+    values = {key: "ok" for key in REQUIRED_HEALTH_KEYS}
+    values.update(overrides)
+    return values
 
 
 def _theme(ticker, cluster="ai_complex"):
@@ -129,7 +138,7 @@ def _run_context(**ov):
 
 
 def _stage_status(**ov):
-    ss = {"provider_health": classify_provider_health({"fmp": "ok", "sec_edgar": "ok"}),   # a REAL classifier output
+    ss = {"provider_health": classify_provider_health(_provider_health()),   # a REAL classifier output
           "portfolio_guard_status": "normal", "theme_opportunity_state": "no_strong_theme"}
     ss.update(ov)
     return ss
@@ -172,12 +181,24 @@ class StageStatusBinding(unittest.TestCase):
         self.assertIn("portfolio_guard=cooldown", str(self._sections(portfolio_guard_status="cooldown")[2]))
 
     def test_provider_health_rendered_from_stage_not_note(self):
-        ph = classify_provider_health({"fmp": "down", "sec_edgar": "ok"})
+        ph = classify_provider_health(_provider_health(analyst_grades="down"))
         self.assertIn("provider_health=usable_with_fallback", str(self._sections(provider_health=ph)[11]))
 
     def test_critical_sec_restriction_rendered_from_stage(self):
-        ph = classify_provider_health({"fmp": "ok", "sec_edgar": "degraded"})
+        ph = classify_provider_health(_provider_health(sec_offering_audit="degraded"))
         self.assertIn("provider_health=restricted", str(self._sections(provider_health=ph)[11]))
+
+    def test_report_health_detail_is_exact_and_non_clean_families_are_listed(self):
+        ph = classify_provider_health(_provider_health(analyst_grades="down", massive_events="degraded"))
+        sections = self._sections(provider_health=ph)
+        self.assertEqual(parse_provider_health_detail_line(sections[11][-1]), ph["sources"])
+        self.assertEqual(
+            sections[13][-2:],
+            [
+                "\u2462 provider health non-clean: analyst_grades=usable_with_fallback",
+                "\u2462 provider health non-clean: massive_events=usable_with_fallback",
+            ],
+        )
 
     def test_forged_classifier_result_rejected(self):
         # a fabricated health dict (legal overall_run_state but NOT a real classify_provider_health output) fails

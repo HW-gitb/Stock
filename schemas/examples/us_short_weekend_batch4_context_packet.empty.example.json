@@ -80,8 +80,14 @@
     }
   },
   "provider_health": {
-    "fmp": "ok",
-    "sec_edgar": "ok"
+    "universe_status": "ok",
+    "universe_market_cap": "ok",
+    "massive_momentum": "ok",
+    "sec_sic": "ok",
+    "analyst_grades": "ok",
+    "sec_offering_audit": "ok",
+    "massive_events": "ok",
+    "fmp_vix": "ok"
   },
   "market_axis_regimes": {
     "vix": "进攻",

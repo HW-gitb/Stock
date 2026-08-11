@@ -22,10 +22,12 @@ from runners import us_short_batch5_full_candidate_pass2_preflight as preflight_
 from engine.us_short_overextension_producer import eligible_tickers_sha256  # noqa: E402
 from tests.provider.test_us_short_batch5_data_context import (  # noqa: E402
     _DECISION_DATE,
+    _GRADE_AS_OF,
     _OFFERING_OBSERVED_AT,
     _candidate_artifact,
     _constant_projection,
 )
+from engine.us_short_yfinance_analyst_grades import resolve_yfinance_grade_actions  # noqa: E402
 from tests.provider.us_short_projection_binding_test_helpers import bound_projection  # noqa: E402
 from tests.provider.us_short_private_test_root import (  # noqa: E402
     temporary_us_short_directory,
@@ -265,6 +267,7 @@ class UsShortBatch5FullCandidateLiveSourcePacketTest(unittest.TestCase):
             "momentum": self.state_root / f"{self.slug}_momentum.json",
             "theme": self.state_root / f"{self.slug}_theme.json",
             "ohlcv": self.state_root / f"{self.slug}_ohlcv.json",
+            "yfinance": self.state_root / f"{self.slug}_yfinance_analyst.json",
             "preflight": self.preflight_root / self.slug / "preflight.json",
             "summary": self.sample_root / "full_candidate_live_source_packet_20260706" / self.slug / "summary.json",
             "prefix": self.state_root / self.slug,
@@ -349,6 +352,7 @@ class UsShortBatch5FullCandidateLiveSourcePacketTest(unittest.TestCase):
             self.paths["momentum"],
             self.paths["theme"],
             self.paths["ohlcv"],
+            self.paths["yfinance"],
             self.paths["preflight"],
             self.paths["summary"],
             self.paths["output"],
@@ -454,6 +458,8 @@ class UsShortBatch5FullCandidateLiveSourcePacketTest(unittest.TestCase):
         self.assertEqual(summary["endpoint_call_budget"]["retry_count_used"], 0)
         self.assertEqual(summary["endpoint_call_budget"]["massive_stock_split_calls"], 3)
         self.assertEqual(summary["endpoint_call_budget"]["massive_dividend_calls"], 3)
+        self.assertEqual(summary["source_artifacts"]["analyst_grade_actions_consumed_from"], "fmp_analyst_grade_actions")
+        self.assertIsNone(summary["source_artifacts"]["analyst_grade_actions_exclusion"])
         self.assertTrue(summary["scope"]["provider_calls_performed"])
         self.assertTrue(summary["scope"]["source_packet_written"])
         self.assertTrue(summary["scope"]["data_context_written"])
@@ -464,6 +470,10 @@ class UsShortBatch5FullCandidateLiveSourcePacketTest(unittest.TestCase):
         self.assertTrue(self.paths["output"].exists())
         self.assertTrue(self.paths["components"].exists())
         close_only_components = json.loads(self.paths["components"].read_text(encoding="utf-8"))
+        self.assertEqual(
+            close_only_components["result_linkage_sources"]["AAPL"]["coverage"]["data_checks"]["analyst"],
+            "ok",
+        )
         for ticker in ("AAPL", "MSFT", "JPM"):
             row = close_only_components["per_ticker_analysis"][ticker]
             close_only_price = row["source_result_facts"]["price"]
@@ -504,6 +514,156 @@ class UsShortBatch5FullCandidateLiveSourcePacketTest(unittest.TestCase):
         self.assertNotIn("api.massive.com", text.lower())
         self.assertNotIn("data.sec.gov", text.lower())
         self.assertNotIn('"payload"', text)
+
+    def test_yfinance_grades_do_not_require_fmp_key_and_summary_is_honest(self):
+        def yfinance_source(ticker: str) -> dict:
+            return {
+                "records": ([{
+                    "symbol": ticker,
+                    "GradeDate": "2026-06-10",
+                    "Action": "down",
+                    "Firm": "BankA",
+                    "ToGrade": "Sell",
+                    "FromGrade": "Hold",
+                }] if ticker == "AAPL" else []),
+                "provenance": {
+                    "provider_id": "yfinance",
+                    "endpoint_or_filing_type": "upgrades_downgrades",
+                    "source_as_of": _GRADE_AS_OF,
+                    "observed_at": "2026-06-15T08:00:00-04:00",
+                    "coverage_status": "full",
+                    "parser_status": "ok",
+                    "lineage_ref": f"yfinance:upgrades_downgrades:{_GRADE_AS_OF}#{ticker.lower()}",
+                },
+            }
+
+        _write_json(
+            self.paths["yfinance"],
+            resolve_yfinance_grade_actions(
+                as_of=_GRADE_AS_OF,
+                grades_by_ticker={
+                    ticker: yfinance_source(ticker) for ticker in ("AAPL", "MSFT", "JPM")
+                },
+            ),
+        )
+        client = FullCandidateFakeClient()
+        original_read_required_env = runner.sample_validation.read_required_env
+
+        def read_env(name: str):
+            if name == "FMP_API_KEY":
+                raise AssertionError("FMP_API_KEY must not be read when yfinance grades are supplied")
+            return original_read_required_env(name)
+
+        with mock.patch.dict(
+            runner.sample_validation.os.environ,
+            {
+                "SEC_USER_AGENT": "UnitTest/0.1 contact:test@example.com",
+                "MASSIVE_API_KEY": "UNIT_TEST_MASSIVE_SECRET",
+            },
+            clear=False,
+        ), mock.patch.object(
+            runner.sample_validation, "_read_windows_environment_value", return_value=None
+        ), mock.patch.object(
+            runner.sample_validation, "read_required_env", side_effect=read_env
+        ):
+            runner.sample_validation.os.environ.pop("FMP_API_KEY", None)
+            summary = runner.run_full_candidate_live_source_packet(
+                preflight_summary_path=self.paths["preflight"],
+                expected_total_call_budget=16,
+                output_data_context_path=self.paths["output"],
+                context_components_output_path=self.paths["components"],
+                source_artifact_prefix=self.paths["prefix"],
+                summary_path=self.paths["summary"],
+                raw_root=self.raw_root,
+                client=client,
+                confirm_user_authorization=True,
+                run_data_context=True,
+                generated_at="2026-07-06T12:00:00+00:00",
+                observed_at=_OFFERING_OBSERVED_AT,
+                sec_sleep_seconds=0,
+                yfinance_grade_actions_path=self.paths["yfinance"],
+            )
+
+        self.assertTrue(summary["scope"]["yfinance_consumption_performed"])
+        self.assertFalse(summary["environment"]["fmp_api_key_present"])
+        self.assertEqual(summary["environment"]["fmp_api_key_source"], "not_required_yfinance_grades")
+        self.assertEqual(summary["source_artifacts"]["analyst_grade_actions_consumed_from"], "yfinance_grade_actions")
+        self.assertEqual(
+            summary["source_artifacts"]["analyst_grade_actions_exclusion"],
+            "not_called_replaced_by_yfinance",
+        )
+        self.assertTrue(summary["prohibited_claims"]["yfinance_used"])
+        self.assertNotIn("provider_health", summary)
+        self.assertNotIn("provider_health_facts", summary)
+        self.assertEqual(summary["endpoint_call_budget"]["fmp_grades_calls"], 0)
+        self.assertEqual(summary["endpoint_call_budget"]["actual_total_endpoint_calls"], 13)
+        self.assertNotIn("financialmodelingprep.com", "\n".join(client.urls))
+
+    def test_analyst_source_consumption_cross_locks_reject_tampered_summary(self):
+        with self._env(), mock.patch.object(
+            runner.sample_validation, "_read_windows_environment_value", return_value=None
+        ):
+            summary = runner.run_full_candidate_live_source_packet(
+                preflight_summary_path=self.paths["preflight"],
+                expected_total_call_budget=16,
+                output_data_context_path=self.paths["output"],
+                context_components_output_path=self.paths["components"],
+                source_artifact_prefix=self.paths["prefix"],
+                summary_path=self.paths["summary"],
+                raw_root=self.raw_root,
+                client=FullCandidateFakeClient(),
+                confirm_user_authorization=True,
+                run_data_context=False,
+                generated_at="2026-07-06T12:00:00+00:00",
+                observed_at=_OFFERING_OBSERVED_AT,
+                sec_sleep_seconds=0,
+            )
+
+        self.assertEqual(summary["source_artifacts"]["analyst_grade_actions_consumed_from"], "fmp_analyst_grade_actions")
+        mutations = {
+            "yfinance flag": (("scope", "yfinance_consumption_performed"), True),
+            "FMP key presence": (("environment", "fmp_api_key_present"), False),
+            "FMP key source": (("environment", "fmp_api_key_source"), "not_required_yfinance_grades"),
+            "FMP call count": (("endpoint_call_budget", "fmp_grades_calls"), 0),
+            "exclusion sentinel": (("source_artifacts", "analyst_grade_actions_exclusion"),
+                                   "not_called_replaced_by_yfinance"),
+        }
+        for label, (path, value) in mutations.items():
+            mutated = json.loads(json.dumps(summary))
+            cursor = mutated
+            for key in path[:-1]:
+                cursor = cursor[key]
+            cursor[path[-1]] = value
+            with self.subTest(label=label):
+                with self.assertRaises(runner.FullCandidateLiveSourcePacketError):
+                    runner._validate_summary_against_schema(mutated)
+
+    def test_fmp_fallback_without_key_rejects_before_any_provider_call(self):
+        client = FullCandidateFakeClient()
+
+        with self._env(), mock.patch.object(
+            runner.sample_validation, "_read_windows_environment_value", return_value=None
+        ):
+            runner.sample_validation.os.environ.pop("FMP_API_KEY", None)
+            with self.assertRaisesRegex(RuntimeError, "FMP_API_KEY"):
+                runner.run_full_candidate_live_source_packet(
+                    preflight_summary_path=self.paths["preflight"],
+                    expected_total_call_budget=16,
+                    output_data_context_path=self.paths["output"],
+                    context_components_output_path=self.paths["components"],
+                    source_artifact_prefix=self.paths["prefix"],
+                    summary_path=self.paths["summary"],
+                    raw_root=self.raw_root,
+                    client=client,
+                    confirm_user_authorization=True,
+                    run_data_context=True,
+                    generated_at="2026-07-06T12:00:00+00:00",
+                    observed_at=_OFFERING_OBSERVED_AT,
+                    sec_sleep_seconds=0,
+                )
+
+        self.assertEqual(client.urls, [])
+        self.assertFalse(self.paths["summary"].exists())
 
     def test_authorized_run_wires_ohlcv_into_packet_and_result_linkage(self):
         ohlcv = self._write_ohlcv_fixture()

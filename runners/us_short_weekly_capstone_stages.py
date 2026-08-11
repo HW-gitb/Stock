@@ -38,7 +38,7 @@ from engine.us_short_forward_policy_source_capture import (
     validate_forward_policy_source_capture,
 )
 from engine.us_short_market_calendar import load_market_calendar, sessions_for_window
-from engine.us_short_run_origin import require_research_live_provider_summary
+from engine.us_short_run_origin import RunOriginError, require_research_live_provider_summary
 from engine.us_short_soft_boost_comparison_adjudication import (
     SoftBoostComparisonAdjudicationError, append_pairwise_capture, apply_maturity_observations,
     build_adjudication_receipt, build_pairwise_capture, evaluate_pairwise_ledger, persist_pairwise_ledger,
@@ -824,10 +824,9 @@ def run_soft_boost_comparison_maturity(ctx) -> dict[str, Any]:
 
 
 def run_weekly_bridge(ctx) -> dict[str, Any]:
-    """Derive HONEST provider_health from the actual Pass2 outcome, then bridge the source packet → weekly report /
-    action table. provider_health is NOT hand-written: fmp = ok iff >=_HEALTH_MIN_SUCCESS_COVERAGE of grades calls
-    succeeded; sec_edgar = ok iff every unique Pass2 target has exactly one successful SEC submissions record. A
-    down critical source makes the orchestrator emit nothing (design §3.2)."""
+    """Derive the closed-world eight-family provider health from stage outcomes, then bridge the source packet →
+    weekly report / action table. The projection is not hand-written: each family is sourced from its owning stage,
+    and a down critical family makes the orchestrator emit nothing (design §3.2)."""
     _write_provider_health(ctx)
     try:
         vix_summary = json.loads(ctx.vix_regime_summary_path.read_text(encoding="utf-8"))
@@ -965,79 +964,439 @@ def _record_serenity_report_delivery(ctx, delivery: Mapping[str, Any] | None) ->
         return
 
 
-# --- honest provider_health derivation from the real Pass2 summary ---
+# --- canonical eight-family provider-health projection ---
 
-# FMP grades reads "ok" only if at least this fraction of its ATTEMPTED endpoint calls came back success. This is a
-# coverage threshold, deliberately NOT "any single success" / "any call attempted": a run whose grades mostly 429'd
-# reports that source as down instead of pretending coverage is healthy. SEC submissions is different: as the
-# emit-critical audit source, every unique Pass2 target ticker needs exactly one successful submissions record.
-# Downstream criticality is separate: FMP grades is advisory/fallback; SEC submissions remains emit-critical.
-# 0.5 = a simple majority; tune here if the operational bar changes.
-_HEALTH_MIN_SUCCESS_COVERAGE = 0.5
+# This is the only health projector. It consumes the already-verified stage results carried by the capstone receipt;
+# analyst grades are projected from the selected yfinance stage summary or explicit FMP fallback in Pass2.
+_HEALTH_PRODUCER_STAGES = (
+    "universe_fetch", "momentum_fetch", "sic_fetch", "pass2_fetch", "yfinance_grades_fetch", "vix_regime",
+)
+_EVENT_FAMILIES = ("reference_news", "stock_splits", "dividends")
+
+
+def _raw_state_from_summary_state(value: Any) -> str:
+    """Map an existing producer run-state to the raw health vocabulary."""
+    if value == "clean":
+        return "ok"
+    if value in {"usable_with_fallback", "restricted"}:
+        return "degraded"
+    if value == "blocked":
+        return "down"
+    return "missing"
+
+
+def _universe_health(summary: Mapping[str, Any]) -> tuple[str, str]:
+    if not isinstance(summary, Mapping):
+        return "universe_status", "missing"
+    scope = summary.get("scope")
+    if not isinstance(scope, Mapping) or not isinstance(scope.get("status"), str):
+        return "universe_status", "missing"
+    producer_health = summary.get("provider_health")
+    if not isinstance(producer_health, Mapping):
+        return "universe_status", "missing"
+    status_sources = producer_health.get("status_sources")
+    if not isinstance(status_sources, Mapping):
+        return "universe_status", "missing"
+    status_state = status_sources.get("state")
+    outcome = status_sources.get("outcome")
+    if not isinstance(status_state, str) or not isinstance(outcome, Mapping):
+        return "universe_status", "missing"
+    if type(outcome.get("block_or_no_emit")) is not bool \
+            or type(outcome.get("critical_all_failed")) is not bool \
+            or not isinstance(outcome.get("failed_sources"), list) \
+            or not isinstance(outcome.get("critical_failed"), list) \
+            or type(outcome.get("failed_count")) is not int \
+            or type(outcome.get("total_sources")) is not int:
+        return "universe_status", "missing"
+    failed_sources = outcome["failed_sources"]
+    critical_failed = outcome["critical_failed"]
+    if any(not isinstance(value, str) or not value for value in (*failed_sources, *critical_failed)):
+        return "universe_status", "missing"
+    if (
+        failed_sources != sorted(set(failed_sources))
+        or critical_failed != sorted(set(critical_failed))
+        or outcome["failed_count"] != len(failed_sources)
+        or outcome["total_sources"] < outcome["failed_count"]
+        or (outcome["critical_all_failed"] and not critical_failed)
+        or outcome["block_or_no_emit"] is not outcome["critical_all_failed"]
+    ):
+        return "universe_status", "missing"
+    expected_state = "blocked" if outcome["block_or_no_emit"] else (
+        "restricted" if critical_failed else "clean"
+    )
+    if status_state != expected_state:
+        return "universe_status", "missing"
+    state = _raw_state_from_summary_state(status_state)
+    if state == "missing":
+        return "universe_status", "missing"
+    screening = summary.get("status_screening")
+    screening_outcome = screening.get("status_source_outcome") if isinstance(screening, Mapping) else None
+    if screening_outcome is not None and screening_outcome != outcome:
+        return "universe_status", "missing"
+    return "universe_status", state
+
+
+def _universe_market_cap_health(summary: Mapping[str, Any]) -> tuple[str, str]:
+    if not isinstance(summary, Mapping):
+        return "universe_market_cap", "missing"
+    pass1 = summary.get("pass1_result")
+    if not isinstance(pass1, Mapping):
+        return "universe_market_cap", "missing"
+    needs = pass1.get("needs_market_cap")
+    if not isinstance(needs, list):
+        return "universe_market_cap", "missing"
+    unresolved = len(needs)
+    fallback = ((summary.get("provider_health") or {}).get("opportunistic_fallbacks")
+                if isinstance(summary.get("provider_health"), Mapping) else None)
+    fallback = fallback.get("fmp_profile_market_cap") if isinstance(fallback, Mapping) else None
+    if isinstance(fallback, Mapping):
+        raw_needed = fallback.get("needed_count")
+        raw_unresolved = fallback.get("unresolved_count")
+        if type(raw_needed) is int and raw_needed >= 0 and type(raw_unresolved) is int and raw_unresolved >= 0:
+            unresolved = raw_unresolved
+            if raw_needed == 0 or unresolved == 0:
+                return "universe_market_cap", "ok"
+            return "universe_market_cap", "down" if unresolved >= raw_needed else "degraded"
+    return "universe_market_cap", "ok" if unresolved == 0 else "degraded"
+
+
+def _momentum_health(summary: Mapping[str, Any]) -> tuple[str, str]:
+    if not isinstance(summary, Mapping):
+        return "massive_momentum", "missing"
+    stats = summary.get("fetch_stats")
+    coverage = summary.get("coverage")
+    if not isinstance(stats, Mapping) or not isinstance(coverage, Mapping):
+        return "massive_momentum", "missing"
+    sessions = stats.get("sessions_with_data")
+    min_sessions = stats.get("min_sessions_required")
+    eligible = coverage.get("eligible_count")
+    series = coverage.get("series_ticker_count")
+    benchmarks = coverage.get("benchmarks_present")
+    if any(type(value) is not int or value < 0 for value in (sessions, min_sessions, eligible, series)) \
+            or type(benchmarks) is not bool:
+        return "massive_momentum", "missing"
+    if eligible > 0 and series == 0:
+        return "massive_momentum", "down"
+    if sessions == 0 or sessions < min_sessions:
+        return "massive_momentum", "down" if sessions == 0 else "degraded"
+    if not benchmarks or series < eligible:
+        return "massive_momentum", "degraded"
+    return "massive_momentum", "ok"
+
+
+def _sic_health(summary: Mapping[str, Any]) -> tuple[str, str]:
+    if not isinstance(summary, Mapping):
+        return "sec_sic", "missing"
+    classification = summary.get("classification")
+    if not isinstance(classification, Mapping):
+        return "sec_sic", "missing"
+    eligible = classification.get("eligible_count")
+    resolved = classification.get("sic_resolved_count")
+    missing = classification.get("sic_missing_count")
+    if any(type(value) is not int or value < 0 for value in (eligible, resolved, missing)) \
+            or resolved + missing != eligible:
+        return "sec_sic", "missing"
+    if eligible == 0:
+        return "sec_sic", "ok"
+    if resolved == 0:
+        return "sec_sic", "down"
+    return "sec_sic", "ok" if resolved == eligible else "degraded"
+
+
+def _pass2_rows(summary: Mapping[str, Any]) -> tuple[list[Mapping[str, Any]], list[str]] | None:
+    if not isinstance(summary, Mapping) or not isinstance(summary.get("endpoint_results"), list):
+        return None
+    targets = ((summary.get("pass2_target_universe") or {}).get("target_symbols")
+               if isinstance(summary.get("pass2_target_universe"), Mapping) else None)
+    target_count = ((summary.get("pass2_target_universe") or {}).get("target_count")
+                    if isinstance(summary.get("pass2_target_universe"), Mapping) else None)
+    if type(targets) is not list or not targets or type(target_count) is not int \
+            or target_count != len(targets) or len(set(targets)) != len(targets) \
+            or any(type(symbol) is not str or not symbol for symbol in targets):
+        return None
+    rows = summary["endpoint_results"]
+    if any(not isinstance(row, Mapping) or row.get("status") not in {"success", "error"}
+           or not isinstance(row.get("provider_id"), str)
+           or not isinstance(row.get("endpoint_family"), str)
+           for row in rows):
+        return None
+    return rows, targets
+
+
+def _fmp_analyst_grades_health(summary: Mapping[str, Any]) -> tuple[str, str]:
+    parsed = _pass2_rows(summary)
+    budget = summary.get("endpoint_call_budget") if isinstance(summary, Mapping) else None
+    source_artifacts = summary.get("source_artifacts") if isinstance(summary, Mapping) else None
+    if parsed is None or not isinstance(budget, Mapping) or not isinstance(source_artifacts, Mapping):
+        return "analyst_grades", "missing"
+    if source_artifacts.get("analyst_grade_actions_consumed_from") != "fmp_analyst_grade_actions":
+        return "analyst_grades", "down"
+    rows, _ = parsed
+    grade_rows = [row for row in rows
+                  if row.get("provider_id") == "financial_modeling_prep" and row.get("endpoint_family") == "grades"]
+    calls = budget.get("fmp_grades_calls")
+    if type(calls) is not int or calls < 0 or calls != len(grade_rows):
+        return "analyst_grades", "down"
+    if calls == 0:
+        return "analyst_grades", "down"
+    successes = sum(1 for row in grade_rows if row.get("status") == "success")
+    if successes == calls:
+        return "analyst_grades", "ok"
+    return "analyst_grades", "down" if successes == 0 else "degraded"
+
+
+def _yfinance_analyst_grades_health(
+    summary: Mapping[str, Any], pass2_summary: Mapping[str, Any],
+) -> tuple[str, str]:
+    """Validate the yfinance stage summary before projecting the non-critical analyst health family."""
+    parsed = _pass2_rows(pass2_summary)
+    if parsed is None or not isinstance(summary, Mapping):
+        return "analyst_grades", "down"
+    _, targets = parsed
+    source_artifacts = pass2_summary.get("source_artifacts")
+    if not isinstance(source_artifacts, Mapping) \
+            or source_artifacts.get("analyst_grade_actions_consumed_from") != "yfinance_grade_actions":
+        return "analyst_grades", "down"
+    scope = summary.get("scope")
+    clock = summary.get("decision_clock")
+    gate = summary.get("preflight_gate")
+    execution = summary.get("execution")
+    if not all(isinstance(value, Mapping) for value in (scope, clock, gate, execution)):
+        return "analyst_grades", "down"
+    pass2_clock = pass2_summary.get("decision_clock")
+    pass2_gate = pass2_summary.get("preflight_gate")
+    pass2_targets = pass2_summary.get("pass2_target_universe")
+    if not isinstance(pass2_clock, Mapping) or not isinstance(pass2_gate, Mapping) \
+            or not isinstance(pass2_targets, Mapping):
+        return "analyst_grades", "down"
+    if (
+        clock.get("expected_decision_date") != pass2_clock.get("expected_decision_date")
+        or clock.get("source_as_of") != pass2_clock.get("source_as_of")
+        or gate.get("preflight_summary_path") != pass2_gate.get("preflight_summary_path")
+        or gate.get("target_count") != len(targets)
+        or pass2_targets.get("target_count") != len(targets)
+        or gate.get("target_symbols_in_summary") is not False
+    ):
+        return "analyst_grades", "down"
+    count_fields = (
+        "attempted_symbol_count", "successful_symbol_count", "parser_failed_symbol_count",
+        "fetch_error_count", "rate_limit_or_crumb_failure_count",
+    )
+    counts = {field: execution.get(field) for field in count_fields}
+    if any(type(value) is not int or value < 0 for value in counts.values()):
+        return "analyst_grades", "down"
+    attempted = counts["attempted_symbol_count"]
+    if sum(counts[field] for field in count_fields[1:]) != attempted or attempted > len(targets):
+        return "analyst_grades", "down"
+    if any(type(scope.get(field)) is not bool for field in (
+        "network_access_performed", "provider_calls_performed",
+    )):
+        return "analyst_grades", "down"
+    if scope["provider_calls_performed"] is not (attempted > 0) \
+            or scope["network_access_performed"] is not (attempted > 0):
+        return "analyst_grades", "down"
+    provider_status = scope.get("provider_status")
+    status = scope.get("status")
+    if provider_status not in {"ok", "down"} or not isinstance(status, str):
+        return "analyst_grades", "down"
+    resolver_rejection = execution.get("resolver_rejection")
+    advisory_failure = execution.get("advisory_failure")
+    dependency_missing = execution.get("dependency_missing")
+    if type(dependency_missing) is not bool:
+        return "analyst_grades", "down"
+    if resolver_rejection is not None and not isinstance(resolver_rejection, Mapping):
+        return "analyst_grades", "down"
+    if advisory_failure is not None and not isinstance(advisory_failure, Mapping):
+        return "analyst_grades", "down"
+    forced_down = (
+        dependency_missing
+        or counts["rate_limit_or_crumb_failure_count"] > 0
+        or resolver_rejection is not None
+        or advisory_failure is not None
+    )
+    expected_status = (
+        "advisory_stage_neutralized" if advisory_failure is not None else
+        "resolver_rejected_neutralized" if resolver_rejection is not None else
+        "dependency_missing" if dependency_missing else
+        "halted_rate_limit_or_crumb_failure" if counts["rate_limit_or_crumb_failure_count"] else
+        "completed_with_fetch_errors" if (
+            counts["fetch_error_count"] or counts["parser_failed_symbol_count"]
+        ) else "completed"
+    )
+    if status != expected_status or (provider_status == "down") is not forced_down:
+        return "analyst_grades", "down"
+    if forced_down or attempted != len(targets):
+        return "analyst_grades", "down"
+    return "analyst_grades", "ok" if counts["successful_symbol_count"] == attempted else "degraded"
+
+
+def _analyst_grades_health(
+    pass2_summary: Mapping[str, Any], yfinance_summary: Mapping[str, Any] | None,
+) -> tuple[str, str]:
+    if yfinance_summary is not None:
+        return _yfinance_analyst_grades_health(yfinance_summary, pass2_summary)
+    return _fmp_analyst_grades_health(pass2_summary)
+
+
+def _sec_offering_health(summary: Mapping[str, Any]) -> tuple[str, str]:
+    parsed = _pass2_rows(summary)
+    if parsed is None:
+        return "sec_offering_audit", "down"
+    rows, targets = parsed
+    target_set = set(targets)
+    seen: dict[str, str] = {}
+    malformed = False
+    for row in rows:
+        if row.get("provider_id") != "sec_edgar" or row.get("endpoint_family") != "submissions":
+            continue
+        symbol = row.get("symbol")
+        if type(symbol) is not str or symbol not in target_set or symbol in seen:
+            malformed = True
+            continue
+        seen[symbol] = row.get("status")
+    if malformed or set(seen) != target_set or any(status != "success" for status in seen.values()):
+        return "sec_offering_audit", "down"
+    return "sec_offering_audit", "ok"
+
+
+def _massive_events_health(summary: Mapping[str, Any]) -> tuple[str, str]:
+    parsed = _pass2_rows(summary)
+    if parsed is None:
+        return "massive_events", "missing"
+    rows, targets = parsed
+    expected = {(family, symbol) for family in _EVENT_FAMILIES for symbol in targets}
+    seen: dict[tuple[str, str], str] = {}
+    malformed = False
+    for row in rows:
+        if row.get("provider_id") != "massive" or row.get("endpoint_family") not in _EVENT_FAMILIES:
+            continue
+        key = (row.get("endpoint_family"), row.get("symbol"))
+        if key not in expected or key in seen:
+            malformed = True
+            continue
+        seen[key] = row.get("status")
+    if malformed:
+        return "massive_events", "down"
+    if not seen:
+        return "massive_events", "down"
+    successes = sum(1 for status in seen.values() if status == "success")
+    if len(seen) == len(expected) and successes == len(expected):
+        return "massive_events", "ok"
+    if successes == 0:
+        return "massive_events", "down"
+    return "massive_events", "degraded"
+
+
+def _vix_health(summary: Mapping[str, Any]) -> tuple[str, str]:
+    if not isinstance(summary, Mapping):
+        return "fmp_vix", "missing"
+    status = summary.get("http_status")
+    value = summary.get("vix_value")
+    regime = summary.get("vix_regime")
+    unknown = summary.get("vix_regime_is_unknown")
+    if type(status) is not int or type(unknown) is not bool:
+        return "fmp_vix", "missing"
+    if status != 200 or type(value) not in (int, float) or isinstance(value, bool) \
+            or not math.isfinite(float(value)):
+        return "fmp_vix", "down"
+    if regime not in (*REGIMES, UNKNOWN) or unknown is not (regime == UNKNOWN):
+        return "fmp_vix", "degraded"
+    return "fmp_vix", "degraded" if unknown else "ok"
+
+
+def derive_capstone_provider_health(stage_results: Mapping[str, Any]) -> dict[str, str]:
+    """Project exactly eight raw health families from same-run producer results.
+
+    The function is pure and closed-world: missing or malformed producer facts never become ``ok``.  It does not
+    inspect resolved analyst actions, and it performs no provider call.
+    """
+    if not isinstance(stage_results, Mapping):
+        stage_results = {}
+    universe = stage_results.get("universe_fetch")
+    momentum = stage_results.get("momentum_fetch")
+    sic = stage_results.get("sic_fetch")
+    pass2 = stage_results.get("pass2_fetch")
+    yfinance = stage_results.get("yfinance_grades_fetch") if "yfinance_grades_fetch" in stage_results else None
+    vix = stage_results.get("vix_regime")
+    pairs = (
+        _universe_health(universe),
+        _universe_market_cap_health(universe),
+        _momentum_health(momentum),
+        _sic_health(sic),
+        _analyst_grades_health(pass2, yfinance),
+        _sec_offering_health(pass2),
+        _massive_events_health(pass2),
+        _vix_health(vix),
+    )
+    return dict(pairs)
 
 
 def derive_provider_health(summary) -> dict[str, str]:
-    """Pure canonical provider-health projection from the receipt-bound Pass2 summary."""
-    results = summary.get("endpoint_results", []) if isinstance(summary, dict) else []
-    if not isinstance(results, list):
-        results = []
+    """Compatibility name delegating to the one canonical eight-family projector."""
+    return derive_capstone_provider_health({"pass2_fetch": summary})
 
-    def _coverage_ok(provider: str, family: str) -> bool:
-        # success COVERAGE over the family's ATTEMPTED calls (obtained, not merely attempted): a mostly-failed source
-        # is down. Non-dict rows are ignored (fail-closed), so a hostile row can never inflate coverage or crash.
-        rows = [r for r in results
-                if isinstance(r, dict) and r.get("provider_id") == provider and r.get("endpoint_family") == family]
-        if not rows:
-            return False   # no attempted calls for this family -> not a usable source
-        successes = sum(1 for r in rows if r.get("status") == "success")
-        return successes / len(rows) >= _HEALTH_MIN_SUCCESS_COVERAGE
 
-    def _sec_target_coverage_ok() -> bool:
-        target_universe = summary.get("pass2_target_universe") if isinstance(summary, dict) else None
-        targets = target_universe.get("target_symbols") if isinstance(target_universe, dict) else None
-        if type(targets) is not list or not targets or any(type(symbol) is not str or not symbol for symbol in targets):
-            return False
-        target_set = set(targets)
-        target_count = target_universe.get("target_count")
-        if len(target_set) != len(targets) or type(target_count) is not int or target_count != len(targets):
-            return False
-
-        sec_status_by_symbol: dict[str, Any] = {}
-        for row in results:
-            if not isinstance(row, dict) \
-                    or row.get("provider_id") != "sec_edgar" \
-                    or row.get("endpoint_family") != "submissions":
-                continue
-            symbol = row.get("symbol")
-            if type(symbol) is not str or symbol not in target_set or symbol in sec_status_by_symbol:
-                return False
-            sec_status_by_symbol[symbol] = row.get("status")
-
-        return (
-            set(sec_status_by_symbol) == target_set
-            and all(status == "success" for status in sec_status_by_symbol.values())
-        )
-
-    return {
-        "fmp": "ok" if _coverage_ok("financial_modeling_prep", "grades") else "down",
-        "sec_edgar": "ok" if _sec_target_coverage_ok() else "down",
-    }
+def _read_json_or_empty(path: Path) -> dict[str, Any]:
+    if not isinstance(path, (str, Path)):
+        return {}
+    try:
+        value = json.loads(Path(path).read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        return {}
+    return value if isinstance(value, dict) else {}
 
 
 def _write_provider_health(ctx) -> None:
-    # Fail closed on a malformed/unreadable summary: any read / parse / container-shape problem -> empty results ->
-    # both sources 'down', NEVER a crash. Downstream permits advisory FMP fallback but still blocks on critical SEC.
-    # This is the gate's OWN defense-in-depth, not reliance on the orchestrator's blanket stage-exception handler.
-    try:
-        summary = json.loads(_stage_summary_targets(ctx)["pass2"].read_text(encoding="utf-8"))
-    except (OSError, ValueError):
-        summary = {}
+    """Write the raw health map; production uses the already-issued receipt as the sole aggregation point."""
     receipt = getattr(ctx, "research_live_capability", None)
+    summary_targets = _stage_summary_targets(ctx)
+    producer_paths = {
+        "universe_fetch": getattr(
+            ctx, "universe_summary_path",
+            ROOT / "docs" / f"us_short_universe_fetch_summary_{ctx.decision_date}.json",
+        ),
+        "momentum_fetch": summary_targets["momentum_fetch"],
+        "sic_fetch": summary_targets["sic_classification"],
+        "pass2_fetch": summary_targets["pass2"],
+        "yfinance_grades_fetch": summary_targets["yfinance_grades_fetch"],
+        "vix_regime": getattr(ctx, "vix_regime_summary_path", None),
+    }
     if receipt is not None:
-        require_research_live_provider_summary(receipt, "pass2_fetch", summary)
-    health = derive_provider_health(summary)
+        from engine.us_short_provider_health import validate_provider_health_facts
+
+        for stage_name in _HEALTH_PRODUCER_STAGES:
+            path = producer_paths[stage_name]
+            if not isinstance(path, (str, Path)) or not Path(path).is_file():
+                raise RunOriginError(f"receipt-bound provider summary is missing: {stage_name}")
+            summary = _read_json_or_empty(Path(path))
+            if not summary:
+                raise RunOriginError(f"receipt-bound provider summary is unreadable: {stage_name}")
+            require_research_live_provider_summary(receipt, stage_name, summary)
+            if stage_name == "pass2_fetch" and summary.get("schema_name") == "us_short_batch5_full_candidate_live_source_packet_summary":
+                _pass2._validate_summary_against_schema(summary)
+        facts = tuple(receipt.provider_health_facts)
+        if not validate_provider_health_facts(facts):
+            raise ValueError("receipt provider-health facts are not the exact eight-family contract")
+        health = dict(facts)
+    else:
+        # Offline/direct unit seam only.  It still delegates to the same projector and never invents a healthy family.
+        pass2_summary = _read_json_or_empty(producer_paths["pass2_fetch"])
+        if pass2_summary.get("schema_name") == "us_short_batch5_full_candidate_live_source_packet_summary":
+            # A persisted full Pass2 summary is a real consumer boundary: re-run its schema + analyst-source
+            # semantic validator before allowing any health family to consume it.
+            _pass2._validate_summary_against_schema(pass2_summary)
+        health_inputs = {
+            "universe_fetch": _read_json_or_empty(producer_paths["universe_fetch"]),
+            "momentum_fetch": _read_json_or_empty(producer_paths["momentum_fetch"]),
+            "sic_fetch": _read_json_or_empty(producer_paths["sic_fetch"]),
+            "pass2_fetch": pass2_summary,
+            "vix_regime": _read_json_or_empty(producer_paths["vix_regime"]),
+        }
+        yfinance_path = producer_paths["yfinance_grades_fetch"]
+        if isinstance(yfinance_path, (str, Path)) and Path(yfinance_path).is_file():
+            health_inputs["yfinance_grades_fetch"] = _read_json_or_empty(yfinance_path)
+        health = derive_capstone_provider_health(health_inputs)
     ctx.provider_health_path.parent.mkdir(parents=True, exist_ok=True)
-    # F3: atomic write (tmp + os.replace) so a crash mid-write never leaves a half-written provider_health JSON.
     text = json.dumps(health, ensure_ascii=False, indent=2) + "\n"
     tmp = ctx.provider_health_path.with_name(ctx.provider_health_path.name + ".tmp")
     tmp.write_text(text, encoding="utf-8")

@@ -1,5 +1,23 @@
 # Phase 7 Kickoff Spec Handoff
 
+## 2026-08-11 append: desk us_testrun0810 Problem 3 active analyst source same-source consumption (OPEN-NOT_VERIFIED)
+
+This is appended to the existing Phase 7 provider/universe owner handoff; no fragment handoff was created.
+
+**Scope / implementation**
+
+- This slice closes only the yfinance/FMP active analyst source -> scoring -> result-linkage coverage -> final action/data-quality chain. Problem 6's eight-key provider health and receipt -> emit -> report/private-write chain is explicitly out of scope and unchanged.
+- `runners/us_short_batch5_data_context_source_packet.py` now resolves and validates `active_analyst_payload`, `active_analyst_provider`, and `active_analyst_path_field` once at the packet boundary. Scoring and `build_result_source_facts()` consume the same payload; `engine/us_short_result_source_linkage.py` remains a pure consumer.
+- `runners/us_short_batch5_full_candidate_live_source_packet.py` uses one `analyst_source` to control FMP calls, `FMP_API_KEY` reads, and summary fields. yfinance needs no FMP key and reports `yfinance_consumption_performed=true`, `fmp_grades_calls=0`, `not_required_yfinance_grades`, and `not_called_replaced_by_yfinance`; FMP fallback remains key-gated before provider calls.
+- No health key, health digest, per-ticker SHA, second resolver, provider/live path, or real-key execution was added. Summary schema changes are limited to the truthful booleans and optional exclusion field.
+
+**Verification / handoff boundary**
+
+- Fixed-Python focused acceptance: `161 OK`, `receipt:307d601e59bba2aa3ebf94fb`; after reverse probes, affected source-packet module: `31 OK`, `receipt:7cb656ba871a5f2cb2896215`. Reverse probes genuinely failed when coverage was mapped back to the empty FMP shell and when yfinance was injected into global `provider_health`; both were restored.
+- The one us_short full lane recorded `discovered=5744 ran=5744 equal=True PASS`, `399.1s/860s`, fingerprint `d0feedf7e23627a07a18b1e46567bfdb705e8b28a5edff5f737f1344bbda3f35`; `py_compile=4` and `git diff --check` passed.
+- Current status is `OPEN-NOT_VERIFIED`, not provider/live acceptance, production, ship-gate, or full-size trading evidence. Claude Code must independently review and then decide whether to commit; Codex does not commit. `CURRENT.md` was intentionally not changed for pending review/commit state.
+
+
 ## 2026-06-20 append: A-long value-yield forward-paper round-3 re-review PASS
 
 **Changed**:
@@ -4165,3 +4183,79 @@ git diff --check
 1. Review this A-long forward-paper repair only; do not mix in A-short, US lanes, provider selection, DataHub, or broker/order work.
 2. Any real monthly capture still requires separate user authorization and the runner confirmation flags.
 3. Full-size / production / ship-gate claims remain blocked until the separate forward evidence policy is met.
+
+## 2026-08-11 追加：问题3 独立审查 FAIL（analyst 同源腿成立 / 健康身份腿未做）
+
+- **结论**：FAIL，未提交。桌面 `us_testrun0810.md` §问题3 的 A/B 腿已成立，§2.C/§2.D 未实现。
+- **已核实无问题（下一轮别改回去）**：packet 边界 `_resolve_active_analyst_source()` 单点解析、`active_source_payloads` 喂 `build_result_source_facts`、Pass2 `analyst_source` 单点派生四处 summary 语义、`fetch_fmp_grades and fmp_env is None` 的纵深门。这些是本轮真正修好的东西。
+- **为什么 FAIL**：`R-USSHORT-ANALYST-SOURCE-COVERAGE-HEALTH-DRIFT` — Required 1（§2.C/§2.D 健康身份与消费腿未做，`derive_provider_health()` 零行恒 `fmp=down`，`overall_run_state` 永不可能 `clean`）、Required 2（register/SESSION_LOG 把它记成问题6 范围并给 R-ID 打 `repaired`）。取证与闭合判据只在 register。
+- **顺序**：先 Required 1（health 身份 → receipt → emit → 周报 §11 一条链一起做，别只改中间 JSON），再 Required 2 更正状态位；Optional O-P3-1 待 health 消费者建起来后随手锁死。
+- **唯一有效命令**：`Codex：修复`
+
+## 2026-08-11 追加：桌面 us_testrun0810 问题3 + 问题6 修复（Codex，待 Claude 独立审查）
+
+### 结果与实现边界
+
+- 按当前桌面稿的去重顺序，问题3与问题6分别实现、同一工作树串行验证。问题3修复 active analyst source：source-packet 一次解析，打分与 analyst coverage 同源；Pass2 只有 FMP fallback 读 `FMP_API_KEY`；yfinance summary/coverage 诚实且不进入 global health。Optional O-P3-1 的 summary 读时语义 validator 已接入，锁定 source、key sentinel、FMP calls 与 exclusion sentinel 的交叉一致性。
+- 问题6只消费 Universe、Momentum、SIC、Pass2、VIX 五个 producer 的既有结果，唯一 projector 输出八键：`universe_status`、`universe_market_cap`、`massive_momentum`、`sec_sic`、`fmp_grades`、`sec_offering_audit`、`massive_events`、`fmp_vix`。`fmp_grades` 只读 FMP 自身事实；yfinance 不进入 health facts、classifier 或 emit。
+- receipt 绑定五个 producer summary 与 exact 八键 facts；report §11/§13、classifier/emit、private-write 均复核同一份事实。旧 `{fmp, sec_edgar}` 形状、缺键、多键、外来 yfinance key fail-closed。测试 incident writer 使用临时目录，未再写 canonical `state/us_short`；inventory 快照已由既有生成器同步。
+
+### 验证与边界
+
+- 固定主 Python：`C:\Users\cnhea\AppData\Local\Programs\Python\Python313\python.exe`。
+- 综合 focused：`Ran 395 tests ... OK`，receipt=`receipt:ed9ab62940115d488ec7b190`；隔离/清单/真实根增长子集 `44 OK`。
+- 最终 full lane：`discover -s tests -p test_us_short*.py`，`discovered=5752 ran=5752 equal=True`，`RESULT status=PASS exit=0 tests=5752 elapsed=425.9s deadline=860s`，fingerprint 前缀 `ef075028974b`；静态 `diff_check=PASS py_compile=21`。
+- 反向控制：移除 `massive_events` 时预期测试转红；让 yfinance 状态改变 global health 时预期边界测试转红；两项均已还原。没有 provider/network/live/account/real-key/真实周跑、DataHub、broker/order 或 production/ship-gate 运行。
+- 状态：`R-USSHORT-ANALYST-SOURCE-COVERAGE-HEALTH-DRIFT` 与 `R-USSHORT-PROVIDER-HEALTH-EIGHT-FAMILY-CONSUMPTION-CHAIN` 均为 `repaired / OPEN-NOT_VERIFIED`。Codex 不提交；Claude Code 独立审查通过后再提交本刀覆盖文件。
+
+## 2026-08-11 追加：问题3 复审 + 问题6 首审 —— 独立审查 FAIL
+
+- **结论**：FAIL，未提交。八键 health 管道（projector→receipt→classifier/emit→周报 §11/§13→private-write 反向核对）是真的、做得好；三条 Required 全是**口径接错**，不是没接线。
+- **已核实无问题（下一轮别改回去）**：§11/§13 的 tamper 门（private-write 把明细绑回运行级 classifier）、receipt 五份 producer digest + 八键 exact facts、旧两键 `derive_provider_health` 已只剩测试调用且无双契约残留、问题3 的 packet 边界单点解析与同源 coverage。
+- **为什么 FAIL**：`R-USSHORT-PROVIDER-HEALTH-EIGHT-FAMILY-CONSUMPTION-CHAIN` Required A/B/C —— A：`_universe_health` 读 universe summary 的 worst-of `overall_run_state`（含机会性 FMP 市值兜底）且 `universe_status` 是 critical，仓内三份真实 summary 实测全 `degraded` → `restricted` → **每周硬 no-emit**；B：同函数在健康块缺失时返回 `ok`，critical 家族 fail-open；C：评级家族仍叫 `fmp_grades` 且 `calls==0→down`，一键路径下恒真，`clean` 结构性不可达。取证与闭合判据只在 register。
+- **顺序**：先 A（它今天就让周报出不来），再 B（同一函数，一起改），C 需要用户先在 Options 里选口径再动手；Optional 五条随修。
+- **唯一有效命令**：`Codex：修复`
+
+## 2026-08-11 追加：问题3复审意见与问题6口径修复（238a，Codex，待 Claude 独立审查）
+
+### 当前结果
+
+- 上一段 `repaired` 状态已由本段更正为 `partially_repaired / OPEN-NOT_VERIFIED`；分析师健康身份属于问题3，问题6 只在 `analyst_grades` 功能身份上扩展，不能把它写成问题3已无条件闭合。
+- `universe_status` 现在只从 `provider_health.status_sources.state/outcome` 派生；机会性市值兜底单独归入 non-critical `universe_market_cap`。健康块缺失、坏形状或冲突 fail-closed；真实状态源坏时仍由 critical 门阻断 emit。
+- 评级家族已由 `fmp_grades` 改为 non-critical `analyst_grades`。yfinance 选择时校验 yfinance stage summary 的 provider status、计数自洽、日期、预检路径、目标数与 Pass2 来源；显式 FMP fallback 才读取真实 FMP grades rows。缺失/冲突/边界不一致降为 `down`，不会阻断 emit；yfinance 不再列入 `UNAUTHORIZED_SOURCES`。
+- receipt→classifier/emit→周报 §11/§13→private-write 的共享事实链保持，六个 producer summary（Universe、Momentum、SIC、Pass2、yfinance grades、VIX）均纳入 receipt digest。
+
+### 验证与交接
+
+- 固定主 Python：`C:\Users\cnhea\AppData\Local\Programs\Python\Python313\python.exe`；问题3/6广覆盖 `Ran 357 tests ... OK`，文档治理/路由门禁 `Ran 95 tests ... OK`，修改 Python `py_compile=20`，`git diff --check=0`。验证仅使用本地离线 fixture/临时根，不触 provider/network/live/account/real-key/生产周跑。
+- 本次修复和本交接只落 `D:\cnhea\Codex\worktrees\238a\Stock`；桌面 `us_testrun0810.md` 只作 guideline，未修改；1302 不承接问题3/6。
+- Codex 不提交。下一步由 Claude Code 独立审查问题3/6，复核状态源口径、analyst health 身份、receipt-bound 六 stage digest、emit/report/private-write 全链和反向控制后按流程决定是否提交。
+
+## 2026-08-11 追加：问题3 + 问题6 修复轮 —— 独立审查 FAIL（差两行）
+
+- **结论**：FAIL，未提交。上一轮三条 Required 全部真修好，唯一阻断是改名时漏改两个已提交样例。
+- **已核实无问题（下一轮别改回去）**：`_universe_health` 改读 `status_sources.state/outcome` 并对缺失/坏形状 fail-closed；`analyst_grades` 家族由 yfinance stage summary 驱动且交叉校验 Pass2 来源身份/时钟/target 数；non-critical 不阻断 emit；`docs/us_short_system_design.md:9` 只改 provider-health 半句、保留 "never gate emit"；receipt 已绑六个 producer summary（含 yfinance）；§11/§13 tamper 双门。
+- **为什么 FAIL**：`R-USSHORT-BATCH4-CONTEXT-EXAMPLE-KEEPS-THE-RENAMED-HEALTH-KEY` — 两个样例仍写 `fmp_grades`，`classify_provider_health` 抛未接住的 `ProviderHealthError`，batch4 runner exit 2，三条测试红。取证、闭合判据与六条 Optional 只在 register。
+- **顺序**：改两处键名 → 顺手更正 register 第 103/105 行旧口径 → 重跑 `tests.test_us_short_weekend_batch4_context_builder` → **自己跑一次全量并记账**（本轮 `full-lane=not rerun`，而这条 P1 恰恰只有全量抓得到）→ 再看六条 Optional。
+- **唯一有效命令**：`Codex：修复`
+
+## 2026-08-11 追加：问题3 + 问题6 样例健康键修复（238a，待 Claude 独立审查）
+
+### 结果与实现边界
+
+- 修复 `R-USSHORT-BATCH4-CONTEXT-EXAMPLE-KEEPS-THE-RENAMED-HEALTH-KEY`：两个 batch4 context packet 示例的 `provider_health` 家族键均已从旧 `fmp_grades` 改为 `analyst_grades`，与当前 health classifier 合同一致。
+- `docs/system_risk_register.md` 中上一轮遗留的两处旧口径已标为历史段落并指向当前契约；前三条 Required 保持上一轮 reviewer 已独立验证的修复状态，本轮不扩展 `O-P6R-1`~`O-P6R-6`。
+
+### 验证与交接
+
+- 固定主 Python：`C:\Users\cnhea\AppData\Local\Programs\Python\Python313\python.exe`；focused `tests.test_us_short_weekend_batch4_context_builder`=`20 OK`，receipt=`receipt:2a5d9b70d2469355fed85474`。
+- official full lane：`discover -s tests -p test_us_short*.py`，`discovered=5755 ran=5755 equal=True`，`RESULT status=PASS exit=0 tests=5755 elapsed=520.7s deadline=860s`，fingerprint=`7a7be6b95677`；静态 `diff_check=PASS`、`py_compile=21`；文档治理/路由门 `95 OK`，receipt=`receipt:e18f64ee96434a716cfb307c`。验证仅为本地离线测试/fixture，不触 provider/network/live/account/real-key/生产周跑。
+- 本次修复与交接只落 `D:\cnhea\Codex\worktrees\238a\Stock`；桌面 `us_testrun0810.md` 只作 guideline，未修改；1302 不承接问题3/6；Codex 不提交。当前结论仍为 `OPEN-NOT_VERIFIED`，下一步由 Claude Code 独立审查并按流程决定是否提交。
+
+## 2026-08-11 追加：问题3 + 问题6 —— 独立审查 PASS 并收口
+
+- **结论**：PASS，已提交并合入 master。桌面 `us_testrun0810.md` 的问题3与问题6 全链闭合。
+- **已核实无问题（下一轮别改回去）**：八键功能族契约（`analyst_grades` 由 yfinance stage summary 驱动、non-critical 不阻断 emit）、`universe_status` 只读 `status_sources.state/outcome` 且缺证据 fail-closed、机会性市值兜底只进 `universe_market_cap`、receipt 绑六个 producer summary、§11/§13 tamper 双门、两份 batch4 样例与八键契约一致。
+- **本轮做了什么**：只把两份样例的家族键改名并把 register 旧口径标为 superseded；reviewer 走 rule 8 快档（整读消费链 + 反向控制 + 验收超集 378 OK，含上一轮转红的模块），未起 agent、未起全量（用户指示；执行方账本指纹与当前代码态逐字相同）。
+- **失效旧结论**：register 中「健康家族为 `fmp_grades`」「yfinance 不进 global health」的表述已作废，现行契约是 `analyst_grades` + yfinance 驱动；`docs/us_short_system_design.md:9` 已同步，只改 provider-health 半句、保留 "never gate emit"。
+- **下一步注意事项**：`clean` 仍不可达，因为 `universe_market_cap` 与 `sec_sic` 在真实产物上长期 `degraded`——这是问题7 的数据缺口，按桌面 §问题6 §3.A.2 属预期，不要当回归查。剩余 `O-P6R-2`~`O-P6R-6`、`O-P3-1` 为非阻断 Optional。

@@ -30,6 +30,7 @@ from engine.us_short_run_origin import (  # noqa: E402
     run_origin_for_mode,
     validate_run_origin,
 )
+from engine.us_short_provider_health import REQUIRED_HEALTH_KEYS, classify_provider_health, provider_health_detail_line  # noqa: E402
 
 
 def _report_data(origin):
@@ -37,6 +38,9 @@ def _report_data(origin):
     honesty = build_offline_honesty("clean", 0)
     run_status = build_run_status("20260710", 1, 0, 0, 1, 0)
     s11, s13 = canonical_offline_sections(honesty, origin)
+    s11.append(provider_health_detail_line(classify_provider_health(
+        {key: "ok" for key in REQUIRED_HEALTH_KEYS}
+    )))
     sections = {str(i): ["filler %d" % i] for i in range(1, 14)}
     sections["1"] = canonical_section_1(origin, run_status)
     sections["11"] = s11
