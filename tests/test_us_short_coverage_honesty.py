@@ -28,6 +28,40 @@ def _checks(analyst="ok", sec_parse="ok", event="ok"):
 
 
 class DeriveWorstOf(unittest.TestCase):
+    def test_required_category_order_does_not_change_3_4_7_category_outputs(self):
+        supported = tuple(ch._SUPPORTED_COVERAGE_CATEGORIES)
+        shapes = {
+            "legacy_3": {
+                "analyst": "missing", "sec_parse": "blocked", "event": "ok",
+            },
+            "source_fact_4": {
+                "analyst": "missing", "sec_parse": "blocked", "event": "ok", "price": "restricted",
+            },
+            "scored_7": {
+                "analyst": "missing", "sec_parse": "blocked", "event": "ok",
+                "momentum": "restricted", "theme": "missing", "catalyst": "blocked", "price": "restricted",
+            },
+        }
+        for name, checks in shapes.items():
+            with self.subTest(shape=name):
+                required = tuple(checks)
+                outputs = {
+                    tuple(order): ch.build_row_coverage(
+                        RS,
+                        {category: checks[category] for category in order},
+                        required_categories=order,
+                    )
+                    for order in (required, tuple(sorted(required)), tuple(reversed(required)))
+                }
+                self.assertEqual(outputs[required], outputs[tuple(sorted(required))])
+                self.assertEqual(outputs[required], outputs[tuple(reversed(required))])
+                expected_gaps = [
+                    f"{category}:{checks[category]}"
+                    for category in supported
+                    if category in checks and checks[category] != "ok"
+                ]
+                self.assertEqual(outputs[required]["coverage_gap_tags"], expected_gaps)
+
     def test_all_ok_is_full_no_gaps(self):
         c = ch.build_row_coverage(RS, _checks())
         self.assertEqual(c["coverage_status"], "full")

@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 import unittest
 
 from engine.us_short_result_source_linkage import (
@@ -58,6 +59,41 @@ def _fact(*, ticker="AAPL", row_source="top15_candidate", status="full"):
 
 
 class ResultSourceLinkageTest(unittest.TestCase):
+    def test_sorted_json_round_trip_preserves_multigap_source_fact(self):
+        fact = _fact()
+        checks = {
+            "analyst": "ok",
+            "sec_parse": "restricted",
+            "event": "ok",
+            "momentum": "ok",
+            "theme": "ok",
+            "catalyst": "blocked",
+            "price": "ok",
+        }
+        fact["coverage"] = {
+            "row_source": "top15_candidate",
+            "data_checks": checks,
+            "coverage_status": "blocked",
+            "coverage_gap_tags": ["sec_parse:restricted", "catalyst:blocked"],
+        }
+        fact["catalyst"] = {
+            **fact["catalyst"],
+            "status": "gated",
+            "coverage_disposition": "blocked",
+            "coverage_matrix": {"score_projection_disposition": "blocked"},
+        }
+        fact["data_quality_tags"] = ["sec_parse:restricted", "catalyst:blocked", "catalyst:gated"]
+        round_tripped = json.loads(json.dumps(fact, ensure_ascii=False, sort_keys=True))
+        validated = validate_result_source_fact(
+            round_tripped,
+            ticker="AAPL",
+            row_source="top15_candidate",
+            as_of=_AS_OF,
+            price_basis_date=_PRICE_BASIS,
+        )
+        self.assertEqual(validated["coverage"], fact["coverage"])
+        self.assertEqual(validated["data_quality_tags"], fact["data_quality_tags"])
+
     def test_swapped_ticker_or_date_source_fact_fails_before_price_binding(self):
         swapped = _fact(ticker="MSFT")
         row = {"ticker": "AAPL", "row_source": "top15_candidate", "source_result_facts": swapped}
