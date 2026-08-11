@@ -167,6 +167,11 @@ def _digest(value: Any) -> str:
     return hashlib.sha256(_canonical(value).encode("utf-8")).hexdigest()
 
 
+def _file_digest(path: Path) -> str:
+    """Digest a tracked JSON contract by its canonical content, not checkout bytes."""
+    return _digest(_load_json(path))
+
+
 def _strict_nonnegative_int(value: object, label: str) -> int:
     if isinstance(value, bool) or not isinstance(value, int) or value < 0:
         raise MarginOverheatCashControlError(f"{label} must be a non-negative integer")
@@ -1805,15 +1810,14 @@ def _margin_capture_program(governance: Mapping[str, Any], *, comparison_stage: 
         "private_root_layout": governance["capture_contract"]["write_namespace"],
         "governance_sha256": _digest(governance),
         "schema_sha256": {
-            "capture": hashlib.sha256(CAPTURE_SCHEMA_PATH.read_bytes()).hexdigest(),
-            "source_receipt": hashlib.sha256(RECEIPT_SCHEMA_PATH.read_bytes()).hexdigest(),
-            "outcome": hashlib.sha256(OUTCOME_SCHEMA_PATH.read_bytes()).hexdigest(),
-            "ledger": hashlib.sha256(LEDGER_SCHEMA_PATH.read_bytes()).hexdigest(),
-            "adjudication": hashlib.sha256(ADJUDICATION_SCHEMA_PATH.read_bytes()).hexdigest(),
-            "reminder": hashlib.sha256(REMINDER_SCHEMA_PATH.read_bytes()).hexdigest(),
-            "stage_transition_receipt": hashlib.sha256(
-                STAGE_TRANSITION_RECEIPT_SCHEMA_PATH.read_bytes()).hexdigest(),
-            "freeze_manifest": hashlib.sha256(FREEZE_MANIFEST_SCHEMA_PATH.read_bytes()).hexdigest(),
+            "capture": _file_digest(CAPTURE_SCHEMA_PATH),
+            "source_receipt": _file_digest(RECEIPT_SCHEMA_PATH),
+            "outcome": _file_digest(OUTCOME_SCHEMA_PATH),
+            "ledger": _file_digest(LEDGER_SCHEMA_PATH),
+            "adjudication": _file_digest(ADJUDICATION_SCHEMA_PATH),
+            "reminder": _file_digest(REMINDER_SCHEMA_PATH),
+            "stage_transition_receipt": _file_digest(STAGE_TRANSITION_RECEIPT_SCHEMA_PATH),
+            "freeze_manifest": _file_digest(FREEZE_MANIFEST_SCHEMA_PATH),
         },
         "boundary": _knife3_boundary(governance),
     }
