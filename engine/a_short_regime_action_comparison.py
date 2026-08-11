@@ -23,6 +23,7 @@ from engine.a_short_regime_classifier import (
     FORWARD_RETURN_BASIS, RAW_REGIMES, STATEFUL_REGIMES, V14_2_REGIMES,
 )
 from engine.a_short_regime_ledger import is_canonical_date
+from engine.a_short_run_revision import validate_run_revision_id
 from engine.a_short_experiment_admission_registry import admission_snapshot
 
 
@@ -174,13 +175,22 @@ def _returns_from_regime_record(record: dict) -> tuple[dict, list[str], bool]:
 
 def build_action_record(*, regime_record: dict, raw_v14_2_regime: str,
                         effective_v14_2_regime: str, m67_source: dict,
-                        forward_origin: dict) -> dict:
+                        forward_origin: dict,
+                        run_revision_id: str | None = None) -> dict:
     """Build and validate one immutable comparison decision record.
 
     ``raw_v14_2_regime`` may be unknown, but the effective label must be the
     fail-closed production fallback used for the baseline.  This separation is
     why old unknown-only ledger rows are never silently mixed into D2 results.
     """
+    if run_revision_id is not None:
+        run_revision_id = validate_run_revision_id(run_revision_id)
+    record_revision = regime_record.get("run_revision_id")
+    if record_revision not in (None, ""):
+        record_revision = validate_run_revision_id(str(record_revision))
+    if run_revision_id is not None and record_revision not in (None, run_revision_id):
+        raise ValueError("action comparison revision does not match regime record")
+    run_revision_id = run_revision_id or record_revision
     if raw_v14_2_regime not in V14_2_REGIMES:
         raise ValueError("raw V14.2 regime is invalid")
     if effective_v14_2_regime not in RAW_REGIMES:
@@ -226,6 +236,7 @@ def build_action_record(*, regime_record: dict, raw_v14_2_regime: str,
         "schema_name": "a_short_regime_action_comparison_weekly",
         "schema_version": ACTION_RECORD_SCHEMA_VERSION,
         "as_of": as_of,
+        **({"run_revision_id": run_revision_id} if run_revision_id is not None else {}),
         "raw_v14_2_regime": raw_v14_2_regime,
         "effective_v14_2_regime": effective_v14_2_regime,
         "baseline_policy_id": gov["baseline_policy_id"],
@@ -266,6 +277,8 @@ def validate_action_record(record: dict) -> None:
         raise ValueError(f"action comparison schema: {exc.message}") from exc
     if not is_canonical_date(str(record.get("as_of"))):
         raise ValueError("action comparison as_of is not a real date")
+    if record.get("run_revision_id") not in (None, ""):
+        validate_run_revision_id(str(record["run_revision_id"]))
     origin = record.get("forward_origin") or {}
     decision_as_of = str(origin.get("decision_as_of"))
     run_date = str(origin.get("run_date"))
@@ -378,26 +391,28 @@ def merge_action_records(existing: list[dict], current: dict) -> list[dict]:
     seen = set()
     for row in existing:
         validate_action_record(row)
-        key = str(row["as_of"])
+        key = (str(row["as_of"]), row.get("run_revision_id") or "legacy_revision_0")
         if key in seen:
             raise ValueError(f"duplicate action comparison as_of {key}")
         seen.add(key)
-        if key == current["as_of"]:
+        current_key = (str(current["as_of"]), current.get("run_revision_id") or "legacy_revision_0")
+        if key == current_key:
             if row != current:
                 raise ValueError("same-week action comparison conflicts with immutable history")
         else:
             out.append(row)
     out.append(current)
-    return sorted(out, key=lambda r: str(r["as_of"]))
+    return sorted(out, key=lambda r: (str(r["as_of"]), str(r.get("run_revision_id") or "")))
 
 
 def refresh_action_records(existing: list[dict], regime_records: list[dict]) -> list[dict]:
     """Carry audited index-return backfills into the action history without changing a decision."""
-    by_date = {str(row.get("as_of")): row for row in regime_records}
+    by_date = {(str(row.get("as_of")), row.get("run_revision_id") or "legacy_revision_0"): row
+               for row in regime_records}
     refreshed = []
     for row in existing:
         validate_action_record(row)
-        regime = by_date.get(str(row["as_of"]))
+        regime = by_date.get((str(row["as_of"]), row.get("run_revision_id") or "legacy_revision_0"))
         if regime is None:
             raise ValueError("action comparison has no matching regime record")
         rebuilt = build_action_record(
@@ -406,6 +421,7 @@ def refresh_action_records(existing: list[dict], regime_records: list[dict]) -> 
             effective_v14_2_regime=row["effective_v14_2_regime"],
             m67_source=row["m67_provenance"],
             forward_origin=row["forward_origin"],
+            run_revision_id=row.get("run_revision_id"),
         )
         immutable = ("raw_v14_2_regime", "effective_v14_2_regime", "candidate_v14_3_raw_regime",
                      "candidate_v14_3_fired_rule", "baseline_policy_id", "baseline_policy_epoch",
@@ -417,8 +433,15 @@ def refresh_action_records(existing: list[dict], regime_records: list[dict]) -> 
     return refreshed
 
 
-def summarize_action_records(records: list[dict]) -> dict:
-    """Summarize only comparable post-D2 rows; unknown legacy records have no place here."""
+def summarize_action_records(records: list[dict], official_revision_id: str | None = None) -> dict:
+    """Summarize only comparable post-D2 rows; unknown legacy records have no place here.
+
+    ``official_revision_id`` is provenance for the public current view.  It is
+    intentionally supplied by the resolver-bound runner rather than inferred
+    from the first/last action row.
+    """
+    if official_revision_id is not None:
+        official_revision_id = validate_run_revision_id(official_revision_id)
     for row in records:
         validate_action_record(row)
     forward_records = [r for r in records if r["forward_eligible"]]
@@ -450,6 +473,7 @@ def summarize_action_records(records: list[dict]) -> dict:
     else:
         status = "review_inconclusive"
     return {
+        "official_revision_id": official_revision_id,
         "total_forward_weeks": len(forward_records),
         "historical_not_counted": len(records) - len(forward_records),
         "divergent_action_weeks": len(divergent),
@@ -532,6 +556,9 @@ def build_candidate_effect_record(*, candidate: dict, stateful_regime: dict,
         raise ValueError("candidate effect capture_mode must be live or historical_replay")
     if str(evidence_origin.get("decision_as_of")) != as_of:
         raise ValueError("candidate effect evidence_origin.decision_as_of must equal candidate as_of")
+    run_revision_id = evidence_origin.get("run_revision_id")
+    if run_revision_id not in (None, ""):
+        run_revision_id = validate_run_revision_id(str(run_revision_id))
 
     stock = _finite_return_map(forward_returns.get("stock_net_returns"), field="stock_net_returns")
     benchmark = _finite_return_map(forward_returns.get("csi1000_returns"), field="csi1000_returns")
@@ -560,7 +587,10 @@ def build_candidate_effect_record(*, candidate: dict, stateful_regime: dict,
         "stateful_regime": state if state_evaluable else None,
         "state_evaluable": state_evaluable,
         "candidate_new_build_forbidden": forbidden,
-        "evidence_origin": {"capture_mode": capture_mode, "decision_as_of": as_of},
+        "evidence_origin": {
+            "capture_mode": capture_mode, "decision_as_of": as_of,
+            **({"run_revision_id": run_revision_id} if run_revision_id is not None else {}),
+        },
         "policy_id": policy["policy_id"],
         "policy_epoch": policy["policy_epoch"],
         "policy_fingerprint": candidate_effect_policy_fingerprint(),
@@ -594,6 +624,8 @@ def _validate_candidate_effect_record(record: dict) -> None:
     origin = record.get("evidence_origin") or {}
     if origin.get("capture_mode") not in {"live", "historical_replay"} or str(origin.get("decision_as_of")) != record["as_of"]:
         raise ValueError("candidate effect record has invalid evidence origin")
+    if origin.get("run_revision_id") not in (None, ""):
+        validate_run_revision_id(str(origin["run_revision_id"]))
     state = record.get("stateful_regime")
     if record.get("state_evaluable"):
         if state not in STATEFUL_REGIMES:
@@ -633,16 +665,19 @@ def _mean_or_none(values: list[float]) -> float | None:
     return sum(values) / len(values) if values else None
 
 
-def summarize_candidate_effect_records(records: list[dict]) -> dict:
+def summarize_candidate_effect_records(records: list[dict],
+                                      official_revision_id: str | None = None) -> dict:
     """Summarize P1 records by equal-weighted week, never by pooled individual stocks.
 
     Missing/immature returns and historical replays remain visible in the progress counters but are
     never coerced to zero or counted toward the forward evidence gate.
     """
+    if official_revision_id is not None:
+        official_revision_id = validate_run_revision_id(official_revision_id)
     seen_candidate_keys = set()
     for record in records:
         _validate_candidate_effect_record(record)
-        key = (record["as_of"], record["ts_code"])
+        key = (record["as_of"], record.get("evidence_origin", {}).get("run_revision_id"), record["ts_code"])
         if key in seen_candidate_keys:
             raise ValueError("candidate-effect duplicate (as_of, ts_code) cannot be counted twice")
         seen_candidate_keys.add(key)
@@ -733,6 +768,7 @@ def summarize_candidate_effect_records(records: list[dict]) -> dict:
         "schema_name": "a_short_regime_candidate_effect_summary",
         "schema_version": "1.1.0",
         "latest_evidence_as_of": max(live_weeks) if live_weeks else None,
+        "official_revision_id": official_revision_id,
         "policy": {
             "policy_id": policy["policy_id"],
             "policy_epoch": policy["policy_epoch"],

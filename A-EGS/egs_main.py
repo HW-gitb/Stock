@@ -138,8 +138,10 @@ from engine.a_short_run_paths import (
     last_selection_version_as_of,
     last_selection_version_path,
     previous_last_selection_version_path,
+    run_bundle_dir,
     weight_comparison_path,
 )
+from engine.a_short_run_revision import validate_run_revision_id
 from engine.a_short_runtime_config import load_runtime_configuration, runtime_configuration_lineage
 from engine.a_share_market_clock import a_share_market_date, a_share_market_wall_time
 from engine.a_short_northbound import (
@@ -1320,7 +1322,8 @@ def export_analysis_input(df_full, watch_df, tier1_final, latest_td, trade_dates
                           price_data_through=None, run_date=None, margin_observation=None,
                           moneyflow_coverage=None,
                           l0_excluded_counts=None, trade_calendar_context=None,
-                          market_context_facts=None, iv_projection=None):
+                          market_context_facts=None, iv_projection=None,
+                          run_revision_id=None):
     import json as _json
 
     project_root = os.path.dirname(SCRIPT_DIR)
@@ -1416,7 +1419,10 @@ def export_analysis_input(df_full, watch_df, tier1_final, latest_td, trade_dates
             list(trade_dates[:MONEYFLOW_FETCH_SESSIONS]),
         )
     )
-    out_dir = os.path.join(base_root, latest_td)
+    out_dir = run_bundle_dir(
+        latest_td, output_root=base_root, project_root=project_root,
+        run_revision_id=run_revision_id,
+    )
     os.makedirs(out_dir, exist_ok=True)
 
     final_codes = set(tier1_final.head(CONF["final_n"]).get("ts_code", pd.Series(dtype=str)).tolist()) \
@@ -1433,6 +1439,8 @@ def export_analysis_input(df_full, watch_df, tier1_final, latest_td, trade_dates
         for rank, (_, row) in enumerate(watch_df.iterrows(), start=1)
     ]
     run_identity = build_a_short_run_identity(latest_td, candidates)
+    if run_revision_id is not None:
+        run_identity["run_revision_id"] = validate_run_revision_id(run_revision_id)
 
     analysis_input = {
         "schema_name": "analysis_input",
@@ -1635,7 +1643,8 @@ def export_analysis_input(df_full, watch_df, tier1_final, latest_td, trade_dates
 
 
 def export_stage3_selection_snapshot(top50, tier1_final, latest_td, run_identity,
-                                     red_dict, unlock_set, output_root=None):
+                                     red_dict, unlock_set, output_root=None,
+                                     run_revision_id=None):
     """Write the same-run P4a source proof without changing official selection.
 
     P4a must compare only the already formed Stage3 pool.  This sidecar records
@@ -1647,7 +1656,11 @@ def export_stage3_selection_snapshot(top50, tier1_final, latest_td, run_identity
     base_root = (output_root if output_root and os.path.isabs(output_root) else
                  os.path.join(project_root, output_root) if output_root else
                  os.path.join(project_root, "result", "a_short"))
-    out_path = os.path.join(base_root, latest_td, "stage3_selection_snapshot.json")
+    out_path = os.path.join(
+        run_bundle_dir(latest_td, output_root=base_root, project_root=project_root,
+                       run_revision_id=run_revision_id),
+        "stage3_selection_snapshot.json",
+    )
     required = ("ts_code", "final_score", "l1_name", "l2_name", "tier", "overheat_flag", "chasing_high")
 
     def _rows(frame, label):
@@ -2434,7 +2447,7 @@ def export_data_health(df_full, watch_df, tier1_final, analysis_input, latest_td
     return health_path, health
 
 
-def publish_egs_run_manifest(analysis_input, health, paths):
+def publish_egs_run_manifest(analysis_input, health, paths, run_revision_id=None):
     """Publish the sole official marker after every EGS artifact validates.
 
     Files written by a failed/staged run are not official without this marker;
@@ -2464,6 +2477,8 @@ def publish_egs_run_manifest(analysis_input, health, paths):
         "stage_status": "complete",
         "files": files,
     }
+    if run_revision_id is not None:
+        manifest["run_revision_id"] = validate_run_revision_id(run_revision_id)
     marker = os.path.join(os.path.dirname(paths["analysis_input"]), "official_publish.json")
     write_json_atomic(marker, manifest)
     return marker, manifest
@@ -6765,17 +6780,33 @@ def market_environment(trade_dates, stats_df, *, return_facts=False):
 # §9 主引擎
 # ═══════════════════════════════════════════════════
 def run_egs(backtest_mode=False, output_root=None, price_as_of=None, iv_feed_path=None,
-            iv_feed_status="not_requested"):
+            iv_feed_status="not_requested", run_revision_id=None):
+    if run_revision_id is not None:
+        run_revision_id = validate_run_revision_id(run_revision_id)
+    project_root = os.path.dirname(SCRIPT_DIR)
     if output_root:
         CONF["output_root"] = output_root
         # Isolate intermediate egs_tier1/egs_full CSV+XLSX artifacts to the backtest
         # tree so they cannot overwrite the official A-EGS/Result/ files when a
         # backtest as_of collides with a production run date.
-        project_root = os.path.dirname(SCRIPT_DIR)
         base_root = output_root if os.path.isabs(output_root) else os.path.join(project_root, output_root)
-        CONF["result_dir"] = os.path.join(base_root, "_intermediate")
+        CONF["result_dir"] = (
+            run_bundle_dir(TODAY, output_root=base_root, project_root=project_root,
+                           run_revision_id=run_revision_id)
+            if run_revision_id else os.path.join(base_root, "_intermediate")
+        )
         CONF["xlsx_dir"] = CONF["result_dir"]
         os.makedirs(CONF["result_dir"], exist_ok=True)
+    elif run_revision_id:
+        base_root = os.path.join(project_root, "result", "a_short")
+        revision_root = run_bundle_dir(
+            TODAY, output_root=base_root, project_root=project_root,
+            run_revision_id=run_revision_id,
+        )
+        CONF["output_root"] = base_root
+        CONF["result_dir"] = revision_root
+        CONF["xlsx_dir"] = revision_root
+        os.makedirs(revision_root, exist_ok=True)
     log.info("═" * 60)
     log.info(f"  EGS {EGS_VERSION} 量化选股框架 — 周频增强版")
     log.info("═" * 60)
@@ -7128,7 +7159,9 @@ def run_egs(backtest_mode=False, output_root=None, price_as_of=None, iv_feed_pat
             _ov_pool["baseline_rank"] = range(1, len(_ov_pool) + 1)
             _ov_gen = datetime.now().astimezone().isoformat(timespec="seconds")
             _ov_written = emit_overlay(CONF.get("l3_mode"), _ov_pool, all_daily, _l3, sw_map,
-                                       TODAY, _ov_gen, overlay_path(TODAY, output_root=output_root))
+                                       TODAY, _ov_gen, overlay_path(
+                                           TODAY, output_root=CONF.get("output_root") or output_root,
+                                           run_revision_id=run_revision_id))
             # P4a needs scores for the immutable Stage3-eligible pool, not the
             # Top15 watch pool consumed by M6.7.  Prepare the comparison-only
             # inputs now, but write no P4 file until the official-output
@@ -7240,7 +7273,10 @@ def run_egs(backtest_mode=False, output_root=None, price_as_of=None, iv_feed_pat
         else os.path.join(project_root, configured_root) if configured_root
         else os.path.join(project_root, "result", "a_short")
     )
-    official_dir = os.path.join(base_root, decision_as_of)
+    official_dir = run_bundle_dir(
+        decision_as_of, output_root=base_root, project_root=project_root,
+        run_revision_id=run_revision_id,
+    )
     rank_reconciliation_path = os.path.join(
         official_dir, "rank_universe_reconciliation.csv"
     )
@@ -7254,7 +7290,8 @@ def run_egs(backtest_mode=False, output_root=None, price_as_of=None, iv_feed_pat
         os.path.join(official_dir, "stage3_overlay_score.json"),
         os.path.join(official_dir, "candidates.csv"),
         os.path.join(official_dir, "data_health.json"),
-        weight_comparison_path(TODAY, output_root=CONF.get("output_root")),
+        weight_comparison_path(TODAY, output_root=CONF.get("output_root"),
+                               run_revision_id=run_revision_id),
         rank_reconciliation_path,
         os.path.join(official_dir, "official_publish.json"),
     ]
@@ -7292,6 +7329,7 @@ def run_egs(backtest_mode=False, output_root=None, price_as_of=None, iv_feed_pat
             trade_calendar_context=trade_calendar_context,
             market_context_facts=market_context_facts,
             iv_projection=iv_projection,
+            run_revision_id=run_revision_id,
         )
         log.info(f"[OK] analysis_input saved to {analysis_path}")
         log.info(f"[OK] snapshot saved to {snapshot_path}")
@@ -7302,6 +7340,7 @@ def run_egs(backtest_mode=False, output_root=None, price_as_of=None, iv_feed_pat
                 top50, tier1_final, decision_as_of,
                 (analysis_input.get("source") or {}).get("run_identity") or {},
                 red_dict, unlock_set, output_root=CONF.get("output_root"),
+                run_revision_id=run_revision_id,
             )
             log.info(f"[OK] P4a Stage3 snapshot saved to {_p4_stage3_snapshot_path}")
         except Exception as _p4_snapshot_exc:  # comparison evidence cannot mutate EGS output
@@ -7331,7 +7370,9 @@ def run_egs(backtest_mode=False, output_root=None, price_as_of=None, iv_feed_pat
         # Same output transaction as analysis_input and its final marker: P5 may
         # later consume this file only when the marker binds these exact bytes.
         try:
-            _wc_path = weight_comparison_path(TODAY, output_root=CONF.get("output_root"))
+            _wc_path = weight_comparison_path(
+                TODAY, output_root=CONF.get("output_root"), run_revision_id=run_revision_id
+            )
             write_weight_comparison(df_full, _wc_path, as_of=TODAY)
             _weight_comparison_published = True
             log.info(f"egs 权重 variant 对比 diff 已写(非生产）：{_wc_path}")
@@ -7377,12 +7418,13 @@ def run_egs(backtest_mode=False, output_root=None, price_as_of=None, iv_feed_pat
             _published_files["p4_stage3_overlay_score"] = _p4_overlay_score_path
         if _weight_comparison_published:
             _published_files["egs_weight_comparison"] = weight_comparison_path(
-                TODAY, output_root=CONF.get("output_root")
+                TODAY, output_root=CONF.get("output_root"), run_revision_id=run_revision_id
             )
         marker_path, _manifest = publish_egs_run_manifest(
             analysis_input,
             health,
             _published_files,
+            run_revision_id=run_revision_id,
         )
     log.info(f"[OK] official EGS publish marker saved to {marker_path}")
     log.info(f"[OK] 结果已保存至 {tier1_csv_path} / {tier1_xlsx_path} / {full_csv_path}")
@@ -7505,6 +7547,8 @@ if __name__ == "__main__":
     parser.add_argument("--iv-feed-status", dest="iv_feed_status", choices=IV_FEED_STATUSES,
                         default="not_requested",
                         help="Wrapper-computed IV feed state; EGS renders it and does not infer failures")
+    parser.add_argument("--run-revision-id", dest="run_revision_id", default=None,
+                        help="V5-A immutable weekly revision id; generated once by the launcher")
     args = parser.parse_args()
 
     CONF["cache_policy"] = args.cache_policy
@@ -7541,4 +7585,4 @@ if __name__ == "__main__":
 
     run_egs(backtest_mode=args.backtest_mode, output_root=args.output_root,
             price_as_of=args.price_as_of, iv_feed_path=args.iv_feed_path,
-            iv_feed_status=args.iv_feed_status)
+            iv_feed_status=args.iv_feed_status, run_revision_id=args.run_revision_id)

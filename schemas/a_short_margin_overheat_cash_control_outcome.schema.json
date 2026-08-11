@@ -17,6 +17,7 @@
       "properties": {
         "question_id": {"const": "margin_overheat_cash_control"},
         "decision_date": {"type": "string", "pattern": "^[0-9]{8}$"},
+        "run_revision_id": {"type": ["string", "null"], "pattern": "^[0-9a-f]{32}$"},
         "run_date": {"type": "string", "pattern": "^[0-9]{8}$"},
         "price_data_through": {"type": "string", "pattern": "^[0-9]{8}$"},
         "daily_cache_digest": {"type": "string", "pattern": "^[a-f0-9]{64}$"},

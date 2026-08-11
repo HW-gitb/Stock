@@ -175,11 +175,15 @@ def recover(journal_dir: str | Path) -> dict | None:
     return report
 
 
-def commit_artifact_set(journal_dir: str | Path, files: dict[str | Path, bytes]) -> None:
-    """Write every file, or leave every one of them exactly as it was.
+def commit_artifact_set(journal_dir: str | Path, files: dict[str | Path, bytes], *,
+                        delete_paths: list[str | Path] | tuple[str | Path, ...] = ()) -> None:
+    """Write/delete every member, or leave every one of them exactly as it was.
 
     ``files`` maps each target path to its complete bytes; callers build all of
     them first, so a validation failure happens before anything is touched.
+    ``delete_paths`` is used only for a materialized view whose old files are no
+    longer part of the selected revision.  Deletions are journaled with the
+    same old-byte backup and rollback guarantees as replacements.
     """
     journal_dir = Path(journal_dir)
     if not files:
@@ -192,11 +196,18 @@ def commit_artifact_set(journal_dir: str | Path, files: dict[str | Path, bytes])
     # unrecoverable.
     recover(journal_dir)
 
-    targets = [(Path(target), bytes(payload)) for target, payload in files.items()]
+    targets = [(Path(target), bytes(payload), "write") for target, payload in files.items()]
+    existing_targets = {target for target, _payload, _operation in targets}
+    for target in delete_paths:
+        target_path = Path(target)
+        if target_path in existing_targets:
+            raise ArtifactSetTransactionError(
+                f"artifact-set target is both written and deleted: {target_path}")
+        targets.append((target_path, b"", "delete"))
     targets.sort(key=lambda item: item[0].as_posix())
     _, backup_dir = _journal_paths(journal_dir)
     entries = []
-    for index, (target, _payload) in enumerate(targets):
+    for index, (target, _payload, _operation) in enumerate(targets):
         if target.is_file():
             backup_name = f"{index:03d}.bak"
             _durable_write(backup_dir / backup_name, target.read_bytes())
@@ -215,8 +226,11 @@ def commit_artifact_set(journal_dir: str | Path, files: dict[str | Path, bytes])
     _replace_durably(journal_path, json.dumps(journal, ensure_ascii=False, sort_keys=True,
                                               indent=1, allow_nan=False).encode("utf-8"))
     try:
-        for target, payload in targets:
-            _replace_durably(target, payload)
+        for target, payload, operation in targets:
+            if operation == "delete":
+                target.unlink(missing_ok=True)
+            else:
+                _replace_durably(target, payload)
     except BaseException:
         _undo(journal_dir, entries, strict=True)
         _clear(journal_dir)

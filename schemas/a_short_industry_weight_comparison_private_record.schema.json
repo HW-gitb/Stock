@@ -10,6 +10,7 @@
     "record_type": {"enum": ["capture", "outcome", "conflict"]},
     "program_id": {"const": "a_short_industry_weight_comparison_v1"},
     "decision_date": {"type": "string", "pattern": "^[0-9]{8}$"},
+    "run_revision_id": {"type": ["string", "null"], "pattern": "^[0-9a-f]{32}$"},
     "epoch_id": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
     "contract_fingerprint": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
     "payload": {"type": "object"},

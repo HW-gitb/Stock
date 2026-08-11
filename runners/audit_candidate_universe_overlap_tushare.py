@@ -22,6 +22,7 @@ from runners.backtest_execution import (
     validate_json_schema,
 )
 from runners.materialize_execution_price_data_tushare import ts_call, tushare_pro
+from engine.a_short_run_revision import official_analysis_input_path
 
 
 SCHEMA_PATH = ROOT / "schemas" / "candidate_universe_overlap_audit.schema.json"
@@ -56,8 +57,9 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     parser.add_argument(
         "--analysis-input",
         type=Path,
-        help="analysis_input.json for --as-of. Defaults to result/a_short/<as-of>/analysis_input.json.",
+        help="analysis_input.json for --as-of. Defaults to the official revision pointer for <as-of> (legacy date-root is read-only fallback).",
     )
+    parser.add_argument("--run-revision-id", help="Explicit V5-A revision id; bypasses the official pointer.")
     parser.add_argument(
         "--lookback-days",
         type=int,
@@ -86,8 +88,8 @@ def validate_date8(value: str, label: str = "date") -> None:
     datetime.strptime(value, "%Y%m%d")
 
 
-def default_analysis_input_path(as_of: str) -> Path:
-    return DEFAULT_INPUT_ROOT / as_of / "analysis_input.json"
+def default_analysis_input_path(as_of: str, run_revision_id: str | None = None) -> Path:
+    return official_analysis_input_path(ROOT, as_of, run_revision_id)
 
 
 def output_path(as_of: str, out_path: Path | None) -> Path:
@@ -329,7 +331,7 @@ def write_payload(payload: dict[str, Any], path: Path) -> None:
 
 def main(argv: list[str] | None = None) -> int:
     args = parse_args(argv)
-    analysis_input_path = args.analysis_input or default_analysis_input_path(args.as_of)
+    analysis_input_path = args.analysis_input or default_analysis_input_path(args.as_of, args.run_revision_id)
     payload = build_audit_payload(
         tushare_pro(),
         analysis_input_path=analysis_input_path,

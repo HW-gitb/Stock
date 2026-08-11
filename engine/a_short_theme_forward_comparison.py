@@ -26,6 +26,8 @@ from typing import Any, Callable
 import numpy as np
 import pandas as pd
 
+from engine.a_short_run_revision import validate_run_revision_id
+
 
 ROOT = Path(__file__).resolve().parents[1]
 GOVERNANCE_PATH = ROOT / "presets" / "a_short_theme_forward_comparison_governance_20260725.json"
@@ -54,6 +56,7 @@ RETURN_STATUS_COLUMN = f"ret_{RETURN_WINDOW_DAYS}d_status"
 RETURN_COLUMN = f"ret_{RETURN_WINDOW_DAYS}d_t1_net"
 RETURN_UNIT_COLUMN = f"{RETURN_COLUMN}_unit"
 RETURN_EXIT_DATE_COLUMN = f"ret_{RETURN_WINDOW_DAYS}d_exit_date"
+RUN_REVISION_ID_COLUMN = "run_revision_id"
 DECISION_AS_OF_COLUMN = "decision_as_of"
 RUN_DATE_COLUMN = "run_date"
 PRICE_DATA_THROUGH_COLUMN = "price_data_through"
@@ -297,6 +300,7 @@ def validate_tracker_lineage(tracker: pd.DataFrame) -> pd.DataFrame:
     if missing:
         raise ThemeForwardComparisonError(f"forward tracker missing required columns: {missing}")
     df = tracker.copy()
+    has_revision_column = RUN_REVISION_ID_COLUMN in df.columns
     for column in LEGACY_OPTIONAL_COLUMNS:
         if column not in df.columns:
             df[column] = pd.NA
@@ -304,7 +308,15 @@ def validate_tracker_lineage(tracker: pd.DataFrame) -> pd.DataFrame:
     df["ts_code"] = df["ts_code"].map(_as_text)
     if (df["as_of"] == "").any() or (df["ts_code"] == "").any():
         raise ThemeForwardComparisonError("forward tracker has a blank as_of or ts_code")
-    if df.duplicated(["as_of", "ts_code"]).any():
+    if has_revision_column:
+        for value in df[RUN_REVISION_ID_COLUMN].dropna().tolist():
+            if _as_text(value):
+                validate_run_revision_id(_as_text(value))
+        if df.duplicated(["as_of", RUN_REVISION_ID_COLUMN, "ts_code"]).any():
+            raise ThemeForwardComparisonError(
+                "forward tracker has duplicate (as_of, run_revision_id, ts_code) rows"
+            )
+    elif df.duplicated(["as_of", "ts_code"]).any():
         raise ThemeForwardComparisonError("forward tracker has duplicate (as_of, ts_code) rows")
 
     live_indexes: list[Any] = []
@@ -344,7 +356,9 @@ def validate_tracker_lineage(tracker: pd.DataFrame) -> pd.DataFrame:
         identities = {(_as_text(row.run_id), _as_text(row.candidate_digest))
                       for row in cohort[["run_id", "candidate_digest"]].itertuples(index=False)}
         if len(identities) != 1 or not next(iter(identities))[0] or not next(iter(identities))[1]:
-            raise ThemeForwardComparisonError(f"forward-live cohort {as_of} has ambiguous/missing run identity")
+            raise ThemeForwardComparisonError(
+                f"forward-live cohort {as_of}/{_as_text(cohort.iloc[0].get(RUN_REVISION_ID_COLUMN)) or 'legacy_revision_0'} "
+                "has ambiguous/missing run identity")
     return live
 
 
@@ -1190,6 +1204,21 @@ def _cohort_admission_digest(cohort: pd.DataFrame) -> str:
     return _digest({"columns": columns, "rows": rows})
 
 
+def _cohort_run_revision_id(cohort: pd.DataFrame) -> str | None:
+    """Return the one revision carried by a tracker cohort, if present."""
+    if RUN_REVISION_ID_COLUMN not in cohort.columns:
+        return None
+    values = {
+        _as_text(value) for value in cohort[RUN_REVISION_ID_COLUMN]
+        if _as_text(value)
+    }
+    if len(values) > 1:
+        raise ThemeForwardComparisonError("theme cohort has mixed run_revision_id values")
+    if not values:
+        return None
+    return validate_run_revision_id(next(iter(values)))
+
+
 def _seal_private_receipt(payload: dict[str, Any]) -> dict[str, Any]:
     record = dict(payload)
     record["record_sha256"] = _digest(record)
@@ -1264,7 +1293,7 @@ def _admission_receipt_fields(
     deadline = decision_date + timedelta(days=ADMISSION_GRACE_CALENDAR_DAYS)
     if admission_date > deadline or not _theme_references_within_epoch(cohort, epoch["frozen_theme_ids"]):
         return None
-    return {
+    receipt = {
         "epoch_id": epoch["epoch_id"],
         "epoch_identity_fingerprint": epoch["epoch_identity_fingerprint"],
         "freeze_packet_identity": epoch["freeze_packet_identity"],
@@ -1276,6 +1305,10 @@ def _admission_receipt_fields(
         "admission_time_provenance": ADMISSION_TIME_PROVENANCE,
         "cohort_admission_sha256": _cohort_admission_digest(cohort),
     }
+    revision = _cohort_run_revision_id(cohort)
+    if revision is not None:
+        receipt[RUN_REVISION_ID_COLUMN] = revision
+    return receipt
 
 
 def build_cohort_admission_receipt(
@@ -1286,13 +1319,14 @@ def build_cohort_admission_receipt(
     fields = _admission_receipt_fields(cohort, epoch, top_n, admission_date or _today_date())
     if fields is None or not _cohort_outcomes_are_unobserved(cohort):
         return None
-    return _seal_private_receipt({
+    receipt = {
         "schema_name": PRIVATE_RECEIPT_SCHEMA,
         "schema_version": "1.0.0",
         "record_type": "cohort_admission",
         "track": TRACK_ID,
         **fields,
-    })
+    }
+    return _seal_private_receipt(receipt)
 
 
 def validate_cohort_admission_receipt(
@@ -1306,6 +1340,14 @@ def validate_cohort_admission_receipt(
     expected = build_cohort_admission_receipt(
         _decision_time_projection(cohort), epoch, top_n, admission_date=admitted_on,
     )
+    expected_revision = _cohort_run_revision_id(cohort)
+    actual_revision = receipt.get(RUN_REVISION_ID_COLUMN)
+    if actual_revision not in (None, ""):
+        actual_revision = validate_run_revision_id(actual_revision)
+    if actual_revision != expected_revision:
+        raise ThemeForwardComparisonError(
+            "admission receipt run_revision_id does not match cohort evidence"
+        )
     if expected is None or receipt != expected:
         raise ThemeForwardComparisonError(
             "admitted cohort is no longer formally eligible; admission receipt no longer matches decision evidence"
@@ -1341,7 +1383,7 @@ def build_terminal_outcome_receipt(
     primary = _score_sorted([row for row in rows if _as_text(row.get("analysis_role")) == "final"])[:top_n]
     if _selection_return(primary, top_n, require_full_selection=True)[0] is None:
         return None
-    return _seal_private_receipt({
+    receipt = {
         "schema_name": PRIVATE_RECEIPT_SCHEMA,
         "schema_version": "1.0.0",
         "record_type": "terminal_outcome",
@@ -1353,7 +1395,11 @@ def build_terminal_outcome_receipt(
         "row_count": int(len(cohort)),
         "admission_receipt_sha256": admission_receipt["record_sha256"],
         "cohort_evidence_sha256": _cohort_evidence_digest(cohort),
-    })
+    }
+    revision = _cohort_run_revision_id(cohort)
+    if revision is not None:
+        receipt[RUN_REVISION_ID_COLUMN] = revision
+    return _seal_private_receipt(receipt)
 
 
 def validate_terminal_outcome_receipt(receipt: dict[str, Any], cohort: pd.DataFrame,

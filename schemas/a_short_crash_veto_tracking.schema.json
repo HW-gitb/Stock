@@ -13,6 +13,7 @@
     "schema_version": {"const": "1.0.0"},
     "generated_at": {"type": "string", "minLength": 1},
     "as_of": {"type": "string", "pattern": "^[0-9]{8}$"},
+    "official_revision_id": {"type": "string", "pattern": "^[0-9a-f]{32}$"},
     "comparison_only": {"const": true},
     "affects_selection": {"const": false},
     "production_rule_changed": {"const": false},
@@ -69,6 +70,7 @@
         ],
         "properties": {
           "cohort_id": {"type": "string", "pattern": "^crash-veto-[0-9a-f]{20}$"},
+          "run_revision_id": {"type": "string", "pattern": "^[0-9a-f]{32}$"},
           "as_of": {"type": "string", "pattern": "^[0-9]{8}$"},
           "scope": {"type": "string", "minLength": 1},
           "rule_confirmed_days": {"type": "integer", "minimum": 1},

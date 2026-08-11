@@ -30,6 +30,14 @@ if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
 from engine.a_short_observability import safe_exception_summary
+from engine.a_short_run_revision import (
+    RevisionError,
+    official_analysis_input_path,
+    official_public_revision_root,
+    require_official_revision,
+    resolve_official_revision,
+    validate_run_revision_id,
+)
 
 STATE_PATH = ROOT / "logs" / "a_short_crash_veto_tracker.json"
 SUMMARY_PATH = ROOT / "logs" / "a_short_crash_veto_summary.json"
@@ -103,11 +111,14 @@ def _load_state(path: Path = STATE_PATH) -> dict:
     return payload
 
 
-def _official_inputs(as_of: str) -> tuple[dict, pd.DataFrame, pd.DataFrame]:
-    result_dir = ROOT / "result" / "a_short" / as_of
+def _official_inputs(as_of: str, run_revision_id: str | None = None) -> tuple[dict, pd.DataFrame, pd.DataFrame]:
+    result_dir = official_public_revision_root(ROOT, as_of, run_revision_id)
     marker_path = result_dir / "official_publish.json"
     recon_path = result_dir / "rank_universe_reconciliation.csv"
-    full_path = ROOT / "A-EGS" / "Result" / f"egs_full_{as_of}.csv"
+    full_path = result_dir / f"egs_full_{as_of}.csv"
+    if run_revision_id is None:
+        # Legacy date-root EGS full-rank output predates V5-A's public bundle.
+        full_path = ROOT / "A-EGS" / "Result" / f"egs_full_{as_of}.csv"
     if not marker_path.exists() or not recon_path.exists() or not full_path.exists():
         raise FileNotFoundError(f"{as_of} official EGS publish/reconciliation/full-rank artifact missing")
     marker = json.loads(marker_path.read_text(encoding="utf-8"))
@@ -139,7 +150,8 @@ def _find_cache(pattern: str) -> Path:
 
 
 def _load_capture_frames(as_of: str, full: pd.DataFrame,
-                         reconciliation: pd.DataFrame | None = None) -> pd.DataFrame:
+                         reconciliation: pd.DataFrame | None = None,
+                         run_revision_id: str | None = None) -> pd.DataFrame:
     # The reconciliation carries the pre-L2 feature surface for veto members;
     # the ranked artifact carries the matching control pool.  Combine both so
     # an uncached runtest does not depend on transient egs_cache pickles.
@@ -162,7 +174,7 @@ def _load_capture_frames(as_of: str, full: pd.DataFrame,
     daily = pd.read_pickle(cache_dir / f"daily_all_{as_of}_60d.pkl")
     stocks = pd.read_pickle(_find_cache(f"stock_list_{as_of}*.pkl"))
     industry = pd.read_pickle(_find_cache(f"sw_industry_map*_{as_of}.pkl"))
-    analysis = json.loads((ROOT / "result" / "a_short" / as_of / "analysis_input.json").read_text(encoding="utf-8"))
+    analysis = json.loads(official_analysis_input_path(ROOT, as_of, run_revision_id).read_text(encoding="utf-8"))
     source_date = str(((analysis.get("candidates") or [{}])[0].get("quote") or {}).get("source_trade_date") or "")
     basic_pattern = f"daily_basic_{source_date}*.pkl" if source_date else f"daily_basic_{as_of}*.pkl"
     basic = pd.read_pickle(_find_cache(basic_pattern))
@@ -283,14 +295,18 @@ def match_controls(member_codes: list[str], control_codes: list[str], features: 
     return result
 
 
-def _cohort_id(as_of: str, run_id: str, scope: str, days: int) -> str:
-    raw = f"{as_of}|{run_id}|{scope}|{days}".encode("utf-8")
+def _cohort_id(as_of: str, run_id: str, scope: str, days: int,
+               run_revision_id: str | None = None) -> str:
+    raw = f"{as_of}|{run_id}|{scope}|{days}|{run_revision_id or ''}".encode("utf-8")
     return "crash-veto-" + hashlib.sha256(raw).hexdigest()[:20]
 
 
 def _make_cohort(as_of: str, marker: dict, scope: str, days: int, member_codes: list[str],
                  control_codes: list[str], features: pd.DataFrame, source: str,
-                 locked: bool = False, notes: dict | None = None) -> dict:
+                 locked: bool = False, notes: dict | None = None,
+                 run_revision_id: str | None = None) -> dict:
+    if run_revision_id is not None:
+        run_revision_id = validate_run_revision_id(run_revision_id)
     matches = match_controls(member_codes, control_codes, features)
     members = []
     for code in sorted(set(member_codes)):
@@ -299,11 +315,13 @@ def _make_cohort(as_of: str, marker: dict, scope: str, days: int, member_codes: 
                         "l1_name": str(row.get("l1_name") or ""), "l2_name": str(row.get("l2_name") or ""),
                         "controls": matches.get(code, [])})
     return {
-        "cohort_id": _cohort_id(as_of, str(marker["run_id"]), scope, days),
+        "cohort_id": _cohort_id(as_of, str(marker["run_id"]), scope, days, run_revision_id),
         "as_of": as_of, "run_id": marker["run_id"], "captured_at": _now(),
         "rule_confirmed_days": days, "scope": scope, "source": source, "locked": bool(locked),
         "member_count": len(members), "members": members, "notes": notes or {}, "results": {},
     }
+    if run_revision_id is not None:
+        cohort["run_revision_id"] = run_revision_id
 
 
 def _upsert_cohort(state: dict, cohort: dict) -> bool:
@@ -318,22 +336,25 @@ def _upsert_cohort(state: dict, cohort: dict) -> bool:
     return True
 
 
-def capture_official(state: dict, as_of: str, rule_days: int) -> int:
-    marker, recon, full = _official_inputs(as_of)
+def capture_official(state: dict, as_of: str, rule_days: int,
+                     run_revision_id: str | None = None) -> int:
+    marker, recon, full = _official_inputs(as_of, run_revision_id)
     members = sorted(recon.loc[recon["reason"] == "l2_crash_veto", "ts_code"].astype(str).unique())
     controls = sorted(recon.loc[recon["outcome"] == "ranked", "ts_code"].astype(str).unique())
-    features = _load_capture_frames(as_of, full, recon)
+    features = _load_capture_frames(as_of, full, recon, run_revision_id)
     if not set(members).issubset(features.index):
         missing = sorted(set(members) - set(features.index))
         raise ValueError(f"crash-veto capture feature source missing members: {missing}")
     cohort = _make_cohort(as_of, marker, "official_all_crash_veto", rule_days, members, controls, features,
-                          source="official_publish_hashed_reconciliation")
+                          source="official_publish_hashed_reconciliation",
+                          run_revision_id=run_revision_id)
     _upsert_cohort(state, cohort)
     return len(members)
 
 
-def bootstrap_legacy(state: dict, as_of: str, official_days: int, active_days: int) -> tuple[int, int, int]:
-    marker, recon, full = _official_inputs(as_of)
+def bootstrap_legacy(state: dict, as_of: str, official_days: int, active_days: int,
+                     run_revision_id: str | None = None) -> tuple[int, int, int]:
+    marker, recon, full = _official_inputs(as_of, run_revision_id)
     old_members = sorted(recon.loc[recon["reason"] == "l2_crash_veto", "ts_code"].astype(str).unique())
     ranked = set(recon.loc[recon["outcome"] == "ranked", "ts_code"].astype(str))
     l1_survivors = set(recon.loc[recon["terminal_stage"] != "l1_industry_leader", "ts_code"].astype(str))
@@ -344,19 +365,21 @@ def bootstrap_legacy(state: dict, as_of: str, official_days: int, active_days: i
         raise ValueError(f"legacy replay mismatch: official={len(old_members)} replay={len(old_shadow)}")
     added_all = active_shadow - old_shadow
     added_rank_impact = sorted(added_all & ranked)
-    features = _load_capture_frames(as_of, full, recon)
+    features = _load_capture_frames(as_of, full, recon, run_revision_id)
     if not set(old_members).issubset(features.index):
         missing = sorted(set(old_members) - set(features.index))
         raise ValueError(f"legacy crash-veto feature source missing members: {missing}")
     old = _make_cohort(as_of, marker, "legacy_official_4d", official_days, old_members, sorted(ranked), features,
                        source="official_publish_hashed_reconciliation", locked=True,
-                       notes={"purpose": "freeze_original_245_without_future_rule_drift"})
+                       notes={"purpose": "freeze_original_245_without_future_rule_drift"},
+                       run_revision_id=run_revision_id)
     incremental = _make_cohort(
         as_of, marker, "active_5d_incremental_rank_impact", active_days, added_rank_impact,
         sorted(ranked - set(added_rank_impact)), features, source="same_run_daily_cache_shadow_replay", locked=True,
         notes={"active_all_crash_count": len(active_shadow), "incremental_all_count": len(added_all),
                "incremental_already_other_l2_count": len(added_all - ranked),
                "purpose": "measure_only_the_extra_sensitivity_added_by_fifth_confirmed_day"},
+        run_revision_id=run_revision_id,
     )
     _upsert_cohort(state, old)
     _upsert_cohort(state, incremental)
@@ -698,7 +721,31 @@ def _build_official_rolling(official_variants: list[dict], as_of: str) -> dict:
     }
 
 
-def build_summary(state: dict, cache: dict, as_of: str) -> dict:
+def build_summary(
+    state: dict,
+    cache: dict,
+    as_of: str,
+    *,
+    official_project_root: str | Path | None = None,
+) -> dict:
+    selected_revisions: dict[str, str] = {}
+    if official_project_root is not None:
+        # Formal rolling/settlement is resolver-driven: a same-day validation
+        # replay stays in the audit list but can never enter the counted set.
+        for cohort in state.get("cohorts", []):
+            revision = str(cohort.get("run_revision_id") or "")
+            cohort_as_of = str(cohort.get("as_of") or "")
+            if not revision or not cohort_as_of:
+                continue
+            try:
+                selected = resolve_official_revision(
+                    official_project_root, cohort_as_of,
+                    expected_revision_id=revision, require=True,
+                )
+            except RevisionError:
+                continue
+            if selected is not None:
+                selected_revisions[cohort_as_of] = str(selected["selected_revision_id"])
     variants = []
     for cohort in state["cohorts"]:
         five = evaluate_cohort(cohort, cache, 5)
@@ -711,14 +758,31 @@ def build_summary(state: dict, cache: dict, as_of: str) -> dict:
                          "one_week_plain": _plain_metric(five, "一周"),
                          "two_week_plain": _plain_metric(ten, "两周"),
                          "decision": decision, "conclusion_plain": conclusion})
+    cohort_revisions = {
+        str(cohort.get("cohort_id")): str(cohort.get("run_revision_id") or "")
+        for cohort in state.get("cohorts", [])
+    }
+    for variant in variants:
+        revision = cohort_revisions.get(str(variant.get("cohort_id")), "")
+        if revision:
+            variant["run_revision_id"] = revision
     scope_order = {"legacy_official_4d": 0, "active_5d_incremental_rank_impact": 1,
                    "official_all_crash_veto": 2}
     variants.sort(key=lambda v: (scope_order.get(v["scope"], 9), v["as_of"], v["cohort_id"]))
-    official_variants = [v for v in variants if v["scope"] == "official_all_crash_veto"]
+    def _counted(v: dict) -> bool:
+        if official_project_root is None:
+            return True
+        revision = str(v.get("run_revision_id") or "")
+        return bool(revision and selected_revisions.get(str(v.get("as_of"))) == revision)
+
+    official_variants = [
+        v for v in variants
+        if v["scope"] == "official_all_crash_veto" and _counted(v)
+    ]
     official_rolling = _build_official_rolling(official_variants, as_of)
     # 用户要看的主样本是旧官方 245 只；新增第 5 日的排名影响组单独作为敏感度复核，绝不混算收益。
-    legacy = [v for v in variants if v["scope"] == "legacy_official_4d"]
-    incremental = [v for v in variants if v["scope"] == "active_5d_incremental_rank_impact"]
+    legacy = [v for v in variants if v["scope"] == "legacy_official_4d" and _counted(v)]
+    incremental = [v for v in variants if v["scope"] == "active_5d_incremental_rank_impact" and _counted(v)]
     headline = legacy[-1] if legacy else (variants[-1] if variants else None)
     decision_set = ([legacy[-1]] if legacy else []) + ([incremental[-1]] if incremental else [])
     decision_set.append({"cohort_id": None, "decision": official_rolling["decision"]})
@@ -751,37 +815,53 @@ def build_summary(state: dict, cache: dict, as_of: str) -> dict:
         basis = []
     rolling_evidence = official_rolling["plain_text"]
     final_plain = f"{final_plain}；{rolling_evidence}"
-    return {"schema_name": "a_short_crash_veto_tracking_summary",
+    summary = {"schema_name": "a_short_crash_veto_tracking_summary",
             "schema_version": SUMMARY_SCHEMA_VERSION, "generated_at": _now(), "as_of": as_of,
             "comparison_only": True, "affects_selection": False, "production_rule_changed": False,
             "one_week_plain": one_plain, "two_week_plain": two_plain,
             "final_decision": {"status": final_status, "basis_cohort_ids": basis, "plain_text": final_plain},
             "official_rolling": official_rolling,
             "variants": variants}
+    selected_for_summary = selected_revisions.get(str(as_of))
+    if selected_for_summary:
+        summary["official_revision_id"] = selected_for_summary
+    return summary
 
 
 def run_update(as_of: str, rule_days: int, state_path: Path, summary_path: Path,
                price_path: Path, fetch_authorized: bool, bootstrap: bool = False,
-               official_days: int = 4, active_days: int = 5) -> int:
+               official_days: int = 4, active_days: int = 5,
+               run_revision_id: str | None = None,
+               official_project_root: str | Path | None = None) -> int:
     state = _load_state(state_path)
     if bootstrap:
-        old_n, added_n, other_n = bootstrap_legacy(state, as_of, official_days, active_days)
+        if run_revision_id is None:
+            old_n, added_n, other_n = bootstrap_legacy(state, as_of, official_days, active_days)
+        else:
+            old_n, added_n, other_n = bootstrap_legacy(
+                state, as_of, official_days, active_days, run_revision_id
+            )
         print(f"[crash-veto] frozen legacy={old_n}, fifth-day rank-impact={added_n}, already-other-L2={other_n}")
     else:
-        n = capture_official(state, as_of, rule_days)
+        n = (capture_official(state, as_of, rule_days)
+             if run_revision_id is None
+             else capture_official(state, as_of, rule_days, run_revision_id))
         print(f"[crash-veto] frozen official cohort {as_of}: {n} stocks (confirmed_days={rule_days})")
     # 先冻结名单再联网补行情。即使 provider 本周失败，该批次也不会丢；下周会继续补算。
     state["updated_at"] = _now()
     _atomic_json(state_path, state)
     if fetch_authorized:
-        analysis_path = ROOT / "result" / "a_short" / as_of / "analysis_input.json"
+        analysis_path = official_analysis_input_path(ROOT, as_of, run_revision_id)
         settled_through = latest_settled_trade_date_from_analysis_input(analysis_path, as_of)
         cache = refresh_prices_for_mature_cohorts(
             state, price_path, current_run_as_of=as_of, settled_through=settled_through
         )
     else:
         cache = _load_price_cache(price_path)
-    summary = build_summary(state, cache, as_of)
+    summary = build_summary(
+        state, cache, as_of,
+        official_project_root=official_project_root,
+    )
     state["updated_at"] = summary["generated_at"]
     _atomic_json(state_path, state)
     _atomic_json(summary_path, summary)
@@ -791,30 +871,60 @@ def run_update(as_of: str, rule_days: int, state_path: Path, summary_path: Path,
     return 0
 
 
+def settle_existing(
+    *, as_of: str, state_path: Path = STATE_PATH, summary_path: Path = SUMMARY_PATH,
+    price_path: Path = PRICE_CACHE_PATH, run_revision_id: str,
+    official_project_root: str | Path,
+) -> dict:
+    """Rebuild only the official rolling view; never recapture or fetch prices."""
+    revision = validate_run_revision_id(run_revision_id)
+    require_official_revision(official_project_root, as_of, revision)
+    state = _load_state(state_path)
+    cache = _load_price_cache(price_path)
+    summary = build_summary(
+        state, cache, as_of, official_project_root=official_project_root,
+    )
+    state["updated_at"] = summary["generated_at"]
+    _atomic_json(state_path, state)
+    _atomic_json(summary_path, summary)
+    return {
+        "status": "settled",
+        "official_revision_id": summary.get("official_revision_id"),
+    }
+
+
 def main(argv=None) -> int:
     parser = argparse.ArgumentParser(description="A-short 闪崩否决 5/10 交易日 comparison-only 追踪")
     sub = parser.add_subparsers(dest="cmd", required=True)
     update = sub.add_parser("update", help="冻结本周官方批次并补算已到期结果")
     update.add_argument("--as-of", required=True)
     update.add_argument("--rule-confirmed-days", type=int, default=5)
+    update.add_argument("--run-revision-id", help="Explicit V5-A revision id for this physical run.")
     update.add_argument("--confirm-fetch-authorized", action="store_true")
     boot = sub.add_parser("bootstrap", help="冻结旧 4 日 245 只及第 5 日新增排名影响组")
     boot.add_argument("--as-of", required=True)
     boot.add_argument("--official-rule-days", type=int, default=4)
     boot.add_argument("--active-rule-days", type=int, default=5)
+    boot.add_argument("--run-revision-id", help="Explicit V5-A revision id for this physical run.")
     boot.add_argument("--confirm-fetch-authorized", action="store_true")
     for p in (update, boot):
         p.add_argument("--state", default=str(STATE_PATH))
         p.add_argument("--summary", default=str(SUMMARY_PATH))
         p.add_argument("--price-cache", default=str(PRICE_CACHE_PATH))
+        p.add_argument("--official-project-root", default=None,
+                       help="project root used to resolve the sole official revision before counting")
     args = parser.parse_args(argv)
     try:
         if args.cmd == "bootstrap":
             return run_update(args.as_of, args.active_rule_days, Path(args.state), Path(args.summary),
                               Path(args.price_cache), args.confirm_fetch_authorized, bootstrap=True,
-                              official_days=args.official_rule_days, active_days=args.active_rule_days)
+                              official_days=args.official_rule_days, active_days=args.active_rule_days,
+                              run_revision_id=args.run_revision_id,
+                              official_project_root=args.official_project_root)
         return run_update(args.as_of, args.rule_confirmed_days, Path(args.state), Path(args.summary),
-                          Path(args.price_cache), args.confirm_fetch_authorized)
+                          Path(args.price_cache), args.confirm_fetch_authorized,
+                          run_revision_id=args.run_revision_id,
+                          official_project_root=args.official_project_root)
     except Exception as exc:
         print("[WARN] crash-veto tracker failed safely "
               f"({safe_exception_summary(exc)}); formal selection unchanged.")

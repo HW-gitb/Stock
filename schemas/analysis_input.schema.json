@@ -268,6 +268,10 @@
             },
             "stage_status": {
               "const": "egs_validated"
+            },
+            "run_revision_id": {
+              "type": "string",
+              "pattern": "^[0-9a-f]{32}$"
             }
           }
         },

@@ -903,6 +903,13 @@
           "type": "string",
           "pattern": "^[0-9]{8}$"
         },
+        "official_revision_id": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "pattern": "^[a-f0-9]{32}$"
+        },
         "status": {
           "enum": [
             "not_configured",
@@ -1014,6 +1021,13 @@
           "type": "string",
           "pattern": "^[0-9]{8}$"
         },
+        "official_revision_id": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "pattern": "^[a-f0-9]{32}$"
+        },
         "status": {
           "type": "string"
         },
@@ -1099,6 +1113,13 @@
         "as_of": {
           "type": "string",
           "pattern": "^[0-9]{8}$"
+        },
+        "official_revision_id": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "pattern": "^[a-f0-9]{32}$"
         },
         "data_through": {
           "type": [
@@ -1997,6 +2018,10 @@
         "run_id": {
           "type": "string",
           "pattern": "^a-short-[0-9]{8}-[0-9a-f]{16}$"
+        },
+        "run_revision_id": {
+          "type": "string",
+          "pattern": "^[0-9a-f]{32}$"
         },
         "candidate_digest": {
           "type": "string",

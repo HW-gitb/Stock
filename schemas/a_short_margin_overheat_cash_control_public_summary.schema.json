@@ -7,6 +7,7 @@
   "properties": {
     "schema_name": {"const": "a_short_margin_overheat_cash_control_public_summary"}, "schema_version": {"const": "1.0.0"},
     "track_id": {"const": "a_short_margin_overheat_cash_control"},
+    "official_revision_id": {"type": ["string", "null"], "pattern": "^[a-f0-9]{32}$"},
     "status": {"enum": ["not_configured", "evidence_current", "evidence_unavailable_or_inconclusive"]},
     "evidence_status": {"enum": ["insufficient_data", "accumulating", "review_due"]},
     "current_stage": {"enum": ["stage_a", "stage_b"]},

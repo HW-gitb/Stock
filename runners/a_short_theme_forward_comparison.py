@@ -26,6 +26,12 @@ from engine.a_short_theme_forward_comparison import (
     validate_tracker_lineage, _weekly_latest_as_ofs,
 )
 from engine import a_short_evidence_epoch_mode as epoch_mode
+from engine.a_short_run_revision import (
+    private_revision_root,
+    require_official_revision,
+    resolve_official_revision,
+    validate_run_revision_id,
+)
 
 
 DEFAULT_TRACKER = ROOT / "logs" / "forward_tracker.csv"
@@ -425,12 +431,63 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--epoch-start-as-of", help="YYYYMMDD cohort whose theme family is frozen")
     parser.add_argument("--reset-epoch", action="store_true", help="archive the current frozen epoch before opening --start-epoch")
     parser.add_argument("--private-root", default=str(DEFAULT_PRIVATE_ROOT))
+    parser.add_argument("--run-revision-id", default=None)
+    parser.add_argument("--official-project-root", default=None,
+                        help="optional project root whose official pointer gates formal receipts")
     args = parser.parse_args(argv)
     tracker_path = Path(args.tracker)
     if not tracker_path.exists():
         raise SystemExit(f"[FATAL] forward tracker not found: {tracker_path}")
     tracker = pd.read_csv(tracker_path, dtype=TRACKER_STRING_COLUMNS)
     private_root = _private_root(args.private_root)
+    run_revision_id = None
+    if args.run_revision_id is not None:
+        try:
+            run_revision_id = validate_run_revision_id(args.run_revision_id)
+        except ValueError as exc:
+            raise SystemExit(f"[FATAL] invalid --run-revision-id: {exc}") from exc
+        if "run_revision_id" not in tracker.columns:
+            raise SystemExit("[FATAL] tracker has no run_revision_id; cannot prove theme cohort binding")
+        if args.official_project_root:
+            # A current invocation id must not hide older official cohorts.
+            # Resolve each tracker row by its own decision date; the private
+            # epoch remains rooted at the shared theme directory.
+            official_rows = []
+            for _, row in tracker.iterrows():
+                row_revision = str(row.get("run_revision_id") or "")
+                row_as_of = str(row.get("as_of") or "")
+                if not row_revision or not row_as_of:
+                    continue
+                selected = resolve_official_revision(
+                    args.official_project_root, row_as_of, require=False,
+                )
+                if selected is not None and selected["selected_revision_id"] == row_revision:
+                    official_rows.append(row)
+            tracker = pd.DataFrame(official_rows, columns=tracker.columns)
+        else:
+            tracker = tracker[tracker["run_revision_id"].fillna("").astype(str) == run_revision_id].copy()
+            private_root = (
+                private_revision_root(private_root, str(tracker["as_of"].iloc[0]), run_revision_id)
+                if not tracker.empty else private_root / "revisions" / run_revision_id
+            )
+    elif "run_revision_id" in tracker.columns:
+        revisions = {
+            str(value) for value in tracker["run_revision_id"]
+            if not pd.isna(value) and str(value or "")
+        }
+        has_legacy_rows = any(
+            pd.isna(value) or not str(value or "")
+            for value in tracker["run_revision_id"]
+        )
+        if len(revisions) > 1 or (revisions and has_legacy_rows):
+            raise SystemExit("[FATAL] mixed revisionized tracker requires explicit --run-revision-id")
+        if revisions:
+            run_revision_id = validate_run_revision_id(next(iter(revisions)))
+    if args.official_project_root and run_revision_id is None and not tracker.empty:
+        raise SystemExit("[FATAL] official theme settlement requires revision-bound tracker rows")
+    if run_revision_id is not None and args.official_project_root:
+        for as_of in sorted({str(value) for value in tracker["as_of"]}):
+            require_official_revision(args.official_project_root, as_of, run_revision_id)
     if args.start_epoch:
         if not args.epoch_start_as_of:
             raise SystemExit("[FATAL] --start-epoch requires --epoch-start-as-of")
@@ -458,6 +515,16 @@ def main(argv: list[str] | None = None) -> int:
         formal_decision_receipt=formal_receipt,
         recorded_formal_packet=recorded_formal_packet,
     )
+    # The packet is a de-identified public current view.  When a formal
+    # resolver is supplied, carry the one selected identity instead of letting
+    # a reader infer it from tracker row order.  A mixed-date packet is left
+    # explicitly unbound rather than inventing one revision for all cohorts.
+    official_revision_id = None
+    if args.official_project_root and run_revision_id is not None and not tracker.empty:
+        selected = {str(value) for value in tracker["run_revision_id"].dropna().astype(str) if value}
+        if len(selected) == 1:
+            official_revision_id = next(iter(selected))
+    packet["official_revision_id"] = official_revision_id
     validate_comparison_packet(packet)
     output_path = Path(args.out)
     _write_json_atomic(output_path, packet)

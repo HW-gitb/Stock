@@ -12,6 +12,7 @@
     "schema_name": {"const": "a_short_regime_comparison_weekly"},
     "schema_version": {"const": "1.0.0"},
     "as_of": {"type": "string", "pattern": "^[0-9]{8}$"},
+    "run_revision_id": {"type": "string", "pattern": "^[0-9a-f]{32}$"},
     "generated_at": {"type": ["string", "null"]},
     "v14_2_regime": {"enum": ["attack", "shock", "defense", "contraction", "unknown"],
       "description": "the production V14.2 M1 regime label as surfaced this run (mirrors analysis_input market_regime.status enum; often 'unknown' — V14.2 M1 is not always computed)"},

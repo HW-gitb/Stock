@@ -9,11 +9,12 @@
     "schema_name": {"const": "a_short_regime_candidate_effect_outcome"},
     "schema_version": {"const": "1.0.0"},
     "as_of": {"type": "string", "pattern": "^[0-9]{8}$"},
+    "run_revision_id": {"type": "string", "pattern": "^[0-9a-f]{32}$"},
     "status": {
       "enum": ["updated", "skipped_source_mismatch", "skipped_immutable_mature_week"]
     },
     "reason_code": {
-      "enum": ["updated", "run_identity_mismatch", "tracker_rows_missing", "m67_digest_drift", "immutable_mature_week"]
+      "enum": ["updated", "run_identity_mismatch", "tracker_rows_missing", "m67_digest_drift", "immutable_mature_week", "non_official_revision"]
     },
     "observed_as_of": {"type": ["string", "null"], "pattern": "^[0-9]{8}$"}
   },
@@ -24,7 +25,7 @@
     },
     {
       "if": {"properties": {"status": {"const": "skipped_source_mismatch"}}},
-      "then": {"properties": {"reason_code": {"enum": ["run_identity_mismatch", "tracker_rows_missing", "m67_digest_drift"]}}}
+      "then": {"properties": {"reason_code": {"enum": ["run_identity_mismatch", "tracker_rows_missing", "m67_digest_drift", "non_official_revision"]}}}
     },
     {
       "if": {"properties": {"status": {"const": "skipped_immutable_mature_week"}}},

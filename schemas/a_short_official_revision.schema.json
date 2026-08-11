@@ -1,0 +1,22 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://stock.local/schemas/a_short_official_revision/1.0.0/schema.json",
+  "title": "A-short official revision pointer or selection receipt",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_name", "schema_version", "decision_as_of", "selected_revision_id",
+    "selected_manifest_sha256", "selected_content_digest", "selection_status", "reason", "supersedes_revision_id"
+  ],
+  "properties": {
+    "schema_name": {"enum": ["a_short_official_revision", "a_short_official_selection_receipt"]},
+    "schema_version": {"const": "1.0.0"},
+    "decision_as_of": {"type": "string", "pattern": "^[0-9]{8}$"},
+    "selected_revision_id": {"type": "string", "pattern": "^[0-9a-f]{32}$"},
+    "selected_manifest_sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+    "selected_content_digest": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+    "selection_status": {"const": "selected"},
+    "reason": {"type": "string", "pattern": "^[a-z0-9_]+$", "minLength": 1},
+    "supersedes_revision_id": {"type": ["string", "null"], "pattern": "^([0-9a-f]{32})?$"}
+  }
+}

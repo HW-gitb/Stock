@@ -9,6 +9,7 @@
     "schema_version": {"const": "1.0.0"},
     "summary_id": {"const": "a_short_industry_weight_comparison"},
     "as_of": {"type": "string", "pattern": "^[0-9]{8}$"},
+    "official_revision_id": {"type": ["string", "null"], "pattern": "^[a-f0-9]{32}$"},
     "status": {"enum": ["not_configured", "accumulating", "review_due", "evidence_unavailable_or_inconclusive"]},
     "questions": {"type": "array", "minItems": 3, "maxItems": 3},
     "p5b_build_due": {"type": "boolean"},

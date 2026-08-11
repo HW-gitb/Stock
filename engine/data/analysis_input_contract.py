@@ -13,6 +13,7 @@ from engine.a_short_industry_theme import (
     industry_trend_from_score,
     industry_trend_policy,
 )
+from engine.a_short_run_revision import validate_run_revision_id
 from engine.a_short_legacy_llm_tasks import TASK_TYPES
 from engine.egs_industry_heat import load_governance
 
@@ -46,13 +47,19 @@ def build_a_short_run_identity(trade_date: str, candidates: list[dict[str, Any]]
 
 
 def is_official_a_short_analysis_input_path(path: str | Path) -> bool:
-    """Return true only for the one-click EGS publication input, not backtest artifacts."""
+    """Return true for a date-root or revision-root EGS publication input."""
     try:
         relative = Path(path).resolve().relative_to((ROOT / "result" / "a_short").resolve())
     except ValueError:
         return False
-    return len(relative.parts) == 2 and relative.parts[1] == "analysis_input.json" and bool(
-        _DATE8_RE.fullmatch(relative.parts[0])
+    if len(relative.parts) == 2:
+        return relative.parts[1] == "analysis_input.json" and bool(_DATE8_RE.fullmatch(relative.parts[0]))
+    return (
+        len(relative.parts) == 4
+        and bool(_DATE8_RE.fullmatch(relative.parts[0]))
+        and relative.parts[1] == "revisions"
+        and bool(re.fullmatch(r"[0-9a-f]{32}", relative.parts[2]))
+        and relative.parts[3] == "analysis_input.json"
     )
 
 
@@ -185,6 +192,13 @@ def _validate_pit_invariants(payload: dict[str, Any], label: str, official_input
         expected_run_id = f"a-short-{trade_date}-{expected_digest[:16]}"
         if run_identity.get("run_id") != expected_run_id:
             raise AnalysisInputContractError(f"{label} run_id does not match trade_date/candidate_digest")
+        if run_identity.get("run_revision_id") not in (None, ""):
+            try:
+                validate_run_revision_id(run_identity["run_revision_id"])
+            except ValueError as exc:
+                raise AnalysisInputContractError(
+                    f"{label} run_revision_id is invalid"
+                ) from exc
     l3_mode = source.get("l3_mode")
     l3_snapshot_date = source.get("l3_snapshot_date")
     l3_provider = source.get("l3_provider")

@@ -1,6 +1,7 @@
 import json
 import tempfile
 import unittest
+import hashlib
 from contextlib import redirect_stdout
 from io import StringIO
 from pathlib import Path
@@ -11,6 +12,7 @@ import pandas as pd
 
 from runners.a_short_crash_veto_tracker import (
     _official_rolling_epoch_mode,
+    _official_inputs,
     _load_capture_frames,
     build_summary,
     decide_design,
@@ -24,12 +26,55 @@ from runners.a_short_crash_veto_tracker import (
 )
 from runners.a_short_m67_render import render_weekly_markdown
 from runners.a_short_weekly_pipeline import build_weekly_report
+from engine.a_short_run_revision import official_analysis_input_path, public_revision_root
 
 
 ROOT = Path(__file__).resolve().parents[1]
 
 
 class CrashVetoTrackerTest(unittest.TestCase):
+    def test_revision_bundle_is_the_crash_veto_official_input_and_missing_analysis_fails_loud(self):
+        as_of = "20260723"
+        revision = "a" * 32
+        with tempfile.TemporaryDirectory() as td:
+            root = Path(td)
+            bundle = public_revision_root(root, as_of, revision)
+            bundle.mkdir(parents=True)
+            recon = bundle / "rank_universe_reconciliation.csv"
+            full = bundle / f"egs_full_{as_of}.csv"
+            recon.write_text(
+                "ts_code,outcome,terminal_stage,reason\n000001.SZ,ranked,l5_rank,ranked\n",
+                encoding="utf-8",
+            )
+            full.write_text("ts_code\n000001.SZ\n", encoding="utf-8")
+            digest = lambda path: hashlib.sha256(path.read_bytes()).hexdigest()
+            (bundle / "official_publish.json").write_text(json.dumps({
+                "stage_status": "complete", "trade_date": as_of,
+                "run_id": "run-revision", "files": {
+                    "rank_universe_reconciliation": {"path": recon.name, "sha256": digest(recon)},
+                    "full_rank": {"path": full.name, "sha256": digest(full)},
+                },
+            }), encoding="utf-8")
+            analysis = official_analysis_input_path(root, as_of, revision)
+            analysis.write_text(json.dumps({
+                "trade_date": as_of,
+                "candidates": [{"quote": {"source_trade_date": "20260722"}}],
+            }), encoding="utf-8")
+            with mock.patch("runners.a_short_crash_veto_tracker.ROOT", root):
+                marker, recon_frame, full_frame = _official_inputs(as_of, revision)
+                self.assertEqual(marker["run_id"], "run-revision")
+                self.assertEqual(set(full_frame["ts_code"]), {"000001.SZ"})
+                self.assertEqual(
+                    latest_settled_trade_date_from_analysis_input(
+                        official_analysis_input_path(root, as_of, revision), as_of
+                    ),
+                    "20260722",
+                )
+                with self.assertRaises(RuntimeError):
+                    latest_settled_trade_date_from_analysis_input(
+                        official_analysis_input_path(root, "20260724", revision), "20260724"
+                    )
+
     def test_official_rolling_does_not_proxy_unrelated_epoch_track(self):
         with mock.patch("engine.a_short_evidence_epoch_mode.enforcement_enabled",
                         side_effect=AssertionError("unrelated track must not be queried")):

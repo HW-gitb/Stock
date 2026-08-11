@@ -6,13 +6,12 @@ selection result, M6.7 bundle, or the non-blocking exit-code contract.
 from __future__ import annotations
 
 import argparse
-import csv
 import hashlib
 import json
 import os
 import sys
 import tempfile
-from datetime import datetime, timezone
+from datetime import date, datetime, timezone
 from pathlib import Path
 from typing import Any
 
@@ -26,7 +25,7 @@ ROOT = Path(__file__).resolve().parents[1]
 if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
-from engine.a_short_observability import safe_exception_summary  # noqa: E402
+from engine.a_short_run_revision import validate_run_revision_id  # noqa: E402
 
 HEALTH_SCHEMA = ROOT / "schemas" / "a_short_weekly_sidecar_health.schema.json"
 OUTCOME_SCHEMA = ROOT / "schemas" / "a_short_weekly_sidecar_outcomes.schema.json"
@@ -37,71 +36,95 @@ REQUIRED_ARTIFACT_SCHEMAS = {
 }
 
 # Deliberately small and explicit.  A new sidecar must be registered here and
-# must also be named in the launcher/pipeline expected-outcome manifest.
-SIDECAR_SPECS: dict[str, str] = {
-    "data_canary": "advisory",
-    "forward_tracker_capture": "forward_evidence",
-    "forward_tracker_backfill": "forward_evidence",
-    "theme_forward_comparison": "forward_evidence",
-    "crash_veto": "forward_evidence",
-    "shared_cache_build": "cache_support",
-    "regime_daily": "forward_evidence",
-    "regime_action": "forward_evidence",
-    "candidate_effect": "forward_evidence",
-    "iv_feed": "readiness",
-    "official_operation_capture": "forward_evidence",
-    "official_operation_settlement": "forward_evidence",
-    "factor_v2_capture": "forward_evidence",
-    "margin_overheat_cash_control_capture": "advisory",
-    "margin_overheat_cash_control_settlement": "advisory",
-    "industry_weight_capture": "forward_evidence",
-    "industry_weight_settlement": "forward_evidence",
-    "target_policy_capture": "forward_evidence",
-    "final_action_capture": "forward_evidence",
-    "overlay_adjudication_capture": "forward_evidence",
-    "overlay_adjudication_settlement": "forward_evidence",
+# must also be named in the launcher/pipeline expected-outcome manifest.  The
+# three properties are the only health policy: no runtime path probing is
+# allowed to infer a fourth one.
+class _SidecarSpec(dict[str, str]):
+    """Mapping value with a small compatibility equality for old callers."""
+
+    def __eq__(self, other: object) -> bool:  # pragma: no cover - compatibility only
+        if isinstance(other, str):
+            return self.get("evidence_role") == other
+        return dict.__eq__(self, other)
+
+
+def _spec(evidence_role: str, progress_clock: str, evidence_policy: str) -> _SidecarSpec:
+    return _SidecarSpec(
+        evidence_role=evidence_role,
+        progress_clock=progress_clock,
+        evidence_policy=evidence_policy,
+    )
+
+
+SIDECAR_SPECS: dict[str, _SidecarSpec] = {
+    "data_canary": _spec("advisory", "decision", "manifest_only"),
+    "forward_tracker_capture": _spec("forward_evidence", "decision", "manifest_only"),
+    "forward_tracker_backfill": _spec("forward_evidence", "clockless", "manifest_only"),
+    "theme_forward_comparison": _spec("forward_evidence", "decision", "validated_current_packet"),
+    "crash_veto": _spec("forward_evidence", "decision", "manifest_only"),
+    "shared_cache_build": _spec("cache_support", "clockless", "manifest_only"),
+    "regime_daily": _spec("forward_evidence", "data", "manifest_only"),
+    "regime_action": _spec("forward_evidence", "decision", "manifest_only"),
+    "candidate_effect": _spec("forward_evidence", "decision", "authoritative_artifact"),
+    "iv_feed": _spec("readiness", "decision", "authoritative_artifact"),
+    "official_operation_capture": _spec("forward_evidence", "decision", "manifest_only"),
+    "official_operation_settlement": _spec("forward_evidence", "clockless", "manifest_only"),
+    "factor_v2_capture": _spec("forward_evidence", "decision", "manifest_only"),
+    "margin_overheat_cash_control_capture": _spec("advisory", "clockless", "manifest_only"),
+    "margin_overheat_cash_control_settlement": _spec("advisory", "clockless", "manifest_only"),
+    "industry_weight_capture": _spec("forward_evidence", "decision", "manifest_only"),
+    "industry_weight_settlement": _spec("forward_evidence", "clockless", "manifest_only"),
+    "target_policy_capture": _spec("forward_evidence", "decision", "manifest_only"),
+    "final_action_capture": _spec("forward_evidence", "decision", "manifest_only"),
+    "overlay_adjudication_capture": _spec("forward_evidence", "decision", "manifest_only"),
+    "overlay_adjudication_settlement": _spec("forward_evidence", "clockless", "manifest_only"),
 }
-AUTHORITATIVE_ARTIFACT_SIDECARS = frozenset(REQUIRED_ARTIFACT_SCHEMAS)
-BEST_EFFORT_SELF_REPORT_SIDECARS = frozenset({
-    "data_canary",
-    "forward_tracker_capture",
-    "forward_tracker_backfill",
-    # Landed on master in parallel with the fourth knife.  Best-effort: it has a probe path
-    # and its own adjudication-mode check below, but no schema-validated authoritative receipt.
-    "theme_forward_comparison",
-    "crash_veto",
-    "shared_cache_build",
-    "regime_daily",
-    "regime_action",
-    "official_operation_capture",
-    "official_operation_settlement",
-    "factor_v2_capture",
-    "margin_overheat_cash_control_capture",
-    "margin_overheat_cash_control_settlement",
-    "industry_weight_capture",
-    "industry_weight_settlement",
-    "target_policy_capture",
-    "final_action_capture",
-    "overlay_adjudication_capture",
-    "overlay_adjudication_settlement",
+AUTHORITATIVE_ARTIFACT_SIDECARS = frozenset(
+    name for name, spec in SIDECAR_SPECS.items()
+    if spec["evidence_policy"] == "authoritative_artifact"
+)
+BEST_EFFORT_SELF_REPORT_SIDECARS = frozenset(
+    set(SIDECAR_SPECS) - set(AUTHORITATIVE_ARTIFACT_SIDECARS)
+)
+_ALLOWED_CLOCKS = frozenset({"decision", "data", "clockless"})
+_ALLOWED_POLICIES = frozenset({
+    "manifest_only", "authoritative_artifact", "validated_current_packet",
 })
 
 
 def _validate_sidecar_validation_buckets() -> None:
-    """Keep every registered sidecar explicit about whether its artifact is authoritative.
-
-    Authoritative artifacts fail closed on missing/invalid data. Best-effort sidecars retain the
-    established launcher-report fallback because they have no schema-bound public receipt yet.
-    """
+    """Require one explicit clock and one evidence policy for every sidecar."""
     registered = set(SIDECAR_SPECS)
-    authoritative = set(AUTHORITATIVE_ARTIFACT_SIDECARS)
-    best_effort = set(BEST_EFFORT_SELF_REPORT_SIDECARS)
-    if authoritative & best_effort:
-        raise ValueError("sidecar validation buckets overlap")
-    if authoritative | best_effort != registered:
+    clock_registered: set[str] = set()
+    policy_registered: set[str] = set()
+    for name, spec in SIDECAR_SPECS.items():
+        if not isinstance(spec, dict):
+            raise ValueError("every sidecar must have one validation bucket")
+        if set(spec) != {"evidence_role", "progress_clock", "evidence_policy"}:
+            raise ValueError("every sidecar must have one validation bucket")
+        if spec.get("progress_clock") not in _ALLOWED_CLOCKS:
+            raise ValueError("every sidecar must have one progress clock")
+        if spec.get("evidence_policy") not in _ALLOWED_POLICIES:
+            raise ValueError("every sidecar must have one evidence policy")
+        clock_registered.add(name)
+        policy_registered.add(name)
+    if registered != clock_registered or registered != policy_registered:
         raise ValueError("every sidecar must have one validation bucket")
-    if not authoritative <= set(REQUIRED_ARTIFACT_SCHEMAS):
+    if set(AUTHORITATIVE_ARTIFACT_SIDECARS) != {
+        name for name, spec in SIDECAR_SPECS.items()
+        if spec.get("evidence_policy") == "authoritative_artifact"
+    }:
+        raise ValueError("authoritative sidecar policy mismatch")
+    if not set(AUTHORITATIVE_ARTIFACT_SIDECARS) <= set(REQUIRED_ARTIFACT_SCHEMAS):
         raise ValueError("authoritative sidecar lacks an artifact schema")
+    if any(
+        spec.get("evidence_policy") == "authoritative_artifact"
+        and spec.get("progress_clock") != "decision"
+        for spec in SIDECAR_SPECS.values()
+    ):
+        raise ValueError("authoritative artifact must use decision clock")
+    if SIDECAR_SPECS.get("theme_forward_comparison", {}).get("evidence_policy") != "validated_current_packet":
+        raise ValueError("theme sidecar must use current packet policy")
 
 
 def _load_json(path: Path) -> dict[str, Any] | None:
@@ -155,10 +178,13 @@ def _artifact_matches_schema(name: str, path: Path) -> bool:
     return _artifact_validation(name, path)[0]
 
 
-def _authoritative_artifact_path(project_root: Path, name: str, as_of: str) -> Path:
+def _authoritative_artifact_path(project_root: Path, name: str, as_of: str,
+                                 iv_feed_path: Path | None = None) -> Path:
     if name == "candidate_effect":
         return project_root / "research/results/a_short/regime_candidate_effect_summary.json"
     if name == "iv_feed":
+        if iv_feed_path is not None:
+            return iv_feed_path
         return project_root / f"research/results/a_short/iv_feed_{as_of}/iv_feed.json"
     raise ValueError(f"authoritative sidecar has no artifact path: {name}")
 
@@ -176,6 +202,7 @@ def _failed_m67_receipt_evidence(receipt_path: Path, as_of: str) -> dict[str, An
             "status": "failed",
             "run_id": None,
             "candidate_digest": None,
+            "run_revision_id": receipt.get("run_revision_id"),
             "source_receipt_sha256": hashlib.sha256(receipt_bytes).hexdigest(),
         }
     except (
@@ -211,6 +238,7 @@ def _m67_evidence(
                 "status": "complete",
                 "run_id": str(lineage.get("run_id") or "") or None,
                 "candidate_digest": str(lineage.get("candidate_digest") or "") or None,
+                "run_revision_id": str(lineage.get("run_revision_id") or "") or None,
                 "source_receipt_sha256": bundle.receipt_sha256,
             }
         except Exception:
@@ -221,6 +249,7 @@ def _m67_evidence(
                 "status": "unavailable",
                 "run_id": None,
                 "candidate_digest": None,
+                "run_revision_id": None,
                 "source_receipt_sha256": None,
             }
     if receipt_path.is_file() and not weekly_path.exists() and not markdown_path.exists():
@@ -231,6 +260,7 @@ def _m67_evidence(
             "status": "unavailable",
             "run_id": None,
             "candidate_digest": None,
+            "run_revision_id": None,
             "source_receipt_sha256": None,
         }
     if any(present):
@@ -238,12 +268,14 @@ def _m67_evidence(
             "status": "unavailable",
             "run_id": None,
             "candidate_digest": None,
+            "run_revision_id": None,
             "source_receipt_sha256": None,
         }
     return {
         "status": "unavailable",
         "run_id": None,
         "candidate_digest": None,
+        "run_revision_id": None,
         "source_receipt_sha256": None,
     }
 
@@ -264,122 +296,157 @@ def _atomic_write(path: Path, data: bytes) -> None:
 
 def _safe_date(value: Any) -> str | None:
     text = str(value or "")
-    return text if len(text) == 8 and text.isdigit() else None
-
-
-def _max_csv_as_of(path: Path) -> str | None:
+    if len(text) != 8 or not text.isdigit():
+        return None
     try:
-        with path.open("r", encoding="utf-8-sig", newline="") as handle:
-            rows = csv.DictReader(handle)
-            dates = [_safe_date(row.get("as_of")) for row in rows]
-    except (OSError, csv.Error):
+        date(int(text[:4]), int(text[4:6]), int(text[6:8]))
+    except ValueError:
         return None
-    valid = [value for value in dates if value]
-    return max(valid) if valid else None
+    return text
 
 
-def _max_json_as_of(path: Path, *, row_key: str | None = None) -> str | None:
-    value = _load_json(path)
-    if value is None:
-        return None
-    if row_key:
-        rows = value.get(row_key)
-        if isinstance(rows, list):
-            dates = [_safe_date(row.get("as_of")) for row in rows if isinstance(row, dict)]
-            valid = [date for date in dates if date]
-            return max(valid) if valid else None
-    return _safe_date(value.get("as_of")) or _safe_date(value.get("latest_evidence_as_of"))
-
-
-def _probe(project_root: Path, name: str, as_of: str) -> tuple[str | None, str | None]:
-    """Return observed decision/data dates from de-identified artifacts."""
-    paths: dict[str, tuple[Path, str | None]] = {
-        "regime_daily": (project_root / "research/results/a_short/regime_daily_ledger.json", "rows"),
-        "regime_action": (project_root / "research/results/a_short/regime_action_comparison_records.json", None),
-        "candidate_effect": (project_root / "research/results/a_short/regime_candidate_effect_summary.json", None),
-        "crash_veto": (project_root / "logs/a_short_crash_veto_summary.json", None),
-        "forward_tracker_capture": (project_root / "logs/forward_tracker.csv", None),
-        "theme_forward_comparison": (
-            project_root / "research/results/a_short_theme_forward_comparison.json", None
-        ),
-        "industry_weight_capture": (project_root / "research/results/a_short/industry_weight_comparison_summary.json", None),
-        "industry_weight_settlement": (project_root / "research/results/a_short/industry_weight_comparison_summary.json", None),
-        "target_policy_capture": (project_root / "research/results/a_short/target_policy_comparison_summary.json", None),
-        "final_action_capture": (project_root / "research/results/a_short/final_action_validation_summary.json", None),
-        "official_operation_settlement": (project_root / "research/results/a_short/official_operation_evidence_summary.json", None),
-        "overlay_adjudication_settlement": (project_root / "research/results/a_short/overlay_adjudication_summary.json", None),
-    }
-    if name == "factor_v2_capture":
-        path = project_root / "state/a_short/factor_comparison_private/v2/weeks" / as_of
-        return (as_of if path.is_dir() else None, None)
-    if name == "iv_feed":
-        observed = _max_json_as_of(
-            project_root / f"research/results/a_short/iv_feed_{as_of}/iv_feed.json"
-        )
-        return observed, None
-    path_info = paths.get(name)
-    if path_info is None:
+def _normalise_date_field(
+    value: Any,
+    *,
+    as_of: str,
+    field: str,
+    clock: str,
+) -> tuple[str | None, str | None]:
+    """Parse one manifest date without accepting future or impossible dates."""
+    if value in (None, ""):
         return None, None
-    path, row_key = path_info
-    if path.suffix.lower() == ".csv":
-        observed = _max_csv_as_of(path)
-    elif path.name.endswith("records.json") and name == "regime_action":
-        try:
-            rows = json.loads(path.read_text(encoding="utf-8-sig"))
-            observed = max((_safe_date(row.get("as_of")) for row in rows if isinstance(row, dict)), default=None)
-        except (OSError, ValueError, TypeError):
-            observed = None
+    parsed = _safe_date(value)
+    if parsed is None or parsed > as_of:
+        return None, "health_contract_invalid_date"
+    if clock == "decision" and field == "observed_data_through":
+        return None, "health_contract_clock_mismatch"
+    if clock == "data" and field == "observed_decision_as_of":
+        return None, "health_contract_clock_mismatch"
+    return parsed, None
+
+
+def _artifact_observed_date(name: str, path: Path, *, as_of: str) -> tuple[str | None, str | None]:
+    """Read only the date owned by an already validated authoritative artifact."""
+    payload = _load_json(path)
+    if payload is None:
+        return None, "health_contract_invalid_date"
+    value = payload.get("as_of") if name == "iv_feed" else (
+        payload.get("latest_evidence_as_of")
+        or payload.get("observed_as_of")
+        or payload.get("as_of")
+    )
+    if value in (None, ""):
+        return None, None
+    parsed = _safe_date(value)
+    if parsed is None or parsed > as_of:
+        return None, "health_contract_invalid_date"
+    return parsed, None
+
+
+def _set_contract_failure(item: dict[str, Any], code: str | None, detail: str | None) -> None:
+    item["progress_status"] = "unavailable"
+    if code and not item.get("error_code"):
+        item["error_code"] = code
+    if detail and not item.get("error_detail"):
+        item["error_detail"] = detail
+
+
+def _theme_packet_progress(
+    item: dict[str, Any],
+    *,
+    as_of: str,
+    project_root: Path,
+) -> None:
+    """Apply the one named theme packet rule; never inspect stale packets."""
+    if not (item["expected"] and item["attempted"] and item["execution_status"] == "succeeded"):
+        return
+    packet_path = project_root / "research/results/a_short_theme_forward_comparison.json"
+    packet = _load_json(packet_path)
+    if packet is None:
+        _set_contract_failure(item, None, None)
+        return
+    try:
+        from engine.a_short_theme_forward_comparison import validate_comparison_packet
+
+        validate_comparison_packet(packet)
+    except Exception:
+        _set_contract_failure(item, None, None)
+        return
+    latest, date_error = _normalise_date_field(
+        packet.get("latest_evidence_as_of"),
+        as_of=as_of,
+        field="observed_decision_as_of",
+        clock="decision",
+    )
+    if date_error:
+        _set_contract_failure(item, date_error, "theme_packet_latest_evidence_as_of=invalid")
+        return
+    item["observed_decision_as_of"] = latest
+    rejected = packet.get("rejected_atomic_cohorts")
+    if isinstance(rejected, dict) and rejected.get(as_of):
+        # V3-A owns this reason.  The health consumer only chooses the state.
+        item["progress_status"] = "unavailable"
+        return
+    mode = str(packet.get("adjudication_mode") or "")
+    if mode.startswith("epoch_"):
+        item["progress_status"] = "stalled"
+        return
+    if latest == as_of:
+        item["progress_status"] = (
+            "already_current" if item["progress_status"] == "already_current" else "advanced"
+        )
     else:
-        observed = _max_json_as_of(path, row_key=row_key)
-    if name == "regime_daily":
-        return None, observed
-    return observed, None
+        # A valid packet may be waiting for the next cohort or not yet effective.
+        item["progress_status"] = "not_applicable"
 
 
-def _normalise_outcome(raw: dict[str, Any], *, as_of: str, project_root: Path) -> dict[str, Any]:
+def _normalise_outcome(raw: dict[str, Any], *, as_of: str, project_root: Path,
+                       iv_feed_path: Path | None = None) -> dict[str, Any]:
     name = str(raw.get("name") or "")
+    spec = SIDECAR_SPECS[name]
+    clock = spec["progress_clock"]
+    policy = spec["evidence_policy"]
     expected = bool(raw.get("expected"))
     attempted = bool(raw.get("attempted"))
     execution = str(raw.get("execution_status") or "missing_outcome")
     progress = str(raw.get("progress_status") or "unavailable")
-    observed_decision = _safe_date(raw.get("observed_decision_as_of"))
-    observed_data = _safe_date(raw.get("observed_data_through"))
-    required_artifact = (
-        _authoritative_artifact_path(project_root, name, as_of)
-        if name in AUTHORITATIVE_ARTIFACT_SIDECARS else None
+    observed_decision, decision_error = _normalise_date_field(
+        raw.get("observed_decision_as_of"), as_of=as_of,
+        field="observed_decision_as_of", clock=clock,
     )
-    artifact_valid = None
-    artifact_code = None
-    artifact_detail = None
-    if required_artifact is not None:
-        artifact_valid, artifact_code, artifact_detail = _artifact_validation(name, required_artifact)
-        if expected and execution == "succeeded" and not artifact_valid:
-            execution = "failed"
-            progress = "unavailable"
-            observed_decision = None
-            observed_data = None
-            raw = dict(raw)
-            raw["error_code"] = raw.get("error_code") or artifact_code
-            raw["error_detail"] = raw.get("error_detail") or artifact_detail
-    probed_decision, probed_data = _probe(project_root, name, as_of)
-    if name in AUTHORITATIVE_ARTIFACT_SIDECARS or probed_decision is not None:
-        observed_decision = probed_decision
-    if name in AUTHORITATIVE_ARTIFACT_SIDECARS or probed_data is not None:
-        observed_data = probed_data
-    if execution == "succeeded" and progress == "not_applicable":
-        if observed_decision == as_of or (observed_data and observed_data <= as_of):
-            progress = "advanced"
-    if execution == "failed":
-        progress = "stalled" if (observed_decision and observed_decision < as_of) else "unavailable"
+    observed_data, data_error = _normalise_date_field(
+        raw.get("observed_data_through"), as_of=as_of,
+        field="observed_data_through", clock=clock,
+    )
+    expected_data, expected_data_error = _normalise_date_field(
+        raw.get("expected_data_through"), as_of=as_of,
+        field="expected_data_through", clock="data" if clock == "data" else "clockless",
+    )
+    expected_decision_raw = raw.get("expected_decision_as_of")
+    expected_decision = None
+    expected_decision_error = None
+    if clock == "decision":
+        if expected_decision_raw not in (None, ""):
+            expected_decision, expected_decision_error = _normalise_date_field(
+                expected_decision_raw, as_of=as_of,
+                field="expected_decision_as_of", clock="decision",
+            )
+        else:
+            expected_decision = as_of
+    elif expected_decision_raw not in (None, ""):
+        expected_decision_error = "health_contract_clock_mismatch"
+    if clock != "data" and expected_data is not None:
+        expected_data_error = "health_contract_clock_mismatch"
+
     item = {
         "name": name,
-        "evidence_role": SIDECAR_SPECS[name],
+        "evidence_role": spec["evidence_role"],
         "expected": expected,
         "attempted": attempted,
         "execution_status": execution,
         "progress_status": progress,
-        "expected_decision_as_of": _safe_date(raw.get("expected_decision_as_of")) or (as_of if name not in {"regime_daily"} else None),
-        "expected_data_through": _safe_date(raw.get("expected_data_through")),
+        "expected_decision_as_of": expected_decision,
+        "expected_data_through": expected_data if clock == "data" else None,
         "observed_decision_as_of": observed_decision,
         "observed_data_through": observed_data,
         "error_code": raw.get("error_code"),
@@ -387,6 +454,9 @@ def _normalise_outcome(raw: dict[str, Any], *, as_of: str, project_root: Path) -
         "skip_reason": raw.get("skip_reason"),
         "blocking": False,
     }
+    for key in ("error_code", "error_detail", "skip_reason"):
+        if item[key] is not None:
+            item[key] = str(item[key])
     if "attempted_before_egs" in raw:
         item["attempted_before_egs"] = bool(raw["attempted_before_egs"])
     if raw.get("iv_feed_status") is not None:
@@ -395,68 +465,67 @@ def _normalise_outcome(raw: dict[str, Any], *, as_of: str, project_root: Path) -
         item["feed_ref"] = str(raw["feed_ref"])
     if raw.get("feed_sha256") is not None:
         item["feed_sha256"] = str(raw["feed_sha256"])
-    if item["error_code"] is not None:
-        item["error_code"] = str(item["error_code"])
-    if item["error_detail"] is not None:
-        item["error_detail"] = str(item["error_detail"])
-    if item["skip_reason"] is not None:
-        item["skip_reason"] = str(item["skip_reason"])
-    # A zero exit code is not enough: a successful process that left its
-    # expected artifact behind an older clock is still stalled.  Pure cache
-    # and settlement helpers have no independent decision clock.
-    clockless = {
-        "shared_cache_build", "forward_tracker_backfill",
-        "official_operation_settlement", "industry_weight_settlement",
-        "overlay_adjudication_settlement", "margin_overheat_cash_control_capture",
-        "margin_overheat_cash_control_settlement",
-    }
-    if item["execution_status"] == "succeeded" and name not in clockless:
-        expected_decision = item["expected_decision_as_of"]
-        expected_data = item["expected_data_through"]
-        if expected_decision:
-            if observed_decision is None:
-                item["progress_status"] = "unavailable"
-                item["error_code"] = item["error_code"] or (
-                    "candidate_effect_no_observed_evidence"
-                    if name == "candidate_effect" else f"{name}_observed_evidence_missing"
-                )
-                item["error_detail"] = item["error_detail"] or (
-                    "authoritative_summary_observed_as_of=missing"
-                    if name == "candidate_effect" else "observed_decision_as_of=missing"
-                )
-            elif observed_decision < expected_decision:
-                item["progress_status"] = "stalled"
-                item["error_code"] = item["error_code"] or f"{name}_evidence_stale"
-                item["error_detail"] = item["error_detail"] or "observed_decision_as_of=stale"
-        if expected_data:
-            if observed_data is None:
-                item["progress_status"] = "unavailable"
-                item["error_code"] = item["error_code"] or f"{name}_observed_data_missing"
-                item["error_detail"] = item["error_detail"] or "observed_data_through=missing"
-            elif observed_data < expected_data:
-                item["progress_status"] = "stalled"
-                item["error_code"] = item["error_code"] or f"{name}_data_stale"
-                item["error_detail"] = item["error_detail"] or "observed_data_through=stale"
-    if name == "theme_forward_comparison" and item["execution_status"] == "succeeded":
-        packet = _load_json(
-            project_root / "research/results/a_short_theme_forward_comparison.json"
-        )
-        rejected = (packet or {}).get("rejected_atomic_cohorts") if isinstance(packet, dict) else None
-        if isinstance(rejected, dict) and rejected.get(str(as_of)):
-            item["progress_status"] = "unavailable"
-            item["error_code"] = item["error_code"] or "theme_cohort_rejected"
-            item["error_detail"] = item["error_detail"] or safe_exception_summary(
-                ValueError(str(rejected[str(as_of)])), limit=480
-            )
-        mode = str((packet or {}).get("adjudication_mode") or "")
-        if mode.startswith("epoch_"):
-            item["progress_status"] = "stalled"
-            item["error_code"] = item["error_code"] or f"evidence_clock_blocked_{mode}"
-    if name == "candidate_effect" and expected and item["execution_status"] == "succeeded" \
-            and item["observed_decision_as_of"] is None and artifact_valid is not False:
+
+    date_error = next(
+        (error for error in (decision_error, data_error, expected_data_error, expected_decision_error) if error),
+        None,
+    )
+
+    # The only artifact reads are the two named authoritative validators, and
+    # only for a current, expected, attempted successful run.
+    artifact_valid: bool | None = None
+    if policy == "authoritative_artifact" and expected and attempted and execution == "succeeded":
+        artifact_path = _authoritative_artifact_path(project_root, name, as_of, iv_feed_path)
+        artifact_valid, _artifact_code, _artifact_detail = _artifact_validation(name, artifact_path)
+        if artifact_valid:
+            artifact_date, artifact_date_error = _artifact_observed_date(name, artifact_path, as_of=as_of)
+            if artifact_date_error:
+                date_error = date_error or artifact_date_error
+                item["observed_decision_as_of"] = None
+            else:
+                item["observed_decision_as_of"] = artifact_date
+            item["observed_data_through"] = None
+        else:
+            item["observed_decision_as_of"] = None
+            item["observed_data_through"] = None
+            _set_contract_failure(item, None, None)
+
+    if policy == "validated_current_packet":
+        _theme_packet_progress(item, as_of=as_of, project_root=project_root)
+
+    if date_error:
+        _set_contract_failure(item, date_error, f"{date_error}=manifest_clock")
+
+    # Upstream execution/progress is authoritative.  Only the explicitly
+    # allowed decision/data checks may change a claimed advanced state.
+    if execution == "failed" and progress not in {"stalled", "unavailable"}:
         item["progress_status"] = "unavailable"
-        item["error_code"] = item["error_code"] or "candidate_effect_no_observed_evidence"
-        item["error_detail"] = item["error_detail"] or "authoritative_summary_observed_as_of=missing"
+        item["error_code"] = item["error_code"] or "health_contract_conflict"
+        item["error_detail"] = item["error_detail"] or "failed_progress_conflict"
+    elif execution in {"skipped", "not_due", "not_configured"} and progress != "not_applicable":
+        item["progress_status"] = "unavailable"
+        item["error_code"] = item["error_code"] or "health_contract_conflict"
+        item["error_detail"] = item["error_detail"] or "non_execution_progress_conflict"
+
+    if execution == "succeeded" and item["progress_status"] in {"advanced", "already_current"}:
+        if clock == "decision":
+            if item["observed_decision_as_of"] is None:
+                _set_contract_failure(item, "health_contract_missing_clock", "observed_decision_as_of=missing")
+            elif expected_decision and item["observed_decision_as_of"] < expected_decision:
+                item["progress_status"] = "stalled"
+                if not item.get("error_code"):
+                    item["error_code"] = f"{name}_evidence_stale"
+                if not item.get("error_detail"):
+                    item["error_detail"] = "observed_decision_as_of=stale"
+        elif clock == "data":
+            if item["observed_data_through"] is None:
+                _set_contract_failure(item, "health_contract_missing_clock", "observed_data_through=missing")
+            elif expected_data and item["observed_data_through"] < expected_data:
+                item["progress_status"] = "stalled"
+                if not item.get("error_code"):
+                    item["error_code"] = f"{name}_data_stale"
+                if not item.get("error_detail"):
+                    item["error_detail"] = "observed_data_through=stale"
     return item
 
 
@@ -498,33 +567,55 @@ def build_health(
     project_root: Path = ROOT,
     m67_out_dir: Path | None = None,
     m67_invocation: str | None = None,
+    iv_feed_path: Path | None = None,
+    run_revision_id: str | None = None,
 ) -> dict[str, Any]:
     _validate_sidecar_validation_buckets()
+    as_of = _safe_date(as_of)
+    if as_of is None:
+        raise ValueError("health_contract_invalid_date")
     if m67_invocation is None:
         m67_invocation = "requested" if m67_out_dir is not None else "not_run"
     if m67_invocation not in {"requested", "skipped", "not_run"}:
         raise ValueError("m67_invocation must be requested, skipped, or not_run")
+    if run_revision_id not in (None, ""):
+        run_revision_id = validate_run_revision_id(run_revision_id)
     manifests = [manifest for manifest in (launcher_manifest,) if manifest]
     if m67_invocation == "requested" and pipeline_manifest:
         manifests.append(pipeline_manifest)
     expected: list[str] = []
     raw_by_name: dict[str, dict[str, Any]] = {}
+    sidecar_owners: dict[str, int] = {}
     manifest_run_ids: set[str] = set()
     manifest_candidate_digests: set[str] = set()
-    for manifest in manifests:
+    manifest_revisions: set[str] = set()
+    for manifest_index, manifest in enumerate(manifests):
+        if manifest.get("as_of") not in (None, "", as_of):
+            raise ValueError("health_contract_clock_mismatch")
         expected.extend(str(name) for name in manifest.get("expected_sidecars", []))
         for raw in manifest.get("sidecars", []):
             if isinstance(raw, dict) and raw.get("name"):
-                raw_by_name[str(raw["name"])] = raw
+                name = str(raw["name"])
+                if name in sidecar_owners:
+                    raise ValueError("duplicate_sidecar_outcome")
+                sidecar_owners[name] = manifest_index
+                raw_by_name[name] = raw
         if manifest.get("run_id"):
             manifest_run_ids.add(str(manifest["run_id"]))
         if manifest.get("candidate_digest"):
             manifest_candidate_digests.add(str(manifest["candidate_digest"]))
+        if manifest.get("run_revision_id") not in (None, ""):
+            manifest_revisions.add(validate_run_revision_id(manifest["run_revision_id"]))
+    if len(manifest_revisions) > 1:
+        raise ValueError("launcher/pipeline manifests use different run_revision_id values")
+    if run_revision_id is not None and manifest_revisions and manifest_revisions != {run_revision_id}:
+        raise ValueError("manifest run_revision_id does not match requested run revision")
     evidence = (
         {
             "status": m67_invocation,
             "run_id": None,
             "candidate_digest": None,
+            "run_revision_id": None,
             "source_receipt_sha256": None,
         }
         if m67_invocation != "requested"
@@ -535,6 +626,7 @@ def build_health(
                 "status": "unavailable",
                 "run_id": None,
                 "candidate_digest": None,
+                "run_revision_id": None,
                 "source_receipt_sha256": None,
             }
         )
@@ -550,8 +642,17 @@ def build_health(
             "status": "unavailable",
             "run_id": None,
             "candidate_digest": None,
+            "run_revision_id": None,
             "source_receipt_sha256": None,
         }
+    evidence_revision = evidence.get("run_revision_id")
+    if evidence_revision not in (None, ""):
+        evidence_revision = validate_run_revision_id(evidence_revision)
+    if manifest_revisions and evidence_revision not in (None, next(iter(manifest_revisions))):
+        raise ValueError("M6.7 bundle run_revision_id does not match sidecar manifests")
+    if run_revision_id is not None and evidence_revision not in (None, run_revision_id):
+        raise ValueError("M6.7 bundle run_revision_id does not match requested run revision")
+    resolved_revision = run_revision_id or (next(iter(manifest_revisions)) if manifest_revisions else evidence_revision)
     expected = list(dict.fromkeys(expected))
     for name in expected:
         if name not in SIDECAR_SPECS:
@@ -565,17 +666,23 @@ def build_health(
                 "execution_status": "missing_outcome", "progress_status": "unavailable",
                 "error_code": "missing_outcome",
             }
-        entries.append(_normalise_outcome(raw, as_of=as_of, project_root=project_root))
+        entries.append(_normalise_outcome(
+            raw, as_of=as_of, project_root=project_root,
+            iv_feed_path=iv_feed_path,
+        ))
     _validate_health_reason_contract(entries)
-    failed = sum(1 for item in entries if item["execution_status"] in {"failed", "missing_outcome"} or
-                 (item["expected"] and item["progress_status"] in {"stalled", "unavailable"}))
+    failed = sum(1 for item in entries if item["execution_status"] in {"failed", "missing_outcome"})
     stalled = sum(1 for item in entries if item["progress_status"] == "stalled")
     advanced = sum(1 for item in entries if item["progress_status"] in {"advanced", "already_current"})
     partial = sum(1 for item in entries if item["execution_status"] in {"skipped", "not_due", "not_configured"})
+    sidecar_degraded = any(
+        item["expected"] and item["progress_status"] in {"stalled", "unavailable"}
+        for item in entries
+    )
     m67_status = str(evidence.get("status") or "unavailable")
     overall = (
         "degraded"
-        if failed or m67_status in {"failed", "unavailable"}
+        if failed or sidecar_degraded or m67_status in {"failed", "unavailable"}
         else (
             "partial"
             if partial or m67_status == "skipped"
@@ -587,6 +694,7 @@ def build_health(
         "schema_version": "1.0.0",
         "as_of": as_of,
         "generated_at": datetime.now(timezone.utc).isoformat(timespec="seconds"),
+        "run_revision_id": resolved_revision,
         "run_id": evidence.get("run_id"),
         "candidate_digest": evidence.get("candidate_digest"),
         "m67_status": m67_status,
@@ -622,6 +730,7 @@ def write_health_bundle(payload: dict[str, Any], out_dir: Path) -> tuple[Path, P
         "schema_name": "a_short_weekly_sidecar_health_receipt",
         "schema_version": "1.0.0",
         "as_of": payload["as_of"],
+        "run_revision_id": payload.get("run_revision_id"),
         "run_id": payload.get("run_id"),
         "candidate_digest": payload.get("candidate_digest"),
         "health_sha256": None,
@@ -637,11 +746,18 @@ def write_health_bundle(payload: dict[str, Any], out_dir: Path) -> tuple[Path, P
         # the verdict: an all-zero sidecar tally beside `degraded` reads as a
         # contradiction until the M6.7 leg that actually caused it is visible.
         f"overall={payload['overall']} · m67={payload['m67_status']} · advanced={payload['advanced_count']} · stalled={payload['stalled_count']} · failed={payload['failed_count']} · partial={payload['partial_count']}", "",
-        "| sidecar | execution | progress | decision/data through | error |", "|---|---|---|---|---|",
+        "| sidecar | execution | progress | expected decision | observed decision | expected data through | observed data through | error |",
+        "|---|---|---|---|---|---|---|---|",
     ]
     for item in payload["sidecars"]:
-        date = item.get("observed_decision_as_of") or item.get("observed_data_through") or "-"
-        md.append(f"| {item['name']} | {item['execution_status']} | {item['progress_status']} | {date} | {item.get('error_code') or '-'} |")
+        md.append(
+            f"| {item['name']} | {item['execution_status']} | {item['progress_status']} | "
+            f"{item.get('expected_decision_as_of') or '-'} | "
+            f"{item.get('observed_decision_as_of') or '-'} | "
+            f"{item.get('expected_data_through') or '-'} | "
+            f"{item.get('observed_data_through') or '-'} | "
+            f"{item.get('error_code') or '-'} |"
+        )
     md_bytes = ("\n".join(md) + "\n").encode("utf-8")
     receipt_bytes = (json.dumps(receipt, ensure_ascii=False, indent=2, allow_nan=False) + "\n").encode("utf-8")
     _atomic_write(json_path, json_bytes)
@@ -657,6 +773,8 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--out-dir", required=True)
     parser.add_argument("--launcher-outcomes")
     parser.add_argument("--pipeline-outcomes")
+    parser.add_argument("--iv-feed", help="revision-scoped IV feed for authoritative health validation")
+    parser.add_argument("--run-revision-id", help="expected V5 revision shared by M6.7 and both manifests")
     parser.add_argument(
         "--m67-invocation",
         choices=["requested", "skipped", "not_run"],
@@ -671,6 +789,8 @@ def main(argv: list[str] | None = None) -> int:
         project_root=Path(args.project_root).resolve(),
         m67_out_dir=out_dir,
         m67_invocation=args.m67_invocation,
+        iv_feed_path=Path(args.iv_feed).resolve() if args.iv_feed else None,
+        run_revision_id=args.run_revision_id,
     )
     paths = write_health_bundle(payload, out_dir)
     print(f"[sidecar-health] overall={payload['overall']} m67={payload['m67_status']} failed={payload['failed_count']} stalled={payload['stalled_count']} partial={payload['partial_count']} -> {paths[1].name}")

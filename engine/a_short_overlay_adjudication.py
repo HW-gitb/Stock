@@ -28,6 +28,10 @@ from engine import egs_industry_heat as _heat
 from engine.a_short_experiment_admission_registry import admission_snapshot, get_admission
 from engine.a_short_nullable_bool import require_known_risk_bool
 from engine.a_short_runtime_config import runtime_configuration_lineage
+from engine.a_short_run_revision import (
+    iter_private_week_roots, private_week_root, require_official_revision,
+    resolve_official_revision, validate_run_revision_id,
+)
 
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -234,8 +238,8 @@ def _epoch_id(fingerprint: str) -> str:
     return _digest({"program_id": PROGRAM_ID, "contract_fingerprint": fingerprint})
 
 
-def _week_paths(root: Path, decision_date: str) -> tuple[Path, Path]:
-    directory = root / "weeks" / decision_date
+def _week_paths(root: Path, decision_date: str, run_revision_id: str | None = None) -> tuple[Path, Path]:
+    directory = private_week_root(root, decision_date, run_revision_id)
     return directory / "capture.json", directory / "outcome.json"
 
 
@@ -244,12 +248,12 @@ def _records(root: Path) -> list[dict]:
     if not weeks.exists():
         return []
     result = []
-    for directory in sorted(path for path in weeks.iterdir() if path.is_dir()):
+    for decision_date, revision, directory in iter_private_week_roots(root):
         capture = directory / "capture.json"
         if capture.exists():
             item = _load(capture)
             _validate_record(item)
-            if item["decision_date"] != directory.name or item["record_type"] != "capture":
+            if item["decision_date"] != decision_date or item.get("run_revision_id") != revision or item["record_type"] != "capture":
                 raise OverlayAdjudicationError("P4a capture directory identity drifted")
             result.append(item)
     return result
@@ -482,7 +486,8 @@ def capture_after_published_weekly(*, root: str | Path, decision_date: str, run_
                                    stage3_snapshot_path: str | Path, overlay_path: str | Path,
                                    out_path: str | Path, receipt_path: str | Path,
                                    egs_publish_marker_path: str | Path,
-                                   source_identity: dict, forward_eligible: bool) -> dict:
+                                   source_identity: dict, forward_eligible: bool,
+                                   run_revision_id: str | None = None) -> dict:
     """Freeze one post-publication P4a observation; historical inputs never start its clock."""
     decision_date, run_date = _date(decision_date, "decision_date"), _date(run_date, "run_date")
     if not forward_eligible or run_date != _today() or decision_date < run_date:
@@ -508,6 +513,7 @@ def capture_after_published_weekly(*, root: str | Path, decision_date: str, run_
     fingerprint, epoch = epoch_context["contract_fingerprint"], epoch_context["epoch_id"]
     payload = {"admission_binding": epoch_context["admission_binding"], "run_date": run_date,
                 "run_id": source_identity["run_id"],
+                "run_revision_id": run_revision_id,
                 "weekly_bundle_sha256": weekly_bundle.weekly_sha256,
                 "weekly_receipt_digest": _digest(weekly_bundle.receipt),
                "egs_publish_marker_digest": _digest(marker),
@@ -527,8 +533,9 @@ def capture_after_published_weekly(*, root: str | Path, decision_date: str, run_
     payload["capture_payload_sha256"] = _digest({key: value for key, value in payload.items() if key != "capture_payload_sha256"})
     record = _seal_record({"schema_name": "a_short_overlay_adjudication_private_record", "schema_version": "1.0.0",
               "record_type": "capture", "program_id": PROGRAM_ID, "decision_date": decision_date,
+              "run_revision_id": run_revision_id,
               "epoch_id": epoch, "contract_fingerprint": fingerprint, "payload": payload, "boundary": _boundary()})
-    _validate_record(record); capture_path, _ = _week_paths(private_root, decision_date)
+    _validate_record(record); capture_path, _ = _week_paths(private_root, decision_date, run_revision_id)
     if capture_path.exists():
         existing = _load(capture_path)
         _validate_record(existing)
@@ -538,7 +545,9 @@ def capture_after_published_weekly(*, root: str | Path, decision_date: str, run_
                     "record_type": "conflict", "program_id": PROGRAM_ID, "decision_date": decision_date,
                     "epoch_id": existing.get("epoch_id", epoch), "contract_fingerprint": existing.get("contract_fingerprint", fingerprint),
                     "payload": {"reason": "same_canonical_week_content_drift_no_overwrite"}, "boundary": _boundary()})
-        _write(private_root / "conflicts" / f"{decision_date}.json", conflict)
+        conflict_root = (private_week_root(private_root, decision_date, run_revision_id)
+                         if run_revision_id is not None else private_root)
+        _write(conflict_root / "conflicts" / f"{decision_date}.json", conflict)
         return {"status": "conflict_recorded_no_count", "reason_code": "immutable_capture_conflict",
                 "production_unchanged": True}
     _write(capture_path, record); _refresh_ledger(private_root)
@@ -679,7 +688,9 @@ def _terminal_equivalent(old: dict, new: dict) -> bool:
 
 
 def _write_immutable_conflict(root: Path, capture: dict, reason: str) -> None:
-    path = root / "conflicts" / f"{capture['decision_date']}.json"
+    conflict_root = (private_week_root(root, capture["decision_date"], capture.get("run_revision_id"))
+                     if capture.get("run_revision_id") is not None else root)
+    path = conflict_root / "conflicts" / f"{capture['decision_date']}.json"
     if path.exists():
         return
     _write(path, _seal_record({"schema_name": "a_short_overlay_adjudication_private_record", "schema_version": "1.0.0",
@@ -689,18 +700,39 @@ def _write_immutable_conflict(root: Path, capture: dict, reason: str) -> None:
 
 
 def settle_from_daily_payload(*, root: str | Path, daily_payload: dict, as_of: str,
-                              cache_path: str | Path | None = None, epoch_context: dict | None = None) -> dict:
+                              cache_path: str | Path | None = None, epoch_context: dict | None = None,
+                              run_revision_id: str | None = None,
+                              official_project_root: str | Path | None = None) -> dict:
     private_root, as_of = _root(root), _date(as_of, "as_of")
+    if run_revision_id is not None:
+        run_revision_id = validate_run_revision_id(run_revision_id)
+    if official_project_root is not None and run_revision_id is None:
+        raise OverlayAdjudicationError("official settlement requires run_revision_id")
     if cache_path is not None and Path(cache_path).resolve().name != "daily_cache.json":
         raise OverlayAdjudicationError("P4a settlement cache must be the canonical daily_cache.json artifact")
     _validate_shared_daily_cache(daily_payload, as_of)
     stocks, limits, benchmarks, available_dates = _cache_frames(daily_payload)
     dates = [day for day in available_dates if day <= as_of]; date_pos = {day: index for index, day in enumerate(dates)}; changed = 0
     cache_sha256 = _digest(daily_payload); context = epoch_context or _epoch_context()
+    official_selected_count = 0
     for capture in _current_records(private_root, context):
         if capture["decision_date"] > as_of:
             continue
-        conflict = private_root / "conflicts" / f"{capture['decision_date']}.json"; horizons = {}
+        if official_project_root is not None:
+            capture_revision = capture.get("run_revision_id")
+            if capture_revision in (None, ""):
+                continue
+            selected = resolve_official_revision(
+                official_project_root, capture["decision_date"], require=False
+            )
+            if selected is None or selected["selected_revision_id"] != capture_revision:
+                continue
+            if capture["decision_date"] == str(as_of) and run_revision_id is not None and capture_revision != run_revision_id:
+                raise OverlayAdjudicationError("current official revision does not match settlement caller")
+            official_selected_count += 1
+        conflict_root = (private_week_root(private_root, capture["decision_date"], capture.get("run_revision_id"))
+                         if capture.get("run_revision_id") is not None else private_root)
+        conflict = conflict_root / "conflicts" / f"{capture['decision_date']}.json"; horizons = {}
         for horizon in HORIZONS:
             if conflict.exists():
                 horizons[f"h{horizon}"] = {"status": "no_count", "reason": "immutable_capture_conflict"}; continue
@@ -717,7 +749,7 @@ def settle_from_daily_payload(*, root: str | Path, daily_payload: dict, as_of: s
                                          "baseline": baseline, "candidate": candidate, "source_cache_sha256": cache_sha256,
                                          "benchmarks": {name: {"baseline_excess_pct": baseline["portfolio_net_return_pct"] - row["net_return_pct"], "candidate_excess_pct": candidate["portfolio_net_return_pct"] - row["net_return_pct"]} for name, row in bench.items()}}
             
-        _, path = _week_paths(private_root, capture["decision_date"])
+        _, path = _week_paths(private_root, capture["decision_date"], capture.get("run_revision_id"))
         existing = _load(path) if path.exists() else None
         if existing is not None:
             _validate_record(existing)
@@ -737,13 +769,17 @@ def settle_from_daily_payload(*, root: str | Path, daily_payload: dict, as_of: s
             horizons = {key: old_horizons[key] if _terminal_status(old_horizons.get(key)) else value
                         for key, value in horizons.items()}
         outcome = _seal_record({"schema_name": "a_short_overlay_adjudication_private_record", "schema_version": "1.0.0", "record_type": "outcome", "program_id": PROGRAM_ID,
-                   "decision_date": capture["decision_date"], "epoch_id": capture["epoch_id"], "contract_fingerprint": capture["contract_fingerprint"],
+                   "decision_date": capture["decision_date"], "run_revision_id": capture.get("run_revision_id"),
+                   "epoch_id": capture["epoch_id"], "contract_fingerprint": capture["contract_fingerprint"],
                     "payload": {"capture_sha256": _digest(capture), "cache_sha256": cache_sha256,
                                 "settled_through": max(as_of, str((existing or {}).get("payload", {}).get("settled_through") or "")),
                                 "horizons": horizons}, "boundary": _boundary()})
         _validate_record(outcome)
         if not path.exists() or _load(path) != outcome:
             _write(path, outcome); changed += 1
+    if official_project_root is not None and official_selected_count == 0:
+        return {"status": "no_official_overlay_captures", "outcomes_updated": 0,
+                "production_unchanged": True}
     _refresh_ledger(private_root)
     return {"status": "settled_from_existing_cache", "outcomes_updated": changed, "production_unchanged": True}
 
@@ -936,16 +972,40 @@ def _adjudicate(rows: list[dict], mature: int, no_count: int) -> tuple[str, dict
     return "inconclusive_retired_for_epoch", metrics
 
 
-def build_public_summary(*, root: str | Path | None, as_of: str, epoch_context: dict | None = None) -> dict:
+def build_public_summary(*, root: str | Path | None, as_of: str,
+                         epoch_context: dict | None = None,
+                         run_revision_id: str | None = None,
+                         official_project_root: str | Path | None = None) -> dict:
     as_of = _date(as_of, "as_of")
     context = epoch_context or _epoch_context()
     if root is None:
         return _summary(as_of, "not_configured", 0, 0, 0, 0, 0, "not_due", "not_due", "continue_accumulating",
                         epoch_context=context)
+    if run_revision_id is not None:
+        run_revision_id = validate_run_revision_id(run_revision_id)
+    official_revision_id = None
+    if official_project_root is not None:
+        if run_revision_id is not None:
+            official_revision_id = require_official_revision(
+                official_project_root, as_of, run_revision_id
+            )
+        else:
+            selected = resolve_official_revision(official_project_root, as_of, require=False)
+            if selected is not None:
+                official_revision_id = str(selected["selected_revision_id"])
     private_root = _root(root); rows = []; mature = no_count = 0; h5_complete = h20_complete = True
     for capture in _current_records(private_root, context):
+        if official_project_root is not None:
+            selected = resolve_official_revision(
+                official_project_root, capture["decision_date"], require=False
+            )
+            if (selected is None or capture.get("run_revision_id") in (None, "") or
+                    capture.get("run_revision_id") != selected["selected_revision_id"]):
+                continue
+        elif run_revision_id is not None and capture.get("run_revision_id") != run_revision_id:
+            continue
         if capture["decision_date"] > as_of: continue
-        _, outcome_path = _week_paths(private_root, capture["decision_date"])
+        _, outcome_path = _week_paths(private_root, capture["decision_date"], capture.get("run_revision_id"))
         if not outcome_path.exists(): continue
         outcome = _load(outcome_path); _validate_record(outcome)
         if outcome["decision_date"] != capture["decision_date"] or outcome["epoch_id"] != capture["epoch_id"] or \
@@ -953,7 +1013,9 @@ def build_public_summary(*, root: str | Path | None, as_of: str, epoch_context: 
                 outcome["payload"].get("capture_sha256") != _digest(capture):
             raise OverlayAdjudicationError("P4a outcome/capture immutable source binding drifted")
         h10 = outcome["payload"].get("horizons", {}).get("h10", {})
-        if (private_root / "conflicts" / f"{capture['decision_date']}.json").exists():
+        conflict_root = (private_week_root(private_root, capture["decision_date"], capture.get("run_revision_id"))
+                         if capture.get("run_revision_id") is not None else private_root)
+        if (conflict_root / "conflicts" / f"{capture['decision_date']}.json").exists():
             if h10.get("status") in {"settled", "no_count"}:
                 mature += 1; no_count += 1
             continue
@@ -969,8 +1031,11 @@ def build_public_summary(*, root: str | Path | None, as_of: str, epoch_context: 
     h5_status = "not_due" if eligible < preliminary[0] else "complete" if h5_complete else "pending_h5_coverage"
     h20_status = "not_due" if eligible < formal[0] else "complete" if h20_complete else "pending_h20_coverage"
     status = "manual_promotion_candidate" if verdict == "candidate_for_manual_promotion" else "do_not_promote" if verdict == "do_not_promote" else "retired_for_epoch" if verdict == "inconclusive_retired_for_epoch" else "preliminary_review" if verdict.startswith("preliminary_") else "accumulating"
-    return _summary(as_of, status, eligible, difference, blocks, mature, no_count, h5_status, h20_status, verdict,
-                    metrics, context)
+    return _summary(
+        as_of, status, eligible, difference, blocks, mature, no_count, h5_status,
+        h20_status, verdict, metrics, context,
+        official_revision_id=official_revision_id,
+    )
 
 
 def _public_failed_gates(metrics: dict | None, *, eligible: int, blocks: int, mature: int, no_count: int) -> list[str]:
@@ -1003,13 +1068,15 @@ def _public_failed_gates(metrics: dict | None, *, eligible: int, blocks: int, ma
 
 def _summary(as_of: str, status: str, eligible: int, difference: int, blocks: int, mature: int, no_count: int,
              h5: str, h20: str, verdict: str, metrics: dict | None = None,
-             epoch_context: dict | None = None) -> dict:
+             epoch_context: dict | None = None,
+             official_revision_id: str | None = None) -> dict:
     context = epoch_context or _epoch_context()
     checkpoints = _checkpoint_contract()
     result = {"schema_name": "a_short_overlay_adjudication_summary", "schema_version": "1.0.0", "summary_id": "a_short_p4_stage3_rank_source", "as_of": as_of, "status": status,
                "eligible_policy_weeks": eligible, "difference_weeks": difference, "nonoverlap_blocks": blocks, "mature_opportunities": mature, "no_count_weeks": no_count,
                "h5_coverage_status": h5, "h20_coverage_status": h20,
                "epoch_id": context["epoch_id"],
+               "official_revision_id": official_revision_id,
                "checkpoints": {str(checkpoint): "available" if eligible >= checkpoint else "deficient"
                                for checkpoint, _, _ in checkpoints},
                "checkpoint_progress": {str(checkpoint): {"remaining_eligible_weeks": max(0, checkpoint - eligible),
@@ -1096,24 +1163,36 @@ def unavailable_public_summary(as_of: str, *, epoch_context: dict | None = None)
 def settle_and_summarize_weekly(*, root: str | Path | None, daily_cache_path: str | Path | None, as_of: str,
                                 public_json_path: str | Path = DEFAULT_PUBLIC_JSON, public_markdown_path: str | Path = DEFAULT_PUBLIC_MD,
                                 write_public: bool = True, strict: bool = False,
-                                sidecar_result: dict | None = None) -> dict:
+                                sidecar_result: dict | None = None,
+                                run_revision_id: str | None = None,
+                                official_project_root: str | Path | None = None) -> dict:
     """``write_public=False`` is the weekly-pipeline path: the pair may only move
     after the official bundle publishes and the private capture lands."""
     epoch_context = None
     try:
         epoch_context = _epoch_context()
-        if root is None: summary = build_public_summary(root=None, as_of=as_of, epoch_context=epoch_context)
+        if run_revision_id is not None:
+            run_revision_id = validate_run_revision_id(run_revision_id)
+        if root is None: summary = build_public_summary(root=None, as_of=as_of, epoch_context=epoch_context,
+                                                        run_revision_id=run_revision_id)
         else:
             private_root = _root(root); cache = Path(daily_cache_path) if daily_cache_path else None
             if cache and cache.is_file():
-                settle_from_daily_payload(root=private_root, daily_payload=_load(cache), as_of=as_of, cache_path=cache,
-                                          epoch_context=epoch_context)
-            summary = build_public_summary(root=private_root, as_of=as_of, epoch_context=epoch_context)
+                settlement = settle_from_daily_payload(
+                    root=private_root, daily_payload=_load(cache), as_of=as_of, cache_path=cache,
+                    epoch_context=epoch_context, run_revision_id=run_revision_id,
+                    official_project_root=official_project_root)
+                if official_project_root is not None and settlement.get("status") != "settled_from_existing_cache":
+                    summary = unavailable_public_summary(as_of, epoch_context=epoch_context)
+                else:
+                    summary = build_public_summary(root=private_root, as_of=as_of, epoch_context=epoch_context,
+                                                   run_revision_id=run_revision_id,
+                                                   official_project_root=official_project_root)
         if write_public:
             write_public_summary(summary, json_path=public_json_path, markdown_path=public_markdown_path)
         if sidecar_result is not None:
             sidecar_result["reason_codes"] = _settlement_reason_codes(
-                root=root, as_of=as_of, epoch_context=epoch_context)
+                root=root, as_of=as_of, epoch_context=epoch_context, run_revision_id=run_revision_id)
         return summary
     except Exception:
         # An outage must not overwrite last week's checked pair with a fresh
@@ -1131,7 +1210,8 @@ def _refresh_ledger(root: Path) -> None:
 
 
 def _settlement_reason_codes(*, root: str | Path | None, as_of: str,
-                             epoch_context: dict | None = None) -> list[str]:
+                             epoch_context: dict | None = None,
+                             run_revision_id: str | None = None) -> list[str]:
     """Return only stable, de-identified reasons from the current settlement."""
     if root is None:
         return []
@@ -1142,12 +1222,16 @@ def _settlement_reason_codes(*, root: str | Path | None, as_of: str,
     context = epoch_context or _epoch_context()
     codes: set[str] = set()
     for capture in _current_records(private_root, context):
+        if run_revision_id is not None and capture.get("run_revision_id") != run_revision_id:
+            continue
         decision_date = capture["decision_date"]
         if decision_date != cutoff:
             continue
-        if (private_root / "conflicts" / f"{decision_date}.json").exists():
+        conflict_root = (private_week_root(private_root, decision_date, capture.get("run_revision_id"))
+                         if capture.get("run_revision_id") is not None else private_root)
+        if (conflict_root / "conflicts" / f"{decision_date}.json").exists():
             codes.add("immutable_capture_conflict")
-        _, outcome_path = _week_paths(private_root, decision_date)
+        _, outcome_path = _week_paths(private_root, decision_date, capture.get("run_revision_id"))
         if not outcome_path.exists():
             continue
         outcome = _load(outcome_path)

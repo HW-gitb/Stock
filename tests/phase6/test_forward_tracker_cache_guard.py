@@ -84,6 +84,7 @@ def _tracker_row(
     *,
     run_date: str | None = None,
     price_data_through: str | None = None,
+    run_revision_id: str | None = None,
 ) -> dict:
     row = {col: pd.NA for col in forward_tracker.SCHEMA_COLUMNS}
     row.update({
@@ -98,11 +99,63 @@ def _tracker_row(
         "ret_5d_status": "pending_capture",
         "ret_10d_status": "pending_capture",
         "ret_20d_status": "pending_capture",
+        "run_revision_id": run_revision_id,
     })
     return row
 
 
 class ForwardTrackerCacheGuardTests(unittest.TestCase):
+    def test_official_backfill_reports_legacy_rows_as_audit_only(self) -> None:
+        import io
+        from contextlib import redirect_stdout
+
+        frame = pd.DataFrame([_tracker_row("20260801", "000001.SZ")])
+        revision = "a" * 32
+        output = io.StringIO()
+        with (
+            patch.object(forward_tracker, "_load_existing_tracker", return_value=frame),
+            patch.object(
+                forward_tracker,
+                "_filter_official_revision",
+                return_value=frame.iloc[0:0].copy(),
+            ),
+            redirect_stdout(output),
+        ):
+            rc = forward_tracker.backfill(
+                [5], run_revision_id=revision, official_project_root=Path("official")
+            )
+
+        self.assertEqual(rc, 0)
+        self.assertIn("excluded 1 legacy audit row(s)", output.getvalue())
+        self.assertNotIn("tracker is empty", output.getvalue())
+
+    def test_official_backfill_keeps_each_due_date_revision_not_only_current_invocation(self) -> None:
+        old_revision = "a" * 32
+        current_revision = "b" * 32
+        nonofficial_revision = "c" * 32
+        frame = pd.DataFrame([
+            _tracker_row("20240131", "000001.SZ", run_revision_id=old_revision),
+            _tracker_row("20240201", "000002.SZ", run_revision_id=current_revision),
+            _tracker_row("20240202", "000003.SZ", run_revision_id=nonofficial_revision),
+            _tracker_row("20240203", "000004.SZ"),
+        ])
+
+        def selected(_root, as_of, *, require):
+            return {
+                "20240131": {"selected_revision_id": old_revision},
+                "20240201": {"selected_revision_id": current_revision},
+                "20240202": {"selected_revision_id": old_revision},
+                "20240203": {"selected_revision_id": old_revision},
+            }.get(str(as_of))
+
+        with patch.object(forward_tracker, "resolve_official_revision", side_effect=selected):
+            filtered = forward_tracker._filter_official_revision(
+                frame, Path("/tmp/official"), current_revision,
+            )
+
+        self.assertEqual(filtered["ts_code"].tolist(), ["000001.SZ", "000002.SZ"])
+        self.assertEqual(filtered["run_revision_id"].tolist(), [old_revision, current_revision])
+
     def _write_cache(
         self,
         path: Path,

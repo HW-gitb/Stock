@@ -22,6 +22,10 @@ from typing import Any
 import pandas as pd
 
 from engine import a_short_evidence_epoch_mode as _epoch_mode
+from engine.a_short_run_revision import (
+    iter_private_week_roots, private_week_root, require_official_revision,
+    resolve_official_revision, validate_run_revision_id,
+)
 
 from engine import a_short_factor_comparison as v1
 
@@ -201,7 +205,8 @@ def validate_v2_ledger(ledger: dict) -> None:
     _validate_with_schema(ledger, LEDGER_SCHEMA_PATH)
     if any(ledger["boundary"].values()):
         raise ComparisonV2Error("v2 ledger crossed the comparison-only boundary")
-    keys = [(row["decision_date"], row["question_id"]) for row in ledger["entries"]]
+    keys = [(row["decision_date"], row.get("run_revision_id", "legacy_revision_0"), row["question_id"])
+            for row in ledger["entries"]]
     if len(keys) != len(set(keys)):
         raise ComparisonV2Error("v2 ledger may contain one entry per decision date/question only")
 
@@ -529,9 +534,15 @@ def _clean_run_identity(run_identity: dict, decision_date: str) -> dict:
     if not isinstance(run_identity, dict):
         raise ComparisonV2Error("v2 run_identity must be an object")
     required = ("run_id", "run_date", "source_as_of", "price_data_through", "candidate_digest", "official_m67_digest")
-    if set(run_identity) != set(required):
+    allowed = set(required) | {"run_revision_id"}
+    if not set(run_identity).issubset(allowed) or set(run_identity) - set(required) - {"run_revision_id"}:
         raise ComparisonV2Error("v2 run_identity keys drifted")
+    missing = [key for key in required if key not in run_identity]
+    if missing:
+        raise ComparisonV2Error("v2 run_identity is missing " + ", ".join(missing))
     identity = {key: str(run_identity[key]) for key in required}
+    if "run_revision_id" in run_identity:
+        identity["run_revision_id"] = validate_run_revision_id(str(run_identity["run_revision_id"]))
     if not identity["run_id"]:
         raise ComparisonV2Error("v2 run_identity requires run_id")
     run_date = _date(identity["run_date"])
@@ -881,12 +892,19 @@ def _validate_source_receipt(root: Path, capture: dict, receipt: dict) -> None:
 
 
 def capture_v2_week(*, root: str | Path, decision_date: str, candidates: list[dict], run_identity: dict,
-                    forward_eligible: bool, governance: dict | None = None) -> dict:
+                    forward_eligible: bool, governance: dict | None = None,
+                    run_revision_id: str | None = None) -> dict:
     """Freeze v2 question/arm evidence.  No provider call or live weekly coupling occurs here."""
     root = _private_root(root)
     decision_date = _date(decision_date)
     governance = copy.deepcopy(governance or load_v2_governance())
     validate_v2_governance(governance)
+    if run_revision_id is not None:
+        run_revision_id = validate_run_revision_id(run_revision_id)
+        if run_identity.get("run_revision_id") not in (None, run_revision_id):
+            raise ComparisonV2Error("v2 run_identity run_revision_id does not match caller")
+        run_identity = dict(run_identity)
+        run_identity["run_revision_id"] = run_revision_id
     identity = _clean_run_identity(run_identity, decision_date)
     if not isinstance(forward_eligible, bool):
         raise ComparisonV2Error("forward_eligible must be boolean")
@@ -917,7 +935,7 @@ def capture_v2_week(*, root: str | Path, decision_date: str, candidates: list[di
     _ensure_program(root, governance)
     active_batch_ids = _active_experiment_batch_ids(root, governance)
     epoch = _resolve_epoch(root, governance, decision_date)
-    day = root / "weeks" / decision_date
+    day = private_week_root(root, decision_date, run_revision_id)
     capture_path = day / "capture.json"
     receipt_path = day / "source_receipt.json"
     common_pool = _immutable_common_pool(sanitized)
@@ -1303,13 +1321,16 @@ def _upsert_ledger(root: Path, capture: dict, outcome: dict, governance: dict) -
     ledger = _load_json(path)
     validate_v2_ledger(ledger)
     decision_date = capture["decision_date"]
-    entries = [row for row in ledger["entries"] if row["decision_date"] != decision_date]
+    revision = capture["payload"]["run_identity"].get("run_revision_id", "legacy_revision_0")
+    entries = [row for row in ledger["entries"]
+               if (row["decision_date"], row.get("run_revision_id", "legacy_revision_0"))
+               != (decision_date, revision)]
     for question in outcome["payload"]["questions"]:
         capture_question = next((row for row in capture["payload"]["questions"]
                                  if row["question_id"] == question["question_id"]), None)
         if not isinstance(capture_question, dict):
             raise ComparisonV2Error("v2 ledger cannot bind an outcome question to its capture batch")
-        entries.append({
+        entry = {
             "decision_date": decision_date,
             "question_id": question["question_id"],
             "experiment_batch_id": capture_question["experiment_batch_id"],
@@ -1318,14 +1339,19 @@ def _upsert_ledger(root: Path, capture: dict, outcome: dict, governance: dict) -
             "outcome_status": question["status"],
             "capture_sha256": capture["payload"]["capture_sha256"],
             "outcome_sha256": outcome["payload"]["outcome_sha256"],
-        })
-    ledger["entries"] = sorted(entries, key=lambda row: (row["decision_date"], row["question_id"]))
+        }
+        if capture["payload"]["run_identity"].get("run_revision_id") is not None:
+            entry["run_revision_id"] = capture["payload"]["run_identity"]["run_revision_id"]
+        entries.append(entry)
+    ledger["entries"] = sorted(entries, key=lambda row: (row["decision_date"], row.get("run_revision_id", "legacy_revision_0"), row["question_id"]))
     ledger["boundary"] = _boundary(governance)
     validate_v2_ledger(ledger)
     _atomic_write(path, ledger)
 
 
-def settle_v2_from_daily_payload(*, root: str | Path, daily_payload: dict, governance: dict | None = None) -> dict:
+def settle_v2_from_daily_payload(*, root: str | Path, daily_payload: dict, governance: dict | None = None,
+                                 run_revision_id: str | None = None,
+                                 official_project_root: str | Path | None = None) -> dict:
     """Settle only frozen v2 captures from an existing cache payload; no fetch and no adjudication."""
     root = _private_root(root)
     governance = copy.deepcopy(governance or load_v2_governance())
@@ -1335,19 +1361,44 @@ def settle_v2_from_daily_payload(*, root: str | Path, daily_payload: dict, gover
     _ensure_program(root, governance)
     dates, lookup, limits = _normalise_prices(daily_payload)
     updated = []
-    weeks_root = root / "weeks"
-    if not weeks_root.exists():
+    official_candidate_count = 0
+    if run_revision_id is not None:
+        run_revision_id = validate_run_revision_id(run_revision_id)
+    if official_project_root is not None and run_revision_id is None:
+        raise ComparisonV2Error("official settlement requires run_revision_id")
+    # In official mode ``run_revision_id`` validates the current invocation;
+    # cumulative settlement must still inspect each decision date's selected
+    # official revision.  Filtering the ledger to the current id first would
+    # silently reset the forward clock to one week.
+    if official_project_root is not None:
+        week_roots = iter_private_week_roots(root)
+    elif run_revision_id is not None:
+        week_roots = [(day, revision, path) for day, revision, path in iter_private_week_roots(root)
+                      if revision == run_revision_id]
+    else:
+        week_roots = iter_private_week_roots(root)
+    if not week_roots:
         return {"status": "no_v2_captures", "updated_dates": [], "production_unchanged": True}
-    for day in sorted(path for path in weeks_root.iterdir() if path.is_dir() and path.name.isdigit()):
+    for day_name, revision, day in week_roots:
+        if official_project_root is not None:
+            if revision is None:
+                # Legacy evidence remains audit-only; it is never promoted to
+                # a formal count merely because the current run is official.
+                continue
+            selected = resolve_official_revision(official_project_root, day_name, require=False)
+            if selected is None or selected["selected_revision_id"] != revision:
+                continue
         capture_path = day / "capture.json"
         receipt_path = day / "source_receipt.json"
         if not capture_path.exists() or not receipt_path.exists():
-            raise ComparisonV2Error(f"{day.name}: incomplete v2 capture cannot settle")
+            raise ComparisonV2Error(f"{day_name}/{revision or 'legacy_revision_0'}: incomplete v2 capture cannot settle")
         capture = _load_json(capture_path)
         receipt = _load_json(receipt_path)
         _validate_source_receipt(root, capture, receipt)
         if not is_current_governed_capture(capture, governance=governance):
             continue
+        if official_project_root is not None:
+            official_candidate_count += 1
         outcome_payload = _outcome_payload(capture, dates=dates, lookup=lookup, limits=limits, governance=governance)
         outcome = {
             "schema_name": "a_short_factor_comparison_v2_weekly",
@@ -1368,7 +1419,7 @@ def settle_v2_from_daily_payload(*, root: str | Path, daily_payload: dict, gover
             existing_terminal = all(row["status"] in {"settled", "no_count"}
                                     for row in existing["payload"].get("questions", []))
             if existing_terminal and existing != outcome:
-                raise ComparisonV2Error(f"{day.name}: terminal v2 outcome source drifted")
+                raise ComparisonV2Error(f"{day_name}/{revision or 'legacy_revision_0'}: terminal v2 outcome source drifted")
             if existing_terminal:
                 outcome = existing
             else:
@@ -1383,7 +1434,7 @@ def settle_v2_from_daily_payload(*, root: str | Path, daily_payload: dict, gover
         receipt_payload = copy.deepcopy(receipt["payload"])
         old_settlement = receipt_payload.get("settlement")
         if old_settlement is not None and old_settlement != settlement and old_settlement.get("terminal"):
-            raise ComparisonV2Error(f"{day.name}: terminal v2 source receipt drifted")
+            raise ComparisonV2Error(f"{day_name}/{revision or 'legacy_revision_0'}: terminal v2 source receipt drifted")
         receipt_payload["settlement"] = settlement
         updated_receipt = dict(receipt)
         updated_receipt["payload"] = receipt_payload
@@ -1391,13 +1442,22 @@ def settle_v2_from_daily_payload(*, root: str | Path, daily_payload: dict, gover
         _atomic_write(receipt_path, updated_receipt)
         _upsert_ledger(root, capture, outcome, governance)
         updated.append(day.name)
+    if official_project_root is not None and official_candidate_count == 0:
+        # A pre-selector pipeline invocation may have private replay evidence,
+        # but without a resolver-selected capture it must not feed the
+        # adjudicator or expose an old reminder in the formal weekly banner.
+        return {"status": "no_official_v2_captures", "updated_dates": [], "production_unchanged": True}
     return {"status": "settled_from_existing_cache", "updated_dates": updated, "production_unchanged": True}
 
 
 def build_v2_public_progress(*, root: str | Path | None, as_of: str,
-                             governance: dict | None = None) -> dict:
+                             governance: dict | None = None,
+                             run_revision_id: str | None = None,
+                             official_project_root: str | Path | None = None) -> dict:
     """Build P0's de-identified public progress; private symbols, prices and inputs never leave the ledger."""
     governance = copy.deepcopy(governance or load_v2_governance())
+    if run_revision_id is not None:
+        run_revision_id = validate_run_revision_id(run_revision_id)
     validate_v2_governance(governance)
     as_of = _date(as_of)
     from engine.a_short_experiment_admission_registry import admission_snapshot, admissions
@@ -1410,6 +1470,13 @@ def build_v2_public_progress(*, root: str | Path | None, as_of: str,
     admission_ids = tuple(admission_questions)
     signature = _canonical_contracts(governance)
     epoch_id, entries = None, []
+    official_revision_id = None
+    if official_project_root is not None:
+        selected_for_summary = resolve_official_revision(
+            official_project_root, as_of, require=False,
+        )
+        if selected_for_summary is not None:
+            official_revision_id = str(selected_for_summary["selected_revision_id"])
     if root is not None:
         private_root = _private_root(root)
         ledger_path, epochs_path = private_root / "ledger.json", private_root / "epochs.json"
@@ -1420,8 +1487,20 @@ def build_v2_public_progress(*, root: str | Path | None, as_of: str,
                             if row.get("orthogonality_signature") == signature), None)
             if current is not None:
                 epoch_id = current["epoch_id"]
-                entries = [row for row in ledger["entries"] if row["epoch_id"] == epoch_id and
-                           row["forward_eligible"] and row["decision_date"] <= as_of]
+                entries = []
+                for row in ledger["entries"]:
+                    if row["epoch_id"] != epoch_id or not row["forward_eligible"] or row["decision_date"] > as_of:
+                        continue
+                    if official_project_root is not None:
+                        selected = resolve_official_revision(
+                            official_project_root, row["decision_date"], require=False
+                        )
+                        if (selected is None or row.get("run_revision_id") in (None, "") or
+                                row.get("run_revision_id") != selected["selected_revision_id"]):
+                            continue
+                    elif run_revision_id is not None and row.get("run_revision_id") != run_revision_id:
+                        continue
+                    entries.append(row)
     evidence = []
     for admission_id in admission_ids:
         admission = registry[admission_id]
@@ -1441,6 +1520,7 @@ def build_v2_public_progress(*, root: str | Path | None, as_of: str,
     summary = {
         "schema_name": "a_short_factor_comparison_v2_public_progress", "schema_version": "1.0.0",
         "as_of": as_of, "current_epoch_id": epoch_id, "admissions": admission_snapshot(*admission_ids),
+        "official_revision_id": official_revision_id,
         "evidence": evidence,
         "source_hash": _digest([{key: row[key] for key in ("decision_date", "question_id", "epoch_id", "capture_sha256", "outcome_sha256")}
                                 for row in entries]),

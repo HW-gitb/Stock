@@ -32,6 +32,7 @@ if str(ROOT) not in sys.path:
 
 import jsonschema  # noqa: E402
 import pandas as pd  # noqa: E402
+from engine.a_short_run_revision import validate_run_revision_id  # noqa: E402
 
 SCHEMA_NAME = "a_short_iv_feed"
 SCHEMA_VERSION = "1.2.0"          # 1.2.0:M0.5——PIT-safe IV delta/觉醒状态/Rule3 state producer
@@ -956,8 +957,22 @@ def main(argv=None, pro_factory=None):
     p.add_argument("--out", required=True)
     p.add_argument("--failure-receipt-out", default=None,
                    help="optional sanitized failure receipt; cleared at startup and written only when a provider call fails")
+    p.add_argument("--run-revision-id", default=None,
+                   help="V5-A immutable weekly revision id; output must live in its revision directory")
     p.add_argument("--confirm-fetch-authorized", action="store_true")
     args = p.parse_args(argv)
+    if args.run_revision_id is not None:
+        try:
+            revision_id = validate_run_revision_id(args.run_revision_id)
+        except ValueError as exc:
+            raise SystemExit(f"[FATAL] invalid --run-revision-id: {exc}") from exc
+        output_parent = Path(args.out).resolve().parent
+        if output_parent.name != revision_id or output_parent.parent.name != "revisions":
+            raise SystemExit("[FATAL] IV output is outside the requested revision root")
+        if args.failure_receipt_out:
+            failure_parent = Path(args.failure_receipt_out).resolve().parent
+            if failure_parent != output_parent:
+                raise SystemExit("[FATAL] IV failure receipt must share the revision root")
     if args.failure_receipt_out:
         # A weekly run can reuse an OS PID. Clear before any validation or fetch
         # so a cited receipt can only have been written by this invocation.

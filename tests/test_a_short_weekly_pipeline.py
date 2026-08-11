@@ -39,7 +39,7 @@ from runners.a_short_weekly_pipeline import (  # noqa: E402
     DRAGON_LIST_LOOKBACK_TRADING_DAYS, _DRAGON_LIST_EVIDENCE_VALUE, _DRAGON_LIST_MARKER,
     _fetch_dragon_inst, _sum_inst_net,
     _block_trade_events, _fetch_block_trade, _attach_block_trade_impacts,
-    _fetch_daily_close, _attach_block_discount,
+    _fetch_daily_close, _attach_block_discount, _recover_public_artifact_sets,
     _financial_trends, _fetch_forecast, _fetch_income, _fetch_balancesheet, _attach_financial_trend_impacts,
     _forecast_red_flags, _income_red_flags, _balancesheet_red_flags, _industry_fundamentals, _FIN_STATEMENT_MARKER,
     _attach_holding_disposition, _factor_comparison_realized_regime, _build_evidence_reminders,
@@ -782,6 +782,47 @@ class IVMissingTests(unittest.TestCase):
 
 
 class MainWiringTests(unittest.TestCase):
+    def test_optional_comparison_recovery_imports_never_block_preflight(self):
+        optional_modules = (
+            "engine.a_short_industry_weight_comparison",
+            "engine.a_short_overlay_adjudication",
+            "runners.a_short_final_action_validation_runner",
+            "runners.a_short_target_policy_comparison_runner",
+        )
+        for module_name in optional_modules:
+            with self.subTest(module_name=module_name), patch.dict(
+                sys.modules, {module_name: None}, clear=False,
+            ):
+                self.assertEqual(_recover_public_artifact_sets(), [])
+
+    def test_optional_comparison_import_failures_leave_weekly_json_and_mark_sidecar_unavailable(self):
+        cases = (
+            ("engine.a_short_factor_comparison_v2_weekly", "--factor-comparison-v2-root", "factor_v2_capture"),
+            ("engine.a_short_industry_weight_comparison", "--industry-weight-comparison-root", "industry_weight_capture"),
+            ("runners.a_short_target_policy_comparison_runner", "--target-policy-root", "target_policy_capture"),
+            ("runners.a_short_final_action_validation_runner", "--final-action-validation-root", "final_action_capture"),
+        )
+        for module_name, option, sidecar_name in cases:
+            with self.subTest(module_name=module_name), tempfile.TemporaryDirectory() as td, patch.dict(
+                sys.modules, {module_name: None}, clear=False,
+            ):
+                self._write_inputs(td)
+                out = Path(td) / "weekly.json"
+                main([
+                    "--as-of", AS_OF,
+                    "--analysis-input", str(Path(td) / "ai.json"),
+                    "--iv-feed", str(Path(td) / "feed.json"),
+                    "--account", str(Path(td) / "acct.json"),
+                    "--out", str(out), "--run-date", AS_OF,
+                    option, str(Path(td) / "optional-root"),
+                ], price_provider=lambda code: _series())
+                self.assertTrue(out.is_file())
+                outcomes = json.loads(
+                    out.with_name(f"{out.stem}.pipeline_sidecar_outcomes.json").read_text(encoding="utf-8")
+                )
+                row = next(item for item in outcomes["sidecars"] if item["name"] == sidecar_name)
+                self.assertEqual(row["progress_status"], "unavailable")
+
     def test_registered_sidecar_result_mapping_is_closed_world_and_structured(self):
         self.assertEqual(_sidecar_result_fields({"status": "captured"}), ("advanced", None, None))
         self.assertEqual(_sidecar_result_fields({"status": "already_current"}), ("already_current", None, None))

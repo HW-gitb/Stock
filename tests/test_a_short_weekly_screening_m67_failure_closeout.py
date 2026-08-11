@@ -92,6 +92,19 @@ class AShortWeeklyM67FailureCloseoutTests(unittest.TestCase):
         ):
             self.assertIn(f"'{expected}'", self.text)
 
+    def test_v5a_required_readers_and_o24_selection_clocks_are_explicit(self) -> None:
+        self.assertIn("$IvFailureReceipt = Join-Path $ResearchRevisionDir", self.text)
+        self.assertIn(
+            "a_short_crash_veto_tracker.py update --as-of $AsOf --rule-confirmed-days 5 "
+            "--run-revision-id $RunRevisionId --official-project-root $ProjectRoot --confirm-fetch-authorized",
+            self.text,
+        )
+        self.assertIn("if ($IsHistoricalAsOf) {", self.text)
+        self.assertIn("$SelectionStatus = 'validation_only'", self.text)
+        self.assertIn("official pointer unchanged", self.text)
+        self.assertNotIn("$SelectArgs += '--cutoff-passed'", self.text)
+        self.assertIn("if ($FormalStateCommitted) { $SelectArgs += '--formal-state-committed' }", self.text)
+
 
 if __name__ == "__main__":
     unittest.main()

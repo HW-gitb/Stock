@@ -20,6 +20,8 @@ from datetime import datetime
 from pathlib import Path
 from typing import Iterable
 
+from engine.a_short_run_revision import validate_run_revision_id
+
 ROOT = Path(__file__).resolve().parents[1]
 DAILY_SCHEMA_PATH = ROOT / "schemas" / "a_short_market_regime_daily.schema.json"
 
@@ -43,6 +45,28 @@ LEDGER_POLICY = {
 # daily-feature numeric (float) fields that must be finite-or-null (jsonschema accepts NaN/Inf).
 _DAILY_FLOAT_FIELDS = ("promotion_rate", "failed_limit_rate", "iv_percentile_252d",
                        "csi300_ret_1d", "csi1000_ret_1d", "pct_above_ma20")
+
+
+def _row_revision(row: dict) -> str | None:
+    value = row.get("run_revision_id")
+    if value in (None, ""):
+        return None
+    return validate_run_revision_id(str(value))
+
+
+def _row_observation_date(row: dict) -> str:
+    observed = row.get("observed_data_through")
+    if observed not in (None, ""):
+        if not _is_canonical_date(str(observed)):
+            raise ValueError(f"row observed_data_through {observed!r} is not a real YYYYMMDD date")
+        if row.get("as_of") not in (None, "") and str(row.get("as_of")) != str(observed):
+            raise ValueError("row observed_data_through must equal as_of for a daily snapshot")
+        return str(observed)
+    return str(row.get("as_of"))
+
+
+def _row_key(row: dict) -> tuple[str, str]:
+    return (_row_observation_date(row), _row_revision(row) or "legacy_revision_0")
 
 
 def is_canonical_date(s) -> bool:
@@ -73,7 +97,11 @@ def daily_row_semantic_errors(row: dict) -> list[str]:
     defense/attack logic, so an inconsistent value can flip the regime).
     """
     errs = []
-    d = row.get("as_of")
+    try:
+        d = _row_observation_date(row)
+        _row_revision(row)
+    except ValueError as exc:
+        return [str(exc)]
     if not _is_canonical_date(d):
         errs.append(f"row as_of {d!r} is not a real YYYYMMDD date")
     for f in _DAILY_FLOAT_FIELDS:
@@ -156,41 +184,59 @@ def merge_rows(existing_rows: Iterable[dict], new_rows: Iterable[dict], as_of: s
     if not _is_canonical_date(as_of):
         raise ValueError(f"merge_rows: as_of {as_of!r} is not a real YYYYMMDD date")
     existing_rows = list(existing_rows)
-    existing_date_list = [str(r["as_of"]) for r in existing_rows]
-    dup = sorted({d for d in existing_date_list if existing_date_list.count(d) > 1})
+    existing_key_list = [_row_key(r) for r in existing_rows]
+    dup = sorted({key for key in existing_key_list if existing_key_list.count(key) > 1})
     if dup:
         # append-only immutable ledger must never carry duplicate dates; the dict-build below would
         # silently collapse them and hide the corruption, so reject before conversion.
-        raise ValueError(f"merge_rows: existing_rows contain duplicate as_of dates {dup[:3]} (corrupt ledger)")
-    existing = {str(r["as_of"]): r for r in existing_rows}
+        raise ValueError(f"merge_rows: existing_rows contain duplicate observation keys {dup[:3]} (corrupt ledger)")
+    existing = {_row_key(r): r for r in existing_rows}
     errs = []
-    for d in existing:                                     # existing rows must already be PIT
+    for d, _revision in existing:                           # existing rows must already be PIT
         if not _is_canonical_date(d):
             errs.append(f"existing row {d!r} is not a real YYYYMMDD date")
         elif d > str(as_of):
             errs.append(f"existing row {d} is after as_of {as_of} (look-ahead-contaminated ledger)")
     for row in new_rows:
-        d = str(row.get("as_of"))
+        try:
+            d = _row_observation_date(row)
+            key = _row_key(row)
+        except ValueError as exc:
+            errs.append(str(exc))
+            continue
         if not _is_canonical_date(d):
             errs.append(f"new row {d!r} is not a real YYYYMMDD date")
             continue
         if d > str(as_of):
             errs.append(f"row {d} is after as_of {as_of} (look-ahead)")
             continue
-        if d in existing and existing[d] != row:
+        if key in existing and existing[key] != row:
             errs.append(f"row {d} already exists with a different payload (immutable; revision must be explicit)")
             continue
-        existing[d] = row
+        existing[key] = row
     if errs:
         raise ValueError("merge_rows rejected: " + "; ".join(errs))
-    return [existing[d] for d in sorted(existing)]
+    return [existing[key] for key in sorted(existing)]
 
 
-def build_ledger(rows: Iterable[dict], generated_at: str | None = None) -> dict:
+def build_ledger(rows: Iterable[dict], generated_at: str | None = None,
+                 run_revision_id: str | None = None) -> dict:
     """Assemble the ledger envelope (metadata + const policy + boundary) around sorted rows."""
-    rows = sorted(rows, key=lambda r: str(r["as_of"]))
-    dates = [str(r["as_of"]) for r in rows]
-    return {
+    if run_revision_id is not None:
+        run_revision_id = validate_run_revision_id(run_revision_id)
+    rows = [dict(row) for row in rows]
+    for row in rows:
+        date = _row_observation_date(row)
+        row.setdefault("as_of", date)
+        if run_revision_id is not None:
+            current = _row_revision(row)
+            if current not in (None, run_revision_id):
+                raise ValueError("build_ledger: row revision does not match ledger revision")
+            row["run_revision_id"] = run_revision_id
+            row.setdefault("observed_data_through", date)
+    rows = sorted(rows, key=_row_key)
+    dates = [_row_observation_date(r) for r in rows]
+    payload = {
         "schema_name": "a_short_regime_daily_ledger",
         "schema_version": "1.0.0",
         "generated_at": generated_at,
@@ -204,6 +250,9 @@ def build_ledger(rows: Iterable[dict], generated_at: str | None = None) -> dict:
         "boundary": {"production": False, "comparison_only": True,
                      "drives_phase5_risk_posture": False, "lane_root": LEDGER_LANE_ROOT},
     }
+    if run_revision_id is not None:
+        payload["run_revision_id"] = run_revision_id
+    return payload
 
 
 def validate_ledger_envelope(ledger: dict, *, validate_rows: bool = True) -> bool:
@@ -225,11 +274,31 @@ def validate_ledger_envelope(ledger: dict, *, validate_rows: bool = True) -> boo
         errs.append(f"schema: {exc.message}")
 
     rows = ledger.get("rows") or []
-    dates = [str(r.get("as_of")) for r in rows]
+    dates = []
+    row_revisions = []
+    for row in rows:
+        try:
+            dates.append(_row_observation_date(row))
+            row_revisions.append(_row_revision(row))
+        except ValueError as exc:
+            errs.append(str(exc))
+            dates.append(str(row.get("as_of")))
+            row_revisions.append(None)
     if dates != sorted(dates):
-        errs.append("rows are not sorted ascending by as_of")
+        errs.append("rows are not sorted ascending by observed_data_through")
     if len(dates) != len(set(dates)):
-        errs.append("rows contain duplicate as_of dates")
+        errs.append("rows contain duplicate observed_data_through dates")
+
+    ledger_revision = ledger.get("run_revision_id")
+    if ledger_revision not in (None, ""):
+        try:
+            ledger_revision = validate_run_revision_id(str(ledger_revision))
+            if any(revision != ledger_revision for revision in row_revisions):
+                errs.append("ledger rows do not all match run_revision_id")
+        except ValueError as exc:
+            errs.append(str(exc))
+    elif any(revision is not None for revision in row_revisions):
+        errs.append("revision-scoped rows require ledger run_revision_id")
 
     cov = ledger.get("coverage") or {}
     exp_start = dates[0] if dates else None

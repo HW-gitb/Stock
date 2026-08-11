@@ -27,6 +27,7 @@ from typing import Iterable
 import numpy as np
 
 from engine.a_short_regime_ledger import is_canonical_date   # single-source canonical YYYYMMDD
+from engine.a_short_run_revision import validate_run_revision_id
 
 ROOT = Path(__file__).resolve().parents[1]
 GOVERNANCE_PATH = ROOT / "presets" / "a_short_v14_3_regime_governance_20260611.json"
@@ -293,7 +294,8 @@ def build_comparison_record(history: Iterable[dict], v14_2_regime: str,
                             forward_returns: dict | None = None,
                             as_of: str | None = None,
                             generated_at: str | None = None,
-                            window: int = PERCENTILE_WINDOW) -> dict:
+                            window: int = PERCENTILE_WINDOW,
+                            run_revision_id: str | None = None) -> dict:
     """Assemble one weekly comparison record: V14.2 production regime vs V14.3 raw regime.
 
     ``forward_returns`` maps horizon → realized forward return on :data:`FORWARD_RETURN_BASIS`
@@ -304,6 +306,8 @@ def build_comparison_record(history: Iterable[dict], v14_2_regime: str,
     """
     if v14_2_regime not in V14_2_REGIMES:
         raise ValueError(f"build_comparison_record: v14_2_regime {v14_2_regime!r} not in {V14_2_REGIMES}")
+    if run_revision_id is not None:
+        run_revision_id = validate_run_revision_id(run_revision_id)
     raw = classify_raw_regime(history, as_of=as_of, window=window)
     fr = dict(forward_returns or {})
     horizons = {h: fr.get(h, None) for h in ("h1", "h3", "h5", "h10")}
@@ -312,6 +316,7 @@ def build_comparison_record(history: Iterable[dict], v14_2_regime: str,
         "schema_name": "a_short_regime_comparison_weekly",
         "schema_version": "1.0.0",
         "as_of": raw["as_of"],
+        **({"run_revision_id": run_revision_id} if run_revision_id is not None else {}),
         "generated_at": generated_at,
         "v14_2_regime": v14_2_regime,
         "v14_3_raw_regime": raw["raw_regime"],

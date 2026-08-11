@@ -10,6 +10,7 @@
     "schema_version": {"const": "1.1.0"},
     "program_id": {"const": "a_short_official_operation_evidence"},
     "decision_id": {"type": "string", "pattern": "^[a-f0-9]{64}$"},
+    "run_revision_id": {"type": ["string", "null"], "pattern": "^[0-9a-f]{32}$"},
     "evaluation_mode": {"const": "live_normalized"},
     "policy_version": {"const": "official_m67_v1"},
     "capture_sha256": {"type": "string", "pattern": "^[a-f0-9]{64}$"},

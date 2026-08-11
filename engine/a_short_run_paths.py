@@ -93,26 +93,33 @@ def resolve_base_root(output_root: str | None = None, project_root: str | None =
     return os.path.join(root, "result", "a_short")
 
 
-def run_bundle_dir(as_of: str, output_root: str | None = None, project_root: str | None = None) -> str:
-    """单次 run 的统一桶:<resolved base_root>/<as_of>/(与 EGS analysis_input 落点一致)。"""
-    return os.path.join(resolve_base_root(output_root, project_root), str(as_of))
+def run_bundle_dir(as_of: str, output_root: str | None = None, project_root: str | None = None,
+                   run_revision_id: str | None = None) -> str:
+    """单次 run 的统一桶, optionally under one immutable revision directory."""
+    directory = os.path.join(resolve_base_root(output_root, project_root), str(as_of))
+    if run_revision_id:
+        from engine.a_short_run_revision import resolve_revision_root
+        directory = os.fspath(resolve_revision_root(
+            resolve_base_root(output_root, project_root), str(as_of), run_revision_id
+        ))
+    return directory
 
 
-def analysis_input_path(as_of, output_root=None, project_root=None):
-    return os.path.join(run_bundle_dir(as_of, output_root, project_root), "analysis_input.json")
+def analysis_input_path(as_of, output_root=None, project_root=None, run_revision_id=None):
+    return os.path.join(run_bundle_dir(as_of, output_root, project_root, run_revision_id), "analysis_input.json")
 
 
-def weight_comparison_path(as_of, output_root=None, project_root=None):
-    return os.path.join(run_bundle_dir(as_of, output_root, project_root), "egs_weight_comparison.json")
+def weight_comparison_path(as_of, output_root=None, project_root=None, run_revision_id=None):
+    return os.path.join(run_bundle_dir(as_of, output_root, project_root, run_revision_id), "egs_weight_comparison.json")
 
 
-def overlay_path(as_of, output_root=None, project_root=None):
-    return os.path.join(run_bundle_dir(as_of, output_root, project_root), "overlay.json")
+def overlay_path(as_of, output_root=None, project_root=None, run_revision_id=None):
+    return os.path.join(run_bundle_dir(as_of, output_root, project_root, run_revision_id), "overlay.json")
 
 
-def weekly_m67_path(as_of, output_root=None, project_root=None):
-    return os.path.join(run_bundle_dir(as_of, output_root, project_root), "weekly_m67.json")
+def weekly_m67_path(as_of, output_root=None, project_root=None, run_revision_id=None):
+    return os.path.join(run_bundle_dir(as_of, output_root, project_root, run_revision_id), "weekly_m67.json")
 
 
-def account_path(as_of, output_root=None, project_root=None):
-    return os.path.join(run_bundle_dir(as_of, output_root, project_root), "account.json")
+def account_path(as_of, output_root=None, project_root=None, run_revision_id=None):
+    return os.path.join(run_bundle_dir(as_of, output_root, project_root, run_revision_id), "account.json")
