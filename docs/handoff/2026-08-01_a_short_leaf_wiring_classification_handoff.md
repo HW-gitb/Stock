@@ -1,4 +1,54 @@
 # A-short 371 叶重新分层交接
+
+## 2026-08-11 - Codex executor/fixer：V5-A Required + Optional 修复（OPEN-NOT_VERIFIED）
+
+### Purpose / problem / repair
+
+承接 Claude 最新 V5-A FAIL：`-Account` IV failure receipt 与 output 不在同一 revision root；P4 守卫由 date-root 注释喂绿；crash-veto 仍从 date-root 读 analysis_input；O24 selector 时钟未由 launcher 传递；O25 两个 Tushare reader 默认读 date-root。最小修复为：失败收据固定 research revision；P4 守卫断言真实 `$PublicRevisionDir` 赋值并增加错误植入控制；crash-veto 与 launcher 显式透传 `run_revision_id` 并解析 revision EGS bundle；launcher 显式传 cutoff/formal ratchet flags；两个 O25 reader 先通过中央 official pointer/revision resolver，pointer 缺失才只读回退 legacy。
+
+### Call chain / consumers / schema / source-binding / write boundary
+
+`weekly_screening.ps1` revision id → IV/EGS/M6.7/health；crash-veto `update --run-revision-id` → `official_public_revision_root` / `official_analysis_input_path` → marker/reconciliation/full-rank/analysis_input；execution-price 与 candidate-overlap reader 复用同一 official resolver。新增仅为中央 resolver 与 CLI 参数，既有业务 schema 不变；public/private 仍分根，manifest 不含 private/account/holding 内容。crash-veto summary/date-root 及 V5-C/D capture/settlement 迁移不在本刀。
+
+### Negative controls / fixed-Python verification
+
+- IV 跨 root 仍 FATAL，同 root 可通过；P4 实际赋值植入错误时测试转红；crash revision bundle 可读，缺 analysis_input fail-loud；official pointer、显式 id 与 legacy fallback 均覆盖；O24 两个 selector clock 显式接线。
+- 固定解释器 `C:\Users\cnhea\AppData\Local\Programs\Python\Python313\python.exe` / `Python 3.13.8`。点名包 `Ran 61 tests in 2.665s ... OK`；扩展 V5-A 包 `Ran 1189 tests in 182.535s ... OK`；`py_compile`、PowerShell Parser、`git diff --check` 通过（仅既有 CRLF warning）。无 provider/live/normal weekly/full lane。
+
+### Review / commit boundary / next
+
+本条是 Codex executor/fixer 交接，当前 `OPEN-NOT_VERIFIED`；Claude Code 是独立 reviewer/committer，需复审 Required/Optional 的真实接线、source-binding、official clock 与 legacy fallback 后才可 stage/commit。Codex 不提交。下一步：`Claude Code：按桌面 V5-A 复审 Required + Optional`。
+
+## 2026-08-11 - Codex executor/fixer：桌面 V5-A 中央 revision/official 修复（OPEN-NOT_VERIFIED）
+
+### Purpose / problem / repair
+
+桌面 `2a_testrun0810.md` V5-A 指出：同一 decision date 的多次周跑没有共同物理运行身份，EGS、M6.7、IV、sidecar/health 可能按 date-only 文件覆盖、保留首版或跨运行拼接。按最小方案新增 `engine/a_short_run_revision.py`；`weekly_screening.ps1` 每次物理运行只生成一次 32 位小写 hex `run_revision_id`，并把 EGS、IV、M6.7 与 health 的本轮正式输出放进各自 revision root。V5-B/C/D 的 16 点 capture/forward/settlement/current-view 迁移不在本条，不把 V5 总体写成已关闭。
+
+### Call chain / consumers / schema / source-binding / write boundary
+
+`weekly_screening.ps1` 分配 id → `A-EGS/egs_main.py::run_egs/export_*` → `result/a_short/<decision_as_of>/revisions/<run_revision_id>/`（analysis/snapshot/candidates/stage3/data-health/official marker）→ `runners/a_short_iv_feed_build.py` 写 research revision IV → `runners/a_short_weekly_pipeline.py` 校验 analysis path 与 EGS marker 的 revision 后写 M6.7 research/private revision → launcher/pipeline outcome manifests + `a_short_weekly_sidecar_health.py` 显式消费 revision IV → finalizer 要求角色齐全后调用 `engine.a_short_run_revision write-manifest` → `select-official` 通过 `engine.a_short_artifact_set_transaction.commit_artifact_set` 同步 `official_revision.json` 与 `official_selection_receipt.json`。
+
+新增闭世界契约仅两份：`schemas/a_short_run_revision_manifest.schema.json`、`schemas/a_short_official_revision.schema.json`。现有业务 schema 正文不扩展；EGS marker 的 `run_revision_id` 是可选绑定字段，pipeline 在显式 id 模式下强制校验。manifest 只留顶层 decision/run/price clocks、现有 `run_id/candidate_digest`、role 相对标识与 sha/byte length/结构完整状态及必要 content digest；private role 使用 `private://...`，不写绝对 private/account/holding 路径、正文或 token。
+
+### Replay / negative controls
+
+- `run_revision_id` 缺失、非法、非日历日期或 EGS marker/analysis/IV path 不一致 → 正式 publish 前 fail-closed；下游不自行生成第二个 id。
+- 同 id 同 payload → `already_current`，manifest 原字节不改；同 id 任一 role/identity 改变 → `RevisionIdentityConflict`；同日新 id → 新 immutable 目录；新 id 与当前 official content digest 相同 → `equivalent_replay`，不切 official。
+- formal state/cutoff switch 受 `RevisionSelectionBlocked` 保护；pointer/receipt 共用 rollback 事务，事务失败时旧 pointer/receipt 不留下半成品；private role reference 脱敏。
+- 旧 date-only artifact 只读兼容，不迁移、不删除、不覆盖。V5-B/C/D 尚未改写所有 comparison/tracker/settlement/current-view writer/reader。
+
+### Fixed-Python tests / syntax / self-review
+
+- 固定解释器存在且版本为 `Python 3.13.8`：`C:\Users\cnhea\AppData\Local\Programs\Python\Python313\python.exe`。
+- 中央单元（含 manifest-location、cutoff negative controls）：`& 'C:\Users\cnhea\AppData\Local\Programs\Python\Python313\python.exe' -m unittest tests.test_a_short_run_revision` → `Ran 8 tests ... OK`。
+- 桌面聚焦命令原样包含不存在的 `tests.forward_tracker_analysis_role`，原始终态为 `Ran 1154 ... FAILED (errors=1)`；按仓库实际模块名修正为 `tests.test_forward_tracker_analysis_role` 后，同一包 `Ran 1160 tests in 163.075s ... OK`。`tests.test_a_short_effect_contract` → `Ran 61 tests in 40.776s ... OK`。
+- 改动 Python `py_compile`、PowerShell `Parser.ParseFile`、`git diff --check` 均通过；`git diff --check` 只有既有 LF→CRLF warning。无真实 provider/live/normal weekly/full lane，无真实 state 写入。
+
+### Review / commit boundary / next
+
+本条是 Codex executor/fixer 交接，当前 `OPEN-NOT_VERIFIED`；工作树保留本刀源码/测试/schema/docs 改动及既有 research dirty/untracked 产物。Claude Code 是独立 reviewer/committer，需复审 V5-A 的路径、source-binding、manifest 隐私、等价 replay、official rollback 与实际 pipeline 接线后才可 stage/commit；Codex 不提交。下一步：`Claude Code：按桌面 V5-A 方案复审并给出结论`。
+
 ## 2026-08-11 - Codex executor/fixer: Optional O23 health reason detail closure (OPEN-NOT_VERIFIED)
 
 ### Purpose / problem / repair
@@ -5508,3 +5558,82 @@ effect contract 已用固定 Python 重新登记 A-EGS decision-predicate hash �
 - 零源码改动，rule 3 未触发，全量归执行方记 `NOT_VERIFIED`；§6a 未起 agent。
 
 **下一步**：`Codex：执行`
+
+## 2026-08-11 追加：桌面 V5-A（同日 revision 身份与 official 选择）独立审查 —— FAIL（未提交）
+
+**判定**：FAIL，三条 Required。中央模块本身是干净的；问题集中在一句话——**写方搬了家，读方和守卫没搬**。
+
+**我实际验了什么**（区别于执行方与子 agent 的转述）
+
+- 账户模式那条链是我自己跑出来的、不是读代码推的：把 research revision 的 `--out` 与 private revision 的 `--failure-receipt-out` 一起喂给 IV builder，拿到 `[FATAL] IV failure receipt must share the revision root` / exit 1，并确认该门在任何 provider 调用之前生效；再回读 launcher 的 else 腿，确认它落成 `build_failed`，而该行自己的告警就写着 M6.7 会因此 fail closed。
+- 整读了 `engine/a_short_run_revision.py` 全文，以及四个消费点的函数体：EGS 的三处路径改写与 marker 绑定、weekly pipeline 的 marker/path 双校验、health 的显式 IV 路径、launcher 末尾的 manifest + official 收口段。
+- 亲跑验收超集 10 模块 812 用例全绿——但三条 Required 一条都没被它覆盖；这个「绿得很干净却漏了三处」本身就是覆盖面证据，不是通过的理由。
+- 顺着同一缺陷类扫了 date-root 读方，抓到 crash-veto 两处硬读点，以及两个 runner 的 `default_analysis_input_path()`（后者 fail-loud、记 Optional）。
+
+**植入对照（我自写，打的是门本身）**
+
+- 把 `$OverlayAdjudicationStage3` 的真实赋值改成 `PLANTED_WRONG_TARGET.json`，P4 守卫仍然 `OK / 3 tests / exit=0` → 证明该守卫现在完全由本刀新增的三行注释喂饱，对真实接线零承重；还原后 `runners/weekly_screening.ps1` sha256 逐字节回 `2dd47c2e…`。
+
+**未覆盖维度与诚实边界**
+
+- 未起独立对抗 agent：三条 Required 已被自写探针坐实，按分级门 ③ 先出结论；广度维度（16 点消费者矩阵、五段 A/B/C 重放）因此未覆盖。
+- 未跑真实 weekly / provider / full lane；full lane 按 rule 4 归执行方。
+- date-root 读方只查了我 grep 命中的那批；`research/results/a_short/<as_of>/` 一侧的读方未逐个追。
+- 本树既有 `research/results/a_short/**` dirty/untracked 产物不属本刀，未纳入结论。
+
+**下一步**：`Codex：修复`
+
+## 2026-08-11 追加：margin capture schema 指纹改规范化（Claude 自修自审，用户令）
+
+**判定**：已修并自审通过；与同树 V5-A 那刀无因果，V5-A 仍是 FAIL、代码不提交。
+
+**我实际验了什么**（不采信并发窗口的转述）
+
+- 先自己复现：`tests.test_tracked_artifact_digest_canonicalization` 在 40d9 同样红，8 个未解释坐标全在 `_margin_capture_program`；`git merge-base --is-ancestor 0adbe95b HEAD` 通过、该引擎文件与 `master` diff 为空 —— 确认是 A-short 早先落地的代码带进来的，不是本刀弄坏的，但确实在我这棵树里。
+- 判「该怎么修」而不是照单执行：守卫允许的豁免仅限「raw bytes 本身就是运行时证据」，而这 8 个是 tracked JSON **契约**，写豁免等于给错分类；同仓 `a_short_factor_comparison_v2.py` 对同一用途早就用规范摘要，所以修法是对齐既有正确写法，不是新造机制。
+- 反向探针（我自写）：同一份 schema 的 LF/CRLF 两版，旧写法指纹不同、新写法相同；再改一个字段名新写法指纹随之变化 —— 既证明修掉了真问题，也证明没把内容绑定一起削掉。
+
+**未覆盖维度与诚实边界**
+
+- 没跑真实周跑/provider/full lane；full lane 未触发 rule 3。
+- 本树无既有冻结 `program.json`；若别处有旧算法冻结的 manifest，本次算法变更会让它一次性 fail-closed 判漂移，重跑该周 capture 即恢复 —— 这是脱离 checkout-字节身份的预期代价，已写进 register。
+
+**下一步**：`Codex：修复`（V5-A 三条 Required）
+
+## 2026-08-11 追加：V5-A 三条 Required 复核 + 植入对照重写（Claude 自修自审，用户令）
+
+**判定**：三条 Required 的接线确已实闭；执行方补的那条「植入对照」不成立，我本轮自己重写并自审通过。
+
+**我实际验了什么**（不采信执行方转述）
+
+- R1：按 launcher 现在的真实配对跑 IV builder，且**刻意不带** `--confirm-fetch-authorized`，因此没有任何 provider 调用；它直接走到授权门，`revision root` 一字未提 —— revision 门已放行。再把收据换回 private 根，仍 FATAL，证明门没被删掉换通过。
+- R2：把真实赋值改错，模块现在会红（修复前同一改动是绿的）；还原后 launcher 逐字节回原 sha。
+- R3：读了新解析器的优先级（显式 id > official 指针 > legacy 只读），并确认 launcher 真把 `--run-revision-id` 传给了 crash-veto runner；显式 id 落 revision 目录、无指针回落 date-root 我各跑了一次。
+
+**我自己动手修的那条**
+
+- 执行方的 `test_p4_guard_rejects_planted_wrong_active_assignment` 是 `X not in src.replace(X, Y)`，checklist §C2 已把它列为「直接判无效、不必讨论」的恒真式：它从不把变异文本喂给守卫。我把守卫断言体抽成 `_assert_p4_wiring(text)`，植入用例改为传变异文本并 `assertRaises`，三条活跃赋值逐条 subTest。
+- **对照之对照**：把守卫自身掏空 → 新用例会红（failures=3）；旧那条在同一掏空下仍绿。还原后测试文件逐字节回原 sha。
+
+**未覆盖维度与诚实边界**
+
+- 只复核这三条 + 我自修那条；16 点消费者矩阵、五段重放、current view、O24/O25 仍未覆盖，V5-A 整刀不因此转 PASS。
+- 未跑真实 weekly / provider / full lane。同树有并发执行方在改动，本轮不提交。
+
+**下一步**：`Codex：修复`（V5-A 剩余广度与 O24/O25 按 register）
+
+## 2026-08-11 追加：本轮收口（margin 指纹已合入；V5-A 维持 FAIL）
+
+**判定**：只收 margin 那一条的口；V5-A 整刀仍是 FAIL，代码未提交。
+
+**落地事实**
+
+- `engine/a_short_margin_overheat_cash_control.py` 的 8 处 schema 指纹改规范 JSON 摘要：40d9 `a8fe52dd` → master `bfe49b25`，只 add 这一个文件，执行方在飞的 V5-A 改动一个没碰。提交门被 pre-commit 挡过两次（收据被并发改动作废、缺 `a_short_effect_contract` bundle），补跑后通过，未用 `--no-verify`。
+- V5-A 三条 Required 我已逐条用自己的探针复核为实闭；但 16 点消费者矩阵、五段重放、current view、O24/O25 未复审，整刀不转 PASS。
+
+**边界与遗留**
+
+- 我上一轮越界改了 `tests/test_a_short_fourth_knife_p4.py`（重写恒真式植入对照）。按用户裁定，该条改判为 Required 交回执行方；还原该文件的尝试被本机 Edit 分类器拦下，未绕过，改动仍留在工作树未提交，是否还原待用户裁定。
+- register / SESSION_LOG / handoff 三件本轮随收口提交；V5-A 的代码与测试改动仍在工作树等执行方收口后再走复审。
+
+**下一步**：`Codex：修复`
