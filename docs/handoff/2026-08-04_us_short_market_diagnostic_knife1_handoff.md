@@ -1168,3 +1168,39 @@ python -c "verification_receipt.collect_code_state / fingerprint" 独立重算�
 
 - 五条 Optional（preflight 只证 head 叶子 / serenity 结算块写入不在名单 / capstone 私密 writer 无自守卫 / state_dir AST 守卫实测只覆盖 1 个 child / 相对 private-root 行为变更）仍 open，别当作已解决。
 - 桌面 `us_testrun1.md` 的问题 3 及之后各项尚未处理；本刀 PASS 只代表一键跑到 `weekly_bridge` 之前的路径不再自堵。
+
+## 2026-08-11 追加：问题3 覆盖标签规范序 —— 独立审查 PASS（Claude Code reviewer/committer）
+
+### 改了什么
+
+- 只做审查与收口，未改本刀交付的代码或测试。新建并关闭 `R-USSHORT-COVERAGE-GAP-TAGS-ORDER-DEPENDS-ON-CALLER-MAPPING-ORDER`，另记流程 Optional `R-USSHORT-EXECUTOR-LANDED-A-SLICE-WITH-NO-SESSION-LOG-OR-REGISTER-ENTRY`；正文都在 register。
+
+### 为什么改
+
+- 执行方本轮只留了 5 个改动文件，SESSION_LOG / register / handoff 三处都没有条目，也没有 full-lane 记账。verdict 与证据必须有 durable 落点，否则下一个接手的人只能从 diff 猜。
+
+### 验证命令
+
+```text
+固定解释器：C:\Users\cnhea\AppData\Local\Programs\Python\Python313\python.exe（3.13.8）
+.tools\run_unittest_with_repo_pythonpath.cmd --timeout-seconds 900 tests.test_us_short_coverage_honesty tests.test_us_short_result_source_linkage tests.provider.test_us_short_batch5_to_batch4_e2e tests.test_us_short_test_io_inventory tests.test_doc_governance_guard
+python .tools\full_pack_ledger.py run us_short "<rule-6 escalation reason>" "receipt:cff9f819a009340f5f9c1df4" 860 -- discover -s tests -p "test_us_short*.py"
+（探针）两种调用方顺序的 build_row_coverage 输出比对 + 漏项/多项/不支持类别三种坏输入 + 把循环还原成 caller 顺序的植入
+```
+
+### 验证结果
+
+- 焦点超集：`Ran 105 / 32.1s / OK`，`receipt:cff9f819a009340f5f9c1df4`。
+- 结构闭合性（静态）：`_GATING_CATEGORIES = frozenset(_SUPPORTED_COVERAGE_CATEGORIES)`，两者同集合且入参已校验 required ⊆ 该集合，所以「按规范序遍历 + 跳过非 required」恰好访问全部 required 项——不存在漏检某个已校验类别、把 worst-of 算轻的路径。这是本刀唯一值得担心的方向，已排除。
+- 探针：两种调用方顺序输出逐字段相同（`gap_tags=['analyst:missing','event:blocked']`、`coverage_status='blocked'`）；Cut4 子集 `price`+`momentum` 得 `restricted`；漏项 / 多项 / 不支持类别三种坏输入全部仍被拒（闭世界没被顺带放宽）。
+- 植入：循环还原成 `for category in required_categories` → 精确转红 4 条，含 `test_sorted_json_round_trip_preserves_multigap_source_fact`（ERROR，本 finding 的复现形态）与 `test_required_category_order_does_not_change_3_4_7_category_outputs` 的三种形状；还原后引擎 sha256 前后同为 `a5f54465…`。
+- reviewer 自起 full lane（rule 6）：`discovered=5738 ran=5738 equal=True PASS`，735.8s，fingerprint `4dd172cfe749`，已记账。
+
+### 失效的旧结论
+
+- 上一节「问题 3 及之后各项尚未处理」中的问题 3 部分已失效：问题 3 已修复并通过独立审查。
+
+### 下一步注意事项
+
+- 实现方下一刀交审前请补 SESSION_LOG entry（含 Proof-of-use）并在 rule 3 触发时自行跑全量记账；本轮因两者都缺，reviewer 只能自补一次 736s 全量，墙钟被拉长。
+- 桌面 `us_testrun1.md` 问题 4（checkpoint 能力）及之后各项仍未处理；问题2 遗留的 5 条 Optional 也仍 open。

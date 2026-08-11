@@ -277,7 +277,7 @@
     "tests/provider/test_us_short_batch5_momentum_price_source_packet.py:unlink:provider_samples,state/us_short:class4_unresolved_write": 1,
     "tests/provider/test_us_short_batch5_neutral_projection_inputs.py:kwarg:momentum_projection_path:provider_samples,state/us_short:class4_unresolved_write": 1,
     "tests/provider/test_us_short_batch5_provider_live_probe.py:kwarg:packet_path:provider_samples,state/us_short:class4_unresolved_write": 4,
-    "tests/provider/test_us_short_batch5_to_batch4_e2e.py:kwarg:batch4_template_path:provider_samples,state/us_short:class4_unresolved_write": 4,
+    "tests/provider/test_us_short_batch5_to_batch4_e2e.py:kwarg:batch4_template_path:provider_samples,state/us_short:class4_unresolved_write": 5,
     "tests/provider/test_us_short_batch5_to_batch4_e2e.py:kwarg:official_output_root:provider_samples,state/us_short:class4_unresolved_write": 1,
     "tests/provider/test_us_short_batch5_to_batch4_e2e.py:kwarg:private_root:provider_samples,state/us_short:class4_unresolved_write": 1,
     "tests/provider/test_us_short_batch5_to_batch4_e2e.py:write_bytes:provider_samples,state/us_short:class4_unresolved_write": 1,
@@ -688,7 +688,7 @@
         "state/us_short"
       ],
       "read_count": 0,
-      "write_count": 8
+      "write_count": 9
     },
     {
       "module": "tests/provider/test_us_short_corporate_action_source_intake.py",

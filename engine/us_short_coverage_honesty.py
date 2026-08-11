@@ -77,12 +77,13 @@ def build_row_coverage(row_source, data_checks, *, required_categories=None) -> 
     """Classify one row's §11.5 coverage honesty → ``{"row_source", "coverage_status", "coverage_gap_tags"}``.
 
     ``row_source`` must be one of the frozen ``design_locked_enums`` row_source values. ``data_checks`` must be a
-    dict reporting EXACTLY the gating categories (``analyst`` / ``sec_parse`` / ``event``), each a status in
-    {ok, missing, restricted, blocked} — a missing / extra category is refused (closed-world + complete: a row
-    can't be scored without checking all three). ``coverage_status`` is the WORST-of the per-category checks
-    (severity = the frozen coverage_status order), and ``coverage_gap_tags`` lists every non-ok category as
-    ``"<category>:<status>"``. So ``full`` is emitted only when all three are ``ok`` (the §11.5 不写 clean rule),
-    and the result is self-validated. Raises ``CoverageHonestyError`` on bad input."""
+    dict reporting EXACTLY the required categories, each a status in {ok, missing, restricted, blocked} — a
+    missing / extra category is refused (closed-world + complete: a row can't be scored without checking every
+    required category). ``coverage_status`` is the WORST-of the per-category checks (severity = the frozen
+    coverage_status order), and ``coverage_gap_tags`` lists every non-ok category as ``"<category>:<status>"``
+    in the canonical ``_SUPPORTED_COVERAGE_CATEGORIES`` order, regardless of the caller's mapping order. So
+    ``full`` is emitted only when all required categories are ``ok`` (the §11.5 不写 clean rule), and the result
+    is self-validated. Raises ``CoverageHonestyError`` on bad input."""
     if row_source not in set(_row_sources()):
         raise CoverageHonestyError(
             "row_source %r not in the frozen design_locked_enums row_source set %s" % (row_source, _row_sources())
@@ -91,12 +92,13 @@ def build_row_coverage(row_source, data_checks, *, required_categories=None) -> 
         required_categories = _REQUIRED_COVERAGE_CATEGORIES
     if not isinstance(required_categories, (tuple, list)) or not required_categories:
         raise CoverageHonestyError("required_categories must be a non-empty tuple/list")
-    if (len(required_categories) != len(set(required_categories))
+    required_category_set = set(required_categories)
+    if (len(required_categories) != len(required_category_set)
             or any(category not in _GATING_CATEGORIES for category in required_categories)):
         raise CoverageHonestyError("required_categories contains an unsupported or duplicate category")
     if not isinstance(data_checks, dict):
         raise CoverageHonestyError("data_checks must be a dict, got %r" % (type(data_checks).__name__,))
-    if set(data_checks) != set(required_categories):
+    if set(data_checks) != required_category_set:
         raise CoverageHonestyError(
             "data_checks must report EXACTLY the gating categories %s, got %s"
             % (sorted(required_categories), sorted(map(str, data_checks)))
@@ -105,7 +107,9 @@ def build_row_coverage(row_source, data_checks, *, required_categories=None) -> 
     statuses = _coverage_statuses()
     worst_rank = 0
     gap_tags = []
-    for category in required_categories:  # caller-bound but fully validated order (stable, deterministic gap_tags)
+    for category in _SUPPORTED_COVERAGE_CATEGORIES:
+        if category not in required_category_set:
+            continue
         status = data_checks[category]
         if status not in _CATEGORY_STATUS_TO_COVERAGE:
             raise CoverageHonestyError(

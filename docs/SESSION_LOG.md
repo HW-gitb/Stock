@@ -1,5 +1,12 @@
 # Session Log
 
+## 2026-08-11 — Claude 审查 PASS（问题3 覆盖标签规范序）
+
+- **Verdict/Action**: PASS，已提交并合入 master。`build_row_coverage()` 改按既有 `_SUPPORTED_COVERAGE_CATEGORIES` 规范序产出 `coverage_gap_tags`，与桌面权威件 §问题3 方案逐项一致：未删 `sort_keys=True`、未把校验放宽成集合比对、未动 legacy 三类、未新增 schema/字段/SHA。风险档=低（纯确定性派生规则，无 provider/secret/授权门改动），故 §6a 不起独立 agent。
+- **Required**: 无。新建并关闭 `R-USSHORT-COVERAGE-GAP-TAGS-ORDER-DEPENDS-ON-CALLER-MAPPING-ORDER`；另记一条流程 Optional `R-USSHORT-EXECUTOR-LANDED-A-SLICE-WITH-NO-SESSION-LOG-OR-REGISTER-ENTRY`。正文与独立复算只在 `docs/system_risk_register.md`。
+- **Verify**: review-evidence:b164e007346c。焦点超集亲跑 `Ran 105 / 32.1s / OK receipt:cff9f819a009340f5f9c1df4`。探针：两种调用方顺序输出逐字段相同且 worst-of 未变；漏项/多项/不支持类别三种坏输入仍全拒。植入：循环还原成 caller 顺序 → 精确转红 4 条（含 sorted-JSON round-trip 那条），还原后引擎 sha 前后同为 `a5f54465…`。**reviewer 自起全量**（rule 6：账本无当前代码态记录、执行方未留任何条目；rule 3(b) 共享引擎 5 个生产消费者）：`discovered=5738 ran=5738 equal=True PASS`，735.8s，已记账。**超时原因**:执行方没跑全量也没留条目，我按 rule 6 自补一次 736s 全量串在墙钟上。
+- **Next**: Codex：Pass
+
 ## 2026-08-10 — Claude 复审 PASS（问题2 carrier-root / leaf-preflight / model-paper 首周 seed）
 
 - **Verdict/Action**: PASS，已在 238a 提交 `c44d9c80`；**合入 master 被阻塞、尚未合入**——主树当时正处在另一并发窗口未完成的 a-short merge 中（`UU` 冲突 + 已 staged 改动），按并发纪律不碰他人在飞的 merge，`git merge` 直接被 git 拒绝且未改动主树。两条同类腿都改用 lane 既有注入式隔离根，正向控制仍跑完整事务且新增三份 official 产物落位断言；真实 `state/us_short` 残留已清空；生产面三个文件本轮未动。
