@@ -1,5 +1,27 @@
 # A-short 371 叶重新分层交接
 
+## 2026-08-11 Codex executor/fixer - V3-A/V4 three-way cross-validation (OPEN-NOT_VERIFIED, 40d9)
+
+### Purpose / problem / repair
+
+按桌面 `C:\Users\cnhea\Desktop\2a_testrun0810.md` 的 V3-A/V4 联合关闭门，执行三条离线交叉验收：candidate authoritative downgrade、industry/overlay conflict preservation、以及 theme rejected reason 与 V4 decision clock 同包。第一条真实 consumer 路径暴露：candidate producer 写入合法 `updated` summary 但 `latest_evidence_as_of=null` 时，V4 `_normalise_outcome` 先给出泛化 `health_contract_missing_clock`，覆盖了 V3-A 稳定原因。最小修复是在 `runners/a_short_weekly_sidecar_health.py::_normalise_outcome` 的 authoritative-artifact 分支补回 `candidate_effect_no_observed_evidence` 与脱敏 detail；V4 仍只降级 progress，不改写原因。
+
+### Cross proof / call chain / consumers
+
+- Candidate：`write_candidate_effect_outcome` → launcher manifest → `build_health._normalise_outcome` authoritative artifact → V3-A reason + V4 final unavailable → `write_health_bundle`。真实 producer schema 形状为 `status=updated` / `reason=updated`，稳定原因只在 consumer 边界派生。
+- Industry/overlay：producer result → `_sidecar_result_fields` → `_write_pipeline_sidecar_outcomes` → `build_health` → health JSON/Markdown/receipt；`immutable_capture_conflict` 在 capture 与 settlement 两条腿都保持 stalled，未被改成 `advanced`。
+- Theme：真实 `evaluate_theme_forward_comparison` + `validate_comparison_packet` 产生 rejected cohort；launcher outcome 与 `_theme_packet_progress` 把 `theme_cohort_rejected`、具体 taxonomy detail、`observed_decision_as_of=20260727` 一起送进同一 durable health bundle。
+
+### Schema / source-binding / write boundary
+
+既有 sidecar-health、sidecar-outcome、publish-receipt、candidate 与 comparison schemas 继续权威，未改 schema、provider、token、selection、M6.7 或 public-output 语义。所有用例只在临时根写 candidate/manifest/health JSON、Markdown、receipt；未触碰真实 state、public output、provider cache 或真实 weekly。receipt hash 绑定当前 JSON。
+
+### Verification / boundary / next
+
+- 固定解释器 `C:\Users\cnhea\AppData\Local\Programs\Python\Python313\python.exe`（3.13.8）。三条联合用例：`Ran 3 tests in 1.220s ... OK`；V3-A 受影响包（含联合用例）：`Ran 753 tests in 125.593s ... OK`；`py_compile=OK`；`git diff --check=OK`。文档门禁在本轮交接落盘后重跑。
+- `NOT_VERIFIED`：未运行 provider/live、真实 normal weekly、full lane、durable 两轮或 ship-gate；未 stage/commit/push/merge。仍需 Claude Code 独立复审真实接线后决定是否提交。
+- 下一步：`Claude Code：独立复审 V3-A/V4 三条联合接线；不提交、不 merge`。
+
 ## 2026-08-11 Codex executor/fixer - V1/V5 cross-validation (OPEN-NOT_VERIFIED, 40d9)
 
 ### Purpose / problem / repair
@@ -6151,5 +6173,24 @@ effect contract 已用固定 Python 重新登记 A-EGS decision-predicate hash �
 
 - 桌面那条「真实周末→周一 durable 两轮」的交叉仍 `NOT_VERIFIED`，离线用例不能替代。
 - a_short 全量在本代码态仍归执行方；§6a 按 rule 8 未起 agent。
+
+**下一步**：`Codex：执行`
+
+## 2026-08-11 追加：V3-A/V4 三条联合接线独立复审 —— PASS（已提交并合入 master）
+
+**判定**：PASS，无 Required。桌面挂的那句「缺少交叉证据时两项都不能按自然继承关闭」，这轮补齐了。
+
+**我实际验了什么**（区别于执行方转述）
+
+- 三条用例我逐条读了断言正文，重点看它们是不是手造 health 对象——不是：candidate 用真实的 `write_candidate_effect_outcome()`，industry/overlay 用真实的 `_sidecar_result_fields` + `_write_pipeline_sidecar_outcomes()`，theme 用真实 packet；三条都以真调 `write_health_bundle()` 收尾并断言 receipt 的 sha256 绑本轮 JSON 字节。
+- 生产侧只有 8 行：candidate 的权威 summary 缺 observed 时钟时补原因，写法是 `or` 兜底而不是覆盖。
+- **我自写的越界探针**：在临时根里同时植入私有根 outcome 与公开累计 summary、两边都喊 `advanced`，上游 manifest 仍是 `stalled/immutable_capture_conflict` → health 给出的仍是 stalled。这正是桌面禁止的那条「health 越过 private-root 边界自行补状态」，没有发生。
+- **反向控制**：上游给更具体的码时兜底不覆盖，而 progress 仍被降级——「降级归 V4、原因归 V3-A」两个方向都成立。
+
+**未覆盖维度与诚实边界**
+
+- V3 总项没关：V3-B（native stderr / 外层失败）与 V3-C（未注册 advisory 的降级原因）按桌面本就不在本刀，仍待各自设计。
+- 真实 provider/weekly 下的同一条链仍 `NOT_VERIFIED`；a_short 全量归执行方。
+- §6a 按 rule 8 未起 agent（8 行、只影响运维 health）。
 
 **下一步**：`Codex：执行`

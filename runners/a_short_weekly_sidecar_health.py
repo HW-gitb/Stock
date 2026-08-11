@@ -484,6 +484,14 @@ def _normalise_outcome(raw: dict[str, Any], *, as_of: str, project_root: Path,
                 item["observed_decision_as_of"] = None
             else:
                 item["observed_decision_as_of"] = artifact_date
+                if name == "candidate_effect" and artifact_date is None:
+                    # V3-A owns the stable explanation for a valid current
+                    # summary that has no observed evidence clock.  V4 may
+                    # downgrade progress, but must not replace this reason
+                    # with its generic missing-clock classification.
+                    item["error_code"] = item["error_code"] or "candidate_effect_no_observed_evidence"
+                    item["error_detail"] = item["error_detail"] or \
+                        "authoritative_summary_observed_as_of=missing"
             item["observed_data_through"] = None
         else:
             item["observed_decision_as_of"] = None
