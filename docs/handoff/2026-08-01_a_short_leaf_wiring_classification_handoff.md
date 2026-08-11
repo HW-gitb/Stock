@@ -1,4 +1,26 @@
 # A-short 371 叶重新分层交接
+## 2026-08-11 - Codex executor/fixer: Optional O23 health reason detail closure (OPEN-NOT_VERIFIED)
+
+### Purpose / problem / repair
+
+本条承接当前风险登记中最新的 Optional O23。旧 health reason-contract 逻辑在 `error_detail` 超长或含换行时也无条件覆盖合法 `error_code`，会把 `capture_unavailable` 等 producer 原因降成通用 `reason_contract_violation`。当前 HEAD `8cf2c214` 已包含最小修复：缺码/非法码才合成通用码；只有 detail 违规时保留合法 code，并把 detail 替换为有界 `health_reason_contract=error_detail_unbounded`。本轮未重复改生产代码。
+
+### Call chain / consumers / schema / source-binding / write boundary
+
+`pipeline/launcher sidecar outcome` → `_normalise_outcome()` → `_validate_health_reason_contract()` → `build_health()` → `sidecar_health.json/.md/.receipt.json`。health/outcome schema、`as_of`/observed-date source binding、三件套写盘边界均不变；不读 private payload，不新增 provider、token、cache 或消费者。
+
+### Negative controls / verification
+
+- 缺码 degraded row 仍合成 `reason_contract_violation`；合法 `capture_unavailable` + 513 字符 detail 保留原 code，detail 变成有界分类。
+- 固定解释器：`C:\Users\cnhea\AppData\Local\Programs\Python\Python313\python.exe`（Python 3.13.8）。
+- 点名命令：`& 'C:\Users\cnhea\AppData\Local\Programs\Python\Python313\python.exe' -m unittest tests.test_a_short_weekly_sidecar_health.AShortSidecarHealthTests.test_reason_contract_violation_keeps_health_bundle_durable` → `Ran 1 test / OK`。
+- 模块命令：`& 'C:\Users\cnhea\AppData\Local\Programs\Python\Python313\python.exe' -m unittest tests.test_a_short_weekly_sidecar_health` → `Ran 46 tests / OK`。
+- 未运行 provider/live、真实 weekly、full lane、ship-gate；均 `NOT_VERIFIED`。现有 research dirty/untracked 产物未触碰。
+
+### Self-review / review boundary / next
+
+**Pre-Codex self-review**：`matrix=O23 valid-code preservation + missing-code fallback + health durable bundle`; `register=updated`; `handoff=updated`; `focused=1+46 OK`; `full-lane=NOT_VERIFIED`; `door=fixed-Python 3.13.8 + no-provider/live + review-boundary`。本轮文档修改未提交；Claude Code 是 reviewer/committer，需独立复审后再 stage/commit，Codex 不提交。下一步：`Claude Code：复审 Optional O23 health reason detail closure；通过后按流程收口`。
+
 
 ## 2026-08-10 — Codex executor/fixer：V3-A Required 两个座位与 health durable fallback 修复（OPEN-NOT_VERIFIED）
 
@@ -5611,5 +5633,24 @@ effect contract 已用固定 Python 重新登记 A-EGS decision-predicate hash �
 **未覆盖维度与诚实边界**
 
 - 纯测试隔离，未触碰 `.tools/verification_receipt.py` 的生产逻辑。
+## 2026-08-11 追加：O23 治理记录轮独立复审 —— PASS（已合入 master）
+
+**判定**：PASS，无 Required。本轮是「零源码 + 只写治理记录」的一刀，审的实质是记录里那句关于代码的断言。
+
+**我自己实际验了什么**
+
+- **不采信转述**：执行方称 HEAD `8cf2c214` 已保留合法 code。我自写探针跑四格（合法码+超长 detail / 合法码+换行 detail / 缺码 / 非法码），亲眼看到前两格 code 保留、后两格才合成，断言成立。
+- **读到分支本身**：`_validate_health_reason_contract` 里是先算 issues、再判 `missing_or_invalid_error_code` 才覆盖 code，detail 一律换成有界分类。
+- **守卫真的两腿都钉**：那条 durable-bundle 用例同时覆盖缺码合成与合法码保留，还把落盘 JSON 过了 health schema、断言三件套齐出。
+- **记录与仓库状态一致**：`git status` 零源码 dirty，执行方没有把既有修复冒充成本轮工作。
+
+**植入对照（我自写）**
+
+- 把保留分支中和成 `if True:`（恢复旧的无条件覆盖）→ 点名用例精确转红在 `capture_unavailable` 那条断言；还原后源文件 sha256 逐字节回原值。
+
+**未覆盖维度与诚实边界**
+
+- 本刀**不推进桌面清单**：V4（health 汇总改写上游状态与数据时钟）与 一.3/V5（同日重跑版本化协议）仍未做，故 merge 后不回写桌面状态位。
+- 零源码改动，rule 3 未触发，全量归执行方记 `NOT_VERIFIED`；§6a 未起 agent。
 
 **下一步**：`Codex：执行`
