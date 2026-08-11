@@ -477,6 +477,12 @@ class Batch5ToBatch4E2ETest(unittest.TestCase):
             self.assertEqual(price_source["session"], "RTH")
             self.assertEqual(price_source["adjustment_mode"], "adjusted")
             self.assertEqual(len(row["price_input"]["bars"]), 15)
+            expected_bars = [
+                {"high": point["high"], "low": point["low"], "close": point["close"]}
+                for point in points
+            ]
+            self.assertEqual(price_source["input"]["bars"], expected_bars)
+            self.assertEqual(row["price_input"], price_source["input"])
 
     def test_default_legacy_e2e_rejects_full_candidate_profile_without_explicit_contract(self) -> None:
         targets = ("AAPL",)

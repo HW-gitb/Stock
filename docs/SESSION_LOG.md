@@ -1,5 +1,20 @@
 # Session Log
 
+## 2026-08-11 — Claude 审查 PASS（问题2 OHLCV → Pass2 → 价格链）
+
+- **Verdict/Action**: PASS，已提交并合入 master。A/B/C 与桌面权威件 §问题2 方案逐项一致：复用同一 `ctx.ohlcv_series_packet_path`、只补 source-packet 既有合同要求的那一枚 SHA、零 schema/sidecar/第二指纹、未放宽缺数降级；缺文件在 `pass2_fetch` stage 入口硬失败。风险档=低（22 行参数接线，无新 fail-closed 引擎、无 secret、无新增 live 调用），§6a 不起独立 agent。
+- **Required**: 无。`R-USSHORT-CAPSTONE-OHLCV-PRICE-LINKAGE-GAP` 翻 `resolved`；另记一条**非本刀造成**的 A-short Optional `R-ASHORT-MARGIN-CAPTURE-SCHEMA-PATH-CONSTANTS-ESCAPE-TRACKED-DIGEST-CANONICALIZATION`。完整正文、独立复算与闭合判据只在 `docs/system_risk_register.md`。
+- **Verify**: review-evidence:2e22812d4745。焦点超集亲跑 `Ran 130 / 77.4s`，唯一红=8 个 A-short digest 坐标；该 guard 测试本刀 `numstat=3 0` 纯新增、`a_short_margin_overheat_cash_control.py` 与 HEAD 逐字节同 → HEAD 同红，非本刀。植入：抹掉 `packet_paths["ohlcv_series_packet_path"]` → 点名测试精确转红且红在生产门 `_validated_provider_envelope_digests`，还原后 sha 同为 `7dbc9e55…`。full lane 按 rule 4 引账本 `5740/5740 equal=True PASS 360.5s`，独立重算 code-state fingerprint `0153257565…` 与账本逐字相同。
+- **Next**: Codex：Pass
+
+## 2026-08-11 — Codex 修复：问题1 Optional 复核 + 桌面 us_testrun0810 问题2 OHLCV 价格链（OPEN-NOT_VERIFIED）
+
+- **Verdict/Action**：问题1 Optional recurrence guard 点名复核通过；问题2 OHLCV source-packet→result-linkage→Batch4 price-input 已按 A/B/C 修复；Codex 未提交。
+- **Required**：`R-USSHORT-CAPSTONE-OHLCV-PRICE-LINKAGE-GAP` = `repaired / OPEN-NOT_VERIFIED`；详情见 `docs/system_risk_register.md`。
+- **Verify**：固定 Python313；问题1 点名 `1 OK`（`receipt:8996ec08ef757a4374473b9c`）；问题2 core `86+23+11 OK`；inventory `18 OK`；full lane once `5740/5740 equal PASS`；exact focused `130` 仍有 8 个既有 A-short digest baseline 红；无 provider/network/live/account。
+- **Pre-Codex self-review**：A-F checked; independent-self-review=NOT_USED; main-thread checklist fallback; matrix=问题1 Optional + 问题2 A/B/C; register=updated; handoff=updated; focused=core PASS/exact package baseline FAIL; full-lane=5740/5740 PASS once; door=55 OK receipt:32602fea35a67a784b9fc9fe。
+- **Next**：Claude Code：独立审查问题1 Optional 与问题2；若接受 A-short baseline 边界再决定 Pass 或继续修复。
+
 ## 2026-08-11 — Claude 审查 PASS（问题3 覆盖标签规范序）
 
 - **Verdict/Action**: PASS，已提交并合入 master。`build_row_coverage()` 改按既有 `_SUPPORTED_COVERAGE_CATEGORIES` 规范序产出 `coverage_gap_tags`，与桌面权威件 §问题3 方案逐项一致：未删 `sort_keys=True`、未把校验放宽成集合比对、未动 legacy 三类、未新增 schema/字段/SHA。风险档=低（纯确定性派生规则，无 provider/secret/授权门改动），故 §6a 不起独立 agent。
