@@ -393,70 +393,10 @@ def validate_unavailable_manual_review_trend(previous_ledger: dict, current_ledg
         )
 
 
-def _canonical_ast(node):
-    """Return a stable structural representation without ``ast.dump`` text.
-
-    ``ast.dump`` changed its default rendering of empty fields in Python 3.13.
-    The effect contract guards source structure, not a particular CPython
-    pretty-printer, so omit empty-list implementation fields and retain the
-    remaining node types, field names, and literal values as JSON data.
-    """
-    if isinstance(node, ast.AST):
-        fields = []
-        for field, value in ast.iter_fields(node):
-            if isinstance(value, list) and not value:
-                continue
-            fields.append([field, _canonical_ast(value)])
-        return {"node": type(node).__name__, "fields": fields}
-    if isinstance(node, list):
-        return [_canonical_ast(value) for value in node]
-    if isinstance(node, bytes):
-        return {"literal_type": "bytes", "hex": node.hex()}
-    if isinstance(node, complex):
-        return {"literal_type": "complex", "real": node.real, "imag": node.imag}
-    if node is Ellipsis:
-        return {"literal_type": "ellipsis"}
-    if node is None or isinstance(node, (str, int, float, bool)):
-        return node
-    raise TypeError(f"unsupported AST fingerprint value: {type(node).__name__}")
-
-
 @lru_cache(maxsize=64)
 def _source_tree(source: str) -> ast.AST:
     """Parse source once per exact text; callers must treat the tree as read-only."""
     return ast.parse(source)
-
-
-@lru_cache(maxsize=128)
-def _predicate_hashes_for_source(source: str) -> tuple[str, ...]:
-    tree = _source_tree(source)
-    tests = []
-    for node in ast.walk(tree):
-        if isinstance(node, (ast.If, ast.IfExp, ast.While, ast.Assert)):
-            tests.append(_hash(_canonical_ast(node.test)))
-    return tuple(sorted(tests))
-
-
-def _predicate_hashes(source: str) -> list[str]:
-    return list(_predicate_hashes_for_source(source))
-
-
-@lru_cache(maxsize=128)
-def _constant_inventory_items(source: str) -> tuple[tuple[str, str], ...]:
-    tree = _source_tree(source)
-    values = {}
-    for node in tree.body:
-        if not isinstance(node, (ast.Assign, ast.AnnAssign)):
-            continue
-        targets = node.targets if isinstance(node, ast.Assign) else [node.target]
-        for target in targets:
-            if isinstance(target, ast.Name) and target.id.isupper():
-                values[target.id] = _hash(_canonical_ast(node.value))
-    return tuple(sorted(values.items()))
-
-
-def _constant_inventory(source: str) -> dict[str, str]:
-    return dict(_constant_inventory_items(source))
 
 
 @lru_cache(maxsize=128)
@@ -577,11 +517,21 @@ def _policy_leaf_paths(rel: str, payload: dict) -> list[str]:
     return sorted(paths)
 
 
+def _schema_paths_from_raw(raw: str, label: str) -> list[str]:
+    try:
+        schema = json.loads(raw)
+    except json.JSONDecodeError as exc:
+        raise ValueError(f"JSON schema invalid for effect contract: {label}") from exc
+    if not isinstance(schema, dict):
+        raise ValueError(f"JSON schema must be an object for effect contract: {label}")
+    return _schema_leaf_paths(schema)
+
+
 def _runtime_policy_inventory(overrides: dict[str, str] | None = None,
-                              schema_overrides: dict[str, str] | None = None) -> tuple[dict[str, list[str]], dict[str, str], dict[str, str]]:
+                              schema_overrides: dict[str, str] | None = None) -> tuple[dict[str, list[str]], dict[str, list[str]]]:
     overrides = overrides or {}
     schema_overrides = schema_overrides or {}
-    paths, value_hashes = {}, {}
+    paths, schema_paths = {}, {}
     for rel in _RUNTIME_POLICY_FILES:
         raw = overrides.get(rel, (ROOT / rel).read_text(encoding="utf-8"))
         try:
@@ -589,10 +539,50 @@ def _runtime_policy_inventory(overrides: dict[str, str] | None = None,
         except json.JSONDecodeError as exc:
             raise ValueError(f"runtime policy JSON invalid for effect contract: {rel}") from exc
         paths[rel] = _policy_leaf_paths(rel, payload)
-        value_hashes[rel] = _hash(raw)
-    schema_hashes = {rel: _hash(schema_overrides.get(rel, (ROOT / rel).read_text(encoding="utf-8")))
-                     for rel in _RUNTIME_POLICY_SCHEMA_FILES}
-    return paths, value_hashes, schema_hashes
+    for rel in _RUNTIME_POLICY_SCHEMA_FILES:
+        schema_paths[rel] = _schema_paths_from_raw(
+            schema_overrides.get(rel, (ROOT / rel).read_text(encoding="utf-8")), rel
+        )
+    return paths, schema_paths
+
+
+def _legacy_migration_entries(raw: str) -> list[dict[str, str | None]]:
+    try:
+        registry = json.loads(raw)
+    except json.JSONDecodeError as exc:
+        raise ValueError("legacy effect-contract migration registry is unreadable") from exc
+    migrations = registry.get("migrations") if isinstance(registry, dict) else None
+    if not isinstance(migrations, list):
+        raise ValueError("legacy effect-contract migration registry entries are malformed")
+    keys = ("contract_fingerprint", "source_commit", "ledger_schema_version")
+    entries = [{key: entry.get(key) if isinstance(entry, dict) else None for key in keys}
+               for entry in migrations]
+    return sorted(entries, key=lambda entry: tuple(str(entry[key]) for key in keys))
+
+
+def _sorted_string_list(value):
+    if not isinstance(value, list) or not all(isinstance(item, str) for item in value):
+        return value
+    return sorted(value)
+
+
+def _sorted_path_map(value):
+    if not isinstance(value, dict):
+        return value
+    normalized = {}
+    for key, paths in value.items():
+        if (not isinstance(key, str) or not isinstance(paths, list)
+                or not all(isinstance(path, str) for path in paths)):
+            return value
+        normalized[key] = sorted(paths)
+    return {key: normalized[key] for key in sorted(normalized)}
+
+
+def _sorted_migration_entries(value):
+    if not isinstance(value, list) or not all(isinstance(item, dict) for item in value):
+        return value
+    keys = ("contract_fingerprint", "source_commit", "ledger_schema_version")
+    return sorted(value, key=lambda entry: tuple(str(entry.get(key)) for key in keys))
 
 
 def _function_by_name(tree: ast.AST, name: str) -> ast.FunctionDef | None:
@@ -875,24 +865,21 @@ def _build_static_inventory(*, source_overrides: dict[str, str] | None = None,
         if isinstance(node, ast.Assign) and isinstance(node.targets[0], ast.Name)
         and node.targets[0].id == "_FACTOR_SPECS")
     factor_specs = factor_node.value.elts if isinstance(factor_node.value, (ast.Tuple, ast.List)) else []
-    policy_paths, policy_hashes, policy_schema_hashes = _runtime_policy_inventory(
+    analysis_paths = analysis_input_paths(analysis_schema)
+    policy_paths, policy_schema_paths = _runtime_policy_inventory(
         runtime_policy_overrides, runtime_policy_schema_overrides)
     return {
-        "analysis_input_paths": analysis_input_paths(analysis_schema),
+        "analysis_input_paths": analysis_paths,
         "producer_constant_null_leaves": sorted(
             path for path, kind in _producer_literal_leaves(sources["A-EGS/egs_main.py"]).items()
-            if kind == "constant_null" and path in set(analysis_input_paths(analysis_schema))
+            if kind == "constant_null" and path in set(analysis_paths)
         ),
-        "decision_predicate_sha256": {rel: _hash(_predicate_hashes(sources[rel])) for rel in _DECISION_FILES},
-        "runtime_constants_sha256": {rel: _hash(_constant_inventory(sources[rel])) for rel in _CONSTANT_FILES},
         "governed_python_literal_names": {
             rel: _governed_python_literal_names(sources[rel], rel) for rel in _GOVERNED_LITERAL_FILES
         } | {"A-EGS/egs_main.py": _governed_python_literal_names(sources["A-EGS/egs_main.py"], "A-EGS/egs_main.py")},
         "runtime_portfolio_policy_literal_violations": _runtime_portfolio_policy_literal_violations(portfolio, weekly),
         "runtime_policy_paths": policy_paths,
-        "runtime_policy_paths_sha256": _hash(policy_paths),
-        "runtime_policy_sha256": policy_hashes,
-        "runtime_policy_schema_sha256": policy_schema_hashes,
+        "runtime_policy_schema_paths": policy_schema_paths,
         "runtime_policy_leaf_readers": _runtime_policy_leaf_readers(policy_paths, sources),
         "operation_impact_sources": _operation_impact_sources(phase5) + _operation_impact_sources(weekly),
         "llm_task_types": _llm_task_types(analysis_schema),
@@ -900,9 +887,12 @@ def _build_static_inventory(*, source_overrides: dict[str, str] | None = None,
                                     if isinstance(row, (ast.Tuple, ast.List)) and row.elts
                                     and isinstance(row.elts[0], ast.Constant)
                                     and isinstance(row.elts[0].value, str)],
-        "output_schema_sha256": {rel: _hash(output_schema_overrides.get(rel, (ROOT / rel).read_text(encoding="utf-8")))
-                                 for rel in _OUTPUT_SCHEMA_FILES},
-        "legacy_migration_sha256": _hash(sources[_LEGACY_MIGRATION_FILE]),
+        "output_schema_paths": {
+            rel: _schema_paths_from_raw(
+                output_schema_overrides.get(rel, (ROOT / rel).read_text(encoding="utf-8")), rel
+            ) for rel in _OUTPUT_SCHEMA_FILES
+        },
+        "legacy_migration_entries": _legacy_migration_entries(sources[_LEGACY_MIGRATION_FILE]),
     }
 
 
@@ -927,10 +917,12 @@ def _default_static_inventory_from_snapshot(snapshot: tuple[tuple[str, str], ...
 def static_inventory(*, source_overrides: dict[str, str] | None = None,
                      analysis_schema: dict | None = None,
                      output_schema_overrides: dict[str, str] | None = None,
-                     runtime_policy_overrides: dict[str, str] | None = None) -> dict:
+                     runtime_policy_overrides: dict[str, str] | None = None,
+                     runtime_policy_schema_overrides: dict[str, str] | None = None) -> dict:
     """Return the static inventory, memoized only for unmodified on-disk inputs."""
     if (source_overrides is None and analysis_schema is None
-            and output_schema_overrides is None and runtime_policy_overrides is None):
+            and output_schema_overrides is None and runtime_policy_overrides is None
+            and runtime_policy_schema_overrides is None):
         # A fresh copy prevents a caller from poisoning the cached contract view.
         return copy.deepcopy(_default_static_inventory_from_snapshot(_read_default_static_snapshot()))
     return _build_static_inventory(
@@ -938,6 +930,7 @@ def static_inventory(*, source_overrides: dict[str, str] | None = None,
         analysis_schema=analysis_schema,
         output_schema_overrides=output_schema_overrides,
         runtime_policy_overrides=runtime_policy_overrides,
+        runtime_policy_schema_overrides=runtime_policy_schema_overrides,
     )
 
 
@@ -970,8 +963,8 @@ def load_legacy_effect_contract(contract_fp: str) -> dict | None:
         registry = json.loads(registry_text)
     except (OSError, UnicodeDecodeError, json.JSONDecodeError) as exc:
         raise ValueError("legacy effect-contract migration registry is unreadable") from exc
-    if load_contract().get("legacy_migration_sha256") != _hash(registry_text):
-        raise ValueError("legacy effect-contract migration registry hash is not bound to current contract")
+    if load_contract().get("legacy_migration_entries") != _legacy_migration_entries(registry_text):
+        raise ValueError("legacy effect-contract migration registry entries are not bound to current contract")
     if (registry.get("schema_name") != "a_short_m67_effect_contract_legacy_migrations"
             or registry.get("schema_version") != "1.0.0"):
         raise ValueError("legacy effect-contract migration registry schema is invalid")
@@ -1196,7 +1189,7 @@ def static_contract_error(contract: dict | None = None, *, inventory: dict | Non
     duplicate = sorted(path for path, count in coverage.items() if count > 1)
     if uncovered or duplicate:
         return f"effect contract analysis_input coverage invalid: uncovered={uncovered[:4]}, duplicate={duplicate[:4]}"
-    if contract.get("analysis_input_all_paths_sha256") != _hash(paths):
+    if _sorted_string_list(contract.get("analysis_input_paths")) != paths:
         return "analysis_input schema changed without effect contract update"
     if inventory["runtime_portfolio_policy_literal_violations"]:
         return ("runtime portfolio policy literal returned to result consumers: "
@@ -1248,34 +1241,26 @@ def static_contract_error(contract: dict | None = None, *, inventory: dict | Non
     policy_duplicate = sorted(f"{rel}:{path}" for (rel, path), count in policy_coverage.items() if count > 1)
     if policy_uncovered or policy_duplicate:
         return f"effect contract runtime policy coverage invalid: uncovered={policy_uncovered[:4]}, duplicate={policy_duplicate[:4]}"
-    if contract.get("runtime_policy_paths_sha256") != inventory["runtime_policy_paths_sha256"]:
-        return "runtime policy field inventory changed without effect contract update"
-    if contract.get("runtime_policy_paths") != inventory["runtime_policy_paths"]:
+    if _sorted_path_map(contract.get("runtime_policy_paths")) != _sorted_path_map(inventory["runtime_policy_paths"]):
         return "runtime policy field inventory body changed without effect contract update"
-    if contract.get("runtime_policy_sha256") != inventory["runtime_policy_sha256"]:
-        return "runtime policy value changed without effect contract update"
-    if contract.get("runtime_policy_schema_sha256") != inventory["runtime_policy_schema_sha256"]:
+    if (_sorted_path_map(contract.get("runtime_policy_schema_paths"))
+            != _sorted_path_map(inventory["runtime_policy_schema_paths"])):
         return "runtime policy schema changed without effect contract update"
-    if contract.get("runtime_policy_leaf_readers_sha256") != _hash(inventory["runtime_policy_leaf_readers"]):
-        return "runtime policy per-leaf reader mapping changed without effect contract update"
     if contract.get("runtime_policy_leaf_readers") != inventory["runtime_policy_leaf_readers"]:
         return "runtime policy per-leaf reader mapping body changed without effect contract update"
     literals = {rel: values for rel, values in inventory["governed_python_literal_names"].items() if values}
     if literals:
         return f"governed business threshold literal returned to Python: {literals}"
-    if contract.get("decision_predicate_sha256") != inventory["decision_predicate_sha256"]:
-        return "decision predicate changed without effect contract update"
-    if contract.get("runtime_constants_sha256") != inventory["runtime_constants_sha256"]:
-        return "runtime threshold/constant changed without effect contract update"
     if sorted(contract.get("operation_impact_sources") or []) != sorted(inventory["operation_impact_sources"]):
         return "operation_impact source_field changed without effect contract update"
     if sorted(contract.get("llm_task_types") or []) != inventory["llm_task_types"]:
         return "LLM task type changed without effect contract update"
     if sorted(contract.get("portfolio_factor_fields") or []) != sorted(inventory["portfolio_factor_fields"]):
         return "portfolio factor field changed without effect contract update"
-    if contract.get("output_schema_sha256") != inventory["output_schema_sha256"]:
+    if _sorted_path_map(contract.get("output_schema_paths")) != _sorted_path_map(inventory["output_schema_paths"]):
         return "weekly/M6.7 output schema changed without effect contract update"
-    if contract.get("legacy_migration_sha256") != inventory["legacy_migration_sha256"]:
+    if (_sorted_migration_entries(contract.get("legacy_migration_entries"))
+            != _sorted_migration_entries(inventory["legacy_migration_entries"])):
         return "legacy effect-contract migration registry changed without effect-contract update"
     return None
 

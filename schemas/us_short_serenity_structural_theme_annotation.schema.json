@@ -1,0 +1,237 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "US-short Serenity structural theme annotation",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_name",
+    "schema_version",
+    "schema_ref",
+    "annotation_id",
+    "generated_at",
+    "identity_envelope",
+    "canonical_annotation",
+    "effect_boundary"
+  ],
+  "properties": {
+    "schema_name": {"const": "us_short_serenity_structural_theme_annotation"},
+    "schema_version": {"const": "1.0.0"},
+    "schema_ref": {"const": "schemas/us_short_serenity_structural_theme_annotation.schema.json"},
+    "annotation_id": {"$ref": "#/$defs/sha256"},
+    "generated_at": {"type": "string", "format": "date-time"},
+    "identity_envelope": {"$ref": "#/$defs/identity_envelope"},
+    "canonical_annotation": {"$ref": "#/$defs/canonical_annotation"},
+    "effect_boundary": {"$ref": "#/$defs/effect_boundary"}
+  },
+  "$defs": {
+    "sha256": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{64}$"
+    },
+    "identifier": {
+      "type": "string",
+      "pattern": "^[A-Za-z0-9][A-Za-z0-9_.:-]{1,127}$"
+    },
+    "source_ref": {
+      "type": "string",
+      "pattern": "^[A-Za-z0-9][A-Za-z0-9_.:/-]{1,255}$"
+    },
+    "layer": {
+      "type": "string",
+      "enum": ["demand", "system", "module", "device", "process", "equipment", "material", "infrastructure"]
+    },
+    "source_authority": {
+      "type": "string",
+      "enum": ["primary", "credible_secondary", "lead"]
+    },
+    "claim_support": {
+      "type": "string",
+      "enum": ["direct", "corroborating", "context", "contradictory"]
+    },
+    "source_ref_ids": {
+      "type": "array",
+      "minItems": 1,
+      "uniqueItems": true,
+      "items": {"$ref": "#/$defs/source_ref"}
+    },
+    "identity_envelope": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "upstream_input_packet_id",
+        "upstream_decision_result_id",
+        "upstream_policy_version",
+        "upstream_decision_date",
+        "input_artifact_sha256",
+        "source_cutoff_at",
+        "rubric_version",
+        "annotation_author_kind",
+        "prompt_or_protocol_id",
+        "model_identity",
+        "generated_at",
+        "review_status",
+        "annotation_sha256",
+        "valid_through"
+      ],
+      "properties": {
+        "upstream_input_packet_id": {"$ref": "#/$defs/identifier"},
+        "upstream_decision_result_id": {"$ref": "#/$defs/sha256"},
+        "upstream_policy_version": {
+          "type": "string",
+          "enum": ["soft_discovery_query_policy_v0.2.0", "soft_discovery_query_policy_v0.3.0"]
+        },
+        "upstream_decision_date": {
+          "type": "string",
+          "pattern": "^[0-9]{8}$"
+        },
+        "input_artifact_sha256": {"$ref": "#/$defs/sha256"},
+        "source_cutoff_at": {"type": "string", "format": "date-time"},
+        "rubric_version": {"const": "serenity_annotation_rubric_v0.1.0"},
+        "annotation_author_kind": {
+          "type": "string",
+          "enum": ["human", "llm", "hybrid"]
+        },
+        "prompt_or_protocol_id": {"$ref": "#/$defs/identifier"},
+        "model_identity": {
+          "type": ["string", "null"]
+        },
+        "generated_at": {"type": "string", "format": "date-time"},
+        "review_status": {
+          "type": "string",
+          "enum": ["candidate_offline", "approved_offline"]
+        },
+        "annotation_sha256": {"$ref": "#/$defs/sha256"},
+        "valid_through": {"type": "string", "format": "date-time"}
+      }
+    },
+    "chain_role": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["role", "source_ref_ids", "source_authority", "claim_support"],
+      "properties": {
+        "role": {
+          "type": "string",
+          "enum": ["control_chokepoint", "supply_chokepoint", "ordinary_beneficiary", "weak_pricing_power", "story_only"]
+        },
+        "source_ref_ids": {"$ref": "#/$defs/source_ref_ids"},
+        "source_authority": {"$ref": "#/$defs/source_authority"},
+        "claim_support": {"$ref": "#/$defs/claim_support"}
+      }
+    },
+    "falsifier": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["type", "statement", "observable_metric", "expected_window", "status", "source_ref_ids"],
+      "properties": {
+        "type": {
+          "type": "string",
+          "enum": ["metric", "event", "timing", "source"]
+        },
+        "statement": {"type": "string", "minLength": 1, "maxLength": 2000},
+        "observable_metric": {"type": "string", "minLength": 1, "maxLength": 500},
+        "expected_window": {
+          "type": "string",
+          "enum": ["days_to_weeks", "3_to_12_months", "long_term"]
+        },
+        "status": {
+          "type": "string",
+          "enum": ["open", "observed", "not_observed", "contradicted"]
+        },
+        "source_ref_ids": {"$ref": "#/$defs/source_ref_ids"}
+      }
+    },
+    "claim": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["claim_id", "statement", "source_ref_ids", "source_authority", "claim_support"],
+      "properties": {
+        "claim_id": {"$ref": "#/$defs/identifier"},
+        "statement": {"type": "string", "minLength": 1, "maxLength": 2000},
+        "source_ref_ids": {"$ref": "#/$defs/source_ref_ids"},
+        "source_authority": {"$ref": "#/$defs/source_authority"},
+        "claim_support": {"$ref": "#/$defs/claim_support"}
+      }
+    },
+    "canonical_annotation": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "annotation_version",
+        "system_change",
+        "value_chain_layers",
+        "scarce_layer",
+        "constraint_mechanism",
+        "chain_role_by_ticker",
+        "common_constraint_id",
+        "system_change_id",
+        "falsifiers",
+        "horizon_alignment",
+        "near_term_observable",
+        "horizon_basis_source_ref_ids",
+        "claims",
+        "structural_status",
+        "structural_fit_candidate"
+      ],
+      "properties": {
+        "annotation_version": {"const": "structural_theme_annotation_v0.1.0"},
+        "system_change": {"type": "string", "minLength": 1, "maxLength": 2000},
+        "value_chain_layers": {
+          "type": "array",
+          "minItems": 1,
+          "maxItems": 8,
+          "uniqueItems": true,
+          "items": {"$ref": "#/$defs/layer"}
+        },
+        "scarce_layer": {"$ref": "#/$defs/layer"},
+        "constraint_mechanism": {
+          "type": "string",
+          "enum": ["capacity", "certification_cycle", "purity", "equipment", "yield", "permit", "delivery_lead_time", "customer_lock_in"]
+        },
+        "chain_role_by_ticker": {
+          "type": "object",
+          "minProperties": 1,
+          "patternProperties": {
+            "^[A-Z][A-Z0-9.:-]{0,9}$": {"$ref": "#/$defs/chain_role"}
+          },
+          "additionalProperties": false
+        },
+        "common_constraint_id": {
+          "type": ["string", "null"],
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9_.:-]{1,127}$"
+        },
+        "system_change_id": {"$ref": "#/$defs/identifier"},
+        "falsifiers": {
+          "type": "array",
+          "minItems": 1,
+          "items": {"$ref": "#/$defs/falsifier"}
+        },
+        "horizon_alignment": {
+          "type": "string",
+          "enum": ["days_to_weeks", "3_to_12_months", "long_term"]
+        },
+        "near_term_observable": {"type": "string", "minLength": 1, "maxLength": 1000},
+        "horizon_basis_source_ref_ids": {"$ref": "#/$defs/source_ref_ids"},
+        "claims": {
+          "type": "array",
+          "minItems": 1,
+          "items": {"$ref": "#/$defs/claim"}
+        },
+        "structural_status": {
+          "type": "string",
+          "enum": ["unverified_lead", "plausible", "evidence_backed", "contradicted", "stale"]
+        },
+        "structural_fit_candidate": {"const": false}
+      }
+    },
+    "effect_boundary": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["scoring_eligible", "top15_effect_enabled", "operation_advice_effect_enabled"],
+      "properties": {
+        "scoring_eligible": {"const": false},
+        "top15_effect_enabled": {"const": false},
+        "operation_advice_effect_enabled": {"const": false}
+      }
+    }
+  }
+}

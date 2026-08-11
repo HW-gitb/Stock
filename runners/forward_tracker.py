@@ -576,6 +576,17 @@ def backfill(
         # same-day revisions remain audit history and are not mutated here.
         df = df[df["run_revision_id"].fillna("").astype(str) == run_revision_id].copy()
     if df.empty:
+        if official_project_root is not None and not all_df.empty:
+            revision_series = all_df.get("run_revision_id")
+            legacy_rows = int(
+                revision_series.fillna("").astype(str).eq("").sum()
+                if revision_series is not None else len(all_df)
+            )
+            print(
+                "[OK] no official tracker rows; "
+                f"excluded {legacy_rows} legacy audit row(s), formal backfill count=0"
+            )
+            return 0
         print("[OK] tracker is empty, nothing to backfill")
         return 0
 

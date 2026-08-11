@@ -17,7 +17,7 @@ import hashlib
 import json
 import math
 from pathlib import Path
-from typing import Any
+from typing import Any, Mapping
 
 import jsonschema
 from engine.us_short_eligibility_gate import load_eligibility_governance
@@ -211,6 +211,7 @@ def run_pass2_fetch(ctx) -> dict[str, Any]:
         context_components_output_path=ctx.context_components_path,
         output_data_context_path=ctx.data_context_path,   # decision-date-keyed (else the runner default is a stale 20260706 name)
         overextension_projection_path=ctx.overextension_projection_path,
+        ohlcv_series_packet_path=ctx.ohlcv_series_packet_path,
         sector_classification_packet_path=ctx.classification_packet_path,
         yfinance_grade_actions_path=ctx.yfinance_grade_actions_path,
         summary_path=_stage_summary_targets(ctx)["pass2"],
@@ -284,6 +285,38 @@ def run_soft_discovery(ctx) -> dict[str, Any]:
     from runners.us_short_weekly_capstone_soft_discovery import run_offline_stage
 
     return run_offline_stage(ctx)
+
+
+def run_serenity_quality_forward(ctx) -> dict[str, Any]:
+    """Produce/observe the optional Serenity pair and expose the downstream preflight."""
+    from datetime import datetime
+
+    from engine.us_short_serenity_quality_forward import produce_annotation_for_week, run_quality_forward
+
+    producer = produce_annotation_for_week(
+        annotation_path=ctx.serenity_annotation_path,
+        annotation_payload=getattr(ctx, "serenity_annotation_payload", None),
+        soft_discovery_result=ctx.soft_discovery_run_result,
+        decision_date=ctx.decision_date,
+        root=ctx.sample_root,
+        now=datetime.fromisoformat(ctx.generated_at),
+    )
+    result = run_quality_forward(
+        annotation_path=ctx.serenity_annotation_path,
+        review_path=ctx.serenity_quality_review_path,
+        observation_path=ctx.serenity_quality_observation_path,
+        ledger_path=ctx.serenity_quality_ledger_path,
+        gate_path=ctx.serenity_quality_gate_path,
+        decision_date=ctx.decision_date,
+        observed_at=ctx.generated_at,
+        root=ctx.sample_root,
+        now=datetime.fromisoformat(ctx.generated_at),
+        g1_decision_path=ctx.serenity_g1_decision_path,
+        g1_preflight_path=ctx.serenity_g1_blade6_preflight_path,
+    )
+    result["annotation_producer"] = producer
+    result["previous_review_settlement"] = getattr(ctx, "serenity_settlement_result", None)
+    return result
 
 
 def run_momentum_producer(ctx) -> dict[str, Any]:
@@ -822,7 +855,7 @@ def run_weekly_bridge(ctx) -> dict[str, Any]:
             "adjudication_receipt_path": (str(ctx.soft_boost_adjudication_receipt_path)
                                            if ctx.soft_boost_adjudication_receipt_path.is_file() else None),
         }
-    return _bridge.run_e2e(
+    summary = _bridge.run_e2e(
         source_packet_path=ctx.source_packet_path,
         batch4_template_path=ctx.batch4_template_path,
         account_state_path=ctx.account_state_path,
@@ -842,6 +875,94 @@ def run_weekly_bridge(ctx) -> dict[str, Any]:
         soft_discovery_receipt_paths=soft_paths,
         projection_binding_expectations=_bridge.FULL_CANDIDATE_LIVE_PROJECTION_BINDING,
     )
+    delivery = _deliver_serenity_shadow_to_official_report(ctx, summary)
+    _record_serenity_report_delivery(ctx, delivery)
+    return summary
+
+
+def _deliver_serenity_shadow_to_official_report(
+    ctx, summary: Mapping[str, Any]
+) -> dict[str, Any] | None:
+    """Best-effort report delivery after the bridge has emitted its ordinary report.
+
+    The Blade4 consumer remains a pure text overlay.  This caller is the one
+    weekly integration seam allowed to read/write the already-created private
+    report.  Any optional delivery failure leaves the ordinary report intact.
+    """
+    shadow = getattr(ctx, "serenity_shadow_result", None)
+    if not isinstance(shadow, Mapping) or shadow.get("status") != "active":
+        return None
+    batch4 = summary.get("batch4_run") if isinstance(summary, Mapping) else None
+    output_paths = batch4.get("output_paths") if isinstance(batch4, Mapping) else None
+    report_value = output_paths.get("weekly_report_path") if isinstance(output_paths, Mapping) else None
+    if not isinstance(report_value, str) or not report_value:
+        return {
+            "report_block_delivered": False,
+            "report_block_problem": "weekly report path is missing",
+            "main_task_should_abort": False,
+        }
+    report_path = Path(report_value).resolve()
+    private_root = Path(getattr(ctx, "official_output_root", None) or getattr(ctx, "private_root", report_path.parent)).resolve()
+    temporary = None
+    try:
+        report_path.relative_to(private_root)
+        report_text = report_path.read_text(encoding="utf-8")
+        from engine.us_short_serenity_shadow_consumers import deliver_serenity_shadow_to_report
+
+        delivered = deliver_serenity_shadow_to_report(report_text, shadow)
+        if not delivered.get("report_block_delivered"):
+            return delivered
+        temporary = report_path.with_name(report_path.name + ".serenity.tmp")
+        temporary.write_text(delivered["report_text"], encoding="utf-8")
+        temporary.replace(report_path)
+        return delivered
+    except Exception as exc:
+        try:
+            if temporary is not None:
+                temporary.unlink(missing_ok=True)
+        except OSError:
+            pass
+        return {
+            "report_block_delivered": False,
+            "report_block_problem": f"{type(exc).__name__}: {str(exc).replace(chr(10), ' ')[:260]}",
+            "main_task_should_abort": False,
+        }
+
+
+def _record_serenity_report_delivery(ctx, delivery: Mapping[str, Any] | None) -> None:
+    """Persist the optional overlay outcome without making report delivery fatal."""
+    if not isinstance(delivery, Mapping) or type(delivery.get("report_block_delivered")) is not bool:
+        return
+    delivered = delivery["report_block_delivered"]
+    problem = delivery.get("report_block_problem")
+    if problem is not None:
+        problem = " ".join(str(problem).replace("\r", " ").replace("\n", " ").split())[:300]
+
+    quality_result = getattr(ctx, "serenity_quality_run_result", None)
+    if isinstance(quality_result, dict):
+        quality_result["report_block_delivered"] = delivered
+        quality_result["report_block_problem"] = problem
+        observation = quality_result.get("observation")
+        if isinstance(observation, dict):
+            observation["report_block_delivered"] = delivered
+            observation["report_block_problem"] = problem
+
+    observation_path = getattr(ctx, "serenity_quality_observation_path", None)
+    if not isinstance(observation_path, (str, Path)):
+        return
+    try:
+        path = Path(observation_path)
+        payload = json.loads(path.read_text(encoding="utf-8"))
+        if not isinstance(payload, dict) or payload.get("schema_name") != "us_short_serenity_quality_forward_observation":
+            return
+        payload["report_block_delivered"] = delivered
+        payload["report_block_problem"] = problem
+        path.parent.mkdir(parents=True, exist_ok=True)
+        temporary = path.with_name(path.name + ".tmp")
+        temporary.write_text(json.dumps(payload, ensure_ascii=False, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+        temporary.replace(path)
+    except (OSError, UnicodeDecodeError, json.JSONDecodeError, TypeError, ValueError):
+        return
 
 
 # --- honest provider_health derivation from the real Pass2 summary ---

@@ -1317,26 +1317,42 @@ class MainWiringTests(unittest.TestCase):
         wrote the pair on the way in, and wrote an `unavailable` pair even when
         settlement failed.  A real weekly run took that path, so the assertion
         above is load-bearing rather than incidentally true.
+
+        The planted body writes a temporary pair rather than the production
+        default.  Two windows running this suite at once otherwise fight over
+        the same tracked file, which is a real failure here (`OSError` 22 on a
+        concurrent write), not a hypothetical one.  The default binding is
+        asserted directly, so "the removed body writes on the way in" and "its
+        target is the tracked pair" both stay proven without writing there.
         """
         import engine.a_short_industry_weight_comparison as p5
 
-        def pre_repair_body(*, root, daily_cache_path, as_of, **_kwargs):
-            try:
-                summary = p5.build_public_progress(root=p5._private_root(root), as_of=as_of)
-            except Exception:
-                summary = p5.unavailable_public_progress(as_of)
-            p5.write_public_progress(summary)
-            return summary
+        self.assertIn(p5.DEFAULT_PUBLIC_JSON, self.TRACKED_PUBLIC_PAIRS)
+        self.assertIn(p5.DEFAULT_PUBLIC_MD, self.TRACKED_PUBLIC_PAIRS)
 
         with tempfile.TemporaryDirectory() as td:
+            planted_json = Path(td) / "planted_summary.json"
+            planted_md = Path(td) / "planted_summary.md"
+
+            def pre_repair_body(*, root, daily_cache_path, as_of, **_kwargs):
+                try:
+                    summary = p5.build_public_progress(root=p5._private_root(root), as_of=as_of)
+                except Exception:
+                    summary = p5.unavailable_public_progress(as_of)
+                p5.write_public_progress(summary, json_path=planted_json,
+                                         markdown_path=planted_md)
+                return summary
+
             self._write_inputs(td)
+            self.assertFalse(planted_json.exists() or planted_md.exists())
             with patch.object(p5, "settle_and_summarize_weekly", side_effect=pre_repair_body):
                 before, after = self._run_with_a_failing_publication(td, [
                     "--industry-weight-comparison-root", str(Path(td) / "p5"),
                 ])
-        moved = sorted(path.name for path in before if after.get(path) != before[path])
-        self.assertEqual(moved, ["industry_weight_comparison_summary.json",
-                                 "industry_weight_comparison_summary.md"],
+            written = sorted(path.name for path in (planted_json, planted_md) if path.is_file())
+        self.assertEqual(after, before,
+                         "the planted run must not touch the tracked pair either")
+        self.assertEqual(written, ["planted_summary.json", "planted_summary.md"],
                          "the pre-publish write must be what moves the pair")
 
     def test_p2_target_policy_is_absent_without_its_private_root(self):

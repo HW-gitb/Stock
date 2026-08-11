@@ -1,0 +1,57 @@
+{
+  "schema_name": "us_short_serenity_quality_forward_policy",
+  "schema_version": "1.0.0",
+  "quality_policy_version": "serenity_quality_policy_v0.1.0",
+  "activation_status": "candidate_offline",
+  "metrics": [
+    {
+      "metric_id": "claim_binding_integrity",
+      "what": "检查每周注解中的主张、来源引用和上游决策身份是否仍然逐项可绑定。",
+      "why": "没有完整绑定的主张不能作为质量观察的证据。"
+    },
+    {
+      "metric_id": "review_consistency",
+      "what": "由独立复核者说明本周复核判断与冻结 rubric 的适用方式是否一致，并记录理由。",
+      "why": "质量窗口需要可重复的判断口径，而不是复核者的隐含偏好。"
+    },
+    {
+      "metric_id": "falsifier_observability",
+      "what": "检查注解列出的 falsifier 是否有可观察指标、时间窗和可引用证据。",
+      "why": "不可观察的反证条件无法在 forward 周度中被诚实地复核。"
+    },
+    {
+      "metric_id": "horizon_judgment",
+      "what": "检查 horizon 判定是否与注解的 near-term observable、来源和预先冻结的判断理由相符。",
+      "why": "时间尺度错配会把研究候选误读为短期事实或反过来。"
+    },
+    {
+      "metric_id": "weak_or_contradicted_discrimination",
+      "what": "检查复核是否能区分 weak、contradicted 与普通受益者，而不是把所有成员写成同一类。",
+      "why": "区分力是结构注解的质量要求，不是收益或交易效果证明。"
+    }
+  ],
+  "frozen_window": {
+    "minimum_eligible_weeks": 4,
+    "minimum_evaluable_rate": 0.75,
+    "minimum_pass_rate": 0.8
+  },
+  "cohort_dimensions": [
+    "annotation_schema_version",
+    "rubric_version",
+    "consumer_version",
+    "upstream_policy_version",
+    "producer_identity_version",
+    "annotation_prompt_version",
+    "reviewer_identity_version",
+    "review_prompt_version"
+  ],
+  "cross_cohort_aggregation_allowed": false,
+  "effect_boundary": {
+    "scoring_eligible": false,
+    "top15_effect_enabled": false,
+    "operation_advice_effect_enabled": false,
+    "provider_calls_performed": false,
+    "network_access_performed": false,
+    "main_task_should_abort": false
+  }
+}

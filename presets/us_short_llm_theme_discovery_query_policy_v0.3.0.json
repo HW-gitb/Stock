@@ -1,0 +1,71 @@
+{
+  "schema_name": "us_short_llm_theme_discovery_query_policy",
+  "schema_version": "1.0.0",
+  "policy_version": "soft_discovery_query_policy_v0.3.0",
+  "activation_status": "candidate_offline",
+  "production_query_policy_activated": false,
+  "policy_content_sha256": "9e113e256ae507f46ca3939d3d471bb02d29041b7cecf41b2ce386b7c63c0ccc",
+  "policy_core": {
+    "discovery_window": "newly_emerging_only",
+    "optimization_priority": "coverage_first_fail_closed_downstream",
+    "future_stage1_budget_share": "majority",
+    "weekly_user_knob_selection_required": false,
+    "stage1_templates": [
+      {
+        "query_id": "stage1_new_cross_industry_demand",
+        "text": "Identify US-listed companies first reported or materially affected this week by a newly emerging demand shift spanning at least two otherwise unrelated industries. Exclude broad background commentary and ongoing stories; include only source-supported company examples and state the common development.",
+        "angles": ["new_demand", "cross_industry"]
+      },
+      {
+        "query_id": "stage1_capex_orders_capacity",
+        "text": "Which capital-spending commitments, order changes, or capacity expansions were first reported or materially changed this week and are affecting US-listed companies across multiple industries? Exclude routine or continuing commentary; cite independent evidence for every company included.",
+        "angles": ["capital_expenditure", "orders", "capacity"]
+      },
+      {
+        "query_id": "stage1_supply_regulation_bottleneck",
+        "text": "What supply constraint, regulatory change, or infrastructure bottleneck was first reported or materially changed this week and is creating direct business effects for US-listed companies in at least two different industries? Identify which physical constraint layer is tight (capacity, certification, purity, equipment, or delivery lead time), which US-listed companies are stuck at that layer, and which companies are waiting in a certification queue. Require source-bound evidence for each company-to-layer linkage. Exclude broad macro commentary, generic beneficiary lists, and companies not explicitly named by sources.",
+        "angles": ["supply_chain", "regulation", "infrastructure"]
+      },
+      {
+        "query_id": "stage1_earnings_bookings_guidance",
+        "text": "Which US-listed companies in different industries were independently cited this week for the same newly reported or materially changed earnings, bookings, or guidance pattern that was not broadly visible in the prior quarter? Exclude routine recaps and broad market commentary; cite the evidence tying each company to the shared pattern.",
+        "angles": ["earnings", "bookings", "guidance"]
+      }
+    ],
+    "stage2": {
+      "generation_mode": "deterministic_templates_from_frozen_stage1_focus_terms",
+      "source_binding_required": true,
+      "allowed_term_types": ["ticker", "company", "industry", "concept"],
+      "max_terms_total": 32,
+      "max_terms_by_type": {
+        "ticker": 8,
+        "company": 8,
+        "industry": 8,
+        "concept": 8
+      },
+      "normalization": {
+        "unicode_normalization": "NFC",
+        "whitespace": "trim_and_collapse",
+        "text_case": "casefold",
+        "ticker_case": "ASCII_UPPER"
+      },
+      "ordering": "term_type_rank_then_normalized_term_then_source_ref_ids",
+      "term_type_rank": {
+        "ticker": 0,
+        "company": 1,
+        "industry": 2,
+        "concept": 3
+      },
+      "query_text_template": "Find newly emerging US-short evidence for {term_type}: {term}. Use only source-bound Stage-1 evidence; do not confirm themes, assign scores, seats, actions, or lifecycle."
+    }
+  },
+  "effect_boundary": {
+    "scoring_eligible": false,
+    "top15_effect_enabled": false,
+    "operation_advice_effect_enabled": false,
+    "dynamic_seats_enabled": false,
+    "theme_probe_enabled": false,
+    "lifecycle_actions_enabled": false,
+    "theme_confirmation_enabled": false
+  }
+}

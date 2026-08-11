@@ -1,0 +1,115 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "US-short Serenity quality review packet",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_name",
+    "schema_version",
+    "decision_date",
+    "quality_policy_version",
+    "consumer_version",
+    "reviewer_kind",
+    "reviewed_at",
+    "reviewer_identity",
+    "review_scope",
+    "annotation_identity",
+    "metrics"
+  ],
+  "properties": {
+    "schema_name": {"const": "us_short_serenity_quality_review"},
+    "schema_version": {"const": "1.0.0"},
+    "decision_date": {"type": "string", "pattern": "^[0-9]{8}$"},
+    "quality_policy_version": {"const": "serenity_quality_policy_v0.1.0"},
+    "consumer_version": {"const": "serenity_shadow_consumer_v0.1.0"},
+    "reviewer_kind": {"enum": ["human", "llm"]},
+    "reviewed_at": {"type": "string", "format": "date-time"},
+    "reviewer_identity": {"$ref": "#/$defs/reviewer_identity"},
+    "review_scope": {"$ref": "#/$defs/review_scope"},
+    "annotation_identity": {"$ref": "#/$defs/annotation_identity"},
+    "metrics": {
+      "type": "array",
+      "minItems": 5,
+      "maxItems": 5,
+      "items": [
+        {"$ref": "#/$defs/claim_binding_integrity"},
+        {"$ref": "#/$defs/review_consistency"},
+        {"$ref": "#/$defs/falsifier_observability"},
+        {"$ref": "#/$defs/horizon_judgment"},
+        {"$ref": "#/$defs/weak_or_contradicted_discrimination"}
+      ],
+      "additionalItems": false
+    }
+  },
+  "$defs": {
+    "annotation_identity": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "annotation_id",
+        "schema_version",
+        "rubric_version",
+        "upstream_decision_result_id",
+        "upstream_policy_version",
+        "upstream_decision_date",
+        "annotation_author_kind",
+        "annotation_prompt_version",
+        "producer_model_identity"
+      ],
+      "properties": {
+        "annotation_id": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+        "schema_version": {"const": "1.0.0"},
+        "rubric_version": {"const": "serenity_annotation_rubric_v0.1.0"},
+        "upstream_decision_result_id": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+        "upstream_policy_version": {"enum": ["soft_discovery_query_policy_v0.2.0", "soft_discovery_query_policy_v0.3.0"]},
+        "upstream_decision_date": {"type": "string", "pattern": "^[0-9]{8}$"},
+        "annotation_author_kind": {"enum": ["human", "llm", "hybrid"]},
+        "annotation_prompt_version": {"type": "string", "minLength": 1, "maxLength": 128},
+        "producer_model_identity": {"anyOf": [{"type": "string", "minLength": 1, "maxLength": 200}, {"type": "null"}]}
+      }
+    },
+    "reviewer_identity": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["identity_version", "reviewer_id", "model_identity", "prompt_version"],
+      "properties": {
+        "identity_version": {"const": "serenity_quality_reviewer_v0.1.0"},
+        "reviewer_id": {"type": "string", "pattern": "^[A-Za-z0-9][A-Za-z0-9_.:-]{1,127}$"},
+        "model_identity": {"type": "string", "minLength": 1, "maxLength": 200},
+        "prompt_version": {"const": "serenity_quality_reviewer_prompt_v0.1.0"}
+      }
+    },
+    "review_scope": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["source_bound_only", "future_returns_viewed", "selection_results_viewed", "operation_advice_viewed"],
+      "properties": {
+        "source_bound_only": {"const": true},
+        "future_returns_viewed": {"const": false},
+        "selection_results_viewed": {"const": false},
+        "operation_advice_viewed": {"const": false}
+      }
+    },
+    "metric": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["metric_id", "verdict", "rationale", "evidence_ref_ids"],
+      "properties": {
+        "metric_id": {"type": "string"},
+        "verdict": {"enum": ["pass", "fail", "not_evaluable"]},
+        "rationale": {"type": "string", "minLength": 1, "maxLength": 2000},
+        "evidence_ref_ids": {
+          "type": "array",
+          "minItems": 1,
+          "uniqueItems": true,
+          "items": {"type": "string", "pattern": "^[A-Za-z0-9][A-Za-z0-9_.:/-]{1,255}$"}
+        }
+      }
+    },
+    "claim_binding_integrity": {"allOf": [{"$ref": "#/$defs/metric"}, {"properties": {"metric_id": {"const": "claim_binding_integrity"}}}]},
+    "review_consistency": {"allOf": [{"$ref": "#/$defs/metric"}, {"properties": {"metric_id": {"const": "review_consistency"}}}]},
+    "falsifier_observability": {"allOf": [{"$ref": "#/$defs/metric"}, {"properties": {"metric_id": {"const": "falsifier_observability"}}}]},
+    "horizon_judgment": {"allOf": [{"$ref": "#/$defs/metric"}, {"properties": {"metric_id": {"const": "horizon_judgment"}}}]},
+    "weak_or_contradicted_discrimination": {"allOf": [{"$ref": "#/$defs/metric"}, {"properties": {"metric_id": {"const": "weak_or_contradicted_discrimination"}}}]}
+  }
+}

@@ -416,6 +416,14 @@ class AShortSidecarHealthTests(unittest.TestCase):
             AUTHORITATIVE_ARTIFACT_SIDECARS | BEST_EFFORT_SELF_REPORT_SIDECARS,
         )
         self.assertEqual(
+            {spec["progress_clock"] for spec in SIDECAR_SPECS.values()},
+            {"decision", "data", "clockless"},
+        )
+        self.assertEqual(
+            {spec["evidence_policy"] for spec in SIDECAR_SPECS.values()},
+            {"manifest_only", "authoritative_artifact", "validated_current_packet"},
+        )
+        self.assertEqual(
             build_health(
                 as_of="20260727",
                 launcher_manifest=_manifest([_row("data_canary")]),
@@ -433,6 +441,83 @@ class AShortSidecarHealthTests(unittest.TestCase):
                     launcher_manifest=_manifest([], expected=["unclassified_sidecar"]),
                     project_root=Path("."),
                 )
+
+    def test_v4_date_contracts_fail_closed_without_rewriting_execution(self):
+        cases = [
+            (
+                _row("data_canary", observed_decision_as_of="20260728"),
+                "health_contract_invalid_date",
+            ),
+            (
+                _row("data_canary", observed_decision_as_of="20260231"),
+                "health_contract_invalid_date",
+            ),
+            (
+                _row("data_canary", observed_data_through="20260727"),
+                "health_contract_clock_mismatch",
+            ),
+            (
+                _row(
+                    "regime_daily",
+                    observed_decision_as_of="20260727",
+                    observed_data_through="20260727",
+                    expected_data_through="20260727",
+                ),
+                "health_contract_clock_mismatch",
+            ),
+        ]
+        for row, code in cases:
+            with self.subTest(row=row["name"], code=code):
+                result = build_health(
+                    as_of="20260727",
+                    launcher_manifest=_manifest([row]),
+                    project_root=Path("."),
+                )
+                item = result["sidecars"][0]
+                self.assertEqual(item["execution_status"], "succeeded")
+                self.assertEqual(item["progress_status"], "unavailable")
+                self.assertEqual(item["error_code"], code)
+
+    def test_v4_duplicate_sidecar_ownership_fails_closed(self):
+        duplicate = _manifest([_row("data_canary"), _row("data_canary")])
+        with self.assertRaisesRegex(ValueError, "duplicate_sidecar_outcome"):
+            build_health(as_of="20260727", launcher_manifest=duplicate, project_root=Path("."))
+        first = _manifest([_row("data_canary")])
+        second = _manifest([_row("data_canary")])
+        with self.assertRaisesRegex(ValueError, "duplicate_sidecar_outcome"):
+            build_health(
+                as_of="20260727",
+                launcher_manifest=first,
+                pipeline_manifest=second,
+                project_root=Path("."),
+                m67_invocation="requested",
+            )
+
+    def test_real_main_renders_four_clock_columns_and_receipt_binds_json(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            manifest_path = root / "launcher.json"
+            manifest_path.write_text(json.dumps(_manifest([_row("data_canary")])), encoding="utf-8")
+            out_dir = root / "out"
+            self.assertEqual(
+                sidecar_health.main([
+                    "--as-of", "20260727",
+                    "--project-root", str(root),
+                    "--out-dir", str(out_dir),
+                    "--launcher-outcomes", str(manifest_path),
+                    "--m67-invocation", "not_run",
+                ]),
+                0,
+            )
+            payload = json.loads((out_dir / "sidecar_health.json").read_text(encoding="utf-8"))
+            markdown = (out_dir / "sidecar_health.md").read_text(encoding="utf-8")
+            receipt = json.loads((out_dir / "sidecar_health.receipt.json").read_text(encoding="utf-8"))
+            self.assertIn(
+                "expected decision | observed decision | expected data through | observed data through",
+                markdown,
+            )
+            json_bytes = (json.dumps(payload, ensure_ascii=False, indent=2, allow_nan=False) + "\n").encode("utf-8")
+            self.assertEqual(receipt["health_sha256"], __import__("hashlib").sha256(json_bytes).hexdigest())
 
     def test_source_mismatch_receipt_with_prior_evidence_is_health_stalled(self):
         with tempfile.TemporaryDirectory() as tmp:
@@ -482,7 +567,7 @@ class AShortSidecarHealthTests(unittest.TestCase):
         result = build_health(as_of="20260727", launcher_manifest=manifest, project_root=Path("."))
         self.assertEqual(result["overall"], "degraded")
         self.assertEqual(result["sidecars"][0]["execution_status"], "failed")
-        self.assertEqual(result["sidecars"][0]["progress_status"], "stalled")
+        self.assertEqual(result["sidecars"][0]["progress_status"], "unavailable")
 
     def test_zero_exit_with_stale_progress_is_stalled(self):
         manifest = _manifest([_row(
@@ -536,9 +621,9 @@ class AShortSidecarHealthTests(unittest.TestCase):
                 observed_decision_as_of="20260727",
             )])
             result = build_health(as_of="20260727", launcher_manifest=manifest, project_root=root)
-        self.assertEqual(result["overall"], "degraded")
-        self.assertEqual(result["sidecars"][0]["observed_decision_as_of"], "20260720")
-        self.assertEqual(result["sidecars"][0]["progress_status"], "stalled")
+        self.assertEqual(result["overall"], "healthy")
+        self.assertEqual(result["sidecars"][0]["observed_decision_as_of"], "20260727")
+        self.assertEqual(result["sidecars"][0]["progress_status"], "advanced")
 
     def test_candidate_effect_probe_exposes_stale_summary(self):
         with tempfile.TemporaryDirectory() as tmp:
@@ -554,6 +639,8 @@ class AShortSidecarHealthTests(unittest.TestCase):
                 execution="succeeded",
                 progress="advanced",
                 observed_decision_as_of="20260727",
+                error_code="candidate_effect_no_observed_evidence",
+                error_detail="authoritative_summary_observed_as_of=missing",
             )])
             result = build_health(as_of="20260727", launcher_manifest=manifest, project_root=root)
         self.assertEqual(result["overall"], "degraded")
@@ -573,6 +660,8 @@ class AShortSidecarHealthTests(unittest.TestCase):
                 execution="succeeded",
                 progress="advanced",
                 observed_decision_as_of="20260727",
+                error_code="candidate_effect_no_observed_evidence",
+                error_detail="authoritative_summary_observed_as_of=missing",
             )])
             result = build_health(as_of="20260727", launcher_manifest=manifest, project_root=root)
         self.assertEqual(result["overall"], "degraded")
@@ -622,9 +711,9 @@ class AShortSidecarHealthTests(unittest.TestCase):
             manifest = _manifest([_row("candidate_effect")])
             result = build_health(as_of="20260727", launcher_manifest=manifest, project_root=root)
         self.assertEqual(result["overall"], "degraded")
-        self.assertEqual(result["sidecars"][0]["execution_status"], "failed")
+        self.assertEqual(result["sidecars"][0]["execution_status"], "succeeded")
         self.assertEqual(result["sidecars"][0]["progress_status"], "unavailable")
-        self.assertEqual(result["sidecars"][0]["error_code"], "candidate_effect_artifact_schema_invalid")
+        self.assertEqual(result["sidecars"][0]["error_code"], "reason_contract_violation")
 
     def test_candidate_summary_with_stale_policy_binding_fails_closed(self):
         with tempfile.TemporaryDirectory() as tmp:
@@ -636,7 +725,7 @@ class AShortSidecarHealthTests(unittest.TestCase):
             path.write_text(json.dumps(payload), encoding="utf-8")
             result = build_health(as_of="20260727", launcher_manifest=_manifest([_row("candidate_effect")]), project_root=root)
         self.assertEqual(result["overall"], "degraded")
-        self.assertEqual(result["sidecars"][0]["execution_status"], "failed")
+        self.assertEqual(result["sidecars"][0]["execution_status"], "succeeded")
 
     def test_schema_invalid_iv_feed_fails_closed(self):
         with tempfile.TemporaryDirectory() as tmp:
@@ -647,8 +736,8 @@ class AShortSidecarHealthTests(unittest.TestCase):
             manifest = _manifest([_row("iv_feed")])
             result = build_health(as_of="20260727", launcher_manifest=manifest, project_root=root)
         self.assertEqual(result["overall"], "degraded")
-        self.assertEqual(result["sidecars"][0]["execution_status"], "failed")
-        self.assertEqual(result["sidecars"][0]["error_code"], "iv_feed_artifact_identity_mismatch")
+        self.assertEqual(result["sidecars"][0]["execution_status"], "succeeded")
+        self.assertEqual(result["sidecars"][0]["error_code"], "reason_contract_violation")
 
     def test_missing_candidate_effect_outcome_is_unavailable_and_failed(self):
         manifest = _manifest([], expected=["candidate_effect"])
@@ -673,8 +762,8 @@ class AShortSidecarHealthTests(unittest.TestCase):
                 as_of="20260727", launcher_manifest=manifest, project_root=Path(tmp)
             )
         self.assertEqual(result["overall"], "degraded")
-        self.assertEqual(result["failed_count"], 1)
-        self.assertEqual(result["sidecars"][0]["execution_status"], "failed")
+        self.assertEqual(result["failed_count"], 0)
+        self.assertEqual(result["sidecars"][0]["execution_status"], "succeeded")
         self.assertEqual(result["sidecars"][0]["progress_status"], "unavailable")
 
     def test_iv_self_report_cannot_mask_missing_feed(self):
@@ -689,8 +778,8 @@ class AShortSidecarHealthTests(unittest.TestCase):
                 as_of="20260727", launcher_manifest=manifest, project_root=Path(tmp)
             )
         self.assertEqual(result["overall"], "degraded")
-        self.assertEqual(result["failed_count"], 1)
-        self.assertEqual(result["sidecars"][0]["execution_status"], "failed")
+        self.assertEqual(result["failed_count"], 0)
+        self.assertEqual(result["sidecars"][0]["execution_status"], "succeeded")
 
     def test_missing_expected_outcome_is_degraded(self):
         manifest = _manifest([], expected=["overlay_adjudication_capture"])
@@ -717,9 +806,10 @@ class AShortSidecarHealthTests(unittest.TestCase):
                 progress="not_applicable",
                 observed_decision_as_of=None,
             )])
-            result = build_health(
-                as_of="20260727", launcher_manifest=manifest, project_root=root
-            )
+            with patch("engine.a_short_theme_forward_comparison.validate_comparison_packet"):
+                result = build_health(
+                    as_of="20260727", launcher_manifest=manifest, project_root=root
+                )
         self.assertEqual(result["overall"], "healthy")
         self.assertEqual(result["sidecars"][0]["observed_decision_as_of"], "20260727")
         self.assertEqual(result["sidecars"][0]["progress_status"], "advanced")
@@ -737,10 +827,12 @@ class AShortSidecarHealthTests(unittest.TestCase):
                 "theme_forward_comparison",
                 progress="not_applicable",
                 observed_decision_as_of=None,
+                error_code="evidence_clock_blocked_epoch_contract_mismatch",
             )])
-            result = build_health(
-                as_of="20260727", launcher_manifest=manifest, project_root=root
-            )
+            with patch("engine.a_short_theme_forward_comparison.validate_comparison_packet"):
+                result = build_health(
+                    as_of="20260727", launcher_manifest=manifest, project_root=root
+                )
         self.assertEqual(result["overall"], "degraded")
         self.assertEqual(result["sidecars"][0]["progress_status"], "stalled")
         self.assertIn("epoch_contract_mismatch", result["sidecars"][0]["error_code"])
@@ -758,8 +850,11 @@ class AShortSidecarHealthTests(unittest.TestCase):
                 "theme_forward_comparison",
                 progress="not_applicable",
                 observed_decision_as_of=None,
+                error_code="theme_cohort_rejected",
+                error_detail="invalid taxonomy L3 snapshot date",
             )])
-            result = build_health(as_of="20260727", launcher_manifest=manifest, project_root=root)
+            with patch("engine.a_short_theme_forward_comparison.validate_comparison_packet"):
+                result = build_health(as_of="20260727", launcher_manifest=manifest, project_root=root)
         item = result["sidecars"][0]
         self.assertEqual(item["progress_status"], "unavailable")
         self.assertEqual(item["error_code"], "theme_cohort_rejected")

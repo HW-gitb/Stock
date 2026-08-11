@@ -23,10 +23,11 @@ from runners.us_short_weekly_capstone import (  # noqa: E402
     WeeklyCapstoneError,
     run_weekly_capstone,
 )
+from tests.provider.us_short_private_test_root import temporary_us_short_state_directory  # noqa: E402
 
 _STAGE_NAMES = [
     "universe_fetch", "momentum_fetch", "overextension_producer", "momentum_producer", "sic_fetch",
-    "soft_discovery", "theme_producer",
+    "soft_discovery", "serenity_quality_forward", "theme_producer",
     "projection_inputs", "pass2_preflight", "yfinance_grades_fetch", "pass2_fetch", "vix_regime", "forward_policy_shadow",
     "forward_policy_corporate_actions", "forward_policy_maturity", "soft_boost_comparison_maturity", "soft_boost_comparison_capture", "weekly_bridge",
     # Post-bridge, no artifact. Knife 10b added the two that ADVANCE the 26-week
@@ -43,7 +44,7 @@ _PRE_BRIDGE_STAGE_NAMES = [
 _PRE_BRIDGE_THROUGH_BRIDGE = _PRE_BRIDGE_STAGE_NAMES + ["weekly_bridge"]
 _RECEIPT_STAGE_NAMES = tuple(
     name for name in _STAGE_NAMES if name not in {
-        "soft_discovery", "forward_policy_shadow", "forward_policy_corporate_actions",
+        "soft_discovery", "serenity_quality_forward", "forward_policy_shadow", "forward_policy_corporate_actions",
         "forward_policy_maturity", "soft_boost_comparison_maturity", "soft_boost_comparison_capture", "weekly_bridge",
         "market_diagnostic", "market_diagnostic_fetch", "market_diagnostic_settle",
     }
@@ -109,6 +110,12 @@ class CapstoneDryRunTest(unittest.TestCase):
                           # vendor, so the diagnostic fetch joins the authorization list
                           # rather than sneaking a request in behind an ungated stage.
                           "vix_regime", "forward_policy_corporate_actions", "market_diagnostic_fetch"])
+        pass2 = next(stage for stage in plan["stages"] if stage["name"] == "pass2_fetch")
+        self.assertEqual(pass2["contract_version"], "2.1.0")
+        self.assertIn(
+            "state/us_short/us_short_batch5_full_universe_ohlcv_series_20260708_packet.json",
+            pass2["inputs"],
+        )
 
     def test_cli_default_private_root_lands_in_gitignored_state_dir(self):
         """--private-root omitted on the CLI defaults to the gitignored state/us_short tree, so the weekly report /
@@ -243,15 +250,28 @@ class CapstoneFakeChainTest(unittest.TestCase):
         shutil.rmtree(self.private_root, ignore_errors=True)
 
     def _fake_stages(self, order_sink, *, break_stage=None, skip_output_stage=None, bridge_batch4=None,
-                     missing_input_stage=None, present_input_stage=None, preflight_result=None):
+                     missing_input_stage=None, present_input_stage=None, preflight_result=None,
+                     omit_ohlcv_output=False):
         def outs_for(name):
+            def momentum_outputs(c):
+                outputs = [c.series_packet_path]
+                if not omit_ohlcv_output:
+                    outputs.append(c.ohlcv_series_packet_path)
+                return outputs
+
             return {
                 "universe_fetch": lambda c: [c.candidate_path],
-                "momentum_fetch": lambda c: [c.series_packet_path, c.ohlcv_series_packet_path],
+                "momentum_fetch": momentum_outputs,
                 "overextension_producer": lambda c: [c.overextension_projection_path],
                 "momentum_producer": lambda c: [c.momentum_projection_path],
                 "sic_fetch": lambda c: [c.classification_packet_path],
                 "soft_discovery": lambda c: [c.soft_discovery_receipt_path],
+                "serenity_quality_forward": lambda c: [
+                    c.serenity_quality_observation_path,
+                    c.serenity_quality_ledger_path,
+                    c.serenity_quality_gate_path,
+                    c.serenity_g1_blade6_preflight_path,
+                ],
                 "theme_producer": lambda c: [c.theme_projection_path],
                 "projection_inputs": lambda c: [c.merged_momentum_path, c.merged_theme_path],
                 "pass2_preflight": lambda c: [c.preflight_summary_path],
@@ -315,6 +335,8 @@ class CapstoneFakeChainTest(unittest.TestCase):
                 ins = lambda c: [Path(c.private_root) / "_run_inputs" / "absent_declared_input.json"]
             elif name == present_input_stage:
                 ins = lambda c: [c.candidate_path]   # produced by universe_fetch (stage 0) → present at this turn
+            elif name == "pass2_fetch":
+                ins = lambda c: [c.ohlcv_series_packet_path]
             else:
                 ins = lambda c: []
             stages.append(Stage(
@@ -328,7 +350,7 @@ class CapstoneFakeChainTest(unittest.TestCase):
         return stages
 
     def _run(self, order_sink, **kw):
-        account_state_path = kw.pop("account_state_path", Path("account.json"))
+        account_state_path = kw.pop("account_state_path", self.private_root / "account.json")
         return run_weekly_capstone(
             now_et=datetime(2026, 7, 9, 8, 0, 0),
             private_root=self.private_root,
@@ -341,6 +363,69 @@ class CapstoneFakeChainTest(unittest.TestCase):
             **kw,
         )
 
+    def test_unregistered_in_repo_root_fails_before_first_stage(self):
+        from runners import us_short_weekly_capstone as cap
+
+        order: list[str] = []
+        bad_root = ROOT / "state" / "us_short" / "unregistered_capstone_root"
+        with self.assertRaisesRegex(WeeklyCapstoneError, "private output preflight"):
+            run_weekly_capstone(
+                now_et=datetime(2026, 7, 9, 8, 0, 0),
+                private_root=bad_root,
+                batch4_template_path=bad_root / "batch4_template.json",
+                account_state_path=bad_root / "account_state.json",
+                dry_run=False,
+                confirm_user_authorization=True,
+                state_dir=self.state_dir,
+                sample_root=self.state_dir,
+                stages=self._fake_stages(order),
+            )
+        self.assertEqual(order, [])
+
+        with temporary_us_short_state_directory(ROOT) as canonical_root_text:
+            canonical_root = Path(canonical_root_text)
+
+            def bridge_outputs(ctx):
+                return cap._official_output_paths(ctx)
+
+            def bridge_run(ctx):
+                outputs = bridge_outputs(ctx)
+                for path in outputs:
+                    path.parent.mkdir(parents=True, exist_ok=True)
+                    path.write_text("{}", encoding="utf-8")
+                return {
+                    "batch4_run": {
+                        "emitted": True,
+                        "output_paths": {
+                            "weekly_report_path": str(outputs[0]),
+                            "action_table_path": str(outputs[1]),
+                            "machine_record_path": str(outputs[2]),
+                        },
+                    }
+                }
+
+            summary = run_weekly_capstone(
+                now_et=datetime(2026, 7, 9, 8, 0, 0),
+                private_root=canonical_root,
+                batch4_template_path=self.private_root / "batch4_template.json",
+                account_state_path=canonical_root / "canonical_preflight_account.json",
+                dry_run=False,
+                confirm_user_authorization=True,
+                state_dir=self.state_dir,
+                sample_root=self.state_dir,
+                stages=[Stage("weekly_bridge", False, lambda _ctx: [], bridge_outputs, bridge_run)],
+            )
+            self.assertEqual(summary["execution_mode"], "injected_pipeline")
+            self.assertTrue(
+                (canonical_root / "weekly_private" / "20260709" / "weekly_report.md").is_file()
+            )
+            self.assertTrue(
+                (canonical_root / "weekly_private" / "20260709" / "action_table.csv").is_file()
+            )
+            self.assertTrue(
+                (canonical_root / "runs_private" / "20260709" / "machine_record.json").is_file()
+            )
+
     def test_full_chain_runs_in_order_and_emits(self):
         order: list[str] = []
         summary = self._run(order, stages=self._fake_stages(order))
@@ -352,6 +437,53 @@ class CapstoneFakeChainTest(unittest.TestCase):
         self.assertEqual(summary["decision_date"], "20260709")
         self.assertTrue(summary["emitted_report"].endswith("weekly_report.md"))
         self.assertNotIn("shadow_capture_failed", summary)
+
+    def test_typed_serenity_settlement_error_is_nonblocking(self):
+        from engine.us_short_serenity_quality_forward import SerenityQualityForwardError
+
+        order: list[str] = []
+        with mock.patch(
+            "engine.us_short_serenity_quality_forward.settle_pending_review",
+            side_effect=SerenityQualityForwardError("legacy ledger"),
+        ):
+            summary = self._run(order, stages=self._fake_stages(order))
+        self.assertEqual(order, _STAGE_NAMES)
+        self.assertEqual(summary["mode"], "live")
+        self.assertEqual(summary["execution_mode"], "injected_pipeline")
+
+    def test_legacy_serenity_ledger_is_local_no_count_and_chain_continues(self):
+        from engine import us_short_serenity_quality_forward as serenity_quality
+
+        ledger = self.state_dir / "us_short_serenity_quality_forward_ledger.json"
+        legacy = {
+            "schema_name": serenity_quality.SCHEMA_NAME,
+            "schema_version": serenity_quality.SCHEMA_VERSION,
+            "quality_policy_version": serenity_quality.QUALITY_POLICY_VERSION,
+            "cross_cohort_aggregation_allowed": False,
+            "cohorts": [],
+            "effects": dict(serenity_quality.EFFECT_BOUNDARY),
+        }
+        ledger.write_text(json.dumps(legacy, indent=2) + "\n", encoding="utf-8")
+        order: list[str] = []
+        settlement_result: dict[str, object] = {}
+        original_settle = serenity_quality.settle_pending_review
+
+        def settle_and_capture(**kwargs):
+            result = original_settle(**kwargs)
+            settlement_result.update(result)
+            return result
+
+        with mock.patch(
+            "engine.us_short_serenity_quality_forward.settle_pending_review",
+            side_effect=settle_and_capture,
+        ) as settle:
+            summary = self._run(order, stages=self._fake_stages(order))
+
+        self.assertEqual(order, _STAGE_NAMES)
+        self.assertEqual(summary["mode"], "live")
+        self.assertEqual(settle.call_count, 1)
+        self.assertEqual(settlement_result["status"], "no_count")
+        self.assertEqual(settlement_result["evidence_status"], "invalid_evidence")
 
     def test_decision_lock_is_bound_to_the_injected_state_root_and_reacquirable(self):
         from runners import us_short_weekly_capstone as cap
@@ -516,6 +648,15 @@ class CapstoneFakeChainTest(unittest.TestCase):
         self.assertIn("input", str(cm.exception).lower())
         self.assertNotIn("pass2_fetch", order)               # aborted BEFORE the stage's run body
         self.assertIn("yfinance_grades_fetch", order)        # earlier (empty-input) stages still ran
+
+    def test_pass2_ohlcv_input_missing_fails_before_stage_body(self):
+        order: list[str] = []
+        with self.assertRaisesRegex(WeeklyCapstoneError, "pass2_fetch.*input"):
+            self._run(
+                order,
+                stages=self._fake_stages(order, omit_ohlcv_output=True),
+            )
+        self.assertNotIn("pass2_fetch", order)
 
     def test_stage_present_declared_input_passes_and_chain_completes(self):
         # positive control: a stage whose declared input WAS produced by an earlier stage passes the pre-stage gate
@@ -747,11 +888,16 @@ class CapstoneFakeChainTest(unittest.TestCase):
         from runners import us_short_weekly_capstone as cap
         self._seed_prior_official_outputs()
         order: list[str] = []
-        with mock.patch.object(cap, "reject_nonprivate_output_path", side_effect=PrivatePathError("nonprivate")):
-            with self.assertRaises(PrivatePathError):
+        def reject_superseded_path(path):
+            if "_superseded" in str(path):
+                raise PrivatePathError("nonprivate")
+
+        with mock.patch.object(cap, "reject_nonprivate_output_path", side_effect=reject_superseded_path):
+            with self.assertRaises(WeeklyCapstoneError) as cm:
                 self._run(order, stages=self._fake_stages(
                     order, skip_output_stage="weekly_bridge",
                     bridge_batch4={"emitted": False, "no_emit_reason": "x"}))
+        self.assertIsInstance(cm.exception.__cause__, PrivatePathError)
 
     def test_pre_run_archive_failure_restores_prior_before_any_stage(self):
         # C3: prior outputs are archived BEFORE provider execution. A second-move fault rolls back while the prior run
@@ -1501,7 +1647,7 @@ class CapstoneAdapterSignatureTest(unittest.TestCase):
             (st._mom_fetch.run_fetch, ["candidate_artifact_path", "series_packet_path", "ohlcv_series_packet_path", "summary_path", "generated_at", "confirm_user_authorization"]),
             (st._sic.run_fetch, ["candidate_artifact_path", "classification_packet_path", "summary_path", "generated_at", "confirm_user_authorization"]),
             (st._yfinance_grades.run_yfinance_grades_fetch, ["preflight_summary_path", "output_source_package_path", "output_resolved_actions_path", "summary_path", "raw_root", "confirm_user_authorization", "generated_at", "observed_at", "pace_seconds"]),
-            (st._pass2.run_full_candidate_live_source_packet, ["preflight_summary_path", "expected_total_call_budget", "authorized_momentum_top_k", "forced_holding_tickers", "catalyst_recall_tickers", "source_artifact_prefix", "context_components_output_path", "output_data_context_path", "overextension_projection_path", "yfinance_grade_actions_path", "summary_path", "confirm_user_authorization", "run_data_context", "generated_at", "observed_at", "provider_pace_seconds", "max_retries_per_call", "retry_backoff_seconds", "max_total_http_attempts", "theme_soft_boost_enabled", "soft_discovery_stage_result", "provisional_theme_stage_receipt_path", "provisional_theme_validation_path", "original_candidate_artifact_path", "classification_packet_path", "soft_boost_consumption_receipt_path", "soft_boost_shadow_receipt_path", "soft_boost_comparison_ledger_path", "soft_boost_state_dir"]),
+            (st._pass2.run_full_candidate_live_source_packet, ["preflight_summary_path", "expected_total_call_budget", "authorized_momentum_top_k", "forced_holding_tickers", "catalyst_recall_tickers", "source_artifact_prefix", "context_components_output_path", "output_data_context_path", "overextension_projection_path", "ohlcv_series_packet_path", "yfinance_grade_actions_path", "summary_path", "confirm_user_authorization", "run_data_context", "generated_at", "observed_at", "provider_pace_seconds", "max_retries_per_call", "retry_backoff_seconds", "max_total_http_attempts", "theme_soft_boost_enabled", "soft_discovery_stage_result", "provisional_theme_stage_receipt_path", "provisional_theme_validation_path", "original_candidate_artifact_path", "classification_packet_path", "soft_boost_consumption_receipt_path", "soft_boost_shadow_receipt_path", "soft_boost_comparison_ledger_path", "soft_boost_state_dir"]),
             (st._mom_prod.run_packet, ["candidate_artifact_path", "series_packet_path", "output_projection_path", "summary_path", "generated_at"]),
             (st._overextension.run_packet, ["candidate_artifact_path", "series_packet_path", "output_projection_path", "summary_path", "generated_at"]),
             (st._theme.run_packet, ["candidate_artifact_path", "series_packet_path", "classification_packet_path", "output_projection_path", "summary_path", "generated_at"]),
@@ -1579,6 +1725,7 @@ class CapstoneAdapterSignatureTest(unittest.TestCase):
             self.assertEqual(overextension.call_args.kwargs["series_packet_path"], ctx.ohlcv_series_packet_path)
             self.assertEqual(overextension.call_args.kwargs["output_projection_path"], ctx.overextension_projection_path)
             self.assertEqual(pass2.call_args.kwargs["overextension_projection_path"], ctx.overextension_projection_path)
+            self.assertEqual(pass2.call_args.kwargs["ohlcv_series_packet_path"], ctx.ohlcv_series_packet_path)
             self.assertEqual(pass2.call_args.kwargs["yfinance_grade_actions_path"], ctx.yfinance_grade_actions_path)
 
 

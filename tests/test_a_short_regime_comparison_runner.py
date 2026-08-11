@@ -116,14 +116,17 @@ def _write_tracker(path: Path, as_of: str, *, digest: str, values: dict[str, flo
     path.write_text("\n".join(lines) + "\n", encoding="utf-8")
 
 
-def _write_m67(path: Path, as_of: str, *, digest: str, codes: list[str]) -> None:
+def _write_m67(path: Path, as_of: str, *, digest: str, codes: list[str],
+               price_freshness: dict | None = None) -> None:
     run_id = f"a-short-{as_of}-0123456789abcdef"
     write_content_bound_bundle(path, {
         "schema_name": "a_short_weekly_report", "as_of": as_of,
         "run_lineage": {
             "candidate_digest": digest, "run_id": run_id,
-            "price_freshness": {"mode": "strict_as_of", "run_date": as_of,
-                                 "price_data_through": as_of},
+            "price_freshness": price_freshness or {
+                "mode": "strict_as_of", "run_date": as_of,
+                "price_data_through": as_of,
+            },
         },
         "reports": [{
             "ts_code": code, "row_source": "egs_candidate",
@@ -622,6 +625,64 @@ class BootstrapPolicyTests(unittest.TestCase):
             self.assertTrue(out["action_comparison"]["records"][0]["forward_eligible"])
             self.assertTrue((base / "actions.json").exists())
 
+    def test_d2_monday_decision_accepts_friday_settled_regime_with_matching_receipt(self):
+        cal = _dates(BACKFILL_MIN_TRADING_DAYS, start=date(2025, 11, 29))
+        self.assertEqual(cal[-1], "20260807")
+        decision_as_of = "20260810"
+        with tempfile.TemporaryDirectory() as tmp:
+            base = Path(tmp)
+            report = base / decision_as_of / "weekly_m67.json"
+            _write_m67(
+                report, decision_as_of, digest="a" * 64, codes=[],
+                price_freshness={
+                    "mode": "intraday_prior_settled",
+                    "run_date": "20260809",
+                    "price_data_through": cal[-1],
+                    "accepted_prior_settled_date": cal[-1],
+                },
+            )
+            kw = self._kw(cal, tmp, bootstrap=True)
+            kw.update(
+                v14_2_regime="shock", raw_v14_2_regime="unknown",
+                m67_report_path=str(report), action_records_path=str(base / "actions.json"),
+                action_summary_path=str(base / "summary.json"),
+                action_decision_as_of=decision_as_of,
+            )
+            with patch("runners.a_short_regime_comparison_runner._current_run_date",
+                       return_value="20260809"):
+                out = run_regime_step(**kw)
+            origin = out["action_comparison"]["records"][0]["forward_origin"]
+            self.assertEqual(origin["decision_as_of"], decision_as_of)
+            self.assertEqual(origin["price_data_through"], cal[-1])
+            self.assertTrue(origin["source_receipt_complete"])
+
+    def test_d2_rejects_receipt_for_a_different_decision_date(self):
+        cal = _dates(BACKFILL_MIN_TRADING_DAYS, start=date(2025, 11, 29))
+        decision_as_of = "20260810"
+        with tempfile.TemporaryDirectory() as tmp:
+            base = Path(tmp)
+            report = base / "20260811" / "weekly_m67.json"
+            _write_m67(
+                report, "20260811", digest="a" * 64, codes=[],
+                price_freshness={
+                    "mode": "intraday_prior_settled",
+                    "run_date": "20260810",
+                    "price_data_through": cal[-1],
+                    "accepted_prior_settled_date": cal[-1],
+                },
+            )
+            kw = self._kw(cal, tmp, bootstrap=True)
+            kw.update(
+                v14_2_regime="shock", raw_v14_2_regime="unknown",
+                m67_report_path=str(report), action_records_path=str(base / "actions.json"),
+                action_summary_path=str(base / "summary.json"),
+                action_decision_as_of=decision_as_of,
+            )
+            with patch("runners.a_short_regime_comparison_runner._current_run_date",
+                       return_value="20260809"):
+                with self.assertRaisesRegex(ValueError, "D2 M6.7 receipt identity is incomplete"):
+                    run_regime_step(**kw)
+
     def test_d2_rejects_unreceipted_json_or_markdown_before_action_writes(self):
         cal = _dates(BACKFILL_MIN_TRADING_DAYS)
         for target in ("json", "markdown"):
@@ -719,23 +780,18 @@ class BootstrapPolicyTests(unittest.TestCase):
             self.assertNotIn("是否进入生产切换审查", panel)
 
     def test_d2_historical_decision_is_derived_not_counted(self):
-        cal = _dates(BACKFILL_MIN_TRADING_DAYS)
+        cal = _dates(BACKFILL_MIN_TRADING_DAYS + 1)
         with tempfile.TemporaryDirectory() as tmp:
             base = Path(tmp)
-            report = base / cal[-1] / "weekly_m67.json"
-            _write_m67(report, cal[-1], digest="a" * 64, codes=[])
-            historical_source = json.loads(report.read_text(encoding="utf-8"))
-            historical_source["run_lineage"]["price_freshness"] = {
-                "mode": "strict_as_of", "run_date": cal[-2], "price_data_through": cal[-2],
-            }
-            historical_source["run_date"] = cal[-2]
-            historical_source["price_data_through"] = cal[-2]
-            write_content_bound_bundle(report, historical_source)
+            decision_as_of = cal[-2]
+            report = base / decision_as_of / "weekly_m67.json"
+            _write_m67(report, decision_as_of, digest="a" * 64, codes=[])
             kw = self._kw(cal, tmp, bootstrap=True)
+            kw["as_of"] = decision_as_of
             kw.update(v14_2_regime="shock", raw_v14_2_regime="unknown", m67_report_path=str(report),
                       action_records_path=str(base / "actions.json"),
                       action_summary_path=str(base / "summary.json"),
-                      action_decision_as_of=cal[-2])
+                      action_decision_as_of=decision_as_of)
             out = run_regime_step(**kw)
             row = out["action_comparison"]["records"][0]
             self.assertFalse(row["forward_eligible"])

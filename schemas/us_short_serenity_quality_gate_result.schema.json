@@ -1,0 +1,121 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "US-short Serenity quality gate result",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_name",
+    "schema_version",
+    "generated_at",
+    "quality_policy_version",
+    "cohort_id",
+    "cohort_dimensions",
+    "verdict",
+    "quality_gate_result_id",
+    "formal_count_ready",
+    "formal_blockers",
+    "window",
+    "metric_assessments",
+    "thresholds",
+    "effects"
+  ],
+  "properties": {
+    "schema_name": {"const": "us_short_serenity_quality_gate_result"},
+    "schema_version": {"const": "1.0.0"},
+    "generated_at": {"type": "string", "format": "date-time"},
+    "quality_policy_version": {"const": "serenity_quality_policy_v0.1.0"},
+    "cohort_id": {"anyOf": [{"type": "string", "pattern": "^serenity_quality_cohort:[A-Za-z0-9_.:-]{3,500}$"}, {"type": "null"}]},
+    "cohort_dimensions": {"anyOf": [{"$ref": "#/$defs/dimensions"}, {"type": "null"}]},
+    "verdict": {"enum": ["continue_accumulating", "quality_below_threshold", "quality_gate_pass"]},
+    "quality_gate_result_id": {"anyOf": [{"type": "string", "pattern": "^serenity_quality_gate:[A-Za-z0-9_.:-]{3,500}$"}, {"type": "null"}]},
+    "formal_count_ready": {"type": "boolean"},
+    "formal_blockers": {
+      "type": "array",
+      "uniqueItems": true,
+      "items": {"type": "string", "pattern": "^[a-z0-9_:-]{2,120}$"}
+    },
+    "window": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["start_decision_date", "end_decision_date", "eligible_week_count", "record_ids"],
+      "properties": {
+        "start_decision_date": {"anyOf": [{"type": "string", "pattern": "^[0-9]{8}$"}, {"type": "null"}]},
+        "end_decision_date": {"anyOf": [{"type": "string", "pattern": "^[0-9]{8}$"}, {"type": "null"}]},
+        "eligible_week_count": {"type": "integer", "minimum": 0},
+        "record_ids": {"type": "array", "items": {"type": "string", "pattern": "^serenity_quality_record:[A-Za-z0-9_.:-]{3,500}$"}}
+      }
+    },
+    "metric_assessments": {
+      "type": "array",
+      "minItems": 5,
+      "maxItems": 5,
+      "items": [
+        {"$ref": "#/$defs/claim_binding_integrity"},
+        {"$ref": "#/$defs/review_consistency"},
+        {"$ref": "#/$defs/falsifier_observability"},
+        {"$ref": "#/$defs/horizon_judgment"},
+        {"$ref": "#/$defs/weak_or_contradicted_discrimination"}
+      ],
+      "additionalItems": false
+    },
+    "thresholds": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["minimum_eligible_weeks", "minimum_evaluable_rate", "minimum_pass_rate"],
+      "properties": {
+        "minimum_eligible_weeks": {"const": 4},
+        "minimum_evaluable_rate": {"const": 0.75},
+        "minimum_pass_rate": {"const": 0.8}
+      }
+    },
+    "effects": {"$ref": "#/$defs/effect_boundary"}
+  },
+  "$defs": {
+    "dimensions": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["annotation_schema_version", "rubric_version", "consumer_version", "upstream_policy_version", "producer_identity_version", "annotation_prompt_version", "reviewer_identity_version", "review_prompt_version"],
+      "properties": {
+        "annotation_schema_version": {"const": "1.0.0"},
+        "rubric_version": {"const": "serenity_annotation_rubric_v0.1.0"},
+        "consumer_version": {"const": "serenity_shadow_consumer_v0.1.0"},
+        "upstream_policy_version": {"enum": ["soft_discovery_query_policy_v0.2.0", "soft_discovery_query_policy_v0.3.0"]},
+        "producer_identity_version": {"const": "serenity_annotation_producer_v0.1.0"},
+        "annotation_prompt_version": {"type": "string", "minLength": 1, "maxLength": 128},
+        "reviewer_identity_version": {"const": "serenity_quality_reviewer_v0.1.0"},
+        "review_prompt_version": {"const": "serenity_quality_reviewer_prompt_v0.1.0"}
+      }
+    },
+    "assessment": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["metric_id", "evaluable_count", "evaluable_rate", "pass_count", "pass_rate", "verdict"],
+      "properties": {
+        "metric_id": {"type": "string"},
+        "evaluable_count": {"type": "integer", "minimum": 0},
+        "evaluable_rate": {"type": "number", "minimum": 0, "maximum": 1},
+        "pass_count": {"type": "integer", "minimum": 0},
+        "pass_rate": {"type": "number", "minimum": 0, "maximum": 1},
+        "verdict": {"enum": ["not_ready", "below_threshold", "pass"]}
+      }
+    },
+    "claim_binding_integrity": {"allOf": [{"$ref": "#/$defs/assessment"}, {"properties": {"metric_id": {"const": "claim_binding_integrity"}}}]},
+    "review_consistency": {"allOf": [{"$ref": "#/$defs/assessment"}, {"properties": {"metric_id": {"const": "review_consistency"}}}]},
+    "falsifier_observability": {"allOf": [{"$ref": "#/$defs/assessment"}, {"properties": {"metric_id": {"const": "falsifier_observability"}}}]},
+    "horizon_judgment": {"allOf": [{"$ref": "#/$defs/assessment"}, {"properties": {"metric_id": {"const": "horizon_judgment"}}}]},
+    "weak_or_contradicted_discrimination": {"allOf": [{"$ref": "#/$defs/assessment"}, {"properties": {"metric_id": {"const": "weak_or_contradicted_discrimination"}}}]},
+    "effect_boundary": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["scoring_eligible", "top15_effect_enabled", "operation_advice_effect_enabled", "provider_calls_performed", "network_access_performed", "main_task_should_abort"],
+      "properties": {
+        "scoring_eligible": {"const": false},
+        "top15_effect_enabled": {"const": false},
+        "operation_advice_effect_enabled": {"const": false},
+        "provider_calls_performed": {"const": false},
+        "network_access_performed": {"const": false},
+        "main_task_should_abort": {"const": false}
+      }
+    }
+  }
+}

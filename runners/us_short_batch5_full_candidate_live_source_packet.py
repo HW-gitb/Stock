@@ -1159,6 +1159,7 @@ def _build_local_source_packet(
     theme_projection_path: Path,
     overextension_projection_path: Path | None,
     overextension_candidate_artifact_path: Path | None,
+    ohlcv_series_packet_path: Path | None,
     yfinance_grade_actions_path: Path | None,
     output_data_context_path: Path,
     context_components_output_path: Path | None,
@@ -1194,6 +1195,8 @@ def _build_local_source_packet(
     if overextension_projection_path is not None:
         packet_paths["overextension_projection_path"] = _repo_rel(overextension_projection_path)
         packet_paths["overextension_candidate_artifact_path"] = _repo_rel(overextension_candidate_artifact_path)
+    if ohlcv_series_packet_path is not None:
+        packet_paths["ohlcv_series_packet_path"] = _repo_rel(ohlcv_series_packet_path)
     if yfinance_grade_actions_path is not None:
         packet_paths["yfinance_grade_actions_path"] = _repo_rel(yfinance_grade_actions_path)
     if context_components_output_path is not None:
@@ -1251,6 +1254,10 @@ def _build_local_source_packet(
     if yfinance_grade_actions_path is not None:
         source_artifact_sha256["yfinance_grade_actions_path"] = hashlib.sha256(
             yfinance_grade_actions_path.read_bytes()
+        ).hexdigest()
+    if ohlcv_series_packet_path is not None:
+        source_artifact_sha256["ohlcv_series_packet_path"] = hashlib.sha256(
+            ohlcv_series_packet_path.read_bytes()
         ).hexdigest()
     optional_inputs = {
         "holdings": holdings,
@@ -1787,6 +1794,7 @@ def run_full_candidate_live_source_packet(
     output_data_context_path: Path = DEFAULT_OUTPUT_DATA_CONTEXT_PATH,
     context_components_output_path: Path | None = DEFAULT_CONTEXT_COMPONENTS_OUTPUT_PATH,
     overextension_projection_path: Path | None = None,
+    ohlcv_series_packet_path: Path | None = None,
     sector_classification_packet_path: Path | None = None,
     yfinance_grade_actions_path: Path | None = None,
     source_artifact_prefix: Path = SOURCE_ARTIFACT_PREFIX,
@@ -1943,6 +1951,11 @@ def run_full_candidate_live_source_packet(
     overextension_path = (
         _existing_state_json(overextension_projection_path, field="overextension_projection_path")
         if overextension_projection_path is not None
+        else None
+    )
+    ohlcv_path = (
+        _existing_state_json(ohlcv_series_packet_path, field="ohlcv_series_packet_path")
+        if ohlcv_series_packet_path is not None
         else None
     )
     yfinance_actions_path = (
@@ -2107,6 +2120,7 @@ def run_full_candidate_live_source_packet(
         theme_projection_path=paths["theme_projection"],
         overextension_projection_path=overextension_path,
         overextension_candidate_artifact_path=candidate_path if overextension_path is not None else None,
+        ohlcv_series_packet_path=ohlcv_path,
         yfinance_grade_actions_path=yfinance_actions_path,
         output_data_context_path=output_path,
         context_components_output_path=components_path,
@@ -2185,6 +2199,7 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     parser.add_argument("--authorized-momentum-top-k", type=int, required=True)
     parser.add_argument("--output-data-context-path", type=Path, default=DEFAULT_OUTPUT_DATA_CONTEXT_PATH)
     parser.add_argument("--context-components-out", type=Path, default=DEFAULT_CONTEXT_COMPONENTS_OUTPUT_PATH)
+    parser.add_argument("--ohlcv-series-packet-path", type=Path)
     parser.add_argument("--yfinance-grade-actions-path", type=Path)
     parser.add_argument("--source-artifact-prefix", type=Path, default=SOURCE_ARTIFACT_PREFIX)
     parser.add_argument("--summary-path", type=Path, default=SUMMARY_PATH)
@@ -2217,6 +2232,7 @@ def main(argv: list[str] | None = None) -> int:
             output_data_context_path=args.output_data_context_path,
             context_components_output_path=args.context_components_out,
             yfinance_grade_actions_path=args.yfinance_grade_actions_path,
+            ohlcv_series_packet_path=args.ohlcv_series_packet_path,
             source_artifact_prefix=args.source_artifact_prefix,
             summary_path=args.summary_path,
             raw_root=args.raw_root,

@@ -1,5 +1,37 @@
 # A-short 371 叶重新分层交接
 
+## 2026-08-11 Codex executor/fixer：Optional O29/O30 + 桌面 V4 health 修复（OPEN-NOT_VERIFIED，40d9）
+
+### Purpose / problem / repair
+
+本轮承接桌面 `C:\Users\cnhea\Desktop\2a_testrun0810.md` V4 与当前 register Optional O29/O30。O29 的 official backfill 过滤后只有 legacy audit rows，却输出“tracker is empty”；O30 只有外部 planted-failure 探针，没有测试内承重控制；V4 旧 health 汇总通过累计 CSV/ledger/summary/目录 probe 改写本轮 manifest 的状态和日期。
+
+- `runners/forward_tracker.py::backfill()` 现在在 official filter 为空但原 tracker 非空时明确输出 `no official tracker rows; excluded N legacy audit row(s), formal backfill count=0`，保持 legacy 正式零计数、exit 0、append-only 和 provider/cache 边界。
+- `tests/test_a_short_v5_revision_matrix.py` 新增真实 `settle_and_summarize_v2_weekly` consumer keyword 删除的 planted-failure；矩阵从生产 call-site True 变 False，测试不写生产文件。
+- `runners/a_short_weekly_sidecar_health.py` 将 21 项完整登记为 `evidence_role/progress_clock/evidence_policy`；删除 `_probe`、`_max_csv_as_of`、`_max_json_as_of` 与目录猜测；manifest-only 只读本轮 outcome；candidate/IV 只在当前成功尝试下复用中央 validator；theme 只在当前成功尝试下复用 `validate_comparison_packet()`；执行状态由 manifest 所有，clockless 不生成 decision clock；日期/字段错位/duplicate owner fail-closed；Markdown 输出四个日期列。
+
+### Call chain / consumers / schema / source-binding / write boundary
+
+O29：`weekly_screening.ps1` → `forward_tracker.py backfill --run-revision-id --official-project-root` → `_load_existing_tracker()` → `_filter_official_revision()` → legacy audit-only message / formal backfill。O30：`tests/test_a_short_v5_revision_matrix.py` AST →真实 pipeline consumer call → `REVISION_MATRIX`。
+
+V4：`weekly_screening.ps1` → 当前 launcher/pipeline `a_short_weekly_sidecar_outcomes` manifests → `a_short_weekly_sidecar_health.py::main/build_health` → `write_health_bundle` → `sidecar_health.json` / Markdown / receipt。使用既有 `schemas/a_short_weekly_sidecar_health.schema.json`、`schemas/a_short_weekly_sidecar_outcomes.schema.json`、`schemas/a_short_weekly_publish_receipt.schema.json`；不生成/重算 `run_revision_id`，不改变 V5 resolver/official selector/path，不改 EGS/M6.7/comparison/provider/cache。candidate/IV artifact 和 theme packet 只有当前 `expected=true + attempted=true + succeeded` 才读取；manifest-only 不读取累计 private/public summary；写盘仍只限 health 三件套。
+
+### Negative controls / self-review / exact terminal evidence
+
+- 21 项 registry 计数为 decision=13、data=1、clockless=7；policy 为 manifest_only=18、authoritative_artifact=2、validated_current_packet=1。
+- factor/target 的 upstream `failed + stalled`、regime data clock、skipped settlement、七项 clockless、旧 artifact 不覆盖当前 manifest、candidate/IV 成功进程不被 validator 失败改成 failed、theme rejection/epoch/waiting/current packet 均有回归或负向断言。
+- future/impossible/wrong-clock date、single/dual manifest duplicate、真实 `main()` → JSON/Markdown/receipt 四列/hash 均由 `tests/test_a_short_weekly_sidecar_health.py` 覆盖。
+- 固定解释器：`C:\Users\cnhea\AppData\Local\Programs\Python\Python313\python.exe`，`Python 3.13.8`。
+- 精确联合命令：
+  `& 'C:\Users\cnhea\AppData\Local\Programs\Python\Python313\python.exe' -m unittest tests.test_a_short_weekly_sidecar_health tests.test_a_short_weekly_screening_m67_failure_closeout tests.phase6.test_forward_tracker_cache_guard tests.test_a_short_v5_revision_matrix -q`
+  原始终态：`Ran 86 tests in 11.510s ... OK`，exit 0。
+- 固定 Python `-m py_compile`（health/forward tracker/O29/O30 tests）exit 0；`git diff --check` exit 0（仅既有 LF→CRLF warnings）。
+- 本轮未 provider/live、未真实 normal weekly/cache-build、未 durable 两轮、未 full lane/ship-gate；当前用户已有 `research/results/a_short/**` tracked/untracked 产物保留，未清理或覆盖。
+
+### Review / commit boundary / next
+
+当前是 Codex executor/fixer 的 `OPEN-NOT_VERIFIED` 交接；未 stage/commit/push/merge。Claude Code 是独立 reviewer/committer，需复审真实 `main()` 接线、V3-A reason preservation、registry/日期/duplicate 规则、O29/O30 planted controls 和 dirty 产物边界后再决定 PASS/Required。下一步：`Claude Code：独立复审 Optional O29/O30 与桌面 V4；不提交、不 merge`。
+
 ## 2026-08-11 Codex executor/fixer：V5-A/B/C/D 最新五条 Required 修复（OPEN-NOT_VERIFIED，40d9）
 
 ### 目的、相互影响与最小改动
@@ -4499,6 +4531,12 @@ O17 调用链为 `build_state → _preliminary_calendar_effective_weeks → _adj
 
 **下一步**：`Codex：执行`
 
+## 2026-08-10 追加：Optional O26 修复交接（782a）
+
+- O26 已修：`test_receipt_is_bound_to_code_state_and_token` 显式屏蔽真实 `MERGE_HEAD` 的 bundle widening；merge 两侧 widening 仍由 `MergeCombinedStateTests` 独立覆盖。
+- 固定 Python 收据包 `11 OK`，receipt=`receipt:13e6e521f867332c22bbccec`。本轮只改测试隔离，未改生产收据逻辑，未提交/合并。
+- 当前 handoff 没有比 O26 更具体的新实现刀；O25 只是根目录 `*.md` 的既有边界观察，已由现行 `is_code_path()` 行为覆盖且不建议扩大代码边界。待 Claude Code 独立审查。
+
 ## 2026-08-09 追加：接线 + 频率证据 —— 给执行方的方案（reviewer 定）
 
 **这一节是施工单。** finding 正文见 `docs/system_risk_register.md` 的 `R-ASHORT-MARGIN-OVERHEAT-TRACK-IS-MERGED-BUT-NO-PRODUCTION-ENTRY-EVER-TURNS-IT-ON`，本节只写怎么做、怎么证、以及**明确不做什么**。
@@ -5134,6 +5172,60 @@ undeclared_track_dependency track=p1_regime_candidate_effect path=schemas/plante
 
 **下一步**：`Codex：执行`（按轨分绑仍等设计定稿与用户授权，不得翻 mode、不得加 forward）
 
+## 2026-08-09 追加：P1-1 D2 决策收据误拿已结算 regime 日核对（OPEN-NOT_VERIFIED）
+
+### 问题、根因与改动
+
+- canonical 周跑的 `decision_as_of` 是结果服务的交易日，正常可为周一；`as_of` 在 regime runner 内是当时最新已结算行情日，正常为上周五。二者本来允许相差不超过七天。
+- `run_regime_step` 却用 `receipt.as_of == as_of` 判 M6.7 来源完整，导致 `20260810` 决策收据被拿去和 `20260807` regime 日比较并硬报 `D2 M6.7 receipt identity is incomplete`。
+- 最小修复只把该腿改为 `receipt.as_of == decision_as_of`。`run_id`、`candidate_digest`、价格 freshness、七天陈旧门、canonical resolver 与 settled-day 算法均未改。
+
+### 调用链、消费者、schema/source-binding/写盘
+
+- 调用链：`weekly_screening.ps1` → regime runner `main()` → `_latest_settled_as_of` → `run_regime_step` → `validate_published_weekly_bundle` → receipt identity → action record/summary → candidate-effect。
+- 直接消费者：`forward_origin.source_receipt_complete`、`forward_eligible`、action records/summary、candidate-effect。官方选股与 M6.7 不消费这些 comparison-only 结果。
+- 无 schema 变化。共享 publication validator 仍先把 receipt 的 `as_of/decision_as_of/run_id/candidate_digest` 与周报逐项绑定；本地门只把收据决策身份对到 `action_decision_as_of`。regime 日继续只服务日线账本/状态。
+- 写盘仍限于既有 comparison ledger/records/panel；没有写正式周报、生产结果、provider raw、账户或订单。本轮没有运行真实 runner/live/provider。
+
+### 正反控、植入、自审与验证
+
+- 新正控：周日运行、周一决策、周五 settled regime/price，精确断言三个日期/身份字段各归其位并成功产 action。
+- 新反控：完整但属于另一决策日的收据，`assertRaisesRegex` 点名拒 `D2 M6.7 receipt identity is incomplete`。旧 historical 测试夹具同步纠正 receipt/weekly/decision 三者同日，仍断言不计 forward。
+- 修前红测：`Ran 1 test in 2.954s` / `FAILED (errors=1)`；修后点名两测：`Ran 2 tests in 3.622s` / `OK`。把门临时退回旧比较后再次 `Ran 1 test in 2.861s` / `FAILED (errors=1)`，随后恢复，runner SHA-256 回到 `2727162d8ab514ea61d24acdbb552b937a6b6271fe33f7a131aee9a9557769e0`。
+- 固定主 Python `C:\Users\cnhea\AppData\Local\Programs\Python\Python313\python.exe` / `Python 3.13.8`。最终 bounded direct pack：`Ran 73 tests in 29.662s` / `OK`，`RESULT tier=focused status=PASS exit=0 tests=73`，receipt `receipt:bf798d088d0867ea0f6d868c`；A-short preflight `[OK]`；`py_compile` 与 `git diff --check` exit 0；最终文档门 `Ran 55 tests in 0.990s` / `OK`，实际 pre-commit 为 `Ran 14 tests` / `OK` + `Ran 41 tests` / `OK`。
+- A-F：同类扫描确认本 runner 只有这一处 receipt/settled-date 交叉绑定；权威链与写盘边界如上；正控、另一决策日反控、历史不计数与门中和植入均已覆盖。改动小且 direct pack 可界定，不起 sub-agent，不跑 full lane。
+
+### NOT_VERIFIED 与提交边界
+
+- full lane=`not_triggered: AGENTS rule 3; reason=comparison-only runner 单字段身份纠正，未改生产顶层 weekly pipeline/EGS、共享 engine/schema/provider/account`。
+- provider/live、真实周跑、真实 comparison 写盘、forward/freeze/clock、ship gate 均未运行；独立 reviewer、commit、push、merge 为 `NOT_VERIFIED/NOT_PERFORMED`。未使用 `--no-verify`。
+- 本节是 executor/fixer 交接，不是 reviewer PASS。
+
+**下一步**：`Claude Code：审查`
+
+## 2026-08-09 追加：桌面 `a_runtest2_cc.md` P1-1 独立审查 —— PASS（已合入 master）
+
+**判定**：PASS，无 Required、无 Optional。改动 = 生产 1 行 + 测试 + 三份文档。finding 正文只在 `docs/system_risk_register.md` 同日 PASS 节，本节只写过程与边界。
+
+**我自己实际验了什么（区别于执行方与子 agent 的转述）**
+
+- **真实产物重算**：直接读主树 `state/a_short/weekly_private/20260810/` 的已发布 bundle，把 `run_regime_step:831-835` 的布尔式以旧源 / 新源各代入一次 —— 旧源 `False`（必 raise，精确复现本次实盘的 `[5/5] exit 1`）、新源 `True`。这条证据不依赖任何测试夹具。
+- **权威链**：`weekly["decision_as_of"] = str(args.as_of)`（`a_short_weekly_pipeline.py:6277`）+ `validate_published_weekly_bundle:3410-3435` 的六字段逐项回绑，说明改后这腿不是重复设防：run_id/digest 两腿自洽复核在上游已做，as_of 这腿是唯一的「调用方声明 vs 已验证 bundle」跨源绑定。
+- **整类扫点**：`:784-790`（≤7 天容忍）/ `:820`（记录键用 settled 是对的）/ `:838-844`（价格腿本就用决策日）/ `m67_provenance_from_bundle:137` / `engine/a_short_regime_action_comparison.py:336` / `a_short_weekly_sidecar_health.py:139,173` 逐个判定，确认只有 `:832` 一处错。
+- **下游解锁**：修后首次可达的 `run_candidate_effect_sidecar` 里 `_tracker_rows_for_week` 缺 cohort 是 raise —— 实测真实 `logs/forward_tracker.csv` 的 `20260810` cohort 存在（15 行、digest/run_id 与周报 lineage 相等、本周建仓候选 0），故不会把崩溃挪后一格。
+- **旧夹具改写**：确认原组合在新语义下已非法、必须改，改后仍守住 `forward_eligible=False` 与 `total_forward_weeks=0`，`_dates(N+1)` 是为保住 252 天 bootstrap 下限。
+
+**植入对照（我自写，分腿两次）**
+
+- A 把门退回 pre-patch 原体 → 正控精确红在生产同一句 `D2 M6.7 receipt identity is incomplete`；B 只中和该腿 → 反控精确红在 `ValueError not raised`。**必须分开**：反控在 A 下仍绿，单靠它证不出修复方向（执行方只做了 A）。两次还原后 runner sha256 逐字节回到 `2727162d…`。
+
+**未覆盖维度与诚实边界**
+
+- 只闭 P1-1 的崩溃半；「一次退出把三条 sidecar 统一记 failed / 日线其实已写盘」属退出码派生状态，归桌面 P2-1 / P2-4，本刀未动。
+- 未跑真实周跑；action 记录仍只有 20260717 一条，下周真跑才新增。forward/freeze/clock、provider/live/account/ship-gate 全 `NOT_VERIFIED`。
+- full lane 按 rule 4 归执行方（判 `not_triggered`），我未重跑也未走 rule 6 escalation；§6a 未起 agent（无 live 取数 / secret 落盘 / 新增大改 fail-closed 门）。
+
+**下一步**：`Codex：执行`（桌面 `a_runtest2_cc.md` 下一顺位；未来审查工作树与交接文档改在 `D:\cnhea\Codex\worktrees\40d9\Stock`）
 ## 2026-08-09 追加：D-2/D-5 executor/fixer 修复（OPEN-NOT_VERIFIED）
 
 ### 范围与结论
@@ -5609,6 +5701,75 @@ effect contract 已用固定 Python 重新登记 A-EGS decision-predicate hash �
 
 **下一步**：`Codex：执行`
 
+## 2026-08-10 追加：O24 自修复 + 自审 —— PASS（已合入 master）
+
+**判定**：PASS，无 Required。用户指示由我一人完成修复与审查，故本节同时是修复记录与审查记录。
+
+**做了什么**
+
+- 那条植入对照原先把公开对写进真实仓库路径，多窗口并发下互相踩（主树那次 `OSError 22` 即由此而来）。现在写进 tmp，断言改看 tmp 那对；另加静态断言把「生产默认路径就是那对 tracked 文件」钉住，链条保留在断言里而不是写盘里。
+
+**我自己实际验了什么**
+
+- **先枚举再动手**：全仓检索测试里三个公开写函数的 18 个调用点，确认只有这一处依赖默认路径，其余都已传 tmp——这一类只有一名成员。
+- **修复后**：两条用例绿；同一次运行前后对 8 个 tracked 产物逐个算 sha256，逐字节一致。
+- **植入对照**：把写盘改回默认路径 → 精确转红在我新加的那条断言上；还原后测试文件与 8 个产物全部逐字节回原值。
+
+**未覆盖维度与诚实边界**
+
+- 没有真去复现两个进程同时跑的竞态（那需要并发进程），只证明了本测试不再写真实产物、碰撞面已移除。
+- 纯测试隔离改动，未碰生产代码、schema 或决策逻辑。
+## 2026-08-10 Codex — frozen digest reseal-tax retirement (782a)
+
+- Scope: `R-ASHORT-FROZEN-DIGEST-RESEAL-TAX-RETIRE-CODE-FINGERPRINTS`; no 40d9 sidecar mixing, no provider/live/account/order work.
+- A1 retired the four code-derived fingerprint keys and their constructors/guards. A2 keeps explicit sorted `analysis_input_paths` / `runtime_policy_paths` and adds explicit sorted schema path maps for runtime-policy schemas and output schemas. A3 was checked as still consumed by the legacy loader, so the migration hash became sorted `legacy_migration_entries` rather than being deleted.
+- No derived-vs-derived self-comparison was introduced. A2 planted additions fail at the list guard and reorder-only controls pass. B controls prove docs-only receipt validity, code mutation invalidation, and the pre-commit code gate; C comparison-track identity fingerprints were untouched.
+- Fixed-Python final focused pack: `186 OK`, `receipt:ba7ba51068e79f18276fea8e`, including route-doc and doc-governance doors. A-short full lane: `2725/2725 PASS`, count gate equal, `STATIC diff_check=PASS py_compile=6`, ledger fingerprint `9bdb97b75736`.
+- Boundary: Codex executor/fixer only; independent review and commit remain outside this turn. The risk-register entry is the detailed source of truth.
+
+## 2026-08-10 Codex follow-up：B 收据代码树锚点（782a）
+
+- B 修复已落地：收据不再把裸 `@HEAD` 纳入指纹，改为 filtered tracked code-tree SHA256 + 未提交非文档文件内容；`.githooks/pre-commit` 复用同一入口。
+- 三态闭合：文档工作区改动保持 receipt；文档-only commit 保持 receipt；代码 commit 改变 fingerprint 并拒绝 receipt。固定 Python 最终聚焦 `143 OK`，token=`receipt:8e7ee27a7839b577d94f9cf6`，包含 route-doc、doc-governance 和 Unicode `.md` 路径门禁。
+- Boundary：本轮仅 B 工具链；A/C 不回退；不做 provider/live/account/order；未提交/合并，待 Claude Code 独立审查。
+
+## 2026-08-10 追加：指纹退役刀（782a）独立审查 —— FAIL（未提交）
+
+**判定**：FAIL，一条 P2 Required（B 腿未实现，正文只在 `docs/system_risk_register.md` 同日节）。A 腿复核成立。
+
+**我自己实际验了什么**
+
+- **A 整族核了一遍**，不是只看被点名的两个键：9 个冻结指纹键逐个对上处置方式，`static_contract_error` 里对应的比对分支全部改成「契约冻结清单 vs 当前派生清单」，不是派生自比对那种空壳。
+- **零残留自查**：删掉的三个 helper 在 engine·runners·tests·.tools 内 0 命中；退役键只剩在历史迁移归档里（应该留）。`A-EGS/egs_main.py` 里的同名 `_canonical_ast` 是另一处既有实现，别误判成漏删。
+- **B 用探针坐实没做**：`.tools/verification_receipt.py` 一个字节没改。我在临时 git 仓里复现了真实事故——改文档**文件**指纹不变（新用例测的就是这格，改前就成立），把同一改动**提交**后指纹立刻变，收据作废；再改代码仍会变（反向控制在）。根子是 `collect_code_state()` 把裸 `@HEAD` 折进了指纹。
+
+**未覆盖维度与诚实边界**
+
+- 未做植入对照：Required 是「要求未实现」，没有门可中和；A 侧植入由执行方那两条清单用例承担，我核了判据形状。
+- 记下一处既定取舍：退役 `runtime_policy_sha256` 后，policy JSON 的**数值**变化不再被契约察觉，只剩字段集变化会被抓——这正是用户要去掉的那条税。
+- §6a 未起 agent；未提交、未合并。
+
+**下一步**：`Codex：修复`（只补 B：让纯文档**提交**不再作废收据，并保留代码提交必作废的反向控制）
+
+## 2026-08-10 追加：收据封印（B 腿）复审 —— PASS（已合入 master）
+
+**判定**：PASS，无 Required，一条新 Optional（O25，正文只在 `docs/system_risk_register.md` 同日节）。至此指纹退役刀 A、B 两腿全闭。
+
+**我自己实际验了什么**
+
+- **用上一轮把它判死的那条探针原样复跑**：纯文档**提交**后指纹不再变（上一轮正是在这一格作废的）。
+- **反向三格自写**：代码工作副本改、代码提交、`git rm` 删代码文件——三种形态都仍然作废收据，没有放宽过头。
+- **读了封印的实现**：`@CODE_TREE` 取的是 `ls-tree` 的 blob 条目而不是工作副本字节，因此对 CRLF/autocrlf 天然免疫；`core.quotePath=false` + utf-8 解码避免非 ASCII 路径让封印随环境漂移。
+- **A 腿字节未变**，沿用上一轮的整族复核结论，未重复劳动。
+
+**植入对照（我自写）**
+
+- 把 `_tracked_code_tree_sha256` 的 `if is_code_path(rel):` 中和成 `if True:` → 点名闭合用例精确转红；还原后该文件 sha256 逐字节回原值、`git diff --numstat` 仍是本刀自己的 33/7。
+
+**未覆盖维度与诚实边界**
+
+- 没有真去复现两个进程同时跑的竞态，只证明了「文档提交不再作废封印」这条因果链。
+- 记下一个边界：根目录 `*.md`（含 `AGENTS.md`）也在代码边界之外，改它不再作废收据；实际影响接近零，因为两个文档守卫由 pre-commit 每次现跑。
 ## 2026-08-10 追加：桌面 V1 optional 共享缓存与 EGS 同类入口修复 —— OPEN-NOT_VERIFIED
 
 **判定**：按 `C:\Users\cnhea\Desktop\2a_testrun0810.md` 的 V1 方案完成当前工作树最小代码修复与离线回归；不是 reviewer PASS，也不是生产/发布关闭。未改主树、未手工改真实 state、未启动 provider/live/full lane、未提交。
@@ -5664,6 +5825,23 @@ effect contract 已用固定 Python 重新登记 A-EGS decision-predicate hash �
 
 **下一步**：`Codex：执行`
 
+## 2026-08-10 追加：O26（收据绑定单测 vs merge 状态）复审 —— PASS（已合入 master）
+
+**判定**：PASS，无 Required。
+
+**我自己实际验了什么**
+
+- 读了被短接掉的那条链：该用例主题是收据/令牌绑定，`validate_focused_evidence` 却经 `required_bundles_now` → `merge_side_paths()` 去读真实仓库的 `MERGE_HEAD`，所以「冲突解完先跑一遍」必然见红。
+- 确认覆盖没丢：`MergeCombinedStateTests` 用临时仓真造一次纯文档 merge 来钉 widening，并有 `--merge --abort` 的反向孪生。
+- 强制今天那组致红条件重跑该用例 → 绿。
+
+**植入对照（我自写）**
+
+- 把隔离层换回读真实状态 → 同样条件下该用例 FAILED；还原后测试文件 sha256 逐字节回原值。
+
+**未覆盖维度与诚实边界**
+
+- 纯测试隔离，未触碰 `.tools/verification_receipt.py` 的生产逻辑。
 ## 2026-08-11 追加：O23 治理记录轮独立复审 —— PASS（已合入 master）
 
 **判定**：PASS，无 Required。本轮是「零源码 + 只写治理记录」的一刀，审的实质是记录里那句关于代码的断言。
@@ -5898,5 +6076,25 @@ effect contract 已用固定 Python 重新登记 A-EGS decision-predicate hash �
 - 桌面 V5 的总关闭门（真实周末→周一 durable 两轮同时满足四时钟/revision/cache/outcome/health）**未达成**；本 PASS 只覆盖代码与离线契约，真实 provider/weekly 仍 `NOT_VERIFIED`。
 - full lane 按 rule 4 归执行方；§6a 上一轮已对同一门起过 agent，本轮定点复核未重复起。
 - 提交排除 `research/results/a_short/**` 的 0810 真实周跑遗留（既有 dirty + untracked），它们不属本刀。
+
+**下一步**：`Codex：执行`
+
+## 2026-08-11 追加：O29/O30 + 桌面 V4 独立审查 —— PASS（已提交并合入 master）
+
+**判定**：PASS。两条 Optional 闭了，桌面 V4 的 sidecar-health 汇总改写也真做对了；同轮把此前解好的 master 合并落了地。
+
+**我实际验了什么**（区别于执行方转述）
+
+- V4 的六条 0810 现场改写，我自己构造 manifest 喂进 `build_health` 逐条看：`stalled` 不再被改写成 `unavailable`（`stalled_count` 从 0 回到 2）、`regime_daily` 保住周五数据日且没混进决策日、`skipped` 的 settlement 不再从旧 summary 补日期、clockless 不再被强配决策期望、两份 manifest 同名直接 `duplicate_sidecar_outcome`、不存在的 `20260231` 落成 `health_contract_invalid_date` 且该值被丢弃。
+- **放松类改动必做的反向控制**（这轮删掉了一批通用改写，最容易顺手把该降的也放过）：我另跑五格——缺时钟、时钟发霉、时钟角色放错、execution 与 progress 自相矛盾，四格都仍然降级并给出稳定码，干净那格仍是 advanced。
+- 结构面：`_max_csv_as_of` / `_max_json_as_of` 在文件里 0 次出现，是真删了不是留着不调；三类 evidence_policy 与三类 progress_clock 齐备。
+- O30 的植入用例是把**变异源码喂进守卫**再断言它察觉，不是恒真式；与我上一轮的外部探针同结论，现在固化进了测试。
+- master 合并：冲突是结构性的（master 把 effect contract 换成路径清单模型），我以 master 为底重放本刀两处语义增量，四个 provenance 路径由 `static_inventory()` 现场派生后写回，`validate_static_contract()` 通过；register 追加型冲突两侧全留。
+
+**未覆盖维度与诚实边界**
+
+- a_short 全量在本代码态仍没有绿记录：rule 4 说这一次归执行方，我此前按 rule 6 起过一次被 ledger 以「收据早于提交」拒绝，之后工作树一直在被并发写入。这条留给执行方。
+- 真实 provider / live / 真实 normal weekly 两轮 durable 产物仍 `NOT_VERIFIED`；桌面 V5 总关闭门未达成。
+- V4 只动运维 health，未改 EGS 排名、Top5、M6.7 结论或总退出码；§6a 未起 agent（rule 8 低危）。
 
 **下一步**：`Codex：执行`

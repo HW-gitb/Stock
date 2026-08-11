@@ -941,3 +941,313 @@ cmd /c .tools\run_unittest_with_repo_pythonpath.cmd tests.test_route_doc_ledger_
 **验证命令与结果**：按 §6a Optional-only 快档——一次 scope grep + 最小覆盖目标一次 `Ran 71 in 26.8s OK`；未起 agent、未跑全量。探针与控制组见 SESSION_LOG 同日 `Verify`。
 
 **一条自我更正**：我第一版探针把「中断」模拟成「删掉 receipt」，忘了真实中断会先留下 pending intent，于是控制组红了。代码报的 `without a pending receipt intent` 正好点破——那条路径（有人手工摆一份通知）本就该拒。按控制组不绿即判探针无效的规矩重做后结论才成立。教训：**模拟失败态之前先读清楚成功路径的写入顺序**。
+
+## 2026-08-10 追加：桌面 us_testrun1 问题1 —— canonical transaction lock 私密路径修复（OPEN-NOT_VERIFIED）
+
+### 改了什么
+
+- 根 `.gitignore` 新增精确规则 `state/*/_transaction_locks/`，覆盖一键入口真实生成的 `state/us_short/_transaction_locks/<decision_date>.lock`。
+- `tests/test_us_short_paper_one_click.py` 新增 canonical 接线测试：使用 `DEFAULT_STATE_DIR`、真实 `resolve_capstone_context()` 和 `_decision_lock_path()`，再由真实 `reject_nonprivate_output_path()` 消费；同时保留 `state/us_short/anything/deep/x.json` 的负向控制。
+- 生产代码仍只有 `runners/us_short_weekly_capstone.py::_decision_lock_path()` 一个锁目录生产点；conformance 测试中的 `provider_samples/.../_transaction_locks` 是故意植入坐标，未改。
+
+### 为什么改
+
+问题1的实际死点发生在任何 stage 之前：canonical transaction lock 被私密守卫拒绝。原有锁测试只注入仓外/临时 state root，无法证明一键真实坐标可用；本刀同时验证 tracked `.gitignore` 来源，避免本机 `.git/info/exclude` 造成假绿。
+
+### 验证命令
+
+```text
+固定解释器：C:\Users\cnhea\AppData\Local\Programs\Python\Python313\python.exe（3.13.8）
+.tools\run_unittest_with_repo_pythonpath.cmd tests.test_us_short_paper_one_click.USShortPaperOneClickTest.test_canonical_decision_lock_is_ignored_by_tracked_gitignore
+.tools\run_unittest_with_repo_pythonpath.cmd tests.test_us_short_paper_one_click tests.test_us_short_private_paths tests.provider.test_us_short_weekly_capstone.CapstoneFakeChainTest.test_decision_lock_is_bound_to_the_injected_state_root_and_reacquirable
+.tools\run_unittest_with_repo_pythonpath.cmd tests.test_route_doc_ledger_status_consistency tests.test_doc_governance_guard
+```
+
+### 验证结果
+
+- 修复前点名测试 `Ran 1 / FAILED`，失败来源为本机 `D:/cnhea/Stock/.git/info/exclude:7`，不是 tracked `.gitignore`；修复后点名测试 `Ran 1 / OK`，receipt=`receipt:3f736ec63694dc9b3abf1f80`。
+- 聚焦包 `Ran 21 / OK`，receipt=`receipt:e068e3e4e61b77a35749ae9b`；canonical `git check-ignore -v` 命中 `.gitignore:47`，深层未登记路径返回未忽略且守卫拒绝。
+- 两道 door `Ran 55 / OK`，receipt=`receipt:619d73c2ec80fa334fac94d6`；`py_compile` 与 `git diff --check` 通过（仅既有 LF/CRLF 警告）。
+- 未运行 provider、网络、真实一键周跑或 full US-short lane；本轮不打开诊断时钟，不触及问题2。
+
+### 失效的旧结论
+
+- “现有临时 state-root 锁测试足以覆盖一键锁路径”已失效；真实 canonical `state/us_short` 坐标此前没有接线覆盖。
+- “`git check-ignore` 返回 0 即证明 tracked 私密规则已生效”已失效；本轮红灯证明本机 `.git/info/exclude` 可以制造假绿，必须核对命中来源。
+
+### 下一步注意事项
+
+- 当前 R-ID `R-USSHORT-CANONICAL-TRANSACTION-LOCK-NOT-GITIGNORED` 保持 `OPEN-NOT_VERIFIED`，等待 Claude Code 独立审查后再决定关闭/提交。
+- 问题2 `private_root` / `official_output_root` 默认根冲突仍未处理；不得把本刀的 tracked ignore 修复解释为一键全流程已通过。
+
+## 2026-08-10 追加：问题1 独立审查 PASS（Claude Code reviewer/committer）
+
+### 改了什么
+
+- 只做审查与收口，未改上一节交付的任何代码或测试；本节新增的只有 verdict 与独立证据落位：`R-USSHORT-CANONICAL-TRANSACTION-LOCK-NOT-GITIGNORED` 翻 `resolved`，并新记一条 Optional `R-USSHORT-NEW-PRIVATE-STATE-SUBDIR-HAS-NO-RECURRENCE-GUARD`。
+
+### 为什么改
+
+- 上一节的 verdict 位停在 `OPEN-NOT_VERIFIED`，等的就是独立复算；复算全部成立，故按 reviewer/committer 流程关闭并提交。同时把「一个实例已关、产生它的机制仍无守卫」这条残留从桌面权威件搬进仓库状态，避免它只活在桌面文档里。
+
+### 验证命令
+
+```text
+固定解释器：C:\Users\cnhea\AppData\Local\Programs\Python\Python313\python.exe（3.13.8）
+.tools\run_unittest_with_repo_pythonpath.cmd tests.test_us_short_paper_one_click tests.test_doc_governance_guard
+（植入探针）按字节删除 .gitignore 第 47 行 → 跑 tests.test_us_short_paper_one_click.USShortPaperOneClickTest.test_canonical_decision_lock_is_ignored_by_tracked_gitignore → 按字节还原并核对 sha256
+git check-ignore -v --no-index -- <9 条私密坐标 + state/us_short/anything/deep/x.json>
+```
+
+### 验证结果
+
+- rule-1 焦点超集（reviewer 亲跑）：`Ran 51 in 4.4s OK`，`receipt:8b2c35c706519566f86e4d90`。
+- 承重腿植入：点名测试精确转红，失败正文正是 `D:/cnhea/Stock/.git/info/exclude:7`；还原后 `.gitignore` sha256 前后同为 `de129b6ed07e3bdbfb1f4cbf331093cd9242cd617af147e47f5544ad50808758`。同一植入态下 `reject_nonprivate_output_path(lock_path)` 仍 ACCEPT —— 生产守卫本身测不出这个缺口，所以那条「来源必须是 tracked `.gitignore`」的断言是承重的，不是装饰。
+- 同类扫描独立重跑：私密家族 9 条坐标全部命中 tracked `.gitignore`；`state/us_short/anything/deep/x.json` 仍 NOT-IGNORED，忽略面未扩大。
+- 掩盖源穷举：repo `.git/info/exclude` 只有 `state/*/_transaction_locks/` 一条真实模式，`core.excludesFile` 未配置（rc=1），故本仓没有第二处「靠未跟踪 exclude 撑起私密证明」的同类实例。
+- 分级：无 live provider、无 secret 落盘、无 fail-closed 引擎改动，按 §6a 不起独立 agent；rule 3 五个触发条件均不成立，`full-lane=not_triggered`。
+
+### 失效的旧结论
+
+- 上一节「等待 Claude Code 独立审查后再决定关闭/提交」已失效——审查已完成，R-ID 已关闭并提交。
+
+### 下一步注意事项
+
+- 机制级复发仍未上守卫（Optional R-ID 已登记）。若将来采纳，只允许一条窄的静态一致性测试 + planted-failure；桌面权威件 §问题1 修复方案 §0 已把注册表 / schema / 指纹 / 运行时目录扫描器 / 新抽象层列入不纳入，不得借此扩建。
+- 问题2 `private_root` / `official_output_root` 默认根冲突仍未处理；本刀 PASS 只代表锁这一步不再拦路，不代表一键全流程可跑通。
+
+## 2026-08-10 追加：问题1 Optional recurrence guard + 桌面问题2 carrier-root / model-paper 首周 seed 修复（OPEN-NOT_VERIFIED）
+
+### 改了什么
+
+- 问题1 Optional：`tests/test_us_short_paper_one_click.py` 静态枚举生产 `ctx.state_dir / "<literal>"` 私密子目录，逐项要求真实 `git check-ignore -v --no-index` 命中 tracked `.gitignore`，并加入未登记子目录 planted-failure；未引入注册表、schema、指纹、运行时扫描器或宽泛 ignore。
+- 问题2 A：`runners/us_short_batch5_to_batch4_weekend_e2e.py` 把 `private_root` / `official_output_root` 只解析为 carrier root；account/context 及下游 lifecycle/weekly/runs 实际叶子守卫保留。
+- 问题2 B：`runners/us_short_weekly_capstone.py` 在 authorization/context 基础校验后、settlement/checkpoint/transaction/provider 前，对 account、context packet、lifecycle、三份 official 叶子和 model-paper `head_manifest.json` 做真实 preflight；dry-run 语义不变。
+- 问题2 C：`engine/us_short_model_paper_store.py::_store_root()` 改守卫首个真实制品 `head_manifest.json`，不提前 mkdir；首次缺失 store 继续走既有 `not initialized → seed_required`，终端 owner 仍负责初始化。
+- 只在既有三个测试文件补三条承重回归，并更新既有 IO inventory 测试分类与快照；未改 schema、CLI、业务字段、`.gitignore`、provider/live。
+
+### 为什么改
+
+问题2的两个默认入口把 namespace/carrier root 当成私密叶子，导致 canonical `state/us_short` 在任何 stage 前被拒；model-paper 首次运行又在真实 head 制品创建前守卫尚不存在的裸根，阻断 first-week seed。桌面方案要求把隐私证明落在真实叶子，不放宽全局 private-path guard，也不忽略整根。
+
+### 验证命令
+
+```text
+固定解释器：C:\Users\cnhea\AppData\Local\Programs\Python\Python313\python.exe（3.13.8）
+.tools\run_unittest_with_repo_pythonpath.cmd tests.provider.test_us_short_batch5_to_batch4_e2e tests.provider.test_us_short_weekly_capstone tests.test_us_short_paper_one_click tests.test_us_short_model_paper_store tests.test_us_short_model_paper_weekly tests.test_us_short_model_paper_capstone_wiring tests.test_us_short_private_paths tests.test_us_short_capstone_checkpoint
+C:\Users\cnhea\AppData\Local\Programs\Python\Python313\python.exe -m py_compile runners/us_short_batch5_to_batch4_weekend_e2e.py runners/us_short_weekly_capstone.py engine/us_short_model_paper_store.py tests/provider/test_us_short_batch5_to_batch4_e2e.py tests/provider/test_us_short_weekly_capstone.py tests/test_us_short_model_paper_capstone_wiring.py
+.tools\run_unittest_with_repo_pythonpath.cmd tests.test_us_short_test_io_inventory
+.tools\run_unittest_with_repo_pythonpath.cmd tests.test_route_doc_ledger_status_consistency tests.test_doc_governance_guard
+```
+
+### 验证结果与边界
+
+- 三条新回归先取得区分性红灯，修复后 `3/3 PASS`，receipt=`receipt:6ee0485a5f5e70b6691ab3c7`；最终 focused 超集 `146/146 PASS`，receipt=`receipt:beb25a11ea3b1625b55af028`；IO inventory 修正后 `18/18 PASS`，receipt=`receipt:d7ee5d51a1a2c9807ee0d682`。
+- full-lane 按 rule 3(a)/(b) 只执行一次：ledger `FAIL`，`discovered=5735`、`ran=5274`，因旧 IO inventory 快照未覆盖本刀新增夹具 allowlist/count；未显示生产行为测试失败。按桌面方案不重跑 full lane，不能宣称 full-lane PASS。
+- `py_compile`、`git diff --check` 和两道 door 均通过；door `55/55 PASS` receipt=`receipt:971fdcf25e64d9d407333f05`。本轮无 provider/network/live/account/diagnostic clock/ship-gate，未产生真实运行产物，Codex 未提交。当前 Required 与 Optional 均保持 `OPEN-NOT_VERIFIED`，待 Claude Code 独立审查。
+
+### 失效的旧结论
+
+- “问题1只有 `_transaction_locks/` 实例、没有机制级 recurrence guard”已失效：静态枚举 + tracked-ignore + planted-failure 已落地，但仍待独立审查闭合。
+- “canonical `private_root` / `official_output_root` 仍在首阶段被根守卫阻断”已失效；“首次不存在的 model-paper root 必须先手工 mkdir 才能 seed”也已失效。
+- “当前问题2 full lane 已通过”不成立：唯一 full-lane 记录是 `5735 discovered / 5274 ran / FAIL`，inventory 基线随后已修正，但按方案未重跑全量。
+
+### 下一步注意事项
+
+- Claude Code：独立审查问题1 Optional 与 `R-USSHORT-CARRIER-ROOT-LEAF-PREFLIGHT-AND-MODEL-PAPER-FIRST-SEED`；重点核对 carrier root 与实际叶子边界、preflight 位置、model-paper 首件证明、negative controls、full-lane FAIL 边界，然后决定 Pass 或 Required/重跑授权。
+- 不要把 `state/us_short` 整根加入 `.gitignore`，不要恢复裸根 guard，不要用手工 mkdir/新 schema/SHA/运行时机制掩盖问题；本工作树仍为 `D:\cnhea\Codex\worktrees\238a\Stock`，不提交、不触碰主树或其他工作树。
+
+## 2026-08-10 追加：问题2 独立审查 FAIL（Claude Code reviewer）
+
+### 改了什么
+
+- 只做审查，未改本刀交付的任何代码或测试。新增 verdict 与证据落位：blocking `R-USSHORT-NEW-CAPSTONE-TEST-WRITES-INTO-THE-REAL-REPO-PRIVATE-ROOT` + 5 条 Optional，正文全在 `docs/system_risk_register.md`。
+
+### 为什么改
+
+- 生产三处改动本身站得住（见下），但新增回归测试把真实 checkout 的 `state/us_short` 当成自己的沙盒跑真实事务，撞红既有资源隔离守卫，full lane 因此无法通过——而执行方自己写的 closure criteria 就要求一次 `discovered == ran` 的 full lane PASS。
+
+### 验证命令
+
+```text
+固定解释器：C:\Users\cnhea\AppData\Local\Programs\Python\Python313\python.exe（3.13.8）
+.tools\run_unittest_with_repo_pythonpath.cmd --timeout-seconds 900 tests.test_us_short_paper_one_click tests.test_us_short_model_paper_capstone_wiring tests.test_us_short_test_io_inventory tests.provider.test_us_short_weekly_capstone tests.provider.test_us_short_batch5_to_batch4_e2e tests.test_us_short_discovery_conformance tests.test_doc_governance_guard
+python .tools\full_pack_ledger.py run us_short "<rule-6 escalation reason>" "receipt:9cf2d8d1d47637bb4878e4e9" 860 -- discover -s tests -p "test_us_short*.py"
+（放松腿反向控制）_store_root / _week_paths 对 state/us_short_probe_tmp 与 canonical 对照；git check-ignore -v --no-index 逐条坐标
+```
+
+### 验证结果
+
+- 焦点超集：`Ran 197 in 43.5s OK`，`receipt:9cf2d8d1d47637bb4878e4e9`。
+- reviewer 自起 full lane（rule 6）：`discovered=5735 ran=5734 equal=False FAIL`，唯一红为 `tests/test_us_short_discovery_conformance.py:2325`，断言原文 `a resource test changed repository state/us_short`。跑完真实目录里多出 `runs_private/20260709/machine_record.json`、`weekly_private/20260709/{weekly_report.md,action_table.csv}` 与 `_superseded/20260709__2026-07-09T08-00-00-04-00[_x…]` 链，全部 gitignored 所以 `git status` 恒净。
+- 放松腿反向控制：`_store_root` 现接受 `state/us_short_probe_tmp`（该根本身 NOT-IGNORED）——放松是真的；但 `_week_paths` 在同一根下仍 REJECT，canonical 对照两者皆 ACCEPT，故**叶子级 fail-closed 仍成立、无数据外泄**。`.json.tmp` 兄弟实测 IGNORED，我读代码时怀疑的临时文件泄漏不成立。
+- §6a 独立对抗 agent（起 1 个）：在不知道我那条全量红的前提下独立收敛到同一条，并演示 `_superseded` 目录对数 9→10 的无界增长；其余 6 条为 P2/P3，均未演示出数据外泄，已按 Optional 记录。
+
+### 失效的旧结论
+
+- 「full-lane 唯一失败是旧 IO inventory 快照、未显示生产行为测试失败」已失效：那次 fail-fast 停在 inventory 模块，**从未跑到**资源隔离守卫；本轮跑到了，红的是本刀新增测试引起的真实状态污染。
+
+### 下一步注意事项
+
+- 修复须整类闭：同类还有 `tests/test_us_short_model_paper_capstone_wiring.py` 断言 `state/us_short/model_paper_private` 不存在（跑过产品的 checkout 必红）。
+- 修完请一并清掉本次已落盘的 `state/us_short/{runs_private,weekly_private}/20260709*` 与 `_superseded` 残链，并由执行方跑出一次 `discovered == ran` 的 full lane PASS 再交复审。
+
+## 2026-08-10 追加：Required 测试真实私密根污染修复（OPEN-NOT_VERIFIED）
+
+### 改了什么
+
+- `test_unregistered_in_repo_root_fails_before_first_stage` 的正向控制改用既有 `temporary_us_short_state_directory(ROOT)` 注入式 gitignored 临时根；仍跑 `dry_run=False` 的完整 fake bridge 事务并断言 weekly/action/machine 三份输出，canonical carrier-root 语义未改成放宽真实守卫。
+- `test_absent_in_repo_model_paper_root_reaches_first_week_seed_preview` 同样使用临时 state 根，验证缺失 store 可到达 `seed_required` 且 adapter preview 不创建 store；不再断言真实 checkout 的 `state/us_short/model_paper_private` 永远不存在。
+- 用既有 inventory 生成器同步 `docs/us_short_test_io_inventory_20260801.json`，只删除已经不再出现的 `model_paper_store_root` unresolved key；五条 Optional 未处理。
+
+### 残留清理
+
+- 当前工作树中已删除并复核为空：
+  `state/us_short/runs_private/20260709`、
+  `state/us_short/runs_private/_superseded`、
+  `state/us_short/weekly_private/20260709`、
+  `state/us_short/weekly_private/_superseded`、
+  `state/us_short/model_paper_private`。
+- 被删除的是 gitignored 运行时假产物/归档链，不在 Git 历史中，不能由 Git 恢复；未触碰主树或其他工作树。
+
+### 验证命令与结果
+
+```text
+固定解释器：C:\Users\cnhea\AppData\Local\Programs\Python\Python313\python.exe（3.13.8）
+.tools\run_unittest_with_repo_pythonpath.cmd tests.test_us_short_discovery_conformance_resources.ResourceIsolationMatrix.test_d_repo_shared_resource_tests_inject_state_and_lock_roots
+.tools\run_unittest_with_repo_pythonpath.cmd tests.provider.test_us_short_batch5_to_batch4_e2e tests.provider.test_us_short_weekly_capstone tests.test_us_short_paper_one_click tests.test_us_short_model_paper_store tests.test_us_short_model_paper_weekly tests.test_us_short_model_paper_capstone_wiring tests.test_us_short_private_paths tests.test_us_short_capstone_checkpoint
+.tools\run_unittest_with_repo_pythonpath.cmd tests.test_us_short_test_io_inventory
+C:\Users\cnhea\AppData\Local\Programs\Python\Python313\python.exe .tools\full_pack_ledger.py check us_short
+```
+
+- 资源隔离点名 `Ran 1 / 82.119s / OK`，receipt=`receipt:27466ca9e5aeeddac40d8b51`；affected focused `Ran 146 / 17.994s / OK`，receipt=`receipt:e7a0edc450540a89f16cd5e3`；inventory `Ran 18 / 10.219s / OK`，receipt=`receipt:7e34a2a9cf7656c50dbe5f6d`。
+- full lane 已按 ledger 唯一执行并通过：`modules=316, discovered=5735, ran=5735, equal=True`，`Ran 5735 in 592.724s`，`RESULT status=PASS exit=0 tests=5735`；`.tools/state/full_pack_ledger.json` 已记录该 exact code fingerprint `430062b2a96e490bccef5b29d97b52e1ce38d8be3bb814f8de0114aac0a1c4ca` 的 `5735 OK`。full-pack static 为 `diff_check=PASS, py_compile=8`；最终文档/路由门 `Ran 55 / 2.024s / OK`，receipt=`receipt:545765f5d3b817c60a23a610`，`git diff --check=PASS`。
+- 盘面扫描确认 `20260709`、`_superseded`、`model_paper_private` 均无匹配残留；无 provider/network/live/account/order/诊断时钟/ship-gate。
+
+### 失效的旧结论
+
+- 「full lane 唯一失败是旧 inventory、未跑到生产行为守卫」已失效：当前 exact code state 的唯一有效 full lane 已完整跑到资源隔离模块并以 `5735/5735 PASS` 收口。
+- 「测试会把真实 `state/us_short` 当作自己的沙盒并持续增长 `_superseded`」已失效：两处正向/缺失根测试都绑定临时根，真实盘面扫描为空。
+
+### 下一步
+
+- Claude Code：独立审查本 R-ID 的两处测试隔离、inventory 变更、清理范围和 `5735/5735` ledger 证据；通过后由 reviewer/committer 提交。五条 Optional 继续留在 register，未作为本次 Required 的闭合条件。
+
+## 2026-08-10 追加：问题2 复审 PASS（Claude Code reviewer/committer）
+
+### 改了什么
+
+- 只做复审与收口，未改本刀交付的任何代码或测试。`R-USSHORT-NEW-CAPSTONE-TEST-WRITES-INTO-THE-REAL-REPO-PRIVATE-ROOT` 与 `R-USSHORT-CARRIER-ROOT-LEAF-PREFLIGHT-AND-MODEL-PAPER-FIRST-SEED` 双双翻 `resolved`，独立复算写进 register 顶部；上轮 5 条 Optional 保持 open。
+
+### 为什么改
+
+- 上轮判死的是测试隔离，不是设计。两条同类腿改用 lane 既有的 `temporary_us_short_state_directory` 之后，canonical 载体根语义仍被完整证明（正向控制照跑完整事务，并新增三份 official 产物落位断言），而真实 checkout 不再被写。
+
+### 验证命令
+
+```text
+固定解释器：C:\Users\cnhea\AppData\Local\Programs\Python\Python313\python.exe（3.13.8）
+.tools\run_unittest_with_repo_pythonpath.cmd --timeout-seconds 900 tests.provider.test_us_short_weekly_capstone tests.test_us_short_model_paper_capstone_wiring tests.test_us_short_paper_one_click tests.test_us_short_test_io_inventory tests.provider.test_us_short_batch5_to_batch4_e2e tests.test_us_short_discovery_conformance_resources tests.test_doc_governance_guard
+（植入探针）把 _preflight_private_output_paths 按字节中和成 no-op → 跑点名测试 → 按字节还原并核 sha256
+python -c "verification_receipt.collect_code_state / fingerprint" 独立重算指纹，与 .tools/state/full_pack_ledger.json 记录比对
+```
+
+### 验证结果
+
+- 焦点超集（含上轮转红的 `tests.test_us_short_discovery_conformance_resources`）：`Ran 169 / 142.1s / OK`，`receipt:a1634177c8bfc727d82dfa94`；真实 `state/us_short` 下 `20260709`、`_superseded`、`model_paper_private` 残留实测为空。
+- 植入探针：中和 preflight 后点名测试精确转红（`FAILED (errors=1)`），还原后 `runners/us_short_weekly_capstone.py` sha256 前后同为 `2e01b679…`。**顺带一个比预期更强的结论**：中和后拦住未登记仓内根的，是更深处 writer 抛出的原生 `PrivatePathError`（`weekly_private/_transaction_state/20260709.json`）——preflight 是「把失败提前」，不是唯一防线。
+- full lane 按 rule 4 引用执行方账本、reviewer 不重跑：`fingerprint` 与 `prepared_fingerprint` 均等于我独立重算的 `430062b2a96e49…`，`discovered=ran=5735`、`count_gate_equal=True`、`modules 316/316`、592.7s。
+- 一次自我更正：`check us_short` 报 no cached green，一度像是与账本冲突；读 `cached_green()` 后确认它还要求 prepared 记录的 focused receipt 与当前 receipt 文件一致，而覆盖该文件的正是我自己的 focused 重跑——属受体绑定假阴性，不是代码态变化，故未按 rule 6 重跑全量。
+- 另一次自我更正：第一版植入探针写成 PowerShell 内联字符串，转义被解析吃掉，文件从未被改（sha 未变）而命令却返回 OK，并在仓库根留下一个空文件 `assert`。已删除该文件并改用脚本文件重做，结论以重做那次为准。教训：**带引号/反斜杠的字节级补丁一律走脚本文件，别塞进内联字符串**。
+
+### 失效的旧结论
+
+- 「本刀不能过，因为 full lane 过不去」已失效：账本已有 `5735/5735 equal PASS` 且指纹匹配当前代码态。
+
+### 下一步注意事项
+
+- 五条 Optional（preflight 只证 head 叶子 / serenity 结算块写入不在名单 / capstone 私密 writer 无自守卫 / state_dir AST 守卫实测只覆盖 1 个 child / 相对 private-root 行为变更）仍 open，别当作已解决。
+- 桌面 `us_testrun1.md` 的问题 3 及之后各项尚未处理；本刀 PASS 只代表一键跑到 `weekly_bridge` 之前的路径不再自堵。
+
+## 2026-08-11 追加：问题3 覆盖标签规范序 —— 独立审查 PASS（Claude Code reviewer/committer）
+
+### 改了什么
+
+- 只做审查与收口，未改本刀交付的代码或测试。新建并关闭 `R-USSHORT-COVERAGE-GAP-TAGS-ORDER-DEPENDS-ON-CALLER-MAPPING-ORDER`，另记流程 Optional `R-USSHORT-EXECUTOR-LANDED-A-SLICE-WITH-NO-SESSION-LOG-OR-REGISTER-ENTRY`；正文都在 register。
+
+### 为什么改
+
+- 执行方本轮只留了 5 个改动文件，SESSION_LOG / register / handoff 三处都没有条目，也没有 full-lane 记账。verdict 与证据必须有 durable 落点，否则下一个接手的人只能从 diff 猜。
+
+### 验证命令
+
+```text
+固定解释器：C:\Users\cnhea\AppData\Local\Programs\Python\Python313\python.exe（3.13.8）
+.tools\run_unittest_with_repo_pythonpath.cmd --timeout-seconds 900 tests.test_us_short_coverage_honesty tests.test_us_short_result_source_linkage tests.provider.test_us_short_batch5_to_batch4_e2e tests.test_us_short_test_io_inventory tests.test_doc_governance_guard
+python .tools\full_pack_ledger.py run us_short "<rule-6 escalation reason>" "receipt:cff9f819a009340f5f9c1df4" 860 -- discover -s tests -p "test_us_short*.py"
+（探针）两种调用方顺序的 build_row_coverage 输出比对 + 漏项/多项/不支持类别三种坏输入 + 把循环还原成 caller 顺序的植入
+```
+
+### 验证结果
+
+- 焦点超集：`Ran 105 / 32.1s / OK`，`receipt:cff9f819a009340f5f9c1df4`。
+- 结构闭合性（静态）：`_GATING_CATEGORIES = frozenset(_SUPPORTED_COVERAGE_CATEGORIES)`，两者同集合且入参已校验 required ⊆ 该集合，所以「按规范序遍历 + 跳过非 required」恰好访问全部 required 项——不存在漏检某个已校验类别、把 worst-of 算轻的路径。这是本刀唯一值得担心的方向，已排除。
+- 探针：两种调用方顺序输出逐字段相同（`gap_tags=['analyst:missing','event:blocked']`、`coverage_status='blocked'`）；Cut4 子集 `price`+`momentum` 得 `restricted`；漏项 / 多项 / 不支持类别三种坏输入全部仍被拒（闭世界没被顺带放宽）。
+- 植入：循环还原成 `for category in required_categories` → 精确转红 4 条，含 `test_sorted_json_round_trip_preserves_multigap_source_fact`（ERROR，本 finding 的复现形态）与 `test_required_category_order_does_not_change_3_4_7_category_outputs` 的三种形状；还原后引擎 sha256 前后同为 `a5f54465…`。
+- reviewer 自起 full lane（rule 6）：`discovered=5738 ran=5738 equal=True PASS`，735.8s，fingerprint `4dd172cfe749`，已记账。
+
+### 失效的旧结论
+
+- 上一节「问题 3 及之后各项尚未处理」中的问题 3 部分已失效：问题 3 已修复并通过独立审查。
+
+### 下一步注意事项
+
+- 实现方下一刀交审前请补 SESSION_LOG entry（含 Proof-of-use）并在 rule 3 触发时自行跑全量记账；本轮因两者都缺，reviewer 只能自补一次 736s 全量，墙钟被拉长。
+- 桌面 `us_testrun1.md` 问题 4（checkpoint 能力）及之后各项仍未处理；问题2 遗留的 5 条 Optional 也仍 open。
+
+## 2026-08-11 追加：桌面 us_testrun0810 问题1 Optional + 问题2 OHLCV source-packet→价格链修复（OPEN-NOT_VERIFIED）
+
+### 改动
+
+- 当前权威执行方案是桌面 `us_testrun0810.md`；`us_testrun1.md` 已不再作为本轮方案。
+- 问题1 Optional recurrence guard 已按既有窄静态方案复核：点名 planted-failure 测试 `1 OK`，receipt=`receipt:8996ec08ef757a4374473b9c`；状态仍为 `repaired / OPEN-NOT_VERIFIED`，不得宣读为覆盖所有私密子目录。
+- 问题2 的断点是 Pass2 丢失已有 `ctx.ohlcv_series_packet_path`。修复只做 A/B/C：weekly capstone Pass2 inputs 加 OHLCV 并升 contract `2.0.0→2.1.0`；stage 透传；source-packet runner/CLI 接收同一路径，复用既有路径校验，把 packet 相对路径和真实字节 SHA 写入 source packet，随后让 result linkage / Batch4 使用同一 OHLCV bars。没有新 schema、sidecar、manifest、digest identity 或 yfinance 行为改动。
+
+### 证据
+
+- 固定解释器：`C:\Users\cnhea\AppData\Local\Programs\Python\Python313\python.exe`（3.13.8）。问题2核心 `weekly=86 OK`、`source-packet=23 OK`、`batch5→batch4 e2e=11 OK`；inventory `18 OK`，receipt=`receipt:35fb887d8914d2c4feee52ef`。
+- 反向植入：移除 adapter 的 OHLCV 透传后点名测试精确 `KeyError`/FAIL；恢复后 2 条相关测试 `OK`，receipt=`receipt:96452500059b2ef9adbb1043`。
+- 精确桌面 focused package `130` 仍有唯一测试文件红：`test_tracked_artifact_digest_canonicalization` 的 8 个既有 A-short raw-digest 坐标；新增 OHLCV 坐标已用精确例外处理。未修改无关 A-short。
+- full lane 在最终行为代码态只执行一次，`discovered=5740 ran=5740 equal=True PASS`，`360.5s/860s`；静态 `py_compile=7`、`git diff --check=PASS`。未调用 provider/network/live/account，未跑真实周任务。
+
+### 交接边界与下一步
+
+- 本轮不是“exact focused 全绿”或实盘/ship-gate 结论；`R-USSHORT-CAPSTONE-OHLCV-PRICE-LINKAGE-GAP` 为 `repaired / OPEN-NOT_VERIFIED`。
+- Claude Code：独立审查问题1 Optional、问题2 A/B/C、精确 digest 例外、既有 A-short focused baseline 与 `5740/5740` full-lane 证据；若接受基线边界，再决定 Pass 或另开 A-short 修复。
+
+## 2026-08-11 追加：问题2 OHLCV 价格链接线 —— 独立审查 PASS 并收口
+
+### 改了什么
+
+- 无生产代码改动（审查方不写业务代码）。本节记录对执行方 A/B/C 的独立复核结论与证据，并把 `R-USSHORT-CAPSTONE-OHLCV-PRICE-LINKAGE-GAP` 从 `repaired / OPEN-NOT_VERIFIED` 收到 `resolved`。
+
+### 为什么
+
+- 桌面权威件 `us_testrun0810.md` §问题2 要求的不是"source packet 多一个字段"，而是 bars 真到价格引擎。故本轮审查把重点放在消费侧整读与植入证伪，而不是复述执行方的红绿计数。
+
+### 验证命令与结果
+
+- 焦点超集（reviewer 亲跑）：`.tools\run_unittest_with_repo_pythonpath.cmd --timeout-seconds 900 tests.provider.test_us_short_weekly_capstone tests.provider.test_us_short_batch5_full_candidate_live_source_packet tests.provider.test_us_short_batch5_to_batch4_e2e tests.test_tracked_artifact_digest_canonicalization` → `Ran 130 / 77.4s / FAILED(failures=1)`，唯一红为既有 A-short digest 坐标（已归因、已单立 R-ID）。
+- 植入探针（reviewer 自写）：抹掉 `_build_local_source_packet` 写 `packet_paths["ohlcv_series_packet_path"]` 的那一条 → 点名测试转红，红点落在生产门 `_validated_provider_envelope_digests`；还原后该文件 sha256 前后同为 `7dbc9e55…`。
+- full lane：按 AGENTS rule 4 不重跑，引用执行方账本 `5740/5740 equal=True PASS 360.5s/860s`；reviewer 用 `full_pack_ledger.collect_code_state()` / `fingerprint()` 独立重算得 `0153257565f7a0e8…`，与账本记录逐字相同，证明该全量绑定当前 diff。
+
+### 失效旧结论
+
+- 上一节末尾"桌面 `us_testrun1.md` 问题 4 …"的表述失效：**自 2026-08-11 起 `us_testrun1.md` 已退役**，唯一权威清单是桌面 `us_testrun0810.md`（按严重度重排，编号与旧文不同：原问题1→#4、原问题2→#5、原问题3→#1）。
+- "问题2 遗留的 5 条 Optional 仍 open"指的是 0810 的 **#5（原问题2，private_root 载体根）**，与本节的 0810 **#2（原问题11，OHLCV 价格链）** 不是同一条，别按编号串起来。
+
+### 下一步注意事项
+
+- 0810 清单里已写出完整「修复执行方案」而尚未动工的是 **#3（原问题7，analyst 覆盖源）、#6（原问题6，provider_health 八键）、#8（原问题5，Massive 429）、#9（原问题12，context_components 形状权威）、#12（原问题4，checkpoint 与操作员参数）**。
+- **#3 是 #2 的必要配套**：本刀只解开 OHLCV 一条腿，`coverage_status` 仍会被 analyst 空壳压成 `restricted`，`final_action` 仍被强制转"观察"。**不得据本刀宣称"操作表会出现建仓"。**
+- A-short 那条 digest guard 红由 A-short owner 处理，US-short 侧不要顺手改别人 lane 的 allowlist。

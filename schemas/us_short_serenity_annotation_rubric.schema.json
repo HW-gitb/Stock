@@ -1,0 +1,129 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "US-short Serenity structural annotation rubric",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_name",
+    "schema_version",
+    "rubric_version",
+    "activation_status",
+    "production_annotation_activated",
+    "accepted_upstream_policy_versions",
+    "rubric_core",
+    "effect_boundary"
+  ],
+  "properties": {
+    "schema_name": {"const": "us_short_serenity_annotation_rubric"},
+    "schema_version": {"const": "1.0.0"},
+    "rubric_version": {"const": "serenity_annotation_rubric_v0.1.0"},
+    "activation_status": {"const": "candidate_offline"},
+    "production_annotation_activated": {"const": false},
+    "accepted_upstream_policy_versions": {
+      "type": "array",
+      "const": [
+        "soft_discovery_query_policy_v0.2.0",
+        "soft_discovery_query_policy_v0.3.0"
+      ]
+    },
+    "rubric_core": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "canonical_fields",
+        "value_chain_layers",
+        "constraint_mechanisms",
+        "chain_roles",
+        "horizon_alignments",
+        "source_authorities",
+        "claim_support_values",
+        "structural_statuses",
+        "falsifier_types",
+        "falsifier_statuses"
+      ],
+      "properties": {
+        "canonical_fields": {
+          "type": "array",
+          "const": [
+            "annotation_version",
+            "system_change",
+            "value_chain_layers",
+            "scarce_layer",
+            "constraint_mechanism",
+            "chain_role_by_ticker",
+            "common_constraint_id",
+            "system_change_id",
+            "falsifiers",
+            "horizon_alignment",
+            "near_term_observable",
+            "horizon_basis_source_ref_ids",
+            "claims",
+            "structural_status",
+            "structural_fit_candidate"
+          ]
+        },
+        "value_chain_layers": {"$ref": "#/$defs/layer_values"},
+        "constraint_mechanisms": {"$ref": "#/$defs/constraint_values"},
+        "chain_roles": {"$ref": "#/$defs/role_values"},
+        "horizon_alignments": {"$ref": "#/$defs/horizon_values"},
+        "source_authorities": {"$ref": "#/$defs/source_authority_values"},
+        "claim_support_values": {"$ref": "#/$defs/claim_support_values"},
+        "structural_statuses": {"$ref": "#/$defs/structural_status_values"},
+        "falsifier_types": {"$ref": "#/$defs/falsifier_type_values"},
+        "falsifier_statuses": {"$ref": "#/$defs/falsifier_status_values"}
+      }
+    },
+    "effect_boundary": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "scoring_eligible",
+        "top15_effect_enabled",
+        "operation_advice_effect_enabled"
+      ],
+      "properties": {
+        "scoring_eligible": {"const": false},
+        "top15_effect_enabled": {"const": false},
+        "operation_advice_effect_enabled": {"const": false}
+      }
+    }
+  },
+  "$defs": {
+    "layer_values": {
+      "type": "array",
+      "const": ["demand", "system", "module", "device", "process", "equipment", "material", "infrastructure"]
+    },
+    "constraint_values": {
+      "type": "array",
+      "const": ["capacity", "certification_cycle", "purity", "equipment", "yield", "permit", "delivery_lead_time", "customer_lock_in"]
+    },
+    "role_values": {
+      "type": "array",
+      "const": ["control_chokepoint", "supply_chokepoint", "ordinary_beneficiary", "weak_pricing_power", "story_only"]
+    },
+    "horizon_values": {
+      "type": "array",
+      "const": ["days_to_weeks", "3_to_12_months", "long_term"]
+    },
+    "source_authority_values": {
+      "type": "array",
+      "const": ["primary", "credible_secondary", "lead"]
+    },
+    "claim_support_values": {
+      "type": "array",
+      "const": ["direct", "corroborating", "context", "contradictory"]
+    },
+    "structural_status_values": {
+      "type": "array",
+      "const": ["unverified_lead", "plausible", "evidence_backed", "contradicted", "stale"]
+    },
+    "falsifier_type_values": {
+      "type": "array",
+      "const": ["metric", "event", "timing", "source"]
+    },
+    "falsifier_status_values": {
+      "type": "array",
+      "const": ["open", "observed", "not_observed", "contradicted"]
+    }
+  }
+}

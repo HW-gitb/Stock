@@ -163,8 +163,7 @@ _EFFECT_CONTRACT_LEAF_LEDGER_KEYS = frozenset({
     "leaf_effect_overrides",
     "leaf_nature_by_group",
     "analysis_input_paths",
-    "analysis_input_all_paths_sha256",
-    "legacy_migration_sha256",
+    "legacy_migration_entries",
     # The frozen list of leaves still awaiting an effect adjudication.  It is
     # bookkeeping of the same kind: wiring or deleting a leaf shrinks it, and
     # that shrink decides no comparison.  Left bound, every such shrink would

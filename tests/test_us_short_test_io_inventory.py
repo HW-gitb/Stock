@@ -38,6 +38,13 @@ RESIDUAL_WRITE_DISPOSITIONS = {
         "tests/provider/test_us_short_batch5_theme_source_packet.py:kwarg:raw_sample_ref:provider_samples",
         "tests/schema/test_us_short_soft_discovery_query_quality_probe_packet_schema.py:kwarg:state_dir:state/us_short",
     }),
+    "carrier_root_contract_fixture": frozenset({
+        "tests/provider/test_us_short_weekly_capstone.py:kwarg:account_state_path:state/us_short",
+        "tests/provider/test_us_short_weekly_capstone.py:kwarg:batch4_template_path:state/us_short",
+        "tests/provider/test_us_short_weekly_capstone.py:kwarg:private_root:state/us_short",
+        "tests/test_us_short_model_paper_capstone_wiring.py:kwarg:official_output_root:state/us_short",
+        "tests/test_us_short_model_paper_capstone_wiring.py:kwarg:private_root:state/us_short",
+    }),
     "static_contract_write": frozenset({
         "tests/provider/test_us_short_batch5_incident_log_writer.py:TemporaryDirectory:state/us_short",
         "tests/provider/test_us_short_batch5_incident_log_writer.py:kwarg:incident_root:state/us_short",

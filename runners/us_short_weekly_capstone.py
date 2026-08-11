@@ -52,7 +52,7 @@ if str(ROOT) not in sys.path:
 from engine.us_short_canonical_asof import OutOfWindowError, resolve_canonical_asof  # noqa: E402
 from engine import us_short_capstone_checkpoint as checkpoint_store  # noqa: E402
 from engine.us_short_market_calendar import load_market_calendar, sessions_for_window  # noqa: E402
-from engine.us_short_private_paths import reject_nonprivate_output_path  # noqa: E402
+from engine.us_short_private_paths import PrivatePathError, reject_nonprivate_output_path  # noqa: E402
 from engine.us_short_run_origin import _issue_capstone_research_live_receipt  # noqa: E402
 from runners import us_short_batch5_data_context_source_packet as source_packet_runner  # noqa: E402
 
@@ -223,6 +223,10 @@ class CapstoneContext:
     soft_discovery_enabled: bool = True
     theme_soft_boost_enabled: bool = True
     soft_discovery_run_result: dict[str, Any] | None = None
+    serenity_annotation_payload: dict[str, Any] | None = None
+    serenity_settlement_result: dict[str, Any] | None = None
+    serenity_quality_run_result: dict[str, Any] | None = None
+    serenity_shadow_result: dict[str, Any] | None = None
     state_dir: Path = STATE_DIR
     sample_root: Path = ROOT   # repo root that the runners' provider_samples/ allowlists resolve against (tests inject a tempdir)
     research_live_capability: Any = None   # A1: minted by run_weekly_capstone ONLY for a genuine production run — never by resolve_capstone_context / a caller
@@ -285,6 +289,34 @@ class CapstoneContext:
     def soft_discovery_receipt_path(self) -> Path:
         from runners.us_short_weekly_capstone_soft_discovery import default_receipt_path
         return default_receipt_path(self.decision_date, state_dir=self.state_dir)
+
+    @property
+    def serenity_annotation_path(self) -> Path:
+        return self._s(f"us_short_serenity_structural_theme_annotation_{self.decision_date}.json")
+
+    @property
+    def serenity_quality_review_path(self) -> Path:
+        return self._s(f"us_short_serenity_quality_review_{self.decision_date}.json")
+
+    @property
+    def serenity_quality_observation_path(self) -> Path:
+        return self._s(f"us_short_serenity_quality_observation_{self.decision_date}.json")
+
+    @property
+    def serenity_quality_ledger_path(self) -> Path:
+        return self._s("us_short_serenity_quality_forward_ledger.json")
+
+    @property
+    def serenity_quality_gate_path(self) -> Path:
+        return self._s(f"us_short_serenity_quality_gate_{self.decision_date}.json")
+
+    @property
+    def serenity_g1_decision_path(self) -> Path:
+        return self._s("us_short_serenity_g1_decision.json")
+
+    @property
+    def serenity_g1_blade6_preflight_path(self) -> Path:
+        return self._s(f"us_short_serenity_g1_blade6_preflight_{self.decision_date}.json")
 
     @property
     def soft_boost_consumption_receipt_path(self) -> Path:
@@ -354,6 +386,10 @@ class CapstoneContext:
     @property
     def context_components_path(self) -> Path:
         return self._s(f"us_short_batch5_capstone_{self.decision_date}_context_components.json")
+
+    @property
+    def context_packet_path(self) -> Path:
+        return self.private_root / "batch5_to_batch4_context_packet.json"
 
     @property
     def data_context_path(self) -> Path:
@@ -916,6 +952,15 @@ def default_pipeline(
               failure_policy="zero_effect", output_policy="optional",
               checkpoint_policy="optional_result_only",
               failure_handler=_degrade_soft_discovery_boundary),
+        Stage("serenity_quality_forward", False,
+              lambda c: [c.soft_discovery_receipt_path] if c.soft_discovery_run_result is not None else [],
+              lambda c: [c.serenity_quality_observation_path, c.serenity_quality_ledger_path,
+                          c.serenity_quality_gate_path, c.serenity_g1_blade6_preflight_path],
+              st.run_serenity_quality_forward,
+              contract_version="1.0.0", reuse_policy="never",
+              failure_policy="zero_effect", output_policy="optional",
+              checkpoint_policy="optional_result_only",
+              failure_handler=_degrade_serenity_quality_boundary),
         Stage("theme_producer", False,
               lambda c: [c.candidate_path, c.series_packet_path, c.classification_packet_path],
               lambda c: [c.theme_projection_path], st.run_theme_producer,
@@ -929,9 +974,10 @@ def default_pipeline(
         Stage("yfinance_grades_fetch", True, lambda c: [c.preflight_summary_path],
               lambda c: [c.yfinance_grade_source_package_path, c.yfinance_grade_actions_path],
               st.run_yfinance_grades_fetch, contract_version="1.1.0"),
-        Stage("pass2_fetch", True, lambda c: [c.preflight_summary_path, c.overextension_projection_path, c.yfinance_grade_actions_path],
+        Stage("pass2_fetch", True, lambda c: [c.preflight_summary_path, c.overextension_projection_path,
+                                               c.yfinance_grade_actions_path, c.ohlcv_series_packet_path],
               lambda c: [c.source_packet_path, c.context_components_path], st.run_pass2_fetch,
-              contract_version="2.0.0"),
+              contract_version="2.1.0"),
         Stage("vix_regime", True, lambda c: [], lambda c: [c.vix_regime_summary_path], st.run_vix_regime),
         Stage("forward_policy_shadow", False,
               lambda c: [c.data_context_path, c.context_components_path, c.ohlcv_series_packet_path,
@@ -995,6 +1041,31 @@ def _official_output_paths(ctx: CapstoneContext) -> list[Path]:
     ]
 
 
+def _preflight_private_output_paths(ctx: CapstoneContext) -> None:
+    """Prove every private leaf before live settlement, checkpoints, or provider stages begin."""
+    paths: list[tuple[Path, str]] = [
+        (ctx.account_state_path, "account_state_path"),
+        (ctx.context_packet_path, "context_packet_path"),
+        (ctx.private_root / "lifecycle" / "lifecycle_register.json", "lifecycle_register_path"),
+    ]
+    paths.extend(
+        (path, label)
+        for path, label in zip(
+            _official_output_paths(ctx),
+            ("weekly_report_path", "action_table_path", "machine_record_path"),
+        )
+    )
+    if _model_paper_enabled(ctx):
+        paths.append((ctx.model_paper_store_root / "head_manifest.json", "model_paper_head_manifest_path"))
+    for path, label in paths:
+        try:
+            reject_nonprivate_output_path(path)
+        except PrivatePathError as exc:
+            raise WeeklyCapstoneError(
+                f"private output preflight rejected {label}: {Path(path).resolve()}"
+            ) from exc
+
+
 def _plan(ctx: CapstoneContext, stages: list[Stage], *, resume_from: Path | None = None) -> dict[str, Any]:
     """The dry-run plan: canonical dates + every stage's gated flag + I/O paths. No execution, no fetch."""
     return {
@@ -1026,6 +1097,8 @@ def _plan(ctx: CapstoneContext, stages: list[Stage], *, resume_from: Path | None
 def _checkpoint_run_contract(ctx: CapstoneContext) -> dict[str, Any]:
     """Non-file inputs that can change frozen-stage output despite identical artifact SHA-256s."""
     approval = ctx.budget_approval
+    annotation = ctx.serenity_annotation_payload
+    annotation_identity = annotation.get("identity_envelope") if isinstance(annotation, dict) else None
     return {
         "authorized_momentum_top_k": ctx.authorized_momentum_top_k,
         "authorized_pass2_call_budget": (
@@ -1034,6 +1107,14 @@ def _checkpoint_run_contract(ctx: CapstoneContext) -> dict[str, Any]:
         "catalyst_recall_tickers": list(ctx.catalyst_recall_tickers),
         "frozen_holding_tickers": list(ctx.frozen_holding_tickers or ()),
         "theme_soft_boost_enabled": ctx.theme_soft_boost_enabled,
+        "serenity_annotation_payload_identity": {
+            key: annotation_identity.get(key)
+            for key in (
+                "upstream_input_packet_id", "upstream_decision_result_id", "upstream_policy_version",
+                "upstream_decision_date", "rubric_version", "annotation_author_kind",
+                "prompt_or_protocol_id", "model_identity", "generated_at",
+            )
+        } if isinstance(annotation_identity, dict) else None,
     }
 
 
@@ -1235,6 +1316,33 @@ def _unchanged_soft_discovery_receipt_matches(
     )
 
 
+def _unchanged_serenity_quality_outputs_match(
+    stage: Stage, result: dict[str, Any], expected_outputs: list[Path],
+) -> bool:
+    """Accept an idempotent frozen-week rewrite without pretending it is a fresh observation."""
+    if stage.name != "serenity_quality_forward" or len(expected_outputs) != 4:
+        return False
+    artifact_names = ("observation", "ledger", "quality_gate", "g1_blade6_preflight")
+    artifacts = result.get("artifacts")
+    result_values = (
+        result.get("observation"), result.get("ledger"), result.get("quality_gate"),
+        result.get("g1_blade6_preflight"),
+    )
+    if not isinstance(artifacts, dict) or any(not isinstance(value, str) for value in artifacts.values()):
+        return False
+    for name, path, value in zip(artifact_names, expected_outputs, result_values):
+        if artifacts.get(name) != str(path):
+            return False
+        if not isinstance(value, dict):
+            return False
+        try:
+            if json.loads(path.read_text(encoding="utf-8")) != value:
+                return False
+        except (OSError, UnicodeDecodeError, ValueError):
+            return False
+    return True
+
+
 def _is_typed_zero_effect_result(result: Any) -> bool:
     if not isinstance(result, dict) or result.get("status") != "invalid_evidence":
         return False
@@ -1302,6 +1410,36 @@ def _degrade_soft_discovery_boundary(
         }
 
 
+def _degrade_serenity_quality_boundary(
+    stage: Stage, ctx: CapstoneContext, exc: Exception,
+) -> dict[str, Any]:
+    """Typed local fallback for the optional quality observer; the ordinary week keeps running."""
+    return {
+        "stage": "serenity_quality_forward",
+        "schema_name": "us_short_serenity_quality_forward_observation",
+        "schema_version": "1.0.0",
+        "generated_at": ctx.generated_at,
+        "observed_at": ctx.observed_at,
+        "decision_date": ctx.decision_date,
+        "status": "invalid_evidence",
+        "main_task_should_abort": False,
+        "validated_theme_count": 0,
+        "boostable_ticker_count": 0,
+        "effects": {
+            "scoring_eligible": False,
+            "top15_effect_enabled": False,
+            "operation_advice_effect_enabled": False,
+            "provider_calls_performed": False,
+            "network_access_performed": False,
+            "main_task_should_abort": False,
+        },
+        "error": {
+            "code": "SERENITY_QUALITY_STAGE_EXCEPTION",
+            "message": f"{type(exc).__name__}: local quality observation was degraded",
+        },
+    }
+
+
 def _degrade_stage_boundary(stage: Stage, ctx: CapstoneContext, exc: Exception) -> dict[str, Any]:
     """Apply the explicitly declared optional-stage failure handler."""
     if not _stage_is_optional(stage) or stage.failure_handler is None:
@@ -1325,7 +1463,7 @@ def _provider_execution_receipt(ctx: CapstoneContext, results: list[dict[str, An
     required_results = tuple(
         item for item in results
         if not item.get("best_effort", False)
-        and item.get("name") not in {"model_paper_adapter", "soft_discovery"}
+        and item.get("name") not in {"model_paper_adapter", "soft_discovery", "serenity_quality_forward"}
     )
     completed = tuple(item.get("name") for item in required_results)
     expected = tuple(
@@ -1335,6 +1473,7 @@ def _provider_execution_receipt(ctx: CapstoneContext, results: list[dict[str, An
             # provider-relevant sequence, and market_diagnostic runs after the
             # bridge, reads only a local clock, and performs no provider call.
             "weekly_bridge", "model_paper_adapter", "model_paper_weekly", "soft_discovery",
+            "serenity_quality_forward",
             # All three diagnostic steps sit after the bridge. The fetch one is
             # gated because it really does call a vendor, but it is not part of
             # the PRE-bridge provider-relevant sequence this receipt binds.
@@ -1831,6 +1970,10 @@ def _run_pass2_budget_preview(ctx: CapstoneContext, pipeline: list[Stage]) -> di
             stage, result, expected_outputs,
         ):
             missing = []
+        elif missing == expected_outputs and _unchanged_serenity_quality_outputs_match(
+            stage, result, expected_outputs,
+        ):
+            missing = []
         elif missing and _stage_is_optional(stage):
             if not _is_typed_zero_effect_result(result):
                 result = _degrade_stage_boundary(
@@ -1918,6 +2061,7 @@ def run_weekly_capstone(
     model_paper_run_account_mode: str | None = None,
     soft_discovery_enabled: bool = True,
     theme_soft_boost_enabled: bool = True,
+    serenity_annotation_payload: dict[str, Any] | None = None,
     diagnostic_event: Callable[[dict[str, Any]], None] | None = None,
 ) -> dict[str, Any]:
     """Orchestrate the weekly one-click path. `dry_run=True` (default) resolves the canonical dates and returns the
@@ -1955,6 +2099,8 @@ def run_weekly_capstone(
         theme_soft_boost_enabled=theme_soft_boost_enabled,
         sample_root=sample_root,
     )
+    if serenity_annotation_payload is not None:
+        ctx = replace(ctx, serenity_annotation_payload=dict(serenity_annotation_payload))
     _emit_diagnostic_event(
         diagnostic_event,
         "capstone_context_resolved",
@@ -2003,7 +2149,6 @@ def run_weekly_capstone(
             "explicit per-execution authorization (confirm_user_authorization=True); re-run with --dry-run to review "
             "the plan first"
         )
-
     production_run = (stages is None) and (ctx.confirm_user_authorization is True) and not prepare_pass2_budget
     auto_budget_run = auto_authorize_pass2_budget and production_run
     budget_preview_run = (stages is None) and (ctx.confirm_user_authorization is True) and prepare_pass2_budget
@@ -2030,6 +2175,28 @@ def run_weekly_capstone(
             "--prepare-pass2-budget requires momentum_top_k (1..250) and no Pass2 call budget; "
             "it derives the exact execution budget"
         )
+    # Prove every private leaf after operator/budget validation, but before any pre-stage settlement,
+    # checkpoint, transaction, or provider stage.
+    _preflight_private_output_paths(ctx)
+    if not prepare_pass2_budget and any(stage.name == "serenity_quality_forward" for stage in pipeline):
+        from engine import us_short_serenity_quality_forward as serenity_quality
+
+        try:
+            settlement = serenity_quality.settle_pending_review(
+                ledger_path=ctx.serenity_quality_ledger_path,
+                current_decision_date=ctx.decision_date,
+                observed_at=ctx.observed_at,
+                state_dir=ctx.state_dir,
+                root=ctx.sample_root,
+                now=datetime.fromisoformat(ctx.observed_at),
+                g1_decision_path=ctx.serenity_g1_decision_path,
+                g1_preflight_path=ctx.serenity_g1_blade6_preflight_path,
+            )
+        except serenity_quality.SerenityQualityForwardError as exc:
+            # This pre-stage settlement is outside the normal optional-stage boundary.  A stale/legacy local
+            # ledger is invalid quality evidence, never a reason to abort the ordinary zero-effect weekly task.
+            settlement = serenity_quality.ledger_rejected_settlement(exc)
+        ctx = replace(ctx, serenity_settlement_result=dict(settlement))
     if (production_run or budget_preview_run) and not _model_paper_enabled(ctx):
         from runners.us_short_account_state_from_manual_tables import validate_account_state
 
@@ -2271,6 +2438,17 @@ def run_weekly_capstone(
                     )
                     if stage.name == "soft_discovery":
                         ctx = replace(ctx, soft_discovery_run_result=dict(result))
+                    if stage.name == "serenity_quality_forward":
+                        shadow = result.get("shadow_consumption")
+                        ctx = replace(
+                            ctx,
+                            serenity_quality_run_result=dict(result),
+                            serenity_shadow_result=(
+                                dict(shadow)
+                                if isinstance(shadow, dict) and shadow.get("status") == "active"
+                                else None
+                            ),
+                        )
                     try:
                         checkpoint_manifest = checkpoint_store.record_stage(
                             manifest_path=checkpoint_manifest_path, manifest=checkpoint_manifest, stage=stage,
@@ -2401,6 +2579,10 @@ def run_weekly_capstone(
                 stage, result, expected_outputs,
             ):
                 missing = []
+            elif missing == expected_outputs and _unchanged_serenity_quality_outputs_match(
+                stage, result, expected_outputs,
+            ):
+                missing = []
             elif missing and _stage_is_optional(stage):
                 if not _is_typed_zero_effect_result(result):
                     result = _degrade_stage_boundary(
@@ -2478,6 +2660,17 @@ def run_weekly_capstone(
                 ctx = replace(ctx, frozen_holding_tickers=tuple(holdings))
             if stage.name == "soft_discovery":
                 ctx = replace(ctx, soft_discovery_run_result=dict(result))
+            if stage.name == "serenity_quality_forward":
+                shadow = result.get("shadow_consumption")
+                ctx = replace(
+                    ctx,
+                    serenity_quality_run_result=dict(result),
+                    serenity_shadow_result=(
+                        dict(shadow)
+                        if isinstance(shadow, dict) and shadow.get("status") == "active"
+                        else None
+                    ),
+                )
             execution_mode = "executed"
             if resume_manifest is not None and stage.reuse_policy == "refresh_then_reuse_if_equivalent":
                 try:

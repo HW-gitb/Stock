@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import hashlib
 import json
 import os
 import sys
@@ -263,6 +264,7 @@ class UsShortBatch5FullCandidateLiveSourcePacketTest(unittest.TestCase):
             "candidate": self.state_root / f"{self.slug}_candidate.json",
             "momentum": self.state_root / f"{self.slug}_momentum.json",
             "theme": self.state_root / f"{self.slug}_theme.json",
+            "ohlcv": self.state_root / f"{self.slug}_ohlcv.json",
             "preflight": self.preflight_root / self.slug / "preflight.json",
             "summary": self.sample_root / "full_candidate_live_source_packet_20260706" / self.slug / "summary.json",
             "prefix": self.state_root / self.slug,
@@ -346,6 +348,7 @@ class UsShortBatch5FullCandidateLiveSourcePacketTest(unittest.TestCase):
             self.paths["candidate"],
             self.paths["momentum"],
             self.paths["theme"],
+            self.paths["ohlcv"],
             self.paths["preflight"],
             self.paths["summary"],
             self.paths["output"],
@@ -374,6 +377,53 @@ class UsShortBatch5FullCandidateLiveSourcePacketTest(unittest.TestCase):
             },
             clear=False,
         )
+
+    def _write_ohlcv_fixture(self) -> dict:
+        points = [
+            {"date": f"2026-05-{idx:02d}", "high": 101.0 + idx, "low": 99.0 + idx, "close": 100.0 + idx}
+            for idx in range(1, 15)
+        ] + [{"date": "2026-06-12", "high": 116.0, "low": 114.0, "close": 115.0}]
+        packet = {
+            "schema_name": "us_short_batch5_full_universe_ohlcv_series_packet",
+            "schema_version": "1.0.0",
+            "generated_at": "2026-07-06T12:00:00+00:00",
+            "scope": {
+                "market": "US", "lane": "us_short", "batch": "batch5_provider_live",
+                "packet_status": "full_universe_per_ticker_ohlcv_series_ready_for_local_overextension_projection",
+                "full_market_reconstruction": True,
+                "network_access_performed_by_packet_producer": False,
+                "provider_calls_performed_by_packet_producer": False,
+                "raw_payload_refs_gitignored": True,
+                "datahub_consumption_allowed": False,
+                "production_storage_allowed": False,
+                "ship_gate_evidence_claimed": False,
+                "broker_or_order_automation_allowed": False,
+                "a_share_crossing_allowed": False,
+            },
+            "decision_clock": {
+                "expected_decision_date": _DECISION_DATE,
+                "candidate_price_basis_date": "20260612",
+                "price_basis_date": "2026-06-12",
+                "source_as_of": "2026-06-12",
+            },
+            "series_contract": {
+                "session": "RTH", "adjustment_mode": "split_adjusted",
+                "as_of": "2026-06-12", "grouped_session_count": 15,
+            },
+            "provenance": {
+                "provider_id": "fmp", "endpoint_or_family": "historical_price_full",
+                "source_as_of": "2026-06-12", "observed_at": "2026-07-06T12:00:00+00:00",
+                "coverage_status": "full", "parser_status": "ok",
+            },
+            "series_by_ticker": {
+                ticker: {
+                    "as_of": "2026-06-12", "session": "RTH", "adjustment_mode": "split_adjusted",
+                    "points": points,
+                }
+                for ticker in ("AAPL", "MSFT", "JPM")
+            },
+        }
+        return json.loads(_write_json(self.paths["ohlcv"], packet).read_text(encoding="utf-8"))
 
     def test_authorized_full_candidate_run_builds_packet_components_and_corporate_action_capture(self):
         client = FullCandidateFakeClient()
@@ -413,6 +463,12 @@ class UsShortBatch5FullCandidateLiveSourcePacketTest(unittest.TestCase):
         self.assertEqual(summary["source_packet"]["preflight_status"], "offline_preflight_passed")
         self.assertTrue(self.paths["output"].exists())
         self.assertTrue(self.paths["components"].exists())
+        close_only_components = json.loads(self.paths["components"].read_text(encoding="utf-8"))
+        for ticker in ("AAPL", "MSFT", "JPM"):
+            row = close_only_components["per_ticker_analysis"][ticker]
+            close_only_price = row["source_result_facts"]["price"]
+            self.assertEqual(close_only_price["status"], "close_only")
+            self.assertNotIn("bars", close_only_price["input"])
         capture_path = self.paths["prefix"].with_name(
             self.paths["prefix"].name + "_corporate_action_capture.json"
         )
@@ -448,6 +504,56 @@ class UsShortBatch5FullCandidateLiveSourcePacketTest(unittest.TestCase):
         self.assertNotIn("api.massive.com", text.lower())
         self.assertNotIn("data.sec.gov", text.lower())
         self.assertNotIn('"payload"', text)
+
+    def test_authorized_run_wires_ohlcv_into_packet_and_result_linkage(self):
+        ohlcv = self._write_ohlcv_fixture()
+
+        with self._env(), mock.patch.object(
+            runner.sample_validation, "_read_windows_environment_value", return_value=None
+        ):
+            runner.run_full_candidate_live_source_packet(
+                preflight_summary_path=self.paths["preflight"],
+                expected_total_call_budget=16,
+                output_data_context_path=self.paths["output"],
+                context_components_output_path=self.paths["components"],
+                ohlcv_series_packet_path=self.paths["ohlcv"],
+                source_artifact_prefix=self.paths["prefix"],
+                summary_path=self.paths["summary"],
+                raw_root=self.raw_root,
+                client=FullCandidateFakeClient(),
+                confirm_user_authorization=True,
+                run_data_context=True,
+                generated_at="2026-07-06T12:00:00+00:00",
+                observed_at=_OFFERING_OBSERVED_AT,
+                sec_sleep_seconds=0,
+            )
+
+        source_packet_path = self.paths["prefix"].with_name(
+            self.paths["prefix"].name + "_source_packet.json"
+        )
+        source_packet = json.loads(source_packet_path.read_text(encoding="utf-8"))
+        self.assertEqual(source_packet["paths"]["ohlcv_series_packet_path"], str(
+            self.paths["ohlcv"].relative_to(ROOT)
+        ).replace("\\", "/"))
+        self.assertEqual(
+            source_packet["source_artifact_sha256"]["ohlcv_series_packet_path"],
+            hashlib.sha256(self.paths["ohlcv"].read_bytes()).hexdigest(),
+        )
+
+        components = json.loads(self.paths["components"].read_text(encoding="utf-8"))
+        expected_bars = [
+            {"high": point["high"], "low": point["low"], "close": point["close"]}
+            for point in ohlcv["series_by_ticker"]["AAPL"]["points"]
+        ]
+        for ticker in ("AAPL", "MSFT", "JPM"):
+            row = components["per_ticker_analysis"][ticker]
+            price = row["source_result_facts"]["price"]
+            self.assertEqual(price["status"], "ohlcv_ready")
+            self.assertEqual(price["observed_at"], "2026-07-06T12:00:00+00:00")
+            self.assertEqual(price["session"], "RTH")
+            self.assertEqual(price["adjustment_mode"], "split_adjusted")
+            self.assertEqual(price["input"]["bars"], expected_bars)
+            self.assertEqual(components["result_linkage_sources"][ticker]["price"], price)
 
     def test_full_overextension_binds_eligible_universe_before_top_k_subset_assembly(self):
         momentum = _constant_projection(

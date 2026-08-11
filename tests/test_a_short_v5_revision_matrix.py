@@ -114,6 +114,22 @@ class AShortV5RevisionMatrixTests(unittest.TestCase):
         self.assertRegex(launcher_text, r"forward_tracker\.py backfill[^\r\n]*--official-project-root\s+\$ProjectRoot")
         self.assertRegex(launcher_text, r"--run-revision-id \$RunRevisionId --official-project-root \$ProjectRoot")
 
+    def test_matrix_guard_rejects_a_planted_missing_production_consumer_keyword(self):
+        relative = "runners/a_short_weekly_pipeline.py"
+        source = (ROOT / relative).read_text(encoding="utf-8")
+        call_names = {"settle_and_summarize_v2_weekly"}
+        self.assertTrue(
+            _call_uses_keyword(ast.parse(source, filename=relative), call_names, "official_project_root")
+        )
+        planted = source.replace(
+            "official_project_root=args.official_project_root",
+            "removed_official_project_root=args.official_project_root",
+            1,
+        )
+        self.assertFalse(
+            _call_uses_keyword(ast.parse(planted, filename=relative), call_names, "official_project_root")
+        )
+
     def _bundle(self, root: Path, revision: str, payload: str) -> Path:
         public = public_revision_root(root, DATE, revision)
         research = research_revision_root(root, DATE, revision)

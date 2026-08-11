@@ -284,16 +284,21 @@ def validate_parent_plan_against_reviewed_policy(payload: Mapping[str, Any]) -> 
     """
     candidate = dict(payload)
     validate_parent_plan(candidate)
+    core = candidate["canonical_plan_core"]
     try:
-        policy = query_policy.load_query_policy(query_policy.POLICY_PATH, root=ROOT)
+        policy_spec = query_policy.get_policy_spec(core["policy_version"])
+        if not policy_spec.provider_execution_allowed:
+            raise QueryPlanError(
+                f"policy version {core['policy_version']} is offline-only and cannot authorize provider dispatch"
+            )
+        policy = query_policy.load_query_policy_for_version(core["policy_version"], root=ROOT)
         expected_queries = query_policy.render_stage1_queries(policy)
         expected_stage2_sha256 = query_policy.stage2_rule_sha256(policy)
     except query_policy.QueryPolicyError as exc:
-        raise QueryPlanError("reviewed query policy authority is unavailable") from exc
-    core = candidate["canonical_plan_core"]
-    if core["policy_version"] != query_policy.EXPECTED_POLICY_VERSION:
-        raise QueryPlanError("parent plan is not bound to the reviewed policy version")
-    if core["policy_template_content_sha256"] != query_policy.EXPECTED_POLICY_CONTENT_SHA256:
+        raise QueryPlanError("reviewed policy version authority is unavailable") from exc
+    except QueryPlanError:
+        raise
+    if core["policy_template_content_sha256"] != policy["policy_content_sha256"]:
         raise QueryPlanError("parent plan is not bound to the reviewed policy content digest")
     if core["stage1_queries"] != expected_queries:
         raise QueryPlanError("parent plan Stage-1 queries are not bound to the reviewed policy")

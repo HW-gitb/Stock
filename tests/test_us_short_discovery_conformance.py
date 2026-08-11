@@ -1155,8 +1155,8 @@ class ExecutableClosureMatrix:
             },
         )
         optional = [stage for stage in stages if stage.failure_policy == "zero_effect"]
-        self.assertEqual([stage.name for stage in optional], ["soft_discovery"])
-        self.assertEqual(optional[0].reuse_policy, "never")
+        self.assertEqual([stage.name for stage in optional], ["soft_discovery", "serenity_quality_forward"])
+        self.assertTrue(all(stage.reuse_policy == "never" for stage in optional))
 
         # Every derived lifecycle column has a real planted-failure control.  The
         # controls are test paths (not production policy) and are intentionally

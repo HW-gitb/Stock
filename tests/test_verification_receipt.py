@@ -17,6 +17,20 @@ def _run_git(repo: Path, *args: str) -> None:
                    stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
 
 
+def build_receipt_repo(repo: Path) -> None:
+    (repo / "engine").mkdir(parents=True, exist_ok=True)
+    (repo / "docs").mkdir(parents=True, exist_ok=True)
+    (repo / "engine" / "logic.py").write_text("VALUE = 1\n", encoding="utf-8")
+    (repo / "docs" / "note.md").write_text("base\n", encoding="utf-8")
+    (repo / "设计说明.md").write_text("base\n", encoding="utf-8")
+    (repo / ".gitignore").write_text(".tools/\n", encoding="utf-8")
+    _run_git(repo, "init", "-b", "main")
+    _run_git(repo, "config", "user.email", "t@example.com")
+    _run_git(repo, "config", "user.name", "t")
+    _run_git(repo, "add", "-A")
+    _run_git(repo, "commit", "-m", "base")
+
+
 def build_docs_only_merge(repo: Path) -> None:
     """A merge whose incoming side touches documents only, while ours touched code.
 
@@ -57,11 +71,11 @@ class MergeCombinedStateTests(unittest.TestCase):
             with patch.object(receipts, "ROOT", repo):
                 self.assertTrue(receipts.merge_in_progress())
                 # The staged diff is documents only, so the one-sided view asks for nothing...
-                self.assertEqual(receipts.required_bundles_for_state({"@HEAD": "x"}), ())
+                self.assertEqual(receipts.required_bundles_for_state({"@CODE_TREE": "x"}), ())
                 # ...while the surface our own side moved since the base still has to be shown.
                 self.assertIn("engine/a_short_effect_contract.py", receipts.merge_side_paths())
                 self.assertEqual(
-                    receipts.required_bundles_now({"@HEAD": "x"}),
+                    receipts.required_bundles_now({"@CODE_TREE": "x"}),
                     ("a_short_effect_contract",),
                 )
 
@@ -76,7 +90,7 @@ class MergeCombinedStateTests(unittest.TestCase):
             with patch.object(receipts, "ROOT", repo):
                 self.assertFalse(receipts.merge_in_progress())
                 self.assertEqual(receipts.merge_side_paths(), frozenset())
-                self.assertEqual(receipts.required_bundles_now({"@HEAD": "x"}), ())
+                self.assertEqual(receipts.required_bundles_now({"@CODE_TREE": "x"}), ())
 
 
 class VerificationReceiptTests(unittest.TestCase):
@@ -107,7 +121,7 @@ class VerificationReceiptTests(unittest.TestCase):
         -- the number quoted as evidence -- could be inflated and still
         validate.  Mutating ANY field must now break the integrity check.
         """
-        state = {"engine/a_short_effect_contract.py": "sha", "@HEAD": "head"}
+        state = {"engine/a_short_effect_contract.py": "sha", "@CODE_TREE": "tree"}
         with tempfile.TemporaryDirectory() as tmp:
             receipt = self._receipt(state, Path(tmp) / "r.json")
         mutations = {
@@ -135,7 +149,7 @@ class VerificationReceiptTests(unittest.TestCase):
 
     def test_inflated_test_count_is_rejected_end_to_end(self):
         """The exact reviewer probe that found the hole: 17 -> 99999."""
-        state = {"engine/a_short_effect_contract.py": "sha", "@HEAD": "head"}
+        state = {"engine/a_short_effect_contract.py": "sha", "@CODE_TREE": "tree"}
         with tempfile.TemporaryDirectory() as tmp:
             receipt = self._receipt(state, Path(tmp) / "r.json")
         inflated = dict(receipt, tests=99999)
@@ -146,7 +160,7 @@ class VerificationReceiptTests(unittest.TestCase):
     def test_effect_surface_requires_both_contract_and_consumer_modules(self):
         state = {
             "engine/a_short_effect_contract.py": "sha",
-            "@HEAD": "head",
+            "@CODE_TREE": "tree",
         }
         self.assertEqual(
             receipts.required_bundles_for_state(state),
@@ -158,7 +172,7 @@ class VerificationReceiptTests(unittest.TestCase):
         )
 
     def test_free_text_focused_evidence_is_rejected(self):
-        state = {"engine/x.py": "sha", "@HEAD": "head"}
+        state = {"engine/x.py": "sha", "@CODE_TREE": "tree"}
         with tempfile.TemporaryDirectory() as tmp:
             _, reason = receipts.validate_focused_evidence(
                 "focused=17 OK",
@@ -168,22 +182,114 @@ class VerificationReceiptTests(unittest.TestCase):
         self.assertIn("machine token", reason)
 
     def test_receipt_is_bound_to_code_state_and_token(self):
-        state = {"engine/x.py": "sha", "@HEAD": "head"}
-        changed = {"engine/x.py": "changed", "@HEAD": "head"}
+        state = {"engine/x.py": "sha", "@CODE_TREE": "tree"}
+        changed = {"engine/x.py": "changed", "@CODE_TREE": "tree"}
         with tempfile.TemporaryDirectory() as tmp:
             path = Path(tmp) / "receipt.json"
             receipt = self._receipt(state, path, ["tests.test_example"])
             token = receipts.receipt_token(receipt)
-            loaded, reason = receipts.validate_focused_evidence(token, state=state, path=path)
-            self.assertEqual(reason, "OK")
-            self.assertEqual(loaded, receipt)
-            _, changed_reason = receipts.validate_focused_evidence(token, state=changed, path=path)
-            self.assertIn("current code state", changed_reason)
+            # This test isolates receipt/token binding.  Merge-side bundle
+            # widening is covered by MergeCombinedStateTests above; patching
+            # it here keeps the assertion deterministic when the real repo has
+            # an unresolved, uncommitted merge.
+            with patch.object(receipts, "merge_side_paths", return_value=frozenset()):
+                loaded, reason = receipts.validate_focused_evidence(
+                    token, state=state, path=path
+                )
+                self.assertEqual(reason, "OK")
+                self.assertEqual(loaded, receipt)
+                _, changed_reason = receipts.validate_focused_evidence(
+                    token, state=changed, path=path
+                )
+                self.assertIn("current code state", changed_reason)
+
+    def test_docs_only_mutation_keeps_receipt_valid_and_code_mutation_is_rejected(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            repo = Path(tmp) / "repo"
+            repo.mkdir()
+            build_receipt_repo(repo)
+            with patch.object(receipts, "ROOT", repo):
+                before = receipts.collect_code_state()
+                receipt_path = repo / ".tools" / "state" / "receipt.json"
+                receipt = self._receipt(before, receipt_path, ["tests.test_example"])
+                token = receipts.receipt_token(receipt)
+
+                (repo / "docs" / "note.md").write_text("docs-only edit\n", encoding="utf-8")
+                docs_state = receipts.collect_code_state()
+                self.assertEqual(receipts.fingerprint(before), receipts.fingerprint(docs_state))
+                loaded, reason = receipts.validate_focused_evidence(
+                    token, state=docs_state, path=receipt_path,
+                )
+                self.assertEqual(reason, "OK")
+                self.assertEqual(loaded, receipt)
+
+                (repo / "engine" / "logic.py").write_text("VALUE = 2\n", encoding="utf-8")
+                code_state = receipts.collect_code_state()
+                self.assertNotEqual(receipts.fingerprint(before), receipts.fingerprint(code_state))
+                _, reason = receipts.validate_focused_evidence(
+                    token, state=code_state, path=receipt_path,
+                )
+                self.assertIn("current code state", reason)
+
+    def test_docs_only_commit_keeps_receipt_valid_but_code_commit_invalidates(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            repo = Path(tmp) / "repo"
+            repo.mkdir()
+            build_receipt_repo(repo)
+            with patch.object(receipts, "ROOT", repo):
+                before = receipts.collect_code_state()
+                self.assertIn("@CODE_TREE", before)
+                self.assertNotIn("@HEAD", before)
+                receipt_path = repo / ".tools" / "state" / "receipt.json"
+                receipt = self._receipt(before, receipt_path, ["tests.test_example"])
+                token = receipts.receipt_token(receipt)
+
+                (repo / "docs" / "note.md").write_text(
+                    "docs-only committed edit\n", encoding="utf-8"
+                )
+                (repo / "设计说明.md").write_text(
+                    "docs-only committed root markdown edit\n", encoding="utf-8"
+                )
+                _run_git(repo, "add", "docs/note.md")
+                _run_git(repo, "commit", "-m", "docs-only receipt control")
+                docs_commit_state = receipts.collect_code_state()
+                self.assertEqual(
+                    receipts.fingerprint(before), receipts.fingerprint(docs_commit_state)
+                )
+                loaded, reason = receipts.validate_focused_evidence(
+                    token, state=docs_commit_state, path=receipt_path
+                )
+                self.assertEqual(reason, "OK")
+                self.assertEqual(loaded, receipt)
+
+                (repo / "engine" / "logic.py").write_text(
+                    "VALUE = 2\n", encoding="utf-8"
+                )
+                _run_git(repo, "add", "engine/logic.py")
+                _run_git(repo, "commit", "-m", "code receipt control")
+                code_commit_state = receipts.collect_code_state()
+                self.assertNotEqual(
+                    receipts.fingerprint(before), receipts.fingerprint(code_commit_state)
+                )
+                _, reason = receipts.validate_focused_evidence(
+                    token, state=code_commit_state, path=receipt_path
+                )
+                self.assertIn("current code state", reason)
+
+    def test_receipt_boundary_and_pre_commit_gate_keep_docs_out_but_code_in(self):
+        self.assertFalse(receipts.is_code_path("docs/note.py"))
+        self.assertFalse(receipts.is_code_path("notes/readme.md"))
+        self.assertFalse(receipts.is_code_path("设计说明.md"))
+        self.assertTrue(receipts.is_code_path("engine/logic.py"))
+        hook = (receipts.ROOT / ".githooks" / "pre-commit").read_text(encoding="utf-8")
+        self.assertIn("git diff --cached --name-only | grep -vE", hook)
+        self.assertIn('if [ -n "$code_changed" ] || [ -n "$merging" ]; then', hook)
+        self.assertIn('"$PY" .tools/verification_receipt.py', hook)
 
     def test_effect_receipt_without_consumer_bundle_is_rejected(self):
         state = {
             "runners/a_short_weekly_pipeline.py": "sha",
-            "@HEAD": "head",
+            "@CODE_TREE": "tree",
         }
         with tempfile.TemporaryDirectory() as tmp:
             path = Path(tmp) / "receipt.json"

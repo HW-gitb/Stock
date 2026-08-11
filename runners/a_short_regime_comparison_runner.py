@@ -932,7 +932,7 @@ def run_regime_step(*, as_of: str, trade_calendar, v14_2_regime: str,
                 raise ValueError("D2 M6.7 source lacks a complete price freshness clock")
             receipt = published_bundle.receipt
             source_receipt_complete = (
-                receipt.get("as_of") == as_of
+                receipt.get("as_of") == decision_as_of
                 and receipt.get("run_id") == m67_lineage.get("run_id")
                 and receipt.get("candidate_digest") == m67_lineage.get("candidate_digest")
                 and (run_revision_id is None or receipt.get("run_revision_id") == run_revision_id)

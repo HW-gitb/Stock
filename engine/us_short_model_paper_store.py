@@ -70,7 +70,9 @@ def _store_root(root: str | Path) -> Path:
     if not path.is_absolute():
         raise ModelPaperStoreError("model-paper store root must be absolute")
     path = path.resolve()
-    _guard(path)
+    # The root is a carrier namespace.  Guard the first real private artifact so a clean
+    # in-repo store can reach the seed-required preview without creating the directory.
+    _guard((path / "head_manifest.json").resolve())
     if path.exists():
         for candidate in path.rglob(".*.tmp-*"):
             resolved = candidate.resolve()

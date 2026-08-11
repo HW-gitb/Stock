@@ -1,0 +1,177 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "US-short Serenity quality-forward weekly observation",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_name",
+    "schema_version",
+    "decision_date",
+    "observed_at",
+    "quality_policy_version",
+    "consumer_version",
+    "status",
+    "annotation_identity",
+    "producer_identity",
+    "reviewer_identity",
+    "formal_count_eligible",
+    "settlement_status",
+    "metrics",
+    "annotation_present",
+    "review_present",
+    "eligible",
+    "shadow_consumption_status",
+    "report_block_delivered",
+    "report_block_problem",
+    "effects",
+    "error"
+  ],
+  "properties": {
+    "schema_name": {"const": "us_short_serenity_quality_forward_observation"},
+    "schema_version": {"const": "1.0.0"},
+    "decision_date": {"type": "string", "pattern": "^[0-9]{8}$"},
+    "observed_at": {"type": "string", "format": "date-time"},
+    "quality_policy_version": {"const": "serenity_quality_policy_v0.1.0"},
+    "consumer_version": {"const": "serenity_shadow_consumer_v0.1.0"},
+    "status": {"enum": ["sleeping", "eligible", "not_evaluable", "invalid_evidence"]},
+    "annotation_identity": {
+      "anyOf": [{"$ref": "#/$defs/annotation_identity"}, {"type": "null"}]
+    },
+    "producer_identity": {
+      "anyOf": [{"$ref": "#/$defs/producer_identity"}, {"type": "null"}]
+    },
+    "reviewer_identity": {
+      "anyOf": [{"$ref": "#/$defs/reviewer_identity"}, {"type": "null"}]
+    },
+    "formal_count_eligible": {"type": "boolean"},
+    "settlement_status": {
+      "anyOf": [{"enum": ["pending_review", "eligible", "no_count"]}, {"type": "null"}]
+    },
+    "metrics": {
+      "type": "array",
+      "minItems": 5,
+      "maxItems": 5,
+      "items": [
+        {"$ref": "#/$defs/claim_binding_integrity"},
+        {"$ref": "#/$defs/review_consistency"},
+        {"$ref": "#/$defs/falsifier_observability"},
+        {"$ref": "#/$defs/horizon_judgment"},
+        {"$ref": "#/$defs/weak_or_contradicted_discrimination"}
+      ],
+      "additionalItems": false
+    },
+    "annotation_present": {"type": "boolean"},
+    "review_present": {"type": "boolean"},
+    "eligible": {"type": "boolean"},
+    "shadow_consumption_status": {"enum": ["sleeping", "active", "invalid_annotation", "null"]},
+    "report_overlay_available": {"type": "boolean"},
+    "report_block_delivered": {"anyOf": [{"type": "boolean"}, {"type": "null"}]},
+    "report_block_problem": {"anyOf": [{"type": "string", "minLength": 1, "maxLength": 300}, {"type": "null"}]},
+    "effects": {"$ref": "#/$defs/effect_boundary"},
+    "error": {
+      "anyOf": [
+        {"type": "null"},
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["code", "message"],
+          "properties": {
+            "code": {"type": "string", "pattern": "^[A-Z0-9_:-]{2,100}$"},
+            "message": {"type": "string", "minLength": 1, "maxLength": 300}
+          }
+        }
+      ]
+    }
+  },
+  "$defs": {
+    "annotation_identity": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "annotation_id",
+        "schema_version",
+        "rubric_version",
+        "upstream_decision_result_id",
+        "upstream_policy_version",
+        "upstream_decision_date",
+        "annotation_author_kind",
+        "annotation_prompt_version",
+        "producer_model_identity"
+      ],
+      "properties": {
+        "annotation_id": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+        "schema_version": {"const": "1.0.0"},
+        "rubric_version": {"const": "serenity_annotation_rubric_v0.1.0"},
+        "upstream_decision_result_id": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+        "upstream_policy_version": {"enum": ["soft_discovery_query_policy_v0.2.0", "soft_discovery_query_policy_v0.3.0"]},
+        "upstream_decision_date": {"type": "string", "pattern": "^[0-9]{8}$"},
+        "annotation_author_kind": {"enum": ["human", "llm", "hybrid"]},
+        "annotation_prompt_version": {"type": "string", "minLength": 1, "maxLength": 128},
+        "producer_model_identity": {"anyOf": [{"type": "string", "minLength": 1, "maxLength": 200}, {"type": "null"}]}
+      }
+    },
+    "producer_identity": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["identity_version", "author_kind", "prompt_version", "model_identity"],
+      "properties": {
+        "identity_version": {"const": "serenity_annotation_producer_v0.1.0"},
+        "author_kind": {"enum": ["human", "llm", "hybrid"]},
+        "prompt_version": {"type": "string", "minLength": 1, "maxLength": 128},
+        "model_identity": {"anyOf": [{"type": "string", "minLength": 1, "maxLength": 200}, {"type": "null"}]}
+      }
+    },
+    "reviewer_identity": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["identity_version", "reviewer_id", "model_identity", "prompt_version"],
+      "properties": {
+        "identity_version": {"const": "serenity_quality_reviewer_v0.1.0"},
+        "reviewer_id": {"type": "string", "pattern": "^[A-Za-z0-9][A-Za-z0-9_.:-]{1,127}$"},
+        "model_identity": {"type": "string", "minLength": 1, "maxLength": 200},
+        "prompt_version": {"const": "serenity_quality_reviewer_prompt_v0.1.0"}
+      }
+    },
+    "metric": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["metric_id", "verdict", "rationale", "evidence_ref_ids"],
+      "properties": {
+        "metric_id": {"type": "string"},
+        "verdict": {"enum": ["pass", "fail", "not_evaluable"]},
+        "rationale": {"type": "string", "minLength": 1, "maxLength": 2000},
+        "evidence_ref_ids": {
+          "type": "array",
+          "minItems": 1,
+          "uniqueItems": true,
+          "items": {"type": "string", "pattern": "^[A-Za-z0-9][A-Za-z0-9_.:/-]{1,255}$"}
+        }
+      }
+    },
+    "claim_binding_integrity": {"allOf": [{"$ref": "#/$defs/metric"}, {"properties": {"metric_id": {"const": "claim_binding_integrity"}}}]},
+    "review_consistency": {"allOf": [{"$ref": "#/$defs/metric"}, {"properties": {"metric_id": {"const": "review_consistency"}}}]},
+    "falsifier_observability": {"allOf": [{"$ref": "#/$defs/metric"}, {"properties": {"metric_id": {"const": "falsifier_observability"}}}]},
+    "horizon_judgment": {"allOf": [{"$ref": "#/$defs/metric"}, {"properties": {"metric_id": {"const": "horizon_judgment"}}}]},
+    "weak_or_contradicted_discrimination": {"allOf": [{"$ref": "#/$defs/metric"}, {"properties": {"metric_id": {"const": "weak_or_contradicted_discrimination"}}}]},
+    "effect_boundary": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "scoring_eligible",
+        "top15_effect_enabled",
+        "operation_advice_effect_enabled",
+        "provider_calls_performed",
+        "network_access_performed",
+        "main_task_should_abort"
+      ],
+      "properties": {
+        "scoring_eligible": {"const": false},
+        "top15_effect_enabled": {"const": false},
+        "operation_advice_effect_enabled": {"const": false},
+        "provider_calls_performed": {"const": false},
+        "network_access_performed": {"const": false},
+        "main_task_should_abort": {"const": false}
+      }
+    }
+  }
+}
