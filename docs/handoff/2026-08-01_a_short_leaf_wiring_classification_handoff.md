@@ -6306,3 +6306,21 @@ effect contract 已用固定 Python 重新登记 A-EGS decision-predicate hash �
 - 真实 provider / live / 真实 normal weekly 仍 `NOT_VERIFIED`；§6a 按 rule 8 未起 agent。
 
 **下一步**：`Codex：执行`
+
+## 2026-08-11 追加：桌面 2a 六项合并状态核对 + residual `true_dangling` 用户裁定不修
+
+**判定**：六项都已独立复审 PASS 并合入 master；同时记下用户对 `true_dangling` 的裁定。本轮零源码改动。
+
+**我实际核了什么**（不引述文档结论，逐条落到 commit）
+
+- 六项各自的合并点见 register 的对照表；`git merge-base --is-ancestor` 对 `381a2c16`/`28d2aeaf`/`b8e80551`/`90eb2fc9`/`38df637d`/`b217f09a`/`f93e2125`/`bfe49b25` 全部返回 IN master。
+- 序 22b 那条我没停在 commit message：`SESSION_LOG` 2552 行就是「2026-08-05 — Claude 审查 PASS（序 22b 两条 P1 收口）」，2533 行另记了它写进 `b2d26488`、合入 `f93e2125`。
+- `true_dangling` 的范围是我现算的：9 组 88 片叶，叶层 60 片 `unclassified_pending_audit` + 28 片 `producer_constant_null`，人工举证 override 0 片，master 与 40d9 逐字相同。
+
+**这条裁定关闭了什么、没关闭什么**
+
+- 关闭的是**接线工作**：这 88 片不再列为工程欠账。
+- 没关闭的是**契约表述**：机器仍会把它们报成未举证。要让机器也说「有意独立」，得逐叶补 `intentionally_independent_or_delete` 加三个举证字段，那是另一把刀，本轮明确不做。
+- 也没解开任何闸：生产激活、冻结重封、durable SHA 累计仍被 `not_authorized` 与六轨 `pre_freeze_audit_only` 挡着。
+
+**下一步**：`Codex：执行`
