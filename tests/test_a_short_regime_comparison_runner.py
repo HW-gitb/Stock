@@ -846,6 +846,46 @@ class BootstrapPolicyTests(unittest.TestCase):
 
 
 class CliGuardTests(unittest.TestCase):
+    def test_cli_does_not_pass_d2_source_to_writer_before_design_completion(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            paths = {
+                "ledger": str(root / "research/results/a_short/regime_daily_ledger.json"),
+                "records": str(root / "research/results/a_short/regime_comparison_records.json"),
+                "panel": str(root / "research/results/a_short/regime_comparison_panel.md"),
+                "action_records": str(root / "research/results/a_short/regime_action_comparison_records.json"),
+                "action_summary": str(root / "research/results/a_short/regime_action_comparison_summary.json"),
+                "candidate_effect_ledger": str(root / "logs/a_short_regime_candidate_effect.json"),
+                "candidate_effect_summary": str(root / "research/results/a_short/regime_candidate_effect_summary.json"),
+                "candidate_effect_markdown": str(root / "research/results/a_short/regime_candidate_effect_summary.md"),
+                "candidate_effect_outcome": str(root / "research/results/a_short/candidate_effect_outcome.json"),
+                "forward_tracker": str(root / "logs/forward_tracker.csv"),
+            }
+            result = {"ledger": {"coverage": {"n": 1}}, "evidence": "forward"}
+            with patch("runners.a_short_regime_comparison_runner.lane_paths", return_value=paths), \
+                    patch("runners.a_short_regime_comparison_runner.load_ledger",
+                          return_value={"rows": [{}], "coverage": {"start": "20260701"}}), \
+                    patch("runners.a_short_regime_comparison_runner._init_pro", return_value=object()), \
+                    patch("runners.a_short_regime_comparison_runner._fetch_trade_calendar",
+                          return_value=["20260727"]), \
+                    patch("runners.a_short_regime_comparison_runner._fetch_daily",
+                          return_value=pd.DataFrame({"trade_date": ["20260727"]})), \
+                    patch("runners.a_short_regime_comparison_runner._fetch_stk_limit",
+                          return_value=pd.DataFrame()), \
+                    patch("runners.a_short_regime_comparison_runner._fetch_index",
+                          return_value=pd.DataFrame()), \
+                    patch("runners.a_short_regime_comparison_runner.run_regime_step",
+                          return_value=result) as run:
+                self.assertEqual(main([
+                    "--as-of", "20260727", "--v14_2-raw-regime", "unknown",
+                    "--m67-report", str(root / "weekly_m67.json"),
+                    "--confirm-fetch-authorized",
+                ]), 0)
+            kwargs = run.call_args.kwargs
+        self.assertIsNone(kwargs["raw_v14_2_regime"])
+        self.assertIsNone(kwargs["m67_report_path"])
+        self.assertNotIn("action_records_path", kwargs)
+
     def test_cli_keeps_zero_exit_and_writes_outcome_when_candidate_source_mismatches(self):
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)

@@ -159,6 +159,33 @@ class PreFreezeEvidenceModeTests(unittest.TestCase):
             self.assertFalse(epoch_mode.enforcement_enabled(track))
             self.assertFalse(epoch_mode.evidence_counts_toward_clock(track))
 
+    def test_default_registry_has_no_user_design_completion_authorization(self):
+        self.assertFalse(epoch_mode.design_completion_authorized())
+        for track in epoch_mode.TRACKS:
+            self.assertFalse(epoch_mode.durable_evidence_writes_enabled(track))
+
+    def test_frozen_mode_without_user_design_completion_fails_closed(self):
+        with tempfile.TemporaryDirectory() as temp:
+            path = Path(temp) / "registry.json"
+            path.write_text(json.dumps({
+                "schema_name": "a_short_evidence_epoch_mode_registry",
+                "schema_version": "1.0.0",
+                "design_completion_authorization": {
+                    "status": "not_authorized", "directive": None,
+                },
+                "track_modes": {
+                    track: ("frozen_enforced" if track == epoch_mode.TRACKS[0]
+                            else "pre_freeze_audit_only")
+                    for track in epoch_mode.TRACKS
+                },
+            }), encoding="utf-8")
+            with mock.patch.object(epoch_mode, "TRACK_MODE_REGISTRY_PATH", path), \
+                    self.assertRaisesRegex(
+                        epoch_mode.EvidenceEpochModeError,
+                        "explicit design-completion authorization",
+                    ):
+                epoch_mode.enforcement_enabled(epoch_mode.TRACKS[0])
+
     def test_every_individually_frozen_track_rearms_the_shared_freeze_packet(self):
         for track in epoch_mode.TRACKS:
             with self.subTest(track=track), \
@@ -296,6 +323,10 @@ class PreFreezeEvidenceModeTests(unittest.TestCase):
             registry_path.write_text(json.dumps({
                 "schema_name": "a_short_evidence_epoch_mode_registry",
                 "schema_version": "1.0.0",
+                "design_completion_authorization": {
+                    "status": "authorized",
+                    "directive": "test-only explicit design completion",
+                },
                 "track_modes": {
                     track: "frozen_enforced" for track in epoch_mode.TRACKS
                 },
@@ -963,7 +994,7 @@ class PreFreezeVerdictGateTests(unittest.TestCase):
                                               "horizons": {"h10": {"status": "settled"}}}]}}
         any_existing_file = ROOT / "engine" / "a_short_evidence_epoch_mode.py"
         with mock.patch.object(p5, "_current_admission_capture_records", lambda root: captures), \
-                mock.patch.object(p5, "_weekly_paths", lambda root, date: (any_existing_file, any_existing_file)), \
+                mock.patch.object(p5, "_weekly_paths", lambda root, date, _run_revision_id=None: (any_existing_file, any_existing_file)), \
                 mock.patch.object(p5, "_load_json", lambda path: outcome), \
                 mock.patch.object(p5, "_validate_private_record", lambda record: None):
             with patched_epoch_modes("pre_freeze_audit_only", ("p5_industry_weight",)):

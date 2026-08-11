@@ -1,11 +1,14 @@
-"""Guard: published weekly bundles must be byte-identical on every checkout.
+"""Guard: frozen published weekly bundles must be byte-identical on every checkout.
 
-The comparison ledgers bind evidence by the RAW sha256 of these files
+Once the relevant A-short evidence track is explicitly frozen, the comparison
+ledgers bind evidence by the RAW sha256 of these files
 (`m67_provenance.source_sha256`, and the official-operation capture's source
 identity).  This repository runs with `core.autocrlf=true`, so without a
 `-text` pin a fresh clone or `git worktree add` smudges the bundles to CRLF,
 their sha stops matching the recorded one, and every source-binding assertion
-fails for a reason that has nothing to do with the code under review.
+fails for a reason that has nothing to do with the code under review.  Before
+the user authorizes design completion, those records are audit-only and are
+not required to be members of the frozen bundle set.
 
 That false red has already consumed a full review round, with the reviewer and
 the implementer measuring opposite results on two different trees.  This guard
@@ -22,9 +25,12 @@ import subprocess
 import unittest
 from pathlib import Path
 
+from engine import a_short_evidence_epoch_mode as epoch_mode
+
 ROOT = Path(__file__).resolve().parents[1]
 BUNDLE_PATTERN = "research/results/a_short/*/weekly_m67.*"
 RECORDS = ROOT / "research" / "results" / "a_short" / "regime_action_comparison_records.json"
+REGIME_TRACK = "p1_regime_candidate_effect"
 EOL_ROW = re.compile(r"^i/(?P<index>\S*)\s+w/(?P<worktree>\S*)\s+attr/(?P<attr>\S*)\s*\t(?P<path>.+)$")
 
 
@@ -63,11 +69,15 @@ class PublishedBundleEolPinTests(unittest.TestCase):
         self.assertEqual(with_crlf, [])
 
     def test_recorded_source_sha_still_matches_a_tracked_bundle(self) -> None:
-        """The binding the pin exists to protect, checked end to end."""
+        """Check source binding only after this track is explicitly frozen."""
         payload = json.loads(RECORDS.read_text(encoding="utf-8"))
         records = payload if isinstance(payload, list) else payload.get("records", [])
         recorded = [str((row.get("m67_provenance") or {}).get("source_sha256") or "")
                     for row in records if (row.get("m67_provenance") or {}).get("source_sha256")]
+        if not epoch_mode.durable_evidence_writes_enabled(REGIME_TRACK):
+            # Pre-freeze rows remain available for audit, but they must not turn
+            # an untracked audit artifact into a failed frozen-bundle assertion.
+            return
         self.assertTrue(recorded, "no recorded provenance sha; this guard would be vacuous")
         available = {hashlib.sha256((ROOT / row["path"]).read_bytes()).hexdigest() for row in self.bundles}
         self.assertEqual([sha for sha in recorded if sha not in available], [])

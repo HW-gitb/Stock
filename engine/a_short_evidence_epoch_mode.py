@@ -21,16 +21,13 @@ mechanism was protecting almost nothing while invalidating everything.
 What this module does
 ---------------------
 While a track is ``pre_freeze_audit_only`` in the per-track registry, its epoch
-fingerprint is a **stable constant** instead of a hash over moving files:
-
-* captures still record a fingerprint, so provenance is still written down;
-* nothing is ever silently dropped, so progress counters stop lying;
-* unrelated edits cost nothing, so the design can keep moving.
-
-A pre-freeze constant can never equal a real post-freeze fingerprint, so
-freezing one registry entry naturally leaves every pre-freeze week outside the
-new epoch.  That is the intended semantics: the 12/24/36-week clocks start
-**at the freeze**, not before.
+fingerprint is a **stable constant** instead of a hash over moving files.  The
+weekly runner may still compute an in-memory audit result, but it must not write
+durable comparison evidence that can later be mistaken for frozen accumulation.
+In particular, a pre-freeze weekly run must not persist a source SHA as a
+countable action/candidate record.  The real 12/24/36-week clocks start only
+after the user explicitly authorizes that the system design is complete and a
+track is moved to ``frozen_enforced``.
 
 Pre-freeze evidence is audit-only.  ``evidence_counts_toward_clock(track)`` is
 False, and every track must refuse to emit a promote / retire / ready verdict
@@ -39,8 +36,10 @@ same class of dishonesty this module exists to remove.
 
 Restoring enforcement
 ---------------------
-Freeze only the intended entry in ``TRACK_MODE_REGISTRY_PATH`` once that
-track's design is settled.  There is deliberately no all-track switch.
+Freeze only the intended entry in ``TRACK_MODE_REGISTRY_PATH`` after the
+explicit design-completion authorization in that same registry is present.
+There is deliberately no automatic or all-track switch: a mode flip without
+that authorization is rejected fail-closed.
 
 The shared prerequisite is done (2026-08-05).  The fifth-knife freeze packet
 used to gate on whole-file bytes, which would have returned the original churn
@@ -82,6 +81,12 @@ import jsonschema
 _PRE_FREEZE = "pre_freeze_audit_only"
 _FROZEN = "frozen_enforced"
 _VALID_MODES = (_PRE_FREEZE, _FROZEN)
+_DESIGN_COMPLETION_AUTHORIZATION_KEY = "design_completion_authorization"
+_DESIGN_NOT_AUTHORIZED = "not_authorized"
+_DESIGN_AUTHORIZED = "authorized"
+_VALID_DESIGN_AUTHORIZATION_STATUSES = (
+    _DESIGN_NOT_AUTHORIZED, _DESIGN_AUTHORIZED,
+)
 
 #: Every track that owns an epoch fingerprint.  A new comparison track MUST be
 #: registered here and route its fingerprint through this module, so the next
@@ -454,22 +459,30 @@ def _freeze_packet_identity(packet: dict) -> dict[str, str]:
 def validated_frozen_packet_identity(track: str) -> dict[str, str] | None:
     """Return the current validated identity, or ``None`` while pre-freeze."""
     mode = _mode(track)
+    if mode == _FROZEN:
+        require_design_completion_authorization()
     packet = _validate_fifth_knife_freeze_packet(
         require_contract_hashes=(mode == _FROZEN),
     )
     return _freeze_packet_identity(packet) if mode == _FROZEN else None
 
 
-@lru_cache(maxsize=4)
-def _track_modes_from_source(source: str) -> tuple[tuple[str, str], ...]:
-    """Parse and validate the mode registry once per exact registry text."""
+def _parse_registry(source: str) -> dict:
     try:
         registry = json.loads(source)
     except ValueError as exc:
         raise EvidenceEpochModeError(f"cannot read evidence epoch mode registry: {exc}") from exc
-    if registry.get("schema_name") != "a_short_evidence_epoch_mode_registry" or \
+    if not isinstance(registry, dict) or \
+            registry.get("schema_name") != "a_short_evidence_epoch_mode_registry" or \
             registry.get("schema_version") != "1.0.0":
         raise EvidenceEpochModeError("invalid evidence epoch mode registry identity")
+    return registry
+
+
+@lru_cache(maxsize=4)
+def _track_modes_from_source(source: str) -> tuple[tuple[str, str], ...]:
+    """Parse and validate the mode registry once per exact registry text."""
+    registry = _parse_registry(source)
     modes = registry.get("track_modes")
     if not isinstance(modes, dict) or set(modes) != set(TRACKS):
         raise EvidenceEpochModeError("evidence epoch mode registry must name every registered track exactly once")
@@ -477,6 +490,38 @@ def _track_modes_from_source(source: str) -> tuple[tuple[str, str], ...]:
         if mode not in _VALID_MODES:
             raise EvidenceEpochModeError(f"unknown evidence epoch mode for track: {track}")
     return tuple(sorted(modes.items()))
+
+
+@lru_cache(maxsize=4)
+def _design_completion_from_source(source: str) -> tuple[str, str | None]:
+    """Return the explicit design-completion status and its user directive."""
+    registry = _parse_registry(source)
+    authorization = registry.get(_DESIGN_COMPLETION_AUTHORIZATION_KEY)
+    # Older temporary/test registries had no authorization field. Treat that
+    # shape as not authorized; a frozen mode still fails closed below.
+    if authorization is None:
+        return _DESIGN_NOT_AUTHORIZED, None
+    if not isinstance(authorization, dict):
+        raise EvidenceEpochModeError(
+            "design completion authorization must be an object"
+        )
+    status = authorization.get("status")
+    directive = authorization.get("directive")
+    if status not in _VALID_DESIGN_AUTHORIZATION_STATUSES:
+        raise EvidenceEpochModeError(
+            f"unknown design completion authorization status: {status}"
+        )
+    if status == _DESIGN_AUTHORIZED:
+        if not isinstance(directive, str) or not directive.strip():
+            raise EvidenceEpochModeError(
+                "authorized design completion requires a non-empty user directive"
+            )
+        return status, directive.strip()
+    if directive not in (None, ""):
+        raise EvidenceEpochModeError(
+            "not-authorized design completion must not carry a directive"
+        )
+    return status, None
 
 
 def _mode(track: str) -> str:
@@ -487,11 +532,33 @@ def _mode(track: str) -> str:
     is skipped.
     """
     track = _require_track(track)
+    source = _registry_source_text()
+    return dict(_track_modes_from_source(source))[track]
+
+
+def _registry_source_text() -> str:
     try:
         source = TRACK_MODE_REGISTRY_PATH.read_text(encoding="utf-8")
     except OSError as exc:
         raise EvidenceEpochModeError(f"cannot read evidence epoch mode registry: {exc}") from exc
-    return dict(_track_modes_from_source(source))[track]
+    return source
+
+
+def design_completion_authorized() -> bool:
+    """Whether the user has explicitly authorized design completion."""
+    source = _registry_source_text()
+    # Validate the whole registry before exposing the authorization decision.
+    _track_modes_from_source(source)
+    status, _directive = _design_completion_from_source(source)
+    return status == _DESIGN_AUTHORIZED
+
+
+def require_design_completion_authorization() -> None:
+    """Fail closed unless the registry records an explicit user directive."""
+    if not design_completion_authorized():
+        raise EvidenceEpochModeError(
+            "explicit design-completion authorization is required before freezing evidence"
+        )
 
 
 def enforcement_enabled(track: str) -> bool:
@@ -507,6 +574,7 @@ def validate_frozen_transition(track: str) -> dict[str, str]:
     admission receipt, archive, active epoch, or frozen registry state.
     """
     _require_track(track)
+    require_design_completion_authorization()
     packet = _validate_fifth_knife_freeze_packet(require_contract_hashes=True)
     return _freeze_packet_identity(packet)
 
@@ -540,6 +608,16 @@ def bind_frozen_fingerprint(
 def evidence_counts_toward_clock(track: str) -> bool:
     """Whether accumulated weeks may advance a 12/24/36-week checkpoint."""
     return enforcement_enabled(track)
+
+
+def durable_evidence_writes_enabled(track: str) -> bool:
+    """Whether a weekly comparison writer may persist countable evidence.
+
+    This is intentionally the same fail-closed gate as the evidence clock:
+    pre-freeze runs may compute audit values, but they cannot persist a source
+    binding that later appears to be frozen accumulation.
+    """
+    return evidence_counts_toward_clock(track)
 
 
 def _require_track(track: str) -> str:

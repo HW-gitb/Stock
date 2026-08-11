@@ -1,6 +1,10 @@
 {
   "schema_name": "a_short_evidence_epoch_mode_registry",
   "schema_version": "1.0.0",
+  "design_completion_authorization": {
+    "status": "not_authorized",
+    "directive": null
+  },
   "track_modes": {
     "p0_factor_comparison_v2": "pre_freeze_audit_only",
     "p1_regime_candidate_effect": "pre_freeze_audit_only",

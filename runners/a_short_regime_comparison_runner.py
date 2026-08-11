@@ -1099,19 +1099,29 @@ def main(argv=None) -> int:
     iv_feed = json.loads(Path(args.iv_feed).read_text(encoding="utf-8")) if args.iv_feed else None
     if bool(args.v14_2_raw_regime) != bool(args.m67_report):
         raise SystemExit("D2 action comparison requires both --v14_2-raw-regime and --m67-report, or neither")
+    d2_persistence_enabled = _epoch_mode.durable_evidence_writes_enabled(
+        "p1_regime_candidate_effect"
+    )
+    if args.v14_2_raw_regime and not d2_persistence_enabled:
+        # Before the user explicitly declares the design complete, keep the
+        # weekly run audit-only: do not pass the M6.7 source into the D2 writer,
+        # so no source SHA or candidate-effect week can be accumulated.
+        print("[regime] design completion is not authorized; skipping durable D2/candidate-effect evidence "
+              "(pre_freeze_audit_only)")
     action_paths = ({"action_records_path": paths["action_records"], "action_summary_path": paths["action_summary"],
                      "action_decision_as_of": as_of,
                      "candidate_effect_ledger_path": paths["candidate_effect_ledger"],
                      "candidate_effect_summary_path": paths["candidate_effect_summary"],
                      "candidate_effect_markdown_path": paths["candidate_effect_markdown"],
                      "forward_tracker_path": paths["forward_tracker"]}
-                    if args.v14_2_raw_regime else {})
+                    if args.v14_2_raw_regime and d2_persistence_enabled else {})
     out = run_regime_step(as_of=effective_as_of, trade_calendar=cal, v14_2_regime=args.v14_2_regime,
                           daily=daily, stk_limit=stk_limit, csi300=csi300, csi1000=csi1000,
                           iv_feed=iv_feed, ledger_path=paths["ledger"],
                           records_path=paths["records"], panel_path=paths["panel"],
-                          bootstrap=args.bootstrap, raw_v14_2_regime=args.v14_2_raw_regime,
-                          m67_report_path=args.m67_report,
+                          bootstrap=args.bootstrap,
+                          raw_v14_2_regime=(args.v14_2_raw_regime if d2_persistence_enabled else None),
+                          m67_report_path=(args.m67_report if d2_persistence_enabled else None),
                           run_revision_id=args.run_revision_id,
                           **action_paths)
     print(f"V14.3 regime comparison written (non-production): ledger n={out['ledger']['coverage']['n']}, "

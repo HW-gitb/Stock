@@ -41,6 +41,10 @@ def patched_epoch_modes(mode: str, tracks: tuple[str, ...] | None = None):
         path.write_text(json.dumps({
             "schema_name": "a_short_evidence_epoch_mode_registry",
             "schema_version": "1.0.0",
+            "design_completion_authorization": {
+                "status": "authorized",
+                "directive": "test-only explicit design completion",
+            },
             "track_modes": modes,
         }), encoding="utf-8")
         _resealed_freeze_packet(packet_path)
