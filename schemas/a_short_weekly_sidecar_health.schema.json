@@ -27,6 +27,7 @@
     "schema_name": {"const": "a_short_weekly_sidecar_health"},
     "schema_version": {"const": "1.0.0"},
     "as_of": {"type": "string", "pattern": "^[0-9]{8}$"},
+    "run_revision_id": {"type": ["string", "null"], "pattern": "^([0-9a-f]{32})?$"},
     "generated_at": {"type": "string"},
     "run_id": {"type": ["string", "null"], "pattern": "^(a-short-[0-9]{8}-[0-9a-f]{16})?$"},
     "candidate_digest": {"type": ["string", "null"], "pattern": "^([0-9a-f]{64})?$"},

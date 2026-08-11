@@ -15,6 +15,7 @@
         "required": ["decision_date", "run_date", "price_data_through", "question_id", "experiment_batch_id", "epoch_id", "stage", "capture_sha256", "outcome_sha256", "source_receipt_sha256", "status", "forward_eligible"],
         "properties": {
           "decision_date": {"type": "string", "pattern": "^[0-9]{8}$"}, "run_date": {"type": "string", "pattern": "^[0-9]{8}$"},
+          "run_revision_id": {"type": ["string", "null"], "pattern": "^[0-9a-f]{32}$"},
           "price_data_through": {"type": "string", "pattern": "^[0-9]{8}$"}, "question_id": {"const": "margin_overheat_cash_control"},
           "experiment_batch_id": {"type": "string", "minLength": 1}, "epoch_id": {"type": "string", "minLength": 1}, "stage": {"enum": ["stage_a", "stage_b"]},
           "capture_sha256": {"type": "string", "pattern": "^[a-f0-9]{64}$"}, "outcome_sha256": {"type": "string", "pattern": "^[a-f0-9]{64}$"}, "source_receipt_sha256": {"type": "string", "pattern": "^[a-f0-9]{64}$"},

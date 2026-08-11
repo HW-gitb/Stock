@@ -18,6 +18,7 @@ from __future__ import annotations
 import argparse
 import copy
 import hashlib
+import importlib
 import json
 import math
 import os
@@ -70,6 +71,7 @@ from engine.a_short_regulatory_advisory import (
 from engine.a_short_tushare_client import is_retryable_tushare_error
 from engine.a_short_observability import safe_exception_summary  # noqa: E402
 from engine.a_share_market_clock import a_share_market_date  # noqa: E402
+from engine.a_short_run_revision import public_revision_root, validate_run_revision_id  # noqa: E402
 
 _RUNTIME_CONFIGURATION = load_runtime_configuration()
 _WEEKLY_WINDOWS = _RUNTIME_CONFIGURATION["m67"]["weekly_windows"]
@@ -186,12 +188,20 @@ def _industry_trend_for_candidate(cand: dict, expected_as_of: str) -> tuple[str,
 
 
 def _validate_official_publish_marker(analysis_path: str | Path, marker: dict,
-                                      source_identity: dict) -> None:
+                                      source_identity: dict,
+                                      expected_revision_id: str | None = None) -> None:
     """Bind the consumed analysis file bytes to the final EGS publish marker."""
     if marker.get("stage_status") != "complete" or \
             marker.get("run_id") != source_identity.get("run_id") or \
             marker.get("candidate_digest") != source_identity.get("candidate_digest"):
         raise SystemExit("[FATAL] official publish marker does not match analysis_input run identity")
+    if expected_revision_id is not None:
+        expected_revision_id = validate_run_revision_id(expected_revision_id)
+        if marker.get("run_revision_id") != expected_revision_id:
+            raise SystemExit("[FATAL] official publish marker does not match --run-revision-id")
+        revision_parent = Path(analysis_path).resolve().parent
+        if revision_parent.name != expected_revision_id or revision_parent.parent.name != "revisions":
+            raise SystemExit("[FATAL] analysis_input path is outside the requested revision root")
     path = Path(analysis_path)
     try:
         analysis = json.loads(path.read_text(encoding="utf-8"))
@@ -2309,16 +2319,19 @@ def validate_weekly_report(weekly: dict, iv_feed_summary: dict,
     if weekly.get("crash_veto_tracking") is not None:
         _validate_crash_veto_tracking_summary(weekly["crash_veto_tracking"], expected_as_of=weekly["as_of"])
     if weekly.get("factor_comparison_v2") is not None:
-        from engine.a_short_factor_comparison_v2_weekly import validate_v2_public_summary
-        validate_v2_public_summary(weekly["factor_comparison_v2"])
+        factor_module = _optional_module("engine.a_short_factor_comparison_v2_weekly")
+        if factor_module is not None:
+            factor_module.validate_v2_public_summary(weekly["factor_comparison_v2"])
     if weekly.get("margin_overheat_cash_control") is not None:
         _validate_margin_overheat_public_summary_shape(weekly["margin_overheat_cash_control"])
     if weekly.get("industry_weight_comparison") is not None:
-        from engine.a_short_industry_weight_comparison import validate_public_progress
-        validate_public_progress(weekly["industry_weight_comparison"])
+        industry_module = _optional_module("engine.a_short_industry_weight_comparison")
+        if industry_module is not None:
+            industry_module.validate_public_progress(weekly["industry_weight_comparison"])
     if weekly.get("overlay_adjudication") is not None:
-        from engine.a_short_overlay_adjudication import validate_public_summary
-        validate_public_summary(weekly["overlay_adjudication"])
+        overlay_module = _optional_module("engine.a_short_overlay_adjudication")
+        if overlay_module is not None:
+            overlay_module.validate_public_summary(weekly["overlay_adjudication"])
     # 跨-as_of PIT:feed 不得来自周报 as_of 之后(否则用了未来波动率)
     if str(iv_feed_summary.get("as_of")) > weekly["as_of"]:
         raise ValueError(f"IV feed as_of {iv_feed_summary.get('as_of')} 晚于周报 as_of {weekly['as_of']}(未来 feed)")
@@ -2337,6 +2350,11 @@ def validate_weekly_report(weekly: dict, iv_feed_summary: dict,
     rl = weekly.get("run_lineage") or {}
     if rl.get("stage_status") != "complete":
         raise ValueError("run_lineage.stage_status must be complete before publish")
+    if rl.get("run_revision_id") not in (None, ""):
+        try:
+            validate_run_revision_id(rl["run_revision_id"])
+        except ValueError as exc:
+            raise ValueError("run_lineage.run_revision_id is invalid") from exc
     if not re.fullmatch(rf"a-short-{weekly['as_of']}-[0-9a-f]{{16}}", str(rl.get("run_id") or "")):
         raise ValueError("run_lineage.run_id is not bound to weekly as_of")
     if not re.fullmatch(r"[0-9a-f]{64}", str(rl.get("candidate_digest") or "")):
@@ -3180,6 +3198,19 @@ def _margin_overheat_unavailable_public_summary() -> dict:
     }
 
 
+def _factor_v2_unavailable_public_summary() -> dict:
+    """Keep the formal weekly shape valid when the optional v2 module is absent."""
+    return {
+        "summary_id": "a_short_factor_comparison_v2",
+        "status": "evidence_unavailable_or_inconclusive",
+        "reminder_count": 0,
+        "admission_binding": "0" * 64,
+        "public_progress": {"status": "unavailable", "official_revision_id": None},
+        "message": "Factor-comparison v2 module is unavailable; official M6.7 is unchanged.",
+        "production_unchanged": True,
+    }
+
+
 def _validate_margin_overheat_public_summary_shape(summary: object) -> None:
     """Validate against the official weekly schema, not the optional sidecar file."""
     try:
@@ -3194,6 +3225,19 @@ def _validate_margin_overheat_public_summary_shape(summary: object) -> None:
         raise ValueError("unavailable margin-overheat summary carries stale reminders")
 
 
+def _optional_module(module_name: str):
+    """Import an optional comparison module without masking its own defects.
+
+    Only an unavailable import is optional.  Syntax errors and import-time
+    defects inside an installed module must still fail closed instead of being
+    silently relabelled as a sidecar outage.
+    """
+    try:
+        return importlib.import_module(module_name)
+    except ImportError:
+        return None
+
+
 def _recover_public_artifact_sets() -> list[dict]:
     """Undo any half-written comparison pair a dead run left, before it is read.
 
@@ -3201,27 +3245,39 @@ def _recover_public_artifact_sets() -> list[dict]:
     not undo is named on stderr by the transaction itself.
     """
     from engine.a_short_artifact_set_transaction import recover
-    from engine.a_short_industry_weight_comparison import DEFAULT_ARTIFACT_SET_JOURNAL_DIR as p5_journal
-    from engine.a_short_overlay_adjudication import DEFAULT_ARTIFACT_SET_JOURNAL_DIR as p4_journal
-    from runners.a_short_final_action_validation_runner import DEFAULT_ARTIFACT_SET_JOURNAL_DIR as p3_journal
-    from runners.a_short_target_policy_comparison_runner import DEFAULT_ARTIFACT_SET_JOURNAL_DIR as p2_journal
 
+    # All comparison tracks are optional.  Keep one import rule for recovery:
+    # a missing module only skips its journal; an installed module's own
+    # import-time failure remains visible and fail-closed.
+    journal_specs = (
+        ("engine.a_short_industry_weight_comparison", "P5"),
+        ("engine.a_short_overlay_adjudication", "P4"),
+        ("runners.a_short_final_action_validation_runner", "P3"),
+        ("runners.a_short_target_policy_comparison_runner", "P2"),
+    )
     reports = []
-    for journal_dir in (p5_journal, p4_journal, p3_journal, p2_journal):
+    for module_name, track in journal_specs:
+        module = _optional_module(module_name)
+        if module is None:
+            continue
+        journal_dir = getattr(module, "DEFAULT_ARTIFACT_SET_JOURNAL_DIR")
         report = recover(journal_dir)
         if report is not None:
+            report.setdefault("track", track)
             reports.append(report)
     return reports
 
 
 def _write_pipeline_sidecar_outcomes(path: str | Path, *, as_of: str, run_id: str | None,
                                      candidate_digest: str | None, expected: list[str],
+                                     run_revision_id: str | None = None,
                                      outcomes: list[dict]) -> None:
     """Write one de-identified post-publish outcome manifest atomically."""
     payload = {
         "schema_name": "a_short_weekly_sidecar_outcomes",
         "schema_version": "1.0.0",
         "as_of": str(as_of),
+        "run_revision_id": run_revision_id,
         "run_id": run_id,
         "candidate_digest": candidate_digest,
         "expected_sidecars": list(dict.fromkeys(expected)),
@@ -3269,6 +3325,8 @@ def publish_weekly_bundle(weekly: dict, iv_feed_summary: dict, out_path: str, md
         "run_date": weekly.get("run_date"),
         "price_data_through": weekly.get("price_data_through"),
         "run_id": lineage["run_id"],
+        **({"run_revision_id": lineage["run_revision_id"]}
+           if lineage.get("run_revision_id") not in (None, "") else {}),
         "candidate_digest": lineage["candidate_digest"],
         "published_at": datetime.now().astimezone().isoformat(timespec="seconds"),
         "account_snapshot": lineage.get("account_snapshot"),
@@ -5615,6 +5673,8 @@ def main(argv=None, pro_factory=None, price_provider=None, semantic_provider=Non
     p.add_argument("--out", required=True)
     p.add_argument("--phase4-report-dir", default=None,
                    help="deterministic Phase 4 report directory (default: result/a_short/<as_of>/reports)")
+    p.add_argument("--official-project-root", default=None,
+                   help="official project root for pre/post-selector formal-count gating; missing-pointer and legacy weeks remain audit-only")
     p.add_argument("--confirm-fetch-authorized", action="store_true")
     p.add_argument("--cninfo-lookback-days", type=int, default=90,
                    help="语义官方层 cninfo 取数回溯天数(默认 90;真 run --confirm 时自动取数)")
@@ -5622,6 +5682,7 @@ def main(argv=None, pro_factory=None, price_provider=None, semantic_provider=Non
                    help="web_llm em 资讯新鲜度窗(天,默认 30;只把近 N 天新闻喂判官)")
     p.add_argument("--run-date", help="实际运行日 YYYYMMDD(记进 run_lineage;intraday_prior_settled 模式要求存在且 <= --as-of)")
     p.add_argument("--price-as-of", help="latest officially settled price/technical date; must be <= --as-of")
+    p.add_argument("--run-revision-id", help="V5-A immutable weekly revision id")
     p.add_argument("--price-freshness-mode", choices=["strict_as_of", "intraday_prior_settled"],
                    default="strict_as_of",
                    help="价格新鲜度模式(显式,记进 run_lineage.price_freshness):strict_as_of(默认,最新 bar 必须 ==as_of);"
@@ -5701,6 +5762,11 @@ def main(argv=None, pro_factory=None, price_provider=None, semantic_provider=Non
     p.add_argument("--overlay-adjudication-forward", action="store_true",
                    help="freeze only a live canonical P4a observation after M6.7 publication")
     args = p.parse_args(argv)
+    if args.run_revision_id is not None:
+        try:
+            args.run_revision_id = validate_run_revision_id(args.run_revision_id)
+        except ValueError as exc:
+            raise SystemExit(f"[FATAL] invalid --run-revision-id: {exc}") from exc
     pipeline_sidecar_expected: list[str] = []
     pipeline_sidecar_outcomes: list[dict] = []
 
@@ -5853,6 +5919,11 @@ def main(argv=None, pro_factory=None, price_provider=None, semantic_provider=Non
     from engine.data.analysis_input_contract import build_a_short_run_identity
     source_section = ai.get("source") or {}
     source_identity = dict((source_section.get("run_identity") or {}))
+    if args.run_revision_id is not None:
+        if source_identity.get("run_revision_id") != args.run_revision_id:
+            raise SystemExit(
+                "[FATAL] analysis_input run_revision_id does not match --run-revision-id"
+            )
     try:
         validate_runtime_configuration_lineage(source_section.get("runtime_configuration"))
     except ValueError as exc:
@@ -5866,7 +5937,10 @@ def main(argv=None, pro_factory=None, price_provider=None, semantic_provider=Non
         if not marker_path.exists():
             raise SystemExit("[FATAL] official analysis_input has no final publish marker")
         marker = _load_official_publish_marker(marker_path)
-        _validate_official_publish_marker(args.analysis_input, marker, source_identity)
+        _validate_official_publish_marker(
+            args.analysis_input, marker, source_identity,
+            expected_revision_id=args.run_revision_id,
+        )
     elif not source_identity:
         # Hermetic fixtures/research callers outside result/a_short get a
         # deterministic identity; production paths never take this branch.
@@ -6198,6 +6272,8 @@ def main(argv=None, pro_factory=None, price_provider=None, semantic_provider=Non
                    "decision_as_of": str(args.as_of),
                    "price_data_through": price_data_through,
                    "runtime_configuration": source_runtime_configuration}
+    if args.run_revision_id is not None:
+        run_lineage["run_revision_id"] = args.run_revision_id
     # 持仓恒列入 S1 + 语义(4.2 S2): 先以有效候选、普通持仓、候选价格隔离持仓建立互斥出口。后者
     # 不伪造持有/止损结论，直接 private manual-review；选股、引擎决策、user-stop 不变。
     holding_normalized, holding_meta, holdings_manual_review = ([], {}, [])
@@ -6299,9 +6375,14 @@ def main(argv=None, pro_factory=None, price_provider=None, semantic_provider=Non
     # Knife 3 pre-M6.7 order: only an existing private cache may settle frozen v2 captures,
     # then the adjudicator atomically rewrites the current reminder. This helper has no provider
     # handle and suppresses stale reminders whenever cache/private integrity is not provable.
-    from engine.a_short_factor_comparison_v2_weekly import settle_and_summarize_v2_weekly
-    factor_comparison_v2 = settle_and_summarize_v2_weekly(
-        root=args.factor_comparison_v2_root, daily_cache_path=args.factor_comparison_v2_daily_cache, as_of=args.as_of)
+    factor_module = _optional_module("engine.a_short_factor_comparison_v2_weekly")
+    if factor_module is None:
+        factor_comparison_v2 = _factor_v2_unavailable_public_summary()
+    else:
+        factor_comparison_v2 = factor_module.settle_and_summarize_v2_weekly(
+            root=args.factor_comparison_v2_root, daily_cache_path=args.factor_comparison_v2_daily_cache, as_of=args.as_of,
+            run_revision_id=args.run_revision_id,
+            official_project_root=args.official_project_root)
     # Knife 3 margin-overheat order: settle only historical private captures from
     # the existing approved cache, recompute its private ledger/adjudication/
     # reminder, and expose only the de-identified banner below.  Any cache,
@@ -6311,13 +6392,15 @@ def main(argv=None, pro_factory=None, price_provider=None, semantic_provider=Non
     if args.margin_overheat_cash_control_root:
         _expect_sidecar("margin_overheat_cash_control_settlement")
         try:
-            from engine.a_short_margin_overheat_cash_control import (
-                settle_and_summarize_margin_overheat_weekly,
-            )
-            margin_overheat_cash_control = settle_and_summarize_margin_overheat_weekly(
+            margin_module = _optional_module("engine.a_short_margin_overheat_cash_control")
+            if margin_module is None:
+                raise ImportError("optional margin-overheat comparison module is unavailable")
+            margin_overheat_cash_control = margin_module.settle_and_summarize_margin_overheat_weekly(
                 root=args.margin_overheat_cash_control_root,
                 daily_cache_path=args.margin_overheat_cash_control_daily_cache,
                 as_of=args.as_of,
+                run_revision_id=args.run_revision_id,
+                official_project_root=args.official_project_root,
                 strict=True,
             )
             _validate_margin_overheat_public_summary_shape(margin_overheat_cash_control)
@@ -6349,65 +6432,64 @@ def main(argv=None, pro_factory=None, price_provider=None, semantic_provider=Non
         # No public write happens in this pre-publish block: every published pair
         # moves only after `publish_weekly_bundle` returns and the private capture
         # has advanced.  A summary built here is for the in-report banner only.
-        from engine.a_short_industry_weight_comparison import (settle_and_summarize_weekly,
-                                                               unavailable_public_progress)
-        if args.industry_weight_comparison_forward and not Path(args.industry_weight_comparison_source).is_file():
-            industry_weight_comparison = unavailable_public_progress(args.as_of)
+        industry_module = _optional_module("engine.a_short_industry_weight_comparison")
+        if industry_module is None:
+            industry_weight_comparison = None
+        elif args.industry_weight_comparison_forward and not Path(args.industry_weight_comparison_source).is_file():
+            industry_weight_comparison = industry_module.unavailable_public_progress(args.as_of)
         else:
             try:
-                industry_weight_comparison = settle_and_summarize_weekly(
+                industry_weight_comparison = industry_module.settle_and_summarize_weekly(
                     root=args.industry_weight_comparison_root,
                     daily_cache_path=args.industry_weight_comparison_daily_cache,
                     as_of=args.as_of,
+                    run_revision_id=args.run_revision_id,
+                    official_project_root=args.official_project_root,
                     write_public=False,
                     strict=True,
                 )
             except Exception:
-                industry_weight_comparison = unavailable_public_progress(args.as_of)
+                industry_weight_comparison = industry_module.unavailable_public_progress(args.as_of)
     # P2 is another non-blocking, no-provider evidence sidecar.  Missing or
     # malformed execution data produces a fresh unavailable reminder, never a
     # stale review_due message and never a changed M6.7 decision.
     target_policy_comparison = None
     if args.target_policy_root:
         _expect_sidecar("target_policy_capture")
-        from runners.a_short_target_policy_comparison_runner import (
-            settle_and_summarize as settle_target_policy,
-            unavailable_public_summary,
-            validate_public_summary,
-        )
-        target_policy_comparison = settle_target_policy(
-            root=args.target_policy_root, as_of=args.as_of, daily_cache_path=args.target_policy_daily_cache,
-            summary_path=args.target_policy_public_summary, markdown_path=args.target_policy_public_markdown,
-            write_public=False)
-        try:
-            validate_public_summary(target_policy_comparison)
-        except Exception:
-            # A P2 schema/message drift is a sidecar outage, never a reason to
-            # reject an otherwise valid official M6.7 publication.  Replace
-            # it with a fresh current-unavailable reminder; if even that
-            # cannot validate, omit only this optional banner.
-            target_policy_comparison = unavailable_public_summary(args.as_of)
+        target_module = _optional_module("runners.a_short_target_policy_comparison_runner")
+        if target_module is not None:
+            target_policy_comparison = target_module.settle_and_summarize(
+                root=args.target_policy_root, as_of=args.as_of, daily_cache_path=args.target_policy_daily_cache,
+                summary_path=args.target_policy_public_summary, markdown_path=args.target_policy_public_markdown,
+                write_public=False, run_revision_id=args.run_revision_id,
+                official_project_root=args.official_project_root)
             try:
-                validate_public_summary(target_policy_comparison)
+                target_module.validate_public_summary(target_policy_comparison)
             except Exception:
-                target_policy_comparison = None
+                # A P2 schema/message drift is a sidecar outage, never a reason to
+                # reject an otherwise valid official M6.7 publication.  Replace
+                # it with a fresh current-unavailable reminder; if even that
+                # cannot validate, omit only this optional banner.
+                target_policy_comparison = target_module.unavailable_public_summary(args.as_of)
+                try:
+                    target_module.validate_public_summary(target_policy_comparison)
+                except Exception:
+                    target_policy_comparison = None
     final_action_validation = None
     if args.final_action_validation_root:
         _expect_sidecar("final_action_capture")
-        from runners.a_short_final_action_validation_runner import (
-            settle_and_summarize as settle_final_action_validation,
-            validate_public_summary as validate_final_action_summary,
-            unavailable_public_summary as unavailable_final_action_summary,
-        )
-        final_action_validation = settle_final_action_validation(
-            root=args.final_action_validation_root, as_of=args.as_of,
-            tracker_path=(args.final_action_validation_tracker or str(ROOT / "logs" / "forward_tracker.csv")),
-            daily_cache_path=args.final_action_validation_daily_cache,
-            write_public=False)
-        try:
-            validate_final_action_summary(final_action_validation)
-        except Exception:
-            final_action_validation = unavailable_final_action_summary(args.as_of)
+        final_module = _optional_module("runners.a_short_final_action_validation_runner")
+        if final_module is not None:
+            final_action_validation = final_module.settle_and_summarize(
+                root=args.final_action_validation_root, as_of=args.as_of,
+                tracker_path=(args.final_action_validation_tracker or str(ROOT / "logs" / "forward_tracker.csv")),
+                daily_cache_path=args.final_action_validation_daily_cache,
+                write_public=False, run_revision_id=args.run_revision_id,
+                official_project_root=args.official_project_root)
+            try:
+                final_module.validate_public_summary(final_action_validation)
+            except Exception:
+                final_action_validation = final_module.unavailable_public_summary(args.as_of)
     overlay_adjudication = None
     if args.overlay_adjudication_root:
         _expect_sidecar("overlay_adjudication_capture")
@@ -6418,17 +6500,23 @@ def main(argv=None, pro_factory=None, price_provider=None, semantic_provider=Non
         if args.overlay_adjudication_public_markdown:
             overlay_public_paths["public_markdown_path"] = args.overlay_adjudication_public_markdown
         try:
-            from engine.a_short_overlay_adjudication import settle_and_summarize_weekly as settle_overlay_adjudication
-            overlay_adjudication = settle_overlay_adjudication(root=args.overlay_adjudication_root,
+            overlay_module = _optional_module("engine.a_short_overlay_adjudication")
+            if overlay_module is None:
+                raise ImportError("optional overlay-adjudication module is unavailable")
+            overlay_adjudication = overlay_module.settle_and_summarize_weekly(root=args.overlay_adjudication_root,
                 daily_cache_path=args.overlay_adjudication_daily_cache, as_of=args.as_of,
-                write_public=False, strict=True, **overlay_public_paths)
+                write_public=False, strict=True, run_revision_id=args.run_revision_id,
+                official_project_root=args.official_project_root, **overlay_public_paths)
         except Exception:
             # P4a is an optional comparison sidecar.  An import or settlement
             # outage must neither fail the formal weekly run nor retain a stale
             # P4a conclusion in the new official report.
             try:
-                from engine.a_short_overlay_adjudication import unavailable_public_summary
-                overlay_adjudication = unavailable_public_summary(args.as_of)
+                overlay_module = _optional_module("engine.a_short_overlay_adjudication")
+                overlay_adjudication = (
+                    overlay_module.unavailable_public_summary(args.as_of)
+                    if overlay_module is not None else None
+                )
             except Exception:
                 overlay_adjudication = None
     weekly = build_weekly_report(portfolio_normalized, args.as_of, gen,
@@ -6551,11 +6639,17 @@ def main(argv=None, pro_factory=None, price_provider=None, semantic_provider=Non
                            expected_pre_holiday_control=pre_holiday_control,
                            expected_northbound_control=northbound_control,
                            expected_margin_overheat_control=margin_overheat_control)
-    phase4_report_dir = (
-        Path(args.phase4_report_dir) if args.phase4_report_dir else
-        (ROOT / "result" / "a_short" / args.as_of / "reports" if official_input
-         else Path(args.out).resolve().parent / "reports")
-    )
+    if args.phase4_report_dir:
+        phase4_report_dir = Path(args.phase4_report_dir)
+    elif official_input and args.run_revision_id:
+        phase4_report_dir = public_revision_root(ROOT, args.as_of, args.run_revision_id) / "reports"
+    elif official_input:
+        # Legacy direct callers remain read-only compatible; the production
+        # launcher always supplies a revision id and never writes the
+        # selector-managed date-root reports directory.
+        phase4_report_dir = ROOT / "result" / "a_short" / args.as_of / "reports"
+    else:
+        phase4_report_dir = Path(args.out).resolve().parent / "reports"
     phase4_analysis_input = dict(ai)
     phase4_analysis_input["candidates"] = cands
     _materialize_legacy_task_reports(phase4_analysis_input, task_results_by_code, phase4_report_dir, args.as_of)
@@ -6610,6 +6704,7 @@ def main(argv=None, pro_factory=None, price_provider=None, semantic_provider=Non
                     root=args.official_operation_evidence_root,
                     out_path=args.out,
                     receipt_path=receipt_path,
+                    run_revision_id=args.run_revision_id,
                 )
             except Exception as exc:
                 capture_detail = _record_sidecar_failure("official_operation_capture", stage=stage, exc=exc,
@@ -6632,6 +6727,8 @@ def main(argv=None, pro_factory=None, price_provider=None, semantic_provider=Non
                         root=args.official_operation_evidence_root,
                         as_of=args.as_of,
                         daily_cache_path=args.official_operation_evidence_daily_cache,
+                        run_revision_id=args.run_revision_id,
+                        official_project_root=args.official_project_root,
                     )
                 except Exception as exc:
                     _record_sidecar_failure("official_operation_settlement", stage=stage, exc=exc,
@@ -6666,7 +6763,8 @@ def main(argv=None, pro_factory=None, price_provider=None, semantic_provider=Non
                 comparison = capture_v2_after_published_weekly(
                     root=args.factor_comparison_v2_root, decision_date=args.as_of, candidates=normalized,
                     source_identity=source_identity, out_path=args.out, receipt_path=receipt_path,
-                    forward_eligible=args.factor_comparison_v2_forward)
+                    forward_eligible=args.factor_comparison_v2_forward,
+                    run_revision_id=args.run_revision_id)
             except Exception as exc:
                 # A changed same-canonical-week replay must leave the first source-bound capture immutable.
                 # Do not surface private candidate details; the fixed operator message is enough to distinguish
@@ -6726,6 +6824,7 @@ def main(argv=None, pro_factory=None, price_provider=None, semantic_provider=Non
                     margin_facts=((ai.get("market_context") or {}).get("margin_overheat") or {}),
                     predicate_facts=predicate_facts,
                     forward_eligible=args.margin_overheat_cash_control_forward,
+                    run_revision_id=args.run_revision_id,
                 )
                 print(f"[margin-overheat-cash-control] capture={margin_capture['status']} (production unchanged)")
                 margin_progress, margin_code, margin_detail = _sidecar_result_fields(margin_capture)
@@ -6762,7 +6861,8 @@ def main(argv=None, pro_factory=None, price_provider=None, semantic_provider=Non
                     root=args.industry_weight_comparison_root, decision_date=args.as_of, run_date=args.run_date,
                     analysis_input_path=args.analysis_input, weight_comparison_path=args.industry_weight_comparison_source,
                     source_identity=source_identity, out_path=args.out, receipt_path=receipt_path,
-                    forward_eligible=args.industry_weight_comparison_forward)
+                    forward_eligible=args.industry_weight_comparison_forward,
+                    run_revision_id=args.run_revision_id)
             except Exception as exc:
                 capture_detail = _record_sidecar_failure("industry_weight_capture", stage=stage, exc=exc,
                                                          error_code="capture_unavailable")
@@ -6780,7 +6880,9 @@ def main(argv=None, pro_factory=None, price_provider=None, semantic_provider=Non
                         root=args.industry_weight_comparison_root,
                         daily_cache_path=args.industry_weight_comparison_daily_cache,
                         as_of=args.as_of, strict=True,
-                        sidecar_result=p5_settlement_result)
+                        sidecar_result=p5_settlement_result,
+                        run_revision_id=args.run_revision_id,
+                        official_project_root=args.official_project_root)
                 except Exception as exc:
                     capture_progress, capture_code, capture_detail = _sidecar_result_fields(p5_capture)
                     _record_sidecar("industry_weight_capture", execution_status="succeeded",
@@ -6833,7 +6935,8 @@ def main(argv=None, pro_factory=None, price_provider=None, semantic_provider=Non
                     root=args.target_policy_root, decision_date=args.as_of, candidates=p2_candidates,
                     source_identity=source_identity, out_path=args.out, receipt_path=receipt_path,
                     forward_eligible=args.target_policy_forward, summary_path=args.target_policy_public_summary,
-                    markdown_path=args.target_policy_public_markdown)
+                    markdown_path=args.target_policy_public_markdown,
+                    run_revision_id=args.run_revision_id)
             except Exception as exc:
                 if "p2_capture_replay_input_drifted" in safe_exception_summary(exc):
                     _record_sidecar_failure("target_policy_capture", stage=stage, exc=exc,
@@ -6871,7 +6974,8 @@ def main(argv=None, pro_factory=None, price_provider=None, semantic_provider=Non
                     root=args.final_action_validation_root, decision_date=args.as_of, candidates=normalized,
                     source_identity=source_identity, out_path=args.out, receipt_path=receipt_path,
                     forward_eligible=args.final_action_validation_forward,
-                    tracker_path=(args.final_action_validation_tracker or str(ROOT / "logs" / "forward_tracker.csv")))
+                    tracker_path=(args.final_action_validation_tracker or str(ROOT / "logs" / "forward_tracker.csv")),
+                    run_revision_id=args.run_revision_id)
             except Exception as exc:
                 if "mature_source_identity_changed" in safe_exception_summary(exc):
                     _record_sidecar_failure("final_action_capture", stage=stage, exc=exc,
@@ -6892,7 +6996,9 @@ def main(argv=None, pro_factory=None, price_provider=None, semantic_provider=Non
                     settle_final_action_validation(
                         root=args.final_action_validation_root, as_of=args.as_of,
                         tracker_path=(args.final_action_validation_tracker or str(ROOT / "logs" / "forward_tracker.csv")),
-                        daily_cache_path=args.final_action_validation_daily_cache)
+                        daily_cache_path=args.final_action_validation_daily_cache,
+                        run_revision_id=args.run_revision_id,
+                        official_project_root=args.official_project_root)
                 except Exception as exc:
                     _record_sidecar_failure("final_action_capture", stage=stage, exc=exc,
                                             error_code="capture_unavailable")
@@ -6924,7 +7030,8 @@ def main(argv=None, pro_factory=None, price_provider=None, semantic_provider=Non
                     run_date=args.run_date, stage3_snapshot_path=args.overlay_adjudication_stage3_snapshot,
                     overlay_path=args.overlay_adjudication_overlay_source, out_path=args.out, receipt_path=receipt_path,
                     egs_publish_marker_path=args.overlay_adjudication_egs_publish_marker,
-                    source_identity=source_identity, forward_eligible=args.overlay_adjudication_forward)
+                    source_identity=source_identity, forward_eligible=args.overlay_adjudication_forward,
+                    run_revision_id=args.run_revision_id)
             except Exception as exc:
                 capture_detail = _record_sidecar_failure("overlay_adjudication_capture", stage=stage, exc=exc,
                                                          error_code="capture_unavailable")
@@ -6941,6 +7048,8 @@ def main(argv=None, pro_factory=None, price_provider=None, semantic_provider=Non
                         root=args.overlay_adjudication_root,
                         daily_cache_path=args.overlay_adjudication_daily_cache,
                         as_of=args.as_of, strict=True, sidecar_result=p4_settlement_result,
+                        run_revision_id=args.run_revision_id,
+                        official_project_root=args.official_project_root,
                         **overlay_public_paths)
                 except Exception as exc:
                     capture_progress, capture_code, capture_detail = _sidecar_result_fields(p4_capture)
@@ -6983,6 +7092,7 @@ def main(argv=None, pro_factory=None, price_provider=None, semantic_provider=Non
             as_of=args.as_of,
             run_id=source_identity.get("run_id") if isinstance(source_identity, dict) else None,
             candidate_digest=source_identity.get("candidate_digest") if isinstance(source_identity, dict) else None,
+            run_revision_id=args.run_revision_id,
             expected=pipeline_sidecar_expected,
             outcomes=pipeline_sidecar_outcomes,
         )

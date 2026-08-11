@@ -6,6 +6,7 @@
   "properties": {
     "schema_name": {"const": "a_short_factor_comparison_v2_public_progress"}, "schema_version": {"const": "1.0.0"},
     "as_of": {"type": "string", "pattern": "^[0-9]{8}$"}, "current_epoch_id": {"type": ["string", "null"], "pattern": "^epoch-[a-f0-9]{12}$"},
+    "official_revision_id": {"type": ["string", "null"], "pattern": "^[a-f0-9]{32}$"},
     "admissions": {"type": "object", "additionalProperties": {"type": "object", "additionalProperties": false,
       "required": ["experiment_id", "component_id", "track_mode", "identity_sha256", "statistical_contract_sha256", "pit_forward_contract_sha256", "dependency_components"],
       "properties": {"experiment_id": {"type": "string"}, "component_id": {"type": "string"}, "track_mode": {"const": "switchable"}, "identity_sha256": {"type": "string", "pattern": "^[a-f0-9]{64}$"}, "statistical_contract_sha256": {"type": "string", "pattern": "^[a-f0-9]{64}$"}, "pit_forward_contract_sha256": {"type": "string", "pattern": "^[a-f0-9]{64}$"}, "dependency_components": {"type": "array", "items": {"type": "object", "additionalProperties": false, "required": ["component_id", "baseline_definition_sha256"], "properties": {"component_id": {"type": "string"}, "baseline_definition_sha256": {"type": "string", "pattern": "^[a-f0-9]{64}$"}}}}}}},

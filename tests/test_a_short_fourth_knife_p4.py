@@ -11,14 +11,21 @@ import jsonschema
 ROOT = Path(__file__).resolve().parents[1]
 
 
+ACTIVE_P4_ASSIGNMENTS = (
+    "$OverlayAdjudicationStage3 = Join-Path $PublicRevisionDir 'stage3_selection_snapshot.json'",
+    "$OverlayAdjudicationSource = Join-Path $PublicRevisionDir 'stage3_overlay_score.json'",
+    "$OverlayAdjudicationMarker = Join-Path $PublicRevisionDir 'official_publish.json'",
+)
+
+
 class FourthKnifeP4WiringTests(unittest.TestCase):
-    def test_standard_launcher_wires_one_as_of_p4_bucket_and_shared_cache(self) -> None:
-        text = (ROOT / "runners" / "weekly_screening.ps1").read_text(encoding="utf-8")
+    def _assert_p4_wiring(self, text: str) -> None:
+        """The gate itself, callable on any launcher text so it can be planted against."""
         required = (
             "$OverlayAdjudicationRoot = Join-Path $ProjectRoot 'state\\a_short\\overlay_adjudication_private\\v1'",
-            '"result\\a_short\\$AsOf\\stage3_selection_snapshot.json"',
-            '"result\\a_short\\$AsOf\\stage3_overlay_score.json"',
-            '"result\\a_short\\$AsOf\\official_publish.json"',
+            "$OverlayAdjudicationStage3 = Join-Path $PublicRevisionDir 'stage3_selection_snapshot.json'",
+            "$OverlayAdjudicationSource = Join-Path $PublicRevisionDir 'stage3_overlay_score.json'",
+            "$OverlayAdjudicationMarker = Join-Path $PublicRevisionDir 'official_publish.json'",
             "'research\\results\\a_short\\overlay_adjudication_summary.json'",
             "'research\\results\\a_short\\overlay_adjudication_summary.md'",
             "--overlay-adjudication-root $OverlayAdjudicationRoot",
@@ -30,9 +37,28 @@ class FourthKnifeP4WiringTests(unittest.TestCase):
         )
         for needle in required:
             self.assertIn(needle, text)
+        for legacy in (
+            '# "result\\a_short\\$AsOf\\stage3_selection_snapshot.json"',
+            '# "result\\a_short\\$AsOf\\stage3_overlay_score.json"',
+            '# "result\\a_short\\$AsOf\\official_publish.json"',
+        ):
+            self.assertNotIn(legacy, text)
         cache_call = next(line for line in text.splitlines() if "a_short_factor_comparison_v2_cache_build.py" in line)
         self.assertIn("--overlay-adjudication-root $OverlayAdjudicationRoot", cache_call)
         self.assertEqual(text.count("'--overlay-adjudication-forward')"), 1)
+
+    def test_standard_launcher_wires_one_as_of_p4_bucket_and_shared_cache(self) -> None:
+        self._assert_p4_wiring((ROOT / "runners" / "weekly_screening.ps1").read_text(encoding="utf-8"))
+
+    def test_p4_guard_rejects_planted_wrong_active_assignment(self) -> None:
+        """Patch the subject, not the yardstick: a broken assignment must make the gate raise."""
+        text = (ROOT / "runners" / "weekly_screening.ps1").read_text(encoding="utf-8")
+        for expected in ACTIVE_P4_ASSIGNMENTS:
+            with self.subTest(assignment=expected):
+                planted = text.replace(expected, expected.rsplit(" ", 1)[0] + " 'PLANTED_WRONG_TARGET.json'")
+                self.assertNotEqual(planted, text, "anchor moved; update this planted control")
+                with self.assertRaises(AssertionError):
+                    self._assert_p4_wiring(planted)
 
     def test_p4_forward_flag_is_inside_live_branch(self) -> None:
         text = (ROOT / "runners" / "weekly_screening.ps1").read_text(encoding="utf-8")

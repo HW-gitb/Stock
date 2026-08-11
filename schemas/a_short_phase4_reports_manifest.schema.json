@@ -1,0 +1,33 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://stock.local/schemas/a_short_phase4_reports_manifest/1.0.0/schema.json",
+  "title": "A-short Phase-4 reports manifest",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_name", "schema_version", "decision_as_of", "run_revision_id",
+    "reports_root", "file_count", "files", "content_digest"
+  ],
+  "properties": {
+    "schema_name": {"const": "a_short_phase4_reports_manifest"},
+    "schema_version": {"const": "1.0.0"},
+    "decision_as_of": {"type": "string", "pattern": "^[0-9]{8}$"},
+    "run_revision_id": {"type": "string", "pattern": "^[0-9a-f]{32}$"},
+    "reports_root": {"const": "reports"},
+    "file_count": {"type": "integer", "minimum": 0},
+    "files": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["relative_path", "sha256", "byte_length"],
+        "properties": {
+          "relative_path": {"type": "string", "pattern": "^reports/(?!/)(?!.*\\\\)(?!.*(^|/)\\.\\.(?:/|$)).+$"},
+          "sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+          "byte_length": {"type": "integer", "minimum": 0}
+        }
+      }
+    },
+    "content_digest": {"type": "string", "pattern": "^[0-9a-f]{64}$"}
+  }
+}

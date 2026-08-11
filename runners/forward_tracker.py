@@ -58,6 +58,12 @@ from runners.backtest_rank import (
 )
 from engine.data.analysis_input_contract import validate_analysis_input_contract
 from engine.a_share_market_clock import a_share_market_date
+from engine.a_short_run_revision import (
+    RevisionError,
+    public_revision_root,
+    resolve_official_revision,
+    validate_run_revision_id,
+)
 
 TRACKER_CSV = ROOT / "logs" / "forward_tracker.csv"
 LIVE_RESULT_ROOT = ROOT / "result" / "a_short"
@@ -69,6 +75,7 @@ SCHEMA_COLUMNS = [
     "captured_at",
     "run_id",
     "candidate_digest",
+    "run_revision_id",
     "decision_as_of",
     "run_date",
     "price_data_through",
@@ -139,6 +146,7 @@ SCHEMA_COLUMNS = [
 ]
 TRACKER_STRING_COLUMNS = {
     "as_of": str, "decision_as_of": str, "run_date": str,
+    "run_revision_id": str,
     "price_data_through": str, "industry_trend_source_as_of": str,
     "theme_taxonomy_source_as_of": str, "theme_taxonomy_l3_snapshot_date": str,
     "entry_date": str, "ret_10d_exit_date": str, "ts_code": str,
@@ -196,7 +204,8 @@ def _candidate_row(as_of: str, captured_at: str, run_id: str, candidate_digest: 
                    l3_mode: str | None = None, *, decision_as_of: str | None = None,
                    run_date: str | None = None, price_data_through: str | None = None,
                    stage3_candidate_count: int | None = None,
-                   runtime_configuration_fingerprint: str | None = None) -> dict:
+                   runtime_configuration_fingerprint: str | None = None,
+                   run_revision_id: str | None = None) -> dict:
     industry = _get(c, "industry", default={}) or {}
     signal = industry.get("industry_trend_signal") if isinstance(industry, dict) else {}
     signal = signal if isinstance(signal, dict) else {}
@@ -221,6 +230,7 @@ def _candidate_row(as_of: str, captured_at: str, run_id: str, candidate_digest: 
         "captured_at": captured_at,
         "run_id": run_id,
         "candidate_digest": candidate_digest,
+        "run_revision_id": run_revision_id,
         "decision_as_of": decision_as_of,
         "run_date": run_date,
         "price_data_through": price_data_through,
@@ -351,8 +361,16 @@ def _decision_cohort_matches(existing: pd.DataFrame, incoming: pd.DataFrame) -> 
     return canonical_rows(existing) == canonical_rows(incoming)
 
 
-def capture(as_of: str) -> int:
-    input_path = LIVE_RESULT_ROOT / as_of / "analysis_input.json"
+def capture(as_of: str, run_revision_id: str | None = None) -> int:
+    if run_revision_id is not None:
+        try:
+            run_revision_id = validate_run_revision_id(run_revision_id)
+        except ValueError as exc:
+            print(f"[FATAL] invalid run_revision_id: {exc}")
+            return 2
+        input_path = public_revision_root(ROOT, as_of, run_revision_id) / "analysis_input.json"
+    else:
+        input_path = LIVE_RESULT_ROOT / as_of / "analysis_input.json"
     if not input_path.exists():
         print(f"[FATAL] analysis_input.json missing: {input_path.relative_to(ROOT)}")
         return 2
@@ -372,6 +390,17 @@ def capture(as_of: str) -> int:
     if not run_id or not digest:
         print("[FATAL] analysis_input missing run identity; refusing ambiguous same-day cohort")
         return 2
+    identity_revision = identity.get("run_revision_id")
+    if identity_revision not in (None, ""):
+        try:
+            identity_revision = validate_run_revision_id(str(identity_revision))
+        except ValueError as exc:
+            print(f"[FATAL] analysis_input has invalid run_revision_id: {exc}")
+            return 2
+    if run_revision_id is not None and identity_revision != run_revision_id:
+        print("[FATAL] requested run_revision_id does not match analysis_input identity")
+        return 2
+    run_revision_id = run_revision_id or identity_revision
     candidates = payload.get("candidates") or []
     decision_as_of = str(payload.get("decision_as_of") or payload.get("trade_date") or "")
     run_date = str(payload.get("run_date") or ((payload.get("source") or {}).get("clocks") or {}).get("run_date") or "")
@@ -395,12 +424,17 @@ def capture(as_of: str) -> int:
         price_data_through=price_data_through,
         stage3_candidate_count=len(candidates),
         runtime_configuration_fingerprint=runtime_configuration_fingerprint,
+        run_revision_id=run_revision_id,
     )
                 for c in candidates]
     new_df = pd.DataFrame(new_rows, columns=SCHEMA_COLUMNS)
 
     existing = _load_existing_tracker()
-    same_day = existing[existing["as_of"].astype(str) == str(as_of)] if not existing.empty else existing
+    if not existing.empty:
+        same_day = existing[existing["as_of"].astype(str) == str(as_of)]
+        same_day = same_day[same_day["run_revision_id"].fillna("").astype(str) == str(run_revision_id or "")]
+    else:
+        same_day = existing
     expected_codes = sorted(str(row["ts_code"]) for row in new_rows)
     captured_codes = sorted(same_day["ts_code"].dropna().astype(str).tolist()) if not same_day.empty else []
     if not same_day.empty and set(same_day["run_id"].dropna().astype(str)) == {run_id} and \
@@ -409,12 +443,17 @@ def capture(as_of: str) -> int:
         print(f"[OK] {as_of}: identical run already captured; preserving backfill")
         return 0
 
-    # A same-day rerun is an authoritative cohort replacement.  Never union
-    # candidates across run identities (A/B then B/C must end as B/C only).
-    prior_other_days = existing[existing["as_of"].astype(str) != str(as_of)] if not existing.empty else existing
+    # Legacy date-only captures retain their historical replacement behavior.  A
+    # V5 revision is a separate immutable cohort: a new revision is appended and
+    # never deletes the earlier same-day cohort.
+    if run_revision_id is None:
+        prior_other_days = existing[existing["as_of"].astype(str) != str(as_of)] if not existing.empty else existing
+    else:
+        prior_other_days = existing
     combined = pd.concat([prior_other_days, new_df], ignore_index=True)
     _write_tracker(combined)
-    print(f"[OK] {as_of}: replaced cohort with run {run_id} ({len(new_df)} rows; tracker rows now {len(combined)})")
+    action = "appended revision cohort" if run_revision_id is not None else "replaced cohort"
+    print(f"[OK] {as_of}: {action} with run {run_id} ({len(new_df)} rows; tracker rows now {len(combined)})")
     return 0
 
 
@@ -478,8 +517,64 @@ def _pending_backfill_mask(df: pd.DataFrame, windows: list[int]) -> pd.Series:
     return pending_mask
 
 
-def backfill(windows: list[int]) -> int:
-    df = _load_existing_tracker()
+def _filter_official_revision(
+    frame: pd.DataFrame,
+    project_root: str | Path,
+    requested_revision: str,
+) -> pd.DataFrame:
+    """Keep only the resolver-selected cohort for each decision date.
+
+    The tracker remains an append-only audit ledger.  Non-official and
+    validation-only rows are left untouched in the CSV but are excluded from
+    formal backfill counting when an official root is supplied.
+    """
+    if frame.empty:
+        return frame.copy()
+    selected_revisions: dict[str, str] = {}
+    for as_of in sorted(frame["as_of"].astype(str).unique()):
+        try:
+            selected = resolve_official_revision(
+                project_root, as_of,
+                require=True,
+            )
+        except RevisionError:
+            continue
+        if selected is not None:
+            selected_revisions[as_of] = selected["selected_revision_id"]
+    if not selected_revisions:
+        return frame.iloc[0:0].copy()
+    # ``requested_revision`` identifies the current invocation only.  Historical
+    # cohorts must use the resolver-selected revision for their own decision date;
+    # filtering everything to the current id makes every mature cohort disappear.
+    selected = frame["as_of"].astype(str).map(selected_revisions)
+    return frame[
+        selected.notna()
+        & frame["run_revision_id"].fillna("").astype(str).eq(selected.astype(str))
+    ].copy()
+
+
+def backfill(
+    windows: list[int],
+    run_revision_id: str | None = None,
+    official_project_root: str | Path | None = None,
+) -> int:
+    if run_revision_id is not None:
+        try:
+            run_revision_id = validate_run_revision_id(run_revision_id)
+        except ValueError as exc:
+            print(f"[FATAL] invalid run_revision_id: {exc}")
+            return 2
+    if official_project_root is not None and run_revision_id is None:
+        print("[FATAL] official backfill requires run_revision_id")
+        return 2
+    all_df = _load_existing_tracker()
+    df = all_df.copy()
+    if run_revision_id is not None and official_project_root is not None and not df.empty:
+        df = _filter_official_revision(df, official_project_root, run_revision_id)
+    elif run_revision_id is not None and not df.empty:
+        # Cache settlement is scoped to the requested official cohort.  Other
+        # same-day revisions remain audit history and are not mutated here.
+        df = df[df["run_revision_id"].fillna("").astype(str) == run_revision_id].copy()
     if df.empty:
         print("[OK] tracker is empty, nothing to backfill")
         return 0
@@ -526,7 +621,7 @@ def backfill(windows: list[int]) -> int:
     if work.empty:
         return EXIT_LEDGER_STALLED if needs_refresh else 0
     pending_before_attach = {
-        (str(row.as_of), str(row.ts_code), window): str(getattr(row, f"ret_{window}d_status"))
+        (str(row.as_of), str(getattr(row, "run_revision_id", "") or ""), str(row.ts_code), window): str(getattr(row, f"ret_{window}d_status"))
         for row in work.itertuples(index=False)
         for window in windows
     }
@@ -538,7 +633,9 @@ def backfill(windows: list[int]) -> int:
     work = attach_forward_returns(work, windows, payload)
 
     stale_windows = []
-    for as_of, cohort in work.groupby(work["as_of"].astype(str), sort=True):
+    for (as_of, revision), cohort in work.groupby(
+            [work["as_of"].astype(str), work["run_revision_id"].fillna("").astype(str)],
+            sort=True, dropna=False):
         for window in windows:
             status_column = f"ret_{window}d_status"
             if status_column not in cohort.columns:
@@ -551,16 +648,17 @@ def backfill(windows: list[int]) -> int:
             if not cache_is_behind_market_date:
                 continue
             if any(
-                pending_before_attach.get((str(row.as_of), str(row.ts_code), window))
+                pending_before_attach.get((str(row.as_of), str(getattr(row, "run_revision_id", "") or ""),
+                                           str(row.ts_code), window))
                 not in TERMINAL_FORWARD_STATUSES
                 and str(getattr(row, status_column)) in STALE_CACHE_PENDING_STATUSES
                 for row in cohort.itertuples(index=False)
             ):
-                stale_windows.append(f"{as_of}:+{window}d")
+                stale_windows.append(f"{as_of}/{revision or 'legacy_revision_0'}:+{window}d")
 
     # Write the resulting returns back into df by (as_of, ts_code).
-    work_idx = work.set_index(["as_of", "ts_code"])
-    df_idx = df.set_index(["as_of", "ts_code"])
+    work_idx = work.set_index(["as_of", "run_revision_id", "ts_code"])
+    df_idx = df.set_index(["as_of", "run_revision_id", "ts_code"])
 
     # These columns are all-NA (float64) on a fresh tracker but the write-back
     # below assigns strings/timestamps into them; pandas 2.x rejects a
@@ -602,7 +700,12 @@ def backfill(windows: list[int]) -> int:
         df_idx.at[key, "backfilled_at"] = backfilled_at
         updated_keys.append(key)
 
-    df_out = df_idx.reset_index()[SCHEMA_COLUMNS]
+    selected_out = df_idx.reset_index()[SCHEMA_COLUMNS]
+    if run_revision_id is not None:
+        other = all_df[all_df["run_revision_id"].fillna("").astype(str) != run_revision_id]
+        df_out = pd.concat([other, selected_out], ignore_index=True)[SCHEMA_COLUMNS]
+    else:
+        df_out = selected_out
     _write_tracker(df_out)
     stale_cohorts = sorted(set(needs_refresh + [item.split(":", 1)[0] for item in stale_windows]))
     if stale_cohorts:
@@ -901,17 +1004,25 @@ def main():
     sub = parser.add_subparsers(dest="cmd", required=True)
     cap = sub.add_parser("capture", help="Append one row per candidate from result/a_short/<as_of>/analysis_input.json.")
     cap.add_argument("--as-of", required=True, help="YYYYMMDD trading day.")
+    cap.add_argument("--run-revision-id", default=None)
     bf = sub.add_parser("backfill", help="Fill forward returns for matured pending rows (cache-only).")
     bf.add_argument("--windows", default="5,10,20")
+    bf.add_argument("--run-revision-id", default=None)
+    bf.add_argument("--official-project-root", default=None,
+                    help="optional project root whose official pointer gates formal backfill")
     rf = sub.add_parser("refresh", help="Explicit narrowest-safe forward_daily cache refresh for matured pending cohorts.")
     rf.add_argument("--windows", default="5,10,20")
     args = parser.parse_args()
 
     if args.cmd == "capture":
-        return capture(args.as_of)
+        return capture(args.as_of, run_revision_id=args.run_revision_id)
     if args.cmd == "backfill":
         windows = [int(w) for w in args.windows.split(",") if w.strip()]
-        return backfill(windows)
+        return backfill(
+            windows,
+            run_revision_id=args.run_revision_id,
+            official_project_root=args.official_project_root,
+        )
     if args.cmd == "refresh":
         windows = [int(w) for w in args.windows.split(",") if w.strip()]
         return refresh(windows)

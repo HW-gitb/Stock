@@ -2,7 +2,7 @@
   "schema_name": "a_short_m67_effect_contract",
   "schema_version": "1.0.0",
   "legacy_migration_sha256": "b99cbb6895b7b2c2877e172fbbd59ff0b84a5c3b9bbf5de2b8ee2aab0d52cc4e",
-  "analysis_input_all_paths_sha256": "3d9514b984c6ba46776aa55a9b81a53dab761aff5225104310cb65836851de6e",
+  "analysis_input_all_paths_sha256": "9bb97bb004d1ae2504bd5523aa4e015ec0c7a2859b99ca899bc11f0a2732a8a5",
   "unclassified_pending_audit_baseline": [
     "account_context.mode",
     "account_context.positions[].current_price",
@@ -270,7 +270,7 @@
         "source.clocks",
         "state_refs"
       ],
-      "source_paths_sha256": "ee93f6b099e2d80954c45bdf83da5a7d9d52d2abe892ad2243ede546db4fe3a1",
+      "source_paths_sha256": "543333ef686f022543ccedabf0f28c6ed2a7a42a4fd0c2eda4ba9d1daee252dc",
       "policy": "must_affect_result",
       "terminal_surfaces": [
         "weekly.effect_contract_ledger",
@@ -851,6 +851,12 @@
     }
   ],
   "leaf_effect_overrides": {
+    "source.run_identity.run_revision_id": {
+      "category": "duplicate_or_display_audit",
+      "consumer_ref": "engine/a_short_run_revision.py::official pointer/current-view binding",
+      "terminal_surface": "weekly run-lineage and official revision provenance; not an M6.7 decision input",
+      "mutation_evidence": "changing the revision changes evidence provenance and current-view selection, while the bound M6.7 facts remain unchanged"
+    },
     "candidates[].catalyst.theme_taxonomy.comparison_metrics.theme_heat_score": {
       "category": "formal_comparison_verdict",
       "consumer_ref": "engine/a_short_industry_theme.py::theme comparison",
@@ -1272,13 +1278,13 @@
     "candidate_data_quality": "comparison_track"
   },
   "decision_predicate_sha256": {
-    "A-EGS/egs_main.py": "41af6058d86741c14fb5934c26fe1122969171446782c1d61808f46398d07d92",
+    "A-EGS/egs_main.py": "2d7458e4f60059dea7c7657702e05eae82d38c059733692afde530dce6e8ecbb",
     "engine/egs_industry_heat.py": "74932f994ec0658345c41aa932b54b5685c1737c663f5070a193d264f37fced2",
     "engine/a_short_industry_theme.py": "516191a042a3e9c5b16d0bb3bd56bd959f81fc64dfe7fe93f85c170b3bba53f4",
     "engine/a_short_northbound.py": "e48d20a9c49d06480443815755d97f5674fa98fe1e13284f2d4aaaa19361d71a",
     "engine/a_short_margin_overheat.py": "5d727a30ecc215a5546afe8be41dd3d43c99d7cc4abf2a03e1c099ee171d7cbb",
     "runners/a_short_phase5_engine.py": "bd9c17a7032066d7c3c9074a8fedb16e5e11b559d973d95987458fb8eca6dd5e",
-    "runners/a_short_weekly_pipeline.py": "1793f1d3d02bc848ce7950af8ccff196d72643a1146009f561429cfd609ff51a",
+        "runners/a_short_weekly_pipeline.py": "dfed115ed7e86716599f6e4d8d9c8a06b5519be30816705d9e814fa3481e715e",
     "runners/a_short_m67_render.py": "ad68c7533ae055ce30e126c083ae7bbf576bc64657904e3bec0c780f887eb448",
     "engine/a_short_portfolio_risk.py": "02b88ac3b5239e8dd4897bde06afab0769ea5593f8a8a3666e5c8fba24486860",
     "engine/a_short_effect_contract.py": "2f7c1cbc41bd60acdd2ce4886a3beada8ee3ec76dc2a3b2288edffe37418c6a8"
@@ -1452,7 +1458,7 @@
       "id": "target_policy_comparison",
       "policy": "intentionally_independent",
       "schema_path": "schemas/a_short_target_policy_comparison_summary.schema.json",
-      "schema_sha256": "e78d21e59a3a7cffdebf08d751fb68409a81ac6490a6388df9fd65d3e1c4b4fb",
+      "schema_sha256": "dc9eff8925ff23afa3ce0d8fcbcfc72fc75de58af4dcd7ce3e1a488e1e8dabc0",
       "reason": "P2 freezes a shadow-only target and breakout comparison. Before separate future reviews, independent re-review, and explicit user confirmation, it is prohibited from changing formal M6.7 target, entry eligibility, star, risk, action, sizing, cash allocation, or veto.",
       "owner": "runners/a_short_target_policy_comparison_runner.py + engine/a_short_managed_exit.py",
       "review_ref": "P2 forward review only after the public summary reaches its frozen minimum data thresholds",
@@ -1465,7 +1471,7 @@
       "id": "final_action_validation",
       "policy": "intentionally_independent",
       "schema_path": "schemas/a_short_final_action_validation_summary.schema.json",
-      "schema_sha256": "498719d368f21d495e7123acfcf25c64889009ff3cf8ad3cd3d40ffabfdce2a2",
+      "schema_sha256": "023b590e79c7253fb2917f00292d416bcced271a07098a2640bbf60f0481d73f",
       "reason": "P3 freezes an account-independent model-selection comparison and optional shared managed-exit evidence. Before future threshold reviews, independent re-review, and explicit user confirmation, it is prohibited from changing EGS, formal M6.7 action, star, sizing, cash allocation, stop, target, veto, or any production policy.",
       "owner": "runners/a_short_final_action_validation_runner.py + engine/a_short_managed_exit.py",
       "review_ref": "P3 forward review only after public reminder thresholds; HAC, P3b and production switching remain separately gated",
@@ -1478,7 +1484,7 @@
       "id": "industry_weight_comparison_p5",
       "policy": "intentionally_independent",
       "schema_path": "schemas/a_short_industry_weight_comparison_progress_summary.schema.json",
-      "schema_sha256": "9a62c53c616a5f09f3b19e8bbee9227c990c8d7d43db2c62c43fec57b0985f2b",
+      "schema_sha256": "00113f38d0172cb4f493247c22c81b6d0250b67affea007a212b75daa7725039",
       "reason": "P5b computes a source-bound, cache-only comparison verdict for the governed profile questions. It is prohibited from changing active_profile, EGS, formal M6.7 action, star, sizing, cash allocation, veto, stop, target, account state, or any production policy.",
       "owner": "engine/a_short_industry_weight_comparison.py + engine/a_short_industry_weight_adjudication.py + runners/a_short_industry_weight_comparison.py",
       "review_ref": "P5b verdicts are advisory comparison evidence only; every policy change remains separately reviewed and user-gated.",
@@ -1491,7 +1497,7 @@
       "id": "overlay_adjudication_p4a",
       "policy": "intentionally_independent",
       "schema_path": "schemas/a_short_overlay_adjudication_summary.schema.json",
-      "schema_sha256": "c134fb685dec293ab59f087e5816dc66520984b4ba5772e5d00f94951545b3e8",
+      "schema_sha256": "3a9e4b1f46fefcb65227aafbb426685581854053740f49e164f9174457644825",
       "reason": "P4a freezes a post-publication Stage3 Top5 rank-source comparison. Before a separately reviewed user receipt with a future effective week, it is prohibited from changing official Top5, EGS, M6.7 action, star, sizing, cash allocation, holdings, exit, veto, or production configuration.",
       "owner": "engine/a_short_overlay_adjudication.py + runners/a_short_overlay_adjudication.py",
       "review_ref": "P4a automatic adjudication is advisory-only; P4b and activation remain separately gated.",
@@ -1580,7 +1586,7 @@
       "id": "margin_overheat_cash_control_capture",
       "policy": "intentionally_independent",
       "schema_path": "schemas/a_short_margin_overheat_cash_control_capture.schema.json",
-      "schema_sha256": "687533607d3e7bd782ed4196fa54dac993bfc371b0f266771e48ad07914652ad",
+      "schema_sha256": "f537f944a836aacaa4b2ee1521a3f5c64d2b77ca946a5b0df18c8eee5b4e59f1",
       "reason": "Private captures bind each comparison-only week to its source, stage, batch, epoch and, when frozen, dedicated manifest; they never write official selection or allocation output.",
       "owner": "engine/a_short_margin_overheat_cash_control.py::capture_margin_overheat_week",
       "review_ref": "序19后续刀4 source-bound current-batch evidence",
@@ -1593,7 +1599,7 @@
       "id": "margin_overheat_cash_control_outcome",
       "policy": "intentionally_independent",
       "schema_path": "schemas/a_short_margin_overheat_cash_control_outcome.schema.json",
-      "schema_sha256": "2162126f817d4fe67987f6bc08b7a7a007f6f776fbff45fb1c401ec9bbca53bf",
+      "schema_sha256": "8154abf48d72be5c4c723572568f55ec96ee6b656abd636dbc67b7c85276f5f4",
       "reason": "Private H5/H10/H20 outcomes and their risk evidence are input to comparison adjudication only; the values cannot alter the official weekly M6.7 report.",
       "owner": "engine/a_short_margin_overheat_cash_control.py::_settle_capture",
       "review_ref": "序19后续刀4 paired formal-risk gate",
@@ -1606,7 +1612,7 @@
       "id": "margin_overheat_cash_control_ledger",
       "policy": "intentionally_independent",
       "schema_path": "schemas/a_short_margin_overheat_cash_control_ledger.schema.json",
-      "schema_sha256": "a118cd91f8f7815ad482a2e1181c6a892bea67be88d40ace72d71a0cde29a925",
+      "schema_sha256": "a336d7c1eea21c600e5d35438eee111065fbe93de43d454f39520f34b8f89b51",
       "reason": "The isolated ledger admits only its own source-hashed stage and batch records, so other comparison questions cannot affect this formal verdict.",
       "owner": "engine/a_short_margin_overheat_cash_control.py::validate_margin_ledger",
       "review_ref": "序19后续刀4 current-batch isolation",
@@ -1692,7 +1698,7 @@
     "small_float_mv_pct"
   ],
   "output_schema_sha256": {
-    "schemas/a_short_weekly_report.schema.json": "9492ec7d97860c41decff5ae32d23c1e7d7398d58dccdadb5e446c78d7714091",
+        "schemas/a_short_weekly_report.schema.json": "18c02e5e50fa318c7499a8ac82c2e3a67b7abf65f4ef0854291458c000042923",
     "schemas/a_short_m67_report.schema.json": "cdf7c83a3947e42702f7efe90edec4911c33bec7ca8b25c882dd706dc680a2be"
   },
   "analysis_input_paths": [
@@ -2093,6 +2099,7 @@
     "source.notes[]",
     "source.run_identity.candidate_digest",
     "source.run_identity.run_id",
+    "source.run_identity.run_revision_id",
     "source.run_identity.stage_status",
     "source.runtime_configuration.configuration_fingerprint",
     "source.runtime_configuration.policies[].path",

@@ -23,6 +23,10 @@ from pathlib import Path
 from typing import Any
 
 import jsonschema
+from engine.a_short_run_revision import (
+    iter_private_week_roots, private_week_root, require_official_revision,
+    validate_run_revision_id,
+)
 
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -269,6 +273,7 @@ def _decision_id(source: dict, symbol: str | None, scope: str,
     return _digest({
         "program_id": PROGRAM_ID,
         "as_of": source["as_of"],
+        "run_revision_id": source.get("run_revision_id"),
         "run_id": source["run_id"],
         "candidate_digest": source["candidate_digest"],
         "account_snapshot_digest": source["account_snapshot_digest"],
@@ -477,11 +482,15 @@ def _capture_record(
     receipt_file: Path,
     *,
     validated_bundle=None,
+    run_revision_id: str | None = None,
 ) -> dict:
     as_of = _calendar_date(weekly.get("as_of"), "as_of")
     source = _source_identity(
         weekly, output, receipt_file, validated_bundle=validated_bundle
     )
+    if run_revision_id is not None:
+        run_revision_id = validate_run_revision_id(run_revision_id)
+        source["run_revision_id"] = run_revision_id
     decisions = [_decision_from_report(weekly, source, report) for report in weekly["reports"]]
     if not decisions:
         portfolio_only = _portfolio_only_decision(weekly, source)
@@ -493,6 +502,7 @@ def _capture_record(
         "record_type": "decision_capture",
         "program_id": PROGRAM_ID,
         "as_of": as_of,
+        "run_revision_id": run_revision_id,
         "source_identity": source,
         "decisions": decisions,
         "boundary": _boundary(),
@@ -502,11 +512,12 @@ def _capture_record(
     return record
 
 
-def _capture_path(root: Path, as_of: str) -> Path:
-    return root / "weeks" / as_of / "capture.json"
+def _capture_path(root: Path, as_of: str, run_revision_id: str | None = None) -> Path:
+    return private_week_root(root, as_of, run_revision_id) / "capture.json"
 
 
-def _write_conflict(root: Path, as_of: str, existing: dict, incoming: dict) -> None:
+def _write_conflict(root: Path, as_of: str, existing: dict, incoming: dict,
+                    run_revision_id: str | None = None) -> None:
     """Record only hashes so a replay conflict never overwrites the original evidence."""
     conflict = {
         "schema_name": "a_short_official_operation_evidence_conflict",
@@ -517,10 +528,11 @@ def _write_conflict(root: Path, as_of: str, existing: dict, incoming: dict) -> N
         "existing_capture_sha256": existing.get("capture_sha256"),
         "incoming_capture_sha256": incoming.get("capture_sha256"),
     }
-    _atomic_write(root / "conflicts" / f"{as_of}.json", conflict)
+    _atomic_write(private_week_root(root, as_of, run_revision_id) / "conflicts" / f"{as_of}.json", conflict)
 
 
-def capture_after_published_weekly(*, root: str | Path, out_path: str | Path, receipt_path: str | Path) -> dict:
+def capture_after_published_weekly(*, root: str | Path, out_path: str | Path, receipt_path: str | Path,
+                                   run_revision_id: str | None = None) -> dict:
     """Create one immutable capture from the published source; conflict never overwrites it."""
     private_root = _private_root(root)
     bundle = _load_official_bundle(
@@ -531,8 +543,10 @@ def capture_after_published_weekly(*, root: str | Path, out_path: str | Path, re
         bundle.weekly_path,
         bundle.receipt_path,
         validated_bundle=bundle,
+        run_revision_id=run_revision_id,
     )
-    path = _capture_path(private_root, record["as_of"])
+    revision = record.get("run_revision_id")
+    path = _capture_path(private_root, record["as_of"], revision)
     if path.exists():
         existing = _load_json(path)
         _validate_private_capture(existing)
@@ -540,15 +554,18 @@ def capture_after_published_weekly(*, root: str | Path, out_path: str | Path, re
             _refresh_private_ledger(private_root)
             return {"status": "idempotent_existing_capture", "decision_count": len(record["decisions"]),
                     "production_unchanged": True}
-        _write_conflict(private_root, record["as_of"], existing, record)
+        _write_conflict(private_root, record["as_of"], existing, record, revision)
         raise OfficialOperationEvidenceError("official_operation_capture_source_conflict")
     _atomic_write(path, record)
     _refresh_private_ledger(private_root)
     return {"status": "captured", "decision_count": len(record["decisions"]), "production_unchanged": True}
 
 
-def _outcome_path(root: Path, decision_id: str) -> Path:
-    return root / "outcomes" / f"{decision_id}.json"
+def _outcome_path(root: Path, as_of: str, decision_id: str,
+                  run_revision_id: str | None = None) -> Path:
+    if run_revision_id is None:
+        return root / "outcomes" / f"{decision_id}.json"
+    return private_week_root(root, as_of, run_revision_id) / "outcomes" / f"{decision_id}.json"
 
 
 def _load_capture_records(root: Path) -> list[dict]:
@@ -556,13 +573,13 @@ def _load_capture_records(root: Path) -> list[dict]:
     weeks = root / "weeks"
     if not weeks.exists():
         return records
-    for directory in sorted(path for path in weeks.iterdir() if path.is_dir() and path.name.isdigit()):
+    for as_of, revision, directory in iter_private_week_roots(root):
         capture_path = directory / "capture.json"
         if not capture_path.is_file():
             continue
         capture = _load_json(capture_path)
         _validate_private_capture(capture)
-        if capture.get("as_of") != directory.name:
+        if capture.get("as_of") != as_of or capture.get("run_revision_id") != revision:
             raise OfficialOperationEvidenceError("official_operation_capture_directory_identity_drift")
         records.append(capture)
     return records
@@ -604,12 +621,14 @@ def cache_consumer_windows(*, root: str | Path, run_date: str) -> list[dict]:
     run_date = _calendar_date(run_date, "run_date")
     windows: list[dict] = []
     for capture in _load_capture_records(private_root):
-        if capture["as_of"] > run_date or (private_root / "conflicts" / f"{capture['as_of']}.json").exists():
+        if capture["as_of"] > run_date or (private_week_root(private_root, capture["as_of"], capture.get("run_revision_id")) /
+                                           "conflicts" / f"{capture['as_of']}.json").exists():
             continue
         symbols: list[str] = []
         for decision in capture["decisions"]:
             decision_id = str(decision.get("decision_id") or "")
-            existing_path = _outcome_path(private_root, decision_id)
+            existing_path = _outcome_path(private_root, capture["as_of"], decision_id,
+                                          capture.get("run_revision_id"))
             if existing_path.is_file() and _outcome_terminal(str(_load_outcome(existing_path).get("status"))):
                 continue
             plan = ((decision.get("prices") or {}).get("managed_exit_plan"))
@@ -711,6 +730,7 @@ def _outcome_from_decision(*, capture: dict, decision: dict, as_of: str,
         "schema_version": "1.1.0",
         "program_id": PROGRAM_ID,
         "decision_id": decision["decision_id"],
+        "run_revision_id": capture.get("run_revision_id"),
         "evaluation_mode": EVALUATION_MODE,
         "policy_version": OFFICIAL_POLICY_VERSION,
         "capture_sha256": capture["capture_sha256"],
@@ -736,8 +756,11 @@ def _outcome_from_decision(*, capture: dict, decision: dict, as_of: str,
     return record
 
 
-def _write_outcome_conflict(root: Path, decision_id: str, existing: dict, incoming: dict) -> None:
-    _atomic_write(root / "conflicts" / f"outcome_{decision_id}.json", {
+def _write_outcome_conflict(root: Path, decision_id: str, existing: dict, incoming: dict,
+                            run_revision_id: str | None = None, source_as_of: str | None = None) -> None:
+    conflict_root = (private_week_root(root, source_as_of, run_revision_id)
+                     if run_revision_id is not None and source_as_of else root)
+    _atomic_write(conflict_root / "conflicts" / f"outcome_{decision_id}.json", {
         "schema_name": "a_short_official_operation_evidence_conflict",
         "schema_version": "1.0.0",
         "program_id": PROGRAM_ID,
@@ -761,7 +784,8 @@ def _terminal_evidence(record: dict) -> dict:
 
 
 def _write_or_advance_outcome(root: Path, incoming: dict) -> bool:
-    path = _outcome_path(root, incoming["decision_id"])
+    path = _outcome_path(root, incoming["source_as_of"], incoming["decision_id"],
+                         incoming.get("run_revision_id"))
     if not path.exists():
         _atomic_write(path, incoming)
         return True
@@ -769,7 +793,8 @@ def _write_or_advance_outcome(root: Path, incoming: dict) -> bool:
     if (existing.get("decision_id"), existing.get("evaluation_mode"), existing.get("policy_version"),
             existing.get("capture_sha256")) != (incoming["decision_id"], incoming["evaluation_mode"],
                                                   incoming["policy_version"], incoming["capture_sha256"]):
-        _write_outcome_conflict(root, incoming["decision_id"], existing, incoming)
+        _write_outcome_conflict(root, incoming["decision_id"], existing, incoming,
+                                incoming.get("run_revision_id"), incoming.get("source_as_of"))
         raise OfficialOperationEvidenceError("official_operation_outcome_identity_conflict")
     if _outcome_terminal(str(existing.get("status"))):
         # A later weekly run naturally has a later progress date and a larger
@@ -779,7 +804,8 @@ def _write_or_advance_outcome(root: Path, incoming: dict) -> bool:
         if not _outcome_terminal(str(incoming.get("status"))) or \
                 _terminal_evidence(existing) == _terminal_evidence(incoming):
             return False
-        _write_outcome_conflict(root, incoming["decision_id"], existing, incoming)
+        _write_outcome_conflict(root, incoming["decision_id"], existing, incoming,
+                                incoming.get("run_revision_id"), incoming.get("source_as_of"))
         raise OfficialOperationEvidenceError("official_operation_outcome_terminal_conflict")
     if existing == incoming:
         return False
@@ -821,21 +847,23 @@ def _refresh_private_ledger(root: Path) -> dict:
     rows: list[dict] = []
     for capture in _load_capture_records(root):
         for decision in capture["decisions"]:
-            path = _outcome_path(root, decision["decision_id"])
+            path = _outcome_path(root, capture["as_of"], decision["decision_id"],
+                                 capture.get("run_revision_id"))
             outcome = _load_outcome(path) if path.is_file() else None
             rows.append({
                 "decision_id": decision["decision_id"], "capture_as_of": capture["as_of"],
+                "run_revision_id": capture.get("run_revision_id"),
                 "capture_sha256": capture["capture_sha256"], "evaluation_mode": EVALUATION_MODE,
                 "policy_version": OFFICIAL_POLICY_VERSION,
                 "status": outcome.get("status") if outcome else "capture_pending",
                 "reason": outcome.get("reason") if outcome else None,
                 "outcome_sha256": outcome.get("outcome_sha256") if outcome else None,
             })
-    if len({(row["decision_id"], row["evaluation_mode"], row["policy_version"]) for row in rows}) != len(rows):
+    if len({(row["decision_id"], row.get("run_revision_id"), row["evaluation_mode"], row["policy_version"]) for row in rows}) != len(rows):
         raise OfficialOperationEvidenceError("official_operation_ledger_duplicate_decision")
     ledger = {
         "schema_name": "a_short_official_operation_evidence_ledger", "schema_version": "1.0.0",
-        "program_id": PROGRAM_ID, "records": sorted(rows, key=lambda row: (row["capture_as_of"], row["decision_id"])),
+        "program_id": PROGRAM_ID, "records": sorted(rows, key=lambda row: (row["capture_as_of"], row.get("run_revision_id") or "legacy_revision_0", row["decision_id"])),
         "boundary": {"program_progress_ledger_only": True, "portfolio_state_created": False,
                      "cash_or_positions_created": False, "nav_or_head_manifest_created": False,
                      "automatic_order_execution": False},
@@ -848,16 +876,30 @@ def _refresh_private_ledger(root: Path) -> dict:
     return ledger
 
 
-def build_public_summary(*, root: str | Path, as_of: str) -> dict:
+def build_public_summary(*, root: str | Path, as_of: str,
+                         run_revision_id: str | None = None,
+                         official_project_root: str | Path | None = None) -> dict:
     """Return a de-identified cohort report; small cohorts expose counts only."""
     private_root, as_of = _private_root(root), _calendar_date(as_of, "as_of")
+    if run_revision_id is not None:
+        run_revision_id = validate_run_revision_id(run_revision_id)
+    official_revision_id = None
+    if official_project_root is not None and run_revision_id is None:
+        raise OfficialOperationEvidenceError("official summary requires run_revision_id")
+    if official_project_root is not None and run_revision_id is not None:
+        official_revision_id = require_official_revision(
+            official_project_root, as_of, run_revision_id
+        )
     grouped: dict[str, dict] = {}
     totals = {"capture_pending": 0, "pending": 0, "settled": 0, "no_count": 0, "ambiguous": 0, "unfilled": 0}
     for capture in _load_capture_records(private_root):
         if capture["as_of"] > as_of:
             continue
+        if run_revision_id is not None and capture.get("run_revision_id") != run_revision_id:
+            continue
         for decision in capture["decisions"]:
-            path = _outcome_path(private_root, decision["decision_id"])
+            path = _outcome_path(private_root, capture["as_of"], decision["decision_id"],
+                                 capture.get("run_revision_id"))
             outcome = _load_outcome(path) if path.is_file() else {"status": "capture_pending", "metrics": None}
             status = str(outcome["status"])
             totals[status] = totals.get(status, 0) + 1
@@ -873,7 +915,8 @@ def build_public_summary(*, root: str | Path, as_of: str) -> dict:
     for bucket in grouped.values():
         records = bucket["records"]
         settled = [row for row in records if row.get("status") == "settled"]
-        row = {"cohort": bucket["cohort"], "record_count": len(records), "evaluable_count": len(settled),
+        row = {"cohort": bucket["cohort"], "official_revision_id": official_revision_id,
+               "record_count": len(records), "evaluable_count": len(settled),
                "no_count_count": sum(item.get("status") == "no_count" for item in records),
                "ambiguous_count": sum(bool((item.get("metrics") or {}).get("same_bar_both_triggered")) for item in records),
                "metrics_withheld_for_small_cohort": len(settled) < MIN_PUBLIC_COHORT_SIZE}
@@ -885,6 +928,7 @@ def build_public_summary(*, root: str | Path, as_of: str) -> dict:
     return {
         "schema_name": "a_short_official_operation_evidence_summary", "schema_version": "1.0.0",
         "program_id": PROGRAM_ID, "as_of": as_of, "evaluation_mode": EVALUATION_MODE,
+        "official_revision_id": official_revision_id,
         "minimum_metric_cohort_size": MIN_PUBLIC_COHORT_SIZE, "totals": totals,
         "cohorts": sorted(cohorts, key=lambda row: _canonical(row["cohort"])),
         "boundary": {"deidentified_aggregate_only": True, "contains_symbols": False,
@@ -912,9 +956,20 @@ def write_public_summary(summary: dict, *, json_path: str | Path, markdown_path:
 
 def settle_and_summarize(*, root: str | Path, as_of: str, daily_cache_path: str | Path | None = None,
                           public_json_path: str | Path = PUBLIC_SUMMARY_DEFAULT,
-                          public_markdown_path: str | Path = PUBLIC_MARKDOWN_DEFAULT) -> dict:
+                          public_markdown_path: str | Path = PUBLIC_MARKDOWN_DEFAULT,
+                          run_revision_id: str | None = None,
+                          official_project_root: str | Path | None = None) -> dict:
     """Advance only the private decision-progress ledger from the shared cache."""
     private_root, as_of = _private_root(root), _calendar_date(as_of, "as_of")
+    if run_revision_id is not None:
+        run_revision_id = validate_run_revision_id(run_revision_id)
+    official_revision_id = None
+    if official_project_root is not None and run_revision_id is None:
+        raise OfficialOperationEvidenceError("official settlement requires run_revision_id")
+    if official_project_root is not None and run_revision_id is not None:
+        official_revision_id = require_official_revision(
+            official_project_root, as_of, run_revision_id
+        )
     daily_payload = None
     if daily_cache_path is not None and Path(daily_cache_path).is_file():
         daily_payload = _load_json(Path(daily_cache_path))
@@ -930,7 +985,17 @@ def settle_and_summarize(*, root: str | Path, as_of: str, daily_cache_path: str 
     for capture in _load_capture_records(private_root):
         if capture["as_of"] > as_of:
             continue
-        if (private_root / "conflicts" / f"{capture['as_of']}.json").exists():
+        if run_revision_id is not None and capture.get("run_revision_id") != run_revision_id:
+            continue
+        if official_project_root is not None:
+            capture_revision = capture.get("run_revision_id")
+            if capture_revision in (None, ""):
+                raise OfficialOperationEvidenceError("official settlement capture missing run_revision_id")
+            require_official_revision(
+                official_project_root, capture["as_of"], capture_revision
+            )
+        if (private_week_root(private_root, capture["as_of"], capture.get("run_revision_id")) /
+                "conflicts" / f"{capture['as_of']}.json").exists():
             continue
         for decision in capture["decisions"]:
             changed += int(_write_or_advance_outcome(
@@ -939,7 +1004,10 @@ def settle_and_summarize(*, root: str | Path, as_of: str, daily_cache_path: str 
                                        daily_payload=daily_payload, rows=rows),
             ))
     ledger = _refresh_private_ledger(private_root)
-    summary = build_public_summary(root=private_root, as_of=as_of)
+    summary = build_public_summary(
+        root=private_root, as_of=as_of, run_revision_id=run_revision_id,
+        official_project_root=official_project_root,
+    )
     write_public_summary(summary, json_path=public_json_path, markdown_path=public_markdown_path)
     return {"status": "settled_from_existing_shared_cache", "outcomes_updated": changed,
             "ledger_record_count": len(ledger["records"]), "summary": summary,

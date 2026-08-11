@@ -9,6 +9,7 @@
     "schema_version": {"const": "1.0.0"},
     "summary_id": {"const": "a_short_final_action_validation"},
     "as_of": {"type": "string", "pattern": "^[0-9]{8}$"},
+    "official_revision_id": {"type": ["string", "null"], "pattern": "^[a-f0-9]{32}$"},
     "data_through": {"type": ["string", "null"]},
     "status": {"enum": ["accumulating", "review_due", "unavailable"]},
     "comparison_only": {"const": true},

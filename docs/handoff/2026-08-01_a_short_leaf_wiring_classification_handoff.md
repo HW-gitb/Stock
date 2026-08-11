@@ -1,5 +1,132 @@
 # A-short 371 叶重新分层交接
 
+## 2026-08-11 Codex executor/fixer：V5-A/B/C/D 最新五条 Required 修复（OPEN-NOT_VERIFIED，40d9）
+
+### 目的、相互影响与最小改动
+
+承接 Claude 最新五条 Required：V5-A 历史 replay 必须可审计且不因 cutoff 变红；V5-B/C 累计账不能先按当前 invocation revision 截断；V5-C official gate 必须在 pre-publish settlement 的生产调用边界生效；V5-D 矩阵必须验证真实消费。四刀仍相互影响：pipeline 预发布 sidecar、selector、post-selector settlement、forward/theme/crash 共享 `decision_as_of` 与 `run_revision_id`，但正式计数只认每个日期 pointer 选中的 revision。
+
+### 修复与调用链
+
+- `runners/a_short_weekly_pipeline.py` 的 factor/margin/industry/target/final/overlay settlement 全部传 `official_project_root`；无 pointer/legacy/rejected capture 的 sidecar 只返回 unavailable/zero-count，不写正式进度。
+- `engine/a_short_factor_comparison_v2.py`、industry、margin、target、final、overlay、theme 与 `runners/forward_tracker.py` 按每个 decision date 解析 official revision；当前 `run_revision_id` 只做当前调用身份校验。industry/overlay no-official 分支在刷新 private ledger 前返回，wrapper 直接产生 unavailable summary。
+- `runners/weekly_screening.ps1` 历史 as-of 不再追加 `--cutoff-passed` 或调用 selector，保留 `validation_only`、manifest audit 与 official pointer unchanged。
+- `tests/test_a_short_v5_revision_matrix.py` 由文本 marker 断言改为真实 AST call-site/函数参数/launcher wiring 断言，并覆盖三周 official 累计与 pre-selector zero-count；`tests/phase6/test_forward_tracker_cache_guard.py` 覆盖旧 official + 当前 official cohort 同时保留。
+
+### 消费者、schema/source-binding、写盘边界
+
+`weekly_screening.ps1:$RunRevisionId` → M6.7 pipeline（official root）→ pre-publish comparison banner/unavailable → M6.7 publish/selector → `runners/a_short_official_settlement.py` → operation/factor/margin/industry/target/final/overlay/forward/theme/crash。revision-private capture/outcome 仍写各自 private week root；public summary 只认 per-date selected official revision；legacy date-root 只读。未改业务 schema 语义，未放宽 immutable capture/source binding，未新增 provider/token。
+
+### 负向控制、自审、验证与交接边界
+
+- no pointer legacy/rejected 不产生正式 outcome/计数；三周 official + 当前 id 仍为 3；历史 replay 不调用 selector；删除任一 V5-D 真实 production call site 会使矩阵失败。
+- 固定解释器 `C:\Users\cnhea\AppData\Local\Programs\Python\Python313\python.exe` / `Python 3.13.8`；聚焦 suite 原始终态 `Ran 267 tests in 75.960s ... OK`；文档门禁 `tests.test_doc_governance_guard tests.test_route_doc_ledger_status_consistency tests.test_readme_route_row_length` 原始终态 `Ran 66 tests in 1.736s ... OK`；`py_compile=OK`、effect-contract=`OK`、PowerShell `Parser.ParseFile`=`OK`、`git diff --check exit 0`（仅既有 CRLF warning）。
+- `NOT_VERIFIED`：provider/live、真实 normal weekly/cache-build、durable 两轮、full lane、ship-gate 与独立 review/commit。当前 Codex 为 executor/fixer，不 stage/commit/merge；下一步由 Claude Code 独立复审。
+
+## 2026-08-11 Codex executor/fixer：V5-A 新增要求与 V5-B/C/D 交叉修复（OPEN-NOT_VERIFIED，40d9）
+
+### Purpose / interaction decision / repair
+
+承接最新交接新增的 V5-A Required，并按桌面 `C:\Users\cnhea\Desktop\2a_testrun0810.md` 同刀完成 V5-B、V5-C、V5-D。复核结论是四刀相互影响：V5-A 的 revision root 与 V5-D current-view 删除面必须同刀；V5-C official-only settlement 不能在 selector 前调用，否则会把无 pointer 的 legacy 周全部硬失败；V5-A optional import 位于 B/C/D 正式 publish 前置链，必须类修而不能只修 P4 一处。没有 provider/live/真实 normal weekly/full lane，没有 stage/commit/push/merge。
+
+- **V5-A × V5-D Phase-4 reports**：`runners/a_short_weekly_pipeline.py` 在显式 `run_revision_id` 下将逐股 Phase-4 报告写入 `result/a_short/<as_of>/revisions/<run_revision_id>/reports`；`engine/a_short_run_revision.py` 新增 `schemas/a_short_phase4_reports_manifest.schema.json`、`phase4_reports_manifest` role 与幂等 `write-reports-index`。launcher 在 manifest 前登记该 role。选择器只 materialize 索引，不扫描/删除/覆盖 date-root legacy `reports/`；官方报告由 selected revision root + index 读取，A→B 后 A 目录原样保留。选择的是桌面 Required 允许的“reports 明确排除 date-root selector 管理面”边界，避免“写 date-root 后被删”。
+- **V5-C × V5-D official caller**：新增 `runners/a_short_official_settlement.py`。launcher 解析 selector JSON，仅 `selected`/`already_current` 调用它；factor v2、margin、industry、target、final、official-operation、overlay 全部传 `official_project_root` + selected `run_revision_id`，并写各自 public summaries；forward backfill、theme、crash 走同一 official resolver。无 pointer 且无 revision 返回 `legacy_audit_only/formal_count=0`；equivalent replay/validation-only 不触发正式 settlement。新增 crash `settle_existing()` 只重算已有 state/cache，不 capture、不联网。
+- **V5-A optional class**：`_optional_module()` 统一处理 recovery P5/P4/P3/P2 与 pre-publish factor/P5/P2/P3；只捕获 `ImportError`。缺模块跳过旁路、后续 outcome 记 unavailable；导入期真实 defect 不被吞。修复 P5 fallback 未定义名称；P4 planted control 采纳当前真实 `$PublicRevisionDir` assignments，逐条错误植入会失败。
+
+### Call chain / consumers / schema / source-binding / write boundary
+
+`weekly_screening.ps1:$RunRevisionId` → IV/EGS/M6.7/launcher/pipeline/health → revision Phase-4 reports/index → manifest/official pointer → post-selector official settlement → final public summaries/forward-theme-crash readers。`decision_as_of` 与 `run_revision_id` 在每个边界校验；private/account 不进入 public manifest；legacy date-root 只读，selector 的 `delete_paths` 只处理上一 official manifest 已登记的受管便利文件。
+
+新增 report index schema；同步 `schemas/a_short_m67_effect_contract.json` 中 pipeline fingerprint（当前 computed `dfed115ed7e86716599f6e4d8d9c8a06b5519be30816705d9e814fa3481e715e`）。没有新增 provider/token/cache 或改变 M6.7 业务决策。
+
+### Negative controls / self-review
+
+- same-id report index drift、缺/非法 revision、pointer/receipt transaction failure、A/B/C 五段 replay、cutoff validation、legacy no-pointer zero count 均有离线控制。
+- P5/P4/P3/P2 recovery 和 factor/P5/P2/P3 pre-publish import 逐个置不可导入：weekly JSON 仍产出，对应 sidecar `unavailable`；P4 三个实际 launcher assignment 植入错误目标时守卫失败。
+- 16 点 revision writer→consumer 矩阵覆盖及五段 A/B/C replay 测试新增于 `tests/test_a_short_v5_revision_matrix.py`；Phase-4 A→B report retention 覆盖于 `tests/test_a_short_run_revision.py`。
+
+### Fixed Python / exact commands / original terminal state
+
+- 当前工作树：`D:\cnhea\Codex\worktrees\40d9\Stock`；`git rev-parse --show-toplevel` = `D:/cnhea/Codex/worktrees/40d9/Stock`。
+- 唯一解释器：`C:\Users\cnhea\AppData\Local\Programs\Python\Python313\python.exe` → `Python 3.13.8`。
+- `tests.test_a_short_run_revision tests.test_a_short_v5_revision_matrix tests.test_a_short_fourth_knife_p4 tests.test_a_short_effect_contract tests.test_a_short_effect_consumer_probe` → `Ran 97 tests in 47.996s ... OK`。
+- optional closure（recovery 四模块 + weekly JSON/sidecar 四模块）→ `Ran 2 tests in 12.648s ... OK`；`tests.test_a_short_v5_revision_matrix` → `Ran 4 tests in 0.982s ... OK`。
+- 桌面原样聚焦命令（固定 Python、10 分钟上限）→ `Ran 1169 tests in 172.196s ... OK`，exit 0；CLI usage、ResourceWarning、crash `insufficient_keep` 为既有夹具/负向输出。
+- 固定 Python `py_compile`（revision/pipeline/official-settlement/crash/tests）exit 0；PowerShell `Parser.ParseFile` = `OK`；`git diff --check` exit 0（仅既有 LF→CRLF warnings）。
+
+### Pre-Codex self-review / closeout fields
+
+`matrix=V5-A revision+optional+P4 control; V5-B writers; V5-C official-only settlement/forward/theme/crash; V5-D current-view+16-point+five-segment`; `register=updated`; `handoff=updated`; `focused=97+2+4+1169 tests OK`; `full-lane=NOT_VERIFIED`; `door=fixed Python 3.13.8 + effect-contract fingerprint + PowerShell Parser.ParseFile + git diff --check`。
+
+### NOT_VERIFIED / review and commit boundary / next
+
+真实 provider/live、真实 normal weekly、durable 两轮 settlement/current-view 产物、full lane、ship-gate 仍 `NOT_VERIFIED`。当前工作树既有 dirty tracked/untracked 研究产物保留，未清理或覆盖。Codex 只负责 executor/fixer；未 stage/commit/push/merge。Claude Code 是独立 reviewer/committer，需先复审交叉接线后再按 PASS 规则 stage/commit。下一步：`Claude Code：独立复审 V5-A + V5-B + V5-C + V5-D 交叉修复；不提交、不 merge`。
+
+## 2026-08-11 Codex executor/fixer：桌面 V5-A P4 optional recovery import 修复（OPEN-NOT_VERIFIED，40d9）
+
+### Purpose / problem / repair
+
+桌面 V5-A 要求 optional comparison sidecar 不得阻断正式 M6.7。核验时发现 `runners/a_short_weekly_pipeline.py::_recover_public_artifact_sets()` 在 preflight 阶段无条件 import `engine.a_short_overlay_adjudication`；测试将该模块设为不可导入后，异常在正式周报前抛出，后面原本用于记录 P4 unavailable 的 guard 根本不会执行。
+
+修复为 P4 journal guarded import：导入失败时只跳过 P4 recovery，P4 后置阶段仍把 import/capture failure 写入既有 sidecar outcomes；不改 V5-A 中央 revision/official selector、EGS/M6.7/IV、health、P4 capture/settlement schema 或生产写盘边界。weekly decision predicate 指纹同步为 `63d7e01a44faed119544b6b776e655873cfd6892522b1b4e26da03e70ae9b46b`。
+
+### Call chain / consumers / schema / source-binding / write boundary
+
+`weekly_screening.ps1`/weekly `main()` → `_recover_public_artifact_sets()` → required P5/P3/P2 journals + optional P4 journal → formal M6.7 build/publish → P4 post-publish capture/settlement outcome。P4 仍是 comparison-only；formal weekly JSON 不包含 P4 unavailable summary，`decision_as_of/run_revision_id` 与 existing effect-contract/weekly schema 不变；recovery 不新增业务文件、不改 EGS/M6.7/selection/account/private roots。
+
+### Negative controls / exact terminal evidence
+
+- 将 `engine.a_short_overlay_adjudication` 注入 `sys.modules=None`，正式 weekly JSON 仍落盘，`overlay_adjudication` 不出现，M6.7 unchanged；精确测试 `tests.phase6.test_egs_analysis_input_contract.EgsMainAnalysisInputContractTest.test_p4_import_failure_cannot_fail_or_mutate_the_formal_weekly_output` → `Ran 1 test in 3.208s ... OK`。
+- V5-A 聚焦固定-Python 命令（run_revision、P4 guard、crash-veto、IV、analysis-input contract、weekly failure closeout、health、effect-contract）→ `Ran 224 tests in 104.856s ... OK`。
+- 桌面原样 A/B/C/D 联合固定-Python 命令 → `Ran 1164 tests in 178.693s ... OK`。
+
+### Self-review / NOT_VERIFIED / review boundary
+
+`matrix=P4 recovery import → optional outcome → formal weekly publish + V5-A revision/official readers`; `register=updated`; `handoff=updated`; `focused=1+224 OK`; `full-lane=NOT_VERIFIED`; `door=固定 Python/effect-contract digest/联合验收 + doc-governance/route/readme + PowerShell Parser.ParseFile + git diff --check 全部通过`。未 provider/live、未真实 normal weekly/full lane、未观察 durable closure；Codex executor/fixer 不 stage/commit/merge，Claude Code 独立 reviewer 尚未审查。下一步：`Claude Code：审查 V5-A P4 optional recovery 修复（不提交、不 merge）`。
+
+## 2026-08-11 Codex executor/fixer：桌面优化 V5-B → V5-C → V5-D 连续修复（OPEN-NOT_VERIFIED，40d9）
+
+### Purpose / execution order
+
+承接桌面 `C:\Users\cnhea\Desktop\2a_testrun0810.md` 的优化方案。本轮严格按 `V5-B → B 独立测试/自审 → V5-C → C 独立测试/自审 → V5-D → 联合贯通验收` 执行；B 只处理主输出绑定，C 只处理 capture/replay 与 forward/theme/crash，D 只处理 settlement/最终消费者/current view；未重做 V5-A，未访问主树或其他工作树。
+
+### V5-B：主输出绑定
+
+- **问题/根因**：同一 `decision_as_of` 的 writers/readers 缺少统一 `(decision_as_of, run_revision_id)` source binding；跨 revision 重跑可能混写，candidate-effect 的 revision 化记录还会被旧的同日期过滤逻辑误判为 legacy。周报 inline industry schema 也未声明官方 revision 字段，legacy public payload 则不能被无条件扩形。
+- **改动**：官方 operation、factor v2、margin、industry、target policy、final action、overlay、regime daily/action/candidate-effect 统一校验 revision；same-id equivalent replay 保持原字节，same-id drift fail-closed，新 id 写独立 evidence root。candidate-effect revision 放入 `evidence_origin` 并改同日期筛选；`a_short_weekly_report.schema.json` 增加可空 industry `official_revision_id`；同步 M6.7 effect-contract weekly schema digest。legacy public summary 仅在 revision 存在时带字段。
+- **调用链/消费者/schema/source-binding/写盘边界**：launcher/pipeline → capture/ledger → private revision week root → official summary/selector；业务窗口仍由 `decision_as_of` 绑定，物理运行由 `run_revision_id` 绑定；正式 EGS/M6.7/Top5 不变，private/account 不进 public manifest，comparison 写盘不越出原 roots。
+- **负向控制与自审**：wrong revision、same-id drift、缺 revision official consumer、legacy exact-shape、跨 revision candidate-effect 均有拒绝/回归覆盖。
+- **精确测试命令及原始终态**：
+  `Set-Location -LiteralPath 'D:\cnhea\Codex\worktrees\40d9\Stock'; & 'C:\Users\cnhea\AppData\Local\Programs\Python\Python313\python.exe' -m unittest tests.test_a_short_official_operation_evidence tests.test_a_short_factor_comparison_v2 tests.test_a_short_margin_overheat_cash_control tests.test_a_short_industry_weight_comparison tests.test_a_short_target_policy_comparison tests.test_a_short_final_action_validation tests.test_a_short_overlay_adjudication tests.test_a_short_regime_pipeline tests.test_a_short_regime_ledger tests.test_a_short_regime_action_comparison tests.test_a_short_regime_comparison_runner`
+  → `Ran 354 tests in 76.579s ... OK`。
+
+### V5-C：capture/replay、forward/theme/crash、official-only settlement
+
+- **问题/根因**：settlement/mature/rolling/ratchet 若按日期或任意 capture 计数，会把非 official、equivalent replay、validation-only 证据升级为正式结果；theme L3 snapshot 是非价格时钟，不能被错误压到 Friday price clock。
+- **改动**：forward/theme/crash consumers 使用 official pointer/revision；official root 缺 revision 或 lineage 不匹配即 unavailable/fail-closed。theme comparison 只有 tracker dates 全部解析到选定 revision 时才写 `official_revision_id`；正式 settlement 先 resolve official，非 official/equivalent/validation-only 计数为零。现有 capture/replay writer、forward clock、comparison-only namespace 和正式 M6.7 写盘边界不变。
+- **调用链/消费者/schema/source-binding/写盘边界**：official selector/pointer → forward tracker/theme-forward/crash cohort → private capture/settlement → public comparison summary；theme/L3 绑定 receipt snapshot/run/decision，industry/price 绑定 `price_data_through`，输出只在原 private/research comparison roots。
+- **负向控制与自审**：missing/wrong official revision、future snapshot、source/L3 mismatch、immature return、nonofficial settlement 均 fail-closed/no-count。
+- **精确测试命令及原始终态**：
+  `Set-Location -LiteralPath 'D:\cnhea\Codex\worktrees\40d9\Stock'; & 'C:\Users\cnhea\AppData\Local\Programs\Python\Python313\python.exe' -m unittest tests.test_forward_tracker_analysis_role tests.test_a_short_theme_forward_comparison tests.test_a_short_theme_forward_comparison_runner tests.test_a_short_crash_veto_tracker tests.test_a_short_final_action_validation tests.test_a_short_factor_comparison_v2 tests.test_a_short_industry_weight_comparison tests.test_a_short_overlay_adjudication tests.test_a_short_margin_overheat_cash_control`
+  → `Ran 289 tests in 78.567s ... OK`；crash fixture 的 `insufficient_keep/pre_freeze_audit_only` 是预期成熟度保护。
+
+### V5-D：settlement/最终消费者/current view
+
+- **问题/根因**：official revision 切换时 date-root current view 可能残留上一 revision 的 managed role；launcher、health、legacy/public summary 未总是携带同一 revision，最终消费者可能跨运行拼接。
+- **改动**：`commit_artifact_set()` 支持 journaled `delete_paths`；official selector 切换时只删除 stale managed date-root 文件并保留 `revisions/<id>` immutable evidence。launcher 显式传 revision 给 theme/EGS/M6.7/IV/health/selector；public summaries 在 revision 可用时写 `official_revision_id`，legacy exact shape 保持；新增 current-view switch regression。
+- **调用链/消费者/schema/source-binding/写盘边界**：selector → journaled current-view transaction → launcher/pipeline/sidecar-health/legacy summary；删除仅限受管 date-root，跳过 immutable revision subtree，事务失败 rollback/fail-closed；不触碰正式 M6.7、account/private roots。
+- **负向控制与自审**：same-id replay、transaction rollback、stale-role 清理、legacy shape、direct-file launcher、IV failure receipt、health unavailable 均覆盖。
+- **精确测试命令及原始终态**：
+  `Set-Location -LiteralPath 'D:\cnhea\Codex\worktrees\40d9\Stock'; & 'C:\Users\cnhea\AppData\Local\Programs\Python\Python313\python.exe' -m unittest tests.test_a_short_run_revision tests.test_a_short_artifact_set_transaction tests.test_a_short_weekly_pipeline tests.test_a_short_weekly_screening_m67_failure_closeout tests.test_a_short_iv_feed_build tests.test_a_short_weekly_sidecar_health tests.phase6.test_weekly_screening_guardrails`
+  → `Ran 705 tests in 51.821s ... OK`。
+
+### 联合贯通验收 / self-review / handoff boundary
+
+- **桌面原样联合命令**：V5 A/B/C/D 所列 revision、weekly、IV、official、factor、margin、industry、target、final、overlay、regime、forward、theme、crash、health、guardrail 全集 → `Ran 1164 tests in 192.371s ... OK`。
+- **门禁检查**：固定 Python `a_short_effect_contract.validate_static_contract()` → `fixed-Python static contract OK`；PowerShell `Parser.ParseFile` → `PowerShell parser OK`；`git diff --check` exit 0（仅既有 LF→CRLF warnings）。唯一解释器为 `C:\Users\cnhea\AppData\Local\Programs\Python\Python313\python.exe` / Python 3.13.8。
+- **原始问题/异常记录**：早期 B 重跑发现 industry inline schema unexpected property 与 legacy margin/industry exact-shape 失败，已分别以 schema 可空字段和 conditional public field 修正；修正后 B/C/D 与联合命令均 exit 0。测试输出中的 CLI usage、ResourceWarning、crash `insufficient_keep` 和 fake-provider failure receipts 属预期负向/夹具路径，不构成未处理失败。
+- **NOT_VERIFIED**：未 provider/live、未真实 normal weekly/cache-build、未观察 durable settlement/current-view 两轮产物、未执行 ship-gate；独立 Claude Code reviewer/committer 尚未复审/提交。Codex 仅 executor/fixer，不 stage/commit/push/merge。下一步命令：`Claude Code：独立复审 V5-B/C/D，PASS 后按规则 stage/commit`。
+
 ## 2026-08-11 - Codex executor/fixer：V5-A Required + Optional 修复（OPEN-NOT_VERIFIED）
 
 ### Purpose / problem / repair
@@ -5637,3 +5764,139 @@ effect contract 已用固定 Python 重新登记 A-EGS decision-predicate hash �
 - register / SESSION_LOG / handoff 三件本轮随收口提交；V5-A 的代码与测试改动仍在工作树等执行方收口后再走复审。
 
 **下一步**：`Codex：修复`
+
+## 2026-08-11 追加：桌面 V5-B/C/D 逐刀独立审查 —— 三刀 FAIL（未提交）
+
+**判定**：V5-B / V5-C / V5-D 各自 FAIL。一句话——**写方搬完了家，读方和计数方没有一个在生产路径上被接上**，而日期根的「兼容视图」会先把真实产物删掉。V5-A 按用户当轮指令跳过（在修）。
+
+**我实际验了什么**（区别于执行方转述）
+
+- 冻结 scope：`76 files changed, 2461 insertions(+), 513 deletions(-)` + 10 untracked；其中 `research/results/a_short/**` 的 dirty 与 20260810 untracked 产物是上一轮已判定的真实周跑遗留，不属本刀。
+- 亲跑验收超集（按提交门补入 effect-contract 两模块）：`status=FAIL exit=1 tests=1240 elapsed=276.7s`，41 条红**全部**来自 `decision predicate changed without effect contract update`。执行方那条 `1164 OK` 的命令里没有这两个模块——这就是「按自己挑的包跑绿」与「按门跑」的差别。
+- 读方接线是我自己 grep 出来的，不是推的：`official_project_root` 在 `runners/a_short_weekly_pipeline.py` 出现 0 次、在所有 `*.ps1` 出现 0 次；`run_revision_id` 在整个 `tests/` 只出现在 `tests/test_a_short_run_revision.py` 一个文件里（15 次）。
+- 整读了 `engine/a_short_run_revision.py` 的解析/选择/视图三段函数体（`resolve_official_revision`、`require_official_revision`、`_official_current_view_payloads`、`_official_current_view_deletions`），以及 launcher 的 `$RevisionRoles` 注册段与 `select-official` 调用段。
+
+**探针（我自写，打的是行为本身）**
+
+- 临时目录里放好 legacy 日期根文件（`candidates.csv` / `snapshot.json` / `stage3_selection_snapshot.json` / `reports/600000.SH.md`），跑**第一次** `select_official_revision` → 返回 `selected`，四个文件全部消失。不需要 A→B 切换，首选即删；真实 `result/a_short/20260810/` 里有 40+ 份同类文件（含逐股报告）。
+
+**未覆盖维度与诚实边界**
+
+- effect-contract 红的**根因归属**没有二分（本刀 vs 最后一次绿跑后的落盘 vs 跨模块干扰），标 `NOT_VERIFIED`；但它在当前字节下确实红，PASS 不能建立在它之上。
+- 未起独立对抗 agent：四条 Required 已被实测与探针坐实，按分级门 ③ 先出结论；16 点消费者矩阵、五段 A/B/C 重放本身就是缺件，未另行覆盖。
+- 未跑真实 weekly / provider / full lane；full lane 按 rule 4 归执行方。
+- V5-A 本轮完全未审（用户指令），其结论仍以上一节为准。
+
+**下一步**：`Codex：修复`
+
+## 2026-08-11 追加：V5-A P4 optional recovery 轮独立复审 —— FAIL（未提交）
+
+**判定**：FAIL，两条 Required。修的方向对、被点名那条腿也真修好了，但**同一个函数里的三个兄弟一个没动**。
+
+**我实际验了什么**（区别于执行方转述）
+
+- 整读 `_recover_public_artifact_sets()`（`runners/a_short_weekly_pipeline.py` 3211-3238）：四份 journal 常量里只有 P4a 被包进 `try/except`，P5/P3/P2 仍无条件 import，且与本轮是否启用这些 comparison 轨无关。
+- 自写探针逐个把兄弟模块置为不可导入：P4 `recovery SURVIVED`，P5/P3/P2 全部 `RAISED ModuleNotFoundError`——爆炸半径与被修的那条完全相同（正式 M6.7 出不来）。
+- 亲跑验收超集（含 effect-contract 两模块）：`PASS exit=0 tests=839 elapsed=128.9s`。上一轮我抓到的 41 条 `decision predicate changed without effect contract update` 全部消失；执行方 register 也写明是本轮谓词改动触发 seal 后同步了指纹，因此上轮那条红的根因归属可以从 `NOT_VERIFIED` 改为已确认由本批切片造成。
+- 核了 `schemas/a_short_m67_effect_contract.json` 的实际改动面：除三处 sha 外还新增了 `source.run_identity.run_revision_id` 的 leaf override（`duplicate_or_display_audit`），归类成立，不是暗中放宽。
+- 核了那条交回执行方的 Required：`tests/test_a_short_fourth_knife_p4.py` sha 仍是 `247b9d9f06fa…`、mtime 12:31:39，与我上轮重写后的字节一致——执行方本轮没碰它。
+
+**未覆盖维度与诚实边界**
+
+- **scope 未冻结**：开工时非文档改动比我上轮冻结时多 59 行，`weekly_pipeline` mtime 15:21:10 晚于我上轮的验收跑，执行方在同树并发写入；结论只覆盖我实读实测处。
+- **不可分割**：V5-A 的载体文件同时承载今日判 FAIL 的 V5-B/C/D（含首次选择即删日期根真实产物那条），按 scope gate 无法只 stage V5-A。
+- 未起独立对抗 agent（本轮改动面=一个 optional import 守卫，按 rule 8 低危）；未跑真实 weekly / provider / full lane。
+
+**下一步**：`Codex：修复`
+
+## 2026-08-11 追加：V5 类修复方案（六类 + 四刀相互影响，交 Codex 执行）
+
+**这一节是给执行方的施工图**，不是新的判定。每条 finding 的机制/Required repair/Closure tests 仍只在 `docs/system_risk_register.md`；这里只写**怎么排刀、每类一次修到底的边界、以及四刀之间会互相打架的地方**。
+
+### 六个缺陷类（全部实例已扫，别再只修被点名那一条腿）
+
+| 类 | 一句话 | 全量实例 | 权威 R-ID |
+|---|---|---|---|
+| C1 悬空接线 | 新参数/新字段没有生产调用方，等于没修 | `official_project_root`：7 个接收方，pipeline/egs/ps1 各 0 次调用；3 个 runner 暴露 `--official-project-root` 而 launcher 从不传；`official_revision_id` 因此恒 None | `R-ASHORT-V5C-OFFICIAL-ONLY-COUNTING-GATE-HAS-NO-PRODUCTION-CALLER` |
+| C2 类不修实例 | optional 比较轨的 import 成了正式周报硬前置 | 7 处未守：recovery 3218/3219/3220，pre-publish settle 6346/6398/6420/6444；P4 的 3227/6468/6477 是现成正确模板 | `R-ASHORT-V5-OPTIONAL-COMPARISON-IMPORT-IS-A-FORMAL-PUBLISH-DEPENDENCY` |
+| C3 破坏性删除 | 删除集是「一切未被选中」而不是「自己管过的」 | 唯一产地 `_official_current_view_deletions`，调用点 610/661 | `R-ASHORT-V5D-OFFICIAL-SWITCH-DELETES-NON-ROLE-DATE-ROOT-ARTIFACTS` |
+| C4 零测试 | revision 行为整批没有测试盯着 | `run_revision_id` 只在 1 个测试文件；`official_project_root`/`official_revision_id` 在 tests 中 0 命中 | `R-ASHORT-V5B-...-NO-TEST-COVERAGE` + `R-ASHORT-V5D-16-POINT-MATRIX-...-ABSENT` |
+| C5 date-root 未迁移 | 写方搬了家、读写点还留在日期根 | `weekly_pipeline:6603` 的 Phase-4 reports 目录（+5645 help 默认值）；`audit_candidate_universe_overlap_tushare:29` 的 `DEFAULT_INPUT_ROOT` 常量 | `R-ASHORT-V5D-PHASE4-REPORTS-STILL-WRITTEN-TO-THE-DELETED-DATE-ROOT` |
+| C6 效果契约 seal | 改决策谓词不同步指纹 = 41 处消费点集体红 | 横切纪律：凡改 `egs_main.py` / `a_short_weekly_pipeline.py` 决策谓词，同刀同步 `decision_predicate_sha256` | 无独立 R-ID，写进每刀 checklist |
+| C7 恒真式植入对照 | 植入打的是判据来源而不是门 | 全批唯一实例=P4 守卫，且现状是审查方的编辑 | `R-ASHORT-V5A-P4-PLANTED-CONTROL-IS-A-TAUTOLOGY` |
+
+### 四刀之间会互相打架的地方（必须同刀裁决，别按刀号顺序盲推）
+
+1. **C1 的接线被 V5-D 卡着**：`require_official_revision()` 在缺 official 指针时抛 `RevisionSelectionBlocked`，`factor_comparison_v2` 对 legacy capture 直接 `raise`；而现在**没有任何 decision date 有 official 指针**。所以「把 `official_project_root` 接进 pipeline」不能先做，必须与「无指针 / legacy 周 = 零正式计数 + 保留审计」的策略同刀落地，否则一接线所有历史周 settlement 变成每周必失败——与 V5-A 那条 crash-veto 同型。
+2. **C3 与 C5 正面相撞**：pipeline 仍往 date-root 写 Phase-4 报告，selector 又把 date-root 非角色文件全删；净效果是「本轮刚写的报告被本轮删掉」。收窄删除集与迁移 reports 必须一起决定，只修一边会变成另一种坏。
+3. **C2 的修复必然触发 C6**：本轮执行方修 P4 recovery 时已经踩到一次谓词 seal，把指纹同步成 `63d7e01a…`。后续每一次改这两个文件都会再触发，请在每刀 checklist 里固定写上「同步 seal + 跑含 effect-contract 的超集」。
+4. **C4 的容器是 V5-D**：16 点覆盖矩阵与 A/B/C 五段重放是 V5-D 的定义件，但它必须覆盖 V5-B 的六条 capture writer 与 V5-C 的 forward/theme/crash/settlement。别在 V5-B/C 里各写一套小矩阵，也别把 V5-D 的矩阵缩成只测中央模块。
+5. **V5-A 无法单独收口**：其载体文件（`weekly_screening.ps1`、`a_short_weekly_pipeline.py`、`engine/a_short_run_revision.py`）同时承载判 FAIL 的 V5-B/C/D 改动，按 scope gate 不能只 stage V5-A。整批一起过门。
+
+### 建议施工顺序（每序一刀，刀内一次修净整类，刀间不并行）
+
+- **序 1 = C3 + C5 合刀（先做，因为它同时是数据安全和 C1 的解锁前提）**：把删除集从「一切未被选中」收窄成「上一版 official 实际物化过、本版不再产出的角色」；同刀裁决 Phase-4 `reports/` 是迁进 revision 并注册为角色，还是永久划出 selector 管理面。收口标准：日期根预置 legacy 文件后首次选择一个都不删；A→B 切换后 A 的证据与 legacy 文件字节不变。
+- **序 2 = C2 一次收敛**：recovery 四份 journal 与 pre-publish 四条 settle import 统一成一条 optional 规则（一个 helper 或一个循环，异常收窄到 `ImportError`），逐轨参数化验证「不可导入 → 正式周报仍出 + 该轨记 unavailable」。别逐个手写 `try`。
+- **序 3 = C1 接线 + legacy 策略**：launcher/pipeline 真实传入 official project root，同刀定义无指针/legacy 周零计数不硬毙；`official_revision_id` 随之在公开累计 summary 非空。收口标准：legacy 周照常跑完记零计数、official 周正常计数、validation-only 与 equivalent replay 零计数。
+- **序 4 = C4 测试矩阵**：补 V5-B 的 capture A/B 参数化矩阵、V5-C 的 forward/settlement official-only 矩阵、V5-D 的 16 点覆盖矩阵（断言 `affected == revision_bound == consumer_verified == tested`）与 A/B/C 五段重放。
+- **横切（每刀都做）**：C6 同步 seal 并跑含 `tests.test_a_short_effect_contract` + `tests.test_a_short_effect_consumer_probe` 的超集；C7 由执行方接管 P4 植入对照（在自己那版基础上重写，或显式署名接管工作树这版）。
+
+### 给执行方的边界提醒
+
+- 行号取自 2026-08-11 的实读，工作树当时仍在被并发写入（`a_short_weekly_pipeline.py` mtime 15:21:10）；动手前自行复核锚点，别照抄行号。
+- 本节不含任何我方代码改动；除 P4 守卫那一处遗留（待接管）外，工作树里的生产改动都是执行方自己的。
+- 真实 provider / live / 真实 normal weekly / full lane 全部仍 `NOT_VERIFIED`，离线绿不能代替真实周跑结论。
+
+**下一步**：`Codex：修复`
+
+## 2026-08-11 追加：V5-A+B+C+D 交叉修复独立审查 —— FAIL（未提交）
+
+**判定**：FAIL，四条 P1 + 一条 P2。上一轮我交出的六类**行为面确实一条条修对了**，这一轮的问题全部出在「把 official 门接进生产」的**位置与顺序**上。
+
+**我实际验了什么**（区别于执行方与子 agent 的转述）
+
+- 冻结 scope：`77 files changed, 3053 insertions(+), 577 deletions(-)` + 13 untracked（新增 `runners/a_short_official_settlement.py`、`tests/test_a_short_v5_revision_matrix.py`、phase4 manifest schema）。
+- **重跑我自己上两轮的原始探针，双双翻转**：optional import 四条腿（P4/P5/P3/P2）全部 `recovery SURVIVED`；日期根预置的 legacy 文件在**首次**选择后全部保留。
+- **补了放松类改动的反向控制**（这类改动最容易修过头）：真正 stale 的角色仍被清理、A 的 revision 证据字节仍在——收窄没有把该删的也放过。
+- 整读：`engine/a_short_factor_comparison_v2.py` 的账目循环、`runners/a_short_official_settlement.py` 的 legacy/gate 两段、launcher 的 selector→settlement 段、pipeline 的 reports 分支与 optional 模块解析。
+- **自跑探针坐实历史回放必红**：无指针 + `cutoff_passed=True` → `RevisionSelectionBlocked`，而 launcher 只要 `$IsHistoricalAsOf` 就无条件加 `--cutoff-passed`。
+- 验收超集 25 模块 `1260 OK`——**全绿，但四条 P1 没有一条落在它的覆盖面内**；这本身就是覆盖面证据。
+
+**独立对抗 agent（§6a，只读当前工作树，1 个）**
+
+- 它坐实了两件我只读到形状的事：非 official 运行的计数已经落盘（门是事后再跑一遍）、以及 `run_revision_id` 过滤器排在 official 过滤器之前导致累计周数 3→1。另有 forward backfill 永远无法成熟的执行输出。
+- 我未逐字复现它的数值输出，已在 register 逐条标注来源；它另有一批「读而未执行」的同形位置（industry / overlay / crash-veto / theme / margin / final_action），一并列进 Required 的同类扫面，别只修被演示的那两处。
+
+**未覆盖维度与诚实边界**
+
+- 未跑真实 weekly / provider / full lane；full lane 按 rule 4 归执行方。
+- R1/R2/R3 的数值证据来自 agent，我复现的是 R4 与 R2 的代码顺序；写进 register 时已按来源分标。
+- 墙钟超 30 分钟，原因是四刀交叉 + §6a 必起 agent，已在 SESSION_LOG `Verify` 写明。
+
+**下一步**：`Codex：修复`
+
+## 2026-08-11 追加：V5-A+B+C+D 交叉刀复审 —— PASS（已提交并合入 master）
+
+**判定**：PASS。上一轮的四条 P1 + 一条 P2 全部修净，而且这次是**按类修的**——我上一轮点名的两处只是演示，执行方把同形的兄弟位置一起闭了。
+
+**我实际验了什么**（区别于执行方与上一轮 agent 的转述）
+
+- R1：pipeline 的 factor v2 / margin settle 现在都带 `official_project_root`，launcher 把 `--official-project-root` 传给 pipeline / forward backfill / theme / crash-veto；上一轮 agent 只读未执行的 post-publish P5/P4 也带上了。
+- R2：整读两个引擎的账目循环——按本轮 revision 丢行那一步删掉了，改成逐 decision date 解析 official；industry weight 同形。
+- R3：整读 `_filter_official_revision` 的新语义，并**拿真实 `logs/forward_tracker.csv` 只读跑了一遍**：该文件还是迁移前 schema（无 revision 列），归一后 15 行全 legacy、过滤后 0 行、不崩——符合 legacy 审计零计数。
+- R4：launcher 对历史 as_of 直接置 `validation_only` 且不再调 selector；selector 原语在无指针+cutoff 下仍会拒绝（我复跑确认），但生产路径不再撞它。
+- R5：**自写植入探针**——真树的矩阵断言 `True`，把 `official_project_root=` 那个调用点摘掉后 `False`。守卫从「字符串存在」变成了「真的被调用」。
+- 验收超集 26 模块 `1266 OK / 330.8s`。
+
+**留给下一轮的两条 Optional**
+
+- backfill 在 legacy 行被排除时打印「tracker is empty」，与事实不符，且正是将来同类复发会被掩盖的那句话。
+- 矩阵守卫的承重性目前靠我的外部探针证明，建议把植入用例固化进测试文件。
+
+**未覆盖维度与诚实边界**
+
+- 桌面 V5 的总关闭门（真实周末→周一 durable 两轮同时满足四时钟/revision/cache/outcome/health）**未达成**；本 PASS 只覆盖代码与离线契约，真实 provider/weekly 仍 `NOT_VERIFIED`。
+- full lane 按 rule 4 归执行方；§6a 上一轮已对同一门起过 agent，本轮定点复核未重复起。
+- 提交排除 `research/results/a_short/**` 的 0810 真实周跑遗留（既有 dirty + untracked），它们不属本刀。
+
+**下一步**：`Codex：执行`

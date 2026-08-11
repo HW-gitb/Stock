@@ -9,6 +9,7 @@
     "schema_name": {"const": "a_short_regime_daily_ledger"},
     "schema_version": {"const": "1.0.0"},
     "generated_at": {"type": ["string", "null"]},
+    "run_revision_id": {"type": "string", "pattern": "^[0-9a-f]{32}$"},
     "coverage": {
       "type": "object",
       "additionalProperties": false,
@@ -38,7 +39,11 @@
       "items": {
         "type": "object",
         "required": ["as_of"],
-        "properties": {"as_of": {"type": "string", "pattern": "^[0-9]{8}$"}}
+        "properties": {
+          "as_of": {"type": "string", "pattern": "^[0-9]{8}$"},
+          "observed_data_through": {"type": "string", "pattern": "^[0-9]{8}$"},
+          "run_revision_id": {"type": "string", "pattern": "^[0-9a-f]{32}$"}
+        }
       }
     },
     "boundary": {

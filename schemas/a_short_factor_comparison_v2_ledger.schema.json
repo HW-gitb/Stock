@@ -23,7 +23,8 @@
           "forward_eligible": {"type": "boolean"},
           "outcome_status": {"enum": ["pending", "no_count", "settled"]},
           "capture_sha256": {"type": "string", "pattern": "^[a-f0-9]{64}$"},
-          "outcome_sha256": {"type": "string", "pattern": "^[a-f0-9]{64}$"}
+          "outcome_sha256": {"type": "string", "pattern": "^[a-f0-9]{64}$"},
+          "run_revision_id": {"type": "string", "pattern": "^[a-f0-9]{32}$"}
         }
       }
     },

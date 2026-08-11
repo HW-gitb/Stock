@@ -28,6 +28,9 @@ from engine.a_short_managed_exit import evaluate_managed_exit
 from runners import a_short_phase5_engine as phase5_engine
 from engine.a_short_experiment_admission_registry import admission_snapshot, get_admission
 from engine.a_short_target_policy_adjudication import adjudicate_target_exit
+from engine.a_short_run_revision import (
+    require_official_revision, resolve_official_revision, validate_run_revision_id,
+)
 
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -252,17 +255,22 @@ def _validate_current_record(record: dict[str, Any], epoch: dict[str, Any]) -> N
         ("breakout_entries", "breakout_difference")
     required = {"decision_date", "forward_eligible", "source_identity", "component_id", "admission_binding",
                 "component_epoch_fingerprint", "capture_sha256", entry_key, difference_key}
-    if not isinstance(record, dict) or set(record) != required or record["component_id"] != track or \
+    if not isinstance(record, dict) or not required.issubset(record) or set(record) - required != {"run_revision_id"} and set(record) - required or record["component_id"] != track or \
             record["admission_binding"] != epoch["admission_binding"] or \
             record["component_epoch_fingerprint"] != epoch["contract_fingerprint"] or \
             not isinstance(record["forward_eligible"], bool) or not isinstance(record[entry_key], list) or \
             not isinstance(record[difference_key], bool) or _date(record["decision_date"]) != record["decision_date"]:
         raise TargetPolicyError("private_current_record_binding_invalid")
+    if record.get("run_revision_id") is not None:
+        validate_run_revision_id(record["run_revision_id"])
     source = record["source_identity"]
-    if not isinstance(source, dict) or set(source) != {"run_id", "candidate_digest", "official_m67_sha256", "price_data_through"} or \
+    source_allowed = {"run_id", "candidate_digest", "official_m67_sha256", "price_data_through", "run_revision_id"}
+    if not isinstance(source, dict) or not source_allowed.issuperset(source) or \
+            set(source) - source_allowed - ({"run_revision_id"} if "run_revision_id" in source else set()) or \
             not isinstance(source["run_id"], str) or not source["run_id"] or \
             not _is_sha256(source["candidate_digest"]) or not _is_sha256(source["official_m67_sha256"]) or \
             _date(source["price_data_through"]) != source["price_data_through"] or \
+            source.get("run_revision_id") != record.get("run_revision_id") or \
             record["capture_sha256"] != _capture_digest(record):
         raise TargetPolicyError("private_current_record_capture_integrity_invalid")
 
@@ -300,8 +308,9 @@ def _validate_ledger(ledger: dict[str, Any]) -> None:
         if "component_id" in epoch and _epoch_mode.enforcement_enabled("p2_target_policy") and \
                 epoch["admission_binding"] != admission_snapshot(TRACK_ADMISSIONS[epoch["component_id"]]):
             raise TargetPolicyError("private_epoch_admission_binding_drifted")
-        dates = [record.get("decision_date") for record in epoch["records"] if isinstance(record, dict)]
-        if len(dates) != len(epoch["records"]) or len(set(dates)) != len(dates):
+        identities = [(record.get("decision_date"), record.get("run_revision_id"))
+                      for record in epoch["records"] if isinstance(record, dict)]
+        if len(identities) != len(epoch["records"]) or len(set(identities)) != len(identities):
             raise TargetPolicyError("private_record_identity_invalid")
         if "component_id" in epoch:
             for record in epoch["records"]:
@@ -422,11 +431,33 @@ def _message(status: str, target: dict[str, Any], breakout: dict[str, Any]) -> s
     )
 
 
-def _summary_from_ledger(ledger: dict[str, Any], as_of: str) -> dict[str, Any]:
+def _summary_from_ledger(ledger: dict[str, Any], as_of: str,
+                         official_revision_id: str | None = None,
+                         official_project_root: str | Path | None = None) -> dict[str, Any]:
     target_epoch = _active_epoch(ledger, create=False, track="target_exit")
     breakout_epoch = _active_epoch(ledger, create=False, track="breakout_entry")
     target_records = list(target_epoch["records"]) if target_epoch else []
     breakout_records = list(breakout_epoch["records"]) if breakout_epoch else []
+    if official_project_root is not None:
+        target_records = [
+            row for row in target_records
+            if row.get("run_revision_id") not in (None, "") and
+            (lambda selected: selected is not None and
+             selected["selected_revision_id"] == row.get("run_revision_id"))(
+                 resolve_official_revision(official_project_root, row["decision_date"], require=False)
+             )
+        ]
+        breakout_records = [
+            row for row in breakout_records
+            if row.get("run_revision_id") not in (None, "") and
+            (lambda selected: selected is not None and
+             selected["selected_revision_id"] == row.get("run_revision_id"))(
+                 resolve_official_revision(official_project_root, row["decision_date"], require=False)
+             )
+        ]
+    elif official_revision_id is not None:
+        target_records = [row for row in target_records if row.get("run_revision_id") == official_revision_id]
+        breakout_records = [row for row in breakout_records if row.get("run_revision_id") == official_revision_id]
     target = _progress(target_records, "target_exit", _current_review_status(ledger, "target_exit", target_epoch))
     breakout = _progress(breakout_records, "breakout_entry", _current_review_status(ledger, "breakout_entry", breakout_epoch))
     if target["review_state"] == "pass_pending_confirmation" or breakout["review_state"] == "pass_pending_confirmation":
@@ -462,6 +493,7 @@ def _summary_from_ledger(ledger: dict[str, Any], as_of: str) -> dict[str, Any]:
         "schema_version": SCHEMA_VERSION,
         "summary_id": "a_short_target_policy_comparison",
         "as_of": as_of,
+        "official_revision_id": official_revision_id,
         "data_through": data_through,
         "status": status,
         "target_exit": target,
@@ -485,7 +517,8 @@ def _summary_from_ledger(ledger: dict[str, Any], as_of: str) -> dict[str, Any]:
     return summary
 
 
-def _unavailable_summary(as_of: str, *, configured: bool) -> dict[str, Any]:
+def _unavailable_summary(as_of: str, *, configured: bool,
+                         official_revision_id: str | None = None) -> dict[str, Any]:
     target = _empty_progress("not_reviewed")
     breakout = _empty_progress("not_reviewed")
     status = "evidence_unavailable_or_inconclusive" if configured else "not_configured"
@@ -494,6 +527,7 @@ def _unavailable_summary(as_of: str, *, configured: bool) -> dict[str, Any]:
         "schema_version": SCHEMA_VERSION,
         "summary_id": "a_short_target_policy_comparison",
         "as_of": _date(as_of),
+        "official_revision_id": official_revision_id,
         "data_through": None,
         "status": status,
         "target_exit": target,
@@ -619,7 +653,9 @@ def settle_and_summarize(*, root: str | Path | None, as_of: str,
                           daily_cache_path: str | Path | None = None,
                           summary_path: str | Path | None = None,
                           markdown_path: str | Path | None = None,
-                          write_public: bool = True) -> dict[str, Any]:
+                          write_public: bool = True,
+                          run_revision_id: str | None = None,
+                          official_project_root: str | Path | None = None) -> dict[str, Any]:
     """Settle only existing captures, then return the current de-identified P2 reminder.
 
     ``write_public=False`` is the weekly-pipeline path: it needs the summary for
@@ -629,14 +665,40 @@ def settle_and_summarize(*, root: str | Path | None, as_of: str,
     if root is None:
         return _unavailable_summary(as_of, configured=False)
     try:
+        if run_revision_id is not None:
+            run_revision_id = validate_run_revision_id(run_revision_id)
+        official_revision_id = None
+        if official_project_root is not None and run_revision_id is None:
+            raise TargetPolicyError("official settlement requires run_revision_id")
+        if official_project_root is not None and run_revision_id is not None:
+            official_revision_id = require_official_revision(
+                official_project_root, _date(as_of), run_revision_id
+            )
         private_path, ledger = _load_or_initialize(root)
         if daily_cache_path is not None and Path(daily_cache_path).is_file():
             for track in TRACK_ADMISSIONS:
                 epoch = _active_epoch(ledger, create=True, track=track)
-                _settle_existing_records(epoch["records"], Path(daily_cache_path), track=track)
+                if official_project_root is not None:
+                    selected_records = []
+                    for record in epoch["records"]:
+                        record_revision = record.get("run_revision_id")
+                        if record_revision in (None, ""):
+                            continue
+                        selected = resolve_official_revision(
+                            official_project_root, record["decision_date"], require=False,
+                        )
+                        if selected is not None and selected["selected_revision_id"] == record_revision:
+                            selected_records.append(record)
+                else:
+                    selected_records = [record for record in epoch["records"]
+                                        if run_revision_id is None or record.get("run_revision_id") == run_revision_id]
+                _settle_existing_records(selected_records, Path(daily_cache_path), track=track)
         _validate_ledger(ledger)
         _atomic_write(private_path, ledger)
-        summary = _summary_from_ledger(ledger, _date(as_of))
+        summary = _summary_from_ledger(
+            ledger, _date(as_of), official_revision_id=official_revision_id,
+            official_project_root=official_project_root,
+        )
         if (summary_path is None) != (markdown_path is None):
             raise TargetPolicyError("public_summary_paths_must_be_paired")
         if summary_path is not None and write_public:
@@ -716,9 +778,12 @@ def capture_after_published_weekly(*, root: str | Path, decision_date: str, cand
                                    source_identity: dict[str, Any], out_path: str | Path, receipt_path: str | Path,
                                    forward_eligible: bool,
                                    summary_path: str | Path | None = None,
-                                   markdown_path: str | Path | None = None) -> dict[str, Any]:
+                                   markdown_path: str | Path | None = None,
+                                   run_revision_id: str | None = None) -> dict[str, Any]:
     """Freeze P2 target/breakout deltas only after the official bundle exists."""
     decision_date = _date(decision_date)
+    if run_revision_id is not None:
+        run_revision_id = validate_run_revision_id(run_revision_id)
     private_path, ledger = _load_or_initialize(root)
     weekly_bundle = _verify_published_bundle(
         out_path, receipt_path, decision_date, source_identity
@@ -784,11 +849,13 @@ def capture_after_published_weekly(*, root: str | Path, decision_date: str, cand
                                  "outcomes": None})
     record_base = {
         "decision_date": decision_date,
+        "run_revision_id": run_revision_id,
         "forward_eligible": bool(forward_eligible),
         "source_identity": {"run_id": str(source_identity["run_id"]),
                             "candidate_digest": str(source_identity["candidate_digest"]),
                             "official_m67_sha256": weekly_bundle.weekly_sha256,
-                            "price_data_through": price_data_through},
+                            "price_data_through": price_data_through,
+                            "run_revision_id": run_revision_id},
     }
     records: dict[str, dict[str, Any]] = {}
     idempotent = True
@@ -805,19 +872,33 @@ def capture_after_published_weekly(*, root: str | Path, decision_date: str, cand
         record["component_epoch_fingerprint"] = _contract_fingerprint(track)
         record["capture_sha256"] = _capture_digest(record)
         epoch = _active_epoch(ledger, create=True, track=track)
-        existing = next((item for item in epoch["records"] if item["decision_date"] == decision_date), None)
+        existing = next((item for item in epoch["records"]
+                         if item["decision_date"] == decision_date and
+                         item.get("run_revision_id") == run_revision_id), None)
         if existing is not None:
             if existing.get("capture_sha256") != record["capture_sha256"]:
+                if run_revision_id is not None:
+                    _atomic_write(
+                        private_path.parent / "weeks" / decision_date / "revisions" / run_revision_id / "conflict.json",
+                        {"schema_name": "a_short_target_policy_comparison_conflict",
+                         "decision_date": decision_date, "run_revision_id": run_revision_id,
+                         "reason": "p2_capture_replay_input_drifted"},
+                    )
                 raise TargetPolicyError("p2_capture_replay_input_drifted")
             records[track] = existing
             continue
         idempotent = False
         epoch["records"].append(record)
-        epoch["records"].sort(key=lambda item: item["decision_date"])
+        epoch["records"].sort(key=lambda item: (item["decision_date"], item.get("run_revision_id") or "legacy_revision_0"))
         records[track] = record
     _validate_ledger(ledger)
     if not idempotent:
         _atomic_write(private_path, ledger)
+        if run_revision_id is not None:
+            revision_root = (private_path.parent / "weeks" / decision_date / "revisions" / run_revision_id)
+            revision_root.mkdir(parents=True, exist_ok=True)
+            for track, record in records.items():
+                _atomic_write(revision_root / f"{track}.json", record)
         summary = _summary_from_ledger(ledger, decision_date)
         if (summary_path is None) != (markdown_path is None):
             raise TargetPolicyError("public_summary_paths_must_be_paired")

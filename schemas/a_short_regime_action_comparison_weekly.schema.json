@@ -8,6 +8,7 @@
     "schema_name": {"const": "a_short_regime_action_comparison_weekly"},
     "schema_version": {"const": "1.1.0"},
     "as_of": {"type": "string", "pattern": "^[0-9]{8}$"},
+    "run_revision_id": {"type": "string", "pattern": "^[0-9a-f]{32}$"},
     "raw_v14_2_regime": {"enum": ["attack", "shock", "defense", "contraction", "unknown"]},
     "effective_v14_2_regime": {"enum": ["attack", "shock", "defense", "contraction"]},
     "baseline_policy_id": {"const": "v14_2_effective_action_proxy_v1"},

@@ -60,6 +60,9 @@ from engine.a_short_regime_action_comparison import (
 from engine.data.a_share_board_scope import is_a_share_main_board
 from engine.a_short_experiment_admission_registry import admission_snapshot
 from engine import a_short_evidence_epoch_mode as _epoch_mode
+from engine.a_short_run_revision import (
+    research_revision_root, require_official_revision, validate_run_revision_id,
+)
 
 RECORDS_FILENAME = "regime_comparison_records.json"
 PANEL_FILENAME = "regime_comparison_panel.md"
@@ -123,9 +126,16 @@ def make_feature_provider(daily: pd.DataFrame, stk_limit: pd.DataFrame,
     return provider
 
 
-def lane_paths(project_root: str | Path | None = None) -> dict:
+def lane_paths(project_root: str | Path | None = None, *, decision_as_of: str | None = None,
+               run_revision_id: str | None = None) -> dict:
     base = Path(project_root) if project_root is not None else ROOT
-    lane = base / LEDGER_LANE_ROOT
+    if run_revision_id is not None:
+        run_revision_id = validate_run_revision_id(run_revision_id)
+        if decision_as_of is None:
+            raise ValueError("lane_paths: revision-scoped paths require decision_as_of")
+        lane = research_revision_root(base, str(decision_as_of), run_revision_id)
+    else:
+        lane = base / LEDGER_LANE_ROOT
     return {
         "ledger": str(lane / LEDGER_FILENAME),
         "records": str(lane / RECORDS_FILENAME),
@@ -170,7 +180,8 @@ def _write_json(obj, path: str) -> None:
 
 
 def write_candidate_effect_outcome(*, as_of: str, result: dict, summary_path: str,
-                                   outcome_path: str) -> dict:
+                                   outcome_path: str,
+                                   run_revision_id: str | None = None) -> dict:
     """Publish one de-identified current-run receipt even when candidate evidence is not updated."""
     if result.get("status") == "updated":
         prior_summary = result.get("summary") or {}
@@ -185,6 +196,8 @@ def write_candidate_effect_outcome(*, as_of: str, result: dict, summary_path: st
         observed_as_of = None
     else:
         observed_as_of = prior_summary.get("latest_evidence_as_of")
+    if run_revision_id is not None:
+        run_revision_id = validate_run_revision_id(run_revision_id)
     outcome = {
         "schema_name": "a_short_regime_candidate_effect_outcome",
         "schema_version": "1.0.0",
@@ -193,6 +206,8 @@ def write_candidate_effect_outcome(*, as_of: str, result: dict, summary_path: st
         "reason_code": str(result.get("reason_code") or "updated"),
         "observed_as_of": observed_as_of,
     }
+    if run_revision_id is not None:
+        outcome["run_revision_id"] = run_revision_id
     schema = json.loads(CANDIDATE_EFFECT_OUTCOME_SCHEMA_PATH.read_text(encoding="utf-8"))
     jsonschema.validate(outcome, schema)
     _write_json(outcome, outcome_path)
@@ -231,9 +246,9 @@ def save_comparison_records(records: list, path: str) -> None:
     seen = set()
     for r in records:
         validate_comparison_record(r)
-        a = str(r.get("as_of"))
+        a = (str(r.get("as_of")), r.get("run_revision_id") or "legacy_revision_0")
         if a in seen:
-            raise ValueError(f"save_comparison_records: duplicate as_of {a}")
+            raise ValueError(f"save_comparison_records: duplicate observation key {a}")
         seen.add(a)
     _write_json(records, path)
 
@@ -247,6 +262,8 @@ def save_action_records(records: list, path: str, *, current_action: dict,
     rows as forward evidence. The one current row is checked against the runner-owned clock.
     """
     validate_action_record(current_action)
+    current_key = (str(current_action["as_of"]),
+                   current_action.get("run_revision_id") or "legacy_revision_0")
     current_as_of = str(current_action["as_of"])
     origin = current_action["forward_origin"]
     actual_run_date = _current_run_date()
@@ -256,28 +273,29 @@ def save_action_records(records: list, path: str, *, current_action: dict,
             datetime.strptime(current_as_of, "%Y%m%d")).days) > 7:
         raise ValueError("save_action_records: current action decision date is stale versus settled regime date")
     prior = load_comparison_records(path)
-    prior_by_date = {}
+    prior_by_key = {}
     for row in prior:
         validate_action_record(row)
-        as_of = str(row["as_of"])
-        if as_of in prior_by_date:
-            raise ValueError(f"save_action_records: existing duplicate as_of {as_of}")
-        prior_by_date[as_of] = row
+        key = (str(row["as_of"]), row.get("run_revision_id") or "legacy_revision_0")
+        if key in prior_by_key:
+            raise ValueError(f"save_action_records: existing duplicate observation key {key}")
+        prior_by_key[key] = row
     refreshed_prior = refresh_action_records(prior, regime_records)
-    refreshed_by_date = {str(row["as_of"]): row for row in refreshed_prior}
+    refreshed_by_key = {(str(row["as_of"]), row.get("run_revision_id") or "legacy_revision_0"): row
+                        for row in refreshed_prior}
     seen = set()
     for row in records:
         validate_action_record(row)
-        as_of = str(row["as_of"])
-        if as_of in seen:
-            raise ValueError(f"save_action_records: duplicate as_of {as_of}")
-        seen.add(as_of)
-        if as_of == current_as_of:
+        key = (str(row["as_of"]), row.get("run_revision_id") or "legacy_revision_0")
+        if key in seen:
+            raise ValueError(f"save_action_records: duplicate observation key {key}")
+        seen.add(key)
+        if key == current_key:
             if row != current_action:
                 raise ValueError("save_action_records: current action does not match runner observation")
-        elif refreshed_by_date.get(as_of) != row:
+        elif refreshed_by_key.get(key) != row:
             raise ValueError("save_action_records: non-current action must match sanctioned history refresh")
-    if seen != set(refreshed_by_date) | {current_as_of}:
+    if seen != set(refreshed_by_key) | {current_key}:
         raise ValueError("save_action_records: action history cannot drop or add non-current rows")
     _write_json(records, path)
 
@@ -446,10 +464,13 @@ def _load_tracker_rows(path: str) -> list[dict]:
     return rows
 
 
-def _tracker_rows_for_week(path: str, as_of: str, *, all_rows: list[dict] | None = None) -> tuple[dict[str, dict], dict]:
+def _tracker_rows_for_week(path: str, as_of: str, *, all_rows: list[dict] | None = None,
+                           run_revision_id: str | None = None) -> tuple[dict[str, dict], dict]:
     """Read the existing tracker as the sole current authority for a candidate cohort and returns."""
     rows = [row for row in (all_rows if all_rows is not None else _load_tracker_rows(path))
             if str(row.get("as_of")) == str(as_of)]
+    if run_revision_id is not None:
+        rows = [row for row in rows if str(row.get("run_revision_id") or "") == run_revision_id]
     if not rows:
         raise ValueError(f"forward tracker has no {as_of} cohort")
     by_code = {}
@@ -472,14 +493,21 @@ def _tracker_rows_for_week(path: str, as_of: str, *, all_rows: list[dict] | None
         "candidate_digest": next(iter(digests)),
         "run_id": next(iter(run_ids)),
         "forward_live": next(iter(modes)) == "true",
+        "run_revision_id": (
+            str(rows[0].get("run_revision_id") or "") or None
+            if run_revision_id is not None else None
+        ),
     }
 
 
-def _tracker_rows_by_frozen_key(rows: list[dict]) -> dict[tuple[str, str], dict]:
+def _tracker_rows_by_frozen_key(rows: list[dict]) -> dict[tuple[str, str | None, str], dict]:
     out = {}
     for row in rows:
-        key = (str(row.get("as_of") or ""), str(row.get("ts_code") or ""))
-        if not all(key):
+        revision = str(row.get("run_revision_id") or "") or None
+        key = (str(row.get("as_of") or ""), revision, str(row.get("ts_code") or ""))
+        # Legacy date-only tracker rows intentionally use ``None`` for the
+        # middle revision component; that is still a valid frozen key.
+        if not key[0] or not key[2]:
             continue
         if key in out:
             raise ValueError("forward tracker has duplicate frozen evidence keys")
@@ -542,6 +570,7 @@ def _m67_build_candidates(bundle, *, as_of: str) -> tuple[list[dict], dict]:
         "m67_sha256": bundle.weekly_sha256,
         "candidate_digest": candidate_digest,
         "run_id": run_id,
+        "run_revision_id": str(lineage.get("run_revision_id") or "") or None,
         "candidate_set_digest": candidate_set_digest,
     }
 
@@ -633,7 +662,9 @@ def _render_candidate_effect_summary(summary: dict) -> str:
 
 def run_candidate_effect_sidecar(*, decision_as_of: str, regime_ledger: dict, m67_report_path: str,
                                  tracker_path: str, ledger_path: str, summary_path: str,
-                                 markdown_path: str, published_bundle=None) -> dict:
+                                 markdown_path: str, published_bundle=None,
+                                 run_revision_id: str | None = None,
+                                 official_project_root: str | Path | None = None) -> dict:
     """Freeze/refresh P1 Cut2 evidence from existing M6.7 and forward-tracker artifacts only.
 
     This never fetches market data and never writes production or private-account artifacts.  A
@@ -643,6 +674,19 @@ def run_candidate_effect_sidecar(*, decision_as_of: str, regime_ledger: dict, m6
     """
     if not is_canonical_date(str(decision_as_of)):
         raise ValueError("candidate-effect decision_as_of must be a canonical date")
+    if run_revision_id is not None:
+        run_revision_id = validate_run_revision_id(run_revision_id)
+        if official_project_root is not None:
+            try:
+                require_official_revision(official_project_root, str(decision_as_of), run_revision_id)
+            except Exception:
+                return {"status": "skipped_source_mismatch", "counted": False,
+                        "reason_code": "non_official_revision",
+                        "reason": "candidate-effect revision is not the selected official revision"}
+    elif official_project_root is not None:
+        return {"status": "skipped_source_mismatch", "counted": False,
+                "reason_code": "missing_revision_identity",
+                "reason": "official candidate-effect requires a revision-bound run"}
     if published_bundle is None:
         from runners.a_short_weekly_pipeline import validate_published_weekly_bundle
         published_bundle = validate_published_weekly_bundle(m67_report_path)
@@ -651,12 +695,24 @@ def run_candidate_effect_sidecar(*, decision_as_of: str, regime_ledger: dict, m6
     )
     all_tracker_rows = _load_tracker_rows(tracker_path)
     tracker_by_code, tracker_meta = _tracker_rows_for_week(
-        tracker_path, str(decision_as_of), all_rows=all_tracker_rows)
+        tracker_path, str(decision_as_of), all_rows=all_tracker_rows,
+        run_revision_id=run_revision_id)
     if (m67_meta["candidate_digest"] != tracker_meta["candidate_digest"]
             or m67_meta["run_id"] != tracker_meta["run_id"]):
         return {"status": "skipped_source_mismatch", "counted": False,
                 "reason_code": "run_identity_mismatch",
                 "reason": "M6.7 and forward-tracker run identity differ"}
+    m67_revision = (
+        ((published_bundle.weekly.get("run_lineage") or {}).get("run_revision_id"))
+        if isinstance(published_bundle.weekly, dict) else None
+    )
+    if run_revision_id is not None and (
+            m67_revision != run_revision_id or
+            m67_meta.get("run_revision_id") != run_revision_id or
+            tracker_meta.get("run_revision_id") != run_revision_id):
+        return {"status": "skipped_source_mismatch", "counted": False,
+                "reason_code": "revision_identity_mismatch",
+                "reason": "M6.7 and requested revision differ"}
     missing_tracker_rows = sorted(c["ts_code"] for c in candidates if c["ts_code"] not in tracker_by_code)
     if missing_tracker_rows:
         return {"status": "skipped_source_mismatch", "counted": False,
@@ -675,10 +731,26 @@ def run_candidate_effect_sidecar(*, decision_as_of: str, regime_ledger: dict, m6
     if not isinstance(group.get("weeks"), dict) or not isinstance(group.get("records"), list):
         raise ValueError("candidate-effect policy group is malformed")
 
-    prior_week = group["weeks"].get(str(decision_as_of))
-    prior_records = [r for r in group["records"] if str(r.get("as_of")) == str(decision_as_of)]
+    def _record_revision(record: dict) -> str | None:
+        """Read the revision from the candidate-effect evidence binding.
+
+        Candidate-effect records deliberately keep the identity inside
+        ``evidence_origin``.  Treating it as a top-level field would make a
+        revisionized rerun look like a legacy row and could replace/count the
+        wrong same-date cohort.
+        """
+        origin = record.get("evidence_origin") or {}
+        value = origin.get("run_revision_id")
+        return str(value) if value not in (None, "") else None
+
+    week_key = str(decision_as_of) if run_revision_id is None else f"{decision_as_of}|{run_revision_id}"
+    prior_week = group["weeks"].get(week_key)
+    prior_records = [r for r in group["records"]
+                     if str(r.get("as_of")) == str(decision_as_of)
+                     and _record_revision(r) == run_revision_id]
     current_source = {**m67_meta, **tracker_meta, "state_source_as_of": state_source_as_of,
-                      "capture_mode": capture_mode}
+                      "capture_mode": capture_mode,
+                      **({"run_revision_id": run_revision_id} if run_revision_id is not None else {})}
     if prior_week is not None and prior_week.get("candidate_digest") == tracker_meta["candidate_digest"] \
             and prior_week.get("m67_sha256") != m67_meta["m67_sha256"]:
         return {"status": "skipped_source_mismatch", "counted": False,
@@ -690,17 +762,24 @@ def run_candidate_effect_sidecar(*, decision_as_of: str, regime_ledger: dict, m6
     # rewrite old candidate eligibility.
     tracker_by_frozen_key = _tracker_rows_by_frozen_key(all_tracker_rows)
     group["records"] = [
-        _frozen_record_refresh(record, tracker_by_frozen_key[(str(record["as_of"]), str(record["ts_code"]))])
-        if (str(record["as_of"]), str(record["ts_code"])) in tracker_by_frozen_key else record
+        _frozen_record_refresh(
+            record,
+            tracker_by_frozen_key[(str(record["as_of"]), record.get("evidence_origin", {}).get("run_revision_id"), str(record["ts_code"]))],
+        )
+        if (str(record["as_of"]), record.get("evidence_origin", {}).get("run_revision_id"), str(record["ts_code"])) in tracker_by_frozen_key else record
         for record in group["records"]
     ]
-    prior_records = [r for r in group["records"] if str(r.get("as_of")) == str(decision_as_of)]
+    prior_records = [r for r in group["records"]
+                     if str(r.get("as_of")) == str(decision_as_of)
+                     and _record_revision(r) == run_revision_id]
     if prior_week is not None and prior_week.get("candidate_digest") != tracker_meta["candidate_digest"]:
         if any(_record_has_mature_return(record) for record in prior_records):
             return {"status": "skipped_immutable_mature_week", "counted": False,
                     "reason_code": "immutable_mature_week",
                     "reason": "same-date tracker replacement arrived after a mature return"}
-        group["records"] = [r for r in group["records"] if str(r.get("as_of")) != str(decision_as_of)]
+        group["records"] = [r for r in group["records"] if not (
+            str(r.get("as_of")) == str(decision_as_of)
+            and _record_revision(r) == run_revision_id)]
         prior_records = []
 
     if prior_week is None or not prior_records:
@@ -709,21 +788,27 @@ def run_candidate_effect_sidecar(*, decision_as_of: str, regime_ledger: dict, m6
             record = build_candidate_effect_record(
                 candidate=candidate, stateful_regime=state,
                 forward_returns=_tracker_return_map(tracker_by_code[candidate["ts_code"]]),
-                evidence_origin={"capture_mode": capture_mode, "decision_as_of": str(decision_as_of)},
+                evidence_origin={"capture_mode": capture_mode, "decision_as_of": str(decision_as_of),
+                                 **({"run_revision_id": run_revision_id} if run_revision_id is not None else {})},
             )
             if record is not None:
                 fresh_records.append(record)
         group["records"].extend(fresh_records)
-        group["weeks"][str(decision_as_of)] = current_source
+        group["weeks"][week_key] = current_source
     else:
         # Same input reruns do not re-decide M6.7 eligibility or state.  They only apply the
         # forward tracker’s sanctioned return backfill to the already frozen candidate set.
         refreshed = [_frozen_record_refresh(record, tracker_by_code[record["ts_code"]])
                      for record in prior_records]
-        group["records"] = [r for r in group["records"] if str(r.get("as_of")) != str(decision_as_of)] + refreshed
+        group["records"] = [r for r in group["records"] if not (
+            str(r.get("as_of")) == str(decision_as_of)
+            and _record_revision(r) == run_revision_id)] + refreshed
 
     group["records"].sort(key=lambda r: (str(r["as_of"]), str(r["ts_code"])))
-    summary = summarize_candidate_effect_records(group["records"])
+    summary = summarize_candidate_effect_records(
+        group["records"],
+        official_revision_id=(run_revision_id if official_project_root is not None else None),
+    )
     # The active summary is one policy cohort.  Expose the total isolated groups as a data-quality
     # count, never by pooling old and new policy records.
     summary["data_quality"]["policy_groups"] = len(ledger["policy_groups"])
@@ -749,7 +834,9 @@ def run_regime_step(*, as_of: str, trade_calendar, v14_2_regime: str,
                     candidate_effect_ledger_path: str | None = None,
                     candidate_effect_summary_path: str | None = None,
                     candidate_effect_markdown_path: str | None = None,
-                    forward_tracker_path: str | None = None) -> dict:
+                    forward_tracker_path: str | None = None,
+                    run_revision_id: str | None = None,
+                    official_project_root: str | Path | None = None) -> dict:
     """One comparison run (orchestration; all data frames injected, so unit-testable without Tushare).
 
     Loads the ledger + comparison-record history, builds the real feature provider, runs the audited
@@ -759,6 +846,8 @@ def run_regime_step(*, as_of: str, trade_calendar, v14_2_regime: str,
     ``bootstrap=False`` raises (a weekly run must not silently create a ledger), and a bootstrap that
     yields fewer than ``BACKFILL_MIN_TRADING_DAYS`` rows raises (do not start the evidence clock from an
     insufficient window). Returns the step output."""
+    if run_revision_id is not None:
+        run_revision_id = validate_run_revision_id(run_revision_id)
     action_requested = any(v is not None for v in
                            (raw_v14_2_regime, m67_report_path, action_records_path, action_summary_path,
                             action_decision_as_of))
@@ -775,6 +864,9 @@ def run_regime_step(*, as_of: str, trade_calendar, v14_2_regime: str,
         raise ValueError("candidate-effect sidecar requires all private/public/tracker paths")
     if candidate_effect_requested and not action_requested:
         raise ValueError("candidate-effect sidecar requires the same-week D2 M6.7 source and decision date")
+    if (action_requested or candidate_effect_requested) and official_project_root is not None \
+            and run_revision_id is None:
+        raise ValueError("official regime consumers require run_revision_id")
     published_bundle = None
     if action_requested or candidate_effect_requested:
         from runners.a_short_weekly_pipeline import validate_published_weekly_bundle
@@ -791,6 +883,13 @@ def run_regime_step(*, as_of: str, trade_calendar, v14_2_regime: str,
         action_run_date = _current_run_date()
         if not is_canonical_date(action_run_date):
             raise ValueError("D2 controlled runner clock returned an invalid date")
+        if official_project_root is not None:
+            require_official_revision(official_project_root, decision_as_of, run_revision_id)
+        m67_lineage = published_bundle.weekly.get("run_lineage") or {}
+        if run_revision_id is not None and m67_lineage.get("run_revision_id") != run_revision_id:
+            raise ValueError("D2 M6.7 lineage revision does not match requested revision")
+        if run_revision_id is not None and published_bundle.receipt.get("run_revision_id") != run_revision_id:
+            raise ValueError("D2 M6.7 receipt revision does not match requested revision")
     cal = list(trade_calendar)
     ledger = load_ledger(ledger_path)
     was_empty = not (ledger.get("rows") or [])
@@ -806,7 +905,8 @@ def run_regime_step(*, as_of: str, trade_calendar, v14_2_regime: str,
     provider = feature_provider or make_feature_provider(
         daily, stk_limit, csi300, csi1000, iv_series_to_map(iv_feed))
     out = weekly_regime_step(ledger, as_of, cal, v14_2_regime, csi1000, provider,
-                             prior_comparison_records=records)
+                             prior_comparison_records=records,
+                             run_revision_id=run_revision_id)
     if was_empty and len(out["ledger"]["rows"]) < BACKFILL_MIN_TRADING_DAYS:
         raise ValueError(f"run_regime_step: insufficient bootstrap — only {len(out['ledger']['rows'])} "
                          f"< {BACKFILL_MIN_TRADING_DAYS} eligible trading days; refusing to start the "
@@ -817,7 +917,10 @@ def run_regime_step(*, as_of: str, trade_calendar, v14_2_regime: str,
     if action_requested:
         old_actions = load_comparison_records(str(action_records_path))
         refreshed = refresh_action_records(old_actions, out["comparison_records"])
-        existing_action = next((row for row in refreshed if str(row["as_of"]) == str(as_of)), None)
+        action_key = (str(as_of), run_revision_id or "legacy_revision_0")
+        existing_action = next((row for row in refreshed
+                                if (str(row["as_of"]), row.get("run_revision_id") or "legacy_revision_0")
+                                == action_key), None)
         if existing_action is None:
             m67_source = m67_provenance_from_bundle(published_bundle, as_of=as_of)
             m67_doc = published_bundle.weekly
@@ -832,6 +935,7 @@ def run_regime_step(*, as_of: str, trade_calendar, v14_2_regime: str,
                 receipt.get("as_of") == as_of
                 and receipt.get("run_id") == m67_lineage.get("run_id")
                 and receipt.get("candidate_digest") == m67_lineage.get("candidate_digest")
+                and (run_revision_id is None or receipt.get("run_revision_id") == run_revision_id)
             )
             if not source_receipt_complete:
                 raise ValueError("D2 M6.7 receipt identity is incomplete")
@@ -853,6 +957,7 @@ def run_regime_step(*, as_of: str, trade_calendar, v14_2_regime: str,
                                 "price_data_through": source_price_data_through,
                                 "source_receipt_complete": source_receipt_complete,
                                 "price_day_latest_settled": price_day_latest_settled},
+                run_revision_id=run_revision_id,
             )
             actions = merge_action_records(refreshed, current_action)
         else:
@@ -862,7 +967,10 @@ def run_regime_step(*, as_of: str, trade_calendar, v14_2_regime: str,
             # a history conflict. The engine-level merge guard remains strict for callers.
             current_action = existing_action
             actions = refreshed
-        summary = summarize_action_records(actions)
+        summary = summarize_action_records(
+            actions,
+            official_revision_id=(run_revision_id if official_project_root is not None else None),
+        )
         reminder = render_action_review_reminder(summary)
         save_action_records(actions, str(action_records_path), current_action=current_action,
                             regime_records=out["comparison_records"])
@@ -878,6 +986,8 @@ def run_regime_step(*, as_of: str, trade_calendar, v14_2_regime: str,
             m67_report_path=str(m67_report_path), tracker_path=str(forward_tracker_path),
             ledger_path=str(candidate_effect_ledger_path), summary_path=str(candidate_effect_summary_path),
             markdown_path=str(candidate_effect_markdown_path), published_bundle=published_bundle,
+            run_revision_id=run_revision_id,
+            official_project_root=official_project_root,
         )
     return out
 
@@ -943,6 +1053,8 @@ def main(argv=None) -> int:
     ap.add_argument("--bootstrap", action="store_true",
                     help="one-time 252-day backfill (heavy Tushare 执行)")
     ap.add_argument("--iv-feed", default=None, help="path to the a_short_iv_feed.json artifact")
+    ap.add_argument("--run-revision-id", default=None,
+                    help="V5 immutable weekly revision id; revision-scoped research outputs are required")
     ap.add_argument("--confirm-fetch-authorized", action="store_true",
                     help="required to perform any real Tushare fetch")
     args = ap.parse_args(argv)
@@ -952,7 +1064,12 @@ def main(argv=None) -> int:
     if not args.confirm_fetch_authorized:
         raise SystemExit("real Tushare fetch is user-authorized only: pass --confirm-fetch-authorized "
                          "(the bootstrap 252-day backfill is the first real-Tushare 执行 in V14.3)")
-    paths = lane_paths()
+    try:
+        args.run_revision_id = (validate_run_revision_id(args.run_revision_id)
+                                if args.run_revision_id is not None else None)
+    except ValueError as exc:
+        raise SystemExit(f"--run-revision-id is invalid: {exc}") from exc
+    paths = lane_paths(decision_as_of=as_of, run_revision_id=args.run_revision_id)
     ledger0 = load_ledger(paths["ledger"])
     has_ledger = bool(ledger0.get("rows"))
     if not has_ledger and not args.bootstrap:
@@ -995,6 +1112,7 @@ def main(argv=None) -> int:
                           records_path=paths["records"], panel_path=paths["panel"],
                           bootstrap=args.bootstrap, raw_v14_2_regime=args.v14_2_raw_regime,
                           m67_report_path=args.m67_report,
+                          run_revision_id=args.run_revision_id,
                           **action_paths)
     print(f"V14.3 regime comparison written (non-production): ledger n={out['ledger']['coverage']['n']}, "
           f"evidence={out['evidence']}, panel={paths['panel']}")
@@ -1016,6 +1134,7 @@ def main(argv=None) -> int:
             result=candidate_effect,
             summary_path=paths["candidate_effect_summary"],
             outcome_path=paths["candidate_effect_outcome"],
+            run_revision_id=args.run_revision_id,
         )
         if candidate_effect["status"] == "updated":
             progress = candidate_effect["summary"]["evidence_progress"]

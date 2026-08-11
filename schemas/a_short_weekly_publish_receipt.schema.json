@@ -50,6 +50,10 @@
       "type": "string",
       "minLength": 1
     },
+    "run_revision_id": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{32}$"
+    },
     "candidate_digest": {
       "type": "string",
       "pattern": "^[a-f0-9]{64}$"

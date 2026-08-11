@@ -24,6 +24,7 @@ from runners.backtest_execution import (
     validate_json_schema,
 )
 from engine.a_short_tushare_client import init_tushare_pro, is_retryable_tushare_error
+from engine.a_short_run_revision import official_analysis_input_path
 
 DEFAULT_INPUT_ROOT = ROOT / "result" / "a_short"
 DEFAULT_OUT_DIR = ROOT / "result" / "a_short" / "backtest" / "execution" / "price_data"
@@ -44,8 +45,9 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     parser.add_argument(
         "--analysis-input",
         type=Path,
-        help="analysis_input.json used to derive symbols. Defaults to result/a_short/<as-of>/analysis_input.json.",
+        help="analysis_input.json used to derive symbols. Defaults to the official revision pointer for <as-of> (legacy date-root is read-only fallback).",
     )
+    parser.add_argument("--run-revision-id", help="Explicit V5-A revision id; bypasses the official pointer.")
     parser.add_argument(
         "--symbols",
         help="Optional comma-separated ts_code list. Overrides symbols from --analysis-input.",
@@ -89,8 +91,8 @@ def output_path(as_of: str, out_path: Path | None) -> Path:
     return DEFAULT_OUT_DIR / f"execution_price_data_tushare_{as_of}.json"
 
 
-def default_analysis_input_path(as_of: str) -> Path:
-    return DEFAULT_INPUT_ROOT / as_of / "analysis_input.json"
+def default_analysis_input_path(as_of: str, run_revision_id: str | None = None) -> Path:
+    return official_analysis_input_path(ROOT, as_of, run_revision_id)
 
 
 def parse_symbols(raw: str | None) -> list[str] | None:
@@ -418,7 +420,7 @@ def write_payload(payload: dict[str, Any], path: Path) -> None:
 
 def main(argv: list[str] | None = None) -> int:
     args = parse_args(argv)
-    analysis_input_path = args.analysis_input or default_analysis_input_path(args.as_of)
+    analysis_input_path = args.analysis_input or default_analysis_input_path(args.as_of, args.run_revision_id)
     symbols = resolve_symbols(args.symbols, analysis_input_path)
     start_date, end_date = resolve_date_range(
         args.as_of, args.start_date, args.end_date, args.calendar_days

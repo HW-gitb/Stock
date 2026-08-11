@@ -36,6 +36,9 @@ from engine.a_short_managed_exit import (
 from runners.a_short_phase5_engine import ATR_MULT
 from engine.a_short_experiment_admission_registry import admission_snapshot, p3b_external_comparison_tracks
 from engine.a_short_final_action_adjudication import adjudicate_full_edge
+from engine.a_short_run_revision import (
+    require_official_revision, resolve_official_revision, validate_run_revision_id,
+)
 
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -163,7 +166,7 @@ def _validate_ledger(ledger: dict[str, Any]) -> None:
         is_current_epoch = fingerprint == current_fingerprint
         if is_current_epoch and epoch.get("admission_bindings") != current_admissions:
             raise FinalActionValidationError("private_ledger_admission_binding_drifted")
-        dates: set[str] = set()
+        identities: set[tuple[str, str | None]] = set()
         for record in epoch["records"]:
             if not isinstance(record, dict):
                 raise FinalActionValidationError("private_ledger_contract_invalid")
@@ -173,9 +176,12 @@ def _validate_ledger(ledger: dict[str, Any]) -> None:
                     record.get("capture_sha256") != _capture_digest(record)):
                 raise FinalActionValidationError("private_record_epoch_binding_drifted")
             decision_date = _date(record.get("decision_date"))
-            if decision_date in dates:
+            identity = (decision_date, record.get("run_revision_id"))
+            if identity in identities:
                 raise FinalActionValidationError("private_ledger_duplicate_week")
-            dates.add(decision_date)
+            if record.get("run_revision_id") is not None:
+                validate_run_revision_id(record["run_revision_id"])
+            identities.add(identity)
 
 
 def _load_or_initialize(root: str | Path) -> tuple[Path, dict[str, Any]]:
@@ -227,8 +233,18 @@ def _load_tracker(path: str | Path) -> list[dict[str, str]]:
     return rows
 
 
-def _tracker_cohort(rows: list[dict[str, str]], decision_date: str, source_identity: dict[str, Any]) -> list[dict[str, str]]:
-    cohort = [row for row in rows if str(row.get("as_of")) == decision_date]
+def _tracker_cohort(rows: list[dict[str, str]], decision_date: str,
+                    source_identity: dict[str, Any]) -> list[dict[str, str]]:
+    expected_revision = source_identity.get("run_revision_id")
+    if expected_revision not in (None, ""):
+        expected_revision = validate_run_revision_id(expected_revision)
+        if not any("run_revision_id" in row for row in rows):
+            raise FinalActionValidationError("tracker_revision_binding_missing")
+    cohort = [
+        row for row in rows
+        if str(row.get("as_of")) == decision_date
+        and (expected_revision is None or str(row.get("run_revision_id") or "") == expected_revision)
+    ]
     if not cohort:
         raise FinalActionValidationError("tracker_cohort_missing")
     run_ids = {str(row.get("run_id") or "") for row in cohort}
@@ -238,11 +254,15 @@ def _tracker_cohort(rows: list[dict[str, str]], decision_date: str, source_ident
             digests != {str(source_identity.get("candidate_digest") or "")} or
             not all(codes) or len(set(codes)) != len(codes)):
         raise FinalActionValidationError("tracker_cohort_binding_invalid")
+    if expected_revision is not None and any(
+            str(row.get("run_revision_id") or "") != expected_revision for row in cohort):
+        raise FinalActionValidationError("tracker_cohort_revision_mismatch")
     return sorted(cohort, key=lambda row: str(row["ts_code"]))
 
 
 def _verify_published_bundle(out_path: str | Path, receipt_path: str | Path, decision_date: str,
-                             source_identity: dict[str, Any]):
+                             source_identity: dict[str, Any],
+                             expected_revision_id: str | None = None):
     try:
         from runners.a_short_weekly_pipeline import validate_published_weekly_bundle
         bundle = validate_published_weekly_bundle(out_path, receipt_path)
@@ -255,6 +275,12 @@ def _verify_published_bundle(out_path: str | Path, receipt_path: str | Path, dec
             receipt.get("run_id") != lineage.get("run_id") or
             receipt.get("candidate_digest") != lineage.get("candidate_digest")):
         raise FinalActionValidationError("published_bundle_binding_invalid")
+    if expected_revision_id is not None:
+        expected_revision_id = validate_run_revision_id(expected_revision_id)
+        if (lineage.get("run_revision_id") != expected_revision_id or
+                receipt.get("run_revision_id") != expected_revision_id or
+                source_identity.get("run_revision_id") != expected_revision_id):
+            raise FinalActionValidationError("published_bundle_revision_binding_invalid")
     return bundle
 
 
@@ -289,12 +315,16 @@ def capture_after_published_weekly(*, root: str | Path, decision_date: str, cand
                                    source_identity: dict[str, Any], out_path: str | Path, receipt_path: str | Path,
                                    forward_eligible: bool, tracker_path: str | Path = TRACKER_DEFAULT,
                                    summary_path: str | Path = PUBLIC_SUMMARY_DEFAULT,
-                                   markdown_path: str | Path = PUBLIC_MARKDOWN_DEFAULT) -> dict[str, Any]:
+                                   markdown_path: str | Path = PUBLIC_MARKDOWN_DEFAULT,
+                                   run_revision_id: str | None = None) -> dict[str, Any]:
     """Freeze P3 selection only after the source-bound M6.7 bundle is complete."""
     decision_date = _date(decision_date)
+    if run_revision_id is not None:
+        run_revision_id = validate_run_revision_id(run_revision_id)
     private_path, ledger = _load_or_initialize(root)
     weekly_bundle = _verify_published_bundle(
-        out_path, receipt_path, decision_date, source_identity
+        out_path, receipt_path, decision_date, source_identity,
+        expected_revision_id=run_revision_id,
     )
     weekly = weekly_bundle.weekly
     if forward_eligible:
@@ -347,26 +377,45 @@ def capture_after_published_weekly(*, root: str | Path, decision_date: str, cand
         "hold_result": {"status": "pending"},
         "full_edge_result": {"status": "pending"},
     }
+    if run_revision_id is not None:
+        record["run_revision_id"] = run_revision_id
+        record["source_identity"]["run_revision_id"] = run_revision_id
     record["capture_sha256"] = _capture_digest(record)
     epoch = _active_epoch(ledger, create=True)
     assert epoch is not None
-    existing = next((item for item in epoch["records"] if item["decision_date"] == decision_date), None)
+    existing = next((item for item in epoch["records"]
+                     if item["decision_date"] == decision_date and
+                     item.get("run_revision_id") == run_revision_id), None)
     if existing is not None:
         if existing.get("capture_sha256") == record["capture_sha256"]:
             return {"status": "idempotent", "record": existing}
+        if run_revision_id is not None:
+            _atomic_write(
+                private_path.parent / "weeks" / decision_date / "revisions" / run_revision_id / "conflict.json",
+                {"schema_name": "a_short_final_action_validation_conflict",
+                 "decision_date": decision_date, "run_revision_id": run_revision_id,
+                 "reason": "mature_source_identity_changed" if _record_is_mature(existing)
+                 else "capture_replay_input_drifted"},
+            )
+            raise FinalActionValidationError("capture_replay_input_drifted")
         if _record_is_mature(existing):
             existing["conflict"] = "mature_source_identity_changed"
             _atomic_write(private_path, ledger)
             summary = settle_and_summarize(root=root, as_of=decision_date, tracker_path=tracker_path,
-                                           summary_path=summary_path, markdown_path=markdown_path)
+                                           summary_path=summary_path, markdown_path=markdown_path,
+                                           run_revision_id=run_revision_id)
             return {"status": "conflict", "record": existing, "summary": summary}
         epoch["records"].remove(existing)
     epoch["records"].append(record)
-    epoch["records"].sort(key=lambda item: item["decision_date"])
+    epoch["records"].sort(key=lambda item: (item["decision_date"], item.get("run_revision_id") or "legacy_revision_0"))
     _validate_ledger(ledger)
     _atomic_write(private_path, ledger)
+    if run_revision_id is not None:
+        revision_root = private_path.parent / "weeks" / decision_date / "revisions" / run_revision_id
+        _atomic_write(revision_root / "capture.json", record)
     summary = settle_and_summarize(root=root, as_of=decision_date, tracker_path=tracker_path,
-                                   summary_path=summary_path, markdown_path=markdown_path)
+                                   summary_path=summary_path, markdown_path=markdown_path,
+                                   run_revision_id=run_revision_id)
     return {"status": "captured", "record": record, "summary": summary}
 
 
@@ -601,9 +650,22 @@ def _p3b_ready(public_verdict: object, external_verdicts: int) -> bool:
     return isinstance(public_verdict, str) and public_verdict != "not_adjudicated" and external_verdicts >= 2
 
 
-def _summary_from_ledger(ledger: dict[str, Any], as_of: str) -> dict[str, Any]:
+def _summary_from_ledger(ledger: dict[str, Any], as_of: str,
+                         official_revision_id: str | None = None,
+                         official_project_root: str | Path | None = None) -> dict[str, Any]:
     epoch = _active_epoch(ledger, create=False)
     records = list((epoch or {}).get("records") or [])
+    if official_project_root is not None:
+        records = [
+            row for row in records
+            if row.get("run_revision_id") not in (None, "") and
+            (lambda selected: selected is not None and
+             selected["selected_revision_id"] == row.get("run_revision_id"))(
+                 resolve_official_revision(official_project_root, row["decision_date"], require=False)
+             )
+        ]
+    elif official_revision_id is not None:
+        records = [row for row in records if row.get("run_revision_id") == official_revision_id]
     valid = [record for record in records if record.get("forward_eligible") and not record.get("conflict")]
     holds = [record["hold_result"] for record in valid if (record.get("hold_result") or {}).get("status") == "settled"]
     edges = [record["full_edge_result"] for record in valid if (record.get("full_edge_result") or {}).get("status") == "settled"]
@@ -651,6 +713,7 @@ def _summary_from_ledger(ledger: dict[str, Any], as_of: str) -> dict[str, Any]:
         "schema_version": SCHEMA_VERSION,
         "summary_id": "a_short_final_action_validation",
         "as_of": as_of,
+        "official_revision_id": official_revision_id,
         "data_through": max((record["decision_date"] for record in records), default=None),
         "status": status,
         "comparison_only": True,
@@ -680,10 +743,10 @@ def _summary_from_ledger(ledger: dict[str, Any], as_of: str) -> dict[str, Any]:
     }
 
 
-def unavailable_public_summary(as_of: str) -> dict[str, Any]:
+def unavailable_public_summary(as_of: str, official_revision_id: str | None = None) -> dict[str, Any]:
     return {
         "schema_name": SCHEMA_NAME, "schema_version": SCHEMA_VERSION,
-        "summary_id": "a_short_final_action_validation", "as_of": _date(as_of), "data_through": None,
+        "summary_id": "a_short_final_action_validation", "as_of": _date(as_of), "official_revision_id": official_revision_id, "data_through": None,
         "status": "unavailable", "comparison_only": True, "automatic_policy_switch": False,
         "round_trip_cost_pct": ROUND_TRIP_COST_PCT,
         "hold_based": {"forward_weeks": 0, "review_threshold_weeks": HOLD_REVIEW_WEEKS,
@@ -766,19 +829,41 @@ def settle_and_summarize(*, root: str | Path | None, as_of: str, tracker_path: s
                          daily_cache_path: str | Path | None = None,
                          summary_path: str | Path = PUBLIC_SUMMARY_DEFAULT,
                          markdown_path: str | Path = PUBLIC_MARKDOWN_DEFAULT,
-                         write_public: bool = True) -> dict[str, Any]:
+                         write_public: bool = True,
+                         run_revision_id: str | None = None,
+                         official_project_root: str | Path | None = None) -> dict[str, Any]:
     """``write_public=False`` is the weekly-pipeline path: the published pair may
     only move after the official bundle publishes and the private capture lands."""
     as_of = _date(as_of)
+    if run_revision_id is not None:
+        run_revision_id = validate_run_revision_id(run_revision_id)
     if not root:
-        return unavailable_public_summary(as_of)
+        return unavailable_public_summary(as_of, run_revision_id)
     try:
+        official_revision_id = None
+        if official_project_root is not None and run_revision_id is None:
+            raise FinalActionValidationError("official settlement requires run_revision_id")
+        if official_project_root is not None and run_revision_id is not None:
+            official_revision_id = require_official_revision(
+                official_project_root, as_of, run_revision_id
+            )
         private_path, ledger = _load_or_initialize(root)
         epoch = _active_epoch(ledger, create=False)
         if epoch is not None:
             tracker = _load_tracker(tracker_path)
             execution = _load_execution_cache(daily_cache_path)
             for record in epoch["records"]:
+                if official_project_root is not None:
+                    record_revision = record.get("run_revision_id")
+                    if record_revision in (None, ""):
+                        continue
+                    selected = resolve_official_revision(
+                        official_project_root, record["decision_date"], require=False,
+                    )
+                    if selected is None or selected["selected_revision_id"] != record_revision:
+                        continue
+                elif run_revision_id is not None and record.get("run_revision_id") != run_revision_id:
+                    continue
                 try:
                     cohort = _tracker_cohort(tracker, record["decision_date"], record["source_identity"])
                 except FinalActionValidationError as exc:
@@ -791,14 +876,17 @@ def settle_and_summarize(*, root: str | Path | None, as_of: str, tracker_path: s
                 _settle_full_edge(record, execution)
             _validate_ledger(ledger)
             _atomic_write(private_path, ledger)
-        summary = _summary_from_ledger(ledger, as_of)
+        summary = _summary_from_ledger(
+            ledger, as_of, official_revision_id=official_revision_id,
+            official_project_root=official_project_root,
+        )
         if write_public:
             write_public_summary(summary, summary_path=summary_path, markdown_path=markdown_path)
         return summary
     except Exception:
         # An outage must not overwrite last week's checked pair with a fresh
         # "unavailable" one; the caller records it in the sidecar outcomes.
-        return unavailable_public_summary(as_of)
+        return unavailable_public_summary(as_of, run_revision_id)
 
 
 def main(argv: list[str] | None = None) -> int:

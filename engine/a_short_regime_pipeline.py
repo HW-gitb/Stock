@@ -32,10 +32,12 @@ from engine.a_short_regime_classifier import build_comparison_record
 from engine.a_short_regime_comparison import (
     backfill_forward_returns, summarize_comparison_records, render_regime_comparison_block,
 )
+from engine.a_short_run_revision import validate_run_revision_id
 
 
 def extend_ledger(existing_ledger: dict, as_of: str, trade_calendar: Iterable[str],
-                  feature_provider: Callable[[str], dict]) -> dict:
+                  feature_provider: Callable[[str], dict],
+                  run_revision_id: str | None = None) -> dict:
     """Extend the daily-feature ledger up to ``as_of`` via the fail-closed cadence workflow.
 
     ``feature_provider(date)`` must return the ``a_short_market_regime_daily`` row for ``date`` (in
@@ -46,6 +48,8 @@ def extend_ledger(existing_ledger: dict, as_of: str, trade_calendar: Iterable[st
     provider output is required to be dated exactly ``date``; the merged ledger is re-validated through
     the sanctioned current/read gate (:func:`validate_ledger`, incl. freshness through ``as_of``).
     Returns the new ledger dict (does NOT write it — persistence is ②b-2)."""
+    if run_revision_id is not None:
+        run_revision_id = validate_run_revision_id(run_revision_id)
     cal = list(trade_calendar)   # materialize ONCE — passed to 3 helpers; a generator would empty out
     existing_rows = list(existing_ledger.get("rows") or [])
     validate_ledger_for_append(existing_ledger, as_of=as_of, trade_calendar=cal)
@@ -56,6 +60,13 @@ def extend_ledger(existing_ledger: dict, as_of: str, trade_calendar: Iterable[st
         if not isinstance(row, dict) or str(row.get("as_of")) != str(d):
             raise ValueError(f"extend_ledger: feature_provider({d!r}) must return a daily-feature row "
                              f"dict with as_of=={d!r}, got {row!r}")
+        row = dict(row)
+        if run_revision_id is not None:
+            existing_revision = row.get("run_revision_id")
+            if existing_revision not in (None, run_revision_id):
+                raise ValueError("extend_ledger: feature row revision does not match requested revision")
+            row["run_revision_id"] = run_revision_id
+            row.setdefault("observed_data_through", str(d))
         new_rows.append(row)
     merged = merge_rows(existing_rows, new_rows, as_of)
     if not existing_rows and not merged:
@@ -64,7 +75,7 @@ def extend_ledger(existing_ledger: dict, as_of: str, trade_calendar: Iterable[st
         # ledger (an empty pre-bootstrap envelope is fine for validate_ledger, NOT for this driver).
         raise ValueError(f"extend_ledger: bootstrap from empty ledger produced no rows — no eligible "
                          f"trading day <= as_of {as_of} in the calendar (bad/empty calendar)")
-    new_ledger = build_ledger(merged)
+    new_ledger = build_ledger(merged, run_revision_id=run_revision_id)
     validate_ledger(new_ledger, as_of=as_of, trade_calendar=cal)
     return new_ledger
 
@@ -73,7 +84,8 @@ def weekly_regime_step(existing_ledger: dict, as_of: str, trade_calendar: Iterab
                        v14_2_regime: str, csi1000: pd.DataFrame,
                        feature_provider: Callable[[str], dict],
                        prior_comparison_records: Iterable[dict] = (),
-                       generated_at: str | None = None) -> dict:
+                       generated_at: str | None = None,
+                       run_revision_id: str | None = None) -> dict:
     """Run one weekly V14.3 comparison step (pure). Returns the new ledger, this week's audited
     comparison record, the audited comparison-record history, the evidence summary, and the
     comparison-only panel markdown.
@@ -82,16 +94,21 @@ def weekly_regime_step(existing_ledger: dict, as_of: str, trade_calendar: Iterab
     week's not-yet-elapsed horizons stay pending and no look-ahead can advance the evidence clock.
     Comparison-only: this drives nothing; V14.2 stays the frozen production baseline.
     """
+    if run_revision_id is not None:
+        run_revision_id = validate_run_revision_id(run_revision_id)
     cal = list(trade_calendar)   # materialize once (reused by extend_ledger)
-    new_ledger = extend_ledger(existing_ledger, as_of, cal, feature_provider)
+    new_ledger = extend_ledger(existing_ledger, as_of, cal, feature_provider,
+                               run_revision_id=run_revision_id)
     record = build_comparison_record(new_ledger["rows"], v14_2_regime, as_of=as_of,
-                                     generated_at=generated_at)
+                                     generated_at=generated_at,
+                                     run_revision_id=run_revision_id)
     # same-week rerun semantics: if the loaded history already has this as_of, an IDENTICAL
     # classification is a legitimate rerun (replace the row — forward returns are re-derived by the
     # audit anyway); a DIFFERENT classification for the same week is an immutable-history conflict.
     prior = list(prior_comparison_records)
     cur_as_of = str(record["as_of"])
-    same = [r for r in prior if str(r.get("as_of")) == cur_as_of]
+    same = [r for r in prior if str(r.get("as_of")) == cur_as_of
+            and (r.get("run_revision_id") or None) == run_revision_id]
     if same:
         if len(same) > 1:
             raise ValueError(f"weekly_regime_step: prior_comparison_records already has duplicate "
@@ -99,7 +116,8 @@ def weekly_regime_step(existing_ledger: dict, as_of: str, trade_calendar: Iterab
         if not _same_classification(same[0], record):
             raise ValueError(f"weekly_regime_step: same-week rerun for {cur_as_of} differs from history "
                              f"in immutable classification fields (immutable-history conflict)")
-        all_records = [r for r in prior if str(r.get("as_of")) != cur_as_of] + [record]
+        all_records = [r for r in prior if not (str(r.get("as_of")) == cur_as_of
+                                                and (r.get("run_revision_id") or None) == run_revision_id)] + [record]
     else:
         all_records = prior + [record]
     audited = backfill_forward_returns(all_records, csi1000, as_of)
@@ -109,7 +127,8 @@ def weekly_regime_step(existing_ledger: dict, as_of: str, trade_calendar: Iterab
     return {
         "ledger": new_ledger,
         "comparison_record": current,
-        "comparison_records": sorted(audited, key=lambda r: str(r.get("as_of"))),   # stable persist order
+        "comparison_records": sorted(audited, key=lambda r: (str(r.get("as_of")),
+                                                               str(r.get("run_revision_id") or ""))),
         "evidence": evidence,
         "panel_markdown": panel,
         "boundary": {"production": False, "comparison_only": True,
@@ -125,4 +144,5 @@ _CLASSIFICATION_KEYS = ("schema_name", "schema_version", "as_of", "v14_2_regime"
 
 
 def _same_classification(a: dict, b: dict) -> bool:
-    return all(a.get(k) == b.get(k) for k in _CLASSIFICATION_KEYS)
+    return all(a.get(k) == b.get(k) for k in _CLASSIFICATION_KEYS) and \
+        (a.get("run_revision_id") or None) == (b.get("run_revision_id") or None)

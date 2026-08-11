@@ -26,6 +26,10 @@ from typing import Any, Mapping, Sequence
 from engine import a_short_evidence_epoch_mode as epoch_mode
 from engine.a_short_market_history import canonical_dates, percentile_rank
 from engine import a_short_margin_overheat as production_margin
+from engine.a_short_run_revision import (
+    iter_private_week_roots, private_week_root, resolve_official_revision,
+    require_official_revision, validate_run_revision_id,
+)
 
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -1967,7 +1971,8 @@ def validate_margin_ledger(ledger: Mapping[str, Any]) -> None:
     _schema_validate(dict(ledger), LEDGER_SCHEMA_PATH)
     if ledger.get("track_id") != TRACK_ID or ledger.get("question_id") != QUESTION_ID:
         raise MarginOverheatCashControlError("margin-overheat ledger namespace drifted")
-    keys = [(row["decision_date"], row["question_id"]) for row in ledger.get("entries", [])]
+    keys = [(row["decision_date"], row.get("run_revision_id"), row["question_id"])
+            for row in ledger.get("entries", [])]
     if len(keys) != len(set(keys)):
         raise MarginOverheatCashControlError("margin-overheat ledger has duplicate decision-date entries")
     batch = ledger.get("experiment_batch_id")
@@ -2243,12 +2248,13 @@ def validate_margin_public_summary(summary: Mapping[str, Any]) -> None:
 
 
 def _public_margin_summary_payload(status: str, *, as_of: str, evidence_status: str = "insufficient_data",
-                                   stage: str = STAGE_A, pending_user_receipt_count: int = 0) -> dict[str, Any]:
+                                   stage: str = STAGE_A, pending_user_receipt_count: int = 0,
+                                   official_revision_id: str | None = None) -> dict[str, Any]:
     """Build the fixed de-identified shape without touching the schema filesystem."""
     if status not in {PUBLIC_STATUS_NOT_CONFIGURED, PUBLIC_STATUS_CURRENT, PUBLIC_STATUS_UNAVAILABLE}:
         raise MarginOverheatCashControlError("margin-overheat public summary status is unknown")
     count = _strict_nonnegative_int(pending_user_receipt_count, "pending_user_receipt_count")
-    return {
+    payload = {
         "schema_name": "a_short_margin_overheat_cash_control_public_summary",
         "schema_version": CAPTURE_SCHEMA_VERSION,
         "track_id": TRACK_ID,
@@ -2265,13 +2271,18 @@ def _public_margin_summary_payload(status: str, *, as_of: str, evidence_status: 
         ),
         "production_unchanged": True,
     }
+    if official_revision_id is not None:
+        payload["official_revision_id"] = official_revision_id
+    return payload
 
 
 def _public_margin_summary(status: str, *, as_of: str, evidence_status: str = "insufficient_data",
-                           stage: str = STAGE_A, pending_user_receipt_count: int = 0) -> dict[str, Any]:
+                           stage: str = STAGE_A, pending_user_receipt_count: int = 0,
+                           official_revision_id: str | None = None) -> dict[str, Any]:
     summary = _public_margin_summary_payload(
         status, as_of=as_of, evidence_status=evidence_status, stage=stage,
         pending_user_receipt_count=pending_user_receipt_count,
+        official_revision_id=official_revision_id,
     )
     _schema_validate(summary, PUBLIC_SUMMARY_SCHEMA_PATH)
     return summary
@@ -2370,11 +2381,14 @@ def capture_margin_overheat_week(
     reports: Sequence[Mapping[str, Any]], predicate_facts: Mapping[str, Any] | None = None,
     forward_eligible: bool = False,
     stage: str = STAGE_A,
+    run_revision_id: str | None = None,
 ) -> dict[str, Any]:
     """Capture one canonical week after the caller proves the official bundle exists."""
     private_root = _private_root(root)
     _recover_private_artifact_set(private_root)
     decision_date = _require_date8(decision_date, "decision_date")
+    if run_revision_id is not None:
+        run_revision_id = validate_run_revision_id(run_revision_id)
     if stage not in (STAGE_A, STAGE_B):
         raise MarginOverheatCashControlError("margin-overheat capture comparison stage is invalid")
     stage_root, stage_b_admission = _stage_storage_root(
@@ -2443,6 +2457,7 @@ def capture_margin_overheat_week(
                            "arms": arms}
     payload = {
         "decision_date": decision_date,
+        "run_revision_id": run_revision_id,
         "run_date": run_date,
         "price_data_through": price_data_through,
         "official_m67_digest": official_digest,
@@ -2481,7 +2496,8 @@ def capture_margin_overheat_week(
     _validate_margin_capture(capture)
     receipt = _capture_source_receipt(payload)
     validate_margin_source_receipt(receipt, capture)
-    week_dir = stage_root / "weeks" / decision_date
+    week_dir = (private_week_root(stage_root, decision_date, run_revision_id)
+                if run_revision_id is not None else stage_root / "weeks" / decision_date)
     capture_path, receipt_path = week_dir / "capture.json", week_dir / "source_receipt.json"
     if capture_path.exists() or receipt_path.exists():
         if not capture_path.is_file() or not receipt_path.is_file():
@@ -2692,6 +2708,7 @@ def _settle_capture(capture: Mapping[str, Any], document: Mapping[str, Any]) -> 
                 for row in payload["arms"]]
         result_payload = {
             "question_id": QUESTION_ID, "decision_date": payload["decision_date"],
+            "run_revision_id": payload.get("run_revision_id"),
             "run_date": payload["run_date"], "price_data_through": payload["price_data_through"],
             "daily_cache_digest": payload["daily_cache_digest"], "status": "no_count",
             "reason": unavailable_reason, "arms": arms,
@@ -2713,6 +2730,7 @@ def _settle_capture(capture: Mapping[str, Any], document: Mapping[str, Any]) -> 
             "pending" if any(row["status"] == "pending" for row in arm_results) else "settled"
         result_payload = {
             "question_id": QUESTION_ID, "decision_date": payload["decision_date"],
+            "run_revision_id": payload.get("run_revision_id"),
             "run_date": payload["run_date"], "price_data_through": payload["price_data_through"],
             "daily_cache_digest": payload["daily_cache_digest"], "status": status,
             "reason": sorted(set(reasons))[0] if reasons else None, "arms": arm_results,
@@ -3503,11 +3521,17 @@ def adjudicate_margin_overheat_cash_control(
 def settle_margin_overheat_from_daily_cache(
         *, root: str | Path, daily_cache_document: Mapping[str, Any],
         stage: str = STAGE_A, as_of: str | None = None,
+        run_revision_id: str | None = None,
+        official_project_root: str | Path | None = None,
 ) -> dict[str, Any]:
     """Recompute all private captures from one existing cache, then commit one artifact set."""
     private_root = _private_root(root)
     _recover_private_artifact_set(private_root)
     operation_as_of = _stage_admission_as_of(as_of)
+    if run_revision_id is not None:
+        run_revision_id = validate_run_revision_id(run_revision_id)
+    if official_project_root is not None and run_revision_id is None:
+        raise MarginOverheatCashControlError("official settlement requires run_revision_id")
     stage_root, stage_b_admission = _stage_storage_root(
         private_root, stage=stage, as_of=operation_as_of,
     )
@@ -3530,17 +3554,42 @@ def settle_margin_overheat_from_daily_cache(
     if ledger["stage"] != stage:
         raise MarginOverheatCashControlError("margin-overheat settlement stage root drifted")
     weeks_root = stage_root / "weeks"
-    capture_files = [] if not weeks_root.exists() else sorted(
-        path for path in weeks_root.iterdir() if path.is_dir()
-    )
+    if official_project_root is not None:
+        # The current invocation id is only an identity check.  Historical
+        # settlement must inspect every revision directory and resolve the
+        # official id independently for each decision date.
+        capture_files = []
+        for decision_date, revision, week_dir in iter_private_week_roots(stage_root):
+            if revision is None:
+                continue
+            selected = resolve_official_revision(
+                official_project_root, decision_date, require=False,
+            )
+            if selected is None or selected["selected_revision_id"] != revision:
+                continue
+            capture_files.append((decision_date, week_dir))
+    elif run_revision_id is None:
+        capture_files = [(path.name, path) for path in sorted(weeks_root.iterdir()) if path.is_dir()] if weeks_root.exists() else []
+    else:
+        capture_files = [
+            (path.name, private_week_root(stage_root, path.name, run_revision_id))
+            for path in weeks_root.iterdir() if path.is_dir() and path.name.isdigit()
+            and private_week_root(stage_root, path.name, run_revision_id).is_dir()
+        ] if weeks_root.exists() else []
     captures: dict[str, dict] = {}
     outcomes: dict[str, dict] = {}
     receipts: dict[str, dict] = {}
-    for week_dir in capture_files:
+    for decision_date, week_dir in capture_files:
+        if official_project_root is not None and decision_date == operation_as_of and run_revision_id is not None:
+            # A pre-selector invocation may still point at an older same-day
+            # revision; it is audit-only and must not be settled as this run.
+            selected = resolve_official_revision(official_project_root, decision_date, require=False)
+            if selected is None or selected["selected_revision_id"] != run_revision_id:
+                continue
         capture_path, receipt_path = week_dir / "capture.json", week_dir / "source_receipt.json"
         if not capture_path.is_file() or not receipt_path.is_file():
             raise MarginOverheatCashControlError(
-                f"{week_dir.name}: partial margin-overheat capture artifact set"
+                f"{decision_date}: partial margin-overheat capture artifact set"
             )
         capture = _load_private_json(capture_path, "capture")
         receipt = _load_private_json(receipt_path, "source receipt")
@@ -3560,10 +3609,12 @@ def settle_margin_overheat_from_daily_cache(
                     )
             # A pending capture may consume a later in-place cache upgrade;
             # unrelated rows never enter current_slice_digest.
-        captures[week_dir.name] = capture
-        receipts[week_dir.name] = receipt
+        captures[decision_date] = capture
+        receipts[decision_date] = receipt
         outcome = _settle_capture(capture, document)
-        outcomes[week_dir.name] = outcome
+        outcomes[decision_date] = outcome
+    if official_project_root is not None and not captures:
+        return {"status": "no_official_margin_captures", "production_unchanged": True}
     settled_receipts: dict[str, dict] = {}
     for date, outcome in outcomes.items():
         capture = captures[date]
@@ -3581,6 +3632,7 @@ def settle_margin_overheat_from_daily_cache(
         outcome = outcomes[date]
         new_entries.append({
             "decision_date": date,
+            "run_revision_id": capture["payload"].get("run_revision_id"),
             "run_date": capture["payload"]["run_date"],
             "price_data_through": capture["payload"]["price_data_through"],
             "question_id": QUESTION_ID,
@@ -3605,9 +3657,12 @@ def settle_margin_overheat_from_daily_cache(
         stage_root / "reminder.json": _json_bytes(reminder),
     }
     for date, outcome in outcomes.items():
+        capture = captures[date]
         receipt = settled_receipts[date]
-        writes[stage_root / "weeks" / date / "outcome.json"] = _json_bytes(outcome)
-        writes[stage_root / "weeks" / date / "source_receipt.json"] = _json_bytes(receipt)
+        week_root = (private_week_root(stage_root, date, capture["payload"].get("run_revision_id"))
+                     if capture["payload"].get("run_revision_id") is not None else stage_root / "weeks" / date)
+        writes[week_root / "outcome.json"] = _json_bytes(outcome)
+        writes[week_root / "source_receipt.json"] = _json_bytes(receipt)
     from engine.a_short_artifact_set_transaction import commit_artifact_set
     commit_artifact_set(_private_journal_dir(stage_root), writes)
     return {"status": "settled_from_existing_cache", "ledger": new_ledger,
@@ -3616,10 +3671,14 @@ def settle_margin_overheat_from_daily_cache(
 
 def settle_and_summarize_margin_overheat_weekly(*, root: str | Path | None,
                                                  daily_cache_path: str | Path | None,
-                                                 as_of: str, strict: bool = False) -> dict[str, Any]:
+                                                 as_of: str, strict: bool = False,
+                                                 run_revision_id: str | None = None,
+                                                 official_project_root: str | Path | None = None) -> dict[str, Any]:
     """Settle/adjudicate before M6.7 and suppress stale reminders on any fault."""
     private_root = None
     try:
+        if official_project_root is not None and run_revision_id is None:
+            raise MarginOverheatCashControlError("official summary requires run_revision_id")
         if root is None:
             return _public_margin_summary(PUBLIC_STATUS_NOT_CONFIGURED, as_of=as_of)
         private_root = _private_root(root)
@@ -3631,6 +3690,8 @@ def settle_and_summarize_margin_overheat_weekly(*, root: str | Path | None,
         document = load_margin_overheat_daily_cache(daily_cache_path)
         result = settle_margin_overheat_from_daily_cache(
             root=private_root, daily_cache_document=document, as_of=as_of,
+            run_revision_id=run_revision_id,
+            official_project_root=official_project_root,
         )
         reminder = result["reminder"]
         validate_margin_reminder(reminder)
@@ -3642,6 +3703,7 @@ def settle_and_summarize_margin_overheat_weekly(*, root: str | Path | None,
             evidence_status=state["evidence_status"],
             stage=state["stage"],
             pending_user_receipt_count=len(reminder["reminders"]),
+            official_revision_id=run_revision_id if official_project_root is not None else None,
         )
         validate_margin_public_summary(summary)
         return summary
@@ -3662,6 +3724,7 @@ def capture_margin_overheat_after_published_weekly(
     official_bundle: Any, daily_cache_path: str | Path | None,
     margin_facts: Mapping[str, Any], predicate_facts: Mapping[str, Any] | None = None,
     forward_eligible: bool = False,
+    run_revision_id: str | None = None,
 ) -> dict[str, Any]:
     """Capture only after the weekly runner has validated JSON/Markdown/receipt."""
     if daily_cache_path is None:
@@ -3672,4 +3735,5 @@ def capture_margin_overheat_after_published_weekly(
         official_bundle=official_bundle, margin_facts=margin_facts,
         daily_cache_document=document, candidates=candidates, reports=reports,
         predicate_facts=predicate_facts, forward_eligible=forward_eligible,
+        run_revision_id=run_revision_id,
     )

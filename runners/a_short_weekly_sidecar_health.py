@@ -27,6 +27,7 @@ if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
 from engine.a_short_observability import safe_exception_summary  # noqa: E402
+from engine.a_short_run_revision import validate_run_revision_id  # noqa: E402
 
 HEALTH_SCHEMA = ROOT / "schemas" / "a_short_weekly_sidecar_health.schema.json"
 OUTCOME_SCHEMA = ROOT / "schemas" / "a_short_weekly_sidecar_outcomes.schema.json"
@@ -155,10 +156,13 @@ def _artifact_matches_schema(name: str, path: Path) -> bool:
     return _artifact_validation(name, path)[0]
 
 
-def _authoritative_artifact_path(project_root: Path, name: str, as_of: str) -> Path:
+def _authoritative_artifact_path(project_root: Path, name: str, as_of: str,
+                                 iv_feed_path: Path | None = None) -> Path:
     if name == "candidate_effect":
         return project_root / "research/results/a_short/regime_candidate_effect_summary.json"
     if name == "iv_feed":
+        if iv_feed_path is not None:
+            return iv_feed_path
         return project_root / f"research/results/a_short/iv_feed_{as_of}/iv_feed.json"
     raise ValueError(f"authoritative sidecar has no artifact path: {name}")
 
@@ -176,6 +180,7 @@ def _failed_m67_receipt_evidence(receipt_path: Path, as_of: str) -> dict[str, An
             "status": "failed",
             "run_id": None,
             "candidate_digest": None,
+            "run_revision_id": receipt.get("run_revision_id"),
             "source_receipt_sha256": hashlib.sha256(receipt_bytes).hexdigest(),
         }
     except (
@@ -211,6 +216,7 @@ def _m67_evidence(
                 "status": "complete",
                 "run_id": str(lineage.get("run_id") or "") or None,
                 "candidate_digest": str(lineage.get("candidate_digest") or "") or None,
+                "run_revision_id": str(lineage.get("run_revision_id") or "") or None,
                 "source_receipt_sha256": bundle.receipt_sha256,
             }
         except Exception:
@@ -221,6 +227,7 @@ def _m67_evidence(
                 "status": "unavailable",
                 "run_id": None,
                 "candidate_digest": None,
+                "run_revision_id": None,
                 "source_receipt_sha256": None,
             }
     if receipt_path.is_file() and not weekly_path.exists() and not markdown_path.exists():
@@ -231,6 +238,7 @@ def _m67_evidence(
             "status": "unavailable",
             "run_id": None,
             "candidate_digest": None,
+            "run_revision_id": None,
             "source_receipt_sha256": None,
         }
     if any(present):
@@ -238,12 +246,14 @@ def _m67_evidence(
             "status": "unavailable",
             "run_id": None,
             "candidate_digest": None,
+            "run_revision_id": None,
             "source_receipt_sha256": None,
         }
     return {
         "status": "unavailable",
         "run_id": None,
         "candidate_digest": None,
+        "run_revision_id": None,
         "source_receipt_sha256": None,
     }
 
@@ -291,7 +301,8 @@ def _max_json_as_of(path: Path, *, row_key: str | None = None) -> str | None:
     return _safe_date(value.get("as_of")) or _safe_date(value.get("latest_evidence_as_of"))
 
 
-def _probe(project_root: Path, name: str, as_of: str) -> tuple[str | None, str | None]:
+def _probe(project_root: Path, name: str, as_of: str,
+           iv_feed_path: Path | None = None) -> tuple[str | None, str | None]:
     """Return observed decision/data dates from de-identified artifacts."""
     paths: dict[str, tuple[Path, str | None]] = {
         "regime_daily": (project_root / "research/results/a_short/regime_daily_ledger.json", "rows"),
@@ -314,7 +325,7 @@ def _probe(project_root: Path, name: str, as_of: str) -> tuple[str | None, str |
         return (as_of if path.is_dir() else None, None)
     if name == "iv_feed":
         observed = _max_json_as_of(
-            project_root / f"research/results/a_short/iv_feed_{as_of}/iv_feed.json"
+            iv_feed_path or project_root / f"research/results/a_short/iv_feed_{as_of}/iv_feed.json"
         )
         return observed, None
     path_info = paths.get(name)
@@ -336,7 +347,8 @@ def _probe(project_root: Path, name: str, as_of: str) -> tuple[str | None, str |
     return observed, None
 
 
-def _normalise_outcome(raw: dict[str, Any], *, as_of: str, project_root: Path) -> dict[str, Any]:
+def _normalise_outcome(raw: dict[str, Any], *, as_of: str, project_root: Path,
+                       iv_feed_path: Path | None = None) -> dict[str, Any]:
     name = str(raw.get("name") or "")
     expected = bool(raw.get("expected"))
     attempted = bool(raw.get("attempted"))
@@ -345,7 +357,7 @@ def _normalise_outcome(raw: dict[str, Any], *, as_of: str, project_root: Path) -
     observed_decision = _safe_date(raw.get("observed_decision_as_of"))
     observed_data = _safe_date(raw.get("observed_data_through"))
     required_artifact = (
-        _authoritative_artifact_path(project_root, name, as_of)
+        _authoritative_artifact_path(project_root, name, as_of, iv_feed_path)
         if name in AUTHORITATIVE_ARTIFACT_SIDECARS else None
     )
     artifact_valid = None
@@ -361,7 +373,7 @@ def _normalise_outcome(raw: dict[str, Any], *, as_of: str, project_root: Path) -
             raw = dict(raw)
             raw["error_code"] = raw.get("error_code") or artifact_code
             raw["error_detail"] = raw.get("error_detail") or artifact_detail
-    probed_decision, probed_data = _probe(project_root, name, as_of)
+    probed_decision, probed_data = _probe(project_root, name, as_of, iv_feed_path)
     if name in AUTHORITATIVE_ARTIFACT_SIDECARS or probed_decision is not None:
         observed_decision = probed_decision
     if name in AUTHORITATIVE_ARTIFACT_SIDECARS or probed_data is not None:
@@ -498,12 +510,16 @@ def build_health(
     project_root: Path = ROOT,
     m67_out_dir: Path | None = None,
     m67_invocation: str | None = None,
+    iv_feed_path: Path | None = None,
+    run_revision_id: str | None = None,
 ) -> dict[str, Any]:
     _validate_sidecar_validation_buckets()
     if m67_invocation is None:
         m67_invocation = "requested" if m67_out_dir is not None else "not_run"
     if m67_invocation not in {"requested", "skipped", "not_run"}:
         raise ValueError("m67_invocation must be requested, skipped, or not_run")
+    if run_revision_id not in (None, ""):
+        run_revision_id = validate_run_revision_id(run_revision_id)
     manifests = [manifest for manifest in (launcher_manifest,) if manifest]
     if m67_invocation == "requested" and pipeline_manifest:
         manifests.append(pipeline_manifest)
@@ -511,6 +527,7 @@ def build_health(
     raw_by_name: dict[str, dict[str, Any]] = {}
     manifest_run_ids: set[str] = set()
     manifest_candidate_digests: set[str] = set()
+    manifest_revisions: set[str] = set()
     for manifest in manifests:
         expected.extend(str(name) for name in manifest.get("expected_sidecars", []))
         for raw in manifest.get("sidecars", []):
@@ -520,11 +537,18 @@ def build_health(
             manifest_run_ids.add(str(manifest["run_id"]))
         if manifest.get("candidate_digest"):
             manifest_candidate_digests.add(str(manifest["candidate_digest"]))
+        if manifest.get("run_revision_id") not in (None, ""):
+            manifest_revisions.add(validate_run_revision_id(manifest["run_revision_id"]))
+    if len(manifest_revisions) > 1:
+        raise ValueError("launcher/pipeline manifests use different run_revision_id values")
+    if run_revision_id is not None and manifest_revisions and manifest_revisions != {run_revision_id}:
+        raise ValueError("manifest run_revision_id does not match requested run revision")
     evidence = (
         {
             "status": m67_invocation,
             "run_id": None,
             "candidate_digest": None,
+            "run_revision_id": None,
             "source_receipt_sha256": None,
         }
         if m67_invocation != "requested"
@@ -535,6 +559,7 @@ def build_health(
                 "status": "unavailable",
                 "run_id": None,
                 "candidate_digest": None,
+                "run_revision_id": None,
                 "source_receipt_sha256": None,
             }
         )
@@ -550,8 +575,17 @@ def build_health(
             "status": "unavailable",
             "run_id": None,
             "candidate_digest": None,
+            "run_revision_id": None,
             "source_receipt_sha256": None,
         }
+    evidence_revision = evidence.get("run_revision_id")
+    if evidence_revision not in (None, ""):
+        evidence_revision = validate_run_revision_id(evidence_revision)
+    if manifest_revisions and evidence_revision not in (None, next(iter(manifest_revisions))):
+        raise ValueError("M6.7 bundle run_revision_id does not match sidecar manifests")
+    if run_revision_id is not None and evidence_revision not in (None, run_revision_id):
+        raise ValueError("M6.7 bundle run_revision_id does not match requested run revision")
+    resolved_revision = run_revision_id or (next(iter(manifest_revisions)) if manifest_revisions else evidence_revision)
     expected = list(dict.fromkeys(expected))
     for name in expected:
         if name not in SIDECAR_SPECS:
@@ -565,7 +599,10 @@ def build_health(
                 "execution_status": "missing_outcome", "progress_status": "unavailable",
                 "error_code": "missing_outcome",
             }
-        entries.append(_normalise_outcome(raw, as_of=as_of, project_root=project_root))
+        entries.append(_normalise_outcome(
+            raw, as_of=as_of, project_root=project_root,
+            iv_feed_path=iv_feed_path,
+        ))
     _validate_health_reason_contract(entries)
     failed = sum(1 for item in entries if item["execution_status"] in {"failed", "missing_outcome"} or
                  (item["expected"] and item["progress_status"] in {"stalled", "unavailable"}))
@@ -587,6 +624,7 @@ def build_health(
         "schema_version": "1.0.0",
         "as_of": as_of,
         "generated_at": datetime.now(timezone.utc).isoformat(timespec="seconds"),
+        "run_revision_id": resolved_revision,
         "run_id": evidence.get("run_id"),
         "candidate_digest": evidence.get("candidate_digest"),
         "m67_status": m67_status,
@@ -622,6 +660,7 @@ def write_health_bundle(payload: dict[str, Any], out_dir: Path) -> tuple[Path, P
         "schema_name": "a_short_weekly_sidecar_health_receipt",
         "schema_version": "1.0.0",
         "as_of": payload["as_of"],
+        "run_revision_id": payload.get("run_revision_id"),
         "run_id": payload.get("run_id"),
         "candidate_digest": payload.get("candidate_digest"),
         "health_sha256": None,
@@ -657,6 +696,8 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--out-dir", required=True)
     parser.add_argument("--launcher-outcomes")
     parser.add_argument("--pipeline-outcomes")
+    parser.add_argument("--iv-feed", help="revision-scoped IV feed for authoritative health validation")
+    parser.add_argument("--run-revision-id", help="expected V5 revision shared by M6.7 and both manifests")
     parser.add_argument(
         "--m67-invocation",
         choices=["requested", "skipped", "not_run"],
@@ -671,6 +712,8 @@ def main(argv: list[str] | None = None) -> int:
         project_root=Path(args.project_root).resolve(),
         m67_out_dir=out_dir,
         m67_invocation=args.m67_invocation,
+        iv_feed_path=Path(args.iv_feed).resolve() if args.iv_feed else None,
+        run_revision_id=args.run_revision_id,
     )
     paths = write_health_bundle(payload, out_dir)
     print(f"[sidecar-health] overall={payload['overall']} m67={payload['m67_status']} failed={payload['failed_count']} stalled={payload['stalled_count']} partial={payload['partial_count']} -> {paths[1].name}")

@@ -28,6 +28,7 @@ from engine.a_short_factor_comparison_v2 import (
 )
 from engine.a_short_factor_comparison_v2_adjudication import adjudicate_v2_from_private_ledger
 from engine.a_short_experiment_admission_registry import admission_snapshot
+from engine.a_short_run_revision import validate_run_revision_id
 
 
 DAILY_CACHE_SCHEMA_PATH = ROOT / "schemas" / "a_short_factor_comparison_v2_daily_cache.schema.json"
@@ -106,7 +107,8 @@ def _public_admission_snapshot() -> dict:
 
 
 def _public_summary(status: str, reminder_count: int = 0, *, root: str | Path | None,
-                    as_of: str) -> dict:
+                    as_of: str, run_revision_id: str | None = None,
+                    official_project_root: str | Path | None = None) -> dict:
     if status == PUBLIC_STATUS_NOT_CONFIGURED:
         message = "对比轨 v2：未配置；未读取或写入对比证据，生产结论不变。"
     elif status == PUBLIC_STATUS_CURRENT:
@@ -115,7 +117,10 @@ def _public_summary(status: str, reminder_count: int = 0, *, root: str | Path | 
         message = "对比轨 v2：证据不可用或结论未定；不显示旧提醒，生产结论不变。"
     else:
         raise ComparisonV2Error("v2 public summary status is unknown")
-    progress = build_v2_public_progress(root=root, as_of=as_of)
+    progress = build_v2_public_progress(
+        root=root, as_of=as_of, run_revision_id=run_revision_id,
+        official_project_root=official_project_root,
+    )
     return {
         "summary_id": "a_short_factor_comparison_v2",
         "status": status,
@@ -186,40 +191,60 @@ def load_v2_daily_cache(*, root: str | Path, daily_cache_path: str | Path | None
 
 
 def settle_and_summarize_v2_weekly(*, root: str | Path | None,
-                                   daily_cache_path: str | Path | None = None, as_of: str) -> dict:
+                                   daily_cache_path: str | Path | None = None, as_of: str,
+                                   run_revision_id: str | None = None,
+                                   official_project_root: str | Path | None = None) -> dict:
     """Settle then adjudicate before M6.7, returning only a de-identified current summary.
 
     An unavailable cache, corrupt private state, or any integrity failure intentionally
     produces no reminder.  Thus an old successful reminder can never be replayed into
     a fresh M6.7 report.
     """
+    if run_revision_id is not None:
+        run_revision_id = validate_run_revision_id(run_revision_id)
     if root is None:
-        return _public_summary(PUBLIC_STATUS_NOT_CONFIGURED, root=None, as_of=as_of)
+        return _public_summary(PUBLIC_STATUS_NOT_CONFIGURED, root=None, as_of=as_of,
+                                run_revision_id=run_revision_id,
+                                official_project_root=official_project_root)
     try:
         private_root = _private_root(root)
         if not private_root.exists():
-            return _public_summary(PUBLIC_STATUS_UNAVAILABLE, root=private_root, as_of=as_of)
+            return _public_summary(PUBLIC_STATUS_UNAVAILABLE, root=private_root, as_of=as_of,
+                                    run_revision_id=run_revision_id,
+                                    official_project_root=official_project_root)
         payload = load_v2_daily_cache(root=private_root, daily_cache_path=daily_cache_path)
-        settlement = settle_v2_from_daily_payload(root=private_root, daily_payload=payload)
+        settlement = settle_v2_from_daily_payload(root=private_root, daily_payload=payload,
+                                                  run_revision_id=run_revision_id,
+                                                  official_project_root=official_project_root)
         if settlement.get("status") != "settled_from_existing_cache":
-            return _public_summary(PUBLIC_STATUS_UNAVAILABLE, root=private_root, as_of=as_of)
+            return _public_summary(PUBLIC_STATUS_UNAVAILABLE, root=private_root, as_of=as_of,
+                                    run_revision_id=run_revision_id,
+                                    official_project_root=official_project_root)
         adjudication = adjudicate_v2_from_private_ledger(root=private_root)
         if adjudication.get("status") != "adjudicated_private_v2":
-            return _public_summary(PUBLIC_STATUS_UNAVAILABLE, root=private_root, as_of=as_of)
+            return _public_summary(PUBLIC_STATUS_UNAVAILABLE, root=private_root, as_of=as_of,
+                                    run_revision_id=run_revision_id,
+                                    official_project_root=official_project_root)
         reminder_path = private_root / "reminder.json"
         reminder = json.loads(reminder_path.read_text(encoding="utf-8"))
         if reminder != adjudication.get("reminder") or \
                 reminder.get("schema_name") != "a_short_factor_comparison_v2_reminder" or \
                 reminder.get("production_unchanged") is not True or \
                 not isinstance(reminder.get("reminders"), list):
-            return _public_summary(PUBLIC_STATUS_UNAVAILABLE, root=private_root, as_of=as_of)
-        return _public_summary(PUBLIC_STATUS_CURRENT, len(reminder["reminders"]), root=private_root, as_of=as_of)
+            return _public_summary(PUBLIC_STATUS_UNAVAILABLE, root=private_root, as_of=as_of,
+                                    run_revision_id=run_revision_id,
+                                    official_project_root=official_project_root)
+        return _public_summary(PUBLIC_STATUS_CURRENT, len(reminder["reminders"]), root=private_root, as_of=as_of,
+                                run_revision_id=run_revision_id,
+                                official_project_root=official_project_root)
     except Exception:
         # Production seam: the comparison track must NEVER block the weekly run, so this
         # catches any Exception (not a fixed tuple) — a future latent uncaught type in
         # settle/adjudicate still degrades to "unavailable", never propagates. BaseException
         # (KeyboardInterrupt/SystemExit) is intentionally not caught.
-        return _public_summary(PUBLIC_STATUS_UNAVAILABLE, root=root, as_of=as_of)
+        return _public_summary(PUBLIC_STATUS_UNAVAILABLE, root=root, as_of=as_of,
+                                run_revision_id=run_revision_id,
+                                official_project_root=official_project_root)
 
 
 def _verify_published_weekly_bundle(*, out_path: str | Path, receipt_path: str | Path,
@@ -245,7 +270,8 @@ def _verify_published_weekly_bundle(*, out_path: str | Path, receipt_path: str |
 
 def capture_v2_after_published_weekly(*, root: str | Path, decision_date: str, candidates: list[dict],
                                       source_identity: dict, out_path: str | Path, receipt_path: str | Path,
-                                      forward_eligible: bool) -> dict:
+                                      forward_eligible: bool,
+                                      run_revision_id: str | None = None) -> dict:
     """Freeze the current week only after a matching M6.7 JSON/Markdown/receipt exists."""
     _private_root(root)
     bundle = _verify_published_weekly_bundle(out_path=out_path, receipt_path=receipt_path,
@@ -273,5 +299,8 @@ def capture_v2_after_published_weekly(*, root: str | Path, decision_date: str, c
         "candidate_digest": _digest(sanitized),
         "official_m67_digest": bundle.weekly_sha256,
     }
+    if run_revision_id is not None:
+        identity["run_revision_id"] = str(run_revision_id)
     return capture_v2_week(root=root, decision_date=decision_date, candidates=candidates,
-                           run_identity=identity, forward_eligible=forward_eligible)
+                           run_identity=identity, forward_eligible=forward_eligible,
+                           run_revision_id=run_revision_id)

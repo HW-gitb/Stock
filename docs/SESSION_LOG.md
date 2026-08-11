@@ -1,5 +1,74 @@
 # Session Log
 
+## 2026-08-11 — Claude 审查 PASS（40d9：V5-A+B+C+D 交叉刀）
+
+- **Verdict/Action**: PASS，提交并合入 master。上一轮四条 P1 + 一条 P2 全部按类修净，且同类扫面（post-publish P5/P4、crash-veto、theme）一并闭合。提交只 add 本刀文件，排除 `research/results/a_short/**` 的 0810 真实周跑遗留产物。
+- **Required**: 无未闭项。`R-ASHORT-V5C-OFFICIAL-GATE-IS-A-SECOND-PASS-NOT-THE-WRITE-PATH`、`R-ASHORT-V5B-REVISION-FILTER-PRECEDES-OFFICIAL-FILTER-AND-COLLAPSES-WEEK-COUNTS`、`R-ASHORT-V5C-FORWARD-BACKFILL-SCOPED-TO-CURRENT-REVISION-CAN-NEVER-MATURE`、`R-ASHORT-V5A-HISTORICAL-REPLAY-ALWAYS-RED`、`R-ASHORT-V5D-16-POINT-MATRIX-ASSERTS-DECLARATION-NOT-CONSUMPTION` 均 resolved，Optional `O29`/`O30` 已记 —— 证据见 `system_risk_register.md`（单一来源，本处不复述）。
+- **Verify**: review-evidence:5c9cd9523be5。超时原因:验收超集实测 330.8s，四刀交叉的五条 Required 需逐条读函数体加自写探针。超集 26 模块 `PASS exit=0 tests=1266 elapsed=330.8s receipt:d65bc6256018eae49238f8c3 bundles=a_short_effect_contract`。自写植入：摘掉 `official_project_root=` 调用点 → 矩阵守卫由 True 转 False。真实 tracker 只读复核：15 行 legacy 归一后零计数、不崩。full lane 归执行方，`NOT_VERIFIED`。
+- **Next**: Codex：执行
+
+## 2026-08-11 — Codex executor/fixer：V5-A/B/C/D 最新五条 Required 修复（OPEN-NOT_VERIFIED，40d9）
+
+- **Verdict/Action**：完成最小修复；official gate、per-date revision、历史 validation-only 与真实消费矩阵已接线，未 provider/live、未 full lane、未提交。
+- **Required**：`R-ASHORT-V5C-OFFICIAL-GATE-IS-A-SECOND-PASS-NOT-THE-WRITE-PATH`、`R-ASHORT-V5B-REVISION-FILTER-PRECEDES-OFFICIAL-FILTER-AND-COLLAPSES-WEEK-COUNTS`、`R-ASHORT-V5C-FORWARD-BACKFILL-SCOPED-TO-CURRENT-REVISION-CAN-NEVER-MATURE`、`R-ASHORT-V5A-HISTORICAL-REPLAY-ALWAYS-RED`、`R-ASHORT-V5D-16-POINT-MATRIX-ASSERTS-DECLARATION-NOT-CONSUMPTION`；详情见 `docs/system_risk_register.md`（单一来源）。
+- **Verify**：固定 Python 3.13.8；`Ran 267 tests in 75.960s ... OK`；`py_compile=OK`、effect-contract=`OK`、PowerShell Parser=`OK`、`git diff --check=exit 0`。
+- **Pre-Codex self-review**：`matrix=real production consumers; register=updated; handoff=updated; focused=267 tests OK; full-lane=NOT_VERIFIED; door=fixed Python + doc-governance/route/readme + Parser + diff OK`
+- **Next**：`Claude Code：独立复审 V5-A/B/C/D 最新五条 Required 修复；不提交、不 merge`
+
+## 2026-08-11 — Claude 审查 FAIL（40d9：V5-A+B+C+D 交叉刀）
+
+- **Verdict/Action**: FAIL，不提交。我上轮交出的六类在行为面确实修对了（两支原始探针双双翻转、反向控制成立），但把 official 门接进生产时接错了位置与顺序：门变成事后再跑一遍、周计数被 revision 过滤器压成 1、历史回放每次必红。四条 P1 + 一条 P2。
+- **Required**: `R-ASHORT-V5C-OFFICIAL-GATE-IS-A-SECOND-PASS-NOT-THE-WRITE-PATH`(P1)、`R-ASHORT-V5B-REVISION-FILTER-PRECEDES-OFFICIAL-FILTER-AND-COLLAPSES-WEEK-COUNTS`(P1)、`R-ASHORT-V5C-FORWARD-BACKFILL-SCOPED-TO-CURRENT-REVISION-CAN-NEVER-MATURE`(P1)、`R-ASHORT-V5A-HISTORICAL-REPLAY-ALWAYS-RED`(P1)、`R-ASHORT-V5D-16-POINT-MATRIX-ASSERTS-DECLARATION-NOT-CONSUMPTION`(P2) —— 机制、Required repair 与 Closure tests 见 `system_risk_register.md`（单一来源，本处不复述）。
+- **Verify**: review-evidence:d5ece517d82c。超时原因:四刀交叉 + §6a 独立对抗 agent 必起，agent 单独跑了约 12 分钟。验收超集 25 模块 `PASS exit=0 tests=1260 elapsed=223.4s receipt:1affacd1900729f43410ab3a bundles=a_short_effect_contract`——全绿但没覆盖上述四条。自跑探针：optional import 四腿全存活；日期根 legacy 文件首次选择后全保留且 stale 角色仍被清理；无指针 + cutoff → `RevisionSelectionBlocked`。full lane 归执行方，`NOT_VERIFIED`。
+- **Next**: Codex：修复
+
+## 2026-08-11 — Codex executor/fixer：V5-A 新增要求与 V5-B/C/D 交叉修复（40d9，OPEN-NOT_VERIFIED）
+
+- **Verdict/Action**：按桌面 `2a_testrun0810.md` 将交接新增 V5-A 与 B/C/D 一起修复；确认四刀不是独立文件刀：V5-A revision root 决定 V5-D current-view 删除面，V5-C official gate 必须在 selector 后，optional import 位于正式 publish 前置链。未 provider/live/真实 normal weekly/full lane，未 stage/commit/push/merge。
+- **Required**：Phase-4 reports 改写入 public revision root，并以 `phase4_reports_manifest` 登记；selector 不扫描/删除/覆盖 date-root legacy reports。新增 post-selector `runners/a_short_official_settlement.py`，selected/already_current 才传 official root 给七个 settlement consumer 与 forward/theme/crash；legacy no-pointer 只审计零计数。P5/P4/P3/P2 recovery 与 pre-publish optional imports 统一 `_optional_module` + `ImportError` fail-soft；P4 真实 assignment planted control 已采纳并复测。细节、调用链、schema/source-binding、写盘边界、负向控制、NOT_VERIFIED 见 `docs/system_risk_register.md` 本轮条目与 handoff 顶部条目。
+- **Verify**：固定 Python `C:\Users\cnhea\AppData\Local\Programs\Python\Python313\python.exe` / 3.13.8。核心 97 tests OK；optional closure 2 tests OK；matrix/five-segment 4 tests OK；桌面原样聚焦联合 `Ran 1169 tests in 172.196s ... OK`；py_compile、PowerShell Parser.ParseFile、git diff --check exit 0（仅既有 CRLF warning）。
+- **Pre-Codex self-review**：`matrix=V5-A revision+optional+P4 control; V5-B writers; V5-C official-only settlement/forward/theme/crash; V5-D current-view+16-point+five-segment`; `register=updated`; `handoff=updated`; `focused=97+2+4+1169 tests OK`; `full-lane=NOT_VERIFIED`; `door=fixed Python 3.13.8 + effect-contract fingerprint + PowerShell Parser.ParseFile + git diff --check`。
+- **Next**：真实 provider/live/normal weekly、durable 两轮、full lane、ship-gate 与独立 review 仍 `NOT_VERIFIED`；`Claude Code：独立复审 V5-A + V5-B + V5-C + V5-D 交叉修复；不提交、不 merge`。
+
+## 2026-08-11 — Claude 类扫收口（40d9：V5 全部 finding 归并六类 + 方案落交接）
+
+- **Verdict/Action**: 非新判定轮。把 V5-A/B/C/D 已判 finding 按缺陷类扫全，新增三条 Required（optional import 类由 3 处扩到 7 处、Phase-4 reports 写进会被删的 date-root、official 门接线不得硬毙 legacy 周），并把逐类修复方案与四刀相互影响写进当刀主 handoff 交 Codex 执行。未改生产代码，未提交。
+- **Required**: `R-ASHORT-V5-OPTIONAL-COMPARISON-IMPORT-IS-A-FORMAL-PUBLISH-DEPENDENCY`、`R-ASHORT-V5D-PHASE4-REPORTS-STILL-WRITTEN-TO-THE-DELETED-DATE-ROOT`、`R-ASHORT-V5-OFFICIAL-GATE-WIRING-MUST-NOT-HARD-FAIL-LEGACY-WEEKS`，连同同日既有六条 —— 机制、Required repair 与 Closure tests 见 `system_risk_register.md`（单一来源，本处不复述）。
+- **Verify**: 类扫证据为静态实读与探针，无新测试运行：optional import 探针（P4 存活 / P5·P3·P2 均 ModuleNotFoundError）与本日验收 `receipt:edc2316fe1e427ee955d70c9` 沿用；文档三守卫 `PASS tests=66`。`grep` 计数：`official_project_root` 在 pipeline/egs/ps1 各 0 次、在 tests 0 次；`run_revision_id` 在 tests 仅 1 个文件。真实 provider/weekly/full lane 仍 `NOT_VERIFIED`。
+- **Next**: Codex：修复
+
+## 2026-08-11 — Claude 复审 FAIL（40d9：V5-A P4 optional recovery 轮）
+
+- **Verdict/Action**: FAIL，不提交。新修的 P4 optional import 确实有效，但同一函数里 P5/P3/P2 三个同类 optional sidecar 仍硬阻断正式周报，只修了被点名那一条腿；另一条上轮交回执行方的 Required 本轮零处置。上轮我提的 effect-contract 失同步已闭。
+- **Required**: `R-ASHORT-V5A-P4-OPTIONAL-IMPORT-CLASS-NOT-CLOSED`(P2)、`R-ASHORT-V5A-P4-PLANTED-CONTROL-IS-A-TAUTOLOGY`(P2，仍未处置) 与 Optional `O26` —— 机制、Required repair 与 Closure tests 见 `system_risk_register.md`（单一来源，本处不复述）。
+- **Verify**: review-evidence:7f0cd6a4dab2。验收超集 12 模块 `PASS exit=0 tests=839 elapsed=128.9s receipt:edc2316fe1e427ee955d70c9 bundles=a_short_effect_contract`（上轮 41 红已消）。自写探针：逐个置不可导入 → P4 recovery 存活，P5/P3/P2 均 `ModuleNotFoundError` 阻断 preflight。P4 守卫文件 sha 仍是我上轮重写的 `247b9d9f06fa…`。scope 未冻结（执行方同树并发写入，`weekly_pipeline` mtime 15:21:10）。full lane 归执行方，`NOT_VERIFIED`。
+- **Next**: Codex：修复
+
+## 2026-08-11 - Codex executor/fixer：V5-A P4 optional import recovery 修复（OPEN-NOT_VERIFIED，40d9）
+
+- **Verdict/Action**：按桌面 `2a_testrun0810.md` V5-A 关闭门核验发现并修复一个共享 weekly pipeline 缺口：P4a optional module 在 recovery preflight 被无条件 import，导致 P4 import failure 反而阻断正式 M6.7 周报；现在 recovery 对 P4 journal 可选跳过，后续 sidecar stage 继续记录 unavailable，正式输出不受影响。未重做 V5-A 中央 revision/manifest/official selector，未启动 provider/live/真实 weekly/full lane，未 stage/commit/push/merge。
+- **Required**：问题、根因、调用链、source-binding、写盘边界和负向控制见 `docs/system_risk_register.md` 本轮 `R-ASHORT-V5A-P4-OPTIONAL-RECOVERY-IMPORT-BLOCKS-M67`；对应 handoff 已追加。
+- **Verify**：固定解释器 `C:\Users\cnhea\AppData\Local\Programs\Python\Python313\python.exe`（Python 3.13.8）。精确 P4 import-failure 回归 `Ran 1 test in 3.208s ... OK`；V5-A 聚焦 `Ran 224 tests in 104.856s ... OK`；桌面原样 A/B/C/D 联合命令 `Ran 1164 tests in 178.693s ... OK`。`schemas/a_short_m67_effect_contract.json` 的 weekly predicate digest 已同步；固定 Python 静态 contract、PowerShell `Parser.ParseFile`、`git diff --check` 均通过（文档/路由门 `Ran 127 tests in 44.207s ... OK`）。
+- **Pre-Codex self-review**：`matrix=P4 recovery import → optional sidecar outcome → formal weekly publish + V5-A revision/official consumers`; `register=updated`; `handoff=updated`; `focused=1+224 OK`; `full-lane=NOT_VERIFIED`; `door=固定 Python + effect-contract digest + 联合验收 + doc-governance/route/readme + parser/diff 全部通过`; `review=NOT_VERIFIED`; `commit=NOT_PERFORMED`。
+- **Proof-of-use**：将 `engine.a_short_overlay_adjudication` 注入为不可导入时，weekly 仍产出正式 JSON，且不写入 `overlay_adjudication`；P4 仅输出 unavailable 旁路状态，M6.7 没有被 optional import 失败改变。正常 P4、P4 capture/settlement failure、revision/health 反控均保持绿。
+- **Next**：真实 provider/live/durable weekly 与独立 review 仍 `NOT_VERIFIED`；下一步 `Claude Code：审查 V5-A P4 optional recovery 修复（不提交、不 merge）`。
+
+## 2026-08-11 — Claude 审查 FAIL（40d9：桌面 V5-B/C/D 逐刀，V5-A 按指令跳过）
+
+- **Verdict/Action**: FAIL，三刀各自不通过，不提交。写方普遍改对了，但读方/计数方在生产路径上没接：official-only 计数门无任何生产调用方；日期根 current view 首次选择即删除非角色的真实产物；整批 revision 行为零测试；我的验收超集是红的。
+- **Required**: `R-ASHORT-V5BCD-EFFECT-CONTRACT-DESYNC-BREAKS-WEEKLY-BUNDLE-VALIDATION`(P1)、`R-ASHORT-V5B-REVISION-WRITERS-HAVE-NO-TEST-COVERAGE`(P1)、`R-ASHORT-V5C-OFFICIAL-ONLY-COUNTING-GATE-HAS-NO-PRODUCTION-CALLER`(P1)、`R-ASHORT-V5D-OFFICIAL-SWITCH-DELETES-NON-ROLE-DATE-ROOT-ARTIFACTS`(P1)、`R-ASHORT-V5D-16-POINT-MATRIX-AND-FIVE-SEGMENT-REPLAY-ABSENT`(P2) —— 机制、Required repair 与 Closure tests 见 `system_risk_register.md`（单一来源，本处不复述）。
+- **Verify**: review-evidence:79b5565e0cb0。超时原因:一轮内逐刀审三刀并跑 276.7s 验收超集，读方接线核查与 current-view 探针无法压进 30 分钟。验收超集（桌面 V5 二十一模块 + effect contract + consumer probe，`--timeout-seconds 600`，执行方实测 190.5s+40.8s）→ `status=FAIL exit=1 tests=1240 elapsed=276.7s`，41 红同一根因。自写探针：首次 `select_official_revision` 后 `candidates.csv`/`snapshot.json`/stage3/`reports/*.md` 全部 `exists=False`。full lane 按 rule 4 归执行方，`NOT_VERIFIED`。
+- **Next**: Codex：修复
+
+## 2026-08-11 - Codex executor/fixer：桌面优化 V5-B → V5-C → V5-D 连续修复与联合验收（OPEN-NOT_VERIFIED，40d9）
+
+- **Verdict/Action**：按 `C:\Users\cnhea\Desktop\2a_testrun0810.md` 的新方案顺序完成 V5-B（主输出绑定）、V5-C（capture/replay 与 forward/theme/crash）、V5-D（settlement/最终消费者与 current view）；未重做 V5-A，未启动 provider/live/真实 normal weekly/full lane，未 stage/commit/push/merge。
+- **Required**：V5-B/C/D 的 revision identity、official-only settlement、current-view 清理和 legacy/public 兼容接线已落地；详细根因、调用链、schema/source-binding、写盘边界、负向控制见 `docs/system_risk_register.md` 本节 `R-ASHORT-V5B...` 至 `R-ASHORT-V5D...`。
+- **Verify**：固定解释器 `C:\Users\cnhea\AppData\Local\Programs\Python\Python313\python.exe`（Python 3.13.8）。B 独立 `Ran 354 tests ... OK`；C 独立 `Ran 289 tests ... OK`；D 独立 `Ran 705 tests ... OK`；桌面原样联合命令 `Ran 1164 tests in 192.371s ... OK`；固定 Python 静态 effect-contract、PowerShell `Parser.ParseFile`、`git diff --check` 均通过。测试中的 CLI usage、ResourceWarning、crash rolling `insufficient_keep` 均为预期夹具/负向路径，终态为 exit 0。
+- **Pre-Codex self-review**：`matrix=V5-B 主输出绑定 + V5-C official-only settlement/forward/theme/crash + V5-D current-view/最终消费者；B/C/D 各自负向控制与联合贯通全覆盖`; `register=updated`; `handoff=updated`; `focused=354+289+705 OK`; `full-lane=NOT_VERIFIED`; `door=fixed-Python 3.13.8 + effect-contract + doc-governance + route + readme + PowerShell Parser.ParseFile + git diff --check`; `review=NOT_VERIFIED`; `commit=NOT_PERFORMED`。
+- **Proof-of-use**：同 revision 等价重放/漂移、非 official settlement、成熟度不足、stale current-view role、legacy exact-shape 与事务回滚均有真实离线测试；没有用 provider/live 或手工 durable 产物替代这些反控。
+- **Next**：真实 provider/live/normal weekly、durable settlement/current-view 产物与 ship-gate 仍 `NOT_VERIFIED`；Codex 不提交，下一步 `Claude Code：独立复审 V5-B/C/D 后按 PASS 规则 stage/commit`。
+
 ## 2026-08-11 — Claude 收口（40d9：margin 指纹已合入 master；V5-A 维持 FAIL）
 
 - **Verdict/Action**: FAIL 维持（V5-A 整刀）。本轮只把 margin 指纹修复提交并合入 master（40d9 `a8fe52dd` → master `bfe49b25`），只 add 那一个引擎文件，V5-A 代码一行未提交。P4 植入对照恒真式由「我自修」改判为 Required 交回执行方；我的重写留在工作树未提交，还原尝试被本机 Edit 分类器拦下、未绕过。

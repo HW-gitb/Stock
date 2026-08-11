@@ -17,6 +17,7 @@
         "required": ["decision_id", "capture_as_of", "capture_sha256", "evaluation_mode", "policy_version", "status", "reason", "outcome_sha256"],
         "properties": {
           "decision_id": {"type": "string", "pattern": "^[a-f0-9]{64}$"},
+          "run_revision_id": {"type": ["string", "null"], "pattern": "^[0-9a-f]{32}$"},
           "capture_as_of": {"type": "string", "pattern": "^[0-9]{8}$"},
           "capture_sha256": {"type": "string", "pattern": "^[a-f0-9]{64}$"},
           "evaluation_mode": {"const": "live_normalized"},

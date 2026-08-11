@@ -75,6 +75,8 @@ param(
     [string]$Account = $null,
     [string]$RegulatoryConfirmations = $null,
     [string]$HoldingRegulatoryConfirmations = $null,
+    [ValidatePattern('^[0-9a-f]{32}$')]
+    [string]$RunRevisionId = $null,
     [switch]$AllowHistoricalOverwrite,
     [switch]$SkipCanary,
     [switch]$SkipTracker,
@@ -102,6 +104,11 @@ try {
 } catch {
     Write-Host "[FATAL] $($_.Exception.Message)" -ForegroundColor Red
     exit 1
+}
+# V5-A: allocate the opaque physical-run key before any guard can publish a
+# failure receipt.  The key is still passed unchanged to every later writer.
+if ([string]::IsNullOrWhiteSpace($RunRevisionId)) {
+    $RunRevisionId = [guid]::NewGuid().ToString('N')
 }
 function Write-M67Utf8NoBom {
     param([string]$LiteralPath, [string]$Text)
@@ -282,7 +289,13 @@ function Write-KnownM67FailureReceipt {
     if ([string]::IsNullOrWhiteSpace($KnownIvFeedStatus)) {
         $KnownIvFeedStatus = 'not_requested'
     }
-    $Directory = if ($Account) {
+    $Directory = if ($RunRevisionId) {
+        if ($Account) {
+            Join-Path $ProjectRoot "state\a_short\weekly_private\weeks\$AsOf\revisions\$RunRevisionId"
+        } else {
+            Join-Path $ProjectRoot "research\results\a_short\$AsOf\revisions\$RunRevisionId"
+        }
+    } elseif ($Account) {
         Join-Path $ProjectRoot "state\a_short\weekly_private\$AsOf"
     } else {
         Join-Path $ProjectRoot "research\results\a_short\$AsOf"
@@ -427,6 +440,27 @@ if ([string]::IsNullOrWhiteSpace($AsOf)) {
     }
     Write-Host "[EXPLICIT] as_of=$AsOf  run_date=$RunDate  mode=$(if($IsHistoricalAsOf){'historical'}else{'live'})  price_basis=$PriceBasis  price_as_of=$PriceAsOf" -ForegroundColor Cyan
 }
+# O24: inspect only the existing private ratchet envelope before this run.
+# A same/future-date envelope means formal state already exists and the
+# selector must not switch official; a malformed envelope blocks fail-closed.
+$FormalStateCommitted = $false
+if ($Account) {
+    $RatchetStatePath = Join-Path $ProjectRoot 'state\a_short\holding_ratchet\ratchet_state.json'
+    if (Test-Path -LiteralPath $RatchetStatePath -PathType Leaf) {
+        try {
+            $PriorRatchet = Get-Content -Raw -Encoding UTF8 -LiteralPath $RatchetStatePath | ConvertFrom-Json
+            $PriorRatchetAsOf = [string]$PriorRatchet.as_of
+            $FormalStateCommitted = (-not [string]::IsNullOrWhiteSpace($PriorRatchetAsOf)) -and
+                ([string]::Compare($PriorRatchetAsOf, [string]$AsOf, [System.StringComparison]::Ordinal) -ge 0)
+        } catch {
+            $FormalStateCommitted = $true
+            Write-Host "[FATAL] existing holding-ratchet state is unreadable; official selection is blocked." -ForegroundColor Red
+        }
+    }
+}
+# V5-A: this key was allocated before preflight/guard failures so every
+# revision-scoped writer below receives the exact same value.
+Write-Host "run revision:  $RunRevisionId" -ForegroundColor DarkGray
 # P4: de-identified per-run manifests for the post-run health companion.
 $LauncherSidecarOutcomes = @()
 $script:IvFeedAttemptedBeforeEgs = $false
@@ -597,14 +631,21 @@ $script:IvFeedAttemptedBeforeEgs = $false
 $script:IvFeedStatus = 'not_requested'
 $script:IvFeedSha256 = $null
 $script:IvFeedFailureDetailRef = ''
-$M67Dir = if ($Account) { Join-Path $ProjectRoot "state\a_short\weekly_private\$AsOf" } else { Join-Path $ProjectRoot "research\results\a_short\$AsOf" }
-$SemAnalysisInput = Join-Path $ProjectRoot "result\a_short\$AsOf\analysis_input.json"
-$IvFeed = Join-Path $ProjectRoot "research\results\a_short\iv_feed_$AsOf\iv_feed.json"
-$IvFailureReceipt = Join-Path $M67Dir "iv_feed_failure_$PID.json"
+$PublicRevisionDir = Join-Path $ProjectRoot "result\a_short\$AsOf\revisions\$RunRevisionId"
+$ResearchRevisionDir = Join-Path $ProjectRoot "research\results\a_short\$AsOf\revisions\$RunRevisionId"
+# All active V5-A writers and P4 readers resolve the revision directory above.
+$PrivateRevisionDir = Join-Path $ProjectRoot "state\a_short\weekly_private\weeks\$AsOf\revisions\$RunRevisionId"
+$M67Dir = if ($Account) { $PrivateRevisionDir } else { $ResearchRevisionDir }
+$SemAnalysisInput = Join-Path $PublicRevisionDir 'analysis_input.json'
+$IvFeed = Join-Path $ResearchRevisionDir 'iv_feed.json'
+$Phase4ReportDir = Join-Path $PublicRevisionDir 'reports'
+# IV failure evidence is public/de-identified and must share the IV revision
+# root even when M6.7's successful output is private under -Account.
+$IvFailureReceipt = Join-Path $ResearchRevisionDir "iv_feed_failure_$PID.json"
 $IvFailureDetailRef = ''
 $M67Out = Join-Path $M67Dir "weekly_m67.json"
-$OverlayPath = Join-Path $ProjectRoot "result\a_short\$AsOf\overlay.json"
-$script:IvFeedRef = "research/results/a_short/iv_feed_$AsOf/iv_feed.json"
+$OverlayPath = Join-Path $PublicRevisionDir 'overlay.json'
+$script:IvFeedRef = "research/results/a_short/$AsOf/revisions/$RunRevisionId/iv_feed.json"
 
 if (-not $SkipSemanticRisk) {
     $script:IvFeedAttemptedBeforeEgs = $true
@@ -612,7 +653,7 @@ if (-not $SkipSemanticRisk) {
         Remove-Item -LiteralPath $IvFailureReceipt -Force -ErrorAction Stop
     }
     Write-Host "[0/4] Building market IV feed before EGS: runners\a_short_iv_feed_build.py --as-of $AsOf ..." -ForegroundColor Yellow
-    & $PythonExe runners\a_short_iv_feed_build.py --as-of $AsOf --price-data-through $PriceAsOf --out $IvFeed --failure-receipt-out $IvFailureReceipt --confirm-fetch-authorized
+    & $PythonExe runners\a_short_iv_feed_build.py --as-of $AsOf --price-data-through $PriceAsOf --out $IvFeed --failure-receipt-out $IvFailureReceipt --run-revision-id $RunRevisionId --confirm-fetch-authorized
     $IvExitCode = $LASTEXITCODE
     if ($null -eq $IvExitCode) { $IvExitCode = 1 }
     if ($IvExitCode -eq 23) {
@@ -641,7 +682,7 @@ if (-not $SkipSemanticRisk) {
 }
 
 # --- Stage 1: egs_main (the HiThink L3 graph is fetched and verified in-process) ---
-$EgsArgs = @('A-EGS\egs_main.py', '--as-of', $AsOf, '--price-as-of', $PriceAsOf, '--l3-mode', $EffectiveL3Mode, '--cache-policy', $CachePolicy)
+$EgsArgs = @('A-EGS\egs_main.py', '--as-of', $AsOf, '--price-as-of', $PriceAsOf, '--l3-mode', $EffectiveL3Mode, '--cache-policy', $CachePolicy, '--run-revision-id', $RunRevisionId)
 $EgsArgs += @('--iv-feed-status', $script:IvFeedStatus)
 if ($EffectiveL3Mode -eq 'pit') {
     $EgsArgs += '--l3-pit-strict'
@@ -708,7 +749,7 @@ if ($SkipTracker) {
     $TrackerBackfillExitCode = 1
     Write-Host ""
     Write-Host "[3/4] Running runners\forward_tracker.py capture --as-of $AsOf ..." -ForegroundColor Yellow
-    & $PythonExe runners\forward_tracker.py capture --as-of $AsOf
+    & $PythonExe runners\forward_tracker.py capture --as-of $AsOf --run-revision-id $RunRevisionId
     $TrackerExitCode = $LASTEXITCODE
     if ($null -eq $TrackerExitCode) { $TrackerExitCode = 1 }
 
@@ -723,7 +764,7 @@ if ($SkipTracker) {
         # P1 Cut2 consumes only this existing tracker. Backfill is cache-only: it never asks the
         # weekly runner to download extra market data, and a cache gap remains advisory.
         Write-Host "[3/4] Cache-only forward_tracker backfill (P1 candidate-effect sidecar input) ..." -ForegroundColor Yellow
-        & $PythonExe runners\forward_tracker.py backfill --windows 5,10,20
+        & $PythonExe runners\forward_tracker.py backfill --windows 5,10,20 --run-revision-id $RunRevisionId --official-project-root $ProjectRoot
         $TrackerBackfillExitCode = $LASTEXITCODE
         if ($null -eq $TrackerBackfillExitCode) { $TrackerBackfillExitCode = 1 }
         # Exit 3 = the process was fine but the shared forward_daily cache kept a matured
@@ -747,7 +788,8 @@ if ($SkipTracker) {
             & $PythonExe runners\a_short_theme_forward_comparison.py `
                 --tracker (Join-Path $ProjectRoot 'logs\forward_tracker.csv') `
                 --out (Join-Path $ProjectRoot 'research\results\a_short_theme_forward_comparison.json') `
-                --private-root (Join-Path $ProjectRoot 'state\a_short\theme_forward_comparison_private\v1')
+                --private-root (Join-Path $ProjectRoot 'state\a_short\theme_forward_comparison_private\v1') `
+                --run-revision-id $RunRevisionId --official-project-root $ProjectRoot
             $ThemeComparisonExitCode = $LASTEXITCODE
             if ($null -eq $ThemeComparisonExitCode) { $ThemeComparisonExitCode = 1 }
             if ($ThemeComparisonExitCode -ne 0) {
@@ -767,7 +809,7 @@ if ($IsHistoricalAsOf) {
     Write-Host "[3b/4] Historical replay: crash-veto forward tracker skipped" -ForegroundColor DarkGray
 } else {
     Write-Host "[3b/4] Updating crash-veto 5/10-trading-day comparison ..." -ForegroundColor Yellow
-    & $PythonExe runners\a_short_crash_veto_tracker.py update --as-of $AsOf --rule-confirmed-days 5 --confirm-fetch-authorized
+    & $PythonExe runners\a_short_crash_veto_tracker.py update --as-of $AsOf --rule-confirmed-days 5 --run-revision-id $RunRevisionId --official-project-root $ProjectRoot --confirm-fetch-authorized
     $CrashVetoExitCode = $LASTEXITCODE
     if ($null -eq $CrashVetoExitCode) { $CrashVetoExitCode = 1 }
     if ($CrashVetoExitCode -eq 0 -and (Test-Path $CrashVetoSummary)) {
@@ -806,7 +848,7 @@ if ($SkipSemanticRisk) {
                 -IvFeedStatus $script:IvFeedStatus -Directory $M67Dir
         } else {
             Add-SidecarOutcome -Name 'iv_feed' -Expected $true -Attempted $true -ExecutionStatus 'succeeded' -ProgressStatus 'advanced' -ObservedDecisionAsOf $AsOf -AttemptedBeforeEgs $script:IvFeedAttemptedBeforeEgs -FeedRef $script:IvFeedRef -FeedSha256 $script:IvFeedSha256 -IvFeedStatus $script:IvFeedStatus
-            $M67Args = @('runners\a_short_weekly_pipeline.py', '--as-of', $AsOf, '--price-as-of', $PriceAsOf, '--run-date', $RunDate, '--analysis-input', $SemAnalysisInput, '--iv-feed-status', $script:IvFeedStatus, '--iv-feed', $IvFeed, '--out', $M67Out, '--confirm-fetch-authorized')
+            $M67Args = @('runners\a_short_weekly_pipeline.py', '--as-of', $AsOf, '--price-as-of', $PriceAsOf, '--run-date', $RunDate, '--run-revision-id', $RunRevisionId, '--official-project-root', $ProjectRoot, '--analysis-input', $SemAnalysisInput, '--iv-feed-status', $script:IvFeedStatus, '--iv-feed', $IvFeed, '--out', $M67Out, '--phase4-report-dir', $Phase4ReportDir, '--confirm-fetch-authorized')
             if ($CrashVetoSummaryReady) { $M67Args += @('--crash-veto-summary', $CrashVetoSummary) }
             if (-not $IsHistoricalAsOf) {
                 # live 运行(as_of>=运行日:今日 或 前瞻 canonical 周一):as_of 当日 EOD 盘中/盘前尚未发布 → 显式启用
@@ -821,13 +863,13 @@ if ($SkipSemanticRisk) {
                 $SharedCacheOutcomePath = Join-Path $M67Dir 'shared_cache_build.outcome.json'
                 $MarginOverheatCashControlRoot = Join-Path $ProjectRoot 'state\a_short\margin_overheat_cash_control_private\v1'
                 $OverlayAdjudicationRoot = Join-Path $ProjectRoot 'state\a_short\overlay_adjudication_private\v1'
-                $OverlayAdjudicationStage3 = Join-Path $ProjectRoot "result\a_short\$AsOf\stage3_selection_snapshot.json"
-                $OverlayAdjudicationSource = Join-Path $ProjectRoot "result\a_short\$AsOf\stage3_overlay_score.json"
-                $OverlayAdjudicationMarker = Join-Path $ProjectRoot "result\a_short\$AsOf\official_publish.json"
+                $OverlayAdjudicationStage3 = Join-Path $PublicRevisionDir 'stage3_selection_snapshot.json'
+                $OverlayAdjudicationSource = Join-Path $PublicRevisionDir 'stage3_overlay_score.json'
+                $OverlayAdjudicationMarker = Join-Path $PublicRevisionDir 'official_publish.json'
                 $OverlayAdjudicationPublicJson = Join-Path $ProjectRoot 'research\results\a_short\overlay_adjudication_summary.json'
                 $OverlayAdjudicationPublicMarkdown = Join-Path $ProjectRoot 'research\results\a_short\overlay_adjudication_summary.md'
                 $IndustryWeightP5Root = Join-Path $ProjectRoot 'state\a_short\industry_weight_comparison_private\v1'
-                $IndustryWeightSource = Join-Path $ProjectRoot "result\a_short\$AsOf\egs_weight_comparison.json"
+                $IndustryWeightSource = Join-Path $PublicRevisionDir 'egs_weight_comparison.json'
                 $TargetPolicyLedger = Join-Path $ProjectRoot 'logs\a_short_target_policy_comparison.json'
                 $TargetPolicyPublicJson = Join-Path $ProjectRoot 'research\results\a_short\target_policy_comparison_summary.json'
                 $TargetPolicyPublicMarkdown = Join-Path $ProjectRoot 'research\results\a_short\target_policy_comparison_summary.md'
@@ -993,7 +1035,7 @@ if ($SkipRegime) {
 } else {
     Write-Host ""
     $RegimeLedger = Join-Path $ProjectRoot "research\results\a_short\regime_daily_ledger.json"
-    $RegimeIvFeed = Join-Path $ProjectRoot "research\results\a_short\iv_feed_$AsOf\iv_feed.json"
+    $RegimeIvFeed = $IvFeed
     # The daily comparison baseline is fail-closed shock. A complete M6.7 run may
     # additionally bind the raw analysis-input regime and published weekly bundle.
     $EffectiveV142Regime = 'shock'
@@ -1090,12 +1132,9 @@ if ($SkipRegime) {
 }
 
  # P4: health is a separate post-run companion.  The already-published M6.7
- # JSON/Markdown/receipt are intentionally not rewritten here.
-$HealthDir = if ($Account) {
-    Join-Path $ProjectRoot "state\a_short\weekly_private\$AsOf"
-} else {
-    Join-Path $ProjectRoot "research\results\a_short\$AsOf"
-}
+ # JSON/Markdown/receipt are intentionally not rewritten here.  V5-A keeps
+ # this bundle inside the same revision root as IV and M6.7.
+$HealthDir = $M67Dir
 $PipelineExpected = @()
 if (-not $SkipSemanticRisk -and -not $IsHistoricalAsOf) {
     $PipelineExpected = @(
@@ -1110,6 +1149,7 @@ $LauncherManifest = [ordered]@{
     schema_name = 'a_short_weekly_sidecar_outcomes'
     schema_version = '1.0.0'
     as_of = [string]$AsOf
+    run_revision_id = [string]$RunRevisionId
     run_id = $null
     candidate_digest = $null
     expected_sidecars = @($ManifestExpected)
@@ -1138,7 +1178,9 @@ if ($LauncherManifestWritten) {
         'runners\a_short_weekly_sidecar_health.py', '--as-of', $AsOf,
         '--project-root', $ProjectRoot, '--out-dir', $HealthDir,
         '--launcher-outcomes', $LauncherManifestPath,
-        '--m67-invocation', $(if ($SkipSemanticRisk) { 'skipped' } else { 'requested' })
+        '--run-revision-id', $RunRevisionId,
+        '--m67-invocation', $(if ($SkipSemanticRisk) { 'skipped' } else { 'requested' }),
+        '--iv-feed', $IvFeed
     )
     if (-not $SkipSemanticRisk) {
         $HealthArgs += @('--pipeline-outcomes', $PipelineManifestPath)
@@ -1160,6 +1202,117 @@ if ($LauncherManifestWritten) {
             Invalidate-M67Artifact -LiteralPath (Join-Path $HealthDir $Leaf) | Out-Null
         }
         Write-Host "[sidecar-health] UNAVAILABLE (health companion failed or returned an incomplete JSON/Markdown/receipt trio; M6.7/selection unchanged)" -ForegroundColor Red
+    }
+}
+
+# V5-A closeout: only a structurally complete EGS/M6.7/IV/health bundle can
+# create the immutable revision manifest.  Pointer and selection receipt are
+# committed together through the Python rollback boundary; a failed selection
+# leaves the previous pointer untouched and makes the run non-zero.
+if ($EgsExitCode -eq 0 -and $M67InvocationState -eq 'complete' -and $HealthComplete) {
+    $RevisionManifestPath = Join-Path $ResearchRevisionDir 'revision_manifest.json'
+    $OfficialPointerPath = Join-Path $ProjectRoot "research\results\a_short\$AsOf\official_revision.json"
+    $SelectionReceiptPath = Join-Path $ProjectRoot "research\results\a_short\$AsOf\official_selection_receipt.json"
+    $RevisionTransactionDir = Join-Path $ProjectRoot "state\a_short\revision_transactions\$AsOf"
+    $RevisionRoles = [ordered]@{
+        analysis_input = $SemAnalysisInput
+        egs_data_health = (Join-Path $PublicRevisionDir 'data_health.json')
+        egs_official_publish = (Join-Path $PublicRevisionDir 'official_publish.json')
+        iv_feed = $IvFeed
+        weekly_m67 = $M67Out
+        weekly_m67_receipt = (Join-Path $M67Dir 'weekly_m67.receipt.json')
+        phase4_reports_manifest = (Join-Path $PublicRevisionDir 'phase4_reports_manifest.json')
+        launcher_sidecar_outcomes = $LauncherManifestPath
+        pipeline_sidecar_outcomes = $PipelineManifestPath
+        sidecar_health = (Join-Path $HealthDir 'sidecar_health.json')
+        sidecar_health_markdown = (Join-Path $HealthDir 'sidecar_health.md')
+        sidecar_health_receipt = (Join-Path $HealthDir 'sidecar_health.receipt.json')
+    }
+    try {
+        $ReportsIndexArgs = @(
+            '-m', 'engine.a_short_run_revision', 'write-reports-index',
+            '--project-root', $ProjectRoot, '--decision-as-of', $AsOf,
+            '--run-revision-id', $RunRevisionId
+        )
+        & $PythonExe @ReportsIndexArgs
+        $ReportsIndexExitCode = $LASTEXITCODE
+        if ($null -eq $ReportsIndexExitCode) { $ReportsIndexExitCode = 1 }
+        if ($ReportsIndexExitCode -ne 0) { throw "Phase-4 reports index writer exit $ReportsIndexExitCode" }
+    } catch {
+        $script:FinalExitCode = if ($script:FinalExitCode -eq 0) { 1 } else { $script:FinalExitCode }
+        Write-Host "[revision] UNAVAILABLE ($($_.Exception.Message)); official pointer unchanged" -ForegroundColor Red
+    }
+    $MissingRevisionRoles = @($RevisionRoles.GetEnumerator() | Where-Object { -not (Test-Path -LiteralPath $_.Value -PathType Leaf) })
+    if ($MissingRevisionRoles.Count -gt 0) {
+        $script:FinalExitCode = if ($script:FinalExitCode -eq 0) { 1 } else { $script:FinalExitCode }
+        Write-Host "[revision] UNAVAILABLE (formal role missing; official pointer unchanged)" -ForegroundColor Red
+    } else {
+        try {
+            $AnalysisPayload = Get-Content -Raw -Encoding UTF8 -LiteralPath $SemAnalysisInput | ConvertFrom-Json
+            $RunIdentity = $AnalysisPayload.source.run_identity
+            $ManifestArgs = @(
+                '-m', 'engine.a_short_run_revision', 'write-manifest',
+                '--project-root', $ProjectRoot, '--manifest', $RevisionManifestPath,
+                '--decision-as-of', $AsOf, '--run-date', $RunDate,
+                '--price-data-through', $PriceAsOf, '--run-revision-id', $RunRevisionId,
+                '--run-id', [string]$RunIdentity.run_id, '--candidate-digest', [string]$RunIdentity.candidate_digest
+            )
+            foreach ($Role in $RevisionRoles.GetEnumerator()) {
+                $ManifestArgs += @('--role', "$($Role.Key)=$($Role.Value)")
+            }
+            & $PythonExe @ManifestArgs
+            $ManifestExitCode = $LASTEXITCODE
+            if ($null -eq $ManifestExitCode) { $ManifestExitCode = 1 }
+            if ($ManifestExitCode -ne 0) { throw "revision manifest writer exit $ManifestExitCode" }
+            $SelectArgs = @(
+                '-m', 'engine.a_short_run_revision', 'select-official',
+                '--pointer', $OfficialPointerPath, '--selection-receipt', $SelectionReceiptPath,
+                '--manifest', $RevisionManifestPath, '--transaction-dir', $RevisionTransactionDir,
+                '--run-revision-id', $RunRevisionId, '--decision-as-of', $AsOf,
+                '--reason', 'normal_weekly'
+            )
+            # Historical replays are validation-only after the decision cutoff.
+            # They still get a revision manifest for audit, but must not ask the
+            # selector to switch/choose an official pointer; doing so would turn
+            # a valid replay into a hard cutoff failure or mutate current view.
+            if ($IsHistoricalAsOf) {
+                $SelectionStatus = 'validation_only'
+                Write-Host "[revision] historical replay retained validation-only; official pointer unchanged" -ForegroundColor DarkGray
+            } else {
+                if ($FormalStateCommitted) { $SelectArgs += '--formal-state-committed' }
+                $SelectionRaw = & $PythonExe @SelectArgs
+                $SelectionExitCode = $LASTEXITCODE
+                if ($null -eq $SelectionExitCode) { $SelectionExitCode = 1 }
+                if ($SelectionExitCode -ne 0) { throw "official revision selector exit $SelectionExitCode" }
+                try {
+                    $SelectionResult = (($SelectionRaw -join "`n") | ConvertFrom-Json -ErrorAction Stop)
+                } catch {
+                    throw "official revision selector returned invalid status JSON"
+                }
+                $SelectionStatus = [string]$SelectionResult.status
+            }
+            if ($SelectionStatus -in @('selected', 'already_current')) {
+                $SettlementArgs = @(
+                    'runners\a_short_official_settlement.py', '--project-root', $ProjectRoot,
+                    '--as-of', $AsOf, '--run-revision-id', $RunRevisionId
+                )
+                if ($IsHistoricalAsOf) { $SettlementArgs += '--skip-forward' }
+                & $PythonExe @SettlementArgs
+                $OfficialSettlementExitCode = $LASTEXITCODE
+                if ($null -eq $OfficialSettlementExitCode) { $OfficialSettlementExitCode = 1 }
+                if ($OfficialSettlementExitCode -ne 0) {
+                    throw "official settlement runner exit $OfficialSettlementExitCode"
+                }
+                Write-Host "[revision] manifest + official pointer + post-selector settlement committed for $RunRevisionId" -ForegroundColor Yellow
+            } elseif ($SelectionStatus -in @('equivalent_replay', 'validation_only')) {
+                Write-Host "[revision] non-official replay retained audit-only; official pointer unchanged" -ForegroundColor DarkGray
+            } else {
+                throw "official revision selector returned unexpected status: $SelectionStatus"
+            }
+        } catch {
+            $script:FinalExitCode = if ($script:FinalExitCode -eq 0) { 1 } else { $script:FinalExitCode }
+            Write-Host "[revision] UNAVAILABLE ($($_.Exception.Message)); official pointer unchanged" -ForegroundColor Red
+        }
     }
 }
 Write-Host "=== Pipeline done ===" -ForegroundColor Cyan

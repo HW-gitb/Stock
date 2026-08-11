@@ -1,0 +1,48 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://stock.local/schemas/a_short_run_revision_manifest/1.0.0/schema.json",
+  "title": "A-short run revision manifest",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_name", "schema_version", "decision_as_of", "run_date",
+    "price_data_through", "run_revision_id", "run_id", "candidate_digest", "content_digest",
+    "stage_status", "structural_completeness", "roles"
+  ],
+  "properties": {
+    "schema_name": {"const": "a_short_run_revision_manifest"},
+    "schema_version": {"const": "1.0.0"},
+    "decision_as_of": {"type": "string", "pattern": "^[0-9]{8}$"},
+    "run_date": {"type": ["string", "null"], "pattern": "^([0-9]{8})?$"},
+    "price_data_through": {"type": "string", "pattern": "^[0-9]{8}$"},
+    "run_revision_id": {"type": "string", "pattern": "^[0-9a-f]{32}$"},
+    "run_id": {"type": "string", "minLength": 1},
+    "candidate_digest": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+    "content_digest": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+    "stage_status": {"const": "complete"},
+    "structural_completeness": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["expected_role_count", "observed_role_count", "all_expected_roles_present"],
+      "properties": {
+        "expected_role_count": {"type": "integer", "minimum": 1},
+        "observed_role_count": {"type": "integer", "minimum": 1},
+        "all_expected_roles_present": {"const": true}
+      }
+    },
+    "roles": {
+      "type": "object",
+      "minProperties": 1,
+      "additionalProperties": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["relative_path", "sha256", "byte_length"],
+        "properties": {
+          "relative_path": {"type": "string", "pattern": "^(?!/)(?!.*\\\\)(?!.*(^|/)\\.\\.(?:/|$)).+$"},
+          "sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+          "byte_length": {"type": "integer", "minimum": 0}
+        }
+      }
+    }
+  }
+}

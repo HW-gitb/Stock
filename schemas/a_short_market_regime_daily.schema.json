@@ -12,6 +12,8 @@
     "schema_name": {"const": "a_short_market_regime_daily"},
     "schema_version": {"const": "1.0.0"},
     "as_of": {"type": "string", "pattern": "^[0-9]{8}$"},
+    "observed_data_through": {"type": "string", "pattern": "^[0-9]{8}$"},
+    "run_revision_id": {"type": "string", "pattern": "^[0-9a-f]{32}$"},
     "limit_up_count": {"type": "integer", "minimum": 0},
     "limit_down_count": {"type": "integer", "minimum": 0},
     "net_limit": {"type": "integer"},

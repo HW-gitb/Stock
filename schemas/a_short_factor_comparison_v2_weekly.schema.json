@@ -16,6 +16,7 @@
         "price_data_through": {"type": "string", "pattern": "^[0-9]{8}$"},
         "candidate_digest": {"type": "string", "pattern": "^[a-f0-9]{64}$"},
         "official_m67_digest": {"type": "string", "pattern": "^[a-f0-9]{64}$"}
+        ,"run_revision_id": {"type": "string", "pattern": "^[a-f0-9]{32}$"}
       }
     }
   },

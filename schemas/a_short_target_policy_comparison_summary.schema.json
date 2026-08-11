@@ -29,6 +29,7 @@
     "schema_version": {"const": "1.0.0"},
     "summary_id": {"const": "a_short_target_policy_comparison"},
     "as_of": {"type": "string", "pattern": "^[0-9]{8}$"},
+    "official_revision_id": {"type": ["string", "null"], "pattern": "^[a-f0-9]{32}$"},
     "data_through": {"type": ["string", "null"], "pattern": "^[0-9]{8}$"},
     "status": {
       "enum": [
