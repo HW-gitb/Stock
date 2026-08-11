@@ -4,7 +4,7 @@
 
 - **Verdict/Action**: PASS，已提交并合入 master。A/B/C 与桌面权威件 §问题2 方案逐项一致：复用同一 `ctx.ohlcv_series_packet_path`、只补 source-packet 既有合同要求的那一枚 SHA、零 schema/sidecar/第二指纹、未放宽缺数降级；缺文件在 `pass2_fetch` stage 入口硬失败。风险档=低（22 行参数接线，无新 fail-closed 引擎、无 secret、无新增 live 调用），§6a 不起独立 agent。
 - **Required**: 无。`R-USSHORT-CAPSTONE-OHLCV-PRICE-LINKAGE-GAP` 翻 `resolved`；另记一条**非本刀造成**的 A-short Optional `R-ASHORT-MARGIN-CAPTURE-SCHEMA-PATH-CONSTANTS-ESCAPE-TRACKED-DIGEST-CANONICALIZATION`。完整正文、独立复算与闭合判据只在 `docs/system_risk_register.md`。
-- **Verify**: review-evidence:2e22812d4745。焦点超集亲跑 `Ran 130 / 77.4s`，唯一红=8 个 A-short digest 坐标；该 guard 测试本刀 `numstat=3 0` 纯新增、`a_short_margin_overheat_cash_control.py` 与 HEAD 逐字节同 → HEAD 同红，非本刀。植入：抹掉 `packet_paths["ohlcv_series_packet_path"]` → 点名测试精确转红且红在生产门 `_validated_provider_envelope_digests`，还原后 sha 同为 `7dbc9e55…`。full lane 按 rule 4 引账本 `5740/5740 equal=True PASS 360.5s`，独立重算 code-state fingerprint `0153257565…` 与账本逐字相同。
+- **Verify**: review-evidence:2e22812d4745。焦点超集亲跑 `Ran 130/77.4s`，唯一红=8 个 A-short digest 坐标（该 guard 测试本刀 `numstat=3 0`、a_short 引擎与 HEAD 逐字节同 → HEAD 同红，非本刀）。植入：抹掉 `packet_paths["ohlcv_series_packet_path"]` → 点名测试精确转红且红在生产门 `_validated_provider_envelope_digests`，还原后 sha 同为 `7dbc9e55…`。full lane 按 rule 4 引账本 `5740/5740 PASS`，独立重算 fingerprint `0153257565…` 逐字相同。**超时原因**:主树 pre-commit 两轮补证据（120 OK → merge widening 要 `a_short_effect_contract` 束 197 OK/203s）串在墙钟上。
 - **Next**: Codex：Pass
 
 ## 2026-08-11 — Codex 修复：问题1 Optional 复核 + 桌面 us_testrun0810 问题2 OHLCV 价格链（OPEN-NOT_VERIFIED）
