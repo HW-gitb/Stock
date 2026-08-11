@@ -35,6 +35,7 @@ from engine.a_short_factor_comparison_v2 import (  # noqa: E402
     validate_v2_weekly_record,
 )
 from engine.a_short_observability import safe_exception_summary  # noqa: E402
+from engine.a_short_run_revision import iter_private_week_roots  # noqa: E402
 from engine.a_short_tushare_client import init_tushare_pro  # noqa: E402
 from engine.data.a_share_board_scope import is_a_share_main_board  # noqa: E402
 from runners.materialize_execution_price_data_tushare import ts_call  # noqa: E402
@@ -280,21 +281,20 @@ def _dedupe_rows(rows: list[dict], *, key_names: tuple[str, str], label: str) ->
 
 
 def _frozen_windows(root: Path, run_date: str) -> list[dict]:
-    weeks = root / "weeks"
-    if not weeks.exists():
+    if not (root / "weeks").exists():
         return []
     windows = []
-    for week in sorted(path for path in weeks.iterdir() if path.is_dir() and path.name.isdigit()):
+    for decision_date, _run_revision_id, week in iter_private_week_roots(root):
         capture_path = week / "capture.json"
         receipt_path = week / "source_receipt.json"
         if not capture_path.exists() or not receipt_path.exists():
-            raise ComparisonV2Error(f"{week.name}: incomplete v2 capture cannot materialize a cache")
+            raise ComparisonV2Error(f"{decision_date}: incomplete v2 capture cannot materialize a cache")
         capture, receipt = _load_json(capture_path), _load_json(receipt_path)
         validate_v2_weekly_record(capture)
         validate_v2_weekly_record(receipt)
         _validate_source_receipt(root, capture, receipt)
         if capture.get("record_type") != "capture":
-            raise ComparisonV2Error(f"{week.name}: cache source is not a capture")
+            raise ComparisonV2Error(f"{decision_date}: cache source is not a capture")
         if not is_current_governed_capture(capture):
             # Old epoch evidence remains on disk for diagnosis but must not
             # consume fresh cache/provider budget or enter this admission's clock.
