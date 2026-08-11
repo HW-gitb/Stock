@@ -694,6 +694,54 @@ class Batch5DataContextSourcePacketTest(unittest.TestCase):
                         run_packet(self.packet, generated_at="2026-07-04T00:00:02Z")
                 self.assertFalse(self.paths["output"].exists())
 
+    def test_active_yfinance_source_bytes_and_provider_declaration_are_rejected(self):
+        for label, mutate, refresh_digest, expected_message in (
+            (
+                "bytes",
+                lambda payload: payload.__setitem__("replacement_probe", "yfinance-bytes"),
+                False,
+                "does not bind",
+            ),
+            (
+                "provider_declaration",
+                lambda payload: payload["provenance"]["AAPL"].__setitem__("provider_id", "fmp"),
+                True,
+                "provider envelope",
+            ),
+        ):
+            with self.subTest(case=label):
+                self._write_sources_and_packet()
+                _write_json(
+                    self.paths["yfinance"],
+                    resolve_yfinance_grade_actions(
+                        as_of=_GRADE_AS_OF,
+                        grades_by_ticker={
+                            "AAPL": self._yfinance_source([self._yfinance_row()]),
+                            "MSFT": self._yfinance_source([], ticker="MSFT"),
+                        },
+                    ),
+                )
+                packet = self._packet_payload()
+                packet["paths"]["yfinance_grade_actions_path"] = _rel(self.paths["yfinance"])
+                packet["source_artifact_sha256"]["yfinance_grade_actions_path"] = hashlib.sha256(
+                    self.paths["yfinance"].read_bytes()
+                ).hexdigest()
+                _write_json(self.packet, packet)
+
+                payload = json.loads(self.paths["yfinance"].read_text(encoding="utf-8"))
+                mutate(payload)
+                _write_json(self.paths["yfinance"], payload)
+                if refresh_digest:
+                    packet["source_artifact_sha256"]["yfinance_grade_actions_path"] = hashlib.sha256(
+                        self.paths["yfinance"].read_bytes()
+                    ).hexdigest()
+                    _write_json(self.packet, packet)
+
+                with mock.patch("runners.us_short_batch5_data_context_source_packet._validate_schema"):
+                    with self.assertRaisesRegex(SourcePacketError, expected_message):
+                        run_packet(self.packet, generated_at="2026-07-04T00:00:02Z")
+                self.assertFalse(self.paths["output"].exists())
+
     def test_yfinance_grade_envelope_is_bound_when_selected(self):
         _write_json(
             self.paths["yfinance"],
@@ -720,6 +768,52 @@ class Batch5DataContextSourcePacketTest(unittest.TestCase):
         ):
             result = run_packet(self.packet, generated_at="2026-07-04T00:00:02Z")
         self.assertEqual(result["scope"]["assembly_status"], "data_context_assembled_from_resolved_sources")
+
+    def test_selected_yfinance_source_drives_cut4_analyst_coverage(self):
+        # Required red control for R-USSHORT-ANALYST-SOURCE-COVERAGE-HEALTH-DRIFT:
+        # scoring and Cut4 linkage must consume the same active analyst source.  The
+        # canonical FMP shell is intentionally empty in this fixture.
+        _write_json(
+            self.paths["analyst"],
+            resolve_analyst_grade_actions(
+                as_of=_GRADE_AS_OF,
+                grades_by_ticker={
+                    # The canonical FMP-compatible shell deliberately has no
+                    # official target coverage; only yfinance covers AAPL.
+                    "JPM": _grade_source("JPM", []),
+                },
+            ),
+        )
+        _write_json(
+            self.paths["yfinance"],
+            resolve_yfinance_grade_actions(
+                as_of=_GRADE_AS_OF,
+                grades_by_ticker={
+                    "AAPL": self._yfinance_source([self._yfinance_row()]),
+                    "MSFT": self._yfinance_source([], ticker="MSFT"),
+                },
+            ),
+        )
+        packet = self._packet_payload()
+        packet["source_artifact_sha256"]["analyst_grade_actions_path"] = hashlib.sha256(
+            self.paths["analyst"].read_bytes()
+        ).hexdigest()
+        packet["paths"]["yfinance_grade_actions_path"] = _rel(self.paths["yfinance"])
+        packet["source_artifact_sha256"]["yfinance_grade_actions_path"] = hashlib.sha256(
+            self.paths["yfinance"].read_bytes()
+        ).hexdigest()
+        packet["paths"]["output_context_components_path"] = _rel(self.paths["components"])
+        _write_json(self.packet, packet)
+
+        run_packet(self.packet, generated_at="2026-07-04T00:00:02Z")
+
+        components = json.loads(self.paths["components"].read_text(encoding="utf-8"))
+        selection = components["data_context"]["selection_inputs"]["per_ticker"]
+        self.assertNotEqual(selection["AAPL"]["core_score"], 50.0)
+        self.assertEqual(
+            components["result_linkage_sources"]["AAPL"]["coverage"]["data_checks"]["analyst"],
+            "ok",
+        )
 
     def test_cli_default_accepts_legacy_projection_inputs_profile(self):
         targets = ("AAPL", "MSFT")
@@ -990,6 +1084,14 @@ class Batch5DataContextSourcePacketTest(unittest.TestCase):
         components = json.loads(self.paths["components"].read_text(encoding="utf-8"))
         selection = components["data_context"]["selection_inputs"]["per_ticker"]
         self.assertAlmostEqual(selection["AAPL"]["core_score"], 51.5)
+        aapl_linkage = components["result_linkage_sources"]["AAPL"]
+        self.assertEqual(aapl_linkage["coverage"]["data_checks"]["analyst"], "restricted")
+        self.assertEqual(aapl_linkage["coverage"]["coverage_status"], "restricted")
+        self.assertIn("analyst:restricted", aapl_linkage["coverage"]["coverage_gap_tags"])
+        self.assertNotIn("provider_health", components)
+        self.assertNotIn("provider_health_facts", components)
+        self.assertNotIn("emit", components)
+        self.assertNotIn("ship_gate", components)
         source_refs = components["run_provenance"]["families"]["selection_inputs"]["source_refs"]
         self.assertIn({"role": "yfinance_grade_actions", "path": _rel(self.paths["yfinance"])}, source_refs)
         self.assertNotIn({"role": "analyst_grade_actions", "path": _rel(self.paths["analyst"])}, source_refs)

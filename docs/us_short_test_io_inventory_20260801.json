@@ -7,23 +7,23 @@
       "state/us_short"
     ]
   },
-  "module_count": 316,
+  "module_count": 317,
   "classification_counts": {
-    "class0_no_direct_protected_io": 244,
+    "class0_no_direct_protected_io": 245,
     "class1_read_real_root": 1,
-    "class2_write_real_root": 4,
+    "class2_write_real_root": 3,
     "class3_global_sentinel": 5,
-    "class4_unresolved_write": 62
+    "class4_unresolved_write": 63
   },
   "class0_modules_omitted": true,
-  "module_path_sha256": "47778cc36040e6d601d7330a768beb2649ff5619edf7faaa6bebf4477a9ade50",
+  "module_path_sha256": "7c061c676a2a24b31278cdf988dc92e1e79030abf926f70b91b3beb78a8d528f",
   "allowlist": [
     "tests/provider/test_us_short_batch5_bankruptcy_8k_source_packet.py:kwarg:packet_ref:state/us_short",
     "tests/provider/test_us_short_batch5_bankruptcy_8k_source_packet.py:kwarg:screen_path:state/us_short",
-    "tests/provider/test_us_short_batch5_incident_log_writer.py:TemporaryDirectory:state/us_short",
-    "tests/provider/test_us_short_batch5_incident_log_writer.py:kwarg:incident_root:state/us_short",
-    "tests/provider/test_us_short_batch5_incident_log_writer.py:mkdir:state/us_short",
-    "tests/provider/test_us_short_batch5_incident_log_writer.py:write_text:state/us_short",
+    "tests/provider/test_us_short_batch5_incident_log_writer.py:TemporaryDirectory:provider_samples,state/us_short",
+    "tests/provider/test_us_short_batch5_incident_log_writer.py:kwarg:incident_root:provider_samples,state/us_short",
+    "tests/provider/test_us_short_batch5_incident_log_writer.py:mkdir:provider_samples,state/us_short",
+    "tests/provider/test_us_short_batch5_incident_log_writer.py:write_text:provider_samples,state/us_short",
     "tests/provider/test_us_short_batch5_live_source_packet.py:kwarg:raw_sample_ref:provider_samples",
     "tests/provider/test_us_short_batch5_theme_source_packet.py:kwarg:raw_sample_ref:provider_samples",
     "tests/provider/test_us_short_llm_theme_discovery_fetch_web.py:kwarg:artifact_path:state/us_short",
@@ -80,6 +80,10 @@
     "tests/provider/test_us_short_batch5_full_universe_theme_producer.py:mkdir:provider_samples,state/us_short:class4_unresolved_write",
     "tests/provider/test_us_short_batch5_full_universe_theme_producer.py:unlink:provider_samples,state/us_short:class4_unresolved_write",
     "tests/provider/test_us_short_batch5_full_universe_theme_producer.py:write_text:provider_samples,state/us_short:class4_unresolved_write",
+    "tests/provider/test_us_short_batch5_incident_log_writer.py:TemporaryDirectory:provider_samples,state/us_short:class4_unresolved_write",
+    "tests/provider/test_us_short_batch5_incident_log_writer.py:kwarg:incident_root:provider_samples,state/us_short:class4_unresolved_write",
+    "tests/provider/test_us_short_batch5_incident_log_writer.py:mkdir:provider_samples,state/us_short:class4_unresolved_write",
+    "tests/provider/test_us_short_batch5_incident_log_writer.py:write_text:provider_samples,state/us_short:class4_unresolved_write",
     "tests/provider/test_us_short_batch5_live_source_packet.py:mkdir:provider_samples,state/us_short:class4_unresolved_write",
     "tests/provider/test_us_short_batch5_live_source_packet.py:rmdir:provider_samples,state/us_short:class4_unresolved_write",
     "tests/provider/test_us_short_batch5_live_source_packet.py:unlink:provider_samples,state/us_short:class4_unresolved_write",
@@ -268,6 +272,10 @@
     "tests/provider/test_us_short_batch5_full_universe_theme_producer.py:mkdir:provider_samples,state/us_short:class4_unresolved_write": 1,
     "tests/provider/test_us_short_batch5_full_universe_theme_producer.py:unlink:provider_samples,state/us_short:class4_unresolved_write": 2,
     "tests/provider/test_us_short_batch5_full_universe_theme_producer.py:write_text:provider_samples,state/us_short:class4_unresolved_write": 1,
+    "tests/provider/test_us_short_batch5_incident_log_writer.py:TemporaryDirectory:provider_samples,state/us_short:class4_unresolved_write": 1,
+    "tests/provider/test_us_short_batch5_incident_log_writer.py:kwarg:incident_root:provider_samples,state/us_short:class4_unresolved_write": 13,
+    "tests/provider/test_us_short_batch5_incident_log_writer.py:mkdir:provider_samples,state/us_short:class4_unresolved_write": 3,
+    "tests/provider/test_us_short_batch5_incident_log_writer.py:write_text:provider_samples,state/us_short:class4_unresolved_write": 2,
     "tests/provider/test_us_short_batch5_live_source_packet.py:mkdir:provider_samples,state/us_short:class4_unresolved_write": 1,
     "tests/provider/test_us_short_batch5_live_source_packet.py:rmdir:provider_samples,state/us_short:class4_unresolved_write": 3,
     "tests/provider/test_us_short_batch5_live_source_packet.py:unlink:provider_samples,state/us_short:class4_unresolved_write": 4,
@@ -417,10 +425,6 @@
   "protected_write_finding_keys": [
     "tests/provider/test_us_short_batch5_bankruptcy_8k_source_packet.py:kwarg:packet_ref:state/us_short",
     "tests/provider/test_us_short_batch5_bankruptcy_8k_source_packet.py:kwarg:screen_path:state/us_short",
-    "tests/provider/test_us_short_batch5_incident_log_writer.py:TemporaryDirectory:state/us_short",
-    "tests/provider/test_us_short_batch5_incident_log_writer.py:kwarg:incident_root:state/us_short",
-    "tests/provider/test_us_short_batch5_incident_log_writer.py:mkdir:state/us_short",
-    "tests/provider/test_us_short_batch5_incident_log_writer.py:write_text:state/us_short",
     "tests/provider/test_us_short_batch5_live_source_packet.py:kwarg:raw_sample_ref:provider_samples",
     "tests/provider/test_us_short_batch5_theme_source_packet.py:kwarg:raw_sample_ref:provider_samples",
     "tests/provider/test_us_short_llm_theme_discovery_fetch_web.py:kwarg:artifact_path:state/us_short",
@@ -437,10 +441,6 @@
   "protected_write_finding_counts": {
     "tests/provider/test_us_short_batch5_bankruptcy_8k_source_packet.py:kwarg:packet_ref:state/us_short": 1,
     "tests/provider/test_us_short_batch5_bankruptcy_8k_source_packet.py:kwarg:screen_path:state/us_short": 1,
-    "tests/provider/test_us_short_batch5_incident_log_writer.py:TemporaryDirectory:state/us_short": 1,
-    "tests/provider/test_us_short_batch5_incident_log_writer.py:kwarg:incident_root:state/us_short": 13,
-    "tests/provider/test_us_short_batch5_incident_log_writer.py:mkdir:state/us_short": 3,
-    "tests/provider/test_us_short_batch5_incident_log_writer.py:write_text:state/us_short": 2,
     "tests/provider/test_us_short_batch5_live_source_packet.py:kwarg:raw_sample_ref:provider_samples": 1,
     "tests/provider/test_us_short_batch5_theme_source_packet.py:kwarg:raw_sample_ref:provider_samples": 1,
     "tests/provider/test_us_short_llm_theme_discovery_fetch_web.py:kwarg:artifact_path:state/us_short": 1,
@@ -596,8 +596,9 @@
     },
     {
       "module": "tests/provider/test_us_short_batch5_incident_log_writer.py",
-      "classification": "class2_write_real_root",
+      "classification": "class4_unresolved_write",
       "protected_roots": [
+        "provider_samples",
         "state/us_short"
       ],
       "read_count": 15,

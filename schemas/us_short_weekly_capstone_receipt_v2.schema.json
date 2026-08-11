@@ -38,9 +38,9 @@
     "provider_call_counts": { "$ref": "#/definitions/counts" },
     "provider_summary_digests": { "$ref": "#/definitions/digests" },
     "provider_health_facts": {
-      "type": "array", "items": {
+      "type": "array", "minItems": 8, "maxItems": 8, "items": {
         "type": "array", "minItems": 2, "maxItems": 2,
-        "items": [{ "type": "string", "minLength": 1 }, { "enum": ["ok", "down"] }],
+        "items": [{ "type": "string", "minLength": 1 }, { "enum": ["ok", "degraded", "down", "missing"] }],
         "additionalItems": false
       }
     },

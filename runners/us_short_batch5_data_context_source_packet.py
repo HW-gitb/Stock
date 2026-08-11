@@ -679,6 +679,31 @@ def _validate_resolved_analyst_grade_envelope(
         raise SourcePacketError("provider envelope analyst excluded dispositions must be exact str")
 
 
+def _resolve_active_analyst_source(
+    source_payloads: dict[str, Any], *, as_of: str,
+) -> tuple[dict[str, Any], str, str]:
+    """Validate and select the one analyst envelope consumed by all local consumers."""
+    fmp_path_field = "analyst_grade_actions_path"
+    _validate_resolved_analyst_grade_envelope(
+        source_payloads[fmp_path_field],
+        as_of=as_of,
+        provider_id="fmp",
+        endpoint="grades",
+        direction_map={"upgrade": "up", "downgrade": "down"},
+    )
+    yfinance_path_field = "yfinance_grade_actions_path"
+    if yfinance_path_field in source_payloads:
+        _validate_resolved_analyst_grade_envelope(
+            source_payloads[yfinance_path_field],
+            as_of=as_of,
+            provider_id="yfinance",
+            endpoint="upgrades_downgrades",
+            direction_map={"up": "up", "down": "down"},
+        )
+        return source_payloads[yfinance_path_field], "yfinance", yfinance_path_field
+    return source_payloads[fmp_path_field], "fmp", fmp_path_field
+
+
 def _validate_resolved_offering_envelope(result: Any, *, as_of: str) -> None:
     if type(result) is not dict or set(result) != _SEC_OFFERING_RESULT_KEYS:
         raise SourcePacketError("provider envelope SEC offering result keys drifted")
@@ -832,12 +857,9 @@ def run_packet(
         _validate_resolved_offering_envelope(
             source_payloads["offering_audit_source_path"], as_of=provider_envelope_as_of
         )
-        _validate_resolved_analyst_grade_envelope(
-            source_payloads["analyst_grade_actions_path"],
+        active_analyst_payload, active_analyst_provider, active_analyst_path_field = _resolve_active_analyst_source(
+            source_payloads,
             as_of=provider_envelope_as_of,
-            provider_id="fmp",
-            endpoint="grades",
-            direction_map={"upgrade": "up", "downgrade": "down"},
         )
         try:
             validate_resolved_news_events(
@@ -846,18 +868,13 @@ def run_packet(
             )
         except Exception as exc:
             raise SourcePacketError(f"provider envelope Massive news rejected: {exc}") from exc
-        if "yfinance_grade_actions_path" in source_payloads:
-            _validate_resolved_analyst_grade_envelope(
-                source_payloads["yfinance_grade_actions_path"],
-                as_of=provider_envelope_as_of,
-                provider_id="yfinance",
-                endpoint="upgrades_downgrades",
-                direction_map={"up": "up", "down": "down"},
-            )
-        analyst_grade_actions = source_payloads.get(
-            "yfinance_grade_actions_path",
-            source_payloads["analyst_grade_actions_path"],
-        )
+        # The provider/path identity is resolved once at the packet boundary. All
+        # downstream consumers (score/coverage/Cut4) receive this same payload;
+        # the canonical FMP-compatible shell remains provenance-only when
+        # yfinance is selected.
+        active_source_payloads = dict(source_payloads)
+        active_source_payloads["analyst_grade_actions_path"] = source_payloads[active_analyst_path_field]
+        analyst_grade_actions = active_analyst_payload
         candidate = source_payloads["candidate_artifact_path"]
         try:
             validate_projection_binding(
@@ -1042,7 +1059,7 @@ def run_packet(
             try:
                 source_facts = build_result_source_facts(
                     context_components=context_components,
-                    source_payloads=source_payloads,
+                    source_payloads=active_source_payloads,
                     source_digests=source_digests,
                     ohlcv_packet=source_payloads.get("ohlcv_series_packet_path"),
                 )

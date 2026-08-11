@@ -504,7 +504,7 @@ def _fetch_live_records(
     selected_symbols: list[str],
     raw_root: Path,
     client: sample_validation.JsonHttpClient,
-    fmp_env: sample_validation.EnvValue,
+    fmp_env: sample_validation.EnvValue | None,
     sec_env: sample_validation.EnvValue,
     massive_env: sample_validation.EnvValue,
     sec_sleep_seconds: float,
@@ -525,6 +525,10 @@ def _fetch_live_records(
                 "budget exceeded before provider request: approved budget "
                 f"{binding['exact_pass2_calls']}, stage requires {max_total_endpoint_calls}"
             )
+    if fetch_fmp_grades and fmp_env is None:
+        raise FullCandidateLiveSourcePacketError(
+            "FMP_API_KEY is required for the FMP analyst-grades fallback"
+        )
     records: list[sample_validation.FetchRecord] = []
     retry_stats = {"used": 0}
     attempt_budget = HttpAttemptBudget(max_total_http_attempts=max_total_http_attempts)
@@ -1382,8 +1386,13 @@ def _build_summary(
     source_packet_run: dict[str, Any] | None,
     run_data_context: bool,
     context_components_output_path: Path | None,
+    analyst_source: str,
     yfinance_grade_actions_path: Path | None,
 ) -> dict[str, Any]:
+    if analyst_source not in {"fmp", "yfinance"}:
+        raise FullCandidateLiveSourcePacketError("analyst_source must be fmp or yfinance")
+    if (analyst_source == "yfinance") != (yfinance_grade_actions_path is not None):
+        raise FullCandidateLiveSourcePacketError("analyst_source does not match the supplied analyst source path")
     endpoint_errors = sum(1 for record in endpoint_records if not record.ok)
     eligible = list(candidate_artifact["eligible_tickers"])
     offline_replay = execution_mode == _EXECUTION_MODE_OFFLINE_REPLAY
@@ -1428,7 +1437,7 @@ def _build_summary(
             "datahub_consumption_performed": False,
             "production_storage_performed": False,
             "full_market_call_performed": False,
-            "yfinance_consumption_performed": False,
+            "yfinance_consumption_performed": analyst_source == "yfinance",
             "broker_or_order_execution_performed": False,
             "ship_gate_or_live_normalized_evidence_claimed": False,
             "a_share_crossing_performed": False,
@@ -1505,7 +1514,10 @@ def _build_summary(
                 _repo_rel(yfinance_grade_actions_path) if yfinance_grade_actions_path is not None else None
             ),
             "analyst_grade_actions_consumed_from": (
-                "yfinance_grade_actions" if yfinance_grade_actions_path is not None else "fmp_analyst_grade_actions"
+                "yfinance_grade_actions" if analyst_source == "yfinance" else "fmp_analyst_grade_actions"
+            ),
+            "analyst_grade_actions_exclusion": (
+                "not_called_replaced_by_yfinance" if analyst_source == "yfinance" else None
             ),
             "massive_news_events_path": _repo_rel(source_paths["massive_news_events"]),
             "corporate_action_capture_path": _repo_rel(source_paths["corporate_action_capture"]),
@@ -1534,7 +1546,7 @@ def _build_summary(
         "prohibited_claims": {
             "provider_selected": False,
             "full_market_download_performed": False,
-            "yfinance_used": yfinance_grade_actions_path is not None,
+            "yfinance_used": analyst_source == "yfinance",
             "paid_access_used": False,
             "datahub_consumed": False,
             "production_readiness_claimed": False,
@@ -1578,6 +1590,7 @@ def _assert_text_safe(text: str, sensitive_values: list[str]) -> None:
 
 def _validate_summary_against_schema(summary: dict[str, Any]) -> None:
     _validate_json_schema(summary, SUMMARY_SCHEMA_PATH, label="full-candidate live source-packet summary")
+    _validate_analyst_source_semantics(summary)
     gate = summary["preflight_gate"]
     budget = summary["endpoint_call_budget"]
     if gate["expected_total_call_budget"] != gate["preflight_total_call_forecast"]:
@@ -1624,6 +1637,53 @@ def _validate_summary_against_schema(summary: dict[str, Any]) -> None:
             raise FullCandidateLiveSourcePacketError(
                 "offline replay summary decision clock is not bound to the source capture"
             )
+
+
+def _validate_analyst_source_semantics(summary: dict[str, Any]) -> None:
+    """Read-time semantic lock for the active analyst source and its FMP/yfinance accounting.
+
+    JSON Schema intentionally permits the two environment booleans because the source is selected at runtime.  This
+    validator closes the cross-field meaning that schema cannot express: a yfinance run must not claim an FMP key or
+    FMP grades calls, while an FMP fallback must not carry the yfinance exclusion sentinel.
+    """
+    try:
+        scope = summary["scope"]
+        environment = summary["environment"]
+        source_artifacts = summary["source_artifacts"]
+        budget = summary["endpoint_call_budget"]
+        consumed_from = source_artifacts["analyst_grade_actions_consumed_from"]
+        yfinance_consumed = scope["yfinance_consumption_performed"]
+        fmp_key_present = environment["fmp_api_key_present"]
+        fmp_key_source = environment["fmp_api_key_source"]
+        fmp_calls = budget["fmp_grades_calls"]
+        exclusion = source_artifacts["analyst_grade_actions_exclusion"]
+    except (KeyError, TypeError) as exc:
+        raise FullCandidateLiveSourcePacketError("summary analyst-source semantic fields are incomplete") from exc
+    if consumed_from == "yfinance_grade_actions":
+        if not (
+            yfinance_consumed is True
+            and fmp_key_present is False
+            and fmp_key_source == "not_required_yfinance_grades"
+            and fmp_calls == 0
+            and exclusion == "not_called_replaced_by_yfinance"
+        ):
+            raise FullCandidateLiveSourcePacketError(
+                "yfinance analyst-source summary is inconsistent with FMP credential/call/exclusion facts"
+            )
+    elif consumed_from == "fmp_analyst_grade_actions":
+        if not (
+            yfinance_consumed is False
+            and fmp_key_present is True
+            and fmp_key_source != "not_required_yfinance_grades"
+            and type(fmp_calls) is int
+            and fmp_calls > 0
+            and exclusion is None
+        ):
+            raise FullCandidateLiveSourcePacketError(
+                "FMP analyst-source summary is inconsistent with yfinance/FMP credential/call/exclusion facts"
+            )
+    else:
+        raise FullCandidateLiveSourcePacketError("summary analyst_grade_actions_consumed_from is unknown")
 
 
 def _write_summary_validated(summary: dict[str, Any], summary_path: Path, sensitive_values: list[str]) -> None:
@@ -2022,12 +2082,14 @@ def run_full_candidate_live_source_packet(
         raise FullCandidateLiveSourcePacketError("candidate target symbols drifted from the re-derived funnel")
     fetch_symbols = list(reviewed_target_symbols)
 
-    fmp_env = sample_validation.read_required_env("FMP_API_KEY")
+    analyst_source = "yfinance" if yfinance_actions_path is not None else "fmp"
+    fetch_fmp_grades = analyst_source == "fmp"
+    fmp_env = sample_validation.read_required_env("FMP_API_KEY") if fetch_fmp_grades else None
     sec_env = sample_validation.read_required_env("SEC_USER_AGENT")
     massive_env = sample_validation.read_required_env("MASSIVE_API_KEY")
     env_summary = {
-        "fmp_api_key_present": True,
-        "fmp_api_key_source": fmp_env.source,
+        "fmp_api_key_present": fmp_env is not None,
+        "fmp_api_key_source": fmp_env.source if fmp_env is not None else "not_required_yfinance_grades",
         "sec_user_agent_present": True,
         "sec_user_agent_source": sec_env.source,
         "massive_api_key_present": True,
@@ -2050,7 +2112,7 @@ def run_full_candidate_live_source_packet(
         provider_pace_seconds=provider_pace_seconds,
         max_retries_per_call=max_retries_per_call,
         retry_backoff_seconds=retry_backoff_seconds,
-        fetch_fmp_grades=yfinance_actions_path is None,
+        fetch_fmp_grades=fetch_fmp_grades,
         budget_approval=budget_approval,
         require_budget_approval=execution_mode == _EXECUTION_MODE_LIVE_PROVIDER_FETCH,
     )
@@ -2180,9 +2242,14 @@ def run_full_candidate_live_source_packet(
         source_packet_run=packet_run,
         run_data_context=run_data_context,
         context_components_output_path=components_path,
+        analyst_source=analyst_source,
         yfinance_grade_actions_path=yfinance_actions_path,
     )
-    _write_summary_validated(summary, summary_resolved, [fmp_env.value, sec_env.value, massive_env.value])
+    _write_summary_validated(
+        summary,
+        summary_resolved,
+        [value for value in (fmp_env.value if fmp_env is not None else None, sec_env.value, massive_env.value) if value],
+    )
     return summary
 
 

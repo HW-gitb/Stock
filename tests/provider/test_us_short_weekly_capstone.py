@@ -51,15 +51,27 @@ _RECEIPT_STAGE_NAMES = tuple(
 )
 
 
+def _health_facts(**overrides):
+    keys = (
+        "universe_status", "universe_market_cap", "massive_momentum", "sec_sic",
+        "analyst_grades", "sec_offering_audit", "massive_events", "fmp_vix",
+    )
+    values = {key: "ok" for key in keys}
+    values.update(overrides)
+    return tuple((key, values[key]) for key in keys)
+
+
 def _research_receipt(*, decision_date="20260709", source_path=None, generated_at="2026-07-09T08:00:00-04:00",
                       source_manifest=None, provider_summaries=None,
-                      provider_health_facts=(("fmp", "ok"), ("sec_edgar", "ok")), stage_executions=None):
+                      provider_health_facts=None, stage_executions=None):
     from engine.us_short_run_origin import _issue_capstone_research_live_receipt
     source = Path(source_path or (ROOT / "state" / "us_short" / "receipt_test_source.json")).resolve()
     source_digest = hashlib.sha256(source.read_bytes()).hexdigest() if source.is_file() else "1" * 64
     evidence_digest = "2" * 64
     source_manifest = source_manifest or (("test_source", str(source), source_digest),)
-    provider_stages = ("universe_fetch", "momentum_fetch", "sic_fetch", "pass2_fetch", "vix_regime")
+    provider_stages = (
+        "universe_fetch", "momentum_fetch", "sic_fetch", "pass2_fetch", "yfinance_grades_fetch", "vix_regime",
+    )
     summaries = {stage: {"stage": stage} for stage in provider_stages}
     summaries.update(provider_summaries or {})
     provider_summaries = summaries
@@ -68,6 +80,8 @@ def _research_receipt(*, decision_date="20260709", source_path=None, generated_a
                                            separators=(",", ":")).encode("utf-8")).hexdigest())
         for stage in provider_stages
     )
+    if provider_health_facts is None:
+        provider_health_facts = _health_facts()
     run_id = hashlib.sha256(
         f"{decision_date}|{generated_at}|{source}|{source_digest}|{evidence_digest}".encode("utf-8")
     ).hexdigest()
@@ -1580,7 +1594,7 @@ class CapstoneStageAuthAndSourceBindingTest(unittest.TestCase):
         require_research_live_capability(FORGED, receipt, decision_date="20260615")   # ok — no raise
         advisory_receipt = _research_receipt(
             decision_date="20260615",
-            provider_health_facts=(("fmp", "down"), ("sec_edgar", "ok")),
+            provider_health_facts=_health_facts(analyst_grades="down"),
         )
         require_research_live_capability(FORGED, advisory_receipt, decision_date="20260615")
         require_research_live_capability({"run_mode": "offline_test"}, None)           # offline_test no-op
@@ -1607,7 +1621,7 @@ class CapstoneStageAuthAndSourceBindingTest(unittest.TestCase):
                     write_action_table({"run_origin": FORGED, "rows": []}, _out, **cap)
             critical_down_receipt = _research_receipt(
                 decision_date="20260615",
-                provider_health_facts=(("fmp", "ok"), ("sec_edgar", "down")),
+                provider_health_facts=_health_facts(sec_offering_audit="down"),
             )
             with self.assertRaises(RunOriginError):
                 assemble_machine_record(object(), as_of="20260615", run_origin=FORGED,
@@ -1778,11 +1792,7 @@ class CapstoneStageSummaryPathTest(unittest.TestCase):
 
 
 class CapstoneProviderHealthDerivationTest(unittest.TestCase):
-    """_write_provider_health derives {fmp, sec_edgar} from the REAL Pass2 summary (endpoint_results rows carry
-    provider_id/endpoint_family/status per _summarize_endpoint). This is the emit-critical unit the stopped 2026-07-09
-    run never reached and the fake-chain tests structurally cannot cover (they inject the bridge RESULT, not the
-    derivation). FMP grades reads 'ok' only at its success-coverage threshold; emit-critical SEC instead requires
-    exactly one successful submissions record for every unique Pass2 target identity."""
+    """The receipt-bound projector derives the exact eight functional health families from stage results."""
 
     def _derive(self, endpoint_results, budget):
         import json
@@ -1810,10 +1820,38 @@ class CapstoneProviderHealthDerivationTest(unittest.TestCase):
                 "target_count": len(sec_target_symbols),
                 "target_symbols": sec_target_symbols,
             },
+            "source_artifacts": {"analyst_grade_actions_consumed_from": "fmp_analyst_grade_actions"},
         }),
                         encoding="utf-8")
-        st._write_provider_health(ctx)
-        return json.loads(ctx.provider_health_path.read_text(encoding="utf-8"))
+        # The direct projector is the canonical unit; the write seam is covered separately below.
+        return st.derive_capstone_provider_health({
+            "universe_fetch": {
+                "scope": {"status": "universe_fetch_and_pass1_completed"},
+                "provider_health": {
+                    "overall_run_state": "clean",
+                    "status_sources": {
+                        "state": "clean",
+                        "outcome": {
+                            "per_source": {"ticker_reference": "ok", "exchange_halt_feed": "ok", "sec_8k_item_103": "ok"},
+                            "failed_sources": [], "failed_count": 0, "total_sources": 3,
+                            "critical_failed": [], "critical_all_failed": False, "block_or_no_emit": False,
+                        },
+                    },
+                },
+                "pass1_result": {"needs_market_cap": []},
+            },
+            "momentum_fetch": {
+                "fetch_stats": {"sessions_with_data": 5, "min_sessions_required": 3},
+                "coverage": {"eligible_count": 1, "series_ticker_count": 1, "benchmarks_present": True},
+            },
+            "sic_fetch": {
+                "classification": {"eligible_count": 1, "sic_resolved_count": 1, "sic_missing_count": 0},
+            },
+            "pass2_fetch": json.loads(summ.read_text(encoding="utf-8")),
+            "vix_regime": {
+                "http_status": 200, "vix_value": 18.0, "vix_regime": "进攻", "vix_regime_is_unknown": False,
+            },
+        })
 
     @staticmethod
     def _row(provider, family, ok):
@@ -1863,7 +1901,8 @@ class CapstoneProviderHealthDerivationTest(unittest.TestCase):
         rows = ([self._row("financial_modeling_prep", "grades", True) for _ in range(5)]
                 + [self._row("sec_edgar", "submissions", True) for _ in range(5)])
         health = self._derive(rows, {"fmp_grades_calls": 5, "sec_submissions_calls": 5, "endpoint_error_count": 0})
-        self.assertEqual(health, {"fmp": "ok", "sec_edgar": "ok"})
+        self.assertEqual(health["analyst_grades"], "ok")
+        self.assertEqual(health["sec_offering_audit"], "ok")
 
     def test_zero_grades_success_is_down(self):
         # every grades call errored -> no success row -> _family_ok False -> budget fallback also False
@@ -1871,8 +1910,8 @@ class CapstoneProviderHealthDerivationTest(unittest.TestCase):
         rows = ([self._row("financial_modeling_prep", "grades", False) for _ in range(5)]
                 + [self._row("sec_edgar", "submissions", True) for _ in range(5)])
         health = self._derive(rows, {"fmp_grades_calls": 5, "sec_submissions_calls": 5, "endpoint_error_count": 5})
-        self.assertEqual(health["fmp"], "down")
-        self.assertEqual(health["sec_edgar"], "ok")
+        self.assertEqual(health["analyst_grades"], "down")
+        self.assertEqual(health["sec_offering_audit"], "ok")
 
     def test_low_grades_coverage_is_down(self):
         # item 2 (a): ONE success among 199 failures = 0.5% coverage < threshold -> fmp='down' (was 'ok' under the
@@ -1882,13 +1921,13 @@ class CapstoneProviderHealthDerivationTest(unittest.TestCase):
                 + [self._row("financial_modeling_prep", "grades", False) for _ in range(199)]
                 + [self._row("sec_edgar", "submissions", True)])
         health = self._derive(rows, {"fmp_grades_calls": 200, "sec_submissions_calls": 1, "endpoint_error_count": 199})
-        self.assertEqual(health["fmp"], "down")
+        self.assertEqual(health["analyst_grades"], "degraded")
 
     def test_sec_no_calls_is_down(self):
         # No exact target SEC submission coverage -> down.
         rows = [self._row("financial_modeling_prep", "grades", True)]
         health = self._derive(rows, {"fmp_grades_calls": 1, "sec_submissions_calls": 0, "endpoint_error_count": 0})
-        self.assertEqual(health["sec_edgar"], "down")
+        self.assertEqual(health["sec_offering_audit"], "down")
 
     def test_sec_all_failed_is_down(self):
         # item 2 (a): ALL SEC submissions failed = 0% coverage -> sec_edgar='down' (was 'ok' under the old
@@ -1896,7 +1935,7 @@ class CapstoneProviderHealthDerivationTest(unittest.TestCase):
         rows = ([self._row("financial_modeling_prep", "grades", True) for _ in range(5)]
                 + [self._row("sec_edgar", "submissions", False) for _ in range(5)])
         health = self._derive(rows, {"fmp_grades_calls": 5, "sec_submissions_calls": 5, "endpoint_error_count": 5})
-        self.assertEqual(health["sec_edgar"], "down")
+        self.assertEqual(health["sec_offering_audit"], "down")
 
     def test_sec_partial_target_coverage_is_down_even_when_every_attempt_succeeds(self):
         # R3: endpoint-success coverage is not target-identity coverage. Two successful SEC calls cannot make a
@@ -1912,7 +1951,7 @@ class CapstoneProviderHealthDerivationTest(unittest.TestCase):
             ],
         })
 
-        self.assertEqual(health["sec_edgar"], "down")
+        self.assertEqual(health["sec_offering_audit"], "down")
 
     def test_sec_error_for_any_required_target_is_down(self):
         from runners import us_short_weekly_capstone_stages as st
@@ -1926,7 +1965,7 @@ class CapstoneProviderHealthDerivationTest(unittest.TestCase):
             ],
         })
 
-        self.assertEqual(health["sec_edgar"], "down")
+        self.assertEqual(health["sec_offering_audit"], "down")
 
     def test_sec_coverage_rejects_target_count_drift(self):
         from runners import us_short_weekly_capstone_stages as st
@@ -1940,7 +1979,7 @@ class CapstoneProviderHealthDerivationTest(unittest.TestCase):
             ],
         })
 
-        self.assertEqual(health["sec_edgar"], "down")
+        self.assertEqual(health["sec_offering_audit"], "down")
 
     def test_sec_coverage_rejects_noninteger_target_count(self):
         from runners import us_short_weekly_capstone_stages as st
@@ -1953,7 +1992,7 @@ class CapstoneProviderHealthDerivationTest(unittest.TestCase):
             ],
         })
 
-        self.assertEqual(health["sec_edgar"], "down")
+        self.assertEqual(health["sec_offering_audit"], "down")
 
     def test_sec_coverage_rejects_duplicate_or_foreign_submission_identity(self):
         from runners import us_short_weekly_capstone_stages as st
@@ -1972,21 +2011,22 @@ class CapstoneProviderHealthDerivationTest(unittest.TestCase):
         ):
             with self.subTest(extra=extra["symbol"]):
                 summary = {**base, "endpoint_results": [*base["endpoint_results"], extra]}
-                self.assertEqual(st.derive_provider_health(summary)["sec_edgar"], "down")
+                self.assertEqual(st.derive_provider_health(summary)["sec_offering_audit"], "down")
 
     def test_fmp_coverage_exactly_at_threshold_is_ok_but_partial_sec_target_coverage_is_down(self):
         # The FMP threshold remains inclusive; SEC's emit-critical contract instead requires every target identity.
         rows = ([self._row("financial_modeling_prep", "grades", i < 5) for i in range(10)]
                 + [self._row("sec_edgar", "submissions", i < 5) for i in range(10)])
         health = self._derive(rows, {"fmp_grades_calls": 10, "sec_submissions_calls": 10, "endpoint_error_count": 10})
-        self.assertEqual(health, {"fmp": "ok", "sec_edgar": "down"})
+        self.assertEqual(health["analyst_grades"], "degraded")
+        self.assertEqual(health["sec_offering_audit"], "down")
 
     def test_coverage_just_below_threshold_is_down(self):
         # boundary: 4/10 = 0.4 < 0.5 -> down.
         rows = ([self._row("financial_modeling_prep", "grades", i < 4) for i in range(10)]
                 + [self._row("sec_edgar", "submissions", True) for _ in range(10)])
         health = self._derive(rows, {"fmp_grades_calls": 10, "sec_submissions_calls": 10, "endpoint_error_count": 6})
-        self.assertEqual(health["fmp"], "down")
+        self.assertEqual(health["analyst_grades"], "degraded")
 
     def _run_on_raw(self, raw_text):
         import json
@@ -2011,12 +2051,23 @@ class CapstoneProviderHealthDerivationTest(unittest.TestCase):
         for bad in ("[]", "null", "42", '"hello"', "true",
                     json.dumps({"endpoint_results": None}), json.dumps({"endpoint_results": 5}),
                     json.dumps({"no_results_key": 1})):
-            self.assertEqual(self._run_on_raw(bad), {"fmp": "down", "sec_edgar": "down"}, f"input={bad!r}")
+            self.assertEqual(
+                self._run_on_raw(bad),
+                {"universe_status": "missing", "universe_market_cap": "missing", "massive_momentum": "missing",
+                 "sec_sic": "missing", "analyst_grades": "missing", "sec_offering_audit": "down",
+                 "massive_events": "missing", "fmp_vix": "missing"},
+                f"input={bad!r}",
+            )
 
     def test_unreadable_or_invalid_json_fails_closed(self):
         # invalid JSON and an empty/0-byte file -> fail closed to down, no crash.
-        self.assertEqual(self._run_on_raw("{not valid json"), {"fmp": "down", "sec_edgar": "down"})
-        self.assertEqual(self._run_on_raw(""), {"fmp": "down", "sec_edgar": "down"})
+        expected = {
+            "universe_status": "missing", "universe_market_cap": "missing", "massive_momentum": "missing",
+            "sec_sic": "missing", "analyst_grades": "missing", "sec_offering_audit": "down",
+            "massive_events": "missing", "fmp_vix": "missing",
+        }
+        self.assertEqual(self._run_on_raw("{not valid json"), expected)
+        self.assertEqual(self._run_on_raw(""), expected)
 
 
 if __name__ == "__main__":

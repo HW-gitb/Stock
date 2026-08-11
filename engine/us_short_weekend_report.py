@@ -48,7 +48,11 @@ from engine.us_short_lifecycle_readiness import LifecycleReadinessError, _assert
 from engine.us_short_observe_split import aggregate_observe_split, render_observe_split
 from engine.us_short_portfolio_guard import PORTFOLIO_GUARD_STATES
 from engine.us_short_price_clock import validate_price_clock
-from engine.us_short_provider_health import validate_provider_health_result
+from engine.us_short_provider_health import (
+    provider_health_detail_line,
+    provider_health_non_clean_lines,
+    validate_provider_health_result,
+)
 from engine.us_short_run_origin import (
     OFFLINE_TEST_RUN_ORIGIN,
     assert_offline_report_invariants,
@@ -537,6 +541,10 @@ def build_weekly_report(machine_record, lifecycle_result, *, report_context, run
     offline_honesty = build_offline_honesty(
         stage_status["provider_health"]["overall_run_state"], len(not_clean))
     offline_s11, offline_s13 = canonical_offline_sections(offline_honesty, run_origin)
+    # §11/§13 consume the same classified eight-family result that the receipt and emit gate use.  yfinance is not
+    # referenced here: its source/coverage observability remains on the Problem 3 surface only.
+    offline_s11.append(provider_health_detail_line(stage_status["provider_health"]))
+    offline_s13.extend(provider_health_non_clean_lines(stage_status["provider_health"]))
     # §1 is the system-owned authoritative run-status section: build it from the immutable run_origin + a typed
     # closed-world run_status, so the consumer can recompute it canonically (no extra operational line after the
     # sentinel) — R-USSHORT-BATCH4-OFFLINE-ARTIFACT-MODE-PROVENANCE-GAP §1 canonical repair.

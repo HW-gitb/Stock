@@ -11,9 +11,10 @@ from §3.1 / §18.1 #3:
 
   * a critical authorized source that is degraded / down does NOT stay `clean` — it fails closed to
     `restricted` / `blocked` (关键源坏 → 不输出 clean);
-  * UNAUTHORIZED sources (yfinance / Web·X / FMP full-market / paid feeds — not in the current $0 small-sample
-    authorization, SR-PROVIDER-001) are ALWAYS `disabled_unapproved` and may NEVER be probed or counted toward
-    `clean`. This is enforced STRUCTURALLY: `classify_provider_health` REFUSES a status for any non-authorized
+  * UNAUTHORIZED sources (Web·X / FMP full-market / paid feeds — not in the current $0 small-sample authorization,
+    SR-PROVIDER-001) are ALWAYS `disabled_unapproved` and may NEVER be probed or counted toward `clean`. The bounded
+    yfinance analyst-grades stage is represented by the non-critical `analyst_grades` family. This is enforced
+    STRUCTURALLY: `classify_provider_health` REFUSES a status for any non-authorized
     source (you cannot even hand it an unauthorized source's health), so the health check can never touch one
     (§18.1 #3 「健康检查绝不触达未授权源」).
 
@@ -21,16 +22,25 @@ Pure / offline: no provider/live/DataHub/network import; no A-share crossing.
 """
 from __future__ import annotations
 
-# Current $0 small-sample authorization (§3.1 / §18.0 P0, SR-PROVIDER-001).
-AUTHORIZED_SOURCES = frozenset({"fmp", "sec_edgar"})
-# In this capstone projection, `fmp` is the analyst-grades catalyst leg: advisory and neutral on absence.
-# SEC submissions remains critical for audit/veto fields. Other FMP field families are classified separately.
-CRITICAL_SOURCES = frozenset({"sec_edgar"})
-# Explicitly NOT authorized → always disabled_unapproved, never probed (full-market FMP / yfinance / Web·X /
-# paid feeds all need a separate reviewed approval, §18.0 P0).
-UNAUTHORIZED_SOURCES = frozenset({"fmp_full_market", "yfinance", "web_x", "sec_parser", "paid_borrow_options", "dark_pool"})
+# The capstone global-health contract is deliberately FUNCTIONAL, not vendor-wide.  Each key is projected from one
+# already-verified producer summary; the analyst-grades family may be sourced by the bounded yfinance stage or FMP
+# fallback, but remains non-critical.
+HEALTH_FAMILIES = (
+    "universe_status", "universe_market_cap", "massive_momentum", "sec_sic",
+    "analyst_grades", "sec_offering_audit", "massive_events", "fmp_vix",
+)
+AUTHORIZED_SOURCES = frozenset(HEALTH_FAMILIES)
+REQUIRED_HEALTH_KEYS = HEALTH_FAMILIES
+# Only the universe's status/listing gate and SEC offering audit are emit-critical.  All other functional families
+# remain visible and may degrade the run to usable_with_fallback without suppressing output.
+CRITICAL_SOURCES = frozenset({"universe_status", "sec_offering_audit"})
+# Explicitly NOT authorized → always disabled_unapproved, never probed (full-market FMP / Web·X / paid feeds all
+# need a separate reviewed approval, §18.0 P0). The bounded yfinance analyst-grades stage is represented by
+# `analyst_grades` and is non-critical.
+UNAUTHORIZED_SOURCES = frozenset({"fmp_full_market", "web_x", "sec_parser", "paid_borrow_options", "dark_pool"})
 
 _INPUT_STATES = frozenset({"ok", "degraded", "down", "missing"})
+_CLASSIFIED_STATES = frozenset({"clean", "usable_with_fallback", "restricted", "blocked"})
 RUN_STATES = frozenset({"clean", "usable_with_fallback", "restricted", "blocked", "disabled_unapproved"})
 EMIT_ALLOWED_RUN_STATES = frozenset({"clean", "usable_with_fallback"})
 _SEVERITY = {"clean": 0, "usable_with_fallback": 1, "restricted": 2, "blocked": 3}  # worst-of ordering
@@ -70,6 +80,14 @@ def classify_provider_health(authorized_statuses) -> dict:
     """
     if not isinstance(authorized_statuses, dict):
         raise ProviderHealthError("authorized_statuses must be a dict of {authorized_source: status}")
+    # A new functional family may be absent from an injected map and is then classified as `missing` below;
+    # this preserves the critical-family fail-closed behavior.  The superseded vendor-wide two-key map is not a
+    # valid partial input because it cannot identify any of the eight current health families.
+    if set(authorized_statuses) and set(authorized_statuses).issubset({"fmp", "sec_edgar"}):
+        raise ProviderHealthError(
+            "health check rejects the superseded {fmp, sec_edgar} map; use the eight functional families %s"
+            % (list(REQUIRED_HEALTH_KEYS),)
+        )
     sources: dict = {}
     for src, status in authorized_statuses.items():
         if src not in AUTHORIZED_SOURCES:
@@ -108,3 +126,61 @@ def validate_provider_health_result(result) -> bool:
     if overall not in _SEVERITY or overall != max(sources.values(), key=lambda st: _SEVERITY[st]):
         return False
     return result["disabled_unapproved"] == sorted(UNAUTHORIZED_SOURCES)
+
+
+def validate_provider_health_facts(value) -> bool:
+    """Return whether a raw receipt fact tuple is the exact closed-world eight-key contract."""
+    if not isinstance(value, tuple):
+        return False
+    try:
+        return (
+            tuple(key for key, _ in value) == REQUIRED_HEALTH_KEYS
+            and all(state in _INPUT_STATES for _, state in value)
+        )
+    except (TypeError, ValueError):
+        return False
+
+
+def provider_health_detail_line(result) -> str:
+    """Canonical §11 detail line for the classified health result."""
+    if not validate_provider_health_result(result):
+        raise ProviderHealthError("cannot render malformed provider health result")
+    return "provider_health_facts: " + "; ".join(
+        f"{key}={result['sources'][key]}" for key in REQUIRED_HEALTH_KEYS
+    )
+
+
+def parse_provider_health_detail_line(value):
+    """Parse the exact §11 functional-health detail line into its classified source states."""
+    prefix = "provider_health_facts: "
+    if not isinstance(value, str) or not value.startswith(prefix):
+        return None
+    pairs = value[len(prefix):].split("; ")
+    if len(pairs) != len(REQUIRED_HEALTH_KEYS):
+        return None
+    parsed = {}
+    for pair, key in zip(pairs, REQUIRED_HEALTH_KEYS):
+        if "=" not in pair:
+            return None
+        actual_key, state = pair.split("=", 1)
+        if actual_key != key or state not in _CLASSIFIED_STATES or state not in _SOURCE_RUN_STATES[key]:
+            return None
+        parsed[key] = state
+    return parsed
+
+
+def provider_health_non_clean_line(key: str, state: str) -> str:
+    if key not in AUTHORIZED_SOURCES or state not in _SOURCE_RUN_STATES[key] or state == "clean":
+        raise ProviderHealthError("invalid non-clean provider health detail")
+    return f"\u2462 provider health non-clean: {key}={state}"
+
+
+def provider_health_non_clean_lines(result) -> list[str]:
+    """Canonical §13 lines; only non-clean functional families are rendered."""
+    if not validate_provider_health_result(result):
+        raise ProviderHealthError("cannot render malformed provider health result")
+    return [
+        f"③ provider health non-clean: {key}={result['sources'][key]}"
+        for key in REQUIRED_HEALTH_KEYS
+        if result["sources"][key] != "clean"
+    ]

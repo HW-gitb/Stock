@@ -21,8 +21,8 @@ bridge). Today a weekly run means invoking ~7 commands by hand. This capstone ch
   * FAIL-FAST with a stage label + no silent partial success; a gated stage that returns DEGRADED coverage
     (e.g. FMP 429) does NOT abort — the run proceeds to the bridge, whose provider_health gate decides emit/no-emit
     (exactly the honest 2026-07-08 behaviour).
-  * HONEST provider_health DERIVED from the actual Pass2 outcome (fmp = ok iff grades were obtained, sec_edgar = ok
-    iff submissions were obtained) — the health gate cannot be hand-waved past.
+  * HONEST provider_health DERIVED from the five stage outcomes into the closed-world eight functional families —
+    the health gate cannot be hand-waved past or widened by an unrelated vendor status.
 
 SKELETON status: the orchestration framework (canonical anchor, stage sequencing, dry-run plan, auth gating,
 fail-fast, provider-health derivation, path threading) is implemented and offline-tested (dry-run + a full injected-
@@ -1598,7 +1598,7 @@ def _provider_execution_receipt(ctx: CapstoneContext, results: list[dict[str, An
                 json.dumps(by_name[name], ensure_ascii=False, sort_keys=True, separators=(",", ":")).encode("utf-8")
             ).hexdigest(),
         }
-        for name in (*dict(call_counts), "vix_regime")
+        for name in (*dict(call_counts), "yfinance_grades_fetch", "vix_regime")
     }
     evidence_sha256 = hashlib.sha256(
         json.dumps(evidence, sort_keys=True, separators=(",", ":")).encode("utf-8")
@@ -1614,11 +1614,16 @@ def _provider_execution_receipt(ctx: CapstoneContext, results: list[dict[str, An
         json.dumps(source_manifest, sort_keys=True, separators=(",", ":")).encode("utf-8")
     ).hexdigest()
     provider_summary_digests = tuple(
-        (name, evidence[name]["summary_sha256"]) for name in (*dict(call_counts), "vix_regime")
+        (name, evidence[name]["summary_sha256"])
+        for name in (*dict(call_counts), "yfinance_grades_fetch", "vix_regime")
     )
     from runners import us_short_weekly_capstone_stages as stage_adapters
-    provider_health = stage_adapters.derive_provider_health(pass2)
-    provider_health_facts = tuple((key, provider_health[key]) for key in ("fmp", "sec_edgar"))
+    health_stage_results = {
+        name: _result(name)
+        for name in ("universe_fetch", "momentum_fetch", "sic_fetch", "pass2_fetch", "yfinance_grades_fetch", "vix_regime")
+    }
+    provider_health = stage_adapters.derive_capstone_provider_health(health_stage_results)
+    provider_health_facts = tuple(provider_health.items())
     run_id = hashlib.sha256(
         f"{ctx.decision_date}|{ctx.generated_at}|{source_path}|{source_sha256}|"
         f"{source_manifest_sha256}|{action_input_manifest[0][2]}|{evidence_sha256}|{stage_executions}".encode("utf-8")

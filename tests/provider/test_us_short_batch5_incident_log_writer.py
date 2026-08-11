@@ -11,8 +11,26 @@ from tests.schema.test_us_short_batch5_incident_log_record_schema import valid_r
 
 
 class UsShortBatch5IncidentLogWriterTest(unittest.TestCase):
+    def setUp(self) -> None:
+        self._state_root_context = tempfile.TemporaryDirectory(
+            prefix="unit_state_",
+            dir=writer.ROOT,
+        )
+        self._state_root = Path(self._state_root_context.name)
+        self.addCleanup(self._state_root_context.__exit__, None, None, None)
+        self._ignored_patch = mock.patch.object(writer, "_git_check_ignored", return_value=True)
+        self._ignored_patch.start()
+        self.addCleanup(self._ignored_patch.stop)
+        self._incident_root_patch = mock.patch.object(
+            writer,
+            "PRIVATE_INCIDENT_ROOT",
+            self._state_root / "runs_private" / "provider_incidents",
+        )
+        self._incident_root_patch.start()
+        self.addCleanup(self._incident_root_patch.stop)
+
     def _private_incident_root(self) -> Path:
-        base = writer.ROOT / "state" / "us_short" / "runs_private" / "provider_incidents"
+        base = Path(writer.PRIVATE_INCIDENT_ROOT)
         base.mkdir(parents=True, exist_ok=True)
         tmp = tempfile.TemporaryDirectory(prefix="unit_writer_", dir=base)
         self.addCleanup(tmp.cleanup)

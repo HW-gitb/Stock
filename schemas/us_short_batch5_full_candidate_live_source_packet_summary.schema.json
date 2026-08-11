@@ -98,7 +98,7 @@
         "datahub_consumption_performed": { "const": false },
         "production_storage_performed": { "const": false },
         "full_market_call_performed": { "const": false },
-        "yfinance_consumption_performed": { "const": false },
+        "yfinance_consumption_performed": { "type": "boolean" },
         "broker_or_order_execution_performed": { "const": false },
         "ship_gate_or_live_normalized_evidence_claimed": { "const": false },
         "a_share_crossing_performed": { "const": false }
@@ -128,7 +128,7 @@
         "secrets_logged"
       ],
       "properties": {
-        "fmp_api_key_present": { "const": true },
+        "fmp_api_key_present": { "type": "boolean" },
         "fmp_api_key_source": { "type": "string", "minLength": 1 },
         "sec_user_agent_present": { "const": true },
         "sec_user_agent_source": { "type": "string", "minLength": 1 },
@@ -332,6 +332,12 @@
         },
         "analyst_grade_actions_consumed_from": {
           "enum": ["fmp_analyst_grade_actions", "yfinance_grade_actions"]
+        },
+        "analyst_grade_actions_exclusion": {
+          "anyOf": [
+            { "const": "not_called_replaced_by_yfinance" },
+            { "type": "null" }
+          ]
         },
         "massive_news_events_path": { "type": "string", "pattern": "^state/us_short/.+\\.json$" },
         "corporate_action_capture_path": { "type": "string", "pattern": "^state/us_short/.+\\.json$" },
