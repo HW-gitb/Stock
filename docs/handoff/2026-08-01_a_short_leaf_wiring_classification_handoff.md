@@ -1,5 +1,38 @@
 # A-short 371 叶重新分层交接
 
+## 2026-08-11 Codex executor/fixer - V1/V5 cross-validation (OPEN-NOT_VERIFIED, 40d9)
+
+### Purpose / problem / repair
+
+按桌面 `C:\Users\cnhea\Desktop\2a_testrun0810.md` 完成 V5 后的 V1/V5 交叉验收。离线临时根/fake provider 场景发现 `runners/a_short_factor_comparison_v2_cache_build.py::_frozen_windows()` 只扫描 legacy `weeks/<decision_date>/`，而 V5 capture 位于 `weeks/<decision_date>/revisions/<run_revision_id>/`，因此 revision-bound capture 无法进入 V1 cache。最小修复是接入 `engine.a_short_run_revision.iter_private_week_roots`；保留原 capture/receipt 校验、governed-capture filter、terminal outcome 和 legacy 兼容，不改 schema、provider、token、decision predicate 或正式输出语义。
+
+### Cross proof / call chain / consumers
+
+`capture_v2_week` -> revision-private `capture.json`/`source_receipt.json` -> `iter_private_week_roots` -> `_frozen_windows` -> `materialize_incremental_cache` -> private `daily_cache.json`; V5 `build_revision_manifest`/`select_official_revision` controls official pointer/current view; `settle_v2_from_daily_payload` writes revision-bound outcome/receipt/ledger; `build_v2_public_progress` consumes only the selected official revision. Test covers missing adj -> provider completion, prepublish A selection, postpublish B-only cache upgrade with A capture bytes unchanged, B official switch, same-revision pending -> mature settlement, unique ledger identities, and public progress restricted to B.
+
+Existing V1/V2 capture, receipt, outcome, ledger, revision-manifest, and official-selection schemas remain authoritative. Candidate digest, `decision_as_of`, `price_data_through`, and `run_revision_id` remain source-bound. Test writes only below a temporary root; no real state, provider cache, public revision, or durable weekly artifact was touched.
+
+### Negative controls / exact terminal evidence
+
+- Missing adjustment data remains unobserved until fake provider completion; no synthetic admission.
+- A capture is immutable across A -> B; only `600001.SH` is added on the B cache pass.
+- Pending -> mature updates B without duplicate ledger keys; public progress excludes non-official A.
+- Fixed Python: `C:\Users\cnhea\AppData\Local\Programs\Python\Python313\python.exe` / 3.13.8.
+- `tests.test_a_short_v1_v5_cross_validation`: `Ran 1 test in 0.754s ... OK`.
+- Affected offline suite: `Ran 636 tests in 79.844s ... OK`; targeted `py_compile=OK`.
+- Exact commands used:
+  ```powershell
+  & 'C:\Users\cnhea\AppData\Local\Programs\Python\Python313\python.exe' -c "import os,sys,unittest; os.chdir(r'D:\cnhea\Codex\worktrees\40d9\Stock'); sys.path.insert(0, os.getcwd()); suite=unittest.defaultTestLoader.loadTestsFromName('tests.test_a_short_v1_v5_cross_validation'); result=unittest.TextTestRunner(verbosity=2).run(suite); raise SystemExit(0 if result.wasSuccessful() else 1)"
+  & 'C:\Users\cnhea\AppData\Local\Programs\Python\Python313\python.exe' -c "import os,sys,unittest; os.chdir(r'D:\cnhea\Codex\worktrees\40d9\Stock'); sys.path.insert(0, os.getcwd()); names=['tests.test_a_short_v1_v5_cross_validation','tests.test_a_short_factor_comparison_v2_cache_build','tests.test_a_short_run_revision','tests.test_a_short_weekly_pipeline','tests.test_a_short_weekly_screening_m67_failure_closeout','tests.test_a_short_weekly_sidecar_health','tests.test_a_short_v5_revision_matrix']; suite=unittest.TestSuite(unittest.defaultTestLoader.loadTestsFromName(n) for n in names); result=unittest.TextTestRunner(verbosity=1).run(suite); raise SystemExit(0 if result.wasSuccessful() else 1)"
+  & 'C:\Users\cnhea\AppData\Local\Programs\Python\Python313\python.exe' -m py_compile 'D:\cnhea\Codex\worktrees\40d9\Stock\runners\a_short_factor_comparison_v2_cache_build.py' 'D:\cnhea\Codex\worktrees\40d9\Stock\tests\test_a_short_v1_v5_cross_validation.py'
+  & 'C:\Users\cnhea\AppData\Local\Programs\Python\Python313\python.exe' -c "import os,sys,unittest; os.chdir(r'D:\cnhea\Codex\worktrees\40d9\Stock'); sys.path.insert(0, os.getcwd()); names=['tests.test_doc_governance_guard','tests.test_route_doc_ledger_status_consistency','tests.test_readme_route_row_length']; suite=unittest.TestSuite(unittest.defaultTestLoader.loadTestsFromName(n) for n in names); result=unittest.TextTestRunner(verbosity=1).run(suite); raise SystemExit(0 if result.wasSuccessful() else 1)"
+  git -C 'D:\cnhea\Codex\worktrees\40d9\Stock' diff --check
+  ```
+
+### Handoff boundary / next
+
+Status remains `OPEN-NOT_VERIFIED`: no real provider/live, durable normal weekly/cache-build two-round run, full lane, ship-gate, or independent review/commit. Codex executor/fixer made no stage/commit/merge. Next: `Claude Code：独立复审 V1/V5 交叉接线；不提交、不 merge`。
+
 ## 2026-08-11 Codex executor/fixer：Optional O29/O30 + 桌面 V4 health 修复（OPEN-NOT_VERIFIED，40d9）
 
 ### Purpose / problem / repair
@@ -6096,5 +6129,27 @@ effect contract 已用固定 Python 重新登记 A-EGS decision-predicate hash �
 - a_short 全量在本代码态仍没有绿记录：rule 4 说这一次归执行方，我此前按 rule 6 起过一次被 ledger 以「收据早于提交」拒绝，之后工作树一直在被并发写入。这条留给执行方。
 - 真实 provider / live / 真实 normal weekly 两轮 durable 产物仍 `NOT_VERIFIED`；桌面 V5 总关闭门未达成。
 - V4 只动运维 health，未改 EGS 排名、Top5、M6.7 结论或总退出码；§6a 未起 agent（rule 8 低危）。
+
+**下一步**：`Codex：执行`
+
+## 2026-08-11 追加：V1/V5 交叉接线独立复审 —— PASS（已提交并合入 master）
+
+**判定**：PASS，一条 Optional。桌面 V1 里那条「要等 V5 做完才能做」的交叉验收，这轮补上了。
+
+**我实际验了什么**（区别于执行方转述）
+
+- 缺口本身：`_frozen_windows()` 原来直接遍历 `weeks/<日期>`，V5 把 capture 挪进 `weeks/<日期>/revisions/<id>/` 之后它会整批看不见；现在改走 `iter_private_week_roots`。
+- 整读那个迭代器：date 根只在自带 capture 或该日没有 revisions 子树时才当 legacy 返回，所以不会对「只有 revision 的日期」误报缺 capture；revision 逐个校验 id、按名排序，不看 mtime。
+- 自写探针三种布局（legacy-only / revision-only / 同日并存）全部被枚举到；再在只有 revision 的根里植入半份 capture，构建器按 `20260803` 报 incomplete —— 证明它真的走进了 revision 层，不是只改了返回值形状。
+- 新交叉用例的断言我逐条读了：发布前补数原地升级并续跑；发布后 A 的 capture **字节不变**、B 成为 official 且 A 仍可读、缓存只更新新代码；`pending→mature` 落在同一份 B 的 outcome 上，ledger 键唯一且全绑 B，公开进度每行 `forward_weeks/settled_weeks` 各为 1（没有 C、没有重复计数）。
+
+**留下的一条 Optional**
+
+- `_frozen_windows` 把「空 revision 目录」和「capture 写了但 receipt 缺失」判成同一条硬失败。后者该 fail-closed，前者不是证据。我造得出这个状态但找不到生产路径会造出它，所以只记 Optional；将来若出现「先建目录、后写 capture」的写法，它会变成每周硬失败。
+
+**未覆盖维度与诚实边界**
+
+- 桌面那条「真实周末→周一 durable 两轮」的交叉仍 `NOT_VERIFIED`，离线用例不能替代。
+- a_short 全量在本代码态仍归执行方；§6a 按 rule 8 未起 agent。
 
 **下一步**：`Codex：执行`
