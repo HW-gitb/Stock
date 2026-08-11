@@ -1,5 +1,12 @@
 # Session Log
 
+## 2026-08-11 — Claude 收口（40d9：本刀已提交，合入 master 被阻塞）
+
+- **Verdict/Action**: PASS 维持，但**未合入 master**。主树合并在 `schemas/a_short_m67_effect_contract.json` 撞结构性冲突（master 侧已换结构），我已 abort，主树保持 `5c461509` 未动。40d9 落后 master 74 个提交、领先 2 个。
+- **Required**: 无新增。合并阻塞与归属见 `system_risk_register.md` 本轮两条收口补记（单一来源，本处不复述）。
+- **Verify**: review-evidence:5c9cd9523be5。超时原因:PASS 后的提交与合并门在主树撞到 74 提交的结构性分歧，诊断与安全中止占用额外时间。40d9 提交 `3d5c9312` + `c16379ac`，pre-commit 三门各通过（route 14 OK、doc-governance 41 OK、verification-receipt PASS）；`git merge --abort` 后主树 `git status` 无冲突残留。a_short 全量在本代码态仍 `NOT_VERIFIED`。
+- **Next**: Codex：执行
+
 ## 2026-08-11 — Claude 审查 PASS（40d9：V5-A+B+C+D 交叉刀）
 
 - **Verdict/Action**: PASS，提交并合入 master。上一轮四条 P1 + 一条 P2 全部按类修净，且同类扫面（post-publish P5/P4、crash-veto、theme）一并闭合。提交只 add 本刀文件，排除 `research/results/a_short/**` 的 0810 真实周跑遗留产物。
