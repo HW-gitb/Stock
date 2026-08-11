@@ -1204,3 +1204,50 @@ python .tools\full_pack_ledger.py run us_short "<rule-6 escalation reason>" "rec
 
 - 实现方下一刀交审前请补 SESSION_LOG entry（含 Proof-of-use）并在 rule 3 触发时自行跑全量记账；本轮因两者都缺，reviewer 只能自补一次 736s 全量，墙钟被拉长。
 - 桌面 `us_testrun1.md` 问题 4（checkpoint 能力）及之后各项仍未处理；问题2 遗留的 5 条 Optional 也仍 open。
+
+## 2026-08-11 追加：桌面 us_testrun0810 问题1 Optional + 问题2 OHLCV source-packet→价格链修复（OPEN-NOT_VERIFIED）
+
+### 改动
+
+- 当前权威执行方案是桌面 `us_testrun0810.md`；`us_testrun1.md` 已不再作为本轮方案。
+- 问题1 Optional recurrence guard 已按既有窄静态方案复核：点名 planted-failure 测试 `1 OK`，receipt=`receipt:8996ec08ef757a4374473b9c`；状态仍为 `repaired / OPEN-NOT_VERIFIED`，不得宣读为覆盖所有私密子目录。
+- 问题2 的断点是 Pass2 丢失已有 `ctx.ohlcv_series_packet_path`。修复只做 A/B/C：weekly capstone Pass2 inputs 加 OHLCV 并升 contract `2.0.0→2.1.0`；stage 透传；source-packet runner/CLI 接收同一路径，复用既有路径校验，把 packet 相对路径和真实字节 SHA 写入 source packet，随后让 result linkage / Batch4 使用同一 OHLCV bars。没有新 schema、sidecar、manifest、digest identity 或 yfinance 行为改动。
+
+### 证据
+
+- 固定解释器：`C:\Users\cnhea\AppData\Local\Programs\Python\Python313\python.exe`（3.13.8）。问题2核心 `weekly=86 OK`、`source-packet=23 OK`、`batch5→batch4 e2e=11 OK`；inventory `18 OK`，receipt=`receipt:35fb887d8914d2c4feee52ef`。
+- 反向植入：移除 adapter 的 OHLCV 透传后点名测试精确 `KeyError`/FAIL；恢复后 2 条相关测试 `OK`，receipt=`receipt:96452500059b2ef9adbb1043`。
+- 精确桌面 focused package `130` 仍有唯一测试文件红：`test_tracked_artifact_digest_canonicalization` 的 8 个既有 A-short raw-digest 坐标；新增 OHLCV 坐标已用精确例外处理。未修改无关 A-short。
+- full lane 在最终行为代码态只执行一次，`discovered=5740 ran=5740 equal=True PASS`，`360.5s/860s`；静态 `py_compile=7`、`git diff --check=PASS`。未调用 provider/network/live/account，未跑真实周任务。
+
+### 交接边界与下一步
+
+- 本轮不是“exact focused 全绿”或实盘/ship-gate 结论；`R-USSHORT-CAPSTONE-OHLCV-PRICE-LINKAGE-GAP` 为 `repaired / OPEN-NOT_VERIFIED`。
+- Claude Code：独立审查问题1 Optional、问题2 A/B/C、精确 digest 例外、既有 A-short focused baseline 与 `5740/5740` full-lane 证据；若接受基线边界，再决定 Pass 或另开 A-short 修复。
+
+## 2026-08-11 追加：问题2 OHLCV 价格链接线 —— 独立审查 PASS 并收口
+
+### 改了什么
+
+- 无生产代码改动（审查方不写业务代码）。本节记录对执行方 A/B/C 的独立复核结论与证据，并把 `R-USSHORT-CAPSTONE-OHLCV-PRICE-LINKAGE-GAP` 从 `repaired / OPEN-NOT_VERIFIED` 收到 `resolved`。
+
+### 为什么
+
+- 桌面权威件 `us_testrun0810.md` §问题2 要求的不是"source packet 多一个字段"，而是 bars 真到价格引擎。故本轮审查把重点放在消费侧整读与植入证伪，而不是复述执行方的红绿计数。
+
+### 验证命令与结果
+
+- 焦点超集（reviewer 亲跑）：`.tools\run_unittest_with_repo_pythonpath.cmd --timeout-seconds 900 tests.provider.test_us_short_weekly_capstone tests.provider.test_us_short_batch5_full_candidate_live_source_packet tests.provider.test_us_short_batch5_to_batch4_e2e tests.test_tracked_artifact_digest_canonicalization` → `Ran 130 / 77.4s / FAILED(failures=1)`，唯一红为既有 A-short digest 坐标（已归因、已单立 R-ID）。
+- 植入探针（reviewer 自写）：抹掉 `_build_local_source_packet` 写 `packet_paths["ohlcv_series_packet_path"]` 的那一条 → 点名测试转红，红点落在生产门 `_validated_provider_envelope_digests`；还原后该文件 sha256 前后同为 `7dbc9e55…`。
+- full lane：按 AGENTS rule 4 不重跑，引用执行方账本 `5740/5740 equal=True PASS 360.5s/860s`；reviewer 用 `full_pack_ledger.collect_code_state()` / `fingerprint()` 独立重算得 `0153257565f7a0e8…`，与账本记录逐字相同，证明该全量绑定当前 diff。
+
+### 失效旧结论
+
+- 上一节末尾"桌面 `us_testrun1.md` 问题 4 …"的表述失效：**自 2026-08-11 起 `us_testrun1.md` 已退役**，唯一权威清单是桌面 `us_testrun0810.md`（按严重度重排，编号与旧文不同：原问题1→#4、原问题2→#5、原问题3→#1）。
+- "问题2 遗留的 5 条 Optional 仍 open"指的是 0810 的 **#5（原问题2，private_root 载体根）**，与本节的 0810 **#2（原问题11，OHLCV 价格链）** 不是同一条，别按编号串起来。
+
+### 下一步注意事项
+
+- 0810 清单里已写出完整「修复执行方案」而尚未动工的是 **#3（原问题7，analyst 覆盖源）、#6（原问题6，provider_health 八键）、#8（原问题5，Massive 429）、#9（原问题12，context_components 形状权威）、#12（原问题4，checkpoint 与操作员参数）**。
+- **#3 是 #2 的必要配套**：本刀只解开 OHLCV 一条腿，`coverage_status` 仍会被 analyst 空壳压成 `restricted`，`final_action` 仍被强制转"观察"。**不得据本刀宣称"操作表会出现建仓"。**
+- A-short 那条 digest guard 红由 A-short owner 处理，US-short 侧不要顺手改别人 lane 的 allowlist。

@@ -110,6 +110,12 @@ class CapstoneDryRunTest(unittest.TestCase):
                           # vendor, so the diagnostic fetch joins the authorization list
                           # rather than sneaking a request in behind an ungated stage.
                           "vix_regime", "forward_policy_corporate_actions", "market_diagnostic_fetch"])
+        pass2 = next(stage for stage in plan["stages"] if stage["name"] == "pass2_fetch")
+        self.assertEqual(pass2["contract_version"], "2.1.0")
+        self.assertIn(
+            "state/us_short/us_short_batch5_full_universe_ohlcv_series_20260708_packet.json",
+            pass2["inputs"],
+        )
 
     def test_cli_default_private_root_lands_in_gitignored_state_dir(self):
         """--private-root omitted on the CLI defaults to the gitignored state/us_short tree, so the weekly report /
@@ -244,11 +250,18 @@ class CapstoneFakeChainTest(unittest.TestCase):
         shutil.rmtree(self.private_root, ignore_errors=True)
 
     def _fake_stages(self, order_sink, *, break_stage=None, skip_output_stage=None, bridge_batch4=None,
-                     missing_input_stage=None, present_input_stage=None, preflight_result=None):
+                     missing_input_stage=None, present_input_stage=None, preflight_result=None,
+                     omit_ohlcv_output=False):
         def outs_for(name):
+            def momentum_outputs(c):
+                outputs = [c.series_packet_path]
+                if not omit_ohlcv_output:
+                    outputs.append(c.ohlcv_series_packet_path)
+                return outputs
+
             return {
                 "universe_fetch": lambda c: [c.candidate_path],
-                "momentum_fetch": lambda c: [c.series_packet_path, c.ohlcv_series_packet_path],
+                "momentum_fetch": momentum_outputs,
                 "overextension_producer": lambda c: [c.overextension_projection_path],
                 "momentum_producer": lambda c: [c.momentum_projection_path],
                 "sic_fetch": lambda c: [c.classification_packet_path],
@@ -322,6 +335,8 @@ class CapstoneFakeChainTest(unittest.TestCase):
                 ins = lambda c: [Path(c.private_root) / "_run_inputs" / "absent_declared_input.json"]
             elif name == present_input_stage:
                 ins = lambda c: [c.candidate_path]   # produced by universe_fetch (stage 0) → present at this turn
+            elif name == "pass2_fetch":
+                ins = lambda c: [c.ohlcv_series_packet_path]
             else:
                 ins = lambda c: []
             stages.append(Stage(
@@ -633,6 +648,15 @@ class CapstoneFakeChainTest(unittest.TestCase):
         self.assertIn("input", str(cm.exception).lower())
         self.assertNotIn("pass2_fetch", order)               # aborted BEFORE the stage's run body
         self.assertIn("yfinance_grades_fetch", order)        # earlier (empty-input) stages still ran
+
+    def test_pass2_ohlcv_input_missing_fails_before_stage_body(self):
+        order: list[str] = []
+        with self.assertRaisesRegex(WeeklyCapstoneError, "pass2_fetch.*input"):
+            self._run(
+                order,
+                stages=self._fake_stages(order, omit_ohlcv_output=True),
+            )
+        self.assertNotIn("pass2_fetch", order)
 
     def test_stage_present_declared_input_passes_and_chain_completes(self):
         # positive control: a stage whose declared input WAS produced by an earlier stage passes the pre-stage gate
@@ -1623,7 +1647,7 @@ class CapstoneAdapterSignatureTest(unittest.TestCase):
             (st._mom_fetch.run_fetch, ["candidate_artifact_path", "series_packet_path", "ohlcv_series_packet_path", "summary_path", "generated_at", "confirm_user_authorization"]),
             (st._sic.run_fetch, ["candidate_artifact_path", "classification_packet_path", "summary_path", "generated_at", "confirm_user_authorization"]),
             (st._yfinance_grades.run_yfinance_grades_fetch, ["preflight_summary_path", "output_source_package_path", "output_resolved_actions_path", "summary_path", "raw_root", "confirm_user_authorization", "generated_at", "observed_at", "pace_seconds"]),
-            (st._pass2.run_full_candidate_live_source_packet, ["preflight_summary_path", "expected_total_call_budget", "authorized_momentum_top_k", "forced_holding_tickers", "catalyst_recall_tickers", "source_artifact_prefix", "context_components_output_path", "output_data_context_path", "overextension_projection_path", "yfinance_grade_actions_path", "summary_path", "confirm_user_authorization", "run_data_context", "generated_at", "observed_at", "provider_pace_seconds", "max_retries_per_call", "retry_backoff_seconds", "max_total_http_attempts", "theme_soft_boost_enabled", "soft_discovery_stage_result", "provisional_theme_stage_receipt_path", "provisional_theme_validation_path", "original_candidate_artifact_path", "classification_packet_path", "soft_boost_consumption_receipt_path", "soft_boost_shadow_receipt_path", "soft_boost_comparison_ledger_path", "soft_boost_state_dir"]),
+            (st._pass2.run_full_candidate_live_source_packet, ["preflight_summary_path", "expected_total_call_budget", "authorized_momentum_top_k", "forced_holding_tickers", "catalyst_recall_tickers", "source_artifact_prefix", "context_components_output_path", "output_data_context_path", "overextension_projection_path", "ohlcv_series_packet_path", "yfinance_grade_actions_path", "summary_path", "confirm_user_authorization", "run_data_context", "generated_at", "observed_at", "provider_pace_seconds", "max_retries_per_call", "retry_backoff_seconds", "max_total_http_attempts", "theme_soft_boost_enabled", "soft_discovery_stage_result", "provisional_theme_stage_receipt_path", "provisional_theme_validation_path", "original_candidate_artifact_path", "classification_packet_path", "soft_boost_consumption_receipt_path", "soft_boost_shadow_receipt_path", "soft_boost_comparison_ledger_path", "soft_boost_state_dir"]),
             (st._mom_prod.run_packet, ["candidate_artifact_path", "series_packet_path", "output_projection_path", "summary_path", "generated_at"]),
             (st._overextension.run_packet, ["candidate_artifact_path", "series_packet_path", "output_projection_path", "summary_path", "generated_at"]),
             (st._theme.run_packet, ["candidate_artifact_path", "series_packet_path", "classification_packet_path", "output_projection_path", "summary_path", "generated_at"]),
@@ -1701,6 +1725,7 @@ class CapstoneAdapterSignatureTest(unittest.TestCase):
             self.assertEqual(overextension.call_args.kwargs["series_packet_path"], ctx.ohlcv_series_packet_path)
             self.assertEqual(overextension.call_args.kwargs["output_projection_path"], ctx.overextension_projection_path)
             self.assertEqual(pass2.call_args.kwargs["overextension_projection_path"], ctx.overextension_projection_path)
+            self.assertEqual(pass2.call_args.kwargs["ohlcv_series_packet_path"], ctx.ohlcv_series_packet_path)
             self.assertEqual(pass2.call_args.kwargs["yfinance_grade_actions_path"], ctx.yfinance_grade_actions_path)
 
 

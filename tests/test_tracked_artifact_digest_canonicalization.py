@@ -104,6 +104,9 @@ RAW_DIGEST_EXCEPTIONS: dict[str, str] = {
     "runners/us_short_batch5_full_candidate_live_source_packet.py:_build_local_source_packet:<runtime-composed-path>:yfinance_grade_actions_path": (
         "Optional yfinance-grade action input is a runtime provider-evidence artifact with intentional raw-byte binding."
     ),
+    "runners/us_short_batch5_full_candidate_live_source_packet.py:_build_local_source_packet:<runtime-composed-path>:ohlcv_series_packet_path": (
+        "Optional OHLCV packet input is a runtime provider-evidence artifact with intentional raw-byte binding."
+    ),
     "runners/us_short_batch5_full_candidate_live_source_packet.py:_raw_capture_manifest:<runtime-composed-path>:raw_path": (
         "Captured provider payloads are raw evidence whose exact bytes are recorded in the capture manifest."
     ),
