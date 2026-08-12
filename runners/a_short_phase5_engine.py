@@ -141,6 +141,40 @@ IV_HV_REGIMES = ("iv_rich", "iv_inline", "iv_cheap", "unknown")
 _IV_HV_TEXT = {"iv_rich": "IV>HV 隐含溢价(期权偏贵/避险情绪)",
                "iv_cheap": "IV<HV 隐含偏低(情绪偏松/或低估波动)",
                "iv_inline": "IV≈HV", "unknown": "IV-HV未知"}
+IV_FEED_STATUSES = ("not_requested", "build_failed", "digest_failed", "clock_mismatch", "ready")
+NONREADY_IV_FEED_STATUSES = frozenset(IV_FEED_STATUSES) - {"ready"}
+
+
+def _explicit_iv_feed_status(iv_state: dict) -> str | None:
+    """Return the producer-bound IV status when a modern pipeline supplied it."""
+    status = iv_state.get("iv_feed_status")
+    if status is None:
+        return None  # pre-14B direct-engine fixture compatibility only
+    if status not in IV_FEED_STATUSES:
+        raise ValueError(f"iv_feed_status 非法: {status!r}")
+    return status
+
+
+def _validate_nonready_iv_state(iv_state: dict, iv_feed_status: str | None) -> None:
+    """A non-ready producer may not smuggle stale IV/M0.5 values into Phase5."""
+    if iv_feed_status not in NONREADY_IV_FEED_STATUSES:
+        return
+    expected = {
+        "iv_percentile_252d": None,
+        "iv_value": None,
+        "hv_value": None,
+        "iv_change_abs_1d_pctpt": None,
+        "cash_reclaim_pct": None,
+        "rule3_status": "unknown",
+        "awakening_status": "unknown",
+        "awakening_trigger_date": None,
+        "awakening_release_date": None,
+    }
+    for field, expected_value in expected.items():
+        if iv_state.get(field) != expected_value:
+            raise ValueError(
+                f"iv_feed_status={iv_feed_status} 但 iv.{field} 不是 fail-closed unknown projection"
+            )
 
 
 def iv_hv_tag(iv_value, hv_value, hi: float = IV_HV_RATIO_HI, lo: float = IV_HV_RATIO_LO):
@@ -1632,6 +1666,9 @@ def build_m67_report(inp: dict, as_of: str, generated_at: str) -> dict:
     regime_unknown_fallback = bool(regime_fallback.get("active"))
     regime_fallback_reason = regime_fallback.get("reason") or "EGS market_regime unknown/missing→按震荡期保守处理"
     iv_state = inp.get("iv") or {}
+    iv_feed_status = _explicit_iv_feed_status(iv_state)
+    _validate_nonready_iv_state(iv_state, iv_feed_status)
+    iv_explicitly_unavailable = iv_feed_status in NONREADY_IV_FEED_STATUSES
     iv_pct = iv_state.get("iv_percentile_252d")
     rule3_status = _m05_rule3_status(iv_state)
     awakening_status = iv_state.get("awakening_status") or "unknown"
@@ -1732,7 +1769,7 @@ def build_m67_report(inp: dict, as_of: str, generated_at: str) -> dict:
         halve_reasons.append("regime unknown→震荡期保守减半")
     extra_halve = bool(halve_reasons)
     halve_reason = "；".join(halve_reasons)
-    model_eligible = model_build_eligible(
+    model_eligible = False if iv_explicitly_unavailable else model_build_eligible(
         inp, ind, rule6_gate, regime=regime, extra_halve=extra_halve,
         halve_reason=halve_reason, high_material=high_material, web=web,
         web_status=web_status, web_downgrade=web_downgrade,
@@ -1746,6 +1783,10 @@ def build_m67_report(inp: dict, as_of: str, generated_at: str) -> dict:
                   + (f";命中硬风控:{'|'.join(hard)}" if hard else ""))
     elif hard:
         action, etype, plan, reject = "否决", "N/A", None, "|".join(hard)
+    elif iv_explicitly_unavailable:
+        # 14B: keep hard veto precedence and holding management above, but no
+        # non-ready IV status may degrade merely to a smaller new-entry plan.
+        action, etype, plan, reject = "观察", "N/A", None, "IV 数据不可用，禁止新建仓"
     elif not final_new_entry_eligible:
         action, etype, plan, reject = "观察", "N/A", None, "非 final，仅观察"
     elif m4_review_gate:
@@ -1979,7 +2020,8 @@ def build_m67_report(inp: dict, as_of: str, generated_at: str) -> dict:
                                      "star": star, "cash_allocation_star": allocation_star,
                                      "plan": plan, "reject_reason": reject},
             "model_build_eligible": model_eligible,
-            "iv_gate": {"iv_percentile_252d": iv_pct, "halve": iv_halve, "status": iv_status,
+            "iv_gate": {"iv_feed_status": iv_feed_status,
+                        "iv_percentile_252d": iv_pct, "halve": iv_halve, "status": iv_status,
                         "rule3_status": rule3_status, "awakening_status": awakening_status,
                         "m05_mode": (M05_CONSERVATIVE_MODE if awakening_status == "active" else None),
                         "cash_reclaim_pct": cash_reclaim_pct,
@@ -2034,6 +2076,8 @@ def build_holding_report(inp: dict, as_of: str, generated_at: str) -> dict:
     position = stateful.get("position") or {}
     regime = inp.get("market_regime", "震荡期")
     iv_state = inp.get("iv") or {}
+    iv_feed_status = _explicit_iv_feed_status(iv_state)
+    _validate_nonready_iv_state(iv_state, iv_feed_status)
     iv_pct = iv_state.get("iv_percentile_252d")
     rule3_status = _m05_rule3_status(iv_state)
     awakening_status = iv_state.get("awakening_status") or "unknown"
@@ -2136,7 +2180,8 @@ def build_holding_report(inp: dict, as_of: str, generated_at: str) -> dict:
                       **({"semantic_risk": sc["trace"]} if has_semantic_input else {})},
             "entry_exit_size_star": {"action": "持有", "type": "已有持仓", "star": 0,
                                      "plan": plan, "reject_reason": hl_reject},
-            "iv_gate": {"iv_percentile_252d": iv_pct, "halve": False, "status": iv_status,
+            "iv_gate": {"iv_feed_status": iv_feed_status,
+                        "iv_percentile_252d": iv_pct, "halve": False, "status": iv_status,
                         "rule3_status": rule3_status, "awakening_status": awakening_status,
                         "m05_mode": (M05_CONSERVATIVE_MODE if awakening_status == "active" else None),
                         "cash_reclaim_pct": cash_reclaim_pct,
@@ -2737,6 +2782,19 @@ def validate_m67_consistency(report: dict, *, allow_legacy_m05: bool = False) ->
     # 文案与档位绑定(非 unknown 含「IV/HV」、unknown 含「IV-HV未知」)。
     ig = mc["iv_gate"]
     vs = m67["精简结论区"]["波动率状态"]
+    iv_feed_status = ig.get("iv_feed_status")
+    if iv_feed_status is not None:
+        if iv_feed_status not in IV_FEED_STATUSES:
+            raise ValueError("machine.iv_gate.iv_feed_status 非法")
+        if iv_feed_status in NONREADY_IV_FEED_STATUSES:
+            _validate_nonready_iv_state(ig, iv_feed_status)
+            position_state = (mc.get("stateful_risk") or {}).get("position_state")
+            decision = mc.get("entry_exit_size_star") or {}
+            if position_state != "held" and decision.get("action") != "否决":
+                if decision.get("action") != "观察" or decision.get("plan") is not None:
+                    raise ValueError("非 ready IV 的空仓报告不得生成新建仓计划")
+                if decision.get("reject_reason") != "IV 数据不可用，禁止新建仓":
+                    raise ValueError("非 ready IV 的空仓报告缺少明确禁止新建仓原因")
     _validate_m05_consistency(ig, vs, mc, allow_legacy_m05=allow_legacy_m05)
     for k in ("iv_value", "hv_value", "iv_hv_ratio", "iv_hv_regime"):
         if k not in ig:

@@ -82,6 +82,12 @@
         "iv_gate": {
           "type": "object",
           "properties": {
+            "iv_feed_status": {
+              "anyOf": [
+                {"enum": ["not_requested", "build_failed", "digest_failed", "clock_mismatch", "ready"]},
+                {"type": "null"}
+              ]
+            },
             "rule3_status": {"enum": ["normal", "reduce_new_position_50pct", "no_trade", "unknown"]},
             "awakening_status": {"enum": ["inactive", "active", "cooldown", "unknown"]},
             "m05_mode": {"enum": [null, "conservative_degradation"]},

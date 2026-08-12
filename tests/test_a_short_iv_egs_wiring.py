@@ -27,6 +27,7 @@ from runners.a_short_iv_feed_build import (  # noqa: E402
 )
 from runners.a_short_weekly_pipeline import (  # noqa: E402
     _validate_analysis_input_m05_binding,
+    _validate_nonready_analysis_input_iv_binding,
     latest_m05_state,
 )
 
@@ -78,17 +79,23 @@ class EgsIvProjectionTests(unittest.TestCase):
         self.assertEqual(projection["freshness_status"], "not_requested")
         self.assertEqual(projection["freshness_reason"], "iv_feed_not_requested")
         self.assertIsNone(projection["iv_percentile_252d"])
+        self.assertIsNone(projection["hv_value"])
         self.assertEqual(projection["rule3_status"], "unknown")
 
     def test_each_nonready_status_is_rendered_without_inference_or_abort(self) -> None:
-        for status in ("build_failed", "digest_failed", "clock_mismatch"):
+        for status in ("not_requested", "build_failed", "digest_failed", "clock_mismatch"):
             projection = self.egs_main._load_iv_feed_projection(
                 None, "20260808", "20260807", iv_feed_status=status
             )
             self.assertEqual(projection["iv_feed_status"], status)
-            self.assertEqual(projection["freshness_status"], "unavailable")
+            self.assertEqual(
+                projection["freshness_status"],
+                "not_requested" if status == "not_requested" else "unavailable",
+            )
             self.assertEqual(projection["freshness_reason"], f"iv_feed_{status}")
             self.assertIsNone(projection["iv_percentile_252d"])
+            self.assertIsNone(projection["iv_value"])
+            self.assertIsNone(projection["hv_value"])
             self.assertEqual(projection["rule3_status"], "unknown")
 
     def test_nonready_status_cannot_smuggle_a_feed_path(self) -> None:
@@ -115,7 +122,7 @@ class EgsIvProjectionTests(unittest.TestCase):
             self.assertEqual(projection["source_as_of"], feed["as_of"])
             self.assertEqual(projection["source_latest_trade_date"], latest["trade_date"])
             for field in (
-                "iv_value", "iv_percentile_252d", "iv_change_abs_1d_pctpt",
+                "iv_value", "hv_value", "iv_percentile_252d", "iv_change_abs_1d_pctpt",
                 "rule3_status", "awakening_status", "cash_reclaim_pct",
             ):
                 self.assertEqual(projection[field], latest[field])
@@ -253,6 +260,26 @@ class WeeklyIvSourceBindingTests(unittest.TestCase):
                     forged, feed, latest_m05_state(feed), iv_feed_path=str(path)
                 )
 
+    def test_nonready_projection_requires_exact_cli_status_and_unknown_values(self) -> None:
+        egs_main = importlib.import_module("egs_main_iv_wiring_under_test") \
+            if "egs_main_iv_wiring_under_test" in sys.modules else _load_egs_module()
+        for status in ("not_requested", "build_failed", "digest_failed", "clock_mismatch"):
+            with self.subTest(status=status):
+                projection = egs_main._unknown_iv_projection(status)
+                ai = {"market_context": {"volatility": projection}}
+                _validate_nonready_analysis_input_iv_binding(ai, status)
+
+                forged = copy.deepcopy(ai)
+                forged["market_context"]["volatility"]["hv_value"] = 0.20
+                with self.assertRaisesRegex(ValueError, "hv_value"):
+                    _validate_nonready_analysis_input_iv_binding(forged, status)
+
+                forged = copy.deepcopy(ai)
+                forged["market_context"]["volatility"]["iv_feed_status"] = "digest_failed"
+                if status != "digest_failed":
+                    with self.assertRaisesRegex(ValueError, "iv_feed_status"):
+                        _validate_nonready_analysis_input_iv_binding(forged, status)
+
 
 class IvFeedTrustRootTests(unittest.TestCase):
     """The read door certifies these numbers, so each check must be killable."""
@@ -346,7 +373,9 @@ class WeeklyIvOrderingTests(unittest.TestCase):
         self.assertIn("-IvFeedStatus $KnownIvFeedStatus", text)
         self.assertIn("attempted_before_egs", text)
         self.assertIn("feed_sha256", text)
-        self.assertIn("Set-M67Failure -Reason 'iv_feed_failed'", text)
+        self.assertNotIn("Set-M67Failure -Reason 'iv_feed_failed'", text)
+        self.assertIn("'--iv-feed-status', $script:IvFeedStatus", text)
+        self.assertIn("if ($script:IvFeedReady) { $M67Args += @('--iv-feed', $IvFeed) }", text)
         egs = text.index("& $PythonExe @EgsArgs")
         self.assertGreater(text.index("runners\\data_canary.py --as-of"), egs)
         self.assertGreater(text.index("runners\\forward_tracker.py capture"), egs)

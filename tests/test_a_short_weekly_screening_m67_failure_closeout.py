@@ -21,7 +21,6 @@ class AShortWeeklyM67FailureCloseoutTests(unittest.TestCase):
         self.assertIn("function Set-M67Failure", self.text)
         for reason in (
             "analysis_input_missing",
-            "iv_feed_failed",
             "account_path_missing",
             "weekly_pipeline_failed",
         ):
@@ -33,6 +32,14 @@ class AShortWeeklyM67FailureCloseoutTests(unittest.TestCase):
         self.assertIn("[switch]$DeferHealth", self.text)
         self.assertIn("if ($DeferHealth)", self.text)
         self.assertNotRegex(self.stage4, r"^\s*exit\s+", re.MULTILINE)
+
+    def test_nonready_iv_is_recorded_but_still_invokes_degraded_pipeline(self) -> None:
+        self.assertIn("if (-not $script:IvFeedReady)", self.stage4)
+        self.assertIn("-Name 'iv_feed' -Expected $true -Attempted $true -ExecutionStatus 'failed'", self.stage4)
+        self.assertNotIn("iv_feed_failed", self.stage4)
+        self.assertIn("if ($script:M67InvocationState -eq 'requested')", self.stage4)
+        self.assertIn("'--iv-feed-status', $script:IvFeedStatus", self.stage4)
+        self.assertIn("if ($script:IvFeedReady) { $M67Args += @('--iv-feed', $IvFeed) }", self.stage4)
 
     def test_first_m67_failure_code_is_preserved_and_only_final_exit_remains(self) -> None:
         self.assertIn("if ($script:FinalExitCode -eq 0)", self.text)

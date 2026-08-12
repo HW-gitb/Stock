@@ -859,12 +859,12 @@ if ($SkipSemanticRisk) {
         # pipeline 侧另有同口径硬护栏,直接调用绕过本脚本也拦得住。
         if (-not $script:IvFeedReady) {
             Add-SidecarOutcome -Name 'iv_feed' -Expected $true -Attempted $true -ExecutionStatus 'failed' -ProgressStatus 'unavailable' -ErrorCode 'process_failed' -AttemptedBeforeEgs $script:IvFeedAttemptedBeforeEgs -FeedRef $script:IvFeedRef -FeedSha256 $script:IvFeedSha256 -IvFeedStatus $script:IvFeedStatus
-            Set-M67Failure -Reason 'iv_feed_failed' -ExitCode 22 -FailureDetailRef $IvFailureDetailRef -AnalysisInput $SemAnalysisInput `
-                -AttemptedBeforeEgs $script:IvFeedAttemptedBeforeEgs -FeedRef $script:IvFeedRef -FeedSha256 $script:IvFeedSha256 `
-                -IvFeedStatus $script:IvFeedStatus -Directory $M67Dir
         } else {
             Add-SidecarOutcome -Name 'iv_feed' -Expected $true -Attempted $true -ExecutionStatus 'succeeded' -ProgressStatus 'advanced' -ObservedDecisionAsOf $AsOf -AttemptedBeforeEgs $script:IvFeedAttemptedBeforeEgs -FeedRef $script:IvFeedRef -FeedSha256 $script:IvFeedSha256 -IvFeedStatus $script:IvFeedStatus
-            $M67Args = @('runners\a_short_weekly_pipeline.py', '--as-of', $AsOf, '--price-as-of', $PriceAsOf, '--run-date', $RunDate, '--run-revision-id', $RunRevisionId, '--official-project-root', $ProjectRoot, '--analysis-input', $SemAnalysisInput, '--iv-feed-status', $script:IvFeedStatus, '--iv-feed', $IvFeed, '--out', $M67Out, '--phase4-report-dir', $Phase4ReportDir, '--confirm-fetch-authorized')
+        }
+        if ($script:M67InvocationState -eq 'requested') {
+            $M67Args = @('runners\a_short_weekly_pipeline.py', '--as-of', $AsOf, '--price-as-of', $PriceAsOf, '--run-date', $RunDate, '--run-revision-id', $RunRevisionId, '--official-project-root', $ProjectRoot, '--analysis-input', $SemAnalysisInput, '--iv-feed-status', $script:IvFeedStatus, '--out', $M67Out, '--phase4-report-dir', $Phase4ReportDir, '--confirm-fetch-authorized')
+            if ($script:IvFeedReady) { $M67Args += @('--iv-feed', $IvFeed) }
             if ($CrashVetoSummaryReady) { $M67Args += @('--crash-veto-summary', $CrashVetoSummary) }
             if (-not $IsHistoricalAsOf) {
                 # live 运行(as_of>=运行日:今日 或 前瞻 canonical 周一):as_of 当日 EOD 盘中/盘前尚未发布 → 显式启用

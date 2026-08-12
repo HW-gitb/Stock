@@ -347,14 +347,14 @@
       "source_prefixes": [
         "market_context"
       ],
-      "source_paths_sha256": "23ee5ec1178529f51d5afeb95bf072f3430f7f5b974ab22b26e98a3473fab410",
+      "source_paths_sha256": "a0e26842183a7218ad889aacce8b9e76f0ad96a4dd1b619d280e208260bed597",
       "policy": "must_affect_result",
       "terminal_surfaces": [
         "weekly.effect_contract_ledger",
         "weekly Markdown 字段/规则联动台账"
       ],
       "runtime_handler": "unresolved_input_group",
-      "unresolved_reason": "北向 5 日净流与 CSI300 窗口已由结构化 northbound_control 接入新建仓门并落到 operation_impact；IV volatility 叶字段现由 EGS/weekly 的同一 feed source-binding 逐叶校验；其余广度、流动性、日历和波动率叶字段仍未逐叶证明消费者，不能报整组已联动。"
+      "unresolved_reason": "北向 5 日净流与 CSI300 窗口已由结构化 northbound_control 接入新建仓门并落到 operation_impact；IV volatility 叶字段现由 EGS/weekly 的 ready feed 或 non-ready unknown projection 逐叶校验；其余广度、流动性、日历和波动率叶字段仍未逐叶证明消费者，不能报整组已联动。"
     },
     {
       "id": "account_context",
@@ -1189,6 +1189,12 @@
       "terminal_surface": "analysis_input volatility freshness gate",
       "mutation_evidence": "an unaligned status is rejected before M6.7, preventing stale or future IV from entering the weekly decision"
     },
+    "market_context.volatility.hv_value": {
+      "category": "m67_main_decision",
+      "consumer_ref": "runners/a_short_weekly_pipeline.py::_validate_analysis_input_m05_binding / _validate_nonready_analysis_input_iv_binding -> latest_iv_hv",
+      "terminal_surface": "weekly IV-HV advisory and source-bound volatility input",
+      "mutation_evidence": "a ready projection differing from the feed is rejected; a non-ready projection with hv_value is rejected before Phase5, so it cannot carry a stale volatility value into a degraded package"
+    },
     "market_context.volatility.iv_change_abs_1d_pctpt": {
       "category": "m67_main_decision",
       "consumer_ref": "runners/a_short_weekly_pipeline.py::_validate_analysis_input_m05_binding -> latest_m05_state",
@@ -1197,9 +1203,9 @@
     },
     "market_context.volatility.iv_feed_status": {
       "category": "m67_main_decision",
-      "consumer_ref": "A-EGS/egs_main.py::_load_iv_feed_projection -> runners/weekly_screening.ps1 -> runners/a_short_weekly_pipeline.py::_validate_analysis_input_m05_binding",
-      "terminal_surface": "analysis_input IV status, weekly M6.7 receipt, and fail-closed sidecar outcome",
-      "mutation_evidence": "non-ready status renders explicit unknown volatility and blocks M6.7 publication while canary/forward sidecars continue; ready requires the validated feed"
+      "consumer_ref": "A-EGS/egs_main.py::_load_iv_feed_projection/_unknown_iv_projection -> runners/weekly_screening.ps1 -> runners/a_short_weekly_pipeline.py::_validate_analysis_input_m05_binding/_validate_nonready_analysis_input_iv_binding -> runners/a_short_phase5_engine.py",
+      "terminal_surface": "analysis_input IV status, weekly M6.7 receipt, and Phase5 flat-position no-new-entry gate",
+      "mutation_evidence": "a non-ready status must match the schema-locked unknown projection; it publishes a degraded package whose flat rows are observe-only with no plan, while hard vetoes and held-position management retain precedence; ready requires the validated feed"
     },
     "market_context.volatility.iv_percentile_252d": {
       "category": "m67_main_decision",
@@ -2172,6 +2178,7 @@
       "machine.iv_gate.awakening_trigger_date",
       "machine.iv_gate.cash_reclaim_pct",
       "machine.iv_gate.iv_change_abs_1d_pctpt",
+      "machine.iv_gate.iv_feed_status",
       "machine.iv_gate.m05_mode",
       "machine.iv_gate.rule3_status",
       "machine.layer",
@@ -2587,6 +2594,7 @@
     "market_context.volatility.feed_sha256",
     "market_context.volatility.freshness_reason",
     "market_context.volatility.freshness_status",
+    "market_context.volatility.hv_value",
     "market_context.volatility.iv_change_abs_1d_pctpt",
     "market_context.volatility.iv_feed_status",
     "market_context.volatility.iv_percentile_252d",

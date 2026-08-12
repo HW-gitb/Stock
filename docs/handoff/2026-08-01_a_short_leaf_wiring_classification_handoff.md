@@ -6479,3 +6479,144 @@ effect contract 已用固定 Python 重新登记 A-EGS decision-predicate hash �
 - 14B/14C 未执行，降级态在生产路径上仍不可达；未跑真实 provider / live / launcher 端到端。
 
 **下一步**：`Codex：执行`（14B）
+
+### 2026-08-12 Codex 执行：桌面 `ashort_1415.md` 第14B IV non-ready 降级闭环（`OPEN-NOT_VERIFIED`，43fe）
+
+#### 本节用途、追加位置与原始终态
+
+本节是指定 A-short sequence handoff 对桌面 `ashort_1415.md` §14B 的详细执行记录；它只补 IV non-ready 到 `degraded_no_new_entries` 的正式链路，不执行 14C、15 或无关重构。按本文件既有规则追加在 14A 独立审查记录之后，不覆盖历史。`docs/SESSION_LOG.md` 只保留本轮摘要，`docs/system_risk_register.md` 是 `R-ASHORT-14B-IV-NONREADY-DEGRADED-PACKAGE-WIRING` 的风险/Required 单一来源。当前状态是实现和离线自审完成、独立 review/commit 未完成，故 `OPEN-NOT_VERIFIED`；Codex 未 stage、commit、push 或 merge。
+
+#### 问题、根因与最小改动
+
+- 14A 已有三种可发布周包和 operation loader，但 IV build/digest/clock 只要非 `ready`，launcher 就写 `iv_feed_failed` failed receipt 并跳过 pipeline；pipeline 又只接受 `ready`、无条件读 `--iv-feed`。因此已有 four-state contract 在 IV 局部故障时不可达，且 Phase5 只能把缺值当保守输入，不能产生「禁止新建仓」的正式动作。
+- 不新增 `--iv-status`、输入 SHA、epoch、第二发布事务或 test-only production entry。复用五态 `not_requested/build_failed/digest_failed/clock_mismatch/ready`；launcher 总传 status，只在 ready 传 feed，non-ready 继续保留既有 IV sidecar outcome 但不覆盖 pipeline 的成功降级包。
+- EGS 的 ready/unknown volatility projection 都显式包含 `hv_value`；analysis-input schema 把 non-ready 的 `hv_value` 钉为 null。pipeline 先精确校验 unknown projection，再从该 projection 直接取 `iv_pct/iv_value/hv_value/m05_state`，不另写常量、不读旧文件。ready 分支保留原 schema/summary/as-of/clock/M0.5/byte source binding。
+- 为让非 ready 包通过现有顶层 schema，legacy display-only `iv_feed_ref` 写空字符串；权威 `run_lineage.iv_feed` 仍为 null。降级时 factor-v2 只产生 module-owned unavailable public summary，不读、不 settle 私有 cache；这是维持单个正式包可校验所需的最小闭合，不改变 comparison-only consumer 边界。
+
+#### 调用链、直接消费者、schema/source-binding 与写盘边界
+
+`weekly_screening.ps1` → `egs_main.py::_load_iv_feed_projection/_unknown_iv_projection` → `a_short_weekly_pipeline.py::main`（ready/non-ready binding）→ `normalize_candidate` / `_build_holdings` → `a_short_phase5_engine.py::{build_m67_report,build_holding_report,validate_m67_consistency}` → `build_weekly_report` / `publish_weekly_bundle` → weekly JSON/Markdown/receipt → operation loader → sidecar health / user-visible Markdown。
+
+- `market_context.volatility.iv_feed_status` 是 launcher CLI 与 EGS projection 的同一身份；non-ready 的 IV/HV、percentile、change、cash reclaim、source as-of/latest/ref/digest 都无值，Rule3/Awakening 是 `unknown`。CLI status 不同即 write 前 `SystemExit`。
+- normalized `iv.iv_feed_status` 到 Phase5 的 machine `iv_gate.iv_feed_status` 一对一保留；M67 report schema 和 effect contract 的 analysis/output inventory、group hash、per-leaf `hv_value` effect 都已同步。没有无人消费的新 sidecar。
+- write boundary 仍是 `publish_weekly_bundle` 的 current schema + atomic JSON/Markdown/receipt + output digest；non-ready publisher 只接收 `iv_feed_summary=None`、`stage_status=degraded_no_new_entries`。account 包仍只允许 private ignored root；14A 的 complete-only official pointer/manifest guard 不变，降级包只留当前 revision。
+- complete-only evidence consumers 未切到 operation loader；operation loader、health 和 Markdown 从同一 receipt 读真实降级状态。14B 不打开 14C 价格隔离、5% 门或任何 M6.7-dependent capture/settlement。
+
+#### Phase5 动作门与负向控制
+
+- gate 顺序固定：held 管理先于 IV gate；flat hard veto 先于 IV gate；其余 flat non-ready 强制 `观察` / `plan=None` / `IV 数据不可用，禁止新建仓`。股数、入、盈一、盈二、损必须 null，不允许建仓、低吸或突破。held 继续显示止损/减仓/退出/人工复核。
+- `validate_m67_consistency` 复验 non-ready 的 unknown machine IV state、flat action、plan 和 reject reason；不允许篡改报告后绕过。
+- 负向覆盖：non-ready CLI 带 feed 直接拒绝；CLI/projection status 不同拒绝；unknown projection 若藏入旧 `hv_value` 拒绝；ready 缺 feed、坏 schema、错日期、错 clock 仍拒绝。测试同时放置 malformed stale feed 文件但不传其路径，证明 non-ready 不读取它。
+- 对四种 non-ready status 使用一个参数化 E2E fixture；`build_failed` 是 launcher-status handoff 的模拟。静态 launcher guard 额外锁住：non-ready 写 existing `iv_feed` outcome、不得再出现 `iv_feed_failed` failure closeout、status 总传且 feed 只在 ready 加入 args。真正 PowerShell launcher 端到端未运行，仍 NOT_VERIFIED。
+
+#### 固定 Python、自审与精确验证
+
+- 唯一解释器：`C:\Users\cnhea\AppData\Local\Programs\Python\Python313\python.exe`，版本 `3.13.8`；未使用 PATH、`python`、`python3`、bundled Python 或其他解释器。
+- 精确命令：`C:\Users\cnhea\AppData\Local\Programs\Python\Python313\python.exe -m unittest -q tests.test_a_short_effect_contract tests.test_a_short_iv_egs_wiring tests.test_a_short_phase5_engine tests.test_a_short_weekly_pipeline tests.test_a_short_weekly_screening_m67_failure_closeout`
+- 原始终态：`Ran 788 tests in 109.691s`，`OK`。该包包含完整 weekly-pipeline unit module、完整 Phase5 module、effect-contract 静态/运行时契约、EGS projection/source binding、launcher closeout guard；不是 full lane。
+- Door checks：固定 Python `py_compile`（全部改动 Python 文件）通过；三个 JSON schema/contract `json.load` + static inventory 与 contract paths 相等；PowerShell `Parser.ParseFile` 通过；`git diff --check` 通过。自审还逐段比对 gate precedence、source 的唯一性、receipt outputs、health/Markdown、complete-vs-operation consumer 边界和 factor-v2 degraded summary。
+- 未运行 provider/live/网络/真实 weekly、真实 PowerShell launcher E2E、full lane 或 sub-agent；这些离线证据不宣称 production/live/ship PASS。
+
+#### 审查边界与下一步
+
+请 Claude Code 仅独立复审 `ashort_1415.md` §14B 与本工作树 diff：确认五态不新增、ready/non-ready source binding、flat hard-veto/observe/held precedence、receipt/loader/health/Markdown 同步、14A official-pointer 与 complete-only consumer 边界不回退。PASS 后按 reviewer/committer 边界提交；不要顺带执行 14C。第14刀仍由 14C 的票级价格隔离与 5% 门决定是否关闭。
+
+## 2026-08-12 追加：第14B刀独立审查（按 1415 文档逐条）—— FAIL（未提交）
+
+**判定**：FAIL，一条 Required + 两条 Optional，正文只在 `docs/system_risk_register.md`。本轮按用户指令**以桌面 1415 文档 §14B 为权威**逐条对照，不以实现自述为准。
+
+**我实际验了什么**（区别于执行方转述）
+
+- 14B-1/2/3/4 我逐条落到代码上核过：五态没新增参数；launcher 的 `iv_feed_failed` 失败路径已删且 M6.7 调用改挂在 `M67InvocationState -eq 'requested'` 上（这是「非 ready 也要跑 pipeline」的承重改动）；pipeline 的 ready/非 ready 双向硬失败都在；Phase5 的门在 hard-veto 之后、其他新建仓判断之前，`entry_type()` 一行未动。
+- **自写反向控制**：四种非 ready 状态全部只出「观察 + 无 plan + 交易字段全 null + 固定 reject 文案 + eligible=False」；六个字段分别夹带陈旧 IV 值 → 六次全 raise；非法状态值 raise；hard-veto 候选保留原始 Rule6 理由。
+- **自写植入对照（并纠正了自己的一次假阴性）**：第一版把门改成 `False` 后结论「门不承重」——查下来是 `from runners import ...` 取到包属性上的旧模块对象，补丁根本没生效。用 `importlib.reload` 重做后结论反转：门在 → reject 是「IV 数据不可用」且 `model_build_eligible=False`；门摘掉 → 落回两融分支且 `eligible=True`。**假阴性没有进结论**，还原 sha 逐字节一致。
+- **同类扫描抓到申报面外的一个模块**：按 `iv_feed_failed` 全仓扫，除了红的 `phase6/test_weekly_screening_guardrails`（3 条），还有 `tests/test_a_short_review1_knives_6_10.py:276`（1 条）同样断言旧路径，单跑确认 `FAILED (failures=1)`。这一条不在执行方跑过的包里。
+
+**未覆盖维度与诚实边界**
+
+- 真实 PowerShell launcher 端到端未运行；14B-2 的结论是静态整读 + 仓内静态守卫，行为链仍 `NOT_VERIFIED`。
+- 全量 lane 未跑（rule 4 归执行方，红已坐实）；§6a 未起 agent（无 live/secret 面，rule 8）。
+- 14C 与第 15 刀未执行，`partial_holdings_only` 生产路径仍不可达。
+
+**下一步**：`Codex：修复`
+
+### 2026-08-12 Codex 修复：第14B 审查 Required 的 launcher 守卫漂移（`repaired / OPEN-NOT_VERIFIED`，43fe）
+
+#### 用途、问题与最小改动
+
+本节追加到既有第14B执行/审查记录之后，专门记录 `R-ASHORT-14B-LAUNCHER-GUARD-TESTS-STILL-PIN-THE-REMOVED-IV-FAILURE-PATH` 的收口；不重写历史记录，也不执行14C或第15刀。根因是运行时已按桌面 §14B 删除 `iv_feed_failed` 的 M6.7 failed-receipt 终止路径，但两个静态 launcher 测试仍把该路径当作当前行为，且 IV failure receipt 守卫没有转为验证 non-ready 降级链。
+
+仅改两个测试文件：`tests/phase6/test_weekly_screening_guardrails.py` 和 `tests/test_a_short_review1_knives_6_10.py`。通用 failure-receipt 断言用仍存在的 `weekly_operation_bundle_invalid` 取代被删 reason；`-AnalysisInput $SemAnalysisInput` 的旧计数从 4 修为当前 3；旧 receipt 测试改为 `test_nonready_iv_records_sidecar_and_still_invokes_pipeline`，锁定现有 IV failed sidecar、无 `iv_feed_failed` finalizer、五态 status 传递、ready-only feed 和 `& $PythonExe @M67Args`。没有改任何生产代码、schema、契约、source-binding、消费者、写盘点或隔离根。
+
+#### 调用链、负向控制与写盘边界
+
+运行时调用链保持前节已记录的 `weekly_screening.ps1` → EGS IV projection → `a_short_weekly_pipeline.main` → Phase5 → `publish_weekly_bundle` JSON/Markdown/receipt → operation loader → health/Markdown；本修复只把测试期望对齐该既有链。`Set-M67Failure -Reason 'iv_feed_failed'` 在生产源码为 0；测试中不再有正向 `assertIn`，只保留三条 `assertNotIn` 负向守卫。四种 non-ready 的行为闭合仍由 weekly-pipeline 参数化 E2E 用例证明：不打开 malformed stale feed、发布 `degraded_no_new_entries`、operation loader/health/Markdown 收敛同一 receipt。14A 的 atomic publish、output digest、complete-only official pointer 和 account-private write boundary 均未改动。
+
+#### 固定 Python、自审与精确测试
+
+- 唯一解释器：`C:\Users\cnhea\AppData\Local\Programs\Python\Python313\python.exe`（3.13.8）；未使用 PATH、`python`、`python3`、bundled Python 或其他解释器。
+- 关闭包：`C:\Users\cnhea\AppData\Local\Programs\Python\Python313\python.exe -m unittest -v tests.phase6.test_weekly_screening_guardrails tests.test_a_short_review1_knives_6_10` → `Ran 46 tests in 5.121s`，`OK`。
+- 14B 离线验收超集：`C:\Users\cnhea\AppData\Local\Programs\Python\Python313\python.exe -m unittest -q tests.test_a_short_effect_contract tests.test_a_short_effect_consumer_probe tests.test_a_short_iv_egs_wiring tests.test_a_short_phase5_engine tests.test_a_short_weekly_pipeline tests.test_a_short_weekly_screening_m67_failure_closeout tests.test_a_short_m67_render tests.test_a_short_weekly_sidecar_health tests.schema.test_a_short_weekly_publish_receipt_schema` → `Ran 887 tests in 139.360s`，`OK`。
+- repair-closeout matrix：Required `R-ASHORT-14B-LAUNCHER-GUARD-TESTS-STILL-PIN-THE-REMOVED-IV-FAILURE-PATH=已修`；`O-14B-1/O-14B-2=未触及（非本轮授权）`。main-thread 已做 A-F 与同类 `rg`，未起 sub-agent；full lane 未获授权且未触发。固定 Python `py_compile`、PowerShell `Parser.ParseFile`、文档治理/route 55 tests 与 `git diff --check` 均通过。
+
+#### 原始终态与边界
+
+当前为 `repaired / OPEN-NOT_VERIFIED`，因为独立 Claude Code 尚未复审当前 diff；Codex 未 stage、commit、push 或 merge。未运行 provider、live、网络、真实 weekly、真实 PowerShell launcher E2E 或 full lane；这些离线测试不构成生产、实盘或 ship 证据。14C/15 和 Optional 均保持原状态。
+
+## 2026-08-12 追加：第14B刀 launcher 守卫收口复审 —— FAIL（未提交，全量抓到植入被打偏）
+
+**判定**：FAIL。上轮点名的四条守卫**确已按类修好**，但按 rule 6 自跑的全量抓到一条新的：14B 的新调用点把另一个模块的植入对照打偏了。正文只在 `docs/system_risk_register.md`。
+
+**我实际验了什么**（区别于执行方转述）
+
+- 先确认本轮是纯测试侧增量：生产文件 numstat 与上轮逐项相同、两处承重行仍在原位，故上轮对 §14B 接线与硬门的结论可继承。
+- **守卫是否承重我自己植入验**：重塞旧 `iv_feed_failed` 终止路径 / 把 pipeline 调用门改成 `if ($true)` / 把 `weekly_operation_bundle_invalid` 改名 —— 三发各只让**应该红的那条**转红，互不误伤，还原 sha 逐字节一致。这一步是判「守卫真守着东西」的唯一硬证据。
+- **理由清单完整性我自己枚举**：launcher 恰有 4 个失败理由，两个清单断言的恰是这 4 个；这次修复顺带补上了 14A 新增却没人守的 `weekly_operation_bundle_invalid`。
+- **全量按 rule 6 自跑并抓到真问题**：本 slice 含两个生产顶层 runner，而执行方按「本轮只改测试」申报 `not_triggered`、14A 落地时也没有全量记录，即这个合并态从未被全量覆盖过。跑出来唯一一条红是 `test_a_short_v5_revision_matrix` 的植入对照——它按**首个文本出现位置**打植入，而 14B 新增的 `_factor_v2_unavailable_public_summary(...)`（pipeline:6722）把同形文本排到了被守卫调用（:6728）前面，于是植入打偏、守卫不再承重。
+- **定性不靠猜**：同一模块在干净 master 主树单跑 `7 tests OK`，所以是本 slice 引入，不是历史遗留。
+- **同类扫描划定修复面**：对本刀改过的三个生产文件检索定位式 `replace(..., 1)` 植入，仅此一处。
+
+**未覆盖维度与诚实边界**
+
+- 该次全量 fail-fast 在首红处停止派发（`discovered=2786 ran=2694 equal=False`），首红之后的模块未获覆盖。
+- 真实 PowerShell launcher 端到端仍未运行；§6a 未起 agent（rule 8）；14C 与第 15 刀未执行。
+
+**下一步**：`Codex：修复`
+
+### 2026-08-12 Codex 修复：第14B revision-matrix 植入目标漂移（`repaired / OPEN-NOT_VERIFIED`，43fe）
+
+#### 用途、根因与最小改动
+
+本节追加于第14B复审 FAIL 之后，只收口 `R-ASHORT-14B-NEW-FACTOR-V2-CALL-MISTARGETS-A-PLANTED-CONTROL`。14B 的 unavailable factor-v2 调用在目标 `settle_and_summarize_v2_weekly(...)` 之前引入同形的 `official_project_root` 文本，使 `source.replace(..., 1)` 植入错误地修改前者，未再检验目标调用的关键字。
+
+仅改 `tests/test_a_short_v5_revision_matrix.py`。正控继续在真实 pipeline AST 中确认目标调用带 `official_project_root`；负控不再按文本位置替换，而是解析同一源码 AST，精确定位 `settle_and_summarize_v2_weekly` 的 `ast.Call`，只删除该 call 的 keyword，记录 `removed=True`，再要求 `_call_uses_keyword` 为 false。没有改 `a_short_weekly_pipeline.py`、factor-v2 模块或其私有 API、任何 schema/source binding、消费者或写盘点；`O-14B-1/O-14B-2` 未触及。
+
+#### 调用链、负向控制与边界
+
+实际运行链保持 `weekly_screening.ps1` → `a_short_weekly_pipeline.py` 的 factor-v2 settle/unavailable 分支 → weekly JSON/Markdown/receipt；这次只修复验证该 production call 是否带 `official_project_root` 的测试植入位置。旧 `source.replace(` 与同形关键字文本在测试内均零残留；正控、`removed=True` 和负控分别钉住目标调用存在、确实被定点修改、修改后守卫拒绝。没有新增 runner 行为、输出、缓存、私有路径或写盘。
+
+#### 固定 Python、精确验证与原始终态
+
+- 唯一解释器：`C:\Users\cnhea\AppData\Local\Programs\Python\Python313\python.exe`（3.13.8）。
+- 合规 focused：`.tools\run_unittest_with_repo_pythonpath.cmd tests.test_a_short_v5_revision_matrix tests.test_a_short_effect_contract tests.test_a_short_effect_consumer_probe` → `Ran 84 tests in 61.274s`，`PASS`，receipt `receipt:6bb4f3949b6c04e95541eaa7`。
+- A-short full lane（rule 3(a)，唯一实际执行）：`C:\Users\cnhea\AppData\Local\Programs\Python\Python313\python.exe .tools\full_pack_ledger.py run a_short '14B revision-matrix planted-control target repair' 'receipt:6bb4f3949b6c04e95541eaa7' 860 -- discover -s tests -p 'test_a_short*.py'` → `discovered=2786`、`ran=2786`、`equal=True`、`PASS`、112.099s、`mode=parallel`、fingerprint `e5e5b1194951…`。ledger 的 `git diff --check` 与 10 个 Python 文件 `py_compile`、交接后的 document-governance/route/README guard `66 OK` 均 PASS。
+- 首次 full-ledger 命令因 focused receipt 未含 effect bundle 在 preflight 被拒绝，未启动 full test；随后合规 receipt 的这次 PASS 是本代码态唯一实际 full run。
+- 当前为 `repaired / OPEN-NOT_VERIFIED`；未运行 provider/live/网络/真实 weekly/真实 PowerShell launcher E2E，未起 sub-agent，未 stage、commit、push 或 merge。第14C、第15刀及两个 Optional 仍保持原状态。
+
+## 2026-08-12 追加：第14B刀 planted-control 收口复审 —— PASS（已提交并合入 master）
+
+**判定**：PASS。两条 Required 全闭，两条 Optional 如实保留 open；正文只在 `docs/system_risk_register.md`。
+
+**我实际验了什么**（区别于执行方转述）
+
+- 先读判据本身再判修法：`_call_uses_keyword` 是「任一匹配调用带该关键字即 True」，而 pipeline 里该函数只有一处真实调用（`:6725`），`:3605` 是消费者清单的字符串字面量、AST 天然不吃。所以「AST 定位该调用节点 + break + `assertTrue(removed)`」是充分的修法，不是换个写法而已。
+- **三发植入对照**（patch 的都是被守卫的生产源码）：① **复刻当初打偏它的场景**——在被守卫调用之前插一处同形文本，测试仍 PASS，说明这次真扛住了；② 被守卫调用丢掉关键字 → 正控红；③ 调用改名致植入无处可打 → `assertTrue(removed)` 红。三发之后源码 sha 逐字节一致。
+- **全量我没重跑，但账本我自己核了**：现场重算代码态指纹与账本 `fingerprint`/`prepared_fingerprint` 三者逐字相同，被审源码 mtime 全早于 `recorded_at`，所以那次 `2786 OK / 111 模块全跑完` 绑的是我在审的代码态。这也补上了我上一轮 rule-6 自跑时 fail-fast 停在首红、首红之后未覆盖的缺口。
+
+**未覆盖维度与诚实边界**
+
+- 本轮 hook 未注入 review-evidence token（措辞未命中触发式），已按规定在 `Verify` 写 `not_available` 并声明缺口；证据全部为真实工具结果。
+- 真实 PowerShell launcher 端到端仍未运行——这是第 14 刀当前最大的未覆盖面。
+- §6a 未起 agent（rule 8）；14C 与第 15 刀未执行，`partial_holdings_only` 生产路径仍不可达。
+
+**下一步**：`Codex：执行`（14C）

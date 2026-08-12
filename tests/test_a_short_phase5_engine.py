@@ -1387,6 +1387,59 @@ class HeldStateActionBindTests(unittest.TestCase):
 
 
 class M05ConsumerTests(unittest.TestCase):
+    def test_nonready_iv_status_blocks_only_new_entries_and_preserves_hard_veto_and_holdings(self):
+        unknown = {
+            "iv_feed_status": "build_failed",
+            "iv_percentile_252d": None,
+            "iv_value": None,
+            "hv_value": None,
+            "iv_change_abs_1d_pctpt": None,
+            "cash_reclaim_pct": None,
+            "rule3_status": "unknown",
+            "awakening_status": "unknown",
+            "awakening_trigger_date": None,
+            "awakening_release_date": None,
+        }
+        for status in ("not_requested", "build_failed", "digest_failed", "clock_mismatch"):
+            with self.subTest(status=status):
+                flat = build_m67_report(
+                    _good_input(iv={**unknown, "iv_feed_status": status}), AS_OF, "t"
+                )
+                table = flat["m67"]["table"]
+                decision = flat["machine"]["entry_exit_size_star"]
+                self.assertEqual(table["操作"], "观察")
+                self.assertEqual(table["类型"], "N/A")
+                self.assertIsNone(decision["plan"])
+                self.assertEqual(decision["reject_reason"], "IV 数据不可用，禁止新建仓")
+                self.assertFalse(flat["machine"]["model_build_eligible"])
+                self.assertEqual(flat["machine"]["iv_gate"]["iv_feed_status"], status)
+                for field in ("股数", "入", "盈一", "盈二", "损"):
+                    self.assertIsNone(table[field])
+                validate_m67_consistency(flat)
+
+        hard_ready_input = _good_input()
+        hard_ready_input["derived"]["hard_veto"] = True
+        hard_ready = build_m67_report(hard_ready_input, AS_OF, "t")
+
+        hard_input = _good_input(iv=unknown)
+        hard_input["derived"]["hard_veto"] = True
+        hard = build_m67_report(hard_input, AS_OF, "t")
+        self.assertEqual(hard["m67"]["table"]["操作"], "否决")
+        self.assertEqual(
+            hard["machine"]["entry_exit_size_star"]["reject_reason"],
+            hard_ready["machine"]["entry_exit_size_star"]["reject_reason"],
+        )
+        self.assertIsNone(hard["machine"]["entry_exit_size_star"]["plan"])
+        validate_m67_consistency(hard)
+
+        held = build_m67_report(
+            _good_input(iv=unknown, stateful_risk=_held_state()), AS_OF, "t"
+        )
+        self.assertEqual(held["m67"]["table"]["操作"], "持有")
+        self.assertIsNotNone(held["machine"]["entry_exit_size_star"]["plan"])
+        self.assertIn("已有持仓", held["m67"]["精简结论区"]["操作建议"])
+        validate_m67_consistency(held)
+
     def test_legacy_shape_bypass_does_not_disable_modern_m05_semantics(self):
         report = build_m67_report(_good_input(iv={
             "iv_percentile_252d": 55.0,

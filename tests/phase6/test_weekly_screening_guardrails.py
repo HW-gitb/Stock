@@ -283,9 +283,9 @@ class WeeklyScreeningGuardrailTest(unittest.TestCase):
         self.assertIn("function Set-M67Failure", text)
         for reason in (
             "analysis_input_missing",
-            "iv_feed_failed",
             "account_path_missing",
             "weekly_pipeline_failed",
+            "weekly_operation_bundle_invalid",
         ):
             self.assertIn(f"Set-M67Failure -Reason '{reason}'", text)
         self.assertIn("exit $FinalExitCode", text)
@@ -342,17 +342,21 @@ class WeeklyScreeningGuardrailTest(unittest.TestCase):
         self.assertIn("$Payload['candidate_digest']", text)
         for reason in ("preflight_failed", "entrypoint_missing", "egs_failed"):
             self.assertIn(reason, text)
-        self.assertEqual(text.count("-AnalysisInput $SemAnalysisInput"), 4)
+        self.assertEqual(text.count("-AnalysisInput $SemAnalysisInput"), 3)
 
-    def test_iv_feed_failure_receipt_is_wired_without_copying_error_text(self) -> None:
+    def test_nonready_iv_records_sidecar_and_still_invokes_pipeline(self) -> None:
         text = SCRIPT.read_text(encoding="utf-8")
-        self.assertIn("$IvFailureReceipt", text)
-        self.assertIn('"iv_feed_failure_$PID.json"', text)
-        self.assertIn("Remove-Item -LiteralPath $IvFailureReceipt", text)
-        self.assertIn("--failure-receipt-out $IvFailureReceipt", text)
-        self.assertIn("-FailureDetailRef $IvFailureDetailRef", text)
-        self.assertIn("failure_detail_ref", text)
-        self.assertNotIn("Get-Content -Raw $IvFailureReceipt", text)
+        stage4 = text[text.index("# --- Stage 4:"):text.index("# --- Stage 5:")]
+        self.assertIn("if (-not $script:IvFeedReady)", stage4)
+        self.assertIn(
+            "-Name 'iv_feed' -Expected $true -Attempted $true -ExecutionStatus 'failed'",
+            stage4,
+        )
+        self.assertNotIn("Set-M67Failure -Reason 'iv_feed_failed'", stage4)
+        self.assertIn("if ($script:M67InvocationState -eq 'requested')", stage4)
+        self.assertIn("'--iv-feed-status', $script:IvFeedStatus", stage4)
+        self.assertIn("if ($script:IvFeedReady) { $M67Args += @('--iv-feed', $IvFeed) }", stage4)
+        self.assertIn("& $PythonExe @M67Args", stage4)
 
     def test_regime_stage_wired_live_only_nonblocking(self):
         # V14.3 regime comparison sidecar wired into the one-click weekly: runs only on a live run

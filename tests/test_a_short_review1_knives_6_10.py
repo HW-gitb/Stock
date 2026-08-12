@@ -273,9 +273,9 @@ class RunIdentityAndPublishTest(unittest.TestCase):
         text = (ROOT / "runners" / "weekly_screening.ps1").read_text(encoding="utf-8")
         for reason in (
             "analysis_input_missing",
-            "iv_feed_failed",
             "account_path_missing",
             "weekly_pipeline_failed",
+            "weekly_operation_bundle_invalid",
         ):
             self.assertIn(f"Set-M67Failure -Reason '{reason}'", text)
         self.assertIn("$script:FinalExitCode = $ExitCode", text)

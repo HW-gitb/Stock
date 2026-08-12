@@ -531,6 +531,10 @@
               "$ref": "#/$defs/numberNullable",
               "description": "Unit: percent or index points depending on IV source."
             },
+            "hv_value": {
+              "$ref": "#/$defs/numberNullable",
+              "description": "Unit: percent or index points depending on realised-volatility source."
+            },
             "iv_percentile_252d": {
               "$ref": "#/$defs/percentNullable",
               "description": "Unit: percentile, 0-100."
@@ -1127,6 +1131,7 @@
                   "source_ref": {"type": "null"},
                   "feed_sha256": {"type": "null"},
                   "iv_value": {"type": "null"},
+                  "hv_value": {"type": "null"},
                   "iv_percentile_252d": {"type": "null"},
                   "iv_change_abs_1d_pctpt": {"type": "null"},
                   "rule3_status": {"const": "unknown"},
