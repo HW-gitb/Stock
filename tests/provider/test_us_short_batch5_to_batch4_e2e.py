@@ -9,6 +9,7 @@ import tempfile
 import unittest
 from datetime import datetime
 from pathlib import Path
+from types import SimpleNamespace
 from unittest import mock
 
 
@@ -23,6 +24,7 @@ from engine.us_short_projection_binding import build_projection_binding  # noqa:
 from engine.us_short_result_source_linkage import validate_result_source_fact  # noqa: E402
 from engine.us_short_sec_offering_audit import resolve_offering_audit  # noqa: E402
 from runners import us_short_batch5_to_batch4_weekend_e2e as e2e  # noqa: E402
+from runners import us_short_weekly_capstone_stages as capstone_stages  # noqa: E402
 from tests.provider.test_us_short_batch5_data_context import (  # noqa: E402
     _DECISION_DATE,
     _GRADE_AS_OF,
@@ -83,6 +85,90 @@ def _no_build_template(path: Path) -> Path:
     return _write_json(path, payload)
 
 
+def _overextension_for_current_aapl() -> dict:
+    ticker = "AAPL"
+    digest = hashlib.sha256(json.dumps([ticker], separators=(",", ":")).encode("ascii")).hexdigest()
+    return {
+        "schema_name": "us_short_full_universe_overextension_projection",
+        "schema_version": "1.0.0",
+        "generated_at": "2026-06-15T08:30:00-04:00",
+        "decision_clock": {
+            "expected_decision_date": _DECISION_DATE,
+            "candidate_price_basis_date": "20260612",
+            "price_basis_date": "2026-06-12",
+            "source_as_of": "2026-06-12",
+        },
+        "source_contract": {"session": "RTH", "adjustment_mode": "split_adjusted"},
+        "candidate_binding": {"eligible_count": 1, "eligible_tickers_sha256": digest},
+        "overextension_by_ticker": {
+            ticker: {
+                "overextension_state": "none",
+                "strips_theme_score": False,
+                "execution_flags": {},
+                "conditions_met": 0,
+                "condition_names": [],
+                "disposition": "scored",
+                "pit": {
+                    "as_of": "2026-06-12",
+                    "session": "RTH",
+                    "adjustment_mode": "split_adjusted",
+                    "n_points": 70,
+                },
+            },
+        },
+        "disposition_counts": {"scored": 1, "insufficient_data": 0},
+        "scored_count": 1,
+        "target_count": 1,
+    }
+
+
+def _forward_ohlcv_packet(*, decision_date: str, price_basis_date: str, start_date: str, points: int) -> dict:
+    start = datetime.strptime(start_date, "%Y-%m-%d").date()
+    rows = []
+    for offset in range(points):
+        current = start.fromordinal(start.toordinal() + offset)
+        rows.append({
+            "date": current.isoformat(), "open": 100.0, "high": 101.0,
+            "low": 99.0, "close": 100.0, "volume": 1000.0,
+        })
+    price_basis_iso = f"{price_basis_date[:4]}-{price_basis_date[4:6]}-{price_basis_date[6:]}"
+    return {
+        "schema_name": "us_short_batch5_full_universe_ohlcv_series_packet",
+        "schema_version": "1.0.0",
+        "generated_at": "2026-06-15T13:00:00Z",
+        "scope": {
+            "market": "US", "lane": "us_short", "batch": "batch5_provider_live",
+            "packet_status": "full_universe_per_ticker_ohlcv_series_ready_for_local_overextension_projection",
+            "full_market_reconstruction": True, "network_access_performed_by_packet_producer": False,
+            "provider_calls_performed_by_packet_producer": False, "raw_payload_refs_gitignored": True,
+            "datahub_consumption_allowed": False, "production_storage_allowed": False,
+            "ship_gate_evidence_claimed": False, "broker_or_order_automation_allowed": False,
+            "a_share_crossing_allowed": False,
+        },
+        "decision_clock": {
+            "expected_decision_date": decision_date,
+            "candidate_price_basis_date": price_basis_date,
+            "price_basis_date": price_basis_iso,
+            "source_as_of": price_basis_iso,
+        },
+        "series_contract": {
+            "session": "regular", "adjustment_mode": "split_dividend_adjusted",
+            "as_of": price_basis_iso, "grouped_session_count": points,
+        },
+        "provenance": {
+            "provider_id": "massive", "endpoint_or_family": "grouped_daily",
+            "source_as_of": price_basis_iso, "observed_at": "2026-06-15T13:00:00Z",
+            "coverage_status": "full", "parser_status": "ok",
+        },
+        "series_by_ticker": {
+            "AAPL": {
+                "as_of": price_basis_iso, "session": "regular",
+                "adjustment_mode": "split_dividend_adjusted", "points": rows,
+            },
+        },
+    }
+
+
 class Batch5ToBatch4E2ETest(unittest.TestCase):
     def setUp(self) -> None:
         self._state_root_context = temporary_us_short_state_directory(ROOT)
@@ -99,6 +185,7 @@ class Batch5ToBatch4E2ETest(unittest.TestCase):
             "news": self.state_dir / f"{self.slug}_news.json",
             "theme_contract": self.state_dir / f"{self.slug}_theme_selection_contract.json",
             "ohlcv": self.state_dir / f"{self.slug}_ohlcv.json",
+            "overextension": self.state_dir / f"{self.slug}_overextension.json",
             "data_context": self.state_dir / f"{self.slug}_data_context.json",
             "components": self.state_dir / f"{self.slug}_context_components.json",
         }
@@ -308,6 +395,138 @@ class Batch5ToBatch4E2ETest(unittest.TestCase):
             action_csv = (private_root / "weekly_private" / _DECISION_DATE / "action_table.csv").read_text(encoding="utf-8")
             self.assertIn("coverage_status", action_csv.splitlines()[0])
             self.assertIn("partial", action_csv.splitlines()[1])
+
+    def test_one_current_producer_carrier_feeds_bridge_then_shadow_then_maturity(self) -> None:
+        """The same six-key producer artifact feeds both runtime consumers and the existing H20 reader."""
+        _write_json(self.paths["overextension"], _overextension_for_current_aapl())
+        packet = json.loads(self.paths["packet"].read_text(encoding="utf-8"))
+        packet["paths"].update({
+            "overextension_projection_path": _rel(self.paths["overextension"]),
+            "overextension_candidate_artifact_path": _rel(self.paths["candidate"]),
+        })
+        _write_json(self.paths["packet"], packet)
+
+        with tempfile.TemporaryDirectory() as private_dir:
+            private_root = Path(private_dir)
+            account = _write_json(private_root / "account_state.json", _empty_account())
+            health = _write_json(private_root / "provider_health.json", _provider_health())
+            template = _no_build_template(private_root / "batch4_template.json")
+            context_out = private_root / "context_packet.json"
+            bridge = e2e.run_e2e(
+                source_packet_path=self.paths["packet"],
+                batch4_template_path=template,
+                account_state_path=account,
+                provider_health_path=health,
+                private_root=private_root,
+                now_et=datetime(2026, 6, 15, 9, 0, 0),
+                context_components_path=self.paths["components"],
+                context_packet_path=context_out,
+                bootstrap_lifecycle=True,
+                generated_at="2026-06-15T13:01:00Z",
+            )
+            components = json.loads(self.paths["components"].read_text(encoding="utf-8"))
+            self.assertEqual(
+                set(components),
+                set(e2e.source_packet_runner.CONTEXT_COMPONENT_SHAPES["cut4"]),
+            )
+            self.assertTrue(bridge["batch4_run"]["emitted"])
+
+            ohlcv_path = private_root / "ohlcv_20260615.json"
+            _write_json(
+                ohlcv_path,
+                _forward_ohlcv_packet(
+                    decision_date=_DECISION_DATE,
+                    price_basis_date="20260612",
+                    start_date="2026-06-08",
+                    points=5,
+                ),
+            )
+            vix_path = _write_json(private_root / "vix_20260615.json", {
+                "vix_regime": "进攻", "vix_regime_is_unknown": False,
+            })
+            shadow_root = private_root / "shadow_compare_private"
+            shadow_root.mkdir()
+            ctx = SimpleNamespace(
+                now_et=datetime(2026, 6, 15, 9, 0, 0),
+                data_context_path=self.paths["data_context"],
+                context_components_path=self.paths["components"],
+                decision_date=_DECISION_DATE,
+                price_basis_date="20260612",
+                generated_at="2026-06-15T13:01:00Z",
+                forward_shadow_selection_private_path=shadow_root / "forward_policy_selection_20260615.json",
+                forward_policy_summary_path=shadow_root / "forward_policy_summary_20260615.json",
+                forward_policy_source_capture_private_path=(
+                    shadow_root / "forward_policy_source_capture_20260615.json"
+                ),
+                ohlcv_series_packet_path=ohlcv_path,
+                batch4_template_path=template,
+                vix_regime_summary_path=vix_path,
+            )
+            shadow = capstone_stages.run_forward_policy_shadow(ctx)
+            self.assertEqual(shadow["summary"]["selected_counts"]["balanced"], 1)
+            self.assertTrue(ctx.forward_policy_source_capture_private_path.is_file())
+
+            maturity_ohlcv = _write_json(
+                private_root / "ohlcv_20260713.json",
+                _forward_ohlcv_packet(
+                    decision_date="20260713",
+                    price_basis_date="20260710",
+                    start_date="2026-06-15",
+                    points=26,
+                ),
+            )
+            maturity_ctx = SimpleNamespace(
+                forward_policy_comparison_ledger_path=shadow_root / "forward_policy_comparison_ledger.json",
+                ohlcv_series_packet_path=maturity_ohlcv,
+                decision_date="20260713",
+            )
+            maturity = capstone_stages.run_forward_policy_maturity(maturity_ctx)
+            self.assertEqual(maturity["source_captures_processed"], 1)
+            self.assertEqual(maturity["whole_week_no_count"], 1)
+            self.assertTrue((shadow_root / "forward_policy_outcome_20260615.json").is_file())
+
+    def test_bridge_keeps_exact_legacy_a1_and_cut4_carriers_readable(self) -> None:
+        base = {
+            "data_context": {
+                "universe": [],
+                "selection_inputs": {"theme_opportunity_state": "no_strong_theme"},
+            },
+            "per_ticker_analysis": {},
+            "run_provenance": {"as_of": _DECISION_DATE, "price_basis_date": "20260612"},
+        }
+        variants = {
+            "legacy": base,
+            "a1": {**base, "score_composition": {}, "overextension_by_ticker": None},
+            "cut4": {**base, "score_composition": {}, "overextension_by_ticker": None, "result_linkage_sources": {}},
+        }
+        source_summary = {
+            "packet_ref": "historical-fixture",
+            "data_context": {"selection_input_count": 0},
+            "scope": {"context_components_written": True},
+        }
+        with tempfile.TemporaryDirectory() as private_dir:
+            private_root = Path(private_dir)
+            account = _write_json(private_root / "account_state.json", _empty_account())
+            health = _write_json(private_root / "provider_health.json", _provider_health())
+            template = _no_build_template(private_root / "batch4_template.json")
+            for shape, components in variants.items():
+                with self.subTest(shape=shape):
+                    _write_json(self.paths["components"], components)
+                    with mock.patch.object(e2e, "_safe_source_packet_run", return_value=source_summary), mock.patch.object(
+                        e2e, "_safe_batch4_run", return_value={"emitted": False, "decision_date": _DECISION_DATE, "row_count": 0}
+                    ):
+                        result = e2e.run_e2e(
+                            source_packet_path=self.paths["packet"],
+                            batch4_template_path=template,
+                            account_state_path=account,
+                            provider_health_path=health,
+                            private_root=private_root,
+                            now_et=datetime(2026, 6, 15, 9, 0, 0),
+                            context_components_path=self.paths["components"],
+                            context_packet_path=private_root / f"{shape}_context_packet.json",
+                            generated_at="2026-06-15T13:01:00Z",
+                        )
+                    self.assertEqual(result["scope"]["status"], "batch5_source_packet_to_batch4_outputs_completed")
 
     def test_multigap_source_facts_survive_sorted_context_packet_and_emit(self) -> None:
         with tempfile.TemporaryDirectory() as private_dir:
