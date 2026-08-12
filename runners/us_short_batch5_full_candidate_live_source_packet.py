@@ -22,7 +22,11 @@ if str(ROOT) not in sys.path:
 
 from engine.us_short_catalyst import load_catalyst_governance  # noqa: E402
 from engine.us_short_eligibility_gate import canonical_us_ticker, load_eligibility_governance  # noqa: E402
-from engine.us_short_pass2_funnel import Pass2FunnelError, select_pass2_targets  # noqa: E402
+from engine.us_short_pass2_funnel import (  # noqa: E402
+    Pass2FunnelError,
+    partition_pass2_targets,
+    select_pass2_targets,
+)
 from engine.us_short_projection_binding import (  # noqa: E402
     build_projection_binding,
     file_sha256,
@@ -88,6 +92,13 @@ _SEC_TICKER_MAPPING_CALLS = 1
 _PASS2_ENDPOINT_CALLS_PER_TARGET = 5
 _EXECUTION_MODE_LIVE_PROVIDER_FETCH = "live_provider_fetch"
 _EXECUTION_MODE_OFFLINE_REPLAY = "offline_replay"
+_OPTIONAL_ELIGIBLE_PARTITION_AUDIT_FIELDS = (
+    "eligible_selected_count",
+    "eligible_not_selected_count",
+    "eligible_scored_not_selected_count",
+    "eligible_unscored_not_selected_count",
+    "eligible_partition_conserved",
+)
 
 
 class FullCandidateLiveSourcePacketError(ValueError):
@@ -1528,6 +1539,11 @@ def _build_summary(
             "target_count": pass2_target_universe["target_count"],
             "target_symbols": list(pass2_target_universe["target_symbols"]),
             "target_symbol_sample": list(pass2_target_universe["target_symbol_sample"]),
+            "eligible_selected_count": pass2_target_universe["eligible_selected_count"],
+            "eligible_not_selected_count": pass2_target_universe["eligible_not_selected_count"],
+            "eligible_scored_not_selected_count": pass2_target_universe["eligible_scored_not_selected_count"],
+            "eligible_unscored_not_selected_count": pass2_target_universe["eligible_unscored_not_selected_count"],
+            "eligible_partition_conserved": pass2_target_universe["eligible_partition_conserved"],
             "fmp_grade_call_cap": pass2_target_universe["fmp_grade_call_cap"],
             "fmp_grade_calls_within_free_daily_cap": pass2_target_universe["fmp_grade_calls_within_free_daily_cap"],
             "neutral_fill_tickers_excluded_from_expensive_pass2": (
@@ -1790,6 +1806,32 @@ def _canonical_catalyst_recall(
     return recall
 
 
+def _validate_optional_preflight_eligible_partition(
+    preflight_targets: dict[str, Any],
+    verified_targets: dict[str, Any],
+) -> None:
+    """Bind an upgraded preflight's eligible-to-Pass2 audit to the live re-derivation.
+
+    Historic reviewed preflights legitimately predate this Optional field set, so an entirely absent set remains
+    readable.  Once any audit field is present, however, all of it must agree with the independently re-derived
+    partition before the live runner can spend a provider call.
+    """
+    present = [field in preflight_targets for field in _OPTIONAL_ELIGIBLE_PARTITION_AUDIT_FIELDS]
+    if not any(present):
+        return
+    if not all(present):
+        raise FullCandidateLiveSourcePacketError("preflight eligible/Pass2 partition audit is incomplete")
+    mismatched = [
+        field
+        for field in _OPTIONAL_ELIGIBLE_PARTITION_AUDIT_FIELDS
+        if preflight_targets[field] != verified_targets[field]
+    ]
+    if mismatched:
+        raise FullCandidateLiveSourcePacketError(
+            "preflight eligible/Pass2 partition does not match the live re-derivation"
+        )
+
+
 def _rederive_and_verify_pass2_targets(
     *,
     candidate_artifact_path: Path,
@@ -1879,8 +1921,16 @@ def _rederive_and_verify_pass2_targets(
             forced_holdings=forced,
             top_k=momentum_top_k,
         )
+        partition = partition_pass2_targets(
+            targets=expected_list,
+            momentum_scores=momentum_projection["momentum_by_ticker"],
+            theme_scores=theme_projection["theme_block_by_ticker"],
+            eligible=eligible,
+        )
     except Pass2FunnelError as exc:
         raise FullCandidateLiveSourcePacketError(f"re-derived Pass2 funnel target is invalid: {exc}") from exc
+    if len(partition["eligible_selected"]) + len(partition["eligible_not_selected"]) != len(eligible):
+        raise FullCandidateLiveSourcePacketError("re-derived eligible/Pass2 partition does not conserve the candidate universe")
     expected = set(expected_list)
     if type(reviewed_target_symbols) is not list or set(reviewed_target_symbols) != expected:
         raise FullCandidateLiveSourcePacketError(
@@ -1899,6 +1949,11 @@ def _rederive_and_verify_pass2_targets(
         "target_count": len(targets),
         "target_symbols": targets,
         "target_symbol_sample": targets[:10],
+        "eligible_selected_count": len(partition["eligible_selected"]),
+        "eligible_not_selected_count": len(partition["eligible_not_selected"]),
+        "eligible_scored_not_selected_count": len(partition["eligible_scored_not_selected"]),
+        "eligible_unscored_not_selected_count": len(partition["eligible_unscored_not_selected"]),
+        "eligible_partition_conserved": True,
         "fmp_grade_call_cap": FMP_FREE_DAILY_GRADE_CALL_CAP,
         "fmp_grade_calls_within_free_daily_cap": within_cap,
         "neutral_fill_tickers_excluded_from_expensive_pass2": True,
@@ -2122,6 +2177,7 @@ def run_full_candidate_live_source_packet(
         expected_forced_holdings_sha256=preflight_targets.get("forced_holding_tickers_sha256"),
         expected_catalyst_recall_sha256=preflight_targets.get("catalyst_recall_tickers_sha256"),
     )
+    _validate_optional_preflight_eligible_partition(preflight_targets, verified_targets)
     # Re-anchor the live-spend budget to the RUNNER-re-derived target count (not the preflight-attested
     # forecast/momentum_top_k): the operator's authorized call budget must equal the forecast recomputed from the
     # re-derived Pass2 target count, so a forged preflight that widens momentum_top_k / target_count is rejected

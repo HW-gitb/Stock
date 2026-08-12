@@ -66,3 +66,34 @@ def select_pass2_targets(
     scored_eligible.sort(key=lambda item: (-item[1], item[0]))
     selected = {ticker for ticker, _ in scored_eligible[:top_k]}
     return sorted(selected | recall_set | holdings_set)
+
+
+def partition_pass2_targets(
+    *,
+    targets: Any,
+    momentum_scores: Any,
+    theme_scores: Any,
+    eligible: Any,
+) -> dict[str, list[str]]:
+    """Account for every Pass1-eligible ticker after the reviewed Pass2 funnel narrows it.
+
+    This does not change selection.  It makes the intentional Top-K and score-absence exclusions auditable for
+    both the preflight and the live re-derivation consumers.
+    """
+    eligible_set = _canonical_str_set(eligible, field="eligible")
+    target_set = _canonical_str_set(targets, field="targets")
+    momentum = _score_map(momentum_scores, field="momentum_scores")
+    theme = _score_map(theme_scores, field="theme_scores")
+    scored_eligible = (set(momentum) | set(theme)) & eligible_set
+    eligible_selected = target_set & eligible_set
+    eligible_not_selected = eligible_set - eligible_selected
+    eligible_scored_not_selected = eligible_not_selected & scored_eligible
+    eligible_unscored_not_selected = eligible_not_selected - scored_eligible
+    if eligible_selected | eligible_not_selected != eligible_set:
+        raise Pass2FunnelError("eligible Pass2 partition does not conserve the candidate set")
+    return {
+        "eligible_selected": sorted(eligible_selected),
+        "eligible_not_selected": sorted(eligible_not_selected),
+        "eligible_scored_not_selected": sorted(eligible_scored_not_selected),
+        "eligible_unscored_not_selected": sorted(eligible_unscored_not_selected),
+    }

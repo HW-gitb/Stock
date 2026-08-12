@@ -10,10 +10,11 @@ Data path (all free, pure HTTP — NO broker, no order, no paid subscription):
                                 stocks (/v2/aggs/grouped/locale/us/market/stocks/{date}). We fetch the
                                 ADV WINDOW (the last N trading days, §13.1 #2 prior) so liquidity is a real
                                 MULTI-DAY average, not one day's spike/dip.
-  - Shares outstanding        : SEC XBRL frames API, merged over recent quarters, latest per CIK (~4 calls)
-  - market_cap fallback       : FMP profile marketCap, bounded, only for SEC-missing-shares survivors
+  - Shares outstanding        : SEC XBRL frames API, merged over dynamic completed quarters, then targeted
+                                CompanyFacts for SEC-frame holes
+  - market_cap fallback       : FMP profile marketCap, then Massive ticker-overview for exact residuals
                                 (multi-class / non-calendar-aligned names absent from SEC frames, e.g. GOOGL)
-  - market_cap                : shares (SEC) × close (Massive); else FMP profile marketCap
+  - market_cap                : shares (SEC) × close (Massive); else FMP profile; else Massive overview
   - ADV (avg daily $ volume)  : mean over the ADV window of (close × volume) per ticker. A ticker observed on
                                 fewer than ADV_MIN_DAYS_REQUIRED days gets adv_usd=None (insufficient coverage
                                 → conservative; the gate's adv floor is multi-day, governance preset $5M/day).
@@ -38,6 +39,7 @@ Requires env: MASSIVE_API_KEY, SEC_USER_AGENT (FMP_API_KEY optional, for market-
 from __future__ import annotations
 
 import argparse
+import calendar as _calendar
 import copy
 import gzip as _gzip
 import json
@@ -84,7 +86,7 @@ RAW_ROOT_DIR = ROOT / "provider_samples"
 SEC_EXCHANGE_TICKERS_URL = "https://www.sec.gov/files/company_tickers_exchange.json"
 SEC_SUBMISSIONS_URL = "https://data.sec.gov/submissions/CIK{cik:010d}.json"
 SEC_FRAMES_URL = "https://data.sec.gov/api/xbrl/frames/dei/EntityCommonStockSharesOutstanding/shares/{q}.json"
-SEC_SHARE_FRAMES = ["CY2026Q1I", "CY2025Q4I", "CY2025Q3I", "CY2025Q2I"]
+SEC_COMPANYFACTS_URL = "https://data.sec.gov/api/xbrl/companyfacts/CIK{cik:010d}.json"
 SEC_FAIR_ACCESS_SLEEP = 0.15
 SEC_BANKRUPTCY_MAX_RETRIES = 3
 SEC_BANKRUPTCY_RETRY_BACKOFF_SECONDS = 1.0
@@ -95,6 +97,7 @@ EXCHANGE_WHITELIST = ("NYSE", "NASDAQ")
 NASDAQ_TRADE_HALTS_RSS_URL = "https://www.nasdaqtrader.com/rss.aspx?feed=tradehalts"
 
 MASSIVE_GROUPED_URL = "https://api.massive.com/v2/aggs/grouped/locale/us/market/stocks/{date}?apiKey={key}"
+MASSIVE_TICKER_OVERVIEW_URL = "https://api.massive.com/v3/reference/tickers/{ticker}?date={date}&apiKey={key}"
 MASSIVE_GROUPED_REQUEST_INTERVAL_SECONDS = 13.0
 MASSIVE_RATE_LIMIT_RETRY_SECONDS = 65.0
 MASSIVE_RATE_LIMIT_MAX_RETRIES = 2
@@ -109,18 +112,15 @@ ADV_MIN_DAYS_REQUIRED = 10
 # sessions may not be published yet); we still collect only up to ADV_WINDOW_TRADING_DAYS days WITH data.
 ADV_WINDOW_FETCH_BUFFER_SESSIONS = 12
 
-PROVIDER_LABEL = "massive_grouped_daily + sec_shares (+ fmp mktcap fallback)"
-ROW_PROVIDER_ID = "massive_grouped_daily+sec_xbrl_frames(+fmp_profile)"
+PROVIDER_LABEL = "massive_grouped_daily + sec_shares (+ fmp/massive mktcap fallback)"
+ROW_PROVIDER_ID = "massive_grouped_daily+sec_xbrl_frames_or_companyfacts(+fmp_profile,+massive_ticker_overview)"
 
 FMP_PROFILE_URL = "https://financialmodelingprep.com/stable/profile?symbol={sym}&apikey={key}"
 FMP_FALLBACK_SLEEP = 0.2
-# Universe market-cap fallback FMP budget -- deliberately SMALL, NOT the full ~250/day FMP free cap.
-# The weekly pipeline's Pass2 grades stage draws ~200 FMP calls from the SAME daily quota, so this
-# fallback is reserved to ~40 (~= 250 - 200 grades - buffer) so it cannot starve grades (the 429
-# collision that produced provider_health_blocked no-emit on 2026-07-08/09). Raising it re-introduces
-# that collision until a shared cross-stage FMP budget exists.
-# See R-USSHORT-BATCH5-UNIVERSE-FMP-FALLBACK-STARVES-PASS2-GRADES.
-UNIVERSE_FMP_MKTCAP_FALLBACK_BUDGET = 40
+# Problem 7 fixes the old silent first-40 truncation. The retired grades reservation is no longer part of this
+# universe stage; 240 is the approved bounded maximum (250/day less a 10-call safety buffer). Pass2 retains its
+# own explicit/advisory contract and this stage never performs a batch/bulk request.
+UNIVERSE_FMP_MKTCAP_FALLBACK_BUDGET = 240
 _RUN_STATE_SEVERITY = {"clean": 0, "usable_with_fallback": 1, "restricted": 2, "blocked": 3}
 
 
@@ -131,6 +131,17 @@ def _is_finite(x: Any) -> bool:
         return math.isfinite(x)
     except OverflowError:
         return False
+
+
+def _finite_positive_product(left: Any, right: Any) -> float | None:
+    """Return a finite positive float product, or None when the SEC-derived cap is unavailable."""
+    if not _is_finite(left) or not _is_finite(right):
+        return None
+    try:
+        product = float(left) * float(right)
+    except (OverflowError, ValueError):
+        return None
+    return product if _is_finite(product) and product > 0 else None
 
 
 def _rel(path: Path) -> str:
@@ -181,6 +192,7 @@ def _build_run_fetch_provider_health(
     fallback_needed_count: int,
     fmp_attempted: int,
     fmp_rescued: int,
+    final_unresolved_count: int,
 ) -> dict[str, Any]:
     """Summarize provider run-state from already-observed run outcomes.
 
@@ -194,10 +206,22 @@ def _build_run_fetch_provider_health(
     elif status_source_outcome.get("critical_failed"):
         status_state = "restricted"
 
+    counts = (fallback_needed_count, fmp_attempted, fmp_rescued, final_unresolved_count)
+    if any(type(value) is not int or value < 0 for value in counts):
+        raise RuntimeError("market-cap fallback health counts must be non-negative exact ints")
+    if (
+        fmp_attempted > fallback_needed_count
+        or fmp_rescued > fallback_needed_count
+        or final_unresolved_count > fallback_needed_count
+    ):
+        raise RuntimeError("market-cap fallback health counts exceed the CompanyFacts residual")
+
     if fallback_needed_count <= 0:
         fmp_state = "clean"
     else:
         fmp_state = "usable_with_fallback"
+
+    unresolved_after_fmp_count = max(fallback_needed_count - fmp_rescued, 0)
 
     return {
         "overall_run_state": _worst_run_state(["clean", status_state, fmp_state]),
@@ -215,13 +239,58 @@ def _build_run_fetch_provider_health(
                 "needed_count": fallback_needed_count,
                 "attempted_count": fmp_attempted,
                 "rescued_count": fmp_rescued,
-                "unresolved_count": max(fallback_needed_count - fmp_rescued, 0),
+                # Keep the legacy field tied to the final, whole-chain fact.  The FMP-only intermediate is
+                # retained under an explicit name so a Massive rescue cannot make this summary contradict itself.
+                "unresolved_after_fmp_count": unresolved_after_fmp_count,
+                "unresolved_count": final_unresolved_count,
                 "provider_readiness_evidence": False,
                 "policy": "opportunistic_rescue_only_not_provider_readiness",
             },
         },
         "critical_failure_no_emit_policy": True,
         "provider_selection_or_production_claimed": False,
+    }
+
+
+def _assert_exact_market_cap_layer_targets(
+    residual: list[str], targets: list[str], *, layer: str,
+) -> None:
+    """Each fallback layer must receive the preceding residual in exact order, never a silent prefix."""
+    if targets != residual:
+        raise RuntimeError(f"{layer} targets must exactly equal the preceding market-cap residual")
+
+
+def build_massive_ticker_overview_observability(
+    *,
+    target_count: int,
+    physical_http_call_count: int,
+    rescued_count: int,
+    final_unresolved_count: int,
+) -> dict[str, Any]:
+    """Describe the existing Massive fallback outcome without creating another capstone health family."""
+    counts = (target_count, physical_http_call_count, rescued_count, final_unresolved_count)
+    if any(type(value) is not int or value < 0 for value in counts):
+        raise RuntimeError("Massive overview observability counts must be non-negative exact ints")
+    if rescued_count + final_unresolved_count != target_count:
+        raise RuntimeError("Massive overview outcome must conserve its exact target set")
+    if target_count == 0:
+        outcome = "not_needed"
+    elif final_unresolved_count == 0:
+        outcome = "all_targets_rescued"
+    elif rescued_count == 0:
+        outcome = "no_target_rescued"
+    else:
+        outcome = "partial_rescue_with_unresolved"
+    return {
+        "target_count": target_count,
+        "physical_http_call_count": physical_http_call_count,
+        "rescued_count": rescued_count,
+        "final_unresolved_count": final_unresolved_count,
+        "initial_attempt_minimum_pacing_seconds": (
+            max(target_count - 1, 0) * MASSIVE_GROUPED_REQUEST_INTERVAL_SECONDS
+        ),
+        "outcome": outcome,
+        "provider_readiness_evidence": False,
     }
 
 
@@ -545,13 +614,98 @@ def build_live_status_records(
 # SEC: bulk shares outstanding via frames (latest per CIK across quarters)
 # ---------------------------------------------------------------------------
 
-def fetch_sec_shares(sec_ua: str, *, frames: list[str] = SEC_SHARE_FRAMES) -> dict[int, dict[str, Any]]:
-    """Return {cik: {"shares": float, "end": str}} keeping the latest 'end' per CIK across frames.
+SEC_COMPANYFACTS_FORMS = frozenset({
+    "10-Q", "10-Q/A", "10-K", "10-K/A", "20-F", "20-F/A", "40-F", "40-F/A", "6-K", "6-K/A",
+})
+
+
+def completed_sec_share_frames(price_basis_date: str, *, count: int = 4) -> list[str]:
+    """Return the newest ``count`` completed SEC instant-quarter frames for a YYYYMMDD price basis.
+
+    The quarter containing the price basis is used only when its calendar quarter has ended. This keeps the
+    frame list dynamic across year/Q1 boundaries and prevents a future/incomplete quarter from becoming the
+    shares basis.
+    """
+    if type(count) is not int or count <= 0:
+        raise ValueError("count must be a positive integer")
+    try:
+        basis = datetime.strptime(price_basis_date, "%Y%m%d").date()
+    except (TypeError, ValueError) as exc:
+        raise ValueError("price_basis_date must be YYYYMMDD") from exc
+    quarter = (basis.month - 1) // 3 + 1
+    quarter_end_month = quarter * 3
+    quarter_end = datetime(
+        basis.year, quarter_end_month, _calendar.monthrange(basis.year, quarter_end_month)[1],
+    ).date()
+    if basis < quarter_end:
+        quarter -= 1
+    year = basis.year
+    frames: list[str] = []
+    for _ in range(count):
+        if quarter == 0:
+            year -= 1
+            quarter = 4
+        frames.append(f"CY{year}Q{quarter}I")
+        quarter -= 1
+    return frames
+
+
+def _valid_iso_date(value: Any, *, upper_bound: str | None = None) -> bool:
+    if not isinstance(value, str) or len(value) != 10:
+        return False
+    try:
+        datetime.strptime(value, "%Y-%m-%d")
+    except ValueError:
+        return False
+    return upper_bound is None or value <= upper_bound
+
+
+def _frame_share_record(
+    item: Any, *, price_basis_date: str | None, decision_date: str | None = None,
+) -> tuple[int, dict[str, Any]] | None:
+    if not isinstance(item, dict):
+        return None
+    cik = item.get("cik")
+    val = item.get("val")
+    end = item.get("end")
+    upper = _iso_from_yyyymmdd(price_basis_date) if price_basis_date else None
+    if (type(cik) is not int or cik <= 0 or not _is_finite(val) or val <= 0
+            or not _valid_iso_date(end, upper_bound=upper)):
+        return None
+    record: dict[str, Any] = {
+        "shares": float(val), "end": end, "source": "sec_xbrl_frames",
+    }
+    filed = item.get("filed")
+    decision_iso = _iso_from_yyyymmdd(decision_date) if decision_date else None
+    if filed is not None and not _valid_iso_date(filed, upper_bound=decision_iso):
+        return None
+    if filed is not None:
+        record["filed"] = filed
+    accession = item.get("accn") or item.get("accession")
+    if isinstance(accession, str) and accession:
+        record["accession"] = accession
+        record["accn"] = accession
+    return cik, record
+
+
+def fetch_sec_shares(
+    sec_ua: str,
+    *,
+    frames: list[str] | None = None,
+    price_basis_date: str | None = None,
+    decision_date: str | None = None,
+) -> dict[int, dict[str, Any]]:
+    """Return SEC frame shares keyed by CIK, retaining source/date/accession provenance.
 
     F2 (cc_r1_v1): if EVERY frame request fails (SEC source down) RAISE — never return an empty map that
     silently yields a degraded near-empty eligible universe with NO health signal (asymmetric with the Massive
     auth path which already raises). A single failed frame is tolerated (other quarters still merge the latest
     shares per CIK)."""
+    if frames is None:
+        basis = price_basis_date or datetime.now(timezone.utc).strftime("%Y%m%d")
+        frames = completed_sec_share_frames(basis)
+    if not frames:
+        raise ValueError("at least one SEC share frame is required")
     by_cik: dict[int, dict[str, Any]] = {}
     failed = 0
     for q in frames:
@@ -561,20 +715,117 @@ def fetch_sec_shares(sec_ua: str, *, frames: list[str] = SEC_SHARE_FRAMES) -> di
             failed += 1
             continue
         for item in data.get("data", []):
-            cik = item.get("cik")
-            val = item.get("val")
-            end = item.get("end", "")
-            if not isinstance(cik, int) or not _is_finite(val) or val <= 0:
+            parsed = _frame_share_record(
+                item, price_basis_date=price_basis_date, decision_date=decision_date,
+            )
+            if parsed is None:
                 continue
+            cik, record = parsed
             prev = by_cik.get(cik)
-            if prev is None or end > prev["end"]:
-                by_cik[cik] = {"shares": float(val), "end": end}
+            if prev is None or (
+                record["end"], record.get("filed", ""), record.get("accession", "")
+            ) > (
+                prev["end"], prev.get("filed", ""), prev.get("accession", "")
+            ):
+                by_cik[cik] = record
         time.sleep(SEC_FAIR_ACCESS_SLEEP)
     if failed == len(frames):
         raise RuntimeError(
             f"all {len(frames)} SEC share frames failed (SEC source unavailable); fail-closed rather than "
             "emit a silently-degraded universe with no shares/market-cap")
     return by_cik
+
+
+def _companyfacts_share_record(
+    payload: Any, *, decision_date: str, price_basis_date: str,
+) -> dict[str, Any] | None:
+    """Select one legal PIT shares fact, preferring DEI over us-gaap without mixing facts."""
+    if not isinstance(payload, dict):
+        return None
+    try:
+        decision_iso = _iso_from_yyyymmdd(decision_date)
+        price_iso = _iso_from_yyyymmdd(price_basis_date)
+        datetime.strptime(decision_iso, "%Y-%m-%d")
+        datetime.strptime(price_iso, "%Y-%m-%d")
+    except (TypeError, ValueError):
+        return None
+    facts = payload.get("facts")
+    if not isinstance(facts, dict):
+        return None
+    for taxonomy, tag in (("dei", "EntityCommonStockSharesOutstanding"),
+                          ("us-gaap", "CommonStockSharesOutstanding")):
+        namespace = facts.get(taxonomy)
+        tag_payload = namespace.get(tag) if isinstance(namespace, dict) else None
+        units = tag_payload.get("units") if isinstance(tag_payload, dict) else None
+        values = units.get("shares") if isinstance(units, dict) else None
+        if not isinstance(values, list):
+            continue
+        legal: list[dict[str, Any]] = []
+        for item in values:
+            if not isinstance(item, dict) or item.get("form") not in SEC_COMPANYFACTS_FORMS:
+                continue
+            value = item.get("val")
+            end = item.get("end")
+            filed = item.get("filed")
+            accession = item.get("accn") or item.get("accession")
+            if (not _is_finite(value) or value <= 0
+                    or not _valid_iso_date(end, upper_bound=price_iso)
+                    or not _valid_iso_date(filed, upper_bound=decision_iso)
+                    or not isinstance(accession, str) or not accession):
+                continue
+            legal.append({
+                "shares": float(value),
+                "end": end,
+                "filed": filed,
+                "accession": accession,
+                "accn": accession,
+                "source": "sec_xbrl_companyfacts",
+            })
+        if legal:
+            latest_key = max((item["end"], item["filed"], item["accession"]) for item in legal)
+            latest = [
+                item for item in legal
+                if (item["end"], item["filed"], item["accession"]) == latest_key
+            ]
+            # Equal PIT precedence with divergent values cannot be resolved from ordering in a provider payload.
+            # Do not silently choose the first row or fall through to a lower-priority taxonomy.
+            if len({item["shares"] for item in latest}) != 1:
+                return None
+            return latest[0]
+    return None
+
+
+def fetch_sec_companyfacts(
+    sec_ua: str,
+    ciks: list[int],
+    *,
+    decision_date: str,
+    price_basis_date: str,
+    stats_out: dict[str, int] | None = None,
+) -> dict[int, dict[str, Any]]:
+    """Fetch at most one targeted CompanyFacts payload per requested CIK; failed/invalid CIKs remain unresolved."""
+    out: dict[int, dict[str, Any]] = {}
+    calls = 0
+    seen: set[int] = set()
+    for cik in ciks:
+        if type(cik) is not int or cik <= 0 or cik in seen:
+            continue
+        seen.add(cik)
+        if calls:
+            time.sleep(SEC_FAIR_ACCESS_SLEEP)
+        calls += 1
+        try:
+            payload = _sec_get(SEC_COMPANYFACTS_URL.format(cik=cik), sec_ua)
+            record = _companyfacts_share_record(
+                payload, decision_date=decision_date, price_basis_date=price_basis_date,
+            )
+        except Exception:
+            continue
+        if record is not None:
+            out[cik] = record
+    if stats_out is not None:
+        stats_out.update({"actual_request_count": calls})
+    return out
 
 
 # ---------------------------------------------------------------------------
@@ -587,6 +838,64 @@ def _massive_grouped_for_date(date_str: str, key: str) -> list[dict[str, Any]]:
     with urllib.request.urlopen(req, timeout=60) as resp:
         payload = json.loads(resp.read().decode("utf-8"))
     return payload.get("results") or []
+
+
+def _massive_ticker_overview_for_date(ticker: str, price_basis_date: str, key: str) -> dict[str, Any] | None:
+    url = MASSIVE_TICKER_OVERVIEW_URL.format(
+        ticker=urllib.parse.quote(ticker, safe=""), date=_iso_from_yyyymmdd(price_basis_date), key=key,
+    )
+    req = urllib.request.Request(url, headers={"User-Agent": "StockSystem/0.1 us-short-universe-mktcap"})
+    with urllib.request.urlopen(req, timeout=30) as resp:
+        payload = json.loads(resp.read().decode("utf-8"))
+    result = payload.get("results") if isinstance(payload, dict) else None
+    return result if isinstance(result, dict) else None
+
+
+def fetch_massive_ticker_overview(
+    tickers: list[str], price_basis_date: str, key: str, *,
+    stats_out: dict[str, int] | None = None,
+    sleep_func=None,
+) -> dict[str, float]:
+    """Fetch the exact residual ticker-overview set with the canonical Massive pacing/retry contract."""
+    out: dict[str, float] = {}
+    physical_calls = 0
+    sleep = sleep_func or time.sleep
+    seen: set[str] = set()
+    for raw_ticker in tickers:
+        ticker = canonical_us_ticker(raw_ticker)
+        if ticker is None or ticker in seen:
+            continue
+        seen.add(ticker)
+        if not key:
+            break
+        retries = 0
+        while True:
+            if physical_calls > 0 and retries == 0:
+                sleep(MASSIVE_GROUPED_REQUEST_INTERVAL_SECONDS)
+            physical_calls += 1
+            try:
+                row = _massive_ticker_overview_for_date(ticker, price_basis_date, key)
+                break
+            except urllib.error.HTTPError as exc:
+                if exc.code == 429 and retries < MASSIVE_RATE_LIMIT_MAX_RETRIES:
+                    retries += 1
+                    sleep(MASSIVE_RATE_LIMIT_RETRY_SECONDS)
+                    continue
+                row = None
+                break
+            except Exception:
+                row = None
+                break
+        if not isinstance(row, dict):
+            continue
+        returned_ticker = canonical_us_ticker(row.get("ticker"))
+        market_cap = row.get("market_cap")
+        if returned_ticker != ticker or not _is_finite(market_cap) or market_cap <= 0:
+            continue
+        out[ticker] = float(market_cap)
+    if stats_out is not None:
+        stats_out.update({"actual_request_count": physical_calls})
+    return out
 
 
 def adv_window_session_dates(price_basis_date: str, calendar: dict, *, count: int) -> list[str]:
@@ -724,6 +1033,13 @@ def fetch_fmp_market_caps(
             continue
         row = payload[0] if isinstance(payload, list) and payload else (payload if isinstance(payload, dict) else None)
         if isinstance(row, dict):
+            expected_ticker = canonical_us_ticker(sym)
+            identity_values = [row[key] for key in ("symbol", "ticker") if key in row]
+            # A response must identify itself.  If both identity fields are present they must both independently
+            # canonicalize to the requested ticker; blank, malformed, or disagreeing values remain unresolved.
+            if (expected_ticker is None or not identity_values
+                    or any(canonical_us_ticker(value) != expected_ticker for value in identity_values)):
+                continue
             mc = row.get("marketCap")
             if _is_finite(mc) and mc > 0:
                 out[sym] = float(mc)
@@ -755,6 +1071,7 @@ def apply_pass1(
     *,
     governance: dict[str, Any],
     fmp_caps: dict[str, float] | None = None,
+    massive_caps: dict[str, float] | None = None,
     status_records: dict[str, dict[str, Any]] | None = None,
     as_of: str,
     observed_at: str,
@@ -764,12 +1081,14 @@ def apply_pass1(
     """Pass1 over the universe -> ONE per-row lineage record per ticker (eligible AND not).
 
     price/volume/adv_usd come from `market_data` (Massive multi-day window: adv_usd is the AVERAGE daily
-    dollar volume, None when coverage < min_days). market_cap = SEC shares × close (else fmp_caps[ticker]).
+    dollar volume, None when coverage < min_days). market_cap precedence is SEC shares × close, then FMP profile,
+    then Massive ticker-overview.
     Each row carries the Pass1 inputs, the gate verdict + reasons, and §3.2 lineage (price_source / ADV
     window coverage / shares source / market_cap source / as_of / observed_at). The summary is recomputed
     from these rows by `summarize_rows` (single source).
     """
     fmp_caps = fmp_caps or {}
+    massive_caps = massive_caps or {}
     status_supplied = status_records is not None
     if status_supplied and not isinstance(status_records, dict):
         raise RuntimeError("status_records must be a dict keyed by canonical ticker")
@@ -786,13 +1105,20 @@ def apply_pass1(
 
         market_cap = None
         market_cap_source = "none"
-        shares_source = "sec_xbrl_frames" if _is_finite(shares) else "none"
-        if _is_finite(shares) and _is_finite(price):
-            market_cap = float(shares) * float(price)
+        shares_source = (shares_rec.get("source", "sec_xbrl_frames")
+                         if _is_finite(shares) and isinstance(shares_rec, dict) else "none")
+        if _is_finite(shares) and shares_source not in {"sec_xbrl_frames", "sec_xbrl_companyfacts"}:
+            raise RuntimeError(f"unsupported SEC shares source for {sym}: {shares_source!r}")
+        sec_market_cap = _finite_positive_product(shares, price)
+        if sec_market_cap is not None:
+            market_cap = sec_market_cap
             market_cap_source = "sec_shares_x_close"
-        if market_cap is None and sym in fmp_caps and _is_finite(fmp_caps[sym]):
+        if market_cap is None and sym in fmp_caps and _is_finite(fmp_caps[sym]) and fmp_caps[sym] > 0:
             market_cap = float(fmp_caps[sym])
             market_cap_source = "fmp_profile"
+        if market_cap is None and sym in massive_caps and _is_finite(massive_caps[sym]) and massive_caps[sym] > 0:
+            market_cap = float(massive_caps[sym])
+            market_cap_source = "massive_ticker_overview"
 
         status_values = {flag: False for flag in _status_source.DISQUALIFYING_FLAGS}
         status_record = None
@@ -848,6 +1174,13 @@ def apply_pass1(
                 "market_cap_source": market_cap_source,
             },
         }
+        if isinstance(shares_rec, dict) and _is_finite(shares):
+            for record_key, lineage_key in (
+                ("end", "shares_end"), ("filed", "shares_filed"), ("accession", "shares_accession"),
+            ):
+                value = shares_rec.get(record_key)
+                if isinstance(value, str) and value:
+                    row["lineage"][lineage_key] = value
         if status_supplied:
             row["status_provenance"] = copy.deepcopy(status_record)
         rows.append(row)
@@ -886,6 +1219,68 @@ def summarize_rows(rows: list[dict[str, Any]]) -> dict[str, Any]:
     }
 
 
+def build_market_cap_completion(
+    *,
+    initial_needs: list[str],
+    after_companyfacts_needs: list[str],
+    after_fmp_needs: list[str],
+    final_needs: list[str],
+    sec_companyfacts_target_count: int,
+    sec_companyfacts_request_count: int,
+    fmp_attempted_count: int,
+    massive_overview_attempted_count: int,
+) -> dict[str, int]:
+    """Build and check the single conservation aggregate consumed by problem 6."""
+    if any(not isinstance(values, list) for values in (
+        initial_needs, after_companyfacts_needs, after_fmp_needs, final_needs,
+    )):
+        raise RuntimeError("market-cap completion stages must be lists")
+    if any(
+        any(not isinstance(ticker, str) or not ticker for ticker in values)
+        for values in (initial_needs, after_companyfacts_needs, after_fmp_needs, final_needs)
+    ):
+        raise RuntimeError("market-cap completion stages must contain non-empty ticker strings")
+    initial = set(initial_needs)
+    companyfacts_residual = set(after_companyfacts_needs)
+    fmp_residual = set(after_fmp_needs)
+    final = set(final_needs)
+    if (len(initial) != len(initial_needs)
+            or len(companyfacts_residual) != len(after_companyfacts_needs)
+            or len(fmp_residual) != len(after_fmp_needs)
+            or len(final) != len(final_needs)
+            or not companyfacts_residual <= initial
+            or not fmp_residual <= companyfacts_residual or not final <= fmp_residual):
+        raise RuntimeError("market-cap completion stages must be nested unique ticker sets")
+    counts = (
+        sec_companyfacts_target_count, sec_companyfacts_request_count,
+        fmp_attempted_count, massive_overview_attempted_count,
+    )
+    if any(type(value) is not int or value < 0 for value in counts):
+        raise RuntimeError("market-cap completion call counts must be non-negative integers")
+    if (sec_companyfacts_target_count > len(initial)
+            or sec_companyfacts_request_count > sec_companyfacts_target_count
+            or fmp_attempted_count > len(companyfacts_residual)
+            or massive_overview_attempted_count > len(fmp_residual)):
+        raise RuntimeError("market-cap completion call counts exceed their exact stage targets")
+    sec_rescued = len(initial - companyfacts_residual)
+    fmp_rescued = len(companyfacts_residual - fmp_residual)
+    massive_rescued = len(fmp_residual - final)
+    completion = {
+        "needed_count": len(initial_needs),
+        "sec_companyfacts_target_count": sec_companyfacts_target_count,
+        "sec_companyfacts_request_count": sec_companyfacts_request_count,
+        "sec_companyfacts_rescued_count": sec_rescued,
+        "fmp_attempted_count": fmp_attempted_count,
+        "fmp_rescued_count": fmp_rescued,
+        "massive_overview_attempted_count": massive_overview_attempted_count,
+        "massive_overview_rescued_count": massive_rescued,
+        "final_unresolved_count": len(final_needs),
+    }
+    if len(initial) != sec_rescued + fmp_rescued + massive_rescued + len(final):
+        raise RuntimeError("market-cap completion counts do not conserve the initial target set")
+    return completion
+
+
 # ---------------------------------------------------------------------------
 # Per-run candidate artifact: build + schema/semantic validate BEFORE write
 # ---------------------------------------------------------------------------
@@ -905,7 +1300,7 @@ def build_candidate_artifact(
     eligible = eligible_tickers_from_rows(rows)
     return {
         "schema_name": "us_short_universe_candidate_artifact",
-        "schema_version": "1.1.0",
+        "schema_version": "1.2.0",
         "authorization_ref": AUTHORIZATION_REF,
         "generated_at": generated_at,
         "decision_date": decision_date,
@@ -955,6 +1350,11 @@ def validate_candidate_artifact(artifact: dict[str, Any], *, expected_decision_d
         raise RuntimeError("eligible_tickers 含重复（候选集须唯一）")
     if artifact["decision_date"] != expected_decision_date:
         raise RuntimeError("artifact.decision_date 与输出路径绑定的 decision_date 不一致")
+    for field in ("decision_date", "price_basis_date"):
+        try:
+            datetime.strptime(artifact[field], "%Y%m%d")
+        except (TypeError, ValueError) as exc:
+            raise RuntimeError(f"artifact.{field} must be a valid YYYYMMDD date") from exc
 
     # Per-row anti-forgery (F1, cc_r1_v1): re-derive EACH row's verdict / coverage / lineage / status /
     # clock from its OWN stored Pass1 inputs + the artifact's declared window+clock, and fail closed on ANY
@@ -1001,23 +1401,52 @@ def validate_candidate_artifact(artifact: dict[str, Any], *, expected_decision_d
         # (Codex cc_r1_v1 residual): SEC shares×price wins WHENEVER both are finite — so a row with SEC
         # shares+price available can NOT carry market_cap_source=fmp_profile/none. fmp_profile is valid only
         # when SEC-derived cap is unavailable + a finite FMP cap is present; none only when no finite cap.
-        if _is_finite(sh) and _is_finite(px):
-            if mcs != "sec_shares_x_close" or not (_is_finite(mc) and math.isclose(mc, float(sh) * float(px), rel_tol=1e-9)):
+        sec_market_cap = _finite_positive_product(sh, px)
+        if sec_market_cap is not None:
+            if mcs != "sec_shares_x_close" or not (_is_finite(mc) and math.isclose(mc, sec_market_cap, rel_tol=1e-9)):
                 raise RuntimeError(f"行 {r['ticker']} SEC shares×price 可得时 market_cap 必须 sec_shares_x_close 且 == shares×price（producer 优先级反伪造）")
-        elif mcs == "fmp_profile":
-            if not _is_finite(mc):
-                raise RuntimeError(f"行 {r['ticker']} market_cap_source=fmp_profile 但 market_cap_usd 非有限")
+        elif mcs in {"fmp_profile", "massive_ticker_overview"}:
+            if not _is_finite(mc) or mc <= 0:
+                raise RuntimeError(f"行 {r['ticker']} market_cap_source={mcs} 但 market_cap_usd 非正有限")
         elif mcs == "none":
             if mc is not None:
                 raise RuntimeError(f"行 {r['ticker']} market_cap_source=none 但 market_cap_usd 非空")
         else:
             raise RuntimeError(f"行 {r['ticker']} market_cap_source={mcs!r} 但 SEC shares/price 不全可得（producer 优先级反伪造）")
         lin = r["lineage"]
-        expected_shares_source = "sec_xbrl_frames" if _is_finite(sh) else "none"
+        expected_shares_source = lin.get("shares_source") if _is_finite(sh) else "none"
         if (lin["adv_window_trading_days"] != window_days or lin["adv_days_observed"] != r["adv_days_observed"]
                 or lin["market_cap_source"] != mcs or lin["shares_source"] != expected_shares_source
                 or lin["price_source"] != "massive_grouped_daily"):
             raise RuntimeError(f"行 {r['ticker']} lineage 与存储输入/窗口不一致（反伪造）")
+        if expected_shares_source not in {"sec_xbrl_frames", "sec_xbrl_companyfacts", "none"}:
+            raise RuntimeError(f"行 {r['ticker']} shares_source 非法")
+        provenance_keys = ("shares_end", "shares_filed", "shares_accession")
+        if _is_finite(sh) and (
+            "shares_end" not in lin
+            or not _valid_iso_date(lin["shares_end"], upper_bound=_iso_from_yyyymmdd(artifact["price_basis_date"]))
+        ):
+            raise RuntimeError(f"行 {r['ticker']} SEC shares 缺少合法 PIT shares_end")
+        if any(key in lin for key in provenance_keys):
+            if not _is_finite(sh):
+                raise RuntimeError(f"行 {r['ticker']} 无 shares 时不得携带 shares provenance")
+            if "shares_end" in lin and not _valid_iso_date(lin["shares_end"]):
+                raise RuntimeError(f"行 {r['ticker']} shares_end 非法")
+            if "shares_filed" in lin and not _valid_iso_date(lin["shares_filed"]):
+                raise RuntimeError(f"行 {r['ticker']} shares_filed 非法")
+            if "shares_accession" in lin and (
+                not isinstance(lin["shares_accession"], str) or not lin["shares_accession"]
+            ):
+                raise RuntimeError(f"行 {r['ticker']} shares_accession 非法")
+        if expected_shares_source == "sec_xbrl_companyfacts":
+            if not all(key in lin for key in provenance_keys):
+                raise RuntimeError(f"行 {r['ticker']} CompanyFacts shares 缺 provenance")
+            if lin["shares_filed"] > _iso_from_yyyymmdd(artifact["decision_date"]):
+                raise RuntimeError(f"行 {r['ticker']} CompanyFacts filed 晚于 decision_date")
+            if lin["shares_end"] > _iso_from_yyyymmdd(artifact["price_basis_date"]):
+                raise RuntimeError(f"行 {r['ticker']} CompanyFacts end 晚于 price_basis_date")
+        elif "shares_filed" in lin and lin["shares_filed"] > _iso_from_yyyymmdd(artifact["decision_date"]):
+            raise RuntimeError(f"行 {r['ticker']} SEC shares filed 晚于 decision_date")
         if r["as_of"] != used_date or r["observed_at"] != generated_at:
             raise RuntimeError(f"行 {r['ticker']} as_of/observed_at 未绑定 run 时钟（as_of=used_date, observed_at=generated_at）")
     return artifact
@@ -1291,13 +1720,17 @@ def run_fetch(
           f"{len(market_data)} symbols with data", flush=True)
 
     print("[4/5] SEC 流通股 frames (bulk)...", flush=True)
-    sec_shares = fetch_sec_shares(sec_ua)
-    print(f"      {len(sec_shares)} CIK 有流通股", flush=True)
+    sec_share_frames = completed_sec_share_frames(price_basis_date)
+    sec_shares = fetch_sec_shares(
+        sec_ua, frames=sec_share_frames, price_basis_date=price_basis_date, decision_date=decision_date,
+    )
+    print(f"      frames={sec_share_frames}  {len(sec_shares)} CIK 有流通股", flush=True)
 
     _write_json_atomic(
         {"decision_date": decision_date, "price_basis_date": price_basis_date,
          "used_date": used_date, "observed_window_dates": observed_window_dates,
          "status_source_payloads": status_source_payloads,
+         "sec_share_frames": sec_share_frames,
          "sec_shares_by_cik": {str(k): v for k, v in sec_shares.items()},
          "market_data": market_data},
         raw_root / "raw_universe_data.json",
@@ -1311,21 +1744,96 @@ def run_fetch(
     print(f"      pass-A eligible={summary_counts['eligible_count']}  "
           f"needs_mktcap={len(summary_counts['needs_market_cap'])}", flush=True)
 
-    # FMP market-cap fallback for SEC-missing-shares survivors (bounded; pure HTTP, no broker)
+    initial_needs = list(summary_counts["needs_market_cap"])
+    companyfacts_ciks: list[int] = []
+    companyfacts_seen: set[int] = set()
+    for ticker in initial_needs:
+        meta = sec_map.get(ticker) or {}
+        cik = meta.get("cik") if isinstance(meta, dict) else None
+        if type(cik) is int and cik > 0 and cik not in companyfacts_seen:
+            companyfacts_seen.add(cik)
+            companyfacts_ciks.append(cik)
+    sec_companyfacts_stats: dict[str, int] = {"actual_request_count": 0}
+    companyfacts_shares: dict[int, dict[str, Any]] = {}
+    if companyfacts_ciks:
+        print(f"      SEC CompanyFacts 定向补齐: {len(companyfacts_ciks)} CIK...", flush=True)
+        companyfacts_shares = fetch_sec_companyfacts(
+            sec_ua, companyfacts_ciks, decision_date=decision_date,
+            price_basis_date=price_basis_date, stats_out=sec_companyfacts_stats,
+        )
+        for cik, record in companyfacts_shares.items():
+            # SEC bulk frame evidence is the earlier/higher-priority source; CompanyFacts only fills a hole.
+            if cik not in sec_shares:
+                sec_shares[cik] = record
+        rows = apply_pass1(
+            sec_map, sec_shares, market_data, governance=governance,
+            as_of=used_date, observed_at=generated_at, status_records=status_records,
+        )
+        summary_counts = summarize_rows(rows)
+    after_companyfacts_needs = list(summary_counts["needs_market_cap"])
+
+    # FMP market-cap fallback for the exact CompanyFacts residual set (bounded; pure HTTP, no broker)
     fmp_caps: dict[str, float] = {}
     fmp_call_stats: dict[str, int] = {"actual_request_count": 0}
     fmp_key = os.environ.get("FMP_API_KEY", "")
-    fallback_targets = summary_counts["needs_market_cap"]
-    fmp_planned = 0
-    if fallback_targets and fmp_key:
-        fmp_planned = min(len(fallback_targets), UNIVERSE_FMP_MKTCAP_FALLBACK_BUDGET)
-        print(f"      FMP 市值兜底: {len(fallback_targets)} 缺市值 → 取前 {fmp_planned}...", flush=True)
-        fmp_caps = fetch_fmp_market_caps(fallback_targets, fmp_key, stats_out=fmp_call_stats)
+    fmp_targets = list(after_companyfacts_needs)
+    _assert_exact_market_cap_layer_targets(
+        after_companyfacts_needs, fmp_targets, layer="FMP market-cap fallback",
+    )
+    if fmp_targets and fmp_key:
+        print(f"      FMP 市值兜底: {len(fmp_targets)} 个残余，预算={UNIVERSE_FMP_MKTCAP_FALLBACK_BUDGET}...", flush=True)
+        fmp_caps = fetch_fmp_market_caps(
+            fmp_targets, fmp_key, budget=UNIVERSE_FMP_MKTCAP_FALLBACK_BUDGET, stats_out=fmp_call_stats,
+        )
         rows = apply_pass1(sec_map, sec_shares, market_data, governance=governance, fmp_caps=fmp_caps,
                            as_of=used_date, observed_at=generated_at, status_records=status_records)
         summary_counts = summarize_rows(rows)
-    elif fallback_targets and not fmp_key:
-        print(f"      FMP 兜底跳过 (FMP_API_KEY 未设); {len(fallback_targets)} 缺市值未救回", flush=True)
+    elif fmp_targets and not fmp_key:
+        print(f"      FMP 兜底跳过 (FMP_API_KEY 未设); {len(fmp_targets)} 个残余转 Massive", flush=True)
+
+    after_fmp_needs = list(summary_counts["needs_market_cap"])
+    massive_overview_stats: dict[str, int] = {"actual_request_count": 0}
+    massive_overview_caps: dict[str, float] = {}
+    massive_overview_targets = list(after_fmp_needs)
+    _assert_exact_market_cap_layer_targets(
+        after_fmp_needs, massive_overview_targets, layer="Massive ticker-overview fallback",
+    )
+    if massive_overview_targets:
+        minimum_pacing_seconds = (
+            max(len(massive_overview_targets) - 1, 0) * MASSIVE_GROUPED_REQUEST_INTERVAL_SECONDS
+        )
+        print(
+            f"      Massive ticker-overview 残余补齐: {len(massive_overview_targets)} 个 "
+            f"(初始尝试最少 pacing={minimum_pacing_seconds:.0f}s; 不截断残余)...",
+            flush=True,
+        )
+        massive_overview_caps = fetch_massive_ticker_overview(
+            massive_overview_targets, price_basis_date, massive_key, stats_out=massive_overview_stats,
+        )
+        rows = apply_pass1(
+            sec_map, sec_shares, market_data, governance=governance,
+            fmp_caps=fmp_caps, massive_caps=massive_overview_caps,
+            as_of=used_date, observed_at=generated_at, status_records=status_records,
+        )
+        summary_counts = summarize_rows(rows)
+
+    final_needs = list(summary_counts["needs_market_cap"])
+    market_cap_completion = build_market_cap_completion(
+        initial_needs=initial_needs,
+        after_companyfacts_needs=after_companyfacts_needs,
+        after_fmp_needs=after_fmp_needs,
+        final_needs=final_needs,
+        sec_companyfacts_target_count=len(companyfacts_ciks),
+        sec_companyfacts_request_count=sec_companyfacts_stats.get("actual_request_count", 0),
+        fmp_attempted_count=fmp_call_stats.get("actual_request_count", 0),
+        massive_overview_attempted_count=len(massive_overview_targets),
+    )
+    massive_overview_observability = build_massive_ticker_overview_observability(
+        target_count=len(massive_overview_targets),
+        physical_http_call_count=massive_overview_stats.get("actual_request_count", 0),
+        rescued_count=market_cap_completion["massive_overview_rescued_count"],
+        final_unresolved_count=market_cap_completion["final_unresolved_count"],
+    )
 
     fmp_attempted = fmp_call_stats.get("actual_request_count", 0)
     integrated_bankruptcy_stats = {
@@ -1360,6 +1868,7 @@ def run_fetch(
             market_data,
             governance=governance,
             fmp_caps=fmp_caps,
+            massive_caps=massive_overview_caps,
             as_of=used_date,
             observed_at=generated_at,
             status_records=status_records,
@@ -1373,6 +1882,7 @@ def run_fetch(
                 "used_date": used_date,
                 "observed_window_dates": observed_window_dates,
                 "status_source_payloads": status_source_payloads,
+                "sec_share_frames": sec_share_frames,
                 "sec_shares_by_cik": {str(k): v for k, v in sec_shares.items()},
                 "market_data": market_data,
             },
@@ -1382,7 +1892,8 @@ def run_fetch(
     print(f"      eligible={summary_counts['eligible_count']}  "
           f"ineligible={summary_counts['ineligible_count']}  "
           f"no_price={summary_counts['no_price_count']}  no_shares={summary_counts['no_shares_count']}  "
-          f"fmp_rescued={len(fmp_caps)}", flush=True)
+          f"market_cap_rescued={sum(market_cap_completion[k] for k in ('sec_companyfacts_rescued_count', 'fmp_rescued_count', 'massive_overview_rescued_count'))}  "
+          f"unresolved={market_cap_completion['final_unresolved_count']}", flush=True)
     if scan_bankruptcy_for_eligible:
         bankruptcy_source = "integrated_eligible_sec_submissions"
         bankruptcy_input_count = integrated_bankruptcy_stats["eligible_symbol_count"]
@@ -1443,9 +1954,10 @@ def run_fetch(
         )
     provider_health = _build_run_fetch_provider_health(
         status_source_outcome=status_source_outcome,
-        fallback_needed_count=len(fallback_targets),
+        fallback_needed_count=len(fmp_targets),
         fmp_attempted=fmp_attempted,
-        fmp_rescued=len(fmp_caps),
+        fmp_rescued=market_cap_completion["fmp_rescued_count"],
+        final_unresolved_count=market_cap_completion["final_unresolved_count"],
     )
     provider_call_evidence = {
         "network_access_performed": True,
@@ -1453,10 +1965,13 @@ def run_fetch(
         "sec_ticker_reference_calls": 1,
         "nasdaq_halt_feed_calls": 1,
         "massive_grouped_daily_calls": massive_call_stats.get("actual_request_count", 0),
-        "sec_share_frame_calls": len(SEC_SHARE_FRAMES),
+        "sec_share_frame_calls": len(sec_share_frames),
+        "sec_companyfacts_calls": sec_companyfacts_stats.get("actual_request_count", 0),
         "sec_bankruptcy_submissions_calls": integrated_bankruptcy_stats["sec_company_submissions_calls"],
         "fmp_profile_calls": fmp_call_stats.get("actual_request_count", 0),
+        "massive_ticker_overview_calls": massive_overview_stats.get("actual_request_count", 0),
     }
+    provider_call_evidence["sec_share_frames"] = list(sec_share_frames)
     provider_call_evidence["actual_total_calls"] = sum(
         value for key, value in provider_call_evidence.items()
         if key.endswith("_calls") and type(value) is int
@@ -1500,8 +2015,8 @@ def run_fetch(
         "data_path": {
             "tickers_cik_exchange": "SEC company_tickers_exchange.json",
             "price_volume": "Massive grouped daily (/v2/aggs/grouped/locale/us/market/stocks/{date}), one call per window day",
-            "shares_outstanding": "SEC XBRL frames (dei/EntityCommonStockSharesOutstanding); FMP profile marketCap fallback",
-            "market_cap": "SEC shares × Massive close; else FMP profile marketCap (bounded fallback)",
+            "shares_outstanding": "SEC XBRL frames (dynamic completed quarters), then targeted SEC CompanyFacts (DEI/us-gaap PIT)",
+            "market_cap": "SEC shares × Massive close; else FMP profile (max 240 residual calls); else Massive ticker-overview",
             "adv": f"mean of Massive (volume × close) over the {ADV_WINDOW_TRADING_DAYS}-trading-day window (multi-day average, not a single day)",
             "broker_used": False,
             "paid_subscription_used": False,
@@ -1513,8 +2028,14 @@ def run_fetch(
             "sec_tickers": len(sec_map),
             "massive_symbols_with_data": len(market_data),
             "sec_ciks_with_shares": len(sec_shares),
+            "sec_share_frames": list(sec_share_frames),
+            "sec_share_frame_count": len(sec_share_frames),
             "fmp_mktcap_fallback_attempted": fmp_attempted,
-            "fmp_mktcap_fallback_rescued": len(fmp_caps),
+            "fmp_mktcap_fallback_rescued": market_cap_completion["fmp_rescued_count"],
+        },
+        "market_cap_completion": market_cap_completion,
+        "market_cap_fallback_observability": {
+            "massive_ticker_overview": massive_overview_observability,
         },
         "provider_health": provider_health,
         "provider_call_evidence": provider_call_evidence,
@@ -1545,7 +2066,7 @@ def run_fetch(
             bankruptcy_limitation,
             f"ADV = mean daily dollar volume over the last {ADV_WINDOW_TRADING_DAYS} trading days ending at used_date (a real multi-day average, governance floor is $5M/day). A ticker observed on < {ADV_MIN_DAYS_REQUIRED} days has adv_usd=null (insufficient coverage) and fails the gate conservatively — it is never admitted on a one-day spike.",
             "decision_date / price_basis_date are resolved from the FROZEN NYSE/NASDAQ calendar, whose data_provenance.verification_status is recorded here; it is still pending_authoritative_cross_check until verified (SR-PROVIDER-001) — disclosed, not laundered.",
-            "market_cap = latest SEC shares × Massive close; SEC-missing-shares names use FMP fallback (bounded by FMP free daily cap; overflow stays ineligible).",
+            "market_cap completion is a fixed SEC frames → targeted CompanyFacts → FMP profile (max 240) → Massive ticker-overview chain; failures remain unresolved and the aggregate is conserved.",
             "Massive free tier is delayed data — fine for the §2.1 prior-close price clock; does NOT authorize DataHub/production/ship-gate.",
             "Non-common-stock SEC entries (warrants/units/preferreds) without a Massive close or SEC shares fall out as no_price / no_shares.",
         ],

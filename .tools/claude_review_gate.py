@@ -23,6 +23,8 @@ OVERRUN_REASON_MARKER = "超时原因"
 AGENT_PENDING_OVERRIDE_MARKER = "agent-aborted:"
 AGENT_LAUNCH_TOOLS = ("Agent", "Task")
 ASYNC_LAUNCH_SIGNATURE = "async agent launched"
+_SESSION_HEADER_RE = re.compile(r"(?m)^##.*$")
+_VALID_SESSION_HEADER_RE = re.compile(r"^## \d{4}-\d{2}-\d{2} [—–-] .*$")
 
 
 def is_review_prompt(prompt: str) -> bool:
@@ -442,14 +444,25 @@ def pending_async_agents(
     return sorted(pending)
 
 
-def _top_review_entry(text: str) -> str | None:
+def _top_review_entry(text: str) -> tuple[str | None, str | None]:
+    """Return the newest compliant-zone entry, rejecting a malformed newest header.
+
+    This syntax intentionally matches the SESSION_LOG governance splitter.  Do not
+    skip an invalid newest dated header and validate an older entry instead.
+    """
     zone = text.split(ADOPTION_MARKER, 1)[0] if ADOPTION_MARKER in text else text
-    matches = list(re.finditer(r"(?m)^## \d{4}-\d{2}-\d{2}\b.*$", zone))
+    matches = list(_SESSION_HEADER_RE.finditer(zone))
     if not matches:
-        return None
+        return None, "no dated SESSION_LOG entry found above review marker"
+    if not _VALID_SESSION_HEADER_RE.fullmatch(matches[0].group(0)):
+        return (
+            None,
+            "top dated SESSION_LOG entry has an invalid header separator; "
+            "expected `## YYYY-MM-DD — ...`",
+        )
     start = matches[0].start()
     end = matches[1].start() if len(matches) > 1 else len(zone)
-    return zone[start:end]
+    return zone[start:end], None
 
 
 def validate_session_log_text(
@@ -458,9 +471,10 @@ def validate_session_log_text(
     pending_agents: list[str] | None = None,
 ) -> list[str]:
     errors: list[str] = []
-    entry = _top_review_entry(text)
-    if not entry:
-        return ["no dated SESSION_LOG entry found above review marker"]
+    entry, entry_error = _top_review_entry(text)
+    if entry_error:
+        return [entry_error]
+    assert entry is not None
     header = entry.splitlines()[0]
     if "审查" not in header and "review" not in header.lower():
         errors.append("top SESSION_LOG entry is not a review entry")

@@ -9,7 +9,11 @@ ROOT = Path(__file__).resolve().parents[1]
 if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
-from engine.us_short_pass2_funnel import Pass2FunnelError, select_pass2_targets  # noqa: E402
+from engine.us_short_pass2_funnel import (  # noqa: E402
+    Pass2FunnelError,
+    partition_pass2_targets,
+    select_pass2_targets,
+)
 
 
 class SelectPass2TargetsTest(unittest.TestCase):
@@ -79,6 +83,23 @@ class SelectPass2TargetsTest(unittest.TestCase):
         # highest scores are the largest i; top-200 = T0800..T0999
         self.assertEqual(target[0], "T0800")
         self.assertEqual(target[-1], "T0999")
+
+    def test_partition_accounts_for_top_k_and_unscored_eligible_tickers(self):
+        targets = select_pass2_targets(
+            momentum_scores={"AAA": 90.0, "BBB": 80.0}, theme_scores={},
+            eligible={"AAA", "BBB", "CCC", "DDD"}, catalyst_recall={"DDD"}, forced_holdings={"HOLD"}, top_k=1,
+        )
+        partition = partition_pass2_targets(
+            targets=targets,
+            momentum_scores={"AAA": 90.0, "BBB": 80.0}, theme_scores={},
+            eligible={"AAA", "BBB", "CCC", "DDD"},
+        )
+
+        self.assertEqual(targets, ["AAA", "DDD", "HOLD"])
+        self.assertEqual(partition["eligible_selected"], ["AAA", "DDD"])
+        self.assertEqual(partition["eligible_scored_not_selected"], ["BBB"])
+        self.assertEqual(partition["eligible_unscored_not_selected"], ["CCC"])
+        self.assertEqual(partition["eligible_not_selected"], ["BBB", "CCC"])
 
     def test_empty_scored_with_holdings_returns_holdings(self):
         target = select_pass2_targets(

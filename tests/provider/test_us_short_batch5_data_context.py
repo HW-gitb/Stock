@@ -499,6 +499,60 @@ def _official_kwargs():
 
 
 class Batch5DataContextAssemblyTest(unittest.TestCase):
+    def test_massive_market_cap_rescue_is_consumed_as_the_candidate_source(self):
+        sec_tickers = {"COIN": {"cik": 17299, "exchange": "NASDAQ"}}
+        status_records = {
+            "COIN": _status_record(
+                "COIN", exchange="NASDAQ", bankruptcy_screen_status="screened_no_filing",
+                as_of=_STATUS_AS_OF, observed_at=_STATUS_OBSERVED_AT,
+            )
+        }
+        rows = universe_fetch.apply_pass1(
+            sec_tickers, {}, {"COIN": _market_data(200.0, 50_000_000.0)}, governance=_gov(),
+            massive_caps={"COIN": 2e11}, as_of=_USED_DATE, observed_at=_GENERATED_AT,
+            status_records=status_records,
+        )
+        artifact = universe_fetch.build_candidate_artifact(
+            rows=rows, decision_date=_DECISION_DATE, price_basis_date=_PRICE_BASIS_DATE,
+            used_date=_USED_DATE, observed_window_dates=[_USED_DATE], generated_at=_GENERATED_AT,
+            calendar_verification_status="pending_authoritative_cross_check",
+        )
+        context = assemble_data_context(
+            candidate_artifact=artifact, expected_decision_date=_DECISION_DATE,
+            eligibility_governance=_gov(), score_composition=_score_composition(("COIN",)),
+            candidate_pass2_signals={"COIN": {}},
+        )
+        self.assertEqual(artifact["eligible_tickers"], ["COIN"])
+        self.assertEqual(artifact["rows"][0]["market_cap_source"], "massive_ticker_overview")
+        self.assertEqual([row["ticker"] for row in context["universe"]], ["COIN"])
+        self.assertEqual(list(context["selection_inputs"]["per_ticker"]), ["COIN"])
+
+    def test_unresolved_market_cap_has_no_candidate_consumer_bypass(self):
+        sec_tickers = {"COIN": {"cik": 17299, "exchange": "NASDAQ"}}
+        status_records = {
+            "COIN": _status_record(
+                "COIN", exchange="NASDAQ", bankruptcy_screen_status="screened_no_filing",
+                as_of=_STATUS_AS_OF, observed_at=_STATUS_OBSERVED_AT,
+            )
+        }
+        rows = universe_fetch.apply_pass1(
+            sec_tickers, {}, {"COIN": _market_data(200.0, 50_000_000.0)}, governance=_gov(),
+            as_of=_USED_DATE, observed_at=_GENERATED_AT, status_records=status_records,
+        )
+        artifact = universe_fetch.build_candidate_artifact(
+            rows=rows, decision_date=_DECISION_DATE, price_basis_date=_PRICE_BASIS_DATE,
+            used_date=_USED_DATE, observed_window_dates=[_USED_DATE], generated_at=_GENERATED_AT,
+            calendar_verification_status="pending_authoritative_cross_check",
+        )
+        context = assemble_data_context(
+            candidate_artifact=artifact, expected_decision_date=_DECISION_DATE,
+            eligibility_governance=_gov(), score_composition=_score_composition(()),
+            candidate_pass2_signals={},
+        )
+        self.assertEqual(artifact["eligible_tickers"], [])
+        self.assertEqual(context["selection_inputs"]["per_ticker"], {})
+        self.assertIsNone(context["universe"][0]["market_cap_usd"])
+
     def test_enabled_provisional_theme_consumer_requires_matching_identity_receipt(self):
         artifact = {
             "decision_clock": {

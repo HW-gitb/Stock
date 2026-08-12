@@ -318,6 +318,21 @@ class TestIntegratedBankruptcySubmissionsFetch(unittest.TestCase):
 
 
 class TestFetchSecShares(unittest.TestCase):
+    def test_completed_frames_follow_price_basis_and_calendar_boundaries(self):
+        self.assertEqual(
+            _mod.completed_sec_share_frames("20260807"),
+            ["CY2026Q2I", "CY2026Q1I", "CY2025Q4I", "CY2025Q3I"],
+        )
+        self.assertEqual(
+            _mod.completed_sec_share_frames("20260102"),
+            ["CY2025Q4I", "CY2025Q3I", "CY2025Q2I", "CY2025Q1I"],
+        )
+        self.assertEqual(
+            _mod.completed_sec_share_frames("20260401"),
+            ["CY2026Q1I", "CY2025Q4I", "CY2025Q3I", "CY2025Q2I"],
+        )
+        self.assertEqual(_mod.completed_sec_share_frames("20260630")[0], "CY2026Q2I")
+
     def test_latest_end_per_cik_wins(self):
         q1 = {"data": [{"cik": 1, "val": 100, "end": "2026-03-31"}]}
         q4 = {"data": [{"cik": 1, "val": 90, "end": "2025-12-31"}]}
@@ -352,6 +367,75 @@ class TestFetchSecShares(unittest.TestCase):
         with patch.object(_mod, "_sec_get", side_effect=se):
             out = _mod.fetch_sec_shares("ua@test.com", frames=["CY2026Q1I", "CY2025Q4I"])
         self.assertEqual(out[7]["shares"], 800.0)
+
+    def test_companyfacts_accepts_only_pit_latest_dei_then_us_gaap_fallback(self):
+        def facts(*, dei=(), us_gaap=()):
+            return {
+                "facts": {
+                    "dei": {"EntityCommonStockSharesOutstanding": {"units": {"shares": list(dei)}}},
+                    "us-gaap": {"CommonStockSharesOutstanding": {"units": {"shares": list(us_gaap)}}},
+                }
+            }
+
+        payloads = {
+            1: facts(
+                dei=(
+                    {"val": 90, "end": "2025-12-31", "filed": "2026-01-15", "form": "10-K", "accn": "old"},
+                    {"val": 100, "end": "2026-03-31", "filed": "2026-04-20", "form": "10-Q", "accn": "new"},
+                    {"val": 101, "end": "2026-03-31", "filed": "2026-07-01", "form": "10-Q", "accn": "future-filed"},
+                    {"val": 102, "end": "2026-06-30", "filed": "2026-06-20", "form": "10-Q", "accn": "future-end"},
+                    {"val": -1, "end": "2026-03-31", "filed": "2026-04-20", "form": "10-Q", "accn": "negative"},
+                    {"val": 103, "end": "2026-03-31", "filed": "2026-04-20", "form": "8-K", "accn": "wrong-form"},
+                ),
+                us_gaap=(
+                    {"val": 999, "end": "2026-03-31", "filed": "2026-04-20", "form": "10-Q", "accn": "gaap"},
+                ),
+            ),
+            2: facts(
+                dei=({"val": 200, "end": "2026-03-31", "filed": "2026-04-20", "form": "8-K", "accn": "bad-dei"},),
+                us_gaap=({"val": 300, "end": "2026-03-31", "filed": "2026-04-20", "form": "20-F/A", "accn": "gaap-ok"},),
+            ),
+            3: {"facts": {}},
+        }
+        stats = {}
+        with patch.object(
+            _mod, "_sec_get",
+            side_effect=lambda url, ua: payloads[int(url.split("CIK", 1)[1].split(".json", 1)[0])],
+        ) as sec_get, \
+             patch.object(_mod.time, "sleep") as sleep:
+            out = _mod.fetch_sec_companyfacts(
+                "ua@test", [1, 1, 2, 3], decision_date="20260629", price_basis_date="20260626",
+                stats_out=stats,
+            )
+
+        self.assertEqual(sec_get.call_count, 3)
+        self.assertEqual(sleep.call_count, 2)
+        self.assertEqual(stats["actual_request_count"], 3)
+        self.assertEqual(out[1], {
+            "shares": 100.0, "end": "2026-03-31", "filed": "2026-04-20",
+            "accession": "new", "accn": "new", "source": "sec_xbrl_companyfacts",
+        })
+        self.assertEqual(out[2]["shares"], 300.0)
+        self.assertEqual(out[2]["source"], "sec_xbrl_companyfacts")
+        self.assertNotIn(3, out)
+
+    def test_companyfacts_equal_precedence_conflict_fails_closed(self):
+        def facts(values):
+            return {"facts": {"dei": {"EntityCommonStockSharesOutstanding": {
+                "units": {"shares": values},
+            }}}}
+
+        base = {"end": "2026-03-31", "filed": "2026-04-20", "form": "10-Q", "accn": "same"}
+        conflict = facts([{**base, "val": 100}, {**base, "val": 900}])
+        duplicate = facts([{**base, "val": 100}, {**base, "val": 100}])
+
+        self.assertIsNone(_mod._companyfacts_share_record(
+            conflict, decision_date="20260629", price_basis_date="20260626",
+        ))
+        accepted = _mod._companyfacts_share_record(
+            duplicate, decision_date="20260629", price_basis_date="20260626",
+        )
+        self.assertEqual(accepted["shares"], 100.0)
 
 
 class TestAdvWindowSessionDates(unittest.TestCase):
@@ -501,6 +585,77 @@ class TestFetchMassiveWindow(unittest.TestCase):
         self.assertIsNone(md["NOCLS"]["close"])              # present but no usable price
 
 
+class TestFetchMassiveTickerOverview(unittest.TestCase):
+    def test_requests_iso_price_basis_and_accepts_only_matching_positive_cap(self):
+        class Resp:
+            def read(self):
+                return json.dumps({"results": {"ticker": "COIN", "market_cap": 1.2e11}}).encode()
+
+            def __enter__(self):
+                return self
+
+            def __exit__(self, *args):
+                return False
+
+        with patch.object(_mod.urllib.request, "urlopen", return_value=Resp()) as urlopen:
+            out = _mod._massive_ticker_overview_for_date("COIN", "20260807", "key")
+
+        self.assertEqual(out["market_cap"], 1.2e11)
+        request = urlopen.call_args.args[0]
+        self.assertIn("/v3/reference/tickers/COIN", request.full_url)
+        self.assertIn("date=2026-08-07", request.full_url)
+
+    def test_exact_residual_identity_positive_cap_and_bounded_429_retry(self):
+        responses = [
+            _mod.urllib.error.HTTPError(None, 429, "rate", {}, None),
+            {"ticker": "COIN", "market_cap": 1.2e11},
+            {"ticker": "MSTR", "market_cap": 3.0e11},
+        ]
+        stats = {}
+        sleeps = []
+
+        def fake(ticker, price_basis_date, key):
+            value = responses.pop(0)
+            if isinstance(value, Exception):
+                raise value
+            return value
+
+        with patch.object(_mod, "_massive_ticker_overview_for_date", side_effect=fake):
+            out = _mod.fetch_massive_ticker_overview(
+                ["COIN", "MSTR"], "20260807", "key", stats_out=stats, sleep_func=sleeps.append,
+            )
+
+        self.assertEqual(out, {"COIN": 1.2e11, "MSTR": 3.0e11})
+        self.assertEqual(stats["actual_request_count"], 3)
+        self.assertEqual(sleeps, [_mod.MASSIVE_RATE_LIMIT_RETRY_SECONDS, _mod.MASSIVE_GROUPED_REQUEST_INTERVAL_SECONDS])
+
+    def test_zero_negative_nan_infinity_and_bad_identity_remain_unresolved(self):
+        responses = [
+            {"ticker": "A", "market_cap": 0},
+            {"ticker": "B", "market_cap": -1},
+            {"ticker": "C", "market_cap": float("nan")},
+            {"ticker": "D", "market_cap": float("inf")},
+            {"ticker": "OTHER", "market_cap": 1e9},
+        ]
+
+        with patch.object(_mod, "_massive_ticker_overview_for_date", side_effect=lambda *args: responses.pop(0)):
+            out = _mod.fetch_massive_ticker_overview(
+                ["A", "B", "C", "D", "E"], "20260807", "key", sleep_func=lambda _: None,
+            )
+
+        self.assertEqual(out, {})
+
+    def test_non_429_failures_stay_unresolved_but_physical_calls_are_observable(self):
+        stats = {}
+        with patch.object(_mod, "_massive_ticker_overview_for_date", side_effect=RuntimeError("offline failure")):
+            out = _mod.fetch_massive_ticker_overview(
+                ["COIN", "MSTR"], "20260807", "key", stats_out=stats, sleep_func=lambda _: None,
+            )
+
+        self.assertEqual(out, {})
+        self.assertEqual(stats["actual_request_count"], 2)
+
+
 class TestApplyPass1(unittest.TestCase):
     def setUp(self):
         self.gov = _load_gov()
@@ -552,12 +707,82 @@ class TestApplyPass1(unittest.TestCase):
         self.assertTrue(rows[0]["eligible"])
         self.assertEqual(rows[0]["market_cap_source"], "fmp_profile")
 
+    def test_massive_overview_cap_rescues_after_fmp(self):
+        sec = {"COIN": {"cik": 9001, "exchange": "NASDAQ"}}
+        rows = self._rows(
+            sec, {}, {"COIN": _md(200.0, 50_000_000.0)},
+            massive_caps={"COIN": 2e11},
+        )
+        self.assertTrue(rows[0]["eligible"])
+        self.assertEqual(rows[0]["market_cap_source"], "massive_ticker_overview")
+        self.assertEqual(rows[0]["lineage"]["market_cap_source"], "massive_ticker_overview")
+
+    def test_companyfacts_lineage_is_retained_and_validated(self):
+        sec = {"MSTR": {"cik": 9002, "exchange": "NASDAQ"}}
+        shares = {
+            9002: {
+                "shares": 200_000_000, "end": "2026-03-31", "filed": "2026-04-20",
+                "accession": "00009002-26-000001", "accn": "00009002-26-000001",
+                "source": "sec_xbrl_companyfacts",
+            }
+        }
+        rows = self._rows(sec, shares, {"MSTR": _md(200.0, 50_000_000.0)})
+        self.assertEqual(rows[0]["lineage"]["shares_source"], "sec_xbrl_companyfacts")
+        self.assertEqual(rows[0]["lineage"]["shares_accession"], "00009002-26-000001")
+        artifact = _mod.build_candidate_artifact(
+            rows=rows, decision_date="20260629", price_basis_date="20260626", used_date="2026-06-26",
+            observed_window_dates=["2026-06-26"], generated_at="2026-06-29T12:00:00+00:00",
+            calendar_verification_status="pending_authoritative_cross_check",
+        )
+        _mod.validate_candidate_artifact(artifact, expected_decision_date="20260629", governance=self.gov)
+
+    def test_invalid_fallback_caps_are_not_used(self):
+        sec = {"COIN": {"cik": 9001, "exchange": "NASDAQ"}}
+        rows = self._rows(
+            sec, {}, {"COIN": _md(200.0, 50_000_000.0)},
+            fmp_caps={"COIN": 0}, massive_caps={"COIN": float("nan")},
+        )
+        self.assertFalse(rows[0]["eligible"])
+        self.assertEqual(rows[0]["market_cap_source"], "none")
+        self.assertIsNone(rows[0]["market_cap_usd"])
+
+    def test_overflowing_sec_shares_times_close_falls_through_to_valid_fallback(self):
+        sec = {"GIANT": {"cik": 9010, "exchange": "NASDAQ"}}
+        shares = {9010: {"shares": 1e308, "end": "2026-03-31", "source": "sec_xbrl_frames"}}
+        market_data = {"GIANT": _md(1e308, 50_000_000.0)}
+
+        rows = self._rows(sec, shares, market_data, fmp_caps={"GIANT": 1e9})
+        self.assertEqual(rows[0]["market_cap_source"], "fmp_profile")
+        self.assertEqual(rows[0]["market_cap_usd"], 1e9)
+
+        unresolved_rows = self._rows(sec, shares, market_data)
+        self.assertEqual(unresolved_rows[0]["market_cap_source"], "none")
+        self.assertIsNone(unresolved_rows[0]["market_cap_usd"])
+        artifact = _mod.build_candidate_artifact(
+            rows=unresolved_rows, decision_date="20260629", price_basis_date="20260626", used_date="2026-06-26",
+            observed_window_dates=["2026-06-26"], generated_at="2026-06-29T12:00:00+00:00",
+            calendar_verification_status="pending_authoritative_cross_check",
+        )
+        _mod.validate_candidate_artifact(artifact, expected_decision_date="20260629", governance=self.gov)
+
     def test_sec_shares_precedence_over_fmp(self):
         sec = {"AAPL": {"cik": 320193, "exchange": "NASDAQ"}}
         shares = {320193: {"shares": 15_000_000_000, "end": "2026-03-31"}}
-        rows = self._rows(sec, shares, {"AAPL": _md(200.0, 50_000_000.0)}, fmp_caps={"AAPL": 1.0})
+        rows = self._rows(
+            sec, shares, {"AAPL": _md(200.0, 50_000_000.0)},
+            fmp_caps={"AAPL": 1.0}, massive_caps={"AAPL": 2e12},
+        )
         self.assertTrue(rows[0]["eligible"])               # SEC shares used, bogus FMP cap ignored
         self.assertEqual(rows[0]["market_cap_source"], "sec_shares_x_close")
+
+    def test_fmp_precedence_over_later_massive_overview(self):
+        sec = {"COIN": {"cik": 9001, "exchange": "NASDAQ"}}
+        rows = self._rows(
+            sec, {}, {"COIN": _md(200.0, 50_000_000.0)},
+            fmp_caps={"COIN": 1e11}, massive_caps={"COIN": 2e11},
+        )
+        self.assertEqual(rows[0]["market_cap_source"], "fmp_profile")
+        self.assertEqual(rows[0]["market_cap_usd"], 1e11)
 
     def test_no_price_fails(self):
         sec = {"X": {"cik": 7, "exchange": "NYSE"}}
@@ -576,7 +801,7 @@ class TestApplyPass1(unittest.TestCase):
             self.assertIn(key, r)
         self.assertEqual(set(r["lineage"]),
                          {"price_source", "adv_window_trading_days", "adv_days_observed",
-                          "shares_source", "market_cap_source"})
+                          "shares_source", "market_cap_source", "shares_end"})
         self.assertEqual(r["as_of"], "2026-06-26")
         self.assertEqual(r["lineage"]["shares_source"], "sec_xbrl_frames")
         self.assertFalse(r["status_flags_sourced"])
@@ -826,6 +1051,17 @@ class TestSummaryAndArtifact(unittest.TestCase):
         self.assertIsNone(rows[0]["shares"])
         _mod.validate_candidate_artifact(self._fmp_artifact(rows), expected_decision_date="20260629", governance=self.gov)
 
+    def test_validate_accepts_massive_overview_fallback_when_sec_and_fmp_unavailable(self):
+        rows = _mod.apply_pass1(
+            {"COIN": {"cik": 999, "exchange": "NASDAQ"}}, {},
+            {"COIN": _md(50.0, 20_000_000.0)}, governance=self.gov,
+            massive_caps={"COIN": 5e8}, as_of="2026-06-26", observed_at="2026-06-29T12:00:00+00:00",
+        )
+        self.assertEqual(rows[0]["market_cap_source"], "massive_ticker_overview")
+        _mod.validate_candidate_artifact(
+            self._fmp_artifact(rows), expected_decision_date="20260629", governance=self.gov,
+        )
+
     def test_validate_accepts_none_source_when_no_market_cap(self):
         # none POSITIVE: no SEC shares + no FMP cap → market_cap_source=none, market_cap_usd=None accepted.
         rows = self._fmp_rows({})
@@ -877,6 +1113,165 @@ class TestFetchFmpMarketCaps(unittest.TestCase):
             out = _mod.fetch_fmp_market_caps(["A", "B"], "key", budget=10, stats_out=stats)
         self.assertEqual(out, {})
         self.assertEqual(stats["actual_request_count"], 1)
+
+    def test_403_stops_without_trying_later_residual(self):
+        import urllib.error
+
+        def fake(req, timeout=20):
+            raise urllib.error.HTTPError(None, 403, "forbidden", {}, None)
+
+        stats = {}
+        with patch("urllib.request.urlopen", side_effect=fake), patch.object(_mod.time, "sleep"):
+            out = _mod.fetch_fmp_market_caps(["A", "B"], "key", budget=240, stats_out=stats)
+        self.assertEqual(out, {})
+        self.assertEqual(stats["actual_request_count"], 1)
+
+    def test_explicit_fmp_identity_mismatch_remains_unresolved(self):
+        payload = json.dumps([{"symbol": "OTHER", "marketCap": 5e11}]).encode()
+
+        with patch("urllib.request.urlopen", return_value=self._Resp(payload)), \
+             patch.object(_mod.time, "sleep"):
+            out = _mod.fetch_fmp_market_caps(["COIN"], "key", budget=10)
+
+        self.assertEqual(out, {})
+
+    def test_fmp_requires_one_or_two_consistent_nonblank_identity_fields(self):
+        payloads = iter([
+            [{"marketCap": 1e9}],
+            [{"symbol": "", "ticker": "EMPTY", "marketCap": 1e9}],
+            [{"symbol": "CONFLICT", "ticker": "OTHER", "marketCap": 1e9}],
+            [{"ticker": "valid", "marketCap": 1e9}],
+        ])
+
+        with patch("urllib.request.urlopen", side_effect=lambda *args, **kwargs: self._Resp(json.dumps(next(payloads)).encode())), \
+             patch.object(_mod.time, "sleep"):
+            out = _mod.fetch_fmp_market_caps(["MISS", "EMPTY", "CONFLICT", "VALID"], "key", budget=10)
+
+        self.assertEqual(out, {"VALID": 1e9})
+
+
+class TestProblem7MarketCapChain(unittest.TestCase):
+    def setUp(self):
+        self.gov = _load_gov()
+        self.tickers = [f"P{idx:02d}X" for idx in range(43)]
+        self.sec = {
+            ticker: {"cik": 700000 + idx, "exchange": "NASDAQ"}
+            for idx, ticker in enumerate(self.tickers)
+        }
+        self.market_data = {
+            ticker: _md(100.0 + idx, 25_000_000.0)
+            for idx, ticker in enumerate(self.tickers)
+        }
+
+    def test_layer_target_guard_rejects_a_truncated_residual(self):
+        with self.assertRaisesRegex(RuntimeError, "exactly equal"):
+            _mod._assert_exact_market_cap_layer_targets(
+                ["AAA", "BBB"], ["AAA"], layer="Massive ticker-overview fallback",
+            )
+
+    def test_43_targets_complete_fmp_then_exact_massive_residual_without_loss(self):
+        initial_rows = _mod.apply_pass1(
+            self.sec, {}, self.market_data, governance=self.gov,
+            as_of="2026-08-07", observed_at="2026-08-10T12:00:00+00:00",
+        )
+        initial = _mod.summarize_rows(initial_rows)["needs_market_cap"]
+        self.assertEqual(initial, self.tickers)
+
+        fmp_calls = []
+
+        def fmp_fake(request, timeout=20):
+            query = _mod.urllib.parse.parse_qs(_mod.urllib.parse.urlparse(request.full_url).query)
+            ticker = query["symbol"][0]
+            fmp_calls.append(ticker)
+            body = [{"symbol": ticker, "marketCap": 1e9}] if ticker in self.tickers[:40] else []
+            return TestFetchFmpMarketCaps._Resp(json.dumps(body).encode())
+
+        fmp_stats = {}
+        with patch.object(_mod.urllib.request, "urlopen", side_effect=fmp_fake), \
+             patch.object(_mod.time, "sleep"):
+            fmp_caps = _mod.fetch_fmp_market_caps(
+                initial, "key", budget=_mod.UNIVERSE_FMP_MKTCAP_FALLBACK_BUDGET, stats_out=fmp_stats,
+            )
+        self.assertEqual(len(fmp_calls), 43)
+        self.assertEqual(fmp_stats["actual_request_count"], 43)
+        self.assertEqual(set(fmp_caps), set(self.tickers[:40]))
+
+        after_fmp_rows = _mod.apply_pass1(
+            self.sec, {}, self.market_data, governance=self.gov, fmp_caps=fmp_caps,
+            as_of="2026-08-07", observed_at="2026-08-10T12:00:00+00:00",
+        )
+        after_fmp = _mod.summarize_rows(after_fmp_rows)["needs_market_cap"]
+        self.assertEqual(after_fmp, self.tickers[40:])
+
+        overview_calls = []
+
+        def overview_fake(ticker, price_basis_date, key):
+            overview_calls.append((ticker, price_basis_date))
+            return {"ticker": ticker, "market_cap": 2e9}
+
+        overview_stats = {}
+        with patch.object(_mod, "_massive_ticker_overview_for_date", side_effect=overview_fake):
+            massive_caps = _mod.fetch_massive_ticker_overview(
+                after_fmp, "20260807", "key", stats_out=overview_stats, sleep_func=lambda _: None,
+            )
+        self.assertEqual(overview_calls, [(ticker, "20260807") for ticker in self.tickers[40:]])
+        self.assertEqual(overview_stats["actual_request_count"], 3)
+
+        final_rows = _mod.apply_pass1(
+            self.sec, {}, self.market_data, governance=self.gov, fmp_caps=fmp_caps,
+            massive_caps=massive_caps, as_of="2026-08-07", observed_at="2026-08-10T12:00:00+00:00",
+        )
+        final = _mod.summarize_rows(final_rows)
+        self.assertEqual(final["needs_market_cap"], [])
+        self.assertEqual(set(_mod.eligible_tickers_from_rows(final_rows)), set(self.tickers))
+        completion = _mod.build_market_cap_completion(
+            initial_needs=initial, after_companyfacts_needs=initial, after_fmp_needs=after_fmp,
+            final_needs=final["needs_market_cap"], sec_companyfacts_target_count=0,
+            sec_companyfacts_request_count=0, fmp_attempted_count=fmp_stats["actual_request_count"],
+            massive_overview_attempted_count=len(after_fmp),
+        )
+        self.assertEqual(completion["needed_count"], 43)
+        self.assertEqual(completion["fmp_rescued_count"], 40)
+        self.assertEqual(completion["massive_overview_rescued_count"], 3)
+        self.assertEqual(completion["final_unresolved_count"], 0)
+
+    def test_failed_final_residual_stays_unresolved_and_conserved(self):
+        initial_rows = _mod.apply_pass1(
+            self.sec, {}, self.market_data, governance=self.gov,
+            as_of="2026-08-07", observed_at="2026-08-10T12:00:00+00:00",
+        )
+        initial = _mod.summarize_rows(initial_rows)["needs_market_cap"]
+        fmp_caps = {ticker: 1e9 for ticker in initial[:40]}
+        after_fmp = _mod.summarize_rows(_mod.apply_pass1(
+            self.sec, {}, self.market_data, governance=self.gov, fmp_caps=fmp_caps,
+            as_of="2026-08-07", observed_at="2026-08-10T12:00:00+00:00",
+        ))["needs_market_cap"]
+
+        def overview_fake(ticker, price_basis_date, key):
+            return {"ticker": ticker, "market_cap": 2e9} if ticker != self.tickers[-1] else {"ticker": ticker, "market_cap": 0}
+
+        with patch.object(_mod, "_massive_ticker_overview_for_date", side_effect=overview_fake):
+            massive_caps = _mod.fetch_massive_ticker_overview(
+                after_fmp, "20260807", "key", sleep_func=lambda _: None,
+            )
+        final_rows = _mod.apply_pass1(
+            self.sec, {}, self.market_data, governance=self.gov, fmp_caps=fmp_caps,
+            massive_caps=massive_caps, as_of="2026-08-07", observed_at="2026-08-10T12:00:00+00:00",
+        )
+        final = _mod.summarize_rows(final_rows)
+        self.assertEqual(final["needs_market_cap"], [self.tickers[-1]])
+        completion = _mod.build_market_cap_completion(
+            initial_needs=initial, after_companyfacts_needs=initial, after_fmp_needs=after_fmp,
+            final_needs=final["needs_market_cap"], sec_companyfacts_target_count=0,
+            sec_companyfacts_request_count=0, fmp_attempted_count=40,
+            massive_overview_attempted_count=3,
+        )
+        self.assertEqual(completion["final_unresolved_count"], len(final["needs_market_cap"]))
+        self.assertEqual(
+            completion["needed_count"],
+            completion["fmp_rescued_count"] + completion["massive_overview_rescued_count"]
+            + completion["final_unresolved_count"],
+        )
 
 
 class TestGuards(unittest.TestCase):
@@ -945,6 +1340,28 @@ class TestRunFetchE2E(unittest.TestCase):
 
         _mod._git_check_ignored = _git_check_ignored_for_private_test
         self.addCleanup(setattr, _mod, "_git_check_ignored", self._orig_git_check_ignored)
+
+        def no_companyfacts(sec_ua, ciks, *, decision_date, price_basis_date, stats_out=None):
+            if stats_out is not None:
+                stats_out["actual_request_count"] = len({cik for cik in ciks if type(cik) is int and cik > 0})
+            return {}
+
+        def no_massive_overview(tickers, price_basis_date, key, *, stats_out=None, sleep_func=None):
+            if stats_out is not None:
+                stats_out["actual_request_count"] = len(tickers)
+            return {}
+
+        self._offline_companyfacts_patch = patch.object(
+            _mod, "fetch_sec_companyfacts", side_effect=no_companyfacts,
+        )
+        self._offline_massive_overview_patch = patch.object(
+            _mod, "fetch_massive_ticker_overview", side_effect=no_massive_overview,
+        )
+        self._offline_companyfacts_patch.start()
+        self._offline_massive_overview_patch.start()
+        self.addCleanup(self._offline_companyfacts_patch.stop)
+        self.addCleanup(self._offline_massive_overview_patch.stop)
+
     def test_tracked_20260706_summary_provider_health_fmp_counts_match_recorded_counts(self):
         summary_path = ROOT / "docs" / "us_short_universe_fetch_summary_20260706.json"
         summary = json.loads(summary_path.read_text(encoding="utf-8"))
@@ -953,9 +1370,8 @@ class TestRunFetchE2E(unittest.TestCase):
         fallback = summary["provider_health"]["opportunistic_fallbacks"]["fmp_profile_market_cap"]
         attempted = summary["universe"]["fmp_mktcap_fallback_attempted"]
         rescued = summary["universe"]["fmp_mktcap_fallback_rescued"]
-        # The 20260706 evidence summary was generated when the universe fallback cap was 240; the
-        # current _mod.UNIVERSE_FMP_MKTCAP_FALLBACK_BUDGET (40) is intentionally lower and does NOT
-        # retro-apply to this frozen artifact, so pin the historical cap for this consistency check.
+        # The 20260706 evidence summary records its own historical cap; pin it here so current policy changes
+        # do not retroactively rewrite frozen evidence.
         free_cap = 240
 
         self.assertEqual(fallback["unresolved_count"], len(needs_market_cap))
@@ -1012,7 +1428,8 @@ class TestRunFetchE2E(unittest.TestCase):
                 calls["actual_total_calls"],
                 calls["sec_ticker_reference_calls"] + calls["nasdaq_halt_feed_calls"]
                 + calls["massive_grouped_daily_calls"] + calls["sec_share_frame_calls"]
-                + calls["fmp_profile_calls"],
+                + calls["sec_companyfacts_calls"] + calls["fmp_profile_calls"]
+                + calls["massive_ticker_overview_calls"],
             )
 
             artifact = json.loads(cand.read_text(encoding="utf-8"))
@@ -1024,6 +1441,245 @@ class TestRunFetchE2E(unittest.TestCase):
         self.assertTrue(aapl["adv_coverage_ok"])
         self.assertEqual(summary["pass1_result"], {**_mod.summarize_rows(artifact["rows"]),
                                                    "eligible_tickers": ["AAPL"]})
+
+    def test_run_fetch_residual_massive_cap_enters_final_artifact(self):
+        sec_map = {"COIN": {"cik": 17299, "exchange": "NASDAQ"}}
+
+        def fake_grouped(date, key):
+            return [{"T": "COIN", "c": 200.0, "v": 50_000_000}]
+
+        def fake_companyfacts(sec_ua, ciks, *, decision_date, price_basis_date, stats_out=None):
+            self.assertEqual(ciks, [17299])
+            if stats_out is not None:
+                stats_out["actual_request_count"] = 1
+            return {}
+
+        def fake_overview(tickers, price_basis_date, key, *, stats_out=None, sleep_func=None):
+            self.assertEqual(tickers, ["COIN"])
+            self.assertEqual(price_basis_date, "20260626")
+            if stats_out is not None:
+                stats_out["actual_request_count"] = 1
+            return {"COIN": 2e11}
+
+        cand = self.state_root / "candidate_universe_20260629.json"
+        cand.unlink(missing_ok=True)
+        self.addCleanup(cand.unlink, missing_ok=True)
+        self.addCleanup(cand.with_name(cand.name + ".tmp").unlink, missing_ok=True)
+        import tempfile
+        with tempfile.TemporaryDirectory() as tmp:
+            tmpp = Path(tmp)
+            with patch.dict(os.environ, {
+                "SEC_USER_AGENT": "ua@test", "MASSIVE_API_KEY": "MASSIVE_SECRET_ZZZ", "FMP_API_KEY": "",
+            }), patch.object(_mod, "fetch_sec_tickers", return_value=sec_map), \
+                 patch.object(_mod, "fetch_sec_shares", return_value={}) as frame_fetch, \
+                 patch.object(_mod, "fetch_sec_companyfacts", side_effect=fake_companyfacts), \
+                 patch.object(_mod, "fetch_massive_ticker_overview", side_effect=fake_overview), \
+                 patch.object(_mod, "_massive_grouped_for_date", side_effect=fake_grouped), \
+                 patch.object(_mod, "fetch_nasdaq_trade_halt_feed", return_value={
+                     "observed": True, "observed_at": "2026-06-29T12:00:00+00:00", "halted_symbols": [],
+                 }), patch.object(_mod.time, "sleep"), \
+                 patch.object(_mod._sv, "validate_raw_root"):
+                summary = _mod.run_fetch(
+                    now_et=datetime(2026, 6, 29, 8, 0, 0), summary_path=tmpp / "sum.json",
+                    raw_root=tmpp / "raw", candidate_list_path=cand,
+                    generated_at="2026-06-29T12:00:00+00:00", confirm_user_authorization=True,
+                )
+            artifact = json.loads(cand.read_text(encoding="utf-8"))
+
+        self.assertEqual(artifact["eligible_tickers"], ["COIN"])
+        self.assertEqual(artifact["rows"][0]["market_cap_source"], "massive_ticker_overview")
+        expected_frames = ["CY2026Q1I", "CY2025Q4I", "CY2025Q3I", "CY2025Q2I"]
+        self.assertEqual(summary["universe"]["sec_share_frames"], expected_frames)
+        self.assertEqual(summary["universe"]["sec_share_frame_count"], 4)
+        self.assertEqual(summary["provider_call_evidence"]["sec_share_frames"], expected_frames)
+        self.assertEqual(frame_fetch.call_args.kwargs["frames"], expected_frames)
+        completion = summary["market_cap_completion"]
+        self.assertEqual(completion["needed_count"], 1)
+        self.assertEqual(completion["sec_companyfacts_target_count"], 1)
+        self.assertEqual(completion["sec_companyfacts_request_count"], 1)
+        self.assertEqual(completion["fmp_attempted_count"], 0)
+        self.assertEqual(completion["massive_overview_attempted_count"], 1)
+        self.assertEqual(completion["massive_overview_rescued_count"], 1)
+        self.assertEqual(completion["final_unresolved_count"], 0)
+        self.assertEqual(summary["provider_call_evidence"]["sec_companyfacts_calls"], 1)
+        self.assertEqual(summary["provider_call_evidence"]["massive_ticker_overview_calls"], 1)
+        self.assertEqual(summary["provider_health"]["overall_run_state"], "usable_with_fallback")
+        fallback = summary["provider_health"]["opportunistic_fallbacks"]["fmp_profile_market_cap"]
+        self.assertEqual(fallback["unresolved_after_fmp_count"], 1)
+        self.assertEqual(fallback["unresolved_count"], 0)
+        massive_observation = summary["market_cap_fallback_observability"]["massive_ticker_overview"]
+        self.assertEqual(massive_observation["target_count"], 1)
+        self.assertEqual(massive_observation["physical_http_call_count"], 1)
+        self.assertEqual(massive_observation["rescued_count"], 1)
+        self.assertEqual(massive_observation["final_unresolved_count"], 0)
+        self.assertEqual(massive_observation["outcome"], "all_targets_rescued")
+
+    def test_run_fetch_preserves_frames_over_conflicting_companyfacts_record(self):
+        sec_map = {
+            "FRAME": {"cik": 101, "exchange": "NASDAQ"},
+            "HOLE": {"cik": 102, "exchange": "NYSE"},
+        }
+        frame_shares = {
+            101: {"shares": 2_000_000, "end": "2026-03-31", "source": "sec_xbrl_frames"},
+        }
+
+        def fake_grouped(date, key):
+            return [
+                {"T": "FRAME", "c": 200.0, "v": 50_000_000},
+                {"T": "HOLE", "c": 200.0, "v": 50_000_000},
+            ]
+
+        def fake_companyfacts(sec_ua, ciks, *, decision_date, price_basis_date, stats_out=None):
+            self.assertEqual(ciks, [102])
+            if stats_out is not None:
+                stats_out["actual_request_count"] = 1
+            return {
+                101: {"shares": 1_000, "end": "2026-03-31", "filed": "2026-04-20",
+                      "accession": "conflict-frame", "accn": "conflict-frame", "source": "sec_xbrl_companyfacts"},
+                102: {"shares": 2_000_000, "end": "2026-03-31", "filed": "2026-04-20",
+                      "accession": "hole", "accn": "hole", "source": "sec_xbrl_companyfacts"},
+            }
+
+        cand = self.state_root / "candidate_universe_20260629.json"
+        cand.unlink(missing_ok=True)
+        self.addCleanup(cand.unlink, missing_ok=True)
+        self.addCleanup(cand.with_name(cand.name + ".tmp").unlink, missing_ok=True)
+        import tempfile
+        with tempfile.TemporaryDirectory() as tmp:
+            tmpp = Path(tmp)
+            with patch.dict(os.environ, {
+                "SEC_USER_AGENT": "ua@test", "MASSIVE_API_KEY": "MASSIVE_SECRET_ZZZ", "FMP_API_KEY": "",
+            }), patch.object(_mod, "fetch_sec_tickers", return_value=sec_map), \
+                 patch.object(_mod, "fetch_sec_shares", return_value=frame_shares), \
+                 patch.object(_mod, "fetch_sec_companyfacts", side_effect=fake_companyfacts), \
+                 patch.object(_mod, "fetch_massive_ticker_overview") as overview, \
+                 patch.object(_mod, "_massive_grouped_for_date", side_effect=fake_grouped), \
+                 patch.object(_mod, "fetch_nasdaq_trade_halt_feed", return_value={
+                     "observed": True, "observed_at": "2026-06-29T12:00:00+00:00", "halted_symbols": [],
+                 }), patch.object(_mod.time, "sleep"), \
+                 patch.object(_mod._sv, "validate_raw_root"):
+                _mod.run_fetch(
+                    now_et=datetime(2026, 6, 29, 8, 0, 0), summary_path=tmpp / "sum.json",
+                    raw_root=tmpp / "raw", candidate_list_path=cand,
+                    generated_at="2026-06-29T12:00:00+00:00", confirm_user_authorization=True,
+                )
+
+        overview.assert_not_called()
+        artifact = json.loads(cand.read_text(encoding="utf-8"))
+        rows = {row["ticker"]: row for row in artifact["rows"]}
+        self.assertEqual(rows["FRAME"]["shares"], 2_000_000.0)
+        self.assertEqual(rows["FRAME"]["lineage"]["shares_source"], "sec_xbrl_frames")
+        self.assertEqual(rows["FRAME"]["market_cap_source"], "sec_shares_x_close")
+        self.assertEqual(rows["HOLE"]["lineage"]["shares_source"], "sec_xbrl_companyfacts")
+
+    def test_run_fetch_sends_the_full_43_residual_to_both_fallback_layers(self):
+        tickers = [f"P{idx:02d}X" for idx in range(43)]
+        sec_map = {
+            ticker: {"cik": 700_000 + idx, "exchange": "NASDAQ"}
+            for idx, ticker in enumerate(tickers)
+        }
+        fmp_seen = []
+        massive_seen = []
+
+        def fake_grouped(date, key):
+            return [{"T": ticker, "c": 100.0, "v": 25_000_000} for ticker in tickers]
+
+        def fake_companyfacts(sec_ua, ciks, *, decision_date, price_basis_date, stats_out=None):
+            self.assertEqual(ciks, [sec_map[ticker]["cik"] for ticker in tickers])
+            if stats_out is not None:
+                stats_out["actual_request_count"] = len(ciks)
+            return {}
+
+        def fake_fmp(targets, key, *, budget, stats_out=None):
+            fmp_seen.append(list(targets))
+            self.assertEqual(budget, _mod.UNIVERSE_FMP_MKTCAP_FALLBACK_BUDGET)
+            if stats_out is not None:
+                stats_out["actual_request_count"] = len(targets)
+            return {}
+
+        def fake_overview(targets, price_basis_date, key, *, stats_out=None, sleep_func=None):
+            massive_seen.append(list(targets))
+            self.assertEqual(price_basis_date, "20260626")
+            if stats_out is not None:
+                stats_out["actual_request_count"] = len(targets)
+            return {ticker: 1e9 for ticker in targets}
+
+        cand = self.state_root / "candidate_universe_20260629.json"
+        cand.unlink(missing_ok=True)
+        self.addCleanup(cand.unlink, missing_ok=True)
+        self.addCleanup(cand.with_name(cand.name + ".tmp").unlink, missing_ok=True)
+        import tempfile
+        with tempfile.TemporaryDirectory() as tmp:
+            tmpp = Path(tmp)
+            with patch.dict(os.environ, {
+                "SEC_USER_AGENT": "ua@test", "MASSIVE_API_KEY": "MASSIVE_SECRET_ZZZ", "FMP_API_KEY": "FMP_TEST_KEY",
+            }), patch.object(_mod, "fetch_sec_tickers", return_value=sec_map), \
+                 patch.object(_mod, "fetch_sec_shares", return_value={}), \
+                 patch.object(_mod, "fetch_sec_companyfacts", side_effect=fake_companyfacts), \
+                 patch.object(_mod, "fetch_fmp_market_caps", side_effect=fake_fmp), \
+                 patch.object(_mod, "fetch_massive_ticker_overview", side_effect=fake_overview), \
+                 patch.object(_mod, "_massive_grouped_for_date", side_effect=fake_grouped), \
+                 patch.object(_mod, "fetch_nasdaq_trade_halt_feed", return_value={
+                     "observed": True, "observed_at": "2026-06-29T12:00:00+00:00", "halted_symbols": [],
+                 }), patch.object(_mod.time, "sleep"), \
+                 patch.object(_mod._sv, "validate_raw_root"):
+                summary = _mod.run_fetch(
+                    now_et=datetime(2026, 6, 29, 8, 0, 0), summary_path=tmpp / "sum.json",
+                    raw_root=tmpp / "raw", candidate_list_path=cand,
+                    generated_at="2026-06-29T12:00:00+00:00", confirm_user_authorization=True,
+                )
+
+        self.assertEqual(fmp_seen, [tickers])
+        self.assertEqual(massive_seen, [tickers])
+        artifact = json.loads(cand.read_text(encoding="utf-8"))
+        self.assertEqual(artifact["eligible_tickers"], tickers)
+        self.assertEqual(summary["market_cap_completion"]["massive_overview_rescued_count"], 43)
+        self.assertEqual(summary["market_cap_completion"]["final_unresolved_count"], 0)
+        fallback = summary["provider_health"]["opportunistic_fallbacks"]["fmp_profile_market_cap"]
+        self.assertEqual(fallback["unresolved_after_fmp_count"], 43)
+        self.assertEqual(fallback["unresolved_count"], 0)
+        massive_observation = summary["market_cap_fallback_observability"]["massive_ticker_overview"]
+        self.assertEqual(massive_observation["target_count"], 43)
+        self.assertEqual(massive_observation["physical_http_call_count"], 43)
+        self.assertEqual(massive_observation["initial_attempt_minimum_pacing_seconds"], 42 * 13.0)
+        self.assertEqual(massive_observation["outcome"], "all_targets_rescued")
+
+    def test_run_fetch_records_no_rescue_massive_outcome_without_a_second_health_family(self):
+        sec_map = {"COIN": {"cik": 17299, "exchange": "NASDAQ"}}
+
+        def fake_grouped(date, key):
+            return [{"T": "COIN", "c": 200.0, "v": 50_000_000}]
+
+        cand = self.state_root / "candidate_universe_20260629.json"
+        cand.unlink(missing_ok=True)
+        self.addCleanup(cand.unlink, missing_ok=True)
+        self.addCleanup(cand.with_name(cand.name + ".tmp").unlink, missing_ok=True)
+        import tempfile
+        with tempfile.TemporaryDirectory() as tmp:
+            tmpp = Path(tmp)
+            with patch.dict(os.environ, {
+                "SEC_USER_AGENT": "ua@test", "MASSIVE_API_KEY": "MASSIVE_SECRET_ZZZ", "FMP_API_KEY": "",
+            }), patch.object(_mod, "fetch_sec_tickers", return_value=sec_map), \
+                 patch.object(_mod, "fetch_sec_shares", return_value={}), \
+                 patch.object(_mod, "_massive_grouped_for_date", side_effect=fake_grouped), \
+                 patch.object(_mod, "fetch_nasdaq_trade_halt_feed", return_value={
+                     "observed": True, "observed_at": "2026-06-29T12:00:00+00:00", "halted_symbols": [],
+                 }), patch.object(_mod.time, "sleep"), \
+                 patch.object(_mod._sv, "validate_raw_root"):
+                summary = _mod.run_fetch(
+                    now_et=datetime(2026, 6, 29, 8, 0, 0), summary_path=tmpp / "sum.json",
+                    raw_root=tmpp / "raw", candidate_list_path=cand,
+                    generated_at="2026-06-29T12:00:00+00:00", confirm_user_authorization=True,
+                )
+
+        massive_observation = summary["market_cap_fallback_observability"]["massive_ticker_overview"]
+        self.assertEqual(massive_observation["target_count"], 1)
+        self.assertEqual(massive_observation["physical_http_call_count"], 1)
+        self.assertEqual(massive_observation["rescued_count"], 0)
+        self.assertEqual(massive_observation["final_unresolved_count"], 1)
+        self.assertEqual(massive_observation["outcome"], "no_target_rescued")
+        self.assertFalse(massive_observation["provider_readiness_evidence"])
+        self.assertEqual(summary["pass1_result"]["eligible_tickers"], [])
 
     def test_live_run_wires_status_records_from_sec_reference_and_halt_feed(self):
         sec_map = {"AAPL": {"cik": 320193, "exchange": "NASDAQ"},
