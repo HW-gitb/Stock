@@ -182,6 +182,8 @@ class USShortPaperOneClickTest(unittest.TestCase):
         kwargs = run_capstone.call_args.kwargs
         self.assertEqual(private_root.resolve(), kwargs["private_root"])
         self.assertEqual(DEFAULT_STATE_DIR.resolve(), kwargs["state_dir"])
+        self.assertEqual(2, kwargs["max_retries_per_call"])
+        self.assertEqual(65.0, kwargs["retry_backoff_seconds"])
 
     @mock.patch(
         "runners.us_short_paper_one_click.resolve_capstone_context",

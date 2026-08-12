@@ -98,6 +98,7 @@ MASSIVE_GROUPED_URL = "https://api.massive.com/v2/aggs/grouped/locale/us/market/
 MASSIVE_GROUPED_REQUEST_INTERVAL_SECONDS = 13.0
 MASSIVE_RATE_LIMIT_RETRY_SECONDS = 65.0
 MASSIVE_RATE_LIMIT_MAX_RETRIES = 2
+MASSIVE_RATE_LIMIT_WINDOW_CAPACITY = 10
 
 # ADV window (§13.1 #2 liquidity prior — measurement methodology, recorded per-run in lineage so it is
 # auditable and cannot silently drift to a 1-day spike). 20 trading days ≈ one trading month smooths a

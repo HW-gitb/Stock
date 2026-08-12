@@ -2,8 +2,8 @@
 """Authorized market-wide Massive coverage fetch for A1 zero-event certificates.
 
 The runner is deliberately narrow: two endpoint families, one batched union date window, at most
-two pages per family, no retry and no per-ticker calls.  Raw payloads and ticker-bearing coverage
-stay private.  The returned stage summary is counts/status/digests only.
+two pages per family, and only bounded Massive HTTP-429 retries on the same logical page.  Raw
+payloads and ticker-bearing coverage stay private.  The returned stage summary is counts/status/digests only.
 """
 from __future__ import annotations
 
@@ -12,9 +12,10 @@ import datetime
 import hashlib
 import json
 import re
+import time
 import urllib.parse
 from pathlib import Path
-from typing import Any
+from typing import Any, Callable
 
 from engine.us_short_forward_policy_corporate_action_evidence import (
     FIRST_ELIGIBLE_DECISION_DATE,
@@ -27,6 +28,7 @@ from engine.us_short_forward_policy_corporate_action_evidence import (
 from engine.us_short_forward_policy_source_capture import validate_forward_policy_source_capture
 from engine.us_short_private_paths import PrivatePathError, reject_nonprivate_output_path
 from runners import us_egs_sample_validation as sample_validation
+from runners import us_short_universe_fetch as universe_fetch
 
 
 ROOT = Path(__file__).resolve().parent.parent
@@ -38,7 +40,10 @@ _ENDPOINTS = {
     "dividends": ("/stocks/v1/dividends", "ex_dividend_date"),
 }
 MAX_PAGES_PER_FAMILY = 2
-MAX_HTTP_ATTEMPTS = 4
+MAX_RETRIES_PER_PAGE = universe_fetch.MASSIVE_RATE_LIMIT_MAX_RETRIES
+MASSIVE_429_RETRY_WAIT_SECONDS = universe_fetch.MASSIVE_RATE_LIMIT_RETRY_SECONDS
+MAX_HTTP_ATTEMPTS_PER_FAMILY = MAX_PAGES_PER_FAMILY * (1 + MAX_RETRIES_PER_PAGE)
+MAX_HTTP_ATTEMPTS = MAX_HTTP_ATTEMPTS_PER_FAMILY * len(_ENDPOINTS)
 _TICKER = re.compile(r"^[A-Z][A-Z0-9.-]{0,9}$")
 _EVENT_ID = re.compile(r"^[A-Za-z0-9][A-Za-z0-9_.-]*$")
 
@@ -209,28 +214,56 @@ def _redact_secret(value: Any, secret: str) -> Any:
 def _fetch_family(
     *, family: str, date_from: str, date_to: str, api_key: str,
     raw_root: Path, client: sample_validation.JsonHttpClient,
-) -> dict[str, Any]:
+    sleep_func: Callable[[float], None],
+) -> tuple[dict[str, Any], dict[str, int]]:
     events: list[dict[str, str]] = []
     raw_digests: list[str] = []
+    pending_raw_pages: list[tuple[Path, dict[str, Any]]] = []
     seen_provider_ids: set[str] = set()
     status, reason, exhausted = "complete", None, False
+    logical_requests = 0
+    physical_attempts = 0
+    retry_count = 0
     url = _first_url(family=family, date_from=date_from, date_to=date_to, api_key=api_key)
     for page_number in range(1, MAX_PAGES_PER_FAMILY + 1):
-        payload, http_status, ok, error_type = client.get_json(
-            url, headers={"User-Agent": "StockSystem/0.1 us-short-forward-policy-zero-event"}
-        )
+        logical_requests += 1
+        attempt = 0
+        while True:
+            if physical_attempts >= MAX_HTTP_ATTEMPTS_PER_FAMILY:
+                status, reason = "incomplete", "http_error"
+                break
+            attempt += 1
+            physical_attempts += 1
+            payload, http_status, ok, error_type = client.get_json(
+                url, headers={"User-Agent": "StockSystem/0.1 us-short-forward-policy-zero-event"}
+            )
+            if not ok and http_status == 429 and attempt <= MAX_RETRIES_PER_PAGE:
+                retry_count += 1
+                sleep_func(MASSIVE_429_RETRY_WAIT_SECONDS)
+                continue
+            break
+        if attempt == 0:
+            break
         wrapper = {
             "provider_id": "massive", "endpoint_family": family, "page_number": page_number,
             "http_status": http_status, "ok": bool(ok), "error_type": error_type,
             "payload": _redact_secret(payload, api_key),
         }
         raw_path = raw_root / "massive" / f"{family}_page_{page_number}.json"
+        if not ok and http_status == 429:
+            status, reason = "incomplete", "massive_429_exhausted"
+            break
         try:
             page_digest = canonical_sha256(wrapper)
         except ForwardPolicyCorporateActionEvidenceError:  # non-finite (NaN/Infinity) payload — never persist the poisoning page
             status, reason = "incomplete", "malformed_payload"
             break
-        _write_once(raw_path, wrapper, "raw corporate-action page")
+        # Hold canonical raw until run_fetch knows the outcome of both sibling
+        # families.  A mixed splits/dividends run that exhausts Massive 429
+        # must leave no sibling raw page behind to poison the recovery rerun.
+        # The caller preserves the pre-existing non-429 write semantics by
+        # flushing these pending pages after the family pair completes.
+        pending_raw_pages.append((raw_path, wrapper))
         raw_digests.append(page_digest)
         if not ok:
             status, reason = "incomplete", "http_error"
@@ -255,7 +288,7 @@ def _fetch_family(
             status, reason = "incomplete", "pagination_limit_exceeded"
             break
         url = next_url
-    return {
+    result = {
         "status": status if exhausted else "incomplete",
         "date_field": _ENDPOINTS[family][1],
         "pages_fetched": len(raw_digests),
@@ -265,7 +298,16 @@ def _fetch_family(
         "raw_page_sha256": raw_digests,
         "events": events,
         "failure_reason": None if exhausted and status == "complete" else (reason or "http_error"),
+        "_pending_raw_pages": pending_raw_pages,
     }
+    return (
+        result,
+        {
+            "logical_requests": logical_requests,
+            "physical_attempts": physical_attempts,
+            "retry_count_used": retry_count,
+        },
+    )
 
 
 def _validate_raw_page_bindings(coverage: dict[str, Any], raw_root: Path) -> None:
@@ -287,6 +329,7 @@ def run_fetch(
     maturity_ohlcv_path: Path, sample_root: Path, private_root: Path,
     summary_path: Path | None = None,
     client: sample_validation.JsonHttpClient | None = None,
+    sleep_func: Callable[[float], None] | None = None,
 ) -> dict[str, Any]:
     """Fetch one union window and emit immutable sidecars for newly mature eligible captures."""
     if confirm_user_authorization is not True:
@@ -339,6 +382,9 @@ def run_fetch(
         summary = {
             "status": "no_eligible_mature_capture", "eligible_capture_count": 0,
             "coverage_packet_sha256": None, "sidecars_written": 0, "http_attempt_count": 0,
+            "logical_request_count": 0, "max_total_http_attempts": MAX_HTTP_ATTEMPTS,
+            "retry_count_allowed": MAX_RETRIES_PER_PAGE, "retry_count_used": 0,
+            "massive_429_retry_wait_seconds": MASSIVE_429_RETRY_WAIT_SECONDS,
             "family_status": {"splits": "not_run", "dividends": "not_run"},
         }
         _write_tracked_summary(
@@ -366,6 +412,8 @@ def run_fetch(
             raise ForwardPolicyCorporateActionFetchError("existing coverage packet cannot be reused for this exact run")
         _validate_raw_page_bindings(coverage, raw_root)
         http_attempts = 0
+        logical_requests = 0
+        retry_count_used = 0
     else:
         try:
             api_key = sample_validation.read_required_env("MASSIVE_API_KEY").value
@@ -374,12 +422,51 @@ def run_fetch(
         sensitive_values = (api_key,)
         _private_path(raw_root / "massive" / "probe.json")
         http_client = client or sample_validation.JsonHttpClient()
-        families = {
+        fetched_families = {
             family: _fetch_family(
                 family=family, date_from=date_from, date_to=date_to, api_key=api_key,
                 raw_root=raw_root, client=http_client,
+                sleep_func=sleep_func or time.sleep,
             ) for family in ("splits", "dividends")
         }
+        pending_raw_pages: list[tuple[Path, dict[str, Any]]] = []
+        families: dict[str, dict[str, Any]] = {}
+        for family, (result, _metrics) in fetched_families.items():
+            pending_raw_pages.extend(result.pop("_pending_raw_pages", []))
+            families[family] = result
+        logical_requests = sum(
+            metrics["logical_requests"] for _result, metrics in fetched_families.values()
+        )
+        http_attempts = sum(
+            metrics["physical_attempts"] for _result, metrics in fetched_families.values()
+        )
+        retry_count_used = sum(
+            metrics["retry_count_used"] for _result, metrics in fetched_families.values()
+        )
+        if any(
+            result["failure_reason"] == "massive_429_exhausted"
+            for result, _metrics in fetched_families.values()
+        ):
+            summary = {
+                "status": "incomplete_no_count",
+                "eligible_capture_count": len(windows),
+                "coverage_packet_sha256": None,
+                "sidecars_written": 0,
+                "http_attempt_count": http_attempts,
+                "logical_request_count": logical_requests,
+                "max_total_http_attempts": MAX_HTTP_ATTEMPTS,
+                "retry_count_allowed": MAX_RETRIES_PER_PAGE,
+                "retry_count_used": retry_count_used,
+                "massive_429_retry_wait_seconds": MASSIVE_429_RETRY_WAIT_SECONDS,
+                "family_status": {name: value["status"] for name, value in families.items()},
+            }
+            _write_tracked_summary(
+                summary=summary, summary_path=summary_path, sample_root=sample_root,
+                decision_date=decision_date, sensitive_values=sensitive_values,
+            )
+            return summary
+        for raw_path, wrapper in pending_raw_pages:
+            _write_once(raw_path, wrapper, "raw corporate-action page")
         coverage = {
             "schema_name": "us_short_forward_policy_corporate_action_coverage",
             "schema_version": "1.0.0",
@@ -402,7 +489,7 @@ def run_fetch(
         except ForwardPolicyCorporateActionEvidenceError as exc:
             raise ForwardPolicyCorporateActionFetchError("new coverage packet is invalid") from exc
         _write_once(coverage_path, coverage, "corporate-action coverage packet")
-        http_attempts = sum(item["pages_fetched"] for item in families.values())
+        # http_attempts was counted while fetching; pages_fetched remains the logical-page count.
         if http_attempts > MAX_HTTP_ATTEMPTS:  # pragma: no cover - loop bound invariant
             raise ForwardPolicyCorporateActionFetchError("corporate-action HTTP attempt budget exceeded")
     coverage_sha = canonical_sha256(coverage)
@@ -430,6 +517,11 @@ def run_fetch(
         "coverage_packet_sha256": coverage_sha,
         "sidecars_written": written,
         "http_attempt_count": http_attempts,
+        "logical_request_count": logical_requests,
+        "max_total_http_attempts": MAX_HTTP_ATTEMPTS,
+        "retry_count_allowed": MAX_RETRIES_PER_PAGE,
+        "retry_count_used": retry_count_used,
+        "massive_429_retry_wait_seconds": MASSIVE_429_RETRY_WAIT_SECONDS,
         "eventful_window_count": eventful_windows,
         "family_status": family_status,
         "family_result_sha256": {name: value["result_sha256"] for name, value in coverage["families"].items()},

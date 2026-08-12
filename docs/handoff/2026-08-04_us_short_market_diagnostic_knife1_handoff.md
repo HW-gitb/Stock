@@ -1251,3 +1251,28 @@ python .tools\full_pack_ledger.py run us_short "<rule-6 escalation reason>" "rec
 - 0810 清单里已写出完整「修复执行方案」而尚未动工的是 **#3（原问题7，analyst 覆盖源）、#6（原问题6，provider_health 八键）、#8（原问题5，Massive 429）、#9（原问题12，context_components 形状权威）、#12（原问题4，checkpoint 与操作员参数）**。
 - **#3 是 #2 的必要配套**：本刀只解开 OHLCV 一条腿，`coverage_status` 仍会被 analyst 空壳压成 `restricted`，`final_action` 仍被强制转"观察"。**不得据本刀宣称"操作表会出现建仓"。**
 - A-short 那条 digest guard 红由 A-short owner 处理，US-short 侧不要顺手改别人 lane 的 allowlist。
+
+## 2026-08-11 追加：问题8 ETF total-return sidecar 429 恢复（1302，待 Claude 独立审查）
+
+### 改动与边界
+
+- ETF sidecar 的 Massive 请求按同一逻辑 page 重试，固定等待 `65s`、最多 `2` 次；记录 logical/physical/retry 计数并严格限制总物理尝试不超过 `40`（本方案的 `32` 个逻辑调用）。
+- 持久 429 只使受影响 ETF family 降级，其他 family 继续完成；不把失败 family 伪装成 total-return 可用，不跨全局 cap，也不改变既有 26-week clock、settlement、cash return 或 ship-gate 语义。
+- 入口仍是既有 `market_diagnostic_fetch`/sidecar 路径；没有新增 health 链。问题8共用的 one-click/Pass2/forward 预算边界、问题6 `massive_events` receipt/report 消费和 checkpoint retry-identity 反向测试记录在 `R-USSHORT-MASSIVE-429-RECOVERY-WIRING-GAP`。
+
+### 验证与交接
+
+- 固定主 Python：`C:\Users\cnhea\AppData\Local\Programs\Python\Python313\python.exe`；ETF retry/持久降级/预算测试通过，问题8与既有问题6消费者 focused 超集 `249 OK`，最终 full lane `discovered=5773 ran=5773 equal=True PASS`，`392.8s/860s`。
+- 验证为 fake client、临时根和离线 full lane；未调用 provider/network/live，未打开诊断时钟，未写真实市场诊断私有根。状态仍 `OPEN-NOT_VERIFIED`，下一步为 Claude Code 独立审查后按流程提交。
+
+## 2026-08-11 追加：问题8 ETF Optional 修复（1302，待 Claude 独立复审）
+
+### 判定与变更
+
+- `O-P8-1`、`O-P8-2`、`O-P8-4` 均合理：此前 ETF physical pool 没有为剩余 logical request 保留初始槽位，整周全 429 仍写 captured sidecar，且窗口常量有重复来源。本轮增加 `_consume_physical_attempt` 预留逻辑，强制 `physical=logical+retry` 且不超过40；整周全 family 持久 429 且无成功页改为 `incomplete_no_count`/无 canonical sidecar，同日成功 rerun 可恢复；capacity、wait、max2 复用 `universe_fetch` canonical constants。
+- ETF raw 的持久429路径使用新的 attempt leaf，恢复后不同字节可写入；非429成功页仍保留既有 write-once/digest 行为。混合 family 继续局部降级，不把失败 family 伪装成可用 total-return。
+
+### 验证与边界
+
+- ETF 模块 `18 OK`；问题8与既有问题6消费者 focused 超集 `415 OK`，receipt=`receipt:5328794d756e3be6929c54f6`；full lane `5779/5779 equal=True PASS`、`317/317`、`388.4s/860s`。
+- 固定主 Python、fake client、临时根和离线测试；无 provider/network/live，未改变 26-week clock、settlement、cash return 或 ship-gate 语义。状态 `OPEN-NOT_VERIFIED`，待 Claude Code 独立复审。

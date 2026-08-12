@@ -35,6 +35,7 @@ from __future__ import annotations
 import argparse
 import hashlib
 import json
+import math
 import os
 import re
 import shutil
@@ -55,6 +56,7 @@ from engine.us_short_market_calendar import load_market_calendar, sessions_for_w
 from engine.us_short_private_paths import PrivatePathError, reject_nonprivate_output_path  # noqa: E402
 from engine.us_short_run_origin import _issue_capstone_research_live_receipt  # noqa: E402
 from runners import us_short_batch5_data_context_source_packet as source_packet_runner  # noqa: E402
+from runners import us_short_universe_fetch as universe_fetch  # noqa: E402
 
 CALENDAR_PRESET = ROOT / "presets" / "us_short_market_calendar_2026_2027.json"
 STATE_DIR = ROOT / "state" / "us_short"
@@ -63,6 +65,52 @@ STATE_DIR = ROOT / "state" / "us_short"
 # runners.us_short_batch5_full_candidate_pass2_preflight.PROVIDER_SAMPLE_REL_ROOT (a conformance test pins equality)
 # — a per-run gitignored sidecar under the reviewed provider_samples/ tree, decision-date-keyed in the filename.
 _PREFLIGHT_SAMPLE_REL_ROOT = Path("provider_samples") / "us_short_batch5_full_candidate_pass2_preflight_20260706"
+MASSIVE_RATE_LIMIT_WINDOW_CAPACITY = universe_fetch.MASSIVE_RATE_LIMIT_WINDOW_CAPACITY
+
+
+def _normalize_capstone_retry_policy(
+    max_retries_per_call: int | None,
+    retry_backoff_seconds: float | None,
+    *,
+    auto_authorize_pass2_budget: bool,
+) -> tuple[int, float]:
+    """Normalize one-click defaults while keeping the reviewed Massive policy closed-world."""
+    retries = (
+        universe_fetch.MASSIVE_RATE_LIMIT_MAX_RETRIES
+        if max_retries_per_call is None and auto_authorize_pass2_budget
+        else 0
+        if max_retries_per_call is None
+        else max_retries_per_call
+    )
+    if type(retries) is not int or not 0 <= retries <= universe_fetch.MASSIVE_RATE_LIMIT_MAX_RETRIES:
+        raise WeeklyCapstoneError(
+            "max_retries_per_call must be an int in [0, 2]"
+        )
+    if retry_backoff_seconds is None:
+        backoff = 0.0 if retries == 0 else universe_fetch.MASSIVE_RATE_LIMIT_RETRY_SECONDS
+    elif (
+        isinstance(retry_backoff_seconds, (int, float))
+        and not isinstance(retry_backoff_seconds, bool)
+        and math.isfinite(retry_backoff_seconds)
+        and retry_backoff_seconds == (
+            0.0 if retries == 0 else universe_fetch.MASSIVE_RATE_LIMIT_RETRY_SECONDS
+        )
+    ):
+        backoff = float(retry_backoff_seconds)
+    else:
+        raise WeeklyCapstoneError(
+            "retry_backoff_seconds must be omitted/0 when retries are disabled or exactly 65.0 when retries are enabled"
+        )
+    return retries, float(backoff)
+
+
+def _automatic_pass2_http_attempt_cap(*, exact_pass2_calls: int, target_count: int, max_retries: int) -> int:
+    massive_logical_calls = target_count * 3
+    retry_headroom = max_retries * (
+        (massive_logical_calls + MASSIVE_RATE_LIMIT_WINDOW_CAPACITY - 1)
+        // MASSIVE_RATE_LIMIT_WINDOW_CAPACITY
+    )
+    return exact_pass2_calls + retry_headroom
 
 
 class WeeklyCapstoneError(RuntimeError):
@@ -2053,8 +2101,8 @@ def run_weekly_capstone(
     confirm_user_authorization: bool = False,
     dry_run: bool = True,
     provider_pace_seconds: float = 0.0,
-    max_retries_per_call: int = 0,
-    retry_backoff_seconds: float = 0.0,
+    max_retries_per_call: int | None = None,
+    retry_backoff_seconds: float | None = None,
     max_total_http_attempts: int | None = None,
     stages: list[Stage] | None = None,
     state_dir: Path = STATE_DIR,
@@ -2074,7 +2122,23 @@ def run_weekly_capstone(
     runs each stage in order, validating each stage's declared inputs are readable
     before it starts and its declared outputs exist after, aborting fast (with the stage name) on the first failure.
     `stages` is injectable for offline testing."""
-    if max_retries_per_call and max_total_http_attempts is None:
+    max_retries_per_call, retry_backoff_seconds = _normalize_capstone_retry_policy(
+        max_retries_per_call,
+        retry_backoff_seconds,
+        auto_authorize_pass2_budget=auto_authorize_pass2_budget,
+    )
+    if (
+        max_total_http_attempts is not None
+        and (
+            type(max_total_http_attempts) is not int
+            or isinstance(max_total_http_attempts, bool)
+            or max_total_http_attempts < 1
+        )
+    ):
+        raise WeeklyCapstoneError(
+            "max_total_http_attempts must be a positive exact int"
+        )
+    if max_retries_per_call and max_total_http_attempts is None and not auto_authorize_pass2_budget:
         raise WeeklyCapstoneError(
             "max_total_http_attempts must be explicit whenever live 429 retries are enabled"
         )
@@ -2644,6 +2708,27 @@ def run_weekly_capstone(
                     authorized_pass2_call_budget=approval.exact_pass2_calls,
                     pass2_budget_preview=False,
                 )
+                automatic_cap = _automatic_pass2_http_attempt_cap(
+                    exact_pass2_calls=approval.exact_pass2_calls,
+                    target_count=approval.target_count,
+                    max_retries=ctx.max_retries_per_call,
+                )
+                requested_cap = ctx.max_total_http_attempts
+                if requested_cap is None:
+                    effective_cap = automatic_cap
+                elif (
+                    type(requested_cap) is not int
+                    or isinstance(requested_cap, bool)
+                    or requested_cap < approval.exact_pass2_calls
+                    or requested_cap > automatic_cap
+                ):
+                    raise WeeklyCapstoneError(
+                        "max_total_http_attempts must cover the exact Pass2 logical budget and not exceed "
+                        "the reviewed Massive minute-window retry headroom"
+                    )
+                else:
+                    effective_cap = requested_cap
+                ctx = replace(ctx, max_total_http_attempts=effective_cap)
                 _emit_diagnostic_event(
                     diagnostic_event,
                     "budget_approval_created",
@@ -2824,8 +2909,10 @@ def main(argv: list[str] | None = None) -> int:
         ),
     )
     parser.add_argument("--provider-pace-seconds", type=float, default=1.0)
-    parser.add_argument("--max-retries-per-call", type=int, default=0)
-    parser.add_argument("--retry-backoff-seconds", type=float, default=2.0)
+    parser.add_argument("--max-retries-per-call", type=int, default=None,
+                        help="Massive HTTP 429 retries per call (0, 1, or 2; one-click default is 2)")
+    parser.add_argument("--retry-backoff-seconds", type=float, default=None,
+                        help="Massive HTTP 429 wait; omitted/0 normalizes to the fixed 65-second policy")
     parser.add_argument("--max-total-http-attempts", type=int,
                         help="explicit physical HTTP-attempt cap required for live 429 retries")
     parser.add_argument("--resume", type=Path,

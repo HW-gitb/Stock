@@ -44,6 +44,7 @@ class _MassiveFixture:
         split_fault: str | None = None,
         price_fault: str | None = None,
         interrupt_after: int | None = None,
+        massive_429_attempts: int = 0,
     ) -> None:
         self.pagination_gap = pagination_gap
         self.unreadable_dividends = unreadable_dividends
@@ -54,6 +55,7 @@ class _MassiveFixture:
         self.split_fault = split_fault
         self.price_fault = price_fault
         self.interrupt_after = interrupt_after
+        self.massive_429_attempts = massive_429_attempts
         self.calls: list[str] = []
 
     def get_json(self, url: str, *, headers: dict[str, str]):
@@ -61,6 +63,9 @@ class _MassiveFixture:
         self.calls.append(url)
         if self.interrupt_after is not None and len(self.calls) > self.interrupt_after:
             raise KeyboardInterrupt("fixture interruption")
+        if self.massive_429_attempts:
+            self.massive_429_attempts -= 1
+            return {}, 429, False, "http_error"
         parsed = urlsplit(url)
         if "/v2/aggs/ticker/" in parsed.path:
             symbol = parsed.path.split("/v2/aggs/ticker/", 1)[1].split("/", 1)[0]
@@ -150,6 +155,7 @@ class EtfSidecarProducerTest(unittest.TestCase):
         benchmark_packet: dict | None = None,
         decision_date: str | None = None,
         now: str = OBSERVED_AT,
+        sleep_func=None,
     ):
         client = client or _MassiveFixture(pagination_gap=pagination_gap)
         with (
@@ -165,6 +171,7 @@ class EtfSidecarProducerTest(unittest.TestCase):
                 client=client,
                 api_key=api_key,
                 now=lambda: now,
+                sleep_func=sleep_func,
             )
         return result, client
 
@@ -199,6 +206,72 @@ class EtfSidecarProducerTest(unittest.TestCase):
         vti = sidecar["weeks"][0]["benchmarks"]["VTI"]
         self.assertIn("pagination_incomplete", vti["data_quality_reasons"])
         self.assertNotIn("VTI", result["evaluable_symbols"])
+
+    def test_429_retries_same_page_with_fixed_wait_and_keeps_attempt_raw(self) -> None:
+        sleeps = []
+        decision_date = f"{self.decision_date}-429-recover"
+        result, client = self._capture(
+            client=_MassiveFixture(massive_429_attempts=1),
+            decision_date=decision_date,
+            sleep_func=sleeps.append,
+        )
+        self.assertEqual(result["status"], "captured")
+        self.assertEqual(result["logical_requests"], 16)
+        self.assertEqual(result["http_attempts"], 17)
+        self.assertEqual(result["retry_count_used"], 1)
+        self.assertEqual(result["massive_429_retry_wait_seconds"], 65.0)
+        self.assertEqual(sleeps, [65.0])
+        self.assertEqual(client.calls[0], client.calls[1])
+        raw_root = (
+            self.raw_root / "provider_samples"
+            / f"us_short_market_diagnostic_etf_sidecar_{decision_date}"
+            / "raw" / "massive" / "VTI" / "dividends"
+        )
+        self.assertEqual(json.loads((raw_root / "page-001-attempt-001.json").read_text())["http_status"], 429)
+        self.assertEqual(json.loads((raw_root / "page-001-attempt-002.json").read_text())["http_status"], 200)
+
+    def test_persistent_429_degrades_only_one_family_and_other_families_continue_under_cap(self) -> None:
+        sleeps = []
+        result, client = self._capture(
+            client=_MassiveFixture(massive_429_attempts=3),
+            decision_date=f"{self.decision_date}-429-persistent",
+            sleep_func=sleeps.append,
+        )
+        self.assertEqual(result["status"], "captured")
+        self.assertEqual(result["logical_requests"], 16)
+        self.assertEqual(result["retry_count_used"], 2)
+        self.assertEqual(result["http_attempts"], 18)
+        self.assertLessEqual(result["http_attempts"], fetch.MAX_TOTAL_HTTP_ATTEMPTS)
+        self.assertEqual(sleeps, [65.0, 65.0])
+        self.assertEqual(["IWB", "SPY", "QQQ"], result["evaluable_symbols"])
+        self.assertGreater(len(client.calls), 3)
+        self.assertEqual(result["logical_requests"] + result["retry_count_used"], result["http_attempts"])
+
+    def test_all_family_429_is_incomplete_and_exact_rerun_recovers(self) -> None:
+        decision_date = f"{self.decision_date}-429-all"
+        sleeps = []
+        first, first_client = self._capture(
+            client=_MassiveFixture(massive_429_attempts=1000),
+            decision_date=decision_date,
+            sleep_func=sleeps.append,
+        )
+        self.assertEqual(first["status"], "incomplete_no_count")
+        self.assertIsNone(first["sidecar_path"])
+        self.assertEqual([], first["evaluable_symbols"])
+        self.assertEqual(first["logical_requests"] + first["retry_count_used"], first["http_attempts"])
+        self.assertLessEqual(first["http_attempts"], fetch.MAX_TOTAL_HTTP_ATTEMPTS)
+        self.assertEqual(first["http_attempts"], len(first_client.calls))
+        self.assertEqual([65.0] * first["retry_count_used"], sleeps)
+        self.assertFalse(fetch.sidecar_path(decision_date, inputs_root=self.inputs_root).exists())
+
+        recovered, recovered_client = self._capture(
+            client=_MassiveFixture(),
+            decision_date=decision_date,
+            now=SECOND_OBSERVED_AT,
+        )
+        self.assertEqual(recovered["status"], "captured")
+        self.assertEqual(["VTI", "IWB", "SPY", "QQQ"], recovered["evaluable_symbols"])
+        self.assertEqual(16, len(recovered_client.calls))
 
     def test_unreadable_dividend_body_never_upgrades_to_total_return(self) -> None:
         result, _ = self._capture(

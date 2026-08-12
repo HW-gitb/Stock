@@ -80,7 +80,7 @@ def _ok(payload):
 
 
 class ForwardPolicyCorporateActionFetchTests(unittest.TestCase):
-    def _run(self, responses, *, prewrite=None):
+    def _run(self, responses, *, prewrite=None, sleep_func=None):
         temp = tempfile.TemporaryDirectory()
         self.addCleanup(temp.cleanup)
         root = Path(temp.name)
@@ -103,7 +103,7 @@ class ForwardPolicyCorporateActionFetchTests(unittest.TestCase):
                 confirm_user_authorization=True, capability=capability,
                 decision_date="20260810", generated_at="2026-08-10T08:00:00-04:00",
                 maturity_ohlcv_path=maturity_path, sample_root=root, private_root=private_root,
-                client=client,
+                client=client, sleep_func=sleep_func,
             )
         return root, private_root, maturity_path, summary, client
 
@@ -136,6 +136,99 @@ class ForwardPolicyCorporateActionFetchTests(unittest.TestCase):
         for forbidden in ("UNIT_TEST_SECRET", "api.massive.com", '"ticker"', '"payload"'):
             self.assertNotIn(forbidden, tracked)
         self.assertTrue((root / "provider_samples").exists())
+
+    def test_massive_429_retries_same_logical_page_and_writes_only_final_success(self):
+        sleeps = []
+        root, private_root, _, summary, client = self._run([
+            ({"error": "rate"}, 429, False, "http_error"),
+            _ok({"results": []}), _ok({"results": []}),
+        ], sleep_func=sleeps.append)
+        self.assertEqual(summary["status"], "complete")
+        self.assertEqual(summary["logical_request_count"], 2)
+        self.assertEqual(summary["http_attempt_count"], 3)
+        self.assertEqual(summary["retry_count_used"], 1)
+        self.assertEqual(summary["massive_429_retry_wait_seconds"], 65.0)
+        self.assertEqual(sleeps, [65.0])
+        self.assertEqual(client.urls[0], client.urls[1])
+        raw_path = root / "provider_samples" / "us_short_forward_policy_corporate_action_20260810" / "raw" / "massive" / "splits_page_1.json"
+        self.assertEqual(json.loads(raw_path.read_text())["http_status"], 200)
+        self.assertTrue((private_root / "forward_policy_corporate_action_coverage_20260810.json").exists())
+
+    def test_persistent_massive_429_writes_incomplete_summary_without_coverage_and_recovers_on_exact_rerun(self):
+        sleeps = []
+        root, private_root, maturity_path, summary, client = self._run([
+            ({"error": "rate"}, 429, False, "http_error"),
+            ({"error": "rate"}, 429, False, "http_error"),
+            ({"error": "rate"}, 429, False, "http_error"),
+            _ok({"results": []}),
+        ], sleep_func=sleeps.append)
+        self.assertEqual(summary["status"], "incomplete_no_count")
+        self.assertEqual(summary["logical_request_count"], 2)
+        self.assertEqual(summary["http_attempt_count"], 4)
+        self.assertEqual(summary["retry_count_used"], 2)
+        self.assertEqual(sleeps, [65.0, 65.0])
+        self.assertFalse((private_root / "forward_policy_corporate_action_coverage_20260810.json").exists())
+        self.assertFalse((private_root / "forward_policy_adjustment_evidence_20260720.json").exists())
+        self.assertFalse((
+            root / "provider_samples" / "us_short_forward_policy_corporate_action_20260810" / "raw" / "massive" / "splits_page_1.json"
+        ).exists())
+
+        capability = fetch._issue_weekly_capstone_capability(
+            decision_date="20260810", generated_at="2026-08-10T08:00:00-04:00",
+            sample_root=root, private_root=private_root,
+        )
+        rerun_client = QueueClient([_ok({"results": []}), _ok({"results": []})])
+        rerun_sleeps = []
+        with mock.patch.dict(os.environ, {"MASSIVE_API_KEY": "UNIT_TEST_SECRET"}):
+            recovered = fetch.run_fetch(
+                confirm_user_authorization=True, capability=capability,
+                decision_date="20260810", generated_at="2026-08-10T08:00:00-04:00",
+                maturity_ohlcv_path=maturity_path, sample_root=root, private_root=private_root,
+                client=rerun_client, sleep_func=rerun_sleeps.append,
+            )
+        self.assertEqual(recovered["status"], "complete")
+        self.assertEqual(recovered["http_attempt_count"], 2)
+        self.assertEqual(rerun_sleeps, [])
+        self.assertTrue((private_root / "forward_policy_corporate_action_coverage_20260810.json").exists())
+        self.assertTrue((private_root / "forward_policy_adjustment_evidence_20260720.json").exists())
+
+    def test_mixed_family_429_does_not_leave_sibling_raw_and_changed_rerun_recovers(self):
+        raw_root = lambda root: (
+            root / "provider_samples" / "us_short_forward_policy_corporate_action_20260810"
+            / "raw" / "massive"
+        )
+        sleeps = []
+        root, private_root, maturity_path, summary, _ = self._run([
+            ({"error": "rate"}, 429, False, "http_error"),
+            ({"error": "rate"}, 429, False, "http_error"),
+            ({"error": "rate"}, 429, False, "http_error"),
+            _ok({"results": [], "page_marker": "dividend-first"}),
+        ], sleep_func=sleeps.append)
+        self.assertEqual(summary["status"], "incomplete_no_count")
+        self.assertFalse((raw_root(root) / "splits_page_1.json").exists())
+        self.assertFalse((raw_root(root) / "dividends_page_1.json").exists())
+        self.assertFalse((private_root / "forward_policy_corporate_action_coverage_20260810.json").exists())
+        self.assertEqual([65.0, 65.0], sleeps)
+
+        capability = fetch._issue_weekly_capstone_capability(
+            decision_date="20260810", generated_at="2026-08-10T08:00:00-04:00",
+            sample_root=root, private_root=private_root,
+        )
+        rerun_client = QueueClient([
+            _ok({"results": []}),
+            _ok({"results": [], "page_marker": "dividend-second"}),
+        ])
+        with mock.patch.dict(os.environ, {"MASSIVE_API_KEY": "UNIT_TEST_SECRET"}):
+            recovered = fetch.run_fetch(
+                confirm_user_authorization=True, capability=capability,
+                decision_date="20260810", generated_at="2026-08-10T08:00:00-04:00",
+                maturity_ohlcv_path=maturity_path, sample_root=root, private_root=private_root,
+                client=rerun_client,
+            )
+        self.assertEqual(recovered["status"], "complete")
+        self.assertTrue((raw_root(root) / "splits_page_1.json").exists())
+        self.assertTrue((raw_root(root) / "dividends_page_1.json").exists())
+        self.assertTrue((private_root / "forward_policy_adjustment_evidence_20260720.json").exists())
 
     def test_eventful_window_is_no_count_but_outside_pool_event_is_evaluable(self):
         pool_ticker = _eligible_source_capture()["capture"]["common_selection_pool"][0]

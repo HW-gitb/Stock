@@ -5,6 +5,7 @@ import json
 import shutil
 import sys
 import tempfile
+from dataclasses import replace
 import unittest
 from datetime import datetime
 from pathlib import Path
@@ -23,6 +24,7 @@ from runners.us_short_weekly_capstone import (  # noqa: E402
     WeeklyCapstoneError,
     run_weekly_capstone,
 )
+from runners import us_short_weekly_capstone as capstone  # noqa: E402
 from tests.provider.us_short_private_test_root import temporary_us_short_state_directory  # noqa: E402
 
 _STAGE_NAMES = [
@@ -112,6 +114,60 @@ class CapstoneDryRunTest(unittest.TestCase):
             **kw,
         )
 
+    def test_one_click_massive_retry_defaults_and_closed_override_matrix(self):
+        self.assertEqual(
+            capstone._normalize_capstone_retry_policy(None, None, auto_authorize_pass2_budget=True),
+            (2, 65.0),
+        )
+        self.assertEqual(
+            capstone._normalize_capstone_retry_policy(0, 0.0, auto_authorize_pass2_budget=True),
+            (0, 0.0),
+        )
+        self.assertEqual(
+            capstone._normalize_capstone_retry_policy(1, None, auto_authorize_pass2_budget=True),
+            (1, 65.0),
+        )
+        self.assertEqual(
+            capstone._normalize_capstone_retry_policy(2, 65.0, auto_authorize_pass2_budget=True),
+            (2, 65.0),
+        )
+        with self.assertRaises(WeeklyCapstoneError):
+            capstone._normalize_capstone_retry_policy(1, 64.0, auto_authorize_pass2_budget=True)
+        with self.assertRaises(WeeklyCapstoneError):
+            capstone._normalize_capstone_retry_policy(1, 0.0, auto_authorize_pass2_budget=True)
+        with self.assertRaises(WeeklyCapstoneError):
+            capstone._normalize_capstone_retry_policy(2, 0.0, auto_authorize_pass2_budget=True)
+        self.assertEqual(
+            capstone._automatic_pass2_http_attempt_cap(
+                exact_pass2_calls=1001, target_count=200, max_retries=2,
+            ),
+            1121,
+        )
+
+    def test_retry_policy_is_not_checkpoint_identity(self):
+        ctx = capstone.resolve_capstone_context(
+            now_et=datetime(2026, 7, 9, 8, 0, 0),
+            private_root=Path(tempfile.gettempdir()) / "capstone_checkpoint_identity_priv",
+            batch4_template_path=Path("template.json"),
+            account_state_path=Path("account.json"),
+            max_retries_per_call=0,
+            retry_backoff_seconds=0.0,
+            max_total_http_attempts=None,
+        )
+        retry_ctx = replace(
+            ctx,
+            max_retries_per_call=2,
+            retry_backoff_seconds=65.0,
+            max_total_http_attempts=1121,
+        )
+        self.assertEqual(
+            capstone._checkpoint_run_contract(ctx),
+            capstone._checkpoint_run_contract(retry_ctx),
+        )
+        self.assertNotIn("max_retries_per_call", capstone._checkpoint_run_contract(retry_ctx))
+        self.assertNotIn("retry_backoff_seconds", capstone._checkpoint_run_contract(retry_ctx))
+        self.assertNotIn("max_total_http_attempts", capstone._checkpoint_run_contract(retry_ctx))
+
     def test_dry_run_resolves_canonical_and_plans_all_stages(self):
         plan = self._run(datetime(2026, 7, 9, 8, 0, 0), dry_run=True)   # Thu 07-09 08:00 ET = pre-open
         self.assertEqual(plan["mode"], "dry_run")
@@ -188,6 +244,28 @@ class CapstoneDryRunTest(unittest.TestCase):
                 stages=[stage],
             )
         self.assertEqual(entered, [])
+
+    def test_invalid_physical_cap_fails_before_context_or_pipeline_stage(self):
+        for invalid_cap in (0, -1, True, 1.5):
+            with self.subTest(invalid_cap=invalid_cap):
+                entered: list[str] = []
+                stage = Stage(
+                    "must_not_run",
+                    False,
+                    lambda _ctx: [],
+                    lambda _ctx: [],
+                    lambda _ctx: entered.append("stage") or {},
+                )
+                with self.assertRaisesRegex(WeeklyCapstoneError, "positive exact int"):
+                    self._run(
+                        datetime(2026, 7, 9, 8, 0, 0),
+                        dry_run=False,
+                        confirm_user_authorization=True,
+                        max_retries_per_call=1,
+                        max_total_http_attempts=invalid_cap,
+                        stages=[stage],
+                    )
+                self.assertEqual(entered, [])
 
     def test_tz_aware_now_et_rejected(self):
         from datetime import timezone
@@ -553,6 +631,70 @@ class CapstoneFakeChainTest(unittest.TestCase):
         self.assertEqual(summary["operational_use"], "not_authorized")
         self.assertIn("--pass2-call-budget 11", summary["next_required"])
         self.assertFalse((self.private_root / "weekly_private" / "20260709").exists())
+
+    def test_one_click_production_shape_derives_and_threads_massive_physical_cap(self):
+        # The operator wrapper must enter the real default-pipeline branch (stages=None), derive the approval from
+        # the preflight target count, and hand the resulting physical cap to the Pass2 adapter before it runs.
+        from runners import us_short_paper_one_click as one_click
+
+        order: list[str] = []
+        preflight_result = {
+            "candidate_universe": {
+                "candidate_artifact_sha256": hashlib.sha256(b"{}").hexdigest(),
+            },
+            "decision_clock": {
+                "expected_decision_date": "20260709",
+                "candidate_price_basis_date": "20260708",
+            },
+            "pass2_target_universe": {"momentum_top_k": 2, "target_count": 2},
+            "endpoint_call_forecast": {"total_calls_for_pass2_target_cut": 11},
+        }
+        stages = self._fake_stages(order, preflight_result=preflight_result)
+        pass2_stage = next(stage for stage in stages if stage.name == "pass2_fetch")
+        original_pass2_run = pass2_stage.run
+        observed: dict[str, object] = {}
+
+        def capture_pass2_context(ctx):
+            observed.update({
+                "max_retries_per_call": ctx.max_retries_per_call,
+                "retry_backoff_seconds": ctx.retry_backoff_seconds,
+                "max_total_http_attempts": ctx.max_total_http_attempts,
+                "exact_pass2_calls": ctx.budget_approval.exact_pass2_calls,
+            })
+            return original_pass2_run(ctx)
+
+        pass2_stage.run = capture_pass2_context
+        checkout_root = self.state_dir / "one_click_checkout"
+        (checkout_root / "presets").mkdir(parents=True, exist_ok=True)
+        shutil.copyfile(
+            ROOT / "presets" / "us_short_market_calendar_2026_2027.json",
+            checkout_root / "presets" / "us_short_market_calendar_2026_2027.json",
+        )
+        with (
+            mock.patch.object(one_click, "ROOT", checkout_root),
+            mock.patch.object(one_click, "DEFAULT_STATE_DIR", self.state_dir),
+            mock.patch.object(capstone, "default_pipeline", return_value=stages),
+            mock.patch.object(capstone, "_provider_execution_receipt", return_value=mock.Mock()),
+            mock.patch(
+                "runners.us_short_batch5_full_candidate_pass2_preflight.finalize_preflight_from_existing_derivation",
+                return_value=preflight_result,
+            ),
+        ):
+            summary = one_click.run_one_click(
+                now_et=datetime(2026, 7, 9, 8, 0, 0),
+                private_root=self.private_root,
+                state_dir=self.state_dir,
+                momentum_top_k=2,
+                provider_pace_seconds=0.0,
+            )
+
+        self.assertEqual(summary["execution_mode"], "live_provider_fetch")
+        self.assertEqual(observed, {
+            "max_retries_per_call": 2,
+            "retry_backoff_seconds": 65.0,
+            "max_total_http_attempts": 13,
+            "exact_pass2_calls": 11,
+        })
 
     def test_shadow_failure_is_loud_nonblocking_and_bridge_emits(self):
         order: list[str] = []
