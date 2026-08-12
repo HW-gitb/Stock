@@ -73,47 +73,116 @@ def _git(*args: str) -> str:
     ).stdout
 
 
-def _tracked_code_tree_sha256() -> str:
-    """Hash tracked tree entries whose paths are inside the code boundary.
+def _git_stdin(*args: str, stdin: str) -> str:
+    return subprocess.run(
+        ["git", "-C", str(ROOT), "-c", "core.quotePath=false", *args],
+        input=stdin,
+        capture_output=True,
+        text=True,
+        encoding="utf-8",
+        errors="replace",
+        check=False,
+    ).stdout
 
-    A commit hash is intentionally not part of the seal: a documentation-only
-    commit must not invalidate a receipt.  The filtered tree still changes for
-    any tracked code-path commit, including adding, deleting, or rewriting a
-    code file.
+
+def code_paths_now() -> set[str]:
+    """Every code path that exists for this working tree, tracked or not."""
+    paths: set[str] = set()
+    for args in (("ls-files",), ("ls-files", "--others", "--exclude-standard")):
+        for line in _git(*args).splitlines():
+            rel = _normalise(line)
+            if rel and is_code_path(rel):
+                paths.add(rel)
+    return paths
+
+
+def _effective_code_content_sha256() -> str:
+    """Hash what the code files actually contain right now.
+
+    Deliberately blind to whether that content is staged or committed.  A
+    focused run tests bytes, not git status, so `git add` and `git commit` of
+    the very bytes it just tested must leave its receipt valid -- otherwise the
+    gate forces a rerun that can only confirm what was already confirmed.
+    Editing, adding, or deleting a code file does change this value.
+
+    Every path is hashed the same way, from disk.  Mixing git blob ids (cheap
+    for clean files) with content hashes (needed for dirty ones) would move a
+    file between hash spaces the moment it was staged, which is the very flip
+    this function exists to remove.
     """
-    entries: list[str] = []
-    for line in _git("ls-tree", "-r", "--full-tree", "HEAD").splitlines():
+    content: dict[str, str] = {}
+    from_disk: set[str] = set()
+    for line in _git("ls-files", "-s").splitlines():
         if "\t" not in line:
             continue
-        rel = line.split("\t", 1)[1]
-        if is_code_path(rel):
-            entries.append(line)
-    canonical = "\n".join(sorted(entries))
+        meta, rel = line.split("\t", 1)
+        rel = _normalise(rel)
+        if not is_code_path(rel):
+            continue
+        fields = meta.split()
+        if len(fields) < 3:
+            continue
+        blob, stage = fields[1], fields[2]
+        if stage == "0":
+            content[rel] = blob
+        else:  # unmerged: the working copy, not any one side, is the truth
+            from_disk.add(rel)
+    for args in (("diff-files", "--name-only"), ("ls-files", "--others", "--exclude-standard")):
+        for line in _git(*args).splitlines():
+            rel = _normalise(line)
+            if rel and is_code_path(rel):
+                from_disk.add(rel)
+    present = sorted(rel for rel in from_disk if (ROOT / rel).is_file())
+    for rel in from_disk:
+        content[rel] = "ABSENT"
+    if present:
+        # `hash-object` applies the same per-path clean filters git used for the
+        # index entries above, so both halves stay in one id space.
+        hashed = _git_stdin("hash-object", "--stdin-paths", stdin="\n".join(present) + "\n").split()
+        if len(hashed) != len(present):  # never seal a half-read tree
+            raise RuntimeError("git hash-object did not return one id per code path")
+        content.update(zip(present, hashed))
+    canonical = "\n".join(f"{rel}:{content[rel]}" for rel in sorted(content))
     return hashlib.sha256(canonical.encode("utf-8")).hexdigest()
 
 
-def collect_code_state() -> dict[str, str]:
-    """Hash the tracked code tree plus changed/untracked code files."""
+def changed_code_paths() -> set[str]:
+    """Code paths this working tree changes relative to HEAD.
+
+    Only drives which acceptance bundles a commit must show; it is not part of
+    the seal, because "which files moved" is a different question from "what do
+    the files contain".
+    """
     changed = [line for line in _git("diff", "HEAD", "--name-only").splitlines() if line]
     untracked = [
         line
         for line in _git("ls-files", "--others", "--exclude-standard").splitlines()
         if line
     ]
+    return {_normalise(rel) for rel in set(changed) | set(untracked) if is_code_path(rel)}
+
+
+def collect_code_state() -> dict[str, str]:
+    """The content seal, plus the changed paths that decide bundle demands."""
     state: dict[str, str] = {}
-    for rel in set(changed) | set(untracked):
-        if not is_code_path(rel):
-            continue
+    for rel in changed_code_paths():
         path = ROOT / rel
-        state[_normalise(rel)] = (
+        state[rel] = (
             hashlib.sha256(path.read_bytes()).hexdigest() if path.is_file() else "ABSENT"
         )
-    state["@CODE_TREE"] = _tracked_code_tree_sha256()
+    state["@CODE_CONTENT"] = _effective_code_content_sha256()
     return state
 
 
 def fingerprint(state: dict[str, str]) -> str:
-    canonical = "\n".join(f"{key}:{state[key]}" for key in sorted(state))
+    """Seal only the ``@`` keys: they already cover every code path's content.
+
+    The per-path entries alongside them record which files a commit touches,
+    and that set legitimately empties out on commit while the content stays
+    identical.  Sealing it too is what made a commit look like a code change.
+    """
+    sealed = sorted(key for key in state if key.startswith("@"))
+    canonical = "\n".join(f"{key}:{state[key]}" for key in sealed)
     return hashlib.sha256(canonical.encode("utf-8")).hexdigest()
 
 
@@ -311,7 +380,60 @@ def validate_focused_evidence(
     return receipt, "OK"
 
 
+def explain_lines(
+    *,
+    state: dict[str, str] | None = None,
+    path: Path = RECEIPT_PATH,
+) -> list[str]:
+    """Say what the gate is comparing, so a FAIL does not need source reading.
+
+    The one-line FAIL cannot distinguish "no receipt", "wrong Python", "code
+    moved" and "missing bundle", and the required-bundle set was only reachable
+    by importing the module by hand.
+    """
+    current_state = state if state is not None else collect_code_state()
+    receipt = load_receipt(path)
+    ok, reason = validate_receipt(receipt, state=current_state)
+    current_fp = fingerprint(current_state)
+    receipt_fp = receipt.get("code_fingerprint") if isinstance(receipt, dict) else None
+    changed = sorted(key for key in current_state if not key.startswith("@"))
+    merge_paths = merge_side_paths()
+    lines = [
+        f"pinned python      : {pinned_python_error() or 'OK'}",
+        f"receipt file       : {path}",
+        f"receipt            : {'present' if isinstance(receipt, dict) else 'missing/unreadable'}",
+    ]
+    if isinstance(receipt, dict):
+        lines += [
+            f"  id               : {receipt.get('receipt_id')}",
+            f"  tests            : {receipt.get('tests')}",
+            f"  recorded_at      : {receipt.get('recorded_at')}",
+            f"  unittest_args    : {receipt.get('unittest_args')}",
+            f"  bundles          : {receipt.get('bundles')}",
+        ]
+    lines += [
+        f"code fingerprint   : now={current_fp} receipt={receipt_fp}",
+        f"fingerprints match : {'yes' if receipt_fp == current_fp else 'NO'}",
+        f"changed code paths : {len(changed)}",
+    ]
+    lines += [f"  - {rel}" for rel in changed[:12]]
+    if len(changed) > 12:
+        lines.append(f"  ... and {len(changed) - 12} more")
+    lines += [
+        f"merge in progress  : {'yes' if merge_in_progress() else 'no'}"
+        + (f" (+{len(merge_paths)} merge-side code paths)" if merge_paths else ""),
+        f"required bundles   : {required_bundles_now(current_state)}",
+        f"verdict            : {'PASS' if ok else 'FAIL'} - {reason}",
+    ]
+    return lines
+
+
 if __name__ == "__main__":
+    if "--explain" in sys.argv[1:]:
+        print("[verification-receipt] EXPLAIN")
+        for line in explain_lines():
+            print(f"  {line}")
+        raise SystemExit(0)
     if pinned_python_error():
         print(f"[verification-receipt] REFUSED - {pinned_python_error()}")
         raise SystemExit(2)

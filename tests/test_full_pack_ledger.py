@@ -118,15 +118,18 @@ class FullPackLedgerTests(unittest.TestCase):
             self.assertTrue(fpl._is_code_path(code), code)
 
     def test_fingerprint_is_deterministic_and_state_sensitive(self):
-        base = {"engine/x.py": "aaa", "@HEAD": "h1"}
+        # The `@` key carries the content seal; the per-path entries beside it
+        # say which files a commit touches and are deliberately not sealed, so
+        # that staging or committing the tested bytes does not move the id.
+        base = {"engine/x.py": "aaa", "@CODE_CONTENT": "c1"}
         self.assertEqual(fpl.fingerprint(base), fpl.fingerprint(dict(base)))          # deterministic
-        self.assertNotEqual(fpl.fingerprint(base), fpl.fingerprint({"engine/x.py": "bbb", "@HEAD": "h1"}))  # code edit
-        self.assertNotEqual(fpl.fingerprint(base), fpl.fingerprint({"engine/x.py": "aaa", "@HEAD": "h2"}))  # HEAD moved
+        self.assertNotEqual(fpl.fingerprint(base), fpl.fingerprint({"engine/x.py": "aaa", "@CODE_CONTENT": "c2"}))  # code edit
+        self.assertEqual(fpl.fingerprint(base), fpl.fingerprint({"@CODE_CONTENT": "c1"}))  # same bytes, now committed
 
     def test_cache_hit_returns_count_only_on_the_exact_same_code_state(self):
         with tempfile.TemporaryDirectory() as tmp:
             ledger = Path(tmp) / "ledger.json"
-            state = {"engine/x.py": "aaa", "@HEAD": "h1"}
+            state = {"engine/x.py": "aaa", "@CODE_CONTENT": "c1"}
             fpl.prepare("us_short", "shared engine", FOCUSED_RECEIPT, state=state, ledger=ledger)
             fpl.record("us_short", "4497 OK", state=state, ledger=ledger)
             # same code state -> hit; it returns the count so a re-run "just for a number" is unnecessary.
@@ -134,7 +137,7 @@ class FullPackLedgerTests(unittest.TestCase):
             self.assertIsNotNone(hit)
             self.assertEqual(hit["count"], "4497 OK")
             # a real code change -> miss (a full run is warranted if rule 3 applies).
-            self.assertIsNone(fpl.cached_green("us_short", state={"engine/x.py": "bbb", "@HEAD": "h1"}, ledger=ledger))
+            self.assertIsNone(fpl.cached_green("us_short", state={"engine/x.py": "aaa", "@CODE_CONTENT": "c2"}, ledger=ledger))
             # a different lane never reuses this lane's green.
             self.assertIsNone(fpl.cached_green("a_short", state=state, ledger=ledger))
 
@@ -142,7 +145,7 @@ class FullPackLedgerTests(unittest.TestCase):
         # A docs-only change leaves the code-state map identical, so the cached green still matches.
         with tempfile.TemporaryDirectory() as tmp:
             ledger = Path(tmp) / "ledger.json"
-            code_state = {"engine/x.py": "aaa", "@HEAD": "h1"}       # docs paths are filtered out by collect_code_state
+            code_state = {"engine/x.py": "aaa", "@CODE_CONTENT": "c1"}       # docs paths are filtered out by collect_code_state
             fpl.prepare("us_short", "shared engine", FOCUSED_RECEIPT, state=code_state, ledger=ledger)
             fpl.record("us_short", "4497 OK", state=code_state, ledger=ledger)
             self.assertIsNotNone(fpl.cached_green("us_short", state=code_state, ledger=ledger))
@@ -150,14 +153,14 @@ class FullPackLedgerTests(unittest.TestCase):
     def test_record_refuses_without_a_matching_af_prepare(self):
         with tempfile.TemporaryDirectory() as tmp:
             ledger = Path(tmp) / "ledger.json"
-            state = {"engine/x.py": "aaa", "@HEAD": "h1"}
+            state = {"engine/x.py": "aaa", "@CODE_CONTENT": "c1"}
             with self.assertRaisesRegex(ValueError, "matching prepare"):
                 fpl.record("a_short", "2000 OK", state=state, ledger=ledger)
 
     def test_behavior_change_after_prepare_invalidates_the_final_full_record(self):
         with tempfile.TemporaryDirectory() as tmp:
             ledger = Path(tmp) / "ledger.json"
-            prepared_state = {"engine/x.py": "aaa", "@HEAD": "h1"}
+            prepared_state = {"engine/x.py": "aaa", "@CODE_CONTENT": "c1"}
             changed_state = {"engine/x.py": "bbb", "@HEAD": "h1"}
             fpl.prepare("a_short", "production consumer", FOCUSED_RECEIPT,
                         state=prepared_state, ledger=ledger)
@@ -168,7 +171,7 @@ class FullPackLedgerTests(unittest.TestCase):
     def test_prepare_requires_a_trigger_reason_and_focused_evidence(self):
         with tempfile.TemporaryDirectory() as tmp:
             ledger = Path(tmp) / "ledger.json"
-            state = {"engine/x.py": "aaa", "@HEAD": "h1"}
+            state = {"engine/x.py": "aaa", "@CODE_CONTENT": "c1"}
             with self.assertRaisesRegex(ValueError, "trigger reason"):
                 fpl.prepare("a_short", "", FOCUSED_RECEIPT, state=state, ledger=ledger)
             with self.assertRaisesRegex(ValueError, "focused-test evidence"):
@@ -177,7 +180,7 @@ class FullPackLedgerTests(unittest.TestCase):
     def test_prepare_rejects_free_text_before_writing_a_ledger(self):
         with tempfile.TemporaryDirectory() as tmp:
             ledger = Path(tmp) / "ledger.json"
-            state = {"engine/x.py": "aaa", "@HEAD": "h1"}
+            state = {"engine/x.py": "aaa", "@CODE_CONTENT": "c1"}
             with self.assertRaisesRegex(ValueError, "machine focused receipt token"):
                 fpl.prepare("a_short", "production consumer", "focused=20 OK", state=state, ledger=ledger)
             self.assertFalse(ledger.exists())
@@ -223,7 +226,7 @@ class FullPackLedgerTests(unittest.TestCase):
                 runner.assert_not_called()
 
     def test_full_pack_rejects_free_text_before_spawning_any_test(self):
-        state = {"engine/x.py": "aaa", "@HEAD": "h1"}
+        state = {"engine/x.py": "aaa", "@CODE_CONTENT": "c1"}
         with tempfile.TemporaryDirectory() as tmp:
             with patch.object(
                 fpl,
@@ -251,7 +254,7 @@ class FullPackLedgerTests(unittest.TestCase):
         for lane, args in fpl.FULL_PACK_DISCOVERY_ARGS.items():
             with self.subTest(lane=lane), tempfile.TemporaryDirectory() as tmp:
                 ledger = Path(tmp) / "ledger.json"
-                state = {"engine/x.py": "aaa", "@HEAD": "h1"}
+                state = {"engine/x.py": "aaa", "@CODE_CONTENT": "c1"}
                 output = StringIO()
                 passed = Result("PASS", 0, 3, 0.2, "Ran 3 tests in 0.1s\n\nOK\n")
 
@@ -296,7 +299,7 @@ class FullPackLedgerTests(unittest.TestCase):
                 )
 
     def test_only_a_real_unittest_spawn_may_print_start(self):
-        state = {"engine/x.py": "aaa", "@HEAD": "h1"}
+        state = {"engine/x.py": "aaa", "@CODE_CONTENT": "c1"}
         for lane, args in fpl.FULL_PACK_DISCOVERY_ARGS.items():
             with self.subTest(lane=lane, case="dependency"), tempfile.TemporaryDirectory() as tmp:
                 output = StringIO()
@@ -339,7 +342,7 @@ class FullPackLedgerTests(unittest.TestCase):
     def test_single_run_command_prepares_runs_and_records_only_real_pass(self):
         with tempfile.TemporaryDirectory() as tmp:
             ledger = Path(tmp) / "ledger.json"
-            state = {"engine/x.py": "aaa", "@HEAD": "h1"}
+            state = {"engine/x.py": "aaa", "@CODE_CONTENT": "c1"}
             passed = Result("PASS", 0, 3, 0.2, "Ran 3 tests in 0.1s\n\nOK\n")
             with patch.object(fpl, "_execute_full_pack", return_value=(passed, {"mode": "parallel"})):
                 self.assertEqual(
@@ -366,7 +369,7 @@ class FullPackLedgerTests(unittest.TestCase):
                   "slowest_module_seconds": 330.7, "count_gate_equal": True}
         with tempfile.TemporaryDirectory() as tmp:
             ledger = Path(tmp) / "ledger.json"
-            state = {"engine/x.py": "aaa", "@HEAD": "h1"}
+            state = {"engine/x.py": "aaa", "@CODE_CONTENT": "c1"}
             passed = Result("PASS", 0, 3, 0.2, "Ran 3 tests in 0.1s\n\nOK\n")
             with patch.object(fpl, "_execute_full_pack", return_value=(passed, detail)):
                 self.assertEqual(
@@ -384,7 +387,7 @@ class FullPackLedgerTests(unittest.TestCase):
     def test_a_share_provider_dependency_blocks_only_a_short_full_pack(self):
         with tempfile.TemporaryDirectory() as tmp:
             ledger = Path(tmp) / "ledger.json"
-            state = {"engine/x.py": "aaa", "@HEAD": "h1"}
+            state = {"engine/x.py": "aaa", "@CODE_CONTENT": "c1"}
             fpl.prepare("a_short", "shared schema", FOCUSED_RECEIPT, state=state, ledger=ledger)
             fpl.record("a_short", "3 OK", state=state, ledger=ledger)
             passed = Result("PASS", 0, 3, 0.2, "Ran 3 tests in 0.1s\n\nOK\n")
@@ -422,7 +425,7 @@ class FullPackLedgerTests(unittest.TestCase):
     def test_common_dependency_blocks_both_full_pack_lanes(self):
         with tempfile.TemporaryDirectory() as tmp:
             ledger = Path(tmp) / "ledger.json"
-            state = {"engine/x.py": "aaa", "@HEAD": "h1"}
+            state = {"engine/x.py": "aaa", "@CODE_CONTENT": "c1"}
             with patch.object(
                 fpl,
                 "external_test_dependency_error",
@@ -438,7 +441,7 @@ class FullPackLedgerTests(unittest.TestCase):
             runner.assert_not_called()
 
     def test_single_run_rejects_subset_and_unknown_lane(self):
-        state = {"engine/x.py": "aaa", "@HEAD": "h1"}
+        state = {"engine/x.py": "aaa", "@CODE_CONTENT": "c1"}
         with tempfile.TemporaryDirectory() as tmp:
             ledger = Path(tmp) / "ledger.json"
             with self.assertRaisesRegex(ValueError, "test_a_short\\*\\.py"):
@@ -462,7 +465,7 @@ class FullPackLedgerTests(unittest.TestCase):
     def test_single_run_timeout_never_records_green(self):
         with tempfile.TemporaryDirectory() as tmp:
             ledger = Path(tmp) / "ledger.json"
-            state = {"engine/x.py": "aaa", "@HEAD": "h1"}
+            state = {"engine/x.py": "aaa", "@CODE_CONTENT": "c1"}
             timed_out = Result("TIMEOUT", 124, None, 1.0, "")
             with patch.object(fpl, "_execute_full_pack", return_value=(timed_out, {"mode": "parallel"})):
                 self.assertEqual(
@@ -482,7 +485,7 @@ class FullPackLedgerTests(unittest.TestCase):
     def test_check_shows_the_prepared_review_and_matching_green_together(self):
         with tempfile.TemporaryDirectory() as tmp:
             ledger = Path(tmp) / "ledger.json"
-            state = {"engine/x.py": "aaa", "@HEAD": "h1"}
+            state = {"engine/x.py": "aaa", "@CODE_CONTENT": "c1"}
             fpl.prepare("a_short", "shared schema", FOCUSED_RECEIPT, state=state, ledger=ledger)
             fpl.record("a_short", "2000 OK", state=state, ledger=ledger)
             output = StringIO()
@@ -494,7 +497,7 @@ class FullPackLedgerTests(unittest.TestCase):
     def test_legacy_green_is_historical_but_not_reusable(self):
         with tempfile.TemporaryDirectory() as tmp:
             ledger = Path(tmp) / "ledger.json"
-            state = {"engine/x.py": "aaa", "@HEAD": "h1"}
+            state = {"engine/x.py": "aaa", "@CODE_CONTENT": "c1"}
             ledger.write_text(
                 '{"a_short": {"fingerprint": "' + fpl.fingerprint(state)
                 + '", "count": "1999 OK", "recorded_at": "old"}}',
