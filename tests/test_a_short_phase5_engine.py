@@ -22,7 +22,7 @@ if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
 from runners.a_short_phase5_engine import (  # noqa: E402
-    compute_indicators, entry_type, exit_and_size, classify_risk_families,
+    compute_indicators, entry_type, entry_exit_geometry, exit_and_size, classify_risk_families,
     build_m67_report, build_holding_report, validate_m67_consistency, write_m67_report, GOVERNANCE,
     tick_ref, tick_up, tick_down, holding_levels, effective_support, effective_resistance, SR_SPIKE_ATR,
     BREAKOUT_RR_BONUS,
@@ -536,6 +536,32 @@ class EntryExitTests(unittest.TestCase):
         self.assertIsNone(rej)
         self.assertGreaterEqual(plan["rr"], 1.5)
         self.assertGreaterEqual(plan["shares"], 100)
+
+    def test_exit_size_preserves_the_frozen_full_plan_after_geometry_extraction(self):
+        inp = {"close": 10.0, "account": {"available_cash": 100000.0},
+               "liquidity": {"avg_amount_5d": 1000000000.0}}
+        ind = {"support": 9.5, "support_quality": "strong", "resistance": 12.0,
+               "resistance_quality": "strong", "atr14": 0.4}
+        expected_geometry = {
+            "entry": 10.0, "entry_low": 9.8, "entry_high": 10.0, "entry_type": "低吸",
+            "entry_for_risk": 10.0, "chase_invalid_above": None, "entry_invalid_reason": None,
+            "stop": 9.0, "t1": 12.0, "t2": 12.5, "rr": 2.0, "rr_at_entry_high": 2.0,
+            "rr_floor": 1.5, "support": 9.5, "support_quality": "strong",
+            "resistance": 12.0, "resistance_quality": "strong",
+            "t1_basis": "structural_resistance",
+        }
+        geometry, reject = entry_exit_geometry(inp, ind, "震荡期", "低吸")
+        plan, plan_reject = exit_and_size(inp, ind, "震荡期", "低吸")
+        self.assertIsNone(reject)
+        self.assertIsNone(plan_reject)
+        self.assertEqual(geometry, expected_geometry)
+        self.assertEqual(plan, {
+            **expected_geometry,
+            "shares": 2000,
+            "avg_amount_5d": 1000000000.0,
+            "sizing_notes": ["试探仓(edge 未验证,默认上限×0.5)"],
+            "capital_context": None,
+        })
 
     def test_exit_size_extra_halve_smaller(self):
         full, _ = exit_and_size(_good_input(), self.ind, "震荡期", extra_halve=False)

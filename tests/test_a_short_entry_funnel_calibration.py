@@ -19,6 +19,8 @@ from runners.a_short_entry_funnel_calibration import (
     PREREG_PATH,
     PREREG_SCHEMA_PATH,
     REPORT_SCHEMA_PATH,
+    _adjudicate_calibration,
+    build_historical_report,
     build_report,
     load_json,
     main,
@@ -35,7 +37,59 @@ class AShortEntryFunnelCalibrationTests(unittest.TestCase):
     def _historical_analysis_input(self) -> dict:
         payload = json.loads(ANALYSIS_INPUT_EXAMPLE.read_text(encoding="utf-8"))
         payload["trade_date"] = HISTORICAL_AS_OF
+        payload["market_context"]["volatility"].update({
+            "iv_symbol": "50ETF",
+            "iv_value": 20.0,
+            "hv_value": 15.0,
+            "iv_percentile_252d": 50.0,
+            "iv_change_abs_1d_pctpt": 0.5,
+            "rule3_status": "normal",
+            "awakening_status": "inactive",
+            "cash_reclaim_pct": 0.0,
+            "iv_feed_status": "ready",
+            "source_status": "complete",
+            "freshness_status": "aligned",
+            "freshness_reason": "validated_feed",
+            "source_as_of": HISTORICAL_AS_OF,
+            "source_latest_trade_date": HISTORICAL_AS_OF,
+            "source_ref": "iv_feed.json",
+            "feed_sha256": "0" * 64,
+        })
         return payload
+
+    def _nonready_iv_projection(self, analysis_input: dict, status: str = "build_failed") -> None:
+        if status not in {"not_requested", "build_failed", "digest_failed", "clock_mismatch"}:
+            raise ValueError(f"unexpected non-ready status: {status}")
+        analysis_input["market_context"]["volatility"].update({
+            "iv_value": None,
+            "hv_value": None,
+            "iv_percentile_252d": None,
+            "iv_change_abs_1d_pctpt": None,
+            "rule3_status": "unknown",
+            "awakening_status": "unknown",
+            "cash_reclaim_pct": None,
+            "iv_feed_status": status,
+            "source_status": "unavailable",
+            "freshness_status": "not_requested" if status == "not_requested" else "unavailable",
+            "freshness_reason": f"iv_feed_{status}",
+            "source_as_of": None,
+            "source_latest_trade_date": None,
+            "source_ref": None,
+            "feed_sha256": None,
+        })
+
+    def _legacy_healthy_iv_projection(self, analysis_input: dict) -> None:
+        volatility = analysis_input["market_context"]["volatility"]
+        for key in (
+            "iv_feed_status", "source_status", "freshness_status", "freshness_reason",
+            "source_as_of", "source_latest_trade_date", "source_ref", "feed_sha256",
+        ):
+            volatility.pop(key, None)
+        volatility.update({
+            "iv_percentile_252d": 50.0,
+            "rule3_status": "normal",
+            "awakening_status": "inactive",
+        })
 
     def _price_rows(self, count: int = 20) -> list[dict[str, str]]:
         start = date(2026, 5, 1)
@@ -74,6 +128,56 @@ class AShortEntryFunnelCalibrationTests(unittest.TestCase):
         report = json.loads(path.read_text(encoding="utf-8"))
         self.assertEqual(list(Draft7Validator(load_json(HISTORICAL_REPORT_SCHEMA_PATH)).iter_errors(report)), [])
         return report
+
+    def _clear_rule6(self, candidate: dict) -> None:
+        from engine.a_short_rule6_contract import RULE6_D_TIER_REASONS
+
+        for check in candidate["event_risk"]["rule6_checks"]:
+            check_id = check["id"]
+            if check_id in RULE6_D_TIER_REASONS:
+                check["status"] = "not_applicable"
+                check["notes"] = RULE6_D_TIER_REASONS[check_id]
+            else:
+                check["status"] = "pass"
+
+    def _write_minimum_15b_sequence(self, root: Path, *, weeks: int = 12,
+                                    candidates_per_week: int = 10,
+                                    legacy_healthy_iv: bool = False) -> None:
+        all_rows = []
+        first_as_of = date(2026, 1, 23)
+        template = self._historical_analysis_input()
+        if legacy_healthy_iv:
+            self._legacy_healthy_iv_projection(template)
+        for week_index in range(weeks):
+            as_of_date = first_as_of + timedelta(days=7 * week_index)
+            as_of = as_of_date.strftime("%Y%m%d")
+            payload = copy.deepcopy(template)
+            payload["trade_date"] = as_of
+            payload["market_context"]["volatility"]["iv_percentile_252d"] = 50.0
+            payload["candidates"] = []
+            for candidate_index in range(candidates_per_week):
+                candidate = copy.deepcopy(template["candidates"][0])
+                candidate["ts_code"] = f"{week_index * candidates_per_week + candidate_index + 1:06d}.SZ"
+                candidate["derived_flags"]["is_breakout"] = False
+                candidate["derived_flags"]["hard_veto"] = False
+                self._clear_rule6(candidate)
+                payload["candidates"].append(candidate)
+                for offset in range(20):
+                    all_rows.append({
+                        "as_of": as_of,
+                        "ts_code": candidate["ts_code"],
+                        "trade_date": (as_of_date - timedelta(days=19 - offset)).strftime("%Y%m%d"),
+                        "high": "10.0",
+                        "low": "9.95",
+                        "close": "10.0",
+                    })
+            input_path = root / "analysis_inputs" / as_of / "analysis_input.json"
+            input_path.parent.mkdir(parents=True, exist_ok=True)
+            input_path.write_text(json.dumps(payload, ensure_ascii=False), encoding="utf-8")
+        with (root / "prices.csv").open("w", encoding="utf-8", newline="") as handle:
+            writer = csv.DictWriter(handle, fieldnames=("as_of", "ts_code", "trade_date", "high", "low", "close"))
+            writer.writeheader()
+            writer.writerows(all_rows)
 
     def _require_frozen_sources(self) -> None:
         from runners.a_short_entry_funnel_calibration import verified_sources
@@ -170,11 +274,11 @@ class AShortEntryFunnelCalibrationTests(unittest.TestCase):
             )
             report = self._read_historical_report(out)
         self.assertEqual(report["source_readiness"]["status"], "source_missing")
-        self.assertEqual(report["entry_diagnostic"]["status"], "not_run_source_missing")
+        self.assertEqual(report["entry_diagnostic"]["status"], "source_missing")
         self.assertFalse(report["calibration_conclusion"]["sample_sufficient"])
         self.assertEqual(
             report["calibration_conclusion"]["next_evidence"],
-            "provide_authorized_historical_pit_source",
+            "provide_or_expand_authorized_historical_pit_source",
         )
 
     def test_historical_input_structure_defects_preserve_existing_active_report(self) -> None:
@@ -230,9 +334,97 @@ class AShortEntryFunnelCalibrationTests(unittest.TestCase):
                 "missing_rule6_hard_veto": 1,
                 "missing_egs_breakout": 1,
                 "missing_m05_rule3": 0,
+                "iv_feed_not_ready": 0,
                 "insufficient_pit_price_window": 1,
             },
         )
+
+    def test_nonready_iv_week_is_visible_and_excluded_from_the_diagnostic_denominator(self) -> None:
+        analysis_input = self._historical_analysis_input()
+        candidate = analysis_input["candidates"][0]
+        self._clear_rule6(candidate)
+        candidate["derived_flags"]["hard_veto"] = False
+        self._nonready_iv_projection(analysis_input)
+        self.assertEqual(list(Draft7Validator(load_json(ANALYSIS_INPUT_SCHEMA_PATH)).iter_errors(analysis_input)), [])
+        with tempfile.TemporaryDirectory() as tmpdir:
+            root = Path(tmpdir) / "historical"
+            out = Path(tmpdir) / "active_report.json"
+            self._write_historical_root(root, analysis_input=analysis_input)
+            self.assertEqual(
+                main([
+                    "--historical-root", str(root), "--out", str(out),
+                    "--generated-at", HISTORICAL_GENERATED_AT,
+                ]),
+                0,
+            )
+            report = self._read_historical_report(out)
+        self.assertEqual(report["source_readiness"]["status"], "ready_with_candidate_gaps")
+        self.assertEqual(report["funnel"]["not_evaluable_reason_counts"]["iv_feed_not_ready"], 1)
+        self.assertEqual(report["funnel"]["not_evaluable_reason_counts"]["missing_m05_rule3"], 0)
+        self.assertEqual(report["funnel"]["evaluable_candidate_count"], 0)
+        self.assertEqual(report["funnel"]["diagnostic_candidate_count"], 0)
+        self.assertEqual(report["funnel"]["diagnostic_week_count"], 0)
+        self.assertEqual(report["entry_diagnostic"]["metrics"]["decision"]["pre_capital_build_rate"], None)
+
+    def test_ready_iv_week_remains_in_the_diagnostic_denominator(self) -> None:
+        analysis_input = self._historical_analysis_input()
+        candidate = analysis_input["candidates"][0]
+        self._clear_rule6(candidate)
+        candidate["derived_flags"]["hard_veto"] = False
+        with tempfile.TemporaryDirectory() as tmpdir:
+            root = Path(tmpdir) / "historical"
+            self._write_historical_root(root, analysis_input=analysis_input)
+            report, exit_code = build_historical_report(root, HISTORICAL_GENERATED_AT)
+        self.assertEqual(exit_code, 0)
+        self.assertEqual(report["funnel"]["not_evaluable_reason_counts"]["iv_feed_not_ready"], 0)
+        self.assertEqual(report["funnel"]["diagnostic_candidate_count"], 1)
+        self.assertEqual(report["funnel"]["diagnostic_week_count"], 1)
+
+    def test_legacy_healthy_iv_week_remains_in_the_diagnostic_denominator(self) -> None:
+        analysis_input = self._historical_analysis_input()
+        self._legacy_healthy_iv_projection(analysis_input)
+        candidate = analysis_input["candidates"][0]
+        self._clear_rule6(candidate)
+        candidate["derived_flags"]["hard_veto"] = False
+        self.assertEqual(list(Draft7Validator(load_json(ANALYSIS_INPUT_SCHEMA_PATH)).iter_errors(analysis_input)), [])
+        with tempfile.TemporaryDirectory() as tmpdir:
+            root = Path(tmpdir) / "historical"
+            self._write_historical_root(root, analysis_input=analysis_input)
+            report, exit_code = build_historical_report(root, HISTORICAL_GENERATED_AT)
+        self.assertEqual(exit_code, 0)
+        self.assertEqual(report["funnel"]["not_evaluable_reason_counts"]["iv_feed_not_ready"], 0)
+        self.assertEqual(report["funnel"]["diagnostic_candidate_count"], 1)
+        self.assertEqual(report["funnel"]["diagnostic_week_count"], 1)
+
+    def test_legacy_unknown_iv_week_is_excluded_as_missing_m05(self) -> None:
+        analysis_input = self._historical_analysis_input()
+        self._legacy_healthy_iv_projection(analysis_input)
+        analysis_input["market_context"]["volatility"].update({
+            "iv_percentile_252d": None,
+            "rule3_status": "unknown",
+            "awakening_status": "unknown",
+        })
+        candidate = analysis_input["candidates"][0]
+        self._clear_rule6(candidate)
+        candidate["derived_flags"]["hard_veto"] = False
+        self.assertEqual(list(Draft7Validator(load_json(ANALYSIS_INPUT_SCHEMA_PATH)).iter_errors(analysis_input)), [])
+        with tempfile.TemporaryDirectory() as tmpdir:
+            root = Path(tmpdir) / "historical"
+            self._write_historical_root(root, analysis_input=analysis_input)
+            report, exit_code = build_historical_report(root, HISTORICAL_GENERATED_AT)
+        self.assertEqual(exit_code, 0)
+        self.assertEqual(report["funnel"]["not_evaluable_reason_counts"]["iv_feed_not_ready"], 0)
+        self.assertEqual(report["funnel"]["not_evaluable_reason_counts"]["missing_m05_rule3"], 1)
+        self.assertEqual(report["funnel"]["diagnostic_candidate_count"], 0)
+
+    def test_15b_legacy_healthy_iv_sequence_can_satisfy_the_minimum_sample(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            root = Path(tmpdir) / "historical"
+            self._write_minimum_15b_sequence(root, legacy_healthy_iv=True)
+            report, exit_code = build_historical_report(root, HISTORICAL_GENERATED_AT)
+        self.assertEqual(exit_code, 0)
+        self.assertEqual(report["funnel"]["diagnostic_week_count"], 12)
+        self.assertEqual(report["funnel"]["diagnostic_candidate_count"], 120)
 
     def test_invalid_m05_rule3_input_preserves_existing_active_report(self) -> None:
         analysis_input = self._historical_analysis_input()
@@ -272,6 +464,69 @@ class AShortEntryFunnelCalibrationTests(unittest.TestCase):
             with patch.object(calibration, "HISTORICAL_DEFAULT_OUT", out):
                 self.assertEqual(calibration.main(["--out", str(out)]), 1)
             self.assertFalse(out.exists())
+
+    def test_15b_uses_production_geometry_with_the_minimum_12week_120candidate_sample(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            root = Path(tmpdir) / "historical"
+            self._write_minimum_15b_sequence(root)
+            report, exit_code = build_historical_report(root, HISTORICAL_GENERATED_AT)
+        self.assertEqual(exit_code, 0)
+        self.assertEqual(list(Draft7Validator(load_json(HISTORICAL_REPORT_SCHEMA_PATH)).iter_errors(report)), [])
+        self.assertEqual(report["funnel"]["diagnostic_week_count"], 12)
+        self.assertEqual(report["funnel"]["diagnostic_candidate_count"], 120)
+        self.assertEqual(report["entry_diagnostic"]["capital_gate"], "not_evaluable_private_account")
+        self.assertEqual(report["entry_diagnostic"]["pre_capital_plan_count"], 120)
+        self.assertEqual(report["calibration_conclusion"]["status"], "too_lax")
+        methods = report["entry_diagnostic"]["support_methods"]
+        self.assertEqual(methods["effective_support"]["recent_low_20"]["count"], 120)
+        self.assertTrue(all(len(methods[name]["band_observations"]) == 4 for name in methods))
+        counterfactuals = report["entry_diagnostic"]["counterfactuals"]
+        self.assertEqual(len(counterfactuals), 7)  # 2 support + 4 band + egs-only, never a 4x3 replay grid.
+
+    def test_15b_adjudication_covers_all_five_dynamic_final_statuses(self) -> None:
+        decision = lambda build, active: {"pre_capital_build_rate": build, "active_week_rate": active}
+        cases = {
+            "insufficient_sample": {
+                "weeks": 11, "candidates": 120, "metrics": decision(0.10, 0.50), "counterfactuals": {},
+                "next": "provide_or_expand_authorized_historical_pit_source",
+            },
+            "within_calibration_band": {
+                "weeks": 12, "candidates": 120, "metrics": decision(0.10, 0.50), "counterfactuals": {},
+                "next": "retain_production_baseline_and_seek_forward_confirmation",
+            },
+            "too_lax": {
+                "weeks": 12, "candidates": 120, "metrics": decision(0.21, 0.50), "counterfactuals": {},
+                "next": "open_reviewed_tightening_candidate",
+            },
+            "egs_entry_mismatch": {
+                "weeks": 12, "candidates": 120, "metrics": decision(0.01, 0.10),
+                "counterfactuals": {"egs_only_as_breakout": {"decision": decision(0.10, 0.50)}},
+                "next": "manual_review_selection_entry_alignment_no_production_change",
+            },
+            "specific_gate_too_strict": {
+                "weeks": 12, "candidates": 120, "metrics": decision(0.01, 0.10),
+                "counterfactuals": {
+                    "egs_only_as_breakout": {"decision": decision(0.01, 0.10)},
+                    "support:ma20": {"decision": decision(0.10, 0.50)},
+                },
+                "next": "open_reviewed_rule_change_candidate",
+            },
+        }
+        for expected_status, case in cases.items():
+            with self.subTest(status=expected_status):
+                conclusion = _adjudicate_calibration(
+                    source_status="ready",
+                    diagnostic_week_count=case["weeks"],
+                    diagnostic_candidate_count=case["candidates"],
+                    metrics=case["metrics"],
+                    counterfactuals=case["counterfactuals"],
+                )
+                self.assertEqual(conclusion["status"], expected_status)
+                self.assertEqual(conclusion["next_evidence"], case["next"])
+                self.assertFalse(conclusion["production_threshold_change"])
+        self.assertEqual(conclusion["candidate_gates"], [
+            {"gate": "support:ma20", "metrics": decision(0.10, 0.50)},
+        ])
 
 
 if __name__ == "__main__":

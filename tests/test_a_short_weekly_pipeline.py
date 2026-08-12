@@ -44,6 +44,7 @@ from runners.a_short_weekly_pipeline import (  # noqa: E402
     _financial_trends, _fetch_forecast, _fetch_income, _fetch_balancesheet, _attach_financial_trend_impacts,
     _forecast_red_flags, _income_red_flags, _balancesheet_red_flags, _industry_fundamentals, _FIN_STATEMENT_MARKER,
     _attach_holding_disposition, _factor_comparison_realized_regime, _build_evidence_reminders,
+    _load_entry_funnel_calibration_reminder,
     _resolve_m05_state, _validate_analysis_input_m05_binding,
     _sidecar_result_fields, _validate_weekly_stage_content,
 )
@@ -1611,7 +1612,7 @@ class MainWiringTests(unittest.TestCase):
         self.assertEqual(retired["status"], "closed")
         self.assertIn("新预注册/新 epoch", p4_item["message"])
 
-    def test_p4_reminder_markdown_uses_the_unified_p2_p3_p4_heading(self):
+    def test_p4_reminder_markdown_uses_the_unified_a_short_evidence_heading(self):
         rendered = render_weekly_markdown({
             "a_short_evidence_reminders": _build_evidence_reminders(
                 AS_OF, None, None,
@@ -1620,7 +1621,61 @@ class MainWiringTests(unittest.TestCase):
             "reports": [],
             "n_stocks": 0,
         })
-        self.assertIn("P2/P3/P4", rendered)
+        self.assertIn("A-short evidence reminders", rendered)
+
+    def test_entry_funnel_missing_or_bad_report_is_nonblocking_and_keeps_m67_unchanged(self):
+        with tempfile.TemporaryDirectory() as td:
+            missing = _load_entry_funnel_calibration_reminder(Path(td) / "missing.json")
+            bad_path = Path(td) / "bad.json"
+            bad_path.write_text("{}", encoding="utf-8")
+            bad = _load_entry_funnel_calibration_reminder(bad_path)
+            self.assertEqual(missing["status"], "unavailable")
+            self.assertEqual(bad["status"], "unavailable")
+            weekly = _weekly()
+            baseline_reports = copy.deepcopy(weekly["reports"])
+            weekly["a_short_evidence_reminders"] = _build_evidence_reminders(
+                AS_OF, None, None, entry_funnel_calibration=bad,
+            )
+            out = Path(td) / "weekly.json"
+            write_weekly_report(weekly, _feed(), str(out))
+            rendered = render_weekly_markdown(weekly)
+        self.assertEqual(weekly["reports"], baseline_reports)
+        self.assertIn("A-short evidence reminders", rendered)
+        item = next(row for row in weekly["a_short_evidence_reminders"]["reminders"]
+                    if row["track"] == "entry_funnel_calibration")
+        self.assertEqual(item["status"], "unavailable")
+
+    def test_entry_funnel_valid_report_reaches_weekly_json_and_markdown_as_advisory_only(self):
+        from runners.a_short_entry_funnel_calibration import _historical_source_missing_report
+
+        report = _historical_source_missing_report(GEN)
+        report["source_readiness"]["status"] = "ready"
+        report["entry_diagnostic"]["status"] = "completed"
+        report["calibration_conclusion"].update({
+            "status": "within_calibration_band",
+            "observed_bottleneck": "none",
+            "sample_sufficient": True,
+            "mismatch_kind": None,
+            "candidate_gates": [],
+            "next_evidence": "retain_production_baseline_and_seek_forward_confirmation",
+        })
+        with tempfile.TemporaryDirectory() as td:
+            report_path = Path(td) / "calibration_report.json"
+            report_path.write_text(json.dumps(report, ensure_ascii=False), encoding="utf-8")
+            reminder = _load_entry_funnel_calibration_reminder(report_path)
+            weekly = _weekly()
+            baseline_reports = copy.deepcopy(weekly["reports"])
+            weekly["a_short_evidence_reminders"] = _build_evidence_reminders(
+                AS_OF, None, None, entry_funnel_calibration=reminder,
+            )
+            out = Path(td) / "weekly.json"
+            write_weekly_report(weekly, _feed(), str(out))
+            written = json.loads(out.read_text(encoding="utf-8"))
+            rendered = render_weekly_markdown(written)
+        self.assertEqual(reminder["status"], "retain_baseline")
+        self.assertEqual(written["reports"], baseline_reports)
+        self.assertIn("entry_funnel_calibration", json.dumps(written))
+        self.assertIn("A-short evidence reminders", rendered)
 
     def test_p3_final_action_is_pre_publish_summary_then_post_publish_capture(self):
         from runners.a_short_final_action_validation_runner import unavailable_public_summary

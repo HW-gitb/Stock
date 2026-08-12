@@ -828,7 +828,8 @@ def classify_risk_families(inp: dict, ind: dict, rule6_gate: dict | None = None)
 
 
 # ── 入场类型 / 止损止盈 / 仓位(M2.7 收紧 + Rule 7 ATR + §9)────────────────────
-def entry_type(inp: dict, ind: dict):
+def entry_type(inp: dict, ind: dict, *, lowxi_band: float | None = None,
+               allow_egs_only_breakout: bool = False):
     close = inp.get("close")
     sup, ma5, ma10, ma20 = ind.get("support"), ind.get("ma5"), ind.get("ma10"), ind.get("ma20")
     if close is None:
@@ -838,9 +839,10 @@ def entry_type(inp: dict, ind: dict):
     # #6-ii:is_breakout 现为 v14.2 spec 突破信号(站稳MA10 + 当日量>5日均量×1.2,EGS 算)。引擎本地复查
     # close>=ma10 作安全门;**不再叠加旧 vol_confirm(近5日上涨日额>下跌日额)门**——那是非-spec 额外量能,
     # 会把合法的 spec 突破误判成观察(vol_confirm 仅留作 EGS l4_score 评分输入,不门控突破)。
-    if breakout_source_agreement(inp, ind) == "agree_true":
+    agreement = breakout_source_agreement(inp, ind)
+    if agreement == "agree_true" or (allow_egs_only_breakout and agreement == "egs_only"):
         return "突破", "站稳 MA10 + 放量"
-    if sup and abs(close - sup) / sup <= LOWXI_BAND:
+    if sup and abs(close - sup) / sup <= (LOWXI_BAND if lowxi_band is None else lowxi_band):
         return "低吸", "现价近关键支撑"
     return "观察", "未到低吸/突破触发"
 
@@ -915,12 +917,9 @@ def breakout_source_agreement(inp: dict, ind: dict) -> str:
     return "egs_only" if egs_breakout else "pipeline_only"
 
 
-def exit_and_size(inp: dict, ind: dict, regime: str, etype: str = "低吸", extra_halve: bool = False,
-                  halve_reason: str = "", size_multiplier: float = 1.0, size_multiplier_reason: str = ""):
-    """返回 (plan, None) | (None, reject)。plan 含入场区间 entry_low/high(#2)、最不利价 RR、按区间上沿的股数。
-    etype:低吸/突破(决定区间口径)。extra_halve:IV>80(Rule3)或 IV feed 缺失(保守)时在试探仓基础上再减半。"""
+def entry_exit_geometry(inp: dict, ind: dict, regime: str, etype: str = "低吸"):
+    """Return only the shared price geometry and RR gate, never account sizing."""
     close, sup, res, atr = inp.get("close"), ind.get("support"), ind.get("resistance"), ind.get("atr14")
-    notes = []
     if close is None or sup is None or atr is None or atr <= 0:
         return None, "缺价/支撑/ATR,无法精算"
     stop = sup - ATR_MULT.get(regime, 1.25) * atr
@@ -973,6 +972,35 @@ def exit_and_size(inp: dict, ind: dict, regime: str, etype: str = "低吸", extr
     entry_t = entry_high
     if not (stop_t < entry_t and t1_t > entry_t):
         return None, "最不利价取整后结构失效(止损≥入/止盈≤入)"
+    return {"entry": entry_t, "entry_low": entry_low, "entry_high": entry_high,
+            "entry_type": etype, "entry_for_risk": entry_high, "chase_invalid_above": chase,
+            "entry_invalid_reason": entry_invalid_reason, "stop": stop_t, "t1": t1_t, "t2": t2_t,
+            "rr": round(rr_eh, 3), "rr_at_entry_high": round(rr_eh, 3), "rr_floor": rr_floor,
+            "support": sup, "support_quality": ind.get("support_quality"),
+            "resistance": res, "resistance_quality": ind.get("resistance_quality"),
+            "t1_basis": t1_basis}, None
+
+
+def exit_and_size(inp: dict, ind: dict, regime: str, etype: str = "低吸", extra_halve: bool = False,
+                  halve_reason: str = "", size_multiplier: float = 1.0, size_multiplier_reason: str = ""):
+    """Return a price geometry plus production-only capital sizing."""
+    geometry, reject = entry_exit_geometry(inp, ind, regime, etype)
+    if geometry is None:
+        return None, reject
+    entry_t = geometry["entry"]
+    entry_low = geometry["entry_low"]
+    entry_high = geometry["entry_high"]
+    chase = geometry["chase_invalid_above"]
+    entry_invalid_reason = geometry["entry_invalid_reason"]
+    stop_t = geometry["stop"]
+    t1_t = geometry["t1"]
+    t2_t = geometry["t2"]
+    rr_eh = geometry["rr_at_entry_high"]
+    rr_floor = geometry["rr_floor"]
+    sup = geometry["support"]
+    res = geometry["resistance"]
+    t1_basis = geometry["t1_basis"]
+    notes = []
     # 仓位:单只上限 + 冲击成本 + 100股 + 试探仓 + IV 减半;股数/最小金额/现金上限按**最不利买入价 entry_high** 计(§11.3)。
     cap_pct = SINGLE_CAP_PCT.get(regime, 0.40)
     if cap_pct <= 0:

@@ -189,7 +189,7 @@ def main(argv: list[str]) -> int:
         if pin_error:
             raise ValueError(pin_error)
         tier, timeout, unittest_args = _parse(argv)
-        state_before = receipts.collect_code_state() if tier == "focused" else None
+        state_before = receipts.collect_code_state() if tier == "focused" and not nested else None
         result = run_unittest(unittest_args, timeout)
     except (ValueError, OSError) as exc:
         print(f"[bounded-unittest] REFUSED: {exc}")

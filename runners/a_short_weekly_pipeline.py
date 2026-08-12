@@ -98,6 +98,10 @@ IV_FEED_STATUSES = {
 NONREADY_IV_FEED_STATUSES = IV_FEED_STATUSES - {"ready"}
 SCHEMA_PATH = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
                            "schemas", "a_short_weekly_report.schema.json")
+ENTRY_FUNNEL_CALIBRATION_REPORT_PATH = (
+    ROOT / "research" / "results" / "a_short" / "entry_funnel_calibration" / "calibration_report.json"
+)
+ENTRY_FUNNEL_CALIBRATION_SCHEMA_PATH = ROOT / "schemas" / "a_short_entry_funnel_historical_report.schema.json"
 M67_SCHEMA_PATH = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
                                "schemas", "a_short_m67_report.schema.json")
 WEEKLY_RECEIPT_SCHEMA_PATH = os.path.join(
@@ -5823,9 +5827,55 @@ def _p2_shadow_candidates(candidates: list[dict], provider, as_of: str,
     return shadow_candidates
 
 
+def _load_entry_funnel_calibration_reminder(
+        report_path: str | Path = ENTRY_FUNNEL_CALIBRATION_REPORT_PATH) -> dict:
+    """Load one aggregate calibration conclusion without touching historical inputs."""
+    try:
+        payload = json.loads(Path(report_path).read_text(encoding="utf-8"))
+        if not isinstance(payload, dict):
+            raise ValueError("calibration report is not an object")
+        _validate_against_schema_file(payload, ENTRY_FUNNEL_CALIBRATION_SCHEMA_PATH)
+        readiness = str((payload.get("source_readiness") or {}).get("status") or "")
+        conclusion = payload.get("calibration_conclusion") or {}
+        conclusion_status = str(conclusion.get("status") or "")
+        next_evidence = str(conclusion.get("next_evidence") or "")
+    except (OSError, ValueError, json.JSONDecodeError, jsonschema.ValidationError):
+        return {
+            "track": "entry_funnel_calibration",
+            "status": "unavailable",
+            "message": "Entry-funnel calibration is unavailable; official M6.7 remains unchanged.",
+        }
+    if readiness == "source_missing":
+        return {
+            "track": "entry_funnel_calibration",
+            "status": "unavailable",
+            "message": "Entry-funnel calibration source is unavailable; official M6.7 remains unchanged.",
+        }
+    status_map = {
+        "insufficient_sample": "accumulating",
+        "egs_entry_mismatch": "review_due",
+        "specific_gate_too_strict": "review_due",
+        "too_lax": "review_due",
+        "within_calibration_band": "retain_baseline",
+    }
+    reminder_status = status_map.get(conclusion_status)
+    if reminder_status is None:
+        return {
+            "track": "entry_funnel_calibration",
+            "status": "unavailable",
+            "message": "Entry-funnel calibration conclusion is unavailable; official M6.7 remains unchanged.",
+        }
+    return {
+        "track": "entry_funnel_calibration",
+        "status": reminder_status,
+        "message": f"Entry-funnel calibration: {conclusion_status}; next evidence: {next_evidence}.",
+    }
+
+
 def _build_evidence_reminders(as_of: str, target_policy: dict | None,
                               final_action: dict | None,
-                              overlay_adjudication: dict | None = None) -> dict | None:
+                              overlay_adjudication: dict | None = None,
+                              entry_funnel_calibration: dict | None = None) -> dict | None:
     """Render P2/P3/P4a progress and the P4b manual gate into one public surface."""
     items = []
     if target_policy is not None:
@@ -5868,6 +5918,8 @@ def _build_evidence_reminders(as_of: str, target_policy: dict | None,
             p4_status = "accumulating"
             p4_message = "P4a 证据仍在积累；P4b 尚未具备人工升级审查条件。"
         items.append({"track": "p4b_manual_promotion", "status": p4_status, "message": p4_message})
+    if entry_funnel_calibration is not None:
+        items.append(dict(entry_funnel_calibration))
     if not items:
         return None
     statuses = [item["status"] for item in items]
@@ -5876,7 +5928,7 @@ def _build_evidence_reminders(as_of: str, target_policy: dict | None,
             "unavailable" if all(status == "unavailable" for status in statuses) else "accumulating"))
     return {"schema_name": "a_short_evidence_reminders", "schema_version": "1.0.0", "as_of": str(as_of),
             "status": overall, "reminders": items,
-            "message": "A-short P2/P3 证据提醒：comparison-only；正式 M6.7 不变。",
+            "message": "A-short evidence reminders: comparison-only; official M6.7 unchanged.",
             "production_unchanged": True}
 
 
@@ -7013,8 +7065,9 @@ def main(argv=None, pro_factory=None, price_provider=None, semantic_provider=Non
         weekly["target_policy_comparison"] = target_policy_comparison
     if overlay_adjudication is not None:
         weekly["overlay_adjudication"] = overlay_adjudication
+    entry_funnel_calibration = _load_entry_funnel_calibration_reminder()
     evidence_reminders = _build_evidence_reminders(args.as_of, target_policy_comparison, final_action_validation,
-                                                    overlay_adjudication)
+                                                    overlay_adjudication, entry_funnel_calibration)
     if evidence_reminders is not None:
         weekly["a_short_evidence_reminders"] = evidence_reminders
     # S1: 每行打 row_source / coverage_status;持仓行挂 4.3-D 对账警告;无价/停牌持仓单列 manual_review。
