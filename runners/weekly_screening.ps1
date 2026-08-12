@@ -1008,8 +1008,43 @@ if ($SkipSemanticRisk) {
                     # requested M6.7 是本次正式运维产物；失败必须显式传播，不能返回选股成功假象。
                     Set-M67Failure -Reason 'weekly_pipeline_failed' -ExitCode $M67ExitCode -AnalysisInput $SemAnalysisInput -IvFeedStatus $script:IvFeedStatus -Directory $M67Dir
                 } else {
-                    $script:M67InvocationState = 'complete'
-                    Write-Host "[OPERATION] authoritative M6.7 weekly report -> $M67Out. Older analysis reports remain research-only inputs." -ForegroundColor Yellow
+                    $OperationLoaderCode = @'
+import json
+import sys
+
+sys.path.insert(0, sys.argv[1])
+from runners.a_short_weekly_pipeline import validate_published_weekly_operation_bundle
+
+bundle = validate_published_weekly_operation_bundle(sys.argv[2])
+stage = str(bundle.receipt.get("stage_status") or "")
+if stage not in {"complete", "degraded_no_new_entries", "partial_holdings_only"}:
+    raise SystemExit(f"invalid operation stage: {stage!r}")
+print(json.dumps({
+    "stage_status": stage,
+    "weekly_path": str(bundle.weekly_path),
+    "markdown_path": str(bundle.markdown_path),
+}, ensure_ascii=False))
+'@
+                    $OperationLoaderOutput = & $PythonExe -c $OperationLoaderCode $ProjectRoot $M67Out
+                    $OperationLoaderExitCode = $LASTEXITCODE
+                    if ($null -eq $OperationLoaderExitCode) { $OperationLoaderExitCode = 1 }
+                    try {
+                        if ($OperationLoaderExitCode -ne 0) {
+                            throw "operation loader exited $OperationLoaderExitCode"
+                        }
+                        $OperationRecord = ($OperationLoaderOutput -join "`n") | ConvertFrom-Json
+                        $OperationStage = [string]$OperationRecord.stage_status
+                        if ($OperationStage -notin @('complete', 'degraded_no_new_entries', 'partial_holdings_only')) {
+                            throw "operation loader returned invalid stage $OperationStage"
+                        }
+                    } catch {
+                        Set-M67Failure -Reason 'weekly_operation_bundle_invalid' -ExitCode 24 -AnalysisInput $SemAnalysisInput -IvFeedStatus $script:IvFeedStatus -Directory $M67Dir
+                    }
+                    if ($script:M67InvocationState -ne 'failed') {
+                        $script:M67InvocationState = $OperationStage
+                        $OperationMarkdown = Join-Path $M67Dir 'weekly_m67.md'
+                        Write-Host "[OPERATION] stage=$OperationStage JSON=$M67Out Markdown=$OperationMarkdown. Older analysis reports remain research-only inputs." -ForegroundColor Yellow
+                    }
                 }
             }
         }
@@ -1069,6 +1104,8 @@ if ($SkipRegime) {
         $RegimeArgs += @('--v14_2-raw-regime', $RawV142Regime, '--m67-report', $M67Out)
     } elseif ($M67InvocationState -eq 'complete') {
         Write-Host "[regime] design completion is not authorized; running daily-only audit and not freezing D2/candidate-effect evidence" -ForegroundColor DarkGray
+    } elseif ($M67InvocationState -in @('degraded_no_new_entries', 'partial_holdings_only')) {
+        Write-Host "[regime] M6.7 stage=$M67InvocationState; running daily-only regime evidence without M6.7-dependent action/effect binding" -ForegroundColor Yellow
     } elseif ($M67InvocationState -eq 'failed') {
         Write-Host "[regime] M6.7 failed; running daily-only regime evidence without raw regime or M6.7 report binding" -ForegroundColor Yellow
     } else {
@@ -1104,6 +1141,9 @@ if ($SkipRegime) {
         # rather than looking like a failed or countable weekly observation.
         Add-SidecarOutcome -Name 'regime_action' -Expected $false -Attempted $false -ExecutionStatus 'skipped' -ProgressStatus 'not_applicable' -SkipReason 'design_not_complete'
         Add-SidecarOutcome -Name 'candidate_effect' -Expected $false -Attempted $false -ExecutionStatus 'skipped' -ProgressStatus 'not_applicable' -SkipReason 'design_not_complete'
+    } elseif ($M67InvocationState -in @('degraded_no_new_entries', 'partial_holdings_only')) {
+        Add-SidecarOutcome -Name 'regime_action' -Expected $false -Attempted $false -ExecutionStatus 'not_due' -ProgressStatus 'not_applicable' -SkipReason 'stage_not_complete'
+        Add-SidecarOutcome -Name 'candidate_effect' -Expected $false -Attempted $false -ExecutionStatus 'not_due' -ProgressStatus 'not_applicable' -SkipReason 'stage_not_complete'
     } elseif ($M67InvocationState -eq 'failed') {
         # The daily-only invocation cannot produce a D2 action or candidate-effect
         # record. Keep both expectations visible as failed, unattempted dependencies.

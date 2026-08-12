@@ -6306,3 +6306,116 @@ effect contract 已用固定 Python 重新登记 A-EGS decision-predicate hash �
 - 真实 provider / live / 真实 normal weekly 仍 `NOT_VERIFIED`；§6a 按 rule 8 未起 agent。
 
 **下一步**：`Codex：执行`
+
+## 2026-08-12 Codex 执行：桌面 `ashort_1415.md` 第14A刀（OPEN-NOT_VERIFIED，43fe）
+
+**范围与结论**
+
+- 本轮严格只执行 14A：周报四态契约、IV/source-bound 发布边界、complete/operation 两类 loader、M6.7 launcher 实际状态路由、sidecar health 与渲染提示。14B/14C 未实现、未推断、未提前开放。
+- 状态集合为 `complete`、`degraded_no_new_entries`、`partial_holdings_only`、`failed`；发布成功只允许前三态，优先级为 `failed > partial_holdings_only > degraded_no_new_entries > complete`。`complete` 仍要求 `iv_feed_status=ready`；非 ready 路径不读旧 IV feed。
+- 实现与本轮自审精确测试已通过；独立 reviewer/committer 尚未复审或提交，结论保持 `OPEN-NOT_VERIFIED`。
+
+**根因与最小改动**
+
+- 原链路把 M6.7 周报近似成单一 `complete/ready` 状态，无法安全表达 IV 不可用、价格覆盖超容忍上限、仅持仓管理和真正失败；loader/launcher 还存在把实际状态硬编码为 complete 的风险，可能误读旧 feed 或错误生成正式产物。
+- 只按该类问题改动：在 weekly report/receipt schema 与 Python validator 中增加四态及 `iv_feed_status`/`iv_freshness`；publisher 增加 pre-write 状态、feed、内容、receipt、digest 校验；保留 legacy 与 revision 路径并绑定 `run_revision_id`；新增 operation loader；launcher 使用实际 receipt/loader 状态；health 与 renderer 按状态分流；测试 fixture/静态 guard 只补足新契约，不做无关重构。
+
+**调用链与边界**
+
+`runners/weekly_screening.ps1` → `runners/a_short_weekly_pipeline.py::main` / `publish_weekly_bundle` → weekly JSON/Markdown + publish receipt → `validate_published_weekly_operation_bundle` → `runners/a_short_weekly_sidecar_health.py::_m67_evidence` → `runners/a_short_m67_render.py`。
+
+- schema/source-binding：weekly `run_lineage` 绑定 stage、IV 状态、IV freshness、IV ref 和 price-through；receipt 绑定实际 stage、IV 状态、JSON/Markdown 路径、digest、`run_revision_id`；revision 目录同时绑定 weekly 与 receipt，legacy 仍绑定 `<as_of>`。
+- 写盘边界：publisher 继续使用现有 atomic write/digest；account-bearing package 只能在 private ignored root；正式 manifest/pointer/selection 仍只由 `complete + health` 更新。degraded/partial 只保留 revision 产物，不覆盖旧 official pointer；failed 保留失败字段且不得有成功输出。
+- 消费者边界：formal/complete consumers 继续只调用 complete loader；运维 sidecar/health 调用 operation loader 并读取 receipt 的实际状态；regime_daily 可独立运行，M6.7 依赖 sidecar 在非 complete 时写 `not_due`/`not_applicable` 与 `stage_not_complete`，不伪造正常成功。
+
+**Fail-closed 与负向控制**
+
+- non-ready IV 必须 `iv_feed=null`、`iv_data_through=null`、freshness status 与 IV status 精确一致；publisher 不接受/不读取 stale feed；`complete + non-ready` 与 `degraded + ready` 均拒绝。
+- degraded 只允许 flat 候选，hard veto 仍为 `否决`、其他 flat 为 `观察`；plan 和交易股数/入场/止盈/止损字段必须为 null。partial 只允许 held reports。
+- complete loader 拒绝 degraded/partial；operation loader 只接受三种 publishable 状态；JSON/Markdown/receipt 任一内容、digest、identity、schema、路径或 revision 绑定被篡改即拒绝；failed receipt 不得带成功输出。
+- launcher 的 pipeline 非零统一 `Set-M67Failure`；pipeline 为零仍必须加载当前 revision 并读取 receipt 实际 stage，loader 失败也 `Set-M67Failure`；非 complete sidecar 不得冒充成功。
+
+**自审与精确验证**
+
+- 所有检查使用固定解释器 `C:\Users\cnhea\AppData\Local\Programs\Python\Python313\python.exe`（版本 `3.13.8`）；未使用 PATH、bundled Python、provider、live、网络、全量 lane 或 sub-agent。
+- 精确通过项：`tests.test_a_short_weekly_pipeline` 全模块 `547 tests OK`；publish-receipt schema + launcher closeout `12 tests OK`；sidecar health `49 tests OK`；renderer `27 tests OK`；state/banner/launcher pack `52 tests OK`；IV/revision/EOL/launcher focused pack `51 tests OK`；static effect-contract fingerprint 校验通过。
+- 自审重点覆盖：旧 complete consumer 与新 operation consumer 分流、non-ready 不读旧 feed、四态内容约束、revision 目录绑定、实际 receipt 状态、非 complete sidecar、两条精确中文 banner、launcher failure closeout。上述证据是离线/单元与静态证据，不等价于真实 weekly/provider/live/full-lane 证据。
+
+**交接**
+
+- 当前工作树为 `D:\cnhea\Codex\worktrees\43fe\Stock`；Codex 未 stage、commit、merge 或 push。请 Claude Code 作为独立 reviewer 按 14A 范围复审后，再按项目规则决定是否由 reviewer/committer 收口；不得顺带执行 14B/14C。
+
+## 2026-08-12 追加：桌面 `ashort_1415.md` 第14A刀独立审查 —— FAIL（未提交）
+
+**判定**：FAIL，两条 Required + 一条 Optional，正文只在 `docs/system_risk_register.md`。审查树 = `D:\cnhea\Codex\worktrees\43fe\Stock`（HEAD `381a2c16`，本轮**未**同步 master，落后 7 个 commit）。
+
+**我实际验了什么**（区别于执行方转述）
+
+- 先冻 scope：19 modified / 0 staged / 0 untracked；核对执行方「只做 14A、14B/14C 未执行」的申报属实——`--iv-feed-status` 仍 `choices=("ready",)`、`main()` 的 `stage_status` 仍硬写 `complete`，所以降级态在生产路径上还不可达，这是 14A 的定位不是缺陷。
+- **自写负控**：直接喂 `_validate_weekly_stage_content` 六种伪造（degraded 带 plan / 股数非 null / hard-veto 写观察 / 动作建仓；partial 混 flat；failed 冒充可发布）全部 raise，三种合规输入放行。这道门是承重的。
+- **自写探针定位历史包**：不是照抄测试红字，而是拿真实 `20260720`/`20260727` 周报单独对新 schema 跑校验，首错是 `data_quality_shadow`（Knife 12A′ 的必填字段），二者同时缺新必填 `iv_feed_status`。这才把「测试红」定性成「读取端严格度回溯作用于不可变已发布产物」。
+- **同类扫描而非点名修**：把 `validate_weekly_report` / `publish_weekly_bundle` 的直接消费者模块一次跑完，得到 10 模块 31 例红并按 jsonschema 原因分成四类，用来给执行方划定一次到位的修复面。
+
+**执行方交接的可见性缺口**
+
+申报的验收面（weekly pipeline 547 + 五个精确包）不含被本刀改动的 `schemas/a_short_m67_effect_contract.json` 的两个守卫，因此两类红在交接时不可见；checklist §B 的「一次全仓连带 grep + 零残留证据」本轮缺失。
+
+**未覆盖维度与诚实边界**
+
+- 全量 lane 未跑（红已坐实，按 rule 4 归执行方）；§6a 未起 agent（无 live/secret 面，rule 8）。
+- launcher 只做静态整读与状态机路径核对，未真实执行 PowerShell 端到端；「降级包被 complete loader 拒绝」只有静态证据。
+- 未触真实 provider / live / 账户 / 选股 / ship gate。
+
+**下一步**：`Codex：修复`
+
+## 2026-08-12 - Codex executor/fixer: 14A Required + Optional repair (OPEN-NOT_VERIFIED, 43fe)
+
+### Scope and original state
+
+- Scope stayed on desktop `ashort_1415.md` 14A. 14B/14C were not opened. The current worktree is `D:\cnhea\Codex\worktrees\43fe\Stock`; no main-tree or other-worktree access, provider/live/full lane/sub-agent, stage, commit, merge, or push occurred.
+- Original review state: Required `R-ASHORT-14A-OPERATION-LOADER-SCHEMA-STRICTNESS-REJECTS-PUBLISHED-HISTORY` and `R-ASHORT-14A-READY-IV-FEED-BINDING-RIPPLE-UNCLOSED`, plus Optional `O-14A-1`, were open after Claude review receipt `dc09f07da530`.
+
+### Problem, root cause, and minimal repair
+
+- Historical reader compatibility: `_validate_published_weekly_bundle` had made the reader apply the current weekly/report schemas to immutable published bytes. The 20260720 and 20260727 complete bundles predated `data_quality_shadow`, `northbound_control`, and explicit `run_lineage.iv_feed_status`, so a read-side schema check rejected valid historical evidence. The repair removes weekly/report schema validation from the reader; the writer remains the current schema gate. Receipt, exact bytes, identity, path, Markdown, content, ledger, and digest checks remain enforced. A narrow in-memory grandfather derives `ready` only for an old complete bundle with non-empty `iv_feed`, aligned IV freshness, and non-empty `iv_data_through`; bytes are never rewritten.
+- Official operation evidence had a second current-schema envelope check after the shared reader. It now applies the same narrow in-memory `iv_feed_status=ready` compatibility view before its historical schema envelope check, while preserving the account-snapshot mismatch check order and rejecting degraded/partial inputs on the complete evidence path.
+- Ready IV binding ripple: `build_weekly_report` now defaults ordinary ready fixtures/builders to the non-empty source binding `iv_feed.json`; explicit non-ready states still bind `iv_feed=null` and do not receive/read a feed. The negative validator test keeps `ready + empty iv_feed` fail-closed.
+- Optional role split: `COMPLETE_PUBLISHED_WEEKLY_CONSUMERS` and `OPERATION_PUBLISHED_WEEKLY_CONSUMERS` are separate registries. The AST guard pins complete evidence entrypoints to `validate_published_weekly_bundle` and operational entrypoints to `validate_published_weekly_operation_bundle`; planted cross-role calls fail the guard.
+
+### Call chain, consumers, schema/source binding, and write boundary
+
+`weekly_screening.ps1` -> `a_short_weekly_pipeline.main` / `publish_weekly_bundle` -> weekly JSON + deterministic Markdown + receipt -> operation loader for launcher/sidecar health; the formal evidence modules remain on the complete-only loader. Writer-side schema validation and atomic receipt/output digests are unchanged. Reader-side compatibility is memory-only and is followed by receipt stage, `run_lineage`, `as_of`, revision/legacy path, output set, byte digest, deterministic Markdown, content, and effect-ledger checks. No historical artifact, schema, receipt, or private state was rewritten.
+
+### Negative controls and self-review
+
+- Complete loader still rejects `degraded_no_new_entries` and `partial_holdings_only`; operation loader accepts only the three publishable states; `failed` remains non-publishable.
+- `ready` with missing/empty IV binding still raises `ready IV feed must bind a non-empty run_lineage.iv_feed`; non-ready paths reject a supplied feed. Historical compatibility does not infer degraded or partial states.
+- Self-review checked consumer role registries, all formal consumer call sites, official operation error ordering, historical 20260720/20260727 byte preservation, schema writer/read separation, source/digest/revision binding, and `git diff --check`.
+
+### Exact verification and handoff
+
+- Fixed interpreter: `C:\Users\cnhea\AppData\Local\Programs\Python\Python313\python.exe`, version `3.13.8`; no PATH/bundled Python was used.
+- Exact closure command: `C:\Users\cnhea\AppData\Local\Programs\Python\Python313\python.exe -m unittest tests.test_a_short_effect_contract tests.test_a_short_effect_consumer_probe tests.test_a_short_industry_weight_comparison tests.test_a_short_official_operation_evidence tests.test_a_short_target_policy_comparison tests.test_a_short_margin_overheat_cash_control tests.test_a_short_legacy_llm_tasks tests.test_a_short_runtime_configuration tests.phase6.test_egs_margin_coverage tests.test_a_short_weekly_pipeline.PublishedBundleConsumerRoutingTests tests.test_a_short_weekly_pipeline.ValidateWeeklyTests.test_ready_requires_nonempty_iv_feed_binding` -> `Ran 279 tests ... OK`.
+- Additional focused recheck: historical effect boundary + official operation evidence + role routing -> `Ran 29 tests ... OK`. Provider/live/full lane/sub-agent were not run. Independent Claude review/commit remains pending; status is `OPEN-NOT_VERIFIED`.
+- Final self-review gates: fixed-Python `py_compile` passed; full `tests.test_a_short_weekly_pipeline` -> `Ran 549 tests ... OK`; receipt/schema/renderer/sidecar/launcher pack -> `Ran 117 tests ... OK`; document/route governance pack -> `Ran 81 tests ... OK`; `git diff --check` clean. The shell wrapper's `Get-Location` may display `C:\`, but `git rev-parse --show-toplevel` confirmed the only worktree used was `D:\cnhea\Codex\worktrees\43fe\Stock`.
+- **Pre-Codex self-review**: matrix=historical reader compatibility + ready-IV class ripple + role-pinned consumer AST; register=updated; handoff=updated; focused=279+29 tests OK; full-lane=NOT_VERIFIED; door=fixed Python + diff-check
+- Next command for the independent reviewer: `Claude Code：独立复审 14A Required + Optional 修复；通过后按项目规则决定是否收口，不执行 14B/14C。`
+
+## 2026-08-12 追加：第14A刀 Required + Optional 收口复审 —— PASS（已提交并合入 master）
+
+**判定**：PASS。上轮两条 Required 与 `O-14A-1` 全闭，新记一条 pre-existing 的 Optional `O-14A-2`；正文只在 `docs/system_risk_register.md`。
+
+**我实际验了什么**（区别于执行方与其自述）
+
+- 这轮的核心是一次**撤回**：读取端不再校 weekly/report schema。撤回安全与否只取决于「字节绑定是否承重」，所以我先把这条腿单独打：真实周报字节末尾**多加一个空格** → 读取端报 `weekly receipt digest does not match weekly_m67.json`；不加则 `OK stage=complete`。
+- **兼容视图**不是纸面声明：我用真实 20260720 周报 + 合成 1.1.0 receipt，把 `iv_feed_status` 整个删掉（pre-14A 形状），complete loader 仍读回 `stage=complete`；且该视图只产 `ready`，构造不出 degraded/partial。
+- **角色 pin 我自己植入**：不用仓内那两段合成片段，而是拿**全部 9 个真实消费者源码**把本角色 loader 换成另一角色的，9/9 由到达 validator 变成 0 reached + violations；原样 9/9 全达。磁盘 sha 未动。
+- **一次真实的判定纠偏**：我的第一版正控断言「两份历史周报应能被 complete loader 读回」，结果不过。回溯 `git show HEAD:` 才确认卡点是 receipt `schema_version` 1.0.0 vs schema `const 1.1.0`，**在本刀之前就存在**——所以它是 `O-14A-2`（pre-existing、不阻断），不是本刀回归。没有这一步，这轮会误判 FAIL。
+
+**未覆盖维度与诚实边界**
+
+- 全量 lane 双方本轮都未跑（执行方自记 `full-lane=NOT_VERIFIED`），跨 lane 回归是明确边界；§6a 未起 agent（无 live/secret 面，rule 8）。
+- 「complete loader 拒降级包」只有静态证据与仓内测试：我造的降级 receipt 先被 schema 的「degraded 不得配 ready IV」条件挡下，没能隔离角色门本身。
+- 14B/14C 未执行，降级态在生产路径上仍不可达；未跑真实 provider / live / launcher 端到端。
+
+**下一步**：`Codex：执行`（14B）

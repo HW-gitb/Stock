@@ -784,6 +784,7 @@ class EffectContractRuntimeTests(unittest.TestCase):
                     "published_at": "2026-08-02T00:00:00+08:00",
                     "account_snapshot": lineage.get("account_snapshot"),
                     "stage_status": "complete",
+                    "iv_feed_status": "ready",
                     "outputs": ["weekly_m67.json", "weekly_m67.md"],
                     "outputs_digest": {
                         "weekly_m67.json": {"sha256": hashlib.sha256(weekly_bytes).hexdigest(),

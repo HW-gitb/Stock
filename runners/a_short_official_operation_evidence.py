@@ -200,7 +200,27 @@ def _load_official_bundle(*, out_path: str | Path, receipt_path: str | Path):
                     legacy_schema["properties"]["effect_contract_ledger"] = {"type": "object"}
             if legacy_schema is None:
                 raise
-            jsonschema.validate(weekly, legacy_schema)
+            # The weekly publish reader deliberately grandfathered immutable
+            # pre-14A complete bundles whose IV status was represented by the
+            # aligned freshness block rather than an explicit status field.
+            # Apply that same in-memory compatibility view here; never rewrite
+            # the historical bytes and never infer a degraded/partial state.
+            schema_weekly = weekly
+            lineage = weekly.get("run_lineage") or {}
+            freshness = lineage.get("iv_freshness") or {}
+            if (
+                "iv_feed_status" not in lineage
+                and str(weekly.get("schema_version") or "") == "1.0.0"
+                and lineage.get("stage_status") == "complete"
+                and isinstance(lineage.get("iv_feed"), str)
+                and bool(lineage.get("iv_feed"))
+                and freshness.get("status") == "aligned"
+                and isinstance(freshness.get("iv_data_through"), str)
+                and bool(freshness.get("iv_data_through"))
+            ):
+                schema_weekly = copy.deepcopy(weekly)
+                schema_weekly["run_lineage"]["iv_feed_status"] = "ready"
+            jsonschema.validate(schema_weekly, legacy_schema)
         m67_schema = _load_schema(M67_SCHEMA_PATH)
         for report in weekly["reports"]:
             jsonschema.validate(report, m67_schema)

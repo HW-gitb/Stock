@@ -31,7 +31,7 @@
     "generated_at": {"type": "string"},
     "run_id": {"type": ["string", "null"], "pattern": "^(a-short-[0-9]{8}-[0-9a-f]{16})?$"},
     "candidate_digest": {"type": ["string", "null"], "pattern": "^([0-9a-f]{64})?$"},
-    "m67_status": {"enum": ["complete", "failed", "skipped", "not_run", "unavailable"]},
+    "m67_status": {"enum": ["complete", "degraded_no_new_entries", "partial_holdings_only", "failed", "skipped", "not_run", "unavailable"]},
     "overall": {"enum": ["healthy", "degraded", "partial"]},
     "advanced_count": {"type": "integer", "minimum": 0},
     "stalled_count": {"type": "integer", "minimum": 0},

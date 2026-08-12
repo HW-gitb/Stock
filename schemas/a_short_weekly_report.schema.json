@@ -2007,11 +2007,13 @@
         "analysis_input",
         "selection_bucket",
         "iv_feed",
+        "iv_feed_status",
         "account_ref",
         "account_status",
         "sizing_mode",
         "account_snapshot",
         "price_freshness",
+        "iv_freshness",
         "runtime_configuration"
       ],
       "properties": {
@@ -2028,7 +2030,11 @@
           "pattern": "^[0-9a-f]{64}$"
         },
         "stage_status": {
-          "const": "complete"
+          "enum": [
+            "complete",
+            "degraded_no_new_entries",
+            "partial_holdings_only"
+          ]
         },
         "decision_as_of": {
           "type": "string",
@@ -2045,7 +2051,19 @@
           "type": "string"
         },
         "iv_feed": {
-          "type": "string"
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "iv_feed_status": {
+          "enum": [
+            "not_requested",
+            "build_failed",
+            "digest_failed",
+            "clock_mismatch",
+            "ready"
+          ]
         },
         "account_ref": {
           "type": "string"
@@ -2135,10 +2153,19 @@
           ],
           "properties": {
             "status": {
-              "const": "aligned"
+              "enum": [
+                "aligned",
+                "not_requested",
+                "build_failed",
+                "digest_failed",
+                "clock_mismatch"
+              ]
             },
             "iv_data_through": {
-              "type": "string",
+              "type": [
+                "string",
+                "null"
+              ],
               "pattern": "^[0-9]{8}$"
             },
             "price_data_through": {
@@ -2387,7 +2414,141 @@
             }
           }
         }
-      }
+      },
+      "allOf": [
+          {
+            "if": {
+              "properties": {
+                "iv_feed_status": {
+                  "const": "ready"
+                }
+              }
+            },
+            "then": {
+              "properties": {
+                "iv_feed": {
+                  "type": "string",
+                  "minLength": 1
+                },
+                "iv_freshness": {
+                  "properties": {
+                    "status": {
+                      "const": "aligned"
+                    },
+                    "iv_data_through": {
+                      "type": "string",
+                      "pattern": "^[0-9]{8}$"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          {
+            "if": {
+              "properties": {
+                "iv_feed_status": {
+                  "const": "not_requested"
+                }
+              }
+            },
+            "then": {
+              "properties": {
+                "iv_feed": {
+                  "const": null
+                },
+                "iv_freshness": {
+                  "properties": {
+                    "status": {
+                      "const": "not_requested"
+                    },
+                    "iv_data_through": {
+                      "const": null
+                    }
+                  }
+                }
+              }
+            }
+          },
+          {
+            "if": {
+              "properties": {
+                "iv_feed_status": {
+                  "const": "build_failed"
+                }
+              }
+            },
+            "then": {
+              "properties": {
+                "iv_feed": {
+                  "const": null
+                },
+                "iv_freshness": {
+                  "properties": {
+                    "status": {
+                      "const": "build_failed"
+                    },
+                    "iv_data_through": {
+                      "const": null
+                    }
+                  }
+                }
+              }
+            }
+          },
+          {
+            "if": {
+              "properties": {
+                "iv_feed_status": {
+                  "const": "digest_failed"
+                }
+              }
+            },
+            "then": {
+              "properties": {
+                "iv_feed": {
+                  "const": null
+                },
+                "iv_freshness": {
+                  "properties": {
+                    "status": {
+                      "const": "digest_failed"
+                    },
+                    "iv_data_through": {
+                      "const": null
+                    }
+                  }
+                }
+              }
+            }
+          },
+          {
+            "if": {
+              "properties": {
+                "iv_feed_status": {
+                  "const": "clock_mismatch"
+                }
+              }
+            },
+            "then": {
+              "properties": {
+                "iv_feed": {
+                  "const": null
+                },
+                "iv_freshness": {
+                  "properties": {
+                    "status": {
+                      "const": "clock_mismatch"
+                    },
+                    "iv_data_through": {
+                      "const": null
+                    }
+                  }
+                }
+              }
+            }
+          }
+        ]
     },
     "boundary": {
       "type": "object",
@@ -2874,5 +3035,141 @@
         }
       }
     }
-  }
+  },
+  "allOf": [
+    {
+      "if": {
+        "required": ["run_lineage"],
+        "properties": {
+          "run_lineage": {
+            "required": ["stage_status"],
+            "properties": {
+              "stage_status": {
+                "const": "degraded_no_new_entries"
+              }
+            }
+          }
+        }
+      },
+      "then": {
+        "properties": {
+          "reports": {
+            "items": {
+              "if": {
+                "required": ["machine"],
+                "properties": {
+                  "machine": {
+                    "type": "object",
+                    "required": ["stateful_risk"],
+                    "properties": {
+                      "stateful_risk": {
+                        "type": "object",
+                        "required": ["position_state"],
+                        "properties": {
+                          "position_state": {
+                            "const": "held"
+                          }
+                        }
+                      }
+                    }
+                  }
+                }
+              },
+              "then": {},
+              "else": {
+                "required": ["machine", "m67"],
+                "properties": {
+                  "machine": {
+                    "type": "object",
+                    "required": ["stateful_risk", "entry_exit_size_star"],
+                    "properties": {
+                      "stateful_risk": {
+                        "type": "object",
+                        "required": ["position_state"],
+                        "properties": {
+                          "position_state": {
+                            "const": "flat"
+                          }
+                        }
+                      },
+                      "entry_exit_size_star": {
+                        "type": "object",
+                        "required": ["plan"],
+                        "properties": {
+                          "plan": {
+                            "type": "null"
+                          }
+                        }
+                      }
+                    }
+                  },
+                  "m67": {
+                    "type": "object",
+                    "required": ["table"],
+                    "properties": {
+                      "table": {
+                        "type": "object",
+                        "required": ["操作", "股数", "入", "盈一", "盈二", "损"],
+                        "properties": {
+                          "操作": {
+                            "enum": ["否决", "观察"]
+                          },
+                          "股数": {"type": "null"},
+                          "入": {"type": "null"},
+                          "盈一": {"type": "null"},
+                          "盈二": {"type": "null"},
+                          "损": {"type": "null"}
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "required": ["run_lineage"],
+        "properties": {
+          "run_lineage": {
+            "required": ["stage_status"],
+            "properties": {
+              "stage_status": {
+                "const": "partial_holdings_only"
+              }
+            }
+          }
+        }
+      },
+      "then": {
+        "properties": {
+          "reports": {
+            "items": {
+              "required": ["machine"],
+              "properties": {
+                "machine": {
+                  "type": "object",
+                  "required": ["stateful_risk"],
+                  "properties": {
+                    "stateful_risk": {
+                      "type": "object",
+                      "required": ["position_state"],
+                      "properties": {
+                        "position_state": {
+                          "const": "held"
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  ]
 }

@@ -21,6 +21,11 @@ from runners.a_short_iv_feed_build import (
 
 _BANNER = ("> ⚠️ **非生产 / A-short risk_filter_only / edge 未验证**。所有「建仓」均为 **试探仓**,"
            "**止损无条件**(盘中由你手动),仅供参考,非买卖指令。\n")
+_STAGE_BANNERS = {
+    "complete": _BANNER,
+    "degraded_no_new_entries": "> ⚠️ IV 风控不可用，本周禁止新建仓；持仓管理继续\n",
+    "partial_holdings_only": "> ⚠️ 候选价格覆盖超过容忍上限，本周只管理持仓\n",
+}
 
 
 def _cell(v):
@@ -437,8 +442,10 @@ def render_weekly_markdown(weekly: dict) -> str:
         acts[a] = acts.get(a, 0) + 1
     env = reports[0]["m67"]["精简结论区"]["当前环境"] if reports else ""
     vol = reports[0]["m67"]["精简结论区"]["波动率状态"] if reports else ""
+    stage_status = str((weekly.get("run_lineage") or {}).get("stage_status") or "complete")
+    stage_banner = _STAGE_BANNERS.get(stage_status, _BANNER)
 
-    out = [f"# A-short 周报 M6.7 — {as_of}", "", _BANNER,
+    out = [f"# A-short 周报 M6.7 — {as_of}", "", stage_banner,
            f"**环境**:{env}　|　**波动率**:{vol}",
            f"**共 {n} 只** — 建仓 {acts.get('建仓',0)} / 持有 {acts.get('持有',0)} / "
            f"观察 {acts.get('观察',0)} / 否决 {acts.get('否决',0)}"]

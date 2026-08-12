@@ -8,7 +8,8 @@
     "schema_name",
     "schema_version",
     "as_of",
-    "stage_status"
+    "stage_status",
+    "iv_feed_status"
   ],
   "properties": {
     "schema_name": {
@@ -74,6 +75,8 @@
     "stage_status": {
       "enum": [
         "complete",
+        "degraded_no_new_entries",
+        "partial_holdings_only",
         "failed"
       ]
     },
@@ -123,7 +126,11 @@
       "if": {
         "properties": {
           "stage_status": {
-            "const": "complete"
+            "enum": [
+              "complete",
+              "degraded_no_new_entries",
+              "partial_holdings_only"
+            ]
           }
         },
         "required": [
@@ -139,6 +146,7 @@
           "candidate_digest",
           "published_at",
           "account_snapshot",
+          "iv_feed_status",
           "outputs",
           "outputs_digest"
         ],
@@ -205,6 +213,49 @@
               ]
             }
           ]
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "stage_status": {"const": "complete"}
+        },
+        "required": ["stage_status"]
+      },
+      "then": {
+        "properties": {
+          "iv_feed_status": {"const": "ready"}
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "stage_status": {"const": "degraded_no_new_entries"}
+        },
+        "required": ["stage_status"]
+      },
+      "then": {
+        "properties": {
+          "iv_feed_status": {
+            "enum": ["not_requested", "build_failed", "digest_failed", "clock_mismatch"]
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "stage_status": {"const": "partial_holdings_only"}
+        },
+        "required": ["stage_status"]
+      },
+      "then": {
+        "properties": {
+          "iv_feed_status": {
+            "enum": ["not_requested", "build_failed", "digest_failed", "clock_mismatch", "ready"]
+          }
         }
       }
     }

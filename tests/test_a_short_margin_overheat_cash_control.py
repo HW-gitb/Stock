@@ -1264,7 +1264,7 @@ class MarginOverheatCashControlKnife3Tests(unittest.TestCase):
 
     def test_weekly_order_and_missing_cache_are_nonblocking_and_clear_stale_reminder(self):
         source = Path(weekly_pipeline.__file__).read_text(encoding="utf-8")
-        capture_marker = "if args.margin_overheat_cash_control_root:\n        _expect_sidecar(\"margin_overheat_cash_control_capture\")"
+        capture_marker = "if args.margin_overheat_cash_control_root and m67_stage_status == \"complete\":\n        _expect_sidecar(\"margin_overheat_cash_control_capture\")"
         self.assertLess(source.rfind("publish_weekly_bundle("), source.index(capture_marker))
         self._capture()
         settled = track.settle_margin_overheat_from_daily_cache(
