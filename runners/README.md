@@ -39,7 +39,7 @@ Existing helpers:
 
 - `backtest_rank.py` — Phase 2 rank 回测入口；smoke-mode historical `today` L3 generation explicitly passes `--allow-historical-live-l3`, while production defaults to L3 neutralization.
 - `a_short_preflight.py` / `a_short_offline_check.ps1` - validate the one pinned host Python (an explicit value is validation-only), report every missing A-short dependency and actual `Asia/Shanghai` timezone capability in one offline pass, then run the fixed offline test pack without provider or private-account access.
-- `a_short_entry_funnel_calibration.py` - local-only, source-hash-bound evaluator for the preregistered A-short funnel / IV / overlay seen sample; it cannot search or change production thresholds and keeps future confirmatory observations separate.
+- `a_short_entry_funnel_calibration.py` - local-only calibration entry: legacy source-hash-bound replay remains separate from `--historical-root` PIT readiness output; neither mode calls a provider, changes production thresholds, or creates buy advice.
 - `backtest_execution.py` - Phase 5 execution backtest runner; reads
   `analysis_input.json`, can validate/reference an existing `execution_price_data`
   JSON via `--price-data`, requires explicit `--portfolio-allocation` and

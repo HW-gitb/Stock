@@ -7,6 +7,6 @@ A-short(A 股短线)的研究/运行结果。约定见 `docs/a_short_run_bundle_
 - `iv_feed_<date>/` = 市场级 50ETF IV feed(跨 run 复用,不在某次 run bundle 内)。
 - `iv_feed_probe_<date>/` = IV 可行性探测产物。
 - `weekly_<date>/`、`egs_weight_comparison_<date>.json` = pre-convention 的一次性产物(2026-06-11 从 research/results 顶层归入本 lane)。
-- `entry_funnel_calibration_<date>/` = hash-bound、预注册的本地 funnel / IV / overlay 校准结果；seen 与 future confirmatory 分离，不是生产阈值或 ship-gate 证据。
+- `entry_funnel_calibration_<date>/` = hash-bound、预注册的 legacy funnel / IV / overlay 校准结果；`entry_funnel_calibration/` = 仅由显式 `--historical-root` 写入的 active PIT 就绪报告。两者均不是生产阈值或 ship-gate 证据。
 
 **未来**:新的 a_short 运行自动落到这里(per-run bundle 约定)。生产选股仍在 `result/a_short/<date>`(代码引用的生产根,不在此)。
