@@ -237,6 +237,29 @@ def _feed(last_pct=55.0):
     }
 
 
+def _nonready_iv_projection(status):
+    if status not in {"not_requested", "build_failed", "digest_failed", "clock_mismatch"}:
+        raise ValueError(f"unexpected non-ready status: {status}")
+    return {
+        "iv_symbol": "50ETF",
+        "iv_value": None,
+        "hv_value": None,
+        "iv_percentile_252d": None,
+        "iv_change_abs_1d_pctpt": None,
+        "rule3_status": "unknown",
+        "awakening_status": "unknown",
+        "cash_reclaim_pct": None,
+        "iv_feed_status": status,
+        "source_status": "unavailable",
+        "freshness_status": "not_requested" if status == "not_requested" else "unavailable",
+        "freshness_reason": f"iv_feed_{status}",
+        "source_as_of": None,
+        "source_latest_trade_date": None,
+        "source_ref": None,
+        "feed_sha256": None,
+    }
+
+
 def _valid_overlay_for(codes, as_of=AS_OF):
     """Schema + consistency valid overlay summary for an arbitrary candidate set (Slice A builders)."""
     pool = pd.DataFrame([
@@ -907,6 +930,100 @@ class MainWiringTests(unittest.TestCase):
         (Path(td) / "ai.json").write_text(json.dumps(ai), encoding="utf-8")
         (Path(td) / "feed.json").write_text(json.dumps(feed or _feed()), encoding="utf-8")
         _write_account(Path(td) / "acct.json")
+
+    def test_nonready_iv_statuses_publish_one_degraded_bundle_without_reading_feed(self):
+        from runners.a_short_weekly_pipeline import validate_published_weekly_operation_bundle
+        from runners.a_short_weekly_sidecar_health import build_health
+
+        for status in ("not_requested", "build_failed", "digest_failed", "clock_mismatch"):
+            with self.subTest(status=status), tempfile.TemporaryDirectory() as td:
+                ai = _analysis_input(candidates=[_ai_candidate("600000.SH")])
+                ai["market_context"]["volatility"] = _nonready_iv_projection(status)
+                self._write_inputs(td, ai=ai)
+                # A malformed stale file may exist, but non-ready execution must
+                # not open it because no --iv-feed argument is supplied.
+                (Path(td) / "feed.json").write_text("{ stale iv feed", encoding="utf-8")
+                out = Path(td) / AS_OF / "weekly_m67.json"
+                main([
+                    "--as-of", AS_OF,
+                    "--analysis-input", str(Path(td) / "ai.json"),
+                    "--iv-feed-status", status,
+                    "--account", str(Path(td) / "acct.json"),
+                    "--out", str(out),
+                ], price_provider=lambda code: _series())
+
+                bundle = validate_published_weekly_operation_bundle(out)
+                weekly = json.loads(out.read_text(encoding="utf-8"))
+                report = weekly["reports"][0]
+                table = report["m67"]["table"]
+                self.assertEqual(bundle.receipt["stage_status"], "degraded_no_new_entries")
+                self.assertEqual(bundle.receipt["iv_feed_status"], status)
+                self.assertEqual(weekly["run_lineage"]["iv_feed"], None)
+                self.assertEqual(weekly["iv_feed_ref"], "")
+                self.assertEqual(weekly["run_lineage"]["iv_freshness"]["status"], status)
+                self.assertEqual(table["操作"], "观察")
+                self.assertEqual(report["machine"]["entry_exit_size_star"]["plan"], None)
+                self.assertEqual(
+                    report["machine"]["entry_exit_size_star"]["reject_reason"],
+                    "IV 数据不可用，禁止新建仓",
+                )
+                for field in ("股数", "入", "盈一", "盈二", "损"):
+                    self.assertIsNone(table[field])
+                self.assertIn("IV 风控不可用，本周禁止新建仓", out.with_suffix(".md").read_text(encoding="utf-8"))
+                health = build_health(
+                    as_of=AS_OF,
+                    project_root=Path(td),
+                    m67_out_dir=out.parent,
+                    m67_invocation="requested",
+                )
+                self.assertEqual(health["m67_status"], "degraded_no_new_entries")
+                self.assertEqual(health["overall"], "degraded")
+                self.assertEqual(
+                    set(bundle.receipt["outputs"]),
+                    {out.name, out.with_suffix(".md").name},
+                )
+
+    def test_nonready_cli_and_analysis_input_status_mismatch_fails_closed(self):
+        with tempfile.TemporaryDirectory() as td:
+            ai = _analysis_input(candidates=[_ai_candidate("600000.SH")])
+            ai["market_context"]["volatility"] = _nonready_iv_projection("build_failed")
+            self._write_inputs(td, ai=ai)
+            out = Path(td) / AS_OF / "weekly_m67.json"
+            with self.assertRaisesRegex(SystemExit, "iv_feed_status"):
+                main([
+                    "--as-of", AS_OF,
+                    "--analysis-input", str(Path(td) / "ai.json"),
+                    "--iv-feed-status", "digest_failed",
+                    "--account", str(Path(td) / "acct.json"),
+                    "--out", str(out),
+                ], price_provider=lambda code: _series())
+            self.assertFalse(out.exists())
+
+    def test_ready_iv_requires_file_and_rejects_bad_date_or_clock(self):
+        cases = (
+            ("missing", None, "requires --iv-feed"),
+            ("bad_schema", {"schema_name": "broken"}, None),
+            ("wrong_date", {**_feed(), "as_of": "20260608"}, None),
+            ("wrong_clock", {**_feed(), "series": [
+                *(_feed()["series"][:-1]),
+                {**_feed()["series"][-1], "trade_date": "20260608"},
+            ]}, None),
+        )
+        for label, feed, message in cases:
+            with self.subTest(label=label), tempfile.TemporaryDirectory() as td:
+                self._write_inputs(td, feed=(feed or _feed()))
+                args = [
+                    "--as-of", AS_OF,
+                    "--analysis-input", str(Path(td) / "ai.json"),
+                    "--account", str(Path(td) / "acct.json"),
+                    "--out", str(Path(td) / "weekly.json"),
+                ]
+                if label != "missing":
+                    args.extend(("--iv-feed", str(Path(td) / "feed.json")))
+                with self.assertRaises((SystemExit, ValueError)) as caught:
+                    main(args, price_provider=lambda code: _series())
+                if message:
+                    self.assertIn(message, str(caught.exception))
 
     def test_main_publishes_zero_report_bundle_for_empty_candidate_set(self):
         ai = _analysis_input(candidates=[])

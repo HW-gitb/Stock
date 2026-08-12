@@ -502,6 +502,7 @@ def _append_manual_review_advisories(manual_review: list[dict], semantic_provide
 
 def _build_holdings(acct, candidate_codes, as_of, price_provider, iv_pct, account, regime,
                     regime_fallback, price_data_through, egs_full=None, iv_value=None, hv_value=None,
+                    iv_feed_status=None,
                     iv_change_abs_1d_pctpt=None, rule3_status=None, awakening_status=None,
                     cash_reclaim_pct=None, awakening_trigger_date=None, awakening_release_date=None,
                     semantic_provider=None, web_llm_provider=None, account_integrity=None,
@@ -566,10 +567,10 @@ def _build_holdings(acct, candidate_codes, as_of, price_provider, iv_pct, accoun
                                 regime_fallback=regime_fallback,
                                 stateful_risk=stateful_risk_for_candidate(
                                     acct, code, as_of, account_integrity=account_integrity),
-                                semantic=(semantic_provider(code) if semantic_provider else None),
-                                semantic_web_llm=(web_llm_provider(code) if web_llm_provider else None),
-                                iv_value=iv_value, hv_value=hv_value,
-                                iv_change_abs_1d_pctpt=iv_change_abs_1d_pctpt,
+                                 semantic=(semantic_provider(code) if semantic_provider else None),
+                                 semantic_web_llm=(web_llm_provider(code) if web_llm_provider else None),
+                                 iv_value=iv_value, hv_value=hv_value, iv_feed_status=iv_feed_status,
+                                 iv_change_abs_1d_pctpt=iv_change_abs_1d_pctpt,
                                 rule3_status=rule3_status, awakening_status=awakening_status,
                                 cash_reclaim_pct=cash_reclaim_pct,
                                 awakening_trigger_date=awakening_trigger_date,
@@ -589,7 +590,8 @@ def normalize_candidate(cand: dict, price_series: list, overlay_row: dict, iv_pc
                         semantic_web_llm=None, regime_fallback=None, stateful_risk=None,
                         iv_value=None, hv_value=None, iv_change_abs_1d_pctpt=None,
                         rule3_status=None, awakening_status=None, cash_reclaim_pct=None,
-                        awakening_trigger_date=None, awakening_release_date=None) -> dict:
+                        awakening_trigger_date=None, awakening_release_date=None,
+                        iv_feed_status=None) -> dict:
     """把一个 EGS analysis_input 候选 + 价格序列 + overlay 行 + 市场级 IV 分位 + 账户/环境
     归一化成 Phase 5 引擎输入。字段缺失 → 引擎按保守/observe 处理。"""
     d = cand.get("derived_flags", {}) or {}
@@ -677,7 +679,8 @@ def normalize_candidate(cand: dict, price_series: list, overlay_row: dict, iv_pc
                   "regulatory_legacy_vetoed": False},
         "rule6_checks": materialize_50etf_iv_rule6_check(ev.get("rule6_checks"), iv_pct),
         "liquidity": {"avg_amount_5d": liq.get("avg_amount_5d"), "avg_amount_20d": liq.get("avg_amount_20d")},
-        "iv": {"iv_percentile_252d": iv_pct, "iv_value": iv_value, "hv_value": hv_value,
+        "iv": {"iv_feed_status": iv_feed_status,
+               "iv_percentile_252d": iv_pct, "iv_value": iv_value, "hv_value": hv_value,
                "iv_change_abs_1d_pctpt": iv_change_abs_1d_pctpt,
                "rule3_status": rule3_status,
                "awakening_status": awakening_status,
@@ -3300,8 +3303,25 @@ def _margin_overheat_unavailable_public_summary() -> dict:
     }
 
 
-def _factor_v2_unavailable_public_summary() -> dict:
-    """Keep the formal weekly shape valid when the optional v2 module is absent."""
+def _factor_v2_unavailable_public_summary(as_of: str, *, factor_module=None,
+                                          run_revision_id: str | None = None,
+                                          official_project_root: str | None = None) -> dict:
+    """Return the valid no-sidecar public shape without settling private evidence.
+
+    A degraded official package must carry the same schema-valid public summary
+    as a complete package, but it must not read or settle the v2 private cache.
+    The module's private formatter is the single producer of its public schema.
+    """
+    if factor_module is not None:
+        return factor_module._public_summary(
+            factor_module.PUBLIC_STATUS_UNAVAILABLE,
+            root=None,
+            as_of=as_of,
+            run_revision_id=run_revision_id,
+            official_project_root=official_project_root,
+        )
+    # The optional module is absent, so its own validator cannot be imported.
+    # Preserve the historical descriptive fallback for that environment only.
     return {
         "summary_id": "a_short_factor_comparison_v2",
         "status": "evidence_unavailable_or_inconclusive",
@@ -3948,6 +3968,51 @@ def latest_m05_state(iv_feed_summary: dict) -> dict:
     )}
 
 
+def _unknown_m05_state(volatility: dict) -> dict:
+    """Extract the only M0.5 projection permitted from a validated unknown IV shape."""
+    return {key: volatility.get(key) for key in (
+        "iv_change_abs_1d_pctpt", "rule3_status", "awakening_status",
+        "cash_reclaim_pct", "awakening_trigger_date", "awakening_release_date",
+    )}
+
+
+def _validate_nonready_analysis_input_iv_binding(analysis_input: dict, iv_feed_status: str) -> dict:
+    """Bind a degraded weekly run to EGS's explicit unknown IV projection.
+
+    A non-ready launcher must not read an IV file or retain a value from a
+    previous ready run.  Validate every source leaf here before Phase5 receives
+    the normalized projection.
+    """
+    if iv_feed_status not in NONREADY_IV_FEED_STATUSES:
+        raise ValueError(f"non-ready IV binding received invalid status: {iv_feed_status!r}")
+    volatility = ((analysis_input or {}).get("market_context") or {}).get("volatility") or {}
+    freshness_status = "not_requested" if iv_feed_status == "not_requested" else "unavailable"
+    expected = {
+        "iv_symbol": "50ETF",
+        "iv_value": None,
+        "hv_value": None,
+        "iv_percentile_252d": None,
+        "iv_change_abs_1d_pctpt": None,
+        "cash_reclaim_pct": None,
+        "rule3_status": "unknown",
+        "awakening_status": "unknown",
+        "iv_feed_status": iv_feed_status,
+        "source_status": "unavailable",
+        "freshness_status": freshness_status,
+        "freshness_reason": f"iv_feed_{iv_feed_status}",
+        "source_as_of": None,
+        "source_latest_trade_date": None,
+        "source_ref": None,
+        "feed_sha256": None,
+    }
+    for field, expected_value in expected.items():
+        if field not in volatility or volatility.get(field) != expected_value:
+            raise ValueError(
+                f"analysis_input volatility {field} is not bound to non-ready IV status {iv_feed_status}"
+            )
+    return volatility
+
+
 def _validate_analysis_input_m05_binding(analysis_input: dict, iv_feed_summary: dict,
                                          m05_state: dict, iv_feed_path: str | None = None) -> None:
     """Require the EGS volatility projection to equal the one validated IV feed.
@@ -3979,6 +4044,7 @@ def _validate_analysis_input_m05_binding(analysis_input: dict, iv_feed_summary: 
     expected = {
         "iv_symbol": "50ETF",
         "iv_value": latest.get("iv_value"),
+        "hv_value": latest.get("hv_value"),
         "iv_percentile_252d": latest.get("iv_percentile_252d"),
         "iv_change_abs_1d_pctpt": latest.get("iv_change_abs_1d_pctpt"),
         "rule3_status": m05_state.get("rule3_status"),
@@ -5899,9 +5965,9 @@ def main(argv=None, pro_factory=None, price_provider=None, semantic_provider=Non
     p = argparse.ArgumentParser(description="A-short weekly pipeline (EGS→overlay→IV→engine→weekly M6.7)")
     p.add_argument("--as-of", required=True, help="YYYYMMDD")
     p.add_argument("--analysis-input", required=True, help="EGS analysis_input.json (top-N 候选)")
-    p.add_argument("--iv-feed", required=True, help="a_short_iv_feed.json")
-    p.add_argument("--iv-feed-status", choices=("ready",), default="ready",
-                   help="Explicit wrapper status; the M6.7 consumer accepts only ready feeds")
+    p.add_argument("--iv-feed", help="a_short_iv_feed.json; required only with --iv-feed-status ready")
+    p.add_argument("--iv-feed-status", choices=tuple(sorted(IV_FEED_STATUSES)), default="ready",
+                   help="Explicit launcher IV status; a non-ready status publishes only a degraded no-new-entry package")
     p.add_argument("--crash-veto-summary", help="闪崩否决 5/10 日 comparison-only 摘要(可选；只进周报、不改决策)")
     p.add_argument("--overlay", help="overlay artifact(可选)")
     p.add_argument(
@@ -6207,22 +6273,35 @@ def main(argv=None, pro_factory=None, price_provider=None, semantic_provider=Non
         except (OSError, UnicodeDecodeError, json.JSONDecodeError,
                 jsonschema.ValidationError, RegulatoryAdvisoryContractError) as exc:
             raise SystemExit(f"[FATAL] invalid/stale --regulatory-confirmations: {type(exc).__name__}") from exc
-    try:
-        feed = _load(args.iv_feed)
-    except (OSError, UnicodeDecodeError, json.JSONDecodeError) as exc:
-        raise SystemExit(f"[FATAL] invalid/stale --iv-feed: {type(exc).__name__}") from exc
-    from runners.a_short_iv_feed_build import validate_feed_artifact
-    validate_feed_artifact(feed)
-    if args.iv_feed_status != "ready":
-        raise SystemExit("[FATAL] M6.7 requires --iv-feed-status ready")
-    if str(feed.get("as_of") or "") != str(args.as_of):
-        raise SystemExit(
-            f"[FATAL] IV feed as_of {feed.get('as_of')} != weekly as_of {args.as_of}; stale/future feed rejected"
-        )
-    iv_pct = latest_iv_percentile(feed)        # 市场级 IV 分位(None → 引擎按 missing 处理)
-    iv_value, hv_value = latest_iv_hv(feed)    # #6 IV-HV advisory:市场级 IV/HV 原始值(引擎算标签)
-    m05_state = latest_m05_state(feed)
-    _validate_analysis_input_m05_binding(ai, feed, m05_state, iv_feed_path=args.iv_feed)
+    feed = None
+    if args.iv_feed_status == "ready":
+        if not args.iv_feed:
+            raise SystemExit("[FATAL] --iv-feed-status ready requires --iv-feed")
+        try:
+            feed = _load(args.iv_feed)
+        except (OSError, UnicodeDecodeError, json.JSONDecodeError) as exc:
+            raise SystemExit(f"[FATAL] invalid/stale --iv-feed: {type(exc).__name__}") from exc
+        from runners.a_short_iv_feed_build import validate_feed_artifact
+        validate_feed_artifact(feed)
+        if str(feed.get("as_of") or "") != str(args.as_of):
+            raise SystemExit(
+                f"[FATAL] IV feed as_of {feed.get('as_of')} != weekly as_of {args.as_of}; stale/future feed rejected"
+            )
+        iv_pct = latest_iv_percentile(feed)        # 市场级 IV 分位
+        iv_value, hv_value = latest_iv_hv(feed)    # #6 IV-HV advisory
+        m05_state = latest_m05_state(feed)
+        _validate_analysis_input_m05_binding(ai, feed, m05_state, iv_feed_path=args.iv_feed)
+    else:
+        if args.iv_feed:
+            raise SystemExit("[FATAL] non-ready --iv-feed-status must not carry --iv-feed")
+        try:
+            unknown_iv = _validate_nonready_analysis_input_iv_binding(ai, args.iv_feed_status)
+        except ValueError as exc:
+            raise SystemExit(f"[FATAL] non-ready IV analysis-input binding failed: {exc}") from exc
+        iv_pct = unknown_iv["iv_percentile_252d"]
+        iv_value = unknown_iv["iv_value"]
+        hv_value = unknown_iv["hv_value"]
+        m05_state = _unknown_m05_state(unknown_iv)
     overlay = _load_validated_overlay(args.overlay, args.as_of) if args.overlay else {}
     weekly_candidates = [c.get("ts_code") for c in ai.get("candidates", [])]
     # overlay 血缘门(#R-ASHORT-WEEKLY-AUX-ARTIFACT-CANDIDATE-SET-MISMATCH):overlay 必须**恰好覆盖**
@@ -6439,10 +6518,10 @@ def main(argv=None, pro_factory=None, price_provider=None, semantic_provider=Non
                                       stateful_risk=stateful_risk_for_candidate(
                                           acct, c["ts_code"], args.as_of,
                                           account_integrity=account_integrity),
-                                      semantic=semantic_by_code[str(c["ts_code"])],
-                                      semantic_web_llm=(web_llm_provider(c["ts_code"]) if web_llm_provider else None),
-                                      iv_value=iv_value, hv_value=hv_value,
-                                      iv_change_abs_1d_pctpt=m05_state["iv_change_abs_1d_pctpt"],
+                                       semantic=semantic_by_code[str(c["ts_code"])],
+                                       semantic_web_llm=(web_llm_provider(c["ts_code"]) if web_llm_provider else None),
+                                       iv_value=iv_value, hv_value=hv_value, iv_feed_status=args.iv_feed_status,
+                                       iv_change_abs_1d_pctpt=m05_state["iv_change_abs_1d_pctpt"],
                                       rule3_status=m05_state["rule3_status"],
                                       awakening_status=m05_state["awakening_status"],
                                       cash_reclaim_pct=m05_state["cash_reclaim_pct"],
@@ -6475,7 +6554,12 @@ def main(argv=None, pro_factory=None, price_provider=None, semantic_provider=Non
     # decision-date placeholder used to request those bars.
     if dragon_list_days is None and pro is not None:
         dragon_list_days = _recent_trading_days(pro, price_data_through, DRAGON_LIST_LOOKBACK_TRADING_DAYS)
-    iv_freshness = validate_iv_feed_freshness(feed, price_data_through)
+    iv_freshness = (validate_iv_feed_freshness(feed, price_data_through)
+                    if args.iv_feed_status == "ready" else {
+                        "status": args.iv_feed_status,
+                        "iv_data_through": None,
+                        "price_data_through": str(price_data_through),
+                    })
     accepted_psd = str(prior_settled) if (prior_settled is not None and price_data_through == str(prior_settled)) else None
     price_freshness = {"mode": args.price_freshness_mode,
                        "run_date": (str(args.run_date) if args.run_date else None),
@@ -6496,11 +6580,12 @@ def main(argv=None, pro_factory=None, price_provider=None, semantic_provider=Non
     margin_coverage.setdefault("invalid_numeric_row_count", 0)
     run_lineage = {"run_id": source_identity["run_id"],
                    "candidate_digest": source_identity["candidate_digest"],
-                   "stage_status": "complete",
+                   "stage_status": ("complete" if args.iv_feed_status == "ready"
+                                    else "degraded_no_new_entries"),
                    "iv_feed_status": args.iv_feed_status,
                    "analysis_input": _rel(args.analysis_input),
                    "selection_bucket": _rel(os.path.dirname(args.analysis_input)),
-                   "iv_feed": _rel(args.iv_feed),
+                   "iv_feed": (_rel(args.iv_feed) if args.iv_feed_status == "ready" else None),
                    "account_ref": (_rel(args.account) if args.account else ""),
                    "account_status": account_status, "sizing_mode": sizing_mode,
                    "account_snapshot": ({"snapshot_id": account_bundle["snapshot_id"],
@@ -6577,6 +6662,7 @@ def main(argv=None, pro_factory=None, price_provider=None, semantic_provider=Non
         holding_normalized, holding_meta, price_manual_review = _build_holdings(
             acct, candidate_codes, args.as_of, price_provider, iv_pct, account, regime,
             regime_fallback, price_data_through, iv_value=iv_value, hv_value=hv_value,
+            iv_feed_status=args.iv_feed_status,
             iv_change_abs_1d_pctpt=m05_state["iv_change_abs_1d_pctpt"],
             rule3_status=m05_state["rule3_status"], awakening_status=m05_state["awakening_status"],
             cash_reclaim_pct=m05_state["cash_reclaim_pct"],
@@ -6629,7 +6715,12 @@ def main(argv=None, pro_factory=None, price_provider=None, semantic_provider=Non
     # handle and suppresses stale reminders whenever cache/private integrity is not provable.
     factor_module = _optional_module("engine.a_short_factor_comparison_v2_weekly")
     if factor_module is None or m67_stage_status != "complete":
-        factor_comparison_v2 = _factor_v2_unavailable_public_summary()
+        factor_comparison_v2 = _factor_v2_unavailable_public_summary(
+            args.as_of,
+            factor_module=factor_module,
+            run_revision_id=args.run_revision_id,
+            official_project_root=args.official_project_root,
+        )
     else:
         factor_comparison_v2 = factor_module.settle_and_summarize_v2_weekly(
             root=args.factor_comparison_v2_root, daily_cache_path=args.factor_comparison_v2_daily_cache, as_of=args.as_of,
@@ -6772,7 +6863,8 @@ def main(argv=None, pro_factory=None, price_provider=None, semantic_provider=Non
             except Exception:
                 overlay_adjudication = None
     weekly = build_weekly_report(portfolio_normalized, args.as_of, gen,
-                                 iv_feed_ref=os.path.basename(args.iv_feed), run_lineage=run_lineage,
+                                 iv_feed_ref=(os.path.basename(args.iv_feed)
+                                              if args.iv_feed_status == "ready" else ""), run_lineage=run_lineage,
                                  available_cash=(available_cash if args.account else None),
                                  new_exposure_capacity=new_exposure_capacity,
                                  crash_veto_tracking=crash_veto_tracking,

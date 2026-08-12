@@ -121,13 +121,24 @@ class AShortV5RevisionMatrixTests(unittest.TestCase):
         self.assertTrue(
             _call_uses_keyword(ast.parse(source, filename=relative), call_names, "official_project_root")
         )
-        planted = source.replace(
-            "official_project_root=args.official_project_root",
-            "removed_official_project_root=args.official_project_root",
-            1,
-        )
+        planted = ast.parse(source, filename=relative)
+        removed = False
+        for node in ast.walk(planted):
+            if not isinstance(node, ast.Call):
+                continue
+            function = node.func
+            name = function.attr if isinstance(function, ast.Attribute) else function.id if isinstance(function, ast.Name) else ""
+            if name != "settle_and_summarize_v2_weekly":
+                continue
+            node.keywords = [
+                argument for argument in node.keywords
+                if argument.arg != "official_project_root"
+            ]
+            removed = True
+            break
+        self.assertTrue(removed)
         self.assertFalse(
-            _call_uses_keyword(ast.parse(planted, filename=relative), call_names, "official_project_root")
+            _call_uses_keyword(planted, call_names, "official_project_root")
         )
 
     def _bundle(self, root: Path, revision: str, payload: str) -> Path:

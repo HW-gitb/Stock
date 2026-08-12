@@ -1242,6 +1242,7 @@ def _unknown_iv_projection(iv_feed_status="not_requested"):
     return {
         "iv_symbol": "50ETF",
         "iv_value": None,
+        "hv_value": None,
         "iv_percentile_252d": None,
         "iv_change_abs_1d_pctpt": None,
         "rule3_status": "unknown",
@@ -1299,6 +1300,7 @@ def _load_iv_feed_projection(iv_feed_path, decision_as_of, price_data_through,
     return {
         "iv_symbol": "50ETF",
         "iv_value": latest.get("iv_value"),
+        "hv_value": latest.get("hv_value"),
         "iv_percentile_252d": latest.get("iv_percentile_252d"),
         "iv_change_abs_1d_pctpt": latest.get("iv_change_abs_1d_pctpt"),
         "rule3_status": latest.get("rule3_status"),
