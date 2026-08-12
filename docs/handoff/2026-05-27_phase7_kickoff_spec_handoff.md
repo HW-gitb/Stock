@@ -4268,3 +4268,70 @@ git diff --check
 - **验证**：焦点超集 `288 OK`（`receipt:e9fd04f4cdda1f469a54aea2`）；植入把守卫顺序改回原样 → 精确复现 `TypeError`，还原后 sha 一致；三份真实 universe summary 在收紧后仍 `ok`（正向控制）。
 - **失效旧结论**：register 里「这五条只在离线 seam 可达、暂不处理」的表述作废——已修完。
 - **下一步注意事项**：本刀按用户指示**未跑全量**，改的是共享 fail-closed 投影器，跨 lane 回归是已声明的证据边界；下次有全量机会时顺带确认一次。
+
+## 2026-08-11 追加：桌面 us_testrun0810 问题8 Massive 429 恢复与问题6消费闭环（1302，待 Claude 独立审查）
+
+### 结果与实现边界
+
+- 先只读比较主分支已提交代码，确认问题6已有唯一 `massive_events → derive_provider_health → receipt → emit/report` 链及对应测试；1302 仅 fast-forward 同步该链，未另建 health 实现。
+- 按更新后的问题8方案修复三条 active 入口：Pass2 Massive news/splits/dividends；one-click forward corporate-action；ETF total-return sidecar。Massive 429 只在 Massive 入口按同一逻辑请求固定等待 `65s`、最多 `2` 次；FMP/SEC 429 不重试。
+- Pass2 逻辑调用先全部预留，retry 只消费物理 headroom；one-click 在 preflight target 后自动计算 `exact_pass2_calls + 2 * ceil(target_count * 3 / 10)`，显式 cap 不得低于逻辑预算或高于自动上限。forward 只有最终成功写 canonical raw，持久 429 为 `incomplete_no_count` 且无 coverage/evidence；exact rerun 可恢复。ETF 为 `32` logical / `40` physical，单家族持久失败不阻断其他家族。
+- news 已恢复到 source packet/data-context/score/selection 可观察结果；split/dividend 通过既有问题6 health projector、receipt facts、classifier/report 被消费。checkpoint run identity 不包含 retry 参数，并有反向测试。
+
+### 验证与交接
+
+- 固定主 Python：`C:\Users\cnhea\AppData\Local\Programs\Python\Python313\python.exe`；问题8/问题6消费 focused `249 OK`，checkpoint/inventory 快照验证后 `18 OK`；验证均为本地 fake client/临时根，无 provider/network/live/真实周跑。
+- 新增测试造成的首次 inventory 快照漂移已用既有生成器同步；最终 full lane ledger 为 `discover -s tests -p test_us_short*.py`、`discovered=5773 ran=5773 equal=True`、`317/317` modules、`PASS`、`392.8s/860s`，fingerprint=`12201c29c333…`；静态 `diff_check=PASS`、`py_compile=11`。
+- 状态：`R-USSHORT-MASSIVE-429-RECOVERY-WIRING-GAP` 为 `repaired / OPEN-NOT_VERIFIED`。Claude Code：独立审查三入口 retry/physical cap/持久失败语义、news 与 split/dividend 消费可见性、问题6 receipt/report 绑定和 checkpoint identity；通过后按流程提交。
+
+## 2026-08-11 追加：问题8 独立审查 FAIL（1302，未提交）
+
+### 改了什么
+
+- 审查方零代码改动。只在 `docs/system_risk_register.md` 新建两条 Required、记 5 条 Optional 并写下已确认成立的不变量清单；`docs/SESSION_LOG.md` 顶部 prepend 一条极简 FAIL entry。
+
+### 为什么
+
+- `R-USSHORT-FORWARD-CA-SIBLING-FAMILY-RAW-PERSISTS-BEFORE-RUN-OUTCOME`：`_fetch_family` 在页循环体内即时 `_write_once` canonical raw，而 429 早返回是在两个 family 都跑完之后才做。混合轮（一 family 成功、一 family 持久 429）会留下成功 family 的 raw 页却没有 coverage；`_write_once` 的逐字节 drift 守卫会让限流恢复后的 rerun 在 payload 有任何字节差异时永久失败。上文「forward 只有最终成功写 canonical raw…exact rerun 可恢复」这句**与代码不符**，以本节和 register 为准。
+- `R-USSHORT-CAPSTONE-HTTP-ATTEMPT-CAP-VALIDATED-AFTER-THREE-GATED-PROVIDER-STAGES`：显式 `max_total_http_attempts` 的类型/下界/上界校验只在 `pass2_preflight` 之后（`us_short_weekly_capstone.py:2707-2719`），而 `universe_fetch` / `momentum_fetch` / `sic_fetch` 三个 gated stage 与 current-output 归档事务都在它之前。方案 A.3 要求「任何非法值必须在 provider stage 前失败」。
+
+### 验证命令
+
+- `.tools\run_unittest_with_repo_pythonpath.cmd --timeout-seconds 900 tests.provider.test_us_short_batch5_full_candidate_live_source_packet tests.provider.test_us_short_batch5_pass2_fetch_retry_pacing tests.provider.test_us_short_forward_policy_corporate_action_fetch tests.provider.test_us_short_weekly_capstone tests.test_us_short_market_diagnostic_etf_sidecar tests.test_us_short_paper_one_click`
+- 植入反控：中和 `_fetch_with_retry` 的 `provider_id == "massive"` 后单跑 `tests.provider.test_us_short_batch5_pass2_fetch_retry_pacing`。
+- reviewer 自写探针：离线导入两处 normalizer 与两处 cap 公式，跑 16 组敌意输入 + 5 组 cap 参数三方比对。
+
+### 验证结果
+
+- 焦点超集 `Ran 168 in 93.2s OK`，`receipt:9bad141034020ee5d95b05d6`。
+- 植入后**仅** `test_fmp_429_is_not_retried` 转红（`AssertionError: True is not false`），还原后 `git diff --numstat` 回到 `81 13`、全仓无 `PLANTED` 残留。
+- cap 公式五组（1121/1061/1001/12/12）与两处实现逐值相同；normalizer 对 `3`/`-1`/`True`/`"2"`/`2.0`/`64.9`/`65.0000001`/`inf`/`nan`/`retries=0 配 65` 全部拒绝。
+- full lane 按 AGENTS rule 4 不重跑，独立读 `.tools/state/full_pack_ledger.json` 核对 `5773/5773`、`317/317`、`392.8s`、fingerprint `12201c29c333…`，且 `_prepares` 当前指纹与之逐字相等。
+- 全程零联网、零真实 provider、零真钱、未推进诊断时钟、未写真实 `state/us_short`。
+
+### 失效旧结论
+
+- 上一节「forward 只有最终成功写 canonical raw」与「exact rerun 可恢复」在混合-family 场景下不成立，作废；修复并复审通过后再改回。
+- `test_persistent_massive_429_..._recovers_on_exact_rerun` 目前只证明「逐字节相同的重放可重跑」，不证明「限流恢复后可重跑」，不得再被引用为后者的证据。
+
+### 下一步注意事项
+
+- 两条 Required 属同一刀的同一缺陷类，按 §16 一轮批量修完再交复审；ETF sidecar 的预算共享（`O-P8-1`）与整周降级冻结（`O-P8-2`）机制早于本 diff，不要顺手扩进本刀。
+
+## 2026-08-11 追加：问题8 Required/Optional 审查意见核对后修复（1302，待 Claude 独立复审）
+
+### 审查意见合理性判断
+
+- 先对当前代码和 0810 方案逐条核对后，2 条 Required 均是方案明确要求的 fail-before-side-effect / outcome-boundary 硬门；5 条 Optional 也都能在当前实现中复现为预算、恢复、配置漂移或测试隔离缺口，因此本轮全部接受并修复。
+
+### 修复内容
+
+- Forward corporate-action 两个 family 的成功 raw 页改为先内存缓存；只有本轮没有持久 Massive 429 时才统一写 canonical raw。混合 429 不留下 sibling raw，恢复后 provider wrapper 不同字节的 rerun 可以成功写 coverage 与 adjustment evidence；`_write_once` 漂移守卫未放松。
+- Capstone 在任何 gated provider stage 前校验显式 `max_total_http_attempts` 为 exact positive int 且非 bool；依赖 approval 的 exact lower/automatic upper bound 仍在后续保留。
+- ETF sidecar 增加 logical-slot 初始尝试预留，保持 `physical=logical+retry`/`physical<=40`；整周全 family 持久 429 且无成功页返回 `incomplete_no_count`、不写 sidecar，同日成功 rerun 可恢复；429 raw 路径不会阻塞恢复后的新字节写入，混合 family 仍局部降级。
+- retries>0 的 backoff 严格为 `65`，window capacity、wait、max2 统一引用 `universe_fetch`；Pass2 sleep 支持注入。问题6既有 `massive_events → derive_provider_health → receipt → emit/report` 消费链未另建第二条 health 链。
+
+### 验证与边界
+
+- 固定主 Python；focused `415 OK`（receipt `receipt:5328794d756e3be6929c54f6`）；full lane `5779/5779 equal=True PASS`、`317/317`、`388.4s/860s`，static `diff_check=PASS`、`py_compile=13`，fingerprint=`95bd1354d6dc9a6d7ac74f08c77a7c32030d922a10c9a780ae99e904bec9e335`。
+- 证据来自 fake client、临时根和离线测试；无 provider/network/live、无真实周跑、无诊断时钟推进、无真实 `state/us_short` 写入。状态为 `OPEN-NOT_VERIFIED`，下一步是 Claude Code 独立复审后按流程提交。

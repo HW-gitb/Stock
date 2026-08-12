@@ -27,6 +27,7 @@ if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
 from engine.us_short_private_paths import PrivatePathError, reject_nonprivate_output_path  # noqa: E402
+from runners import us_short_universe_fetch as universe_fetch  # noqa: E402
 from runners.us_short_weekly_capstone import (  # noqa: E402
     WeeklyCapstoneError,
     resolve_capstone_context,
@@ -291,6 +292,8 @@ def run_one_click(
         confirm_user_authorization=True,
         dry_run=False,
         provider_pace_seconds=provider_pace_seconds,
+        max_retries_per_call=2,
+        retry_backoff_seconds=universe_fetch.MASSIVE_RATE_LIMIT_RETRY_SECONDS,
         state_dir=state_dir,
         sample_root=ROOT,
         auto_authorize_pass2_budget=True,

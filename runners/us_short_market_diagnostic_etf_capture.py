@@ -141,6 +141,32 @@ def _write_json_once(path: Path, value: Any, label: str) -> None:
     sample_validation.write_json_atomic(json.loads(serialized), path)
 
 
+def _raw_page_path(
+    raw_root: Path,
+    *,
+    symbol: str,
+    family: str,
+    page_index: int,
+    attempt_index: int,
+) -> Path:
+    """Keep a recovery attempt from colliding with a prior persistent 429 page."""
+    path = raw_root / "massive" / symbol / family / (
+        f"page-{page_index:03d}-attempt-{attempt_index:03d}.json"
+    )
+    while path.exists():
+        try:
+            existing = json.loads(path.read_text(encoding="utf-8"))
+        except (OSError, UnicodeDecodeError, json.JSONDecodeError):
+            break
+        if not isinstance(existing, dict) or existing.get("http_status") != 429:
+            break
+        attempt_index += 1
+        path = raw_root / "massive" / symbol / family / (
+            f"page-{page_index:03d}-attempt-{attempt_index:03d}.json"
+        )
+    return path
+
+
 def _iso_now() -> str:
     return dt.datetime.now(dt.timezone.utc).isoformat(timespec="seconds")
 
@@ -302,7 +328,13 @@ def _capture_page(
         "error_type": error_type,
         "payload": payload,
     }
-    path = raw_root / "massive" / symbol / family / f"page-{page_index:03d}-attempt-{attempt_index:03d}.json"
+    path = _raw_page_path(
+        raw_root,
+        symbol=symbol,
+        family=family,
+        page_index=page_index,
+        attempt_index=attempt_index,
+    )
     _write_json_once(path, wrapper, f"raw page {symbol}/{family}/{page_index}/{attempt_index}")
     return {
         "payload": payload,

@@ -96,13 +96,22 @@ def _full_overextension_projection() -> dict:
 
 
 class FullCandidateFakeClient:
-    def __init__(self):
+    def __init__(self, *, massive_429_once=()):
         self.urls: list[str] = []
+        self._massive_429_once = set(massive_429_once)
 
     def get_json(self, url, headers=None, timeout_seconds=30):
         self.urls.append(url)
         parsed = urlparse(url)
         query = parse_qs(parsed.query)
+        if parsed.netloc == "api.massive.com" and parsed.path in {
+            "/stocks/v1/splits", "/stocks/v1/dividends",
+        }:
+            family = "stock_splits" if parsed.path.endswith("/splits") else "dividends"
+            identity = (family, query["ticker"][0])
+            if identity in self._massive_429_once:
+                self._massive_429_once.remove(identity)
+                return ({"error": "rate limited"}, 429, False, "http_error")
         if parsed.netloc == "www.sec.gov" and parsed.path.endswith("/company_tickers.json"):
             return (
                 {
@@ -456,6 +465,7 @@ class UsShortBatch5FullCandidateLiveSourcePacketTest(unittest.TestCase):
         self.assertEqual(summary["endpoint_call_budget"]["max_total_http_attempts"], 16)
         self.assertEqual(summary["endpoint_call_budget"]["actual_total_http_attempts"], 16)
         self.assertEqual(summary["endpoint_call_budget"]["retry_count_used"], 0)
+        self.assertEqual(summary["endpoint_call_budget"]["massive_429_retry_wait_seconds"], 0.0)
         self.assertEqual(summary["endpoint_call_budget"]["massive_stock_split_calls"], 3)
         self.assertEqual(summary["endpoint_call_budget"]["massive_dividend_calls"], 3)
         self.assertEqual(summary["source_artifacts"]["analyst_grade_actions_consumed_from"], "fmp_analyst_grade_actions")
@@ -514,6 +524,86 @@ class UsShortBatch5FullCandidateLiveSourcePacketTest(unittest.TestCase):
         self.assertNotIn("api.massive.com", text.lower())
         self.assertNotIn("data.sec.gov", text.lower())
         self.assertNotIn('"payload"', text)
+
+    def test_recovered_massive_events_reach_issue6_health_receipt_and_report_identity(self):
+        client = FullCandidateFakeClient(
+            massive_429_once=(("stock_splits", "AAPL"), ("dividends", "MSFT")),
+        )
+        sleeps = []
+
+        with self._env(), mock.patch.object(
+            runner.sample_validation, "_read_windows_environment_value", return_value=None
+        ), mock.patch.object(runner.time, "sleep", side_effect=sleeps.append):
+            summary = runner.run_full_candidate_live_source_packet(
+                preflight_summary_path=self.paths["preflight"],
+                expected_total_call_budget=16,
+                output_data_context_path=self.paths["output"],
+                context_components_output_path=self.paths["components"],
+                source_artifact_prefix=self.paths["prefix"],
+                summary_path=self.paths["summary"],
+                raw_root=self.raw_root,
+                client=client,
+                confirm_user_authorization=True,
+                run_data_context=True,
+                generated_at="2026-07-06T12:00:00+00:00",
+                observed_at=_OFFERING_OBSERVED_AT,
+                sec_sleep_seconds=0,
+                max_retries_per_call=2,
+                retry_backoff_seconds=65.0,
+                max_total_http_attempts=18,
+            )
+
+        budget = summary["endpoint_call_budget"]
+        self.assertEqual(budget["actual_total_endpoint_calls"], 16)
+        self.assertEqual(budget["actual_total_http_attempts"], 18)
+        self.assertEqual(budget["max_total_http_attempts"], 18)
+        self.assertEqual(budget["retry_count_used"], 2)
+        self.assertEqual([value for value in sleeps if value == 65.0], [65.0, 65.0])
+        final_status = {
+            (row["endpoint_family"], row["symbol"]): row["status"]
+            for row in summary["endpoint_results"]
+            if row["provider_id"] == "massive"
+        }
+        self.assertEqual(final_status[("stock_splits", "AAPL")], "success")
+        self.assertEqual(final_status[("dividends", "MSFT")], "success")
+
+        news_path = self.paths["prefix"].with_name(self.paths["prefix"].name + "_massive_news_events.json")
+        news = json.loads(news_path.read_text(encoding="utf-8"))
+        self.assertEqual(news["records"]["AAPL"][0]["id"], "aapl-news-1")
+        source_packet = json.loads(
+            self.paths["prefix"].with_name(self.paths["prefix"].name + "_source_packet.json")
+            .read_text(encoding="utf-8")
+        )
+        self.assertEqual(
+            source_packet["paths"]["massive_news_events_path"],
+            news_path.relative_to(ROOT).as_posix(),
+        )
+        components = json.loads(self.paths["components"].read_text(encoding="utf-8"))
+        self.assertEqual(
+            components["score_composition"]["coverage_by_ticker"]["AAPL"]["catalyst"],
+            "scored_realized_catalyst",
+        )
+        self.assertEqual(
+            components["per_ticker_analysis"]["AAPL"]["source_result_facts"]["coverage"]["data_checks"]["event"],
+            "ok",
+        )
+
+        from engine.us_short_provider_health import classify_provider_health, provider_health_detail_line
+        from engine.us_short_run_origin import require_research_live_provider_health_result
+        from runners import us_short_weekly_capstone_stages as stage_adapters
+        from tests.provider.test_us_short_provider_health_capstone_matrix import _stage_results
+        from tests.provider.test_us_short_weekly_capstone import _research_receipt
+
+        health_inputs = _stage_results()
+        health_inputs["pass2_fetch"] = summary
+        health_inputs["yfinance_grades_fetch"] = None
+        provider_health = stage_adapters.derive_capstone_provider_health(health_inputs)
+        self.assertEqual(provider_health["massive_events"], "ok")
+        classified = classify_provider_health(provider_health)
+        self.assertEqual(classified["overall_run_state"], "clean")
+        receipt = _research_receipt(provider_health_facts=tuple(provider_health.items()))
+        require_research_live_provider_health_result(receipt, classified)
+        self.assertIn("massive_events=clean", provider_health_detail_line(classified))
 
     def test_yfinance_grades_do_not_require_fmp_key_and_summary_is_honest(self):
         def yfinance_source(ticker: str) -> dict:
@@ -664,6 +754,31 @@ class UsShortBatch5FullCandidateLiveSourcePacketTest(unittest.TestCase):
 
         self.assertEqual(client.urls, [])
         self.assertFalse(self.paths["summary"].exists())
+
+    def test_massive_retry_physical_cap_formula_rejects_high_override_before_transport(self):
+        client = FullCandidateFakeClient()
+        with self._env(), self.assertRaisesRegex(
+            runner.FullCandidateLiveSourcePacketError,
+            "cannot exceed the reviewed Massive minute-window retry headroom",
+        ):
+            runner.run_full_candidate_live_source_packet(
+                preflight_summary_path=self.paths["preflight"],
+                expected_total_call_budget=16,
+                output_data_context_path=self.paths["output"],
+                context_components_output_path=self.paths["components"],
+                source_artifact_prefix=self.paths["prefix"],
+                summary_path=self.paths["summary"],
+                raw_root=self.raw_root,
+                client=client,
+                confirm_user_authorization=True,
+                generated_at="2026-07-06T12:00:00+00:00",
+                observed_at=_OFFERING_OBSERVED_AT,
+                sec_sleep_seconds=0,
+                max_retries_per_call=2,
+                retry_backoff_seconds=65.0,
+                max_total_http_attempts=19,
+            )
+        self.assertEqual(client.urls, [])
 
     def test_authorized_run_wires_ohlcv_into_packet_and_result_linkage(self):
         ohlcv = self._write_ohlcv_fixture()

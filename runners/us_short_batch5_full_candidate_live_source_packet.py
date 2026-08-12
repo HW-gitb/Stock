@@ -10,7 +10,7 @@ import time
 from dataclasses import dataclass
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Any
+from typing import Any, Callable
 
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -449,7 +449,47 @@ def _fmp_stable_url(path_template: str, symbol: str, api_key: str) -> str:
     return sample_validation.fmp_url(path_template, symbol, {}, api_key, endpoint_mode="stable")
 
 
-_MAX_RETRIES_PER_CALL_CAP = 6   # hard ceiling on the per-call 429 retry count (bounds worst-case physical spend)
+MASSIVE_429_RETRY_WAIT_SECONDS = universe_fetch.MASSIVE_RATE_LIMIT_RETRY_SECONDS
+MASSIVE_429_RETRY_MAX = universe_fetch.MASSIVE_RATE_LIMIT_MAX_RETRIES
+MASSIVE_RATE_LIMIT_WINDOW_CAPACITY = universe_fetch.MASSIVE_RATE_LIMIT_WINDOW_CAPACITY
+_MAX_RETRIES_PER_CALL_CAP = MASSIVE_429_RETRY_MAX
+
+
+def _normalize_massive_retry_policy(
+    max_retries: Any, retry_backoff_seconds: Any,
+) -> tuple[int, float]:
+    """Accept only the reviewed Massive 429 policy; no caller-selected backoff is supported."""
+    if type(max_retries) is not int or not 0 <= max_retries <= MASSIVE_429_RETRY_MAX:
+        raise FullCandidateLiveSourcePacketError(
+            f"max_retries_per_call must be an int in [0, {MASSIVE_429_RETRY_MAX}]"
+        )
+    if retry_backoff_seconds is None:
+        normalized_backoff = 0.0 if max_retries == 0 else MASSIVE_429_RETRY_WAIT_SECONDS
+    elif (
+        isinstance(retry_backoff_seconds, (int, float))
+        and not isinstance(retry_backoff_seconds, bool)
+        and math.isfinite(retry_backoff_seconds)
+        and retry_backoff_seconds == (
+            0.0 if max_retries == 0 else MASSIVE_429_RETRY_WAIT_SECONDS
+        )
+    ):
+        normalized_backoff = float(retry_backoff_seconds)
+    else:
+        raise FullCandidateLiveSourcePacketError(
+            "retry_backoff_seconds must be omitted/0 when retries are disabled or "
+            f"exactly {MASSIVE_429_RETRY_WAIT_SECONDS} when retries are enabled"
+        )
+    return max_retries, float(normalized_backoff)
+
+
+def automatic_http_attempt_cap(*, logical_call_budget: int, target_count: int, max_retries: int) -> int:
+    """Return the one-click physical cap: all logical calls plus bounded Massive-window headroom."""
+    massive_logical_calls = target_count * 3
+    retry_headroom = max_retries * (
+        (massive_logical_calls + MASSIVE_RATE_LIMIT_WINDOW_CAPACITY - 1)
+        // MASSIVE_RATE_LIMIT_WINDOW_CAPACITY
+    )
+    return logical_call_budget + retry_headroom
 
 
 def _fetch_with_retry(
@@ -467,27 +507,36 @@ def _fetch_with_retry(
     retry_stats: dict[str, int],
     attempt_budget: HttpAttemptBudget,
     reserved_required_attempts: int,
+    sleep_func: Callable[[float], None] | None = None,
 ) -> sample_validation.FetchRecord:
-    """Fetch one endpoint with bounded retry ONLY on HTTP 429 (rate-limit). A 402 paywall / 404 / any non-429
+    """Fetch one Massive endpoint with bounded retry ONLY on HTTP 429 (rate-limit). A 402 paywall / 404 / any non-429
     outcome is returned as-is and NOT retried — retrying a paywall is pointless, and it makes a rate-limit
     (recoverable by waiting) observably distinct from a paywall/quota (not). Retries happen INSIDE this call (each
     physical attempt overwrites the same raw path); only the FINAL FetchRecord is returned, so the caller's LOGICAL
     endpoint-record count stays unchanged. Every initial call and retry consumes the separately explicit physical
     HTTP-attempt budget; a retry is skipped when it would steal capacity reserved for the remaining logical calls.
-    `pace_seconds` spaces consecutive endpoints AFTER the final attempt to stay under the free-tier rate.
+    FMP and SEC 429 responses are returned as-is and never consume retry headroom. `pace_seconds` spaces consecutive
+    endpoints AFTER the final attempt to stay under the free-tier rate.
     `retry_stats["used"]` accumulates actual physical retries for reporting."""
+    _normalize_massive_retry_policy(max_retries, retry_backoff_seconds)
+    sleeper = sleep_func or time.sleep
     attempt_budget.consume_required_attempt()
     record = sample_validation.fetch_and_store(
         client, url=url, provider_id=provider_id, endpoint_family=endpoint_family,
         symbol=symbol, raw_root=raw_root, headers=headers,
     )
     attempt = 0
-    while (not record.ok) and record.http_status == 429 and attempt < max_retries:
+    while (
+        provider_id == "massive"
+        and (not record.ok)
+        and record.http_status == 429
+        and attempt < max_retries
+    ):
         if not attempt_budget.consume_retry_if_available(
             reserved_required_attempts=reserved_required_attempts,
         ):
             break
-        time.sleep(retry_backoff_seconds * (2 ** attempt))   # exponential backoff on rate-limit
+        sleeper(MASSIVE_429_RETRY_WAIT_SECONDS)
         retry_stats["used"] += 1
         attempt += 1
         record = sample_validation.fetch_and_store(
@@ -495,7 +544,7 @@ def _fetch_with_retry(
             symbol=symbol, raw_root=raw_root, headers=headers,
         )
     if pace_seconds:
-        time.sleep(pace_seconds)
+        sleeper(pace_seconds)
     return record
 
 
@@ -516,6 +565,7 @@ def _fetch_live_records(
     fetch_fmp_grades: bool,
     budget_approval: Any = None,
     require_budget_approval: bool = True,
+    sleep_func: Callable[[float], None] | None = None,
 ) -> tuple[list[sample_validation.FetchRecord], dict[str, str], int, int]:
     binding = None
     if require_budget_approval or budget_approval is not None:
@@ -532,6 +582,7 @@ def _fetch_live_records(
     records: list[sample_validation.FetchRecord] = []
     retry_stats = {"used": 0}
     attempt_budget = HttpAttemptBudget(max_total_http_attempts=max_total_http_attempts)
+    sleeper = sleep_func or time.sleep
 
     def _fetch_required(**kwargs: Any) -> sample_validation.FetchRecord:
         attempt_budget.consume_required_attempt()
@@ -575,13 +626,14 @@ def _fetch_live_records(
                     retry_stats=retry_stats,
                     attempt_budget=attempt_budget,
                     reserved_required_attempts=_reserved_after_current(),
+                    sleep_func=sleeper,
                 )
             )
 
         cik10 = cik_by_symbol.get(symbol)
         if cik10:
             _assert_endpoint_budget(records, max_total_endpoint_calls)
-            time.sleep(sec_sleep_seconds)
+            sleeper(sec_sleep_seconds)
             records.append(
                 _fetch_required(
                     url=sample_validation.sec_url("submissions", cik10),
@@ -609,6 +661,7 @@ def _fetch_live_records(
                 retry_stats=retry_stats,
                 attempt_budget=attempt_budget,
                 reserved_required_attempts=_reserved_after_current(),
+                sleep_func=sleeper,
             )
         )
 
@@ -628,6 +681,7 @@ def _fetch_live_records(
                 retry_stats=retry_stats,
                 attempt_budget=attempt_budget,
                 reserved_required_attempts=_reserved_after_current(),
+                sleep_func=sleeper,
             )
         )
 
@@ -647,6 +701,7 @@ def _fetch_live_records(
                 retry_stats=retry_stats,
                 attempt_budget=attempt_budget,
                 reserved_required_attempts=_reserved_after_current(),
+                sleep_func=sleeper,
             )
         )
     validator = getattr(client, "assert_all_loaded_consumed", None)
@@ -1374,6 +1429,7 @@ def _build_summary(
     endpoint_records: list[sample_validation.FetchRecord],
     retry_count_allowed: int,
     retry_count_used: int,
+    massive_429_retry_wait_seconds: float,
     max_total_http_attempts: int,
     actual_total_http_attempts: int,
     execution_mode: str,
@@ -1493,6 +1549,7 @@ def _build_summary(
             "sec_cik_missing_count": len([symbol for symbol in eligible if symbol not in cik_by_symbol]),
             "retry_count_allowed": retry_count_allowed,
             "retry_count_used": retry_count_used,
+            "massive_429_retry_wait_seconds": massive_429_retry_wait_seconds,
             "within_budget": actual_total_http_attempts <= max_total_http_attempts,
         },
         "endpoint_results": [_summarize_endpoint(record) for record in endpoint_records],
@@ -1613,6 +1670,11 @@ def _validate_summary_against_schema(summary: dict[str, Any]) -> None:
         raise FullCandidateLiveSourcePacketError("summary physical HTTP attempts do not equal logical calls plus retries")
     if budget["actual_total_http_attempts"] > budget["max_total_http_attempts"]:
         raise FullCandidateLiveSourcePacketError("summary physical HTTP-attempt budget exceeded")
+    expected_retry_wait = (
+        MASSIVE_429_RETRY_WAIT_SECONDS if budget["retry_count_allowed"] else 0.0
+    )
+    if budget.get("massive_429_retry_wait_seconds", 0.0) != expected_retry_wait:
+        raise FullCandidateLiveSourcePacketError("summary Massive 429 retry wait is not canonical")
     manifest = summary["raw_capture_manifest"]
     rows = manifest["endpoint_wrapper_sha256"]
     manifest_identities = {(row["provider_id"], row["endpoint_family"], row["symbol"]) for row in rows}
@@ -1871,6 +1933,7 @@ def run_full_candidate_live_source_packet(
     catalyst_recall_tickers: list[str] | tuple[str, ...] | None = None,
     sec_sleep_seconds: float = sample_validation.SEC_FAIR_ACCESS_SLEEP_SECONDS,
     provider_pace_seconds: float = 0.0,
+    sleep_func: Callable[[float], None] | None = None,
     max_retries_per_call: int = 0,
     retry_backoff_seconds: float = 0.0,
     max_total_http_attempts: int | None = None,
@@ -1924,10 +1987,9 @@ def run_full_candidate_live_source_packet(
         raise FullCandidateLiveSourcePacketError(
             "disabled K4b consumption must not carry stage result or soft-boost paths"
         )
-    if not (isinstance(max_retries_per_call, int) and not isinstance(max_retries_per_call, bool)
-            and 0 <= max_retries_per_call <= _MAX_RETRIES_PER_CALL_CAP):
-        raise FullCandidateLiveSourcePacketError(
-            f"max_retries_per_call must be an int in [0, {_MAX_RETRIES_PER_CALL_CAP}]")
+    max_retries_per_call, retry_backoff_seconds = _normalize_massive_retry_policy(
+        max_retries_per_call, retry_backoff_seconds
+    )
     if execution_mode not in {_EXECUTION_MODE_LIVE_PROVIDER_FETCH, _EXECUTION_MODE_OFFLINE_REPLAY}:
         raise FullCandidateLiveSourcePacketError("execution_mode must be live_provider_fetch or offline_replay")
     if execution_mode == _EXECUTION_MODE_LIVE_PROVIDER_FETCH and not confirm_user_authorization:
@@ -1944,9 +2006,9 @@ def run_full_candidate_live_source_packet(
         # strict-finite, NOT just >= 0: inf passes `>= 0` and then time.sleep(inf) hangs/crashes (bare OverflowError
         # outside the runner's error contract); an absurd-but-finite value would sleep for days. Bound to [0, 60]s.
         return isinstance(x, (int, float)) and not isinstance(x, bool) and math.isfinite(x) and 0 <= x <= 60
-    if not (_finite_pace(provider_pace_seconds) and _finite_pace(retry_backoff_seconds)):
+    if not _finite_pace(provider_pace_seconds):
         raise FullCandidateLiveSourcePacketError(
-            "provider_pace_seconds and retry_backoff_seconds must be finite numbers in [0, 60] seconds")
+            "provider_pace_seconds must be a finite number in [0, 60] seconds")
     generated_at = generated_at or iso_now()
     if execution_mode == _EXECUTION_MODE_OFFLINE_REPLAY:
         # This is deliberately duplicated from the replay CLI boundary.  The shared assembly function is callable
@@ -2071,6 +2133,15 @@ def run_full_candidate_live_source_packet(
             "expected call budget must match the forecast recomputed from the re-derived Pass2 target count: "
             f"{expected_total_call_budget} != {rederived_call_forecast}"
         )
+    automatic_cap = automatic_http_attempt_cap(
+        logical_call_budget=expected_total_call_budget,
+        target_count=verified_targets["target_count"],
+        max_retries=max_retries_per_call,
+    )
+    if max_total_http_attempts > automatic_cap:
+        raise FullCandidateLiveSourcePacketError(
+            "max_total_http_attempts cannot exceed the reviewed Massive minute-window retry headroom"
+        )
     candidate_subset = _candidate_subset_artifact(
         candidate_artifact_path=candidate_path,
         expected_decision_date=expected_decision_date,
@@ -2115,6 +2186,7 @@ def run_full_candidate_live_source_packet(
         fetch_fmp_grades=fetch_fmp_grades,
         budget_approval=budget_approval,
         require_budget_approval=execution_mode == _EXECUTION_MODE_LIVE_PROVIDER_FETCH,
+        sleep_func=sleep_func,
     )
     resolved_sources = _resolved_source_artifacts(
         selected_symbols=selected_symbols,
@@ -2230,6 +2302,9 @@ def run_full_candidate_live_source_packet(
         endpoint_records=records,
         retry_count_allowed=max_retries_per_call,
         retry_count_used=retry_count_used,
+        massive_429_retry_wait_seconds=(
+            MASSIVE_429_RETRY_WAIT_SECONDS if max_retries_per_call else 0.0
+        ),
         max_total_http_attempts=max_total_http_attempts,
         actual_total_http_attempts=actual_total_http_attempts,
         execution_mode=execution_mode,
@@ -2281,9 +2356,9 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     parser.add_argument("--provider-pace-seconds", type=float, default=0.0,
                         help="sleep between consecutive FMP/Massive endpoint calls to stay under the free-tier rate (SEC has its own pace)")
     parser.add_argument("--max-retries-per-call", type=int, default=0,
-                        help="bounded retries on HTTP 429 (rate-limit) per FMP/Massive call; a 402 paywall is NOT retried")
+                        help="bounded retries on Massive HTTP 429 per call (0, 1, or 2); FMP/SEC 429 is not retried")
     parser.add_argument("--retry-backoff-seconds", type=float, default=0.0,
-                        help="base for exponential backoff (backoff*2^attempt) between 429 retries")
+                        help="omitted/0 normalizes to the fixed 65-second Massive 429 wait")
     parser.add_argument("--max-total-http-attempts", type=int,
                         help="explicit physical HTTP-attempt cap; required when 429 retries are enabled")
     return parser.parse_args(argv)

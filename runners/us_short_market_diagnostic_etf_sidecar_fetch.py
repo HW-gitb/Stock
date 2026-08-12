@@ -12,6 +12,7 @@ import json
 import os
 from pathlib import Path
 import sys
+import time
 from collections.abc import Mapping
 from typing import Any, Callable
 
@@ -35,6 +36,7 @@ from engine.us_short_private_paths import PrivatePathError, reject_nonprivate_ou
 from engine.us_short_model_paper_portfolio import canonical_json_bytes
 from runners import us_short_market_diagnostic_etf_capture as capture
 from runners import us_egs_sample_validation as sample_validation
+from runners import us_short_universe_fetch as universe_fetch
 from runners.us_short_market_diagnostic_benchmark_fetch import DEFAULT_INPUTS_ROOT
 
 
@@ -44,7 +46,8 @@ BASELINE_LOGICAL_CALLS = len(BENCHMARKS) * len(FAMILIES)
 MAX_PAGES_PER_SYMBOL_FAMILY = 2
 MAX_LOGICAL_REQUESTS = BASELINE_LOGICAL_CALLS * MAX_PAGES_PER_SYMBOL_FAMILY
 MAX_TOTAL_HTTP_ATTEMPTS = 40
-MAX_RETRIES_PER_PAGE = 2
+MAX_RETRIES_PER_PAGE = universe_fetch.MASSIVE_RATE_LIMIT_MAX_RETRIES
+MASSIVE_429_RETRY_WAIT_SECONDS = universe_fetch.MASSIVE_RATE_LIMIT_RETRY_SECONDS
 MISSING_PROVIDER_KEY = "provider_key_missing"
 
 
@@ -172,6 +175,16 @@ def _synthetic_capture(
     }
 
 
+def _consume_physical_attempt(
+    counters: dict[str, int], *, reserved_required_attempts: int,
+) -> bool:
+    """Consume one attempt while preserving one initial attempt per remaining logical slot."""
+    if counters["physical"] + 1 + reserved_required_attempts > MAX_TOTAL_HTTP_ATTEMPTS:
+        return False
+    counters["physical"] += 1
+    return True
+
+
 def _price_window(price_intervals: dict[str, dict[str, str | None]], fallback: str) -> dict[str, str]:
     dates = [
         value
@@ -202,7 +215,8 @@ def _capture_family(
     decision_date: str,
     counters: dict[str, int],
     call_log: list[str],
-) -> dict[str, Any]:
+    sleep_func: Callable[[float], None],
+) -> tuple[dict[str, Any], bool]:
     pages: list[dict[str, Any]] = []
     next_url = capture._initial_url(
         family=family, symbol=symbol, packet=packet, api_key=api_key
@@ -216,15 +230,17 @@ def _capture_family(
             break
         if counters["logical"] >= MAX_LOGICAL_REQUESTS:
             raise EtfSidecarFetchError("weekly ETF sidecar logical call budget exceeded before request")
+        if not _consume_physical_attempt(
+            counters,
+            reserved_required_attempts=MAX_LOGICAL_REQUESTS - counters["logical"] - 1,
+        ):
+            pagination_reason = "pagination_incomplete"
+            break
         counters["logical"] += 1
         attempt_index = 0
         final_page: dict[str, Any] | None = None
         while True:
-            if counters["physical"] >= MAX_TOTAL_HTTP_ATTEMPTS:
-                pagination_reason = "pagination_incomplete"
-                break
             attempt_index += 1
-            counters["physical"] += 1
             call_log.append(f"etf_sidecar:{symbol}:{family}:{page_index}:{attempt_index}")
             try:
                 final_page = capture._capture_page(
@@ -248,7 +264,7 @@ def _capture_family(
                     decision_date=decision_date,
                     observed_at=observed_at,
                     error_type="raw_conflict",
-                )
+                ), False
             except Exception as exc:  # provider/client failure; retain class only
                 return _synthetic_capture(
                     symbol=symbol,
@@ -256,12 +272,17 @@ def _capture_family(
                     decision_date=decision_date,
                     observed_at=observed_at,
                     error_type=type(exc).__name__,
-                )
+                ), False
             if final_page["ok"] or final_page["http_status"] != 429 or attempt_index > MAX_RETRIES_PER_PAGE:
                 break
-            if counters["physical"] >= MAX_TOTAL_HTTP_ATTEMPTS:
+            if not _consume_physical_attempt(
+                counters,
+                reserved_required_attempts=MAX_LOGICAL_REQUESTS - counters["logical"],
+            ):
                 pagination_reason = "pagination_incomplete"
                 break
+            counters["retry"] += 1
+            sleep_func(MASSIVE_429_RETRY_WAIT_SECONDS)
         if final_page is not None:
             pages.append(final_page)
         if final_page is None:
@@ -300,7 +321,16 @@ def _capture_family(
         pagination_reason=pagination_reason,
     )
     result["rows"] = rows
-    return result
+    massive_429_exhausted = bool(
+        final_page is not None
+        and not final_page["ok"]
+        and final_page["http_status"] == 429
+    )
+    if massive_429_exhausted:
+        result["error_types"] = sorted(
+            set(result.get("error_types", [])) | {"massive_429_exhausted"}
+        )
+    return result, massive_429_exhausted
 
 
 def capture_sidecar_week(
@@ -314,6 +344,7 @@ def capture_sidecar_week(
     api_key: str | None = None,
     now: Callable[[], str] | None = None,
     call_log: list[str] | None = None,
+    sleep_func: Callable[[float], None] | None = None,
 ) -> dict[str, Any]:
     """Capture and write one immutable sidecar after the existing gate passes."""
 
@@ -371,10 +402,15 @@ def capture_sidecar_week(
             "provider_calls": 0,
             "logical_requests": 0,
             "http_attempts": 0,
+            "retry_count_allowed": MAX_RETRIES_PER_PAGE,
+            "retry_count_used": 0,
+            "massive_429_retry_wait_seconds": MASSIVE_429_RETRY_WAIT_SECONDS,
         }
 
-    counters = {"logical": 0, "physical": 0}
+    counters = {"logical": 0, "physical": 0, "retry": 0}
+    sleeper = sleep_func or time.sleep
     captures: dict[str, dict[str, dict[str, Any]]] = {}
+    persistent_429_families = 0
     if api_key is None:
         try:
             api_key = sample_validation.read_required_env("MASSIVE_API_KEY").value
@@ -400,7 +436,7 @@ def capture_sidecar_week(
         for symbol in BENCHMARKS:
             captures[symbol] = {}
             for family in FAMILIES:
-                captures[symbol][family] = _capture_family(
+                captures[symbol][family], exhausted_429 = _capture_family(
                     symbol=symbol,
                     family=family,
                     packet=request_packet,
@@ -411,7 +447,29 @@ def capture_sidecar_week(
                     decision_date=decision_date,
                     counters=counters,
                     call_log=local_log,
+                    sleep_func=sleeper,
                 )
+                persistent_429_families += int(exhausted_429)
+
+    if (
+        persistent_429_families == BASELINE_LOGICAL_CALLS
+        and all(
+            captures[symbol][family].get("http_success_pages", 0) == 0
+            for symbol in BENCHMARKS
+            for family in FAMILIES
+        )
+    ):
+        return {
+            "status": "incomplete_no_count",
+            "sidecar_path": None,
+            "evaluable_symbols": [],
+            "provider_calls": counters["physical"],
+            "logical_requests": counters["logical"],
+            "http_attempts": counters["physical"],
+            "retry_count_allowed": MAX_RETRIES_PER_PAGE,
+            "retry_count_used": counters["retry"],
+            "massive_429_retry_wait_seconds": MASSIVE_429_RETRY_WAIT_SECONDS,
+        }
 
     try:
         sidecar = build_etf_total_return_sidecar_week(
@@ -445,6 +503,9 @@ def capture_sidecar_week(
         "provider_calls": counters["physical"],
         "logical_requests": counters["logical"],
         "http_attempts": counters["physical"],
+        "retry_count_allowed": MAX_RETRIES_PER_PAGE,
+        "retry_count_used": counters["retry"],
+        "massive_429_retry_wait_seconds": MASSIVE_429_RETRY_WAIT_SECONDS,
     }
 
 
@@ -453,6 +514,8 @@ __all__ = [
     "EtfSidecarFetchError",
     "MAX_LOGICAL_REQUESTS",
     "MAX_TOTAL_HTTP_ATTEMPTS",
+    "MAX_RETRIES_PER_PAGE",
+    "MASSIVE_429_RETRY_WAIT_SECONDS",
     "SIDECAR_FILENAME",
     "capture_sidecar_week",
     "sidecar_path",
