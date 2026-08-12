@@ -765,8 +765,12 @@ def render_weekly_markdown(weekly: dict) -> str:
     # 4.2 Round2 上游过滤批次级摘要(无 M6.7 个股行,仅计数,不含个股/持仓 → public)
     _candidate_exclusions = weekly.get("candidate_exclusions") or []
     if _candidate_exclusions:
-        out += ["", f"## 单票候选排除（共 {len(_candidate_exclusions)} 只）",
-                "> 仅隔离已证停牌或价格时钟当前但历史不足的单票；来源、陈旧或混合时钟存疑仍整批拒跑。",
+        _local_price_error_count = sum(
+            item.get("reason") in {"provider_unavailable", "malformed_price_row"}
+            for item in _candidate_exclusions
+        )
+        out += ["", f"## 单票候选排除（共 {len(_candidate_exclusions)} 只；本地价格异常 {_local_price_error_count} 只）",
+                "> 仅隔离已证停牌、当前历史不足，或限定的本地价格异常；provider 异常、PIT、陈旧和混合时钟仍整批拒跑。",
                 "| 标的 | 名称 | 原因 | 来源状态 |", "|---|---|---|---|"]
         out += [f"| {_cell(item.get('ts_code'))} | {_cell(item.get('name'))} | {_cell(item.get('reason'))} | "
                 f"{_cell(item.get('source_status'))} |" for item in _candidate_exclusions]

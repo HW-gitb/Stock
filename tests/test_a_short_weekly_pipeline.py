@@ -31,6 +31,7 @@ from runners.a_short_weekly_pipeline import (  # noqa: E402
     normalize_candidate, build_weekly_report as _build_weekly_report, validate_weekly_report,
     write_weekly_report, latest_iv_percentile, latest_iv_hv, latest_m05_state, main, SCHEMA_PATH,
     _fetch_price_series, _prev_trading_day, _load_validated_overlay, MIN_PRICE_OBS, resolve_market_regime,
+    TickerLocalPriceError,
     _candidate_price_clock, _candidate_price_exclusion,
     validate_account_state, stateful_risk_for_candidate, _ex_div_notices, _fetch_dividends,
     _build_exclusion_summary, _upcoming_events, _fetch_unlocks, _fetch_earnings_schedule, _attach_forward_event_impacts,
@@ -730,6 +731,7 @@ class ValidateWeeklyTests(unittest.TestCase):
         lineage["stage_status"] = "degraded_no_new_entries"
         lineage["iv_feed_status"] = "build_failed"
         lineage["iv_feed"] = None
+        weekly["iv_feed_ref"] = None
         lineage["iv_freshness"] = {
             "status": "build_failed",
             "iv_data_through": None,
@@ -931,6 +933,238 @@ class MainWiringTests(unittest.TestCase):
         (Path(td) / "feed.json").write_text(json.dumps(feed or _feed()), encoding="utf-8")
         _write_account(Path(td) / "acct.json")
 
+    @staticmethod
+    def _price_error_candidates(count: int) -> list[dict]:
+        return [_ai_candidate(f"{600000 + index:06d}.SH") for index in range(count)]
+
+    @staticmethod
+    def _holding(code: str) -> dict:
+        return {"ts_code": code, "name": "held", "shares": 1000,
+                "avg_cost": 2.70, "entry_date": "20260601", "stop_loss": 2.55}
+
+    def test_candidate_local_price_error_budget_allows_less_and_exact_five_percent(self):
+        cases = ((21, 1, "complete"), (20, 1, "complete"), (20, 2, "partial_holdings_only"))
+        for candidate_count, bad_count, expected_stage in cases:
+            with self.subTest(candidate_count=candidate_count, bad_count=bad_count), tempfile.TemporaryDirectory() as td:
+                candidates = self._price_error_candidates(candidate_count)
+                bad_codes = {candidate["ts_code"] for candidate in candidates[:bad_count]}
+                self._write_inputs(td, ai=_analysis_input(candidates=candidates))
+                if expected_stage == "partial_holdings_only":
+                    acct = _account()
+                    acct["positions"] = [self._holding(candidates[0]["ts_code"]),
+                                         self._holding(candidates[-1]["ts_code"])]
+                    _write_account(Path(td) / "acct.json", acct)
+                out = Path(td) / "weekly.json"
+                main(["--as-of", AS_OF, "--analysis-input", str(Path(td) / "ai.json"),
+                      "--iv-feed", str(Path(td) / "feed.json"), "--account", str(Path(td) / "acct.json"),
+                      "--out", str(out)],
+                     price_provider=lambda code: ([], None) if code in bad_codes else _series())
+                weekly = json.loads(out.read_text(encoding="utf-8"))
+            self.assertEqual(weekly["run_lineage"]["stage_status"], expected_stage)
+            local_errors = [item for item in weekly["candidate_exclusions"]
+                            if item["reason"] == "provider_unavailable"]
+            self.assertEqual(len(local_errors), bad_count)
+            if expected_stage == "partial_holdings_only":
+                self.assertEqual([report["ts_code"] for report in weekly["reports"]], [candidates[-1]["ts_code"]])
+                self.assertTrue(all(
+                    report["machine"]["stateful_risk"]["position_state"] == "held"
+                    for report in weekly["reports"]
+                ))
+                self.assertEqual([item["ts_code"] for item in weekly["holdings_manual_review"]],
+                                 [candidates[0]["ts_code"]])
+
+    def test_old_suspension_and_short_history_do_not_spend_local_price_budget(self):
+        candidates = self._price_error_candidates(20)
+        candidates[1]["event_risk"]["suspension"] = {
+            "is_suspended": True, "source_status": "known_hit", "observed_at": AS_OF,
+        }
+        short_code, unavailable_code = candidates[2]["ts_code"], candidates[0]["ts_code"]
+
+        def provider(code):
+            if code == unavailable_code:
+                return [], None
+            if code == short_code:
+                return _series()[:MIN_PRICE_OBS - 1], AS_OF
+            return _series()
+
+        with tempfile.TemporaryDirectory() as td:
+            self._write_inputs(td, ai=_analysis_input(candidates=candidates))
+            out = Path(td) / AS_OF / "weekly_m67.json"
+            main(["--as-of", AS_OF, "--analysis-input", str(Path(td) / "ai.json"),
+                  "--iv-feed", str(Path(td) / "feed.json"), "--account", str(Path(td) / "acct.json"),
+                  "--out", str(out)], price_provider=provider)
+            weekly = json.loads(out.read_text(encoding="utf-8"))
+        self.assertEqual(weekly["run_lineage"]["stage_status"], "complete")
+        self.assertEqual(sum(item["reason"] in {"provider_unavailable", "malformed_price_row"}
+                             for item in weekly["candidate_exclusions"]), 1)
+        self.assertEqual({item["reason"] for item in weekly["candidate_exclusions"]}, {
+            "provider_unavailable", "confirmed_suspension", "insufficient_usable_history",
+        })
+
+    def test_malformed_injected_hlc_rows_are_isolated_and_schema_pairs_are_closed(self):
+        schema = json.loads(Path(SCHEMA_PATH).read_text(encoding="utf-8"))
+        item_schema = schema["properties"]["candidate_exclusions"]["items"]
+        for reason, source_status in (
+            ("confirmed_suspension", "known_hit"),
+            ("insufficient_usable_history", "price_clock_current"),
+            ("provider_unavailable", "price_source_unavailable"),
+            ("malformed_price_row", "price_row_invalid"),
+        ):
+            jsonschema.validate({"ts_code": "600000.SH", "name": "x", "reason": reason,
+                                 "source_status": source_status}, item_schema)
+        with self.assertRaises(jsonschema.ValidationError):
+            jsonschema.validate({"ts_code": "600000.SH", "name": "x", "reason": "malformed_price_row",
+                                 "source_status": "price_source_unavailable"}, item_schema)
+        for field, value in (("high", None), ("high", True), ("low", float("nan")), ("close", float("inf"))):
+            with self.subTest(field=field), tempfile.TemporaryDirectory() as td:
+                candidates = self._price_error_candidates(21)
+                bad_code = candidates[0]["ts_code"]
+                self._write_inputs(td, ai=_analysis_input(candidates=candidates))
+                out = Path(td) / "weekly.json"
+
+                def provider(code):
+                    rows = _series()
+                    if code == bad_code:
+                        rows[-1] = dict(rows[-1])
+                        rows[-1][field] = value
+                    return rows
+
+                main(["--as-of", AS_OF, "--analysis-input", str(Path(td) / "ai.json"),
+                      "--iv-feed", str(Path(td) / "feed.json"), "--account", str(Path(td) / "acct.json"),
+                      "--out", str(out)], price_provider=provider)
+                weekly = json.loads(out.read_text(encoding="utf-8"))
+            self.assertEqual(weekly["run_lineage"]["stage_status"], "complete")
+            self.assertEqual(weekly["candidate_exclusions"], [{
+                "ts_code": bad_code, "name": candidates[0]["name"],
+                "reason": "malformed_price_row", "source_status": "price_row_invalid",
+            }])
+
+    def test_overbudget_local_price_errors_without_account_fail_closed(self):
+        candidates = self._price_error_candidates(20)
+        bad_codes = {candidate["ts_code"] for candidate in candidates[:2]}
+        with tempfile.TemporaryDirectory() as td:
+            self._write_inputs(td, ai=_analysis_input(candidates=candidates))
+            out = Path(td) / "weekly.json"
+            with self.assertRaises(SystemExit):
+                main(["--as-of", AS_OF, "--analysis-input", str(Path(td) / "ai.json"),
+                      "--iv-feed", str(Path(td) / "feed.json"), "--out", str(out)],
+                     price_provider=lambda code: ([], None) if code in bad_codes else _series())
+            self.assertFalse(out.exists())
+
+    def test_local_price_budget_uses_deduplicated_candidate_denominator(self):
+        candidates = self._price_error_candidates(19)
+        candidates.append(dict(candidates[-1]))
+        bad_code = candidates[0]["ts_code"]
+        with tempfile.TemporaryDirectory() as td:
+            self._write_inputs(td, ai=_analysis_input(candidates=candidates))
+            out = Path(td) / "weekly.json"
+            main(["--as-of", AS_OF, "--analysis-input", str(Path(td) / "ai.json"),
+                  "--iv-feed", str(Path(td) / "feed.json"), "--account", str(Path(td) / "acct.json"),
+                  "--out", str(out)],
+                 price_provider=lambda code: ([], None) if code == bad_code else _series())
+            weekly = json.loads(out.read_text(encoding="utf-8"))
+        self.assertEqual(weekly["run_lineage"]["stage_status"], "partial_holdings_only")
+
+    def test_nonready_iv_and_overbudget_price_publish_one_partial_bundle(self):
+        from runners.a_short_weekly_pipeline import validate_published_weekly_operation_bundle
+        from runners.a_short_weekly_sidecar_health import build_health
+
+        candidates = self._price_error_candidates(20)
+        bad_codes = {candidate["ts_code"] for candidate in candidates[:2]}
+        ai = _analysis_input(candidates=candidates)
+        ai["market_context"]["volatility"] = _nonready_iv_projection("build_failed")
+        with tempfile.TemporaryDirectory() as td:
+            self._write_inputs(td, ai=ai)
+            acct = _account()
+            acct["positions"] = [self._holding(candidates[0]["ts_code"]), self._holding(candidates[-1]["ts_code"])]
+            _write_account(Path(td) / "acct.json", acct)
+            out = Path(td) / AS_OF / "weekly_m67.json"
+            main(["--as-of", AS_OF, "--analysis-input", str(Path(td) / "ai.json"),
+                  "--iv-feed-status", "build_failed", "--account", str(Path(td) / "acct.json"),
+                  "--out", str(out)],
+                 price_provider=lambda code: ([], None) if code in bad_codes else _series())
+            bundle = validate_published_weekly_operation_bundle(out)
+            weekly = json.loads(out.read_text(encoding="utf-8"))
+            health = build_health(
+                as_of=AS_OF, project_root=Path(td), m67_out_dir=out.parent,
+                m67_invocation="requested",
+            )
+            markdown = out.with_suffix(".md").read_text(encoding="utf-8")
+        self.assertEqual((weekly["run_lineage"]["stage_status"], weekly["run_lineage"]["iv_feed_status"]),
+                         ("partial_holdings_only", "build_failed"))
+        self.assertIsNone(weekly["iv_feed_ref"])
+        self.assertEqual(bundle.receipt["stage_status"], "partial_holdings_only")
+        self.assertEqual(set(bundle.receipt["outputs"]), {"weekly_m67.json", "weekly_m67.md"})
+        self.assertEqual((health["m67_status"], health["overall"]), ("partial_holdings_only", "partial"))
+        self.assertIn("本地价格异常 2 只", markdown)
+
+    def test_local_price_error_never_masks_future_bar_fatal(self):
+        candidates = self._price_error_candidates(20)
+        unavailable_codes = {candidate["ts_code"] for candidate in candidates[:2]}
+        future_code = candidates[2]["ts_code"]
+
+        def provider(code):
+            if code in unavailable_codes:
+                return [], None
+            rows = _series()
+            if code == future_code:
+                rows[-1] = {**rows[-1], "trade_date": "20260610"}
+            return rows
+
+        with tempfile.TemporaryDirectory() as td:
+            self._write_inputs(td, ai=_analysis_input(candidates=candidates))
+            out = Path(td) / "weekly.json"
+            with self.assertRaises(SystemExit):
+                main(["--as-of", AS_OF, "--analysis-input", str(Path(td) / "ai.json"),
+                      "--iv-feed", str(Path(td) / "feed.json"), "--account", str(Path(td) / "acct.json"),
+                      "--out", str(out)], price_provider=provider)
+            self.assertFalse(out.exists())
+
+    def test_factor_v2_unavailable_path_uses_public_factory(self):
+        from runners.a_short_weekly_pipeline import _factor_v2_unavailable_public_summary
+
+        class PublicOnlyFactorModule:
+            def __init__(self):
+                self.calls = []
+
+            def unavailable_public_summary(self, **kwargs):
+                self.calls.append(kwargs)
+                return {"public": True}
+
+            def _public_summary(self, *args, **kwargs):
+                raise AssertionError("pipeline must not cross the factor module's private boundary")
+
+        module = PublicOnlyFactorModule()
+        self.assertEqual(
+            _factor_v2_unavailable_public_summary(AS_OF, factor_module=module, run_revision_id="a" * 32),
+            {"public": True},
+        )
+        self.assertEqual(module.calls, [{"as_of": AS_OF, "run_revision_id": "a" * 32,
+                                         "official_project_root": None}])
+
+    def test_next_full_candidate_price_run_recovers_complete_loader(self):
+        from runners.a_short_weekly_pipeline import load_published_weekly_bundle
+
+        candidates = self._price_error_candidates(20)
+        bad_codes = {candidate["ts_code"] for candidate in candidates[:2]}
+        with tempfile.TemporaryDirectory() as td:
+            self._write_inputs(td, ai=_analysis_input(candidates=candidates))
+            acct = _account()
+            acct["positions"] = [self._holding(candidates[-1]["ts_code"])]
+            _write_account(Path(td) / "acct.json", acct)
+            out = Path(td) / AS_OF / "weekly_m67.json"
+            argv = ["--as-of", AS_OF, "--analysis-input", str(Path(td) / "ai.json"),
+                    "--iv-feed", str(Path(td) / "feed.json"), "--account", str(Path(td) / "acct.json"),
+                    "--out", str(out)]
+            main(argv, price_provider=lambda code: ([], None) if code in bad_codes else _series())
+            self.assertEqual(json.loads(out.read_text(encoding="utf-8"))["run_lineage"]["stage_status"],
+                             "partial_holdings_only")
+            main(argv, price_provider=lambda code: _series())
+            weekly = json.loads(out.read_text(encoding="utf-8"))
+            loaded = load_published_weekly_bundle(out)
+        self.assertEqual(weekly["run_lineage"]["stage_status"], "complete")
+        self.assertEqual(loaded["run_lineage"]["stage_status"], "complete")
+
     def test_nonready_iv_statuses_publish_one_degraded_bundle_without_reading_feed(self):
         from runners.a_short_weekly_pipeline import validate_published_weekly_operation_bundle
         from runners.a_short_weekly_sidecar_health import build_health
@@ -959,7 +1193,7 @@ class MainWiringTests(unittest.TestCase):
                 self.assertEqual(bundle.receipt["stage_status"], "degraded_no_new_entries")
                 self.assertEqual(bundle.receipt["iv_feed_status"], status)
                 self.assertEqual(weekly["run_lineage"]["iv_feed"], None)
-                self.assertEqual(weekly["iv_feed_ref"], "")
+                self.assertIsNone(weekly["iv_feed_ref"])
                 self.assertEqual(weekly["run_lineage"]["iv_freshness"]["status"], status)
                 self.assertEqual(table["操作"], "观察")
                 self.assertEqual(report["machine"]["entry_exit_size_star"]["plan"], None)
@@ -2497,16 +2731,18 @@ class MainWiringTests(unittest.TestCase):
                 main(["--as-of", AS_OF, "--analysis-input", str(Path(td) / "ai.json"),
                       "--iv-feed", str(Path(td) / "feed.json"), "--out", str(Path(td) / "w.json")])
 
-    def test_main_empty_price_series_without_current_clock_aborts_no_file(self):
-        # A missing latest bar is source-ambiguous, so it remains batch fail-closed.
+    def test_main_empty_price_series_isolates_as_provider_unavailable(self):
+        # A provider-success empty result is ticker-local and reaches the 5% account fallback.
         with tempfile.TemporaryDirectory() as td:
             self._write_inputs(td)
             out = Path(td) / "weekly.json"
-            with self.assertRaises(SystemExit):
-                main(["--as-of", AS_OF, "--analysis-input", str(Path(td) / "ai.json"),
-                      "--iv-feed", str(Path(td) / "feed.json"), "--account", str(Path(td) / "acct.json"),
-                      "--out", str(out)], price_provider=lambda code: ([], None))
-            self.assertFalse(out.exists())
+            main(["--as-of", AS_OF, "--analysis-input", str(Path(td) / "ai.json"),
+                  "--iv-feed", str(Path(td) / "feed.json"), "--account", str(Path(td) / "acct.json"),
+                  "--out", str(out)], price_provider=lambda code: ([], None))
+            weekly = json.loads(out.read_text(encoding="utf-8"))
+        self.assertEqual(weekly["run_lineage"]["stage_status"], "partial_holdings_only")
+        self.assertTrue(all(item["reason"] == "provider_unavailable"
+                            for item in weekly["candidate_exclusions"]))
 
     def test_main_short_price_series_with_stale_clock_aborts_no_file(self):
         with tempfile.TemporaryDirectory() as td:
@@ -2904,6 +3140,18 @@ class PriceFetchTests(unittest.TestCase):
         self.assertEqual(len(series), 2)
         self.assertEqual(series[0]["trade_date"], "20260108")  # holding trailing-stop needs the PIT date
         self.assertEqual(latest, "20260109")        # actual latest bar date surfaced for lineage
+
+    def test_malformed_high_low_or_close_is_ticker_local_without_raw_row_text(self):
+        for field, value in (("high", None), ("high", True), ("low", float("nan")), ("close", float("inf"))):
+            with self.subTest(field=field):
+                frame = pd.DataFrame({"trade_date": ["20260109"], "high": [3.1], "low": [2.95], "close": [3.0]})
+                frame[field] = frame[field].astype(object)
+                frame.loc[0, field] = value
+                with self.assertRaises(TickerLocalPriceError) as captured:
+                    _fetch_price_series(_fake_ts(frame), object(), "600000.SH", "20260101", "20260109")
+                self.assertEqual(captured.exception.reason, "malformed_price_row")
+                self.assertEqual(captured.exception.ts_code, "600000.SH")
+                self.assertNotIn("nan", str(captured.exception).lower())
 
     def test_provider_exception_aborts(self):
         ts = _fake_ts(None)
@@ -6198,7 +6446,7 @@ class LoadPublishedBundleTests(unittest.TestCase):
             "complete", "degraded_no_new_entries", "partial_holdings_only",
         } else "complete"
         iv_status = "build_failed" if weekly_stage == "degraded_no_new_entries" else "ready"
-        iv_ref = "iv_feed.json" if iv_status == "ready" else ""
+        iv_ref = "iv_feed.json" if iv_status == "ready" else None
         lineage = {
             "run_id": "a-short-20260622-0123456789abcdef",
             "candidate_digest": "b" * 64,

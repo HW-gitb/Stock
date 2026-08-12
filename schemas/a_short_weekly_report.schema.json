@@ -49,7 +49,7 @@
       "pattern": "^[0-9]{8}$"
     },
     "iv_feed_ref": {
-      "type": "string"
+      "type": ["string", "null"]
     },
     "n_stocks": {
       "type": "integer",
@@ -107,7 +107,7 @@
     },
     "candidate_exclusions": {
       "type": "array",
-      "description": "Reviewed ticker-local price exclusions. Only confirmed same-run suspension or a current price clock with insufficient usable history may appear; excluded tickers are absent from reports and cash allocation.",
+      "description": "Reviewed ticker-local price exclusions. Only the four reason/source-status pairs below may appear; excluded tickers are absent from reports and cash allocation.",
       "items": {
         "type": "object",
         "additionalProperties": false,
@@ -128,16 +128,26 @@
           "reason": {
             "enum": [
               "confirmed_suspension",
-              "insufficient_usable_history"
+              "insufficient_usable_history",
+              "provider_unavailable",
+              "malformed_price_row"
             ]
           },
           "source_status": {
             "enum": [
               "known_hit",
-              "price_clock_current"
+              "price_clock_current",
+              "price_source_unavailable",
+              "price_row_invalid"
             ]
           }
-        }
+        },
+        "oneOf": [
+          {"properties": {"reason": {"const": "confirmed_suspension"}, "source_status": {"const": "known_hit"}}},
+          {"properties": {"reason": {"const": "insufficient_usable_history"}, "source_status": {"const": "price_clock_current"}}},
+          {"properties": {"reason": {"const": "provider_unavailable"}, "source_status": {"const": "price_source_unavailable"}}},
+          {"properties": {"reason": {"const": "malformed_price_row"}, "source_status": {"const": "price_row_invalid"}}}
+        ]
       }
     },
     "margin_coverage": {

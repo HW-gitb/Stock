@@ -6620,3 +6620,50 @@ effect contract 已用固定 Python 重新登记 A-EGS decision-predicate hash �
 - §6a 未起 agent（rule 8）；14C 与第 15 刀未执行，`partial_holdings_only` 生产路径仍不可达。
 
 **下一步**：`Codex：执行`（14C）
+
+### 2026-08-12 Codex 执行：桌面 `ashort_1415.md` 第14C刀 + O-14B-1/O-14B-2（`repaired / OPEN-NOT_VERIFIED`，43fe）
+
+#### 用途、范围与原始终态
+
+本节追加在 14B 收口复审之后，记录指定 A-short sequence handoff 对桌面 `ashort_1415.md` §14C 的完整执行交接，并按用户指令同时收口 `O-14B-1/O-14B-2`。仅修改完成这三项所需的 pipeline、weekly schema、public renderer、factor-v2 public API 与既有测试；第15刀、交易规则、仓位、provider、epoch、第二发布事务和新摘要文件均未打开。当前工作树为 `D:\cnhea\Codex\worktrees\43fe\Stock`；实现和离线自审已完成，独立 reviewer/committer 尚未复审或提交，因此原始终态为 `repaired / OPEN-NOT_VERIFIED`。
+
+#### 问题、根因与最小改动
+
+- 14A/14B 虽定义 `partial_holdings_only`，但原候选价格结果用一次性字典推导收集：一票局部异常会直接让整包失败，无法区分可确认的单票数据坏行和全局 PIT/时钟故障；也没有 5% 预算、去重分母或仅持仓出口。
+- `TickerLocalPriceError` 是唯一新异常，reason 只允许 `malformed_price_row`；实际和注入价格入口共享 H/L/C 的非 bool、float-convertible、finite 校验。成功 provider 的空结果/无 latest 是 `provider_unavailable`，坏 H/L/C 行是 `malformed_price_row`；provider exception、非法/未来日期、陈旧/混合时钟、PIT/lineage 不转换为局部排除。
+- 主循环按 `ts_code` 去重后逐票收集，精确允许四个 `candidate_exclusions` 二元组。只统计新的两种价格错误，使用整数 `count * 100 <= deduplicated_candidates * 5`：小于或等于 5% 去掉坏候选后继续；超过 5% 且账户有效则清空 flat candidates、仅生成 held reports 和既有 holdings manual review；账户缺失或无效则 fail-closed 且不写成功包。
+- `iv_feed_ref` 的 non-ready 顶层值由空串改为 null，并双向校验 ready/non-ready binding。factor-v2 新增其自己的 public unavailable builder；pipeline 不再跨模块调用私有 `_public_summary`。没有抽象重写或增加输入 hash、epoch、summary artifact、publisher。
+
+#### 调用链、消费者、schema/source-binding 与写盘边界
+
+`weekly_screening.ps1` → `a_short_weekly_pipeline.main` → `_price_provider_result` / `_fetch_price_series` → `candidate_exclusions` + price clock + 四态 `run_lineage` → `build_weekly_report` / 既有 `publish_weekly_bundle` → weekly JSON、Markdown、receipt/digest → operation loader → sidecar health 与 renderer。weekly schema 用 `oneOf` 闭合四个 reason/source-status 对；Markdown 和终端从 `candidate_exclusions` 现算异常数，不写第二份汇总。`partial_holdings_only` 必须有有效 sized account，reports 只允许 held；坏候选若也是实际持仓仍进入既有 private `holdings_manual_review`，不是普通候选。原有 atomic publish、receipt/output digest、revision identity、complete-only M6.7 消费者与 account private-root 约束均未放宽。
+
+#### 负向控制、自审与精确验证
+
+- 自审覆盖 `<5%`、`=5%`、`>5%`，重复候选不扩大分母，已有停牌/short-history 不消耗新预算，空结果与 None/NaN/inf/bool H/L/C 都只在许可条件下隔离。future bar、provider exception、陈旧或混合时钟依旧 fatal；超门无账户不写包；IV non-ready + 超门唯一为 partial；下一次完整价格运行重新被 complete loader 接受。
+- 仅使用 `C:\Users\cnhea\AppData\Local\Programs\Python\Python313\python.exe`（3.13.8）。focused 命令为 `.tools\run_unittest_with_repo_pythonpath.cmd --timeout-seconds 900 tests.test_a_short_effect_contract tests.test_a_short_effect_consumer_probe tests.test_a_short_weekly_pipeline tests.test_a_short_m67_render tests.test_a_short_factor_comparison_v2_weekly tests.test_a_short_weekly_sidecar_health tests.test_a_short_weekly_screening_m67_failure_closeout tests.phase6.test_weekly_screening_guardrails tests.test_a_short_v5_revision_matrix tests.test_a_short_phase5_engine`，结果 `917/917 PASS`，receipt `receipt:eceb73fb252e3fc5d37a94fa`。
+- 本代码态唯一实际 full lane：`C:\Users\cnhea\AppData\Local\Programs\Python\Python313\python.exe .tools\full_pack_ledger.py run a_short "A-short 14C ticker-local price-error boundary and O-14B optional repair" "receipt:eceb73fb252e3fc5d37a94fa" 860 -- discover -s tests -p "test_a_short*.py"`，结果 `discovered=2797 ran=2797 equal=True PASS`，113.2s、parallel、fingerprint `7ecec6406399`。ledger static `git diff --check` 和 5 个改动 Python 文件 `py_compile` 均 PASS。
+
+#### 审查边界与下一步
+
+未运行 provider/live/网络、真实 weekly 或真实 PowerShell launcher E2E；这些未覆盖面不被离线测试或 full lane 冒充。未起 sub-agent，未 stage、commit、push 或 merge。请 Claude Code 只对照桌面 §14C 与当前 diff：核验票级/全局异常分界、精确 5% 算术与去重分母、partial 的账户和 held-only 内容门、四层状态消费一致性、O-14B 的 null/public-API 收口，以及 M6.7 complete-only 消费者未放宽。PASS 后由 reviewer/committer 按项目规则决定第14刀是否最终收口；不要执行第15刀。
+
+## 2026-08-12 追加：第14C刀独立审查（按 1415 文档逐条）—— PASS（已提交并合入 master）
+
+**判定**：PASS，无 Required；上轮两条 Optional 一并闭；留一条 Options（5% 分母口径）。正文只在 `docs/system_risk_register.md`。
+
+**我实际验了什么**（区别于执行方转述）
+
+- 这刀的风险方向是**把整批 fatal 降级成票级排除**，所以我的探针全打在「哪些必须仍然整批死」上：provider 自己抛异常 → 原样传播没被吞；非法 `trade_date`、畸形返回元组 → `SystemExit`；混合时钟仍整批拒。反过来六种坏 H/L/C（字符串 / None / NaN / inf / bool / 缺字段）全部且仅仅转成票级 `malformed_price_row`。
+- **错误文本零 raw 我实打**：把 `close` 塞成一个标记串，异常消息里没有它，只剩代码 + 交易日 + 分类。
+- **`TickerLocalPriceError` 的 reason 是钉死的**：试了三个别的 reason 全被构造器拒，所以这个类不会被将来顺手扩成万能票级异常。
+- **5% 算术我自己算**：`5/100` 放行、`6/100` 越界，与「恰好 5% 允许继续」一致。
+- **发现一处口径分歧并判成 Options 而非 Required**：已证停牌票计入分母、却从未进入价格校验。桌面原文两句话各支持一种读法，且差别会真改结论（50 停牌 + 5 异常：现口径照发周报，窄口径转 holdings-only）。我倾向维持宽分母——5% 预算抓的是数据质量，停牌是良性状态，窄口径会让停牌一多就误触发 holdings-only。
+- **全量我没重跑，账本我自己核**：现场重算代码态指纹与账本逐字相同、被审源码 mtime 全早于记账时间，所以 `2797 OK` 绑的是我在审的代码态。
+
+**未覆盖维度与诚实边界**
+
+- 真实 PowerShell launcher 端到端仍未运行；`partial_holdings_only` 的真实周运行未验，只有离线用例。
+- §6a 未起 agent（rule 8）；第 15 刀未执行。
+
+**下一步**：`Codex：执行`（第 15 刀）

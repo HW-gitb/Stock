@@ -33,6 +33,7 @@ from engine.a_short_factor_comparison_v2_weekly import (  # noqa: E402
     is_capture_replay_drift,
     load_v2_daily_cache,
     settle_and_summarize_v2_weekly,
+    unavailable_public_summary,
     validate_v2_public_summary,
 )
 from tests._a_short_weekly_publish_test_utils import write_content_bound_bundle  # noqa: E402
@@ -109,6 +110,12 @@ class ComparisonV2WeeklyAdapterTests(unittest.TestCase):
             capture_v2_week(root=root, decision_date=DECISION_DATE, candidates=candidates,
                             run_identity=_identity(candidates), forward_eligible=True)
         return candidates
+
+    def test_public_unavailable_summary_never_opens_private_root(self):
+        summary = unavailable_public_summary(DECISION_DATE)
+        self.assertEqual(summary["status"], PUBLIC_STATUS_UNAVAILABLE)
+        self.assertEqual(summary["reminder_count"], 0)
+        validate_v2_public_summary(summary)
 
     def test_capture_accepts_same_price_with_binary_float_representation_drift(self):
         with tempfile.TemporaryDirectory() as tmp:
