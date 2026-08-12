@@ -90,7 +90,7 @@ def _valid_artifact() -> dict:
             _row("LOW", eligible=False, adv_usd=1000.0, reasons=["adv_usd_below_floor"])]
     return {
         "schema_name": "us_short_universe_candidate_artifact",
-        "schema_version": "1.1.0",
+        "schema_version": "1.2.0",
         "authorization_ref": "user_chat_20260626_universe_fetch",
         "generated_at": "2026-06-29T12:00:00+00:00",
         "decision_date": "20260629",

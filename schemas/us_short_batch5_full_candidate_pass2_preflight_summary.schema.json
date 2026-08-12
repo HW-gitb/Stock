@@ -175,6 +175,11 @@
           "maxItems": 10,
           "items": { "type": "string", "pattern": "^[A-Z][A-Z0-9.:-]*$" }
         },
+        "eligible_selected_count": { "type": "integer", "minimum": 0 },
+        "eligible_not_selected_count": { "type": "integer", "minimum": 0 },
+        "eligible_scored_not_selected_count": { "type": "integer", "minimum": 0 },
+        "eligible_unscored_not_selected_count": { "type": "integer", "minimum": 0 },
+        "eligible_partition_conserved": { "const": true },
         "fmp_grade_call_cap": { "const": 250 },
         "fmp_grade_calls_within_free_daily_cap": { "type": "boolean" },
         "neutral_fill_tickers_excluded_from_expensive_pass2": { "const": true },

@@ -978,7 +978,7 @@ class ExecutableClosureMatrix:
                     self._function_calls(planted, "_degrade_soft_discovery_boundary"),
                     f"A/{name} planted failure did not disarm the assertion",
                 )
-                run, red, resolved = LaneGuardRegistryConformance._run(self.A_BEHAVIOR[name])
+                run, red, resolved, _output = LaneGuardRegistryConformance._run(self.A_BEHAVIOR[name])
                 self.assertTrue(resolved)
                 self.assertEqual((run, red), (1, 0))
                 capstone = importlib.import_module("runners.us_short_weekly_capstone")
@@ -987,7 +987,7 @@ class ExecutableClosureMatrix:
                     "_degrade_stage_boundary",
                     lambda *_args, **_kwargs: None,
                 ):
-                    planted_run, planted_red, _ = LaneGuardRegistryConformance._run(
+                    planted_run, planted_red, _, _ = LaneGuardRegistryConformance._run(
                         self.A_BEHAVIOR[name]
                     )
                 self.assertEqual(planted_run, 1)
@@ -1008,7 +1008,7 @@ class ExecutableClosureMatrix:
         }
         self.assertEqual(stage_entries, {"run_offline_stage"})
         for test_path in (self.A_STAGE_BEHAVIOR, self.A_FROZEN_BEHAVIOR):
-            run, red, resolved = LaneGuardRegistryConformance._run(test_path)
+            run, red, resolved, _output = LaneGuardRegistryConformance._run(test_path)
             self.assertTrue(resolved)
             self.assertEqual((run, red), (1, 0))
 
@@ -1105,7 +1105,7 @@ class ExecutableClosureMatrix:
             if route != "normal":
                 capstone.Stage = stage_factory
             try:
-                run, red, resolved = LaneGuardRegistryConformance._run(path)
+                run, red, resolved, _output = LaneGuardRegistryConformance._run(path)
                 self.assertTrue(resolved, f"route precondition did not resolve: {path}")
                 self.assertEqual((run, red), (1, 0), f"route baseline failed: {path}")
             finally:
@@ -1248,7 +1248,7 @@ class ExecutableClosureMatrix:
 
         for route, policy, callee, lineno in cells:
             with self.subTest(route=route, policy=policy, lifecycle=f"{callee}:{lineno}"):
-                run, red, resolved = mutate_route(route, policy, callee, lineno, route_tests[route])
+                run, red, resolved, _output = mutate_route(route, policy, callee, lineno, route_tests[route])
                 self.assertTrue(resolved, f"missing mutation control for {callee}")
                 self.assertGreater(run, 0)
                 self.assertGreater(red, 0, f"mutation did not kill {route}:{callee}:{lineno}")
@@ -1270,7 +1270,7 @@ class ExecutableClosureMatrix:
             "tests.provider.test_us_short_pass2_budget_approval.Pass2BudgetApprovalContractTest"
             ".test_capstone_approval_minting_binds_current_candidate_bytes"
         )
-        baseline_run, baseline_red, resolved = LaneGuardRegistryConformance._run(path)
+        baseline_run, baseline_red, resolved, _output = LaneGuardRegistryConformance._run(path)
         self.assertTrue(resolved)
         self.assertEqual((baseline_run, baseline_red), (1, 0))
         original = capstone._build_pass2_budget_approval
@@ -1281,13 +1281,13 @@ class ExecutableClosureMatrix:
                 capstone.WeeklyCapstoneError("planted strict Pass2 approval callsite failure")
             ),
         ):
-            mutated_run, mutated_red, _ = LaneGuardRegistryConformance._run(path)
+            mutated_run, mutated_red, _, _ = LaneGuardRegistryConformance._run(path)
         self.assertEqual(mutated_run, 1)
         self.assertGreater(mutated_red, 0, "deleting strict approval enforcement must turn the control red")
         self.assertIs(capstone._build_pass2_budget_approval, original)
 
     def test_named_non_guard_raisers_each_have_a_real_dying_behavior_control(self):
-        clean_baselines: dict[str, tuple[int, int, bool]] = {}
+        clean_baselines: dict[str, tuple[int, int, bool, str]] = {}
         for module_name, entries in self.NAMED_NON_GUARD_TESTS.items():
             module = importlib.import_module(module_name)
             for attribute, test_path in entries.items():
@@ -1296,7 +1296,7 @@ class ExecutableClosureMatrix:
                         clean_baselines[test_path] = LaneGuardRegistryConformance._run(
                             test_path
                         )
-                    baseline_run, baseline_red, resolved = clean_baselines[test_path]
+                    baseline_run, baseline_red, resolved, _output = clean_baselines[test_path]
                     self.assertTrue(resolved)
                     self.assertEqual((baseline_run, baseline_red), (1, 0))
                     original = getattr(module, attribute)
@@ -1307,7 +1307,7 @@ class ExecutableClosureMatrix:
                             AssertionError(f"planted {module_name}.{attribute} failure")
                         ),
                     ):
-                        mutated_run, mutated_red, _ = LaneGuardRegistryConformance._run(test_path)
+                        mutated_run, mutated_red, _, _ = LaneGuardRegistryConformance._run(test_path)
                     self.assertEqual(mutated_run, 1)
                     self.assertGreater(mutated_red, 0)
                     self.assertIs(getattr(module, attribute), original)
@@ -1339,7 +1339,7 @@ class ExecutableClosureMatrix:
         )
         index = entry.args.kwonlyargs.index(upstream_arg)
         self.assertIsNone(entry.args.kw_defaults[index], "anchoring must not be opt-in")
-        run, red, resolved = LaneGuardRegistryConformance._run(
+        run, red, resolved, _output = LaneGuardRegistryConformance._run(
             "tests.provider.test_us_short_weekly_capstone_soft_discovery"
             ".WeeklyCapstoneSoftDiscoveryStageTest"
             ".test_upstream_pairs_are_required_replayed_and_honestly_labelled"
@@ -1576,7 +1576,7 @@ class ExecutableClosureMatrix:
                     redundant_replay_baseline = registry._run(
                         self.REDUNDANT_REPLAY_TEST
                     )
-                run, red, resolved = redundant_replay_baseline
+                run, red, resolved, _output = redundant_replay_baseline
                 if resolved and (run, red) == (1, 0):
                     continue
             owner_module = importlib.import_module(patch_owner)
@@ -1617,7 +1617,7 @@ class ExecutableClosureMatrix:
             died = False
             with mock.patch.object(owner_module, bound_name, targeted):
                 for test_path in candidates:
-                    run, red, resolved = registry._run(test_path)
+                    run, red, resolved, _output = registry._run(test_path)
                     if hit and resolved and run == 1 and red > 0:
                         died = True
                         break
@@ -1903,8 +1903,8 @@ class LaneGuardRegistryConformance(unittest.TestCase):
         raise AssertionError(f"no mutant declared for {name}")
 
     @staticmethod
-    def _run(test_path: str) -> tuple[int, int, bool]:
-        """Return (cases run, failures+errors, whether the path resolved to a REAL test)."""
+    def _run(test_path: str) -> tuple[int, int, bool, str]:
+        """Return result counts, resolution, and the nested runner's diagnostic output."""
         suite = unittest.defaultTestLoader.loadTestsFromNames([test_path])
         cases: list[Any] = [suite]
         flattened: list[Any] = []
@@ -1918,8 +1918,9 @@ class LaneGuardRegistryConformance(unittest.TestCase):
             type(case).__name__ == "_FailedTest" or case.id().startswith("unittest.loader")
             for case in flattened
         )
-        result = unittest.TextTestRunner(verbosity=0, stream=io.StringIO()).run(suite)
-        return result.testsRun, len(result.failures) + len(result.errors), resolved
+        stream = io.StringIO()
+        result = unittest.TextTestRunner(verbosity=0, buffer=True, stream=stream).run(suite)
+        return result.testsRun, len(result.failures) + len(result.errors), resolved, stream.getvalue()
 
     def test_the_registry_covers_every_public_term_of_its_shared_modules(self):
         """A guard can also be lost by never being REGISTERED, so the registry is enumerated too."""
@@ -2032,16 +2033,21 @@ class LaneGuardRegistryConformance(unittest.TestCase):
         # Its clean baseline only proves that the named test exists and is green,
         # so run that identical fact once per unique test path.  Every guard's
         # planted mutation below still runs separately and must still turn red.
-        baseline_by_test: dict[str, tuple[int, int, bool]] = {}
+        baseline_by_test: dict[str, tuple[int, int, bool, str]] = {}
         for module_name, attribute, test_path in self.GUARDS:
             guard = f"{module_name}.{attribute}"
             if test_path not in baseline_by_test:
                 baseline_by_test[test_path] = self._run(test_path)
-            baseline_run, baseline_red, resolved = baseline_by_test[test_path]
+            baseline_run, baseline_red, resolved, baseline_output = baseline_by_test[test_path]
             with self.subTest(guard=guard, phase="baseline"):
                 self.assertTrue(resolved, f"registered dying test does not exist: {test_path}")
                 self.assertEqual(baseline_run, 1, "the dying test must be exactly one case")
-                self.assertEqual(baseline_red, 0, "the dying test must be green before mutation")
+                self.assertEqual(
+                    baseline_red,
+                    0,
+                    "the dying test must be green before mutation; nested test output:\n"
+                    + baseline_output.rstrip(),
+                )
 
             module = importlib.import_module(module_name)
             mutant = self._neutered(attribute)
@@ -2056,7 +2062,7 @@ class LaneGuardRegistryConformance(unittest.TestCase):
             for patch in patches:
                 patch.start()
             try:
-                mutated_run, mutated_red, _ = self._run(test_path)
+                mutated_run, mutated_red, _, _ = self._run(test_path)
             finally:
                 for patch in reversed(patches):
                     patch.stop()
@@ -2071,8 +2077,20 @@ class LaneGuardRegistryConformance(unittest.TestCase):
             "tests.provider.test_no_such_module_at_all.C.test_x",
         ):
             with self.subTest(path=fabricated):
-                _run, _red, resolved = self._run(fabricated)
+                _run, _red, resolved, _output = self._run(fabricated)
                 self.assertFalse(resolved, "a nonexistent test path must not count as a dying test")
+
+    def test_registry_runner_preserves_failed_test_traceback(self):
+        test_path = (
+            "tests.test_us_short_discovery_conformance."
+            "LaneGuardRegistryConformance.test_missing"
+        )
+        _run, red, resolved, output = self._run(test_path)
+
+        self.assertFalse(resolved)
+        self.assertEqual(red, 1)
+        self.assertIn("ERROR", output)
+        self.assertIn("test_missing", output)
 
 
 class ConformanceTierPairingConformance(unittest.TestCase):
@@ -2282,7 +2300,7 @@ class ResourceIsolationMatrix:
             "_decision_lock_path",
             lambda ctx: (legacy_lock_root / f"{ctx.decision_date}.lock").resolve(),
         ):
-            planted_run, planted_red, planted_resolved = (
+            planted_run, planted_red, planted_resolved, _output = (
                 LaneGuardRegistryConformance._run(lock_binding_test)
             )
         self.assertTrue(planted_resolved)
@@ -2318,7 +2336,7 @@ class ResourceIsolationMatrix:
              mock.patch.object(capstone, "_release_decision_lock", proving_release):
             for order in (selected, list(reversed(selected))):
                 for test_path in order:
-                    run, red, resolved = LaneGuardRegistryConformance._run(test_path)
+                    run, red, resolved, _output = LaneGuardRegistryConformance._run(test_path)
                     with self.subTest(resource_test=test_path):
                         self.assertTrue(resolved)
                         self.assertEqual((run, red), (1, 0))

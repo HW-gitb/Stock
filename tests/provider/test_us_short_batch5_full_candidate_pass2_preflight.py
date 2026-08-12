@@ -23,6 +23,7 @@ from tests.provider.test_us_short_batch5_data_context import (  # noqa: E402
     _candidate_artifact,
     _constant_projection,
 )
+from runners import us_short_universe_fetch as universe_fetch  # noqa: E402
 from tests.provider.us_short_projection_binding_test_helpers import bound_projection  # noqa: E402
 from tests.provider.us_short_private_test_root import (  # noqa: E402
     temporary_us_short_directory,
@@ -96,6 +97,48 @@ class FullCandidatePass2PreflightTest(unittest.TestCase):
 
     def _module(self):
         return importlib.import_module(MODULE)
+
+    def test_massive_market_cap_candidate_is_the_pass2_preflight_target(self):
+        runner = self._module()
+        candidate = _candidate_artifact(("COIN",))
+        row = candidate["rows"][0]
+        row["shares"] = None
+        row["market_cap_usd"] = 2e11
+        row["market_cap_source"] = "massive_ticker_overview"
+        row["coverage_status"] = "no_shares"
+        row["lineage"]["shares_source"] = "none"
+        row["lineage"]["market_cap_source"] = "massive_ticker_overview"
+        for key in ("shares_end", "shares_filed", "shares_accession"):
+            row["lineage"].pop(key, None)
+        candidate["summary"] = universe_fetch.summarize_rows(candidate["rows"])
+        _write_json(self.paths["candidate"], candidate)
+        _write_json(
+            self.paths["momentum"],
+            _constant_projection(
+                "momentum_by_ticker", ("COIN",), "scored", score=50.0,
+                candidate_path=self.paths["candidate"],
+            ),
+        )
+        _write_json(
+            self.paths["theme"],
+            _constant_projection(
+                "theme_block_by_ticker", ("COIN",), "scored_theme_base", score=50.0,
+                candidate_path=self.paths["candidate"],
+            ),
+        )
+        summary = runner.run_preflight(
+            candidate_artifact_path=self.paths["candidate"],
+            expected_decision_date=_DECISION_DATE,
+            momentum_projection_path=self.paths["momentum"],
+            theme_projection_path=self.paths["theme"],
+            summary_path=self.paths["summary"],
+            authorized_total_call_budget=6,
+            confirm_user_authorization=True,
+            generated_at="2026-07-06T12:00:00+00:00",
+        )
+        self.assertEqual(summary["pass2_target_universe"]["target_symbols"], ["COIN"])
+        self.assertEqual(summary["pass2_target_universe"]["target_count"], 1)
+        self.assertFalse(summary["scope"]["network_access_performed"])
 
     def test_preflight_blocks_when_local_score_inputs_do_not_cover_full_candidate_set(self):
         runner = self._module()
@@ -196,6 +239,11 @@ class FullCandidatePass2PreflightTest(unittest.TestCase):
         self.assertEqual(pass2["momentum_scored_candidate_count"], 3)  # all 3 scored (pre-cap)
         self.assertEqual(pass2["target_count"], 2)  # narrowed to top-2
         self.assertEqual(pass2["target_symbols"], ["AAPL", "MSFT"])  # top-2 by score = AAPL(90), MSFT(80); JPM(10) dropped
+        self.assertEqual(pass2["eligible_selected_count"], 2)
+        self.assertEqual(pass2["eligible_not_selected_count"], 1)
+        self.assertEqual(pass2["eligible_scored_not_selected_count"], 1)
+        self.assertEqual(pass2["eligible_unscored_not_selected_count"], 0)
+        self.assertTrue(pass2["eligible_partition_conserved"])
         self.assertTrue(pass2["fmp_grade_calls_within_free_daily_cap"])
         self.assertEqual(summary["endpoint_call_forecast"]["total_calls_for_pass2_target_cut"], 11)
 
@@ -302,6 +350,9 @@ class FullCandidatePass2PreflightTest(unittest.TestCase):
         self.assertEqual(summary["pass2_target_universe"]["forced_holding_count"], 0)
         self.assertEqual(summary["pass2_target_universe"]["target_count"], 2)
         self.assertEqual(summary["pass2_target_universe"]["target_symbols"], ["AAPL", "MSFT"])
+        self.assertEqual(summary["pass2_target_universe"]["eligible_not_selected_count"], 1)
+        self.assertEqual(summary["pass2_target_universe"]["eligible_unscored_not_selected_count"], 1)
+        self.assertTrue(summary["pass2_target_universe"]["eligible_partition_conserved"])
         self.assertFalse(summary["pass2_target_universe"]["expensive_pass2_targets_full_eligible_set"])
         self.assertEqual(summary["endpoint_call_forecast"]["families"]["pass2_source_packet"]["fmp_grades_calls"], 2)
         self.assertEqual(summary["endpoint_call_forecast"]["total_calls_for_pass2_target_cut"], 11)

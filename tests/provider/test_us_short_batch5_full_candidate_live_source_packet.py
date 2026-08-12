@@ -1343,6 +1343,32 @@ class UsShortBatch5FullCandidateLiveSourcePacketTest(unittest.TestCase):
         self.assertEqual(client.urls, [])
         self.assertFalse(self.paths["summary"].exists())
 
+    def test_forged_preflight_eligible_partition_count_is_rejected_before_fetch(self):
+        preflight = json.loads(self.paths["preflight"].read_text(encoding="utf-8"))
+        preflight["pass2_target_universe"]["eligible_selected_count"] = 0
+        _write_json(self.paths["preflight"], preflight)
+
+        client = FullCandidateFakeClient()
+        with self.assertRaisesRegex(runner.FullCandidateLiveSourcePacketError, "eligible/Pass2 partition"):
+            runner.run_full_candidate_live_source_packet(
+                preflight_summary_path=self.paths["preflight"],
+                expected_total_call_budget=16,
+                output_data_context_path=self.paths["output"],
+                context_components_output_path=self.paths["components"],
+                source_artifact_prefix=self.paths["prefix"],
+                summary_path=self.paths["summary"],
+                raw_root=self.raw_root,
+                client=client,
+                confirm_user_authorization=True,
+                run_data_context=False,
+                generated_at="2026-07-06T12:00:00+00:00",
+                observed_at=_OFFERING_OBSERVED_AT,
+                sec_sleep_seconds=0,
+            )
+
+        self.assertEqual(client.urls, [])
+        self.assertFalse(self.paths["summary"].exists())
+
     def test_forged_within_cap_preflight_is_rejected_when_target_exceeds_recomputed_cap(self):
         # The runner must RECOMPUTE within-cap from the re-derived target, not trust the preflight's const-true
         # attestation. With the cap lowered to 2, the canonical 3-target preflight (which self-attests within_cap)
@@ -1415,6 +1441,11 @@ class UsShortBatch5FullCandidateLiveSourcePacketTest(unittest.TestCase):
         self.assertEqual(summary["pass2_target_universe"]["momentum_top_k"], 2)
         self.assertEqual(summary["pass2_target_universe"]["target_count"], 2)
         self.assertEqual(summary["pass2_target_universe"]["target_symbols"], ["AAPL", "MSFT"])
+        self.assertEqual(summary["pass2_target_universe"]["eligible_selected_count"], 2)
+        self.assertEqual(summary["pass2_target_universe"]["eligible_not_selected_count"], 1)
+        self.assertEqual(summary["pass2_target_universe"]["eligible_scored_not_selected_count"], 1)
+        self.assertEqual(summary["pass2_target_universe"]["eligible_unscored_not_selected_count"], 0)
+        self.assertTrue(summary["pass2_target_universe"]["eligible_partition_conserved"])
         self.assertEqual(summary["endpoint_call_budget"]["actual_total_endpoint_calls"], 11)
         fetched_symbols = {row["symbol"] for row in summary["endpoint_results"] if row["symbol"] is not None}
         self.assertEqual(fetched_symbols, {"AAPL", "MSFT"})

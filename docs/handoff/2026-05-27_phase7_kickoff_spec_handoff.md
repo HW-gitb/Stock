@@ -4335,3 +4335,173 @@ git diff --check
 
 - 固定主 Python；focused `415 OK`（receipt `receipt:5328794d756e3be6929c54f6`）；full lane `5779/5779 equal=True PASS`、`317/317`、`388.4s/860s`，static `diff_check=PASS`、`py_compile=13`，fingerprint=`95bd1354d6dc9a6d7ac74f08c77a7c32030d922a10c9a780ae99e904bec9e335`。
 - 证据来自 fake client、临时根和离线测试；无 provider/network/live、无真实周跑、无诊断时钟推进、无真实 `state/us_short` 写入。状态为 `OPEN-NOT_VERIFIED`，下一步是 Claude Code 独立复审后按流程提交。
+
+## 2026-08-12 追加：0810 问题7市值获取链与候选池消费闭环（1302，待 Claude 独立审查）
+
+### 结果与实现边界
+
+- **风险身份**：`R-USSHORT-UNIVERSE-MARKET-CAP-ACQUISITION-GAP`，状态 `repaired / OPEN-NOT_VERIFIED`；本段是问题7的唯一当前交接，不删除或改写历史 `R-USSHORT-BATCH5-UNIVERSE-FMP-FALLBACK-STARVES-PASS2-GRADES` finding。
+- **生产链**：最终唯一链为 `run_fetch → dynamic recent 4 completed SEC frames → initial Pass1 → exact missing-CIK CompanyFacts → Pass1-B → exact residual FMP profile (max 240) → Pass1-C → exact residual Massive ticker-overview (price_basis_date, existing 13s pacing and issue8 65s/max2 429 contract) → Pass1-D → final candidate artifact/eligible_tickers → existing data-context → Pass2 preflight/final choice → market_cap_completion → existing problem6 universe_market_cap health → existing receipt/emit/report`。问题7没有复制问题6 classifier/receipt/report，也没有复制问题8 retry。
+- **相邻接口**：问题2 的 OHLCV source-packet→价格链、问题3 的 analyst source/coverage/provenance、问题8 的 Massive retry 常量/语义、问题9 的 `context_components` exact shape 均保持 owner 不变；问题7只消费最终候选和既有下游合同。
+- **SEC / schema / provenance**：frames 根据 `price_basis_date` 动态取最近四个已完成 quarter（`20260807` 实际列表为 `CY2026Q2I,CY2026Q1I,CY2025Q4I,CY2025Q3I`）；四 frame 全失败仍阻断。CompanyFacts 按首次 `needs_market_cap` 去重 CIK、每 CIK 一次、DEI→us-gaap、合法表单/`shares` 单位/正有限值/PIT 边界，保留 source/end/filed/accession；schema `1.2.0` 固定 `sec_xbrl_frames|sec_xbrl_companyfacts|none` 与 `sec_shares_x_close|fmp_profile|massive_ticker_overview|none`。
+- **残余与守恒**：FMP 逐票最多 240、沿用既有 403/429 stop 与 0.2s pacing；显式 identity mismatch 也不救援。Massive 只处理 FMP 后精确 residual，正有限且 identity match 才救援；失败保持 unresolved。`market_cap_completion` 守恒并记录 CompanyFacts/FMP/Massive target/request/attempt/rescued/final-unresolved；问题6 对完整/部分/坏 aggregate 分别给 `ok/degraded/down`，历史 FMP-only summary 兼容。
+- **真实消费者证明**：最终 Pass1 rows 产生 artifact summary/eligible/count；离线真实 `run_fetch` 形状用例证明 COIN 类初始市值缺口经 Massive 补齐进入 data-context candidates 和 Pass2 preflight target；失败 residual 不能通过 catalyst recall/default 旁路。
+
+### 验证与未验证边界
+
+- 固定解释器：`C:\Users\cnhea\AppData\Local\Programs\Python\Python313\python.exe`。规定聚焦模块为 `Ran 274 tests in 9.0s ... OK`，machine receipt=`receipt:b0a73f22c910a79b62a274d4`；相关 7 个 Python 文件 `py_compile=PASS`，`git diff --check=PASS`。
+- 按 AGENTS rule 4 对冻结代码只执行一次 full-pack ledger：`discover -s tests -p test_us_short*.py`，`discovered=5801 ran=5801 equal=True`、`317/317` modules、`PASS`、`487.4s/860s`，full/prepare/code fingerprint=`0b7a0b9b17fe6f6f7b7fd537e6554be8afeb61f016c25561ae76586f430a3b52`。
+- 聚焦覆盖动态 frame/CompanyFacts PIT、43 条超过旧 40 限制的完整残余链、FMP/Massive/none lineage/schema/反伪造、consumer closure、problem6 aggregate health reverse；ripple 检查确认无生产 first-40 静默截断、无第二套 health/retry、旧 `SEC_SHARE_FRAMES` 生产符号无残留。测试均为 fake transport/临时根/离线。
+- 未执行 bounded live acceptance、未访问 provider/真实 key、未写真实 `state/us_short`，未核对真实 `MSTR`、`COIN`、`RDDT`、`HIMS`、`DKNG`、`SNAP` 或 20260810 的 544/504 产物；不得据此声称 20260810 全量问题已修复、production/ship gate 已开放。Codex 不提交；下一步由 Claude Code 独立审查并按 PASS 流程提交。
+
+## 2026-08-12 追加：问题7 独立审查 FAIL（1302，未提交）
+
+### 改了什么
+
+- 审查方零代码改动。`docs/system_risk_register.md` 新建三条 Required、记 6 条 Optional、2 条「明确不是发现」与已验成立的不变量清单；`docs/SESSION_LOG.md` 顶部 prepend 一条极简 FAIL entry。
+
+### 为什么
+
+- `R-USSHORT-MARKET-CAP-LAYER-TARGET-TRUNCATION-HAS-NO-ORCHESTRATION-GUARD`：`us_short_universe_fetch.py:1695` 与 `:1710` 两处决定每层目标集的编排行没有任何测试钉住。我在**最后一层**种回 `[:40]` 后全部 114 条测试仍绿——第 41 名之后的票拿不到 overview、落进 `final_unresolved`、被静默移出候选池，正是本刀要根除的 504 只死法。守恒式结构上抓不到（丢掉的票只是落进 `final`，等式照样成立）。
+- `R-USSHORT-COMPANYFACTS-PRECEDENCE-TEST-IS-TAUTOLOGICAL`：`test_companyfacts_target_is_only_a_frame_hole` 把生产的 merge 循环手抄进测试体再对自己抄的那份断言，无任何生产调用。
+- `R-USSHORT-UNIVERSE-SUMMARY-UNRESOLVED-COUNT-IGNORES-THE-MASSIVE-LAYER`：`unresolved_count` 由 CompanyFacts 残余减 FMP 救回得出，无视 Massive 层，与同一摘要里的 `final_unresolved_count` 系统性矛盾，违反本刀完成判据 #5。
+
+### 验证命令
+
+- `.tools\run_unittest_with_repo_pythonpath.cmd --timeout-seconds 900 tests.provider.test_us_short_universe_fetch tests.schema.test_us_short_universe_candidate_artifact_schema tests.provider.test_us_short_batch5_data_context tests.provider.test_us_short_batch5_full_candidate_pass2_preflight tests.provider.test_us_short_provider_health_capstone_matrix tests.provider.test_us_short_weekly_capstone`
+- 植入反控：分别在 `:1695` 与 `:1710` 加 `[:40]` 后单跑 `tests.provider.test_us_short_universe_fetch`。
+
+### 验证结果
+
+- 焦点超集 `Ran 291 in 10.6s OK`，`receipt:d63a39e62d763448b761f3cb`。
+- 两次植入均 `Ran 114 OK`（**应红未红**，即本轮 P1 Required 的证据）；还原后 `git diff --numstat` 回 `462 48`、全仓零 `PLANTED` 残留。
+- full lane 按 rule 4 不重跑，独立读账本核对 `5801/5801`、`317/317`、`487.4s`、fingerprint `0b7a0b9b17fe…`，与执行方所述一致。
+
+### 失效旧结论
+
+- 上一节「ripple 检查确认无生产 first-40 静默截断」只对**当前代码**成立，不代表该缺陷类已被守住——它可以原样种回而无测试转红。修完 P1 前不得把本刀读成「截断问题已根除」。
+
+### 下一步注意事项
+
+- 三条 Required 属同一轮批量修（§16），修完再交复审。
+- 1302 落后 master 8 个提交（`O-P7-5`），修复前建议先做 step-0 `ff-only` 同步，否则合并会走双侧 widening。
+- 未做 bounded live acceptance，不得声称 20260810 的 504 只已修复。
+
+## 2026-08-12 追加：0810 问题7 Required + Optional 修复交接（1302，待 Claude 独立审查）
+
+### 范围与结论
+
+- **风险身份**：`R-USSHORT-UNIVERSE-MARKET-CAP-ACQUISITION-GAP`；3 条 Required 与 `O-P7-1`~`O-P7-6` 均已实现，状态为 `repaired / OPEN-NOT_VERIFIED`。没有提交或 merge；所有编辑仅在 1302，桌面 `us_testrun0810.md` 未修改。
+- **同步**：先把 1302 fast-forward 到 master `d99f0cab`，再恢复原有工作并解决唯一的 `docs/system_risk_register.md` 冲突；因此 `O-P7-5` 已消除，后续没有在主树工作。
+- **唯一链不变**：`run_fetch -> SEC frames -> missing-CIK CompanyFacts -> FMP residual -> Massive residual -> final artifact/eligible -> existing data-context/Pass2 -> market_cap_completion -> existing problem6 health -> existing receipt/emit/report`。没有新 health family、receipt、emit/report 或 retry 链。
+
+### 本轮修复
+
+- 两个 fallback seam 均用逐元素 exact-residual guard 锁住；43 ticker 的生产 `run_fetch` fake-transport 用例记录并断言 FMP 与 Massive 各自收到全量 residual，且最后层可救回 ticker 保留在 `eligible_tickers`。
+- CompanyFacts precedence 改成生产路径验证：frames 已有的 CIK 即使 CompanyFacts 回传冲突 shares 也不被覆盖；仅 frames hole 可由 CompanyFacts 填补。相同 `(end,filed,accession)` 的相同值可接受、不同值 fail-closed。
+- health 兼容字段把 `unresolved_count` 绑定到最终 whole-chain unresolved，并分列 `unresolved_after_fmp_count`；Massive overview 还输出 target/physical/rescued/final-unresolved/outcome 与 13 秒初始请求 pacing 下界，仍不是独立 health family，也没有 hard cap。
+- FMP fallback identity 改为至少一个非空 identity、所有提供的 `symbol`/`ticker` 都需 canonical-match；`shares * close` 只在有限正值时作为 SEC 市值，否则正常落入 fallback/none。
+- Pass2 继续使用审批 Top-K，不把所有 eligible 强推入昂贵调用；preflight 与 live consumer 共同生成/核验 eligible-selected、eligible-scored-not-selected、eligible-unscored-not-selected 的 count/SHA-256 分区。任何已升级 preflight 的分区伪造会在 provider call 前拒绝；历史 preflight 完全缺这组 Optional 字段时保持可读。
+
+### 验证与边界
+
+- 固定主 Python wrapper：`Ran 375 tests ... OK`，receipt=`receipt:63d0f2831ee2c7773aa4d2ab`；包含问题7规定模块和本轮触及的 funnel/live/schema。`py_compile`、`git diff --check HEAD` 通过。
+- 植入反控均实际转红后还原：FMP seam `[:40]`、Massive seam `[:40]` 分别触发 exact-residual guard；移除 frames 优先级使生产 precedence 断言从 `2_000_000.0` 变为冲突的 `1000.0`。零 `PLANTED` 残留。
+- 按 rule 4 在代码冻结后只启动一次 `full_pack_ledger.py run us_short ...`。静态门先通过（`diff_check=PASS`、`py_compile=12`），但 full lane 在既有 soft-discovery conformance baseline 报红而 fail-fast：`discovered=5810, ran=4804, equal=False, FAIL`。因此本交接**没有**全量绿结论，不能以旧 `5801/5801` 替代。
+- 隔离检查中，失败模块同 full-worker 参数直接为 `29 OK`；紧接其 serial predecessor `provider.test_us_short_weekly_capstone_soft_discovery` 后亦为 `53 OK` + `29 OK`。根因未定位，单列 `R-USSHORT-FULL-LANE-CONFORMANCE-BASELINE-FLAKE`，不把它伪称为问题7回归，也不原样重跑 full lane。
+- 全部测试使用 fake transport 和临时根；未访问 provider/真实 key，未写真实 `state/us_short`，未做 bounded live acceptance，未推进诊断时钟，未得出 production/ship 或 20260810 504/544 已修复的结论。
+
+### Claude 审查入口
+
+- 审查 Required 的三个真实生产路径与全部 Optional（尤其是 live consumer 分区绑定），核对 `docs/system_risk_register.md` 的 full-lane `FAIL` 边界。若修复该独立 full-lane gate，代码指纹变化后再按 rule 4 运行唯一一次完整 ledger；否则不得提交为“全量验证通过”。
+
+## 2026-08-12 追加：SESSION_LOG header 与 full-lane conformance 诊断修复（1302，待 Claude 独立审查）
+
+### 修复内容
+
+- review gate 的 newest-entry parser 现与 doc-governance 共用同一 header grammar：`## YYYY-MM-DD — ...`（亦允许既有 en-dash/hyphen 变体）。最新 dated header 漏分隔符会立即拒绝，不能再绕去验证旧 entry。
+- `LaneGuardRegistryConformance._run()` 保留 nested unittest 的 captured output；baseline 失败将携带实际内部 traceback。所有 executable/resource consumer 已随四元返回契约更新，资源隔离 module 的遗漏 unpack 由第一次 full-ledger 立即发现并修正。
+
+### 验证与边界
+
+- 固定主 Python focused conformance/gate closure：`54 OK`，receipt `receipt:716a5695e4e09645993a5750`；另有 header-missing-separator 与 nested-error-output 回归测试。
+- 首次新 fingerprint ledger 只跑到 `4528/5811`，原因是本刀漏改 resource consumer 的 `ValueError`；修正后新的 fingerprint 的唯一 ledger 为 `5811/5811`、317/317、`PASS`、383.4s/860s，static `diff_check=PASS`、`py_compile=15`。
+- 原始 soft-discovery baseline 未在本轮重现，因此只关闭其诊断黑洞，不编造根因；无 provider/network/live、无真实 `state/us_short` 写入、无诊断时钟/production/ship 结论。状态仍 `OPEN-NOT_VERIFIED`，由 Claude Code 独立审查、提交。
+
+## 2026-08-12 追加：问题7 复审 —— 三条 Required 闭合确认，新增审查门 Required（1302，未提交）
+
+### 改了什么
+
+- 审查方零代码改动。register 记三条旧 Required 翻 `resolved` 的实测证据、新建一条审查门 Required、一条 Optional；SESSION_LOG 顶部 prepend 极简 FAIL entry。
+
+### 为什么
+
+- 三条旧 Required 确已闭合：编排层两处 seam 加了逐元素比对的 `_assert_exact_market_cap_layer_targets`；自证的 precedence 测试换成走生产 `run_fetch` 的冲突用例；`unresolved_count` 改读全链最终值并保留 `unresolved_after_fmp_count`。
+- 新 Required `R-DOCGOV-REVIEW-GATE-STILL-VALIDATES-AN-OLDER-ENTRY-WHEN-THE-NEWEST-HEADER-IS-MALFORMED`：`_top_review_entry` 的锚点是「第一条匹配日期正则的行」，最新 header 若连该正则都不匹配（`##` 后无空格、日期未补零），门会拿更老的合规条目放行本轮回复。这是反造假机制本身，且正是本轮 R-ID 名字里的那一格。
+
+### 验证命令
+
+- `.tools\run_unittest_with_repo_pythonpath.cmd --timeout-seconds 1200 <本轮全部 10 个改动测试模块>`
+- 再植入：最后一层 `massive_overview_targets` 加 `[:40]` 后单跑 `tests.provider.test_us_short_universe_fetch`
+- 审查门探针：直接调 `_top_review_entry`，喂四种 header 形状
+
+### 验证结果
+
+- 焦点超集 `Ran 335 in 58.8s OK`，`receipt:c2f1ff9de307453291cc354e`。
+- 再植入 `RuntimeError` 精确转红在 `test_run_fetch_sends_the_full_43_residual_to_both_fallback_layers`；**上一轮同一植入是 `Ran 114 OK` 全绿**——这是 P1 闭合的前后对照。还原后零残留。
+- 审查门四格：合法 → 取最新；分隔符错 → 正确报错；`##` 后无空格 / 日期未补零 → `err=None` 且 picked 落到 2026-08-01 的旧条目。
+
+### 失效旧结论
+
+- 上一节「ripple 检查确认无生产 first-40 静默截断」现已由编排级 guard 与 43 条残余的 run_fetch 用例真正守住，可以引用了。
+- 本轮 `R-DOCGOV-SESSIONLOG-HEADER-SEPARATOR-GATE-DIVERGENCE` 的「已修复」不涵盖其 R-ID 名字里的 skip 那一格，勿据其宣称审查门已无跳过风险。
+
+### 下一步注意事项
+
+- 只剩审查门那一条 Required，锚点从「第一条匹配日期正则的行」改成「compliant zone 里的第一条 `^## ` 行」即可，三格闭合测试见 register。
+- 仍未做 bounded live acceptance，不得声称 20260810 的 504 只已修复。
+
+## 2026-08-12 追加：审查门 header anchor 与问题7 Optional 哈希最小修复（1302，待 Claude 独立审查）
+
+### 修复与取舍
+
+- `R-DOCGOV-REVIEW-GATE-STILL-VALIDATES-AN-OLDER-ENTRY-WHEN-THE-NEWEST-HEADER-IS-MALFORMED`：review gate 现在先取 compliant zone 的第一条 `^##` 行，而非第一条匹配日期正则的行；随后仍用原有严格 header grammar 判定。漏分隔符、`##` 后无空格、日期未补零都 fail-closed，且不能退回验证后面的旧 entry。
+- `O-P7-7` 的 4 个 `eligible_*_tickers_sha256` 被判为过度设计并删除：它们是不可解释的摘要指纹，无法给出具体排除项；live runner 已在花 provider call 前独立重推导且精确比对 `target_symbols`。保留分区计数、守恒与 upgraded preflight 对 live re-derivation 的一致性校验；forced-holding/catalyst-recall 的既有 binding hashes 不在本 Optional 范围。
+
+### 验证与边界
+
+- 固定主 Python 的聚焦集 `86 OK`，receipt=`receipt:754625ea870daae6b600d4ac`；`diff_check=PASS`、`py_compile=15`。
+- rule 4 的当前指纹唯一 US-short ledger 为 `5811/5811`、317/317 modules、`PASS`、`480.4s/860s`、fingerprint=`e8813231743d…`。
+- 全部为离线/fake/临时根测试；没有 provider/network/live、真实 `state/us_short` 写入、主树或桌面文档变更。状态 `OPEN-NOT_VERIFIED`，下一步由 Claude Code 独立审查，不提交、不 merge。
+
+## 2026-08-12 追加：审查门 anchor 复审 PASS（1302 → master）
+
+### 改了什么
+
+- 审查方零代码改动；register 记 `R-DOCGOV-REVIEW-GATE-STILL-VALIDATES-AN-OLDER-ENTRY-WHEN-THE-NEWEST-HEADER-IS-MALFORMED` 翻 `resolved`、新记 `O-P7-8`；SESSION_LOG 顶部 prepend 极简 PASS entry。
+
+### 为什么
+
+- `_top_review_entry` 的锚点从「第一条匹配日期正则的行」改为 compliant zone 里的第一条 `##` 行，再用既有严格 grammar 判定。这样最新 header 无论何种畸形都不可能让门回退去验更老的合规条目。
+
+### 验证命令
+
+- `.tools\run_unittest_with_repo_pythonpath.cmd --timeout-seconds 900 tests.test_claude_review_gate tests.test_us_short_pass2_funnel tests.provider.test_us_short_batch5_full_candidate_pass2_preflight tests.provider.test_us_short_batch5_full_candidate_live_source_packet tests.test_doc_governance_guard tests.test_route_doc_ledger_status_consistency`
+- 植入：把 `_SESSION_HEADER_RE` 改回 `^## \d{4}-\d{2}-\d{2}\b.*$` 后单跑 `tests.test_claude_review_gate`
+- 探针：直接调 `_top_review_entry` 喂五种 header 形状
+
+### 验证结果
+
+- 焦点超集 `Ran 127 in 45.3s OK`，`receipt:4008497fbc2de396a027ad7b`。
+- 植入 → `test_stop_validation_rejects_malformed_newest_header_before_validating_body` 在 `##2026-08-12` 与 `## 2026-8-12` 两个 subTest 精确转红；还原后 numstat 回 `21 7`、零残留。
+- 五格探针全部 fail-closed；上轮 C/D 两格的静默回退已消除。
+- full lane 按 rule 4 引账本 `5811/5811`、`317/317`、`480.4s`；直接计算当前代码态指纹 `e8813231743d…` 与记录值逐字相同，确认绑定最终 diff。
+
+### 失效旧结论
+
+- 上一节「`R-DOCGOV-SESSIONLOG-HEADER-SEPARATOR-GATE-DIVERGENCE` 已修复」当时只覆盖分隔符那一格；skip 那一格由本轮补齐，两者合起来才是该 R-ID 名字承诺的范围。
+
+### 下一步注意事项
+
+- `O-P7-8`：`^##.*$` 亦匹配 `###`，正文含三级标题的 entry 会被截断（fail-closed，不放行）；若将来评审 entry 需要子标题，改成 `^##(?!#).*$`。
+- 仍未做 bounded live acceptance，不得声称 20260810 的 504 只已修复。

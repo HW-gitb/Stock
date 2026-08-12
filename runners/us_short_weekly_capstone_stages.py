@@ -1057,8 +1057,45 @@ def _universe_market_cap_health(summary: Mapping[str, Any]) -> tuple[str, str]:
     if not isinstance(pass1, Mapping):
         return "universe_market_cap", "missing"
     needs = pass1.get("needs_market_cap")
-    if not isinstance(needs, list):
+    if (not isinstance(needs, list) or any(not isinstance(value, str) or not value for value in needs)
+            or len(set(needs)) != len(needs)):
         return "universe_market_cap", "missing"
+
+    # Problem 7's current producer supplies one conserved aggregate. It is the only current market-cap health
+    # input; malformed/current aggregate evidence is down, never silently replaced by the historical FMP-only shape.
+    if "market_cap_completion" in summary:
+        completion = summary.get("market_cap_completion")
+        required = (
+            "needed_count", "sec_companyfacts_target_count", "sec_companyfacts_request_count",
+            "sec_companyfacts_rescued_count", "fmp_attempted_count", "fmp_rescued_count",
+            "massive_overview_attempted_count", "massive_overview_rescued_count", "final_unresolved_count",
+        )
+        if not isinstance(completion, Mapping) or any(
+            type(completion.get(key)) is not int or completion[key] < 0 for key in required
+        ):
+            return "universe_market_cap", "down"
+        needed = completion["needed_count"]
+        sec_target = completion["sec_companyfacts_target_count"]
+        sec_calls = completion["sec_companyfacts_request_count"]
+        sec_rescued = completion["sec_companyfacts_rescued_count"]
+        fmp_attempted = completion["fmp_attempted_count"]
+        fmp_rescued = completion["fmp_rescued_count"]
+        massive_attempted = completion["massive_overview_attempted_count"]
+        massive_rescued = completion["massive_overview_rescued_count"]
+        unresolved = completion["final_unresolved_count"]
+        if (
+            sec_target > needed or sec_calls > sec_target
+            or fmp_attempted > _universe.UNIVERSE_FMP_MKTCAP_FALLBACK_BUDGET
+            or fmp_attempted > needed
+            or fmp_rescued > fmp_attempted
+            or massive_attempted > needed or massive_rescued > massive_attempted
+            or sec_rescued > needed
+            or unresolved != len(needs)
+            or needed != sec_rescued + fmp_rescued + massive_rescued + unresolved
+        ):
+            return "universe_market_cap", "down"
+        return "universe_market_cap", "ok" if unresolved == 0 else "degraded"
+
     unresolved = len(needs)
     fallback = ((summary.get("provider_health") or {}).get("opportunistic_fallbacks")
                 if isinstance(summary.get("provider_health"), Mapping) else None)

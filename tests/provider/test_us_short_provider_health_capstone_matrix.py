@@ -143,6 +143,74 @@ def _projected() -> dict[str, str]:
 
 
 class CapstoneProviderHealthMatrix(unittest.TestCase):
+    def _with_completion(self, *, needs, completion):
+        stages = _stage_results()
+        stages["universe_fetch"]["pass1_result"]["needs_market_cap"] = list(needs)
+        stages["universe_fetch"]["market_cap_completion"] = dict(completion)
+        return stages
+
+    def test_market_cap_completion_zero_and_43_rescued_are_ok(self):
+        zero = self._with_completion(
+            needs=[],
+            completion={
+                "needed_count": 0, "sec_companyfacts_target_count": 0, "sec_companyfacts_request_count": 0,
+                "sec_companyfacts_rescued_count": 0, "fmp_attempted_count": 0, "fmp_rescued_count": 0,
+                "massive_overview_attempted_count": 0, "massive_overview_rescued_count": 0,
+                "final_unresolved_count": 0,
+            },
+        )
+        self.assertEqual(stages._universe_market_cap_health(zero["universe_fetch"]),
+                         ("universe_market_cap", "ok"))
+
+        names = [f"P{idx:02d}X" for idx in range(43)]
+        complete = self._with_completion(
+            needs=[],
+            completion={
+                "needed_count": 43, "sec_companyfacts_target_count": 0, "sec_companyfacts_request_count": 0,
+                "sec_companyfacts_rescued_count": 0, "fmp_attempted_count": 43, "fmp_rescued_count": 40,
+                "massive_overview_attempted_count": 3, "massive_overview_rescued_count": 3,
+                "final_unresolved_count": 0,
+            },
+        )
+        self.assertEqual(stages._universe_market_cap_health(complete["universe_fetch"]),
+                         ("universe_market_cap", "ok"))
+        self.assertEqual(
+            stages.derive_capstone_provider_health(complete)["universe_market_cap"], "ok",
+        )
+
+    def test_market_cap_completion_unresolved_is_degraded(self):
+        summary = self._with_completion(
+            needs=["UNRESOLVED"],
+            completion={
+                "needed_count": 1, "sec_companyfacts_target_count": 1, "sec_companyfacts_request_count": 1,
+                "sec_companyfacts_rescued_count": 0, "fmp_attempted_count": 1, "fmp_rescued_count": 0,
+                "massive_overview_attempted_count": 1, "massive_overview_rescued_count": 0,
+                "final_unresolved_count": 1,
+            },
+        )
+        self.assertEqual(stages._universe_market_cap_health(summary["universe_fetch"]),
+                         ("universe_market_cap", "degraded"))
+
+    def test_market_cap_completion_malformed_or_nonconserved_is_down(self):
+        malformed = self._with_completion(
+            needs=["A"],
+            completion={"needed_count": 1},
+        )
+        self.assertEqual(stages._universe_market_cap_health(malformed["universe_fetch"]),
+                         ("universe_market_cap", "down"))
+
+        nonconserved = self._with_completion(
+            needs=["A"],
+            completion={
+                "needed_count": 1, "sec_companyfacts_target_count": 0, "sec_companyfacts_request_count": 0,
+                "sec_companyfacts_rescued_count": 1, "fmp_attempted_count": 0, "fmp_rescued_count": 1,
+                "massive_overview_attempted_count": 0, "massive_overview_rescued_count": 0,
+                "final_unresolved_count": 0,
+            },
+        )
+        self.assertEqual(stages._universe_market_cap_health(nonconserved["universe_fetch"]),
+                         ("universe_market_cap", "down"))
+
     def test_committed_real_universe_summary_keeps_market_cap_fallback_noncritical(self):
         path = ROOT / "docs" / "us_short_universe_fetch_summary_20260730.json"
         summary = json.loads(path.read_text(encoding="utf-8"))

@@ -18,7 +18,7 @@ if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
 from engine.us_short_eligibility_gate import canonical_us_ticker, load_eligibility_governance  # noqa: E402
-from engine.us_short_pass2_funnel import select_pass2_targets  # noqa: E402
+from engine.us_short_pass2_funnel import partition_pass2_targets, select_pass2_targets  # noqa: E402
 from engine.us_short_projection_binding import (  # noqa: E402
     file_sha256,
     ticker_partition_sha256,
@@ -330,6 +330,14 @@ def _pass2_target_universe(
         forced_holdings=forced,
         top_k=momentum_top_k,
     )
+    partition = partition_pass2_targets(
+        targets=targets,
+        momentum_scores=momentum_scores,
+        theme_scores=theme_coverage["_scored_score_map"],
+        eligible=eligible,
+    )
+    if len(partition["eligible_selected"]) + len(partition["eligible_not_selected"]) != len(eligible):
+        raise FullCandidatePass2PreflightError("Pass2 eligible partition does not conserve the candidate universe")
     target_count = len(targets)
     full_eligible = target_count == len(eligible_tickers)
     within_cap = target_count <= FMP_FREE_DAILY_GRADE_CALL_CAP
@@ -346,6 +354,11 @@ def _pass2_target_universe(
         "target_count": target_count,
         "target_symbols": targets,
         "target_symbol_sample": targets[:10],
+        "eligible_selected_count": len(partition["eligible_selected"]),
+        "eligible_not_selected_count": len(partition["eligible_not_selected"]),
+        "eligible_scored_not_selected_count": len(partition["eligible_scored_not_selected"]),
+        "eligible_unscored_not_selected_count": len(partition["eligible_unscored_not_selected"]),
+        "eligible_partition_conserved": True,
         "fmp_grade_call_cap": FMP_FREE_DAILY_GRADE_CALL_CAP,
         "fmp_grade_calls_within_free_daily_cap": within_cap,
         "neutral_fill_tickers_excluded_from_expensive_pass2": True,

@@ -270,6 +270,38 @@ class ClaudeReviewGateTests(unittest.TestCase):
         self.assertIn("Verify", "\n".join(gate.validate_session_log_text(missing, token)))
         self.assertIn("Verify", "\n".join(gate.validate_session_log_text(wrong_line, token)))
 
+    def test_stop_validation_rejects_malformed_newest_header_before_validating_body(self):
+        gate = _load_gate()
+        token = "review-evidence:abc123"
+        for malformed_header in (
+            "## 2026-08-12 Claude review PASS (slice)",
+            "##2026-08-12 — Claude review PASS (slice)",
+            "## 2026-8-12 — Claude review PASS (slice)",
+        ):
+            with self.subTest(malformed_header=malformed_header):
+                malformed_log = (
+                    "# log\n\n"
+                    f"{malformed_header}\n"
+                    "- **Verdict/Action**: PASS\n"
+                    "- **Required**: none\n"
+                    f"- **Verify**: full pack OK; {token}\n"
+                    "- **Next**: none\n\n"
+                    "## 2026-08-11 — Claude review PASS (older valid entry)\n"
+                    "- **Verdict/Action**: PASS\n"
+                    "- **Required**: none\n"
+                    f"- **Verify**: full pack OK; {token}\n"
+                    "- **Next**: none\n\n"
+                    "REVIEW-CYCLE-MINIMAL-TEMPLATE-MARKER\n"
+                )
+
+                self.assertEqual(
+                    gate.validate_session_log_text(malformed_log, token),
+                    [
+                        "top dated SESSION_LOG entry has an invalid header separator; "
+                        "expected `## YYYY-MM-DD — ...`",
+                    ],
+                )
+
     def test_stop_hook_blocks_corrupt_active_review_state(self):
         gate = _load_gate()
         with tempfile.TemporaryDirectory() as td:
