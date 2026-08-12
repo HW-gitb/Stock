@@ -1,0 +1,142 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://stock.local/schemas/a_short_entry_funnel_historical_report/1.0.0/schema.json",
+  "title": "A-short Entry Funnel Historical Readiness Report",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_name",
+    "schema_version",
+    "generated_at",
+    "source_readiness",
+    "decision_policy",
+    "funnel",
+    "entry_diagnostic",
+    "calibration_conclusion",
+    "boundary"
+  ],
+  "properties": {
+    "schema_name": {"const": "a_short_entry_funnel_historical_report"},
+    "schema_version": {"const": "1.0.0"},
+    "generated_at": {"type": "string", "format": "date-time"},
+    "source_readiness": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "status",
+        "logical_source_id",
+        "input_filenames",
+        "date_range",
+        "distinct_weeks",
+        "price_row_count",
+        "analysis_input_schema_versions",
+        "provider_calls"
+      ],
+      "properties": {
+        "status": {"enum": ["ready", "ready_with_candidate_gaps", "source_missing"]},
+        "logical_source_id": {"const": "authorized_local_historical_pit"},
+        "input_filenames": {"const": ["analysis_input.json", "prices.csv"]},
+        "date_range": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["first_as_of", "last_as_of"],
+          "properties": {
+            "first_as_of": {"type": ["string", "null"], "pattern": "^[0-9]{8}$"},
+            "last_as_of": {"type": ["string", "null"], "pattern": "^[0-9]{8}$"}
+          }
+        },
+        "distinct_weeks": {"type": "integer", "minimum": 0},
+        "price_row_count": {"type": "integer", "minimum": 0},
+        "analysis_input_schema_versions": {
+          "type": "array",
+          "uniqueItems": true,
+          "items": {"type": "string"}
+        },
+        "provider_calls": {"const": 0}
+      }
+    },
+    "decision_policy": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["mode", "provider_calls", "production_threshold_change"],
+      "properties": {
+        "mode": {"const": "historical_input_readiness_only"},
+        "provider_calls": {"const": 0},
+        "production_threshold_change": {"const": false}
+      }
+    },
+    "funnel": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "candidate_count",
+        "evaluable_candidate_count",
+        "not_evaluable_candidate_count",
+        "not_evaluable_reason_counts"
+      ],
+      "properties": {
+        "candidate_count": {"type": "integer", "minimum": 0},
+        "evaluable_candidate_count": {"type": "integer", "minimum": 0},
+        "not_evaluable_candidate_count": {"type": "integer", "minimum": 0},
+        "not_evaluable_reason_counts": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "missing_rule6_hard_veto",
+            "missing_egs_breakout",
+            "missing_m05_rule3",
+            "insufficient_pit_price_window"
+          ],
+          "properties": {
+            "missing_rule6_hard_veto": {"type": "integer", "minimum": 0},
+            "missing_egs_breakout": {"type": "integer", "minimum": 0},
+            "missing_m05_rule3": {"type": "integer", "minimum": 0},
+            "insufficient_pit_price_window": {"type": "integer", "minimum": 0}
+          }
+        }
+      }
+    },
+    "entry_diagnostic": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["status", "price_window_required"],
+      "properties": {
+        "status": {"enum": ["not_run_source_missing", "not_run_15b_pending"]},
+        "price_window_required": {"const": 20}
+      }
+    },
+    "calibration_conclusion": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["status", "sample_sufficient", "next_evidence"],
+      "properties": {
+        "status": {"const": "insufficient_sample"},
+        "sample_sufficient": {"const": false},
+        "next_evidence": {
+          "enum": [
+            "provide_authorized_historical_pit_source",
+            "complete_15b_production_replay_before_any_rule_change"
+          ]
+        }
+      }
+    },
+    "boundary": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "calibration_only",
+        "production_unchanged",
+        "is_buy_advice",
+        "satisfies_ship_gate",
+        "full_size_allowed"
+      ],
+      "properties": {
+        "calibration_only": {"const": true},
+        "production_unchanged": {"const": true},
+        "is_buy_advice": {"const": false},
+        "satisfies_ship_gate": {"const": false},
+        "full_size_allowed": {"const": false}
+      }
+    }
+  }
+}

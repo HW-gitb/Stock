@@ -6667,3 +6667,41 @@ effect contract 已用固定 Python 重新登记 A-EGS decision-predicate hash �
 - §6a 未起 agent（rule 8）；第 15 刀未执行。
 
 **下一步**：`Codex：执行`（第 15 刀）
+
+## 2026-08-12 — Codex executor/fixer: desktop `ashort_1415.md` §15A historical input and active-report readiness (`43fe`, `implemented / OPEN-NOT_VERIFIED`)
+
+### Scope, source binding, and terminal state
+
+This entry records only §15A in `D:\\cnhea\\Codex\\worktrees\\43fe\\Stock`; the desktop plan is authoritative. `runners/a_short_entry_funnel_calibration.py` now separates legacy v1.1 hash-bound replay (no `--historical-root`) from active `a_short_entry_funnel_historical_report` v1.0.0 (with `--historical-root`). It is not independent review, commit, real-data execution, production change, or Knife-15 closure.
+
+- Active root shape is exactly `analysis_inputs/<as_of>/analysis_input.json` plus `prices.csv` with `as_of,ts_code,trade_date,high,low,close`. Each input validates against `schemas/analysis_input.schema.json`, directory as-of equals `trade_date`, and price rows are canonical, finite, unique `(as_of,ts_code,trade_date)`, and never future.
+- Chain: `user-authorized local PIT root -> a_short_entry_funnel_calibration.py --historical-root -> research/results/a_short/entry_funnel_calibration/calibration_report.json`. No provider call/import in active builder, no weekly consumer, and no change to `a_short_weekly_pipeline.py`, `entry_type`, selection, M6.7 action, sizing, stops/targets, account state, or presets.
+- Missing root/required file atomically writes `source_missing` and exits `2`; ready/candidate-gap writes exit `0`; structural/input/schema/write defects exit `1` before replacing an existing report. Missing Rule6/hard-veto, breakout, or 20 PIT rows is named `not_evaluable`; absent required M0.5/Rule3 field fails closed as an analysis-input schema defect. Active reports contain only filename/logical-source/date/count/version data and `provider_calls=0`, never absolute paths, SHA, copied input, or preregistration.
+- Boundaries are calibration-only, production unchanged, not buy advice, no ship gate, no full-size. §15B is a separate future non-blocking weekly loader; §15C requires explicit user designation and authorization of a real local root. Knife 15 remains `OPEN`.
+
+### Evidence and successor entry
+
+- Fixed interpreter only: `C:\Users\cnhea\AppData\Local\Programs\Python\Python313\python.exe` (3.13.8). Focused `.tools\run_unittest_with_repo_pythonpath.cmd --timeout-seconds 600 tests.test_a_short_entry_funnel_calibration tests.test_a_short_public_json_writer_nonfinite_guard tests.test_tracked_artifact_digest_canonicalization` -> `31 OK` with 3 pre-existing frozen-replay skips, receipt `receipt:d0d6b715263e67cbf460db88`; document guards -> `66 OK`, receipt `receipt:5f05b5dc2620168bdce07767`; `git diff --check=PASS` before final docs.
+- Negative controls: valid synthetic source/default output; source missing; future/duplicate/non-finite/as-of mismatch and malformed input do not overwrite; candidate gaps are counted; both legacy/active output-mix directions reject. Full lane is `NOT_TRIGGERED` under the isolated-module rule: no provider/live/network, real root, real weekly, PowerShell E2E, sub-agent, stage, commit, push, or merge occurred.
+- Reviewer checks active/legacy isolation, strict PIT rejection, atomic no-overwrite, disclosure limit, provider-zero, and no consumer; do not execute §15B/§15C or a real root. Later §15C only after explicit user authorization, with `C:\Users\cnhea\AppData\Local\Programs\Python\Python313\python.exe runners\a_short_entry_funnel_calibration.py --historical-root <authorized-local-root>`.
+
+## 2026-08-12 追加：第15A刀独立审查（按 1415 文档逐条）—— PASS（已提交并合入 master）
+
+**判定**：PASS，无 Required，一条 Optional（`O-15A-1`：活动 schema 把 15B 的裁判字段钉成常量、而身份锁死 1.0.0）。正文只在 `docs/system_risk_register.md`。
+
+**我实际验了什么**（区别于执行方转述）
+
+- **untracked 的新 schema 是 diff 盲区，我整读了正文**：`input_filenames` 是 `const` 数组、`provider_calls` 是 `const 0`、全篇无 SHA 字段——形状上就堵死了「泄露用户绝对路径」和「偷偷记输入指纹」。
+- **fail-closed 用哨兵法自己打**：先在输出路径放一份哨兵 JSON 记 sha，再注入未来 `trade_date` / 重复主键 / `close=NaN` / 孤儿 `as_of` 四类结构性错误 —— 四次全部 exit=1 且哨兵**逐字节未变**。这条（结构性错误不得替换既有活动 report）是 §15A-3 的核心，光读代码判不了。
+- **缺源路径**：exit=2、写出 `source_missing`、`next_evidence=provide_authorized_historical_pit_source`、`provider_calls=0`，顺序是先写后退出，符合方案。
+- **我自加的边界**：20 日窗口是包含边界（19 行 → gap 计 1、状态 `ready_with_candidate_gaps`；20 行 → `ready`、可评估 1/1）。
+- **零 provider 我自己扫**：全文件搜 provider/网络关键字，命中的只有那个值为 0 的常量字段和一句 docstring。
+- **全量不跑是我独立判的**：research-only runner、新 schema 生产侧零消费者、无 provider，rule 3 不触发；跑了反而是 rule 8 的过度审查。执行方申报一致。
+
+**未覆盖维度与诚实边界**
+
+- 真实历史 PIT 数据未提供，`ready` 路径只由合成夹具与我的探针证明；15C 未做，第 15 刀按方案保持 OPEN。
+- 15B 未执行，weekly pipeline 零改动，证据提醒轨尚未接线。
+- §6a 未起 agent（rule 8）。
+
+**下一步**：`Codex：执行`（15B）
