@@ -315,6 +315,88 @@ class VerificationReceiptTests(unittest.TestCase):
                         )
                         self.assertIn("current code state", reason)
 
+    def test_retyping_a_path_without_touching_its_bytes_still_breaks_the_seal(self):
+        """An id is not a file: the same blob typed as a symlink is a symlink.
+
+        The retired tree hash covered mode and type because it hashed whole
+        `ls-tree` lines.  Sealing the object id alone would have let a path be
+        re-typed to `120000` (symlink) or `160000` (gitlink) -- which changes
+        what a POSIX checkout executes -- without moving the fingerprint.
+        """
+        with tempfile.TemporaryDirectory() as tmp:
+            repo = Path(tmp) / "repo"
+            repo.mkdir()
+            build_receipt_repo(repo)
+            with patch.object(receipts, "ROOT", repo):
+                receipt_path = repo / ".tools" / "state" / "receipt.json"
+                before = receipts.collect_code_state()
+                receipt = self._receipt(before, receipt_path, ["tests.test_example"])
+                token = receipts.receipt_token(receipt)
+                blob = subprocess.run(
+                    ["git", "-C", str(repo), "rev-parse", ":engine/logic.py"],
+                    capture_output=True, text=True, check=True,
+                ).stdout.strip()
+
+                # `--chmod` isolates the mode: same blob, same bytes on disk, and
+                # (with core.filemode off) git does not even report the path as
+                # dirty -- so only sealing the mode itself can catch it.
+                _run_git(repo, "update-index", "--chmod=+x", "engine/logic.py")
+                chmodded = receipts.collect_code_state()
+                self.assertNotEqual(
+                    receipts.fingerprint(before), receipts.fingerprint(chmodded)
+                )
+                _, reason = receipts.validate_focused_evidence(
+                    token, state=chmodded, path=receipt_path
+                )
+                self.assertIn("current code state", reason)
+
+                _run_git(repo, "update-index", "--chmod=-x", "engine/logic.py")
+                self.assertEqual(
+                    receipts.fingerprint(before),
+                    receipts.fingerprint(receipts.collect_code_state()),
+                )
+
+                # Same id, re-typed as a symlink: on a POSIX checkout that path
+                # stops being the module and becomes a link named by its text.
+                _run_git(repo, "update-index", "--cacheinfo", f"120000,{blob},engine/logic.py")
+                self.assertNotEqual(
+                    receipts.fingerprint(before),
+                    receipts.fingerprint(receipts.collect_code_state()),
+                )
+
+    def test_explain_exit_code_mirrors_the_gate_it_explains(self):
+        """`--explain` must be a superset of the check, never a softer one.
+
+        The reason anyone reaches for it is an opaque FAIL, so an explain that
+        always exited 0 would disarm the hook the first time someone wired it
+        in for legibility.
+        """
+        with tempfile.TemporaryDirectory() as tmp:
+            repo = Path(tmp) / "repo"
+            repo.mkdir()
+            build_receipt_repo(repo)
+            with patch.object(receipts, "ROOT", repo):
+                receipt_path = repo / ".tools" / "state" / "receipt.json"
+                state = receipts.collect_code_state()
+                self._receipt(state, receipt_path, ["tests.test_example"])
+                with patch.object(receipts, "pinned_python_error", return_value=None):
+                    code, _ = receipts.explain(state=state, path=receipt_path)
+                    self.assertEqual(code, 0)
+
+                    (repo / "engine" / "logic.py").write_text("V = 9\n", encoding="utf-8")
+                    code, lines = receipts.explain(
+                        state=receipts.collect_code_state(), path=receipt_path
+                    )
+                    self.assertEqual(code, 1)
+                    self.assertIn("verdict            : FAIL", "\n".join(lines))
+
+                    code, _ = receipts.explain(state=state, path=repo / "absent.json")
+                    self.assertEqual(code, 1)
+                # a wrong interpreter is a FAIL for the plain gate, so also here
+                with patch.object(receipts, "pinned_python_error", return_value="wrong python"):
+                    code, _ = receipts.explain(state=state, path=receipt_path)
+                    self.assertEqual(code, 1)
+
     def test_explain_names_what_the_gate_is_comparing(self):
         """A one-line FAIL cannot tell a missing receipt from a moved file."""
         with tempfile.TemporaryDirectory() as tmp:

@@ -111,6 +111,7 @@ def _effective_code_content_sha256() -> str:
     this function exists to remove.
     """
     content: dict[str, str] = {}
+    modes: dict[str, str] = {}
     from_disk: set[str] = set()
     for line in _git("ls-files", "-s").splitlines():
         if "\t" not in line:
@@ -122,9 +123,15 @@ def _effective_code_content_sha256() -> str:
         fields = meta.split()
         if len(fields) < 3:
             continue
-        blob, stage = fields[1], fields[2]
+        mode, blob, stage = fields[0], fields[1], fields[2]
+        modes[rel] = mode
         if stage == "0":
-            content[rel] = blob
+            # Mode carries the entry TYPE: 100644/100755 blob, 120000 symlink,
+            # 160000 gitlink.  Re-typing a path to a symlink keeps the id while
+            # changing what a POSIX checkout executes, so the id alone is not
+            # the file.  The retired tree hash covered this by hashing whole
+            # `ls-tree` lines; dropping it here would have been a quiet loss.
+            content[rel] = f"{mode} {blob}"
         else:  # unmerged: the working copy, not any one side, is the truth
             from_disk.add(rel)
     for args in (("diff-files", "--name-only"), ("ls-files", "--others", "--exclude-standard")):
@@ -141,7 +148,8 @@ def _effective_code_content_sha256() -> str:
         hashed = _git_stdin("hash-object", "--stdin-paths", stdin="\n".join(present) + "\n").split()
         if len(hashed) != len(present):  # never seal a half-read tree
             raise RuntimeError("git hash-object did not return one id per code path")
-        content.update(zip(present, hashed))
+        for rel, disk_id in zip(present, hashed):
+            content[rel] = f"{modes.get(rel, 'untracked')} {disk_id}"
     canonical = "\n".join(f"{rel}:{content[rel]}" for rel in sorted(content))
     return hashlib.sha256(canonical.encode("utf-8")).hexdigest()
 
@@ -380,16 +388,22 @@ def validate_focused_evidence(
     return receipt, "OK"
 
 
-def explain_lines(
+def explain(
     *,
     state: dict[str, str] | None = None,
     path: Path = RECEIPT_PATH,
-) -> list[str]:
+) -> tuple[int, list[str]]:
     """Say what the gate is comparing, so a FAIL does not need source reading.
 
     The one-line FAIL cannot distinguish "no receipt", "wrong Python", "code
     moved" and "missing bundle", and the required-bundle set was only reachable
     by importing the module by hand.
+
+    Returns the gate's OWN exit code alongside the explanation, so this is a
+    strict superset of the plain check rather than a softer alternative to it.
+    An explain that always succeeded would be a trap: the whole reason to reach
+    for it is an opaque FAIL, so the first person to wire it into
+    ``.githooks/pre-commit`` for legibility would silently disarm the gate.
     """
     current_state = state if state is not None else collect_code_state()
     receipt = load_receipt(path)
@@ -425,15 +439,24 @@ def explain_lines(
         f"required bundles   : {required_bundles_now(current_state)}",
         f"verdict            : {'PASS' if ok else 'FAIL'} - {reason}",
     ]
-    return lines
+    return (0 if ok and not pinned_python_error() else 1), lines
+
+
+def explain_lines(
+    *,
+    state: dict[str, str] | None = None,
+    path: Path = RECEIPT_PATH,
+) -> list[str]:
+    return explain(state=state, path=path)[1]
 
 
 if __name__ == "__main__":
     if "--explain" in sys.argv[1:]:
+        exit_code, lines = explain()
         print("[verification-receipt] EXPLAIN")
-        for line in explain_lines():
+        for line in lines:
             print(f"  {line}")
-        raise SystemExit(0)
+        raise SystemExit(exit_code)
     if pinned_python_error():
         print(f"[verification-receipt] REFUSED - {pinned_python_error()}")
         raise SystemExit(2)

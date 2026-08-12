@@ -233,7 +233,7 @@ def _pre_full_static_checks(state: dict[str, str]) -> bool:
     compiled = 0
     try:
         for rel in sorted(state):
-            if rel == "@HEAD" or not rel.endswith(".py"):
+            if rel.startswith("@") or not rel.endswith(".py"):
                 continue
             path = ROOT / rel
             if path.is_file():
