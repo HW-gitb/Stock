@@ -5,9 +5,11 @@ import hashlib
 import json
 import subprocess
 import sys
+from collections.abc import Mapping
 from dataclasses import dataclass
 from datetime import datetime, timezone
 from pathlib import Path
+from types import MappingProxyType
 from typing import Any
 
 
@@ -148,10 +150,77 @@ PROHIBITED_FALSE_FIELDS = (
     "production_ready",
     "datahub_consumed",
 )
+_CONTEXT_COMPONENT_LEGACY_KEYS = frozenset({"data_context", "per_ticker_analysis", "run_provenance"})
+CONTEXT_COMPONENT_SHAPES = MappingProxyType({
+    "legacy": _CONTEXT_COMPONENT_LEGACY_KEYS,
+    "a1": _CONTEXT_COMPONENT_LEGACY_KEYS | frozenset({"score_composition", "overextension_by_ticker"}),
+    "cut4": _CONTEXT_COMPONENT_LEGACY_KEYS
+    | frozenset({"score_composition", "overextension_by_ticker", "result_linkage_sources"}),
+})
+_CONTEXT_COMPONENT_MAPPING_FIELDS = frozenset({
+    "data_context",
+    "score_composition",
+    "per_ticker_analysis",
+    "run_provenance",
+    "result_linkage_sources",
+})
 
 
 class SourcePacketError(ValueError):
     """The local US-short Batch5 source packet cannot be consumed safely."""
+
+
+def validate_context_components_shape(value: Any, *, allowed_shapes: tuple[str, ...]) -> str:
+    """Return the exact accepted carrier shape; reject missing, extra, or mistyped components."""
+    unknown_shapes = set(allowed_shapes) - set(CONTEXT_COMPONENT_SHAPES)
+    if not allowed_shapes or unknown_shapes:
+        raise SourcePacketError(f"context_components allowed_shapes are invalid: {sorted(unknown_shapes)}")
+    if not isinstance(value, Mapping):
+        raise SourcePacketError("context_components must be a mapping")
+
+    actual_keys = frozenset(value)
+    for shape in allowed_shapes:
+        expected_keys = CONTEXT_COMPONENT_SHAPES[shape]
+        if actual_keys != expected_keys:
+            continue
+        invalid_value_types = sorted(
+            key
+            for key in expected_keys
+            if (
+                key in _CONTEXT_COMPONENT_MAPPING_FIELDS and not isinstance(value[key], Mapping)
+            )
+            or (
+                key == "overextension_by_ticker"
+                and value[key] is not None
+                and not isinstance(value[key], Mapping)
+            )
+        )
+        if invalid_value_types:
+            raise SourcePacketError(
+                f"context_components {shape} has invalid_value_types={invalid_value_types}"
+            )
+        return shape
+
+    closest_shape = min(
+        allowed_shapes,
+        key=lambda shape: (
+            len(actual_keys ^ CONTEXT_COMPONENT_SHAPES[shape]),
+            -len(CONTEXT_COMPONENT_SHAPES[shape]),
+            shape,
+        ),
+    )
+    expected_keys = CONTEXT_COMPONENT_SHAPES[closest_shape]
+    missing_keys = sorted(expected_keys - actual_keys)
+    unexpected_keys = sorted(actual_keys - expected_keys)
+    raise SourcePacketError(
+        "context_components closed-world shape rejected: "
+        f"missing_keys={missing_keys} unexpected_keys={unexpected_keys}"
+    )
+
+
+def validate_current_context_components(value: Any) -> str:
+    """Accept only the final six-key Cut4 carrier used by current producer and shadow paths."""
+    return validate_context_components_shape(value, allowed_shapes=("cut4",))
 
 
 @dataclass(frozen=True)
@@ -1088,6 +1157,7 @@ def run_packet(
     output_path.write_text(json.dumps(data_context, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
     context_components_output_path = paths.get("output_context_components_path")
     if context_components_output_path is not None and context_components is not None:
+        validate_current_context_components(context_components)
         context_components_output_path.parent.mkdir(parents=True, exist_ok=True)
         context_components_output_path.write_text(
             json.dumps(context_components, ensure_ascii=False, indent=2) + "\n",

@@ -55,6 +55,45 @@ from tests.provider.us_short_private_test_root import (  # noqa: E402
 STATE_DIR = ROOT / "state" / "us_short"
 
 
+class ContextComponentsShapeContractTest(unittest.TestCase):
+    def _components(self, shape: str) -> dict:
+        values = {
+            "data_context": {},
+            "score_composition": {},
+            "overextension_by_ticker": None,
+            "per_ticker_analysis": {},
+            "run_provenance": {},
+            "result_linkage_sources": {},
+        }
+        return {
+            key: values[key]
+            for key in reversed(tuple(source_packet_runner.CONTEXT_COMPONENT_SHAPES[shape]))
+        }
+
+    def test_exact_shape_contract_accepts_historical_shapes_and_only_current_cut4(self):
+        for shape in ("legacy", "a1", "cut4"):
+            with self.subTest(shape=shape):
+                self.assertEqual(
+                    source_packet_runner.validate_context_components_shape(
+                        self._components(shape), allowed_shapes=("legacy", "a1", "cut4")
+                    ),
+                    shape,
+                )
+
+        current = self._components("cut4")
+        self.assertEqual(source_packet_runner.validate_current_context_components(current), "cut4")
+        with self.assertRaisesRegex(SourcePacketError, "missing_keys=.*result_linkage_sources"):
+            source_packet_runner.validate_current_context_components(
+                {key: value for key, value in current.items() if key != "result_linkage_sources"}
+            )
+        with self.assertRaisesRegex(SourcePacketError, "unexpected_keys=.*unknown"):
+            source_packet_runner.validate_current_context_components({**current, "unknown": {}})
+        with self.assertRaisesRegex(SourcePacketError, "mapping"):
+            source_packet_runner.validate_current_context_components([])
+        with self.assertRaisesRegex(SourcePacketError, "invalid_value_types=.*data_context"):
+            source_packet_runner.validate_current_context_components({**current, "data_context": []})
+
+
 class K4bPublicTop15ContractTest(unittest.TestCase):
     def test_source_packet_imports_the_public_top15_contract(self):
         self.assertIs(source_packet_runner.official_top15_tickers, official_top15_tickers)
@@ -909,6 +948,38 @@ class Batch5DataContextSourcePacketTest(unittest.TestCase):
             {"role": "offering_audit_source", "path": _rel(self.paths["offering"])},
             source_refs,
         )
+
+    def test_run_packet_validates_current_components_before_writing_them(self):
+        packet = self._packet_payload()
+        packet["paths"]["output_context_components_path"] = _rel(self.paths["components"])
+        _write_json(self.packet, packet)
+        original = source_packet_runner.validate_current_context_components
+
+        with mock.patch.object(
+            source_packet_runner,
+            "validate_current_context_components",
+            wraps=original,
+        ) as validator:
+            run_packet(self.packet, generated_at="2026-07-04T00:00:02Z")
+
+        validator.assert_called_once()
+        written = json.loads(self.paths["components"].read_text(encoding="utf-8"))
+        self.assertEqual(validator.call_args.args[0], written)
+
+    def test_current_components_rejection_happens_before_component_output_write(self):
+        packet = self._packet_payload()
+        packet["paths"]["output_context_components_path"] = _rel(self.paths["components"])
+        _write_json(self.packet, packet)
+
+        with mock.patch.object(
+            source_packet_runner,
+            "validate_current_context_components",
+            side_effect=SourcePacketError("planted current-shape rejection"),
+        ):
+            with self.assertRaisesRegex(SourcePacketError, "planted current-shape rejection"):
+                run_packet(self.packet, generated_at="2026-07-04T00:00:02Z")
+
+        self.assertFalse(self.paths["components"].exists())
 
     def test_run_packet_context_components_preserve_holdings_union_row_sources(self):
         _write_json(

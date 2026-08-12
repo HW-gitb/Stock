@@ -288,6 +288,7 @@ class ForwardPolicyShadowStageTests(unittest.TestCase):
                     "price_basis_date": "20260710",
                     "families": {},
                 },
+                "result_linkage_sources": {},
             }), encoding="utf-8")
 
             class Context:
@@ -330,6 +331,18 @@ class ForwardPolicyShadowStageTests(unittest.TestCase):
             self.assertTrue(Context.forward_shadow_selection_private_path.exists())
             self.assertTrue(Context.forward_policy_summary_path.exists())
 
+            current_components = json.loads(components_path.read_text(encoding="utf-8"))
+            legacy_components = dict(current_components)
+            legacy_components.pop("result_linkage_sources")
+            components_path.write_text(json.dumps(legacy_components), encoding="utf-8")
+            Context.forward_shadow_selection_private_path = root / "rejected_forward_policy_selection_20260713.json"
+            Context.forward_policy_summary_path = root / "rejected_forward_policy_summary_20260713.json"
+            with self.assertRaisesRegex(ValueError, "missing_keys=.*result_linkage_sources"):
+                capstone_stages.run_forward_policy_shadow(Context())
+            self.assertFalse(Context.forward_shadow_selection_private_path.exists())
+            self.assertFalse(Context.forward_policy_summary_path.exists())
+
+            components_path.write_text(json.dumps(current_components), encoding="utf-8")
             mismatched = dict(self.data_context)
             mismatched["selection_inputs"] = {
                 **mismatched["selection_inputs"],

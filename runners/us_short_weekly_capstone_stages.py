@@ -47,6 +47,7 @@ from engine.us_short_soft_boost_comparison_adjudication import (
 from engine import us_short_soft_boost_consumption as _soft_boost_consumption
 from engine.us_short_forward_policy_source_capture import _validated_ohlcv_packet
 from engine.us_short_regime import REGIMES, UNKNOWN
+from runners import us_short_batch5_data_context_source_packet as _source_packet
 from runners import us_short_batch5_full_candidate_live_source_packet as _pass2
 from runners import us_short_batch5_full_candidate_pass2_preflight as _preflight
 from runners import us_short_batch5_full_candidate_projection_inputs as _proj
@@ -396,10 +397,10 @@ def run_forward_policy_shadow(ctx) -> dict[str, Any]:
         components = json.loads(components_bytes)
     except (OSError, ValueError) as exc:
         raise ValueError("forward-policy shadow requires readable same-run data_context and context-components JSON") from exc
-    expected_component_keys = {
-        "data_context", "score_composition", "overextension_by_ticker", "per_ticker_analysis", "run_provenance"}
-    if not isinstance(components, dict) or set(components) != expected_component_keys:
-        raise ValueError("forward-policy shadow context-components shape is incomplete or stale")
+    try:
+        _source_packet.validate_current_context_components(components)
+    except _source_packet.SourcePacketError as exc:
+        raise ValueError(f"forward-policy shadow context-components shape rejected: {exc}") from exc
     if components["data_context"] != data_context:
         raise ValueError("forward-policy shadow refuses mismatched data_context and context-components snapshots")
     if components["overextension_by_ticker"] is None:

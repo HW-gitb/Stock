@@ -4535,3 +4535,53 @@ git diff --check
 
 - 下次 `us_short_paper_one_click.ps1` 真实周跑完成后，按 register 该节的五条清单逐项核对（守恒 / 每层完整残余 / 动态 frames / 六只代表票 / 不得宣读的边界），核完即删除该清单并翻 live 腿。
 - 编排层 `_assert_exact_market_cap_layer_targets` 会在任一层拿不到完整残余时直接 `raise`，所以「周跑跑完了」本身就是第 2 条的证据。
+## 2026-08-12 追加：0810 问题9 context_components 单一形状合同修复（1302，待 Claude 独立审查）
+
+### 修复
+
+- 新建风险 `R-USSHORT-CONTEXT-COMPONENTS-SHAPE-AUTHORITY-DRIFT`，状态 `repaired / OPEN-NOT_VERIFIED`。此前 current source-packet 是 6 键 carrier，而 bridge 和 shadow 分别复制 3/5/6 与旧 5 键规则，存在规则分叉。
+- source-packet producer 现在唯一持有 immutable legacy/a1/cut4 exact-key table 与 mapping validator；`run_packet()` 在 `result_linkage_sources` 绑定后、写组件 carrier 前验证 cut4。bridge 调共享 validator 兼容 legacy/a1/cut4，shadow 调 current-only wrapper；未新增 schema/hash/migration/adapter/context/provider/live 行为。
+- 真实 source-packet carrier 进入同一文件 bridge 后再进入 shadow，并由既有 source capture/H20 comparison consumer 读到；shadow 对 legacy/current 缺键在生成输出前拒绝。bridge 的历史 3/5/6 carrier 兼容性以独立参数化测试保留。
+
+### 验证与边界
+
+- 固定主 Python 聚焦超集 `228 OK`，receipt=`receipt:6c6aeed30b8817c5cb349a4d`。包括 I/O inventory、producer、bridge、shadow、source capture/comparison、capstone 与 discovery conformance。
+- code-freeze 后唯一 full ledger `5816/5816`、`317/317` modules、`PASS`、`487.1s/860s`、fingerprint=`db0fd268cbf7`；`diff_check=PASS`、`py_compile=6`。
+- 首次 I/O inventory guard 识别到测试 `unlink` 与生成清单的写计数漂移；已移除该不合规 I/O、以项目 generator 更新 `docs/us_short_test_io_inventory_20260801.json`，allowlist 未扩大。所有测试 fake/temporary/offline；无 provider/network/live、无真实 `state/us_short` 写入、无诊断时钟或 production/ship 结论。
+
+### Claude 审查入口
+
+- 审查 shared validator 的 exact closed-world/type 约束、producer 的 pre-write current gate、bridge 的 legacy/a1/cut4 compatibility 和 shadow 的 current-only pre-output failure path；确认 source-capture/H20 test 是同一真实 carrier 的既有 consumer，而非新建 health 或 comparison 链。PASS 后由 Claude Code 按流程提交；Codex 不提交、不 merge。
+
+## 2026-08-12 追加：问题9 独立审查 PASS（1302 → master）
+
+### 改了什么
+
+- 审查方零代码改动。register 记 `R-USSHORT-CONTEXT-COMPONENTS-SHAPE-AUTHORITY-DRIFT` 翻 `resolved` 与逐条方案对照、5 条 Optional；SESSION_LOG 顶部 prepend 极简 PASS entry。
+
+### 为什么
+
+- 形状表收敛为 `CONTEXT_COMPONENT_SHAPES`（`MappingProxyType`，真只读），legacy/a1/cut4 三种精确形状；`validate_current_context_components` 是 cut4-only 薄封装。bridge 与 shadow 的本地键集全删、改调同一合同，全仓零残留。
+- 校验点在 `result_linkage_sources` 插入（:1143）之后、落盘（:1163）之前（:1160），且真测断言被校验对象即被写盘对象。
+
+### 验证命令
+
+- `.tools\run_unittest_with_repo_pythonpath.cmd --timeout-seconds 1200 tests.provider.test_us_short_batch5_data_context_source_packet tests.provider.test_us_short_batch5_to_batch4_e2e tests.test_us_short_forward_policy_shadow_stage tests.provider.test_us_short_weekly_capstone tests.test_doc_governance_guard tests.test_route_doc_ledger_status_consistency`
+- 植入：把 `actual_keys != expected_keys` 改成 `expected_keys <= actual_keys`（subset 放宽）后单跑两个契约模块。
+
+### 验证结果
+
+- 焦点超集 `Ran 201 in 15.9s OK`，`receipt:6907191c32af5c17b3b6ec4b`。
+- 植入 → `test_exact_shape_contract_accepts_historical_shapes_and_only_current_cut4` 在 a1 / cut4 / 未知键三个 subTest 精确转红；还原后 numstat 回 `70 0`、零残留。
+- 13 格只读探针：6 键通过；5 键 a1 与 3 键 legacy 在 shadow 侧被拒并报缺失键；未知第 7 键报 `unexpected_keys`；类型错报 `invalid_value_types`；bridge 侧三种历史形状照收。
+- full lane 按 rule 4 引账本 `5816/5816`、`317/317`、`487.1s`；当前代码态指纹 `db0fd268cbf7…` 与记录逐字相同。
+
+### 失效旧结论
+
+- 「forward_policy_shadow 只认 5 键、每周静默作废六头对比轨」自此不再成立；shadow 现只认 current/cut4，且拒绝发生在任何输出写盘之前。
+
+### 下一步注意事项
+
+- `O-P9-1`：`data_context.json` 在门之前写盘，形状被拒时会留半对产物（已确认无消费者受害）；把门移到该写盘之上即可零成本消除。
+- `O-P9-5`（既有、超出本刀）：`forward_policy_shadow` 先于 `weekly_bridge`，而 bridge 会重写同一个 `context_components_path`，soft-boost 异常回落 OFF 使两次产出不保证字节相同——六头账本可能绑到正式周报没用过的 carrier。建议单独立刀。
+- 按去重顺序，下一个是**问题10（soft-boost result usability 三态）**。
