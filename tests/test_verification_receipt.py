@@ -71,11 +71,11 @@ class MergeCombinedStateTests(unittest.TestCase):
             with patch.object(receipts, "ROOT", repo):
                 self.assertTrue(receipts.merge_in_progress())
                 # The staged diff is documents only, so the one-sided view asks for nothing...
-                self.assertEqual(receipts.required_bundles_for_state({"@CODE_TREE": "x"}), ())
+                self.assertEqual(receipts.required_bundles_for_state({"@CODE_CONTENT": "x"}), ())
                 # ...while the surface our own side moved since the base still has to be shown.
                 self.assertIn("engine/a_short_effect_contract.py", receipts.merge_side_paths())
                 self.assertEqual(
-                    receipts.required_bundles_now({"@CODE_TREE": "x"}),
+                    receipts.required_bundles_now({"@CODE_CONTENT": "x"}),
                     ("a_short_effect_contract",),
                 )
 
@@ -90,7 +90,7 @@ class MergeCombinedStateTests(unittest.TestCase):
             with patch.object(receipts, "ROOT", repo):
                 self.assertFalse(receipts.merge_in_progress())
                 self.assertEqual(receipts.merge_side_paths(), frozenset())
-                self.assertEqual(receipts.required_bundles_now({"@CODE_TREE": "x"}), ())
+                self.assertEqual(receipts.required_bundles_now({"@CODE_CONTENT": "x"}), ())
 
 
 class VerificationReceiptTests(unittest.TestCase):
@@ -121,7 +121,7 @@ class VerificationReceiptTests(unittest.TestCase):
         -- the number quoted as evidence -- could be inflated and still
         validate.  Mutating ANY field must now break the integrity check.
         """
-        state = {"engine/a_short_effect_contract.py": "sha", "@CODE_TREE": "tree"}
+        state = {"engine/a_short_effect_contract.py": "sha", "@CODE_CONTENT": "tree"}
         with tempfile.TemporaryDirectory() as tmp:
             receipt = self._receipt(state, Path(tmp) / "r.json")
         mutations = {
@@ -149,7 +149,7 @@ class VerificationReceiptTests(unittest.TestCase):
 
     def test_inflated_test_count_is_rejected_end_to_end(self):
         """The exact reviewer probe that found the hole: 17 -> 99999."""
-        state = {"engine/a_short_effect_contract.py": "sha", "@CODE_TREE": "tree"}
+        state = {"engine/a_short_effect_contract.py": "sha", "@CODE_CONTENT": "tree"}
         with tempfile.TemporaryDirectory() as tmp:
             receipt = self._receipt(state, Path(tmp) / "r.json")
         inflated = dict(receipt, tests=99999)
@@ -160,7 +160,7 @@ class VerificationReceiptTests(unittest.TestCase):
     def test_effect_surface_requires_both_contract_and_consumer_modules(self):
         state = {
             "engine/a_short_effect_contract.py": "sha",
-            "@CODE_TREE": "tree",
+            "@CODE_CONTENT": "tree",
         }
         self.assertEqual(
             receipts.required_bundles_for_state(state),
@@ -172,7 +172,7 @@ class VerificationReceiptTests(unittest.TestCase):
         )
 
     def test_free_text_focused_evidence_is_rejected(self):
-        state = {"engine/x.py": "sha", "@CODE_TREE": "tree"}
+        state = {"engine/x.py": "sha", "@CODE_CONTENT": "tree"}
         with tempfile.TemporaryDirectory() as tmp:
             _, reason = receipts.validate_focused_evidence(
                 "focused=17 OK",
@@ -182,8 +182,10 @@ class VerificationReceiptTests(unittest.TestCase):
         self.assertIn("machine token", reason)
 
     def test_receipt_is_bound_to_code_state_and_token(self):
-        state = {"engine/x.py": "sha", "@CODE_TREE": "tree"}
-        changed = {"engine/x.py": "changed", "@CODE_TREE": "tree"}
+        # The seal is the `@` content key; the per-path entries beside it record
+        # which files a commit touches and deliberately do not seal anything.
+        state = {"engine/x.py": "sha", "@CODE_CONTENT": "content"}
+        changed = {"engine/x.py": "sha", "@CODE_CONTENT": "different content"}
         with tempfile.TemporaryDirectory() as tmp:
             path = Path(tmp) / "receipt.json"
             receipt = self._receipt(state, path, ["tests.test_example"])
@@ -231,25 +233,57 @@ class VerificationReceiptTests(unittest.TestCase):
                 )
                 self.assertIn("current code state", reason)
 
-    def test_docs_only_commit_keeps_receipt_valid_but_code_commit_invalidates(self):
+    def test_staging_and_committing_the_tested_bytes_keeps_the_receipt_valid(self):
+        """The seal answers "same bytes?", never "same git status?".
+
+        A focused run tests file contents.  `git add` and `git commit` of those
+        exact contents prove nothing new, so demanding a rerun for them is a
+        rerun that can only reconfirm what was already confirmed.
+        """
+        with tempfile.TemporaryDirectory() as tmp:
+            repo = Path(tmp) / "repo"
+            repo.mkdir()
+            build_receipt_repo(repo)
+            with patch.object(receipts, "ROOT", repo):
+                receipt_path = repo / ".tools" / "state" / "receipt.json"
+                # Edit code, then take the receipt: this is the real order.
+                (repo / "engine" / "logic.py").write_text("VALUE = 2\n", encoding="utf-8")
+                tested = receipts.collect_code_state()
+                self.assertIn("@CODE_CONTENT", tested)
+                self.assertNotIn("@CODE_TREE", tested)
+                self.assertNotIn("@HEAD", tested)
+                receipt = self._receipt(tested, receipt_path, ["tests.test_example"])
+                token = receipts.receipt_token(receipt)
+
+                _run_git(repo, "add", "engine/logic.py")
+                staged = receipts.collect_code_state()
+                self.assertEqual(receipts.fingerprint(tested), receipts.fingerprint(staged))
+
+                _run_git(repo, "commit", "-m", "commit the exact tested bytes")
+                committed = receipts.collect_code_state()
+                self.assertEqual(receipts.fingerprint(tested), receipts.fingerprint(committed))
+                self.assertEqual(committed["@CODE_CONTENT"], tested["@CODE_CONTENT"])
+                # The changed-path view legitimately empties out; it is not sealed.
+                self.assertEqual([k for k in committed if not k.startswith("@")], [])
+                loaded, reason = receipts.validate_focused_evidence(
+                    token, state=committed, path=receipt_path
+                )
+                self.assertEqual(reason, "OK")
+                self.assertEqual(loaded, receipt)
+
+    def test_docs_stay_out_while_any_real_code_content_change_invalidates(self):
         with tempfile.TemporaryDirectory() as tmp:
             repo = Path(tmp) / "repo"
             repo.mkdir()
             build_receipt_repo(repo)
             with patch.object(receipts, "ROOT", repo):
                 before = receipts.collect_code_state()
-                self.assertIn("@CODE_TREE", before)
-                self.assertNotIn("@HEAD", before)
                 receipt_path = repo / ".tools" / "state" / "receipt.json"
                 receipt = self._receipt(before, receipt_path, ["tests.test_example"])
                 token = receipts.receipt_token(receipt)
 
-                (repo / "docs" / "note.md").write_text(
-                    "docs-only committed edit\n", encoding="utf-8"
-                )
-                (repo / "设计说明.md").write_text(
-                    "docs-only committed root markdown edit\n", encoding="utf-8"
-                )
+                (repo / "docs" / "note.md").write_text("docs edit\n", encoding="utf-8")
+                (repo / "设计说明.md").write_text("root markdown edit\n", encoding="utf-8")
                 _run_git(repo, "add", "docs/note.md")
                 _run_git(repo, "commit", "-m", "docs-only receipt control")
                 docs_commit_state = receipts.collect_code_state()
@@ -262,19 +296,135 @@ class VerificationReceiptTests(unittest.TestCase):
                 self.assertEqual(reason, "OK")
                 self.assertEqual(loaded, receipt)
 
-                (repo / "engine" / "logic.py").write_text(
-                    "VALUE = 2\n", encoding="utf-8"
-                )
-                _run_git(repo, "add", "engine/logic.py")
-                _run_git(repo, "commit", "-m", "code receipt control")
-                code_commit_state = receipts.collect_code_state()
+                # Each of these is a different byte-level truth and must break the seal.
+                for label, mutate in (
+                    ("edit", lambda: (repo / "engine" / "logic.py").write_text(
+                        "VALUE = 99\n", encoding="utf-8")),
+                    ("add", lambda: (repo / "engine" / "extra.py").write_text(
+                        "NEW = 1\n", encoding="utf-8")),
+                    ("delete", lambda: (repo / "engine" / "logic.py").unlink()),
+                ):
+                    with self.subTest(mutation=label):
+                        mutate()
+                        mutated = receipts.collect_code_state()
+                        self.assertNotEqual(
+                            receipts.fingerprint(before), receipts.fingerprint(mutated)
+                        )
+                        _, reason = receipts.validate_focused_evidence(
+                            token, state=mutated, path=receipt_path
+                        )
+                        self.assertIn("current code state", reason)
+
+    def test_retyping_a_path_without_touching_its_bytes_still_breaks_the_seal(self):
+        """An id is not a file: the same blob typed as a symlink is a symlink.
+
+        The retired tree hash covered mode and type because it hashed whole
+        `ls-tree` lines.  Sealing the object id alone would have let a path be
+        re-typed to `120000` (symlink) or `160000` (gitlink) -- which changes
+        what a POSIX checkout executes -- without moving the fingerprint.
+        """
+        with tempfile.TemporaryDirectory() as tmp:
+            repo = Path(tmp) / "repo"
+            repo.mkdir()
+            build_receipt_repo(repo)
+            with patch.object(receipts, "ROOT", repo):
+                receipt_path = repo / ".tools" / "state" / "receipt.json"
+                before = receipts.collect_code_state()
+                receipt = self._receipt(before, receipt_path, ["tests.test_example"])
+                token = receipts.receipt_token(receipt)
+                blob = subprocess.run(
+                    ["git", "-C", str(repo), "rev-parse", ":engine/logic.py"],
+                    capture_output=True, text=True, check=True,
+                ).stdout.strip()
+
+                # `--chmod` isolates the mode: same blob, same bytes on disk, and
+                # (with core.filemode off) git does not even report the path as
+                # dirty -- so only sealing the mode itself can catch it.
+                _run_git(repo, "update-index", "--chmod=+x", "engine/logic.py")
+                chmodded = receipts.collect_code_state()
                 self.assertNotEqual(
-                    receipts.fingerprint(before), receipts.fingerprint(code_commit_state)
+                    receipts.fingerprint(before), receipts.fingerprint(chmodded)
                 )
                 _, reason = receipts.validate_focused_evidence(
-                    token, state=code_commit_state, path=receipt_path
+                    token, state=chmodded, path=receipt_path
                 )
                 self.assertIn("current code state", reason)
+
+                _run_git(repo, "update-index", "--chmod=-x", "engine/logic.py")
+                self.assertEqual(
+                    receipts.fingerprint(before),
+                    receipts.fingerprint(receipts.collect_code_state()),
+                )
+
+                # Same id, re-typed as a symlink: on a POSIX checkout that path
+                # stops being the module and becomes a link named by its text.
+                _run_git(repo, "update-index", "--cacheinfo", f"120000,{blob},engine/logic.py")
+                self.assertNotEqual(
+                    receipts.fingerprint(before),
+                    receipts.fingerprint(receipts.collect_code_state()),
+                )
+
+    def test_explain_exit_code_mirrors_the_gate_it_explains(self):
+        """`--explain` must be a superset of the check, never a softer one.
+
+        The reason anyone reaches for it is an opaque FAIL, so an explain that
+        always exited 0 would disarm the hook the first time someone wired it
+        in for legibility.
+        """
+        with tempfile.TemporaryDirectory() as tmp:
+            repo = Path(tmp) / "repo"
+            repo.mkdir()
+            build_receipt_repo(repo)
+            with patch.object(receipts, "ROOT", repo):
+                receipt_path = repo / ".tools" / "state" / "receipt.json"
+                state = receipts.collect_code_state()
+                self._receipt(state, receipt_path, ["tests.test_example"])
+                with patch.object(receipts, "pinned_python_error", return_value=None):
+                    code, _ = receipts.explain(state=state, path=receipt_path)
+                    self.assertEqual(code, 0)
+
+                    (repo / "engine" / "logic.py").write_text("V = 9\n", encoding="utf-8")
+                    code, lines = receipts.explain(
+                        state=receipts.collect_code_state(), path=receipt_path
+                    )
+                    self.assertEqual(code, 1)
+                    self.assertIn("verdict            : FAIL", "\n".join(lines))
+
+                    code, _ = receipts.explain(state=state, path=repo / "absent.json")
+                    self.assertEqual(code, 1)
+                # a wrong interpreter is a FAIL for the plain gate, so also here
+                with patch.object(receipts, "pinned_python_error", return_value="wrong python"):
+                    code, _ = receipts.explain(state=state, path=receipt_path)
+                    self.assertEqual(code, 1)
+
+    def test_explain_names_what_the_gate_is_comparing(self):
+        """A one-line FAIL cannot tell a missing receipt from a moved file."""
+        with tempfile.TemporaryDirectory() as tmp:
+            repo = Path(tmp) / "repo"
+            repo.mkdir()
+            build_receipt_repo(repo)
+            with patch.object(receipts, "ROOT", repo):
+                receipt_path = repo / ".tools" / "state" / "receipt.json"
+                state = receipts.collect_code_state()
+                receipt = self._receipt(state, receipt_path, ["tests.test_example"])
+
+                text = "\n".join(receipts.explain_lines(state=state, path=receipt_path))
+                self.assertIn(receipt["receipt_id"], text)
+                self.assertIn("fingerprints match : yes", text)
+                self.assertIn("required bundles   : ()", text)
+                self.assertIn("verdict            : PASS", text)
+
+                (repo / "engine" / "logic.py").write_text("VALUE = 3\n", encoding="utf-8")
+                moved = receipts.collect_code_state()
+                text = "\n".join(receipts.explain_lines(state=moved, path=receipt_path))
+                self.assertIn("fingerprints match : NO", text)
+                self.assertIn("engine/logic.py", text)      # names the file that moved
+                self.assertIn("verdict            : FAIL", text)
+
+                missing = "\n".join(
+                    receipts.explain_lines(state=moved, path=repo / "nope.json")
+                )
+                self.assertIn("receipt            : missing/unreadable", missing)
 
     def test_receipt_boundary_and_pre_commit_gate_keep_docs_out_but_code_in(self):
         self.assertFalse(receipts.is_code_path("docs/note.py"))
@@ -289,7 +439,7 @@ class VerificationReceiptTests(unittest.TestCase):
     def test_effect_receipt_without_consumer_bundle_is_rejected(self):
         state = {
             "runners/a_short_weekly_pipeline.py": "sha",
-            "@CODE_TREE": "tree",
+            "@CODE_CONTENT": "tree",
         }
         with tempfile.TemporaryDirectory() as tmp:
             path = Path(tmp) / "receipt.json"
