@@ -4505,3 +4505,33 @@ git diff --check
 
 - `O-P7-8`：`^##.*$` 亦匹配 `###`，正文含三级标题的 entry 会被截断（fail-closed，不放行）；若将来评审 entry 需要子标题，改成 `^##(?!#).*$`。
 - 仍未做 bounded live acceptance，不得声称 20260810 的 504 只已修复。
+
+## 2026-08-12 追加：问题7 live acceptance 的结构性阻塞与替代收口路径
+
+### 改了什么
+
+- 零代码改动。register 新增 `R-USSHORT-PROBLEM7-LIVE-REPLAY-CONFLICTS-WITH-THE-STATUS-SOURCE-PIT-CONTRACT` 并附下次真实周跑的五条验收清单；SESSION_LOG 顶部 prepend 裁决 entry。
+
+### 为什么
+
+- 用户授权后真跑了 `--now-et 2026-08-10T09:00:00`，在 2/5 阶段 fail-closed：status record 的 `observed_at`（真实墙钟 2026-08-12）不在决策 session 2026-08-10 的 [上一 session 收盘, 决策 session 开盘] 窗口内。守卫拒绝把两天后的观测盖成决策时刻的观测——PIT 契约在正确工作。
+- 因此桌面 §4.8「对 20260810/20260807 做 PIT 规则回放」在带 live provider 时**无法满足**。这是方案缺陷，不是实现缺陷；**不得为满足该条而放宽 status-source**。
+- 附带确认：`_validate_candidate_path` 把候选产物硬绑到 canonical `state/us_short/candidate_universe_<date>.json`，连私有 kwarg 也必须等于它，所以 §4.8 说的「注入式 gitignored 临时根」对 universe 产物同样做不到；可行隔离只有换一棵工作树。
+
+### 验证命令
+
+- `python runners/us_short_universe_fetch.py --confirm-user-authorization --now-et 2026-08-10T09:00:00`（分离进程 + 日志）
+
+### 验证结果
+
+- 停在 `[2/5] Status source` 的 `StatusSourceError`；`[1/5]` 已返回 7659 ticker。
+- **FMP 240 次与 Massive ticker-overview 全部未发生**，当日配额基本未损耗；零产物落盘，主树真实 `candidate_universe_20260810.json` 未被触碰。
+
+### 失效旧结论
+
+- 本 handoff 与 register 中所有「待 bounded live acceptance / 另行授权后回放 20260810」的表述作废：授权已给、已尝试、结构上不可行。改以下次真实周跑收口。
+
+### 下一步注意事项
+
+- 下次 `us_short_paper_one_click.ps1` 真实周跑完成后，按 register 该节的五条清单逐项核对（守恒 / 每层完整残余 / 动态 frames / 六只代表票 / 不得宣读的边界），核完即删除该清单并翻 live 腿。
+- 编排层 `_assert_exact_market_cap_layer_targets` 会在任一层拿不到完整残余时直接 `raise`，所以「周跑跑完了」本身就是第 2 条的证据。
