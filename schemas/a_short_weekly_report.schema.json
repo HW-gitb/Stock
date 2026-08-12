@@ -1385,7 +1385,7 @@
       }
     },
     "a_short_evidence_reminders": {
-      "description": "Unified de-identified P2/P3/P4b evidence reminder surface. It is comparison-only, contains no ticker/account/price/private-path data, and never changes official EGS, M6.7, or Top5 output.",
+      "description": "Unified de-identified A-short evidence reminder surface. It is comparison-only, contains no ticker/account/price/private-path data, and never changes official EGS, M6.7, or Top5 output.",
       "type": "object",
       "additionalProperties": false,
       "required": [

@@ -6705,3 +6705,115 @@ This entry records only §15A in `D:\\cnhea\\Codex\\worktrees\\43fe\\Stock`; the
 - §6a 未起 agent（rule 8）。
 
 **下一步**：`Codex：执行`（15B）
+
+## 2026-08-12 — Codex executor/fixer: desktop `ashort_1415.md` §15B entry-diagnostic replay + `O-15A-1`（`43fe`，`repaired / OPEN-NOT_VERIFIED`）
+
+### 用途、问题和最小改动
+
+本节是指定 A-short sequence handoff 中 §15B 的追加；桌面 `ashort_1415.md` 仍是逐条执行权威。15A 的 active local-PIT report 只能报告 readiness，且把 §15B 的裁判字段 const-pin 为 `insufficient_sample`/`false`，因此未来真实诊断既不能按当轮数据得出五种结论，也没有一个安全的 weekly 只读消费者。按用户指令同时修复该 Optional，保持 report identity v`1.0.0`（目前没有真实 active report，无迁移数据），不做版本/抽象/阈值搜索扩张。
+
+- `runners/a_short_phase5_engine.py` 抽取无 account/cash/shares 的 `entry_exit_geometry(inp, ind, regime, etype)`；`exit_and_size` 改为调用它后继续既有 sizing，完整 golden result 不变。
+- `runners/a_short_entry_funnel_calibration.py` 对每个已授权本地 PIT 候选复用 production normalizer、`assess_rule6_checks`、`compute_indicators`、`effective_support`、`breakout_source_agreement` 和 `entry_type`；hard-veto/Rule6-not-clear 在分母上游 blocked。只加入 7 个单因子对照（EGS-only breakout、close-low/MA20 support、1.5/2/3/5% pullback band），不做 4x3 组合搜索；输出 candidate/equal-weighted metrics、support/band 分布和五个计算出的状态。
+- `runners/a_short_weekly_pipeline.py` 只从固定 active `calibration_report.json` 读取并按既有 schema 校验，向 `a_short_evidence_reminders` 追加不可阻断提醒；不存在、坏 JSON、非 object 或 schema-invalid 都为 `unavailable`，不能读取 historical root/`prices.csv`，不能改变候选、action、stop/target、shares、account、receipt 或 publish。
+- schema v`1.0.0` 放开并要求 §15B 动态字段；`runners/a_short_m67_render.py` 与 weekly schema 仅将提示标题推广为 A-short evidence reminder。全量首跑发现 nested focused child 虽不写 receipt 仍收集 pre-state、会与并行测试临时改源竞态；`.tools/bounded_unittest.py` 仅跳过 nested child 的 pre-state，外层 receipt gate 未放宽。
+
+### 调用链、source/schema 和写盘边界
+
+`authorized local PIT root -> a_short_entry_funnel_calibration.py --historical-root -> research/results/a_short/entry_funnel_calibration/calibration_report.json -> a_short_weekly_pipeline.main -> fixed-path schema loader -> a_short_evidence_reminders -> existing weekly JSON/Markdown renderer`。report 仍只记录逻辑 source、输入文件名、计数/版本和 `provider_calls=0`，不记录绝对路径、SHA 或 raw input；writer 保持 atomic。weekly 只显示 active report 的 reminder，绝不反向访问 source root，source/report 无效只降为 reminder `unavailable`。全路径仍 calibration-only、production unchanged、not buy advice、no ship gate，`capital_gate=not_evaluable_private_account`。
+
+结论映射为：不足样本→`accumulating`；within-band→`retain_baseline`；source-missing→`unavailable`；`too_lax`、`egs_entry_mismatch`、`specific_gate_too_strict`→`review_due`。第 15 刀未关闭：§15C 仍须用户明确指定和授权真实本地 historical root。
+
+### 负向控制、自审、精确证据和原始终态
+
+- 自审和 tests 固定 `exit_and_size` 全部旧结果、Rule6/hard-veto 不入诊断分母、五态和映射均由数据计算、counterfactual 单因子、no-path/bad-schema reminder 不影响其余 weekly report，以及 nullable hard-veto fail-closed。
+- 仅使用 `C:\Users\cnhea\AppData\Local\Programs\Python\Python313\python.exe` (3.13.8)。affected focused pack `853 OK`（3 个既有 skip），receipt `receipt:2ee81ae8bbefb8b2d43607e6`。最终命令：`C:\Users\cnhea\AppData\Local\Programs\Python\Python313\python.exe .tools\full_pack_ledger.py run a_short "desktop ashort_1415 15B production geometry replay weekly reminder and final fail-closed guards" "receipt:2ee81ae8bbefb8b2d43607e6" 860 -- discover -s tests -p "test_a_short*.py"`，结果 `PASS; discovered=2809 ran=2809 equal=True; 128.2s; static git diff --check=PASS; py_compile=8; fingerprint=fb5e38fa8cf6`。交接后文档守卫命令 `C:\Users\cnhea\AppData\Local\Programs\Python\Python313\python.exe .tools\bounded_unittest.py focused 240 -- tests.test_doc_governance_guard tests.test_route_doc_ledger_status_consistency tests.test_readme_route_row_length`，结果 `66 OK`，receipt `receipt:7ca1c666f71dddef45bb5f68`。
+- 未运行 provider/live/network、真实 historical root、真实 weekly、PowerShell launcher E2E 或 §15C；未起 sub-agent，未 stage/commit/push/merge。此处只代表 executor/fixer 的离线实现和自审，原始终态 `repaired / OPEN-NOT_VERIFIED`。请 Claude Code 逐条对照桌面 §15B 与当前 diff，特别检查 production geometry 与 sizing 分界、upstream denominator、动态五态/一因子对照、weekly fixed-path nonblocking consumer、schema/source/write boundary 与 ancillary nested-preflight 修复；不得在审查中执行 §15C。
+
+## 2026-08-12 追加：第15B刀独立审查（按 1415 文档逐条）—— FAIL（未提交）
+
+**判定**：FAIL，一条 Required + 一条 Optional，正文只在 `docs/system_risk_register.md`。本刀跨多轮：中途 Claude Code 的命令安全判定模型故障、终端全不可用，前几轮只能只读整读，本轮恢复后补探针与包。
+
+**我实际验了什么**（区别于执行方转述）
+
+- **先把一个自己的怀疑撤掉**：`entry_exit_geometry` 里那段 fallback 基准逻辑看着像抽取时顺手改的行为，拿主树（未含本刀）逐字对照后发现连注释都早就存在——纯搬运，疑点撤销。宁可自己推翻自己，也不拿「看起来像」写成 finding。
+- **验证工具的改动单独审过**：`.tools/bounded_unittest.py` 那一行只是让 nested 运行不再采集注定丢弃的代码态；发收据的 `not nested` 门第 201 行本来就在、未被触碰，非 nested 仍前后比对指纹。不削弱证据链。
+- **把疑点做成可复现的探针**：构造 `iv_feed_status=build_failed` + M0.5 全 `unknown` 的合法历史输入（这正是 14B 要求 EGS 写出的 fail-closed 形状）→ 历史重放判 `ready`、候选 `evaluable=1/1`、`missing_m05=0`，与 IV 正常周输出**完全一致**。也就是说「那一周production 一单都不许开」这件事，在诊断里被当成了正常周。
+- **顺手确认了修法的坑**：重放走 `entry_type` + `entry_exit_geometry`，从不经 `build_m67_report`，而 14B 的硬门在后者里。所以「把真实状态透传下去」这种看似自然的修法**一个计数都不会变**，必须显式排除或计数。这一条我写进了 Required，免得下一轮修了个寂寞。
+- **上轮 `O-15A-1` 的结局也核了**：15B 在同一 `1.0.0` 下原地扩了契约；盘面上活动报告并不存在（只有 legacy 目录），所以没作废任何真实产物，可转 resolved。
+
+**未覆盖维度与诚实边界**
+
+- 全量未跑（Required 已坐实，rule ③/rule 4）；§6a 未起 agent（rule 8）。
+- 15C 未做、真实历史数据未提供，第 15 刀保持 OPEN。
+- 中途工具故障导致本刀审查跨多轮，墙钟不可比。
+
+**下一步**：`Codex：修复`
+
+## 2026-08-12 — Codex executor/fixer: §15B IV source-bound diagnostic-denominator Required（`43fe`，`repaired / OPEN-NOT_VERIFIED`）
+
+### 问题、根因和最小修复
+
+本节追加在指定 A-short sequence handoff 的当前末尾；桌面 `ashort_1415.md` 仍是权威。Claude 的 Required `R-ASHORT-15B-HISTORICAL-REPLAY-COUNTS-IV-DEAD-WEEKS-AS-NORMAL` 已复现：历史 replay 在 `_historical_production_input` 把 `iv_feed_status` 写死为 `ready`，没有读取 source-bound `analysis_input.market_context.volatility.iv_feed_status`。因此 EGS 14B 定义的 non-ready 投影（例如 `build_failed` + `source_status=unavailable` + Rule3/awakening=`unknown`）经过旧 `None`-only M0.5 gate 后会与正常周一样进诊断分母。
+
+最小改动只在 calibration runner、现有 active-report schema 与其测试：`_historical_production_input` 透传原始 IV status；`_candidate_gap_reasons` 仅在 source status `ready` 时检查 M0.5 完整性，任何 non-ready 或缺失 status 都新增可见 `iv_feed_not_ready`，在 Rule6、entry geometry、counterfactual 之前阻断该候选。ready status 下 `rule3_status`/`awakening_status="unknown"` 仍为 `missing_m05_rule3`，不再默认为有效 M0.5。schema v`1.0.0` 把 `iv_feed_not_ready` 加入 required counter；没有修改 production IV/entry 规则、支撑/RR 几何、账户/cash/shares sizing、weekly action、provider、source root 或 atomic writer。
+
+### 调用链、消费者、schema/source-binding 和写盘边界
+
+`authorized local PIT analysis_input -> market_context.volatility.iv_feed_status -> _candidate_gap_reasons / _historical_production_input -> normalize_candidate -> historical active report`。non-ready/absent 周写入该报告的 candidate-gap 计数，不能增加 `evaluable_candidate_count`、`diagnostic_candidate_count` 或 `diagnostic_week_count`。既有 downstream 保持 `active calibration_report.json -> fixed-path schema validation -> a_short_evidence_reminders -> weekly JSON/Markdown`；weekly 永不读取 historical root/`prices.csv`，提醒仍不改变 candidates/actions/stops/targets/shares/account/receipt。无 input SHA、绝对路径或 raw 落盘，`provider_calls=0` 和 calibration-only 边界不变。
+
+### 负向控制、自审、精确证据和原始终态
+
+- 新的 schema-valid negative control 是 `build_failed`/`unavailable` source、所有 M0.5 数值为 null、Rule3/awakening 为 `unknown`；结果 `iv_feed_not_ready=1`、evaluable=0、diagnostic candidates/weeks=0。相同的已清 Rule6/hard-veto 候选在 ready source projection 下仍是 diagnostic candidates/weeks=1。这同时证明 explicit `unknown` 不能再伪装为有效 M0.5，且正常周不受影响。
+- 只使用 `C:\Users\cnhea\AppData\Local\Programs\Python\Python313\python.exe` (3.13.8)。精确 calibration `15 OK`（3 个既有 skip），receipt `receipt:c2e80908b91b9b6bb1a8cefa`；focused acceptance（calibration/effect contract+consumer/weekly/render/Phase5/IV- EGS/sidecar/failure closeout）`909 OK`（3 个既有 skip），receipt `receipt:2d816736a003218d0b932870`；最终 full 命令 `C:\Users\cnhea\AppData\Local\Programs\Python\Python313\python.exe .tools\full_pack_ledger.py run a_short "desktop ashort_1415 15B IV source-bound historical diagnostic denominator repair" "receipt:2d816736a003218d0b932870" 860 -- discover -s tests -p "test_a_short*.py"` -> `PASS; discovered=2811 ran=2811 equal=True; 134.4s; static git diff --check=PASS; py_compile=8; fingerprint=6a082f8fdafd`。
+- 未执行真实 historical root/§15C、provider/live/network、真实 weekly、PowerShell launcher E2E；未起 sub-agent，未 stage/commit/push/merge。`O-15B-1`（用户可见标题中文措辞）未被本次 Required 修复授权，保持 Optional。原始终态仍 `repaired / OPEN-NOT_VERIFIED`；请 Claude Code 对 source-status gate、visible counter、ready/non-ready 正反控制、schema 和无消费者扩张独立审查，且不得执行 §15C。
+
+## 2026-08-12 追加：第15B刀 IV-dead-week 修复复审 —— FAIL（未提交，反方向被打出来）
+
+**判定**：FAIL。上轮 Required 的正方向修好了，但同一处判据打出了反方向的新 Required；Optional `O-15B-1` 仍 open。正文只在 `docs/system_risk_register.md`。
+
+**我实际验了什么**（区别于执行方转述）
+
+- **先用同一支探针验正方向**：`build_failed` + M0.5 全 `unknown` 的那一周，从上轮的 `evaluable=1/1, iv_not_ready=0` 变成 `evaluable=0, iv_not_ready=1`，readiness 如实降为 `ready_with_candidate_gaps`。正方向确实修好了。
+- **然后立刻打反方向**（这一步是本轮的全部价值）：判据是 `volatility.get("iv_feed_status") != "ready"`，而 `.get()` 对缺字段返回 `None`——于是「没有这个字段」被等同于「IV 不可用」。我把夹具里 08-08 之后才有的字段全删掉、只留 `rule3_status: normal`（IV 真实且健康）→ 该周 `evaluable=0 / iv_not_ready=1`，被当成 IV 不可用丢掉。
+- **回溯字段年龄定严重度**：`git log -S "iv_feed_status"` 显示它由单个提交 `2554c473`（**2026-08-08**）同时引入 EGS 和 analysis_input schema。而裁判器要 12 个不同周、120 个候选，即至少三个月历史——几乎全在 08-08 之前，一份都不带该字段。所以这不是边角情况：15C 喂进真实历史后 `diagnostic_candidate_count` 会是 0，裁判器恒定 `insufficient_sample`，报告看起来像「数据不够」，实际是「数据被整批丢掉」。
+- **也确认了为什么 schema 挡不住**：`volatility.required` 只有三项，`source_status`/`iv_feed_status` 都不在基础必填里，两个 allOf 分支只在 `source_status` 存在时触发——老形状今天仍然合法，会顺利过 15A 的校验再被这道门丢掉。
+- **验收超集 871 全绿**，说明现有测试对这条同样无感（与上轮一样）。
+
+**未覆盖维度与诚实边界**
+
+- 仓内没有 tracked 的真实历史 `analysis_input`（0 份，gitignored），可达性是由字段引入日期 + schema 允许缺失推出的，不是直接读到用户那些文件。
+- 全量未跑（Required 已坐实，rule ③/rule 4）；§6a 未起 agent（rule 8）；15C 未做，第 15 刀保持 OPEN。
+
+**下一步**：`Codex：修复`
+
+## 2026-08-12 — Codex executor/fixer: §15B legacy-IV compatibility Required（`43fe`，`repaired / OPEN-NOT_VERIFIED`）
+
+### 问题、最小修复和调用链
+
+桌面 `ashort_1415.md` 仍为权威。本次只修 Claude Required `R-ASHORT-15B-IV-READINESS-CHECK-DISCARDS-EVERY-PRE-0808-HISTORICAL-WEEK`：`iv_feed_status` 于 2026-08-08 才出现，旧合法 historical `analysis_input` 缺字段不代表 feed 不可用。`runners/a_short_entry_funnel_calibration.py::_candidate_gap_reasons` 现在只在该字段存在且明确非 `ready` 时写 `iv_feed_not_ready`；字段不存在时，以已有 M0.5 实质事实决定：`iv_percentile_252d` 必须非 null，`rule3_status` 和 `awakening_status` 必须存在且非 `unknown`。不完整旧形状复用已有 `missing_m05_rule3`，健康旧形状不进入任何排除桶。
+
+调用链固定为 `authorized local PIT analysis_input.market_context.volatility -> _historical_production_input -> _candidate_gap_reasons -> normalize_candidate -> active calibration_report`。没有新增 status、schema、消费者或写盘路径；只校正 historical diagnostic 的分类。既有 consumer 仍为 `active calibration_report.json -> fixed-path schema validation -> a_short_evidence_reminders -> weekly JSON/Markdown`，提醒保持非阻断且不改变 candidates/actions/stops/targets/shares/account/receipt；不读 historical root、无 provider 调用、无 raw/path/input-SHA 落盘。
+
+### 负向控制、自审、精确证据和原始终态
+
+- explicit `iv_feed_status=build_failed` 仍排除并计 `iv_feed_not_ready`；无 status 的健康旧形状进入 diagnostic 分母；无 status 的 `iv_percentile_252d=null`/Rule3 或 awakening=`unknown` 旧形状排除并计 `missing_m05_rule3`；全旧形状 12 周/120 candidates 能满足 minimum。原有 Rule6/hard-veto 清除、geometry、weekly nonblocking 边界保持。
+- 只使用 `C:\Users\cnhea\AppData\Local\Programs\Python\Python313\python.exe` (3.13.8)。精确 `tests.test_a_short_entry_funnel_calibration`: `18 OK`（3 existing skips，`receipt:9283dcf31d566dd315bf0af3`）；focused acceptance `912 OK`（3 existing skips，`receipt:875636858c0a080637166153`）；full 命令 `C:\Users\cnhea\AppData\Local\Programs\Python\Python313\python.exe .tools\full_pack_ledger.py run a_short "desktop ashort_1415 15B legacy IV readiness compatibility repair" "receipt:875636858c0a080637166153" 860 -- discover -s tests -p "test_a_short*.py"` -> `PASS; discovered=2814 ran=2814 equal=True; 122.5s; static git diff --check=PASS; py_compile=8; fingerprint=cdc22c2fd52f`。
+- 未执行真实 historical root/§15C、provider/live/network、真实 weekly、launcher E2E；未起 sub-agent，未 stage/commit/push/merge。第 15 刀原始终态 `repaired / OPEN-NOT_VERIFIED`；`O-15B-1`（用户可见标题中文措辞）保持 Optional、未动。请 Claude Code 对 explicit/absent status 分流、legacy M0.5 fallback、可见 counters、12-week control 和无消费者扩张独立审查；不得执行 §15C。
+
+## 2026-08-12 追加：第15B刀 IV 就绪判据两向收口复审 —— PASS（已提交并合入 master）
+
+**判定**：PASS。两条 Required 全闭，`O-15B-1` 仍 open；正文只在 `docs/system_risk_register.md`。
+
+**我实际验了什么**（区别于执行方转述）
+
+- **五格分档全部自跑**：ready+健康 → 可评估；`build_failed` → 排除记 `iv_feed_not_ready`；**无字段但数据健康（老形状）→ 可评估**（这就是上轮误杀的那格）；无字段但 M0.5 `unknown` → 排除记 `missing_m05_rule3`；无字段且无 IV 分位 → 同样排除。两类排除原因可区分。
+- **自造 12 周定论样本**：12 个不同 ISO 周 × 10 候选 × 每票 20 行价格、全为 08-08 之前形状。Rule6 多 `unknown` 时 `diagnostic=0`、`upstream_blocked=120 {rule6_not_clear:120}`、结论 `insufficient_sample`——正确且原因可见；把 Rule6 置 clear 后 `diagnostic=120/12 周`、`sample_sufficient=True`、结论 `egs_entry_mismatch`。**证明 15C 不会被这道判据堵死**，这是上轮 Required 最后一项、也是我最担心的一项。
+- **撤回一条自己的疑虑**：我曾以为报告没输出上游阻断/diagnostic 计数，回查发现四项都在 `funnel` 的 required 里，是我第一支探针只打了 `entry_diagnostic` 才没看见。宁可自己推翻自己，不把误判写成 finding。
+- **全量没重跑、但账本我自己核**：现场重算指纹 `cdc22c2f…` 与账本 `2814 OK` 逐字相同、被审源码 mtime 全早于记账时间。
+
+**未覆盖维度与诚实边界**
+
+- 12 周定论用的是我自造的合法夹具，不是用户真实历史；仓内无 tracked 真实 `analysis_input`（gitignored），可达性由字段引入日期 + schema 不必填推出。
+- 15C 未执行，第 15 刀保持 OPEN；§6a 未起 agent（rule 8）；真实 launcher 端到端仍未跑（14B 遗留边界）。
+
+**下一步**：`Codex：执行`（15C：需用户授权本地历史 PIT 数据）

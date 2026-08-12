@@ -1,20 +1,10 @@
 {
   "$schema": "http://json-schema.org/draft-07/schema#",
   "$id": "https://stock.local/schemas/a_short_entry_funnel_historical_report/1.0.0/schema.json",
-  "title": "A-short Entry Funnel Historical Readiness Report",
+  "title": "A-short Entry Funnel Historical Calibration Report",
   "type": "object",
   "additionalProperties": false,
-  "required": [
-    "schema_name",
-    "schema_version",
-    "generated_at",
-    "source_readiness",
-    "decision_policy",
-    "funnel",
-    "entry_diagnostic",
-    "calibration_conclusion",
-    "boundary"
-  ],
+  "required": ["schema_name", "schema_version", "generated_at", "source_readiness", "decision_policy", "funnel", "entry_diagnostic", "calibration_conclusion", "boundary"],
   "properties": {
     "schema_name": {"const": "a_short_entry_funnel_historical_report"},
     "schema_version": {"const": "1.0.0"},
@@ -22,16 +12,7 @@
     "source_readiness": {
       "type": "object",
       "additionalProperties": false,
-      "required": [
-        "status",
-        "logical_source_id",
-        "input_filenames",
-        "date_range",
-        "distinct_weeks",
-        "price_row_count",
-        "analysis_input_schema_versions",
-        "provider_calls"
-      ],
+      "required": ["status", "logical_source_id", "input_filenames", "date_range", "distinct_weeks", "price_row_count", "analysis_input_schema_versions", "provider_calls"],
       "properties": {
         "status": {"enum": ["ready", "ready_with_candidate_gaps", "source_missing"]},
         "logical_source_id": {"const": "authorized_local_historical_pit"},
@@ -47,20 +28,21 @@
         },
         "distinct_weeks": {"type": "integer", "minimum": 0},
         "price_row_count": {"type": "integer", "minimum": 0},
-        "analysis_input_schema_versions": {
-          "type": "array",
-          "uniqueItems": true,
-          "items": {"type": "string"}
-        },
+        "analysis_input_schema_versions": {"type": "array", "uniqueItems": true, "items": {"type": "string"}},
         "provider_calls": {"const": 0}
       }
     },
     "decision_policy": {
       "type": "object",
       "additionalProperties": false,
-      "required": ["mode", "provider_calls", "production_threshold_change"],
+      "required": ["mode", "minimum_distinct_weeks", "minimum_diagnostic_candidates", "target_pre_capital_build_rate", "target_active_week_rate", "band_points", "provider_calls", "production_threshold_change"],
       "properties": {
-        "mode": {"const": "historical_input_readiness_only"},
+        "mode": {"const": "historical_production_replay"},
+        "minimum_distinct_weeks": {"const": 12},
+        "minimum_diagnostic_candidates": {"const": 120},
+        "target_pre_capital_build_rate": {"const": [0.02, 0.2]},
+        "target_active_week_rate": {"const": [0.25, 0.75]},
+        "band_points": {"const": [0.015, 0.02, 0.03, 0.05]},
         "provider_calls": {"const": 0},
         "production_threshold_change": {"const": false}
       }
@@ -68,30 +50,22 @@
     "funnel": {
       "type": "object",
       "additionalProperties": false,
-      "required": [
-        "candidate_count",
-        "evaluable_candidate_count",
-        "not_evaluable_candidate_count",
-        "not_evaluable_reason_counts"
-      ],
+      "required": ["candidate_count", "evaluable_candidate_count", "not_evaluable_candidate_count", "not_evaluable_reason_counts", "diagnostic_candidate_count", "diagnostic_week_count", "upstream_blocked_candidate_count", "upstream_blocked_reason_counts"],
       "properties": {
         "candidate_count": {"type": "integer", "minimum": 0},
         "evaluable_candidate_count": {"type": "integer", "minimum": 0},
         "not_evaluable_candidate_count": {"type": "integer", "minimum": 0},
-        "not_evaluable_reason_counts": {
+        "not_evaluable_reason_counts": {"$ref": "#/$defs/not_evaluable_reasons"},
+        "diagnostic_candidate_count": {"type": "integer", "minimum": 0},
+        "diagnostic_week_count": {"type": "integer", "minimum": 0},
+        "upstream_blocked_candidate_count": {"type": "integer", "minimum": 0},
+        "upstream_blocked_reason_counts": {
           "type": "object",
           "additionalProperties": false,
-          "required": [
-            "missing_rule6_hard_veto",
-            "missing_egs_breakout",
-            "missing_m05_rule3",
-            "insufficient_pit_price_window"
-          ],
+          "required": ["hard_veto", "rule6_not_clear"],
           "properties": {
-            "missing_rule6_hard_veto": {"type": "integer", "minimum": 0},
-            "missing_egs_breakout": {"type": "integer", "minimum": 0},
-            "missing_m05_rule3": {"type": "integer", "minimum": 0},
-            "insufficient_pit_price_window": {"type": "integer", "minimum": 0}
+            "hard_veto": {"type": "integer", "minimum": 0},
+            "rule6_not_clear": {"type": "integer", "minimum": 0}
           }
         }
       }
@@ -99,43 +73,157 @@
     "entry_diagnostic": {
       "type": "object",
       "additionalProperties": false,
-      "required": ["status", "price_window_required"],
+      "required": ["status", "price_window_required", "capital_gate", "ma_shape_pass_count", "breakout_source_agreement_counts", "entry_trigger_counts", "pre_capital_plan_count", "active_week_count", "metrics", "support_methods", "counterfactuals"],
       "properties": {
-        "status": {"enum": ["not_run_source_missing", "not_run_15b_pending"]},
-        "price_window_required": {"const": 20}
+        "status": {"enum": ["source_missing", "completed"]},
+        "price_window_required": {"const": 20},
+        "capital_gate": {"const": "not_evaluable_private_account"},
+        "ma_shape_pass_count": {"type": "integer", "minimum": 0},
+        "breakout_source_agreement_counts": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["agree_true", "agree_false", "egs_only", "pipeline_only"],
+          "properties": {
+            "agree_true": {"type": "integer", "minimum": 0},
+            "agree_false": {"type": "integer", "minimum": 0},
+            "egs_only": {"type": "integer", "minimum": 0},
+            "pipeline_only": {"type": "integer", "minimum": 0}
+          }
+        },
+        "entry_trigger_counts": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["low_pullback_hit", "breakout_hit", "neither"],
+          "properties": {
+            "low_pullback_hit": {"type": "integer", "minimum": 0},
+            "breakout_hit": {"type": "integer", "minimum": 0},
+            "neither": {"type": "integer", "minimum": 0}
+          }
+        },
+        "pre_capital_plan_count": {"type": "integer", "minimum": 0},
+        "active_week_count": {"type": "integer", "minimum": 0},
+        "metrics": {"$ref": "#/$defs/metrics"},
+        "support_methods": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["effective_support", "close_low_20", "ma20"],
+          "properties": {
+            "effective_support": {"$ref": "#/$defs/support_method"},
+            "close_low_20": {"$ref": "#/$defs/support_method"},
+            "ma20": {"$ref": "#/$defs/support_method"}
+          }
+        },
+        "counterfactuals": {
+          "type": "object",
+          "additionalProperties": {"$ref": "#/$defs/metrics"}
+        }
       }
     },
     "calibration_conclusion": {
       "type": "object",
       "additionalProperties": false,
-      "required": ["status", "sample_sufficient", "next_evidence"],
+      "required": ["status", "observed_bottleneck", "sample_sufficient", "mismatch_kind", "candidate_gates", "next_evidence", "production_threshold_change"],
       "properties": {
-        "status": {"const": "insufficient_sample"},
-        "sample_sufficient": {"const": false},
-        "next_evidence": {
-          "enum": [
-            "provide_authorized_historical_pit_source",
-            "complete_15b_production_replay_before_any_rule_change"
-          ]
-        }
+        "status": {"enum": ["insufficient_sample", "within_calibration_band", "too_lax", "egs_entry_mismatch", "specific_gate_too_strict"]},
+        "observed_bottleneck": {"type": "string", "minLength": 1},
+        "sample_sufficient": {"type": "boolean"},
+        "mismatch_kind": {"type": ["string", "null"]},
+        "candidate_gates": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["gate", "metrics"],
+            "properties": {
+              "gate": {"type": "string", "minLength": 1},
+              "metrics": {"$ref": "#/$defs/decision_metrics"}
+            }
+          }
+        },
+        "next_evidence": {"enum": ["provide_or_expand_authorized_historical_pit_source", "manual_review_selection_entry_alignment_no_production_change", "open_reviewed_rule_change_candidate", "retain_production_baseline_and_seek_forward_confirmation", "open_reviewed_tightening_candidate"]},
+        "production_threshold_change": {"const": false}
       }
     },
     "boundary": {
       "type": "object",
       "additionalProperties": false,
-      "required": [
-        "calibration_only",
-        "production_unchanged",
-        "is_buy_advice",
-        "satisfies_ship_gate",
-        "full_size_allowed"
-      ],
+      "required": ["calibration_only", "production_unchanged", "is_buy_advice", "satisfies_ship_gate", "full_size_allowed"],
       "properties": {
         "calibration_only": {"const": true},
         "production_unchanged": {"const": true},
         "is_buy_advice": {"const": false},
         "satisfies_ship_gate": {"const": false},
         "full_size_allowed": {"const": false}
+      }
+    }
+  },
+  "$defs": {
+    "number_or_null": {"type": ["number", "null"]},
+    "distribution": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["count", "minimum", "median", "maximum"],
+      "properties": {
+        "count": {"type": "integer", "minimum": 0},
+        "minimum": {"$ref": "#/$defs/number_or_null"},
+        "median": {"$ref": "#/$defs/number_or_null"},
+        "maximum": {"$ref": "#/$defs/number_or_null"}
+      }
+    },
+    "decision_metrics": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["pre_capital_build_rate", "active_week_rate"],
+      "properties": {
+        "pre_capital_build_rate": {"$ref": "#/$defs/number_or_null"},
+        "active_week_rate": {"$ref": "#/$defs/number_or_null"}
+      }
+    },
+    "metrics": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["candidate_weighted", "equal_weighted", "decision"],
+      "properties": {
+        "candidate_weighted": {"$ref": "#/$defs/decision_metrics"},
+        "equal_weighted": {"$ref": "#/$defs/decision_metrics"},
+        "decision": {"$ref": "#/$defs/decision_metrics"}
+      }
+    },
+    "support_method": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["support_count", "recent_low_20", "required_band_pct", "band_observations"],
+      "properties": {
+        "support_count": {"type": "integer", "minimum": 0},
+        "recent_low_20": {"$ref": "#/$defs/distribution"},
+        "required_band_pct": {"$ref": "#/$defs/distribution"},
+        "band_observations": {
+          "type": "array",
+          "minItems": 4,
+          "maxItems": 4,
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["band_pct", "within_count", "within_rate"],
+            "properties": {
+              "band_pct": {"enum": [0.015, 0.02, 0.03, 0.05]},
+              "within_count": {"type": "integer", "minimum": 0},
+              "within_rate": {"$ref": "#/$defs/number_or_null"}
+            }
+          }
+        }
+      }
+    },
+    "not_evaluable_reasons": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["missing_rule6_hard_veto", "missing_egs_breakout", "missing_m05_rule3", "iv_feed_not_ready", "insufficient_pit_price_window"],
+      "properties": {
+        "missing_rule6_hard_veto": {"type": "integer", "minimum": 0},
+        "missing_egs_breakout": {"type": "integer", "minimum": 0},
+        "missing_m05_rule3": {"type": "integer", "minimum": 0},
+        "iv_feed_not_ready": {"type": "integer", "minimum": 0},
+        "insufficient_pit_price_window": {"type": "integer", "minimum": 0}
       }
     }
   }

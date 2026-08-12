@@ -567,7 +567,7 @@ def render_weekly_markdown(weekly: dict) -> str:
         out.append("**P2 目标策略**: " + str(target_policy.get("message", "")))
     evidence_reminders = weekly.get("a_short_evidence_reminders")
     if evidence_reminders:
-        out.append("**P2/P3/P4 证据提醒**: " + str(evidence_reminders.get("message", "")))
+        out.append("**A-short evidence reminders**: " + str(evidence_reminders.get("message", "")))
         for reminder in evidence_reminders.get("reminders") or []:
             if isinstance(reminder, dict):
                 out.append("- " + str(reminder.get("message", "")))
