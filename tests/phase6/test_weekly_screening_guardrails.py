@@ -342,7 +342,7 @@ class WeeklyScreeningGuardrailTest(unittest.TestCase):
         self.assertIn("$Payload['candidate_digest']", text)
         for reason in ("preflight_failed", "entrypoint_missing", "egs_failed"):
             self.assertIn(reason, text)
-        self.assertEqual(text.count("-AnalysisInput $SemAnalysisInput"), 3)
+        self.assertEqual(text.count("-AnalysisInput $SemAnalysisInput"), 4)
 
     def test_iv_feed_failure_receipt_is_wired_without_copying_error_text(self) -> None:
         text = SCRIPT.read_text(encoding="utf-8")

@@ -2035,6 +2035,7 @@
       "run_lineage.candidate_digest",
       "run_lineage.decision_as_of",
       "run_lineage.iv_feed",
+      "run_lineage.iv_feed_status",
       "run_lineage.iv_freshness.iv_data_through",
       "run_lineage.iv_freshness.price_data_through",
       "run_lineage.iv_freshness.status",

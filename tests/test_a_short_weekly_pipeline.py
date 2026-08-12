@@ -44,7 +44,7 @@ from runners.a_short_weekly_pipeline import (  # noqa: E402
     _forecast_red_flags, _income_red_flags, _balancesheet_red_flags, _industry_fundamentals, _FIN_STATEMENT_MARKER,
     _attach_holding_disposition, _factor_comparison_realized_regime, _build_evidence_reminders,
     _resolve_m05_state, _validate_analysis_input_m05_binding,
-    _sidecar_result_fields,
+    _sidecar_result_fields, _validate_weekly_stage_content,
 )
 from engine.data.analysis_input_contract import (  # noqa: E402
     build_a_short_run_identity,
@@ -627,6 +627,12 @@ class ValidateWeeklyTests(unittest.TestCase):
     def test_good_passes(self):
         validate_weekly_report(_weekly(), _feed())  # no raise
 
+    def test_ready_requires_nonempty_iv_feed_binding(self):
+        weekly = _weekly()
+        weekly["run_lineage"]["iv_feed"] = ""
+        with self.assertRaisesRegex(ValueError, "non-empty run_lineage.iv_feed"):
+            validate_weekly_report(weekly, _feed())
+
     def test_consumer_validates_iv_feed_p2(self):
         # P2: the pipeline MUST validate the feed it consumed → a corrupt feed is caught here.
         bad_feed = _feed()
@@ -693,6 +699,63 @@ class ValidateWeeklyTests(unittest.TestCase):
             w["run_lineage"]["sizing_mode"] = size_md
             with self.assertRaises(ValueError):
                 validate_weekly_report(w, _feed())
+
+
+    def _degraded_weekly(self):
+        weekly = _weekly()
+        lineage = weekly["run_lineage"]
+        lineage["stage_status"] = "degraded_no_new_entries"
+        lineage["iv_feed_status"] = "build_failed"
+        lineage["iv_feed"] = None
+        lineage["iv_freshness"] = {
+            "status": "build_failed",
+            "iv_data_through": None,
+            "price_data_through": lineage["price_freshness"]["price_data_through"],
+        }
+        report = weekly["reports"][0]
+        report["machine"]["stateful_risk"] = {"position_state": "flat"}
+        action = "\u89c2\u5bdf"
+        report["machine"]["entry_exit_size_star"]["action"] = action
+        report["machine"]["entry_exit_size_star"]["plan"] = None
+        table = report["m67"]["table"]
+        table["\u64cd\u4f5c"] = action
+        for field in ("\u80a1\u6570", "\u5165", "\u76c8\u4e00", "\u76c8\u4e8c", "\u635f"):
+            table[field] = None
+        return weekly
+
+    def test_degraded_report_is_observe_only_and_does_not_read_iv(self):
+        weekly = self._degraded_weekly()
+        validate_weekly_report(weekly, None)
+        _validate_weekly_stage_content(weekly)
+
+    def test_degraded_flat_report_rejects_any_trade_plan(self):
+        weekly = self._degraded_weekly()
+        weekly["reports"][0]["machine"]["entry_exit_size_star"]["plan"] = {}
+        with self.assertRaisesRegex(ValueError, "plan"):
+            _validate_weekly_stage_content(weekly)
+
+    def test_partial_report_schema_accepts_held_only_and_rejects_flat(self):
+        schema = json.loads(Path(SCHEMA_PATH).read_text(encoding="utf-8"))
+        weekly = _weekly()
+        weekly["run_lineage"]["stage_status"] = "partial_holdings_only"
+        weekly["reports"][0]["machine"]["stateful_risk"] = {"position_state": "held"}
+        jsonschema.validate(weekly, schema)
+        weekly["reports"][0]["machine"]["stateful_risk"]["position_state"] = "flat"
+        with self.assertRaises(jsonschema.ValidationError):
+            jsonschema.validate(weekly, schema)
+
+    def test_nonready_publisher_rejects_stale_iv_feed_input(self):
+        from runners.a_short_weekly_pipeline import publish_weekly_bundle
+
+        weekly = self._degraded_weekly()
+        with tempfile.TemporaryDirectory() as td:
+            out = Path(td) / AS_OF / "weekly_m67.json"
+            md = out.with_suffix(".md")
+            with self.assertRaisesRegex(ValueError, "iv_feed_summary=None"):
+                publish_weekly_bundle(
+                    weekly, _feed(), str(out), str(md), iv_feed_status="build_failed"
+                )
+            self.assertFalse(out.exists())
 
 
 class WriteWeeklyTests(unittest.TestCase):
@@ -3330,7 +3393,7 @@ class CashAllocationTests(unittest.TestCase):
         return rows
 
     def test_no_account_no_cash_allocation(self):
-        w = build_weekly_report([_normalized()], AS_OF, GEN)        # 默认 absent lineage + available_cash None
+        w = build_weekly_report([_normalized()], AS_OF, GEN, iv_feed_ref="iv_feed.json")
         self.assertIsNone(w["cash_allocation"])
         validate_weekly_report(w, _feed())                          # observation-only 一致(absent⟺cash_allocation None)
 
@@ -3471,7 +3534,7 @@ class ExDivNoticeTests(unittest.TestCase):
         self.assertEqual([x["ex_date"] for x in n], ["20260611"])     # 同票取最近一次
 
     def test_weekly_attach_schema_validator_render(self):
-        w = build_weekly_report([_normalized()], AS_OF, GEN)
+        w = build_weekly_report([_normalized()], AS_OF, GEN, iv_feed_ref="iv_feed.json")
         w["ex_div_notices"] = [{"ts_code": "600000.SH", "name": "甲", "ex_date": "20260615", "days_to_ex": 6}]
         with tempfile.TemporaryDirectory() as td:    # write = jsonschema + validate_weekly_report
             write_weekly_report(w, _feed(), str(Path(td) / "w.json"))
@@ -3480,7 +3543,7 @@ class ExDivNoticeTests(unittest.TestCase):
         self.assertIn("20260615", md)
 
     def test_validator_rejects_inconsistent_days(self):
-        w = build_weekly_report([_normalized()], AS_OF, GEN)
+        w = build_weekly_report([_normalized()], AS_OF, GEN, iv_feed_ref="iv_feed.json")
         w["ex_div_notices"] = [{"ts_code": "600000.SH", "name": "甲", "ex_date": "20260615", "days_to_ex": 99}]
         with self.assertRaises(ValueError):
             validate_weekly_report(w, _feed())
@@ -3523,7 +3586,7 @@ class ExDivNoticeTests(unittest.TestCase):
 
     def test_validator_accepts_manual_review_holding_notice(self):
         # 正向:提示 ts_code 属 holdings_manual_review(无价持仓)→ validator 接受(在周报 universe 内)
-        w = build_weekly_report([_normalized()], AS_OF, GEN)
+        w = build_weekly_report([_normalized()], AS_OF, GEN, iv_feed_ref="iv_feed.json")
         w["holdings_manual_review"] = [{"ts_code": "600519.SH", "name": "乙", "reason": "停牌"}]
         w["ex_div_notices"] = [{"ts_code": "600519.SH", "name": "乙", "ex_date": "20260615", "days_to_ex": 6}]
         validate_weekly_report(w, _feed())     # 不 raise
@@ -6008,20 +6071,56 @@ class FactorComparisonRealizedRegimeTests(unittest.TestCase):
 class LoadPublishedBundleTests(unittest.TestCase):
     """刀10: the official reader accepts only the exact JSON/Markdown bytes in the receipt."""
 
-    def _bundle(self, root, *, dir_name="20260622", stage_status="complete", tamper=None):
+    def _bundle(self, root, *, dir_name="20260622", stage_status="complete", tamper=None,
+                revision_id=None):
         d = Path(root) / dir_name
+        if revision_id is not None:
+            d = d / "revisions" / revision_id
         d.mkdir(parents=True, exist_ok=True)
-        weekly = {"as_of": "20260622", "decision_as_of": "20260622", "run_date": "20260622",
-                  "price_data_through": "20260622",
-                  "run_lineage": {"run_id": "a-short-20260622-01", "candidate_digest": "b" * 64,
-                                   "decision_as_of": "20260622", "price_data_through": "20260622"}}
-        weekly_bytes = json.dumps(weekly).encode("utf-8")
+        weekly_stage = stage_status if stage_status in {
+            "complete", "degraded_no_new_entries", "partial_holdings_only",
+        } else "complete"
+        iv_status = "build_failed" if weekly_stage == "degraded_no_new_entries" else "ready"
+        iv_ref = "iv_feed.json" if iv_status == "ready" else ""
+        lineage = {
+            "run_id": "a-short-20260622-0123456789abcdef",
+            "candidate_digest": "b" * 64,
+            "stage_status": weekly_stage,
+            "analysis_input": "",
+            "selection_bucket": "",
+            "iv_feed": iv_ref if iv_status == "ready" else None,
+            "iv_feed_status": iv_status,
+            "account_ref": "",
+            "account_status": "absent",
+            "sizing_mode": "observation_only_no_account",
+            "account_snapshot": None,
+            "price_freshness": {
+                "mode": "strict_as_of", "run_date": None,
+                "accepted_prior_settled_date": None,
+                "price_data_through": "20260622",
+            },
+            "iv_freshness": {
+                "status": "aligned" if iv_status == "ready" else iv_status,
+                "iv_data_through": "20260622" if iv_status == "ready" else None,
+                "price_data_through": "20260622",
+            },
+            "runtime_configuration": runtime_configuration_lineage(load_runtime_configuration()),
+        }
+        if revision_id is not None:
+            lineage["run_revision_id"] = revision_id
+        weekly = _build_weekly_report(
+            [], "20260622", "2026-06-22T12:00:00+08:00",
+            iv_feed_ref=iv_ref, run_lineage=lineage,
+        )
+        weekly_bytes = json.dumps(weekly, ensure_ascii=False, indent=2).encode("utf-8")
         markdown_bytes = b"# report"
         receipt = {"schema_name": "a_short_weekly_publish_receipt", "schema_version": "1.1.0",
                    "as_of": "20260622",
-                   "decision_as_of": "20260622", "run_date": "20260622", "price_data_through": "20260622",
-                   "run_id": "a-short-20260622-01", "candidate_digest": "b" * 64,
+                   "decision_as_of": "20260622", "run_date": weekly.get("run_date"),
+                   "price_data_through": weekly.get("price_data_through"),
+                   "run_id": "a-short-20260622-0123456789abcdef", "candidate_digest": "b" * 64,
                    "published_at": "2026-06-22T12:00:00+08:00", "account_snapshot": None,
+                   "iv_feed_status": iv_status,
                    "stage_status": stage_status, "outputs": ["weekly_m67.json", "weekly_m67.md"],
                    "outputs_digest": {
                        "weekly_m67.json": {
@@ -6033,6 +6132,8 @@ class LoadPublishedBundleTests(unittest.TestCase):
                            "byte_length": len(markdown_bytes),
                        },
                    }}
+        if revision_id is not None:
+            receipt["run_revision_id"] = revision_id
         if tamper:
             tamper(weekly, receipt)
         (d / "weekly_m67.json").write_bytes(weekly_bytes)
@@ -6062,6 +6163,39 @@ class LoadPublishedBundleTests(unittest.TestCase):
             with self.assertRaises(ValueError):
                 load_published_weekly_bundle(self._bundle(tmp, stage_status="failed"))
 
+    def test_operation_loader_accepts_three_publishable_states(self):
+        from runners.a_short_weekly_pipeline import validate_published_weekly_operation_bundle
+        for stage in ("complete", "degraded_no_new_entries", "partial_holdings_only"):
+            with self.subTest(stage=stage), tempfile.TemporaryDirectory() as tmp:
+                with patch("runners.a_short_m67_render.render_weekly_markdown", return_value="# report"):
+                    out = self._bundle(tmp, stage_status=stage)
+                    bundle = validate_published_weekly_operation_bundle(out)
+                self.assertEqual(bundle.receipt["stage_status"], stage)
+
+    def test_complete_loader_rejects_degraded_operation_bundle(self):
+        from runners.a_short_weekly_pipeline import load_published_weekly_bundle
+        with tempfile.TemporaryDirectory() as tmp:
+            with self.assertRaisesRegex(ValueError, "stage_status"):
+                load_published_weekly_bundle(
+                    self._bundle(tmp, stage_status="degraded_no_new_entries")
+                )
+
+    def test_revision_path_binds_directory_to_both_lineages(self):
+        from runners.a_short_weekly_pipeline import validate_published_weekly_operation_bundle
+        revision_id = "c" * 32
+        with tempfile.TemporaryDirectory() as tmp:
+            with patch("runners.a_short_m67_render.render_weekly_markdown", return_value="# report"):
+                out = self._bundle(tmp, revision_id=revision_id)
+                bundle = validate_published_weekly_operation_bundle(out)
+            self.assertEqual(bundle.receipt["run_revision_id"], revision_id)
+            bad = Path(out).parent.parent / ("d" * 32)
+            bad.mkdir(parents=True)
+            for source in Path(out).parent.iterdir():
+                (bad / source.name).write_bytes(source.read_bytes())
+            bad_json = bad / "weekly_m67.json"
+            with self.assertRaisesRegex(ValueError, "revision"):
+                validate_published_weekly_operation_bundle(bad_json)
+
     def test_identity_mismatch_rejects(self):
         from runners.a_short_weekly_pipeline import load_published_weekly_bundle
         with tempfile.TemporaryDirectory() as tmp:
@@ -6080,7 +6214,7 @@ class LoadPublishedBundleTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as tmp:
             out = Path(self._bundle(tmp))
             weekly = json.loads(out.read_text(encoding="utf-8"))
-            weekly["operation"] = "建仓"
+            weekly["generated_at"] = "2026-06-22T12:00:01+08:00"
             out.write_text(json.dumps(weekly), encoding="utf-8")
             with patch("runners.a_short_m67_render.render_weekly_markdown", return_value="# report"), \
                     self.assertRaisesRegex(ValueError, "digest"):
@@ -6112,9 +6246,23 @@ class LoadPublishedBundleTests(unittest.TestCase):
 
 
 class PublishedBundleConsumerRoutingTests(unittest.TestCase):
+    COMPLETE_ENTRYPOINTS = {
+        relative: set(names)
+        for relative, names in _weekly_pipeline_module.COMPLETE_PUBLISHED_WEEKLY_CONSUMERS.items()
+    }
+    OPERATION_ENTRYPOINTS = {
+        relative: set(names)
+        for relative, names in _weekly_pipeline_module.OPERATION_PUBLISHED_WEEKLY_CONSUMERS.items()
+    }
     ENTRYPOINTS = {
         relative: set(names)
-        for relative, names in _weekly_pipeline_module.FORMAL_PUBLISHED_WEEKLY_CONSUMERS.items()
+        for relative, names in COMPLETE_ENTRYPOINTS.items()
+    }
+    for _relative, _names in OPERATION_ENTRYPOINTS.items():
+        ENTRYPOINTS.setdefault(_relative, set()).update(_names)
+    VALIDATORS_BY_ROLE = {
+        "complete": {"validate_published_weekly_bundle"},
+        "operation": {"validate_published_weekly_operation_bundle"},
     }
     NONCONSUMER_ENTRYPOINTS = {
         relative: set(names)
@@ -6138,7 +6286,6 @@ class PublishedBundleConsumerRoutingTests(unittest.TestCase):
     }
     SAFE_PATH_CALLS = {
         "Path", "str", "any", "all", "print",
-        "validate_published_weekly_bundle",
         # Output-side filesystem operations are not weekly JSON consumers.
         "mkstemp", "replace",
     }
@@ -6264,6 +6411,7 @@ class PublishedBundleConsumerRoutingTests(unittest.TestCase):
         cls,
         source: str,
         entrypoints: set[str] | None = None,
+        allowed_validators: set[str] | None = None,
     ) -> tuple[set[str], list[str]]:
         tree = ast.parse(source)
         functions = {
@@ -6271,6 +6419,8 @@ class PublishedBundleConsumerRoutingTests(unittest.TestCase):
             if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef))
         }
         entrypoints = set(entrypoints or cls._public_entrypoints(source))
+        allowed_validators = set(allowed_validators or cls.VALIDATORS_BY_ROLE["complete"])
+        safe_path_calls = cls.SAFE_PATH_CALLS | allowed_validators
         reaches_validator: set[str] = set()
         raw_weekly_reads: list[str] = []
         cache: dict[
@@ -6555,7 +6705,7 @@ class PublishedBundleConsumerRoutingTests(unittest.TestCase):
                 }
                 tainted_arguments = argument_names & tainted
                 path_container_arguments = argument_names & path_containers
-                if called == "validate_published_weekly_bundle" and tainted_arguments:
+                if called in allowed_validators and tainted_arguments:
                     reached = True
                 if isinstance(target, ast.Name) and target.id in tainted_callables:
                     violations.append(f"{name}:raw_callable:{target.id}")
@@ -6590,7 +6740,7 @@ class PublishedBundleConsumerRoutingTests(unittest.TestCase):
                 elif (
                     called not in functions
                     and tainted_arguments
-                    and called not in cls.SAFE_PATH_CALLS
+                    and called not in safe_path_calls
                     and called != "open"
                 ):
                     violations.append(
@@ -6606,7 +6756,7 @@ class PublishedBundleConsumerRoutingTests(unittest.TestCase):
                 if (
                     isinstance(value, ast.Call)
                     and isinstance(value.func, ast.Name)
-                    and value.func.id == "validate_published_weekly_bundle"
+                    and value.func.id in allowed_validators
                 ):
                     continue
                 if (
@@ -6653,21 +6803,51 @@ class PublishedBundleConsumerRoutingTests(unittest.TestCase):
             raw_weekly_reads.extend(violations)
         return reaches_validator, raw_weekly_reads
 
-    def test_every_formal_entrypoint_reaches_validator_and_no_raw_weekly_loader_survives(self):
-        for relative, entrypoints in self.ENTRYPOINTS.items():
-            with self.subTest(consumer=relative):
-                source = (ROOT / relative).read_text(encoding="utf-8")
-                reaches_validator, raw_weekly_reads = self._audit_source(source, entrypoints)
-                self.assertEqual(entrypoints - reaches_validator, set())
-                if relative == "runners/a_short_weekly_sidecar_health.py":
-                    self.assertEqual(
-                        raw_weekly_reads,
-                        ["_failed_m67_receipt_evidence:read_bytes:['receipt_path']"],
+    def test_every_role_entrypoint_reaches_its_pinned_validator_and_no_raw_weekly_loader_survives(self):
+        for role, inventory in (
+            ("complete", self.COMPLETE_ENTRYPOINTS),
+            ("operation", self.OPERATION_ENTRYPOINTS),
+        ):
+            for relative, entrypoints in inventory.items():
+                with self.subTest(role=role, consumer=relative):
+                    source = (ROOT / relative).read_text(encoding="utf-8")
+                    reaches_validator, raw_weekly_reads = self._audit_source(
+                        source, entrypoints, allowed_validators=self.VALIDATORS_BY_ROLE[role]
                     )
-                else:
-                    self.assertEqual(raw_weekly_reads, [])
-                self.assertNotIn("require_canonical_path", source)
-                self.assertNotIn("verify_markdown_render", source)
+                    self.assertEqual(entrypoints - reaches_validator, set())
+                    if relative == "runners/a_short_weekly_sidecar_health.py":
+                        self.assertEqual(
+                            raw_weekly_reads,
+                            ["_failed_m67_receipt_evidence:read_bytes:['receipt_path']"],
+                        )
+                    else:
+                        self.assertEqual(raw_weekly_reads, [])
+                    self.assertNotIn("require_canonical_path", source)
+                    self.assertNotIn("verify_markdown_render", source)
+
+    def test_role_pin_rejects_cross_role_loader(self):
+        complete_uses_operation = """
+def capture_after_published_weekly(out_path):
+    return validate_published_weekly_operation_bundle(out_path)
+"""
+        operation_uses_complete = """
+def main(out_dir):
+    return validate_published_weekly_bundle(out_dir)
+"""
+        reaches, violations = self._audit_source(
+            complete_uses_operation,
+            {"capture_after_published_weekly"},
+            allowed_validators=self.VALIDATORS_BY_ROLE["complete"],
+        )
+        self.assertEqual(reaches, set())
+        self.assertTrue(violations)
+        reaches, violations = self._audit_source(
+            operation_uses_complete,
+            {"main"},
+            allowed_validators=self.VALIDATORS_BY_ROLE["operation"],
+        )
+        self.assertEqual(reaches, set())
+        self.assertTrue(violations)
 
     def test_inventory_matches_automatic_engine_runner_discovery(self):
         discovered = set()

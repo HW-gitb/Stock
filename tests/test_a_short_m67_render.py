@@ -152,6 +152,25 @@ class RunLineageBannerTests(unittest.TestCase):
         self.assertNotIn("lineage", md)
 
 
+    def test_degraded_stage_uses_one_exact_top_banner(self):
+        weekly = _weekly([_report("600000.SH", "瑙傚療")])
+        weekly["run_lineage"] = {"stage_status": "degraded_no_new_entries"}
+        md = render_weekly_markdown(weekly)
+        banner = "> \u26a0\ufe0f IV \u98ce\u63a7\u4e0d\u53ef\u7528\uff0c\u672c\u5468\u7981\u6b62\u65b0\u5efa\u4ed3\uff1b\u6301\u4ed3\u7ba1\u7406\u7ee7\u7eed"
+        self.assertEqual(md.splitlines()[2], banner)
+        self.assertEqual(md.count(banner), 1)
+        self.assertNotIn("\u5019\u9009\u4ef7\u683c\u8986\u76d6\u8d85\u8fc7\u5bb9\u5fcd\u4e0a\u9650", md)
+
+    def test_partial_stage_uses_one_exact_top_banner(self):
+        weekly = _weekly([_report("600000.SH", "瑙傚療")])
+        weekly["run_lineage"] = {"stage_status": "partial_holdings_only"}
+        md = render_weekly_markdown(weekly)
+        banner = "> \u26a0\ufe0f \u5019\u9009\u4ef7\u683c\u8986\u76d6\u8d85\u8fc7\u5bb9\u5fcd\u4e0a\u9650\uff0c\u672c\u5468\u53ea\u7ba1\u7406\u6301\u4ed3"
+        self.assertEqual(md.splitlines()[2], banner)
+        self.assertEqual(md.count(banner), 1)
+        self.assertNotIn("IV \u98ce\u63a7\u4e0d\u53ef\u7528", md)
+
+
 class EgsScoreAndRegimeBannerTests(unittest.TestCase):
     """Slice A: 一览表并列「EGS分」(选股质量分) + 风控星级,让 82 分和 56 分不再都只显示 2 星;
     regime unknown 做全局横幅(把"全员保守压星"说成市场状态,不是个股质量差)。纯渲染,不改打分逻辑。"""

@@ -36,6 +36,24 @@ def write_content_bound_bundle(
     price_freshness = lineage.get("price_freshness") or {}
     temporal_origin = lineage.get("temporal_origin") or {}
     as_of = str(weekly.get("as_of") or "")
+    stage_status = str(lineage.get("stage_status") or "complete")
+    iv_feed_status = str(lineage.get("iv_feed_status") or "ready")
+    lineage.setdefault("stage_status", stage_status)
+    lineage.setdefault("analysis_input", "")
+    lineage.setdefault("selection_bucket", "")
+    lineage.setdefault("iv_feed_status", iv_feed_status)
+    lineage.setdefault("iv_feed", "synthetic_iv_feed.json" if iv_feed_status == "ready" else None)
+    lineage.setdefault("account_ref", "")
+    lineage.setdefault("account_status", "absent")
+    lineage.setdefault("sizing_mode", "observation_only_no_account")
+    lineage.setdefault("account_snapshot", None)
+    price_freshness.setdefault("accepted_prior_settled_date", None)
+    lineage["price_freshness"] = price_freshness
+    lineage.setdefault("iv_freshness", {
+        "status": "aligned" if iv_feed_status == "ready" else iv_feed_status,
+        "iv_data_through": as_of if iv_feed_status == "ready" else None,
+        "price_data_through": as_of,
+    })
     run_id = str(lineage.get("run_id") or "")
     candidate_digest = str(lineage.get("candidate_digest") or "")
     decision_as_of = str(weekly.get("decision_as_of") or as_of)
@@ -121,7 +139,8 @@ def write_content_bound_bundle(
         "candidate_digest": candidate_digest,
         "published_at": published_at,
         "account_snapshot": lineage.get("account_snapshot"),
-        "stage_status": "complete",
+        "iv_feed_status": str(lineage.get("iv_feed_status") or "ready"),
+        "stage_status": str(lineage.get("stage_status") or "complete"),
         "outputs": [output.name, markdown_path.name],
         "outputs_digest": {
             output.name: {

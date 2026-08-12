@@ -92,6 +92,22 @@ class AShortWeeklyM67FailureCloseoutTests(unittest.TestCase):
         self.assertIn("M6.7 not requested; running independent daily-only regime evidence", self.stage5)
         self.assertIn("$script:IvFeedReady -and (Test-Path -LiteralPath $RegimeIvFeed -PathType Leaf)", self.stage5)
 
+    def test_successful_m67_reads_actual_operation_stage_and_paths(self) -> None:
+        self.assertIn("validate_published_weekly_operation_bundle", self.stage4)
+        self.assertIn('"stage_status": stage', self.stage4)
+        self.assertIn("$script:M67InvocationState = $OperationStage", self.stage4)
+        self.assertIn("JSON=$M67Out Markdown=$OperationMarkdown", self.stage4)
+        self.assertNotIn("$script:M67InvocationState = 'complete'", self.stage4)
+        self.assertIn("weekly_operation_bundle_invalid", self.stage4)
+
+    def test_noncomplete_operation_states_do_not_run_m67_dependent_regime_sidecars(self) -> None:
+        self.assertIn(
+            "$M67InvocationState -in @('degraded_no_new_entries', 'partial_holdings_only')",
+            self.stage5,
+        )
+        self.assertIn("-SkipReason 'stage_not_complete'", self.stage5)
+        self.assertIn("without M6.7-dependent action/effect binding", self.stage5)
+
     def test_atomic_launcher_and_health_fail_closed(self) -> None:
         self.assertIn("$LauncherManifestTmp", self.text)
         self.assertIn("Move-Item -LiteralPath $LauncherManifestTmp -Destination $LauncherManifestPath", self.text)

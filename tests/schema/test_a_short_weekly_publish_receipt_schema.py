@@ -26,6 +26,7 @@ def _complete_receipt() -> dict:
         "candidate_digest": "a" * 64,
         "published_at": "2026-07-27T12:00:00+08:00",
         "account_snapshot": None,
+        "iv_feed_status": "ready",
         "stage_status": "complete",
         "outputs": ["weekly_m67.json", "weekly_m67.md"],
         "outputs_digest": {
@@ -57,6 +58,7 @@ class AShortWeeklyPublishReceiptSchemaTests(unittest.TestCase):
             "schema_version": "1.1.0",
             "as_of": "20260727",
             "stage_status": "failed",
+            "iv_feed_status": "build_failed",
             "failure_reason": "weekly_pipeline_failed",
             "exit_code": 22,
         }
@@ -68,12 +70,34 @@ class AShortWeeklyPublishReceiptSchemaTests(unittest.TestCase):
             "schema_version": "1.1.0",
             "as_of": "20260727",
             "stage_status": "failed",
+            "iv_feed_status": "build_failed",
             "failure_reason": "weekly_pipeline_failed",
             "exit_code": 22,
             "outputs": ["weekly_m67.json", "weekly_m67.md"],
         }
         with self.assertRaises(jsonschema.ValidationError):
             jsonschema.validate(failed, SCHEMA)
+
+    def test_degraded_and_partial_success_receipts_require_outputs(self):
+        for stage, iv_status in (
+            ("degraded_no_new_entries", "build_failed"),
+            ("partial_holdings_only", "ready"),
+        ):
+            receipt = copy.deepcopy(_complete_receipt())
+            receipt["stage_status"] = stage
+            receipt["iv_feed_status"] = iv_status
+            jsonschema.validate(receipt, SCHEMA)
+
+    def test_stage_and_iv_status_mismatch_is_rejected(self):
+        for stage, iv_status in (
+            ("complete", "build_failed"),
+            ("degraded_no_new_entries", "ready"),
+        ):
+            receipt = copy.deepcopy(_complete_receipt())
+            receipt["stage_status"] = stage
+            receipt["iv_feed_status"] = iv_status
+            with self.assertRaises(jsonschema.ValidationError):
+                jsonschema.validate(receipt, SCHEMA)
 
 
 if __name__ == "__main__":

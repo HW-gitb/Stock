@@ -88,6 +88,14 @@ _MARGIN_OVERHEAT_SOURCE_PATH = "analysis_input.market_context.margin_overheat"
 
 SCHEMA_NAME = "a_short_weekly_report"
 SCHEMA_VERSION = "1.0.0"
+PUBLISHABLE_WEEKLY_STAGE_STATUSES = {
+    "complete", "degraded_no_new_entries", "partial_holdings_only",
+}
+WEEKLY_STAGE_STATUSES = PUBLISHABLE_WEEKLY_STAGE_STATUSES | {"failed"}
+IV_FEED_STATUSES = {
+    "not_requested", "build_failed", "digest_failed", "clock_mismatch", "ready",
+}
+NONREADY_IV_FEED_STATUSES = IV_FEED_STATUSES - {"ready"}
 SCHEMA_PATH = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
                            "schemas", "a_short_weekly_report.schema.json")
 M67_SCHEMA_PATH = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
@@ -1878,7 +1886,7 @@ def _build_market_breadth_audit(source: dict | None) -> dict:
 
 
 def build_weekly_report(normalized_list: list, as_of: str, generated_at: str,
-                        iv_feed_ref: str = "", run_lineage: dict = None, available_cash=None,
+                        iv_feed_ref: str = "iv_feed.json", run_lineage: dict = None, available_cash=None,
                         new_exposure_capacity=None, crash_veto_tracking: dict | None = None,
                         portfolio_fact_overrides: dict | None = None,
                         account_positions: list[dict] | None = None,
@@ -2073,6 +2081,19 @@ def build_weekly_report(normalized_list: list, as_of: str, generated_at: str,
     lineage.setdefault("run_id", f"a-short-{as_of}-{fallback_digest[:16]}")
     lineage.setdefault("candidate_digest", fallback_digest)
     lineage.setdefault("stage_status", "complete")
+    lineage.setdefault("iv_feed_status", "ready")
+    if lineage.get("iv_feed_status") == "ready":
+        lineage.setdefault("iv_feed", iv_feed_ref)
+    else:
+        lineage.setdefault("iv_feed", None)
+    price_lineage = lineage.get("price_freshness") or {}
+    lineage.setdefault("iv_freshness", {
+        "status": "aligned" if lineage.get("iv_feed_status") == "ready"
+                  else lineage.get("iv_feed_status"),
+        "iv_data_through": (str(price_lineage.get("price_data_through") or as_of)
+                             if lineage.get("iv_feed_status") == "ready" else None),
+        "price_data_through": str(price_lineage.get("price_data_through") or as_of),
+    })
     lineage.setdefault("runtime_configuration", runtime_configuration_lineage(_RUNTIME_CONFIGURATION))
     if lineage.get("margin_coverage") not in (None, margin_coverage):
         raise ValueError("weekly run lineage margin coverage disagrees with report coverage")
@@ -2281,7 +2302,52 @@ def _bind_effect_contract_trend_guard(weekly: dict, out_path: str | Path) -> dic
     return previous_ledger
 
 
-def validate_weekly_report(weekly: dict, iv_feed_summary: dict,
+def _validate_weekly_stage_content(weekly: dict) -> None:
+    """Enforce the user-visible content contract for publishable degraded states."""
+    lineage = weekly.get("run_lineage") or {}
+    stage_status = lineage.get("stage_status")
+    if stage_status not in PUBLISHABLE_WEEKLY_STAGE_STATUSES:
+        raise ValueError(f"weekly stage_status is not publishable: {stage_status!r}")
+    reports = weekly.get("reports") or []
+    for report in reports:
+        machine = report.get("machine") or {}
+        stateful = machine.get("stateful_risk") or {}
+        position_state = stateful.get("position_state")
+        if stage_status == "partial_holdings_only":
+            if position_state != "held":
+                raise ValueError(
+                    "partial_holdings_only reports must contain held positions only"
+                )
+            continue
+        if stage_status != "degraded_no_new_entries" or position_state == "held":
+            continue
+        if position_state != "flat":
+            raise ValueError(
+                "degraded_no_new_entries non-held reports must be flat candidates"
+            )
+        action = (machine.get("entry_exit_size_star") or {}).get("action")
+        hard_veto = (machine.get("layer") or {}).get("hard_veto") or []
+        expected_action = "否决" if hard_veto else "观察"
+        if action != expected_action:
+            raise ValueError(
+                "degraded_no_new_entries flat action must preserve hard veto or observe"
+            )
+        table = (report.get("m67") or {}).get("table") or {}
+        if table.get("操作") != expected_action:
+            raise ValueError(
+                "degraded_no_new_entries table action is not bound to stage policy"
+            )
+        if (machine.get("entry_exit_size_star") or {}).get("plan") is not None:
+            raise ValueError(
+                "degraded_no_new_entries flat candidates must not carry a plan"
+            )
+        if any(table.get(field) is not None for field in ("股数", "入", "盈一", "盈二", "损")):
+            raise ValueError(
+                "degraded_no_new_entries flat candidates must null all trade fields"
+            )
+
+
+def validate_weekly_report(weekly: dict, iv_feed_summary: dict | None,
                            *, previous_ledger: dict | None = None,
                            expected_pre_holiday_control: dict | None = None,
                            expected_northbound_control: dict | None = None,
@@ -2315,7 +2381,23 @@ def validate_weekly_report(weekly: dict, iv_feed_summary: dict,
         datetime.strptime(str(weekly["as_of"]), "%Y%m%d")
     except ValueError:
         raise ValueError(f"weekly as_of {weekly['as_of']} 非合法日历日期")
-    validate_feed_artifact(iv_feed_summary)        # 读取方 schema + feed binding 校验(P2)
+    early_lineage = weekly.get("run_lineage") or {}
+    early_stage_status = early_lineage.get("stage_status")
+    early_iv_feed_status = early_lineage.get("iv_feed_status")
+    if early_stage_status not in PUBLISHABLE_WEEKLY_STAGE_STATUSES:
+        raise ValueError(f"run_lineage.stage_status is not publishable: {early_stage_status!r}")
+    if early_iv_feed_status not in IV_FEED_STATUSES:
+        raise ValueError(f"run_lineage.iv_feed_status is invalid: {early_iv_feed_status!r}")
+    if early_stage_status == "complete" and early_iv_feed_status != "ready":
+        raise ValueError("complete weekly report requires iv_feed_status=ready")
+    if early_stage_status == "degraded_no_new_entries" and early_iv_feed_status == "ready":
+        raise ValueError("degraded_no_new_entries requires a non-ready IV feed status")
+    if early_iv_feed_status == "ready":
+        if not isinstance(iv_feed_summary, dict):
+            raise ValueError("ready weekly report requires an IV feed summary")
+        validate_feed_artifact(iv_feed_summary)  # 读取方 schema + feed binding 校验(P2)
+    elif iv_feed_summary is not None:
+        raise ValueError("non-ready weekly report must not receive or read an IV feed summary")
     if weekly.get("crash_veto_tracking") is not None:
         _validate_crash_veto_tracking_summary(weekly["crash_veto_tracking"], expected_as_of=weekly["as_of"])
     if weekly.get("factor_comparison_v2") is not None:
@@ -2332,12 +2414,13 @@ def validate_weekly_report(weekly: dict, iv_feed_summary: dict,
         overlay_module = _optional_module("engine.a_short_overlay_adjudication")
         if overlay_module is not None:
             overlay_module.validate_public_summary(weekly["overlay_adjudication"])
-    # 跨-as_of PIT:feed 不得来自周报 as_of 之后(否则用了未来波动率)
-    if str(iv_feed_summary.get("as_of")) > weekly["as_of"]:
-        raise ValueError(f"IV feed as_of {iv_feed_summary.get('as_of')} 晚于周报 as_of {weekly['as_of']}(未来 feed)")
-    fs = iv_feed_summary.get("series") or []
-    if fs and str(fs[-1]["trade_date"]) > weekly["as_of"]:
-        raise ValueError(f"IV feed 最新 trade_date {fs[-1]['trade_date']} 晚于周报 as_of {weekly['as_of']}(PIT 违规)")
+    if early_iv_feed_status == "ready":
+        # 跨-as_of PIT:feed 不得来自周报 as_of 之后(否则用了未来波动率)
+        if str(iv_feed_summary.get("as_of")) > weekly["as_of"]:
+            raise ValueError(f"IV feed as_of {iv_feed_summary.get('as_of')} 晚于周报 as_of {weekly['as_of']}(未来 feed)")
+        fs = iv_feed_summary.get("series") or []
+        if fs and str(fs[-1]["trade_date"]) > weekly["as_of"]:
+            raise ValueError(f"IV feed 最新 trade_date {fs[-1]['trade_date']} 晚于周报 as_of {weekly['as_of']}(PIT 违规)")
     if weekly["n_stocks"] != len(weekly["reports"]):
         raise ValueError("n_stocks 与 reports 长度不一致")
     _validate_portfolio_risk(weekly)
@@ -2348,8 +2431,16 @@ def validate_weekly_report(weekly: dict, iv_feed_summary: dict,
     if any(b for b in weekly["boundary"].values()):
         raise ValueError("weekly boundary 必须全 false")
     rl = weekly.get("run_lineage") or {}
-    if rl.get("stage_status") != "complete":
-        raise ValueError("run_lineage.stage_status must be complete before publish")
+    stage_status = rl.get("stage_status")
+    iv_feed_status = rl.get("iv_feed_status")
+    if stage_status not in PUBLISHABLE_WEEKLY_STAGE_STATUSES:
+        raise ValueError(f"run_lineage.stage_status is not publishable: {stage_status!r}")
+    if iv_feed_status not in IV_FEED_STATUSES:
+        raise ValueError(f"run_lineage.iv_feed_status is invalid: {iv_feed_status!r}")
+    if stage_status == "complete" and iv_feed_status != "ready":
+        raise ValueError("complete weekly report requires iv_feed_status=ready")
+    if stage_status == "degraded_no_new_entries" and iv_feed_status == "ready":
+        raise ValueError("degraded_no_new_entries requires a non-ready IV feed status")
     if rl.get("run_revision_id") not in (None, ""):
         try:
             validate_run_revision_id(rl["run_revision_id"])
@@ -2397,10 +2488,21 @@ def validate_weekly_report(weekly: dict, iv_feed_summary: dict,
         raise ValueError("run_lineage.decision_as_of is not bound to weekly decision_as_of")
     if rl.get("price_data_through") not in (None, price_data_through):
         raise ValueError("run_lineage.price_data_through is not bound to weekly price_data_through")
-    if ivf is not None:
+    if not isinstance(ivf, dict):
+        raise ValueError("run_lineage.iv_freshness is required")
+    if iv_feed_status == "ready":
+        if not isinstance(rl.get("iv_feed"), str) or not rl.get("iv_feed"):
+            raise ValueError("ready IV feed must bind a non-empty run_lineage.iv_feed")
         if ivf.get("status") != "aligned" or ivf.get("iv_data_through") != pf.get("price_data_through") or \
                 ivf.get("price_data_through") != pf.get("price_data_through"):
             raise ValueError("run_lineage.iv_freshness 未与 price_freshness.price_data_through 对齐")
+    else:
+        if rl.get("iv_feed") is not None:
+            raise ValueError("non-ready IV feed must bind run_lineage.iv_feed=null")
+        if ivf.get("status") != iv_feed_status or ivf.get("iv_data_through") is not None or \
+                ivf.get("price_data_through") != pf.get("price_data_through"):
+            raise ValueError("non-ready run_lineage.iv_freshness is not bound to IV status/price clock")
+    _validate_weekly_stage_content(weekly)
     mr = rl.get("market_regime")
     if mr is not None:
         source = mr.get("source_status")
@@ -3292,18 +3394,37 @@ def _write_pipeline_sidecar_outcomes(path: str | Path, *, as_of: str, run_id: st
     os.replace(tmp, target)
 
 
-def publish_weekly_bundle(weekly: dict, iv_feed_summary: dict, out_path: str, md_path: str,
+def publish_weekly_bundle(weekly: dict, iv_feed_summary: dict | None, out_path: str, md_path: str,
                           *, allow_nonprivate_account_out: bool = False,
                           ratchet_publish: tuple[str, dict, str, str] | None = None,
                           iv_feed_status: str = "ready") -> str:
     """Validate all final surfaces, then publish JSON/Markdown/ratchet/receipt together."""
     from runners.a_short_m67_render import render_weekly_markdown, _weekly_has_account_data
 
-    if iv_feed_status != "ready":
-        raise ValueError("M6.7 publish requires iv_feed_status=ready")
+    if iv_feed_status not in IV_FEED_STATUSES:
+        raise ValueError(f"invalid iv_feed_status={iv_feed_status!r}")
     _reject_production_output_path(out_path)
     previous_ledger = _bind_effect_contract_trend_guard(weekly, out_path)
-    if _weekly_has_account_data(weekly):
+    lineage = weekly.get("run_lineage") or {}
+    stage_status = lineage.get("stage_status")
+    lineage_iv_feed_status = lineage.get("iv_feed_status")
+    if stage_status not in PUBLISHABLE_WEEKLY_STAGE_STATUSES:
+        raise ValueError(f"weekly stage_status is not publishable: {stage_status!r}")
+    if stage_status == "complete" and iv_feed_status != "ready":
+        raise ValueError("complete weekly stage requires iv_feed_status=ready")
+    if stage_status == "degraded_no_new_entries" and iv_feed_status == "ready":
+        raise ValueError("degraded weekly stage requires a non-ready IV feed status")
+    if lineage_iv_feed_status != iv_feed_status:
+        raise ValueError("weekly lineage iv_feed_status does not match publisher argument")
+    if iv_feed_status == "ready" and not isinstance(iv_feed_summary, dict):
+        raise ValueError("ready publisher requires an IV feed summary")
+    if iv_feed_status != "ready" and iv_feed_summary is not None:
+        raise ValueError("non-ready publisher must receive iv_feed_summary=None")
+    has_account_data = _weekly_has_account_data(weekly)
+    if has_account_data:
+        _reject_nonprivate_account_output_path(
+            out_path, True, allow_nonprivate_account_out
+        )
         _reject_nonprivate_account_output_path(md_path, True, allow_nonprivate_account_out)
     _validate_against_schema_file(weekly, SCHEMA_PATH)
     for report in weekly["reports"]:
@@ -3331,7 +3452,7 @@ def publish_weekly_bundle(weekly: dict, iv_feed_summary: dict, out_path: str, md
         "published_at": datetime.now().astimezone().isoformat(timespec="seconds"),
         "account_snapshot": lineage.get("account_snapshot"),
         "iv_feed_status": iv_feed_status,
-        "stage_status": "complete",
+        "stage_status": stage_status,
         "outputs": list(output_bytes),
         "outputs_digest": {
             name: {
@@ -3409,9 +3530,11 @@ class PublishedWeeklyBundle:
 
 
 # Authoritative inventory for code that consumes an already-published weekly
-# bundle. Producers, renderers, and path-only helpers are deliberately absent.
-# A new engine/runner consumer must register its formal boundary here.
-FORMAL_PUBLISHED_WEEKLY_CONSUMERS = {
+# bundle through the complete-only evidence boundary. Producers, renderers,
+# and path-only helpers are deliberately absent. A new evidence consumer must
+# register its entrypoint here; operational consumers belong in the separate
+# operation registry below so the loader role cannot silently drift.
+COMPLETE_PUBLISHED_WEEKLY_CONSUMERS = {
     "engine/a_short_factor_comparison_v2_weekly.py": (
         "capture_v2_after_published_weekly",
     ),
@@ -3438,15 +3561,22 @@ FORMAL_PUBLISHED_WEEKLY_CONSUMERS = {
     "runners/a_short_target_policy_comparison_runner.py": (
         "capture_after_published_weekly",
     ),
+}
+
+# Operational consumers may read any publishable M6.7 state, including
+# degraded_no_new_entries and partial_holdings_only. Keep this list separate
+# from the complete-only evidence inventory and pin it independently in the
+# AST path-reader guard.
+OPERATION_PUBLISHED_WEEKLY_CONSUMERS = {
     "runners/a_short_weekly_sidecar_health.py": (
         "main",
     ),
 }
 
 # Every public function in a registered consumer module must be classified here
-# or in FORMAL_PUBLISHED_WEEKLY_CONSUMERS.  Classification deliberately does
-# not depend on parameter names: adding ``consumer(source)`` must be as visible
-# as adding ``consumer(path)``.
+# or in either role-specific published-weekly consumer registry.
+# Classification deliberately does not depend on parameter names: adding
+# ``consumer(source)`` must be as visible as adding ``consumer(path)``.
 NONCONSUMER_PUBLIC_PATH_ENTRYPOINTS = {
     "engine/a_short_factor_comparison_v2_weekly.py": (
         "capture_error_code",
@@ -3547,12 +3677,17 @@ NONCONSUMER_PUBLIC_PATH_ENTRYPOINTS = {
 }
 
 
-def validate_published_weekly_bundle(
+def _validate_published_weekly_bundle(
     out_path: str | Path,
-    receipt_path: str | Path | None = None,
+    receipt_path: str | Path | None,
+    *,
+    allowed_stage_statuses: set[str],
 ) -> PublishedWeeklyBundle:
-    """Load one official bundle from the exact bytes bound by its complete receipt."""
-    from runners.a_short_m67_render import render_weekly_markdown
+    """Shared byte/schema/path/identity validation for complete and operation readers."""
+    from runners.a_short_m67_render import (
+        _weekly_has_account_data,
+        render_weekly_markdown,
+    )
 
     output = Path(out_path)
     if output.name != "weekly_m67.json":
@@ -3570,20 +3705,99 @@ def validate_published_weekly_bundle(
         receipt_bytes = receipt_file.read_bytes()
         weekly = json.loads(weekly_bytes.decode("utf-8-sig"))
         receipt = json.loads(receipt_bytes.decode("utf-8-sig"))
-        with open(WEEKLY_RECEIPT_SCHEMA_PATH, "r", encoding="utf-8") as f:
-            jsonschema.validate(receipt, json.load(f))
+        # The writer is the current-schema gate.  Published readers must not
+        # retroactively impose today's weekly/report schema on immutable
+        # historical bytes; receipt schema/identity/digest checks below still
+        # bind the exact published bundle.  This is deliberately not a raw
+        # JSON bypass: status, content, ledger, rendering, path and receipt
+        # bindings remain enforced below.
+        receipt_for_schema = receipt
+        legacy_lineage = weekly.get("run_lineage") or {}
+        legacy_freshness = legacy_lineage.get("iv_freshness") or {}
+        legacy_ready_receipt = (
+            "iv_feed_status" not in receipt
+            and "iv_feed_status" not in legacy_lineage
+            and receipt.get("stage_status") == "complete"
+            and isinstance(legacy_lineage.get("iv_feed"), str)
+            and bool(legacy_lineage.get("iv_feed"))
+            and legacy_freshness.get("status") == "aligned"
+            and isinstance(legacy_freshness.get("iv_data_through"), str)
+            and bool(legacy_freshness.get("iv_data_through"))
+        )
+        if legacy_ready_receipt:
+            # Validate the old receipt shape against the current schema after
+            # adding only the derivable 14A status in memory.  The returned
+            # receipt and its bytes remain the exact on-disk objects.
+            receipt_for_schema = dict(receipt)
+            receipt_for_schema["iv_feed_status"] = "ready"
+        _validate_against_schema_file(receipt_for_schema, WEEKLY_RECEIPT_SCHEMA_PATH)
     except (OSError, UnicodeDecodeError, json.JSONDecodeError, jsonschema.ValidationError) as exc:
         raise ValueError("weekly bundle or receipt is unreadable or schema-invalid") from exc
-    if (
-        not re.fullmatch(r"[0-9]{8}", output.parent.name)
-        or output.parent.name != str(weekly.get("as_of") or "")
+
+    lineage = weekly.get("run_lineage") or {}
+    weekly_as_of = str(weekly.get("as_of") or "")
+    receipt_as_of = str(receipt.get("as_of") or "")
+    if not re.fullmatch(r"[0-9]{8}", weekly_as_of) or receipt_as_of != weekly_as_of:
+        raise ValueError("weekly/receipt as_of is not consistent")
+    legacy_path = (
+        re.fullmatch(r"[0-9]{8}", output.parent.name)
+        and output.parent.name == weekly_as_of
+    )
+    revision_path = (
+        re.fullmatch(r"[0-9]{8}", output.parent.parent.parent.name)
+        and output.parent.parent.name == "revisions"
+        and output.parent.parent.parent.name == weekly_as_of
+        and re.fullmatch(r"[0-9a-f]{32}", output.parent.name)
+    )
+    if not legacy_path and not revision_path:
+        raise ValueError("weekly bundle directory does not match legacy or revision artifact as_of")
+    if revision_path:
+        revision_id = output.parent.name
+        if lineage.get("run_revision_id") != revision_id or receipt.get("run_revision_id") != revision_id:
+            raise ValueError("revision directory does not match weekly/receipt run_revision_id")
+    elif (
+        lineage.get("run_revision_id") not in (None, "")
+        and receipt.get("run_revision_id") not in (None, lineage.get("run_revision_id"))
     ):
-        raise ValueError("weekly bundle directory does not match artifact as_of")
+        raise ValueError("legacy weekly receipt run_revision_id does not match weekly lineage")
+    if _weekly_has_account_data(weekly):
+        try:
+            _reject_nonprivate_account_output_path(str(output), True, False)
+        except (SystemExit, ValueError) as exc:
+            raise ValueError("account-bearing weekly bundle is outside a private ignored path") from exc
+    receipt_stage_status = receipt.get("stage_status")
+    if receipt_stage_status not in allowed_stage_statuses:
+        raise ValueError(f"weekly receipt stage_status is not allowed: {receipt_stage_status!r}")
+    if lineage.get("stage_status") != receipt_stage_status:
+        raise ValueError("weekly/receipt stage_status mismatch")
+    lineage_iv_feed_status = lineage.get("iv_feed_status")
+    if lineage_iv_feed_status is None:
+        # 14A grandfather: pre-14A complete bundles had an aligned IV
+        # freshness block and a non-empty IV path, but no explicit status.
+        # Infer only the safe complete/ready shape; never infer a degraded or
+        # partial state from an incomplete lineage.
+        legacy_freshness = lineage.get("iv_freshness") or {}
+        if (
+            receipt_stage_status == "complete"
+            and isinstance(lineage.get("iv_feed"), str)
+            and bool(lineage.get("iv_feed"))
+            and legacy_freshness.get("status") == "aligned"
+            and isinstance(legacy_freshness.get("iv_data_through"), str)
+            and bool(legacy_freshness.get("iv_data_through"))
+        ):
+            lineage_iv_feed_status = "ready"
+        else:
+            raise ValueError("legacy weekly lineage has no safe IV status binding")
+    receipt_iv_feed_status = receipt.get("iv_feed_status")
+    if receipt_iv_feed_status is None and lineage_iv_feed_status == "ready":
+        receipt_iv_feed_status = "ready"
+    if lineage_iv_feed_status != receipt_iv_feed_status:
+        raise ValueError("weekly/receipt iv_feed_status mismatch")
+    _validate_weekly_stage_content(weekly)
     if isinstance(weekly.get("effect_contract_ledger"), dict):
         from engine.a_short_effect_contract import validate_effect_contract_ledger
-        previous_effect_ledger, _ = _load_previous_effect_contract_ledger(output, str(weekly.get("as_of") or ""))
+        previous_effect_ledger, _ = _load_previous_effect_contract_ledger(output, weekly_as_of)
         validate_effect_contract_ledger(weekly, previous_ledger=previous_effect_ledger)
-    lineage = weekly.get("run_lineage") or {}
     price_freshness = lineage.get("price_freshness") or {}
     temporal_origin = lineage.get("temporal_origin") or {}
     identity = {
@@ -3604,8 +3818,6 @@ def validate_published_weekly_bundle(
         "run_id": lineage.get("run_id"),
         "candidate_digest": lineage.get("candidate_digest"),
     }
-    if receipt.get("stage_status") != "complete":
-        raise ValueError("weekly receipt is not complete")
     for field in ("as_of", "decision_as_of", "run_date", "price_data_through", "run_id", "candidate_digest"):
         expected = identity[field]
         if field == "run_date" and expected is None and receipt.get(field) is None:
@@ -3642,9 +3854,35 @@ def validate_published_weekly_bundle(
     )
 
 
+def validate_published_weekly_bundle(
+    out_path: str | Path,
+    receipt_path: str | Path | None = None,
+) -> PublishedWeeklyBundle:
+    """Load a complete-only formal evidence bundle."""
+    return _validate_published_weekly_bundle(
+        out_path, receipt_path, allowed_stage_statuses={"complete"}
+    )
+
+
+def validate_published_weekly_operation_bundle(
+    out_path: str | Path,
+    receipt_path: str | Path | None = None,
+) -> PublishedWeeklyBundle:
+    """Load a complete/degraded/partial bundle for operational surfaces only."""
+    return _validate_published_weekly_bundle(
+        out_path, receipt_path,
+        allowed_stage_statuses=set(PUBLISHABLE_WEEKLY_STAGE_STATUSES),
+    )
+
+
 def load_published_weekly_bundle(out_path: str) -> dict:
     """Load an official weekly artifact only through its content-bound complete receipt."""
     return validate_published_weekly_bundle(out_path).weekly
+
+
+def load_published_weekly_operation_bundle(out_path: str | Path) -> dict:
+    """Load a published weekly artifact for launcher/health/holding operations."""
+    return validate_published_weekly_operation_bundle(out_path).weekly
 
 
 def _load_validated_overlay(overlay_path: str, weekly_as_of: str) -> dict:
@@ -5776,13 +6014,14 @@ def main(argv=None, pro_factory=None, price_provider=None, semantic_provider=Non
     def _record_sidecar(name: str, *, execution_status: str, progress_status: str,
                         error_code: str | None = None, observed_decision_as_of: str | None = None,
                         observed_data_through: str | None = None,
-                        error_detail: str | None = None) -> None:
+                        error_detail: str | None = None, attempted: bool = True,
+                        skip_reason: str | None = None) -> None:
         if error_code == "unexpected_sidecar_status":
             execution_status, progress_status = "failed", "unavailable"
         pipeline_sidecar_outcomes.append({
             "name": name,
             "expected": True,
-            "attempted": True,
+            "attempted": attempted,
             "execution_status": execution_status,
             "progress_status": progress_status,
             "expected_data_through": None,
@@ -5790,8 +6029,19 @@ def main(argv=None, pro_factory=None, price_provider=None, semantic_provider=Non
             "observed_data_through": observed_data_through,
             "error_code": error_code,
             "error_detail": error_detail,
-            "skip_reason": None,
+            "skip_reason": skip_reason,
         })
+
+    def _record_stage_not_complete_sidecar(name: str) -> None:
+        """Record a requested M6.7-dependent sidecar without touching its private state."""
+        _expect_sidecar(name)
+        _record_sidecar(
+            name,
+            execution_status="not_due",
+            progress_status="not_applicable",
+            attempted=False,
+            skip_reason="stage_not_complete",
+        )
 
     def _record_sidecar_failure(name: str, *, stage: str, exc: BaseException,
                                 error_code: str, progress_status: str = "unavailable",
@@ -6247,6 +6497,7 @@ def main(argv=None, pro_factory=None, price_provider=None, semantic_provider=Non
     run_lineage = {"run_id": source_identity["run_id"],
                    "candidate_digest": source_identity["candidate_digest"],
                    "stage_status": "complete",
+                   "iv_feed_status": args.iv_feed_status,
                    "analysis_input": _rel(args.analysis_input),
                    "selection_bucket": _rel(os.path.dirname(args.analysis_input)),
                    "iv_feed": _rel(args.iv_feed),
@@ -6274,6 +6525,7 @@ def main(argv=None, pro_factory=None, price_provider=None, semantic_provider=Non
                    "runtime_configuration": source_runtime_configuration}
     if args.run_revision_id is not None:
         run_lineage["run_revision_id"] = args.run_revision_id
+    m67_stage_status = str(run_lineage.get("stage_status") or "complete")
     # 持仓恒列入 S1 + 语义(4.2 S2): 先以有效候选、普通持仓、候选价格隔离持仓建立互斥出口。后者
     # 不伪造持有/止损结论，直接 private manual-review；选股、引擎决策、user-stop 不变。
     holding_normalized, holding_meta, holdings_manual_review = ([], {}, [])
@@ -6376,7 +6628,7 @@ def main(argv=None, pro_factory=None, price_provider=None, semantic_provider=Non
     # then the adjudicator atomically rewrites the current reminder. This helper has no provider
     # handle and suppresses stale reminders whenever cache/private integrity is not provable.
     factor_module = _optional_module("engine.a_short_factor_comparison_v2_weekly")
-    if factor_module is None:
+    if factor_module is None or m67_stage_status != "complete":
         factor_comparison_v2 = _factor_v2_unavailable_public_summary()
     else:
         factor_comparison_v2 = factor_module.settle_and_summarize_v2_weekly(
@@ -6389,7 +6641,7 @@ def main(argv=None, pro_factory=None, price_provider=None, semantic_provider=Non
     # private-state, import, or contract fault degrades this optional sidecar;
     # it must not block official M6.7.
     margin_overheat_cash_control = None
-    if args.margin_overheat_cash_control_root:
+    if args.margin_overheat_cash_control_root and m67_stage_status == "complete":
         _expect_sidecar("margin_overheat_cash_control_settlement")
         try:
             margin_module = _optional_module("engine.a_short_margin_overheat_cash_control")
@@ -6426,7 +6678,7 @@ def main(argv=None, pro_factory=None, price_provider=None, semantic_provider=Non
     # successful commit.
     _recover_public_artifact_sets()
     industry_weight_comparison = None
-    if args.industry_weight_comparison_root:
+    if args.industry_weight_comparison_root and m67_stage_status == "complete":
         _expect_sidecar("industry_weight_capture")
         _expect_sidecar("industry_weight_settlement")
         # No public write happens in this pre-publish block: every published pair
@@ -6454,7 +6706,7 @@ def main(argv=None, pro_factory=None, price_provider=None, semantic_provider=Non
     # malformed execution data produces a fresh unavailable reminder, never a
     # stale review_due message and never a changed M6.7 decision.
     target_policy_comparison = None
-    if args.target_policy_root:
+    if args.target_policy_root and m67_stage_status == "complete":
         _expect_sidecar("target_policy_capture")
         target_module = _optional_module("runners.a_short_target_policy_comparison_runner")
         if target_module is not None:
@@ -6476,7 +6728,7 @@ def main(argv=None, pro_factory=None, price_provider=None, semantic_provider=Non
                 except Exception:
                     target_policy_comparison = None
     final_action_validation = None
-    if args.final_action_validation_root:
+    if args.final_action_validation_root and m67_stage_status == "complete":
         _expect_sidecar("final_action_capture")
         final_module = _optional_module("runners.a_short_final_action_validation_runner")
         if final_module is not None:
@@ -6491,7 +6743,7 @@ def main(argv=None, pro_factory=None, price_provider=None, semantic_provider=Non
             except Exception:
                 final_action_validation = final_module.unavailable_public_summary(args.as_of)
     overlay_adjudication = None
-    if args.overlay_adjudication_root:
+    if args.overlay_adjudication_root and m67_stage_status == "complete":
         _expect_sidecar("overlay_adjudication_capture")
         _expect_sidecar("overlay_adjudication_settlement")
         overlay_public_paths = {}
@@ -6680,7 +6932,7 @@ def main(argv=None, pro_factory=None, price_provider=None, semantic_provider=Non
     # Formal operation evidence is a private, append-only fact capture of the already-published
     # user-visible M6.7 surface.  It is deliberately independent of P2/P3/P5/cache settlement:
     # a sidecar failure may not rewrite, delay, or invalidate the official weekly bundle.
-    if args.official_operation_evidence_root:
+    if args.official_operation_evidence_root and m67_stage_status == "complete":
         _expect_sidecar("official_operation_capture")
         _expect_sidecar("official_operation_settlement")
         stage = "import"
@@ -6743,7 +6995,7 @@ def main(argv=None, pro_factory=None, price_provider=None, semantic_provider=Non
                                     progress_status=settlement_progress, error_code=settlement_code,
                                     error_detail=settlement_detail,
                                     observed_decision_as_of=args.as_of)
-    if args.factor_comparison_v2_root:
+    if args.factor_comparison_v2_root and m67_stage_status == "complete":
         _expect_sidecar("factor_v2_capture")
         stage = "import"
         try:
@@ -6787,7 +7039,7 @@ def main(argv=None, pro_factory=None, price_provider=None, semantic_provider=Non
                                 progress_status=comparison_progress, error_code=comparison_code,
                                 error_detail=comparison_detail,
                                 observed_decision_as_of=args.as_of)
-    if args.margin_overheat_cash_control_root:
+    if args.margin_overheat_cash_control_root and m67_stage_status == "complete":
         _expect_sidecar("margin_overheat_cash_control_capture")
         stage = "import"
         try:
@@ -6843,7 +7095,7 @@ def main(argv=None, pro_factory=None, price_provider=None, semantic_provider=Non
                                             error_code="capture_unavailable")
                     print("[margin-overheat-cash-control] current-week capture unavailable; "
                           "M6.7 output remains authoritative and unchanged")
-    if args.industry_weight_comparison_root:
+    if args.industry_weight_comparison_root and m67_stage_status == "complete":
         stage = "import"
         try:
             from engine.a_short_industry_weight_comparison import capture_after_published_weekly, settle_and_summarize_weekly
@@ -6917,7 +7169,7 @@ def main(argv=None, pro_factory=None, price_provider=None, semantic_provider=Non
                     else:
                         _record_sidecar("industry_weight_settlement", execution_status="succeeded",
                                         progress_status="advanced", observed_decision_as_of=args.as_of)
-    if args.target_policy_root:
+    if args.target_policy_root and m67_stage_status == "complete":
         stage = "import"
         try:
             from runners.a_short_target_policy_comparison_runner import capture_after_published_weekly
@@ -6955,7 +7207,7 @@ def main(argv=None, pro_factory=None, price_provider=None, semantic_provider=Non
                                 progress_status=capture_progress, error_code=capture_code,
                                 error_detail=capture_detail,
                                 observed_decision_as_of=args.as_of)
-    if args.final_action_validation_root:
+    if args.final_action_validation_root and m67_stage_status == "complete":
         stage = "import"
         try:
             from runners.a_short_final_action_validation_runner import (
@@ -7011,7 +7263,7 @@ def main(argv=None, pro_factory=None, price_provider=None, semantic_provider=Non
                                     progress_status=capture_progress, error_code=capture_code,
                                     error_detail=capture_detail,
                                     observed_decision_as_of=args.as_of)
-    if args.overlay_adjudication_root:
+    if args.overlay_adjudication_root and m67_stage_status == "complete":
         stage = "import"
         try:
             from engine.a_short_overlay_adjudication import capture_after_published_weekly, settle_and_summarize_weekly
@@ -7086,6 +7338,25 @@ def main(argv=None, pro_factory=None, price_provider=None, semantic_provider=Non
                     else:
                         _record_sidecar("overlay_adjudication_settlement", execution_status="succeeded",
                                         progress_status="advanced", observed_decision_as_of=args.as_of)
+    if m67_stage_status != "complete":
+        stage_gated_sidecars = []
+        if args.official_operation_evidence_root:
+            stage_gated_sidecars.extend(("official_operation_capture", "official_operation_settlement"))
+        if args.factor_comparison_v2_root:
+            stage_gated_sidecars.append("factor_v2_capture")
+        if args.margin_overheat_cash_control_root:
+            stage_gated_sidecars.extend(("margin_overheat_cash_control_settlement", "margin_overheat_cash_control_capture"))
+        if args.industry_weight_comparison_root:
+            stage_gated_sidecars.extend(("industry_weight_capture", "industry_weight_settlement"))
+        if args.target_policy_root:
+            stage_gated_sidecars.append("target_policy_capture")
+        if args.final_action_validation_root:
+            stage_gated_sidecars.append("final_action_capture")
+        if args.overlay_adjudication_root:
+            stage_gated_sidecars.extend(("overlay_adjudication_capture", "overlay_adjudication_settlement"))
+        for sidecar_name in stage_gated_sidecars:
+            if sidecar_name not in pipeline_sidecar_expected:
+                _record_stage_not_complete_sidecar(sidecar_name)
     if pipeline_sidecar_expected:
         _write_pipeline_sidecar_outcomes(
             Path(args.out).with_name(f"{Path(args.out).stem}.pipeline_sidecar_outcomes.json"),

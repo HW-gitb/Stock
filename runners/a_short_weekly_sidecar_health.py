@@ -228,14 +228,14 @@ def _m67_evidence(
     present = (weekly_path.is_file(), markdown_path.is_file(), receipt_path.is_file())
     if all(present):
         try:
-            from runners.a_short_weekly_pipeline import validate_published_weekly_bundle
+            from runners.a_short_weekly_pipeline import validate_published_weekly_operation_bundle
 
-            bundle = validate_published_weekly_bundle(weekly_path)
+            bundle = validate_published_weekly_operation_bundle(weekly_path)
             if str(bundle.weekly.get("as_of")) != str(as_of):
                 raise ValueError("weekly bundle as_of mismatch")
             lineage = bundle.weekly.get("run_lineage") or {}
             return {
-                "status": "complete",
+                "status": str(bundle.receipt.get("stage_status") or ""),
                 "run_id": str(lineage.get("run_id") or "") or None,
                 "candidate_digest": str(lineage.get("candidate_digest") or "") or None,
                 "run_revision_id": str(lineage.get("run_revision_id") or "") or None,
@@ -690,10 +690,12 @@ def build_health(
     m67_status = str(evidence.get("status") or "unavailable")
     overall = (
         "degraded"
-        if failed or sidecar_degraded or m67_status in {"failed", "unavailable"}
+        if failed or sidecar_degraded or m67_status in {
+            "failed", "unavailable", "degraded_no_new_entries",
+        }
         else (
             "partial"
-            if partial or m67_status == "skipped"
+            if partial or m67_status in {"skipped", "partial_holdings_only"}
             else "healthy"
         )
     )
