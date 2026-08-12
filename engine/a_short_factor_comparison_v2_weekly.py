@@ -132,6 +132,18 @@ def _public_summary(status: str, reminder_count: int = 0, *, root: str | Path | 
     }
 
 
+def unavailable_public_summary(as_of: str, *, run_revision_id: str | None = None,
+                               official_project_root: str | Path | None = None) -> dict:
+    """Build the public unavailable shape without opening private v2 evidence."""
+    return _public_summary(
+        PUBLIC_STATUS_UNAVAILABLE,
+        root=None,
+        as_of=as_of,
+        run_revision_id=run_revision_id,
+        official_project_root=official_project_root,
+    )
+
+
 def validate_v2_public_summary(summary: dict) -> None:
     """Reject a weekly surface that could relay a stale or private reminder."""
     if not isinstance(summary, dict) or set(summary) != {

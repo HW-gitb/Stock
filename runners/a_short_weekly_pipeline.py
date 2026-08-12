@@ -122,6 +122,21 @@ HOLDING_RATCHET_DEFAULT_PATH = os.path.join(os.path.dirname(os.path.dirname(os.p
                                             "state", "a_short", "holding_ratchet", "ratchet_state.json")
 PRICE_FETCH_MAX_ATTEMPTS = 3
 PRICE_FETCH_RETRY_BACKOFF_SECONDS = 0.5
+
+
+class TickerLocalPriceError(ValueError):
+    """One candidate's malformed H/L/C row; never carries the raw provider row."""
+
+    def __init__(self, reason: str, ts_code: str, trade_date: str | None):
+        if reason != "malformed_price_row":
+            raise ValueError("ticker-local price reason is invalid")
+        self.reason = reason
+        self.ts_code = str(ts_code)
+        self.trade_date = str(trade_date) if trade_date is not None else None
+        super().__init__(
+            f"ticker-local price error {self.reason}: {self.ts_code} "
+            f"trade_date={self.trade_date or 'unknown'}"
+        )
 # The official M6.7 path is frozen to this historical fetch boundary.  P2
 # requests its longer shadow window only after a successful official publish.
 PRODUCTION_PRICE_FETCH_CALENDAR_DAYS = 120
@@ -533,7 +548,7 @@ def _build_holdings(acct, candidate_codes, as_of, price_provider, iv_pct, accoun
         code = str(p.get("ts_code"))
         try:
             series, latest = _price_provider_result(price_provider, code, as_of)
-        except SystemExit:
+        except (SystemExit, TickerLocalPriceError):
             # Candidate price failures remain fail-closed in main.  An
             # excluded holding instead becomes an explicit manual-management
             # item so one suspended name cannot erase the whole weekly report.
@@ -1889,7 +1904,7 @@ def _build_market_breadth_audit(source: dict | None) -> dict:
 
 
 def build_weekly_report(normalized_list: list, as_of: str, generated_at: str,
-                        iv_feed_ref: str = "iv_feed.json", run_lineage: dict = None, available_cash=None,
+                        iv_feed_ref: str | None = "iv_feed.json", run_lineage: dict = None, available_cash=None,
                         new_exposure_capacity=None, crash_veto_tracking: dict | None = None,
                         portfolio_fact_overrides: dict | None = None,
                         account_positions: list[dict] | None = None,
@@ -2396,11 +2411,16 @@ def validate_weekly_report(weekly: dict, iv_feed_summary: dict | None,
     if early_stage_status == "degraded_no_new_entries" and early_iv_feed_status == "ready":
         raise ValueError("degraded_no_new_entries requires a non-ready IV feed status")
     if early_iv_feed_status == "ready":
+        if not isinstance(weekly.get("iv_feed_ref"), str) or not weekly["iv_feed_ref"]:
+            raise ValueError("ready weekly report requires a non-empty iv_feed_ref")
         if not isinstance(iv_feed_summary, dict):
             raise ValueError("ready weekly report requires an IV feed summary")
         validate_feed_artifact(iv_feed_summary)  # 读取方 schema + feed binding 校验(P2)
-    elif iv_feed_summary is not None:
-        raise ValueError("non-ready weekly report must not receive or read an IV feed summary")
+    else:
+        if weekly.get("iv_feed_ref") is not None:
+            raise ValueError("non-ready weekly report must bind iv_feed_ref=null")
+        if iv_feed_summary is not None:
+            raise ValueError("non-ready weekly report must not receive or read an IV feed summary")
     if weekly.get("crash_veto_tracking") is not None:
         _validate_crash_veto_tracking_summary(weekly["crash_veto_tracking"], expected_as_of=weekly["as_of"])
     if weekly.get("factor_comparison_v2") is not None:
@@ -2469,6 +2489,8 @@ def validate_weekly_report(weekly: dict, iv_feed_summary: dict | None,
     # (account_status,sizing_mode) 配对不够——还须把它绑死 cash_allocation,否则手构/refactor 的报告可声称
     # 账户定量(sized)却静默跳过全局现金分配(重开多股过度分配 bug),或声称无账户却带分配。main 永远一致;此处兜底。
     sized = (rl.get("account_status"), rl.get("sizing_mode")) == ("provided", "sized")
+    if stage_status == "partial_holdings_only" and not sized:
+        raise ValueError("partial_holdings_only requires a valid sized account")
     snap = rl.get("account_snapshot")
     if sized:
         if not isinstance(snap, dict):
@@ -2635,7 +2657,9 @@ def validate_weekly_report(weekly: dict, iv_feed_summary: dict | None,
         reason, source_status = item.get("reason"), item.get("source_status")
         if ((reason, source_status) not in {
                 ("confirmed_suspension", "known_hit"),
-                ("insufficient_usable_history", "price_clock_current")}):
+                ("insufficient_usable_history", "price_clock_current"),
+                ("provider_unavailable", "price_source_unavailable"),
+                ("malformed_price_row", "price_row_invalid")}):
             raise ValueError("candidate_exclusions reason/source_status 不匹配")
     # 4.2 Round2: exclusion_summary 一致性(counts-only 批次级,可选;无则跳过)
     es = weekly.get("exclusion_summary")
@@ -3313,9 +3337,7 @@ def _factor_v2_unavailable_public_summary(as_of: str, *, factor_module=None,
     The module's private formatter is the single producer of its public schema.
     """
     if factor_module is not None:
-        return factor_module._public_summary(
-            factor_module.PUBLIC_STATUS_UNAVAILABLE,
-            root=None,
+        return factor_module.unavailable_public_summary(
             as_of=as_of,
             run_revision_id=run_revision_id,
             official_project_root=official_project_root,
@@ -3603,6 +3625,7 @@ NONCONSUMER_PUBLIC_PATH_ENTRYPOINTS = {
         "is_capture_replay_drift",
         "load_v2_daily_cache",
         "settle_and_summarize_v2_weekly",
+        "unavailable_public_summary",
         "validate_v2_public_summary",
         "v1",
     ),
@@ -4121,7 +4144,9 @@ def _candidate_price_clock(candidates: list[dict], price_results: dict[str, tupl
     """Return the one observed non-suspension clock; any mixed clock stays batch-fatal."""
     dates = sorted({latest for candidate in candidates
                     if not _is_current_confirmed_suspension(candidate, as_of)
-                    for _series, latest in [price_results[str(candidate["ts_code"])]]
+                    for result in [price_results.get(str(candidate["ts_code"]))]
+                    if result is not None
+                    for _series, latest in [result]
                     if latest})
     if len(dates) > 1:
         raise SystemExit(f"[FATAL] 候选价格最新 bar 日期不一致(混合时钟 {dates});不写周报"
@@ -4129,26 +4154,27 @@ def _candidate_price_clock(candidates: list[dict], price_results: dict[str, tupl
     return dates[0] if dates else str(prior_settled or as_of)
 
 
+def _candidate_price_exclusion_record(candidate: dict, reason: str, source_status: str) -> dict:
+    return {
+        "ts_code": str(candidate.get("ts_code") or ""),
+        "name": str(candidate.get("name") or ""),
+        "reason": reason,
+        "source_status": source_status,
+    }
+
+
 def _candidate_price_exclusion(candidate: dict, series: list, latest_trade_date: str | None,
                                price_clock_date: str, as_of: str) -> dict | None:
-    """Return only the two reviewed, ticker-local price exclusions; all ambiguity stays batch-fatal."""
+    """Return only reviewed non-provider ticker-local exclusions; all ambiguity stays batch-fatal."""
     suspension = ((candidate.get("event_risk") or {}).get("suspension") or {})
     if _is_current_confirmed_suspension(candidate, as_of):
-        return {
-            "ts_code": str(candidate.get("ts_code") or ""),
-            "name": str(candidate.get("name") or ""),
-            "reason": "confirmed_suspension",
-            "source_status": "known_hit",
-        }
+        return _candidate_price_exclusion_record(candidate, "confirmed_suspension", "known_hit")
     if suspension.get("is_suspended") is True:
         return None
     if len(series) < MIN_PRICE_OBS and str(latest_trade_date or "") == str(price_clock_date):
-        return {
-            "ts_code": str(candidate.get("ts_code") or ""),
-            "name": str(candidate.get("name") or ""),
-            "reason": "insufficient_usable_history",
-            "source_status": "price_clock_current",
-        }
+        return _candidate_price_exclusion_record(
+            candidate, "insufficient_usable_history", "price_clock_current"
+        )
     return None
 
 
@@ -5635,6 +5661,58 @@ def _is_retryable_price_fetch_error(exc: Exception) -> bool:
     return is_retryable_tushare_error(exc)
 
 
+_MISSING_PRICE_VALUE = object()
+
+
+def _price_row_value(row, field: str):
+    try:
+        return row.get(field, _MISSING_PRICE_VALUE) if hasattr(row, "get") else row[field]
+    except (KeyError, IndexError, TypeError):
+        return _MISSING_PRICE_VALUE
+
+
+def _validated_price_values(row, ts_code: str, trade_date: str | None) -> dict:
+    values = {}
+    for field in ("high", "low", "close"):
+        value = _price_row_value(row, field)
+        if isinstance(value, bool) or type(value).__name__ == "bool_":
+            raise TickerLocalPriceError("malformed_price_row", ts_code, trade_date)
+        try:
+            number = float(value)
+        except (TypeError, ValueError):
+            raise TickerLocalPriceError("malformed_price_row", ts_code, trade_date) from None
+        if not math.isfinite(number):
+            raise TickerLocalPriceError("malformed_price_row", ts_code, trade_date)
+        values[field] = number
+    return values
+
+
+def _validated_price_trade_date(value, ts_code: str, as_of: str) -> str:
+    trade_date = str(value)
+    try:
+        datetime.strptime(trade_date, "%Y%m%d")
+    except (TypeError, ValueError):
+        raise SystemExit(f"[FATAL] price row {ts_code} has invalid trade_date; no weekly report") from None
+    if trade_date > str(as_of):
+        raise SystemExit(f"[FATAL] price row {ts_code} is after as_of; no weekly report")
+    return trade_date
+
+
+def _validated_injected_price_series(series, ts_code: str, as_of: str) -> list[dict]:
+    try:
+        rows = list(series or [])
+    except TypeError:
+        raise SystemExit(f"[FATAL] price provider {ts_code} returned a non-iterable series; no weekly report") from None
+    validated = []
+    for row in rows:
+        raw_date = _price_row_value(row, "trade_date")
+        trade_date = str(as_of) if raw_date is _MISSING_PRICE_VALUE or raw_date is None else str(raw_date)
+        trade_date = _validated_price_trade_date(trade_date, ts_code, as_of)
+        validated.append({"trade_date": trade_date,
+                          **_validated_price_values(row, ts_code, trade_date)})
+    return validated
+
+
 def _fetch_price_series(ts_module, pro, ts_code: str, start: str, end: str,
                         accept_prior_settled_date: str | None = None) -> tuple:
     """前复权日线 → [{high,low,close}](oldest→newest)。A 股主板个股用 asset='E'。`end` == 周报 as_of。
@@ -5676,7 +5754,7 @@ def _fetch_price_series(ts_module, pro, ts_code: str, start: str, end: str,
             raise SystemExit(f"[FATAL] pro_bar {ts_code} 返回非法日历日期 {td};不写周报")
         if td > str(end):
             raise SystemExit(f"[FATAL] pro_bar {ts_code} 返回未来 bar {td} > as_of {end}(PIT 违规);不写周报")
-        rows.append({"trade_date": td, "high": float(r["high"]), "low": float(r["low"]), "close": float(r["close"])})
+        rows.append({"trade_date": td, **_validated_price_values(r, ts_code, td)})
     if rows and rows[-1]["trade_date"] != str(end):
         latest = rows[-1]["trade_date"]
         # 实盘盘中容忍:当日 EOD 未发布 → 最新已结算 == 前一交易日(accept_prior_settled_date)放行;凡比它更早
@@ -5710,10 +5788,17 @@ def _price_provider_result(provider, code: str, as_of: str) -> tuple:
     (`_fetch_price_series`) returns that tuple; an injected list-only provider (tests) is treated as a
     strict ``as_of`` clock (latest == as_of) so the run_lineage price clock is honest in both paths."""
     res = provider(code)
+    if res is None:
+        return [], None
     if isinstance(res, tuple):
+        if len(res) != 2:
+            raise SystemExit(f"[FATAL] price provider {code} returned an invalid result tuple; no weekly report")
         series, latest = res
-        return list(series), (str(latest) if latest is not None else None)
-    return list(res), str(as_of)
+        validated = _validated_injected_price_series(series, code, as_of)
+        if latest is None:
+            return validated, None
+        return validated, _validated_price_trade_date(latest, code, as_of)
+    return _validated_injected_price_series(res, code, as_of), str(as_of)
 
 
 def _p2_shadow_candidates(candidates: list[dict], provider, as_of: str,
@@ -6447,12 +6532,36 @@ def main(argv=None, pro_factory=None, price_provider=None, semantic_provider=Non
     # 时自动 cninfo 取数。取数失败 → None(语义全 unknown 中性)。语义只融进非生产 M6.7,不碰确定性 base 决策外的逻辑。
     if portfolio_risk_provider is None and pro is not None:
         portfolio_risk_provider = lambda codes, as_of: _fetch_portfolio_risk_fact_overrides(pro, as_of, codes)
-    cands = ai.get("candidates", [])
-    # capture (series, latest_trade_date) per candidate so the artifact can record the real price clock
-    price_results = {c["ts_code"]: _price_provider_result(price_provider, c["ts_code"], price_data_through) for c in cands}
-    price_clock_date = _candidate_price_clock(cands, price_results, args.as_of, prior_settled)
-    candidate_exclusions, eligible_cands, unresolved_short = [], [], []
+    candidate_by_code = {}
+    for candidate in ai.get("candidates", []):
+        candidate_by_code.setdefault(str(candidate["ts_code"]), candidate)
+    cands = list(candidate_by_code.values())
+    candidate_count = len(cands)
+    candidate_exclusions, price_results, clock_candidates = [], {}, []
     for candidate in cands:
+        code = str(candidate["ts_code"])
+        if _is_current_confirmed_suspension(candidate, args.as_of):
+            candidate_exclusions.append(
+                _candidate_price_exclusion_record(candidate, "confirmed_suspension", "known_hit")
+            )
+            continue
+        try:
+            series, latest = _price_provider_result(price_provider, code, price_data_through)
+        except TickerLocalPriceError:
+            candidate_exclusions.append(
+                _candidate_price_exclusion_record(candidate, "malformed_price_row", "price_row_invalid")
+            )
+            continue
+        if not series or not latest:
+            candidate_exclusions.append(
+                _candidate_price_exclusion_record(candidate, "provider_unavailable", "price_source_unavailable")
+            )
+            continue
+        price_results[code] = (series, latest)
+        clock_candidates.append(candidate)
+    price_clock_date = _candidate_price_clock(clock_candidates, price_results, args.as_of, prior_settled)
+    eligible_cands, unresolved_short = [], []
+    for candidate in clock_candidates:
         code = str(candidate["ts_code"])
         series, latest = price_results[code]
         exclusion = _candidate_price_exclusion(candidate, series, latest, price_clock_date, args.as_of)
@@ -6466,7 +6575,20 @@ def main(argv=None, pro_factory=None, price_provider=None, semantic_provider=Non
     if unresolved_short:
         raise SystemExit(f"[FATAL] 以下候选价格序列不足且非已证单票异常:{unresolved_short};"
                          "不写周报(来源/价格时钟存疑,不可静默跳过)")
-    cands = eligible_cands
+    local_price_error_count = sum(
+        item.get("reason") in {"provider_unavailable", "malformed_price_row"}
+        for item in candidate_exclusions
+    )
+    local_price_error_over_budget = local_price_error_count * 100 > candidate_count * 5
+    if local_price_error_over_budget:
+        if not args.account:
+            raise SystemExit(
+                "[FATAL] candidate-local price failures exceed the 5% budget without a valid account; "
+                "no weekly report"
+            )
+        cands = []
+    else:
+        cands = eligible_cands
     for candidate in cands:
         candidate["_weekly_as_of"] = price_data_through
     if semantic_provider is None and args.confirm_fetch_authorized and not args.skip_semantic:
@@ -6532,7 +6654,7 @@ def main(argv=None, pro_factory=None, price_provider=None, semantic_provider=Non
     if unmatched_regulatory_confirmations:
         raise SystemExit("[FATAL] regulatory confirmation is stale or outside the current official candidate events "
                          f"(unmatched={len(unmatched_regulatory_confirmations)})")
-    # 价格覆盖门(#2):仅两种已确认单票异常可在前段隔离；其余价格不足仍整批中止，绝不退化成观察。
+    # 价格覆盖门(#2/14C):四种明确的单票排除可在前段隔离；其余价格不足仍整批中止，绝不退化成观察。
     # 价格时钟 lineage 在隔离前就由所有非已证停牌候选对账，避免短历史票掩盖混合时钟。
     if clock_explicit and price_clock_date != price_data_through:
         raise SystemExit(
@@ -6580,8 +6702,9 @@ def main(argv=None, pro_factory=None, price_provider=None, semantic_provider=Non
     margin_coverage.setdefault("invalid_numeric_row_count", 0)
     run_lineage = {"run_id": source_identity["run_id"],
                    "candidate_digest": source_identity["candidate_digest"],
-                   "stage_status": ("complete" if args.iv_feed_status == "ready"
-                                    else "degraded_no_new_entries"),
+                   "stage_status": ("partial_holdings_only" if local_price_error_over_budget
+                                    else ("complete" if args.iv_feed_status == "ready"
+                                          else "degraded_no_new_entries")),
                    "iv_feed_status": args.iv_feed_status,
                    "analysis_input": _rel(args.analysis_input),
                    "selection_bucket": _rel(os.path.dirname(args.analysis_input)),
@@ -6864,7 +6987,7 @@ def main(argv=None, pro_factory=None, price_provider=None, semantic_provider=Non
                 overlay_adjudication = None
     weekly = build_weekly_report(portfolio_normalized, args.as_of, gen,
                                  iv_feed_ref=(os.path.basename(args.iv_feed)
-                                              if args.iv_feed_status == "ready" else ""), run_lineage=run_lineage,
+                                              if args.iv_feed_status == "ready" else None), run_lineage=run_lineage,
                                  available_cash=(available_cash if args.account else None),
                                  new_exposure_capacity=new_exposure_capacity,
                                  crash_veto_tracking=crash_veto_tracking,
@@ -7007,7 +7130,13 @@ def main(argv=None, pro_factory=None, price_provider=None, semantic_provider=Non
     actions = {}
     for r in weekly["reports"]:
         actions[r["m67"]["table"]["操作"]] = actions.get(r["m67"]["table"]["操作"], 0) + 1
-    print(f"[weekly] n={weekly['n_stocks']} actions={actions} iv_pct={iv_pct} -> {args.out} (+ {md_path}; receipt={receipt_path})")
+    markdown_local_price_error_count = sum(
+        item.get("reason") in {"provider_unavailable", "malformed_price_row"}
+        for item in (weekly.get("candidate_exclusions") or [])
+    )
+    print(f"[weekly] n={weekly['n_stocks']} actions={actions} iv_pct={iv_pct} "
+          f"local_price_errors={markdown_local_price_error_count}/{candidate_count} -> {args.out} "
+          f"(+ {md_path}; receipt={receipt_path})")
     # The terminal and Markdown consume the same de-identified pre-M6.7 reminder summary.
     print(f"[factor-comparison-v2] {factor_comparison_v2['message']}")
     if industry_weight_comparison is not None:
