@@ -1621,7 +1621,7 @@ class MainWiringTests(unittest.TestCase):
             "reports": [],
             "n_stocks": 0,
         })
-        self.assertIn("A-short evidence reminders", rendered)
+        self.assertIn("A-short 证据提醒", rendered)
 
     def test_entry_funnel_missing_or_bad_report_is_nonblocking_and_keeps_m67_unchanged(self):
         with tempfile.TemporaryDirectory() as td:
@@ -1640,7 +1640,7 @@ class MainWiringTests(unittest.TestCase):
             write_weekly_report(weekly, _feed(), str(out))
             rendered = render_weekly_markdown(weekly)
         self.assertEqual(weekly["reports"], baseline_reports)
-        self.assertIn("A-short evidence reminders", rendered)
+        self.assertIn("A-short 证据提醒", rendered)
         item = next(row for row in weekly["a_short_evidence_reminders"]["reminders"]
                     if row["track"] == "entry_funnel_calibration")
         self.assertEqual(item["status"], "unavailable")
@@ -1675,7 +1675,7 @@ class MainWiringTests(unittest.TestCase):
         self.assertEqual(reminder["status"], "retain_baseline")
         self.assertEqual(written["reports"], baseline_reports)
         self.assertIn("entry_funnel_calibration", json.dumps(written))
-        self.assertIn("A-short evidence reminders", rendered)
+        self.assertIn("A-short 证据提醒", rendered)
 
     def test_p3_final_action_is_pre_publish_summary_then_post_publish_capture(self):
         from runners.a_short_final_action_validation_runner import unavailable_public_summary

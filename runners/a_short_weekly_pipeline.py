@@ -5876,7 +5876,7 @@ def _build_evidence_reminders(as_of: str, target_policy: dict | None,
                               final_action: dict | None,
                               overlay_adjudication: dict | None = None,
                               entry_funnel_calibration: dict | None = None) -> dict | None:
-    """Render P2/P3/P4a progress and the P4b manual gate into one public surface."""
+    """Render the A-short evidence reminder surface (progress plus the manual gate)."""
     items = []
     if target_policy is not None:
         raw = str(target_policy.get("status") or "")
@@ -5928,7 +5928,7 @@ def _build_evidence_reminders(as_of: str, target_policy: dict | None,
             "unavailable" if all(status == "unavailable" for status in statuses) else "accumulating"))
     return {"schema_name": "a_short_evidence_reminders", "schema_version": "1.0.0", "as_of": str(as_of),
             "status": overall, "reminders": items,
-            "message": "A-short evidence reminders: comparison-only; official M6.7 unchanged.",
+            "message": "A-short 证据提醒：comparison-only；正式 M6.7 不变。",
             "production_unchanged": True}
 
 
