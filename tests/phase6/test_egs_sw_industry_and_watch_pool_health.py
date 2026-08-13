@@ -30,16 +30,24 @@ def _load_egs_module():
 
 
 def _safe_call(fn, *args, **kwargs):
-    kwargs.pop("default", None)
-    kwargs.pop("retries", None)
+    default = kwargs.pop("default", None)
+    retries = kwargs.pop("retries", 3)
     errors = kwargs.pop("errors", None)
-    try:
-        return fn(*args, **kwargs)
-    except Exception as exc:
-        if errors is not None:
-            errors.append(exc)
-            return None
-        raise
+    for attempt in range(retries):
+        try:
+            result = fn(*args, **kwargs)
+            if result is not None and len(result) > 0:
+                return result
+            return default
+        except Exception as exc:
+            # `safe_api` never propagates: it records the error when a list was
+            # supplied and returns the default either way.  A helper that raised
+            # here would hide a production fail-open instead of exposing it.
+            if attempt == retries - 1:
+                if errors is not None:
+                    errors.append(exc)
+                return default
+    return default
 
 
 def _classifications():
@@ -67,6 +75,12 @@ def _canonical_members():
     })
 
 
+def _canonical_member_all():
+    return _canonical_members().rename(
+        columns={"con_code": "ts_code", "index_code": "l2_code"}
+    )
+
+
 class SwIndustrySourceTest(unittest.TestCase):
     @classmethod
     def setUpClass(cls) -> None:
@@ -82,6 +96,82 @@ class SwIndustrySourceTest(unittest.TestCase):
         self.egs_main.TODAY = self.old_today
         self.egs_main.SW_INDUSTRY_MIN_ACTIVE = self.old_min
         self.egs_main._LAST_SW_INDUSTRY_SOURCE_OBSERVATION = None
+
+    def test_test_safe_call_maps_empty_response_to_default(self) -> None:
+        self.assertEqual(
+            _safe_call(lambda: pd.DataFrame(), default="empty-default"),
+            "empty-default",
+        )
+
+    def test_bounded_sw_reason_marks_truncation_at_complete_sample_boundary(self) -> None:
+        self.assertEqual(
+            self.egs_main._bounded_sw_reason("  short\n  reason  "),
+            "short reason",
+        )
+
+        samples = [f"L2-{index}:unconfirmed_empty" for index in range(1, 10)]
+        reason = (
+            "  decision_as_of_requires_pit_history;  "
+            "l2_batch:ok=120,confirmed_empty=2,unconfirmed_empty=4,"
+            "exception=0,bad_shape=0,failed_count=4,sample="
+            f"{samples}"
+        )
+
+        bounded = self.egs_main._bounded_sw_reason(reason)
+        marker = "...[truncated]"
+
+        self.assertLessEqual(len(bounded), 256)
+        self.assertTrue(bounded.endswith(marker))
+        self.assertIn(
+            "ok=120,confirmed_empty=2,unconfirmed_empty=4,exception=0,bad_shape=0,failed_count=4",
+            bounded,
+        )
+        sample_prefix = bounded[:-len(marker)].split("sample=[", 1)[1]
+        self.assertTrue(sample_prefix.endswith("'"))
+        self.assertTrue(
+            all(
+                fragment.startswith("'") and fragment.endswith("'")
+                for fragment in sample_prefix.split(", ")
+            )
+        )
+
+    def test_record_sw_failure_consumes_bounded_reason_in_observation(self) -> None:
+        samples = [f"L2-{index}:unconfirmed_empty" for index in range(1, 10)]
+        reason = (
+            "decision_as_of_requires_pit_history;"
+            "l2_batch:ok=120,confirmed_empty=2,unconfirmed_empty=4,"
+            "exception=0,bad_shape=0,failed_count=4,sample="
+            f"{samples}"
+        )
+
+        returned = self.egs_main._record_sw_failure(
+            source="index_member_all_l2_history",
+            reason=reason,
+            observed_sources=["SW2021"],
+            request_group_count=12,
+            fallback_used=True,
+        )
+        observation = self.egs_main._current_sw_industry_source_observation()
+
+        self.assertEqual(returned, observation["message"])
+        self.assertLessEqual(len(returned), 256)
+        self.assertTrue(returned.endswith("...[truncated]"))
+        self.assertEqual(observation["status"], "fail")
+        self.assertEqual(observation["source"], "index_member_all_l2_history")
+        self.assertFalse(observation["fast_path_used"])
+        self.assertTrue(observation["fallback_used"])
+
+    def test_non_sw_stock_consumers_share_nonempty_universe_guard(self) -> None:
+        empty = pd.DataFrame(columns=["ts_code"])
+        valid = pd.DataFrame({"ts_code": ["600000.SH"]})
+        with patch.object(self.egs_main, "get_stock_list", return_value=empty):
+            with self.assertRaisesRegex(RuntimeError, "daily_basic.*non-empty stock universe"):
+                self.egs_main._require_nonempty_stock_universe("daily_basic")
+        with patch.object(self.egs_main, "get_stock_list", return_value=valid):
+            self.assertIs(
+                self.egs_main._require_nonempty_stock_universe("suspend"),
+                valid,
+            )
 
     def test_current_run_uses_l1_fast_path_and_normalizes_official_aliases(self) -> None:
         l1, l2 = _classifications()
@@ -169,8 +259,10 @@ class SwIndustrySourceTest(unittest.TestCase):
         def index_classify(*, level, src, fields):
             return l1 if level == "L1" else l2
 
-        def index_member_all(**_kwargs):
-            return limited
+        def index_member_all(**kwargs):
+            if "l1_code" in kwargs:
+                return limited
+            return _canonical_member_all()
 
         canonical = _canonical_members().set_index("index_code")
 
@@ -190,7 +282,7 @@ class SwIndustrySourceTest(unittest.TestCase):
 
         self.assertEqual(set(mapping), {"000001.SZ", "000002.SZ"})
         observation = self.egs_main._current_sw_industry_source_observation()
-        self.assertEqual(observation["source"], "index_member_l2_history")
+        self.assertEqual(observation["source"], "index_member_all_l2_history")
         self.assertTrue(observation["fallback_used"])
         self.assertIn("row_limit", observation["message"])
 
@@ -200,13 +292,21 @@ class SwIndustrySourceTest(unittest.TestCase):
         def index_classify(*, level, src, fields):
             return l1 if level == "L1" else l2
 
-        def index_member_all(**_kwargs):
-            raise AssertionError("historical PIT run must not use current-only membership")
+        calls = []
 
-        canonical = _canonical_members().set_index("index_code")
+        def index_member_all(**kwargs):
+            self.assertNotIn("is_new", kwargs)
+            self.assertNotIn("l1_code", kwargs)
+            calls.append(kwargs)
+            return pd.DataFrame({
+                "ts_code": ["000001.SZ", "000001.SZ", "000002.SZ"],
+                "l2_code": ["801783.SI", "801780.SI", "801780.SI"],
+                "in_date": ["20200101", "20210101", "20200101"],
+                "out_date": ["20201231", "", ""],
+            })
 
-        def index_member(*, index_code, **_kwargs):
-            return canonical.loc[[index_code]].reset_index()
+        def index_member(**_kwargs):
+            raise AssertionError("historical PIT run must not use legacy member source")
 
         self.egs_main.TODAY = "20210101"
         self.egs_main.pro = SimpleNamespace(
@@ -220,8 +320,10 @@ class SwIndustrySourceTest(unittest.TestCase):
             mapping = self.egs_main.get_sw_industry_map()
 
         self.assertEqual(set(mapping), {"000001.SZ", "000002.SZ"})
+        self.assertEqual(mapping["000001.SZ"]["l2_code"], "801780.SI")
+        self.assertEqual(len(calls), 2)
         observation = self.egs_main._current_sw_industry_source_observation()
-        self.assertEqual(observation["source"], "index_member_l2_history")
+        self.assertEqual(observation["source"], "index_member_all_l2_history")
         self.assertFalse(observation["fast_path_used"])
         self.assertTrue(observation["fallback_used"])
         self.assertEqual(observation["message"], "decision_as_of_requires_pit_history")
@@ -238,7 +340,7 @@ class SwIndustrySourceTest(unittest.TestCase):
         def index_classify(*, level, src, fields):
             return l1 if level == "L1" else l2
 
-        def index_member_all(**_kwargs):
+        def index_member_all(**kwargs):
             return pd.DataFrame({
                 "ts_code": ["000001.SZ", "000002.SZ"],
                 "l2_code": ["801783.SI", "801780.SI"],
@@ -304,7 +406,49 @@ class SwIndustrySourceTest(unittest.TestCase):
                 observation = self.egs_main._current_sw_industry_source_observation()
                 self.assertEqual(observation["status"], "fail")
                 self.assertEqual(observation["source"], "index_classify")
+                expected_standard = {
+                    "SW2014": "SW2014",
+                    "mixed": None,
+                    "missing": None,
+                }[source_shape]
+                expected_sources = {
+                    "SW2014": ["SW2014"],
+                    "mixed": ["SW2014", "SW2021"],
+                    "missing": [],
+                }[source_shape]
+                self.assertEqual(observation["classification_standard"], expected_standard)
+                self.assertEqual(observation["observed_sources"], expected_sources)
                 self.assertNotEqual(observation["status"], "not_observed")
+
+    def test_blank_classification_source_fails_before_members_and_reports_missing_rows(self) -> None:
+        l1, l2 = _classifications()
+        l2 = l2.copy()
+        l2.loc[0, "src"] = ""
+        member_calls = []
+
+        def index_classify(*, level, src, fields):
+            return l1 if level == "L1" else l2
+
+        def index_member(**kwargs):
+            member_calls.append(kwargs)
+            return _canonical_members()
+
+        self.egs_main.TODAY = "20210101"
+        self.egs_main.pro = SimpleNamespace(
+            index_classify=index_classify,
+            index_member=index_member,
+        )
+        with patch.object(self.egs_main, "load_cache", return_value=None), \
+             patch.object(self.egs_main, "save_cache") as save_cache, \
+             patch.object(self.egs_main, "safe_api", side_effect=_safe_call):
+            with self.assertRaisesRegex(RuntimeError, "missing_source_count=1"):
+                self.egs_main.get_sw_industry_map()
+
+        observation = self.egs_main._current_sw_industry_source_observation()
+        self.assertEqual(observation["classification_standard"], "SW2021")
+        self.assertEqual(observation["observed_sources"], ["SW2021"])
+        self.assertEqual(member_calls, [])
+        save_cache.assert_not_called()
 
     def test_classification_empty_or_exception_records_failure_before_members(self) -> None:
         for failure in ("exception", "empty"):
@@ -354,18 +498,22 @@ class SwIndustrySourceTest(unittest.TestCase):
                 def index_classify(*, level, src, fields):
                     return l1 if level == "L1" else l2
 
-                def index_member(**kwargs):
-                    member_calls.append(kwargs["index_code"])
+                def index_member_all(**kwargs):
+                    member_calls.append(("index_member_all", kwargs))
                     if category == "exception":
                         raise RuntimeError("synthetic member failure")
                     if category == "empty":
                         return pd.DataFrame()
                     return pd.DataFrame({"wrong": [1]})
 
+                def index_member(**kwargs):
+                    member_calls.append(("index_member", kwargs))
+                    return pd.DataFrame()
+
                 self.egs_main.pro = SimpleNamespace(
                     index_classify=index_classify,
+                    index_member_all=index_member_all,
                     index_member=index_member,
-                    index_member_all=lambda **kwargs: pd.DataFrame(),
                 )
                 with patch.object(self.egs_main, "load_cache", return_value=None), \
                      patch.object(self.egs_main, "save_cache") as save_cache, \
@@ -375,12 +523,191 @@ class SwIndustrySourceTest(unittest.TestCase):
 
                 observation = self.egs_main._current_sw_industry_source_observation()
                 self.assertEqual(observation["status"], "fail")
-                self.assertEqual(observation["source"], "index_member_l2_history")
-                self.assertIn(f"{category}=2", observation["message"])
-                self.assertIn("failed_count=2", observation["message"])
+                self.assertEqual(observation["source"], "index_member_all_l2_history")
+                if category == "empty":
+                    self.assertIn("confirmed_empty=2", observation["message"])
+                    self.assertEqual(len(member_calls), 4)
+                else:
+                    self.assertIn(f"{category}=2", observation["message"])
+                    self.assertIn("failed_count=2", observation["message"])
+                    self.assertEqual(len(member_calls), 6 if category == "exception" else 2)
                 self.assertLessEqual(observation["message"].count("801"), 10)
-                self.assertEqual(len(member_calls), 2)
                 save_cache.assert_not_called()
+
+    def test_confirmed_empty_l2_group_is_allowed_and_legacy_is_probed_once(self) -> None:
+        l1, l2 = _classifications()
+        main_calls = []
+        legacy_calls = []
+
+        def index_classify(*, level, src, fields):
+            return l1 if level == "L1" else l2
+
+        def index_member_all(**kwargs):
+            self.assertNotIn("is_new", kwargs)
+            l2_code = kwargs["l2_code"]
+            main_calls.append(l2_code)
+            if l2_code == "801783.SI":
+                return pd.DataFrame()
+            return _canonical_member_all().assign(l2_code=l2_code)
+
+        def index_member(**kwargs):
+            legacy_calls.append(kwargs)
+            return pd.DataFrame()
+
+        self.egs_main.TODAY = "20210101"
+        self.egs_main.pro = SimpleNamespace(
+            index_classify=index_classify,
+            index_member_all=index_member_all,
+            index_member=index_member,
+        )
+        with patch.object(self.egs_main, "load_cache", return_value=None), \
+             patch.object(self.egs_main, "save_cache") as save_cache, \
+             patch.object(self.egs_main, "safe_api", side_effect=_safe_call):
+            mapping = self.egs_main.get_sw_industry_map()
+
+        self.assertEqual(set(mapping), {"000001.SZ", "000002.SZ"})
+        self.assertEqual(main_calls, ["801783.SI", "801780.SI"])
+        self.assertEqual([call["index_code"] for call in legacy_calls], ["801783.SI"])
+        observation = self.egs_main._current_sw_industry_source_observation()
+        self.assertEqual(observation["source"], "index_member_all_l2_history")
+        self.assertTrue(observation["fallback_used"])
+        save_cache.assert_called_once()
+
+        master = self.egs_main.build_master(
+            pd.DataFrame({
+                "ts_code": ["000001.SZ", "000002.SZ"],
+                "pct_20d": [1.0, 1.0],
+            }),
+            pd.DataFrame({
+                "ts_code": ["000001.SZ", "000002.SZ"],
+                "qfq_close": [10.0, 10.0],
+                "qfq_source_trade_date": ["20201231", "20201231"],
+                "pct_20d": [1.0, 1.0],
+            }),
+            pd.DataFrame({
+                "ts_code": ["000001.SZ", "000002.SZ"],
+                "close": [10.0, 10.0],
+                "source_trade_date": ["20201231", "20201231"],
+            }),
+            pd.DataFrame(),
+            mapping,
+            {"deduct_30d": set()},
+        )
+        self.assertEqual(
+            master.loc[master["ts_code"] == "000001.SZ", "l2_name"].item(),
+            "银行",
+        )
+
+    def test_unconfirmed_empty_l2_group_aborts_without_partial_cache(self) -> None:
+        l1, l2 = _classifications()
+        for legacy_case in ("member", "exception", "bad_shape"):
+            with self.subTest(legacy_case=legacy_case):
+                legacy_calls = []
+
+                def index_classify(*, level, src, fields):
+                    return l1 if level == "L1" else l2
+
+                def index_member_all(**kwargs):
+                    if kwargs["l2_code"] == "801783.SI":
+                        return pd.DataFrame()
+                    return _canonical_member_all().assign(l2_code=kwargs["l2_code"])
+
+                def index_member(**kwargs):
+                    legacy_calls.append(kwargs)
+                    if legacy_case == "member":
+                        return _canonical_members().iloc[[0]].copy()
+                    if legacy_case == "exception":
+                        raise RuntimeError("synthetic legacy member failure")
+                    return pd.DataFrame({"wrong": [1]})
+
+                self.egs_main.TODAY = "20210101"
+                self.egs_main.pro = SimpleNamespace(
+                    index_classify=index_classify,
+                    index_member_all=index_member_all,
+                    index_member=index_member,
+                )
+                with patch.object(self.egs_main, "load_cache", return_value=None), \
+                     patch.object(self.egs_main, "save_cache") as save_cache, \
+                     patch.object(self.egs_main, "safe_api", side_effect=_safe_call):
+                    with self.assertRaisesRegex(RuntimeError, "unconfirmed_empty=1"):
+                        self.egs_main.get_sw_industry_map()
+
+                self.assertEqual(
+                    [call["index_code"] for call in legacy_calls],
+                    ["801783.SI"] * (3 if legacy_case == "exception" else 1),
+                )
+                self.assertEqual(
+                    self.egs_main._current_sw_industry_source_observation()["source"],
+                    "index_member_all_l2_history",
+                )
+                save_cache.assert_not_called()
+
+    def test_l2_batch_empty_group_directory_is_explicitly_fail_closed(self) -> None:
+        l1, _l2 = _classifications()
+        empty_l2 = pd.DataFrame({
+            "index_code": [pd.NA],
+            "industry_name": ["空组"],
+            "parent_code": ["801000"],
+            "src": ["SW2021"],
+        })
+        member_calls = []
+
+        def index_classify(*, level, src, fields):
+            return l1 if level == "L1" else empty_l2
+
+        def index_member(**kwargs):
+            member_calls.append(kwargs)
+            return _canonical_members()
+
+        self.egs_main.TODAY = "20210101"
+        self.egs_main.pro = SimpleNamespace(
+            index_classify=index_classify,
+            index_member=index_member,
+        )
+        with patch.object(self.egs_main, "load_cache", return_value=None), \
+             patch.object(self.egs_main, "save_cache") as save_cache, \
+             patch.object(self.egs_main, "safe_api", side_effect=_safe_call):
+            with self.assertRaisesRegex(RuntimeError, "no_l2_groups"):
+                self.egs_main.get_sw_industry_map()
+
+        observation = self.egs_main._current_sw_industry_source_observation()
+        self.assertIn("l2_batch:no_l2_groups", observation["message"])
+        self.assertEqual(member_calls, [])
+        save_cache.assert_not_called()
+
+    def test_l2_batch_row_limit_is_settled_as_bad_shape_without_partial_cache(self) -> None:
+        l1, l2 = _classifications()
+        limit = self.egs_main.SW_INDEX_MEMBER_ALL_ROW_LIMIT
+
+        def index_classify(*, level, src, fields):
+            return l1 if level == "L1" else l2
+
+        def index_member_all(*, l2_code, **_kwargs):
+            if l2_code == "801783.SI":
+                return pd.DataFrame({
+                    "ts_code": ["000001.SZ"] * limit,
+                    "l2_code": [l2_code] * limit,
+                    "in_date": ["20200101"] * limit,
+                    "out_date": [""] * limit,
+                })
+            return _canonical_member_all().query("l2_code == @l2_code").copy()
+
+        self.egs_main.TODAY = "20210101"
+        self.egs_main.pro = SimpleNamespace(
+            index_classify=index_classify,
+            index_member_all=index_member_all,
+            index_member=lambda **_kwargs: pd.DataFrame(),
+        )
+        with patch.object(self.egs_main, "load_cache", return_value=None), \
+             patch.object(self.egs_main, "save_cache") as save_cache, \
+             patch.object(self.egs_main, "safe_api", side_effect=_safe_call):
+            with self.assertRaisesRegex(RuntimeError, "row_limit_hit"):
+                self.egs_main.get_sw_industry_map()
+
+        observation = self.egs_main._current_sw_industry_source_observation()
+        self.assertIn("bad_shape=1", observation["message"])
+        self.assertIn("row_limit_hit", observation["message"])
+        save_cache.assert_not_called()
 
     def test_unresolved_l2_parent_fails_before_any_member_call(self) -> None:
         l1, l2 = _classifications()
@@ -465,13 +792,16 @@ class SwIndustrySourceTest(unittest.TestCase):
                 return l2
             return l1
 
-        canonical = _canonical_members()
+        canonical = _canonical_member_all()
 
-        def index_member(*, index_code, **_kwargs):
-            return canonical[canonical["index_code"] == index_code].copy()
+        def index_member_all(*, l2_code, **_kwargs):
+            return canonical[canonical["l2_code"] == l2_code].copy()
 
         self.egs_main.TODAY = "20210101"
-        self.egs_main.pro = SimpleNamespace(index_classify=index_classify, index_member=index_member)
+        self.egs_main.pro = SimpleNamespace(
+            index_classify=index_classify,
+            index_member_all=index_member_all,
+        )
         with patch.object(self.egs_main, "load_cache", return_value=None), \
              patch.object(self.egs_main, "save_cache"), \
              patch.object(self.egs_main.time, "sleep", return_value=None):
@@ -496,12 +826,8 @@ class SwIndustrySourceTest(unittest.TestCase):
 
         member_calls = []
 
-        def index_member(**kwargs):
-            member_calls.append(kwargs)
-            return _canonical_members()
-
         self.egs_main.TODAY = "20210101"
-        self.egs_main.pro = SimpleNamespace(index_classify=index_classify, index_member=index_member)
+        self.egs_main.pro = SimpleNamespace(index_classify=index_classify)
         with patch.object(self.egs_main, "load_cache", return_value=None), \
              patch.object(self.egs_main, "save_cache") as save_cache, \
              patch.object(self.egs_main.time, "sleep", return_value=None):
@@ -515,19 +841,22 @@ class SwIndustrySourceTest(unittest.TestCase):
     def test_real_safe_api_retries_transient_l2_group_then_passes(self) -> None:
         l1, l2 = _classifications()
         attempts = {"801783.SI": 0, "801780.SI": 0}
-        canonical = _canonical_members()
+        canonical = _canonical_member_all()
 
         def index_classify(*, level, src, fields):
             return l1 if level == "L1" else l2
 
-        def index_member(*, index_code, **_kwargs):
-            attempts[index_code] += 1
-            if index_code == "801783.SI" and attempts[index_code] == 1:
+        def index_member_all(*, l2_code, **_kwargs):
+            attempts[l2_code] += 1
+            if l2_code == "801783.SI" and attempts[l2_code] == 1:
                 raise RuntimeError("transient member failure")
-            return canonical[canonical["index_code"] == index_code].copy()
+            return canonical[canonical["l2_code"] == l2_code].copy()
 
         self.egs_main.TODAY = "20210101"
-        self.egs_main.pro = SimpleNamespace(index_classify=index_classify, index_member=index_member)
+        self.egs_main.pro = SimpleNamespace(
+            index_classify=index_classify,
+            index_member_all=index_member_all,
+        )
         with patch.object(self.egs_main, "load_cache", return_value=None), \
              patch.object(self.egs_main, "save_cache"), \
              patch.object(self.egs_main.time, "sleep", return_value=None):
@@ -540,19 +869,22 @@ class SwIndustrySourceTest(unittest.TestCase):
     def test_real_safe_api_retries_persistent_l2_group_and_aborts_batch(self) -> None:
         l1, l2 = _classifications()
         attempts = {"801783.SI": 0, "801780.SI": 0}
-        canonical = _canonical_members()
+        canonical = _canonical_member_all()
 
         def index_classify(*, level, src, fields):
             return l1 if level == "L1" else l2
 
-        def index_member(*, index_code, **_kwargs):
-            attempts[index_code] += 1
-            if index_code == "801783.SI":
+        def index_member_all(*, l2_code, **_kwargs):
+            attempts[l2_code] += 1
+            if l2_code == "801783.SI":
                 raise RuntimeError("persistent member failure")
-            return canonical[canonical["index_code"] == index_code].copy()
+            return canonical[canonical["l2_code"] == l2_code].copy()
 
         self.egs_main.TODAY = "20210101"
-        self.egs_main.pro = SimpleNamespace(index_classify=index_classify, index_member=index_member)
+        self.egs_main.pro = SimpleNamespace(
+            index_classify=index_classify,
+            index_member_all=index_member_all,
+        )
         with patch.object(self.egs_main, "load_cache", return_value=None), \
              patch.object(self.egs_main, "save_cache") as save_cache, \
              patch.object(self.egs_main.time, "sleep", return_value=None):
@@ -579,7 +911,7 @@ class SwIndustrySourceTest(unittest.TestCase):
         def index_classify(*, level, src, fields):
             return l1 if level == "L1" else l2
 
-        def index_member_all(**kwargs):
+        def index_member_all(**_kwargs):
             return pd.DataFrame({
                 "ts_code": ["000001.SZ", "000002.SZ"],
                 "l2_code": ["801783.SI", "801780.SI"],
@@ -603,11 +935,94 @@ class SwIndustrySourceTest(unittest.TestCase):
         self.assertNotEqual(mapping["000001.SZ"]["l1_name"], "未知")
         save_cache.assert_called_once()
 
+    def test_valid_sw2021_cache_hit_records_source_bound_observation(self) -> None:
+        cached = {
+            "000001.SZ": {
+                "l1_name": "一级", "l1_code": "801000", "l2_name": "二级一", "l2_code": "801783.SI"
+            },
+            "000002.SZ": {
+                "l1_name": "一级", "l1_code": "801000", "l2_name": "二级二", "l2_code": "801780.SI"
+            },
+        }
+        self.egs_main.pro = SimpleNamespace()
+        with patch.object(self.egs_main, "load_cache", return_value=cached), \
+             patch.object(self.egs_main, "save_cache") as save_cache:
+            result = self.egs_main.get_sw_industry_map()
+
+        self.assertEqual(result, cached)
+        observation = self.egs_main._current_sw_industry_source_observation()
+        self.assertEqual(observation["classification_standard"], "SW2021")
+        self.assertEqual(observation["observed_sources"], ["SW2021"])
+        self.assertEqual(observation["message"], "cache_key_source_binding")
+        save_cache.assert_not_called()
+
     def test_classification_standard_helper_rejects_invalid_observed_sources(self) -> None:
         for observed in ([], ["SW2014"], ["SW2021", "SW2014"]):
             with self.subTest(observed=observed):
                 with self.assertRaises(RuntimeError):
                     self.egs_main._classification_standard_from_observed_sources(observed)
+
+    def test_empty_stock_basic_universe_aborts_before_cache_write(self) -> None:
+        old_pro = self.egs_main.pro
+        self.egs_main.pro = SimpleNamespace(
+            stock_basic=lambda **_kwargs: pd.DataFrame(),
+        )
+        try:
+            with patch.object(self.egs_main, "load_cache", return_value=None), \
+                 patch.object(self.egs_main, "save_cache") as save_cache, \
+                 patch.object(self.egs_main, "safe_api", side_effect=_safe_call):
+                with self.assertRaisesRegex(RuntimeError, "returned no rows"):
+                    self.egs_main.get_stock_list()
+            save_cache.assert_not_called()
+        finally:
+            self.egs_main.pro = old_pro
+
+    def test_empty_stock_list_cache_is_refetched_instead_of_trusted(self) -> None:
+        # An empty entry can only be a poisoned legacy artifact, so the cache
+        # branch must fall through to a fresh pull rather than return it.  The
+        # refetch either self-heals or hits the existing empty-universe abort.
+        rows = pd.DataFrame([{
+            "ts_code": "000001.SZ", "symbol": "000001", "name": "平安银行",
+            "list_date": "19910403", "delist_date": "", "market": "主板",
+            "list_status": "L",
+        }])
+        old_pro = self.egs_main.pro
+        try:
+            self.egs_main.pro = SimpleNamespace(
+                stock_basic=lambda **kwargs: (
+                    rows.copy() if kwargs.get("list_status") == "L" else pd.DataFrame()
+                ),
+            )
+            with patch.object(self.egs_main, "load_cache", return_value=pd.DataFrame()), \
+                 patch.object(self.egs_main, "save_cache") as save_cache, \
+                 patch.object(self.egs_main, "safe_api", side_effect=_safe_call):
+                healed = self.egs_main.get_stock_list()
+            self.assertEqual(list(healed["ts_code"]), ["000001.SZ"])
+            save_cache.assert_called_once()
+
+            self.egs_main.pro = SimpleNamespace(stock_basic=lambda **_kwargs: pd.DataFrame())
+            with patch.object(self.egs_main, "load_cache", return_value=pd.DataFrame()), \
+                 patch.object(self.egs_main, "save_cache") as save_cache, \
+                 patch.object(self.egs_main, "safe_api", side_effect=_safe_call):
+                with self.assertRaisesRegex(RuntimeError, "returned no rows"):
+                    self.egs_main.get_stock_list()
+            save_cache.assert_not_called()
+        finally:
+            self.egs_main.pro = old_pro
+
+    def test_empty_target_board_universe_aborts_before_zero_missing_cache_pass(self) -> None:
+        old_pro = self.egs_main.pro
+        self.egs_main.pro = SimpleNamespace(stock_basic=lambda **_kwargs: pd.DataFrame())
+        try:
+            with patch.object(
+                self.egs_main,
+                "get_stock_list",
+                return_value=pd.DataFrame({"ts_code": []}),
+            ), patch.object(self.egs_main, "load_cache", return_value={}):
+                with self.assertRaisesRegex(RuntimeError, "target-board universe is empty"):
+                    self.egs_main.get_sw_industry_map()
+        finally:
+            self.egs_main.pro = old_pro
 
     def test_target_board_failure_reports_full_counts_ratio_and_bounded_sample(self) -> None:
         l1, l2 = _classifications()
@@ -617,15 +1032,17 @@ class SwIndustrySourceTest(unittest.TestCase):
             return l1 if level == "L1" else l2
 
         def index_member_all(**kwargs):
+            self.assertNotIn("is_new", kwargs)
+            if kwargs["l2_code"] == "801780.SI":
+                return pd.DataFrame()
             return pd.DataFrame({
                 "ts_code": ["000001.SZ", "000002.SZ"],
-                "l2_code": ["801783.SI", "801780.SI"],
+                "l2_code": ["801783.SI", "801783.SI"],
                 "in_date": ["20200101", "20200101"],
                 "out_date": ["", ""],
-                "is_new": ["Y", "Y"],
             })
 
-        self.egs_main.TODAY = self.egs_main.datetime.now().strftime("%Y%m%d")
+        self.egs_main.TODAY = "20210101"
         self.egs_main.pro = SimpleNamespace(
             index_classify=index_classify,
             index_member_all=index_member_all,
@@ -839,6 +1256,60 @@ class WatchPoolHealthTest(unittest.TestCase):
 
         with self.assertRaisesRegex(ValueError, "minimum coverage"):
             self.egs_main.validate_data_health_consistency(health)
+
+    def test_slow_path_source_contract_accepts_new_label_and_rejects_legacy_label(self) -> None:
+        health = self._health(actual_count=13, eligible_count=13)
+        health["metrics"]["sw_industry_membership"].update({
+            "status": "pass",
+            "source": "index_member_all_l2_history",
+            "as_of": "20260714",
+            "active_count": 3000,
+            "min_active": 3000,
+            "request_group_count": 134,
+            "fast_path_used": False,
+            "fallback_used": True,
+            "cache_hit": False,
+            "message": None,
+            "classification_standard": "SW2021",
+            "observed_sources": ["SW2021"],
+        })
+
+        self.egs_main.validate_json_schema(
+            health,
+            schema_path=str(DATA_HEALTH_SCHEMA),
+            label="slow path source contract test",
+        )
+        self.egs_main.validate_data_health_consistency(health)
+
+        health["metrics"]["sw_industry_membership"]["source"] = "index_member_l2_history"
+        with self.assertRaisesRegex(ValueError, "schema validation failed"):
+            self.egs_main.validate_json_schema(
+                health,
+                schema_path=str(DATA_HEALTH_SCHEMA),
+                label="legacy slow path source contract test",
+            )
+
+    def test_schema_and_consistency_accept_truthful_failed_sw_source(self) -> None:
+        for standard, observed_sources in (("SW2014", ["SW2014"]), (None, [])):
+            with self.subTest(standard=standard):
+                health = self._health(actual_count=13, eligible_count=13)
+                health["metrics"]["sw_industry_membership"].update({
+                    "status": "fail",
+                    "classification_standard": standard,
+                    "observed_sources": observed_sources,
+                    "source": "index_classify",
+                    "as_of": "20260714",
+                    "active_count": None,
+                    "request_group_count": 1,
+                    "message": "classification failure",
+                })
+
+                self.egs_main.validate_json_schema(
+                    health,
+                    schema_path=str(DATA_HEALTH_SCHEMA),
+                    label="truthful failed SW source test",
+                )
+                self.egs_main.validate_data_health_consistency(health)
 
 
 if __name__ == "__main__":

@@ -340,6 +340,8 @@ class WeeklyScreeningGuardrailTest(unittest.TestCase):
         self.assertIn("$FailureHealthComplete", text)
         self.assertIn("$Payload['run_id']", text)
         self.assertIn("$Payload['candidate_digest']", text)
+        self.assertIn("$Payload['run_revision_id'] = [string]$RunRevisionId", text)
+        self.assertIn("$FailureHealthArgs += @('--run-revision-id', [string]$RunRevisionId)", text)
         for reason in ("preflight_failed", "entrypoint_missing", "egs_failed"):
             self.assertIn(reason, text)
         self.assertEqual(text.count("-AnalysisInput $SemAnalysisInput"), 3)

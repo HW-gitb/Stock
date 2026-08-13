@@ -135,6 +135,15 @@ class AShortWeeklyM67FailureCloseoutTests(unittest.TestCase):
         ):
             self.assertIn(f"'{expected}'", self.text)
 
+    def test_failure_health_keeps_run_revision_and_receipt_identity_binding(self) -> None:
+        self.assertIn("$Payload['run_revision_id'] = [string]$RunRevisionId", self.text)
+        self.assertIn("$FailureHealthArgs += @('--run-revision-id', [string]$RunRevisionId)", self.text)
+        self.assertIn(
+            "-FailureDetailRef $FailureDetailRef -AnalysisInput $AnalysisInput -RunRevisionId $RunRevisionId",
+            self.text,
+        )
+        self.assertIn("-RunRevisionId $RunRevisionId `", self.text)
+
     def test_v5a_required_readers_and_o24_selection_clocks_are_explicit(self) -> None:
         self.assertIn("$IvFailureReceipt = Join-Path $ResearchRevisionDir", self.text)
         self.assertIn(

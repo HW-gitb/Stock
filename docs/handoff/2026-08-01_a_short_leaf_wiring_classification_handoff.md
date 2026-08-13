@@ -7005,3 +7005,330 @@ This entry records only §15A in `D:\\cnhea\\Codex\\worktrees\\43fe\\Stock`; the
 **未覆盖维度与诚实边界**：P1-4 的真实 `fast_path_used=true`、P0-1 的运行闭环仍须一次获授权的当前日无缓存胶囊；本轮全部结论建立在离线假 provider 上。第二刀 P2-8/P2-9 未实现（那 4 个文件仍只有换行差）、未审。上一轮独立 agent 报告的两条线索（HTTP 5xx 被折成空表使 `exception` 计数失效；`get_stock_list()` 空表化架空目标主板门）我至今未独立复现，仍标 NOT_VERIFIED。
 
 **下一步**：等用户单独授权后跑真实无缓存胶囊收口 P0-1/P1-4；第二刀另起。
+
+## 2026-08-13 追加：SW Optional 与 P2-8/P2-9 最小修复（Codex executor/fixer；c405；OPEN-NOT_VERIFIED）
+
+### 用途、问题与方案
+
+本条是本 handoff 的后续追加，承接桌面 `a_testrun0813.md` 的第二刀；不新建平行交接。执行范围为 `O-SW1-1`~`O-SW1-5`、P2-8、P2-9，采用最小改动、fail-closed、按类修复。P1-4 真实无缓存验收、P0-1、provider/live、full lane、P3-10 均未启动。
+
+- `O-SW1-1`：失败 observation 从实际 `src` 推导单一标准；没有 source 或 mixed source 则标准为 null；SW2021 cache hit 以 source-bound cache key 记录 `SW2021`，不再用空 observed list 掩盖绑定。pass 仍强制 SW2021，fail 可记录实际标准/null，`data_health` schema/code 同步 1.12.0。
+- `O-SW1-2`：`_resolve_sw_l1_name()` 同时服务 parent closure 与 mapping，消除两处候选逻辑漂移；末端 raise 仍作为防御边界。
+- `O-SW1-3`：分类帧任一 src 缺失/NaN/空白都记录 `missing_source_count` 并在 member 调用前失败。
+- `O-SW1-4`：L2 无组明确返回 `no_l2_groups`；每组既有行数上限达到时归入 `bad_shape`/`row_limit_hit`，部分 batch 不得入 mapping/cache。
+- `O-SW1-5`：测试 helper 现在复刻 `safe_api` 的 retry、empty→default、errors 语义；未改生产 `safe_api`。
+- P2-8：失败 receipt、即时 health、health receipt 都传递已有 `RunRevisionId`；`analysis_input` 同时给出真实 run identity 时才传播 paired identity，EGS 前失败保持 null；requested/manifest mismatch 仍 fail-closed。
+- P2-9：M6.7 `failed` 优先产生 `overall=failed`；`failed_count` 仍只统计 sidecar，显示标签改为 `sidecar_failed=`；health JSON/receipt 版本为 1.1.0。
+
+### 调用链、消费者、schema/source-binding/写盘边界
+
+- SW 生产链仍为 `weekly_screening.ps1 → run_egs → get_sw_industry_map → SW2021 L1/L2 classify → parent closure → current L1 fast path 或 PIT L2 fallback → coverage/semantic gate → cache → build_master → score/Tier`。修复只发生在现有抓取 helper 和 data-health provenance，合法 mapping/缓存消费者未换线。
+- 失败健康链仍为 `Write-M67FailureReceipt → a_short_weekly_sidecar_health.py → sidecar_health.json/.md/.receipt.json`。没有新增 runner、schema 文件或输出位置；revision 一致性仍由既有 requested/manifest/evidence checks 约束，paired identity 只从真实上游 receipt/analysis input 读取。
+- `data_health` pass 的 SW2021/source-binding 不放宽；fail 记录实际 source 或 null。`a_short_weekly_sidecar_health` 仅新增 failed overall 枚举和 failed_count 说明，没有引入第二套 failure state machine。
+
+### 负向控制、自审、精确测试与原始终态
+
+- SW 负向：SW2014/mixed/缺列/空白 src、null/whitespace parent、无 L2 group、row limit、持续分类/L2 异常；正向：正常 SW2021、cache hit provenance、瞬时异常重试、既有 sidecar 状态。
+- P2 负向：EGS 前失败三份产物同 revision 且 paired null、analysis_input 已存在时三份产物保留真实 paired identity、receipt/requested 与 receipt/manifest revision mismatch 拒绝、pure sidecar degradation 仍为 degraded。
+- 固定 Python：`C:\Users\cnhea\AppData\Local\Programs\Python\Python313\python.exe`，3.13.8。最终合并焦点命令为固定解释器加载：`tests.phase6.test_egs_sw_industry_and_watch_pool_health tests.test_a_short_tushare_runtime_contract tests.test_a_short_weekly_sidecar_health tests.test_a_short_weekly_screening_m67_failure_closeout tests.phase6.test_weekly_screening_guardrails tests.test_a_short_v5_revision_matrix`，原始终态 `Ran 125 tests ... OK`；另专项 P2 失败身份焦点 `Ran 87 tests ... OK`。`py_compile`、PowerShell parser、`git diff --check` 均 PASS。
+- 未运行 provider/live/network、真实无缓存 A-short、真实 weekly、full lane 或 sub-agent；未 stage/commit/push/merge。代码与文档终态为 `repaired / OPEN-NOT_VERIFIED`，等待 Claude Code 独立 review/commit 边界；executor/fixer 不提交。
+
+后续如再修复，只能继续追加问题与根因、最小改动、调用链/消费者/schema/source-binding/写盘边界、负向控制、自审、精确测试命令和原始终态，并同步 `docs/system_risk_register.md` 与 `docs/SESSION_LOG.md`；不得新建平行 handoff。
+
+## 2026-08-13 追加：SW 五条 Optional 与第二刀 P2-8/P2-9 的独立审查 = PASS（Claude Code；c405，已合入 master）
+
+**判定**：PASS，零 Required。`O-SW1-1`~`O-SW1-4` 转 resolved，`O-SW1-5` 仍 open；P2-8/P2-9 复核成立。正文只在 `docs/system_risk_register.md`。
+
+**我实际验了什么（区别于执行方转述）**：整读改动后的 `validate_data_health_consistency` SW 分支、`_record_sw_failure` 的派生逻辑、`_validate_sw_classification_frame` 的缺失统计、`_fetch_l2_batch` 的行数守卫与空目录分支、新提取的 `_resolve_sw_l1_name` 及其两个调用点，以及 `a_short_weekly_sidecar_health.py` 的 `overall` 条件链与 `_failed_m67_receipt_evidence` 的配对腿。执行方自报的 `125 OK`/`87 OK` 一条没采信，自己重跑了覆盖改动符号的 252 用例超集，并按 rule 6 补跑一次 a_short 全量。
+
+**本轮唯一的放宽及其强制腿反向控制**：schema 把 `classification_standard` 从 `enum:[null,"SW2021"]` 放宽成 string/null（为了让失败记录能如实报出观测到的 SW2014）。我打了九格：`pass` 侧三格全拒（SW2014、观测不符、观测为空），`fail` 侧「自称 SW2021 但观测 SW2014」被拒、「诚实报 SW2014」放行、「什么也没观测到就报 null」放行、空串被拒。放宽只开在它该开的那一格上。
+
+**收紧类的正控**：`src` 全部有值仍放行；L2 组 `LIMIT-1` 行仍正常通过并写缓存，恰好触顶才归 `bad_shape` 并整批失败——边界没有一刀切。正常数据端到端仍建图、写缓存、`status=pass`。
+
+**第二刀的消费面 ripple**：全仓没有第二个消费 `overall` 的地方，`weekly_screening.ps1` 只检查 `sidecar_health.md` 是否存在、不解析那一行，所以新增 `failed` 枚举与 `failed=`→`sidecar_failed=` 标签改名不会打红下游；health receipt 没有独立 schema 文件，仓内也没有 tracked 产物钉旧版本。
+
+**未覆盖维度与诚实边界**：PowerShell 侧只做静态核对，没真跑 launcher；仓内那几条 PS 断言比对的是源码字符串而非运行行为（既有模式，照现状接受）。P1-4 的真实 `fast_path_used=true` 与 P0-1 运行闭环仍须获授权的无缓存胶囊。上一轮 agent 的两条线索仍未独立复现，其中 `get_stock_list()` 空表化会架空目标主板零遗漏门那条建议单独排一刀。
+
+**下一步**：等用户授权跑真实无缓存胶囊收口 P0-1/P1-4；`get_stock_list` 那条另起。
+
+## 2026-08-13 追加：get_stock_list 空 universe / 目标主板门最小修复（Codex executor/fixer；c405；OPEN-NOT-VERIFIED）
+
+### 用途、问题与方案
+
+本条是同一 handoff 的后续追加，承接用户指定的第二条线索；不新建平行交接。问题是 `safe_api` 会把空响应（含 Tushare 故障折叠为空 DataFrame）返回为 `default=None`，`get_stock_list()` 在三次 `stock_basic` 都无行时原先可返回/缓存空表，`get_sw_industry_map()` 随后把空目标集合的差集当成零遗漏。本轮只做最小 fail-closed 修复，不触及 O-SW1-5、PowerShell launcher、Tushare client/endpoint、provider/live、full lane 或其他问题。
+
+- `get_stock_list()` 命中空 DataFrame cache 立即拒绝；L/D/P 三次调用均无原始行时立即拒绝，不构造/写入空 universe。
+- `get_sw_industry_map()` 投影严格主板后的 `target_codes` 为空时立即拒绝，避免空差集通过 coverage gate。
+- 合法历史 `as_of` 过滤后为空的既有行为保留，最终空结果直接返回且不写空 cache；未改 HTTP 状态诊断、全局 `safe_api`、schema、SW mapping 消费者或 cache 代际。
+
+### 调用链、消费者、schema/source-binding 与写盘边界
+
+调用链为 `stock_basic → get_stock_list → get_sw_industry_map → target-board coverage gate → SW2021 classification/member mapping → cache → build_master/score`。错误在目标集合/空 universe 进入 SW cache、classification/member 调用及下游消费前被拒；有效 SW2021 source-binding 和下游 mapping 不变。没有新增产物或写盘路径，空状态不写 cache。
+
+### 负向控制、自审、精确测试与原始终态
+
+- 负向控制：三次 `stock_basic` 空响应、空 stock-list cache、空目标主板集合均 fail-closed 且不通过零遗漏门；正向控制：既有合法历史 delisting/as-of 空结果仍能通过，避免过度收紧。
+- 固定解释器：`C:\Users\cnhea\AppData\Local\Programs\Python\Python313\python.exe`，Python 3.13.8。
+- 精确验证：固定解释器运行 `tests.phase6.test_egs_sw_industry_and_watch_pool_health tests.phase6.test_egs_main_board_and_holder_pit tests.test_a_short_tushare_runtime_contract`，原始终态 `Ran 54 tests ... OK`；`py_compile` 与 `git diff --check` 通过。未运行 provider/live、真实 weekly、full lane 或 sub-agent；未 stage/commit/push/merge。
+- 结论：代码 `repaired / OPEN-NOT_VERIFIED`，等待 Claude Code 独立复审/提交边界。HTTP 4xx/5xx 的原始状态仍不可从空 DataFrame 恢复，本轮只保证其在 universe/目标主板边界不再 fail-open。
+
+后续若再修复，只能继续在本 handoff 追加问题/根因、最小改动、调用链/消费者/schema/source-binding/写盘边界、负向控制、自审、精确测试命令和原始终态，并同步 `docs/system_risk_register.md` 与 `docs/SESSION_LOG.md`；不得新建平行 handoff。
+
+## 2026-08-13 追加：空 universe 门的独立审查 = PASS（Claude Code；c405，已合入 master）
+
+**判定**：PASS，零 Required。`R-ASHORT-EMPTY-UNIVERSE-DISARMS-THE-TARGET-BOARD-GATE` 转 resolved，新记 `O-EU-1`/`O-EU-2`。正文只在 `docs/system_risk_register.md`。
+
+**我实际验了什么（区别于执行方与上一轮 agent 的转述）**：整读改动后的 `get_stock_list()` 全函数体（含 `safe_api` 的 `errors` 判据、三次 `list_status` 的 `frames` 收集条件、状态去重与 as-of 过滤、写缓存边界）以及 `get_sw_industry_map()` 里新的 target 门。上一轮 agent 只是报告了这个缺口、我当时标 NOT_VERIFIED；本轮我用「三次调用都成功但都返回空表」的假 provider 亲自把原缺口的形态跑了出来，再确认现在它抛 `stock_basic returned no rows across list_status=L,D,P`。执行方自报的 `54 OK` 一条没采信，自己重跑了 168 用例超集，并按 rule 6 补跑一次 a_short 全量。
+
+**六格正反**：全空三格 → 抛且不写缓存；空缓存 → 抛；正常 → 1 行且写缓存；过滤后为空 → 返回空但不写缓存（保住历史 replay 的合法语义，同时不把空态固化）；universe 有行但无主板 → SW 目标门抛且 **provider 调用实测 0 次**；主板正控 → 端到端建图 `status=pass`。加严没有把合法路径误杀。
+
+**消费链**：`get_stock_list()` 全仓 5 个生产调用点，生产顺序里 SW map 先执行，所以空 universe 会在新门处先中止。但这层保护依赖调用顺序而非各自把门，已记为 `O-EU-1`。
+
+**未覆盖维度与诚实边界**：agent 的另一条线索（HTTP 4xx/5xx 被折成空表使 `_fetch_l2_batch` 的 `exception` 计数对主流故障形态失效）本轮未修也未复现，按方案 §3.1.4 的边界保持 open——方向仍是中止而非放行。P1-4 / P0-1 仍须获授权的真实无缓存胶囊；本轮全部结论建立在离线假 provider 上。
+
+**下一步**：等用户授权跑真实无缓存胶囊收口 P0-1/P1-4。
+
+## 2026-08-13 追加：Optional 三项与 P3-10 最小修复（Codex executor/fixer；c405；OPEN-NOT-VERIFIED）
+
+### 用途、问题与方案
+
+本条继续追加到当前 handoff，不新建平行文档。按用户命令处理当前风险登记的 `O-EU-1`、`O-EU-2`、`O-SW1-5`，并严格执行桌面 `a_testrun0813.md` 的 P3-10 方案；不触及 HTTP 状态伪诊断、provider/live、真实 runtest、full lane 或其他问题。
+
+- `O-EU-1`：新增 `_require_nonempty_stock_universe()`，接入 `get_daily_basic`、`get_suspend_info` 两个读取点和 `run_egs`；SW map 保留已有专用目标主板门，五个已知生产消费点均 fail-closed。
+- `O-EU-2`：坏 stock-list 空 cache 维持直接抛错作为统一策略，不增加 warning/re-fetch 或新的 retry 状态机。
+- `O-SW1-5`：在现有测试 helper 上补 `empty DataFrame → default` 明确断言，生产 `safe_api` 不变。
+- P3-10：两个 launcher 将 `$SourceRoot` 参数默认值改为空字符串，在既有确认/ExtraArgs 闸门后用各自 `$RuntimeRoot` 只对空白值回填；显式 SourceRoot、Resolve-Path、capsule manager、固定 Python resolver 和 worker 参数保持不变。
+
+### 调用链、消费者、schema/source-binding/写盘边界
+
+Optional 调用链为 `stock_basic → get_stock_list → _require_nonempty_stock_universe → daily_basic/suspend/run_egs`，SW 目标链不变；空 universe 在各消费者读取/写 cache/继续评分前被拒。P3-10 调用链为 `powershell.exe -File → launcher 参数绑定 → ConfirmRuntest/ExtraArgs 闸门 → RuntimeRoot/SourceRoot → runtest_capsule.py → 现有 worker`；修复不新增产物、schema 或写盘路径，未改变 explicit SourceRoot ownership。
+
+### 负向控制、自审、精确测试与原始终态
+
+- Optional 负向：helper 空表回 default、非空 universe 门拒绝空表、有效帧保持原对象、坏 cache 仍 fail-closed。
+- P3-10 负向：A-short/US-short 各一次真实 Windows PowerShell `-File` 调用，省略 SourceRoot 与 ConfirmRuntest，均抵达确认错误、不出现空 `Split-Path` 错误、不创建 capsule；既有显式 SourceRoot/worker 命名绑定测试继续通过。
+- 固定解释器：`C:\Users\cnhea\AppData\Local\Programs\Python\Python313\python.exe`，Python 3.13.8。精确焦点原始终态：`Ran 63 tests ... OK`；未运行 provider/live、真实 runtest、full lane 或 sub-agent；未 stage/commit/push/merge。
+- 当前代码/测试终态：`repaired / OPEN-NOT-VERIFIED`；固定 Python `py_compile`、两个 launcher 的 PowerShell parser、`git diff --check`、文档治理 `66 OK` 均通过，交 Claude Code 独立复审。
+
+后续如再修复，只能在本 handoff 继续追加问题/根因、最小改动、调用链/消费者/schema/source-binding/写盘边界、负向控制、自审、精确测试命令和原始终态，并同步 `docs/system_risk_register.md` 与 `docs/SESSION_LOG.md`；不得新建平行 handoff。
+
+## 2026-08-13 追加：空 universe 门下沉与 P3-10 启动器的独立审查 = PASS（Claude Code；c405，已合入 master）
+
+**判定**：PASS，零 Required。`O-EU-1` 转 resolved；P3-10 代码面成立但原症状未复现，标 NOT_VERIFIED。正文只在 `docs/system_risk_register.md`。
+
+**我实际验了什么**：整读新增的 `_require_nonempty_stock_universe` 与它在 `get_daily_basic`、`get_suspend_info`（两处）、`run_egs` 的四个接入点，并静态清点全仓裸 `get_stock_list()` 只剩 2 处（helper 自身 + 已有独立门的 SW map）。跑了 helper 四格（空表 / 缺 `ts_code` 列 / 非 DataFrame / 正常）与两个消费点的实际报错标签。启动器侧读了两处闸门顺序，确认兜底之前没人读 `$SourceRoot`。执行方的自报计数未采信，自己重跑 183 用例超集并按 rule 6 补跑一次 a_short 全量。
+
+**P3-10 的诚实边界**：我用 bash 调 `powershell.exe -File`（绝对路径）、`cmd /c powershell.exe -File`、相对路径 `-File` 三种方式跑最小复现脚本，**都没能让参数默认值里的 `$PSScriptRoot` 变空**——桌面记录的失败形态在我这边没重现。因此我只能认定：把计算挪出参数默认值是严格更稳的写法，且两个真启动器在 `-File` 下现在都干净地停在 `-ConfirmRuntest` 闸门上。「这次改动正是 P3-10 的解」这句话没有我的独立证据，最终关闭要靠用户用当初失败的那条命令复跑。
+
+**未覆盖维度**：P1-4 的真实 `fast_path_used=true` 与 P0-1 的整周产物闭环仍须获授权的真实无缓存胶囊；本轮及此前 SW 侧全部结论都建立在离线假 provider 上。`O-EU-2`、`O-SW1-5` 与 agent 的 `exception`-计数线索仍 open。
+
+**下一步**：唯一还缺的是那次真实无缓存周跑——它同时收口 P0-1、P1-4，并给 P3-10 一个真实调用现场。
+
+## 2026-08-13 追加：`O-EU-2` / `O-SW1-5` 自修自审（Claude Code；c405，已合入 master）
+
+**判定**：两条 Optional 已闭，零 Required。附一条对我自己此前结论的更正。正文只在 `docs/system_risk_register.md`。
+
+**动手前的回查（这次是关键一步）**：用户要我自己收 Optional 前先确认它们真没修。回查发现 `O-SW1-5` 的主体早在 `fe00caf9` 就被修掉了——测试 helper 已经复刻了 `safe_api` 的「空结果→默认值」，而我在之后两轮的结论里仍写着「仍 open」，属于把旧条目顺手抄下来没回查。教训是：Optional 队列跨轮携带时必须重新读代码，不能凭上一轮的措辞。
+
+**实修两处**：① `get_stock_list()` 的空缓存由直接 `RuntimeError` 改为 warning + 落到重抓分支，与同文件 SW map 对坏缓存的惯例一致；这个函数自 `83ab108a` 起不再存空表，所以空条目只可能是遗留脏数据，重抓要么自愈要么撞既有硬门，严格优于让人手动删文件。② 测试 helper `_safe_call` 在最后一次尝试失败时不再 `raise`，改为与 `safe_api` 一致地返回 `default`。
+
+**自审证据**：五格——空缓存+健康 provider 自愈（实测重抓 3 次、1 行、写缓存）、空缓存+空 provider 仍抛 `returned no rows` 且不写缓存、非空缓存 0 次 provider 调用、无缓存正常路径不变、dict 缓存原样返回；helper 与真 `safe_api` 的四格（空返回/抛异常 × 传/不传 `errors`）返回值与 errors 计数全等。原先钉旧行为的那条测试已改写成同时钉自愈与 fail-closed 两侧。
+
+**有意不动**：`exception` 计数对 HTTP 折叠故障失效那条，方案 §3.1.4 明令不伪造 HTTP 诊断、不改第三方库；P3-10 按用户指示不动。
+
+**下一步**：仍是那次获授权的真实无缓存周跑。
+
+## 2026-08-13 追加：`3a_testrun0813` 文档收口校准方案（实为一笔 Required + 一项 Optional；待执行；docs-only）
+
+### Verdict / 方案来源判断
+
+同意桌面 `C:\Users\cnhea\Desktop\3a_testrun0813.md` §6 的两条原则：旧产物不重跑、不改写；P3-10 只凭原失败命令的修复前后对照关闭。按桌面 2026-08-13 最新更正，原“三笔”实际只剩一笔 Required 和一项低价值 Optional：
+
+1. §6.1 四周范围裁决已在本 handoff 的“P0-3 四周历史产物统一处置”及其 Claude 独立审查 PASS 条目完成，并已在 `docs/system_risk_register.md::R-ASHORT-P0-3-PRE-DESIGN-HISTORICAL-ARTIFACTS` 落盘；本项改判为 **NO-OP / ALREADY_SETTLED**，禁止重复追加第二份 disposition。
+2. §6.2 的过时失败描述可选择追加事实更正，但 register 已有 `Ran 4 tests / OK` 的权威事实，因此本项为 **Optional / LOW_VALUE**，默认不执行；若执行，`OPEN-NOT_VERIFIED` 状态和 design-completion 关闭条件必须保持不变。
+3. §6.3 已出现满足既有关闭判据的修复前后**字面同形完整命令**证据，是唯一仍须执行的纯文档 P3-10 收口。
+
+正确 owner 是本文件：`docs/handoff/README.md` 已把本文件指定为 A-short“序 N”工程队列主 handoff，并要求默认追加现有阶段 handoff、不新建平行文档。桌面 §6 是问题与原始处置方向，不是当前状态真相源；未来执行以当前 handoff、risk register、SESSION_LOG 和证据本身为准。
+
+### 文档①：P0-3 四周范围裁决——只确认已完成，不重复执行
+
+当前已有的正式裁决覆盖 `20260720`、`20260727`、`20260803`、`20260810` 四周：全部为 `pre-design audit-only artifacts`，只可只读审计，永不计入正式 forward evidence、12/24/36-week clock、promote/retire/ready、strategy replacement、ship gate 或 design-completion baseline；原始 JSON/Markdown/receipt 保持原样。
+
+执行本收口方案时，本项只做一致性核对：确认上述 handoff 条目、Claude PASS 条目和 register R-ID 仍存在且没有后续反转。若一致，记录 `NO-OP / ALREADY_SETTLED` 后结束；不得再次写同一裁决、不得新建 R-ID、不得修改 registry、历史产物、消费者、schema、日期黑名单或 invalidation marker。P0-1、P0-2 的真实运行验收继续保持独立边界。
+
+### 文档②（Optional / LOW_VALUE）：EOL-pin 旧失败描述的事实更正——状态不变
+
+问题仅是本 handoff 上方旧条目仍写着：`test_a_short_published_bundle_eol_pin` 因保留的 `20260810` pre-design dirty record/source SHA 而未闭。当前证据已经表明该句过时：在 `c6632437` 上相关四例终态为 `Ran 4 tests in 0.148s ... OK (skipped=1)`，其中 source-binding 断言明确走 `skipped 'pre-freeze: recorded SHA membership is audit-only'`；这与本文件顶部 O32/O33 条目记录的显式 pre-freeze skip 语义一致。
+
+本项默认不执行；register 已经保存该测试绿色事实，不补不会造成当前权威状态错误。只有用户明确选择补充，或执行文档③时希望顺带消除旧 handoff 的阅读噪声，才在本 handoff 末尾追加一条“事实更正”；不得回写或删除旧历史 entry。更正必须同时写清：
+
+- 旧句“该测试仍因 20260810 而未闭”在 `c6632437` 已不成立；
+- 这是 pre-freeze audit-only 分支正确生效的证据，不是 design completion、freeze-start 或 durable evidence 已获授权；
+- 原条目状态继续保持 **`OPEN-NOT_VERIFIED`**；关闭条件仍是用户明确宣布 A-short 设计完成，并按既有授权/冻结流程建立新 epoch；
+- 不删除、重写、补 SHA 或重新发布 `20260810` 及其他三周产物。
+
+若 `docs/system_risk_register.md` 的当前有效条目仍携带同一过时失败事实，才在对应 owner 条目追加同样的事实更正；当前有效 register 已有 `Ran 4 tests / OK` 时不重复造条目。不得仅为该 Optional 单独新增 SESSION_LOG 周期；若它与文档③同批执行，只在 P3-10 的 SESSION_LOG 极简 entry 内附带一句“EOL-pin 旧失败事实已更正、状态不变”。不得把测试绿色写成该线已关闭。
+
+### 文档③：P3-10 按既有关闭判据收口
+
+P3-10 的代码面已经独立审查 PASS；唯一保留的 `NOT_VERIFIED` 原因是审查者在修复后无法复现修复前 `$PSScriptRoot` 为空的现场，并明确把最终关闭判据定为“用当初失败的命令再跑一次”。桌面 §6.3 已给出**字面同形、包含完整参数表**的前后两半证据：
+
+- 修复前 `31a360fb`：`cmd /c powershell.exe -ExecutionPolicy Bypass -File <绝对路径> -ConfirmRuntest -Commit <sha> -Account <path>` 在 `a_short_runtest.ps1:12 char:47` 以 `Split-Path : Cannot bind argument ...` 崩溃；
+- 修复后 `c6632437`：使用字面同形完整命令（`-Account` 故意指向不存在路径），参数默认值绑定通过，`-ConfirmRuntest` 闸门通过，随后在 `a_short_runtest.ps1:43` 的 `Resolve-Path` 因该路径不存在而停止；胶囊创建位于 `:47`，没有发生，因此该验证零副作用；
+- 修复后补充证据：`-File` 不带参数时，A-short / US-short 两个 launcher 均干净停在确认闸门。此项只证明无参数入口行为，不替代上一条完整原命令的关闭证据。
+
+未来执行不再改代码、不启动真实 runtest、不加测试。只做以下文档动作：
+
+1. 在 `docs/system_risk_register.md` 顶部当前区域追加 P3-10 closure，逐字记录上述完整命令形状、修复前 `:12` 绑定崩溃、修复后通过绑定和确认门并在 `:43` 因故意不存在的 Account 路径停止、`:47` 胶囊创建未发生，据此把 P3-10 从 `NOT_VERIFIED` 转为 `resolved`；无参数 A-short / US-short 结果只列为补充。保留旧审查者“修复后无法复现修复前症状”的历史记录，不回写历史段落。
+2. 在本 handoff 末尾追加对应 closeout，明确“时序差异”解释：原审查发生在修复后，所以它无法制造修复前现场；本次前后对照补齐了因果证据。
+3. 在 `docs/SESSION_LOG.md` 顶部按项目极简模板记录该 docs-only 收口及 reviewer/committer 下一步；不得把 P3-10 关闭扩大为 P0-1、P1-4、真实 capsule、provider/live、full-system 或 ship PASS。
+
+### 固定范围、验证和角色边界
+
+本方案未来执行的 Required 允许修改范围只有：
+
+- `docs/handoff/2026-08-01_a_short_leaf_wiring_classification_handoff.md`；
+- `docs/system_risk_register.md`；
+- `docs/SESSION_LOG.md`。
+
+不改桌面原始证据、代码、测试、schema、registry、runner、launcher、历史/当前运行产物或 Git 配置；不运行 provider/live、runtest capsule、full lane 或全量系统。因为这是纯文档状态校准，不触发生产 full lane，也不为它新增测试、fingerprint、SHA 或哈希。执行方只用固定 Python运行项目既有文档治理/route 门，并运行 `git diff --check`；记录精确命令与原始终态。executor/fixer 不提交，由独立 reviewer/committer 核对“①未重复、②若不执行则没有多余状态；若执行则状态未翻、③完整原命令前后证据成对且胶囊未创建”后提交。
+
+### 成稿前“方案规则”审查（写入前已完成）
+
+- **规则 1：PASS。** 第①笔改为 NO-OP，第②笔降为默认不执行的低价值 Optional，第③笔只追加关闭事实和状态；不改代码/产物，不新增测试、指纹、SHA、哈希、迁移器或防御层。
+- **规则 2：PASS。** 已核对桌面 §6 最新更正、本 handoff 的 P0-3 disposition + Claude PASS、O32/O33、P3-10 reviewer 边界及当前 register；方案消除了桌面“第①笔未做”与当前仓库“已完成”的冲突，也没有把低价值第②笔伪装成 Required。
+- **规则 3：PASS。** 三笔都是治理文档收口，其真实消费者是后续 executor/reviewer/epoch 与风险路由；方案把事实分别接入主 handoff、risk register 和 SESSION_LOG，并保持 registry/正式 evidence consumer 边界不变，不会形成只写桌面、项目内无人读取的悬空结论。
+
+## 2026-08-13 追加：N-3/N-4 SW2021 L2 历史成员路径最小修复（Codex executor/fixer；c405；OPEN-NOT_VERIFIED）
+
+### 用途、问题与桌面方案
+
+本条继续追加到 A-short 主 handoff，不新建平行交接。唯一问题入口是桌面 `C:\Users\cnhea\Desktop\3a_testrun0813.md`；本轮严格只执行 N-3/N-4：N-3 对应 P0-2 尚未完成的成员源半边，N-4 对应 P1-5 对“合法为空”与“未确认为空”的状态分类修复。N-5、P1-4、P0-3、P3-10 和其他桌面线索不在本轮范围。
+
+### 根因与最小改动
+
+- N-3 根因是分类目录已改为 SW2021，但历史/非当前日慢路径仍调用旧 `index_member`；这会让 source-binding 与 PIT 成员字段不一致。慢路径现在按 L2 逐组调用：
+  `pro.index_member_all(l2_code=l2_code, fields="ts_code,l2_code,in_date,out_date,is_new", errors=errors)`。
+- 该调用**不传 `is_new`**；`is_new="Y"` 仍只属于当前日 L1 快路径。历史非空帧必须含 `ts_code/l2_code/in_date/out_date`，经 `_normalize_sw_member_columns(..., "index_member_all")` 后走 `_apply_pit_window(..., source="index_member_all")`，已退出成员不会流入 mapping。
+- N-4 根因是主接口 `index_member_all` 空响应被过度当成失败。现在主接口明确为空后才探测旧 `index_member`：旧接口明确为空 → `confirmed_empty`（该组无 mapping 行但不使整批失败）；旧接口非空、异常、坏形状或不可用 → `unconfirmed_empty`，整批 fail-closed。主接口异常、非 DataFrame、既有 row-limit、缺 PIT 列或规范化空帧仍分别归 `exception`/`bad_shape` 并整批失败。
+- 批摘要区分 `ok/confirmed_empty/unconfirmed_empty/exception/bad_shape`；只有 confirmed-empty 不进入 failures。任一其他失败，或全部组 confirmed-empty 且没有 frame，均不拼 partial mapping、不写 cache；minimum-active、semantic、target-board zero-missing 门保持原样。
+
+### 调用链、消费者、schema/source-binding 与写盘边界
+
+`weekly_screening.ps1 → run_egs → get_sw_industry_map → index_classify(src=SW2021) → L2 parent closure → index_member_all L1 current 或 index_member_all L2 history → _apply_pit_window → semantic/target-board gates → SW cache → build_master/score/Tier`。
+
+旧 `index_member` 只在新接口明确为空时作为一次确认调用；旧返回行永不进入 `frames`、正式 source-binding、mapping 或 cache。健康 source 改为 `index_member_all_l2_history`，当前快路径仍为 `index_member_all_l1_current`；`schemas/data_health.schema.json`、producer 与 consistency validator 升至 `1.13.0`，旧 `index_member_l2_history` 被 schema/测试拒绝。没有新增 runner、provider、迁移器或写盘边界。
+
+### 负向控制、自审与精确测试
+
+- 正向：历史帧的退出日/活动日 PIT 过滤；confirmed-empty 与有效 L2 并存时只保留有效行；正常 mapping 仍可被 `build_master` 消费。
+- 反向：主接口异常、坏 shape、row-limit、缺 PIT 列、空规范化帧；旧接口非空/异常/不可用；L2 全部 confirmed-empty；既有分类/L2 持续异常、无 L2 组、目标主板缺口和 zero-missing 门，均保留 fail-closed 且不写 partial cache。
+- 精确测试：固定 Python `C:\Users\cnhea\AppData\Local\Programs\Python\Python313\python.exe`（3.13.8）运行 `& '.tools\\run_unittest_with_repo_pythonpath.cmd' tests.phase6.test_egs_sw_industry_and_watch_pool_health tests.phase6.test_egs_main_suspend_guard`，`Ran 41 tests in 0.658s ... OK`，receipt `receipt:c41f7202c42d6d21faf8b2fc`。为满足现有 effect-contract bundle，最终 bounded focused 超集加 `tests.test_a_short_effect_contract tests.test_a_short_effect_consumer_probe`，`Ran 118 tests in 51.376s ... OK`，receipt `receipt:69bdf1cd155ea2d49abef76f`。
+- 固定 Python `-m py_compile A-EGS/egs_main.py` 与 `git diff --check` 通过。因 `A-EGS/egs_main.py` 是 top-level 生产入口，按规则 3 用 receipt `69bdf1cd155ea2d49abef76f` 执行一次 `a_short` 全量离线 lane：`discovered=2823`、`ran=2823`、`2823/2823 PASS`、129.2s、parallel；ledger fingerprint `5fa44c3860c3`，ledger/sidecar 指针见 `docs/system_risk_register.md` 本条。
+
+### 原始终态与角色边界
+
+原始终态为 **`repaired / OPEN-NOT_VERIFIED`**：离线 focused/full-lane 证据通过，但尚未有 Claude Code 独立审查、提交或用户授权的真实无缓存胶囊；没有 provider/live、真实 weekly、sub-agent、stage/commit/push/merge。P0-1 不因本轮离线全量通过而关闭；N-5、P1-4、P0-3、P3-10 未修改。
+
+后续如再修复，只能在本 handoff 继续追加问题、根因、最小改动、调用链/消费者/schema/source-binding/写盘边界、负向控制、自审、精确测试命令和原始终态，并同步 `docs/system_risk_register.md` 与 `docs/SESSION_LOG.md`；不得新建平行 handoff。
+
+## 2026-08-13 追加：N-3 / N-4 同刀的独立审查 = PASS（Claude Code；c405 已提交 `80e8506b`；合入 master 被并发窗口阻塞）
+
+**判定**：PASS，零 Required，N-3 与 N-4 均 resolved。正文只在 `docs/system_risk_register.md`。
+
+**我实际验了什么（区别于执行方转述）**：整读改动后的 `_fetch_l2_batch()` 全体（主源调用、五档分类、旧接口核验分支、计数与摘要拼装）、`get_sw_industry_map()` 里换 source 后的六处 `fallback_used` 判断、`validate_data_health_consistency` 的 `expected_flags`，以及 schema 的三处 source 枚举/条件。执行方自报计数未采信，自己重跑覆盖改动符号的 193 用例超集，并按 rule 6 补跑一次 a_short 全量。
+
+**八组探针**：① 慢路径实际调用参数为 `{'l2_code': ...}` + 五字段，**无 `is_new`**；② as-of 前已退出的成员被 PIT 滤掉，没退化成当前快照；③ 双空组 `confirmed_empty` 放行且旧接口只对该组调一次；④ 未确认空三格（legacy 有成员 / 抛异常 / 接口不存在）全部整批失败、不写缓存；⑤ 双空放行后目标主板零遗漏门仍能抓出缺股并中止；⑥ 主源缺 PIT 日期列 → bad_shape 整批失败；⑦ 主接口不可用 → 一次性失败且 member_all 零调用；⑧ 契约正反：新 source 放行、旧 source 与错 flags 组合均被拒。
+
+**与方案的逐条对齐**：改动文件与 §3.2.6 清单完全一致；§3.2.2 的三态表、不传 `is_new`、旧接口不得回填 mapping、双空只是组内放行条件、六道最终硬门——逐条核过成立。方案「明确不做」的四项（N-5 截断器、P1-4 条件、`safe_api`/client/重试、缓存代际）确实一处未动。
+
+**未覆盖维度与诚实边界**：全部结论建立在离线假 provider 上。方案 §2.1 的真实验收判据（修好后约 1000 只主板股重新进池、Tier1 名单应明显不同；若几乎一样反而说明没生效）我无法代劳，必须由获授权的真实无缓存胶囊跑出来；桌面里那些 134 组 / 25 只 / 残留 17 只的数字同样是你的实测而非我的运行。
+
+**下一步**：N-5、P1-4 各自另起；真实无缓存周跑仍是唯一能同时收口 P0-1、P1-4 和本刀验收判据的一件事。
+
+## 2026-08-13 追加：N-5 SW 失败诊断截断最小修复（Codex executor/fixer；c405；OPEN-NOT_VERIFIED）
+
+### 用途、问题与桌面方案
+
+本条继续追加到 A-short 主 handoff，不新建平行交接。唯一问题入口是桌面 `C:\Users\cnhea\Desktop\3a_testrun0813.md` `4/4.1`；本轮严格只执行 N-5。N-5 与 N-3/N-4 的 SW 成员获取修复独立；P2-7 主体已关闭，本轮只收口失败诊断 message 的显示截断。
+
+### 根因与最小改动
+
+- 原 `_bounded_sw_reason(reason, limit=256)` 在 whitespace normalization 后直接 `text[:limit]`，长的 N-3/N-4 批摘要会从 token、计数或 sample item 中间切断，且没有截断标记。
+- 只修改 `A-EGS/egs_main.py::_bounded_sw_reason()`：保留 whitespace normalization；短文本保持原有 normalized 文本且不加 marker；长文本预留固定 `...[truncated]`，优先落在空格/逗号/分号边界，找不到时才用冒号，无边界时只返回 marker，默认总长不超过 256。
+- 只修改现有 `tests/phase6/test_egs_sw_industry_and_watch_pool_health.py`，加入短文本、批摘要边界和 `_record_sw_failure` 消费一致性测试。未修改 `_record_sw_failure` 失败行为、source、flags、schema、cache、provider、runner 或 launcher。
+
+### 调用链、消费者、schema/source-binding 与写盘边界
+
+`weekly_screening.ps1 → A-EGS/egs_main.py → get_sw_industry_map 失败路径 → _record_sw_failure → _bounded_sw_reason → _current_sw_industry_source_observation()["message"] → data-health/RuntimeError/log 消费者。`
+
+message 仍为原有字符串字段；SW2021 source-binding、status、`fast_path`/`fallback_used` flags、schema 和 cache 写盘边界均不变。N-5 不会把显示截断误做成功、不会把失败改成放行，也没有新增写盘或迁移路径。
+
+### 负向控制、自审与精确测试
+
+- 旧代码先跑新增负向测试：现有 SW 模块 38 tests 中 2 项按预期因无 marker 失败；修复后该模块 `38/38 OK`。
+- 最终固定 Python `C:\Users\cnhea\AppData\Local\Programs\Python\Python313\python.exe`（3.13.8）运行：
+  `& '.tools\run_unittest_with_repo_pythonpath.cmd' tests.test_a_short_effect_contract tests.test_a_short_effect_consumer_probe tests.phase6.test_egs_sw_industry_and_watch_pool_health`，`115/115 OK`，receipt `receipt:0e5a3286f058d376cae0972f`。
+- `-m py_compile A-EGS/egs_main.py`、`git diff --check` 通过。因顶层生产入口变更，按方案以该 receipt 仅执行一次离线 `a_short` 全量 lane：`discovered=2823`、`ran=2823`、`2823/2823 PASS`、104.1s、parallel，fingerprint `34c2d59584fb`；ledger/sidecar 原始指针见 `docs/system_risk_register.md` 本条。
+- A-F 自审已核对：生产入口、完整调用链、全部 SW failure 消费、短文本和长摘要边界、固定 suffix、无半 token、消费者一致性、schema/source-binding/写盘边界、负向控制和 scope。未起 sub-agent，未启动 provider/live、真实 weekly 或真实 capsule。
+
+### 原始终态与角色边界
+
+原始终态为 **`repaired / OPEN-NOT_VERIFIED`**：代码与离线 focused/full-lane 证据已完成，但 Claude Code 独立审查、提交和用户授权的真实无缓存胶囊仍未完成。当前代码 diff 仅含 `A-EGS/egs_main.py` 与现有 SW 健康测试；N-3/N-4、P1-4、P0-3、P3-10 和其他桌面线索未修改。Codex executor/fixer 不 stage/commit/push/merge。
+
+后续如再修复，只能在本 handoff 继续追加问题、根因、最小改动、调用链/消费者/schema/source-binding/写盘边界、负向控制、自审、精确测试命令和原始终态，并同步 `docs/system_risk_register.md` 与 `docs/SESSION_LOG.md`；不得新建平行 handoff。
+
+## 2026-08-13 追加：N-5 诊断截断的独立审查 = PASS（Claude Code；c405，已合入 master）
+
+**判定**：PASS，零 Required，`R-ASHORT-N5-BOUNDED-SW-REASON-MID-TOKEN-TRUNCATION` 转 resolved。正文只在 `docs/system_risk_register.md`。
+
+**我实际验了什么**：整读改动后的 `_bounded_sw_reason()`（marker 预算、三级边界回退、尾部 `rstrip(" ,;")`、无边界兜底）与它唯一的调用点 `_record_sw_failure()`，并清点全仓只有这一处调用、没有第二条分叉。执行方自报的 `115 OK` 未采信，自己重跑了 175 用例焦点超集。
+
+**决定性对照**：直接对着 N-5 报的症状构造一条 415 字符的真实形态 batch summary——旧写法 `text[:256]` 末尾停在 `'801916.SI:unconfirmed_emp`（半个 token、没有收尾引号、没有任何提示），新实现末尾是 `'801907.SI:unconfirmed_empty'...[truncated]`，长度 242、最后一项完整、六个总量字段全部保留。向后兼容也验了：短文本逐字等于旧行为且不带 marker，长度边界 255/256/257 分别为 255/256（不加 marker）/255（加 marker）。兜底两格（全无分隔符、只有冒号）与方案 §4.1.2 第 5、7 条一致。
+
+**接线证明**（方案 §4.1.4 点名不能只单测字符串函数）：把长 reason 喂给 `_record_sw_failure()`，其返回值与 observation 的 `message` 完全相等、≤256、带 marker，而 `status=fail` / `source=index_member_all_l2_history` / flags / `classification_standard` 全部未变——显示修复没有碰到 fail-closed 语义。
+
+**full lane 的处理**：这次执行方真的跑了并记了账（`2823/2823 PASS`、fingerprint `34c2d59584fb`）。按 rule 4 与方案 §4.1.7 第 5 条我不重跑，改为独立重算当前代码态指纹（得同一值）并核对账本 `recorded_at` 晚于两个被审文件的 mtime——确认那次全量跑在最终代码上。
+
+**未覆盖 / 边界**：极小 `limit`（<14）返回的 marker 会超过该 limit，方案明确不为非生产参数组合防御，不判缺陷。本刀不依赖 provider/日期/行情，关闭不需要真实胶囊。P1-4 与 §6 文档收口不在本刀。
+
+**下一步**：P1-4 另起；真实无缓存周跑仍是 P0-1/P1-4 与 N-3 验收判据的唯一出口。
+
+## 2026-08-13 追加：P3-10 状态收口为 `resolved`（Claude Code 自修自审；c405）
+
+**判定**：`R-ASHORT-P3-10-RUNTEST-LAUNCHER-PSSCRIPTROOT-EMPTY-UNDER-FILE` 转 `resolved`。零代码改动。正文只在 `docs/system_risk_register.md`。
+
+**为什么这一轮才收口**：此前 P3-10 的证据链其实已经齐了，但 register 里始终只有「判据我认为已满足」这句**评估**，没有任何一条 `NOT_VERIFIED → resolved` 的状态行——而写下「仍 NOT_VERIFIED、须用当初失败的那条命令复跑」的人是我，所以这条状态行是我欠的。
+
+**我更正的两处误读**：① `f0a79061` 被称作「把状态改成 resolved 的 docs-only 提交」，实测它只改 `docs/SESSION_LOG.md` +7 行、是并发窗口那条状态核对日志本身，没翻任何状态；② 「它不在 HEAD `25f57959` 祖先链里」属实，但那只是 c405 作为单向被合并的 feature 线的正常拓扑——实测 `f0a79061` 与 `25f57959` **都是** master HEAD `d0b70a2c` 的祖先，没有东西掉队。
+
+**我自己的运行（不再转述）**：`cmd /c powershell.exe -NoProfile -ExecutionPolicy Bypass -File …a_short_runtest.ps1 -ConfirmRuntest -Commit HEAD -Account <不存在路径>` → 绑定与 `-ConfirmRuntest` 闸门均通过，进入脚本体后停在 `:43 char:17` 的 `Resolve-Path` 并抛 `PathNotFound`；原崩点 `:12 char:47` 的参数默认值不再发生。安全性：抛点早于 `:47` 胶囊创建，实测胶囊根跑前跑后均为 7 个条目。
+
+**保留的诚实边界**：我先后四种调用方式都没能复现**修复前**的症状，所以「本次改动正是那次崩溃的解」仍无我的独立证据。关闭依据是我自己当初写下的判据——「原命令形态现在能正常起来」——这是可验证事实，不是因果推断。同形态若再崩应重开新条目，不是翻本条。
+
+**下一步**：P1-4 与那次真实无缓存周跑仍未动。
+
+## 2026-08-13 追加：EOL-pin 旧失败描述的事实更正（文档②；Optional 经用户点名执行；状态位不变）
+
+本节只做一件事：更正本文件**上方历史条目**（`OPEN-NOT_VERIFIED` 那条）里一句已经过时的失败描述。按项目惯例与 `3a_testrun0813` §6.2 的约束，**不回写、不删除、不重排任何历史 entry**，只在此追加。
+
+**被更正的那句**：旧条目写「旧 A-short full lane 的 `test_a_short_published_bundle_eol_pin` 仍因保留的 20260810 pre-design dirty record/source SHA 而未闭」。
+
+**该句现已不成立（我自己跑的，不是转述）**：在当前 c405 代码态（HEAD `1154c5e3`，与 master `6c0b1d2e` 内容同源）上跑 `tests.test_a_short_published_bundle_eol_pin` ——
+
+```
+test_recorded_source_sha_still_matches_a_tracked_bundle ... skipped 'pre-freeze: recorded SHA membership is audit-only'
+Ran 4 tests in 0.141s
+OK (skipped=1)
+```
+
+即那条 source-binding 断言**不是失败，而是被 pre-freeze 分支显式 skip 接住**，与本文件顶部 O32/O33 记录的显式 `skipTest` 语义一致。
+
+**这条更正不代表什么（四条边界，逐条写死）**：
+
+1. 它只证明**旧句过时**；`OPEN-NOT_VERIFIED` 那条的**状态位继续保持 `OPEN-NOT_VERIFIED`**，本节不改它。
+2. 它是 **pre-freeze audit-only 分支正确生效**的证据，**不是** design completion、freeze-start 或 durable evidence 已获授权的证据。测试绿 ≠ 该线已关闭。
+3. **关闭条件不变**：仍须用户明确宣布 A-short 系统设计完成，并按既有授权 / 冻结流程建立新 epoch；在此之前 registry 保持 `not_authorized`、所有 track 保持 pre-freeze。
+4. **不删除、不重写、不补 SHA、不重新发布** `20260810` 及另外三周产物；四周仍是 `pre-design audit-only artifacts`。
+
+**为什么只改这一处**：`docs/system_risk_register.md` 的当前有效条目**不带**这句过时失败事实（我 grep 过，零命中），按 §6.2「当前有效 register 已有 `Ran 4 tests / OK` 时不重复造条目」，故本轮不动 register。同理按 §6.2「不得仅为该 Optional 单独新增 SESSION_LOG 周期」，本轮**不新增 SESSION_LOG 评审循环 entry**；留痕由本节与提交本身承担。

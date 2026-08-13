@@ -14,7 +14,7 @@ param(
     [switch]$Live,
     [int]$MomentumTopK = 0,
     [string[]]$ExtraArgs = @(),
-    [string]$SourceRoot = (Split-Path -Parent $PSScriptRoot),
+    [string]$SourceRoot = '',
     [string]$CapsuleRoot = 'D:\cnhea\Stock_runtest_private',
     [string]$Commit = 'HEAD',
     [string]$RunId = '',
@@ -35,6 +35,9 @@ if ($ExtraArgs.Count -gt 0) {
     throw 'Runtest does not forward -ExtraArgs; it rejects all raw runner flags so capsule paths and authorization gates cannot be overridden.'
 }
 $RuntimeRoot = Split-Path -Parent $PSScriptRoot
+if ([string]::IsNullOrWhiteSpace($SourceRoot)) {
+    $SourceRoot = $RuntimeRoot
+}
 $SourceRoot = (Resolve-Path -LiteralPath $SourceRoot).Path
 $Manager = Join-Path $SourceRoot 'runners\runtest_capsule.py'
 if (-not (Test-Path -LiteralPath $Manager -PathType Leaf)) {

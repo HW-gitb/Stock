@@ -24,7 +24,7 @@
       "const": "data_health"
     },
     "schema_version": {
-      "const": "1.11.0"
+      "const": "1.13.0"
     },
     "generated_at": {
       "type": "string"
@@ -210,14 +210,18 @@
           ],
           "properties": {
             "status": {"enum": ["pass", "fail", "not_observed"]},
-            "classification_standard": {"enum": [null, "SW2021"]},
+            "classification_standard": {
+              "type": ["string", "null"],
+              "minLength": 1,
+              "description": "Passing observations must be SW2021; failed observations report the observed standard when available and may be null when no source was returned."
+            },
             "observed_sources": {
               "type": ["array", "null"],
               "items": {"type": "string", "minLength": 1},
               "uniqueItems": true
             },
             "source": {
-              "enum": [null, "cache", "index_classify", "index_member_all_l1_current", "index_member_l2_history"]
+              "enum": [null, "cache", "index_classify", "index_member_all_l1_current", "index_member_all_l2_history"]
             },
             "as_of": {"type": ["string", "null"], "pattern": "^[0-9]{8}$"},
             "active_count": {"type": ["integer", "null"], "minimum": 0},
@@ -230,7 +234,7 @@
           },
           "allOf": [
             {
-              "if": {"properties": {"status": {"enum": ["pass", "fail"]}}},
+              "if": {"properties": {"status": {"const": "pass"}}},
               "then": {
                 "properties": {
                   "classification_standard": {"const": "SW2021"}
@@ -259,7 +263,7 @@
               "then": {
                 "properties": {
                   "source": {
-                    "enum": ["cache", "index_member_all_l1_current", "index_member_l2_history"]
+                    "enum": ["cache", "index_member_all_l1_current", "index_member_all_l2_history"]
                   },
                   "as_of": {"type": "string", "pattern": "^[0-9]{8}$"},
                   "active_count": {"type": "integer", "minimum": 0}
@@ -302,7 +306,7 @@
               }
             },
             {
-              "if": {"properties": {"source": {"const": "index_member_l2_history"}}},
+              "if": {"properties": {"source": {"const": "index_member_all_l2_history"}}},
               "then": {
                 "properties": {
                   "fast_path_used": {"const": false},

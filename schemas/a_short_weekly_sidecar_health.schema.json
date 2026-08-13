@@ -25,17 +25,21 @@
   ],
   "properties": {
     "schema_name": {"const": "a_short_weekly_sidecar_health"},
-    "schema_version": {"const": "1.0.0"},
+    "schema_version": {"const": "1.1.0"},
     "as_of": {"type": "string", "pattern": "^[0-9]{8}$"},
     "run_revision_id": {"type": ["string", "null"], "pattern": "^([0-9a-f]{32})?$"},
     "generated_at": {"type": "string"},
     "run_id": {"type": ["string", "null"], "pattern": "^(a-short-[0-9]{8}-[0-9a-f]{16})?$"},
     "candidate_digest": {"type": ["string", "null"], "pattern": "^([0-9a-f]{64})?$"},
     "m67_status": {"enum": ["complete", "degraded_no_new_entries", "partial_holdings_only", "failed", "skipped", "not_run", "unavailable"]},
-    "overall": {"enum": ["healthy", "degraded", "partial"]},
+    "overall": {"enum": ["healthy", "degraded", "partial", "failed"]},
     "advanced_count": {"type": "integer", "minimum": 0},
     "stalled_count": {"type": "integer", "minimum": 0},
-    "failed_count": {"type": "integer", "minimum": 0},
+    "failed_count": {
+      "type": "integer",
+      "minimum": 0,
+      "description": "Number of failed or missing sidecar outcomes; does not count a failed M6.7 main run."
+    },
     "partial_count": {"type": "integer", "minimum": 0},
     "source_receipt_sha256": {"type": ["string", "null"], "pattern": "^([0-9a-f]{64})?$"},
     "sidecars": {

@@ -1727,7 +1727,7 @@ def export_stage3_selection_snapshot(top50, tier1_final, latest_td, run_identity
     return out_path
 
 
-DATA_HEALTH_SCHEMA_VERSION = "1.11.0"
+DATA_HEALTH_SCHEMA_VERSION = "1.13.0"
 DATA_HEALTH_SCHEMA_PATH = os.path.join(PROJECT_ROOT, "schemas", "data_health.schema.json")
 LAST_SELECTION_SCHEMA_PATH = os.path.join(PROJECT_ROOT, "schemas", "a_short_last_selection.schema.json")
 
@@ -2353,15 +2353,21 @@ def validate_data_health_consistency(health):
         ):
             raise ValueError("data_health unobserved SW source carries observed values")
     elif status in {"pass", "fail"}:
-        if classification_standard != SW_INDUSTRY_CLASSIFICATION_STANDARD:
-            raise ValueError("data_health SW classification standard is not SW2021")
         if not isinstance(observed_sources, list) or any(
             not isinstance(value, str) or not value.strip() for value in observed_sources
         ) or observed_sources != sorted(set(observed_sources)):
             raise ValueError("data_health SW observed sources must be a sorted unique string list")
         normalized_sources = {value.strip().upper() for value in observed_sources}
-        if normalized_sources and normalized_sources != {SW_INDUSTRY_CLASSIFICATION_STANDARD}:
-            raise ValueError("data_health SW observed source binding is not SW2021")
+        if status == "pass":
+            if classification_standard != SW_INDUSTRY_CLASSIFICATION_STANDARD:
+                raise ValueError("data_health SW classification standard is not SW2021")
+            if normalized_sources != {SW_INDUSTRY_CLASSIFICATION_STANDARD}:
+                raise ValueError("data_health passing SW observed source binding is not SW2021")
+        elif classification_standard is not None:
+            if not isinstance(classification_standard, str) or not classification_standard.strip():
+                raise ValueError("data_health failed SW classification standard is invalid")
+            if not normalized_sources or classification_standard.strip().upper() not in normalized_sources:
+                raise ValueError("data_health failed SW classification standard is not observed")
         if status == "pass":
             active_count = int(sw.get("active_count"))
             min_active = int(sw.get("min_active"))
@@ -2370,7 +2376,7 @@ def validate_data_health_consistency(health):
             expected_flags = {
                 "cache": (False, False, True),
                 "index_member_all_l1_current": (True, False, False),
-                "index_member_l2_history": (False, True, False),
+                "index_member_all_l2_history": (False, True, False),
             }
             if source not in expected_flags or (
                 fast_path_used,
@@ -2971,7 +2977,14 @@ def get_stock_list():
     key = f"stock_list_{TODAY}_v4_{mode}"
     cached = load_cache(key)
     if cached is not None:
-        return cached
+        # An empty entry can only be a poisoned legacy artifact: this function no
+        # longer stores one.  Refetch like the SW industry map does instead of
+        # aborting on it -- a refetch either self-heals or fails loudly below,
+        # and the empty-universe gates downstream are unchanged either way.
+        if isinstance(cached, pd.DataFrame) and cached.empty:
+            log.warning(f"stock list cache {key} is empty; refetching")
+        else:
+            return cached
     log.info("拉取股票基础信息(L+D+P,按as_of过滤)...")
     fields = "ts_code,symbol,name,list_date,delist_date,market,list_status"
     frames = []
@@ -2996,7 +3009,12 @@ def get_stock_list():
         )
     if len(successful_statuses) != 3:
         raise RuntimeError("stock_basic coverage incomplete")
-    df = pd.concat(frames, ignore_index=True) if frames else pd.DataFrame(columns=fields.split(","))
+    if not frames:
+        raise RuntimeError(
+            "stock_basic returned no rows across list_status=L,D,P; "
+            "refusing empty stock universe"
+        )
+    df = pd.concat(frames, ignore_index=True)
     required_columns = {"ts_code", "name", "list_date", "delist_date", "list_status"}
     missing_columns = sorted(required_columns - set(df.columns))
     if missing_columns:
@@ -3024,8 +3042,18 @@ def get_stock_list():
     if mode == "hist":
         historical_names = _historical_name_map(df)
         df["name"] = df["ts_code"].map(historical_names)
+    if df.empty:
+        return df
     save_cache(key, df)
     return df
+
+
+def _require_nonempty_stock_universe(consumer):
+    frame = get_stock_list()
+    if not isinstance(frame, pd.DataFrame) or "ts_code" not in frame.columns or frame.empty:
+        raise RuntimeError(f"{consumer} requires a non-empty stock universe")
+    return frame
+
 
 SW_INDUSTRY_CLASSIFICATION_STANDARD = "SW2021"
 SW_INDUSTRY_CLASSIFICATION_FIELDS = (
@@ -3057,8 +3085,8 @@ def _record_sw_industry_source_observation(**details):
     global _LAST_SW_INDUSTRY_SOURCE_OBSERVATION
     payload = _sw_industry_source_not_observed()
     payload.update(details)
-    if payload["status"] in {"pass", "fail"} and payload["classification_standard"] is None:
-        raise ValueError("observed SW source requires an explicit classification standard")
+    if payload["status"] == "pass" and payload["classification_standard"] is None:
+        raise ValueError("passing SW source requires an explicit classification standard")
     _LAST_SW_INDUSTRY_SOURCE_OBSERVATION = payload
     return dict(payload)
 
@@ -3102,7 +3130,23 @@ def _normalize_sw_code(value):
 
 def _bounded_sw_reason(reason, limit=256):
     text = " ".join(str(reason).split())
-    return text[:limit]
+    if len(text) <= limit:
+        return text
+
+    marker = "...[truncated]"
+    prefix_limit = limit - len(marker)
+    if prefix_limit <= 0:
+        return marker
+
+    prefix = text[:prefix_limit]
+    boundary = max(prefix.rfind(" "), prefix.rfind(","), prefix.rfind(";"))
+    if boundary < 0:
+        boundary = prefix.rfind(":")
+    if boundary < 0:
+        return marker
+
+    bounded = prefix[:boundary].rstrip(" ,;")
+    return f"{bounded}{marker}" if bounded else marker
 
 
 def _record_sw_failure(
@@ -3117,6 +3161,13 @@ def _record_sw_failure(
     cache_hit=False,
 ):
     reason = _bounded_sw_reason(reason)
+    observed_sources = sorted({
+        str(value).strip()
+        for value in (observed_sources or [])
+        if str(value).strip()
+    })
+    normalized_sources = {value.upper() for value in observed_sources}
+    failure_standard = next(iter(normalized_sources)) if len(normalized_sources) == 1 else None
     _record_sw_industry_source_observation(
         status="fail",
         source=source,
@@ -3126,8 +3177,8 @@ def _record_sw_failure(
         fast_path_used=bool(fast_path_used),
         fallback_used=bool(fallback_used),
         cache_hit=bool(cache_hit),
-        classification_standard=SW_INDUSTRY_CLASSIFICATION_STANDARD,
-        observed_sources=sorted(set(observed_sources or [])),
+        classification_standard=failure_standard,
+        observed_sources=observed_sources,
         message=reason,
     )
     return reason
@@ -3200,11 +3251,21 @@ def _validate_sw_classification_frame(df, level):
         raise RuntimeError(
             f"SW {level} industry classification missing required columns: {missing}"
         )
-    sources = {
-        str(value).strip()
-        for value in df["src"].dropna().tolist()
-        if str(value).strip()
-    }
+    source_values = df["src"].tolist()
+    missing_source_count = 0
+    for value in source_values:
+        try:
+            missing = bool(pd.isna(value))
+        except (TypeError, ValueError):
+            missing = False
+        if missing or not str(value).strip():
+            missing_source_count += 1
+    if missing_source_count:
+        raise RuntimeError(
+            f"SW {level} industry classification source binding invalid: "
+            f"missing_source_count={missing_source_count}"
+        )
+    sources = {str(value).strip() for value in source_values}
     normalized_sources = {value.upper() for value in sources}
     if normalized_sources != {SW_INDUSTRY_CLASSIFICATION_STANDARD}:
         raise RuntimeError(
@@ -3227,6 +3288,25 @@ def _observed_sw_classification_sources(*frames):
     return sorted(observed)
 
 
+def _resolve_sw_l1_name(l1_map, parent_code):
+    normalized_parent = _normalize_sw_code(parent_code)
+    if normalized_parent is None:
+        return None
+    base = normalized_parent.split(".", 1)[0]
+    candidates = [normalized_parent]
+    if base not in candidates:
+        candidates.append(base)
+    for suffix in (".SI", ".SZ", ".SH"):
+        candidate = base + suffix
+        if candidate not in candidates:
+            candidates.append(candidate)
+    for candidate in candidates:
+        name = l1_map.get(candidate)
+        if name is not None:
+            return name
+    return None
+
+
 def _classification_standard_from_observed_sources(observed_sources):
     """Derive the standard at this helper boundary, fail-closed on misuse."""
     normalized_sources = {
@@ -3245,10 +3325,10 @@ def _classification_standard_from_observed_sources(observed_sources):
 def get_sw_industry_map():
     """As-of-aware SW industry membership.
 
-    Tushare's pro.index_member exposes in_date / out_date per (con_code, index_code).
-    We fetch the full membership history and pick the row whose interval contains
-    TODAY, so each as_of date sees the industry assignment that was active at the
-    time (instead of today's snapshot with is_new=1).
+    The current-members endpoint exposes in_date / out_date per
+    (ts_code, l2_code).  The slow path fetches those history rows one L2 at a
+    time and picks the interval containing TODAY, so historical runs do not use
+    today's current-only snapshot.
     """
     # v4 caches written before SW_INDUSTRY_MIN_ACTIVE safeguard had ~75-stock
     # coverage (mostly l2_name="未知"). v5 fixed L2 coverage but missed L1
@@ -3265,6 +3345,10 @@ def get_sw_industry_map():
             str(code) for code in target_frame["ts_code"].dropna().astype(str)
             if is_a_share_main_board(code)
         }
+        if not target_codes:
+            raise RuntimeError(
+                "SW industry target-board universe is empty; refusing zero-missing coverage gate"
+            )
     cached = load_cache(key)
     if cached is not None:
         cached_codes = set(cached) if isinstance(cached, dict) else set()
@@ -3281,8 +3365,8 @@ def get_sw_industry_map():
                 fallback_used=False,
                 cache_hit=True,
                 classification_standard=SW_INDUSTRY_CLASSIFICATION_STANDARD,
-                observed_sources=[],
-                message=None,
+                observed_sources=[SW_INDUSTRY_CLASSIFICATION_STANDARD],
+                message="cache_key_source_binding",
             )
             return cached
         cached_size = len(cached) if isinstance(cached, dict) else "invalid"
@@ -3312,6 +3396,7 @@ def get_sw_industry_map():
             reason = _record_sw_failure(
                 source="index_classify",
                 reason=f"index_classify:{level}:invalid={exc}",
+                observed_sources=_observed_sw_classification_sources(frame),
             )
             raise RuntimeError(reason) from exc
 
@@ -3344,17 +3429,10 @@ def get_sw_industry_map():
         if normalized_code is not None:
             l2_info[normalized_code] = row
 
-    l1_parent_keys = set()
-    for value in l1_map:
-        normalized_code = _normalize_sw_code(str(value).split(".", 1)[0])
-        if normalized_code is not None:
-            l1_parent_keys.add(normalized_code)
     unresolved_parents = []
     for l2_code, row in l2_info.items():
         raw_parent = row.get("parent_code")
-        parent_code = _normalize_sw_code(raw_parent)
-        parent_key = parent_code.split(".", 1)[0] if parent_code else None
-        if not parent_key or parent_key not in l1_parent_keys:
+        if _resolve_sw_l1_name(l1_map, raw_parent) is None:
             unresolved_parents.append((l2_code, raw_parent))
     if unresolved_parents:
         reason = _record_sw_failure(
@@ -3370,31 +3448,85 @@ def get_sw_industry_map():
         raise RuntimeError(reason)
 
     member_fields = "con_code,index_code,in_date,out_date"
+    member_all_fields = "ts_code,l2_code,in_date,out_date,is_new"
     l2_codes = set(l2_info.keys())
+    index_member_all = getattr(pro, "index_member_all", None)
 
     def _fetch_l2_batch():
-        """L2-by-L2 batching fallback. Slow but covers when full-market endpoints
-        return incomplete data. Returns a concat'd raw DataFrame (unfiltered)."""
+        """Fetch SW2021 member history one L2 at a time.
+
+        The current-members endpoint is the formal source.  The legacy member
+        endpoint is used only to confirm an empty current response, never to
+        populate the returned mapping.
+        """
         frames = []
         l2_code_list = list(l2_info)
-        counts = {"ok": 0, "exception": 0, "empty": 0, "bad_shape": 0}
+        counts = {
+            "ok": 0,
+            "confirmed_empty": 0,
+            "unconfirmed_empty": 0,
+            "exception": 0,
+            "bad_shape": 0,
+        }
         failures = []
+        if not l2_code_list:
+            return pd.DataFrame(), 0, "l2_batch:no_l2_groups", True
+        if not callable(index_member_all):
+            return pd.DataFrame(), 0, "l2_batch:index_member_all_unavailable", True
         for l2_code in tqdm(l2_code_list, desc="SW industry L2 batching"):
             errors = []
+            failure_detail = None
             t = safe_api(
-                pro.index_member,
-                index_code=l2_code,
-                fields=member_fields,
+                index_member_all,
+                l2_code=l2_code,
+                fields=member_all_fields,
                 errors=errors,
             )
             if errors:
                 category = "exception"
             elif t is None or (isinstance(t, pd.DataFrame) and t.empty):
-                category = "empty"
+                legacy_errors = []
+                legacy_api = getattr(pro, "index_member", None)
+                legacy = (
+                    safe_api(
+                        legacy_api,
+                        index_code=l2_code,
+                        fields=member_fields,
+                        errors=legacy_errors,
+                    )
+                    if callable(legacy_api)
+                    else None
+                )
+                if not callable(legacy_api):
+                    category = "unconfirmed_empty"
+                    failure_detail = f"{l2_code}:unconfirmed_empty:legacy_unavailable"
+                elif legacy_errors:
+                    category = "unconfirmed_empty"
+                    failure_detail = (
+                        f"{l2_code}:unconfirmed_empty:legacy_exception="
+                        f"{type(legacy_errors[-1]).__name__}"
+                    )
+                elif legacy is None or (isinstance(legacy, pd.DataFrame) and legacy.empty):
+                    counts["confirmed_empty"] += 1
+                    continue
+                else:
+                    category = "unconfirmed_empty"
+                    failure_detail = f"{l2_code}:unconfirmed_empty:legacy_nonempty"
             elif not isinstance(t, pd.DataFrame):
                 category = "bad_shape"
+                failure_detail = f"{l2_code}:bad_shape:not_dataframe"
+            elif len(t) >= SW_INDEX_MEMBER_ALL_ROW_LIMIT:
+                category = "bad_shape"
+                failure_detail = f"{l2_code}:row_limit_hit:{len(t)}"
             else:
-                normalized = _normalize_sw_member_columns(t, "index_member")
+                missing = sorted({"ts_code", "l2_code", "in_date", "out_date"} - set(t.columns))
+                if missing:
+                    category = "bad_shape"
+                    failure_detail = f"{l2_code}:bad_shape:missing_columns={missing}"
+                    counts[category] += 1
+                    failures.append(failure_detail)
+                    continue
+                normalized = _normalize_sw_member_columns(t, "index_member_all")
                 if normalized.empty:
                     category = "bad_shape"
                 else:
@@ -3402,12 +3534,18 @@ def get_sw_industry_map():
                     frames.append(normalized)
                     continue
             counts[category] += 1
-            failures.append(f"{l2_code}:{category}")
+            failures.append(failure_detail or f"{l2_code}:{category}")
         summary = (
             "l2_batch:"
             + ",".join(
                 f"{name}={counts[name]}"
-                for name in ("ok", "exception", "empty", "bad_shape")
+                for name in (
+                    "ok",
+                    "confirmed_empty",
+                    "unconfirmed_empty",
+                    "exception",
+                    "bad_shape",
+                )
             )
             + f",failed_count={len(failures)},sample={failures[:10]}"
         )
@@ -3466,7 +3604,6 @@ def get_sw_industry_map():
     # Current production run: query the official endpoint by L1 group.  Never
     # trust the capped unfiltered response, and never use current-only rows for
     # a historical PIT replay.
-    index_member_all = getattr(pro, "index_member_all", None)
     wall_date = a_share_market_date()
     if TODAY == wall_date and callable(index_member_all):
         candidate, request_group_count, fallback_reason = _fetch_current_by_l1(index_member_all)
@@ -3491,21 +3628,21 @@ def get_sw_industry_map():
     if df_mem.empty:
         log.warning(
             "SW industry L1 current fast path unavailable or incomplete "
-            f"({fallback_reason}); fetching PIT history by L2 index_code"
+            f"({fallback_reason}); fetching PIT history by L2 index_member_all"
         )
         batched, l2_group_count, batch_summary, batch_failed = _fetch_l2_batch()
         request_group_count += l2_group_count
         if batch_failed:
             reason = _record_sw_failure(
-                source="index_member_l2_history",
+                source="index_member_all_l2_history",
                 reason=f"{fallback_reason or 'l2_fallback'};{batch_summary}",
                 observed_sources=observed_sources,
                 request_group_count=request_group_count,
                 fallback_used=True,
             )
             raise RuntimeError(reason)
-        df_mem = _apply_pit_window(batched, l2_codes, TODAY, source="index_member")
-        member_source = "index_member_l2_history"
+        df_mem = _apply_pit_window(batched, l2_codes, TODAY, source="index_member_all")
+        member_source = "index_member_all_l2_history"
 
     active_count = df_mem["con_code"].nunique()
     if active_count < SW_INDUSTRY_MIN_ACTIVE:
@@ -3516,7 +3653,7 @@ def get_sw_industry_map():
             active_count=int(active_count),
             request_group_count=request_group_count,
             fast_path_used=member_source == "index_member_all_l1_current",
-            fallback_used=member_source == "index_member_l2_history",
+            fallback_used=member_source == "index_member_all_l2_history",
             classification_standard=classification_standard,
             observed_sources=observed_sources,
             message=fallback_reason,
@@ -3538,15 +3675,7 @@ def get_sw_industry_map():
         raw_parent = l2_row.get("parent_code")
         parent_code = _normalize_sw_code(raw_parent)
 
-        # parent_code 与 l1_map key 格式可能不一致，尝试多种匹配
-        l1_name = l1_map.get(parent_code)
-        if l1_name is None:
-            stripped = parent_code.split(".")[0] if parent_code else ""
-            l1_name = l1_map.get(stripped)
-        if l1_name is None:
-            for suffix in [".SI", ".SZ", ".SH"]:
-                l1_name = l1_map.get((parent_code or "") + suffix)
-                if l1_name: break
+        l1_name = _resolve_sw_l1_name(l1_map, raw_parent)
         if l1_name is None:
             reason = _record_sw_failure(
                 source=member_source,
@@ -3558,7 +3687,7 @@ def get_sw_industry_map():
                 active_count=int(len(mapping)),
                 request_group_count=request_group_count,
                 fast_path_used=member_source == "index_member_all_l1_current",
-                fallback_used=member_source == "index_member_l2_history",
+                fallback_used=member_source == "index_member_all_l2_history",
             )
             raise RuntimeError(reason)
 
@@ -3584,7 +3713,7 @@ def get_sw_industry_map():
             active_count=int(len(mapping)),
             request_group_count=request_group_count,
             fast_path_used=member_source == "index_member_all_l1_current",
-            fallback_used=member_source == "index_member_l2_history",
+            fallback_used=member_source == "index_member_all_l2_history",
         )
         raise RuntimeError(f"SW industry map target-board coverage incomplete: {reason}")
     if not _sw_mapping_is_usable(mapping):
@@ -3598,7 +3727,7 @@ def get_sw_industry_map():
             active_count=int(len(mapping)),
             request_group_count=request_group_count,
             fast_path_used=member_source == "index_member_all_l1_current",
-            fallback_used=member_source == "index_member_l2_history",
+            fallback_used=member_source == "index_member_all_l2_history",
         )
         raise RuntimeError(reason)
     _record_sw_industry_source_observation(
@@ -3609,7 +3738,7 @@ def get_sw_industry_map():
         min_active=int(SW_INDUSTRY_MIN_ACTIVE),
         request_group_count=int(request_group_count),
         fast_path_used=member_source == "index_member_all_l1_current",
-        fallback_used=member_source == "index_member_l2_history",
+        fallback_used=member_source == "index_member_all_l2_history",
         classification_standard=classification_standard,
         observed_sources=observed_sources,
         cache_hit=False,
@@ -3908,9 +4037,8 @@ def get_daily_basic(trade_date, fallback_dates=None):
     key = f"daily_basic_{trade_date}_source_v2"
     target_codes = None
     if callable(getattr(pro, "stock_basic", None)):
-        target_frame = get_stock_list()
-        if isinstance(target_frame, pd.DataFrame) and "ts_code" in target_frame.columns:
-            target_codes = set(target_frame["ts_code"].dropna().astype(str))
+        target_frame = _require_nonempty_stock_universe("daily_basic")
+        target_codes = set(target_frame["ts_code"].dropna().astype(str))
     if (cached := load_cache(key)) is not None:
         if "source_trade_date" not in cached.columns:
             raise RuntimeError("daily_basic cache lacks source_trade_date provenance")
@@ -4013,7 +4141,9 @@ def get_suspend_info(trade_dates):
         observed_at = str(cached.get("observed_at") or "")
         target_date = str(trade_dates[0])
         if observed_at != target_date:
-            all_codes = set(get_stock_list()["ts_code"].dropna().astype(str))
+            all_codes = set(
+                _require_nonempty_stock_universe("suspend")["ts_code"].dropna().astype(str)
+            )
             target_daily = safe_api(pro.daily, trade_date=target_date, fields="ts_code")
             try:
                 target_traded = _validated_suspend_traded_codes(
@@ -4043,7 +4173,9 @@ def get_suspend_info(trade_dates):
             message="suspend set loaded from cache; no fresh daily coverage measurement in this run",
         )
         return members
-    all_codes = set(get_stock_list()["ts_code"].dropna().astype(str))
+    all_codes = set(
+        _require_nonempty_stock_universe("suspend")["ts_code"].dropna().astype(str)
+    )
 
     for td in trade_dates[:3]:
         daily_td = safe_api(pro.daily, trade_date=td, fields="ts_code")
@@ -7109,7 +7241,7 @@ def run_egs(backtest_mode=False, output_root=None, price_as_of=None, iv_feed_pat
     run_date = a_share_market_date()
     trade_calendar_context = get_trade_calendar_context(decision_as_of)
 
-    df_stocks  = get_stock_list()
+    df_stocks  = _require_nonempty_stock_universe("EGS")
     sw_map     = get_sw_industry_map()
     csi300_ret = get_csi300_return(trade_dates)
     all_daily  = get_daily_all(trade_dates, price_as_of=price_data_through)

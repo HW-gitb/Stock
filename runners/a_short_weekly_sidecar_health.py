@@ -34,6 +34,7 @@ REQUIRED_ARTIFACT_SCHEMAS = {
     "candidate_effect": ROOT / "schemas" / "a_short_regime_candidate_effect_summary.schema.json",
     "iv_feed": ROOT / "schemas" / "a_short_iv_feed.schema.json",
 }
+HEALTH_SCHEMA_VERSION = "1.1.0"
 
 # Deliberately small and explicit.  A new sidecar must be registered here and
 # must also be named in the launcher/pipeline expected-outcome manifest.  The
@@ -190,7 +191,7 @@ def _authoritative_artifact_path(project_root: Path, name: str, as_of: str,
 
 
 def _failed_m67_receipt_evidence(receipt_path: Path, as_of: str) -> dict[str, Any] | None:
-    """Validate a failure-only receipt without claiming any output binding."""
+    """Validate a failure-only receipt while preserving only paired identities."""
     try:
         receipt_bytes = receipt_path.read_bytes()
         receipt = json.loads(receipt_bytes.decode("utf-8"))
@@ -198,11 +199,16 @@ def _failed_m67_receipt_evidence(receipt_path: Path, as_of: str) -> dict[str, An
         jsonschema.validate(receipt, schema)
         if str(receipt.get("as_of")) != str(as_of) or receipt.get("stage_status") != "failed":
             return None
+        receipt_run_id = str(receipt.get("run_id") or "") or None
+        receipt_candidate_digest = str(receipt.get("candidate_digest") or "") or None
+        if not (receipt_run_id and receipt_candidate_digest):
+            receipt_run_id = None
+            receipt_candidate_digest = None
         return {
             "status": "failed",
-            "run_id": None,
-            "candidate_digest": None,
-            "run_revision_id": receipt.get("run_revision_id"),
+            "run_id": receipt_run_id,
+            "candidate_digest": receipt_candidate_digest,
+            "run_revision_id": str(receipt.get("run_revision_id") or "") or None,
             "source_receipt_sha256": hashlib.sha256(receipt_bytes).hexdigest(),
         }
     except (
@@ -689,9 +695,11 @@ def build_health(
     )
     m67_status = str(evidence.get("status") or "unavailable")
     overall = (
-        "degraded"
+        "failed"
+        if m67_status == "failed"
+        else "degraded"
         if failed or sidecar_degraded or m67_status in {
-            "failed", "unavailable", "degraded_no_new_entries",
+            "unavailable", "degraded_no_new_entries",
         }
         else (
             "partial"
@@ -701,7 +709,7 @@ def build_health(
     )
     payload = {
         "schema_name": "a_short_weekly_sidecar_health",
-        "schema_version": "1.0.0",
+        "schema_version": HEALTH_SCHEMA_VERSION,
         "as_of": as_of,
         "generated_at": datetime.now(timezone.utc).isoformat(timespec="seconds"),
         "run_revision_id": resolved_revision,
@@ -738,7 +746,7 @@ def write_health_bundle(payload: dict[str, Any], out_dir: Path) -> tuple[Path, P
     md_path = out_dir / "sidecar_health.md"
     receipt = {
         "schema_name": "a_short_weekly_sidecar_health_receipt",
-        "schema_version": "1.0.0",
+        "schema_version": HEALTH_SCHEMA_VERSION,
         "as_of": payload["as_of"],
         "run_revision_id": payload.get("run_revision_id"),
         "run_id": payload.get("run_id"),
@@ -753,9 +761,9 @@ def write_health_bundle(payload: dict[str, Any], out_dir: Path) -> tuple[Path, P
     md = [
         f"# A-short sidecar health · {payload['as_of']}", "",
         # `m67_status` is half of the `overall` formula, so it is printed next to
-        # the verdict: an all-zero sidecar tally beside `degraded` reads as a
+        # the verdict: an all-zero sidecar tally beside a non-failed main state reads as a
         # contradiction until the M6.7 leg that actually caused it is visible.
-        f"overall={payload['overall']} · m67={payload['m67_status']} · advanced={payload['advanced_count']} · stalled={payload['stalled_count']} · failed={payload['failed_count']} · partial={payload['partial_count']}", "",
+        f"overall={payload['overall']} · m67={payload['m67_status']} · advanced={payload['advanced_count']} · stalled={payload['stalled_count']} · sidecar_failed={payload['failed_count']} · partial={payload['partial_count']}", "",
         "| sidecar | execution | progress | expected decision | observed decision | expected data through | observed data through | error |",
         "|---|---|---|---|---|---|---|---|",
     ]
@@ -803,7 +811,7 @@ def main(argv: list[str] | None = None) -> int:
         run_revision_id=args.run_revision_id,
     )
     paths = write_health_bundle(payload, out_dir)
-    print(f"[sidecar-health] overall={payload['overall']} m67={payload['m67_status']} failed={payload['failed_count']} stalled={payload['stalled_count']} partial={payload['partial_count']} -> {paths[1].name}")
+    print(f"[sidecar-health] overall={payload['overall']} m67={payload['m67_status']} sidecar_failed={payload['failed_count']} stalled={payload['stalled_count']} partial={payload['partial_count']} -> {paths[1].name}")
     return 0
 
 

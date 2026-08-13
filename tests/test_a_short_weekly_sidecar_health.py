@@ -281,6 +281,68 @@ class AShortSidecarHealthTests(unittest.TestCase):
             receipt.write_text("{", encoding="utf-8")
             self.assertEqual(_m67_evidence(out_dir, "20260727")["status"], "unavailable")
 
+    def test_failed_receipt_preserves_paired_identity_and_revision_fail_closed(self):
+        revision = "c" * 32
+        run_id = "a-short-20260727-0123456789abcdef"
+        candidate_digest = "a" * 64
+        with tempfile.TemporaryDirectory() as tmp:
+            out_dir = Path(tmp) / "20260727"
+            out_dir.mkdir()
+            receipt = out_dir / "weekly_m67.receipt.json"
+            receipt.write_text(json.dumps({
+                "schema_name": "a_short_weekly_publish_receipt",
+                "schema_version": "1.1.0",
+                "as_of": "20260727",
+                "iv_feed_status": "build_failed",
+                "stage_status": "failed",
+                "failure_reason": "weekly_failed",
+                "exit_code": 22,
+                "run_revision_id": revision,
+                "run_id": run_id,
+                "candidate_digest": candidate_digest,
+            }), encoding="utf-8")
+            evidence = _m67_evidence(out_dir, "20260727")
+            self.assertEqual(evidence["run_revision_id"], revision)
+            self.assertEqual(evidence["run_id"], run_id)
+            self.assertEqual(evidence["candidate_digest"], candidate_digest)
+            result = build_health(
+                as_of="20260727",
+                project_root=Path(tmp),
+                m67_out_dir=out_dir,
+                m67_invocation="requested",
+                run_revision_id=revision,
+            )
+            self.assertEqual(result["overall"], "failed")
+            self.assertEqual(result["run_revision_id"], revision)
+            self.assertEqual(result["run_id"], run_id)
+            self.assertEqual(result["candidate_digest"], candidate_digest)
+            write_health_bundle(result, out_dir)
+            health_receipt = json.loads(
+                (out_dir / "sidecar_health.receipt.json").read_text(encoding="utf-8")
+            )
+            self.assertEqual(health_receipt["run_revision_id"], revision)
+            self.assertEqual(health_receipt["run_id"], run_id)
+            self.assertEqual(health_receipt["candidate_digest"], candidate_digest)
+            with self.assertRaisesRegex(ValueError, "requested run revision"):
+                build_health(
+                    as_of="20260727",
+                    project_root=Path(tmp),
+                    m67_out_dir=out_dir,
+                    m67_invocation="requested",
+                    run_revision_id="d" * 32,
+                )
+            manifest = _manifest([])
+            manifest["run_revision_id"] = "d" * 32
+            with self.assertRaisesRegex(ValueError, "manifest run_revision_id"):
+                build_health(
+                    as_of="20260727",
+                    launcher_manifest=manifest,
+                    project_root=Path(tmp),
+                    m67_out_dir=out_dir,
+                    m67_invocation="requested",
+                    run_revision_id=revision,
+                )
+
     def test_failed_receipt_remains_failed_when_old_complete_outputs_survive(self):
         with tempfile.TemporaryDirectory() as tmp:
             out_dir = _write_valid_weekly_bundle(Path(tmp))
@@ -340,7 +402,7 @@ class AShortSidecarHealthTests(unittest.TestCase):
                 (out_dir / "sidecar_health.json").read_text(encoding="utf-8")
             )
         self.assertEqual(persisted["m67_status"], "failed")
-        self.assertEqual(persisted["overall"], "degraded")
+        self.assertEqual(persisted["overall"], "failed")
         self.assertIsNone(persisted["run_id"])
         self.assertIsNone(persisted["candidate_digest"])
         self.assertEqual(len(persisted["source_receipt_sha256"]), 64)
@@ -382,7 +444,7 @@ class AShortSidecarHealthTests(unittest.TestCase):
                 m67_invocation="requested",
             )
         self.assertEqual(result["m67_status"], "failed")
-        self.assertEqual(result["overall"], "degraded")
+        self.assertEqual(result["overall"], "failed")
         self.assertEqual(result["failed_count"], len(pipeline_names))
         self.assertEqual(len(result["sidecars"]), 1 + len(pipeline_names))
         by_name = {row["name"]: row for row in result["sidecars"]}
@@ -947,11 +1009,13 @@ class AShortSidecarOutcomeSchemaTests(unittest.TestCase):
                     "$AsOf = '20260727'",
                     f"$ProjectRoot = '{quote(root)}'",
                     f"$PythonExe = '{quote(sys.executable)}'",
+                    "$RunRevisionId = 'bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb'",
                     failure_writer,
                     (
                         "Write-M67FailureReceipt "
                         f"-Directory '{quote(out_dir)}' "
-                        "-Reason 'weekly_pipeline_failed' -ExitCode 22"
+                        "-Reason 'weekly_pipeline_failed' -ExitCode 22 "
+                        "-RunRevisionId $RunRevisionId"
                     ),
                 )
             )
@@ -977,17 +1041,108 @@ class AShortSidecarOutcomeSchemaTests(unittest.TestCase):
                 (out_dir / "sidecar_health.json").read_text(encoding="utf-8")
             )
             self.assertEqual(payload["m67_status"], "failed")
-            self.assertEqual(payload["overall"], "degraded")
+            self.assertEqual(payload["overall"], "failed")
             self.assertEqual(payload["sidecars"], [])
             self.assertIsNone(payload["run_id"])
             self.assertIsNone(payload["candidate_digest"])
+            self.assertEqual(payload["run_revision_id"], "b" * 32)
             self.assertEqual(len(payload["source_receipt_sha256"]), 64)
+            m67_receipt = json.loads(
+                (out_dir / "weekly_m67.receipt.json").read_text(encoding="utf-8")
+            )
+            self.assertEqual(m67_receipt["run_revision_id"], "b" * 32)
+            self.assertIsNone(m67_receipt.get("run_id"))
+            self.assertIsNone(m67_receipt.get("candidate_digest"))
             self.assertTrue((out_dir / "sidecar_health.md").is_file())
-            self.assertTrue((out_dir / "sidecar_health.receipt.json").is_file())
+            health_receipt = json.loads(
+                (out_dir / "sidecar_health.receipt.json").read_text(encoding="utf-8")
+            )
+            self.assertEqual(health_receipt["run_revision_id"], "b" * 32)
+            self.assertIsNone(health_receipt["run_id"])
+            self.assertIsNone(health_receipt["candidate_digest"])
+            self.assertIn(
+                "sidecar_failed=0",
+                (out_dir / "sidecar_health.md").read_text(encoding="utf-8"),
+            )
             self.assertFalse(
                 (out_dir / "weekly_m67.pipeline_sidecar_outcomes.json").exists()
             )
             self.assertFalse((out_dir / "launcher_sidecar_outcomes.json").exists())
+
+    def test_failure_writer_preserves_analysis_input_identity_across_health_surfaces(self):
+        root = Path(__file__).resolve().parents[1]
+        launcher = (root / "runners" / "weekly_screening.ps1").read_text(
+            encoding="utf-8"
+        )
+        failure_writer = (
+            "function Write-M67Utf8NoBom"
+            + launcher.split("function Write-M67Utf8NoBom", 1)[1].split(
+                "function Write-KnownM67FailureReceipt", 1
+            )[0]
+        )
+        with tempfile.TemporaryDirectory() as tmp:
+            out_dir = Path(tmp) / "20260727"
+            out_dir.mkdir()
+            analysis_input = out_dir / "analysis_input.json"
+            run_id = "a-short-20260727-0123456789abcdef"
+            candidate_digest = "a" * 64
+            analysis_input.write_text(json.dumps({
+                "source": {
+                    "run_identity": {
+                        "run_id": run_id,
+                        "candidate_digest": candidate_digest,
+                    }
+                }
+            }), encoding="utf-8")
+            quote = lambda value: str(value).replace("'", "''")
+            command = "\n".join(
+                (
+                    "$ErrorActionPreference = 'Stop'",
+                    "$AsOf = '20260727'",
+                    f"$ProjectRoot = '{quote(root)}'",
+                    f"$PythonExe = '{quote(sys.executable)}'",
+                    "$RunRevisionId = 'cccccccccccccccccccccccccccccccc'",
+                    failure_writer,
+                    (
+                        "Write-M67FailureReceipt "
+                        f"-Directory '{quote(out_dir)}' "
+                        "-Reason 'weekly_pipeline_failed' -ExitCode 22 "
+                        f"-RunRevisionId $RunRevisionId -AnalysisInput '{quote(analysis_input)}'"
+                    ),
+                )
+            )
+            completed = subprocess.run(
+                [
+                    "powershell",
+                    "-NoProfile",
+                    "-NonInteractive",
+                    "-Command",
+                    command,
+                ],
+                cwd=root,
+                text=True,
+                capture_output=True,
+                check=False,
+            )
+            self.assertEqual(
+                completed.returncode,
+                0,
+                msg=f"stdout={completed.stdout}\nstderr={completed.stderr}",
+            )
+            m67_receipt = json.loads(
+                (out_dir / "weekly_m67.receipt.json").read_text(encoding="utf-8")
+            )
+            health = json.loads(
+                (out_dir / "sidecar_health.json").read_text(encoding="utf-8")
+            )
+            health_receipt = json.loads(
+                (out_dir / "sidecar_health.receipt.json").read_text(encoding="utf-8")
+            )
+        for payload in (m67_receipt, health, health_receipt):
+            self.assertEqual(payload["run_revision_id"], "c" * 32)
+            self.assertEqual(payload["run_id"], run_id)
+            self.assertEqual(payload["candidate_digest"], candidate_digest)
+        self.assertEqual(health["overall"], "failed")
 
     def test_failure_writer_invalidates_before_temp_write_failure(self):
         root = Path(__file__).resolve().parents[1]
@@ -1128,7 +1283,7 @@ class AShortSidecarOutcomeSchemaTests(unittest.TestCase):
                 (out_dir / "sidecar_health.json").read_text(encoding="utf-8")
             )
             self.assertEqual(payload["m67_status"], "failed")
-            self.assertEqual(payload["overall"], "degraded")
+            self.assertEqual(payload["overall"], "failed")
 
     def test_failure_writer_attempts_every_surface_after_delete_and_tombstone_failure(self):
         root = Path(__file__).resolve().parents[1]
