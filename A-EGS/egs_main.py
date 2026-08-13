@@ -1727,7 +1727,7 @@ def export_stage3_selection_snapshot(top50, tier1_final, latest_td, run_identity
     return out_path
 
 
-DATA_HEALTH_SCHEMA_VERSION = "1.8.0"
+DATA_HEALTH_SCHEMA_VERSION = "1.9.0"
 DATA_HEALTH_SCHEMA_PATH = os.path.join(PROJECT_ROOT, "schemas", "data_health.schema.json")
 LAST_SELECTION_SCHEMA_PATH = os.path.join(PROJECT_ROOT, "schemas", "a_short_last_selection.schema.json")
 
@@ -2339,6 +2339,7 @@ def validate_data_health_consistency(health):
     if not isinstance(sw, dict):
         raise ValueError("data_health missing sw_industry_membership")
     status = sw.get("status")
+    classification_standard = sw.get("classification_standard")
     source = sw.get("source")
     fast_path_used = bool(sw.get("fast_path_used"))
     fallback_used = bool(sw.get("fallback_used"))
@@ -2346,26 +2347,29 @@ def validate_data_health_consistency(health):
     if sum((fast_path_used, fallback_used, cache_hit)) > 1:
         raise ValueError("data_health SW source flags are mutually exclusive")
     if status == "not_observed":
-        if source is not None or sw.get("active_count") is not None or any(
+        if classification_standard is not None or source is not None or sw.get("active_count") is not None or any(
             (fast_path_used, fallback_used, cache_hit)
         ):
             raise ValueError("data_health unobserved SW source carries observed values")
-    elif status == "pass":
-        active_count = int(sw.get("active_count"))
-        min_active = int(sw.get("min_active"))
-        if active_count < min_active:
-            raise ValueError("data_health passing SW source is below minimum coverage")
-        expected_flags = {
-            "cache": (False, False, True),
-            "index_member_all_l1_current": (True, False, False),
-            "index_member_l2_history": (False, True, False),
-        }
-        if source not in expected_flags or (
-            fast_path_used,
-            fallback_used,
-            cache_hit,
-        ) != expected_flags[source]:
-            raise ValueError("data_health passing SW source does not match its source flags")
+    elif status in {"pass", "fail"}:
+        if classification_standard != SW_INDUSTRY_CLASSIFICATION_STANDARD:
+            raise ValueError("data_health SW classification standard is not SW2021")
+        if status == "pass":
+            active_count = int(sw.get("active_count"))
+            min_active = int(sw.get("min_active"))
+            if active_count < min_active:
+                raise ValueError("data_health passing SW source is below minimum coverage")
+            expected_flags = {
+                "cache": (False, False, True),
+                "index_member_all_l1_current": (True, False, False),
+                "index_member_l2_history": (False, True, False),
+            }
+            if source not in expected_flags or (
+                fast_path_used,
+                fallback_used,
+                cache_hit,
+            ) != expected_flags[source]:
+                raise ValueError("data_health passing SW source does not match its source flags")
     margin = metrics.get("margin_coverage")
     if not isinstance(margin, dict):
         raise ValueError("data_health missing margin_coverage")
@@ -3015,6 +3019,10 @@ def get_stock_list():
     save_cache(key, df)
     return df
 
+SW_INDUSTRY_CLASSIFICATION_STANDARD = "SW2021"
+SW_INDUSTRY_CLASSIFICATION_FIELDS = (
+    "index_code,industry_name,parent_code,level,industry_code,src"
+)
 SW_INDUSTRY_MIN_ACTIVE = 3000
 SW_INDEX_MEMBER_ALL_ROW_LIMIT = 2000
 _LAST_SW_INDUSTRY_SOURCE_OBSERVATION = None
@@ -3023,6 +3031,7 @@ _LAST_SW_INDUSTRY_SOURCE_OBSERVATION = None
 def _sw_industry_source_not_observed():
     return {
         "status": "not_observed",
+        "classification_standard": None,
         "source": None,
         "as_of": None,
         "active_count": None,
@@ -3039,6 +3048,8 @@ def _record_sw_industry_source_observation(**details):
     global _LAST_SW_INDUSTRY_SOURCE_OBSERVATION
     payload = _sw_industry_source_not_observed()
     payload.update(details)
+    if payload["status"] in {"pass", "fail"}:
+        payload["classification_standard"] = SW_INDUSTRY_CLASSIFICATION_STANDARD
     _LAST_SW_INDUSTRY_SOURCE_OBSERVATION = payload
     return dict(payload)
 
@@ -3108,6 +3119,31 @@ def _apply_pit_window(df, l2_codes, as_of_date, source="index_member"):
     return df[mask_in & mask_out]
 
 
+def _validate_sw_classification_frame(df, level):
+    """Require one explicit, current SW classification standard before use."""
+    if not isinstance(df, pd.DataFrame) or df.empty:
+        raise RuntimeError(f"SW {level} industry classification unavailable")
+    required = {"index_code", "industry_name", "src"}
+    if level == "L2":
+        required.add("parent_code")
+    missing = sorted(required - set(df.columns))
+    if missing:
+        raise RuntimeError(
+            f"SW {level} industry classification missing required columns: {missing}"
+        )
+    sources = {
+        str(value).strip()
+        for value in df["src"].dropna().tolist()
+        if str(value).strip()
+    }
+    if sources != {SW_INDUSTRY_CLASSIFICATION_STANDARD}:
+        raise RuntimeError(
+            f"SW {level} industry classification source binding invalid: "
+            f"expected {SW_INDUSTRY_CLASSIFICATION_STANDARD}, got {sorted(sources)}"
+        )
+    return df
+
+
 def get_sw_industry_map():
     """As-of-aware SW industry membership.
 
@@ -3119,8 +3155,9 @@ def get_sw_industry_map():
     # v4 caches written before SW_INDUSTRY_MIN_ACTIVE safeguard had ~75-stock
     # coverage (mostly l2_name="未知"). v5 fixed L2 coverage but missed L1
     # parent mapping because Tushare L2 parent_code points to L1 industry_code,
-    # not index_code. v6 invalidates both broken cache generations.
-    key = f"sw_industry_map_v6_{TODAY}"
+    # not index_code. v7 starts a source-bound SW2021 cache generation; older
+    # generations remain unread and are not migrated.
+    key = f"sw_industry_map_sw2021_v7_{TODAY}"
     target_codes = None
     if callable(getattr(pro, "stock_basic", None)):
         target_frame = get_stock_list()
@@ -3150,10 +3187,20 @@ def get_sw_industry_map():
         cached_size = len(cached) if isinstance(cached, dict) else "invalid"
         log.warning(f"SW industry cache {key} coverage too low ({cached_size}); refetching")
     log.info("拉取申万行业分类(按as_of时点)...")
-    df_l2 = safe_api(pro.index_classify, level="L2")
-    df_l1 = safe_api(pro.index_classify, level="L1")
-    if df_l2 is None or df_l2.empty:
-        raise RuntimeError("SW L2 industry classification unavailable")
+    df_l2 = safe_api(
+        pro.index_classify,
+        level="L2",
+        src=SW_INDUSTRY_CLASSIFICATION_STANDARD,
+        fields=SW_INDUSTRY_CLASSIFICATION_FIELDS,
+    )
+    df_l1 = safe_api(
+        pro.index_classify,
+        level="L1",
+        src=SW_INDUSTRY_CLASSIFICATION_STANDARD,
+        fields=SW_INDUSTRY_CLASSIFICATION_FIELDS,
+    )
+    df_l2 = _validate_sw_classification_frame(df_l2, "L2")
+    df_l1 = _validate_sw_classification_frame(df_l1, "L1")
 
     l1_map = {}
     if df_l1 is not None and not df_l1.empty:
