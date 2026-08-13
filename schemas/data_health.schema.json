@@ -24,7 +24,7 @@
       "const": "data_health"
     },
     "schema_version": {
-      "const": "1.11.0"
+      "const": "1.12.0"
     },
     "generated_at": {
       "type": "string"
@@ -210,7 +210,11 @@
           ],
           "properties": {
             "status": {"enum": ["pass", "fail", "not_observed"]},
-            "classification_standard": {"enum": [null, "SW2021"]},
+            "classification_standard": {
+              "type": ["string", "null"],
+              "minLength": 1,
+              "description": "Passing observations must be SW2021; failed observations report the observed standard when available and may be null when no source was returned."
+            },
             "observed_sources": {
               "type": ["array", "null"],
               "items": {"type": "string", "minLength": 1},
@@ -230,7 +234,7 @@
           },
           "allOf": [
             {
-              "if": {"properties": {"status": {"enum": ["pass", "fail"]}}},
+              "if": {"properties": {"status": {"const": "pass"}}},
               "then": {
                 "properties": {
                   "classification_standard": {"const": "SW2021"}

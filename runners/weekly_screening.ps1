@@ -163,6 +163,7 @@ function Get-DesignCompletionAuthorized {
 
 function Write-M67FailureReceipt {
     param([string]$Directory, [string]$Reason, [int]$ExitCode, [string]$FailureDetailRef = '', [string]$AnalysisInput = $null,
+          [string]$RunRevisionId = $null,
           [object]$AttemptedBeforeEgs = $null, [string]$FeedRef = '', [string]$FeedSha256 = '',
           [string]$IvFeedStatus = 'not_requested', [switch]$DeferHealth)
     $ErrorActionPreference = 'Stop'
@@ -177,6 +178,9 @@ function Write-M67FailureReceipt {
         failure_reason = $Reason
         exit_code = $ExitCode
         iv_feed_status = $IvFeedStatus
+    }
+    if (-not [string]::IsNullOrWhiteSpace($RunRevisionId)) {
+        $Payload['run_revision_id'] = [string]$RunRevisionId
     }
     # Record the price clock even on a failed run: a receipt that leaves the basis
     # implicit is exactly what let two entry points disagree unnoticed.
@@ -251,6 +255,9 @@ function Write-M67FailureReceipt {
             '--out-dir', $Directory,
             '--m67-invocation', 'requested'
         )
+        if (-not [string]::IsNullOrWhiteSpace($RunRevisionId)) {
+            $FailureHealthArgs += @('--run-revision-id', [string]$RunRevisionId)
+        }
         & $PythonExe @FailureHealthArgs
         $FailureHealthExit = $LASTEXITCODE
         if ($null -eq $FailureHealthExit) { $FailureHealthExit = 1 }
@@ -293,7 +300,7 @@ function Set-M67Failure {
         $script:FinalExitCode = $ExitCode
     }
     Write-M67FailureReceipt -Directory $Directory -Reason $Reason -ExitCode $ExitCode `
-        -FailureDetailRef $FailureDetailRef -AnalysisInput $AnalysisInput `
+        -FailureDetailRef $FailureDetailRef -AnalysisInput $AnalysisInput -RunRevisionId $RunRevisionId `
         -AttemptedBeforeEgs $AttemptedBeforeEgs -FeedRef $FeedRef -FeedSha256 $FeedSha256 `
         -IvFeedStatus $IvFeedStatus -DeferHealth
     Write-Host "[FATAL] M6.7 requested: $Reason (exit $ExitCode); continuing independent closeout" -ForegroundColor Red
@@ -317,6 +324,7 @@ function Write-KnownM67FailureReceipt {
         Join-Path $ProjectRoot "research\results\a_short\$AsOf"
     }
     Write-M67FailureReceipt -Directory $Directory -Reason $Reason -ExitCode $ExitCode `
+        -RunRevisionId $RunRevisionId `
         -AttemptedBeforeEgs $script:IvFeedAttemptedBeforeEgs `
         -FeedRef $script:IvFeedRef -FeedSha256 $script:IvFeedSha256 `
         -IvFeedStatus $KnownIvFeedStatus
