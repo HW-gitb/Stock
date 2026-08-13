@@ -2977,9 +2977,14 @@ def get_stock_list():
     key = f"stock_list_{TODAY}_v4_{mode}"
     cached = load_cache(key)
     if cached is not None:
+        # An empty entry can only be a poisoned legacy artifact: this function no
+        # longer stores one.  Refetch like the SW industry map does instead of
+        # aborting on it -- a refetch either self-heals or fails loudly below,
+        # and the empty-universe gates downstream are unchanged either way.
         if isinstance(cached, pd.DataFrame) and cached.empty:
-            raise RuntimeError("stock list cache is empty; refusing empty stock universe")
-        return cached
+            log.warning(f"stock list cache {key} is empty; refetching")
+        else:
+            return cached
     log.info("拉取股票基础信息(L+D+P,按as_of过滤)...")
     fields = "ts_code,symbol,name,list_date,delist_date,market,list_status"
     frames = []

@@ -40,11 +40,13 @@ def _safe_call(fn, *args, **kwargs):
                 return result
             return default
         except Exception as exc:
+            # `safe_api` never propagates: it records the error when a list was
+            # supplied and returns the default either way.  A helper that raised
+            # here would hide a production fail-open instead of exposing it.
             if attempt == retries - 1:
                 if errors is not None:
                     errors.append(exc)
-                    return default
-                raise
+                return default
     return default
 
 
@@ -777,13 +779,34 @@ class SwIndustrySourceTest(unittest.TestCase):
         finally:
             self.egs_main.pro = old_pro
 
-    def test_empty_stock_list_cache_aborts_before_sw_coverage_gate(self) -> None:
+    def test_empty_stock_list_cache_is_refetched_instead_of_trusted(self) -> None:
+        # An empty entry can only be a poisoned legacy artifact, so the cache
+        # branch must fall through to a fresh pull rather than return it.  The
+        # refetch either self-heals or hits the existing empty-universe abort.
+        rows = pd.DataFrame([{
+            "ts_code": "000001.SZ", "symbol": "000001", "name": "平安银行",
+            "list_date": "19910403", "delist_date": "", "market": "主板",
+            "list_status": "L",
+        }])
         old_pro = self.egs_main.pro
-        self.egs_main.pro = SimpleNamespace(stock_basic=lambda **_kwargs: pd.DataFrame())
         try:
+            self.egs_main.pro = SimpleNamespace(
+                stock_basic=lambda **kwargs: (
+                    rows.copy() if kwargs.get("list_status") == "L" else pd.DataFrame()
+                ),
+            )
             with patch.object(self.egs_main, "load_cache", return_value=pd.DataFrame()), \
-                 patch.object(self.egs_main, "save_cache") as save_cache:
-                with self.assertRaisesRegex(RuntimeError, "stock list cache is empty"):
+                 patch.object(self.egs_main, "save_cache") as save_cache, \
+                 patch.object(self.egs_main, "safe_api", side_effect=_safe_call):
+                healed = self.egs_main.get_stock_list()
+            self.assertEqual(list(healed["ts_code"]), ["000001.SZ"])
+            save_cache.assert_called_once()
+
+            self.egs_main.pro = SimpleNamespace(stock_basic=lambda **_kwargs: pd.DataFrame())
+            with patch.object(self.egs_main, "load_cache", return_value=pd.DataFrame()), \
+                 patch.object(self.egs_main, "save_cache") as save_cache, \
+                 patch.object(self.egs_main, "safe_api", side_effect=_safe_call):
+                with self.assertRaisesRegex(RuntimeError, "returned no rows"):
                     self.egs_main.get_stock_list()
             save_cache.assert_not_called()
         finally:

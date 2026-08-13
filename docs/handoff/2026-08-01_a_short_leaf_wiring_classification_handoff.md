@@ -7123,3 +7123,17 @@ Optional 调用链为 `stock_basic → get_stock_list → _require_nonempty_stoc
 **未覆盖维度**：P1-4 的真实 `fast_path_used=true` 与 P0-1 的整周产物闭环仍须获授权的真实无缓存胶囊；本轮及此前 SW 侧全部结论都建立在离线假 provider 上。`O-EU-2`、`O-SW1-5` 与 agent 的 `exception`-计数线索仍 open。
 
 **下一步**：唯一还缺的是那次真实无缓存周跑——它同时收口 P0-1、P1-4，并给 P3-10 一个真实调用现场。
+
+## 2026-08-13 追加：`O-EU-2` / `O-SW1-5` 自修自审（Claude Code；c405，已合入 master）
+
+**判定**：两条 Optional 已闭，零 Required。附一条对我自己此前结论的更正。正文只在 `docs/system_risk_register.md`。
+
+**动手前的回查（这次是关键一步）**：用户要我自己收 Optional 前先确认它们真没修。回查发现 `O-SW1-5` 的主体早在 `fe00caf9` 就被修掉了——测试 helper 已经复刻了 `safe_api` 的「空结果→默认值」，而我在之后两轮的结论里仍写着「仍 open」，属于把旧条目顺手抄下来没回查。教训是：Optional 队列跨轮携带时必须重新读代码，不能凭上一轮的措辞。
+
+**实修两处**：① `get_stock_list()` 的空缓存由直接 `RuntimeError` 改为 warning + 落到重抓分支，与同文件 SW map 对坏缓存的惯例一致；这个函数自 `83ab108a` 起不再存空表，所以空条目只可能是遗留脏数据，重抓要么自愈要么撞既有硬门，严格优于让人手动删文件。② 测试 helper `_safe_call` 在最后一次尝试失败时不再 `raise`，改为与 `safe_api` 一致地返回 `default`。
+
+**自审证据**：五格——空缓存+健康 provider 自愈（实测重抓 3 次、1 行、写缓存）、空缓存+空 provider 仍抛 `returned no rows` 且不写缓存、非空缓存 0 次 provider 调用、无缓存正常路径不变、dict 缓存原样返回；helper 与真 `safe_api` 的四格（空返回/抛异常 × 传/不传 `errors`）返回值与 errors 计数全等。原先钉旧行为的那条测试已改写成同时钉自愈与 fail-closed 两侧。
+
+**有意不动**：`exception` 计数对 HTTP 折叠故障失效那条，方案 §3.1.4 明令不伪造 HTTP 诊断、不改第三方库；P3-10 按用户指示不动。
+
+**下一步**：仍是那次获授权的真实无缓存周跑。
