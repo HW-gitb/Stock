@@ -7293,3 +7293,17 @@ message 仍为原有字符串字段；SW2021 source-binding、status、`fast_pat
 **未覆盖 / 边界**：极小 `limit`（<14）返回的 marker 会超过该 limit，方案明确不为非生产参数组合防御，不判缺陷。本刀不依赖 provider/日期/行情，关闭不需要真实胶囊。P1-4 与 §6 文档收口不在本刀。
 
 **下一步**：P1-4 另起；真实无缓存周跑仍是 P0-1/P1-4 与 N-3 验收判据的唯一出口。
+
+## 2026-08-13 追加：P3-10 状态收口为 `resolved`（Claude Code 自修自审；c405）
+
+**判定**：`R-ASHORT-P3-10-RUNTEST-LAUNCHER-PSSCRIPTROOT-EMPTY-UNDER-FILE` 转 `resolved`。零代码改动。正文只在 `docs/system_risk_register.md`。
+
+**为什么这一轮才收口**：此前 P3-10 的证据链其实已经齐了，但 register 里始终只有「判据我认为已满足」这句**评估**，没有任何一条 `NOT_VERIFIED → resolved` 的状态行——而写下「仍 NOT_VERIFIED、须用当初失败的那条命令复跑」的人是我，所以这条状态行是我欠的。
+
+**我更正的两处误读**：① `f0a79061` 被称作「把状态改成 resolved 的 docs-only 提交」，实测它只改 `docs/SESSION_LOG.md` +7 行、是并发窗口那条状态核对日志本身，没翻任何状态；② 「它不在 HEAD `25f57959` 祖先链里」属实，但那只是 c405 作为单向被合并的 feature 线的正常拓扑——实测 `f0a79061` 与 `25f57959` **都是** master HEAD `d0b70a2c` 的祖先，没有东西掉队。
+
+**我自己的运行（不再转述）**：`cmd /c powershell.exe -NoProfile -ExecutionPolicy Bypass -File …a_short_runtest.ps1 -ConfirmRuntest -Commit HEAD -Account <不存在路径>` → 绑定与 `-ConfirmRuntest` 闸门均通过，进入脚本体后停在 `:43 char:17` 的 `Resolve-Path` 并抛 `PathNotFound`；原崩点 `:12 char:47` 的参数默认值不再发生。安全性：抛点早于 `:47` 胶囊创建，实测胶囊根跑前跑后均为 7 个条目。
+
+**保留的诚实边界**：我先后四种调用方式都没能复现**修复前**的症状，所以「本次改动正是那次崩溃的解」仍无我的独立证据。关闭依据是我自己当初写下的判据——「原命令形态现在能正常起来」——这是可验证事实，不是因果推断。同形态若再崩应重开新条目，不是翻本条。
+
+**下一步**：P1-4 与那次真实无缓存周跑仍未动。
