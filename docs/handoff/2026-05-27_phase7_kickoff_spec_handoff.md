@@ -4625,7 +4625,8 @@ git diff --check
 **为什么**：用户裁决把「逐 key 精确计数」判为过度设计——它钉的是测试代码的记账而不是有没有越界，导致问题7/8/9/10 每轮都要重建快照。
 
 **验证命令**：
-- `.toolsun_unittest_with_repo_pythonpath.cmd --timeout-seconds 600 tests.test_us_short_test_io_inventory tests.test_us_short_discovery_conformance`
+- `.tools
+un_unittest_with_repo_pythonpath.cmd --timeout-seconds 600 tests.test_us_short_test_io_inventory tests.test_us_short_discovery_conformance`
 - reviewer 自写探针（合成仓在系统临时目录）：新 resolved 保护根写 / 新 unresolved class-4 写 / 各自加白名单后的反向控制 / 加纯临时根模块后的快照稳定性 / 同 key 写入次数 1→3 后的快照稳定性 / `git show HEAD:` 版与工作树版同一测试文件的分类对比。
 
 **验证结果**：焦点超集 `PASS tests=51 elapsed=22.6s`、`receipt:c2d5b260eba564c3c486dce6`。退役内容本身成立：`unallowlisted_write_findings == []` 这条安全腿原样保留，且 `build_inventory` 里它同时覆盖 resolved 与 unresolved 两类，我的探针确认两类新写各命中 1 条、加白名单后归零；快照对「加临时根模块」与「同 key 写入 1→3」都不再变化；`module_path_sha256` 已删；两份白名单只减不增。
@@ -4636,3 +4637,35 @@ git diff --check
 - 提交进 master 的基线必须能由它自己那次提交的代码态重新生成；要么从「只含本刀两处 .py 改动」的树重建（形状变、内容仍是 189 条 / 72 行），要么显式把本刀排在问题10 之后并在 register 记依赖。问题10 当前是 FAIL 未提交，后一条路暂时走不通。
 - 两刀的条目已写进同一份 register 与 SESSION_LOG，任何一刀提交时都必须逐文件挑选，不得整目录 stage。
 - 真正的门是 `unallowlisted_write_findings == []`；新加的两条 `<=` 断言与它功能重复，后续别把门误删成只剩 `<=`。
+
+## 2026-08-13 追加：I/O inventory 退役刀收口（1302，`repaired / OPEN-NOT_VERIFIED`）
+
+**范围与顺序**：1302 先执行 `git merge --ff-only 59968db9`（already up to date），再 `git stash pop stash@{0}`。基线 JSON 冲突只取当前 HEAD；stash 中的 `tests/provider/us_short_test_io_inventory.py` 与 `tests/test_us_short_test_io_inventory.py` 保留。未改问题10文件、主树或桌面文档，未提交。
+
+**基线**：由退役版 generator 重新生成 `docs/us_short_test_io_inventory_20260801.json`，未手改 JSON。结果为 `inventory_version=us_short_test_io_inventory.v0.5.0`；顶层退役七字段与每模块 `read_count`/`write_count` 均不存在；`allowlist=20`（与 HEAD 逐字相同）、`unresolved_allowlist=187`、snapshot `modules=71`。generator full source scan 为 `module_count=318`、classification `247/1/3/5/62`、`unallowlisted=[]`。
+
+**闭合与验证**：临时根新增模块不改变 snapshot；受保护根未白名单先红、加白名单后绿，直接用例 `2 OK`。inventory `20 OK` receipt=`receipt:99a00aa13ba95ad47068aee8`；最终焦点包 `51 OK` receipt=`receipt:e1913e0787f01980b33fcdd3`；文档门 `55 OK` receipt=`receipt:09c8390615111e6a1607638a`；两个 `.py` `py_compile`、`git diff --check HEAD`、BOM/FFFD/冲突扫描 PASS；`full-lane=not_triggered`。
+
+**Optional disposition**：`O-IOINV-1/2 accept`（记录冗余与白名单只减不增的已接受代价，不扩机制）；`O-IOINV-3/4 reject`（本轮不扩 churn 或 class-4 对称测试，超出最小退役刀）。
+
+**交接边界**：代码/基线差异仅三文件；文档门须在本节落盘后运行，并在文档门覆盖 singleton receipt 后重跑上述焦点包一次。之后交 Claude Code 独立审查；Codex 不提交。
+## 2026-08-13 追加：I/O inventory 精确计数基线退役——审查 PASS，已合入 master
+
+**改了什么**：本节只记审查侧结论。范围恰好三个文件：`tests/provider/us_short_test_io_inventory.py`（快照瘦身 `v0.4.0 → v0.5.0`）、`tests/test_us_short_test_io_inventory.py`（删逐 key 计数与总数基线、全等改成员资格、加两条闭合用例）、`docs/us_short_test_io_inventory_20260801.json`（按退役形状重建）。
+
+**为什么**：逐 key 精确计数钉的是测试代码的记账而非有没有越界，导致问题7/8/9/10 每轮都要重建快照；上一轮的 Required 是「基线必须能由它自己那次提交的代码态重新生成」，问题10 合入后本刀才具备这个前提。
+
+**验证命令**：
+- `.toolsun_unittest_with_repo_pythonpath.cmd --timeout-seconds 600 tests.test_us_short_test_io_inventory tests.test_us_short_discovery_conformance`
+- `python -m unittest tests.test_us_short_test_io_inventory`（rule-1 直测）
+- reviewer 反向控制：① 从基线 allowlist 删一条 ② 往 modules 塞一行伪模块，各重跑一次该测试，`finally` 按字节还原并核 sha256 + `git diff --numstat`
+- 逐字节比对两处 `.py` 与 `stash@{0}`（我上轮已审内容）
+
+**验证结果**：焦点超集 `PASS tests=51 elapsed=44.2s`、`receipt:355d8a813f1603b5c730fa4c`；rule-1 直测 `Ran 20 tests in 15.771s OK`；反控 1 → `FAILED (failures=2)`，反控 2 → `FAILED (failures=1)`，还原后 sha256 与篡改前相同、numstat 回 `72 445`。基线实测：`inventory_version v0.5.0`、七个顶层计数/指纹字段与每模块 `read_count`/`write_count` 全部消失、`allowlist 20` / `unresolved_allowlist 187` / `modules 71 行` **与 HEAD 逐字相同（新增 0、删除 0）**——纯形状变化、内容零变化。两处 `.py` 与上轮已审版本去掉 CR 后逐字节相同。
+
+**失效旧结论**：`R-USSHORT-IO-INVENTORY-BASELINE-CARRIES-ANOTHER-KNIFE-S-TREE-STATE` 及其 `2026-08-13 更新` 节里的待办已完成，本条转 `resolved`；其中 189/72 与 187/71 两组验收数字都已用尽，后续不要再引用。
+
+**下一步注意事项**：
+- `stash@{0}`（`io-inventory-retirement-parked`）**仍在**——SESSION_LOG 写的是 pop，但 pop 成功会自动删条目，实际走的是 apply 或冲突恢复路径。文件本身已逐字节核对无误；合入后应 `git stash drop stash@{0}`，否则下一个人会以为还有活停着（`O-IOINV-5`）。
+- `O-IOINV-3` / `O-IOINV-4` 被 reject，缺的只是测试钉子不是行为：同 key 写入次数 1→3 快照不变、新的 class-4 unresolved 写入仍被抓到且加白名单后归零，这两点我已用真 `build_inventory` 实测过。想补测试随时可补。
+- 全量用例数会从 5829 回到 5831（退役版新增的两条闭合用例回到扫描面），不要误当回归。

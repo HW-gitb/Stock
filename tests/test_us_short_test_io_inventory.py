@@ -3,7 +3,6 @@ from __future__ import annotations
 
 from pathlib import Path
 from tempfile import TemporaryDirectory
-from collections import Counter
 import json
 import unittest
 
@@ -19,17 +18,13 @@ from tests.provider.us_short_private_test_root import temporary_us_short_state_d
 
 ROOT = Path(__file__).resolve().parents[1]
 
-# The checked-in snapshot stores stable (module, operation, roots) keys plus per-key counts.  The
-# class-4 list is an explicit reviewed disposition, not a permission for new unresolved writes:
-# an added same-operation write still turns this acceptance red.
+# The checked-in snapshot stores reviewed key membership, not per-key occurrence counts.  The
+# class-4 list is an explicit reviewed disposition, not a permission for new unresolved keys.
 _BASELINE = json.loads(
     (ROOT / "docs" / "us_short_test_io_inventory_20260801.json").read_text(encoding="utf-8")
 )
 EXPLICIT_TEMPORARY_ALLOWLIST = frozenset(_BASELINE["allowlist"])
 EXPLICIT_UNRESOLVED_ALLOWLIST = frozenset(_BASELINE["unresolved_allowlist"])
-EXPECTED_ALLOWLIST_COUNTS = {
-    key: int(value) for key, value in _BASELINE["protected_write_finding_counts"].items()
-}
 RESIDUAL_WRITE_DISPOSITIONS = {
     "negative_or_contract_fixture": frozenset({
         "tests/provider/test_us_short_batch5_bankruptcy_8k_source_packet.py:kwarg:packet_ref:state/us_short",
@@ -71,7 +66,7 @@ class USShortTestIOInventoryTests(unittest.TestCase):
         )
         cls._snapshot = inventory.snapshot_from_inventory(cls._inventory)
 
-    def test_b0_inventory_is_reproducible_and_allowlist_is_exact(self):
+    def test_b0_inventory_is_reproducible_and_allowlist_membership_is_enforced(self):
         # Determinism is proved by re-scanning real modules below.  Comparing the one cached
         # inventory with itself would read like a reproducibility check and could never fail.
         first = self._inventory
@@ -81,8 +76,6 @@ class USShortTestIOInventoryTests(unittest.TestCase):
         ):
             source = (ROOT / relative).read_text(encoding="utf-8")
             self.assertEqual(_accesses(source, relative), _accesses(source, relative))
-        self.assertEqual(first["module_count"], _BASELINE["module_count"])
-        self.assertEqual(first["classification_counts"], _BASELINE["classification_counts"])
         self.assertEqual(first["unallowlisted_write_findings"], [])
         sentinel_modules = {
             module["module"]
@@ -93,23 +86,14 @@ class USShortTestIOInventoryTests(unittest.TestCase):
         self.assertEqual(sentinel_modules, set(GLOBAL_SIDE_EFFECT_SENTINEL_REASONS))
         self.assertTrue(all(GLOBAL_SIDE_EFFECT_SENTINEL_REASONS[name] for name in sentinel_modules))
         observed_unresolved = frozenset(first["unresolved_write_finding_counts"])
-        self.assertEqual(observed_unresolved, EXPLICIT_UNRESOLVED_ALLOWLIST)
-        observed = Counter(
+        self.assertTrue(observed_unresolved <= EXPLICIT_UNRESOLVED_ALLOWLIST)
+        observed_protected = frozenset(
             access["key"]
             for module in first["modules"]
             for access in module["accesses"]
             if access["mode"] != "read" and not access["unresolved"]
         )
-        self.assertEqual(observed, Counter(EXPECTED_ALLOWLIST_COUNTS))
-        observed_unresolved_counts = Counter(
-            f"{access['key']}:class4_unresolved_write"
-            for module in first["modules"]
-            for access in module["accesses"]
-            if access["mode"] != "read" and access["unresolved"]
-        )
-        self.assertEqual(observed_unresolved_counts, Counter(
-            first["unresolved_write_finding_counts"]
-        ))
+        self.assertTrue(observed_protected <= EXPLICIT_TEMPORARY_ALLOWLIST)
         for key in EXPLICIT_TEMPORARY_ALLOWLIST:
             module, rest = key.split(":", 1)
             operation, roots = rest.rsplit(":", 1)
@@ -145,13 +129,53 @@ class USShortTestIOInventoryTests(unittest.TestCase):
             if snapshot.get(key) != expected.get(key)
         )
         # A legitimate future compact-snapshot shape may replace the module table; if so, update
-        # this diagnostic with that schema.  Until then, a stale count must name its owner rather
+        # this diagnostic with that schema.  Until then, stale policy must name its owner rather
         # than hiding behind unittest's truncated whole-document diff.
         self.assertEqual(
             snapshot,
             expected,
             f"inventory snapshot drift modules={module_diffs} top_level={top_level_diffs}",
         )
+
+    def _synthetic_inventory(self, source: str, *, allowlist=()):
+        with TemporaryDirectory() as temp_repo:
+            repo_root = Path(temp_repo)
+            test_path = repo_root / "tests" / "test_us_short_synthetic.py"
+            test_path.parent.mkdir(parents=True)
+            test_path.write_text(source, encoding="utf-8")
+            return build_inventory(repo_root, allowlist=allowlist)
+
+    def test_class0_temporary_root_case_needs_no_inventory_baseline_change(self):
+        source = '''
+from pathlib import Path
+from tempfile import TemporaryDirectory
+def test_uses_only_temp_root():
+    with TemporaryDirectory() as root:
+        (Path(root) / "receipt.json").write_text("{}", encoding="utf-8")
+'''
+        with TemporaryDirectory() as temp_repo:
+            repo_root = Path(temp_repo)
+            (repo_root / "tests").mkdir()
+            before = inventory.build_snapshot(repo_root)
+            (repo_root / "tests" / "test_us_short_temporary.py").write_text(source, encoding="utf-8")
+            after = inventory.build_snapshot(repo_root)
+        self.assertEqual(before, after)
+
+    def test_unallowlisted_protected_write_fails_until_explicitly_allowed(self):
+        source = '''
+from pathlib import Path
+ROOT = Path(__file__).resolve().parents[1]
+def test_bad_write():
+    (ROOT / "state" / "us_short" / "bad.json").write_text("{}", encoding="utf-8")
+'''
+        rejected = self._synthetic_inventory(source)
+        self.assertEqual(len(rejected["unallowlisted_write_findings"]), 1)
+        with self.assertRaises(AssertionError):
+            self.assertEqual(rejected["unallowlisted_write_findings"], [])
+
+        key = rejected["unallowlisted_write_findings"][0]["key"]
+        allowed = self._synthetic_inventory(source, allowlist=(key,))
+        self.assertEqual(allowed["unallowlisted_write_findings"], [])
 
     def test_planted_protected_write_is_not_silently_safe(self):
         source = '''
