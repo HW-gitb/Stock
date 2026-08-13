@@ -900,6 +900,7 @@ class ExecutableClosureMatrix:
     })
     NAMED_NON_GUARD_RAISERS = {
         "runners.us_short_discovery_publish_policy": {
+            "_frozen_shadow_matches_consumption_upgrade": "internal zero-to-valid binding comparison covered by direct publish-policy tests",
             "_gitignored": "internal gitignore adapter covered by exact-slot policy tests",
             "_repo_relative": "internal containment primitive covered by the public slot validator",
             "_staged_temp": "internal staging primitive covered by all three public writer mutations",
@@ -914,6 +915,10 @@ class ExecutableClosureMatrix:
         },
     }
     NAMED_NON_GUARD_TESTS = {
+        "runners.us_short_discovery_publish_policy": {
+            "_frozen_shadow_matches_consumption_upgrade": "tests.test_us_short_discovery_publish_policy"
+            ".DiscoveryPublishPolicyTransitionTests.test_zero_to_valid_upgrade_binds_target_slot_existing_receipt_and_frozen_shadow",
+        },
         "runners.us_short_weekly_capstone_soft_discovery": {
             "_artifact": "tests.provider.test_us_short_weekly_capstone_soft_discovery"
             ".WeeklyCapstoneSoftDiscoveryStageTest.test_all_five_states_are_distinct_and_invalid_is_not_valid_empty",
@@ -1641,6 +1646,28 @@ class ExecutableClosureMatrix:
 
 
 
+class PublishPolicyParameterCoverage(unittest.TestCase):
+    def test_every_publish_policy_parameter_name_has_a_test_reference(self):
+        policy = ast.parse(_source(WRITE_DOOR))
+        test_text = "\n".join(
+            path.read_text(encoding="utf-8")
+            for path in (ROOT / "tests").rglob("test_*.py")
+        )
+        missing = []
+        for node in ast.walk(policy):
+            if not isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)):
+                continue
+            arguments = (*node.args.posonlyargs, *node.args.args, *node.args.kwonlyargs)
+            if node.args.vararg is not None:
+                arguments += (node.args.vararg,)
+            if node.args.kwarg is not None:
+                arguments += (node.args.kwarg,)
+            for argument in arguments:
+                if argument.arg not in {"self", "cls"} and argument.arg not in test_text:
+                    missing.append(f"{node.name}.{argument.arg}")
+        self.assertEqual(missing, [])
+
+
 class LaneGuardRegistryConformance(unittest.TestCase):
     """Every fail-closed term in the lane's shared modules must have a test that DIES with it.
 
@@ -1658,8 +1685,14 @@ class LaneGuardRegistryConformance(unittest.TestCase):
          "tests.provider.test_us_short_llm_theme_discovery_fetch_web.WebFetchTests"
          ".test_live_cli_rejects_occupied_formal_slot_before_runner_on_both_lanes"),
         ("runners.us_short_discovery_publish_policy", "write_immutable_json",
-         "tests.provider.test_us_short_llm_theme_discovery.OfflineLLMThemeDiscoveryTests"
-         ".test_immutable_retry_reuses_only_same_evidence"),
+         "tests.test_us_short_discovery_publish_policy.DiscoveryPublishPolicyTransitionTests"
+         ".test_zero_to_valid_upgrade_policy_has_closed_transition_table"),
+        ("runners.us_short_discovery_publish_policy", "_require_zero_to_valid_upgrade_lock",
+         "tests.test_us_short_soft_boost_consumption.SoftBoostConsumptionTest"
+         ".test_zero_to_valid_retry_recovers_second_step_failure_only_under_decision_lock"),
+        ("runners.us_short_discovery_publish_policy", "_zero_to_valid_upgrade_allowed",
+         "tests.test_us_short_discovery_publish_policy.DiscoveryPublishPolicyTransitionTests"
+         ".test_zero_to_valid_upgrade_policy_has_closed_transition_table"),
         ("runners.us_short_discovery_publish_policy", "frozen_artifact_matches",
          "tests.provider.test_us_short_llm_theme_discovery.OfflineLLMThemeDiscoveryTests"
          ".test_immutable_retry_reuses_only_same_evidence"),
@@ -1846,6 +1879,8 @@ class LaneGuardRegistryConformance(unittest.TestCase):
                 json.dumps(payload, ensure_ascii=True, indent=2) + "\n"
             ).encode("utf-8"),
             "_serialized_sha256": lambda *_args, **_kwargs: "f" * 64,
+            "_require_zero_to_valid_upgrade_lock": lambda *_args, **_kwargs: None,
+            "_zero_to_valid_upgrade_allowed": lambda *_args, **_kwargs: True,
             "_read_canonical_json": lambda path: __import__(
                 "engine.us_short_soft_boost_consumption", fromlist=["_read_json_bytes"]
             )._read_json_bytes(path),
@@ -2339,7 +2374,7 @@ class ResourceIsolationMatrix:
                     run, red, resolved, _output = LaneGuardRegistryConformance._run(test_path)
                     with self.subTest(resource_test=test_path):
                         self.assertTrue(resolved)
-                        self.assertEqual((run, red), (1, 0))
+                        self.assertEqual((run, red), (1, 0), _output)
                 self.assertEqual(
                     snapshot(state_root), state_before,
                     "a resource test changed repository state/us_short",

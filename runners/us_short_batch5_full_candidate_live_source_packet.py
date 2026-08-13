@@ -1614,6 +1614,11 @@ def _build_summary(
             "context_components_output_path": (
                 _repo_rel(context_components_output_path) if context_components_output_path is not None else None
             ),
+            "soft_boost": (
+                dict(source_packet_run["soft_boost"])
+                if source_packet_run is not None and type(source_packet_run.get("soft_boost")) is dict
+                else None
+            ),
         },
         "replay_source_capture": replay_source_capture,
         "prohibited_claims": {
@@ -2004,6 +2009,7 @@ def run_full_candidate_live_source_packet(
     soft_boost_shadow_receipt_path: Path | None = None,
     soft_boost_comparison_ledger_path: Path | None = None,
     soft_boost_state_dir: Path | None = None,
+    decision_lock: Any = None,
 ) -> dict[str, Any]:
     # This runner has no source-bound §4.3 theme-confirmation pool.  It must not accept a caller-selected strong
     # state that changes Top15 seats; the conservative state preserves the no-strong seat split until that producer
@@ -2336,6 +2342,7 @@ def run_full_candidate_live_source_packet(
                 paths["source_packet"],
                 generated_at=generated_at,
                 projection_binding_expectations=FULL_CANDIDATE_LIVE_PROJECTION_BINDING,
+                decision_lock=decision_lock,
             )
             if run_data_context
             else None

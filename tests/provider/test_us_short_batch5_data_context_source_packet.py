@@ -81,6 +81,7 @@ class ContextComponentsShapeContractTest(unittest.TestCase):
                 )
 
         current = self._components("cut4")
+        self.assertEqual(source_packet_runner.CURRENT_CONTEXT_COMPONENT_SHAPE, "cut4")
         self.assertEqual(source_packet_runner.validate_current_context_components(current), "cut4")
         with self.assertRaisesRegex(SourcePacketError, "missing_keys=.*result_linkage_sources"):
             source_packet_runner.validate_current_context_components(
@@ -510,6 +511,76 @@ class Batch5DataContextSourcePacketTest(unittest.TestCase):
             "soft_boost_shadow_receipt_path": _rel(self.paths["soft_shadow"]),
             "soft_boost_comparison_ledger_path": _rel(self.paths["soft_ledger"]),
         })
+        typed_zero_consumption = self.paths["soft_consumption"]
+        typed_zero_shadow = self.paths["soft_shadow"]
+        typed_zero_ledger = self.paths["soft_ledger"]
+        typed_zero_packet = copy.deepcopy(packet)
+        typed_zero_stage = copy.deepcopy(stage)
+        typed_zero_stage.update({
+            "status": "upstream_unavailable",
+            "reason_code": "CANDIDATE_INPUT_UNAVAILABLE",
+            "validated_theme_count": 0,
+            "boostable_ticker_count": 0,
+            "error_summary": {
+                "code": "CANDIDATE_INPUT_UNAVAILABLE",
+                "error_type": "SoftDiscoveryEvidenceError",
+            },
+        })
+        typed_zero_packet["optional_inputs"]["soft_discovery_stage_result"] = typed_zero_stage
+        _write_json(self.packet, typed_zero_packet)
+        typed_zero_result = run_packet(self.packet, generated_at="2026-07-04T00:00:02Z")
+        self.assertEqual(self.paths["output"].read_bytes(), baseline)
+        self.assertEqual(typed_zero_result["soft_boost"]["status"], "zero_upstream_unavailable")
+        self.assertFalse(typed_zero_result["soft_boost"]["evidence_bundle_written"])
+        self.assertEqual(
+            typed_zero_result["soft_boost"]["consumption_receipt_path"],
+            _rel(typed_zero_consumption),
+        )
+        self.assertTrue(typed_zero_consumption.is_file())
+        self.assertFalse(typed_zero_shadow.exists())
+        self.assertFalse(typed_zero_ledger.exists())
+
+        # A same-date retry may learn a different typed-zero reason.  The frozen
+        # receipt remains the honest reportable result; a write rejection must
+        # not be swallowed into an unclaimed/invalid K4b result.
+        empty_validation = copy.deepcopy(artifact)
+        empty_validation["themes"] = []
+        empty_validation["summary"]["validated_theme_count"] = 0
+        empty_validation["summary"]["validated_member_count"] = 0
+        _write_json(self.paths["soft_validation"], empty_validation)
+        empty_validation_sha = hashlib.sha256(self.paths["soft_validation"].read_bytes()).hexdigest()
+        valid_empty_stage = copy.deepcopy(stage)
+        valid_empty_stage.update({
+            "status": "valid_empty",
+            "reason_code": "VALID_EMPTY",
+            "validated_theme_count": 0,
+            "boostable_ticker_count": 0,
+        })
+        valid_empty_stage["artifacts"]["validation"]["sha256"] = empty_validation_sha
+        _write_json(self.paths["soft_stage"], valid_empty_stage)
+        typed_zero_packet["optional_inputs"]["soft_discovery_stage_result"] = valid_empty_stage
+        _write_json(self.packet, typed_zero_packet)
+        frozen_zero_retry = run_packet(self.packet, generated_at="2026-07-04T00:00:03Z")
+        self.assertEqual(frozen_zero_retry["soft_boost"]["status"], "zero_upstream_unavailable")
+        self.assertEqual(frozen_zero_retry["soft_boost"]["reason_code"], "CANDIDATE_INPUT_UNAVAILABLE")
+        self.assertEqual(
+            frozen_zero_retry["soft_boost"]["consumption_receipt_path"],
+            _rel(typed_zero_consumption),
+        )
+        self.assertEqual(
+            json.loads(typed_zero_consumption.read_text(encoding="utf-8"))["status"],
+            "zero_upstream_unavailable",
+        )
+        frozen_zero_bytes = typed_zero_consumption.read_bytes()
+        typed_zero_consumption.write_text("{not-json", encoding="utf-8")
+        unreadable_zero_retry = run_packet(self.packet, generated_at="2026-07-04T00:00:04Z")
+        self.assertEqual(unreadable_zero_retry["soft_boost"]["status"], "zero_invalid_evidence")
+        self.assertIsNone(unreadable_zero_retry["soft_boost"]["consumption_receipt_path"])
+        typed_zero_consumption.unlink()
+        _write_json(self.paths["soft_validation"], artifact)
+        _write_json(self.paths["soft_stage"], stage)
+        _write_json(self.packet, packet)
+        typed_zero_consumption.write_bytes(frozen_zero_bytes)
         missing_components = copy.deepcopy(packet)
         missing_components["paths"].pop("output_context_components_path")
         _write_json(self.packet, missing_components)
@@ -533,7 +604,40 @@ class Batch5DataContextSourcePacketTest(unittest.TestCase):
             common_digest,
             _soft_boost_common_input_sha256(loaded_packet, changed_theme_contract),
         )
-        result = run_packet(self.packet, generated_at="2026-07-04T00:00:02Z")
+        with mock.patch(
+            "runners.us_short_batch5_data_context_source_packet.write_evidence_bundle",
+            side_effect=__import__(
+                "engine.us_short_soft_boost_consumption",
+                fromlist=["SoftBoostConsumptionError"],
+            ).SoftBoostConsumptionError("planted publication failure"),
+        ):
+            degraded_from_frozen_zero = run_packet(
+                self.packet, generated_at="2026-07-04T00:00:02Z"
+            )
+        self.assertEqual(self.paths["output"].read_bytes(), baseline)
+        self.assertFalse(degraded_from_frozen_zero["soft_boost"]["effective_enabled"])
+        self.assertEqual(
+            degraded_from_frozen_zero["soft_boost"]["status"],
+            "zero_invalid_evidence",
+        )
+        self.assertFalse(degraded_from_frozen_zero["soft_boost"]["evidence_bundle_written"])
+        self.assertIsNone(degraded_from_frozen_zero["soft_boost"]["consumption_receipt_path"])
+        self.assertEqual(
+            json.loads(typed_zero_consumption.read_text(encoding="utf-8"))["status"],
+            "zero_upstream_unavailable",
+        )
+        from runners import us_short_weekly_capstone as capstone
+        from types import SimpleNamespace
+
+        lock = capstone._acquire_decision_lock(SimpleNamespace(
+            state_dir=self.soft_state_dir, decision_date=_DECISION_DATE,
+        ))
+        try:
+            result = run_packet(
+                self.packet, generated_at="2026-07-04T00:00:02Z", decision_lock=lock,
+            )
+        finally:
+            capstone._release_decision_lock(lock)
 
         written = json.loads(self.paths["output"].read_text(encoding="utf-8"))
         self.assertAlmostEqual(written["selection_inputs"]["per_ticker"]["AAPL"]["core_score"], 48.5)
@@ -547,6 +651,7 @@ class Batch5DataContextSourcePacketTest(unittest.TestCase):
         )
         self.assertNotEqual(self.paths["output"].read_bytes(), baseline)
         self.assertTrue(result["soft_boost"]["effective_enabled"])
+        self.assertTrue(result["soft_boost"]["evidence_bundle_written"])
         receipt = json.loads(self.paths["soft_consumption"].read_text(encoding="utf-8"))
         self.assertFalse(receipt["effects"]["operation_advice_effect_claimed"])
         shadow = json.loads(self.paths["soft_shadow"].read_text(encoding="utf-8"))
@@ -980,6 +1085,7 @@ class Batch5DataContextSourcePacketTest(unittest.TestCase):
                 run_packet(self.packet, generated_at="2026-07-04T00:00:02Z")
 
         self.assertFalse(self.paths["components"].exists())
+        self.assertFalse(self.paths["output"].exists())
 
     def test_run_packet_context_components_preserve_holdings_union_row_sources(self):
         _write_json(

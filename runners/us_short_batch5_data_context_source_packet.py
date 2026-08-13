@@ -32,7 +32,9 @@ from engine.us_short_soft_boost_consumption import (  # noqa: E402
     build_consumption_receipt,
     build_shadow_receipt,
     degrade_soft_boost_consumption,
+    read_frozen_zero_consumption_receipt,
     resolve_soft_boost_consumption,
+    write_consumption_receipt,
     write_evidence_bundle,
 )
 from engine.us_short_seam_momentum import (  # noqa: E402
@@ -157,6 +159,7 @@ CONTEXT_COMPONENT_SHAPES = MappingProxyType({
     "cut4": _CONTEXT_COMPONENT_LEGACY_KEYS
     | frozenset({"score_composition", "overextension_by_ticker", "result_linkage_sources"}),
 })
+CURRENT_CONTEXT_COMPONENT_SHAPE = "cut4"
 _CONTEXT_COMPONENT_MAPPING_FIELDS = frozenset({
     "data_context",
     "score_composition",
@@ -220,7 +223,10 @@ def validate_context_components_shape(value: Any, *, allowed_shapes: tuple[str, 
 
 def validate_current_context_components(value: Any) -> str:
     """Accept only the final six-key Cut4 carrier used by current producer and shadow paths."""
-    return validate_context_components_shape(value, allowed_shapes=("cut4",))
+    return validate_context_components_shape(
+        value,
+        allowed_shapes=(CURRENT_CONTEXT_COMPONENT_SHAPE,),
+    )
 
 
 @dataclass(frozen=True)
@@ -870,6 +876,7 @@ def run_packet(
     generated_at: str | None = None,
     context_components_output_path: Path | str | None = None,
     projection_binding_expectations: ProjectionBindingExpectations = FULL_CANDIDATE_LIVE_PROJECTION_BINDING,
+    decision_lock: Any = None,
 ) -> dict[str, Any]:
     packet, paths = _load_and_validate_packet(packet_path)
     provider_envelope_digests = _validated_provider_envelope_digests(packet, paths)
@@ -1019,6 +1026,7 @@ def run_packet(
             overextension_generated_at = validated_overextension["generated_at"]
         context_components = None
         soft_evidence_bundle_written = False
+        soft_consumption_receipt_written = False
         if "output_context_components_path" in paths:
             component_kwargs = {
                 **common_kwargs,
@@ -1092,31 +1100,92 @@ def run_packet(
                         on_top15=on_top15,
                         off_top15=off_top15,
                     )
-                    common_input_sha256 = _soft_boost_common_input_sha256(packet, paths)
-                    shadow = build_shadow_receipt(
-                        resolved=soft_resolution,
-                        generated_at=generated_at or iso_now(),
-                        on_top15=on_top15,
-                        off_top15=off_top15,
-                        common_input_sha256=common_input_sha256,
-                    )
-                    write_evidence_bundle(
-                        consumption_receipt=receipt,
-                        consumption_path=paths["soft_boost_consumption_receipt_path"],
-                        shadow_receipt=shadow,
-                        shadow_path=paths["soft_boost_shadow_receipt_path"],
-                        ledger_path=paths["soft_boost_comparison_ledger_path"],
-                        state_dir=paths[SOFT_BOOST_STATE_DIR_PATH_FIELD],
-                    )
-                    soft_evidence_bundle_written = True
-                    context_components = on_components
-                    data_context = on_components["data_context"]
+                    if soft_resolution["effective_enabled"]:
+                        common_input_sha256 = _soft_boost_common_input_sha256(packet, paths)
+                        shadow = build_shadow_receipt(
+                            resolved=soft_resolution,
+                            generated_at=generated_at or iso_now(),
+                            on_top15=on_top15,
+                            off_top15=off_top15,
+                            common_input_sha256=common_input_sha256,
+                        )
+                        write_evidence_bundle(
+                            consumption_receipt=receipt,
+                            consumption_path=paths["soft_boost_consumption_receipt_path"],
+                            shadow_receipt=shadow,
+                            shadow_path=paths["soft_boost_shadow_receipt_path"],
+                            ledger_path=paths["soft_boost_comparison_ledger_path"],
+                            state_dir=paths[SOFT_BOOST_STATE_DIR_PATH_FIELD],
+                            decision_lock=decision_lock,
+                        )
+                        soft_evidence_bundle_written = True
+                        soft_consumption_receipt_written = True
+                        context_components = on_components
+                        data_context = on_components["data_context"]
+                    else:
+                        try:
+                            write_consumption_receipt(
+                                receipt,
+                                paths["soft_boost_consumption_receipt_path"],
+                                state_dir=paths[SOFT_BOOST_STATE_DIR_PATH_FIELD],
+                            )
+                            soft_consumption_receipt_written = True
+                        except Exception:
+                            frozen_zero = read_frozen_zero_consumption_receipt(
+                                paths["soft_boost_consumption_receipt_path"]
+                            )
+                            if frozen_zero is None:
+                                raise
+                            soft_resolution = {
+                                **soft_resolution,
+                                "status": frozen_zero["status"],
+                                "reason_code": frozen_zero["reason_code"],
+                                "effective_enabled": False,
+                            }
+                            soft_consumption_receipt_written = True
                 except Exception:
                     context_components = off_components
                     data_context = off_components["data_context"]
                     soft_resolution = degrade_soft_boost_consumption(
                         decision_date=packet["decision_clock"]["expected_decision_date"],
                     )
+                    try:
+                        zero_selection = {
+                            ticker: row["core_score"]
+                            for ticker, row in off_components["data_context"]["selection_inputs"]["per_ticker"].items()
+                        }
+                        zero_receipt = build_consumption_receipt(
+                            resolved=soft_resolution,
+                            generated_at=generated_at or iso_now(),
+                            on_selection=zero_selection,
+                            off_selection=zero_selection,
+                            boost_records={
+                                ticker: {"theme_soft_boost": 0.0, "evidence_tier": None}
+                                for ticker in zero_selection
+                            },
+                            on_top15=official_top15_tickers(
+                                off_components["data_context"]["selection_inputs"],
+                                decision_date=packet["decision_clock"]["expected_decision_date"],
+                            ),
+                            off_top15=official_top15_tickers(
+                                off_components["data_context"]["selection_inputs"],
+                                decision_date=packet["decision_clock"]["expected_decision_date"],
+                            ),
+                        )
+                        try:
+                            write_consumption_receipt(
+                                zero_receipt,
+                                paths["soft_boost_consumption_receipt_path"],
+                                state_dir=paths[SOFT_BOOST_STATE_DIR_PATH_FIELD],
+                            )
+                            soft_consumption_receipt_written = True
+                        except Exception:
+                            # A lifecycle failure is the result of this run, not a
+                            # retry of a typed-zero receipt.  Keep the failure visible
+                            # when the immutable zero slot belongs to an earlier run.
+                            pass
+                    except Exception:
+                        pass
             # Cut4: one source-bound per-ticker record owns coverage, the catalyst availability annotation,
             # price input, and the output-visible quality/execution tags. The existing score and price engines
             # still do their own work; this only binds their permitted inputs to the local source packet.
@@ -1152,12 +1221,13 @@ def run_packet(
     except Exception as exc:
         raise SourcePacketError(f"source packet data_context assembly rejected: {exc}") from exc
 
-    output_path = paths["output_data_context_path"]
-    output_path.parent.mkdir(parents=True, exist_ok=True)
-    output_path.write_text(json.dumps(data_context, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
     context_components_output_path = paths.get("output_context_components_path")
     if context_components_output_path is not None and context_components is not None:
         validate_current_context_components(context_components)
+    output_path = paths["output_data_context_path"]
+    output_path.parent.mkdir(parents=True, exist_ok=True)
+    output_path.write_text(json.dumps(data_context, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
+    if context_components_output_path is not None and context_components is not None:
         context_components_output_path.parent.mkdir(parents=True, exist_ok=True)
         context_components_output_path.write_text(
             json.dumps(context_components, ensure_ascii=False, indent=2) + "\n",
@@ -1218,7 +1288,7 @@ def run_packet(
             "evidence_bundle_written": soft_evidence_bundle_written,
             "consumption_receipt_path": (
                 _repo_rel(paths["soft_boost_consumption_receipt_path"])
-                if soft_evidence_bundle_written else None
+                if soft_consumption_receipt_written else None
             ),
             "shadow_receipt_path": (
                 _repo_rel(paths["soft_boost_shadow_receipt_path"])

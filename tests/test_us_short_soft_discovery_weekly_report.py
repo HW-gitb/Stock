@@ -22,6 +22,22 @@ ROOT = Path(__file__).resolve().parents[1]
 
 
 class SoftDiscoveryWeeklyReportTests(SoftBoostFixture, unittest.TestCase):
+    @staticmethod
+    def _comparison_ready_result(
+        *, consumption_path: Path, shadow_path: Path, comparison_ledger_path: Path,
+    ) -> dict:
+        return {
+            "requested_enabled": True,
+            "status": "consumed_valid_nonempty",
+            "reason_code": None,
+            "effective_enabled": True,
+            "evidence_bundle_written": True,
+            "consumption_receipt_path": str(consumption_path),
+            "shadow_receipt_path": str(shadow_path),
+            "comparison_ledger_path": str(comparison_ledger_path),
+            "provider_calls_performed": False,
+        }
+
     """§4c snapshots are built solely from the already-tested K4a/K4b receipt fixtures."""
 
     def _publish(self, resolved, *, on=None, off=None, boosts=None, on_top15=None, off_top15=None):
@@ -155,12 +171,22 @@ class SoftDiscoveryWeeklyReportTests(SoftBoostFixture, unittest.TestCase):
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)
             consumption_path, shadow_path = root / "on.json", root / "off.json"
+            comparison_ledger_path = root / "weekly.json"
             consumption_path.write_bytes(self.paths["consumption"].read_bytes())
             shadow_path.write_bytes(self.paths["shadow"].read_bytes())
+            comparison_ledger_path.write_text("{}", encoding="utf-8")
             ctx = SimpleNamespace(
                 decision_date=DATE, soft_boost_consumption_receipt_path=consumption_path,
                 soft_boost_shadow_receipt_path=shadow_path, soft_boost_pairwise_ledger_path=root / "pairwise.json",
                 soft_boost_maturity_observation_root=root / "maturity", soft_boost_adjudication_receipt_path=root / "adj.json",
+                soft_boost_comparison_ledger_path=comparison_ledger_path,
+                theme_soft_boost_enabled=True,
+                soft_discovery_run_result={},
+                soft_boost_run_result=self._comparison_ready_result(
+                    consumption_path=consumption_path,
+                    shadow_path=shadow_path,
+                    comparison_ledger_path=comparison_ledger_path,
+                ),
             )
             self.assertEqual(capstone_stages.run_soft_boost_comparison_capture(ctx)["captured_week_count"], 1)
             next_date = "21000101"
@@ -181,8 +207,10 @@ class SoftDiscoveryWeeklyReportTests(SoftBoostFixture, unittest.TestCase):
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)
             consumption_path, shadow_path = root / "on.json", root / "off.json"
+            comparison_ledger_path = root / "weekly.json"
             consumption_path.write_bytes(self.paths["consumption"].read_bytes())
             shadow_path.write_bytes(self.paths["shadow"].read_bytes())
+            comparison_ledger_path.write_text("{}", encoding="utf-8")
             pairwise_path = root / "pairwise.json"
             pairwise_path.write_text(json.dumps(comparison_adjudication.build_pairwise_ledger([
                 {**row, "on_net_return": 0.0, "off_net_return": 0.03}
@@ -193,6 +221,14 @@ class SoftDiscoveryWeeklyReportTests(SoftBoostFixture, unittest.TestCase):
                 decision_date=DATE, soft_boost_consumption_receipt_path=consumption_path,
                 soft_boost_shadow_receipt_path=shadow_path, soft_boost_pairwise_ledger_path=pairwise_path,
                 soft_boost_maturity_observation_root=root / "maturity", soft_boost_adjudication_receipt_path=adjudication_path,
+                soft_boost_comparison_ledger_path=comparison_ledger_path,
+                theme_soft_boost_enabled=True,
+                soft_discovery_run_result={},
+                soft_boost_run_result=self._comparison_ready_result(
+                    consumption_path=consumption_path,
+                    shadow_path=shadow_path,
+                    comparison_ledger_path=comparison_ledger_path,
+                ),
             )
             stage = capstone_stages.run_soft_boost_comparison_capture(ctx)
             self.assertEqual((stage["captured_week_count"], stage["eligible_divergence_week_count"], stage["formal_look"]), (25, 24, 24))
@@ -240,8 +276,10 @@ class SoftDiscoveryWeeklyReportTests(SoftBoostFixture, unittest.TestCase):
                 comparison_adjudication.append_pairwise_capture(None, prior_capture), old_capture)), encoding="utf-8")
             current_consumption = consumption_root / f"us_short_soft_boost_consumption_receipt_{DATE}.json"
             current_shadow = shadow_root / f"us_short_soft_boost_shadow_receipt_{DATE}.json"
+            comparison_ledger_path = root / "weekly.json"
             current_consumption.write_bytes(self.paths["consumption"].read_bytes())
             current_shadow.write_bytes(self.paths["shadow"].read_bytes())
+            comparison_ledger_path.write_text("{}", encoding="utf-8")
             ohlcv_path = root / "ohlcv.json"
             vix_path = root / "vix.json"
             vix_path.write_text(json.dumps({"vix_regime": capstone_stages.REGIMES[0], "vix_regime_is_unknown": False}), encoding="utf-8")
@@ -253,6 +291,14 @@ class SoftDiscoveryWeeklyReportTests(SoftBoostFixture, unittest.TestCase):
                 soft_boost_consumption_receipt_path=current_consumption, soft_boost_shadow_receipt_path=current_shadow,
                 soft_boost_pairwise_ledger_path=pairwise_path, soft_boost_maturity_observation_root=root / "observations",
                 soft_boost_adjudication_receipt_path=root / "adj.json", vix_regime_summary_path=vix_path,
+                soft_boost_comparison_ledger_path=comparison_ledger_path,
+                theme_soft_boost_enabled=True,
+                soft_discovery_run_result={},
+                soft_boost_run_result=self._comparison_ready_result(
+                    consumption_path=current_consumption,
+                    shadow_path=current_shadow,
+                    comparison_ledger_path=comparison_ledger_path,
+                ),
             )
             no_count = capstone_stages.run_soft_boost_comparison_maturity(ctx)
             self.assertEqual((no_count["matured_observations_written"], no_count["whole_week_no_count"]), (0, 2))
@@ -465,6 +511,44 @@ class SoftDiscoveryWeeklyReportTests(SoftBoostFixture, unittest.TestCase):
             consumption_receipt_path=self.paths["consumption"], shadow_receipt_path=self.paths["shadow"],
             comparison_ledger_path=self.paths["ledger"], adjudication_receipt_path=adjudication)
         self.assertEqual(rejected["comparison"]["status"], "comparison_unavailable")
+
+    def test_capture_none_and_invalid_none_do_not_read_or_advance_pairwise_ledger(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            ctx = SimpleNamespace(
+                decision_date=DATE,
+                theme_soft_boost_enabled=False,
+                soft_discovery_run_result=None,
+                soft_boost_run_result=None,
+                soft_boost_consumption_receipt_path=root / "absent_consumption.json",
+                soft_boost_shadow_receipt_path=root / "absent_shadow.json",
+                soft_boost_comparison_ledger_path=root / "absent_weekly_ledger.json",
+                soft_boost_pairwise_ledger_path=root / "pairwise.json",
+                soft_boost_maturity_observation_root=root / "maturity",
+                soft_boost_adjudication_receipt_path=root / "adj.json",
+            )
+            disabled = capstone_stages.run_soft_boost_comparison_capture(ctx)
+            self.assertEqual(disabled, {
+                "status": "not_applicable",
+                "reason_code": "SOFT_BOOST_COMPARISON_NOT_REQUESTED",
+                "comparison_capture_performed": False,
+            })
+            self.assertFalse(ctx.soft_boost_pairwise_ledger_path.exists())
+            ctx.theme_soft_boost_enabled = True
+            self.assertEqual(capstone_stages.run_soft_boost_comparison_capture(ctx), {
+                "status": "not_applicable",
+                "reason_code": "SOFT_BOOST_COMPARISON_NOT_REQUESTED",
+                "comparison_capture_performed": False,
+            })
+            ctx.soft_discovery_run_result = {}
+            ctx.soft_boost_run_result = {"requested_enabled": True}
+            invalid = capstone_stages.run_soft_boost_comparison_capture(ctx)
+            self.assertEqual(invalid, {
+                "status": "failed",
+                "reason_code": "SOFT_BOOST_COMPARISON_ARTIFACT_INVALID",
+                "comparison_capture_performed": False,
+            })
+            self.assertFalse(ctx.soft_boost_pairwise_ledger_path.exists())
 
     @staticmethod
     def _formal_pairwise_rows():

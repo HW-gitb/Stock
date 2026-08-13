@@ -16,6 +16,7 @@ from engine.us_short_forward_policy_shadow_stage import (
     validate_forward_shadow_selection_record,
 )
 from runners import us_short_weekly_capstone_stages as capstone_stages
+from runners import us_short_batch5_data_context_source_packet as source_packet_runner
 
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -278,7 +279,7 @@ class ForwardPolicyShadowStageTests(unittest.TestCase):
             data_path = root / "data_context.json"
             components_path = root / "context_components.json"
             data_path.write_text(json.dumps(self.data_context), encoding="utf-8")
-            components_path.write_text(json.dumps({
+            component_values = {
                 "data_context": self.data_context,
                 "score_composition": self.composition,
                 "overextension_by_ticker": self.overextension,
@@ -289,6 +290,11 @@ class ForwardPolicyShadowStageTests(unittest.TestCase):
                     "families": {},
                 },
                 "result_linkage_sources": {},
+            }
+            current_shape = next(reversed(source_packet_runner.CONTEXT_COMPONENT_SHAPES))
+            components_path.write_text(json.dumps({
+                key: component_values[key]
+                for key in source_packet_runner.CONTEXT_COMPONENT_SHAPES[current_shape]
             }), encoding="utf-8")
 
             class Context:

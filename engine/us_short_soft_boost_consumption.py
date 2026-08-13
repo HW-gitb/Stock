@@ -13,7 +13,10 @@ from engine.us_short_provisional_theme_boost import (
 )
 from engine.us_short_schema_formats import FORMAT_CHECKER
 from runners.us_short_discovery_publish_policy import (
+    CLOCK_KEYS_RECEIPT,
     DiscoveryPublishPolicyError,
+    ZERO_TO_VALID_UPGRADE,
+    _require_zero_to_valid_upgrade_lock,
     _serialized_sha256,
     publish_immutable_pair,
     validate_exact_decision_slot,
@@ -37,6 +40,22 @@ _DIGEST_KEYS = (
     "candidate_artifact_sha256",
     "classification_packet_sha256",
 )
+_SOFT_BOOST_RUN_RESULT_KEYS = frozenset({
+    "requested_enabled",
+    "status",
+    "reason_code",
+    "effective_enabled",
+    "evidence_bundle_written",
+    "consumption_receipt_path",
+    "shadow_receipt_path",
+    "comparison_ledger_path",
+    "provider_calls_performed",
+})
+_ZERO_SOFT_BOOST_STATUSES = frozenset({
+    "zero_valid_empty",
+    "zero_upstream_unavailable",
+    "zero_invalid_evidence",
+})
 
 
 class SoftBoostConsumptionError(ValueError):
@@ -363,6 +382,7 @@ def build_consumption_receipt(
 
 def write_consumption_receipt(
     payload: dict[str, Any], path: Path, *, state_dir: Path = STATE_DIR,
+    decision_lock: Any = None,
 ) -> None:
     _validate(payload, CONSUMPTION_SCHEMA, label="K4b consumption receipt")
     try:
@@ -370,13 +390,106 @@ def write_consumption_receipt(
             f"us_short_soft_boost_consumption_receipt_{payload['decision_date']}.json"
         )
         validate_exact_decision_slot(Path(path), expected, root=ROOT, state_dir=Path(state_dir))
+        receipt_path = Path(path)
         write_immutable_json(
-            payload, Path(path), verify=lambda value: _validate(
+            payload, receipt_path, verify=lambda value: _validate(
                 value, CONSUMPTION_SCHEMA, label="existing K4b consumption receipt",
-            ),
+            ), replacement_policy=(
+                ZERO_TO_VALID_UPGRADE
+                if payload.get("status") == "consumed_valid_nonempty" else None
+            ), decision_lock=decision_lock,
         )
     except DiscoveryPublishPolicyError as exc:
         raise SoftBoostConsumptionError("cannot publish immutable K4b consumption receipt") from exc
+
+
+def _can_upgrade_zero_receipt(path: Path, payload: dict[str, Any]) -> bool:
+    """Permit only a same-slot zero-to-valid promotion; valid evidence remains frozen."""
+    if payload.get("status") != "consumed_valid_nonempty" or not path.is_file():
+        return False
+    try:
+        existing, _ = _read_json_bytes(path)
+        _validate(existing, CONSUMPTION_SCHEMA, label="existing K4b consumption receipt")
+    except (OSError, UnicodeDecodeError, ValueError, SoftBoostConsumptionError):
+        return False
+    return existing.get("status") in _ZERO_SOFT_BOOST_STATUSES
+
+
+def read_frozen_zero_consumption_receipt(path: Path) -> dict[str, Any] | None:
+    """Return only a schema-valid frozen typed-zero receipt, never a guessed fallback."""
+    try:
+        existing, _ = _read_json_bytes(Path(path))
+        _validate(existing, CONSUMPTION_SCHEMA, label="frozen K4b consumption receipt")
+    except (OSError, UnicodeDecodeError, ValueError, SoftBoostConsumptionError):
+        return None
+    return existing if existing.get("status") in _ZERO_SOFT_BOOST_STATUSES else None
+
+
+def _declares_expected_path(value: Any, expected: Path) -> bool:
+    if type(value) is not str or not value:
+        return False
+    candidate = Path(value)
+    if not candidate.is_absolute():
+        candidate = ROOT / candidate
+    try:
+        return candidate.resolve() == Path(expected).resolve()
+    except OSError:
+        return False
+
+
+def classify_soft_boost_artifact_state(
+    *,
+    soft_boost_requested: bool,
+    soft_boost_run_result: Any,
+    consumption_receipt_path: Path,
+    shadow_receipt_path: Path,
+    comparison_ledger_path: Path,
+) -> dict[str, str]:
+    """Classify only this run's declared K4b artifact usability; never read artifact contents."""
+    if soft_boost_requested is False:
+        return {"state": "none", "reason_code": "SOFT_BOOST_COMPARISON_NOT_REQUESTED"}
+    if type(soft_boost_requested) is not bool or type(soft_boost_run_result) is not dict:
+        return {"state": "none", "reason_code": "SOFT_BOOST_COMPARISON_ARTIFACT_INVALID"}
+    if set(soft_boost_run_result) != _SOFT_BOOST_RUN_RESULT_KEYS:
+        return {"state": "none", "reason_code": "SOFT_BOOST_COMPARISON_ARTIFACT_INVALID"}
+    if (
+        soft_boost_run_result["requested_enabled"] is not True
+        or type(soft_boost_run_result["status"]) is not str
+        or (
+            soft_boost_run_result["reason_code"] is not None
+            and (type(soft_boost_run_result["reason_code"]) is not str or not soft_boost_run_result["reason_code"])
+        )
+        or type(soft_boost_run_result["effective_enabled"]) is not bool
+        or type(soft_boost_run_result["evidence_bundle_written"]) is not bool
+        or type(soft_boost_run_result["provider_calls_performed"]) is not bool
+    ):
+        return {"state": "none", "reason_code": "SOFT_BOOST_COMPARISON_ARTIFACT_INVALID"}
+
+    if (
+        soft_boost_run_result["status"] in _ZERO_SOFT_BOOST_STATUSES
+        and soft_boost_run_result["effective_enabled"] is False
+        and soft_boost_run_result["evidence_bundle_written"] is False
+        and _declares_expected_path(soft_boost_run_result["consumption_receipt_path"], consumption_receipt_path)
+        and soft_boost_run_result["shadow_receipt_path"] is None
+        and soft_boost_run_result["comparison_ledger_path"] is None
+        and Path(consumption_receipt_path).is_file()
+    ):
+        return {"state": "consumption_only", "reason_code": "SOFT_BOOST_COMPARISON_NOT_APPLICABLE"}
+
+    if (
+        soft_boost_run_result["status"] == "consumed_valid_nonempty"
+        and soft_boost_run_result["reason_code"] is None
+        and soft_boost_run_result["effective_enabled"] is True
+        and soft_boost_run_result["evidence_bundle_written"] is True
+        and _declares_expected_path(soft_boost_run_result["consumption_receipt_path"], consumption_receipt_path)
+        and _declares_expected_path(soft_boost_run_result["shadow_receipt_path"], shadow_receipt_path)
+        and _declares_expected_path(soft_boost_run_result["comparison_ledger_path"], comparison_ledger_path)
+        and Path(consumption_receipt_path).is_file()
+        and Path(shadow_receipt_path).is_file()
+        and Path(comparison_ledger_path).is_file()
+    ):
+        return {"state": "comparison_ready", "reason_code": "SOFT_BOOST_COMPARISON_READY"}
+    return {"state": "none", "reason_code": "SOFT_BOOST_COMPARISON_ARTIFACT_INVALID"}
 
 
 def _validated_evidence_contracts() -> tuple[str, str]:
@@ -439,8 +552,9 @@ def write_evidence_bundle(
     shadow_path: Path,
     ledger_path: Path,
     state_dir: Path = STATE_DIR,
+    decision_lock: Any = None,
 ) -> None:
-    """Atomically publish the three K4b evidence siblings or none."""
+    """Publish K4b evidence siblings; a lock-held zero-to-valid retry may complete a prior half-upgrade."""
     _validate(consumption_receipt, CONSUMPTION_SCHEMA, label="K4b consumption receipt")
     _validate(shadow_receipt, SHADOW_SCHEMA, label="K4b shadow receipt")
     decision_date = consumption_receipt["decision_date"]
@@ -473,19 +587,37 @@ def write_evidence_bundle(
     try:
         for path, expected in zip((consumption_path, shadow_path, ledger_path), expected_paths):
             validate_exact_decision_slot(Path(path), expected, root=ROOT, state_dir=state_root)
-        publish_immutable_pair(
-            (
-                (consumption_receipt, Path(consumption_path)),
-                (shadow_receipt, Path(shadow_path)),
-                (ledger, Path(ledger_path)),
-            ),
-            verifiers=(
-                lambda value: _validate(value, CONSUMPTION_SCHEMA, label="existing K4b consumption receipt"),
-                lambda value: _validate(value, SHADOW_SCHEMA, label="existing K4b shadow receipt"),
-                lambda value: _validate(value, LEDGER_SCHEMA, label="existing K4b weekly comparison ledger"),
-            ),
-            clock_keys=(),
-            recursive=False,
-        )
+        if _can_upgrade_zero_receipt(Path(consumption_path), consumption_receipt):
+            _require_zero_to_valid_upgrade_lock(
+                consumption_receipt, Path(consumption_path), decision_lock,
+            )
+            publish_immutable_pair(
+                ((shadow_receipt, Path(shadow_path)), (ledger, Path(ledger_path))),
+                verifiers=(
+                    lambda value: _validate(value, SHADOW_SCHEMA, label="existing K4b shadow receipt"),
+                    lambda value: _validate(value, LEDGER_SCHEMA, label="existing K4b weekly comparison ledger"),
+                ),
+                clock_keys=CLOCK_KEYS_RECEIPT,
+                recursive=True,
+            )
+            write_consumption_receipt(
+                consumption_receipt, Path(consumption_path), state_dir=state_root,
+                decision_lock=decision_lock,
+            )
+        else:
+            publish_immutable_pair(
+                (
+                    (consumption_receipt, Path(consumption_path)),
+                    (shadow_receipt, Path(shadow_path)),
+                    (ledger, Path(ledger_path)),
+                ),
+                verifiers=(
+                    lambda value: _validate(value, CONSUMPTION_SCHEMA, label="existing K4b consumption receipt"),
+                    lambda value: _validate(value, SHADOW_SCHEMA, label="existing K4b shadow receipt"),
+                    lambda value: _validate(value, LEDGER_SCHEMA, label="existing K4b weekly comparison ledger"),
+                ),
+                clock_keys=CLOCK_KEYS_RECEIPT,
+                recursive=True,
+            )
     except DiscoveryPublishPolicyError as exc:
-        raise SoftBoostConsumptionError("cannot atomically publish K4b evidence bundle") from exc
+        raise SoftBoostConsumptionError("cannot publish K4b evidence bundle") from exc

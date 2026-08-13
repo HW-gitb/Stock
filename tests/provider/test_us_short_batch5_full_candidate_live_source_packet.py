@@ -1278,6 +1278,10 @@ class UsShortBatch5FullCandidateLiveSourcePacketTest(unittest.TestCase):
                 with self.assertRaises(runner.FullCandidateLiveSourcePacketError):
                     runner._validate_summary_against_schema(mutated)
 
+        legacy_summary = json.loads(json.dumps(summary))
+        del legacy_summary["source_packet"]["soft_boost"]
+        runner._validate_summary_against_schema(legacy_summary)
+
     def test_forged_preflight_injecting_neutral_fill_target_is_rejected_before_fetch(self):
         # R-USSHORT-BATCH5-LIVE-RUNNER-TRUSTS-PREFLIGHT-FUNNEL-NOT-REDERIVED: the live runner must RE-DERIVE the
         # funnel target from the momentum projection (scored∩eligible ∪ forced-holdings), not trust the preflight.
